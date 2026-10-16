@@ -44,7 +44,19 @@
   --ap-card-dark: #15181f;            /* 深灰卡片（列表项/次要容器） */
   --ap-line: rgba(232, 224, 204, 0.14); /* 1px 细分隔线/描边：#e8e0cc @ 14% */
   --ap-accent-tab: #ffd27a;           /* 激活 tab/进度/高亮——复用存在金，同金色纪律 */
+  /* UI 配色方案（规范 §8 增补⑤）：accent 默认 = 存在金（现状视觉不变）；
+     可选配色经 html[data-accent] 覆写，且机器断言不占存在金家族（theme.ts）。 */
+  --ap-accent-ui: #ffd27a;
+  --ap-accent-ui-ink: #1b1409;
   --ap-stamp: #ece7da;                /* 图章/编号文字（括号角标内，等宽，§6.3） */
+
+  /* ---------- 滚动条（显白病灶修复）----------
+     深底主题（night/heritage-void/ocean/forest）继承本组骨白低透；
+     浅底主题（essence/day/paper）在各自块覆写为墨色低透，星舰覆写冷白。
+     纪律：任何主题下禁止默认白滚动条/发白滑块（shell.css 全局规则消费本组）。 */
+  --ap-scrollbar-thumb: rgba(232, 224, 204, 0.18);
+  --ap-scrollbar-thumb-hover: rgba(232, 224, 204, 0.32);
+  --ap-scrollbar-track: transparent;
 
   /* ---------- 语义色 🟡 待确认（规范 §2.4 / 附录 B-5；纪律已确认，数值提案） ----------
      克制使用：仅警示/否定/成功/中性信息，禁止装饰；info 取深空蓝系不抢金色。 */
@@ -70,6 +82,21 @@
   --ap-register-archive-card-dark: #454041;    /* 条目深卡 */
   --ap-register-archive-card-deep: #131212;    /* 稀有度色条深 */
   --ap-register-archive-accent: #ffd27a;       /* 纸面调内强调仍用存在金（跨调性纪律） */
+  /* ⑥ 记忆卷宗实拍校准新增（🔵 提案，待主人拍板后回写规范 §5.6②）：
+     #ffd27a 在纸白 #e2e1df 上对比度不足——文字级强调用下沉金（金家族色相 42°），
+     实体填充强调（选中条/主按钮底）仍用 accent 金配墨字。 */
+  --ap-register-archive-ink-gold: #8a6d1f;
+  /* 伴随值令牌化（2026-09-23 深色档案批）：组件局部覆写原先硬编码
+     rgba(38,38,42,*) / #ecebe9 / #e5e4e2——深色主题要整套反色，必须走令牌。 */
+  --ap-register-archive-ink-60: rgba(38, 38, 42, 0.6);
+  --ap-register-archive-ink-55: rgba(38, 38, 42, 0.55);
+  --ap-register-archive-ink-40: rgba(38, 38, 42, 0.4);
+  --ap-register-archive-ink-35: rgba(38, 38, 42, 0.35);
+  --ap-register-archive-ink-26: rgba(38, 38, 42, 0.26);
+  --ap-register-archive-ink-14: rgba(38, 38, 42, 0.14);
+  --ap-register-archive-ink-solid: #26262a;    /* 金字底上的墨字 */
+  --ap-register-archive-surface-2: #ecebe9;
+  --ap-register-archive-surface-3: #e5e4e2;
 
   /* ---------- 数据深舱调 🔵 规范 §5.6③ / JSON registers.deepOps ----------
      适用于系统状态/审批审计/任务面板/设置；识别色 ≤6 且避开存在金。 */
@@ -79,6 +106,12 @@
   --ap-register-deepops-blue: #2392fb;   /* 核心/中枢类 */
   --ap-register-deepops-green: #6fae5f;  /* 培养/生产类 */
   --ap-register-deepops-yellow: #e8c33a; /* 工业黄（制造类） */
+  /* 余 3 色补足 🔵 提案（gap-plan §4.1 建议：紫=情感/姿态、青=记忆、红=安全守卫；
+     治理卷宗首次落地消费——审批=蓝 / 授权=绿 / 守卫=红 / 审计=工业黄；
+     三值均为提案值，实拍校准后回写规范 §5.6③ 与 design-tokens.json） */
+  --ap-register-deepops-purple: #8f7ad9; /* 情感/姿态类（🔵 提案，卷宗暂不消费） */
+  --ap-register-deepops-cyan: #3fb0c4;   /* 记忆类（🔵 提案，卷宗暂不消费） */
+  --ap-register-deepops-red: #d95f55;    /* 安全守卫类（🔵 提案，守卫 tab 消费） */
 
   /* ---------- 排版 ✅ 规范 §6 / JSON typography ---------- */
   /* 他的声音（引用/日记/正式发言）：衬线栈 index.html:20 */
@@ -110,31 +143,315 @@
   --ap-ease: var(--ap-ease-standard);
 }
 
-/* ---------- Essence 浅色主题（星空山脉壁纸 + 雾面玻璃 UI） ---------- */
+/* ---------- Essence 浅色主题（星空山脉壁纸 + 雾面玻璃 UI） ----------
+   2026-09-23 视觉走查校准（rev-essence-hour22 实证）：原值三层白近无分界、
+   金家族过灰——面板加实、描边加深、金家族提亮一档（accent-tab 仍随金家族）。 */
 html[data-theme='essence'] {
-  --ap-space-void: #ebe8e2;
-  --ap-gold: #8a7355;
-  --ap-gold-white-hot: #a89272;
-  --ap-gold-amber: #6f5e48;
-  --ap-gold-ui: #5c4f3f;
-  --ap-gold-platinum: #c4b8a8;
+  --ap-space-void: #e6e2da;
+  --ap-gold: #a08050;
+  --ap-gold-white-hot: #bd9a68;
+  --ap-gold-amber: #84663f;
+  --ap-gold-ui: #6b5238;
+  --ap-gold-platinum: #c9b898;
   --ap-bone: #1c1b1f;
-  --ap-bone-68: rgba(28, 27, 31, 0.72);
-  --ap-bone-42: rgba(28, 27, 31, 0.52);
-  --ap-bone-30: rgba(28, 27, 31, 0.38);
+  --ap-bone-68: rgba(28, 27, 31, 0.78);
+  --ap-bone-42: rgba(28, 27, 31, 0.56);
+  --ap-bone-30: rgba(28, 27, 31, 0.42);
   --ap-ink: #141316;
-  --ap-panel: rgba(255, 255, 255, 0.76);
+  --ap-panel: rgba(255, 255, 255, 0.85);
   --ap-panel-solid: #f7f5f1;
-  --ap-shell-chip: rgba(255, 255, 255, 0.72);
-  --ap-shell-elevated: rgba(255, 255, 255, 0.92);
+  --ap-shell-chip: rgba(255, 255, 255, 0.8);
+  --ap-shell-elevated: rgba(255, 255, 255, 0.94);
   --ap-card: #ffffff;
-  --ap-card-dark: #eceae5;
-  --ap-line: rgba(20, 19, 22, 0.1);
-  --ap-accent-tab: #8a7355;
-  --ap-semantic-success: #3d7a5c;
-  --ap-semantic-warning: #9a6f2e;
+  --ap-card-dark: #e9e6e0;
+  --ap-line: rgba(20, 19, 22, 0.16);
+  --ap-accent-tab: #a08050;
+  --ap-accent-ui: #a08050;
+  --ap-accent-ui-ink: #faf7f2;
+  --ap-semantic-success: #35705a;
+  --ap-semantic-warning: #96691f;
   --ap-semantic-danger: #a84840;
   --ap-semantic-info: #4a6278;
+  /* 浅底滚动条 = 墨色低透（骨白滑块在浅底上发白 = 显白病灶） */
+  --ap-scrollbar-thumb: rgba(28, 27, 31, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(28, 27, 31, 0.38);
+}
+
+/* ---------- 日光 day（浅·暖档案调；2026-09-23 四主题补全）----------
+   浅底深字，金家族沿用 essence 校准值；面板偏暖白与 essence 冷白拉开区分。 */
+html[data-theme='day'] {
+  --ap-space-void: #f3eee3;
+  --ap-gold: #a08050;
+  --ap-gold-white-hot: #bd9a68;
+  --ap-gold-amber: #84663f;
+  --ap-gold-ui: #6b5238;
+  --ap-gold-platinum: #c9b898;
+  --ap-bone: #1c1b1f;
+  --ap-bone-68: rgba(28, 27, 31, 0.78);
+  --ap-bone-42: rgba(28, 27, 31, 0.56);
+  --ap-bone-30: rgba(28, 27, 31, 0.42);
+  --ap-ink: #141316;
+  --ap-panel: rgba(255, 253, 247, 0.85);
+  --ap-panel-solid: #faf6ec;
+  --ap-shell-chip: rgba(255, 253, 247, 0.8);
+  --ap-shell-elevated: rgba(255, 253, 247, 0.94);
+  --ap-card: #fffef9;
+  --ap-card-dark: #efe8d8;
+  --ap-line: rgba(40, 32, 20, 0.15);
+  --ap-accent-tab: #a08050;
+  --ap-accent-ui: #a08050;
+  --ap-accent-ui-ink: #faf7f2;
+  --ap-semantic-success: #35705a;
+  --ap-semantic-warning: #96691f;
+  --ap-semantic-danger: #a84840;
+  --ap-semantic-info: #4a6278;
+  /* 浅底滚动条 = 墨色低透 */
+  --ap-scrollbar-thumb: rgba(28, 27, 31, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(28, 27, 31, 0.38);
+}
+
+/* ---------- 纸面 paper（浅·注册表低饱和；四主题补全）----------
+   比 essence 更中性的灰白；金家族降饱和一档，让位给纸面横线纹理。 */
+html[data-theme='paper'] {
+  --ap-space-void: #eae8e3;
+  --ap-gold: #8f7a58;
+  --ap-gold-white-hot: #a89272;
+  --ap-gold-amber: #6f6046;
+  --ap-gold-ui: #5f5138;
+  --ap-gold-platinum: #b5ab98;
+  --ap-bone: #1f1e22;
+  --ap-bone-68: rgba(31, 30, 34, 0.78);
+  --ap-bone-42: rgba(31, 30, 34, 0.56);
+  --ap-bone-30: rgba(31, 30, 34, 0.42);
+  --ap-ink: #161519;
+  --ap-panel: rgba(252, 251, 248, 0.92);
+  --ap-panel-solid: #f5f4f0;
+  --ap-shell-chip: rgba(252, 251, 248, 0.85);
+  --ap-shell-elevated: rgba(252, 251, 248, 0.97);
+  --ap-card: #ffffff;
+  --ap-card-dark: #e8e6e1;
+  --ap-line: rgba(25, 24, 28, 0.16);
+  --ap-accent-tab: #8f7a58;
+  --ap-accent-ui: #8f7a58;
+  --ap-accent-ui-ink: #faf9f6;
+  --ap-semantic-success: #35705a;
+  --ap-semantic-warning: #8a6420;
+  --ap-semantic-danger: #a04a42;
+  --ap-semantic-info: #4a5f74;
+  /* 浅底滚动条 = 墨色低透 */
+  --ap-scrollbar-thumb: rgba(31, 30, 34, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(31, 30, 34, 0.38);
+}
+
+/* ---------- 原初 origin（默认 · DeepSeek 原生界面风）----------
+   2026-10-03 主人拍板：新增"最初的主题"并设为默认——参考 DeepSeek 原生
+   操作界面：白底 / 品牌蓝 #4D6BFE / 灰阶卡片 / 零动画（纯色层，不改组件
+   结构、功能按钮与配置）。纪律：存在金家族不染——金色是他的存在色（沿用
+   essence 浅底校准值），品牌蓝只走 UI 高亮（--ap-accent-tab/--ap-accent-ui）。 */
+html[data-theme='origin'] {
+  --ap-space-void: #ffffff;
+  --ap-gold: #a08050;
+  --ap-gold-white-hot: #bd9a68;
+  --ap-gold-amber: #84663f;
+  --ap-gold-ui: #6b5238;
+  --ap-gold-platinum: #c9b898;
+  --ap-bone: #1f2329;
+  --ap-bone-68: rgba(31, 35, 41, 0.78);
+  --ap-bone-42: rgba(31, 35, 41, 0.56);
+  --ap-bone-30: rgba(31, 35, 41, 0.42);
+  --ap-ink: #1f2329;
+  --ap-panel: rgba(255, 255, 255, 0.92);
+  --ap-panel-solid: #ffffff;
+  --ap-shell-chip: rgba(242, 243, 245, 0.9);
+  --ap-shell-elevated: rgba(255, 255, 255, 0.98);
+  --ap-card: #eef3ff;
+  --ap-card-dark: #f2f3f5;
+  --ap-line: rgba(31, 35, 41, 0.12);
+  --ap-accent-tab: #4d6bfe;
+  --ap-accent-ui: #4d6bfe;
+  --ap-accent-ui-ink: #ffffff;
+  --ap-semantic-success: #2e7d5b;
+  --ap-semantic-warning: #96691f;
+  --ap-semantic-danger: #a84840;
+  --ap-semantic-info: #4d6bfe;
+  /* 浅底滚动条 = 墨色低透（显白病灶纪律） */
+  --ap-scrollbar-thumb: rgba(31, 35, 41, 0.22);
+  --ap-scrollbar-thumb-hover: rgba(31, 35, 41, 0.38);
+}
+
+/* ---------- 纯黑 noir（纯黑档 · 零装饰高对比）----------
+   2026-10-03 主人拍板「再加一个黑色的」：真黑底 #000、近白字、发丝线，
+   零装饰零动画（纯色层，同 origin 纪律）。存在金家族不染（默认金即他），
+   滚动条继承 :root 骨白低透（深底族）。 */
+html[data-theme='noir'] {
+  --ap-space-void: #000000;
+  --ap-bone: #e9e9ec;
+  --ap-bone-68: rgba(233, 233, 236, 0.68);
+  --ap-bone-42: rgba(233, 233, 236, 0.42);
+  --ap-bone-30: rgba(233, 233, 236, 0.3);
+  --ap-ink: #ececef;
+  --ap-panel: rgba(16, 16, 18, 0.9);
+  --ap-panel-solid: #0a0a0b;
+  --ap-shell-chip: rgba(22, 22, 24, 0.6);
+  --ap-shell-elevated: rgba(12, 12, 14, 0.97);
+  --ap-card: #17171a;
+  --ap-card-dark: #121214;
+  --ap-line: rgba(233, 233, 236, 0.12);
+}
+
+/* ---------- 深海 ocean（深·舱蓝工程调；四主题补全）----------
+   深底浅字继承 :root 骨白/存在金不动；只染面板族与分隔线色相。 */
+html[data-theme='ocean'] {
+  --ap-space-void: #060b10;
+  --ap-panel: rgba(12, 22, 31, 0.84);
+  --ap-panel-solid: #0c1620;
+  --ap-shell-chip: rgba(12, 22, 31, 0.55);
+  --ap-shell-elevated: rgba(10, 18, 26, 0.96);
+  --ap-card-dark: #131e29;
+  --ap-line: rgba(160, 195, 220, 0.16);
+  --ap-semantic-info: #6faadf;
+}
+
+/* ---------- 林海 forest（深·绿调专注；四主题补全）---------- */
+html[data-theme='forest'] {
+  --ap-space-void: #080f0b;
+  --ap-panel: rgba(13, 22, 17, 0.84);
+  --ap-panel-solid: #0d1611;
+  --ap-shell-chip: rgba(13, 22, 17, 0.55);
+  --ap-shell-elevated: rgba(11, 18, 14, 0.96);
+  --ap-card-dark: #14211a;
+  --ap-line: rgba(160, 205, 175, 0.15);
+  --ap-semantic-success: #6fae86;
+}
+
+/* ---------- 星舰 starship（科幻 HUD 档 · 深空黑底 + 发光数据）----------
+   纪律：本块只做变量层切换（值不出块），组件结构与既有规则零改动；
+   HUD 氛围（网格/扫描线/发光/角标记）在 hud.css，颜色一律经 --ap-hud-* 令牌
+   引用，令牌值只在本块出现。存在金家族（--ap-gold*）整组不染——金色是他的
+   存在色，青蓝/琥珀只走数据光令牌：发光的是数据，正文保持可读性优先。 */
+html[data-theme='starship'] {
+  /* 深空卡面上的墨字改冷白：--ap-ink 是浅底墨色，星舰卡面深空不覆盖会隐形。
+     单声明纪律（内测实锤修复）：本块 --ap-ink 只许声明一次——同名后置声明会
+     覆盖先声明值，实机"用户气泡黑字"即此前块尾残留的深色值把冷白盖掉。 */
+  --ap-ink: #e8f1f8;
+  --ap-space-void: #04070d;
+  --ap-space-horizon: #010204;
+  --ap-space-blue-base: #071322;
+  --ap-space-blue-dark: #040b16;
+  --ap-space-blue-light: #17324c;
+  --ap-space-blue-floor: #0c1826;
+  --ap-bone: #e4edf5;
+  --ap-bone-68: rgba(228, 237, 245, 0.72);
+  --ap-bone-42: rgba(228, 237, 245, 0.5);
+  --ap-bone-30: rgba(228, 237, 245, 0.34);
+  --ap-panel: rgba(8, 17, 28, 0.88);
+  --ap-panel-solid: #08121e;
+  --ap-shell-chip: rgba(10, 24, 38, 0.58);
+  --ap-shell-elevated: rgba(6, 14, 24, 0.97);
+  --ap-card: #0c1a2b;
+  --ap-card-dark: #10202f;
+  --ap-line: rgba(87, 214, 255, 0.16);
+  --ap-stamp: #bfe6f7;
+  --ap-semantic-success: #4db380;
+  --ap-semantic-warning: #e8b25a;
+  --ap-semantic-danger: #e0685c;
+  --ap-semantic-info: #57d6ff;
+
+  /* 档案调随深色族反色（取值对齐深色主题组，幽灵编号/图标换青辉） */
+  --ap-register-archive-paper: #0b1626;
+  --ap-register-archive-paper-lo: #07111d;
+  --ap-register-archive-paper-hi: #122334;
+  --ap-register-archive-ink: #e4edf5;
+  --ap-register-archive-ink-60: rgba(228, 237, 245, 0.62);
+  --ap-register-archive-ink-55: rgba(228, 237, 245, 0.57);
+  --ap-register-archive-ink-40: rgba(228, 237, 245, 0.42);
+  --ap-register-archive-ink-35: rgba(228, 237, 245, 0.37);
+  --ap-register-archive-ink-26: rgba(228, 237, 245, 0.28);
+  --ap-register-archive-ink-14: rgba(228, 237, 245, 0.16);
+  --ap-register-archive-ghost-number: #1c3450;
+  --ap-register-archive-icon-gray: #4e6b84;
+  --ap-register-archive-card-dark: #16283c;
+  --ap-register-archive-card-deep: #24405c;
+  --ap-register-archive-ink-gold: #ecc271;   /* 文字级强调沿用亮金（金色纪律） */
+  --ap-register-archive-surface-2: #12212f;
+  --ap-register-archive-surface-3: #182b3c;
+
+  /* ---------- HUD 数据光令牌（只在本主题定义与消费） ---------- */
+  --ap-hud-cyan: #57d6ff;
+  --ap-hud-cyan-soft: rgba(87, 214, 255, 0.45);
+  --ap-hud-cyan-line: rgba(87, 214, 255, 0.24);
+  --ap-hud-amber: #ffb454;
+  --ap-hud-amber-soft: rgba(255, 180, 84, 0.5);
+  --ap-hud-title-ink: #d7ecf9;
+  --ap-hud-title-glow: 0 0 14px rgba(87, 214, 255, 0.38);
+  --ap-hud-title-glow-hi: 0 0 22px rgba(87, 214, 255, 0.6);
+  --ap-hud-data-glow: 0 0 8px rgba(87, 214, 255, 0.35);
+  --ap-hud-amber-glow: 0 0 8px rgba(255, 180, 84, 0.35);
+  --ap-hud-amber-glow-hi: 0 0 15px rgba(255, 180, 84, 0.62);
+  --ap-hud-danger-glow: 0 0 8px rgba(224, 104, 92, 0.4);
+  --ap-hud-corner: rgba(87, 214, 255, 0.85);
+  --ap-hud-rule: rgba(87, 214, 255, 0.22);
+  --ap-hud-track: rgba(87, 214, 255, 0.1);
+  --ap-hud-bar-fill: linear-gradient(90deg, rgba(255, 180, 84, 0.95), rgba(87, 214, 255, 0.95));
+  /* 深空底：网格 + 舱顶冷光 + 底部数据辉光（整条背景值走令牌） */
+  --ap-hud-sky:
+    repeating-linear-gradient(0deg, rgba(87, 214, 255, 0.055) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(90deg, rgba(87, 214, 255, 0.055) 0 1px, transparent 1px 46px),
+    radial-gradient(ellipse 90% 60% at 50% 118%, rgba(24, 84, 128, 0.5) 0%, rgba(4, 7, 13, 0) 62%),
+    radial-gradient(ellipse 120% 80% at 50% -12%, rgba(23, 68, 104, 0.55) 0%, rgba(4, 7, 13, 0) 58%),
+    linear-gradient(180deg, #060d18 0%, #02060c 100%);
+  --ap-hud-veil: radial-gradient(ellipse 130% 95% at 50% 0%, rgba(2, 6, 12, 0) 40%, rgba(2, 5, 10, 0.7) 100%);
+  --ap-hud-scan: linear-gradient(180deg, rgba(87, 214, 255, 0) 0%, rgba(87, 214, 255, 0.16) 50%, rgba(87, 214, 255, 0) 100%);
+  /* 滚动条走本主题冷白骨色（--ap-bone #e4edf5 同族），不与 HUD 青蓝争色相 */
+  --ap-scrollbar-thumb: rgba(228, 237, 245, 0.18);
+  --ap-scrollbar-thumb-hover: rgba(228, 237, 245, 0.32);
+}
+
+/* ---------- 档案调·深舱反色（2026-09-23 主人真机反馈：深色主题里记忆/日记
+   一块白纸违和，「纸面恒纸面」拍板收窄为浅色语境）----------
+   深色主题（深空舰桥/遗产星空/深海/林海）下 Archive 档案转石墨深底 + 骨白墨；
+   金色纪律不动（accent 金配墨字两态通用；文字级强调深底换亮金，原下沉金
+   #8a6d1f 在深底不可读）。浅色系（essence/day/paper）保持纸面原值。
+   ⚠ 深空舰桥 = 默认主题，applyDocumentTheme 对它**移除** data-theme 属性
+   （theme.ts）——必须 :not([data-theme]) 选中，写 [data-theme='night'] 永不命中。 */
+html:not([data-theme]),
+html[data-theme='heritage-void'],
+html[data-theme='ocean'],
+html[data-theme='forest'] {
+  --ap-register-archive-paper: #16181d;
+  --ap-register-archive-paper-lo: #0e1013;
+  --ap-register-archive-paper-hi: #1f2227;
+  --ap-register-archive-ink: #e8e0cc;
+  --ap-register-archive-ink-60: rgba(232, 224, 204, 0.6);
+  --ap-register-archive-ink-55: rgba(232, 224, 204, 0.55);
+  --ap-register-archive-ink-40: rgba(232, 224, 204, 0.4);
+  --ap-register-archive-ink-35: rgba(232, 224, 204, 0.35);
+  --ap-register-archive-ink-26: rgba(232, 224, 204, 0.26);
+  --ap-register-archive-ink-14: rgba(232, 224, 204, 0.14);
+  /* ink-solid（金字底上的墨字）与 marker-orange / accent 两态通用，不覆写 */
+  --ap-register-archive-ghost-number: #2e3339;
+  --ap-register-archive-icon-gray: #5f636a;
+  --ap-register-archive-card-dark: #d9d4c8;   /* 条目深卡 → 浅卡 */
+  --ap-register-archive-card-deep: #efe9db;
+  --ap-register-archive-ink-gold: #ecc271;    /* 深底文字级强调用亮金 */
+  --ap-register-archive-surface-2: #23262b;
+  --ap-register-archive-surface-3: #2b2f34;
+}
+
+/* ---------- UI 配色方案覆写（规范 §8 增补⑤）----------
+   置于主题块之后：显式选择的配色优先于主题默认 accent（同特异性，后定义者胜）。
+   值与 theme.ts 的 ACCENT_CATALOG 一一对应，改任一边必须同步（测试锁定纪律）。 */
+html[data-accent='deep-space'] {
+  --ap-accent-ui: #7d9cc0;
+  --ap-accent-ui-ink: #0b0d12;
+}
+html[data-accent='sage'] {
+  --ap-accent-ui: #7fb894;
+  --ap-accent-ui-ink: #0b0d12;
+}
+html[data-accent='bone'] {
+  --ap-accent-ui: #e6e2da;
+  --ap-accent-ui-ink: #1c1b1f;
 }
 
 

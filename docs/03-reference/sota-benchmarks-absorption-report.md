@@ -1,4 +1,4 @@
-# 《前沿工程标杆深度解构与 Apeireth 2.0 参考吸收报告》
+# 《前沿工程标杆深度解构与 Apeireth 2.0 参考对齐报告》
 
 **调研员**：前沿工程标杆深度调研员  
 **汇报对象**：Apeireth 2.0 架构委员会 / 主代理（Parent Agent）  
@@ -19,7 +19,7 @@
    - 2.7 `OpenKB`：PageIndex 无向量化树状推理 RAG、层级目录索引与结构化检索
 3. [跨维度工程机制深度横向矩阵](#3-跨维度工程机制深度横向矩阵)
 4. [对照 Apeireth 2.0 架构：核心优势与护城河](#4-对照-apeireth-20-架构核心优势与护城河)
-5. [Apeireth 2.0 深度吸收与工程演进建议](#5-apeireth-20-深度吸收与工程演进建议)
+5. [Apeireth 2.0 对齐与工程演进建议](#5-apeireth-20-对齐与工程演进建议)
 6. [演进落地路线图与架构演进代码设计](#6-演进落地路线图与架构演进代码设计)
 
 ---
@@ -92,7 +92,7 @@
 ---
 
 ### 2.5 `OmegaWiki (AutoSci)`
-- **定位**：全生命周期 AI 科研与深度探索平台，由 Claude Code 驱动的科研中枢。
+- **定位**：全生命周期 AI 科研与深度探索平台，由编码 Agent 驱动的科研中枢。
 - **核心机制**：
   1. **Skill-Tool 分层架构**：
      - 将确定性工具（Python 脚本、文件操作、数据抓取）与非确定性 LLM 决策（Skills）严格解耦。
@@ -162,15 +162,15 @@
 
 ---
 
-## 5. Apeireth 2.0 深度吸收与工程演进建议
+## 5. Apeireth 2.0 对齐与工程演进建议
 
-#### 建议 1：吸收 Aider 的 Tree-sitter + PageRank Repo Map 机制，重构 `apeireth-tools-canonical`
+#### 建议 1：引入 Aider 的 Tree-sitter + PageRank Repo Map 机制，重构 `apeireth-tools-canonical`
 - 利用 Rust 原生 `tree-sitter` 绑定解析 AST 并提取 Tags (Def & Ref)，结合会话文件计算个性化 PageRank，在严格 Token 预算内输出折叠实现的高信噪比代码地图。
 
-#### 建议 2：吸收 gnhf 的 Git Worktree 多 Agent 隔离与自验证回滚机制，增强 `Subloop`
+#### 建议 2：引入 gnhf 的 Git Worktree 多 Agent 隔离与自验证回滚机制，增强 `Subloop`
 - 为 `Subloop` 增加 `WorktreeSandbox` 模式，在启动探索性重构或多智能体协作时，自动创建独立工作树，并在测试失败时硬重置。
 
-#### 建议 3：吸收 SwarmVault 的三层知识架构（Raw-Wiki-Schema）与 OpenKB 的 TOC 树索引，升级 `WikiFsEngine`
+#### 建议 3：引入 SwarmVault 的三层知识架构（Raw-Wiki-Schema）与 OpenKB 的 TOC 树索引，升级 `WikiFsEngine`
 - 建立三层存储标准：`vault/raw/`（只读不可变源）、`vault/wiki/`（双链 Markdown）、`vault/schema.yaml`（类型契约）；引入 PageIndex 式 TOC 树状大纲索引与路由。
 
 ---

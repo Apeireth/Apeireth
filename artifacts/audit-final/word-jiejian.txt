@@ -1,0 +1,7 @@
+crates/foundation/protocol/README.md:3:> Apeireth R17 战役 1-1: LLM 协议归一化层 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini), 字段级借鉴开源 protocol-bridge 真代码. R37-1 bridge facade (4 Bridge struct 砍 router 中间层) + R20 阶段 2 WS 8 帧协议 (AuthFrame/CloseFrame/ErrorFrame/Ping/StreamChunk/StreamEnd/ToolInvoke/ToolResult). src 模块 9 个 (lib + adapter + adapters/ + bridge + bridge_ext + error + gateway + normalized + organ_kani_proofs + ws_v1). 测试数 (#[test]): 51 in-src + 27 集成 (tests/wire_format.rs + tests/wire_format_ext.rs, 4 协议 golden + 边界).
+scripts/check-neutral-terms.ps1:3:# 产品/项目标识或"移植/借鉴/参照实现"类来源措辞。只扫 git diff 的新增行
+scripts/check-neutral-terms.ps1:17:  '借鉴自',
+scripts/release/README.md:160:- 借鉴 8/11 真实施 + LOCKED 内部 fn 改动
+scripts/release/README.md:208:## 5. 借鉴源码 0 装 PASS 严守 (per decision-33 §2.3 C2)
+scripts/release/README.md:210:| 状态 | 借鉴源码 | 实施状态 |
+scripts/release/README.md:265:| #56 | 8/10 | r127-2-borrowed-3-retry-release-prep | R127-2 10 派活 (借鉴 3 限流重试 + 1.0 release 准备) |

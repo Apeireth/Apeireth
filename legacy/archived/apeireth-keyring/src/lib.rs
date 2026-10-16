@@ -52,7 +52,7 @@
 //! ## 引用文档 (4 份)
 //!
 //! 1. `.openclaw\workspace\promethean\Apeireth-rust\docs\stage4\v09021-rust-translation-blueprint-2026-08-05.md` §2.4.1
-//! 2. `安装包keychain-token-storage` (~12KB, 1:1 翻译源)
+//! 2. `keychain-token-storage` (~12KB, 1:1 翻译源)
 //! 3. `.openclaw\workspace\promethean\Apeireth-rust\docs\stage4\m3-hallucination-defense-2026-08-05.md` §2.4
 //! 4. `.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-mcp-winrm\Cargo.toml` (PBKDF2 + AES-256-GCM 模板, fallback 参考)
 //!

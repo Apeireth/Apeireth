@@ -4,7 +4,7 @@
 //! deterministic evaluation path. Provider calls are injected by the runtime
 //! through a small adapter; this crate never owns a provider client.
 //!
-//! 借鉴 v1 `apeireth-team-lead` (14 调度工具) + `apeireth-council` (7 advisor
+//! 对齐 v1 `apeireth-team-lead` (14 调度工具) + `apeireth-council` (7 advisor
 //! + 按住机制) + `apeireth-orchestrator` (plan/impl/review). **v2 形态**:
 //! - `Advisor` trait (per-domain LLM 评审; 7 advisor 是 7 个具体 struct)
 //! - `Council::decide(proposal) -> CouncilVerdict` (按住 + 多意见加权)
@@ -37,6 +37,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use apeireth_core::deadline::TimeoutErrorCode;
 use apeireth_core::kernel::SessionId;
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -44,10 +45,16 @@ use serde::{Deserialize, Serialize};
 
 pub mod ambient_context;
 pub mod async_context;
+// 派发调度 · 并行调用分类调度: 判定器 + 互斥屏障 + 有界滚动池 + 模型序提交 + 取消补果。
+pub mod call_scheduler;
 pub mod care_potential_field;
+// 上下文工程 · 压缩检查点: 表层替换 + 留档 + 可回放 (纯确定性折叠 + 注入式摘要)。
 pub mod cognitive_quota_scheduler;
+pub mod compaction_checkpoint;
 pub mod context_budget;
 pub mod context_fold;
+// 上下文质感 · 件二: 触发数学 + 溢出自愈决策 (纯函数纯参数)。
+pub mod context_overflow;
 pub mod context_rot;
 // B3 · Phase 3 (research, 默认关闭): 上下文在线保留决策 (RA-3 StackPin/ShadowLogger).
 pub mod research_context_policy;
@@ -70,28 +77,71 @@ pub mod continuation;
 pub mod council;
 pub mod cron;
 pub mod durable;
+// 耐久输入队列 (第三批·裁决件): next-turn / next-step 双队列 + claim 原子批走 + 调度投递接线示范。
+pub mod durable_inbox;
+// 持久调度 (第三批·裁决件): 三型触发 + 补发纪律 (只补最近一次) + 全记录 compare-and-set + 单一 FIFO 写队列。
+pub mod durable_schedule;
+pub mod job_board;
+pub mod job_ring;
 pub mod lineage_spawning;
 pub mod llm;
+pub mod output_retention;
+// 计划模式（协作状态投影）: 事件流折叠 (init/apply/stateVersion) + 切换延迟落账 + 只改提示词投影。
+pub mod plan_mode;
 pub mod prompt_stabilizer;
+// 循环质感 · 件一: 重复调用提醒 (纯劝告通道, 不拦截执行、不进审计判定)。
+pub mod repetition_advisory;
+// 循环质感 · 件二: 运行时不变量注册表 (离线已证性质的线上守卫, 观察层)。
+pub mod runtime_invariants;
+// 「性格养成」第一铲: 自动校准引擎 (体验参数微调, 可见/可撤销/记录透明)。
+pub mod self_tuning;
 pub mod speech_arbiter;
+/// 生产 Orchestrator: LLM 驱动 subagent 调度 (2026-10-10, worktree 装饰器的主角)。
+pub mod subagent_llm;
+pub mod token_meter;
+// 跨会话引用封套（不受信任背景 + 按预算披露）: 固定警告头 + 边界标记 + 每源预算 + 省略三态措辞。
+pub mod untrusted_envelope;
+// 工作消耗记账 (第三批·裁决件): 事件日志单趟纯折叠 (取消/中断同答案)。
+pub mod work_consumption;
 pub mod worktree_sandbox;
 
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
 };
 pub use async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
+pub use call_scheduler::{
+    CallBatch, CallRunner, CallScheduler, CancelKind, ConcurrencyClass, ConcurrencySafety,
+    SafetyRule, SafetyWhitelist, ScheduledCall, SchedulerConfig, SchedulerConfigError, SlotOutcome,
+    DEFAULT_MAX_PARALLEL, DEFAULT_WIND_DOWN,
+};
 pub use care_potential_field::{CareAction, CarePotentialField};
 pub use cognitive_quota_scheduler::{
     CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
     CognitiveQuotaScheduler, CognitiveTaskControlBlock,
 };
-pub use context_budget::{CatalogEntry, ContextAssembler, ContextBlock, ProgressiveCatalog};
+pub use compaction_checkpoint::{
+    compaction_due, detect_unclosed_compactions, fold_checkpoints, pair_safe_end,
+    render_transcript, select_compaction_range, validate_summary, CompactionBudget,
+    CompactionCheckpoint, CompactionEngine, CompactionLogEntry, CompactionMessage,
+    CompactionOutcome, CompactionRange, CompactionRole, FoldedView, SummaryError, SummaryGenerator,
+    SummaryRequest, SummarySections, ViewSegment, SUMMARY_SECTION_HEADERS,
+};
+pub use context_budget::{
+    omission_marker, retrieval_guide, spill_file_name, split_head_tail, truncate_with_spill,
+    CatalogEntry, ContextAssembler, ContextBlock, PreviewSplit, ProgressiveCatalog, SpillWriter,
+    SpilledTruncation, SPILL_SUBDIR,
+};
 pub use context_fold::{
     approx_tokens, cosine, fold, fold_segments, has_fold_markers, parse_fold_blocks,
     render_fold_blocks, unfold, unfold_semantic, AccumulatorSnapshot, BigramOverlapScorer,
     Embedder, EmbeddingScorer, FoldBlock, FoldBlockRender, FoldError, FoldMarker, FoldResult,
     FoldStrategy, FoldedSegment, MarkerKind, RelevanceScorer, SemanticFoldOptions,
     SemanticFoldOutcome, TokenAccumulator,
+};
+pub use context_overflow::{
+    exceeds_trigger, retain_tail_tokens, retry_makes_progress, shrink_budget,
+    trigger_threshold_chars, trigger_threshold_tokens, BUDGET_SHRINK_DENOMINATOR,
+    BUDGET_SHRINK_NUMERATOR, DEFAULT_RETAIN_TAIL_RATIO, MAX_OVERFLOW_RETRIES, RESERVE_TOKENS,
 };
 pub use context_rot::{
     apply_ops, compact_then_budget, extractive_summary, query_tokens, repetition_factor,
@@ -110,18 +160,49 @@ pub use durable::{
     ActivityEvent, ActivityEventKind, ActivityExecutor, ActivityState, ActivityStateError,
     ActivityStateMachine, DurableError, DurableHistory, DurableResult, DurableRun, RetryPolicy,
 };
+pub use job_board::{
+    BoardConfig, BoardError, CompletionListener, CompletionWaiter, JobBoard, JobHandle, JobId,
+    JobOutcome, JobStatus, OwnerId, SegmentIndex, SegmentState, SettleReport, WakeDecision,
+    WakeGate,
+};
+pub use job_ring::{Chunk, JobRing, RingSlice, RingStats};
 pub use lineage_spawning::{
     LineageProgenySpec, LineageSpawningOrchestrator, NurturingPhase, ProgenySpecialization,
+};
+pub use output_retention::{
+    omission_note, prefix_within_bytes, prefix_within_chars, retain_fragment_within_bytes,
+    retain_within_bytes, suffix_within_chars, OmittedHow, OmittedWhere, RetainedOutput,
 };
 pub use prompt_stabilizer::{
     assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
     StabilizedRole,
 };
+pub use repetition_advisory::{
+    append_result_context, canonical_arguments, chain_key, params_preview, AdvisoryLevel,
+    RepetitionAdvisory, RepetitionDetector, RepetitionPolicy, RESULT_CONTEXT_MARKER,
+};
+pub use runtime_invariants::{
+    auditor_sink, first_batch_auditor, first_batch_invariants, AuditEvent, AuditEventKind,
+    AuditEventSink, InvariantAuditor, InvariantCheck, InvariantMode, InvariantRegistry,
+    InvariantViolation, RuntimeInvariant, StreamFacts, INV_A_NO_DOUBLE_SIDE_EFFECT,
+    INV_FORGET_CONFINED_TO_TARGET, INV_FORGET_IDEMPOTENT, INV_SWEEP_KEEPS_PROTECTED,
+};
+pub use self_tuning::{
+    clear_effective_overrides, effective_override, install_effective_values,
+    RetrievalHitMissSignal, SelfTuningEngine, TunableParam, TuningEvent, TuningRecord,
+    TuningSignal, TuningValues, DAY_MS,
+};
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
 };
+pub use subagent_llm::{HumanApprovalGate, LlmSubagentOrchestrator};
+pub use token_meter::{
+    envelope_of, fold_chars, fold_text, Calibration, MeterReading, MeteredEnvelope, TokenMeter,
+    UsageAnchor,
+};
 pub use worktree_sandbox::{
-    RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
+    CommandRunner, RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,
+    WorktreeSandboxedOrchestrator,
 };
 
 // ============================================
@@ -348,7 +429,10 @@ impl CouncilResult {
             if self.timed_out {
                 feedback = "Council timed out before reaching a safe decision".into();
             } else if !self.failures.is_empty() {
-                feedback = format!("{} advisor(s) failed to evaluate the candidate", self.failures.len());
+                feedback = format!(
+                    "{} advisor(s) failed to evaluate the candidate",
+                    self.failures.len()
+                );
             } else {
                 feedback = "Council vetoed the candidate".into();
             }
@@ -403,7 +487,10 @@ impl Default for CouncilConfig {
     fn default() -> Self {
         Self {
             max_advisors: 7,
-            per_advisor_timeout: Duration::from_secs(10),
+            // 2026-10-10 调 (台账 #46 实测): 思考型模型 reasoning 余量下 10s 不够
+            // (live 实锤 PerformanceAdvisor 超时→DeferToHuman), 30s 覆盖实测延迟。
+            // CLI 层可用 APEIRETH_COUNCIL_TIMEOUT_MS 覆盖。
+            per_advisor_timeout: Duration::from_secs(30),
             overall_timeout: Duration::from_secs(60),
         }
     }
@@ -654,11 +741,16 @@ impl Council {
             .iter()
             .filter(|evaluation| evaluation.verdict.verdict == AdvisorDecision::Allow)
             .count();
+        // L4 修复 (2026-09-24 审计): `decisive.is_empty()` 一律 fail-closed。
+        // 旧条件是 `decisive.is_empty() && !failures.is_empty()` — 当**全部 advisor
+        // 都 Abstain 且零 failure** 时落进 `Continue` 分支: 一个"没人表态"的评审
+        // 被当成"通过", 等于 Council 静默 fail-open (调用方把 Continue 读成放行)。
+        // 没有决定性意见时必须交还人类, 而不是默认放行。
         let decision = if stop.is_some() {
             CouncilDecision::Stop
         } else if retries > allows {
             CouncilDecision::Retry
-        } else if decisive.is_empty() && !failures.is_empty() {
+        } else if decisive.is_empty() {
             CouncilDecision::DeferToHuman
         } else {
             CouncilDecision::Continue
@@ -810,7 +902,7 @@ pub struct SubagentSpec {
 }
 
 /// Subagent 输出结果
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentOutcome {
     /// 对应 spec.id
     pub spec_id: String,
@@ -910,6 +1002,15 @@ pub enum OrchestratorError {
     GovernanceDenied(String),
     /// IO 错误
     Io(String),
+    /// 有界等待到期: 超时类独立 code 归属 (`timeout.*`), 带触发到期的边界取值。
+    Timeout {
+        /// 超时类 code (独立错误族)。
+        code: TimeoutErrorCode,
+        /// 触发到期的边界取值 (毫秒)。
+        timeout_ms: u64,
+        /// 哪一段等待到期 (如 "dispatch")。
+        what: String,
+    },
 }
 
 impl std::fmt::Display for OrchestratorError {
@@ -919,6 +1020,11 @@ impl std::fmt::Display for OrchestratorError {
             Self::HumanDenied(msg) => write!(f, "human denied: {msg}"),
             Self::GovernanceDenied(msg) => write!(f, "governance denied: {msg}"),
             Self::Io(msg) => write!(f, "io error: {msg}"),
+            Self::Timeout {
+                code,
+                timeout_ms,
+                what,
+            } => write!(f, "{what} timed out after {timeout_ms}ms ({code})"),
         }
     }
 }
@@ -1236,5 +1342,69 @@ mod tests {
             .await;
         assert_eq!(result.decision, CouncilDecision::DeferToHuman);
         assert_eq!(result.failures[0].category, "advisor_timeout");
+    }
+
+    /// L4 回归: 全部 advisor Abstain 且**零 failure** → 必须 DeferToHuman。
+    ///
+    /// 旧实现的条件是 `decisive.is_empty() && !failures.is_empty()` — 全 Abstain
+    /// 无失败时落进 `Continue`, 等于把"没人表态"静默读成"通过" (fail-open)。
+    #[tokio::test]
+    async fn council_all_abstain_without_failures_defers_to_human() {
+        let council = council_with_kinds(&[AdvisorKind::Safety, AdvisorKind::Performance]);
+        let invoker = ScriptedInvoker {
+            decisions: [
+                (
+                    AdvisorKind::Safety,
+                    Ok(verdict(AdvisorDecision::Abstain, 0.0)),
+                ),
+                (
+                    AdvisorKind::Performance,
+                    Ok(verdict(AdvisorDecision::Abstain, 0.0)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            delays: Default::default(),
+        };
+        let result = council
+            .decide_with_invoker(&sample_proposal(), &invoker)
+            .await;
+        assert_eq!(
+            result.decision,
+            CouncilDecision::DeferToHuman,
+            "全 Abstain 不得 fail-open 成 Continue"
+        );
+        assert_eq!(result.aggregate_score, 0.0);
+        assert!(result.failures.is_empty(), "本用例零 failure, 纯 Abstain");
+        assert!(
+            result.supporting_advisors.is_empty(),
+            "Abstain 不是支持性意见"
+        );
+    }
+
+    /// L4 回归: 混合 Abstain + Allow 时 Abstain 不算决定性意见 (仍可 Continue)。
+    #[tokio::test]
+    async fn council_abstain_does_not_count_as_decisive() {
+        let council = council_with_kinds(&[AdvisorKind::Safety, AdvisorKind::Performance]);
+        let invoker = ScriptedInvoker {
+            decisions: [
+                (
+                    AdvisorKind::Safety,
+                    Ok(verdict(AdvisorDecision::Abstain, 0.0)),
+                ),
+                (
+                    AdvisorKind::Performance,
+                    Ok(verdict(AdvisorDecision::Allow, 1.0)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            delays: Default::default(),
+        };
+        let result = council
+            .decide_with_invoker(&sample_proposal(), &invoker)
+            .await;
+        assert_eq!(result.decision, CouncilDecision::Continue);
+        assert!((result.aggregate_score - 1.0).abs() < f64::EPSILON);
     }
 }

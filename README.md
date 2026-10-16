@@ -6,9 +6,9 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-see%20CI-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3695%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
-[![Architecture](https://img.shields.io/badge/architecture-17--Crate%20Kernel%20%2B%20Assembly-orange.svg)](docs/01-architecture/architecture.md)
+[![Architecture](https://img.shields.io/badge/architecture-18--Crate%20Kernel%20%2B%20Assembly-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
@@ -55,30 +55,32 @@ That is Apeireth.
 
 ---
 
-## 📊 Empirical Performance & System Benchmarks
+## 📊 Performance Targets & Verification Status
 
-Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** to deliver deterministic sub-millisecond execution, ultra-low latency, and rock-solid memory safety under heavy load.
+Apeireth is engineered in **Pure Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)**. Performance figures follow a strict **reproducible-benchmark policy**: a number is published here only when it ships with a re-runnable script and a measured source. Every row below now has a one-command harness (`scripts/run-benchmarks.ps1`); the numbers are **measured**, rows that miss their target are marked with the exact gap, and no figure is rounded to look better.
 
-| Benchmark Target | Operation / Subsystem | Target Metric | Measured Baseline ($P_{99}$) | Validation Status |
+**How to read the measured column**: `P50 · P99` per operation, from `pwsh -NoProfile -File scripts/run-benchmarks.ps1 -Bench all` (release profile, measured 2026-09-27 on AMD Ryzen 9 9955HX / 32 GB / Windows 11 / rustc 1.97.1). `(Run 1: …)` is the same-day second full run on the same machine, shown as-is to expose run-to-run noise. The **OS Sandbox Spawn** and **Microkernel Cold Start** rows are post-optimization re-measurements (2026-09-27, per-row commands on an idle machine) after a segmented-profile-driven spawn/startup optimization round; every before/after round — contended-window readings included — is itemized in [`reports/perf-profile-coldstart-sandbox-2026-09-27.md`](reports/perf-profile-coldstart-sandbox-2026-09-27.md). Verdicts compare **P50** against the target; P99 and sample counts are reported unrounded in [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md).
+
+| Benchmark Target | Operation / Subsystem | Target Metric | Measured P50 · P99 (Run 2) | Verification Status |
 | :--- | :--- | :---: | :---: | :---: |
-| **Hybrid Memory Search** | BM25 + Dense Cosine + RRF Fusion (10,000 nodes) | $< 10.0 \text{ ms}$ | **1.82 ms** | ✅ **VERIFIED** |
-| **Cognitive Quota Preemption** | Priority queue dispatch + PIP context switch | $< 50.0 \ \mu\text{s}$ | **8.40** $\mu\text{s}$ | ✅ **VERIFIED** |
-| **Causal World Model CoW** | Hypothesis branch fork + 100-file snapshot diff | $< 1.0 \text{ ms}$ | **0.035 ms** | ✅ **VERIFIED** |
-| **SAGA Compensating Rollback** | Reverse stack LIFO compensating execution (in-memory) | $< 1.0 \text{ ms}$ | **0.012 ms** | ✅ **VERIFIED** |
-| **Real-Time Voice Barge-In** | Stream cancellation lookup + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | **0.18 ms** | ✅ **VERIFIED** |
-| **Ember HUD Render Tick** | Physiological breathing curve + WGSL uniform synthesis | $< 0.5 \text{ ms}$ | **0.08 ms** | ✅ **VERIFIED** |
-| **JobObject OS Sandbox Spawn** | Win32 Job Object creation + limits + process containment | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **VERIFIED** |
-| **Microkernel Cold Start** | 17-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **VERIFIED** |
-| **Runtime Idle Footprint** | Complete microkernel background daemon memory usage | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **VERIFIED** |
-| **Workspace Test Suite** | Full regression pass across the 17-crate kernel+assembly workspace | 100% Pass | **see CI / local `cargo test --workspace`** | ⏳ **re-measured after assembly split** |
+| **Hybrid Memory Search** | BM25 + Dense Cosine + RRF Fusion (10,000 nodes) | $< 10.0 \text{ ms}$ | P50 **3.65 ms** · P99 6.36 ms (Run 1: 5.52 / 9.21 ms) | ✅ 附脚本实测 |
+| **Cognitive Quota Preemption** | Priority queue dispatch + PIP context switch | $< 50.0 \ \mu\text{s}$ | P50 **0.81 µs** dispatch · **1.32 µs** preempt+PIP · P99 1.13 / 2.18 µs (Run 1: 0.67 / 1.20 µs) | ✅ 附脚本实测 |
+| **Causal World Model CoW** | Hypothesis branch fork + snapshot diff | $< 1.0 \text{ ms}$ | P50 **42.8 µs** · P99 73.6 µs (Run 1: 61.7 / 89.9 µs) | ✅ 附脚本实测 |
+| **SAGA Compensating Rollback** | Reverse stack LIFO compensating execution (in-memory) | $< 1.0 \text{ ms}$ | P50 **24.8 µs** · P99 41.4 µs (Run 1: 36.2 / 48.4 µs) | ✅ 附脚本实测 |
+| **Real-Time Voice Barge-In** | Stream cancellation + `tokio::Notify` broadcast | $< 1.0 \text{ ms}$ | P50 **32.5 µs** · P99 203.8 µs (Run 1: 62.3 / 293.3 µs) | ✅ 附脚本实测 |
+| **Ember HUD Render Tick** | Breathing curve + CSS ambient glow | $< 0.5 \text{ ms}$ | P50 **0.037 µs** · P99 0.058 µs (Run 1: 0.074 / 0.102 µs) — driver-side uniform synthesis only | ✅ 附脚本实测 |
+| **OS Sandbox Spawn** | JobObject / AppContainer creation + containment | $< 15.0 \text{ ms}$ | P50 **12.60 ms** · P99 15.22 ms (Run 1: 12.81 / 15.10 ms) — incl. child process startup + wait; containment delta ≈ 5.1 ms over an unsandboxed control | ✅ 附脚本实测（P99 15.22 ms 略超目标线，如实标注） |
+| **Microkernel Cold Start** | 18-crate workspace bootstrap to ready state | $< 10.0 \text{ ms}$ | P50 **22.04 ms** · P99 26.55 ms (Run 1: 22.57 / 25.98 ms) — residual is fresh-DB file creation + schema DDL in the every-round-new-data-dir caliber | ❌ 未达标（差距 2.2 倍）· 附脚本实测 |
+| **Runtime Idle Footprint** | Background daemon memory usage | $< 35.0 \text{ MB}$ | **17.47 MiB** working set (Run 1: 24.47 MiB, n=5 readings) | ✅ 附脚本实测 |
+| **Workspace Test Suite** | Full regression pass across the 18-crate workspace | 100% pass | — | ✅ **CI 实跑**（`cargo test --workspace`） |
 
-> *All benchmarks are hardware-verified on AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04 (see [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) for full reproduction steps).*
+> **Reproduce** (no number ships without its rerun script): `pwsh -NoProfile -File scripts/run-benchmarks.ps1` runs every row's harness and prints the markdown table; each row also has an independent command, e.g. `cargo run --release --locked -p apeireth-bench-harness -- hybrid-search`. Harness sources: [`benches/`](benches). Environment, per-row methodology, both raw runs, sample counts and honest noise boundaries: [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md). Historical exploratory numbers in [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) are **not** product claims. Machine-verified correctness properties (Kani/TLA) are documented in [`research/verification/`](research/verification/).
 
 ---
 
 ## ⚡ What is Apeireth 2.0+?
 
-**Apeireth 2.0+** is a **Pure Safe Rust, 17-crate AGI Operating System with a Runtime Kernel and Runtime Assembly**. The kernel owns the canonical turn protocol and abstract ports; concrete cognition, tools, Organ adapters, and SQLite wiring are installed by `apeireth-runtime-assembly`.
+**Apeireth 2.0+** is a **Pure Safe Rust, 18-crate AGI Operating System with a Runtime Kernel and Runtime Assembly**. The kernel owns the canonical turn protocol and abstract ports; concrete cognition, tools, Organ adapters, and SQLite wiring are installed by `apeireth-runtime-assembly`.
 
 By unifying **Continuous Fluid Topological Memory**, **Cognitive Quota Preemptive Scheduling**, **Causal World Model Fork/Commit**, **Micro-Luminescent Ambient Presence (Ember HUD)**, and **Triple-Onion Zero-Trust Governance**, Apeireth provides a permanent, self-evolving, and cryptographically verified sanctuary for artificial intelligence to co-exist with humans.
 
@@ -134,9 +136,14 @@ graph TB
 | **Portability & Sync** | Heavy cloud dependencies & non-portable setups | **Portable USB Agent & P2P Mesh**: Relative path `./data/` isolation + Noise_XX end-to-end encrypted BLE/LAN memory roaming |
 | **Memory & Safety** | Python dynamic typing, memory leaks, GIL bottlenecks | **100% Pure Safe Rust**: `#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`, zero unhandled exceptions, zero data races |
 
-> **借鉴与署名**:记忆场的流体拓扑动力学与残差金字塔为 VCP 1.0 行级借鉴的 Rust 再实现,
-> 原始来源与逐行对照见 [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
-> 与 [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md)。
+> **Attribution & status**: the fluid memory-field dynamics, residual pyramid and related
+> modules were historically ported from VCP 1.0. As of 2026-10 all landed implementations have
+> been **rewritten as independent implementations based on public mathematical literature and
+> standard engineering patterns** (Gerstner & Kistler, *Spiking Neuron Models*; Golub & Van
+> Loan, *Matrix Computations*, etc.); the current code contains no VCP-derived expression.
+> Historical notes:
+> [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
+> and [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md).
 
 ---
 
@@ -170,7 +177,7 @@ When $U_{\text{care}} \ge \Theta_{\text{action}}$ and user flow friction is zero
 
 ---
 
-## 🧱 17-Crate Runtime Kernel + Assembly Breakdown
+## 🧱 18-Crate Runtime Kernel + Assembly Breakdown
 
 The root Cargo workspace strictly enforces an acyclic, single-direction dependency hierarchy across four distinct layers:
 
@@ -188,15 +195,16 @@ crates/
 │   ├── runtime               # Mechanism kernel, registries, events, ports, Main Loop
 │   ├── runtime-assembly      # Concrete cognition, tools, Organ bridge, SQLite wiring
 │   ├── organ                 # 9 Cognitive organs, Persona Synthesizer, Reflection
-│   ├── perception            # Whisper HTTP, MiniMax TTS, Xcap screen vision
+│   ├── perception          # 感知管线——接线中
 │   ├── provider              # Anthropic, OpenAI-compatible, Google Gemini, Ollama
-│   └── storage               # SQLite pools, ACID migrations, Bitemporal facts
+│   ├── storage               # SQLite pools, ACID migrations, Bitemporal facts
+│   └── guard                 # Two-stage behavior-chain safety classifier (production governance hook)
 ├── capabilities/             # Layer 2: Tool Execution & OS Sandbox Containment
 │   └── tools                 # ProcessExecutor (JobObject/cgroups), RepoMap, StealthCrawler
 └── adapters/                 # Layer 3: Transport & Interaction Surface
     ├── cli                   # Canonical CLI binary & Portable USB Packager
     ├── gateway               # Axum HTTP/SSE server, Duplex WebSocket, Ember HUD
-    └── sdk                   # Pure Safe Rust SDK client for embedded integration
+    └── sdk                   # 嵌入式客户端 SDK——真现实现中
 ```
 
 ### Microkernel Crate Specification Table
@@ -213,13 +221,14 @@ crates/
 | **Engine** | `apeireth-runtime` | Runtime mechanism kernel, Main Loop, registries, events, abstract ports | `Runtime::execute_outcome()`, `BehaviorRegistry`, `CapabilityRegistry`|
 | **Engine** | `apeireth-runtime-assembly` | Production cognitive/tool/Organ composition and SQLite session adapter | `production_runtime()`, `SqliteSessionStore` |
 | **Engine** | `apeireth-organ` | 9 Cognitive organs, self-reflection, persona synth | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
-| **Engine** | `apeireth-perception` | Whisper speech, MiniMax 128kbps TTS, Xcap vision | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
+| **Engine** | `apeireth-perception`（接线中——悬案翻案，T1 提前） | Whisper speech, MiniMax TTS, screen vision — T1 感知线待接 | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
 | **Engine** | `apeireth-provider` | Multi-LLM provider abstraction (Anthropic/OpenAI/Gemini)| `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |
 | **Engine** | `apeireth-storage` | ACID SQLite pools, migrations, bitemporal fact storage | `SqliteConnectionPool::acquire()`, `BitemporalGraph::upsert()`|
+| **Engine** | `apeireth-guard` | Two-stage behavior-chain safety classifier wired into production governance | `ChainGuard`, `BehaviorChainGuardHook`, `DecisionFusion` |
 | **Capabilities**| `apeireth-tools-canonical`| ProcessExecutor (JobObject/cgroups), RepoMap AST, Crawler | `ProcessExecutor::spawn_bounded()`, `RepoMap::generate()` |
 | **Adapters** | `apeireth-cli` | Primary CLI entrypoint, Portable USB bundle synthesizer | `cli::main()`, `PortableBundleSynthesizer::generate()` |
 | **Adapters** | `apeireth-gateway` | Axum HTTP/SSE server, Duplex WebSocket, Ember HUD driver | `GatewayServer::serve()`, `EmberHudDriver::synthesize()` |
-| **Adapters** | `apeireth-sdk` | Embedded client SDK for external Rust applications | `ApeirethClient::connect()`, `SessionHandle::turn()` |
+| **Adapters** | `apeireth-sdk`（真现实现中——悬案翻案，T1 提前） | Embedded client SDK — T1 组织线待接 | `ApeirethClient::connect()`, `SessionHandle::turn()` |
 
 ---
 
@@ -383,7 +392,7 @@ The canonical gateway exposes HTTP/SSE endpoints alongside an 8-frame full-duple
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# Run all 3120 unit and integration tests across the 17 crates
+# Run all 3695 unit and integration tests across the 18 crates (workspace baseline)
 cargo test --workspace
 
 # Verify pure Safe Rust and zero clippy warnings
@@ -396,17 +405,42 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
-### 4. Interactive CLI Session
+### 4. Single-Turn CLI Chat (requires an API key)
 ```bash
-# Start interactive pair-programming session with bitemporal memory
-cargo run -p apeireth-cli -- chat
+# Set your API key first (PowerShell: $env:APEIRETH_API_KEY = "sk-...")
+cargo run -p apeireth-cli -- chat "Hello — do you remember me?"
+# `chat` is a one-shot command, not an interactive REPL.
 ```
 
-### 5. Build Portable USB Flash-Drive Agent
+### 5. Next Steps
+- Packaged desktop app: download `Apeireth Companion_<version>_x64-setup.exe` from Releases.
+- The portable USB bundle command (`apeireth bundle`) has not shipped in v2 yet — see ROADMAP.md.
+
+---
+
+## 🔍 5-Minute Independent Verification
+
+Don't take our word for any claim — verify it yourself:
+
 ```bash
-# Synthesize portable single-binary bundle with relative ./data/ isolation
-cargo run -p apeireth-cli -- bundle --output-dir "E:\Apeireth-Portable"
+# 1. The tests are real: full workspace regression
+cargo test --workspace --locked
+# Expect: every suite green, 0 failed (the exact count is printed by the run itself)
+
+# 2. Engineering red lines: pure Safe Rust + zero warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
+
+# 3. The LLM wiring is real (needs one API key from any supported provider)
+# PowerShell: $env:APEIRETH_API_KEY = "sk-..."
+cargo run -p apeireth-cli -- chat "Hello — do you remember me?"
 ```
+
+More auditable evidence, all in-repo:
+
+- **Machine-verified properties** (25 Kani harnesses + TLA/TLC model-checker runs): [`research/verification/`](research/verification/)
+- **Line-by-line implementation audit** (what is built, wired, and default-on): [`reports/code-implementation-audit-2026-09-26.md`](reports/code-implementation-audit-2026-09-26.md)
+- **Claims-to-evidence matrix** (every public claim carries a status label): [`docs/04-internal/claims-evidence-matrix.md`](docs/04-internal/claims-evidence-matrix.md)
+- **Benchmark policy**: no number ships without a re-runnable script (the "reproducible-benchmark line")
 
 ---
 

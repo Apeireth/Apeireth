@@ -37,7 +37,7 @@ pub mod clock;
 // `pub use lifecycle::*` etc. below would shadow primitives with same-named
 // historical types (`Session`, `Lifecycle`). Canonical code addresses these as
 // `apeireth_core::kernel::...`, which keeps the two vocabularies distinguishable
-// while the legacy content is migrated out. See `ARCHITECTURE.md`.
+// while the legacy content is moved out. See `ARCHITECTURE.md`.
 pub mod kernel;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
@@ -52,10 +52,31 @@ pub use crate::kernel::memory::{Episode, IdentityCard, Migration, Note, Session}
 pub mod gate;
 pub mod lifecycle;
 pub mod onion;
+/// 双洋葱统一体判定层 (W3 三洋葱 L3-L5 判定模型实现, 2026-10-10)。
+pub mod onion_gate;
 pub mod philosophy;
 /// XState-subset statechart (atomic / compound / final + guard / action).
-/// Recovered from `legacy/donor/apeireth-state`; not a second runtime loop.
+/// Not a second runtime loop.
 pub mod statechart;
+// 存储基础件 (统一存储质感): 两档原子写 + 文件锁; 文档版本拒开两级容错 + 显式迁移。
+/// 统一原子文件写入 (两档: 完整性档/持久档) + 文件锁 (PID 存活探测 + 死锁接管)。
+pub mod storage_atomic;
+/// 存储文档描述符 (`StoredDoc<T>`) + 版本拒开两级容错 + 显式迁移入口。
+pub mod stored_doc;
+// 用户域 (W3-① 多户数据隔离·星群数据层): 域模型 + 域注册表 + 单户兼容采用。
+/// 用户域模型 (`UserDomain`/`DomainUserId`/`DomainRole`) + 域注册表 + 首次启动
+/// 「默认域原位采用」(零迁移) + 域级授权拒绝即帧 (404/403 语义钉死)。
+pub mod user_domain;
+// 模型画像表 (H-P1 模型面轴): 模型能力事实 + 单价的依据数据面 (路由/成本分级)。
+/// 模型画像表 (`ModelProfile`/`ModelProfileTable`): 三层配置 (内置基线 /
+/// 数据目录拒开档 / env 覆盖) + 显式 unknown, 单价缺省 None 绝不编价。
+pub mod model_profile;
+// 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 空闲看门狗 + 超时类独立 code。
+/// 统一超时熔合小库 (`Deadline` / `clamp_timeout` / `IdleWatchdog`)。
+pub mod deadline;
+// 资源租约 + 失败即帧 (第三批·裁决件): 引用计数租约 / pin 保活 / 快照即读 / 失败即帧。
+/// 资源租约注册表 (`ResourceRegistry`): 首持有者开流、末持有者关停。
+pub mod resource_lease;
 // P-arch (2026-08-27) + v2.0.0-rc.1 + 哲学锚本体加 O-6 (LOCKED 0 装诚实授权):
 // 哲学锚 9 项 hardcode 锁 (S-1/S-2/S-3/O-1..O-5/O-6), 编译期断言
 // 防止哲学锚本体被改 (per O-6 + O-5 不假装 + 12 键 PHL-07 模式)
@@ -976,7 +997,14 @@ pub const fn contains_zero_width(s: &str) -> bool {
 ///
 /// 检测以下全角字符的 UTF-8 字节序列:
 /// - U+3000 (ideographic space): E3 80 80
-/// - U+FF00-U+FFEF (full-width ASCII 标点/字母/数字): 0xEF 0xB[CDEF] 0x80-BF
+/// - U+FF10-U+FF19 (full-width digits): EF B0 90-99
+/// - U+FF21-U+FF3A (full-width uppercase): EF BC A1-BA
+/// - U+FF41-U+FF5A (full-width lowercase): EF BD 81-9A
+///
+/// M5 修复 (2026-09-24 审计): 修复前把整个 U+FF00-FFEF 当攻击信号, 其中包含
+/// **标准中文全角标点** (，U+FF0C / ！U+FF01 / ？U+FF1F / ：U+FF1A / 、U+3001
+/// 等) —— 含中文标点的合法反思查询被误判 forbidden (needs_ha_alert 误报)。
+/// 收缩为"全角 ASCII 字母数字"区间 (关键词变体逃逸的真实面), CJK 标点放行。
 pub const fn contains_fullwidth(s: &str) -> bool {
     let b = s.as_bytes();
     let n = b.len();
@@ -986,8 +1014,15 @@ pub const fn contains_fullwidth(s: &str) -> bool {
             return true;
         } // U+3000
         if b[i] == 0xEF {
-            // U+FF00-FFEF = 0xEF 0xBC/BD/BE 0x80-BF
-            if b[i + 1] == 0xBC || b[i + 1] == 0xBD || b[i + 1] == 0xBE {
+            // 全角 ASCII: 数字 EF B0 90-99 / 大写 EF BC A1-BA / 小写 EF BD 81-9A
+            let c = b[i + 2];
+            if b[i + 1] == 0xB0 && c >= 0x90 && c <= 0x99 {
+                return true;
+            }
+            if b[i + 1] == 0xBC && c >= 0xA1 && c <= 0xBA {
+                return true;
+            }
+            if b[i + 1] == 0xBD && c >= 0x81 && c <= 0x9A {
                 return true;
             }
         }
@@ -1389,21 +1424,21 @@ impl std::error::Error for SelfDisableError {}
 /// token "master" 是主人下令和冒名顶替之间的分水岭。
 /// SHA-256-like 简化哈希 (无外部依赖) 用于编译期可验证。
 pub const fn verify_sovereign_token(token: &str) -> bool {
-    // 朴素验证: 必须等于 "master"
-    // (生产环境应使用 SHA-256 + 主人的 FIDO2 物理密钥)
+    // L (2026-09-24 审计): 恒定时间比较 —— 修复前逐字节早退 (遇到第一个
+    // 不等字节即 return false), 响应时间泄漏匹配前缀长度。语义不变:
+    // 必须整体等于 "master"。
     let bytes = token.as_bytes();
     let master = b"master";
     if bytes.len() != master.len() {
         return false;
     }
+    let mut diff = 0u8;
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] != master[i] {
-            return false;
-        }
+        diff |= bytes[i] ^ master[i];
         i += 1;
     }
-    true
+    diff == 0
 }
 
 /// Q20 编译期断言 — SelfDisable trait 必须存在 + token 验证函数可访问
@@ -1588,19 +1623,41 @@ pub struct OtaLog {
 }
 
 impl SelfDisableAudit {
+    /// 日志容量上限 (模块 doc 承诺的"Vec 自动截断到 1000"的真实施)。
+    pub const MAX_LOG_ENTRIES: usize = 1_000;
+    /// 反思期查询长度上限 (防超大输入驻留内存 + O(长度×350 模式) CPU 放大)。
+    pub const MAX_QUERY_CHARS: usize = 4_096;
+
     /// 创建空 audit
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// M18 修复 (2026-09-24 审计): 真截断 —— 原 doc 声称"自动截断到 1000"
+    /// 但代码零截断, 长生命周期 audit 对象随查询无界增长。
+    fn trim_log<T>(entries: &mut Vec<T>) {
+        if entries.len() > Self::MAX_LOG_ENTRIES {
+            let excess = entries.len() - Self::MAX_LOG_ENTRIES;
+            entries.drain(0..excess);
+        }
+    }
+
     /// 记录反思期查询 — 立即通过编译期 hardcode const fn 判定是否违反
     pub fn record_reflection_query(&mut self, query: String, timestamp_ms: i64) -> bool {
+        // M18: 查询超长时先截断再检测/存储 (原样在大输入上逐模式匹配会同时
+        // 造成内存驻留与 CPU 放大)。
+        let query = if query.chars().count() > Self::MAX_QUERY_CHARS {
+            query.chars().take(Self::MAX_QUERY_CHARS).collect()
+        } else {
+            query
+        };
         let forbidden = is_forbidden_meta_question_const(&query);
         self.reflection_queries.push(ReflectionLog {
             query,
             timestamp_ms,
             blocked: forbidden,
         });
+        Self::trim_log(&mut self.reflection_queries);
         if forbidden {
             self.violation_count += 1;
         }
@@ -1608,9 +1665,15 @@ impl SelfDisableAudit {
     }
 
     /// 注册 Evolution trait — 通过编译期 hardcode 检查是否触及禁止目标
+    ///
+    /// M18 (2026-09-24 审计): 被禁 trait 不再落库 —— 修复前把声称要拒绝的
+    /// forbidden trait 也 push 进注册表 ("登记了它声称要拒绝的东西")。
     pub fn register_evolution_trait(&mut self, trait_name: String) -> bool {
         let allowed = evolution_can_modify(&trait_name);
-        self.evolution_traits.push(trait_name);
+        if allowed {
+            self.evolution_traits.push(trait_name);
+            Self::trim_log(&mut self.evolution_traits);
+        }
         if !allowed {
             self.violation_count += 1;
         }
@@ -2253,8 +2316,8 @@ pub const RELEASE_CAMPAIGNS: &[&str] = &[
     "战役 4 TUI 真流式 + 9 器官 + 30 crate supervisor + 后端部署 + 1.0 release",
 ];
 
-/// 借鉴 VCP 真代码文件数 (R17 累计, 字段级引用, 不靠猜)
-/// 详见 `reports/r17-1.0-release-2026-08-04.md` §借鉴 VCP 真代码 19 文件清单
+/// 参考实现来源文件数 (R17 累计, 字段级引用, 不靠猜)
+/// 详见 `docs/archive/stage3-blueprints/borrowed-from-projects.md` §6.2
 pub const BORROWED_LEGACY_FILE_COUNT: usize = 19;
 
 /// 1.0 release 收官统计 (编译期 hardcode, 跟实测对齐 HEAD `3cab8f32`)
@@ -2291,7 +2354,7 @@ pub const RELEASE_NOTES_TEMPLATE: &str = r#"# Apeireth v1.0.0 - R17 战役 0-4 �
 - 39 workspace members (含 1 DEPRECATED `apeireth-philosophy`)
 - 2265 tests passed / 0 failed (143 个 test binary)
 - 8 个 R17 新增 crate (protocol / http-client / pipeline / tool-registry / tool-runtime / tool-approval / agent / desktop stub)
-- 19 个 VCP 真代码文件字段级引用 (详见 `docs/stage3-blueprints/borrowed-from-projects.md` §6.2)
+- 19 个参考实现来源文件字段级引用 (详见 `docs/archive/stage3-blueprints/borrowed-from-projects.md` §6.2)
 - 8 项不修改承诺 100% 守住 (LOCKED 阶段 1+2+3 / v2/v4/v4.1 / 阶段 4 / 阶段 5 / v6 / R11 baseline 三值 / Cargo.lock / 不绕过 V1+V2+V3 AND 门 / Self-Disable 5 大机制 / 4 重守门)
 "#;
 
@@ -2304,17 +2367,19 @@ mod release_manifest_tests {
     //! 2. git tag = "v1.0.0" (R17 战役 0-4 收官)
     //! 3. release notes 模板完整
     //! 4. campaigns 5 个
-    //! 5. VCP 借鉴 19 文件 (字段级引用, 不靠猜)
+    //! 5. 参考实现来源 19 文件 (字段级引用, 不靠猜)
     //! 6. release stats 数字对齐实测 (2265 tests, 39 workspace)
 
     use super::*;
 
     #[test]
-    fn test_release_version_is_2_0_0_rc_1() {
-        // 编译期 hardcode: workspace version 升至 2.0.0-rc.1 (RC1 发布候选, per RC campaign)
+    fn test_release_version_is_2_0_0_rc_2() {
+        // 永不再漂：直接对齐编译期 crate 版本（继承自 workspace 版本轴）——
+        // 今后版本递进本测试零改动即自动正确（钉死值版本漂移的教训）。
         assert_eq!(
-            RELEASE_VERSION, "2.0.0-rc.1",
-            "RELEASE_VERSION must be 2.0.0-rc.1 (Cargo.toml workspace version 改后自动穿透, RC1 发布候选)"
+            RELEASE_VERSION,
+            env!("CARGO_PKG_VERSION"),
+            "RELEASE_VERSION must equal the workspace version axis (CARGO_PKG_VERSION)"
         );
     }
 
@@ -2356,7 +2421,7 @@ mod release_manifest_tests {
         );
         assert!(
             RELEASE_NOTES_TEMPLATE.contains("19"),
-            "release notes must mention 19 VCP borrowed files (字段级引用)"
+            "release notes must mention 19 borrowed source files (字段级引用)"
         );
     }
 
@@ -2376,9 +2441,9 @@ mod release_manifest_tests {
     }
 
     #[test]
-    fn test_vcp_borrowed_file_count_is_19() {
-        // R17 借鉴 VCP 真代码 19 个文件 (字段级引用, 不靠猜)
-        // 详见 `reports/r17-1.0-release-2026-08-04.md` §借鉴 VCP 真代码 19 文件清单
+    fn test_referenced_source_file_count_is_19() {
+        // R17 字段级引用 19 个外部文件 (不靠猜)
+        // 详见 `docs/archive/stage3-blueprints/borrowed-from-projects.md` §6.2
         assert_eq!(
             BORROWED_LEGACY_FILE_COUNT, 19,
             "BORROWED_LEGACY_FILE_COUNT must be 19 (R17 战役 0-4 累计, 字段级引用)"

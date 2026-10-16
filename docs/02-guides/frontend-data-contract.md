@@ -177,7 +177,7 @@ handler：`companion_serve.rs:1040-1363`。OpenAI 兼容请求，服务端在调
 | header | 说明 / 出处 |
 |--------|--------------|
 | `X-Apeireth-Continuity` | 可选会话标签；空/缺省 → 启动 subject（`:1045-1050`）。前端在 `streamChat` 里当 `sessionId` 非空时发送（`runtime.ts:366-368`） |
-| `Authorization` | 服务端不校验；可发任意非空 Bearer |
+| `Authorization` | **全 API 面令牌门**（W2-② 起 chat/事件流/面板/会话/审批/admin 族全鉴权，唯一豁免 `/health` 探活）：三态口径（env `APEIRETH_GATEWAY_TOKEN` + 客户端令牌表任一在场=强制态，Bearer 必须命中令牌族；两面皆空=放行但警告+审计；`none`=明示不设防留痕，见 `docs/04-internal/backend-enhancement/E-threat-model.md` G10 处置）。桌面 UI 每个网关请求统一经 `gatewayAuthHeaders()`（`src/lib/tauri-bridge.ts` 令牌面，三源取值：IPC `get_gateway_token`（桌面）> env `VITE_APEIRETH_GATEWAY_TOKEN`（web 构建注入）> 无；无令牌=三态门未设口径照旧，不发鉴权头）。用户凭据（`config.apiKey` / `provider.apiKey`）**不是**入站鉴权，不进网关请求头 |
 
 服务端副作用（前端可感知）：每条对话都会喂节律 + 重置做梦安静期（`:1053`），并可能触发异步记忆提炼（fire-and-forget，`:1355-1360`）。
 
@@ -720,7 +720,7 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 ### 9.2 断线重连策略建议
 
-- **SSE `/v1/apeireth/events`**：参照 `subscribeCompanionEvents` 的指数退避（首试 2s，×1.5，封顶 30s，连接成功后复位，`runtime.ts:1022`、`:1035`、`:1059-1060`）。注意服务端 broadcast 容量 64、落后即丢（`companion_serve.rs:980`、`:1532`）——重连后**不要**假设能补到断线期消息，应主动拉一次相关 REST（如 approval-requests）对齐状态。`EventSource` 自带重连不可控，建议统一走 fetch+reader 的手动循环（现有实现即如此）。
+- **SSE `/v1/apeireth/events`**：参照 `subscribeCompanionEvents` 的指数退避（首试 2s，×1.5，封顶 30s）。注意服务端 broadcast 容量 64、落后即丢（`companion_serve.rs:980`、`:1532`）——重连后**不要**假设能补到断线期消息，应主动拉一次相关 REST（如 approval-requests）对齐状态。`EventSource` 自带重连不可控且**无法带 Authorization 头**：令牌门全 API 面化后，有令牌的客户端统一走 fetch+reader 手动循环（`src/lib/sse-stream.ts`，帧解析与 EventSource 同口径）；无令牌（三态门未设，兼容路径）保留 EventSource 原路径，行为与收口前一致。
 - **轮询兜底**：`App.svelte:463-465` 已每 15s 刷新健康 + 审批请求。SSE 断线期间这是唯一状态来源，保留。
 - **chat 请求**：503（限流）按 body 提示 10-30s 后由用户重试（`companion_serve.rs:1256`）；`streamChat` 中断（`done` 提前/网络错）时前端已能保留已收 `fullText`，不要整句丢弃。
 - **所有 panel 只读端点**失败时按「数据源暂缺」降级展示，不阻塞主对话链路。
@@ -757,5 +757,154 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 | `update|forget|protect|unprotectMemoryEpisode` | `/v1/apeireth/memory/episodes/:id*` ✗ | ✗ G10 |
 | `fetchGrants` / `revokeGrant` | `/v1/apeireth/grants*` ✗ | ✗ G10 |
 | `fetchTraces` / `fetchTraceDetail` | `/v1/panel/traces(/:id)` ✗ | ✗ G10 |
+
+---
+
+## 10. 后端增强批新数据面（2026-10 战役 · 前端接新面唯一契约参照）
+
+> 本节收录后端增强战役新建数据面的**字段合同**（指标端点 / 配额自述 / 域节 / 技能卡 / 随手记条目）。
+> 沿用本文「契约即真相」纪律：字段与代码不一致时以代码为准并回写本文档（含出处行号）；
+> 能力面清单（状态+上屏面）见 [capabilities-matrix.md](../03-reference/capabilities-matrix.md) §1.1。
+> 向后兼容约定沿用 §9.3：后端加字段不改名，前端未知字段忽略。
+
+### 10.1 `GET /v1/panel/metrics` — 回合指标（G-P1，`schema_version: 1`）
+
+数据源 = canonical runtime 指标注册表（进程内滚动窗口，`retention` 恒报 `"in_process_rolling"`，**不假装持久化**）；端点在 W2-② 全 API 面令牌门之内（缺 Bearer → 401 `auth_missing_key`，伪造 → 401 `auth_invalid_key`）。出处：`crates/adapters/gateway/src/panel_metrics.rs:37-102`（DTO 全表）、`:163-175`（路由+handler）；采集模型 `crates/engine/runtime/src/canonical/metrics.rs`（`TurnMetrics`/`WindowAggregate`）；合同全文与留存策略见 [G-observability.md](../04-internal/backend-enhancement/G-observability.md)。
+
+```json
+{
+  "schema_version": 1,
+  "window_turns": 50,
+  "retention": "in_process_rolling",
+  "global": {
+    "turns": 3, "succeeded": 2, "failed": 1, "pending_approval": 0,
+    "latency_ms": { "count": 3, "mean": 12.0, "p50": 10, "p95": 30, "sum": 36 },
+    "input_tokens": { "count": 2, "mean": 100.0, "p50": 100, "p95": 120, "sum": 200 },
+    "output_tokens": { "count": 2, "mean": 20.0, "p50": 20, "p95": 24, "sum": 40 },
+    "rounds": { "count": 3, "mean": 1.0, "p50": 1, "p95": 2, "sum": 3 },
+    "tool_calls": { "count": 2, "mean": 1.0, "p50": 1, "p95": 2, "sum": 2 },
+    "cache_hit_tokens": null, "cache_hit_rate": null, "cost_micros": null
+  },
+  "sessions": [ { "session_id": "…", "aggregate": { "…": "同 global 形" } } ]
+}
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `schema_version` | number，恒 `1` | 形状变更必须递增（`METRICS_SCHEMA_VERSION`，`panel_metrics.rs:30`） |
+| `window_turns` | number | 生效滚动窗口（拍/层；默认 50，`panel_metrics.rs:41`） |
+| `retention` | string，恒 `"in_process_rolling"` | 进程内环形、不落盘（`:33`、`:43`） |
+| `global` / `sessions[].aggregate` | object | 同形窗口聚合（`AggregateDto`，`:52-77`）：`turns`/`succeeded`/`failed`/`pending_approval` 计数 + `latency_ms`/`input_tokens`/`output_tokens`/`rounds`/`tool_calls` 五分布 + `cache_hit_tokens`/`cache_hit_rate`/`cost_micros` 三可选列 |
+| `*.mean/p50/p95/sum` | number \| null | 分布 `{count,mean,p50,p95,sum}`（`DistributionDto`，`:82-93`）；**空窗口 `count:0` 时四个数值列显式 `null`**，不用 0 冒充"有数据的 0" |
+| `cache_hit_rate` | number(0.0–1.0) \| null | Σ命中/Σ输入；上屏百分比由消费端换算 |
+| `sessions[].session_id` | string | `:97-102`；无数据时 `sessions: []` 显式空数组 |
+
+**空态 = "—" 语义（与遥测条同款）**：`null` 渲染 "—"，**未知不用 0 冒充**。
+**前端消费现状**：0 消费（待上屏——驾驶舱 CACHE/BUDGET 面板与聊天头遥测条待点亮，挂 [00-backlog.md](../04-internal/backend-enhancement/00-backlog.md) 债栏 D9）。
+
+### 10.2 配额自述行（`tool.self_status` → `budget.quota`，A-P1/P2 配额三维）
+
+出处：`crates/capabilities/tools/src/self_status.rs:548-573`（budget 节）、`:710-718`（`render_quota_dimension`，字段合同唯一实现）。`budget` 节含 `max_rounds_per_turn` / `max_tool_calls_per_round`（回合预算）与 `quota` 四维行：
+
+```json
+{
+  "budget": {
+    "max_rounds_per_turn": 8,
+    "max_tool_calls_per_round": 16,
+    "quota": {
+      "tokens":     { "limit": 100000, "consumed": 7, "remaining": 99993, "display": "7/100000", "reason": null },
+      "tool_steps": { "limit": 200, "consumed": 12, "remaining": 188, "display": "12/200", "reason": null },
+      "cost_micros": { "limit": 5000000, "consumed": 7002, "remaining": 4992998, "display": "7002/5000000", "reason": "部分计量: N 个计量轮无单价未计入 (绝不编价)" },
+      "depth":      { "limit": null, "consumed": null, "remaining": null, "display": "—", "reason": "暂无接口" }
+    },
+    "source": "…", "note": "…", "reason": null
+  }
+}
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `quota.{tokens,tool_steps,cost_micros,depth}` | object | 四维各一行；前三维 = **已接线真值**（`limit/consumed/remaining` 真数），深度维如实 `暂无接口` |
+| `*.limit/consumed/remaining` | number \| null | 不设限（env 未设）或未接线 → `null`；**不编造数值** |
+| `*.display` | string | 显示串口径 `"{已耗}/{上限}"`，取不到/不设限的一侧显 `"—"`；暂无接口的维整行 `"—"`（`self_status.rs:182-232`） |
+| `*.reason` | string \| null | 部分计量/缺源原因；`cost_micros` 无价轮 > 0 时为冻结文案「部分计量: N 个计量轮无单价未计入 (绝不编价)」 |
+| `budget.reason` | string \| null | budget 节缺源时显式 `null` 值 + 原因（`self_status.rs:562-573`） |
+
+**前端消费现状**：设置页预算旋钮/预算表已有同族读值面（`tests/budget-knobs.mjs`、`tests/budget-meter.mjs` 钉口径）；新字段按 §9.3 向后兼容接入。会话作用域缺失时 `consumed` 显式 `null`+原因（A-P2 口径）。
+
+### 10.3 自述域节（`tool.self_status` → `domain`，W3-① 用户域）
+
+出处：`crates/capabilities/tools/src/self_status.rs:379-395`（`DomainStatus`）、`:625-645`（渲染）、`:721-728`（`render_domain_counts`）。当前域 = 本自述来源所组装的用户域，如实报告、不跨域代答。
+
+```json
+{
+  "domain": {
+    "user_id": "alice",
+    "display_name": "Alice",
+    "role": "owner",
+    "created_at": 1728000000000,
+    "counts": { "sessions": 3, "memories": 12, "protected": 1, "reason": null }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `user_id` | string（默认域 = `default`） | 域 id（`:385-386`）；缺源显式 `null` |
+| `display_name` | string | 域显示名（`:388`） |
+| `role` | string | 域角色 `owner` / `member`（`:390`，冻结词表；`guest` 无域写面） |
+| `created_at` | number，**epoch 毫秒** | `:392`（注意与本文其余 unix 秒口径不同） |
+| `counts.{sessions,memories,protected}` | number \| null | 域内真值计数；缺探测口的维显式 `null` + `counts.reason` |
+| `counts.reason` | string \| null | 计数缺源原因（`render_domain_counts`，`:721-728`） |
+
+**前端消费现状**：0 消费（待上屏——域/用户管理面仅 CLI，挂债栏 D10）。
+
+### 10.4 技能卡 `SkillCard`（I1 书→技能沉淀，**在建**）
+
+出处：`crates/capabilities/tools/src/skill/card.rs`（`SkillCard`/`SkillCardDraft`/`SkillSource`/`SkillSourceKind`）。**状态：I1 线在途**（交付记录随线落盘，[I 轴分期](../04-internal/backend-enhancement/I-absorption-automation.md) 分期表）——前端**严禁提前消费**，形状演进以 `card.rs` 为准。
+
+```json
+{
+  "id": "skill-1f2e3d4c5b6a7988",
+  "name": "发布前检查单",
+  "summary": "一句话摘要",
+  "triggers": ["发布", "上线检查"],
+  "body": "要点 / 操作步骤",
+  "source": { "kind": "book", "title": "来源标题" },
+  "created_at": 1728000000000
+}
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `id` | string | 稳定身份 = `skill-{FNV-1a 64 hex}`（卡名确定性派生，非密码学、仅身份/文件名用；同名必同 id，改名=新卡；`card.rs:127-137`） |
+| `name` | string | 卡名（技能库内唯一键；同名即版本演进，旧版留审计） |
+| `summary` / `body` | string | 摘要（≤400 字）/ 正文（≤40 000 字）；坏卡拒（空/超长/控制符/路径分隔符拒绝即帧） |
+| `triggers` | string[] | 触发词（已归一：去首尾空白/弃空项/大小写折叠去重、保首次出现序；≤24 个、每个 ≤64 字，超限拒绝即帧） |
+| `source.kind` | string | `document` / `book` / `article`（内容输入三类，冻结词表） |
+| `source.title` | string | 来源标题（非空，≤200 字） |
+| `created_at` | number，epoch 毫秒 | 首次沉淀时刻（版本演进不变） |
+
+### 10.5 随手记条目（C 轴入口面，Quick Capture，✅ 已交付）
+
+出处：`frontend/companion-desktop/src/features/quick/quick-capture.ts`（`CaptureLedger`/`buildCaptureNote`/`parseCaptureNote`）；交付记录 [quick-capture-delivery.md](../04-internal/backend-enhancement/quick-capture-delivery.md)（§2 分级标注、§3 接线图）。
+
+- **落流正文（唯一承载面，随文序列化、格式常量同源可逆）**：`[随手记 #N] <原文>（来源 capture）`；
+- **账本条目（localStorage 读缓存，一等字段不是暗记）**：
+
+```json
+{ "seq": 3, "text": "明早买牛奶", "at": 1728000000000, "source": "capture", "protected": false }
+```
+
+| 字段 | 类型 | 说明 / 出处 |
+|------|------|--------------|
+| `seq` | number | 连记序号（发号在写流之前、发号即持久、号只发不收；并发连号连续） |
+| `text` | string | 原文（不改写不截断）；`parseCaptureNote` 可逆还原 |
+| `at` | number，epoch 毫秒 | 采集时刻 |
+| `source` | string，恒 `"capture"` | 来源一等字段（未整理原料级） |
+| `protected` | bool，恒 `false` | 落流即未保护级，可被后续整编吸收；不走 protect/unprotect/forget 通道 |
+
+- **落流缝**：`POST /v1/memory/append {session, role:'user', content}`（与 §4 记忆追加同源缝）；后端 schema 无 `source` 列——来源随正文序列化（诚实边界见交付记录 §2.3），后续整编用 `parseCaptureNote` 剥标注取原料。
+- **零打扰纪律**：采集分支与对话回合完全分叉（唯一请求 = 记忆追加，零 `/v1/chat/completions`、零通知、纯采集零 token）。
 
 *文档完。任何字段与代码冲突时，以代码为准并回写本文档（含出处行号）。*

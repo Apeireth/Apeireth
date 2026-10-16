@@ -1,0 +1,23 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking apeireth-core v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\foundation\core)
+   Compiling apeireth-sdk v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\adapters\sdk)
+    Checking apeireth-storage v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\storage)
+    Checking apeireth-protocol v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\foundation\protocol)
+    Checking apeireth-orchestration v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\foundation\orchestration)
+    Checking apeireth-governance v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\foundation\governance)
+    Checking apeireth-guard v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\guard)
+    Checking apeireth-plugin v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\foundation\plugin)
+    Checking apeireth-memory v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\memory)
+    Checking apeireth-runtime v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\runtime)
+    Checking apeireth-organ v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\organ)
+    Checking apeireth-tools-canonical v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\capabilities\tools)
+    Checking apeireth-credentials v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\foundation\credentials)
+    Checking apeireth-gateway v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\adapters\gateway)
+    Checking apeireth-provider v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\provider)
+    Checking apeireth-runtime-assembly v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\runtime-assembly)
+    Checking apeireth-perception v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\engine\perception)
+    Checking apeireth-bench-harness v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\benches)
+    Checking apeireth-cli v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\crates\adapters\cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.67s

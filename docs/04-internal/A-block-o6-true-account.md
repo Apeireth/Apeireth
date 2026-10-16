@@ -10,7 +10,7 @@
 
 之前 5 commit O-6 三阶审查 sections 多是"描述我做了什么" (what), **不是** "为什么这是最优 vs alternatives" (why). 例:
 
-- "与 v1 organs.rs:108-114 1:1 翻译" — 这是 v1 alignment, **不是**总体最优. v1 怎么干 ≠ v2 最优.
+- "与 v1 organs.rs:108-114 语义对齐" — 这是 v1 alignment, **不是**总体最优. v1 怎么干 ≠ v2 最优.
 - "新增 extract_emotion_mood() helper" — 描述 WHAT, 没回答"为什么不直接内联 / 为什么不放 OrganChainOutputs / 为什么不放 F1 organ".
 - "check_8_gates 加 chain 参数" — 描述 change, 没讨论"为什么不用 generic / 为什么不用 trait method".
 
@@ -27,7 +27,7 @@
   - A 块 5 缺口按依赖排序: D (local) < B (local) < A (跨 trait) < C (跨 dep) < E (跨 crate).
   - 选 D 为 Stage 1: 改动纯 local (orchestrator.rs + tests), 0 引新外部 dep, 0 跨 crate. **拒** A 先做: A 需改 4 文件 (organ/plugin/runtime/tests) + 跨 crate enum 移动, 风险 > D.
 - **系统最优**:
-  - 改动在 `engine/runtime` crate orchestrator.rs. v1 `AwakeCompanion::ratify_fresh_policy` 1:1 翻译.
+  - 改动在 `engine/runtime` crate orchestrator.rs. v1 `AwakeCompanion::ratify_fresh_policy` 语义对齐.
   - **拒** 放 orchestration crate: Orchestrator service (orchestration/lib.rs:181) 责任是 workflow service, agent loop 是 runtime 层, 责任错位.
   - **拒** 放 governance crate: governance 是决策层, 不应 own state machine, 违反 workspace 单向依赖 (foundation 不依赖 engine).
 - **架构最优**:
@@ -43,7 +43,7 @@
   - **拒** A 先做: A (E7 gate) 需改 OrganOutput schema 跨 crate, 风险 > B.
   - **拒** C/E: C (Council) 需 Orchestrator.new 签名变 breaking change; E (L0-L5 cycle) 跨 4 crate 复用, 早期做基础未稳.
 - **系统最优**:
-  - 改动在 `engine/runtime` crate orchestrator.rs. v1 `organs.rs:108-114` mood_floor 抑制是 AwakeCompanion::tick 第 3 步, 1:1 翻译.
+  - 改动在 `engine/runtime` crate orchestrator.rs. v1 `organs.rs:108-114` mood_floor 抑制是 AwakeCompanion::tick 第 3 步, 语义对齐.
   - **拒** 调 F1 EmotionOrgan 直接拿 mood (跨 OrganTrait 调用): OrganTrait 是单 input/output 契约, 跨 organ 调用破坏 9 organ 独立设计. orchestrator 提是边界清的角色 (串接 9 organ).
 - **架构最优**:
   - 公开 API 增量 = `OrganOrchestrator::extract_emotion_mood(&self, chain) -> Option<f64>`.

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import {untrack} from 'svelte';
   import {Copy, Check, Pencil, RotateCw, GitFork, Terminal, X, ArrowUp} from 'lucide-svelte';
   import {renderMarkdown} from './markdown';
   import TaskCard from '../components/TaskCard.svelte';
@@ -24,7 +25,8 @@
 
   let copied = $state(false);
   let isEditing = $state(false);
-  let editDraft = $state(message.text || '');
+  // 编辑草稿只取 message 初值快照（进入编辑时 onclick 还会再同步一次），untrack 显式声明。
+  let editDraft = $state(untrack(() => message.text || ''));
 
   const role = $derived(message.role);
   const text = $derived(message.text || '');
@@ -101,6 +103,13 @@
 
       {#if message.error}
         <p class="message-error" role="alert">{message.error}</p>
+      {/if}
+
+      {#if message.aborted}
+        <!-- 打断的诚实语义（gap-plan §5 缺口：后端无 /v1/turn/interrupt）：
+             前端打断 = 切断收听（abort 流式读取），后端回合仍会跑完；
+             这是「你不再听了」，不是「他停下了」。 -->
+        <p class="message-aborted" role="note">你不再听他说完——他的话在后端跑完了，只是没有进这扇窗。</p>
       {/if}
 
       {#if !streaming && (text || message.error)}
@@ -303,8 +312,9 @@
   }
   .user-actions-bar {
     position: absolute;
-    bottom: -22px;
-    right: 4px;
+    /* 收回气泡裁剪域内：clip-path 角切造型会裁掉边界外一切（bottom:-22 被整块裁掉=『卡到气泡框下面』病根） */
+    bottom: 4px;
+    right: 6px;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -434,5 +444,13 @@
     font-size: 12px;
     line-height: 1.6;
     color: var(--ap-semantic-danger);
+  }
+
+  /* 打断标记：中性小字，不是错误色——打断是主人的选择，不是事故 */
+  .message-aborted {
+    margin: 6px 0 0;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--ap-bone-42, rgba(232, 224, 204, 0.42));
   }
 </style>

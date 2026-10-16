@@ -1,0 +1,5 @@
+crates/foundation/plugin/src/organ.rs:16://! - v1 companion era 9 organ ID: 行为/认知器官 (本 trait 服务对象, 移植自
+docs/integration/architecture.md:28:  src/lib/{MessageContent,TaskCard,ExecutionTimeline,ConversationsView,PageHeader,StatusDot}.svelte  ← 移植自 Pattern
+frontend/companion-desktop/src/lib/scene/blackhole.ts:4: * 移植自 frontend/design-preview/index.html v0.2（已验收原型），渲染数值与原型逐行一致：
+frontend/companion-desktop/src/lib/scene/timeline.ts:4: * 移植自 frontend/design-preview/index.html v0.2 时间线滑杆逻辑（sstep/tlParams/tlPhaseName/tlTimeText），
+scripts/check-neutral-terms.ps1:16:  '移植自',

@@ -303,7 +303,7 @@ networks:
 
 ### 5.1 事故根因 (per `1.0.0-release-report-2026-08-05.md` §5)
 
-**事故**: 前代产品 0.9.21 商业版 `agent sandbox 影子备份从来不清理` bug, 在 `.minimax-agent-cn\` 留下 91 个 `agent-xxxxxx` 影子目录, 总占 71 GB。
+**事故**: v0.9.21 `agent sandbox 影子备份从来不清理` bug, 在 `.minimax-agent-cn\` 留下 91 个 `agent-xxxxxx` 影子目录, 总占 71 GB。
 
 ### 5.2 4 重防御 hardcode (per `crates/apeireth-rollback/src/lib.rs` L92-L120)
 

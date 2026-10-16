@@ -11,7 +11,7 @@
 //! 归位后：CLI / gateway / 测试全部消费同一实现。
 //!
 //! 映射语义：两套 `CompletionRequest`/`CompletionResponse`/`TokenUsage` 形状
-//! 一致，field 级 1:1 搬运，0 语义转换；错误按 variant 一一映射。
+//! 一致，field 级一一对应，0 语义转换；错误按 variant 一一映射。
 
 use std::sync::Arc;
 

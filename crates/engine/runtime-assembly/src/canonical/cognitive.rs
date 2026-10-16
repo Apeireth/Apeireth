@@ -11,6 +11,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
+use apeireth_memory::{
+    BoundedMemoryInput, MemoryCoordinator, MemoryExtractor, MemoryMaterializer,
+    MemoryMaterializerPort, MemoryRecallQuery, MemoryScope, MemoryTypedMaterializationSink,
+    ProactiveRecallPolicy, ProactiveRecallService, RuleMemoryExtractor, SelectedMemoryAccess,
+    SqliteAccessHistoryStore,
+};
 use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
     CouncilInvoker, Proposal,
@@ -24,7 +30,9 @@ use apeireth_plugin::self_assessment::{SelfAssessment, SelfAssessmentStore};
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedMessage, NormalizedResponse,
 };
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use super::module::{
@@ -44,6 +52,18 @@ pub const COUNCIL_MODULE_ID: &str = "cognitive.council";
 const DEFAULT_RECALL_LIMIT: usize = 5;
 const DEFAULT_MAX_CONTEXT_CHARS: usize = 4_000;
 const MAX_TELEMETRY_EVENTS: usize = 4_096;
+
+/// poison 容错锁 (L 组, cognitive.rs 15+ 处 expect)。
+///
+/// 认知模块的 telemetry / 指标 / 访问记录锁都在模块热路径上: 持锁线程一旦
+/// panic (例如一次 telemetry sink 的 panic), 旧实现的 `.expect(...)` 会把
+/// 之后每一次 hook 调用都变成 panic —— 一个模块的失误升级为整个运行时的
+/// 级联崩溃。锁保护的都是可重建的非权威状态, 取回内部数据继续运行。
+fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 /// Low-cardinality, non-sensitive module telemetry.
 ///
@@ -91,7 +111,7 @@ pub struct CognitiveTelemetry {
 
 impl CognitiveTelemetry {
     pub(crate) fn record(&self, event: CognitiveModuleEvent) {
-        let mut events = self.events.lock().expect("cognitive telemetry mutex");
+        let mut events = lock_or_recover(&self.events);
         if events.len() == MAX_TELEMETRY_EVENTS {
             events.remove(0);
         }
@@ -100,10 +120,75 @@ impl CognitiveTelemetry {
 
     /// Snapshot and clear no state; callers receive a stable copy.
     pub fn events(&self) -> Vec<CognitiveModuleEvent> {
-        self.events
-            .lock()
-            .expect("cognitive telemetry mutex")
-            .clone()
+        lock_or_recover(&self.events).clone()
+    }
+}
+
+/// Async durable sink for selected context IDs. Implementations must be fail-open
+/// at call sites: recording must never change recall behavior.
+#[async_trait]
+pub trait MemoryRecallAccessStore: Send + Sync {
+    async fn record_selected(
+        &self,
+        session_id: &str,
+        accessed_at_ms: i64,
+        selected_candidate_ids: &[String],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+
+/// Assembly adapter for the durable SQLite access history implementation.
+#[async_trait]
+impl MemoryRecallAccessStore for SqliteAccessHistoryStore {
+    async fn record_selected(
+        &self,
+        session_id: &str,
+        accessed_at_ms: i64,
+        selected_candidate_ids: &[String],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        for (rank, memory_id) in selected_candidate_ids.iter().enumerate() {
+            self.record_selected_context(
+                memory_id,
+                None,
+                Some(session_id.to_owned()),
+                accessed_at_ms,
+                None,
+                Some(rank as i64),
+                None,
+                json!({}),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+}
+
+/// Thread-safe, dependency-free observation of memory IDs selected for recall.
+///
+/// The recorder deliberately stores only session IDs and selected candidate IDs.
+/// It never stores the query, overlay, recalled content, or any provider data,
+/// so production assembly can consume selection telemetry without persisting
+/// prompts or secrets. A caller opts in with [`MemoryRecallModule::with_access_recorder`].
+#[derive(Debug, Default)]
+pub struct MemoryRecallAccessRecorder {
+    selected_by_session: Mutex<BTreeMap<String, Vec<String>>>,
+}
+
+impl MemoryRecallAccessRecorder {
+    fn clear(&self, session_id: &str) {
+        lock_or_recover(&self.selected_by_session).remove(session_id);
+    }
+
+    fn record_selected(&self, session_id: &str, access: &SelectedMemoryAccess) {
+        lock_or_recover(&self.selected_by_session)
+            .insert(session_id.to_owned(), access.selected_candidate_ids.clone());
+    }
+
+    /// Return the selected candidate IDs for the latest recall of a session.
+    pub fn selected_candidate_ids(&self, session_id: &str) -> Vec<String> {
+        lock_or_recover(&self.selected_by_session)
+            .get(session_id)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -120,7 +205,7 @@ struct ModuleMetrics {
 
 impl ModuleMetrics {
     fn attach_telemetry(&self, telemetry: Arc<CognitiveTelemetry>) {
-        *self.telemetry.lock().expect("cognitive telemetry mutex") = Some(telemetry);
+        *lock_or_recover(&self.telemetry) = Some(telemetry);
     }
 
     fn record(
@@ -135,15 +220,9 @@ impl ModuleMetrics {
         self.side_calls.fetch_add(side_calls, Ordering::Relaxed);
         let duration_ms = started.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.last_duration_ms.store(duration_ms, Ordering::Relaxed);
-        *self.last_hook.lock().expect("module metrics mutex") = Some(format!("{hook:?}"));
-        *self.last_directive.lock().expect("module metrics mutex") =
-            Some(directive_name(directive).to_string());
-        if let Some(telemetry) = self
-            .telemetry
-            .lock()
-            .expect("cognitive telemetry mutex")
-            .as_ref()
-        {
+        *lock_or_recover(&self.last_hook) = Some(format!("{hook:?}"));
+        *lock_or_recover(&self.last_directive) = Some(directive_name(directive).to_string());
+        if let Some(telemetry) = lock_or_recover(&self.telemetry).as_ref() {
             telemetry.record(CognitiveModuleEvent {
                 module_id: module_id.to_string(),
                 hook: format!("{hook:?}"),
@@ -163,12 +242,8 @@ impl ModuleMetrics {
             hook_calls: self.hook_calls.load(Ordering::Relaxed),
             side_calls: self.side_calls.load(Ordering::Relaxed),
             warnings: self.warnings.load(Ordering::Relaxed),
-            last_hook: self.last_hook.lock().expect("module metrics mutex").clone(),
-            last_directive: self
-                .last_directive
-                .lock()
-                .expect("module metrics mutex")
-                .clone(),
+            last_hook: lock_or_recover(&self.last_hook).clone(),
+            last_directive: lock_or_recover(&self.last_directive).clone(),
             last_duration_ms: self.last_duration_ms.load(Ordering::Relaxed),
         }
     }
@@ -252,15 +327,657 @@ fn preference_context(preferences: &[UserPreference], max_chars: usize) -> Strin
 }
 
 /// Recall context from the injected memory and optional experience stores.
+/// 模块 id: W2 §4.2 partner 双向羁绊 (2026-10-10)。
+pub const PARTNER_BOND_MODULE_ID: &str = "cognitive.partner_bond";
+
+/// 每回合羁绊深度增量 (温和演化: ~10 回合 Familiar, ~22 Trusted; 阶段阈值见
+/// `apeireth_memory::partner` 测试注)。
+pub const BOND_DEPTH_INCREMENT_PER_TURN: f64 = 0.02;
+
+/// **W2 §4.2 partner 羁绊模块** (2026-10-10): 双向落点 ——
+/// - `TurnStart` **关系状态注入** (`PromptOverlay::system`): 羁绊阶段/深度/演化次数,
+///   供语气与信任校准参考 (工程化关系状态, 非情绪伪装);
+/// - `AfterTurn` **羁绊演化**: `touch` + `Bond::evolve` 回写 [`PartnerStore`]
+///   (纯确定性状态机, 0 LLM 调用)。
+///
+/// **身份口径**: partner id = `subject_id` (`APEIRETH_SUBJECT_ID`, W2 首批身份
+/// 旋钮) —— 跨会话稳定, 与 typed 身份体系同源 (羁绊本义即跨 Session 连续)。
+///
+/// **0 假装边界**: 存储现为 `InMemoryPartnerStore` (进程内, 重启即散) —— 持久
+/// partner 后端落点 = `PartnerStore` trait, 后续接 sqlite 实现即可, 本模块不动。
+pub struct PartnerBondModule {
+    manifest: ModuleManifest,
+    partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
+    subject_id: String,
+    clock: Arc<dyn Clock>,
+    depth_increment: f64,
+    metrics: ModuleMetrics,
+}
+
+impl PartnerBondModule {
+    /// 构造 (subject_id = 跨会话伙伴身份)。
+    pub fn new(
+        partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
+        subject_id: impl Into<String>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            manifest: ModuleManifest::new(PARTNER_BOND_MODULE_ID, "Partner bond"),
+            partner_store,
+            subject_id: subject_id.into(),
+            clock,
+            depth_increment: BOND_DEPTH_INCREMENT_PER_TURN,
+            metrics: ModuleMetrics::default(),
+        }
+    }
+
+    /// 覆盖每回合深度增量 (测试/调参用)。
+    #[must_use]
+    pub fn with_depth_increment(mut self, increment: f64) -> Self {
+        self.depth_increment = increment;
+        self
+    }
+
+    /// Attach the shared non-sensitive telemetry sink.
+    #[must_use]
+    pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
+        self.metrics.attach_telemetry(telemetry);
+        self
+    }
+
+    fn partner_id(&self) -> apeireth_memory::partner::PartnerId {
+        apeireth_memory::partner::PartnerId(self.subject_id.clone())
+    }
+
+    /// 取或建伙伴记录 (store 错误 → None, 调用方降级继续)。
+    fn get_or_create_partner(&self) -> Option<apeireth_memory::partner::Partner> {
+        use apeireth_memory::partner::{Partner, PartnerPreferences};
+        let id = self.partner_id();
+        let now = self.clock.now().timestamp_millis();
+        match self.partner_store.get_partner(&id) {
+            Ok(Some(partner)) => Some(partner),
+            Ok(None) => {
+                let partner = Partner::new(
+                    id,
+                    self.subject_id.clone(),
+                    PartnerPreferences::default(),
+                    now,
+                );
+                if self.partner_store.save_partner(&partner).is_err() {
+                    self.metrics.warning();
+                    return None;
+                }
+                Some(partner)
+            }
+            Err(_) => {
+                self.metrics.warning();
+                None
+            }
+        }
+    }
+}
+
+/// 羁绊注入文本 (纯函数, 供 TurnStart overlay 与测试)。
+fn bond_overlay_text(partner: &apeireth_memory::partner::Partner) -> String {
+    format!(
+        "【关系状态】羁绊阶段: {}, 羁绊深度: {:.2}, 演化次数: {} (工程化关系状态, 供语气与信任校准参考)",
+        bond_stage_cn(&partner.bond.stage),
+        partner.bond.depth.value(),
+        partner.bond.evolution_count
+    )
+}
+
+/// 阶段中文名 (展示用)。
+fn bond_stage_cn(stage: &apeireth_memory::partner::BondStage) -> &'static str {
+    use apeireth_memory::partner::BondStage;
+    match stage {
+        BondStage::Initial => "初识",
+        BondStage::Familiar => "熟悉",
+        BondStage::Trusted => "信任",
+        BondStage::Intimate => "亲密",
+        BondStage::LongTerm => "长久",
+        _ => "未知阶段",
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for PartnerBondModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        let result = match hook {
+            HookPoint::TurnStart => match self.get_or_create_partner() {
+                Some(partner) => {
+                    let text = bond_overlay_text(&partner);
+                    ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
+                }
+                None => ModuleOutcome::continue_(),
+            },
+            HookPoint::AfterTurn => {
+                // 羁绊演化: 纯确定性状态机 (touch + evolve), 0 LLM 调用。
+                if let Some(mut partner) = self.get_or_create_partner() {
+                    let now = self.clock.now().timestamp_millis();
+                    partner.touch(now);
+                    partner.bond.evolve(self.depth_increment.max(0.0), now);
+                    if self.partner_store.save_partner(&partner).is_err() {
+                        self.metrics.warning();
+                    }
+                }
+                ModuleOutcome::continue_()
+            }
+            _ => ModuleOutcome::continue_(),
+        };
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod absorption_insight_tests {
+    use super::*;
+
+    #[test]
+    fn config_defaults_to_absorption_insight_off() {
+        // W2 五件验收门②: 默认关 = 行为不变。
+        let config = crate::canonical::production::CognitiveModuleConfig::default();
+        assert!(!config.absorption_insight, "absorption_insight 必须默认关");
+    }
+
+    #[test]
+    fn absorption_insight_reports_four_algorithm_sections_and_is_deterministic() {
+        // W2 五件验收门③: 效果可见 = 四算法各出一节 + 同输入恒同输出 (可重放)。
+        let messages = vec![
+            "帮我梳理一下记忆系统的架构，特别是检索那一层。".to_string(),
+            "检索层有 ACT-R 激活与混合检索；但治理层的取舍我们还没聊过。".to_string(),
+        ];
+        let first = absorption_insight_text(&messages);
+        let second = absorption_insight_text(&messages);
+        assert_eq!(first, second, "同输入恒同输出 (纯确定性)");
+        assert!(first.contains("【认知体操】"), "{first}");
+        assert!(first.contains("认知空洞"), "{first}");
+        assert!(first.contains("语义新颖度"), "{first}");
+        assert!(first.contains("关联传导"), "{first}");
+        assert!(first.contains("顿悟涌现"), "{first}");
+        // 空输入 = 空报告 (0 装: 不凭空造洞察)。
+        assert_eq!(absorption_insight_text(&[]), "");
+    }
+}
+
+#[cfg(test)]
+mod community_triage_tests {
+    use super::*;
+
+    fn plugin_fact(
+        subject: &str,
+        predicate: &str,
+        object: &str,
+    ) -> apeireth_plugin::experience::GraphFact {
+        apeireth_plugin::experience::GraphFact {
+            id: format!("{subject}-{predicate}-{object}"),
+            subject_id: subject.into(),
+            subject_kind: "concept".into(),
+            predicate: predicate.into(),
+            object_id: object.into(),
+            object_kind: "concept".into(),
+            valid_from: 1,
+            valid_until: None,
+            source_episode_id: "ep".into(),
+            confidence: 0.9,
+        }
+    }
+
+    fn community_fact(
+        subject: &str,
+        predicate: &str,
+        object: &str,
+    ) -> apeireth_memory::amem_graph::GraphFact {
+        apeireth_memory::amem_graph::GraphFact {
+            id: format!("{subject}-{predicate}-{object}"),
+            chain: format!("{subject}|{predicate}|{object}"),
+            rev: 0,
+            subject: subject.into(),
+            predicate: predicate.into(),
+            object: object.into(),
+            valid_at: 1,
+            invalid_at: None,
+            importance: 9,
+        }
+    }
+
+    #[test]
+    fn conversion_maps_store_contract_to_community_contract() {
+        // plugin GraphFact (subject_id/object_id) → memory GraphFact (subject/object)。
+        let converted = plugin_facts_to_community_facts(&[plugin_fact("rust", "is", "fast")]);
+        assert_eq!(converted.len(), 1);
+        assert_eq!(converted[0].subject, "rust");
+        assert_eq!(converted[0].object, "fast");
+        assert_eq!(converted[0].predicate, "is");
+        assert_eq!(converted[0].chain, "rust|is|fast");
+    }
+
+    #[test]
+    fn overlay_entity_route_on_substring_hit() {
+        let facts = vec![community_fact("小明", "喜欢", "篮球")];
+        let text = community_overlay_text("小明在干什么", &facts).expect("entity route");
+        assert!(text.contains("命中实体"), "{text}");
+        assert!(text.contains("小明"), "{text}");
+    }
+
+    #[test]
+    fn overlay_broad_route_with_briefs() {
+        let facts = vec![
+            community_fact("a", "r", "b"),
+            community_fact("b", "r", "c"),
+            community_fact("x", "r", "y"),
+        ];
+        let text = community_overlay_text("讲讲图里都有什么", &facts).expect("broad route");
+        assert!(text.contains("社区"), "{text}");
+    }
+
+    #[test]
+    fn overlay_empty_inputs_degrade_to_none() {
+        // 0 装降级: 空 topic / 空 facts → None (不注入空 overlay)。
+        assert!(community_overlay_text("   ", &[community_fact("a", "r", "b")]).is_none());
+        assert!(community_overlay_text("topic", &[]).is_none());
+    }
+
+    #[test]
+    fn config_defaults_to_community_triage_off() {
+        let config = crate::canonical::production::CognitiveModuleConfig::default();
+        assert!(!config.community_triage, "community_triage 必须默认关");
+    }
+}
+
+#[cfg(test)]
+mod morphology_recall_tests {
+    use super::morphology_recall_limit;
+
+    #[test]
+    fn default_off_keeps_configured_ceiling() {
+        let deep = "为什么系统在高并发下会出现级联失败？请展开分析并给出判据。";
+        assert_eq!(morphology_recall_limit(deep, 8, false), 8);
+        assert_eq!(morphology_recall_limit("hi", 8, false), 8);
+    }
+
+    #[test]
+    fn shallow_query_narrows_and_ceiling_caps() {
+        // W2 五件验收门③: 效果可见 = 浅查询显著收紧, 深查询回满, 且绝不越上限。
+        assert!(
+            morphology_recall_limit("hi", 8, true) <= 3,
+            "浅查询应显著收紧"
+        );
+        let deep = "为什么系统在高并发下会出现这种级联失败？请从架构与历史决策两个层面展开分析，并给出可验证的判据与对照实验设计思路，且说明缓存击穿与雪崩的区别。";
+        assert!(morphology_recall_limit(deep, 8, true) >= 3, "深查询应放宽");
+        assert!(
+            morphology_recall_limit(deep, 2, true) <= 2,
+            "绝不越过配置上限"
+        );
+    }
+}
+
+#[cfg(test)]
+mod partner_bond_tests {
+    use super::*;
+    use apeireth_memory::partner::{BondStage, InMemoryPartnerStore, PartnerId, PartnerStore};
+
+    #[test]
+    fn config_defaults_to_partner_bond_off() {
+        // W2 五件验收门②: 默认关 = 行为不变 (不建模块不注入不演化)。
+        let config = crate::canonical::production::CognitiveModuleConfig::default();
+        assert!(!config.partner_bond, "partner_bond 必须默认关");
+    }
+
+    #[test]
+    fn bond_overlay_reports_stage_and_depth() {
+        use apeireth_memory::partner::{Bond, Partner, PartnerPreferences};
+        let mut partner = Partner::new(
+            PartnerId("local-user".to_string()),
+            "local-user",
+            PartnerPreferences::default(),
+            1000,
+        );
+        partner.bond = Bond::new(1000);
+        let text = bond_overlay_text(&partner);
+        assert!(text.contains("羁绊阶段: 初识"), "{text}");
+        assert!(text.contains("羁绊深度: 0.00"), "{text}");
+    }
+
+    #[test]
+    fn evolve_partner_bond_is_visible_in_store() {
+        // W2 五件验收门③: 效果可见 = 阶段跃迁出现在存储行为里 (非字段自证)。
+        let store = InMemoryPartnerStore::new();
+        let id = PartnerId("local-user".to_string());
+        let now = 1_000i64;
+        let mut partner = apeireth_memory::partner::Partner::new(
+            id.clone(),
+            "local-user",
+            apeireth_memory::partner::PartnerPreferences::default(),
+            now,
+        );
+
+        // 11 次温和演化 (11 × 0.02 = 0.22) 应跨过 Familiar 阈值 (0.20)。
+        for step in 0..11 {
+            let at = now + (step + 1) * 60_000;
+            partner.touch(at);
+            partner.bond.evolve(BOND_DEPTH_INCREMENT_PER_TURN, at);
+        }
+        store.save_partner(&partner).unwrap();
+        let loaded = store.get_partner(&id).unwrap().expect("partner persisted");
+        assert_eq!(loaded.bond.stage, BondStage::Familiar);
+        assert!(loaded.bond.depth.value() >= 0.20);
+        assert_eq!(loaded.bond.evolution_count, 11);
+    }
+}
+
+/// 模块 id: W2 §4.4 研究吸收批 (2026-10-10)。
+pub const ABSORPTION_INSIGHT_MODULE_ID: &str = "cognitive.absorption_insight";
+
+/// 吸收批特征维度 (确定性字节直方图, 与 OrthogonalResidualPyramid 对齐)。
+pub const ABSORPTION_FEATURE_DIM: usize = 32;
+
+/// 确定性文本特征 (字节直方图归一化)。
+///
+/// **0 假装**: 这是浅层确定性特征 (与 morphology 手调启发式同口径), **不是**语义
+/// 嵌入 —— 吸收批的产出是实验性认知体操洞察, 不是生产语义召回。
+fn text_features(text: &str) -> Vec<f32> {
+    let mut hist = vec![0.0f32; ABSORPTION_FEATURE_DIM];
+    for byte in text.bytes() {
+        hist[(byte as usize) % ABSORPTION_FEATURE_DIM] += 1.0;
+    }
+    let norm: f32 = hist.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-12);
+    hist.iter().map(|x| x / norm).collect()
+}
+
+/// **W2 §4.4 认知体操报告** (纯函数): 四算法对本轮消息做实验性分析 ——
+/// - **betti** (持久同调): β₁ 认知空洞 → "值得追问" 驱动;
+/// - **residual_pyramid** (MGS 残差金字塔): 语义新颖度/白噪门控;
+/// - **river_topology** (LIF spike 传导): 关联扩展信号;
+/// - **kuramoto** (相位锁定): 顿悟事件/涌现元概念。
+///
+/// 纯确定性 (同输入恒同输出, 0 LLM / 0 IO)。输出供 TurnStart overlay 注入。
+fn absorption_insight_text(messages: &[String]) -> String {
+    use apeireth_memory::betti_hole_detector::{BettiHoleDetector, ManifoldConceptNode};
+    use apeireth_memory::kuramoto_resonance::{KuramotoOscillator, KuramotoResonanceEngine};
+    use apeireth_memory::residual_pyramid::{FieldActivationGate, OrthogonalResidualPyramid};
+    use apeireth_memory::river_topology::{RiverDynamicsEngine, TagNode};
+
+    if messages.is_empty() {
+        return String::new();
+    }
+
+    // 流形节点 = 各消息的确定性特征向量。
+    let nodes: Vec<ManifoldConceptNode> = messages
+        .iter()
+        .enumerate()
+        .map(|(i, text)| ManifoldConceptNode {
+            name: format!("msg-{i}"),
+            embedding: text_features(text),
+            activation_energy: 1.0,
+        })
+        .collect();
+
+    // ① betti: 认知空洞 + 内聚。
+    let betti = BettiHoleDetector::new(0.1, 4).analyze(&nodes);
+
+    // ② residual: 末条消息对"已知概念子空间"的新颖度/激活门控。
+    let query_vec = text_features(messages.last().map(String::as_str).unwrap_or_default());
+    let known: Vec<(u64, Vec<f32>)> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (i as u64, n.embedding.clone()))
+        .collect();
+    let analysis = OrthogonalResidualPyramid::new(ABSORPTION_FEATURE_DIM)
+        .analyze(&query_vec, |_q, k| known.iter().take(k).cloned().collect());
+    let activation = FieldActivationGate::compute_activation(&analysis);
+
+    // ③ river: 消息链上的 spike 传导 (关联扩展信号)。
+    let mut river = RiverDynamicsEngine::new();
+    for (i, node) in nodes.iter().enumerate() {
+        river.add_node(TagNode {
+            id: i as u64,
+            name: node.name.clone(),
+            vector: node.embedding.clone(),
+            intrinsic_residual: analysis.novelty_signal.min(1.0).max(0.0),
+        });
+        if i > 0 {
+            river.add_edge((i - 1) as u64, i as u64, 0.5);
+        }
+    }
+    let spread = river.propagate_spikes(&[(0, 1.0)], 3);
+
+    // ④ kuramoto: 相位锁定 → 顿悟事件。
+    let mut oscillators: Vec<KuramotoOscillator> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| KuramotoOscillator {
+            concept_id: n.name.clone(),
+            domain_tag: format!("d{}", i % 3),
+            natural_frequency_omega: 0.5 + 0.1 * (i as f32),
+            current_phase_theta: 0.1 * (i as f32),
+            intrinsic_residual: n.embedding.clone(),
+            phase_velocity: 0.0,
+        })
+        .collect();
+    let epiphanies = KuramotoResonanceEngine::new(1.0, 0.65).step(&mut oscillators, 1.0);
+
+    format!(
+        "【认知体操】(研究吸收批实验性洞察, 非生产语义)\n\
+         - 认知空洞: β0 岛屿 {} 个 / β1 空洞 {} 处 / 内聚 {:.2}{}\n\
+         - 语义新颖度: {:.2} (激活门控 {:.2})\n\
+         - 关联传导: {} 个节点受激\n\
+         - 顿悟涌现: {} 起",
+        betti.betti_0_islands,
+        betti.betti_1_voids.len(),
+        betti.cohesion_score,
+        if betti.betti_1_voids.is_empty() {
+            ""
+        } else {
+            " —— 有空洞, 值得主动追问补齐"
+        },
+        analysis.novelty_signal,
+        activation,
+        spread.len(),
+        epiphanies.len(),
+    )
+}
+
+/// **W2 §4.4 研究吸收批模块** (2026-10-10): 认知体操 ——
+/// `AfterTurn` 对本轮消息跑四算法实验性分析 (0 LLM / 0 IO / 纯确定性),
+/// `TurnStart` 把洞察注入 prompt overlay (只注一次)。
+///
+/// **0 假装边界**: 特征是字节直方图级浅特征 (非语义嵌入); 产出是实验性洞察
+/// (研究吸收批的涌现行为试验场), 不参与生产语义召回与决策。
+pub struct AbsorptionInsightModule {
+    manifest: ModuleManifest,
+    pending_insight: Mutex<Option<String>>,
+}
+
+impl AbsorptionInsightModule {
+    /// 构造。
+    pub fn new() -> Self {
+        Self {
+            manifest: ModuleManifest::new(ABSORPTION_INSIGHT_MODULE_ID, "Absorption insight"),
+            pending_insight: Mutex::new(None),
+        }
+    }
+}
+
+impl Default for AbsorptionInsightModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for AbsorptionInsightModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        match hook {
+            HookPoint::AfterTurn => {
+                let texts: Vec<String> = ctx
+                    .messages
+                    .iter()
+                    .map(|message| ContentPart::join_text(&message.content))
+                    .collect();
+                let insight = absorption_insight_text(&texts);
+                if !insight.is_empty() {
+                    let mut slot = self
+                        .pending_insight
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner());
+                    *slot = Some(insight);
+                }
+                Ok(ModuleOutcome::continue_())
+            }
+            HookPoint::TurnStart => {
+                let taken = self
+                    .pending_insight
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .take();
+                match taken {
+                    Some(text) => {
+                        Ok(ModuleOutcome::continue_()
+                            .with_prompt_overlay(PromptOverlay::system(text)))
+                    }
+                    None => Ok(ModuleOutcome::continue_()),
+                }
+            }
+            _ => Ok(ModuleOutcome::continue_()),
+        }
+    }
+}
+
 pub struct MemoryRecallModule {
     manifest: ModuleManifest,
     memory: Arc<dyn MemoryBackend>,
+    coordinator: Option<Arc<MemoryCoordinator>>,
     wiki: Option<Arc<dyn WikiEntryStore>>,
     graph: Option<Arc<dyn KnowledgeGraphStore>>,
     associations: Option<Arc<dyn AssociationStore>>,
     limit: usize,
     max_context_chars: usize,
     metrics: ModuleMetrics,
+    access_recorder: Option<Arc<MemoryRecallAccessRecorder>>,
+    access_store: Option<Arc<dyn MemoryRecallAccessStore>>,
+    clock: Option<Arc<dyn Clock>>,
+    proactive_recall: Option<ProactiveRecallService>,
+    /// W2 §4.3 (2026-10-10, 默认关): 查询形态学自适应检索深度。
+    morphology_recall: bool,
+    /// W3 community 生产消费 (2026-10-10, 默认关): 图谱 store 句柄。
+    community_triage: Option<Arc<dyn apeireth_plugin::experience::KnowledgeGraphStore>>,
+    /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层 —— 本模块的召回
+    /// 结果是**真接**的检索命中/未命中信号源 (每轮记一次, 凑批由接线层聚合)。
+    self_tuning: Option<Arc<crate::canonical::self_tuning_wire::SelfTuningWire>>,
+}
+
+/// W3 community 分诊的图谱 fact 读取上限 (社区检测的被动分析输入规模)。
+pub const COMMUNITY_FACT_LIMIT: u32 = 200;
+
+/// 社区摘要 top-N (brief 内实体数)。
+pub const COMMUNITY_SUMMARY_TOP_N: usize = 5;
+
+/// Broad 路由的最大社区数。
+pub const COMMUNITY_MAX_BRIEFS: usize = 3;
+
+/// W3 community: plugin GraphFact (store 契约, subject_id/object_id) →
+/// memory GraphFact (community 分诊契约, subject/object) 的字段映射 (纯函数)。
+fn plugin_facts_to_community_facts(
+    facts: &[apeireth_plugin::experience::GraphFact],
+) -> Vec<apeireth_memory::amem_graph::GraphFact> {
+    facts
+        .iter()
+        .map(|fact| apeireth_memory::amem_graph::GraphFact {
+            id: fact.id.clone(),
+            chain: apeireth_memory::amem_graph::GraphFact::chain_key(
+                &fact.subject_id,
+                &fact.predicate,
+                &fact.object_id,
+            ),
+            rev: 0,
+            subject: fact.subject_id.clone(),
+            predicate: fact.predicate.clone(),
+            object: fact.object_id.clone(),
+            valid_at: fact.valid_from,
+            invalid_at: fact.valid_until,
+            importance: (fact.confidence * 10.0).clamp(0.0, 255.0) as u8,
+        })
+        .collect()
+}
+
+/// W3 community: 社区分诊 overlay 文本 (纯函数, 测试锚点):
+/// Entity 路由 = 命中实体提示 (实体链方向); Broad = 社区摘要 briefs。
+fn community_overlay_text(
+    topic: &str,
+    facts: &[apeireth_memory::amem_graph::GraphFact],
+) -> Option<String> {
+    if topic.trim().is_empty() {
+        return None;
+    }
+    let result = apeireth_memory::community::triage(
+        topic,
+        facts,
+        COMMUNITY_SUMMARY_TOP_N,
+        COMMUNITY_MAX_BRIEFS,
+    );
+    use apeireth_memory::community::Route;
+    match result.route {
+        Route::Entity => Some(format!(
+            "【社区分诊】命中实体: {} (实体链方向)",
+            result.matched_entities.join(", ")
+        )),
+        Route::Broad => {
+            if result.community_briefs.is_empty() {
+                None
+            } else {
+                Some(format!(
+                    "【社区分诊】{}\n{}",
+                    topic,
+                    result.community_briefs.join("\n")
+                ))
+            }
+        }
+    }
+}
+
+impl MemoryRecallModule {
+    /// W3 community 分诊 overlay (读 store → 转换 → 分诊; 0 装降级 = None)。
+    fn community_overlay(&self, topic: &str) -> Option<String> {
+        let store = self.community_triage.as_ref()?;
+        let facts = store.all_facts(COMMUNITY_FACT_LIMIT).ok()?;
+        if facts.is_empty() {
+            return None;
+        }
+        community_overlay_text(topic, &plugin_facts_to_community_facts(&facts))
+    }
+}
+
+/// W2 §4.3: 形态学自适应检索深度 (纯函数, 供 recall 前置与测试)。
+///
+/// `crawl_budget` [1,6] 为查询形态学 softmax 预算 (Shallow 1 / Standard 3 /
+/// Deep 6); 只能在配置上限内**收紧** (浅查询少召回), 绝不越过配置上限
+/// (不放大成本)。温度 = `APEIRETH_MORPHOLOGY_TEMPERATURE` (非法回 1.0)。
+fn morphology_recall_limit(topic: &str, ceiling: usize, enabled: bool) -> usize {
+    if !enabled {
+        return ceiling;
+    }
+    let budget = apeireth_organ::morphology::crawl_budget(
+        topic,
+        apeireth_organ::morphology::env_temperature(),
+    );
+    budget.clamp(1, ceiling.max(1))
 }
 
 impl MemoryRecallModule {
@@ -270,13 +987,105 @@ impl MemoryRecallModule {
         Self {
             manifest: ModuleManifest::new(MEMORY_RECALL_MODULE_ID, "Memory recall"),
             memory,
+            coordinator: None,
             wiki: None,
             graph: None,
             associations: None,
             limit: DEFAULT_RECALL_LIMIT,
             max_context_chars: DEFAULT_MAX_CONTEXT_CHARS,
             metrics: ModuleMetrics::default(),
+            access_recorder: None,
+            access_store: None,
+            clock: None,
+            proactive_recall: None,
+            morphology_recall: false,
+            community_triage: None,
+            self_tuning: None,
         }
+    }
+
+    /// 「性格养成」第一铲: 接入自校准接线层 (默认无 = 自学习关)。
+    /// 本模块每次召回把命中/未命中喂给接线层 (真接信号)。
+    #[must_use]
+    pub fn with_self_tuning(
+        mut self,
+        wire: Arc<crate::canonical::self_tuning_wire::SelfTuningWire>,
+    ) -> Self {
+        self.self_tuning = Some(wire);
+        self
+    }
+
+    /// 真接信号: 把一轮召回结果 (选中 ≥1 候选 = 命中, 空 = 未命中) 记进
+    /// 自校准接线层; 无接线层 = 自学习关, 什么都不做。
+    fn feed_retrieval_signal(&self, hit: bool) {
+        if let Some(wire) = &self.self_tuning {
+            let at_epoch_ms = self
+                .clock
+                .as_ref()
+                .map(|clock| clock.now().timestamp_millis())
+                .unwrap_or_else(|| {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|duration| duration.as_millis() as i64)
+                        .unwrap_or(0)
+                });
+            wire.record_retrieval_round(hit, at_epoch_ms);
+        }
+    }
+
+    /// W2 §4.3: 开启查询形态学自适应检索深度 (默认关)。
+    #[must_use]
+    pub fn with_morphology_recall(mut self) -> Self {
+        self.morphology_recall = true;
+        self
+    }
+
+    /// W3 (2026-10-10): 接入社区分诊 (检索前置)。store 供 `all_facts` 全量读。
+    #[must_use]
+    pub fn with_community_triage(
+        mut self,
+        store: Arc<dyn apeireth_plugin::experience::KnowledgeGraphStore>,
+    ) -> Self {
+        self.community_triage = Some(store);
+        self
+    }
+
+    /// Opt into deterministic proactive candidate filtering with a hard budget.
+    #[must_use]
+    pub fn with_proactive_recall(mut self, policy: ProactiveRecallPolicy) -> Self {
+        self.proactive_recall = Some(ProactiveRecallService::new(policy));
+        self
+    }
+
+    /// Attach a Unified Memory 2.0 coordinator for closed-world multi-layer recall.
+    #[must_use]
+    pub fn with_coordinator(mut self, coordinator: Arc<MemoryCoordinator>) -> Self {
+        self.coordinator = Some(coordinator);
+        self
+    }
+
+    /// Attach an optional dependency-free recorder for selected candidate IDs.
+    #[must_use]
+    pub fn with_access_recorder(mut self, recorder: Arc<MemoryRecallAccessRecorder>) -> Self {
+        self.access_recorder = Some(recorder);
+        self
+    }
+
+    /// Return the configured selection recorder, if any.
+    pub fn access_recorder(&self) -> Option<Arc<MemoryRecallAccessRecorder>> {
+        self.access_recorder.clone()
+    }
+
+    /// Attach a durable async access sink and clock. Sink failures are fail-open.
+    #[must_use]
+    pub fn with_access_store(
+        mut self,
+        store: Arc<dyn MemoryRecallAccessStore>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        self.access_store = Some(store);
+        self.clock = Some(clock);
+        self
     }
 
     /// Add optional progressive-disclosure experience stores.
@@ -328,69 +1137,158 @@ impl AgentModule for MemoryRecallModule {
         let started = Instant::now();
         let result = if hook == HookPoint::TurnStart {
             let session = session_text(ctx.session_id);
-            let mut context = match self.memory.recent_episodes(&session, self.limit) {
-                Ok(episodes) => episode_context(&episodes, self.max_context_chars),
-                Err(_) => {
-                    self.metrics.warning();
-                    String::new()
-                }
-            };
-            let topic = topic_from_messages(ctx.messages);
-            if let Some(wiki) = &self.wiki {
-                match wiki.list_wiki(&session, &topic, self.limit as u32) {
-                    Ok(entries) => {
-                        for entry in entries {
-                            context.push_str(&format!(
-                                "wiki: {}\n",
-                                bounded(&entry.summary, self.max_context_chars),
-                            ));
+            if let Some(coord) = &self.coordinator {
+                let topic = topic_from_messages(ctx.messages);
+                let limit = morphology_recall_limit(&topic, self.limit, self.morphology_recall);
+                let query = MemoryRecallQuery::new(session.clone(), topic.clone())
+                    .with_limit(limit)
+                    .with_max_chars(self.max_context_chars);
+                let result = if let Some(proactive) = &self.proactive_recall {
+                    let cue = apeireth_memory::TopicCue {
+                        recent_user_messages: ctx
+                            .messages
+                            .iter()
+                            .filter(|message| message.role == MessageRole::User)
+                            .map(|message| ContentPart::join_text(&message.content))
+                            .collect(),
+                        recent_assistant_messages: ctx
+                            .messages
+                            .iter()
+                            .filter(|message| message.role == MessageRole::Assistant)
+                            .map(|message| ContentPart::join_text(&message.content))
+                            .collect(),
+                        ..Default::default()
+                    };
+                    coord.compile_prompt_overlay_with_proactive_access(
+                        &query,
+                        proactive.policy(),
+                        &cue,
+                    )
+                } else {
+                    coord.compile_prompt_overlay_with_selected_access(&query)
+                };
+                match result {
+                    Ok(Some(selected)) => {
+                        // 真接信号: 本轮召回选中了候选 = 命中, 全空 = 未命中。
+                        self.feed_retrieval_signal(!selected.selected_candidate_ids.is_empty());
+                        if let Some(recorder) = &self.access_recorder {
+                            recorder.record_selected(&session, &selected);
                         }
-                    }
-                    Err(_) => self.metrics.warning(),
-                }
-            }
-            // Experience reads are optional and deliberately never write or
-            // invoke a model. Their bounded summaries are part of the same
-            // transient overlay as episode recall.
-            if !topic.is_empty() {
-                if let Some(graph) = &self.graph {
-                    match graph.facts_from(&topic, self.limit as u32) {
-                        Ok(facts) => {
-                            for fact in facts {
-                                context.push_str(&format!(
-                                    "fact: {} {} {}\n",
-                                    bounded(&fact.subject_id, 120),
-                                    bounded(&fact.predicate, 120),
-                                    bounded(&fact.object_id, 120),
-                                ));
+                        if !selected.selected_candidate_ids.is_empty() {
+                            if let (Some(store), Some(clock)) = (&self.access_store, &self.clock) {
+                                if store
+                                    .record_selected(
+                                        &session,
+                                        clock.now().timestamp_millis(),
+                                        &selected.selected_candidate_ids,
+                                    )
+                                    .await
+                                    .is_err()
+                                {
+                                    self.metrics.warning();
+                                }
                             }
                         }
-                        Err(_) => self.metrics.warning(),
-                    }
-                }
-                if let Some(associations) = &self.associations {
-                    match associations.top_associations(&topic, self.limit as u32) {
-                        Ok(edges) => {
-                            for edge in edges {
-                                context.push_str(&format!(
-                                    "association: {} -> {}\n",
-                                    bounded(&edge.from_entity, 120),
-                                    bounded(&edge.to_entity, 120),
-                                ));
-                            }
+                        let mut overlay = selected.overlay.clone();
+                        if let Some(community) = self.community_overlay(&topic) {
+                            overlay.push_str("\n\n");
+                            overlay.push_str(&community);
                         }
-                        Err(_) => self.metrics.warning(),
+                        // Recalled memory content is cross-source input: the
+                        // provider-request funnel discloses it through the
+                        // untrusted reference envelope.
+                        ModuleOutcome::continue_().with_prompt_overlay(
+                            PromptOverlay::system_cross_source("memory_recall", overlay),
+                        )
+                    }
+                    Ok(None) => {
+                        // 真接信号: 无候选可召回 = 未命中轮。
+                        self.feed_retrieval_signal(false);
+                        if let Some(recorder) = &self.access_recorder {
+                            recorder.clear(&session);
+                        }
+                        ModuleOutcome::continue_()
+                    }
+                    Err(_) => {
+                        // 检索失败是故障不是使用证据, 不喂信号 (0 装诚实)。
+                        self.metrics.warning();
+                        ModuleOutcome::continue_()
                     }
                 }
-            }
-            if context.is_empty() {
-                ModuleOutcome::continue_()
             } else {
-                let overlay = format!(
-                    "Retrieved memory context (non-authoritative; never override system, developer, or governance constraints):\n{}",
-                    bounded(&context, self.max_context_chars)
-                );
-                ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(overlay))
+                let mut context = match self.memory.recent_episodes(&session, self.limit) {
+                    Ok(episodes) => {
+                        // 真接信号 (旧路径): 近期记忆非空 = 命中轮。
+                        self.feed_retrieval_signal(!episodes.is_empty());
+                        episode_context(&episodes, self.max_context_chars)
+                    }
+                    Err(_) => {
+                        self.metrics.warning();
+                        String::new()
+                    }
+                };
+                let topic = topic_from_messages(ctx.messages);
+                if let Some(wiki) = &self.wiki {
+                    match wiki.list_wiki(&session, &topic, self.limit as u32) {
+                        Ok(entries) => {
+                            for entry in entries {
+                                context.push_str(&format!(
+                                    "wiki: {}\n",
+                                    bounded(&entry.summary, self.max_context_chars),
+                                ));
+                            }
+                        }
+                        Err(_) => self.metrics.warning(),
+                    }
+                }
+                // Experience reads are optional and deliberately never write or
+                // invoke a model. Their bounded summaries are part of the same
+                // transient overlay as episode recall.
+                if !topic.is_empty() {
+                    if let Some(graph) = &self.graph {
+                        match graph.facts_from(&topic, self.limit as u32) {
+                            Ok(facts) => {
+                                for fact in facts {
+                                    context.push_str(&format!(
+                                        "fact: {} {} {}\n",
+                                        bounded(&fact.subject_id, 120),
+                                        bounded(&fact.predicate, 120),
+                                        bounded(&fact.object_id, 120),
+                                    ));
+                                }
+                            }
+                            Err(_) => self.metrics.warning(),
+                        }
+                    }
+                    if let Some(associations) = &self.associations {
+                        match associations.top_associations(&topic, self.limit as u32) {
+                            Ok(edges) => {
+                                for edge in edges {
+                                    context.push_str(&format!(
+                                        "association: {} -> {}\n",
+                                        bounded(&edge.from_entity, 120),
+                                        bounded(&edge.to_entity, 120),
+                                    ));
+                                }
+                            }
+                            Err(_) => self.metrics.warning(),
+                        }
+                    }
+                }
+                if context.is_empty() {
+                    ModuleOutcome::continue_()
+                } else {
+                    let overlay = format!(
+                        "<governed_memory source=\"legacy_recall\">{}</governed_memory>",
+                        bounded(&context, self.max_context_chars)
+                    );
+                    // Recalled memory content is cross-source input: the
+                    // provider-request funnel discloses it through the
+                    // untrusted reference envelope.
+                    ModuleOutcome::continue_().with_prompt_overlay(
+                        PromptOverlay::system_cross_source("memory_recall", overlay),
+                    )
+                }
             }
         } else {
             ModuleOutcome::continue_()
@@ -405,9 +1303,16 @@ impl AgentModule for MemoryRecallModule {
 pub struct MemoryWritebackModule {
     manifest: ModuleManifest,
     memory: Arc<dyn MemoryBackend>,
+    coordinator: Option<Arc<MemoryCoordinator>>,
     wiki: Option<Arc<dyn WikiEntryStore>>,
     graph: Option<Arc<dyn KnowledgeGraphStore>>,
     associations: Option<Arc<dyn AssociationStore>>,
+    materializer: Arc<dyn MemoryMaterializerPort>,
+    typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
+    consolidation: bool,
+    /// 「性格养成」第一铲: 整合节奏计数 (每会话回合数)。触发阈值 =
+    /// 体验旋钮 ConsolidationCadence (每 N 回合一次, 1 = 每回合 = 现行为)。
+    consolidation_turns: Mutex<std::collections::BTreeMap<String, u64>>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
 }
@@ -418,12 +1323,24 @@ impl MemoryWritebackModule {
         Self {
             manifest: ModuleManifest::new(MEMORY_WRITEBACK_MODULE_ID, "Memory writeback"),
             memory,
+            coordinator: None,
             wiki: None,
             graph: None,
             associations: None,
+            materializer: Arc::new(MemoryMaterializer::default()),
+            typed_sink: None,
+            consolidation: false,
+            consolidation_turns: Mutex::new(std::collections::BTreeMap::new()),
             clock,
             metrics: ModuleMetrics::default(),
         }
+    }
+
+    /// Attach a Unified Memory 2.0 coordinator for multi-layer writeback.
+    #[must_use]
+    pub fn with_coordinator(mut self, coordinator: Arc<MemoryCoordinator>) -> Self {
+        self.coordinator = Some(coordinator);
+        self
     }
 
     /// Attach the existing Experience stores. Extraction remains
@@ -441,6 +1358,35 @@ impl MemoryWritebackModule {
         self
     }
 
+    /// Attach the bounded-turn materializer. The extractor setter remains for source compatibility.
+    #[must_use]
+    pub fn with_materializer(mut self, materializer: Arc<dyn MemoryMaterializerPort>) -> Self {
+        self.materializer = materializer;
+        self
+    }
+
+    #[must_use]
+    pub fn with_typed_sink(mut self, sink: Arc<dyn MemoryTypedMaterializationSink>) -> Self {
+        self.typed_sink = Some(sink);
+        self
+    }
+
+    /// Run the deterministic consolidation report after each turn and persist
+    /// its extracted insights (2026-10-06 W2 记忆闭环批; 默认关).
+    #[must_use]
+    pub fn with_consolidation(mut self) -> Self {
+        self.consolidation = true;
+        self
+    }
+
+    /// Attach a unified memory extractor for source compatibility. The materializer
+    /// owns extraction for AfterTurn writeback.
+    #[must_use]
+    pub fn with_extractor(mut self, extractor: Arc<dyn MemoryExtractor>) -> Self {
+        self.materializer = Arc::new(MemoryMaterializer::new(extractor));
+        self
+    }
+
     /// Read-only metrics for embedding callers.
     pub fn metrics(&self) -> ModuleMetricsSnapshot {
         self.metrics.snapshot()
@@ -451,6 +1397,16 @@ impl MemoryWritebackModule {
     pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
         self.metrics.attach_telemetry(telemetry);
         self
+    }
+
+    /// 整合节奏判定 (体验旋钮 ConsolidationCadence): 每会话每 N 回合返回 true
+    /// 一次; N = 1 (未设/非法) = 每回合 = 现行为, 零变化。
+    fn consolidation_due(&self, session: &str) -> bool {
+        let cadence = crate::canonical::self_tuning_wire::consolidation_cadence_turns();
+        let mut turns = lock_or_recover(&self.consolidation_turns);
+        let counter = turns.entry(session.to_string()).or_insert(0);
+        *counter = counter.saturating_add(1);
+        *counter % cadence == 0
     }
 }
 
@@ -493,12 +1449,87 @@ impl AgentModule for MemoryWritebackModule {
                     timestamp: now,
                     role: "assistant".into(),
                     content: candidate.content.clone(),
-                    session_id: session,
+                    session_id: session.clone(),
                 });
+
+                // Materialize exactly this bounded user+assistant turn. Legacy coordinator
+                // episode writeback below remains unchanged; generic extraction is written
+                // only through the materializer to avoid duplicate projections.
+                let input = BoundedMemoryInput {
+                    scope: MemoryScope::Session {
+                        session_id: episodes[0].session_id.clone(),
+                    },
+                    source_session: Some(episodes[0].session_id.clone()),
+                    source_trace: None,
+                    source_request: Some(candidate.id.clone()),
+                    messages: episodes
+                        .iter()
+                        .map(|episode| apeireth_memory::MemoryExtractionMessage {
+                            role: episode.role.clone(),
+                            content: episode.content.clone(),
+                        })
+                        .collect(),
+                    max_messages: 2,
+                    max_message_chars: 4_096,
+                };
+                if let Some(sink) = &self.typed_sink {
+                    let typed_input = BoundedMemoryInput {
+                        scope: MemoryScope::Session {
+                            session_id: episodes[0].session_id.clone(),
+                        },
+                        source_session: Some(episodes[0].session_id.clone()),
+                        source_trace: None,
+                        source_request: Some(candidate.id.clone()),
+                        messages: episodes
+                            .iter()
+                            .map(|episode| apeireth_memory::MemoryExtractionMessage {
+                                role: episode.role.clone(),
+                                content: episode.content.clone(),
+                            })
+                            .collect(),
+                        max_messages: 2,
+                        max_message_chars: 4_096,
+                    };
+                    if self
+                        .materializer
+                        .materialize_typed(typed_input, now, sink.as_ref())
+                        .await
+                        .is_err()
+                    {
+                        self.metrics.warning();
+                    }
+                }
+
+                match self.materializer.materialize_episodes(input, now).await {
+                    Ok(materialized) => {
+                        for item in materialized {
+                            let result = if let Some(coord) = &self.coordinator {
+                                coord.writeback_episode(&item.episode).map(|_| ())
+                            } else {
+                                self.memory.put_episode(&item.episode).map_err(|e| {
+                                    apeireth_memory::MemoryError::Invalid(e.to_string())
+                                })
+                            };
+                            if result.is_err() {
+                                self.metrics.warning();
+                            }
+                        }
+                    }
+                    Err(_) => self.metrics.warning(),
+                }
+
                 for episode in episodes {
                     // Post-commit persistence is fail-open for the current
                     // answer, but the warning counter makes the loss visible.
-                    if self.memory.put_episode(&episode).is_err() {
+                    let write_res = if let Some(coord) = &self.coordinator {
+                        coord
+                            .writeback_episode(&episode)
+                            .map(|_| ())
+                            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                    } else {
+                        self.memory.put_episode(&episode)
+                    };
+                    if write_res.is_err() {
                         self.metrics.warning();
                         continue;
                     }
@@ -531,6 +1562,33 @@ impl AgentModule for MemoryWritebackModule {
                                         )
                                         .is_err()
                                     {
+                                        self.metrics.warning();
+                                    }
+                                }
+                            }
+                            Err(_) => self.metrics.warning(),
+                        }
+                    }
+                }
+                // 2026-10-06 W2 记忆闭环批: consolidation 触发点 (with_consolidation 开, 默认关).
+                // run_consolidation = 确定性治理视图分析 (0 模型调用); 提炼 insights 以
+                // 稳定 ID 落库 (跨轮幂等), 下一轮召回可见 —— 效果闭环.
+                // 「性格养成」第一铲: 触发阈值 = 整合节奏旋钮
+                // (APEIRETH_TUNE_CONSOLIDATION_CADENCE: 每 N 回合一次, 1 = 每回合
+                // = 现行为, 零变化; 非法值回 1)。
+                if self.consolidation && self.consolidation_due(&session) {
+                    if let Some(coord) = &self.coordinator {
+                        match coord.run_consolidation(&session) {
+                            Ok(report) => {
+                                for insight in report.extracted_insights {
+                                    let episode = Episode {
+                                        id: hash_id("ep-consolidation", &[&insight]),
+                                        timestamp: now,
+                                        role: "consolidation".into(),
+                                        content: format!("[记忆整理洞察] {insight}"),
+                                        session_id: session.clone(),
+                                    };
+                                    if coord.writeback_episode(&episode).is_err() {
                                         self.metrics.warning();
                                     }
                                 }
@@ -691,6 +1749,136 @@ impl AgentModule for PreferenceRecallModule {
             started,
             0,
         );
+        Ok(result)
+    }
+}
+
+/// Reflexion module ID (2026-10-06 W2 记忆闭环批).
+pub const REFLEXION_MODULE_ID: &str = "cognitive.reflexion";
+
+/// 失败闭环模块 (`apeireth-companion` 口头强化反思, 2026-10-06 W2 接线).
+///
+/// - `TurnStart`: 按任务标签召回历史教训, 字符预算内注入 (确定性, 0 LLM 调用).
+/// - `AfterTurn`: 消费 [`JudgeObservations`] 的**显式**非 Pass 判定, 沉淀
+///   `FailureKind::DecisionRejected` 并即时经 `RuleCritic` 蒸馏反思.
+///
+/// **0 装信号边界**: 只认 Judge 的显式判定 —— Judge 未开 = 无信号 = 不记录,
+/// 绝不从文本启发式猜"失败". `ValidationFailed` / `ExperienceFailed` 两类
+/// 失败信号生产暂无诚实来源 (store API 就绪, 留待信号接入).
+pub struct ReflexionModule {
+    manifest: ModuleManifest,
+    store: Arc<dyn apeireth_memory::reflexion::ReflexionStore>,
+    observations: Arc<JudgeObservations>,
+    task_type: String,
+    budget_chars: usize,
+    clock: Arc<dyn Clock>,
+    metrics: ModuleMetrics,
+}
+
+impl ReflexionModule {
+    /// Build the module against an explicit store and the shared judge observations.
+    pub fn new(
+        store: Arc<dyn apeireth_memory::reflexion::ReflexionStore>,
+        observations: Arc<JudgeObservations>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            manifest: ModuleManifest::new(REFLEXION_MODULE_ID, "Reflexion failure feedback"),
+            store,
+            observations,
+            task_type: "chat".to_string(),
+            budget_chars: 600,
+            clock,
+            metrics: ModuleMetrics::default(),
+        }
+    }
+
+    /// Set the task label used for record/retrieve matching.
+    #[must_use]
+    pub fn with_task_type(mut self, task_type: impl Into<String>) -> Self {
+        self.task_type = task_type.into();
+        self
+    }
+
+    /// Bound the retry-injection block size.
+    #[must_use]
+    pub fn with_budget(mut self, budget_chars: usize) -> Self {
+        self.budget_chars = budget_chars.max(1);
+        self
+    }
+
+    /// Read-only metrics for embedding callers.
+    pub fn metrics(&self) -> ModuleMetricsSnapshot {
+        self.metrics.snapshot()
+    }
+
+    /// Attach the shared non-sensitive telemetry sink.
+    #[must_use]
+    pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
+        self.metrics.attach_telemetry(telemetry);
+        self
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for ReflexionModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        use apeireth_memory::reflexion::{FailureKind, RuleCritic};
+        let started = Instant::now();
+        let result = if hook == HookPoint::TurnStart {
+            match self
+                .store
+                .retry_injection(&self.task_type, self.budget_chars)
+            {
+                Ok(Some(text)) => {
+                    ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
+                }
+                Ok(None) => ModuleOutcome::continue_(),
+                Err(_) => {
+                    self.metrics.warning();
+                    ModuleOutcome::continue_()
+                }
+            }
+        } else if hook == HookPoint::AfterTurn {
+            let now = self.clock.now().timestamp_millis();
+            if let Some(observation) = self.observations.get(ctx.session_id) {
+                if observation.verdict != JudgeVerdict::Pass {
+                    let summary = if observation.critique.trim().is_empty() {
+                        format!("judge verdict: {:?}", observation.verdict)
+                    } else {
+                        observation.critique.clone()
+                    };
+                    if self
+                        .store
+                        .record_failure(
+                            FailureKind::DecisionRejected,
+                            &self.task_type,
+                            &summary,
+                            now,
+                        )
+                        .is_err()
+                    {
+                        self.metrics.warning();
+                    }
+                }
+            }
+            if self.store.process_unreflected(&RuleCritic, now).is_err() {
+                self.metrics.warning();
+            }
+            ModuleOutcome::continue_()
+        } else {
+            ModuleOutcome::continue_()
+        };
+        self.metrics
+            .record(REFLEXION_MODULE_ID, hook, &result.directive, started, 0);
         Ok(result)
     }
 }
@@ -857,10 +2045,7 @@ impl AgentModule for JudgeModule {
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
         if hook == HookPoint::TurnStart {
-            self.retries
-                .lock()
-                .expect("judge retries mutex")
-                .remove(ctx.session_id);
+            lock_or_recover(&self.retries).remove(ctx.session_id);
             self.observations.clear(ctx.session_id);
         }
 
@@ -892,22 +2077,42 @@ impl AgentModule for JudgeModule {
             };
             let response = ctx.invoker().invoke(request).await?;
             side_calls = 1;
-            let judged = Self::parse_result(response.text())?;
-            self.observations.record(*ctx.session_id, judged.clone());
-            match judged.verdict {
-                JudgeVerdict::Pass => ModuleOutcome::continue_(),
-                JudgeVerdict::Stop => ModuleOutcome::stop("AI Judge rejected the candidate"),
-                JudgeVerdict::Retry if judged.score < self.config.retry_below => {
-                    let mut retries = self.retries.lock().expect("judge retries mutex");
-                    let retry_count = retries.entry(*ctx.session_id).or_default();
-                    if *retry_count < self.config.max_retries {
-                        *retry_count += 1;
-                        ModuleOutcome::retry(bounded(&judged.critique, 2_000))
-                    } else {
-                        ModuleOutcome::stop("AI Judge retry budget exhausted")
+            match Self::parse_result(response.text()) {
+                Ok(judged) => {
+                    self.observations.record(*ctx.session_id, judged.clone());
+                    match judged.verdict {
+                        JudgeVerdict::Pass => ModuleOutcome::continue_(),
+                        JudgeVerdict::Stop => {
+                            ModuleOutcome::stop("AI Judge rejected the candidate")
+                        }
+                        JudgeVerdict::Retry if judged.score < self.config.retry_below => {
+                            let mut retries = lock_or_recover(&self.retries);
+                            let retry_count = retries.entry(*ctx.session_id).or_default();
+                            if *retry_count < self.config.max_retries {
+                                *retry_count += 1;
+                                ModuleOutcome::retry(bounded(&judged.critique, 2_000))
+                            } else {
+                                // Retry budget exhausted = best-effort acceptance,
+                                // NOT a turn-killing stop (2026-10-06 真机: Stop
+                                // 把审批续跑回合打成 HTTP 500). The Retry verdict
+                                // is already recorded in observations (0 装).
+                                ModuleOutcome::continue_()
+                            }
+                        }
+                        JudgeVerdict::Retry => ModuleOutcome::continue_(),
                     }
                 }
-                JudgeVerdict::Retry => ModuleOutcome::continue_(),
+                Err(error) => {
+                    // 侧调用空响应/坏 JSON = 评审不可用。Best-effort 放行候选,
+                    // 绝不因元层解析失败杀死主任务 (2026-10-06 真机: DeepSeek
+                    // 对纯 JSON 指令偶发空回复 → "EOF at line 1 column 0" →
+                    // HTTP 500 杀死了审批续跑回合)。0 装: stderr 留痕 + metrics
+                    // 记录 Continue, 不伪造任何评分。
+                    eprintln!(
+                        "[cognitive.judge] side-call unparseable; best-effort continue (candidate NOT evaluated): {error}"
+                    );
+                    ModuleOutcome::continue_()
+                }
             }
         };
         self.metrics.record(
@@ -1277,6 +2482,102 @@ mod tests {
         }
     }
 
+    impl apeireth_memory::MemoryGovernanceStore for FakeMemory {
+        fn get_governed(
+            &self,
+            _episode_id: &str,
+        ) -> Result<Option<apeireth_memory::GovernedEpisode>, apeireth_memory::MemoryGovernanceError>
+        {
+            Ok(None)
+        }
+
+        fn update_episode_content(
+            &self,
+            episode_id: &str,
+            _new_content: &str,
+            _updated_by: Option<&str>,
+            _expected_rev: i64,
+        ) -> Result<apeireth_memory::GovernedEpisode, apeireth_memory::MemoryGovernanceError>
+        {
+            Err(apeireth_memory::MemoryGovernanceError::NotFound(
+                episode_id.to_string(),
+            ))
+        }
+
+        fn forget_episode(
+            &self,
+            episode_id: &str,
+            _reason: Option<&str>,
+            _expected_rev: i64,
+        ) -> Result<apeireth_memory::GovernedEpisode, apeireth_memory::MemoryGovernanceError>
+        {
+            Err(apeireth_memory::MemoryGovernanceError::NotFound(
+                episode_id.to_string(),
+            ))
+        }
+
+        fn protect_episode(
+            &self,
+            episode_id: &str,
+            _expected_rev: i64,
+        ) -> Result<apeireth_memory::GovernedEpisode, apeireth_memory::MemoryGovernanceError>
+        {
+            Err(apeireth_memory::MemoryGovernanceError::NotFound(
+                episode_id.to_string(),
+            ))
+        }
+
+        fn unprotect_episode(
+            &self,
+            episode_id: &str,
+            _expected_rev: i64,
+        ) -> Result<apeireth_memory::GovernedEpisode, apeireth_memory::MemoryGovernanceError>
+        {
+            Err(apeireth_memory::MemoryGovernanceError::NotFound(
+                episode_id.to_string(),
+            ))
+        }
+
+        fn governed_recent_episodes(
+            &self,
+            session_id: &str,
+            n: usize,
+        ) -> Result<Vec<apeireth_memory::GovernedEpisode>, apeireth_memory::MemoryGovernanceError>
+        {
+            // 2026-10-06: 治理视图从 episodes 如实派生 (此前恒返空 = 半真 fake,
+            // 被 consolidation 效果测试咬出). fake 无遗忘态, 全部按 Active 上报.
+            let mut governed: Vec<apeireth_memory::GovernedEpisode> = self
+                .episodes
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|episode| episode.session_id == session_id)
+                .rev()
+                .take(n)
+                .map(|episode| apeireth_memory::GovernedEpisode {
+                    episode: episode.clone(),
+                    status: apeireth_memory::MemoryGovernanceStatus::Active,
+                    protected: false,
+                    content_override: None,
+                    revision: 0,
+                    updated_at: None,
+                    updated_by: None,
+                    forgotten_at: None,
+                })
+                .collect();
+            governed.reverse();
+            Ok(governed)
+        }
+
+        fn governed_query(
+            &self,
+            _q: &apeireth_memory::EpisodeQuery,
+        ) -> Result<Vec<apeireth_memory::GovernedEpisode>, apeireth_memory::MemoryGovernanceError>
+        {
+            Ok(Vec::new())
+        }
+    }
+
     #[derive(Default)]
     struct FakeExperience {
         wikis: Mutex<Vec<WikiEntry>>,
@@ -1586,6 +2887,225 @@ mod tests {
         }
     }
 
+    struct FakeScoped {
+        episodes: std::sync::Mutex<Vec<Episode>>,
+    }
+
+    impl apeireth_memory::ScopedMemoryBackend for FakeScoped {
+        fn query_candidates(
+            &self,
+            _query: &apeireth_memory::MemoryCandidateQuery,
+        ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(self.episodes.lock().unwrap().clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn memory_injection_format_switches_the_overlay_shape() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        let scoped = Arc::new(FakeScoped {
+            episodes: std::sync::Mutex::new(vec![Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "主人明天要交线代作业".into(),
+                session_id: session.to_string(),
+            }]),
+        });
+        let xml = MemoryCoordinator::new(memory.clone(), memory.clone())
+            .with_scoped_backend(scoped.clone());
+        let injection = MemoryCoordinator::new(memory.clone(), memory.clone())
+            .with_scoped_backend(scoped)
+            .with_memory_injection_format();
+        let query = apeireth_memory::MemoryRecallQuery::new(session.to_string(), "线代作业");
+
+        let xml_overlay = xml
+            .compile_prompt_overlay(&query)
+            .unwrap()
+            .expect("xml overlay");
+        assert!(xml_overlay.contains("<governed_memory"), "{xml_overlay}");
+
+        let inj_overlay = injection
+            .compile_prompt_overlay(&query)
+            .unwrap()
+            .expect("injection overlay");
+        assert!(inj_overlay.contains("[记忆证据"), "{inj_overlay}");
+        assert!(
+            inj_overlay.contains("禁止说「我记得我们以前聊过」"),
+            "{inj_overlay}"
+        );
+    }
+
+    #[tokio::test]
+    async fn consolidation_is_opt_in_and_persists_insights_idempotently() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        memory
+            .put_episode(&Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "we resolved the build error: xyz".into(),
+                session_id: session.to_string(),
+            })
+            .unwrap();
+        let coordinator = Arc::new(MemoryCoordinator::new(memory.clone(), memory.clone()));
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "resolved the issue");
+
+        // 默认关: 不落任何 consolidation 洞察.
+        let off = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator));
+        off.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(insight_ids(&memory, &session.to_string()).len(), 0);
+
+        // 开: 洞察落库; 重复运行幂等 (稳定 ID + 派生记忆不再入料).
+        let on = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_consolidation();
+        on.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        // 原始证据 = 种子 user 条目 + 本轮 assistant 回复, 各提炼 1 条洞察.
+        let first = insight_ids(&memory, &session.to_string());
+        assert_eq!(first.len(), 2, "one insight per raw evidence: {first:?}");
+
+        // 再跑一轮: ID 集合不变 (幂等; 洞察自我增殖必须为 0).
+        on.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            insight_ids(&memory, &session.to_string()),
+            first,
+            "second run must not spawn derived-insight cascades"
+        );
+    }
+
+    fn insight_ids(memory: &FakeMemory, session: &str) -> std::collections::BTreeSet<String> {
+        memory
+            .recent_episodes(session, 50)
+            .unwrap()
+            .into_iter()
+            .filter(|episode| episode.role == "consolidation")
+            .map(|episode| episode.id)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn reflexion_records_judge_failures_and_injects_lessons() {
+        use apeireth_memory::reflexion::ReflexionStore;
+        let session = SessionId::new();
+        let store = Arc::new(apeireth_memory::reflexion::InMemoryReflexionStore::new());
+        let observations = Arc::new(JudgeObservations::default());
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let module = ReflexionModule::new(store.clone(), Arc::clone(&observations), clock);
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+
+        // 无判定 → 不记录, TurnStart 无注入 (行为不变).
+        let quiet = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert!(quiet.prompt_overlays.is_empty());
+        assert!(store.list_failures().unwrap().is_empty());
+
+        // Judge 显式非 Pass 判定 → 沉淀失败 + RuleCritic 即时蒸馏反思.
+        observations.record(
+            session,
+            JudgeResult {
+                score: 0.3,
+                verdict: JudgeVerdict::Retry,
+                critique: "answer too terse".into(),
+            },
+        );
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert_eq!(store.list_failures().unwrap().len(), 1);
+        assert_eq!(store.list_reflections().unwrap().len(), 1);
+
+        // TurnStart 注入教训块 (反刍格式).
+        let injected = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(&session, &messages, None, &invoker, REFLEXION_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert_eq!(injected.prompt_overlays.len(), 1);
+        let text = ContentPart::join_text(&injected.prompt_overlays[0].message().content);
+        assert!(text.contains("历史失败反思备忘"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn proactive_recall_is_opt_in_and_budgeted() {
+        let memory = Arc::new(FakeMemory::default());
+        let disabled = MemoryRecallModule::new(memory.clone());
+        assert!(disabled.proactive_recall.is_none());
+        let enabled = MemoryRecallModule::new(memory).with_proactive_recall(
+            ProactiveRecallPolicy::default()
+                .enabled(true)
+                .with_budget(1),
+        );
+        assert_eq!(
+            enabled.proactive_recall.as_ref().unwrap().policy().budget,
+            1
+        );
+    }
     #[tokio::test]
     async fn recall_is_transient_and_writeback_is_after_turn_only() {
         let session = SessionId::new();
@@ -1757,10 +3277,48 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(matches!(second.directive, ModuleDirective::Stop { .. }));
+        // Budget exhausted degrades to best-effort acceptance (2026-10-06:
+        // a Stop here killed approval-resumed turns with HTTP 500).
+        assert!(matches!(second.directive, ModuleDirective::Continue));
         assert_eq!(invoker_counter.calls.load(Ordering::Relaxed), 2);
         assert_eq!(judge.metrics().side_calls, 2);
         assert!(JudgeModule::parse_result("not json").is_err());
+    }
+
+    #[tokio::test]
+    async fn judge_side_call_empty_response_degrades_to_continue() {
+        let session = SessionId::new();
+        // DeepSeek 对纯 JSON 指令偶发空回复 (2026-10-06 真机: EOF at line 1
+        // column 0) — 评审不可用必须降级放行候选, 而不是 Err 杀死回合.
+        let invoker_counter = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("", "fake", "empty"),
+            calls: AtomicU64::new(0),
+        });
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = invoker_counter.clone();
+        let judge = JudgeModule::new(
+            JudgeConfig {
+                enabled: true,
+                ..JudgeConfig::default()
+            },
+            Arc::new(JudgeObservations::default()),
+        );
+        let messages = vec![NormalizedMessage::user("request")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "candidate");
+        let outcome = judge
+            .on_hook(
+                HookPoint::AfterModelResponse,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&candidate),
+                    &invoker,
+                    JUDGE_MODULE_ID,
+                ),
+            )
+            .await
+            .expect("empty side-call must not surface as a module error");
+        assert!(matches!(outcome.directive, ModuleDirective::Continue));
+        assert_eq!(invoker_counter.calls.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]
@@ -1819,8 +3377,10 @@ mod tests {
         ));
         let mut config = CognitiveModuleConfig::default();
         config.judge.enabled = false;
+        let mem = Arc::new(FakeMemory::default());
         let backends = CognitiveBackends {
-            memory: Some(Arc::new(FakeMemory::default())),
+            memory: Some(mem.clone()),
+            memory_governance: Some(mem),
             preferences: Some(Arc::new(FakePreferences)),
             self_assessments: Some(Arc::new(FakeAssessments::default())),
             ..CognitiveBackends::default()

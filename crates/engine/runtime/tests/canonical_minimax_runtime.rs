@@ -1,4 +1,4 @@
-//! Deterministic proof that the canonical runtime executes the migrated
+//! Deterministic proof that the canonical runtime executes the
 //! minimax provider **without** the LegacyLlmCapability bridge.
 //!
 //! The chain being proved:
@@ -116,7 +116,7 @@ fn frozen_clock() -> Arc<dyn Clock> {
     ))
 }
 
-/// Build a runtime whose only provider is the migrated minimax capability,
+/// Build a runtime whose only provider is the minimax capability,
 /// pointed at the mock server, with a fake key resolver.
 async fn runtime_at(base_url: &str, resolver: Arc<dyn CredentialResolver>) -> Runtime {
     let http = reqwest::Client::builder().build().unwrap();
@@ -135,7 +135,7 @@ async fn runtime_at(base_url: &str, resolver: Arc<dyn CredentialResolver>) -> Ru
 }
 
 #[tokio::test]
-async fn the_runtime_serves_a_turn_through_the_migrated_provider() {
+async fn the_runtime_serves_a_turn_through_the_minimax_provider() {
     let server = MockServer::start(CannedResponse {
         status: 200,
         headers: vec![],
@@ -151,7 +151,7 @@ async fn the_runtime_serves_a_turn_through_the_migrated_provider() {
         .await
         .expect("the turn completes");
 
-    // The migrated canonical capability served the turn — not a compat.* id.
+    // The canonical capability served the turn — not a compat.* id.
     assert_eq!(outcome.served_by.as_str(), "provider.minimax");
     assert_eq!(outcome.text, "hello from minimax");
     assert_eq!(outcome.rounds, 1, "no tools, so one provider round");

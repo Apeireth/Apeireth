@@ -72,6 +72,6 @@ Runtime integration:
 Governance hooks:
 Persistence:
 External I/O:
-Legacy donor source:
+Legacy source:
 Forbidden dependencies:
 ```

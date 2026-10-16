@@ -18,7 +18,7 @@
 老文件 → 我们开始 destructive 阶段 → 系统按 `v1` baseline 假设覆盖 — 结果是用户
 手动删的文件被"恢复"回来,看起来像我们没做 destructive 操作。
 
-**借鉴来源**: [Jimmyxiao2009/agentos-windows-recovery](https://github.com/Jimmyxiao2009/agentos-windows-recovery)
+**吸收来源**: [来源工程仓库](https://github.com/Jimmyxiao2009/agentos-windows-recovery)
 (MIT License) — 三路对比 `(baseline, expected_after, current)` 检测冲突是工业界
 **git merge / database WAL / VM snapshot** 都用的模式,我们直接吸收。
 
@@ -265,5 +265,5 @@ if let DetectOutcome::Conflict(c) | DetectOutcome::ConflictBypassedByForce(c) =
 - [x] `cargo test -p apeireth-host --lib three_way` ≥ 5 passed 0 failed。
 - [x] `cargo clippy -p apeireth-host --lib -- -D warnings` 0 warnings。
 - [x] `apeireth-host/src/lib.rs` re-export 5 个 pub item + 1 个 module。
-- [x] 借鉴 ID 在 module doc 与本设计文件顶部都出现。
+- [x] 吸收 ID 在 module doc 与本设计文件顶部都出现。
 - [x] 不假装清单 (§7.2) 在 module doc 与本设计文件都出现。

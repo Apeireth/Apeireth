@@ -1,10 +1,13 @@
 //! residual_pyramid: 修正 Gram-Schmidt 多层正交残差金字塔
 //!
-//! 吸收自 VCP 1.0 (`ResidualPyramid.js`):
-//! 1. 基于 Modified Gram-Schmidt (MGS) 正交化算法，将 Query 向量投影到已知标签张成的子空间中；
-//! 2. 多层级能量级联分解（60% 主导语义 -> 25% 次级语义 -> 5% 隐蔽微弱残差）；
-//! 3. 握手差向量（Handshake Vectors）与方向一致性（Direction Coherence），量化领域漂移意图；
-//! 4. 语义新颖度与白噪音抑制门控。
+//! 本模块为独立实现，数学基础均为公开数值线性代数中的经典方法：
+//! 1. Modified Gram-Schmidt (MGS) 正交化
+//!    [Golub & Van Loan, *Matrix Computations*, 4th ed., §5.2]，
+//!    将查询向量逐层投影到召回标签张成的正交子空间上；
+//! 2. 多层能量级联分解：每层结算一次解释能量占比，残差过小或层数用尽即停机；
+//! 3. 方向一致性 (Direction Coherence)：归一化差向量均值的范数，
+//!    用于量化查询与召回集的整体漂移方向；
+//! 4. 语义新颖度与白噪音抑制门控（Coverage × Coherence × (1 − Noise)）。
 
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +39,12 @@ pub struct OrthogonalResidualPyramid {
     pub min_energy_ratio: f32, // 默认 0.10 (解释 90% 后停机)
 }
 
+/// 正交基底及其存活标签：逐标签正交化后范数过小的候选被丢弃（线性相关）。
+struct OrthogonalBasis {
+    vectors: Vec<Vec<f32>>,
+    kept_tags: Vec<u64>,
+}
+
 impl Default for OrthogonalResidualPyramid {
     fn default() -> Self {
         Self::new(3072)
@@ -51,12 +60,15 @@ impl OrthogonalResidualPyramid {
         }
     }
 
-    /// 执行修正 Gram-Schmidt 正交化投影与多层残差分解
+    /// 执行修正 Gram-Schmidt 正交化投影与多层残差分解。
+    ///
+    /// 每层：召回 → MGS 构基 → 残差投影剥离 → 能量结算；
+    /// 首层召回集另用于方向一致性分析。
     pub fn analyze<F>(&self, query: &[f32], tag_retriever: F) -> PyramidAnalysis
     where
         F: Fn(&[f32], usize) -> Vec<(u64, Vec<f32>)>,
     {
-        let original_energy: f32 = query.iter().map(|&x| x * x).sum();
+        let original_energy = dot(query, query);
         if original_energy < 1e-12 {
             return PyramidAnalysis {
                 levels: vec![],
@@ -68,93 +80,55 @@ impl OrthogonalResidualPyramid {
             };
         }
 
-        let mut current_residual = query.to_vec();
+        let mut residual = query.to_vec();
         let mut levels = Vec::new();
-        let mut total_explained = 0.0;
-        let mut all_retrieved_tags = Vec::new();
+        let mut total_explained = 0.0f32;
+        let mut first_wave: Vec<(u64, Vec<f32>)> = Vec::new();
 
         for level in 0..self.max_levels {
-            let tags = tag_retriever(&current_residual, 10);
+            let tags = tag_retriever(&residual, 10);
             if tags.is_empty() {
                 break;
             }
-
-            // 保存全部召回的标签用于握手分析
             if level == 0 {
-                all_retrieved_tags = tags.clone();
+                first_wave = tags.clone();
             }
 
-            // 1. Modified Gram-Schmidt (MGS) 构建正交基底
-            let mut basis: Vec<Vec<f32>> = Vec::new();
-            let mut contributions = Vec::new();
-
-            for (tag_id, tag_vec) in &tags {
-                let mut v = tag_vec.clone();
-                // 逐一减去已有正交基上的投影分量
-                for u in &basis {
-                    let dot: f32 = v.iter().zip(u).map(|(&a, &b)| a * b).sum();
-                    for (vi, &ui) in v.iter_mut().zip(u) {
-                        *vi -= dot * ui;
-                    }
-                }
-                let mag = (v.iter().map(|&x| x * x).sum::<f32>()).sqrt();
-                if mag > 1e-6 {
-                    for x in &mut v {
-                        *x /= mag;
-                    }
-                    let coeff = current_residual
-                        .iter()
-                        .zip(&v)
-                        .map(|(&a, &b)| a * b)
-                        .sum::<f32>()
-                        .abs();
-                    contributions.push((*tag_id, coeff));
-                    basis.push(v);
-                }
-            }
-
-            if basis.is_empty() {
+            let basis = Self::orthonormal_basis(&tags);
+            if basis.vectors.is_empty() {
                 break;
             }
 
-            // 2. 计算当前残差在子空间上的总投影向量 P = Σ <R, u_i> * u_i
-            let mut projection = vec![0.0f32; self.dimension];
-            for u in &basis {
-                let dot: f32 = current_residual.iter().zip(u).map(|(&a, &b)| a * b).sum();
-                for (pi, &ui) in projection.iter_mut().zip(u) {
-                    *pi += dot * ui;
-                }
-            }
+            let contributions: Vec<(u64, f32)> = basis
+                .kept_tags
+                .iter()
+                .zip(&basis.vectors)
+                .map(|(tag_id, axis)| (*tag_id, dot(&residual, axis).abs()))
+                .collect();
 
-            // 3. 计算新残差 R_new = R_old - P
-            let mut new_residual = vec![0.0f32; self.dimension];
-            for i in 0..self.dimension {
-                new_residual[i] = current_residual[i] - projection[i];
-            }
+            let projection = project_onto(&basis.vectors, &residual);
+            let next_residual = subtract(&residual, &projection);
 
-            let new_res_energy: f32 = new_residual.iter().map(|&x| x * x).sum();
-            let current_energy: f32 = current_residual.iter().map(|&x| x * x).sum();
-            let energy_explained = (current_energy - new_res_energy).max(0.0) / original_energy;
+            let next_energy = dot(&next_residual, &next_residual);
+            let current_energy = dot(&residual, &residual);
+            let explained = (current_energy - next_energy).max(0.0) / original_energy;
 
             levels.push(PyramidLevel {
                 level,
-                explained_energy_ratio: energy_explained,
-                residual_magnitude: new_res_energy.sqrt(),
+                explained_energy_ratio: explained,
+                residual_magnitude: next_energy.sqrt(),
                 tag_contributions: contributions,
             });
 
-            total_explained += energy_explained;
-            current_residual = new_residual;
+            total_explained += explained;
+            residual = next_residual;
 
-            // 能量阈值截断 (90% 解释度)
-            if (new_res_energy / original_energy) < self.min_energy_ratio {
+            if (dot(&residual, &residual) / original_energy) < self.min_energy_ratio {
                 break;
             }
         }
 
-        // 4. 分析握手差向量与相干度 (Direction Coherence)
-        let (coherence, noise_signal) =
-            Self::compute_handshake_coherence(query, &all_retrieved_tags);
+        let (coherence, noise_signal) = directional_agreement(query, &first_wave);
         let novelty_signal = ((1.0 - total_explained) * 0.70 + coherence * 0.30).clamp(0.0, 1.0);
 
         PyramidAnalysis {
@@ -163,43 +137,35 @@ impl OrthogonalResidualPyramid {
             coherence,
             novelty_signal,
             noise_signal,
-            final_residual: current_residual,
+            final_residual: residual,
         }
     }
 
-    /// 计算握手差向量与相干度
-    fn compute_handshake_coherence(query: &[f32], tags: &[(u64, Vec<f32>)]) -> (f32, f32) {
-        if tags.is_empty() {
-            return (0.0, 1.0);
-        }
-
-        let dim = query.len();
-        let mut mean_diff = vec![0.0f32; dim];
-
-        for (_, tag_vec) in tags {
-            let mut diff = vec![0.0f32; dim];
-            for i in 0..dim {
-                diff[i] = query[i] - tag_vec[i];
-            }
-            let mag = (diff.iter().map(|&x| x * x).sum::<f32>()).sqrt();
-            if mag > 1e-6 {
-                for i in 0..dim {
-                    mean_diff[i] += diff[i] / mag;
+    /// Modified Gram-Schmidt：按召回顺序逐一正交化并单位化，
+    /// 与已保留轴几乎共线（范数 ≤ 1e-6）的候选直接丢弃。
+    fn orthonormal_basis(tags: &[(u64, Vec<f32>)]) -> OrthogonalBasis {
+        let mut basis = OrthogonalBasis {
+            vectors: Vec::new(),
+            kept_tags: Vec::new(),
+        };
+        for (tag_id, tag_vec) in tags {
+            let mut axis = tag_vec.clone();
+            for accepted in &basis.vectors {
+                let coeff = dot(&axis, accepted);
+                for (a, &u) in axis.iter_mut().zip(accepted) {
+                    *a -= coeff * u;
                 }
             }
+            let magnitude = dot(&axis, &axis).sqrt();
+            if magnitude > 1e-6 {
+                for a in &mut axis {
+                    *a /= magnitude;
+                }
+                basis.kept_tags.push(*tag_id);
+                basis.vectors.push(axis);
+            }
         }
-
-        let n = tags.len() as f32;
-        for x in &mut mean_diff {
-            *x /= n;
-        }
-
-        let coherence = (mean_diff.iter().map(|&x| x * x).sum::<f32>())
-            .sqrt()
-            .clamp(0.0, 1.0);
-        let noise_signal = (1.0 - coherence).clamp(0.0, 1.0);
-
-        (coherence, noise_signal)
+        basis
     }
 }
 
@@ -212,6 +178,53 @@ impl FieldActivationGate {
         (analysis.total_explained_ratio * analysis.coherence * (1.0 - analysis.noise_signal))
             .clamp(0.0, 1.0)
     }
+}
+
+/// 向量内积（长度按短者截断，与逐维 zip 语义一致）。
+fn dot(a: &[f32], b: &[f32]) -> f32 {
+    a.iter().zip(b).map(|(&x, &y)| x * y).sum()
+}
+
+/// 把 `v` 投影到正交基底张成的子空间：P v = Σ ⟨v, uᵢ⟩ uᵢ。
+fn project_onto(basis: &[Vec<f32>], v: &[f32]) -> Vec<f32> {
+    let mut acc = vec![0.0f32; v.len()];
+    for axis in basis {
+        let coeff = dot(v, axis);
+        for (a, &u) in acc.iter_mut().zip(axis) {
+            *a += coeff * u;
+        }
+    }
+    acc
+}
+
+/// 逐维相减 `a - b`（长度按 `a`）。
+fn subtract(a: &[f32], b: &[f32]) -> Vec<f32> {
+    a.iter().zip(b).map(|(&x, &y)| x - y).collect()
+}
+
+/// 方向一致性：把每个召回向量对查询的差向量单位化后求均值，
+/// 均值范数即 coherence（一致漂移越强越大），其余量记为 noise。
+fn directional_agreement(query: &[f32], tags: &[(u64, Vec<f32>)]) -> (f32, f32) {
+    if tags.is_empty() {
+        return (0.0, 1.0);
+    }
+    let mut drift = vec![0.0f32; query.len()];
+    for (_, tag_vec) in tags {
+        let diff = subtract(query, tag_vec);
+        let magnitude = dot(&diff, &diff).sqrt();
+        if magnitude > 1e-6 {
+            for (d, &delta) in drift.iter_mut().zip(&diff) {
+                *d += delta / magnitude;
+            }
+        }
+    }
+    let n = tags.len() as f32;
+    for d in &mut drift {
+        *d /= n;
+    }
+    let coherence = dot(&drift, &drift).sqrt().clamp(0.0, 1.0);
+    let noise_signal = (1.0 - coherence).clamp(0.0, 1.0);
+    (coherence, noise_signal)
 }
 
 #[cfg(test)]

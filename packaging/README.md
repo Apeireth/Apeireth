@@ -11,6 +11,9 @@ packaging/
 │   ├── build-zip.ps1     # Alias wrapper
 │   ├── install.ps1       # User installation helper
 │   └── uninstall.ps1     # User uninstallation helper
+├── portable/             # 星槎便携随身包（companion 桌面壳；data\ 随身 + portable.flag 判定）
+│   ├── make-portable.ps1 # 便携布局脚本（密钥不随身；0 装边界拒绝）
+│   └── test-make-portable.ps1 # 布局/边界自测（DryRun 不动盘 + 7 项断言）
 ├── msi/                  # Windows WiX MSI Installer
 │   ├── apeireth.wxs      # WiX product XML definition (valid GUIDs, Start Menu, clean uninstall)
 │   ├── build.ps1         # WiX build & staging script

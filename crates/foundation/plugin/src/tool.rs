@@ -1,6 +1,6 @@
 //! The tool capability: something a model can call.
 
-use apeireth_core::kernel::CapabilityId;
+use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -92,6 +92,24 @@ pub trait ToolCapability: Send + Sync {
     /// must not create a pending approval for an invalid operation.
     fn freeze_invocation(&self, _call: &ToolCall) -> Result<Option<FrozenInvocation>, ToolResult> {
         Ok(None)
+    }
+
+    /// Session-scoped execution entry: the runtime passes the session whose
+    /// turn is dispatching this call.
+    ///
+    /// Tools that report session-scoped state (the structured self-report
+    /// tool's quota metering, for one) override this method and read the scope;
+    /// every other tool keeps the default, which ignores the session and
+    /// delegates to [`ToolCapability::invoke_frozen`]. `session` is `None` when
+    /// the caller has no session scope (direct host-side invocations).
+    async fn invoke_in_session(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        session: Option<SessionId>,
+    ) -> ToolResult {
+        let _ = session;
+        self.invoke_frozen(call, frozen).await
     }
 }
 

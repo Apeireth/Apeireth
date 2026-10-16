@@ -242,6 +242,8 @@ impl RuntimeSubLoopSpawner {
             prompt_tokens: 0,
             completion_tokens: 0,
             total_tokens: 0,
+            // 缓存列的求和单位元 (累计起点, 不是计量): 累加折子见下。
+            prompt_cache_hit_tokens: Some(0),
         };
         let mut collected_tool_results = Vec::new();
 
@@ -273,9 +275,26 @@ impl RuntimeSubLoopSpawner {
                     })?;
 
             let response = routed.response;
-            total_usage.prompt_tokens += response.usage.prompt_tokens;
-            total_usage.completion_tokens += response.usage.completion_tokens;
-            total_usage.total_tokens += response.usage.total_tokens;
+            // 与 M11 同类: usage 累加不得回绕 (debug panic / release 静默截断
+            // 都会污染记账)。
+            total_usage.prompt_tokens = total_usage
+                .prompt_tokens
+                .saturating_add(response.usage.prompt_tokens);
+            total_usage.completion_tokens = total_usage
+                .completion_tokens
+                .saturating_add(response.usage.completion_tokens);
+            total_usage.total_tokens = total_usage
+                .total_tokens
+                .saturating_add(response.usage.total_tokens);
+            // 缓存列累加: 有列的轮逐轮求和 (不回绕); 任一轮缺列 = 总计未知
+            // (None, 未知不当 0 —— 不编造)。
+            total_usage.prompt_cache_hit_tokens = match (
+                total_usage.prompt_cache_hit_tokens,
+                response.usage.prompt_cache_hit_tokens,
+            ) {
+                (Some(total), Some(round)) => Some(total.saturating_add(round)),
+                _ => None,
+            };
 
             // If the model called tools
             if response.finish_reason == Some(NormalizedFinishReason::ToolCalls)
@@ -315,18 +334,31 @@ impl RuntimeSubLoopSpawner {
         allowlist: &[CapabilityId],
         round: u32,
     ) -> ToolResult {
-        // 1. Look up tool among all active runtime tools
-        let Some(tool) = self
+        // 1. Look up tool among all active runtime tools.
+        // M20: 按 name fail-closed, 与 capability.rs `find_by_name` 同语义 ——
+        // 多个同名工具时不猜第一个 (旧实现 `find(...)` 命中即返回), 直接判
+        // 歧义拒绝, 避免"注册了谁就调度谁"的隐性选择。
+        let mut name_matches = self
             .tools
             .iter()
-            .find(|t| t.declaration().name == call.name)
-        else {
+            .filter(|t| t.declaration().name == call.name);
+        let Some(tool) = name_matches.next() else {
             return ToolResult::permanent_error(
                 &call.id,
                 format!("no tool named {:?} is available", call.name),
             )
             .with_name(&call.name);
         };
+        if name_matches.next().is_some() {
+            return ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "ambiguous tool name {:?}: more than one registered tool claims this model-facing name; refusing to dispatch (fail-closed)",
+                    call.name
+                ),
+            )
+            .with_name(&call.name);
+        }
 
         let capability = tool.id();
 
@@ -343,18 +375,19 @@ impl RuntimeSubLoopSpawner {
         }
 
         // 3. Canonical Governance evaluation (must never be bypassed!)
+        // M20: 绑定真实 action_id (provider tool-call id) —— 依赖 action_id
+        // 的审批去重/审计关联此前在 subloop 上失效 (治理 hook 只能自行派生
+        // 一个与 tool_call_id 不同的标识, 数据集标签因此错配)。
         let action = Action::CapabilityDispatch {
             capability,
             arguments: &call.arguments,
         };
         let verdict = self
             .governance
-            .evaluate_verbose(&GovernanceRequest::new(
-                action,
-                self.session_id,
-                self.trace_id,
-                round,
-            ))
+            .evaluate_verbose(
+                &GovernanceRequest::new(action, self.session_id, self.trace_id, round)
+                    .with_action_id(&call.id),
+            )
             .await;
 
         match verdict.decision {

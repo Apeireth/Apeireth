@@ -1,0 +1,2 @@
+scripts/check-neutral-terms.ps1:13:  'dsh-',
+scripts/check-neutral-terms.ps1:15:  'DeepSeekHarness',

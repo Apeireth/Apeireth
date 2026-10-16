@@ -1,11 +1,11 @@
 //! P-arch (2026-08-27): B5 process supervisor trait skeleton.
 //!
-//! 借鉴 v1 `apeireth-supervisor`（5 sub-supervisor + RestartStrategy + ChildSpec +
+//! 对齐 v1 `apeireth-supervisor`（5 sub-supervisor + RestartStrategy + ChildSpec +
 //! PidOneSupervisor），v2 形态：
 //!
 //! - `RestartStrategy` enum (OneForOne / RestForOne / Transient)
 //! - `ChildSpec` 声明式子进程规格
-//! - `SubSupervisor` trait (5 sub-supervisor: Core/Cognition/Council/Upgrade/Plugin 借鉴)
+//! - `SubSupervisor` trait (5 sub-supervisor: Core/Cognition/Council/Upgrade/Plugin 对齐)
 //! - `ExitReason` + `RestartDecision` (event 流)
 //!
 //! **0 装 PASS (v2.0 alpha)**:
@@ -26,7 +26,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 // ============================================
-// 借鉴 v1: 3 种 RestartStrategy
+// 对齐 v1: 3 种 RestartStrategy
 // ============================================
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,7 +40,7 @@ pub enum RestartStrategy {
 }
 
 // ============================================
-// 借鉴 v1: ChildSpec
+// 对齐 v1: ChildSpec
 // ============================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,7 +79,7 @@ impl ChildSpec {
 }
 
 // ============================================
-// 借鉴 v1: ExitReason + RestartDecision
+// 对齐 v1: ExitReason + RestartDecision
 // ============================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,7 +109,7 @@ pub enum RestartDecision {
 }
 
 // ============================================
-// 借鉴 v1: SubSupervisor trait (5 sub-supervisor 的抽象)
+// 对齐 v1: SubSupervisor trait (5 sub-supervisor 的抽象)
 // ============================================
 
 /// 5 个 sub-supervisor (v1: Core / Cognition / Council / Upgrade / Plugin)

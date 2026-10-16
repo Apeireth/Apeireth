@@ -5,11 +5,11 @@
 # 当不可用时 (e.g. Windows 网络阻塞 release-assets DNS), fallback 到
 #   pwsh scripts/secret-scan.ps1 -Mode scan-staged (本配置 PowerShell 版本覆盖同等 pattern 子集)
 #
-# 借鉴自 https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+# 衍生自 gitleaks (MIT, https://github.com/gitleaks/gitleaks), 配置文本: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
 
 title = "Apeireth-rust secret scan (R215 防御)"
 
-# 借鉴自 gitleaks default rules 的 extend (高置信 subset)
+# 衍生自 gitleaks default rules 的 extend (高置信 subset)
 [extend]
 # useDefault = true  # 当 gitleaks binary 可用时启用, 当前网络限制下 false
 useDefault = false

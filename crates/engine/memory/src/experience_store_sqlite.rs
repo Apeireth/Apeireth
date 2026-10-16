@@ -96,22 +96,23 @@ impl WikiEntryStore for SQLiteExperienceStore {
     fn put_wiki(&self, entry: &WikiEntry) -> CapabilityResult<()> {
         let tags_json = serde_json::to_string(&entry.tags)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let id = entry.id.clone();
+        let session_id = entry.session_id.clone();
+        let source_episode_id = entry.source_episode_id.clone();
+        let topic = entry.topic.clone();
+        let summary = entry.summary.clone();
+        let body = entry.body.clone();
+        let confidence = entry.confidence;
+        let extracted_at = entry.extracted_at;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO wiki_entries \
                      (id, session_id, source_episode_id, topic, summary, body, confidence, tags, extracted_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     rusqlite::params![
-                        entry.id,
-                        entry.session_id,
-                        entry.source_episode_id,
-                        entry.topic,
-                        entry.summary,
-                        entry.body,
-                        entry.confidence,
-                        tags_json,
-                        entry.extracted_at,
+                        id, session_id, source_episode_id, topic, summary, body,
+                        confidence, tags_json, extracted_at,
                     ],
                 )?;
                 Ok(())
@@ -214,24 +215,34 @@ impl WikiEntryStore for SQLiteExperienceStore {
 
 impl KnowledgeGraphStore for SQLiteExperienceStore {
     fn put_fact(&self, fact: &GraphFact) -> CapabilityResult<()> {
+        let id = fact.id.clone();
+        let subject_id = fact.subject_id.clone();
+        let subject_kind = fact.subject_kind.clone();
+        let predicate = fact.predicate.clone();
+        let object_id = fact.object_id.clone();
+        let object_kind = fact.object_kind.clone();
+        let valid_from = fact.valid_from;
+        let valid_until = fact.valid_until;
+        let source_episode_id = fact.source_episode_id.clone();
+        let confidence = fact.confidence;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO kg_facts \
                      (id, subject_id, subject_kind, predicate, object_id, object_kind, \
                       valid_from_ms, valid_until_ms, source_episode_id, confidence) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                     rusqlite::params![
-                        fact.id,
-                        fact.subject_id,
-                        fact.subject_kind,
-                        fact.predicate,
-                        fact.object_id,
-                        fact.object_kind,
-                        fact.valid_from,
-                        fact.valid_until,
-                        fact.source_episode_id,
-                        fact.confidence,
+                        id,
+                        subject_id,
+                        subject_kind,
+                        predicate,
+                        object_id,
+                        object_kind,
+                        valid_from,
+                        valid_until,
+                        source_episode_id,
+                        confidence,
                     ],
                 )?;
                 Ok(())
@@ -240,20 +251,19 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
     }
 
     fn put_link(&self, link: &GraphLink) -> CapabilityResult<()> {
+        let from_id = link.from_id.clone();
+        let to_id = link.to_id.clone();
+        let kind = link.kind.clone();
+        let weight = link.weight;
+        let source_episode_id = link.source_episode_id.clone();
+        let created_at = link.created_at;
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "INSERT OR REPLACE INTO kg_links \
                      (from_id, to_id, kind, weight, source_episode_id, created_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    rusqlite::params![
-                        link.from_id,
-                        link.to_id,
-                        link.kind,
-                        link.weight,
-                        link.source_episode_id,
-                        link.created_at,
-                    ],
+                    rusqlite::params![from_id, to_id, kind, weight, source_episode_id, created_at,],
                 )?;
                 Ok(())
             })
@@ -301,6 +311,46 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
+    /// 全量 fact 列举 (W3 community 消费, 2026-10-10): 最近 limit 条,
+    /// 有效窗口过滤 (与 facts_from 同口径), 无 subject 前缀。
+    fn all_facts(&self, limit: u32) -> CapabilityResult<Vec<GraphFact>> {
+        self.pool
+            .read(
+                |conn| -> Result<Vec<GraphFact>, apeireth_storage::StorageError> {
+                    let mut stmt = conn.prepare_cached(
+                        "SELECT id, subject_id, subject_kind, predicate, object_id, object_kind, \
+                            valid_from_ms, valid_until_ms, source_episode_id, confidence \
+                         FROM kg_facts \
+                         WHERE (valid_until_ms IS NULL OR valid_until_ms > ?1) \
+                         ORDER BY valid_from_ms DESC \
+                         LIMIT ?2",
+                    )?;
+                    let now_ms = chrono::Utc::now().timestamp_millis();
+                    let rows =
+                        stmt.query_map(rusqlite::params![now_ms, i64::from(limit)], |row| {
+                            Ok(GraphFact {
+                                id: row.get(0)?,
+                                subject_id: row.get(1)?,
+                                subject_kind: row.get(2)?,
+                                predicate: row.get(3)?,
+                                object_id: row.get(4)?,
+                                object_kind: row.get(5)?,
+                                valid_from: row.get(6)?,
+                                valid_until: row.get(7)?,
+                                source_episode_id: row.get(8)?,
+                                confidence: row.get(9)?,
+                            })
+                        })?;
+                    let mut out = Vec::new();
+                    for r in rows {
+                        out.push(r?);
+                    }
+                    Ok(out)
+                },
+            )
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+
     fn links_from(&self, from_id: &str, limit: u32) -> CapabilityResult<Vec<GraphLink>> {
         self.pool
             .read(
@@ -331,8 +381,9 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
     }
 
     fn forget_subject(&self, subject_id: &str) -> CapabilityResult<()> {
+        let subject_id = subject_id.to_string();
         self.pool
-            .read(|conn| {
+            .write_sync(move |conn| {
                 conn.execute(
                     "DELETE FROM kg_facts WHERE subject_id = ?1",
                     rusqlite::params![subject_id],
@@ -350,37 +401,41 @@ impl KnowledgeGraphStore for SQLiteExperienceStore {
 impl AssociationStore for SQLiteExperienceStore {
     fn record_cooccurrence(&self, from: &str, to: &str, episode_id: &str) -> CapabilityResult<()> {
         let now = chrono::Utc::now().timestamp();
-        self.pool.read(|conn| {
-            let inserted = conn.execute(
-                "INSERT OR IGNORE INTO association_observations \
-                 (from_entity, to_entity, source_episode_id) VALUES (?1, ?2, ?3)",
-                rusqlite::params![from, to, episode_id],
-            )?;
-            if inserted == 0 {
-                return Ok(());
-            }
-            conn.execute(
-                "INSERT INTO association_edges (from_entity, to_entity, co_occurrence_count, last_seen_episode_id, last_seen_at) \
-                 VALUES (?1, ?2, 1, ?3, ?4) \
-                 ON CONFLICT (from_entity, to_entity) DO UPDATE SET \
-                    co_occurrence_count = co_occurrence_count + 1, \
-                    last_seen_episode_id = excluded.last_seen_episode_id, \
-                    last_seen_at = excluded.last_seen_at",
-                rusqlite::params![from, to, episode_id, now],
-            )?;
-            for entity in [from, to] {
-                conn.execute(
-                    "INSERT INTO association_nodes (entity_id, co_occurrence_count, last_seen_at) \
-                     VALUES (?1, 1, ?2) \
-                     ON CONFLICT (entity_id) DO UPDATE SET \
-                        co_occurrence_count = co_occurrence_count + 1, \
-                        last_seen_at = excluded.last_seen_at",
-                    rusqlite::params![entity, now],
+        let from = from.to_string();
+        let to = to.to_string();
+        let episode_id = episode_id.to_string();
+        self.pool
+            .write_sync(move |conn| {
+                let inserted = conn.execute(
+                    "INSERT OR IGNORE INTO association_observations \
+                     (from_entity, to_entity, source_episode_id) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![from, to, episode_id],
                 )?;
-            }
-            Ok(())
-        })
-        .map_err(|e| -> Box::<dyn std::error::Error + Send + Sync> { Box::new(e) })
+                if inserted == 0 {
+                    return Ok(());
+                }
+                conn.execute(
+                    "INSERT INTO association_edges (from_entity, to_entity, co_occurrence_count, last_seen_episode_id, last_seen_at) \
+                     VALUES (?1, ?2, 1, ?3, ?4) \
+                     ON CONFLICT (from_entity, to_entity) DO UPDATE SET \
+                        co_occurrence_count = co_occurrence_count + 1, \
+                        last_seen_episode_id = excluded.last_seen_episode_id, \
+                        last_seen_at = excluded.last_seen_at",
+                    rusqlite::params![from, to, episode_id, now],
+                )?;
+                for entity in [from, to] {
+                    conn.execute(
+                        "INSERT INTO association_nodes (entity_id, co_occurrence_count, last_seen_at) \
+                         VALUES (?1, 1, ?2) \
+                         ON CONFLICT (entity_id) DO UPDATE SET \
+                            co_occurrence_count = co_occurrence_count + 1, \
+                            last_seen_at = excluded.last_seen_at",
+                        rusqlite::params![entity, now],
+                    )?;
+                }
+                Ok(())
+            })
+            .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))
     }
 
     fn top_associations(&self, entity: &str, limit: u32) -> CapabilityResult<Vec<AssociationEdge>> {
@@ -482,6 +537,75 @@ mod tests {
         KnowledgeGraphStore::put_link(&store, &link).expect("put_link");
         let links = KnowledgeGraphStore::links_from(&store, "rust", 10).expect("links_from");
         assert_eq!(links.len(), 1);
+    }
+
+    /// W3 community 消费 (2026-10-10): all_facts 全量列举 roundtrip + limit 封顶。
+    #[tokio::test]
+    async fn kg_all_facts_roundtrip_and_limit() {
+        let store = fresh().await;
+        for index in 0..3 {
+            let fact = GraphFact {
+                id: format!("f-{index}"),
+                subject_id: format!("s{index}"),
+                subject_kind: "thing".into(),
+                predicate: "rel".into(),
+                object_id: format!("o{index}"),
+                object_kind: "thing".into(),
+                valid_from: 1_700_000_000 + index,
+                valid_until: None,
+                source_episode_id: "ep-1".into(),
+                confidence: 0.8,
+            };
+            KnowledgeGraphStore::put_fact(&store, &fact).expect("put_fact");
+        }
+        let all = KnowledgeGraphStore::all_facts(&store, 10).expect("all_facts");
+        assert_eq!(all.len(), 3, "全量列举必须看到全部 subject 的 fact");
+        let capped = KnowledgeGraphStore::all_facts(&store, 2).expect("all_facts");
+        assert_eq!(capped.len(), 2, "limit 封顶");
+        // 无 subject 前缀: facts_from 只能按 subject 看一跳, all_facts 是全集。
+        let from = KnowledgeGraphStore::facts_from(&store, "s0", 10).expect("facts_from");
+        assert_eq!(from.len(), 1);
+    }
+
+    /// 默认 trait 实现: 未覆写 all_facts 的 store = 空 (契约默认, 不炸)。
+    #[test]
+    fn default_all_facts_is_empty_for_non_sqlite_stores() {
+        struct NoopStore;
+        impl apeireth_plugin::experience::KnowledgeGraphStore for NoopStore {
+            fn put_fact(
+                &self,
+                _fact: &GraphFact,
+            ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                Ok(())
+            }
+            fn put_link(
+                &self,
+                _link: &GraphLink,
+            ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                Ok(())
+            }
+            fn facts_from(
+                &self,
+                _subject_id: &str,
+                _limit: u32,
+            ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<GraphFact>> {
+                Ok(Vec::new())
+            }
+            fn links_from(
+                &self,
+                _from_id: &str,
+                _limit: u32,
+            ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<GraphLink>> {
+                Ok(Vec::new())
+            }
+            fn forget_subject(
+                &self,
+                _subject_id: &str,
+            ) -> apeireth_plugin::memory_backend::CapabilityResult<()> {
+                Ok(())
+            }
+        }
+        assert!(NoopStore.all_facts(10).expect("default").is_empty());
     }
 
     /// RC-2 验收: forget_subject 真删

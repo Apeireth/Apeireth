@@ -677,7 +677,7 @@ async fn hooks_fire_and_overlays_are_ordered_transient_and_not_persisted() {
 
     let first = provider.request(0);
     let first_texts: Vec<String> = first.messages.iter().map(text).collect();
-    assert_eq!(first_texts, ["A_MARKER", "B_MARKER", "one"]);
+    assert_eq!(first_texts, ["one", "A_MARKER", "B_MARKER"]); // 缓存友好组装：史在前、叠加层在尾
     let second_texts: Vec<String> = provider.request(1).messages.iter().map(text).collect();
     assert_eq!(second_texts, ["one", "first", "two"]);
 
@@ -703,9 +703,9 @@ async fn overlays_are_recomputed_for_each_provider_retry() {
         .unwrap();
 
     let first: Vec<String> = provider.request(0).messages.iter().map(text).collect();
-    assert_eq!(first, ["overlay-0", "question"]);
+    assert_eq!(first, ["question", "overlay-0"]); // 缓存友好组装：史在前、叠加层在尾
     let second: Vec<String> = provider.request(1).messages.iter().map(text).collect();
-    assert_eq!(second, ["overlay-1", "question", "revise"]);
+    assert_eq!(second, ["question", "overlay-1", "revise"]); // 史→叠→重试脚手架
     assert!(
         !second.iter().any(|message| message == "candidate 1"),
         "rejected candidate must not be replayed to the provider"
@@ -1218,7 +1218,7 @@ async fn retry_cannot_extend_the_structural_round_limit() {
         .unwrap_err();
     assert!(matches!(
         error,
-        RuntimeError::RoundLimitExceeded { limit: 1 }
+        RuntimeError::RoundLimitExceeded { limit: 1, .. }
     ));
     assert_eq!(provider.call_count(), 1);
 }
@@ -1265,4 +1265,65 @@ async fn isolated_module_invoker_obeys_completion_governance() {
     assert!(error.to_string().contains("completions blocked"), "{error}");
     assert_eq!(provider.call_count(), 0);
     assert!(side_text.lock().unwrap().is_none());
+}
+
+/// Propagates a budget-exhaustion error with `?`, exactly like the judge
+/// module does when its isolated side-call hits the per-turn budget.
+struct PropagatingBudgetModule {
+    manifest: ModuleManifest,
+}
+
+#[async_trait]
+impl AgentModule for PropagatingBudgetModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook == HookPoint::BeforeFinalCommit {
+            // 1st call fits the budget; 2nd exhausts it and propagates.
+            let _ = ctx
+                .invoker()
+                .invoke(ModuleInvocationRequest::isolated("side", "first"))
+                .await?;
+            ctx.invoker()
+                .invoke(ModuleInvocationRequest::isolated("side", "second"))
+                .await?;
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+/// Regression for the 2026-09-19 real-machine failure: when a module (judge)
+/// propagates `BudgetExceeded`, the canonical loop used to abort the WHOLE
+/// turn with "module … budget exceeded" — the user lost the candidate answer.
+/// The fix degrades the module to Continue for the pass, commits the
+/// candidate, and records the skip as a session event.
+#[tokio::test]
+async fn budget_exhaustion_degrades_the_module_instead_of_aborting_the_turn() {
+    let provider = FakeProvider::new(vec![Reply::Text("candidate"), Reply::Text("side")]);
+    let module = Arc::new(PropagatingBudgetModule {
+        manifest: ModuleManifest::new("module.budget_propagate", "budget propagate"),
+    });
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_max_module_invocations(1)
+        .with_governance(Arc::new(AllowAll))
+        .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
+        .with_module(module)
+        .build()
+        .await
+        .unwrap();
+
+    let response = runtime
+        .execute(TurnRequest::new(SessionId::new(), "question"))
+        .await
+        .expect("the turn must survive budget exhaustion");
+    assert_eq!(response.text, "candidate");
+    // main candidate + one successful side-call; the exhausting call never ran.
+    assert_eq!(provider.call_count(), 2);
 }

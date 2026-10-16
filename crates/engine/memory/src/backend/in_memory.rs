@@ -19,6 +19,7 @@ use super::{BackendKind, MemoryBackend};
 /// 进程内 HashMap 后端（测试用）。
 pub struct InMemoryBackend {
     episodes_by_id: Mutex<HashMap<String, Episode>>,
+    metadata_by_episode: Mutex<HashMap<String, serde_json::Value>>,
     /// `(stream_kind, session_id) -> ordered list of entries`
     streams: Mutex<HashMap<(StreamKind, String), Vec<HistoryEntry>>>,
 }
@@ -27,6 +28,7 @@ impl InMemoryBackend {
     pub fn new() -> Self {
         Self {
             episodes_by_id: Mutex::new(HashMap::new()),
+            metadata_by_episode: Mutex::new(HashMap::new()),
             streams: Mutex::new(HashMap::new()),
         }
     }
@@ -51,7 +53,7 @@ impl MemoryBackend for InMemoryBackend {
         let mut map = self
             .episodes_by_id
             .lock()
-            .expect("InMemoryBackend poisoned");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if map.contains_key(&ep.id) {
             return Err(Box::new(crate::MemoryError::Invalid(format!(
                 "episode id already exists: {}",
@@ -69,7 +71,7 @@ impl MemoryBackend for InMemoryBackend {
         let map = self
             .episodes_by_id
             .lock()
-            .expect("InMemoryBackend poisoned");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         Ok(map.get(id).cloned())
     }
 
@@ -81,7 +83,7 @@ impl MemoryBackend for InMemoryBackend {
         let map = self
             .episodes_by_id
             .lock()
-            .expect("InMemoryBackend poisoned");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut all: Vec<Episode> = map
             .values()
             .filter(|e| e.session_id == session_id)
@@ -95,12 +97,39 @@ impl MemoryBackend for InMemoryBackend {
         Ok(all)
     }
 
+    fn put_episode_metadata(
+        &self,
+        episode_id: &str,
+        metadata: serde_json::Value,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.metadata_by_episode
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(episode_id.to_string(), metadata);
+        Ok(())
+    }
+
+    fn get_episode_metadata(
+        &self,
+        episode_id: &str,
+    ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self
+            .metadata_by_episode
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(episode_id)
+            .cloned())
+    }
+
     fn append_stream(
         &self,
         kind: StreamKind,
         entry: HistoryEntry,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut streams = self.streams.lock().expect("InMemoryBackend poisoned");
+        let mut streams = self
+            .streams
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let key = (kind, entry.session_id.clone().unwrap_or_default());
         let list = streams.entry(key).or_insert_with(Vec::new);
         list.push(entry);
@@ -113,14 +142,23 @@ impl MemoryBackend for InMemoryBackend {
         session_id: &str,
         n: usize,
     ) -> Result<Vec<HistoryEntry>, Box<dyn std::error::Error + Send + Sync>> {
-        let streams = self.streams.lock().expect("InMemoryBackend poisoned");
-        let key = (kind, session_id.to_string());
-        let Some(list) = streams.get(&key) else {
-            return Ok(Vec::new());
-        };
-        let mut alive: Vec<HistoryEntry> = list
+        let streams = self
+            .streams
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut alive: Vec<HistoryEntry> = streams
             .iter()
+            .filter(|((k, _), _)| *k == kind)
+            .flat_map(|(_, list)| list.iter())
             .filter(|e| e.tombstoned_at.is_none())
+            // L 组: 与 SqliteBackend / FileBackend / EncryptedFileBackend 对齐 —
+            // `entry.session_id` 为 None 时不归属任何 session, 对任意
+            // session_id 查询都可见. 旧实现把 None 归一成 "" 键桶, 只有查询
+            // 空串才命中, 语义与其它三个后端分裂.
+            .filter(|e| match &e.session_id {
+                None => true,
+                Some(s) => s == session_id,
+            })
             .cloned()
             .collect();
         alive.sort_by_key(|e| e.created_at);
@@ -129,6 +167,54 @@ impl MemoryBackend for InMemoryBackend {
             alive.drain(..skip);
         }
         Ok(alive)
+    }
+}
+
+impl crate::scope::ScopedMemoryBackend for InMemoryBackend {
+    fn query_candidates(
+        &self,
+        query: &crate::scope::MemoryCandidateQuery,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        if query.visible_scopes.is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+        let episodes = self
+            .episodes_by_id
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let metadata_map = self
+            .metadata_by_episode
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let mut matched = Vec::new();
+        for ep in episodes.values() {
+            if let Some(as_of_ms) = query.as_of_ms {
+                if (ep.timestamp * 1000) > as_of_ms {
+                    continue;
+                }
+            }
+            let scope = if let Some(meta) = metadata_map.get(&ep.id) {
+                meta.get("scope")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_else(|| crate::scope::MemoryScope::Session {
+                        session_id: ep.session_id.clone(),
+                    })
+            } else {
+                crate::scope::MemoryScope::Session {
+                    session_id: ep.session_id.clone(),
+                }
+            };
+
+            if scope.is_visible_in(&query.visible_scopes) {
+                matched.push(ep.clone());
+            }
+        }
+
+        matched.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
+        matched.truncate(query.limit);
+        matched.reverse();
+        Ok(matched)
     }
 }
 
@@ -227,6 +313,23 @@ mod tests {
         let list = b.list_stream(action, session, 10).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, "a");
+    }
+
+    /// L 组: None-session 条目对任意 session 查询可见 (与 SqliteBackend /
+    /// FileBackend / EncryptedFileBackend 对齐, 旧实现把它们锁在 "" 键桶).
+    #[test]
+    fn list_stream_none_session_matches_any_session() {
+        let b = InMemoryBackend::new();
+        let thought = crate::StreamKind::Thought;
+        let mut orphan = he("orphan", "whatever");
+        orphan.session_id = None;
+        b.append_stream(thought, orphan).unwrap();
+        b.append_stream(thought, he("owned", "s1")).unwrap();
+        let for_s1 = b.list_stream(thought, "s1", 10).unwrap();
+        assert_eq!(for_s1.len(), 2, "None-session 条目必须对具名 session 可见");
+        let for_other = b.list_stream(thought, "other", 10).unwrap();
+        assert_eq!(for_other.len(), 1);
+        assert_eq!(for_other[0].id, "orphan");
     }
 
     #[test]

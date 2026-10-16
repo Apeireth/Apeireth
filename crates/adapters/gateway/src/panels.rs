@@ -8,6 +8,11 @@
 //!
 //! Response shapes follow `docs/gateway-api-contract.md` §4-§9 and mirror the
 //! desktop types in the sibling `apeireth-ui/src/lib/types.ts` workspace.
+//!
+//! 读快照语义 (W2-③ 面板一致性, 多客户端读数一致): 每个 `/v1/panel/*` 响应 =
+//! **一次快照读** —— 单个端口调用的完整结果, 绝不拼两次读 (会话列表/内存计数
+//! 不会混两个时刻的状态); 响应内各字段同出一刻, 多客户端并发读各自拿到完整
+//! 一致的快照。该语义由 `tests/multi_client_session.rs` 面板两例钉住。
 
 use std::sync::{Arc, RwLock};
 
@@ -27,10 +32,48 @@ pub struct GatewayState {
     pub runtime: Arc<Runtime>,
     pub services: GatewayServices,
     pub events: crate::events::EventBus,
+    /// Keepalive pin on the SSE delivery frame surface (逐连接租约的装配面):
+    /// the assembly keeps the delivery stream open, so frame retention spans
+    /// connection gaps and every new connection reads a current snapshot.
+    pub events_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
     pub observations: Arc<crate::events::RuntimeObservationSink>,
+    /// Keepalive pin on the observation flush surface (攒批面租约的装配面):
+    /// the flush loop runs for the assembly lifetime and stops with it.
+    pub observations_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
+    /// Presence synthesizer behind `presence_state` frames (contract §8a); held
+    /// here so the service outlives the assembly scope and its heartbeat task.
+    pub presence: Arc<crate::presence::PresenceService>,
+    /// Keepalive pin on the presence frame surface (资源租约示范接线): the
+    /// assembly surface is the first holder, so the frame stream (heartbeat
+    /// producer) opens here and closes when the gateway state is gone.
+    pub presence_stream: Arc<apeireth_core::resource_lease::ResourcePin>,
     /// Live runtime config, readable by every request path and patchable through
     /// `/v1/admin/config`.
     pub hot_config: Arc<RwLock<crate::admin::GatewayRuntimeConfig>>,
+    /// W2-② 全 API 面令牌门 (chat / 事件流 / 面板 / 会话 / 审批 / admin 族,
+    /// 唯一豁免 `UNAUTHENTICATED_PROBE_PATHS` 健康探活), 三态口径解析自 env
+    /// `APEIRETH_GATEWAY_TOKEN` (see [`crate::canonical_entry::GatewayTokenGate`])。
+    pub token_gate: crate::canonical_entry::GatewayTokenGate,
+    /// 客户端令牌表 (name → token, 令牌族第二面): 与 env 单令牌并列的通行证,
+    /// 过门审计带客户端名。由组合根**显式装载注入** (see
+    /// [`crate::client_tokens::ClientTokenTable::load`]) —— 装配函数不隐式读
+    /// 配置面, 「坏配置拒开」必须在可失败边界执行; 未注入 = 空表 (仅 env 面)。
+    pub client_tokens: crate::client_tokens::ClientTokenTable,
+    /// 用户角色面 (W3-②): 用户表 (`users.json`; 未注入 = **角色面未激活**,
+    /// 兼容路径零回归) + 会话→用户绑定。由组合根显式装载注入 (see
+    /// [`crate::client_tokens::UserAccess::load`]), 坏表/绑定不一致在可失败
+    /// 边界拒开; 角色门据此按治理层 role 权限矩阵过闸。
+    pub user_access: crate::client_tokens::UserAccess,
+    /// 用户域会话平面 (W3-① 多户数据隔离): 域解析 + 按域路由会话写闸 (每域
+    /// 恰一把, 默认域与运行时共用同一把)。由组合根显式装载注入 (see
+    /// [`apeireth_runtime_assembly::DomainDataPlane`]); 未注入 = 域面未接线
+    /// (兼容路径, 一切按默认域原位语义)。
+    pub domains: Option<Arc<apeireth_runtime::canonical::DomainSessionPlane>>,
+    /// Graceful-shutdown trigger (W2-① resident form): fired by the token-gated
+    /// `/v1/admin/shutdown` endpoint; the serve loop stops, writes the closing
+    /// audit fact and flushes the observation archive (see
+    /// [`crate::canonical_entry::serve_with_shutdown`]).
+    pub shutdown: Arc<crate::shutdown::ShutdownTrigger>,
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +193,38 @@ pub struct GraphEdgeDto {
 pub struct MemoryGraphDto {
     pub nodes: Vec<GraphNodeDto>,
     pub edges: Vec<GraphEdgeDto>,
+}
+
+pub use apeireth_guard::{GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkbenchToolExecutionDto {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkbenchMemoryProvenanceDto {
+    pub recalled_count: usize,
+    pub governance_filtered: usize,
+    pub layers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkbenchTurnDto {
+    pub session_id: String,
+    pub goal: String,
+    pub agent_status: String,
+    pub tools: Vec<WorkbenchToolExecutionDto>,
+    pub memory: WorkbenchMemoryProvenanceDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guard_verdict: Option<String>,
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -383,6 +458,38 @@ pub trait ModuleQuery: Send + Sync {
     async fn list_modules(&self) -> Result<Vec<OrganDto>, String>;
 }
 
+/// Safety guard query port.
+#[async_trait]
+pub trait SafetyGuardQuery: Send + Sync {
+    async fn status(&self) -> Result<GuardStatusDto, String>;
+    async fn recent_events(&self, limit: usize) -> Result<Vec<GuardEventDto>, String>;
+    async fn dry_run(&self, req: GuardDryRunRequest) -> Result<GuardDryRunResponse, String>;
+}
+
+#[async_trait]
+impl SafetyGuardQuery for apeireth_guard::BehaviorChainGuardHook {
+    async fn status(&self) -> Result<GuardStatusDto, String> {
+        Ok(self.status())
+    }
+
+    async fn recent_events(&self, limit: usize) -> Result<Vec<GuardEventDto>, String> {
+        Ok(self.recent_events(Some(limit)))
+    }
+
+    async fn dry_run(&self, req: GuardDryRunRequest) -> Result<GuardDryRunResponse, String> {
+        Ok(self.dry_run(&req))
+    }
+}
+
+/// Workbench turn query port.
+#[async_trait]
+pub trait WorkbenchQuery: Send + Sync {
+    async fn turn_status(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<Option<WorkbenchTurnDto>, String>;
+}
+
 /// Gateway service graph. Presence of a port is the capability fact; there is
 /// no second `supports_*` feature-bit interface in the production path.
 #[derive(Clone, Default)]
@@ -401,6 +508,8 @@ pub struct GatewayServices {
     pub modules: Option<Arc<dyn ModuleQuery>>,
     /// Writes hot-reloaded API keys to the process credential backend (keyring).
     pub credentials: Option<Arc<dyn crate::admin::CredentialWriter>>,
+    pub safety_guard: Option<Arc<dyn SafetyGuardQuery>>,
+    pub workbench: Option<Arc<dyn WorkbenchQuery>>,
 }
 
 impl GatewayServices {
@@ -430,6 +539,8 @@ impl GatewayServices {
             grant_commands: permissions.then(|| adapter.clone() as Arc<dyn GrantCommand>),
             modules: modules.then(|| adapter as Arc<dyn ModuleQuery>),
             credentials: None,
+            safety_guard: None,
+            workbench: None,
         }
     }
 }
@@ -567,6 +678,14 @@ impl ModuleQuery for PanelDataAdapter {
 
 /// Panel routes without attached state — merge into the canonical router
 /// before its final `.with_state(...)`.
+/// 面板族里的**管理面**端点 (W3-② 角色门分类用): 授权热撤属治理层 role 权限
+/// 矩阵 [`apeireth_governance::UserCapability::AdminControl`] 档 (owner)。
+/// 面板路径知识归面板面本体 (canonical_entry 只问不背路径, 架构冻结面不许引
+/// 面板路径)。
+pub fn panel_admin_face(endpoint: &str) -> bool {
+    endpoint == "/v1/panel/grants/revoke"
+}
+
 pub fn panel_routes() -> Router<GatewayState> {
     Router::new()
         .route("/v1/panel/sessions", get(list_sessions))
@@ -594,6 +713,16 @@ pub fn panel_routes() -> Router<GatewayState> {
         .route("/v1/panel/grants/revoke", axum::routing::post(revoke_grant))
         .route("/v1/organs", get(list_organs))
         .route("/v1/modules", get(list_modules))
+        .route("/v1/safety/guard/status", get(guard_status))
+        .route("/v1/panel/safety/guard/status", get(guard_status))
+        .route("/v1/safety/guard/events", get(guard_events))
+        .route("/v1/panel/safety/guard/events", get(guard_events))
+        .route(
+            "/v1/safety/guard/evaluate",
+            axum::routing::post(guard_evaluate),
+        )
+        .route("/v1/workbench/turn", get(workbench_turn))
+        .route("/v1/panel/workbench/turn", get(workbench_turn))
 }
 
 // ---------------------------------------------------------------------------
@@ -698,6 +827,61 @@ async fn list_audit(State(state): State<GatewayState>, Query(q): Query<LimitQuer
             Json(serde_json::json!({ "events": events })),
         )
             .into_response(),
+        Err(e) => panel_error(e),
+    }
+}
+
+async fn guard_status(State(state): State<GatewayState>) -> Response {
+    let Some(guard) = &state.services.safety_guard else {
+        return unsupported("safety.guard.status.read");
+    };
+    match guard.status().await {
+        Ok(status) => (StatusCode::OK, Json(status)).into_response(),
+        Err(e) => panel_error(e),
+    }
+}
+
+async fn guard_events(State(state): State<GatewayState>, Query(q): Query<LimitQuery>) -> Response {
+    let Some(guard) = &state.services.safety_guard else {
+        return unsupported("safety.guard.events.read");
+    };
+    match guard.recent_events(limit_of(q.limit)).await {
+        Ok(events) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "events": events })),
+        )
+            .into_response(),
+        Err(e) => panel_error(e),
+    }
+}
+
+async fn guard_evaluate(
+    State(state): State<GatewayState>,
+    Json(request): Json<GuardDryRunRequest>,
+) -> Response {
+    let Some(guard) = &state.services.safety_guard else {
+        return unsupported("safety.guard.evaluate");
+    };
+    match guard.dry_run(request).await {
+        Ok(res) => (StatusCode::OK, Json(res)).into_response(),
+        Err(e) => panel_error(e),
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct WorkbenchQueryParam {
+    session: Option<String>,
+}
+
+async fn workbench_turn(
+    State(state): State<GatewayState>,
+    Query(q): Query<WorkbenchQueryParam>,
+) -> Response {
+    let Some(workbench) = &state.services.workbench else {
+        return unsupported("workbench.turn.read");
+    };
+    match workbench.turn_status(q.session.as_deref()).await {
+        Ok(turn) => (StatusCode::OK, Json(serde_json::json!({ "turn": turn }))).into_response(),
         Err(e) => panel_error(e),
     }
 }
@@ -1014,6 +1198,8 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
     let permissions_supported = services.grants.is_some();
     let permissions_write_supported = services.grant_commands.is_some();
     let organs_supported = services.modules.is_some();
+    let safety_supported = services.safety_guard.is_some();
+    let workbench_supported = services.workbench.is_some();
 
     let memory_ids = [
         ("memory.read", true, false, &["list", "read"] as &[&str]),
@@ -1065,7 +1251,10 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "providers", "capabilities": [ cap("providers.list", true, false, &["list"], true, !state.runtime.providers().is_empty()) ] },
             { "name": "runtime", "capabilities": [ cap("runtime.snapshot.read", true, false, &["read"], true, true) ] },
             { "name": "chat", "capabilities": [ cap("chat.completions", true, true, &["complete", "stream"], true, !state.runtime.providers().is_empty()) ] },
-            { "name": "sessions", "capabilities": [ cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported) ] },
+            { "name": "sessions", "capabilities": [
+                cap("sessions.read", true, false, &["list"], sessions_supported, sessions_supported),
+                cap("sessions.delete", false, true, &["delete"], true, true),
+            ] },
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "permissions", "capabilities": [
@@ -1079,6 +1268,23 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "organs", "capabilities": [
                 cap("organs.list", true, false, &["list"], organs_supported, organs_supported),
                 cap("modules.list", true, false, &["list"], organs_supported, organs_supported),
+            ] },
+            { "name": "safety", "capabilities": [
+                cap("safety.guard.status.read", true, false, &["read"], safety_supported, safety_supported),
+                cap("safety.guard.events.read", true, false, &["list"], safety_supported, safety_supported),
+                cap("safety.guard.evaluate", false, true, &["evaluate"], safety_supported, safety_supported),
+            ] },
+            { "name": "workbench", "capabilities": [
+                cap("workbench.turn.read", true, false, &["read"], workbench_supported, workbench_supported),
+            ] },
+            { "name": "metrics", "capabilities": [
+                cap("metrics.read", true, false, &["read"], true, true),
+            ] },
+            { "name": "voice", "capabilities": [
+                cap_with_reason("voice.duplex", false, false, &["duplex", "stream"], false, false, Some("not_assembled")),
+            ] },
+            { "name": "subagents", "capabilities": [
+                cap_with_reason("subagents.orchestration", false, false, &["spawn", "coordinate"], false, false, Some("not_assembled")),
             ] },
             { "name": "trace", "capabilities": [ cap("trace.read", true, false, &["list", "detail"], trace_supported, trace_supported) ] },
             { "name": "audit", "capabilities": [ cap("audit.read", true, false, &["list"], audit_supported, audit_supported) ] },

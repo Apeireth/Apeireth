@@ -1,19 +1,19 @@
 //! Alias resolution, LRU lookup cache, and invalidation.
 //!
-//! Recovered from legacy `apeireth-agent` `AgentManager` (VCP `agentManager.js`
+//! Legacy `AgentManager` (既有实现
 //! alias map + prompt cache) as a **metadata helper**, not as an agent owner.
 //! The canonical plugin and module registries remain the source of truth;
 //! this module only answers "what id does this lookup key refer to" and
 //! caches the answer.
 //!
-//! # Behaviour preserved from the donor
+//! # Behaviour preserved from the baseline
 //!
 //! - An entity's id is an implicit alias of itself.
 //! - Several aliases may point at one id; a colliding alias is last-writer-wins.
 //! - `resolve` checks the record table by id first, then the alias index.
 //! - Hits are stored in a bounded LRU keyed by the **lookup string**, so
 //!   `id`, `@a1`, and `@a2` are three cache entries.
-//! - Register and unregister clear the whole cache (VCP `promptCache.clear()`
+//! - Register and unregister clear the whole cache (缓存清空惯例
 //!   on `loadMap`).
 //! - A miss does not occupy cache capacity.
 //! - Unregister removes only aliases that still point at the removed id, so a
@@ -25,16 +25,16 @@ use std::num::NonZeroUsize;
 
 use crate::manifest::PluginManifest;
 
-/// Default LRU capacity. The donor prompt cache was an unbounded `Map`; 64 is
+/// Default LRU capacity. The earlier prompt cache was an unbounded `Map`; 64 is
 /// the size it used once the cache became a real LRU.
 pub const DEFAULT_CACHE_SIZE: usize = 64;
 
-/// VCP miss token prefix (`agentManager.js:282` `{{agent:` + alias + `}}`).
+/// miss token 前缀惯例 (`agentManager.js:282` `{{agent:` + alias + `}}`).
 pub const LEGACY_UNRESOLVED_PREFIX: &str = "{{agent:";
 
 /// Format a miss placeholder so a consumer can leave the lookup in the prompt
 /// rather than inventing a record. V2 uses `plugin` as the kind; pass `agent`
-/// to reproduce the donor token.
+/// to reproduce the baseline token.
 pub fn unresolved_token(kind: &str, alias: &str) -> String {
     format!("{{{{{kind}:{alias}}}}}")
 }
@@ -194,7 +194,7 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
 
 /// Record table + alias index + LRU lookup cache.
 ///
-/// This is the donor `AgentManager` resolution algorithm with the agent type
+/// This is the `AgentManager` resolution algorithm with the agent type
 /// erased. Callers that own plugins or modules keep those records; they use
 /// this helper only for alias/cache behaviour.
 #[derive(Debug, Clone)]
@@ -220,7 +220,7 @@ impl<T: Clone> AliasResolver<T> {
     }
 
     /// Insert or replace `id`. Existing aliases for the same id are rebound.
-    /// The lookup cache is cleared (donor `loadMap` behaviour).
+    /// The lookup cache is cleared (baseline `loadMap` behaviour).
     pub fn register(
         &mut self,
         id: impl Into<String>,
@@ -592,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_token_matches_vcp_shape() {
+    fn unresolved_token_matches_expected_shape() {
         assert_eq!(LEGACY_UNRESOLVED_PREFIX, "{{agent:");
         assert_eq!(unresolved_token("agent", "coder"), "{{agent:coder}}");
         assert_eq!(

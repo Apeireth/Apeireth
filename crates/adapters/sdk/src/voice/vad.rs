@@ -1,15 +1,15 @@
-//! # Voice Activity Detection (per @anthropic-ai/voice v0.9.21 1:1 翻译)
+//! # Voice Activity Detection (per 既有 Voice SDK)
 //!
-//! 3 VAD 算法 (per v0.9.21 + task spec §3):
+//! 3 VAD 算法 (按既有实现 + task spec §3):
 //! 1. **Energy** — 基于能量阈值 (RMS 简易, 离线)
-//! 2. **Silence** — 基于静音时长阈值 (per 商业版 silence detection)
+//! 2. **Silence** — 基于静音时长阈值 (per 上游 silence detection)
 //! 3. **WebRtc** — WebRTC VAD 集成 (per Chromium WebRTC VAD, 离线)
 //!
-//! **STUB**: 3 算法枚举保留 1:1 翻译, 但 detect() 内部返 `VoiceError::NotImplemented`.
+//! 领域模型 (3 算法枚举 + 配置 / 结果) + 流式折叠状态机 (§5).
 //!
 //! ## 引用文档
 //!
-//! 1. `@anthropic-ai/voice v0.9.21` `client/vad_engine.js` (VAD 1:1 翻译源)
+//! 1. `既有 Voice SDK` `client/vad_engine.js` (VAD 参考)
 //! 2. WebRTC VAD 官方文档 (per Google WebRTC project)
 
 use std::time::Duration;
@@ -22,18 +22,18 @@ use crate::voice::error::{VoiceError, VoiceResult};
 // §1 3 VAD 算法 enum (K-1 强校验守门, 编译期 hardcode 3 variant)
 // ============================================================================
 
-/// VAD 算法 (3 variant, 1:1 翻译 @anthropic-ai/voice v0.9.21 `VadAlgorithm` enum).
+/// VAD 算法 (3 variant, 语义对齐 既有 Voice SDK `VadAlgorithm` enum).
 ///
-/// 3 算法 snake_case 字符串严格匹配 v0.9.21 API 规范.
+/// 3 算法 snake_case 字符串严格匹配 既有实现 API 规范.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VadAlgorithm {
-    /// **基于能量阈值** (RMS 简易, 离线, per v0.9.21估 1:1).
+    /// **基于能量阈值** (RMS 简易, 离线, 按既有实现估算).
     #[default]
     Energy,
-    /// **基于静音时长阈值** (silence detection, per v0.9.21估 1:1).
+    /// **基于静音时长阈值** (silence detection, 按既有实现估算).
     Silence,
-    /// **WebRTC VAD** (Chromium WebRTC VAD 集成, 离线, per v0.9.21估 1:1).
+    /// **WebRTC VAD** (Chromium WebRTC VAD 集成, 离线, 按既有实现估算).
     WebRtc,
 }
 
@@ -41,7 +41,7 @@ impl VadAlgorithm {
     /// 3 算法 hardcode 常量.
     pub const COUNT: usize = 3;
 
-    /// 字符串 (1:1 翻译 v0.9.21 `algorithm` 字段, snake_case 严格匹配).
+    /// 字符串 (对齐既有实现 `algorithm` 字段, snake_case 严格匹配).
     pub fn as_str(&self) -> &'static str {
         match self {
             VadAlgorithm::Energy => "energy",
@@ -50,7 +50,7 @@ impl VadAlgorithm {
         }
     }
 
-    /// 从字符串解析 (per v0.9.21响应 `algorithm` 字段).
+    /// 从字符串解析 (按既有实现响应 `algorithm` 字段).
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "energy" => Some(VadAlgorithm::Energy),
@@ -99,12 +99,12 @@ pub const SUPPORTED_VAD_ALGORITHMS: &[VadAlgorithm] = &[
 const _: () = assert!(SUPPORTED_VAD_ALGORITHMS.len() == 3);
 
 // ============================================================================
-// §2 VadConfig VAD 配置 (per v0.9.21 1:1 翻译)
+// §2 VadConfig VAD 配置 (per 对齐既有实现)
 // ============================================================================
 
-/// VAD 配置 (per v0.9.21 `vad_config` 字段 1:1 翻译).
+/// VAD 配置 (按既有实现 `vad_config` 字段).
 ///
-/// 字段对应 v0.9.21 `VadConfig` 对象:
+/// 字段对应既有实现 `VadConfig` 对象:
 /// - `algorithm` (per `VadAlgorithm`)
 /// - `energy_threshold` (0.0..=1.0, per Energy 算法)
 /// - `silence_threshold_ms` (静音时长阈值, per Silence 算法)
@@ -168,28 +168,28 @@ impl VadConfig {
     ) -> VoiceResult<Self> {
         // 能量阈值 0.0..=1.0
         if !(0.0..=1.0).contains(&energy_threshold) {
-            return Err(VoiceError::Other(format!(
+            return Err(VoiceError::InvalidArgument(format!(
                 "energy_threshold {} out of range [0.0, 1.0]",
                 energy_threshold
             )));
         }
         // 静音阈值 0..=10000ms (10s)
         if silence_threshold_ms > 10_000 {
-            return Err(VoiceError::Other(format!(
+            return Err(VoiceError::InvalidArgument(format!(
                 "silence_threshold_ms {} out of range [0, 10000]",
                 silence_threshold_ms
             )));
         }
         // 最小语音长度 0..=10000ms
         if min_speech_duration_ms > 10_000 {
-            return Err(VoiceError::Other(format!(
+            return Err(VoiceError::InvalidArgument(format!(
                 "min_speech_duration_ms {} out of range [0, 10000]",
                 min_speech_duration_ms
             )));
         }
         // 帧长度 10/20/30 ms (per WebRTC VAD)
         if !matches!(frame_size_ms, 10 | 20 | 30) {
-            return Err(VoiceError::Other(format!(
+            return Err(VoiceError::InvalidArgument(format!(
                 "frame_size_ms {} invalid, expected 10/20/30",
                 frame_size_ms
             )));
@@ -211,12 +211,12 @@ impl Default for VadConfig {
 }
 
 // ============================================================================
-// §3 VadResult VAD 检测结果 (per v0.9.21 1:1 翻译)
+// §3 VadResult VAD 检测结果 (per 对齐既有实现)
 // ============================================================================
 
-/// VAD 检测结果 (per v0.9.21 `vad_detect` 响应 1:1 翻译).
+/// VAD 检测结果 (按既有实现 `vad_detect` 响应).
 ///
-/// 字段对应 v0.9.21 `VadResult` 对象:
+/// 字段对应既有实现 `VadResult` 对象:
 /// - `is_speech` (是否语音)
 /// - `algorithm` (per `VadAlgorithm`)
 /// - `confidence` (0.0..=1.0, 置信度)
@@ -354,21 +354,21 @@ mod tests {
     #[test]
     fn k1_vad_config_rejects_invalid_energy_threshold() {
         let result = VadConfig::custom(VadAlgorithm::Energy, 1.5, 1000, 200, 20);
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
         let result = VadConfig::custom(VadAlgorithm::Energy, -0.1, 1000, 200, 20);
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]
     fn k1_vad_config_rejects_invalid_frame_size() {
         let result = VadConfig::custom(VadAlgorithm::Energy, 0.1, 1000, 200, 50);
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     #[test]
     fn k1_vad_config_rejects_invalid_silence_threshold() {
         let result = VadConfig::custom(VadAlgorithm::Silence, 0.0, 20000, 200, 20);
-        assert!(matches!(result, Err(VoiceError::Other(_))));
+        assert!(matches!(result, Err(VoiceError::InvalidArgument(_))));
     }
 
     // ---- §3 VadResult ----
@@ -396,5 +396,254 @@ mod tests {
             Duration::from_millis(0),
         );
         assert_eq!(result.speech_ratio(), 0.0);
+    }
+}
+
+// ============================================================================
+// §5 流式 VAD 折叠状态机 (语音段门限 + 静音挂留 + 置信度平滑)
+// ============================================================================
+//
+// 语义 (如实文档化):
+// - `fold` 逐观测折叠: 语音观测先进**候选段**, 累计到
+//   `min_speech_duration_ms` 才计入语音 (短促噪声门限); 未达门限的候选段
+//   在静音到来或 `finish` 时降级为静音。
+// - 静音观测时长 < `silence_threshold_ms` 视为句中停顿 (挂留), 不清除
+//   `in_speech`; 达到阈值才判定语音段结束。
+// - 置信度按 EMA (α=0.5) 平滑, 抑制单帧抖动。
+// 这是纯确定性折叠逻辑, 零模型推理; 每条迁移都在测试里钉死。
+
+/// 置信度 EMA 系数.
+pub const CONFIDENCE_EMA_ALPHA: f32 = 0.5;
+
+/// 流式 VAD 折叠状态.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VadStreamState {
+    algorithm: VadAlgorithm,
+    min_speech_duration_ms: u64,
+    hangover_ms: u64,
+    committed_speech_ms: u64,
+    committed_silence_ms: u64,
+    candidate_speech_ms: u64,
+    confidence_ema: Option<f32>,
+    in_speech: bool,
+}
+
+impl VadStreamState {
+    /// 从 VAD 配置创建折叠状态.
+    pub fn new(config: &VadConfig) -> Self {
+        Self {
+            algorithm: config.algorithm,
+            min_speech_duration_ms: u64::from(config.min_speech_duration_ms),
+            hangover_ms: u64::from(config.silence_threshold_ms),
+            committed_speech_ms: 0,
+            committed_silence_ms: 0,
+            candidate_speech_ms: 0,
+            confidence_ema: None,
+            in_speech: false,
+        }
+    }
+
+    /// 当前是否处于语音段 (门限后).
+    pub fn in_speech(&self) -> bool {
+        self.in_speech
+    }
+
+    /// 未过门限的候选语音时长 (毫秒).
+    pub fn candidate_speech_ms(&self) -> u64 {
+        self.candidate_speech_ms
+    }
+
+    /// 复位.
+    pub fn reset(&mut self) {
+        self.committed_speech_ms = 0;
+        self.committed_silence_ms = 0;
+        self.candidate_speech_ms = 0;
+        self.confidence_ema = None;
+        self.in_speech = false;
+    }
+
+    /// 折叠一个观测, 返回折叠后的聚合结果.
+    pub fn fold(&mut self, obs: &VadResult) -> VadResult {
+        // 置信度 EMA 平滑
+        self.confidence_ema = Some(match self.confidence_ema {
+            Some(prev) => {
+                prev * (1.0 - CONFIDENCE_EMA_ALPHA) + obs.confidence * CONFIDENCE_EMA_ALPHA
+            }
+            None => obs.confidence,
+        });
+
+        if obs.is_speech {
+            self.committed_silence_ms += obs.silence_duration.as_millis() as u64;
+            self.candidate_speech_ms += obs.speech_duration.as_millis() as u64;
+            if self.candidate_speech_ms >= self.min_speech_duration_ms {
+                self.committed_speech_ms += self.candidate_speech_ms;
+                self.candidate_speech_ms = 0;
+                self.in_speech = true;
+            }
+        } else {
+            // 未达门限的候选语音降级为静音 (短促噪声门限)
+            let downgrade = self.candidate_speech_ms;
+            self.candidate_speech_ms = 0;
+            self.committed_silence_ms += obs.silence_duration.as_millis() as u64
+                + obs.speech_duration.as_millis() as u64
+                + downgrade;
+            let silence_run = obs.silence_duration.as_millis() as u64;
+            if silence_run >= self.hangover_ms {
+                self.in_speech = false;
+            }
+        }
+        self.snapshot()
+    }
+
+    /// 流结束: 尾部未达门限的候选语音降级为静音.
+    pub fn finish(&mut self) -> VadResult {
+        self.committed_silence_ms += self.candidate_speech_ms;
+        self.candidate_speech_ms = 0;
+        self.in_speech = false;
+        self.snapshot()
+    }
+
+    fn snapshot(&self) -> VadResult {
+        VadResult {
+            is_speech: self.in_speech,
+            algorithm: self.algorithm,
+            confidence: self.confidence_ema.unwrap_or(0.0),
+            speech_duration: Duration::from_millis(self.committed_speech_ms),
+            silence_duration: Duration::from_millis(self.committed_silence_ms),
+        }
+    }
+}
+
+#[cfg(test)]
+mod stream_tests {
+    use super::*;
+
+    fn config(min_speech_ms: u32, hangover_ms: u32) -> VadConfig {
+        VadConfig {
+            algorithm: VadAlgorithm::Energy,
+            energy_threshold: 0.05,
+            silence_threshold_ms: hangover_ms,
+            min_speech_duration_ms: min_speech_ms,
+            frame_size_ms: 20,
+        }
+    }
+
+    fn speech_obs(ms: u64, confidence: f32) -> VadResult {
+        VadResult {
+            is_speech: true,
+            algorithm: VadAlgorithm::Energy,
+            confidence,
+            speech_duration: Duration::from_millis(ms),
+            silence_duration: Duration::from_millis(0),
+        }
+    }
+
+    fn silence_obs(ms: u64, confidence: f32) -> VadResult {
+        VadResult {
+            is_speech: false,
+            algorithm: VadAlgorithm::Energy,
+            confidence,
+            speech_duration: Duration::from_millis(0),
+            silence_duration: Duration::from_millis(ms),
+        }
+    }
+
+    #[test]
+    fn short_speech_burst_is_gated_to_silence() {
+        let mut state = VadStreamState::new(&config(100, 500));
+        // 60ms 语音 < 100ms 门限 → 候选, 不算语音
+        let out = state.fold(&speech_obs(60, 0.9));
+        assert!(!out.is_speech);
+        assert_eq!(state.candidate_speech_ms(), 60);
+        assert_eq!(out.speech_duration, Duration::from_millis(0));
+
+        // 静音到来 → 候选降级为静音
+        let out = state.fold(&silence_obs(20, 0.1));
+        assert!(!out.is_speech);
+        assert_eq!(state.candidate_speech_ms(), 0);
+        assert_eq!(out.speech_duration, Duration::from_millis(0));
+        assert_eq!(
+            out.silence_duration,
+            Duration::from_millis(80),
+            "60 降级 + 20 静音"
+        );
+    }
+
+    #[test]
+    fn sustained_speech_commits_after_min_duration() {
+        let mut state = VadStreamState::new(&config(100, 500));
+        state.fold(&speech_obs(40, 0.8));
+        state.fold(&speech_obs(40, 0.8));
+        assert!(!state.in_speech(), "未达门限不算语音");
+        let out = state.fold(&speech_obs(40, 0.8));
+        assert!(out.is_speech, "累计 120ms ≥ 100ms 门限");
+        assert_eq!(out.speech_duration, Duration::from_millis(120));
+        assert_eq!(state.candidate_speech_ms(), 0);
+    }
+
+    #[test]
+    fn hangover_keeps_speech_through_short_pauses() {
+        let mut state = VadStreamState::new(&config(100, 500));
+        state.fold(&speech_obs(120, 0.9));
+        assert!(state.in_speech());
+        // 短停顿 200ms < 500ms 挂留 → 仍在语音段
+        let out = state.fold(&silence_obs(200, 0.2));
+        assert!(out.is_speech, "短停顿不应清除语音段");
+        // 长停顿 600ms ≥ 500ms → 语音段结束
+        let out = state.fold(&silence_obs(600, 0.1));
+        assert!(!out.is_speech, "长停顿必须结束语音段");
+    }
+
+    #[test]
+    fn confidence_is_smoothed_by_ema() {
+        let mut state = VadStreamState::new(&config(10, 100));
+        let out = state.fold(&speech_obs(20, 0.0));
+        assert!((out.confidence - 0.0).abs() < 1e-6);
+        let out = state.fold(&speech_obs(0, 1.0));
+        // EMA: 0*0.5 + 1*0.5 = 0.5
+        assert!(
+            (out.confidence - 0.5).abs() < 1e-6,
+            "EMA 平滑值必须 0.5: {}",
+            out.confidence
+        );
+    }
+
+    #[test]
+    fn finish_downgrades_trailing_candidate() {
+        let mut state = VadStreamState::new(&config(200, 500));
+        state.fold(&speech_obs(150, 0.9));
+        let out = state.finish();
+        assert!(!out.is_speech);
+        assert_eq!(out.speech_duration, Duration::from_millis(0));
+        assert_eq!(
+            out.silence_duration,
+            Duration::from_millis(150),
+            "尾部候选降级"
+        );
+    }
+
+    #[test]
+    fn reset_clears_everything() {
+        let mut state = VadStreamState::new(&config(100, 500));
+        state.fold(&speech_obs(300, 0.9));
+        state.reset();
+        assert!(!state.in_speech());
+        assert_eq!(state.candidate_speech_ms(), 0);
+        let out = state.fold(&silence_obs(0, 0.0));
+        assert_eq!(out.speech_duration, Duration::from_millis(0));
+        assert_eq!(out.silence_duration, Duration::from_millis(0));
+    }
+
+    #[test]
+    fn folded_result_propagates_algorithm_and_ratio() {
+        let mut cfg = config(100, 500);
+        cfg.algorithm = VadAlgorithm::WebRtc;
+        let mut state = VadStreamState::new(&cfg);
+        state.fold(&speech_obs(120, 0.5));
+        let out = state.fold(&silence_obs(80, 0.5));
+        assert_eq!(out.algorithm, VadAlgorithm::WebRtc);
+        let total = out.speech_duration.as_millis() + out.silence_duration.as_millis();
+        assert_eq!(total, 200);
+        assert!((out.speech_ratio() - 0.6).abs() < 1e-6);
     }
 }

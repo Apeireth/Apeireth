@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Apeireth 1.0 release 检查清单 (12 项, per 蓝图 §3.5)
+# Apeireth 1.0 release 检查清单 (12 项, 按安装规范)
 # 9 P0 + 3 P1, 任何 1 P0 fail 阻塞 1.0 release tag
 #
 # 用法:
@@ -64,7 +64,7 @@ check 2 "test (cargo test --workspace 0 fail + 54/54 报告齐)" "P0" check_test
 
 # 3. security
 check_security() {
-    # 5 守门 (per 蓝图 §3.5) 全部实跑
+    # 5 守门 (按安装规范) 全部实跑
     local FAIL=0
     # 守门 1: non-root USER
     if ! grep -qE "^USER (apeireth|nonroot:nonroot)" Dockerfile 2>/dev/null; then
@@ -76,7 +76,7 @@ check_security() {
     if [ -n "$HITS" ]; then
         echo "    ❌ 守门 2: API key 形如 sk-cp-/ghp_/AKIA 命中: $HITS"; FAIL=1
     fi
-    # 守门 3: audit append-only (per 蓝图 §3.5 守门 5)
+    # 守门 3: audit append-only (按安装规范 守门 5)
     if [ -d reports ]; then
         # 存在 reports/ 即可 (append-only 写入, 不删历史)
         :  # 0 装 PASS
@@ -111,11 +111,11 @@ check 4 "install (8 包 dry-run install 0 错)" "P0" check_install
 
 # 5. upgrade
 check_upgrade() {
-    # 升级脚本 dry-run 0 错 (per 蓝图 §3.6)
+    # 升级脚本 dry-run 0 错 (按安装规范)
     test -f scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh && \
     test -f scripts/upgrade/rollback.sh
 }
-check 5 "upgrade (D-07 一次性迁移脚本 dry-run 0 错, 蓝图 §3.6)" "P0" check_upgrade
+check 5 "upgrade (D-07 一次性迁移脚本 dry-run 0 错, 内部规范)" "P0" check_upgrade
 
 # 6. uninstall
 check_uninstall() {
@@ -150,7 +150,7 @@ check_i18n() {
     # dry-run 模式: 仅检查存在性
     return 0
 }
-check 10 "i18n (中英文档 0 missing, 蓝图 §3.5 P1)" "P1" check_i18n
+check 10 "i18n (中英文档 0 missing, 内部规范 P1)" "P1" check_i18n
 
 # 11. license
 check_license() {
@@ -179,7 +179,7 @@ check 11 "license (Apache 2.0 + NOTICE + 第三方 LICENSE, cargo deny license 0
 
 # 12. signature
 check_signature() {
-    # 8 形态签名实跑 (per 蓝图 §3.5):
+    # 8 形态签名实跑 (按安装规范):
     # 1. deb.gpg, 2. rpm.gpg, 3. brew.bottle.json.sig, 4. scoop.sha256
     # 5. tarball.sha256, 6. image.cosign, 7. git.tag.gpg, 8. crates.io.token
     local MISSING=()
@@ -234,7 +234,7 @@ cat >> "${OUT}" <<EOF
 - FAIL: ${FAIL}/12
 - P0 fail 阻塞 1.0 release tag
 
-## 12 项详细 (per 蓝图 §3.5)
+## 12 项详细 (按安装规范)
 
 | # | 类别 | 检查项 | 通过判据 |
 |---:|------|-------|---------|

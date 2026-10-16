@@ -18,7 +18,7 @@ Author:          子代理 R9
 
 ## 1. 前提
 
-- **v2 gateway 0 装**: HEAD `b9026186` 拍板 v2.0.0-rc.1 (per 子代理 R9 必读 #1). 17-crate workspace, 3 路由 (per `canonical_entry.rs:168-174`).
+- **v2 gateway 0 装**: HEAD `b9026186` 拍板 v2.0.0-rc.1 (per 子代理 R9 必读 #1). 18-crate workspace, 3 路由 (per `canonical_entry.rs:168-174`).
 - **9 organ done**: E4/F4/F6/F1/W1/W2/W3/E7/Memory 9 organ trait 抽象 + 真实现 (per `crates/engine/organ/src/lib.rs:11-32`, 整合 #2 commit `bbf70293`).
 - **认知模块 6/12 WIRED**: 6 WIRED + 6 DEFERRED (`memory_recall` / `preference_recall` / `judge` / `council` / `self_assessment` / `memory_writeback`, judge/council 为 WIRED, OFF by default; per `cognitive-module-wiring.md:22-35`).
 - **companion-desktop 0.5.0**: 当前指向 v1 :8090, 待真生产迁移到 :8080 (per `frontend/companion-desktop/README.md:6-7`).
@@ -35,8 +35,8 @@ cd C:\Users\31683\Apeireth-rust
 cargo run --locked --bin apeireth -- gateway serve --port 8080
 # 期望: HTTP 服务监听 :8080, 路由 /health + /v1/chat + /v1/chat/completions
 
-# 或 Docker (待真生产)
-docker run -p 8080:8080 -e APEIRETH_LLM_BACKEND=minimax apeireth:2.0.0
+# 或 Docker (待真生产; 单服务 SQLite 编排, 环境变量见 .env.example)
+docker run -p 8080:8080 -e APEIRETH_API_KEY=$APEIRETH_API_KEY -e APEIRETH_MODEL=$APEIRETH_MODEL apeireth/apeireth:2.0.0-rc.1
 ```
 
 **验证**:

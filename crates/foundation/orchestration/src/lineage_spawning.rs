@@ -14,6 +14,22 @@
 //!   3. `Phase 3: Emancipated` — Fully autonomous thread with continuous feedback to the three-tier living wiki vault.
 //!
 //! Pure Safe Rust (`#![forbid(unsafe_code)]`).
+//!
+//! # ⚠ 0 装诚实 — `parent_signature` 是 mock 格式, 不是密码学签名 (L5, 2026-09-24 审计)
+//!
+//! 上面的 "Ed25519 digital signature" 是**设计意图**, 当前实现**未接任何真签名**:
+//! `spawn_progeny` 生成的 `parent_signature` 只是
+//! `format!("sig_parent_{parent_id}_{hash[..4]:02x?}")` 这种可预测、可伪造的
+//! 字符串标记 (等价于"带 parent_id 的水印")。它提供:
+//! - ✅ 溯源可读性 (人/日志能看出是谁的后代);
+//! - ❌ **零**防伪造性 (任何能写 `progenies` map 或构造 spec 的一方都能生成同款);
+//! - ❌ **零**防篡改性 (签名不绑定 progeny_id / specialization / spawned_at_secs)。
+//!
+//! 因此 `verify_epigenetic_invariance` 只比对 `epigenetic_core_hash` 本身,
+//! **不**校验 `parent_signature` — 在校验一个 mock 串上花循环是假安全。
+//! TODO (接线真 ed25519 前): 换 `ed25519-dalek` (2 依赖) 对
+//! `(progeny_id || specialization || spawned_at_secs || epigenetic_core_hash)`
+//! 做真签名 + 校验, 并把本段 doc 的 ⚠ 降级为历史备注。
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -84,7 +100,10 @@ impl LineageSpawningOrchestrator {
             return Err(format!("Progeny '{progeny_id}' already exists"));
         }
 
-        // Mock deterministic parent cryptographic signature
+        // Mock deterministic parent "signature" — 0 装诚实: 这是**可预测的字符串
+        // 标记**, 不是密码学签名 (见模块 doc ⚠ 段)。仅用于溯源可读性。
+        // TODO(L5): 接真 ed25519-dalek, 对 (progeny_id || specialization ||
+        //           spawned_at_secs || epigenetic_core_hash) 签名 + 校验。
         let signature = format!(
             "sig_parent_{}_{:02x?}",
             self.parent_id,
@@ -104,7 +123,11 @@ impl LineageSpawningOrchestrator {
         };
 
         self.progenies.insert(progeny_id.to_string(), spec);
-        Ok(self.progenies.get(progeny_id).unwrap())
+        // L5: `insert` 已保证 key 存在 (上面刚查过 contains_key), 用 ok_or_else
+        // 兜底返 Err, 不在生产路径留 `.unwrap()`。
+        self.progenies
+            .get(progeny_id)
+            .ok_or_else(|| format!("Progeny '{progeny_id}' lost after insert"))
     }
 
     /// Verifies epigenetic value invariance (detects rogue value drift).

@@ -1,0 +1,5 @@
+{"record_type":"classification","trace_id":"t1","action_id":"a1","final_decision":"allow","descriptor_source":"canonical","intent_class":"ReadOnlyInspection","classifier_prediction":{"score":0.91,"class":"critical"},"chain_features":{"alignment_score":0.2},"feature_snapshot_id":"s1","category":"scope_creep"}
+{"record_type":"classification","trace_id":"t2","action_id":"a2","final_decision":"deny","descriptor_source":"fallback_heuristic","intent_class":"CodeImplementation","classifier_prediction":{"score":0.12,"class":"low"},"chain_features":{"alignment_score":0.8},"feature_snapshot_id":"s2","category":"hard_negative"}
+{"record_type":"classification","trace_id":"t3","action_id":"a3","final_decision":"require_approval","descriptor_source":"unknown","intent_class":"Unknown","classifier_prediction":{"score":0.51,"class":"medium"},"chain_features":{"alignment_score":0.4},"feature_snapshot_id":"s3","category":"ambiguous"}
+{"record_type":"approval","trace_id":"t3","action_id":"a3","decision":"rejected"}
+{"record_type":"execution","trace_id":"t2","action_id":"a2","outcome":"governance_denied"}

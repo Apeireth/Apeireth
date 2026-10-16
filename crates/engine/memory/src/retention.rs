@@ -1,6 +1,6 @@
 //! Retention policy + sweep (salvage of context-ledger prune, layered-memo decay, governance protect).
 //!
-//! Combines three donor / v2 primitives that previously lived in isolation:
+//! Combines three baseline / v2 primitives that previously lived in isolation:
 //! - **Count cap** (Context ledger `max_records` per subject) — keep the newest N.
 //! - **Age TTL** — forget episodes older than `max_age_secs`.
 //! - **Decay threshold** — forget when Ebbinghaus strength drops below `min_strength`.
@@ -12,13 +12,35 @@
 //! ContextLedger's own rolling DELETE stays inside [`crate::context_ledger`] because a
 //! ledger is a recent-window, not an archive.
 
+use apeireth_orchestration::runtime_invariants::{AuditEvent, AuditEventSink};
+use apeireth_orchestration::self_tuning::TunableParam;
+
 use crate::memory_governance::{MemoryGovernanceStatus, MemoryGovernanceStore};
 use crate::{EpisodeQuery, EpisodeStore, MemoryResult, SqliteMemoryStore};
+
+/// Module attribution of the cleanup audit events (matches the module the
+/// `inv_sweep_keeps_protected` invariant is registered under).
+pub const CLEANUP_AUDIT_MODULE: &str = "retention";
+
+/// 艾宾浩斯半衰期基线 (小时) —— 现状硬编码常量 (24h = 1 天)。
+/// `APEIRETH_TUNE_MEMORY_FADE` 未设/非法 = 衰减倍率 1.0 = 本值 (零变化)。
+pub const BASELINE_HALF_LIFE_HOURS: f64 = 24.0;
+
+/// 当前生效的艾宾浩斯半衰期 (小时):
+/// `BASELINE_HALF_LIFE_HOURS / MemoryFade 倍率`。
+///
+/// - 倍率来自体验旋钮 [`TunableParam::MemoryFade`] (env `APEIRETH_TUNE_MEMORY_FADE`,
+///   非法值回默认 1.0), 自动校准引擎的落地值经进程内 override 生效。
+/// - 倍率 > 1 = 忘得更快 (半衰期缩短), < 1 = 记得更久。
+/// - 未设 = 倍率 1.0 = 现状 24h, 行为零变化。
+pub fn effective_half_life_hours() -> f64 {
+    BASELINE_HALF_LIFE_HOURS / TunableParam::MemoryFade.effective()
+}
 
 /// Ebbinghaus strength at `now_unix` relative to `last_unix` (both epoch seconds).
 ///
 /// `strength = 0.5 ^ (elapsed_hours / half_life_hours)`. Computed against the
-/// sweep clock so tests (and scheduled jobs) are deterministic — donor
+/// sweep clock so tests (and scheduled jobs) are deterministic — the baseline
 /// `DecayEngine::strength` always reads `SystemClock::now()`, which would make
 /// a sweep at a caller-supplied `now_unix` wall-clock-dependent.
 pub fn decay_strength(last_unix: i64, now_unix: i64, half_life_hours: f64) -> f32 {
@@ -38,7 +60,8 @@ pub struct RetentionPolicy {
     pub max_age_secs: Option<i64>,
     /// Forget when decay strength (half-life hours) falls below this (0, 1].
     pub min_strength: Option<f32>,
-    /// Half-life used when `min_strength` is set. Default 24h.
+    /// Half-life used when `min_strength` is set. Baseline 24h, scaled by the
+    /// experience knob `APEIRETH_TUNE_MEMORY_FADE` (see [`effective_half_life_hours`]).
     pub half_life_hours: f64,
 }
 
@@ -48,7 +71,8 @@ impl Default for RetentionPolicy {
             max_count: None,
             max_age_secs: None,
             min_strength: None,
-            half_life_hours: 24.0,
+            // 艾宾浩斯半衰期 (体验旋钮 MemoryFade): 未设 = 倍率 1.0 = 24h 现状。
+            half_life_hours: effective_half_life_hours(),
         }
     }
 }
@@ -87,11 +111,52 @@ pub struct RetentionSweepReport {
 /// Sweep `session_id` under `policy` at `now_unix` (epoch seconds).
 ///
 /// Empty session_id is rejected. Inactive policy is a no-op (scanned = 0).
+/// No audit feed (unchanged behavior); use [`sweep_session_with_audit`] or the
+/// [`RetentionCleanup`] entry when the cleanup stream must be observable.
 pub fn sweep_session(
     store: &SqliteMemoryStore,
     session_id: &str,
     policy: &RetentionPolicy,
     now_unix: i64,
+) -> MemoryResult<RetentionSweepReport> {
+    sweep_session_inner(store, session_id, policy, now_unix, None)
+}
+
+/// Sweep `session_id` under `policy` at `now_unix`, feeding the cleanup
+/// execution point into the runtime audit stream.
+///
+/// Every subject the sweep commits to cleaning emits one
+/// [`AuditEvent::cleanup`] into `audit` — the same [`AuditEventSink`] the
+/// memory-governance surface feeds forget/protect/unprotect events into — so
+/// `inv_sweep_keeps_protected` becomes an online guard over live cleanup
+/// traffic: a cleanup event on a subject that carries a live protect marker is
+/// exactly the mutual exclusion it flags.
+///
+/// Protected subjects are skipped before the cleanup executes and therefore
+/// never enter the cleanup stream (a normal pass emits nothing for them).
+pub fn sweep_session_with_audit(
+    store: &SqliteMemoryStore,
+    session_id: &str,
+    policy: &RetentionPolicy,
+    now_unix: i64,
+    audit: Option<&AuditEventSink>,
+) -> MemoryResult<RetentionSweepReport> {
+    sweep_session_inner(store, session_id, policy, now_unix, audit)
+}
+
+/// Feed one subject entering the cleanup stream at the cleanup execution point.
+fn feed_cleanup_event(audit: Option<&AuditEventSink>, subject: &str, cause: &str) {
+    if let Some(sink) = audit {
+        sink(AuditEvent::cleanup(CLEANUP_AUDIT_MODULE, subject, cause));
+    }
+}
+
+fn sweep_session_inner(
+    store: &SqliteMemoryStore,
+    session_id: &str,
+    policy: &RetentionPolicy,
+    now_unix: i64,
+    audit: Option<&AuditEventSink>,
 ) -> MemoryResult<RetentionSweepReport> {
     if session_id.trim().is_empty() {
         return Err(crate::MemoryError::Invalid(
@@ -141,6 +206,10 @@ pub fn sweep_session(
             }
         }
         if drop_it {
+            // The subject enters the cleanup stream here: the sweep committed
+            // to cleaning it. The feed precedes the execution so the guard sees
+            // even the attempts the store turns back.
+            feed_cleanup_event(audit, &ep.id, "retention-sweep");
             match store.forget_episode(&ep.id, Some("retention-sweep"), governed.revision) {
                 Ok(_) => report.forgotten += 1,
                 Err(crate::memory_governance::MemoryGovernanceError::Protected(_)) => {
@@ -167,6 +236,7 @@ pub fn sweep_session(
                 .map(|(id, _, rev)| (id.clone(), *rev))
                 .collect();
             for (id, rev) in victims {
+                feed_cleanup_event(audit, &id, "retention-count-cap");
                 match store.forget_episode(&id, Some("retention-count-cap"), rev) {
                     Ok(_) => report.forgotten += 1,
                     Err(crate::memory_governance::MemoryGovernanceError::Protected(_)) => {
@@ -182,6 +252,39 @@ pub fn sweep_session(
     }
 
     Ok(report)
+}
+
+/// Minimal online cleanup entry: one retention sweep wired to the runtime audit
+/// stream.
+///
+/// The retention sweep had no production caller, so the cleanup side never
+/// reached the audit stream. This entry is the minimal cleanup surface a
+/// scheduler or operator can invoke: it runs [`sweep_session_with_audit`] and
+/// feeds every subject entering the cleanup stream into the attached
+/// [`AuditEventSink`] — the same consumption point the governance events use —
+/// making `inv_sweep_keeps_protected` an online guard over real cleanup runs.
+#[derive(Clone, Default)]
+pub struct RetentionCleanup {
+    audit: Option<AuditEventSink>,
+}
+
+impl RetentionCleanup {
+    /// A cleanup entry with (or without) an audit feed. `None` keeps the sweep
+    /// silent; `Some(sink)` feeds cleanup events into the shared stream.
+    pub fn new(audit: Option<AuditEventSink>) -> Self {
+        Self { audit }
+    }
+
+    /// Run one cleanup pass over `session_id` at `now_unix` (epoch seconds).
+    pub fn run(
+        &self,
+        store: &SqliteMemoryStore,
+        session_id: &str,
+        policy: &RetentionPolicy,
+        now_unix: i64,
+    ) -> MemoryResult<RetentionSweepReport> {
+        sweep_session_with_audit(store, session_id, policy, now_unix, self.audit.as_ref())
+    }
 }
 
 #[cfg(test)]
@@ -267,6 +370,26 @@ mod tests {
         assert!((decay_strength(0, 0, 24.0) - 1.0).abs() < 1e-6);
         assert!((decay_strength(0, 24 * 3600, 24.0) - 0.5).abs() < 1e-5);
         assert!(decay_strength(0, 48 * 3600, 24.0) < 0.26);
+    }
+
+    /// 旋钮推导锁定: 生效半衰期 = 基线 / MemoryFade 倍率;
+    /// 未设旋钮 (倍率 1.0) = 基线 24h, 行为零变化。
+    #[test]
+    fn memory_fade_knob_scales_half_life_from_baseline() {
+        let fade = TunableParam::MemoryFade.effective();
+        assert!(
+            (effective_half_life_hours() - BASELINE_HALF_LIFE_HOURS / fade).abs() < 1e-9,
+            "生效半衰期必须是 基线/倍率"
+        );
+        assert_eq!(
+            TunableParam::MemoryFade.parse_env_value(None),
+            1.0,
+            "未设旋钮 = 倍率 1.0 = 现状"
+        );
+        assert_eq!(
+            RetentionPolicy::default().half_life_hours,
+            effective_half_life_hours()
+        );
     }
 
     #[test]

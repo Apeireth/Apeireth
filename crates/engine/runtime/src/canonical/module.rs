@@ -71,6 +71,11 @@ impl ModuleManifest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PromptOverlay {
     message: NormalizedMessage,
+    /// Source label when the block carries cross-source content that must be
+    /// disclosed through the untrusted reference envelope at the provider
+    /// funnel; `None` marks text the caller owns (or text that already is an
+    /// envelope disclosure), which passes the funnel byte-for-byte.
+    cross_source: Option<String>,
 }
 
 impl PromptOverlay {
@@ -78,7 +83,26 @@ impl PromptOverlay {
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             message: NormalizedMessage::system(content),
+            cross_source: None,
         }
+    }
+
+    /// A transient system message carrying cross-source content — material
+    /// recalled from outside the current turn (other sessions, external
+    /// stores). `source` names where the content came from and is rendered
+    /// inside the disclosure envelope; the provider-request funnel discloses
+    /// the block through the untrusted reference envelope before composition
+    /// (see `budget_injected_overlays`).
+    pub fn system_cross_source(source: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            message: NormalizedMessage::system(content),
+            cross_source: Some(source.into()),
+        }
+    }
+
+    /// The cross-source label, when the block carries cross-source content.
+    pub fn cross_source_label(&self) -> Option<&str> {
+        self.cross_source.as_deref()
     }
 
     /// The normalized message that will be sent to the provider.
@@ -547,7 +571,16 @@ impl<'a> IntoIterator for &'a BehaviorRegistry {
 }
 
 /// Default maximum number of isolated module provider calls in one turn.
-pub const DEFAULT_MAX_MODULE_INVOCATIONS: usize = 8;
+///
+/// Must fit the deepest legitimate combination in one candidate pass —
+/// Council (≤7 advisors) + Judge (1) = 8 — **plus** retry passes. The
+/// production "cognitive depth = deep" preset (judge + council) consumes the
+/// full pass budget on the first pass; a judge-requested regeneration then
+/// needs a second full pass. 24 leaves headroom for retries while still
+/// bounding per-turn LLM cost (2026-09-19 real-machine finding: the old limit
+/// of 8 made the deep preset abort every turn whose first candidate was
+/// retried).
+pub const DEFAULT_MAX_MODULE_INVOCATIONS: usize = 24;
 
 /// Per-turn side-call accounting shared by all registered modules.
 pub struct ModuleTurnState {

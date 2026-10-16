@@ -1,0 +1,469 @@
+   Compiling companion-desktop v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\frontend\companion-desktop\src-tauri)
+warning: use of a disallowed method `std::fs::metadata`
+   --> src\backend_supervisor.rs:528:11
+    |
+528 |     match std::fs::metadata(path) {
+    |           ^^^^^^^^^^^^^^^^^ help: use: `fs_err::metadata`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+    = note: `#[warn(clippy::disallowed_methods)]` on by default
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+   --> src\backend_supervisor.rs:798:21
+    |
+798 |             let _ = std::fs::create_dir_all(parent);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+   --> src\backend_supervisor.rs:817:21
+    |
+817 |             let _ = std::fs::create_dir_all(parent);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: redundant closure
+    --> src\backend_supervisor.rs:1281:49
+     |
+1281 |             provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
+     |                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the function itself: `keychain::get_provider_key`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#redundant_closure
+     = note: `#[warn(clippy::redundant_closure)]` on by default
+
+warning: matching on `Some` with `ok()` is redundant
+    --> src\backend_supervisor.rs:1404:9
+     |
+1404 |         if let Some(value) = std::env::var("APEIRETH_SESSION_DB").ok() {
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#match_result_ok
+     = note: `#[warn(clippy::match_result_ok)]` on by default
+help: consider matching on `Ok(value)` and removing the call to `ok` instead
+     |
+1404 -         if let Some(value) = std::env::var("APEIRETH_SESSION_DB").ok() {
+1404 +         if let Ok(value) = std::env::var("APEIRETH_SESSION_DB") {
+     |
+
+warning: redundant closure
+    --> src\backend_supervisor.rs:1590:49
+     |
+1590 |             provider_env.with_keychain_fallback(|provider| keychain::get_provider_key(provider));
+     |                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the function itself: `keychain::get_provider_key`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#redundant_closure
+
+warning: current MSRV (Minimum Supported Rust Version) is `1.77.2` but this item is stable since `1.82.0`
+    --> src\backend_supervisor.rs:1623:18
+     |
+1623 |                 .is_none_or(|v| !Path::new(v).is_absolute());
+     |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#incompatible_msrv
+     = note: `#[warn(clippy::incompatible_msrv)]` on by default
+
+warning: current MSRV (Minimum Supported Rust Version) is `1.77.2` but this item is stable since `1.82.0`
+    --> src\backend_supervisor.rs:1626:18
+     |
+1626 |                 .is_none_or(|v| !Path::new(v).is_absolute());
+     |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#incompatible_msrv
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+    --> src\backend_supervisor.rs:1632:25
+     |
+1632 |                 let _ = std::fs::create_dir_all(&store_dir);
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: the function `CredWriteW` doesn't need a mutable reference
+   --> src\keychain.rs:157:38
+    |
+157 |         let ok = unsafe { CredWriteW(&mut credential, 0) };
+    |                                      ^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_mut_passed
+    = note: `#[warn(clippy::unnecessary_mut_passed)]` on by default
+help: remove this `mut`
+    |
+157 -         let ok = unsafe { CredWriteW(&mut credential, 0) };
+157 +         let ok = unsafe { CredWriteW(&credential, 0) };
+    |
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+  --> src\workspace.rs:52:5
+   |
+52 |     std::fs::create_dir_all(app_data_dir)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::path::Path::canonicalize`
+  --> src\workspace.rs:94:16
+   |
+94 |     match path.canonicalize() {
+   |                ^^^^^^^^^^^^ help: use: `fs_err::canonicalize`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> src\workspace.rs:113:5
+    |
+113 |     std::fs::write(&probe, b"")
+    |     ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_file`
+   --> src\workspace.rs:115:13
+    |
+115 |     let _ = std::fs::remove_file(&probe);
+    |             ^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_file`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+    --> src\backend_supervisor.rs:2186:9
+     |
+2186 |         std::fs::create_dir_all(&dir).unwrap();
+     |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+    --> src\backend_supervisor.rs:2188:9
+     |
+2188 |         std::fs::write(
+     |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+    --> src\backend_supervisor.rs:2209:17
+     |
+2209 |         let _ = std::fs::remove_dir_all(&dir);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+    --> src\backend_supervisor.rs:2217:9
+     |
+2217 |         std::fs::create_dir_all(&dir).unwrap();
+     |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+    --> src\backend_supervisor.rs:2224:9
+     |
+2224 |         std::fs::write(&path, format!("{legacy_line}\n{envelope_line}\n")).unwrap();
+     |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+    --> src\backend_supervisor.rs:2236:17
+     |
+2236 |         let _ = std::fs::remove_dir_all(&dir);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+    --> src\backend_supervisor.rs:2468:17
+     |
+2468 |         let _ = std::fs::remove_dir_all(&dir);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+    --> src\backend_supervisor.rs:2469:9
+     |
+2469 |         std::fs::create_dir_all(&dir).unwrap();
+     |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+    --> src\backend_supervisor.rs:2479:9
+     |
+2479 |         std::fs::write(dir.join("backend-provider-env.json"), b"{ this is not json").unwrap();
+     |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+    --> src\backend_supervisor.rs:2489:17
+     |
+2489 |         let _ = std::fs::remove_dir_all(&dir);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read`
+    --> src\backend_supervisor.rs:2505:19
+     |
+2505 |         let raw = std::fs::read(dir.join("backend-provider-env.json")).unwrap();
+     |                   ^^^^^^^^^^^^^ help: use: `fs_err::read`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+    --> src\backend_supervisor.rs:2519:17
+     |
+2519 |         let _ = std::fs::remove_dir_all(&dir);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+    --> src\backend_supervisor.rs:2534:9
+     |
+2534 |         std::fs::write(&path, &legacy_bytes).unwrap();
+     |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read`
+    --> src\backend_supervisor.rs:2542:13
+     |
+2542 |             std::fs::read(&path).unwrap(),
+     |             ^^^^^^^^^^^^^ help: use: `fs_err::read`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read_to_string`
+    --> src\backend_supervisor.rs:2550:13
+     |
+2550 |             std::fs::read_to_string(dir.join("backend-provider-env.json.migrate-audit.jsonl"))
+     |             ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::read_to_string`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+    --> src\backend_supervisor.rs:2559:17
+     |
+2559 |         let _ = std::fs::remove_dir_all(&dir);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+    --> src\backend_supervisor.rs:2569:9
+     |
+2569 |         std::fs::write(&path, &legacy_bytes).unwrap();
+     |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read`
+    --> src\backend_supervisor.rs:2575:13
+     |
+2575 |             std::fs::read(&path).unwrap(),
+     |             ^^^^^^^^^^^^^ help: use: `fs_err::read`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read_to_string`
+    --> src\backend_supervisor.rs:2582:13
+     |
+2582 |             std::fs::read_to_string(dir.join("backend-capability-env.json.migrate-audit.jsonl"))
+     |             ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::read_to_string`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+    --> src\backend_supervisor.rs:2592:17
+     |
+2592 |         let _ = std::fs::remove_dir_all(&dir);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> src\workspace.rs:186:9
+    |
+186 |         std::fs::write(&file, b"x").unwrap();
+    |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_file`
+   --> src\workspace.rs:188:17
+    |
+188 |         let _ = std::fs::remove_file(&file);
+    |                 ^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_file`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+   --> src\workspace.rs:194:9
+    |
+194 |         std::fs::create_dir_all(&dir).unwrap();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read_dir`
+   --> src\workspace.rs:196:23
+    |
+196 |         let entries = std::fs::read_dir(&dir).unwrap().count();
+    |                       ^^^^^^^^^^^^^^^^^ help: use: `fs_err::read_dir`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> src\workspace.rs:198:17
+    |
+198 |         let _ = std::fs::remove_dir_all(&dir);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> src\workspace.rs:225:17
+    |
+225 |         let _ = std::fs::remove_dir_all(&dir);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+   --> src\workspace.rs:226:9
+    |
+226 |         std::fs::create_dir_all(&dir).unwrap();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+   --> src\workspace.rs:235:9
+    |
+235 |         std::fs::create_dir_all(&target).unwrap();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> src\workspace.rs:238:9
+    |
+238 |         std::fs::write(&path, b"{ this is not json").unwrap();
+    |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> src\workspace.rs:245:9
+    |
+245 |         std::fs::write(
+    |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> src\workspace.rs:254:17
+    |
+254 |         let _ = std::fs::remove_dir_all(&app_data);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+   --> src\workspace.rs:262:9
+    |
+262 |         std::fs::create_dir_all(&target).unwrap();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read`
+   --> src\workspace.rs:265:19
+    |
+265 |         let raw = std::fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap();
+    |                   ^^^^^^^^^^^^^ help: use: `fs_err::read`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> src\workspace.rs:282:17
+    |
+282 |         let _ = std::fs::remove_dir_all(&app_data);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::create_dir_all`
+   --> src\workspace.rs:290:9
+    |
+290 |         std::fs::create_dir_all(&target).unwrap();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::create_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> src\workspace.rs:295:9
+    |
+295 |         std::fs::write(app_data.join(WORKSPACE_CONFIG_FILE), &legacy_bytes).unwrap();
+    |         ^^^^^^^^^^^^^^ help: use: `fs_err::write`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read`
+   --> src\workspace.rs:300:13
+    |
+300 |             std::fs::read(app_data.join(WORKSPACE_CONFIG_FILE)).unwrap(),
+    |             ^^^^^^^^^^^^^ help: use: `fs_err::read`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::read_to_string`
+   --> src\workspace.rs:308:21
+    |
+308 |         let audit = std::fs::read_to_string(&audit_path).expect("显式迁移必须留审计");
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::read_to_string`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> src\workspace.rs:313:17
+    |
+313 |         let _ = std::fs::remove_dir_all(&app_data);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: `companion-desktop` (lib) generated 14 warnings (run `cargo clippy --fix --lib -p companion-desktop -- ` to apply 12 suggestions)
+warning: `companion-desktop` (lib test) generated 53 warnings (14 duplicates) (run `cargo clippy --fix --lib -p companion-desktop --tests -- ` to apply 39 suggestions)
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> tests\supervisor_lifecycle.rs:326:13
+    |
+326 |     let _ = std::fs::remove_dir_all(&app_data);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+    = note: `#[warn(clippy::disallowed_methods)]` on by default
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> tests\supervisor_lifecycle.rs:372:13
+    |
+372 |     let _ = std::fs::remove_dir_all(&app_data);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::remove_dir_all`
+   --> tests\supervisor_lifecycle.rs:373:13
+    |
+373 |     let _ = std::fs::remove_dir_all(&custom);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^ help: use: `fs_err::remove_dir_all`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#disallowed_methods
+
+warning: `companion-desktop` (test "supervisor_lifecycle") generated 3 warnings (run `cargo clippy --fix --test "supervisor_lifecycle" -p companion-desktop -- ` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.49s

@@ -42,6 +42,8 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(windows)]
+pub mod appcontainer;
 #[cfg(target_os = "linux")]
 pub(crate) mod linux;
 #[cfg(target_os = "macos")]
@@ -55,6 +57,8 @@ pub mod windows;
 const POST_KILL_WAIT: Duration = Duration::from_secs(5);
 /// Poll interval used while supervising a running child.
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
+/// Fine-grained fallback poll slice for platforms without an event-style wait.
+const WAIT_POLL_SLICE: Duration = Duration::from_millis(1);
 /// Maximum time to wait for a reader thread to deliver output after the child
 /// has exited. If a descendant inherited a pipe and keeps it open on a
 /// non-Windows platform, the executor does not hang forever.
@@ -389,6 +393,11 @@ impl ProcessLimits {
     ///
     /// This is **not** used by canonical builtin tools. It is provided for
     /// callers that must opt out of the safe default with their eyes open.
+    ///
+    /// L 组 (2026-09-24 审计): `max_stdout_bytes`/`max_stderr_bytes` 的
+    /// `usize::MAX` 会被 [`validate_request`] 拒绝 (读取侧的 take(max+1)
+    /// 会回绕/panic), 因此本构造目前**不可直接执行** —— 选择放开上限的
+    /// 调用方必须显式改成一个真实的大数字, 把"我确知后果"变成事实。
     pub fn unrestricted() -> Self {
         Self {
             max_runtime: Duration::MAX,
@@ -424,6 +433,12 @@ pub enum EnvironmentSpec {
 pub struct ProcessRequest {
     executable: OsString,
     args: Vec<OsString>,
+    /// Windows-only verbatim command-line tail, appended AFTER `args` without
+    /// quoting or escaping (std's `raw_arg`). Used by the Trusted Shell so
+    /// `cmd /S /C "<script>"` reaches cmd byte-for-byte — Rust's normal arg
+    /// quoting mangles embedded double quotes under cmd's /S rules
+    /// (2026-10-06 真机: powershell -Command "..." 只回显不执行).
+    raw_arg: Option<OsString>,
     working_directory: Option<PathBuf>,
     environment: EnvironmentSpec,
     limits: ProcessLimits,
@@ -436,6 +451,7 @@ impl ProcessRequest {
         Self {
             executable: executable.into(),
             args: Vec::new(),
+            raw_arg: None,
             working_directory: None,
             environment: EnvironmentSpec::Inherit,
             limits: ProcessLimits::default(),
@@ -457,6 +473,17 @@ impl ProcessRequest {
     {
         self.args.extend(args.into_iter().map(Into::into));
         self
+    }
+
+    /// Set the Windows-only verbatim command-line tail (ignored elsewhere).
+    pub fn with_raw_arg(mut self, tail: impl Into<OsString>) -> Self {
+        self.raw_arg = Some(tail.into());
+        self
+    }
+
+    /// The Windows-only verbatim command-line tail, when set.
+    pub fn raw_arg(&self) -> Option<&OsString> {
+        self.raw_arg.as_ref()
     }
 
     /// Set the working directory for the child.
@@ -762,6 +789,16 @@ fn validate_request(request: &ProcessRequest) -> Result<(), ProcessError> {
             "output limits must be non-zero".into(),
         ));
     }
+    // L 组 (2026-09-24 审计): usize::MAX 的"近无界"输出上限必须显式拒绝
+    // (`ProcessLimits::unrestricted()` 的 take(max+1) 在 debug 构建 panic、
+    // release 回绕为 0)。需要放开上限的调用方必须给一个真实的大数字。
+    if request.limits.max_stdout_bytes == usize::MAX
+        || request.limits.max_stderr_bytes == usize::MAX
+    {
+        return Err(ProcessError::InvalidConfiguration(
+            "output byte limits must not be usize::MAX (near-unbounded reads are refused)".into(),
+        ));
+    }
     if request.limits.max_process_memory_bytes == Some(0) {
         return Err(ProcessError::InvalidConfiguration(
             "max_process_memory_bytes must be non-zero".into(),
@@ -891,6 +928,30 @@ pub(crate) trait ManagedChild {
     fn terminate(&mut self) -> Result<(), ProcessError>;
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>>;
     fn take_stderr(&mut self) -> Option<Box<dyn Read + Send>>;
+
+    /// Block until the child exits or `timeout` elapses, whichever comes first.
+    ///
+    /// Returns `Some(status)` on exit and `None` on timeout. Backends with an
+    /// event-style process wait override this to wake exactly at child exit;
+    /// the default implementation falls back to fine-grained polling so a
+    /// short-lived child is not held up by the coarse supervision tick.
+    fn wait_timeout(&mut self, timeout: Duration) -> Result<Option<ChildStatus>, ProcessError> {
+        let deadline = Instant::now() + timeout;
+        let mut slice = WAIT_POLL_SLICE;
+        loop {
+            if let Some(status) = self.try_wait()? {
+                return Ok(Some(status));
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return Ok(None);
+            }
+            thread::sleep(slice.min(deadline - now));
+            // Back off toward the coarse tick so long-running children settle
+            // at the same polling cost as before, while short ones exit fast.
+            slice = (slice * 2).min(POLL_INTERVAL);
+        }
+    }
 }
 
 pub(crate) fn supervise<C: ManagedChild>(
@@ -916,7 +977,8 @@ pub(crate) fn supervise<C: ManagedChild>(
             break 'supervise status;
         }
 
-        if start.elapsed() >= request.limits.max_runtime {
+        let elapsed = start.elapsed();
+        if elapsed >= request.limits.max_runtime {
             timed_out = true;
             child.terminate()?;
 
@@ -934,7 +996,12 @@ pub(crate) fn supervise<C: ManagedChild>(
             }
         }
 
-        thread::sleep(POLL_INTERVAL);
+        // Wake at child exit (event-style wait where the platform offers one)
+        // instead of ticking at the coarse supervision poll interval; the
+        // timeout boundary above is checked again on every wake-up.
+        if let Some(status) = child.wait_timeout(request.limits.max_runtime - elapsed)? {
+            break 'supervise status;
+        }
     };
 
     let termination = if timed_out {
@@ -965,7 +1032,14 @@ where
     let (tx, rx) = std::sync::mpsc::channel();
     thread::spawn(move || {
         let mut buffer = Vec::new();
-        let mut limited = pipe.take(max_bytes as u64 + 1);
+        // L 组 (2026-09-24 审计): `max_bytes as u64 + 1` 在 max_bytes ==
+        // usize::MAX 时 debug 构建 panic / release 回绕为 0 (无限流被当成
+        // 0 字节读)。先 try_from 转换再 saturating_add, 不可转换时取 u64::MAX
+        // (读满自然中断); usize::MAX 本身由 validate_request 拒绝。
+        let read_limit = u64::try_from(max_bytes)
+            .map(|limit| limit.saturating_add(1))
+            .unwrap_or(u64::MAX);
+        let mut limited = pipe.take(read_limit);
         match limited.read_to_end(&mut buffer) {
             Ok(_) => {
                 let truncated = buffer.len() > max_bytes;

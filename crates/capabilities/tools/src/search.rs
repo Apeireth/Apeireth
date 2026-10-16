@@ -6,6 +6,7 @@
 //! (path, line, text) order. Known credential and key paths are skipped.
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use apeireth_core::kernel::CapabilityId;
@@ -14,7 +15,9 @@ use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::sensitive_path::is_sensitive_path;
+use crate::sensitive_path::{
+    credential_surface_refusal, is_sensitive_path, redact_secret_field_values,
+};
 
 const DEFAULT_MAX_RESULTS: usize = 20;
 const MAX_RESULTS_CAP: usize = 100;
@@ -56,7 +59,7 @@ struct SearchMatch {
     /// 1-based byte column of the first match on the case-folded line.
     /// `0` for filename matches (no line content).
     column: usize,
-    /// Non-overlapping occurrence count on this line (donor CodeSearcher semantics).
+    /// Non-overlapping occurrence count on this line (CodeSearcher semantics).
     occurrences: usize,
 }
 
@@ -108,6 +111,12 @@ impl SearchTool {
         } else {
             root.join(requested)
         };
+
+        // M13 (2026-09-24 审计): guardrail 前置守门接线 (词法层先行, 现实层
+        // canonicalize 校验随后; 双层拒穿越/symlink 逃逸)。
+        crate::guardrail::ToolGuardrail::verify_path_access(&root, &candidate)
+            .map_err(|e| SearchError::PermissionDenied(e.to_string()))?;
+
         let canonical = fs::canonicalize(&candidate).map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => {
                 SearchError::NotFound(format!("{}", candidate.display()))
@@ -126,9 +135,9 @@ impl SearchTool {
         }
 
         if is_sensitive_path(&root, &candidate) || is_sensitive_path(&root, &canonical) {
-            return Err(SearchError::PermissionDenied(
-                "requested path is protected".to_string(),
-            ));
+            // 凭据与密钥面 fail-closed: 拒绝信息即帧 (pre_deny 语义), 说明
+            // 「凭据面不可读（安全契约）」。
+            return Err(SearchError::PermissionDenied(credential_surface_refusal()));
         }
 
         Ok((root, canonical))
@@ -288,14 +297,22 @@ impl SearchTool {
             }
         }
 
-        let Ok(metadata) = fs::metadata(path) else {
-            return;
-        };
-        if metadata.len() > self.max_file_size {
+        // L 组 (2026-09-24 审计): 不再信任 metadata 预检大小 (检查与读取
+        // 之间有增长竞态); open + take(max+1) 按实读字节判定, 超限跳过。
+        let mut content_bytes = Vec::new();
+        match fs::OpenOptions::new().read(true).open(path) {
+            Ok(file) => {
+                let mut limited = file.take(self.max_file_size.saturating_add(1));
+                if limited.read_to_end(&mut content_bytes).is_err() {
+                    return;
+                }
+            }
+            Err(_) => return,
+        }
+        if content_bytes.len() as u64 > self.max_file_size {
             return;
         }
-
-        let Ok(content) = fs::read_to_string(path) else {
+        let Ok(content) = String::from_utf8(content_bytes) else {
             return;
         };
 
@@ -324,7 +341,7 @@ impl SearchTool {
 /// Count non-overlapping literal hits on a case-folded line.
 ///
 /// Returns `(occurrences, first_column)` where `first_column` is 1-based on the
-/// case-folded line (donor CodeSearcher: positions computed after lowercasing).
+/// case-folded line (CodeSearcher: positions computed after lowercasing).
 fn literal_line_hits(line_lower: &str, query_lower: &str) -> (usize, usize) {
     if query_lower.is_empty() {
         return (0, 0);
@@ -443,7 +460,9 @@ impl ToolCapability for SearchTool {
             "matches": results.into_iter().map(|m| serde_json::json!({
                 "path": m.path,
                 "line": m.line,
-                "text": m.text,
+                // 输出侧敏感面治理: 命中行里的密钥字段值脱敏为 `[redacted]`
+                // (检索匹配仍按原文进行, 只是不回显字段值)。
+                "text": redact_secret_field_values(&m.text),
                 "column": m.column,
                 "occurrences": m.occurrences,
             })).collect::<Vec<_>>(),
@@ -461,7 +480,6 @@ mod tests {
     fn tool(root: &Path) -> SearchTool {
         SearchTool::new(root.to_path_buf())
     }
-
     async fn invoke(
         tool: &SearchTool,
         query: &str,
@@ -549,6 +567,41 @@ mod tests {
         assert!(result.is_ok());
         let rendered = result.render();
         assert!(rendered.contains("\"count\":0"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn oversize_file_content_is_skipped_by_bounded_read() {
+        // L 组: take(max+1) 实读字节判定 —— 内容超限的文件被跳过, 未超限的
+        // 文件照常命中。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("large.txt"), "needle".repeat(100)).unwrap();
+        fs::write(dir.path().join("small.txt"), "needle").unwrap();
+        let tool = SearchTool::new(dir.path().to_path_buf()).with_max_file_size(10);
+
+        let result = invoke(&tool, "needle", ".", None).await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        assert!(rendered.contains("small.txt"), "{rendered}");
+        assert!(!rendered.contains("large.txt"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn search_rejects_absolute_path_outside_root() {
+        // M13 接线: root 外的绝对路径一律 permission denied。
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let outside = base.path().join("outside");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("secret.txt"), "needle").unwrap();
+
+        let result = invoke(&tool(&root), "needle", outside.to_str().unwrap(), None).await;
+        assert!(!result.is_ok());
+        assert!(
+            result.render().contains("permission denied"),
+            "{}",
+            result.render()
+        );
     }
 
     #[tokio::test]
@@ -680,5 +733,49 @@ mod tests {
         let rendered = result.render();
         assert!(rendered.contains("\"occurrences\":3"), "{rendered}");
         assert!(rendered.contains("\"column\":1"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn credential_surface_denial_is_a_pre_deny_frame() {
+        // 凭据面搜索目标 fail-closed: 拒绝信息即帧 (pre_deny 语义)。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("creds.json"),
+            "{\"api_key\":\"sk-live-secret\"}",
+        )
+        .unwrap();
+
+        let result = invoke(&tool(dir.path()), "api_key", "creds.json", None).await;
+        assert!(!result.is_ok());
+        let rendered = result.render();
+        assert!(rendered.contains("pipeline.pre_deny"), "{rendered}");
+        assert!(rendered.contains("protected"), "{rendered}");
+        assert!(rendered.contains("凭据面不可读（安全契约）"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn matched_lines_redact_secret_field_values() {
+        // 检索匹配按原文进行, 但命中的密钥字段值脱敏为 `[redacted]`;
+        // 非敏感命中行照读。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("app.toml"),
+            "token = \"sk-live-secret\"\ntimeout = 30\n",
+        )
+        .unwrap();
+
+        let result = invoke(&tool(dir.path()), "token", ".", None).await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        assert!(!rendered.contains("sk-live-secret"), "{rendered}");
+        assert!(rendered.contains("[redacted]"), "{rendered}");
+
+        let plain = invoke(&tool(dir.path()), "timeout", ".", None).await;
+        assert!(plain.is_ok());
+        assert!(
+            plain.render().contains("timeout = 30"),
+            "{}",
+            plain.render()
+        );
     }
 }

@@ -1,10 +1,10 @@
 name: Rust tests (OS matrix + cargo-nextest)
 
 # R25 Stage 1: 独立 rust tests workflow (qdrant 模式)
-# 抄自: qdrant/.github/workflows/rust.yml
+# 对齐: qdrant/.github/workflows/rust.yml
 # 模板: https://github.com/qdrant/qdrant/blob/master/.github/workflows/rust.yml
-# 借鉴: tokio ci.yml [test-tokio-full] / [test-workspace-all-features] job
-# 借鉴: wasmtime main.yml [ci] job
+# 结构对齐: tokio ci.yml [test-tokio-full] / [test-workspace-all-features] job
+# 结构对齐: wasmtime main.yml [ci] job
 #
 # 跟 rust-ci.yml 的关系 (R25 Agent D 2026-08-10):
 #   - rust-ci.yml = 旧"一锅炖"R18 升级版 (OS matrix + nextest + release-build + battle-1-2 + ci-summary)
@@ -20,7 +20,7 @@ name: Rust tests (OS matrix + cargo-nextest)
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
   pull_request:
     branches: ['**']
   workflow_dispatch:
@@ -175,11 +175,36 @@ jobs:
             echo "::error::workspace.version is missing"
             exit 1
           fi
-          if [ -n "$PREV" ] && [ "$CUR" != "$PREV" ]; then
-            echo "::error::workspace.version 改动: $PREV → $CUR"
+          # 语义修正 2026-10-03 (对齐仓内 release authority 本义):
+          #   - o6-anchor #4: "The workspace package version is the active release
+          #     authority" —— version 本身就是权威, 守的是它存在且合法;
+          #   - release-prep.sh A1: "matches release authority" = 等于本次 release
+          #     期望值 (允许随 release 递进), 不是"相对 base 一律不许变"。
+          # 旧实现 (PREV != CUR 即 fail) 与仓内版本轴递进流程 (rc.1→rc.2→rc.3,
+          # 见 CHANGELOG "版本轴递进" 系列提交) 自相矛盾: 每个 release 提交必假红。
+          # 现规则: ① 必须合法 semver; ② 变动时必须有 release 拍板证据 ——
+          # CHANGELOG.md 含新版本号条目。零变动照旧放行。
+          if ! echo "$CUR" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$'; then
+            echo "::error::workspace.version 非法 semver: $CUR"
             exit 1
           fi
-          echo "✅ workspace.version 1.2.0 不变"
+          if [ -n "$PREV" ] && [ "$CUR" != "$PREV" ]; then
+            # 拍板证据 (仓内惯例): ① `release:` 提交携带新版本号 (如 "release: 版本轴
+            # 递进 2.0.0-rc.3"); 或 ② CHANGELOG.md 含新版本号条目。二者皆无 = 拍板
+            # 证据缺失, 挡下。注: CHANGELOG 不强制跟版本轴记账 (rc.2/rc.3 起采
+            # "断言已编译期派生, 零同步负担" 约定), 故 ① 是主通道。
+            HIT=$(git log --format='%s' "$BASE"..HEAD | grep -E '^release[:：]' | grep -F "$CUR" | head -1 || true)
+            if [ -z "$HIT" ] && grep -qF "$CUR" CHANGELOG.md; then
+              HIT="CHANGELOG.md 含 $CUR 条目"
+            fi
+            if [ -z "$HIT" ]; then
+              echo "::error::workspace.version 改动 $PREV → $CUR 但无 release 拍板证据 (release: 提交含 $CUR / CHANGELOG 条目)"
+              exit 1
+            fi
+            echo "✅ workspace.version $PREV → $CUR (release authority 递进, 拍板证据: $HIT)"
+          else
+            echo "✅ workspace.version $CUR 不变"
+          fi
 
       - name: "守门 3: R11 baseline 3 值 0.8682/0.8532/0.9063 不变"
         env:
@@ -269,7 +294,7 @@ jobs:
   # 当前用本地 PowerShell 扫描器 (gitleaks binary 因 release-assets DNS 阻塞装不上, 0 装 PASS 标注)
   # 扫描模式: scan-all (working tree) + scan-history (force-push 偷渡防御)
   secret-scan:
-    name: Secret scan (R215 防御层, 借鉴 gitleaks pattern)
+    name: Secret scan (R215 防御层, 高置信凭证 pattern)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

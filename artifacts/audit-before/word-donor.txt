@@ -1,0 +1,807 @@
+ARCHITECTURE.md:4:Historical design proposals and donor implementations live under `docs/archive/`,
+ARCHITECTURE.md:21:├── legacy/                # donor/reference code; excluded from the root workspace
+INSTALL.md:284:| `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 用 donor 反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；**默认开**（`=0` 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式） |
+ROADMAP.md:52:| M1C 治理移植 | Allow/Deny/RequireApproval + PII/注入检测 + 审计哈希链 → `crates/foundation/governance` | `docs/01-architecture/m1c-governance-donor-primitives.md` |
+crates/README.md:47:directory or reintroduce the historical Companion donor as production code.
+crates/README.md:61:All donor/archived/frozen code lives under `legacy/`, not here. Current product
+crates/adapters/cli/src/lib.rs:84:// 2026-10-06 W2 记忆闭环批: donor 反幻觉注入格式 / 每轮记忆整理 / 失败闭环。
+crates/adapters/cli/src/lib.rs:196:/// donor 反幻觉注入格式 (记忆核心族, **默认开**): 开启时记忆 overlay 用编号
+crates/capabilities/tools/src/fetch.rs:57:    /// Optional per-host sliding-window rate limiter (donor R231 semantics).
+crates/capabilities/tools/src/fetch.rs:60:    /// Optional TTL response cache (donor R265 semantics). Process-local;
+crates/capabilities/tools/src/fetch.rs:110:    /// Enable per-host rate limiting with the donor default (60 requests per
+crates/capabilities/tools/src/fetch.rs:371:        // donor's semantics).
+crates/capabilities/tools/src/fetch/html_text.rs:215:        // Donor decoder handles decimal numeric entities (`&#65;` → A). Hex
+crates/capabilities/tools/src/fetch/rate_limit.rs:16:/// Default limit: 60 requests per 60 seconds (donor default).
+crates/capabilities/tools/src/fetch/rate_limit.rs:18:/// Default window: 60 seconds (donor default).
+crates/capabilities/tools/src/fetch/response_cache.rs:5://! access; `invalidate`/`clear` give callers explicit control. The donor used
+crates/capabilities/tools/src/search.rs:60:    /// Non-overlapping occurrence count on this line (donor CodeSearcher semantics).
+crates/capabilities/tools/src/search.rs:342:/// case-folded line (donor CodeSearcher: positions computed after lowercasing).
+crates/engine/memory/src/amem_graph.rs:8://! This module recovers the **missing** donor algorithms without a second store:
+crates/engine/memory/src/amem_graph.rs:20:/// Jaccard overlap threshold for A-MEM auto-link (donor `>= 0.3`).
+crates/engine/memory/src/amem_graph.rs:23:/// Default injection-block cap (donor `take(10)`).
+crates/engine/memory/src/amem_graph.rs:76:/// `factg-*` / `link-*` episodes (donor persistence was episode pollution).
+crates/engine/memory/src/amem_graph.rs:261:    /// Skips self, `link-*`, and `tomb-*` ids (donor skip list).
+crates/engine/memory/src/calibration.rs:3://! Recovered from `legacy/donor/apeireth-cognition/src/calibration.rs`.
+crates/engine/memory/src/calibration.rs:25:/// `(p − y)² = 0` when `p = y` holds, matching the donor diagnostic tests.
+crates/engine/memory/src/calibration_critic.rs:3://! Recovered from `legacy/donor/apeireth-evolution/src/critic.rs` and
+crates/engine/memory/src/calibration_critic.rs:4://! **decoupled from the donor 6-state evolution machine**.
+crates/engine/memory/src/canonical/domain.rs:81:/// - `importance`: donor-supported domain metadata. Persisted now, ranked in
+crates/engine/memory/src/canonical/domain.rs:83:/// - `access_count`: donor-supported domain metadata used for ACT-R-style
+crates/engine/memory/src/canonical/domain.rs:85:/// - `access_times`: donor-supported domain metadata; explicit timestamps for
+crates/engine/memory/src/canonical/graph.rs:5://! a causal cognition engine. The donor graph implementations are in-memory
+crates/engine/memory/src/canonical/retrieval.rs:8://! The donor formula is ACT-R-inspired activation plus an importance bonus.
+crates/engine/memory/src/canonical/retrieval.rs:18:/// Default donor decay for ACT-R-style activation.
+crates/engine/memory/src/canonical/retrieval.rs:20:/// Default donor beta for ACT-R-style activation.
+crates/engine/memory/src/canonical/retrieval.rs:22:/// Default donor importance weight in the retrieval score.
+crates/engine/memory/src/canonical/retrieval.rs:25:/// Calculates the donor ACT-R-inspired activation.
+crates/engine/memory/src/canonical/retrieval.rs:35:/// clipped to a one-second difference, exactly as in the donor
+crates/engine/memory/src/canonical/retrieval.rs:87:/// donor query semantics: decay `0.5`, beta `0.0`, importance weight `2.0`.
+crates/engine/memory/src/canonical/retrieval.rs:108:    /// Creates donor-default retrieval options for `as_of`.
+crates/engine/memory/src/canonical/retrieval.rs:256:    fn activation_matches_donor_formula_exact_values() {
+crates/engine/memory/src/canonical/retrieval.rs:274:        // A future access would produce diff = -1; donor clamps to 1, so
+crates/engine/memory/src/canonical/vector.rs:7://! The donor implementation (`origin/master:.../storage/src/vector.rs`) is
+crates/engine/memory/src/canonical/vector.rs:187:    /// stored vector yields a similarity of `0.0` (the donor behaviour) rather
+crates/engine/memory/src/community.rs:3://! **移植来源**: v1 `legacy/donor/apeireth-companion/src/community.rs` (台账 M2,
+crates/engine/memory/src/confidence.rs:3://! Recovered from `legacy/donor/apeireth-companion/src/confidence.rs`.
+crates/engine/memory/src/context_compiler.rs:126:    /// Compile an overlay in the donor closed-world **injection** format
+crates/engine/memory/src/context_compiler.rs:130:    /// 显式反幻觉规则 ("禁止说「我记得我们以前聊过」"). 预算语义: 每条证据按 donor
+crates/engine/memory/src/context_compiler.rs:132:    /// 预算容不下任何条目或空召回时返回 `None` (donor 渲染器空输入出空串, 空 overlay 无意义).
+crates/engine/memory/src/context_ledger.rs:3://! Donor behaviour recovered:
+crates/engine/memory/src/context_ledger.rs:10://! Discarded donor shortcuts:
+crates/engine/memory/src/context_ledger.rs:22:/// Default per-anchor retention (donor DEFAULT_MAX_RECORDS).
+crates/engine/memory/src/coordinator.rs:160:    /// Switch the prompt overlay renderer to the donor closed-world injection
+crates/engine/memory/src/coordinator.rs:809:    /// by default; donor injection format behind `with_memory_injection_format`).
+crates/engine/memory/src/dedup.rs:3://! Donor behaviour recovered:
+crates/engine/memory/src/dedup.rs:11://! rows — that donor shortcut is discarded.
+crates/engine/memory/src/dedup.rs:13://! Default window = 24h; default LRU cap = 1024 (donor constants).
+crates/engine/memory/src/dedup.rs:29:/// Character Jaccard threshold used by [`dedup_textual`] (donor dream.rs: 0.8).
+crates/engine/memory/src/dedup.rs:35:/// Fingerprint hex length (8 bytes = 16 hex chars; donor `args_hash`).
+crates/engine/memory/src/dedup.rs:98:/// Strip whitespace and lowercase (donor `dream::dedup_textual` normalizer).
+crates/engine/memory/src/dedup.rs:130:/// Donor `dream::dedup_textual` incremented `i` after replacing the current
+crates/engine/memory/src/dedup.rs:576:        // Donor incremented past the replacement; we must collapse all three.
+crates/engine/memory/src/dream_consolidation.rs:1://! Incremental dream-candidate selection (donor `DreamScheduler::tick` filter).
+crates/engine/memory/src/dream_consolidation.rs:8://! Donor companion `dream.rs` additionally **filters** what enters a cycle:
+crates/engine/memory/src/dream_consolidation.rs:49:/// Pair-merge contents with the donor joiner `" ◆ "` (honest string concat).
+crates/engine/memory/src/ensemble.rs:3://! Recovered from `legacy/donor/apeireth-cognition/src/forecast.rs`.
+crates/engine/memory/src/ensemble.rs:17://! the donor's raw `exp(q/b)`). No provider, store, or loop is owned here.
+crates/engine/memory/src/ensemble.rs:310:    /// is cosmetic; it exists for donor API parity.
+crates/engine/memory/src/episode.rs:114:    /// Donor companion `continuity::migrate_subject` needed this path because
+crates/engine/memory/src/graph_algo.rs:1://! Graph traversal helpers over [`MemoryGraph`] (salvage of donor
+crates/engine/memory/src/graph_algo.rs:154:/// (donor Dijkstra does not support them). A self-path is `([from], 0.0)` when
+crates/engine/memory/src/graph_algo.rs:220:/// (donor behaviour). Neighbors are visited in id-ascending order.
+crates/engine/memory/src/lib.rs:54:/// 图社区分层聚合 + 双级检索分诊 (W3 移植批, v1 donor community, 2026-10-10)。
+crates/engine/memory/src/memory_injection.rs:1://! Closed-world memory injection (donor `apeireth-companion::memory_injection`).
+crates/engine/memory/src/memory_injection.rs:3://! LLM retrieval easily fabricates "I remember we talked about…". The donor
+crates/engine/memory/src/memory_injection.rs:17://! - `legacy/donor/apeireth-companion/src/memory_injection.rs`
+crates/engine/memory/src/memory_injection.rs:22:/// Maximum visible characters per evidence line (donor truncation).
+crates/engine/memory/src/memory_injection.rs:25:/// Maximum preference portrait lines (donor `take(8)`).
+crates/engine/memory/src/memory_rank.rs:3://! Recovered from `legacy/donor/apeireth-companion/src/memory_extractor.rs`:
+crates/engine/memory/src/memory_rank.rs:14:/// Importance prefix written by the donor extractor (`【imp:N】content`).
+crates/engine/memory/src/memory_rank.rs:39:/// Parse `【imp:N】` prefix; missing / malformed → 5 (donor default).
+crates/engine/memory/src/memory_rank.rs:85:/// recorded for callers but unused in the donor score (count only).
+crates/engine/memory/src/metadata_filter.rs:1://! JSON property-bag filters for retrieval (salvage of donor
+crates/engine/memory/src/metadata_filter.rs:4://! Donor `NodeQuery` / `EdgeQuery` AND-ed kind + JSON equality over a property
+crates/engine/memory/src/online_calibration.rs:3://! Recovered from `legacy/donor/apeireth-asi/src/{calibration,drift,scheduler}.rs`
+crates/engine/memory/src/online_calibration.rs:6://! The donor types were locked to `V05_DIM_COUNT` / `V1136_SUBMEASURE_COUNT`.
+crates/engine/memory/src/online_calibration.rs:453:    /// The donor's `observe` path did **not** retain a trace buffer; it fitted
+crates/engine/memory/src/persistent_vector.rs:1://! Persistent brute-force cosine KNN (salvage of donor
+crates/engine/memory/src/persistent_vector.rs:4://! The donor `vec0` virtual table requires the `sqlite-vec` C extension
+crates/engine/memory/src/persistent_vector.rs:12://! is the durable companion (own `.db` file, same as the donor) and is
+crates/engine/memory/src/persistent_vector.rs:26:/// Default file name used by the donor backend.
+crates/engine/memory/src/persistent_vector.rs:224:    /// Cosine top-k. Optional `filter` is applied **after** scoring (donor
+crates/engine/memory/src/preference_store_sqlite.rs:166:        // SELECT 路径 (v1 donor `preference_injection` 语义: 偏好跨场景自动应用):
+crates/engine/memory/src/preference_store_sqlite.rs:169:        // 2. 无 topic 命中时回退到该 session 的 top-N (donor 的偏好画像是
+crates/engine/memory/src/preference_store_sqlite.rs:197:                    // Donor 语义回退: 无话题命中 → 该 session 的 top-N 偏好画像.
+crates/engine/memory/src/preference_store_sqlite.rs:431:    /// 无 topic 命中 → 回退到该 session 的 top-N (v1 donor
+crates/engine/memory/src/query_expand.rs:3://! Assigned donors (`apeireth-graph`, `apeireth-graph-primitive`,
+crates/engine/memory/src/retention.rs:3://! Combines three donor / v2 primitives that previously lived in isolation:
+crates/engine/memory/src/retention.rs:43:/// sweep clock so tests (and scheduled jobs) are deterministic — donor
+crates/engine/memory/src/vector_distance.rs:1://! Vector distance utilities (salvage of donor `apeireth-vector::distance`).
+crates/engine/memory/src/vector_distance.rs:5://! (L2, L2², dot, Manhattan) and the donor distance→score maps used by the
+crates/engine/memory/src/vector_distance.rs:7://! `None` instead of panicking (the donor used `assert_eq!`).
+crates/engine/memory/src/vector_distance.rs:106:/// smaller values remain "closer" (donor convention).
+crates/engine/memory/src/vector_distance.rs:117:/// Donor sqlite-vec score maps, kept as ranking heuristics without the C
+crates/engine/organ/src/causal_world_model.rs:3://! v1 `apeireth-companion::causal_world_model::CausalWorldModel` 1:1 翻译 (`legacy/donor/apeireth-companion/src/causal_world_model.rs`,
+crates/engine/organ/src/causal_world_model_edges.rs:5://! (v1 `MineCausalEdges`, per `legacy/donor/apeireth-companion/src/causal_world_model.rs:170-274`).
+crates/engine/organ/src/context_assembly.rs:3://! Recovered from `legacy/donor/apeireth-companion/src/context.rs` (the block
+crates/engine/organ/src/curiosity.rs:1://! E4 Curiosity 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/curiosity.rs`).
+crates/engine/organ/src/curiosity.rs:5://!   per `legacy/donor/apeireth-companion/src/curiosity.rs:13-17` 文档明示).
+crates/engine/organ/src/emergence.rs:1://! E7 Emergence 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/emergence.rs`).
+crates/engine/organ/src/emergence.rs:40://!   `AwakeCompanion` (在 legacy/donor/) 或 v2 future integration 复用.
+crates/engine/organ/src/emergence.rs:80:/// v2 organ crate 不绑 Bond (Bond 在 legacy/donor/), 暴露 `LocalRelationship` (机制层
+crates/engine/organ/src/emergence.rs:454:/// - v2 E7 organ crate 不绑 apeireth-evolution (它在 legacy/donor/), 本 enum 是
+crates/engine/organ/src/emotion_memory.rs:1://! F1 EmotionMemory 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/emotion_memory.rs`).
+crates/engine/organ/src/emotion_memory.rs:4://! - v1 真实现是**确定性无 LLM** (per `legacy/donor/apeireth-companion/src/emotion_memory.rs:11-17`
+crates/engine/organ/src/experience_growth.rs:3://! Recovered from `legacy/donor/apeireth-companion/src/experience.rs` (algorithm
+crates/engine/organ/src/experience_growth.rs:14:/// Promotion: `verify_count >= 3` and `score >= 0.7` (donor initial params).
+crates/engine/organ/src/experience_growth.rs:17:/// EMA smoothing (aligned with donor capability EMA).
+crates/engine/organ/src/experience_growth.rs:70:/// Outcome value used in the EMA update (donor `verify` table).
+crates/engine/organ/src/goal.rs:3://! Recovered from `legacy/donor/apeireth-companion/src/goal.rs` (DSH-style
+crates/engine/organ/src/goal.rs:9://! Semantics kept from the donor:
+crates/engine/organ/src/goal.rs:17://! Honest adaptations vs the donor:
+crates/engine/organ/src/goal.rs:18://! - Donor claimed compare-and-set (`StaleRevision`) but never compared an
+crates/engine/organ/src/goal.rs:21://! - Donor swallowed persist errors (`let _ = store.save`). This port surfaces
+crates/engine/organ/src/hypothesis.rs:1://! F4 Hypothesis 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/hypothesis.rs`).
+crates/engine/organ/src/hypothesis.rs:6://!   全部可测, 无 LLM 依赖, per `legacy/donor/apeireth-companion/src/hypothesis.rs:11-17`
+crates/engine/organ/src/hypothesis.rs:34://! **v1 哲学** (per `legacy/donor/apeireth-companion/src/hypothesis.rs:1-9`):
+crates/engine/organ/src/lib.rs:46://! 仍在 `legacy/donor/` (workspace exclude), v2 真生产路径走本 crate.
+crates/engine/organ/src/memory.rs:6://! - **v1 真实现核查**: `legacy/donor/apeireth-companion/src/runtime_brain.rs` **没有
+crates/engine/organ/src/morphology.rs:3://! Recovered from `legacy/donor/apeireth-companion/src/morphology.rs`.
+crates/engine/organ/src/motivation.rs:3://! Recovered from `legacy/donor/apeireth-motivation/src/lib.rs` §13
+crates/engine/organ/src/motivation.rs:22:/// Hard threshold the donor used (`MIN_EVIDENCE_SCORE` = 0.85).
+crates/engine/organ/src/prompt_assembly.rs:3://! Recovered from `legacy/donor/apeireth-companion/src/prompt_assembler.rs`.
+crates/engine/organ/src/tone.rs:21:/// 情绪注入 EMA 混合项基线系数 (donor `BondCharacter::apply_emotion` 写死的
+crates/engine/organ/src/tone.rs:26:/// trust 情绪项基线系数 (donor 写死的 0.2; 与 [`EMOTION_MIX_RESONANCE`] 同受
+crates/engine/organ/src/tone.rs:58:    /// Plutchik-style emotion injection into relational character (donor `BondCharacter::apply_emotion`).
+crates/engine/organ/src/tone.rs:62:    /// are accepted for API parity and currently unused (donor discarded them
+crates/engine/organ/src/tone.rs:68:    /// 即 donor 写死的情绪项权重 (resonance 情绪项 0.1 / trust 情绪项 0.2) 的
+crates/engine/organ/src/tone.rs:303:    /// 旋钮推导锁定: 生效情绪混合项 = donor 基线系数 × ToneSaturation 倍率
+crates/engine/organ/src/value_cases.rs:1://! F6 Value Cases 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/value_cases.rs`).
+crates/engine/organ/src/value_cases.rs:6://!   无 LLM 依赖, per `legacy/donor/apeireth-companion/src/value_cases.rs:13-18` 文档明示
+crates/engine/organ/src/value_cases.rs:37://! **v1 哲学** (per `legacy/donor/apeireth-companion/src/value_cases.rs:3-12`):
+crates/engine/organ/src/world_model.rs:1://! W1 World Model 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/world_model.rs`).
+crates/engine/organ/src/world_model.rs:39://! **v1 哲学** (per `legacy/donor/apeireth-companion/src/world_model.rs:1-21`):
+crates/engine/organ/tests/memory.rs:22://!   `legacy/donor/apeireth-companion/src/runtime_brain.rs` 242 行无 MemoryMerger;
+crates/engine/organ/tests/value_cases.rs:28://! + `Feedback` 2 态 (per `legacy/donor/apeireth-companion/src/value_cases.rs:13-148`).
+crates/engine/perception/src/capture.rs:3://! `XcapVisionBackend` already captures PNG/JPEG bytes. Donor `VisionInput` also
+crates/engine/perception/src/normalize.rs:1://! Multimodal observation normalization recovered from donor `apeireth-perception`.
+crates/engine/perception/src/normalize.rs:4://! `apeireth-plugin`. This module does **not** resurrect donor `PerceptionChannel`
+crates/engine/perception/src/normalize.rs:24:/// Donor default attention threshold (balance of signal vs noise).
+crates/engine/perception/src/normalize.rs:27:/// Donor default Top-K (aligned with a single-batch processing cap).
+crates/engine/perception/src/normalize.rs:76:/// Voice priority equals clamped loudness (donor heuristic; no acoustic model).
+crates/engine/perception/src/normalize.rs:124:/// Validate canonical event fields recovered from donor `validate_event`.
+crates/engine/perception/src/normalize.rs:138:/// Append a tag (donor `PerceptionEvent::with_tag`).
+crates/engine/perception/src/normalize.rs:146:/// The cutoff is **not** clamped here (matching donor `pipeline`): a threshold
+crates/engine/perception/src/observe.rs:3://! Donor behaviour kept:
+crates/engine/perception/src/observe.rs:9://! Donor behaviour discarded:
+crates/engine/perception/src/observe.rs:14://! Hash adaptation: donor used SHA-256 truncated to 16 hex chars. This crate
+crates/engine/perception/src/observe.rs:44:/// Candidate experience source. Donor only shipped `ToolExecution`; the enum
+crates/engine/perception/src/observe.rs:88:    /// Three-way label aligned with donor `experience::Experience.outcome`.
+crates/engine/perception/src/screen.rs:9://! IdleStart is emitted at most once per idle stretch (donor `poll_events`
+crates/engine/perception/src/voice/audio_frame.rs:1://! PCM16 frame primitives recovered from donor `apeireth-voice`.
+crates/engine/perception/src/voice/audio_frame.rs:3://! Donor `VoiceSdk` / Porcupine facades returned `NotImplemented`. The load-bearing
+crates/engine/perception/src/voice/audio_frame.rs:19:/// pvrecorder / Porcupine sample rate (donor `VOICE_SAMPLE_RATE_HZ`).
+crates/engine/perception/src/voice/audio_frame.rs:22:/// Single analysis frame (donor `VOICE_FRAME_LENGTH`).
+crates/engine/perception/src/voice/audio_frame.rs:25:/// Single-session recording cap (donor `VOICE_MAX_AUDIO_SECONDS`).
+crates/engine/perception/src/voice/audio_frame.rs:28:/// Mono channel count used by the donor buffer helpers.
+crates/engine/perception/src/voice/audio_frame.rs:42:    /// Sample rate other than the donor hardcode.
+crates/engine/perception/src/voice/audio_frame.rs:77:/// Donor formula: `samples.len() * 1000 / (sample_rate * channels)`, integer
+crates/engine/perception/src/voice/audio_frame.rs:88:/// Donor VAD named an Energy (RMS) algorithm but left `detect()` unimplemented.
+crates/engine/perception/src/voice/audio_frame.rs:130:/// Recovered from `legacy/donor/apeireth-voice/src/minimax_live.rs`. The HTTP
+crates/engine/perception/src/voice/audio_frame.rs:162:/// One PCM16 analysis frame. Geometry defaults to the donor 16 kHz / 512-sample
+crates/engine/perception/src/voice/audio_frame.rs:177:    /// Build a frame from samples at the donor sample rate. Empty is rejected.
+crates/engine/perception/src/voice/audio_frame.rs:200:    /// Frame length in samples (donor field `frame_length`).
+crates/engine/perception/src/voice/audio_frame.rs:248:    /// Donor `assert_sample_rate_hardcode`.
+crates/engine/perception/src/voice/audio_frame.rs:259:    /// Donor `assert_duration_within_limit` (30 s).
+crates/engine/perception/src/voice/audio_frame.rs:301:/// Split a PCM16 stream into donor-sized frames. Trailing partial frames are kept.
+crates/engine/perception/src/voice/audio_session.rs:1://! Audio session state machines recovered from donor voice + companion.
+crates/engine/perception/src/voice/audio_session.rs:5://! 1. [`RecordingSession`] — donor `RecordingStatus` (Pending / Recording /
+crates/engine/perception/src/voice/audio_session.rs:6://!    Stopped / Failed) as a *real* guarded SM. Donor `VoiceRecorder::start`
+crates/engine/perception/src/voice/audio_session.rs:53:/// Donor 4-state recording machine (`Pending` / `Recording` / `Stopped` / `Failed`).
+crates/engine/perception/src/voice/audio_session.rs:70:    /// Opaque session id (caller-assigned; donor used UUID).
+crates/engine/perception/src/voice/audio_session.rs:76:    /// Max capture duration (donor default 30 s).
+crates/engine/perception/src/voice/audio_session.rs:293:    /// Speak failure does **not** increment `turn_count` (donor contract).
+crates/engine/perception/src/voice/energy_vad.rs:63:/// Energy VAD configuration (donor `VadConfig` Energy defaults).
+crates/engine/perception/src/voice/energy_vad.rs:66:    /// RMS threshold in `[0.0, 1.0]`. Donor Energy default = 0.05.
+crates/engine/perception/src/voice/energy_vad.rs:77:    /// Donor `VadConfig::default_energy`.
+crates/engine/perception/src/voice/energy_vad.rs:87:    /// Donor `VadConfig::default_silence` (threshold 0, 500 ms hangover).
+crates/engine/perception/src/voice/energy_vad.rs:97:    /// Validated constructor (donor `VadConfig::custom` Energy path).
+crates/engine/perception/src/voice/energy_vad.rs:136:/// One Energy-VAD result (donor `VadResult` fields that the Energy path can fill).
+crates/engine/perception/src/voice/stream_frame.rs:1://! Streaming audio buffer framing recovered from donor `apeireth-voice::realtime`.
+crates/engine/perception/src/voice/stream_frame.rs:3://! Donor realtime.rs is an OpenAI Realtime *schema* (event enums, gpt-realtime
+crates/engine/perception/src/voice/stream_frame.rs:21:/// Maximum audio bytes per append (donor `REALTIME_MAX_AUDIO_BUFFER_BYTES`).
+crates/engine/perception/src/voice/stream_frame.rs:24:/// Maximum image bytes for a multimodal attachment (donor `REALTIME_MAX_IMAGE_BYTES`).
+crates/engine/perception/src/voice/stream_frame.rs:39:    /// Empty payload rejected (donor used `AudioBufferTooLarge { got: 0 }` /
+crates/engine/perception/src/voice/stream_frame.rs:81:/// Audio format tag for a streaming append (donor `RealtimeAudioFormat`).
+crates/engine/perception/src/voice/stream_frame.rs:99:/// Turn-detection kind (donor `TurnDetectionKind`).
+crates/engine/perception/src/voice/stream_frame.rs:109:/// Server-side VAD configuration (donor `TurnDetection` defaults).
+crates/engine/perception/src/voice/stream_frame.rs:179:/// Input-audio-buffer states. Donor events (`append` / `commit` / `clear` /
+crates/engine/perception/src/voice/stream_frame.rs:347:    /// How many donor-sized PCM16 frames the current buffer would split into
+crates/engine/runtime-assembly/src/canonical.rs:63:/// W3 移植批: 自我改进闭环实验侧 (v1 donor experiment_field, 2026-10-10)。
+crates/engine/runtime-assembly/src/canonical/cognitive.rs:1759:/// 失败闭环模块 (donor `apeireth-companion` 口头强化反思, 2026-10-06 W2 接线).
+crates/engine/runtime-assembly/src/canonical/cognitive.rs:3081:        // TurnStart 注入教训块 (donor 反刍格式).
+crates/engine/runtime-assembly/src/canonical/experiment_field.rs:1://! W3 移植批: 自我改进闭环的**实验侧** (v1 `donor/apeireth-companion/
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:3://! 1:1 翻译 v1 `legacy/donor/apeireth-companion/src/runtime_brain.rs` +
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:4://! `legacy/donor/apeireth-companion/src/organs.rs`:
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:94:/// - v1 真状态机在 `apeireth-evolution` crate (`legacy/donor/` workspace exclude),
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:291:/// **0 装诚实**: trait 是抽象, 真生产路径 Bond (`legacy/donor/apeireth-core::bond`)
+crates/engine/runtime-assembly/src/canonical/orchestrator.rs:503:/// - Bond (per v1 `loop_: EmergenceLoop<Bond>`) 在 legacy/donor/, runtime 侧用
+crates/engine/runtime-assembly/src/canonical/preference_learning.rs:13://! # Donor truth, honored
+crates/engine/runtime-assembly/src/canonical/preference_learning.rs:15://! The v1 donor (`apeireth-companion::memory_extractor`) classified
+crates/engine/runtime-assembly/src/canonical/preference_learning.rs:22://! `PreferenceStore`, and recall keeps its existing slot. The donor's
+crates/engine/runtime-assembly/src/canonical/production.rs:156:    /// Render prompt overlays in the donor closed-world injection format
+crates/engine/runtime-assembly/tests/canonical_preference_learning.rs:76:            // Fixed donor semantics: fall back to the session's top-N.
+crates/engine/storage/src/cache/evictor.rs:284:/// `p` is not adapted — donor already labelled this as not IBM ARC.
+crates/engine/storage/src/cache/mod.rs:7://! Donor extras that are not ported:
+crates/engine/storage/src/cache/mod.rs:9://! - Redis / Disk / Memcached backends (honest stubs in the donor)
+crates/engine/storage/src/lib.rs:17://! Only `pool.rs` and `migrations.rs` semantics were ported, with the donor
+crates/engine/storage/src/machine_id.rs:4://! Probe chains (donor 1:1):
+crates/engine/storage/src/machine_id.rs:255:/// Donor format: `"IOPlatformUUID" = "AAAAAAAA-BBBB-..."` — the UUID is the
+crates/engine/storage/src/migrations.rs:27:/// Version 1 preserves the donor `reconstruction_v2` on-disk table set so an
+crates/engine/storage/src/migrations.rs:30:/// donor databases may already contain these tables while still carrying
+crates/engine/storage/src/pool.rs:78:/// The defaults mirror the donor implementation: WAL, synchronous NORMAL,
+crates/engine/storage/src/quota.rs:3://! The donor SnapshotService (file copy + git2) is not ported. This module
+crates/engine/storage/src/quota.rs:10:/// Default per-shadow age cap (7 days). Donor `MAX_SHADOW_AGE_DAYS`.
+crates/engine/storage/src/quota.rs:12:/// Default per-shadow size cap (100 MiB). Donor `MAX_SHADOW_SIZE_BYTES`.
+crates/engine/storage/src/quota.rs:14:/// Default total shadow size cap (2 GiB). Donor `MAX_TOTAL_SHADOW_SIZE_BYTES`.
+crates/engine/storage/src/quota.rs:17:/// Quota configuration. Defaults match the donor 71GB-incident constants.
+crates/engine/storage/src/quota.rs:210:    fn defaults_match_donor_71gb_constants() {
+crates/engine/storage/src/rate_limit/mod.rs:3://! Recovered from `legacy/donor/apeireth-rate-limiter`. This is a library
+crates/engine/storage/src/rate_limit/mod.rs:9://! distributed) were honest stubs in the donor and are not ported.
+crates/engine/storage/tests/storage_foundation.rs:322:fn machine_id_parsers_roundtrip_donor_fixtures() {
+crates/foundation/core/src/lib.rs:59:/// Recovered from `legacy/donor/apeireth-state`; not a second runtime loop.
+crates/foundation/core/src/onion_gate.rs:3://! **移植来源** (防重造轮子 diff 记录, 2026-10-10): v1 `legacy/donor/apeireth-onion`
+crates/foundation/core/src/statechart.rs:1://! XState-subset statechart recovered from `legacy/donor/apeireth-state`.
+crates/foundation/governance/src/approval_policy.rs:1://! Policy helpers recovered from the donor tool-approval **rule engine**.
+crates/foundation/governance/src/approval_policy.rs:23:/// Default high-risk capability prefixes (donor RiskRule).
+crates/foundation/governance/src/approval_policy.rs:116:/// Prefix match used by the donor RiskRule (`system.exec`, `file_write`, …).
+crates/foundation/governance/src/approval_policy.rs:223:    /// Evaluate in donor order: Blacklist → Trust → Frequency → Risk →
+crates/foundation/governance/src/colang.rs:3://! Recovered from `legacy/donor/apeireth-sovereignty/src/colang_dsl.rs` as a
+crates/foundation/governance/src/colang.rs:8://! * the donor `SixFoldGuardRunner` / `Governance.process` wrapper is discarded
+crates/foundation/governance/src/eval.rs:1://! Score aggregation recovered from `legacy/donor/apeireth-eval`.
+crates/foundation/governance/src/eval.rs:7://! from the donor are discarded.
+crates/foundation/governance/src/eval.rs:135:/// (donor convention: "no tasks" is not a failure).
+crates/foundation/governance/src/evidence.rs:1://! Claim / evidence chain recovered from donor `evidence_guard`.
+crates/foundation/governance/src/input_security.rs:34:    // Mainland-China mobile shape from the donor. The trailing `\b` keeps a
+crates/foundation/governance/src/input_security.rs:70:    /// A phone number (currently the donor's mainland-China mobile shape).
+crates/foundation/governance/src/lib.rs:12://! Recovered donor algorithms (Colang parser, approval-policy scoring, eval
+crates/foundation/governance/src/permission.rs:1://! Small deterministic permission primitives, adapted from the donor's onion
+crates/foundation/governance/src/permission.rs:4://! The donor's `PrincipleOnion` (hardcoded philosophical prose) and `DslOnion`
+crates/foundation/governance/src/permission.rs:37:    /// Administrative override. Kept from the donor as an explicit grant; a
+crates/foundation/governance/src/risk.rs:1://! Risk-rank and fail-closed helpers recovered from donor sovereignty.
+crates/foundation/governance/src/risk.rs:29:/// treated as "no change" (donor: empty does not fire).
+crates/foundation/governance/src/risk.rs:145:/// Four regression-assertion kinds recovered from donor `apeireth-verify`.
+crates/foundation/governance/src/risk.rs:236:    fn ranks_match_donor_table() {
+crates/foundation/governance/src/rubric.rs:13://! Default advisor-domain weights match the donor Safety=1.00 … History=0.55
+crates/foundation/governance/src/rubric.rs:27:/// Stance used by the donor synthesis table.
+crates/foundation/governance/src/rubric.rs:78:/// Seven donor advisor domains. Weights are used only when a ballot leaves
+crates/foundation/governance/src/rubric.rs:165:/// donor: strong-disapprove percent uses total count).
+crates/foundation/governance/src/rubric.rs:434:    fn default_domain_weights_match_donor() {
+crates/foundation/orchestration/src/context_fold/mod.rs:3://! Recovered from donor `apeireth-context-fold` (Rust-native). This is a
+crates/foundation/orchestration/src/cron.rs:3://! Recovered from `legacy/donor/apeireth-cron/src/lib.rs`. This is a **parser
+crates/foundation/orchestration/src/cron.rs:32://! Discarded: `CronEngine` tokio tick loop (`scheduler.rs`, test-only in donor
+crates/foundation/orchestration/src/durable/history.rs:3://! **语义来源**: donor/apeireth-workflow `Event`/`EventKind` (typed events, 单调
+crates/foundation/orchestration/src/durable/history.rs:4://! event_id, input/output/error/timestamp) + donor/apeireth-supervisor `Journal`
+crates/foundation/orchestration/src/durable/history.rs:5://! (单调 seq 重分配, JSONL 行序列化, filter 查询) + donor/apeireth-bus `EventLog`
+crates/foundation/orchestration/src/durable/history.rs:23:/// 活动事件类型 (donor workflow `EventKind` 语义, 命名对齐 v2: SubLoop/step 而非 Workflow)。
+crates/foundation/orchestration/src/durable/history.rs:27:    /// 一次持久 run 开始 (输入已记录; donor `WorkflowStarted`)。
+crates/foundation/orchestration/src/durable/history.rs:29:    /// 活动已调度 (输入 + 尝试号已记录; donor `ActivityScheduled`)。
+crates/foundation/orchestration/src/durable/history.rs:31:    /// 活动成功完成 (输出已记录; donor `ActivityCompleted`)。
+crates/foundation/orchestration/src/durable/history.rs:33:    /// 活动失败 (错误 + 尝试号已记录; donor `ActivityFailed`)。
+crates/foundation/orchestration/src/durable/history.rs:35:    /// 一次持久 run 成功结束 (输出已记录; donor `WorkflowCompleted`)。
+crates/foundation/orchestration/src/durable/history.rs:37:    /// 一次持久 run 失败结束 (错误已记录; donor `WorkflowFailed`)。
+crates/foundation/orchestration/src/durable/history.rs:218:    // ====== donor workflow lib.rs 移植测试 ======
+crates/foundation/orchestration/src/durable/history.rs:220:    /// donor `runner_event_ids_monotonic`: seq 严格单调 1..=n。
+crates/foundation/orchestration/src/durable/history.rs:241:    /// donor `event_kind_serialization`: snake_case serde 表示。
+crates/foundation/orchestration/src/durable/history.rs:271:    /// donor `event_serialization_round_trip`: 事件 serde 往返无损。
+crates/foundation/orchestration/src/durable/history.rs:291:    /// donor `journal_append_assigns_monotonic_seq`: 外部 seq 被重分配。
+crates/foundation/orchestration/src/durable/history.rs:317:    /// donor `journal_filter_kind_isolates` + `journal_filter_child_isolates`。
+crates/foundation/orchestration/src/durable/history.rs:362:    /// donor `journal_entry_serde_jsonl_compat`: 每行独立可解析 (JSONL)。
+crates/foundation/orchestration/src/durable/history.rs:428:    /// donor `replay_since_filters_by_timestamp` + `last_n_reverses_order`。
+crates/foundation/orchestration/src/durable/mod.rs:4://! - `legacy/donor/apeireth-workflow` (Temporal-lite `EventHistory` + Activity 语义)
+crates/foundation/orchestration/src/durable/mod.rs:5://! - `legacy/donor/apeireth-supervisor/src/journal_entry.rs` (chidori 式 host-call
+crates/foundation/orchestration/src/durable/mod.rs:7://! - `legacy/donor/apeireth-bus/src/event_log.rs` (replay 查询语义: filter / since / last_n)
+crates/foundation/orchestration/src/durable/mod.rs:15://!    且**已记录完成的活动零副作用重放** (这是 legacy donor 只声称而未实现的真重放:
+crates/foundation/orchestration/src/durable/mod.rs:16://!    donor 的 "replay" 只是整段重跑并重新执行全部副作用)
+crates/foundation/orchestration/src/durable/mod.rs:64:    /// (确定性被破坏的显式信号, 对应 donor `WorkflowError::HistoryCorrupted` 的升级)。
+crates/foundation/orchestration/src/durable/replay.rs:3://! **语义来源**: donor/apeireth-workflow 声称 "同一 input + 相同 history → 相同 output"
+crates/foundation/orchestration/src/durable/replay.rs:4://! 的 replay, 但 donor `WorkflowRunner::run` 每次都新建空 history 并重新执行全部
+crates/foundation/orchestration/src/durable/replay.rs:6://! **补上 donor 未实现的真重放**:
+crates/foundation/orchestration/src/durable/replay.rs:15://! 不采用 donor supervisor 的 `host_pid` / `rng_seed` DeterminismMeta。
+crates/foundation/orchestration/src/durable/replay.rs:26:/// 副作用执行器 (donor `Activity` trait 的注入形态, 无全局注册表).
+crates/foundation/orchestration/src/durable/replay.rs:559:    /// donor `runner_records_event_history` / R225 end-to-end: 事件顺序。
+crates/foundation/orchestration/src/durable/replay.rs:592:    /// donor `test_workflow_propagates_activity_failure` + `runner_handles_activity_failure`。
+crates/foundation/orchestration/src/durable/replay.rs:619:    /// donor `r152_workflow_deliverables`: 同 input → 同 output; **并且**第二次
+crates/foundation/orchestration/src/durable/replay.rs:620:    /// 走 history 重放, 计数器不增加 (这是 donor 只声称未实现的真重放)。
+crates/foundation/orchestration/src/durable/retry.rs:7://! - donor/apeireth-pipeline-g5 `DefaultReliability::backoff_ms` (attempt→退避查询,
+crates/foundation/orchestration/src/durable/retry.rs:19:/// 重试策略: 尝试预算 + 确定性指数退避 (donor frozen-task 常量为默认值)。
+crates/foundation/orchestration/src/durable/retry.rs:22:    /// 最大尝试次数 (含首次; donor `MAX_RETRIES_DEFAULT = 3`)。
+crates/foundation/orchestration/src/durable/retry.rs:24:    /// 退避基数毫秒 (第 1 次重试前; donor `RETRY_BACKOFF_MS = 1000`)。
+crates/foundation/orchestration/src/durable/retry.rs:75:    /// 已创建, 未调度 (donor `Pending`)
+crates/foundation/orchestration/src/durable/retry.rs:77:    /// 已写入调度事件 (donor `Queued`)
+crates/foundation/orchestration/src/durable/retry.rs:79:    /// 执行器在途 (donor `Running`)
+crates/foundation/orchestration/src/durable/retry.rs:81:    /// 成功 (终态; donor `Completed`)
+crates/foundation/orchestration/src/durable/retry.rs:83:    /// 失败 (可重试; donor `Failed`)
+crates/foundation/orchestration/src/durable/retry.rs:85:    /// 取消 (终态, 永不可重试; donor `Cancelled`)
+crates/foundation/orchestration/src/durable/retry.rs:87:    /// 超时 (可重试; donor `Timeout`)
+crates/foundation/orchestration/src/durable/retry.rs:91:/// 状态数编译期守门 (donor `TASK_STATE_COUNT` 模式)。
+crates/foundation/orchestration/src/durable/retry.rs:94:/// 全部 7 个状态 (donor `SUPPORTED_STATES` 模式)。
+crates/foundation/orchestration/src/durable/retry.rs:107:/// 活动状态机守门错误 (donor `TaskError::InvalidTransition` 模式)。
+crates/foundation/orchestration/src/durable/retry.rs:117:    /// 重试超出预算 (donor `RetryPolicy.max_retries` 守门)。
+crates/foundation/orchestration/src/durable/retry.rs:148:/// 活动调用守门状态机 (donor `TaskStateMachine` 适配)。
+crates/foundation/orchestration/src/durable/retry.rs:150:/// 转换表 (donor 状态图 1:1, Queued→Scheduled 改名):
+crates/foundation/orchestration/src/durable/retry.rs:162:/// **不变量** (不可妥协, donor O-1 教训):
+crates/foundation/orchestration/src/durable/retry.rs:233:    /// 转换是否合法 (不修改状态; donor `can_transition`)。
+crates/foundation/orchestration/src/durable/retry.rs:258:    /// 是否终态 (donor `is_terminal`; Failed/TimedOut 属终态, 仅保留重试通道)。
+crates/foundation/orchestration/src/durable/retry.rs:276:        // 1-based (donor max_attempts=3 means 3 executions, not 3 retries on top
+crates/foundation/orchestration/src/durable/retry.rs:298:    /// donor frozen-task 常量: max_retries=3, backoff 基数 1000ms。
+crates/foundation/orchestration/src/durable/retry.rs:300:    fn defaults_match_donor_constants() {
+crates/foundation/orchestration/src/durable/retry.rs:306:    /// donor g5 语义: attempt 计数守门, 超预算拒绝。
+crates/foundation/orchestration/src/durable/retry.rs:321:    /// donor frozen-task 指数退避 1s→2s→4s, 封顶生效, 零重试为 0。
+crates/foundation/orchestration/src/durable/retry.rs:340:    // ====== ActivityStateMachine (donor frozen-task 移植测试) ======
+crates/foundation/orchestration/src/durable/retry.rs:342:    /// donor `test_seven_states_hardcoded`。
+crates/foundation/orchestration/src/durable/retry.rs:349:    /// donor `test_state_machine_happy_path`。
+crates/foundation/orchestration/src/durable/retry.rs:363:    /// donor `test_terminal_blocks_further_transitions`。
+crates/foundation/orchestration/src/durable/retry.rs:375:    /// donor `test_pending_to_cancelled_direct`。
+crates/foundation/orchestration/src/durable/retry.rs:383:    /// donor `test_invalid_skip_queue_to_running`: Pending 不得跳过 Scheduled。
+crates/foundation/orchestration/src/prompt_stabilizer.rs:126:/// concatenate. Recovered from donor `prompt_cache::assemble_tiered`.
+crates/foundation/plugin/src/alias.rs:9://! # Behaviour preserved from the donor
+crates/foundation/plugin/src/alias.rs:28:/// Default LRU capacity. The donor prompt cache was an unbounded `Map`; 64 is
+crates/foundation/plugin/src/alias.rs:37:/// to reproduce the donor token.
+crates/foundation/plugin/src/alias.rs:197:/// This is the donor `AgentManager` resolution algorithm with the agent type
+crates/foundation/plugin/src/alias.rs:223:    /// The lookup cache is cleared (donor `loadMap` behaviour).
+crates/foundation/plugin/src/availability.rs:2://! `legacy/donor/apeireth-companion/src/capabilities_manifest.rs`.
+crates/foundation/plugin/src/availability.rs:4://! The donor catalog was a 20-row companion front-desk. This helper keeps the
+crates/foundation/plugin/src/bounds.rs:2://! `legacy/donor/apeireth-extension` (`manifest.rs`, `sandbox.rs`, `audit.rs`).
+crates/foundation/plugin/src/bounds.rs:4://! The donor parsed `extension.toml` and ran a second plugin execution manager.
+crates/foundation/plugin/src/bounds.rs:15:/// Donor name length cap (`extension.toml` `name`, 1..=64).
+crates/foundation/plugin/src/bounds.rs:17:/// Donor description length cap.
+crates/foundation/plugin/src/bounds.rs:19:/// Donor permission-string length cap.
+crates/foundation/plugin/src/bounds.rs:21:/// Donor permission-list length cap.
+crates/foundation/plugin/src/bounds.rs:23:/// Donor version-string length cap (the strict parser is tighter).
+crates/foundation/plugin/src/bounds.rs:46:    /// Donor-style defaults: 64 KiB in/out, 1 s timeout.
+crates/foundation/plugin/src/bounds.rs:122:/// `legacy/donor/apeireth-skills` `is_valid_id`. Distinct from core
+crates/foundation/plugin/src/bounds.rs:221:/// Donor audit layer: at least one permission, I/O ≥ 1 KiB, timeout ≤ 10 min.
+crates/foundation/plugin/src/bounds.rs:308:/// Default caller grant from the donor sandbox (`invoke` + `read`).
+crates/foundation/plugin/src/bounds.rs:313:/// Privileged grant from the donor sandbox.
+crates/foundation/plugin/src/bounds.rs:326:/// Opt-in: [`crate::PluginManager::register`] does not call this. Donor
+crates/foundation/plugin/src/mcp/discovery.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/primitives.rs`.
+crates/foundation/plugin/src/mcp/jsonrpc.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/protocol.rs`.
+crates/foundation/plugin/src/mcp/lifecycle.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/{initialize.rs,lib.rs}` (ServerInfo /
+crates/foundation/plugin/src/mcp/lifecycle.rs:128:/// Server capability declaration. Donor only advertised `tools`; this
+crates/foundation/plugin/src/mcp/lifecycle.rs:146:    /// Tools-only advertisement (matches the donor default).
+crates/foundation/plugin/src/mcp/lifecycle.rs:278:/// Donor `McpClient` only had a boolean `server_info.is_some()`. A reconnect
+crates/foundation/plugin/src/mcp/mod.rs:3://! Recovered from donor `apeireth-mcp` as **types and algorithms**, not as a
+crates/foundation/plugin/src/mcp/prompt.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/prompts.rs`.
+crates/foundation/plugin/src/mcp/reconnect.rs:3://! Donor SSE transport documented `retry:` / Last-Event-ID and then
+crates/foundation/plugin/src/mcp/reconnect.rs:15:/// 8 attempts) — donor had no numbers because reconnect was stubbed.
+crates/foundation/plugin/src/mcp/resource.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/resources.rs`.
+crates/foundation/plugin/src/mcp/schema.rs:3://! Donor `apeireth-mcp` stored tool/resource fields as Rust snake_case
+crates/foundation/plugin/src/mcp/schema.rs:11://! Also recovered: kebab-case tool/prompt name check (donor
+crates/foundation/plugin/src/mcp/schema.rs:43:/// are returned unchanged. Used to ingest donor JSON that was serialized
+crates/foundation/plugin/src/mcp/schema.rs:69:/// Kebab-case MCP tool / prompt name (donor `is_valid_tool_name`).
+crates/foundation/plugin/src/mcp/schema.rs:237:/// Normalize a tools/call result object that may use donor snake_case.
+crates/foundation/plugin/src/mcp/schema.rs:274:        let donor = json!({
+crates/foundation/plugin/src/mcp/schema.rs:280:        let out = normalize_wire_object(donor);
+crates/foundation/plugin/src/mcp/schema.rs:306:        let donor = json!({"type": "text", "text": "hi", "mime_type": "text/plain"});
+crates/foundation/plugin/src/mcp/schema.rs:307:        let c = content_block_from_wire(donor).unwrap();
+crates/foundation/plugin/src/mcp/schema.rs:329:    fn normalize_mcp_result_from_donor_snake_case() {
+crates/foundation/plugin/src/mcp/schema.rs:330:        let donor = json!({
+crates/foundation/plugin/src/mcp/schema.rs:334:        let r = normalize_mcp_result(donor).unwrap();
+crates/foundation/plugin/src/mcp/sse.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/transport/sse.rs` (`parse_sse_frame`,
+crates/foundation/plugin/src/mcp/sse.rs:6://! Recovered **without reqwest**. The donor `SseTransport` is deferred: it
+crates/foundation/plugin/src/mcp/sse.rs:17:    /// `id:` field (Last-Event-ID). Donor ignored this; we keep it so
+crates/foundation/plugin/src/mcp/sse.rs:20:    /// `retry:` field, milliseconds. Donor ignored this.
+crates/foundation/plugin/src/mcp/sse.rs:146:/// Donor used `reqwest::Url::join`. This version is std-only:
+crates/foundation/plugin/src/mcp/subscribe.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/{subscriptions,tool_subscriptions}.rs`.
+crates/foundation/plugin/src/mcp/subscribe.rs:20:/// Donor `subscriptions.rs` used −32020. That collides with
+crates/foundation/plugin/src/mcp/subscribe.rs:21:/// [`crate::mcp::prompt::PROMPT_NOT_FOUND`]. Kept as-is for donor fidelity;
+crates/foundation/plugin/src/mcp/uri.rs:3://! Donor: `legacy/donor/apeireth-mcp/src/resource_servers.rs`
+crates/foundation/plugin/src/mcp/uri.rs:6://! Recovered as **pure functions**. The donor `FileResourceServer` also
+crates/foundation/plugin/src/mcp/uri.rs:127:/// Extension → MIME guess (donor table, common text types only).
+crates/foundation/plugin/src/organ.rs:17://!   `legacy/donor/apeireth-companion/src/{curiosity,emotion_memory,hypothesis,...}.rs`).
+crates/foundation/plugin/src/organ.rs:51://!   per `legacy/donor/apeireth-companion/src/curiosity.rs:1-23` 文档明示).
+crates/foundation/plugin/src/organ.rs:62://! 仍在 `legacy/donor/` (workspace exclude), v2 真生产路径走 `apeireth-organ::curiosity`.
+crates/foundation/plugin/src/organ.rs:106:    /// v1 module 路径 (per `legacy/donor/apeireth-companion/src/<file>.rs`)
+crates/foundation/plugin/src/organ.rs:317:/// v1 curiosity `ExplorationTarget` 1:1 翻译 (per `legacy/donor/apeireth-companion/src/curiosity.rs:64-73`)
+crates/foundation/plugin/src/organ.rs:327:/// v1 `Depth` 1:1 (per `legacy/donor/apeireth-companion/src/curiosity.rs:57-61`)
+crates/foundation/plugin/src/perception.rs:18://!   `legacy/donor/apeireth-perception` (workspace exclude), v2 alpha 不移植
+crates/foundation/plugin/src/semver.rs:2://! `legacy/donor/apeireth-skills/src/semver_strict.rs`.
+crates/foundation/plugin/src/watch.rs:3://! Recovered from `legacy/donor/apeireth-skills/src/watcher.rs` (mtime compare,
+crates/foundation/plugin/src/watch.rs:4://! Added / Modified / Removed). The donor `apeireth-agent` `watch_dir` used
+crates/foundation/plugin/src/watch.rs:80:    /// Watch `root`. Depth 4 matches the donor file-loader bound (loop guard).
+crates/foundation/protocol/src/acp.rs:6://! only: the donor's transport lives in a pre-v2 runtime this workspace no
+crates/foundation/protocol/src/acp.rs:14://! Checksum honesty (carried over from the donor): the integrity digest uses
+crates/foundation/protocol/src/acp.rs:26:/// ACP envelope errors (donor 1:1).
+crates/foundation/protocol/src/acp.rs:43:/// Agent-to-agent envelope (donor `apeireth_acp::Envelope`, 1:1).
+crates/foundation/protocol/src/acp.rs:92:/// Donor 1:1: canonical field-ordered JSON, prefixed with `'E'` (seeded by
+crates/foundation/protocol/src/acp.rs:138:/// Donor 1:1: replaces random UUIDs with a reproducible id for replay
+crates/foundation/protocol/src/acp.rs:180:    // Tests ported 1:1 from the donor apeireth-acp crate.
+crates/foundation/protocol/src/gateway.rs:103:    /// Match order mirrors the donor: Anthropic Messages → OpenAI Responses →
+crates/foundation/protocol/src/gateway.rs:136:        // Header-based fallback (donor detect.rs:24-32). Path always wins.
+crates/foundation/protocol/src/gateway.rs:361:        // First hit wins, donor order preserved.
+crates/foundation/protocol/src/gateway.rs:370:        // Donor detect.rs: detect_via_anthropic_version.
+crates/foundation/protocol/src/retry.rs:14://! Differences from the donor, by design:
+crates/foundation/protocol/src/retry.rs:15://! - The donor wrapped jitter in a `WithJitter(Box<BackoffPolicy>, JitterMode>)`
+crates/foundation/protocol/src/retry.rs:18://! - The donor's metrics came from `apeireth_telemetry::Counter`; here
+crates/foundation/protocol/src/retry.rs:21://! - The donor drew randomness from a thread-local xorshift; here
+crates/foundation/protocol/src/retry.rs:146:/// Same shift constants as the donor (13 / 7 / 17). Not
+crates/foundation/protocol/src/retry.rs:147:/// cryptographically secure — jitter only, exactly as in the donor.
+crates/foundation/protocol/src/retry.rs:155:    /// mirroring the donor's initialization guard).
+crates/foundation/protocol/src/retry.rs:237:/// Legacy shape minus the compatibility shim: the donor modeled this as a
+crates/foundation/protocol/src/retry.rs:257:    /// Attach a jitter mode (builder style, mirroring the donor's
+crates/foundation/protocol/src/retry.rs:265:    /// changes the tier count, mirroring the donor's `WithJitter` semantics).
+crates/foundation/protocol/src/retry.rs:351:    // ---------- should_retry_status (ported 1:1 from donor) ----------
+docs/01-architecture/architecture.md:5:> `frontend/companion-desktop` workspace。历史 donor 不属于生产依赖。
+docs/01-architecture/architecture.md:78:- `legacy/donor/`, `legacy/archived/`, and `legacy/frozen/` are reference-only;
+docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md:10:源: `legacy/donor/apeireth-companion/src/proactive_memory.rs` (919 行, 0 LLM, 启发式).
+docs/01-architecture/cognitive-9-organ-integration-spec.md:325:    `legacy/donor/apeireth-companion/examples/awake_greeting.rs:48` `AwakeCompanion::new`).
+docs/01-architecture/cognitive-9-organ-integration-spec.md:567:- v2 E7 organ crate 不绑 apeireth-evolution (它在 legacy/donor/), 本 enum 是**前向声明**,
+docs/01-architecture/cognitive-9-organ-integration-spec.md:1000:- `legacy/donor/apeireth-companion/examples/awake_greeting.rs` (v1 AwakeCompanion + 真 LLM 渲染)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:15:> - `legacy/donor/apeireth-companion/src/proactive_memory.rs` (v1 TopicPredictor + PreloadChannel)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:16:> - `legacy/donor/apeireth-companion/src/value_cases.rs` (v1 ValueCaseStore 真实现, F6 1:1 翻译 v1 已完)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:66:**v1 时代真实现**: `legacy/donor/apeireth-companion/src/proactive_memory.rs`
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:100:**路径**: `legacy/donor/apeireth-companion/src/proactive_memory.rs` (919 行)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:124:v1 proactive_memory.rs (legacy/donor/)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:242:        // 1:1 翻译 v1 predict_topic (per legacy/donor/apeireth-companion/src/proactive_memory.rs:225-258)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:298:- 复制 `legacy/donor/apeireth-companion/src/proactive_memory.rs:1-419` 算法骨架
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:430:- ✅ 含 v1 1:1 翻译路径 (per `legacy/donor/apeireth-companion/src/proactive_memory.rs:225-419`)
+docs/01-architecture/deferred-slot-activation-preference_learning-spec.md:746:- v1 1:1 翻译路径明确 (per `legacy/donor/apeireth-companion/src/proactive_memory.rs:225-419`)
+docs/01-architecture/m1a-canonical-storage-foundation.md:31:  rollback on failure, idempotent v1 for donor on-disk compatibility
+docs/01-architecture/m1a-canonical-storage-foundation.md:37:- r2d2_sqlite: donor 0.24 (rusqlite 0.31) -> 0.25 (rusqlite 0.32) to obey the
+docs/01-architecture/m1a-canonical-storage-foundation.md:43:- Migration engine is versioned (user_version); donor had none
+docs/01-architecture/m1a-canonical-storage-foundation.md:44:- Config is explicit (`SqliteConfig`) with validation; donor hardcoded PRAGMAs
+docs/01-architecture/m1a-canonical-storage-foundation.md:45:- StorageError separates Open/Migration/InvalidConfiguration instead of donor's
+docs/01-architecture/m1a-canonical-storage-foundation.md:65:Migration version 1 preserves the donor table set:
+docs/01-architecture/m1a-canonical-storage-foundation.md:72:so a donor-created database with `user_version = 0` is upgraded idempotently
+docs/01-architecture/m1b1-memory-foundation.md:15:## Donor source
+docs/01-architecture/m1b1-memory-foundation.md:21:| Donor concept | Classification | Disposition |
+docs/01-architecture/m1b2-memory-retrieval.md:9:## Donor source
+docs/01-architecture/m1b2-memory-retrieval.md:19:- Donor query score: `activation + importance * 2.0`.
+docs/01-architecture/m1b2-memory-retrieval.md:20:- Donor default parameters: `decay = 0.5`, `beta = 0.0`, importance weight `2.0`.
+docs/01-architecture/m1b3-vector-graph.md:8:structures are in-memory only, matching donor semantics.
+docs/01-architecture/m1b3-vector-graph.md:18:## Donor sources
+docs/01-architecture/m1b3-vector-graph.md:32:- Cycle-safe bounded BFS traversal from the donor graph crawl.
+docs/01-architecture/m1b3-vector-graph.md:39:- Graph edges carry both `relation` and finite `weight` (merging donor
+docs/01-architecture/m1b3-vector-graph.md:40:  `graph_primitive` label semantics with donor `graph.rs` weight semantics).
+docs/01-architecture/m1b3-vector-graph.md:48:- Donor `CausalGraph` MCTS causal simulator: out of scope for M1B3.
+docs/01-architecture/m1b3-vector-graph.md:49:- Donor hybrid cosine+BM25 search: deferred. The BM25 half is text retrieval
+docs/01-architecture/m1b3-vector-graph.md:52:- No persistence: donor vector and graph are in-memory, so no reopen test is
+docs/01-architecture/m1c-governance-donor-primitives.md:1:# M1C — Canonical Governance Donor Primitives
+docs/01-architecture/m1c-governance-donor-primitives.md:8:Donor: `origin/master:reconstruction_v2/crates/apeireth-governance/src/`
+docs/01-architecture/m1c-governance-donor-primitives.md:10:This migration took algorithms and primitives from the master donor
+docs/01-architecture/m1c-governance-donor-primitives.md:12:`apeireth-governance`. It did **not** port the donor architecture.
+docs/01-architecture/m1c-governance-donor-primitives.md:14:## Donor source
+docs/01-architecture/m1c-governance-donor-primitives.md:16:| Donor module | Maturity | Ported? | Strategy |
+docs/01-architecture/m1c-governance-donor-primitives.md:30:Donor `guard.rs` used a single `PiiDetector` struct for three concerns: PII
+docs/01-architecture/m1c-governance-donor-primitives.md:35:  Kinds: `Email`, `Phone` (mainland-China mobile shape from donor), and
+docs/01-architecture/m1c-governance-donor-primitives.md:41:  `PromptInjectionSignal { kind, start, end }` from the donor's five patterns,
+docs/01-architecture/m1c-governance-donor-primitives.md:50:Donor `audit.rs` was a real append-only hash chain, but appended with
+docs/01-architecture/m1c-governance-donor-primitives.md:65:Donor `onion.rs` had a deterministic `Permission` / `PermissionPack` core plus
+docs/01-architecture/m1c-governance-donor-primitives.md:81:- **Donor five-gate `GovernancePipeline`** (`gates.rs`): a second pipeline with
+docs/01-architecture/m1c-governance-donor-primitives.md:86:- **Donor `standard_agent` permission pack**: hardcoded vendor egress
+docs/01-architecture/m1c-governance-donor-primitives.md:90:- **`LifecycleHandle`** (donor runtime facade): not ported.
+docs/01-architecture/m2a-simple-tool-ports.md:8:Donor: `origin/master:reconstruction_v2/crates/apeireth-tools/src/builtin/`
+docs/01-architecture/m2a-simple-tool-ports.md:10:M2A took three low-risk tool implementations from the master donor and adapted
+docs/01-architecture/m2a-simple-tool-ports.md:12:architecture. It did **not** port the donor `Tool` trait, `ToolRegistry`, or
+docs/01-architecture/m2a-simple-tool-ports.md:17:| Tool | Donor path | Strategy | Canonical implementation | Risk metadata | Status |
+docs/01-architecture/m2a-simple-tool-ports.md:23:## Donor provenance
+docs/01-architecture/m2a-simple-tool-ports.md:27:- Donor path: `reconstruction_v2/crates/apeireth-tools/src/builtin/filesystem.rs`
+docs/01-architecture/m2a-simple-tool-ports.md:33:- Rejected: donor `write`/`delete` operations in M2A.
+docs/01-architecture/m2a-simple-tool-ports.md:38:- Donor path: `reconstruction_v2/crates/apeireth-tools/src/builtin/search.rs`
+docs/01-architecture/m2a-simple-tool-ports.md:45:- Rejected: none; donor search had no tests, so tests were newly written.
+docs/01-architecture/m2a-simple-tool-ports.md:51:- Donor path: `reconstruction_v2/crates/apeireth-tools/src/builtin/repo_tools.rs`
+docs/01-architecture/m2a-simple-tool-ports.md:57:- Rejected: donor `args: Option<Vec<String>>` arbitrary-argument path.
+docs/01-architecture/m2b-process-containment.md:8:Donor: `origin/master:reconstruction_v2/crates/apeireth-tools/src/sandbox.rs` and siblings
+docs/01-architecture/m2b-process-containment.md:10:## 1. Donor reality audit
+docs/01-architecture/m2b-process-containment.md:12:Donor sources inspected:
+docs/01-architecture/m2b-process-containment.md:21:| Feature | Donor status | Canonical strategy | Final status | Evidence |
+docs/01-architecture/m2b-process-containment.md:26:| Descendants in job | PARTIAL (Job Object semantics support it; donor never attached) | ADAPT Job Object tree semantics | ENFORCED | `windows_tests::timeout_terminates_the_whole_job_tree` |
+docs/01-architecture/m2b-process-containment.md:27:| Kill-on-close | REAL (flag set on donor job) but never tested | REIMPLEMENT + real test | ENFORCED | `windows_tests::kill_on_job_close_terminates_a_running_child` |
+docs/01-architecture/m2b-process-containment.md:28:| Memory limit | DOC-ONLY / PARTIAL (donor set 256MB but no child was ever assigned) | REIMPLEMENT opt-in | ENFORCED (opt-in) | `windows_tests::process_memory_limit_rejects_oversized_allocation` |
+docs/01-architecture/m2b-process-containment.md:29:| Active process count | DONOR DID NOT SET | REIMPLEMENT opt-in | ENFORCED (opt-in) | `windows_tests::active_process_limit_blocks_extra_child_creation` |
+docs/01-architecture/m2b-process-containment.md:30:| RestrictedToken creation | PARTIAL (created if `OpenProcessToken` succeeded) | DEFERRED | DEFERRED | Donor `sandbox.rs` calls `CreateRestrictedToken`; no launch path uses it |
+docs/01-architecture/m2b-process-containment.md:31:| Restricted-token launch | NOT ENFORCED | DEFERRED | DEFERRED | Donor spawns via `std::process::Command` / `tokio::process::Command`; `restricted_token` is never used |
+docs/01-architecture/m2b-process-containment.md:37:Donor conclusion: `master` had a real Job Object and a restricted-token handle, but
+docs/01-architecture/m2c-shell-readiness-review.md:763:`"medium"`; donor Shell used `High`). Risk metadata alone does **not** enforce
+docs/01-architecture/m2c-shell-readiness-review.md:1307:M1C donor audit deferred SovereignControl. Do not introduce it simply for
+docs/01-architecture/m2c-shell-readiness-review.md:1312:## 79. Donor Audit
+docs/01-architecture/m2c-shell-readiness-review.md:1334:Donor conclusion: the master ShellTool was **not** sandboxed despite its
+docs/01-architecture/m2c-shell-readiness-review.md:1342:Confirmed: donor `ShellTool::definition()` describes itself as
+docs/01-architecture/m2d-network-egress-enforcement.md:29:## 2. Donor audit
+docs/01-architecture/m2d-network-egress-enforcement.md:33:| Donor primitive | Classification | Notes |
+docs/01-architecture/m3a-canonical-fetch.md:19:## 2. Master donor audit
+docs/01-architecture/m3a-canonical-fetch.md:21:Master donor SHA: `7f515aab37d1a9e58f1eedb0a92691cfe496f4d6`
+docs/01-architecture/m3a-canonical-fetch.md:23:| Donor component | Actual maturity | Useful behavior | Security gap | Strategy |
+docs/01-architecture/m3a-canonical-fetch.md:28:| `crates/apeireth-tool-fetch` (legacy current-branch copy) | BROKEN for SSRF | None beyond donor above | Same as donor; duplicate HTTP stack and registry | DROP |
+docs/01-architecture/m3a-canonical-fetch.md:30:The donor's central SSRF gap is confirmed: destination validation is performed
+docs/01-architecture/master-functionality-port-audit.md:168:| Storage | `apeireth-storage` (durability) not yet created; `InMemorySessionStore` seam | real SQLite pool + MemoryStore + VectorIndex + graph | Canonical owner + master implementation | Strong donor: DIRECT_PORT pool/memory/vector/graph primitives |
+docs/01-architecture/master-functionality-port-audit.md:424:Companion is valuable as **implementation donor** for emotion, Borbely, Brier, and
+docs/01-architecture/master-functionality-port-audit.md:429:## 12. Provider / Protocol Donor Code
+docs/01-architecture/master-functionality-port-audit.md:761:B) implementation donor
+docs/01-architecture/master-functionality-port-audit.md:766:access. It cannot serve as the architecture donor. However, a substantial subset of
+docs/01-architecture/organ-orchestrator-completion-plan.md:78:5. R11 baseline (legacy reference: `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` const `R11_V1141_BASELINE: f64 = 0.8682` / `R11_V1131_BASELINE: f64 = 0.8532` / `R11_V1136_BASELINE: f64 = 0.9063` — active workspace 无 const source, 等 R12 spec 重新审定后移植) 0 改
+docs/01-architecture/organ-orchestrator-spec.md:23:**v1 AwakeCompanion** (`legacy/donor/apeireth-companion/src/organs.rs:34`) 是真实现: 8 重门控 (emergence.rs:460-503) + 5 状态机 (apeireth-evolution::EvolutionState, Idle/Draft/Proposed/Ratified/Active/Retired) + 9 organ 串联 (E4/F1/F4/F6/W1/W2/W3/E7/Council) + emotion/council/onion 三层合成.
+docs/01-architecture/organ-orchestrator-spec.md:45:- 5 状态机在 v1 `apeireth-evolution::EvolutionState` (`legacy/donor/apeireth-evolution/src/state.rs:26`):
+docs/01-architecture/organ-orchestrator-spec.md:249:per `legacy/donor/apeireth-companion/src/emergence.rs:460-503` + `presence.rs:410-423` (13 InitiativeGate):
+docs/01-architecture/organ-orchestrator-spec.md:355:| **v1 AwakeCompanion 真实现** | ✅ 已 done (per R7 风险 #1 标) | `legacy/donor/apeireth-companion/src/organs.rs:34-275` (391 行) |
+docs/01-architecture/organ-orchestrator-spec.md:356:| **v1 8 重 gate 真实现** | ✅ 已 done | `legacy/donor/apeireth-companion/src/emergence.rs:460-503` + `presence.rs:410-423` (13 种 InitiativeGate) |
+docs/01-architecture/organ-orchestrator-spec.md:357:| **v1 5 状态机真实现** | ✅ 已 done | `legacy/donor/apeireth-evolution/src/state.rs:26-197` (6 状态含 Retired) |
+docs/01-architecture/r0t-repository-topology-audit.md:7:| apeireth-acp | crates/apeireth-acp | legacy/donor | legacy/donor/apeireth-acp | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:8:| apeireth-action | crates/apeireth-action | legacy/donor | legacy/donor/apeireth-action | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:9:| apeireth-agent | crates/apeireth-agent | legacy/donor | legacy/donor/apeireth-agent | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:10:| apeireth-api | crates/apeireth-api | legacy/donor | legacy/donor/apeireth-api | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:11:| apeireth-arbitration | crates/apeireth-arbitration | legacy/donor | legacy/donor/apeireth-arbitration | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:12:| apeireth-asi | crates/apeireth-asi | legacy/donor | legacy/donor/apeireth-asi | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:13:| apeireth-bench | crates/apeireth-bench | legacy/donor | legacy/donor/apeireth-bench | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:14:| apeireth-blueprint-impl | crates/apeireth-blueprint-impl | legacy/donor | legacy/donor/apeireth-blueprint-impl | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:15:| apeireth-bus | crates/apeireth-bus | legacy/donor | legacy/donor/apeireth-bus | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:16:| apeireth-central | crates/apeireth-central | legacy/donor | legacy/donor/apeireth-central | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:18:| apeireth-cognition | crates/apeireth-cognition | legacy/donor | legacy/donor/apeireth-cognition | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:20:| apeireth-config | crates/apeireth-config | legacy/donor | legacy/donor/apeireth-config | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:21:| apeireth-consciousness | crates/apeireth-consciousness | legacy/donor | legacy/donor/apeireth-consciousness | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:22:| apeireth-constraint | crates/apeireth-constraint | legacy/donor | legacy/donor/apeireth-constraint | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:23:| apeireth-context-fold | crates/apeireth-context-fold | legacy/donor | legacy/donor/apeireth-context-fold | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:25:| apeireth-council | crates/apeireth-council | legacy/donor | legacy/donor/apeireth-council | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:27:| apeireth-cron | crates/apeireth-cron | legacy/donor | legacy/donor/apeireth-cron | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:28:| apeireth-environment | crates/apeireth-environment | legacy/donor | legacy/donor/apeireth-environment | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:29:| apeireth-eval | crates/apeireth-eval | legacy/donor | legacy/donor/apeireth-eval | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:30:| apeireth-evolution | crates/apeireth-evolution | legacy/donor | legacy/donor/apeireth-evolution | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:31:| apeireth-experience | crates/apeireth-experience | legacy/donor | legacy/donor/apeireth-experience | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:32:| apeireth-extension | crates/apeireth-extension | legacy/donor | legacy/donor/apeireth-extension | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:35:| apeireth-graph | crates/apeireth-graph | legacy/donor | legacy/donor/apeireth-graph | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:36:| apeireth-graph-primitive | crates/apeireth-graph-primitive | legacy/donor | legacy/donor/apeireth-graph-primitive | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:37:| apeireth-guard | crates/apeireth-guard | legacy/donor | legacy/donor/apeireth-guard | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:38:| apeireth-host | crates/apeireth-host | legacy/donor | legacy/donor/apeireth-host | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:39:| apeireth-http-client | crates/apeireth-http-client | legacy/donor | legacy/donor/apeireth-http-client | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:40:| apeireth-i18n | crates/apeireth-i18n | legacy/donor | legacy/donor/apeireth-i18n | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:41:| apeireth-integration-e2e | crates/apeireth-integration-e2e | legacy/donor | legacy/donor/apeireth-integration-e2e | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:42:| apeireth-lark | crates/apeireth-lark | legacy/donor | legacy/donor/apeireth-lark | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:43:| apeireth-library-governance | crates/apeireth-library-governance | legacy/donor | legacy/donor/apeireth-library-governance | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:44:| apeireth-life-force | crates/apeireth-life-force | legacy/donor | legacy/donor/apeireth-life-force | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:45:| apeireth-livekit | crates/apeireth-livekit | legacy/donor | legacy/donor/apeireth-livekit | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:46:| apeireth-llm-iface | crates/apeireth-llm-iface | legacy/donor | legacy/donor/apeireth-llm-iface | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:47:| apeireth-mcp | crates/apeireth-mcp | legacy/donor | legacy/donor/apeireth-mcp | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:49:| apeireth-memory-extensions | crates/apeireth-memory/extensions | legacy/donor | legacy/donor/apeireth-memory-extensions | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:50:| apeireth-motivation | crates/apeireth-motivation | legacy/donor | legacy/donor/apeireth-motivation | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:51:| apeireth-naming-v05 | crates/apeireth-naming-v05 | legacy/donor | legacy/donor/apeireth-naming-v05 | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:52:| apeireth-onion | crates/apeireth-onion | legacy/donor | legacy/donor/apeireth-onion | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:53:| apeireth-perception | crates/apeireth-perception | legacy/donor | legacy/donor/apeireth-perception | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:54:| apeireth-pipeline | crates/apeireth-pipeline | legacy/donor | legacy/donor/apeireth-pipeline | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:55:| apeireth-pipeline-g5 | crates/apeireth-pipeline-g5 | legacy/donor | legacy/donor/apeireth-pipeline-g5 | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:59:| apeireth-pybridge | crates/apeireth-pybridge | legacy/donor | legacy/donor/apeireth-pybridge | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:60:| apeireth-rate-limiter | crates/apeireth-rate-limiter | legacy/donor | legacy/donor/apeireth-rate-limiter | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:61:| apeireth-repo-tools | crates/apeireth-repo-tools | legacy/donor | legacy/donor/apeireth-repo-tools | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:64:| apeireth-skills | crates/apeireth-skills | legacy/donor | legacy/donor/apeireth-skills | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:65:| apeireth-sovereignty | crates/apeireth-sovereignty | legacy/donor | legacy/donor/apeireth-sovereignty | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:66:| apeireth-state | crates/apeireth-state | legacy/donor | legacy/donor/apeireth-state | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:67:| apeireth-stock | crates/apeireth-stock | legacy/donor | legacy/donor/apeireth-stock | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:69:| apeireth-supervisor | crates/apeireth-supervisor | legacy/donor | legacy/donor/apeireth-supervisor | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:70:| apeireth-team-lead | crates/apeireth-team-lead | legacy/donor | legacy/donor/apeireth-team-lead | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:71:| apeireth-telemetry | crates/apeireth-telemetry | legacy/donor | legacy/donor/apeireth-telemetry | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:72:| apeireth-test | crates/apeireth-test | legacy/donor | legacy/donor/apeireth-test | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:73:| apeireth-tool-approval | crates/apeireth-tool-approval | legacy/donor | legacy/donor/apeireth-tool-approval | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:74:| apeireth-tool-browser | crates/apeireth-tool-browser | legacy/donor | legacy/donor/apeireth-tool-browser | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:75:| apeireth-tool-codesearch | crates/apeireth-tool-codesearch | legacy/donor | legacy/donor/apeireth-tool-codesearch | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:76:| apeireth-tool-fetch | crates/apeireth-tool-fetch | legacy/donor | legacy/donor/apeireth-tool-fetch | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:77:| apeireth-tool-filesystem | crates/apeireth-tool-filesystem | legacy/donor | legacy/donor/apeireth-tool-filesystem | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:78:| apeireth-tool-image-gen | crates/apeireth-tool-image-gen | legacy/donor | legacy/donor/apeireth-tool-image-gen | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:79:| apeireth-tool-image-process | crates/apeireth-tool-image-process | legacy/donor | legacy/donor/apeireth-tool-image-process | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:80:| apeireth-tool-registry | crates/apeireth-tool-registry | legacy/donor | legacy/donor/apeireth-tool-registry | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:81:| apeireth-tool-runtime | crates/apeireth-tool-runtime | legacy/donor | legacy/donor/apeireth-tool-runtime | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:82:| apeireth-tool-search | crates/apeireth-tool-search | legacy/donor | legacy/donor/apeireth-tool-search | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:83:| apeireth-tool-shell | crates/apeireth-tool-shell | legacy/donor | legacy/donor/apeireth-tool-shell | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:84:| apeireth-tools | crates/apeireth-tools | legacy/donor | legacy/donor/apeireth-tools | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:86:| apeireth-tui | crates/apeireth-tui | legacy/donor | legacy/donor/apeireth-tui | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:87:| apeireth-tui-e2e | crates/apeireth-tui-e2e | legacy/donor | legacy/donor/apeireth-tui-e2e | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:88:| apeireth-upgrade | crates/apeireth-upgrade | legacy/donor | legacy/donor/apeireth-upgrade | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:89:| apeireth-value | crates/apeireth-value | legacy/donor | legacy/donor/apeireth-value | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:90:| apeireth-vector | crates/apeireth-vector | legacy/donor | legacy/donor/apeireth-vector | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:91:| apeireth-verify | crates/apeireth-verify | legacy/donor | legacy/donor/apeireth-verify | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:92:| apeireth-voice | crates/apeireth-voice | legacy/donor | legacy/donor/apeireth-voice | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:93:| apeireth-web | crates/apeireth-web | legacy/donor | legacy/donor/apeireth-web | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:94:| apeireth-wiki | crates/apeireth-wiki | legacy/donor | legacy/donor/apeireth-wiki | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:95:| apeireth-workflow | crates/apeireth-workflow | legacy/donor | legacy/donor/apeireth-workflow | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r0t-repository-topology-audit.md:96:| release-tools | crates/release-tools | legacy/donor | legacy/donor/release-tools | Historical donor or legacy implementation; not canonical product owner |
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:7:- v1 真实现: `legacy/donor/apeireth-companion/src/proactive_memory.rs` (919 行, 0 LLM, 启发式)
+docs/01-architecture/r20-preference_learning-research-2026-08-28.md:286:1:1 翻译 v1 apeireth-companion::proactive_memory (legacy/donor/apeireth-companion/
+docs/01-architecture/r21-r24-r12-research-2026-08-28.md:159:- v1 真实现源: legacy/donor/apeireth-companion/src/{critic|reflection}.rs (file:line)
+docs/01-architecture/rc-7-perception-true-modality-spec.md:745:- `legacy/donor/apeireth-voice/src/real.rs` (v1 voice STT `POST /v1/audio/transcriptions` multipart/form-data 1:1 翻译)
+docs/01-architecture/rc-7-perception-true-modality-spec.md:746:- `legacy/donor/apeireth-voice/src/real.rs` (v1 voice 4 块 1:1 翻译 TTS/STT/声纹/唤醒词)
+docs/01-architecture/rc7-perception-research-2026-08-28.md:32:**v1 真接参考** (1:1 翻译, `legacy/donor/apeireth-voice/src/real.rs:824-938`):
+docs/01-architecture/rc7-perception-research-2026-08-28.md:57:- `legacy/donor/apeireth-companion/src/screen_perception.rs` **不是截屏**, 是 **foreground window 轮询** (`GetForegroundWindow` 注释, 168 行)
+docs/01-architecture/reconstruct-v2-audit.md:7:Update 2026-08-26: the nested `reconstruction_v2/` donor workspace described
+docs/01-architecture/reconstruct-v2-audit.md:22:| `origin/master` | historical reference / donor only — **not** merged, **not** rebased |
+docs/01-architecture/reconstruct-v2-audit.md:29:| B. **root workspace** (`/Cargo.toml`, `crates/`) | the real, large, historical implementation | mature donor; convergence target |
+docs/01-architecture/reconstruct-v2-audit.md:30:| C. `reconstruction_v2/` **directory** | a *separate nested* Cargo workspace | idea donor only; not a target |
+docs/01-architecture/reconstruct-v2-audit.md:158:The nested `reconstruction_v2/` donor has now been removed as scheduled in the
+docs/02-guides/custom-llm.md:5:> **现状 (2026-08-27)**：本文针对 v1 时代 companion_serve（`legacy/donor/apeireth-companion`）。
+docs/02-guides/development.md:3:This guide describes the current repository, not the historical donor
+docs/02-guides/frontend-data-contract.md:3:> **现状 (2026-08-27)**：本文契约针对 v1 时代后端 `companion_serve`（:8090，现 `legacy/donor/apeireth-companion/examples/companion_serve.rs`）。
+docs/02-guides/user-manual.md:38:记忆 v2 的"对话打分 / 对账 / 排名注入"等流水线**功能等价物**将在 P3 阶段从 `legacy/donor/apeireth-companion` 移植回 `crates/engine/memory`，详见 ROADMAP §4 P3/P6。当前 v2 状态下记忆引擎已能接上 plugin / session / SQLite，**但"打字 → 评分 → 写库 → 检索注入"的端到端管线不在 13-crate 工作区里**——这是一个明确的可观察缺口，不是文档不诚实。
+docs/02-guides/user-manual.md:73:v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / 自我诊断"等**实现全部在 `legacy/donor/apeireth-companion`**，未移植；详见 ROADMAP §4 P6。
+docs/02-guides/v2-gateway-frontend-integration-spec.md:37:v1 `apeireth-companion` (`legacy/donor/apeireth-companion/`) 是 86-crate 单体, `companion_serve.rs` 提供 :8090 HTTP/SSE (legacy/donor/apeireth-companion/examples/companion_serve.rs). 9 organ 散落在 lib.rs 顶层 mod, 内部 if-else 散落 (`crates/engine/organ/src/lib.rs:3-7`).
+docs/02-guides/v2-gateway-frontend-integration-spec.md:489:- ✅ **#3 12 consumer 弃用迁移** (100+ consumer 0 破, v1 `apeireth-companion` 在 `legacy/donor/`)
+docs/03-reference/api.md:8:> `legacy/donor/apeireth-companion/examples/companion_serve.rs` 及相关 crate；其能力将按根 `ROADMAP.md` §4 恢复。
+docs/03-reference/crates.md:24:| `apeireth-guard` | `crates/engine/guard` | 行为链安全 Guard：两阶段行为链分类器（FastGuard + DecisionFusion）、命令效果分析、会话行为历史、数据集录制与 oracle 评估；经 `BehaviorChainGuardHook` 接生产治理管线（2026-10-06 协作者批加入。与 v1 legacy/donor 的 PII `apeireth-guard` 同名不同物——PII 脱敏当前位于 `apeireth-governance::input_security`） |
+docs/03-reference/crates.md:53:`legacy/donor/`, `legacy/archived/`, and `legacy/frozen/` contain historical
+docs/04-internal/ENGINEER-MANIFESTO.md:530:| **R11 baseline 3 值** | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (R11_V1141/1131/1136_BASELINE const) + `legacy/donor/apeireth-blueprint-impl/src/r_measure.rs:228-231` (RMeasureAll::drift hardcode) — active workspace 无 const source | 0.8682 / 0.8532 / 0.9063 (R11 ASI R-Measure 数字严守) | R11 数字更新需 R12 spec 重新审定 + active workspace 移植, 主代理拍板. |
+docs/04-internal/HANDOFF-NOTES.md:138:| **R-B2** | 9 器官 (W1/W2/W3/E4/F4/F1/F6/E7) 全部在 `legacy/donor/apeireth-companion`, 未移植 v2 主链 | 高 | 主代理 + 6-8 周工作量 (ROADMAP §4 P6) | **不要**在 rc 阶段硬塞 — 长程任务继续走 v1 branch (`archive/v1.0-master`). v2 rc 阶段走标准 OpenAI Chat 兼容. |
+docs/04-internal/TO-NEW-TEAM.md:228:| R11 baseline 3 值 | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (active workspace 无 const source) | 0.8682 / 0.8532 / 0.9063 (数字严守, R12 spec 重新审定后移植) |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:35:3. **架构不同**: 1.0 master (legacy/donor/, 86-crate, God Object UnifiedRuntimeHost) → 2.0 canonical (17-crate workspace, 三面一体 + 五原型 + 物种化). **架构可不同, 功能不能缺**.
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:44:## 1. 1.0 功能全集真账 (per `legacy/donor/apeireth-companion/src/` ~100 modules + `master-functionality-port-audit.md` L197-771)
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:55:| Memory_* support modules | `apeireth-storage/src/memory_*.rs` | PARTIAL | ✅ **OK** (per R11-Storage 真账, v2 `apeireth-memory` 22 modules 大部分 1:1 翻译 v1 donor, **ONNX stub 待决策** — DROP/真接/ADAPT) | 🟢 OK |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:131:| CuriosityEngine (score) | `apeireth-companion/src/curiosity.rs` | PARTIAL | ✅ `E4 curiosity` organ 1:1 翻译 (per v1 donor) | 🟢 OK (organ 借, score 同源) |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:142:| **memory_extractor** | `apeireth-companion/src/memory_extractor.rs` | REAL | ⚠️ ADAPT (per v1 donor, part of cognitive memory module) | 🟡 partial |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:221:- **reflection** (反思, v2 R22 真实施) — 1:1 翻译 v1 donor
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:314:- 必读: `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` (本文件) + 1.0 真账 `legacy/donor/apeireth-companion/src/<module>.rs` + 2.0 真账 `v2-reference-handbook-2026-08-28.md` + Round 9 6 真账 + Round 10 5 真调研
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:332:| **本真账 0 实测** | 未 git clone v2 master branch (per master audit L138), 仅读 1.0 真账 (legacy/donor/) + 2.0 handbook + 5 R7 真调研 + master audit 真账推论 | 真实施前主代理必亲验 (per §4.2 派单顺序) |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:371:_Mavis 写于 2026-08-28 Round 11, 用户原话 "看 1.0 缺什么, 2.0 最终功能应该和 1.0 相同, 但架构不同而已" 触发, 主代理真账 1.0 vs 2.0 功能全集差距, ~25 项 P0 必补, 派 6 sub-agent 真调研 + Round 12 P1 真实施. 0 装诚实标: 0 git clone v2 master branch, 仅读 1.0 真账 (legacy/donor/) + 2.0 handbook + 5 R7 真调研 + master audit 真账推论, 真实施前主代理必亲验._
+docs/04-internal/engineering-review-handoff-2026-10-06.md:31:**最重要的背景事实**: 本仓库有 105 个 crate 的 v1 在 `legacy/` (donor 77 / archived 15 /
+docs/04-internal/engineering-review-handoff-2026-10-06.md:59:| A2 | v1 在 `legacy/` = **106 个 Cargo.toml** (105 crate + workspace 根) | `(Get-ChildItem legacy -Recurse -Filter Cargo.toml).Count` | `106`; `legacy/Cargo.toml` members = `["donor/*","archived/*","frozen/*"]` | |
+docs/04-internal/engineering-review-handoff-2026-10-06.md:275:- **动工前置**: **逐个读 `legacy/donor/` 里的 v1 实现**再排期 —— 本批只做了名称级扫描 (§4.3)。
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:108:| `legacy/` (1857 tracked files) | ❌ **未 ignore** | "Round 1 已 ignore" | **1857 文件仍 tracked** (`git ls-files legacy/ \| wc -l = 1857`) | ⚠️ **特殊 — donor 历史, 应 NOT ignore** (v1 参考), **R14 spec 标错需修正** |
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:134:| `legacy/` (1857 files) | tracked, **应 NOT ignore** (v1 donor 参考) | 子代理独立判断 — R14 spec 标 "Round 1 已 ignore" **错**, 但 ignore 也错 (破坏 v1 参考链). **保留 tracked + 加 doc 标**. |
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:179:**理由**: `legacy/donor/apeireth-voice/src/real.rs` 是 v1 STT 真接代码, RC-7 真实施时**直接 1:1 翻译参考** (per R14 spec §3.3 + 本文 §1.1). 同样 `legacy/donor/apeireth-companion/src/screen_perception.rs` 是 v1 屏幕"感知"参考 (虽不截屏, 但 foreground window 轮询可借鉴).
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:191:1. **R14 spec §1.3 "Round 1 已 ignore legacy/" 标错**: 真 = 1857 legacy 文件 tracked. legacy 是 donor 参考, **应 NOT ignore** (破坏 v1 参考链), 但 spec 表述需修正.
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:194:4. **`legacy/` donor 参考链**: 是 v1 真接代码 1:1 移植来源 (RC-5 / RC-7 / RC-1 均依赖), 子代理独立判断应**保留 tracked**.
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:208:| 历史特殊 (应 NOT ignore) | 1 (`legacy/` — donor 链) |
+docs/04-internal/handoff-18crate-ci-fix-2026-09-23.md:51:| 结构与索引 | `ARCHITECTURE.md`（`seventeen`→`eighteen`、Engine 组补 guard、ownership 表新增 guard 行）、`docs/01-architecture/architecture.md`、`docs/03-reference/crates.md`（"16 members"→18，补 `apeireth-runtime-assembly` 与 `apeireth-guard` 两行，并注明 guard 与 v1 `legacy/donor` 的 PII guard **同名不同物**）|
+docs/04-internal/handoff-18crate-ci-fix-2026-09-23.md:139:| medium | `jsonwebtoken` | `legacy/donor/apeireth-livekit/Cargo.toml` | GHSA-h395-gr6q-cpjc 类型混淆→潜在授权绕过；清单 pin `"9.3"`，vuln `< 10.3.0` |
+docs/04-internal/handoff-w1-w5-closure-2026-10-10.md:25:| 55 | 三洋葱判定模型（`onion_gate`，v1 donor 移植 + r177 证明平移）| W3 |
+docs/04-internal/handoff-w2-wiring-2026-10-06.md:70:| memory_injection 反幻觉格式 | `APEIRETH_ENABLE_MEMORY_INJECTION=1` | overlay 渲染切换 donor 封闭世界格式: 编号证据清单 + 「禁止说『我记得我们以前聊过』」反幻觉规则 (默认 XML 格式不变) | `memory/src/context_compiler.rs`, `memory/src/coordinator.rs` (`injection_format` 分支), `memory/src/memory_injection.rs` |
+docs/04-internal/handoff-w2-wiring-2026-10-06.md:107:| 三洋葱 L3-L5 | ✅ **整 crate 真** (`donor/apeireth-onion` 双洋葱 L0-L5 全六层 + **Kani 形式化证明**) | 真缺口成立, 比原估计更广, **可回收度最高** |
+docs/04-internal/live-verification-ledger.md:76:| 43 | **W2 记忆闭环批（consolidation/reflexion/memory_injection 三模块接线）+ 挂账核销四审**（① **接线**：consolidation 触发点（writeback AfterTurn 跑 `run_consolidation`、洞察稳定 ID 落库幂等、`APEIRETH_ENABLE_CONSOLIDATION` 默认关）、reflexion 失败闭环（新模块 `cognitive.reflexion`：TurnStart 教训注入 + AfterTurn 消费 Judge **显式**非 Pass 判定沉淀 `DecisionRejected` 并 RuleCritic 即时蒸馏——Judge 未开=无信号=不记录，绝不文本猜失败；`APEIRETH_ENABLE_REFLEXION` 默认关 + `APEIRETH_REFLEXION_DIR`）、memory_injection 反幻觉格式（donor 编号证据清单 + 「禁止说『我记得我们以前聊过』」，`APEIRETH_ENABLE_MEMORY_INJECTION` 默认关）；② **效果测试咬出 2 个真缺陷并修**：FakeMemory 半真 fake（治理视图恒空→从 episodes 如实派生）、**consolidation 洞察自我增殖**（派生记忆含 "resolved" 被再提炼出级联副本——实测 2 轮 4 个 ID→修复后只从 user/assistant/tool 原始证据提炼+幂等断言）；③ **挂账核销**：thought_cluster 钉死（v2 `cluster_store.rs` = v1 `thought_cluster` 完整改名移植，**从真缺口移出**）；HybridCognitiveRouter/ToolSynthesizer **改判纯愿景**（v1 亦无）；community/experiment_field/onering/**Docker 容器沙箱**/HTTP·WS 客户端群（http-client+ws_v1+bus-l4+lark+voice+update）/**整 crate 双洋葱+Kani 形式化证明**（`apeireth-onion` L0-L5 全六层）六组 legacy 源码级实证 v1 真实现（差距审计 §7.2 四审表，逐项带文件行号）；`jimmy` 死指针删除（删前复验） | 2026-10-06 全量 **129 suite / 3425 passed / 0 failed / 19 ignored**（3418+7=新测试数）+ clippy `-D warnings` 0 警告；新测试：memory 注入格式×3、assembly consolidation/reflexion/格式切换×3、cli 旋钮×1；legacy 标准=逐个 read 实现体（不读名字） | `cargo test -p apeireth-runtime-assembly`；`cargo test -p apeireth-cli`；legacy 证据见差距审计 §7.2 四审表 |
+docs/04-internal/live-verification-ledger.md:88:| 55 | **三洋葱 L3-L5 判定模型移植（W3 工作项 6 完成）**：v1 `donor/apeireth-onion` 判定层 → `crates/foundation/core/src/onion_gate.rs`。移植件：层身份枚举（`PrincipleLayerKind` E/S/A/M/O + `PermissionLayerKind` L0-L5）+ 5+6=11 编译期 const 断言（含对 onion.rs struct 字段的 dedupe 交叉校验）+ `arbitrate_principles`（E 胜所有>S>A>M>O，纯函数）+ `ElectronicRing`（11 节点，满环计数/溢出显式拒）+ `OnionAction`/`OnionVerdict` + `DoubleOnionGate`（构造期 L0 恒需 HA 不变式 fail-loud）+ `unify_check` 三段门原样移植（HA 离线+触 HA 层=物理隔离拒绝 / 触 L5=E 层兜底 / 否则 11 环全节点放行）。**防重造轮子**：0 重定义 struct（切片访问走既有 fields，`requires_ha` 字段替代 v1 slice trait）；多签密码学判定仍归 `HumanAuthority::verify_multisig`（占位不动，真 Ed25519 留 v2.1）——测试 `offline_multisig_stays_denied_by_existing_verifier` 自证不重复。**适配差异如实记录**：v1 Kani 形式化证明（organ_kani_proofs r177）→ 本仓无 Kani harness，平移为等价 Rust 测试（编号/语义保留）。剩余物理执行面装配 = 下一工作项（W1 已就绪：ApprovalMemoryGate / ControlledEgress / worktree_sandbox） | 2026-10-10 亲跑：apeireth-core **344 passed / 0 failed**（新增 15：r177×6/层映射+仲裁/电子环 3/unify 三段门 4/防重自证 1）；clippy `-D warnings` 0 警告 | `cargo test -p apeireth-core onion_gate`；不变式复现：改 `standard_permission_onion().l0.requires_ha=false` → 构造期 Err（测试 r177_oni_06 已锁） |
+docs/04-internal/live-verification-ledger.md:90:| 57 | **community 社区分层 + 双级分诊移植（W3 工作项 8 完成）**：v1 `donor/apeireth-companion/community.rs` → `crates/engine/memory/src/community.rs`。三件全落：① `detect_communities`（s/p/o **全参**共现 → 并查集聚类，成员/社区 id 字典序稳定，谓词即共现键）② `deterministic_summary`（社区内 s/o 高频 top-N：频次降序→字典序升序）+ `Summarizer` trait 0 装升级口（LLM 提炼可实现替换）③ `triage` 双级路由（s/o 子串命中且长度≥2 → Entity 走实体链；否则 → Broad 社区摘要按事实数降序→id 升序、max_communities 封顶）。**防重 diff 记录**：`graph_algo::connected_components` 是 Memory(Id) 域通用原语；本模块 = GraphFact 字符串值域共现图（不同输入域，不重复轮子）。**0 假装消费边界**：生产图谱契约（`KnowledgeGraphStore`）仅 `facts_from(subject)` 单跳读、**无全量列举** → 本批 = 移植+测试（IMPLEMENTED）；生产消费（检索前置接线）= 契约扩展（`all_facts`/subject 枚举）后的接线项。⚠️ 顺记：`reflexion` 文件并发既有测试在并行调度下偶发 flake（单跑复绿，与本纯内存移植无关） | 2026-10-10 亲跑：apeireth-memory 全量 **830 passed / 0 failed**（community 9 测全绿；首跑 1 个既有文件并发 flake、聚合跑复绿、单跑复绿）；clippy `-D warnings` 0 警告 | `cargo test -p apeireth-memory community`；语义验证：`triage("小明在干什么", facts, ..)` → Entity；无命中查询 → Broad + brief 降序 |
+docs/04-internal/live-verification-ledger.md:93:| 59 | **experiment_field 机制移植（W3 工作项 4 机制件完成）**：v1 `donor/apeireth-companion/experiment_field.rs` → `runtime-assembly/src/canonical/experiment_field.rs`。件：① `ExperimentStatus` 五态确定性状态机 + `ExperimentField`（propose/run/approve_for_deploy/learn_from_failure/get/len 全回路）；② `VMRunner` trait + `NoopVMRunner`（0 装诚实 Err——run 失败状态**回 Proposed**，不假装已实验，v1 原语义）；③ **回滚学习适配（v1→v2 差异实记）**：v1 写 `Experience{scene,practice,result}` 记录，v2 **无该记录型**（v2 经验=WikiEntry 容器）→ `FailureLearningSink` trait（调用方注入）+ `WikiFailureLearningSink`（失败信号→WikiEntry：topic="实验失败:{proposal}", confidence=0.0, tags=["experiment-failure"]），集成而非分立；④ 与部署侧 `upgrade_cycle.rs` 互补成环（"独立的是实验，批准的是部署"——提案先试后批）。**执行后端仍 0 装**（真 VM=smol-vm/libkrun 后续项）；机制层无旋钮（与 upgrade_cycle 同层：真触发=L0 主人手动/governance 审计，CLI 命令面为后续批）。测试：v1 5 测试原样平移（happy path/失败学习 sink/WikiEntry 映射/Noop 诚实/状态机拒错） | 2026-10-10 亲跑：apeireth-runtime-assembly experiment_field **5 passed / 0 failed**（v1 测试组全平移）；clippy `-D warnings` 0 警告 | `cargo test -p apeireth-runtime-assembly experiment_field`；0 装复现：`ExperimentField::new(Box::new(NoopVMRunner))` run → Err("未接入") 且状态回 Proposed |
+docs/04-internal/maintenance-guide.md:89:| `apeireth-guard` | **行为链安全 Guard**（2026-10-06 协作者批）：两阶段行为链分类（`FastGuard` 快判 → `DecisionFusion` 融合）、命令效果分析、会话行为历史、数据集录制与 oracle 评估；经 `BehaviorChainGuardHook` 接生产治理管线（旋钮 `APEIRETH_GUARD_DATASET_ENABLED/PATH`、`APEIRETH_GUARD_ML_MODE/MODEL`）。**名字历史**：v1 legacy/donor 的 `apeireth-guard` 是 PII 隐私护栏（不同物），PII 脱敏在 v2 位于 `apeireth-governance::input_security` | `ChainGuard` / `BehaviorChainGuardHook` / `DecisionFusion` / `FastGuard` / `ActionOracleLabel` |
+docs/04-internal/migration-v1-to-v2.md:3:> **现状 (2026-08-27)**：v1.0 (`993e9107`) 与 v2.0.0-alpha.1 (`bad99fd4` / 远端 `9080cc93`) 并列存在。v1 走 master 线 (`archive/v1.0-master`) + tag `v1.0.0` + `legacy/donor/apeireth-companion` 源码; v2 走 main 线（默认）+ `v2.0.0-alpha.1` tag + 13-crate 工程重构工作区。本指南是 **v1 companion_serve 用户切到 v2 gateway + CLI** 的最小路径。
+docs/04-internal/migration-v1-to-v2.md:14:> 给谁看：v1 companion_serve (legacy/donor) 的部署者 / 集成者 / AI 协作者。
+docs/04-internal/migration-v1-to-v2.md:80:# 4. v1 代码还在 legacy/donor/apeireth-companion, 可读可参考, 不会进 build
+docs/04-internal/migration-v1-to-v2.md:81:ls legacy/donor/apeireth-companion/
+docs/04-internal/migration-v1-to-v2.md:120:Apeireth-rust/legacy/donor/apeireth-companion/
+docs/04-internal/migration-v1-to-v2.md:161:v1 companion.db 6 张流表（thought_stream / proposal_stream / action_stream / relation_stream / evolution_stream / reflection_stream）+ episodes 表 + identity_cards + audit_log → v2 同 schema（`crates/engine/memory/src/migrations.rs` 现有 migrations 兼容 donor v1 schema）。
+docs/04-internal/migration-v1-to-v2.md:183:- v1 schema 与 v2 schema 在 v2 alpha + rc 阶段**应当兼容**（per migrations.rs 注释："donor v1 schema kept for on-disk compatibility"）
+docs/04-internal/migration-v1-to-v2.md:356:A: v2 alpha 没 TUI。`apeireth-tui` 在 `legacy/donor/` 还在但 v2 workspace exclude。rc 之后（或 v2.0.0）有计划重做 TUI 走 v2 PluginManager。当前建议：CLI + companion-desktop GUI 都够用。
+docs/04-internal/migration-v1-to-v2.md:359:A: v1 代码在 `legacy/donor/apeireth-companion/` 完整保留（86-crate v1 workspace exclude 后保留了 source-of-truth 价值）。你要在 v1 branch 跑 v1 organ 完全可以——v1 master line (`archive/v1.0-master`) build 不依赖 v2 工作区。v2 与 v1 是并列分支，按场景选。
+docs/04-internal/next-team-handbook.md:3:> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本文任务包（TP21-TP34）是 v1.0/v1.5 收尾批次，挂接点（companion_serve/apeireth-api 等）已进 `legacy/donor/`；v2 下一步见 ROADMAP §4（旧 TP34 流式重映射为 P8）。
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:6:> **必读**: 全部 1.0 v1 source 14 file (legacy/donor/apeireth-companion/src/) + v2 workspace grep (crate/**).
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:25:### 1.1 1.0 真账 (`legacy/donor/apeireth-companion/src/onering.rs` 346 行, REAL)
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:257:- **必读**: 本 R11 真账 + 1.0 真账 `legacy/donor/apeireth-companion/src/[项].rs` + 2.0 真账 `v2-reference-handbook-2026-08-28.md` + 5 R7 真调研 + master audit 真账
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:265:- **R11 真账 0 实测**: 未 git clone v2 master branch, 仅读 1.0 真账 (legacy/donor/) + 2.0 handbook + 5 R7 真调研 + 12 slot + master audit 真账推论 + grep v2 workspace 验证. 真实施前主代理必亲验 (per §4.2 派单顺序, 跟 Round 8 verify 模式一致)
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:273:- R11 baseline 3 值 (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44`)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:25:- **0 实测**: 未 git clone v2 master branch (per master audit L138), 仅读 1.0 真账 (legacy/donor/) + 2.0 handbook + Mio 真账 + 1.0 vs 2.0 gap 真账推论
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:38:| **路径** | `legacy/donor/apeireth-companion/src/daily_summary.rs` (99 行) + `diary.rs` (442 行) | 真实施 |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:85:| **路径** | `legacy/donor/apeireth-companion/src/cross_diary.rs` (301 行) | 真实施 |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:128:| **路径** | `legacy/donor/apeireth-companion/src/memory_injection.rs` (66 行) | 真实施 |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:169:| **路径** | `legacy/donor/apeireth-companion/src/reflexion.rs` | `legacy/donor/apeireth-companion/src/reflection.rs` | per 真账 §1.8 |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:270:1. **1.0 真账** (legacy/donor/apeireth-companion/src/) — 1:1 翻译 6 模块 ~1734 行真账 (99+442+301+66+497+329)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:282:| **0 实测** | 本调研未 git clone v2 master branch, 仅读 1.0 真账 (legacy/donor/) + 2.0 handbook + Mio 真账 + 1.0 vs 2.0 gap 真账推论 | 真实施前主代理必亲验: git clone v2 main + grep 跟 1.0 真对照 (per 真账 §4.3 #5 + §5) |
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:31:### 1.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/meta_thinking.rs` 643 行)
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:36:**0 装诚实标**: meta_thinking.rs 提交 6fcd36c2 落 donor v1 路径, v2 active workspace 没移植.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:47:### 2.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/reflexion.rs` 497 行)
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:51:**真账** (per `backlog.md` L101): ✅ E1 完成 (7285995c agent_orchestrator2): reflexion.rs 自包含, 5 单测全绿; **但是**: v2 active workspace `grep reflexion` 在 `crates/` 0 命中 (§0 grep 实测); v1 donor 路径已入库 legacy/, 没移植 active workspace; 没注册 cognitive slot.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:52:**0 装诚实标**: v2 没移植 reflexion; donor E1 commit 仅入库 legacy/, active workspace 0 触及. 物种化反思循环 = 0 真实施.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:63:### 3.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/reflection.rs` 329 行)
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:78:### 4.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/thought_cluster.rs` 522 行)
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:82:**真账** (per `backlog.md` L58): ✅ N4 完成 (任务 eac874d5): thought_cluster.rs 模块入库 (ThoughtClusterManager 全 API + ThoughtClusterReader trait 口, 8 单测全绿) + reflection.rs/dream.rs with_thought_reader 注入点. **但是**: v2 active workspace `grep thought_cluster` 在 `crates/` 0 命中 (§0 grep 实测); v1 donor 已入库 legacy/, 没移植 active workspace.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:93:### 5.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/intent_brier.rs` 817 行)
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:97:**真账** (per `backlog.md` L402): ✅ W6 完成 (任务 aa65a995, backend_engineer2): intent_brier.rs 新模块 31 新测试 + 576 旧测试 = 607/607 全绿; oracle API 0 改动向后兼容. **但是**: v2 active workspace `grep intent_brier` 在 `crates/` 0 命中; v1 donor 已入库 legacy/, 没移植 active workspace.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:98:**0 装诚实标**: v2 没移植 intent_brier; donor W6 commit 仅入库 legacy/, active workspace 0 触及. 认知层 Brier 校准意图 = 0 真实施.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:109:### 6.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/confidence.rs` 177 行)
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:156:| 顺序 | 模块 | 估时 | 借鉴链 (v1 donor) | 阻塞 | 并行 |
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:168:**借鉴链汇总**: v1 donor `legacy/donor/apeireth-companion/src/{6 modules}` (6 REAL 模块 1:1 翻译) + VCP MetaThinkingManager + ThoughtClusterManager + Generative Agents importance 触发 + Reflexion 论文 + hydra genome 置信度数学 + oracle.rs Brier 公式 + N.E.K.O reflective 维 (per `r7-neko-species-research-2026-08-28.md` L70) + Mio 日记反思部分 (per `r7-mio-species-research-2026-08-28.md` L75).
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:196:**0 装诚实标** (per O-5): (1) 本调研 0 git clone v2 active workspace (per 主代理 brief "不写真账以外的 file"); (2) 仅读 1.0 真账 (`legacy/donor/apeireth-companion/src/{6 modules}`) + 2.0 handbook (`v2-reference-handbook-2026-08-28.md` + `cognitive-module-wiring.md`) + 5 R7 真调研 + R21-R24 调研推论; (3) 6 模块在 v2 active workspace **0 真实施** (per §0 grep 实测, no crate, no OrganTrait, no OrganKind variant; 仅 `organ::world_model::CalibrationStrength` 本地简化版 in-place); (4) donor E1 reflexion + N4 thought_cluster + W6 intent_brier 已入库 legacy/, **active workspace 0 移植**; (5) **真实施前主代理必亲验** (per `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` §5).
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:200:**LOCKED 0 触碰** (per §7.2 + `MANIFESTO §10`): 9 哲学锚本体 (`crates/foundation/core/src/eight_anchors.rs:58-79` + `NINE_ANCHORS_HARDCODE` L222-366); 13 键 (`crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false`); 3 项不可变脊柱 (`crates/foundation/core/src/onion.rs:249`); workspace.version (`Cargo.toml:44` `"1.2.0"`); R11 baseline 3 值 (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44`); **新增 OrganKind variant** (R22 + reflexion + intent_brier + confidence 4 variant; meta_thinking + thought_cluster 可挂 reflection crate 共享 variant) — 加不破 9 现有 (per `r21-r24-r12-research-2026-08-28.md` §2.3).
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:35:### 1.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/education.rs`, 402 行)
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:77:### 2.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/partner.rs`, 141 行)
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:110:### 3.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/community.rs`, 360 行)
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:145:### 4.1 1.0 真账 (per `legacy/donor/apeireth-companion/src/principles.rs`, 478 行)
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:225:- **P0 #1 principles 真调研**: 派 sub-agent 真读 `legacy/donor/apeireth-companion/src/principles.rs` (478 行) + `value_cases.rs` (F6 WIRED) + 真账
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:226:- **P0 #2 partner 真调研**: 派 sub-agent 真读 `legacy/donor/apeireth-companion/src/partner.rs` (141 行) + `bond.rs` + 真账
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:227:- **P0 #3 community 真调研**: 派 sub-agent 真读 `legacy/donor/apeireth-companion/src/community.rs` (360 行) + Graph primitives 真账 + 真账
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:8:> **0 装诚实标 (per O-5 + S-2 实事求是)**: 已读 1.0 三个真账 (`legacy/donor/apeireth-companion/src/{timeline,tone,morphology}.rs`) + 必读 6 文件 + Round 10 5 真账; **未 git clone v2 master branch** (per 主代理 brief 4h 限 + 未要求) + **未 git clone N.E.K.O / Open-LLM-VTuber / Firefly / Mio / AIRI** (R7 已 flag 0 装); 仅基于 1.0 真账 + 2.0 真理解推论 + Round 10 5 调研推论. 真实施前**主代理必亲验**.
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:36:### 1.1 1.0 真账 (`legacy/donor/apeireth-companion/src/timeline.rs` 79 行)
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:75:| 1 | **Timeline 数据结构真实施** (1:1 翻译 `legacy/donor/apeireth-companion/src/timeline.rs:1-79`, 加 `apeireth-companion-data` 或 `apeireth-organ::timeline` 路径) | 2-3 天 | 0 | 1:1 翻译 v1 |
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:93:### 2.1 1.0 真账 (`legacy/donor/apeireth-companion/src/tone.rs` 374 行)
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:151:### 3.1 1.0 真账 (`legacy/donor/apeireth-companion/src/morphology.rs` 284 行)
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:281:- 必读: 本文件 + `apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md` §2.5 + `apeireth-true-understanding-2026-08-28.md` §1.1.3 §3.2 + `vision.md` L29-49 + 1.0 真账 (`legacy/donor/apeireth-companion/src/{timeline,tone,morphology}.rs`) + v2 handbook + Round 10 5 真调研
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:24:3. **🟡 1.0 真账在 `_research_mem/apeireth-rust-fork/crates/{apeireth-vector,apeireth-graph-primitive}/`**, `legacy/donor/apeireth-storage/` 不存在
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:44:**donor 原始路径** `legacy/donor/apeireth-storage/src/vector.rs` (per master audit L206): in-memory only, **0 持久化**, hybrid cosine + BM25 混合检索器
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:69:| L45 "Memory_* support modules ... ⚠️ partial (organ memory ✅, support modules 0 真实施)" | ⚠️ 错. v2 `apeireth-memory` 22 modules 大部分 1:1 翻译 v1 donor. 改: 🟢 OK (ONNX stub 待决策) |
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:105:**donor 原始路径** `legacy/donor/apeireth-storage/src/{graph.rs,graph_primitive.rs,graph_ops.rs,fold.rs}` (per master audit L207): PARTIAL, BFS/MCTS-like but simplified
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:162:22 modules 1:1 翻译 v1 donor:
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:168:**Maturity**: ✅ 大部分 REAL (1:1 翻译 v1 donor), ONNX stub 仍缺
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:200:1. **1.0 donor 真实施**: `_research_mem/apeireth-rust-fork/crates/{apeireth-vector,apeireth-graph-primitive}/` — 完整 fork, 含 trait 抽象 + 双 backend + BFS/DFS + predicate query + 4 关系枚举 + Kani
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:230:| **donor 路径混淆** | 主代理真账 §1.1 L43 写 "1.0 path `crates/apeireth-storage/src/vector.rs`", 实际 `legacy/donor/apeireth-storage/` 不存在, 完整 1.0 fork 在 `_research_mem/apeireth-rust-fork/` | 主代理修订真账 §1.1 path 列 (本文件 §1.1 已给真路径) |
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:40:- 1.0 真账实测 (主代理亲测 legacy/donor/apeireth-companion/src/{context.rs, context_rot.rs}):
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:61:   - legacy/donor/apeireth-companion/src/context.rs (L141-451, ~770 行)
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:62:   - legacy/donor/apeireth-companion/src/context_rot.rs (L1-180, ~526 行)
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:77:   - docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md (9 项 v2 现状, 11:1 翻译 v1 donor)
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:86:   - legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063, R11 baseline LOCKED, 0 触碰)
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:92:   - legacy/donor/apeireth-companion/src/context.rs (~770 行, 1:1 翻译 source)
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:93:   - legacy/donor/apeireth-companion/src/context_rot.rs (~526 行, 1:1 翻译 source, 含完整 rot_score 实现)
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:105:- 1.0 真账实测 (legacy/donor/apeireth-companion/src/{context.rs, context_rot.rs} ~770 + 526 行, REAL maturity, 1:1 可移植)
+docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md:204:- R11 baseline 3 值: legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:78:   - legacy/donor/apeireth-companion/src/ (~100 modules, 1.0 真账)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:82:   - legacy/donor/apeireth-companion/src/[具体 1.0 模块].rs (~100-1500 行 1.0 真账)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:97:- 1.0 真账实测 (legacy/donor/apeireth-companion/src/[具体].rs 行数 + maturity + 0 装 PASS 标注)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:196:- R11 baseline 3 值: legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:290:- legacy/donor/apeireth-companion/src/{onering.rs,oracle.rs,oracle_adapters.rs,context.rs,context_rot.rs,continuation.rs,continuity.rs,spill.rs,assemble.rs,hello.rs,milestone.rs,experiment_field.rs,proactive.rs,progressive.rs,pentest.rs,bridge_kani_proofs.rs,organ_kani_proofs.rs} (~1500+ 行 1.0 真账, REAL/PARTIAL)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:329:- legacy/donor/apeireth-companion/src/{continuation.rs,continuity.rs,spill.rs,milestone.rs,experiment_field.rs} (~300+ 行 1.0 真账)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:353:- legacy/donor/apeireth-companion/src/{proactive.rs,progressive.rs,pentest.rs,bridge_kani_proofs.rs,organ_kani_proofs.rs} (~600+ 行 1.0 真账)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:373:- legacy/donor/apeireth-companion/src/{principles.rs (478 行), partner.rs (141 行), value_cases.rs, bond.rs} (1.0 真账)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:399:- legacy/donor/apeireth-companion/src/{community.rs (360 行), education.rs (402 行)}
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:421:- legacy/donor/apeireth-companion/src/{daily_summary.rs (99 行 REAL), diary.rs (442 行 REAL + ⚠️ trait 口), cross_diary.rs (301 行 REAL + ⚠️ trait 口), memory_injection.rs (66 行 REAL), reflexion.rs (497 行 REAL + ⚠️ 3 trait 口待主代理亲做), reflection.rs (329 行 REAL), memory_extractor.rs, memory_graph.rs} (1.0 真账, ~2000 行 6 .rs)
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:479:- legacy/donor/apeireth-companion/src/{timeline.rs (79 行 REAL), tone.rs (374 行 REAL), morphology.rs (284 行 REAL)}
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:504:- legacy/donor/apeireth-companion/src/{meta_thinking.rs (643 行 REAL), thought_cluster.rs (522 行 REAL), intent_brier.rs (817 行 REAL, 31 单测全绿), confidence.rs (177 行 REAL, BetaBinomial trait), hybrid.rs (master PARTIAL rule-based fast path)}
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:532:- legacy/donor/apeireth-companion/src/{synthesis.rs (PARTIAL, sandbox unused security risk), builtin/{shell.rs, filesystem.rs, fetch.rs, browser.rs (PARTIAL, HTML stripping only), search.rs, repo_tools.rs, invest.rs (PARTIAL), learning.rs (PARTIAL), system_monitor.rs (PARTIAL)}, vision/{screen.rs (REAL Windows), omni_parser.rs (REAL Windows), desktop_action.rs (PARTIAL)}, voice/{vad.rs (REAL), tts.rs (STUB), lipsync.rs (PARTIAL)}, mcp/* (REAL)}
+docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md:561:- legacy/donor/apeireth-companion/src/proactive_memory.rs (919 行 REAL, TopicPredictor + PreloadChannel, 0 LLM)
+docs/04-internal/round-10-research-plan-2026-08-28.md:70:| R11 baseline 3 值 | legacy reference (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44`) |
+docs/04-internal/round-10-research-plan-2026-08-28.md:76:| `legacy/donor/` (~13 v1 仓库) | 12 slot cognitive module + 9 organ 1:1 移植来源 |
+docs/04-internal/round-12-final-gap-audit-2026-08-28.md:24:2. **1.0 功能全集**: `legacy/donor/apeireth-companion/src/` 100+ modules + `master-functionality-port-audit.md` 1.0 真账 + `apeireth-true-understanding-2026-08-28.md` 物种化框架
+docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md:49:- `legacy/donor/apeireth-companion/src/*.rs` 1.0 路径列表 (我前面 grep 过 ~100 modules)
+docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md:77:  - ✅ 1.0 真账**路径**已知 (`legacy/donor/apeireth-companion/src/<module>.rs`)
+docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md:130:### 2.1 主代理亲测 1.0 真账 maturity (per `legacy/donor/apeireth-companion/src/<module>.rs`)
+docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md:138:| `apeireth-vector` (1.0 真账不在 legacy/donor/, 在 `_research_mem/apeireth-rust-fork/crates/apeireth-vector/`) | ~400+ | REAL | traits.rs `VectorStore` trait + `SqliteVecBackend` (sqlite-vec vec0 + 10w × 768 维 KNN P99 < 50ms) + `QdrantClient` (REST API v1.7+) + `distance.rs` + `organ_kani_proofs.rs` | ⚠️ partial (v2 `canonical/vector.rs` 1:1 翻译 cosine + ACT-R, 缺 SqliteVecBackend / QdrantClient / trait 抽象) |
+docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md:160:| `apeireth-companion/src/principles.rs` | 478 行 | REAL ✅ 1:1 可移植 (主代理未亲测内容, 仅凭真账行数 + R11-SpeciesCore sub-agent 报告) | (F6 价值内化) | ⚠️ partial (F6 value_cases organ ✅ WIRED 1:1 翻译 v1 donor, principles 0) |
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:97:- ✅ **legacy/donor/~100 modules 1.0 真账** (12 slot + 9 organ 1:1 移植来源)
+docs/04-internal/round-8-verifications-2026-08-28.md:28:4. 🟡 (in-progress) **verify #4**: 读 v1 `legacy/donor/apeireth-companion/src/proactive_memory.rs` + 写 C 块 preference_learning 真实施 mapping (派 sub-agent 调研)
+docs/04-internal/round-8-verifications-2026-08-28.md:110:- v1 真实现: `legacy/donor/apeireth-companion/src/proactive_memory.rs` (`TopicPredictor` + `PreloadChannel`) 是 1:1 翻译目标 ✓
+docs/04-internal/round-8-verifications-2026-08-28.md:123:- 任务: 读 v1 `legacy/donor/apeireth-companion/src/proactive_memory.rs` (TopicPredictor + PreloadChannel 4 impl), 写 C 块 preference_learning 真实施 1:1 翻译 mapping
+docs/04-internal/scene-d-v2-plan.md:3:> **现状 (2026-08-27) — 新增 P-arch 任务**。v2 工程重构把 13 键降级为哲学标准 + external hook 闸为唯一 runtime 治理（upstream `873d2857` 已装 3 个 hook：Permission / 凭据泄漏 / 注入检测）。但场景 D（需要语义上下文的 AI 判断）当前在 v2 工作区**完全缺位**——v1 的 companion_serve 里有完整实现（F1/F6/E7/W6 等），全在 `legacy/donor/apeireth-companion`。本文是 v2 移植+演化的架构方案。
+docs/04-internal/scene-d-v2-plan.md:47:**v1 实现位置**：`legacy/donor/apeireth-companion/memory_extractor.rs`（F1）+ `legacy/donor/apeireth-companion/value_cases.rs`（F6）+ `crates/engine/memory/src/memory_governance.rs`（部分 v2 残留）
+docs/04-internal/scene-d-v2-plan.md:69:**v1 实现位置**：`legacy/donor/apeireth-companion/oracle.rs`（Brier 校准）+ `world_model.rs`（部分）
+docs/04-internal/scene-d-v2-plan.md:101:**v1 实现位置**：`legacy/donor/apeireth-companion/team-lead.rs`（任务调度）+ `legacy/donor/apeireth-companion/orchestrator.rs`（编排），但**v1 没有正式的互审协议**——只有任务队列。
+docs/04-internal/sub-agent-audit-round-4-2026-08-28.md:180:| 4 | **`organ-orchestrator-completion-plan.md:78` + `ENGINEER-MANIFESTO §10 L473` + `TO-NEW-TEAM.md:227`** "R11 baseline path = `crates/foundation/core/src/cognitive.rs`" — **路径错** (实际在 `legacy/donor/apeireth-asi/`, active workspace 没 active R11 baseline source) | 30min | 待 R12 spec 重新审定 (per §10 真例外 #5) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:14:| crate 数 | **105** (donor 77 / archived 15 / frozen 13) | **18** (foundation 6 / engine 8 / capabilities 1 / adapters 3) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:15:| 形态 | "伙伴器官"聚合 (donor/apeireth-companion ≈ 90 模块) | 微内核 + 显式装配 (PluginRegistry + CapabilityRegistry + Runtime) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:65:| reflexion / thought_cluster / intent_brier | REAL | donor 已入库, **active 0 移植** | 🔴 |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:291:> | ~~reflexion / memory_injection~~ (原列本行) | 0 引用→未接 | **W2b 本批已接**: reflexion = 新模块 `cognitive.reflexion` (TurnStart 教训注入 + AfterTurn 消费 Judge 显式判定沉淀 + RuleCritic 蒸馏, `APEIRETH_ENABLE_REFLEXION=1`); memory_injection = donor 反幻觉注入格式 (`APEIRETH_ENABLE_MEMORY_INJECTION=1`) ✅ | partner/principles/intent_brier/吸收批 4 个等: 确证未接 (crate 内部互调亦零命中), 维持按序接线 |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:319:> | 1 | community | ✅ 真: `donor/apeireth-companion/community.rs` (`Community` + `triage()` + 测试; `memory_graph.rs:429` 消费 `TriageResult`) | 真缺口成立 (v1→v2 未移植) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:320:> | 2 | experiment_field | ✅ 真框架: `donor/.../experiment_field.rs` (`ExperimentField` + `VMRunner` 注入边界 + 提案→实验→批准→部署→回滚学习) | 真缺口成立 (框架可回收) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:323:> | 5 | thought_cluster | ✅ 真: `donor/.../thought_cluster.rs` (`ThoughtClusterManager` + `ThoughtClusterReader` + search + 链注册表) | **从缺口移出**: v2 `cluster_store.rs` 是完整改名移植 (API 五件套 + trait 同构, 还多了路径穿越防御) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:324:> | 6 | onering | ✅ 真: `donor/.../onering.rs` (`OneRingLedger` 统一上下文账本, 溯源强制, SSE/Lark/Telegram/Web/CLI 五前端同一锚点时间线, 8 测试) | 真缺口成立 (原"仅元数据透传"观测的是 v2 侧) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:326:> | 8 | SDK 真 HTTP/WS | ✅ 大量真: `donor/apeireth-http-client` (reqwest + LIFO 池) / `apeireth-api/ws_v1` (axum WS 8 帧 handler) / `apeireth-bus/l4` (tokio-tungstenite 真双端) / `voice/{real,minimax_live}` / `lark/real` / `update` (真下载 + minisign 验签) / `memory-extensions/provider_s3` | 真缺口成立且 v1 真 HTTP/WS 客户端**群**可回收 |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:327:> | 9 | 三洋葱 L3-L5 | ✅ **整 crate 真**: `donor/apeireth-onion` (双洋葱统一体: 原则洋葱 E/S/A/M/O + 权限洋葱 L0..L5 **全六层** + L0 HA + `unify_check` 三段门 + `arbitrate`) + `archived/apeireth-formal` **Kani 形式化证明** (`double_onion_sample`: L0 requires HA) + `constraint` V2 门 + `companion/security.rs` 洋葱门接线 + `bench/self_disable_bench` 5 攻击类别 guards | 真缺口成立且比原估计更广: v2 `core::onion` 只有数据模型 (多签 hex 占位), v1 有统一门 + 形式化证明 |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:339:| 三洋葱 L3-L5 | 🔴 → ✅ **[2026-10-10 W3]** 三层全落地: 判定模型 (`core/onion_gate.rs`, v1 donor 移植 + r177 Kani 证明平移为 Rust 测试) + 物理执行面 (`OnionLayerHook` 接入生产治理管线末层, `APEIRETH_ENABLE_ONION_LAYER=1` 默认关); 仅真 Ed25519 多签留 v2.1 (0 装占位已载明) |
+docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md:448:`plugin/mcp/sse.rs:6` SseTransport deferred; `plugin/mcp/reconnect.rs:15` donor 重连原本就是 stub。
+docs/04-internal/v2-reference-handbook-2026-08-28.md:77:| R11 baseline 3 值 | legacy reference (`legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` `R11_V1141_BASELINE: f64 = 0.8682` / `R11_V1131_BASELINE: f64 = 0.8532` / `R11_V1136_BASELINE: f64 = 0.9063`) — **active workspace 无 const source**, 等 R12 spec 重新审定后移植 | R11 数字更新需 R12 spec 重新审定 + active workspace 移植, 主代理拍板 |
+docs/04-internal/v2-reference-handbook-2026-08-28.md:157:**工程兑现**: A 块 5 stage 1:1 翻译 v1 (`legacy/donor/apeireth-companion/src/`) + R20 preference_learning 1:1 翻译 v1 TopicPredictor + PreloadChannel + R21 critic 1:1 翻译 v1 critic.rs + R22 reflection 1:1 翻译 v1 reflection.rs.
+docs/04-internal/v2-unabsorbed-features.md:21:- **盘点对象**：`legacy/donor/` 77 crate + `legacy/archived/` 15 + `legacy/frozen/` 13
+docs/04-internal/v2-unabsorbed-features.md:24:- **逐项核实**：本批对每个 S1/S2 项都读过 `legacy/donor/<crate>/src/lib.rs` 顶部 doc comment + 关键模块声明，引用附文件路径
+docs/04-internal/v2-unabsorbed-features.md:48:**v1 实现**：`legacy/donor/apeireth-council/src/lib.rs`（已实装，162 行 + 7 Advisor 子模块 + 30+ tests）
+docs/04-internal/v2-unabsorbed-features.md:81:**v1 实现**：`legacy/donor/apeireth-team-lead/src/lib.rs`（759 行 + 14 工具 + 8 bench + 5 fixtures）
+docs/04-internal/v2-unabsorbed-features.md:112:**v1 实现**：`legacy/donor/apeireth-perception/src/lib.rs`（194 行 + 5 PerceptionInput + 2 Attention + 5 PerceptionChannel + PerceptionEvent）
+docs/04-internal/v2-unabsorbed-features.md:141:**v1 实现**：`legacy/donor/apeireth-memory-extensions/src/lib.rs`（文件存储 / MongoDB / SQLite 多后端 provider）
+docs/04-internal/v2-unabsorbed-features.md:169:**v1 实现**：`legacy/donor/apeireth-tool-runtime/src/lib.rs`（含 `ToolCallParser` + `ParsedToolCall` + `<<<[TOOL_REQUEST]>>>` marker 协议）
+docs/04-internal/v2-unabsorbed-features.md:191:**v1 实现**：`legacy/donor/apeireth-tool-approval/src/lib.rs`（5 规则：blacklist/trust/risk/frequency/whitelist + ApprovalDecision enum）
+docs/04-internal/v2-unabsorbed-features.md:366:| `legacy/donor/` | 全部保留作参考代码（per README v1.0 入口）；本文为每个未吸收项指向 legacy 源路径 |
+docs/04-internal/v2-unabsorbed-features.md:384:_本文 v2 首发 (2026-08-27) + rc.1 进展更新 (2026-08-27 收盘, HEAD `67c06d95`)：基于对 77 个 legacy/donor crate + 15 archived + 13 frozen 的 doc comment + 关键模块声明实测盘查（非子代理推理）。结论：v2 13-crate 工作区**缺 6 类 A 级功能 + 7 类 B 级 + 14 类 C 级 + 14 类 D 级**。A 级（council/team-lead/perception/memory-extensions/tool-runtime/tool-approval）必须进 v2 roadmap，P-arch / P1 / P3 / P5 / P6 排期落地。v2-native 设计原则贯穿：多 instance LLM 隔离（v1 全独立 session 太重）/ JSON 协议（v1 free text）/ 单一事实源 plugin registry（v1 多 registry）/ trait-based 多态（v1 if-else 散落）。**0 漂移承诺**: 9 哲学锚（升 8→9, 加 O-6 永远追求最优）/ 13 键 LOCKED 数据 / 3 项不可变脊柱语义 / workspace.version 0 改；本文新增 `crates/foundation/orchestration/`（P6）+ `crates/engine/perception/`（P4）+ 各 trait 扩展，**不**触碰 LOCKED public API。
+docs/04-internal/v2.0.0-release-path-7-spec-4-block.md:50:- `legacy/donor/apeireth-companion/src/proactive_memory.rs:225-419` (`TopicPredictor::predict_topic` + `PreloadChannel` trait + 4 impl)
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:12:> **方法**: 逐个读 v1 **真代码**（`legacy/donor/...`），不用文件名下结论——上一轮审计（engineering-review-handoff-2026-10-06.md §4.3）自称只做了名称级扫描并要求复核。每条主张带 `path:line`。
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:38:- **位置**: `legacy/donor/apeireth-companion/src/community.rs`（≈300 行，含测试）。
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:67:- **位置**: `legacy/donor/apeireth-companion/src/experiment_field.rs`（260 行）+ `sandbox_pass.rs`（358 行，编译期契约守门）。
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:100:- **v1 位置**: `legacy/donor/apeireth-companion/src/thought_cluster.rs`（486 行）：`ThoughtClusterManager` + 只读 `ThoughtClusterReader`，消费方 `dream.rs:58` / `reflection.rs:37` / `meta_thinking.rs:33`。
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:109:- **位置**: `legacy/donor/apeireth-companion/src/onering.rs`（318 行，**8 个测试**：`:256-338`）。
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:122:  - `legacy/donor/apeireth-tool-shell/src/lib.rs:25-28`："Linux seccomp BPF filter: 需要 `seccompiler` crate + unsafe pre_exec / Windows JobObject: 需要 `windows-sys` … / Linux namespaces … 需要 `nix`"；
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:132:- v1 参照物：`legacy/donor/apeireth-api`（WS 8 帧协议与工具白名单的原始出处，SDK `client.rs` 是其 1:1 翻译）。
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:137:> **[2026-10-10 判定模型移植完成]** v1 `donor/apeireth-onion` 判定层已移植为
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:156:- **位置**: `legacy/donor/apeireth-onion/src/lib.rs` + `examples/onion_demo.rs`。
+docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md:201:- **新证据**: `legacy/donor/apeireth-companion/src/community.rs:155` `pub fn triage(...)` 真分诊入口存在，且有专项测试 `triage_entity_vs_broad`（`:323`）。v1 的社群识别→分诊是**真功能**（detect_communities + triage + deterministic_summary 三件套），§1 工作量判断 **M 不变**，但移植范围应含 triage 分诊逻辑（原先按 brief 级估会漏）。
+docs/core-capability-expansion.md:3:> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本系列描述旧 master 线（86-crate）上针对 `crates/apeireth-companion|memory|api` 的能力扩展工作，相关实现现整体在 `legacy/donor/`。
+docs/core-capability-final-report.md:3:> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本系列描述旧 master 线（86-crate）上针对 `crates/apeireth-companion|memory|api` 的能力扩展工作，相关实现现整体在 `legacy/donor/`。
+docs/core-capability-git-freeze-report.md:3:> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本系列描述旧 master 线（86-crate）上针对 `crates/apeireth-companion|memory|api` 的能力扩展工作，相关实现现整体在 `legacy/donor/`。
+docs/core-capability-integration-report.md:3:> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本系列描述旧 master 线（86-crate）上针对 `crates/apeireth-companion|memory|api` 的能力扩展工作，相关实现现整体在 `legacy/donor/`。
+docs/core-capability-integration-strategy.md:3:> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本系列描述旧 master 线（86-crate）上针对 `crates/apeireth-companion|memory|api` 的能力扩展工作，相关实现现整体在 `legacy/donor/`。
+docs/design/00-PHILOSOPHY.md:85:- 诚实断点当前实例：presence 四事件属 legacy donor，现役 gateway 未接线（更正见 `01-DESIGN-SYSTEM.md` §3.1）——**本文 §10 的契约就是补上这个断点的提案**。
+docs/design/01-DESIGN-SYSTEM.md:5:> **现状 (2026-08-27)**：本文是设计令牌规范（v1 时代定版，2026-08-21），**设计令牌 / 界面语言本身 v2 不变**。前端 `frontend/companion-desktop/` 仍是独立 Svelte 5 + Tauri 2 workspace，v2 后端 = canonical gateway :8080。当前基线见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)；附录引用的 `presence.rs` / `companion_serve.rs` 行号属 v1 路径，现位于 `legacy/donor/apeireth-companion/`。
+docs/design/01-DESIGN-SYSTEM.md:38:**诚实标注**：✅ 方向与前三条为已确认决策；第 4 条依赖 presence 频道——**v2 状态更正（2026-09-22）**：presence 四事件的生产点 `presence.rs` / `companion_serve.rs` 已归入 `legacy/donor/apeireth-companion/`，**现役 canonical gateway 无 presence 频道**，数据契约断线；重接路线见 §3.1 更正段。
+docs/design/01-DESIGN-SYSTEM.md:126:> **⚠️ v2 状态更正（2026-09-22 核实）**：上述接线状态描述的是 **v1 世界**。`presence.rs` / `companion_serve.rs` 现位于 `legacy/donor/apeireth-companion/`，**现役 canonical gateway（:8080）的事件总线只有 `backend_ready / turn_started / turn_delta / turn_completed / approval_required / approval_resolved` 六类，没有 presence 四事件**——PAD / initiative / dream / memory_recall 的数据契约当前断线。已有重接种子：主链 `crates/adapters/gateway/src/ember_hud_driver.rs`（Ember HUD：4.0s 呼吸节律 + 四种认知姿态枚举 + WGSL uniform 输出，路由零消费方）。重接路线（方案详见 `frontend/design-preview/peer-gap-and-frontend-plan.md` §4.6）：推荐 **gateway 内重实现**（runtime 每轮产出 PAD 粗估值 + `presence_state` 事件上现有 events bus，v0 用启发式估算并诚实标注），而非迁回 legacy 双服务。更正前本节"双驱动可用"的结论**不成立**——时间线照明在 v2 目前只有天文驱动半边。
+docs/design/frontend-handoff.md:5:> 文中后端 `companion_serve`（:8090）是 v1 时代后端，代码在 `legacy/donor/apeireth-companion`。
+docs/development/adding-a-module.md:15:| Historical/donor code | `legacy/donor/` | No new production development |
+docs/development/adding-a-module.md:75:Legacy donor source:
+docs/development/legacy-port-backlog.md:5:removed. A donor location is a source of reference, not a production dependency.
+docs/development/legacy-port-backlog.md:7:| Feature | Donor location | Missing canonical behavior | Target owner | Disposition |
+docs/development/legacy-port-backlog.md:9:| Living-day orchestration and background heartbeat | `legacy/donor/apeireth-supervisor`, `legacy/donor/apeireth-workflow`, `legacy/donor/apeireth-bus` | No autonomous scheduler, workflow worker, or event bus in the canonical runtime | `apeireth-runtime` | REASSESS — canonical turns and session lifecycle are the current contract |
+docs/development/legacy-port-backlog.md:10:| Provider facade and multi-vendor HTTP dispatcher | `legacy/donor/apeireth-acp`, `legacy/donor/apeireth-llm-iface`, `legacy/donor/apeireth-http-client` | No facade-level status API or shared dispatcher; canonical providers own wire translation | `apeireth-provider` | DROP — superseded by `ProviderCapability` plugins and normalized protocol |
+docs/development/legacy-port-backlog.md:11:| Memory-side LLM episode analysis | `legacy/donor/apeireth-llm-iface` and removed memory bridge | No canonical analysis capability or prompt/extraction policy | `apeireth-memory` | PORT — only after a canonical memory-analysis contract is specified |
+docs/development/legacy-port-backlog.md:12:| Text embedding and persistent semantic-vector integration | `legacy/donor/apeireth-vector` and removed semantic modules | Canonical memory has a standalone vector index, but no text embedder or persistent vec0 bridge | `apeireth-memory` | REASSESS — preserve canonical vector/graph primitives; do not restore the donor bridge |
+docs/development/legacy-port-backlog.md:13:| External memory provider implementations | `legacy/donor/apeireth-memory-extensions` | No file/Mongo provider adapters in the canonical repository API | `apeireth-memory` | REASSESS — add adapters only behind an approved canonical repository contract |
+docs/development/legacy-port-backlog.md:14:| Life-force and reflection semantics | `legacy/donor/apeireth-life-force` | No canonical endurance/reflection model | `apeireth-memory` or a future module | PORT — require an explicit ownership and governance design |
+docs/development/legacy-port-backlog.md:15:| Gateway privacy guard and rate limiting | `legacy/donor/apeireth-guard`, `legacy/donor/apeireth-rate-limiter` | Canonical gateway currently validates transport and delegates execution; no PII redaction or quota policy | `apeireth-gateway` / `apeireth-governance` | PORT — define policy at the adapter/governance boundary before implementation |
+docs/development/legacy-port-backlog.md:16:| CLI skills, eval, council, MCP, and ASI commands | `legacy/donor/apeireth-skills`, `legacy/donor/apeireth-eval`, `legacy/donor/apeireth-council`, `legacy/donor/apeireth-mcp`, `legacy/donor/apeireth-asi` | CLI now exposes only session, chat, and gateway serve | Future dedicated adapters | REASSESS — no historical command is part of the canonical CLI contract |
+docs/development/legacy-port-backlog.md:17:| Companion module | `legacy/donor/apeireth-companion` | No canonical companion feature module in the current workspace | 一个未来 canonical plugin/module（归入 `crates/` 四组之一，无 `crates/modules/` 层） | PORT — reintroduce only as a canonical plugin/module with no donor dependency |
+docs/development/legacy-port-backlog.md:20:current crates to import donor code, and it does not claim that donor behavior
+docs/development/repository-layout.md:39:├── donor/            # historical donor implementations
+docs/development/repository-layout.md:69:| `legacy/` | donor, archived, and frozen historical code | none from current product code | new production work or reverse dependencies into `crates/` |
+docs/development/repository-layout.md:82:- Historical Companion code lives at `legacy/donor/apeireth-companion` and is
+docs/integration/legacy-audit.md:38:> **补充（2026-08-27, v2 工程重构）**：本文 §1 "Legacy 残留 0" 仅指当时 `frontend/companion-desktop/` 内部相对 pattern 残留（pre-1.0 的 Computer Use / AgentOS 等）。**这不等于 v2 工作区无 legacy**：reconstruct_v2 收敛（commit `72088f61` 起）把 86-crate 旧工作区整体搬入 `legacy/`，当前 `legacy/{donor 77 / archived 15 / frozen 13}` 共 105 个目录，旧代码**全部 reference-only**，由根 `Cargo.toml` `exclude = ["legacy"]` 排除构建；详见根 [ARCHITECTURE.md](../../ARCHITECTURE.md) "Historical material" 节与根 [ROADMAP.md](../../ROADMAP.md) §4。
+docs/runtime-decoupling-report.md:3:> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本报告代码落点在 `legacy/donor/apeireth-companion/examples/companion_serve.rs`；其思想是 reconstruct_v2 分层（engine/runtime + engine/provider + foundation/core）的前身。
+frontend/companion-desktop/src/lib/presence.ts:27:// memory_recall) 的生产点已归入 legacy/donor/apeireth-companion/, canonical
+scripts/check-neutral-terms.ps1:21:  'donor'
+scripts/release-prep.sh:74:    # 实际定义在 legacy/donor/apeireth-asi/tests/integration_r_measure.rs (编译期 hardcode const)
+scripts/release-prep.sh:75:    # 也出现在 legacy/donor/apeireth-blueprint-impl/src/r_measure.rs (RMeasureDelta 字段)
+scripts/release-prep.sh:76:    local TARGET="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"
+scripts/release/verify-1.0-pre-tag.ps1:238:    $baselineFiles = Get-ChildItem -Path 'legacy/donor/apeireth-asi' -Recurse -Filter '*.py' -ErrorAction SilentlyContinue | Select-Object -First 5

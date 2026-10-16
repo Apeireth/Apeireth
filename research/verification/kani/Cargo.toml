@@ -6,9 +6,23 @@ publish = false
 # 无 rust-version 字段: Kani 0.67 自带 nightly-2025-11-21 (rustc 1.93),
 # 而 workspace 声明 rustc 1.97 最低版本, 直接 `cargo kani -p apeireth-runtime`
 # 会被 cargo 的 rust-version 检查拒绝。本 mirror 是独立 crate (root workspace
-# 已 exclude research/), 只编译 canonical 状态机一个文件, 无版本冲突。
+# 已 exclude research/), 只编译经 #[path] 引入的 canonical 源文件, 无版本冲突。
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+# 仅 canonical 源内 #[cfg(test)] 模块用 (bitemporal_graph / fold_block 等);
+# cargo kani 不编译 cfg(test), 但 `cargo test --manifest-path` 需要它。
+serde_json = "1"
+# file_fetcher (gateway) 依赖: 与 workspace 同版本族。
+# sha2 显式开 force-soft 纯软件后端 —— x86 SHA-NI 后端走 SIMD/CPUID 内建,
+# 在 CBMC 翻译层属高风险路径; 待验证的业务逻辑是 file_fetcher 自身的
+# 缓存键/解码/沙箱判定, 不是第三方压缩函数。
+sha2 = { version = "0.10", features = ["force-soft"] }
+thiserror = "1"
 # 注: `kani` 宏 crate 不在此声明 —— cargo kani 会自动注入 (安装包内 path 版本,
 # crates.io 上 kani crate 无对应版本); 显式声明反而与注入版本冲突。
+# 本地类型检查用的 kani 桩 crate 在 ../kani-typecheck/ (独立 manifest, 不进 CI)。
+
+# kani 自带 cfg(kani); stable rustc 不认识 —— 声明后不误报。
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

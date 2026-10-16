@@ -30,23 +30,24 @@ fn twelve_keys_hardcode_const_evaluates() {
 
 #[test]
 fn all_twelve_keys_compat_alias_contains_thirteen_keys() {
-    assert_eq!(ALL_TWELVE_KEYS.len(), 13, "兼容别名必须覆盖 13 键");
+    // 2026-10-11 PHL-08 后基数 14（函数名/注释中的 thirteen 为当时基数，历史命名不动）
+    assert_eq!(ALL_TWELVE_KEYS.len(), 14, "兼容别名必须覆盖 14 键");
 }
 
 #[test]
 fn all_twelve_keys_distinct_no_duplicates() {
-    // 13 键必须唯一 (不重复), 避免一个 key 出现两次, 另一 key 缺失
+    // 键必须唯一 (不重复), 避免一个 key 出现两次, 另一 key 缺失
     let mut seen: Vec<PhilosophyKey> = Vec::new();
     for k in ALL_TWELVE_KEYS.iter() {
         assert!(!seen.contains(k), "重复键: {:?}", k);
         seen.push(*k);
     }
-    assert_eq!(seen.len(), 13);
+    assert_eq!(seen.len(), 14);
 }
 
 #[test]
 fn group_distribution_matches_thirteen_key_layout() {
-    // V3 PHL-01/02b/03 (3+3+3) + PHL-04/05/06/07 (1+1+1+1) = 13
+    // V3 PHL-01/02b/03 (3+3+3) + PHL-04/05/06/07 (1+1+1+1) + PHL-08 (1) = 14
     let mut phl01 = 0u8;
     let mut phl02b = 0u8;
     let mut phl03 = 0u8;
@@ -54,6 +55,7 @@ fn group_distribution_matches_thirteen_key_layout() {
     let mut phl05 = 0u8;
     let mut phl06 = 0u8;
     let mut phl07 = 0u8;
+    let mut phl08 = 0u8;
     for k in ALL_TWELVE_KEYS.iter() {
         match k.group_id() {
             1 => phl01 += 1,
@@ -63,6 +65,7 @@ fn group_distribution_matches_thirteen_key_layout() {
             5 => phl05 += 1,
             6 => phl06 += 1,
             7 => phl07 += 1,
+            8 => phl08 += 1,
             _ => panic!("未分组键: {:?}", k),
         }
     }
@@ -73,6 +76,7 @@ fn group_distribution_matches_thirteen_key_layout() {
     assert_eq!(phl05, 1, "PHL-05 必须 1 键");
     assert_eq!(phl06, 1, "PHL-06 必须 1 键");
     assert_eq!(phl07, 1, "PHL-07 必须 1 键");
+    assert_eq!(phl08, 1, "PHL-08 必须 1 键");
 }
 
 #[test]
@@ -116,7 +120,7 @@ fn philosophy_key_descriptions_are_unique() {
         assert!(!descs.contains(&d), "description 重复: {}", d);
         descs.push(d);
     }
-    assert_eq!(descs.len(), 13);
+    assert_eq!(descs.len(), 14);
 }
 
 // ============================================================================
@@ -149,6 +153,10 @@ fn all_twelve_keys_appear_in_verdict_for_target_routes() {
             ActionTarget::PretendUnscientific,
             PhilosophyKey::NotUnscientific,
         ),
+        (
+            ActionTarget::PretendAuthoritative,
+            PhilosophyKey::NotAuthoritative,
+        ),
     ];
 
     // 9 个不同 (target, key) 组合 — 至少 6 个不同的 key
@@ -180,7 +188,7 @@ fn philosophy_verdict_block_carries_distinct_keys_each_time() {
             }
         }
     }
-    assert_eq!(uniq_keys.len(), 13, "13 个 Block 应带 13 个不同 key");
+    assert_eq!(uniq_keys.len(), 14, "14 个 Block 应带 14 个不同 key");
 }
 
 #[test]

@@ -33,7 +33,7 @@ pub struct PluginManifest {
     pub metadata: Metadata,
     /// Alternative lookup keys for this plugin id.
     ///
-    /// Recovered from legacy agent alias maps. These are **not** a second
+    /// Aligned with the legacy agent alias maps. These are **not** a second
     /// identity: [`PluginId`] remains unique, and [`crate::PluginRegistry`]
     /// still keys on it. Aliases exist so a caller can resolve `@coder` to
     /// `builtin.coder` through [`crate::alias::AliasIndex`] without inventing

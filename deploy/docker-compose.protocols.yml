@@ -1,3 +1,6 @@
+# ⚠️ v1 时代协议联调编排（历史验证用）：环境变量为 v1 口径（APEIRETH_LLM_* 等），
+# 当前代码不读取；当前部署请用根目录 docker-compose.yml（单服务 SQLite）。
+#
 # Apeireth V2 全栈 docker-compose (R18 战役 5 + V2 部署加固)
 #
 # V2 加固 (devops_engineer2):

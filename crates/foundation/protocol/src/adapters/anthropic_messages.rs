@@ -12,7 +12,7 @@
 //! - 响应 `content` 是块数组 (text / tool_use), 不是 `choices`
 //! - 响应 `stop_reason`: `end_turn` / `max_tokens` / `stop_sequence` / `tool_use`
 //!
-//! **借鉴 VCP**:
+//! **设计参考**:
 //! - `routes/protocolBridge.js:120-156` `normalizeToolChoice` (Anthropic 不支持 tool_choice
 //!   "none" 跟 "auto", 用 tools 列表控制)
 //! - `chatCompletionHandler.js:286-323` `isToolResultError` 的 5 字段语义
@@ -75,7 +75,7 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
         body.insert("model".into(), Value::String(req.model.clone()));
         body.insert("max_tokens".into(), json!(max_tokens));
 
-        // 借鉴 VCP: system 提到顶层
+        // 设计参考 system 提到顶层
         let mut system_text: Option<String> = None;
         let mut non_system: Vec<&crate::normalized::NormalizedMessage> = Vec::new();
         for m in &req.messages {
@@ -93,9 +93,9 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
             body.insert("system".into(), Value::String(s));
         }
 
-        // 借鉴 VCP `routes/protocolBridge.js:120-156`:
+        // 映射设计参考:
         // Anthropic 不支持 tool_choice = "none" / "auto" / "specific"
-        // 通过 tools 列表控制 (VCP 真代码: tool_choice === 'none' 时去掉 tools)
+        // 通过 tools 列表控制 (既有实现: tool_choice === 'none' 时去掉 tools)
         let mut tools = req.tools.clone();
         let tool_choice_v: Option<Value> = match &req.tool_choice {
             Some(NormalizedToolChoice::None) => {
@@ -133,7 +133,7 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
                         if !text.is_empty() {
                             blocks.push(json!({"type": "text", "text": text}));
                         }
-                        // 借鉴 VCP: assistant tool_calls → Anthropic tool_use 块
+                        // 设计参考 assistant tool_calls → Anthropic tool_use 块
                         for tc in &m.tool_calls {
                             blocks.push(json!({
                                 "type": "tool_use",
@@ -277,7 +277,7 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
                         });
                     }
                     "thinking" => {
-                        // 借鉴 VCP: thinking 块不进入主 content, 进 raw_metadata
+                        // 设计参考 thinking 块不进入主 content, 进 raw_metadata
                         if let Some(thinking) = block.get("thinking").and_then(|v| v.as_str()) {
                             // 不追加到 content, 留给 raw_metadata
                             let _ = thinking;
@@ -296,8 +296,12 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
         let usage = raw
             .get("usage")
             .map(|u| {
-                let p = u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                let c = u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let p = crate::normalized::clamp_u32(
+                    u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                );
+                let c = crate::normalized::clamp_u32(
+                    u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                );
                 crate::normalized::NormalizedUsage::new(p, c)
             })
             .unwrap_or_default();
@@ -338,11 +342,16 @@ impl AnthropicMessagesAdapter {
                 ContentPart::Text { text } => json!({"type": "text", "text": text}),
                 ContentPart::ImageUrl { url, .. } => {
                     // Anthropic image: source.type=url or base64
-                    if url.starts_with("data:") {
+                    if let Some(body) = url.strip_prefix("data:") {
                         // base64 → source.type=base64
-                        let comma = url.find(',').unwrap_or(url.len());
-                        let meta = &url[5..comma]; // "image/png;base64"
-                        let data = &url[comma + 1..];
+                        // H2 修复 (2026-09-24 审计): 无逗号的畸形 data URL
+                        // (`data:image/png;base64`) 曾令 `&url[comma + 1..]`
+                        // 越界 panic (comma = url.len() 时 comma+1 越界)。
+                        // 现在按"无数据段"处理: meta 取 body, data 为空。
+                        let (meta, data) = match body.find(',') {
+                            Some(comma) => (&body[..comma], &body[comma + 1..]),
+                            None => (body, ""),
+                        };
                         let parts: Vec<&str> = meta.split(';').collect();
                         let media_type = parts.first().copied().unwrap_or("image/png");
                         json!({
@@ -416,7 +425,7 @@ mod tests {
 
     #[test]
     fn request_tool_choice_none_drops_tools() {
-        // 借鉴 VCP protocolBridge.js:120-156: tool_choice=none → 去掉 tools
+        // 设计参考 protocolBridge.js:120-156: tool_choice=none → 去掉 tools
         let mut req =
             NormalizedRequest::new("claude-sonnet-4", vec![NormalizedMessage::user("hi")]);
         req.max_tokens = Some(100);
@@ -440,7 +449,7 @@ mod tests {
 
     #[test]
     fn request_tool_choice_specific_filters_tools() {
-        // 借鉴 VCP: specific 退化为 filter
+        // 设计参考 specific 退化为 filter
         let mut req =
             NormalizedRequest::new("claude-sonnet-4", vec![NormalizedMessage::user("hi")]);
         req.max_tokens = Some(100);
@@ -454,7 +463,7 @@ mod tests {
 
     #[test]
     fn request_assistant_tool_calls_become_tool_use_blocks() {
-        // 借鉴 VCP: OpenAI tool_calls → Anthropic tool_use 块
+        // 设计参考 OpenAI tool_calls → Anthropic tool_use 块
         let tc = ToolCall {
             id: "toolu_1".into(),
             name: "get_weather".into(),
@@ -475,7 +484,7 @@ mod tests {
 
     #[test]
     fn request_tool_message_becomes_user_with_tool_result_block() {
-        // 借鉴 VCP: OpenAI tool → Anthropic user role + tool_result block
+        // 设计参考 OpenAI tool → Anthropic user role + tool_result block
         let mut req = NormalizedRequest::new(
             "claude-sonnet-4",
             vec![NormalizedMessage::tool_result(
@@ -495,7 +504,7 @@ mod tests {
 
     #[test]
     fn request_image_url_becomes_anthropic_image_block() {
-        // 借鉴 VCP: image 块两种 source (url / base64)
+        // 设计参考 image 块两种 source (url / base64)
         use crate::normalized::ContentPart;
         let msg = NormalizedMessage {
             role: MessageRole::User,

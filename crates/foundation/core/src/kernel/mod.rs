@@ -141,16 +141,16 @@ mod tests {
         let _via_root_cache: crate::philosophy::VerdictCache = cache;
     }
 
-    /// 13 键 / 守门 / 洋葱 全部通过 kernel 可达.
+    /// 14 键 / 守门 / 洋葱 全部通过 kernel 可达.
     #[test]
     fn kernel_principle_and_governance_aliases_resolve() {
-        // 13 键编译期断言仍通过
+        // 14 键编译期断言仍通过（2026-10-11 PHL-08 后组域扩至 8）
         let count: u8 = crate::ALL_THIRTEEN_KEYS
             .iter()
             .map(|k| k.group_id())
-            .filter(|g| *g >= 1 && *g <= 7)
+            .filter(|g| *g >= 1 && *g <= 8)
             .count() as u8;
-        assert_eq!(count, 13);
+        assert_eq!(count, 14);
 
         // 原则洋葱通过 kernel 路径
         let _layer: PrincipleLayer = PrincipleLayer {

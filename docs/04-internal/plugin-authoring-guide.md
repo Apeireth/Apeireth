@@ -1,6 +1,6 @@
 # Apeireth 社区插件开发规范（v2 工程重构线, 2026-08-27）
 
-> **现状 (2026-08-27)**：本文**重写**为 v2 插件契约（`crates/foundation/plugin`），取代 v1 时代的 `apeireth-companion` Plugin/Tool trait 与 ToolBridge 装配模型（现 `legacy/`）。当前基线：默认分支 `main`、13-crate 工作区、tag `v2.0.0-alpha.1` @ `d6910cf7`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。内核（哲学 8 锚、文档同步自觉、0 装 PASS）不变。
+> **现状 (2026-08-27)**：本文**重写**为 v2 插件契约（`crates/foundation/plugin`），取代 v1 时代的 `apeireth-companion` Plugin/Tool trait 与 ToolBridge 装配模型（现 `legacy/`）。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区、tag `v2.0.0-alpha.1` @ `d6910cf7`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。内核（哲学 8 锚、文档同步自觉、0 装 PASS）不变。
 
 ```
 [Document-Meta]
@@ -314,7 +314,7 @@ pub struct PluginContext {
 }
 ```
 
-**0 装 PASS 红线**：禁止 `std::env::var("OPENAI_API_KEY")`、禁止 `std::fs::read("apikey.txt")`、禁止 `Utc::now()`。这些在 v1 是常见的"简化"模式，v2 **强制**走 ctx——这是为了可移植 (virtual clock) + 安全 (secret 不落 struct) + 可可观测 (trace 相关性)。
+**0 装 PASS 红线**：禁止 `std::env::var("OPENAI_API_KEY")`、禁止 `std::fs::read("apikey.txt")`、禁止 `Utc::now()`。这些在 v1 是常见的"简化"模式，v2 **强制**走 ctx——这是为了跨环境可迁移 (virtual clock) + 安全 (secret 不落 struct) + 可可观测 (trace 相关性)。
 
 ### 5.2 凭据解析（怎么取 API key）
 
@@ -462,7 +462,7 @@ async fn plugin_registers_and_resolves_tools() {
 | 治理（hooks + Decision）| `crates/foundation/governance/src/lib.rs` |
 | 协议 DTO（NormalizedTool/Request/Response）| `crates/foundation/protocol/src/canonical/` |
 
-> 相关文档：[team-work-doc.md](team-work-doc.md)（§1 三哲学 / §3 文档规范 / §2 工程规范）· [maintenance-guide.md](maintenance-guide.md)（13-crate 模块地图 + v2 维护流程）· [ROADMAP.md](../../ROADMAP.md)（§4 v2 路线 + §5 硬墙）· [ARCHITECTURE.md](../../ARCHITECTURE.md)（架构契约）· [architecture.md](../01-architecture/architecture.md)（foundation/engine/capabilities/adapters 详细归属）
+> 相关文档：[team-work-doc.md](team-work-doc.md)（§1 三哲学 / §3 文档规范 / §2 工程规范）· [maintenance-guide.md](maintenance-guide.md)（18-crate 模块地图 + v2 维护流程）· [ROADMAP.md](../../ROADMAP.md)（§4 v2 路线 + §5 硬墙）· [ARCHITECTURE.md](../../ARCHITECTURE.md)（架构契约）· [architecture.md](../01-architecture/architecture.md)（foundation/engine/capabilities/adapters 详细归属）
 
 ---
 

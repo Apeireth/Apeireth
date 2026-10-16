@@ -153,7 +153,7 @@ Status:          🟡 实施中 (O-6 重构批次, v2.0.0-rc.1 之前必完)
 
 ### Refactor-7: experience WikiEntry 注入策略
 
-**v1 借鉴**: 3-layer progressive disclosure (目录 + 摘要 + 全文). v2 0 装是抽取后不注入. rc 后实现 memory 集成时一起做.
+**v1 参考**: 3-layer progressive disclosure (目录 + 摘要 + 全文). v2 0 装是抽取后不注入. rc 后实现 memory 集成时一起做.
 
 **位置**: `crates/engine/memory/src/experience.rs` 已经有 trait; rc 实现时加 `WikiStore::recall_for_context()` 返回 top-N, runtime `agent_loop` 调用注入 transcript.
 

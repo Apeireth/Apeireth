@@ -127,6 +127,31 @@ pub enum TraceEvent {
         /// Which round.
         round: u32,
     },
+    /// The model's single round carried more tool calls than the runtime
+    /// dispatches; the excess was dropped (with synthetic error results, so
+    /// the transcript stays well-formed).
+    ToolCallsTruncated {
+        /// How many calls the provider asked for.
+        requested: usize,
+        /// How many were kept for dispatch.
+        kept: usize,
+        /// Which round.
+        round: u32,
+    },
+    /// The provider reported the context window as exceeded for a request; the
+    /// injected-context budget was shrunk and the request reassembled for one
+    /// bounded retry attempt. The record is deliberately sanitized: budget
+    /// sizes and attempt counts only, never prompt or result content.
+    ContextBudgetShrunk {
+        /// Which round of the loop.
+        round: u32,
+        /// 1-based retry attempt within this provider request.
+        attempt: u32,
+        /// Injected-context budget before the shrink, in characters.
+        from_budget_chars: usize,
+        /// Injected-context budget after the shrink, in characters.
+        to_budget_chars: usize,
+    },
     /// The turn produced a final answer.
     TurnCompleted {
         /// How many provider round-trips it took.

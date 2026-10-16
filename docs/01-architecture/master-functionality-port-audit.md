@@ -1,6 +1,6 @@
 # Master Functionality Port Audit
 
-> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：文中 Lost Capabilities（:563-589，实为 27 项）多数已由 M1A/M1B/M1C/M2A/M2B/M2C/M2D/M3A 重新实现，本表已过时；DEFER 清单仍有效并对应 ROADMAP §4 P3-P7。
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：文中 Lost Capabilities（:563-589，实为 27 项）多数已由 M1A/M1B/M1C/M2A/M2B/M2C/M2D/M3A 重新实现，本表已过时；DEFER 清单仍有效并对应 ROADMAP §4 P3-P7。
 
 ## 1. Git State
 
@@ -165,7 +165,7 @@ Reuse opportunity
 | Session | `apeireth-runtime::canonical::Session` + `SessionStore` seam | `SessionManager` in-memory `HashMap` with cloned `SessionState` | Canonical | Absorb selective metadata/timestamps; do not import second owner |
 | Trace | `ExecutionTrace` / `SessionEvent` structured events | `AuditHashChain` + `Telemetry` atomics | Canonical | Reuse audit-chain hash primitive as governance hook, not as trace |
 | Governance | `GovernanceHook` / `Decision` Allow/Deny/RequireApproval | 5-gate pipeline, onion, PII, audit chain | Canonical semantics; reuse policy implementations | ADAPT PII/audit/onion into hooks |
-| Storage | `apeireth-storage` (durability) not yet created; `InMemorySessionStore` seam | real SQLite pool + MemoryStore + VectorIndex + graph | Canonical owner + master implementation | Strong donor: DIRECT_PORT pool/memory/vector/graph primitives |
+| Storage | `apeireth-storage` (durability) not yet created; `InMemorySessionStore` seam | real SQLite pool + MemoryStore + VectorIndex + graph | Canonical owner + master implementation | Strong baseline: DIRECT_PORT pool/memory/vector/graph primitives |
 | Memory | companion cognition consumes session; durable store in storage | `MemoryStore` inside storage; runtime retrieves ACT-R items | Split: storage vs companion vs runtime | ADAPT MemoryStore into storage; retrieval into runtime/companion |
 | Gateway | `canonical_entry` calls `Runtime::execute` | Axum router with direct host subsystem access | Canonical | ADAPT selected endpoints; drop direct access and mock routes |
 | Streaming | canonical `StreamEvent` in protocol; gateway transport SSE | `WsFrame`, `SseBroadcaster`, presence SSE | Canonical contract + master transport pieces | Reuse SSE broadcaster/WS frame parser with canonical payloads |
@@ -421,12 +421,12 @@ SessionManager = ABSORBED by canonical session; LifecycleHandle/HybridRouter = D
 | Intent Brier | `intent_brier.rs` | REAL | sliding-window Brier scores |
 | Many remaining modules | ~80 files | STUB/PARTIAL | small simplified modules with honest "0 装 PASS" notes |
 
-Companion is valuable as **implementation donor** for emotion, Borbely, Brier, and
+Companion is valuable as an **existing implementation** for emotion, Borbely, Brier, and
 observer capture. Dream and curiosity need adaptation and better memory input.
 
 ---
 
-## 12. Provider / Protocol Donor Code
+## 12. Provider / Protocol Source Code
 
 Reusable low-level code:
 
@@ -758,12 +758,12 @@ McpRegistry / MCP install into ToolRegistry
 Master `reconstruction_v2` is primarily useful as:
 
 ```text
-B) implementation donor
+B) implementation source
 ```
 
 Explanation: the master architecture is a God-Object runtime with raw credentials,
 raw CoT in public contracts, duplicate registries, and Gateway direct subsystem
-access. It cannot serve as the architecture donor. However, a substantial subset of
+access. It cannot serve as the architecture baseline. However, a substantial subset of
 its implementation is real, tested, and deterministic: SQLite storage, memory
 retrieval, several tools, sandbox primitives, governance primitives, emotion, VAD,
 MCP protocol, and protocol DTO parsers. The correct process is to port those pieces

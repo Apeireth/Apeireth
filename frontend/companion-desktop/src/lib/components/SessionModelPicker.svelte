@@ -7,6 +7,8 @@
     value: string;
     onSelect: (id: string) => void;
     disabled?: boolean;
+    /** 弹层向上翻（输入栏位等底部锚点用）；缺省向下（头部等顶部锚点用）。 */
+    up?: boolean;
   }
 
   let {
@@ -14,6 +16,7 @@
     value = '',
     onSelect,
     disabled = false,
+    up = false,
   }: SessionModelPickerProps = $props();
 
   let open = $state(false);
@@ -74,7 +77,7 @@
 
   {#if open}
     <div class="scrim" onclick={() => (open = false)} aria-hidden="true"></div>
-    <div class="dropdown" role="listbox" aria-label="模型列表">
+    <div class="dropdown" class:up role="listbox" aria-label="模型列表">
       <div class="search">
         <Search size={13} />
         <input bind:value={query} placeholder="过滤模型" />
@@ -169,6 +172,10 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+  .dropdown.up {
+    top: auto;
+    bottom: calc(100% + 8px);
   }
   .search {
     display: flex;

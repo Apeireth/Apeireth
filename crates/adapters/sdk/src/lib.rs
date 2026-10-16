@@ -6,8 +6,9 @@
 //!
 //! 本 crate 是 Apeireth AGI 操作系统的 **多语言 SDK 统一入口**:
 //! - 跨语言 (Python/Node/Go/Rust) 客户能拿到一致的 WireFormat / 版本协商 / 错误码
-//! - R20 阶段 6 增 `ApeirethClient` 客户 SDK 表面 (1.0 release #13 sdk)
-//! - 6 工具 method + 8 帧 WS + 5 auth 组件 + K-1 强校验 4 条
+//! - R20 阶段 6 增 `ApeirethClient` 客户 SDK 表面 (1.0 release #13 sdk;
+//!   W5 2026-10-10 HTTP 真传输已接, WS 仍 stub)
+//! - 6 工具 method (HTTP 真传输) + WS 8 帧 (stub 守门) + 5 auth 组件 + K-1 强校验 4 条
 //!
 //! 任何破坏跨语言一致性的"优化"都违反 S-1 (北: 统一表面).
 //!
@@ -22,8 +23,11 @@
 //!
 //! - 复用 `apeireth-protocol::ws_v1` 5 集成点 (WsFrame / ToolInvokeFrame / 3 个 WS 编译期常量)
 //! - 复用 workspace 共享 deps (reqwest 0.12 / tokio 1.40 / serde 1.0 / thiserror 1.0)
-//! - 1:1 翻译 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
-//! - 1:1 翻译 `apeireth-api::ws_v1` 8 帧 (阶段 6 stub, R21 真接)
+//! - 语义对齐 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
+//! - 语义对齐 `apeireth-api::auth` 5 组件 (Bearer / keyring / token bucket / audit / quota)
+//! - **W5 真传输 (2026-10-10)**: 6 工具 method + `invoke_tool` = 真 HTTP
+//!   (reqwest → `/v1/tools/{tool}/invoke`); WS 8 帧 (`invoke_stream`) 仍 stub
+//!   (`STUB_MODE` 守门, WS 服务端端点 = 后续项)
 //!
 //! 不写自己的 wire format parser / version compare / token bucket 状态机.
 //!
@@ -81,10 +85,14 @@
 pub mod abi;
 // R177: organ invariants (5 tests + 2 Kani)
 pub mod error;
+// 协议族共用基础设施: 错误闭合词表 / 长度前缀帧编解码 / 日志脱敏
+pub mod error_taxonomy;
+pub mod frame_codec;
 mod organ_kani_proofs;
+pub mod redact;
 pub mod version;
 pub mod wire;
-// R20 阶段 6: 1.0 release #13 sdk — 客户 SDK client stub (per 蓝图 §3.5)
+// R20 阶段 6: 1.0 release #13 sdk — 客户 SDK client stub (按接口契约)
 pub mod client;
 
 // R122-8: 多语言 SDK skeleton (PyO3 + napi-rs + cbindgen 桥接)
@@ -123,7 +131,7 @@ pub use client::{
 /// **K-1 强校验编译期守门 #1**: 平台名 = "apeireth".
 ///
 /// 跟 client.rs 内部 `PLATFORM_NAME` 守门双向验证 (跨 module 编译期 0 漂移).
-/// 注: 实际值在 client.rs (per 1:1 翻译 v0.9.21), 此处仅 const 断言引用.
+/// 注: 实际值在 client.rs (per 对齐既有实现), 此处仅 const 断言引用.
 #[allow(dead_code)]
 const _K1_LIB_PLATFORM_APEIRETH: &str = "apeireth";
 
@@ -209,7 +217,7 @@ const _MODULE_COUNT: usize = {
 // - `body` 字段: **object** (任意 JSON, 4 语言用各自的 `Value`/`dict`/`map`/`interface{}`)
 //
 // **不漂移**: WireFormat schema 变更要走 RFC 流程, 不能单方面改 sdk.
-// R21 真接 apeireth-api 时, server 必跟 SDK 这套 schema 1:1 对齐.
+// R21 真接 apeireth-api 时, server 必跟 SDK 这套 schema 一致.
 //
 // **C-ABI 跨语言表面** (per abi.rs extern "C" 入口):
 // - `apeireth_sdk_init() -> i32` — 初始化 (返 0 = OK, -1 = 失败)
@@ -222,8 +230,8 @@ const _MODULE_COUNT: usize = {
 //
 // 1. SDK_VERSION major == 1 (workspace lock)
 // 2. WS_PROTOCOL_VERSION == "1" (apeireth-protocol::ws_v1 lock)
-// 3. PLATFORM_NAME == "apeireth" (跟 v0.9.21 1:1 翻译)
-// 4. TOOL_WHITELIST.len() == 6 (per 蓝图 §2.2)
+// 3. PLATFORM_NAME == "apeireth" (对齐既有实现)
+// 4. TOOL_WHITELIST.len() == 6 (按接口契约)
 // 5. SDK_TOOL_WHITELIST.len() == 8 (6 工具 + 2 通用 invoke)
 // 6. STUB_MODE == true (R21 才改 false, 经 8 哲学锚 + 主人审)
 // 7. AUTH_HEADER_NAME == "Authorization" (HTTP 1.1 RFC 7235)
@@ -232,14 +240,14 @@ const _MODULE_COUNT: usize = {
 // # ========================== 跟 LOCKED crate 的边界 ==========================
 //
 // 24 LOCKED crate (5 P0 + 9 skeleton + 1 observability + 8 原有; R128 + R148 已降级, 入口签名仅保 3 项不可变脊柱):
-// - `apeireth-protocol` — **5 集成点直接复用** (1:1 翻译 ws_v1)
+// - `apeireth-protocol` — **5 集成点直接复用** (语义对齐 ws_v1)
 // - `apeireth-keyring` — 阶段 6 不依赖 (留 R21 真接 keyring 时再用)
 // - `apeireth-machine-id` — 阶段 6 不依赖 (留 R21 真接 machine-id 时再用)
-// - `apeireth-tools` — 阶段 6 不依赖 (SDK 是 client 表面, tools 是 server 表面, 1:1 翻译蓝图 §2.2 D-02 子路径)
+// - `apeireth-tools` — 阶段 6 不依赖 (SDK 是 client 表面, tools 是 server 表面, 接口接口契约 鉴权子路径)
 // - `apeireth-api` — 阶段 6 不直接 dep (R21 真接时 `path = "../apeireth-api"` 即可)
 //
 // **0 改 LOCKED crate** (per 8 项承诺 #3): 本文件不 import 上面任何 crate,
-// 仅在 client.rs 里 1:1 翻译 apeireth-protocol 的 5 集成点 (类型 / 常量).
+// 仅在 client.rs 里 语义对齐 apeireth-protocol 的 5 集成点 (类型 / 常量).
 //
 // # ========================== 错误码双向往返测试用例 ==========================
 //
@@ -267,14 +275,22 @@ const _MODULE_COUNT: usize = {
 // R146: 5 SDK -> 1 apeireth-sdk (feature flags)
 // 4 子 SDK 由 feature 门控, 0 装时 0 编译 (per O-5 不假装)
 //
-// 字段级引用 R20 阶段 4 (lark / livekit / sandbox / voice 4 个 stub 1:1 翻译).
+// 字段级引用 R20 阶段 4 (lark / livekit / sandbox / voice 4 个 stub).
 // =============================================================================
 
 #[cfg(feature = "lark")]
 pub mod lark;
 #[cfg(feature = "livekit")]
 pub mod livekit;
-#[cfg(feature = "sandbox")]
+// IM 快捷接入 wire 面 (渠道 kind / 入站解码 / 出站信封 / 审批卡片 / 分段 / 传输)。
+// `im-feishu` 渠道消费 lark 适配族 (webhook 信封解析 + 消息内容形状 + 消息预算),
+// 因此与 lark 同门控; test 构建恒编译, 保证 wire 面单测进入默认测试面。
+#[cfg(any(feature = "lark", test))]
+pub mod im;
+// sandbox 客户端协议层: 下游按 feature `sandbox` 启用; test 构建恒编译,
+// 保证编排面单测 (生命周期/配额/错误分类/并发/超时) 在标准
+// `cargo test --workspace` 验证里真实运行。
+#[cfg(any(feature = "sandbox", test))]
 pub mod sandbox;
 #[cfg(feature = "voice")]
 pub mod voice;

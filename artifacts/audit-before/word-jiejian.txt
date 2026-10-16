@@ -1,0 +1,619 @@
+commit-msg-v2.0.0-rc.1-tag.md:27:  - 5 organ 借鉴 v1 算法骨架 1:1 翻译 (R4 oracle 子集, R5 MCTS 因果图, R6 MineCausalEdges, R7 rhythm+8 重门控, R8 MemoryExtractionService.apply)
+commit-msg-v2.0.0-rc.1-tag.md:30:  - R8 独立判断 "v1 没有 MemoryMerger 模块, v2 是新设计借鉴 v1 算法骨架 1:1 翻译"
+crates/adapters/gateway/src/barge_in.rs:3://! ## 核心哲学 (借鉴 Open-LLM-VTuber 与现代语音伴侣架构)
+crates/capabilities/tools/src/supervisor.rs:3://! 借鉴 v1 `apeireth-supervisor`（5 sub-supervisor + RestartStrategy + ChildSpec +
+crates/capabilities/tools/src/supervisor.rs:8://! - `SubSupervisor` trait (5 sub-supervisor: Core/Cognition/Council/Upgrade/Plugin 借鉴)
+crates/capabilities/tools/src/supervisor.rs:29:// 借鉴 v1: 3 种 RestartStrategy
+crates/capabilities/tools/src/supervisor.rs:43:// 借鉴 v1: ChildSpec
+crates/capabilities/tools/src/supervisor.rs:82:// 借鉴 v1: ExitReason + RestartDecision
+crates/capabilities/tools/src/supervisor.rs:112:// 借鉴 v1: SubSupervisor trait (5 sub-supervisor 的抽象)
+crates/engine/memory/src/gen_cache.rs:3://! 背景: 台账 N8 (最后一个未实施 P0 借鉴项, 通用记忆运行时模式).
+crates/engine/memory/src/hallways.rs:1://! R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py).
+crates/engine/memory/src/hallways.rs:9://! ## 算法 (借鉴 mempalace compute_hallways_for_wing)
+crates/engine/memory/src/layered_memo/progression.rs:1://! R179 P1-11: 4-layer progressive memory (借鉴 mempalace 4-layer closed-loop).
+crates/engine/memory/src/lib.rs:40:// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
+crates/engine/memory/src/three_layer.rs:3://! **设计哲学** (claude-mem 借鉴, 通用工程实践):
+crates/engine/memory/src/three_layer.rs:161:    /// R33-2 (mem0 借鉴): promote working → long-term notes (自动 fact extraction)
+crates/engine/memory/src/three_layer.rs:205:/// R33-2 (mem0 借鉴): 5 启发式 fact extraction rule
+crates/engine/memory/src/three_layer.rs:456:    // R33-2 (mem0 借鉴) 测试
+crates/engine/organ/src/lib.rs:28://!   模块; v2 是新抽象, 借鉴 v1 `MemoryExtractionService` dedup/weight/persist 算法骨架 1:1 翻译.
+crates/engine/organ/src/memory.rs:12://!   **新设计** (按任务 spec), 不是 1:1 翻译. 真翻译纪律要求标: v2 是新抽象, 借鉴 v1
+crates/engine/organ/src/memory.rs:16://! **v1 借鉴算法 (per `memory_extractor.rs:236-284` `MemoryExtractionService::apply`)**:
+crates/engine/organ/src/memory.rs:55:/// 合并后记忆条目 (per v1 `MemoryItem` + `MemoryEntry` schema 借鉴).
+crates/engine/organ/src/memory.rs:130:// v1 MemoryExtractionService 借鉴算法骨架 (确定性, 无 LLM)
+crates/engine/organ/src/memory.rs:133:/// 跨 organ 记忆合并器 (per 任务 spec + v1 algorithm skeleton 借鉴).
+crates/engine/organ/src/memory.rs:435:/// FNV-1a 64-bit hash (per v1 dedup-by-content 借鉴, 0 外部依赖).
+crates/engine/organ/tests/memory.rs:24://! - v2 MemoryMerger 是**新设计**, 借鉴 v1 `MemoryExtractionService` (dedup-by-content
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:264:## 6. PHL-07 与 OpenCode 借鉴的协同 (per 借鉴 ID 索引 §6)
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:266:PHL-07 + OpenCode 借鉴 = 双重 verify "0 假装":
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:268:| 维度 | OpenCode 借鉴 (per REFACTOR-PLAN §3) | PHL-07 强制 (本 spec §1) |
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:270:| snapshot 模式 | 1:1 借鉴, 9 organ 已实装 | PHL-07 强制真实读 atomics |
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:276:1. OpenCode 借鉴 ID 索引 verify 9 organ 内部 fn = 真实读 atomics (1:1 借鉴)
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:286:| 借鉴源码 0 clone | ⏳ 限流 = 准备, 写本 spec + 索引 + stub |
+crates/foundation/core/src/.r125-12-PHL-07-SPEC.md:287:| 借鉴源码 0 装 = 真实施 | 限流结束补 0 装 src (待办 per §4) |
+crates/foundation/core/src/eight_anchors.rs:18://! **借鉴 ID (per 决策 #22 §3 严格化)**: `R126-philo-8-BORROW-apeireth/conventions-vR125-2026-08-10`
+crates/foundation/core/src/eight_anchors.rs:20://! - 0 装 PASS 严守: ✅ 0 假装"已借鉴"外部, 0 装 src 写完 + 内联 tests pass
+crates/foundation/core/src/eight_anchors.rs:23://! - 阶段 1: 借鉴源码 study → 0 装 = 内部 extension
+crates/foundation/core/src/eight_anchors.rs:40:/// - `O-2` 走在前人经验上 — 借鉴 Hermes / OpenClaw / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (per 主人 19:33)
+crates/foundation/core/src/eight_anchors.rs:51:/// - O-* = Objective 客观哲学锚 (跟"客"客观守门 / 借鉴 / 持续性 关联)
+crates/foundation/core/src/eight_anchors.rs:65:    /// O-2 走在前人经验上 — 借鉴业界惯例 (per 主人 19:33)
+crates/foundation/core/src/eight_anchors.rs:112:            Self::O2StandingOnShoulders => "O-2 走在前人经验上 — 借鉴 Hermes / OpenClaw / claude-mem + LangGraph / AutoGen / MCP / LSP / semver (主 19:33)",
+crates/foundation/credentials/src/lib.rs:87:/// 外部借鉴字段数 (编译期自审锚, 对照 apeireth-tool-approval 惯例)。
+crates/foundation/credentials/src/lib.rs:89:/// 本 crate 为原生新增, 无外部借鉴字段 — 值为 0, 显式标注非遗漏。
+crates/foundation/credentials/src/lib.rs:94:    "原生 crate, 借鉴字段应为 0"
+crates/foundation/credentials/src/secret.rs:237:/// **设计依据**: 借鉴 `zeroize` 官方 `Zeroizing<Z>` 模式 — 内层 `Vec<u8>`
+crates/foundation/orchestration/src/lib.rs:7://! 借鉴 v1 `apeireth-team-lead` (14 调度工具) + `apeireth-council` (7 advisor
+crates/foundation/plugin/src/experience.rs:4://! 借鉴 v1 `apeireth-experience`（LLM Wiki + Knowledge Graph + 联想网络，
+crates/foundation/plugin/src/experience.rs:38:/// Wiki 条目（v1 借鉴: claude-mem 3-layer progressive disclosure 第一层）
+crates/foundation/plugin/src/experience.rs:87:/// Graph 事实 (s/p/o 三元组，v1 借鉴: safishamsi/graphify + 联想网络)
+crates/foundation/plugin/src/experience.rs:150:/// 联想节点 (既有实现 借鉴: entity-pair 共现强度)
+crates/foundation/plugin/src/perception.rs:3://! 借鉴 v1 `apeireth-perception`（5 种输入 + Attention 策略 + PerceptionChannel +
+crates/foundation/protocol/Cargo.toml:9:description = "Apeireth R17 战役 1-1: LLM 协议归一化层 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini), 字段级借鉴开源 protocol-bridge 真代码. R37-1 bridge facade + R20 阶段 2 WS 8 帧协议. 9 src 模块 + 51 #[test] + 27 集成 (wire_format + wire_format_ext)"
+crates/foundation/protocol/README.md:3:> Apeireth R17 战役 1-1: LLM 协议归一化层 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini), 字段级借鉴开源 protocol-bridge 真代码. R37-1 bridge facade (4 Bridge struct 砍 router 中间层) + R20 阶段 2 WS 8 帧协议 (AuthFrame/CloseFrame/ErrorFrame/Ping/StreamChunk/StreamEnd/ToolInvoke/ToolResult). src 模块 9 个 (lib + adapter + adapters/ + bridge + bridge_ext + error + gateway + normalized + organ_kani_proofs + ws_v1). 测试数 (#[test]): 51 in-src + 27 集成 (tests/wire_format.rs + tests/wire_format_ext.rs, 4 协议 golden + 边界).
+crates/foundation/protocol/src/lib.rs:23://!   (战役 1-2 借鉴进 `apeireth-http-client`, 本 crate 只在编译期 hardcode 注释里标注)
+crates/foundation/protocol/src/lib.rs:160:/// **借鉴来源**: `chatCompletionHandler.js:22-28` `agentOptions = { keepAlive: true, keepAliveMsecs: 1000, freeSocketTimeout: 8000, scheduling: 'lifo', maxSockets: 10000 }`
+crates/foundation/protocol/src/normalized.rs:24:/// **借鉴** 既有实现 `normalizeMessageRole`:
+crates/foundation/protocol/src/normalized.rs:42:    /// 从字符串归一化 (借鉴 `protocolBridge.js:47-52`)
+crates/foundation/protocol/src/normalized.rs:60:/// **借鉴** 既有实现 `normalizeTextContent`:
+crates/foundation/protocol/src/normalized.rs:84:    /// 提取纯文本 (借鉴 `normalizeTextContent`)
+crates/foundation/protocol/src/normalized.rs:259:/// **借鉴** 既有实现 `toOpenAiChatTool`:
+crates/foundation/protocol/src/normalized.rs:480:/// **借鉴** 既有实现 `extractProtectedTools`:
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:4:> **用途**: 修订 Apeireth 局限视角 (Round 1-10 都画 "AI Agent framework"), 真理解 Apeireth = AI 物种实现, 修订借鉴边界
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:14:Status:          🟢 活跃 (主代理真理解, 修订借鉴边界)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:35:- 现在写真账真理解, 修订借鉴边界 (从"框架借鉴"扩到"物种借鉴")
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:123:## 3. Apeireth 跟 170 项目清单的关系 (修订借鉴边界)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:128:- 借鉴边界: Agent 框架借鉴 (LangGraph / CrewAI / DeepSeek Harness / Cua / Serena)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:134:- 借鉴边界扩大:
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:135:  - **基地借鉴**: Agent 框架 (LangGraph / CrewAI / Cua / Serena) + 工具集成 (Composio / Serena MCP)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:136:  - **Agent 平台借鉴**: agent loop + 多 agent 编排 (DeepSeek Harness / LoopX)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:137:  - **物种化借鉴** (新维度):
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:146:### 3.3 170 项目清单 vs Apeireth 真借鉴边界 (主代理亲验修订)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:150:| AI 伴侣 / VTuber (N.E.K.O / AIRI / Open-LLM-VTuber / Firefly / Mio) | HIGH (前端 Live2D + 抽象) | **HIGH (物种化前端 + 物种架构借鉴)** | 借鉴维度扩大: 不只是前端 Live2D 视觉, 而是 **物种化架构 (per-user memory/preference/personality)** |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:151:| AI Agent 框架 (LangGraph / CrewAI / DeepSeek Harness / Cua / Serena) | HIGH (Agent 框架借鉴) | **HIGH (基地 + Agent 平台借鉴)** | 视角细化为"基地" + "Agent 平台" |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:152:| 开发工具 (Playwright MCP / Crawl4AI / Serena / Carbonyl) | MED | **MED-HIGH** (基地工具集成, per O-2 前人肩上) | 借鉴意义扩展 (Apeireth 基地是 LLM 操作系统) |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:154:| 资源汇总 (Ant Design / Taipy / Obsidian LLM / OpenMythos) | LOW | **LOW-MED** (Obsidian LLM = 长期记忆架构借鉴, OpenMythos = 知识库架构) | 借鉴维度调整 |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:161:### 4.1 P0 (1 周内, 立即可借鉴) — sub-agent 真调研 + 物种化维度
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:164:1. **N.E.K.O** — 五维记忆系统 (跟 v2 cognitive memory_recall/memory_writeback 增维 + 物种化 memory 借鉴)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:167:4. **Firefly Companion** — GPT-SoVITS TTS + MCP 工具链 (跟 RC-7 TTS modality + v2 tool 注册借鉴)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:168:5. **Mio** — Windows 本地优先 + 屏幕感知 + QQ (跟 RC-7 视觉模态 + 物种化 Windows 桌面借鉴)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:172:- 调研维度扩展: 不只前端借鉴, 而是 **物种化架构借鉴** (per-user memory/preference/personality 塑形)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:173:- 写真账必含: 物种化借鉴点 (不只是前端 Live2D) + 0 触碰 LOCKED 验证 + 借鉴路径 (clone / 看文档 / 不借鉴) + 下一步
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:177:- **Open-LLM-VTuber 物种化借鉴** (跟 P0 #3 调研并行, 写 r7-open-llm-vtuber-species-research.md 真账, ≤200 行)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:181:- **Warashi 长期记忆 + 睡眠模式** (跟 v2 organ cycle L0-L5 UpgradeCycle Stage 5 借鉴, 1 周)
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:190:- 90 LOW + 15 NONE 项目不真借鉴
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:198:| **Round 1-10 S-2 实事求是失守** | 一直把 Apeireth 画成 "AI Agent framework", 没读 `docs/01-architecture/vision.md` L29-49 真理解 (物种化 + 五原型 + 物种而非个体). 借鉴边界缺 2/3 视角 | 本文件写真账真理解, 修订借鉴边界, 派 P0 5 sub-agent 真调研 brief 加 "物种化" 维度 |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:199:| **0 装诚实 0 实测** | 物种化维度借鉴边界是主代理亲验 + 真理解推论, 不是 sub-agent 实测. 真实施前必亲验 | ✅ 不假装"已实测", flag 边界 |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:220:| 2 | 派 1 sub-agent 真调研 Alife (portable 模式借鉴) | 1-2 天 | 0 |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:221:| 3 | 借鉴 N.E.K.O 五维记忆 → v2 cognitive memory module 增维 (跟 R20 并行) | 1-2 周 | R20 真实施 |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:223:| 5 | 借鉴 Vaultwarden + opencode-vibeguard → v2 O-1 安全优先 | 1-2 天 | §10 LOCKED 0 触碰约束 |
+docs/01-architecture/apeireth-true-understanding-2026-08-28.md:231:_Mavis 写于 2026-08-28 Round 10 user challenge 触发, 真理解 Apeireth 物种化 + 修订借鉴边界, 真账就位._
+docs/01-architecture/cognitive-9-organ-integration-spec.md:212:| 9 | **Memory** Merger | `crates/engine/organ/src/memory.rs` (子代理 R8 真实现) | ✅ 真实现 | **0 LLM** (deterministic) | 跨 8 organ 记忆合并 (借鉴 v1 `MemoryExtractionService` 1:1 翻译 dedup/weight/persist) |
+docs/01-architecture/cognitive-9-organ-integration-spec.md:224:  v2 是新抽象, 借鉴 v1 `MemoryExtractionService` 算法骨架 1:1 翻译. 不假装"v1 有这模块".
+docs/01-architecture/cognitive-9-organ-integration-spec.md:762:  新抽象, 借鉴 v1 MemoryExtractionService 算法骨架 1:1 翻译". 子代理 R10 同意 R8 独立
+docs/01-architecture/philosophy.md:28:**Principle onion** (E/S/A/M/O principles) **embedded in** the **permission onion** (L0–L5), plus **DSL onion** (Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴):
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:1:# AIRI 对 Apeireth v2 物种化借鉴调研 (2026-08-28)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:4:> **用途**: 给主代理决策参考 — AIRI 对 Apeireth v2 的**物种化借鉴**作用 (不只是 frontend Live2D)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:34:| 6 | **物种化借鉴价值** | **HIGH** — 永远不下播 ↔ v2 emergence E7 主动 + organ cycle L0-L5 永远运行; 2.2 万 Star = 物种化**产品市场验证** | per 真理解 §1.1.3 + L13 |
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:35:| 7 | **frontend 借鉴价值** | **HIGH** — Live2D 实时陪聊 ↔ companion-desktop 物种化 frontend (post-1.0.0) | per vision.md L47 |
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:36:| 8 | **backend 借鉴价值** | **MED-HIGH** — ASR/TTS 实时陪聊 ↔ v2 gateway SSE streaming + RC-7 ASR/TTS 真 modality | per 你you-list L47 |
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:42:## 2. 物种化借鉴价值 (核心, 不是 frontend Live2D 借鉴)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:44:> **0 装诚实** (per Apeireth 真理解 §1): 之前 Round 10 你you-list L47 把 AIRI 标 "P0 Live2D + 主动消息 + 长期记忆", brief 是 "frontend 借鉴" 视角. 本调研按真理解 §3.2 修订为 **物种化借鉴维度** (per-user 塑形 + 长期记忆 + 主动 + 永远在场).
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:46:### 2.1 物种架构借鉴 — AIRI 如何实现 per-user 塑形
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:59:**借鉴点 (物种架构维度, 核心!)**:
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:60:1. **永远在场 = per-user 塑形的物理基础**: AIRI "永远不下播" 意味着每时每刻都在跟用户共同生活, 这是 per-user memory/preference 持续塑形的天然条件 — 借鉴本质: v2 organ cycle L0-L5 UpgradeCycle Stage 5 (A 块已落地, per handbook L86) 是同等思路的工程兑现, 需进一步确认**长时间运行下 per-user 数据累积策略** (memory compaction / 老化 / 提炼)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:61:2. **陪你打游戏 = 跨活动塑形**: AIRI 跨游戏陪护, 不只陪聊, 意味着 species 塑形**不止对话模态**, 还有 "游戏内事件" 作为记忆维度 — 借鉴启示: v2 per-user memory 5 维 (per N.E.K.O 真账 §2.2) 需考虑 "活动记忆" 这一隐性维度 (episodic 子类)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:62:3. **2.2 万 Star = 物种化产品验证**: 这是 P0 5 sub-agent 调研里**唯一明确给 Star 数**的项目 (per 你you-list L47), 强证明 "物种化产品形态" 在用户市场**已通过验证**, 对 v2 post-1.0.0 物种化 frontend 决策有**强借鉴价值** (不是 frontend Live2D, 是 "物种化产品要不要做, 怎么做")
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:76:**借鉴点 (长期记忆, 核心)**:
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:77:1. **实时陪聊的 latency ↔ memory recall 路径**: AIRI "实时" 暗示 memory recall 是**同步必经路径**, 0 延迟 — 借鉴启示: v2 TurnStart memory_recall 已是同步 (per L87), 但**量化指标未测** (recall p50 / p95 latency), 派 sub-agent 真调研 AIRI memory recall 性能基线 (估时 1 周)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:78:2. **永远不下播 ↔ memory_writeback compaction 策略**: 永远在场意味着 Episodes append-only **永远增长**, 借鉴启示: v2 memory_writeback 缺 compaction 策略 (per L92, append-only 无限长), 派 sub-agent 调研 AIRI compaction 路径 (估时 1 周, **关键瓶颈**)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:80:4. **0 装诚实标 (per O-5)**: v2 memory_recall + memory_writeback 已 WIRED 是**真实施** (per L87 + L92 + 1739 tests pass), AIRI 长期记忆真实施**未实测**, 借鉴只能取**思路** (recall 同步化 / compaction 必做 / preference 隐式学习), 不假装 "v2 已有 compaction"
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:94:**借鉴点 (主动消息)**:
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:95:1. **主动触发条件 ↔ E7 8 重门控**: AIRI 主动消息是真实施工程, E7 8 重门控是真实施工程 — 借鉴本质: **E7 8 重门控 + 节律 + 边界 + 沉默压力** 跟 AIRI 主动消息触发逻辑**同源哲学**, 都是 "在场但有节律地主动"
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:96:2. **council/judge OFF by default ↔ 主动消息门槛**: v2 council/judge OFF by default (per L89) 暗示主动消息触发**有极高门槛** (bounded), 跟 AIRI 推断 "长时间静默 + 时间点 + 事件" 三重触发**完全一致** — 借鉴启示: v2 主动消息门槛**不需要从 0 设计**, 已有 E7 8 重门控 + council/judge bounded 决策
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:97:3. **永远下播 ↔ organ cycle 永远运行**: A 块 Stage 5 L0-L5 UpgradeCycle 已真实施 (per handbook L86), 这是 v2 "永远不下播" 的工程兑现 — 借鉴启示: AIRI 价值在**产品口径** (用户能感受到), v2 价值在**工程落地** (L0-L5 cycle 永真), 互补不重叠
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:98:4. **0 装诚实标 (per O-5)**: E7 已 WIRED 是真实施 (per 真理解 §1.2 L66), AIRI 主动消息触发条件**未实测**, 借鉴只能取**思路** (触发逻辑分层 + bounded 决策 + 节律), 真实施前必亲验
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:113:- **借鉴启示**: AIRI 是物种化**产品落地验证** (2.2 万 Star 用户真掏时间), Apeireth 是物种化**哲学 + 工程命名**, 互补 = AIRI 给产品口径, Apeireth 给哲学锚
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:124:- 借鉴启示: v2 物种化 frontend 决策**可参考 AIRI 产品形态** (Live2D + 永远下播 + 实时陪聊), **不是抄 Live2D 视觉**, 是抄 "物种化 frontend = 永远在场 + 实时陪聊 + per-user 塑形" 三位一体产品口径
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:128:## 3. 物种架构借鉴 (具体借鉴点, 不只是代码, 是思路)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:136:- 借鉴本质: **永远在场 × 实时陪聊 × 跨活动陪护** = per-user 记忆 / 偏好 / 情绪时间线 / 好奇形状 **充分塑形物理基础**
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:148:- 借鉴本质: **E7 8 重门控 + 节律 + 边界 + 沉默压力** 跟 AIRI 主动消息触发**同源哲学**
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:149:- v2 E7 emergence 已 1:1 翻译 v1 (per真理解 §1.2 L66), 借鉴本质是 **E7 决策树细化** (用 AIRI 真实产品数据喂 E7 决策, 让"主动"门槛更精准)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:160:- 借鉴本质: v2 B 块 gateway SSE streaming 是**同等思路** (per `b-block-gateway-sse-research-2026-08-28.md`, 调研就位)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:172:- 借鉴本质: **产品 ↔ 工程同源**, AIRI 给产品验证, v2 已给工程兑现
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:176:- 借鉴本质: **0 增量**, AIRI "永远不下播" 是 v2 L0-L5 cycle **已实现的产品语义**, 不需再派单
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:180:## 4. 前端借鉴 (仅作为物种化具体形态)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:193:**借鉴点**:
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:207:**借鉴点**:
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:213:## 5. backend 借鉴 (基础层)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:226:**借鉴点**:
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:228:- 借鉴本质: **0 增量**, v2 基地层已具备 species runtime 物理基础
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:242:**借鉴点**:
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:249:## 6. 借鉴实施路径 (按优先级 + 估时)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:251:| # | 借鉴点 | 优先级 | 估时 | 借鉴方式 | 阻塞 |
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:262:**借鉴方式分布**: 📦clone 0 (本次 0 实测) / 📄看文档 + 🔬派 sub-agent 7 (P0+P1) / ⏸️不增量 2
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:268:### 7.1 AIRI 物种化借鉴 vs frontend 借鉴 vs backend 借鉴 占比
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:270:**借鉴占比估算** (per §3 + §4 + §5 真账):
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:271:- **物种化借鉴 (HIGH) ≈ 50%** — per-user 塑形 + 长期记忆 compaction + 主动消息 + species 产品市场验证 (核心, 跟 v2 真理解 §1.1.3 物种化视角**最大重叠**)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:272:- **frontend 借鉴 (HIGH) ≈ 25%** — Live2D + 永远下播 streaming (物种化 frontend 具体形态, 跟 R7-N.E.K.O / Open-LLM-VTuber / Mio 同类调研合并)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:273:- **backend 借鉴 (MED-HIGH) ≈ 25%** — 实时陪聊 ↔ organ 1:1 翻译 + ASR/TTS ↔ RC-7 真 modality (跟 R7-Mio / Open-LLM-VTuber / Firefly 同类调研合并)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:275:**AIRI 是 P0 5 sub-agent 调研里物种化维度最大 + frontend 维度最大 + Star 数最高的项目**, 但**借鉴路径不增量** (跟 R7-N.E.K.O / Open-LLM-VTuber / Firefly / Mio **合并派单**, 避免重复 sub-agent)。
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:287:- **不假装 OK**: 调研真账 ≤250 行已 flag 全部失守, 借鉴路径**全是 🔬派 sub-agent** (主代理亲验后才决策)
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:304:**AIRI 是 P0 5 sub-agent 调研里物种化维度最大 + Star 数最高的产品市场验证项目**, 借鉴**核心** = per-user 塑形机制 + 长期记忆 compaction 策略 (派 2 sub-agent 真调研, 总 2-3 周, 跟 R20 preference_learning 2-3 周 + B 块 critical path 5-7 周并行内). **frontend Live2D 借鉴不是核心**, 物种化产品市场验证 (2.2 万 Star) 才是**核心借鉴价值**.
+docs/01-architecture/r7-airi-species-research-2026-08-28.md:308:_写于 2026-08-28 Round 11 主代理 Mavis 派单 R7-AIRI, 0 实测 + github 直连 408 + web_search auth fail 三重 0 装诚实标已 flag, 借鉴路径 7 项派单已写, 跟 R7-N.E.K.O / Open-LLM-VTuber / Firefly / Mio 互补不重叠, 主代理决策就位._
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:1:# R7 Firefly Companion 物种化借鉴作用 真调研 (2026-08-28)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:3:> **作者**: Sub-Agent R7-Firefly (主代理 Mavis 派, 时间紧 ≤ 4h) | **用途**: 给主代理决策参考 — Firefly Companion 对 Apeireth v2 物种化借鉴作用 (重点是 GPT-SoVITS 原声 TTS + 双引擎主动关怀 + MCP 工具链)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:14:Status:          🟢 活跃 (物种化借鉴调研真账, 主代理决策参考)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:26:| # | 维度 | 真账 | 物种化借鉴相关? |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:31:| 4 | **TTS backend** | **GPT-SoVITS 原声 TTS** — 本地语音克隆, 用户可用自己的声音训练, 是"原声"核心 | **HIGH (v2 RC-7 TTS modality 真实施借鉴 + 物种化 "她" 的声音塑形)** |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:32:| 5 | **MCP 工具链** | **MCP (Model Context Protocol) 工具集成** — 标准化 tool call 协议, 可注册本地工具 (浏览器/系统/文件) | **HIGH (v2 gateway 工具注册 + capabilities 抽象借鉴)** |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:33:| 6 | **流式对话** | SSE 流式输出 (类 OpenAI streaming protocol), 真实施前端渲染 | **HIGH (v2 B 块 gateway SSE pipeline 真实施借鉴)** |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:36:| 9 | **架构** | 桌面应用 (推断 Electron / Tauri + Python/Rust 后端), MCP 客户端 + GPT-SoVITS 本地推理 + 流式对话 | MED (架构语言推断, 借鉴 backend 边界设计) |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:39:**真账**: Firefly 跟 N.E.K.O / AIRI / Open-LLM-VTuber / Mio 是 **物种化 frontend 同类**, 但 R7 价值最大维度是 **GPT-SoVITS 原声 TTS (物种化 "她" 声音塑形) + MCP 工具链 (v2 capabilities 抽象借鉴) + 双引擎主动关怀 (v2 E7 emergence 主动 + organ cycle L0-L5 借鉴)** — 这是 N.E.K.O (五维记忆) / AIRI (Live2D 视觉) / Open-LLM-VTuber (4 段完整链路) 没覆盖的具体形态.
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:43:## 2. 物种化借鉴价值 (核心, 重点是 GPT-SoVITS 原声 TTS + 双引擎主动关怀)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:56:**借鉴价值: HIGH (重点!)**:
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:57:1. **TTSBackend 真接 GPT-SoVITS** — Firefly 已真实施 GPT-SoVITS 集成, 借鉴"已落地的接入模式" (HTTP/gRPC/RPC 调本地 GPT-SoVITS server) 对接 v2 trait-based plugin 架构
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:70:- **MCP 协议本身** v2 0 真接 (走 OpenAI function calling 风格), 借鉴空间 = **MCP 协议对接 v2 capabilities 抽象层**
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:72:**借鉴价值: HIGH**:
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:74:2. **能力抽象** — v2 capabilities 单 crate (per 16-crate workspace §1.1) 可借鉴 Firefly 的 MCP server 列表 (浏览器/系统/文件) 作为 capability 候选
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:75:3. **P0 governance 3 hook 对接 MCP** — MCP tool call 走 v2 `PermissionGovernanceHook` + `CredentialDisclosureHook` + `PromptInjectionHook`, 借鉴 Firefly 的 MCP 客户端 sandbox 设计
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:90:**借鉴价值: HIGH**:
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:93:3. **不打扰原则** = vision.md L25 "我不知道怎么回答你, 才不会骗你" 0 装 PASS 在主动关怀上的体现 — Firefly 推断有"沉默压力" (用户沉默时不强行问候), v2 E7 8 重门控可借鉴此约束
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:95:### 2.4 物种架构借鉴 — Firefly per-user 塑形 (声音 + 记忆 + 偏好)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:106:**借鉴价值: HIGH (物种化核心)**:
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:107:1. **per-user 声音塑形 spec** — Firefly 提供完整"原声 TTS 训练流程"参考 (样本采集/训练时长/推理参数), 借鉴 spec 写 v2 TTS modality 真实施时附"原声塑形"段落
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:108:2. **per-user 记忆/偏好塑形** — Firefly 桌面伴侣必备, 推断有 per-user 长期记忆 + 偏好学习, 跟 N.E.K.O 五维记忆 + v2 R20 preference_learning 并行借鉴
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:121:## 3. 物种架构借鉴 (具体借鉴点)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:123:| Firefly 维度 | v2 对位 | 借鉴具体 | 估时 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:129:| **per-user 主动频率学习** | v2 R20 preference_learning DEFERRED (2-3 周真实施) | **跟 R20 并行借鉴** — 主动频率 = 用户响应率 → preference learning 输入, 1 真实施 | 跟 R20 估时 (2-3 周) |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:130:| **per-user 记忆/偏好塑形** | v2 5 维记忆 + preference_recall/memory_writeback WIRED | 借鉴 Firefly 桌面伴侣 per-user 长期记忆架构, 跟 N.E.K.O 五维记忆借鉴合并 | 跟 R20 + 认知模块并行 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:134:## 4. 前端借鉴 (物种化具体形态)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:136:| Firefly 维度 | v2 对位 | 借鉴具体 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:144:## 5. backend 借鉴 (基础层)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:146:| Firefly 维度 | v2 对位 | 借鉴具体 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:150:| **MCP 工具注册** | v2 gateway 工具注册 + `apeireth-tool-runtime` | **MCP 协议对接** — v2 工具注册走 MCP 标准 (stdio/SSE transport), 工具列表 (浏览器/系统/文件) 借鉴 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:155:## 6. 借鉴实施路径 (按优先级 + 估时)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:170:| 5 | **Firefly 物种化塑形** — 调研 Firefly per-user 记忆/偏好塑形, 跟 N.E.K.O 五维记忆借鉴合并 | 📦clone + 🔬派 sub-agent | 2 周 | R20 真实施 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:177:| 7 | **Firefly 桌面架构对照** — Firefly 桌面架构 (推断 Electron/Tauri + Python 后端) 跟 v2 companion-desktop 部署对照, 借鉴部署模式 | 📦clone + 📄看文档 | 1 周 | post-1.0.0 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:188:| 1 | **GPT-SoVITS 原声 TTS 真接借鉴** | ✅ **派 sub-agent 真调研 + 写 v2 TTSBackend::GptSovitsBackend impl spec** (跟 R14 spec §3.4 AudioBuffer 对位, P0) | **重点借鉴**, Firefly 已真实施 GPT-SoVITS 集成 + 原声 TTS 训练 = 物种化塑形具体形态, v2 RC-7 D 块 TTSBackend 0 真 backend, 借"已落地的接入模式"省 1-2 周估时 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:190:| 3 | **双引擎主动关怀借鉴** | ✅ **派 sub-agent 真调研 + 写 v2 E7 emergence 主动 trigger spec** (P0) | Firefly 双引擎 (定时 + 事件) 是 E7 emergence 主动具体形态, 跟 A 块 Stage 5 L0-L5 organ cycle 对位 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:192:| 5 | **Firefly 物种化塑形 + Live2D 借鉴** | ✅ **跟 N.E.K.O / AIRI / Open-LLM-VTuber / Mio 合并借鉴** (P1, 估时 2-3 周) | 5 sub-agent 同类借鉴, 互补不重叠 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:193:| 6 | **Firefly 桌面架构 + 不打扰原则** | ⏸️ **不真借鉴, 仅参考** (P2) | 桌面架构 v2 自有 (Tauri 2), 不打扰原则 v2 0 装 PASS 同源 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:198:2. **0 装诱导 prevention** — 本调研只评估"借鉴价值 HIGH" + "派 sub-agent 真调研", 不假装"已调研" / 不假装"已 clone" / 不假装"已 spec 写". 真实施派 sub-agent 时 brief 必含"git clone 真仓库 + 实测接口" + "不写真账以外 file".
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:217:## 8. 物种化借鉴总账 (per vision.md L47 "物种而非个体")
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:227:- **物种化新增维度** (Firefly 借鉴): per-user 声音塑形 (原声 TTS 训练)
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:229:**借鉴总账**: Firefly 提供 **"原声 TTS 真接 + MCP 工具链 + 双引擎主动"** 3 维度物种化借鉴, 跟 N.E.K.O (五维记忆) + AIRI (Live2D 视觉) + Open-LLM-VTuber (4 段完整链路) + Mio (Windows 桌面) **互补不重叠**, 是 P0 5 sub-agent 调研中**最具体落地**的 1 个 (GPT-SoVITS 真接 = 物种化"她"的声音塑形具体形态).
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:242:| 6 | 跟 N.E.K.O / AIRI / Open-LLM-VTuber / Mio 合并借鉴 Firefly 物种化塑形 | 2-3 周 | R20 真实施 |
+docs/01-architecture/r7-firefly-species-research-2026-08-28.md:246:_Sub-Agent R7-Firefly 写于 2026-08-28, 主代理 Mavis 派单 4h 内. 仅基于 README + 用户清单 + v2 真理解推论, 0 实测. 真实施前主代理必亲验. 物种化借鉴真账就位._
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:1:# Mio 对 Apeireth v2 物种化借鉴调研 (2026-08-28)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:4:> **用途**: 给主代理决策参考 — Mio 对 Apeireth v2 的**物种化借鉴**作用 (Windows 本地优先 + 个人 AI Agent + 日记 + 屏幕感知)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:33:| 6 | **物种化借鉴** | **HIGH** — Windows 本地优先 ↔ v2 portable binary (用户想法 #1) + single-user ↔ v2 物种化 per-user 塑形 | 真理解 §1.1.3 + L50 |
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:34:| 7 | frontend 借鉴 | **MED-HIGH** — Live2D ↔ companion-desktop (与 N.E.K.O/AIRI 同类, 但 Mio 非 species 视角) | L50 |
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:35:| 8 | backend 借鉴 | **HIGH** — 日记 (反思+写回) ↔ v2 self_assessment+memory_writeback 增维 (核心) + 屏幕感知 ↔ RC-7 Vision | 真理解 §3 + RC-7 §1.2 |
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:41:## 2. 物种化借鉴价值 (核心)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:43:> **0 装诚实**: 之前 Round 10 你you-list L50 把 Mio 标 "P0 屏幕感知 + 桌面优先", brief 是 frontend 视角. 本调研按真理解 §1.1.3 修订为 **物种化借鉴维度** (per-user 塑形 + 本地优先 + 日记 + 屏幕感知).
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:51:**借鉴点**:
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:52:1. **Windows 本地 binary 部署** ↔ v2 portable binary (per L93 借鉴 Alife)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:62:**物种 vs 个体**: **同** — Mio single-user + Apeireth 物种化同源哲学 (用户专属 AI, 非 framework); **异** — Mio "个人" 单设备狭义, Apeireth "物种" 单用户广义 (本地优先 + 跨设备可选). **借鉴启示**: Mio 是 v2 物种化 **最贴近的工程参考**.
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:75:**借鉴点 (核心!)**:
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:77:2. **R22 reflection 真实施直接借鉴** (1 周, L62) — 日记反思部分对标
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:78:3. **R20 preference_learning 真实施直接借鉴** (2-3 周, L60) — 日记 → preference 提炼
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:87:**借鉴点**:
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:94:**Mio**: QQ — 推断 NapCatQQ / go-cqhttp / OneBot 协议. **Apeireth v2 gateway** (per L29): 即时通讯 = LOW priority, NapCatQQ 在 LOW 段 (L79). **借鉴点**: **LOW**, 不排 critical path; P2 后续, 跟 N.E.K.O/Firefly 同类合并.
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:98:**Mio**: 语音 = ASR + TTS 标配. **Apeireth RC-7 §1.1**: Voice 真接 = Whisper HTTP (麦克风 + API key); TTS trait 已写, 缺真 backend impl. **借鉴点**: 跟 N.E.K.O / Open-LLM-VTuber 真账已写, Mio 语音**不是 unique 借鉴点**, 重叠路径不重复.
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:102:## 3. 物种架构借鉴 (具体借鉴点, 思路非代码)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:115:**思路**: Mio 日记 = 反思 + 写回合一 ↔ v2 self_assessment + memory_writeback 分离实现缺耦合. 借鉴: 加 `reflection_writeback_pipeline` trait (AfterTurn → Judge → 反思 → append-only Episodes).
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:127:**借鉴点**:
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:138:## 4. 前端借鉴 (物种化具体形态)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:146:**借鉴点**: Live2D 渲染 pipeline ↔ companion-desktop 渲染层; 真实施: 跟 N.E.K.O §4.1 + Open-LLM-VTuber 真账合并, 派 sub-agent 一次性产出.
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:154:**借鉴点**: Mio "Windows 本地优先" 工程范式 ↔ v2 portable binary (per §3.1); 借鉴价值 = **frontend 部署范式** (本地优先 vs cloud-first), 非 frontend 视觉.
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:158:## 5. backend 借鉴 (基础层)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:166:**借鉴点 (P0, 核心)**:
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:169:3. **R20 preference_learning** (2-3 周, L60) 借鉴 Mio 日记 → preference 提炼
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:175:**借鉴点**: Mio 屏幕感知路径调研跟 RC-7 真实施**完全重叠**, 派 1 sub-agent 一次性产出; 估时 1 周, 跟 R15+ RC-7 真实施并行 (per RC-7 §4).
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:179:**Apeireth v2 gateway**: 即时通讯 = LOW (per L29), NapCatQQ 在 LOW 段 (L79). **借鉴点**: P2 后续, 跟 N.E.K.O/Firefly 合并, 主代理可选不借鉴.
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:183:## 6. 借鉴实施路径 (按优先级 + 估时)
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:196:| **P2** | 10 | QQ 接口 (NapCatQQ, LOW, 主代理可选不借鉴) | 派 | 1-2 周 | gateway QQ route |
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:199:**借鉴方式汇总**: 📦clone 2 + 📄看文档 1 + 🔬派 sub-agent 5 + 主代理亲做 1.
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:205:### 7.1 物种化借鉴 vs frontend 借鉴 vs backend 借鉴 占比
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:209:| **物种化借鉴** | **45%** | Windows 本地优先 ↔ portable binary (§3.1) + single-user ↔ per-user 塑形 (§3.3) + 日记反思写回 ↔ 物种化塑形物理基础 (§3.2) |
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:210:| **backend 借鉴** | **35%** | 日记反思写回 ↔ cognitive module 增维 (§5.1, **核心**) + 屏幕感知 ↔ RC-7 真 modality (§5.2) + QQ (§5.3, LOW) |
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:211:| **frontend 借鉴** | **20%** | Live2D + Windows 本地 UI (§4.1-4.2) — 物种化 frontend 具体形态 |
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:215:- 现在: 物种化架构 (per-user 塑形 + 本地优先 + 日记反思写回) — 从 "frontend 借鉴" 升级到 "物种化借鉴 (本地优先架构 + 日记反思)"
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:216:- **差异**: 借鉴维度从 "屏幕感知 modality" 升级到 "per-user 塑形本地架构 + 日记反思写回"
+docs/01-architecture/r7-mio-species-research-2026-08-28.md:241:_R7-Mio 写于 2026-08-28, 4h 限, 物种化借鉴维度修订, 0 实测诚实标 (github 直连 + web_search 双 0 装), 主代理亲验必做. 真账就位._
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:1:# N.E.K.O 对 Apeireth v2 物种化借鉴调研 (2026-08-28)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:4:> **用途**: 给主代理决策参考 — N.E.K.O 对 Apeireth v2 的**物种化借鉴**作用 (不只是 frontend Live2D)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:32:| 6 | **物种化借鉴价值** | **HIGH** — 五维记忆 ↔ v2 cognitive memory_recall/memory_writeback 增维 (核心借鉴) | per 真理解 §3.2 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:33:| 7 | **frontend 借鉴价值** | **HIGH** — Live2D/VRM/MMD 多形态 ↔ companion-desktop 物种化 frontend (post-1.0.0) | per vision.md L47 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:34:| 8 | **backend 借鉴价值** | **MED-HIGH** — ASR/TTS pipeline ↔ v2 gateway SSE + RC-7 ASR/TTS modality | per 你you-list L46 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:40:## 2. 物种化借鉴价值 (核心, 不是 frontend 借鉴)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:42:> **0 装诚实** (per Apeireth 真理解 §1): 之前 Round 10 你you-list L46 把 N.E.K.O 标 "P0 五维记忆系统 + Live2D 多形态", 但 brief 是 "frontend 借鉴" 视角. 本调研按真理解 §3.2 修订为 **物种化借鉴维度** (per-user 塑形 + 长期记忆 + 情绪-认知-行为闭环).
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:44:### 2.1 物种架构借鉴 — N.E.K.O 如何实现 per-user 塑形
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:56:**借鉴点 (物种架构维度)**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:68:| **procedural** | 程序性记忆 (技能/习惯) | v2 cognitive 0 真实现 (DEFERRED R23 planner slot) | R20 + R23 借鉴点 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:70:| **reflective** | 反思记忆 (自我评估/元认知) | v2 `cognitive.self_assessment` WIRED, Judge-backed | R22 reflection 借鉴点 (DEFERRED INTO SELF-ASSESSMENT) |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:72:**借鉴点 (五维记忆增维路径)**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:74:- **procedural** — R23 planner slot 真实施时借鉴 (3 周, LLM Adapter 新设计)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:76:- **reflective** — R22 reflection 真实施时借鉴 (DEFERRED INTO SELF-ASSESSMENT, 1 周)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:78:### 2.3 物种 vs 个体 借鉴
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:92:- **借鉴启示**: Apeireth 物种化更纯粹 — 真账 per-user 独立, N.E.K.O 的 "网络型" 可能需要 O-1 安全锚审视
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:94:### 2.4 物种化 frontend 借鉴 — Live2D/VRM/MMD 多形态
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:103:**借鉴点 (物种化 frontend 维度)**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:106:3. **post-1.0.0 增量路径**: B 块 companion-desktop frontend 已 done 1411 行 runtime.ts (SSE/WS/panel), 真实施 (派 sub-agent A) 1-2 周可借鉴 N.E.K.O 多形态架构
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:110:## 3. 物种架构借鉴价值 (具体借鉴点, 不只是代码, 是思路)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:119:- **借鉴思路**: cognitive memory 模块按 5 维组织 trait 抽象, 每维一个 `Arc<dyn MemoryBackend>`, 不只 recall/writeback 两条管道
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:132:**借鉴点**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:134:- **借鉴路径**: v2 cognitive.preference_recall + memory_recall 借鉴 TopicCue 4 维, 加 user_mood 维度 (per F1 emotion_memory organ)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:147:**借鉴点 (P1 排上)**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:152:### 3.4 N.E.K.O 0 装 PASS 借鉴 (不假装有心 vs Apeireth 0 装诚实锚)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:158:**借鉴启示**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:165:## 4. 前端借鉴 (仅作为物种化具体形态, 不是孤立借鉴)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:167:> **0 装诚实** (per 真理解 §1.5): companion-desktop frontend 本身是物种化具体形态, 不是孤立 frontend 借鉴
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:179:**借鉴点**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:193:**借鉴点**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:206:**借鉴点**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:213:## 5. backend 借鉴 (基础层)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:225:**借鉴点 (backend 维度)**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:239:**借鉴点**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:240:- MCP 工具注册模式 ↔ v2 tool-runtime 1:1 翻译 (已借鉴)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:245:## 6. 借鉴实施路径 (按优先级 + 估时)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:247:### P0 (1 周内, 立即可借鉴)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:249:| # | 项 | 借鉴方式 | 估时 | 输出 | 阻塞 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:251:| 1 | **物种架构调研 + 五维记忆借鉴路径写真账** | 📄看 N.E.K.O README + 🔬派 sub-agent | 1 周 | `r7-neko-5dim-memory-research.md` (≤200 行) + 本真账 | 0 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:256:| # | 项 | 借鉴方式 | 估时 | 输出 | 阻塞 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:260:| 5 | **R22 reflection 真实施** (reflective 维借鉴) | 派 sub-agent 真实施 | 1 周 | R15 §7.2 措辞修 | 0 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:266:| # | 项 | 借鉴方式 | 估时 | 输出 | 阻塞 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:268:| 8 | **物种化 frontend (companion-desktop) 借鉴** | 📦clone + 派 sub-agent | 2-3 周 | companion-desktop 多形态 trait 设计 | §7 多形态调研 + post-1.0.0 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:270:| 10 | **R23 planner 真实施** (procedural 维借鉴) | 派 sub-agent 真实施 | 3 周 | cognitive.planner WIRED | R21+R22 done |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:272:**借鉴方式汇总**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:277:- ⏸️不借鉴: 0 项
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:283:### 7.1 物种化借鉴 vs frontend 借鉴 vs backend 借鉴 占比 (估算)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:287:| **物种化借鉴** | **60%** | 五维记忆增维 (§3.1) + per-user 塑形 (§3.2) + 长期记忆塑形 (§3.3) + 0 装 PASS (§3.4) — 4 个核心物种化借鉴点, 是 Apeireth 真理解 §1 三面一体中"她"维度 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:288:| **frontend 借鉴** | **25%** | Live2D + VRM/MMD 多形态 (§4.1-4.3) — 物种化 frontend 具体形态 (post-1.0.0) |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:289:| **backend 借鉴** | **15%** | MCP 工具链 (§5.2) + organ 协同 (§5.1) — 基础层, v2 已 1:1 翻译 v1, 仅 spec 协同参考 |
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:291:**vs 之前 Round 10 你you-list L46 (frontend 借鉴为主)**:
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:293:- 现在: 物种化架构借鉴 (HIGH, 物种化主 + frontend 具体形态)
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:294:- **差异**: 借鉴维度从 "frontend 视觉" 升级到 "物种化架构 (per-user memory/preference/personality 塑形)"
+docs/01-architecture/r7-neko-species-research-2026-08-28.md:318:_R7-N.E.K.O 写于 2026-08-28, 主代理 brief 4h 限, 物种化借鉴维度修订, 0 实测诚实标, 主代理亲验必做. 真账就位._
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:1:# R7 Open-LLM-VTuber 物种化借鉴作用 真调研 (2026-08-28)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:3:> **作者**: Sub-Agent R7-Open-LLM-VTuber (主代理 Mavis 派) | **用途**: 调研 Open-LLM-VTuber 对 Apeireth v2 物种化借鉴作用, 给主代理决策参考
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:11:Status:          🟢 活跃 (物种化借鉴调研真账, 主代理决策参考)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:21:| # | 维度 | 真账 (per 用户清单 + 公开领域知识 + 项目名推断) | 物种化借鉴相关? |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:25:| 3 | **视觉感知** | 摄像头/屏幕帧输入 → 视觉 LLM (per "视觉感知" 字段) → LLM context | HIGH (RC-7 vision 子模态借鉴) |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:26:| 4 | **工具调用** | LLM tool call → 本地工具 (浏览器/系统/文件), OpenAI function calling 协议 | MED (v2 gateway 工具注册可对位, 但 Apeireth 走 MCP, 借鉴价值看抽象层) |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:28:| 6 | **ASR 抽象** | 真实施多 backend (faster-whisper / sherpa-onnx / OpenAI Whisper API 等) | **HIGH (v2 RC-7 ASR modality 真实施借鉴)** |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:29:| 7 | **TTS 抽象** | 真实施多 backend (GPT-SoVITS / Edge-TTS / OpenAI TTS / CosyVoice 等) | **HIGH (v2 RC-7 TTS modality 真实施借鉴)** |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:30:| 8 | **架构** | Python (FastAPI / asyncio) 后端 + Web 前端 + Live2D 渲染层; 模块化 ASR/TTS/LLM/Vision backend 抽象 | MED (v2 是 Rust + Svelte 5 + Tauri 2, 架构语言不同, 借鉴模块边界设计) |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:31:| 9 | **per-user 塑形** | 单用户本地部署为主, 角色卡 + persona + 长期记忆 (per VTuber 标配) | **HIGH (物种化 "她" 借鉴: per-user memory/preference/personality)** |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:32:| 10 | **生态** | 开源活跃社区, 多 backend 插件化, MIT/Apache 风格 | MED (O-2 前人肩上 + 借鉴社区维护模式) |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:38:## 2. 物种化借鉴价值 (核心, 重点是 ASR→LLM→TTS→Live2D 完整链路)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:42:| Open-LLM-VTuber 链路段 | v2 对位 (per `b-block-gateway-sse-research-2026-08-28.md` + RC-7 spec + companion-desktop 真账) | 借鉴价值 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:44:| **ASR (麦克风 → 文本)** | **D 块 RC-7 perception ASR 子模态** (`apeireth-plugin::perception_backend` trait 架构已落, R6 trait + 5 modality 抽象, 真 modality backend 待硬件) | **HIGH** — RC-7 spec 是骨架, 真 backend 实现 (faster-whisper / sherpa-onnx) 可借鉴 Open-LLM-VTuber 真实施 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:49:**关键发现 (物种化借鉴维度最大价值点)**:
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:51:- **Open-LLM-VTuber 4 段 pipeline 是端到端跑通的**, v2 是 4 段分散在 B 块 (LLM) + D 块 (ASR/TTS) + frontend (Live2D), 借鉴点 = **4 段衔接的事件流设计 + 跨段 session continuity**.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:53:### 2.2 物种架构借鉴 (per-user 塑形 + 五维记忆)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:55:| 物种化维度 | Open-LLM-VTuber 真账 | v2 对位 | 借鉴 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:84:**借鉴价值**: **HIGH** — Open-LLM-VTuber 是 RC-7 ASR/TTS 真 backend 接入的"现成参考目录". 主代理拍板 R14 时, 派 sub-agent 真调研 Open-LLM-VTuber ASR/TTS 抽象层 + 真 clone 仓库对照 v2 trait 设计.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:88:## 3. 物种架构借鉴 (具体借鉴点)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:99:**借鉴点 (具体)**:
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:100:1. **session continuity 跨段传递** — Open-LLM-VTuber 在 ASR→LLM→TTS 全程保留同一 session_id, 这跟 v2 B-A 真实施 3 fail 之一 `non_stream_path_still_returns_json` (L339 session continuity) 完全相关 — R21 SSE 真接时借鉴.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:101:2. **backend 抽象层 trait 设计** — Open-LLM-VTuber Python asyncio 抽象, v2 Rust trait (per R6) — 借鉴抽象粒度 (config-driven + async + error 透传).
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:116:**借鉴点 (具体)**:
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:117:1. **角色卡设计 ↔ 物种塑形载体** — v2 "她" 的 species 不是 prompt 模板, 是"机制/哲学/安全同源" + per-user 塑形. 借鉴 Open-LLM-VTuber 角色卡的"结构化字段 (persona/backstory/style) + 运行时加载" 设计, 但**不是简单复制**, 而是"哲学锚 + 9 organ + 12 slot 配置化" 的物种塑形.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:129:**借鉴点 (具体)**:
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:130:1. **工具列表声明 + per-call approval** — OpenAI function calling 协议 v2 已用 (per OpenAI 兼容), per-call approval v2 governance hook 已写. **借鉴值 MED** — 设计成熟, v2 自有.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:131:2. **工具 sandbox 设计** — Open-LLM-VTuber 用 subprocess 隔离, v2 用 governance hook 拦截. **借鉴值 LOW** — 不同实现路径, 但可借 "per-tool 风险分级" 设计.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:135:## 4. 前端借鉴 (物种化具体形态)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:139:| 维度 | Open-LLM-VTuber | v2 companion-desktop (post-1.0.0) | 借鉴 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:148:**关键借鉴**: **Cubism 5 Live2D 是 Open-LLM-VTuber 标志性能力**, v2 companion-desktop 应直接借 Cubism 5 SDK + `.moc3` 模型生态, 这样用户可复用 Open-LLM-VTuber 社区已积累的大量模型资源 — 这是"前人肩上" (O-2) 的具体兑现.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:156:**借鉴点**:
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:157:1. **双向事件流 ↔ 9 organ stream hook** — Open-LLM-VTuber 双向音频 + 控制事件, v2 R9 spec §4.3 提 9 organ stream frame schema. **借鉴值 HIGH** — schema 设计可对位 Open-LLM-VTuber "音频帧 + 控制帧 + 状态帧" 三类事件.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:166:**借鉴点**: **HIGH** — Open-LLM-VTuber 视觉 backend 列表 (Qwen-VL / GPT-4V / LLaVA) + 帧采样策略 + 视觉 context 注入 prompt 模板, v2 RC-7 vision 真 backend 接入直接对位.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:170:## 5. backend 借鉴 (基础层 + Agent 平台)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:183:**借鉴路径 (HIGH)**:
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:199:**借鉴路径 (HIGH)**:
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:209:**借鉴路径 (LOW-MED)**: v2 自有设计成熟 (governance hook + MCP), Open-LLM-VTuber 工具 sandbox 设计可参考 "per-tool 风险分级", 但**不主借鉴**.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:213:## 6. 借鉴实施路径 (按优先级 + 估时)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:225:- 输出: 调研真账 doc (≤ 200 行), 含 ASR/TTS backend 列表 + trait 对位 v2 RC-7 + Cubism 5 接入方案 + 物种化 frontend 借鉴点
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:244:### 6.4 不借鉴 (per O-5 0 装诚实)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:246:| 项 | 不借鉴理由 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:248:| **Open-LLM-VTuber Python 后端架构** | v2 是 Rust, 架构语言不同, 借鉴代价 > 收益 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:250:| **Open-LLM-VTuber LLM 协议 (OpenAI function calling)** | v2 已用 + 自有设计, 0 借鉴值 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:256:### 7.1 借鉴优先级 (主代理决策参考)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:258:| 借鉴项 | 优先级 | 推荐方式 | 估时 | 阻塞 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:264:| **Open-LLM-VTuber 工具 sandbox** | 🟡 P2 | ⏸️ 不借鉴 | n/a | n/a |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:265:| **Python 后端架构** | 🔴 不借鉴 | ⏸️ 不借鉴 | n/a | n/a |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:272:- **借鉴路径真实**: P0 调研 / P1 真实施 / P2 物种化扩展 三档估时是按"类似 R14 / R20 调研真账" 经验估, 不是真实施数字, 主代理派单时**必重新估时**.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:274:### 7.3 关键发现 (物种化借鉴维度最大价值)
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:278:3. **Open-LLM-VTuber per-user 塑形 (角色卡 + 记忆 + persona) = 物种化 "她" 的现成参考**, v2 vision.md L47 "物种而非个体" 可借鉴 Open-LLM-VTuber "角色卡 + 长期记忆 + Live2D 模型" 三角设计, 但**升级为"哲学锚 + 9 organ + 12 slot 配置化"** 的物种塑形.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:291:**Open-LLM-VTuber 物种化借鉴价值 = 🟢 HIGH**. 核心价值是 **完整 ASR→LLM→TTS→Live2D 4 段 pipeline + ASR/TTS backend 抽象层真实施 + Cubism 5 Live2D 物种化 frontend 具体形态**, 这正是 v2 RC-7 (D 块 ASR/TTS 真 modality) + companion-desktop (B 块 frontend Live2D) **缺的真 backend + 真接入**. 派 3 sub-agent 真调研 (ASR/TTS 抽象 + Cubism 5 SDK + 4 段 session continuity) + 主代理亲做 1 个 spec 决策 (物种塑形载体), 估时 1-2 周调研 + 4-6 周真实施. 0 装诚实标: 本调研**未 git clone**, 仅基于用户清单 L20 + 公开领域知识 + v2 真理解推论, 真实施前**主代理必亲验**.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:297:| # | 项 | 估时 | 阻塞 | 借鉴方式 |
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:309:_Sub-Agent R7-Open-LLM-VTuber 写于 2026-08-28, 主代理 Mavis P0 5 sub-agent 真调研派单 (#3 Open-LLM-VTuber), 物种化借鉴价值 HIGH, 0 装诚实 (未 git clone + web_search 工具不可用 + 仅用户清单 + v2 真理解推论), 真实施前主代理必亲验._
+docs/01-architecture/security.md:24:- DSL onion (Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴): 表达"什么操作允许/禁止"
+docs/01-architecture/v2-arch-refactor-batch.md:156:**v1 借鉴**: 3-layer progressive disclosure (目录 + 摘要 + 全文). v2 0 装是抽取后不注入. rc 后实现 memory 集成时一起做.
+docs/01-architecture/vcp-vs-apeireth-deep-comparison.md:102:  * Apeireth 具备单二进制构建优势，可借鉴其内置便携式运行环境的分发体验。
+docs/03-reference/glossary.md:23:| **三洋葱（Triple Onion）** | 原则洋葱（E/S/A/M/O）嵌入权限洋葱（L0-L5），**外加 DSL 洋葱**（Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴）；L0 人类批准永不可变 |
+docs/04-internal/ENGINEER-MANIFESTO.md:79:| **O-2** | 走在前人肩上 | 借 + 标注 + 改 (不抄) | 这方案借鉴了谁的? 标注来源了吗? 来源: 上游标杆项目 + 标准协议, 借 + 标注 + 改。 |
+docs/04-internal/ENGINEER-MANIFESTO.md:150:| **6 重** | R125-5 v6 守门 (5 重 + DSL onion 守门, NVIDIA Guardrails 借鉴) | ROADMAP L165 | 已升 |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:39:- v2 借鉴链 (research/source ~36 真开源) + R7 5 真调研 (物种化) 都是架构 + 设计思路借鉴, **不是功能全集对比**
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:120:| Gateway SSE broadcaster | `apeireth-gateway/src/sse.rs` | REAL | ⚠️ R21 待真接 | 🟡 partial (4 段 pipeline session continuity 借鉴 Open-LLM-VTuber, Round 10 P1 #3) |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:163:| **streaming_chat** | `apeireth-companion/src/streaming_chat.rs` | REAL | ⚠️ (per B 块 gateway SSE pipeline 真实施借鉴) | 🟡 partial |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:188:约 **15 项**, 包括: Memory support modules, Browser tool, Learning tool, SystemMonitor (DEFER P3), WorktreeSandbox (DEFER P2), MCP protocol (ADAPT P1), SovereignControl (ADAPT P2), EventBusBackbone (ADAPT P2), Scheduler (DEFER P2), Telemetry (DEFER P2), WsFrame (ADAPT P2, CoTDelta 违反 raw CoT), Gateway SSE broadcaster (R21 待), Gateway MCP handler (ADAPT P2), DreamEngine (W2/W3 STUB), EpistemicHealer (ADAPT P2), PromptAssembler (ADAPT P1, raw CoT strip), TopicPredictor/PreloadChannel (R20 真实施中), memory_extractor/memory_graph (ADAPT), presence (companion-desktop 集成), streaming_chat (B 块 gateway SSE 真实施借鉴), voice_session (R14 真 modality 真接).
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:266:| 10 | **timeline + tone + morphology** (物种化塑形时间 + 语言 + 形态) | 2-3 周 | 0 | 派 sub-agent 真调研 + 真实施 (跟 Open-LLM-VTuber / Firefly / AIRI / Mio 借鉴) |
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:290:- **不重叠**: 借鉴链 per Round 10 5 真调研 + research/source 已借鉴
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:320:  - 真实施建议路径 (P0/P1/P2, 估时, 借鉴链)
+docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md:346:| 4 | 派 sub-agent 真调研 **物种化塑形维度 gap** (timeline + tone + morphology) | 2-3 周 | 0 (跟 Round 10 Open-LLM-VTuber / Firefly / AIRI / Mio 借鉴) |
+docs/04-internal/backlog.md:12:| A1 | 代码 TODO 全量审计 (历史借鉴点落地核对) | 2026-08-16 | 本节 |
+docs/04-internal/backlog.md:22:| ✅ 提炼器对账化 (ADD/UPDATE/DELETE + tomb 逻辑删除) | A3 (Mem0 借鉴) | memory_extractor.rs apply_reconcile | 提交 + 单测 |
+docs/04-internal/backlog.md:41:| ✅ TP30 待评估清单 P1-P10 调研 (生态批, ~40 项下放第一批) | next-team-handbook §1 + backlog §3 | 10 个评估文件 reports/tp30/{opensquilla,exo,project-nomad,ocr,scrapling,maigret,airllm,taipy,gitnexus,agent-s}-assessment.md + 总结报告 reports/eb2e1130-18b4-4c98-8177-de8c405b5ab0-backend_engineer2-report.md (项目排序 + 推荐优先级) | 任务 eb2e1130-18b4-4c98-8177-de8c405b5ab0 (backend_engineer2): P1 5 个 (OpenSquilla/exo/project-nomad/OCR 类/Scrapling) + P2 5 个 (maigret/airllm/taipy/GitNexus/Agent-S) 共 10 项目; 每文件「机制+对照+吸收建议+0 装 PASS 标注」四段; GitNexus **实测评估** (research/source/GitNexus 源码 + ARCHITECTURE.md + src/ 目录); 其余 9 个明确标 "未下载实测" 0 装 PASS; 推荐立即落地: (1) CJK 分词器 → apeireth-tool-search (借鉴 GitNexus cjk-segmentation.ts) (2) 反爬特征探测 → apeireth-tool-fetch (借鉴 Scrapling) (3) 本地 OCR → apeireth-tool-image-process (Tesseract+leptess); backlog §3 仍有 30+ 项待下放 |
+docs/04-internal/backlog.md:42:| ✅ TP29 工具声明式配置 (Composio 借鉴, 插件 YAML 声明) | next-team-handbook §1 | 新模块 crates/apeireth-tools/src/yaml_spec.rs: ToolSpec trait + ParameterType (String\|Integer\|Float\|Boolean\|Array\|Object) + PermissionType (FileRead\|FileWrite\|Network\|Env, payload 携带) + ParameterSpec/PermissionSpec/CredentialSpec + SpecError (Io/YamlParse/MissingField/InvalidParameterType/InvalidPermission/InvalidCredential/NameConflict/Directory) + YamlToolSpec (serde_yaml 解析) + StaticToolSpec (内存构造) + load_tool_spec/load_directory (transactional) + register_yaml_spec (冲突不覆盖) + SpecPlaceholderTool (Tool trait 实现, 占位路由); TP33 纪律: 凭证 env 字段仅 `${VAR:?msg}` 形式, 真实密码不入 yml (POSIX env var 命名校验: 字母/下划线开头 + 字母数字下划线); 与 tool_bridge 衔接: ToolBridge.register_yaml_spec / register_yaml_spec_dir (granular, 跳过失败) | 任务 cf0194b6-f842-4d69-ba73-48cc6893b5f4 (backend_engineer): apeireth-tools yaml_spec 22 测试 + companion tp29_tests 4 测试 + apeireth-tools 全 lib 190 (168 基线 + 22 新增); 全 companion lib 546 (542 基线 + 4 新增); cargo check --workspace --all-targets 0 错; 0 装 PASS: 真 LLM/真凭据解析未接, trait 口已备; 实现路径 `implementation:` 字段占位路由未挂载 (后续任务接); 报告 reports/cf0194b6-f842-4d69-ba73-48cc6893b5f4-backend_engineer-report.md |
+docs/04-internal/backlog.md:209:| A1 | 代码 TODO 全量审计 (历史借鉴点落地核对) | 2026-08-16 | 本节 |
+docs/04-internal/backlog.md:219:| ✅ 提炼器对账化 (ADD/UPDATE/DELETE + tomb 逻辑删除) | A3 (Mem0 借鉴) | memory_extractor.rs apply_reconcile | 提交 + 单测 |
+docs/04-internal/backlog.md:238:| ✅ TP30 待评估清单 P1-P10 调研 (生态批, ~40 项下放第一批) | next-team-handbook §1 + backlog §3 | 10 个评估文件 reports/tp30/{opensquilla,exo,project-nomad,ocr,scrapling,maigret,airllm,taipy,gitnexus,agent-s}-assessment.md + 总结报告 reports/eb2e1130-18b4-4c98-8177-de8c405b5ab0-backend_engineer2-report.md (项目排序 + 推荐优先级) | 任务 eb2e1130-18b4-4c98-8177-de8c405b5ab0 (backend_engineer2): P1 5 个 (OpenSquilla/exo/project-nomad/OCR 类/Scrapling) + P2 5 个 (maigret/airllm/taipy/GitNexus/Agent-S) 共 10 项目; 每文件「机制+对照+吸收建议+0 装 PASS 标注」四段; GitNexus **实测评估** (research/source/GitNexus 源码 + ARCHITECTURE.md + src/ 目录); 其余 9 个明确标 "未下载实测" 0 装 PASS; 推荐立即落地: (1) CJK 分词器 → apeireth-tool-search (借鉴 GitNexus cjk-segmentation.ts) (2) 反爬特征探测 → apeireth-tool-fetch (借鉴 Scrapling) (3) 本地 OCR → apeireth-tool-image-process (Tesseract+leptess); backlog §3 仍有 30+ 项待下放 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:1:# 借鉴来源 — Jimmyxiao2009 个人项目 (2026-08-21)
+docs/04-internal/borrow-from-jimmyxiao2009.md:5:> **目的**: 把 https://github.com/Jimmyxiao2009/ 个人项目中的可借鉴设计/模式吸收进 Apeireth-rust 主仓
+docs/04-internal/borrow-from-jimmyxiao2009.md:30:**借鉴 ID**: `BORROW-Jimmyxiao2009/agentos-windows-recovery-atomic-write-2026-08-21`
+docs/04-internal/borrow-from-jimmyxiao2009.md:49:**借鉴 ID**: `BORROW-Jimmyxiao2009/agentos-windows-recovery-fail-closed-2026-08-21`
+docs/04-internal/borrow-from-jimmyxiao2009.md:69:**借鉴 ID**: `BORROW-Jimmyxiao2009/agentos-windows-recovery-hash-chained-journal-2026-08-21`
+docs/04-internal/borrow-from-jimmyxiao2009.md:83:- O-1 安全优先 — 借鉴 agentos-windows-recovery tamper-evidence (检测删除/插入/重排/篡改任一条目)
+docs/04-internal/borrow-from-jimmyxiao2009.md:105:| P1-4 | AgentFlow Task 状态机 + DAG 租约 | 我们已有 memory_extractor / supervision, 局部借鉴 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:114:| **agentos-windows-recovery** | **MIT** (Copyright 2026 Jimmyxiao2009) | ✅ Apache-2.0 兼容, 借鉴 ID + NOTICE 已写 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:115:| AgentFlow | ⚠️ **无 LICENSE** (默认 all-rights-reserved) | ✅ **仅借鉴设计思想** (StateMachine / DAG lease / append-only event store / ProcessSupervisor 的"safeEnvironment"思路), 0 代码复制, 全部 Rust 重新实现 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:116:| Yanshuai-AI / OnDeviceAI 系列 | C# Windows-only, 适配面低, 跳过深挖 | 不出借鉴 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:124:| S-1 北极星 | 7+ 项借鉴全部服务"AI 操作系统"基地建设 (写入 / 安全 / 审计 / 调度 / 升级 / 凭证 = LLM 后端六大支柱) |
+docs/04-internal/borrow-from-jimmyxiao2009.md:128:| O-2 前人肩上 | 字段级移植 agentos-windows-recovery (C#) + AgentFlow (TypeScript) + apeireth-rust fork (Rust) → Rust 全部, 借鉴 ID 完整 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:152:3. **2026-08-21 上午**: 主代理接手 R215 借鉴任务, 做原子写入 + fail-closed + journal + three_way + lease + PR #2 cherry-pick, **但没做 secret scan**
+docs/04-internal/borrow-from-jimmyxiao2009.md:195:**DONE: 2026-08-21** (全闭环: 7 项借鉴 + PR #2 整合 + 4 层 secret 防御 + 历史 scrub)
+docs/04-internal/borrow-from-jimmyxiao2009.md:196:**借鉴 ID**: 4 个
+docs/04-internal/design-task-lease-2026-08-21.md:4:> **借鉴 ID**: `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21`
+docs/04-internal/design-task-lease-2026-08-21.md:5:> **License**: AgentFlow 无 LICENSE (默认 all-rights-reserved); 本文档**仅借鉴设计思想, 0 行代码复制**, 全 Rust 重写.
+docs/04-internal/design-task-lease-2026-08-21.md:22:借鉴 AgentFlow 的 `TaskState` + lease 概念, 把"task 生命周期"显式建模:
+docs/04-internal/design-task-lease-2026-08-21.md:131:**借鉴 ID**: `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21`
+docs/04-internal/design-task-lease-2026-08-21.md:166:## 8. 借鉴合规
+docs/04-internal/design-task-lease-2026-08-21.md:170:| 借鉴仓库 | Jimmyxiao2009/AgentFlow |
+docs/04-internal/design-task-lease-2026-08-21.md:172:| 借鉴方式 | **设计思想 + 字段级 API 形状** (TaskState 6 状态 / 状态机不变量 / lease+timeout+generation 三件套) |
+docs/04-internal/design-task-lease-2026-08-21.md:174:| 借鉴 ID | `BORROW-Jimmyxiao2009/AgentFlow-task-dag-lease-2026-08-21` |
+docs/04-internal/design-task-lease-2026-08-21.md:180:- `docs/04-internal/borrow-from-jimmyxiao2009.md` — 借鉴合规总册
+docs/04-internal/design-task-lease-2026-08-21.md:182:- `_research_mem/AgentFlow-analysis.md` — AgentFlow 分析报告 (65 KB, 借鉴源头)
+docs/04-internal/design-three-way-conflict-2026-08-21.md:21:**借鉴来源**: [Jimmyxiao2009/agentos-windows-recovery](https://github.com/Jimmyxiao2009/agentos-windows-recovery)
+docs/04-internal/design-three-way-conflict-2026-08-21.md:268:- [x] 借鉴 ID 在 module doc 与本设计文件顶部都出现。
+docs/04-internal/frontend-reference-deepseek-harness-2026-09.md:1:# DeepSeek Harness 前端参考研究（2026-09，供 companion-desktop 借鉴）
+docs/04-internal/frontend-reference-deepseek-harness-2026-09.md:21:## 2. 已确认的借鉴点（本代理直接取证）
+docs/04-internal/frontend-reference-deepseek-harness-2026-09.md:130:| 级 | 借鉴项 | DSH 做法（事实） | 我们现状 | 建议动作 |
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:179:**理由**: `legacy/donor/apeireth-voice/src/real.rs` 是 v1 STT 真接代码, RC-7 真实施时**直接 1:1 翻译参考** (per R14 spec §3.3 + 本文 §1.1). 同样 `legacy/donor/apeireth-companion/src/screen_perception.rs` 是 v1 屏幕"感知"参考 (虽不截屏, 但 foreground window 轮询可借鉴).
+docs/04-internal/memory-research.md:113:当初调研标注未落地 (docs/research/mempalace-vs-apeireth-memory.md 时序三元组借鉴/R179 P2/R186),
+docs/04-internal/next-team-handbook.md:26:9. **Composio**——工具声明式配置（integration YAML）+ 认证处理（"认证是 agent 工具集成头号问题"）——**插件规范借鉴**（N21 credentials 的价值佐证）
+docs/04-internal/next-team-handbook.md:75:| TP29 | **工具声明式配置**（Composio 借鉴） | 插件规范升级: 工具 = YAML 声明（名称/参数/权限声明）+ 实现; 认证走 N21 credentials |
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:85:  - **❌ spill 0 真实施**: v2 workspace 无 `SpillStore`/`should_spill`/`SPILL_THRESHOLD_CHARS` grep hit — DSH 借鉴只写在 doc 没用.
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:90:- **路径 C spill (1 周)**: 新 crate `crates/engine/runtime/src/spill.rs` (1:1 翻译 v1 178 行) + 接 `crates/engine/runtime/src/canonical/tool_executor.rs` — 工具结果 > 2000 chars → spill + 返回路径 + LLM 用 FileOperator 按需读. **物种化**: continuity_id = per-user (5 维 memory per-user 自然塑形), 跨进程恢复 = 物种化"同一个她"技术保证. **0 装诚实**: Windows 0700 0 装 PASS (v1 L13 同源), migration 不假装灵魂同一. **借鉴链**: spill 是 DSH (DeepSeek Harness) spill-local 机制, 1:1 翻译 + 标注来源 (per O-2 前人肩上).
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:141:- **progressive.rs 171 行 (REAL, TP21 渐进式披露注入, 借鉴 claude-mem 39k stars)**: `CatalogEntry`(topic+summary+count) + `ProgressiveCatalog`(`catalog_budget_chars` 默认 1600 = ~800 token) + `block()`(按预算截断+末尾标注省略数 "…另有 N 个主题未展开") + `expand(topic)`(按需详情, 0 装 PASS 不假装已拉取记忆) + `fit_count()` 诊断.
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:154:- **路径 C pentest (2 周, O-1 安全优先 + E-1 主人授权)**: 新 crate `crates/adapters/pentest/src/` — 1:1 翻译 v1 443 行 + E-1 范围闸 0 触碰 LOCKED (per `crates/foundation/governance/src/onion.rs:249`). **物种化**: proactive 主动涌现是 species 时间维度 (主人作息塑形), progressive 渐进式披露是 species 注意力维度 (per N.E.K.O 五维 memory 借鉴). **0 装诚实**: pentest 不内置扫描 (v1 L6), progressive `expand()` 不假装已拉取 (v1 L83-88), Lark 无凭据 → Err (v1 proactive L9-11).
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:186:  ├─ progressive (物种化注意力塑形 — N.E.K.O 五维 memory 借鉴)
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:196:  ├─ spill (工具结果溢出 — DSH 借鉴)
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:210:- **五原型** (§1.2): **世界模型 W1/W2/W3** = oracle Brier 接入 W2 (per Mio 真账 §2.2); **自我改进 (A 块 ✅ 骨架)** = experiment_field 独立实验场 (vision L40 待补); **自主好奇心 E4** = progressive 渐进式披露注入 (N.E.K.O 借鉴); **连续感知 (R14 地基)** = spill 工具结果溢出; **价值内化 F6** = Kani proofs 形式化保证.
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:213:### 10.3 真实施顺序 + 估时 + 借鉴链
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:215:| 阶段 | 项 | 周 | 阻塞 | 借鉴链 |
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:219:| P0-3 | onering 路径 A | 2 | 0 | VCP OneRing 借鉴, 复用 v2 IdentityCard |
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:239:| 优先级 | 项 | 估时 | 物种化锚 | 借鉴链 |
+docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md:245:| **P1** | progressive (1 周) | 1 | 物种化"注意力塑形" (N.E.K.O 借鉴) | claude-mem 39k stars |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:32:## 1. daily_summary / diary — 1.0 vs 2.0 + 物种化借鉴
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:54:### 1.3 物种化借鉴 (per Mio 真账 §2.2 + §3.2 + §5.1)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:56:**借鉴点 (核心)**:
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:58:2. **R22 reflection 真实施直接借鉴** (1 周, handbook §1.3 L62) — 日记反思部分对标 reflection.rs 1:1 翻译 (per handbook §2.5)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:59:3. **R20 preference_learning 真实施直接借鉴** (2-3 周, handbook §1.3 L60) — 日记 → preference 提炼 (per Mio 真账 §2.3 L76)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:79:## 2. cross_diary — 1.0 vs 2.0 + 物种化借鉴
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:101:### 2.3 物种化借鉴 (per Mio 真账 + 真账 §2.5)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:103:**借鉴点**:
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:107:4. **跟 N.E.K.O 五维记忆 + AIRI 长期记忆借鉴** (per 真理解 §3.2 真借鉴)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:122:## 3. memory_injection — 1.0 vs 2.0 + 物种化借鉴
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:143:### 3.3 物种化借鉴 (per Mio 真账 + 真理解)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:145:**借鉴点**:
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:148:3. **跟 N.E.K.O 五维记忆借鉴** (per 真理解 §3.2 — 物种化 memory)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:185:### 4.3 物种化借鉴 (per Mio 真账 §2.3 + §3.2 + 真理解)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:187:**借鉴点 (核心)**:
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:237:| vision.md 真账 | consolidation_writeback pipeline 真账 | 借鉴点 |
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:268:### 6.2 借鉴链 (per O-2 前人肩上 + Mio 调研)
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:272:3. **N.E.K.O 五维记忆** (per 真理解 §3.2) — 物种化 memory 借鉴
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:273:4. **AIRI 长期记忆** (per 真理解 §3.2) — 物种化 frontend + backend 借鉴
+docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md:313:_R11-LongTermMemory 写于 2026-08-28 Round 11, ≤4h, 长期记忆塑形 4 项 (daily_summary / diary / cross_diary / memory_injection / reflexion / reflection) + consolidation_writeback pipeline 综述真调研, 跟 Mio 真账 P0 调研对接, 借鉴 1.0 真账 1:1 翻译 ~1734 行 + R20+R22+R21 并行, 0 装诚实 + 5 重守门 + LOCKED 0 触碰 保证, 真实施前主代理必亲验. 真账就位._
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:35:**真账**: `cognitive.reflection` = DEFERRED INTO SELF-ASSESSMENT (handbook §1.3 L62) → R22 派单 1 周; `cognitive.rs` L1118 "Marker showing that this release has no separate reflection or planner module"; meta_thinking trait 0 真实施 (no crate, no OrganTrait); 借鉴链已有 (per `team-work-doc.md` L138 "元思考递归链 ✅ Rust 落点 companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)").
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:39:借鉴 v1 `apeireth-companion/src/meta_thinking.rs:1-643` + VCP MetaThinkingManager.js. 新 crate `crates/engine/reflection/` (per `r21-r24-r12-research-2026-08-28.md` L94) + MetaThinkingChain 1:1 翻译 L176-330 (zero LLM) + `ReflectionMetaThinker` + `ChainReflectionThinker` 1:1 翻译 + 复用 thought_cluster `ThoughtClusterReader` trait + OrganKind::Reflection variant (加不破 9 现有) + 单测 1:1 翻译 v1 8 测试 + 集成 `cognitive.reflection` slot + 5 重守门 baseline.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:55:借鉴 v1 `apeireth-companion/src/reflexion.rs:1-497` + Reflexion 论文. 新 crate `crates/engine/reflexion/` + ReflexionStore 1:1 翻译 v1 L141-277 (zero LLM, JSON 落盘) + RuleCritic 1:1 翻译 + LlmCritic trait 留部署层 + 失败事件接线 = `cognitive.judge` AfterModelResponse (verdict = retry/stop) + `cognitive.self_assessment` AfterTurn (score < 阈值) + 重试注入接线 = `cognitive.preference_recall` + `cognitive.memory_recall` TurnStart (预算 ≤ N chars) + 单测 1:1 翻译 5 测试 + 5 重守门 + LOCKED 0 触碰.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:70:借鉴 v1 `apeireth-companion/src/reflection.rs:1-329` + Generative Agents importance 触发. (1) R17 spec 接力 (主代理派 sub-agent 30-45 分钟仿 R15 模板, 6 节 + 5 LOCKED + 0 装诚实 4 块, 新 crate + OrganKind::Reflection variant, **cognitive.reflection slot OWN** — 当前 SELF-ASSESSMENT owner 错账, R22 真实施要 OWN). (2) 真实施 1 周: ReflectionScheduler 1:1 翻译 + ReflectionReflector trait + N4 thought_reader 接入 + 写回 SQLite 【反思周期】episode (复用 v1 写回路径). (3) 0 触碰 LOCKED 5 项 + 9 哲学锚 0 减 (DEFERRED → WIRED 是 doc sync, 不改 slot). (4) 0 装诚实标: 真 LLM 反思留部署层 trait, lib 0 LLM 依赖.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:72:**主代理决策**: 🔴 P0 critical path (1 周). 物种化塑形核心 (per `r7-mio-species-research-2026-08-28.md` L166 "R22 reflection 真实施直接借鉴" + `r7-neko-species-research-2026-08-28.md` L260 "reflective 维借鉴"). 主代理必亲写 R17 spec + 派单.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:85:借鉴 v1 `apeireth-companion/src/thought_cluster.rs:1-522` + VCP ThoughtClusterManager. 新 crate `crates/engine/thought_cluster/` + ThoughtClusterManager 1:1 翻译 L79-292 (zero LLM) + ThoughtClusterReader trait 1:1 翻译 L69-76 (消费侧) + 集成 R22 reflection with_thought_reader 注入 (per v1 reflection L65-72) + meta_thinking save_to_cluster (per v1 meta_thinking L323) + 单测 1:1 翻译 8 测试 + 5 重守门 + LOCKED 0 触碰.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:101:借鉴 v1 `apeireth-companion/src/intent_brier.rs:1-817` + oracle.rs Brier 公式. 新 crate `crates/engine/intent_brier/` + IntentPrediction + FeedbackOutcome + IntentRecord + IntentLedger 1:1 翻译 L40-191 + brier_score + mean_brier + compute_window + compute_trend + domain_diagnostics + compute_report + render_report 1:1 翻译 L196-431 + 集成 `cognitive.self_assessment` slot (AfterTurn, 反馈 = Agree/Correct/Silent; 反馈源 = Judge verdict) + 集成 `cognitive.preference_recall` (TurnStart, render_report 注入 system prompt, 预算 ≤ N chars) + 跟 W1/W2/W3 world_model organ 共享 brier_score 公式 (per v1 L11-14 + `organ::world_model.rs` L159-160 "CalibrationStrength 本地 enum 0 依赖 apeireth-confidence") + 单测 1:1 翻译 31 测试.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:117:借鉴 v1 `apeireth-companion/src/confidence.rs:1-177` + hydra genome + v2 organ::world_model::CalibrationStrength 本地简化版 (L159-292). 新 crate `crates/engine/confidence/` (per R10 OrganKind variant, 跟 organ::world_model::CalibrationStrength 区分 — confidence crate = 通用 BetaBinomial trait, organ crate = world_model specific 本地简化版) + BetaBinomial + Strength 1:1 翻译 L9-110 (zero LLM) + 集成 cognitive.council (AdvisorVerdict.confidence: Option<f64> → Option<BetaBinomial>) + 集成 cognitive.judge (Judge critique 置信度基于 BetaBinomial, 不再 LLM 自报) + 集成 cognitive.self_assessment (AfterTurn self_assessment 置信度) + **organ::world_model 协同**: 保留本地 Calibr­ationStrength (per 0 装诚实 + 依赖最小), 跟通用 confidence crate 双向 optional borrow + 单测 1:1 翻译 4 测试.
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:154:### 7.3 真实施顺序 + 估时 + 借鉴链
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:156:| 顺序 | 模块 | 估时 | 借鉴链 (v1 donor) | 阻塞 | 并行 |
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:168:**借鉴链汇总**: v1 donor `legacy/donor/apeireth-companion/src/{6 modules}` (6 REAL 模块 1:1 翻译) + VCP MetaThinkingManager + ThoughtClusterManager + Generative Agents importance 触发 + Reflexion 论文 + hydra genome 置信度数学 + oracle.rs Brier 公式 + N.E.K.O reflective 维 (per `r7-neko-species-research-2026-08-28.md` L70) + Mio 日记反思部分 (per `r7-mio-species-research-2026-08-28.md` L75).
+docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md:224:_R11-MetaCognition 写于 2026-08-28 Round 11, 主代理派单 "1.0 vs 2.0 反思+元认知 gap 真调研" 触发, 6 模块 1:1 翻译 v1 真账 vs v2 active workspace 0 真实施 推论真账, R22 reflection critical path 1 周 + meta_thinking + thought_cluster 同期 + reflexion / intent_brier / confidence post-critical path 派单顺序 + 估时 + 借鉴链真账就位. **0 装诚实标**: 本调研 0 git clone v2 active workspace, 仅读 1.0 真账 + 2.0 handbook + 5 R7 真调研 + R21-R24 调研 + 物种化真理解推论, 真实施前主代理必亲验._
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:7:> **关系**: 跟 `vision.md` L29-49 (物种而非个体 + 教后代 + 跨墙信任 + 三远合一) + `apeireth-true-understanding-2026-08-28.md` §2 (物种 vs 个体) + §3.2 (物种化借鉴边界) + 主代理真账 §2.4 (物种化核心缺口) + `v2-reference-handbook-2026-08-28.md` §1.2-1.3 (五原型 + 12 slot) + F6 organ 集成
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:56:**物种化借鉴边界** (per apeireth-true-understanding §3.2 修订):
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:58:- **借鉴 N.E.K.O / AIRI / Open-LLM-VTuber / Firefly / Mio** (Round 10 5 真调研已就位) 的"教/学/塑形"思路
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:65:- **借鉴链**: N.E.K.O 角色塑造 + AIRI Live2D 行为模板 + 1.0 `EducationDxPlugin` 装配模式 + F6 value_cases approve 模式
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:67:### 1.4 物种化借鉴边界 (R11 修订)
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:75:## 2. partner — 1.0 vs 2.0 + 物种化借鉴
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:104:- **借鉴链**: 1.0 partner.rs 真账 + Round 10 N.E.K.O 角色关系 + bond 阶段机设计 (Open-LLM-VTuber / AIRI 调研已就位)
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:108:## 3. community — 1.0 vs 2.0 + 物种化社区借鉴
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:139:- **借鉴链**: 1.0 community.rs 真账 (360 行 deterministic) + LightRAG/GraphRAG 精神 + N.E.K.O 社区机制
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:175:- **借鉴链**: 1.0 principles.rs 真账 (478 行, 完整 safety model) + F6 organ WIRED + 9 哲学锚 LOCKED + 13 键洋葱
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:228:- **P0 #4 education 真调研**: 派 sub-agent 真读 vision L48 + 5 真调研借鉴 + 主代理亲做 spec (物种化核心决策) + 真账
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:232:- **Round 10 5 真调研** (N.E.K.O / AIRI / Open-LLM-VTuber / Firefly / Mio): **物种化前端 + 物种化架构借鉴** (per apeireth-true-understanding §3.2)
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:233:- **R11 物种化核心 4 gap** (education / partner / community / principles): **物种化哲学层落地** (vision L48 "教'如何成为自己'") = 5 真调研借鉴的 **承接 + 真实施**
+docs/04-internal/r11-species-core-gap-research-2026-08-28.md:234:- **互补**: 5 真调研 给借鉴点, R11 4 gap 真实施承接借鉴 → 物种化从"调研"到"工程"的 critical path 闭环
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:30:**R11 真调研任务**: 1.0 三个 `apeireth-companion/src/{timeline,tone,morphology}.rs` 真账 + 2.0 0 真实施现状 + 物种化塑形维度意义 + 真实施路径, 跟 Round 10 5 真调研 (物种化借鉴) 对接.
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:73:| # | 项 | 估时 | 阻塞 | 借鉴链 |
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:82:**借鉴链 (per Round 10 5 真调研)**:
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:83:- **N.E.K.O 五维记忆 reflective 维** (per `r7-neko-species-research-2026-08-28.md` §2.2 L70) — reflective 记忆 = "自我评估/元认知", Milestone 触发规则借鉴
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:132:| # | 项 | 估时 | 阻塞 | 借鉴链 |
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:140:**借鉴链 (per Round 10 5 真调研)**:
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:143:- **N.E.K.O 五维记忆 emotional 维** (per `r7-neko-species-research-2026-08-28.md` §2.2 L69) — emotion_tone 输入来自 emotional 维, 借鉴维度
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:189:**真账**: 1.0 morphology.rs 284 行 + 10 测试 + 0 装诚实登记 (VCP 借鉴 vs 手调常量, 未学习/未调参验证) — 是 v2 release 必补"物种化塑形 frontend 维度"具体形态之一.
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:195:| # | 项 | 估时 | 阻塞 | 借鉴链 |
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:202:**借鉴链 (per Round 10 5 真调研)**:
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:205:- **Mio Windows 本地优先** (per `r7-mio-species-research-2026-08-28.md` §2.1) — 借鉴 portable binary 部署, morphology 是 backend crate, 不影响 frontend
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:206:- **Firefly 流式对话** (per `r7-firefly-species-research-2026-08-28.md` §2.4) — 借鉴流式对话前端渲染, morphology 进度条跟流式输出并行
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:221:| 维度 | 1.0 真账 | v2 状态 | 物种化塑形意义 | 借鉴链 |
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:249:### 4.3 真实施顺序 + 估时 + 借鉴链
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:251:| 阶段 | 项 | 估时 | 借鉴链 | 阻塞 |
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:263:**借鉴链总账**:
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:266:- **物种化借鉴** (Round 10 5 真调研, 互补不重叠) — Firefly 声音 + Open-LLM-VTuber/AIRI 视觉 + Mio 容器 + N.E.K.O 五维记忆
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:276:| 1 | **Timeline (1.0 79 行)** | 🟢 P0 | 派 sub-agent 真调研 + 1:1 翻译 v1 → `apeireth-organ::timeline` (或新 crate `apeireth-companion-data`), 跟 R22 reflection + N.E.K.O reflective 维借鉴合并 | 2-3 周 | 0 |
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:282:- 任务: 1:1 翻译 v1 + 新设计衔接 + 借鉴链整合 + 0 装诚实标
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:305:- **不假装 OK**: 调研真账 ≤ 300 行已 flag 全部失守, 借鉴路径**全是 🔬 派 sub-agent** (主代理亲验后才决策)
+docs/04-internal/r11-species-form-gap-research-2026-08-28.md:327:| # | 项 | 估时 | 阻塞 | 借鉴方式 |
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:26:5. **🟢 借鉴链 1:1 可用**: 1.0 `apeireth-vector` + `apeireth-graph-primitive` 比 v2 canonical 更完整
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:71:### 1.4 借鉴链 + 真实施路径
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:79:**研究/source 借鉴** (R10): Qdrant REST + sqlite-vec + LanceDB + pgvector
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:97:- `graph.rs` — `RelationGraph` (adjacency indexes, 借鉴 SurrealDB RELATE + Neo4j BFS/DFS)
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:124:### 2.3 真账修订 + 借鉴链 + 真实施路径
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:135:**研究/source 借鉴** (R10): SurrealDB + neo4j + cypher + Kani
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:141:- **P1 (2 周)**: **causal engine** — 因果推断 (借鉴 do-calculus / counterfactual, **主代理拍板 spec**, 物种化核心)
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:173:### 3.3 真账修订 + 借鉴链 + 真实施路径
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:198:### 4.2 借鉴链 (O-2)
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:202:3. **研究/source 借鉴 (R10)**: Qdrant + sqlite-vec + SurrealDB + Neo4j + Cypher + Kani
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:203:4. **未借鉴候选**: pgvector + LanceDB + llamacpp
+docs/04-internal/ref-yoyo-evolve.md:48:2. **双层 eval + 命名 checklist 覆盖合同**：机械闸 + LLM 判官 4 维 checklist，FAIL 覆盖 PASS，降级不 fail-closed——**宪法评审可借鉴**（我们当前评审失败=保守拒绝，这里提供「降级但留痕」的另一面）
+docs/04-internal/ref-yoyo-evolve.md:72:### 双层 eval（宪法评审可借鉴）
+docs/04-internal/round-10-research-plan-2026-08-28.md:24:2. ✅ **保留 research/source/ + _research_mem/** (全 gitignore 隐含 ignore, 0 commit, 调研 + 借鉴链)
+docs/04-internal/round-10-research-plan-2026-08-28.md:72:### 1.4 Apeireth v2 已有借鉴链
+docs/04-internal/round-10-research-plan-2026-08-28.md:77:| `research/source/` (~36 真开源借鉴) | tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:104:| **定义** | 直接可借鉴 (代码 / 设计 / 思路) | 同领域参考 (了解趋势, 不直接借鉴) | 远领域 (知道就行) | 完全无关 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:106:| **直接借鉴** | 代码可移植 / 借鉴边界 / 0 触碰 LOCKED | 趋势参考 / 设计思路 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:107:| **不直接借鉴** | 太远或风险高 | 太远或不合规 |
+docs/04-internal/round-10-research-plan-2026-08-28.md:114:- **直接借鉴候选 (TOP 5)**:
+docs/04-internal/round-10-research-plan-2026-08-28.md:118:  - **Cua** (开源 Computer Use 2.0 驱动) — 我们 D 块 RC-7 Perception 工具调用借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:119:  - **Serena** (MCP 编码工具包) — 我们的 tool pipeline (per `crates/capabilities/tools/`) 借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:125:- **真开源 + 直接可借鉴**: Playwright MCP (跨浏览器自动化) / Crawl4AI (LLM 友好爬虫) / Serena (MCP 工具包) / Carbonyl (终端 Chromium) / codebase-memory-mcp (代码智能 MCP)
+docs/04-internal/round-10-research-plan-2026-08-28.md:132:- **0 借鉴价值** — skip
+docs/04-internal/round-10-research-plan-2026-08-28.md:137:- **有限借鉴**:
+docs/04-internal/round-10-research-plan-2026-08-28.md:140:  - **Mio** (Windows 本地优先 + 屏幕感知 + QQ + Live2D) — Windows 桌面部署借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:141:- **P2 后续** (B 块 frontend 真实施时考虑 UI 借鉴)
+docs/04-internal/round-10-research-plan-2026-08-28.md:145:- **D 块 RC-7 真 modality 借鉴候选**:
+docs/04-internal/round-10-research-plan-2026-08-28.md:152:- **有限借鉴**:
+docs/04-internal/round-10-research-plan-2026-08-28.md:153:  - **Vaultwarden** (Rust Bitwarden 兼容服务端) — 我们 cargo keyring + governance credential 借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:154:  - **Sandboxie** (Windows 沙箱) — 我们 process isolation 借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:155:  - **opencode-vibeguard** (敏感信息脱敏插件) — 我们的 governance hook 脱敏借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:160:- **直接相关** (主代理 / 借鉴知识库):
+docs/04-internal/round-10-research-plan-2026-08-28.md:165:  - **Obsidian LLM** (Obsidian 作为 AI 第二大脑) — 长期记忆架构借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:166:  - **OpenMythos** (开源 Mythos 重建) — 知识库架构借鉴
+docs/04-internal/round-10-research-plan-2026-08-28.md:167:- **AI 提示词 / Skill 合集** (CL4R1T4S / Ponytail / old-coder / PUA / andrej-karpathy-skills / live_coding / karpathy/AutoResearch) — 借鉴工作流 / Sub-agent prompt 工程
+docs/04-internal/round-10-research-plan-2026-08-28.md:173:- **0 借鉴价值** — skip
+docs/04-internal/round-10-research-plan-2026-08-28.md:249:- **TOP 5 HIGH 借鉴** (sub-agent 写真账确认后): DeepSeek Harness / LangGraph / CrewAI / Cua / Serena
+docs/04-internal/round-10-research-plan-2026-08-28.md:252:  - 1 commit per 项目, 写借鉴笔记到 docs/04-internal/borrowed-from-X-2026-08-28.md
+docs/04-internal/round-10-research-plan-2026-08-28.md:256:- **MED 趋势参考** (32 + 5 + 3 + 6 = ~46 个): 调研真账, 不真借鉴, 知道就好
+docs/04-internal/round-10-research-plan-2026-08-28.md:264:- **AI 伴侣 UI 借鉴** (3 个): B 块 frontend 真实施时调研
+docs/04-internal/round-10-research-plan-2026-08-28.md:274:- 任务: 逐类分析 170 项目对我们项目 (Apeireth v2) 的实际作用 + 可借鉴度
+docs/04-internal/round-10-research-plan-2026-08-28.md:281:2. 高价值项目 TOP 10 (HIGH, 借鉴点 + 优先级)
+docs/04-internal/round-10-research-plan-2026-08-28.md:300:| 2 | **TOP 5 HIGH 借鉴** (DeepSeek Harness / LangGraph / CrewAI / Cua / Serena) — 派 5 sub-agent 真调研 | 1-2 周 | 0 |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:60:  - **Agent 框架类借鉴**: 12 slot cognitive module + 9 organ 抽象 + agent loop 模式 (直接代码借鉴边界)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:61:  - **AI 伴侣类借鉴**: Live2D 视觉子模态 + 五维记忆系统 + ASR/TTS 抽象层 (设计借鉴, 不直接借鉴 Live2D 渲染)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:64:- Agent 框架类借鉴价值: 直接代码 / 抽象边界 / 接口设计
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:65:- AI 伴侣类借鉴价值: Live2D 视觉形象子模态 (RC-7 真 modality 子集) + 五维记忆 (memory module 拓展) + ASR/TTS 抽象层
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:71:**借鉴顺序 (per O-2 前人肩上, 不重叠)**:
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:72:1. **已借鉴 (0 调研需要)** — `research/source/` 里 Agent 框架 (LangGraph / CrewAI / DeepSeek Harness / Cua / Serena / MetaGPT / openclaw / hermes-agent-rs 等 ~36 真开源)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:76:**关键修订: 借鉴 AI 伴侣类不借鉴 Live2D 渲染本身** (那不是 v2 backend), 只借鉴:
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:85:- sub-agent 评估方法偏差: 用 "社区活跃度" (Star 数) 评估 HIGH, 不是用 "直接借鉴边界" (代码可移植性). 主代理亲验 catch.
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:87:- sub-agent TOP 5 (AI 伴侣) 跟主代理预判 TOP 5 (Agent 框架) 不重叠, 是两个维度. 借鉴顺序: research/source 已借鉴 Agent 框架 → 派单新调研 AI 伴侣类 → 不重复.
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:93:### 2.1 P0 (1 周内, 立即可借鉴)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:97:| # | 项目 | 借鉴点 | 调研方式 | 估时 |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:108:- 写真账必含: 实现摘要 / 借鉴点 (代码 / 设计 / 接口) / 0 触碰 LOCKED 验证 / 借鉴路径 (clone / 看文档 / 不借鉴) / 下一步
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:112:#### 2.1.2 借鉴 Alife + OpenClaw portable 模式 — sub-agent 推 P1, 主代理改 P0
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:116:- **借鉴**: sub-agent 真调研 Alife (1-2 天, 写真账 ≤200 行, 含借鉴路径)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:118:### 2.2 P1 (1 月内, 趋势参考 + 部分借鉴)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:120:#### 2.2.1 借鉴 N.E.K.O 五维记忆 → v2 cognitive.memory_recall / memory_writeback 增维
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:137:#### 2.2.3 借鉴 Vaultwarden + opencode-vibeguard → v2 O-1 安全优先
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:147:- 借鉴 Alife (一键安装) + OpenClaw (跨平台 CLI + Gateway)
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:158:#### 2.3.2 LOW + NONE 项目不真借鉴
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:170:| **sub-agent TOP 5 评估方法偏差** | 用 "社区活跃度" (Star 数) 评估 HIGH, 不是用 "直接借鉴边界" (代码可移植性). 真账标 AI 伴侣类 (5/5 TOP5), 但 Apeireth v2 是 AI Agent framework 不是 AI 伴侣 | 主代理亲验 catch, 修订借鉴边界 (仅借鉴 Live2D 视觉子模态 + 五维记忆 + ASR/TTS 抽象, 不借鉴 Live2D 渲染本身) |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:193:| 2 | 派 1 sub-agent 真调研 Alife (portable 模式借鉴) | 1-2 天 | 0 |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:194:| 3 | 借鉴 N.E.K.O 五维记忆 → v2 cognitive memory module 增维 (跟 R20 并行) | 1-2 周 | R20 真实施 |
+docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md:196:| 5 | 借鉴 Vaultwarden + opencode-vibeguard → v2 O-1 安全优先 | 1-2 天 | §10 LOCKED 0 触碰约束 |
+docs/04-internal/round-12-final-gap-audit-2026-08-28.md:23:1. **所有调研**: Round 9 (真理解 + 真账 + handbook) + Round 10 (1 你you 调研 + 1 主代理预判 + 1 主代理亲验 + 5 R7 物种化借鉴) + Round 11 (1.0 vs 2.0 gap + 6 R11 gap 真调研) = 19 真账 doc, ~5400 行
+docs/04-internal/round-12-final-gap-audit-2026-08-28.md:46:| **Round 10 R7 物种化借鉴 (5 sub-agent 真调研)** | | | |
+docs/04-internal/round-12-final-gap-audit-2026-08-28.md:72:| 5 R7 物种化借鉴 | ✅ 100% | 5 R7 真调研真账 |
+docs/04-internal/round-12-final-gap-audit-2026-08-28.md:164:19. **morphology** — 1.0 `morphology.rs` (REAL, 284, N7 VCP 借鉴). v2 0 (per R11, frontend 维度)
+docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md:168:| `apeireth-companion/src/morphology.rs` | 284 行 | **REAL** ✅ 1:1 可移植 (N7 VCP 借鉴, softmax + 三档 Shallow/Standard/Deep + budget 控制, per R11-SpeciesForm sub-agent 报告) | (物种化塑形 frontend 维度, L167 env APEIRETH_MORPHOLOGY_TEMPERATURE) | ❌ v2 0 真实施 |
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:93:**真账 (借鉴链完整)**:
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:94:- ✅ **5 R7 物种化借鉴真账** (N.E.K.O / Open-LLM-VTuber / Firefly / Mio / AIRI) push 成功
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:96:- ✅ **research/source ~36 真开源借鉴** (tokio / wasmtime / qdrant / sled / hermes-agent-rs / MetaGPT / openclaw / LangGraph / CrewAI / Claude Code 等)
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:102:2. 1.0 PARTIAL 真账借鉴 (5 项: education 字符串规则 / confidence BetaBinomial / HybridCognitiveRouter / proactive / Kani bridge)
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:103:3. R7 物种化借鉴 (5 项目对接: N.E.K.O 五维记忆 / Open-LLM-VTuber 4 段 pipeline / Firefly GPT-SoVITS 原声 TTS / Mio Windows 本地优先 / AIRI 永远不下播)
+docs/04-internal/round-14-v2-completion-plan-2026-08-28.md:104:4. research/source 真开源借鉴 (~36 项目, 真实施时按需 clone)
+docs/04-internal/secret-management-policy.md:12:2026-08-21 在 R215 借鉴任务**收尾阶段**才扫描发现：
+docs/04-internal/secret-management-policy.md:88:**脚本**: `scripts/secret-scan.ps1` (R215 创建, 借鉴 gitleaks v8.30.1 pattern 表)
+docs/04-internal/secret-management-policy.md:115:**文件**: `.gitleaks.toml` (R215 创建, 借鉴 gitleaks 官方 schema)
+docs/04-internal/secret-management-policy.md:223:### 5.3 后续批 (R215 借鉴 backlog)
+docs/04-internal/secret-management-policy.md:235:| 写一篇 "R215 借鉴报告 — 凭证泄露与恢复" blog post | P2 | 2 小时 | ❌ 后续批 |
+docs/04-internal/secret-management-policy.md:274:- ✅ **借鉴 ID 命名** 让 0 装 PASS 标注可追溯 (R215 教训 → 0 装 PASS 段 → 主 2026-08-21 评估)
+docs/04-internal/secret-management-policy.md:295:**借鉴**: gitleaks v8.30.1 (https://github.com/gitleaks/gitleaks) - pattern 表 + config schema
+docs/04-internal/stage123-gap-matrix.md:11:> **措辞约定**：stage3 借鉴清单中的外部项目一律称"参考项目"（Erlang/OTP、Hermes、VCP ToolBox 等）。
+docs/04-internal/team-work-doc.md:324:| AICodeWorker 报告锚点 | 工具输出规范借鉴（读取清单+结果摘要锚点） | P2 |
+docs/04-internal/team-work-doc.md:326:| SkillBridge / PlaceholderExplorer / VCPLog | 社区插件规范借鉴 | P2 |
+docs/04-internal/v2-reference-handbook-2026-08-28.md:159:**改前自问**: "这方案借鉴了谁的? 标注来源了吗?"
+docs/04-internal/v2.0.0-release-path.md:162:| 9 | **Memory** memory | `memory.rs` | ✅ done (待 commit) | 跨 8 organ 记忆合并抽象 (新设计, 借鉴 v1 算法骨架 1:1 翻译) | 确定性 (合并抽象) | R8 | (撤回, 0 装诚实等全 5 完 commit) |
+docs/04-internal/v2.0.0-release-path.md:212:- 子代理 R8 标 "v1 没有 MemoryMerger 模块, v2 是新设计, 借鉴 v1 `MemoryExtractionService::apply` 算法骨架 1:1 翻译"
+docs/04-internal/v2.0.0-release-path.md:262:> - 不假装"v1 有 MemoryMerger" — 子代理 R8 标 v1 没有, v2 是新设计借鉴 v1 算法骨架 1:1 翻译
+docs/04-internal/youyou-list-research-2026-08-28.md:6:> **用途**: 给主代理决策参考 — 170 项目按 10 类分组, 标 HIGH/MED/LOW/NONE, TOP 10 推荐借鉴顺序, 用户末尾 2 想法随记评估
+docs/04-internal/youyou-list-research-2026-08-28.md:25:| 1 | AI Agent 框架与 Harness | 40 | LLM harness / multi-agent | **HIGH** (15-20 直接可借鉴) | v2 已借鉴 Hermes/OpenClaw/LangGraph/CrewAI/MCP 等; 调研不重叠 |
+docs/04-internal/youyou-list-research-2026-08-28.md:29:| 5 | 安全与隐私 | 15 | password / p2p / sandbox | **MED** | 跟 O-1 安全优先哲学锚相关, 部分借鉴 |
+docs/04-internal/youyou-list-research-2026-08-28.md:31:| 7 | 即时通讯/机器人 | 2 | QQ/IM bot | **LOW** | 仅 1-2 项目, v2 gateway 已有 SSE, 不直接借鉴 |
+docs/04-internal/youyou-list-research-2026-08-28.md:32:| 8 | AI 伴侣/VTuber/桌宠 | 27 | VTuber / desktop pet / Live2D | **HIGH** (5-8 直接可借鉴) | 跟 RC-7 真 modality 强相关 (Live2D 视觉形象 = modality 之一), 用户本位 |
+docs/04-internal/youyou-list-research-2026-08-28.md:40:## 2. 高价值项目 TOP 10 (HIGH 相关, P0/P1 借鉴)
+docs/04-internal/youyou-list-research-2026-08-28.md:42:> 借鉴方式: `📦clone` = git clone 看代码, `📄看文档` = 看 README/spec, `🔬派 sub-agent` = 派调研, `⏸️不借鉴` = 仅参考
+docs/04-internal/youyou-list-research-2026-08-28.md:44:### P0 (1 周内立即借鉴, 真实施)
+docs/04-internal/youyou-list-research-2026-08-28.md:46:| # | 项目 | URL | 一句话 | 借鉴点 | 优先级 | 方式 |
+docs/04-internal/youyou-list-research-2026-08-28.md:54:### P1 (1 月内排上, 趋势参考 + 部分借鉴)
+docs/04-internal/youyou-list-research-2026-08-28.md:56:| # | 项目 | URL | 一句话 | 借鉴点 | 优先级 | 方式 |
+docs/04-internal/youyou-list-research-2026-08-28.md:64:### 借鉴方式: P0 派 1 sub-agent 调研 TOP 5, P1 主代理排下月 (4-6 月并行 critical path 内).
+docs/04-internal/youyou-list-research-2026-08-28.md:70:> 不真借鉴, 仅了解趋势, 主代理团队知道就行
+docs/04-internal/youyou-list-research-2026-08-28.md:74:- **AI Agent 框架 (调研不重叠)**: CrewAI / LangGraph / Pydantic AI / Hermes Agent / pi-mono / Mission Control / LoopX / PenguinHarness / OpenViking / Kimi Code / AstrBot / Panniantong/Agent-Reach — **v2 已借鉴或与 research/source 重叠**, 不重复
+docs/04-internal/youyou-list-research-2026-08-28.md:101:**借鉴**: Alife (一键安装) + 借鉴 v2 portable binary 模式 (借鉴 A 块 Stage 5 L0-L5 UpgradeCycle portable 模式)
+docs/04-internal/youyou-list-research-2026-08-28.md:107:**对接 v2 工程现状**: RC-7 Perception 真 modality (R14 调研就位, 2-3 周需硬件到位). 视频 = modality 之一 (跟音频/图像/文本并列). 用户本位 + O-2 前人肩上 (借鉴 N.E.K.O / AIRI / Open-LLM-VTuber / Warashi 等 P0 HIGH 项目).
+docs/04-internal/youyou-list-research-2026-08-28.md:113:4. 借鉴: N.E.K.O (VRM/MMD 视觉) + Open-LLM-VTuber (视觉感知 pipeline) + AIRI (Live2D 渲染)
+docs/04-internal/youyou-list-research-2026-08-28.md:124:### P0 (1 周内, 立即可借鉴)
+docs/04-internal/youyou-list-research-2026-08-28.md:127:2. **借鉴 Alife + OpenClaw portable 模式** 为便携 U 盘做技术调研 (1-2 天, 跟派单 1 并行)
+docs/04-internal/youyou-list-research-2026-08-28.md:128:3. **借鉴 N.E.K.O 五维记忆** → v2 cognitive.memory_recall / memory_writeback 增维 (跟 R20 preference_learning 真实施并行, 2-3 周)
+docs/04-internal/youyou-list-research-2026-08-28.md:130:### P1 (1 月内, 趋势参考 + 部分借鉴)
+docs/04-internal/youyou-list-research-2026-08-28.md:133:5. **借鉴 Vaultwarden (Rust 写 Bitwarden 兼容)** + opencode-vibeguard → v2 O-1 安全优先 (per §10 LOCKED 0 触碰约束, 改仅 3 hook 之外)
+docs/04-internal/youyou-list-research-2026-08-28.md:139:8. **LOW + NONE 项目**: 不真借鉴, 仅主代理团队知道 (本真账已列名, 不再派单)
+docs/04-internal/youyou-list-research-2026-08-28.md:144:- **不要全借鉴** — 170 项目仅 25 HIGH, 大部分 LOW/NONE 是 noise
+docs/04-internal/youyou-list-research-2026-08-28.md:145:- **优先派 sub-agent 调研 P0 TOP 5** — 真账 + 借鉴路径, 估 1 周, 跟 critical path 并行
+docs/04-internal/youyou-list-research-2026-08-28.md:147:- **借鉴原则**: per O-2 前人肩上, 必 1:1 翻译 v1 legacy 优先, 其次 research/source, 最后本清单 (顺序不重叠)
+docs/design/00-PHILOSOPHY.md:31:产品骨骼 = 微信式聊天壳 + 卷宗面板，零 WebGL 依赖（T0 可用）。借鉴的是被十亿用户验证的三件事：
+docs/design/00-PHILOSOPHY.md:121:| `reference/前代产品/INDEX.md` | 素材层 | 借鉴纪律：借信息组织（主从/空态/badge 语义），不借指挥中心形态 |
+scripts/check-neutral-terms.ps1:3:# 产品/项目标识或"移植/借鉴/参照实现"类来源措辞。只扫 git diff 的新增行
+scripts/check-neutral-terms.ps1:17:  '借鉴自',
+scripts/install-pre-commit-hook.ps1:4:# 借鉴 gitleaks pre-commit pattern, 简化版: 用本地 PowerShell 扫描器
+scripts/install-pre-commit-hook.ps1:72:# 借鉴 gitleaks pre-commit pattern, 简化: 用 PowerShell 扫描器扫 staged files.
+scripts/release/CHECKLIST-1.0.md:29:- [x] **借鉴 11/11 状态 clear verify** ✅ (✅ 10 真实施 + ⏳ 0 限流 + ❌ 1 跳过)
+scripts/release/CHECKLIST-1.0.md:44:- [x] **R129-7**: 借鉴 11/11 升级 verify (1:1 verify ✅ 10 + ⏳ 0 + ❌ 1)
+scripts/release/CHECKLIST-1.0.md:180:- **decision-56**: R127-2 10 派活 (借鉴 3 限流重试 + 1.0 release 准备 + Library 进阶)
+scripts/release/README.md:160:- 借鉴 8/11 真实施 + LOCKED 内部 fn 改动
+scripts/release/README.md:208:## 5. 借鉴源码 0 装 PASS 严守 (per decision-33 §2.3 C2)
+scripts/release/README.md:210:| 状态 | 借鉴源码 | 实施状态 |
+scripts/release/README.md:265:| #56 | 8/10 | r127-2-borrowed-3-retry-release-prep | R127-2 10 派活 (借鉴 3 限流重试 + 1.0 release 准备) |
+scripts/release/deploy-github-pages.ps1:276:6. borrowed-repos.md (Borrowed Repos) - 借鉴 11/11 致谢
+scripts/release/deploy-github-pages.ps1:341:Write-Host '    7. Borrowed Repos (borrowed-repos.md) - 借鉴 11/11 致谢' -ForegroundColor White
+scripts/release/deploy-github-pages.sh:263:6. borrowed-repos.md (Borrowed Repos) - 借鉴 11/11 致谢
+scripts/release/deploy-github-pages.sh:318:echo "    7. Borrowed Repos (borrowed-repos.md) - 借鉴 11/11 致谢"
+scripts/release/git-push-1.0.ps1:35:#   C2 0 装 PASS 严守 (commit 5.1 仅借鉴 8/11 真实施)
+scripts/release/git-push-1.0.ps1:136:Write-Host '   - 50+ ?? src/ (借鉴 8/11 真实施 + 新模块)' -ForegroundColor White
+scripts/release/git-push-1.0.ps1:158:借鉴 8/11 真实施:
+scripts/release/git-push-1.0.ps1:231:- OSS_NOTICE.md (P13-1 写, 346 行, 借鉴 8/11 致谢)
+scripts/release/git-push-1.0.ps1:238:- 18 行注释 block (LICENSE 引用链 + 借鉴 8/11)
+scripts/release/git-push-1.0.sh:36:#   C2 0 装 PASS 严守 (commit 5.1 仅借鉴 8/11 真实施)
+scripts/release/git-push-1.0.sh:136:echo '   - 50+ ?? src/ (借鉴 8/11 真实施 + 新模块)'
+scripts/release/git-push-1.0.sh:157:借鉴 8/11 真实施:
+scripts/release/git-push-1.0.sh:228:- OSS_NOTICE.md (P13-1 写, 346 行, 借鉴 8/11 致谢)
+scripts/release/git-push-1.0.sh:235:- 18 行注释 block (LICENSE 引用链 + 借鉴 8/11)
+scripts/release/tag-1.0.0.ps1:190:借鉴 11/11 状态 clear:
+scripts/release/tag-1.0.0.ps1:199:OSS_NOTICE: 根目录 OSS_NOTICE.md (P13-1 写, 346 行, 借鉴 8/11 致谢)
+scripts/release/tag-1.0.0.sh:182:借鉴 11/11 状态 clear:
+scripts/release/tag-1.0.0.sh:191:OSS_NOTICE: 根目录 OSS_NOTICE.md (P13-1 写, 346 行, 借鉴 8/11 致谢)
+scripts/secret-scan.ps1:4:# 借鉴自 gitleaks v8.30.1 的核心 pattern 表 (https://github.com/gitleaks/gitleaks)
+scripts/secret-scan.ps1:40:# 借鉴自 gitleaks v8.30.1 rules/ 目录的 pattern 子集
+scripts/secret-scan.ps1:77:# 借鉴自 .gitignore 的 "允许" 文件 (placeholder / 测试数据, false positive)
+scripts/secret-scan.ps1:101:# 借鉴自 gitleaks .toml allowlist 机制
+scripts/secret-scan.ps1:139:# 借鉴自 gitleaks scan semantics

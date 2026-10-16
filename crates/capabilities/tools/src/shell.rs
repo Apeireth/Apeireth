@@ -8,6 +8,7 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use apeireth_core::kernel::CapabilityId;
@@ -16,6 +17,7 @@ use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, Too
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use crate::object_access::{ObjectAccessJudge, ObjectDomain, ObjectSubject};
 use crate::process::{
     current_platform_capabilities, EnforcementLevel, EnvironmentSpec, IsolationCapability,
     IsolationRequirement, ProcessLimits, ProcessRequest, ProcessResult,
@@ -42,6 +44,24 @@ pub struct TrustedShellConfig {
     pub max_stdout_bytes: usize,
     /// stderr bound in bytes.
     pub max_stderr_bytes: usize,
+    /// **W1 §2.4 沙箱开关** (2026-10-10, 默认**开** —— 设计拍板"产品定位=桌面
+    /// 伴侣"): 开 = 文件限定工作区 + 断网 (AppContainer, 不可实施时**拒绝执行**,
+    /// 绝不裸跑); 关 (`APEIRETH_SHELL_SANDBOX=0`) = 本机全权, 显式裸跑自担风险。
+    pub sandbox: bool,
+    /// **文件写入总闸** (与受控写文件工具同一开关, 唯一来源, 内测整改):
+    /// 关 = shell 写意图 (重定向 / 删除类 / 写命令面) 拒绝即帧
+    /// (`pipeline.pre_deny`, 文案明示同受一闸); 开 = shell 行为不变
+    /// (写命令照旧走 guardrail / 人工审批链 / 既有风险映射)。
+    /// 默认关 (fail-closed) —— 开关名与权力必须相符: 没有写权力时 shell 也
+    /// 写不了文件。写意图判定见 [`crate::write_intent`]。
+    pub file_write: bool,
+    /// **对象级判定挂载点** (E-P3 · 威胁模型 G3): `None` = 默认判定器
+    /// ([`ObjectAccessJudge::with_defaults`]: 工作区对象策略 + 元数据快照探针
+    /// + 进程内审计); `Some` = 挂载自定义判定器 —— 对象策略
+    /// [`crate::object_access::ObjectAccessPolicy`] 可替换 (星港线深望智能体
+    /// 接此契约)。执行前后对象状态对比: 词法面漏放的写入按对象事实兜底,
+    /// 越界即帧 + `sandbox.object_violation` 审计 (见 [`crate::object_access`])。
+    pub object_judgment: Option<Arc<ObjectAccessJudge>>,
 }
 
 impl Default for TrustedShellConfig {
@@ -54,6 +74,12 @@ impl Default for TrustedShellConfig {
             max_timeout_ms: 300_000,
             max_stdout_bytes: 64 * 1024,
             max_stderr_bytes: 64 * 1024,
+            sandbox: true,
+            // 文件写入总闸默认关 (fail-closed): shell 写命令与受控写文件工具
+            // 同受一闸, 未开闸时写意图拒绝即帧。
+            file_write: false,
+            // 对象级判定默认上默认判定器 (执行面常开), 挂载点可替换策略。
+            object_judgment: None,
         }
     }
 }
@@ -69,6 +95,29 @@ impl TrustedShellConfig {
     #[must_use]
     pub fn with_shell_executable(mut self, executable: impl Into<PathBuf>) -> Self {
         self.shell_executable = Some(executable.into());
+        self
+    }
+
+    /// W1 §2.4: 显式关闭沙箱 (裸跑, 本机全权) —— 进阶用户主动选择。
+    #[must_use]
+    pub fn with_sandbox(mut self, sandbox: bool) -> Self {
+        self.sandbox = sandbox;
+        self
+    }
+
+    /// 文件写入总闸 (与受控写文件工具同一开关, 唯一来源): 开 = shell 写命令
+    /// 行为不变; 关 = 写意图拒绝即帧。组装根把 `file_write` 开关值注入这里,
+    /// 开关名与权力相符 (内测整改)。
+    #[must_use]
+    pub fn with_file_write(mut self, file_write: bool) -> Self {
+        self.file_write = file_write;
+        self
+    }
+
+    /// 挂载对象级判定器 (E-P3 · G3): 替换默认判定器的对象策略/探针/审计面。
+    #[must_use]
+    pub fn with_object_judgment(mut self, judgment: Arc<ObjectAccessJudge>) -> Self {
+        self.object_judgment = Some(judgment);
         self
     }
 
@@ -113,6 +162,10 @@ struct ShellFrozenInvocation {
     shell_executable: String,
     shell_args: Vec<String>,
     cwd: String,
+    /// L 组 (2026-09-24 审计): 冻结时固化的规范化 workspace root。执行前
+    /// 用它复核 frozen cwd 的包含性 —— 审批等待期 (分钟级) cwd 可能被换成
+    /// 指向工作区外的 symlink, 冻结时的校验届时已失效 (TOCTOU)。
+    workspace_root: String,
     timeout_ms: u64,
     max_stdout_bytes: usize,
     max_stderr_bytes: usize,
@@ -125,18 +178,30 @@ struct ShellFrozenInvocation {
 pub struct ShellTool {
     id: CapabilityId,
     config: TrustedShellConfig,
+    /// 对象级判定器 (E-P3 · G3): 执行前后对象状态对比 + 越界即帧 + 审计。
+    judge: Arc<ObjectAccessJudge>,
 }
 
 impl ShellTool {
     pub fn new(config: TrustedShellConfig) -> Self {
+        let judge = config
+            .object_judgment
+            .clone()
+            .unwrap_or_else(|| Arc::new(ObjectAccessJudge::with_defaults()));
         Self {
             id: CapabilityId::new("tool.shell").unwrap(),
             config,
+            judge,
         }
     }
 
     pub fn config(&self) -> &TrustedShellConfig {
         &self.config
+    }
+
+    /// 挂载的对象级判定器 (审计行可经 [`ObjectAccessJudge::audit_rows`] 回读)。
+    pub fn object_judge(&self) -> &Arc<ObjectAccessJudge> {
+        &self.judge
     }
 
     fn declaration_parameters() -> ToolParameters {
@@ -187,7 +252,12 @@ impl ShellTool {
             .canonicalize()
             .map_err(|e| format!("cwd {relative:?} is not accessible: {e}"))?;
         if !candidate.starts_with(&root) {
-            return Err(format!("cwd {relative:?} escapes the workspace root"));
+            // 就地提示: 拒绝消息直接携带"如何申请本次升级"的结构化引导
+            // (缺什么模式 / 需要什么理由字段), 不让用户去翻设置。
+            return Err(format!(
+                "cwd {relative:?} escapes the workspace root; {}",
+                crate::escalation::UpgradeHint::out_of_workspace_access()
+            ));
         }
         if !candidate.is_dir() {
             return Err(format!("cwd {relative:?} is not a directory"));
@@ -196,17 +266,14 @@ impl ShellTool {
     }
 
     fn resolve_timeout_ms(&self, requested: Option<u64>) -> Result<u64, String> {
-        let timeout_ms = requested.unwrap_or(self.config.default_timeout_ms);
-        if timeout_ms == 0 {
-            return Err("timeout_ms must be non-zero".into());
-        }
-        if timeout_ms > self.config.max_timeout_ms {
-            return Err(format!(
-                "timeout_ms {timeout_ms} exceeds the configured maximum {}",
-                self.config.max_timeout_ms
-            ));
-        }
-        Ok(timeout_ms)
+        // 命令超时取值走统一超时熔合小库的取值闸 (`clamp_timeout`): 0、
+        // "无界"哨兵、超上限一律拒绝, 其余原样放行 (含 120s 等既有取值)。
+        apeireth_core::deadline::clamp_timeout(
+            requested,
+            self.config.default_timeout_ms,
+            self.config.max_timeout_ms,
+        )
+        .map_err(|e| e.to_string())
     }
 
     fn selected_shell(&self) -> PathBuf {
@@ -234,6 +301,9 @@ impl ShellTool {
     fn shell_args(&self, script: &str) -> Vec<OsString> {
         #[cfg(windows)]
         {
+            // 展示用: 审批卡上呈现 "/D /S /C <script>" 的形态。真正执行时
+            // Windows 走 raw_arg 尾巴 (`/D /S /C "<script>"`), 保证内层双引号
+            // 存活 (见 execute_frozen, 2026-10-06 真机引号被吃修复)。
             vec![
                 OsString::from("/D"),
                 OsString::from("/S"),
@@ -261,6 +331,15 @@ impl ShellTool {
                 "PATH",
                 "PATHEXT",
                 "COMSPEC",
+                // W1 §2.1 (2026-10-10 真机矩阵定案): AppContainer 进程初始化要
+                // 档案基础变量 —— 缺失报 os error 203 "找不到环境选项"。均为标准
+                // 用户/档案元数据 (零密钥), "最小化不泄密"原则保留。
+                "USERPROFILE",
+                "APPDATA",
+                "LOCALAPPDATA",
+                "HOMEDRIVE",
+                "HOMEPATH",
+                "USERNAME",
             ] {
                 if let Some(value) = std::env::var_os(key) {
                     let value = value
@@ -284,7 +363,26 @@ impl ShellTool {
         Ok(vars)
     }
 
-    fn isolation_requirements() -> IsolationRequirement {
+    /// W1 §2.4 (2026-10-10): 沙箱开关决定隔离要求集 —— 开 = 在历史集之上**要求**
+    /// 文件+网络隔离 Enforced (AppContainer 实施; 平台无能力即拒绝执行, 绝不裸跑),
+    /// 关 = 维持历史要求集。
+    fn isolation_requirements_for(sandbox: bool) -> IsolationRequirement {
+        let base = Self::base_isolation_requirements();
+        if sandbox {
+            base.require(
+                IsolationCapability::FilesystemIsolation,
+                crate::process::EnforcementLevel::Enforced,
+            )
+            .require(
+                IsolationCapability::NetworkIsolation,
+                crate::process::EnforcementLevel::Enforced,
+            )
+        } else {
+            base
+        }
+    }
+
+    fn base_isolation_requirements() -> IsolationRequirement {
         IsolationRequirement::new()
             .require(
                 IsolationCapability::StructuredSpawn,
@@ -324,6 +422,23 @@ impl ShellTool {
         OsString::from(value)
     }
 
+    /// 文件写入总闸拒绝即帧: 稳定 `pipeline.pre_deny` 帧 + 明示文案
+    /// 「文件写入开关未开——shell 写命令受同一总闸管辖」(拒绝信息即帧, 不是空话)。
+    fn write_gate_refusal(
+        &self,
+        call: &ToolCall,
+        hit: &crate::write_intent::WriteIntentHit,
+    ) -> ToolResult {
+        let failure = crate::exec_pipeline::PipelineFailure::PreDenied {
+            source: "shell_write_intent_gate".to_string(),
+            reason: format!(
+                "文件写入开关未开——shell 写命令受同一总闸管辖（file_write 唯一写总闸；命中: {}）",
+                hit.surface
+            ),
+        };
+        failure.emit(&call.id, Some("shell"))
+    }
+
     /// Builds a [`ProcessRequest`] from frozen fields only.
     ///
     /// This deliberately does not call `resolve_cwd_for`, `selected_shell`,
@@ -355,14 +470,29 @@ impl ShellTool {
                 .collect(),
         );
 
-        Ok(
+        // Windows: the script travels as a verbatim command-line tail
+        // (`/D /S /C "<script>"`) so embedded double quotes survive cmd's /S
+        // rule; Rust's normal arg quoting mangles them (2026-10-06 真机:
+        // powershell -Command "..." 只回显不执行). Non-Windows keeps argv.
+        #[cfg(windows)]
+        let request = {
+            let script = frozen
+                .shell_args
+                .last()
+                .map(|arg| arg.as_str())
+                .unwrap_or_default();
             ProcessRequest::new(Self::os_string(&frozen.shell_executable))
-                .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)))
-                .with_working_directory(PathBuf::from(&frozen.cwd))
-                .with_environment(environment)
-                .with_limits(limits)
-                .with_isolation(frozen.isolation.clone()),
-        )
+                .with_raw_arg(format!("/D /S /C \"{script}\""))
+        };
+        #[cfg(not(windows))]
+        let request = ProcessRequest::new(Self::os_string(&frozen.shell_executable))
+            .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)));
+
+        Ok(request
+            .with_working_directory(PathBuf::from(&frozen.cwd))
+            .with_environment(environment)
+            .with_limits(limits)
+            .with_isolation(frozen.isolation.clone()))
     }
 
     fn build_frozen(&self, call: &ToolCall) -> Result<ShellFrozenInvocation, ToolResult> {
@@ -388,6 +518,32 @@ impl ShellTool {
             )
             .with_name("shell"));
         }
+
+        // 文件写入总闸 (内测实锤整改, 宪法级): `file_write` 是**唯一写总闸** ——
+        // 受控写文件工具与 shell 写命令同受此闸。总闸未开时写意图 (重定向 /
+        // 删除类 / 写命令面, 保守词法扫描) 拒绝即帧 (`pipeline.pre_deny`); 总闸
+        // 开时行为不变, 仍走本工具既有 guardrail / 审批链 / 风险映射。
+        if !self.config.file_write {
+            if let Some(hit) = crate::write_intent::scan_shell_write_intent(&params.command) {
+                return Err(self.write_gate_refusal(call, &hit));
+            }
+        }
+
+        // M13 (2026-09-24 审计): guardrail 前置守门接线 —— 冻结前 fail-closed
+        // 拦截高危破坏性命令 (`rm -rf /` / `netsh advfirewall set ...` /
+        // `reg add` ...)。守门不是沙箱的替代 (AppContainer 仍是主墙), 但
+        // `APEIRETH_SHELL_SANDBOX=0` 显式裸跑与审批卡之间必须有这一层内容
+        // 过滤; 放在 cwd 解析前, 危险命令不碰文件系统。
+        crate::guardrail::ToolGuardrail::verify_shell_command(&params.command).map_err(|e| {
+            ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "shell command rejected by pre-call guard: {e}; {}",
+                    crate::escalation::UpgradeHint::content_floor()
+                ),
+            )
+            .with_name("shell")
+        })?;
 
         let cwd = self
             .resolve_cwd_for(&params.cwd)
@@ -426,11 +582,18 @@ impl ShellTool {
             shell_executable,
             shell_args,
             cwd: cwd.to_string_lossy().to_string(),
+            // root 单独 canonicalize 一次 (resolve_cwd_for 内部已解析 cwd,
+            // 这里取其 root 一并固化, 供执行前 TOCTOU 复核)。
+            workspace_root: self
+                .resolve_cwd()
+                .map_err(|e| ToolResult::permanent_error(&call.id, e).with_name("shell"))?
+                .to_string_lossy()
+                .to_string(),
             timeout_ms,
             max_stdout_bytes: self.config.max_stdout_bytes,
             max_stderr_bytes: self.config.max_stderr_bytes,
             environment,
-            isolation: Self::isolation_requirements(),
+            isolation: Self::isolation_requirements_for(self.config.sandbox),
         })
     }
 
@@ -450,6 +613,11 @@ impl ShellTool {
                 .iter()
                 .map(|(key, _value)| key)
                 .collect::<Vec<_>>(),
+            "sandbox": if frozen.isolation.requires(IsolationCapability::FilesystemIsolation).is_some() {
+                "工作区限定 + 断网 (AppContainer)"
+            } else {
+                "未沙箱 (本机全权)"
+            },
             "filesystem_isolation": format!("{:?}", capabilities.filesystem_isolation),
             "network_isolation": format!("{:?}", capabilities.network_isolation),
             "process_tree_containment": format!("{:?}", capabilities.process_tree_containment),
@@ -457,6 +625,57 @@ impl ShellTool {
     }
 
     async fn execute_frozen(&self, call: &ToolCall, frozen: &ShellFrozenInvocation) -> ToolResult {
+        // 文件写入总闸复核 (freeze→execute 时差): 审批等待期可达分钟级, 期间
+        // 总闸可能已关 —— 以执行时的闸状态对冻结脚本再扫一次写意图, 关闸后
+        // 冻结载荷同样拒绝即帧 (fail-closed)。
+        if !self.config.file_write {
+            if let Some(script) = frozen.shell_args.last() {
+                if let Some(hit) = crate::write_intent::scan_shell_write_intent(script) {
+                    return self.write_gate_refusal(call, &hit);
+                }
+            }
+        }
+
+        // L 组 (2026-09-24 审计): freeze→execute TOCTOU 复核。审批等待期可
+        // 达分钟级, 期间 frozen cwd 可能被替换成指向工作区外的 symlink ——
+        // 冻结时 (build_frozen) 的包含校验届时已失效。执行前对 frozen cwd
+        // 再 canonicalize, 以冻结时固化的 workspace_root 复核包含性; root
+        // 自身若被换成 symlink (canonicalize 结果与固化值不一致) 同样拒绝。
+        let frozen_root = Path::new(&frozen.workspace_root);
+        let cwd_canonical = match std::fs::canonicalize(&frozen.cwd) {
+            Ok(p) => p,
+            Err(e) => {
+                return ToolResult::permanent_error(
+                    &call.id,
+                    format!("frozen cwd {} is no longer accessible: {e}", frozen.cwd),
+                )
+                .with_name("shell")
+            }
+        };
+        let root_now = match std::fs::canonicalize(frozen_root) {
+            Ok(p) => p,
+            Err(e) => {
+                return ToolResult::permanent_error(
+                    &call.id,
+                    format!(
+                        "frozen workspace root {} is no longer accessible: {e}",
+                        frozen.workspace_root
+                    ),
+                )
+                .with_name("shell")
+            }
+        };
+        if root_now.as_path() != frozen_root || !cwd_canonical.starts_with(frozen_root) {
+            return ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "frozen cwd {} no longer resolves inside the approved workspace root {}",
+                    frozen.cwd, frozen.workspace_root
+                ),
+            )
+            .with_name("shell");
+        }
+
         let request = match Self::process_request_from_frozen(frozen) {
             Ok(request) => request,
             Err(e) => {
@@ -468,21 +687,53 @@ impl ShellTool {
             }
         };
 
-        let result = tokio::task::spawn_blocking(move || {
-            crate::process::ProcessExecutor::new().execute(&request)
+        // 对象级判定窗 (E-P3 · G3): 受控执行前后对象状态对比 ——「动了哪些
+        // 对象」的事实判定, 与 API 形态无关。词法面漏放的写入 (编码负载 /
+        // 解释器内写入等) 在这里按对象事实兜底; 越界即帧 + 落
+        // `sandbox.object_violation` 审计。判定窗开不出 = 对象事实不可核验,
+        // fail-closed 不执行。
+        let judge = Arc::clone(&self.judge);
+        let subject = ObjectSubject::new(frozen.shell_executable.clone());
+        let domain = ObjectDomain::new(PathBuf::from(&frozen.workspace_root));
+        let judged = tokio::task::spawn_blocking(move || {
+            judge.guard(subject, domain, || {
+                crate::process::ProcessExecutor::new().execute(&request)
+            })
         })
         .await;
 
-        match result {
-            Ok(Ok(process_result)) => {
-                let value = Self::format_result(&process_result);
-                ToolResult::ok(&call.id, value).with_name("shell")
+        match judged {
+            Ok(Err(guard_error)) => {
+                let failure = crate::exec_pipeline::PipelineFailure::PreDenied {
+                    source: crate::object_access::OBJECT_JUDGE_SOURCE.to_string(),
+                    reason: guard_error.to_string(),
+                };
+                failure.emit(&call.id, Some("shell"))
             }
-            Ok(Err(process_error)) => ToolResult::permanent_error(
-                &call.id,
-                format!("shell process execution failed: {process_error}"),
-            )
-            .with_name("shell"),
+            Ok(Ok((process_result, report))) => {
+                // 越界即帧: 未授权对象操作判失败 (审计已随判定落行)。
+                if let Some(failure) = report.failure() {
+                    return failure.emit(&call.id, Some("shell"));
+                }
+                match process_result {
+                    Ok(process_result) => {
+                        let mut value = Self::format_result(&process_result);
+                        // 对象审计可见墙: 本次执行动了哪些对象 (计数口径) ——
+                        // 合规执行零帧零审计行, 事实计数随结果可见。
+                        value["object_audit"] = serde_json::json!({
+                            "changes": report.changes().len(),
+                            "violations": report.violations().len(),
+                            "coverage": if report.complete() { "complete" } else { "partial" },
+                        });
+                        ToolResult::ok(&call.id, value).with_name("shell")
+                    }
+                    Err(process_error) => ToolResult::permanent_error(
+                        &call.id,
+                        format!("shell process execution failed: {process_error}"),
+                    )
+                    .with_name("shell"),
+                }
+            }
             Err(join_error) => ToolResult::retryable_error(
                 &call.id,
                 format!("shell execution task failed to join: {join_error}"),
@@ -491,14 +742,48 @@ impl ShellTool {
         }
     }
 
+    /// Decode captured command output. UTF-8 first; when that fails, the bytes
+    /// are almost certainly GBK (cp936) from a Chinese-Windows cmd console —
+    /// `String::from_utf8_lossy` alone turned `date`'s output into 乱码
+    /// (2026-10-06 真机). GBK fallback restores readable Chinese.
+    fn decode_command_output(bytes: &[u8]) -> String {
+        match std::str::from_utf8(bytes) {
+            Ok(text) => text.to_string(),
+            Err(_) => {
+                let (decoded, _, _) = encoding_rs::GBK.decode(bytes);
+                decoded.into_owned()
+            }
+        }
+    }
+
     fn format_result(result: &ProcessResult) -> serde_json::Value {
+        // W1 §2.2 后置出站凭据绊线接线 (2026-10-10): 此前 scan_and_sanitize_output
+        // 零生产调用 (IMPLEMENTED ≠ PRODUCTION WIRED)。shell 输出是唯一"全权出口"
+        // (2026-10-06 真机边界测试结论) —— stdout/stderr 双双过绊线, 命中即脱敏
+        // 截断并打 credential_tripwire 标记 (审批卡/UI 可见墙的存在)。
+        let stdout = crate::guardrail::ToolGuardrail::scan_and_sanitize_output(
+            &Self::decode_command_output(&result.stdout),
+        );
+        let stderr = crate::guardrail::ToolGuardrail::scan_and_sanitize_output(
+            &Self::decode_command_output(&result.stderr),
+        );
+        let mut leaked_kinds = stdout.leaked_kinds.clone();
+        for kind in &stderr.leaked_kinds {
+            if !leaked_kinds.contains(kind) {
+                leaked_kinds.push(*kind);
+            }
+        }
         serde_json::json!({
             "exit_code": result.exit_code(),
             "timed_out": result.timed_out(),
-            "stdout": String::from_utf8_lossy(&result.stdout).to_string(),
-            "stderr": String::from_utf8_lossy(&result.stderr).to_string(),
+            "stdout": stdout.sanitized_output,
+            "stderr": stderr.sanitized_output,
             "stdout_truncated": result.stdout_truncated,
             "stderr_truncated": result.stderr_truncated,
+            "credential_tripwire": {
+                "triggered": !leaked_kinds.is_empty(),
+                "leaked_kinds": leaked_kinds,
+            },
         })
     }
 }
@@ -510,11 +795,20 @@ impl ToolCapability for ShellTool {
     }
 
     fn declaration(&self) -> NormalizedTool {
+        // W1 §2.4 声明诚实 (2026-10-10): 描述随沙箱状态走 —— 开 = 声明墙的存在
+        // (平台无法实施时拒绝执行), 关 = 如实声明本机全权 (双态都不假称)。
+        let description = if self.config.sandbox {
+            "Executes a platform-native local shell command after explicit user approval. \
+             Sandboxed (W1): workspace-directory-only filesystem access and no network \
+             (Windows AppContainer); when the platform cannot enforce the sandbox, \
+             execution is refused instead of running unsandboxed. \
+             APEIRETH_SHELL_SANDBOX=0 explicitly opts out (full user account authority)."
+        } else {
+            "Executes a platform-native local shell command after explicit user approval. \
+             Runs with the user's OS account authority; not a filesystem or network sandbox."
+        };
         NormalizedTool::new("shell")
-            .with_description(
-                "Executes a platform-native local shell command after explicit user approval. \
-                 Runs with the user's OS account authority; not a filesystem or network sandbox.",
-            )
+            .with_description(description)
             .with_parameters(Self::declaration_parameters())
     }
 
@@ -581,6 +875,20 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn command_output_decodes_utf8_then_gbk() {
+        // UTF-8 passes through untouched.
+        let utf8 = "现在是 13:21".as_bytes();
+        assert_eq!(ShellTool::decode_command_output(utf8), "现在是 13:21");
+        // GBK bytes (Chinese-Windows cmd, cp936) decode instead of 乱码.
+        let gbk = encoding_rs::GBK.encode("日期 2026/09/19").0;
+        assert!(
+            std::str::from_utf8(&gbk).is_err(),
+            "fixture must not be valid UTF-8"
+        );
+        assert_eq!(ShellTool::decode_command_output(&gbk), "日期 2026/09/19");
+    }
+
+    #[test]
     fn declaration_is_honest_and_not_sandbox_named() {
         let tool = ShellTool::new(TrustedShellConfig::new("."));
         let declaration = tool.declaration();
@@ -590,6 +898,51 @@ mod tests {
         assert!(!description.contains("safe shell"), "{description}");
         assert!(!description.contains("secure shell"), "{description}");
         assert!(description.contains("user approval"), "{description}");
+    }
+
+    #[test]
+    fn declaration_honesty_covers_both_sandbox_states() {
+        // W1 §2.4 双态诚实 (2026-10-10): 开 = 声明墙的存在与"绝不裸跑"语义;
+        // 关 = 如实声明本机全权。两态都不假称。
+        let on = ShellTool::new(TrustedShellConfig::new("."));
+        let on_desc = on.declaration().description.unwrap_or_default();
+        assert!(on_desc.contains("Sandboxed (W1)"), "{on_desc}");
+        assert!(
+            on_desc.contains("refused instead of running unsandboxed"),
+            "{on_desc}"
+        );
+
+        let off = ShellTool::new(TrustedShellConfig::new(".").with_sandbox(false));
+        let off_desc = off.declaration().description.unwrap_or_default();
+        assert!(
+            off_desc.contains("not a filesystem or network sandbox"),
+            "{off_desc}"
+        );
+        assert!(off_desc.contains("user approval"), "{off_desc}");
+    }
+
+    #[test]
+    fn sandbox_default_on_and_knob_turns_off() {
+        // W1 §2.4 保护默认 (设计拍板"默认开"): 默认沙箱; with_sandbox(false) 显式裸跑。
+        // 要求集随之变化: 开 = 文件+网络 Enforced 要求 (AppContainer 路径), 关 = 历史集。
+        assert!(TrustedShellConfig::new(".").sandbox);
+        assert!(!TrustedShellConfig::new(".").with_sandbox(false).sandbox);
+
+        let on_req = ShellTool::isolation_requirements_for(true);
+        assert!(on_req
+            .requires(IsolationCapability::FilesystemIsolation)
+            .is_some());
+        assert!(on_req
+            .requires(IsolationCapability::NetworkIsolation)
+            .is_some());
+
+        let off_req = ShellTool::isolation_requirements_for(false);
+        assert!(off_req
+            .requires(IsolationCapability::FilesystemIsolation)
+            .is_none());
+        assert!(off_req
+            .requires(IsolationCapability::NetworkIsolation)
+            .is_none());
     }
 
     #[test]
@@ -649,6 +1002,33 @@ mod tests {
     }
 
     #[test]
+    fn command_timeout_resolution_keeps_the_120s_semantics() {
+        // 接线验收: 命令超时取值改走统一超时熔合小库后, 120s 语义不变 ——
+        // 120_000ms 照常放行并原样冻进执行载荷; 缺省仍 30s; 越界仍拒绝。
+        let tool = ShellTool::new(TrustedShellConfig::new("."));
+        assert_eq!(tool.resolve_timeout_ms(Some(120_000)).unwrap(), 120_000);
+        assert_eq!(tool.resolve_timeout_ms(None).unwrap(), 30_000);
+
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo hi", "timeout_ms": 120_000 }),
+        };
+        let frozen = tool.freeze_invocation(&call).unwrap().unwrap();
+        assert_eq!(
+            frozen.payload["timeout_ms"],
+            json!(120_000),
+            "冻结载荷保持同一 120s 取值"
+        );
+
+        // 无界哨兵也拒绝: 无边界等待不是合法的命令超时。
+        assert!(tool
+            .resolve_timeout_ms(Some(u64::MAX))
+            .unwrap_err()
+            .contains("sentinel"));
+    }
+
+    #[test]
     fn cwd_escape_is_rejected() {
         let tmp = tempfile::tempdir().unwrap();
         let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
@@ -681,28 +1061,243 @@ mod tests {
     }
 
     #[test]
-    fn frozen_display_does_not_expose_environment_values() {
-        let tool = ShellTool::new(TrustedShellConfig::new("."));
+    fn dangerous_command_is_rejected_by_precall_guard() {
+        // M13 (2026-09-24 审计): guardrail 守门在冻结前 fail-closed 接线。
+        // 沙箱 (AppContainer) 是主墙, 但 APEIRETH_SHELL_SANDBOX=0 裸跑与
+        // 审批卡之间必须有命令内容过滤这一层。
+        // 总闸分层 (内测整改): 写意图总闸在 guardrail 之前 —— `rm -rf /` 既是
+        // 删除族写命令又是危险命令, 关闸时由总闸先拒 (见写闸测试的同款命令);
+        // 本测开闸验证 guardrail 层自身的拒绝面不因总闸接线而变化。
+        let tool = ShellTool::new(TrustedShellConfig::new(".").with_file_write(true));
+        for command in [
+            "rm -rf / --no-preserve-root",
+            "netsh advfirewall set allprofiles off",
+            "reg add HKLM\\Software\\x /v y",
+        ] {
+            let call = ToolCall {
+                id: "call_1".into(),
+                name: "shell".into(),
+                arguments: json!({ "command": command }),
+            };
+            let frozen = tool.freeze_invocation(&call);
+            assert!(
+                frozen.is_err(),
+                "{command} must be rejected before freezing"
+            );
+            let rendered = frozen.unwrap_err().render();
+            assert!(
+                rendered.contains("pre-call guard"),
+                "{command}: {}",
+                rendered
+            );
+        }
+    }
+
+    #[test]
+    fn benign_command_still_freezes_normally() {
+        // 守门接线不得误伤正常命令 (echo/ping/type 类)。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
         let call = ToolCall {
             id: "call_1".into(),
             name: "shell".into(),
             arguments: json!({ "command": "echo hi" }),
         };
+        assert!(tool.freeze_invocation(&call).unwrap().is_some());
+    }
 
-        let frozen = tool.freeze_invocation(&call).unwrap().unwrap();
-        let shell_frozen: ShellFrozenInvocation =
-            serde_json::from_value(frozen.payload).expect("payload deserializes");
-        let display_text = serde_json::to_string(&frozen.display).unwrap();
-
-        for (_key, value) in &shell_frozen.environment {
+    #[test]
+    fn file_write_gate_closed_denies_write_intent_with_pre_deny_frame() {
+        // 文件写入总闸关 (默认, fail-closed): shell 写命令与受控写文件工具同受
+        // 一闸 —— `echo xxx > file` 不再绕过开关写盘, 拒绝即帧 (`pipeline.pre_deny`)
+        // 且文案明示同受一闸。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        assert!(!tool.config().file_write, "文件写入总闸默认必须关");
+        for command in [
+            "echo xxx > file.txt",
+            "echo xxx >> file.txt",
+            "echo xxx 1> file.txt",
+            "del file.txt",
+            "mkdir new_dir",
+            // 删除族 + 高危破坏双面命令: 关闸时写意图总闸先拒 (稳定 pre_deny 帧)。
+            "rm -rf / --no-preserve-root",
+        ] {
+            let call = ToolCall {
+                id: "call_1".into(),
+                name: "shell".into(),
+                arguments: json!({ "command": command }),
+            };
+            let frozen = tool.freeze_invocation(&call);
+            let rendered = match frozen {
+                Err(result) => result.render(),
+                Ok(_) => panic!("{command} 总闸关时写意图必须拒绝即帧"),
+            };
             assert!(
-                !display_text.contains(value.as_str()),
-                "display payload must not expose environment value {value:?}"
+                rendered.contains("pipeline.pre_deny"),
+                "{command}: {rendered}"
+            );
+            assert!(
+                rendered.contains("文件写入开关未开——shell 写命令受同一总闸管辖"),
+                "{command}: {rendered}"
             );
         }
         assert!(
+            !tmp.path().join("file.txt").exists(),
+            "拒绝即帧 = 命令未执行, 文件不得落盘"
+        );
+    }
+
+    #[test]
+    fn file_write_gate_open_keeps_shell_behavior_unchanged() {
+        // file_write 开 → 行为不变: 写命令照常冻结进审批链 (审批/风险映射不变),
+        // 冻结载荷原样携带脚本。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool =
+            ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_file_write(true));
+        assert!(tool.config().file_write);
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo xxx > file.txt" }),
+        };
+        let frozen = tool
+            .freeze_invocation(&call)
+            .expect("总闸开时写命令冻结必须放行 (行为不变)")
+            .expect("总闸开时写命令冻结必须有载荷");
+        let script = frozen.payload["shell_args"]
+            .as_array()
+            .and_then(|args| args.last())
+            .and_then(|arg| arg.as_str())
+            .unwrap_or_default();
+        assert_eq!(script, "echo xxx > file.txt", "冻结载荷原样携带脚本");
+    }
+
+    #[test]
+    fn file_write_gate_closed_keeps_read_only_commands_unchanged() {
+        // 只读命令零误伤: 总闸只拦写意图。
+        let tmp = tempfile::tempdir().unwrap();
+        let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        for command in [
+            "echo hi",
+            "type file.txt",
+            "git status",
+            "cargo test --workspace",
+        ] {
+            let call = ToolCall {
+                id: "call_1".into(),
+                name: "shell".into(),
+                arguments: json!({ "command": command }),
+            };
+            assert!(
+                tool.freeze_invocation(&call).unwrap().is_some(),
+                "{command} 只读命令必须照常放行"
+            );
+        }
+    }
+
+    #[test]
+    fn file_write_gate_recheck_denies_frozen_payload_after_gate_closes() {
+        // freeze→execute 时差复核: 开闸时冻结的写载荷, 若执行时总闸已关,
+        // 同样拒绝即帧 (fail-closed)。
+        let tmp = tempfile::tempdir().unwrap();
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo xxx > file.txt" }),
+        };
+        let open_tool =
+            ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_file_write(true));
+        let frozen = open_tool.freeze_invocation(&call).unwrap().unwrap();
+
+        let closed_tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        let result = tokio_test_invoke_frozen(&closed_tool, call, Some(&frozen));
+        let rendered = result.render();
+        assert!(!result.is_ok(), "关闸后的冻结写载荷必须拒绝");
+        assert!(rendered.contains("pipeline.pre_deny"), "{rendered}");
+        assert!(
+            rendered.contains("文件写入开关未开——shell 写命令受同一总闸管辖"),
+            "{rendered}"
+        );
+        assert!(
+            !tmp.path().join("file.txt").exists(),
+            "拒绝即帧 = 命令未执行, 文件不得落盘"
+        );
+    }
+
+    #[test]
+    fn frozen_cwd_symlink_swap_is_rejected_before_execution() {
+        // L 组 (2026-09-24 审计): freeze→execute TOCTOU。审批等待期内 frozen
+        // cwd 被换成指向工作区外的 symlink, 执行前复核必须拒绝。
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let work = root.join("work");
+        let outside = base.path().join("outside");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+
+        let tool = ShellTool::new(TrustedShellConfig::new(root.clone()));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo hi", "cwd": "work" }),
+        };
+        let frozen = tool.freeze_invocation(&call).unwrap().unwrap();
+
+        // 模拟审批等待期攻击: work 目录被替换成指向外部的 symlink。
+        std::fs::remove_dir_all(&work).unwrap();
+        #[cfg(unix)]
+        let swapped = std::os::unix::fs::symlink(&outside, &work).is_ok();
+        #[cfg(windows)]
+        let swapped = std::os::windows::fs::symlink_dir(&outside, &work).is_ok();
+        if !swapped {
+            // Symlink creation often needs extra privileges on Windows.
+            return;
+        }
+
+        let result = tokio_test_invoke_frozen(&tool, call, Some(&frozen));
+        assert!(!result.is_ok(), "swapped cwd must fail closed");
+        assert!(
+            result
+                .render()
+                .contains("no longer resolves inside the approved workspace root"),
+            "{}",
+            result.render()
+        );
+    }
+
+    #[test]
+    fn frozen_display_does_not_expose_environment_values() {
+        // 反泄露通道测试 (2026-10-10 重写): 真值子串断言结构性脆 (HOMEDRIVE="C:"
+        // 撞路径、USERPROFILE 撞 cwd 展示) 且 crate forbid(unsafe_code) 不能突变
+        // 进程 env —— 手造含唯一标记值的冻结载荷, 纯函数直测 display 通道。
+        const MARKER_KEY: &str = "PATHEXT";
+        const MARKER_VALUE: &str = "APEIRETH_UNIQ_SECRET_MARKER_12345";
+        let frozen = ShellFrozenInvocation {
+            version: SHELL_FROZEN_VERSION,
+            shell_executable: "cmd.exe".to_string(),
+            shell_args: vec!["/c".to_string(), "echo hi".to_string()],
+            cwd: "C:\\work".to_string(),
+            workspace_root: "C:\\work".to_string(),
+            timeout_ms: 1_000,
+            max_stdout_bytes: 1_024,
+            max_stderr_bytes: 1_024,
+            environment: vec![(MARKER_KEY.to_string(), MARKER_VALUE.to_string())],
+            isolation: ShellTool::base_isolation_requirements(),
+        };
+        let display_text = serde_json::to_string(&ShellTool::display_invocation(&frozen)).unwrap();
+
+        assert!(
+            !display_text.contains(MARKER_VALUE),
+            "display payload must not expose environment values: {display_text}"
+        );
+        assert!(
             display_text.contains("environment_vars"),
             "display payload should still show environment variable names"
+        );
+        assert!(
+            display_text.contains(MARKER_KEY),
+            "键名应可见 (approval 可读性)"
         );
     }
 
@@ -721,7 +1316,11 @@ mod tests {
         #[cfg(not(windows))]
         let command = "pwd";
 
-        let old_tool = ShellTool::new(TrustedShellConfig::new(dir_a.clone()));
+        // 本测主题 = cwd 冻结 (冻结计划不随新配置漂移), 与沙箱无关。沙箱开
+        // 启要求 FilesystemIsolation/Network Enforced —— Linux 无 AppContainer
+        // 等强制机制时 fail-closed (2026-10-15 CI 实测), 故显式关沙箱隔离
+        // 变量; 沙箱默认开的行为由 sandbox_default_on_and_knob_turns_off 专测。
+        let old_tool = ShellTool::new(TrustedShellConfig::new(dir_a.clone()).with_sandbox(false));
         let call = ToolCall {
             id: "call_1".into(),
             name: "shell".into(),
@@ -731,7 +1330,7 @@ mod tests {
 
         // Simulate configuration drift after approval: a rebuilt shell tool
         // would now use a different workspace root.
-        let new_tool = ShellTool::new(TrustedShellConfig::new(dir_b.clone()));
+        let new_tool = ShellTool::new(TrustedShellConfig::new(dir_b.clone()).with_sandbox(false));
         let result = tokio_test_invoke_frozen(&new_tool, call.clone(), Some(&frozen));
 
         assert!(result.is_ok(), "{}", result.render());

@@ -35,10 +35,21 @@ pub enum ErrorCode {
     ProviderError,
     /// The request parameters were invalid.
     InvalidRequest,
+    /// The authenticated user's role may not perform this operation (W3-② 角色门).
+    PermissionDenied,
+    /// 域级越权 (W3-① 多户数据隔离): 点名他域 / 面未按用户域开放 —— 帧恒定,
+    /// 不泄露他域存在。
+    DomainForbidden,
+    /// 本域不可用 (W3-①): 域配置坏/拒开 —— 真因可报 (本域信息, 不涉他域存在性)。
+    DomainRefused,
     /// The referenced session does not exist.
     SessionNotFound,
     /// The request was rate limited.
     RateLimited,
+    /// A cognitive review module (judge/council) rejected the candidate.
+    ReviewRejected,
+    /// The turn hit the structural round limit without reaching an answer.
+    TurnNotConverged,
     /// An unexpected internal error.
     Internal,
 }
@@ -52,8 +63,13 @@ impl ErrorCode {
             Self::ProviderUnreachable => "provider_unreachable",
             Self::ProviderError => "provider_error",
             Self::InvalidRequest => "invalid_request",
+            Self::PermissionDenied => "permission_denied",
+            Self::DomainForbidden => "domain_forbidden",
+            Self::DomainRefused => "domain_refused",
             Self::SessionNotFound => "session_not_found",
             Self::RateLimited => "rate_limited",
+            Self::ReviewRejected => "review_rejected",
+            Self::TurnNotConverged => "turn_not_converged",
             Self::Internal => "internal",
         }
     }
@@ -66,19 +82,30 @@ impl ErrorCode {
             Self::ProviderUnreachable => "检查 base_url 与网络连通性后重试",
             Self::ProviderError => "查看 message 中的上游信息, 必要时联系服务商",
             Self::InvalidRequest => "检查参数后重试",
+            Self::PermissionDenied => "当前用户角色无此操作权限; 需要更高角色请联系 owner 调整用户表",
+            Self::DomainForbidden => "该操作不在本用户域的开放面内; 域面按用户域隔离, 越域访问一律拒绝",
+            Self::DomainRefused => "本用户域的数据面未打开 (域配置可能损坏); 请联系 owner 检查 users/<id>/domain.json",
             Self::SessionNotFound => "回到会话列表重新选择",
             Self::RateLimited => "稍后重试或降低请求频率",
+            Self::ReviewRejected => "回复被认知评审驳回——点「重新生成」再试; 若频繁出现, 在设置 → 高级能力中把认知深度调低",
+            Self::TurnNotConverged => "本轮工具链过长未收敛——把问题拆小一点再问, 或点「重新生成」",
             Self::Internal => "重启 Companion 后重试, 若复现请提交日志",
         }
     }
 }
 
 /// One error frame: human message + machine code + actionable hint.
+///
+/// `details` carries the real budget numbers of a round-limit failure (limit,
+/// consumed rounds, and the approval-frozen tool name when one existed), so a
+/// `turn_not_converged` frame is diagnosable without a second lookup.
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorFrame {
     pub message: String,
     pub code: ErrorCode,
     pub solution: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
 }
 
 impl ErrorFrame {
@@ -88,12 +115,26 @@ impl ErrorFrame {
             message: message.into(),
             code,
             solution: code.solution().to_string(),
+            details: None,
         }
+    }
+
+    /// Attach structured diagnostics to the frame.
+    #[must_use]
+    pub fn with_details(mut self, details: serde_json::Value) -> Self {
+        self.details = Some(details);
+        self
     }
 
     /// Build a complete HTTP error response (`{"error": {...}}`).
     pub fn response(status: StatusCode, code: ErrorCode, message: impl Into<String>) -> Response {
-        (status, Json(ErrorEnvelope { error: Self::new(code, message) })).into_response()
+        (
+            status,
+            Json(ErrorEnvelope {
+                error: Self::new(code, message),
+            }),
+        )
+            .into_response()
     }
 }
 

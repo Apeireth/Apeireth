@@ -35,9 +35,9 @@ pub enum TrustTier {
 /// 频率限制配置.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RateLimitConfig {
-    /// 默认单能力每分钟最大允许调用次数.
+    /// 默认单 (能力, 会话) 每分钟最大允许调用次数.
     pub default_per_minute: u32,
-    /// 默认单能力每小时最大允许调用次数.
+    /// 默认单 (能力, 会话) 每小时最大允许调用次数.
     pub default_per_hour: u32,
     /// 特定能力的独立每分钟阈值覆盖 (如 "tool.fetch" -> 10).
     pub capability_per_minute_overrides: HashMap<String, u32>,
@@ -53,7 +53,7 @@ impl Default for RateLimitConfig {
     }
 }
 
-/// 单能力调用历史记录 (滑动窗口计数).
+/// 单 (能力, 会话) 组合的调用历史记录 (滑动窗口计数).
 #[derive(Debug, Default)]
 struct InvocationWindow {
     timestamps_ms: Vec<i64>,
@@ -88,12 +88,17 @@ impl InvocationWindow {
 }
 
 /// 频率限制治理钩子.
+///
+/// 限流窗口 key 为 `(capability, session)` 组合 (M19): 单能力配额按**单会话**
+/// 独立计量 — 一个会话吃光配额不会饿死其他会话, 也无法借用其他会话的余量,
+/// 与模块 doc 的 "单会话" 语义一致.
 #[derive(Debug, Clone)]
 pub struct RateLimitGovernanceHook {
     config: RateLimitConfig,
     blacklist: Arc<HashSet<String>>,
     trust_tiers: Arc<HashMap<String, TrustTier>>,
-    windows: Arc<Mutex<HashMap<String, InvocationWindow>>>,
+    /// 滑动窗口表: key = `(capability, session)` (M19).
+    windows: Arc<Mutex<HashMap<(String, String), InvocationWindow>>>,
 }
 
 impl RateLimitGovernanceHook {
@@ -176,8 +181,11 @@ impl GovernanceHook for RateLimitGovernanceHook {
                 .map(|d| d.as_millis() as i64)
                 .unwrap_or(0);
 
-            let mut lock = self.windows.lock().unwrap();
-            let window = lock.entry(cap_name.to_string()).or_default();
+            // 4. 限流窗口 (M19: key = (capability, session) 组合, 单会话语义;
+            //    poison 后取守卫值继续 — 限流状态可用性优先于线程 unwind 传播).
+            let window_key = (cap_name.to_string(), request.session.to_string());
+            let mut lock = self.windows.lock().unwrap_or_else(|p| p.into_inner());
+            let window = lock.entry(window_key).or_default();
 
             if !window.record_and_check(now_ms, limit_min, limit_hr) {
                 return Decision::Deny {
@@ -259,6 +267,42 @@ mod tests {
             }
             _ => panic!("Expected Deny on rate limit breach"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_rate_limit_window_is_per_session() {
+        // M19 回归: 窗口按 (capability, session) 组合计量 — 一个会话吃光配额
+        // 不得饿死其他会话 (旧实现按纯 capability 全局共享).
+        let mut config = RateLimitConfig::default();
+        config.default_per_minute = 1;
+        let hook = RateLimitGovernanceHook::new(config);
+        let cap = CapabilityId::new("tool.fetch").unwrap();
+        let args = serde_json::json!({});
+
+        let req_a = GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability: &cap,
+                arguments: &args,
+            },
+            SessionId::new(),
+            TraceId::new(),
+            1,
+        );
+        let req_b = GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability: &cap,
+                arguments: &args,
+            },
+            SessionId::new(),
+            TraceId::new(),
+            1,
+        );
+
+        // 会话 A: 第一次放行, 第二次触发限流
+        assert_eq!(hook.evaluate(&req_a).await, Decision::Allow);
+        assert!(matches!(hook.evaluate(&req_a).await, Decision::Deny { .. }));
+        // 会话 B: 独立窗口, 仍应放行 (不被 A 饿死)
+        assert_eq!(hook.evaluate(&req_b).await, Decision::Allow);
     }
 
     #[tokio::test]

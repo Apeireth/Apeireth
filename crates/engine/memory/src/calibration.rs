@@ -1,7 +1,5 @@
 //! Murphy (1973) Brier 三分解 + 等宽 CalibrationBin + Expected Calibration Error.
 //!
-//! Recovered from `legacy/donor/apeireth-cognition/src/calibration.rs`.
-//!
 //! v2 already has per-intent Brier (`intent_brier`) and an inline Wilson/Beta
 //! posterior inside W1 World Model. This module is the missing **diagnostic**
 //! layer: reliability / resolution / uncertainty, 10-bin reliability diagrams,
@@ -22,7 +20,7 @@ pub const DEFAULT_NUM_BINS: usize = 10;
 ///
 /// Production callers typically use a binary outcome in `{0.0, 1.0}`. Fractional
 /// outcomes are still accepted (clamped to `[0, 1]`) so the Brier identity
-/// `(p − y)² = 0` when `p = y` holds, matching the donor diagnostic tests.
+/// `(p − y)² = 0` when `p = y` holds, matching the baseline diagnostic tests.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Observation {
     /// Forecast probability in `[0.0, 1.0]`.

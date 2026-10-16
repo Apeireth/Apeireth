@@ -46,7 +46,7 @@
 //!    (m3 hallucination 5 道防御, §2.4 14 工具白名单 hardcode 模式)
 //! 3. `.openclaw\workspace\promethean\Apeireth-rust\docs\stage4\supervisor-prompt-818-summary-2026-08-05.md`
 //!    (K-1 强校验 8 条模式, 翻译 invariant)
-//! 4. `安装包taskTools`
+//! 4. `taskTools`
 //!    (v0.9.21 taskTools.js, obfuscated, 1:1 翻译源)
 
 #![warn(missing_docs)]

@@ -9,7 +9,7 @@
 # 决策: D-06 (主人 2026-08-05 20:53 拍 A: 8 包齐发)
 # 公式: packaging/brew/apeireth.rb
 #
-# 4 步标准安装流 (per 蓝图 §3.4, brew 走 tap 仓库而非本地 .rb):
+# 4 步标准安装流 (按安装规范, brew 走 tap 仓库而非本地 .rb):
 #   1. 检测 brew 是否装
 #   2. tap apeireth/tap (per packaging/brew/build.sh 推送到 homebrew-tap 仓库)
 #   3. brew install apeireth/tap/apeireth

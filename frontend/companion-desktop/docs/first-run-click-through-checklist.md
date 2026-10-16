@@ -1,10 +1,5 @@
 # 桌面 UI 点击流人工实测清单（做一次即可）
 
-> 台账挂账 #2（`docs/04-internal/live-verification-ledger.md`）。各链路段全部有自动化验证
-> （install-e2e / supervisor_lifecycle / 前端套件 / 真机流式探针），但**真窗口里的端到端
-> 点击流从未人工点过**——这是唯一建议后人做一次的测试。做完后把结果写回台账挂账 #2
-> 并删掉本清单头部这句话。
-
 ## 前置
 
 1. 装最新 NSIS 包（`target\desktop-nsis\Apeireth Companion_*_x64-setup.exe` /S），
@@ -25,7 +20,7 @@
 | 7 | 在审批面板点"批准" | 工具真执行，模型回报结果（含 hello-from-clickthrough） |
 | 8 | 关掉主窗（隐藏托盘）再点托盘图标 | 窗口恢复，会话历史仍在 |
 | 9 | 完全退出应用（托盘退出） | `apeireth.exe` 侧车进程消失（supervisor kill_on_drop 回收） |
-| 10 | 再启动 | 向导不再出现；设置里 url/模型已记住，key 需要重新输入（设计如此：key 不落盘） |
+| 10 | 再启动 | 向导不再出现；设置里 url/模型已记住；**key 自动恢复无需重输**（密钥存系统钥匙串、重启自恢复——若被要求重新输入 key，记为失败） |
 
 ## 失败时怎么办
 

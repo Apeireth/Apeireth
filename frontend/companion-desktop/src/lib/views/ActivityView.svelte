@@ -33,7 +33,10 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
   import {fetchAuditLogs, fetchTraceDetail, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
-  import {splitPresenceLine, type PresenceFrame} from '../presence';
+  import {parsePresenceStateFrame, type PresenceStateFrame} from '../presence';
+  import {gatewayAuthHeaders} from '../tauri-bridge';
+  import {startSseFetchStream, type SseFrame} from '../sse-stream';
+  import {nextRetryDelay, SSE_INITIAL_RETRY_MS} from '../governance/ledger';
   import {
     getCallLogs,
     clearCallLogs,
@@ -64,7 +67,10 @@
   let canReadTrace = $derived(capabilityAvailable(capabilities, 'trace.read'));
 
   // Trace detail modal (Phase 5): 点击带 traceId 的活动 → 打开 span 树.
+  // span 树排序/缩进逻辑与治理卷宗④审计共用 lib/governance/trace.ts 一份实现
+  // （复用吸收，不另起炉灶）。
   import type {TraceSpanItem} from '../runtime';
+  import {spanTreeSort, spanDepth} from '../governance/trace';
   let traceDetail = $state<{traceId: string; spans: TraceSpanItem[]; loading: boolean; error: string} | null>(null);
 
   async function openTrace(traceId: string): Promise<void> {
@@ -85,20 +91,11 @@
   }
 
   function spanTree(spans: TraceSpanItem[]): TraceSpanItem[] {
-    return [...spans].sort((a, b) => a.started_at - b.started_at);
+    return spanTreeSort(spans);
   }
 
   function spanIndent(spans: TraceSpanItem[], span: TraceSpanItem): number {
-    let depth = 0;
-    let cur = span.parent_span_id;
-    const guard = new Set<string>();
-    while (cur && !guard.has(cur)) {
-      guard.add(cur);
-      depth++;
-      const parent = spans.find((s) => s.span_id === cur);
-      cur = parent?.parent_span_id ?? null;
-    }
-    return Math.min(depth, 6);
+    return spanDepth(spans, span);
   }
 
   type CategoryFilter = 'all' | 'tool' | 'agent' | 'memory' | 'workflow' | 'runtime' | 'error';
@@ -114,6 +111,9 @@
   let expandedIds = $state<Record<string, boolean>>({});
 
   let sseEventSource: EventSource | null = null;
+  let sseStreamClose: (() => void) | null = null;
+  let sseRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let sseRetryDelay = SSE_INITIAL_RETRY_MS;
 
   function toggleCallExpand(id: string) {
     expandedCallIds = {...expandedCallIds, [id]: !expandedCallIds[id]};
@@ -261,128 +261,158 @@
   }
 
   /**
-   * presence 帧 → 活动条目（波次 2：契约 §8.1 分流纪律，修 G5 缺口）。
-   * - initiative/held（欲言又止 = 他的内心）不进对话流，但在此可见；
-   * - emotion 心跳（60s tick）与 legacy 测试行不进活动流——防刷屏，不是数据丢失；
-   * - memory_recall 只带 found/keywords（redacted 恒 true，原文设计上不在 SSE）。
+   * presence_state 帧 → 活动条目（契约 §8a 显影分级纪律）。
+   * - heartbeat（60s 心跳）不进活动流——防刷屏，不是数据丢失；它只驱动 T0 余烬点呼吸。
+   * - turn（回合级）显影为一条 agent 条目，标注 heuristic_v0 接线来源与置信度。
+   * - ritual：契约空间无生产者（v0 永不产出），保留分支以迎接契约演进。
    */
-  function presenceEventToActivity(ev: PresenceFrame): ActivityItem | null {
-    const ts = 'at' in ev && typeof ev.at === 'string' ? Date.parse(ev.at) || Date.now() : Date.now();
-    const id = `presence-${ev.type}-${ts}-${Math.random().toString(36).slice(2, 6)}`;
-    if (ev.type === 'emotion') return null; // 心跳由场景层与状态行呈现
-    if (ev.type === 'initiative') {
-      if (ev.outcome === 'held') {
-        return {
-          id, timestamp: ts, category: 'agent', source: 'sse', severity: 'info',
-          title: '他欲言又止',
-          summary: `门控：${ev.gate_label || ev.gate || '未知'}`,
-          detail: JSON.stringify(ev, null, 2), raw: ev,
-        };
-      }
+  function presenceStateToActivity(frame: PresenceStateFrame): ActivityItem | null {
+    if (frame.significance === 'heartbeat') return null; // 心跳由场景层与余烬点呈现
+    const ts = frame.at || Date.now();
+    const id = `presence-state-${frame.significance}-${ts}-${Math.random().toString(36).slice(2, 6)}`;
+    if (frame.significance === 'ritual') {
+      // 契约空间：v0 后端不产出 ritual/empathetic_care 帧；此分支为前向兼容保留。
       return {
-        id, timestamp: ts, category: 'conversation', source: 'sse', severity: 'info',
-        title: '他主动开口',
-        summary: ev.action ? `动作：${ev.action}` : '完整话术见对话视图',
-        detail: JSON.stringify(ev, null, 2), raw: ev,
+        id, timestamp: ts, category: 'agent', source: 'sse', severity: 'info',
+        title: '他的状态显影 · 仪式级',
+        summary: `姿态 ${frame.stance} · 主导 ${frame.dominant} · 强度 ${frame.intensity.toFixed(2)}`,
+        detail: JSON.stringify(frame, null, 2), raw: frame,
       };
     }
-    if (ev.type === 'dream') {
-      return {
-        id, timestamp: ts, category: 'memory', source: 'sse', severity: 'success',
-        title: '做梦整合完成',
-        summary: `合并 ${ev.merged_count} 条记忆${ev.summary_prefix ? ` · ${ev.summary_prefix}` : ''}`,
-        detail: JSON.stringify(ev, null, 2), raw: ev,
-      };
-    }
-    if (ev.type === 'memory_recall') {
-      return {
-        id, timestamp: ts, category: 'memory', source: 'sse', severity: 'info',
-        title: `他想起了 ${ev.found} 段记忆`,
-        summary: ev.keywords?.length ? `关键词：${ev.keywords.join(' · ')}` : '（脱敏事件，不含原文）',
-        detail: JSON.stringify(ev, null, 2), raw: ev,
-      };
-    }
-    // presence_error：序列化兜底帧，显式呈报而非静默
+    const srcNote = frame.source.kind === 'heuristic_v0'
+      ? `heuristic_v0 接线（置信度 ${frame.source.confidence.toFixed(2)}）`
+      : frame.source.kind;
     return {
-      id, timestamp: ts, category: 'runtime', source: 'sse', severity: 'error',
-      title: 'presence 频道序列化异常',
-      summary: ev.error,
-      detail: JSON.stringify(ev, null, 2), raw: ev,
+      id, timestamp: ts, category: 'agent', source: 'sse', severity: 'info',
+      title: '他的状态显影',
+      summary: `姿态 ${frame.stance} · 主导 ${frame.dominant} · 强度 ${frame.intensity.toFixed(2)} · ${srcNote}`,
+      detail: JSON.stringify(frame, null, 2), raw: frame,
     };
   }
 
-  function startSseListener() {
+  /** 关闭实时频道（任一传输）并撤下重连计时 —— 重建/切换/销毁共用。 */
+  function stopSseChannel() {
     if (sseEventSource) {
       sseEventSource.close();
       sseEventSource = null;
     }
+    if (sseStreamClose) {
+      sseStreamClose();
+      sseStreamClose = null;
+    }
+    if (sseRetryTimer) {
+      clearTimeout(sseRetryTimer);
+      sseRetryTimer = null;
+    }
+  }
+
+  /** 帧分发（与 EventSource 具名/无名帧同一语义）：presence_state 走契约解析，无名帧走 legacy 分支。 */
+  function handleSseFrame(frame: SseFrame): void {
+    if (frame.event === 'presence_state') {
+      const parsed = parsePresenceStateFrame(frame.data);
+      if (!parsed) return; // 坏帧静默丢弃（显影宁可缺席不可错显）
+      const item = presenceStateToActivity(parsed);
+      if (item) activities = mergeActivities(activities, [item]);
+      return;
+    }
+    if (frame.event !== 'message') return;
+    const raw = frame.data;
+    // legacy 文本分支：canonical 上 onmessage 只可能收到无名帧文本（[他说]/测试事件），
+    // presence 四事件已成为考古（见 presence.ts 头注）；此分支蛰伏保留。
+    if (!raw.startsWith('{')) {
+      if (!raw.startsWith('[他说]')) return; // 测试事件行 = 链路验证，不进活动流
+      const said = raw.slice('[他说]'.length).trim();
+      activities = mergeActivities(activities, [{
+        id: `legacy-say-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        category: 'conversation',
+        title: '他主动开口',
+        summary: said.length > 96 ? `${said.slice(0, 96)}…` : said,
+        source: 'sse',
+        severity: 'info',
+      }]);
+      return;
+    }
+    // 其余 JSON（未来 span 帧等）：保留既有通用解析路径
+    try {
+      const parsed = JSON.parse(raw) as {
+        id?: string;
+        type?: string;
+        action?: string;
+        tool?: string;
+        summary?: string;
+        detail?: string;
+        status?: string;
+        ts?: number;
+        trace_id?: string;
+        span_id?: string;
+        kind?: string;
+      };
+
+      const newEvent: ActivityItem = {
+        id: parsed.id || `sse-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: parsed.ts || Date.now(),
+        category: (parsed.tool ? 'tool' : parsed.type === 'memory' ? 'memory' : 'agent') as ActivityItem['category'],
+        title: parsed.tool ? `调用工具: ${parsed.tool}` : (parsed.summary || parsed.action || 'Agent 活动'),
+        summary: parsed.summary || parsed.detail || '实时事件',
+        source: 'sse',
+        severity: parsed.status === 'error' || parsed.status === 'failed' ? 'error' : 'info',
+        detail: JSON.stringify(parsed, null, 2),
+        raw: parsed,
+        traceId: parsed.trace_id,
+      };
+
+      activities = mergeActivities(activities, [newEvent]);
+    } catch {
+      // ignore malformed SSE
+    }
+  }
+
+  function startSseListener() {
+    stopSseChannel();
 
     if (!isLive) return;
     if (!capabilitySupported(capabilities, 'activity.sse') || !capabilityAvailable(capabilities, 'activity.sse')) {
       return;
     }
 
+    void openSseChannel();
+  }
+
+  async function openSseChannel(): Promise<void> {
+    const auth = await gatewayAuthHeaders();
+    const base = config.baseUrl.replace(/\/+$/, '');
+    if (auth.Authorization) {
+      // EventSource 无法带 Authorization 头 —— 带令牌过门走 fetch 流式读取；
+      // fetch 流无内建重连，断线按 2s ×1.5 → 30s 退避续排（建链复位）。
+      sseStreamClose = startSseFetchStream(`${base}/v1/apeireth/events`, auth, {
+        onOpen: () => {
+          sseRetryDelay = SSE_INITIAL_RETRY_MS;
+        },
+        onFrame: handleSseFrame,
+        onEnd: () => {
+          sseStreamClose = null;
+          if (!isLive) return;
+          sseRetryTimer = setTimeout(() => {
+            sseRetryTimer = null;
+            void openSseChannel();
+          }, sseRetryDelay);
+          sseRetryDelay = nextRetryDelay(sseRetryDelay);
+        },
+      });
+      return;
+    }
+    // 无令牌（三态门未设口径照旧）：EventSource 原路径逐字语义保留。
     try {
-      const base = config.baseUrl.replace(/\/+$/, '');
       sseEventSource = new EventSource(`${base}/v1/apeireth/events`);
 
+      // 契约 §8a：presence_state 是具名 SSE 帧，onmessage 收不到，必须具名监听。
+      sseEventSource.addEventListener('presence_state', (event) => {
+        handleSseFrame({event: 'presence_state', data: typeof (event as MessageEvent).data === 'string' ? (event as MessageEvent).data : ''});
+      });
+
       sseEventSource.onmessage = (event) => {
-        const raw = typeof event.data === 'string' ? event.data : '';
-        // 契约 §8.1 分流：行首 { → presence JSON；否则 legacy 文本（[他说]/测试事件）
-        const split = splitPresenceLine(raw);
-        if (split.kind === 'legacy') {
-          const text = split.text ?? '';
-          if (!text.startsWith('[他说]')) return; // 测试事件行 = 链路验证，不进活动流
-          const said = text.slice('[他说]'.length).trim();
-          activities = mergeActivities(activities, [{
-            id: `legacy-say-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            timestamp: Date.now(),
-            category: 'conversation',
-            title: '他主动开口',
-            summary: said.length > 96 ? `${said.slice(0, 96)}…` : said,
-            source: 'sse',
-            severity: 'info',
-          }]);
-          return;
-        }
-        if (split.kind === 'presence' && split.event) {
-          const item = presenceEventToActivity(split.event);
-          if (item) activities = mergeActivities(activities, [item]);
-          return;
-        }
-        // 其余 JSON（未来 span 帧等）：保留既有通用解析路径
-        try {
-          const parsed = JSON.parse(raw) as {
-            id?: string;
-            type?: string;
-            action?: string;
-            tool?: string;
-            summary?: string;
-            detail?: string;
-            status?: string;
-            ts?: number;
-            trace_id?: string;
-            span_id?: string;
-            kind?: string;
-          };
-
-          const newEvent: ActivityItem = {
-            id: parsed.id || `sse-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            timestamp: parsed.ts || Date.now(),
-            category: (parsed.tool ? 'tool' : parsed.type === 'memory' ? 'memory' : 'agent') as ActivityItem['category'],
-            title: parsed.tool ? `调用工具: ${parsed.tool}` : (parsed.summary || parsed.action || 'Agent 活动'),
-            summary: parsed.summary || parsed.detail || '实时事件',
-            source: 'sse',
-            severity: parsed.status === 'error' || parsed.status === 'failed' ? 'error' : 'info',
-            detail: JSON.stringify(parsed, null, 2),
-            raw: parsed,
-            traceId: parsed.trace_id,
-          };
-
-          activities = mergeActivities(activities, [newEvent]);
-        } catch {
-          // ignore malformed SSE
-        }
+        handleSseFrame({event: 'message', data: typeof event.data === 'string' ? event.data : ''});
       };
 
       sseEventSource.onerror = () => {
@@ -397,9 +427,8 @@
     isLive = !isLive;
     if (isLive) {
       startSseListener();
-    } else if (sseEventSource) {
-      sseEventSource.close();
-      sseEventSource = null;
+    } else {
+      stopSseChannel();
     }
   }
 
@@ -453,10 +482,7 @@
 
   onDestroy(() => {
     unsubCallLogs?.();
-    if (sseEventSource) {
-      sseEventSource.close();
-      sseEventSource = null;
-    }
+    stopSseChannel();
   });
 </script>
 

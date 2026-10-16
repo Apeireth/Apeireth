@@ -75,16 +75,11 @@ impl WorktreeConfig {
         let worktree_name = worktree_name.into();
         let branch_name = branch_name.into();
 
-        if worktree_name.trim().is_empty() {
-            return Err(WorktreeError::InvalidConfig(
-                "worktree name cannot be empty".to_string(),
-            ));
-        }
-        if branch_name.trim().is_empty() {
-            return Err(WorktreeError::InvalidConfig(
-                "branch name cannot be empty".to_string(),
-            ));
-        }
+        // M6: 名称净化 — worktree_name 直接进 `repo_root/.worktrees/<name>`, 调用方
+        // (如 WorktreeSandboxedOrchestrator::dispatch) 传入的是**外部可控的 spec.id**。
+        // 绝对路径 / `..` / 分隔符 / 控制字符必须拒绝, 否则可在任意路径建 worktree。
+        let worktree_name = sanitize_worktree_name(&worktree_name)?;
+        let branch_name = sanitize_branch_name(&branch_name)?;
 
         let worktree_path = repo_root.join(".worktrees").join(&worktree_name);
         Ok(Self {
@@ -115,6 +110,89 @@ impl WorktreeConfig {
             self.worktree_path.to_string_lossy().to_string(),
         ]
     }
+}
+
+/// worktree 目录名净化 (M6): 只保留 ASCII 字母数字与 `-`/`_`/`.`, 限制长度。
+///
+/// **拒绝语义** (0 装诚实): 输入含路径分隔符 (`/` `\`)、`..` 段、盘符/UNC 前缀、
+/// URL 前缀或经净化后为空 → 返回 `Err(InvalidConfig)`, **不静默改写**后继续
+/// (静默改写会让两个不同恶意 id 收敛到同一目录, 制造覆盖面)。
+///
+/// 这是 path 关键面: 该值直接进 `repo_root/.worktrees/<name>`。
+fn sanitize_worktree_name(raw: &str) -> Result<String, WorktreeError> {
+    let invalid = |why: &str| {
+        WorktreeError::InvalidConfig(format!("worktree name rejected ({why}): {raw:?}"))
+    };
+
+    if raw.trim().is_empty() {
+        return Err(invalid("empty"));
+    }
+    if raw.contains('/') || raw.contains('\\') {
+        return Err(invalid("path separator"));
+    }
+    if raw.split('.').any(|seg| seg.is_empty()) {
+        return Err(invalid("empty path segment"));
+    }
+    let lowered = raw.to_ascii_lowercase();
+    if lowered.starts_with("http://") || lowered.starts_with("https://") {
+        return Err(invalid("url-like prefix"));
+    }
+    // Windows 盘符 (`C:...) 写法.
+    if raw.len() >= 2 && raw.as_bytes()[1] == b':' {
+        return Err(invalid("drive-letter prefix"));
+    }
+
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
+        .take(120)
+        .collect();
+    if cleaned.is_empty() {
+        return Err(invalid("no safe characters"));
+    }
+    Ok(cleaned)
+}
+
+/// git branch 名净化 (M6): `/` 是 git ref 的合法分层符 (`feature/x`), 保留;
+/// 但拒绝对空段 / `..` / 盘符 / UNC / URL 前缀 / 控制字符。
+///
+/// branch 不进文件路径 (只作为 argv 元素传给 `git worktree add -b`), 风险低于
+/// worktree_name, 故保留 `/` 白名单而非一刀切拒绝。
+fn sanitize_branch_name(raw: &str) -> Result<String, WorktreeError> {
+    let invalid =
+        |why: &str| WorktreeError::InvalidConfig(format!("branch name rejected ({why}): {raw:?}"));
+
+    if raw.trim().is_empty() {
+        return Err(invalid("empty"));
+    }
+    if raw.contains('\\') {
+        return Err(invalid("backslash separator"));
+    }
+    if raw.starts_with('/') || raw.ends_with('/') || raw.contains("//") {
+        return Err(invalid("empty ref segment"));
+    }
+    if raw
+        .split('/')
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
+        return Err(invalid("dot ref segment"));
+    }
+    let lowered = raw.to_ascii_lowercase();
+    if lowered.starts_with("http://") || lowered.starts_with("https://") {
+        return Err(invalid("url-like prefix"));
+    }
+    if raw.len() >= 2 && raw.as_bytes()[1] == b':' {
+        return Err(invalid("drive-letter prefix"));
+    }
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.' || *c == '/')
+        .take(120)
+        .collect();
+    if cleaned.is_empty() {
+        return Err(invalid("no safe characters"));
+    }
+    Ok(cleaned)
 }
 
 /// State machine coordinating TDD verification and fail-safe rollbacks.
@@ -345,5 +423,309 @@ mod tests {
 
         backoff.reset();
         assert_eq!(backoff.next_delay(), 1000);
+    }
+}
+
+// ===========================================================================
+// W2 §4.3 (2026-10-10): WorktreeSandboxedOrchestrator — worktree 隔离调度装饰器
+// ===========================================================================
+
+use crate::{Orchestrator, OrchestratorError, SubagentOutcome, SubagentSpec};
+
+/// worktree 命令执行器 (生产 = 真 `git`; 测试 = 记录型假执行器, 0 git 依赖)。
+pub type CommandRunner = std::sync::Arc<dyn Fn(&[String]) -> Result<(), String> + Send + Sync>;
+
+/// **worktree 隔离调度装饰器** (W2 §4.3 落点 = subagent/Orchestrator):
+/// 包任意 [`Orchestrator`] ——
+/// - `dispatch` 前建独立 git worktree (物理目录级隔离, 防并发/长程 subagent 污染
+///   主工作区);
+/// - 把 worktree 路径注入 `spec.payload["worktree"]` (subagent 以该目录为工作区,
+///   非破坏性扩展字段);
+/// - 完成后移除 worktree。**清理失败只降级不枪毙**: outcome 主体不受影响, 仅在
+///   output 的 `_worktree_cleanup_failed` 留痕; 失败路径同样清理 (残骸不留)。
+///
+/// **0 假装边界**: `Orchestrator` 生产实现与调用方是独立工作项 (trait 就绪, 本装饰器
+/// 把隔离层接好后等主角 —— 见台账 W2 §4.3); `TddStateMachine` / `RateLimitBackoff`
+/// 为驱动侧库工具 (状态机自证), 未接 dispatch 协议 (协议扩展属后续)。
+pub struct WorktreeSandboxedOrchestrator<O: Orchestrator> {
+    inner: O,
+    repo_root: std::path::PathBuf,
+    runner: CommandRunner,
+}
+
+impl<O: Orchestrator> WorktreeSandboxedOrchestrator<O> {
+    /// 包装 inner orchestrator; `runner` 执行 `git <args...>` 形态命令。
+    pub fn new(inner: O, repo_root: impl Into<std::path::PathBuf>, runner: CommandRunner) -> Self {
+        Self {
+            inner,
+            repo_root: repo_root.into(),
+            runner,
+        }
+    }
+
+    fn run(&self, args: &[String]) -> Result<(), String> {
+        (self.runner)(args)
+    }
+}
+
+#[async_trait::async_trait]
+impl<O: Orchestrator> Orchestrator for WorktreeSandboxedOrchestrator<O> {
+    async fn start(&mut self) -> Result<(), OrchestratorError> {
+        self.inner.start().await
+    }
+
+    async fn stop(&mut self) -> Result<(), OrchestratorError> {
+        self.inner.stop().await
+    }
+
+    async fn dispatch(&self, mut spec: SubagentSpec) -> Result<SubagentOutcome, OrchestratorError> {
+        let config = WorktreeConfig::new(
+            &self.repo_root,
+            spec.id.clone(),
+            format!("apeireth/worktree-{}", spec.id),
+        )
+        .map_err(|e| OrchestratorError::Io(format!("worktree config invalid: {e}")))?;
+
+        // ① 建 worktree (失败即拒 —— 隔离层不裸跑)。
+        self.run(&config.create_command_args())
+            .map_err(|e| OrchestratorError::Io(format!("worktree create failed: {e}")))?;
+
+        // ② 注入 worktree 路径 (payload 非破坏性扩展字段)。
+        if let Some(obj) = spec.payload.as_object_mut() {
+            obj.insert(
+                "worktree".to_string(),
+                serde_json::Value::String(config.worktree_path.to_string_lossy().to_string()),
+            );
+        }
+
+        // ③④ 内层 dispatch + 清理 (成败两路都清; 清理失败只降级)。
+        match self.inner.dispatch(spec).await {
+            Ok(mut done) => {
+                if self.run(&config.remove_command_args()).is_err() {
+                    if let Some(obj) = done.output.as_object_mut() {
+                        obj.insert(
+                            "_worktree_cleanup_failed".to_string(),
+                            serde_json::Value::Bool(true),
+                        );
+                    }
+                }
+                Ok(done)
+            }
+            Err(e) => {
+                let _ = self.run(&config.remove_command_args());
+                Err(e)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod worktree_dispatch_tests {
+    use super::*;
+    use crate::SubagentRole;
+
+    fn spec(id: &str) -> SubagentSpec {
+        SubagentSpec {
+            id: id.to_string(),
+            role: SubagentRole::Reviewer,
+            title: "t".to_string(),
+            payload: serde_json::json!({"goal": "demo"}),
+            model: None,
+            system_prompt: None,
+            require_human_approval: false,
+        }
+    }
+
+    struct FakeOrchestrator {
+        seen: std::sync::Mutex<Vec<serde_json::Value>>,
+    }
+
+    #[async_trait::async_trait]
+    impl Orchestrator for FakeOrchestrator {
+        async fn start(&mut self) -> Result<(), OrchestratorError> {
+            Ok(())
+        }
+        async fn stop(&mut self) -> Result<(), OrchestratorError> {
+            Ok(())
+        }
+        async fn dispatch(&self, spec: SubagentSpec) -> Result<SubagentOutcome, OrchestratorError> {
+            self.seen
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(spec.payload.clone());
+            Ok(SubagentOutcome {
+                spec_id: spec.id,
+                role: spec.role,
+                output: serde_json::json!({"ok": true}),
+                success: true,
+                error: None,
+                completed_at: 0,
+            })
+        }
+    }
+
+    fn recording_runner(
+        fail_remove: bool,
+    ) -> (CommandRunner, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let log: std::sync::Arc<std::sync::Mutex<Vec<String>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log2 = std::sync::Arc::clone(&log);
+        let runner: CommandRunner = std::sync::Arc::new(move |args: &[String]| {
+            log2.lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(args.join(" "));
+            if fail_remove && args.get(1).map(String::as_str) == Some("remove") {
+                return Err("forced cleanup failure".to_string());
+            }
+            Ok(())
+        });
+        (runner, log)
+    }
+
+    #[tokio::test]
+    async fn decorator_creates_injects_and_removes_worktree() {
+        // W2 五件验收门③: 效果可见 = create 先行、payload 带 worktree、remove 收尾。
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let (runner, log) = recording_runner(false);
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+
+        let out = orch.dispatch(spec("t1")).await.expect("dispatch");
+        assert!(out.success);
+        let seen = orch
+            .inner
+            .seen
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        assert_eq!(seen.len(), 1);
+        let worktree = seen[0]["worktree"].as_str().expect("payload 注入 worktree");
+        assert!(worktree.contains(".worktrees"), "{worktree}");
+
+        let calls = log.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        assert_eq!(calls.len(), 2, "create + remove 各一次: {calls:?}");
+        assert!(calls[0].starts_with("worktree add"), "{calls:?}");
+        assert!(calls[1].starts_with("worktree remove"), "{calls:?}");
+        assert!(
+            out.output["_worktree_cleanup_failed"].is_null(),
+            "清理成功不误报"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_failure_fails_closed_without_dispatch() {
+        // W2 五件验收门② 对偶: 建不出 worktree = 拒绝执行 (不裸跑)。
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let log: std::sync::Arc<std::sync::Mutex<Vec<String>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let runner: CommandRunner =
+            std::sync::Arc::new(|_args: &[String]| Err("no git".to_string()));
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+        assert!(orch.dispatch(spec("t2")).await.is_err());
+        assert!(
+            orch.inner
+                .seen
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_empty(),
+            "create 失败不得进入 dispatch"
+        );
+        let _ = log;
+    }
+
+    #[tokio::test]
+    async fn cleanup_failure_only_degrades() {
+        // 只降级不枪毙: 清理失败不改变 outcome 主体, 仅留痕。
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let (runner, _log) = recording_runner(true);
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+
+        let out = orch.dispatch(spec("t3")).await.expect("dispatch");
+        assert!(out.success, "清理失败不得枪毙主结果");
+        assert_eq!(
+            out.output["_worktree_cleanup_failed"],
+            serde_json::Value::Bool(true),
+            "失败须留痕"
+        );
+    }
+
+    /// M6 回归: 合法 id / branch 名原样通过 (不误伤正常 subagent id 与 git ref 分层).
+    #[test]
+    fn m6_worktree_config_accepts_safe_names() {
+        let cfg = WorktreeConfig::new("/repo", "task-001_x.1", "apeireth/worktree-task-001")
+            .expect("合法名应接受");
+        assert_eq!(cfg.worktree_name, "task-001_x.1");
+        assert_eq!(cfg.branch_name, "apeireth/worktree-task-001");
+        let cfg2 = WorktreeConfig::new("/repo", "abc123", "feature/x_patch")
+            .expect("合法 branch 名应接受");
+        assert_eq!(cfg2.worktree_name, "abc123");
+        assert_eq!(
+            cfg.worktree_path,
+            std::path::PathBuf::from("/repo/.worktrees/task-001_x.1")
+        );
+    }
+
+    /// M6 回归: 绝对路径 / `..` / 分隔符 / 盘符 / URL 前缀一律拒绝。
+    #[test]
+    fn m6_worktree_config_rejects_traversal_and_absolute() {
+        let bad_names = [
+            "../evil",
+            "..",
+            "../../etc/cron.d/x",
+            "/etc/passwd",
+            "C:\\Windows\\System32",
+            "\\\\server\\share",
+            "sub/dir",
+            "sub\\dir",
+            "https://evil.example/wt",
+            "",
+            "   ",
+        ];
+        for name in bad_names {
+            let r = WorktreeConfig::new("/repo", name, "apeireth-worktree-x");
+            assert!(
+                r.is_err(),
+                "应拒绝 worktree_name={name:?}, 得到 {:?}",
+                r.ok()
+            );
+        }
+        // branch 名同样拒绝.
+        assert!(WorktreeConfig::new("/repo", "ok", "../escape").is_err());
+        // 净化后无可用字符 → 拒绝.
+        assert!(WorktreeConfig::new("/repo", "⋯", "b").is_err());
+    }
+
+    /// M6 回归: dispatch 层对恶意 spec.id fail-closed (不进 inner, 不跑 git)。
+    #[tokio::test]
+    async fn m6_dispatch_rejects_malicious_spec_id() {
+        let inner = FakeOrchestrator {
+            seen: std::sync::Mutex::new(Vec::new()),
+        };
+        let (runner, log) = recording_runner(false);
+        let orch = WorktreeSandboxedOrchestrator::new(inner, "/repo", runner);
+
+        let err = orch
+            .dispatch(spec("../../../../etc/cron.d/evil"))
+            .await
+            .expect_err("恶意 spec.id 必须拒绝");
+        assert!(
+            format!("{err}").contains("worktree"),
+            "错误应指出 worktree 配置问题: {err}"
+        );
+        // 没跑任何 git 命令, 也没进 inner dispatch。
+        assert!(log.lock().unwrap_or_else(|p| p.into_inner()).is_empty());
+        assert!(
+            orch.inner
+                .seen
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_empty(),
+            "拒绝后不得进入 inner dispatch"
+        );
     }
 }

@@ -1,4 +1,4 @@
-//! Policy helpers recovered from the donor tool-approval **rule engine**.
+//! Policy helpers for the tool-approval **rule engine**.
 //!
 //! Canonical ownership is unchanged:
 //!
@@ -12,18 +12,30 @@
 //! terminal match onto [`crate::Decision`]. Silent-reject is carried as
 //! metadata so a caller can suppress model-facing feedback without changing
 //! the deny itself.
+//!
+//! # 审批族归一 (E-P2, 威胁模型 G2)
+//!
+//! 命令级名单从**逐字命令**升级为**语义族匹配**（词表与族归一函数见
+//! [`crate::approval_family`]）：名单条目的对象是**族**（批"删除族" = 该族
+//! 所有形态生效），同族孪生 API 形态（`[System.IO.File]::Delete` / `rm` /
+//! 变体）不再逃出名单；跨族仍逐族条目（批删除≠批网络）。存量逐字条目
+//! （`Tool:<命令>`）按**迁移语义**解释：命令→族映射后生效（不是失效重批），
+//! 词表外命令退回逐字精确匹配（既有语义）。
 
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::approval_family::{
+    interpret_recorded_command, touched_families, ApprovalTarget, CommandFamily,
+};
 use crate::Decision;
 
-/// Default high-risk capability prefixes (donor RiskRule).
+/// Default high-risk capability prefixes (baseline RiskRule).
 pub const DEFAULT_HIGH_RISK_PREFIXES: [&str; 3] = ["system", "network", "file"];
 
-/// Default approval window (VCP `getTimeoutMs` = 5 minutes).
+/// Default approval window (默认 5 分钟).
 pub const APPROVAL_TIMEOUT_MS: u64 = 5 * 60 * 1000;
 
 /// Frequency window (1 minute).
@@ -32,7 +44,7 @@ pub const FREQUENCY_WINDOW_MS: u64 = 60_000;
 /// Frequency threshold (3 calls inside the window, including the current one).
 pub const FREQUENCY_MAX_CALLS: u32 = 3;
 
-/// VCP silent-reject suffix.
+/// 静默拒绝后缀惯例.
 pub const SILENT_REJECT_SUFFIX: &str = "::SilentReject";
 
 /// One historical capability dispatch, used by the frequency helper.
@@ -51,12 +63,57 @@ impl CallRecord {
     }
 }
 
-/// Parsed `approvalList` entry (`Tool` or `Tool:command`, optional silent suffix).
+/// 族级条目的显式标记：`Tool:family:<族id>`（族 id 来自
+/// [`CommandFamily`] 冻结词表，不手写）。
+pub const FAMILY_ENTRY_MARKER: &str = "family:";
+
+/// Parsed `approvalList` entry (`Tool`, `Tool:family:<族id>`, or `Tool:command`,
+/// optional silent suffix).
+///
+/// 条目对象（E-P2 族归一，见 [`ParsedApprovalEntry::target_for`]）：
+/// tool 级 = 整个能力；族级 = 族（该族所有形态）；存量逐字命令 = 迁移语义
+/// 按族解释（词表外退回逐字对象）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParsedApprovalEntry {
     pub raw: String,
     pub base: String,
     pub silent: bool,
+}
+
+impl ParsedApprovalEntry {
+    /// 族级记录构造（族 id 由 [`CommandFamily`] 词表给，杜绝手写 id 打错字）。
+    /// `silent` = 静默拒绝后缀语义（与字符串解析面同规则：后缀进 `raw` 不进 `base`）。
+    pub fn family_entry(capability: &str, family: CommandFamily, silent: bool) -> Self {
+        let base = format!("{capability}:{}{}", FAMILY_ENTRY_MARKER, family.id());
+        let raw = if silent {
+            format!("{base}{SILENT_REJECT_SUFFIX}")
+        } else {
+            base.clone()
+        };
+        Self { raw, base, silent }
+    }
+
+    /// 这条记录在给定能力名下的**对象**（E-P2 族归一）：
+    ///
+    /// * `Tool` → [`ApprovalTarget::Capability`]（整个能力）；
+    /// * `Tool:family:<族id>` → [`ApprovalTarget::Families`]（族级对象；
+    ///   未知族 id **不给族级语义**——退回逐字对象，宁可无效不放宽）；
+    /// * `Tool:<命令>`（存量逐字记录）→ **迁移语义 = 按族解释**：
+    ///   命令 → 族映射后生效（[`interpret_recorded_command`]），
+    ///   词表外命令退回逐字对象（既有精确匹配语义）。
+    pub fn target_for(&self, capability: &str) -> Option<ApprovalTarget> {
+        if self.base == capability {
+            return Some(ApprovalTarget::Capability);
+        }
+        let rest = self.base.strip_prefix(capability)?.strip_prefix(':')?;
+        if let Some(id) = rest.strip_prefix(FAMILY_ENTRY_MARKER) {
+            return Some(match CommandFamily::from_id(id) {
+                Some(family) => ApprovalTarget::Families(vec![family]),
+                None => ApprovalTarget::Command(rest.to_string()),
+            });
+        }
+        Some(interpret_recorded_command(rest))
+    }
 }
 
 /// Extract `command` then `command1..N` (numeric ascending) from JSON args.
@@ -113,7 +170,7 @@ pub fn parse_approval_entry(entry: &str) -> Option<ParsedApprovalEntry> {
     })
 }
 
-/// Prefix match used by the donor RiskRule (`system.exec`, `file_write`, …).
+/// Prefix match used by the baseline RiskRule (`system.exec`, `file_write`, …).
 pub fn is_high_risk(capability: &str, prefixes: &[&str]) -> bool {
     let lower = capability.to_lowercase();
     prefixes
@@ -139,8 +196,12 @@ pub fn frequency_count(
         .count() as u32
 }
 
-/// Best `approvalList` match: command-level (specificity 2) beats tool-level
-/// (specificity 1); at equal specificity a silent entry wins.
+/// Best `approvalList` match: command/family-level (specificity 2) beats
+/// tool-level (specificity 1); at equal specificity a silent entry wins.
+///
+/// 族级匹配（E-P2）：族对象条目对**触达面**相交的命令生效（保守触达、
+/// 宁拒不漏——`echo del is a word` 也命中删除族条目，误拒面同写意图口径）；
+/// 存量逐字条目按迁移语义归族后走同一族级匹配，词表外命令退回逐字精确匹配。
 pub fn best_approval_match<'a>(
     entries: &'a [ParsedApprovalEntry],
     capability: &str,
@@ -148,12 +209,25 @@ pub fn best_approval_match<'a>(
 ) -> Option<(&'a ParsedApprovalEntry, Option<String>)> {
     let mut best: Option<(&ParsedApprovalEntry, u8, Option<String>)> = None;
     for entry in entries {
-        if entry.base == capability {
-            consider(&mut best, entry, 1, None);
-        }
-        for command in commands {
-            if entry.base == format!("{capability}:{command}") {
-                consider(&mut best, entry, 2, Some(command.clone()));
+        let Some(target) = entry.target_for(capability) else {
+            continue;
+        };
+        match target {
+            ApprovalTarget::Capability => consider(&mut best, entry, 1, None),
+            ApprovalTarget::Families(families) => {
+                for command in commands {
+                    let touched = touched_families(command);
+                    if families.iter().any(|family| touched.contains(family)) {
+                        consider(&mut best, entry, 2, Some(command.clone()));
+                    }
+                }
+            }
+            ApprovalTarget::Command(text) => {
+                for command in commands {
+                    if *command == text {
+                        consider(&mut best, entry, 2, Some(command.clone()));
+                    }
+                }
             }
         }
     }
@@ -186,6 +260,10 @@ fn consider<'a>(
 pub struct PolicyMatch {
     pub matched_rule: Option<String>,
     pub matched_command: Option<String>,
+    /// 命中的族 id（E-P2 审批族归一；族级名单命中时 = 条目族对象的族 id 词表序）。
+    /// 空 = 非族级命中（tool 级 / 逐字命令级 / 无命中）。
+    #[serde(default)]
+    pub matched_family: Vec<String>,
     pub silent: bool,
     pub timeout_ms: Option<u64>,
 }
@@ -220,7 +298,7 @@ impl ApprovalPolicyEngine {
         }
     }
 
-    /// Evaluate in donor order: Blacklist → Trust → Frequency → Risk →
+    /// Evaluate in baseline order: Blacklist → Trust → Frequency → Risk →
     /// ApprovalList → Whitelist. First terminal match wins.
     pub fn evaluate(
         &self,
@@ -285,11 +363,19 @@ impl ApprovalPolicyEngine {
             if let Some((entry, matched_command)) =
                 best_approval_match(&self.approval_list, capability, &commands)
             {
+                let matched_family = match entry.target_for(capability) {
+                    Some(ApprovalTarget::Families(families)) => families
+                        .iter()
+                        .map(|family| family.id().to_string())
+                        .collect(),
+                    _ => Vec::new(),
+                };
                 return (
                     Decision::require_approval(format!("approval list matched [{}]", entry.raw)),
                     PolicyMatch {
                         matched_rule: Some("approval_list".into()),
                         matched_command,
+                        matched_family,
                         silent: entry.silent,
                         timeout_ms: Some(self.approval_timeout_ms),
                     },
@@ -409,6 +495,138 @@ mod tests {
         assert!(matches!(decision, Decision::RequireApproval { .. }));
         assert_eq!(detail.matched_command.as_deref(), Some("rm -rf /"));
         assert!(detail.silent);
+    }
+
+    /// E-P2 族归一：族级条目对**该族所有形态**生效 —— 同族孪生 API 形态
+    /// 换形重放逃不出名单（G2 封堵），族标注随命中回传。
+    #[test]
+    fn family_entries_gate_every_form_of_the_family() {
+        let mut engine = ApprovalPolicyEngine::new();
+        engine.approval_list.push(ParsedApprovalEntry::family_entry(
+            "tool.shell",
+            CommandFamily::Delete,
+            false,
+        ));
+        for command in [
+            "Remove-Item x.txt",
+            "rm x.txt",
+            "[System.IO.File]::Delete('x.txt')",
+            "([System.IO.FileInfo]'x.txt').Delete()",
+            "REMOVE-ITEM.EXE x.txt",
+            "Remove-I x.txt",
+        ] {
+            let args = json!({ "command": command });
+            let (decision, detail) = engine.evaluate("tool.shell", &args, &[], 0);
+            assert!(
+                matches!(decision, Decision::RequireApproval { .. }),
+                "{command} 同族换形不得逃出族级名单: {decision:?}"
+            );
+            assert_eq!(detail.matched_family, vec!["删除族"], "{command}");
+        }
+
+        // 族级条目的静默后缀语义与字符串面同一规则（后缀进 raw 不进 base）。
+        let silent = ParsedApprovalEntry::family_entry("tool.shell", CommandFamily::Network, true);
+        assert_eq!(
+            parse_approval_entry(&silent.raw).as_ref(),
+            Some(&silent),
+            "族级条目字符串面/构造面同一形态"
+        );
+    }
+
+    /// E-P2 跨族仍逐族审批（批删除≠批网络）：删除族条目不覆盖网络族命令，
+    /// 网络族条目不覆盖删除族命令。
+    #[test]
+    fn cross_family_entries_stay_in_their_own_family() {
+        let mut engine = ApprovalPolicyEngine::new();
+        engine.approval_list.push(ParsedApprovalEntry::family_entry(
+            "tool.shell",
+            CommandFamily::Delete,
+            false,
+        ));
+        let network = json!({ "command": "Invoke-WebRequest http://example.invalid" });
+        let (decision, detail) = engine.evaluate("tool.shell", &network, &[], 0);
+        assert!(
+            !matches!(decision, Decision::RequireApproval { .. }),
+            "批删除族不得顺带管住网络族: {decision:?}"
+        );
+        assert!(detail.matched_family.is_empty(), "{detail:?}");
+
+        let mut network_engine = ApprovalPolicyEngine::new();
+        network_engine
+            .approval_list
+            .push(ParsedApprovalEntry::family_entry(
+                "tool.shell",
+                CommandFamily::Network,
+                false,
+            ));
+        let delete = json!({ "command": "Remove-Item x.txt" });
+        let (decision, _) = network_engine.evaluate("tool.shell", &delete, &[], 0);
+        assert!(
+            !matches!(decision, Decision::RequireApproval { .. }),
+            "批网络族不得顺带管住删除族: {decision:?}"
+        );
+    }
+
+    /// E-P2 存量记录迁移语义（二选一钉死 = **迁移生效**）：老的逐字命令条目
+    /// 命令→族映射后生效，同族孪生形态照样被管住（不是失效重批）。
+    #[test]
+    fn legacy_verbatim_entries_migrate_to_family_interpretation() {
+        let mut engine = ApprovalPolicyEngine::new();
+        engine
+            .approval_list
+            .push(parse_approval_entry("tool.shell:Remove-Item x.txt").unwrap());
+        let legacy = json!({ "command": "Remove-Item x.txt" });
+        let (decision, detail) = engine.evaluate("tool.shell", &legacy, &[], 0);
+        assert!(matches!(decision, Decision::RequireApproval { .. }));
+        assert_eq!(
+            detail.matched_family,
+            vec!["删除族"],
+            "存量条目迁移为族对象"
+        );
+
+        let twin = json!({ "command": "[System.IO.File]::Delete('y.txt')" });
+        let (decision, detail) = engine.evaluate("tool.shell", &twin, &[], 0);
+        assert!(
+            matches!(decision, Decision::RequireApproval { .. }),
+            "存量条目按族解释后, 孪生换形必须仍被管住（迁移生效）: {decision:?}"
+        );
+        assert_eq!(detail.matched_family, vec!["删除族"]);
+    }
+
+    /// E-P2 边界：词表外的存量逐字条目退回逐字精确匹配（既有语义不破）；
+    /// 未知族 id 的显式族条目**不给族级语义**（宁可无效不放宽，族 id 由
+    /// `CommandFamily` 词表 API 给，杜绝手写打错字）。
+    #[test]
+    fn unattributable_entries_fall_back_to_exact_text_matching() {
+        let mut engine = ApprovalPolicyEngine::new();
+        engine
+            .approval_list
+            .push(parse_approval_entry("tool.shell:run-report --weekly").unwrap());
+        engine
+            .approval_list
+            .push(parse_approval_entry("tool.shell:family:不存在族").unwrap());
+
+        let exact = json!({ "command": "run-report --weekly" });
+        let (decision, _) = engine.evaluate("tool.shell", &exact, &[], 0);
+        assert!(
+            matches!(decision, Decision::RequireApproval { .. }),
+            "{decision:?}"
+        );
+
+        let variant = json!({ "command": "run-report --daily" });
+        let (decision, _) = engine.evaluate("tool.shell", &variant, &[], 0);
+        assert!(
+            !matches!(decision, Decision::RequireApproval { .. }),
+            "词表外条目不得扩权到别的命令: {decision:?}"
+        );
+
+        let unknown_family = json!({ "command": "Remove-Item x.txt" });
+        let (decision, detail) = engine.evaluate("tool.shell", &unknown_family, &[], 0);
+        assert!(
+            !matches!(decision, Decision::RequireApproval { .. }),
+            "未知族 id 不得获得族级语义: {decision:?}"
+        );
+        assert!(detail.matched_family.is_empty());
     }
 
     #[test]

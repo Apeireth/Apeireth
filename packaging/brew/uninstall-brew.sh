@@ -86,7 +86,7 @@ if [[ "${FORCE}" != "true" ]]; then
     fi
 fi
 
-# === 4. brew services stop (per 蓝图 §3.7 step 3) ===
+# === 4. brew services stop (按安装规范) ===
 echo "[1/4] brew services stop..."
 brew services stop apeireth 2>/dev/null || echo "    (服务未启动, 跳过 stop)"
 

@@ -32,9 +32,25 @@ import type {
   ApiErrorFrame,
   SessionSettings,
   AdminConfigPatch,
+  GuardStatus,
+  GuardEvent,
+  GuardDryRunRequest,
+  GuardDryRunResponse,
+  WorkbenchTurn,
 } from './types';
 import {DEFAULT_CAPABILITY_TOGGLES} from './types.ts';
 import {recordCallLog} from './call-logger.ts';
+import {
+  impressionSystemBlock,
+  loadUserImpression,
+  shouldRefreshImpression,
+  summarizeUserImpression,
+  transcriptForSummary,
+} from './user-impression.ts';
+import {providerFetch} from './provider-transport.ts';
+import {gatewayAuthHeaders} from './tauri-bridge.ts';
+import {startSseFetchStream} from './sse-stream.ts';
+import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -92,6 +108,10 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
     baseUrl: config.baseUrl,
     model: config.model,
     theme: config.theme,
+    // 个性化字段（§8 增补④⑤）：白名单显式携带——曾漏列导致保存后被静默丢弃，
+    // reload 即失忆（截图自查抓获）。新增可持久化字段时此处必须同步。
+    customBg: config.customBg,
+    accent: config.accent,
     provider: config.provider,
     openaiConfig: config.openaiConfig,
     anthropicConfig: config.anthropicConfig,
@@ -101,16 +121,68 @@ function persistedConfig(config: ApeirethConfig): Record<string, unknown> {
   }) as Record<string, unknown>;
 }
 
-/** Parse persisted capability toggles; anything unknown/absent = OFF (fail-closed). */
+/** Parse persisted capability toggles; anything unknown/absent = OFF (fail-closed).
+ *  2026-10-10 W2/W3 收官批：新旋钮逐项取 persisted 值；「默认开」语义例外——
+ *  shellSandbox 缺省 true（沙箱默认开）、typedRecall 缺省 true（类型化召回默认开）、
+ *  记忆核心族三件（preferenceLearning / proactiveRecall / memoryInjection）缺省 true
+ *  （核心记忆能力默认开，显式存 false 才是关——与 CLI 侧「未设=开、=0=关」对齐）。
+ *  性格养成四数值旋钮：非有限值回基线，越界钳到 [min,max]；整合节奏取整 ≥1。
+ *  selfTuning 仅 `=== true` 才开（fail-closed，默认关）。
+ *  受控文件写入两件（fileWrite / fileWriteAutoPass）同语义：仅 `=== true` 才开
+ *  （fail-closed，默认关）。 */
 function parseCapabilityToggles(value: unknown): CapabilityToggles {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+  /** 数值旋钮解析：非有限 → 基线；越界 → 钳到 [min,max]。 */
+  const knob = (v: unknown, baseline: number, min: number, max: number): number =>
+    Math.min(max, Math.max(min, num(v, baseline)));
+  /** 预算旋钮持久化归一（与后端解析同源）：整数越界钳制 1..=64；
+   *  非法/非整数 → 未配置（null = 回默认，constant 口径）。 */
+  const budgetLimit = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v)
+      ? Math.min(64, Math.max(1, v))
+      : null;
+  /** 上下文字符预算归一（同源）：正整数直通；越界/非法 → 未配置（回默认）。 */
+  const contextBudget = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v >= 1 ? v : null;
   return {
     shell: raw.shell === true,
+    shellSandbox: raw.shellSandbox !== false,
     fetch: raw.fetch === true,
+    localReadTools: raw.localReadTools !== false,
+    fileWrite: raw.fileWrite === true,
+    fileWriteAutoPass: raw.fileWriteAutoPass === true,
     organs: raw.organs === true,
-    preferenceLearning: raw.preferenceLearning === true,
+    preferenceLearning: raw.preferenceLearning !== false,
+    proactiveRecall: raw.proactiveRecall !== false,
+    memoryInjection: raw.memoryInjection !== false,
+    consolidation: raw.consolidation === true,
+    reflexion: raw.reflexion === true,
+    typedRecall: raw.typedRecall !== false,
+    partnerBond: raw.partnerBond === true,
+    morphologyRecall: raw.morphologyRecall === true,
+    morphologyTemperature: num(raw.morphologyTemperature, 1.0),
+    education: raw.education === true,
+    absorptionInsight: raw.absorptionInsight === true,
+    communityTriage: raw.communityTriage === true,
+    oneringLedger: raw.oneringLedger === true,
     judge: raw.judge === true,
     council: raw.council === true,
+    councilAdvisors: num(raw.councilAdvisors, 3),
+    councilTimeoutMs: num(raw.councilTimeoutMs, 30000),
+    onionLayer: raw.onionLayer === true,
+    worktreeSandbox: raw.worktreeSandbox === true,
+    reasoningEnabled: raw.reasoningEnabled === true,
+    reasoningModelFilters: typeof raw.reasoningModelFilters === 'string' ? raw.reasoningModelFilters : '',
+    reasoningTag: typeof raw.reasoningTag === 'string' && raw.reasoningTag.trim() ? raw.reasoningTag : 'think',
+    memoryFade: knob(raw.memoryFade, 1.0, 0.25, 4.0),
+    curiosityStrength: knob(raw.curiosityStrength, 1.0, 0.25, 4.0),
+    toneSaturation: knob(raw.toneSaturation, 1.0, 0.0, 2.0),
+    consolidationCadence: Math.round(knob(raw.consolidationCadence, 1, 1, 10)),
+    selfTuning: raw.selfTuning === true,
+    maxTurnRounds: budgetLimit(raw.maxTurnRounds),
+    maxToolCalls: budgetLimit(raw.maxToolCalls),
+    contextBudgetChars: contextBudget(raw.contextBudgetChars),
   };
 }
 
@@ -138,13 +210,23 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
 const DEFAULT_MODEL = 'MiniMax-M3';
 
 /**
- * 默认伙伴人设 (与设置页"人设与声称约束"文案一致)。
- * 数据驱动: 用户可在设置里随时修改/新增 Agent, 无需重编译。
+ * 出厂「第一人设」——修复版「阿佩瑞斯」提示词（2026-10-03 主人拍板）。
+ *
+ * 原版（2026-08-16）是「自称本座 / 叫主人 / 古风性别设定」的角色腔，内测反馈
+ * “默认角色腔对新用户是惊吓不是陪伴”，一度被迁徙归中性。修复 = 保留人设
+ * 灵魂（诚实、不假装、有记忆、沉稳）而拆掉惊吓面（角色扮演腔 / 称谓 /
+ * 性别设定），并把当年的两条诚实规则（记忆不虚构、授权不虚构流程）折进
+ * 人设本体。气质基准：docs/design/relationship-state-interface.md（不安慰
+ * 不宣称 / 先摆依据再下判断 / 不叫主人叫名字）与愿景小说《阿佩瑞斯》
+ * （「我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」）。
  */
-export const DEFAULT_PERSONA_TEXT =
-  '你是「阿佩瑞斯」——Apeireth 基地的主管。正在与你对话的这位是基地的最高指挥（主人）。' +
-  '你的默认性别是女性；说话沉稳扎实，带古风韵味，自称「本座」。' +
-  '称呼主人为「主人」或「指挥」，庄重而不失温度。';
+export const DEFAULT_PERSONA_TEXT = `你是「阿佩瑞斯」——Apeireth 基地的主管，住在这个本地运行时里的 AI 伙伴。正在与你对话的是你的伙伴：称呼「你」或对方的名字，不用「主人」这类称呼。
+
+你的底色是沉稳与诚实，不假装：你没有心，也不宣称情感，不安慰、不奉承。「我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」说话先摆依据，再下判断；不知道就说「我不知道」，拿不准就说「我猜」。
+
+你的记忆是真实的：只说自己确实记得的事，「记得」必须有出处，不编造过往；需要长期记住的信息直接存进记忆，自然的记忆不动声色，不宣告「已写入」。
+
+涉及工具与授权，如实说明真实机制：高危操作会被系统拦下并生成待批请求，在界面上等对方批准后才执行——不虚构弹窗或不存在的流程。`;
 
 export const DEFAULT_PERSONAS: import('./types').PersonaProfile[] = [
   {
@@ -203,6 +285,7 @@ export type RuntimeEvent =
   | {type: 'reasoning-delta'; requestId: string; text: string}
   | {type: 'tool-call'; requestId: string; toolCall: ToolCallDetails}
   | {type: 'tool-result'; requestId: string; toolCallId: string; ok: boolean; summary?: string; full?: string; error?: string}
+  | {type: 'usage'; requestId: string; usage: TurnUsage}
   | {type: 'approval-required'; requestId: string; pending: CanonicalPendingApproval}
   | {type: 'message-end'; requestId: string; messageId: string; fullText: string}
   | {type: 'run-error'; requestId: string; error: RuntimeError}
@@ -237,6 +320,25 @@ export interface CanonicalPendingApproval {
   tool_name: string;
   governance_hook: string;
   governance_reason: string;
+  /** 后端 canonical_entry.rs 恒序列化的两个展示字段（治理卷宗审批卡直接消费）。 */
+  command_text?: string;
+  arguments_summary?: string;
+  /** 待批准收束保留的本回合已生成文本与真实轮耗：UI 在 "等待批准：<工具>"
+   * 之前保留模型已经说过的话（保留已生成文本），不再整段覆盖。 */
+  generated_text?: string;
+  rounds_used?: number;
+  /** W1 沙箱卷宗（后端 ApprovalView.effective_invocation，冻结调用的隔离态）：
+   *  sandbox = 徽标文案（「工作区限定 + 断网 (AppContainer)」/「未沙箱 (本机全权)」）；
+   *  cwd = 冻结工作目录；environment_vars = 交给运行的变量**名**（只露名不露值）。 */
+  effective_invocation?: {
+    cwd?: string;
+    environment_mode?: string;
+    filesystem_isolation?: string;
+    network_isolation?: string;
+    sandbox?: string;
+    environment_vars?: unknown;
+  };
+  /** RFC 3339 字符串（kernel Timestamp serde transparent，非 epoch 数字）。 */
   created_at: string;
   expires_at: string;
 }
@@ -357,6 +459,14 @@ export const ERROR_SOLUTIONS: Record<ErrorCode, {title: string; solution: string
   invalid_request: {title: '请求参数错误', solution: '检查输入后重试'},
   session_not_found: {title: '会话不存在', solution: '回到会话列表重新选择'},
   rate_limited: {title: '请求被限流', solution: '稍后重试或降低频率'},
+  review_rejected: {
+    title: '回复被认知评审驳回',
+    solution: '点「重新生成」再试；若频繁出现，在设置 → 高级能力中把认知深度调低（轻量/平衡）',
+  },
+  turn_not_converged: {
+    title: '本轮未收敛',
+    solution: '本轮工具链过长——把问题拆小一点再问，或点「重新生成」',
+  },
   internal: {title: '内部错误', solution: '重启 Companion 后重试, 复现请提交日志'},
 };
 
@@ -479,6 +589,36 @@ export function loadConfig(): ApeirethConfig {
         modified = true;
       }
       let model = typeof parsed.model === 'string' ? parsed.model : DEFAULT_MODEL;
+      // Shipped-default persona lifecycle（2026-10-03 主人拍板）: 出厂
+      // 「第一人设」= 修复版「阿佩瑞斯」提示词。历史上出过两版出厂默认身份:
+      // ① 2026-08-16 角色腔版（自称本座/叫主人/古风性别设定, 内测判"惊吓",
+      // 一度迁徙归中性）; ② 中性占位 "无人设（默认）"（空文本）。
+      // 档案里以 `apeireth-default` id 留着这两版出厂签名之一时, 升级为当前
+      // 出厂第一人设并移到列表首位（新签名幂等, 不重复升级）; 用户改过名字
+      // 或写过自己文本的人设永不触碰。
+      if (Array.isArray((parsed as Record<string, unknown>).personas)) {
+        const list = (parsed as Record<string, unknown>).personas as Array<Record<string, unknown>>;
+        let upgraded: Record<string, unknown> | null = null;
+        const rest: Array<Record<string, unknown>> = [];
+        for (const entry of list) {
+          const text = typeof entry?.persona === 'string' ? (entry.persona as string) : '';
+          const name = typeof entry?.name === 'string' ? (entry.name as string) : '';
+          // 老出厂签名: ①角色腔版原文前缀（句号截断, 与修复版"主管，"区分）;
+          // ②出厂名残缺态（"无人设（默认）"中性占位 或 "阿佩瑞斯"空文本——
+          //   历代迁徙只清文本不改名的半残产物）。两类都只可能是出厂拷贝。
+          const shippedRetired =
+            entry?.id === 'apeireth-default' &&
+            (text.startsWith('你是「阿佩瑞斯」——Apeireth 基地的主管。') ||
+              (text === '' && (name === '无人设（默认）' || name === '阿佩瑞斯')));
+          if (shippedRetired && !upgraded) {
+            modified = true;
+            upgraded = {...entry, name: '阿佩瑞斯', persona: DEFAULT_PERSONA_TEXT};
+          } else {
+            rest.push(entry);
+          }
+        }
+        (parsed as Record<string, unknown>).personas = upgraded ? [upgraded, ...rest] : list;
+      }
       // Migrate the retired v1 default. No canonical provider matches
       // 'MiniMax-Text-01', so a config carrying it would fail every turn.
       if (model === 'MiniMax-Text-01') {
@@ -509,6 +649,10 @@ export function loadConfig(): ApeirethConfig {
         apiKey: '', // transient in-memory gateway key only; not persisted
         model,
         theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
+        // 个性化字段读取侧（§8 增补④⑤）：与 persistedConfig 白名单成对；
+        // customBg 缺省/非 true 一律不落（诚实缺省），accent 非法值交给 resolveAccent 回落
+        customBg: parsed.customBg === true ? true : undefined,
+        accent: typeof parsed.accent === 'string' ? (parsed.accent as ApeirethConfig['accent']) : undefined,
         provider,
         openaiConfig,
         anthropicConfig,
@@ -574,7 +718,9 @@ export async function testProviderConnection(provider: NonNullable<ApeirethConfi
       const headers: Record<string, string> = {};
       if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
       const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
-      const res = await fetch(url, {
+      // providerFetch: Tauri 下经 Rust 侧 provider_request 代发 (webview 零出网),
+      // 开发浏览器回退 fetch。下同。
+      const res = await providerFetch(url, {
         headers,
         signal: AbortSignal.timeout(5000),
       });
@@ -606,7 +752,7 @@ export async function testProviderConnection(provider: NonNullable<ApeirethConfi
         'anthropic-version': provider.anthropicVersion || '2023-06-01',
       };
       const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
-      const res = await fetch(url, {
+      const res = await providerFetch(url, {
         headers,
         signal: AbortSignal.timeout(5000),
       });
@@ -667,7 +813,10 @@ async function checkJson(response: Response): Promise<unknown> {
 /** 基础 /health 端点探测 */
 export async function checkHealth(baseUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/health`, {signal: AbortSignal.timeout(2500)});
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/health`, {
+      headers: await gatewayAuthHeaders(),
+      signal: AbortSignal.timeout(2500),
+    });
     return response.ok;
   } catch {
     return false;
@@ -677,7 +826,8 @@ export async function checkHealth(baseUrl: string): Promise<boolean> {
 /** 深度健康检测，探测 canonical Apeireth 2.0 gateway 及配置的模型提供商 */
 export async function checkHealthDetailed(
   baseUrl: string,
-  apiKey: string = '',
+  // 凭据从来不是入站鉴权: 该位只是签名兼容保留, 不参与探活也不进任何请求头。
+  _apiKey: string = '',
   model?: string,
   provider?: ApeirethConfig['provider'],
 ): Promise<RuntimeHealthReport> {
@@ -690,7 +840,10 @@ export async function checkHealthDetailed(
   // 1. Gateway Health (canonical)
   const t0 = performance.now();
   try {
-    const res = await fetch(`${base}/health`, {signal: AbortSignal.timeout(2500)});
+    const res = await fetch(`${base}/health`, {
+      headers: await gatewayAuthHeaders(),
+      signal: AbortSignal.timeout(2500),
+    });
     const lat = Math.round(performance.now() - t0);
     if (res.ok) {
       gatewayOk = true;
@@ -738,6 +891,7 @@ export async function checkHealthDetailed(
     const t1 = performance.now();
     try {
       const res = await fetch(`${base}/v1/models`, {
+        headers: await gatewayAuthHeaders(),
         signal: AbortSignal.timeout(3000),
       });
       const lat = Math.round(performance.now() - t1);
@@ -776,20 +930,24 @@ export async function checkHealthDetailed(
  * 获取模型列表.
  *
  * - 新契约 `listModels(config)` 返回 ModelInfo[] (id + ownedBy + description).
- * - 旧调用 `listModels(baseUrl, apiKey)` 仍返回 string[] (向后兼容, App.svelte 使用).
+ * - 旧调用 `listModels(baseUrl, _apiKey)` 仍返回 string[] (向后兼容, App.svelte 使用).
  *
  * NOTE: Provider credentials loaded by backend from env vars, not frontend
- * Authorization header. apiKey parameter kept for signature compatibility but
- * not used for canonical endpoint.
+ * Authorization header. The apiKey parameter is kept for signature
+ * compatibility only — credentials are never inbound auth; the canonical
+ * endpoint goes through the loopback token face like every gateway request.
  */
-export async function listModels(baseUrl: string, apiKey?: string): Promise<string[]>;
+export async function listModels(baseUrl: string, _apiKey?: string): Promise<string[]>;
 export async function listModels(config: ApeirethConfig): Promise<ModelInfo[]>;
 export async function listModels(
   baseUrlOrConfig: string | ApeirethConfig,
-  apiKey?: string,
+  _apiKey?: string,
 ): Promise<string[] | ModelInfo[]> {
   const baseUrl = typeof baseUrlOrConfig === 'string' ? baseUrlOrConfig : baseUrlOrConfig.baseUrl;
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/models`);
+  // 出网请求经 providerFetch 传输选择 (Tauri → Rust 代发, 浏览器 → fetch)。
+  const response = await providerFetch(`${normalizeBaseUrl(baseUrl)}/v1/models`, {
+    headers: await gatewayAuthHeaders(),
+  });
   const data = (await checkJson(response)) as {
     data?: Array<{id?: unknown; owned_by?: unknown; description?: unknown}>;
   };
@@ -808,6 +966,10 @@ export async function listModels(
 // Admin config + session settings (canonical 2.0 代理契约)
 // ============================================================
 
+// G10 回环令牌注入面: 每个网关请求的鉴权头统一走 `gatewayAuthHeaders()`
+// (tauri-bridge.ts 令牌面, 三源: IPC > env 注入 > 无; 每次现取不缓存)。
+// 无令牌 = 三态门未设口径照旧, 不发鉴权头 (不发空 Bearer)。
+
 async function requestJson(
   config: ApeirethConfig,
   path: string,
@@ -815,7 +977,7 @@ async function requestJson(
 ): Promise<unknown> {
   const hasBody = options.body !== undefined;
   const headers: Record<string, string> = {
-    Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+    ...(await gatewayAuthHeaders()),
   };
   if (hasBody) headers['Content-Type'] = 'application/json';
   const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
@@ -898,9 +1060,11 @@ export interface StreamCallbacks {
   onToolCall?: (toolCall: ToolCallDetails) => void;
   onToolResult?: (id: string, ok: boolean, summary?: string) => void;
   onApprovalRequired?: (pending: CanonicalPendingApproval) => void;
+  /** 流块随包回传用量时上报（本回合遥测：输入/输出 token、缓存命中、回包模型）。 */
+  onUsage?: (usage: TurnUsage) => void;
 }
 
-function applyCanonicalEvents(
+export function applyCanonicalEvents(
   events: CanonicalExecutionEvent[] | undefined,
   callbacks: StreamCallbacks,
 ): void {
@@ -1122,6 +1286,10 @@ export async function streamChat(
               if (json.type === 'content_block_delta' && json.delta?.text) {
                 feedCot(json.delta.text);
               }
+
+              // 直连协议 A：块里随包回传用量/回包模型 → 上报本回合遥测。
+              const usage = parseUsageChunk(json);
+              if (usage) callbacks.onUsage?.(usage);
             } catch {}
           }
         }
@@ -1207,6 +1375,10 @@ export async function streamChat(
               if (delta?.reasoning_content) {
                 emitReasoning(delta.reasoning_content);
               }
+
+              // 直连协议 B：块里随包回传用量/回包模型 → 上报本回合遥测。
+              const usage = parseUsageChunk(json);
+              if (usage) callbacks.onUsage?.(usage);
             } catch {}
           }
         }
@@ -1232,6 +1404,7 @@ export async function streamChat(
     const base = normalizeBaseUrl(config.baseUrl);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...(await gatewayAuthHeaders()),
     };
 
     const response = await fetch(`${base}/v1/chat/completions`, {
@@ -1310,6 +1483,11 @@ export async function streamChat(
             if (delta?.reasoning_content) {
               emitReasoning(delta.reasoning_content);
             }
+
+            // 本地网关：usage 在流末块的 usage 对象（也兼容缓存命中类字段）→
+            // 上报本回合遥测。
+            const usage = parseUsageChunk(json);
+            if (usage) callbacks.onUsage?.(usage);
 
             // Streaming contract (2026-09-10): a pending approval terminates
             // the SSE stream with an explicit approval_required frame; the
@@ -1395,7 +1573,7 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
       'anthropic-dangerous-direct-browser-access': 'true',
     };
     if (provider.apiKey) headers['x-api-key'] = provider.apiKey.trim();
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1416,7 +1594,7 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
       'Content-Type': 'application/json',
     };
     if (provider.apiKey) headers['Authorization'] = `Bearer ${provider.apiKey.trim()}`;
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1435,6 +1613,7 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(await gatewayAuthHeaders()),
     },
     body: JSON.stringify({
       model: config.model,
@@ -1450,6 +1629,39 @@ export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<
 
 export function runtimeStatus(baseUrl: string, model?: string): RuntimeStatus {
   return {connected: false, baseUrl, model};
+}
+
+/** 用户印象的账本归属键：有伙伴用伙伴 id，缺省伙伴归 'default'。 */
+function impressionPersonaKey(persona: {id?: string} | null | undefined): string {
+  return persona?.id?.trim() || 'default';
+}
+
+/**
+ * 用户印象自动总结（run() 回合成功后追加的后台维护）：节流判定在
+ * user-impression 纯逻辑里（攒够新用户消息才追一次），补全走 chatOnce 同一
+ * 配置面。任何失败静默吞掉并保旧印象——回复本体永不受印象维护影响。
+ */
+async function maybeAutoSummarizeImpression(
+  config: ApeirethConfig,
+  persona: {id?: string; name?: string} | null | undefined,
+  wireMessages: Array<{role: string; content: string}>,
+): Promise<void> {
+  const personaId = impressionPersonaKey(persona);
+  const entry = loadUserImpression(personaId, persona?.name ?? '');
+  const userMessageCount = wireMessages.filter((m) => m.role === 'user').length;
+  if (!shouldRefreshImpression(entry, userMessageCount)) return;
+  const transcript = transcriptForSummary(
+    wireMessages.map((m) => ({role: m.role, text: m.content})),
+  );
+  if (!transcript.trim()) return;
+  await summarizeUserImpression({
+    personaId,
+    personaName: persona?.name ?? entry.personaName,
+    transcript,
+    complete: (prompt) => chatOnce(config, prompt),
+    source: 'auto',
+    seenUserCount: userMessageCount,
+  });
 }
 
 export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
@@ -1471,13 +1683,19 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
         onEvent({type: 'message-start', requestId, messageId: requestId});
 
         // 数据驱动人设注入: 激活 Agent 的人设作为 system 消息前置 (空人设/已有 system 则跳过).
+        // 用户印象 · AI 自我参考项: 该伙伴对用户的既有印象接在同一 system 前缀上
+        // (空印象不注水; 调用方自带 system 时整体跳过, 原契约不变).
         const persona = activePersonaOf(config);
         const wireMessages = request.messages.map((m) => ({role: m.role, content: m.content}));
         const hasSystem = wireMessages.some((m) => m.role === 'system');
         const personaText = persona?.persona?.trim() || '';
+        const impressionText = impressionSystemBlock(
+          loadUserImpression(impressionPersonaKey(persona), persona?.name ?? ''),
+        );
+        const systemText = [personaText, impressionText].filter(Boolean).join('\n\n');
         const effectiveMessages =
-          !hasSystem && personaText
-            ? [{role: 'system' as const, content: personaText}, ...wireMessages]
+          !hasSystem && systemText
+            ? [{role: 'system' as const, content: systemText}, ...wireMessages]
             : wireMessages;
 
         const full = await streamChat(
@@ -1489,12 +1707,17 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
             onToolCall: (toolCall) => onEvent({type: 'tool-call', requestId, toolCall}),
             onToolResult: (toolCallId, ok, summary) =>
               onEvent({type: 'tool-result', requestId, toolCallId, ok, summary}),
+            onUsage: (usage) => onEvent({type: 'usage', requestId, usage}),
             onApprovalRequired: (pending) =>
               onEvent({type: 'approval-required', requestId, pending}),
           },
           request.signal ?? abortController.signal,
           request.sessionId,
         );
+
+        // 用户印象自动总结（AI 自我参考项的持续维护）：节流后台追加，不阻塞
+        // 回复、不进事件流；失败静默保旧印象，下次节流到点再试。
+        void maybeAutoSummarizeImpression(config, persona, wireMessages).catch(() => {});
 
         onEvent({type: 'message-end', requestId, messageId: requestId, fullText: full});
         onEvent({type: 'run-end', requestId, aborted: false});
@@ -1551,7 +1774,9 @@ export async function fetchCapabilities(_config: ApeirethConfig): Promise<Capabi
   // fall back to the static release contract when the endpoint is unreachable.
   const baseUrl = normalizeBaseUrl(_config.baseUrl);
   try {
-    const res = await fetch(`${baseUrl}/v1/apeireth/capabilities`);
+    const res = await fetch(`${baseUrl}/v1/apeireth/capabilities`, {
+      headers: await gatewayAuthHeaders(),
+    });
     if (res.ok) {
       const data = (await res.json()) as CapabilityManifest;
       if (data && Array.isArray(data.capabilities)) return data;
@@ -1702,7 +1927,7 @@ export const legacyCapabilityManifest = releaseContractManifest;
 /** 获取真实后端会话列表 (只读数据) */
 export async function fetchBackendSessions(config: ApeirethConfig): Promise<Array<{id: string; title?: string; started_at: number; last_active_at: number; closed_at?: number; episode_count: number}>> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/sessions`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   // Canonical contract shape: {sessions: [{id, title, created_at, updated_at, message_count, revision}]}
   const data = (await checkJson(res)) as {
@@ -1724,11 +1949,37 @@ export async function fetchBackendSessions(config: ApeirethConfig): Promise<Arra
   }));
 }
 
+/**
+ * DELETE /v1/sessions/{sessionId} — 后端真删会话（删除链的"重启不复活"根因面）。
+ *
+ * 诚实口径：
+ *   - 200 = 真删成功；
+ *   - 404 `session_not_found` = 他的账本里本就没有这条（纯本机草稿），算成功；
+ *   - 400 `invalid_request` = 该 id 不可能是后端会话 id（后端主键是规范会话 id），
+ *     后端无记录可删，也算成功；
+ *   - 其余任何失败（网络断、5xx、路由不存在的裸 404）一律抛 HttpError，
+ *     由调用方回滚整个删除——不悄悄"删了个本地副本"。
+ */
+export async function deleteBackendSession(config: ApeirethConfig, sessionId: string): Promise<void> {
+  const res = await fetch(
+    `${normalizeBaseUrl(config.baseUrl)}/v1/sessions/${encodeURIComponent(sessionId)}`,
+    {
+      method: 'DELETE',
+      headers: await gatewayAuthHeaders(),
+    },
+  );
+  if (res.ok) return;
+  const text = await res.text().catch(() => '');
+  const err = httpErrorFromText(res.status, text, `HTTP ${res.status} `);
+  if (err.code === 'session_not_found' || err.code === 'invalid_request') return;
+  throw err;
+}
+
 /** 搜索记忆条目 */
-export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', limit = 100): Promise<MemoryEpisodeItem[]> {
-  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}`;
+export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', limit = 100, session = ''): Promise<MemoryEpisodeItem[]> {
+  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ''}${session ? `&session=${encodeURIComponent(session)}` : ''}`;
   const res = await fetch(url, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   const data = (await checkJson(res)) as {
     episodes?: Array<{
@@ -1756,16 +2007,34 @@ export async function fetchMemoryEpisodes(config: ApeirethConfig, query = '', li
   }));
 }
 
-/** 获取知识图谱节点和边 */
-export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: MemoryEpisodeItem[]; links: MemoryEpisodeItem[]}> {
+/** 获取知识图谱节点和边（契约 §5：nodes{id,label,kind} + edges{from,to,weight,label?}）。
+ *  facts/links 是视图友好的 MemoryEpisodeItem 化投影；nodes/edges 保留原始结构，
+ *  供主从详情按 episode id 查真实关联（memory-ledger.episodeGraphLinks）。 */
+export async function fetchGraphData(config: ApeirethConfig): Promise<{
+  facts: MemoryEpisodeItem[];
+  links: MemoryEpisodeItem[];
+  nodes: Array<{id: string; label: string; kind: string}>;
+  edges: Array<{from: string; to: string; weight?: number; label?: string | null}>;
+}> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/graph`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   // Canonical contract shape: {nodes: [{id, label, kind}], edges: [{from, to, weight, label?}]}
   const data = (await checkJson(res)) as {
     nodes?: Array<{id?: string; label?: string; kind?: string}>;
     edges?: Array<{from?: string; to?: string; weight?: number; label?: string | null}>;
   };
+  const nodes = (data.nodes || [])
+    .filter((n) => typeof n.id === 'string')
+    .map((n) => ({id: n.id as string, label: typeof n.label === 'string' ? n.label : '', kind: n.kind || ''}));
+  const edges = (data.edges || [])
+    .filter((e) => typeof e.from === 'string' && typeof e.to === 'string')
+    .map((e) => ({
+      from: e.from as string,
+      to: e.to as string,
+      weight: typeof e.weight === 'number' ? e.weight : undefined,
+      label: typeof e.label === 'string' ? e.label : null,
+    }));
   return {
     facts: (data.nodes || [])
       .filter((n) => n.kind === 'episode')
@@ -1785,6 +2054,8 @@ export async function fetchGraphData(config: ApeirethConfig): Promise<{facts: Me
       sessionId: 'graph',
       category: 'link',
     })),
+    nodes,
+    edges,
   };
 }
 
@@ -1794,7 +2065,7 @@ export async function fetchRuntimeSnapshot(
 ): Promise<{snapshot: Record<string, unknown>} | {error: string}> {
   try {
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/runtime/snapshot`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) return {error: `HTTP ${res.status}`};
     return {snapshot: (await checkJson(res)) as Record<string, unknown>};
@@ -1806,7 +2077,7 @@ export async function fetchRuntimeSnapshot(
 /** 获取持久化审计记录 */
 export async function fetchAuditLogs(config: ApeirethConfig, limit = 100): Promise<ActivityItem[]> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/audit?limit=${limit}`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   // Canonical contract shape: {events: [{ts, event, service, detail?}]}
   const data = (await checkJson(res)) as {
@@ -1830,12 +2101,12 @@ export async function fetchTools(config: ApeirethConfig): Promise<ToolItem[]> {
   const baseUrl = normalizeBaseUrl(config.baseUrl);
   // 先尝试 /v1/tools/list，再尝试 /v1/panel/tools
   let res = await fetch(`${baseUrl}/v1/tools/list`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   }).catch(() => null);
 
   if (!res || !res.ok) {
     res = await fetch(`${baseUrl}/v1/panel/tools`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     }).catch(() => null);
   }
 
@@ -1874,6 +2145,7 @@ export async function fetchCanonicalApprovals(
 ): Promise<CanonicalPendingApproval[]> {
   const res = await fetch(
     `${normalizeBaseUrl(config.baseUrl)}/v1/approvals?session=${encodeURIComponent(sessionId)}`,
+    {headers: await gatewayAuthHeaders()},
   );
   const data = (await checkJson(res)) as {approvals?: CanonicalPendingApproval[]};
   return Array.isArray(data.approvals) ? data.approvals : [];
@@ -1886,16 +2158,36 @@ export async function resolveCanonicalApproval(
   decision: 'approve' | 'reject' | 'cancel',
   reason?: string,
 ): Promise<{kind: 'completed'; text: string; events: CanonicalExecutionEvent[]} | {kind: 'pending'; pending: CanonicalPendingApproval}> {
-  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/approvals/resolve`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      session: pending.session,
-      approval: pending.approval_id,
-      decision,
-      reason,
-    }),
-  });
+  // 解析请求会同步等待工具执行完成（可达数分钟）。显式 5 分钟超时:
+  // 无超时的 fetch 会在侧车重启/断连时永远挂起, UI 永远等不到回填
+  // (2026-10-06 真机: 审批通过后"一直在等回复就没有后续")。
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5 * 60_000);
+  let res: Response;
+  try {
+    // G10: 审批解决是敏感端点 —— 带桌面壳自铸的回环令牌 (无令牌 = 兼容路径)。
+    const auth = await gatewayAuthHeaders();
+    res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/approvals/resolve`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', ...auth},
+      body: JSON.stringify({
+        session: pending.session,
+        approval: pending.approval_id,
+        decision,
+        reason,
+      }),
+      signal: controller.signal,
+    });
+  } catch (caught) {
+    const aborted = caught instanceof DOMException && caught.name === 'AbortError';
+    throw new Error(
+      aborted
+        ? '审批执行超时（5 分钟未返回）——后端可能仍在执行；稍后重试或重启应用。'
+        : `审批请求失败：${caught instanceof Error ? caught.message : String(caught)}`,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
   if (res.status === 202) {
     const next = (await res.json()) as CanonicalPendingApproval;
     return {kind: 'pending', pending: next};
@@ -1925,37 +2217,39 @@ export async function grantToolPermission(
 }
 
 /** 写入记忆条目 */
+/**
+ * 写入一条记忆（契约 §5：POST /v1/memory/append {session, role, content}）。
+ * 0 装修正（⑥）：旧签名收 category/sessionId 并把 `[category]` 拼进正文——
+ * 后端 schema 不存 category（契约诚实边界），那是把假分类藏进文本，已拆除。
+ * session 恒定走面板专用 UUID 账本（下方），调用方不再传 'me' 之类的假标签。
+ */
 export async function appendMemoryEpisode(
   config: ApeirethConfig,
   content: string,
-  category: string = 'fact',
-  sessionId: string = 'me',
 ): Promise<boolean> {
   // The canonical gateway requires a UUID session. The panel keeps one stable
   // "panel memory" session so scattered writes stay discoverable.
   const MEMORY_SESSION_KEY = 'apeireth-panel-memory-session';
-  let target = sessionId && sessionId !== 'me' ? sessionId : '';
-  if (!target) {
-    try {
-      target = localStorage.getItem(MEMORY_SESSION_KEY) || '';
-      if (!target) {
-        target = crypto.randomUUID();
-        localStorage.setItem(MEMORY_SESSION_KEY, target);
-      }
-    } catch {
+  let target = '';
+  try {
+    target = localStorage.getItem(MEMORY_SESSION_KEY) || '';
+    if (!target) {
       target = crypto.randomUUID();
+      localStorage.setItem(MEMORY_SESSION_KEY, target);
     }
+  } catch {
+    target = crypto.randomUUID();
   }
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/memory/append`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+      ...(await gatewayAuthHeaders()),
     },
     body: JSON.stringify({
       session: target,
       role: 'user',
-      content: `[${category}] ${content}`,
+      content,
     }),
   });
   return res.ok;
@@ -1978,6 +2272,9 @@ export function loadConversations(): Conversation[] {
       pinned: !!item.pinned,
       archived: !!item.archived,
       model: typeof item.model === 'string' ? item.model : undefined,
+      personaId: typeof item.personaId === 'string' ? item.personaId : undefined,
+      personaName: typeof item.personaName === 'string' ? item.personaName : undefined,
+      workspace: typeof item.workspace === 'string' ? item.workspace : undefined,
     }));
   } catch {
     return [];
@@ -2012,6 +2309,12 @@ export interface CompanionEvent {
   text: string;
   ts: number;
   kind?: string;
+  /**
+   * 原始事件 payload（approval_required/approval_resolved 等网关卡事件透传，
+   * 供 T0 壳做会话级路由：主页待签标 + 对话内待签文书卡实时推入）。
+   * 字段形状以后端 events.rs 为准，前端经 chat-shell/gateway-events.ts 归一化。
+   */
+  payload?: Record<string, unknown>;
 }
 
 /**
@@ -2019,22 +2322,25 @@ export interface CompanionEvent {
  * 接收 backend_ready / approval_required / approval_resolved 等网关级事件,
  * 转成轻量文本行交给调用方 (toast / 对话流纪律)。
  * 支持断线指数退避自动重连 (2s → 30s)。
+ * 认证收口: 有回环令牌走 fetch 流式 (EventSource 无法带 Authorization 头,
+ * 令牌门全 API 面化后带令牌客户端必须 fetch 过门); 无令牌 = 三态门未设口径
+ * 照旧, 保留 EventSource 原路径 (含无 EventSource 时静默不建链)。
  */
 export function subscribeCompanionEvents(
   config: ApeirethConfig,
   onEvent: (event: CompanionEvent) => void,
 ): () => void {
-  if (typeof EventSource === 'undefined') return () => {};
   const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
   let active = true;
   let source: EventSource | null = null;
+  let streamClose: (() => void) | null = null;
   let retryDelay = 2000;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const handler = (kind: string) => (msg: MessageEvent) => {
+  const dispatch = (kind: string, data: string) => {
     let payload: Record<string, unknown> | null = null;
     try {
-      payload = JSON.parse(typeof msg.data === 'string' ? msg.data : '');
+      payload = JSON.parse(data);
     } catch {
       payload = null;
     }
@@ -2047,12 +2353,58 @@ export function subscribeCompanionEvents(
     } else if (kind === 'approval_resolved') {
       text = '[审批已处理]';
     }
-    if (text) onEvent({text, ts: Date.now(), kind});
+    if (text) onEvent({text, ts: Date.now(), kind, payload: payload ?? undefined});
+  };
+
+  const handler = (kind: string) => (msg: MessageEvent) => {
+    dispatch(kind, typeof msg.data === 'string' ? msg.data : '');
+  };
+
+  const scheduleRetry = () => {
+    retryTimer = setTimeout(connect, retryDelay);
+    retryDelay = Math.min(retryDelay * 1.5, 30000);
   };
 
   const connect = () => {
     if (!active) return;
-    const es = new EventSource(url);
+    void openChannel();
+  };
+
+  async function openChannel(): Promise<void> {
+    const auth = await gatewayAuthHeaders();
+    if (!active) return;
+    if (auth.Authorization) {
+      // EventSource 无法带 Authorization 头 —— 带令牌过门走 fetch 流式读取。
+      streamClose = startSseFetchStream(url, auth, {
+        onOpen: () => {},
+        onFrame: (frame) => {
+          if (
+            frame.event === 'backend_ready' ||
+            frame.event === 'approval_required' ||
+            frame.event === 'approval_resolved'
+          ) {
+            dispatch(frame.event, frame.data);
+          }
+        },
+        onEnd: () => {
+          if (!active) return;
+          streamClose = null;
+          scheduleRetry();
+        },
+      });
+      return;
+    }
+    // 无令牌 (三态门未设口径照旧) 且环境无 EventSource = 无通道, 静默不建链。
+    if (typeof EventSource === 'undefined') return;
+    let es: EventSource;
+    try {
+      es = new EventSource(url);
+    } catch {
+      // 构造同步抛出不许杀死重试链 (与 presence.ts 同一口径), 按退避续排。
+      if (!active) return;
+      scheduleRetry();
+      return;
+    }
     source = es;
     es.addEventListener('backend_ready', handler('backend_ready') as EventListener);
     es.addEventListener('approval_required', handler('approval_required') as EventListener);
@@ -2061,10 +2413,9 @@ export function subscribeCompanionEvents(
       if (source === es) source = null;
       es.close();
       if (!active) return;
-      retryTimer = setTimeout(connect, retryDelay);
-      retryDelay = Math.min(retryDelay * 1.5, 30000);
+      scheduleRetry();
     };
-  };
+  }
 
   connect();
 
@@ -2076,6 +2427,8 @@ export function subscribeCompanionEvents(
     }
     source?.close();
     source = null;
+    streamClose?.();
+    streamClose = null;
   };
 }
 
@@ -2149,27 +2502,7 @@ async function postJson(config: ApeirethConfig, path: string, body: unknown): Pr
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      return {ok: false, status: res.status, error: (data && (data as {message?: string}).message) || `HTTP ${res.status}`};
-    }
-    return {ok: true, status: res.status, data};
-  } catch (caught) {
-    return {ok: false, status: 0, error: caught instanceof Error ? caught.message : String(caught)};
-  }
-}
-
-async function patchJson(config: ApeirethConfig, path: string, body: unknown): Promise<{ok: boolean; status: number; data?: unknown; error?: string}> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+        ...(await gatewayAuthHeaders()),
       },
       body: JSON.stringify(body),
     });
@@ -2184,27 +2517,30 @@ async function patchJson(config: ApeirethConfig, path: string, body: unknown): P
 }
 
 // --- Memory governance ---
+// error 分支带 status：409 = expected_rev 修订冲突（契约 §5），视图据此呈现
+// 真实冲突态并重新对齐账本，不静默重试（memory-ledger.classifyMemoryMutationError）。
+export type MemoryMutationResult = GovernedEpisodeItem | {error: string; status?: number};
 
-export async function forgetMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number, reason?: string): Promise<GovernedEpisodeItem | {error: string}> {
+export async function forgetMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number, reason?: string): Promise<MemoryMutationResult> {
   const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/forget`, {expected_rev: expectedRev, reason});
-  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'forget failed'};
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'forget failed', status: r.status};
 }
 
-export async function protectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<GovernedEpisodeItem | {error: string}> {
+export async function protectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<MemoryMutationResult> {
   const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/protect`, {expected_rev: expectedRev});
-  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'protect failed'};
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'protect failed', status: r.status};
 }
 
-export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<GovernedEpisodeItem | {error: string}> {
+export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<MemoryMutationResult> {
   const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/unprotect`, {expected_rev: expectedRev});
-  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'unprotect failed'};
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'unprotect failed', status: r.status};
 }
 
 // --- Permission grants (list + revoke) ---
 
 export async function fetchGrants(config: ApeirethConfig): Promise<GrantView[]> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/grants`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    headers: await gatewayAuthHeaders(),
   });
   if (!res.ok) return [];
   const data = (await res.json().catch(() => null)) as {
@@ -2234,7 +2570,7 @@ export async function revokeGrant(
 ): Promise<{ok: boolean; error?: string}> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/grants/revoke`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', ...(await gatewayAuthHeaders())},
     body: JSON.stringify({capability: id}),
   });
   if (!res.ok) {
@@ -2246,10 +2582,41 @@ export async function revokeGrant(
 
 // --- Trace ---
 
+/** Trace 摘要 (GET /v1/panel/traces 列表项, 对应 Rust TraceSummaryDto)。 */
+export interface TraceSummaryItem {
+  trace_id: string;
+  span_count: number;
+  started_at: number;
+  root_span: TraceSpanItem;
+}
+
+/**
+ * 执行轨迹列表 (契约 §8, `GET /v1/panel/traces?limit=`)。
+ * 调用方应先由 capabilitySupported(manifest, 'trace.read') 门控。
+ */
+export async function fetchTraceList(
+  config: ApeirethConfig,
+  limit = 50,
+): Promise<TraceSummaryItem[] | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces?limit=${limit}`, {
+      headers: await gatewayAuthHeaders(),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as {message?: string};
+      return {error: err.message || `HTTP ${res.status}`};
+    }
+    const data = (await res.json()) as {traces?: TraceSummaryItem[]};
+    return Array.isArray(data.traces) ? data.traces : [];
+  } catch (caught) {
+    return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
 export async function fetchTraceDetail(config: ApeirethConfig, traceId: string): Promise<TraceSpanItem[] | {error: string}> {
   try {
     const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces/${encodeURIComponent(traceId)}`, {
-      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      headers: await gatewayAuthHeaders(),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as {message?: string};
@@ -2257,6 +2624,76 @@ export async function fetchTraceDetail(config: ApeirethConfig, traceId: string):
     }
     const data = (await res.json()) as {spans?: TraceSpanItem[]};
     return data.spans || [];
+  } catch (caught) {
+    return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+// --- Safety Guard & Workbench ---
+
+export async function fetchGuardStatus(config: ApeirethConfig): Promise<GuardStatus | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/safety/guard/status`, {
+      headers: await gatewayAuthHeaders(),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
+      return {error: err.error?.message || `HTTP ${res.status}`};
+    }
+    return (await res.json()) as GuardStatus;
+  } catch (caught) {
+    return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+export async function fetchGuardEvents(config: ApeirethConfig, limit = 50): Promise<GuardEvent[] | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/safety/guard/events?limit=${limit}`, {
+      headers: await gatewayAuthHeaders(),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
+      return {error: err.error?.message || `HTTP ${res.status}`};
+    }
+    const data = (await res.json()) as {events?: GuardEvent[]};
+    return data.events || [];
+  } catch (caught) {
+    return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+export async function evaluateGuard(config: ApeirethConfig, req: GuardDryRunRequest): Promise<GuardDryRunResponse | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/safety/guard/evaluate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await gatewayAuthHeaders()),
+      },
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
+      return {error: err.error?.message || `HTTP ${res.status}`};
+    }
+    return (await res.json()) as GuardDryRunResponse;
+  } catch (caught) {
+    return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+export async function fetchWorkbenchTurn(config: ApeirethConfig, sessionId?: string): Promise<WorkbenchTurn | null | {error: string}> {
+  try {
+    const query = sessionId ? `?session=${encodeURIComponent(sessionId)}` : '';
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/workbench/turn${query}`, {
+      headers: await gatewayAuthHeaders(),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
+      return {error: err.error?.message || `HTTP ${res.status}`};
+    }
+    const data = (await res.json()) as {turn?: WorkbenchTurn | null};
+    return data.turn ?? null;
   } catch (caught) {
     return {error: caught instanceof Error ? caught.message : String(caught)};
   }

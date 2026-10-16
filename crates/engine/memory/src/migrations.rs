@@ -5,7 +5,9 @@
 //!
 //! 命名规范: `V<version>__<short_description>`.
 
-use rusqlite::{params, Connection, Transaction};
+use rusqlite::{params, Connection, Transaction, TransactionBehavior};
+
+use apeireth_storage::{SqliteConnectionPool, StorageError};
 
 use crate::MemoryError;
 use crate::MemoryResult;
@@ -31,7 +33,7 @@ pub const MIGRATIONS: &[Migration] = &[
     },
     // R179 P1-10: Hallway 表 (wing 内 entity-pair co-occurrence)
     // 跟 6 历史流不一样: 不加 append-only trigger, 允许 recompute 时 UPSERT
-    // (mempalace "preserve L7 dynamics" — strength/stability 必须跨 recompute 保留).
+    // (公开设计 "preserve L7 dynamics" — strength/stability 必须跨 recompute 保留).
     Migration {
         version: 2,
         name: "V2__hallways_for_wings",
@@ -200,7 +202,341 @@ pub const MIGRATIONS: &[Migration] = &[
               );\n\
               CREATE INDEX IF NOT EXISTS idx_research_forgotten_ts ON research_forgotten_artifacts(ts);",
     },
+    // Memory 2.1: additive scope/provenance metadata sidecar. Episodes stay
+    // append-only; existing rows without metadata are interpreted as
+    // session-scoped legacy records by the coordinator.
+    // Renumbered from experimental V9 because current main already shipped
+    // V9/V10 research tables after the shared V8 merge-base.
+    Migration {
+        version: 11,
+        name: "V11__episode_memory_scope_metadata",
+        sql: r#"
+CREATE TABLE IF NOT EXISTS episode_memory_metadata (
+    episode_id TEXT PRIMARY KEY,
+    metadata_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_episode_memory_metadata_scope
+    ON episode_memory_metadata(json_extract(metadata_json, '$.scope.scope'));
+"#,
+    },
+    // Memory 2.2: additive indices for scoped cross-session candidate queries.
+    // Renumbered from experimental V10.
+    Migration {
+        version: 12,
+        name: "V12__episode_metadata_scope_indices",
+        sql: r#"
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_project
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.project_id')
+    );
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_session
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.session_id')
+    );
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_user
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.user_id')
+    );
+CREATE INDEX IF NOT EXISTS idx_episode_metadata_scope_persona
+    ON episode_memory_metadata(
+        json_extract(metadata_json, '$.scope.scope'),
+        json_extract(metadata_json, '$.scope.persona_id'),
+        json_extract(metadata_json, '$.scope.user_id')
+    );
+"#,
+    },
+    // Memory 2.2: durable temporal facts, access telemetry, commitments,
+    // persona revisions, lineage, consolidation records, and proactive recall.
+    // All structures are additive and every statement is safe to replay.
+    // Renumbered from experimental V11.
+    Migration {
+        version: 13,
+        name: "V13__memory_2_2_durable_tables",
+        sql: V13_SQL,
+    },
+    // Memory 2.2 governance completion: explicit principal ownership and
+    // durable persona tombstones. Legacy rows are intentionally not backfilled.
+    // Renumbered from experimental V12.
+    Migration {
+        version: 14,
+        name: "V14__principal_ownership_and_persona_governance",
+        sql: V14_SQL,
+    },
+    // M27 / L 组 (2026-09 安全审计): 把运行时懒建表 `dedup_fingerprints`
+    // (dedup.rs `ensure_dedup_table`) 收编进迁移列表 — schema 快照与迁移
+    // 列表不再漂移. DDL 与 dedup.rs 的懒建版本逐字一致 (幂等, 老库里两边
+    // 谁先跑都得到同一张表). `episode_memory_metadata` 已于 V11 收录.
+    Migration {
+        version: 15,
+        name: "V15__dedup_fingerprints",
+        sql: r#"
+CREATE TABLE IF NOT EXISTS dedup_fingerprints (
+    namespace    TEXT NOT NULL,
+    fingerprint  TEXT NOT NULL,
+    last_seen_ms INTEGER NOT NULL,
+    PRIMARY KEY (namespace, fingerprint)
+);
+CREATE INDEX IF NOT EXISTS idx_dedup_last_seen
+    ON dedup_fingerprints(last_seen_ms);
+"#,
+    },
 ];
+
+const V14_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS memory_principal_sessions (
+    principal_id TEXT NOT NULL,
+    session_id TEXT NOT NULL PRIMARY KEY,
+    created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_principal_sessions_principal
+    ON memory_principal_sessions(principal_id, session_id);
+
+CREATE TABLE IF NOT EXISTS persona_profile_governance (
+    persona_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    tombstoned_at_ms INTEGER,
+    protected INTEGER NOT NULL DEFAULT 0,
+    revision INTEGER NOT NULL DEFAULT 0,
+    updated_at_ms INTEGER,
+    reason TEXT,
+    PRIMARY KEY (persona_id, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_persona_profile_governance_visibility
+    ON persona_profile_governance(subject_id, tombstoned_at_ms, protected);
+CREATE TRIGGER IF NOT EXISTS persona_profile_governance_no_delete
+BEFORE DELETE ON persona_profile_governance BEGIN
+    SELECT RAISE(ABORT, 'persona_profile_governance: hard DELETE forbidden');
+END;
+CREATE TRIGGER IF NOT EXISTS persona_profile_governance_no_tombstone_reversal
+BEFORE UPDATE ON persona_profile_governance
+FOR EACH ROW
+WHEN OLD.tombstoned_at_ms IS NOT NULL AND NEW.tombstoned_at_ms IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'persona_profile_governance: tombstone reversal forbidden');
+END;
+"#;
+
+const V13_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS temporal_graph_facts (
+    id TEXT PRIMARY KEY,
+    relation_key TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    predicate TEXT NOT NULL,
+    object_id TEXT NOT NULL,
+    valid_from_ms INTEGER NOT NULL,
+    valid_until_ms INTEGER,
+    believed_at_ms INTEGER NOT NULL,
+    source_episode_id TEXT,
+    scope_json TEXT NOT NULL DEFAULT '{}',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    confidence REAL NOT NULL DEFAULT 0.5,
+    revision INTEGER NOT NULL DEFAULT 0,
+    supersedes_id TEXT,
+    retracted_at_ms INTEGER,
+    created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_temporal_graph_facts_relation
+    ON temporal_graph_facts(relation_key, valid_from_ms);
+CREATE INDEX IF NOT EXISTS idx_temporal_graph_facts_subject
+    ON temporal_graph_facts(subject_id, predicate, valid_from_ms);
+CREATE INDEX IF NOT EXISTS idx_temporal_graph_facts_object
+    ON temporal_graph_facts(object_id, predicate, valid_from_ms);
+CREATE INDEX IF NOT EXISTS idx_temporal_graph_facts_active
+    ON temporal_graph_facts(subject_id, valid_until_ms, retracted_at_ms);
+CREATE INDEX IF NOT EXISTS idx_temporal_graph_facts_source
+    ON temporal_graph_facts(source_episode_id);
+
+CREATE TABLE IF NOT EXISTS memory_access_events (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    subject_id TEXT,
+    session_id TEXT,
+    accessed_at_ms INTEGER NOT NULL,
+    query TEXT,
+    access_kind TEXT NOT NULL DEFAULT 'recall',
+    rank INTEGER,
+    score REAL,
+    metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_memory_access_events_memory
+    ON memory_access_events(memory_id, accessed_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_access_events_subject_time
+    ON memory_access_events(subject_id, accessed_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_access_events_session_time
+    ON memory_access_events(session_id, accessed_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS memory_access_aggregates (
+    memory_id TEXT NOT NULL,
+    bucket_start_ms INTEGER NOT NULL,
+    access_count INTEGER NOT NULL DEFAULT 0,
+    last_accessed_at_ms INTEGER,
+    cumulative_score REAL NOT NULL DEFAULT 0.0,
+    updated_at_ms INTEGER NOT NULL,
+    PRIMARY KEY (memory_id, bucket_start_ms)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_access_aggregates_recent
+    ON memory_access_aggregates(memory_id, last_accessed_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS commitments (
+    id TEXT PRIMARY KEY,
+    subject_id TEXT NOT NULL,
+    statement TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    due_at_ms INTEGER,
+    scope_json TEXT NOT NULL DEFAULT '{}',
+    source_episode_id TEXT,
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    confidence REAL NOT NULL DEFAULT 0.5,
+    revision INTEGER NOT NULL DEFAULT 0,
+    supersedes_id TEXT,
+    retracted_at_ms INTEGER,
+    completed_at_ms INTEGER,
+    created_at_ms INTEGER NOT NULL,
+    updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commitments_subject_status
+    ON commitments(subject_id, status, due_at_ms);
+CREATE INDEX IF NOT EXISTS idx_commitments_due
+    ON commitments(status, due_at_ms);
+CREATE INDEX IF NOT EXISTS idx_commitments_source
+    ON commitments(source_episode_id);
+
+CREATE TABLE IF NOT EXISTS commitment_events (
+    id TEXT PRIMARY KEY,
+    commitment_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    event_at_ms INTEGER NOT NULL,
+    source_episode_id TEXT,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commitment_events_commitment
+    ON commitment_events(commitment_id, event_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_commitment_events_type_time
+    ON commitment_events(event_type, event_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS persona_profiles (
+    persona_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    portrait TEXT NOT NULL DEFAULT '',
+    traits_json TEXT NOT NULL DEFAULT '[]',
+    known_facts_json TEXT NOT NULL DEFAULT '[]',
+    shared_experiences_json TEXT NOT NULL DEFAULT '[]',
+    revision INTEGER NOT NULL DEFAULT 0,
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    created_at_ms INTEGER NOT NULL,
+    updated_at_ms INTEGER NOT NULL,
+    PRIMARY KEY (persona_id, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_persona_profiles_subject
+    ON persona_profiles(subject_id, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS persona_profile_history (
+    id TEXT PRIMARY KEY,
+    persona_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    portrait TEXT NOT NULL DEFAULT '',
+    traits_json TEXT NOT NULL DEFAULT '[]',
+    known_facts_json TEXT NOT NULL DEFAULT '[]',
+    shared_experiences_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    changed_at_ms INTEGER NOT NULL,
+    change_reason TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_persona_profile_history_revision
+    ON persona_profile_history(persona_id, subject_id, revision);
+CREATE INDEX IF NOT EXISTS idx_persona_profile_history_subject
+    ON persona_profile_history(subject_id, changed_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS memory_lineage (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    parent_memory_id TEXT,
+    relation TEXT NOT NULL,
+    source_kind TEXT,
+    source_id TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_lineage_memory
+    ON memory_lineage(memory_id, created_at_ms);
+CREATE INDEX IF NOT EXISTS idx_memory_lineage_parent
+    ON memory_lineage(parent_memory_id, created_at_ms);
+CREATE INDEX IF NOT EXISTS idx_memory_lineage_source
+    ON memory_lineage(source_kind, source_id);
+
+CREATE TABLE IF NOT EXISTS memory_consolidation_records (
+    id TEXT PRIMARY KEY,
+    subject_id TEXT,
+    session_id TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    started_at_ms INTEGER NOT NULL,
+    completed_at_ms INTEGER,
+    input_count INTEGER NOT NULL DEFAULT 0,
+    output_count INTEGER NOT NULL DEFAULT 0,
+    summary TEXT,
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_consolidation_subject
+    ON memory_consolidation_records(subject_id, started_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_consolidation_session
+    ON memory_consolidation_records(session_id, started_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_consolidation_status
+    ON memory_consolidation_records(status, started_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS proactive_recall_candidates (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    scope_json TEXT NOT NULL DEFAULT '{}',
+    cue TEXT NOT NULL,
+    score REAL NOT NULL DEFAULT 0.0,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    expires_at_ms INTEGER,
+    consumed_at_ms INTEGER,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_proactive_recall_pending
+    ON proactive_recall_candidates(subject_id, status, expires_at_ms);
+CREATE INDEX IF NOT EXISTS idx_proactive_recall_memory
+    ON proactive_recall_candidates(memory_id, created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_proactive_recall_score
+    ON proactive_recall_candidates(subject_id, score DESC, created_at_ms DESC);
+
+-- Historical/audit records remain durable; callers use retraction/status fields.
+CREATE TRIGGER IF NOT EXISTS temporal_graph_facts_no_delete
+BEFORE DELETE ON temporal_graph_facts BEGIN
+    SELECT RAISE(ABORT, 'temporal_graph_facts: hard DELETE forbidden');
+END;
+CREATE TRIGGER IF NOT EXISTS memory_access_events_no_delete
+BEFORE DELETE ON memory_access_events BEGIN
+    SELECT RAISE(ABORT, 'memory_access_events: hard DELETE forbidden');
+END;
+CREATE TRIGGER IF NOT EXISTS commitment_events_no_delete
+BEFORE DELETE ON commitment_events BEGIN
+    SELECT RAISE(ABORT, 'commitment_events: hard DELETE forbidden');
+END;
+CREATE TRIGGER IF NOT EXISTS persona_profile_history_no_delete
+BEFORE DELETE ON persona_profile_history BEGIN
+    SELECT RAISE(ABORT, 'persona_profile_history: hard DELETE forbidden');
+END;
+CREATE TRIGGER IF NOT EXISTS memory_lineage_no_delete
+BEFORE DELETE ON memory_lineage BEGIN
+    SELECT RAISE(ABORT, 'memory_lineage: hard DELETE forbidden');
+END;
+CREATE TRIGGER IF NOT EXISTS memory_consolidation_records_no_delete
+BEFORE DELETE ON memory_consolidation_records BEGIN
+    SELECT RAISE(ABORT, 'memory_consolidation_records: hard DELETE forbidden');
+END;
+"#;
 
 const HALLWAYS_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS hallways (
@@ -413,16 +749,30 @@ const APPEND_ONLY_TRIGGERS: &[(&str, &str)] = &[
 
 /// 应用全部未执行的 migrations.
 ///
-/// 事务保护: 单条 migration 内所有 DDL 在一个事务内执行, 失败回滚.
+/// 事务保护: 基表 + 触发器 + 未执行 migration + 版本簿记在**一个** IMMEDIATE
+/// 事务内执行, 失败整体回滚 (migration SQL 本身保持逐条幂等, 见 `MIGRATIONS`
+/// 注释; 启动期只提交一次, 少一次 WAL 往返)。
 pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
-    // 1. 建表总是先跑一次 (CREATE IF NOT EXISTS) — 后续 migration 再叠加 trigger.
-    let tx = conn.transaction()?;
-    tx.execute_batch(INIT_SQL)?;
-    tx.commit()?;
+    // 0. M27 (L 组): 迁移前列集校验 — 如果同名表已被**别套 schema 家族**
+    // (如 `apeireth-storage` 的 `episodes(id, data)` 最小 layout) 创建过,
+    // 必须先报清楚的错. 否则 `CREATE TABLE IF NOT EXISTS` 静默 no-op,
+    // 之后 INSERT 才以 "no such column" 这种难懂的错爆炸 (样板:
+    // `commitments.rs` 的 `validate_schema_columns`).
+    validate_owned_schema(conn)?;
 
-    // 2. 注册 6 流 append-only triggers (幂等).
+    // 1..3. 建表 (CREATE IF NOT EXISTS) + 6 流 append-only 触发器注册 (幂等)
+    //     + 4. 记录已应用的 migration.
     // 规则: 禁止任何原地修改; 唯一例外是 "软删除" (tombstoned_at 从 NULL 变为非 NULL).
     // 软删除也是不可逆的 (OLD.tombstoned_at 必须是 NULL).
+    //
+    // M21: 用 BEGIN IMMEDIATE 从一开始就拿写锁, 版本重读放在**事务内**
+    // (读-判-写同一把写锁), 与 `storage/migrations.rs:109` 同模式 —— 两个
+    // 进程同时启动时按写锁串行而非 BUSY_SNAPSHOT. SQL 全部幂等
+    // (IF NOT EXISTS), 并发下最坏是 busy_timeout 内等待.
+    let tx: Transaction<'_> = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
+    tx.execute_batch(INIT_SQL)?;
+
     for (table, reason) in APPEND_ONLY_TRIGGERS {
         let update_trigger = format!(
             "CREATE TRIGGER IF NOT EXISTS {table}_no_inplace_update
@@ -440,24 +790,103 @@ pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
                  SELECT RAISE(ABORT, '{reason}');
              END;"
         );
-        conn.execute_batch(&update_trigger)?;
-        conn.execute_batch(&delete_trigger)?;
+        tx.execute_batch(&update_trigger)?;
+        tx.execute_batch(&delete_trigger)?;
     }
 
-    // 3. 记录已应用的 migration.
     for m in MIGRATIONS {
-        if migration_applied(conn, m.version)? {
+        if !migration_applied(&tx, m.version)? {
+            tx.execute_batch(m.sql)?;
+            tx.execute(
+                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?1, ?2, ?3)",
+                params![m.version, m.name, now_unix()],
+            )?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// memory schema 家族拥有的核心表 → 必需列 (M27 / L 组).
+///
+/// 与 `apeireth-storage` 的 `episodes(id, data)` / `sessions(id, data)` 等
+/// 最小 layout 同名不同义: 两套迁移先后处理同一 .db 文件时,
+/// `CREATE TABLE IF NOT EXISTS` 会静默 no-op, 之后 INSERT 因缺列报难懂的错.
+const MEMORY_OWNED_TABLES: &[(&str, &[&str])] = &[
+    (
+        "episodes",
+        &[
+            "id",
+            "continuity_id",
+            "session_id",
+            "timestamp",
+            "role",
+            "content",
+        ],
+    ),
+    (
+        "agent_traces",
+        &["span_id", "trace_id", "kind", "actor", "session_id"],
+    ),
+    ("sessions", &["id", "started_at", "last_active_at"]),
+    ("notes", &["id", "timestamp", "content"]),
+];
+
+/// 迁移前列集校验 (M27 / L 组): 已存在的同名表必须已经是 memory layout.
+///
+/// 借用 `commitments.rs` 的 `validate_schema_columns` 样板: 直接对
+/// `sqlite_master` 查列集, 缺列即拒绝启动并给出可操作的信息 (而不是让
+/// 后续 INSERT 崩一个 "no such column").
+fn validate_owned_schema(conn: &Connection) -> MemoryResult<()> {
+    for (table, required) in MEMORY_OWNED_TABLES {
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+                params![table],
+                |row| row.get(0),
+            )
+            .map_err(MemoryError::from)?;
+        if !exists {
             continue;
         }
-        let tx: Transaction<'_> = conn.transaction()?;
-        tx.execute_batch(m.sql)?;
-        tx.execute(
-            "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?1, ?2, ?3)",
-            params![m.version, m.name, now_unix()],
-        )?;
-        tx.commit()?;
+        // 表名来自本文件静态白名单, 无注入面.
+        let mut statement = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+        let actual = statement
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let missing: Vec<&str> = required
+            .iter()
+            .copied()
+            .filter(|column| !actual.iter().any(|actual| actual == column))
+            .collect();
+        if !missing.is_empty() {
+            return Err(MemoryError::Invalid(format!(
+                "table `{table}` exists with a foreign schema layout (missing memory columns: {}). \
+                 The database file is owned by another schema family (e.g. apeireth-storage's \
+                 minimal (id, data) layout); memory and storage must not share one .db file — \
+                 use separate database paths",
+                missing.join(", ")
+            )));
+        }
     }
     Ok(())
+}
+
+/// Applies the memory schema through the pool's serialized writer.
+///
+/// This is the bootstrap entry point for applications that share one
+/// [`SqliteConnectionPool`] across memory backends. It deliberately does not
+/// open a connection or run migrations on a reader, so stores can only be
+/// constructed after the complete V1-V14 schema is installed.
+pub async fn run_migrations_on_pool(pool: &SqliteConnectionPool) -> Result<(), StorageError> {
+    pool.write(|conn| {
+        run_migrations(conn).map_err(|error| StorageError::Migration {
+            version: 0,
+            name: "cognitive_memory",
+            message: error.to_string(),
+        })
+    })
+    .await
 }
 
 fn migration_applied(conn: &Connection, version: i64) -> MemoryResult<bool> {
@@ -483,6 +912,44 @@ fn now_unix() -> i64 {
 mod tests {
     use super::*;
     use crate::SqliteMemoryStore;
+
+    #[tokio::test]
+    async fn pooled_migrations_are_idempotent_across_restart() {
+        let path = tempfile::NamedTempFile::new().unwrap();
+        let path = path.path().to_owned();
+
+        let pool = apeireth_storage::SqliteConnectionPool::open(&path)
+            .await
+            .unwrap();
+        run_migrations_on_pool(&pool).await.unwrap();
+        run_migrations_on_pool(&pool).await.unwrap();
+        let first = pool
+            .read(|conn| {
+                Ok(
+                    conn.query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                        row.get::<_, i64>(0)
+                    })?,
+                )
+            })
+            .unwrap();
+        assert_eq!(first, MIGRATIONS.len() as i64);
+        drop(pool);
+
+        let reopened = apeireth_storage::SqliteConnectionPool::open(&path)
+            .await
+            .unwrap();
+        run_migrations_on_pool(&reopened).await.unwrap();
+        let second = reopened
+            .read(|conn| {
+                Ok(
+                    conn.query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                        row.get::<_, i64>(0)
+                    })?,
+                )
+            })
+            .unwrap();
+        assert_eq!(second, first);
+    }
 
     #[test]
     fn migrations_apply_idempotently() {
@@ -561,7 +1028,7 @@ mod tests {
         // 全新 in-memory DB: V1-V7 全部应用, schema_migrations 记录完整.
         let store = SqliteMemoryStore::open_in_memory().unwrap();
         let applied = store.applied_migrations().unwrap();
-        for v in 1..=7 {
+        for v in 1..=9 {
             assert!(
                 applied.contains(&v),
                 "migration V{v} should be applied on fresh db"
@@ -665,8 +1132,8 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            6,
-            "V5/V6/V7/V8/V9/V10 各一条"
+            11,
+            "V5/V6/V7/V8/V9/V10/V11/V12/V13/V14/V15 各一条 (V15 = M27 收编 dedup_fingerprints)"
         );
     }
 
@@ -692,5 +1159,65 @@ mod tests {
             crate::memory_governance::MemoryGovernanceStatus::Active
         );
         assert!(!recent[0].protected);
+    }
+
+    /// M27 (L 组): 别套 schema 家族 (storage 最小 `(id, data)` layout) 占位的
+    /// episodes 表必须在迁移前被拒绝 — 否则 `CREATE TABLE IF NOT EXISTS` 静默
+    /// no-op, 之后 INSERT 才报 "no such column" 难懂的错.
+    #[test]
+    fn foreign_episodes_layout_is_rejected_before_migration() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE episodes (id TEXT PRIMARY KEY, data TEXT)")
+            .unwrap();
+        let err = run_migrations(&mut conn).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("episodes"), "错误必须指名问题表: {msg}");
+        assert!(
+            msg.contains("foreign schema layout"),
+            "错误必须说明是外来 layout: {msg}"
+        );
+    }
+
+    /// M27: memory 自己的 layout 不得被误伤 (fresh DB 全跑完 + 重跑都通过).
+    #[test]
+    fn memory_owned_layout_passes_validation() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        {
+            let conn = store.conn().unwrap();
+            let mut guard = conn;
+            run_migrations(&mut guard).unwrap();
+        }
+    }
+
+    /// M21: 版本重读在 BEGIN IMMEDIATE 事务内 — 已应用的 migration 不再
+    /// 重复执行/重复插行 (幂等), 两进程并发按写锁串行而非 BUSY_SNAPSHOT.
+    #[test]
+    fn migration_version_is_rechecked_inside_immediate_transaction() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        let before = store.applied_migrations().unwrap();
+        {
+            let conn = store.conn().unwrap();
+            let mut guard = conn;
+            run_migrations(&mut guard).unwrap();
+        }
+        let after = store.applied_migrations().unwrap();
+        assert_eq!(before, after, "Immediate 事务内重读版本, 不得重复插入");
+    }
+
+    /// V15 (M27 / L 组): dedup_fingerprints 必须由迁移列表创建 —
+    /// 不再只靠 dedup.rs 的懒建表 (schema 快照与迁移列表一致).
+    #[test]
+    fn v15_creates_dedup_fingerprints() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        assert!(store.applied_migrations().unwrap().contains(&15));
+        let conn = store.conn().unwrap();
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'dedup_fingerprints')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(exists, "V15 必须创建 dedup_fingerprints");
     }
 }

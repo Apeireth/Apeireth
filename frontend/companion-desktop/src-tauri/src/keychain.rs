@@ -124,7 +124,9 @@ mod platform {
                 }
             }
         }
-        String::from_utf8(blob.to_vec()).ok().filter(|s| !s.is_empty())
+        String::from_utf8(blob.to_vec())
+            .ok()
+            .filter(|s| !s.is_empty())
     }
 
     pub fn set(account: &str, key: &str) -> Result<(), String> {
@@ -132,7 +134,7 @@ mod platform {
         let username = wide(account);
         let mut blob = to_blob(key);
 
-        let mut credential = CREDENTIALW {
+        let credential = CREDENTIALW {
             Flags: 0,
             Type: CRED_TYPE_GENERIC,
             TargetName: target.as_ptr() as *mut u16,
@@ -152,7 +154,7 @@ mod platform {
 
         // SAFETY: all pointer fields reference the buffers above, which stay
         // alive for the duration of the call.
-        let ok = unsafe { CredWriteW(&mut credential, 0) };
+        let ok = unsafe { CredWriteW(&credential, 0) };
         if ok == 0 {
             let code = std::io::Error::last_os_error();
             return Err(format!("CredWriteW failed: {code}"));
@@ -247,7 +249,7 @@ mod platform {
     }
 
     pub fn get(account: &str) -> Result<Option<String>, String> {
-        match entry(account).and_then(|e| e.get_password()) {
+        match entry(account)?.get_password() {
             Ok(key) if !key.is_empty() => Ok(Some(key)),
             Ok(_) => Ok(None),
             Err(keyring::Error::NoEntry) => Ok(None),

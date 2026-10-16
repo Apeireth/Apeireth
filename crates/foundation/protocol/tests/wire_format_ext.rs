@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 
 #[test]
 fn ws_frame_type_str_returns_8_distinct_strings() {
-    // 8 帧 type_str 应返 8 个唯一字符串 (VCP §3.2 设计意图)
+    // 8 帧 type_str 应返 8 个唯一字符串 (协议规范 §3.2 设计意图)
     let frames = [
         WsFrame::ToolInvoke(ToolInvokeFrame {
             req_id: "r1".into(),
@@ -114,7 +114,7 @@ fn ws_frame_stream_chunk_preserves_done_flag() {
 
 #[test]
 fn ws_protocol_version_and_ttl_constants() {
-    // 蓝图 §2.3 / §2.4 D-03 决策
+    // 接口契约 / §2.4 D-03 决策
     assert_eq!(WS_PROTOCOL_VERSION, "1", "WS 协议版本");
     assert_eq!(WS_TOKEN_DEFAULT_TTL_SECS, 300, "WS token 5min TTL");
 }
@@ -127,8 +127,8 @@ fn ws_protocol_version_and_ttl_constants() {
 fn stream_bridge_concatenates_chunks() {
     // 推 2 个 chunk, finish 拿拼接结果
     let mut b = StreamBridge::new();
-    b.push_chunk("hello ");
-    b.push_chunk("world");
+    b.push_chunk("hello ").expect("within limits");
+    b.push_chunk("world").expect("within limits");
     assert_eq!(b.chunk_count(), 2);
     let s = b.finish().expect("finish utf8");
     assert_eq!(s, "hello world");
@@ -140,7 +140,8 @@ fn stream_bridge_concatenates_chunks() {
 fn stream_bridge_finish_invalid_utf8_returns_err() {
     // 推非法 UTF-8 字节 → finish 返 Err
     let mut b = StreamBridge::new();
-    b.push_chunk(&[0xFF, 0xFE, 0xFD][..]); // 单独 bytes 非法 UTF-8
+    b.push_chunk(&[0xFF, 0xFE, 0xFD][..])
+        .expect("within limits"); // 单独 bytes 非法 UTF-8
     let r = b.finish();
     assert!(matches!(r, Err(BridgeExtError::InvalidUtf8)), "got: {r:?}");
 }
@@ -175,7 +176,7 @@ fn queue_bridge_zero_capacity_fails_construct() {
 
 #[test]
 fn is_tool_result_error_chinese_prefix() {
-    // 中文错误前缀 (VCP §3.2 多语言支持)
+    // 中文错误前缀 (协议规范 §3.2 多语言支持)
     assert!(is_tool_result_error(&json!("[错误] 数据库连接失败")));
     assert!(is_tool_result_error(&json!("错误：权限不足")));
     assert!(is_tool_result_error(&json!("失败：网络超时")));

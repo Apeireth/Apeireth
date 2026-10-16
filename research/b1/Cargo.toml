@@ -1,0 +1,15 @@
+[package]
+name = "apeireth-research-b1"
+version = "0.1.0"
+edition = "2021"
+description = "B1 拓扑记忆实验确定性骨架 (Phase 0/1, 0 LLM). 独立 crate, 不进主 workspace 默认构建."
+license = "Apache-2.0 OR MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+apeireth-research-runner = { path = "../runners" }
+
+[dev-dependencies]
+# 仅用于 vendor 漂移检测测试 (协议 §7.2 要求 SHA-256 比对; 运行时依赖不加任何额外 crate).
+sha2 = "0.10"

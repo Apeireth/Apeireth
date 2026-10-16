@@ -1,0 +1,359 @@
+crates/adapters/gateway/src/admin.rs:315:/// (本地 Ollama/vLLM 开发场景)。远端明文 HTTP 会把 Bearer API key 裸奔。
+crates/adapters/sdk/src/sandbox/mod.rs:739:        let cursor = LogCursor {
+crates/adapters/sdk/src/sandbox/mod.rs:748:            cursor,
+crates/adapters/sdk/src/sandbox/mod.rs:749:            |mut cursor| async {
+crates/adapters/sdk/src/sandbox/mod.rs:751:                    if let Some(event) = cursor.queue.pop_front() {
+crates/adapters/sdk/src/sandbox/mod.rs:752:                        return Some((Ok(event), cursor));
+crates/adapters/sdk/src/sandbox/mod.rs:754:                    if cursor.done || cursor.next_seq >= SANDBOX_MAX_LOG_CHUNKS {
+crates/adapters/sdk/src/sandbox/mod.rs:758:                        sandbox_id: cursor.sandbox_id,
+crates/adapters/sdk/src/sandbox/mod.rs:759:                        since_seq: cursor.next_seq,
+crates/adapters/sdk/src/sandbox/mod.rs:762:                    match call_op_on(&cursor.transport, cursor.timeout_ms, request).await {
+crates/adapters/sdk/src/sandbox/mod.rs:765:                                cursor.next_seq = newest.seq + 1;
+crates/adapters/sdk/src/sandbox/mod.rs:767:                            cursor.queue.extend(events);
+crates/adapters/sdk/src/sandbox/mod.rs:768:                            cursor.done = last;
+crates/adapters/sdk/src/sandbox/mod.rs:774:                            cursor.done = true;
+crates/adapters/sdk/src/sandbox/mod.rs:775:                            return Some((Err(err), cursor));
+crates/adapters/sdk/src/sandbox/mod.rs:778:                            cursor.done = true;
+crates/adapters/sdk/src/sandbox/mod.rs:779:                            return Some((Err(err), cursor));
+crates/adapters/sdk/src/sandbox/mod.rs:897:struct LogCursor {
+crates/capabilities/tools/src/guardrail.rs:31:    SlackToken,
+crates/capabilities/tools/src/guardrail.rs:233:        // 5. Slack Token 扫描 (xox[baprs]-...)
+crates/capabilities/tools/src/guardrail.rs:234:        let slack_prefixes = ["xoxb-", "xoxp-", "xoxa-", "xoxr-", "xoxs-"];
+crates/capabilities/tools/src/guardrail.rs:235:        for prefix in &slack_prefixes {
+crates/capabilities/tools/src/guardrail.rs:243:                    leaked_kinds.push(LeakedCredentialKind::SlackToken);
+crates/capabilities/tools/src/guardrail.rs:244:                    sanitized = sanitized.replace(token, "[REDACTED_SLACK_TOKEN]");
+crates/engine/memory/src/graph_algo.rs:179:            let mut cursor = to.clone();
+crates/engine/memory/src/graph_algo.rs:180:            while let Some(p) = parent.get(&cursor) {
+crates/engine/memory/src/graph_algo.rs:182:                cursor = p.clone();
+crates/engine/memory/src/layered_memo/mod.rs:15://! Per `reports/vcp-plugin-gap-analysis-2026-08-12.md` §9.4 Decision 5,
+crates/engine/memory/src/reflexion.rs:107:    #[error("reflexion 存储状态损坏: reflected_until ({cursor}) 超过失败记录总数 ({len})")]
+crates/engine/memory/src/reflexion.rs:108:    CorruptedCursor { cursor: usize, len: usize },
+crates/engine/memory/src/reflexion.rs:398:            return Err(ReflexionError::CorruptedCursor {
+crates/engine/memory/src/reflexion.rs:399:                cursor: self.reflected_until,
+crates/engine/memory/src/reflexion.rs:574:                return Err(ReflexionError::CorruptedCursor {
+crates/engine/memory/src/reflexion.rs:575:                    cursor: data.reflected_until,
+crates/engine/memory/src/reflexion.rs:704:    /// 不 panic, 不静默修复, 且错误中可观测 cursor/len.
+crates/engine/memory/src/reflexion.rs:706:    fn file_store_corrupt_cursor_is_rejected_without_panic() {
+crates/engine/memory/src/reflexion.rs:718:            ReflexionError::CorruptedCursor { cursor, len } => {
+crates/engine/memory/src/reflexion.rs:719:                assert_eq!(cursor, 10);
+crates/engine/memory/src/reflexion.rs:722:            other => panic!("expected CorruptedCursor, got {other:?}"),
+crates/engine/memory/src/reflexion.rs:724:        // 损坏状态保持原样 (不做静默修复): 再次读取仍是损坏的 cursor
+crates/engine/memory/src/reflexion.rs:726:        assert!(matches!(err_again, ReflexionError::CorruptedCursor { .. }));
+crates/engine/memory/src/reflexion.rs:731:    fn file_store_cursor_at_len_is_valid_empty_work() {
+crates/engine/memory/src/reflexion.rs:746:    fn file_store_cursor_below_len_processes_remaining() {
+crates/engine/memory/src/reflexion.rs:769:    fn file_store_history_cap_keeps_cursor_and_reflections_consistent() {
+crates/engine/memory/src/reflexion.rs:787:        // The deterministic policy retains the newest two failures. Its cursor
+crates/engine/memory/src/reflexion.rs:810:        // The persisted next-sequence cursor is independent from the retained
+crates/engine/perception/src/vision/xcap_backend.rs:30:use std::io::Cursor;
+crates/engine/perception/src/vision/xcap_backend.rs:381:    let mut encoded = Cursor::new(Vec::new());
+crates/engine/provider/README.md:3:> apeireth-provider — R35: 6 Provider (claude-code/codex/copilot/gemini-cli/opencode/minimax) + R176: LlmFacade + http_dispatch
+crates/engine/provider/src/canonical_openai_compatible.rs:7://! endpoint (OpenAI, a proxy, a self-hosted gateway, Ollama, Together, vLLM).
+crates/engine/provider/src/canonical_openai_compatible.rs:74:    "qwen-turbo",
+crates/engine/provider/src/canonical_openai_compatible.rs:75:    "qwen-plus",
+crates/engine/provider/src/canonical_openai_compatible.rs:76:    "qwen-max",
+crates/engine/provider/src/canonical_openai_compatible.rs:83:/// 异常的端点 (本模块明确支持自托管 Ollama/vLLM/网关) 可持续发送**永远不含
+crates/engine/provider/src/canonical_openai_compatible.rs:893:            vec!["Qwen/Qwen3-32B".into()],
+crates/engine/provider/src/canonical_openai_compatible.rs:901:        assert_eq!(cap.models()[0].id.as_str(), "qwen-qwen3-32b");
+crates/engine/provider/src/canonical_openai_compatible.rs:904:            Some("Qwen/Qwen3-32B")
+crates/engine/provider/src/canonical_openai_compatible.rs:906:        let req = NormalizedRequest::new("qwen-qwen3-32b", vec![NormalizedMessage::user("hi")]);
+crates/engine/provider/src/canonical_openai_compatible.rs:909:            body["model"], "Qwen/Qwen3-32B",
+crates/engine/provider/src/provider_model.rs:52:        // vendor model like `Qwen/Qwen3-32B` becomes the canonical id
+crates/engine/provider/src/provider_model.rs:53:        // `qwen-qwen3-32b` while its wire name stays `Qwen/Qwen3-32B`. This keeps
+crates/engine/provider/tests/canonical_openai_compatible.rs:269:            "id": "x", "model": "Qwen/Qwen3-32B",
+crates/engine/provider/tests/canonical_openai_compatible.rs:280:            vec!["Qwen/Qwen3-32B".into()],
+crates/engine/provider/tests/canonical_openai_compatible.rs:290:    let req = NormalizedRequest::new("qwen-qwen3-32b", vec![NormalizedMessage::user("hi")]);
+crates/engine/provider/tests/canonical_openai_compatible.rs:294:        recorded.body["model"], "Qwen/Qwen3-32B",
+crates/foundation/orchestration/src/ambient_context.rs:215:            || title_lower.contains("notion")
+crates/foundation/orchestration/src/ambient_context.rs:381:            sanitize_window_title("Chat with alice@example.com - Slack"),
+crates/foundation/orchestration/src/ambient_context.rs:382:            "Chat with [email] - Slack"
+crates/foundation/orchestration/src/call_scheduler.rs:344:    commit_cursor: usize,
+crates/foundation/orchestration/src/call_scheduler.rs:370:            commit_cursor: 0,
+crates/foundation/orchestration/src/call_scheduler.rs:406:            if self.commit_cursor >= self.slots.len() {
+crates/foundation/orchestration/src/call_scheduler.rs:409:            let index = self.commit_cursor;
+crates/foundation/orchestration/src/call_scheduler.rs:412:                    self.commit_cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:48:    cursor: usize,
+crates/foundation/orchestration/src/durable/replay.rs:67:            cursor: 1,
+crates/foundation/orchestration/src/durable/replay.rs:95:            cursor: 1,
+crates/foundation/orchestration/src/durable/replay.rs:131:        if self.cursor < self.history.len() {
+crates/foundation/orchestration/src/durable/replay.rs:143:        if self.cursor < self.history.len() {
+crates/foundation/orchestration/src/durable/replay.rs:144:            let ev = &self.history.events()[self.cursor];
+crates/foundation/orchestration/src/durable/replay.rs:147:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:172:            self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:184:        if self.cursor < self.history.len() {
+crates/foundation/orchestration/src/durable/replay.rs:185:            let ev = &self.history.events()[self.cursor];
+crates/foundation/orchestration/src/durable/replay.rs:188:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:213:            self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:228:            reason: "replay cursor past end".into(),
+crates/foundation/orchestration/src/durable/replay.rs:276:            self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:301:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:305:                    self.cursor += 1;
+crates/foundation/orchestration/src/durable/replay.rs:407:            self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:439:        self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:452:        self.cursor = self.history.len();
+crates/foundation/orchestration/src/durable/replay.rs:456:        self.history.events().get(self.cursor)
+crates/foundation/orchestration/src/job_ring.rs:10://! - **消费游标** ([`JobRing::consumer_cursor`]): 模型消费侧的读取进度, 只由
+crates/foundation/orchestration/src/job_ring.rs:100:    pub consumer_cursor: u64,
+crates/foundation/orchestration/src/job_ring.rs:121:    consumer_cursor: u64,
+crates/foundation/orchestration/src/job_ring.rs:135:            consumer_cursor: 0,
+crates/foundation/orchestration/src/job_ring.rs:171:        let slice = self.slice_from(self.consumer_cursor, max_bytes);
+crates/foundation/orchestration/src/job_ring.rs:172:        self.consumer_cursor = slice.start + slice.bytes.len() as u64;
+crates/foundation/orchestration/src/job_ring.rs:177:    pub fn consumer_cursor(&self) -> u64 {
+crates/foundation/orchestration/src/job_ring.rs:178:        self.consumer_cursor
+crates/foundation/orchestration/src/job_ring.rs:223:            consumer_cursor: self.consumer_cursor,
+crates/foundation/orchestration/tests/job_output_ring.rs:77:fn read_at_never_advances_the_consumer_cursor() {
+crates/foundation/orchestration/tests/job_output_ring.rs:80:    assert_eq!(ring.consumer_cursor(), 0);
+crates/foundation/orchestration/tests/job_output_ring.rs:83:    assert_eq!(ring.consumer_cursor(), 0, "read_at 绝不推进消费游标");
+crates/foundation/orchestration/tests/job_output_ring.rs:86:    assert_eq!(ring.consumer_cursor(), 0);
+crates/foundation/orchestration/tests/job_output_ring.rs:88:    assert_eq!(ring.consumer_cursor(), 3);
+crates/foundation/orchestration/tests/job_output_ring.rs:90:    assert_eq!(ring.consumer_cursor(), 3, "观察读取不动已有消费进度");
+crates/foundation/orchestration/tests/job_output_ring.rs:94:fn dual_cursors_advance_independently() {
+crates/foundation/orchestration/tests/job_output_ring.rs:101:    assert_eq!(ring.consumer_cursor(), 3);
+crates/foundation/orchestration/tests/job_output_ring.rs:107:    assert_eq!(ring.consumer_cursor(), 10);
+crates/foundation/orchestration/tests/job_output_ring.rs:408:    assert_eq!(stats.consumer_cursor, expected.len() as u64);
+crates/foundation/plugin/src/mcp/reconnect.rs:53:/// Mutable reconnect cursor.
+docs/01-architecture/master-functionality-port-audit.md:258:| Bridge clients | `crates/apeireth-bridge/src/*` | PARTIAL | bridge/application | DEFER | P3 | reqwest/jsonwebtoken | bridge tests | Discord/Telegram/OneBot/Lark/LiveKit/Stock have real HTTP/JWT pieces; web/game are stubs |
+docs/01-architecture/master-functionality-port-audit.md:503:- **Bridge**: social bridges (Discord webhook, Telegram bot API, OneBot) are small
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:162:**调研对象真实施**: 摄像头帧 / 屏幕帧 → 视觉 LLM (Qwen-VL / GPT-4V / LLaVA) → LLM context.
+docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md:166:**参考点**: **HIGH** — 调研对象视觉 backend 列表 (Qwen-VL / GPT-4V / LLaVA) + 帧采样策略 + 视觉 context 注入 prompt 模板, v2 RC-7 vision 真 backend 接入直接对位.
+docs/01-architecture/system-capabilities.md:178:* **Post-Call Tripwire**：扫描并脱敏 OpenAI Key (`sk-`), AWS Access Key (`AKIA`), GitHub PAT (`ghp_`), PEM 私钥头与 Slack Token。
+docs/02-guides/custom-llm.md:57:# ---------- 4: 本地 vLLM / Ollama (OpenAI 兼容) ----------
+docs/02-guides/custom-llm.md:62:models = ["meta-llama/Llama-3-70B"]
+docs/02-guides/custom-llm.md:83:| `openai-compatible` | OpenAI Chat Completions | OpenAI / vLLM / Ollama / Gemini OpenAI 模式 |
+docs/02-guides/frontend-data-contract.md:689:- presence 事件**只进 SSE 广播，不进 Lark/Telegram 离线 sink**（sink 只收渲染文本）（`presence.rs:26`、`companion_serve.rs:35`）。
+docs/02-guides/smol-vm-config.md:101:    vcpus: 2, memory_mb: 1024, rootfs: Some(PathBuf::from("/var/lib/apeireth/vm/rootfs.ext4")),
+docs/02-guides/smol-vm-config.md:169:| krun_set_vm_config 失败 (rc=...) | KVM 不可用 / vCPU 超过 32 | 检 /dev/kvm 在 + 调小 vcpus |
+docs/03-reference/team-handover-reference.md:113:* **基线工程深度对比报告**：[`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](../01-architecture/vcp-vs-apeireth-deep-comparison.md)
+docs/03-reference/team-handover-reference.md:114:* **基线工程实现指南（历史）**：[`docs/03-reference/vcp-line-level-absorption-guide.md`](vcp-line-level-absorption-guide.md)
+docs/04-internal/backlog.md:152:| 11 | Telegram 送达 | A2 (Sink 扩展) | 第三 Sink, LarkSink 模式复制 | ✅ 提交 3e0ab1a6: TelegramSink (from_env/from_env_with, 真 HTTP, APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID) + companion_serve 接线; 5 测试 |
+docs/04-internal/backlog.md:347:| 11 | Telegram 送达 | A2 (Sink 扩展) | 第三 Sink, LarkSink 模式复制 | ✅ 提交 3e0ab1a6: TelegramSink (from_env/from_env_with, 真 HTTP, APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID) + companion_serve 接线; 5 测试 |
+docs/04-internal/borrow-from-jimmyxiao2009.md:161:3. **没有 secret 扫描自动化**: 没装泄漏扫描器, 没配 pre-commit hook, 没加 CI gate, 没 .gitleaks.toml 配置。
+docs/04-internal/borrow-from-jimmyxiao2009.md:167:- **第一时间装业界标准泄漏扫描器 (或 fallback PowerShell 扫描器) + 配 pre-commit + CI gate + .gitleaks.toml**
+docs/04-internal/borrow-from-jimmyxiao2009.md:179:| 3 | **`.gitleaks.toml` config** (泄漏扫描器 binary 装上时直接用) | ✅ 已写 | `.gitleaks.toml` |
+docs/04-internal/gitignore-hygiene-audit-2026-08-28.md:41:| 61-66 | Leaked / 反编译源码 (research/source/, claude-code-leaked/) | ✅ 生效 |
+docs/04-internal/handoff-w1-w5-closure-2026-10-10.md:77:| onering Web/SSE 前端 | 需 GatewayState 管线改造（runtime 的 store 句柄不透出）；Lark/Telegram = 新 adapter crate |
+docs/04-internal/memory-research.md:26:- 异步并发摘要 (maxConcurrent 5) + 折叠标记 `[VCP上下文语义折叠-本层摘要:...]`
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:180:- **P1 (1 周)**: **主代理亲做 spec** — ONNX stub 决策 (DROP / 真接 onnxruntime / ADAPT llamacpp)
+docs/04-internal/r11-storage-gap-research-2026-08-28.md:203:4. **未采用候选**: pgvector + LanceDB + llamacpp
+docs/04-internal/secret-management-policy.md:104:- 替换 CI 步骤为 `gitleaks protect --staged --redact --config .gitleaks.toml`
+docs/04-internal/secret-management-policy.md:113:### 3.4 防御层 4: `.gitleaks.toml` 配置 (PowerShell 模式 + 后续扫描器模式通用)
+docs/04-internal/secret-management-policy.md:115:**文件**: `.gitleaks.toml` (R215 创建, 对齐业界标准泄漏扫描器官方 schema)
+docs/04-internal/secret-management-policy.md:149:// 解: 在 .gitleaks.toml / secret-scan.ps1 allowlist 里加测试文件路径
+docs/04-internal/secret-management-policy.md:233:| `.gitleaks.toml` 配置 | P0 | 30 分钟 | ✅ R215 创建 |
+docs/04-internal/secret-management-policy.md:261:- ✅ **是** `.gitleaks.toml` 配置已写好 (泄漏扫描器 binary 装上时直接 `gitleaks protect --staged --redact --config .gitleaks.toml` 即可)
+docs/04-internal/secret-management-policy.md:296:**Defense in depth**: 4 层 (pre-commit + CI + GitHub Secret Scanning + .gitleaks.toml config)
+docs/04-internal/stage123-gap-matrix.md:49:| B6a 8+ LLM providers — OpenAI/Anthropic/本地 + SemanticModelRouter | review §2.3-6；stage2-decisions-llm-integration.md §1-§2 | 3 家 canonical provider（Anthropic / MiniMax / OpenAI-compatible）+ 协议适配层（Gemini / OpenAI Responses / Anthropic Messages adapters）+ embeddings provider；OpenAI-compatible 口可承载 DeepSeek 等。本地管家（Ollama/LlamaCpp/VLLM）无实现；fallback chain（主→次→本地→拒绝）由 ProviderRouter 健康选择部分承担，无"本地兜底"层 | 🟡 部分实现 | `crates/engine/provider/src/canonical_anthropic.rs`、`canonical_minimax.rs`、`canonical_openai_compatible.rs`；`crates/foundation/protocol/src/adapters/gemini.rs`、`openai_responses.rs`；`crates/engine/runtime/tests/canonical_multi_provider.rs` | 数量口径 3-4 家 vs 8+；"本地推理管家"整块缺位（城堡底线的本地 fallback 能力空缺）。经 openai-compatible 兼容口可扩展是事实，但标尺点名的 Google/DeepSeek/Mistral/Ollama/LlamaCpp/VLLM 独立 provider 未逐一实现 |
+docs/04-internal/stage123-gap-matrix.md:141:10. **本地推理管家缺位**（B6a）：Ollama/LlamaCpp/VLLM 本地 provider 与"主→次→本地→拒绝" fallback 链的最后一环不存在，模型自主性与离线兜底不成立。
+docs/04-internal/team-work-doc.md:152:- 共享底座：轮询调度 + MultiSink 送达（SSE/Lark/Telegram 已有）
+docs/04-internal/team-work-doc.md:220:> 新版同类工具箱（源码 research/source/vcptoolbox，从 Downloads 迁入工作区供团队只读，git 排除）：
+docs/04-internal/team-work-doc.md:231:- **对 Apeireth 的启示**：A2（continuity 锚点）可升级为"统一上下文账本"——把多前端（SSE/Lark/Telegram/Web）的会话归入同一 Agent 时间线（X-Apeireth-Continuity 已有雏形）
+docs/04-internal/team-work-doc.md:299:| foldProtocol | **同文档分级显隐**: `[===vcp_fold:阈值===]` 行标记, 语义相似度≥阈值才展开, 未展开提示"还隐藏收纳了 N 组" | context-fold 补 FoldBlock 分级显隐（该工具箱原创） |
+docs/04-internal/team-work-doc.md:311:| OneRing 统一上下文 | A2 升级：跨前端统一时间线账本（SSE/Lark/Telegram/Web 归入同一 Agent 时间线） | P0 |
+docs/04-internal/team-work-doc.md:382:| TP6 | **ContextLedger 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本；SQLite 内容寻址 + fuzzy diff 对账 | 多前端同一叙事/来源标记测试 |
+docs/04-internal/team-work-doc.md:413:| TP15 | **ContextLedger 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本; SQLite 内容寻址 + fuzzy diff 对账; 来源标记 | 多前端同一叙事/来源标记测试 |
+docs/04-internal/upgrade-research-pack.md:26:3. **Future-as-Label + 自动出题结算**：proper scoring rule 做 RL 奖励（Qwen3-32B Brier -27%、校准误差减半）；自动题库 96% 可验证/95% 结算准确——oracle 校准从"记账"升级"闭环"（落 CalibratedResolver + oracle_adapters）
+docs/README.md:30:| [01-architecture/vcp-vs-apeireth-deep-comparison.md](01-architecture/vcp-vs-apeireth-deep-comparison.md) | Apeireth 2.0 vs VCPToolBox 深度架构对比与优劣势洞察报告 |
+docs/README.md:38:| [03-reference/vcp-line-level-absorption-guide.md](03-reference/vcp-line-level-absorption-guide.md) | VCP 核心算法行级代码解构与 2.0 吸收升级指南 |
+docs/design/01-DESIGN-SYSTEM.md:130:**仍然成立的诚实断点**（0 装）：① emotion 只能由 daemon_loop 异步推——chat handler 同步路径拿不到 PAD（daemon 内部 RefCell 跨 await 非 Send，`presence.rs:21-23`、`companion_serve.rs:29-32`），主人消息触发的快照经 interactions 通道异步送达，handler 内 0 假装；② `build_injection` 记忆注入路径的召回数锁在 `assemble.rs::inject_memory` 局部变量不外露，memory_recall 只接工具桥路径（`presence.rs:24-25`）；③ presence 事件只进 SSE，不进 Lark/Telegram 离线 sink（`presence.rs:26`）。另注：`docs/02-guides/frontend-data-contract.md` §8.1 仍标「接线中」，已滞后于代码，应以 `companion_serve.rs` 为准并回写契约文档。
+docs/gateway-api-contract.md:21:- 分页:列表端点统一 `limit`(默认 50,最大 500)+ 按时间倒序;需要更多分页时再引入 cursor
+docs/integration/phase0-audit.md:93:- **channels**：Telegram/SMTP/IMAP 适配器 + 插件发现
+frontend/companion-desktop/src/App.svelte:3066:    cursor: pointer;
+frontend/companion-desktop/src/App.svelte:3140:    cursor: pointer;
+frontend/companion-desktop/src/App.svelte:3151:    cursor: default;
+frontend/companion-desktop/src/App.svelte:3184:    cursor: pointer;
+frontend/companion-desktop/src/App.svelte:3239:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:467:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:519:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:540:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:592:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:643:    cursor: pointer;
+frontend/companion-desktop/src/lib/ConversationsView.svelte:707:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:608:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:626:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:666:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:673:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MemoryView.svelte:686:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:690:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MemoryView.svelte:754:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:909:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1023:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1030:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1059:    cursor: pointer;
+frontend/companion-desktop/src/lib/MemoryView.svelte:1063:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/MessageContent.svelte:274:    cursor: pointer;
+frontend/companion-desktop/src/lib/MessageContent.svelte:337:    cursor: pointer;
+frontend/companion-desktop/src/lib/MessageContent.svelte:364:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/GuardNoticeCard.svelte:95:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/PendingDocumentDock.svelte:111:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:457:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:524:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:551:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:614:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:630:    cursor: default;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:729:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:765:    cursor: pointer;
+frontend/companion-desktop/src/lib/chat-shell/SessionListHome.svelte:787:    cursor: default;
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:197:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:270:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:310:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ApprovalRequestCard.svelte:337:    cursor: default;
+frontend/companion-desktop/src/lib/components/CommandPalette.svelte:217:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/CommandPalette.svelte:226:    cursor: default;
+frontend/companion-desktop/src/lib/components/ComposerMenu.svelte:161:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:124:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:154:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:168:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ConfirmDialog.svelte:181:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorSolutionBanner.svelte:126:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorSolutionBanner.svelte:158:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorSolutionBanner.svelte:172:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ErrorState.svelte:72:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:43:      id: 'ollama',
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:44:      name: 'Ollama 本地',
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:46:      model: 'llama3.3',
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:78:    const key = presetId === 'ollama' ? '' : apiKey.trim();
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:87:    if (presetId !== 'ollama' && !key) {
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:88:      error = '请填写 API Key（Ollama 本地可留空）';
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:147:    {#if presetId !== 'ollama'}
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:226:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:269:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:285:    cursor: default;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:267:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:271:    cursor: default;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:345:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:525:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/RuntimeModal.svelte:532:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte:128:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte:138:    cursor: default;
+frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte:210:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/StatusBar.svelte:89:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ThemeSettingsPanel.svelte:261:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ThemeSettingsPanel.svelte:387:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallCard.svelte:127:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallCard.svelte:258:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallLifecycleCard.svelte:124:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/ToolCallLifecycleCard.svelte:197:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:177:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:224:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:274:    cursor: pointer;
+frontend/companion-desktop/src/lib/components/WorkspacePickerModal.svelte:288:    cursor: pointer;
+frontend/companion-desktop/src/lib/design/base.css:173:button { cursor: pointer; }
+frontend/companion-desktop/src/lib/design/base.css:340:  cursor: grab;
+frontend/companion-desktop/src/lib/design/base.css:354:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/base.css:406:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:134:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:305:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:325:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:343:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:358:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:501:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:619:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:713:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:768:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:824:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1081:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1149:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1190:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1271:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1278:  cursor: default;
+frontend/companion-desktop/src/lib/design/shell.css:1430:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1452:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1522:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1691:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1768:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1801:  cursor: pointer;
+frontend/companion-desktop/src/lib/design/shell.css:1834:  cursor: pointer;
+frontend/companion-desktop/src/lib/desktop-bridge.ts:97: * APEIRETH_API_*; everything else (OpenAI / DeepSeek / Ollama / custom) →
+frontend/companion-desktop/src/lib/intro/IntroLayer.svelte:69:    cursor: pointer;
+frontend/companion-desktop/src/lib/scene/blackhole.ts:715:    this.canvas.style.cursor = dx * dx + dy * dy <= rr * rr ? 'pointer' : '';
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:884:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:993:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1224:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1242:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1295:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1316:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1415:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1511:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ActivityView.svelte:1548:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/GovernanceView.svelte:112:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:335:  // 设计语言：电脑版微信/QQ 设置页——图标 + 标题 + 副文案 + 右侧开关的分组列表。
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:604:      id: 'ollama',
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:605:      name: 'Ollama 本地',
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:607:      defaultModel: 'llama3.3',
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:608:      models: ['llama3.3', 'qwen2.5-coder', 'deepseek-r1'],
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:1568:                    <span class="proto-sub">OpenAI · DeepSeek · MiniMax · Ollama · vLLM</span>
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:2844:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3054:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3089:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3136:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3199:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3234:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3320:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3350:  /* ===== 能力中心 · 微信/QQ 式分组卡片（2026-10-10 W2/W3 收官批）===== */
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3453:  /* 行：图标 + 标题/副文案 + 右侧控制。整行可点（微信设置项语义）。 */
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3464:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3476:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3480:    cursor: default;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3503:    cursor: default;
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3558:  /* 开关（微信式圆钮） */
+frontend/companion-desktop/src/lib/views/SettingsView.svelte:3858:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:631:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:662:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:722:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:778:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:824:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:834:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:866:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:963:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:967:    cursor: not-allowed;
+frontend/companion-desktop/src/lib/views/ToolsView.svelte:1007:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:457:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:509:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:517:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:625:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:649:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/ApprovalsTab.svelte:671:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:359:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:389:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:397:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/AuditTab.svelte:426:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:235:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:243:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:302:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:312:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:348:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:361:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GrantsTab.svelte:372:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:369:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:377:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:490:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:500:    cursor: default;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:533:    cursor: pointer;
+frontend/companion-desktop/src/lib/views/governance/GuardTab.svelte:633:    cursor: pointer;
+scripts/install-pre-commit-hook.ps1:4:# 对齐 gitleaks pre-commit pattern, 简化版: 用本地 PowerShell 扫描器
+scripts/install-pre-commit-hook.ps1:5:# (gitleaks binary 当前装不上, 见 docs/04-internal/secret-management-policy.md)
+scripts/install-pre-commit-hook.ps1:72:# 对齐 gitleaks pre-commit pattern, 简化: 用 PowerShell 扫描器扫 staged files.
+scripts/release/README.md:212:| ✅ 真实施 (10/11) | clap / hyper / servers / PyO3 / kani / langgraph / superpowers / LiteLLM (P6-1 retry 21:38) + opencode (P6-2 retry 22:20) + Guardrails (P6-3 retry 21:58) | 整合 #5 5.1 commit (src/ 真实施) |
+scripts/release/README.md:214:| ❌ 跳过 (1/11) | OpenCog AGPL-3.0 (商用不行) | 0 集成 |
+scripts/release/README.md:216:**0 装 PASS 严守**: ✅ cloned = 真实施 (有真 src 改动 + tests pass), ⏳ 限流 = 准备 (诚实标 "准备", 0 装"已实施"), ❌ 跳过 (OpenCog = 0 集成, 0 假装 "已实施")
+scripts/release/git-push-1.0.ps1:164:- langchain-ai/langgraph d56666f (R125-13) - StateGraph
+scripts/release/git-push-1.0.sh:163:- langchain-ai/langgraph d56666f (R125-13) - StateGraph
+scripts/secret-scan.ps1:4:# 版权致谢 (法律保留, 勿删): 核心 pattern 表衍生自 gitleaks v8.30.1 (MIT
+scripts/secret-scan.ps1:5:# 许可, https://github.com/gitleaks/gitleaks)
+scripts/secret-scan.ps1:8:# **Why PowerShell + 不下 gitleaks binary**:
+scripts/secret-scan.ps1:9:# - gitleaks release-assets DNS 阻塞 (per R215 教训, 主人网络限制)
+scripts/secret-scan.ps1:13:# - 核心 pattern 表是 gitleaks v8.30.1 的 subset (20+ 高置信 pattern), 覆盖 90% 真实场景
+scripts/secret-scan.ps1:16:# - 主人网络恢复后: 装 gitleaks binary, 用 gitleaks.toml 配置 + `gitleaks protect --staged --redact`
+scripts/secret-scan.ps1:23:#   pwsh scripts/secret-scan.ps1 -Mode allowlist-test # 验证 .gitleaks.toml allowlist
+scripts/secret-scan.ps1:37:    [string]$ConfigFile = '.gitleaks.toml'
+scripts/secret-scan.ps1:41:# pattern 子集对应 gitleaks v8.30.1 rules/ 目录 (出处见文件头致谢)
+scripts/secret-scan.ps1:42:# (per https://github.com/gitleaks/gitleaks/tree/master/config/gitleaks.toml)
+scripts/secret-scan.ps1:66:    # Slack
+scripts/secret-scan.ps1:67:    @{ Name = 'Slack Bot Token (xoxb-)'; Pattern = 'xox[baprs]-[0-9]{10,12}-[0-9]{10,12}-[A-Za-z0-9]{20,255}'; Tags = @('slack', 'token') },
+scripts/secret-scan.ps1:73:    # Slack webhook
+scripts/secret-scan.ps1:74:    @{ Name = 'Slack Webhook URL'; Pattern = 'https://hooks\.slack\.com/services/T[A-Z0-9]{8,}/B[A-Z0-9]{8,}/[A-Za-z0-9]{20,255}'; Tags = @('slack', 'webhook') }
+scripts/secret-scan.ps1:92:    '.gitleaks.toml',
+scripts/secret-scan.ps1:102:# 对齐 .gitleaks.toml allowlist 机制
+scripts/secret-scan.ps1:103:# 加载 .gitleaks.toml 里的 [allowlist] 段 (本脚本支持的最小子集: paths + regexes)
+scripts/secret-scan.ps1:105:function Get-GitleaksAllowlist {
+scripts/secret-scan.ps1:140:# 对齐 gitleaks scan semantics
+scripts/secret-scan.ps1:243:$allowlist = Get-GitleaksAllowlist -Path $configPath

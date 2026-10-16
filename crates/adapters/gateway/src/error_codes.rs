@@ -16,8 +16,13 @@ pub const AUTH_INVALID_KEY: &str = "auth_invalid_key";
 pub const PROVIDER_UNREACHABLE: &str = "provider_unreachable";
 pub const PROVIDER_ERROR: &str = "provider_error";
 pub const INVALID_REQUEST: &str = "invalid_request";
+pub const PERMISSION_DENIED: &str = "permission_denied";
+pub const DOMAIN_FORBIDDEN: &str = "domain_forbidden";
+pub const DOMAIN_REFUSED: &str = "domain_refused";
 pub const SESSION_NOT_FOUND: &str = "session_not_found";
 pub const RATE_LIMITED: &str = "rate_limited";
+pub const REVIEW_REJECTED: &str = "review_rejected";
+pub const TURN_NOT_CONVERGED: &str = "turn_not_converged";
 pub const INTERNAL: &str = "internal";
 
 /// Resolve a wire code string to its typed [`ErrorCode`].
@@ -28,8 +33,13 @@ pub fn parse_code(code: &str) -> Option<ErrorCode> {
         PROVIDER_UNREACHABLE => Some(ErrorCode::ProviderUnreachable),
         PROVIDER_ERROR => Some(ErrorCode::ProviderError),
         INVALID_REQUEST => Some(ErrorCode::InvalidRequest),
+        PERMISSION_DENIED => Some(ErrorCode::PermissionDenied),
+        DOMAIN_FORBIDDEN => Some(ErrorCode::DomainForbidden),
+        DOMAIN_REFUSED => Some(ErrorCode::DomainRefused),
         SESSION_NOT_FOUND => Some(ErrorCode::SessionNotFound),
         RATE_LIMITED => Some(ErrorCode::RateLimited),
+        REVIEW_REJECTED => Some(ErrorCode::ReviewRejected),
+        TURN_NOT_CONVERGED => Some(ErrorCode::TurnNotConverged),
         INTERNAL => Some(ErrorCode::Internal),
         _ => None,
     }
@@ -41,12 +51,14 @@ pub fn frame(code: ErrorCode, message: impl Into<String>) -> ErrorFrame {
 }
 
 /// Build a complete HTTP error response (`{"error": {...}}`).
-pub fn error_response(
-    status: StatusCode,
-    code: ErrorCode,
-    message: impl Into<String>,
-) -> Response {
-    (status, Json(ErrorEnvelope { error: frame(code, message) })).into_response()
+pub fn error_response(status: StatusCode, code: ErrorCode, message: impl Into<String>) -> Response {
+    (
+        status,
+        Json(ErrorEnvelope {
+            error: frame(code, message),
+        }),
+    )
+        .into_response()
 }
 
 #[cfg(test)]
@@ -61,8 +73,13 @@ mod tests {
             PROVIDER_UNREACHABLE,
             PROVIDER_ERROR,
             INVALID_REQUEST,
+            PERMISSION_DENIED,
+            DOMAIN_FORBIDDEN,
+            DOMAIN_REFUSED,
             SESSION_NOT_FOUND,
             RATE_LIMITED,
+            REVIEW_REJECTED,
+            TURN_NOT_CONVERGED,
             INTERNAL,
         ];
         for code in codes {

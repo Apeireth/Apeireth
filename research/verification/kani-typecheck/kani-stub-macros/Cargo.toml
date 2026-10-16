@@ -1,0 +1,10 @@
+# `#[kani::proof]` proc-macro 桩 (见 ../kani-stub/src/lib.rs 的说明)。
+[package]
+name = "kani-stub-macros"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+path = "src/lib.rs"

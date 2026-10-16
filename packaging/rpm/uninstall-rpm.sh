@@ -86,7 +86,7 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl disable apeireth 2>/dev/null || echo "    (服务未启用, 跳过 disable)"
 fi
 
-# === 5. dnf remove (per 蓝图 §3.7 step 3, 触发 %preun / %postun) ===
+# === 5. dnf remove (按安装规范, 触发 %preun / %postun) ===
 echo "[2/5] dnf remove apeireth..."
 if command -v dnf >/dev/null 2>&1; then
     dnf remove -y apeireth

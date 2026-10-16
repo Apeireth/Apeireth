@@ -14,7 +14,9 @@ pub struct DecayConfig {
 impl Default for DecayConfig {
     fn default() -> Self {
         Self {
-            half_life_hours: 24.0,
+            // 艾宾浩斯半衰期 (体验旋钮 MemoryFade, 与 retention 同一推导):
+            // 未设 = 倍率 1.0 = 24h 现状, 零变化。
+            half_life_hours: crate::retention::effective_half_life_hours(),
         }
     }
 }

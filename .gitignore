@@ -113,9 +113,6 @@ build-*.txt
 .commit-r20-*.txt
 .commit-raw*.txt
 
-# R23 一次性 wrk trees (其他分支 worktree 留下, 主仓跨 worktree 0 触碰)
-.前代产品-worktrees/
-
 # R23 一次性 backup (升级前/后 snapshot, 留本地)
 .tmp-cargo-lock-*.bak
 .tmp-cargo-toml-*.bak
@@ -206,6 +203,7 @@ crates/apeireth-integration-e2e/.*.log
 # 习惯: .r<round>-<task>-*.<ext> = sub-agent scratch, 0 必进 git (整合 #4 commit 已含 3 实际文件)
 .r[0-9][0-9][0-9]-*-*
 *.py
+!scripts/guard_ml/*.py
 
 # TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
 # 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),
@@ -292,3 +290,18 @@ frontend/companion-desktop/.pnpm-store/
 # target/release at package time (see packaging/stage-sidecar.ps1). It is a
 # build artifact (~10MB), never a source file.
 frontend/companion-desktop/src-tauri/binaries/
+
+# 2026-09-26 hygiene: 验收截图与本地基线测试日志留本地作证据（docs/04-internal 截图索引引用其路径），
+# 不入库以免 100MB+ 二进制进 git；INDEX.md 等清单文件仍被跟踪。
+artifacts/*.png
+artifacts/*.txt
+frontend/companion-desktop/shot-*.png
+
+# 外部源码抽取暂存（研究线临时区）：绝不入库（借鉴源码产物不留痕迹），收口即删
+_lx_src/
+
+# 外部源码抽取暂存（研究线临时区）：绝不入库，收口即删
+_research/
+research/dagger-git/
+research/langflow-git/
+research/praisonai-git/

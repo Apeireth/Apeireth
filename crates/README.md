@@ -54,7 +54,7 @@ External surfaces into canonical Runtime.
 | --- | --- | --- |
 | `adapters/gateway` | `apeireth-gateway` | HTTP adapter only |
 | `adapters/cli` | `apeireth-cli` | Configuration/bootstrap/I/O only |
-| `adapters/sdk` | `apeireth-sdk` | Public SDK surface |
+| `adapters/sdk` | `apeireth-sdk` | 真现实现中（悬案翻案） |
 
 ## Legacy
 

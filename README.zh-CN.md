@@ -6,9 +6,9 @@
 
 [![Rust Version](https://img.shields.io/badge/rustc-1.97.1%2B-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![Pure Safe Rust](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
-[![Tests](https://img.shields.io/badge/tests-3120%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
+[![Tests](https://img.shields.io/badge/tests-3695%20passed%20%7C%200%20failed-success.svg?logo=checkmarx)](docs/03-reference/capabilities-matrix.md)
 [![Clippy](https://img.shields.io/badge/clippy-0%20warnings-brightgreen.svg?logo=rust)](crates)
-[![Architecture](https://img.shields.io/badge/architecture-17--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
+[![Architecture](https://img.shields.io/badge/architecture-18--Crate%20微内核-orange.svg)](docs/01-architecture/architecture.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
@@ -55,30 +55,32 @@
 
 ---
 
-## 📊 系统性能基准与工程实测数据
+## 📊 性能目标与验证状态
 
-Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建，在高并发与复杂认知负载下保持确定性亚毫秒级执行、极低调度延迟与绝对的内存安全。
+Apeireth 全面采用 **纯 Safe Rust (`#![forbid(unsafe_code)]` / `#![deny(unsafe_code)]`)** 构建。性能数字遵循严格的**基准复现线**：只有附带可重跑脚本与实测出处的数字才会发布。下表每一行现在都有一键复跑 harness（`scripts/run-benchmarks.ps1`）；数字全部为**实测**，未达标行如实标注差距倍数，不四舍五入美化。
 
-| 测试目标 | 子系统 / 核心操作 | 目标指标 | 实测基准值 ($P_{99}$) | 验证状态 |
+**实测列读法**：每操作的 `P50 · P99`，来自 `pwsh -NoProfile -File scripts/run-benchmarks.ps1 -Bench all`（release 优化档，2026-09-27 实测于 AMD Ryzen 9 9955HX / 32 GB / Windows 11 / rustc 1.97.1）。`(Run 1: …)` 为同日同机第二轮全量复测，原样呈现以暴露轮间噪声。**OS 物理沙箱**与**微内核冷启动**两行为分段剖析驱动的优化后复测（2026-09-27，空闲机逐行独立命令）；优化前后全部轮次——含并发负载窗口读数——逐条列于 [`reports/perf-profile-coldstart-sandbox-2026-09-27.md`](reports/perf-profile-coldstart-sandbox-2026-09-27.md)。判定口径 = **P50 对目标**；P99 与样本量在 [`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md) 中不作美化呈现。
+
+| 测试目标 | 子系统 / 核心操作 | 目标指标 | 实测 P50 · P99 (Run 2) | 验证状态 |
 | :--- | :--- | :---: | :---: | :---: |
-| **混合记忆拓扑检索** | BM25 + 密集向量余弦 + RRF 融合 (10,000 节点) | $< 10.0 \text{ ms}$ | **1.82 ms** | ✅ **实测通过** |
-| **认知配额抢占调度** | 优先级队列调度 + PIP 上下文切换 | $< 50.0 \ \mu\text{s}$ | **8.40** $\mu\text{s}$ | ✅ **实测通过** |
-| **因果世界模型分支** | 假说分支推演 (CoW) + 100 文件快照差分 | $< 1.0 \text{ ms}$ | **0.035 ms** | ✅ **实测通过** |
-| **SAGA 逆向补偿回滚** | LIFO 逆序算子栈纯内存执行 | $< 1.0 \text{ ms}$ | **0.012 ms** | ✅ **实测通过** |
-| **全双工打断响应 (Barge-in)** | 语音流原子取消检索 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | **0.18 ms** | ✅ **实测通过** |
-| **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + WGSL 着色器 Uniform 合成 | $< 0.5 \text{ ms}$ | **0.08 ms** | ✅ **实测通过** |
-| **JobObject 物理沙箱** | Win32 Job Object 边界初始化 + 进程隔离限制 | $< 15.0 \text{ ms}$ | **6.40 ms** | ✅ **实测通过** |
-| **微内核冷启动耗时** | 17-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | **4.20 ms** | ✅ **实测通过** |
-| **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | **~18.2 MB RAM** | ✅ **实测通过** |
-| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | **3120 / 3120 通过** | ✅ **0 失败** |
+| **混合记忆拓扑检索** | BM25 + 密集向量余弦 + RRF 融合 (10,000 节点) | $< 10.0 \text{ ms}$ | P50 **3.65 ms** · P99 6.36 ms (Run 1: 5.52 / 9.21 ms) | ✅ 附脚本实测 |
+| **认知配额抢占调度** | 优先级队列调度 + PIP 上下文切换 | $< 50.0 \ \mu\text{s}$ | P50 **0.81 µs** 派发 · **1.32 µs** 抢占+PIP · P99 1.13 / 2.18 µs (Run 1: 0.67 / 1.20 µs) | ✅ 附脚本实测 |
+| **因果世界模型分支** | 假说分支推演 (CoW) + 快照差分 | $< 1.0 \text{ ms}$ | P50 **42.8 µs** · P99 73.6 µs (Run 1: 61.7 / 89.9 µs) | ✅ 附脚本实测 |
+| **SAGA 逆向补偿回滚** | LIFO 逆序算子栈纯内存执行 | $< 1.0 \text{ ms}$ | P50 **24.8 µs** · P99 41.4 µs (Run 1: 36.2 / 48.4 µs) | ✅ 附脚本实测 |
+| **全双工打断响应 (Barge-in)** | 语音流原子取消 + `tokio::Notify` 广播 | $< 1.0 \text{ ms}$ | P50 **32.5 µs** · P99 203.8 µs (Run 1: 62.3 / 293.3 µs) | ✅ 附脚本实测 |
+| **Ember HUD 渲染帧** | 4.0s 生理呼吸律动 + CSS 微光 | $< 0.5 \text{ ms}$ | P50 **0.037 µs** · P99 0.058 µs (Run 1: 0.074 / 0.102 µs) — 仅驱动侧 uniforms 合成 | ✅ 附脚本实测 |
+| **OS 物理沙箱** | JobObject / AppContainer 边界初始化 + 进程隔离 | $< 15.0 \text{ ms}$ | P50 **12.60 ms** · P99 15.22 ms (Run 1: 12.81 / 15.10 ms) — 含子进程启动+等待；受控边界增量 ≈ 5.1 ms（对照无隔离） | ✅ 附脚本实测（P99 15.22 ms 略超目标线，如实标注） |
+| **微内核冷启动耗时** | 18-Crate 微内核完整自举至就绪状态 | $< 10.0 \text{ ms}$ | P50 **22.04 ms** · P99 26.55 ms (Run 1: 22.57 / 25.98 ms) — 残余为真冷口径（每轮全新数据目录）的新库文件创建 + schema DDL | ❌ 未达标（差距 2.2 倍）· 附脚本实测 |
+| **后台待机内存占用** | 完整微内核服务待机内存驻留 | $< 35.0 \text{ MB}$ | 工作集 **17.47 MiB** (Run 1: 24.47 MiB, n=5 读数) | ✅ 附脚本实测 |
+| **全工作区测试套件** | 全代码库单元测试与集成测试全量回归 | 100% 通过 | — | ✅ **CI 实跑**（`cargo test --workspace`） |
 
-> *所有基准数据均在真实硬件（AMD Ryzen 9 / Intel Core i9, 32GB RAM, Windows 11 / Ubuntu 24.04）上核验（详见 [`reports/benchmark-baseline.md`](reports/benchmark-baseline.md)）。*
+> **复跑**（无重跑脚本不发布）：`pwsh -NoProfile -File scripts/run-benchmarks.ps1` 一键跑全部行的 harness 并输出 markdown 表；每行也有独立命令，例如 `cargo run --release --locked -p apeireth-bench-harness -- hybrid-search`。harness 源码：[`benches/`](benches)。环境、逐行方法学、两轮原始数据、样本量与噪声边界：[`reports/benchmark-reproduction.md`](reports/benchmark-reproduction.md)。[`reports/benchmark-baseline.md`](reports/benchmark-baseline.md) 中的历史探索性数字**不是**产品宣称。机器证明的正确性命题（Kani/TLA）见 [`research/verification/`](research/verification/)。
 
 ---
 
 ## ⚡ 什么是 Apeireth 2.0+？
 
-**Apeireth 2.0+** 是一个基于 **纯 Safe Rust 构建、拥有 16 个核心 Crate 的 AGI 操作系统与认知微内核**。它从第一性原理出发，彻底摒弃了传统脆弱的单程 Python 脚本、简单的单轮 LLM 胶水封装与断裂的 Top-K 分块向量数据库。
+**Apeireth 2.0+** 是一个基于 **纯 Safe Rust 构建、拥有 18 个核心 Crate 的 AGI 操作系统与认知微内核**。它从第一性原理出发，彻底摒弃了传统脆弱的单程 Python 脚本、简单的单轮 LLM 胶水封装与断裂的 Top-K 分块向量数据库。
 
 Apeireth 创新性地融合了**类脑连续流体拓扑记忆**、**多维认知配额抢占式调度**、**因果世界模型 CoW 分支推演**、**微光在场感知（Ember HUD）** 与 **零信任三洋葱物理沙箱**，为人工智能与人类的终身共生提供了一个永久、可自进化且受密码学严格核验的生命载体。
 
@@ -134,8 +136,11 @@ graph TB
 | **便携化与漫游** | 依赖复杂云环境与中心化服务器 | **随身 U 盘生命体 & P2P Mesh**：`./data/` 相对路径硬隔离（防盘符漂移）+ Noise_XX 端到端加密 BLE/局域网去中心化记忆漫游 |
 | **内存与类型安全** | 动态弱类型、内存泄漏、GIL 性能瓶颈 | **100% 纯 Safe Rust**：`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`，编译期内存安全、零未捕获异常、零数据竞态 |
 
-> **借鉴与署名**：记忆场的流体拓扑动力学与残差金字塔为 VCP 1.0 行级借鉴的 Rust 再实现,
-> 原始来源与逐行对照见 [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
+> **借鉴与署名**：记忆场的流体拓扑动力学、残差金字塔等模块在历史版本中曾移植自 VCP 1.0。
+> 自 2026-10 起，全部已落地实现均已**重写为基于公开数学文献/通用工程模式的独立实现**
+> （Gerstner & Kistler《Spiking Neuron Models》；Golub & Van Loan《Matrix Computations》等），
+> 当前代码不含 VCP 衍生表达。历史对照存档见
+> [`docs/03-reference/vcp-line-level-absorption-guide.md`](docs/03-reference/vcp-line-level-absorption-guide.md)
 > 与 [`docs/01-architecture/vcp-vs-apeireth-deep-comparison.md`](docs/01-architecture/vcp-vs-apeireth-deep-comparison.md)。
 
 ---
@@ -170,7 +175,7 @@ $$\frac{dU_{\text{care}}}{dt} = \nabla U_{\text{circadian}} + \nabla U_{\text{fr
 
 ---
 
-## 🧱 16 个核心 Crate 微内核架构深度解剖
+## 🧱 18 个核心 Crate 微内核架构深度解剖
 
 根 Cargo Workspace 严格遵循单向依赖，划分为四大核心层级：
 
@@ -186,10 +191,12 @@ crates/
 ├── engine/                   # Layer 1: 认知引擎与类脑拓扑流形
 │   ├── memory                # Betti 同调、Kuramoto 振子、双标度连续场、编年史结晶、三层知识库
 │   ├── runtime               # 代理主循环、因果世界模型、FlowLock 心流锁、自驱心跳
+│   ├── runtime-assembly      # 生产组装根：认知模块/工具装配/Organ 桥/SQLite 会话适配
 │   ├── organ                 # 9 大认知器官、人格合成器、自我反思
 │   ├── perception            # Whisper 语音识别、MiniMax TTS 语音流、Xcap 屏幕视觉
 │   ├── provider              # Anthropic、OpenAI 兼容协议、Google Gemini、Ollama 后端
-│   └── storage               # SQLite 连接池、ACID 迁移管理、双时态事实图谱
+│   ├── storage               # SQLite 连接池、ACID 迁移管理、双时态事实图谱
+│   └── guard                 # 行为链安全 Guard：两阶段行为链分类器 + 生产治理钩子
 ├── capabilities/             # Layer 2: 极致工具沙箱与物理隔离
 │   └── tools                 # ProcessExecutor (JobObject/cgroups)、RepoMap、高反爬爬虫
 └── adapters/                 # Layer 3: 传输网关与交互表面
@@ -210,10 +217,12 @@ crates/
 | **Foundation** | `apeireth-plugin` | 动态插件系统与扩展能力生命周期挂载 | `PluginRegistry::register()`, `CapabilityDescriptor` |
 | **Engine** | `apeireth-memory` | Betti 拓扑洞、Kuramoto 振子、双标度连续场、编年史 | `BettiHoleDetector::analyze()`, `KuramotoResonance::step()` |
 | **Engine** | `apeireth-runtime` | 因果世界模型、心流锁、代理主循环 | `CausalWorldModel::fork_branch()`, `Runtime::execute_outcome()`|
+| **Engine** | `apeireth-runtime-assembly` | 生产组装根：认知模块/工具装配/Organ 桥/SQLite 会话适配 | `production_runtime()`, `SqliteSessionStore` |
 | **Engine** | `apeireth-organ` | 9 大认知器官、人格合成器、自我反思循环 | `OrganRegistry::evaluate()`, `PersonaSynthesizer::blend()` |
 | **Engine** | `apeireth-perception` | Whisper 语音识别、MiniMax TTS 音频流、Xcap 视觉 | `WhisperHttp::transcribe()`, `MinimaxTts::synthesize_stream()`|
 | **Engine** | `apeireth-provider` | 多模型抽象 (Anthropic/OpenAI/Gemini/Ollama) | `ProviderRegistry::dispatch()`, `NormalizedChatCompletions` |
 | **Engine** | `apeireth-storage` | SQLite 连接池、双时态事实图谱、ACID 迁移 | `SqliteConnectionPool::acquire()`, `BitemporalGraph::upsert()`|
+| **Engine** | `apeireth-guard` | 行为链安全 Guard：两阶段行为链分类器，接生产治理管线 | `ChainGuard`, `BehaviorChainGuardHook`, `DecisionFusion` |
 | **Capabilities**| `apeireth-tools-canonical`| ProcessExecutor (JobObject/cgroups)、RepoMap AST | `ProcessExecutor::spawn_bounded()`, `RepoMap::generate()` |
 | **Adapters** | `apeireth-cli` | 标准 CLI 二进制入口、随身 U 盘打包器 | `cli::main()`, `PortableBundleSynthesizer::generate()` |
 | **Adapters** | `apeireth-gateway` | Axum HTTP/SSE 网关、全双工 WebSocket、Ember HUD | `GatewayServer::serve()`, `EmberHudDriver::synthesize()` |
@@ -380,7 +389,7 @@ USB 闪存盘 (E:\ 或 /media/usb/)
 git clone https://github.com/Apeireth/Apeireth.git
 cd Apeireth
 
-# 运行全工作区 3120 项单元测试与集成测试
+# 运行全工作区 3695 项单元测试与集成测试（工作区基线口径）
 cargo test --workspace
 
 # 验证纯 Safe Rust 规范与 Clippy 0 警告
@@ -393,17 +402,42 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
-### 4. 开启交互式结对编程会话
+### 4. 单轮命令行对话（需 API key）
 ```bash
-# 启动本地命令行交互式伴侣
-cargo run -p apeireth-cli -- chat
+# 先设置 API key（PowerShell: $env:APEIRETH_API_KEY = "sk-..."）
+cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
+# `chat` 是单轮命令，不是交互式 REPL。
 ```
 
-### 5. 一键生成随身 U 盘便携生命体 (Portable USB Agent)
+### 5. 下一步
+- 打包桌面端：到 Releases 下载 `Apeireth Companion_<version>_x64-setup.exe`。
+- 随身 U 盘打包命令（`apeireth bundle`）尚未随 v2 发布——见 ROADMAP.md。
+
+---
+
+## 🔍 五分钟独立验证
+
+宣传不用信，命令可以信——三条命令复核核心宣称：
+
 ```bash
-# 打包生成自包含单二进制、./data/ 相对路径隔离与 Windows/POSIX 双启动脚本
-cargo run -p apeireth-cli -- bundle --output-dir "E:\Apeireth-Portable"
+# 1. 测试是真的：全工作区回归
+cargo test --workspace --locked
+# 预期：全部套件绿、0 失败（精确计数由运行本身打印）
+
+# 2. 工程红线：纯 Safe Rust + 零警告
+cargo clippy --workspace --all-targets --locked -- -D warnings
+
+# 3. LLM 接线是真的（任一支持的服务商 key 即可）
+# PowerShell: $env:APEIRETH_API_KEY = "sk-..."
+cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
 ```
+
+更多可审计证据（全部在仓库内）：
+
+- **机器证明的性质**（25 条 Kani 命题 + TLA/TLC 模型检验实跑）：[`research/verification/`](research/verification/)
+- **逐条读码实况盘点**（建了什么、接线没有、默认开没开）：[`reports/code-implementation-audit-2026-09-26.md`](reports/code-implementation-audit-2026-09-26.md)
+- **宣称-证据对照矩阵**（每条对外宣称带状态标）：[`docs/04-internal/claims-evidence-matrix.md`](docs/04-internal/claims-evidence-matrix.md)
+- **基准纪律**：无重跑脚本不发布（基准复现线）
 
 ---
 

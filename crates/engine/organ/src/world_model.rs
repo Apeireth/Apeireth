@@ -1,6 +1,6 @@
-//! W1 World Model 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/world_model.rs`).
+//! W1 World Model 器官真实现（v2）。
 //!
-//! **v1 → v2 1:1 翻译纪律**:
+//! **v1 → v2 语义对齐纪律**:
 //!
 //! - v1 W1 是**LLM 重器官**: 文本模拟器 (per v1 `world_model.rs:1-21` 文档明示 "第一层: LLM 按时间线
 //!   展开反事实推演链"). `TextualSimulator` + `TimelineLlm` trait + `CounterfactualChain` 三件套.
@@ -9,21 +9,21 @@
 //!   `llm_factory()` 返 `Some(Arc<dyn LlmFactory>)`).
 //! - v1 `world_model.rs` 依赖 `apeireth-companion::oracle::{WorldState, Forecast, CalibratedResolver}`.
 //!   v2 organ crate **无 `apeireth-memory` 依赖** (保持依赖最小, 与子代理 R1/R2/R3 一致).
-//!   oracle 子集 (`WorldState` / `Entity` / `Forecast`) 1:1 移植到本模块内部; `ForecastRegistry`
+//!   oracle 子集 (`WorldState` / `Entity` / `Forecast`) 落到本模块内部; `ForecastRegistry`
 //!   留 trait 接口 + NoopForecastRegistry 默认 impl (0 装诚实: 未接真库, 不假装有 oracle 历史).
 //!
 //! **与 v1 真实现的 3 个差异 (子代理 R4 独立判断, 见模块顶注释)**:
 //!
-//! 1. **oracle 子集移植而非依赖**: v1 `world_model.rs:27` 引用 `crate::oracle::CalibratedResolver`.
+//! 1. **oracle 子集内嵌而非依赖**: v1 `world_model.rs:27` 引用 `crate::oracle::CalibratedResolver`.
 //!    v2 organ crate 不依赖 `apeireth-memory` (LOCKED 0 触碰), 把 `WorldState`/`Entity`/`Forecast`
-//!    1:1 复制到本模块, `CalibratedResolver` 改 `Option<Arc<dyn ForecastRegistry>>` —
+//!    复制到本模块, `CalibratedResolver` 改 `Option<Arc<dyn ForecastRegistry>>` —
 //!    `None` 时 `status()` 返 `resolved_count=0, mean_brier=0.0` (无历史校准, 不假装).
 //! 2. **真 LLM 实现**: v1 `TimelineLlm` trait 仅 mock (`MockTimelineLlm`); v2 加
 //!    `LlmTimelineLlm` (impl `TimelineLlm`), 内部用 `LlmFactory::spawn` 起独立 LLM instance,
 //!    `complete()` 推 narrative + state_snapshot. 0 装诚实: 真调 LLM, 失败透传 `LlmError` 转
 //!    `OrganError::LlmError`, 不假装"已调过".
 //! 3. **process 路径**: v1 `world_model.rs` 没显式 `process_episode` (调用方直接用 `sim.run`);
-//!    v2 `WorldModelOrgan::process` 1:1 翻译 v1 文本模拟器入口 — episode 文本 → 反事实假设,
+//!    v2 `WorldModelOrgan::process` 语义对齐 v1 文本模拟器入口 — episode 文本 → 反事实假设,
 //!    调 `TextualSimulator::run` → `OrganOutput::WorldModel { edges, counterfactual }`.
 //!
 //! **0 装 PASS**:
@@ -51,7 +51,7 @@
 //!
 //! **3 阶审查** (O-6 锚 9):
 //!
-//! 1. 总体: 1:1 翻译 v1 `TextualSimulator` + `TimelineLlm` + `CounterfactualChain` + oracle 子集,
+//! 1. 总体: 语义对齐 v1 `TextualSimulator` + `TimelineLlm` + `CounterfactualChain` + oracle 子集,
 //!    真接 `LlmFactory`
 //! 2. 系统: impl 在 engine (`apeireth-organ`), trait 在 foundation (`apeireth-plugin`);
 //!    oracle 子集 (`WorldState`/`Entity`/`Forecast`) 在 organ crate 内 (不污染 plugin)
@@ -68,15 +68,15 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 // ============================================================
-// Oracle 子集 1:1 移植 (WorldState / Entity / Forecast / 校准)
+// Oracle 子集内嵌 (WorldState / Entity / Forecast / 校准)
 // ============================================================
 //
-// v1 `apeireth-companion::oracle::{WorldState, Forecast, CalibratedResolver}` 1:1 移植到本
+// v1 `apeireth-companion::oracle::{WorldState, Forecast, CalibratedResolver}` 落到本
 // 模块. v2 organ crate 无 `apeireth-memory` 依赖, 故 `ForecastRegistry` 留 trait + Noop
 // 默认 impl — 不引入新 workspace dep (0 触碰 LOCKED). 真生产路径接入 ForecastRegistry impl
 // 由 runtime/wiring 层注入 (类似 v1 `GraphReconcileSink` 在 F4 trait 留口子).
 
-/// 世界实体 (per v1 `oracle::Entity` 1:1).
+/// 世界实体 (per v1 `oracle::Entity`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Entity {
     pub id: String,
@@ -84,7 +84,7 @@ pub struct Entity {
     pub props: HashMap<String, f64>,
 }
 
-/// 世界状态: 实体集 + 虚拟 tick (per v1 `oracle::WorldState` 1:1).
+/// 世界状态: 实体集 + 虚拟 tick (per v1 `oracle::WorldState`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WorldState {
     pub entities: Vec<Entity>,
@@ -105,7 +105,7 @@ impl WorldState {
     }
 }
 
-/// 预测断言 (per v1 `oracle::Forecast` 1:1).
+/// 预测断言 (per v1 `oracle::Forecast`).
 ///
 /// **差异 (子代理 R4 独立判断 #1)**: v1 用 `chrono::Utc::now().timestamp_millis()` 隐式取
 /// `created_at_ms`; v2 organ crate 无 chrono 依赖 (0 装诚实 + 依赖最小), 显式由调用方注入.
@@ -127,7 +127,7 @@ pub struct Forecast {
 }
 
 impl Forecast {
-    /// 构造 + clamp (per v1 `Forecast::new` 1:1, 不调 chrono).
+    /// 构造 + clamp (per v1 `Forecast::new`, 不调 chrono).
     pub fn new(statement: impl Into<String>, probability: f64, deadline_ms: i64) -> Self {
         Self {
             // 0 装诚实: 不调 uuid crate (无 workspace dep), 用确定性 ID 格式
@@ -144,7 +144,7 @@ impl Forecast {
         }
     }
 
-    /// 对照真实结果: resolve + Brier score (per v1 1:1).
+    /// 对照真实结果: resolve + Brier score (per v1).
     pub fn resolve(&mut self, actual: bool) {
         let p = self.probability;
         self.resolved = Some(actual);
@@ -152,11 +152,11 @@ impl Forecast {
     }
 }
 
-/// 校准裁决状态 (per v1 `oracle::CalibrationStatus` 1:1).
+/// 校准裁决状态 (per v1 `oracle::CalibrationStatus`).
 ///
 /// **差异**: v1 的 `strength` 字段引用 `crate::confidence::Strength` enum; v2 organ crate 不
 /// 依赖 `apeireth-confidence` (0 装诚实 + 依赖最小). 改用同语义 `CalibrationStrength` 本地
-/// enum (Weak/Moderate/Strong), 字段含义 1:1 对齐 v1 (按已对照观测数分档).
+/// enum (Weak/Moderate/Strong), 字段含义 对齐 v1 (按已对照观测数分档).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CalibrationStrength {
     /// 0 已对照预测 → 无信息 (对应 v1 `Strength::Weak`).
@@ -167,7 +167,7 @@ pub enum CalibrationStrength {
     Strong,
 }
 
-/// 校准状态 (per v1 `oracle::CalibrationStatus` 字段 1:1).
+/// 校准状态 (per v1 `oracle::CalibrationStatus` 字段).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CalibrationStatus {
     /// 校准后的概率点估计 (0..1).
@@ -182,7 +182,7 @@ pub struct CalibrationStatus {
     pub mean_brier: f64,
 }
 
-/// 预测登记表 (per v1 `oracle::ForecastRegistry` 1:1).
+/// 预测登记表 (per v1 `oracle::ForecastRegistry`).
 ///
 /// **0 装 PASS**: trait 口已备, 默认 NoopForecastRegistry (空实现). 真生产路径注入真
 /// ForecastRegistry impl (依赖 apeireth-memory SqliteMemoryStore). 与 F4 `ReconcileSink`
@@ -203,7 +203,7 @@ impl ForecastRegistry for NoopForecastRegistry {
     }
 }
 
-/// 校准裁决器 (per v1 `oracle::CalibratedResolver` 1:1).
+/// 校准裁决器 (per v1 `oracle::CalibratedResolver`).
 ///
 /// **差异 (子代理 R4 独立判断 #1)**: v1 `CalibratedResolver` 必持有 `ForecastRegistry`
 /// (依赖 SqliteMemoryStore). v2 organ crate 改用 `Option<Arc<dyn ForecastRegistry>>` —
@@ -242,7 +242,7 @@ impl CalibratedResolver {
         }
     }
 
-    /// 校准状态 (per v1 `CalibratedResolver::status` 1:1).
+    /// 校准状态 (per v1 `CalibratedResolver::status`).
     ///
     /// 无 registry → 返空 (resolved_count=0, mean_brier=0.0). 有 registry → 从
     /// 已对照预测累积 (BetaBinomial 简化版: 后验均值 = (1+successes)/(2+total)).
@@ -310,10 +310,10 @@ impl Default for CalibratedResolver {
 }
 
 // ============================================================
-// 推演链数据结构 (per v1 world_model.rs 1:1)
+// 推演链数据结构 (per v1 world_model.rs)
 // ============================================================
 
-/// LLM 调用上下文: 推演下一步所需的全部状态 (per v1 `TimelineContext` 1:1).
+/// LLM 调用上下文: 推演下一步所需的全部状态 (per v1 `TimelineContext`).
 #[derive(Debug, Clone)]
 pub struct TimelineContext {
     /// 推演起点世界状态 (不变, 用于约束推演语义, 防 LLM 漂移).
@@ -328,7 +328,7 @@ pub struct TimelineContext {
     pub tick: u64,
 }
 
-/// 推演链一步: 叙事 + 状态快照 (per v1 `TimelineStep` 1:1).
+/// 推演链一步: 叙事 + 状态快照 (per v1 `TimelineStep`).
 #[derive(Debug, Clone)]
 pub struct TimelineStep {
     pub tick: u64,
@@ -336,7 +336,7 @@ pub struct TimelineStep {
     pub state_snapshot: WorldState,
 }
 
-/// 一条完整反事实推演链 (per v1 `CounterfactualChain` 1:1).
+/// 一条完整反事实推演链 (per v1 `CounterfactualChain`).
 #[derive(Debug, Clone)]
 pub struct CounterfactualChain {
     pub hypothesis: String,
@@ -372,7 +372,7 @@ impl CounterfactualChain {
 // LLM trait (TimelineLlm) — 真接 LLM 接口
 // ============================================================
 
-/// LLM 抽象: 按时间线展开反事实推演链 (per v1 `TimelineLlm` 1:1).
+/// LLM 抽象: 按时间线展开反事实推演链 (per v1 `TimelineLlm`).
 ///
 /// v1 真 LLM 未接, 仅 `MockTimelineLlm` 测试用. v2 加 `LlmTimelineLlm` 真实现 (用
 /// `LlmFactory` 起 instance → `complete()` 推 narrative + state_snapshot). 0 装诚实:
@@ -389,10 +389,10 @@ pub trait TimelineLlm: Send + Sync {
 }
 
 // ============================================================
-// 文本模拟器 (编排器) — per v1 TextualSimulator 1:1
+// 文本模拟器 (编排器) — per v1 TextualSimulator
 // ============================================================
 
-/// 文本模拟器: 按时间线编排 LLM 推演链 + oracle Brier 终点校准 (per v1 `TextualSimulator` 1:1).
+/// 文本模拟器: 按时间线编排 LLM 推演链 + oracle Brier 终点校准 (per v1 `TextualSimulator`).
 ///
 /// ## 工作流
 /// 1. `run`: 迭代 `max_steps` 次, 每次调 `llm.expand_step(ctx)`; 空 narrative 即停.
@@ -447,7 +447,7 @@ impl TextualSimulator {
         self
     }
 
-    /// 推演一条反事实链 (per v1 `TextualSimulator::run` 1:1).
+    /// 推演一条反事实链 (per v1 `TextualSimulator::run`).
     pub async fn run(
         &self,
         start_state: WorldState,
@@ -504,7 +504,7 @@ impl TextualSimulator {
     }
 
     /// 对账: 用真实结局 resolve 终点 forecast, 更新 `calibration_brier`, 按阈值决定
-    /// 是否拒绝整条链 (per v1 `TextualSimulator::calibrate` 1:1).
+    /// 是否拒绝整条链 (per v1 `TextualSimulator::calibrate`).
     pub fn calibrate(
         &self,
         chain: &mut CounterfactualChain,
@@ -530,10 +530,10 @@ impl TextualSimulator {
 }
 
 // ============================================================
-// Mock TimelineLlm (测试用) — per v1 MockTimelineLlm 1:1
+// Mock TimelineLlm (测试用) — per v1 MockTimelineLlm
 // ============================================================
 
-/// 测试用 Mock LLM: 硬编码推演脚本 + 终点概率 (per v1 `MockTimelineLlm` 1:1).
+/// 测试用 Mock LLM: 硬编码推演脚本 + 终点概率 (per v1 `MockTimelineLlm`).
 ///
 /// 脚本耗尽后 `expand_step` 返回空 narrative (= 链自然结束).
 pub struct MockTimelineLlm {
@@ -596,7 +596,7 @@ impl LlmTimelineLlm {
     /// 失败: 返空 narrative (链自然结束, 不假装"已调 LLM").
     fn parse_response(content: &str, prior_state: &WorldState, tick: u64) -> TimelineStep {
         // 0 装诚实: 解析失败返 narrative="" → TextualSimulator 当链结束 (per v1 语义).
-        // 真 LLM 调用方应保证 schema; 但 W1 1:1 v1 仍兜底空 narrative.
+        // 真 LLM 调用方应保证 schema; 但 W1 对齐 v1 仍兜底空 narrative.
         let narrative = content.trim().to_string();
         let state_snapshot = prior_state.clone(); // 默认 prior_state (防 panic)
         TimelineStep {
@@ -620,7 +620,7 @@ impl LlmTimelineLlm {
             链结束信号: 返回 narrative 为空字符串."
                 .to_string();
 
-        // user prompt: 把 ctx 序列化 (1:1 翻译 v1 TimelineContext 用途)
+        // user prompt: 把 ctx 序列化 (语义对齐 v1 TimelineContext 用途)
         let user_payload = serde_json::json!({
             "hypothesis": ctx.hypothesis,
             "prior_narrative": ctx.prior_narrative,
@@ -698,7 +698,7 @@ pub struct CounterfactualQuery {
     pub current_state: String,
 }
 
-/// 状态 diff (per 任务示例 schema, 1:1 翻译 v1).
+/// 状态 diff (per 任务示例 schema, 语义对齐 v1).
 #[derive(Debug, Clone, Default)]
 pub struct StateDiff {
     /// 新增实体 ID.
@@ -720,7 +720,7 @@ pub struct WorldModel {
 }
 
 impl WorldModel {
-    /// 构造 WorldModel (真接 LLM factory, per W1 1:1 翻译 v1 真实现 LLM 重).
+    /// 构造 WorldModel (真接 LLM factory, per W1 语义对齐 v1 真实现 LLM 重).
     pub fn new(factory: Arc<dyn LlmFactory>, model: impl Into<String>) -> Self {
         Self {
             factory,
@@ -810,13 +810,13 @@ impl WorldModel {
 // WorldModelOrgan (v2 trait 真实现)
 // ============================================================
 
-/// W1 世界模型器官 (per v2 OrganTrait 1:1 翻译 v1 TextualSimulator + 真接 LlmFactory).
+/// W1 世界模型器官 (per v2 OrganTrait 语义对齐 v1 TextualSimulator + 真接 LlmFactory).
 ///
 /// **关键区别 (vs E4/F1/F4/F6)**:
 /// - W1 是**LLM 重** (per v1 doc "第一层: LLM 按时间线展开反事实推演链"). 必然 `llm_factory()`
 ///   返 `Some(factory)` — 不假装"确定性无 LLM".
 /// - E4/F1/F4/F6 是**确定性无 LLM** (per v1 各自文档明示). trait `llm_factory()` 默认 None,
-///   这些器官 1:1 翻译 v1 确定性算法, 不调 LLM.
+///   这些器官 语义对齐 v1 确定性算法, 不调 LLM.
 ///
 /// **构造**:
 /// - `factory`: 必传 (W1 必须 LLM); 真生产用 `MinimaxLlmFactory` 等, 测试用 `MockLlmFactory`.
@@ -835,7 +835,7 @@ impl WorldModelOrgan {
         }
     }
 
-    /// 暴露 WorldModel 内部 (供测试 / 高级用法, 1:1 v1 `TextualSimulator` 入口).
+    /// 暴露 WorldModel 内部 (供测试 / 高级用法, 对齐 v1 `TextualSimulator` 入口).
     pub fn world_model(&self) -> &WorldModel {
         &self.model
     }
@@ -852,7 +852,7 @@ impl OrganTrait for WorldModelOrgan {
     }
 
     async fn process(&self, input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1:1 翻译 v1 `TextualSimulator::run` 入口:
+        // 语义对齐 v1 `TextualSimulator::run` 入口:
         // - 反事实假设: episode 文本为主, 叠加 context_hints (per v1 timeline 输入格式)
         // - 起点状态: WorldState::default() (推演起点固定, 防 LLM 漂移, per v1:108-110)
         // - 真调 LLM: LlmTimelineLlm::expand_step → LlmFactory → 真 LLM
@@ -873,7 +873,7 @@ impl OrganTrait for WorldModelOrgan {
             current_state,
         };
         let state = self.model.simulate(query).await?;
-        // 1:1 v1: counterfactual 字段是叙事序列; 状态序列由 steps.narrative 收集.
+        // 对齐 v1: counterfactual 字段是叙事序列; 状态序列由 steps.narrative 收集.
         // 这里 process 路径下未走 TextualSimulator.run (因 simulate() 已封装), narrative
         // 序列不可见 → 用空 Vec + 状态边界提示, 0 装诚实: 不假装有 counterfactual 文本。
         //
@@ -890,7 +890,7 @@ impl OrganTrait for WorldModelOrgan {
             .await)
             .unwrap_or_default(); // 仅验 trait API 可用, 不返 (OrganOutput schema 无 diff 字段)
         Ok(OrganOutput::WorldModel {
-            edges: vec![], // W2/W3 真接时填 (CausalEdge 1:1 翻译 v1)
+            edges: vec![], // W2/W3 真接时填 (CausalEdge 语义对齐 v1)
             counterfactual: counterfactual_text,
         })
     }
@@ -902,7 +902,7 @@ impl OrganTrait for WorldModelOrgan {
 }
 
 // ============================================================
-// 单元测试 (1:1 翻译 v1 world_model.rs 4 个验收点)
+// 单元测试 (语义对齐 v1 world_model.rs 4 个验收点)
 // ============================================================
 
 #[cfg(test)]
@@ -920,7 +920,7 @@ mod tests {
         }
     }
 
-    /// 构造 n 步 mock 脚本, 终点概率 p (per v1 mock_with_steps 1:1).
+    /// 构造 n 步 mock 脚本, 终点概率 p (per v1 mock_with_steps).
     fn mock_with_steps(n: usize, p: f64) -> Arc<dyn TimelineLlm> {
         let scripts: Vec<TimelineStep> = (0..n)
             .map(|i| TimelineStep {
@@ -942,7 +942,7 @@ mod tests {
         })
     }
 
-    /// v1 1:1: textual_simulator_generates_chain — 推演链生成
+    /// 对齐 v1: textual_simulator_generates_chain — 推演链生成
     #[tokio::test]
     async fn textual_simulator_generates_chain() {
         let llm = mock_with_steps(3, 0.7);
@@ -964,7 +964,7 @@ mod tests {
         assert_eq!(chain.steps[2].tick, 2);
     }
 
-    /// v1 1:1: textual_simulator_calibrates_with_brier — Brier 终点校准数值正确
+    /// 对齐 v1: textual_simulator_calibrates_with_brier — Brier 终点校准数值正确
     #[test]
     fn textual_simulator_calibrates_with_brier() {
         let llm = mock_with_steps(3, 0.7);
@@ -993,7 +993,7 @@ mod tests {
         );
     }
 
-    /// v1 1:1: textual_simulator_rejects_high_brier — 校准差拒绝
+    /// 对齐 v1: textual_simulator_rejects_high_brier — 校准差拒绝
     #[test]
     fn textual_simulator_rejects_high_brier() {
         let llm = mock_with_steps(2, 0.9);
@@ -1016,7 +1016,7 @@ mod tests {
         );
     }
 
-    /// v1 1:1: textual_simulator_does_not_persist_to_memory — 0 装 PASS 边界
+    /// 对齐 v1: textual_simulator_does_not_persist_to_memory — 0 装 PASS 边界
     ///
     /// **子代理 R4 独立判断 #2**: v1 用 `SqliteMemoryStore::open_in_memory()` 验入库;
     /// v2 organ crate 无 `apeireth-memory` 依赖. 改验: chain.steps 不会触发任何 IO (无

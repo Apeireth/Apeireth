@@ -2,7 +2,7 @@
 
 > **文档属性**：代码行级基线审查、理论范式映射与下一代增量升级工程蓝图
 >
-> **审查对象**：Apeireth 2.0 源码全库（17-crate 纯 Safe Rust 微内核体系）、170+ 外部前沿标杆项目、四大科学家未来范式报告
+> **审查对象**：Apeireth 2.0 源码全库（纯 Safe Rust 微内核体系；编制时 17-crate，现行 18-crate）、170+ 外部前沿标杆项目、四大科学家未来范式报告
 >
 > **核心原则**：坚持 **S-2 实事求是**、**O-5 0 装 PASS**、**O-6 永远追求最优**，严禁空中楼阁，以行级代码颗粒度厘清“已实现资产”与“下一代升级点”。
 
@@ -103,7 +103,7 @@
 
 | 模块文件 | 核心结构体 / 函数 | 通信与感知能力 | 状态与单测覆盖 |
 |---|---|---|:---:|
-| `file_fetcher.rs` | `TransparentFileFetcher` | 超栈追踪 V2 跨节点透明文件 Base64 穿透；SHA-256 缓存与防路径穿越沙箱。 | ✅ 100% PASS |
+| `file_fetcher.rs` | `TransparentFileFetcher` | 跨节点透明文件 Base64 穿透；SHA-256 缓存与防路径穿越沙箱。 | ✅ 100% PASS |
 | `duplex_gateway.rs` | `DuplexFrame`, `SentenceDivider` | 8 帧体系全双工 WebSocket 网关；流式分句；毫秒级 Barge-in 打断控制。 | ✅ 100% PASS |
 | `voice/minimax_tts.rs` | `MinimaxTtsClient` | MiniMax LIVE 128kbps 32kHz 高保真语音流式生成；3D PAD 情感参数调制。 | ✅ 100% PASS |
 

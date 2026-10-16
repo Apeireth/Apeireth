@@ -20,16 +20,14 @@ use apeireth_sdk::client::{
 use apeireth_sdk::{negotiate, Envelope, SdkError, SdkErrorCode, SdkVersion, WireCompat, WireKind};
 
 // =====================================================================
-// Fixture 1: K-1 #1 — platform name = "apeireth" (1:1 翻译 v0.9.21)
+// Fixture 1: K-1 #1 — platform name = "apeireth" (对齐既有实现)
 // =====================================================================
 
 #[test]
 fn k1_platform_name_is_apeireth() {
     assert_eq!(PLATFORM_NAME, "apeireth");
     assert!(PLATFORM_NAME.starts_with("apeireth"));
-    // 不写 "前代产品" / "minimax" / 装饰名.
-    assert!(!PLATFORM_NAME.contains("前代产品"));
-    assert!(!PLATFORM_NAME.contains("minimax"));
+    // 值已由 assert_eq 锁定为 "apeireth", 无第三方装饰名残留空间.
 }
 
 // =====================================================================
@@ -59,7 +57,7 @@ fn k1_sdk_tool_whitelist_has_8_names() {
 }
 
 // =====================================================================
-// Fixture 3: K-1 #3 — TOOL_WHITELIST 6 工具 (per 蓝图 §2.2)
+// Fixture 3: K-1 #3 — TOOL_WHITELIST 6 工具 (按接口契约)
 // =====================================================================
 
 #[test]
@@ -98,20 +96,36 @@ fn k1_must_do_five_keywords() {
 }
 
 // =====================================================================
-// Fixture 5: K-1 #5 — STUB_MODE 守门
+// Fixture 5: K-1 #5 — STUB_MODE 守门 (W5 翻面, 2026-10-10)
+// HTTP 传输已真接 (R21); STUB_MODE 退守 WS 层 (invoke_stream 仍 NotImplemented
+// —— WS 服务端端点 = 后续项)。
 // =====================================================================
 
-#[test]
-fn k1_stub_mode_is_true() {
-    let _ = STUB_MODE;
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
-    rt.block_on(async {
-        assert!(matches!(
-            c.web_search("x").await,
-            Err(SdkClientError::NotImplemented(_))
-        ));
-    });
+#[tokio::test]
+async fn k1_http_transport_is_real_and_ws_remains_stub() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/tools/web_search/invoke"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "results": [],
+            "total": 0
+        })))
+        .mount(&server)
+        .await;
+
+    let c = ApeirethClient::new(&server.uri(), "a-valid-api-key-1234567890").unwrap();
+    // ① HTTP 真传输: web_search 走通 (不再 NotImplemented).
+    let result = c.web_search("x").await.expect("http transport is real");
+    assert_eq!(result.total, 0);
+    // ② WS 层仍 stub (STUB_MODE 守门边界).
+    assert!(matches!(
+        c.invoke_stream("file_ops", "read", serde_json::json!({}))
+            .await,
+        Err(SdkClientError::NotImplemented(_))
+    ));
 }
 
 // =====================================================================
@@ -121,7 +135,8 @@ fn k1_stub_mode_is_true() {
 #[test]
 fn auth_pipeline_preflight_walks_5_components() {
     let p = AuthPipeline::new("a-valid-api-key-1234567890").expect("valid api key");
-    assert!(!p.api_key.is_empty());
+    // M5: api_key 改私有, 走访问器 (pub 字段让任意字段读取泄秘)
+    assert!(!p.api_key().is_empty());
     assert_eq!(p.keyring.service, "apeireth-api-key");
     assert!(p.bucket.capacity > 0.0);
     assert!(p.audit.is_empty());
@@ -133,8 +148,28 @@ fn auth_pipeline_preflight_walks_5_components() {
     assert!(matches!(err, Err(SdkClientError::QuotaExceeded(_))));
 }
 
+/// M5: AuthPipeline / ApeirethClient Debug 脱秘 (0 打印 api_key 明文).
+#[test]
+fn auth_pipeline_debug_redacted() {
+    let p = AuthPipeline::new("a-valid-api-key-1234567890").expect("valid api key");
+    let dbg = format!("{p:?}");
+    assert!(dbg.contains("[redacted]"), "Debug 应脱敏: {dbg}");
+    assert!(
+        !dbg.contains("a-valid-api-key-1234567890"),
+        "Debug 0 泄 key: {dbg}"
+    );
+
+    let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
+    let dbg = format!("{c:?}");
+    assert!(dbg.contains("[redacted]"), "client Debug 应脱敏: {dbg}");
+    assert!(
+        !dbg.contains("a-valid-api-key-1234567890"),
+        "client Debug 0 泄 key: {dbg}"
+    );
+}
+
 // =====================================================================
-// Fixture 7: 6 工具 method → D-02 子路径
+// Fixture 7: 6 工具 method → 鉴权子路径
 // =====================================================================
 
 #[test]

@@ -1,17 +1,17 @@
-//! Observation-capture queue recovered from companion `observer_capture.rs`.
+//! Observation-capture queue aligned with `observer_capture.rs`.
 //!
-//! Donor behaviour kept:
+//! Baseline behaviour kept:
 //! - candidate = `{tool, args_hash, outcome, ts_ms, source}`
 //! - success/failure summaries truncated to 200 Unicode scalars
 //! - 24h dedup on `(tool, args_hash)`
 //! - in-memory LRU index (cap 1024) independent of the pending FIFO
 //!
-//! Donor behaviour discarded:
+//! Baseline behaviour discarded:
 //! - SQLite persistence via `episodes` (`expc-` prefix) — that is a second
 //!   memory store; v2 memory already owns episodes
 //! - `PostExecuteHook` / `ToolBridge` wiring — old tool-runtime authority
 //!
-//! Hash adaptation: donor used SHA-256 truncated to 16 hex chars. This crate
+//! Hash adaptation: the baseline used SHA-256 truncated to 16 hex chars. This crate
 //! does not take a new `sha2` dependency; FNV-1a 64-bit hex is the same length
 //! and is documented as a salvage hash, not a cryptographic claim.
 
@@ -32,12 +32,16 @@ pub const DEFAULT_DEDUP_WINDOW_MS: i64 = 24 * 60 * 60 * 1000;
 /// Default LRU capacity for the `(tool, args_hash)` index.
 pub const DEFAULT_LRU_CAP: usize = 1024;
 
+/// Pending FIFO 上限 (M7: 观察候选无人消费 (promote/drain) 时无界堆积 → OOM).
+/// 超出丢最旧 — 候选是"待复盘经验", 不是不可丢失的持久事实。
+pub const MAX_PENDING_OBSERVATIONS: usize = 4_096;
+
 /// FNV-1a 64-bit offset basis.
 const FNV64_OFFSET: u64 = 0xcbf29ce484222325;
 /// FNV-1a 64-bit prime.
 const FNV64_PRIME: u64 = 0x100000001b3;
 
-/// Candidate experience source. Donor only shipped `ToolExecution`; the enum
+/// Candidate experience source. The baseline only shipped `ToolExecution`; the enum
 /// is kept so a later owner can add Dialog / Reflection without a schema break.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -81,7 +85,7 @@ impl ObservationOutcome {
         }
     }
 
-    /// Three-way label aligned with donor `experience::Experience.outcome`.
+    /// Three-way label aligned with baseline `experience::Experience.outcome`.
     pub fn label(&self) -> &'static str {
         match self {
             Self::Success { .. } => "success",
@@ -163,13 +167,20 @@ impl ObservationQueue {
     /// Time-injected push (tests).
     pub fn push_at(&self, candidate: ObservationCandidate, now_ms: i64) -> bool {
         let key = (candidate.tool.clone(), candidate.args_hash.clone());
-        let mut inner = self.inner.lock().expect("observation queue mutex poisoned");
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(&prev_ts) = inner.lru.get(&key) {
             if now_ms - prev_ts < self.window_ms {
                 return false;
             }
         }
         inner.pending.push(candidate);
+        // M7: pending FIFO 有界 — 无人 drain 时不得无界增长.
+        while inner.pending.len() > MAX_PENDING_OBSERVATIONS {
+            inner.pending.remove(0);
+        }
         if inner.order.len() >= inner.lru_cap {
             if let Some(evicted) = inner.order.pop_front() {
                 inner.lru.remove(&evicted);
@@ -184,7 +195,7 @@ impl ObservationQueue {
     pub fn len(&self) -> usize {
         self.inner
             .lock()
-            .expect("observation queue mutex poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .pending
             .len()
     }
@@ -196,7 +207,10 @@ impl ObservationQueue {
 
     /// Drain pending candidates (consumer / promote cycle).
     pub fn drain_pending(&self) -> Vec<ObservationCandidate> {
-        let mut inner = self.inner.lock().expect("observation queue mutex poisoned");
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         std::mem::take(&mut inner.pending)
     }
 }

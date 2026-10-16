@@ -11,6 +11,9 @@
 // imported at module scope by shared code — `@tauri-apps/api` is loaded through
 // a dynamic import that is only reached when the Tauri global is present.
 
+import type {CapabilityToggles} from './types';
+import {BUDGET_KNOB_SPECS, resolveBudgetLimitInput} from './budget.ts';
+
 /** Backend lifecycle states, mirroring the Rust `BackendState` enum. */
 export type BackendState = 'Stopped' | 'Starting' | 'Ready' | 'Failed' | 'Stopping';
 
@@ -140,33 +143,138 @@ export async function applyBackendProviderEnv(env: BackendProviderEnv): Promise<
 /**
  * Advanced-capability toggles, mirroring the Rust `BackendCapabilityEnv`.
  * Fail-closed: the supervisor injects `"1"` only for true values; absent
- * means OFF in the canonical CLI.
+ * means OFF in the canonical CLI. Numeric knobs use 0 = "do not inject"
+ * so the backend keeps its own default.
+ *
+ * 记忆核心族三件（preference_learning / proactive_recall / memory_injection）
+ * 例外：CLI 侧默认开，所以开关必须双向显式注入（开 = "1"、关 = "0"），
+ * 否则「关」会被 CLI 的默认开覆盖。缺省（未配）按默认开映射。
+ *
+ * 2026-10-10 W2/W3 收官批：补齐补漏落地的全部认知旋钮（partner_bond /
+ * morphology / education / absorption / community / onering / onion /
+ * worktree + 记忆流四件 + 议会数值旋钮）。
  */
 export interface BackendCapabilityEnv {
   enable_shell: boolean;
+  /** true → 注入 APEIRETH_SHELL_SANDBOX=0（显式裸跑）；false → 不注入（后端默认沙箱开）。 */
+  shell_sandbox_off: boolean;
   enable_fetch: boolean;
+  enable_local_read_tools: boolean;
+  /** 受控文件写入（apply_patch 补丁式写入）：仅 true 注入 "1"（默认关，fail-closed）。 */
+  enable_file_write: boolean;
+  /** 子开关「自动放行已读文件修改」：依赖主开关——fileWrite 关时恒 false 不注入
+   *  （依赖语义），主开关 + 子开关都开才注入 "1"。 */
+  enable_file_write_auto_pass: boolean;
+  disable_typed_recall: boolean;
   enable_organs: boolean;
   enable_preference_learning: boolean;
+  enable_proactive_recall: boolean;
+  enable_memory_injection: boolean;
+  enable_consolidation: boolean;
+  enable_reflexion: boolean;
+  enable_partner_bond: boolean;
+  enable_morphology_recall: boolean;
+  enable_education: boolean;
+  enable_absorption_insight: boolean;
+  enable_community_triage: boolean;
+  enable_onering_ledger: boolean;
   cognitive_judge: boolean;
   cognitive_council: boolean;
+  /** 1-7；0 = 不注入（后端默认 3）。 */
+  council_advisors: number;
+  /** 毫秒；0 = 不注入（后端默认 30000）。 */
+  council_timeout_ms: number;
+  /** 检索温度；0 = 不注入（后端默认 1.0）。 */
+  morphology_temperature: number;
+  enable_onion_layer: boolean;
+  enable_worktree_sandbox: boolean;
+  /** [Beta] 思考模式（reasoning_content 分流展示）；字符串字段空 = 不注入。 */
+  reasoning_enabled: boolean;
+  reasoning_model_filters: string;
+  reasoning_tag: string;
+  /** 性格养成体验旋钮：恒注入当前值（缺省/非法回基线，越界钳到 [min,max]），
+   *  保持 JS number 由 Rust 侧格式化。 */
+  tune_memory_fade: number;
+  tune_curiosity_strength: number;
+  tune_tone_saturation: number;
+  /** 整合节奏·每 N 回合；≥1 整数（1 = 每回合 = 现行为）。 */
+  tune_consolidation_cadence: number;
+  /** 「从使用中学习」：仅 true 注入 "1"（后端 "1" 才开，默认关，fail-closed）。 */
+  enable_self_tuning: boolean;
+  /** 单回合轮数上限（APEIRETH_MAX_TURN_ROUNDS）；缺省 = 不注入（后端默认 8）。
+   *  取值裁决在后端解析：越界钳制 1..=64、非法回默认。 */
+  turn_round_limit?: number;
+  /** 单轮工具调用上限（APEIRETH_MAX_TOOL_CALLS）；缺省 = 不注入（后端默认 16）。 */
+  tool_call_limit?: number;
+  /** 上下文注入总字符预算（APEIRETH_CONTEXT_BUDGET_CHARS）；缺省 = 不注入
+   *  （后端默认 24000；正整数直通、越界/非法回默认）。 */
+  context_budget_chars?: number;
 }
 
-/** Map the config's capability toggles onto the canonical knob names. */
-export function capabilityEnvFromConfig(toggles: {
-  shell?: boolean;
-  fetch?: boolean;
-  organs?: boolean;
-  preferenceLearning?: boolean;
-  judge?: boolean;
-  council?: boolean;
-} | undefined | null): BackendCapabilityEnv {
+/** Map the config's capability toggles onto the canonical knob names.
+ *  记忆核心族三件缺省 = 开（`!== false`）：未配 capabilities 时不把默认开的
+ *  核心记忆误映射成显式关。 */
+export function capabilityEnvFromConfig(toggles: CapabilityToggles | undefined | null): BackendCapabilityEnv {
+  const advisors = Math.min(7, Math.max(1, Math.round(toggles?.councilAdvisors ?? 3)));
+  const timeout = Math.max(1000, Math.round(toggles?.councilTimeoutMs ?? 30000));
+  const temperature = toggles?.morphologyTemperature ?? 1.0;
+  /** 性格养成体验旋钮：缺省/非有限回基线，越界钳到 [min,max]（整数取整在调用侧）。 */
+  const tuneKnob = (v: unknown, baseline: number, min: number, max: number): number => {
+    const n = typeof v === 'number' && Number.isFinite(v) ? v : baseline;
+    return Math.min(max, Math.max(min, n));
+  };
+  /** 预算旋钮（回合预算 + 上下文字符预算）：配置有值才注入（缺省 = 不注入 =
+   *  后端默认现行为）；归一走与后端解析同一条语义（budget.ts 单一来源），
+   *  非法值回默认落点 = 不注入。 */
+  const budgetValue = (
+    key: 'maxTurnRounds' | 'maxToolCalls' | 'contextBudgetChars',
+  ): number | undefined => {
+    const resolution = resolveBudgetLimitInput(toggles?.[key] ?? null, BUDGET_KNOB_SPECS[key]);
+    return resolution.value ?? undefined;
+  };
   return {
     enable_shell: toggles?.shell === true,
+    // 反向语义：UI 默认开沙箱；显式关沙箱才注入 =0（fail-closed）。
+    shell_sandbox_off: toggles?.shellSandbox === false,
     enable_fetch: toggles?.fetch === true,
+    // 本地只读三件套同默认开语义：缺省 = 开、显式 false = 关（注入侧双向显式）。
+    enable_local_read_tools: toggles?.localReadTools !== false,
+    // 受控文件写入两件 fail-closed：子开关依赖主开关——主开关关时绝不注入。
+    enable_file_write: toggles?.fileWrite === true,
+    enable_file_write_auto_pass: toggles?.fileWrite === true && toggles?.fileWriteAutoPass === true,
+    disable_typed_recall: toggles?.typedRecall === false,
     enable_organs: toggles?.organs === true,
-    enable_preference_learning: toggles?.preferenceLearning === true,
+    // 记忆核心族：缺省 = 开、显式 false = 关（注入侧由 Rust 显式发 1/0）。
+    enable_preference_learning: toggles?.preferenceLearning !== false,
+    enable_proactive_recall: toggles?.proactiveRecall !== false,
+    enable_memory_injection: toggles?.memoryInjection !== false,
+    enable_consolidation: toggles?.consolidation === true,
+    enable_reflexion: toggles?.reflexion === true,
+    enable_partner_bond: toggles?.partnerBond === true,
+    enable_morphology_recall: toggles?.morphologyRecall === true,
+    enable_education: toggles?.education === true,
+    enable_absorption_insight: toggles?.absorptionInsight === true,
+    enable_community_triage: toggles?.communityTriage === true,
+    enable_onering_ledger: toggles?.oneringLedger === true,
     cognitive_judge: toggles?.judge === true,
     cognitive_council: toggles?.council === true,
+    council_advisors: toggles?.council === true ? advisors : 0,
+    council_timeout_ms: toggles?.council === true ? timeout : 0,
+    morphology_temperature: toggles?.morphologyRecall === true && temperature > 0 ? temperature : 0,
+    enable_onion_layer: toggles?.onionLayer === true,
+    enable_worktree_sandbox: toggles?.worktreeSandbox === true,
+    reasoning_enabled: toggles?.reasoningEnabled === true,
+    reasoning_model_filters: toggles?.reasoningEnabled === true ? (toggles?.reasoningModelFilters ?? '').trim() : '',
+    reasoning_tag: toggles?.reasoningEnabled === true ? (toggles?.reasoningTag ?? 'think').trim() : '',
+    // 性格养成体验旋钮：四个数值恒发（当前值），「从使用中学习」fail-closed。
+    tune_memory_fade: tuneKnob(toggles?.memoryFade, 1.0, 0.25, 4.0),
+    tune_curiosity_strength: tuneKnob(toggles?.curiosityStrength, 1.0, 0.25, 4.0),
+    tune_tone_saturation: tuneKnob(toggles?.toneSaturation, 1.0, 0.0, 2.0),
+    tune_consolidation_cadence: Math.round(tuneKnob(toggles?.consolidationCadence, 1, 1, 10)),
+    enable_self_tuning: toggles?.selfTuning === true,
+    turn_round_limit: budgetValue('maxTurnRounds'),
+    tool_call_limit: budgetValue('maxToolCalls'),
+    context_budget_chars: budgetValue('contextBudgetChars'),
   };
 }
 
@@ -183,9 +291,46 @@ export async function applyBackendConfig(
   return info?.endpoint ?? null;
 }
 
+/**
+ * Same contract as {@link applyBackendConfig}, but an IPC failure rejects
+ * instead of collapsing to null. Callers doing optimistic UI updates (the
+ * settings capability toggles apply on click) need to know the push failed so
+ * they can roll the control back and surface the error. Web mode still
+ * resolves null: there is nothing to push.
+ */
+export async function applyBackendConfigOrThrow(
+  provider: BackendProviderEnv | null,
+  capabilities: BackendCapabilityEnv | null,
+): Promise<string | null> {
+  if (!isDesktop()) return null;
+  const {invoke} = await import('@tauri-apps/api/core');
+  const info = await invoke<BackendStatus>('apply_backend_config', {provider, capabilities});
+  return info?.endpoint ?? null;
+}
+
 /** Absolute path of the log directory. */
 export function getLogDirectory(): Promise<string | null> {
   return invokeOptional<string>('get_log_directory');
+}
+
+/**
+ * 「从使用中学习」自动调整记录（只读）：后端写入数据目录的 tuning-log.jsonl，
+ * 此处只读展示。param 取值：memory_fade / curiosity_strength /
+ * tone_saturation / consolidation_cadence。非桌面环境或读取失败返回 null，
+ * 调用侧据此诚实标注「仅桌面版可读」，不伪造空记录。
+ */
+export interface TuningLogEntry {
+  seq: number;
+  param: string;
+  previous: number;
+  next: number;
+  reason: string;
+  at_epoch_ms: number;
+}
+
+/** 读取学习日志（最新在后）；null = 非桌面版 / 读取失败。 */
+export function readTuningLog(): Promise<TuningLogEntry[] | null> {
+  return invokeOptional<TuningLogEntry[]>('read_tuning_log');
 }
 
 /** Reveal the log directory in the platform file manager. */

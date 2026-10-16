@@ -147,7 +147,7 @@ pub async fn admin_config_get(State(state): State<GatewayState>) -> Json<ConfigV
     let config = state
         .hot_config
         .read()
-        .expect("gateway hot config lock poisoned");
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     Json(config.view())
 }
 
@@ -184,7 +184,7 @@ pub async fn admin_config_update(
         let mut config = state
             .hot_config
             .write()
-            .expect("gateway hot config lock poisoned");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(provider) = patch.provider.clone() {
             config.provider = provider;
         }
@@ -206,7 +206,7 @@ pub async fn admin_config_update(
     let provider = state
         .hot_config
         .read()
-        .expect("gateway hot config lock poisoned")
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .provider
         .clone();
 
@@ -256,27 +256,53 @@ pub async fn admin_config_update(
 }
 
 fn provider_registered(state: &GatewayState, provider: &str) -> bool {
-    state.runtime.providers().provider_ids().iter().any(|id| {
-        id.as_str() == provider || id.as_str() == format!("provider.{provider}")
-    })
+    let normalized = normalize_provider(provider);
+    state
+        .runtime
+        .providers()
+        .provider_ids()
+        .iter()
+        .any(|id| id.as_str() == normalized || id.as_str() == format!("provider.{normalized}"))
 }
 
 fn provider_capability_id(provider: &str) -> Result<CapabilityId, String> {
-    let raw = if provider.starts_with("provider.") {
-        provider.to_string()
+    let normalized = normalize_provider(provider);
+    let raw = if normalized.starts_with("provider.") {
+        normalized
     } else {
-        format!("provider.{provider}")
+        format!("provider.{normalized}")
     };
     CapabilityId::new(raw).map_err(|error| format!("provider 名无法映射到 capability id: {error}"))
+}
+
+/// 归一 provider 家族名到注册时的 canonical 拼写。
+///
+/// 已知别名: admin/UI/钥匙串侧的 `openai` 指向注册的 `openai-compatible`
+/// provider 家族 (capability id `provider.openai-compatible`)。不归一的话,
+/// `{"provider":"openai","api_key":...}` 会把 key 写到
+/// `provider.openai.api_key` 这个无人读取的逻辑名下, 而真正服务请求的
+/// capability 按 `provider.openai-compatible.api_key` 解析 —— 热更永远打不中。
+pub fn normalize_provider(provider: &str) -> String {
+    let raw = provider.trim();
+    let (prefix, family) = match raw.strip_prefix("provider.") {
+        Some(rest) => ("provider.", rest),
+        None => ("", raw),
+    };
+    let family = match family {
+        "openai" => "openai-compatible",
+        other => other,
+    };
+    format!("{prefix}{family}")
 }
 
 /// The backend credential name for a provider's API key, following the
 /// production naming convention in `apeireth-provider::credentials`.
 pub fn credential_name(provider: &str) -> String {
-    if provider.starts_with("provider.") {
-        format!("{provider}.api_key")
+    let normalized = normalize_provider(provider);
+    if normalized.starts_with("provider.") {
+        format!("{normalized}.api_key")
     } else {
-        format!("provider.{provider}.api_key")
+        format!("provider.{normalized}.api_key")
     }
 }
 
@@ -285,24 +311,50 @@ pub(crate) fn valid_provider(provider: &str) -> bool {
     !provider.is_empty() && !provider.chars().any(char::is_whitespace)
 }
 
+/// M17 (2026-09-24 审计): https 强制, `http://` 仅放行环回主机
+/// (本地 Ollama/vLLM 开发场景)。远端明文 HTTP 会把 Bearer API key 裸奔。
 pub(crate) fn valid_base_url(base_url: &str) -> bool {
     let base_url = base_url.trim();
-    let Some(rest) = base_url
-        .strip_prefix("https://")
-        .or_else(|| base_url.strip_prefix("http://"))
-    else {
-        return false;
-    };
-    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
-    !host.is_empty() && !host.chars().any(char::is_whitespace)
+    if let Some(rest) = base_url.strip_prefix("https://") {
+        let host = url_host(rest);
+        return !host.is_empty() && !host.chars().any(char::is_whitespace);
+    }
+    if let Some(rest) = base_url.strip_prefix("http://") {
+        return is_loopback_host(rest);
+    }
+    false
+}
+
+/// 从 `scheme://` 之后的部分取 host 段 (去 userinfo / path / port)。
+fn url_host(after_scheme: &str) -> &str {
+    let authority = after_scheme.split(['/', '?', '#']).next().unwrap_or("");
+    let authority = authority.rsplit('@').next().unwrap_or(authority);
+    match authority.rsplit_once(':') {
+        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => host,
+        _ => authority,
+    }
+}
+
+/// `http://` 是否指向环回主机 (本地开发 LLM 端点)。
+fn is_loopback_host(after_scheme: &str) -> bool {
+    let host = url_host(after_scheme)
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_ascii_lowercase();
+    matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1")
 }
 
 /// Mask an API key as `sk-****c4a` (first 3 + redacted middle + last 3).
+/// M17 (2026-09-24 审计): 按 char 边界切片 —— 旧版字节切片在非 ASCII key
+/// (如多字节 UTF-8) 上会 panic (`byte index is not a char boundary`)。
 pub fn mask_api_key(api_key: &str) -> String {
-    if api_key.len() <= 8 {
+    let chars: Vec<char> = api_key.chars().collect();
+    if chars.len() <= 8 {
         return "****".to_string();
     }
-    format!("{}****{}", &api_key[..3], &api_key[api_key.len() - 3..])
+    let prefix: String = chars[..3].iter().collect();
+    let suffix: String = chars[chars.len() - 3..].iter().collect();
+    format!("{prefix}****{suffix}")
 }
 
 /// A shared handle for the mutable hot config, kept in [`GatewayState`].
@@ -337,7 +389,34 @@ mod tests {
             "provider.openai-compatible.api_key"
         );
         assert_eq!(
-            provider_capability_id("openai-compatible").unwrap().as_str(),
+            provider_capability_id("openai-compatible")
+                .unwrap()
+                .as_str(),
+            "provider.openai-compatible"
+        );
+    }
+
+    #[test]
+    fn openai_alias_normalizes_to_the_registered_family() {
+        // admin/UI 侧 "openai" 拼写必须落到注册的 openai-compatible 家族,
+        // 否则 api_key 写到无人读取的逻辑名下, 热更打不中服务请求的 capability。
+        assert_eq!(normalize_provider("openai"), "openai-compatible");
+        assert_eq!(
+            normalize_provider("provider.openai"),
+            "provider.openai-compatible"
+        );
+        assert_eq!(normalize_provider("openai-compatible"), "openai-compatible");
+        assert_eq!(normalize_provider("minimax"), "minimax");
+        assert_eq!(
+            credential_name("openai"),
+            "provider.openai-compatible.api_key"
+        );
+        assert_eq!(
+            credential_name("provider.openai"),
+            "provider.openai-compatible.api_key"
+        );
+        assert_eq!(
+            provider_capability_id("openai").unwrap().as_str(),
             "provider.openai-compatible"
         );
     }

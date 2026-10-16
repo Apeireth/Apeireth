@@ -61,10 +61,10 @@ Status:          🟢 活跃 (v2 发布路线)
 | **P0** | 生产 governance 接线（`build_canonical_runtime_from_env` 装 `GovernancePipeline`）| ✅ done (upstream `873d2857`) | — |
 | **P0** | 13 键 verdict cache 角色**降级完成**（哲学标准 + 5 原则洋葱映射，`RUNTIME_ENFORCED = false`） | — | — |
 | **P1** | core crate 脊椎去留（onion/gate/lifecycle/philosophy/memory 5 legacy 模块）+ `apeireth-credentials` 接线 | 🟡 半完成（credentials 已接线：RC-9 `crates/adapters/cli/src/keyring_bootstrap.rs`；core 脊椎去留仍待） | `v2.0.0-beta.1` |
-| **P3** | M1B 记忆全量移植（ACT-R + 完整管线） | ⏳ | `v2.0.0-beta.2` |
+| **P3** | M1B 记忆全量实现（ACT-R + 完整管线） | ⏳ | `v2.0.0-beta.2` |
 | **P4** | MCP 动态能力注册 | ⏳ | `v2.0.0-rc.1` |
 | **P5** | ProcessSupervisor + 进程树隔离 | ⏳ | 同上 |
-| **P6** | companion 器官移植（W1/W2/W3/E4/F4/F1/F6/E7）| ⏳ | `v2.0.0-rc.2` |
+| **P6** | companion 器官实现（W1/W2/W3/E4/F4/F1/F6/E7）| ⏳ | `v2.0.0-rc.2` |
 | **P7** | 连续感知（voice/screen）| ⏳ | `v2.0.0-rc.3` |
 | **P8** | 前端产品化（companion-desktop ↔ gateway）| ⏳ | `v2.0.0` |
 | — | `v2.0.0` 正式版 | 🎯 | 当 P0-P8 全绿 + governance 生产验证通过 |
@@ -94,7 +94,7 @@ Status:          🟢 活跃 (v2 发布路线)
 
 ### 待完成（P1 接班）
 
-- [ ] **场景 D 长程 AI 判断架构评估**（新增 P-arch 任务）：见 [`docs/04-internal/scene-d-v2-plan.md`](scene-d-v2-plan.md)——F1/F6/E7/W6 移植评估 + 多 agent 互审协议设计（架构层，2-3 周工作量）
+- [ ] **场景 D 长程 AI 判断架构评估**（新增 P-arch 任务）：见 [`docs/04-internal/scene-d-v2-plan.md`](scene-d-v2-plan.md)——F1/F6/E7/W6 实现评估 + 多 agent 互审协议设计（架构层，2-3 周工作量）
 - [ ] **core crate 脊椎去留 + `apeireth-credentials` 接线**（P1）
 - [ ] **World model W1/W2**（P6）：v1 发布前置清单遗留（文本层 + 因果图推演）——根 [ROADMAP.md](../../ROADMAP.md) §4 P6
 - [x] ✅ **13 键 verdict cache 降级**（P0 → 完成）：`philosophy.rs::RUNTIME_ENFORCED = false`，`onion.rs::VERDICT_KEYS_BY_PRINCIPLE` 映射到 E/S/A/M 5 原则洋葱

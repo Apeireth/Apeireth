@@ -1,4 +1,4 @@
-> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当前实测基线：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1。
+> ⚠️ 2026-09-05 对账批标注：本文为历史记录，写作时数字属实于当时。当时实测基线（2026-09-05）：17 crates / 3120 passed / 0 failed / 13 ignored / workspace.version 2.0.0-rc.1（现行基线见 INSTALL.md）。
 
 # 自定义 LLM Provider 指南
 
@@ -9,7 +9,7 @@
 
 > **2026-08-20 新增**: companion_serve 现在支持多 LLM provider 切换, **不需要改源码**.
 >
-> 适用场景: 想用 Claude / OpenAI / 本地 vLLM 替代 MiniMax, 或加 fallback 链.
+> 适用场景: 想用 Anthropic / OpenAI / 本地 vLLM 替代 MiniMax, 或加 fallback 链.
 
 ---
 
@@ -47,7 +47,7 @@ base_url = "https://api.openai.com"
 api_key_env = "OPENAI_API_KEY"
 models = ["gpt-4o", "gpt-4o-mini"]
 
-# ---------- 3: Anthropic Claude (fallback) ----------
+# ---------- 3: Anthropic (fallback) ----------
 [providers.anthropic]
 type = "anthropic-compatible"
 base_url = "https://api.anthropic.com"
@@ -81,7 +81,7 @@ fallback_order = ["minimax", "openai", "anthropic", "gemini"]
 |---|---|---|
 | `apeireth-api` | OpenAI 兼容 + Anthropic 兼容 | MiniMax 本地代理 `apeireth-api daemon` |
 | `openai-compatible` | OpenAI Chat Completions | OpenAI / vLLM / Ollama / Gemini OpenAI 模式 |
-| `anthropic-compatible` | Anthropic Messages | Anthropic Claude / 兼容代理 |
+| `anthropic-compatible` | Anthropic Messages | Anthropic / 兼容代理 |
 | `scripted` | (固定响应) | 测试 / 离线 mock |
 
 ---
@@ -95,7 +95,9 @@ export APEIRETH_API_KEY=sk-cp-xxx       # MiniMax key
 export OPENAI_API_KEY=sk-xxx            # OpenAI key
 export ANTHROPIC_API_KEY=sk-ant-xxx     # Anthropic key
 
-# 启动
+# 启动（⚠️ v1 legacy 示例：apeireth-companion 只存在于 legacy/，当前基线不可用；
+#     当前基线请用 桌面端设置页配置自定义 OpenAI 兼容端点，或
+#     apeireth gateway serve + APEIRETH_API_URL / APEIRETH_API_KEY / APEIRETH_MODEL）
 cargo run -p apeireth-companion --example companion_serve
 ```
 

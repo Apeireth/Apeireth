@@ -62,7 +62,10 @@ fn smoke_envelope_serde_roundtrip() {
     assert_eq!(back.body["prompt"], "hi");
 }
 
-/// ⑤ WireKind 自定义 (Other) 跨语言兼容: snake_case 字符串.
+/// ⑤ WireKind 自定义 (Other) 跨语言兼容: snake_case 裸字符串 (per lib.rs §E 契约).
+///
+/// **L 组修复**: `WireKind::Other(String)` untagged — 序列化为 `"kind":"custom_event"`
+/// 裸字符串 (跨 4 语言一致的 "kind: string" 契约), 不再是外部标签 `{"other":"x"}`.
 #[test]
 fn smoke_wire_kind_other_roundtrip() {
     let env = Envelope::new(
@@ -71,8 +74,21 @@ fn smoke_wire_kind_other_roundtrip() {
         serde_json::json!({}),
     );
     let line = env.encode().unwrap();
-    // snake_case 字符串 Other("custom_event") 在 serde_json 序列化为:
-    //   {"other": "custom_event"}  (为 untagged? 实际是：variant 名 + value)
+    // 跨语言契约: kind 是裸 snake_case 字符串 (非 {"other": ...} 外部标签)
+    assert!(
+        line.contains("\"kind\":\"custom_event\""),
+        "kind 应为裸字符串: {line}"
+    );
+    assert!(
+        !line.contains("\"other\""),
+        "untagged 后 0 外部标签 other: {line}"
+    );
+    // 已知 kind 仍是其 snake_case 字符串
+    let chat_line = Envelope::new(WireKind::Chat, "x", serde_json::json!({}))
+        .encode()
+        .unwrap();
+    assert!(chat_line.contains("\"kind\":\"chat\""));
+
     // 验证至少能 decode 回等价结构:
     let back = Envelope::decode(&line).unwrap();
     match back.kind {

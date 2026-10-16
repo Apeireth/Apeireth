@@ -1,23 +1,33 @@
-//! Codex 风格事务级多文件打补丁工具 (`apply_patch`).
+//! 事务级多文件打补丁工具 (`apply_patch`).
 //!
 //! 支持在单次原子事务中对代码库执行多文件新增 (Add)、删除 (Delete) 与按上下文精确替换更新 (Update).
 //! 若任意一个文件的任意一个 Hunk 匹配失败，整个事务立即完全回滚，保证磁盘状态绝对一致.
 //!
-//! Recovered donor semantics (this wave):
+//! 模块语义:
 //! - Update hunks require a **strict unique** match (0 → [`ApplyPatchError::ContextMismatch`],
 //!   >1 → [`ApplyPatchError::AmbiguousMatch`]). Silent first-match replacement is rejected.
-//! - Codex line-based hunks (`@@` comment anchors, `-old` / `+new`) are auto-detected
-//!   beside the existing SEARCH/REPLACE format.
-//! - Commit writes through a same-directory tmp file + `sync_all` + rename (crash-safe
-//!   replacement; Windows falls back to a backup+rename dance because `rename` cannot
-//!   replace an existing file).
+//! - 行式 hunks (`@@` 注释锚, `-old` / `+new`) 与 SEARCH/REPLACE 格式并存, 自动识别.
+//! - 提交写盘走统一存储基础件的持久档原子写 (同目录独占临时文件 + 落盘 + 替换,
+//!   见 `apeireth_core::storage_atomic`): 崩溃安全替换, 半途中断不留截断目标.
+//! - 提交写盘叠加读前观测门禁 (见 `crate::observed_gate`): 预演阶段读到的
+//!   原始内容即观测事件 (记 (len, mtime) 版本), 提交写携带该版本过版本 CAS
+//!   双钥匙 —— 预演与提交之间的外部改动被拒, Add 走 createIfAbsent 钥匙。
+//!   门禁叠加在既有版本语义 (严格唯一上下文匹配 + 原内容备份) 之上, 不改写它们。
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::io::Read;
+use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
+
+use apeireth_core::storage_atomic;
+
+use crate::observed_gate::{
+    gated_write_atomic_durable, FileVersion, FsVersionProbe, GatedWriteError, ObservedGate,
+    VersionProbe, WriteIntent, WriteKind, WriteRequest,
+};
 
 /// Patch 应用错误.
 #[derive(Debug, Error, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -35,6 +45,13 @@ pub enum ApplyPatchError {
     AmbiguousMatch { path: String, occurrences: usize },
     #[error("磁盘 IO 失败: {0}")]
     Io(String),
+    /// H4 (2026-09-24 审计): 补丁目标路径越出根目录包含边界 (绝对路径 / `..`
+    /// 组件 / symlink 逃逸) —— fail-closed, 整个事务在预演阶段即拒绝。
+    #[error("补丁路径越出工作区边界: {0}")]
+    PathViolation(String),
+    /// 读前观测门禁拒绝 (未读先覆盖 / 版本 CAS 钥匙不符 / createIfAbsent 撞目标)。
+    #[error("读前观测门禁拒绝: {0}")]
+    GateDenied(String),
 }
 
 /// 单个文件操作类型.
@@ -69,6 +86,14 @@ pub struct PatchReport {
     pub total_actions: usize,
 }
 
+/// 提交阶段的暂存写入: 内容 + 门禁意图 + 预演观测版本。
+#[derive(Debug, Clone)]
+struct StagedWrite {
+    content: String,
+    intent: WriteKind,
+    observed: Option<FileVersion>,
+}
+
 /// 事务补丁应用器.
 #[derive(Debug, Clone, Default)]
 pub struct TransactionalPatchApplier;
@@ -80,7 +105,7 @@ impl TransactionalPatchApplier {
 
     /// 解析补丁文本指令.
     ///
-    /// 遵循 Codex/Aider 格式:
+    /// 支持如下补丁文本格式:
     /// ```text
     /// *** Begin Patch
     /// *** Add File: src/new_file.rs
@@ -95,13 +120,25 @@ impl TransactionalPatchApplier {
     /// *** End Patch
     /// ```
     ///
-    /// Codex line-based Update hunks are also accepted:
+    /// 行式 Update hunks 同样接受:
     /// ```text
     /// *** Update File: src/main.rs
     /// @@ optional_anchor
     /// -old line
     /// +new line
     /// ```
+    ///
+    /// # 解析即合同 (内测整改): 解析不了就报错, 不许静默吞行
+    ///
+    /// 旧解析把认不出的行整段静默跳过, 空动作集照常返回 `Ok(vec![])` ——
+    /// 畸形补丁 (指令拼写错 / 换行被转义成字面量 / 只有标记没有动作) 因此
+    /// 得到「成功但零动作」的谎帧。现口径: **解析失败即 [`ApplyPatchError::ParseError`]**
+    /// (错误帧), 覆盖四类:
+    /// 1. 空补丁 (标记之间没有任何动作声明);
+    /// 2. 认不出的补丁行 (含指令拼写错、整份补丁无真换行的转义形态);
+    /// 3. `*** Update File` 没有任何可解析 hunk (零 hunk);
+    /// 4. 指令路径为空。
+    /// 只有空行 (以及 hunk 块内的上下文/注释行) 允许被忽略。
     pub fn parse_patch(patch_text: &str) -> Result<Vec<FilePatchAction>, ApplyPatchError> {
         let trimmed = patch_text.trim();
         if !trimmed.starts_with("*** Begin Patch") || !trimmed.ends_with("*** End Patch") {
@@ -117,8 +154,12 @@ impl TransactionalPatchApplier {
 
         while i < lines.len() {
             let line = lines[i].trim();
+            if line.is_empty() {
+                i += 1;
+                continue;
+            }
             if let Some(stripped) = line.strip_prefix("*** Add File:") {
-                let file_path = PathBuf::from(stripped.trim());
+                let file_path = patch_action_path(stripped)?;
                 i += 1;
                 let mut content_lines = Vec::new();
                 while i < lines.len() && !lines[i].trim().starts_with("***") {
@@ -130,11 +171,11 @@ impl TransactionalPatchApplier {
                     content: decode_add_file_content(&content_lines),
                 });
             } else if let Some(stripped) = line.strip_prefix("*** Delete File:") {
-                let file_path = PathBuf::from(stripped.trim());
+                let file_path = patch_action_path(stripped)?;
                 i += 1;
                 actions.push(FilePatchAction::Delete { path: file_path });
             } else if let Some(stripped) = line.strip_prefix("*** Update File:") {
-                let file_path = PathBuf::from(stripped.trim());
+                let file_path = patch_action_path(stripped)?;
                 i += 1;
                 let mut hunks = Vec::new();
 
@@ -168,7 +209,7 @@ impl TransactionalPatchApplier {
                             search_context: search_lines.join("\n"),
                             replacement_content: replace_lines.join("\n"),
                         });
-                    } else if is_codex_hunk_start(trimmed_line) {
+                    } else if is_line_hunk_start(trimmed_line) {
                         // `@@` is an optional human-readable anchor (comment only).
                         if trimmed_line.starts_with("@@") {
                             i += 1;
@@ -199,44 +240,79 @@ impl TransactionalPatchApplier {
                         }
                         if old_lines.is_empty() {
                             return Err(ApplyPatchError::ParseError(
-                                "Codex hunk missing old lines (- prefix)".to_string(),
+                                "行式 hunk 缺少旧内容行 (- 前缀)".to_string(),
                             ));
                         }
                         hunks.push(PatchHunk {
                             search_context: old_lines.join("\n"),
                             replacement_content: new_lines.join("\n"),
                         });
-                    } else {
+                    } else if trimmed_line.is_empty() {
+                        // 块内空行可忽略 (hunk 之间留白)。
                         i += 1;
+                    } else {
+                        return Err(ApplyPatchError::ParseError(format!(
+                            "无法解析的补丁行 (Update 块内): {trimmed_line}"
+                        )));
                     }
+                }
+                if hunks.is_empty() {
+                    return Err(ApplyPatchError::ParseError(format!(
+                        "*** Update File: {} 没有任何可解析 hunk (零 hunk 补丁拒绝)",
+                        file_path.display()
+                    )));
                 }
                 actions.push(FilePatchAction::Update {
                     path: file_path,
                     hunks,
                 });
             } else {
-                i += 1;
+                return Err(ApplyPatchError::ParseError(format!(
+                    "无法解析的补丁行: {line}"
+                )));
             }
+        }
+
+        if actions.is_empty() {
+            return Err(ApplyPatchError::ParseError(
+                "补丁未声明任何动作 (*** Add File / *** Update File / *** Delete File 均缺席)"
+                    .to_string(),
+            ));
         }
 
         Ok(actions)
     }
 
     /// 在指定根目录下原子性应用整个补丁事务.
+    ///
+    /// 使用调用内建的观测门禁 (补丁自读自写自洽)。需要与文件读工具共享
+    /// 会话观测时用 [`Self::apply_with_gate`]。
     pub fn apply(root_dir: &Path, patch_text: &str) -> Result<PatchReport, ApplyPatchError> {
+        Self::apply_with_gate(root_dir, patch_text, &ObservedGate::new())
+    }
+
+    /// 同 [`Self::apply`], 但提交写盘过共享的读前观测门禁.
+    ///
+    /// 叠加语义: 预演读取把 (len, mtime) 版本记入 `gate` (观测事件), 提交写
+    /// 携带该版本走版本 CAS 双钥匙 (Update/Delete 钥匙 = 预演版本, Add 钥匙 =
+    /// createIfAbsent); 事务收尾把写后现状回填为最新观测, 同会话后续写免重读。
+    pub fn apply_with_gate(
+        root_dir: &Path,
+        patch_text: &str,
+        gate: &ObservedGate,
+    ) -> Result<PatchReport, ApplyPatchError> {
         let actions = Self::parse_patch(patch_text)?;
         if actions.is_empty() {
-            return Ok(PatchReport {
-                files_added: vec![],
-                files_updated: vec![],
-                files_deleted: vec![],
-                total_actions: 0,
-            });
+            // 防御性双保险: 解析合同已保证空动作集报错, 这里绝不返回
+            // 「成功但零动作」的谎帧 (内测病灶: `applied` + `total_actions: 0`)。
+            return Err(ApplyPatchError::ParseError(
+                "补丁未声明任何动作, 拒绝空补丁".to_string(),
+            ));
         }
 
         // 1. 预演阶段 (Dry-run): 在内存中计算并校验所有更改
-        let mut staged_writes: HashMap<PathBuf, String> = HashMap::new();
-        let mut staged_deletes: Vec<PathBuf> = Vec::new();
+        let mut staged_writes: HashMap<PathBuf, StagedWrite> = HashMap::new();
+        let mut staged_deletes: Vec<(PathBuf, FileVersion)> = Vec::new();
         let mut original_backups: HashMap<PathBuf, Option<String>> = HashMap::new();
 
         let mut files_added = Vec::new();
@@ -246,38 +322,47 @@ impl TransactionalPatchApplier {
         for action in &actions {
             match action {
                 FilePatchAction::Add { path, content } => {
-                    let full_path = root_dir.join(path);
+                    // H4: 入口逐 action 校验路径包含 (绝对路径 / `..` / symlink
+                    // 越界在此拒绝, 磁盘写入从不可达边界之外)。
+                    let full_path = Self::resolve_contained_target(root_dir, path)?;
                     if full_path.exists() {
                         return Err(ApplyPatchError::FileAlreadyExists(
                             path.to_string_lossy().to_string(),
                         ));
                     }
+                    // 预演已核对目标缺席 = 「已观测为不存在」观测事件。
+                    gate.observe_missing(&full_path);
                     original_backups.insert(full_path.clone(), None);
-                    staged_writes.insert(full_path, content.clone());
+                    staged_writes.insert(
+                        full_path,
+                        StagedWrite {
+                            content: content.clone(),
+                            intent: WriteKind::Create,
+                            observed: None,
+                        },
+                    );
                     files_added.push(path.to_string_lossy().to_string());
                 }
                 FilePatchAction::Delete { path } => {
-                    let full_path = root_dir.join(path);
+                    let full_path = Self::resolve_contained_target(root_dir, path)?;
                     if !full_path.exists() {
                         return Err(ApplyPatchError::FileNotFound(
                             path.to_string_lossy().to_string(),
                         ));
                     }
-                    let old_content = fs::read_to_string(&full_path)
-                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let (old_content, observed) = read_observed(&full_path, gate)?;
                     original_backups.insert(full_path.clone(), Some(old_content));
-                    staged_deletes.push(full_path);
+                    staged_deletes.push((full_path, observed));
                     files_deleted.push(path.to_string_lossy().to_string());
                 }
                 FilePatchAction::Update { path, hunks } => {
-                    let full_path = root_dir.join(path);
+                    let full_path = Self::resolve_contained_target(root_dir, path)?;
                     if !full_path.exists() {
                         return Err(ApplyPatchError::FileNotFound(
                             path.to_string_lossy().to_string(),
                         ));
                     }
-                    let original = fs::read_to_string(&full_path)
-                        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+                    let (original, observed) = read_observed(&full_path, gate)?;
                     original_backups.insert(full_path.clone(), Some(original.clone()));
 
                     let mut updated = original;
@@ -290,33 +375,70 @@ impl TransactionalPatchApplier {
                             h_idx,
                         )?;
                     }
-                    staged_writes.insert(full_path, updated);
+                    staged_writes.insert(
+                        full_path,
+                        StagedWrite {
+                            content: updated,
+                            intent: WriteKind::Replace,
+                            observed: Some(observed),
+                        },
+                    );
                     files_updated.push(path.to_string_lossy().to_string());
                 }
             }
         }
 
-        // 2. 提交阶段 (Commit): 原子写入磁盘；若有任何 IO 异常则自动回滚已写入的文件
+        // 2. 提交阶段 (Commit): 过门禁的原子写入磁盘；若有任何 IO 异常则自动回滚已写入的文件
         let mut committed_paths = Vec::new();
-        for (path, content) in staged_writes {
+        for (path, staged) in staged_writes {
             if let Some(parent) = path.parent() {
                 if let Err(e) = fs::create_dir_all(parent) {
                     Self::rollback(&committed_paths, &original_backups);
                     return Err(ApplyPatchError::Io(e.to_string()));
                 }
             }
-            if let Err(e) = atomic_write_file(&path, &content) {
+            let request = WriteRequest {
+                path: path.clone(),
+                kind: staged.intent,
+                replace_if_version: staged.observed,
+                create_if_absent: staged.intent == WriteKind::Create,
+            };
+            if let Err(e) = gated_write_atomic_durable(
+                gate,
+                &FsVersionProbe,
+                &request,
+                staged.content.as_bytes(),
+                target_file_mode(&path),
+            ) {
                 Self::rollback(&committed_paths, &original_backups);
-                return Err(e);
+                return Err(match e {
+                    GatedWriteError::Denied(denial) => {
+                        ApplyPatchError::GateDenied(denial.message())
+                    }
+                    GatedWriteError::Io(detail) => ApplyPatchError::Io(detail),
+                });
             }
             committed_paths.push(path);
         }
 
-        for path in staged_deletes {
+        for (path, observed) in staged_deletes {
+            // 删除同属覆盖类: 过同一道门禁 (钥匙 = 预演观测版本)。
+            let intent = WriteIntent {
+                path: &path,
+                kind: WriteKind::Replace,
+                replace_if_version: Some(observed),
+                create_if_absent: false,
+                current: FsVersionProbe.version(&path),
+            };
+            if let Err(denial) = gate.check_write(&intent) {
+                Self::rollback(&committed_paths, &original_backups);
+                return Err(ApplyPatchError::GateDenied(denial.message()));
+            }
             if let Err(e) = fs::remove_file(&path) {
                 Self::rollback(&committed_paths, &original_backups);
                 return Err(ApplyPatchError::Io(e.to_string()));
             }
+            gate.observe_missing(&path);
             committed_paths.push(path);
         }
 
@@ -329,6 +451,15 @@ impl TransactionalPatchApplier {
     }
 
     fn rollback(committed: &[PathBuf], backups: &HashMap<PathBuf, Option<String>>) {
+        // 原子性边界 (审计 I7/L 组): 回滚是 best-effort —— 已 rename 到位的目标
+        // 用备份内容原子重写, 已删除的目标靠原内容重建; 但回滚自身若遇 IO
+        // 失败 (如备份写盘时磁盘满), 磁盘可能停留在部分回滚状态。提交阶段
+        // 的顺序 (先写后删) 与每文件的 tmp+rename 原子性保证的是"进行中的
+        // 损坏不会发生", 而非"回滚必然成功"。调用方需要把 report/err 当权威。
+        //
+        // 回滚恢复的是本次事务刚观测过的原内容, 属内部恢复, 不再过读前观测
+        // 门禁; 回滚后门禁观测可能短暂停在旧版本 —— 偏向"下次写被拒、要求
+        // 重读"的安全方向。
         for path in committed {
             if let Some(backup) = backups.get(path) {
                 match backup {
@@ -342,15 +473,111 @@ impl TransactionalPatchApplier {
             }
         }
     }
+
+    /// H4 (2026-09-24 审计): 把补丁内的相对路径解析为 root 之下、且经
+    /// symlink 现实校验的绝对路径。`root_dir.join(path)` 的裸语义允许绝对
+    /// 路径替换 base (Windows `C:\...` / Unix `/etc/...`) 与 `..` 逃逸,
+    /// 模型或被 prompt 注入诱导的补丁文本即可任意写/删 —— 在此逐 action
+    /// 拒绝:
+    ///
+    /// 1. 词法层: 拒绝绝对路径、盘符/UNC 前缀与任何 `..` 组件;
+    /// 2. 现实层: root 与目标分别 canonicalize (目标不存在时对最近存在
+    ///    祖先 canonicalize 后 join 余量), 要求 `starts_with(root)` ——
+    ///    root 内指向外部的 symlink 在此现形。
+    fn resolve_contained_target(root_dir: &Path, path: &Path) -> Result<PathBuf, ApplyPatchError> {
+        if path.as_os_str().is_empty() {
+            return Err(ApplyPatchError::PathViolation("补丁路径为空".to_string()));
+        }
+        if path.is_absolute() {
+            return Err(ApplyPatchError::PathViolation(format!(
+                "禁止绝对路径 (必须是工作区相对路径): {}",
+                path.display()
+            )));
+        }
+        for component in path.components() {
+            match component {
+                Component::Normal(_) | Component::CurDir => {}
+                _ => {
+                    return Err(ApplyPatchError::PathViolation(format!(
+                        "禁止的路径组件 ({component:?}): {}",
+                        path.display()
+                    )));
+                }
+            }
+        }
+
+        let canonical_root = fs::canonicalize(root_dir).map_err(|e| {
+            ApplyPatchError::Io(format!(
+                "workspace root {} is not accessible: {e}",
+                root_dir.display()
+            ))
+        })?;
+
+        let joined = canonical_root.join(path);
+
+        // 目标可能尚不存在 (Add / 新建子目录): 向上找最近的存在祖先,
+        // canonicalize 它 (展开沿途 symlink), 再把余量拼回去。
+        let mut probe = joined.as_path();
+        let mut remainder: Vec<&OsStr> = Vec::new();
+        loop {
+            match fs::canonicalize(probe) {
+                Ok(canonical) => {
+                    if !canonical.starts_with(&canonical_root) {
+                        return Err(ApplyPatchError::PathViolation(format!(
+                            "{} 解析到工作区之外 (symlink 越界或穿越)",
+                            joined.display()
+                        )));
+                    }
+                    let mut resolved = canonical;
+                    for name in remainder.iter().rev() {
+                        resolved.push(name);
+                    }
+                    return Ok(resolved);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    match (probe.file_name(), probe.parent()) {
+                        (Some(name), Some(parent)) => {
+                            remainder.push(name);
+                            probe = parent;
+                        }
+                        _ => {
+                            return Err(ApplyPatchError::PathViolation(format!(
+                                "{} 无法在工作区内解析",
+                                joined.display()
+                            )));
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(ApplyPatchError::Io(format!(
+                        "{} 解析失败: {e}",
+                        joined.display()
+                    )));
+                }
+            }
+        }
+    }
 }
 
-/// True when `line` (already trimmed) starts a Codex-style hunk.
-fn is_codex_hunk_start(trimmed_line: &str) -> bool {
+/// True when `line` (already trimmed) starts a line-style hunk.
+fn is_line_hunk_start(trimmed_line: &str) -> bool {
     trimmed_line.starts_with("@@") || trimmed_line.starts_with('-') || trimmed_line.starts_with('+')
 }
 
-/// Add File body: Codex requires a `+` prefix on every line; the v2 SEARCH/REPLACE
-/// dialect uses raw file content. Auto-detect: if every line starts with `+`, strip it.
+/// 指令行路径解析: 路径为空的指令直接按解析错误拒绝 (错误帧),
+/// 不让空路径动作混进动作集。
+fn patch_action_path(raw: &str) -> Result<PathBuf, ApplyPatchError> {
+    let path = PathBuf::from(raw.trim());
+    if path.as_os_str().is_empty() {
+        return Err(ApplyPatchError::ParseError(
+            "补丁指令缺少目标路径".to_string(),
+        ));
+    }
+    Ok(path)
+}
+
+/// Add File body: 行式格式要求每行 `+` 前缀; SEARCH/REPLACE 格式则是原始文件内容.
+/// 自动识别: 若所有行都以 `+` 开头, 剥掉此前缀.
 fn decode_add_file_content(content_lines: &[&str]) -> String {
     if !content_lines.is_empty()
         && content_lines
@@ -372,7 +599,7 @@ fn decode_add_file_content(content_lines: &[&str]) -> String {
     }
 }
 
-/// Apply one hunk with donor strict-unique semantics: 0 matches → ContextMismatch,
+/// Apply one hunk with strict-unique semantics: 0 matches → ContextMismatch,
 /// >1 matches → AmbiguousMatch. Never silently replaces the first hit.
 fn apply_unique_replace(
     haystack: &str,
@@ -406,62 +633,54 @@ fn apply_unique_replace(
     Ok(haystack.replacen(needle, replacement, 1))
 }
 
-/// Crash-safer file replacement: write a sibling tmp file, `sync_all`, then rename.
+/// 预演读取: 读当前内容并把 (len, mtime) 版本记入读前观测门禁.
 ///
-/// On Unix, `rename` atomically replaces an existing target. On Windows, `rename`
-/// cannot replace, so the existing target is moved aside to a `.bak` sibling first
-/// and restored if the final rename fails. Either way the new bytes are fully on
-/// disk in the tmp file before the target is touched — a crash mid-`fs::write`
-/// can no longer leave a truncated destination.
+/// 版本取自已开句柄的元数据 (fstat, 零额外 IO), 与读到的内容同源; 该版本
+/// 即提交写携带的版本 CAS 钥匙。在既有版本语义 (原内容备份 + 严格唯一
+/// 上下文匹配) 之上叠加观测, 不改写它们。
+fn read_observed(
+    path: &Path,
+    gate: &ObservedGate,
+) -> Result<(String, FileVersion), ApplyPatchError> {
+    let mut file = fs::File::open(path).map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+    let version = FileVersion::from_metadata(
+        &file
+            .metadata()
+            .map_err(|e| ApplyPatchError::Io(e.to_string()))?,
+    );
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
+    gate.observe_present(path, version);
+    Ok((content, version))
+}
+
+/// 崩溃安全的文件替换: 委托统一存储基础件的持久档原子写
+/// (同目录 `create_new` 独占临时文件 + `sync_all` + 替换)。
+///
+/// 语义: 新字节在临时文件内完整落盘后才替换目标 —— 半途中断不会留下截断的
+/// 目标文件; 独占创建拒绝被预置的同名临时文件/symlink 抢占 (抢占者直接失败,
+/// 不会静默写穿)。目标的 unix 权限在替换中保留; 新文件用
+/// [`storage_atomic::DEFAULT_FILE_MODE`]。
 fn atomic_write_file(path: &Path, content: &str) -> Result<(), ApplyPatchError> {
-    let parent = match path.parent() {
-        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
-        _ => PathBuf::from("."),
-    };
-    let file_name = path.file_name().ok_or_else(|| {
-        ApplyPatchError::Io(format!("invalid patch target path: {}", path.display()))
-    })?;
-    let pid = std::process::id();
-    let stem = file_name.to_string_lossy();
-    let tmp_path = parent.join(format!(".{stem}.apeireth-patch-{pid}.tmp"));
+    storage_atomic::write_atomic_durable(path, content.as_bytes(), target_file_mode(path))
+        .map_err(|e| ApplyPatchError::Io(e.to_string()))
+}
 
-    let write_tmp = (|| -> Result<(), ApplyPatchError> {
-        let mut f = fs::File::create(&tmp_path).map_err(|e| ApplyPatchError::Io(e.to_string()))?;
-        f.write_all(content.as_bytes())
-            .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
-        f.sync_all()
-            .map_err(|e| ApplyPatchError::Io(e.to_string()))?;
-        Ok(())
-    })();
-    if let Err(e) = write_tmp {
-        let _ = fs::remove_file(&tmp_path);
-        return Err(e);
+/// 目标 unix 权限: 更新既有文件时保留原 mode (可执行位等不丢), 新文件用默认 mode。
+fn target_file_mode(path: &Path) -> u32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match fs::metadata(path) {
+            Ok(meta) => meta.permissions().mode() & 0o7777,
+            Err(_) => storage_atomic::DEFAULT_FILE_MODE,
+        }
     }
-
-    match fs::rename(&tmp_path, path) {
-        Ok(()) => Ok(()),
-        Err(_) if path.exists() => {
-            let bak_path = parent.join(format!(".{stem}.apeireth-patch-{pid}.bak"));
-            if let Err(e) = fs::rename(path, &bak_path) {
-                let _ = fs::remove_file(&tmp_path);
-                return Err(ApplyPatchError::Io(e.to_string()));
-            }
-            match fs::rename(&tmp_path, path) {
-                Ok(()) => {
-                    let _ = fs::remove_file(&bak_path);
-                    Ok(())
-                }
-                Err(e) => {
-                    let _ = fs::rename(&bak_path, path);
-                    let _ = fs::remove_file(&tmp_path);
-                    Err(ApplyPatchError::Io(e.to_string()))
-                }
-            }
-        }
-        Err(e) => {
-            let _ = fs::remove_file(&tmp_path);
-            Err(ApplyPatchError::Io(e.to_string()))
-        }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        storage_atomic::DEFAULT_FILE_MODE
     }
 }
 
@@ -551,7 +770,7 @@ replaced
     }
 
     #[test]
-    fn parse_codex_update_hunk() {
+    fn parse_line_style_update_hunk() {
         let patch =
             "*** Begin Patch\n*** Update File: a.txt\n@@ anchor 1\n-old\n+new\n*** End Patch";
         let ops = TransactionalPatchApplier::parse_patch(patch).unwrap();
@@ -568,7 +787,7 @@ replaced
     }
 
     #[test]
-    fn parse_codex_add_file_strips_plus_prefix() {
+    fn parse_add_file_strips_plus_prefix() {
         let patch = "*** Begin Patch\n*** Add File: new.txt\n+hello\n+world\n*** End Patch";
         let ops = TransactionalPatchApplier::parse_patch(patch).unwrap();
         match &ops[0] {
@@ -581,7 +800,7 @@ replaced
     }
 
     #[test]
-    fn apply_codex_update_real_file() {
+    fn apply_line_style_update_real_file() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.txt"), "hello old world").unwrap();
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-old\n+NEW\n*** End Patch";
@@ -593,7 +812,7 @@ replaced
     }
 
     #[test]
-    fn apply_codex_ambiguous_match_is_rejected() {
+    fn apply_ambiguous_match_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.txt"), "x x x").unwrap();
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-x\n+Y\n*** End Patch";
@@ -611,7 +830,7 @@ replaced
     }
 
     #[test]
-    fn apply_codex_old_not_found() {
+    fn apply_old_context_not_found() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.txt"), "foo").unwrap();
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-bar\n+qux\n*** End Patch";
@@ -620,7 +839,7 @@ replaced
     }
 
     #[test]
-    fn parse_codex_hunk_without_old_lines_rejected() {
+    fn parse_line_hunk_without_old_lines_rejected() {
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n+only_add\n*** End Patch";
         let err = TransactionalPatchApplier::parse_patch(patch).unwrap_err();
         assert!(matches!(err, ApplyPatchError::ParseError(_)));
@@ -639,7 +858,7 @@ replaced
             .unwrap()
             .flatten()
             .map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|n| n.contains("apeireth-patch"))
+            .filter(|n| n.contains(".tmp-") || n.ends_with(".bak"))
             .collect();
         assert!(leftovers.is_empty(), "{leftovers:?}");
     }
@@ -653,6 +872,285 @@ replaced
         assert_eq!(
             fs::read_to_string(dir.path().join("a.rs")).unwrap(),
             "alpha\nbar\nbeta\n"
+        );
+    }
+
+    // ---- H4 (2026-09-24 审计): 根目录包含校验 ----
+
+    #[test]
+    fn apply_rejects_absolute_add_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside.txt");
+        let patch = format!(
+            "*** Begin Patch\n*** Add File: {}\npwned\n*** End Patch",
+            outside.display()
+        );
+        let err = TransactionalPatchApplier::apply(dir.path(), &patch).unwrap_err();
+        assert!(
+            matches!(err, ApplyPatchError::PathViolation(_)),
+            "expected PathViolation, got {err:?}"
+        );
+        assert!(!outside.exists(), "absolute path must never be written");
+    }
+
+    #[test]
+    fn apply_rejects_absolute_delete_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("victim.txt");
+        fs::write(&victim, "keep me").unwrap();
+        let patch = format!(
+            "*** Begin Patch\n*** Delete File: {}\n*** End Patch",
+            victim.display()
+        );
+        let err = TransactionalPatchApplier::apply(dir.path(), &patch).unwrap_err();
+        assert!(matches!(err, ApplyPatchError::PathViolation(_)), "{err:?}");
+        assert!(victim.exists(), "absolute path must never be deleted");
+    }
+
+    #[test]
+    fn apply_rejects_parent_dir_escape() {
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let outside = base.path().join("outside.txt");
+        fs::create_dir(&root).unwrap();
+        fs::write(&outside, "secret").unwrap();
+
+        let patch = "*** Begin Patch\n*** Delete File: ../outside.txt\n*** End Patch";
+        let err = TransactionalPatchApplier::apply(&root, patch).unwrap_err();
+        assert!(matches!(err, ApplyPatchError::PathViolation(_)), "{err:?}");
+        assert!(
+            outside.exists(),
+            "`..` traversal must never delete outside the root"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn apply_rejects_windows_style_parent_escape() {
+        // Windows 词法: `..\` 是真正的父目录组件 (Unix 上反斜杠不是分隔符,
+        // 该字面量只是个怪文件名, 无逃逸能力, 故此用例仅 Windows 断言)。
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        fs::create_dir(&root).unwrap();
+        let patch = "*** Begin Patch\n*** Add File: ..\\..\\evil.bat\npwned\n*** End Patch";
+        let err = TransactionalPatchApplier::apply(&root, patch).unwrap_err();
+        assert!(matches!(err, ApplyPatchError::PathViolation(_)), "{err:?}");
+    }
+
+    #[test]
+    fn apply_resolves_nested_new_file_inside_root() {
+        // 目标不存在时对最近存在祖先 canonicalize 后 join 余量 —— 深层新文件
+        // 仍可正常落盘 (H4 不得把合法用例挡掉)。
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        let patch =
+            "*** Begin Patch\n*** Add File: src/deep/new_file.rs\npub fn f() {}\n*** End Patch";
+        let report = TransactionalPatchApplier::apply(dir.path(), patch).unwrap();
+        assert_eq!(report.files_added, vec!["src/deep/new_file.rs"]);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("src/deep/new_file.rs")).unwrap(),
+            "pub fn f() {}"
+        );
+    }
+
+    #[test]
+    fn apply_rejects_symlink_escape() {
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let outside = base.path().join("outside.txt");
+        fs::create_dir(&root).unwrap();
+        fs::write(&outside, "secret").unwrap();
+
+        let link = root.join("link.txt");
+        #[cfg(unix)]
+        let created = std::os::unix::fs::symlink(&outside, &link).is_ok();
+        #[cfg(windows)]
+        let created = std::os::windows::fs::symlink_file(&outside, &link).is_ok();
+        if !created {
+            // Symlink creation often needs extra privileges on Windows.
+            return;
+        }
+
+        let patch = "*** Begin Patch\n*** Update File: link.txt\n<<<<<<< SEARCH\nsecret\n=======\npwned\n>>>>>>>\n*** End Patch";
+        let err = TransactionalPatchApplier::apply(&root, patch).unwrap_err();
+        assert!(
+            matches!(err, ApplyPatchError::PathViolation(_)),
+            "symlink escape must be rejected, got {err:?}"
+        );
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "secret");
+    }
+
+    #[test]
+    fn apply_rejects_symlinked_directory_escape() {
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let outside = base.path().join("outside");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("target.txt"), "secret").unwrap();
+
+        let link = root.join("escape_dir");
+        #[cfg(unix)]
+        let created = std::os::unix::fs::symlink(&outside, &link).is_ok();
+        #[cfg(windows)]
+        let created = std::os::windows::fs::symlink_dir(&outside, &link).is_ok();
+        if !created {
+            return;
+        }
+
+        let patch = "*** Begin Patch\n*** Delete File: escape_dir/target.txt\n*** End Patch";
+        let err = TransactionalPatchApplier::apply(&root, patch).unwrap_err();
+        assert!(
+            matches!(err, ApplyPatchError::PathViolation(_)),
+            "symlinked directory escape must be rejected, got {err:?}"
+        );
+        assert!(outside.join("target.txt").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn apply_rejects_drive_prefixed_path() {
+        // Windows 词法: `C:evil.txt` 带 Prefix 组件 (is_absolute 为 false 但
+        // join 会替换 base) —— components 枚举必须把 Prefix 拒绝。
+        let dir = tempfile::tempdir().unwrap();
+        let patch = "*** Begin Patch\n*** Add File: C:evil.txt\npwned\n*** End Patch";
+        let err = TransactionalPatchApplier::apply(dir.path(), patch).unwrap_err();
+        assert!(
+            matches!(err, ApplyPatchError::PathViolation(_)),
+            "drive-relative path must be rejected, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn atomic_write_uses_exclusive_create() {
+        // create_new 语义 (统一存储基础件): 预置的同名 tmp 必须让写入失败而不是
+        // 被静默覆盖 (防同路径 symlink 预置抢占)。tmp 名含 pid + 进程内原子计数器,
+        // 并行测试下本次调用拿到的 seq 不可预测 —— 预占一段远超本测试二进制写调用
+        // 总数的 seq 区间保证必中, 退出前统一清理。
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("t.txt");
+        let pid = std::process::id();
+        let mut occupied = Vec::new();
+        // 预占 0..256 已远超本测试二进制的全部写调用数, 必中; 同名预置只影响
+        // 同目标名 (t.txt) 的写, 不干扰其它用例的并行写。
+        for seq in 0..256u64 {
+            let candidate = dir.path().join(format!("t.txt.tmp-{pid}-{seq}"));
+            if fs::write(&candidate, "occupied").is_ok() {
+                occupied.push(candidate);
+            }
+        }
+        let err = atomic_write_file(&target, "hello").unwrap_err();
+        assert!(
+            matches!(err, ApplyPatchError::Io(_)),
+            "occupied tmp name must fail the write, got {err:?}"
+        );
+        assert!(!target.exists());
+        for candidate in occupied {
+            let _ = fs::remove_file(candidate);
+        }
+    }
+
+    // ---- 读前观测门禁叠加 (提交写盘走版本 CAS 双钥匙) ----
+
+    #[test]
+    fn apply_with_gate_records_observations_and_enforces_version_cas() {
+        use crate::observed_gate::{
+            gated_write_atomic, GateDenial, GatedWriteError, WriteKind as GateWriteKind,
+            WriteRequest,
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "hello old world").unwrap();
+        let gate = ObservedGate::new();
+        let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-old\n+NEW\n*** End Patch";
+        TransactionalPatchApplier::apply_with_gate(dir.path(), patch, &gate).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "hello NEW world"
+        );
+
+        // 事务收尾回填观测: 同会话后续覆盖写凭回填版本直接过 CAS。
+        // 路径拼写语义 (2026-10-15 示踪破案): 门禁回填以 resolve_contained_target
+        // 的 canonical 拼写为键 —— macOS `/var`→`/private/var` symlink、Windows
+        // 真实大小写/verbatim 前缀都会让裸拼写落不同键 (path_key 是词法归一,
+        // 不展开 symlink)。查询方必须用同拼写命中; 同一文件的异拼写是两个键
+        // (产品内写端/读端均走 resolve, 拼写自洽; 此处对齐之)。
+        let target = fs::canonicalize(dir.path()).unwrap().join("a.txt");
+        let observed = gate.observed_version(&target);
+        assert!(
+            observed.is_some(),
+            "写后必须回填观测版本 (诊断示踪 2026-10-15): target={:?} target_key={} gate_keys={:?}",
+            target,
+            crate::observed_gate::path_key(&target),
+            gate.observed_keys(),
+        );
+        let observed = observed.unwrap();
+        assert_eq!(observed.len, fs::metadata(&target).unwrap().len());
+        let request = WriteRequest {
+            path: target.clone(),
+            kind: GateWriteKind::Replace,
+            replace_if_version: Some(observed),
+            create_if_absent: false,
+        };
+        gated_write_atomic(
+            &gate,
+            &FsVersionProbe,
+            &request,
+            b"second",
+            storage_atomic::DEFAULT_FILE_MODE,
+        )
+        .unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "second");
+
+        // 外部改动后, 旧钥匙被版本 CAS 拒绝, 外部内容不被覆盖。
+        fs::write(&target, "external").unwrap();
+        let stale = WriteRequest {
+            path: target.clone(),
+            kind: GateWriteKind::Replace,
+            replace_if_version: Some(observed),
+            create_if_absent: false,
+        };
+        let err = gated_write_atomic(
+            &gate,
+            &FsVersionProbe,
+            &stale,
+            b"third",
+            storage_atomic::DEFAULT_FILE_MODE,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                GatedWriteError::Denied(GateDenial::VersionMismatch { .. })
+            ),
+            "外部改动后旧钥匙必须被拒, got {err:?}"
+        );
+        assert_eq!(fs::read_to_string(&target).unwrap(), "external");
+    }
+
+    #[test]
+    fn apply_with_gate_creates_only_when_target_is_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let gate = ObservedGate::new();
+        let patch = "*** Begin Patch\n*** Add File: new.txt\n+created\n*** End Patch";
+        let report = TransactionalPatchApplier::apply_with_gate(dir.path(), patch, &gate).unwrap();
+        assert_eq!(report.files_added, vec!["new.txt"]);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("new.txt")).unwrap(),
+            "created"
+        );
+
+        // 目标已出现: 创建路径拒绝覆盖 (预演 FileAlreadyExists 与提交
+        // createIfAbsent 钥匙同口径, 任一触发都不落盘)。
+        let again = "*** Begin Patch\n*** Add File: new.txt\n+clobbered\n*** End Patch";
+        let err = TransactionalPatchApplier::apply_with_gate(dir.path(), again, &gate).unwrap_err();
+        assert!(
+            matches!(err, ApplyPatchError::FileAlreadyExists(_)),
+            "创建撞已有文件必须被拒, got {err:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("new.txt")).unwrap(),
+            "created"
         );
     }
 }

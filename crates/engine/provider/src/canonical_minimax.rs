@@ -1,7 +1,7 @@
 //! The minimax provider as a first-class canonical capability.
 //!
 //! The first production provider to implement
-//! [`ProviderCapability`](apeireth_plugin::ProviderCapability) directly, rather
+//! [`ProviderCapability`] directly, rather
 //! than reaching the runtime through the now-removed `LegacyLlmCapability`
 //! bridge. The runtime therefore names no vendor here: it sees only
 //! `provider.minimax` in its router, and this module is the one place that
@@ -9,7 +9,7 @@
 //!
 //! # What moved where
 //!
-//! Ported from the legacy `apeireth_api::llm::providers::apeireth_api::ApeirethApiProvider`
+//! Semantically aligned with the legacy `apeireth_api::llm::providers::apeireth_api::ApeirethApiProvider`
 //! (an `LlmProvider`), but not wrapped around it:
 //!
 //! - **Request/response translation** is owned here, against the canonical
@@ -122,7 +122,10 @@ impl MinimaxProviderCapability {
     /// [`ProviderError::AuthFailed`] stops the router from cascading.
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
-            let guard = self.resolver.lock().expect("resolver slot lock poisoned");
+            let guard = self
+                .resolver
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone().ok_or_else(|| ProviderError::AuthFailed {
                 provider: self.id.to_string(),
                 detail: format!(
@@ -333,11 +336,17 @@ impl MinimaxProviderPlugin {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_else(|| DEFAULT_MODELS.iter().map(|s| s.to_string()).collect());
-        let http = reqwest::Client::builder().build().map_err(|e| {
-            PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
-                "reqwest client build failed: {e}"
-            )))
-        })?;
+        // M6: 禁重定向 —— vendor client 不跟随 30x。reqwest 0.12 跨主机
+        // 重定向只删 Authorization/Cookie 等固定集合, 自定义 bearer 语义
+        // 的端点一旦被导向另一主机, key 会跟着转发; 本 API 从不 30x。
+        let http = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| {
+                PluginError::Core(apeireth_core::kernel::CoreError::precondition(format!(
+                    "reqwest client build failed: {e}"
+                )))
+            })?;
         Ok(Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?)
     }
 
@@ -362,7 +371,10 @@ impl MinimaxProviderPlugin {
     /// capability directly rather than through `Runtime::execute`.
     #[doc(hidden)]
     pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(resolver);
     }
 
@@ -385,14 +397,20 @@ impl Plugin for MinimaxProviderPlugin {
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
         // The resolver arrives here, after registration. Fill the shared slot
         // so the capability can resolve credentials on its next turn.
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = Some(Arc::clone(&ctx.credentials));
         Ok(())
     }
 
     async fn shutdown(&self) -> PluginResult<()> {
         // Drop the resolver handle on shutdown; no resources to release beyond it.
-        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        let mut slot = self
+            .resolver
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *slot = None;
         Ok(())
     }
@@ -647,6 +665,19 @@ mod tests {
         let resp = cap.adapt_response(body, "MiniMax-M3").expect("adapts");
         assert_eq!(resp.usage, NormalizedUsage::default());
         assert_eq!(resp.finish_reason, Some(NormalizedFinishReason::Length));
+    }
+
+    /// 找不到缓存列的家留 None 不编造: 本家原始 usage 只有三列 token 计数,
+    /// 缓存命中列照实未知 (非 0)。
+    #[test]
+    fn adapt_response_keeps_the_cache_column_unknown_without_a_vendor_column() {
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        });
+        let resp = cap.adapt_response(body, "MiniMax-M3").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, None);
     }
 
     #[test]

@@ -1,0 +1,15 @@
+# kani API 本地桩 (类型检查/冒烟用, 不进 CI)。crate 名固定为 `kani`,
+# 使 harness 中 `kani::any` / `kani::assume` / `#[kani::proof]` 的路径解析
+# 与真实 Kani 工具链注入的同名 crate 完全一致。
+[package]
+name = "kani-stub"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "kani"
+path = "src/lib.rs"
+
+[dependencies]
+kani-stub-macros = { path = "../kani-stub-macros" }

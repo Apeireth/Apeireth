@@ -1,4 +1,4 @@
-//! Retry / backoff helpers recovered from `apeireth-rate-limiter`.
+//! Retry / backoff helpers aligned with `apeireth-rate-limiter`.
 //!
 //! - Full-jitter exponential backoff (`random(0, min(cap, base * 2^attempt))`)
 //! - HTTP `Retry-After` delta-seconds parsing (HTTP-date is an honest `None`)

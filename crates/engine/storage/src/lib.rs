@@ -13,9 +13,9 @@
 //! gateway, companion, provider, or governance logic. Those layers will be
 //! built on top of this foundation in later migration phases.
 //!
-//! M1A port source: `origin/master:reconstruction_v2/crates/apeireth-storage`.
-//! Only `pool.rs` and `migrations.rs` semantics were ported, with the donor
-//! migration SQL kept for on-disk compatibility.
+//! M1A baseline: `origin/master:reconstruction_v2/crates/apeireth-storage`.
+//! Only `pool.rs` and `migrations.rs` semantics are implemented, with the
+//! baseline migration SQL kept for on-disk compatibility.
 
 pub mod cache;
 pub mod error;

@@ -1,0 +1,1 @@
+scripts/check-neutral-terms.ps1:16:  '移植自',

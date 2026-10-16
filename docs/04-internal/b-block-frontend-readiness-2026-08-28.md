@@ -30,7 +30,7 @@
 
 ## 2. frontend runtime.ts 真账 (1411 行, 非 brief 所述)
 
-**不指 :8090**: `loadConfig()` (L126-169) 默认 `baseUrl = 'http://127.0.0.1:3000'`, Pattern 项目移植来的 OpenAI-compatible adapter.
+**不指 :8090**: `loadConfig()` (L126-169) 默认 `baseUrl = 'http://127.0.0.1:3000'`, 该 OpenAI-compatible adapter 沿自既有实现.
 
 **调用 20+ 端点, v2 gateway 实际只实现 3 个**:
 
@@ -148,7 +148,7 @@
 ## 7. 风险 + 阻塞
 
 - **R1 [严重/技术]**: 9 organ SSE frame schema (R9 §4.3) 是 proposal 未真生产跑过, 1 周内可能发现 schema 缺字段 / cognitive module 串联时序冲突.
-- **R2 [严重/技术]**: runtime.ts 1411 行 + 20+ 端点 + CoT 分流 (W6 L401-478) 高复杂度 legacy, 重写**易破** Pattern 移植能力. 建议**只改 baseUrl + SSE 路径**, 不全重写.
+- **R2 [严重/技术]**: runtime.ts 1411 行 + 20+ 端点 + CoT 分流 (W6 L401-478) 高复杂度 legacy, 重写**易破**沿用能力. 建议**只改 baseUrl + SSE 路径**, 不全重写.
 - **R3 [中/技术]**: Tauri 2 keyring (plugin-store / stronghold) 跟 Tauri shell 0 apeireth-* dep 边界冲突. **决策点**.
 - **R4 [严重/估时]**: R12 OrganOrchestrator working tree 已起未 commit, R11 自报 1-3 周, 真账 3-5 周. **最长串行依赖**.
 - **R5 [中/估时]**: spec 4-6 周假设并行, 悲观 8-10 周.

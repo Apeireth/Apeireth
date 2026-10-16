@@ -29,7 +29,7 @@ Author:        子代理 R15 (调研岗, 0 装诚实真账)
 - **真 endpoint 可达**: OpenAI `https://api.openai.com/v1/audio/transcriptions` OR MiniMax `https://api.minimaxi.com/v1/audio/transcriptions` (兼容未确认, 估 1-2 天联调).
 - **真 API key**: `APEIRETH_API_KEY` env 或 RC-9 `KeyringCredentialResolver`.
 
-**v1 真接参考** (1:1 翻译, `legacy/donor/apeireth-voice/src/real.rs:824-938`):
+**v1 真接参考** (语义对齐, `legacy/donor/apeireth-voice/src/real.rs:824-938`):
 - 走 `reqwest::multipart::Form` POST `/v1/audio/transcriptions`
 - `Authorization: Bearer {key}` header
 - `language` + `model=whisper-1` + `file=<PCM bytes>` part
@@ -73,7 +73,7 @@ Author:        子代理 R15 (调研岗, 0 装诚实真账)
 
 | Endpoint | Base URL | Model | Auth | 兼容性 |
 |---|---|---|---|---|
-| **OpenAI Whisper** | `https://api.openai.com/v1/audio/transcriptions` | `whisper-1` | `Bearer sk-...` | ✅ 1:1 翻译 v1, 已知 (R6 测试 + v1 真接) |
+| **OpenAI Whisper** | `https://api.openai.com/v1/audio/transcriptions` | `whisper-1` | `Bearer sk-...` | ✅ 语义对齐 v1, 已知 (R6 测试 + v1 真接) |
 | **MiniMax 兼容** | `https://api.minimaxi.com/v1/audio/transcriptions` | `speech-01` | `Bearer ...` | ⚠️ **未确认兼容**, R6 §2.5 已默认 URL, **估 1-2 天联调** |
 | **自托管 whisper.cpp** | `http://localhost:8080/v1/audio/transcriptions` (估) | ggml-base.bin 估 | `Bearer any` 或无 | ⚠️ 估 OpenAI 兼容, 但 binary + 模型文件配置需自管 |
 

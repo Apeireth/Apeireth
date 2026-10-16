@@ -1,0 +1,75 @@
+SECURITY.md:16:- **上游依赖维护者**（如 tokio / reqwest / serde_json / pyo3 等关键 crate）
+crates/adapters/gateway/src/error_frame.rs:73:            Self::ProviderError => "查看 message 中的上游信息, 必要时联系服务商",
+crates/adapters/sdk/src/voice/vad.rs:5://! 2. **Silence** — 基于静音时长阈值 (per 上游 silence detection)
+crates/engine/memory/src/agent_trace.rs:13://! caller 也可自带 id (如继承上游 traceparent).
+crates/engine/memory/src/derived_repair.rs:191:    /// 上游人工更正提供，本执行器不生成内容——0 装）。
+crates/engine/memory/src/derived_repair.rs:216:        // 拓扑序: Kahn, 依赖 = sources∩(affected \ roots)（根已被上游人工修复, 视为已处理）。
+crates/engine/memory/src/derived_repair.rs:252:                // 根 = 失效源头: 不重建 (内容需上游人工更正, 0 装).
+crates/engine/memory/src/derived_repair.rs:261:            // 所有父来源 ∈ (保留集 ∪ 已修复已验证 ∪ 根集[上游人工已更正]).
+crates/engine/memory/src/derived_repair.rs:497:        // 根自身不重建 (内容由上游人工更正), 留在 still_withdrawn.
+crates/engine/memory/src/derived_repair.rs:554:    /// 根节点自身: 撤回但不重建 (内容需上游人工更正).
+crates/engine/memory/src/forget_coordinator.rs:8://! - **工程版本**: 人工批准后（`approval_id` 由上游 approval 生命周期解析后
+crates/engine/memory/src/forget_coordinator.rs:26:/// 协调遗忘请求：roots 为遗忘根集；`approval_id` 引用上游已通过的审批工件
+crates/engine/perception/src/voice/emotion_voice.rs:151:    /// `text` 与 `voice_name` 都是外部/上游可控字符串 (模型输出、配置、用户输入),
+crates/engine/perception/src/voice/emotion_voice.rs:174:    /// 上游文本 (含模型生成内容) 不得改变 SSML 文档结构。
+crates/engine/perception/src/voice/minimax_tts.rs:24:                write!(f, "上游服务返回错误: HTTP {} - {}", code, msg)
+crates/engine/provider/src/minimax_llm_factory.rs:192:/// (per completion_request 上游决定; instance 0 装模板化)。
+crates/foundation/orchestration/src/council/advisors_llm.rs:69:    /// **输入即不可信**: LLM 响应可以任意长 (真实事故: 上游复述 >2000 字符时
+crates/foundation/protocol/src/error.rs:17:/// - `Remote` — 上游 HTTP / 协议错误 (status code + body)
+crates/foundation/protocol/src/error.rs:60:    /// 上游错误
+crates/foundation/protocol/src/normalized.rs:454:/// M11 修复 (2026-09-24 审计): u64 → u32 安全收敛工具。上游 usage 字段返回
+docs/01-architecture/engineering-report.md:39:- 真实 API 压测 41/59 失败 → 限流退避 → 100/100（尊重上游，不掩盖）
+docs/01-architecture/forget-three-phase-production-spec.md:27:1. **审批工件引用而非内建审批流**：`CoordinatedForget.approval_id` 由上游
+docs/02-guides/custom-llm.md:36:# ---------- 1: MiniMax (默认上游) ----------
+docs/02-guides/frontend-data-contract.md:230:分支：`companion_serve.rs:1193-1237`。架构是**字节透传**：`stream_forward`（`protocol_handlers.rs`，`:1219-1224` 调用）把上游 MiniMax 的 SSE 原样转发，**跳过服务端工具循环**（`:1189` 注释明示 "tool loop 跳过"）。
+docs/02-guides/frontend-data-contract.md:232:- 响应 `Content-Type: text/event-stream`，帧格式即上游 OpenAI 兼容 chunk：
+docs/02-guides/frontend-data-contract.md:244:- 帧尾：上游 `[DONE]` 由前端识别终止（`runtime.ts:405-407`）。
+docs/02-guides/frontend-data-contract.md:252:| 流式上游转发失败 | 502 | `{"error": {"message": "stream forward: …"}}` | `:1228-1235` |
+docs/02-guides/user-manual.md:101:**0 装 PASS 总结**：治理机制全部就位且有单测，**生产 bootstrap 装 3 个 hook**（Permission + 凭据泄漏 + 注入检测），其余 hook（MaxRounds 结构性、AuditHashChain 按需、DenyCapabilities 显式）由部署方决定。PII/越权/凭据泄漏 3 类核心攻击面被上游 `873d2857` 守住；剩余延后项按 ROADMAP §4 P2-P8 排。
+docs/03-reference/absorption-2026-09.md:39:  - `RepairExecutor::execute`：屏障三段（撤回全部受影响 → 拓扑序阶段重建 → 验证"父支撑 ∈ 保留 ∪ 已修复 ∪ 根[上游已更正]"→ 仅放行通过者）；根不重建（内容由上游人工更正，0 装）；`planner_only = true` 显式标注持久化留部署层。
+docs/04-internal/ENGINEER-MANIFESTO.md:79:| **O-2** | 走在前人肩上 | 借 + 标注 + 改 (不抄) | 这方案借鉴了谁的? 标注来源了吗? 来源: 上游标杆项目 + 标准协议, 借 + 标注 + 改。 |
+docs/04-internal/backlog.md:48:> **2026-08-16 新增**: 上游新版调研 (Rust 重写 + 84 插件) 进行中 — 可吸收点登记见下。
+docs/04-internal/backlog.md:55:| N1 | 上游新版调研 (89 插件 + 核心 modules) | 主人 2026-08-16 指示 | 源码 research/source/ 本地快照 (从 Downloads 迁入工作区, git 排除); Rust 记忆层 + 89 插件 manifest 已核实; 可吸收清单已并入 team-work-doc §8 | ✅ 调研完成 (team-work-doc §8.2/8.3/8.4) |
+docs/04-internal/backlog.md:62:| N8 | generation 绑定观测缓存 | N1 发现 (Rust 层) | 查询管线中间产物复用 + 防跨代脏读 | ✅ 移交续接 (database_engineer2→fullstack_engineer2, 任务 1054806e): apeireth-memory 新增 gen_cache.rs (自包含, 上游观测缓存精神): 代际计数器 + 观测缓存按 query_hash 存取 Arc 快照; 同代命中/跨代懒失效 (防脏读); N5 artifact_sig 联动口 observe_sig (签名变→代际推进, 首观立基线); SigSource trait 实接线口 0 装; 9 单测全绿 + crate 307/307 无回归 (a0d6b419) |
+docs/04-internal/backlog.md:64:| N10 | 宽松文本工具协议层 | N1 发现 (插件扫描) | 上游 TOOL_REQUEST 语法: 始末/ESCAPE/模糊匹配/archery/思考块剥离 → tool-runtime 增强 | ✅ 代码被流水线收编提交 fad23d81: tool-runtime 新增 text_protocol.rs (5 机制字段级移植上游协议: 始末语法+ESCAPE 防注入+模糊标记+archery 分流+思考块剥离) + executor.rs execute_separated/ArcheryHandle (fire-and-forget); cargo test -p apeireth-tool-runtime -j 4 全绿 (lib 112 + 集成 20 + doctest 2, 含 N10 新增 19 测); 0 新依赖; 自审报告 reports/77b9efce-edba-4452-b7b3-92b7fa3debda-backend_engineer2-report.md |
+docs/04-internal/backlog.md:66:| N12 | 语义模型路由 + 推理归一化 | N1 发现 (插件扫描) | gateway 层: 语义选模型+容灾链; 13 别名推理字段→think 块 | ✅ 提交 5fa725e6 (gateway semantic_router: 虚拟模型名+意图选模型+容灾链, Embedder/ModelExecutor trait 口, 17 测试) + 350c0255 (provider reasoning_adapter: 实为 12 别名, 台账"13"系笔误已按上游源码核实; 片段级去重+think 块+白名单下发+http_dispatch 接线默认关, 22 测试); 集成合并曾冲回本行, 2026-08-17 复登记; 自审报告 reports/d6bc5357-bbc8-4ad4-aa7a-748ff67d7c9d-mcp_integration_expert-report.md |
+docs/04-internal/backlog.md:70:| N16 | §5.1 记忆主题分组 + 主题索引注入 (上游语义分组精神) | team-work-doc §5.1 记忆域深化包 机制② (团队任务 a227fc3f) | apeireth-companion 新增 topic_groups.rs (确定性分组: CJK bigram+拉丁词 token, 停用词切分点防桥接误并簇 → 贪心聚簇 → 主题名=最高频 token; build_topic_index 预算感知索引块 600 字, 每主题名称+条目数+代表条目, 超预算砍尾行留收纳提示) + assemble.rs memory_block 一处挂接 (主题索引+记忆证据块合并, 不另立平行注入系统) | ✅ 完成: 提交 17483af0 (3 files +347); 独立验证 rustc --test topic_groups.rs 8/8 全绿 (分组正常/空记忆/单主题/停用词/预算截断/确定性); crate 级测试被他人 WIP 阻塞 (HEAD 缺 prompt_assembler.rs, N9 进行中) 如实标注; 报告 reports/a227fc3f-f412-4a6e-b7d7-eea6cac30b5f-mcp_integration_expert2-report.md |
+docs/04-internal/backlog.md:71:| N19 | toolApprovalManager 增强 (命令级粒度+静默拒绝+结构化拒绝) | team-work-doc §8.3/§8.4 吸收清单 (团队任务 fe468acf) | apeireth-tool-approval: ApprovalListRule (`Tool:command` 审批键, 命令从 args command/command1..N 提取, specificity 2>1 同级静默优先 — 上游 considerMatch 字段级) + `::SilentReject` 静默拒绝 (silent=true 不打扰 AI, 审计台账 silent_rejection_audit 留痕) + 结构化拒绝 wait_for_approval_outcome → ApprovalOutcome/Rejection `{rejected_by_user, error_type}` (rejected_by_user/approval_timeout/policy_deny/channel_unavailable 四错误码) + ApprovalRule trait 加 silent_on_reject/matched_command 默认方法 + CallRecord 审计字段; check/wait_for_approval(bool) 签名与 ApprovalDecision 变体零改动 (消费方零破坏); 洋葱安全红线: 高危仍 RequireApproval 走主人批准, 无通道 fail-safe 拒绝 | ✅ 完成 (任务 fe468acf): cargo test -p apeireth-tool-approval -j 4 全绿 (106 单测+39 集成+1 doctest); 0 新依赖; 报告 reports/fe468acf-7515-48c9-9744-a197206ef5ab-security_reviewer-report.md |
+docs/04-internal/backlog.md:77:| N22 | **ShellPreset (shell 预设命令机制)** | 主人 2026-08-17 设计蓝图对照 (R136: "上游 preset 机制 (preset:预设名?参数) 值得保留 — 减少 LLM 记忆成本") | tool-shell 无实现: ShellPreset { name, command_template } + 白名单预设 (预设名展开为完整命令, 参数走模板) — 与 N17 装配同批 | ✅ 提交 b48f355 + 7b11738: tool-shell preset.rs (白名单登记 + argv 模板展开 + 参数独立 quote 防注入 + PresetShell 挂 exec_sandboxed 既有链, 注入用例 `;`/`&&`/`|`/`$()`/反引号全测, 9/9 测试全绿) |
+docs/04-internal/backlog.md:243:> **2026-08-16 新增**: 上游新版调研 (Rust 重写 + 84 插件) 进行中 — 可吸收点登记见下。
+docs/04-internal/backlog.md:250:| N1 | 上游新版调研 (89 插件 + 核心 modules) | 主人 2026-08-16 指示 | 源码 research/source/ 本地快照 (从 Downloads 迁入工作区, git 排除); Rust 记忆层 + 89 插件 manifest 已核实; 可吸收清单已并入 team-work-doc §8 | ✅ 调研完成 (team-work-doc §8.2/8.3/8.4) |
+docs/04-internal/backlog.md:257:| N8 | generation 绑定观测缓存 | N1 发现 (Rust 层) | 查询管线中间产物复用 + 防跨代脏读 | ✅ 移交续接 (database_engineer2→fullstack_engineer2, 任务 1054806e): apeireth-memory 新增 gen_cache.rs (自包含, 上游观测缓存精神): 代际计数器 + 观测缓存按 query_hash 存取 Arc 快照; 同代命中/跨代懒失效 (防脏读); N5 artifact_sig 联动口 observe_sig (签名变→代际推进, 首观立基线); SigSource trait 实接线口 0 装; 9 单测全绿 + crate 307/307 无回归 (a0d6b419) |
+docs/04-internal/backlog.md:259:| N10 | 宽松文本工具协议层 | N1 发现 (插件扫描) | 上游 TOOL_REQUEST 语法: 始末/ESCAPE/模糊匹配/archery/思考块剥离 → tool-runtime 增强 | ✅ 代码被流水线收编提交 fad23d81: tool-runtime 新增 text_protocol.rs (5 机制字段级移植上游协议: 始末语法+ESCAPE 防注入+模糊标记+archery 分流+思考块剥离) + executor.rs execute_separated/ArcheryHandle (fire-and-forget); cargo test -p apeireth-tool-runtime -j 4 全绿 (lib 112 + 集成 20 + doctest 2, 含 N10 新增 19 测); 0 新依赖; 自审报告 reports/77b9efce-edba-4452-b7b3-92b7fa3debda-backend_engineer2-report.md |
+docs/04-internal/backlog.md:261:| N12 | 语义模型路由 + 推理归一化 | N1 发现 (插件扫描) | gateway 层: 语义选模型+容灾链; 13 别名推理字段→think 块 | ✅ 提交 5fa725e6 (gateway semantic_router: 虚拟模型名+意图选模型+容灾链, Embedder/ModelExecutor trait 口, 17 测试) + 350c0255 (provider reasoning_adapter: 实为 12 别名, 台账"13"系笔误已按上游源码核实; 片段级去重+think 块+白名单下发+http_dispatch 接线默认关, 22 测试); 集成合并曾冲回本行, 2026-08-17 复登记; 自审报告 reports/d6bc5357-bbc8-4ad4-aa7a-748ff67d7c9d-mcp_integration_expert-report.md |
+docs/04-internal/backlog.md:265:| N16 | §5.1 记忆主题分组 + 主题索引注入 (上游语义分组精神) | team-work-doc §5.1 记忆域深化包 机制② (团队任务 a227fc3f) | apeireth-companion 新增 topic_groups.rs (确定性分组: CJK bigram+拉丁词 token, 停用词切分点防桥接误并簇 → 贪心聚簇 → 主题名=最高频 token; build_topic_index 预算感知索引块 600 字, 每主题名称+条目数+代表条目, 超预算砍尾行留收纳提示) + assemble.rs memory_block 一处挂接 (主题索引+记忆证据块合并, 不另立平行注入系统) | ✅ 完成: 提交 17483af0 (3 files +347); 独立验证 rustc --test topic_groups.rs 8/8 全绿 (分组正常/空记忆/单主题/停用词/预算截断/确定性); crate 级测试被他人 WIP 阻塞 (HEAD 缺 prompt_assembler.rs, N9 进行中) 如实标注; 报告 reports/a227fc3f-f412-4a6e-b7d7-eea6cac30b5f-mcp_integration_expert2-report.md |
+docs/04-internal/backlog.md:266:| N19 | toolApprovalManager 增强 (命令级粒度+静默拒绝+结构化拒绝) | team-work-doc §8.3/§8.4 吸收清单 (团队任务 fe468acf) | apeireth-tool-approval: ApprovalListRule (`Tool:command` 审批键, 命令从 args command/command1..N 提取, specificity 2>1 同级静默优先 — 上游 considerMatch 字段级) + `::SilentReject` 静默拒绝 (silent=true 不打扰 AI, 审计台账 silent_rejection_audit 留痕) + 结构化拒绝 wait_for_approval_outcome → ApprovalOutcome/Rejection `{rejected_by_user, error_type}` (rejected_by_user/approval_timeout/policy_deny/channel_unavailable 四错误码) + ApprovalRule trait 加 silent_on_reject/matched_command 默认方法 + CallRecord 审计字段; check/wait_for_approval(bool) 签名与 ApprovalDecision 变体零改动 (消费方零破坏); 洋葱安全红线: 高危仍 RequireApproval 走主人批准, 无通道 fail-safe 拒绝 | ✅ 完成 (任务 fe468acf): cargo test -p apeireth-tool-approval -j 4 全绿 (106 单测+39 集成+1 doctest); 0 新依赖; 报告 reports/fe468acf-7515-48c9-9744-a197206ef5ab-security_reviewer-report.md |
+docs/04-internal/backlog.md:272:| N22 | **ShellPreset (shell 预设命令机制)** | 主人 2026-08-17 设计蓝图对照 (R136: "上游 preset 机制 (preset:预设名?参数) 值得保留 — 减少 LLM 记忆成本") | tool-shell 无实现: ShellPreset { name, command_template } + 白名单预设 (预设名展开为完整命令, 参数走模板) — 与 N17 装配同批 | ✅ 提交 b48f355 + 7b11738: tool-shell preset.rs (白名单登记 + argv 模板展开 + 参数独立 quote 防注入 + PresetShell 挂 exec_sandboxed 既有链, 注入用例 `;`/`&&`/`|`/`$()`/反引号全测, 9/9 测试全绿) |
+docs/04-internal/claims-evidence-matrix.md:7:> 命名强于实现的"证明"不计 A 级。行文只用"既有实现 / 上游 / 公开文献"等中性措辞。
+docs/04-internal/design-intent.md:30:- **上游新版调研**: 重新调研上游 Rust 重写版（89 插件 + 记忆层 V3）, 可吸收 17 项
+docs/04-internal/handoff-k3-frontend-2026-09-23.md:4:> **HEAD 状态**：`main` @ `ffffac8f`（2026-09-23 文档批）。远端只有 `jimmy`（github.com/Jimmyxiao2009/Apeireth-rust.git），`main` 未设上游跟踪——**是否推送由主人决定，接手人不要擅自 push**。
+docs/04-internal/handoff-w1-w5-closure-2026-10-10.md:83:| glib <0.20.0 安全告警（GHSA-wrw7-89jp-8q8g） | 已以 not_used 消除（台账 #69）——tauri GTK 栈 cfg(linux/BSD) 门控、Windows 产物不编译；**解锁条件：上游 tauri 升级 GTK 栈，或首次出 Linux 构建前重新评估** |
+docs/04-internal/live-verification-ledger.md:105:| 69 | **dependabot 告警 #2 处置（glib <0.20.0，GHSA-wrw7-89jp-8q8g）**：定性 = **传递依赖误报面**——glib 0.18.5 全量经 tauri 2.11.5 的 GTK/WebKit 栈（gtk 0.18.2 / webkit2gtk 2.0.2 / libappindicator 等 12 包）传递引入，tauri 的 Cargo.toml 已核实 **cfg(linux/ dragonfly/freebsd/openbsd/netbsd) 目标门控**，Windows 构建从不编译该代码；发布产物 Windows-only（NSIS/MSI）。直接升级不可行实证：`cargo update -p glib --precise 0.20.0 --dry-run` 被 `gtk ^0.18` 语义化锁拒（修复需上游 tauri 升 GTK 栈 = 外部依赖）。处置：API 以 **not_used** 消除告警（HTTP 200，理由与「未来 Linux 构建重新评估」警示已写入 dismissed_comment） | 2026-10-11 亲跑：target-gating 核实（本机 registry tauri-2.11.5/Cargo.toml）；升级拒绝实证（dry-run 报错原文留档）；消除请求 200 | 复核：`grep -A4 'cfg(any(target_os = "linux"' ~/.cargo/registry/src/*/tauri-2.11.5/Cargo.toml`；未来 Linux 构建前重开告警评估 |
+docs/04-internal/maintenance-guide.md:278:- v2 路径接 governance hook 之外的任何机制（per ROADMAP P0 = 接线 hook 是排期，不是完成）— **上游 `873d2857` 已落实 P0 的 3 个核心 hook**（Permission + 凭据泄漏 + 注入检测），其余按部署需要
+docs/04-internal/team-work-doc.md:29:| **调研先行** | 高价值/基础工具先调研成熟实现（上游标杆项目等），吸收先进写法，实战验证后才提交 | 闭门造车重造轮子 |
+docs/04-internal/team-work-doc.md:136:- 语义折叠（只折叠低相关段，上游选择性折叠精神）
+docs/04-internal/team-work-doc.md:137:- 记忆主题分组（上游语义分组精神）→ 注入"主题索引"块 ✅ Rust 落点: companion topic_groups.rs (提交 17483af0; assemble.rs memory_block 挂接, 任务 a227fc3f 终验通过)
+docs/04-internal/team-work-doc.md:138:- 元思考递归链（上游元思考精神）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
+docs/04-internal/team-work-doc.md:139:- 跨日记联想（上游关联发现精神）→ memory_graph 已有底层 ✅ Rust 落点: companion cross_diary.rs (提交 8e015af0; 确定性共享token建链+双向查询, 注入 trait 口 CrossDiaryInjector 统一接线延后, 0 装 PASS)
+docs/04-internal/team-work-doc.md:140:- 日记本中心（上游日记插件精神）→ 按日归档 + 检索 + 注入 ✅ Rust 落点: companion diary.rs (提交 f2e50f46; 按日归档+确定性检索+recent_injection 注入块, DiaryInjector trait 口)
+docs/04-internal/v2-rc-1-progress-report.md:5:> **本文档定位**: 保留上游在 `ae182c8c` 的完整历史快照（commit 序列 + 子代理报告 + LOCKED 状态 + 当时阻塞项）。当前交付状态以 `HANDOFF-NOTES.md`、`cognitive-module-wiring.md` 与 `v2.0.0-rc-roadmap.md` 为准。
+docs/04-internal/v2-reference-handbook-2026-08-28.md:155:> Borrow, attribute, adapt (上游标杆项目 + 标准协议), 借 + 标注 + 改。
+docs/core-capability-expansion.md:52:- SSE: 协议端点 `stream:true` 透传上游字节(不解析/不注入 correlation id); companion `/v1/apeireth/events` 是独立 broadcast SSE.
+docs/integration/phase0-audit.md:113:| **enigo/xcap 键鼠/截屏 bridge** | 无（上游无对应） | **drop** — DO NOT PORT |
+docs/integration/phase0-audit.md:179:| **上游文档「不自研 UI 接 LobeChat」与自研 shell 路线冲突** | 低 | 文档是建议非硬约束；自研 shell 能力更强，属路线升级 |
+docs/integration/phase5-report.md:21:| `frontend/companion-desktop/tests/mock-openai-sse.mjs` | mock OpenAI SSE 上游（含故障注入 401/500/hang） |
+docs/integration/phase5-report.md:26:**链路验证成功（真模型除外）**：`UI streamChat → apeireth-api :8080 stream_forward → mock 上游 SSE` 全链路真实工作。
+docs/integration/phase5-report.md:31:- Error-401: 上游 401 → `auth` 分类
+docs/integration/phase5-report.md:32:- Error-500: 上游 500 → `http` 分类
+docs/integration/phase5-report.md:127:- 前端→AgentRuntime→Apeireth→provider 的**完整链路真实工作**（mock 上游验证 SSE/cancel/error/recovery）
+docs/integration/phase5-report.md:133:- **真实模型响应未验证**（环境无 MiniMax key）。在拿到 key 之前，无法确认「真模型对话」这一端到端体验。当前是「链路已验证 + 上游被 mock」的状态。
+frontend/companion-desktop/src/lib/runtime.ts:417:  provider_error: {title: '模型服务返回错误', solution: '查看错误详情中的上游信息'},
+frontend/companion-desktop/tests/mock-openai-sse.mjs:50:        final = `这是来自 mock 上游的回复。你问我: ${String(prompt).slice(0, 40)}。`.repeat(3);
+scripts/upgrade/audit-rationale.md:11:3. **修复路径**: 上游 bump / 替换 / 自实现的成本
+scripts/upgrade/audit-rationale.md:19:| RUSTSEC-2024-0384 | instant | 0.1.13 | unmaintained | 0 (transitive only) | skip — 等上游 bump |
+scripts/upgrade/audit-rationale.md:29:- 上游发布新版本替我们 jump → 自动 unlock (cargo update 周期)
+scripts/upgrade/audit.toml:51:# 不是简单 skip: 上面 6 件都跟特定 transitive 升级路径耦合. 等上游 bump 后

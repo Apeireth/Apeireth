@@ -1,10 +1,10 @@
-//! Score aggregation recovered from `legacy/donor/apeireth-eval`.
+//! Score aggregation.
 //!
 //! Pure stdlib statistics: arithmetic / weighted mean, sample standard
 //! deviation, linear-interpolation percentile, and a SWE-bench-style pass-rate
 //! summarizer. This is **governance-of-eval** math, not a task runner and not
 //! a second agent loop. LLM smoke / MCP bridge / live cross-model HTTP paths
-//! from the donor are discarded.
+//! from the earlier implementation are discarded.
 
 use serde::{Deserialize, Serialize};
 
@@ -113,7 +113,7 @@ pub fn is_valid_percentile(p: f64) -> bool {
     p.is_finite() && (0.0..=1.0).contains(&p)
 }
 
-/// One SWE-bench-style result. The executor itself is not ported.
+/// One SWE-bench-style result. The executor itself is not included here.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TaskResult {
     pub task_id: String,
@@ -132,7 +132,7 @@ pub struct CategoryBreakdown {
 }
 
 /// Aggregated pass-rate report. Empty input uses pass_rate / mean_score = 1.0
-/// (donor convention: "no tasks" is not a failure).
+/// (baseline convention: "no tasks" is not a failure).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TaskSummary {
     pub total: usize,

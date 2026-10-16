@@ -1,6 +1,6 @@
-//! E4 Curiosity 器官真实现 (v2 移植版, per `legacy/donor/apeireth-companion/src/curiosity.rs`).
+//! E4 Curiosity 器官真实现（v2）。
 //!
-//! **v1 → v2 1:1 翻译纪律**:
+//! **v1 → v2 语义对齐纪律**:
 //! - v1 真实现是**确定性机制件** (回声合成/偏置采样/预算/路由全部可测, 无 LLM 依赖,
 //!   per `legacy/donor/apeireth-companion/src/curiosity.rs:13-17` 文档明示).
 //! - v2 真实现保留 v1 全部确定性算法: `CuriosityEngine` (回声采样 + 加深 + 预算 + 路由).
@@ -27,22 +27,23 @@
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位, Curiosity 共享 `LlmFactory` trait 边界
 //!
 //! **3 阶审查** (O-6 锚 9):
-//! 1. 总体: 1:1 翻译 v1 `CuriosityEngine`, trait 边界 + 未来 LLM 探索路径预留
+//! 1. 总体: 语义对齐 v1 `CuriosityEngine`, trait 边界 + 未来 LLM 探索路径预留
 //! 2. 系统: impl 在 engine (`apeireth-organ`), trait 在 foundation (`apeireth-plugin`)
 //! 3. 架构: `Arc<dyn OrganTrait>` 注入 runtime, E4 trait process() 调 CuriosityEngine
 
 use std::collections::HashMap;
 
+use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_plugin::llm_factory::LlmFactory;
 use apeireth_plugin::organ::{
     CuriosityDepth, CuriosityTarget, OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
 };
 
 // ============================================
-// v1 数据结构 1:1 翻译
+// v1 数据结构 (语义对齐 v1)
 // ============================================
 
-/// 回声来源 (per v1 `EchoSource` 1:1)
+/// 回声来源 (per v1 `EchoSource`)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EchoSource {
     /// 记忆: 主题在记忆里反复出现/重要
@@ -51,7 +52,7 @@ pub enum EchoSource {
     OracleSurprise,
 }
 
-/// 记忆回声: 某个主题的好奇引力 (per v1 `Echo` 1:1)
+/// 记忆回声: 某个主题的好奇引力 (per v1 `Echo`)
 #[derive(Debug, Clone)]
 pub struct Echo {
     pub topic: String,
@@ -69,7 +70,7 @@ impl Echo {
     }
 }
 
-/// 探索深度 (per v1 `Depth` 1:1)
+/// 探索深度 (per v1 `Depth`)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Depth {
     Shallow,
@@ -85,9 +86,10 @@ impl From<Depth> for CuriosityDepth {
     }
 }
 
-/// 好奇引擎配置 (per v1 `CuriosityConfig` 1:1)
+/// 好奇引擎配置 (per v1 `CuriosityConfig`)
 #[derive(Debug, Clone)]
 pub struct CuriosityConfig {
+    /// 每日好奇预算 (基线 2000, 受体验旋钮 [`TunableParam::CuriosityStrength`] 缩放)。
     pub daily_budget: f64,
     pub shallow_cost: f64,
     pub deep_cost: f64,
@@ -97,10 +99,24 @@ pub struct CuriosityConfig {
     pub seed: u64,
 }
 
+/// 每日好奇预算基线 (= 现状硬编码常量; 未设旋钮 = 本值, 零变化)。
+pub const BASELINE_DAILY_BUDGET: f64 = 2000.0;
+
+/// 当前生效的每日好奇预算: `BASELINE_DAILY_BUDGET × CuriosityStrength 倍率`。
+///
+/// - 倍率来自体验旋钮 [`TunableParam::CuriosityStrength`] (env
+///   `APEIRETH_TUNE_CURIOSITY_STRENGTH`, 非法值回默认 1.0), 自动校准引擎的
+///   落地值经进程内 override 生效。
+/// - 推导 (v1 哲学「浅尝辄止的童年」: 预算即好奇精力): 倍率 > 1 = 好奇更旺盛,
+///   < 1 = 好奇收敛; 未设 = 倍率 1.0 = 2000 现状。
+pub fn effective_daily_budget() -> f64 {
+    BASELINE_DAILY_BUDGET * TunableParam::CuriosityStrength.effective()
+}
+
 impl Default for CuriosityConfig {
     fn default() -> Self {
         Self {
-            daily_budget: 2000.0,
+            daily_budget: effective_daily_budget(),
             shallow_cost: 100.0,
             deep_cost: 500.0,
             deepen_echo_threshold: 0.6,
@@ -112,10 +128,10 @@ impl Default for CuriosityConfig {
 }
 
 // ============================================
-// v1 CuriosityEngine 1:1 翻译 (确定性, 无 LLM)
+// v1 CuriosityEngine (语义对齐, 确定性, 无 LLM)
 // ============================================
 
-/// 好奇引擎 (per v1 `CuriosityEngine` 1:1 翻译, 保留确定性算法).
+/// 好奇引擎 (per v1 `CuriosityEngine` 语义对齐, 保留确定性算法).
 ///
 /// 0 装 PASS: 无 LLM 依赖. 全部状态可测, 采样用固定种子 LCG (可复现).
 #[derive(Debug)]
@@ -161,7 +177,7 @@ impl CuriosityEngine {
         self.feed_echoes([Echo::new(topic, surprise, EchoSource::OracleSurprise)]);
     }
 
-    /// 回声偏置采样 (per v1 1:1)
+    /// 回声偏置采样 (per v1)
     pub fn sample_targets(&mut self, n: usize) -> Vec<CuriosityTarget> {
         let mut out = Vec::new();
         if n == 0 || self.budget_left <= 0.0 {
@@ -215,7 +231,7 @@ impl CuriosityEngine {
         out
     }
 
-    /// 回声强 → 加深 (per v1 1:1)
+    /// 回声强 → 加深 (per v1)
     pub fn deepen(&mut self, topic: &str) -> bool {
         let echo = self.echoes.get(topic).copied().unwrap_or(0.0);
         if echo >= self.config.deepen_echo_threshold && self.depths.get(topic) != Some(&Depth::Deep)
@@ -227,7 +243,7 @@ impl CuriosityEngine {
         }
     }
 
-    /// 扣预算 (per v1 1:1)
+    /// 扣预算 (per v1)
     pub fn spend(&mut self, target: &CuriosityTarget) -> bool {
         if self.budget_left >= target.est_cost {
             self.budget_left -= target.est_cost;
@@ -237,7 +253,7 @@ impl CuriosityEngine {
         }
     }
 
-    /// 疑问路由 (per v1 1:1)
+    /// 疑问路由 (per v1)
     pub fn should_ask_master(&self, target: &CuriosityTarget) -> bool {
         if target.echo >= self.config.deepen_echo_threshold {
             return false; // 熟悉主题, 自己探索
@@ -270,7 +286,7 @@ impl CuriosityEngine {
 // CuriosityOrgan (v2 trait 真实现)
 // ============================================
 
-/// E4 好奇器官 (per v2 OrganTrait 1:1 翻译 v1 CuriosityEngine).
+/// E4 好奇器官 (per v2 OrganTrait 语义对齐 v1 CuriosityEngine).
 ///
 /// **构造**:
 /// - `llm_factory`: 保留给未来 v2.1 LLM 探索路径. 当前算法**不用** LLM (per v1 确定性).
@@ -311,12 +327,12 @@ impl CuriosityOrgan {
         }
     }
 
-    /// 喂回声 (per v1 API 1:1, 暴露给外部以便 Runtime 喂记忆回声)
+    /// 喂回声 (per v1 API, 暴露给外部以便 Runtime 喂记忆回声)
     pub fn feed_echoes(&self, echoes: impl IntoIterator<Item = Echo>) {
         let mut engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.feed_echoes(echoes);
     }
 
@@ -325,25 +341,25 @@ impl CuriosityOrgan {
         let mut engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.feed_surprise(topic, brier);
     }
 
-    /// 加深 (per v1 API 1:1)
+    /// 加深 (per v1 API)
     pub fn deepen(&self, topic: &str) -> bool {
         let mut engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.deepen(topic)
     }
 
-    /// 剩余预算 (per v1 API 1:1, 诊断用)
+    /// 剩余预算 (per v1 API, 诊断用)
     pub fn budget_left(&self) -> f64 {
         let engine = self
             .engine
             .lock()
-            .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         engine.budget_left()
     }
 }
@@ -359,7 +375,7 @@ impl OrganTrait for CuriosityOrgan {
     }
 
     async fn process(&self, _input: OrganInput) -> Result<OrganOutput, OrganError> {
-        // 1:1 翻译 v1 process 路径:
+        // 语义对齐 v1 process 路径:
         // - 采样最多 N 个目标 (N = context_hints.len() 或 3 兜底)
         // - 疑问路由: 哪些目标该问主人?
         // - 不预扣预算 (per v1 "采样是提议, 探索发生才扣")
@@ -381,7 +397,7 @@ impl OrganTrait for CuriosityOrgan {
                 let engine = self
                     .engine
                     .lock()
-                    .expect("CuriosityOrgan mutex poisoned (0 装诚实)");
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 engine.should_ask_master(t)
             })
             .cloned()
@@ -403,7 +419,7 @@ impl OrganTrait for CuriosityOrgan {
 }
 
 // ============================================
-// 单元测试 (1:1 翻译 v1 curiosity.rs 测试)
+// 单元测试 (语义对齐 v1 curiosity.rs 测试)
 // ============================================
 
 #[cfg(test)]
@@ -427,7 +443,7 @@ mod tests {
         OrganInput::new(ep, vec![])
     }
 
-    /// v1 1:1: 强回声主题显著更多采样
+    /// 对齐 v1: 强回声主题显著更多采样
     #[test]
     fn echo_strong_topic_sampled_more_often() {
         let organ = CuriosityOrgan::new(test_factory(), "minimax-m3");
@@ -454,7 +470,7 @@ mod tests {
         );
     }
 
-    /// v1 1:1: 浅尝辄止 → 回声强才加深
+    /// 对齐 v1: 浅尝辄止 → 回声强才加深
     #[test]
     fn shallow_then_deepen_on_strong_echo() {
         let organ = CuriosityOrgan::new(test_factory(), "minimax-m3");
@@ -475,7 +491,7 @@ mod tests {
         assert_eq!(shallow.est_cost, 100.0);
     }
 
-    /// v1 1:1: 预算封顶 → spend 第二轮返 false
+    /// 对齐 v1: 预算封顶 → spend 第二轮返 false
     #[test]
     fn budget_capped_blocks_spend() {
         let organ = CuriosityOrgan::with_config(
@@ -498,26 +514,32 @@ mod tests {
         assert!(engine.sample_targets(1).is_empty());
     }
 
-    /// v1 1:1: oracle Brier 意外度进回声
+    /// 对齐 v1: oracle Brier 意外度进回声
     #[test]
     fn oracle_surprise_feeds_curiosity() {
         let organ = CuriosityOrgan::new(test_factory(), "minimax-m3");
         organ.feed_surprise("股市预测", 0.8);
         // 直接拿 engine 锁, 不嵌套调 organ 方法 (避免 std::Mutex 死锁)
         let echo_strong = {
-            let engine = organ.engine.lock().unwrap();
+            let engine = organ
+                .engine
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             engine.echo_of("股市预测")
         };
         assert!((echo_strong - 0.4).abs() < 1e-9);
         organ.feed_surprise("稳定领域", 0.05);
         let echo_weak = {
-            let engine = organ.engine.lock().unwrap();
+            let engine = organ
+                .engine
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             engine.echo_of("稳定领域")
         };
         assert!(echo_weak < 0.1);
     }
 
-    /// v1 1:1: 成本/回声比高 → 问主人
+    /// 对齐 v1: 成本/回声比高 → 问主人
     #[test]
     fn ask_master_when_cost_high_echo_low() {
         let organ = CuriosityOrgan::new(test_factory(), "minimax-m3");
@@ -528,7 +550,10 @@ mod tests {
             echo: 0.01,
             est_cost: 100.0,
         };
-        let engine = organ.engine.lock().unwrap();
+        let engine = organ
+            .engine
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         assert!(
             engine.should_ask_master(&costly),
             "成本/回声比高 → 问主人更快"
@@ -543,7 +568,7 @@ mod tests {
         assert!(!engine.should_ask_master(&warm), "回声强 → 自己探索");
     }
 
-    /// v1 1:1: 固定种子 → 同输入同采样
+    /// 对齐 v1: 固定种子 → 同输入同采样
     #[test]
     fn deterministic_with_fixed_seed() {
         let a = CuriosityEngine::new(CuriosityConfig::default());
@@ -566,7 +591,7 @@ mod tests {
         }
     }
 
-    /// v1 1:1: 回声 0 的主题也有极低概率被好奇 (自由好奇通道)
+    /// 对齐 v1: 回声 0 的主题也有极低概率被好奇 (自由好奇通道)
     #[test]
     fn no_whitelist_freedom_curiosity() {
         let organ = CuriosityOrgan::with_config(
@@ -632,5 +657,25 @@ mod tests {
         let organ = CuriosityOrgan::new(test_factory(), "minimax-m3");
         assert_eq!(organ.name(), "E4 Curiosity");
         assert_eq!(organ.organ_id(), OrganKind::E4);
+    }
+
+    /// 旋钮推导锁定: 生效好奇预算 = 基线 × CuriosityStrength 倍率;
+    /// 未设旋钮 (倍率 1.0) = 基线 2000, 行为零变化。
+    #[test]
+    fn curiosity_strength_knob_scales_daily_budget() {
+        let strength = TunableParam::CuriosityStrength.effective();
+        assert!(
+            (effective_daily_budget() - BASELINE_DAILY_BUDGET * strength).abs() < 1e-9,
+            "生效预算必须是 基线×倍率"
+        );
+        assert_eq!(
+            CuriosityConfig::default().daily_budget,
+            effective_daily_budget()
+        );
+        assert_eq!(
+            TunableParam::CuriosityStrength.parse_env_value(None),
+            1.0,
+            "未设旋钮 = 倍率 1.0 = 现状"
+        );
     }
 }

@@ -204,7 +204,7 @@ OK: 34 LOCKED crate mtime = 16:34:11 baseline (0 drift)
 
 - **任务规范**: 主人 2026-08-05 21:14 拍板 "ABCD 都派 + 内存大放心派"
 - **RIVAL 蓝图**: §2.5.3 (1:1 翻译点)
-- **v0.9.21**: `安装包out\main\index.js` (17.1MB minified, 6 BrowserWindow / 8 Menu / 1 Tray / 161 ipcMain / 34 dialog / 102 shell)
+- **v0.9.21**: `out\main\index.js` (17.1MB minified, 6 BrowserWindow / 8 Menu / 1 Tray / 161 ipcMain / 34 dialog / 102 shell)
 - **现有 stub (DEPRECATED, 0 触碰)**: `crates/apeireth-tauri-stub/` (mtime 16:34:11 baseline)
 - **Tauri 2 官方**: <https://tauri.app/v2/>
 - **迁移计划**: `docs/desktop/tauri-2.0-migration-plan-2026-08-05.md`

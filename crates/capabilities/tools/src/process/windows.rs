@@ -3,15 +3,18 @@
 //! The normal launch sequence is:
 //!
 //! ```text
-//! CreateProcessW(..., CREATE_SUSPENDED, ...)  // through std::process::Command
+//! CreateProcessW(..., CREATE_SUSPENDED, ...)  // std spawn or direct call
 //!   -> AssignProcessToJobObject
-//!   -> ResumeThread
+//!   -> ResumeThread (creation thread handle)
 //! ```
 //!
 //! The child therefore cannot execute before it belongs to the Job Object.
-//! This module uses `std::process::Command` for command-line quoting, Unicode
-//! conversion, working directory, environment and pipe creation, so no manual
-//! `CreateProcessW` quoting is invented on the normal path.
+//! The plain (no-isolation) path creates the process directly through
+//! `CreateProcessW` with std-parity command-line quoting and executable
+//! resolution (see [`resolve_plain_program`]), so the primary thread handle
+//! returned at creation can be resumed immediately; batch scripts and
+//! verbatim-prefixed requests keep the `std::process::Command` creation path
+//! untouched (see [`plain_raw_spawn_supported`]).
 //!
 //! When the caller requires [`IsolationCapability::PrivilegeReduction`], the
 //! backend additionally attempts to launch the child with a restricted token
@@ -22,11 +25,12 @@
 
 use std::ffi::{c_void, OsStr, OsString};
 use std::fs::File;
-use std::os::windows::ffi::OsStrExt;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use windows_sys::Win32::Foundation::{
     CloseHandle, SetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE,
@@ -216,13 +220,16 @@ pub(crate) fn capabilities() -> IsolationCapabilities {
         IsolationCapability::PrivilegeReduction,
         restricted_launch_capability(),
     );
+    // W1 §2.1 (2026-10-10): 文件/网络隔离经 AppContainer 实施 —— 探针实测
+    // (真实派生 + 真实创建 AppContainer 子进程) 成功才报 Enforced, 否则如实
+    // Unsupported (0 装: 不实测不称已实施)。
     caps.set(
         IsolationCapability::FilesystemIsolation,
-        EnforcementLevel::Unsupported,
+        super::appcontainer::appcontainer_launch_capability(),
     );
     caps.set(
         IsolationCapability::NetworkIsolation,
-        EnforcementLevel::Unsupported,
+        super::appcontainer::appcontainer_launch_capability(),
     );
     caps.set(
         IsolationCapability::FailClosedPreExecutionContainment,
@@ -231,20 +238,64 @@ pub(crate) fn capabilities() -> IsolationCapabilities {
     caps
 }
 
+/// Process-wide spawn gate: serializes the child-creation critical section.
+///
+/// `CreateProcessW(..., bInheritHandles = TRUE, ...)` hands the new child
+/// **every** inheritable handle open in this process. Each spawn's
+/// stdout/stderr pipe write-ends are inheritable from `create_pipe` until the
+/// parent closes its own copies right after creation, so two overlapping
+/// spawns could cross-adopt those write-ends — and an adopted copy keeps the
+/// other spawn's output reader from ever seeing end-of-stream (its join then
+/// times out on output that already exists). One gate held across
+/// pipe creation → child creation → parent-side closes makes every child
+/// inherit only its own standard handles.
+static SPAWN_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Acquire the spawn gate, tolerating a poisoned holder.
+fn lock_spawn_gate() -> std::sync::MutexGuard<'static, ()> {
+    SPAWN_GATE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub(crate) fn spawn_and_supervise(
     request: &ProcessRequest,
     enforcement: PlatformEnforcement,
 ) -> Result<ProcessResult, ProcessError> {
     let job = JobObject::create(&request.limits)?;
 
-    let child: WindowsChild = if request
+    // W1 §2.1 路径选择 (2026-10-10): 要求文件/网络隔离 = 走 AppContainer 沙箱
+    // (不可用即拒绝执行 —— 沙箱开时绝不裸跑)。其次受限 token, 最后 std 路径。
+    let sandbox_required = request
         .isolation()
-        .requires(IsolationCapability::PrivilegeReduction)
+        .requires(IsolationCapability::FilesystemIsolation)
         .is_some()
-    {
-        WindowsChild::Raw(spawn_restricted_child(request, job)?)
-    } else {
-        WindowsChild::Std(spawn_std_child(request, job)?)
+        || request
+            .isolation()
+            .requires(IsolationCapability::NetworkIsolation)
+            .is_some();
+
+    let child: WindowsChild = {
+        // Creation runs under the process-wide spawn gate (see SPAWN_GATE):
+        // no second creation may interleave between our pipe creation and the
+        // parent-side close of the pipe write-ends. Supervision and I/O run
+        // after the gate is released, so long-lived children never hold it.
+        let _gate = lock_spawn_gate();
+        if sandbox_required {
+            WindowsChild::Raw(spawn_appcontainered_child(request, job)?)
+        } else if request
+            .isolation()
+            .requires(IsolationCapability::PrivilegeReduction)
+            .is_some()
+        {
+            WindowsChild::Raw(spawn_restricted_child(request, job)?)
+        } else if plain_raw_spawn_supported(request) {
+            WindowsChild::Raw(spawn_plain_raw_child(request, job)?)
+        } else {
+            // Legacy std-spawn classes (batch scripts, verbatim-prefixed paths)
+            // keep their original creation path verbatim.
+            WindowsChild::Std(spawn_std_child(request, job)?)
+        }
     };
 
     supervise(child, request, enforcement)
@@ -267,6 +318,13 @@ impl ManagedChild for WindowsChild {
         match self {
             Self::Std(child) => child.wait(),
             Self::Raw(child) => child.wait(),
+        }
+    }
+
+    fn wait_timeout(&mut self, timeout: Duration) -> Result<Option<ChildStatus>, ProcessError> {
+        match self {
+            Self::Std(child) => child.wait_timeout(timeout),
+            Self::Raw(child) => child.wait_timeout(timeout),
         }
     }
 
@@ -301,6 +359,13 @@ impl WindowsStdChild {
     fn spawn(request: &ProcessRequest, job: JobObject) -> Result<Self, ProcessError> {
         let mut command = Command::new(&request.executable);
         command.args(&request.args);
+        // Verbatim command-line tail: appended after args without quoting, so
+        // `cmd /D /S /C "<script>"` reaches cmd byte-for-byte (embedded double
+        // quotes survive cmd's /S rule; 2026-10-06 真机 powershell 引号被吃).
+        if let Some(tail) = request.raw_arg() {
+            use std::os::windows::process::CommandExt;
+            command.raw_arg(tail);
+        }
         command.creation_flags(CREATE_SUSPENDED);
         apply_request_to_command(&mut command, request)?;
         command
@@ -343,6 +408,23 @@ impl ManagedChild for WindowsStdChild {
         self.child.wait().map(status).map_err(io_error)
     }
 
+    fn wait_timeout(&mut self, timeout: Duration) -> Result<Option<ChildStatus>, ProcessError> {
+        unsafe {
+            let handle = self.child.as_raw_handle() as HANDLE;
+            let wait = WaitForSingleObject(handle, wait_timeout_ms(timeout));
+            if wait == WAIT_OBJECT_0 {
+                self.child.wait().map(status).map_err(io_error).map(Some)
+            } else if wait == WAIT_TIMEOUT {
+                Ok(None)
+            } else {
+                Err(ProcessError::Io(format!(
+                    "WaitForSingleObject failed while waiting for child: {}",
+                    std::io::Error::last_os_error()
+                )))
+            }
+        }
+    }
+
     fn terminate(&mut self) -> Result<(), ProcessError> {
         // Job Object termination kills the whole tree. Fall back to direct
         // child kill if the job is somehow unusable.
@@ -372,6 +454,288 @@ fn spawn_std_child(
     job: JobObject,
 ) -> Result<WindowsStdChild, ProcessError> {
     WindowsStdChild::spawn(request, job)
+}
+
+/// Whether the plain (no-isolation) request can use the raw creation path.
+///
+/// Batch scripts (`.bat`/`.cmd`) and verbatim-prefixed programs or working
+/// directories keep using the legacy std-spawn path, so those classes retain
+/// their long-standing creation behavior byte-for-byte.
+fn plain_raw_spawn_supported(request: &ProcessRequest) -> bool {
+    !is_batch_script(&request.executable)
+        && !is_verbatim_text(&request.executable)
+        && !request
+            .working_directory()
+            .is_some_and(|dir| is_verbatim_text(dir.as_os_str()))
+}
+
+fn is_verbatim_text(text: &OsStr) -> bool {
+    text.to_string_lossy().starts_with(r"\\?\")
+}
+
+/// Batch scripts run through the command interpreter on the legacy path.
+fn is_batch_script(program: &OsStr) -> bool {
+    // Windows strips trailing dots/spaces when resolving file names; mirror
+    // that before the extension test so the class decision matches creation.
+    let text = program.to_string_lossy().to_ascii_lowercase();
+    let text = text.trim_end_matches(['.', ' ']);
+    text.ends_with(".bat") || text.ends_with(".cmd")
+}
+
+fn ends_with_ignore_ascii_case(text: &OsStr, suffix: &str) -> bool {
+    let text = text.to_string_lossy();
+    text.len() >= suffix.len()
+        && text
+            .get(text.len() - suffix.len()..)
+            .is_some_and(|tail| tail.eq_ignore_ascii_case(suffix))
+}
+
+/// True for a program name without any path component (searched on `PATH`).
+fn is_bare_program_name(program: &OsStr) -> bool {
+    let text = program.to_string_lossy();
+    !text.is_empty() && !text.contains(['\\', '/'])
+}
+
+/// Program existence check that does not follow reparse points, matching the
+/// attribute probe used before process creation.
+fn program_exists(path: &std::path::Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
+}
+
+/// Resolve the executable for the plain path with the same rules applied before
+/// `CreateProcessW` on the std-spawn path:
+/// - path-bearing names pass through unchanged (a missing file surfaces from
+///   process creation), after trying the `.exe`-appended form when the name has
+///   no `.exe` suffix;
+/// - bare names are searched in the application directory, the system and
+///   Windows directories, then `PATH` (the child's `PATH` first when the
+///   request sets one explicitly), appending `.exe` to extension-less names.
+fn resolve_plain_program(request: &ProcessRequest) -> Result<std::path::PathBuf, ProcessError> {
+    let executable = request.executable();
+    let original = std::path::PathBuf::from(executable);
+
+    if !is_bare_program_name(executable) {
+        if ends_with_ignore_ascii_case(executable, ".exe") {
+            return Ok(original);
+        }
+        let mut appended = original.clone().into_os_string();
+        appended.push(".exe");
+        let appended = std::path::PathBuf::from(appended);
+        return Ok(if program_exists(&appended) {
+            appended
+        } else {
+            original
+        });
+    }
+
+    // Extension-less bare names are searched as `name.exe`; names that already
+    // contain a dot are searched verbatim.
+    let has_extension = executable.to_string_lossy().contains('.');
+    let mut candidate_in = |dir: std::path::PathBuf| -> Option<std::path::PathBuf> {
+        let mut candidate = dir.join(executable);
+        if !has_extension {
+            candidate.set_extension("exe");
+        }
+        program_exists(&candidate).then_some(candidate)
+    };
+
+    // 1. The child's own PATH when the request overrides PATH explicitly.
+    if let Some(child_paths) = explicit_env_path(request) {
+        for dir in std::env::split_paths(&child_paths).filter(|dir| !dir.as_os_str().is_empty()) {
+            if let Some(found) = candidate_in(dir) {
+                return Ok(found);
+            }
+        }
+    }
+
+    // 2. The directory of the running executable.
+    if let Ok(mut app_dir) = std::env::current_exe() {
+        app_dir.pop();
+        if let Some(found) = candidate_in(app_dir) {
+            return Ok(found);
+        }
+    }
+
+    // 3 & 4. The system and Windows directories.
+    for dir in [system_directory(), windows_directory()]
+        .into_iter()
+        .flatten()
+    {
+        if let Some(found) = candidate_in(dir) {
+            return Ok(found);
+        }
+    }
+
+    // 5. The ambient PATH.
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths).filter(|dir| !dir.as_os_str().is_empty()) {
+            if let Some(found) = candidate_in(dir) {
+                return Ok(found);
+            }
+        }
+    }
+
+    Err(ProcessError::SpawnFailed {
+        executable: executable.to_string_lossy().into_owned(),
+        message: "program not found".into(),
+    })
+}
+
+/// `PATH` from an explicit environment override, if the request sets one.
+fn explicit_env_path(request: &ProcessRequest) -> Option<std::path::PathBuf> {
+    use super::EnvironmentSpec;
+    match request.environment() {
+        EnvironmentSpec::Explicit(vars) => vars
+            .iter()
+            .find(|(key, _)| key.to_string_lossy().eq_ignore_ascii_case("path"))
+            .map(|(_, value)| std::path::PathBuf::from(value)),
+        _ => None,
+    }
+}
+
+fn system_directory() -> Option<std::path::PathBuf> {
+    unsafe {
+        use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+        let mut buffer = vec![0u16; 512];
+        let len = GetSystemDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32);
+        if len == 0 || len as usize >= buffer.len() {
+            return None;
+        }
+        buffer.truncate(len as usize);
+        Some(std::path::PathBuf::from(std::ffi::OsString::from_wide(
+            &buffer,
+        )))
+    }
+}
+
+fn windows_directory() -> Option<std::path::PathBuf> {
+    unsafe {
+        use windows_sys::Win32::System::SystemInformation::GetWindowsDirectoryW;
+        let mut buffer = vec![0u16; 512];
+        let len = GetWindowsDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32);
+        if len == 0 || len as usize >= buffer.len() {
+            return None;
+        }
+        buffer.truncate(len as usize);
+        Some(std::path::PathBuf::from(std::ffi::OsString::from_wide(
+            &buffer,
+        )))
+    }
+}
+
+/// Plain raw child (no isolation requirement): the same suspended creation →
+/// Job Object assignment → resume sequence as the sandbox paths, driven through
+/// `CreateProcessW` so the primary thread handle is available at resume time
+/// (no system-wide thread search).
+///
+/// Command-line construction (including the verbatim `raw_arg` tail), the
+/// environment block and the working directory follow the same semantics as
+/// the std-spawn path; batch scripts and verbatim-prefixed requests keep using
+/// that path (see [`plain_raw_spawn_supported`]).
+fn spawn_plain_raw_child(
+    request: &ProcessRequest,
+    job: JobObject,
+) -> Result<WindowsRawChild, ProcessError> {
+    use windows_sys::Win32::System::Threading::{CreateProcessW, CREATE_UNICODE_ENVIRONMENT};
+
+    let mut command_line = build_windows_command_line(&request.executable, &request.args);
+    if let Some(tail) = request.raw_arg() {
+        command_line.pop();
+        command_line.push(u16::from(b' '));
+        command_line.extend(tail.encode_wide());
+        command_line.push(0);
+    }
+    let environment_block = build_environment_block(&request.environment)?;
+    let cwd_block = build_cwd_block(request.working_directory())?;
+    let exe = resolve_plain_program(request)?;
+    let application: Vec<u16> = exe.as_os_str().encode_wide().chain(Some(0)).collect();
+
+    unsafe {
+        // stdin is the NUL device (read-only, inheritable) to match the
+        // std-spawn path's `Stdio::null()` byte-for-byte; stdout/stderr are
+        // captured through pipes like every other creation path here.
+        let null_stdin = File::open(r"\\.\NUL").map_err(|e| ProcessError::SpawnFailed {
+            executable: request.executable.to_string_lossy().into_owned(),
+            message: format!("opening the NUL device failed: {e}"),
+        })?;
+        SetHandleInformation(
+            null_stdin.as_raw_handle() as HANDLE,
+            HANDLE_FLAG_INHERIT,
+            HANDLE_FLAG_INHERIT,
+        );
+        let (stdout_read, stdout_write) = create_pipe()?;
+        let (stderr_read, stderr_write) = create_pipe()?;
+        SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
+
+        let mut si: STARTUPINFOW = std::mem::zeroed();
+        si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+        si.dwFlags = STARTF_USESTDHANDLES;
+        si.hStdInput = null_stdin.as_raw_handle() as HANDLE;
+        si.hStdOutput = stdout_write;
+        si.hStdError = stderr_write;
+
+        let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        let ret = CreateProcessW(
+            application.as_ptr(),
+            command_line.as_mut_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            1,
+            CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+            environment_block
+                .as_ref()
+                .map(|b| b.as_ptr().cast::<c_void>())
+                .unwrap_or(std::ptr::null()),
+            cwd_block
+                .as_ref()
+                .map(|b| b.as_ptr().cast::<u16>())
+                .unwrap_or(std::ptr::null()),
+            &si,
+            &mut pi,
+        );
+
+        CloseHandle(stdout_write);
+        CloseHandle(stderr_write);
+
+        if ret == 0 {
+            let message = std::io::Error::last_os_error().to_string();
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
+            return Err(ProcessError::SpawnFailed {
+                executable: request.executable.to_string_lossy().into_owned(),
+                message: format!("CreateProcessW failed: {message}"),
+            });
+        }
+
+        if let Err(e) = job.assign(pi.hProcess) {
+            TerminateProcess(pi.hProcess, 0);
+            WaitForSingleObject(pi.hProcess, 5000);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
+            return Err(e);
+        }
+
+        if let Err(e) = resume_main_thread_handle(pi.hThread) {
+            TerminateProcess(pi.hProcess, 0);
+            WaitForSingleObject(pi.hProcess, 5000);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
+            return Err(e);
+        }
+
+        Ok(WindowsRawChild {
+            process_handle: pi.hProcess,
+            thread_handle: pi.hThread,
+            job,
+            stdout: Some(File::from_raw_handle(stdout_read.cast())),
+            stderr: Some(File::from_raw_handle(stderr_read.cast())),
+        })
+    }
 }
 
 /// Raw Windows child created through `CreateProcessWithTokenW`.
@@ -426,6 +790,22 @@ impl ManagedChild for WindowsRawChild {
         }
     }
 
+    fn wait_timeout(&mut self, timeout: Duration) -> Result<Option<ChildStatus>, ProcessError> {
+        unsafe {
+            let wait = WaitForSingleObject(self.process_handle, wait_timeout_ms(timeout));
+            if wait == WAIT_OBJECT_0 {
+                Ok(Some(exit_status(self.process_handle)?))
+            } else if wait == WAIT_TIMEOUT {
+                Ok(None)
+            } else {
+                Err(ProcessError::Io(format!(
+                    "WaitForSingleObject failed while waiting for child: {}",
+                    std::io::Error::last_os_error()
+                )))
+            }
+        }
+    }
+
     fn terminate(&mut self) -> Result<(), ProcessError> {
         if self.job.terminate().is_ok() {
             return Ok(());
@@ -452,6 +832,20 @@ impl ManagedChild for WindowsRawChild {
         self.stderr
             .take()
             .map(|s| Box::new(s) as Box<dyn std::io::Read + Send>)
+    }
+}
+
+/// Clamp a wait timeout to the `WaitForSingleObject` millisecond argument.
+///
+/// `u32::MAX` is the API's `INFINITE` sentinel, so a near-unbounded timeout
+/// (e.g. `ProcessLimits::unrestricted()`) waits indefinitely instead of
+/// truncating to a short wait.
+fn wait_timeout_ms(timeout: Duration) -> u32 {
+    let millis = timeout.as_millis();
+    if millis >= u128::from(u32::MAX) {
+        INFINITE
+    } else {
+        millis as u32
     }
 }
 
@@ -619,10 +1013,23 @@ fn probe_restricted_launch(token: HANDLE) -> bool {
 
 /// Spawn the actual requested child with a restricted token, suspended, and
 /// attach it to the Job Object before resume.
+///
+/// L 组 (2026-09-24 审计): 受限 token 路径**不支持** raw_arg 逐字命令列尾
+/// (build_windows_command_line 只拼 executable + args)。静默丢弃会让调用方
+/// (shell 的 `cmd /D /S /C "<script>"`) 以为尾巴生效实则丢失 —— 返回明确
+/// 的配置错误 fail-closed, 由上层改走 AppContainer/std 路径。
 fn spawn_restricted_child(
     request: &ProcessRequest,
     job: JobObject,
 ) -> Result<WindowsRawChild, ProcessError> {
+    if request.raw_arg().is_some() {
+        return Err(ProcessError::InvalidConfiguration(
+            "raw_arg verbatim command-line tail is not supported on the \
+             restricted-token spawn path (would be silently dropped)"
+                .into(),
+        ));
+    }
+
     let token = create_restricted_token()?;
 
     let command_line = build_windows_command_line(&request.executable, &request.args);
@@ -682,20 +1089,29 @@ fn spawn_restricted_child(
             });
         }
         CloseHandle(token);
+        // M15 (2026-09-24 审计): 父进程侧的 stdin_read 副本到此使命结束
+        // (stdin_write 已关, 子进程经 STARTF_USESTDHANDLES 持有自己的副本)
+        // —— 不关即每次 spawn 泄漏 1 个内核句柄。
+        CloseHandle(stdin_read);
 
         if let Err(e) = job.assign(pi.hProcess) {
             TerminateProcess(pi.hProcess, 0);
             WaitForSingleObject(pi.hProcess, 5000);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+            // 子进程已终止, 管道读端无人会消费 —— 一并收掉防泄漏。
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
             return Err(e);
         }
 
-        if let Err(e) = resume_main_thread(pi.dwProcessId) {
+        if let Err(e) = resume_main_thread_handle(pi.hThread) {
             TerminateProcess(pi.hProcess, 0);
             WaitForSingleObject(pi.hProcess, 5000);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
             return Err(e);
         }
 
@@ -707,6 +1123,177 @@ fn spawn_restricted_child(
             stderr: Some(File::from_raw_handle(stderr_read.cast())),
         })
     }
+}
+
+/// **W1 §2.1 AppContainer 沙箱 spawn** (2026-10-10): 文件仅工作区 (调用方先
+/// `grant_directory`), 零网络 capability (`CapabilityCount = 0` → socket 创建即败),
+/// 挂起创建 → JobObject → 恢复 (与受限 token 路径同序)。
+///
+/// **raw_arg 尾部逐字追加** (shell 的 `cmd /D /S /C "<script>"` 依赖此语义 ——
+/// 与 std `Command::raw_arg` 一致; 注意受限 token 路径不含尾部, 见台账)。
+/// 降级契约: AppContainer 不可用 → `ContainmentFailed` 拒绝执行 (绝不裸跑)。
+fn spawn_appcontainered_child(
+    request: &ProcessRequest,
+    job: JobObject,
+) -> Result<WindowsRawChild, ProcessError> {
+    use super::appcontainer::{appcontainer_launch_capability, AppContainerSandbox, AttributeList};
+    use windows_sys::Win32::System::Threading::{
+        CreateProcessW, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, STARTUPINFOEXW,
+    };
+
+    if appcontainer_launch_capability() != EnforcementLevel::Enforced {
+        return Err(ProcessError::ContainmentFailed(
+            "AppContainer 沙箱不可用, 拒绝执行 (沙箱开时绝不裸跑; 显式裸跑需 \
+             APEIRETH_SHELL_SANDBOX=0 自担风险)"
+                .into(),
+        ));
+    }
+    let sandbox = AppContainerSandbox::acquire()?;
+    // `\\?\` 扩展前缀路径在 lpCurrentDirectory 不被接受 (真机实测: 子进程落到
+    // %WINDIR%, 2026-10-10) —— 授权与 cwd 均用剥前缀的普通形态对齐。
+    let cwd_normalized: Option<std::path::PathBuf> = request
+        .working_directory()
+        .map(|p| strip_extended_prefix(p));
+    if let Some(cwd) = cwd_normalized.as_ref() {
+        sandbox.grant_directory(cwd)?;
+    }
+    let mut sec_caps = sandbox.security_capabilities();
+    let attrs = unsafe { AttributeList::new(&mut sec_caps) }?;
+
+    let mut command_line = build_windows_command_line(&request.executable, &request.args);
+    if let Some(tail) = request.raw_arg() {
+        command_line.pop();
+        command_line.push(u16::from(b' '));
+        command_line.extend(tail.encode_wide());
+        command_line.push(0);
+    }
+    let environment_block = build_environment_block(&request.environment)?;
+    let cwd_block = build_cwd_block(cwd_normalized.as_ref())?;
+
+    // AppContainer 下 PATH 搜索以零访问 token 解析会 "找不到文件" (真机实测
+    // os error 2) —— 父进程侧解析可执行文件绝对路径作 lpApplicationName。
+    let exe_abs = resolve_executable_absolute(&request.executable)?;
+    let application: Vec<u16> = exe_abs.as_os_str().encode_wide().chain(Some(0)).collect();
+
+    unsafe {
+        let (stdout_read, stdout_write) = create_pipe()?;
+        let (stderr_read, stderr_write) = create_pipe()?;
+        let (stdin_read, stdin_write) = create_pipe()?;
+        SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(stdin_write, HANDLE_FLAG_INHERIT, 0);
+
+        let mut siex: STARTUPINFOEXW = std::mem::zeroed();
+        siex.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+        siex.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        siex.StartupInfo.hStdInput = stdin_read;
+        siex.StartupInfo.hStdOutput = stdout_write;
+        siex.StartupInfo.hStdError = stderr_write;
+        siex.lpAttributeList = attrs.as_raw();
+
+        let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        // CREATE_UNICODE_ENVIRONMENT: 宽字符环境块必须带此旗, 否则按 ANSI 解释 →
+        // os error 203 "找不到环境选项" (真机咬出, 2026-10-10)。
+        let ret = CreateProcessW(
+            application.as_ptr(),
+            command_line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+            CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+            environment_block
+                .as_ref()
+                .map(|b| b.as_ptr().cast::<c_void>())
+                .unwrap_or(std::ptr::null()),
+            cwd_block
+                .as_ref()
+                .map(|b| b.as_ptr().cast::<u16>())
+                .unwrap_or(std::ptr::null()),
+            &siex.StartupInfo,
+            &mut pi,
+        );
+
+        CloseHandle(stdout_write);
+        CloseHandle(stderr_write);
+        CloseHandle(stdin_write);
+
+        if ret == 0 {
+            let message = std::io::Error::last_os_error().to_string();
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
+            CloseHandle(stdin_read);
+            return Err(ProcessError::SpawnFailed {
+                executable: request.executable.to_string_lossy().into_owned(),
+                message: format!("CreateProcessW(AppContainer) failed: {message}"),
+            });
+        }
+        drop(attrs);
+        // M15 (2026-09-24 审计): 父进程侧 stdin_read 副本使命结束 (子进程经
+        // STARTF_USESTDHANDLES 持有继承副本) —— 不关即每次沙箱 spawn 泄漏 1
+        // 个内核句柄, 高频 shell 调用下累积至句柄耗尽。
+        CloseHandle(stdin_read);
+
+        if let Err(e) = job.assign(pi.hProcess) {
+            TerminateProcess(pi.hProcess, 0);
+            WaitForSingleObject(pi.hProcess, 5000);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            // 子进程已终止, 管道读端无人消费 —— 一并收掉防泄漏。
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
+            return Err(e);
+        }
+
+        if let Err(e) = resume_main_thread_handle(pi.hThread) {
+            TerminateProcess(pi.hProcess, 0);
+            WaitForSingleObject(pi.hProcess, 5000);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            CloseHandle(stdout_read);
+            CloseHandle(stderr_read);
+            return Err(e);
+        }
+
+        Ok(WindowsRawChild {
+            process_handle: pi.hProcess,
+            thread_handle: pi.hThread,
+            job,
+            stdout: Some(File::from_raw_handle(stdout_read.cast())),
+            stderr: Some(File::from_raw_handle(stderr_read.cast())),
+        })
+    }
+}
+
+/// 剥 `\\?\` 扩展前缀 (lpCurrentDirectory 不接受该形态; ACL 授权同用普通形态)。
+fn strip_extended_prefix(path: &std::path::Path) -> std::path::PathBuf {
+    let text = path.as_os_str().to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        std::path::PathBuf::from(rest)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+/// 父进程侧解析可执行文件绝对路径 (AppContainer 子进程零访问无法做 PATH 搜索,
+/// 真机实测 os error 2)。相对名按 PATH 逐目录探测; 找不到即拒 (fail-closed)。
+fn resolve_executable_absolute(executable: &OsStr) -> Result<std::path::PathBuf, ProcessError> {
+    let path = std::path::PathBuf::from(executable);
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let candidate = dir.join(&path);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    Err(ProcessError::SpawnFailed {
+        executable: executable.to_string_lossy().into_owned(),
+        message: "cannot resolve executable to an absolute path (AppContainer spawn requires it)"
+            .into(),
+    })
 }
 
 fn create_pipe() -> Result<(HANDLE, HANDLE), ProcessError> {
@@ -779,8 +1366,13 @@ fn build_environment_block(
         super::EnvironmentSpec::Inherit => Ok(None),
         super::EnvironmentSpec::Clear => Ok(Some(vec![0, 0])),
         super::EnvironmentSpec::Explicit(vars) => {
+            // CreateProcessW 硬性要求环境块**大小写不敏感排序** (真机实测: 乱序块
+            // 报 os error 203 "找不到环境选项", 2026-10-10 AppContainer 路径咬出)。
+            // 在块构造处排序 —— 所有裸 CreateProcess* 路径同受益。
+            let mut sorted: Vec<&(OsString, OsString)> = vars.iter().collect();
+            sorted.sort_by_key(|(key, _)| key.to_string_lossy().to_lowercase());
             let mut block = Vec::new();
-            for (key, value) in vars {
+            for (key, value) in sorted {
                 let mut entry: Vec<u16> = key.encode_wide().collect();
                 entry.push(u16::from(b'='));
                 entry.extend(value.encode_wide());
@@ -804,6 +1396,26 @@ fn build_cwd_block(
             Ok(Some(block))
         }
     }
+}
+
+/// Resume the suspended primary thread through its creation handle.
+///
+/// `CreateProcessW`/`CreateProcessWithTokenW` return the primary thread handle
+/// in `PROCESS_INFORMATION`, so resuming it is an O(1) handle call. The
+/// system-wide thread search in [`resume_main_thread`] is only needed when the
+/// creation handle is unavailable (the legacy std-spawn fallback path).
+fn resume_main_thread_handle(thread_handle: HANDLE) -> Result<(), ProcessError> {
+    unsafe {
+        // ResumeThread returns the previous suspend count, or u32::MAX on
+        // failure. A newly suspended primary thread has suspend count 1.
+        let previous = ResumeThread(thread_handle);
+        if previous == u32::MAX {
+            return Err(ProcessError::ContainmentFailed(
+                "ResumeThread failed; cannot resume suspended child".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn resume_main_thread(pid: u32) -> Result<(), ProcessError> {

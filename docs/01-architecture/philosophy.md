@@ -25,7 +25,7 @@
 
 ## Triple Onion (三洋葱, R125-5 升双→三, 加 DSL 洋葱)
 
-**Principle onion** (E/S/A/M/O principles) **embedded in** the **permission onion** (L0–L5), plus **DSL onion** (Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴):
+**Principle onion** (E/S/A/M/O principles) **embedded in** the **permission onion** (L0–L5), plus **DSL onion** (Colang DSL 守门, R125-5 对齐同类守门工程):
 
 - L0: human approval — **never mutable** (Self-Disable protection, "百年章节")
 - L1-L5: escalating permission layers (approval gate, sandbox, etc.)

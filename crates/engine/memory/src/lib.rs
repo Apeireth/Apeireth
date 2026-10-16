@@ -35,13 +35,13 @@ pub mod canonical;
 mod episode;
 mod identity;
 mod migrations;
-// N8: generation 绑定观测缓存 (自包含, VCP MemoRuntime 精神, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
+// N8: generation 绑定观测缓存 (自包含, 通用记忆运行时模式, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
-// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
+// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (对齐同类记忆工程公开设计)
 pub mod hallways;
 mod session_note;
 mod streams;
-mod three_layer; // R30 U9: claude-mem 3 层 facade
+mod three_layer; // R30 U9: 3 层记忆 facade
 
 pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 // R22 ST-A2.4 — 6 历史流深度公共 API (query / insert / count)
@@ -51,6 +51,8 @@ pub mod arbitration;
 pub mod betti_hole_detector;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
+/// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
+pub mod community;
 pub mod continuity_link;
 pub use continuity_link::{
     continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
@@ -65,6 +67,7 @@ pub mod confidence;
 pub mod cross_diary;
 pub mod daily_summary;
 pub mod diary;
+pub mod dream_wiring;
 pub mod dreaming;
 pub mod ensemble;
 pub mod five_dimensional;
@@ -79,6 +82,7 @@ pub mod online_calibration;
 pub mod partner;
 pub mod persistent_vector;
 pub mod principles;
+pub mod proactive_recall;
 pub mod procedural;
 pub mod query_expand;
 pub mod reflexion;
@@ -108,8 +112,8 @@ pub use amem_graph::{
 };
 pub use dream_consolidation::{pair_merge, select_dream_candidates, DreamSource, DREAM_ID_PREFIX};
 pub use memory_injection::{
-    build_memory_injection, build_preference_injection, EVIDENCE_MAX_CHARS,
-    PREFERENCE_INJECTION_LIMIT,
+    build_l2_retrieval_disclosure, build_memory_injection, build_preference_injection,
+    EVIDENCE_MAX_CHARS, PREFERENCE_INJECTION_LIMIT,
 };
 pub use memory_rank::{
     filter_active_memories, group_bonus, memory_score, parse_importance, rank_memory_entries,
@@ -214,6 +218,7 @@ pub use principles::{
     check_dynamic_principles, constant_time_eq, DynamicPrinciple, InMemoryPrincipleStore,
     PrincipleStatus, PrincipleStore, PromotionCandidate,
 };
+pub use proactive_recall::{ProactiveRecallPolicy, ProactiveRecallService};
 pub use query_expand::{expand_query, ExpandedQuery};
 pub use topic_predictor::{
     CompositeChannel, ImportanceChannel, KeywordChannel, PreloadChannel, TimeChannel, TopicCue,
@@ -228,7 +233,9 @@ pub use vector_distance::{
 // 方法以 inherent impl on SqliteMemoryStore 暴露, 不引入 trait (减少 import, 保持向后兼容).
 pub mod provenance;
 pub use identity::{IdentityCardRecord, IdentityCardStore, IdentityConflict};
-pub use migrations::{run_migrations, Migration as SchemaMigration, MIGRATIONS};
+pub use migrations::{
+    run_migrations, run_migrations_on_pool, Migration as SchemaMigration, MIGRATIONS,
+};
 pub use provenance::{normalize_meta, validate_meta, EpisodeMeta, Provenance};
 pub use session_note::{NoteQuery, NoteRecord, NoteStore, SessionRecord, SessionStore};
 // Core Capability Expansion Phase 2: 后端会话生命周期 (state machine + 乐观并发).
@@ -297,12 +304,88 @@ pub use context_ledger::{
 };
 // Salvage 02: combined retention sweep (count cap + TTL + decay) via governance sidecar.
 pub mod retention;
-pub use retention::{decay_strength, sweep_session, RetentionPolicy, RetentionSweepReport};
+pub use retention::{
+    decay_strength, sweep_session, sweep_session_with_audit, RetentionCleanup, RetentionPolicy,
+    RetentionSweepReport, CLEANUP_AUDIT_MODULE,
+};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
 };
 pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY}; // R30 U9
+
+// Unified Memory 2.0 (coordinator, 4-layer architecture, closed-world prompt injection)
+pub mod access_history;
+pub mod commitments;
+pub mod consolidation;
+pub mod context_compiler;
+pub mod context_window;
+pub mod continuity_state;
+pub mod coordinator;
+pub mod extraction;
+pub mod facade;
+pub mod layers;
+pub mod memory_materializer;
+pub mod partner_store_sqlite;
+pub mod persona_store_sqlite;
+pub mod reconciler;
+pub mod retrieval_pipeline;
+pub mod scope;
+pub mod temporal_graph_store;
+pub mod universal_forget;
+
+pub use access_history::{
+    act_r_activation, AccessEvent, AccessHistoryActivationSource, AccessHistoryError,
+    ActivationSource, SqliteAccessHistoryStore,
+};
+pub use commitments::{
+    Commitment, CommitmentError, CommitmentEvent, CommitmentEventRecord, CommitmentKind,
+    CommitmentStatus, SqliteCommitmentStore,
+};
+pub use facade::MemoryMutationFacade;
+pub use partner_store_sqlite::SqlitePartnerStore;
+pub use persona_store_sqlite::SqlitePersonaProfileStore;
+pub use temporal_graph_store::{
+    SqliteTemporalGraphStore, TemporalGraphError, TemporalGraphFact, TemporalGraphQuery,
+    TraversalBudget, TraversalResult,
+};
+pub use universal_forget::{UniversalForgetFacade, UniversalForgetOutcome};
+
+pub use context_compiler::{
+    ClosedWorldContextCompiler, MemoryAccessObserver, SelectedMemoryAccess,
+};
+pub use context_window::{ContextWindow, ContextWindowManager, ContextWindowPolicy};
+pub use continuity_state::{ContinuityCompressor, ContinuityState};
+pub use coordinator::MemoryCoordinator;
+pub use extraction::{
+    CommitmentCandidate, CommitmentSignal, ExtractedMemory, ExtractionClass, MemoryExtractionInput,
+    MemoryExtractionMessage, MemoryExtractionResult, MemoryExtractor, RuleMemoryExtractor,
+};
+pub use layers::{
+    MemoryLayerKind, MemoryRecallQuery, MemoryRecallResult, MemoryWritebackEntry,
+    RecalledMemoryItem,
+};
+pub use memory_materializer::{
+    BoundedMemoryInput, MaterializedMemoryEpisode, MemoryMaterializationOutcome,
+    MemoryMaterializationReport, MemoryMaterializationSink, MemoryMaterializationStatus,
+    MemoryMaterializer, MemoryMaterializerPort, MemorySinkReport, MemoryTypedCandidate,
+    MemoryTypedMaterializationSink, RelationCandidate,
+};
+pub use reconciler::{
+    MemoryReconciler, MemoryReconciliationDecision, MemoryReconciliationOutcome,
+    MemoryReconciliationRecord, MemoryReconciliationReport,
+};
+pub use retrieval_pipeline::{
+    unicode_tokens, BasicLexicalCandidateSource, HybridRetrievalPipeline, LexicalCandidateSource,
+    MemoryCandidateSource, RetrievalStatus, StaticVectorCandidateSource, VectorCandidateSource,
+};
+pub use scope::{
+    DeterministicReranker, EmbeddingError, EmbeddingProvider, InMemoryPersonaProfileStore,
+    MemoryCandidate, MemoryCandidateQuery, MemoryProvenance, MemoryRankingConfig, MemoryReranker,
+    MemoryScope, NoEmbeddingProvider, PersonaMemoryProfile, PersonaProfileDelta,
+    PersonaProfileStore, ScopedMemoryBackend, ScoreComponents, TypedMemoryRecallSource,
+    TypedRecallIdentity,
+};
 
 /// 重新导出 `apeireth_core::kernel::memory::Episode` 方便下游不必记多个导入路径.
 pub use apeireth_core::kernel::memory::Episode as CoreEpisode;
@@ -383,7 +466,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().expect("memory store mutex");
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -397,7 +483,10 @@ impl SqliteMemoryStore {
         };
         store.configure()?;
         {
-            let mut guard = store.conn.lock().expect("memory store mutex");
+            let mut guard = store
+                .conn
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             run_migrations(&mut guard)?;
         }
         Ok(store)
@@ -408,6 +497,10 @@ impl SqliteMemoryStore {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
+        // M26: 补齐 busy_timeout — rusqlite 默认 0, 另一进程持写锁时立即
+        // SQLITE_BUSY 失败且不重试; 与 apeireth-storage `SqliteConfig::default()`
+        // (5s) 对齐, 两条链路行为一致.
+        conn.pragma_update(None, "busy_timeout", 5_000_i64)?;
         Ok(())
     }
 
@@ -434,6 +527,42 @@ impl SqliteMemoryStore {
         let conn = self.conn()?;
         append_only::export_all_streams(&conn)
     }
+
+    /// 记忆账本计数 (自省通道的元数据面): 会话数 / 记忆件数 / 保护件数.
+    ///
+    /// **只回计数, 不回内容原文** —— 自述面只暴露"有多少", 永不暴露"是什么"。
+    /// 计数全部走本 store 可查的元数据 (episodes 流 + 治理 sidecar 表)。
+    pub fn ledger_counts(&self) -> MemoryResult<MemoryLedgerCounts> {
+        let conn = self.conn()?;
+        let sessions: i64 = conn.query_row(
+            "SELECT COUNT(DISTINCT session_id) FROM episodes",
+            [],
+            |row| row.get(0),
+        )?;
+        let memories: i64 =
+            conn.query_row("SELECT COUNT(*) FROM episodes", [], |row| row.get(0))?;
+        let protected: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM episode_governance WHERE protected = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(MemoryLedgerCounts {
+            sessions: sessions.max(0) as u64,
+            memories: memories.max(0) as u64,
+            protected: protected.max(0) as u64,
+        })
+    }
+}
+
+/// 记忆账本计数 (纯元数据, 自省通道消费).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MemoryLedgerCounts {
+    /// 会话数 (episodes 流里的不同 `session_id` 计数).
+    pub sessions: u64,
+    /// 记忆件数 (episodes 流总行数).
+    pub memories: u64,
+    /// 保护件数 (治理 sidecar 中 `protected = 1` 的行数).
+    pub protected: u64,
 }
 
 fn map_poisoned(e: std::sync::PoisonError<std::sync::MutexGuard<'_, Connection>>) -> MemoryError {
@@ -468,6 +597,212 @@ impl ContinuitySnapshotStore for SqliteMemoryStore {
 
     fn recent_episodes(&self, session_id: &str, n: usize) -> anyhow::Result<Vec<Episode>> {
         <Self as EpisodeStore>::recent_episodes(self, session_id, n).map_err(Into::into)
+    }
+}
+
+impl apeireth_plugin::memory_backend::MemoryBackend for SqliteMemoryStore {
+    fn name(&self) -> &'static str {
+        "sqlite_store"
+    }
+
+    fn kind(&self) -> apeireth_plugin::memory_backend::BackendKind {
+        apeireth_plugin::memory_backend::BackendKind::Sqlite
+    }
+
+    fn put_episode(&self, ep: &Episode) -> apeireth_plugin::memory_backend::CapabilityResult<()> {
+        <Self as EpisodeStore>::put_episode(self, ep)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+
+    fn get_episode(
+        &self,
+        id: &str,
+    ) -> apeireth_plugin::memory_backend::CapabilityResult<Option<Episode>> {
+        <Self as EpisodeStore>::get_episode(self, id)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+
+    fn recent_episodes(
+        &self,
+        session_id: &str,
+        n: usize,
+    ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<Episode>> {
+        <Self as EpisodeStore>::recent_episodes(self, session_id, n)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+
+    fn put_episode_metadata(
+        &self,
+        episode_id: &str,
+        metadata: serde_json::Value,
+    ) -> apeireth_plugin::memory_backend::CapabilityResult<()> {
+        let conn = self
+            .conn()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        let metadata_str = serde_json::to_string(&metadata)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        // M27 / L 组: canonical 定义在 migrations V11 (带 updated_at 列);
+        // 这里仅是 pre-V11 老库 self-heal, 建 V9 时代两列形态. 新库的列集
+        // 以 V11 迁移为准, 懒建路径不得新增列.
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS episode_memory_metadata (episode_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL)",
+        )
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        conn.execute(
+            "INSERT INTO episode_memory_metadata (episode_id, metadata_json) VALUES (?1, ?2) ON CONFLICT(episode_id) DO UPDATE SET metadata_json = excluded.metadata_json",
+            rusqlite::params![episode_id, metadata_str],
+        )
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        Ok(())
+    }
+
+    fn get_episode_metadata(
+        &self,
+        episode_id: &str,
+    ) -> apeireth_plugin::memory_backend::CapabilityResult<Option<serde_json::Value>> {
+        let conn = self
+            .conn()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        let mut stmt = conn
+            .prepare("SELECT metadata_json FROM episode_memory_metadata WHERE episode_id = ?1")
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        let result: rusqlite::Result<String> =
+            stmt.query_row(rusqlite::params![episode_id], |row| row.get(0));
+        match result {
+            Ok(raw) => {
+                let parsed = serde_json::from_str(&raw)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+                Ok(Some(parsed))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>),
+        }
+    }
+
+    fn append_stream(
+        &self,
+        kind: StreamKind,
+        entry: HistoryEntry,
+    ) -> apeireth_plugin::memory_backend::CapabilityResult<()> {
+        let conn = self
+            .conn()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        append_only::insert_entry(&conn, kind.table_name_ext(), &entry)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+
+    fn list_stream(
+        &self,
+        kind: StreamKind,
+        session_id: &str,
+        n: usize,
+    ) -> apeireth_plugin::memory_backend::CapabilityResult<Vec<HistoryEntry>> {
+        let conn = self
+            .conn()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        // H13: 旧实现忽略 session_id (`list_recent_entries` 返回**所有**
+        // session 的最近 N 条) — 跨 session 数据泄漏. 改为按 session_id 列
+        // 过滤 + tombstone 过滤, 与 SqliteBackend / trait 路径语义对齐.
+        append_only::list_recent_for_session(&conn, kind.table_name_ext(), session_id, n, false)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+}
+
+impl crate::scope::ScopedMemoryBackend for SqliteMemoryStore {
+    fn query_candidates(
+        &self,
+        query: &crate::scope::MemoryCandidateQuery,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        if query.visible_scopes.is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut scope_clauses = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        for scope in &query.visible_scopes {
+            match scope {
+                crate::scope::MemoryScope::Global => {
+                    scope_clauses.push(
+                        "json_extract(m.metadata_json, '$.scope.scope') = 'global'".to_string(),
+                    );
+                }
+                crate::scope::MemoryScope::Project { project_id } => {
+                    scope_clauses.push(
+                        "(json_extract(m.metadata_json, '$.scope.scope') = 'project' AND json_extract(m.metadata_json, '$.scope.project_id') = ?)".to_string(),
+                    );
+                    params.push(Box::new(project_id.clone()));
+                }
+                crate::scope::MemoryScope::User { user_id } => {
+                    scope_clauses.push(
+                        "(json_extract(m.metadata_json, '$.scope.scope') = 'user' AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string(),
+                    );
+                    params.push(Box::new(user_id.clone()));
+                }
+                crate::scope::MemoryScope::Persona {
+                    persona_id,
+                    user_id,
+                } => {
+                    scope_clauses.push(
+                        "(json_extract(m.metadata_json, '$.scope.scope') = 'persona' AND json_extract(m.metadata_json, '$.scope.persona_id') = ? AND json_extract(m.metadata_json, '$.scope.user_id') = ?)".to_string(),
+                    );
+                    params.push(Box::new(persona_id.clone()));
+                    params.push(Box::new(user_id.clone()));
+                }
+                crate::scope::MemoryScope::Session { session_id } => {
+                    scope_clauses.push(
+                        "((json_extract(m.metadata_json, '$.scope.scope') = 'session' AND json_extract(m.metadata_json, '$.scope.session_id') = ?) OR (m.metadata_json IS NULL AND e.session_id = ?))".to_string(),
+                    );
+                    params.push(Box::new(session_id.clone()));
+                    params.push(Box::new(session_id.clone()));
+                }
+            }
+        }
+
+        if scope_clauses.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let scope_sql = scope_clauses.join(" OR ");
+        let mut sql = format!(
+            "SELECT e.id, e.timestamp, e.role,
+                    COALESCE(g.content_override, e.content), e.session_id
+               FROM episodes e
+               LEFT JOIN episode_memory_metadata m ON m.episode_id = e.id
+               LEFT JOIN episode_governance g ON g.episode_id = e.id
+              WHERE (g.status IS NULL OR g.status <> 'forgotten')
+                AND ({scope_sql})"
+        );
+
+        if let Some(as_of_ms) = query.as_of_ms {
+            let as_of_sec = as_of_ms / 1000;
+            sql.push_str(" AND e.timestamp <= ?");
+            params.push(Box::new(as_of_sec));
+        }
+
+        sql.push_str(" ORDER BY e.timestamp DESC, e.id DESC LIMIT ?");
+        params.push(Box::new(query.limit as i64));
+
+        let conn = self
+            .conn()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        let mut stmt = conn.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), |row| {
+            Ok(Episode {
+                id: row.get(0)?,
+                timestamp: row.get(1)?,
+                role: row.get(2)?,
+                content: row.get(3)?,
+                session_id: row.get(4)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        out.reverse();
+        Ok(out)
     }
 }
 

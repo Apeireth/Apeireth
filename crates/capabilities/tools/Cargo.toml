@@ -11,10 +11,19 @@ description = "Canonical builtin tool capabilities: filesystem / search / repo (
 [dependencies]
 # Permitted direction: builtin tools are plugin capabilities. They depend on the
 # canonical plugin/protocol/core contracts, never on the runtime or gateway.
+# The governance edge is one-way and interface-only: the execution chain's guard
+# stage consults the deny-only guard interface; no policy is owned here.
 apeireth-core = { path = "../../foundation/core" }
 apeireth-protocol = { path = "../../foundation/protocol" }
 apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-governance = { path = "../../foundation/governance" }
+# 技能卡调用面 (I1) 复用共享引用封套 (UntrustedEnvelope: 固定警告头 + 显式
+# 边界 + 边界伪造转义 + 每源预算 + 分级省略) —— 与记忆检索披露同一套 L2
+# 封套披露语义, 一个预算系统管到底。orchestration 生产依赖仅 core,
+# 方向不变 (foundation 契约面)。
+apeireth-orchestration = { path = "../../foundation/orchestration" }
 async-trait = { workspace = true }
+encoding_rs = "0.8"
 futures = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
@@ -30,9 +39,13 @@ url = "2.5.8"
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Isolation",
+    "Win32_Storage_FileSystem",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_JobObjects",
     "Win32_System_Pipes",
+    "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
 
