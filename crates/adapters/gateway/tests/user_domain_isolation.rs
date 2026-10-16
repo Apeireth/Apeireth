@@ -389,8 +389,7 @@ async fn non_default_domains_are_confined_to_the_domain_routed_surface() {
         Some(ALICE_TOKEN),
         Body::from(r#"{"input":"hi"}"#),
     );
-    chat
-        .headers_mut()
+    chat.headers_mut()
         .insert("content-type", "application/json".parse().unwrap());
     let response = router.clone().oneshot(chat).await.unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);

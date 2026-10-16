@@ -20,7 +20,7 @@
 //! (Windows exit 101) and made `wait_for_ready` time out. Reaching Ready here
 //! is the regression proof that the supervisor drains those pipes.
 
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
 // Workspace policy (clippy.toml): fs_err over std::fs, so filesystem errors
@@ -29,6 +29,7 @@ use fs_err as fs;
 
 use companion_desktop_lib::backend_supervisor::{
     BackendCapabilityEnv, BackendOwnership, BackendProviderEnv, BackendState, BackendSupervisor,
+    LifecycleEvent,
 };
 
 fn gateway_lock() -> MutexGuard<'static, ()> {
@@ -611,6 +612,158 @@ fn minted_gateway_token_enforces_the_sensitive_endpoint_gate() {
             allowed.status().is_success(),
             "minted token must open the gate, got {}",
             allowed.status()
+        );
+
+        supervisor.stop().await.expect("cleanup stop");
+    });
+}
+
+/// E-07 first-boot spawn contract: the launch spawn is held until the
+/// Settings-UI's initial config push resolves, so the model/capability-family
+/// restart decision lands BEFORE the spawn. The ordered lifecycle face must
+/// read exactly `Spawn, Ready` — one spawn straight to ready, no
+/// `RestartRequired`/`Stopped` bounce in between — and the injected model must
+/// be visible on that one process (the resolved config really reached it).
+#[test]
+fn first_boot_spawns_once_to_ready_with_the_initial_config_resolved() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+    isolate_backend_data();
+
+    runtime().block_on(async {
+        let supervisor = Arc::new(BackendSupervisor::new_for_test());
+        let env = BackendProviderEnv {
+            openai_url: Some("https://api.example.com/v1".into()),
+            openai_models: Some("first-boot-model-q7".into()),
+            ..Default::default()
+        };
+
+        // Launch shape: the auto-start entry holds the first spawn while the
+        // config face pushes the initial provider env concurrently. Whichever
+        // side wins the spawn race, the child must come up once with the
+        // resolved config.
+        let starter = {
+            let supervisor = Arc::clone(&supervisor);
+            tokio::spawn(async move {
+                supervisor
+                    .start_after_initial_config(Duration::from_secs(30))
+                    .await
+            })
+        };
+        // Give the launch entry a head start: the held spawn must not have
+        // produced any lifecycle transition before the config face speaks.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(
+            supervisor.lifecycle_events().is_empty(),
+            "the launch spawn must stay held until the initial config resolves"
+        );
+        supervisor
+            .apply_provider_env(env)
+            .await
+            .expect("initial config apply");
+        starter
+            .await
+            .expect("starter task")
+            .expect("the launch spawn succeeds");
+
+        let info = supervisor.info().await;
+        assert_eq!(info.state, BackendState::Ready);
+        assert_eq!(
+            info.restart_count, 0,
+            "the initial config must resolve before the spawn, never bounce it"
+        );
+        assert_eq!(
+            supervisor.lifecycle_events(),
+            vec![LifecycleEvent::Spawn, LifecycleEvent::Ready],
+            "first boot is exactly one spawn to ready — nothing in between"
+        );
+
+        // The single spawn carries the resolved config: the injected model is
+        // registered on that very process.
+        let endpoint = info.endpoint.clone().expect("endpoint after launch");
+        let token = supervisor
+            .gateway_access_token()
+            .await
+            .expect("a spawned sidecar must carry a loopback access token");
+        let models = reqwest::Client::new()
+            .get(format!("{endpoint}/v1/models"))
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await
+            .expect("models request")
+            .text()
+            .await
+            .unwrap_or_default();
+        assert!(
+            models.contains("first-boot-model-q7"),
+            "the resolved config must reach the single spawn: {models}"
+        );
+
+        supervisor.stop().await.expect("cleanup stop");
+    });
+}
+
+/// The pre-existing restart semantics survive the new launch entry: when the
+/// config push only arrives AFTER the spawn (the wait window expired first), a
+/// restart-relevant change still bounces the sidecar exactly once — the full
+/// `Spawn → Ready → RestartRequired → Stopped → Spawn → Ready` sequence, which
+/// is the behavior `supervisor_lifecycle` locks in.
+#[test]
+fn launch_entry_after_spawn_keeps_the_existing_restart_semantics() {
+    if !backend_available() {
+        eprintln!("SKIP: no canonical backend build found");
+        return;
+    }
+    let _guard = gateway_lock();
+    isolate_backend_data();
+
+    runtime().block_on(async {
+        let supervisor = BackendSupervisor::new_for_test();
+        // A zero window means "do not wait": the launch entry behaves exactly
+        // like a plain start.
+        supervisor
+            .start_after_initial_config(Duration::ZERO)
+            .await
+            .expect("backend should start");
+        let first_pid = supervisor.info().await.pid.expect("first pid");
+        assert_eq!(
+            supervisor.lifecycle_events(),
+            vec![LifecycleEvent::Spawn, LifecycleEvent::Ready],
+            "a plain launch spawn still goes straight to ready"
+        );
+
+        let env = BackendProviderEnv {
+            openai_models: Some("late-config-model-k3".into()),
+            ..Default::default()
+        };
+        let info = supervisor
+            .apply_provider_env(env)
+            .await
+            .expect("a late restart-relevant change must restart the Ready backend");
+        assert_eq!(info.state, BackendState::Ready);
+        assert_eq!(
+            info.restart_count, 1,
+            "a late restart-relevant change restarts exactly once"
+        );
+        let second_pid = info.pid.expect("pid after restart");
+        assert_ne!(
+            first_pid, second_pid,
+            "the restart must replace the process"
+        );
+        assert_eq!(
+            supervisor.lifecycle_events(),
+            vec![
+                LifecycleEvent::Spawn,
+                LifecycleEvent::Ready,
+                LifecycleEvent::RestartRequired,
+                LifecycleEvent::Stopped,
+                LifecycleEvent::Spawn,
+                LifecycleEvent::Ready,
+            ],
+            "the late-change bounce sequence is unchanged"
         );
 
         supervisor.stop().await.expect("cleanup stop");

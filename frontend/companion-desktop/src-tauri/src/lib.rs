@@ -25,7 +25,7 @@ pub mod workspace;
 mod workspace_list;
 
 use backend_supervisor::{
-    BackendCapabilityEnv, BackendInfo, BackendProviderEnv, BackendSupervisor,
+    BackendCapabilityEnv, BackendInfo, BackendProviderEnv, BackendSupervisor, INITIAL_CONFIG_WINDOW,
 };
 use logging::{DesktopLogger, LogLevel};
 use std::sync::Arc;
@@ -594,12 +594,19 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
 
-            // Auto-start backend on app launch
+            // Auto-start backend on app launch. The launch spawn is held until
+            // the Settings-UI's initial config push resolves (bounded by
+            // INITIAL_CONFIG_WINDOW), so model/capability-family changes land
+            // in the FIRST spawn instead of bouncing a just-ready sidecar
+            // (E-07: one spawn straight to ready).
             let supervisor_clone = supervisor.clone();
             let logger_clone = logger.clone();
             tauri::async_runtime::spawn(async move {
                 logger_clone.log_desktop(LogLevel::Info, "Backend auto-start initiated");
-                match supervisor_clone.start().await {
+                match supervisor_clone
+                    .start_after_initial_config(INITIAL_CONFIG_WINDOW)
+                    .await
+                {
                     Ok(msg) => {
                         eprintln!("Backend auto-start: {}", msg);
                         logger_clone.log_desktop(

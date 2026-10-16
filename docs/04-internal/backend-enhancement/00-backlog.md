@@ -61,6 +61,7 @@
 | D11 | 【待上屏】客户端令牌表**无管理 UI**（env `APEIRETH_GATEWAY_TOKENS` + 数据目录 `client-tokens.json` 配置面） | W2-② 令牌体系已建成；增删客户端/换令牌只能改配置面，UI 管理面未做 | `W2-2-remote-access-auth-delivery.md` |
 | D12 | 【待上屏】daemon/多客户端**运维面无 UI**（服务生命周期、同会话写排队审计、会话归属审计只在日志/审计面） | W2-①/③ 已建成；驾驶舱/设置页未接运维读数，主人看不到"谁在线、谁在排队" | `F-server-form.md` 现状 + `W2-3-multi-client-session-reuse.md` |
 | D13 | 00-backlog 想法清单 **#I 字母双占**（吸收自动化与星港内置面同用 I） | 命名跨线（I1 施工线注释/分期文档同用「I 轴」口径），单方改名会撞他线命名——待在途线收口后统一改或另立字母 | 本页想法清单两行；`I-absorption-automation.md` / `I-starport-builtins.md` |
+| D14 | 前端套件 `frontend/companion-desktop/tests/session-preset-persistence.mjs`「治理同源」断言与生产装配**形状漂移**（断言 `Arc::clone(&session_store)` / `with_session_store(session_store)` 字面，现装配已改为 `sessions.store()` / `with_session_manager(sessions)`；`pnpm test` 1/76 套件红） | 治理语义意图（钩子与运行时共用同一会话存储）在现装配仍成立，只是断言字面落后于会话写闸装配重构一系（`bddc8aa4`/`ae953e93`）；属治理断言演进，归口批准档持久化线按「演进断言时注明理由」换新短语，非本批代改（2026-10-16 落差清账·行为小修批实测登记，宪章 §六.3 标红不代改） | `session-preset-persistence.mjs:141-146` ↔ `crates/adapters/cli/src/lib.rs:897-905` |
 
 ## 与既有账目的关系
 

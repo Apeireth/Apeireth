@@ -51,6 +51,7 @@ import {providerFetch} from './provider-transport.ts';
 import {gatewayAuthHeaders} from './tauri-bridge.ts';
 import {startSseFetchStream} from './sse-stream.ts';
 import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
+import {normalizeUserRows, normalizeDomainRows, type UserAdminRow, type DomainAdminRow} from './user-admin.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -2696,5 +2697,52 @@ export async function fetchWorkbenchTurn(config: ApeirethConfig, sessionId?: str
     return data.turn ?? null;
   } catch (caught) {
     return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+// --- 用户/域管理读面（契约 §10.6 / §10.7，只读 fetch 面）---
+// 住户卡消费：GET /v1/panel/users → {users, count}，GET /v1/panel/domains →
+// {domains, count}（W3-② AdminControl 面，owner 档）。本节**只加读取**；
+// 管理写面（PATCH/DELETE /v1/admin/users/:id）走 `user-admin.ts` 注入传输缝。
+// 错误帧 {error:{code,message,solution}} 原样透出 status + code，面板据此进
+// 只读态（501 no_role_face / 403 permission_denied），不静默降级成空列表。
+
+export type UserAdminListResult = {users: UserAdminRow[]; count: number} | {error: string; status: number; code: string};
+export type DomainAdminListResult = {domains: DomainAdminRow[]; count: number} | {error: string; status: number; code: string};
+
+function adminFaceError(data: unknown, status: number, fallback: string): {error: string; status: number; code: string} {
+  const frame = (data as {error?: {code?: string; message?: string}} | null)?.error;
+  return {
+    error: frame?.message || (data as {message?: string} | null)?.message || fallback || `HTTP ${status}`,
+    status,
+    code: frame?.code || (status === 0 ? 'network_error' : 'http_error'),
+  };
+}
+
+export async function fetchUsers(config: ApeirethConfig): Promise<UserAdminListResult> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/users`, {
+      headers: await gatewayAuthHeaders(),
+    });
+    const data = (await res.json().catch(() => null)) as {users?: unknown; count?: unknown} | null;
+    if (!res.ok) return adminFaceError(data, res.status, '住户列表读面被拒');
+    const users = normalizeUserRows(data?.users);
+    return {users, count: typeof data?.count === 'number' && Number.isFinite(data.count) ? data.count : users.length};
+  } catch (caught) {
+    return adminFaceError(null, 0, caught instanceof Error ? caught.message : String(caught));
+  }
+}
+
+export async function fetchDomains(config: ApeirethConfig): Promise<DomainAdminListResult> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/domains`, {
+      headers: await gatewayAuthHeaders(),
+    });
+    const data = (await res.json().catch(() => null)) as {domains?: unknown; count?: unknown} | null;
+    if (!res.ok) return adminFaceError(data, res.status, '域列表读面被拒');
+    const domains = normalizeDomainRows(data?.domains);
+    return {domains, count: typeof data?.count === 'number' && Number.isFinite(data.count) ? data.count : domains.length};
+  } catch (caught) {
+    return adminFaceError(null, 0, caught instanceof Error ? caught.message : String(caught));
   }
 }

@@ -139,11 +139,20 @@ check('治理同源：权限预设治理钩子读的是同一份持久化档（�
   assert.ok(hook.includes('session.settings.permission_preset'), '消费的是会话持久化设置里的档');
   assert.ok(hook.includes('session.settings.approval_remember'), '会话内记住开关同源');
   const cli = workspaceSrc('crates/adapters/cli/src/lib.rs');
+  // 断言演进（2026-10-16，V1-b/d 批顺手修，报备）：W3-③ 逐域会话写闸重构后，
+  // 组合根由 `with_session_store(session_store)` 改为 `SessionManager::new(
+  // Arc::clone(&session_store))` + `with_session_manager(sessions)`，钩子取
+  // `sessions.store()` —— 钉的仍是同一行为「钩子与运行时共用同一会话存储」，
+  // 只把字面量换到重构后的装配形状（不钉旧字面）。
   assert.ok(
-    /PermissionPresetGovernanceHook::new\(\s*Arc::new\(governance\),\s*Arc::clone\(&session_store\),/.test(cli),
+    /PermissionPresetGovernanceHook::new\(\s*Arc::new\(governance\),\s*Arc::clone\(sessions\.store\(\)\),/.test(cli),
     '生产装配里钩子与运行时共用同一会话存储',
   );
-  assert.ok(cli.includes('builder = builder.with_session_store(session_store);'), '运行时的会话存储同源');
+  assert.ok(
+    /SessionManager::new\(\s*Arc::clone\(&session_store\),/.test(cli),
+    '会话写闸包的是同一份 production_session_store',
+  );
+  assert.ok(cli.includes('builder = builder.with_session_manager(sessions);'), '运行时的会话存储同源');
 });
 
 console.log(`--- ${checks} checks passed ---`);

@@ -10,6 +10,7 @@
   import MemoryView from '../MemoryView.svelte';
   import DiaryView from '../views/DiaryView.svelte';
   import StarportPanel from './StarportPanel.svelte';
+  import WorkbenchCards from '../views/Workbench.svelte';
   import {WORKBENCH_CARDS, type WorkbenchSection} from '../shell-nav';
 
   let {
@@ -268,6 +269,9 @@
         {/if}
       </div>
     {/if}
+    <!-- V1-b/d 上屏卡片区：住户 / 技能 / 随手记 三卡（views/Workbench.svelte），
+         常驻工作台下方，与回合视图/分区面板并行可达。 -->
+    <WorkbenchCards {config} />
   </div>
 </aside>
 

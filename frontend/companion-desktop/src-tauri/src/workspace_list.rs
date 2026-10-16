@@ -150,7 +150,10 @@ pub fn delete_entry(path: String, name: String) -> Result<String, String> {
         let mut children =
             fs_err::read_dir(&target).map_err(|error| format!("读目录失败（如实报）：{error}"))?;
         if children.next().is_some() {
-            return Err(format!("目录非空，拒绝删除（防误删）：{}", target.display()));
+            return Err(format!(
+                "目录非空，拒绝删除（防误删）：{}",
+                target.display()
+            ));
         }
         fs_err::remove_dir(&target).map_err(|error| format!("删目录失败（如实报）：{error}"))?;
     } else {
@@ -259,26 +262,52 @@ mod tests {
         assert!(Path::new(&created).is_dir(), "目录真建成");
         let renamed = rename_entry(base.clone(), "docs".to_string(), "notes".to_string()).unwrap();
         assert!(Path::new(&renamed).is_dir(), "改名真生效");
-        assert!(delete_entry(base.clone(), "notes".to_string()).unwrap().ends_with("notes"));
+        assert!(delete_entry(base.clone(), "notes".to_string())
+            .unwrap()
+            .ends_with("notes"));
 
         // 文件删除。
         fs_err::write(dir.join("a.txt"), b"x").unwrap();
         assert!(delete_entry(base.clone(), "a.txt".to_string()).is_ok());
 
         // 0 装边界。
-        assert!(create_dir_entry(base.clone(), "x/y".to_string()).is_err(), "分隔符拒绝");
-        assert!(create_dir_entry(base.clone(), " ".to_string()).is_err(), "空名拒绝");
-        assert!(create_dir_entry(base.clone(), "a\tb".to_string()).is_err(), "控制字符拒绝");
-        assert!(create_dir_entry("".to_string(), "n".to_string()).is_err(), "空基目录拒绝");
-        assert!(rename_entry(base.clone(), "ghost".to_string(), "x".to_string()).is_err(), "源必须在");
+        assert!(
+            create_dir_entry(base.clone(), "x/y".to_string()).is_err(),
+            "分隔符拒绝"
+        );
+        assert!(
+            create_dir_entry(base.clone(), " ".to_string()).is_err(),
+            "空名拒绝"
+        );
+        assert!(
+            create_dir_entry(base.clone(), "a\tb".to_string()).is_err(),
+            "控制字符拒绝"
+        );
+        assert!(
+            create_dir_entry("".to_string(), "n".to_string()).is_err(),
+            "空基目录拒绝"
+        );
+        assert!(
+            rename_entry(base.clone(), "ghost".to_string(), "x".to_string()).is_err(),
+            "源必须在"
+        );
         create_dir_entry(base.clone(), "keep".to_string()).unwrap();
         create_dir_entry(base.clone(), "again".to_string()).unwrap();
-        assert!(create_dir_entry(base.clone(), "keep".to_string()).is_err(), "已存在拒绝");
-        assert!(rename_entry(base.clone(), "again".to_string(), "keep".to_string()).is_err(), "目标已存在不覆盖");
+        assert!(
+            create_dir_entry(base.clone(), "keep".to_string()).is_err(),
+            "已存在拒绝"
+        );
+        assert!(
+            rename_entry(base.clone(), "again".to_string(), "keep".to_string()).is_err(),
+            "目标已存在不覆盖"
+        );
 
         // 非空目录删除拒绝（防误删）。
         fs_err::write(dir.join("keep/inner.txt"), b"x").unwrap();
-        assert!(delete_entry(base.clone(), "keep".to_string()).is_err(), "非空目录拒绝");
+        assert!(
+            delete_entry(base.clone(), "keep".to_string()).is_err(),
+            "非空目录拒绝"
+        );
 
         let _ = fs_err::remove_dir_all(&dir);
     }

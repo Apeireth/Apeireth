@@ -100,6 +100,9 @@ const SUITES = [
   {file: 'starport-face-apps.mjs', name: 'starport face apps source mirror (browse gate wiring / real model channel / factory+installer wiring)'},
   {file: 'gateway-auth-face.mjs', name: 'gateway auth face (three-source token / bearer on every fetch / stale credential head purge, real modules)', strip: true},
   {file: 'sse-fetch-stream.mjs', name: 'sse fetch stream (frame parsing / stream lifecycle / token-gated subscription chains, real modules)', strip: true},
+  {file: 'user-admin.mjs', name: 'user admin card (list / read-only state / CLI guidance / owner mutations / domain section, real modules)', strip: true},
+  {file: 'skill-shelf.mjs', name: 'skill shelf (list / expand / L2 envelope warning head / honest no-face seam, real module)', strip: true},
+  {file: 'capture-review.mjs', name: 'capture review card (recent-50 ledger / search filter / same-source review, real modules)', strip: true},
 ];
 
 function run({file, strip}) {

@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::RwLock;
+use tokio::sync::{watch, RwLock};
 
 /// Backend supervisor state machine
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -38,6 +38,27 @@ pub enum BackendState {
     Ready,
     Failed,
     Stopping,
+}
+
+/// One supervised lifecycle transition, kept in order.
+///
+/// Evidence face for the spawn contract: a first boot must observe exactly
+/// `Spawn` then `Ready` — one spawn straight to ready — never a
+/// `RestartRequired`/`Stopped` bounce in between (E-07).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum LifecycleEvent {
+    /// The owned sidecar process is being spawned.
+    Spawn,
+    /// The sidecar answered its readiness probe.
+    Ready,
+    /// The sidecar failed its readiness probe.
+    ReadyFailed,
+    /// The spawn attempt itself failed.
+    SpawnFailed,
+    /// A restart-relevant change forced a bounce of the running sidecar.
+    RestartRequired,
+    /// The owned sidecar process was stopped.
+    Stopped,
 }
 
 /// Backend process information
@@ -728,6 +749,13 @@ pub struct BackendSupervisor {
     /// 是否装有常驻服务无关 (hermetic)。探测路径的自有测试走
     /// [`Self::with_resident_probe_in_dir`]。
     resident_probe: bool,
+    /// E-07 首启 spawn 判定: 是否已收到 Settings-UI 的首次配置推送
+    /// ([`BackendSupervisor::apply_backend_config`] 落值后翻真)。首次 spawn
+    /// 在翻真前持有等待 —— 模型/能力族变更的重启判定因此移到 spawn 前解析。
+    config_resolution: watch::Sender<bool>,
+    /// The supervised lifecycle transitions so far, in order
+    /// (see [`Self::lifecycle_events`] / [`LifecycleEvent`]).
+    lifecycle: std::sync::Mutex<Vec<LifecycleEvent>>,
 }
 
 /// 存储文档身份: 后端 provider 环境配置 (非密字段)。
@@ -801,6 +829,12 @@ fn bearer_value(token: &str) -> String {
 /// 常驻占位文件名 (与 `apeireth gateway serve --pid-file` / 服务脚本写入口径
 /// 一致: `key=value` 行)。
 pub const RESIDENT_DESCRIPTOR_FILE: &str = "gateway.pid";
+
+/// How long a launch-time spawn ([`BackendSupervisor::start_after_initial_config`])
+/// holds out for the Settings-UI's initial config push before proceeding on the
+/// restored config. Only an upper bound: the wait ends as soon as the config
+/// face has spoken.
+pub const INITIAL_CONFIG_WINDOW: Duration = Duration::from_secs(5);
 
 /// 服务令牌面的凭据库目标名 (keyring 默认映射: 目标 = 用户.服务; 服务安装
 /// 面按此名写入, 本壳按此名读取, TUI 走同一身份) —— 明文不落盘。
@@ -1114,6 +1148,8 @@ impl BackendSupervisor {
             spawned_capability_env: RwLock::new(persisted_capabilities),
             spawned_gateway_token: RwLock::new(None),
             resident_probe,
+            config_resolution: watch::channel(false).0,
+            lifecycle: std::sync::Mutex::new(Vec::new()),
         })
     }
 
@@ -1341,6 +1377,24 @@ impl BackendSupervisor {
         self.info.read().await.clone()
     }
 
+    /// Append one lifecycle transition (drives the ordered evidence face).
+    fn record_event(&self, event: LifecycleEvent) {
+        if let Ok(mut events) = self.lifecycle.lock() {
+            events.push(event);
+        }
+    }
+
+    /// The supervised lifecycle transitions seen so far, in order.
+    ///
+    /// The ordered start/stop face tests assert the spawn contract against
+    /// (E-07: first boot = `Spawn, Ready`, nothing in between).
+    pub fn lifecycle_events(&self) -> Vec<LifecycleEvent> {
+        self.lifecycle
+            .lock()
+            .map(|events| events.clone())
+            .unwrap_or_else(|poisoned| poisoned.into_inner().clone())
+    }
+
     /// Adopt an already-running resident gateway (W2-① 常驻协同): publish its
     /// endpoint as `Ready` with `External` ownership and spawn nothing.
     /// Ownership semantics are unchanged — `stop()` still refuses to stop a
@@ -1400,6 +1454,7 @@ impl BackendSupervisor {
             LogLevel::Info,
             &format!("backend.spawn path={backend_path} port={port}"),
         );
+        self.record_event(LifecycleEvent::Spawn);
 
         // Spawn backend process
         match self.spawn_backend(&backend_path, port).await {
@@ -1449,6 +1504,7 @@ impl BackendSupervisor {
                     info.port = None;
                     drop(info);
                     self.log_desktop(LogLevel::Error, &format!("backend.ready_failed {error}"));
+                    self.record_event(LifecycleEvent::ReadyFailed);
                     return Err(error);
                 }
 
@@ -1462,6 +1518,7 @@ impl BackendSupervisor {
                     LogLevel::Info,
                     &format!("backend.ready pid={pid} port={port} latency_ms={latency_ms}"),
                 );
+                self.record_event(LifecycleEvent::Ready);
 
                 Ok(format!("Backend started at {} (PID: {})", endpoint, pid))
             }
@@ -1471,7 +1528,54 @@ impl BackendSupervisor {
                 info.last_error = Some(e.clone());
                 drop(info);
                 self.log_desktop(LogLevel::Error, &format!("backend.spawn_failed {e}"));
+                self.record_event(LifecycleEvent::SpawnFailed);
                 Err(e)
+            }
+        }
+    }
+
+    /// Launch-time startup entry (E-07 first-boot spawn contract).
+    ///
+    /// The Settings-UI pushes its provider/capability config shortly after the
+    /// window opens. Model lists and capability-family toggles are NOT
+    /// hot-applicable (see [`BackendProviderEnv::restart_relevant_pairs`]), so
+    /// spawning before that push lands means the change is only discovered
+    /// AFTER the sidecar is ready and is immediately bounced:
+    /// `spawn → ready → restart required → stopped → spawn`. Holding the very
+    /// first spawn until the config face resolves moves that restart decision
+    /// in front of the spawn — the launch spawn then carries the resolved
+    /// config and goes straight to `Ready` (`Spawn → Ready`, one process).
+    ///
+    /// `window` only bounds the wait: once it expires the spawn proceeds on the
+    /// restored config exactly like [`Self::start`]. A config push that arrives
+    /// later keeps its existing semantics (hot-apply when hot-applicable,
+    /// restart otherwise) — only the launch-time bounce is removed.
+    pub async fn start_after_initial_config(&self, window: Duration) -> Result<String, String> {
+        let mut resolution = self.config_resolution.subscribe();
+        if !*resolution.borrow() {
+            let _ = tokio::time::timeout(window, resolution.wait_for(|resolved| *resolved)).await;
+        }
+        {
+            let info = self.info.read().await;
+            if matches!(info.state, BackendState::Starting | BackendState::Ready) {
+                return Ok(format!(
+                    "Backend already started at {}",
+                    info.endpoint.clone().unwrap_or_default()
+                ));
+            }
+        }
+        match self.start().await {
+            Ok(message) => Ok(message),
+            Err(error) => {
+                // Benign startup race: the config-apply path won the spawn
+                // (with this same just-resolved config) between the state check
+                // and our start. Its spawn is the launch spawn.
+                let state = self.info.read().await.state.clone();
+                if matches!(state, BackendState::Starting | BackendState::Ready) {
+                    Ok("Backend already starting (initial config applied first)".to_string())
+                } else {
+                    Err(error)
+                }
             }
         }
     }
@@ -1512,6 +1616,7 @@ impl BackendSupervisor {
                         LogLevel::Info,
                         &format!("backend.stopped pid={pid:?} exit_code={:?}", status.code()),
                     );
+                    self.record_event(LifecycleEvent::Stopped);
 
                     Ok(format!(
                         "Backend stopped (PID: {:?}, exit: {:?})",
@@ -1541,6 +1646,7 @@ impl BackendSupervisor {
                         LogLevel::Warn,
                         &format!("backend.force_killed pid={pid:?} reason=graceful_timeout"),
                     );
+                    self.record_event(LifecycleEvent::Stopped);
 
                     Ok(format!("Backend force-killed (PID: {:?})", pid))
                 }
@@ -1593,6 +1699,11 @@ impl BackendSupervisor {
     ///
     /// An unchanged configuration is a no-op (no restart), so a settings save
     /// that only touched UI state never bounces the gateway.
+    ///
+    /// A call to this face also answers the launch-time config question the
+    /// held first spawn waits on (see [`Self::start_after_initial_config`]):
+    /// the signal fires after the values are stored, so the launch spawn reads
+    /// the resolved config (E-07).
     pub async fn apply_backend_config(
         &self,
         provider: Option<BackendProviderEnv>,
@@ -1630,20 +1741,23 @@ impl BackendSupervisor {
             false
         };
 
+        // E-07 first-boot resolution: a call to this face answers the launch-time
+        // config question. The signal fires AFTER the values are stored, so the
+        // held first spawn ([`Self::start_after_initial_config`]) reads the
+        // resolved config and no post-ready bounce is needed.
+        self.config_resolution.send_replace(true);
+
         if !provider_changed && !capabilities_changed {
             return Ok(self.info().await);
         }
 
         let state = self.info.read().await.state.clone();
         match state {
-            BackendState::Stopped => {
-                self.start().await?;
+            BackendState::Stopped | BackendState::Failed => {
+                self.start_resolving_config().await?;
             }
             BackendState::Ready => {
                 self.apply_to_ready_gateway().await?;
-            }
-            BackendState::Failed => {
-                self.start().await?;
             }
             BackendState::Starting | BackendState::Stopping => {
                 self.wait_for_settle().await;
@@ -1653,13 +1767,26 @@ impl BackendSupervisor {
                         self.apply_to_ready_gateway().await?;
                     }
                     BackendState::Stopped | BackendState::Failed => {
-                        self.start().await?;
+                        self.start_resolving_config().await?;
                     }
                     _ => {}
                 }
             }
         }
         Ok(self.info().await)
+    }
+
+    /// Start the sidecar for a config application, tolerating the benign
+    /// launch-time race (E-07): when the held first spawn won with this same
+    /// just-resolved config, its spawn is the one that counts.
+    async fn start_resolving_config(&self) -> Result<(), String> {
+        if let Err(error) = self.start().await {
+            let state = self.info.read().await.state.clone();
+            if !matches!(state, BackendState::Starting | BackendState::Ready) {
+                return Err(error);
+            }
+        }
+        Ok(())
     }
 
     /// Apply the current config to a gateway that is already `Ready`.
@@ -1683,6 +1810,7 @@ impl BackendSupervisor {
                         LogLevel::Info,
                         "backend.hot_apply unsupported (pre-admin gateway); restarting",
                     );
+                    self.record_event(LifecycleEvent::RestartRequired);
                     self.restart().await.map(|_| ())
                 }
                 HotApply::Failed(error) => {
@@ -1690,6 +1818,7 @@ impl BackendSupervisor {
                         LogLevel::Warn,
                         &format!("backend.hot_apply failed ({error}); restarting"),
                     );
+                    self.record_event(LifecycleEvent::RestartRequired);
                     self.restart().await.map(|_| ())
                 }
             }
@@ -1698,6 +1827,7 @@ impl BackendSupervisor {
                 LogLevel::Info,
                 "backend.restart required (models/capabilities/other-family change is not hot-applicable)",
             );
+            self.record_event(LifecycleEvent::RestartRequired);
             self.restart().await.map(|_| ())
         }
     }
@@ -2968,6 +3098,51 @@ mod tests {
         assert!(info.pid.is_none());
         assert!(info.endpoint.is_none());
         assert_eq!(info.restart_count, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // E-07 首启 spawn 判定: 配置面先解析、起停事件序列有序。
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn a_fresh_supervisor_has_an_empty_lifecycle_face() {
+        let supervisor = BackendSupervisor::build(None).unwrap();
+        assert!(
+            supervisor.lifecycle_events().is_empty(),
+            "no transitions have happened yet"
+        );
+    }
+
+    #[test]
+    fn apply_backend_config_resolves_the_launch_config_question() {
+        let supervisor = BackendSupervisor::build(None).unwrap();
+        let mut resolution = supervisor.config_resolution.subscribe();
+        assert!(
+            !*resolution.borrow(),
+            "a fresh supervisor has not seen its config face yet"
+        );
+
+        // An unchanged config is a no-op apply (nothing to start), but it still
+        // answers the launch-time question the held first spawn waits on.
+        tokio_block(supervisor.apply_provider_env(BackendProviderEnv::default()))
+            .expect("no-op apply");
+        assert!(
+            *resolution.borrow(),
+            "the first apply must resolve the launch config"
+        );
+        assert!(
+            tokio_block(resolution.wait_for(|resolved| *resolved)).is_ok(),
+            "a waiter observes the resolution"
+        );
+        assert_eq!(
+            tokio_block(supervisor.info()).state,
+            BackendState::Stopped,
+            "a no-op apply must not spawn anything"
+        );
+        assert!(
+            supervisor.lifecycle_events().is_empty(),
+            "a no-op apply drives no lifecycle transition"
+        );
     }
 
     /// An external backend must never be killed by the desktop: a fresh
