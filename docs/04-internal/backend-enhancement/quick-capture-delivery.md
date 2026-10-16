@@ -136,7 +136,7 @@ query ── `#` 前缀 ──▶ handleCapture ──▶ captureToMemoryStream 
 | 门禁 | 实测结果 |
 | --- | --- |
 | `cargo test --workspace --locked -j 2` | ✅ **退出码 0**；结果行 **190 套件 / 5243 例通过 / 0 失败 / 22 忽略**（既有 186 套件零回归；多出的 4 套件为并行线在途新增面）。注：本批取证前一轮同命令出现一次退出码 101 瞬时红，隔离复跑即绿——期间同 build 目录出现并行 `cargo` 抢锁（"Blocking waiting for file lock"），按 flake 口径复跑定性为**并行在途扰动**，非本批引入 |
-| `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` | ❌ **标红（非本批引入）**：编译错误 2 处全在 **J1/I1 线在途新件**——`crates/capabilities/tools/src/content_feed/tool.rs:532`（E0277）、`crates/capabilities/tools/src/skill/distill.rs:521`（E0308）。该战场本批**禁入**（J1/I1 线战场），零触碰零代改，报备待该线自检收口 |
+| `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` | ❌ **标红（非本批引入）**：编译错误 2 处全在 **J1/I1 线在途新件**（历史口径（2026-10）：I1 线 = 现 P 轴 P1 线，审计修 D13）——`crates/capabilities/tools/src/content_feed/tool.rs:532`（E0277）、`crates/capabilities/tools/src/skill/distill.rs:521`（E0308）。该战场本批**禁入**（J1/I1 线战场），零触碰零代改，报备待该线自检收口 |
 | `cargo fmt --all -- --check` | ❌ **标红（非本批引入）**：4 文件不净——`gateway/src/domain_context.rs`、`engine/runtime-assembly/tests/user_domain_isolation.rs`（**W3 线在途**，本批禁入）、`gateway/src/session_settings.rs`、`capabilities/tools/src/lib.rs`（并行在途）。本批**零 Rust 文件触碰**（`git status` 佐证），按「他人在途文件不乱动」不代改 |
 | `pnpm check` | ✅ svelte-check **0 errors, 0 warnings** |
 | `pnpm test` | ✅ **74/74 套件全绿**（终态复跑过两次，含交付前最后一处视图微调之后） |
@@ -151,5 +151,5 @@ query ── `#` 前缀 ──▶ handleCapture ──▶ captureToMemoryStream 
 
 - 不留 TODO/备忘注释；`quick-capture.ts` 每个符号名实相符（发号/入账/回看/拒帧各有其名）；
 - 未改 `appendMemoryEpisode` 签名与语义（既有 MemoryView/深流调用方零回归，pnpm 73 套件为证）；
-- 未动 `crates/engine/memory` 与一切禁区文件；W3/J1/I1 线战场零触碰；
+- 未动 `crates/engine/memory` 与一切禁区文件；W3/J1/I1 线战场零触碰（历史口径（2026-10）：I1 线 = 现 P 轴 P1 线，审计修 D13）；
 - 备注级标注是真实一等字段序列化（来源/分级），不是暗分类；可逆解析缝随行交付。

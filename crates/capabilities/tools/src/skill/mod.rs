@@ -1,4 +1,5 @@
-//! 书→技能沉淀 (I 轴吸收自动化 I1) —— 知识吸收成可调用技能的流水线。
+//! 书→技能沉淀 (P 轴吸收自动化 P1, 原 I 轴/I1 —— 2026-10-16 字母双占统一改名, 见
+//! `docs/04-internal/backend-enhancement/00-backlog.md` D13) —— 知识吸收成可调用技能的流水线。
 //!
 //! 四件套 (管线图与测试证据见 `docs/04-internal/backend-enhancement/I1-skill-distill-delivery.md`):
 //!

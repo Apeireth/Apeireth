@@ -226,7 +226,7 @@ per R9 spec §9.4 (frontend 对接 checklist) + R11 spec §11 (frontend 对接�
 
 ### 3.6 第 6 周: 部署 + release
 
-- [ ] **5 重守门** 自动验证 (`.github/workflows/o6-anchor.yml`, per `FINAL-HANDOFF-V2.0.0-RC.1.md:113-121`)
+- [ ] **5 重守门** 自动验证 (`.github/workflows/o6-anchor.yml`, per `FINAL-HANDOFF-V2.0.0-RC.1.md:113-121`)（口径注（审计修 B-04）：此处 5 重 = CI 五门，非守门级数；守门级数现值 = 7 重守门 v7，见 ROADMAP §13）
 - [ ] **RC-11 migration 真生产验证** (1-2 天, 有 key 但没 v1 db 验证, per R9 spec §9.3):
   - [ ] `python scripts/migrate_v1_to_v2_encrypted.py --src <v1_db> --dst <v2_db>`
   - [ ] `cargo test -p apeireth-migration --locked`

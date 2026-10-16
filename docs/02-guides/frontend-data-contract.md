@@ -859,9 +859,9 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 **前端消费现状**：0 消费（待上屏——自述域节仅工具面自述；域/用户管理的 HTTP 面已由 V2-b 备好，见 §10.6/§10.7，UI 上屏仍挂债栏 D10）。
 
-### 10.4 技能卡 `SkillCard`（I1 书→技能沉淀，**在建**）
+### 10.4 技能卡 `SkillCard`（P1 书→技能沉淀，**在建**；原 I1，审计修 D13 改名）
 
-出处：`crates/capabilities/tools/src/skill/card.rs`（`SkillCard`/`SkillCardDraft`/`SkillSource`/`SkillSourceKind`）。**状态：I1 线在途**（交付记录随线落盘，[I 轴分期](../04-internal/backend-enhancement/I-absorption-automation.md) 分期表）——前端**严禁提前消费**，形状演进以 `card.rs` 为准。
+出处：`crates/capabilities/tools/src/skill/card.rs`（`SkillCard`/`SkillCardDraft`/`SkillSource`/`SkillSourceKind`）。**状态：P1 线在途**（交付记录随线落盘，[P 轴分期](../04-internal/backend-enhancement/I-absorption-automation.md) 分期表——文件名保留旧名防断链）——前端**严禁提前消费**，形状演进以 `card.rs` 为准。
 
 ```json
 {

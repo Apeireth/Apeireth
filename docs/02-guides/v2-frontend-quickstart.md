@@ -217,7 +217,7 @@ per spec §9.4 + `frontend/companion-desktop/README.md:111-117` 已知 follow-up
 - `cargo test --workspace --locked` (0 FAILED)
 - `cargo test -p apeireth-migration --locked` (RC-11 集成测试)
 - `pnpm check` (companion-desktop svelte-check, per `frontend/companion-desktop/README.md:67`)
-- 5 重守门自动验证 (`.github/workflows/o6-anchor.yml`, per `FINAL-HANDOFF-V2.0.0-RC.1.md:113-121`)
+- 5 重守门自动验证 (`.github/workflows/o6-anchor.yml`, per `FINAL-HANDOFF-V2.0.0-RC.1.md:113-121`)（口径注（审计修 B-04）：此处 5 重 = CI 五门（clippy / tests / legacy / LOCKED / 哲学锚表头），非守门级数；守门级数现值 = 7 重守门 v7，见 ROADMAP §13）
 
 ---
 

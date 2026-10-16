@@ -96,7 +96,7 @@ pub const ENABLE_GIT_WRITE_AUTO_PASS_L1_ENV: &str = "APEIRETH_ENABLE_GIT_WRITE_A
 // 放行档), plan 只读零审批。
 pub const ENABLE_WORKTREE_PLAN_ENV: &str = "APEIRETH_ENABLE_WORKTREE_PLAN";
 pub const ENABLE_WORKTREE_APPLY_ENV: &str = "APEIRETH_ENABLE_WORKTREE_APPLY";
-// 书→技能沉淀旋钮 (I 轴吸收自动化 I1): `tool.skill_distill` 是写文件面 ——
+// 书→技能沉淀旋钮 (P 轴吸收自动化 P1): `tool.skill_distill` 是写文件面 ——
 // 子依赖 file_write 唯一写总闸 (fail-closed, 单独设本旋钮而写总闸关 = 无效果),
 // 注册 + grant + 审批档 (每次沉淀都人批, 无自动放行档); `tool.skill_search`
 // 是只读档 (零审批、零写盘), 独立旋钮不依赖写总闸。

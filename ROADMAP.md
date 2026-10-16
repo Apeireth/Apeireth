@@ -64,6 +64,8 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 ## 3. 当前状态（v2.0.0-rc.4 现行；下方各批注记为带日期历史真账）
 
 > **2026-10-16 文本可信度批注记（现行口径，审计修 B-01/B-02/B-03）**：workspace.version = **2.0.0-rc.4**；workspace = **20 members（19 crates + 1 bench harness）**；测试基线单一真源见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-16 口径：199 套件 / 5360 passed / 0 failed / 22 ignored）。下文带日期注记保留当时口径不追溯改写。
+>
+> **2026-10-16 口径尾账批注记（现行口径，审计修 B-04 / B-05 / D13 / F-02）**：守门级数现值 = **7 重守门 v7**（1-5 重嵌套 + 6 Colang DSL + 7 Superpowers Skill Guard），唯一现值出处 = §13「守门级数」行；13 键现值表述 = **13 键 LOCKED**；R11 baseline 3 值**无公开复现入口，仅供内部对照**；吸收自动化轴统一改名 **P 轴（Practice 沉淀）**（原 I 轴，因 00-backlog 想法清单 #I 字母双占，见 00-backlog D13）。其余文档旧口径一律加「历史口径（日期）」标注、不追溯改写。四件对照表与 F-02 去留方案表见 [docs/04-internal/backend-enhancement/audit-gap-caliber-hygiene-2026-10-16.md](docs/04-internal/backend-enhancement/audit-gap-caliber-hygiene-2026-10-16.md)。
 
 > **2026-09-05 对账批注记**：下表数字为本批实测基线（HEAD `7647d2c9`）。workspace 已为 **17 crates**（`0e542d03` 于 2026-09-04 抽出 runtime-assembly 后，此前"16 crates"口径作废）；测试 **3120 passed / 0 failed / 13 ignored**；workspace.version = **2.0.0-rc.1**（2026-08-30 RC1 发布起，旧 1.2.0 双轴制终结）。
 
@@ -82,7 +84,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | Workspace | **workspace = 20 members（19 crates + 1 bench harness `benches`）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui；engine 第 7 个 = `crates/engine/runtime-assembly`，第 8 个 = `crates/engine/guard`（2026-10-06 协作者批）） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
 | 代码量 | crates/ 内 .rs：src-only **147,732 行**（406 文件）+ tests **25,972 行**（73 文件）（2026-09-05 实测，不含 legacy/）；前端 companion-desktop 61 文件 ~21k 行（不含 node_modules/dist） |
 | 测试 | **单一真源见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)**（2026-10-16 口径：199 套件 / 5360 passed / 0 failed / 22 ignored；命令与口径定义同文件）；前端 `pnpm test` **74/74 套件**（2026-10-13 亲跑）。历史口径（带日期，不追溯改写）：2026-10-13 5243/190、2026-09-30 rc.3批 4829/161、2026-09-28 清污批 4671、2026-09-27 MCP批 4668、清零批 4585、尾款批前 3907、2026-09-26 3662/130、2026-10-06 W2 批 3418/19、2026-09-05 3120/13 |
-| CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 现值 = **2.0.0-rc.4**（随 release 推进） |
+| CI / 守门 | 守门全绿（**守门级数现值 = 7 重守门 v7**，含 Colang DSL + Superpowers Skill Guard，见 §13；历史口径（2026-09-05 亲跑）：5 重 CI 门全绿）+ `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 现值 = **2.0.0-rc.4**（随 release 推进） |
 | **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
 | **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |
 
@@ -187,14 +189,14 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | 生命架构 v4 | R11 / R14 | 🔒 LOCKED |
 | 哲学层升级 v4.1 | R11 / R14 | 🔒 LOCKED |
 | 6→9 哲学锚 (S-1~O-5 八项 + **O-6 永远追求最优 NEW 2026-08-27**, 三阶审查 (总体 > 系统 > 架构) + 不做借口清单 + 可检查信号) | 升 9 锚, 哲学锚 #9 登记批次 O-6 重构启动 | 🔒 LOCKED |
-| 12 键 → 13 键编译期 hardcode (+ PHL-07 NotUnoptimizable NEW) | 升 13 键, R125-12 P0-3 done; **v2 角色: 哲学标准 / 5 原则洋葱判别词汇表（`VERDICT_KEYS_BY_PRINCIPLE`）**，不再是 runtime 强制机制（`RUNTIME_ENFORCED = false`） | 🔒 LOCKED |
-| 5 重守门 → 6 重 v6 → 7 重 v7 (+ Colang DSL + Superpowers Skill Guard) | 升 7 重, P1-3 retry done | 🔒 LOCKED |
+| **13 键**（🔒 LOCKED 现值；表述与历史文档「13 键 LOCKED」统一，审计修 B-05） | 历史口径（v4.1 时代）：12 键 → 13 键编译期 hardcode (+ PHL-07 NotUnoptimizable NEW)，升 13 键, R125-12 P0-3 done; **v2 角色: 哲学标准 / 5 原则洋葱判别词汇表（`VERDICT_KEYS_BY_PRINCIPLE`）**，不再是 runtime 强制机制（`RUNTIME_ENFORCED = false`） | 🔒 LOCKED |
+| **守门级数（现值 = 7 重守门 v7**：1-5 重嵌套 + 6 Colang DSL + 7 Superpowers Skill Guard；**现值唯一出处 = 本行**，审计修 B-04） | 历史沿革（历史口径）：5 重守门 → 6 重 v6 → 7 重 v7 (+ Colang DSL + Superpowers Skill Guard)，升 7 重, P1-3 retry done | 🔒 LOCKED |
 | 双洋葱 → 三洋葱 (+ DSL 洋葱, R125-5 done) | 升三洋葱 | 🔒 LOCKED |
 | 9 organ 文件名 + 入口签名 0 改 | TUI 9 organ 内部可改（per R148 LOCKED 撤销扫尾原则） | 🔒 软 LOCKED |
-| R11 baseline 3 值 (0.8682/0.8532/0.9063) 数字严守 | R11 ASI R-Measure | 🔒 LOCKED (A1 仍严守) |
+| R11 baseline 3 值 (0.8682/0.8532/0.9063) 数字严守 | R11 ASI R-Measure；**无公开复现入口，仅供内部对照**（const 源仅存 `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44`，active workspace 无 const source，复现入口需 R12 spec 重审后另立；数字本身 LOCKED 0 触碰。审计修 B-05） | 🔒 LOCKED (A1 仍严守) |
 
 详见 [`docs/01-architecture/philosophy.md`](docs/01-architecture/philosophy.md) + [`docs/01-architecture/vision.md`](docs/01-architecture/vision.md) + [`docs/archive/conventions/09-anchor.md`](docs/archive/conventions/09-anchor.md)。
 
 ---
 
-_本 ROADMAP 由文档对账批重写 (2026-08-27)，反映 reconstruct_v2 工程重构完成 + main 晋升 + v2.0.0-alpha.1；2026-09-05 对账批更新为实测基线（17 crates / 3120 tests / workspace.version 2.0.0-rc.1 / rc.1 tag 已打，历史口径）。2026-10-16 文本可信度批对账：现行口径 = workspace.version 2.0.0-rc.4 / workspace 20 members（19 crates + bench harness）/ 测试基线改引 docs/03-reference/test-baseline.md（审计修 B-01/B-02/B-03）。思想层（9 锚 / 13 键 / 三洋葱 / 9 organ / R11 baseline 3 值）LOCKED 保留。v1.0 时代详单见 `docs/archive/roadmap/`。_
+_本 ROADMAP 由文档对账批重写 (2026-08-27)，反映 reconstruct_v2 工程重构完成 + main 晋升 + v2.0.0-alpha.1；2026-09-05 对账批更新为实测基线（17 crates / 3120 tests / workspace.version 2.0.0-rc.1 / rc.1 tag 已打，历史口径）。2026-10-16 文本可信度批对账：现行口径 = workspace.version 2.0.0-rc.4 / workspace 20 members（19 crates + bench harness）/ 测试基线改引 docs/03-reference/test-baseline.md（审计修 B-01/B-02/B-03）。思想层（9 锚 / 13 键 / 三洋葱 / 9 organ / R11 baseline 3 值）LOCKED 保留。v1.0 时代详单见 `docs/archive/roadmap/`。2026-10-16 口径尾账批对账：守门级数现值 = 7 重守门 v7（§13 唯一现值）、13 键 LOCKED 表述统一、R11 baseline 3 值标注「无公开复现入口，仅供内部对照」、吸收自动化轴改名 P 轴（Practice 沉淀）（审计修 B-04 / B-05 / D13 / F-02）。_

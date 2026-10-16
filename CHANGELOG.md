@@ -554,13 +554,13 @@
     | 2 + 3 | `f2cfaa76` | Refactor-2+3 Experience + Perception traits → plugin |
     | 5 | `ed0a0913` | 真 core drain 完成 (Per 子代理 A 反馈 O-6 #5 决策) |
     | 7 | `7d48c76e` | Refactor-4 KeyringCredentialResolver 重命名 |
-    | 8 + 9 | `240f3277` | O-6 5 重守门 workflow + cargo test --doc workflow |
+    | 8 + 9 | `240f3277` | 历史口径（2026-08-27）：O-6 5 重守门 workflow + cargo test --doc workflow |
     | 10 + 11 + 12 | `c55e3911` | 文档位置 + kernel re-export + 统一 error trait |
     | (alpha arch) | `d42d7c1e` | Refactor-5 core drain 真正重定义 (无 O-6 编号, 子代理 ledger 标 "alpha arch") |
     | **23** | **`38cc1039` (本批)** | **RC-10 line header AAD tamper 保护 (子代理 C 建议 #5 兑现)** |
     | (撤回) | `ed0a0913` | 哲学锚教训撤回 (子代理 D 撤回, 不上升为永久规则) |
   - **0 装诚实 ledger 核对** (子代理 D actionable #2 修正): 真兑现 **11 个编号 (1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 23) + 1 个无编号 (alpha arch) = 12 项**. 子代理 B 报告 "23" 是 12 项总编号之和误读. ledger 源 `docs/04-internal/o6-session-log-2026-08-27.md` §1 阶段 3 表.
-  - 5 重守门 (`.github/workflows/o6-anchor.yml`): clippy 0 警告 / workspace tests 0 失败 / legacy compat path < 100 引用 / 13 键 LOCKED + 9 哲学锚 + workspace.version + R11 baseline 0 触碰 / 哲学锚表头 0 减
+  - 历史口径（2026-08-27）：5 重守门 (`.github/workflows/o6-anchor.yml`): clippy 0 警告 / workspace tests 0 失败 / legacy compat path < 100 引用 / 13 键 LOCKED + 9 哲学锚 + workspace.version + R11 baseline 0 触碰 / 哲学锚表头 0 减（守门级数现值 = 7 重守门 v7，见 ROADMAP §13，审计修 B-04）
   - 详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `docs/01-architecture/philosophy.md` §O-6 + `docs/04-internal/o6-session-log-2026-08-27.md` §1 (ledger 源)
 - **✅ 13 键 verdict cache 降级决策 (P0 拍板完成, 2026-08-27)**:
   - 5 维分析: 安全性 (0 模型污染路径) / 延迟 (6 数量级差, hook 是 O(μs) 而 self-introspection 是 O(seconds)) / 正确性覆盖 (与 hook 少量互补) / 审计 (两者相当) / 场景 D 互补 (已被 SelfAssessmentCache + 多 agent 互审覆盖) → 加权 0.28/5
@@ -862,7 +862,7 @@
 - **24 LOCKED crate mtime baseline** 严守 (B1)
 - **8 哲学锚升级** (B5, 6→8: 增 S-3 流程自化 + O-1 安全优先)
 - **V0.5 25→30 维升级** (B3)
-- **6 重守门 v6 → v7 升级** (B4)
+- 历史口径（2026-08-10）：**6 重守门 v6 → v7 升级** (B4)（守门级数现值 = 7 重守门 v7，见 ROADMAP §13，审计修 B-04）
 - **13 键 verdict cache** (A3, 12 原 12 + PHL-07 = 13 键)
 - **Library v1.0 礼物** (30 经典书 + 100+ 论文 + 50+ 视频 + 10+ 课程 + 10+ hub)
 - **整合 #5.x commit 系列** (5.1 src/ + 5.2 docs/ + 5.3 R125-R137 era reports/ + 5.4 R129-R163 era reports/ + 5.5 library/v1.0/ 准备)

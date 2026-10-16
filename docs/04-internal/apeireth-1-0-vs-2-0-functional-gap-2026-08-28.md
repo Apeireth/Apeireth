@@ -289,7 +289,7 @@ Author:          主代理 Mavis
 - **并行**: 派 5-6 sub-agent 真调研 (每个 ~2-3 周调研 + ~2-4 周真实施)
 - **不重叠**: 吸收链 per Round 10 5 真调研 + research/source 已吸收
 - **0 装诚实标**: 必含, 不假装 OK
-- **5 重守门 baseline**: cargo test + clippy + LOCKED 0 触碰
+- **5 重守门 baseline**: cargo test + clippy + LOCKED 0 触碰（历史口径（2026-08-28）：5 重守门；守门级数现值 = 7 重守门 v7，见 ROADMAP §13，审计修 B-04）
 
 ### 4.2 派单顺序 (per O-6 + 用户 directive "多派几个")
 

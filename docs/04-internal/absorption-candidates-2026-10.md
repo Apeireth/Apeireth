@@ -48,7 +48,7 @@
 ## 二、TOP 吸收候选（机制级，可直接开工）
 
 1. **随手记（Quick Capture）**——随记习惯本身的产品化：全局快捷入口（快捷助手窗已有！）一键记一条→入记忆流（未整理原料，与"教训/里程碑"分级呼应）；气质对齐愿景小说"零零碎碎的日子"。**建议并入 W5/C 轴**（记忆深化的入口面）；
-2. **书→技能流水线**（book-to-skill 假说）：把文档/书/报告**沉淀为可调用技能/知识卡**——恰是 Apeireth 吸收战役的自动化（"吸收一切优秀实践"变成它的本能）。**建议立 I 轴（吸收自动化）**；
+2. **书→技能流水线**（book-to-skill 假说）：把文档/书/报告**沉淀为可调用技能/知识卡**——恰是 Apeireth 吸收战役的自动化（"吸收一切优秀实践"变成它的本能）。**建议立 I 轴（吸收自动化）**（历史口径（2026-10）：I 轴；现统一为 P 轴（Practice 沉淀），审计修 D13）；
 3. **历史即记忆**（Atuin 假说）：操作痕迹（命令/文档改动/浏览）自动进记忆流供回取——"日子自动成忆"。**建议并入 W5/C 轴**；
 4. **终身记忆结构**（SimpleMem 假说）：C 轴"夜间整编"的算法参照（论文级结构，待研后吸收）；
 5. **星群同构参照**（nanoMuse/蜂群）：W3 星群调度的产品参照（多端一人一伙伴）。
@@ -63,11 +63,16 @@ TOP5 机制已全部入 V1-V6 施工序（V3=双引擎关怀/TTS、V4=人格层/
 
 ## 四、登记
 
-- 00-backlog 新增 **I 轴（吸收自动化）** 一行；随手记/历史即记忆 → C 轴分期注记；
+- 00-backlog 新增 **I 轴（吸收自动化）** 一行（历史口径（2026-10）：I 轴一行；现为 P 轴（Practice 沉淀）一行，审计修 D13）；随手记/历史即记忆 → C 轴分期注记；
 - 吸收落地后回写 `docs/04-internal/absorption-ledger.md`（台账先例）。
 
 **落地回写（2026-10-13）**：TOP 候选 2「书→技能流水线」= **I1 已交付**（技能卡模型 +
 `tool.skill_distill` 沉淀管线 + `tool.skill_search` L2 封套调用面 + 治理档），
-分期与后续各期见 [I 轴分期](backend-enhancement/I-absorption-automation.md)，交付实录见
+分期与后续各期见 [I 轴分期](backend-enhancement/I-absorption-automation.md)（历史口径（2026-10-13）：I 轴分期；现为 P 轴分期（Practice 沉淀），审计修 D13），交付实录见
 [I1-skill-distill-delivery](backend-enhancement/I1-skill-distill-delivery.md)；
 TOP 候选 1 随手记已由 C 轴入口面交付（[quick-capture-delivery](backend-enhancement/quick-capture-delivery.md)）。
+
+> **命名注记（审计修 D13，2026-10-16 口径尾账批）**：本文是 2026-10 分诊/登记记录，正文
+> 「I 轴 / I1」为立轴与交付当时的历史口径（2026-10），原值保留不追溯改写；现统一为
+> **P 轴（Practice 沉淀）/ P1**（吸收自动化，见 00-backlog D13 与想法清单 P 行）。
+> 链接文件名保留旧名（`I-absorption-automation.md` / `I1-skill-distill-delivery.md`）避免断链。

@@ -1,15 +1,17 @@
-# I1 书→技能沉淀 —— 交付说明（技能卡模型 + 沉淀管线 + L2 封套调用面）
+# P1（原 I1）书→技能沉淀 —— 交付说明（技能卡模型 + 沉淀管线 + L2 封套调用面）
 
 > `Status: ✅ 已交付（2026-10-13）`
-> I 轴（吸收自动化）第一件：把知识吸收成**可调用技能**——「吸收战役」的产品化。
-> 分期与后续各期见 [I-absorption-automation.md](I-absorption-automation.md)；
+> **别名注记（审计修 D13，2026-10-16 口径尾账批）**：本文件名 `I1-skill-distill-delivery.md`
+> **保留旧名避免断链**；轴名与分期已统一改 **P 轴（Practice 沉淀）/ P1-P4**（原 I 轴 / I1-I4）。
+> P 轴（Practice 沉淀，原 I 轴（吸收自动化））第一件（P1，原 I1）：把知识吸收成**可调用技能**——「吸收战役」的产品化。
+> 分期与后续各期见 [I-absorption-automation.md](I-absorption-automation.md)（P 轴分期，文件名保留旧名）；
 > 上游候选见 [吸收候选池](../absorption-candidates-2026-10.md)（TOP 候选 2「书→技能流水线」）。
 >
 > **战场声明（write_scope）**：主战场 = `crates/capabilities/tools/src/skill/**`（新件 6 文件）+
 > 六个新测试套件；随行 = `tools/src/lib.rs`（模块登记）、`tools/Cargo.toml`（+ foundation/orchestration，
 > 共享引用封套复用）、`tools/src/worktree_plan.rs`（`fnv1a64` 可见性 `pub(crate)`，零复制复用，行为零变）、
 > `runtime-assembly` 四处接线（`tool_modules` / `production` / `self_status_source` / `permission_preset`）、
-> `cli/src/lib.rs`（旋钮 + 授权 + 配置装配）；文档随行 = 本文 + I 轴分期 + user-manual / api /
+> `cli/src/lib.rs`（旋钮 + 授权 + 配置装配）；文档随行 = 本文 + P 轴分期 + user-manual / api /
 > capability-switch-power-audit + 候选池与台账回写。**禁区零触碰**（frontend/**、CHANGELOG、
 > .github/**、docs/design/**、HANDOFF-NOTES、kani playbook、research/verification、
 > memory `reflexion`/`river_topology`、W3 与 J1 战场）。
@@ -115,10 +117,10 @@ build_skill_disclosure: 逐卡 UntrustedEnvelope（固定警告头 + 显式边�
 --all-targets --locked -j 2 -- -D warnings` / `cargo fmt --all -- --check` /
 `scripts/check-neutral-terms.ps1` —— 复跑输出见 §7。
 
-## 6. I 轴分期更新
+## 6. P 轴分期更新
 
-- [I-absorption-automation.md](I-absorption-automation.md)：I1（本批 ✅）→ I2 调用面深化
-  （TurnStart 触发注入 + 技能卡生命周期）→ I3 历史即记忆（与 C 轴协同）→ I4 技能生态
+- [I-absorption-automation.md](I-absorption-automation.md)（P 轴分期，文件名保留旧名防断链）：P1（本批 ✅，原 I1）→ P2 调用面深化
+  （TurnStart 触发注入 + 技能卡生命周期）→ P3 历史即记忆（与 C 轴协同）→ P4 技能生态
   （船坞市场面 + 星群匿名技能共享）；
 - 随手记已由 C 轴入口面交付（[quick-capture-delivery.md](quick-capture-delivery.md)），本轴不重复；
 - 台账回写：[质感吸收台账](../absorption-ledger.md)；开关审计表随行：

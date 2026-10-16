@@ -553,7 +553,7 @@ impl CapabilityProvider for SkillDistillModule {
     }
 }
 
-/// Module providing the read-only skill search tool (`tool.skill_search`, I1 调用面).
+/// Module providing the read-only skill search tool (`tool.skill_search`, P1 调用面; 原 I1, 审计修 D13 改名).
 ///
 /// 检索式注入 (触发词命中 / 按需拉取) 经 **L2 封套披露**进上下文 (共享引用
 /// 封套 + 共享预算, 绝不无差别全量注入)。**只读档零审批** (无 ask 档钩子,

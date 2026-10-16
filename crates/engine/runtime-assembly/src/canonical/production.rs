@@ -240,7 +240,7 @@ pub struct ProductionModulesConfig {
     /// [`Self::file_write`] (唯一写总闸, 注册即闸) + 工作区根 + 技能库目录。
     /// **审批档**: 每次沉淀都人批 (无自动放行档)。默认关 (opt-in)。
     pub skill_distill: bool,
-    /// Register the read-only skill search tool (`tool.skill_search`, I1 调用面)。
+    /// Register the read-only skill search tool (`tool.skill_search`, P1 调用面; 原 I1, 审计修 D13 改名)。
     ///
     /// 检索式注入 (触发词命中 / 按需拉取) 经 L2 封套披露进上下文; 只读档
     /// 零审批。注册条件 = 本开关 + 技能库目录 (不依赖写总闸)。默认关 (opt-in)。
@@ -512,7 +512,7 @@ impl ProductionModules {
             }
         }
 
-        // 书→技能沉淀 (I 轴吸收自动化 I1, 默认关): 两级工具面。`tool.skill_distill`
+        // 书→技能沉淀 (P 轴吸收自动化 P1, 默认关): 两级工具面。`tool.skill_distill`
         // 是写文件面 —— 注册条件 = 开关 + `file_write` 唯一写总闸 + 工作区根 +
         // 技能库目录 (注册即闸, 与 `tool.apply_patch` 同受一闸), 审批档 = 每次
         // 沉淀都人批 (无自动放行档, 审批卡载荷 = 技能卡摘要); `tool.skill_search`

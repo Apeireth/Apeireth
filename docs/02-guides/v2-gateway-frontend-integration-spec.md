@@ -419,7 +419,7 @@ per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md:64-66`: 13 键降级决策 = 
 
 ### 7.3 8 守门 vs Self-Disable 保护
 
-per `docs/04-internal/v2.0.0-release-path.md:55-56`: 工程规范 5 重守门 (clippy / tests / legacy compat / 13 键 LOCKED / 哲学锚表头).
+per `docs/04-internal/v2.0.0-release-path.md:55-56`: 工程规范 5 重守门 (clippy / tests / legacy compat / 13 键 LOCKED / 哲学锚表头).（口径注（审计修 B-04）：此处 5 重 = CI 五门，非守门级数；守门级数现值 = 7 重守门 v7，见 ROADMAP §13）
 
 **Self-Disable**: 真生产时如遇 clippy 失败 / tests 失败 / 13 键泄漏, 系统 self-disable (per 哲学锚 O-1 安全优先).
 
@@ -447,7 +447,7 @@ per `docs/04-internal/v2.0.0-release-path.md:30-36`:
 - ✅ `git tag v2.0.0-rc.1` (HEAD `b9026186` 当时, 已拍板, per 子代理 R9 必读 #1; 当前 HEAD `7d990297` Round 6 完)
 - ⏳ `git tag v2.0.0` (frontend 对接后, 估 2027-01-08 至 2027-03 月, per 子代理 L 估)
 
-### 9.2 真生产前必跑 5 重守门 (per `FINAL-HANDOFF-V2.0.0-RC.1.md:114-121`)
+### 9.2 真生产前必跑 5 重守门 (per `FINAL-HANDOFF-V2.0.0-RC.1.md:114-121`)（口径注（审计修 B-04）：此处 5 重 = CI 五门，非守门级数；守门级数现值 = 7 重守门 v7，见 ROADMAP §13）
 
 ```bash
 cargo clippy --workspace --all-targets --locked -- -D warnings  # ✅ 0 警告

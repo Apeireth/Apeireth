@@ -111,7 +111,7 @@ description: "{when to use}"      # 严格限定
 
 ## 6. 8 硬墙 0 越界 verify
 
-跟 `library/v1.0/README.md` §6 1:1 严守. 0 越界 8 硬墙 (B2 1.2.0 / A1 baseline 3 值 / B1 24 LOCKED / B5 8 哲学锚 / B3 V0.5 / B4 6 重守门 v6 / A3 13 键 / C1 0 commit / C2 0 装 PASS / C3 v6 / 0 push).
+跟 `library/v1.0/README.md` §6 1:1 严守. 0 越界 8 硬墙 (B2 1.2.0 / A1 baseline 3 值 / B1 24 LOCKED / B5 8 哲学锚 / B3 V0.5 / B4 6 重守门 v6 / A3 13 键 / C1 0 commit / C2 0 装 PASS / C3 v6 / 0 push).（历史口径（v1.0 时代，2026-08）：B4 6 重守门 v6；守门级数现值 = 7 重守门 v7，见 ROADMAP §13，审计修 B-04）
 
 ---
 

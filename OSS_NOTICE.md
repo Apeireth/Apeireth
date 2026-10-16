@@ -152,7 +152,7 @@ THIRD-PARTY-NOTICES.md
 |---|------|----------|-----------|----------------|--------|
 | 8 | **LiteLLM** (BerriAI/litellm) | ⏳ 0 files (限流持续 15+ min) | R125-1 LiteLLM Provider Registry 骨架 | P6-1 (R127-2 阶段 A, 21:18 派) | 决策 #22 §3.2 R125-1 + 决策 #56 §2.1 |
 | 9 | **opencode** (sst/opencode) | ⏳ 0 files (限流持续) | R125-12 OpenCode 子代理 + B7 9 organ 内部 fn | P6-2 (R127-2 阶段 A, 21:18 派) | 决策 #22 §3.2 R125-12 + 决策 #33 §2.7 B7 + 决策 #56 §2.1 |
-| 10 | **Guardrails** (NVIDIA/NeMo-Guardrails) | ⏳ 0 files (git submodule 0 init) | R125-5 NVIDIA Guardrails Colang DSL + B4 6 重 v6 | P6-3 (R127-2 阶段 A, 21:18 派) | 决策 #22 §3.2 R125-5 + 决策 #33 §2.4 B4 + 决策 #56 §2.1 |
+| 10 | **Guardrails** (NVIDIA/NeMo-Guardrails) | ⏳ 0 files (git submodule 0 init) | R125-5 NVIDIA Guardrails Colang DSL + B4 6 重 v6（历史口径（2026-08）：6 重 v6；守门级数现值 = 7 重守门 v7，见 ROADMAP §13，审计修 B-04） | P6-3 (R127-2 阶段 A, 21:18 派) | 决策 #22 §3.2 R125-5 + 决策 #33 §2.4 B4 + 决策 #56 §2.1 |
 
 **License 待补 (限流结束后由 P6-1/2/3 报告补充)**:
 - LiteLLM: 待 P6-1 真实施后 verify (通常 MIT)
@@ -305,7 +305,7 @@ per Apache License 2.0 §4(d):
 
 - **BerriAI/litellm** (待 verify) — Provider Registry, P6-1 重试中
 - **sst/opencode** (待 verify) — 子代理, P6-2 重试中
-- **NVIDIA/NeMo-Guardrails** (待 verify) — 6 重守门 v6, P6-3 重试中
+- **NVIDIA/NeMo-Guardrails** (待 verify) — 6 重守门 v6, P6-3 重试中（历史口径（2026-08）：6 重守门 v6；守门级数现值 = 7 重守门 v7，见 ROADMAP §13，审计修 B-04）
 
 ### 8.3 借鉴 1/11 永久跳过 (本 OSS_NOTICE.md §3 详述)
 

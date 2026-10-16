@@ -33,3 +33,8 @@
 
 - 批 L1：协同模式+死亡解剖（最痛的先挖）；批 L2：设计裁定+方法论；批 L3：产品洞察+对外指南；
 - 素材来源：本会话记录 + 各批交付文档的"诚实注/报备/接棒清单"（已有大量半成品素材）。
+
+> **执行进度注记（2026-10-16）**：
+> 批 L1 ✅（协同模式矿 + 死亡解剖矿 → [01-collaboration-patterns.md](../engineering-experience/01-collaboration-patterns.md) / [02-failure-anatomy.md](../engineering-experience/02-failure-anatomy.md)，精华已回写宪章 §六）；
+> 批 L2 ✅（设计裁定矿 + 方法论矿 → [03-design-verdicts.md](../engineering-experience/03-design-verdicts.md) / [04-methodology.md](../engineering-experience/04-methodology.md)，含裁定↔配方对照速查表）；
+> 批 L3 留待（产品洞察矿 + 对外可读版指南）。

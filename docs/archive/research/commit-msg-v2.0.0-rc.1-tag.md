@@ -32,7 +32,7 @@ P-arch (2026-08-28) v2.0.0-rc.1 release 路径 (per FINAL-HANDOFF §5.3 + 9-orga
 
 ## 0 装诚实真账 (子代理 Z 独立审计触发主代理亲做修正)
 
-### ✅ 真兑现 (子代理 Z 核验 5 重守门)
+### ✅ 真兑现 (子代理 Z 核验 5 重守门)（历史口径（2026-08-28）：5 重守门；守门级数现值 = 7 重守门 v7（ROADMAP §13），审计修 B-04）
 1. **9 organ 全部真实现** (整合 #2 commit `bbf70293` 一次性拍板 5 sub-agent working tree, 0 装诱导预防)
 2. **1713 tests passed 0 FAILED** (子代理 Z 亲跑, workspace 96 test result lines, 全部 0 failed)
 3. **0 clippy 警告** (子代理 Z 亲跑, 主代理亲做 R4 clippy fix)
@@ -87,7 +87,7 @@ P-arch (2026-08-28) v2.0.0-rc.1 release 路径 (per FINAL-HANDOFF §5.3 + 9-orga
 - ✅ **9 organ 全部真实现** (整合 #2 commit `bbf70293` 一次性拍板 5 sub-agent working tree)
 - ✅ **1713 tests passed 0 FAILED + 0 clippy 警告** (子代理 Z 亲跑)
 - ✅ **哲学锚 9 项 LOCKED 0 触碰** (子代理 Z 独立核验 + 9 sub-agent 独立标)
-- ✅ **工程规范 5 重守门** (clippy / tests / legacy / 13 键 / 哲学锚表头)
+- ✅ **工程规范 5 重守门** (clippy / tests / legacy / 13 键 / 哲学锚表头)（历史口径（2026-08-28）：5 重守门；守门级数现值 = 7 重守门 v7（ROADMAP §13），审计修 B-04）
 - ✅ **0 装诚实修正 4 文档** (子代理 Z 审计触发主代理亲做 — git conflict + HEAD 数字 + TL;DR 5/9→9/9)
 - ✅ **5 actionable 全 done** (per 子代理 D handoff)
 - ⏳ **真生产前阻塞 #2**: frontend companion-desktop 对接 (4-6 周, 估 2027-Q1 启动)
@@ -95,7 +95,7 @@ P-arch (2026-08-28) v2.0.0-rc.1 release 路径 (per FINAL-HANDOFF §5.3 + 9-orga
 按"不要等, 持续推进" — 主代理亲做 v2.0.0-rc.1 release tag 拍板 (workspace 健康, 9 organ 真兑现, 0 装诚实真账, 4 文档已修). **v2.0.0 release** 估 5-7 月 (子代理 L 估 2027-01-08 至 2027-03 月, frontend 对接 4-6 周后).
 
 **0 装诚实 vs 假装** (主代理自评, 子代理 Z 独立视角触发):
-- ✅ **真兑现**: 9 organ + 哲学锚 + 5 重守门 + 5 actionable + 4 文档修正
+- ✅ **真兑现**: 9 organ + 哲学锚 + 5 重守门 + 5 actionable + 4 文档修正（历史口径（2026-08-28）：5 重守门；守门级数现值 = 7 重守门 v7（ROADMAP §13），审计修 B-04）
 - ⚠️ **假装标**: 整合 #2 commit message "无新外部 dep" 标错 (真 = 5 新外部 dep), **未修** (commit 已 push)
 - ✅ **撤回 broken state**: 主代理亲做 (`git reset HEAD --` 撤回 R6 commit 错, 0 装诱导预防)
 - ✅ **整合 #2 commit 拍板**: 5 sub-agent working tree 一次拍板, **未逐 sub-agent 审细节** (子代理 Z 标"整合 #2 拍板太粗, 0 装诱导 prevention 本身是 0 装诱导")
