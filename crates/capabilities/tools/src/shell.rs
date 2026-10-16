@@ -1316,7 +1316,11 @@ mod tests {
         #[cfg(not(windows))]
         let command = "pwd";
 
-        let old_tool = ShellTool::new(TrustedShellConfig::new(dir_a.clone()));
+        // 本测主题 = cwd 冻结 (冻结计划不随新配置漂移), 与沙箱无关。沙箱开
+        // 启要求 FilesystemIsolation/Network Enforced —— Linux 无 AppContainer
+        // 等强制机制时 fail-closed (2026-10-15 CI 实测), 故显式关沙箱隔离
+        // 变量; 沙箱默认开的行为由 sandbox_default_on_and_knob_turns_off 专测。
+        let old_tool = ShellTool::new(TrustedShellConfig::new(dir_a.clone()).with_sandbox(false));
         let call = ToolCall {
             id: "call_1".into(),
             name: "shell".into(),
@@ -1326,7 +1330,7 @@ mod tests {
 
         // Simulate configuration drift after approval: a rebuilt shell tool
         // would now use a different workspace root.
-        let new_tool = ShellTool::new(TrustedShellConfig::new(dir_b.clone()));
+        let new_tool = ShellTool::new(TrustedShellConfig::new(dir_b.clone()).with_sandbox(false));
         let result = tokio_test_invoke_frozen(&new_tool, call.clone(), Some(&frozen));
 
         assert!(result.is_ok(), "{}", result.render());

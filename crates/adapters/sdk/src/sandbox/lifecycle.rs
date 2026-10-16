@@ -4,7 +4,7 @@
 //! 本模块是**迁移矩阵的唯一权威**: 客户端每一次状态读取/写入 (spawn 建档、
 //! 巡检对账、kill/cleanup 落终态) 都必须经 [`SandboxStatus::can_transition_to`]
 //! / [`apply_transition`] 校验; 非法迁移收口成
-//! [`SandboxError::InvalidState`](crate::sandbox::SandboxError::InvalidState)。
+//! [`SandboxError::InvalidState`]。
 //!
 //! 终态 (`stopped` / `failed`) 吸收: 不接受任何后续迁移。
 

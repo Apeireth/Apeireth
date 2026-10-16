@@ -261,6 +261,13 @@ fn service_script_keeps_the_token_out_of_files_and_task_definitions() {
 /// equally side-effect free, and `status` (read-only) reports honestly.
 #[test]
 fn windows_service_script_dry_run_plans_without_touching_the_system() {
+    // 平台守卫 (2026-10-14): 本测对象是 Windows 服务脚本 (schtasks/服务面)。
+    // ubuntu runner 自带 pwsh → 旧守卫"有 PowerShell 就跑"会放行后在 Linux
+    // 上翻车 (实际 panic 已录)。Windows-only 是诚实口径; 其余平台显式 SKIP。
+    if !cfg!(windows) {
+        eprintln!("SKIP: windows service script face is Windows-only");
+        return;
+    }
     let Some(host) = powershell_host() else {
         eprintln!("SKIP: no PowerShell host available for the dry-run execution face");
         return;
