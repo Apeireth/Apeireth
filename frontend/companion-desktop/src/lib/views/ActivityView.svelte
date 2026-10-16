@@ -34,6 +34,9 @@
   import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
   import {fetchAuditLogs, fetchTraceDetail, capabilityAvailable, capabilitySupported, friendlyErrorMessage} from '../runtime';
   import {parsePresenceStateFrame, type PresenceStateFrame} from '../presence';
+  import {gatewayAuthHeaders} from '../tauri-bridge';
+  import {startSseFetchStream, type SseFrame} from '../sse-stream';
+  import {nextRetryDelay, SSE_INITIAL_RETRY_MS} from '../governance/ledger';
   import {
     getCallLogs,
     clearCallLogs,
@@ -108,6 +111,9 @@
   let expandedIds = $state<Record<string, boolean>>({});
 
   let sseEventSource: EventSource | null = null;
+  let sseStreamClose: (() => void) | null = null;
+  let sseRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let sseRetryDelay = SSE_INITIAL_RETRY_MS;
 
   function toggleCallExpand(id: string) {
     expandedCallIds = {...expandedCallIds, [id]: !expandedCallIds[id]};
@@ -284,81 +290,129 @@
     };
   }
 
-  function startSseListener() {
+  /** 关闭实时频道（任一传输）并撤下重连计时 —— 重建/切换/销毁共用。 */
+  function stopSseChannel() {
     if (sseEventSource) {
       sseEventSource.close();
       sseEventSource = null;
     }
+    if (sseStreamClose) {
+      sseStreamClose();
+      sseStreamClose = null;
+    }
+    if (sseRetryTimer) {
+      clearTimeout(sseRetryTimer);
+      sseRetryTimer = null;
+    }
+  }
+
+  /** 帧分发（与 EventSource 具名/无名帧同一语义）：presence_state 走契约解析，无名帧走 legacy 分支。 */
+  function handleSseFrame(frame: SseFrame): void {
+    if (frame.event === 'presence_state') {
+      const parsed = parsePresenceStateFrame(frame.data);
+      if (!parsed) return; // 坏帧静默丢弃（显影宁可缺席不可错显）
+      const item = presenceStateToActivity(parsed);
+      if (item) activities = mergeActivities(activities, [item]);
+      return;
+    }
+    if (frame.event !== 'message') return;
+    const raw = frame.data;
+    // legacy 文本分支：canonical 上 onmessage 只可能收到无名帧文本（[他说]/测试事件），
+    // presence 四事件已成为考古（见 presence.ts 头注）；此分支蛰伏保留。
+    if (!raw.startsWith('{')) {
+      if (!raw.startsWith('[他说]')) return; // 测试事件行 = 链路验证，不进活动流
+      const said = raw.slice('[他说]'.length).trim();
+      activities = mergeActivities(activities, [{
+        id: `legacy-say-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        category: 'conversation',
+        title: '他主动开口',
+        summary: said.length > 96 ? `${said.slice(0, 96)}…` : said,
+        source: 'sse',
+        severity: 'info',
+      }]);
+      return;
+    }
+    // 其余 JSON（未来 span 帧等）：保留既有通用解析路径
+    try {
+      const parsed = JSON.parse(raw) as {
+        id?: string;
+        type?: string;
+        action?: string;
+        tool?: string;
+        summary?: string;
+        detail?: string;
+        status?: string;
+        ts?: number;
+        trace_id?: string;
+        span_id?: string;
+        kind?: string;
+      };
+
+      const newEvent: ActivityItem = {
+        id: parsed.id || `sse-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: parsed.ts || Date.now(),
+        category: (parsed.tool ? 'tool' : parsed.type === 'memory' ? 'memory' : 'agent') as ActivityItem['category'],
+        title: parsed.tool ? `调用工具: ${parsed.tool}` : (parsed.summary || parsed.action || 'Agent 活动'),
+        summary: parsed.summary || parsed.detail || '实时事件',
+        source: 'sse',
+        severity: parsed.status === 'error' || parsed.status === 'failed' ? 'error' : 'info',
+        detail: JSON.stringify(parsed, null, 2),
+        raw: parsed,
+        traceId: parsed.trace_id,
+      };
+
+      activities = mergeActivities(activities, [newEvent]);
+    } catch {
+      // ignore malformed SSE
+    }
+  }
+
+  function startSseListener() {
+    stopSseChannel();
 
     if (!isLive) return;
     if (!capabilitySupported(capabilities, 'activity.sse') || !capabilityAvailable(capabilities, 'activity.sse')) {
       return;
     }
 
+    void openSseChannel();
+  }
+
+  async function openSseChannel(): Promise<void> {
+    const auth = await gatewayAuthHeaders();
+    const base = config.baseUrl.replace(/\/+$/, '');
+    if (auth.Authorization) {
+      // EventSource 无法带 Authorization 头 —— 带令牌过门走 fetch 流式读取；
+      // fetch 流无内建重连，断线按 2s ×1.5 → 30s 退避续排（建链复位）。
+      sseStreamClose = startSseFetchStream(`${base}/v1/apeireth/events`, auth, {
+        onOpen: () => {
+          sseRetryDelay = SSE_INITIAL_RETRY_MS;
+        },
+        onFrame: handleSseFrame,
+        onEnd: () => {
+          sseStreamClose = null;
+          if (!isLive) return;
+          sseRetryTimer = setTimeout(() => {
+            sseRetryTimer = null;
+            void openSseChannel();
+          }, sseRetryDelay);
+          sseRetryDelay = nextRetryDelay(sseRetryDelay);
+        },
+      });
+      return;
+    }
+    // 无令牌（三态门未设口径照旧）：EventSource 原路径逐字语义保留。
     try {
-      const base = config.baseUrl.replace(/\/+$/, '');
       sseEventSource = new EventSource(`${base}/v1/apeireth/events`);
 
       // 契约 §8a：presence_state 是具名 SSE 帧，onmessage 收不到，必须具名监听。
       sseEventSource.addEventListener('presence_state', (event) => {
-        const raw = typeof (event as MessageEvent).data === 'string' ? (event as MessageEvent).data : '';
-        const frame = parsePresenceStateFrame(raw);
-        if (!frame) return; // 坏帧静默丢弃（显影宁可缺席不可错显）
-        const item = presenceStateToActivity(frame);
-        if (item) activities = mergeActivities(activities, [item]);
+        handleSseFrame({event: 'presence_state', data: typeof (event as MessageEvent).data === 'string' ? (event as MessageEvent).data : ''});
       });
 
       sseEventSource.onmessage = (event) => {
-        const raw = typeof event.data === 'string' ? event.data : '';
-        // legacy 文本分支：canonical 上 onmessage 只可能收到无名帧文本（[他说]/测试事件），
-        // presence 四事件已成为考古（见 presence.ts 头注）；此分支蛰伏保留。
-        if (!raw.startsWith('{')) {
-          if (!raw.startsWith('[他说]')) return; // 测试事件行 = 链路验证，不进活动流
-          const said = raw.slice('[他说]'.length).trim();
-          activities = mergeActivities(activities, [{
-            id: `legacy-say-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            timestamp: Date.now(),
-            category: 'conversation',
-            title: '他主动开口',
-            summary: said.length > 96 ? `${said.slice(0, 96)}…` : said,
-            source: 'sse',
-            severity: 'info',
-          }]);
-          return;
-        }
-        // 其余 JSON（未来 span 帧等）：保留既有通用解析路径
-        try {
-          const parsed = JSON.parse(raw) as {
-            id?: string;
-            type?: string;
-            action?: string;
-            tool?: string;
-            summary?: string;
-            detail?: string;
-            status?: string;
-            ts?: number;
-            trace_id?: string;
-            span_id?: string;
-            kind?: string;
-          };
-
-          const newEvent: ActivityItem = {
-            id: parsed.id || `sse-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            timestamp: parsed.ts || Date.now(),
-            category: (parsed.tool ? 'tool' : parsed.type === 'memory' ? 'memory' : 'agent') as ActivityItem['category'],
-            title: parsed.tool ? `调用工具: ${parsed.tool}` : (parsed.summary || parsed.action || 'Agent 活动'),
-            summary: parsed.summary || parsed.detail || '实时事件',
-            source: 'sse',
-            severity: parsed.status === 'error' || parsed.status === 'failed' ? 'error' : 'info',
-            detail: JSON.stringify(parsed, null, 2),
-            raw: parsed,
-            traceId: parsed.trace_id,
-          };
-
-          activities = mergeActivities(activities, [newEvent]);
-        } catch {
-          // ignore malformed SSE
-        }
+        handleSseFrame({event: 'message', data: typeof event.data === 'string' ? event.data : ''});
       };
 
       sseEventSource.onerror = () => {
@@ -373,9 +427,8 @@
     isLive = !isLive;
     if (isLive) {
       startSseListener();
-    } else if (sseEventSource) {
-      sseEventSource.close();
-      sseEventSource = null;
+    } else {
+      stopSseChannel();
     }
   }
 
@@ -429,10 +482,7 @@
 
   onDestroy(() => {
     unsubCallLogs?.();
-    if (sseEventSource) {
-      sseEventSource.close();
-      sseEventSource = null;
-    }
+    stopSseChannel();
   });
 </script>
 

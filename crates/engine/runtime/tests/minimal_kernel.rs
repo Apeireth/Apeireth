@@ -58,6 +58,7 @@ impl ProviderCapability for PureChatProvider {
                 prompt_tokens: 10,
                 completion_tokens: 10,
                 total_tokens: 20,
+                prompt_cache_hit_tokens: None,
             },
             tool_calls: Vec::new(),
             raw_metadata: serde_json::Map::new(),

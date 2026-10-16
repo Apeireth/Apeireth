@@ -19,7 +19,7 @@
 // store 标记 simulated=true, current 回落本机中性默认值 (PAD 0/0/0),
 // 绝不编造情绪.
 //
-// 快照即读纪律 (资源租约语义): EventSource 每次连接/重连先取
+// 快照即读纪律 (资源租约语义): 事件通道每次连接/重连先取
 // GET /v1/apeireth/presence 快照 (当前帧 + 挂着的失败帧), 立即落位,
 // 不等下一条实时帧、不回放断线期历史; 失败帧是显式事实, 不猜不补.
 //
@@ -29,11 +29,15 @@
 // docs/design/01-DESIGN-SYSTEM.md §3.1 v2 更正段。星尘卡 (memory_recall) 的
 // 蛰伏断点注释保留在 App.svelte 对话流归并处。
 //
-// 本文件刻意零运行时依赖 (不 import svelte/store): store 手写 Svelte store
-// 契约 (subscribe 返回 unsubscribe), 纯函数与 store 均可被 Node 直接 import
-// 测试 (tests/presence-state.mjs), DOM/EventSource/rAF 全部惰性守卫.
+// 本文件刻意零第三方运行时依赖 (不 import svelte/store): store 手写 Svelte
+// store 契约 (subscribe 返回 unsubscribe), 纯函数与 store 均可被 Node 直接
+// import 测试 (tests/presence-state.mjs), DOM/EventSource/rAF 全部惰性守卫.
+// (本地模块 scene/tokens、tauri-bridge 令牌面、sse-stream 流式读取面同为
+//  Node 可载模块, 不引入新的运行时依赖.)
 
 import {PRESENCE_HEURISTIC_V0_GAIN} from './scene/tokens.ts';
+import {gatewayAuthHeaders} from './tauri-bridge.ts';
+import {startSseFetchStream} from './sse-stream.ts';
 
 // ============================================================
 // presence_state 帧类型 — 字段名与契约 §8a 逐字一致
@@ -568,7 +572,7 @@ export function createPresenceStore(nowFn: () => number = () => Date.now()): Pre
 export const presenceStore: PresenceStore = createPresenceStore();
 
 // ============================================================
-// subscribePresence — EventSource 订阅 + 指数退避重连
+// subscribePresence — 事件频道订阅 + 指数退避重连
 // ============================================================
 
 /** 断连持续超过该时长即按 SIM 纪律标记 simulated (设计规范 §5.4) */
@@ -580,13 +584,17 @@ const RETRY_MAX_MS = 30000;
 export interface SubscribePresenceOptions {
   /** 测试/特殊场景注入自定义 store; 默认全局 presenceStore */
   store?: PresenceStore;
-  /** 测试注入的快照取数; 默认 fetch GET /v1/apeireth/presence, 返回响应文本或 null */
+  /** 测试注入的快照取数; 默认 fetch GET /v1/apeireth/presence (带鉴权头), 返回响应文本或 null */
   fetchSnapshot?: () => Promise<string | null>;
 }
 
 /**
  * 订阅 GET /v1/apeireth/events 上的 presence_state 具名帧并驱动 presenceStore。
- * - 具名帧必须 addEventListener('presence_state', …) —— onmessage 收不到;
+ * - 具名帧必须按事件名分发 (EventSource 的 onmessage 只收无名帧; fetch 流
+ *   按 `event:` 帧名分发) —— 帧级解析沿用 parsePresenceStateFrame 同一语义;
+ * - 认证收口: 有回环令牌走 fetch 流式读取 (EventSource 无法带 Authorization
+ *   头, 令牌门全 API 面化后带令牌客户端必须 fetch 过门); 无令牌 = 三态门未设
+ *   口径照旧, 保留 EventSource 原路径逐字语义;
  * - 快照即读: 每次连接/重连都先取 GET /v1/apeireth/presence 快照 (当前帧
  *   + 挂着的失败帧) 立即落位, 断线期事件不回放、不等待下一条实时帧;
  * - 自动重连: 出错即关闭并自建指数退避 (2s ×1.5, 封顶 30s, 连通后复位),
@@ -607,6 +615,7 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
 
   let active = true;
   let source: EventSource | null = null;
+  let streamClose: (() => void) | null = null;
   let retryDelay = RETRY_BASE_MS;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let simTimer: ReturnType<typeof setTimeout> | null = null;
@@ -630,6 +639,32 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
     }, SIM_AFTER_MS);
   }
 
+  /** 建链成功 (任一传输): 复位退避、清降级计时、如实回报连通。 */
+  function onChannelOpen(): void {
+    retryDelay = RETRY_BASE_MS;
+    if (simTimer !== null) {
+      clearTimeout(simTimer);
+      simTimer = null;
+    }
+    store.setConnected(true);
+  }
+
+  /** 断线 (任一传输): 如实回报断连、挂降级计时、按退避续排重连。 */
+  function onChannelEnd(): void {
+    if (!active) return;
+    store.setConnected(false);
+    armSimTimer();
+    retryTimer = setTimeout(connect, retryDelay);
+    retryDelay = Math.min(retryDelay * 1.5, RETRY_MAX_MS);
+  }
+
+  /** 帧级解析 (与 EventSource 具名帧同一语义): 只认 presence_state, 坏帧丢弃不猜。 */
+  function onChannelFrame(event: string, data: string): void {
+    if (event !== 'presence_state' || !data) return;
+    const frame = parsePresenceStateFrame(data);
+    if (frame) store.ingest(frame);
+  }
+
   /** 快照即读: 读当前帧落位 (失败帧显式携带但不编造数据); 取不到即静默降级。 */
   function refreshSnapshot(): void {
     if (!active) return;
@@ -637,9 +672,11 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
       options.fetchSnapshot ??
       (() =>
         typeof fetch === 'function'
-          ? fetch(snapshotUrl)
-              .then((r) => (r.ok ? r.text() : null))
-              .catch(() => null)
+          ? gatewayAuthHeaders().then((auth) =>
+              fetch(snapshotUrl, {headers: auth})
+                .then((r) => (r.ok ? r.text() : null))
+                .catch(() => null),
+            )
           : Promise.resolve(null));
     fetcher()
       .then((text) => {
@@ -654,16 +691,43 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
     if (!active) return;
     // 重连先取快照: 快照请求先于实时通道发出 (快照即读, 不回放断线期历史)。
     refreshSnapshot();
-    const es = new EventSource(url);
+    void openChannel();
+  }
+
+  /** 建流: 有回环令牌走 fetch 流式; 无令牌 = 三态门未设口径照旧走 EventSource 原路径。 */
+  async function openChannel(): Promise<void> {
+    const auth = await gatewayAuthHeaders();
+    if (!active) return;
+    if (auth.Authorization) {
+      // EventSource 无法带 Authorization 头 —— 带令牌过门走 fetch 流式读取。
+      streamClose = startSseFetchStream(url, auth, {
+        onOpen: onChannelOpen,
+        onFrame: (frame) => onChannelFrame(frame.event, frame.data),
+        onEnd: () => {
+          if (streamClose !== null) streamClose = null;
+          onChannelEnd();
+        },
+      });
+      return;
+    }
+    // 构造 EventSource 可能同步抛（非法 URL / 环境不支持）——不接住会让整个
+    // 重试链静默死亡（徽章永远停在未连接且再无重试）。接住即按同一退避续排
+    // 下一次尝试，链路只在取消订阅时才停。
+    let es: EventSource;
+    try {
+      es = new EventSource(url);
+    } catch {
+      if (!active) return;
+      store.setConnected(false);
+      armSimTimer();
+      retryTimer = setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 1.5, RETRY_MAX_MS);
+      return;
+    }
     source = es;
 
     es.onopen = () => {
-      retryDelay = RETRY_BASE_MS;
-      if (simTimer !== null) {
-        clearTimeout(simTimer);
-        simTimer = null;
-      }
-      store.setConnected(true);
+      onChannelOpen();
     };
 
     es.addEventListener('presence_state', (msg) => {
@@ -676,11 +740,7 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
     es.onerror = () => {
       if (source === es) source = null;
       es.close();
-      if (!active) return;
-      store.setConnected(false);
-      armSimTimer();
-      retryTimer = setTimeout(connect, retryDelay);
-      retryDelay = Math.min(retryDelay * 1.5, RETRY_MAX_MS);
+      onChannelEnd();
     };
   }
 
@@ -691,6 +751,8 @@ export function subscribePresence(baseUrl: string, options: SubscribePresenceOpt
     clearTimers();
     source?.close();
     source = null;
+    streamClose?.();
+    streamClose = null;
     store.setConnected(false);
   };
 }

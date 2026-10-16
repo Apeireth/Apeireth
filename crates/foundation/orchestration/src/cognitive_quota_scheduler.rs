@@ -31,7 +31,12 @@
 //!    `complete_task()` 回收 (map 删除), 超上限时淘汰最旧的未入队条目。
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
+// cfg(kani) 证明面容器: 见 research/verification/kani/src/lib.rs kani_collections 注。
+#[cfg(kani)]
+use super::kani_collections::HashMap;
+#[cfg(not(kani))]
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Five-tier cognitive priority levels.
@@ -62,6 +67,23 @@ pub struct CognitiveQuota {
     pub consumed_tokens: usize,
     pub consumed_tool_steps: usize,
     pub consumed_cost_micros: u64,
+    /// 花费维计量覆盖计数: cost 换算不出来的计量轮数 (无单价行, 绝不编价)。
+    ///
+    /// 计入此列的轮**不**计入 `consumed_cost_micros`, 因此该列 > 0 时花费累计
+    /// 是"部分计量"口径 (如实标注, 不是全量花费)。
+    /// `#[serde(default)]` 是落库迁移口径: 旧会话行没有此列, 读回 0。
+    #[serde(default)]
+    pub unpriced_rounds: usize,
+}
+
+impl Default for CognitiveQuota {
+    /// An unlimited, empty ledger: every ceiling unreachable, every counter
+    /// zero. This is the ledger a session carries before any quota knob has
+    /// been bound to it (production wiring: see the canonical runtime's
+    /// session quota accounting).
+    fn default() -> Self {
+        Self::unlimited()
+    }
 }
 
 impl CognitiveQuota {
@@ -73,7 +95,49 @@ impl CognitiveQuota {
             consumed_tokens: 0,
             consumed_tool_steps: 0,
             consumed_cost_micros: 0,
+            unpriced_rounds: 0,
         }
+    }
+
+    /// An unlimited, empty ledger. The ceilings are the type's unreachable
+    /// maxima, which makes `is_exhausted` permanently false until limits are
+    /// bound and consumption recorded.
+    pub fn unlimited() -> Self {
+        Self::new(usize::MAX, usize::MAX, u64::MAX)
+    }
+
+    /// Records one provider round's usage-metered tokens (saturating).
+    ///
+    /// Production metering splits across the metered dimensions because they
+    /// land at different call sites: tokens and cost accumulate per provider
+    /// response, tool steps per dispatched tool call. `consume_step` (below)
+    /// keeps the coupled scheduler-facing accounting untouched.
+    pub fn consume_tokens(&mut self, tokens: usize) {
+        self.consumed_tokens = self.consumed_tokens.saturating_add(tokens);
+    }
+
+    /// Records one dispatched tool call (saturating).
+    pub fn consume_tool_step(&mut self) {
+        self.consumed_tool_steps = self.consumed_tool_steps.saturating_add(1);
+    }
+
+    /// Records one priced provider round's converted cost (saturating).
+    ///
+    /// The amount is the frozen conversion (`usage × unit price`, per-side
+    /// ceil over 1 000 tokens) computed at the metering point. A round whose
+    /// model carries no unit price is **not** recorded here — it lands in
+    /// [`CognitiveQuota::record_unpriced_round`] instead (never invented).
+    pub fn consume_cost_micros(&mut self, cost_micros: u64) {
+        self.consumed_cost_micros = self.consumed_cost_micros.saturating_add(cost_micros);
+    }
+
+    /// Records one provider round whose cost could not be converted (no unit
+    /// price row for the model).
+    ///
+    /// The round still meters tokens/steps normally; only the cost column is
+    /// skipped. A non-zero count marks the cost total as "部分计量" (partial).
+    pub fn record_unpriced_round(&mut self) {
+        self.unpriced_rounds = self.unpriced_rounds.saturating_add(1);
     }
 
     /// Checks if any budget dimension has been exceeded.
@@ -179,7 +243,7 @@ impl CognitiveQuotaScheduler {
         }
         // M1: tasks 表有界 — 超上限淘汰条目。**0 装诚实**: TCB 不带插入时间戳,
         // 这里按 `task_id` 字典序最小淘汰 (确定性, 但不等于"最旧提交者");
-        // 要严格 FIFO 淘汰需给 TCB 加 submit_seq (TODO)。
+        // 要严格 FIFO 淘汰需给 TCB 加 submit_seq (债登记: 00-backlog.md 债栏 D7)。
         while inner.tasks.len() >= MAX_TRACKED_TASKS {
             let oldest = inner.tasks.keys().min().cloned();
             match oldest {
@@ -380,6 +444,32 @@ mod tests {
             quota.consume_step(100, 500);
         }
         assert!(quota.is_exhausted());
+    }
+
+    /// 花费维记账二分 (A-P2): 有价轮进 `consumed_cost_micros` (饱和), 无价轮
+    /// 只进 `unpriced_rounds` (绝不编价, 不污染成本列); 旧账本行缺列读回 0。
+    #[test]
+    fn cost_accounting_splits_priced_and_unpriced_rounds() {
+        let mut quota = CognitiveQuota::new(1000, 5, 5000);
+        quota.consume_cost_micros(7_000);
+        quota.record_unpriced_round();
+        quota.consume_cost_micros(2);
+        assert_eq!(quota.consumed_cost_micros, 7_002, "有价轮累计");
+        assert_eq!(quota.unpriced_rounds, 1, "无价轮只计数, 不编价");
+
+        // 花费列是 u64 累加账本: 到顶饱和停在 u64::MAX, 不回绕不 panic。
+        let mut saturated = CognitiveQuota::unlimited();
+        saturated.consume_cost_micros(u64::MAX);
+        saturated.consume_cost_micros(1);
+        assert_eq!(saturated.consumed_cost_micros, u64::MAX, "饱和不回绕");
+
+        // 落库迁移口径: 旧会话行没有 `unpriced_rounds` 列, 读回 0 不是失败。
+        let legacy = serde_json::from_str::<CognitiveQuota>(
+            r#"{"max_tokens":1,"max_tool_steps":1,"max_cost_micros":1,
+                "consumed_tokens":0,"consumed_tool_steps":0,"consumed_cost_micros":0}"#,
+        )
+        .expect("旧账本行必须能读回");
+        assert_eq!(legacy.unpriced_rounds, 0);
     }
 
     /// M1 回归: 重复 task_id 必须拒绝 (旧实现静默覆盖 + 队列留重).

@@ -61,6 +61,7 @@ pub mod hot_store;
 pub mod keyring;
 pub mod keyring_resolver;
 pub mod secret;
+pub mod service_token;
 pub mod store;
 
 pub use error::{CredentialsError, Result};

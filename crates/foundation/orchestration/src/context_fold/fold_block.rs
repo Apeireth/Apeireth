@@ -122,7 +122,14 @@ pub fn render_fold_blocks(blocks: &[FoldBlock], similarity: f32) -> FoldBlockRen
     let expanded_blocks: Vec<&FoldBlock> = blocks.iter().filter(|b| b.threshold <= sim).collect();
     let hidden = blocks.len() - expanded_blocks.len();
     let stash_hint = if hidden > 0 {
-        format!("[已折叠] 还收纳了 {hidden} 组内容 (相似度未达阈值)")
+        // cfg(kani): format! 插值是 CBMC 引雷点 (Display/format 机器拖
+        // memchr/TwoWaySearcher, 实测 fold 40m+ 跑不完; 见 file_fetcher 同款注)。
+        // 证明面断言渲染记账 (expanded+hidden==blocks), 不含消息文本。
+        #[cfg(kani)]
+        let hint = "[已折叠]".to_string();
+        #[cfg(not(kani))]
+        let hint = format!("[已折叠] 还收纳了 {hidden} 组内容 (相似度未达阈值)");
+        hint
     } else {
         String::new()
     };

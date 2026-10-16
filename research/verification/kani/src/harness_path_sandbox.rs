@@ -14,13 +14,13 @@ use super::file_fetcher::{FileFetchError, TransparentFileFetcher};
 use super::sensitive_path::is_sensitive_path;
 use std::path::{Path, PathBuf};
 
-/// 任意 N 字节串 (含非法 UTF-8 → lossy 替换; 含 NUL/`..`/控制字符均可)。
+/// 任意 N 字符串 (字节 0..=127, 含 NUL/`..`/控制字符)。
+/// 口径修订 2026-10-11 (三次): 字节数组直构 —— char::collect 令 CBMC 无法
+/// 证明编码 1 字节/char, 串长符号化 (见 harness_panic_freedom.rs 同名注)。
 fn bounded_string<const N: usize>() -> String {
-    let mut bytes: Vec<u8> = Vec::with_capacity(N);
-    for _ in 0..N {
-        bytes.push(kani::any::<u8>());
-    }
-    String::from_utf8_lossy(&bytes).into_owned()
+    let bytes: Vec<u8> = (0..N).map(|_| kani::any::<u8>() & 0x7F).collect();
+    // SAFETY: 全部字节 < 0x80, 必为合法 UTF-8 (同款注见 harness_panic_freedom.rs)。
+    unsafe { String::from_utf8_unchecked(bytes) }
 }
 
 /// 证明: 无白名单时 validate_path_safety 的判定精确等于"含 `..` 或 NUL"——

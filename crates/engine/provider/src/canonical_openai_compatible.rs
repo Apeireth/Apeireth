@@ -792,6 +792,7 @@ mod tests {
                 prompt_tokens: 5,
                 completion_tokens: 2,
                 total_tokens: 7,
+                prompt_cache_hit_tokens: None,
             }
         );
     }

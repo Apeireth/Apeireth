@@ -121,6 +121,7 @@ impl ProviderCapability for ScriptedProvider {
                 prompt_tokens: 5,
                 completion_tokens: 5,
                 total_tokens: 10,
+                prompt_cache_hit_tokens: None,
             },
             tool_calls: Vec::new(),
             raw_metadata: serde_json::Map::new(),

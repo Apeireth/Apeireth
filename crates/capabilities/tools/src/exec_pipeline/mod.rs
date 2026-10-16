@@ -51,7 +51,7 @@ pub use apeireth_governance::{GuardRefusal, MonotonicGuards, ToolGuard, ToolGuar
 
 use std::sync::Arc;
 
-use apeireth_core::kernel::CapabilityId;
+use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use serde::{Deserialize, Serialize};
@@ -401,6 +401,20 @@ impl ToolExecutionPipeline {
         call: &ToolCall,
         frozen: Option<&FrozenInvocation>,
     ) -> ExecutedCall {
+        self.run_in_session(tool, call, frozen, None).await
+    }
+
+    /// Run one call through the five stages with the dispatching turn's
+    /// session in scope (see [`ToolCapability::invoke_in_session`]). Host-side
+    /// invocations without a session scope use [`ToolExecutionPipeline::run`]
+    /// or [`ToolExecutionPipeline::run_frozen`] and pass no scope.
+    pub async fn run_in_session(
+        &self,
+        tool: &dyn ToolCapability,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        session: Option<SessionId>,
+    ) -> ExecutedCall {
         let mut record = ExecutionRecord::default();
 
         // Stage 1: pre-execute waterfall.
@@ -434,7 +448,7 @@ impl ToolExecutionPipeline {
 
         // Stage 3: around — timeout and retry wrap the execution.
         let (mut result, attempts) =
-            match around::run_around(tool, call, frozen, &self.around).await {
+            match around::run_around(tool, call, frozen, session, &self.around).await {
                 Ok(executed) => executed,
                 Err(failure) => {
                     record.note_stage(ExecutionStage::Around, failure.code());
@@ -578,6 +592,18 @@ impl ToolCapability for PipelinedCapability {
     ) -> ToolResult {
         self.pipeline
             .run_frozen(self.inner.as_ref(), call, frozen)
+            .await
+            .result
+    }
+
+    async fn invoke_in_session(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        session: Option<SessionId>,
+    ) -> ToolResult {
+        self.pipeline
+            .run_in_session(self.inner.as_ref(), call, frozen, session)
             .await
             .result
     }

@@ -312,8 +312,9 @@
   }
   .user-actions-bar {
     position: absolute;
-    bottom: -22px;
-    right: 4px;
+    /* 收回气泡裁剪域内：clip-path 角切造型会裁掉边界外一切（bottom:-22 被整块裁掉=『卡到气泡框下面』病根） */
+    bottom: 4px;
+    right: 6px;
     display: flex;
     align-items: center;
     gap: 4px;

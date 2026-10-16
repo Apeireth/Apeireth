@@ -9,7 +9,12 @@ use std::sync::Arc;
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::{
-    FetchConfig, FetchTool, FilesystemTool, RepoTool, SearchTool, ShellTool, TrustedShellConfig,
+    apply_patch_capability, authorized_file_write_policy, authorized_git_write_policy,
+    authorized_worktree_apply_policy, content_feed_capability, git_write_capability,
+    worktree_apply_capability, worktree_plan_capability, AroundPolicy, ContentFeedConfig,
+    FetchConfig, FetchTool, FilesystemTool, ObservedGate, PipelinedCapability, RepoTool,
+    SearchTool, SelfStatusSource, SelfStatusTool, ShellTool, ToolExecutionPipeline,
+    TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
 };
 
 use super::capability::CapabilityProvider;
@@ -24,6 +29,15 @@ impl FilesystemModule {
     pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
         Self {
             tool: Arc::new(FilesystemTool::new(workspace_root)),
+        }
+    }
+
+    /// Create a filesystem module sharing one read-observation gate with the
+    /// file-write tool: reads recorded here satisfy the write side's
+    /// read-before-overwrite gate.
+    pub fn new_with_gate(workspace_root: impl Into<PathBuf>, gate: Arc<ObservedGate>) -> Self {
+        Self {
+            tool: Arc::new(FilesystemTool::new(workspace_root).with_observed_gate(gate)),
         }
     }
 
@@ -159,6 +173,41 @@ impl CapabilityProvider for FetchModule {
     }
 }
 
+/// Module providing the life-integration content feed (`tool.content_feed`, J1).
+///
+/// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露,
+/// 跨源内容不直进提示词)。治理档位在治理链上
+/// ([`apeireth_tools_canonical::ContentFeedApprovalHook`]): RequireApproval 级
+/// —— 拉取与入库都经审批档, 改订阅走 write_intent 同族 (改订阅 = 写文件),
+/// 每次调用都停人工审批。默认关 (opt-in)。
+pub struct ContentFeedModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl ContentFeedModule {
+    /// Create the content-feed module from trusted configuration.
+    pub fn new(config: ContentFeedConfig) -> Self {
+        Self {
+            tool: content_feed_capability(config),
+        }
+    }
+
+    /// Access the underlying tool capability.
+    pub fn capability(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for ContentFeedModule {
+    fn id(&self) -> &str {
+        "module.tool.content_feed"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
 /// Module that manages and dynamically contributes Model Context Protocol (MCP) tool capabilities.
 pub struct McpModule {
     tools: std::sync::RwLock<Vec<Arc<dyn ToolCapability>>>,
@@ -272,5 +321,273 @@ impl CapabilityProvider for EducationModule {
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![self.tool.clone()]
+    }
+}
+
+/// 自述工具的执行时限 (毫秒): 自述是进程内只读采集, 到期即归 `timeout.*` 帧。
+pub const SELF_STATUS_TIMEOUT_MS: u64 = 2_000;
+
+/// Module providing the structured self-report tool (`tool.self_status`).
+///
+/// 自省通道: 只读结构化自述面, 与既有 5 内置工具同列注册。执行走五段流水线:
+/// 输出归一合同 (`SelfStatusTool::output_schema`) 冻结自述形状, 超时归既有
+/// `timeout.*` code 族, 失败即帧。
+pub struct SelfStatusModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl SelfStatusModule {
+    /// Create the self-status module bound to a self-report source.
+    pub fn new(source: Arc<dyn SelfStatusSource>) -> Self {
+        let inner: Arc<dyn ToolCapability> = Arc::new(SelfStatusTool::new(source));
+        let pipeline = Arc::new(
+            ToolExecutionPipeline::new()
+                .with_around(
+                    AroundPolicy::new()
+                        .with_timeout(SELF_STATUS_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+                )
+                .with_output_schema(SelfStatusTool::output_schema()),
+        );
+        Self {
+            tool: Arc::new(PipelinedCapability::new(inner, pipeline)),
+        }
+    }
+}
+
+impl CapabilityProvider for SelfStatusModule {
+    fn id(&self) -> &str {
+        "module.tool.self_status"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the controlled file-write tool (`tool.apply_patch`).
+///
+/// 受控写文件 (第七件生产工具): 补丁式创建/修改/删除 (动作必须在补丁里显式
+/// 声明), 沿用读前观测门禁 (未读不得覆盖写)。写入风险档位默认 require-approval
+/// 级 —— 每次写入都停在人工审批 (与本地审批面板 / IM 审批卡同链); 设置可开
+/// 「自动放行已读文件的修改」档, 但删除/新建永不自动放行。
+///
+/// git 写边界 (件三, 分级语义版): 仓库写操作走分级词表 (`tool.git_write`),
+/// L1 可逆默认人批 / L2 出网永远人批 / L3 毁灭无工具面 (工具描述同文)。
+pub struct ApplyPatchModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl ApplyPatchModule {
+    /// Create the file-write module over the shared read-observation gate.
+    pub fn new(workspace_root: impl Into<PathBuf>, gate: Arc<ObservedGate>) -> Self {
+        let tool = apply_patch_capability(workspace_root, gate, authorized_file_write_policy());
+        Self { tool }
+    }
+
+    /// Access the underlying (pipeline-wrapped) file-write capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for ApplyPatchModule {
+    fn id(&self) -> &str {
+        "module.tool.apply_patch"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the graded git-write tool (`tool.git_write`, 干活能力轴 P1).
+///
+/// 分级词表: L1 可逆 (add/commit/branch 建·切/tag 本地) 默认人批, 设置可开
+/// 「自动放行 L1」档; L2 出网 (push/fetch/remote) **永远人批** (无自动放行档,
+/// 会话预设也不得越人); L3 毁灭 (改史/强推/引用删除) **无工具面** —— 词法分级
+/// 拒绝即帧。执行走受控通道 (结构化 argv + 工作区限域 + 超时 `timeout.*` +
+/// 输出归一)。分级风险档位由治理层的分级钩子承载 (与本地审批面板 / IM 审批卡
+/// 同链), 本模块只接工具面。
+pub struct GitWriteModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl GitWriteModule {
+    /// Create the graded git-write module over the workspace root.
+    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
+        let tool = git_write_capability(workspace_root, authorized_git_write_policy());
+        Self { tool }
+    }
+
+    /// Access the underlying (pipeline-wrapped) git-write capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for GitWriteModule {
+    fn id(&self) -> &str {
+        "module.tool.git_write"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the read-only change-order tool (`tool.worktree_plan`, D-P2 计划拍).
+///
+/// 多文件大改的「计划→改→验证→落」四拍之首: 任务目标 → 改单 (文件列表 +
+/// 每文件动作 + 预期)。**计划不落盘** —— 零文件系统写; 只读档**零审批**
+/// (无 ask 档钩子, `read_only` 预设不拒只读能力)。改单是
+/// [`WorktreeApplyModule`] 的输入合同。
+pub struct WorktreePlanModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl WorktreePlanModule {
+    /// Create the read-only change-order module rooted at `workspace_root`.
+    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
+        Self {
+            tool: worktree_plan_capability(workspace_root),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) change-order capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for WorktreePlanModule {
+    fn id(&self) -> &str {
+        "module.tool.worktree_plan"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the controlled worktree write tool (`tool.worktree_apply`, D-P2).
+///
+/// 四拍受控工作树写: 计划拍 (改单/补丁交叉一致, 零写入) → 改拍 (暂存面执行,
+/// 复用事务补丁原语) → 验证拍 (纯结构校验 + 可挂校验命令走受控通道) → 落拍
+/// (过读前观测门禁落真实工作区, 全有或全无, 任一失败整批回滚)。
+///
+/// 治理: **RequireApproval 级** —— 每次落盘都停人工审批 (审批卡载荷 = 改单
+/// 摘要: 文件数/动作分布/验证命令), 无自动放行档; `read_only` 预设拒本工具。
+/// **写总闸语义**: 与 `tool.apply_patch` 同受 `file_write` 唯一写总闸 ——
+/// 组装根必须只在同一开关下注册本模块 (注册即闸)。git 分工: 本模块只动
+/// 文件, 提交走 `tool.git_write` 的分级词表 (工具描述同文)。
+pub struct WorktreeApplyModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl WorktreeApplyModule {
+    /// Create the worktree-write module over the shared read-observation gate.
+    pub fn new(workspace_root: impl Into<PathBuf>, gate: Arc<ObservedGate>) -> Self {
+        let tool =
+            worktree_apply_capability(workspace_root, gate, authorized_worktree_apply_policy());
+        Self { tool }
+    }
+
+    /// Access the underlying (pipeline-wrapped) worktree-write capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for WorktreeApplyModule {
+    fn id(&self) -> &str {
+        "module.tool.worktree_apply"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the skill distill tool (`tool.skill_distill`, 书→技能沉淀 I1).
+///
+/// 知识吸收的写入口: 内容输入 (正文 / 文件只读通道) + 模型侧草稿 → 结构化
+/// 技能卡 → 入技能库 (数据目录 `skills/`, 每卡一 StoredDoc 拒开语义)。创建
+/// 重复名拒绝; 版本演进 (`update`) 同名更新留旧版审计。
+///
+/// 治理: **写文件面 = file_write 总闸族 + 审批档** —— 与 `tool.apply_patch`
+/// 同受 [`super::production::ProductionModulesConfig::file_write`] 唯一写总闸
+/// (注册即闸), **每次沉淀都停人工审批** ( [`SkillDistillApprovalHook`],
+/// 无自动放行档, 审批卡载荷 = 技能卡摘要)。
+pub struct SkillDistillModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl SkillDistillModule {
+    /// Create the skill distill module over the workspace root (来源只读通道限域)
+    /// and the skill library directory (数据目录 `skills/`)。
+    pub fn new(workspace_root: impl Into<PathBuf>, skills_dir: impl Into<PathBuf>) -> Self {
+        let workspace_root = workspace_root.into();
+        let library = apeireth_tools_canonical::SkillLibrary::new(skills_dir.into());
+        Self {
+            tool: apeireth_tools_canonical::skill_distill_capability(
+                workspace_root,
+                library,
+                apeireth_tools_canonical::authorized_skill_distill_policy(),
+            ),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) distill capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for SkillDistillModule {
+    fn id(&self) -> &str {
+        "module.tool.skill_distill"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the read-only skill search tool (`tool.skill_search`, I1 调用面).
+///
+/// 检索式注入 (触发词命中 / 按需拉取) 经 **L2 封套披露**进上下文 (共享引用
+/// 封套 + 共享预算, 绝不无差别全量注入)。**只读档零审批** (无 ask 档钩子,
+/// `read_only` 会话预设不拒只读能力)。
+pub struct SkillSearchModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl SkillSearchModule {
+    /// Create the skill search module over the skill library directory
+    /// (数据目录 `skills/`) with the disclosure budget (字符, 与调用方
+    /// 上下文预算同参换算)。
+    pub fn new(skills_dir: impl Into<PathBuf>, disclosure_budget_chars: usize) -> Self {
+        let library = apeireth_tools_canonical::SkillLibrary::new(skills_dir.into());
+        Self {
+            tool: apeireth_tools_canonical::skill_search_capability(
+                library,
+                disclosure_budget_chars,
+            ),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) search capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for SkillSearchModule {
+    fn id(&self) -> &str {
+        "module.tool.skill_search"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
     }
 }

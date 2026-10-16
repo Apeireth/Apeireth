@@ -67,6 +67,8 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 > **2026-10-06 对账追加**：协作者批（PR #15）新增 `crates/engine/guard`（`apeireth-guard`，行为链安全 Guard，已接生产治理管线），workspace 实为 **18 crates（engine 8）**；下表 crate 数按此更新。测试数同日复核已全量重跑：**3418 passed / 0 failed / 19 ignored**（129 suites，`cargo test --workspace`，exit 0；2026-10-06 W2 接线批后实测，当日复核批口径为 3406）；代码量维持 2026-09-05 口径。
 
+> **2026-10-13 文档同步批注记**：测试数字口径统一到同日全绿实测 **5243 passed / 0 failed / 22 ignored（190 suites）**（quick-capture 批与 W3-② 批两批各自实测一致）、前端 `pnpm test` **74/74 套件**（本批亲跑）；README 按冻结口径不动、带日期历史真账按约定保留原值。本批复核时 `cargo test --workspace --locked -j 2` 复跑被并行在途线未收口件阻塞于**编译门**（`content_feed`/`skill`/`object_access`/`write_intent` 等在途文件，与 [quick-capture-delivery.md](docs/04-internal/backend-enhancement/quick-capture-delivery.md) §4.3 同款在途标注）——按纪律标红、待该线收口后复跑，不虚报、不代改。
+
 > **v2.0.0-preview 定位与说明**:
 > - **建设完全性**: 2.0 底座与全部 14 大关键战区核心功能建设已**基本完全实装**（全工作区 18 Crates 100% 编译与 3662 项单元/集成测试通过，前端桌面端 Svelte 5 + Tauri 2 打包与类型验证全绿，5 项 LOCKED 资产严格零触碰，0 伪造，0 空壳）。
 > - **后续发布路线**: 当前转入**协作者生产压测、真机环境与端到端联调交叉验证**阶段。待协作者压测与交叉验证闭环后，由协作者提议发布 2.0 最终正式版 (GA)。
@@ -77,7 +79,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | Tag | `v1.0.0` / `v1.5.0` / `v2.0.0-alpha.1` / `v2.0.0-preview` / `v2.0.0-rc.1`（→ `854831fc`） |
 | Workspace | **18 crates**（foundation 6 / engine 8 / capabilities 1 / adapters 3；engine 第 7 个 = `crates/engine/runtime-assembly`，第 8 个 = `crates/engine/guard`（2026-10-06 协作者批）） + `frontend/companion-desktop` (Svelte 5 + Tauri 2) |
 | 代码量 | crates/ 内 .rs：src-only **147,732 行**（406 文件）+ tests **25,972 行**（73 文件）（2026-09-05 实测，不含 legacy/）；前端 companion-desktop 61 文件 ~21k 行（不含 node_modules/dist） |
-| 测试 | **4671 passed / 0 failed / 21 ignored**（149 suites，`cargo test --workspace` 全量实测 2026-09-27；历史口径：2026-09-28 清污批 4671、2026-09-27 MCP批 4668、清零批 4585、尾款批前 3907、2026-09-26 3662/130、2026-10-06 W2 批 3418/19、2026-09-05 3120/13） |
+| 测试 | **5243 passed / 0 failed / 22 ignored**（190 suites，`cargo test --workspace --locked -j 2` 全量实测 2026-10-13；前端 `pnpm test` **74/74 套件**同日实测。历史口径：2026-09-30 rc.3批 4829/161、2026-09-28 清污批 4671、2026-09-27 MCP批 4668、清零批 4585、尾款批前 3907、2026-09-26 3662/130、2026-10-06 W2 批 3418/19、2026-09-05 3120/13） |
 | CI / 守门 | 5 重守门全绿 + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告（2026-09-05 亲跑）+ 9 锚 / 13 键 / 3 脊柱 / R11 baseline 0 触碰；workspace.version 已随 RC1 发布推进为 2.0.0-rc.1 |
 | **v2.0 核心建设** | ✅ **100% 落地**：14 大战区（Whisper HTTP + Xcap 截屏多模态、Okapi BM25 + 向量 RRF 混合检索、上下文衰减 3 因子、SpillStore 溢出隔离、7 阶段伙伴羁绊、8 分类里程碑、动态原则洋葱、三层语调合成、断点续行与 O-1 核心段删除防御、叙事日记本与日活动聚合、跨日记图共享词元索引、口头强化反思闭环、微积分换元符号规则检查、Gateway SSE 流式通道及桌面端伙伴）。 |
 | **当前状态与下一步** | **预览版已就绪 (v2.0.0-preview)**，转交协作者开展生产压测与交叉验证，待协作者确认后提议发布 2.0 正式版。 |
@@ -112,11 +114,29 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ## 4. v2.0 下一步（按优先级，2026-08-27 起）
 
+> **后端增强待办（2026-10-02 立）**：想法级清单与细节小文件索引见 docs/04-internal/backend-enhancement/00-backlog.md（A 配额真接口 / B 性能 / C 记忆 / D 干活 / E 安全 / F 服务端 / G 观测 / H 模型面）。
+
+> **安全缺口账（G1-G10 销账状态，与 [E-threat-model.md](docs/04-internal/backend-enhancement/E-threat-model.md) §5 逐条对齐；2026-10-13 文档同步批刷新）**：
+> | # | 缺口 | 销账状态 | 处置/落点 |
+> |---|---|---|---|
+> | G1 | 多用户隔离 | 🟡 处置大半 | 身份/授权面（W3-② 角色门）+ 数据面（W3-① 用户域分库）已销；剩星群逐域伙伴实例 |
+> | G2 | 命令级审批族归一 | 未销 | E-P2（族等价形态可绕，见 E-threat-model §5 G2） |
+> | G3 | 沙箱对象级判定 | 未销 | E-P3（「换 API 换权力」未消；本仓删除双路径已同族同权） |
+> | G4 | 远程访问认证 | ✅ 已销 | W2-② 全 API 面令牌门+客户端令牌表+非回环绑定 fail-closed（[W2-2 交付记录](docs/04-internal/backend-enhancement/W2-2-remote-access-auth-delivery.md)） |
+> | G5 | 备份恢复 | 未销 | G 轴 P4（勒索/删库即永久损失） |
+> | G6 | 供应链（依赖 + MCP 外部工具服务器） | 未销（部分缓解） | MCP 审批级接入+输出脱敏+坏配置拒开；投毒面未消 |
+> | G7 | 数据静态加密 | 未销 | 记忆/会话库明文在盘，物理接触即全量外泄 |
+> | G8 | 提示注入净化仅启发式 | 未销 | 防线后移到审批与沙箱兜底 |
+> | G9 | 多签 v2.1 真密码学 | 未销 | 挂账 D2（现「多签」无密码学效力） |
+> | G10 | 本机回环令牌可选 | ✅ 已销 | W1-③ 三态门+桌面自铸令牌；残余 (c) 随 W2-② 全网关化销账 |
+>
+> 逐条「敌人怎么利用」、处置注全文与残余（如实）见 [E-threat-model.md](docs/04-internal/backend-enhancement/E-threat-model.md) §4/§5；波次挂靠与派工以 owner 拍板为准，不假称已排期。
+
 | P | 任务 | 说明 | 依赖 |
 |---|---|---|---|
 | **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |
 | **P1** | **文档对账**（2026-09-05 批执行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 17-crate 实测值（17 crates / 3120 tests / workspace.version 2.0.0-rc.1） | 无 |
-| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
+| P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 | 🟡 credentials 已接线（四级口径: PRODUCTION WIRED——RC-9, `crates/adapters/cli/src/keyring_bootstrap.rs`, 2026-09-05 实测）；core 脊椎去留仍待 |
 | P3 | M1B 记忆迁回 | ACT-R 记忆、检索、向量/图全量迁入 `crates/engine/memory` | P2 |
 | P4 | MCP 动态能力注册 | ✅ done：`canonical::tool_modules::McpModule`（`CapabilityProvider`，动态 register/unregister + 身份冲突拒绝）已进生产装配（`production.rs`）；MCP 协议客户端栈在 `apeireth-plugin::mcp`（jsonrpc/schema/subscribe/resource/prompt/lifecycle/reconnect/sse）。遗留 = 协议客户端会话 ↔ McpModule 的 transport 桥 | P2 |
 | P5 | ProcessSupervisor + 沙箱强化 | 🟡 半完成：RC-8 `StdSubSupervisor` 真 impl（5 sub-supervisor 真实 spawn + RestartStrategy，`std_sub_supervisor.rs`）。遗留 = 进程树快照、Linux cgroup、macOS 强隔离、文件/网络隔离（沙箱强化层） | P0 |
@@ -131,6 +151,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | **P1 (新)** | **RC-10 metadata-bound APX2 header + RC-11 migration** | 已完成：v2 写入的 AAD 绑定 format version、service/type、physical index、opaque keyed record-id commitment 与完整 sealed length；旧 v1 `[sealed_len:4 BE][sealed:N]` 保持只读兼容，当前格式不落盘 raw `record_id`。`scripts/migrate_v1_to_v2_encrypted.py` 与 7 个 Rust 集成测试完成离线 v1→APX2 重签、截断/超长 ID fail-closed 验证 | RC-10/11 ✅ |
 | **P2 (KV 参考清单, 2026-09-06 登记)** | KV 层逐出/压缩三篇（RA-15 派单包） | 📋 后置：本地推理路线（便携 U 盘 SLM）启动后吸收——arXiv:2607.10582 MemDecay 区域感知逐出 / arXiv:2608.00528 S4R 采样+子空间+稀疏重建 / arXiv:2601.18999 随机化逐出+学习路由。对照见 `docs/03-reference/absorption-2026-09.md` §P2 | 本地推理路线 |
 | **P10 (产品化 P0 批, 2026-09-26 登记)** | 产品化路线（源 `docs/04-internal/pm-review-productization-2026-09-25.md`） | ① NSIS 安装包挂 GitHub Release ✅（`publish-release.yml` 传资产：windows-latest 跑 `packaging/desktop/build-desktop-nsis.ps1` + `check-release-version.ps1 -Strict` 版本门禁，安装包+SHA256 挂 Release；本地全链实证产出 `Apeireth Companion_2.0.0-rc.1_x64-setup.exe`，2026-09-26）；② **宣称口径已拍板：诚实降调**（主人 2026-09-26）——对外文案只写已交付能力，P2P Mesh / 因果世界模型产品化 / 主动关怀移入路线图并标注阶段（`publish-release.yml` 发布说明 body 已按此校准；README 重写轮全量执行）；③ 待做 = 文档必败命令修复 + README 用户视角重写、首启向导人工点击流 + key 钥匙串持久化、核心记忆能力默认开 | 无 |
+| **P11 (deps 治本, 2026-10-03 登记)** | ratatui 0.29 → 0.30 迁移（`apeireth-tui` 驾驶舱） | ✅ **done（2026-10-12 零债清偿批）**：`apeireth-tui` 升 ratatui 0.30.2 + crossterm 0.29（ratatui-crossterm 同版, 全树 crossterm 单版本），API 面零编译修（crate 渲染面为 0.30 兼容子集），驾驶舱 47 测零回归（TestBackend 帧钉 = 观感证据）。三条 transitive 面全消（paste 出树、lru 单一 0.18.5 修复线），三处同步 ignore 短接（deny.toml / audit.toml / cargo-audit.yml `--ignore`）随之清空，回归 0-ignore austere 模式。原登记：消 paste(RUSTSEC-2024-0436 停维护) / lru 0.12(RUSTSEC-2026-0002/0253 unsound) 三条 transitive 面，0.30 是 core/widgets/crossterm 模块重组级大改单列执行，仓内 e2e 已有 0.30 先例可循 | 无 |
 
 ---
 

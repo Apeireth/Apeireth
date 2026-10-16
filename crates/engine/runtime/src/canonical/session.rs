@@ -11,7 +11,9 @@
 //! is async from the start even though the only implementation here is in-memory.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use apeireth_core::kernel::{
     ApprovalId, CapabilityId, Clock, RequestId, SessionId, Timestamp, TraceId,
@@ -20,10 +22,11 @@ use apeireth_orchestration::compaction_checkpoint::{
     CompactionLogEntry, CompactionMessage, CompactionRole,
 };
 use apeireth_orchestration::plan_mode::PlanModeEvent;
+use apeireth_orchestration::CognitiveQuota;
 use apeireth_protocol::canonical::{ContentPart, MessageRole, NormalizedMessage};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 use super::approval::PendingApproval;
 use super::error::{RuntimeError, RuntimeResult};
@@ -100,6 +103,15 @@ pub struct Session {
     /// and lose nothing from their transcript or approval history.
     #[serde(default)]
     pub settings: SessionSettings,
+    /// Session-level cognitive quota ledger: the durable consumption
+    /// accounting behind the opt-in spend gate (token usage accumulated from
+    /// per-round usage metering, tool steps counted per dispatched call).
+    ///
+    /// `#[serde(default)]` is the on-disk migration path: sessions persisted
+    /// before this field existed load an unlimited, empty ledger and lose
+    /// nothing from their transcript or approval history.
+    #[serde(default)]
+    pub quota: CognitiveQuota,
     /// The transcript, in order. Includes assistant tool-call messages and
     /// tool-result messages, so a resumed session can continue mid-tool-loop.
     ///
@@ -154,6 +166,7 @@ impl Session {
             approvals: BTreeMap::new(),
             active_approval_id: None,
             settings: SessionSettings::default(),
+            quota: CognitiveQuota::default(),
             revision: 0,
             created_at: now,
             updated_at: now,
@@ -540,6 +553,20 @@ pub enum SessionEventKind {
         /// Optional human reason recorded at resolution time.
         human_reason: Option<String>,
     },
+    /// The model repeated, in the same turn, a proposal that governance had
+    /// already frozen for human approval. The repeat is folded onto the same
+    /// approval item ("视为同一待批准项"): no second approval is minted, and
+    /// the turn collapses directly instead of re-entering the freeze loop.
+    ApprovalReentryCollapsed {
+        /// Model-facing tool name of the repeated proposal.
+        tool_name: String,
+        /// The approval item the repeat was folded into.
+        approval_id: ApprovalId,
+        /// Status that item had reached when the repeat arrived.
+        prior_status: String,
+        /// Round of the repeated proposal.
+        round: u32,
+    },
     /// Provider routing could not serve a round.
     ProviderFailed {
         /// Legible terminal routing/provider error.
@@ -677,6 +704,8 @@ struct SessionRepr {
     id: SessionId,
     #[serde(default)]
     settings: SessionSettings,
+    #[serde(default)]
+    quota: CognitiveQuota,
     messages: Vec<NormalizedMessage>,
     events: Vec<SessionEvent>,
     #[serde(default)]
@@ -695,6 +724,7 @@ impl From<SessionRepr> for Session {
         let mut session = Self {
             id: repr.id,
             settings: repr.settings,
+            quota: repr.quota,
             messages: repr.messages,
             events: repr.events,
             log: repr.log,
@@ -763,6 +793,13 @@ pub trait SessionStore: Send + Sync {
     /// Panel/introspection surface (`GET /v1/panel/sessions`). Ordering is part
     /// of the contract: the frontend renders the newest conversation first.
     async fn list(&self) -> RuntimeResult<Vec<Session>>;
+
+    /// Remove the stored session record.
+    ///
+    /// Returns `Ok(true)` when a record was removed, `Ok(false)` when the id
+    /// was not present. This deletes the durable transcript record — callers
+    /// own the retention decision.
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool>;
 }
 
 /// A session store held in process memory.
@@ -814,6 +851,165 @@ impl SessionStore for InMemorySessionStore {
         });
         Ok(all)
     }
+
+    async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        Ok(self.sessions.lock().await.remove(id).is_some())
+    }
+}
+
+/// 一次会话写的排队事实 (W2-③ 多客户端会话复用, 审计/观测用)。
+///
+/// 这是**事实记录**, 不是同步原语: 由 [`SessionWritePermit`] 在入场时测得,
+/// 供调用方写审计行 (例如 `gateway.session_client`) 或排障。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionWriteAdmission {
+    /// 入场时排在前面的写者数 (持闸者 + 排队者)。0 = 直接持闸, 未排队。
+    pub queue_position: usize,
+    /// 实际等待持闸的时长。
+    pub waited: Duration,
+}
+
+impl SessionWriteAdmission {
+    /// 这次写是否排过队 (入场时前面有写者)。
+    pub fn was_queued(&self) -> bool {
+        self.queue_position > 0
+    }
+}
+
+/// 同会话写闸的一条车道: 一把先到先服务的互斥锁 + 在场写者计数。
+#[derive(Debug)]
+struct WriteLane {
+    /// 先到先服务 (tokio 互斥锁按请求顺序放行): 同会话写者串行, 不交叠。
+    /// `Arc` 形态让通行证持有**属主守卫**而非借用守卫 (通行证自持车道)。
+    lock: Arc<Mutex<()>>,
+    /// 已入场未退场的写者 (持闸者 + 排队者), 排队事实的来源。
+    writers: AtomicUsize,
+}
+
+impl WriteLane {
+    fn new() -> Self {
+        Self {
+            lock: Arc::new(Mutex::new(())),
+            writers: AtomicUsize::new(0),
+        }
+    }
+}
+
+/// 同时驻留的写车道上限。语义与运行时的 per-session 回合锁一致 (M20):
+/// 超限时只驱逐"无持有者"的车道, 正在持闸/排队的车道永不丢失。
+const MAX_SESSION_WRITE_LANES: usize = 4096;
+
+/// 会话写闸 (W2-③ 多客户端会话复用): **同一会话的账本写先到先服务串行**,
+/// 会话之间互不阻塞。
+///
+/// ## 这把闸承诺什么
+///
+/// 持有 [`SessionWritePermit`] 期间, 同一会话不会有第二个写者交叠写账本
+/// (消息/事件日志/设置): 回合提交、审批续跑、设置补丁、会话删除都从
+/// [`SessionManager::write_permit`] 入场, 先到先服务排队 (第二回合**排队**,
+/// 不发 busy 帧 —— 排队语义见 `docs/04-internal/backend-enhancement/`
+/// W2-3 交付记录的决策表)。
+///
+/// ## 这把闸不承诺什么
+///
+/// 绕过会话写入口、直接调用 `Runtime`/`SessionStore` 写面的调用方不经此闸;
+/// 回合之间的互斥由运行时自身的 per-session 回合锁兜底, 但与本闸覆盖的
+/// 设置写之间的交叠窗口是如实登记的残余 (见 W2-3 交付记录残余表)。
+#[derive(Debug, Default)]
+pub struct SessionWriteGate {
+    lanes: Mutex<BTreeMap<SessionId, Arc<WriteLane>>>,
+}
+
+impl SessionWriteGate {
+    /// 入场一个写者: 同会话先到先服务串行, 会话之间并发。
+    ///
+    /// 返回的通行证携带排队事实 (排在前面几位 / 等了多久); 释放即让位
+    /// (RAII, 不留悬持)。
+    pub async fn admit(&self, session: SessionId) -> SessionWritePermit {
+        let lane = self.lane(session).await;
+        let started = std::time::Instant::now();
+        // 在场写者先计数再排队: 差值即"排在我前面的写者数", 确定性排队事实。
+        let queue_position = lane.writers.fetch_add(1, Ordering::SeqCst);
+        let guard = lane.lock.clone().lock_owned().await;
+        SessionWritePermit {
+            session,
+            admission: SessionWriteAdmission {
+                queue_position,
+                waited: started.elapsed(),
+            },
+            lane,
+            guard: Some(guard),
+        }
+    }
+
+    /// 该会话当前在场写者数 (持闸者 + 排队者) —— 排队深度观测口。
+    pub async fn writers_in_flight(&self, session: &SessionId) -> usize {
+        let map = self.lanes.lock().await;
+        map.get(session)
+            .map_or(0, |lane| lane.writers.load(Ordering::SeqCst))
+    }
+
+    /// 取 (或建) 一条车道。有界 (M20 同语义): 超限只驱逐空闲车道。
+    async fn lane(&self, session: SessionId) -> Arc<WriteLane> {
+        let mut map = self.lanes.lock().await;
+        if let Some(existing) = map.get(&session) {
+            return Arc::clone(existing);
+        }
+        // 无持有者 (仅 map 自己持有一份 Arc) 才可驱逐: 持闸或排队中的车道
+        // 不会因为淘汰而变成另一把锁。
+        if map.len() >= MAX_SESSION_WRITE_LANES {
+            let evictable = map
+                .iter()
+                .find(|(_, lane)| Arc::strong_count(lane) == 1)
+                .map(|(id, _)| *id);
+            if let Some(evictable) = evictable {
+                map.remove(&evictable);
+            }
+        }
+        Arc::clone(
+            map.entry(session)
+                .or_insert_with(|| Arc::new(WriteLane::new())),
+        )
+    }
+}
+
+/// 一张会话写通行证: 持有期间该会话账本写串行 (先到先服务), 释放即让位。
+///
+/// 每个写者一张、RAII 管理: 进程内不设手动释放口, 悬持不可能由 API 造成。
+pub struct SessionWritePermit {
+    session: SessionId,
+    admission: SessionWriteAdmission,
+    lane: Arc<WriteLane>,
+    guard: Option<OwnedMutexGuard<()>>,
+}
+
+impl std::fmt::Debug for SessionWritePermit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionWritePermit")
+            .field("session", &self.session)
+            .field("admission", &self.admission)
+            .finish_non_exhaustive()
+    }
+}
+
+impl SessionWritePermit {
+    /// 这张通行证把守的会话。
+    pub fn session(&self) -> SessionId {
+        self.session
+    }
+
+    /// 排队事实 (排在前面几位 / 等了多久)。
+    pub fn admission(&self) -> SessionWriteAdmission {
+        self.admission
+    }
+}
+
+impl Drop for SessionWritePermit {
+    fn drop(&mut self) {
+        // 先放闸再退位: 后一位写者拿到锁时, 计数已让出它的位置。
+        self.guard.take();
+        self.lane.writers.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 /// Loads, creates, and persists sessions against a [`SessionStore`].
@@ -824,12 +1020,51 @@ impl SessionStore for InMemorySessionStore {
 pub struct SessionManager {
     store: Arc<dyn SessionStore>,
     clock: Arc<dyn Clock>,
+    /// 会话写闸 (W2-③): 同会话账本写先到先服务串行, 会话间并发。
+    writes: SessionWriteGate,
 }
 
 impl SessionManager {
     /// Build a manager over a store.
     pub fn new(store: Arc<dyn SessionStore>, clock: Arc<dyn Clock>) -> Self {
-        Self { store, clock }
+        Self {
+            store,
+            clock,
+            writes: SessionWriteGate::default(),
+        }
+    }
+
+    /// 取一张会话写通行证 (W2-③ 排队语义): 同会话写者先到先服务串行,
+    /// 持证期间该会话账本写不交叠。回合提交 / 审批续跑 / 设置补丁 / 删除
+    /// 等一切会话写入口都从这里入场。
+    pub async fn write_permit(&self, session: SessionId) -> SessionWritePermit {
+        self.writes.admit(session).await
+    }
+
+    /// 写闸观测口 (排队深度等; 面板/测试读数用)。
+    pub fn write_gate(&self) -> &SessionWriteGate {
+        &self.writes
+    }
+
+    /// 原子读-改-写一段会话账本: 持证跨 `load → edit → save`, 与同会话任何
+    /// 在途写者零交叠 (绝不交叠写会话账本)。
+    ///
+    /// 返回 `Ok(None)` = 会话不存在 (未创建、未改动); 否则返回编辑结果与
+    /// 这次写的排队事实。与 [`SessionManager::write_permit`] 同一把闸 —— 持证
+    /// 调用本方法会自锁, 二选一。
+    pub async fn update<R>(
+        &self,
+        session: SessionId,
+        edit: impl FnOnce(&mut Session) -> R,
+    ) -> RuntimeResult<Option<(R, SessionWriteAdmission)>> {
+        let permit = self.write_permit(session).await;
+        let admission = permit.admission();
+        let Some(mut loaded) = self.load(&session).await? else {
+            return Ok(None);
+        };
+        let result = edit(&mut loaded);
+        self.save(&loaded).await?;
+        Ok(Some((result, admission)))
     }
 
     /// Load `id`, returning `None` when it does not exist.
@@ -855,6 +1090,18 @@ impl SessionManager {
             .save(session)
             .await
             .map_err(|e| RuntimeError::session_save(session.id, e.to_string()))
+    }
+
+    /// Remove `id` from the store, returning whether a record was removed.
+    pub async fn delete(&self, id: &SessionId) -> RuntimeResult<bool> {
+        self.store
+            .delete(id)
+            .await
+            .map_err(|e| RuntimeError::Session {
+                session: *id,
+                operation: "deleted",
+                reason: e.to_string(),
+            })
     }
 
     /// The clock this manager stamps sessions with.
@@ -1039,6 +1286,40 @@ mod tests {
         assert_eq!(migrated.permission_preset, PermissionPreset::Full);
     }
 
+    #[test]
+    fn session_settings_survive_json_roundtrip_for_each_preset() {
+        // Select a tier → serialize → deserialize: a populated session (with a
+        // transcript and a recorded fact) must read its settings back as the
+        // same tier, with the model override and the remember flag untouched —
+        // for every tier and every switch between tiers.
+        let clock = clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        session.append(NormalizedMessage::user("hello"), clock.as_ref());
+        session.record(
+            RequestId::new(),
+            TraceId::new(),
+            SessionEventKind::TurnStarted,
+            clock.as_ref(),
+        );
+        session.settings.model = Some("some/model".into());
+
+        for (preset, remember) in [
+            (PermissionPreset::ReadOnly, true),
+            (PermissionPreset::Standard, false),
+            (PermissionPreset::Full, true),
+        ] {
+            session.settings.permission_preset = preset;
+            session.settings.approval_remember = remember;
+
+            let json = serde_json::to_string(&session).unwrap();
+            let reloaded: Session = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(reloaded.settings.permission_preset, preset);
+            assert_eq!(reloaded.settings.approval_remember, remember);
+            assert_eq!(reloaded.settings.model.as_deref(), Some("some/model"));
+        }
+    }
+
     #[tokio::test]
     async fn list_returns_sessions_most_recently_updated_first() {
         let virtual_clock = VirtualClock::new(
@@ -1060,5 +1341,213 @@ mod tests {
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].id, newer.id, "newest updated first");
         assert_eq!(listed[1].id, older.id);
+    }
+
+    #[tokio::test]
+    async fn delete_removes_the_stored_session_and_reports_it() {
+        let store = InMemorySessionStore::new();
+        let id = SessionId::new();
+        store
+            .save(&Session::new(id, clock().as_ref()))
+            .await
+            .unwrap();
+        assert_eq!(store.len().await, 1);
+
+        assert!(store.delete(&id).await.unwrap(), "record was present");
+        assert_eq!(store.len().await, 0);
+        assert!(store.load(&id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn deleting_an_unknown_session_reports_nothing_removed() {
+        let store = InMemorySessionStore::new();
+
+        assert!(!store.delete(&SessionId::new()).await.unwrap());
+    }
+
+    // ------------------------------------------------------------------
+    // W2-③ 会话写闸: 同会话写串行 (排队事实) / 会话间并发 / 读改写原子
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn write_permits_serialize_one_session_and_stay_concurrent_across_sessions() {
+        let gate = Arc::new(SessionWriteGate::default());
+        let a = SessionId::new();
+        let b = SessionId::new();
+
+        let held = gate.admit(a).await;
+        assert_eq!(held.admission().queue_position, 0, "首位写者不排队");
+        assert!(!held.admission().was_queued());
+
+        // 同会话第二位写者: 排队 (不拒绝、不交叠) —— 排队事实确定性。
+        let waiter_gate = Arc::clone(&gate);
+        let waiter = tokio::spawn(async move { waiter_gate.admit(a).await });
+        for _ in 0..100 {
+            if gate.writers_in_flight(&a).await == 2 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            gate.writers_in_flight(&a).await,
+            2,
+            "第二位写者在场排队, 不是被拒 (排队语义钉死)"
+        );
+
+        // 不同会话不共车道: 直接持闸, 不受会话 a 的在场写者影响。
+        let other = gate.admit(b).await;
+        assert!(!other.admission().was_queued(), "会话之间互不阻塞");
+
+        drop(held);
+        let queued = waiter.await.unwrap();
+        assert!(queued.admission().was_queued(), "排队事实必须留痕");
+        assert_eq!(queued.admission().queue_position, 1, "排在原持闸者之后");
+
+        drop(queued);
+        drop(other);
+        assert_eq!(gate.writers_in_flight(&a).await, 0, "退场即清计数");
+        assert_eq!(gate.writers_in_flight(&b).await, 0);
+    }
+
+    #[tokio::test]
+    async fn a_queued_writer_really_waits_until_the_holder_releases() {
+        let gate = Arc::new(SessionWriteGate::default());
+        let session = SessionId::new();
+
+        let held = gate.admit(session).await;
+        let waiter_gate = Arc::clone(&gate);
+        let waiter = tokio::spawn(async move { waiter_gate.admit(session).await });
+
+        // 持闸者不放行, 排队者绝拿不到闸 (串行不交叠)。
+        for _ in 0..100 {
+            assert!(!waiter.is_finished(), "持闸期间排队者不得入场 (回合串行化)");
+            tokio::task::yield_now().await;
+        }
+
+        drop(held);
+        let admitted = waiter.await.unwrap();
+        assert!(admitted.admission().was_queued());
+    }
+
+    #[tokio::test]
+    async fn concurrent_updates_never_lose_a_write_on_one_session() {
+        // 对抗压测: 16 个写者并发读-改-写同一会话, 每人追加一条消息 ——
+        // 交叠写会丢更新, 全量到齐即证零交叠。
+        let clock = clock();
+        let manager = Arc::new(SessionManager::new(
+            Arc::new(InMemorySessionStore::new()),
+            Arc::clone(&clock),
+        ));
+        let id = SessionId::new();
+        manager
+            .save(&manager.load_or_create(id).await.unwrap())
+            .await
+            .unwrap();
+
+        let mut writers = Vec::new();
+        for n in 0..16u32 {
+            let manager = Arc::clone(&manager);
+            let clock = Arc::clone(&clock);
+            writers.push(tokio::spawn(async move {
+                manager
+                    .update(id, |session| {
+                        session.append(NormalizedMessage::user(format!("msg-{n}")), clock.as_ref());
+                    })
+                    .await
+                    .unwrap()
+                    .expect("session exists")
+            }));
+        }
+        for writer in writers {
+            let (_, admission) = writer.await.unwrap();
+            assert!(admission.queue_position < 16, "排队事实有界");
+        }
+
+        let session = manager.load_or_create(id).await.unwrap();
+        assert_eq!(session.len(), 16, "16 次追加一条不丢 (零交叠写)");
+        let appended = session
+            .log
+            .iter()
+            .filter(|entry| matches!(entry.event, SessionEventKind::MessageAppended { .. }))
+            .count();
+        assert_eq!(appended, 16, "账本与转写 lockstep: 每条消息恰有一笔日志");
+    }
+
+    #[tokio::test]
+    async fn update_reports_missing_sessions_without_creating_them() {
+        let manager = SessionManager::new(Arc::new(InMemorySessionStore::new()), clock());
+        let id = SessionId::new();
+
+        let outcome = manager.update(id, |_| ()).await.unwrap();
+        assert!(outcome.is_none(), "不存在的会话不因读改写而凭空出现");
+    }
+
+    #[tokio::test]
+    async fn a_stored_session_list_is_one_coherent_snapshot_under_concurrent_writes() {
+        // 面板读快照语义 (W2-③): `list()` 一次读 = 一个自洽快照 —— 写者并发
+        // 期间, 每个快照行必须是某个时刻的完整会话 (转写与账本永不撕裂)。
+        let clock = clock();
+        let store = Arc::new(InMemorySessionStore::new());
+        let manager = Arc::new(SessionManager::new(
+            Arc::clone(&store) as Arc<dyn SessionStore>,
+            Arc::clone(&clock),
+        ));
+        let ids: Vec<SessionId> = (0..4).map(|_| SessionId::new()).collect();
+        for id in &ids {
+            manager
+                .save(&manager.load_or_create(*id).await.unwrap())
+                .await
+                .unwrap();
+        }
+
+        let mut writers = Vec::new();
+        for id in &ids {
+            for n in 0..8usize {
+                let manager = Arc::clone(&manager);
+                let clock = Arc::clone(&clock);
+                let id = *id;
+                writers.push(tokio::spawn(async move {
+                    manager
+                        .update(id, |session| {
+                            session
+                                .append(NormalizedMessage::user(format!("w-{n}")), clock.as_ref());
+                        })
+                        .await
+                        .unwrap();
+                }));
+            }
+        }
+
+        let mut snapshots = Vec::new();
+        for _ in 0..32 {
+            snapshots.push(store.list().await.unwrap());
+            tokio::task::yield_now().await;
+        }
+        for writer in writers {
+            writer.await.unwrap();
+        }
+        snapshots.push(store.list().await.unwrap());
+
+        for snapshot in &snapshots {
+            assert_eq!(snapshot.len(), ids.len(), "快照不缺行不重行");
+            for session in snapshot {
+                let appended = session
+                    .log
+                    .iter()
+                    .filter(|entry| matches!(entry.event, SessionEventKind::MessageAppended { .. }))
+                    .count();
+                assert_eq!(
+                    appended,
+                    session.messages.len(),
+                    "每行自洽: 账本追加记录与转写同刻 (无撕裂读)"
+                );
+                assert!(session.revision >= session.messages.len() as u64);
+            }
+        }
+        // 写者收尾后的最终快照: 每会话 8 位写者 × 1 条全到齐。
+        let final_snapshot = snapshots.last().unwrap();
+        for session in final_snapshot {
+            assert_eq!(session.messages.len(), 8, "零丢失更新");
+        }
     }
 }

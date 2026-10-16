@@ -62,6 +62,7 @@
 | **运行时 Assembly** | `rt.harness_patch` | `apeireth-runtime-assembly::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| 失败轨迹自动演绎策略补丁 |
 | **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` + runtime-assembly registration | `RepoMapGenerator::generate_map()` | 跨语言 AST 符号提取 + PageRank 代码地图 |
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | 两阶段提交 + 100% 自动原子回滚 |
+| **工具 (Capabilities)** | `tool.git_write` | `apeireth-tools-canonical::git_write` | `git_write(command_str)` | 写意图三级词表（L1 可逆默认人批 / L2 出网永远人批 / L3 毁灭无工具面）+ 命令白名单词法分级（变形防护/组合取最严）+ 受控通道执行 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` + runtime-assembly registration | `initialize()`, `list_tools()`, `call_tool()`| 标准 JSON-RPC 2.0 MCP 协议客户端 |
 | **工具 (Capabilities)** | `tool.stealth_crawler`| `apeireth-tools-canonical::stealth_crawler` | `StealthCrawlerEngine::parse_scraped_document()` | 高反爬异步无头浏览器 + 指纹伪装 + 短视频多模态提取 |
@@ -73,6 +74,29 @@
 | **感知 (Perception)** | `perc.minimax_tts` | `apeireth-perception::voice::minimax_tts`| `synthesize_stream()` | 128kbps 32kHz 音频流 + 3D PAD 情感调制 |
 
 > **状态标注**：本节保留库级能力契约与历史实现索引；是否 PRODUCTION WIRED、DEFAULT ENABLED 或当前可用，必须以运行时 `/v1/apeireth/capabilities` 为准。当前 runtime kernel 只保留机制与抽象端口；具体认知、工具、Organ、SQLite 装配位于 `apeireth-runtime-assembly`。canonical 网关的 chat SSE 当前为缓冲成帧（完整 canonical 完成路径结束后返回帧与 `[DONE]`），非逐 token 增量流式；Activity SSE 的生命周期事件则来自 Runtime Event Spine。没有真实 production backend 的能力保持 `supported=false`。
+
+### 1.1 本轮后端增强新能力行（2026-10 战役 · 状态与上屏面）
+
+> **状态口径**：`已实证` = 交付记录在案且测试钉死（含装配级 e2e）；`在建` = 施工中（他线在途，可能未编译收口）；`接口桩` = 显式未接线的占位面（零假造，只占位）。
+> **上屏面口径**（该能力在哪里与 agent/主人见面）：`工具` = 模型可调用工具面（入名册过治理）；`自审` = `tool.self_status` 自省通道；`设置旋钮` = 设置页或 env 开关（fail-closed）；`仪表` = 预算表/指标格等读数面；`IM 卡` = IM/本地审批卡；`驾驶舱` = TUI；`待上屏` = 后端已建成、UI 面未做（已挂 [00-backlog.md](../04-internal/backend-enhancement/00-backlog.md) 债栏 D 系列「待上屏」类目）。
+> 新数据面字段合同（前端开发唯一契约参照）见 [frontend-data-contract.md](../02-guides/frontend-data-contract.md) §10。
+
+| 能力域 (Domain) | 核心能力 ID | 实现模块 | 核心 API / 契约 | 状态 | 上屏面 |
+|---|---|---|---|---|---|
+| **工具 (Capabilities)** | `tool.apply_patch` + **`file_write` 总闸** | `apeireth-tools-canonical::apply_patch` + 组装根同源开关 | `apply_patch(patch_str)`；主开关 `APEIRETH_ENABLE_FILE_WRITE`（默认关 fail-closed，注册即闸）+ 子档 `APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS`（仅已读文件的修改类补丁免逐次审批） | 已实证 | 工具 + 设置旋钮 |
+| **工具 (Capabilities)** | `tool.git_write`（三级） | `apeireth-tools-canonical::git_write` | `git_write(command_str)`：L1 可逆默认人批（可开 `APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1` 自动放行档）/ L2 出网永远人批 / L3 毁灭无工具面；词法分级+变形防护+组合取最严 | 已实证（[git-write-tiering-delivery.md](../04-internal/backend-enhancement/git-write-tiering-delivery.md)） | 工具 + IM 卡 |
+| **工具 (Capabilities)** | `tool.worktree_plan` / `tool.worktree_apply` | `apeireth-tools-canonical::worktree_plan` / `worktree_apply` | 只读改单（零审批）→ 受控四拍写（计划→改→验证→落，暂存面执行、读前观测门禁、全有或全无）；同受 `file_write` 总闸 | 已实证（[worktree-apply-delivery.md](../04-internal/backend-enhancement/worktree-apply-delivery.md)） | 工具 + IM 卡 |
+| **工具 (Capabilities)** | `tool.self_status`（自省通道） | `apeireth-tools-canonical::self_status` + `runtime-assembly::canonical::self_status_source` | 结构化自述 JSON：`identity / capabilities / memory_ledger / tuning / budget(含配额三维) / workspace / model / domain / content_feed`，字段恒在场、缺源显式 `null`+原因 | 已实证（装配级 e2e + 各批自述面测试） | 自审 |
+| **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` + `apeireth-plugin::mcp` 协议客户端栈 | `initialize()` / `list_tools()` / `call_tool()`：外部工具审批级接入（默认人批，输出归一+脱敏），配置面+工具桥+治理映射，32 e2e | 已实证 | 工具 + IM 卡 |
+| **工具 (Capabilities)** | `tool.content_feed` | `apeireth-tools-canonical::content_feed`（订阅源面 `feeds.json` StoredDoc 拒开 + 摘要面 + 工具面） | `pull`（拉取+入库同调，每次都人批）/ `feed_add`·`feed_remove`（改订阅=写文件同族人批）/ `feed_list`（无免审动作）；产物经 L2 封套入记忆流 | **在建**（J1 线在途：工具面/订阅源面已见代码、交付记录随线落盘；本批实跑时点未编译收口，未能独立复证） | 待上屏（自述订阅节已备） |
+| **工具 (Capabilities)** | `tool.skill_distill` / `tool.skill_search` | `apeireth-tools-canonical::skill`（card / library / distill / search） | 书→技能沉淀三拍（来源采集只读通道→坏卡拒结构化→入技能库）；`SkillCard{id,name,summary,triggers[],body,source{kind,title},created_at}`；写文件面（`file_write` 总闸族）+ 每次沉淀人批 | **在建**（I1 线自报已交付、交付记录随线落盘——[I 轴分期](../04-internal/backend-enhancement/I-absorption-automation.md) 分期表；本批实跑时点未编译收口，未能独立复证） | 工具 + IM 卡 |
+| **记忆 (Memory)** | 随手记（Quick Capture，C 轴入口面） | `frontend/companion-desktop/src/features/quick/quick-capture.ts` → `POST /v1/memory/append` 同源缝 | 一键记条→未整理原料入记忆流：`[随手记 #N] <原文>（来源 capture）`，条目一等字段 `{seq, text, at, source:'capture', protected:false}`；纯采集零 token、零模型调用 | 已实证（[quick-capture-delivery.md](../04-internal/backend-enhancement/quick-capture-delivery.md)） | 快捷窗（随手记面板） |
+| **运行时 (Runtime)** | 配额三维（`tokens` / `tool_steps` / `cost_micros`） | `apeireth-runtime::canonical::quota` + `orchestration::CognitiveQuota` 账本 | env `APEIRETH_QUOTA_MAX_{TOKENS,TOOL_STEPS,COST_MICROS}`（None=不设限）→ 会话账本记账 → 四检查点 `check` 超限即帧 `BudgetExhausted{dimension,limit,consumed}`；单价来源=H-P1 画像表（缺价不编价） | 已实证（[A-quota-real-interface.md](../04-internal/backend-enhancement/A-quota-real-interface.md) P1/P2 实施记录；深度维**暂无接口**如实） | 设置旋钮 + 仪表 + 自审 |
+| **网关 (Gateway)** | 全 API 面令牌门（三态） | `apeireth-gateway::canonical_entry`（`GatewayTokenGate`）+ `client_tokens` + `remote_access` | env `APEIRETH_GATEWAY_TOKEN(S)` + `client-tokens.json` 任一在场=强制 Bearer 恒定时间校验全端点（仅 `/health` 豁免）；两面皆空=放行+警告+审计；`none`=明示不设防留痕；非回环绑定无令牌拒启动（fail-closed） | 已实证（W1-③ + W2-② 交付记录，[E-threat-model.md](../04-internal/backend-enhancement/E-threat-model.md) G10/G4 处置注） | 设置旋钮 |
+| **网关 (Gateway)** | 远程 TLS 传输面 | `apeireth-gateway::remote_access` | `APEIRETH_TLS_CERT`/`APEIRETH_TLS_KEY` 只触发「仍是明文」警告+审计，**不硬造 TLS** | **接口桩**（显式未接线） | —（接线前无面） |
+| **编排 (Orchestration)** | daemon 化 / 多客户端会话复用 | `deploy/` 服务·计划任务脚本 + `apeireth-gateway` 会话路由（W2-①/W2-③） | 常驻占位+优雅停机收尾；并发会话路由（`/v1/apeireth/events?session=` 每客户端独立订阅、同会话扇出）+ 同会话写排队+审计（账本零交叠）+ 会话归属审计 + 面板读快照 | 已实证（[W2-3-multi-client-session-reuse.md](../04-internal/backend-enhancement/W2-3-multi-client-session-reuse.md)；daemon 见 [F-server-form.md](../04-internal/backend-enhancement/F-server-form.md) 现状） | 待上屏（运维面无 UI） |
+| **治理 (Governance)** | 用户域数据门 / 角色门（多用户） | `apeireth-core::user_domain` + `runtime-assembly::domain_plane` + `governance::user_access` + `gateway::{domain_context,client_tokens}` | `users/<id>/` 每户一域+三面分库（会话/记忆/配额账本）+跨域拒绝即帧；`owner/member/guest` 冻结角色词表+24 格权限矩阵+令牌→用户→角色链+管理面 `apeireth user`（owner 门） | 已实证（[W3-1-multi-user-data-isolation.md](../04-internal/backend-enhancement/W3-1-multi-user-data-isolation.md) / [W3-2-user-identity-roles.md](../04-internal/backend-enhancement/W3-2-user-identity-roles.md)） | 自审（域节）+ 待上屏（域/用户管理仅 CLI） |
+| **观测 (Observability)** | `metrics.read`（`GET /v1/panel/metrics`） | `apeireth-runtime::canonical::metrics` + `apeireth-gateway::panel_metrics` | 回合一收束一拍 `TurnMetrics` → 会话/全局两层窗口聚合（`{count,mean,p50,p95,sum}` 最近秩分位）；`schema_version:1`、`retention:"in_process_rolling"`（进程内环形不落盘）；空态显式 `"—"`（null 不冒充 0）；过 W2-② 令牌门 | 已实证（[G-observability.md](../04-internal/backend-enhancement/G-observability.md) P1 交付记录，21 项测试） | 待上屏（仪表/驾驶舱 CACHE·BUDGET 面板与遥测条待前端消费批） |
 
 ---
 

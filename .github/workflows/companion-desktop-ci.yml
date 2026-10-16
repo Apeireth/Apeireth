@@ -99,6 +99,13 @@ jobs:
         working-directory: frontend/companion-desktop
         run: pnpm check
 
+      # 素材许可门禁（avatar-pack-admission.md §1b）：发布物素材必须全在
+      # asset-licenses.json 台账、第三方许可必须白名单内——无行即红。
+      # （最小改动接入，报备：本步只读台账与素材，无其它副作用。）
+      - name: pnpm check:assets (素材许可门禁)
+        working-directory: frontend/companion-desktop
+        run: pnpm check:assets
+
   # =========================================================================
   # 3. 8 硬墙守门 — 确认 companion-desktop 没有偷偷碰 LOCKED crate
   # =========================================================================
@@ -163,7 +170,7 @@ jobs:
           if [ -z "$BASE" ]; then exit 0; fi
           # The workspace package version is the active release authority.
           CUR=$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          EXPECTED="${APEIRETH_VERSION:-2.0.0-rc.2}"
+          EXPECTED="${APEIRETH_VERSION:-2.0.0-rc.4}"
           echo "workspace.version = $CUR"
           if [ "$CUR" != "$EXPECTED" ]; then
             echo "::error::workspace.version 改动: $CUR (期望 $EXPECTED)"

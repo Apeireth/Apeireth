@@ -18,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::{CapabilityId, SessionId};
+use apeireth_governance::approval_family::family_ids_for_arguments;
 use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict};
 use apeireth_runtime::canonical::{PermissionPreset, SessionStore};
 use async_trait::async_trait;
@@ -35,7 +36,12 @@ use sha2::{Digest, Sha256};
 /// mutators:
 /// - 执行面: `tool.shell` / `tool.process` / `tool.supervisor` /
 ///   `tool.std_sub_supervisor` / `tool.mcp*` (动态能力);
-/// - 受控写: `tool.filesystem` (workspace 边界内的读写, 仍是写);
+/// - 受控写: `tool.filesystem` (workspace 边界内的读写, 仍是写) /
+///   `tool.apply_patch` (补丁式受控写文件, 创建/修改/删除都算写) /
+///   `tool.worktree_apply` (四拍受控工作树写, 改单落盘仍是写;
+///   `tool.worktree_plan` 是只读改单面, 不入本名单) /
+///   `tool.skill_distill` (技能库沉淀写, 同受 file_write 写总闸;
+///   `tool.skill_search` 是只读检索面, 不入本名单);
 /// - 出口: `tool.fetch` / `tool.repo` (remote 读发布) —— 只读会话不应外联;
 /// - 凭据: `credential.read` / `secret.read` / `env.read` (环境变量含 secret);
 /// - 删除: `fs.delete`;
@@ -50,6 +56,10 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "tool.std_sub_supervisor",
         // 受控写
         "tool.filesystem",
+        "tool.apply_patch",
+        "tool.git_write",
+        "tool.worktree_apply",
+        "tool.skill_distill",
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",
@@ -68,22 +78,42 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
     WRITE_OR_EXECUTE.contains(&id) || id.starts_with("tool.mcp")
 }
 
+/// 「L2 永不因预设放行」地板: 命中即该调用**不可**被预设改写放行。
+///
+/// git 写分级 (D-P1) 的 L2 出网写 (push/fetch/remote) 永远停人工审批 ——
+/// `full` 预设的 RequireApproval→Allow 改写与 `standard` 的 `approval_remember`
+/// 免审记忆都不得越过它 (手机上批 push, 但每次都得人批)。L1 可逆本地写不受
+/// 地板约束 (照常走预设语义); L3/词表外本来就拒绝即帧, 无需地板。
+pub fn human_approval_floor_applies(
+    capability: &CapabilityId,
+    arguments: &serde_json::Value,
+) -> bool {
+    capability.as_str() == apeireth_tools_canonical::GIT_WRITE_CAPABILITY_ID
+        && apeireth_tools_canonical::git_write_human_approval_floor(arguments)
+}
+
 /// Governance hook that applies a session's [`PermissionPreset`] to capability
 /// dispatch, delegating everything else to the wrapped inner hook.
 pub struct PermissionPresetGovernanceHook {
     inner: Arc<dyn GovernanceHook>,
     sessions: Arc<dyn SessionStore>,
-    /// In-process approval memory, keyed by `(session, capability, args_hash)`.
+    /// In-process approval memory, keyed by `(session, capability, authorization)`.
     ///
     /// L 组 (permission_preset.rs:81-86): the old key was `(session, capability)`
     /// — approving one `tool.shell` call made every later `tool.shell` call in
-    /// that session skip its approval, including `rm -rf ...`. The key now binds
-    /// the *arguments*, so only the exact operation a human approved is
-    /// remembered. Deliberately not persisted: a restart clears it, so approval
-    /// memory never outlives the process.
+    /// that session skip its approval, including `rm -rf ...`.
+    ///
+    /// E-P2 审批族归一: 第三键是**授权对象** ([`authorization_key`]) ——
+    /// 命令面记录的授权对象 = **族集** (批"删除族" = 该族所有形态生效:
+    /// 同族换形重放被同一授权覆盖、不重批; 跨族仍逐族审批, 批删除≠批网络;
+    /// 审批卡族标注随卡明示授权族, 人见族而批)。无族命令退回**精确操作
+    /// 指纹** (逐字语义, L 组口径对无族命令原样保留)。Deny 永不被记忆绕过。
+    /// Deliberately not persisted: a restart clears it, so approval memory
+    /// never outlives the process.
     approval_memory: RwLock<HashSet<(String, String, String)>>,
-    /// The `args_hash` of the most recent `(session, capability)` pair that was
-    /// escalated to RequireApproval and is still awaiting a human decision.
+    /// The authorization key of the most recent `(session, capability)` pair
+    /// that was escalated to RequireApproval and is still awaiting a human
+    /// decision.
     ///
     /// The runtime's `approval_resolved(session, capability)` callback carries
     /// no arguments (trait signature), so the hook records here which exact
@@ -103,13 +133,18 @@ impl PermissionPresetGovernanceHook {
         }
     }
 
-    fn remembered(&self, session: &SessionId, capability: &CapabilityId, args_hash: &str) -> bool {
+    fn remembered(
+        &self,
+        session: &SessionId,
+        capability: &CapabilityId,
+        authorization: &str,
+    ) -> bool {
         // poison 容错 (L 组): 审批记忆是一次 telemetry 级状态, 不是安全边界
         // 本身; 持锁线程 panic 后取回数据继续, 不让级联 panic 打死进程。
         read_lock_or_recover(&self.approval_memory).contains(&(
             session.to_string(),
             capability.as_str().to_string(),
-            args_hash.to_string(),
+            authorization.to_string(),
         ))
     }
 }
@@ -165,6 +200,25 @@ fn arguments_fingerprint(arguments: &serde_json::Value) -> String {
     format!("{digest:x}")[..16].to_string()
 }
 
+/// 审批记忆的**授权对象键** (E-P2 族归一):
+///
+/// * 命令面 (族可归): `family:<族id+…>` —— 授权对象 = 族集。批"删除族" =
+///   该族所有形态生效 (同族换形重放不重批), 跨族不串 (批删除≠批网络);
+///   多族命令以族组合为对象 (批"删除族+网络族" ≠ 单批删除族)。
+/// * 无族命令: `exact:<参数指纹>` —— 授权对象 = 该次操作本身 (逐字语义,
+///   L 组口径原样保留: 同能力不同操作不继承免审)。
+///
+/// 族集判定走治理层单一来源 (`family_ids_for_arguments`, 段首动词 + 成员
+/// 调用归属面): 提到族词 (`echo del is a word`) 不构成授权归属, 不白拿授权。
+fn authorization_key(arguments: &serde_json::Value) -> String {
+    let families = family_ids_for_arguments(arguments);
+    if families.is_empty() {
+        format!("exact:{}", arguments_fingerprint(arguments))
+    } else {
+        format!("family:{}", families.join("+"))
+    }
+}
+
 #[async_trait]
 impl GovernanceHook for PermissionPresetGovernanceHook {
     fn name(&self) -> &str {
@@ -176,16 +230,16 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
     }
 
     fn approval_resolved(&self, session: &SessionId, capability: &CapabilityId) {
-        // 只提升这一对 (session, capability) 最近一次真正等待审批的那个参数
-        // 指纹: trait 回调不带参数, 这里不能把同能力同轮的其它挂起调用一并
+        // 只提升这一对 (session, capability) 最近一次真正等待审批的那个授权
+        // 对象: trait 回调不带参数, 这里不能把同能力同轮的其它挂起调用一并
         // 免审。
-        let args_hash = write_lock_or_recover(&self.awaiting_approval)
+        let authorization = write_lock_or_recover(&self.awaiting_approval)
             .remove(&(session.to_string(), capability.as_str().to_string()));
-        if let Some(args_hash) = args_hash {
+        if let Some(authorization) = authorization {
             write_lock_or_recover(&self.approval_memory).insert((
                 session.to_string(),
                 capability.as_str().to_string(),
-                args_hash,
+                authorization,
             ));
         }
     }
@@ -242,7 +296,11 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
             PermissionPreset::Full => {
                 let verdict = self.inner.evaluate_verbose(request).await;
                 match verdict.decision {
-                    Decision::RequireApproval { .. } => {
+                    // L2 永不因预设放行: 命中人工审批地板的调用, `full` 的
+                    // RequireApproval→Allow 改写也不生效 (D-P1 git 写分级)。
+                    Decision::RequireApproval { .. }
+                        if !human_approval_floor_applies(capability, arguments) =>
+                    {
                         GovernanceVerdict::new(self.name(), Decision::Allow)
                     }
                     _ => verdict,
@@ -252,11 +310,15 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
                 // `approval_remember` only applies to the standard preset: it
                 // skips a *previously approved* approval prompt, never a denial.
                 // `read_only` stays refuse-closed and `full` already allows.
-                // L 组: 记忆键是 (session, capability, args_hash) —— 只放行
-                // 人类真正批准过的那一次操作, 同会话换个参数 (rm -rf) 仍要审批。
-                let args_hash = arguments_fingerprint(arguments);
+                // L 组 + E-P2: 记忆键是 (session, capability, 授权对象) ——
+                // 命令面授权对象 = 族集 (批"删除族" = 该族所有形态生效,
+                // 同族换形重放不重批; 跨族仍逐族审批), 无族命令按精确操作
+                // 指纹逐字记住 (L 组: 同会话换个操作仍要审批)。
+                // L2 永不因预设放行: 免审记忆也不越过人工审批地板 (D-P1)。
+                let authorization = authorization_key(arguments);
                 if approval_remember
-                    && self.remembered(&request.session, capability, &args_hash)
+                    && !human_approval_floor_applies(capability, arguments)
+                    && self.remembered(&request.session, capability, &authorization)
                 {
                     let verdict = self.inner.evaluate_verbose(request).await;
                     match verdict.decision {
@@ -277,7 +339,7 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
                                 request.session.to_string(),
                                 capability.as_str().to_string(),
                             ),
-                            args_hash,
+                            authorization,
                         );
                     }
                     verdict
@@ -367,7 +429,8 @@ mod tests {
     }
 
     /// 走一遍真实流程: 评估登记 awaiting → 人类批准, 使审批记忆里留下
-    /// `(session, capability, args_hash)` 三元组 (旧实现只需一次回调)。
+    /// `(session, capability, 授权对象)` 三元组 (E-P2 起授权对象 = 族集 /
+    /// 精确操作指纹, 见 [`authorization_key`])。
     async fn approve_once(
         hook: &PermissionPresetGovernanceHook,
         session: SessionId,
@@ -384,8 +447,12 @@ mod tests {
         hook.approval_resolved(&session, capability);
     }
 
+    /// 记忆作用域 (L 组回归 + E-P2 授权对象语义): 同 (会话, 能力) 只对
+    /// **同一授权对象**免审 —— 无族命令按精确操作指纹逐字记住 (批准一次
+    /// `echo` 不免审 `rm -rf`, L 组口径原样); 命令面按族集记住 (见下方
+    /// E-P2 三测)。其它会话 / 其它能力一律不继承。
     #[tokio::test]
-    async fn approval_memory_is_scoped_to_session_capability_and_arguments() {
+    async fn approval_memory_is_scoped_to_session_capability_and_authorization_object() {
         let (hook, store) = build_hook().await;
         let session = SessionId::new();
         let other_session = SessionId::new();
@@ -397,7 +464,7 @@ mod tests {
         let approved_args = serde_json::json!({"command": "echo approved-only"});
         approve_once(&hook, session, &capability, &approved_args).await;
 
-        // 同一个 (session, capability) + 同一个参数指纹 → 免审。
+        // 同一个 (session, capability) + 同一个授权对象 → 免审。
         let remembered = hook
             .evaluate_verbose(&dispatch_request(session, &capability, &approved_args))
             .await;
@@ -406,9 +473,8 @@ mod tests {
             "the approved operation must be remembered"
         );
 
-        // L 组回归 (permission_preset.rs:81-86): 同会话同能力但**不同参数**
-        // 不得继承免审 —— 旧键 (session, capability) 下"批准一次 echo 之后,
-        // 同会话的 rm -rf 也跳过审批"。
+        // L 组回归 (permission_preset.rs:81-86): 无族命令逐字授权 —— 批准
+        // 一次 echo 之后, 同会话的 rm -rf (另一授权对象) 仍要审批。
         let dangerous_args = serde_json::json!({"command": "rm -rf /tmp/data"});
         let different_args = hook
             .evaluate_verbose(&dispatch_request(session, &capability, &dangerous_args))
@@ -451,6 +517,108 @@ mod tests {
         );
     }
 
+    /// E-P2 重放对抗①（同族换形不重批）：同族孪生 API 形态换形重放 =
+    /// 同族授权覆盖 —— 批一次 `Remove-Item x.txt`（删除族）后，`rm` / 静态
+    /// 调用形态重放不再重批（G2 的"重放白拿授权"改写为"重放同族授权覆盖"，
+    /// 不再逃出授权面）。
+    #[tokio::test]
+    async fn same_family_form_change_replay_is_covered_without_reapproval() {
+        let (hook, store) = build_hook().await;
+        let session = SessionId::new();
+        let capability = CapabilityId::new("tool.shell").unwrap();
+        save_session(&store, session, PermissionPreset::Standard, true).await;
+
+        let approved = serde_json::json!({"command": "Remove-Item x.txt"});
+        approve_once(&hook, session, &capability, &approved).await;
+
+        for replay in [
+            "[System.IO.File]::Delete('x.txt')",
+            "rm x.txt",
+            "del x.txt",
+            "([System.IO.FileInfo]'x.txt').Delete()",
+        ] {
+            let args = serde_json::json!({ "command": replay });
+            let verdict = hook
+                .evaluate_verbose(&dispatch_request(session, &capability, &args))
+                .await;
+            assert!(
+                verdict.decision.is_allowed(),
+                "{replay} 同族换形重放必须被同族授权覆盖（不重批）: {:?}",
+                verdict.decision
+            );
+        }
+    }
+
+    /// E-P2 重放对抗②（跨族必批）：批删除族 ≠ 批网络族 —— 同会话换族重放
+    /// 仍要人批；跨族复合命令（删除族+网络族）另立授权对象，不吞并单族授权。
+    #[tokio::test]
+    async fn cross_family_replay_still_requires_separate_approval() {
+        let (hook, store) = build_hook().await;
+        let session = SessionId::new();
+        let capability = CapabilityId::new("tool.shell").unwrap();
+        save_session(&store, session, PermissionPreset::Standard, true).await;
+
+        let approved = serde_json::json!({"command": "Remove-Item x.txt"});
+        approve_once(&hook, session, &capability, &approved).await;
+
+        let network = serde_json::json!({"command": "Invoke-WebRequest http://example.invalid"});
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &capability, &network))
+            .await;
+        assert!(
+            matches!(verdict.decision, Decision::RequireApproval { .. }),
+            "批删除族不得顺带免审网络族（批删除≠批网络）: {:?}",
+            verdict.decision
+        );
+
+        // 复合命令（两族）是另一授权对象: 不被单族授权吞并, 也不吞并单族。
+        let compound = serde_json::json!({"command": "del a.txt && curl http://example.invalid"});
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &capability, &compound))
+            .await;
+        assert!(
+            matches!(verdict.decision, Decision::RequireApproval { .. }),
+            "跨族复合命令必须另批: {:?}",
+            verdict.decision
+        );
+    }
+
+    /// E-P2 授权对象语义钉死（批"删除族" = 该族所有形态生效）：族集授权
+    /// 覆盖同族形态与同族目标；审批卡族标注（`authorization_families`）随卡
+    /// 明示授权族，人见族而批。族内目标粒度不在本层（要目标级逐批走
+    /// AllowedOnce 一次性审批面 / 关闭 approval_remember），如实入档契约。
+    #[tokio::test]
+    async fn family_authorization_covers_every_form_of_the_family() {
+        let (hook, store) = build_hook().await;
+        let session = SessionId::new();
+        let capability = CapabilityId::new("tool.shell").unwrap();
+        save_session(&store, session, PermissionPreset::Standard, true).await;
+
+        let approved = serde_json::json!({"command": "Remove-Item x.txt"});
+        approve_once(&hook, session, &capability, &approved).await;
+
+        let other_target = serde_json::json!({"command": "rm -rf /tmp/other-target"});
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &capability, &other_target))
+            .await;
+        assert!(
+            verdict.decision.is_allowed(),
+            "批\"删除族\" = 该族所有形态生效（族集授权对象语义）: {:?}",
+            verdict.decision
+        );
+
+        // 无族命令仍逐字授权（L 组口径不因族归一放宽）。
+        let familyless = serde_json::json!({"command": "echo hi"});
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &capability, &familyless))
+            .await;
+        assert!(
+            matches!(verdict.decision, Decision::RequireApproval { .. }),
+            "无族命令必须逐字逐批: {:?}",
+            verdict.decision
+        );
+    }
+
     #[tokio::test]
     async fn approval_memory_never_bypasses_a_denial() {
         let (hook, store) = build_hook().await;
@@ -464,7 +632,7 @@ mod tests {
         write_lock_or_recover(&hook.approval_memory).insert((
             session.to_string(),
             capability.as_str().to_string(),
-            arguments_fingerprint(&args),
+            authorization_key(&args),
         ));
 
         let verdict = hook
@@ -488,7 +656,7 @@ mod tests {
         write_lock_or_recover(&hook.approval_memory).insert((
             session.to_string(),
             capability.as_str().to_string(),
-            arguments_fingerprint(&args),
+            authorization_key(&args),
         ));
 
         let verdict = hook
@@ -519,7 +687,11 @@ mod tests {
     }
 
     /// M2 回归: `read_only` 预设的执法面必须覆盖出口/凭据/删除类能力 —— 名单
-    /// 缺一项, "只读" 会话就能静默执行该能力。    #[test]
+    /// 缺一项, "只读" 会话就能静默执行该能力。
+    ///
+    /// 债清 (D-P2 进场发现): 本测试的 `#[test]` 属性曾被并入上一行行尾注释而
+    /// 静默失效 (陈旧断言 —— 挂名不跑), 现恢复挂测并钉 D-P2 新面。
+    #[test]
     fn read_only_preset_covers_egress_credential_and_delete_exits() {
         for id in [
             // 执行面 (原名单)
@@ -530,6 +702,9 @@ mod tests {
             "tool.mcp.dynamic",
             // 受控写
             "tool.filesystem",
+            "tool.apply_patch",
+            "tool.git_write",
+            "tool.worktree_apply",
             "fs.write",
             // 出口 / 远端副作用
             "tool.fetch",
@@ -549,13 +724,34 @@ mod tests {
                 "{id} must be refused under the read_only preset"
             );
         }
-        // 纯读能力不受影响。
-        for id in ["tool.search", "tool.education", "fs.read", "unknown.reader"] {
+        // 纯读能力不受影响 (worktree_plan 是只读改单面, 计划不落盘)。
+        for id in [
+            "tool.search",
+            "tool.education",
+            "tool.worktree_plan",
+            "fs.read",
+            "unknown.reader",
+        ] {
             assert!(
                 !is_write_or_execute_capability(&CapabilityId::new(id).unwrap()),
                 "{id} is a read capability and must stay allowed"
             );
         }
+    }
+
+    /// 「L2 永不因预设放行」地板判定 (D-P1 git 写分级): 只有 `tool.git_write`
+    /// 的 L2 (出网) 调用命中地板; L1 与其它能力不踩。
+    #[test]
+    fn human_approval_floor_covers_only_l2_git_write_calls() {
+        let capability = CapabilityId::new("tool.git_write").unwrap();
+        let other = CapabilityId::new("tool.apply_patch").unwrap();
+        let push = serde_json::json!({ "command": "git push origin main" });
+        let fetch = serde_json::json!({ "command": "git fetch origin" });
+        let commit = serde_json::json!({ "command": "git commit -m x" });
+        assert!(human_approval_floor_applies(&capability, &push));
+        assert!(human_approval_floor_applies(&capability, &fetch));
+        assert!(!human_approval_floor_applies(&capability, &commit));
+        assert!(!human_approval_floor_applies(&other, &push));
     }
 
     /// M2 (行为面): read_only 会话下, 新纳入名单的能力必须被本 hook 显式
@@ -567,7 +763,13 @@ mod tests {
         save_session(&store, session, PermissionPreset::ReadOnly, false).await;
         let args = serde_json::json!({});
 
-        for id in ["tool.fetch", "http.send", "credential.read", "fs.delete"] {
+        for id in [
+            "tool.fetch",
+            "http.send",
+            "credential.read",
+            "fs.delete",
+            "tool.worktree_apply",
+        ] {
             let capability = CapabilityId::new(id).unwrap();
             let verdict = hook
                 .evaluate_verbose(&dispatch_request(session, &capability, &args))
@@ -579,5 +781,86 @@ mod tests {
             );
             assert_eq!(verdict.hook, "permission_preset");
         }
+    }
+
+    /// D-P2 (行为面): `tool.worktree_apply` 的审批级语义按预设逐档钉死 ——
+    /// read_only 拒 / standard 审批 (RequireApproval, 理由载荷 = 改单摘要:
+    /// 文件数 / 动作分布 / 验证命令) / full 按预设语义放行 (本工具无审批地板)。
+    /// 计划面 `tool.worktree_plan` 是只读能力, read_only 下照常可用。
+    #[tokio::test]
+    async fn worktree_apply_approval_tier_matches_each_permission_preset() {
+        let inner: Arc<dyn GovernanceHook> = Arc::new(
+            apeireth_tools_canonical::WorktreeApplyApprovalHook::new(std::env::temp_dir()),
+        );
+        let store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let hook = PermissionPresetGovernanceHook::new(inner, store.clone());
+        let session = SessionId::new();
+        let apply = CapabilityId::new("tool.worktree_apply").unwrap();
+        let arguments = serde_json::json!({
+            "plan": {
+                "goal": "demo objective",
+                "files": [
+                    { "path": "a.txt", "action": "update", "expect": "updated body" }
+                ]
+            },
+            "patch": "*** Begin Patch\n*** Update File: a.txt\n@@\n-old\n+new\n*** End Patch",
+            "verify": [ { "program": "cargo", "args": ["--version"] } ]
+        });
+
+        // read_only: 预设显式拒 (写能力名单覆盖)。
+        save_session(&store, session, PermissionPreset::ReadOnly, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &apply, &arguments))
+            .await;
+        assert!(
+            matches!(verdict.decision, Decision::Deny { .. }),
+            "read_only must refuse tool.worktree_apply, got {:?}",
+            verdict.decision
+        );
+        assert_eq!(verdict.hook, "permission_preset");
+
+        // standard: 审批级 (RequireApproval), 载荷带改单摘要。
+        save_session(&store, session, PermissionPreset::Standard, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &apply, &arguments))
+            .await;
+        let Decision::RequireApproval { reason } = &verdict.decision else {
+            panic!(
+                "standard must keep tool.worktree_apply at require-approval, got {:?}",
+                verdict.decision
+            );
+        };
+        assert!(reason.contains("文件 1"), "审批卡载荷缺文件数: {reason}");
+        assert!(
+            reason.contains("add 0/update 1/delete 0"),
+            "审批卡载荷缺动作分布: {reason}"
+        );
+        assert!(
+            reason.contains("验证命令 1 条") && reason.contains("cargo --version"),
+            "审批卡载荷缺验证命令: {reason}"
+        );
+
+        // full: 按预设语义 (RequireApproval→Allow 改写; 本工具无审批地板)。
+        save_session(&store, session, PermissionPreset::Full, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &apply, &arguments))
+            .await;
+        assert!(
+            verdict.decision.is_allowed(),
+            "full preset follows preset semantics for tool.worktree_apply, got {:?}",
+            verdict.decision
+        );
+
+        // 计划面: 只读改单不入写能力名单, read_only 下照常。
+        let plan = CapabilityId::new("tool.worktree_plan").unwrap();
+        save_session(&store, session, PermissionPreset::ReadOnly, false).await;
+        let verdict = hook
+            .evaluate_verbose(&dispatch_request(session, &plan, &serde_json::json!({})))
+            .await;
+        assert!(
+            verdict.decision.is_allowed(),
+            "tool.worktree_plan is read-only and must stay allowed under read_only, got {:?}",
+            verdict.decision
+        );
     }
 }

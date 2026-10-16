@@ -63,6 +63,14 @@ pub mod statechart;
 pub mod storage_atomic;
 /// 存储文档描述符 (`StoredDoc<T>`) + 版本拒开两级容错 + 显式迁移入口。
 pub mod stored_doc;
+// 用户域 (W3-① 多户数据隔离·星群数据层): 域模型 + 域注册表 + 单户兼容采用。
+/// 用户域模型 (`UserDomain`/`DomainUserId`/`DomainRole`) + 域注册表 + 首次启动
+/// 「默认域原位采用」(零迁移) + 域级授权拒绝即帧 (404/403 语义钉死)。
+pub mod user_domain;
+// 模型画像表 (H-P1 模型面轴): 模型能力事实 + 单价的依据数据面 (路由/成本分级)。
+/// 模型画像表 (`ModelProfile`/`ModelProfileTable`): 三层配置 (内置基线 /
+/// 数据目录拒开档 / env 覆盖) + 显式 unknown, 单价缺省 None 绝不编价。
+pub mod model_profile;
 // 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 空闲看门狗 + 超时类独立 code。
 /// 统一超时熔合小库 (`Deadline` / `clamp_timeout` / `IdleWatchdog`)。
 pub mod deadline;
@@ -2365,11 +2373,13 @@ mod release_manifest_tests {
     use super::*;
 
     #[test]
-    fn test_release_version_is_2_0_0_rc_1() {
-        // 编译期 hardcode: workspace version 升至 2.0.0-rc.1 (RC1 发布候选, per RC campaign)
+    fn test_release_version_is_2_0_0_rc_2() {
+        // 永不再漂：直接对齐编译期 crate 版本（继承自 workspace 版本轴）——
+        // 今后版本递进本测试零改动即自动正确（钉死值版本漂移的教训）。
         assert_eq!(
-            RELEASE_VERSION, "2.0.0-rc.1",
-            "RELEASE_VERSION must be 2.0.0-rc.1 (Cargo.toml workspace version 改后自动穿透, RC1 发布候选)"
+            RELEASE_VERSION,
+            env!("CARGO_PKG_VERSION"),
+            "RELEASE_VERSION must equal the workspace version axis (CARGO_PKG_VERSION)"
         );
     }
 

@@ -13,6 +13,13 @@
 #![deny(unsafe_code)]
 
 pub mod apply_patch;
+// 受控文件写入生产工具面 (`tool.apply_patch`): 事务补丁原语 + 读前观测门禁
+// 接线 + 写入风险映射 (require-approval 档) + 单调边界 Guard + 五段流水线。
+pub mod apply_patch_tool;
+// 内容流接入 (J1「内容流接入」): 订阅源管理 (`feeds.json` StoredDoc 拒开) +
+// 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露, 跨源内容不直进提示词);
+// 治理 = RequireApproval 级 (拉取与入库都经审批档, 改订阅走 write_intent 同族)。
+pub mod content_feed;
 pub mod education;
 pub mod egress;
 // 工具执行五段流水线: pre-execute 瀑布 → 单调 Guard → around(超时/重试) →
@@ -23,12 +30,19 @@ pub mod exec_pipeline;
 pub mod escalation;
 pub mod fetch;
 pub mod filesystem;
+// git 写分级生产工具面 (`tool.git_write`, 干活能力轴 P1): 分级词表
+// (L1 可逆/L2 出网/L3 毁灭拒绝即帧) + 词法分级执行面 + 受控通道 + 分级风险映射。
+pub mod git_write;
 pub mod guardrail;
 pub mod mcp;
 // MCP 工具桥 (最后一公里接线): 服务器配置面 (env / 数据目录 StoredDoc 拒开语义) +
 // 每服务器一连接 (生命周期 + 断线重连后重发现) + 动态工具 (mcp:<server>:<tool>,
 // 调用穿五段流水线) + 外部工具治理映射 (默认审批级, 只读预设可放行)。
 pub mod mcp_bridge;
+// 对象级访问判定 (E-P3 · 威胁模型 G3): 按"对象"而非"API 形态"判定文件操作权力 ——
+// 执行前后对象状态对比 (事实判定, 与形态无关) + 越界即帧 + `sandbox.object_violation`
+// 审计 + `ObjectAccessPolicy` 挂载点 (星港线深望智能体接此契约)。
+pub mod object_access;
 // 读前观测门禁: 「未读不得覆盖写」会话期护栏 + 版本 CAS 双钥匙 (纯事件门禁)。
 pub mod observed_gate;
 pub mod plugin;
@@ -36,6 +50,14 @@ pub mod process;
 pub mod repo;
 pub mod repo_map;
 pub mod search;
+// 书→技能沉淀 (I 轴吸收自动化 I1): 技能卡模型 (StoredDoc 落盘 + 拒开语义) +
+// 沉淀管线 (`tool.skill_distill`, file_write 总闸族 + 审批档) + 调用面
+// (`tool.skill_search` 只读档, L2 封套披露的检索式注入, 绝不全量注入)。
+pub mod skill;
+// 结构化自述面 (自省通道): `tool.self_status` 只读工具 —— 身份 / 能力名册 /
+// 记忆账本计数 / 调参状态 / 预算 / 工作区 / 模型画像事实, 全部取真实生效值;
+// 缺失字段显式 null + 原因, 不整帧失败。
+pub mod self_status;
 mod sensitive_path;
 pub mod shell;
 pub mod spill;
@@ -44,9 +66,34 @@ pub mod stealth_crawler;
 // v2.0.0-rc.1 RC-8: 加 std_sub_supervisor 模块 (真 impl, std::process::Command 同步启进程).
 pub mod std_sub_supervisor;
 pub mod supervisor;
+// 文件写入总闸的 shell 侧写意图词法扫描 (内测整改): 命中且总闸未开 → 拒绝即帧。
+pub mod write_intent;
+// 干活能力轴 P2 · 只读改单面 (`tool.worktree_plan`): 任务目标 → 改单
+// (文件列表+动作+预期), 计划不落盘、只读档零审批。
+pub mod worktree_plan;
+// 干活能力轴 P2 · 四拍受控工作树写 (`tool.worktree_apply`): 计划→改→验证→落,
+// 暂存面执行 + 观测门禁 + 写总闸语义 + 落拍全有或全无 (审批级, 每次人批)。
+pub mod worktree_apply;
 
 pub use apply_patch::{
     ApplyPatchError, FilePatchAction, PatchHunk, PatchReport, TransactionalPatchApplier,
+};
+pub use apply_patch_tool::{
+    apply_patch_capability, apply_patch_pipeline, authorized_file_write_policy,
+    write_release_class_for_arguments, write_release_class_for_patch, ApplyPatchParams,
+    ApplyPatchRiskMappingHook, ApplyPatchTool, ApplyPatchWriteApprovalHook,
+    ApplyPatchWriteBoundaryGuard, WriteReleaseClass, APPLY_PATCH_CAPABILITY_ID,
+    APPLY_PATCH_TIMEOUT_MS, APPLY_PATCH_TOOL_DESCRIPTION, APPLY_PATCH_TOOL_NAME,
+    GIT_WRITE_BOUNDARY_NOTE,
+};
+pub use content_feed::{
+    content_feed_approval_reason, content_feed_capability, content_feed_pipeline, episode_for_item,
+    write_face_for_action, ContentFeedApprovalHook, ContentFeedConfig, ContentFeedTool,
+    EpisodeWriter, FeedDocumentForm, FeedItemSummary, FeedKind, FeedSource, FeedStore,
+    FeedStoreError, FeedWriteFace, PullFeedReport, PullRecord, ACTION_FEED_ADD, ACTION_FEED_LIST,
+    ACTION_FEED_REMOVE, ACTION_PULL, CONTENT_FEED_ACTIONS, CONTENT_FEED_CAPABILITY_ID,
+    CONTENT_FEED_DISCLOSURE_NOTE, CONTENT_FEED_EPISODE_ROLE, CONTENT_FEED_SESSION_LABEL,
+    CONTENT_FEED_TOOL_NAME, FEEDS_DOC_NAME,
 };
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
@@ -59,10 +106,18 @@ pub use exec_pipeline::{
     PipelinedCapability, PostDecision, PostExecuteHook, PostExecuteRequest, PostExecuteWaterfall,
     PostVerdict, PreDecision, PreExecuteHook, PreExecuteRequest, PreExecuteWaterfall, PreVerdict,
     RetryPolicy, RiskLevelGateHook, SchemaField, SchemaKind, StageEntry, SupersededResult,
-    ToolExecutionPipeline, ToolGuard, ToolGuardRequest, ToolOutcome,
+    ToolExecutionPipeline, ToolGuard, ToolGuardRequest, ToolOutcome, DEFAULT_MAX_TIMEOUT_MS,
 };
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
+pub use git_write::{
+    authorized_git_write_policy, classify_git_write, git_write_capability,
+    git_write_human_approval_floor, git_write_pipeline, git_write_plan_for_arguments,
+    GitWriteBoundaryGuard, GitWriteParams, GitWritePlan, GitWriteReleaseTier,
+    GitWriteRiskMappingHook, GitWriteTier, GitWriteTierApprovalHook, GitWriteTool, GradedSegment,
+    GIT_WRITE_CAPABILITY_ID, GIT_WRITE_TIMEOUT_MS, GIT_WRITE_TOOL_DESCRIPTION, GIT_WRITE_TOOL_NAME,
+    REFUSAL_L3_PREFIX, REFUSAL_MORPH_PREFIX, REFUSAL_OFFLIST_PREFIX,
+};
 pub use guardrail::{LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult};
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
@@ -74,6 +129,14 @@ pub use mcp_bridge::{
     McpServerConfig, McpServerConnection, McpServerSpec, McpToolBridge, McpToolCatalog,
     McpToolDenyGuard, McpToolEntry, McpToolRegistry, McpTransportKind,
 };
+pub use object_access::{
+    diff_object_states, FsObjectStateProbe, MemoryObjectAuditSink, ObjectAccessJudge,
+    ObjectAccessPolicy, ObjectAccessRequest, ObjectAction, ObjectAuditSink, ObjectChange,
+    ObjectDomain, ObjectFingerprint, ObjectGuardError, ObjectGuardReport, ObjectKind,
+    ObjectPolicyChain, ObjectSnapshot, ObjectStateProbe, ObjectSubject, ObjectVerdict,
+    ObjectViolation, ObjectWindow, ObjectZone, WorkspaceObjectPolicy, OBJECT_JUDGE_SOURCE,
+    OBJECT_VIOLATION_AUDIT_EVENT,
+};
 pub use observed_gate::{
     gated_write_atomic, gated_write_atomic_durable, ExclusionList, FileVersion, FsVersionProbe,
     GateDenial, GatedWriteError, ObservationState, ObservedGate, VersionProbe, WriteIntent,
@@ -82,6 +145,43 @@ pub use observed_gate::{
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
+pub use self_status::{
+    capability_roster, derive_tuning_preset, quota_cost_partial_note, render_snapshot,
+    BudgetStatus, CapabilitySwitch, ContentFeedStatus, DomainCounts, DomainStatus,
+    MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity,
+    SelfStatusSnapshot, SelfStatusSource, SelfStatusTool, SessionQuotaProbe, StatusProbe,
+    TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
+    DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY,
+    PRESET_EFFORTLESS, PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED,
+    QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR,
+};
 pub use shell::{ShellTool, TrustedShellConfig};
+pub use skill::{
+    authorized_skill_distill_policy, build_skill_disclosure, distill_into,
+    skill_distill_capability, skill_distill_pipeline, skill_search_capability,
+    skill_search_pipeline, SkillCard, SkillCardDraft, SkillDistillApprovalHook,
+    SkillDistillBoundaryGuard, SkillDistillParams, SkillDistillReport, SkillDistillRiskMappingHook,
+    SkillDistillTool, SkillLibrary, SkillLibraryError, SkillRevisionAudit,
+    SkillSearchBoundaryGuard, SkillSearchParams, SkillSearchTool, SkillSource, SkillSourceKind,
+    SKILL_DISTILL_CAPABILITY_ID, SKILL_DISTILL_TIMEOUT_MS, SKILL_DISTILL_TOOL_DESCRIPTION,
+    SKILL_DISTILL_TOOL_NAME, SKILL_SEARCH_CAPABILITY_ID, SKILL_SEARCH_TOOL_DESCRIPTION,
+    SKILL_SEARCH_TOOL_NAME,
+};
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
+pub use worktree_apply::{
+    apply_boundary_refusal, apply_summary, authorized_worktree_apply_policy,
+    cross_check_change_order, prepare_apply, worktree_apply_capability, worktree_apply_pipeline,
+    PreparedApply, VerifyCommand, WorktreeApplyApprovalHook, WorktreeApplyBoundaryGuard,
+    WorktreeApplyParams, WorktreeApplyReport, WorktreeApplyRiskMappingHook, WorktreeApplyTool,
+    REFUSAL_DRIFT_PREFIX, REFUSAL_VERIFY_PREFIX, WORKTREE_APPLY_CAPABILITY_ID,
+    WORKTREE_APPLY_TIMEOUT_MS, WORKTREE_APPLY_TOOL_DESCRIPTION, WORKTREE_APPLY_TOOL_NAME,
+};
+pub use worktree_plan::{
+    change_order_refusal, validated_change_order, worktree_plan_capability, worktree_plan_pipeline,
+    ActionDistribution, WorktreeChangeAction, WorktreeChangeOrder, WorktreeFileChange,
+    WorktreePlanBoundaryGuard, WorktreePlanTool, WORKTREE_GIT_BOUNDARY_NOTE,
+    WORKTREE_PLAN_CAPABILITY_ID, WORKTREE_PLAN_TIMEOUT_MS, WORKTREE_PLAN_TOOL_DESCRIPTION,
+    WORKTREE_PLAN_TOOL_NAME,
+};
+pub use write_intent::{scan_shell_write_intent, WriteIntentHit};

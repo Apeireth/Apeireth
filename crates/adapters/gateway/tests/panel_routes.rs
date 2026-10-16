@@ -608,6 +608,17 @@ async fn panel_routes_serve_contract_shapes() {
     let workbench = find_group("workbench");
     assert_eq!(workbench["capabilities"][0]["id"], "workbench.turn.read");
 
+    // G-P1 缺口③收口: 指标端点 (`GET /v1/panel/metrics`) 进能力清单 ——
+    // `metrics.read` 只读面, 端点已过令牌门且合同在案 (恒可用)。
+    let metrics = find_group("metrics");
+    let metrics_read = &metrics["capabilities"][0];
+    assert_eq!(metrics_read["id"], "metrics.read");
+    assert_eq!(metrics_read["read"], true);
+    assert_eq!(metrics_read["write"], false);
+    assert_eq!(metrics_read["operations"], serde_json::json!(["read"]));
+    assert_eq!(metrics_read["supported"], true);
+    assert_eq!(metrics_read["available"], true);
+
     let voice = find_group("voice");
     let voice_duplex = &voice["capabilities"][0];
     assert_eq!(voice_duplex["id"], "voice.duplex");

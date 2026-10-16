@@ -145,7 +145,7 @@ adapters/
 
 ```bash
 make check       # cargo check --workspace --all-targets
-make test        # cargo test --workspace --all-targets --locked (全量实测 3662 passed / 0 failed / 21 ignored，130 suites)
+make test        # cargo test --workspace --all-targets --locked (全量实测 5360 passed / 0 failed / 22 ignored，190 suites，2026-10-13 口径)
 make fmt         # cargo fmt --all
 make ci          # make ci-build + ci-test + ci-release (一键)
 ```

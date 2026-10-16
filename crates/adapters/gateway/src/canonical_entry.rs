@@ -8,13 +8,14 @@
 use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::{ApprovalId, RequestId, SessionId, Timestamp};
+use apeireth_governance::{may_resolve_approval, UserCapability};
 use apeireth_guard::{IntentInput, IntentInterpreter, RuleIntentInterpreter};
 use apeireth_protocol::canonical::{ContentPart, NormalizedUsage};
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ExecutionTrace, PendingApprovalView, Runtime,
     RuntimeError, TraceEvent, TurnOutcome, TurnRequest, TurnSecurityContext,
 };
-use axum::extract::{Query, Request, State};
+use axum::extract::{Extension, Query, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -25,8 +26,12 @@ use tokio_stream::StreamExt;
 use tower_http::cors::AllowOrigin;
 
 use crate::admin::{admin_config_get, admin_config_update, GatewayRuntimeConfig};
+use crate::client_tokens::{
+    client_name_binds, record_session_client, record_user_action, ClientIdentity, UserContext,
+    CLIENT_NAME_CLAIM_HEADER,
+};
 use crate::error_frame::{ErrorCode, ErrorFrame};
-use crate::events::{events_handler, EventBus, GatewayEvent};
+use crate::events::{events_handler, EventBus, GatewayEvent, RuntimeObservationSink};
 use crate::panels::{panel_routes, GatewayServices, GatewayState, PanelData};
 
 /// Native gateway request. HTTP and CLI transports can both construct it.
@@ -166,12 +171,23 @@ pub struct CanonicalPendingApproval {
     pub approval_id: ApprovalId,
     pub request: String,
     pub trace_id: String,
+    /// Runtime round that produced the pending operation (audit pairing key).
+    pub round: u32,
     pub capability_id: String,
     pub tool_name: String,
     pub governance_hook: String,
     pub governance_reason: String,
     pub command_text: String,
     pub arguments_summary: String,
+    /// 审批卡族标注 / 授权对象（E-P2 族归一）：被批命令的族 id 列表；
+    /// 空 = 非命令面操作（授权对象 = 操作本身）。
+    pub authorization_families: Vec<String>,
+    /// The turn's generated text so far, preserved by the pending close so the
+    /// UI can keep what the model already said alongside "waiting for
+    /// approval: <tool>".
+    pub generated_text: String,
+    /// Round slots the turn had consumed when it paused for this approval.
+    pub rounds_used: u32,
     pub created_at: Timestamp,
     pub expires_at: Timestamp,
 }
@@ -183,12 +199,16 @@ impl From<PendingApprovalView> for CanonicalPendingApproval {
             approval_id: view.approval_id,
             request: view.request_id.to_string(),
             trace_id: view.trace_id.to_string(),
+            round: view.round,
             capability_id: view.capability_id.to_string(),
             tool_name: view.tool_name,
             governance_hook: view.governance_hook,
             governance_reason: view.governance_reason,
             command_text: view.command_text,
             arguments_summary: view.arguments_summary,
+            authorization_families: view.authorization_families,
+            generated_text: view.generated_text,
+            rounds_used: view.rounds_used,
             created_at: view.created_at,
             expires_at: view.expires_at,
         }
@@ -226,10 +246,86 @@ pub struct CanonicalApprovalRequest {
     pub reason: Option<String>,
 }
 
+/// W2-③ 会话归属: 这次会话写以谁的名义署名、事实落哪个审计面。
+///
+/// 署名键只来自令牌绑定 ([`ClientIdentity`]); 会话写无论有无归属都过同一把
+/// 会话写闸 (排队 + 串行), 归属只决定 `gateway.session_client` 审计行怎么署名。
+#[derive(Clone)]
+pub struct SessionAttribution {
+    /// 审计署名键 (令牌表 `name` / `env` / `anonymous` / `im-bridge` / `unattributed`)。
+    pub client: String,
+    /// 观测攒批面: `gateway.session_client` 审计行落点 (None = 不留审计行)。
+    pub audit: Option<Arc<RuntimeObservationSink>>,
+}
+
+impl std::fmt::Debug for SessionAttribution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionAttribution")
+            .field("client", &self.client)
+            .field("audit", &self.audit.is_some())
+            .finish()
+    }
+}
+
+impl SessionAttribution {
+    /// 无归属的内部直调 (不署名、不留审计行; 会话写仍过写闸串行)。
+    pub fn unattributed() -> Self {
+        Self {
+            client: ClientIdentity::UNATTRIBUTED.to_string(),
+            audit: None,
+        }
+    }
+
+    /// 以具名客户端署名 (审计面可选)。
+    pub fn new(client: impl Into<String>, audit: Option<Arc<RuntimeObservationSink>>) -> Self {
+        Self {
+            client: client.into(),
+            audit,
+        }
+    }
+}
+
+/// 持会话写闸跑一个回合 (W2-③ 并发写语义: **排队 + 审计**)。
+///
+/// 同一会话的回合先到先服务串行 —— 第二个客户端的回合**排队**等前一个跑完,
+/// 不发 busy 帧、不交叠写会话账本; 入场事实 (排第几 / 等多久) 落
+/// `gateway.session_client` 审计行, 排队因此可观测可审计。
+async fn run_turn_serialized(
+    runtime: &Runtime,
+    turn: TurnRequest,
+    attribution: &SessionAttribution,
+    on_delta: Option<Arc<dyn Fn(String) + Send + Sync>>,
+) -> Result<TurnOutcome, RuntimeError> {
+    let permit = runtime.sessions().write_permit(turn.session).await;
+    record_session_client(
+        attribution.audit.as_deref(),
+        turn.session,
+        &attribution.client,
+        "turn",
+        Some(permit.admission()),
+    );
+    let outcome = match on_delta {
+        Some(sink) => runtime.execute_outcome_streaming(turn, sink).await,
+        None => runtime.execute_outcome(turn).await,
+    };
+    drop(permit);
+    outcome
+}
+
 /// Invoke the canonical runtime through the real gateway entry adapter.
 pub async fn execute_chat(
     runtime: &Runtime,
     request: CanonicalChatRequest,
+) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
+    execute_chat_attributed(runtime, request, SessionAttribution::unattributed()).await
+}
+
+/// 归属化回合入口 (W2-③): 会话写闸串行 (排队语义) + `gateway.session_client`
+/// 审计行 (客户端名 ↔ 会话事件关联)。
+pub async fn execute_chat_attributed(
+    runtime: &Runtime,
+    request: CanonicalChatRequest,
+    attribution: SessionAttribution,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     if request.input.trim().is_empty() {
         return Err(CanonicalEntryError::InvalidRequest(
@@ -254,7 +350,8 @@ pub async fn execute_chat(
         turn = turn.with_system(system);
     }
 
-    Ok(turn_outcome_to_chat(runtime.execute_outcome(turn).await?))
+    let outcome = run_turn_serialized(runtime, turn, &attribution, None).await?;
+    Ok(turn_outcome_to_chat(outcome))
 }
 
 /// Resolve a pending approval through the canonical runtime API.
@@ -262,11 +359,30 @@ pub async fn resolve_approval(
     runtime: &Runtime,
     request: CanonicalApprovalRequest,
 ) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
+    resolve_approval_attributed(runtime, request, SessionAttribution::unattributed()).await
+}
+
+/// 归属化审批续跑 (W2-③): 续跑写同一本会话账本, 同样过会话写闸串行 +
+/// `gateway.session_client` 审计 (`action=approval.resolve`)。
+pub async fn resolve_approval_attributed(
+    runtime: &Runtime,
+    request: CanonicalApprovalRequest,
+    attribution: SessionAttribution,
+) -> Result<CanonicalChatOutcome, CanonicalEntryError> {
     let decision = parse_approval_decision(&request.decision, request.reason.clone())?;
-    match runtime
+    let permit = runtime.sessions().write_permit(request.session).await;
+    record_session_client(
+        attribution.audit.as_deref(),
+        request.session,
+        &attribution.client,
+        "approval.resolve",
+        Some(permit.admission()),
+    );
+    let resolved = runtime
         .resolve_approval(request.session, request.approval, decision)
-        .await?
-    {
+        .await;
+    drop(permit);
+    match resolved? {
         ApprovalResolution::Resumed(outcome) => Ok(turn_outcome_to_chat(outcome)),
         ApprovalResolution::AlreadyResolved { status } => Err(CanonicalEntryError::InvalidRequest(
             format!("approval already resolved: {status:?}"),
@@ -383,6 +499,9 @@ struct OpenAiStreamChunk {
     choices: Vec<OpenAiStreamChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     apeireth: Option<OpenAiExecutionMetadata>,
+    /// OpenAI-conventional top-level usage (final chunk only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    usage: Option<NormalizedUsage>,
 }
 
 #[derive(Debug, Serialize)]
@@ -475,6 +594,20 @@ pub fn build_gateway_state_with_services(
             .keepalive()
             .expect("fresh flush surface cannot be shut down"),
     );
+    // H1/G10 令牌门口径在装配期解析一次 (env → 三态)。逃生阀
+    // (`APEIRETH_GATEWAY_TOKEN=none`) 是操作者的显式声明 —— 装配即入审计,
+    // 之后每次放行另留痕。
+    let token_gate = GatewayTokenGate::from_env();
+    if token_gate == GatewayTokenGate::UnprotectedDeclared {
+        observations.buffer_audit(
+            "gateway.auth_declared_unprotected",
+            Some(format!(
+                "{}={}: operator explicitly declared an unprotected gateway (escape valve)",
+                GatewayTokenGate::ENV,
+                GatewayTokenGate::UNPROTECTED_SENTINEL
+            )),
+        );
+    }
     GatewayState {
         runtime,
         services,
@@ -485,6 +618,17 @@ pub fn build_gateway_state_with_services(
         presence,
         presence_stream,
         hot_config: Arc::new(RwLock::new(GatewayRuntimeConfig::from_env())),
+        token_gate,
+        // 客户端令牌表由组合根显式装载注入 (坏配置拒开在可失败边界执行);
+        // 装配面不隐式读配置面 —— 见 `client_tokens` 字段文档。
+        client_tokens: crate::client_tokens::ClientTokenTable::default(),
+        // 用户角色面 (W3-②) 同一口径: 未注入 = 角色面未激活 (兼容路径),
+        // 坏表/绑定不一致由组合根在可失败边界拒开 —— 见 `user_access` 字段文档。
+        user_access: crate::client_tokens::UserAccess::default(),
+        // 用户域平面 (W3-①) 同一口径: 未注入 = 域面未接线 (兼容路径,
+        // 一切按默认域原位语义) —— 组合根在可失败边界装载注入。
+        domains: None,
+        shutdown: Arc::new(crate::shutdown::ShutdownTrigger::default()),
     }
 }
 
@@ -510,7 +654,8 @@ pub fn canonical_router_with_services(runtime: Arc<Runtime>, services: GatewaySe
 }
 
 // ---------------------------------------------------------------------------
-// H1 (2026-09-24 安全审计): 本地来源白名单 + 可选 loopback 令牌门
+// H1 (2026-09-24 安全审计): 本地来源白名单 + loopback 令牌门
+// (G10 W1-③ 加固: 令牌门口径三态化, 桌面侧自铸令牌注入)
 // ---------------------------------------------------------------------------
 
 /// H1: CORS 只放行本地桌面件来源 (Tauri WebView 与本机开发服务器)。
@@ -547,20 +692,160 @@ fn is_allowed_local_origin(origin: &axum::http::HeaderValue) -> bool {
     matches!(host, "tauri.localhost" | "localhost" | "127.0.0.1" | "::1")
 }
 
-/// H1: 可选的 loopback 令牌 (env `APEIRETH_GATEWAY_TOKEN`)。
+/// H1/G10/W2-②: API 面令牌门的三态口径 (env `APEIRETH_GATEWAY_TOKEN` +
+/// 客户端令牌表 [`crate::client_tokens::ClientTokenTable`])。
 ///
-/// 设置后, `/v1/admin/config` 与 `/v1/approvals/resolve` 要求
-/// `Authorization: Bearer <token>` (恒定时间比较)。未设置时放过 ——
-/// 浏览器向量已由 CORS 白名单收敛, 令牌门是给 LAN 暴露部署加的保险。
-static GATEWAY_TOKEN: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+/// **W2-② 认证面全网关化**: 门从两个敏感端点扩到**全 API 面** (chat / 事件流 /
+/// 面板 / 会话 / 审批 / admin 族), 唯一显式豁免是健康探活
+/// [`UNAUTHENTICATED_PROBE_PATHS`] (探测刚需, 见其文档)。三态语义沿用,
+/// 「设/未设」按**整个令牌族**判定:
+///
+/// - [`GatewayTokenGate::Enforced`] — env 带密钥值: 令牌族在场, 每次调用必须
+///   带 `Authorization: Bearer <token>` (恒定时间比较), 呈现的令牌可以是 env
+///   单令牌 (审计客户端名 [`GatewayTokenGate::ENV_FACE_CLIENT_NAME`]) 或令牌表
+///   内任一枚 (审计客户端名 = 该条目 `name`); 缺失/错误分别 401
+///   `auth_missing_key` / `auth_invalid_key`;
+/// - [`GatewayTokenGate::UnprotectedDefault`] — **env 未设且令牌表为空
+///   (收紧后的默认态)**: 无认证调用仍放行 (保守过渡, 无令牌客户端零断), 但
+///   每次放行记警告帧 (`gateway_auth_unprotected`) + 审计事实
+///   (`gateway.auth_unprotected`); **令牌表配置了任一枚 = 令牌族在场, 照
+///   `Enforced` 校验** (只认表内具名令牌);
+/// - [`GatewayTokenGate::UnprotectedDeclared`] — **逃生阀** (env 显式取值
+///   [`GatewayTokenGate::UNPROTECTED_SENTINEL`]): 操作者明示不设防, 放行且
+///   不发警告帧, 但声明本身与每次放行都入审计 (留痕)。逃生阀与客户端令牌表
+///   互斥 (配置矛盾拒开, 见
+///   [`crate::client_tokens::validate_gate_table_pair`])。
+///
+/// 桌面壳启动侧车时自铸 32 字节随机令牌注入 env, 生产路径恒为 `Enforced`;
+/// 未设/逃生阀只出现在 CLI 裸跑。令牌值不进日志、不进帧、不进 Debug。
+#[derive(Clone, PartialEq, Eq)]
+pub enum GatewayTokenGate {
+    /// env 带真实令牌: 全 API 面强制 Bearer 匹配 (令牌族: env 单令牌 + 令牌表)。
+    Enforced(String),
+    /// env 未设且令牌表为空: 放行 + 警告帧 + 审计 (保守过渡, 催化迁移到带令牌)。
+    UnprotectedDefault,
+    /// env 显式 `none`: 逃生阀 —— 明示不设防, 审计留痕, 不逐次告警。
+    UnprotectedDeclared,
+}
 
-fn gateway_token() -> &'static Option<String> {
-    GATEWAY_TOKEN.get_or_init(|| {
-        std::env::var("APEIRETH_GATEWAY_TOKEN")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-    })
+/// 过门裁决 (纯结果, 中间件负责帧与审计)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GateVerdict {
+    /// 令牌命中: `client` 是审计署名键 (env 面单令牌 / 令牌表条目名)。
+    Pass {
+        /// 命中的客户端名。
+        client: String,
+    },
+    /// 未设防口径下的放行: `mode` 是 `env_unset` 或 `declared_none`。
+    PassUnprotected {
+        /// 未设防模式 (进警告帧与审计明细)。
+        mode: &'static str,
+    },
+    /// 强制态且没带 Bearer。
+    RejectMissing,
+    /// 强制态且 Bearer 不匹配令牌族任何一枚 (伪造 Bearer)。
+    RejectInvalid,
+}
+
+impl GatewayTokenGate {
+    /// 配置令牌门的环境变量名。
+    pub const ENV: &str = "APEIRETH_GATEWAY_TOKEN";
+    /// 逃生阀字面值: 显式声明「本网关不设防」。真实令牌不得取此值。
+    pub const UNPROTECTED_SENTINEL: &str = "none";
+    /// env 单令牌面在审计里的客户端名 (令牌表条目用各自 `name`)。
+    pub const ENV_FACE_CLIENT_NAME: &str = "env";
+
+    /// 从进程环境解析口径 (网关装配期解析一次)。
+    pub fn from_env() -> Self {
+        Self::parse(std::env::var(Self::ENV).ok())
+    }
+
+    /// 从原始 env 值解析口径: 哨兵值 = 显式不设防; 非空值 = 强制令牌;
+    /// 缺失/空白 = 收紧后的默认态。
+    pub fn parse(raw: Option<String>) -> Self {
+        match raw.map(|value| value.trim().to_string()) {
+            Some(value) if value == Self::UNPROTECTED_SENTINEL => Self::UnprotectedDeclared,
+            Some(value) if !value.is_empty() => Self::Enforced(value),
+            _ => Self::UnprotectedDefault,
+        }
+    }
+
+    /// 门在生效时要求的 env 单令牌 (仅 [`GatewayTokenGate::Enforced`])。
+    /// 令牌表条目是并列的通行证, 见 [`Self::verify`]。
+    pub fn enforced_token(&self) -> Option<&str> {
+        match self {
+            Self::Enforced(token) => Some(token),
+            Self::UnprotectedDefault | Self::UnprotectedDeclared => None,
+        }
+    }
+
+    /// 令牌族是否在场 (env 单令牌或令牌表任一非空) —— 在场即强制校验。
+    pub fn family_enforced(&self, clients: &crate::client_tokens::ClientTokenTable) -> bool {
+        matches!(self, Self::Enforced(_)) || !clients.is_empty()
+    }
+
+    /// 过门裁决 (纯函数): `bearer` 是 `Authorization: Bearer ` 后面的裸令牌。
+    ///
+    /// 口径 (令牌族合并后):
+    /// - `Enforced` — bearer 必须命中 env 单令牌或令牌表任一枚;
+    /// - `UnprotectedDefault` — 令牌表为空 = 兼容路径放行; 令牌表非空 = 只认
+    ///   表内具名令牌;
+    /// - `UnprotectedDeclared` — 逃生阀放行 (配置矛盾已由装配闸拒开)。
+    pub fn verify(
+        &self,
+        bearer: Option<&str>,
+        clients: &crate::client_tokens::ClientTokenTable,
+    ) -> GateVerdict {
+        match self {
+            Self::Enforced(expected) => match bearer {
+                None => GateVerdict::RejectMissing,
+                Some(token) => {
+                    if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
+                        GateVerdict::Pass {
+                            client: Self::ENV_FACE_CLIENT_NAME.to_string(),
+                        }
+                    } else {
+                        match clients.authenticate(token) {
+                            Some(name) => GateVerdict::Pass {
+                                client: name.to_string(),
+                            },
+                            None => GateVerdict::RejectInvalid,
+                        }
+                    }
+                }
+            },
+            Self::UnprotectedDefault => {
+                if clients.is_empty() {
+                    GateVerdict::PassUnprotected { mode: "env_unset" }
+                } else {
+                    // 令牌族在场即强制: 表内具名令牌是唯一通行证。
+                    match bearer {
+                        None => GateVerdict::RejectMissing,
+                        Some(token) => match clients.authenticate(token) {
+                            Some(name) => GateVerdict::Pass {
+                                client: name.to_string(),
+                            },
+                            None => GateVerdict::RejectInvalid,
+                        },
+                    }
+                }
+            }
+            Self::UnprotectedDeclared => GateVerdict::PassUnprotected {
+                mode: "declared_none",
+            },
+        }
+    }
+}
+
+/// 令牌永不进 Debug/日志: 值一律打码。
+impl std::fmt::Debug for GatewayTokenGate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Enforced(_) => write!(f, "Enforced(<redacted>)"),
+            Self::UnprotectedDefault => write!(f, "UnprotectedDefault"),
+            Self::UnprotectedDeclared => write!(f, "UnprotectedDeclared"),
+        }
+    }
 }
 
 /// 恒定时间字节比较 (防时序侧信道)。
@@ -575,41 +860,305 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
     diff == 0
 }
 
-/// H1: 敏感端点 (admin 配置 / 审批解决) 的令牌门中间件。
+/// 自称名的有界审计渲染 (请求头值是攻击方可控输入, 不无界进审计行)。
+pub(crate) fn truncate_label(claimed: &str) -> String {
+    let mut bounded: String = claimed.chars().take(64).collect();
+    if bounded.chars().count() < claimed.chars().count() {
+        bounded.push('…');
+    }
+    bounded
+}
+
+/// 无认证探活端点: 令牌门对这些路径**整体豁免** (不校验、不警告、不审计)。
 ///
-/// 未配置 `APEIRETH_GATEWAY_TOKEN` 时透明放过 (桌面单用户场景); 配置后
-/// 缺失/错误的 Bearer 令牌分别返回 401 `auth_missing_key` / `auth_invalid_key`。
-async fn require_gateway_token(request: Request, next: Next) -> Response {
-    let Some(expected) = gateway_token() else {
+/// 健康探活是探测刚需 (服务管理器 / 桌面侧车监督 / 服务脚本的就绪探针都只打
+/// `/health`, 且浏览器 `EventSource` 之外的探针多无法带凭据) —— 认证面上**唯一**
+/// 的显式豁免就是这张表。改这张表 = 改认证面的权力边界, 由
+/// `gateway_auth_face` 测试钉住。
+pub const UNAUTHENTICATED_PROBE_PATHS: &[&str] = &["/health"];
+
+/// H1/G10/W2-②/W2-③: 全 API 面的令牌门中间件 (口径由 [`GatewayTokenGate`] 给出)。
+///
+/// - `Enforced` (或令牌表在场): 缺失/错误的 Bearer 令牌分别返回 401
+///   `auth_missing_key` / `auth_invalid_key`, 拒绝入审计 (`gateway.auth_rejected`);
+///   命中则放行并入审计 (`gateway.auth_client`), **审计带客户端名**;
+/// - `UnprotectedDefault` (env 未设且令牌表为空): 放行但每次记警告帧 + 审计事实;
+/// - `UnprotectedDeclared` (逃生阀 `none`): 放行, 审计留痕, 不逐次告警。
+///
+/// W2-③ 令牌隔离: 过门身份 ([`ClientIdentity`]) 随请求扩展下行给处理器
+/// (署名键**只来自令牌绑定**); 请求可带自称名头
+/// [`CLIENT_NAME_CLAIM_HEADER`] 做 name↔token 绑定校验 —— 自称名与令牌绑定名
+/// 不一致、或在无绑定的未设防口径下自称名, 一律 401 拒绝 (冒名 fail-closed,
+/// 审计署名不可冒名)。
+///
+/// [`UNAUTHENTICATED_PROBE_PATHS`] 显式豁免。任何分支都不把令牌值写进帧、
+/// 审计或错误正文。
+async fn require_gateway_token(
+    State(state): State<GatewayState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let endpoint = request.uri().path().to_string();
+    if UNAUTHENTICATED_PROBE_PATHS.contains(&endpoint.as_str()) {
         return next.run(request).await;
-    };
-    let header = request
+    }
+    let bearer = request
         .headers()
         .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok());
-    let Some(token) = header.and_then(|value| value.strip_prefix("Bearer ")) else {
-        return ErrorFrame::response(
-            StatusCode::UNAUTHORIZED,
-            ErrorCode::AuthMissingKey,
-            "gateway token required for this endpoint",
-        )
-        .into_response();
-    };
-    if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
-        next.run(request).await
-    } else {
-        ErrorFrame::response(
-            StatusCode::UNAUTHORIZED,
-            ErrorCode::AuthInvalidKey,
-            "gateway token invalid",
-        )
-        .into_response()
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::to_string);
+    // W2-③: 客户端自称名 (可选) —— 只做绑定校验, 永不改写审计署名。
+    let claimed = request
+        .headers()
+        .get(CLIENT_NAME_CLAIM_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    match state
+        .token_gate
+        .verify(bearer.as_deref(), &state.client_tokens)
+    {
+        GateVerdict::Pass { client } => {
+            if let Some(claimed) = &claimed {
+                if !client_name_binds(claimed, Some(client.as_str())) {
+                    // 冒名即拒 (错误即帧): 自称名必须与令牌绑定名一致。
+                    state.observations.buffer_audit(
+                        "gateway.auth_rejected",
+                        Some(format!(
+                            "endpoint={endpoint} reason=client_name_mismatch client={client} \
+                             claimed={}",
+                            truncate_label(claimed)
+                        )),
+                    );
+                    return ErrorFrame::response(
+                        StatusCode::UNAUTHORIZED,
+                        ErrorCode::AuthInvalidKey,
+                        "client name does not match the presented credential",
+                    )
+                    .into_response();
+                }
+            }
+            // 过门留痕: 谁 (客户端名) 调了哪个端点 —— W3 多用户授权的问责地基。
+            state.observations.buffer_audit(
+                "gateway.auth_client",
+                Some(format!("endpoint={endpoint} client={client}")),
+            );
+            request
+                .extensions_mut()
+                .insert(ClientIdentity::authenticated(client));
+            next.run(request).await
+        }
+        GateVerdict::PassUnprotected { mode } => {
+            if let Some(claimed) = &claimed {
+                // 无凭证即无绑定: 自称名不可校验 → 拒 (审计署名不可冒名)。
+                state.observations.buffer_audit(
+                    "gateway.auth_rejected",
+                    Some(format!(
+                        "endpoint={endpoint} reason=client_name_unverifiable mode={mode} \
+                         claimed={}",
+                        truncate_label(claimed)
+                    )),
+                );
+                return ErrorFrame::response(
+                    StatusCode::UNAUTHORIZED,
+                    ErrorCode::AuthInvalidKey,
+                    "a claimed client name requires a token binding to verify against",
+                )
+                .into_response();
+            }
+            if mode == "env_unset" {
+                // 收紧后的默认态 (保守过渡): 无认证调用仍放行 (无令牌客户端零断),
+                // 但不再是静默 —— 每次放行记警告帧 + 审计事实。
+                state.events.publish(GatewayEvent::new(
+                    "gateway_auth_unprotected",
+                    serde_json::json!({
+                        "endpoint": endpoint,
+                        "mode": mode,
+                        "detail": "gateway token not configured; an unauthenticated call reached an API endpoint",
+                    }),
+                ));
+            }
+            // 逃生阀 (明示不设防): 不逐次告警, 但每次放行留审计痕。
+            state.observations.buffer_audit(
+                "gateway.auth_unprotected",
+                Some(format!("endpoint={endpoint} mode={mode}")),
+            );
+            request.extensions_mut().insert(ClientIdentity::anonymous());
+            next.run(request).await
+        }
+        GateVerdict::RejectMissing => {
+            state.observations.buffer_audit(
+                "gateway.auth_rejected",
+                Some(format!("endpoint={endpoint} reason=missing")),
+            );
+            ErrorFrame::response(
+                StatusCode::UNAUTHORIZED,
+                ErrorCode::AuthMissingKey,
+                "gateway token required for this endpoint",
+            )
+            .into_response()
+        }
+        GateVerdict::RejectInvalid => {
+            state.observations.buffer_audit(
+                "gateway.auth_rejected",
+                Some(format!("endpoint={endpoint} reason=invalid")),
+            );
+            ErrorFrame::response(
+                StatusCode::UNAUTHORIZED,
+                ErrorCode::AuthInvalidKey,
+                "gateway token invalid",
+            )
+            .into_response()
+        }
     }
+}
+
+/// W3-② 角色门分类: 方法 + 路径 → 所需能力 (治理层 role 权限矩阵的判定入口)。
+///
+/// - 管理面 (admin 族 / 面板族授权热撤, 见 [`crate::panels::panel_admin_face`])
+///   → [`UserCapability::AdminControl`] (owner 档);
+/// - 审批解决 (`/v1/approvals/resolve`) → [`UserCapability::ApprovalL2`]
+///   (跨用户归属另闸, 见 [`cross_user_approval_refusal`]);
+/// - 其余非读方法 (chat / 会话写 / 记忆写) → [`UserCapability::Write`]
+///   (guest 零写面);
+/// - 读方法 (`GET`/`HEAD`) → 无能力要求 (矩阵全员持 [`UserCapability::Read`])。
+fn required_user_capability(method: &axum::http::Method, path: &str) -> Option<UserCapability> {
+    if path.starts_with("/v1/admin") || crate::panels::panel_admin_face(path) {
+        return Some(UserCapability::AdminControl);
+    }
+    if path == "/v1/approvals/resolve" {
+        return Some(UserCapability::ApprovalL2);
+    }
+    match *method {
+        axum::http::Method::GET | axum::http::Method::HEAD => None,
+        _ => Some(UserCapability::Write),
+    }
+}
+
+/// W3-② 角色门 (整面中间件, 挂在令牌门**之内**): 令牌门认「你是谁」,
+/// 角色门判「你能不能」。
+///
+/// - **角色面未激活** (未注入用户表) = 兼容路径: W2-② 行为逐字不变,
+///   不新增拒绝面 (零回归口径);
+/// - **角色面激活**: 过门客户端名 → 令牌→用户→角色链 → 治理层 role 权限矩阵;
+///   写面/管理面/审批面对**未绑定用户** fail-closed 拒 (403 `permission_denied`);
+///   每次裁决 (allow/deny) 落一行 `gateway.user_action` 审计 (user/role/action)。
+///
+/// 角色只来自令牌绑定的解析链 ([`crate::client_tokens::resolve_user_identity`]),
+/// 请求无法自称角色 —— 成员冒名 owner 在这里无从发生 (自称客户端名另有
+/// name↔token 绑定校验, 在令牌门内已拒)。
+async fn require_user_capability(
+    State(state): State<GatewayState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    if !state.user_access.is_active() {
+        request.extensions_mut().insert(UserContext::unbound());
+        return next.run(request).await;
+    }
+    let client = request
+        .extensions()
+        .get::<ClientIdentity>()
+        .map(|identity| identity.client.clone())
+        .unwrap_or_else(|| ClientIdentity::UNATTRIBUTED.to_string());
+    let user = state.user_access.identity(&client, &state.client_tokens);
+    let context = UserContext { user };
+    let endpoint = request.uri().path().to_string();
+    if let Some(capability) = required_user_capability(request.method(), &endpoint) {
+        let allowed = context.allows(capability);
+        record_user_action(
+            Some(state.observations.as_ref()),
+            context.user_id(),
+            context.role(),
+            capability.label(),
+            &endpoint,
+            allowed,
+        );
+        if !allowed {
+            let message = if context.user_id().is_some() {
+                format!(
+                    "role gate refused {endpoint}: the bound user role may not perform {}",
+                    capability.label()
+                )
+            } else {
+                format!("role gate refused {endpoint}: the calling client is not bound to any user")
+            };
+            return ErrorFrame::response(
+                StatusCode::FORBIDDEN,
+                ErrorCode::PermissionDenied,
+                message,
+            )
+            .into_response();
+        }
+    }
+    request.extensions_mut().insert(context);
+    next.run(request).await
+}
+
+/// 会话→用户绑定 (W3-②): 首个具名写者绑定会话归属, 供跨用户审批拒判定。
+fn bind_session_owner(
+    state: &GatewayState,
+    session: SessionId,
+    user: Option<&Extension<UserContext>>,
+) {
+    if let Some(Extension(context)) = user {
+        if let Some(user_id) = context.user_id() {
+            state.user_access.bind_session_user(session, user_id);
+        }
+    }
+}
+
+/// 跨用户审批拒 (G1 对抗面): 角色面激活时, 审批解决必须过归属闸 —— owner 全权
+/// (可批任意会话的审批); 其余角色只可批**本用户绑定会话**的审批; 未绑定用户/
+/// 无归属会话 fail-closed 拒 (403 + `gateway.user_action` 审计)。
+/// 返回 `Some(拒绝帧)` = 不得继续解决审批。
+fn cross_user_approval_refusal(
+    state: &GatewayState,
+    session: SessionId,
+    user: Option<&Extension<UserContext>>,
+) -> Option<Response> {
+    if !state.user_access.is_active() {
+        return None;
+    }
+    let context = user.map(|Extension(context)| context);
+    let subject = state.user_access.session_user(session);
+    let allowed = context
+        .and_then(|context| context.user.as_ref())
+        .is_some_and(|identity| {
+            may_resolve_approval(identity.role, &identity.user_id, subject.as_deref())
+        });
+    if allowed {
+        return None;
+    }
+    record_user_action(
+        Some(state.observations.as_ref()),
+        context.and_then(|context| context.user_id()),
+        context.and_then(|context| context.role()),
+        "approval_ownership",
+        "/v1/approvals/resolve",
+        false,
+    );
+    Some(
+        ErrorFrame::response(
+            StatusCode::FORBIDDEN,
+            ErrorCode::PermissionDenied,
+            format!(
+                "role gate refused /v1/approvals/resolve: approval for session {session} \
+                 belongs to another user (only its owner may resolve it)"
+            ),
+        )
+        .into_response(),
+    )
 }
 
 /// Build the production router over an explicit [`GatewayState`] (lets tests
 /// keep a handle on the event bus).
 pub fn canonical_router_with_state(state: GatewayState) -> Router {
+    // W2-② 认证面全网关化: 令牌门是**整面**中间件 (chat / 事件流 / 面板 / 会话 /
+    // 审批 / admin 族全过门), 不再逐端点挂 route_layer —— 新路由默认在门内,
+    // 漏挂面为零; 唯一豁免是 [`UNAUTHENTICATED_PROBE_PATHS`] (健康探活)。
+    // 中间件自带一份门状态 (口径 + 警告/审计面), 所以 from_fn_with_state。
+    let gate_state = state.clone();
     Router::<GatewayState>::new()
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
@@ -619,15 +1168,15 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         .route("/v1/chat", post(native_chat))
         .route("/v1/chat/completions", post(openai_chat))
         .route("/v1/approvals", get(list_pending_approvals))
-        .route(
-            "/v1/approvals/resolve",
-            // H1: 代替人类批准工具调用的端点, 令牌门保护 (配置 APEIRETH_GATEWAY_TOKEN 时生效)。
-            post(native_resolve_approval).route_layer(middleware::from_fn(require_gateway_token)),
-        )
+        .route("/v1/approvals/resolve", post(native_resolve_approval))
         .route(
             "/v1/sessions/:session_id/settings",
             get(crate::session_settings::get_session_settings)
                 .patch(crate::session_settings::patch_session_settings),
+        )
+        .route(
+            "/v1/sessions/:session_id",
+            axum::routing::delete(crate::session_settings::delete_session),
         )
         .route("/v1/apeireth/events", get(events_handler))
         .route(
@@ -636,19 +1185,45 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
         )
         .route(
             "/v1/admin/config",
-            // H1: 可热改 provider base_url / api_key 的端点, 令牌门保护。
-            get(admin_config_get)
-                .post(admin_config_update)
-                .route_layer(middleware::from_fn(require_gateway_token)),
+            get(admin_config_get).post(admin_config_update),
         )
+        // W2-① 常驻形态: 优雅停机控制面 (计划任务 stop 走这里, 控制台信号
+        // 不可靠)。与全 API 面同一令牌门同一三态口径。
+        .route("/v1/admin/shutdown", post(admin_shutdown))
         .merge(panel_routes())
+        // G-P1 指标端点 (指标数据面路由文件), 同在整面令牌门内。
+        .merge(crate::panel_metrics::metrics_routes())
+        // W3-① 域门 (数据域面): user_id 域解析 + 自称域校验 + 面闸, 过闸后
+        // `DomainContext` 随请求扩展下行 (会话面按域路由)。挂在令牌门与角色门
+        // **之内** (先认人、再判权、后判域); 域面未注入 = 兼容路径零回归。
+        .layer(middleware::from_fn_with_state(
+            gate_state.clone(),
+            crate::domain_context::require_domain_context,
+        ))
+        // W3-② 角色门 (授权面): 挂在令牌门**之内** —— 先认人 (authn) 再判权
+        // (authz)。角色面未注入 = 兼容路径零回归; 激活后按治理层 role 权限矩阵
+        // 过闸 (写面/管理面/审批面), 每次裁决落 `gateway.user_action` 审计。
+        .layer(middleware::from_fn_with_state(
+            gate_state.clone(),
+            require_user_capability,
+        ))
+        // 令牌门包住整个 API 面 (含未匹配路径的 fallback: 强制态下未知路径也
+        // 401, 不借 404/401 差别泄露路由存在性)。
+        .layer(middleware::from_fn_with_state(
+            gate_state,
+            require_gateway_token,
+        ))
         // CORS 白名单 (H1, 2026-09-24 安全审计): 桌面 WebView 是独立源
         // (tauri://localhost / http://tauri.localhost), 浏览器对回环地址同样
         // 执行跨源策略 —— 没有这一层每个 UI fetch 都会被拒 (2026-09-28 真机
         // 故障), 但 **permissive** 会让用户浏览器里任意网页获得同等能力
         // (驱动 agent / 批准工具 / 读会话与记忆)。收敛为本地来源白名单:
         // Tauri 源 + 本机回环开发服务器 (任意端口)。LAN 暴露部署
-        // (--bind 0.0.0.0) 需另配 APEIRETH_GATEWAY_TOKEN 令牌门。
+        // (非回环绑定) 由远程绑定闸强制令牌 (见 `remote_access`), 并叠加
+        // 令牌门全端点校验。
+        //
+        // 层序: CORS 在令牌门**之外** —— 浏览器预检 (OPTIONS, 规范上不带
+        // 凭据) 由 CORS 直接应答, 不会被令牌门 401 拦死; 真实请求仍过门。
         .layer(
             tower_http::cors::CorsLayer::new()
                 .allow_origin(AllowOrigin::predicate(|origin, _request_parts| {
@@ -675,7 +1250,45 @@ pub async fn serve_canonical_with_services(
     runtime: Arc<Runtime>,
     services: GatewayServices,
 ) -> std::io::Result<()> {
+    serve_with_shutdown(listener, runtime, services, std::future::pending::<()>()).await
+}
+
+/// Serve the canonical gateway until the listener closes **or** a shutdown is
+/// requested (W2-① 常驻形态的优雅停机面).
+///
+/// Shutdown sources funnel into one policy:
+///
+/// - `external_shutdown` — the composition root's process-signal face
+///   (`SIGTERM` / console control events);
+/// - [`crate::shutdown::ShutdownTrigger`] — fired by the token-gated
+///   `POST /v1/admin/shutdown` endpoint (the service scripts' stop path).
+///
+/// When either fires, the server stops accepting new work, waits for in-flight
+/// requests to finish, then performs the closing bookkeeping (收尾): one final
+/// `gateway.shutdown` audit fact and a full flush of the observation archive to
+/// its port (the `daemon-audit.jsonl` archive in the production assembly), so
+/// the last facts of the process are on disk before it exits (落盘).
+pub async fn serve_with_shutdown(
+    listener: tokio::net::TcpListener,
+    runtime: Arc<Runtime>,
+    services: GatewayServices,
+    external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> std::io::Result<()> {
     let state = build_gateway_state_with_services(runtime, services);
+    serve_state_with_shutdown(listener, state, external_shutdown).await
+}
+
+/// Serve over an explicit [`GatewayState`] until the listener closes or a
+/// shutdown fires (see [`serve_with_shutdown`] for the shutdown contract).
+///
+/// Keeping the state explicit lets embedders and tests hold the observation
+/// sink handle across the shutdown boundary — which is exactly what the
+/// closing-bookkeeping assertions pin.
+pub async fn serve_state_with_shutdown(
+    listener: tokio::net::TcpListener,
+    state: GatewayState,
+    external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> std::io::Result<()> {
     let endpoint = listener
         .local_addr()
         .map(|addr| addr.to_string())
@@ -684,7 +1297,43 @@ pub async fn serve_canonical_with_services(
         "backend_ready",
         serde_json::json!({ "service": "apeireth-gateway-2.0", "endpoint": endpoint }),
     ));
-    axum::serve(listener, canonical_router_with_state(state)).await
+    let trigger = state.shutdown.clone();
+    let result = axum::serve(listener, canonical_router_with_state(state.clone()))
+        .with_graceful_shutdown(async move {
+            tokio::select! {
+                _ = external_shutdown => {},
+                _ = trigger.fired() => {},
+            }
+        })
+        .await;
+
+    // 优雅停机收尾: 最后一桩审计 + 观测攒批全量落盘, 之后进程才真正退出。
+    state.events.publish(GatewayEvent::new(
+        "backend_stopping",
+        serde_json::json!({ "endpoint": endpoint }),
+    ));
+    state.observations.buffer_audit(
+        "gateway.shutdown",
+        Some(format!("endpoint={endpoint} graceful=1")),
+    );
+    state.observations.flush().await;
+    result
+}
+
+/// W2-① 常驻形态: 优雅停机控制面 (`POST /v1/admin/shutdown`, 令牌门下)。
+///
+/// 幂等: 首次触发返回 `first`, 重复请求返回 `repeat` —— 服务脚本的 stop 重试
+/// 不会再掀一次停机风暴。真正的停机收尾 (审计 + 落盘) 在 [`serve_with_shutdown`]
+/// 的收尾段执行, 本端点只放闸。
+async fn admin_shutdown(State(state): State<GatewayState>) -> Json<serde_json::Value> {
+    let first = state.shutdown.trigger();
+    state
+        .observations
+        .buffer_audit("gateway.shutdown_requested", Some(format!("first={first}")));
+    Json(serde_json::json!({
+        "status": "shutting_down",
+        "trigger": if first { "first" } else { "repeat" },
+    }))
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -761,8 +1410,21 @@ async fn runtime_snapshot(State(state): State<GatewayState>) -> Json<serde_json:
     Json(serde_json::json!(state.runtime.snapshot()))
 }
 
+/// 请求过门身份 → 会话归属 (W2-③): 署名键只来自令牌绑定。
+fn attribution_for(
+    state: &GatewayState,
+    identity: Option<&Extension<ClientIdentity>>,
+) -> SessionAttribution {
+    let client = identity
+        .map(|Extension(identity)| identity.client.clone())
+        .unwrap_or_else(|| ClientIdentity::UNATTRIBUTED.to_string());
+    SessionAttribution::new(client, Some(Arc::clone(&state.observations)))
+}
+
 async fn native_chat(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
@@ -771,7 +1433,10 @@ async fn native_chat(
     }
     let session = request.session.unwrap_or_else(SessionId::new);
     request.session = Some(session);
-    let outcome = execute_chat(state.runtime.as_ref(), request).await;
+    // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
+    bind_session_owner(&state, session, user.as_ref());
+    let attribution = attribution_for(&state, identity.as_ref());
+    let outcome = execute_chat_attributed(state.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     publish_turn_delta(&state.events, &outcome);
@@ -793,10 +1458,18 @@ fn publish_turn_delta(bus: &EventBus, outcome: &CanonicalChatOutcome) {
 
 async fn native_resolve_approval(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
     Json(request): Json<CanonicalApprovalRequest>,
 ) -> Result<Response, HttpError> {
     let session = request.session;
-    let outcome = resolve_approval(state.runtime.as_ref(), request).await;
+    // W3-② 跨用户审批拒: 归属闸在角色门能力判定之后 (owner 可批任意会话)。
+    if let Some(refusal) = cross_user_approval_refusal(&state, session, user.as_ref()) {
+        state.observations.flush().await;
+        return Ok(refusal);
+    }
+    let attribution = attribution_for(&state, identity.as_ref());
+    let outcome = resolve_approval_attributed(state.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     publish_turn_delta(&state.events, &outcome);
@@ -845,6 +1518,8 @@ fn chat_http_response(outcome: CanonicalChatOutcome) -> Response {
 
 async fn openai_chat(
     State(state): State<GatewayState>,
+    identity: Option<Extension<ClientIdentity>>,
+    user: Option<Extension<UserContext>>,
     Json(request): Json<OpenAiChatRequest>,
 ) -> Result<Response, HttpError> {
     let mut request = request;
@@ -853,6 +1528,8 @@ async fn openai_chat(
     }
     let is_stream = request.stream;
     let session = request.session_id.unwrap_or_else(SessionId::new);
+    // W3-②: 会话→用户绑定 (首个具名写者), 跨用户审批拒的判定依据。
+    bind_session_owner(&state, session, user.as_ref());
     let input = request
         .messages
         .iter()
@@ -884,16 +1561,17 @@ async fn openai_chat(
         system: (!system.is_empty()).then_some(system),
     };
     let model_name = request.model.unwrap_or_default();
+    let attribution = attribution_for(&state, identity.as_ref());
 
     // True incremental streaming: deltas flow from the provider through the
     // canonical loop to the client as they arrive. Non-streaming providers
     // fall back inside the runtime (one final delta), so this branch is
     // correct for every provider.
     if is_stream {
-        return openai_chat_streaming(&state, native, model_name).await;
+        return openai_chat_streaming(&state, native, model_name, attribution).await;
     }
 
-    let outcome = execute_chat(state.runtime.as_ref(), native).await;
+    let outcome = execute_chat_attributed(state.runtime.as_ref(), native, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     let outcome = match outcome {
@@ -944,6 +1622,7 @@ async fn openai_chat_streaming(
     state: &GatewayState,
     native: CanonicalChatRequest,
     model_name: String,
+    attribution: SessionAttribution,
 ) -> Result<Response, HttpError> {
     let session = native
         .session
@@ -972,6 +1651,7 @@ async fn openai_chat_streaming(
                 finish_reason: None,
             }],
             apeireth: None,
+            usage: None,
         };
         if let Ok(json) = serde_json::to_string(&chunk) {
             // try_send: a vanished reader must never block the canonical loop.
@@ -1004,12 +1684,14 @@ async fn openai_chat_streaming(
                 finish_reason: None,
             }],
             apeireth: None,
+            usage: None,
         };
         if let Ok(json) = serde_json::to_string(&role_chunk) {
             let _ = tx.send(format!("data: {json}\n\n")).await;
         }
 
-        let outcome = runtime.execute_outcome_streaming(turn, sink).await;
+        // W2-③: 流式回合同样过会话写闸 (排队 + 串行 + 归属审计)。
+        let outcome = run_turn_serialized(runtime.as_ref(), turn, &attribution, Some(sink)).await;
         observations.flush().await;
 
         match outcome {
@@ -1035,8 +1717,9 @@ async fn openai_chat_streaming(
                         served_by: response.served_by.to_string(),
                         rounds: response.rounds,
                         events: events_from_trace(&response.trace),
-                        usage: Some(response.usage),
+                        usage: Some(response.usage.clone()),
                     }),
+                    usage: Some(response.usage),
                 };
                 if let Ok(json) = serde_json::to_string(&final_chunk) {
                     let _ = tx.send(format!("data: {json}\n\ndata: [DONE]\n\n")).await;
@@ -1057,12 +1740,12 @@ async fn openai_chat_streaming(
                 }
             }
             Err(error) => {
-                let (_, code) = classify_runtime_error(&error);
-                let frame = serde_json::json!({
-                    "error": ErrorFrame::new(code, error.to_string()),
+                let frame = runtime_error_frame(&error);
+                let body = serde_json::json!({
+                    "error": frame,
                     "session_id": session.to_string(),
                 });
-                if let Ok(json) = serde_json::to_string(&frame) {
+                if let Ok(json) = serde_json::to_string(&body) {
                     let _ = tx.send(format!("data: {json}\n\ndata: [DONE]\n\n")).await;
                 }
             }
@@ -1101,13 +1784,39 @@ fn hot_model_override(state: &GatewayState) -> Option<String> {
 
 fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpError {
     let (status, code) = classify_entry_error(&error);
+    let frame = match &error {
+        CanonicalEntryError::Runtime(runtime) => runtime_error_frame(runtime),
+        CanonicalEntryError::InvalidRequest(_) => ErrorFrame::new(code, error.to_string()),
+    };
     (
         status,
         Json(ErrorBody {
-            error: ErrorFrame::new(code, error.to_string()),
+            error: frame,
             session_id: session.map(|id| id.to_string()),
         }),
     )
+}
+
+/// The error frame for one runtime failure.
+///
+/// A round-limit failure carries its real budget numbers (configured limit,
+/// consumed rounds, and the approval-frozen tool name when one existed) as
+/// structured `details`, so the frame is diagnosable without a second lookup.
+fn runtime_error_frame(error: &RuntimeError) -> ErrorFrame {
+    let (_, code) = classify_runtime_error(error);
+    let frame = ErrorFrame::new(code, error.to_string());
+    match error {
+        RuntimeError::RoundLimitExceeded {
+            limit,
+            rounds,
+            pending_tool,
+        } => frame.with_details(serde_json::json!({
+            "limit": limit,
+            "rounds": rounds,
+            "pending_tool": pending_tool,
+        })),
+        _ => frame,
+    }
 }
 
 fn classify_entry_error(error: &CanonicalEntryError) -> (StatusCode, ErrorCode) {

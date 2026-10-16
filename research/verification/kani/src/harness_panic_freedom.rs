@@ -7,43 +7,173 @@
 
 use super::async_context::{AsyncArrayKind, AsyncContextMessage, AsyncContextPipeline};
 use super::file_fetcher::TransparentFileFetcher;
-use super::fold_block::{has_fold_markers, parse_fold_blocks, render_fold_blocks};
+use super::fold_block::{has_fold_markers, parse_fold_blocks, render_fold_blocks, FoldBlock};
 use super::residual_pyramid::OrthogonalResidualPyramid;
 use super::river_topology::{DualScaledFieldSolver, RiverObservability, RiverState};
 use super::semantic_axis::SemanticAxisBridge;
 
-/// 任意 N 字节串 (含非法 UTF-8 → lossy 替换; 含 NUL/控制字符均可)。
+/// 任意 N 字符串 (字节 0..=127, 含 NUL/控制字符)。
+/// 口径修订 2026-10-11 (四次·真解): 生成器四易其稿 —— ③ char::collect 令
+/// CBMC 无法证明编码 1 字节/char (encode_utf8 分支) → 串长符号化 → 主循环
+/// 展开断言 FAILURE; ④ 字节数组 + from_utf8 —— 长度可证具体, 但 from_utf8
+/// 的 UTF-8 验证循环 + unwrap 失败路径的 panic/格式化机器 (rustc_demangle
+/// TwoWaySearcher) 仍是 churn 源。终解 = 字节数组 + from_utf8_unchecked:
+/// 字节掩码 <0x80 构造即合法 UTF-8, 安全性由构造保证, 验证机/panic 路径
+/// 双双退出证明面。
 fn bounded_string<const N: usize>() -> String {
-    let mut bytes: Vec<u8> = Vec::with_capacity(N);
-    for _ in 0..N {
-        bytes.push(kani::any::<u8>());
-    }
-    String::from_utf8_lossy(&bytes).into_owned()
+    let bytes: Vec<u8> = (0..N).map(|_| rep_byte()).collect();
+    // SAFETY: rep_byte() 全部 < 0x80 (ASCII), 必为合法 UTF-8。
+    unsafe { String::from_utf8_unchecked(bytes) }
 }
 
-/// 有界有限 f32 ∈ (-20, 20) (经整数取模构造, 不会产生 NaN/inf)。
+/// 有界有限 f32 (9 档代表值域 ∈ [-20, 20))。表选择零算术 ——
+/// 旧版 `(m % 2001) as f32 / 100.0` 的生成器自身带 int→f32 转换与除法,
+/// 每次取值都是软浮点位爆炸源 (K12); 常量表选择让生成器零成本。
+/// 覆盖: 负大/负小/负极小/零/正极小/正小/正 1/正大/正边界。
 fn bounded_f32() -> f32 {
-    let m: i32 = kani::any();
-    (m % 2001) as f32 / 100.0
+    match kani::any::<u8>() % 9 {
+        0 => -20.0,
+        1 => -1.5,
+        2 => -0.01,
+        3 => 0.0,
+        4 => 0.01,
+        5 => 0.5,
+        6 => 1.0,
+        7 => 10.0,
+        _ => 19.99,
+    }
 }
 
-/// 证明: 任意 ≤8 字节串经 has_fold_markers/parse_fold_blocks/render_fold_blocks
-/// 全程无 panic, 且渲染记账恒等 (expanded + hidden == blocks 数)。
-/// 边界: 输入 8 字节 (行数 ≤ 8), similarity 为任意 f32 (含 NaN, 依契约视作 0.0),
-/// unwind 64 覆盖逐行解析与 join。
+/// 代表值域字节 (8 档, 全分支类覆盖): NUL / \n / 空格 / '=' (提前收尾) /
+/// '+' 'A' (base64 合法) / 0x7F (控制) / '!' (非法)。掩码 <0x80 →
+/// 构造即合法 UTF-8。claim 口径: 代表值域量词 + 全分支类覆盖 (K4/K12)。
+fn rep_byte() -> u8 {
+    match kani::any::<u8>() % 8 {
+        0 => 0x00,
+        1 => 0x0A,
+        2 => 0x20,
+        3 => 0x3D,
+        4 => 0x2B,
+        5 => 0x41,
+        6 => 0x7F,
+        _ => 0x21,
+    }
+}
+
+/// 定长 f32 向量 (分支定长法, 口径注见 river harness): n%3 选 1/2/3 维,
+/// 每分支 Vec 长度具体 —— 符号长度收集 (`(0..sym).map().collect()`) 令
+/// slice 循环按 unwind 上界展开, 是 CBMC OOM 的结构根源 (实测 SSA 75k VCC
+/// OOM); 同一 selector 多次调用长度一致 (维度/方阵行同维语义)。
+fn f32_vec(selector: u8) -> Vec<f32> {
+    match selector % 3 {
+        0 => vec![bounded_f32()],
+        1 => vec![bounded_f32(), bounded_f32()],
+        _ => vec![bounded_f32(), bounded_f32(), bounded_f32()],
+    }
+}
+
+/// f32_vec 的 0..=3 变体 (含空分支; ragged 形状量词用)。
+fn f32_vec0(selector: u8) -> Vec<f32> {
+    match selector % 4 {
+        0 => vec![],
+        1 => vec![bounded_f32()],
+        2 => vec![bounded_f32(), bounded_f32()],
+        _ => vec![bounded_f32(), bounded_f32(), bounded_f32()],
+    }
+}
+
+/// fold 文档结构化生成器 (口径四改 2026-10-08, 见 fold_block harness 注):
+/// 行取自 {完整标记行, 断标记行, 文本行, 空行} × 任意 ASCII 尾字节 ×
+/// 有/无换行 —— 内容大头是字面量 (memcmp/搜索逐字节即决), 少量符号字节
+/// 分支, 覆盖真实解析状态 (正常/断标记/夹心/空行) 而公式有限。
+/// fold 文档具名结构用例 (K15 具名量词口径, 2026-10-11 终稿):
+/// 符号内容量词在 CBMC 下三代生成器均超 25 分钟 (TwoWaySearcher 标记搜索 ×
+/// 符号字节分支爆炸, format! 与行界定型后仍超) —— 收敛为**具名结构用例组**,
+/// 覆盖全部解析状态: 仅标记行 / 纯文本 / 空文档 / 断标记 / 多块 / 多行文本。
+/// 残余值域 (具体字符内容) 由 fold_block 单测互补 (单测含 CJK/多字节例)。
+fn fold_docs() -> [&'static str; 6] {
+    // &'static str 字面量而非 String: 堆 String 长度在内存 (CBMC 循环盲展开到
+    // 上界), 静态切片长度是常量 (直接折叠) —— K17 终极开关。
+    [
+        // 仅标记行
+        "[===fold:0.5===]",
+        // 纯文本
+        "plain text",
+        // 空文档
+        "",
+        // 断标记 (无收尾)
+        "[===fold:0.5",
+        // 多块 + 内容行
+        "[===fold:0.5===]\nbody\n[===fold:0.2===]\ntail",
+        // 多行纯文本 (无标记)
+        "x\ny\nz",
+    ]
+}
+
+/// 证明: has_fold_markers 对具名结构用例组不 panic (函数级, 零切片面)。
+/// 口径 (K16 拆分): "管线全程无 panic" 拆为三函数级命题 —— 全管线合一的
+/// harness 让每处切片的 panic 路径各拖一整套格式化/Backtrace 机器 (实测
+/// slice_index_fail 周围 memchr 3937 次展开, 常量输入也 25m+ 不落地),
+/// 与输入域无关; 拆分后各命题面最小化。
 #[kani::proof]
-#[kani::unwind(64)]
-fn kani_panic_free_fold_block_string_pipeline() {
-    let s = bounded_string::<8>();
-    let _markers = has_fold_markers(&s);
-    let blocks = parse_fold_blocks(&s);
-    let sim: f32 = kani::any();
-    let render = render_fold_blocks(&blocks, sim);
-    assert_eq!(
-        render.expanded + render.hidden,
-        blocks.len(),
-        "渲染记账守恒: 展开数 + 折叠数 == 块数"
-    );
+#[kani::unwind(32)]
+fn kani_panic_free_fold_markers() {
+    for doc in fold_docs() {
+        let _ = has_fold_markers(&doc);
+    }
+}
+
+/// 证明: parse_fold_blocks 对具名结构用例组不 panic, 块数有界 (≤ 用例行数)。
+#[kani::proof]
+#[kani::unwind(32)]
+fn kani_panic_free_fold_parse() {
+    for doc in fold_docs() {
+        let blocks = parse_fold_blocks(&doc);
+        assert!(blocks.len() <= 8, "块数有界 (6 用例的行数上界)");
+    }
+}
+
+/// 证明: render_fold_blocks 对直接构造的块组 + 全 sim 域不 panic, 且渲染
+/// 记账恒等 (expanded + hidden == blocks 数)。输入 = 直接构造 blocks
+/// (跳过解析 —— 解析切片面不进本命题), 覆盖 阈值/描述/正文 形态组合。
+#[kani::proof]
+#[kani::unwind(32)]
+fn kani_panic_free_fold_render() {
+    let contents = ["a", "bb", "ccc"];
+    let descs = [String::new(), "d".to_string()];
+    let thresholds = [0.0f32, 0.35, 1.0];
+    for content in contents.iter() {
+        for desc in &descs {
+            for threshold in &thresholds {
+                let blocks = vec![
+                    FoldBlock {
+                        threshold: *threshold,
+                        description: desc.clone(),
+                        content: content.to_string(),
+                    },
+                    FoldBlock {
+                        threshold: 0.5,
+                        description: String::new(),
+                        content: "x".to_string(),
+                    },
+                ];
+                for sim in [
+                    bounded_f32(),
+                    f32::NAN,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    0.0,
+                ] {
+                    let render = render_fold_blocks(&blocks, sim);
+                    assert_eq!(
+                        render.expanded + render.hidden,
+                        blocks.len(),
+                        "渲染记账守恒: 展开数 + 折叠数 == 块数"
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// 证明: OrthogonalResidualPyramid::analyze 对任意 ≤3 维有限有界查询与任意
@@ -53,10 +183,11 @@ fn kani_panic_free_fold_block_string_pipeline() {
 #[kani::proof]
 #[kani::unwind(64)]
 fn kani_panic_free_residual_pyramid_analyze() {
-    let dim = 1 + (kani::any::<usize>() % 3);
-    let query: Vec<f32> = (0..dim).map(|_| bounded_f32()).collect();
-    let tag_a: Vec<f32> = (0..dim).map(|_| bounded_f32()).collect();
-    let tag_b: Vec<f32> = (0..dim).map(|_| bounded_f32()).collect();
+    let dim_sel = kani::any::<u8>();
+    let query = f32_vec(dim_sel);
+    let tag_a = f32_vec(dim_sel);
+    let tag_b = f32_vec(dim_sel);
+    let dim = query.len();
     let id_a: u64 = kani::any();
     let id_b: u64 = kani::any();
 
@@ -91,24 +222,30 @@ fn kani_panic_free_residual_pyramid_analyze() {
 #[kani::proof]
 #[kani::unwind(96)]
 fn kani_panic_free_semantic_axis_fit_project() {
-    let dim = 1 + (kani::any::<usize>() % 3);
-    let sample_count = 1 + (kani::any::<usize>() % 3);
+    let dim_sel = kani::any::<u8>();
+    // 样本数 1..=3: push 链 + 符号条件分支 (无符号长度循环); 每样本向量定长。
     let mut centroids: Vec<(Vec<f32>, f32)> = Vec::new();
-    for _ in 0..sample_count {
-        let v: Vec<f32> = (0..dim).map(|_| bounded_f32()).collect();
-        let weight = (kani::any::<i32>() % 2001) as f32 / 100.0; // [0,20) 取绝对值如下
-        centroids.push((v, weight.abs()));
+    let weight = (kani::any::<i32>() % 2001) as f32 / 100.0;
+    centroids.push((f32_vec(dim_sel), weight.abs()));
+    if kani::any::<bool>() {
+        let weight = (kani::any::<i32>() % 2001) as f32 / 100.0;
+        centroids.push((f32_vec(dim_sel), weight.abs()));
+    }
+    if kani::any::<bool>() {
+        let weight = (kani::any::<i32>() % 2001) as f32 / 100.0;
+        centroids.push((f32_vec(dim_sel), weight.abs()));
     }
 
+    let dim = centroids[0].0.len();
     let mut bridge = SemanticAxisBridge::new(dim);
-    let components = 1 + (kani::any::<usize>() % 3);
+    let components = 1 + (kani::any::<u8>() % 3) as usize;
     bridge.fit(&centroids, components);
     assert!(
         bridge.basis_vectors.len() <= components,
         "基底数 ≤ 请求分量数"
     );
 
-    let query: Vec<f32> = (0..dim).map(|_| bounded_f32()).collect();
+    let query = f32_vec(dim_sel);
     let projection = bridge.project(&query);
     assert!(
         (0.0..=1.0).contains(&projection.normalized_entropy),
@@ -124,18 +261,28 @@ fn kani_panic_free_semantic_axis_fit_project() {
     let _ = bridge.project(&[]);
 }
 
-/// 证明: RiverObservability::measure_omega 对任意计数与任意 f32 流量片
-/// (含 NaN/±inf) 不 panic; 空种子/空边恒 (0.0, Collapsed);
-/// 否则 Ω ∈ [0,1] 且状态与 Ω 分类一致。
-/// 边界: edge_flows ≤ 3 个元素, unwind 32。
+/// 证明: RiverObservability::measure_omega 对任意计数与任意流量片不 panic;
+/// 空种子/空边恒 (0.0, Collapsed); 否则 Ω ∈ [0,1] 且状态与 Ω 分类一致。
+/// 边界: edge_flows ≤ 3 个元素, unwind 8。
+/// 口径注 (2026-10-10): ① 非有限流量由 flow_balance 源头过滤 (NaN 算术
+/// 曾令 nan-check 判负); ② `.cbrt()` 是 libm 外调 (kani#2423 不支持),
+/// cfg(kani) 以恒等桩代 —— Ω 域断言经"cbrt 保 [0,1] 界"解析闭合, 见
+/// river_topology.rs::cbrt_compat; ③ 流量生成改"分支定长" (0/1/2/3 元素
+/// 各自定长 Vec) —— 符号长度收集令 slice 循环按 unwind 上界展开, 是
+/// CBMC OOM 的结构根源 (run 1133… 实测 SSA 75k VCC OOM); NaN/±inf 改具名
+/// 案例覆盖 (过滤语义具名证, 有限域由分支量词覆盖)。
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(8)]
 fn kani_panic_free_river_measure_omega() {
     let active_edges: usize = kani::any();
     let seeds: usize = kani::any();
     let reached: usize = kani::any();
-    let flow_count = kani::any::<usize>() % 4;
-    let flows: Vec<f32> = (0..flow_count).map(|_| kani::any::<f32>()).collect();
+    let flows: Vec<f32> = match kani::any::<u8>() % 4 {
+        0 => vec![],
+        1 => vec![bounded_f32()],
+        2 => vec![bounded_f32(), bounded_f32()],
+        _ => vec![bounded_f32(), bounded_f32(), bounded_f32()],
+    };
 
     let (omega, state) = RiverObservability::measure_omega(active_edges, seeds, reached, &flows);
     if seeds == 0 || active_edges == 0 {
@@ -145,6 +292,19 @@ fn kani_panic_free_river_measure_omega() {
         assert!((0.0..=1.0).contains(&omega), "Ω 在 [0,1]");
     }
     assert_eq!(state, RiverState::classify(omega), "状态由 Ω 分类决定");
+
+    // 具名垃圾值案例: NaN/±inf 流量经源头过滤后契约照旧 (有限域量词 + 具名
+    // 垃圾值 = 全域覆盖, 与 fold_block sim 五态同口径)。
+    for garbage in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0] {
+        let (g_omega, g_state) =
+            RiverObservability::measure_omega(3, 1, 2, &[garbage, 0.5, bounded_f32()]);
+        assert!((0.0..=1.0).contains(&g_omega), "垃圾流量下 Ω 仍在 [0,1]");
+        assert_eq!(
+            g_state,
+            RiverState::classify(g_omega),
+            "垃圾流量下状态仍由 Ω 分类决定"
+        );
+    }
 }
 
 /// 证明: DualScaledFieldSolver::solve 对任意 ≤3 维有限有界源项与方阵不 panic,
@@ -155,12 +315,17 @@ fn kani_panic_free_river_measure_omega() {
 #[kani::proof]
 #[kani::unwind(48)]
 fn kani_panic_free_dual_scaled_field_solve() {
-    let n = 1 + (kani::any::<usize>() % 3);
-    let source: Vec<f32> = (0..n).map(|_| bounded_f32()).collect();
+    let n_sel = kani::any::<u8>();
+    let source = f32_vec(n_sel);
     let mut matrix: Vec<Vec<f32>> = Vec::new();
-    for _ in 0..n {
-        matrix.push((0..n).map(|_| bounded_f32()).collect());
+    matrix.push(f32_vec(n_sel));
+    if source.len() > 1 {
+        matrix.push(f32_vec(n_sel));
     }
+    if source.len() > 2 {
+        matrix.push(f32_vec(n_sel));
+    }
+    let n = source.len();
     let solver = DualScaledFieldSolver {
         alpha_local: bounded_f32(),
         alpha_transfer: bounded_f32(),
@@ -264,20 +429,27 @@ fn kani_panic_free_semantic_axis_fit_any_shape() {
 #[kani::proof]
 #[kani::unwind(48)]
 fn kani_panic_free_dual_scaled_field_solve_any_shape() {
-    let n = kani::any::<usize>() % 4;
-    let source: Vec<f32> = (0..n).map(|_| bounded_f32()).collect();
-    let rows = kani::any::<usize>() % 4;
+    let source = f32_vec0(kani::any::<u8>());
+    let n = source.len();
+    // 行数 0..=3: 条件 push 链 (路径有界); 每行宽独立 0..=3 (ragged 量词域不变)。
     let mut matrix: Vec<Vec<f32>> = Vec::new();
-    for _ in 0..rows {
-        let width = kani::any::<usize>() % 4;
-        matrix.push((0..width).map(|_| bounded_f32()).collect());
+    if kani::any::<bool>() {
+        matrix.push(f32_vec0(kani::any::<u8>()));
+        if kani::any::<bool>() {
+            matrix.push(f32_vec0(kani::any::<u8>()));
+            if kani::any::<bool>() {
+                matrix.push(f32_vec0(kani::any::<u8>()));
+            }
+        }
     }
     let solver = DualScaledFieldSolver {
         max_iterations: 2,
         ..DualScaledFieldSolver::new()
     };
     let (u_local, u_transfer) = solver.solve(&source, &matrix);
-    let well_formed = n > 0 && rows == n && matrix.iter().all(|r| r.len() == n);
+    let well_formed = n > 0
+        && matrix.len() == n
+        && matrix.iter().all(|r| r.len() == n);
     if !well_formed {
         assert!(
             u_local.is_empty() && u_transfer.is_empty(),

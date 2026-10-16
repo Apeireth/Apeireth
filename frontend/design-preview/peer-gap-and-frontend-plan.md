@@ -232,6 +232,6 @@ P7（voice/screen 连续感知）保持后置，presence v0 不依赖硬件。
 | ⑥ 记忆卷宗 + 日记 | ✅ | 记忆主从双栏（Archive 调首次实拍，inkGold 校准），forget 内联确认 + 409 冲突卡；日记 = 纸面空态契约页（后端无日记端点）；commits `104d9a2b`/`5497ae2a`/`78e01e36` |
 | ⑦ T1/T2 显影接线 | ✅ | `presence.ts` 重写订 `presence_state`（具名 addEventListener），显影分级（heartbeat 余烬 / turn 光环 / ritual 契约空间），T2 PAD 映射增益 0.75 保守值；真后端 60s 心跳实测余烬 amplitude 0.65→0.2；commit `7026a3a7` |
 
-**剩余梯队（未开工，等主人指令）**：桌宠（常驻投影，00-PHILOSOPHY §5 🟡 提案待校准）→ 会话设置抽屉（P2）→ 看板/终端（§5 独立立项）；**会话分支**（§6 第 8 项）仍列第二梯队 backlog，需后端数据模型先行。
+**剩余梯队**：桌宠首批 ✅ 已落地（2026-10-11，形象层双形态可插拔 + 主动涌现，施工账 `docs/design/pet-resident-projection.md`）；后续 → 会话设置抽屉（P2）→ 看板/终端（§5 独立立项）；**会话分支**（§6 第 8 项）仍列第二梯队 backlog，需后端数据模型先行。
 
 **v0 诚实边界（施工期确立）**：`empathetic_care` / `ritual` 无生产者（契约空间保留）；initiative 只有预算器无生产者；prompt-overlay 召回命中不上总线（需 runtime 加 TraceEvent 变体）；审批卡对话内真后端全闭环与 UI 点击流人工实测仍挂账（台账 §2 #2/#4）；`subscribeCompanionEvents`（legacy 伴随体订阅）同患 mount 门恒假——点亮会唤醒「他说」主动开口整条链，需主人拍板后再动。

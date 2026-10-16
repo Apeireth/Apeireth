@@ -185,6 +185,24 @@ impl PiiDetector {
     }
 }
 
+/// Redact only the secret-bearing surfaces from display / log text.
+///
+/// 覆盖三类秘密面: 凭据 URL (`scheme://user:pass@host`)、环境式密钥赋值
+/// (`TOKEN=...`, 键名保留)、凭据形状的键值 (`sk-...` 族)。与
+/// [`PiiDetector::redact`] 同一口径, 但**不**动邮箱/电话/IP 等可读信息 ——
+/// 审批卡/命令文本要给人看, 布局信息不该跟着秘密一起消失。
+///
+/// 远端 URL 凭据永不进日志 (审批视图 / 审批卡 / 审计记录都走本函数)。
+pub fn redact_secret_surfaces(text: &str) -> String {
+    let redacted = CREDENTIAL_URL_REGEX.replace_all(text, PiiKind::CredentialUrl.redaction_label());
+    let redacted = ENV_SECRET_REGEX.replace_all(&redacted, |caps: &regex::Captures| {
+        format!("{}=[REDACTED_ENV_SECRET]", &caps[1])
+    });
+    CREDENTIAL_REGEX
+        .replace_all(&redacted, PiiKind::CredentialKey.redaction_label())
+        .into_owned()
+}
+
 fn collect_findings(text: &str, regex: &Regex, kind: PiiKind, out: &mut Vec<PiiFinding>) {
     for m in regex.find_iter(text) {
         out.push(PiiFinding {
@@ -464,6 +482,49 @@ mod tests {
         assert_eq!(redacted.matches("[REDACTED_EMAIL]").count(), 2);
         assert!(!redacted.contains("a@example.com"));
         assert!(!redacted.contains("b@example.org"));
+    }
+
+    /// 秘密面脱敏: 凭据 URL / 密钥赋值 / 凭据形状键值一律换占位, 而可读的
+    /// 布局信息 (邮箱/IP/路径/普通 URL) 保留 —— 审批面给人看, 不跟着丢信息。
+    #[test]
+    fn secret_surface_redaction_removes_credentials_and_keeps_readable_layout() {
+        let input = "git remote add origin https://user:tok123456@host.example/repo.git \
+                     and pasted key sk-1234567890abcdef1234567890 written by dev@example.com";
+        let redacted = redact_secret_surfaces(input);
+        assert!(!redacted.contains("tok123456"), "{redacted}");
+        assert!(!redacted.contains("user:"), "{redacted}");
+        assert!(
+            !redacted.contains("sk-1234567890abcdef1234567890"),
+            "{redacted}"
+        );
+        assert!(redacted.contains("[REDACTED_URL_CREDENTIAL]"), "{redacted}");
+        assert!(redacted.contains("[REDACTED_CREDENTIAL]"), "{redacted}");
+        // 可读信息保留: 邮箱不进秘密面脱敏 (那是全量 PII 口径的事)。
+        assert!(redacted.contains("dev@example.com"), "{redacted}");
+    }
+
+    /// 密钥赋值保留键名、只换值 (与 search/filesystem 的 `[redacted]` 口径同向)。
+    #[test]
+    fn secret_surface_redaction_keeps_env_key_names() {
+        let redacted =
+            redact_secret_surfaces("export GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+        assert!(redacted.contains("GITHUB_TOKEN="), "{redacted}");
+        assert!(
+            !redacted.contains("ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
+            "{redacted}"
+        );
+    }
+
+    /// 无秘密面的普通命令文本零误伤。
+    #[test]
+    fn secret_surface_redaction_is_a_no_op_for_plain_commands() {
+        for text in [
+            "git commit -m \"fix the pipeline\"",
+            "git add src/main.rs && git commit -m release",
+            "https://host.example/repo.git",
+        ] {
+            assert_eq!(redact_secret_surfaces(text), text, "{text}");
+        }
     }
 
     #[test]

@@ -15,7 +15,9 @@ use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::sensitive_path::is_sensitive_path;
+use crate::sensitive_path::{
+    credential_surface_refusal, is_sensitive_path, redact_secret_field_values,
+};
 
 const DEFAULT_MAX_RESULTS: usize = 20;
 const MAX_RESULTS_CAP: usize = 100;
@@ -133,9 +135,9 @@ impl SearchTool {
         }
 
         if is_sensitive_path(&root, &candidate) || is_sensitive_path(&root, &canonical) {
-            return Err(SearchError::PermissionDenied(
-                "requested path is protected".to_string(),
-            ));
+            // 凭据与密钥面 fail-closed: 拒绝信息即帧 (pre_deny 语义), 说明
+            // 「凭据面不可读（安全契约）」。
+            return Err(SearchError::PermissionDenied(credential_surface_refusal()));
         }
 
         Ok((root, canonical))
@@ -458,7 +460,9 @@ impl ToolCapability for SearchTool {
             "matches": results.into_iter().map(|m| serde_json::json!({
                 "path": m.path,
                 "line": m.line,
-                "text": m.text,
+                // 输出侧敏感面治理: 命中行里的密钥字段值脱敏为 `[redacted]`
+                // (检索匹配仍按原文进行, 只是不回显字段值)。
+                "text": redact_secret_field_values(&m.text),
                 "column": m.column,
                 "occurrences": m.occurrences,
             })).collect::<Vec<_>>(),
@@ -476,7 +480,6 @@ mod tests {
     fn tool(root: &Path) -> SearchTool {
         SearchTool::new(root.to_path_buf())
     }
-
     async fn invoke(
         tool: &SearchTool,
         query: &str,
@@ -730,5 +733,49 @@ mod tests {
         let rendered = result.render();
         assert!(rendered.contains("\"occurrences\":3"), "{rendered}");
         assert!(rendered.contains("\"column\":1"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn credential_surface_denial_is_a_pre_deny_frame() {
+        // 凭据面搜索目标 fail-closed: 拒绝信息即帧 (pre_deny 语义)。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("creds.json"),
+            "{\"api_key\":\"sk-live-secret\"}",
+        )
+        .unwrap();
+
+        let result = invoke(&tool(dir.path()), "api_key", "creds.json", None).await;
+        assert!(!result.is_ok());
+        let rendered = result.render();
+        assert!(rendered.contains("pipeline.pre_deny"), "{rendered}");
+        assert!(rendered.contains("protected"), "{rendered}");
+        assert!(rendered.contains("凭据面不可读（安全契约）"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn matched_lines_redact_secret_field_values() {
+        // 检索匹配按原文进行, 但命中的密钥字段值脱敏为 `[redacted]`;
+        // 非敏感命中行照读。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("app.toml"),
+            "token = \"sk-live-secret\"\ntimeout = 30\n",
+        )
+        .unwrap();
+
+        let result = invoke(&tool(dir.path()), "token", ".", None).await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        assert!(!rendered.contains("sk-live-secret"), "{rendered}");
+        assert!(rendered.contains("[redacted]"), "{rendered}");
+
+        let plain = invoke(&tool(dir.path()), "timeout", ".", None).await;
+        assert!(plain.is_ok());
+        assert!(
+            plain.render().contains("timeout = 30"),
+            "{}",
+            plain.render()
+        );
     }
 }

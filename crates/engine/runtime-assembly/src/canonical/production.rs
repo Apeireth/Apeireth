@@ -23,7 +23,9 @@ use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
 use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
-use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig};
+use apeireth_tools_canonical::{
+    CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
+};
 
 use super::capability::CapabilityProvider;
 use super::cognitive::{
@@ -36,9 +38,11 @@ use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
+use super::self_status_source::{roster_from_config, ProductionSelfStatusSource};
 use super::tool_modules::{
-    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
-    ShellModule,
+    ApplyPatchModule, ContentFeedModule, EducationModule, FetchModule, FilesystemModule,
+    GitWriteModule, McpModule, RepoModule, SearchModule, SelfStatusModule, ShellModule,
+    SkillDistillModule, SkillSearchModule, WorktreeApplyModule, WorktreePlanModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -133,6 +137,14 @@ pub struct ProductionModulesConfig {
     pub shell: Option<TrustedShellConfig>,
     /// Register fetch tool module when config is supplied.
     pub fetch: Option<FetchConfig>,
+    /// Register the life-integration content feed (`tool.content_feed`, J1) when
+    /// config is supplied.
+    ///
+    /// 内容流接入: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套
+    /// 披露, 跨源内容不直进提示词)。治理档位 (RequireApproval 级: 拉取与入库
+    /// 都经审批档, 改订阅 = 写文件走 write_intent 同族) 由治理链钩子承载。
+    /// 默认关 (opt-in)。
+    pub content_feed: Option<apeireth_tools_canonical::ContentFeedConfig>,
     /// Register the external tool bridge (MCP) module.
     ///
     /// When enabled, the server list is loaded at assembly time from
@@ -140,6 +152,11 @@ pub struct ProductionModulesConfig {
     /// `mcp-servers.json` (secondary entry, stored-document fail-closed
     /// semantics): a defective configuration is a boot error, never a
     /// silent fallback. Off by default.
+    ///
+    /// Self-report semantics (honest): the `mcp` roster row reads the
+    /// registration condition — the bridge assembled **and** at least one
+    /// enabled server entry. Enabled with no server configuration means no
+    /// external tools, and the roster says so.
     pub mcp: bool,
     /// Data directory whose `mcp-servers.json` is the secondary config entry
     /// for the external tool bridge (see [`Self::mcp`]).
@@ -157,7 +174,9 @@ pub struct ProductionModulesConfig {
     /// (numbered evidence + anti-hallucination rules). Off by default.
     pub memory_injection: bool,
     /// Run the deterministic consolidation report after each turn and persist
-    /// its extracted insights. Off by default.
+    /// its extracted insights. Off by default. Hangs off the memory-writeback
+    /// module (`with_consolidation`): inert when [`Self::memory_writeback`] is
+    /// off, and the roster reports that registration condition.
     pub consolidation: bool,
     /// Register the reflexion failure-feedback module (TurnStart lessons +
     /// AfterTurn judge-failure sedimentation). Off by default.
@@ -165,13 +184,71 @@ pub struct ProductionModulesConfig {
     /// W2 §4.2 partner 羁绊 (2026-10-10, 默认关): TurnStart 关系注入 + AfterTurn 羁绊演化。
     pub partner_bond: bool,
     /// W2 §4.3 (2026-10-10, 默认关): 查询形态学自适应检索深度 (organ/morphology)。
+    /// 挂在记忆召回模块 (`with_morphology_recall`): [`Self::memory_recall`] 关
+    /// 时静默失效, 名册按实际注册条件取值。
     pub morphology_recall: bool,
     /// W3 (2026-10-10, 默认关): community 社区分诊接检索前置 (需 graph 后端)。
+    /// 挂在记忆召回模块 (`with_community_triage`): [`Self::memory_recall`] 关
+    /// 或图谱槽缺席时静默失效, 名册按实际注册条件取值。
     pub community_triage: bool,
     /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
     pub education: bool,
     /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
     pub absorption_insight: bool,
+    /// Register the structured self-report tool (`tool.self_status`, 自省通道).
+    ///
+    /// 只读档、默认可用、零审批: 模型可实测自身状态再发言。缺 data 系探测口
+    /// 时对应字段显式 null + 原因, 不影响注册与其余字段。
+    pub self_status: bool,
+    /// Register the controlled file-write tool (`tool.apply_patch`, 第七件).
+    ///
+    /// 补丁式受控写文件 (创建/修改/删除显式声明), 沿用读前观测门禁。写入风险
+    /// 档位默认 require-approval 级 (每次写入都要人批, 与本地审批面板 / IM 审批
+    /// 卡同链); 授权层由组装根按同一开关接线。默认关 (opt-in)。
+    pub file_write: bool,
+    /// 「自动放行已读文件的修改」子档 (依赖 [`Self::file_write`]): 仅修改类
+    /// 补丁免逐次审批; 删除/新建永不自动放行 (仍走人工审批)。默认关。
+    pub file_write_auto_pass: bool,
+    /// Register the graded git-write tool (`tool.git_write`, 干活能力轴 P1)。
+    ///
+    /// 分级词表: L1 可逆 (add/commit/branch 建·切/tag 本地) / L2 出网
+    /// (push/fetch/remote) / L3 毁灭 (无工具面, 拒绝即帧)。L1 默认每次人批
+    /// (与本地审批面板 / IM 审批卡同链); L2 **永远人批**。默认关 (opt-in)。
+    pub git_write: bool,
+    /// 「自动放行 L1」子档 (依赖 [`Self::git_write`]): 仅 L1 可逆本地写免逐次
+    /// 审批; **L2 出网永不自动放行** (永远人工审批)。默认关。
+    pub git_write_auto_pass_l1: bool,
+    /// Register the read-only change-order tool (`tool.worktree_plan`, 干活能力轴 P2 计划拍)。
+    ///
+    /// 多文件大改「计划→改→验证→落」四拍之首: 任务目标 → 改单 (零落盘,
+    /// 只读面); 改单是 [`Self::worktree_apply`] 的输入合同。注册条件 = 本开关
+    /// + [`Self::file_write`] (唯一写总闸) + 工作区根已注入 (注册即闸)。
+    /// 默认关 (opt-in)。
+    pub worktree_plan: bool,
+    /// Register the controlled worktree-write tool (`tool.worktree_apply`, 干活能力轴 P2)。
+    ///
+    /// 四拍受控工作树写 (计划→改→验证→落, 全有或全无); 与 `tool.apply_patch`
+    /// 同受 [`Self::file_write`] 唯一写总闸。注册条件 = 本开关 +
+    /// [`Self::file_write`] + 工作区根已注入 + 共享读前观测门禁 (`ObservedGate`,
+    /// 与读工具同一张观测表 —— 未读不得覆盖/删除)。RequireApproval 级 (每次
+    /// 落盘都人批, 无自动放行档)。默认关 (opt-in)。
+    pub worktree_apply: bool,
+    /// Register the skill distill tool (`tool.skill_distill`, 书→技能沉淀 I1)。
+    ///
+    /// 知识吸收写入口: 内容输入 (正文 / 文件只读通道) + 模型侧草稿 →
+    /// 结构化技能卡 → 技能库 ( [`Self::skills_dir`] )。注册条件 = 本开关 +
+    /// [`Self::file_write`] (唯一写总闸, 注册即闸) + 工作区根 + 技能库目录。
+    /// **审批档**: 每次沉淀都人批 (无自动放行档)。默认关 (opt-in)。
+    pub skill_distill: bool,
+    /// Register the read-only skill search tool (`tool.skill_search`, I1 调用面)。
+    ///
+    /// 检索式注入 (触发词命中 / 按需拉取) 经 L2 封套披露进上下文; 只读档
+    /// 零审批。注册条件 = 本开关 + 技能库目录 (不依赖写总闸)。默认关 (opt-in)。
+    pub skill_search: bool,
+    /// 技能库目录 (数据目录 `skills/`, 每卡一 StoredDoc)。
+    ///
+    /// 缺位时两级技能工具都注册不成 (注册即闸), 名册照实报 false。
+    pub skills_dir: Option<PathBuf>,
 }
 
 impl Default for ProductionModulesConfig {
@@ -189,6 +266,7 @@ impl Default for ProductionModulesConfig {
             repo: true,
             shell: None,
             fetch: None,
+            content_feed: None,
             mcp: false,
             mcp_data_dir: None,
             preference_learning: false,
@@ -201,6 +279,16 @@ impl Default for ProductionModulesConfig {
             community_triage: false,
             education: false,
             absorption_insight: false,
+            self_status: true,
+            file_write: false,
+            file_write_auto_pass: false,
+            git_write: false,
+            git_write_auto_pass_l1: false,
+            worktree_plan: false,
+            worktree_apply: false,
+            skill_distill: false,
+            skill_search: false,
+            skills_dir: None,
         }
     }
 }
@@ -256,6 +344,23 @@ pub struct ProductionBackends {
     /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层, 接上后
     /// MemoryRecallModule 的召回结果作为真接信号喂给引擎。
     pub self_tuning: Option<Arc<crate::canonical::self_tuning_wire::SelfTuningWire>>,
+    /// 自省通道: 记忆账本计数探测口 (会话/记忆/保护/教训计数, 只回计数)。
+    pub self_status_ledger: Option<StatusProbe<MemoryLedgerStats>>,
+    /// 自省通道: 凭据存在性探测口 (只回布尔, 不回显凭据本体)。
+    pub self_status_credentials: Option<StatusProbe<bool>>,
+    /// 自省通道: 组装根补充的能力名册行 (例如授权层的 `local_read_tools` 旋钮)。
+    pub self_status_extras: Vec<CapabilitySwitch>,
+    /// 自省通道: 生效中的预算一节 (可配置旋钮取值; 缺位回退编译期常量)。
+    pub self_status_budget: Option<apeireth_tools_canonical::BudgetStatus>,
+    /// 自省通道: 会话配额计量探测口 (按会话 id 读已耗真值, 只回数字)。
+    pub self_status_quota: Option<apeireth_tools_canonical::SessionQuotaProbe>,
+    /// 自省通道: 生效模型的画像 (H-P1 模型画像表解析结果; 未知模型传显式
+    /// unknown 行; 缺位时模型节显式 null + 原因)。
+    pub self_status_model_profile: Option<apeireth_core::model_profile::ModelProfile>,
+    /// 自省通道: 用户域节探测口 (W3-①: 当前域 id/角色/域内计数, 现探测如实)。
+    pub self_status_domain: Option<StatusProbe<apeireth_tools_canonical::DomainStatus>>,
+    /// 自省通道: 内容流面探测口 (J1: 订阅数/最近拉取, 现探测如实)。
+    pub self_status_content_feed: Option<StatusProbe<apeireth_tools_canonical::ContentFeedStatus>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -284,6 +389,47 @@ impl ProductionModules {
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
+        // External tool bridge (MCP) server list is loaded BEFORE the roster
+        // projection: the self-report must read the same facts the
+        // registration uses (已启用但无服务器配置 = 无外部工具). Fail-closed
+        // semantics unchanged: a defective configuration is a boot error,
+        // never a silent fallback.
+        let mcp_server_config = if config.mcp {
+            Some(
+                McpServerConfig::load(config.mcp_data_dir.as_deref()).map_err(|error| {
+                    RuntimeError::misconfigured(format!(
+                        "mcp server configuration refused to load: {error}"
+                    ))
+                })?,
+            )
+        } else {
+            None
+        };
+
+        // 自省通道: 能力名册在任何字段移动之前投影 —— 名册即**实际用于装配的**
+        // config 生效值 (读真实生效值, 不是配置文本的复述)。注入槽级的注册
+        // 条件 (图谱槽 / 外部工具服务器面) 先折进生效视图, 名册不复述
+        // "配置说开"而注册没成的事实。
+        let mut roster_config = config.clone();
+        roster_config.community_triage = config.community_triage && backends.graph.is_some();
+        roster_config.mcp = mcp_server_config
+            .as_ref()
+            .is_some_and(|servers| servers.enabled_servers().next().is_some());
+        // 自学习 / 类型化召回的生效值 = 接线事实 AND 上游槽 (自学习信号只走
+        // 记忆召回模块, 类型化召回候选只走记忆协调器)。
+        let self_tuning_effective = backends.self_tuning.is_some() && config.memory_recall;
+        let typed_recall_effective =
+            backends.typed_recall.is_some() && (config.memory_recall || config.memory_writeback);
+        let self_status_roster = config.self_status.then(|| {
+            roster_from_config(
+                &roster_config,
+                backends.workspace_root.is_some(),
+                self_tuning_effective,
+                typed_recall_effective,
+                &backends.self_status_extras,
+            )
+        });
+
         let experience_count = [
             backends.wiki.is_some(),
             backends.graph.is_some(),
@@ -299,9 +445,13 @@ impl ProductionModules {
         }
 
         // Register tool capabilities independently of behavior modules.
+        // 读前观测门禁一张表共享: 读工具记录的观测就是写入端「已读」的证据
+        // (跨工具同一会话观测, 未读不得覆盖写)。
+        let observed_gate = Arc::new(ObservedGate::new());
         if config.filesystem {
             if let Some(root) = &backends.workspace_root {
-                let provider = FilesystemModule::new(root.clone());
+                let provider =
+                    FilesystemModule::new_with_gate(root.clone(), Arc::clone(&observed_gate));
                 capabilities.extend(provider.capabilities());
             }
         }
@@ -320,14 +470,84 @@ impl ProductionModules {
             }
         }
 
+        // 受控文件写入 (`tool.apply_patch`, 第七件生产工具, opt-in): 补丁式
+        // 创建/修改/删除显式声明 + 读前观测门禁; 写入风险档位默认 require-approval
+        // 级 (每次写入都要人批), 授权层按同一开关接线。git 写边界 (分级语义):
+        // 仓库写操作走 `tool.git_write` 的分级词表 (L1 默认人批 / L2 永远人批 /
+        // L3 毁灭无工具面)。
+        if config.file_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = ApplyPatchModule::new(root.clone(), Arc::clone(&observed_gate));
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 干活能力轴 P2 (「计划→改→验证→落」四拍受控工作树写, opt-in): 两级
+        // 工具面注册条件 = 开关 + `file_write` 唯一写总闸 + 工作区根 (注册即闸,
+        // 与 `tool.apply_patch` 同受一闸)。`worktree_plan` 是只读改单面 (零落盘,
+        // 其产物是 apply 的输入合同); `worktree_apply` 走**共享**读前观测门禁
+        // (与读工具同一张观测表, 未读不得覆盖/删除)。审批级: apply 每次落盘
+        // 都人批 (无自动放行档, 审批卡载荷 = 改单摘要), plan 只读零审批。
+        if config.worktree_plan && config.file_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = WorktreePlanModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        if config.worktree_apply && config.file_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = WorktreeApplyModule::new(root.clone(), Arc::clone(&observed_gate));
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // git 写分级 (`tool.git_write`, 干活能力轴 P1, opt-in): 分级词表 +
+        // 词法分级执行面 + 受控通道 (工作区限域/超时/输出归一)。L1 默认人批
+        // (设置可开「自动放行 L1」档), L2 永远人批, L3 拒绝即帧无工具面。
+        if config.git_write {
+            if let Some(root) = &backends.workspace_root {
+                let provider = GitWriteModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 书→技能沉淀 (I 轴吸收自动化 I1, 默认关): 两级工具面。`tool.skill_distill`
+        // 是写文件面 —— 注册条件 = 开关 + `file_write` 唯一写总闸 + 工作区根 +
+        // 技能库目录 (注册即闸, 与 `tool.apply_patch` 同受一闸), 审批档 = 每次
+        // 沉淀都人批 (无自动放行档, 审批卡载荷 = 技能卡摘要); `tool.skill_search`
+        // 是只读档 (零审批), 只要技能库目录。技能库 = 数据目录 `skills/`,
+        // 每卡一 StoredDoc (拒开语义)。
+        if config.skill_distill && config.file_write {
+            if let (Some(root), Some(skills_dir)) = (&backends.workspace_root, &config.skills_dir) {
+                let provider = SkillDistillModule::new(root.clone(), skills_dir.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        if config.skill_search {
+            if let Some(skills_dir) = &config.skills_dir {
+                let provider = SkillSearchModule::new(
+                    skills_dir.clone(),
+                    apeireth_tools_canonical::skill::DEFAULT_SKILL_DISCLOSURE_BUDGET_CHARS,
+                );
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
         // W2 §4.3 (2026-10-10, 默认关): education Dx-Check 工具 (纯确定性, 0 副作用)。
         if config.education {
             let provider = EducationModule::new();
             capabilities.extend(provider.capabilities());
         }
 
+        // 文件写入总闸 (宪法级, 内测整改): `file_write` 是**唯一写总闸** ——
+        // 组装根把同一开关值注入 shell 配置, shell 写命令 (重定向/删除类/写
+        // 命令面) 与 apply_patch 同受此闸, 开关名与权力相符。关 = 写意图拒绝
+        // 即帧 (`pipeline.pre_deny`); 开 = shell 行为不变 (审批链照旧走既有
+        // 风险映射)。
         if let Some(shell_config) = config.shell {
-            let provider = ShellModule::new(shell_config);
+            let provider = ShellModule::new(shell_config.with_file_write(config.file_write));
             capabilities.extend(provider.capabilities());
         }
 
@@ -336,20 +556,60 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +
+        // 结构化摘要 + 入记忆流 (L2 封套披露)。治理档位在治理链
+        // (`ContentFeedApprovalHook`): RequireApproval 级 —— 拉取与入库都经
+        // 审批档, 改订阅走 write_intent 同族 (改订阅 = 写文件)。
+        if let Some(feed_config) = config.content_feed {
+            let provider = ContentFeedModule::new(feed_config);
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
+        // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
+        // 原因, 注册与其余字段不受影响。
+        if let Some(roster) = self_status_roster {
+            let mut source = ProductionSelfStatusSource::new(
+                roster,
+                self_tuning_effective,
+                backends.workspace_root.clone(),
+            );
+            if let Some(probe) = &backends.self_status_ledger {
+                source = source.with_ledger_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_credentials {
+                source = source.with_credentials_probe(Arc::clone(probe));
+            }
+            if let Some(budget) = &backends.self_status_budget {
+                source = source.with_budget(budget.clone());
+            }
+            if let Some(probe) = &backends.self_status_quota {
+                source = source.with_quota_probe(Arc::clone(probe));
+            }
+            if let Some(profile) = &backends.self_status_model_profile {
+                source = source.with_model_profile(profile.clone());
+            }
+            if let Some(probe) = &backends.self_status_domain {
+                source = source.with_domain_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_content_feed {
+                source = source.with_content_feed_probe(Arc::clone(probe));
+            }
+            let provider = SelfStatusModule::new(Arc::new(source));
+            capabilities.extend(provider.capabilities());
+        }
+
         // External tool bridge (MCP): the slot is opt-in, and enabling it
         // loads the server list at assembly time (env primary, data-directory
         // stored document secondary) with fail-closed semantics. Connections
         // are established asynchronously after build; the module bag is the
-        // registration target for the dynamic tools discovery produces.
+        // registration target for the dynamic tools discovery produces. The
+        // server list was loaded above (before the roster projection) — a
+        // server list with no enabled entry assembles an inert bridge (no
+        // external tools), and the roster reports that honestly.
         let mut mcp_bridge = None;
         let mut mcp_module = None;
-        if config.mcp {
-            let server_config =
-                McpServerConfig::load(config.mcp_data_dir.as_deref()).map_err(|error| {
-                    RuntimeError::misconfigured(format!(
-                        "mcp server configuration refused to load: {error}"
-                    ))
-                })?;
+        if let Some(server_config) = mcp_server_config {
             let options = McpBridgeOptions::from_env();
             let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
                 RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))

@@ -456,3 +456,191 @@ fn context_budget_knob_defaults_when_unset() {
         "invalid values fall back to the default"
     );
 }
+
+// ---- 轮数 / 单轮工具调用预算旋钮 (APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS) ----
+
+/// 预算显式化: 两个预算 env 旋钮装配进 runtime (调小轮数可触发真实上限帧)。
+#[tokio::test]
+async fn turn_budget_knobs_configure_the_runtime_from_env() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_rounds = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", Some("2"));
+    let _g_calls = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", Some("4"));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("turn-budget")));
+    let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("turn-budget-session")));
+
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 2);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 4);
+
+    let (runtime, _sessions, _memory, _policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with budget knobs");
+    assert_eq!(runtime.config().max_rounds, 2, "轮数预算 env 生效");
+    assert_eq!(
+        runtime.config().max_tool_calls_per_round,
+        4,
+        "单轮工具调用预算 env 生效"
+    );
+}
+
+/// 预算旋钮取值纪律: 越界钳制、非法值回默认 (8 / 16)。
+#[test]
+fn turn_budget_knobs_clamp_and_fall_back_to_defaults() {
+    let _lock = ENV_LOCK.lock().unwrap();
+
+    let _g_bad = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", Some("not-a-number"));
+    let _g_bad2 = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", Some(""));
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 8);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 16);
+
+    let _g_big = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", Some("999"));
+    let _g_zero = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", Some("0"));
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 64);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 1);
+
+    let _g_none = EnvGuard::set("APEIRETH_MAX_TURN_ROUNDS", None);
+    let _g_none2 = EnvGuard::set("APEIRETH_MAX_TOOL_CALLS", None);
+    assert_eq!(apeireth_cli::turn_round_limit_from_env(), 8);
+    assert_eq!(apeireth_cli::tool_call_limit_from_env(), 16);
+}
+
+// ---- 会话配额旋钮 (APEIRETH_QUOTA_MAX_TOKENS / APEIRETH_QUOTA_MAX_TOOL_STEPS
+//      / APEIRETH_QUOTA_MAX_COST_MICROS) ----
+
+/// 会话配额旋钮 (opt-in 烧钱闸): 正整数直通, env → RuntimeConfig 同源装配。
+#[tokio::test]
+async fn session_quota_knobs_configure_the_runtime_from_env() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_tokens = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", Some("5000"));
+    let _g_steps = EnvGuard::set("APEIRETH_QUOTA_MAX_TOOL_STEPS", Some("250"));
+    let _g_cost = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", Some("700000"));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("quota-knobs")));
+    let _g_sdb = EnvGuard::set("APEIRETH_SESSION_DB", Some(&temp_db("quota-knobs-session")));
+
+    assert_eq!(apeireth_cli::quota_max_tokens_from_env(), Some(5_000));
+    assert_eq!(apeireth_cli::quota_max_tool_steps_from_env(), Some(250));
+    assert_eq!(
+        apeireth_cli::quota_max_cost_micros_from_env(),
+        Some(700_000),
+        "花费旋钮同一解析口径"
+    );
+
+    let (runtime, _sessions, _memory, _policy, _guard_hook) =
+        build_canonical_runtime_with_sessions_from_env()
+            .await
+            .expect("bootstrap with quota knobs");
+    assert_eq!(
+        runtime.config().quota.max_tokens,
+        Some(5_000),
+        "token 配额 env 生效"
+    );
+    assert_eq!(
+        runtime.config().quota.max_tool_steps,
+        Some(250),
+        "步数配额 env 生效"
+    );
+    assert_eq!(
+        runtime.config().quota.max_cost_micros,
+        Some(700_000),
+        "花费配额 env 生效"
+    );
+}
+
+/// 会话配额旋钮取值纪律: 未设 / 0 / 非法 = 不设限 (None, opt-in 显式),
+/// 越界钳制到计量列宽。
+#[test]
+fn session_quota_knobs_are_opt_in_and_clamp_oversized_values() {
+    let _lock = ENV_LOCK.lock().unwrap();
+
+    let _g_none = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", None);
+    let _g_none2 = EnvGuard::set("APEIRETH_QUOTA_MAX_TOOL_STEPS", None);
+    let _g_none3 = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", None);
+    assert_eq!(apeireth_cli::quota_max_tokens_from_env(), None);
+    assert_eq!(apeireth_cli::quota_max_tool_steps_from_env(), None);
+    assert_eq!(apeireth_cli::quota_max_cost_micros_from_env(), None);
+
+    let _g_zero = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", Some("0"));
+    let _g_bad = EnvGuard::set("APEIRETH_QUOTA_MAX_TOOL_STEPS", Some("nope"));
+    let _g_cost_zero = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", Some("0"));
+    assert_eq!(
+        apeireth_cli::quota_max_tokens_from_env(),
+        None,
+        "0 = 不设限 (显式)"
+    );
+    assert_eq!(apeireth_cli::quota_max_tool_steps_from_env(), None);
+    assert_eq!(
+        apeireth_cli::quota_max_cost_micros_from_env(),
+        None,
+        "花费旋钮同族纪律: 0 = 不设限"
+    );
+
+    let _g_big = EnvGuard::set("APEIRETH_QUOTA_MAX_TOKENS", Some("99999999999999"));
+    let _g_cost_big = EnvGuard::set("APEIRETH_QUOTA_MAX_COST_MICROS", Some("99999999999999"));
+    assert_eq!(
+        apeireth_cli::quota_max_tokens_from_env(),
+        Some(apeireth_runtime::canonical::MAX_QUOTA_TOKENS),
+        "越界钳制"
+    );
+    assert_eq!(
+        apeireth_cli::quota_max_cost_micros_from_env(),
+        Some(apeireth_runtime::canonical::MAX_QUOTA_COST_MICROS),
+        "越界钳制"
+    );
+}
+
+/// H-P1 模型面: 生效模型 id 的唯一解析口径 (与运行时 `with_default_model`
+/// 同源) —— `APEIRETH_MODEL` 显式覆盖胜出; 空白覆盖按未设处理, 回族首默认
+/// 模型; 族模型表 env (`APEIRETH_API_MODELS`) 与解析同源。
+#[test]
+fn active_model_id_is_the_single_resolution_for_the_model_plane() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("explicit-model"));
+    let _g_models = EnvGuard::set("APEIRETH_API_MODELS", None);
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("explicit-model"),
+        "显式覆盖胜出"
+    );
+
+    let _g_blank = EnvGuard::set("APEIRETH_MODEL", Some("  "));
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("minimax-m3"),
+        "空白覆盖按未设处理, 回族首默认模型 (提供商面规范 id, 小写)"
+    );
+
+    let _g_list = EnvGuard::set("APEIRETH_API_MODELS", Some("custom-a,custom-b"));
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("custom-a"),
+        "族模型表 env 同源 (首个)"
+    );
+
+    let _g_empty_list = EnvGuard::set("APEIRETH_API_MODELS", Some(" "));
+    let _g_no_model = EnvGuard::set("APEIRETH_MODEL", None);
+    assert_eq!(
+        apeireth_cli::active_model_id().as_deref(),
+        Some("minimax-m3"),
+        "模型表 env 空白 = 族默认模型表"
+    );
+}
+
+/// H-P1 配置面 fail-closed: 坏 `APEIRETH_MODEL_PROFILES` = 装配拒开
+/// (启动错误正式通道), 不静默回退基线。
+#[tokio::test]
+async fn bootstrap_refuses_a_broken_model_profiles_env() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_profiles = EnvGuard::set("APEIRETH_MODEL_PROFILES", Some("{ not json"));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("model-profiles")));
+    let _g_sdb = EnvGuard::set(
+        "APEIRETH_SESSION_DB",
+        Some(&temp_db("model-profiles-session")),
+    );
+    let Err(error) = build_canonical_runtime_with_sessions_from_env().await else {
+        panic!("坏画像配置必须拒开");
+    };
+    assert!(
+        error.contains("model profile configuration refused to load"),
+        "{error}"
+    );
+}

@@ -91,6 +91,8 @@ pub mod production;
 #[path = "canonical/repetition_advisory.rs"]
 pub mod repetition_advisory;
 /// 「性格养成」第一铲: 自校准接线层 (引擎落地 + tuning-log.jsonl 落盘)。
+#[path = "canonical/self_status_source.rs"]
+pub mod self_status_source;
 #[path = "canonical/self_tuning_wire.rs"]
 pub mod self_tuning_wire;
 #[path = "canonical/tool_modules.rs"]
@@ -126,7 +128,9 @@ pub use memory_typed_sink::CanonicalMemoryTypedSink;
 pub use onion_layer::{onion_layer_for_capability, OnionLayerHook};
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
-pub use permission_preset::{is_write_or_execute_capability, PermissionPresetGovernanceHook};
+pub use permission_preset::{
+    human_approval_floor_applies, is_write_or_execute_capability, PermissionPresetGovernanceHook,
+};
 pub use preference_learning::{
     PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity,
     PREFERENCE_LEARNING_MODULE_ID,
@@ -136,13 +140,19 @@ pub use production::{
     MemoryContextProjector, ProductionBackends, ProductionCognitiveModules, ProductionModules,
     ProductionModulesConfig,
 };
+pub use self_status_source::{
+    budget_status_from_configured, budget_status_from_constants, domain_status_probe,
+    max_rounds_per_turn_constant, max_tool_calls_per_round_constant, roster_from_config,
+    session_quota_probe, ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED,
+    BUDGET_SOURCE_CONFIGURED_NOTE, BUDGET_SOURCE_CONSTANT,
+};
 pub use self_tuning_wire::{
     consolidation_cadence_turns, migrate_legacy_tuning_log_file, tuning_log_path,
     tuning_log_path_from_session_db, SelfTuningWire, SELF_TUNING_ENABLE_ENV, TUNING_LOG_DOC_NAME,
     TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use tool_modules::{
-    EducationModule, FetchModule, FilesystemModule, McpModule, RepoModule, SearchModule,
-    ShellModule,
+    EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule,
+    SearchModule, SelfStatusModule, ShellModule, SELF_STATUS_TIMEOUT_MS,
 };
 pub use typed_recall::SqliteTypedMemoryRecallSource;

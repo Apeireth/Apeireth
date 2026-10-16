@@ -147,6 +147,10 @@ pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "guard.policy.write",
     "tool.filesystem",
     "tool.search",
+    "tool.apply_patch",
+    "tool.git_write",
+    "tool.self_status",
+    "tool.content_feed",
 ];
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -283,6 +287,19 @@ pub fn effect_fingerprint(
     format!("effect:{:016x}", hasher.finish())
 }
 
+/// 命令文本**不按 shell 语义解释**的能力面 (结构化调用面)。
+///
+/// git 写分级工具 (`tool.git_write`) 的 `command` 是词表分级的 git 调用:
+/// 固定可执行体 + 白名单 argv, 不经 shell。对这类面, shell 命令效应模板的
+/// **基线面** (Execute / SpawnProcess · ProcessExecution · ShellExecution) 不进
+/// 观察 —— 否则受控 git 调用被误标成 shell 执行面, 「自动放行 L1」档名不实
+/// (快守卫对 shell 执行面恒抬人工确认)。命令携带的**真实效应**照常合并
+/// (push 的 Publish/NetworkSend/ExternalNetwork、reset --hard 的 Delete 等):
+/// 分级词表漏判时, 意图对齐守卫仍是第二双眼睛 (非出网意图下的 push 照样被
+/// 判高危)。其余带 `command` 参数的能力 (shell 面 / 未知能力) 照旧全量合并
+/// (保守优先)。
+const SHELL_FREE_COMMAND_SURFACES: &[&str] = &["tool.git_write"];
+
 fn merge_command_effects(
     descriptor: &mut CapabilitySafetyDescriptor,
     arguments: &serde_json::Value,
@@ -290,18 +307,33 @@ fn merge_command_effects(
     let Some(command) = arguments.get("command").and_then(serde_json::Value::as_str) else {
         return;
     };
+    let shell_free = SHELL_FREE_COMMAND_SURFACES.contains(&descriptor.capability_id.as_str());
     let summary = CommandEffectAnalyzer::analyze(command);
     for operation in summary.operation_classes {
+        if shell_free
+            && matches!(
+                operation,
+                OperationClass::Execute | OperationClass::SpawnProcess
+            )
+        {
+            continue;
+        }
         if !descriptor.operation_classes.contains(&operation) {
             descriptor.operation_classes.push(operation);
         }
     }
     for resource in summary.resource_classes {
+        if shell_free && matches!(resource, ResourceClass::ProcessExecution) {
+            continue;
+        }
         if !descriptor.resource_classes.contains(&resource) {
             descriptor.resource_classes.push(resource);
         }
     }
     for sink in summary.sink_classes {
+        if shell_free && matches!(sink, SinkClass::ShellExecution) {
+            continue;
+        }
         if !descriptor.output_sinks.contains(&sink) {
             descriptor.output_sinks.push(sink);
         }
@@ -490,6 +522,24 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             "workspace",
         ),
+        // 受控文件写入 (`tool.apply_patch`): 工作区文件的补丁式写面。
+        //
+        // 静态描述符只覆盖**写面**本身 (Write/Modify); 补丁内逐动作的
+        // 创建/删除分类由写入风险映射逐次判定 (创建/删除停人工审批,
+        // 「删除/新建永不自动放行」), 不进静态描述符 —— 否则纯修改类补丁
+        // 也会被 intent 的 destructive 门当成未请求删除误伤。
+        describe(
+            "tool.apply_patch",
+            vec![OperationClass::Write, OperationClass::Modify],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            false,
+            true,
+            false,
+            "workspace",
+        ),
         describe(
             "tool.search",
             vec![OperationClass::Read],
@@ -501,6 +551,62 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             false,
             "workspace",
+        ),
+        // git 写分级工具 (`tool.git_write`): 仓库写面 (索引/本地引用/远端交互)
+        // 的受控写入口。静态描述符只覆盖**写面**本身 (Write/Modify): 逐命令的
+        // 分级 (L1 可逆 / L2 出网) 由分级词表逐次判定, 出网面由命令效应合并
+        // (push/fetch 命令追加 Publish/NetworkSend/ExternalNetwork); L3 毁灭级
+        // **无工具面**, 故 destructive 静态如实为 false (不谎报有毁灭入口)。
+        describe(
+            "tool.git_write",
+            vec![OperationClass::Write, OperationClass::Modify],
+            vec![ResourceClass::Repository],
+            vec![SourceClass::UserPrompt],
+            vec![SinkClass::WorkspaceFile],
+            false,
+            false,
+            true,
+            false,
+            "repository",
+        ),
+        // 结构化自述面 (自省通道): 只读运行时自身状态 (开关生效值 / 记忆账本
+        // 计数 / 调参 / 预算 / 工作区事实)。无写、无执行、无外联、无凭据值 ——
+        // 凭据只回存在性布尔, 故 `may_access_credentials = false`。
+        //
+        // 来源分类: 闭合词表没有"运行时自身状态元数据"这一类; 记忆账本只回
+        // **聚合计数**而非记忆正文, 标 `PrivateMemory` 会把计数误标为记忆
+        // 正文读取 (并触发人工确认门), 与本工具的只读零审批档矛盾, 故按
+        // `Unknown` 如实标注词表缺口 (效应标志全 false, 无静默降级)。
+        describe(
+            "tool.self_status",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemoryEpisodic],
+            vec![SourceClass::Unknown],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "self_status",
+        ),
+        // 内容流接入 (`tool.content_feed`, J1): 读网络 + 写记忆流双面。静态描述
+        // 符如实标双面 (NetworkRead + Write; 源 = 外部网络, 汇 = 记忆写), 不因
+        // 「内容只是读来的」降级 —— 跨源内容入记忆流是持久写面。逐动作的写面
+        // (改订阅 = 写文件 / 拉取入库) 由工具的 write_intent 同族归类与治理档
+        // (RequireApproval 级: 拉取与入库都经审批档) 逐次判定, 敏感面 URL
+        // (凭据/内网) 是拒绝而非审批。凭据面: 拒收 userinfo URL, `may_access_credentials`
+        // 如实为 false。
+        describe(
+            "tool.content_feed",
+            vec![OperationClass::NetworkRead, OperationClass::Write],
+            vec![ResourceClass::NetworkPublic, ResourceClass::MemoryEpisodic],
+            vec![SourceClass::ExternalNetwork],
+            vec![SinkClass::MemoryWrite],
+            true,
+            false,
+            true,
+            true,
+            "external_network",
         ),
         describe(
             "guard.policy.write",
@@ -653,6 +759,112 @@ fn infer_descriptor(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// git 写分级工具的结构化调用面: shell 基线效应不进观察 (受控 git 调用
+    /// 不是 shell 执行面), 但真实效应照常合并 (守卫仍是漏判时的第二双眼睛);
+    /// shell 面照旧全量合并 (保守优先)。
+    #[test]
+    fn structured_command_surface_merges_real_effects_without_the_shell_baseline() {
+        let add = descriptor_for_capability(
+            "tool.git_write",
+            &serde_json::json!({ "command": "git add a.txt" }),
+        );
+        assert!(
+            !add.operation_classes.contains(&OperationClass::Execute),
+            "{:?}",
+            add.operation_classes
+        );
+        assert!(
+            !add.output_sinks.contains(&SinkClass::ShellExecution),
+            "{:?}",
+            add.output_sinks
+        );
+        assert!(
+            !add.resource_classes
+                .contains(&ResourceClass::ProcessExecution),
+            "{:?}",
+            add.resource_classes
+        );
+        assert!(add.operation_classes.contains(&OperationClass::Write));
+
+        // 漏判兜底: push 的出网真实效应照常进观察 (意图对齐守卫可判高危)。
+        let push = descriptor_for_capability(
+            "tool.git_write",
+            &serde_json::json!({ "command": "git push origin main" }),
+        );
+        assert!(
+            push.operation_classes.contains(&OperationClass::Publish),
+            "{:?}",
+            push.operation_classes
+        );
+        assert!(
+            push.operation_classes
+                .contains(&OperationClass::NetworkSend),
+            "{:?}",
+            push.operation_classes
+        );
+        assert!(
+            push.output_sinks.contains(&SinkClass::ExternalNetwork),
+            "{:?}",
+            push.output_sinks
+        );
+        assert!(push.requires_network, "{push:?}");
+        assert!(
+            !push.operation_classes.contains(&OperationClass::Execute),
+            "{:?}",
+            push.operation_classes
+        );
+
+        // shell 面照旧全量合并 (保守优先, 不因结构化面放宽)。
+        let shell =
+            descriptor_for_capability("tool.shell", &serde_json::json!({ "command": "echo hi" }));
+        assert!(shell.operation_classes.contains(&OperationClass::Execute));
+        assert!(shell.output_sinks.contains(&SinkClass::ShellExecution));
+    }
+
+    /// 内容流接入 (`tool.content_feed`) 的描述符如实标双面: 读网络 + 写记忆流
+    /// 都在场 (不因「内容只是读来的」降级), 凭据面拒收故 `may_access_credentials`
+    /// 为 false (不谎报有凭据入口)。
+    #[test]
+    fn content_feed_descriptor_is_honest_about_its_dual_face() {
+        let descriptor = descriptor_for_capability("tool.content_feed", &serde_json::json!({}));
+        assert_eq!(descriptor.source, DescriptorSource::Canonical);
+        assert!(descriptor.known);
+        assert!(
+            descriptor
+                .operation_classes
+                .contains(&OperationClass::NetworkRead),
+            "{:?}",
+            descriptor.operation_classes
+        );
+        assert!(
+            descriptor
+                .operation_classes
+                .contains(&OperationClass::Write),
+            "{:?}",
+            descriptor.operation_classes
+        );
+        assert!(descriptor.requires_network);
+        assert!(descriptor.external_effect);
+        assert!(descriptor.persistent_effect, "入记忆流是持久写面");
+        assert!(!descriptor.destructive);
+        assert!(
+            !descriptor.may_access_credentials,
+            "凭据 URL 拒收, 无凭据入口"
+        );
+        assert!(
+            descriptor
+                .resource_classes
+                .contains(&ResourceClass::MemoryEpisodic),
+            "{:?}",
+            descriptor.resource_classes
+        );
+        assert!(
+            descriptor.output_sinks.contains(&SinkClass::MemoryWrite),
+            "{:?}",
+            descriptor.output_sinks
+        );
+    }
 
     #[test]
     fn same_effect_fingerprints_align_across_tool_families() {

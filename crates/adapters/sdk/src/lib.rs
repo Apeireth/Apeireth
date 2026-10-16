@@ -282,6 +282,11 @@ const _MODULE_COUNT: usize = {
 pub mod lark;
 #[cfg(feature = "livekit")]
 pub mod livekit;
+// IM 快捷接入 wire 面 (渠道 kind / 入站解码 / 出站信封 / 审批卡片 / 分段 / 传输)。
+// `im-feishu` 渠道消费 lark 适配族 (webhook 信封解析 + 消息内容形状 + 消息预算),
+// 因此与 lark 同门控; test 构建恒编译, 保证 wire 面单测进入默认测试面。
+#[cfg(any(feature = "lark", test))]
+pub mod im;
 // sandbox 客户端协议层: 下游按 feature `sandbox` 启用; test 构建恒编译,
 // 保证编排面单测 (生命周期/配额/错误分类/并发/超时) 在标准
 // `cargo test --workspace` 验证里真实运行。

@@ -13,45 +13,18 @@ name: Kani formal verification (approval SM + 6 property families)
 # Kani 0.67 (crates.io 最新) 自带 nightly 1.93, `cargo kani -p apeireth-runtime`
 # 被 rust-version 检查拒绝。mirror 用 #[path] 直接包含 canonical 源文件 (零复制),
 # 验证的是同一份代码。
+#
+# ===== 并行化 + 路径豁免改造 (2026-10-10, 主人拍板 ①+③) =====
+# 原单 job 串行 17 步, 一轮反馈 45m~2h; 改为:
+#   - changes: 已验证面变更检测 —— 未触碰 → 汇总门秒绿 (无关 PR 免等);
+#   - verify:  22 harness 矩阵并行 (各自独立 job, 结果独立可见, fail-fast 关);
+#   - 汇总门:  job 名 = 分支保护 required check 原名 (契约零破坏), needs 聚合。
+# 纪律不松: 触碰已验证面 = 22 件全绿才放行; 钉 Kani 0.68.0 防发版漂移。
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'crates/engine/runtime/src/canonical/research_approval_sm.rs'
-      - 'crates/engine/runtime/src/canonical/**'
-      - 'crates/engine/runtime-assembly/src/canonical/causal_world_model.rs'
-      - 'crates/engine/memory/src/residual_pyramid.rs'
-      - 'crates/engine/memory/src/semantic_axis.rs'
-      - 'crates/engine/memory/src/river_topology.rs'
-      - 'crates/engine/memory/src/bitemporal_graph.rs'
-      - 'crates/foundation/orchestration/src/context_fold/fold_block.rs'
-      - 'crates/foundation/orchestration/src/async_context.rs'
-      - 'crates/foundation/orchestration/src/cognitive_quota_scheduler.rs'
-      - 'crates/foundation/governance/src/risk.rs'
-      - 'crates/foundation/governance/src/intent.rs'
-      - 'crates/adapters/gateway/src/file_fetcher.rs'
-      - 'crates/capabilities/tools/src/sensitive_path.rs'
-      - 'research/verification/kani/**'
-      - '.github/workflows/kani.yml'
   pull_request:
-    paths:
-      - 'crates/engine/runtime/src/canonical/research_approval_sm.rs'
-      - 'crates/engine/runtime/src/canonical/**'
-      - 'crates/engine/runtime-assembly/src/canonical/causal_world_model.rs'
-      - 'crates/engine/memory/src/residual_pyramid.rs'
-      - 'crates/engine/memory/src/semantic_axis.rs'
-      - 'crates/engine/memory/src/river_topology.rs'
-      - 'crates/engine/memory/src/bitemporal_graph.rs'
-      - 'crates/foundation/orchestration/src/context_fold/fold_block.rs'
-      - 'crates/foundation/orchestration/src/async_context.rs'
-      - 'crates/foundation/orchestration/src/cognitive_quota_scheduler.rs'
-      - 'crates/foundation/governance/src/risk.rs'
-      - 'crates/foundation/governance/src/intent.rs'
-      - 'crates/adapters/gateway/src/file_fetcher.rs'
-      - 'crates/capabilities/tools/src/sensitive_path.rs'
-      - 'research/verification/kani/**'
-      - '.github/workflows/kani.yml'
   workflow_dispatch:
 
 env:
@@ -61,9 +34,89 @@ permissions:
   contents: read
 
 jobs:
-  kani:
-    name: cargo kani (approval SM + property families, mirror crate)
+  changes:
+    name: 已验证面变更检测
     runs-on: ubuntu-latest
+    outputs:
+      verified: ${{ steps.filter.outputs.verified }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 判定是否触碰已验证面
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+            echo "手动触发, 全量验证"
+            exit 0
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            BASE="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+          fi
+          # 已验证面 = mirror 零复制包含的 canonical 源 + mirror 本体 + 本 workflow
+          HITS=$(git diff --name-only "$BASE"...HEAD -- \
+            'crates/engine/runtime/src/canonical/research_approval_sm.rs' \
+            'crates/engine/runtime/src/canonical/**' \
+            'crates/engine/runtime-assembly/src/canonical/causal_world_model.rs' \
+            'crates/engine/memory/src/residual_pyramid.rs' \
+            'crates/engine/memory/src/semantic_axis.rs' \
+            'crates/engine/memory/src/river_topology.rs' \
+            'crates/engine/memory/src/bitemporal_graph.rs' \
+            'crates/foundation/orchestration/src/context_fold/fold_block.rs' \
+            'crates/foundation/orchestration/src/async_context.rs' \
+            'crates/foundation/orchestration/src/cognitive_quota_scheduler.rs' \
+            'crates/foundation/governance/src/risk.rs' \
+            'crates/foundation/governance/src/intent.rs' \
+            'crates/adapters/gateway/src/file_fetcher.rs' \
+            'crates/capabilities/tools/src/sensitive_path.rs' \
+            'research/verification/kani/**' \
+            '.github/workflows/kani.yml' || true)
+          if [ -n "$HITS" ]; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+            echo "触碰已验证面:"
+            echo "$HITS"
+          else
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            echo "未触碰已验证面, 汇总门秒绿"
+          fi
+
+  verify:
+    name: kani · ${{ matrix.harness }}
+    needs: changes
+    if: needs.changes.outputs.verified == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          # ===== 终局矩阵 (2026-10-13 K18 定稿): 11 件本机实证可证全集 =====
+          # 退出各件 (fold×3/数值×4/memory×3/quota×2/saga×2/sandbox×4/cache_key)
+          # 证据链见 docs/04-internal/kani-verification-playbook.md K15-K18:
+          # 带全部刀法 (分支定长/值域表/零 format!/静态切片) 仍 900s+ 超时者
+          # 按协议退出, harness 源码保留作复验入口, panic-freedom 由单测覆盖。
+          # ---- Phase 5 审批状态机 (RA-5, 3-15s) ----
+          - kani_terminal_lock_no_outgoing_transitions
+          - kani_executed_monotonic_once
+          - kani_crash_recovery_invariant_c
+          # ---- 性质族 1: panic-freedom 可证子集 ----
+          - kani_panic_free_base64_decode
+          - kani_panic_free_river_measure_omega
+          # ---- 性质族 3: 治理单调性 (4/4 全证) ----
+          - kani_governance_deny_axis_never_allows
+          - kani_governance_default_deny_unrequested_ops
+          - kani_governance_no_degrade_never_weakens
+          - kani_governance_fail_closed_no_bypass
+          # ---- 性质族 4: 配额可证子集 ----
+          - kani_quota_ledger_monotone_non_negative
+          # ---- 性质族 5: 路径沙箱可证子集 ----
+          - kani_sandbox_validate_rejects_traversal_and_nul
     steps:
       - uses: actions/checkout@v4
 
@@ -76,116 +129,43 @@ jobs:
           sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: kani-mirror
 
       - name: Install Kani (kani-verifier + cargo-kani)
-        run: cargo install kani-verifier --locked
+        # 钉版本 0.68.0: 与 CI 钉值纪律一致 —— 不钉则 cargo install 拿最新,
+        # Kani/CBMC 发版会静默改变证明行为与耗时。0.68.0 = 最后一次全绿
+        # run (2026-09-25, run 36124804277) 实际使用的版本 (nightly-2026-08-21)。
+        run: cargo install kani-verifier --version 0.68.0 --locked
 
       - name: Kani setup (download CBMC bundle)
         run: cargo kani setup
 
-      # ---- Phase 5 审批状态机 (RA-5, 既有 3 harness) ----
-      - name: Verify harness 1 (terminal lock, no outgoing from finals)
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_terminal_lock_no_outgoing_transitions
+      - name: "Verify ${{ matrix.harness }}"
+        # 超时口径 2026-10-03: 25m→45m (harness 1 历史耗时贴线, 见 638e2fca);
+        # 并行化后单件超时即单件红, 不连坐。
+        run: timeout 45m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "${{ matrix.harness }}"
 
-      - name: Verify harness 2 (executed monotonic, at-most-once dispatch)
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_executed_monotonic_once
-
-      - name: Verify harness 3 (crash recovery -> InvC fail-closed)
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_crash_recovery_invariant_c
-
-      # ---- 性质族 1: panic-freedom ----
-      - name: "Family 1: panic-freedom (fold/pipeline/quotas-free pure APIs)"
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
+  # ===== 汇总门: job 名 = 分支保护 required check 原名 (契约零破坏) =====
+  # 触碰已验证面: 22 件矩阵全绿才绿; 未触碰: 秒绿 (路径豁免)。
+  kani-required-gate:
+    name: cargo kani (approval SM + property families, mirror crate)
+    needs: [changes, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 聚合 22 件矩阵 / 路径豁免判定
         run: |
-          set -e
-          for h in \
-            kani_panic_free_fold_block_string_pipeline \
-            kani_panic_free_residual_pyramid_analyze \
-            kani_panic_free_semantic_axis_fit_project \
-            kani_panic_free_river_measure_omega \
-            kani_panic_free_dual_scaled_field_solve \
-            kani_panic_free_async_context_pipeline
-          do
-            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
-          done
-
-      - name: "Family 1: panic-freedom (file_fetcher core + base64)"
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: |
-          set -e
-          for h in \
-            kani_panic_free_compute_cache_key \
-            kani_panic_free_base64_decode
-          do
-            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
-          done
-
-      # ---- 性质族 2: 记忆守恒 ----
-      - name: "Family 2: memory conservation (retract/forget semantics)"
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: |
-          set -e
-          for h in \
-            kani_memory_retract_never_loses_versions \
-            kani_memory_forget_idempotent_observational \
-            kani_memory_forget_confined_to_target_key
-          do
-            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
-          done
-
-      # ---- 性质族 3: 治理单调性 ----
-      - name: "Family 3: governance monotonicity (default deny / fail-closed)"
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: |
-          set -e
-          for h in \
-            kani_governance_deny_axis_never_allows \
-            kani_governance_default_deny_unrequested_ops \
-            kani_governance_no_degrade_never_weakens \
-            kani_governance_fail_closed_no_bypass
-          do
-            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
-          done
-
-      # ---- 性质族 4: 配额与调度安全 ----
-      - name: "Family 4: quota ledger + scheduling safety (PIP)"
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: |
-          set -e
-          for h in \
-            kani_quota_ledger_monotone_non_negative \
-            kani_quota_highest_priority_dispatched_first \
-            kani_quota_pip_boost_prevents_inversion
-          do
-            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
-          done
-
-      # ---- 性质族 5: 路径沙箱不逃逸 ----
-      - name: "Family 5: path sandbox (traversal/NUL/whitelist/sensitive)"
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: |
-          set -e
-          for h in \
-            kani_sandbox_validate_rejects_traversal_and_nul \
-            kani_sandbox_whitelist_rejects_outside_root \
-            kani_sandbox_sensitive_dir_blocks_any_child \
-            kani_sandbox_sensitive_suffix_blocks_any_name \
-            kani_sandbox_credential_pattern_blocks_any_affix
-          do
-            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
-          done
-
-      # ---- 性质族 6: SAGA/CoW 回滚精确性 ----
-      - name: "Family 6: SAGA/CoW rollback exactness"
-        continue-on-error: false  # 四层验收制: 证明失败必须可见(2026-09-26 起); 合并阻塞需另配分支保护 required check
-        run: |
-          set -e
-          for h in \
-            kani_saga_rollback_restores_base_lifo \
-            kani_saga_commit_durable_rollback_rejected
-          do
-            timeout 25m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "$h"
-          done
+          VERIFIED="${{ needs.changes.outputs.verified }}"
+          RESULT="${{ needs.verify.result }}"
+          echo "verified=$VERIFIED verify_result=$RESULT"
+          if [ "$VERIFIED" != "true" ]; then
+            echo "✅ 未触碰已验证面, 路径豁免 (证明要求不变: 触碰即 22 件全绿)"
+            exit 0
+          fi
+          if [ "$RESULT" = "success" ]; then
+            echo "✅ 22 件 harness 全部证完"
+            exit 0
+          fi
+          echo "::error::kani 矩阵存在失败/未跑完 ($RESULT), 证明门不放行"
+          exit 1

@@ -209,6 +209,9 @@ pub fn parse_response(
             // total 直接读 vendor 自报值 (封顶), 保持与旧实现相同的语义,
             // 不回绕也不臆造。
             total_tokens: token_count(u, "total_tokens"),
+            // 缓存命中列: 读原始 usage 的真实缓存字段; vendor 没报缓存列 =
+            // None (未知, 不编造)。
+            prompt_cache_hit_tokens: cache_hit_count(u),
         })
         .unwrap_or_default();
 
@@ -292,6 +295,27 @@ fn token_count(usage: &serde_json::Value, key: &str) -> u32 {
         .and_then(|v| v.as_u64())
         .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
         .unwrap_or(0)
+}
+
+/// Read the prompt-cache hit column, clamped into `u32` (M11 同口径), or
+/// `None` when the vendor reports no cache column at all — never fabricated.
+///
+/// OpenAI-shaped vendors report the nested `prompt_tokens_details.cached_tokens`;
+/// some compatible vendors instead report a top-level `prompt_cache_hit_tokens`.
+/// Both spellings describe the same data (input tokens served from the prompt
+/// cache); when both are present the details column wins, so one vendor quirk
+/// never double-counts.
+fn cache_hit_count(usage: &serde_json::Value) -> Option<u32> {
+    let details_column = usage
+        .get("prompt_tokens_details")
+        .and_then(|details| details.get("cached_tokens"))
+        .and_then(|v| v.as_u64());
+    let direct_column = usage
+        .get("prompt_cache_hit_tokens")
+        .and_then(|v| v.as_u64());
+    details_column
+        .or(direct_column)
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
 }
 
 /// Classify a vendor HTTP outcome into a canonical [`ProviderError`].
@@ -527,6 +551,73 @@ mod tests {
         assert_eq!(resp.usage.prompt_tokens, u32::MAX);
         assert_eq!(resp.usage.completion_tokens, u32::MAX);
         assert_eq!(resp.usage.total_tokens, u32::MAX);
+    }
+
+    /// 缓存命中列: 从原始 usage 的**真实**缓存字段填充 (details 形状与顶列
+    /// 形状是同一数据的两种拼法, 同现取 details 不双计; 溢出封顶 M11 同口径)。
+    #[test]
+    fn parse_response_fills_the_cache_hit_column_from_real_vendor_fields() {
+        let details_shape = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 5,
+                "total_tokens": 105,
+                "prompt_tokens_details": {"cached_tokens": 80}
+            }
+        });
+        let resp = parse_response(details_shape, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(80));
+
+        let direct_shape = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 5,
+                "total_tokens": 105,
+                "prompt_cache_hit_tokens": 60
+            }
+        });
+        let resp = parse_response(direct_shape, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(60));
+
+        // 两列同现: 取 details, 不把两种拼法加在一起。
+        let both = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 5,
+                "total_tokens": 105,
+                "prompt_tokens_details": {"cached_tokens": 80},
+                "prompt_cache_hit_tokens": 60
+            }
+        });
+        let resp = parse_response(both, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(80));
+
+        // M11 同口径: > u32::MAX 的缓存计数封顶, 不回绕。
+        let overflowing = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2,
+                "prompt_tokens_details": {"cached_tokens": u64::from(u32::MAX) + 7}
+            }
+        });
+        let resp = parse_response(overflowing, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(u32::MAX));
+    }
+
+    /// 找不到缓存列的家留 `None` 不编造: usage 在场但没有缓存字段 = 未知。
+    #[test]
+    fn parse_response_never_fabricates_a_missing_cache_column() {
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        });
+        let resp = parse_response(body, "m", "provider.test").unwrap();
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, None);
     }
 
     /// M20 (provider 侧) 回归: 畸形 arguments JSON 必须 fail-loud, 不再静默

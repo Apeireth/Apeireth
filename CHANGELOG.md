@@ -1,5 +1,89 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 后端增强四波交付终账 + 总装批收口 (2026-10-13)
+
+后端增强工程（`docs/04-internal/backend-enhancement/`）四波交付终账（各一行带测试数，数字均出自各批交付记录 / 门禁实跑）+ 总装批六件收口：
+
+- **三维烧钱闸（A-P2 配额真接口）**：tokens / tool_steps / cost_micros 三维配额真执行——回合计量点双维记账（usage×单价按冻结口径换算，无价轮绝不编价、如实 `unpriced_rounds` 部分计量）、超限即帧真数字（`BudgetExhausted{dimension}` 烧钱闸不起烧下一趟）、自述面真值 + 「部分计量」标注。测试 **24 例**（session_quota 5 / quota 单测 7 / 认知调度 1 / 自述面 9 / env 装配 2，全绿实跑）。
+- **认证闭环（W2-② 远程访问认证面）**：全 API 面令牌门（仅 `/health` 豁免）+ 每客户端令牌表（审计带客户端名）+ 非回环绑定强制令牌（fail-closed 拒启动）+ `APEIRETH_LISTEN` 绑定旋钮（缺省仅本机）。测试 **31 例**（交付记录 §4）。
+- **daemon（W2-① 常驻形态）**：PID 文件常驻占位（二次启动显式拒绝 / 陈旧占位接管 / 停机只清自己的占位）+ 优雅停机收尾（`gateway.shutdown` 审计事实 + 攒批观测全量落盘）+ 停机控制端点过令牌门（缺 / 伪令牌 401 且不触发停机）。测试 **4 例**（`resident_service` 实跑）。
+- **多端（W2-③ 多客户端会话复用）**：并发会话路由（每客户端独立订阅 + 同会话事件扇出多端）+ 同会话并发写**排队 + 审计**（会话账本零交叠写）+ 会话归属审计（`gateway.session_client` + name↔token 绑定校验）+ 面板读快照一致。测试 **19 例**（集成 12 + 单测 7，交付记录 §4）。
+- **git 写分级（D-P1）**：L1 可逆默认每次人批 / L2 出网**永远人批**（免审记忆也不越）/ L3 毁灭**无工具面**——词法分级词表 + 变形防绕过（缩写 / 组合短选项 / refspec 变体 / 危险全局选项）+ 受控通道执行（工作区限域 / 超时 / 输出归一）+ 分级审批钩子 + 审批卡脱敏。测试 **27 项**（交付记录 §4 证据表逐名在案；主套件 `git_write_grading` 16 全绿）。
+- **worktree 四拍受控写（D-P2）**：`tool.worktree_plan` 只读改单（零落盘零审批）→ `tool.worktree_apply`「计划→改→验证→落」（暂存面物化 + 校验命令受控通道 + 落拍过读前观测门禁、全有或全无回滚）；改单 / 补丁交叉一致，漂移拒绝即帧；**每次落盘都人批**（无自动放行档，审批卡载荷 = 改单摘要）。测试 **17 例**（主套件 15 + 组装根 2）。
+- **指标数据面（G-P1）**：一收束一拍 `TurnMetrics` + 会话 / 全局两层窗口聚合（最近秩 P50/P95）+ `GET /v1/panel/metrics` 过令牌门；进程内滚动留存如实声明，未知列 "—" 不冒充 0。测试 **21 项**。
+- **模型画像（H-P1）**：`ModelProfileTable` 基线表（能力布尔取族声明、上下文 / 输出取保守下界、单价一律未提供不编价）+ 自述模型节 + 花费线单价来源同源（坏配置拒开）。测试 **24 例**。
+
+**总装批（本批，六件收口）**：① **worktree 两级工具入组装根**——`ProductionModulesConfig` 增 `worktree_plan` / `worktree_apply` 开关（默认关），注册即闸（`file_write` 唯一写总闸 + 工作区根 + 共享 `ObservedGate`），env 旋钮 `APEIRETH_ENABLE_WORKTREE_PLAN` / `_APPLY`（子依赖主 + file_write，fail-closed）注册与授权同源（apply 审批级 = 每次落盘人批、plan 只读零审批），自省名册两行按实际注册条件取值；② **CACHE 格点亮**——`NormalizedUsage` 增缓存列 `prompt_cache_hit_tokens`（`#[serde(default)]` 落库兼容，既有持久记录照常读回），三家 provider 归一化按原始 usage 真实字段填充（兼容面 `prompt_tokens_details.cached_tokens` / `prompt_cache_hit_tokens`、`cache_read_input_tokens`；找不到缓存列的家留 `None` 不编造），`metrics.rs` 取数口随之取真值（命中率沿用冻结公式 Σ命中/Σ输入，各家缓存列与 prompt 的包含关系差异如实入档不裁剪）；③ **run-all 注册** `gateway-auth-face.mjs` / `sse-fetch-stream.mjs`（两套件真跑过）；④ **能力清单**补 `metrics.read` 条目（G-P1 缺口③收口）；⑤ **`cargo fmt --all` 归一全树** + 债栏 D1–D8 速查（全部仍符实际，无需修正）；⑥ 本终账。新测试 **17 例**（装配 4 / 旋钮 4 / 协议落库兼容 2 / provider 填充与缺列 5 / metrics 取数口 2）。
+- 实证：`cargo test --workspace --locked -j 2` 全绿 **186 套件 / 5180 passed / 0 failed**（= 既有 184 套件 + 本批新增 2 套件，零回归）+ clippy `-D warnings` 0 警告 + `cargo fmt --all -- --check` 干净 + pnpm check 0/0 + pnpm test **73/73**（含新注册两套件）+ 中性扫描零命中 + secret-scan 过。
+
+## [Unreleased] — 收尾入档：形象视觉列重做项（主人裁定）(2026-10-11)
+
+- **主人裁定**：现役前端观感不达标——**形象（含 2D 模式）整体列重做项**，由前端能力/审美更强的模型主持重做讨论（2D 模式方向专题议）。现役形象层三实现（光态哨兵/2D 骨骼小人/3D 素体）一律按**工程验证件**对待：证明契约与管线，不代表产品观感，视觉语言可整体推翻重写。
+- **底座保留（换皮不换契约）**：PetFrame 形象抽象契约、四姿态机、防唠叨引擎、BYO 装载口 + 免责纪律、许可红线进代码、窗壳/互斥/停帧闩、素材台账 + CI 门禁、全部测试门禁。
+- **交接面同步**：`handoff-pet-avatar-line-2026-10-11.md` 增「主人裁定与形象重做令」专节（保留/重做边界表 + 审美线进场清单：先与主人做 2D 模式方向讨论再动工）；施工账、委托需求书（风格方向节挂起待重做讨论）、总台账同步标注。
+
+## [Unreleased] — 桌宠五件套：2D 骨骼华服 + 自主行为 + 真窗实测 + 条款 + 形象设置 (2026-10-11)
+
+- **2D 骨骼第二华服**：程序化骨骼小人（关节/骨段全代码生成，零资产零许可面）接进形象插口，形象层扩为四态（光态/角色/2D 骨骼/微光简模）；社区格式装载口为插缝预留（npm 实探负证在案：正名运行时包不存在、杂名包许可不在白名单——核验收口前不硬接）。
+- **自主行为批**：待机微动作（微摆/微倾/呼吸游移/确定性伸展窗）+ 作息节律（dreaming 真实时长爬坡入定档，不发明假事件）；幅度封顶纪律（≤0.03 弧度当量，质感不冒充信号）进测试钉；两件华服同显身体语言。
+- **真窗实测升级**：`pet-window-real-smoke.mjs` 起真壳 + 调试口挂进真 WebView2，经主窗真 IPC 唤起桌宠——**7/7 全过**，三形象层实拍图入 `reports/pet-real-smoke-2026-10-11/`。**真发现**：`window.hide()` 不翻 `document.visibilityState`——补显式停帧闩（壳层发 `pet-host-visibility`，形象层双闩停帧），原生节流 + 显式闩双保险，后者可验收。
+- **使用条款 BYO 责任段草案**（`user-avatar-terms-draft.md`，待主人审并入正式条款）+ **形象设置面板**（设置 › 外观 › 形象：形象层四选一 + 自带形象管理，跨窗 storage 事件同步）。
+- 设置分区 14→15（形象新增，断言随契约演进注明理由）。
+- 实证：pnpm test **70/70** + check 0/0 + 素材门禁 ✓ + 中性扫描零命中 + 真窗实测 7/7 + Rust clippy 0 / pet 决策表全绿。
+
+## [Unreleased] — 社区生态基建首批：治理章程 + 行为准则 + 协作规范体系 (2026-10-11)
+
+- **治理与信任**：`GOVERNANCE.md`（独立性原则 / 角色六级阶梯 / 三级决策机制（懒共识→RFC→Lead 终审）/ 晋升退出含 6 个月不活跃转 Emeritus / 四级争议解决全带时限）+ `CODE_OF_CONDUCT.md`（Contributor Covenant 2.1 改编 + **社区诚信条款**——买星刷榜伪造活动即违反行为准则，与「0 装 PASS」同源；执行三原则：比例/回避/记录）。
+- **贡献者动线**：`CONTRIBUTING.md` 升级（欢迎段 + Issue 分诊 SLA（1/3/7 天必有结论）+ PR Review 规范（首响 ≤3 工作日、超时 @chuling 升级、不允许无声黑洞））+ 新增 `docs/02-guides/first-contribution.md`（good-first-issue → 第一个 PR 合并的 6 步动线 + FAQ）。
+- **决策与契约**：`docs/development/rfc-process.md`（何时走 RFC / 模板 / 讨论期 ≥7 天 / 裁决 ≤14 天 / 只增不改归档纪律）+ `docs/development/rfc/` 索引 + `docs/development/api-stability.md`（稳定/实验/内部/冻结四级，如实声明 v2.0.0-rc 整体未进稳定期，1.0 前走稳定级清单 RFC）。
+- **生态运营**：`docs/development/community-ops.md`（数据真实性纪律置顶 / 标签体系 / 分诊 runbook / 运营节奏（good-first-issue 存量 ≥5、季度真实性自查）/ 仓库元数据 Runbook / SLA 汇总 / **反面教训清单**——同类项目复盘"文件齐≠生态活、星标与活跃度失真"逐条设防）+ **§八 挂账事项台账**（`conduct@` 邮箱 / stale 自动化 / required set 扩容 / 稳定级 RFC / 角色增补 / Discussions 细分，触发时机+落地动作全登记防遗忘）。
+- **GitHub 设置落地**（API 配置 + 回读验证，2026-10-11）：标签体系（`good first issue`/`help wanted`/`documentation` 改名对齐手册 + `needs-repro`/`needs-info`/`stale`/`rfc`/`1.0-blocker`/`blocked` 新建）+ Discussions 启用 + [welcome 帖 #26](https://github.com/Apeireth/Apeireth/discussions/26) + main 分支保护（≥1 approval / stale 失效 / 会话 resolve / 禁 force-push + 5 稳定门禁强制；红检查修复后逐步纳入）。
+- **同步**：`CODEOWNERS` 登记 6 处新路径；`docs/README.md` 索引补全并修正根文档相对链接（`../../`→`../`，GitHub 渲染实测死链）；旧仓库名链接统一 canonical（`apeireth/apeireth-rust`→`Apeireth/Apeireth`，config.yml / mkdocs.yml / security.txt / 社区文档 7 处）。
+
+## [Unreleased] — 桌宠批 B/C/D 收官：角色形象层 + BYO 装载口 + 素材许可门禁 (2026-10-11)
+
+- **角色形象层**（开放 3D 人形格式，四次拍板）：`CharacterAvatar` 渲染层接进形象插口——形象文件装载 + 程序化素体兜底 + WebGL 降级接线 + 内嵌许可元数据透传；`character-mapping` 契约→口型/眨眼/视线/姿态/呼吸纯映射（六组测试钉）；形象层三态循环（光态哨兵/角色形象/微光简模），代码分割生效（渲染引擎 747KB 独立成块不进主包）。
+- **用户自带形象（BYO）装载口**：格式合法性校验（扩展名/体积/容器魔数）+ 免责确认（"许可责任由你自担"装载前必呈现）+ IndexedDB 本机持久化 + 内嵌许可声明如实显示（不解读不背书）；`user-avatar` 四组测试钉。
+- **素材许可 CI 门禁**：`asset-licenses.json` 台账 + `check-asset-licenses.mjs`（无行即红/白名单外拒/陈旧行红，双向验证）+ `pnpm check:assets` + workflow 最小改动接入。
+- **文书**：用户指引 `avatar-byo-guide.md`（指路不背书三条铁律）+ 官方形象委托需求书 `avatar-commission-brief.md`（合同红线：CC0/CC-BY 交稿 + 编改权 + 再分发 + 链条干净）。
+- **烟测**：`scripts/pet-window-smoke.mjs` 构建产物 7/7（双形象层真渲染 + WebGL 探测 + 异常巡检）。
+- 实证：pnpm test **56/56** + pnpm check 0/0 + check:assets ✓ + 中性扫描零命中 + build ✓。
+
+## [Unreleased] — 桌宠常驻投影首批：形象层双形态可插拔 + 主动涌现 (2026-10-11)
+
+- **桌宠常驻窗**（presence 第四个投影点亮）：透明置顶无边框窗、右下常驻位、拖拽/鼠标穿透/托盘联动；**互斥礼让**——主窗前台隐身、主窗收起接管（壳层纯决策表可单测）；关闭=销毁纪律与快捷窗同源（幽灵窗教训零复发）。
+- **形象层双形态可插拔**（主人拍板）：形象抽象契约 `PetFrame`（姿态/光色/呼吸/抬头/SIM 全契约化），默认**光态哨兵**（光核+弧身+眼神光，"光不长脸"），**微光简模** T0 档回落（两实现共吃一份帧=插口活证据）；主题包形象清单校验/注册口就位（保留字/路径逃逸/绝对路径 fail-closed）。
+- **姿态机直通**：四姿态→角落安静/抬头/蜷睡/靠近；光参数与后端 HUD 驱动逐值镜像（四投影同源同值）。
+- **主动涌现（防唠叨纪律）**：待签文书出通报（限频 45s+同文去重 120s）、待签 90s **抬头一瞥**（2.5s 瞬时/5min 限频、不弹通知）、他开口 ≤3 次/天硬预算（与后端预算器同数）；回合结束/启动不配拥有台词；主动开口帧解析为契约空间接线预留（v0 无生产者，不谎报）。
+- **右键卷宗入口**：记忆/日记/审批治理/状态日志 → `shell-target` 事件 → 壳层同一张目标表改道。
+- 实证：pnpm test **50/50**（新增 4 套件）+ pnpm check 0/0 + pnpm build ✓；cargo check ✓ + 桌宠决策表单测 2/2。施工账 `docs/design/pet-resident-projection.md`，范式层 §5 校准 ✅。
+
+## [Unreleased] — rc.3 改动批：首启引导·用户中心·会话清理双档·主题·滚轮 + CI 门禁修复 (2026-10-03)
+
+- **CLI 首次使用引导** `apeireth onboard`：介绍 → 分流（普通用户=预设值+使用中自动调参 / 专业用户=只介绍）→ API 设置（密钥只进钥匙串，引导档案零机密）→ 自我描述词入身份段；无档案 = 0 行为变化，显式 env 最高。
+- **桌面向导 OOBE** 升级分步弹窗（同一分流模型，纯逻辑零 DOM 可单测；对外接口与 v1 一致）。
+- **用户中心 + 用户印象**：昵称/头像/签名本机存储（无账号不上传）；印象双重身份——用户可读可改的设置项 + system 侧栏随对话注入，回合后节流自动总结、失败静默保旧。
+- **会话清理双档**：① 清近期(7 天窗) ② 清全部，均真删本地正文 + 后端账本行（修"清理后复活"）；长期记忆不动（红线，记忆遗忘是另一动作）。
+- **设置页两级导航**（14 分区归 5 大类）；**主题** 新增 origin(默认档)/noir(AMOLED)；出厂第一人设修复版「阿佩瑞斯」+ 老出厂签名幂等迁徙；**全局滚轮路由**修死区滚轮失效（CDP 复现+探针）。
+- **CI 门禁修复批**：kani 镜像编译面 shim（sensitive_path 新依赖面假红，proof 停跑）；doc-caliber 口径标注两处；audit/deny 三处同步 ignore（ratatui 0.29 系 transitive，治本=0.30 迁移，已登记 ROADMAP §4 P11）；upload-sarif v3→v4；8 硬墙守门 2 对齐 release authority 本义（版本轴递进不再假红，拍板证据=release: 提交携版本号）。
+- **deps**：吸收 dependabot 补丁更新（encoding_rs 0.8.42 / pyo3 0.29.3，甩 multiversion 宏链 ×2）。
+- 实证：pnpm test 41/41 套件 + pnpm check 0/0；cargo deny 四类 ok、cargo audit 0 warnings（3 条 ignore 有据三处同步）、kani mirror 编译 + 62/62 测试。
+
+## [Unreleased] — 预算面板+仪表（内测四轮） (2026-09-30 夜)
+
+- **设置页「预算与配额」区**：三枚真实旋钮（回合轮数/单轮工具/上下文字符预算）即效可调，越界钳制/非法回默认与后端同源；实际生效值徽标（configured/constant 同 self_status 语法）。
+- **会话消耗仪表**：token 入出/缓存命中（数·率）/回合数/累计耗时 + 预算余量条（无上限维度诚实"—"）。
+- **配额四维如实标注"暂无接口"**（读码证据入档，零假旋钮）；耗尽行为无可配语义→固定语义说明。
+- 实证：164 套件 4882 passed / 0 failed（唯一红=已立案 file_lock 负载 flake，隔离复跑绿）；pnpm 37/37。
+## [Unreleased] — 内测二批：P0 挂起修复·缓存组装·自省通道·IM 接入·驾驶舱 P1·星舰主题 (2026-09-30)
+
+- **P0 审批挂起修复**（内测 422 病根）：冻结即收束（保留已生成文本+真实轮耗）、防重入台账（同操作重复提议直接收束、一审批一动作）、收束优先级（待批>轮上限）、预算显式（`APEIRETH_MAX_TURN_ROUNDS`/`APEIRETH_MAX_TOOL_CALLS`）+ 错误帧真实数字。
+- **缓存友好组装**：消息拼装前缀冻结（史→叠→重试），`APEIRETH_CACHE_TRACE=1` 诊断简报；命中率论证入档（会话越长越高）。
+- **自省通道**：`self_status` 结构化自述工具 + 敏感面治理（凭据 fail-closed、密钥字段脱敏）。
+- **IM 快捷接入**：三类 IM 渠道 + 双向消息桥 + **审批卡片到手机**（四态闭合、审计配对原子）。
+- **终端驾驶舱 P1**：`apeireth-tui`（纯 Rust 全屏 HUD、状态条/会话管理/两段退出）。
+- **星舰主题**：深空 HUD 档（发光数据/扫描线/reduced-motion），默认主题零回归。
+- 实证：**161 套件 4829 passed / 0 failed**；clippy 0 / fmt 0 / pnpm 24/24 / 扫描 0。
 ## [Unreleased] — MCP 外部工具服务器接线（最后一公里） (2026-09-27)
 
 - **接入配置面**：`APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json`（信封拒开语义，坏配置 fail-closed）；默认关（轻默认）。
@@ -521,6 +605,7 @@
 > ③ "`apeireth-credentials` 未接线 / 记忆图 / 器官 / voice / screen 未移植"——**已全部兑现**：
 > credentials 已接线（真热更凭据链）、记忆图/语义轴在 `engine/memory`、9 器官全实装、
 > voice 族真现实现、screen/perception 已接线（默认关）；仍未接线的仅 **MCP** 一件（如实标注）。
+> （四级口径: 本条"已接线/实装"= PRODUCTION WIRED / IMPLEMENTED 级, 非 HARDWARE VALIDATED。）
 
 - 生产 bootstrap 尚未安装 governance pipeline（默认 AllowAll）——P0
 - 13 键 verdict cache 只在 core 内测试、未接 canonical 执行路径——P0 拍板去留

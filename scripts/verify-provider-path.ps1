@@ -1,4 +1,4 @@
-﻿# 服务商链路验证脚本（真凭据实跑 + 热更生效性判别）
+# 服务商链路验证脚本（真凭据实跑 + 热更生效性判别）
 # 用途：验证"网关 → 服务商"链路的三件事——①真凭据可用；②热更凭据即时生效；
 # ③热更后可恢复。全程密钥只在内存流转，输出仅回显尾号。
 # 用法：powershell -File scripts/verify-provider-path.ps1 [-Port 8099]
@@ -50,6 +50,16 @@ $env:APEIRETH_API_KEY = $realKey
 $env:OPENAI_API_KEY = $realKey
 $env:APEIRETH_OPENAI_URL = 'https://api.deepseek.com/v1'
 $env:APEIRETH_OPENAI_MODELS = 'deepseek-flash'
+# 令牌透传（W2-② 认证面全网关化）：网关继承本脚本环境——设了 APEIRETH_GATEWAY_TOKEN，
+# 令牌门按**全 API 面**校验（chat/事件流/面板/审批/admin 族, 仅 /health 探活豁免）,
+# 本脚本每个网关调用同源透传该令牌；未设（或显式 none 逃生阀）时按未设口径放行，
+# 保持既有验证语义。入站 Authorization 只做令牌门鉴权, 凭据解析在后端凭据面
+# （本脚本 env 注入）, 不走请求头。
+$gateBearer = if ($env:APEIRETH_GATEWAY_TOKEN -and $env:APEIRETH_GATEWAY_TOKEN.Trim() -notin @('', 'none')) {
+  "Bearer $($env:APEIRETH_GATEWAY_TOKEN.Trim())"
+} else {
+  "Bearer $realKey"
+}
 $exe = Join-Path (Split-Path $PSScriptRoot -Parent) 'target\x86_64-pc-windows-msvc\release\apeireth.exe'
 if (-not (Test-Path $exe)) { $exe = 'C:\Program Files\Apeireth Companion\apeireth.exe' }
 $gw = Start-Process -FilePath $exe -ArgumentList 'gateway','serve','--port',"$Port" -PassThru -WindowStyle Hidden
@@ -57,9 +67,32 @@ Start-Sleep 5
 $base = "http://127.0.0.1:$Port"
 $body = @{model='deepseek-flash'; messages=@(@{role='user'; content='reply with the single word: pong'})} | ConvertTo-Json -Depth 5
 
+# ---- 2b. 认证面矩阵自检（W2-② 全端点带 Bearer）: 强制态下无令牌调用必须 401 ----
+if ($env:APEIRETH_GATEWAY_TOKEN -and $env:APEIRETH_GATEWAY_TOKEN.Trim() -notin @('', 'none')) {
+  foreach ($probe in @(
+    @{n='auth-matrix-chat'; u='/v1/chat/completions'; m='Post'},
+    @{n='auth-matrix-panel'; u='/v1/panel/sessions'; m='Get'}
+  )) {
+    try {
+      if ($probe.m -eq 'Post') {
+        Invoke-RestMethod -Uri "$base$($probe.u)" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 10 | Out-Null
+      } else {
+        Invoke-RestMethod -Uri "$base$($probe.u)" -Method Get -TimeoutSec 10 | Out-Null
+      }
+      Step $probe.n $false '无令牌调用未被拒——令牌门未覆盖该端点'
+    } catch {
+      $status = 0
+      try { $status = [int]$_.Exception.Response.StatusCode } catch { $status = 0 }
+      Step $probe.n ($status -eq 401) ("无令牌调用状态 $status (期望 401)")
+    }
+  }
+} else {
+  Write-Output "SKIP  auth-matrix  未设 APEIRETH_GATEWAY_TOKEN (未设/逃生阀口径): 无认证调用按兼容路径放行 + 警告帧 + 审计"
+}
+
 # ---- 3. ①真凭据聊天 ----
 try {
-  $r = Invoke-RestMethod -Uri "$base/v1/chat/completions" -Method Post -Headers @{Authorization="Bearer $realKey"} -Body $body -ContentType 'application/json' -TimeoutSec 90
+  $r = Invoke-RestMethod -Uri "$base/v1/chat/completions" -Method Post -Headers @{Authorization=$gateBearer} -Body $body -ContentType 'application/json' -TimeoutSec 90
   Step 'real-key-chat' ($null -ne $r.choices) ("回复: $($r.choices[0].message.content)")
 } catch {
   $msg = Read-ErrorBody $_
@@ -73,11 +106,13 @@ try {
 # ---- 4. ②诱饵热更：换假 key，下一请求必须改用假 key ----
 $decoy = 'sk-decoy-INVALID-000000'
 try {
-  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization="Bearer $realKey"} -Body (@{provider='openai'; api_key=$decoy} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
+  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization=$gateBearer} -Body (@{provider='openai'; api_key=$decoy} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
 } catch { Step 'hot-swap-apply' $false (Read-ErrorBody $_) }
 Start-Sleep 1
 try {
-  $null = Invoke-RestMethod -Uri "$base/v1/chat/completions" -Method Post -Headers @{Authorization="Bearer $decoy"} -Body $body -ContentType 'application/json' -TimeoutSec 90
+  # 入站鉴权一律走令牌门凭据 ($gateBearer); 诱饵只进后端热更凭据面 —— 请求
+  # 失败即证明出网换用了诱饵 (不会被入站令牌门误判成"热更生效")。
+  $null = Invoke-RestMethod -Uri "$base/v1/chat/completions" -Method Post -Headers @{Authorization=$gateBearer} -Body $body -ContentType 'application/json' -TimeoutSec 90
   Step 'hot-swap-takes-effect' $false '热更后请求仍用旧凭据成功——热更未生效'
 } catch {
   $msg = Read-ErrorBody $_
@@ -90,11 +125,11 @@ try {
 
 # ---- 5. ③恢复真凭据，再次聊天应成功 ----
 try {
-  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization="Bearer $decoy"} -Body (@{provider='openai'; api_key=$realKey} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
+  Invoke-RestMethod -Uri "$base/v1/admin/config" -Method Post -Headers @{Authorization=$gateBearer} -Body (@{provider='openai'; api_key=$realKey} | ConvertTo-Json) -ContentType 'application/json' -TimeoutSec 10 | Out-Null
 } catch { Step 'restore-apply' $false (Read-ErrorBody $_) }
 Start-Sleep 1
 try {
-  $r3 = Invoke-RestMethod -Uri "$base/v1/chat/completions" -Method Post -Headers @{Authorization="Bearer $realKey"} -Body $body -ContentType 'application/json' -TimeoutSec 90
+  $r3 = Invoke-RestMethod -Uri "$base/v1/chat/completions" -Method Post -Headers @{Authorization=$gateBearer} -Body $body -ContentType 'application/json' -TimeoutSec 90
   Step 'restore-and-chat' ($null -ne $r3.choices) ("恢复成功, 回复: $($r3.choices[0].message.content)")
 } catch {
   $msg = Read-ErrorBody $_

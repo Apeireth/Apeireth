@@ -326,6 +326,11 @@ impl AnthropicProviderCapability {
                     // u32::MAX, 再相加不得回绕 (debug panic / release 静默
                     // 截断都会污染记账)。
                     total_tokens: input.saturating_add(output),
+                    // 缓存命中列: 本家缓存读列是 `usage.cache_read_input_tokens`
+                    // (从提示缓存直接供给的输入 token); 没报 = None (不编造)。
+                    // 注意本家把它记在 `input_tokens` **之外** (见
+                    // [`NormalizedUsage::prompt_cache_hit_tokens`] 的口径注)。
+                    prompt_cache_hit_tokens: cache_read_count(u),
                 }
             })
             .unwrap_or_default();
@@ -597,6 +602,16 @@ fn token_count(usage: &serde_json::Value, key: &str) -> u32 {
         .unwrap_or(0)
 }
 
+/// Read this family's prompt-cache read column (`cache_read_input_tokens`),
+/// clamped into `u32` (M11 同口径), or `None` when the vendor reports no
+/// cache column — never fabricated.
+fn cache_read_count(usage: &serde_json::Value) -> Option<u32> {
+    usage
+        .get("cache_read_input_tokens")
+        .and_then(|v| v.as_u64())
+        .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+}
+
 /// Build the provider model list from configured ids, de-duplicating by
 /// canonical id. Features advertised are only those the implementation
 /// supports: system messages (SystemPrompt). This provider sends no `stream`
@@ -795,6 +810,47 @@ mod tests {
             u32::MAX,
             "total must saturate, not wrap"
         );
+    }
+
+    /// 缓存命中列: 本家缓存读列 `cache_read_input_tokens` 真实填充 (溢出封顶
+    /// M11 同口径); 找不到缓存列 = None 不编造。
+    #[test]
+    fn adapt_response_fills_the_cache_read_column_when_reported() {
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "cache_read_input_tokens": 80
+            }
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(80));
+
+        // 溢出封顶, 不回绕。
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "cache_read_input_tokens": u64::from(u32::MAX) + 3
+            }
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, Some(u32::MAX));
+    }
+
+    /// 没报缓存列的家留 None 不编造 (usage 在场但无缓存字段)。
+    #[test]
+    fn adapt_response_never_fabricates_a_missing_cache_column() {
+        let cap = capability(empty_resolver_slot());
+        let body = serde_json::json!({
+            "content": [{"type": "text", "text": "x"}],
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        });
+        let resp = cap.adapt_response(body, "m").expect("adapts");
+        assert_eq!(resp.usage.prompt_cache_hit_tokens, None);
     }
 
     #[test]
