@@ -284,7 +284,48 @@ CREATE INDEX IF NOT EXISTS idx_dedup_last_seen
     ON dedup_fingerprints(last_seen_ms);
 "#,
     },
+    // V4-a 人格记忆独立成层: 「我是谁」与「关于用户」分表 (episodes/偏好画像 =
+    // 用户事实层; persona_memory_* = 人格层). 状态面语义 (非 append-only 流):
+    // 变更经合并策略 (同类合并 / 矛盾标注张力, 不静默覆盖), 见 persona_layer.rs.
+    Migration {
+        version: 16,
+        name: "V16__persona_memory_layer",
+        sql: V16_SQL,
+    },
 ];
+
+const V16_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS persona_memory_entries (
+    id           TEXT PRIMARY KEY,
+    kind         TEXT NOT NULL,
+    text         TEXT NOT NULL,
+    sources_json TEXT NOT NULL,
+    polarity     TEXT NOT NULL,
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL,
+    protection   TEXT NOT NULL DEFAULT 'on'
+);
+CREATE INDEX IF NOT EXISTS idx_persona_memory_entries_kind
+    ON persona_memory_entries(kind);
+
+CREATE TABLE IF NOT EXISTS persona_memory_tensions (
+    id                TEXT PRIMARY KEY,
+    kind              TEXT NOT NULL,
+    existing_entry_id TEXT NOT NULL,
+    existing_text     TEXT NOT NULL,
+    incoming_text     TEXT NOT NULL,
+    note              TEXT NOT NULL,
+    detected_at       INTEGER NOT NULL,
+    resolved          INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS persona_memory_state (
+    singleton              INTEGER PRIMARY KEY CHECK (singleton = 1),
+    self_narrative         TEXT NOT NULL,
+    updated_at             INTEGER NOT NULL,
+    last_consolidation_at  INTEGER
+);
+"#;
 
 const V14_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS memory_principal_sessions (
@@ -1129,11 +1170,13 @@ mod tests {
         let t = store.get_trace_span("sp1").unwrap().unwrap();
         assert_eq!(t.trace_id, "t1");
         // migration 记录无重复.
+        // 断言演进 (2026-10, V4-a 人格记忆批): 11 → 12 —— 迁移列表是 append-only
+        // 增长面, 每加一条合法迁移本计数 +1 (钉「无重复」语义, 数字随迁移清单走).
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            11,
-            "V5/V6/V7/V8/V9/V10/V11/V12/V13/V14/V15 各一条 (V15 = M27 收编 dedup_fingerprints)"
+            12,
+            "V5..V16 各一条 (V15 = M27 收编 dedup_fingerprints; V16 = V4-a 人格记忆层 persona_memory_* 分表)"
         );
     }
 

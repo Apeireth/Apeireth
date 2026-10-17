@@ -208,6 +208,112 @@ impl CapabilityProvider for ContentFeedModule {
     }
 }
 
+/// Module providing the proactive-care rule scheduling tool (`tool.care_schedule`, V3-a).
+///
+/// 双引擎主动关怀的规则面: 增删列关怀规则 (四类触发器词表), 写文件面走
+/// write_intent 同族 (改规则 = 写文件)。治理档位在治理链
+/// ([`apeireth_organ::care::CareScheduleApprovalHook`]): RequireApproval 级
+/// —— 每次调用都停人工审批, 无自动放行档。默认关 (opt-in)。关怀发起不走
+/// 本模块: 发起 = 双引擎判定 → 标准回合 (见 [`apeireth_organ::care::engine`])。
+pub struct CareScheduleModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl CareScheduleModule {
+    /// Create the care-schedule module bound to the care rules data directory.
+    pub fn new(data_dir: impl Into<PathBuf>) -> Self {
+        let tool: Arc<dyn ToolCapability> =
+            Arc::new(apeireth_organ::care::CareScheduleTool::new(data_dir));
+        Self { tool }
+    }
+
+    /// Access the underlying tool capability.
+    pub fn capability(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for CareScheduleModule {
+    fn id(&self) -> &str {
+        "module.tool.care_schedule"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the backup export tool (`tool.backup_export`, G5 备份恢复).
+///
+/// 记忆保险箱的模型面: 全量打包七类数据面 (会话库/认知库/记忆库/技能卡/
+/// 关怀规则/用户表/域文档) + manifest.json 逐文件 SHA-256 摘要 (损坏可检出);
+/// **凭据不随行** (密钥/令牌面显式排除 + 测试钉死)。恢复/校验是 CLI 面
+/// (`apeireth backup restore|verify`, 本地操作)。治理档位由授权层同源接线
+/// (RequireApproval 级: 每次导出都停人工审批)。默认关 (opt-in)。
+pub struct BackupExportModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl BackupExportModule {
+    /// Create the backup-export module bound to its data sources and hooks.
+    pub fn new(config: apeireth_tools_canonical::backup::BackupExportConfig) -> Self {
+        let tool: Arc<dyn ToolCapability> = Arc::new(
+            apeireth_tools_canonical::backup::BackupExportTool::new(config),
+        );
+        Self { tool }
+    }
+
+    /// Access the underlying tool capability.
+    pub fn capability(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for BackupExportModule {
+    fn id(&self) -> &str {
+        "module.tool.backup_export"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the durable task board (`tool.task_board`, V6-a).
+///
+/// 任务簿工具面: 增/列/改派/完成 over 持久任务队列 (与会话账本同库的任务表)。
+/// 治理档位在治理链 ([`crate::canonical::task_board_tool::TaskBoardApprovalHook`]):
+/// 写面 (增/改派/完成) = write_intent 同族 (改任务簿 = 写文件) 每次人批,
+/// `task_list` 只读零审批; **无 failed/retry 工具面** (failed 只能人判)。
+/// 默认关 (opt-in)。
+pub struct TaskBoardModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl TaskBoardModule {
+    /// Create the task-board module bound to the durable task queue.
+    pub fn new(queue: std::sync::Arc<apeireth_orchestration::task_queue::TaskQueue>) -> Self {
+        Self {
+            tool: Arc::new(crate::canonical::task_board_tool::TaskBoardTool::new(queue)),
+        }
+    }
+
+    /// Access the underlying tool capability.
+    pub fn capability(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for TaskBoardModule {
+    fn id(&self) -> &str {
+        "module.tool.task_board"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
 /// Module that manages and dynamically contributes Model Context Protocol (MCP) tool capabilities.
 pub struct McpModule {
     tools: std::sync::RwLock<Vec<Arc<dyn ToolCapability>>>,
@@ -585,6 +691,51 @@ impl SkillSearchModule {
 impl CapabilityProvider for SkillSearchModule {
     fn id(&self) -> &str {
         "module.tool.skill_search"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the general-voice speech tool (`tool.voice_speak`, V3-b 通用嗓闭环).
+///
+/// 发声面: 文本 → 系统语音引擎合成即播 (合成与播放同一受控调用) + 语句账本
+/// (`spoken.jsonl` append-only: 说了什么/何时/哪把嗓/时长) + 安静纪律 (勿扰
+/// 窗口内错误即帧)。受控播放: 同时只播一条, 新话打断旧话可配 (排队串行可选),
+/// 播放票据 Drop = 真停 (取消/超时不留僵尸播放)。
+///
+/// 治理: **发声面档** —— 注册即闸 (`APEIRETH_ENABLE_VOICE_SPEAK`, 默认关
+/// fail-closed), grant 即发声 (免逐次人批); 与 shell 的「每次人批」执行档
+/// **分立不借壳**, 拦截面 = 参数边界 + 勿扰窗口 + 独占播放 + 账本全责。
+/// 合成执行面注入 (生产 = 系统引擎桥; 测试 = 假引擎)。
+pub struct VoiceSpeakModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl VoiceSpeakModule {
+    /// Create the voice-speak module from trusted configuration + 合成执行面。
+    pub fn new(
+        config: apeireth_tools_canonical::VoiceSpeakConfig,
+        engine: Arc<dyn apeireth_tools_canonical::SynthEngine>,
+    ) -> Self {
+        let tool = apeireth_tools_canonical::voice_speak_capability(
+            config,
+            engine,
+            apeireth_tools_canonical::authorized_voice_speak_policy(),
+        );
+        Self { tool }
+    }
+
+    /// Access the underlying (pipeline-wrapped) speech capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for VoiceSpeakModule {
+    fn id(&self) -> &str {
+        "module.tool.voice_speak"
     }
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {

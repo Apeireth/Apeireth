@@ -16,11 +16,12 @@ use apeireth_core::kernel::SessionId;
 use apeireth_core::model_profile::ModelProfile;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::{
-    derive_tuning_preset, BudgetStatus, CapabilitySwitch, ContentFeedStatus, DomainCounts,
-    DomainStatus, MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus,
-    SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SessionQuotaProbe, StatusProbe,
-    TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
-    QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
+    ContentFeedStatus, DomainCounts, DomainStatus, MemoryLedgerStats, QuotaDimensionStatus,
+    QuotaMeterReading, QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource,
+    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TuningStatus, VoiceStatus, WorkspaceStatus,
+    BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED,
+    QUOTA_METER_SCOPE_REQUIRED,
 };
 
 use super::production::ProductionModulesConfig;
@@ -175,6 +176,92 @@ pub fn domain_status_probe(
     })
 }
 
+/// 自省通道: 双引擎关怀节探测口 (V3-a) —— 现探测 `care_rules.json` 真值
+/// (规则数 / 下次触发 / 最近关怀), 映射到自述关怀节。
+///
+/// 时钟与交互锚点由调用方注入: `now_ms()` 取现时刻 (与关怀引擎同一时钟合同),
+/// `last_interaction_ms()` 取进程内交互观察 (缺位时久未联系类规则以规则创建
+/// 时刻为锚, 如实)。拒开 (StoredDoc 语义) = `Err(真因)`, 自述节显式 null +
+/// 原因, 不编数。
+pub fn care_status_probe(
+    data_dir: PathBuf,
+    now_ms: Arc<dyn Fn() -> i64 + Send + Sync>,
+    last_interaction_ms: Arc<dyn Fn() -> Option<i64> + Send + Sync>,
+) -> StatusProbe<CareStatus> {
+    Arc::new(move || {
+        let store = apeireth_organ::care::CareStore::new(data_dir.clone());
+        let status = store
+            .status(now_ms(), last_interaction_ms())
+            .map_err(|error| error.to_string())?;
+        let last_care_note = status
+            .last_care
+            .as_ref()
+            .map(|record| {
+                let action = if record.spoke { "spoke" } else { "declined" };
+                format!(
+                    "{}: {} ({}): {}",
+                    record.rule_id, action, record.judge, record.note
+                )
+            })
+            .or_else(|| Some("尚无关怀记录".to_string()));
+        Ok(CareStatus {
+            rules: Some(status.rules),
+            next_trigger_at_ms: status.next_trigger_at_ms,
+            last_care_at_ms: status.last_care.as_ref().map(|record| record.at_ms),
+            last_care_note,
+            reason: None,
+        })
+    })
+}
+
+/// 自省通道: 任务节探测口 (V6-a) —— 读持久任务队列的分态计数真值
+/// (pending/assigned/running/done/failed/blocked), 只回计数不回任务正文。
+///
+/// 探测口绑同一个 [`apeireth_orchestration::task_queue::TaskQueue`] 实例
+/// (与 `tool.task_board` 工具面同队同账): 自述与执行面同一真值源。
+pub fn task_board_status_probe(
+    queue: Arc<apeireth_orchestration::task_queue::TaskQueue>,
+) -> StatusProbe<TaskBoardStatus> {
+    Arc::new(move || {
+        let counts = queue
+            .counts()
+            .map_err(|error| format!("task queue read failed: {error}"))?;
+        Ok(TaskBoardStatus {
+            pending: counts.pending,
+            assigned: counts.assigned,
+            running: counts.running,
+            done: counts.done,
+            failed: counts.failed,
+            blocked: counts.blocked,
+        })
+    })
+}
+
+/// 自省通道: 人格节探测口 (`self_status_persona`, V4-a) —— 读人格层落库面
+/// 自述节真值 (信念/边界/偏好/张力计数 + 最后整编时刻, 只计数不回内容)。
+///
+/// 探测口绑同一个 [`apeireth_memory::PersonaMemoryStore`] 实例 (与人格提取步
+/// 的 `persona_memory_*` 分表同库同账): 自述与落库面同一真值源。读失败 =
+/// `Err(真因)`, 自述节显式 null + 原因, 不编数 (0 装诚实)。
+pub fn persona_status_probe(
+    store: Arc<dyn apeireth_memory::PersonaMemoryStore>,
+) -> StatusProbe<apeireth_tools_canonical::PersonaStatusSection> {
+    use apeireth_memory::PersonaMemoryStore as _;
+    Arc::new(move || {
+        let status = store
+            .status()
+            .map_err(|error| format!("persona store read failed: {error}"))?;
+        Ok(apeireth_tools_canonical::PersonaStatusSection {
+            core_beliefs: status.core_beliefs,
+            boundaries: status.boundaries,
+            preferences: status.preferences,
+            tensions: status.tensions,
+            last_consolidation_at: status.last_consolidation_at,
+            reason: None,
+        })
+    })
+}
+
 /// 生产自述来源: 装配期收集生效值, 调用期现探测 data 系。
 pub struct ProductionSelfStatusSource {
     identity: SelfStatusIdentity,
@@ -188,6 +275,11 @@ pub struct ProductionSelfStatusSource {
     model_profile: Option<ModelProfile>,
     domain: Option<StatusProbe<DomainStatus>>,
     content_feed: Option<StatusProbe<ContentFeedStatus>>,
+    care: Option<StatusProbe<CareStatus>>,
+    backup: Option<StatusProbe<BackupStatus>>,
+    task_board: Option<StatusProbe<TaskBoardStatus>>,
+    voice: Option<StatusProbe<VoiceStatus>>,
+    persona: Option<StatusProbe<apeireth_tools_canonical::PersonaStatusSection>>,
 }
 
 impl ProductionSelfStatusSource {
@@ -209,6 +301,11 @@ impl ProductionSelfStatusSource {
             model_profile: None,
             domain: None,
             content_feed: None,
+            care: None,
+            backup: None,
+            task_board: None,
+            voice: None,
+            persona: None,
         }
     }
 
@@ -260,6 +357,50 @@ impl ProductionSelfStatusSource {
     #[must_use]
     pub fn with_content_feed_probe(mut self, probe: StatusProbe<ContentFeedStatus>) -> Self {
         self.content_feed = Some(probe);
+        self
+    }
+
+    /// 接入双引擎关怀节探测口 (V3-a): 规则数/下次触发/最近关怀, 每次自述现
+    /// 探测 (真值如实)。
+    #[must_use]
+    pub fn with_care_probe(mut self, probe: StatusProbe<CareStatus>) -> Self {
+        self.care = Some(probe);
+        self
+    }
+
+    /// 接入备份节探测口 (G5): 最近备份时间/清单件数真值, 每次自述现探测
+    /// (尚无备份显式 null + 原因, 不编时间)。
+    #[must_use]
+    pub fn with_backup_probe(mut self, probe: StatusProbe<BackupStatus>) -> Self {
+        self.backup = Some(probe);
+        self
+    }
+
+    /// 接入任务节探测口 (V6-a): 任务队列分态计数真值, 每次自述现探测
+    /// (只回计数不回任务正文)。
+    #[must_use]
+    pub fn with_task_board_probe(mut self, probe: StatusProbe<TaskBoardStatus>) -> Self {
+        self.task_board = Some(probe);
+        self
+    }
+
+    /// 接入语音节探测口 (V3-b): 账本数/最近说话/嗓名, 每次自述现探测
+    /// (与发声工具同一本语句账本; 摘录口径不回全文)。
+    #[must_use]
+    pub fn with_voice_probe(mut self, probe: StatusProbe<VoiceStatus>) -> Self {
+        self.voice = Some(probe);
+        self
+    }
+
+    /// 接入人格节探测口 (`self_status_persona`, V4-a): 信念/边界/偏好/张力
+    /// 计数 + 最后整编真值, 每次自述现探测 (只计数不回内容; 与人格层落库面
+    /// 同一真值源)。
+    #[must_use]
+    pub fn with_persona_probe(
+        mut self,
+        probe: StatusProbe<apeireth_tools_canonical::PersonaStatusSection>,
+    ) -> Self {
+        self.persona = Some(probe);
         self
     }
 
@@ -401,6 +542,57 @@ impl ProductionSelfStatusSource {
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
 
+        // 双引擎关怀一节 (V3-a): 规则数/下次触发/最近关怀真值, 现探测如实;
+        // 探测口缺位 = 显式 null + 原因 (0 装诚实)。
+        let (care, care_reason) = match &self.care {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("care probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 备份一节 (G5): 最近备份时间/清单件数真值, 现探测如实; 尚无备份 =
+        // 显式 null + 「尚无备份记录」(不编时间), 探测口缺位 = 显式 null + 原因。
+        let (backup, backup_reason) = match &self.backup {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("backup probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 任务节 (V6-a): 任务队列分态计数真值, 现探测如实 (只回计数);
+        // 探测口缺位 = 显式 null + 原因 (0 装诚实)。
+        let (task_board, task_board_reason) = match &self.task_board {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("task board probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 语音节 (V3-b): 账本数/最近说话/嗓名, 现探测如实 (与发声工具同一本
+        // 语句账本); 探测口缺位 = 显式 null + 原因 (0 装诚实)。
+        let (voice, voice_reason) = match &self.voice {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("voice probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 人格节 (V4-a): 信念/边界/偏好/张力计数 + 最后整编真值, 现探测如实
+        // (与人格层落库面同账, 只计数不回内容); 探测口缺位 = 显式 null + 原因
+        // (0 装诚实)。
+        let (persona, persona_reason) = match &self.persona {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("persona probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
             capabilities: self.capabilities.clone(),
@@ -421,6 +613,16 @@ impl ProductionSelfStatusSource {
             domain_reason,
             content_feed,
             content_feed_reason,
+            care,
+            care_reason,
+            backup,
+            backup_reason,
+            task_board,
+            task_board_reason,
+            voice,
+            voice_reason,
+            persona,
+            persona_reason,
         }
     }
 }
@@ -467,6 +669,18 @@ pub fn roster_from_config(
         // 内容流接入 (`tool.content_feed`, J1): 按实际注册条件取值 (配置注入
         // 才算生效)。治理: RequireApproval 级 (拉取与入库都经审批档)。
         CapabilitySwitch::new("content_feed", config.content_feed.is_some()),
+        // V3-a 双引擎主动关怀的规则面 (注册条件 = 数据目录已注入, 注册即闸),
+        // 名册按实际注册条件取值。
+        CapabilitySwitch::new("care_schedule", config.care_schedule.is_some()),
+        // G5 备份导出 (`tool.backup_export`, 注册条件 = 数据源配置已注入,
+        // 注册即闸), 名册按实际注册条件取值。
+        CapabilitySwitch::new("backup_export", config.backup.is_some()),
+        // V3-b 通用嗓发声 (`tool.voice_speak`, 注册条件 = 发声配置已注入,
+        // 注册即闸), 名册按实际注册条件取值。
+        CapabilitySwitch::new("voice_speak", config.voice_speak.is_some()),
+        // V6-a 任务簿 (`tool.task_board`, 注册条件 = 任务队列已注入, 注册即闸),
+        // 名册按实际注册条件取值 (自述任务节与工具面同队同账)。
+        CapabilitySwitch::new("task_board", config.task_board.is_some()),
         // 受控文件写入 (`tool.apply_patch`): 主开关按实际注册条件取值 (配置开启
         // 且工作区根已注入才算生效); 自动放行子档依赖主开关 —— 主开关没注册成,
         // 子档无处生效, 名册照实说 false。
@@ -532,6 +746,13 @@ pub fn roster_from_config(
         CapabilitySwitch::new(
             "consolidation",
             config.consolidation && config.memory_writeback,
+        ),
+        // V4-a 人格提取步挂在记忆写入模块的整编触发点 (`with_persona_layer`):
+        // 人格层落库面缺席由组装根折进生效视图, 这里再 AND 上游槽 (写入模块 +
+        // 整编触发点) —— 上游槽缺席时静默失效, 名册照实 false。
+        CapabilitySwitch::new(
+            "persona_consolidation",
+            config.persona_consolidation && config.consolidation && config.memory_writeback,
         ),
         CapabilitySwitch::new("reflexion", config.reflexion),
         CapabilitySwitch::new("self_assessment", config.self_assessment),
@@ -904,5 +1125,111 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains(DATA_PROBE_NOT_WIRED));
+    }
+
+    /// V4-a 人格节探测口 (`self_status_persona`): 读人格层落库面自述节真值
+    /// (计数 + 最后整编, 只计数不回内容)。
+    #[test]
+    fn persona_probe_reports_the_persona_memory_store_status_truth() {
+        use apeireth_memory::{PersonaExtract, PersonaMemoryStore as _, PersonaStatement};
+        let store = Arc::new(apeireth_memory::InMemoryPersonaMemoryStore::new());
+        let mut memory = apeireth_memory::PersonaMemory::default();
+        let statement = |text: &str| PersonaStatement {
+            text: text.to_string(),
+            source_episode_id: "e1".to_string(),
+        };
+        memory.apply_extract(
+            &PersonaExtract {
+                core_beliefs: vec![statement("我相信先验证再叙事。")],
+                preferences: vec![statement("我喜欢清晨整理记忆。")],
+                boundaries: vec![statement("我绝不静默改用户数据。")],
+                narrative_lines: Vec::new(),
+            },
+            1_728_300_000,
+        );
+        store.save(&memory).expect("persona save");
+
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
+            .with_persona_probe(persona_status_probe(store));
+        let snapshot = source.snapshot();
+        let persona = snapshot.persona.expect("persona section must arrive");
+        assert_eq!(persona.core_beliefs, 1);
+        assert_eq!(persona.boundaries, 1);
+        assert_eq!(persona.preferences, 1);
+        assert_eq!(persona.tensions, 0, "无同核反极 = 无张力 (不编数)");
+        assert_eq!(persona.last_consolidation_at, Some(1_728_300_000));
+        assert!(persona.reason.is_none());
+        assert!(snapshot.persona_reason.is_none());
+
+        // 尚未整编的落库面: 计数如实为 0, 最后整编显式 null (不编时间)。
+        let empty = Arc::new(apeireth_memory::InMemoryPersonaMemoryStore::new());
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
+            .with_persona_probe(persona_status_probe(empty));
+        let snapshot = source.snapshot();
+        let persona = snapshot.persona.expect("persona section must arrive");
+        assert_eq!(persona.core_beliefs, 0);
+        assert_eq!(persona.tensions, 0);
+        assert_eq!(persona.last_consolidation_at, None);
+    }
+
+    /// 人格探测口读失败 = 原因不是整帧失败 (0 装诚实: 显式 null + 真因)。
+    #[test]
+    fn persona_probe_failure_is_a_reason_not_a_failed_frame() {
+        struct BrokenPersonaStore;
+
+        impl apeireth_memory::PersonaMemoryStore for BrokenPersonaStore {
+            fn load(&self) -> apeireth_memory::MemoryResult<apeireth_memory::PersonaMemory> {
+                Err(apeireth_memory::MemoryError::Invalid(
+                    "persona table missing".to_string(),
+                ))
+            }
+
+            fn save(
+                &self,
+                _memory: &apeireth_memory::PersonaMemory,
+            ) -> apeireth_memory::MemoryResult<()> {
+                Err(apeireth_memory::MemoryError::Invalid(
+                    "persona table missing".to_string(),
+                ))
+            }
+
+            fn status(
+                &self,
+            ) -> apeireth_memory::MemoryResult<apeireth_memory::PersonaStatusSection> {
+                Err(apeireth_memory::MemoryError::Invalid(
+                    "persona table missing".to_string(),
+                ))
+            }
+        }
+
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
+            .with_persona_probe(persona_status_probe(Arc::new(BrokenPersonaStore)));
+        let snapshot = source.snapshot();
+        assert!(snapshot.persona.is_none());
+        assert!(
+            snapshot
+                .persona_reason
+                .as_deref()
+                .unwrap()
+                .contains("persona table missing"),
+            "{:?}",
+            snapshot.persona_reason
+        );
+    }
+
+    /// 人格探测口缺位 = 显式「来源未接线」, 不是编造的 0。
+    #[test]
+    fn a_missing_persona_probe_reports_the_missing_interface_explicitly() {
+        let snapshot = ProductionSelfStatusSource::new(Vec::new(), false, None).snapshot();
+        assert!(snapshot.persona.is_none());
+        assert!(
+            snapshot
+                .persona_reason
+                .as_deref()
+                .unwrap()
+                .contains(DATA_PROBE_NOT_WIRED),
+            "{:?}",
+            snapshot.persona_reason
+        );
     }
 }

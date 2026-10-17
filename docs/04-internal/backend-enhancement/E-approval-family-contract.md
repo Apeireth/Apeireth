@@ -119,7 +119,7 @@
 | 跨族复合命令（`del a && curl b`） | 族组合 = 另一授权对象（不吞并单族授权、也不被吞并） | 同上 |
 | 同族不同目标（批 `Remove-Item x` 后 `rm -rf <y>`） | **族集授权覆盖**（批"删除族" = 该族所有形态生效；审批卡族标注随卡明示授权族） | `permission_preset.rs::family_authorization_covers_every_form_of_the_family` |
 | 无族命令（`echo hi`） | 逐字逐批（精确操作指纹，L 组口径原样） | `permission_preset.rs::approval_memory_is_scoped_to_session_capability_and_authorization_object` |
-| `AllowedOnce` 一次性审批 | **不变**：一审批一动作恰好一次（`approval_closure.rs` 词表不动） | `approval_closure.rs` 既有测试 |
+| `AllowedOnce` 一次性审批 | **G2.5 升级为绑定摘要**：一审批一动作恰好一次，且只对该动作的**内容摘要**生效（改参数/目标/顺序即拒；见 §11.4） | `approval_closure.rs::bound_allowed_once_grants_bind_the_action_digest` |
 | git 写 L2 人工审批地板 | **不变**：免审记忆不越过 L2（`git_write_preset_semantics.rs::l2_approval_memory_never_skips_the_human`） | 既有测试 |
 
 **边界（如实）**：族集授权在族内不绑目标——要目标级逐批走 `AllowedOnce` 一次性审批面，
@@ -196,7 +196,149 @@
 2. **归属面是段首动词 + 成员调用**：经调度器转手的形态（`cmd /c del x`）归属不足
    → 授权面按"重批"收口（安全向）；触达面（审批门）仍按词面触达判到；
 3. **族集授权不绑目标**（§6 边界）：同族不同目标不重批，要目标级逐批走
-   `AllowedOnce` 或关闭 `approval_remember`；
+   `AllowedOnce`（G2.5 起即**绑定摘要**的一次性审批，见 §11）或关闭 `approval_remember`；
 4. **未知族 id / 词表外命令**：不获得族级语义（退回逐字，宁可无效不放宽）——
    接线方用 `CommandFamily::from_id` 取族即可杜绝此类配置错误；
 5. **审批记忆进程内**：重启即清（既有口径）；跨进程持久授权不在本批。
+
+## 11. 动作绑定（G2.5 Action-bound 审批 + 委派信任收窄）
+
+> `Status: ✅ 已交付（G2.5 动作绑定批）` 一事：审批批准的对象从"命令/意图描述"
+> 升级为**字节级动作内容摘要**——堵"批准后改参数"的静默越权。
+> 研究依据：哲学研究 03 卡⑥（`ActionBinding` 规范化摘要 + 执行边界重算 +
+> `min(parent, requested)` 委派收窄）；实现为**自研规范化函数**（取 RFC 8785
+> 的规范化思路），字节语义由测试向量钉死，不引新外部依赖。
+
+### 11.1 病灶与整改口径（G2.5）
+
+**病灶**：审批批准的是"这一次动作"，但批准之后载荷仍可能被改（参数 / 目标 /
+argv 顺序变）再执行——批准为**改过参数的动作**背书 = 静默越权（G2 族归一管住了
+"换形重放"，管不住"批准后改内容"）。
+
+**整改口径（动作摘要绑定）**：
+
+1. **审批时算摘要**：对被批动作（操作 / 执行主体 / 目标 / 工具面版本 / 结构化
+   argv）做规范化序列化 → 摘要，**摘要随审批记录落库**（跨重启持久）；
+2. **执行边界重算比对**：派发前对**将执行的活动作**重算摘要；不一致 →
+   **拒绝即帧**（调用不执行、拒绝帧走正式通道回报）+ `approval.binding_mismatch`
+   审计行（会话事件面 `ApprovalBindingMismatch`，带漂移归因与双摘要）；
+3. **一次性授权绑定**（§11.4）与**委派信任收窄**（§11.5）。
+
+### 11.2 动作摘要绑定（`ActionBinding` + 规范化函数规格）
+
+单一来源：`crates/foundation/governance/src/action_binding.rs`
+（`apeireth_governance::action_binding`）。
+
+| 字段 | 语义 | 运行时取值 |
+|---|---|---|
+| `operation` | 批准的动作种类 | 模型面工具名 |
+| `agent` | 执行主体 | 会话身份 |
+| `target` | 动作目标 | `ActionBinding::derive_target`：`command`（命令文本）/ `path`（路径）；都没有 → 空串 |
+| `tool_schema_version` | 工具面版本 | `tool_schema_version_digest`（工具声明的规范化摘要；工具面变更使批准失效） |
+| `parameters` | 结构化 argv（**有序**） | `{arguments, invocation}`——原始参数 + 执行载荷全集 |
+
+**规范化函数规格**（`canonical_json_bytes`，自研实现，测试向量钉字节语义）：
+
+| 规则 | 语义 |
+|---|---|
+| 对象 | 键按 UTF-8 字节序升序；无空白；键按 JSON 字符串规则转义 |
+| 数组 | **元素顺序原样保留**（顺序是动作语义的一部分：改顺序 = 改动作） |
+| 字符串 | 最小转义：`\"` `\\` `\b` `\t` `\n` `\f` `\r`，其余 C0 控制符 `\u00xx`（小写 hex）；非 ASCII 原样 UTF-8 |
+| 数字 | 按解析值的确定性十进制文本（整数与浮点表示视为不同值，`1` ≠ `1.0`，确定性优先） |
+| 字面量 | `true` / `false` / `null` |
+| 空白 | 任何位置零空白 |
+
+* **摘要** = 规范化字节的 SHA-256（小写 hex，64 位）；**短摘要** = hex 前 12 位
+  （审批卡"动作摘要"行用——短摘要非全量载荷）；
+* **确定性**：同动作恒同摘要（键顺序无关、重复计算无关、序列化 round-trip 无关）；
+* **篡改检测**：改参数 / 改目标 / 改顺序（值集合相同、数组顺序不同）都得不出
+  同一摘要；漂移归因（`classify_binding_drift`）按字段序给出
+  `operation` / `agent` / `target` / `tool_schema_version` / `parameters` /
+  `argument_order` 六面之一（词表冻结）。
+
+### 11.3 执行边界重算比对（拒绝即帧）
+
+| 面 | 行为 |
+|---|---|
+| 比对点 | `runtime/canonical/execute.rs::verify_frozen_approval_binding`（已批派发的准入边界，先于任何调用执行） |
+| 比对式 | 活动作（活调用载荷 + 将执行的冻结载荷 + 活工具面）重算摘要 == 批准时冻结摘要 |
+| 不符 | **拒绝即帧**：调用不执行，`approved action binding mismatch (<漂移面>)` 拒绝帧回报模型 |
+| 审计 | 会话事件 `ApprovalBindingMismatch`（稳定审计 kind `approval.binding_mismatch`）：approval id / 漂移面 / 期望摘要 / 实得摘要 / 轮次 |
+| 收束 | 批准项走完本次结果收束为终态，被改载荷不得自动重试 |
+
+### 11.4 与族集授权的关系（不推翻 G2）
+
+| 面 | 口径 | 钉死测试 |
+|---|---|---|
+| 族记忆（`approval_remember`） | **不变**：同族免重批，族内不绑目标（族级口径） | `permission_preset.rs::action_binding_binds_one_shot_content_while_family_keys_stay_target_unbound`（+ §9 全表零回归） |
+| 单次授权（`AllowedOnce`） | **升级为绑定摘要**："这一次就是这一次"字面成真 | `approval_closure.rs::bound_allowed_once_grants_bind_the_action_digest` |
+| 分工 | 绑定只护单次授权；族集授权只管"同族免重批"，两者不互相越界 | 同上 |
+
+**AllowedOnce 绑定面**（`AllowedOnceGrant`）：`mint_bound(pair, binding)` 铸绑定
+授权；`spend_bound(action, binding)` 执行前重算摘要——参数 / 目标 / 顺序变即拒
+（`GrantSpendError::BindingMismatch`）且不消耗授权；未绑定 `spend` 花不动绑定
+授权、绑定授权也不接受未绑定 spend（双向 fail-closed，`UnboundGrant`）。
+存量 `mint` / `spend` 语义原样保留（词表不动）。
+
+### 11.5 委派信任收窄（min(parent, requested)）
+
+审批传递链上权限只减不增（`action_binding.rs::DelegationChain`）：
+
+* **硬上限**：有效授权恒为 `min(parent, requested)`（`DelegationAuthority::narrow`）；
+* **越权即拒**：子代理请求 > 父授权 = **拒**（`DelegationRefusal`），不静默钳制；
+* **多级单调**：链条任何一级有效授权不宽过链首（`is_monotonic`），
+  深度处回要高档位一律拒。
+
+### 11.6 载荷链与审批卡标注
+
+| 面 | 字段 | 取值 |
+|---|---|---|
+| 审批记录 `PendingApproval` | `action_binding: Option<ActionBinding>` | 批准时冻结的绑定（摘要随记录落库、跨重启持久） |
+| 审批视图 `PendingApprovalView` | `action_binding_digest` | SHA-256 hex；存量记录为空串（明示不给假摘要） |
+| 网关载荷 `CanonicalPendingApproval` / `ImApprovalNotice` | `action_binding_digest` | 同上 |
+| IM 审批卡 `ImApprovalCard` | `action_binding_digest` + 渲染行 `动作摘要: <hex 前 12 位>` | 短摘要非全量载荷；存量卡渲染 `（无摘要·存量载荷）`；旧卡片载荷无字段照读 |
+
+### 11.7 测试证据（G2.5 新增，全部 `cargo test --locked -j 2` 实跑）
+
+| # | 测试 | 面 | 钉什么 |
+|---|---|---|---|
+| 1 | `action_binding.rs::canonical_serialization_vectors_pin_key_order_escapes_and_numbers` | 规范化测试向量 | 键排序/数组保序/最小转义/数字文本/零空白逐字节钉死 |
+| 2 | `action_binding.rs::the_same_action_always_yields_the_same_digest` | 摘要确定性 | 同动作恒同摘要（键顺序/重复计算/round-trip 无关）+ 短摘要 |
+| 3 | `action_binding.rs::parameter_changes_change_the_digest_and_are_refused` | 篡改检测 | 改参数 → 摘要不符 + 漂移归因 parameters |
+| 4 | `action_binding.rs::target_changes_change_the_digest_and_are_refused` | 篡改检测 | 改目标 → 摘要不符 + 漂移归因 target |
+| 5 | `action_binding.rs::argument_order_changes_change_the_digest_and_are_refused` | 篡改检测 | 改顺序（值集合相同）→ 摘要不符 + 漂移归因 argument_order |
+| 6 | `action_binding.rs::verify_passes_identical_bindings_and_classifies_every_drift` | 比对面 | 一致通过；六面漂移词表冻结 |
+| 7 | `action_binding.rs::binding_mismatch_audit_rows_use_the_approval_binding_mismatch_vocabulary` | 审计行 | `approval.binding_mismatch` 词表 + 明细含双摘要 + 哈希串链可自证 |
+| 8 | `action_binding.rs::delegation_refuses_a_child_requesting_more_than_its_parent` | 委派收窄 | 子请求>父授权=拒（不静默钳制）+ min(parent, requested) |
+| 9 | `action_binding.rs::delegation_authority_narrows_monotonically_down_the_chain` | 委派收窄 | 多级单调只减不增 + 深度回要高档位即拒 |
+| 10 | `approval_closure.rs::bound_allowed_once_grants_bind_the_action_digest` | AllowedOnce 绑定 | 改参数/目标/顺序全拒、恰好一次、未绑定 spend 花不动 |
+| 11 | `approval_closure.rs::bound_grants_refuse_unbound_spends_and_unbound_grants_refuse_bound_spends` | AllowedOnce 绑定 | 双向 fail-closed + 换动作不消耗 + 非授权闭合不铸绑定授权 |
+| 12 | `approval.rs::action_binding_digest_persists_with_the_approval_record` | 跨重启持久 | 摘要随记录落库 round-trip 存活 + 视图只出摘要 |
+| 13 | `approval.rs::records_before_the_binding_field_migrate_without_a_fake_digest` | 存量迁移 | 旧记录读入无假摘要 + 旧视图载荷照读 |
+| 14 | `canonical_shell_approval_e2e.rs::tampering_the_target_after_approval_is_refused_at_the_execution_boundary` | 执行边界（改目标） | 批准后改目标 → 拒绝即帧 + `approval.binding_mismatch` 审计行 |
+| 15 | `canonical_shell_approval_e2e.rs::tampering_parameters_after_approval_is_refused_at_the_execution_boundary` | 执行边界（改参数） | 批准后改参数值 → 同上 |
+| 16 | `canonical_shell_approval_e2e.rs::reordering_arguments_after_approval_is_refused_at_the_execution_boundary` | 执行边界（改顺序） | 批准后改 argv 顺序 → 同上 |
+| 17 | `approval_history_survives_restart.rs::pending_approval_history_survives_a_session_store_reopen`（扩展） | 跨重启持久 | 生产会话库里摘要随审批记录跨"重启"存活 |
+| 18 | `sdk card.rs::approval_card_carries_the_action_digest_annotation` | 审批卡标注 | 三渠道"动作摘要"行 + 短摘要非全量载荷 + 存量卡明示 + 旧载荷照读 |
+| 19 | `permission_preset.rs::action_binding_binds_one_shot_content_while_family_keys_stay_target_unbound` | G2 零回归 | 族记忆键仍与目标无关（同族换形不重批），绑定只护单次授权 |
+| 20 | `gateway im_approval_cards.rs`（扩展） | 标注链 | 网关侧三渠道卡片带动作摘要行 |
+
+既有套件零回归：`cargo test --workspace --all-targets --locked --no-fail-fast -j 2`
+（含 §9 全表 21 项与 G2 族归一全量对抗面）。收批实测口径：本批面全绿
+（governance / runtime / sdk / gateway 全量，runtime-assembly 全目标，tools 逐
+目标全量）；workspace 全量门禁以并发各线收口后一次实跑为准——本批交付时并发
+在途批自留两个测试目标编译红线（`voice_speak` / `task_board_knob`，均在彼批
+战场，标红不代改）。数字口径见
+[test-baseline.md](../03-reference/test-baseline.md)，本批实测值随批报告。
+
+### 11.8 已知边界（如实）
+
+1. **摘要锚点在记录内**：摘要随审批记录落库——能改写整条记录（含摘要）的攻击者
+   同时改载荷与摘要可绕过比对；这属于审计链 / 存储完整性面（`AuditHashChain` +
+   G3 对象级判定）的分工，本批只保证"载荷改了而摘要没跟上"必被拒；
+2. **存量记录迁移面**：绑定字段加入前持久化的记录无冻结摘要——不给假摘要，
+   执行边界退为逐字载荷比对（仍拒载荷替换）；工具面版本锚在存量记录上不可见（如实）；
+3. **漂移归因是诊断信息**：拒绝以摘要比对为准；`argument_order` 归因在参数值集合
+   相同、仅数组顺序不同时给出，其余参数差异归 `parameters`；
+4. **委派信任收窄是授权面算子**（`DelegationChain`）：默认不挂载，由组合层显式
+   接线到委派产生点；本批不改 orchestrator / 会话派生既有路径（战场外不动）。

@@ -567,6 +567,24 @@ pub enum SessionEventKind {
         /// Round of the repeated proposal.
         round: u32,
     },
+    /// An approved action's binding digest did not match the live action at the
+    /// execution boundary and the dispatch was refused (G2.5 拒绝即帧).
+    /// Stable audit event kind: `approval.binding_mismatch`.
+    ApprovalBindingMismatch {
+        /// The stable approval id that authorized the frozen action.
+        approval_id: ApprovalId,
+        /// Model tool-call correlation id of the refused dispatch.
+        tool_call_id: String,
+        /// 漂移面 (`operation` / `agent` / `target` / `tool_schema_version` /
+        /// `parameters` / `argument_order`): 哪一个被改了。
+        drift: String,
+        /// 批准时冻结的动作摘要。
+        expected_digest: String,
+        /// 执行边界重算的动作摘要。
+        actual_digest: String,
+        /// Runtime round.
+        round: u32,
+    },
     /// Provider routing could not serve a round.
     ProviderFailed {
         /// Legible terminal routing/provider error.

@@ -78,6 +78,8 @@ $SecretPatterns = @(
 # 对齐 .gitignore 的 "允许" 文件 (placeholder / 测试数据, false positive)
 # ============================================================================
 $AllowlistPaths = @(
+    # V5-a 脱敏测试样例（PEM 形态假键，测私钥体脱敏覆盖用——假键非真凭据）
+    'crates/capabilities/tools/src/redaction_bridge.rs',
     'legacy/*',
     'legacy/**/*',
     'frontend/companion-desktop/tests/*',

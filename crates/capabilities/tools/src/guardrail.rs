@@ -2,7 +2,11 @@
 //!
 //! 在能力执行前拦截路径穿越与高危 Shell 注入，在能力执行后扫描输出中的敏感凭据，
 //! 阻断凭据外泄并防止被大模型长程记忆污染.
+//! 出境脱敏双向闸接线面 [`ToolGuardrail::sweep_output_for_egress`]: 先占位族
+//! 出境脱敏 (可还原), 再既有凭据绊线 (单向标签), 两族共存各零回归.
 
+use crate::redaction_bridge::{EgressRedaction, RedactionBridge};
+use apeireth_governance::input_security::RedactionPlaceholder;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
@@ -40,6 +44,14 @@ pub struct TripwireScanResult {
     pub is_clean: bool,
     pub sanitized_output: String,
     pub leaked_kinds: Vec<LeakedCredentialKind>,
+}
+
+/// 出境双层扫结果: 占位族脱敏 (登记入簿, 受控回程可还原) + 既有凭据绊线
+/// (PEM/口令赋值等形状, 单向标签) —— 两族在同一份输出上共存.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EgressSweepResult {
+    pub redaction: EgressRedaction,
+    pub tripwire: TripwireScanResult,
 }
 
 /// 工具执行守门员.
@@ -228,12 +240,24 @@ impl ToolGuardrail {
             }
         }
 
-        // 4. PEM 私钥头扫描
+        // 4. PEM 私钥块扫描 (头部 → END 行整块换标签)。只换头部会把 base64
+        //    私钥体留在输出里 —— 确证级泄漏债, 整块收口; 无 END 行的截断块
+        //    退化为头部替换 (0 装: 不声称截断块全扫)。
         if sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----") {
             leaked_kinds.push(LeakedCredentialKind::PemPrivateKey);
             if let Some(start) = sanitized.find("-----BEGIN") {
-                if let Some(end_offset) = sanitized[start..].find("KEY-----") {
-                    let full_end = start + end_offset + 8;
+                let end_marker = sanitized[start..]
+                    .find("-----END")
+                    .map(|offset| start + offset);
+                let block_end = end_marker.and_then(|end_marker| {
+                    sanitized[end_marker..]
+                        .find("KEY-----")
+                        .map(|offset| end_marker + offset + "KEY-----".len())
+                });
+                let fallback_end = sanitized[start..]
+                    .find("KEY-----")
+                    .map(|offset| start + offset + "KEY-----".len());
+                if let Some(full_end) = block_end.or(fallback_end) {
                     let block = &sanitized[start..full_end];
                     sanitized = sanitized.replace(block, "[REDACTED_PEM_PRIVATE_KEY]");
                 }
@@ -278,7 +302,9 @@ impl ToolGuardrail {
                         .map(|i| value_start + i)
                         .unwrap_or(sanitized.len());
                     let value = &sanitized[value_start..value_end];
-                    if value.len() >= 4 {
+                    // 占位符族豁免: 受控占位符不是明文口令 —— 单向截断会毁掉
+                    // 受控回程的还原锚点。替换面只认占位符族, 其余值一律照旧截断。
+                    if value.len() >= 4 && RedactionPlaceholder::parse(value.trim()).is_none() {
                         leaked_kinds.push(LeakedCredentialKind::PlaintextPassword);
                         sanitized.replace_range(value_start..value_end, "[REDACTED_PASSWORD]");
                         // 文本已变, 从头再扫会错位; 多处口令以首处命中为准
@@ -298,6 +324,24 @@ impl ToolGuardrail {
             is_clean,
             sanitized_output: sanitized,
             leaked_kinds,
+        }
+    }
+
+    /// 出境双层扫 (工具输出进入会话历史/出境面之前的脱敏收口).
+    ///
+    /// 顺序固定: ① 出境占位族脱敏 (真值 → `__AP_<类>_<指纹12>__`, 登记入簿,
+    /// 受控回程可还原) ② 既有凭据绊线 (PEM/口令赋值等未被 PII 检测器覆盖的
+    /// 凭据形状, 单向标签)。两族共存: 占位族在受控回程还原, 单向标签永远
+    /// 保持脱敏。
+    pub fn sweep_output_for_egress(
+        raw_output: &str,
+        bridge: &mut RedactionBridge,
+    ) -> EgressSweepResult {
+        let redaction = bridge.redact_for_egress(raw_output);
+        let tripwire = Self::scan_and_sanitize_output(&redaction.text);
+        EgressSweepResult {
+            redaction,
+            tripwire,
         }
     }
 }
@@ -391,5 +435,42 @@ mod tests {
             .leaked_kinds
             .contains(&LeakedCredentialKind::PemPrivateKey));
         assert!(res.sanitized_output.contains("[REDACTED_PEM_PRIVATE_KEY]"));
+    }
+
+    /// PEM 整块收口: base64 私钥体不得留在输出 (只换头部 = 泄漏债, 已清)。
+    #[test]
+    fn pem_block_redaction_covers_key_body_not_just_header() {
+        let raw = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0\n-----END RSA PRIVATE KEY-----\ntrailing";
+        let res = ToolGuardrail::scan_and_sanitize_output(raw);
+        assert!(
+            !res.sanitized_output.contains("MIIEowIBAAKCAQEA0"),
+            "{}",
+            res.sanitized_output
+        );
+        assert!(
+            res.sanitized_output.contains("trailing"),
+            "{}",
+            res.sanitized_output
+        );
+        assert!(res.sanitized_output.contains("[REDACTED_PEM_PRIVATE_KEY]"));
+    }
+
+    /// 占位符族豁免: 受控占位符不是明文口令 (还原锚点不可被单向截断毁掉),
+    /// 真口令照旧截断 —— 两头都钉。
+    #[test]
+    fn password_scan_keeps_placeholder_family_and_still_redacts_real_passwords() {
+        let token = "__AP_ENV_SECRET_a1b2c3d4e5f6__";
+        let res = ToolGuardrail::scan_and_sanitize_output(&format!("password = {token}\nok"));
+        assert!(res.is_clean, "{res:?}");
+        assert!(
+            res.sanitized_output.contains(token),
+            "{}",
+            res.sanitized_output
+        );
+
+        let res2 = ToolGuardrail::scan_and_sanitize_output("password = realsecret\nok");
+        assert!(!res2.is_clean);
+        assert!(res2.sanitized_output.contains("[REDACTED_PASSWORD]"));
+        assert!(!res2.sanitized_output.contains("realsecret"));
     }
 }

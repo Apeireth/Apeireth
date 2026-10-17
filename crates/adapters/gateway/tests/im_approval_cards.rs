@@ -304,6 +304,8 @@ async fn approval_card_carries_command_text_risk_level_and_two_buttons() {
         command_text: format!("{TOOL}: 1 + 1"),
         arguments_summary: "执行命令 1 + 1".to_string(),
         authorization_families: Vec::new(),
+        action_binding_digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            .to_string(),
         governance_hook: "permission".to_string(),
         governance_reason: "requires human approval".to_string(),
         created_at_ms: 1_700_000_000_000,
@@ -315,6 +317,9 @@ async fn approval_card_carries_command_text_risk_level_and_two_buttons() {
         assert!(rendered.contains(&pair_id), "{kind}: {rendered}");
         assert!(rendered.contains("approve"), "{kind}: {rendered}");
         assert!(rendered.contains("reject"), "{kind}: {rendered}");
+        // G2.5: 卡面带动作摘要行 (短摘要, 非全量载荷)。
+        assert!(rendered.contains("动作摘要"), "{kind}: {rendered}");
+        assert!(rendered.contains("0123456789ab"), "{kind}: {rendered}");
     }
 }
 

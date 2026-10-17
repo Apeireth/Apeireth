@@ -10,9 +10,16 @@ description = "Apeireth 9-organ 真实现 (P-arch 2026-08-28): v1 companion era 
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }
 apeireth-plugin = { path = "../../foundation/plugin" }
+# V3-a 双引擎主动关怀 (care 模块): 工具面 (`tool.care_schedule`) 的
+# ToolCapability 合同类型 (NormalizedTool / ToolCall / ToolResult) 在
+# foundation/protocol; 治理档钩子 (RequireApproval 级) 的 GovernanceHook 合同在
+# foundation/governance。方向不变 (engine → foundation), 0 新外部依赖。
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-governance = { path = "../../foundation/governance" }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 # R4 W1 world_model 真接 LLM (per v1 doc "第一层: LLM 按时间线展开反事实推演链") —
 # `LlmFactory::spawn` 需要 `SubagentRole` (来自 `apeireth-orchestration`).
 # 0 装诚实: W1 必须真接 LLM, 不能走 dev-dep 路径 (那 src 不可见).
@@ -20,6 +27,9 @@ apeireth-orchestration = { path = "../../foundation/orchestration" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+# 测试临时目录 (care_rules.json 落盘面测试用; 与 capabilities/tools 同一测试
+# 依赖版本, 0 新外部包进锁文件)。
+tempfile = "3"
 # RA-15/RC-5 补全 (2026-09-08): organ live E2E 用 OpenAI-compatible factory
 # (DeepSeek) 注入真 LLM 路径 — 仅 dev-dep, 生产依赖图 0 变化。
 apeireth-provider = { path = "../provider" }

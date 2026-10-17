@@ -97,6 +97,12 @@ pub struct ImApprovalCard {
     /// 本身, 逐操作授权)。`#[serde(default)]`: 旧卡片载荷无此字段照读。
     #[serde(default)]
     pub authorization_families: Vec<String>,
+    /// 动作摘要 (G2.5 动作绑定): 被批动作内容的 SHA-256 摘要 (hex)。执行
+    /// 边界重算比对, 载荷被改 (参数/目标/顺序变) → 摘要不符 → 拒绝即帧。
+    /// 卡上只出**短摘要** (hex 前 12 位) 而非全量载荷。
+    /// `#[serde(default)]`: 旧卡片载荷无此字段照读 (存量卡 = 空摘要)。
+    #[serde(default)]
+    pub action_binding_digest: String,
     /// 风险级 (词表标签)。
     pub risk_level: String,
     /// 治理给出的原因 (展示用)。
@@ -171,6 +177,20 @@ pub fn card_family_annotation(card: &ImApprovalCard) -> String {
     }
 }
 
+/// 动作摘要行的短摘要 (G2.5): 摘要 hex 前 12 位 —— 短摘要而非全量载荷;
+/// 存量卡无摘要明示"（无摘要·存量载荷）", 不留语义空洞。
+pub fn card_digest_annotation(card: &ImApprovalCard) -> String {
+    const SHORT_DIGEST_CHARS: usize = 12;
+    if card.action_binding_digest.trim().is_empty() {
+        "（无摘要·存量载荷）".to_string()
+    } else {
+        card.action_binding_digest
+            .chars()
+            .take(SHORT_DIGEST_CHARS)
+            .collect()
+    }
+}
+
 /// `im-feishu` 渠道: 消费 [`crate::lark::message::CardContent`] 元素形状
 /// (header + div 文本 + action 按钮), 按钮 `value` 即 [`ImButtonPayload`]。
 fn render_feishu_card(card: &ImApprovalCard) -> ImResult<serde_json::Value> {
@@ -192,8 +212,9 @@ fn render_feishu_card(card: &ImApprovalCard) -> ImResult<serde_json::Value> {
         serde_json::json!({
             "tag": "lark_md",
             "content": format!(
-                "**授权族**: {}\n**风险级**: {}\n**摘要**: {}\n**治理原因**: {}\n**超时**: {} ms",
+                "**授权族**: {}\n**动作摘要**: {}\n**风险级**: {}\n**摘要**: {}\n**治理原因**: {}\n**超时**: {} ms",
                 card_family_annotation(card),
+                card_digest_annotation(card),
                 card.risk_level,
                 card.arguments_summary,
                 card.governance_reason,
@@ -255,6 +276,8 @@ fn render_template_card(kind: &str, card: &ImApprovalCard) -> ImResult<serde_jso
         .collect::<ImResult<Vec<_>>>()?;
 
     let family_label = format!("授权族: {}", card_family_annotation(card));
+    let digest = card_digest_annotation(card);
+    let digest_label = format!("动作摘要: {digest}");
     Ok(serde_json::json!({
         "card_kind": kind,
         "msgtype": "approval_card",
@@ -264,6 +287,9 @@ fn render_template_card(kind: &str, card: &ImApprovalCard) -> ImResult<serde_jso
             "arguments_summary": card.arguments_summary,
             "authorization_families": card.authorization_families,
             "authorization_family_label": family_label,
+            // G2.5: 渲染面只出短摘要 (hex 前 12 位), 不出全量摘要/全量载荷。
+            "action_digest": digest,
+            "action_digest_label": digest_label,
             "risk_level": card.risk_level,
             "governance_reason": card.governance_reason,
             "expires_at_ms": card.expires_at_ms,
@@ -285,6 +311,8 @@ mod tests {
             command_text: "shell: bash -c 'rm -rf /tmp/x'".to_string(),
             arguments_summary: "执行命令 rm -rf /tmp/x".to_string(),
             authorization_families: vec!["删除族".to_string()],
+            action_binding_digest:
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
             risk_level: "high".to_string(),
             governance_reason: "destructive write".to_string(),
             created_at_ms: 1_700_000_000_000,
@@ -386,5 +414,42 @@ mod tests {
             .remove("authorization_families");
         let migrated: ImApprovalCard = serde_json::from_value(object).unwrap();
         assert!(migrated.authorization_families.is_empty());
+    }
+
+    /// G2.5 动作摘要行: 卡片载荷与各渠道渲染都携带"动作摘要"（短摘要 hex 前
+    /// 12 位, 非全量载荷）; 存量卡无摘要明示"（无摘要·存量载荷）"; 旧载荷
+    /// 无字段照读（serde 兼容）。
+    #[test]
+    fn approval_card_carries_the_action_digest_annotation() {
+        let annotated = card();
+        assert_eq!(card_digest_annotation(&annotated), "0123456789ab");
+        for kind in ImChannelKind::ALL {
+            let rendered = render_approval_card(kind, &annotated).unwrap().to_string();
+            assert!(rendered.contains("动作摘要"), "{kind}: {rendered}");
+            assert!(rendered.contains("0123456789ab"), "{kind}: {rendered}");
+            assert!(
+                !rendered
+                    .contains("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                "{kind}: 卡面只出短摘要, 不出全量摘要"
+            );
+        }
+
+        // 存量卡（无摘要）明示, 不留语义空洞。
+        let mut legacy = card();
+        legacy.action_binding_digest = String::new();
+        assert_eq!(card_digest_annotation(&legacy), "（无摘要·存量载荷）");
+        let rendered = render_approval_card(ImChannelKind::ImWecom, &legacy)
+            .unwrap()
+            .to_string();
+        assert!(rendered.contains("（无摘要·存量载荷）"), "{rendered}");
+
+        // 存量卡片载荷（无本字段）读入 = 空摘要, 不读失败。
+        let mut object = serde_json::to_value(card()).unwrap();
+        object
+            .as_object_mut()
+            .unwrap()
+            .remove("action_binding_digest");
+        let migrated: ImApprovalCard = serde_json::from_value(object).unwrap();
+        assert!(migrated.action_binding_digest.is_empty());
     }
 }

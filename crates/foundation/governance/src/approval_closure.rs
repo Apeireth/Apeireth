@@ -490,11 +490,19 @@ pub fn scan_approval_pairs(records: &[ApprovalAuditRecord]) -> ApprovalPairScan 
 /// This carries the standing one-approval-one-side-effect invariant at the
 /// closure layer: the grant names the paired action and can be spent exactly
 /// once. Every other closure state is fail-closed and mints nothing.
+///
+/// G2.5 动作绑定: [`AllowedOnceGrant::mint_bound`] 把一次性授权升级为**绑定
+/// 摘要**（[`crate::action_binding::ActionBinding`] 的 digest）——"这一次就是
+/// 这一次"字面成真: 绑定授权只对其绑定的动作内容生效, 执行前重算摘要不符
+/// 即拒（[`AllowedOnceGrant::spend_bound`]）, 未绑定的 [`AllowedOnceGrant::spend`]
+/// 也花不动绑定授权（不许绕过绑定）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllowedOnceGrant {
     pair_id: String,
     action: String,
     spent: bool,
+    /// 动作绑定摘要（`Some` = 绑定授权; `None` = 未绑定的存量一次性授权）。
+    binding_digest: Option<String>,
 }
 
 /// Why a grant spend was refused.
@@ -511,6 +519,20 @@ pub enum GrantSpendError {
         expected: String,
         /// The action the spend asked for.
         requested: String,
+    },
+    /// The grant is bound to an action digest and the spend presented a
+    /// different binding (or an unbound spend tried to consume a bound grant).
+    BindingMismatch {
+        /// The digest the grant is bound to.
+        expected: String,
+        /// The digest the spend presented (`"(unbound)"` for an unbound spend).
+        requested: String,
+    },
+    /// The grant carries no binding digest, so a digest-checked spend refuses
+    /// instead of silently skipping the check (fail closed).
+    UnboundGrant {
+        /// The pair the grant came from.
+        pair_id: String,
     },
 }
 
@@ -529,6 +551,21 @@ impl fmt::Display for GrantSpendError {
             } => {
                 write!(f, "grant covers {expected} only; refusing {requested}")
             }
+            Self::BindingMismatch {
+                expected,
+                requested,
+            } => {
+                write!(
+                    f,
+                    "grant is bound to action digest {expected}; refusing digest {requested}"
+                )
+            }
+            Self::UnboundGrant { pair_id } => {
+                write!(
+                    f,
+                    "grant for pair {pair_id} carries no action binding; refusing a digest-checked spend"
+                )
+            }
         }
     }
 }
@@ -539,12 +576,34 @@ impl AllowedOnceGrant {
     /// Mint a grant for the pair's action. Only
     /// [`ApprovalOutcome::AllowedOnce`] mints one; every other closure state
     /// is fail-closed and mints nothing.
+    ///
+    /// 存量形态（不绑摘要）: 兼容面; 新授权请用 [`AllowedOnceGrant::mint_bound`]。
     pub fn mint(pair: &ApprovalAuditPair) -> Option<Self> {
         if pair.outcome().authorizes_once() {
             Some(Self {
                 pair_id: pair.pair_id().to_string(),
                 action: pair.subject().to_string(),
                 spent: false,
+                binding_digest: None,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Mint a **binding** grant (G2.5): the one-shot authorization is bound to
+    /// the approved action's digest ([`crate::action_binding::ActionBinding`]).
+    /// Only [`ApprovalOutcome::AllowedOnce`] mints one.
+    pub fn mint_bound(
+        pair: &ApprovalAuditPair,
+        binding: &crate::action_binding::ActionBinding,
+    ) -> Option<Self> {
+        if pair.outcome().authorizes_once() {
+            Some(Self {
+                pair_id: pair.pair_id().to_string(),
+                action: pair.subject().to_string(),
+                spent: false,
+                binding_digest: Some(binding.digest()),
             })
         } else {
             None
@@ -553,7 +612,39 @@ impl AllowedOnceGrant {
 
     /// Spend the grant on its own action, exactly once. A second spend, or a
     /// spend for a different action, is refused and consumes nothing.
+    ///
+    /// 绑定授权（[`AllowedOnceGrant::mint_bound`]）花不动本入口: 未绑定的
+    /// spend 不许绕过摘要比对（[`GrantSpendError::BindingMismatch`]）。
     pub fn spend(&mut self, action: &str) -> Result<(), GrantSpendError> {
+        if self.spent {
+            return Err(GrantSpendError::AlreadySpent {
+                pair_id: self.pair_id.clone(),
+            });
+        }
+        if let Some(expected) = &self.binding_digest {
+            return Err(GrantSpendError::BindingMismatch {
+                expected: expected.clone(),
+                requested: "(unbound)".to_string(),
+            });
+        }
+        if action != self.action {
+            return Err(GrantSpendError::ActionMismatch {
+                expected: self.action.clone(),
+                requested: action.to_string(),
+            });
+        }
+        self.spent = true;
+        Ok(())
+    }
+
+    /// Spend a **binding** grant on its bound action content, exactly once
+    /// (G2.5). The live action's digest is recomputed and compared: a changed
+    /// payload (参数 / 目标 / 顺序变) is refused and consumes nothing.
+    pub fn spend_bound(
+        &mut self,
+        action: &str,
+        binding: &crate::action_binding::ActionBinding,
+    ) -> Result<(), GrantSpendError> {
         if self.spent {
             return Err(GrantSpendError::AlreadySpent {
                 pair_id: self.pair_id.clone(),
@@ -563,6 +654,18 @@ impl AllowedOnceGrant {
             return Err(GrantSpendError::ActionMismatch {
                 expected: self.action.clone(),
                 requested: action.to_string(),
+            });
+        }
+        let Some(expected) = &self.binding_digest else {
+            return Err(GrantSpendError::UnboundGrant {
+                pair_id: self.pair_id.clone(),
+            });
+        };
+        let requested = binding.digest();
+        if requested != *expected {
+            return Err(GrantSpendError::BindingMismatch {
+                expected: expected.clone(),
+                requested,
             });
         }
         self.spent = true;
@@ -582,6 +685,11 @@ impl AllowedOnceGrant {
     /// The pair this grant was minted from.
     pub fn pair_id(&self) -> &str {
         &self.pair_id
+    }
+
+    /// The bound action digest (G2.5), when this grant is a binding grant.
+    pub fn binding_digest(&self) -> Option<&str> {
+        self.binding_digest.as_deref()
     }
 }
 
@@ -724,6 +832,102 @@ mod tests {
         }
     }
 
+    /// G2.5 AllowedOnce 绑定语义: 绑定授权只对其绑定的动作内容生效,
+    /// 执行前重算摘要 —— 参数/目标/顺序变即拒, 恰好一次不变。
+    #[test]
+    fn bound_allowed_once_grants_bind_the_action_digest() {
+        let approved = crate::action_binding::ActionBinding::new(
+            "tool.shell",
+            "sess-1",
+            "Remove-Item x.txt",
+            "v1",
+            serde_json::json!({ "command": "Remove-Item x.txt" }),
+        );
+        let pair = ApprovalAuditPair::new("pair-1", 3, "tool.shell", ApprovalOutcome::AllowedOnce);
+        let mut grant = AllowedOnceGrant::mint_bound(&pair, &approved)
+            .expect("allowed_once mints a bound one-shot grant");
+        assert_eq!(grant.binding_digest(), Some(approved.digest().as_str()));
+
+        // 未绑定的 spend 花不动绑定授权 (不许绕过摘要比对)。
+        assert!(matches!(
+            grant.spend("tool.shell"),
+            Err(GrantSpendError::BindingMismatch { .. })
+        ));
+        assert!(!grant.is_spent(), "refused spends consume nothing");
+
+        // 改参数/改目标/改顺序的载荷全拒 (摘要不符)。
+        for tampered in [
+            crate::action_binding::ActionBinding::new(
+                "tool.shell",
+                "sess-1",
+                "Remove-Item y.txt",
+                "v1",
+                serde_json::json!({ "command": "Remove-Item y.txt" }),
+            ),
+            crate::action_binding::ActionBinding::new(
+                "tool.shell",
+                "sess-1",
+                "Remove-Item x.txt",
+                "v1",
+                serde_json::json!({ "command": "Remove-Item x.txt", "force": true }),
+            ),
+            crate::action_binding::ActionBinding::new(
+                "tool.shell",
+                "sess-1",
+                "",
+                "v1",
+                serde_json::json!({ "argv": ["b", "a"] }),
+            ),
+        ] {
+            assert!(matches!(
+                grant.spend_bound("tool.shell", &tampered),
+                Err(GrantSpendError::BindingMismatch { .. })
+            ));
+            assert!(!grant.is_spent(), "refused spends consume nothing");
+        }
+
+        // 原样载荷 = 这一次, 恰好一次。
+        grant
+            .spend_bound("tool.shell", &approved)
+            .expect("the bound authorization");
+        assert!(grant.is_spent());
+        assert!(matches!(
+            grant.spend_bound("tool.shell", &approved),
+            Err(GrantSpendError::AlreadySpent { .. })
+        ));
+    }
+
+    /// G2.5: 绑定面双向 fail-closed —— 绑定授权花不动未绑定 spend,
+    /// 未绑定授权也不接受绑定 spend (不静默跳过比对)。
+    #[test]
+    fn bound_grants_refuse_unbound_spends_and_unbound_grants_refuse_bound_spends() {
+        let binding = crate::action_binding::ActionBinding::new(
+            "tool.shell",
+            "sess-1",
+            "x",
+            "v1",
+            serde_json::json!({ "command": "echo x" }),
+        );
+        let pair = ApprovalAuditPair::new("pair-1", 1, "tool.shell", ApprovalOutcome::AllowedOnce);
+        let mut bound = AllowedOnceGrant::mint_bound(&pair, &binding).unwrap();
+        assert!(matches!(
+            bound.spend_bound("tool.fetch", &binding),
+            Err(GrantSpendError::ActionMismatch { .. })
+        ));
+
+        let mut unbound = AllowedOnceGrant::mint(&pair).unwrap();
+        assert!(unbound.binding_digest().is_none());
+        assert!(matches!(
+            unbound.spend_bound("tool.shell", &binding),
+            Err(GrantSpendError::UnboundGrant { .. })
+        ));
+        assert!(!unbound.is_spent());
+        unbound.spend("tool.shell").expect("legacy unbound spend");
+
+        // 非授权闭合态不铸造绑定授权。
+        let rejected = ApprovalAuditPair::new("pair-2", 2, "tool.shell", ApprovalOutcome::Rejected);
+        assert!(AllowedOnceGrant::mint_bound(&rejected, &binding).is_none());
+    }
     #[test]
     fn an_unclosed_asked_pair_is_detected_after_a_crash() {
         // 两次落盘之间崩溃: 只留下 asked 记录 → 未闭对可检出。

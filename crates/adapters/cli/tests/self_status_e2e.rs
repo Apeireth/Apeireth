@@ -10,7 +10,9 @@ use std::sync::Mutex;
 use apeireth_cli::build_canonical_runtime_from_env;
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest};
-use apeireth_memory::{EpisodeStore, MemoryGovernanceStore, SqliteMemoryStore};
+use apeireth_memory::{
+    EpisodeStore, MemoryGovernanceStore, PersonaMemoryStore as _, SqliteMemoryStore,
+};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{ToolCall, ToolResult};
 use apeireth_runtime::canonical::Runtime;
@@ -374,5 +376,55 @@ async fn builtin_read_tools_keep_working_zero_regression() {
         result.render().contains("Cargo.toml"),
         "{}",
         result.render()
+    );
+}
+
+/// V4-a 人格层真接线 (兑现 V4-a 报备的「归口 CLI 接线面」): CLI 组合根把
+/// `persona_memory_*` 分表接进人格节探测口 (`self_status_persona`) —— 自述报
+/// **真值面** (人格层落库面的计数与最后整编真值), 不是「来源未接线」的 null;
+/// 只计数不回内容。
+#[tokio::test]
+async fn persona_section_reads_the_wired_persona_layer_truth() {
+    let _lock = lock_env();
+    let guard = EnvGuard::guard();
+    guard.clear_all();
+
+    // 先造人格沉淀再装配: 探测口与人格层落库面同一 `cognitive.sqlite3` 同账。
+    let cognitive = temp_path("persona", "cognitive.sqlite3");
+    std::env::set_var("APEIRETH_COGNITIVE_DB", &cognitive);
+    std::env::set_var("APEIRETH_REFLEXION_DIR", temp_path("persona", "reflexion"));
+    {
+        let store = SqliteMemoryStore::open(&cognitive).expect("store");
+        let mut memory = apeireth_memory::PersonaMemory::default();
+        memory.apply_extract(
+            &apeireth_memory::PersonaExtract {
+                core_beliefs: vec![apeireth_memory::PersonaStatement {
+                    text: "我相信先验证再叙事。".to_string(),
+                    source_episode_id: "e1".to_string(),
+                }],
+                ..Default::default()
+            },
+            1_728_500_000,
+        );
+        store.save(&memory).expect("persona save");
+    }
+
+    let runtime = build_runtime("persona").await;
+    let report = invoke_self_status(&runtime).await;
+    let persona = &report["persona"];
+    assert_eq!(persona["core_beliefs"], 1);
+    assert_eq!(persona["boundaries"], 0);
+    assert_eq!(persona["preferences"], 0);
+    assert_eq!(persona["tensions"], 0);
+    assert_eq!(persona["last_consolidation_at"], 1_728_500_000i64);
+    assert_eq!(
+        persona["reason"],
+        Value::Null,
+        "探测口已接线: 报真值, 不是缺源 null"
+    );
+    // 只计数不回内容 (与记忆账本同口径)。
+    assert!(
+        !report.to_string().contains("我相信先验证再叙事"),
+        "人格内容不得回显"
     );
 }

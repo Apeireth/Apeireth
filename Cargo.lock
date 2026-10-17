@@ -179,6 +179,7 @@ dependencies = [
  "apeireth-guard",
  "apeireth-memory",
  "apeireth-orchestration",
+ "apeireth-organ",
  "apeireth-plugin",
  "apeireth-protocol",
  "apeireth-provider",
@@ -342,12 +343,16 @@ name = "apeireth-organ"
 version = "2.0.0-rc.4"
 dependencies = [
  "apeireth-core",
+ "apeireth-governance",
  "apeireth-orchestration",
  "apeireth-plugin",
+ "apeireth-protocol",
  "apeireth-provider",
  "async-trait",
  "serde",
  "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
  "tokio",
 ]
 
@@ -521,6 +526,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",

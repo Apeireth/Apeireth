@@ -38,11 +38,14 @@ use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
-use super::self_status_source::{roster_from_config, ProductionSelfStatusSource};
+use super::self_status_source::{
+    roster_from_config, task_board_status_probe, ProductionSelfStatusSource,
+};
 use super::tool_modules::{
-    ApplyPatchModule, ContentFeedModule, EducationModule, FetchModule, FilesystemModule,
-    GitWriteModule, McpModule, RepoModule, SearchModule, SelfStatusModule, ShellModule,
-    SkillDistillModule, SkillSearchModule, WorktreeApplyModule, WorktreePlanModule,
+    ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, EducationModule,
+    FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule, SearchModule,
+    SelfStatusModule, ShellModule, SkillDistillModule, SkillSearchModule, TaskBoardModule,
+    VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
 };
 
 /// Adapter that exposes memory's context-window implementation through the
@@ -145,6 +148,41 @@ pub struct ProductionModulesConfig {
     /// 都经审批档, 改订阅 = 写文件走 write_intent 同族) 由治理链钩子承载。
     /// 默认关 (opt-in)。
     pub content_feed: Option<apeireth_tools_canonical::ContentFeedConfig>,
+    /// Register the proactive-care rule scheduling tool (`tool.care_schedule`,
+    /// V3-a 双引擎主动关怀) when the care rules data directory is supplied.
+    ///
+    /// 关怀规则面: 增删列关怀规则 (四类触发器词表), 写文件面走 write_intent
+    /// 同族 (改规则 = 写文件)。治理档位 (RequireApproval 级: 每次调用都停人工
+    /// 审批, 无自动放行档) 由治理链钩子承载。关怀发起不走本面: 发起 = 双引擎
+    /// 判定 → 标准回合 (零新消息通道)。默认关 (opt-in)。
+    pub care_schedule: Option<PathBuf>,
+    /// Register the general-voice speech tool (`tool.voice_speak`, V3-b 通用嗓闭环)
+    /// when the voice configuration is supplied.
+    ///
+    /// 发声面: 文本 → 系统语音引擎合成即播 + 语句账本 (`spoken.jsonl`) + 安静
+    /// 纪律 (勿扰窗口, 与 care_rules 同源)。治理 = 发声面档 (注册即闸
+    /// `APEIRETH_ENABLE_VOICE_SPEAK`, grant 即发声免逐次人批, 与 shell 的执行档
+    /// 分立)。默认关 (opt-in)。
+    pub voice_speak: Option<apeireth_tools_canonical::VoiceSpeakConfig>,
+    /// Register the backup export tool (`tool.backup_export`, G5 备份恢复) when
+    /// config is supplied.
+    ///
+    /// 备份导出面: 全量打包记忆/账本 (七类数据面) + manifest.json 逐文件摘要
+    /// (损坏可检出); **凭据不随行** (密钥/令牌面显式排除 + 测试钉死)。恢复/校验
+    /// 是 CLI 面 (`apeireth backup restore|verify`, 本地操作), 不走本面。治理
+    /// 档位 (RequireApproval 级: 每次导出都停人工审批) 由授权层同源接线。
+    /// 默认关 (opt-in)。
+    pub backup: Option<apeireth_tools_canonical::backup::BackupExportConfig>,
+    /// Register the durable task board (`tool.task_board`, V6-a 任务编排持久队列)
+    /// when the task queue is supplied.
+    ///
+    /// 任务簿工具面: 增/列/改派/完成 over 持久任务队列 (与会话账本同库的任务表,
+    /// 崩溃恢复/幂等唤醒/环路熔断/结算接账在 [`apeireth_orchestration::task_queue`])。
+    /// 治理档位 (写面 = write_intent 同族: 改任务簿 = 写文件, 每次人批无自动
+    /// 放行档; `task_list` 只读零审批) 由治理链
+    /// ([`super::task_board_tool::TaskBoardApprovalHook`]) 唯一承载; **无
+    /// failed/retry 工具面** (failed 只能人判)。默认关 (opt-in)。
+    pub task_board: Option<Arc<apeireth_orchestration::task_queue::TaskQueue>>,
     /// Register the external tool bridge (MCP) module.
     ///
     /// When enabled, the server list is loaded at assembly time from
@@ -178,6 +216,12 @@ pub struct ProductionModulesConfig {
     /// module (`with_consolidation`): inert when [`Self::memory_writeback`] is
     /// off, and the roster reports that registration condition.
     pub consolidation: bool,
+    /// V4-a 人格提取步 (默认关): 整编触发点上从近期情节提炼人格增量 →
+    /// 人格层合并 (同类合并 / 矛盾标注「人格张力」, 不静默覆盖)。
+    ///
+    /// 挂在记忆写入模块的整编触发点 (`with_persona_layer`): [`Self::consolidation`]
+    /// 关或人格层落库面缺席时显式不跑 (0 装诚实), 名册按实际注册条件取值。
+    pub persona_consolidation: bool,
     /// Register the reflexion failure-feedback module (TurnStart lessons +
     /// AfterTurn judge-failure sedimentation). Off by default.
     pub reflexion: bool,
@@ -267,12 +311,17 @@ impl Default for ProductionModulesConfig {
             shell: None,
             fetch: None,
             content_feed: None,
+            care_schedule: None,
+            voice_speak: None,
+            backup: None,
+            task_board: None,
             mcp: false,
             mcp_data_dir: None,
             preference_learning: false,
             organs: false,
             memory_injection: false,
             consolidation: false,
+            persona_consolidation: false,
             reflexion: false,
             partner_bond: false,
             morphology_recall: false,
@@ -337,6 +386,9 @@ pub struct ProductionBackends {
     pub typed_recall_identity: Option<TypedRecallIdentity>,
     /// Optional concrete typed durable sink for commitment/persona/relation projections.
     pub typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
+    /// V4-a 人格记忆层落库面 (人格提取步的 `persona_memory_*` 分表).
+    /// 缺位 = 人格提取步显式不跑 (默认未接线)。
+    pub persona_layer: Option<Arc<dyn apeireth_memory::PersonaMemoryStore>>,
     /// Reflexion failure-feedback store (2026-10-06 W2 记忆闭环批).
     pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
     /// W2 §4.2: partner 羁绊存储 (InMemoryPartnerStore 或未来 sqlite 实现)。
@@ -361,6 +413,17 @@ pub struct ProductionBackends {
     pub self_status_domain: Option<StatusProbe<apeireth_tools_canonical::DomainStatus>>,
     /// 自省通道: 内容流面探测口 (J1: 订阅数/最近拉取, 现探测如实)。
     pub self_status_content_feed: Option<StatusProbe<apeireth_tools_canonical::ContentFeedStatus>>,
+    /// 自省通道: 双引擎关怀节探测口 (V3-a: 规则数/下次触发/最近关怀真值, 现探测如实)。
+    pub self_status_care: Option<StatusProbe<apeireth_tools_canonical::CareStatus>>,
+    /// 自省通道: 备份节探测口 (G5: 最近备份时间/清单件数真值或 null, 现探测如实)。
+    pub self_status_backup: Option<StatusProbe<apeireth_tools_canonical::BackupStatus>>,
+    /// 自省通道: 语音节探测口 (V3-b: 账本数/最近说话/嗓名, 现探测如实;
+    /// 与发声工具同一本语句账本 `spoken.jsonl`)。
+    pub self_status_voice: Option<StatusProbe<apeireth_tools_canonical::VoiceStatus>>,
+    /// 自省通道: 人格节探测口 (`self_status_persona`, V4-a: 信念/边界/偏好/
+    /// 张力计数 + 最后整编真值, 现探测如实; 与人格层落库面同账, 只计数不回
+    /// 内容)。
+    pub self_status_persona: Option<StatusProbe<apeireth_tools_canonical::PersonaStatusSection>>,
 }
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
@@ -420,6 +483,9 @@ impl ProductionModules {
         let self_tuning_effective = backends.self_tuning.is_some() && config.memory_recall;
         let typed_recall_effective =
             backends.typed_recall.is_some() && (config.memory_recall || config.memory_writeback);
+        // V4-a 人格提取步的生效值 = 开关 AND 人格层落库面 (面缺席 = 显式不跑).
+        roster_config.persona_consolidation =
+            config.persona_consolidation && backends.persona_layer.is_some();
         let self_status_roster = config.self_status.then(|| {
             roster_from_config(
                 &roster_config,
@@ -565,6 +631,46 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // 双引擎主动关怀 (`tool.care_schedule`, V3-a, opt-in): 关怀规则面
+        // (增删列, 四类触发器词表)。治理档位在治理链 (`CareScheduleApprovalHook`):
+        // RequireApproval 级 —— 改规则 = 写文件 (write_intent 同族), 每次调用
+        // 都停人工审批。
+        if let Some(care_dir) = config.care_schedule {
+            let provider = CareScheduleModule::new(care_dir);
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 备份导出 (`tool.backup_export`, G5 备份恢复, opt-in): 全量打包 +
+        // manifest.json 逐文件摘要 (损坏可检出), 凭据不随行。治理档位在授权层
+        // 同源接线 (RequireApproval 级: 每次导出都停人工审批)。
+        if let Some(backup_config) = config.backup {
+            let provider = BackupExportModule::new(backup_config);
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 通用嗓发声 (`tool.voice_speak`, V3-b, opt-in): 文本 → 系统语音引擎
+        // 合成即播 + 语句账本 (`spoken.jsonl`) + 安静纪律 (勿扰窗口, 与
+        // care_rules 同源)。治理 = 发声面档 (注册即闸, grant 即发声免逐次
+        // 人批, 与 shell 的执行档分立)。合成执行面 = 系统引擎桥 (可注入)。
+        if let Some(voice_config) = config.voice_speak {
+            let provider = VoiceSpeakModule::new(
+                voice_config,
+                apeireth_tools_canonical::system_synth_engine(),
+            );
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 任务簿 (`tool.task_board`, V6-a 任务编排持久队列, opt-in): 增/列/
+        // 改派/完成 over 持久任务队列 (与会话账本同库的任务表; 崩溃恢复/幂等
+        // 唤醒/环路熔断/结算接账在 orchestration 队列核)。治理档位在治理链
+        // (`TaskBoardApprovalHook`): 写面 = write_intent 同族 (改任务簿 = 写
+        // 文件) 每次人批, `task_list` 只读零审批; **无 failed/retry 工具面**
+        // (failed 只能人判)。自述任务节与工具面同队同账 (task_board_status_probe)。
+        if let Some(queue) = config.task_board.clone() {
+            let provider = TaskBoardModule::new(queue);
+            capabilities.extend(provider.capabilities());
+        }
+
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
         // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
         // 原因, 注册与其余字段不受影响。
@@ -594,6 +700,21 @@ impl ProductionModules {
             }
             if let Some(probe) = &backends.self_status_content_feed {
                 source = source.with_content_feed_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_care {
+                source = source.with_care_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_backup {
+                source = source.with_backup_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_voice {
+                source = source.with_voice_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_persona {
+                source = source.with_persona_probe(Arc::clone(probe));
+            }
+            if let Some(queue) = &config.task_board {
+                source = source.with_task_board_probe(task_board_status_probe(Arc::clone(queue)));
             }
             let provider = SelfStatusModule::new(Arc::new(source));
             capabilities.extend(provider.capabilities());
@@ -785,6 +906,17 @@ impl ProductionModules {
             ));
         }
 
+        // V4-a 恒定小注入 (人格记忆层回取面 ①) 的 TurnStart overlay 装配点:
+        // 自我叙事摘要 ≤ 恒预算 (`CONSTANT_INJECTION_BUDGET_CHARS`) 进提示词。
+        // **缺人格层 = 不注册本模块 = 零注入零变化**; 人格层无自我叙事沉淀时
+        // 同样零注入 (未沉淀就是未沉淀, 不编)。
+        if let Some(persona) = &backends.persona_layer {
+            modules.push(Arc::new(
+                super::cognitive::PersonaConstantInjectionModule::new(Arc::clone(persona))
+                    .with_telemetry(Arc::clone(&telemetry)),
+            ));
+        }
+
         if config.memory_writeback {
             let mut module = MemoryWritebackModule::new(
                 required(backends.memory, "memory_writeback", "memory")?,
@@ -803,6 +935,13 @@ impl ProductionModules {
             }
             if config.consolidation {
                 module = module.with_consolidation();
+            }
+            // V4-a 人格提取步: 开关 + 人格层落库面齐备才接 (默认未接线);
+            // 运行触发点 = 整编触发点 (with_consolidation), 同一条人格管线。
+            if config.persona_consolidation {
+                if let Some(persona) = &backends.persona_layer {
+                    module = module.with_persona_layer(Arc::clone(persona));
+                }
             }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)

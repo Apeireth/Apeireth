@@ -12,10 +12,11 @@ use std::time::Instant;
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_memory::{
-    BoundedMemoryInput, MemoryCoordinator, MemoryExtractor, MemoryMaterializer,
+    build_constant_injection, consolidate_persona, BoundedMemoryInput, MemoryCoordinator,
+    MemoryExtractor, MemoryGovernanceStatus, MemoryGovernanceStore, MemoryMaterializer,
     MemoryMaterializerPort, MemoryRecallQuery, MemoryScope, MemoryTypedMaterializationSink,
-    ProactiveRecallPolicy, ProactiveRecallService, RuleMemoryExtractor, SelectedMemoryAccess,
-    SqliteAccessHistoryStore,
+    PersonaMemoryStore, ProactiveRecallPolicy, ProactiveRecallService, RuleMemoryExtractor,
+    SelectedMemoryAccess, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
@@ -474,6 +475,80 @@ impl AgentModule for PartnerBondModule {
             _ => ModuleOutcome::continue_(),
         };
         Ok(result)
+    }
+}
+
+/// 恒定小注入 (V4-a 人格记忆层回取面 ①) 的模块 id.
+pub const PERSONA_INJECTION_MODULE_ID: &str = "cognitive.persona_injection";
+
+/// **V4-a 恒定小注入模块**: `TurnStart` 把自我叙事摘要注入 prompt overlay
+/// (`PromptOverlay::system`), 供每一轮提示词组装取用。
+///
+/// - **恒预算**: 摘要走 [`build_constant_injection`] 的 400 字符恒预算
+///   (`CONSTANT_INJECTION_BUDGET_CHARS`), 超长截断 + 显式省略注记;
+/// - **与查询无关**: 身份不靠检索命中, 它一直在;
+/// - **缺人格层 = 零注入零变化**: 本模块只在人格层落库面在场时注册 (装配点见
+///   [`super::production::ProductionModules::build`]); 人格层无自我叙事沉淀或
+///   读取失败时同样不发 overlay —— 提示词逐字不变 (0 装诚实: 未沉淀就是未沉淀,
+///   读失败走 fail-open 零注入, 不编造身份)。
+pub struct PersonaConstantInjectionModule {
+    manifest: ModuleManifest,
+    persona: Arc<dyn PersonaMemoryStore>,
+    metrics: ModuleMetrics,
+}
+
+impl PersonaConstantInjectionModule {
+    /// 构造 (人格层落库面 = 恒定注入的回取源, 与人格提取步同一分表同账)。
+    pub fn new(persona: Arc<dyn PersonaMemoryStore>) -> Self {
+        Self {
+            manifest: ModuleManifest::new(
+                PERSONA_INJECTION_MODULE_ID,
+                "Persona constant injection",
+            ),
+            persona,
+            metrics: ModuleMetrics::default(),
+        }
+    }
+
+    /// Attach the shared non-sensitive telemetry sink.
+    #[must_use]
+    pub fn with_telemetry(self, telemetry: Arc<CognitiveTelemetry>) -> Self {
+        self.metrics.attach_telemetry(telemetry);
+        self
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for PersonaConstantInjectionModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook != HookPoint::TurnStart {
+            return Ok(ModuleOutcome::continue_());
+        }
+        let outcome = match self.persona.load() {
+            // 空自述 → 空串 → 零注入零变化 (未沉淀就是未沉淀)。
+            Ok(memory) => {
+                let text = build_constant_injection(&memory);
+                if text.is_empty() {
+                    ModuleOutcome::continue_()
+                } else {
+                    ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
+                }
+            }
+            // 读失败 fail-open 零注入: 警告计数留痕, 不编造身份文本。
+            Err(_) => {
+                self.metrics.warning();
+                ModuleOutcome::continue_()
+            }
+        };
+        Ok(outcome)
     }
 }
 
@@ -1310,6 +1385,8 @@ pub struct MemoryWritebackModule {
     materializer: Arc<dyn MemoryMaterializerPort>,
     typed_sink: Option<Arc<dyn MemoryTypedMaterializationSink>>,
     consolidation: bool,
+    /// V4-a 人格记忆层: 人格提取步的落库面 (未配置 = 显式不跑, 默认未接线).
+    persona: Option<Arc<dyn PersonaMemoryStore>>,
     /// 「性格养成」第一铲: 整合节奏计数 (每会话回合数)。触发阈值 =
     /// 体验旋钮 ConsolidationCadence (每 N 回合一次, 1 = 每回合 = 现行为)。
     consolidation_turns: Mutex<std::collections::BTreeMap<String, u64>>,
@@ -1330,6 +1407,7 @@ impl MemoryWritebackModule {
             materializer: Arc::new(MemoryMaterializer::default()),
             typed_sink: None,
             consolidation: false,
+            persona: None,
             consolidation_turns: Mutex::new(std::collections::BTreeMap::new()),
             clock,
             metrics: ModuleMetrics::default(),
@@ -1379,6 +1457,14 @@ impl MemoryWritebackModule {
         self
     }
 
+    /// 接人格记忆层落库面 (V4-a): 整编触发点上加**人格提取步** (夜间整编与
+    /// 整编浅接面同一条管线)。默认未接线 —— 不配置即显式不跑 (0 装诚实)。
+    #[must_use]
+    pub fn with_persona_layer(mut self, persona: Arc<dyn PersonaMemoryStore>) -> Self {
+        self.persona = Some(persona);
+        self
+    }
+
     /// Attach a unified memory extractor for source compatibility. The materializer
     /// owns extraction for AfterTurn writeback.
     #[must_use]
@@ -1407,6 +1493,25 @@ impl MemoryWritebackModule {
         let counter = turns.entry(session.to_string()).or_insert(0);
         *counter = counter.saturating_add(1);
         *counter % cadence == 0
+    }
+
+    /// 人格提取步的素材口径: 治理可见的近期情节 (已遗忘情节不入料)。
+    /// 协调器缺席时退化为后端近况 —— 显式降级, 不是假素材。
+    fn persona_source_episodes(&self, session: &str) -> Result<Vec<Episode>, String> {
+        if let Some(coord) = &self.coordinator {
+            let governed = coord
+                .governance()
+                .governed_recent_episodes(session, 50)
+                .map_err(|error| error.to_string())?;
+            return Ok(governed
+                .into_iter()
+                .filter(|item| item.status != MemoryGovernanceStatus::Forgotten)
+                .map(|item| item.episode)
+                .collect());
+        }
+        self.memory
+            .recent_episodes(session, 50)
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -1591,6 +1696,19 @@ impl AgentModule for MemoryWritebackModule {
                                     if coord.writeback_episode(&episode).is_err() {
                                         self.metrics.warning();
                                     }
+                                }
+                            }
+                            Err(_) => self.metrics.warning(),
+                        }
+                    }
+                    // V4-a 人格提取步: 从近期情节提炼人格增量 → 合并策略 (同类合并 /
+                    // 矛盾标注「人格张力」, 不静默覆盖) → 人格层落库。与夜间整编共用
+                    // 同一条管线; persona 存储未配置 = 显式不跑 (默认未接线)。
+                    if let Some(persona) = &self.persona {
+                        match self.persona_source_episodes(&session) {
+                            Ok(episodes) => {
+                                if consolidate_persona(persona.as_ref(), &episodes, now).is_err() {
+                                    self.metrics.warning();
                                 }
                             }
                             Err(_) => self.metrics.warning(),
@@ -3030,6 +3148,106 @@ mod tests {
             .collect()
     }
 
+    /// V4-a 人格提取步: 整编触发点上从近期情节提炼人格增量 → 人格层落库;
+    /// 用户事实不入人格层 (分账); 重复回合幂等; 整编关 = 显式不跑.
+    #[tokio::test]
+    async fn persona_extraction_step_runs_with_the_consolidation_trigger() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        memory
+            .put_episode(&Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "主人喜欢乌龙茶".into(),
+                session_id: session.to_string(),
+            })
+            .unwrap();
+        let coordinator = Arc::new(MemoryCoordinator::new(memory.clone(), memory.clone()));
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        // 本轮回复是自述情节: 一句信念 + 一句底线.
+        let candidate = NormalizedResponse::text(
+            "answer-p",
+            "fake",
+            "我相信先验证再叙事。我绝不在未告知的情况下改用户数据。",
+        );
+
+        // 整编关 (默认): persona 面在场也不跑 —— 触发点就是整编触发点.
+        let silent_persona = Arc::new(apeireth_memory::InMemoryPersonaMemoryStore::new());
+        let off = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_persona_layer(silent_persona.clone());
+        off.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        assert!(
+            silent_persona.load().unwrap().all_entries().is_empty(),
+            "默认关: 不落人格沉淀 (0 装诚实)"
+        );
+
+        // 整编开 + persona 面配置: 人格提取步跑起来.
+        let persona = Arc::new(apeireth_memory::InMemoryPersonaMemoryStore::new());
+        let on = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_consolidation()
+            .with_persona_layer(persona.clone());
+        on.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        let loaded = persona.load().unwrap();
+        assert_eq!(loaded.core_beliefs.len(), 1, "自述信念入人格层");
+        assert_eq!(loaded.boundaries.len(), 1, "自述底线入人格层");
+        assert!(
+            loaded.preferences.is_empty(),
+            "用户事实 (主人喜欢乌龙茶) 不入人格层"
+        );
+        assert!(loaded.last_consolidation_at.is_some(), "最后整编真值已推进");
+
+        // 再跑一轮 (同一批素材): 幂等, 条目不增殖.
+        on.on_hook(
+            HookPoint::AfterTurn,
+            &context(
+                &session,
+                &messages,
+                Some(&candidate),
+                &invoker,
+                MEMORY_WRITEBACK_MODULE_ID,
+            ),
+        )
+        .await
+        .unwrap();
+        let again = persona.load().unwrap();
+        assert_eq!(again.core_beliefs.len(), 1);
+        assert_eq!(again.boundaries.len(), 1);
+    }
+
     #[tokio::test]
     async fn reflexion_records_judge_failures_and_injects_lessons() {
         use apeireth_memory::reflexion::ReflexionStore;
@@ -3421,5 +3639,172 @@ mod tests {
         let request = turn_request_from_perception(&event).unwrap();
         assert_eq!(request.session, session);
         assert_eq!(request.input, "hello");
+    }
+
+    /// V4-a 恒定小注入: TurnStart 注入自我叙事摘要, 与 [`build_constant_injection`]
+    /// 同一渲染同一恒预算 (超长截断 + 显式省略注记, 不静默裁剪)。
+    #[tokio::test]
+    async fn persona_constant_injection_is_wired_at_turn_start_with_the_fixed_budget() {
+        let persona = Arc::new(apeireth_memory::InMemoryPersonaMemoryStore::new());
+        let mut memory = apeireth_memory::PersonaMemory::default();
+        memory.apply_extract(
+            &apeireth_memory::PersonaExtract {
+                narrative_lines: vec![apeireth_memory::PersonaStatement {
+                    text: "我是一个先验证再叙事的记忆体。".to_string(),
+                    source_episode_id: "e-n".to_string(),
+                }],
+                ..Default::default()
+            },
+            1_728_400_000,
+        );
+        persona.save(&memory).unwrap();
+
+        let module = PersonaConstantInjectionModule::new(persona.clone());
+        let session = SessionId::new();
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let outcome = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(
+                    &session,
+                    &messages,
+                    None,
+                    &invoker,
+                    PERSONA_INJECTION_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        assert_eq!(outcome.prompt_overlays.len(), 1);
+        let text = ContentPart::join_text(&outcome.prompt_overlays[0].message().content);
+        assert_eq!(
+            text,
+            apeireth_memory::build_constant_injection(&persona.load().unwrap()),
+            "注入文本必须与回取面纯渲染逐字一致"
+        );
+        assert!(text.contains("【我是谁 · 恒定自述】"), "{text}");
+        assert!(text.contains("我是一个先验证再叙事的记忆体。"), "{text}");
+
+        // 恒预算钉死: 超长自述进注入面 = 400 字符头部 + 显式省略注记。
+        let mut long = apeireth_memory::PersonaMemory::default();
+        long.self_narrative = "认".repeat(600);
+        persona.save(&long).unwrap();
+        let outcome = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(
+                    &session,
+                    &messages,
+                    None,
+                    &invoker,
+                    PERSONA_INJECTION_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        let text = ContentPart::join_text(&outcome.prompt_overlays[0].message().content);
+        let body = text.trim_start_matches("【我是谁 · 恒定自述】\n");
+        let head: String = body
+            .chars()
+            .take(apeireth_memory::CONSTANT_INJECTION_BUDGET_CHARS)
+            .collect();
+        assert!(body.starts_with(&head), "恒预算头部必须逐字保留");
+        assert!(
+            body.contains("已省略"),
+            "超长截断必须留显式省略注记: {body}"
+        );
+        assert!(
+            body.chars().count() <= apeireth_memory::CONSTANT_INJECTION_BUDGET_CHARS + 32,
+            "恒预算溢出: {} 字符",
+            body.chars().count()
+        );
+    }
+
+    /// 无人格沉淀 = 零注入零变化: 空自述不发 overlay (未沉淀就是未沉淀, 不编)。
+    #[tokio::test]
+    async fn without_persona_sediment_the_turn_start_outcome_carries_no_overlay() {
+        let persona = Arc::new(apeireth_memory::InMemoryPersonaMemoryStore::new());
+        let module = PersonaConstantInjectionModule::new(persona);
+        let session = SessionId::new();
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let outcome = module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(
+                    &session,
+                    &messages,
+                    None,
+                    &invoker,
+                    PERSONA_INJECTION_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        assert!(
+            outcome.prompt_overlays.is_empty(),
+            "无沉淀必须零注入 (提示词逐字不变)"
+        );
+    }
+
+    /// 装配缝 (V4-a): 恒定注入模块只在人格层落库面在场时注册 —— 缺人格层 =
+    /// 不注册 = 零注入零变化。
+    #[tokio::test]
+    async fn the_injection_module_registers_only_with_a_persona_layer() {
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let mut config = CognitiveModuleConfig::default();
+        config.judge.enabled = false;
+        config.self_assessment = false;
+        let mem = Arc::new(FakeMemory::default());
+        let base = || CognitiveBackends {
+            memory: Some(mem.clone()),
+            memory_governance: Some(mem.clone()),
+            preferences: Some(Arc::new(FakePreferences)),
+            ..CognitiveBackends::default()
+        };
+
+        // 缺人格层: 模块不进装配 (零注入零变化)。
+        let absent = super::super::production::ProductionCognitiveModules::build(
+            config.clone(),
+            base(),
+            clock.clone(),
+        )
+        .unwrap();
+        assert!(
+            !absent
+                .ids()
+                .contains(&PERSONA_INJECTION_MODULE_ID.to_string()),
+            "缺人格层不得注册恒定注入模块: {:?}",
+            absent.ids()
+        );
+
+        // 有人格层: TurnStart 装配点收进恒定注入模块。
+        let present = super::super::production::ProductionCognitiveModules::build(
+            config,
+            CognitiveBackends {
+                persona_layer: Some(Arc::new(apeireth_memory::InMemoryPersonaMemoryStore::new())),
+                ..base()
+            },
+            clock,
+        )
+        .unwrap();
+        assert!(
+            present
+                .ids()
+                .contains(&PERSONA_INJECTION_MODULE_ID.to_string()),
+            "有人格层必须注册恒定注入模块: {:?}",
+            present.ids()
+        );
     }
 }

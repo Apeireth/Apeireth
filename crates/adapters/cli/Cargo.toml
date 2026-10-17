@@ -24,6 +24,9 @@ apeireth-protocol = { path = "../../foundation/protocol" }
 apeireth-provider = { path = "../../engine/provider" }
 apeireth-runtime = { path = "../../engine/runtime" }
 apeireth-runtime-assembly = { path = "../../engine/runtime-assembly" }
+# V3-a 双引擎主动关怀: 治理档钩子 (`CareScheduleApprovalHook`) 与关怀节时钟
+# (`SystemCareClock`) 的注册/接线面 (engine 层, 方向不变)。
+apeireth-organ = { path = "../../engine/organ" }
 apeireth-storage = { path = "../../engine/storage" }
 # 2026-09-08 用户旋钮批: shell/fetch 工具配置类型 (TrustedShellConfig / FetchConfig).
 apeireth-tools-canonical = { path = "../../capabilities/tools" }

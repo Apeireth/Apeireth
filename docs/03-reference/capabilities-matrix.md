@@ -46,7 +46,7 @@
 ### 0.2 默认能力表（审计修 A-10）
 
 按生产装配默认值（`crates/engine/runtime-assembly/src/canonical/production.rs`
-`ProductionModulesConfig::default()`，2026-10-16 核对）与 CLI env 旋钮实况。**默认 OFF 的能力
+`ProductionModulesConfig::default()`，2026-10-17 核对）与 CLI env 旋钮实况。**默认 OFF 的能力
 不是系统现状**，需显式 env 开启；未接线项如实标注。
 
 | 档 | 能力 | 开启方式 / 备注 |
@@ -55,6 +55,7 @@
 | **默认 ON** | 只读工具面：`filesystem` / `search` / `repo` | `APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 可关 |
 | **默认 ON**（CLI env 覆盖层未设即开） | 偏好学习 `preference_learning` / 主动召回 `proactive_recall` / 记忆注入格式 `memory_injection` / typed 召回 | `=0` 或对应 `APEIRETH_DISABLE_*=1` 关（DISABLE 优先） |
 | **默认 OFF（需 env 显式开启）** | shell（`APEIRETH_ENABLE_SHELL=1`，注册即审批级）/ fetch（`APEIRETH_ENABLE_FETCH=1`）/ content_feed / MCP（`mcp`） | 危险项维持默认关 |
+| **默认 OFF（需 env 显式开启）** | 双引擎关怀规则面 `care_schedule`（`APEIRETH_ENABLE_CARE=1`）/ 任务簿 `task_board`（`APEIRETH_ENABLE_TASK_BOARD=1`，写面审批级）/ 通用嗓发声 `voice_speak`（`APEIRETH_ENABLE_VOICE_SPEAK=1`）/ 备份导出 `backup_export`（`APEIRETH_ENABLE_BACKUP_EXPORT=1`） | 四开关都注册即闸（旋钮开才注入配置/队列/数据源）；自述名册 `care_schedule`/`task_board`/`voice_speak`/`backup_export` 行按实际注册条件取值 |
 | **默认 OFF（需 env 显式开启）** | Judge（`APEIRETH_COGNITIVE_JUDGE=1`）/ Council（`APEIRETH_COGNITIVE_COUNCIL=1`）/ 9 器官（`APEIRETH_ENABLE_ORGANS=1`）/ consolidation（`APEIRETH_ENABLE_CONSOLIDATION=1`）/ reflexion（`APEIRETH_ENABLE_REFLEXION=1`） | LLM 重的项默认关，逐项显式授权 |
 | **默认 OFF（需 env 显式开启）** | 写族：`file_write`（总闸 `APEIRETH_ENABLE_FILE_WRITE=1`）/ `git_write` / `worktree_plan` / `worktree_apply` / `skill_distill` / `skill_search` | 写总闸未开则写族工具注册不成（注册即闸） |
 | **默认 OFF（装配默认 false）** | `partner_bond` / `morphology_recall` / `community_triage` / `education` / `absorption_insight` | 库级在场，装配默认不接 |
@@ -119,7 +120,8 @@
 | **工具 (Capabilities)** | `tool.apply_patch` + **`file_write` 总闸** | `apeireth-tools-canonical::apply_patch` + 组装根同源开关 | `apply_patch(patch_str)`；主开关 `APEIRETH_ENABLE_FILE_WRITE`（默认关 fail-closed，注册即闸）+ 子档 `APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS`（仅已读文件的修改类补丁免逐次审批） | 已实证 | 工具 + 设置旋钮 |
 | **工具 (Capabilities)** | `tool.git_write`（三级） | `apeireth-tools-canonical::git_write` | `git_write(command_str)`：L1 可逆默认人批（可开 `APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1` 自动放行档）/ L2 出网永远人批 / L3 毁灭无工具面；词法分级+变形防护+组合取最严 | 已实证（[git-write-tiering-delivery.md](../04-internal/backend-enhancement/git-write-tiering-delivery.md)） | 工具 + IM 卡 |
 | **工具 (Capabilities)** | `tool.worktree_plan` / `tool.worktree_apply` | `apeireth-tools-canonical::worktree_plan` / `worktree_apply` | 只读改单（零审批）→ 受控四拍写（计划→改→验证→落，暂存面执行、读前观测门禁、全有或全无）；同受 `file_write` 总闸 | 已实证（[worktree-apply-delivery.md](../04-internal/backend-enhancement/worktree-apply-delivery.md)） | 工具 + IM 卡 |
-| **工具 (Capabilities)** | `tool.self_status`（自省通道） | `apeireth-tools-canonical::self_status` + `runtime-assembly::canonical::self_status_source` | 结构化自述 JSON：`identity / capabilities / memory_ledger / tuning / budget(含配额三维) / workspace / model / domain / content_feed`，字段恒在场、缺源显式 `null`+原因 | 已实证（装配级 e2e + 各批自述面测试） | 自审 |
+| **工具 (Capabilities)** | `tool.self_status`（自省通道） | `apeireth-tools-canonical::self_status` + `runtime-assembly::canonical::self_status_source` | 结构化自述 JSON：`identity / capabilities / memory_ledger / tuning / budget(含配额三维) / workspace / model / domain / content_feed / care / backup / voice / task_board / persona`（十四节冻结合同），节恒在场、缺源显式 `null`+原因 | 已实证（装配级 e2e + 各批自述面测试） | 自审 |
+| **工具 (Capabilities)** | `tool.task_board`（任务簿，V6-a） | `runtime-assembly::canonical::task_board_tool` + `orchestration::task_queue`（sqlite 任务表与会话账本同库） | `task_add` / `task_list`（只读零审批）/ `task_reassign` / `task_complete`（自报必须执行者本人）；写面 = 写文件同族每次人批；**无 failed/retry 面**（failed 只能人判，失败不自动重试）；崩溃恢复 running→pending+attempt、同键幂等单执行、任务链深度熔断 | 已实证（[V6-a-task-queue-delivery.md](../04-internal/backend-enhancement/V6-a-task-queue-delivery.md)） | 工具 + IM 卡 |
 | **工具 (Capabilities)** | `tool.mcp` | `apeireth-tools-canonical::mcp` + `apeireth-plugin::mcp` 协议客户端栈 | `initialize()` / `list_tools()` / `call_tool()`：外部工具审批级接入（默认人批，输出归一+脱敏），配置面+工具桥+治理映射，32 e2e | 已实证 | 工具 + IM 卡 |
 | **工具 (Capabilities)** | `tool.content_feed` | `apeireth-tools-canonical::content_feed`（订阅源面 `feeds.json` StoredDoc 拒开 + 摘要面 + 工具面） | `pull`（拉取+入库同调，每次都人批）/ `feed_add`·`feed_remove`（改订阅=写文件同族人批）/ `feed_list`（无免审动作）；产物经 L2 封套入记忆流 | **在建**（J1 线在途：工具面/订阅源面已见代码、交付记录随线落盘；本批实跑时点未编译收口，未能独立复证） | 待上屏（自述订阅节已备） |
 | **工具 (Capabilities)** | `tool.skill_distill` / `tool.skill_search` | `apeireth-tools-canonical::skill`（card / library / distill / search） | 书→技能沉淀三拍（来源采集只读通道→坏卡拒结构化→入技能库）；`SkillCard{id,name,summary,triggers[],body,source{kind,title},created_at}`；写文件面（`file_write` 总闸族）+ 每次沉淀人批 | **在建**（P1 线（原 I1；轴改名见审计修 D13）自报已交付、交付记录随线落盘——[P 轴分期](../04-internal/backend-enhancement/I-absorption-automation.md) 分期表（文件名保留旧名防断链）；本批实跑时点未编译收口，未能独立复证） | 工具 + IM 卡 |

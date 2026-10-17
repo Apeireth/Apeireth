@@ -12,8 +12,8 @@ use apeireth_core::kernel::{
 };
 use apeireth_protocol::canonical::ToolCall;
 use apeireth_runtime::canonical::{
-    approval_arguments_summary, approval_command_text, ApprovalStatus, FrozenTurnContinuation,
-    PendingApproval, Session, SessionEventKind, SessionStore,
+    approval_action_binding, approval_arguments_summary, approval_command_text, ApprovalStatus,
+    FrozenTurnContinuation, PendingApproval, Session, SessionEventKind, SessionStore,
 };
 use apeireth_runtime_assembly::SqliteSessionStore;
 
@@ -45,6 +45,13 @@ fn pending_approval(
         command_text: approval_command_text("shell", &call, None),
         arguments_summary: approval_arguments_summary("shell", &call),
         authorization_families: vec!["删除族".to_string()],
+        action_binding: Some(approval_action_binding(
+            "shell",
+            session_id,
+            "tool-schema-v1",
+            &call.arguments,
+            None,
+        )),
         operation_fingerprint: "fp-approval-history".into(),
         created_at: created,
         expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
@@ -114,6 +121,21 @@ async fn pending_approval_history_survives_a_session_store_reopen() {
         restored.effective_authorization_families(),
         vec!["删除族".to_string()],
         "审批族标注随记录存活"
+    );
+    // G2.5 跨重启持久: 动作摘要随审批记录落库 —— 重启后仍是批准时冻结的值,
+    // 执行边界拿它重算比对 (改载荷的会话恢复在边界被拒)。
+    let digest = restored
+        .action_binding_digest()
+        .expect("冻结绑定随记录存活");
+    assert_eq!(
+        restored.action_binding.as_ref().unwrap().digest(),
+        digest,
+        "摘要 = 冻结绑定的确定性摘要 (同动作恒同摘要)"
+    );
+    assert_eq!(
+        digest.len(),
+        64,
+        "摘要 = SHA-256 小写 hex (规范化序列化的确定性摘要)"
     );
     assert_eq!(
         reloaded.active_approval_id,

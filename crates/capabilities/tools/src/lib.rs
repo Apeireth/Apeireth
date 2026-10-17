@@ -16,6 +16,10 @@ pub mod apply_patch;
 // 受控文件写入生产工具面 (`tool.apply_patch`): 事务补丁原语 + 读前观测门禁
 // 接线 + 写入风险映射 (require-approval 档) + 单调边界 Guard + 五段流水线。
 pub mod apply_patch_tool;
+// G5 备份恢复 (伙伴的「记忆保险箱」): 备份格式 (目录快照 + manifest.json 逐文件
+// SHA-256 摘要) + 导出/恢复/校验引擎 (宁拒不损 + 原子落位 + 版本显式拒) +
+// `tool.backup_export` (凭据不随行, 密钥/令牌面显式排除)。
+pub mod backup;
 // 内容流接入 (J1「内容流接入」): 订阅源管理 (`feeds.json` StoredDoc 拒开) +
 // 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露, 跨源内容不直进提示词);
 // 治理 = RequireApproval 级 (拉取与入库都经审批档, 改订阅走 write_intent 同族)。
@@ -47,6 +51,11 @@ pub mod object_access;
 pub mod observed_gate;
 pub mod plugin;
 pub mod process;
+// 出境脱敏双向闸 (V5-a 安全守望): 占位不可逆指纹 (`__AP_<类>_<指纹12>__`,
+// 会话随机密钥 HMAC 截断) + 还原双闸 (只在受控回程 + 只认本会话登记簿) +
+// 历史回扫 (每次出境前扫工具轨迹/会话历史, 堵历史搭车) + 脱敏账本
+// (redaction.jsonl, 类别/指纹/时间/还原与否, 零真值入账)。
+pub mod redaction_bridge;
 pub mod repo;
 pub mod repo_map;
 pub mod search;
@@ -66,6 +75,10 @@ pub mod stealth_crawler;
 // v2.0.0-rc.1 RC-8: 加 std_sub_supervisor 模块 (真 impl, std::process::Command 同步启进程).
 pub mod std_sub_supervisor;
 pub mod supervisor;
+// 通用嗓 TTS 闭环 (V3-b): `tool.voice_speak` 发声面 (合成即播 + 受控播放 +
+// 语句账本 spoken.jsonl + 安静纪律), 治理 = 发声面档 (注册即闸, 与 shell
+// 的执行档分立)。
+pub mod voice;
 // 文件写入总闸的 shell 侧写意图词法扫描 (内测整改): 命中且总闸未开 → 拒绝即帧。
 pub mod write_intent;
 // 干活能力轴 P2 · 只读改单面 (`tool.worktree_plan`): 任务目标 → 改单
@@ -85,6 +98,14 @@ pub use apply_patch_tool::{
     ApplyPatchWriteBoundaryGuard, WriteReleaseClass, APPLY_PATCH_CAPABILITY_ID,
     APPLY_PATCH_TIMEOUT_MS, APPLY_PATCH_TOOL_DESCRIPTION, APPLY_PATCH_TOOL_NAME,
     GIT_WRITE_BOUNDARY_NOTE,
+};
+pub use backup::{
+    backup_status_probe, export_backup, read_backup_ledger, restore_backup, verify_backup,
+    BackupAudit, BackupCategory, BackupError, BackupExportConfig, BackupExportTool,
+    BackupFileEntry, BackupHooks, BackupItem, BackupLedger, BackupManifest, BackupRestoreReport,
+    BackupSources, ExcludedEntry, RestoreOptions, AUDIT_EVENT_EXPORT, AUDIT_EVENT_RESTORE,
+    BACKUP_EXPORT_CAPABILITY_ID, BACKUP_FORMAT_VERSION, BACKUP_LEDGER_FILE_NAME,
+    CREDENTIAL_ARTIFACTS_EXCLUDED, MANIFEST_FILE_NAME,
 };
 pub use content_feed::{
     content_feed_approval_reason, content_feed_capability, content_feed_pipeline, episode_for_item,
@@ -118,7 +139,9 @@ pub use git_write::{
     GIT_WRITE_CAPABILITY_ID, GIT_WRITE_TIMEOUT_MS, GIT_WRITE_TOOL_DESCRIPTION, GIT_WRITE_TOOL_NAME,
     REFUSAL_L3_PREFIX, REFUSAL_MORPH_PREFIX, REFUSAL_OFFLIST_PREFIX,
 };
-pub use guardrail::{LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult};
+pub use guardrail::{
+    EgressSweepResult, LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult,
+};
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
     McpToolDescriptor, McpToolResult, McpTransport,
@@ -143,17 +166,22 @@ pub use observed_gate::{
     WriteKind, WriteRequest,
 };
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
+pub use redaction_bridge::{
+    EgressRedaction, HistoryRescanReport, LedgerEntry, LedgerEvent, RedactionBridge, RedactionHit,
+    RedactionSurface, RestoreReport, REDACTION_LEDGER_FILE,
+};
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
 pub use self_status::{
     capability_roster, derive_tuning_preset, quota_cost_partial_note, render_snapshot,
-    BudgetStatus, CapabilitySwitch, ContentFeedStatus, DomainCounts, DomainStatus,
-    MemoryLedgerStats, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity,
-    SelfStatusSnapshot, SelfStatusSource, SelfStatusTool, SessionQuotaProbe, StatusProbe,
-    TuningStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
-    DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY,
-    PRESET_EFFORTLESS, PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED,
-    QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR,
+    BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus, ContentFeedStatus, DomainCounts,
+    DomainStatus, MemoryLedgerStats, PersonaStatusSection, QuotaDimensionStatus, QuotaMeterReading,
+    QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
+    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TuningStatus, VoiceStatus, WorkspaceStatus,
+    BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN,
+    PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS, PRICE_NOT_PROVIDED,
+    PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use skill::{
@@ -169,6 +197,14 @@ pub use skill::{
 };
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
+pub use voice::{
+    authorized_voice_speak_policy, system_synth_engine, voice_speak_capability,
+    voice_speak_pipeline, PlaybackPolicy, QuietClock, QuietHours, SpeakOutcome, SpokenLedger,
+    SpokenStatus, SpokenUtterance, SynthEngine, VoiceSpeakBoundaryGuard, VoiceSpeakConfig,
+    VoiceSpeakParams, VoiceSpeakRiskMappingHook, VoiceSpeakTool, DEFAULT_VOICE_LABEL,
+    SPOKEN_LEDGER_FILE, VOICE_SPEAK_CAPABILITY_ID, VOICE_SPEAK_MAX_TEXT_CHARS,
+    VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_TOOL_DESCRIPTION, VOICE_SPEAK_TOOL_NAME,
+};
 pub use worktree_apply::{
     apply_boundary_refusal, apply_summary, authorized_worktree_apply_policy,
     cross_check_change_order, prepare_apply, worktree_apply_capability, worktree_apply_pipeline,

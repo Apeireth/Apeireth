@@ -51,6 +51,7 @@ pub use apeireth_plugin::organ::{
     OrganOutput, OrganTrait, ValueVerdict,
 };
 
+pub mod care;
 pub mod causal_world_model;
 pub mod causal_world_model_edges;
 pub mod context_assembly;

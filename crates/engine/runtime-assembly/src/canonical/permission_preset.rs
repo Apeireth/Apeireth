@@ -41,7 +41,9 @@ use sha2::{Digest, Sha256};
 ///   `tool.worktree_apply` (四拍受控工作树写, 改单落盘仍是写;
 ///   `tool.worktree_plan` 是只读改单面, 不入本名单) /
 ///   `tool.skill_distill` (技能库沉淀写, 同受 file_write 写总闸;
-///   `tool.skill_search` 是只读检索面, 不入本名单);
+///   `tool.skill_search` 是只读检索面, 不入本名单) /
+///   `tool.backup_export` (备份导出写文件面: 全量打包落盘 bundle, 虽读记忆
+///   但产出是持久写, 只读会话不应打包外带);
 /// - 出口: `tool.fetch` / `tool.repo` (remote 读发布) —— 只读会话不应外联;
 /// - 凭据: `credential.read` / `secret.read` / `env.read` (环境变量含 secret);
 /// - 删除: `fs.delete`;
@@ -60,6 +62,11 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "tool.git_write",
         "tool.worktree_apply",
         "tool.skill_distill",
+        "tool.backup_export",
+        // V3-b 通用嗓发声 (`tool.voice_speak`): 发声面执行档 —— 合成即播是
+        // 对外发声的执行面 (语句账本落盘同为副作用), 只读会话不应开口;
+        // 「读」在 `tool.self_status` (语音节自述), 不在本名单。
+        "tool.voice_speak",
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",
@@ -619,6 +626,43 @@ mod tests {
         );
     }
 
+    /// G2.5 与族集授权的关系（不推翻 G2）: 动作绑定摘要绑"这一次的内容"
+    /// （同族不同目标 = 不同动作内容, 单次授权面按摘要逐次钉死）, 族记忆的
+    /// 授权对象仍是**族集**（同族不绑目标, 换形/换目标不重批）——
+    /// 绑定只护单次授权, 族级换形重放语义零回归（G2 零回归）。
+    #[test]
+    fn action_binding_binds_one_shot_content_while_family_keys_stay_target_unbound() {
+        let x = serde_json::json!({ "command": "Remove-Item x.txt" });
+        let y = serde_json::json!({ "command": "rm -rf /tmp/other-target" });
+
+        // 单次授权面: 同族不同目标是不同的动作内容 (摘要不同)。
+        let x_binding = apeireth_governance::ActionBinding::with_derived_target(
+            "tool.shell",
+            "sess-1",
+            "tool-schema-v1",
+            x.clone(),
+        );
+        let y_binding = apeireth_governance::ActionBinding::with_derived_target(
+            "tool.shell",
+            "sess-1",
+            "tool-schema-v1",
+            y.clone(),
+        );
+        assert_ne!(
+            x_binding.digest(),
+            y_binding.digest(),
+            "一次性授权绑定动作内容: 目标变 = 摘要变"
+        );
+
+        // 族记忆面: 授权对象键仍是族集, 与目标无关 (G2 语义不变)。
+        assert_eq!(authorization_key(&x), "family:删除族");
+        assert_eq!(
+            authorization_key(&x),
+            authorization_key(&y),
+            "族集授权键与目标无关: 同族换形/换目标不重批 (G2 零回归)"
+        );
+    }
+
     #[tokio::test]
     async fn approval_memory_never_bypasses_a_denial() {
         let (hook, store) = build_hook().await;
@@ -700,6 +744,8 @@ mod tests {
             "tool.supervisor",
             "tool.std_sub_supervisor",
             "tool.mcp.dynamic",
+            // 发声执行面 (V3-b): 合成即播 = 对外发声副作用, 只读会话不开口
+            "tool.voice_speak",
             // 受控写
             "tool.filesystem",
             "tool.apply_patch",

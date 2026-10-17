@@ -8,6 +8,12 @@
 //! * [`PromptInjectionHook`] and [`CredentialDisclosureHook`] are the policy
 //!   layer: they inspect capability-dispatch arguments and map findings to the
 //!   canonical [`Decision`] semantics (`Allow`, `Deny`, `RequireApproval`).
+//! * [`RedactionPlaceholder`] and [`session_fingerprint`] are the egress
+//!   placeholder primitives: true values become
+//!   `__AP_<CATEGORY>_<fingerprint12>__` tokens whose fingerprint is a keyed
+//!   MAC truncated to 12 hex digits (same session → stable alias, no value
+//!   recoverable from the token). The restore face parses this family strictly
+//!   and nothing else.
 //!
 //! These are **heuristic, pattern-based detectors**. They do not detect all
 //! secrets, and they do not prevent prompt injection. They detect the configured
@@ -24,6 +30,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::{Action, Decision, GovernanceHook, GovernanceRequest};
 
@@ -111,6 +118,47 @@ impl PiiKind {
             Self::CredentialUrl => "[REDACTED_URL_CREDENTIAL]",
             Self::EnvSecret => "[REDACTED_ENV_SECRET]",
         }
+    }
+
+    /// The uppercase category token used inside an egress placeholder
+    /// (`__AP_<CATEGORY>_<fingerprint12>__`).
+    pub const fn placeholder_category(self) -> &'static str {
+        match self {
+            Self::Email => "EMAIL",
+            Self::Phone => "PHONE",
+            Self::CredentialKey => "CREDENTIAL_KEY",
+            Self::Ssn => "SSN",
+            Self::CreditCard => "CREDIT_CARD",
+            Self::IpAddress => "IP_ADDRESS",
+            Self::CredentialUrl => "CREDENTIAL_URL",
+            Self::EnvSecret => "ENV_SECRET",
+        }
+    }
+
+    /// Map a placeholder category token back to its [`PiiKind`].
+    ///
+    /// Exact uppercase match only — the placeholder family is parsed strictly.
+    pub fn from_placeholder_category(category: &str) -> Option<Self> {
+        match category {
+            "EMAIL" => Some(Self::Email),
+            "PHONE" => Some(Self::Phone),
+            "CREDENTIAL_KEY" => Some(Self::CredentialKey),
+            "SSN" => Some(Self::Ssn),
+            "CREDIT_CARD" => Some(Self::CreditCard),
+            "IP_ADDRESS" => Some(Self::IpAddress),
+            "CREDENTIAL_URL" => Some(Self::CredentialUrl),
+            "ENV_SECRET" => Some(Self::EnvSecret),
+            _ => None,
+        }
+    }
+
+    /// Render the egress placeholder for this category and a 12-hex-digit
+    /// session fingerprint: `__AP_<CATEGORY>_<fingerprint12>__`.
+    pub fn placeholder_label(self, fingerprint12: &str) -> String {
+        format!(
+            "{REDACTION_PLACEHOLDER_PREFIX}{}_{fingerprint12}{REDACTION_PLACEHOLDER_SUFFIX}",
+            self.placeholder_category()
+        )
     }
 }
 
@@ -201,6 +249,175 @@ pub fn redact_secret_surfaces(text: &str) -> String {
     CREDENTIAL_REGEX
         .replace_all(&redacted, PiiKind::CredentialKey.redaction_label())
         .into_owned()
+}
+
+// ---------------------------------------------------------------------------
+// 出境占位符族 + 会话指纹 (出境脱敏双向闸的占位原语).
+//
+// 占位格式规格 (严格、可解析、单向):
+//
+// ```text
+//   placeholder := "__AP_" CATEGORY "_" FINGERPRINT12 "__"
+//   CATEGORY     := PiiKind 占位类别 (大写下划线词: EMAIL / PHONE /
+//                   CREDENTIAL_KEY / SSN / CREDIT_CARD / IP_ADDRESS /
+//                   CREDENTIAL_URL / ENV_SECRET)
+//   FINGERPRINT12 := 12 位小写十六进制 = HMAC-SHA256(会话密钥, 真值)
+//                   前 6 字节的十六进制
+// ```
+//
+// 性质:
+// * **同会话同值恒同占位** —— 指纹是密钥化 MAC, 同密钥同输入恒同输出,
+//   模型可跨轮关联同一实体;
+// * **跨会话换别名** —— 指纹随会话随机密钥变化, 不提供跨会话关联;
+// * **不可逆** —— 占位符只携带类别 + 12 位截断 MAC, 不含真值; 无会话密钥
+//   与登记簿无法反推真值 (HMAC 的单向性 + 截断信息量);
+// * **替换面只认占位符族** —— 还原面按本规格严格解析, `__AP_` 之外的任何
+//   字面量 (含 `[REDACTED_*]` 一族) 不属于占位族, 永不进入还原。
+// ---------------------------------------------------------------------------
+
+/// Placeholder prefix of the egress redaction family.
+pub const REDACTION_PLACEHOLDER_PREFIX: &str = "__AP_";
+
+/// Placeholder suffix of the egress redaction family.
+pub const REDACTION_PLACEHOLDER_SUFFIX: &str = "__";
+
+/// Exact length of the hex fingerprint carried by a placeholder.
+pub const REDACTION_FINGERPRINT_HEX_LEN: usize = 12;
+
+// 严格解析面: `__AP_<CATEGORY>_<12 位小写 hex>__`。贪婪/懒惰歧义由固定长度
+// 的指纹段消解 —— 类别段吃到指纹前最后一个下划线为止。
+static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"__AP_([A-Z][A-Z0-9_]*?)_([0-9a-f]{12})__")
+        .expect("static placeholder pattern must compile")
+});
+
+/// One parsed egress placeholder.
+///
+/// A placeholder deliberately carries **no value**: only the semantic category
+/// and the session fingerprint. Restoration is impossible from the token alone
+/// (see `session_fingerprint`).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RedactionPlaceholder {
+    pub kind: PiiKind,
+    /// 12 位小写十六进制会话指纹.
+    pub fingerprint: String,
+}
+
+/// One placeholder occurrence in scanned text (`start`/`end` are byte offsets
+/// into the scanned input, same convention as [`PiiFinding`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RedactionPlaceholderMatch {
+    pub placeholder: RedactionPlaceholder,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl RedactionPlaceholder {
+    /// Build a placeholder from a category and a 12-hex-digit fingerprint.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `fingerprint12` is not exactly 12 lowercase hex digits.
+    /// Callers pass [`session_fingerprint`] output, which is always well
+    /// formed; untrusted text must go through [`RedactionPlaceholder::parse`].
+    pub fn new(kind: PiiKind, fingerprint12: &str) -> Self {
+        assert!(
+            is_fingerprint12(fingerprint12),
+            "fingerprint must be 12 lowercase hex digits"
+        );
+        Self {
+            kind,
+            fingerprint: fingerprint12.to_string(),
+        }
+    }
+
+    /// Render the canonical token: `__AP_<CATEGORY>_<fingerprint12>__`.
+    pub fn render(&self) -> String {
+        self.kind.placeholder_label(&self.fingerprint)
+    }
+
+    /// Strictly parse one token. Anything outside the placeholder family
+    /// returns `None` — the restore face recognizes this family only.
+    pub fn parse(token: &str) -> Option<Self> {
+        let captures = PLACEHOLDER_REGEX.captures(token)?;
+        let whole = captures.get(0)?;
+        if whole.start() != 0 || whole.end() != token.len() {
+            return None;
+        }
+        let kind = PiiKind::from_placeholder_category(&captures[1])?;
+        Some(Self {
+            kind,
+            fingerprint: captures[2].to_string(),
+        })
+    }
+
+    /// Every well-formed placeholder occurrence in `text`, in text order.
+    pub fn scan(text: &str) -> Vec<RedactionPlaceholderMatch> {
+        PLACEHOLDER_REGEX
+            .captures_iter(text)
+            .filter_map(|captures| {
+                let kind = PiiKind::from_placeholder_category(&captures[1])?;
+                let whole = captures.get(0)?;
+                Some(RedactionPlaceholderMatch {
+                    placeholder: RedactionPlaceholder {
+                        kind,
+                        fingerprint: captures[2].to_string(),
+                    },
+                    start: whole.start(),
+                    end: whole.end(),
+                })
+            })
+            .collect()
+    }
+}
+
+fn is_fingerprint12(value: &str) -> bool {
+    value.len() == REDACTION_FINGERPRINT_HEX_LEN
+        && value
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// Session fingerprint of a true value: `HMAC-SHA256(session_key, value)`,
+/// truncated to its first 6 bytes rendered as 12 lowercase hex digits.
+///
+/// * same session key + same value → same fingerprint (stable alias);
+/// * different session key → different fingerprint (no cross-session link);
+/// * value cannot be recovered from the fingerprint (keyed MAC + truncation).
+pub fn session_fingerprint(session_key: &[u8], value: &str) -> String {
+    let mac = hmac_sha256(session_key, value.as_bytes());
+    let mut out = String::with_capacity(REDACTION_FINGERPRINT_HEX_LEN);
+    for byte in &mac[..REDACTION_FINGERPRINT_HEX_LEN / 2] {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+/// HMAC-SHA256 (RFC 2104 construction) composed from `sha2` alone, so the
+/// workspace gains no new external dependency for keyed fingerprints.
+fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
+    const BLOCK_SIZE: usize = 64;
+    let mut key_block = [0u8; BLOCK_SIZE];
+    if key.len() > BLOCK_SIZE {
+        let hashed = Sha256::digest(key);
+        key_block[..hashed.len()].copy_from_slice(&hashed);
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+    let mut ipad = [0x36u8; BLOCK_SIZE];
+    let mut opad = [0x5cu8; BLOCK_SIZE];
+    for i in 0..BLOCK_SIZE {
+        ipad[i] ^= key_block[i];
+        opad[i] ^= key_block[i];
+    }
+    let mut inner = Sha256::new();
+    inner.update(ipad);
+    inner.update(message);
+    let inner_hash = inner.finalize();
+    let mut outer = Sha256::new();
+    outer.update(opad);
+    outer.update(inner_hash);
+    outer.finalize().into()
 }
 
 fn collect_findings(text: &str, regex: &Regex, kind: PiiKind, out: &mut Vec<PiiFinding>) {
@@ -672,5 +889,120 @@ mod tests {
         assert!(redacted.contains("[REDACTED_IP]"));
         assert!(redacted.contains("[REDACTED_URL_CREDENTIAL]"));
         assert!(redacted.contains("API_KEY=[REDACTED_ENV_SECRET]"));
+    }
+
+    // --- 出境占位符族 + 会话指纹 -------------------------------------------
+
+    #[test]
+    fn placeholder_render_parse_roundtrip_all_categories() {
+        let fp = "a1b2c3d4e5f6";
+        for kind in [
+            PiiKind::Email,
+            PiiKind::Phone,
+            PiiKind::CredentialKey,
+            PiiKind::Ssn,
+            PiiKind::CreditCard,
+            PiiKind::IpAddress,
+            PiiKind::CredentialUrl,
+            PiiKind::EnvSecret,
+        ] {
+            let token = kind.placeholder_label(fp);
+            assert!(token.starts_with("__AP_"), "{token}");
+            assert!(token.ends_with("__"), "{token}");
+            let parsed = RedactionPlaceholder::parse(&token)
+                .unwrap_or_else(|| panic!("family token must parse: {token}"));
+            assert_eq!(parsed.kind, kind);
+            assert_eq!(parsed.fingerprint, fp);
+            assert_eq!(parsed.render(), token);
+        }
+    }
+
+    #[test]
+    fn placeholder_parse_is_strict_family_only() {
+        for token in [
+            "[REDACTED_EMAIL]",
+            "__AP_EMAIL_A1B2C3D4E5F6__",    // 指纹大写 hex 不收
+            "__AP_EMAIL_a1b2c3__",          // 指纹长度不足
+            "__AP_EMAIL_a1b2c3d4e5f6789__", // 指纹超长
+            "__AP_UNKNOWN_a1b2c3d4e5f6__",  // 未知类别
+            "__AP_EMAIL_a1b2c3d4e5f6",      // 缺后缀
+            "x__AP_EMAIL_a1b2c3d4e5f6__y",  // parse 是全串口径
+            "__AP__a1b2c3d4e5f6__",         // 缺类别
+        ] {
+            assert!(
+                RedactionPlaceholder::parse(token).is_none(),
+                "{token} 不属于占位族, 不得解析"
+            );
+        }
+    }
+
+    #[test]
+    fn placeholder_scan_finds_family_only_with_byte_offsets() {
+        let token = PiiKind::Email.placeholder_label("a1b2c3d4e5f6");
+        let text = format!("联系 {token} 或 [REDACTED_EMAIL] 结束");
+        let matches = RedactionPlaceholder::scan(&text);
+        assert_eq!(matches.len(), 1, "只认占位族: {matches:?}");
+        assert_eq!(matches[0].placeholder.kind, PiiKind::Email);
+        assert_eq!(&text[matches[0].start..matches[0].end], token);
+    }
+
+    #[test]
+    fn session_fingerprint_matches_rfc4231_hmac_sha256_vectors() {
+        // RFC 4231 test cases 1 / 2 / 6 (case 6 覆盖密钥长于分组的分支).
+        let case1 = hmac_sha256(&[0x0b; 20], b"Hi There");
+        assert_eq!(
+            hex_lower(&case1),
+            "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+        );
+        let case2 = hmac_sha256(b"Jefe", b"what do ya want for nothing?");
+        assert_eq!(
+            hex_lower(&case2),
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
+        let case6 = hmac_sha256(
+            &[0xaa; 131],
+            b"Test Using Larger Than Block-Size Key - Hash Key First",
+        );
+        assert_eq!(
+            hex_lower(&case6),
+            "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"
+        );
+    }
+
+    fn hex_lower(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn session_fingerprint_is_stable_keyed_and_truncated() {
+        let value = "test.user@example.com";
+        let fp_a = session_fingerprint(b"session-key-a", value);
+        assert_eq!(fp_a.len(), REDACTION_FINGERPRINT_HEX_LEN);
+        assert!(is_fingerprint12(&fp_a), "{fp_a}");
+        // 同会话同值恒同指纹 (确定性别名).
+        assert_eq!(fp_a, session_fingerprint(b"session-key-a", value));
+        // 跨会话换别名.
+        assert_ne!(fp_a, session_fingerprint(b"session-key-b", value));
+        // 密钥化: 不是真值(或其普通哈希)的裸前缀 —— 无密钥无法复算/比对.
+        let plain = Sha256::digest(value.as_bytes());
+        assert_ne!(fp_a, hex_lower(&plain)[..REDACTION_FINGERPRINT_HEX_LEN]);
+        assert!(!value.contains(&fp_a));
+    }
+
+    #[test]
+    fn placeholder_token_carries_no_true_value() {
+        let value = "sk-1234567890abcdef1234567890";
+        let fp = session_fingerprint(b"session-key-a", value);
+        let token = PiiKind::CredentialKey.placeholder_label(&fp);
+        assert!(!token.contains(value), "{token}");
+        assert_eq!(
+            RedactionPlaceholder::parse(&token).map(|p| p.kind),
+            Some(PiiKind::CredentialKey)
+        );
+        // 结构上只携带 类别 + 12 位截断 MAC, 无真值槽位.
+        assert_eq!(
+            token.len(),
+            "__AP_".len() + "CREDENTIAL_KEY".len() + 1 + 12 + 2
+        );
     }
 }

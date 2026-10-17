@@ -135,4 +135,18 @@ impl MemoryConsolidationJob {
         let _ = session_id;
         Ok(output)
     }
+
+    /// 人格提取步 (夜间整编入口): 从近期情节提炼人格增量 → 合并策略 (同类合并 /
+    /// 矛盾标注「人格张力」, 不静默覆盖) → 落库。
+    ///
+    /// 与整编浅接面共用 [`crate::persona_layer::consolidate_persona`] 同一条
+    /// 管线 (0 模型调用, 幂等)。素材口径: 调用方传治理可见情节。
+    pub fn consolidate_persona(
+        &self,
+        store: &dyn crate::persona_layer::PersonaMemoryStore,
+        episodes: &[Episode],
+        now: i64,
+    ) -> Result<crate::persona_layer::PersonaConsolidationReport, MemoryError> {
+        crate::persona_layer::consolidate_persona(store, episodes, now)
+    }
 }

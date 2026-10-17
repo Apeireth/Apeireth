@@ -28,6 +28,10 @@ futures = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# G5 备份恢复: manifest 逐文件 SHA-256 摘要 (损坏可检出)。workspace 既有依赖
+# (guard/gateway/memory 等同源), 非新外部包; 归档容器 (tar/zip 类) 都需新依赖,
+# 故备份格式选目录快照 + 逐文件摘要 (0 引新外部包)。
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 url = "2.5.8"

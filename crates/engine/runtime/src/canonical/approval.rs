@@ -10,9 +10,10 @@
 //! orchestration root that acts on them.
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_governance::action_binding::ActionBinding;
 use apeireth_governance::approval_family::family_ids_for_arguments;
 use apeireth_governance::{redact_secret_surfaces, TurnSecurityContext};
-use apeireth_plugin::FrozenInvocation;
+use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{NormalizedUsage, ToolCall};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -261,6 +262,15 @@ pub struct PendingApproval {
     /// 映射生效（命令→族映射后生效，不失效重批）。
     #[serde(default)]
     pub authorization_families: Vec<String>,
+    /// G2.5 动作绑定（审批时冻结）：被批动作内容（操作 / 执行主体 / 目标 /
+    /// 工具面版本 / 结构化 argv）的**绑定**，摘要随记录落库（跨重启持久）。
+    /// 执行边界重算比对（[`approval_action_binding`]），载荷被改（参数 / 目标 /
+    /// 顺序变）→ 摘要不符 → 拒绝即帧 + `approval.binding_mismatch` 审计。
+    ///
+    /// `#[serde(default)]`：本字段加入前持久化的存量记录读入为 `None` ——
+    /// 迁移面**不给假摘要**，执行边界退为逐字载荷比对（仍拒载荷替换）。
+    #[serde(default)]
+    pub action_binding: Option<ActionBinding>,
     /// Canonical fingerprint over every operation-relevant field.
     pub operation_fingerprint: String,
     pub created_at: Timestamp,
@@ -294,6 +304,13 @@ impl PendingApproval {
             return self.authorization_families.clone();
         }
         family_ids_for_arguments(&self.tool_call.arguments)
+    }
+
+    /// 本记录的动作绑定摘要（G2.5）：审批时冻结、随记录落库（跨重启持久）。
+    /// 存量记录（[`PendingApproval::action_binding`] 字段加入前持久化）为
+    /// `None` —— 迁移面不给假摘要，执行边界退为逐字载荷比对。
+    pub fn action_binding_digest(&self) -> Option<String> {
+        self.action_binding.as_ref().map(ActionBinding::digest)
     }
 }
 
@@ -329,6 +346,11 @@ pub struct PendingApprovalView {
     /// 迁移语义映射后随视图给出）。
     #[serde(default)]
     pub authorization_families: Vec<String>,
+    /// G2.5 动作摘要（短摘要即全量载荷的 SHA-256 hex）：审批卡"动作摘要"行
+    /// 与执行边界比对的锚。存量记录（无冻结绑定）为空串 —— 明示不给假摘要。
+    /// 视图只出摘要，不出绑定载荷（短摘要非全量载荷）。
+    #[serde(default)]
+    pub action_binding_digest: String,
     pub created_at: Timestamp,
     pub expires_at: Timestamp,
     pub operation_fingerprint: String,
@@ -362,6 +384,7 @@ impl From<&PendingApproval> for PendingApprovalView {
             command_text: value.command_text.clone(),
             arguments_summary: value.arguments_summary.clone(),
             authorization_families: value.effective_authorization_families(),
+            action_binding_digest: value.action_binding_digest().unwrap_or_default(),
             created_at: value.created_at,
             expires_at: value.expires_at,
             operation_fingerprint: value.operation_fingerprint.clone(),
@@ -455,45 +478,51 @@ fn compact_json(value: &serde_json::Value) -> String {
 }
 
 /// Canonical deterministic JSON representation used for fingerprints.
+///
+/// G2.5 起委托治理层单一来源（`apeireth_governance::action_binding`，自研
+/// 规范化函数）：对象键排序 / 数组保序 / 字符串最小转义 / 零空白，
+/// 字节语义由治理层测试向量钉死。
 pub fn canonical_json_bytes(value: &serde_json::Value) -> Vec<u8> {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut entries: Vec<(&String, &serde_json::Value)> = map.iter().collect();
-            entries.sort_by(|a, b| a.0.cmp(b.0));
-            let mut out = Vec::with_capacity(64);
-            out.push(b'{');
-            for (i, (key, value)) in entries.iter().enumerate() {
-                if i > 0 {
-                    out.push(b',');
-                }
-                out.extend_from_slice(&canonical_json_bytes(&serde_json::Value::String(
-                    (*key).clone(),
-                )));
-                out.push(b':');
-                out.extend_from_slice(&canonical_json_bytes(value));
-            }
-            out.push(b'}');
-            out
-        }
-        serde_json::Value::Array(items) => {
-            let mut out = Vec::with_capacity(64);
-            out.push(b'[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(b',');
-                }
-                out.extend_from_slice(&canonical_json_bytes(item));
-            }
-            out.push(b']');
-            out
-        }
-        serde_json::Value::String(s) => {
-            serde_json::to_vec(s).expect("string serialization is infallible")
-        }
-        serde_json::Value::Null => b"null".to_vec(),
-        serde_json::Value::Bool(b) => b.to_string().into_bytes(),
-        serde_json::Value::Number(n) => n.to_string().into_bytes(),
-    }
+    apeireth_governance::action_binding::canonical_json_bytes(value)
+}
+
+/// 工具面版本摘要（G2.5 ActionBinding 的 `tool_schema_version`）：
+/// 工具声明（name / description / parameters / strict）的规范化摘要。
+/// 工具面变更 → 摘要变 → 既有批准失效（执行边界重算比对）。
+pub fn tool_schema_version_digest(tool: &dyn ToolCapability) -> String {
+    let declaration = serde_json::to_value(tool.declaration()).unwrap_or(serde_json::Value::Null);
+    let mut hasher = Sha256::new();
+    hasher.update(canonical_json_bytes(&declaration));
+    format!("{:x}", hasher.finalize())
+}
+
+/// 运行时动作绑定取值（G2.5）：
+///
+/// * `operation` = 模型面工具名；
+/// * `agent` = 会话身份；
+/// * `target` = 目标派生（[`ActionBinding::derive_target`]：`command` / `path`）；
+/// * `tool_schema_version` = [`tool_schema_version_digest`]；
+/// * `parameters` = `{arguments, invocation}` —— 结构化 argv 与执行载荷全集
+///   （数组顺序是语义的一部分：改参数 / 改目标 / 改顺序都得不出同一摘要）。
+pub fn approval_action_binding(
+    tool_name: &str,
+    session_id: SessionId,
+    tool_schema_version: &str,
+    arguments: &serde_json::Value,
+    effective_invocation: Option<&FrozenInvocation>,
+) -> ActionBinding {
+    let target = ActionBinding::derive_target(arguments);
+    let parameters = serde_json::json!({
+        "arguments": arguments,
+        "invocation": effective_invocation.map(|frozen| frozen.payload.clone()),
+    });
+    ActionBinding::new(
+        tool_name,
+        session_id.to_string(),
+        target,
+        tool_schema_version,
+        parameters,
+    )
 }
 
 /// Compute the canonical operation fingerprint for one tool dispatch.
@@ -765,6 +794,7 @@ mod tests {
             command_text: approval_command_text("shell", &call, None),
             arguments_summary: approval_arguments_summary("shell", &call),
             authorization_families: vec!["删除族".to_string()],
+            action_binding_digest: String::new(),
             created_at: Timestamp::from_epoch_millis(1_700_000_000_000).unwrap(),
             expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
             operation_fingerprint: "fp".into(),
@@ -804,6 +834,7 @@ mod tests {
             command_text: String::new(),
             arguments_summary: String::new(),
             authorization_families: Vec::new(),
+            action_binding_digest: String::new(),
             created_at: Timestamp::from_epoch_millis(1_700_000_000_000).unwrap(),
             expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),
             operation_fingerprint: "fp".into(),
@@ -854,6 +885,67 @@ mod tests {
         assert_eq!(view.authorization_families, vec!["删除族"]);
     }
 
+    /// G2.5 跨重启持久: 动作摘要随审批记录落库 —— 序列化 round-trip 后
+    /// 绑定与摘要原样存活, 视图只出摘要（短摘要非全量载荷）。
+    #[test]
+    fn action_binding_digest_persists_with_the_approval_record() {
+        let pending = pending_delete_approval(vec!["删除族".to_string()]);
+        let digest = pending
+            .action_binding_digest()
+            .expect("new records freeze a binding");
+
+        let blob = serde_json::to_string(&pending).unwrap();
+        let restored: PendingApproval = serde_json::from_str(&blob).unwrap();
+        assert_eq!(
+            restored.action_binding_digest(),
+            Some(digest.clone()),
+            "摘要必须随记录跨重启存活"
+        );
+        assert_eq!(restored.action_binding.as_ref().unwrap().digest(), digest);
+
+        let view = PendingApprovalView::from(&restored);
+        assert_eq!(view.action_binding_digest, digest);
+        let json = serde_json::to_value(&view).unwrap();
+        assert_eq!(json["action_binding_digest"], digest);
+
+        // 载荷被改（参数变）→ 重算摘要不符（执行边界拒绝的依据）。
+        let mut tampered = restored.clone();
+        tampered.tool_call.arguments = serde_json::json!({ "command": "Remove-Item y.txt" });
+        let live = approval_action_binding(
+            "shell",
+            restored.session_id,
+            "tool-schema-v1",
+            &tampered.tool_call.arguments,
+            None,
+        );
+        assert_ne!(live.digest(), digest, "改参数必须得出不同摘要");
+    }
+
+    /// G2.5 存量记录迁移面（不给假摘要）: 绑定字段加入前持久化的记录读入为
+    /// `None`, 摘要为空 —— 执行边界退为逐字载荷比对, 不伪造未冻结的摘要。
+    #[test]
+    fn records_before_the_binding_field_migrate_without_a_fake_digest() {
+        let pending = pending_delete_approval(Vec::new());
+        let mut json = serde_json::to_value(&pending).unwrap();
+        json.as_object_mut().unwrap().remove("action_binding");
+        let migrated: PendingApproval = serde_json::from_value(json).unwrap();
+        assert!(migrated.action_binding.is_none());
+        assert_eq!(migrated.action_binding_digest(), None);
+        let view = PendingApprovalView::from(&migrated);
+        assert!(view.action_binding_digest.is_empty());
+        let view_json = serde_json::to_value(&view).unwrap();
+        assert_eq!(view_json["action_binding_digest"], "");
+
+        // 视图序列化面兼容: 旧载荷无摘要字段照读。
+        let mut old_view = serde_json::to_value(&view).unwrap();
+        old_view
+            .as_object_mut()
+            .unwrap()
+            .remove("action_binding_digest");
+        let restored: PendingApprovalView = serde_json::from_value(old_view).unwrap();
+        assert!(restored.action_binding_digest.is_empty());
+    }
+
     /// 测试件: 一条 `Remove-Item x.txt`（删除族）待批记录。
     fn pending_delete_approval(authorization_families: Vec<String>) -> PendingApproval {
         let call = ToolCall {
@@ -862,9 +954,10 @@ mod tests {
             arguments: serde_json::json!({ "command": "Remove-Item x.txt" }),
         };
         let created = Timestamp::from_epoch_millis(1_700_000_000_000).unwrap();
+        let session_id = SessionId::new();
         PendingApproval {
             approval_id: ApprovalId::new(),
-            session_id: SessionId::new(),
+            session_id,
             request_id: RequestId::new(),
             trace_id: TraceId::new(),
             round: 1,
@@ -877,6 +970,13 @@ mod tests {
             command_text: approval_command_text("shell", &call, None),
             arguments_summary: approval_arguments_summary("shell", &call),
             authorization_families,
+            action_binding: Some(approval_action_binding(
+                "shell",
+                session_id,
+                "tool-schema-v1",
+                &call.arguments,
+                None,
+            )),
             operation_fingerprint: "fp".into(),
             created_at: created,
             expires_at: Timestamp::from_epoch_millis(1_700_000_300_000).unwrap(),

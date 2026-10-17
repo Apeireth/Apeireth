@@ -96,8 +96,11 @@ pub mod runtime_invariants;
 // 「性格养成」第一铲: 自动校准引擎 (体验参数微调, 可见/可撤销/记录透明)。
 pub mod self_tuning;
 pub mod speech_arbiter;
+// 持久任务队列 (V6-a): 状态机 + 幂等唤醒 + 崩溃恢复 + 环路熔断 + 结算接账
+// (Turn 结算挂任务账, 只接账不重复记)。
 /// 生产 Orchestrator: LLM 驱动 subagent 调度 (2026-10-10, worktree 装饰器的主角)。
 pub mod subagent_llm;
+pub mod task_queue;
 pub mod token_meter;
 // 跨会话引用封套（不受信任背景 + 按预算披露）: 固定警告头 + 边界标记 + 每源预算 + 省略三态措辞。
 pub mod untrusted_envelope;
@@ -196,6 +199,12 @@ pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
 };
 pub use subagent_llm::{HumanApprovalGate, LlmSubagentOrchestrator};
+pub use task_queue::{
+    EnqueueOutcome, InMemoryTaskStore, SettlementOutcome, TaskBoardCounts, TaskCaller, TaskClockMs,
+    TaskEvent, TaskQueue, TaskQueueConfig, TaskQueueError, TaskQueueErrorCode, TaskQueueResult,
+    TaskRecord, TaskSettlement, TaskSpec, TaskState, TaskStore, TaskWake, DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_MAX_CHAIN_DEPTH,
+};
 pub use token_meter::{
     envelope_of, fold_chars, fold_text, Calibration, MeterReading, MeteredEnvelope, TokenMeter,
     UsageAnchor,

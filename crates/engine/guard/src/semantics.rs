@@ -151,6 +151,7 @@ pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "tool.git_write",
     "tool.self_status",
     "tool.content_feed",
+    "tool.backup_export",
 ];
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -623,6 +624,34 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             "governance",
         ),
+        // 备份导出 (`tool.backup_export`, G5 备份恢复): 读记忆/账本正文 +
+        // 写备份 bundle 双面。凭据面如实为 false —— 密钥/令牌面**显式排除**
+        // (凭据不随行, 排除表 + 测试钉死), 打包面不含凭据件; 备份本体是
+        // 持久写 (persistent_effect), 无外联、无删除入口 (destructive false)。
+        // 敏感档如实升 MemoryPrivate (打包的是记忆正文, 非工作区元数据)。
+        {
+            let mut descriptor = describe(
+                "tool.backup_export",
+                vec![
+                    OperationClass::Read,
+                    OperationClass::MemoryRead,
+                    OperationClass::Write,
+                ],
+                vec![
+                    ResourceClass::MemoryEpisodic,
+                    ResourceClass::FilesystemSystem,
+                ],
+                vec![SourceClass::PrivateMemory],
+                vec![SinkClass::SystemFile],
+                false,
+                false,
+                true,
+                false,
+                "backup",
+            );
+            descriptor.data_sensitivity = DataSensitivity::MemoryPrivate;
+            descriptor
+        },
     ]
 }
 

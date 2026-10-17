@@ -526,6 +526,7 @@ mod tests {
             command_text: "gated".into(),
             arguments_summary: "{}".into(),
             authorization_families: Vec::new(),
+            action_binding_digest: String::new(),
             created_at: at,
             expires_at: at,
             operation_fingerprint: "fp".into(),

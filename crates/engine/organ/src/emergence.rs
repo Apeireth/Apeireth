@@ -731,6 +731,15 @@ pub fn minutes_of_day_from_epoch_ms(at_ms: i64) -> u32 {
     mins.min(1439)
 }
 
+/// epoch ms → (年, 月, 日) UTC 公历三元组。
+///
+/// **用途**: 双引擎关怀 (`care` 模块) 的作息时刻/纪念日推算与跨日去重, 与
+/// [`day_key_from_epoch_ms`] / [`minutes_of_day_from_epoch_ms`] 同一套公历
+/// 算法 (复用不重复, 不另造日期口径)。
+pub fn ymd_from_epoch_ms(at_ms: i64) -> (i64, u32, u32) {
+    days_since_epoch_to_ymd(at_ms.div_euclid(86_400_000))
+}
+
 /// 距 epoch 的天数 → (年, 月, 日). Gregorian 算法 (per Howard Hinnant `civil_from_days`).
 fn days_since_epoch_to_ymd(days_since_epoch: i64) -> (i64, u32, u32) {
     let z = days_since_epoch + 719468;

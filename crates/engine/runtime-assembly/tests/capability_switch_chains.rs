@@ -404,3 +404,67 @@ impl AssociationStore for FakeAssociations {
         Ok(Vec::new())
     }
 }
+
+// ---------------------------------------------------------------------
+// 口径随行: capabilities-matrix §0.2 开关行与能力名册实况一致
+// ---------------------------------------------------------------------
+
+/// §0.2 默认能力表的四开关行 (care / task_board / voice_speak / backup_export)
+/// 与名册实况同真值: 文档行写明 env 旋钮名与名册行名, 名册行按**实际注册
+/// 条件**取值 (配置槽注入才算生效, 注册即闸) —— 口径行与实况互钉。
+#[test]
+fn matrix_switch_rows_match_the_live_roster() {
+    // 文档面: §0.2 有四开关的 env 旋钮名与名册行名。
+    const MATRIX: &str = include_str!("../../../../docs/03-reference/capabilities-matrix.md");
+    let start = MATRIX.find("### 0.2").expect("§0.2 present");
+    let end = MATRIX[start..]
+        .find("\n---")
+        .map(|offset| start + offset)
+        .unwrap_or(MATRIX.len());
+    let section = &MATRIX[start..end];
+    for needle in [
+        "APEIRETH_ENABLE_CARE",
+        "APEIRETH_ENABLE_TASK_BOARD",
+        "APEIRETH_ENABLE_VOICE_SPEAK",
+        "APEIRETH_ENABLE_BACKUP_EXPORT",
+        "care_schedule",
+        "task_board",
+        "voice_speak",
+        "backup_export",
+    ] {
+        assert!(section.contains(needle), "§0.2 缺开关行口径: {needle}");
+    }
+
+    // 实况面: 名册有这四行; 配置槽缺席照实 false (不复述"配置说开")。
+    let config = ProductionModulesConfig::default();
+    let roster = apeireth_runtime_assembly::roster_from_config(&config, true, false, false, &[]);
+    let enabled = |roster: &[apeireth_tools_canonical::CapabilitySwitch], name: &str| {
+        roster
+            .iter()
+            .find(|row| row.name == name)
+            .unwrap_or_else(|| panic!("名册缺行 {name}"))
+            .enabled
+    };
+    assert!(
+        !enabled(&roster, "care_schedule"),
+        "数据目录槽缺席 = 照实 false"
+    );
+    assert!(
+        !enabled(&roster, "task_board"),
+        "任务队列槽缺席 = 照实 false"
+    );
+    assert!(
+        !enabled(&roster, "voice_speak"),
+        "发声配置槽缺席 = 照实 false"
+    );
+    assert!(
+        !enabled(&roster, "backup_export"),
+        "备份数据源槽缺席 = 照实 false"
+    );
+
+    // 槽注入 = 注册条件达成, 名册照实 true (注册即闸的正向面)。
+    let mut wired = ProductionModulesConfig::default();
+    wired.care_schedule = Some(PathBuf::from("."));
+    let roster = apeireth_runtime_assembly::roster_from_config(&wired, true, false, false, &[]);
+    assert!(enabled(&roster, "care_schedule"), "槽注入必须报真值 true");
+}

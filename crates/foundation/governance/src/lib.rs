@@ -45,6 +45,9 @@ use apeireth_core::kernel::{CapabilityId, Metadata, PluginId, SessionId, TraceId
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+// 动作绑定摘要 (G2.5): 批准绑定到字节级动作 (规范化序列化→摘要), 执行边界
+// 重算比对, 载荷被改即拒绝即帧; 委派信任 min(parent, requested) 只减不增。
+pub mod action_binding;
 pub mod approval_closure;
 // 命令审批族（语义族）词表与族归一 (E-P2): 命令级审批的单一来源,
 // 写意图族词表与它同源引用。
@@ -80,8 +83,10 @@ pub mod user_access;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use input_security::{
-    redact_secret_surfaces, CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind,
-    PromptInjectionHeuristic, PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
+    redact_secret_surfaces, session_fingerprint, CredentialDisclosureHook, PiiDetector, PiiFinding,
+    PiiKind, PromptInjectionHeuristic, PromptInjectionHook, PromptInjectionKind,
+    PromptInjectionSignal, RedactionPlaceholder, RedactionPlaceholderMatch,
+    REDACTION_FINGERPRINT_HEX_LEN, REDACTION_PLACEHOLDER_PREFIX, REDACTION_PLACEHOLDER_SUFFIX,
 };
 pub use intent::{
     CredentialPolicy, DestructivePolicy, IntentClass, IntentExplicitness, IntentProvenance,
@@ -102,6 +107,11 @@ pub use user_access::{
     UserTable,
 };
 
+pub use action_binding::{
+    canonical_json_bytes, classify_binding_drift, verify_action_binding, ActionBinding,
+    BindingDrift, BindingMismatch, BindingMismatchAudit, DelegationAuthority, DelegationChain,
+    DelegationRefusal, AUDIT_EVENT_BINDING_MISMATCH, SHORT_DIGEST_CHARS,
+};
 pub use approval_closure::{
     commit_approval_audit_pair, detect_unclosed_approval_pairs, fold_policy_ask_events,
     scan_approval_pairs, AllowedOnceGrant, ApprovalAuditPair, ApprovalAuditRecord,

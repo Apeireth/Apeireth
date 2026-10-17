@@ -7,6 +7,7 @@
 // v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend
 // (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
+pub mod backup;
 pub mod gateway_panels;
 pub mod keyring_bootstrap;
 pub mod onboarding;
@@ -68,6 +69,25 @@ const ENABLE_FETCH_ENV: &str = "APEIRETH_ENABLE_FETCH";
 // (「工具面有人拍板」) + [`apeireth_tools_canonical::ContentFeedApprovalHook`]
 // 审批档 —— 拉取与入库都经审批档, 每次调用都人批 (无自动放行档)。
 const ENABLE_CONTENT_FEED_ENV: &str = "APEIRETH_ENABLE_CONTENT_FEED";
+// 双引擎主动关怀旋钮 (`tool.care_schedule`, V3-a): 注册 + 策略 grant + 审批档
+// 钩子。默认关 (fail-closed); `APEIRETH_ENABLE_CARE=1` = 注册工具 + grant
+// (「工具面有人拍板」) + [`apeireth_organ::care::CareScheduleApprovalHook`]
+// 审批档 —— 改规则 = 写文件 (write_intent 同族), 每次调用都人批 (无自动放行档)。
+const ENABLE_CARE_ENV: &str = "APEIRETH_ENABLE_CARE";
+// G5 备份导出旋钮 (`tool.backup_export`): 注册 + 策略 grant + require_approval
+// (全量打包记忆/账本落盘是敏感面, **每次导出都人批**, 无自动放行档)。
+// 默认关 (fail-closed); 恢复/校验不走工具面 (CLI 本地操作: `apeireth backup`)。
+pub const ENABLE_BACKUP_EXPORT_ENV: &str = "APEIRETH_ENABLE_BACKUP_EXPORT";
+// 通用嗓发声旋钮 (`tool.voice_speak`, V3-b): 注册 + 策略 grant (发声面档)。
+// 默认关 (fail-closed); `APEIRETH_ENABLE_VOICE_SPEAK=1` = 注册工具 + grant ——
+// 发声面档 = grant 即发声 (免逐次人批, 与 shell 的 grant+require_approval
+// 执行档分立), 拦截面 = 参数边界 + 勿扰窗口 (与 care_rules 同源) + 独占播放
+// + 语句账本全责 (spoken.jsonl)。
+pub const ENABLE_VOICE_SPEAK_ENV: &str = "APEIRETH_ENABLE_VOICE_SPEAK";
+// V6-a 任务簿 (`tool.task_board`) 旋钮 (V6-a 任务编排持久队列): 默认关
+// (fail-closed); `APEIRETH_ENABLE_TASK_BOARD=1` = 注册工具 + grant + 写面
+// 审批钩子 + 任务队列装配 (与会话账本同库的任务表)。
+pub const ENABLE_TASK_BOARD_ENV: &str = "APEIRETH_ENABLE_TASK_BOARD";
 // 受控文件写入旋钮 (`tool.apply_patch`, 第七件生产工具): 注册 + 策略 grant +
 // 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_FILE_WRITE=1` = 注册工具 +
 // grant + require_approval —— 每次写入都要人批 (本地审批面板 + IM 审批卡同链)。
@@ -511,6 +531,65 @@ pub fn content_feed_enabled_from_env() -> bool {
         .is_some_and(|value| value.trim() == "1")
 }
 
+/// 双引擎主动关怀 (`tool.care_schedule`, V3-a) 旋钮: 独立开关, 默认关
+/// (fail-closed)。开 = 注册 + grant + 审批档钩子 (改规则 = 写文件走
+/// write_intent 同族, 每次调用都人批)。
+pub fn care_schedule_enabled_from_env() -> bool {
+    std::env::var(ENABLE_CARE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 备份导出 (`tool.backup_export`, G5) 旋钮: 独立开关, 默认关 (fail-closed)。
+/// 开 = 注册 + grant + require_approval (每次导出都人批, 无自动放行档)。
+pub fn backup_export_enabled_from_env() -> bool {
+    std::env::var(ENABLE_BACKUP_EXPORT_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 通用嗓发声 (`tool.voice_speak`, V3-b) 旋钮: 独立开关, 默认关 (fail-closed)。
+/// 开 = 注册 + grant (发声面档: grant 即发声免逐次人批, 与 shell 的
+/// grant+require_approval 执行档分立; 拦截面 = 参数边界 + 勿扰窗口 + 独占播放
+/// + 语句账本全责)。
+pub fn voice_speak_enabled_from_env() -> bool {
+    std::env::var(ENABLE_VOICE_SPEAK_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 任务簿 (`tool.task_board`, V6-a) 旋钮: 独立开关, 默认关 (fail-closed)。
+/// 开 = 注册 + grant + 写面审批钩子 (写面 = write_intent 同族每次人批,
+/// `task_list` 只读零审批; failed 只能人判, 无 failed/retry 工具面) +
+/// 任务队列装配 (与会话账本同库的任务表, open 即崩溃恢复点)。
+pub fn task_board_enabled_from_env() -> bool {
+    std::env::var(ENABLE_TASK_BOARD_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 发声配置 (注册即闸的另一半): 语句账本落数据目录 (`spoken.jsonl`) +
+/// 勿扰窗口 (同源接缝: `care_rules` 打扰纪律配了窗口 = 引用之, 未落/未配 =
+/// 发声面最小自建 env) + 排队策略 (`APEIRETH_VOICE_INTERRUPT`, 缺省新话打断
+/// 旧话)。坏配置**拒开** (fail-closed, 不静默回退)。
+pub fn voice_speak_config_from_env(
+) -> Result<Option<apeireth_tools_canonical::VoiceSpeakConfig>, String> {
+    if !voice_speak_enabled_from_env() {
+        return Ok(None);
+    }
+    let quiet =
+        apeireth_runtime_assembly::voice_quiet_hours_from_care_rules(default_panel_data_dir())?;
+    let playback = apeireth_tools_canonical::PlaybackPolicy::from_env()?;
+    Ok(Some(
+        apeireth_tools_canonical::VoiceSpeakConfig::new(
+            default_panel_data_dir(),
+            apeireth_tools_canonical::voice::system_quiet_clock(),
+        )
+        .with_quiet(quiet)
+        .with_playback_policy(playback),
+    ))
+}
+
 use apeireth_guard::BehaviorChainGuardHook;
 
 /// Build the production pipeline and return the shared policy handle alongside
@@ -536,6 +615,12 @@ pub fn build_production_governance_parts(
         false,
         // 同口径: 显式布尔构建器不含内容流旋钮 (默认不进授权面, fail-closed)。
         false,
+        // 同口径: 显式布尔构建器不含关怀旋钮 (默认不进授权面, fail-closed)。
+        false,
+        // 同口径: 显式布尔构建器不含备份导出旋钮 (默认不进授权面, fail-closed)。
+        false,
+        // 同口径: 显式布尔构建器不含任务簿旋钮 (默认不进授权面, fail-closed)。
+        false,
     )
 }
 
@@ -549,6 +634,9 @@ fn build_production_governance_parts_with_dataset(
     skill_search: bool,
     skill_distill: bool,
     content_feed: bool,
+    care_schedule: bool,
+    backup_export: bool,
+    task_board: bool,
 ) -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -630,6 +718,35 @@ fn build_production_governance_parts_with_dataset(
             apeireth_tools_canonical::CONTENT_FEED_CAPABILITY_ID.to_string(),
         ));
     }
+    // 双引擎主动关怀 (`tool.care_schedule`, V3-a) 授权面 (开关开 = 注册 + 授权,
+    // 同源整改口径): 只 grant「工具面有人拍板」, 审批档由
+    // [`apeireth_organ::care::CareScheduleApprovalHook`] 唯一承载 —— 改规则 =
+    // 写文件 (write_intent 同族), 每次调用都人批 (无自动放行档)。
+    if care_schedule {
+        policy.grant(Permission::ExecuteTool(
+            apeireth_organ::care::CARE_SCHEDULE_CAPABILITY_ID.to_string(),
+        ));
+    }
+    // G5 备份导出 (`tool.backup_export`) 授权面 (开关开 = 注册 + 授权, 同源
+    // 整改口径): grant + require_approval —— 全量打包记忆/账本落盘是敏感面,
+    // **每次导出都停人工审批** (本地审批面板 + IM 审批卡同链, 无自动放行档);
+    // 凭据面由显式排除表收口 (凭据不随行, 密钥/令牌面不进包)。
+    if backup_export {
+        policy.grant(Permission::ExecuteTool(
+            apeireth_tools_canonical::BACKUP_EXPORT_CAPABILITY_ID.to_string(),
+        ));
+        policy.require_approval_for(apeireth_tools_canonical::BACKUP_EXPORT_CAPABILITY_ID);
+    }
+    // V6-a 任务簿 (`tool.task_board`) 授权面 (开关开 = 注册 + 授权, 同源整改
+    // 口径): 只 grant「工具面有人拍板」, 写面审批档由
+    // [`apeireth_runtime_assembly::TaskBoardApprovalHook`] 唯一承载 —— 写面
+    // (增/改派/完成) = write_intent 同族 (改任务簿 = 写文件), 每次写面都人批
+    // (无自动放行档); `task_list` 只读零审批; failed 只能人判 (无工具面)。
+    if task_board {
+        policy.grant(Permission::ExecuteTool(
+            apeireth_runtime_assembly::TASK_BOARD_CAPABILITY_ID.to_string(),
+        ));
+    }
     let policy = Arc::new(std::sync::Mutex::new(policy));
     let mut guard = BehaviorChainGuardHook::new();
     if let Some(dataset) = dataset {
@@ -685,6 +802,23 @@ fn build_production_governance_parts_with_dataset(
     if content_feed {
         pipeline = pipeline.with(Arc::new(
             apeireth_tools_canonical::ContentFeedApprovalHook::new(),
+        ));
+    }
+    // 关怀规则面审批档映射 (授权之后、内容风险之前, 同一审批链): 改规则 = 写
+    // 文件 (write_intent 同族), 每次调用都停人工审批 (RequireApproval 级, 无
+    // 自动放行档), 理由载荷按写面如实标注; 非法触发器/素材拒绝即帧 (工具层已拒)。
+    if care_schedule {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_organ::care::CareScheduleApprovalHook::new(),
+        ));
+    }
+    // 任务簿写面审批档映射 (授权之后、内容风险之前, 同一审批链): 写面 (增/
+    // 改派/完成) = write_intent 同族 (改任务簿 = 写文件), 每次写面都停人工
+    // 审批 (RequireApproval 级, 无自动放行档); `task_list` 只读零审批; 未知
+    // 动作 fail-closed 停审批。
+    if task_board {
+        pipeline = pipeline.with(Arc::new(
+            apeireth_runtime_assembly::TaskBoardApprovalHook::new(),
         ));
     }
     let mut pipeline = pipeline
@@ -772,6 +906,9 @@ fn build_production_governance_parts_from_env() -> (
         skill_search_enabled_from_env(),
         skill_distill_enabled_from_env(),
         content_feed_enabled_from_env(),
+        care_schedule_enabled_from_env(),
+        backup_export_enabled_from_env(),
+        task_board_enabled_from_env(),
     );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -807,6 +944,21 @@ fn build_production_governance_parts_from_env() -> (
             .lock()
             .expect("permission policy lock poisoned (0 装诚实)")
             .grant(Permission::ExecuteTool("tool.education".to_string()));
+    }
+    // 通用嗓发声 (`tool.voice_speak`, V3-b): **开关开 = 注册 + 授权同源**
+    // (同一开关值同时决定装配侧注册与本授权面)。发声面档 = **grant 即发声**
+    // (免逐次人批), 与 shell/fetch 的 grant + require_approval 执行档**分立**
+    // (不借壳): 声音是输出面 (无任意文件写 —— 唯一落盘是固定路径语句账本的
+    // 追加行; 无网络), 拦截面 = 参数边界拒 + 勿扰窗口 (与 care_rules 同源) +
+    // 独占播放 + 语句账本全责。宿主要逐次人批 = 给本能力挂 require_approval,
+    // 发声面风险钩子会如实映射到同一条人工审批链。
+    if voice_speak_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::VOICE_SPEAK_CAPABILITY_ID.to_string(),
+            ));
     }
     (pipeline, policy, guard_hook)
 }
@@ -861,7 +1013,10 @@ async fn build_domain_partner_runtime(
     memory_db: PathBuf,
 ) -> Result<Runtime, String> {
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
-    let (cognitive, _memory) = build_cognitive_modules_at(memory_db, Arc::clone(&clock)).await?;
+    // 域伙伴运行时不注入备份导出面 (跨域打包面收口到 owner 本地操作, 见
+    // [`default_domain_backup_config`]); 名册照实报 `backup_export: false`。
+    let (cognitive, _memory) =
+        build_cognitive_modules_at(memory_db, Arc::clone(&clock), None).await?;
     let (runtime, _policy, _guard_hook) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok(runtime)
@@ -1049,7 +1204,18 @@ async fn build_cognitive_modules_from_env(
     ),
     String,
 > {
-    build_cognitive_modules_at(cognitive_db_path(), clock).await
+    build_cognitive_modules_at(cognitive_db_path(), clock, default_domain_backup_config()).await
+}
+
+/// G5 备份导出的工具面配置 (默认域专属, 旋钮开才注入 = 注册即闸)。
+///
+/// **域伙伴运行时 (W3-③) 不注入**: 全量打包面能外带整个数据根 (跨域数据
+/// 也在内), 伙伴实例只见本域 —— 备份/搬家是 owner 的本地运维面
+/// (`apeireth backup`), 不下放给域伙伴工具面 (W3-① 跨域拒绝即帧的备份面
+/// 等价承诺)。域伙伴运行时名册照实报 `backup_export: false`。
+fn default_domain_backup_config() -> Option<apeireth_tools_canonical::backup::BackupExportConfig> {
+    backup_export_enabled_from_env()
+        .then(|| backup::backup_export_config(&backup::BackupCliPaths::from_env()))
 }
 
 /// 认知模块组装的记忆库路径化形态 (W3-③ 逐域伙伴运行时: 每域自己的
@@ -1057,6 +1223,7 @@ async fn build_cognitive_modules_from_env(
 async fn build_cognitive_modules_at(
     memory_db: PathBuf,
     clock: Arc<dyn apeireth_core::kernel::Clock>,
+    backup_config: Option<apeireth_tools_canonical::backup::BackupExportConfig>,
 ) -> Result<
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
@@ -1221,6 +1388,27 @@ async fn build_cognitive_modules_at(
     } else {
         None
     };
+    let task_board_queue = if task_board_enabled_from_env() {
+        // V6-a 任务编排持久队列 (旋钮开才装配, 注册即闸): 任务表与会话账本
+        // **同库** —— 落本域 `sessions.sqlite3` (与域伙伴逐域同账; 默认域 =
+        // `.apeireth/sessions.sqlite3`, 与会话账本默认路径同文件)。`open` 即
+        // 崩溃恢复点: running/assigned → pending 重派一次 (attempt 计数防死
+        // 循环), 未投递唤醒重投 (redelivered 计数)。
+        let task_db = path.with_file_name("sessions.sqlite3");
+        let store = std::sync::Arc::new(
+            apeireth_runtime_assembly::SqliteTaskStore::open(task_db)
+                .map_err(|error| format!("task queue store open failed: {error}"))?,
+        );
+        Some(std::sync::Arc::new(
+            apeireth_orchestration::task_queue::TaskQueue::open(
+                store,
+                apeireth_orchestration::task_queue::TaskQueueConfig::default(),
+            )
+            .map_err(|error| format!("task queue open failed: {error}"))?,
+        ))
+    } else {
+        None
+    };
     let config = CognitiveModuleConfig {
         judge: JudgeConfig {
             enabled: judge_enabled,
@@ -1248,6 +1436,21 @@ async fn build_cognitive_modules_at(
         fetch: fetch_enabled.then(FetchConfig::public_internet_only),
         // 内容流接入 (J1): 注册工具 (治理档在治理链: 拉取与入库都经审批档)。
         content_feed: content_feed_config,
+        // 双引擎主动关怀 (V3-a): 注册关怀规则面工具 (治理档在治理链: 改规则 =
+        // 写文件走 write_intent 同族, 每次调用都人批)。关怀发起不走本面 ——
+        // 发起 = 双引擎判定 → 标准回合 (零新消息通道)。
+        care_schedule: care_schedule_enabled_from_env().then(default_panel_data_dir),
+        // G5 备份导出 (`tool.backup_export`): 注册条件 = 默认域 + 旋钮开
+        // (注册即闸; 域伙伴运行时传 None, 跨域打包面收口 owner 本地操作)。
+        backup: backup_config,
+        // 通用嗓发声 (`tool.voice_speak`, V3-b): 注册即闸 (旋钮开才注入配置),
+        // 发声面档 (grant 即发声)。勿扰窗口走同源接缝 (care_rules 窗口优先),
+        // 坏配置拒开 (fail-closed)。
+        voice_speak: voice_speak_config_from_env()?,
+        // V6-a 任务编排持久队列 (`tool.task_board`): 注册即闸 (旋钮开才注入
+        // 队列); 治理档在治理链 (写面 = write_intent 同族每次人批, failed
+        // 只能人判无工具面)。自述任务节与工具面同队同账 (探针随队列注入)。
+        task_board: task_board_queue,
         // 受控文件写入旋钮 (`tool.apply_patch`): 注册工具 + 风险档位同源
         // (治理层 grant/approval 用同一 env 解析, 即效一致)。子档依赖主开关。
         file_write: file_write_enabled_from_env(),
@@ -1294,6 +1497,13 @@ async fn build_cognitive_modules_at(
                 reflexion_store_root_from_env(),
             ))
         });
+    // V4-a 人格记忆层落库面: `persona_memory_*` 分表的存储句柄 (与本组合同一
+    // `cognitive.sqlite3`; 迁移已随记忆迁移族落位)。人格提取步 / 自述人格节 /
+    // TurnStart 恒定注入三面同句柄同账。
+    let persona_store: std::sync::Arc<apeireth_memory::SqliteMemoryStore> = std::sync::Arc::new(
+        apeireth_memory::SqliteMemoryStore::open(path.clone())
+            .map_err(|error| format!("persona memory store open failed: {error}"))?,
+    );
     let backends = CognitiveBackends {
         memory: Some(memory.clone()),
         memory_governance: Some(memory_governance),
@@ -1313,6 +1523,11 @@ async fn build_cognitive_modules_at(
         typed_recall: typed_recall_enabled.then(|| Arc::clone(&typed_source)),
         typed_recall_identity: typed_recall_enabled.then_some(typed_identity),
         typed_sink: Some(typed_sink),
+        // V4-a 人格记忆层落库面 (真接线, 兑现 V4-a 报备的「归口 CLI 接线面」):
+        // `persona_memory_*` 分表与本组合同一 `cognitive.sqlite3` 同账 —— 人格
+        // 提取步 (persona_consolidation, 默认关) 的落库面、自述人格节的真值源、
+        // TurnStart 恒定注入的回取面, 三面同一存储。
+        persona_layer: Some(persona_store.clone()),
         reflexion_store,
         // W2 §4.2: partner 羁绊存储 (InMemory —— 进程内, 重启即散; 持久后端为
         // 后续 sqlite 实现, trait 落点已备)。
@@ -1383,6 +1598,30 @@ async fn build_cognitive_modules_at(
         // 自省通道: 内容流节探测口 (J1 接线, 兑现并行批报备的「归 J1 线」):
         // 订阅数/最近拉取现探测如实 (与工具同一订阅表同一校验口径)。
         self_status_content_feed: Some(content_feed_status_probe(default_panel_data_dir())),
+        // 自省通道: 双引擎关怀节探测口 (V3-a 接线): 规则数/下次触发/最近关怀
+        // 现探测如实 (与工具同一 `care_rules.json` 同一拒开口径)。时钟走系统时钟;
+        // 交互观察锚点未接线 (久未联系类规则退化为规则创建时刻锚, 如实)。
+        self_status_care: Some({
+            use apeireth_organ::care::CareClock;
+            apeireth_runtime_assembly::care_status_probe(
+                default_panel_data_dir(),
+                std::sync::Arc::new(|| apeireth_organ::care::SystemCareClock.now_ms()),
+                std::sync::Arc::new(|| None),
+            )
+        }),
+        // 自省通道: 备份节探测口 (G5 接线): 最近备份时间/清单件数真值现探测
+        // (与导出同一 `last-backup.json` 记录; 尚无备份显式 null + 原因)。
+        self_status_backup: Some(apeireth_runtime_assembly::backup_status_probe(
+            backup::backup_ledger_path(&default_panel_data_dir()),
+        )),
+        // 自省通道: 语音节探测口 (V3-b 接线): 账本数/最近说话/嗓名现探测
+        // (与发声工具同一本语句账本 `spoken.jsonl`; 摘录口径不回全文)。
+        self_status_voice: Some(voice_status_probe(default_panel_data_dir())),
+        // 自省通道: 人格节探测口 (`self_status_persona`, V4-a 接线): 信念/边界/
+        // 偏好/张力计数 + 最后整编真值现探测 (与人格层落库面同账, 只计数不回内容)。
+        self_status_persona: Some(apeireth_runtime_assembly::persona_status_probe(
+            persona_store,
+        )),
     };
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
@@ -1616,6 +1855,16 @@ fn content_feed_status_probe(
         );
         store.status()
     })
+}
+
+/// 自省通道: 语音节探测口 (V3-b) —— 账本数/最近说话/嗓名取自语句账本
+/// `spoken.jsonl` 真值 (与发声工具同一本账、同一逐记录读回口径); 每次自述
+/// 现探测, 失败显式 `null` + 原因, 不让整帧失败 (0 装诚实: 尚无语句 = 如实
+/// 注, 不编时间; 摘录口径不回全文)。
+fn voice_status_probe(
+    data_dir: PathBuf,
+) -> apeireth_tools_canonical::StatusProbe<apeireth_tools_canonical::VoiceStatus> {
+    Arc::new(move || apeireth_tools_canonical::SpokenLedger::under_data_dir(&data_dir).status())
 }
 
 /// 自省通道: 记忆账本计数探测口 —— 会话/记忆/保护计数取自认知库可查元数据

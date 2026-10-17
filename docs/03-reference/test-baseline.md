@@ -24,6 +24,13 @@
 > **复测注记（2026-10-16，落差清账·文本可信度批校验）**：同命令（加 `-j 2`）在当前工作树
 > 复测 = **191 套件 / 5390 passed / 0 failed / 18 ignored**，exit 0。与上表差异来自树间在途批次
 > 增量（例数 +30、ignored -4）；上表为外部审计基线口径，对外引用保持上表，现场以复测类实数为准。
+>
+> **复测注记（2026-10-17，大总装接线批校验）**：同命令（加 `-j 2`）复测 = **208 套件 /
+> 5619 passed / 0 failed / 20 ignored**，exit 0（「套件」= 测试二进制目标计数；本批 +1 =
+> `runtime-assembly/tests/persona_constant_injection.rs` 恒定注入两态装配测试）。本批增量 =
+> self_status 十四节合同（persona 节四面 + 缺节即红断言）、`self_status_persona` 探测口、
+> TurnStart 恒定注入接线、capabilities-matrix §0.2 开关行；上表为外部审计基线口径，对外引用
+> 保持上表，现场以复测类实数为准。
 
 ## 2. 口径定义
 

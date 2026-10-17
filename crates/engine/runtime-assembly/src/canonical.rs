@@ -95,12 +95,20 @@ pub mod repetition_advisory;
 pub mod self_status_source;
 #[path = "canonical/self_tuning_wire.rs"]
 pub mod self_tuning_wire;
+/// 任务簿工具面 (`tool.task_board`, V6-a): 增/列/改派/完成 + 治理档钩子
+/// (写面 = write_intent 同族, failed 只能人判无工具面)。
+#[path = "canonical/task_board_tool.rs"]
+pub mod task_board_tool;
 #[path = "canonical/tool_modules.rs"]
 pub mod tool_modules;
 #[path = "canonical/typed_recall.rs"]
 pub mod typed_recall;
 #[path = "canonical/upgrade_cycle.rs"]
 pub mod upgrade_cycle;
+/// 发声面勿扰窗口的同源接缝 (V3-b × V3-a): `care_rules` 打扰纪律的窗口为准,
+/// 未落/未配回落发声面最小自建 env (坏配置拒开不静默回退)。
+#[path = "canonical/voice_quiet.rs"]
+pub mod voice_quiet;
 
 pub use experiment_field::{
     Experiment, ExperimentField, ExperimentStatus, FailureLearningRecord, FailureLearningSink,
@@ -117,10 +125,10 @@ pub use cognitive::{
     turn_request_from_perception, CognitiveModuleEvent, CognitiveTelemetry, CouncilModule,
     JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict,
     MemoryRecallAccessRecorder, MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule,
-    ModuleMetricsSnapshot, PreferenceRecallModule, ReflexionModule, SelfAssessmentModule,
-    COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID,
-    MEMORY_WRITEBACK_MODULE_ID, PREFERENCE_RECALL_MODULE_ID, REFLEXION_MODULE_ID,
-    SELF_ASSESSMENT_MODULE_ID,
+    ModuleMetricsSnapshot, PersonaConstantInjectionModule, PreferenceRecallModule, ReflexionModule,
+    SelfAssessmentModule, COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID,
+    MEMORY_RECALL_MODULE_ID, MEMORY_WRITEBACK_MODULE_ID, PERSONA_INJECTION_MODULE_ID,
+    PREFERENCE_RECALL_MODULE_ID, REFLEXION_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
 };
 pub use dream_llm::{FallbackMetaThinker, LlmMetaThinker};
 pub use guard_observer::GuardDatasetObserver;
@@ -141,10 +149,11 @@ pub use production::{
     ProductionModulesConfig,
 };
 pub use self_status_source::{
-    budget_status_from_configured, budget_status_from_constants, domain_status_probe,
-    max_rounds_per_turn_constant, max_tool_calls_per_round_constant, roster_from_config,
-    session_quota_probe, ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED,
-    BUDGET_SOURCE_CONFIGURED_NOTE, BUDGET_SOURCE_CONSTANT,
+    budget_status_from_configured, budget_status_from_constants, care_status_probe,
+    domain_status_probe, max_rounds_per_turn_constant, max_tool_calls_per_round_constant,
+    persona_status_probe, roster_from_config, session_quota_probe, task_board_status_probe,
+    ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED, BUDGET_SOURCE_CONFIGURED_NOTE,
+    BUDGET_SOURCE_CONSTANT,
 };
 pub use self_tuning_wire::{
     consolidation_cadence_turns, migrate_legacy_tuning_log_file, tuning_log_path,
@@ -152,7 +161,13 @@ pub use self_tuning_wire::{
     TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use tool_modules::{
-    EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule,
-    SearchModule, SelfStatusModule, ShellModule, SELF_STATUS_TIMEOUT_MS,
+    BackupExportModule, EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule,
+    RepoModule, SearchModule, SelfStatusModule, ShellModule, VoiceSpeakModule,
+    SELF_STATUS_TIMEOUT_MS,
 };
 pub use typed_recall::SqliteTypedMemoryRecallSource;
+// G5 备份恢复导出面: 备份节探测口 (最近备份时间/清单件数真值或 null) 与
+// 备份引擎的组合根入口同面导出 (探针构造与引擎同源, 一个入口两类用法)。
+pub use apeireth_tools_canonical::backup::backup_status_probe;
+// V3-b 发声面勿扰窗口的同源接缝导出 (care_rules 窗口优先, 最小 env 兜底)。
+pub use voice_quiet::voice_quiet_hours_from_care_rules;

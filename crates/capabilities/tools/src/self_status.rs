@@ -349,6 +349,141 @@ impl ContentFeedStatus {
     }
 }
 
+/// 双引擎关怀一节 (V3-a 自述): 规则数 / 下次触发 / 最近关怀真值, 如实。
+///
+/// 「最近关怀」`None` = 尚无关怀 (显式 null + `last_care_note` 如实注「尚无
+/// 关怀记录」), 绝不编造时间或判定; 探测口缺位/失败 = 全维显式 null +
+/// `reason` (0 装诚实)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CareStatus {
+    /// 关怀规则数 (`care_rules.json` 真值计数)。
+    pub rules: Option<u64>,
+    /// 下次触发时刻 (epoch 毫秒); `None` = 无启用规则 (如实)。
+    pub next_trigger_at_ms: Option<i64>,
+    /// 最近关怀时刻 (epoch 毫秒); `None` = 尚无关怀。
+    pub last_care_at_ms: Option<i64>,
+    /// 最近关怀判定真值 (发起/说不 + 判定档 + 理由)。
+    pub last_care_note: Option<String>,
+    /// 探测缺位/失败的原因 (全维就位时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl CareStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            rules: None,
+            next_trigger_at_ms: None,
+            last_care_at_ms: None,
+            last_care_note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 语音一节 (V3-b 发声面自述): 账本数 / 最近说话 / 嗓名, 真值如实。
+///
+/// 「最近说话」`None` = 尚无语句 (显式 null + `note` 如实注「尚无语句记录」),
+/// 绝不编造时刻或文本; `last_text_excerpt` 是**有界摘录** (脱敏口径: 全文
+/// 只在语句账本 `spoken.jsonl`, 自述只给摘录); 探测口缺位/失败 = 全维
+/// 显式 null + `reason` (0 装诚实)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoiceStatus {
+    /// 语句账本数 (`spoken.jsonl` 真值计数)。
+    pub utterances: Option<u64>,
+    /// 最近说话时刻 (epoch 毫秒); `None` = 尚无语句。
+    pub last_spoken_at_ms: Option<i64>,
+    /// 最近说话摘录 (有界; 全文只在语句账本)。
+    pub last_text_excerpt: Option<String>,
+    /// 最近用嗓 (系统默认嗓记 `system-default`)。
+    pub voice: Option<String>,
+    /// 备注 (「尚无语句记录」/ 坏行跳过如实注)。
+    pub note: Option<String>,
+    /// 探测缺位/失败的原因 (全维就位时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl VoiceStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            utterances: None,
+            last_spoken_at_ms: None,
+            last_text_excerpt: None,
+            voice: None,
+            note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 备份一节 (G5 备份恢复): 最近备份时间 / 清单件数真值, 如实。
+///
+/// 「最近备份」`None` = 尚无备份 (显式 null + `reason` 如实注「尚无备份记录」),
+/// 绝不编造时间或件数; 探测口缺位/失败 = 全维显式 null + `reason` (0 装诚实)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackupStatus {
+    /// 最近备份时刻 (epoch 毫秒); `None` = 尚无备份。
+    pub last_backup_at_ms: Option<i64>,
+    /// 该次备份的清单件数; `None` = 尚无备份。
+    pub manifest_entries: Option<u64>,
+    /// 缺位/失败/尚无备份的原因 (真值齐全时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl BackupStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            last_backup_at_ms: None,
+            manifest_entries: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 任务簿一节 (V6-a 任务编排持久队列): 任务队列分态计数真值。
+///
+/// 计数与 `tool.task_board` 工具面同一队列同一真值源 (只回计数不回任务正文);
+/// 探测口缺位/失败 = 全维显式 null + `reason` (0 装诚实, 不编数)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskBoardStatus {
+    /// `pending` (入队待派) 计数。
+    pub pending: u64,
+    /// `assigned` (已指派并已唤醒) 计数。
+    pub assigned: u64,
+    /// `running` (执行段在跑) 计数。
+    pub running: u64,
+    /// `done` (完成) 计数。
+    pub done: u64,
+    /// `failed` (人判失败) 计数。
+    pub failed: u64,
+    /// `blocked` (外部等待/熔断) 计数。
+    pub blocked: u64,
+}
+
+/// 人格层一节 (V4-a 人格记忆自述): 信念/边界/偏好/张力计数 + 最后整编真值,
+/// 只计数不回内容 (与自述面「有多少不说是什么」同口径)。
+///
+/// 计数与人格层落库面同一真值源 (`persona_memory_*` 分表的自述节); 「最后整编」
+/// `None` = 尚未整编 (显式 null, 不编时间, epoch 秒口径与人格层真值一致);
+/// 探测口缺位/失败 = 全维显式 null + `reason` (0 装诚实, 不编数)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonaStatusSection {
+    /// 信念数 (core_beliefs 真值计数)。
+    pub core_beliefs: u64,
+    /// 边界数 (boundaries 真值计数)。
+    pub boundaries: u64,
+    /// 偏好数 (preferences 真值计数)。
+    pub preferences: u64,
+    /// 张力数 (已标注人格张力计数)。
+    pub tensions: u64,
+    /// 最后整编真值 (epoch 秒, 与人格层真值同口径); `None` = 尚未整编。
+    pub last_consolidation_at: Option<i64>,
+    /// 缺位/失败的原因 (真值齐全时 `None`)。
+    pub reason: Option<String>,
+}
+
 /// 域内计数 (W3-① 域节): 会话/记忆/受保护记忆的真值计数。
 ///
 /// 逐维 `None` = 该维探测口缺位/失败 → 显式 null + `reason` (不编数)。
@@ -434,6 +569,26 @@ pub struct SelfStatusSnapshot {
     pub content_feed: Option<ContentFeedStatus>,
     /// 内容流面一节不可用的原因; 可用时为 `None`。
     pub content_feed_reason: Option<String>,
+    /// 双引擎关怀一节 (V3-a: 规则数/下次触发/最近关怀真值)。
+    pub care: Option<CareStatus>,
+    /// 关怀一节不可用的原因; 可用时为 `None`。
+    pub care_reason: Option<String>,
+    /// 备份一节 (G5: 最近备份时间/清单件数真值)。
+    pub backup: Option<BackupStatus>,
+    /// 备份一节不可用的原因; 可用时为 `None`。
+    pub backup_reason: Option<String>,
+    /// 语音一节 (V3-b: 账本数/最近说话/嗓名)。
+    pub voice: Option<VoiceStatus>,
+    /// 语音一节不可用的原因; 可用时为 `None`。
+    pub voice_reason: Option<String>,
+    /// 任务簿一节 (V6-a: 任务队列分态计数真值)。
+    pub task_board: Option<TaskBoardStatus>,
+    /// 任务簿一节不可用的原因; 可用时为 `None`。
+    pub task_board_reason: Option<String>,
+    /// 人格层一节 (V4-a: 信念/边界/偏好/张力计数 + 最后整编真值)。
+    pub persona: Option<PersonaStatusSection>,
+    /// 人格层一节不可用的原因; 可用时为 `None`。
+    pub persona_reason: Option<String>,
 }
 
 impl SelfStatusSnapshot {
@@ -456,6 +611,16 @@ impl SelfStatusSnapshot {
             domain_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             content_feed: None,
             content_feed_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            care: None,
+            care_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            backup: None,
+            backup_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            voice: None,
+            voice_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            task_board: None,
+            task_board_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            persona: None,
+            persona_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
         }
     }
 }
@@ -482,6 +647,37 @@ pub trait SelfStatusSource: Send + Sync {
 ///
 /// 失败**不**让整帧失败: 对应字段显式 null + 原因 (见 [`render_snapshot`])。
 pub type StatusProbe<T> = Arc<dyn Fn() -> Result<T, String> + Send + Sync>;
+
+/// 自述帧冻结节合同: 节的全集与顺序 (显式节序), 演进须注明理由。
+///
+/// [`render_snapshot`] 的渲染面、[`SelfStatusTool::output_schema`] 的 require
+/// 清单、fixture 的在场面三侧同表 —— 缺任何一节 = 合同违约 (断言见
+/// `the_frozen_section_contract_is_the_single_source_for_render_and_schema`)。
+pub const SELF_STATUS_SECTIONS: &[&str] = &[
+    "identity",
+    "capabilities",
+    "memory_ledger",
+    "tuning",
+    "budget",
+    "workspace",
+    // H-P1: 模型画像节入七节合同 (形状冻结的演进, 附理由: 路由/成本依据面)。
+    "model",
+    // W3-①: 用户域节入八节合同 (多户数据隔离的自述域面)。
+    "domain",
+    // J1: 内容流节入九节合同 (订阅数/最近拉取的如实自述)。
+    "content_feed",
+    // V3-a: 关怀节入十节合同 (规则数/下次触发/最近关怀真值)。
+    "care",
+    // G5: 备份节入十一节合同 (最近备份时间/清单件数真值)。
+    "backup",
+    // V3-b: 语音节入十二节合同 (账本数/最近说话/嗓名真值)。
+    "voice",
+    // V6-a: 任务簿节入十三节合同 (任务队列分态计数真值)。
+    "task_board",
+    // V4-a: 人格节入十四节合同 (形状冻结的演进, 附理由: 人格记忆层的计数
+    // 真值与最后整编真值, 只计数不回内容)。
+    "persona",
+];
 
 /// 把一份自述投影成结构化 JSON (字段合同的唯一实现)。
 ///
@@ -669,6 +865,116 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         }),
     };
 
+    let care = match &snapshot.care {
+        Some(status) => json!({
+            "rules": status.rules,
+            "next_trigger_at_ms": status.next_trigger_at_ms,
+            "last_care_at_ms": status.last_care_at_ms,
+            "last_care_note": status.last_care_note,
+            "reason": snapshot.care_reason.clone().or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "rules": null,
+            "next_trigger_at_ms": null,
+            "last_care_at_ms": null,
+            "last_care_note": null,
+            "reason": snapshot
+                .care_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    let backup = match &snapshot.backup {
+        Some(status) => json!({
+            "last_backup_at_ms": status.last_backup_at_ms,
+            "manifest_entries": status.manifest_entries,
+            "reason": snapshot
+                .backup_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "last_backup_at_ms": null,
+            "manifest_entries": null,
+            "reason": snapshot
+                .backup_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    let voice = match &snapshot.voice {
+        Some(status) => json!({
+            "utterances": status.utterances,
+            "last_spoken_at_ms": status.last_spoken_at_ms,
+            "last_text_excerpt": status.last_text_excerpt,
+            "voice": status.voice,
+            "note": status.note,
+            "reason": snapshot.voice_reason.clone().or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "utterances": null,
+            "last_spoken_at_ms": null,
+            "last_text_excerpt": null,
+            "voice": null,
+            "note": null,
+            "reason": snapshot
+                .voice_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    let task_board = match &snapshot.task_board {
+        Some(status) => json!({
+            "pending": status.pending,
+            "assigned": status.assigned,
+            "running": status.running,
+            "done": status.done,
+            "failed": status.failed,
+            "blocked": status.blocked,
+            "reason": snapshot.task_board_reason,
+        }),
+        None => json!({
+            "pending": null,
+            "assigned": null,
+            "running": null,
+            "done": null,
+            "failed": null,
+            "blocked": null,
+            "reason": snapshot
+                .task_board_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    let persona = match &snapshot.persona {
+        Some(status) => json!({
+            "core_beliefs": status.core_beliefs,
+            "boundaries": status.boundaries,
+            "preferences": status.preferences,
+            "tensions": status.tensions,
+            "last_consolidation_at": status.last_consolidation_at,
+            "reason": snapshot
+                .persona_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "core_beliefs": null,
+            "boundaries": null,
+            "preferences": null,
+            "tensions": null,
+            "last_consolidation_at": null,
+            "reason": snapshot
+                .persona_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
     json!({
         "identity": {
             "product_name": snapshot.identity.product_name,
@@ -683,6 +989,11 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "model": model,
         "domain": domain,
         "content_feed": content_feed,
+        "care": care,
+        "backup": backup,
+        "voice": voice,
+        "task_board": task_board,
+        "persona": persona,
     })
 }
 
@@ -747,23 +1058,25 @@ impl SelfStatusTool {
         }
     }
 
-    /// 输出归一合同: 结构化输出必须是对象且九节恒在场 (每节为对象)。
+    /// 输出归一合同: 结构化输出必须是对象且**每一节恒在场** (每节为对象;
+    /// 节的全集与顺序 = [`SELF_STATUS_SECTIONS`] 冻结表, 随能力面叠加而增,
+    /// 计数词免钉防漂移)。
     ///
     /// 具体字段允许显式 null (来源缺失), 但**节**不可缺席 —— 自述的形状冻结。
     /// 模型画像节随 H-P1 (模型画像表) 入合同: 路由/成本的依据数据面自述化;
     /// 用户域节随 W3-① (多户数据隔离) 入合同: 当前域 id/角色/域内计数自述化;
-    /// 内容流节随 J1 (内容流接入) 入合同: 订阅数/最近拉取自述化。
+    /// 内容流节随 J1 (内容流接入) 入合同: 订阅数/最近拉取自述化;
+    /// 关怀节随 V3-a (双引擎主动关怀) 入合同: 规则数/下次触发/最近关怀自述化;
+    /// 备份节随 G5 (备份恢复) 入合同: 最近备份时间/清单件数自述化;
+    /// 任务簿节随 V6-a (任务编排持久队列) 入合同: 分态计数自述化;
+    /// 人格节随 V4-a (人格记忆层) 入合同: 信念/边界/偏好/张力计数 + 最后整编
+    /// 真值自述化 (只计数不回内容)。
     pub fn output_schema() -> OutputSchema {
-        OutputSchema::new()
-            .require("identity", SchemaKind::Object)
-            .require("capabilities", SchemaKind::Object)
-            .require("memory_ledger", SchemaKind::Object)
-            .require("tuning", SchemaKind::Object)
-            .require("budget", SchemaKind::Object)
-            .require("workspace", SchemaKind::Object)
-            .require("model", SchemaKind::Object)
-            .require("domain", SchemaKind::Object)
-            .require("content_feed", SchemaKind::Object)
+        let mut schema = OutputSchema::new();
+        for section in SELF_STATUS_SECTIONS {
+            schema = schema.require(*section, SchemaKind::Object);
+        }
+        schema
     }
 
     /// 采集并投影当前自述 (结构化值)。
@@ -938,6 +1251,47 @@ mod tests {
                 reason: None,
             }),
             content_feed_reason: None,
+            care: Some(CareStatus {
+                rules: Some(3),
+                next_trigger_at_ms: Some(1_728_000_900_000),
+                last_care_at_ms: Some(1_728_000_400_000),
+                last_care_note: Some("morning: spoke (rule_fallback)".to_string()),
+                reason: None,
+            }),
+            care_reason: None,
+            backup: Some(BackupStatus {
+                last_backup_at_ms: Some(1_728_000_600_000),
+                manifest_entries: Some(7),
+                reason: None,
+            }),
+            backup_reason: None,
+            voice: Some(VoiceStatus {
+                utterances: Some(5),
+                last_spoken_at_ms: Some(1_728_000_700_000),
+                last_text_excerpt: Some("最近说的一句".to_string()),
+                voice: Some("system-default".to_string()),
+                note: None,
+                reason: None,
+            }),
+            voice_reason: None,
+            task_board: Some(TaskBoardStatus {
+                pending: 2,
+                assigned: 1,
+                running: 1,
+                done: 4,
+                failed: 1,
+                blocked: 0,
+            }),
+            task_board_reason: None,
+            persona: Some(PersonaStatusSection {
+                core_beliefs: 2,
+                boundaries: 1,
+                preferences: 3,
+                tensions: 1,
+                last_consolidation_at: Some(1_728_000_800),
+                reason: None,
+            }),
+            persona_reason: None,
         }
     }
 
@@ -966,24 +1320,18 @@ mod tests {
         let result = invoke_tool(fixture_snapshot()).await;
         assert!(result.is_ok(), "{}", result.render());
         let value: Value = serde_json::from_str(&result.render()).expect("structured json");
-        for section in [
-            "identity",
-            "capabilities",
-            "memory_ledger",
-            "tuning",
-            "budget",
-            "workspace",
-            // H-P1: 模型画像节入七节合同 (形状冻结的演进, 附理由)。
-            "model",
-            // W3-①: 用户域节入八节合同 (形状冻结的演进, 附理由: 多户数据隔离
-            // 的自述域面)。
-            "domain",
-            // J1: 内容流节入九节合同 (形状冻结的演进, 附理由: 订阅数/最近拉取
-            // 的如实自述)。
-            "content_feed",
-        ] {
+        // 缺节即红: fixture 的渲染必须带出冻结节表的每一节 (十四节合同终核)。
+        for section in SELF_STATUS_SECTIONS {
             assert!(value.get(section).is_some(), "missing section {section}");
         }
+        assert_eq!(value["care"]["rules"], 3);
+        assert_eq!(value["care"]["next_trigger_at_ms"], 1_728_000_900_000i64);
+        assert_eq!(value["care"]["last_care_at_ms"], 1_728_000_400_000i64);
+        assert_eq!(
+            value["care"]["last_care_note"],
+            "morning: spoke (rule_fallback)"
+        );
+        assert_eq!(value["care"]["reason"], Value::Null);
         assert_eq!(value["content_feed"]["feeds"], 2);
         assert_eq!(
             value["content_feed"]["last_pull_at_ms"],
@@ -1013,6 +1361,12 @@ mod tests {
         assert_eq!(value["domain"]["counts"]["sessions"], 3);
         assert_eq!(value["domain"]["counts"]["memories"], 12);
         assert_eq!(value["domain"]["counts"]["protected"], 1);
+        assert_eq!(value["persona"]["core_beliefs"], 2);
+        assert_eq!(value["persona"]["boundaries"], 1);
+        assert_eq!(value["persona"]["preferences"], 3);
+        assert_eq!(value["persona"]["tensions"], 1);
+        assert_eq!(value["persona"]["last_consolidation_at"], 1_728_000_800i64);
+        assert_eq!(value["persona"]["reason"], Value::Null);
     }
 
     #[tokio::test]
@@ -1026,6 +1380,8 @@ mod tests {
         snapshot.domain_reason = Some("domain registry unavailable: bad config".to_string());
         snapshot.content_feed = None;
         snapshot.content_feed_reason = Some("feeds.json refused to open: bad config".to_string());
+        snapshot.care = None;
+        snapshot.care_reason = Some("care_rules.json refused to open: bad config".to_string());
 
         let result = invoke_tool(snapshot).await;
         assert!(result.is_ok(), "a missing source must not fail the frame");
@@ -1079,6 +1435,179 @@ mod tests {
             "{}",
             value["content_feed"]["reason"]
         );
+        // 关怀节缺席同样显式 null + 原因 (不丢节, 不编规则数)。
+        assert_eq!(value["care"]["rules"], Value::Null);
+        assert_eq!(value["care"]["next_trigger_at_ms"], Value::Null);
+        assert_eq!(value["care"]["last_care_at_ms"], Value::Null);
+        assert!(
+            value["care"]["reason"]
+                .as_str()
+                .unwrap()
+                .contains("care_rules.json refused to open"),
+            "{}",
+            value["care"]["reason"]
+        );
+    }
+
+    /// V3-a 自述关怀行: 规则数/下次触发/最近关怀如实 —— 尚无关怀 = 显式 null +
+    /// 如实注, 不编时间不编判定。
+    #[test]
+    fn care_section_reports_rule_count_next_trigger_and_last_care_honestly() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.care = Some(CareStatus {
+            rules: Some(1),
+            next_trigger_at_ms: Some(1_728_100_000_000),
+            last_care_at_ms: None,
+            last_care_note: Some("尚无关怀记录".to_string()),
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["care"]["rules"], 1);
+        assert_eq!(value["care"]["next_trigger_at_ms"], 1_728_100_000_000i64);
+        assert_eq!(value["care"]["last_care_at_ms"], Value::Null);
+        assert_eq!(value["care"]["last_care_note"], "尚无关怀记录");
+        assert_eq!(value["care"]["reason"], Value::Null);
+
+        // 探测口失败 = 全维显式 null + 原因 (0 装诚实)。
+        let unavailable = CareStatus::unavailable("care_rules.json refused to open");
+        assert_eq!(unavailable.rules, None);
+        assert_eq!(
+            unavailable.reason.as_deref(),
+            Some("care_rules.json refused to open")
+        );
+    }
+
+    /// V6-a 自述行: 任务簿分态计数真值 (pending/running/failed 计数不编造)。
+    #[test]
+    fn task_board_section_reports_state_counts_truthfully() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.task_board = Some(TaskBoardStatus {
+            pending: 3,
+            assigned: 1,
+            running: 2,
+            done: 7,
+            failed: 1,
+            blocked: 0,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["task_board"]["pending"], 3);
+        assert_eq!(value["task_board"]["assigned"], 1);
+        assert_eq!(value["task_board"]["running"], 2);
+        assert_eq!(value["task_board"]["done"], 7);
+        assert_eq!(value["task_board"]["failed"], 1);
+        assert_eq!(value["task_board"]["blocked"], 0);
+        assert_eq!(value["task_board"]["reason"], Value::Null);
+
+        // 探测口缺位 = 全维显式 null + 原因 (不编数)。
+        snapshot.task_board = None;
+        snapshot.task_board_reason = Some(DATA_PROBE_NOT_WIRED.to_string());
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["task_board"]["pending"], Value::Null);
+        assert_eq!(value["task_board"]["failed"], Value::Null);
+        assert_eq!(
+            value["task_board"]["reason"].as_str(),
+            Some(DATA_PROBE_NOT_WIRED)
+        );
+    }
+
+    /// V4-a 自述人格节: 信念/边界/偏好/张力计数 + 最后整编真值如实 (只计数不
+    /// 回内容; 尚未整编 = 显式 null, 不编时间)。
+    #[test]
+    fn persona_section_reports_counts_and_last_consolidation_truthfully() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.persona = Some(PersonaStatusSection {
+            core_beliefs: 4,
+            boundaries: 2,
+            preferences: 5,
+            tensions: 1,
+            last_consolidation_at: Some(1_728_200_000),
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["persona"]["core_beliefs"], 4);
+        assert_eq!(value["persona"]["boundaries"], 2);
+        assert_eq!(value["persona"]["preferences"], 5);
+        assert_eq!(value["persona"]["tensions"], 1);
+        assert_eq!(value["persona"]["last_consolidation_at"], 1_728_200_000i64);
+        assert_eq!(value["persona"]["reason"], Value::Null);
+
+        // 尚未整编 = 最后整编显式 null (不编时间), 计数照常如实。
+        snapshot.persona = Some(PersonaStatusSection {
+            core_beliefs: 0,
+            boundaries: 0,
+            preferences: 0,
+            tensions: 0,
+            last_consolidation_at: None,
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["persona"]["core_beliefs"], 0);
+        assert_eq!(value["persona"]["last_consolidation_at"], Value::Null);
+        assert_eq!(value["persona"]["reason"], Value::Null);
+    }
+
+    /// 人格节缺源 = 全维显式 null + 原因 (0 装诚实, 不编数)。
+    #[test]
+    fn persona_section_without_a_source_is_explicit_null_with_a_reason() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.persona = None;
+        snapshot.persona_reason = Some("persona store refused to open: bad config".to_string());
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["persona"]["core_beliefs"], Value::Null);
+        assert_eq!(value["persona"]["boundaries"], Value::Null);
+        assert_eq!(value["persona"]["preferences"], Value::Null);
+        assert_eq!(value["persona"]["tensions"], Value::Null);
+        assert_eq!(value["persona"]["last_consolidation_at"], Value::Null);
+        assert!(
+            value["persona"]["reason"]
+                .as_str()
+                .unwrap()
+                .contains("persona store refused to open"),
+            "{}",
+            value["persona"]["reason"]
+        );
+    }
+
+    /// 十四节合同终核: 节序显式、schema require 清单全、渲染缺一节即红 ——
+    /// [`SELF_STATUS_SECTIONS`] 是 render / output_schema / fixture 三侧的
+    /// 单一真源, 任一侧漂移都红。
+    #[test]
+    fn the_frozen_section_contract_is_the_single_source_for_render_and_schema() {
+        // ① 节序显式: schema require 清单与冻结表逐项同名同序。
+        let schema = SelfStatusTool::output_schema();
+        let declared: Vec<&str> = schema
+            .fields()
+            .iter()
+            .map(|field| field.name.as_str())
+            .collect();
+        assert_eq!(declared, SELF_STATUS_SECTIONS, "节序必须逐项显式一致");
+
+        // ② 渲染面全集 = 冻结表 (不缺节, 不多节)。
+        let value = render_snapshot(&fixture_snapshot());
+        let rendered: std::collections::BTreeSet<&str> = value
+            .as_object()
+            .expect("object frame")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let frozen: std::collections::BTreeSet<&str> =
+            SELF_STATUS_SECTIONS.iter().copied().collect();
+        assert_eq!(rendered, frozen, "渲染面必须恰好是冻结节表的全集");
+        assert!(SelfStatusTool::output_schema().validate(&value).is_ok());
+
+        // ③ 渲染缺一节即红: 逐节拆除都要撞 output_contract.schema_mismatch。
+        for section in SELF_STATUS_SECTIONS {
+            let mut drifted = render_snapshot(&fixture_snapshot());
+            drifted.as_object_mut().unwrap().remove(*section);
+            let error = SelfStatusTool::output_schema()
+                .validate(&drifted)
+                .expect_err("missing section must be a contract violation");
+            assert_eq!(
+                error.code(),
+                "output_contract.schema_mismatch",
+                "缺节 {section} 必须红"
+            );
+        }
     }
 
     /// J1 自述行: 订阅数/最近拉取如实 —— 尚无拉取 = 显式 null + 如实注, 不编时间。
@@ -1222,16 +1751,8 @@ mod tests {
         assert!(executed.failure.is_none(), "{:?}", executed.failure);
         assert!(executed.outcome.ok);
         let structured = executed.outcome.structured().expect("structured sidecar");
-        for section in [
-            "identity",
-            "capabilities",
-            "memory_ledger",
-            "tuning",
-            "budget",
-            "workspace",
-            // H-P1: 模型画像节入七节合同 (形状冻结的演进, 附理由)。
-            "model",
-        ] {
+        // 缺节即红: 冻结节表的每一节都必须穿过执行管道到场。
+        for section in SELF_STATUS_SECTIONS {
             assert!(
                 structured.get(section).is_some(),
                 "missing section {section}"

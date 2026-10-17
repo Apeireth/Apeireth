@@ -53,6 +53,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_governance::{verify_action_binding, BindingMismatchAudit};
 use apeireth_governance::{Action, Decision, GovernanceRequest, TurnSecurityContext};
 use apeireth_orchestration::call_scheduler::{
     CallBatch, CallRunner, CallScheduler, CancelKind, ConcurrencySafety, ScheduledCall, SlotOutcome,
@@ -82,8 +83,9 @@ use apeireth_protocol::canonical::{
 pub use apeireth_orchestration::context_budget::ContextBlock;
 
 use super::approval::{
-    approval_arguments_summary, approval_command_text, operation_arguments_fingerprint,
-    operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus, FrozenOperationRecord,
+    approval_action_binding, approval_arguments_summary, approval_command_text,
+    operation_arguments_fingerprint, operation_fingerprint_with_invocation,
+    tool_schema_version_digest, ApprovalDecision, ApprovalStatus, FrozenOperationRecord,
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 use super::cache_trace;
@@ -254,6 +256,8 @@ struct PendingDispatch {
     tool_name: String,
     tool_call: ToolCall,
     effective_invocation: Option<FrozenInvocation>,
+    /// G2.5 工具面版本摘要（[`tool_schema_version_digest`]）：随动作绑定冻结。
+    tool_schema_version: String,
     governance_hook: String,
     governance_reason: String,
 }
@@ -261,6 +265,36 @@ struct PendingDispatch {
 enum ToolDispatch {
     Result(ToolResult),
     Pending(PendingDispatch),
+}
+
+/// 执行边界绑定比对的拒绝因（G2.5）：身份 / 指纹面（既有口径）或动作绑定
+/// 摘要面（拒绝即帧 + `approval.binding_mismatch` 审计行）。
+enum BindingRefusal {
+    /// 能力 / 工具名 / 调用 id / 冻结指纹不一致（既有口径）。
+    Identity(String),
+    /// 动作绑定摘要不符：批准之后载荷被改（参数 / 目标 / 顺序 / 工具面变）。
+    Binding(BindingMismatchAudit),
+}
+
+impl BindingRefusal {
+    /// 拒绝帧的可读因（落到工具结果与失败事件）。
+    fn message(&self) -> String {
+        match self {
+            Self::Identity(reason) => reason.clone(),
+            Self::Binding(audit) => format!(
+                "approved action binding mismatch ({}): the payload changed after approval; refusing to execute",
+                audit.drift
+            ),
+        }
+    }
+
+    /// G2.5 审计行内容（仅摘要面拒绝产生）。
+    fn audit(&self) -> Option<&BindingMismatchAudit> {
+        match self {
+            Self::Identity(_) => None,
+            Self::Binding(audit) => Some(audit),
+        }
+    }
 }
 
 /// How a repeated approval-gated proposal collapses the turn (防重入收束).
@@ -3087,10 +3121,27 @@ impl Runtime {
                 ));
             };
 
-            if let Err(reason) = self.verify_frozen_approval_binding(approval, call, tool.as_ref())
+            if let Err(refusal) = self.verify_frozen_approval_binding(approval, call, tool.as_ref())
             {
                 // Fail closed: the stored approval does not match the live
-                // capability or its fingerprint. Do not invoke.
+                // capability, its fingerprint, or its action binding. Do not
+                // invoke (G2.5 拒绝即帧: 载荷被改就地拒绝并落审计行).
+                if let Some(audit) = refusal.audit() {
+                    session.record(
+                        request_id,
+                        trace_id,
+                        SessionEventKind::ApprovalBindingMismatch {
+                            approval_id: approval.approval_id,
+                            tool_call_id: call.id.clone(),
+                            drift: audit.drift.label().to_string(),
+                            expected_digest: audit.expected_digest.clone(),
+                            actual_digest: audit.actual_digest.clone(),
+                            round,
+                        },
+                        clock,
+                    );
+                }
+                let reason = refusal.message();
                 session.record(
                     request_id,
                     trace_id,
@@ -3208,6 +3259,7 @@ impl Runtime {
                     tool_name: call.name.clone(),
                     tool_call: call.clone(),
                     effective_invocation,
+                    tool_schema_version: tool_schema_version_digest(tool.as_ref()),
                     governance_hook: hook,
                     governance_reason: reason,
                 }));
@@ -3404,6 +3456,16 @@ impl Runtime {
         let authorization_families = apeireth_governance::approval_family::family_ids_for_arguments(
             &pending_dispatch.tool_call.arguments,
         );
+        // G2.5 动作绑定: 批准时冻结"批准的到底是什么"(操作/主体/目标/工具面
+        // 版本/结构化 argv), 摘要随记录落库; 执行边界重算比对, 载荷被改
+        // (参数/目标/顺序变) → 摘要不符 → 拒绝即帧。
+        let action_binding = approval_action_binding(
+            &pending_dispatch.tool_name,
+            session_id,
+            &pending_dispatch.tool_schema_version,
+            &pending_dispatch.tool_call.arguments,
+            pending_dispatch.effective_invocation.as_ref(),
+        );
         let pending = PendingApproval {
             approval_id,
             session_id,
@@ -3419,6 +3481,7 @@ impl Runtime {
             command_text,
             arguments_summary,
             authorization_families,
+            action_binding: Some(action_binding),
             operation_fingerprint: fingerprint,
             created_at,
             expires_at,
@@ -4031,31 +4094,35 @@ impl Runtime {
 
     /// Recompute the operation fingerprint from the stored approval and verify
     /// the live capability identity matches the frozen approval.
+    ///
+    /// G2.5 动作绑定: 再对**将执行的活动作**重算动作摘要, 与批准时冻结的摘要
+    /// 比对 —— 载荷被改（参数 / 目标 / 顺序变）→ 摘要不符 → 拒绝即帧
+    /// （[`BindingRefusal::Binding`]，`approval.binding_mismatch` 审计行）。
     fn verify_frozen_approval_binding(
         &self,
         approval: &PendingApproval,
         call: &ToolCall,
         tool: &dyn apeireth_plugin::ToolCapability,
-    ) -> Result<(), String> {
+    ) -> Result<(), BindingRefusal> {
         if tool.id() != &approval.capability_id {
-            return Err(format!(
+            return Err(BindingRefusal::Identity(format!(
                 "capability mismatch: approval is for {} but the tool named {:?} resolves to {}",
                 approval.capability_id,
                 call.name,
                 tool.id()
-            ));
+            )));
         }
         if call.name != approval.tool_name {
-            return Err(format!(
+            return Err(BindingRefusal::Identity(format!(
                 "tool name mismatch: approval is for {:?} but the call names {:?}",
                 approval.tool_name, call.name
-            ));
+            )));
         }
         if call.id != approval.tool_call.id {
-            return Err(format!(
+            return Err(BindingRefusal::Identity(format!(
                 "tool call id mismatch: approval is for {:?} but the call id is {:?}",
                 approval.tool_call.id, call.id
-            ));
+            )));
         }
 
         let computed = operation_fingerprint_with_invocation(
@@ -4073,8 +4140,39 @@ impl Runtime {
             approval.round,
         );
         if computed != approval.operation_fingerprint {
-            return Err("frozen invocation fingerprint mismatch".into());
+            return Err(BindingRefusal::Identity(
+                "frozen invocation fingerprint mismatch".into(),
+            ));
         }
+
+        // 执行边界重算: 活动作 = 活调用载荷 + 记录里将执行的冻结载荷 + 活工具面。
+        let live_schema_version = tool_schema_version_digest(tool);
+        let live = approval_action_binding(
+            &approval.tool_name,
+            approval.session_id,
+            &live_schema_version,
+            &call.arguments,
+            approval.effective_invocation.as_ref(),
+        );
+        let approved = match &approval.action_binding {
+            Some(stored) => stored.clone(),
+            // 迁移面 (G2.5 存量记录): 无冻结绑定 —— 不给假摘要, 从记录字段
+            // 重建绑定只钉"记录载荷 vs 活载荷"一致 (仍拒载荷替换)。
+            // 工具面版本锚在存量记录上不可见 (如实), 其余面照比。
+            None => approval_action_binding(
+                &approval.tool_name,
+                approval.session_id,
+                &live_schema_version,
+                &approval.tool_call.arguments,
+                approval.effective_invocation.as_ref(),
+            ),
+        };
+        verify_action_binding(&approved, &live).map_err(|mismatch| {
+            BindingRefusal::Binding(BindingMismatchAudit::new(
+                approval.approval_id.to_string(),
+                &mismatch,
+            ))
+        })?;
 
         Ok(())
     }

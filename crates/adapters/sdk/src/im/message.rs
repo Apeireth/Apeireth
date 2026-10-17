@@ -419,6 +419,7 @@ mod tests {
             command_text: "shell: bash -c 'ls'".to_string(),
             arguments_summary: "执行命令 ls".to_string(),
             authorization_families: Vec::new(),
+            action_binding_digest: String::new(),
             risk_level: "high".to_string(),
             governance_reason: "write effect".to_string(),
             created_at_ms: 1_700_000_000_000,

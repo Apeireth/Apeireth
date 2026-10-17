@@ -62,6 +62,10 @@ pub struct ImApprovalNotice {
     /// 空 = 非命令面操作（授权对象 = 操作本身）。批"删除族" = 该族所有
     /// 形态生效，跨族仍逐族审批。
     pub authorization_families: Vec<String>,
+    /// 动作摘要（G2.5 动作绑定）：被批动作内容的 SHA-256 摘要（hex）。
+    /// 卡面只出短摘要（hex 前 12 位）而非全量载荷；执行边界重算比对，
+    /// 载荷被改 → 拒绝即帧。存量记录（无冻结绑定）为空串。
+    pub action_binding_digest: String,
     /// 治理 hook 名 (展示)。
     pub governance_hook: String,
     /// 治理原因 (展示 + 风险级推导输入)。
@@ -84,6 +88,7 @@ impl ImApprovalNotice {
             command_text: view.command_text.clone(),
             arguments_summary: view.arguments_summary.clone(),
             authorization_families: view.authorization_families.clone(),
+            action_binding_digest: view.action_binding_digest.clone(),
             governance_hook: view.governance_hook.clone(),
             governance_reason: view.governance_reason.clone(),
             created_at_ms: view.created_at.epoch_millis(),
@@ -108,6 +113,7 @@ impl ImApprovalNotice {
             command_text: self.command_text.clone(),
             arguments_summary: self.arguments_summary.clone(),
             authorization_families: self.authorization_families.clone(),
+            action_binding_digest: self.action_binding_digest.clone(),
             risk_level: self.risk_level(),
             governance_reason: self.governance_reason.clone(),
             created_at_ms: self.created_at_ms,
@@ -560,6 +566,8 @@ mod tests {
             command_text: "shell: bash -c 'ls'".to_string(),
             arguments_summary: "执行命令 ls".to_string(),
             authorization_families: vec!["删除族".to_string()],
+            action_binding_digest:
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
             governance_hook: "hook".to_string(),
             governance_reason: "risk=critical write".to_string(),
             created_at_ms: 1_700_000_000_000,

@@ -99,6 +99,8 @@ pub mod amem_graph;
 pub mod dream_consolidation;
 pub mod memory_injection;
 pub mod memory_rank;
+// V4-a 人格记忆独立成层: 「我是谁」与「关于用户」分账 (persona_memory_* 分表).
+pub mod persona_layer;
 
 pub use betti_hole_detector::{
     BettiHoleDetector, BettiTopologicalReport, ManifoldConceptNode, TopologicalVoidRing,
@@ -118,6 +120,17 @@ pub use memory_injection::{
 pub use memory_rank::{
     filter_active_memories, group_bonus, memory_score, parse_importance, rank_memory_entries,
     recency_score, RankableMemory, IMP_PREFIX, TOMBSTONE_PREFIX,
+};
+pub use persona_layer::{
+    build_constant_injection, build_retrieval_supplement, classify_sentence, compress_persona,
+    consolidate_persona, normalize_text as persona_normalize_text, persona_decay_strength,
+    polarity as persona_polarity, split_sentences as persona_split_sentences, sweep_persona,
+    topic_core as persona_topic_core, CompressedPersonaView, InMemoryPersonaMemoryStore,
+    PersonaCompressBudget, PersonaConsolidationReport, PersonaEntry, PersonaExtract,
+    PersonaExtractor, PersonaKind, PersonaMemory, PersonaMemoryStore, PersonaMergeOutcome,
+    PersonaPolarity, PersonaProtection, PersonaStatement, PersonaStatusSection, PersonaSweepReport,
+    PersonaTension, CONSTANT_INJECTION_BUDGET_CHARS, PERSONA_SLOW_HALF_LIFE_HOURS,
+    SUPPLEMENT_MAX_LINES,
 };
 
 pub use residual_pyramid::{

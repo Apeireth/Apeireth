@@ -73,9 +73,10 @@ pub mod trace;
 
 pub use apeireth_governance::TurnSecurityContext;
 pub use approval::{
-    approval_arguments_summary, approval_command_text, operation_arguments_fingerprint,
-    operation_fingerprint, operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
-    FrozenOperationRecord, FrozenTurnContinuation, PendingApproval, PendingApprovalView,
+    approval_action_binding, approval_arguments_summary, approval_command_text,
+    operation_arguments_fingerprint, operation_fingerprint, operation_fingerprint_with_invocation,
+    tool_schema_version_digest, ApprovalDecision, ApprovalStatus, FrozenOperationRecord,
+    FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};

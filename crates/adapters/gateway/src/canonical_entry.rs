@@ -182,6 +182,10 @@ pub struct CanonicalPendingApproval {
     /// 审批卡族标注 / 授权对象（E-P2 族归一）：被批命令的族 id 列表；
     /// 空 = 非命令面操作（授权对象 = 操作本身）。
     pub authorization_families: Vec<String>,
+    /// 动作摘要（G2.5 动作绑定）：被批动作内容的 SHA-256 摘要（hex）。
+    /// 执行边界重算比对，载荷被改 → 拒绝即帧；卡面只出短摘要。
+    /// 存量记录（无冻结绑定）为空串。
+    pub action_binding_digest: String,
     /// The turn's generated text so far, preserved by the pending close so the
     /// UI can keep what the model already said alongside "waiting for
     /// approval: <tool>".
@@ -207,6 +211,7 @@ impl From<PendingApprovalView> for CanonicalPendingApproval {
             command_text: view.command_text,
             arguments_summary: view.arguments_summary,
             authorization_families: view.authorization_families,
+            action_binding_digest: view.action_binding_digest,
             generated_text: view.generated_text,
             rounds_used: view.rounds_used,
             created_at: view.created_at,
