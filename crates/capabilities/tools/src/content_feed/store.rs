@@ -33,6 +33,8 @@ use crate::egress::{self, EgressDestination, EgressPolicy};
 use crate::fetch::FETCH_URL_MAX_BYTES;
 use crate::self_status::ContentFeedStatus;
 
+use super::lifecycle::FeedLifecycleStore;
+
 /// `feeds.json` 的文档身份 (StoredDoc 信封 name 字段)。
 pub const FEEDS_DOC_NAME: &str = "apeireth.content_feeds";
 /// `feeds.json` 的格式版本戳 (读端当前版本)。
@@ -260,14 +262,19 @@ pub fn validate_feed_url(raw: &str, policy: &EgressPolicy) -> Result<Url, String
 pub struct FeedStore {
     path: PathBuf,
     policy: EgressPolicy,
+    lifecycle: FeedLifecycleStore,
 }
 
 impl FeedStore {
     /// 绑定数据目录与出口策略 (URL 校验口径与拉取通道同一策略)。
+    ///
+    /// 同目录挂生命周期账 ([`FeedLifecycleStore`]: 条目去重 / 退避 / 健康)。
     pub fn new(data_dir: impl Into<PathBuf>, policy: EgressPolicy) -> Self {
+        let dir = data_dir.into();
         Self {
-            path: data_dir.into().join(FEEDS_FILE_NAME),
+            path: dir.join(FEEDS_FILE_NAME),
             policy,
+            lifecycle: FeedLifecycleStore::for_data_dir(dir),
         }
     }
 
@@ -279,6 +286,11 @@ impl FeedStore {
     /// 出口策略 (URL 校验口径)。
     pub fn policy(&self) -> &EgressPolicy {
         &self.policy
+    }
+
+    /// 生命周期账 (条目去重 / 退避 / 健康 / 日计数)。
+    pub fn lifecycle(&self) -> &FeedLifecycleStore {
+        &self.lifecycle
     }
 
     /// 装载订阅表 (StoredDoc 拒开语义):
@@ -373,7 +385,10 @@ impl FeedStore {
         Ok(body)
     }
 
-    /// 自述面真值来源: 订阅数 + 最近拉取 (如实; 缺位显式 null + 原因)。
+    /// 自述面真值来源: 订阅数 + 最近拉取 + 生命周期真值 (如实; 缺位显式 null + 原因)。
+    ///
+    /// J2 生命周期字段 (条目去重 / 投摄取 / 注意力截断 / 订阅健康) 取自同目录
+    /// 生命周期账; 账读失败 = 字段级 `None` + `reason`, 不让整帧失败 (0 装诚实)。
     pub fn status(&self) -> Result<ContentFeedStatus, String> {
         let body = self
             .load()
@@ -384,13 +399,40 @@ impl FeedStore {
             .as_ref()
             .map(|record| record.note.clone())
             .or_else(|| Some("尚无拉取记录".to_string()));
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        let (
+            dedup_skipped,
+            ingest_queued,
+            attention_truncated,
+            degraded_feeds,
+            backing_off_feeds,
+            lifecycle_reason,
+        ) = match self.lifecycle.stats(now_ms) {
+            Ok(stats) => (
+                Some(stats.dedup_skipped),
+                Some(stats.ingest_queued),
+                Some(stats.attention_truncated),
+                Some(stats.degraded_feeds),
+                Some(stats.backing_off_feeds),
+                None,
+            ),
+            Err(error) => (None, None, None, None, None, Some(error)),
+        };
         Ok(ContentFeedStatus {
             feeds: Some(body.feeds.len() as u64),
             last_pull_at_ms: body.last_pull.as_ref().map(|record| record.at_ms),
             last_pull_ok: body.last_pull.as_ref().map(|record| record.ok),
             last_pull_ingested: body.last_pull.as_ref().map(|record| record.ingested),
             last_pull_note,
-            reason: None,
+            dedup_skipped,
+            ingest_queued,
+            attention_truncated,
+            degraded_feeds,
+            backing_off_feeds,
+            reason: lifecycle_reason,
         })
     }
 }

@@ -94,6 +94,12 @@ pub const ENABLE_VOICE_SPEAK_ENV: &str = "APEIRETH_ENABLE_VOICE_SPEAK";
 // (fail-closed); `APEIRETH_ENABLE_TASK_BOARD=1` = 注册工具 + grant + 写面
 // 审批钩子 + 任务队列装配 (与会话账本同库的任务表)。
 pub const ENABLE_TASK_BOARD_ENV: &str = "APEIRETH_ENABLE_TASK_BOARD";
+// V5-b 暴露面体检旋钮 (`tool.exposure_audit`): 注册 + 策略 grant (只读档)。
+// 默认关 (fail-closed); `APEIRETH_ENABLE_EXPOSURE_AUDIT=1` = 注册工具 + grant
+// —— 只读档 = grant 即用 (零审批, 与 `tool.self_status` 同档): 本地只读自查
+// (体检不写被测面任何字节, 报告是唯一产出), 与 CLI `apeireth exposure report`
+// 同一内核两个出口。
+pub const ENABLE_EXPOSURE_AUDIT_ENV: &str = "APEIRETH_ENABLE_EXPOSURE_AUDIT";
 // 受控文件写入旋钮 (`tool.apply_patch`, 第七件生产工具): 注册 + 策略 grant +
 // 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_FILE_WRITE=1` = 注册工具 +
 // grant + require_approval —— 每次写入都要人批 (本地审批面板 + IM 审批卡同链)。
@@ -152,6 +158,14 @@ const DEFAULT_SUBJECT_ID: &str = "local-user";
 // 2026-10-06 W2 记忆闭环批: 反幻觉注入格式 / 每轮记忆整理 / 失败闭环。
 const ENABLE_MEMORY_INJECTION_ENV: &str = "APEIRETH_ENABLE_MEMORY_INJECTION";
 const ENABLE_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION";
+// V4-a 人格提取步旋钮 (`persona_consolidation`): 注册即闸, 默认关 (fail-closed);
+// `APEIRETH_ENABLE_PERSONA_CONSOLIDATION=1` = 挂上人格提取步 —— 提取步随整编
+// 跑 (整编触发点上从近期情节提炼人格增量 → 人格层合并), 整编关时显式不跑。
+pub const ENABLE_PERSONA_CONSOLIDATION_ENV: &str = "APEIRETH_ENABLE_PERSONA_CONSOLIDATION";
+// V4-b 整编散列门旋钮 (`consolidation_hash_gate`): 注册即闸, 默认关
+// (fail-closed); `APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE=1` = 挂上散列增量门
+// —— 整编素材同源同散列跳过重复整编 (省算力防重复记忆), 整编关时显式不跑。
+pub const ENABLE_CONSOLIDATION_HASH_GATE_ENV: &str = "APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE";
 const ENABLE_REFLEXION_ENV: &str = "APEIRETH_ENABLE_REFLEXION";
 const REFLEXION_DIR_ENV: &str = "APEIRETH_REFLEXION_DIR";
 const CONTEXT_BUDGET_CHARS_ENV: &str = "APEIRETH_CONTEXT_BUDGET_CHARS";
@@ -289,6 +303,48 @@ pub fn consolidation_enabled_from_env() -> bool {
     std::env::var(ENABLE_CONSOLIDATION_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1")
+}
+
+/// V4-a 人格提取步 (`persona_consolidation`) 旋钮: 注册即闸, 默认关
+/// (fail-closed)。开 = 挂上人格提取步 —— 提取步**随整编跑** (整编触发点上从
+/// 近期情节提炼人格增量 → 人格层合并, 同类合并 / 矛盾标注「人格张力」);
+/// 整编 (`APEIRETH_ENABLE_CONSOLIDATION`) 关时显式不跑, 名册照实 false。
+pub fn persona_consolidation_enabled_from_env() -> bool {
+    std::env::var(ENABLE_PERSONA_CONSOLIDATION_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// V4-b 整编散列门 (`consolidation_hash_gate`) 旋钮: 注册即闸, 默认关
+/// (fail-closed)。开 = 挂上散列增量门 —— 整编素材同源同散列跳过重复整编
+/// (省算力防重复记忆), 变内容照常重摄; 整编关时显式不跑, 名册照实 false。
+pub fn consolidation_hash_gate_enabled_from_env() -> bool {
+    std::env::var(ENABLE_CONSOLIDATION_HASH_GATE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// V5-b 暴露面体检 (`tool.exposure_audit`) 旋钮: 独立开关, 默认关 (fail-closed)。
+/// 开 = 注册 + grant (只读档: grant 即用零审批, 与 `tool.self_status` 同档)。
+pub fn exposure_audit_enabled_from_env() -> bool {
+    std::env::var(ENABLE_EXPOSURE_AUDIT_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+}
+
+/// 暴露面体检配置 (注册即闸的另一半): 数据根 = 面板数据目录, 绑定一致性
+/// 探测口与 CLI `apeireth exposure report` 同源 ([`exposure::binding_probe`]),
+/// 本机监听探测口走 `netstat` 受控采集 (体检项内显式「未测」语义不变)。
+pub fn exposure_audit_config_from_env(
+) -> Result<Option<apeireth_tools_canonical::ExposureAuditConfig>, String> {
+    if !exposure_audit_enabled_from_env() {
+        return Ok(None);
+    }
+    let data_root = default_panel_data_dir();
+    Ok(Some(
+        apeireth_tools_canonical::ExposureAuditConfig::new(data_root.clone())
+            .with_bindings(crate::exposure::binding_probe(data_root)),
+    ))
 }
 
 /// reflexion 失败闭环 (2026-10-06 W2): `APEIRETH_ENABLE_REFLEXION=1` 注册
@@ -574,12 +630,66 @@ pub fn task_board_enabled_from_env() -> bool {
         .is_some_and(|value| value.trim() == "1")
 }
 
+/// R3 生产情绪源 (绑定位, 后绑注入): `voice_speak` 情绪→语气微调的真值源。
+///
+/// 组合根构造发声配置时把 [`Self::reader`] 注进
+/// [`apeireth_tools_canonical::VoiceSpeakConfig::with_emotion_reader`]; 网关装配
+/// 出 presence/PAD 合成器后调 [`Self::bind`] 把现值源接到读取面 —— 此后每次发声
+/// **现读**合成器现值 ([`apeireth_gateway::PresenceService::current_pad`]), 读到
+/// 什么就按冻结映射表微调什么。未绑定 / 合成器缺席 = 无情绪数据 = 原参数零变化
+/// (fail-safe 朝零微调, 不猜情绪、不用基线冒充读数)。
+#[derive(Clone, Default)]
+pub struct VoiceEmotionSource {
+    presence: Arc<std::sync::Mutex<Option<std::sync::Weak<apeireth_gateway::PresenceService>>>>,
+}
+
+impl VoiceEmotionSource {
+    /// 绑定活的 presence/PAD 合成器 (组合根在网关装配处绑; 重复绑定 = 换源)。
+    pub fn bind(&self, presence: &Arc<apeireth_gateway::PresenceService>) {
+        *self
+            .presence
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::downgrade(presence));
+    }
+
+    /// 绑定位现值 (诊断/测试口; 与读取面同一真值)。
+    pub fn current(&self) -> Option<apeireth_tools_canonical::PadReading> {
+        let slot = self
+            .presence
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let pad = slot.as_ref()?.upgrade()?.current_pad()?;
+        Some(apeireth_tools_canonical::PadReading {
+            pleasure: pad.p,
+            arousal: pad.a,
+            dominance: pad.d,
+        })
+    }
+
+    /// 情绪读取面 (每次发声现读一次; 无现值 = `None` = 零微调)。
+    pub fn reader(&self) -> apeireth_tools_canonical::EmotionReader {
+        let source = self.clone();
+        std::sync::Arc::new(move || source.current())
+    }
+}
+
 /// 发声配置 (注册即闸的另一半): 语句账本落数据目录 (`spoken.jsonl`) +
 /// 勿扰窗口 (同源接缝: `care_rules` 打扰纪律配了窗口 = 引用之, 未落/未配 =
 /// 发声面最小自建 env) + 排队策略 (`APEIRETH_VOICE_INTERRUPT`, 缺省排队串行)
 /// + 发声范围 (`APEIRETH_VOICE_SPEAK_SCOPE`, 缺省仅关怀/提醒, `all` 扩全量)。
 /// 坏配置**拒开** (fail-closed, 不静默回退)。
+///
+/// 生产路径带 R3 情绪源读取面: [`voice_speak_config_with_emotion_from_env`]。
 pub fn voice_speak_config_from_env(
+) -> Result<Option<apeireth_tools_canonical::VoiceSpeakConfig>, String> {
+    voice_speak_config_with_emotion_from_env(&VoiceEmotionSource::default())
+}
+
+/// 发声配置 + R3 生产情绪源读取面 (组合根注入真读取面, 兑现 R3 报备的
+/// 「归口 CLI 接线面」): `voice_speak` 每次发声现读 presence/PAD 合成器现值
+/// ([`VoiceEmotionSource`]), 情绪→语气微调生效; 无情绪数据仍零变化。
+pub fn voice_speak_config_with_emotion_from_env(
+    emotion: &VoiceEmotionSource,
 ) -> Result<Option<apeireth_tools_canonical::VoiceSpeakConfig>, String> {
     if !voice_speak_enabled_from_env() {
         return Ok(None);
@@ -595,7 +705,8 @@ pub fn voice_speak_config_from_env(
         )
         .with_quiet(quiet)
         .with_playback_policy(playback)
-        .with_speak_gate(speak_gate),
+        .with_speak_gate(speak_gate)
+        .with_emotion_reader(emotion.reader()),
     ))
 }
 
@@ -973,6 +1084,18 @@ fn build_production_governance_parts_from_env() -> (
                 apeireth_tools_canonical::VOICE_SPEAK_CAPABILITY_ID.to_string(),
             ));
     }
+    // V5-b 暴露面体检 (`tool.exposure_audit`): **开关开 = 注册 + 授权同源**
+    // (同一开关值同时决定装配侧注册与本授权面)。只读档 = **grant 即用**
+    // (零审批, 与 `tool.self_status` 同档): 本地只读自查 (体检不写被测面任何
+    // 字节, 报告是唯一产出, 无网络外联)。
+    if exposure_audit_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::EXPOSURE_AUDIT_CAPABILITY_ID.to_string(),
+            ));
+    }
     (pipeline, policy, guard_hook)
 }
 
@@ -989,6 +1112,10 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
 /// permission-policy handles alongside it, so the gateway can serve the
 /// sessions/memory/permissions introspection surfaces from the same durable
 /// stores and the same live policy.
+///
+/// 情绪源绑定位不随本入口出口 (无 presence/PAD 合成器的调用形态 = 无情绪数据 =
+/// 零微调); 生产网关路径走
+/// [`build_canonical_runtime_with_sessions_and_voice_emotion_from_env`] 取绑定位。
 pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     (
         Runtime,
@@ -999,9 +1126,31 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     ),
     String,
 > {
+    let (runtime, session_store, memory, policy, guard_hook, _voice_emotion) =
+        build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
+    Ok((runtime, session_store, memory, policy, guard_hook))
+}
+
+/// 生产网关路径的运行时组装 (R3 接线出口): 与
+/// [`build_canonical_runtime_with_sessions_from_env`] 同一装配, 额外出口
+/// [`VoiceEmotionSource`] 绑定位 —— 网关装配出 presence/PAD 合成器后把它绑上,
+/// 发声微调即读合成器现值。
+pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() -> Result<
+    (
+        Runtime,
+        Arc<dyn SessionStore>,
+        Arc<dyn MemoryBackend>,
+        Arc<std::sync::Mutex<PermissionPolicy>>,
+        Arc<BehaviorChainGuardHook>,
+        VoiceEmotionSource,
+    ),
+    String,
+> {
     let session_store = production_session_store().await?;
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
-    let (cognitive, memory) = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
+    let voice_emotion = VoiceEmotionSource::default();
+    let (cognitive, memory) =
+        build_cognitive_modules_from_env(Arc::clone(&clock), &voice_emotion).await?;
     // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根把它注册进域平面,
     // 与运行时共用**同一把** (每域恰一把, W2-③ 承诺不拆)。
     let sessions = Arc::new(apeireth_runtime::SessionManager::new(
@@ -1010,7 +1159,14 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     ));
     let (runtime, policy, guard_hook) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
-    Ok((runtime, session_store, memory, policy, guard_hook))
+    Ok((
+        runtime,
+        session_store,
+        memory,
+        policy,
+        guard_hook,
+        voice_emotion,
+    ))
 }
 
 /// W3-③ 逐域伙伴运行时组装 (星群正身, 「每户各得其伴」): 该域自己的
@@ -1024,12 +1180,13 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
 async fn build_domain_partner_runtime(
     sessions: Arc<apeireth_runtime::SessionManager>,
     memory_db: PathBuf,
+    voice_emotion: &VoiceEmotionSource,
 ) -> Result<Runtime, String> {
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     // 域伙伴运行时不注入备份导出面 (跨域打包面收口到 owner 本地操作, 见
     // [`default_domain_backup_config`]); 名册照实报 `backup_export: false`。
     let (cognitive, _memory) =
-        build_cognitive_modules_at(memory_db, Arc::clone(&clock), None).await?;
+        build_cognitive_modules_at(memory_db, Arc::clone(&clock), None, voice_emotion).await?;
     let (runtime, _policy, _guard_hook) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok(runtime)
@@ -1210,6 +1367,7 @@ pub enum CanonicalCliTurn {
 
 async fn build_cognitive_modules_from_env(
     clock: Arc<dyn apeireth_core::kernel::Clock>,
+    voice_emotion: &VoiceEmotionSource,
 ) -> Result<
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
@@ -1217,7 +1375,13 @@ async fn build_cognitive_modules_from_env(
     ),
     String,
 > {
-    build_cognitive_modules_at(cognitive_db_path(), clock, default_domain_backup_config()).await
+    build_cognitive_modules_at(
+        cognitive_db_path(),
+        clock,
+        default_domain_backup_config(),
+        voice_emotion,
+    )
+    .await
 }
 
 /// G5 备份导出的工具面配置 (默认域专属, 旋钮开才注入 = 注册即闸)。
@@ -1237,6 +1401,7 @@ async fn build_cognitive_modules_at(
     memory_db: PathBuf,
     clock: Arc<dyn apeireth_core::kernel::Clock>,
     backup_config: Option<apeireth_tools_canonical::backup::BackupExportConfig>,
+    voice_emotion: &VoiceEmotionSource,
 ) -> Result<
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
@@ -1387,17 +1552,45 @@ async fn build_cognitive_modules_at(
             apeireth_memory::SqliteMemoryStore::open(path.clone())
                 .map_err(|error| format!("content feed memory store open failed: {error}"))?,
         );
+        let writer_store = std::sync::Arc::clone(&store);
         let writer: apeireth_tools_canonical::EpisodeWriter = std::sync::Arc::new(move |episode| {
-            apeireth_memory::EpisodeStore::put_episode(&*store, episode)
+            apeireth_memory::EpisodeStore::put_episode(&*writer_store, episode)
                 .map_err(|error| error.to_string())
         });
-        Some(apeireth_tools_canonical::ContentFeedConfig::new(
-            default_panel_data_dir(),
-            std::sync::Arc::new(apeireth_tools_canonical::ControlledEgress::new(
-                apeireth_tools_canonical::EgressPolicy::PublicInternetOnly,
-            )),
-            writer,
-        ))
+        // J2 拉取→摄取接缝: 条目摘要投保鲜回路 `enqueue_ingest` (散列门 / 摄取
+        // 队列 / 增量折入全自动, 与 episodic 原料面并行)。只读消费记忆摄取口,
+        // 逐态映射 `EnqueueOutcome` → `IngestOutcome`。
+        let ingest_store = std::sync::Arc::clone(&store);
+        let ingest: apeireth_tools_canonical::IngestPort =
+            apeireth_tools_canonical::ingest_port(
+                move |req: &apeireth_tools_canonical::IngestRequest| match ingest_store
+                    .enqueue_ingest(&req.source, &req.topic, &req.content, req.now_ms)
+                {
+                    Ok(apeireth_memory::freshness::EnqueueOutcome::Enqueued { task_id }) => {
+                        apeireth_tools_canonical::IngestOutcome::Enqueued { task_id }
+                    }
+                    Ok(apeireth_memory::freshness::EnqueueOutcome::DuplicateSkipped {
+                        skip_count,
+                        ..
+                    }) => apeireth_tools_canonical::IngestOutcome::DuplicateSkipped { skip_count },
+                    Ok(apeireth_memory::freshness::EnqueueOutcome::AlreadyQueued { task_id }) => {
+                        apeireth_tools_canonical::IngestOutcome::AlreadyQueued { task_id }
+                    }
+                    Err(error) => apeireth_tools_canonical::IngestOutcome::Failed {
+                        error: error.to_string(),
+                    },
+                },
+            );
+        Some(
+            apeireth_tools_canonical::ContentFeedConfig::new(
+                default_panel_data_dir(),
+                std::sync::Arc::new(apeireth_tools_canonical::ControlledEgress::new(
+                    apeireth_tools_canonical::EgressPolicy::PublicInternetOnly,
+                )),
+                writer,
+            )
+            .with_ingest_port(ingest),
+        )
     } else {
         None
     };
@@ -1433,6 +1626,12 @@ async fn build_cognitive_modules_at(
         proactive_recall: proactive_recall_policy_from_env(),
         memory_injection: memory_injection_enabled_from_env(),
         consolidation: consolidation_enabled_from_env(),
+        // V4-a 人格提取步 (`persona_consolidation`): 注册即闸旋钮, 默认关 ——
+        // 开 = 挂上人格提取步 (随整编跑; 整编关时显式不跑, 名册照实 false)。
+        persona_consolidation: persona_consolidation_enabled_from_env(),
+        // V4-b 整编散列门 (`consolidation_hash_gate`): 注册即闸旋钮, 默认关 ——
+        // 开 = 挂上散列增量门 (同源同散列跳过重复整编; 整编关时显式不跑)。
+        consolidation_hash_gate: consolidation_hash_gate_enabled_from_env(),
         reflexion: reflexion_enabled,
         partner_bond: partner_bond_enabled_from_env(),
         morphology_recall: morphology_recall_enabled_from_env(),
@@ -1458,8 +1657,9 @@ async fn build_cognitive_modules_at(
         backup: backup_config,
         // 通用嗓发声 (`tool.voice_speak`, V3-b): 注册即闸 (旋钮开才注入配置),
         // 发声面档 (grant 即发声)。勿扰窗口走同源接缝 (care_rules 窗口优先),
-        // 坏配置拒开 (fail-closed)。
-        voice_speak: voice_speak_config_from_env()?,
+        // 坏配置拒开 (fail-closed)。R3 生产情绪源: 读取面随配置注入 (现读
+        // presence/PAD 合成器现值, 无情绪数据零微调)。
+        voice_speak: voice_speak_config_with_emotion_from_env(voice_emotion)?,
         // V6-a 任务编排持久队列 (`tool.task_board`): 注册即闸 (旋钮开才注入
         // 队列); 治理档在治理链 (写面 = write_intent 同族每次人批, failed
         // 只能人判无工具面)。自述任务节与工具面同队同账 (探针随队列注入)。
@@ -1492,6 +1692,10 @@ async fn build_cognitive_modules_at(
         trait_report: Some(apeireth_runtime_assembly::TraitGrowthPaths::new(
             apeireth_runtime_assembly::tuning_log_path(),
         )),
+        // V5-b 暴露面体检 (`tool.exposure_audit`): 注册即闸 (旋钮开才注入配置),
+        // 只读档 (grant 即用零审批)。与 CLI `apeireth exposure report` 同一内核
+        // 两个出口, 绑定探测口同源。
+        exposure_audit: exposure_audit_config_from_env()?,
         ..CognitiveModuleConfig::default()
     };
     let sqlite_backend = Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));
@@ -2597,8 +2801,8 @@ pub async fn dispatch_gateway_serve_with(
         None => None,
     };
 
-    let (runtime, sessions, memory, policy, guard_hook) =
-        build_canonical_runtime_with_sessions_from_env().await?;
+    let (runtime, sessions, memory, policy, guard_hook, voice_emotion) =
+        build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
     let runtime = Arc::new(runtime);
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
@@ -2671,6 +2875,11 @@ pub async fn dispatch_gateway_serve_with(
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
     let mut state =
         apeireth_gateway::build_gateway_state_with_services(Arc::clone(&runtime), services);
+    // R3 生产情绪源接线 (兑现 R3 报备的「归口 CLI 接线面」): 网关装配出的
+    // presence/PAD 合成器接到发声微调读取面 —— 此后每次发声**现读**合成器
+    // 现值, 情绪→语气微调生效; 合成器缺席 (如纯 CLI 形态) = 无情绪数据 =
+    // 零微调 (fail-safe 朝原参数)。
+    voice_emotion.bind(&state.presence);
     // W3-②: 用户角色面显式注入 (users.json StoredDoc 拒开 + 令牌↔用户绑定一致性
     // fail-closed); 未配置用户表 = 角色面未激活 (兼容路径, 行为逐字不变)。
     let user_access = apeireth_gateway::UserAccess::load(&data_dir, &client_tokens)
@@ -2702,7 +2911,8 @@ pub async fn dispatch_gateway_serve_with(
             );
             continue;
         };
-        match build_domain_partner_runtime(domain_sessions, domain_memory_db).await {
+        match build_domain_partner_runtime(domain_sessions, domain_memory_db, &voice_emotion).await
+        {
             Ok(partner) => {
                 domain_instances.insert(domain_id, Arc::new(partner));
             }

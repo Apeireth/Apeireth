@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::education::EducationTool;
+use apeireth_tools_canonical::exposure_audit::ExposureAuditTool;
 use apeireth_tools_canonical::{
     apply_patch_capability, authorized_file_write_policy, authorized_git_write_policy,
     authorized_worktree_apply_policy, content_feed_capability, git_write_capability,
@@ -789,5 +790,43 @@ impl CapabilityProvider for VoiceSpeakModule {
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the read-only exposure audit tool (`tool.exposure_audit`,
+/// V5-b 暴露面体检, 只读档).
+///
+/// 安全守望的模型可调出口: 「帮你看清你暴露了什么」的本地只读自查 (体检不
+/// 写被测面任何字节, 凭据值/密钥值永不出现在报告里)。与 CLI
+/// `apeireth exposure report` 同一内核两个出口 (AI 先用, 人后用)。
+///
+/// 治理: **只读档** —— 注册即闸 (`APEIRETH_ENABLE_EXPOSURE_AUDIT`, 默认关
+/// fail-closed), grant 即用 (零审批, 与 `tool.self_status` 同档)。
+pub struct ExposureAuditModule {
+    tool: Arc<ExposureAuditTool>,
+}
+
+impl ExposureAuditModule {
+    /// Create the exposure audit module over the injected audit configuration
+    /// (数据根 + 探测口, 与 CLI 出口同一配置构造口径)。
+    pub fn new(config: apeireth_tools_canonical::ExposureAuditConfig) -> Self {
+        Self {
+            tool: Arc::new(ExposureAuditTool::new(config)),
+        }
+    }
+
+    /// Access the underlying exposure audit tool.
+    pub fn tool(&self) -> &Arc<ExposureAuditTool> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for ExposureAuditModule {
+    fn id(&self) -> &str {
+        "module.tool.exposure_audit"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
     }
 }

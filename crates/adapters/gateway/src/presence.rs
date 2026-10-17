@@ -387,6 +387,14 @@ impl PresenceSynthesizer {
         self.frame(now_ms, PresenceSignificance::Heartbeat)
     }
 
+    /// The synthesizer's current PAD estimate (现值, zero side effects).
+    ///
+    /// 生产情绪源读取面 (R3 接线) 的真值口: 发声微调每次发声现读这里,
+    /// 读到的就是本合成器此刻的估计 —— 不缓存、不另造第二份情绪状态。
+    pub fn current_pad(&self) -> PresencePad {
+        self.pad
+    }
+
     /// Gate for a future initiative producer (he wakes from dreaming and
     /// speaks first). v0 ships the discipline before the producer: the budget
     /// is real and enforced from day one.
@@ -590,6 +598,16 @@ impl PresenceService {
     /// Current frame surface snapshot (last value + failure frame beside it).
     pub fn frame_snapshot(&self) -> ResourceFrame<PresenceState> {
         self.frames.snapshot()
+    }
+
+    /// Current PAD estimate held by the synthesizer (现值, 读取面零副作用).
+    ///
+    /// 生产情绪源接线 (R3): `voice_speak` 的情绪→语气微调读取面每次发声现读
+    /// 本口。估计器锁不可用时返回 `None` —— 无情绪数据 = 原参数零变化
+    /// (fail-safe 朝零微调, 不猜情绪, 也不静默给基线值冒充读数)。
+    pub fn current_pad(&self) -> Option<PresencePad> {
+        let synth = self.synthesizer.lock().ok()?;
+        Some(synth.current_pad())
     }
 
     /// Publish one heartbeat frame. Called by the heartbeat task once per

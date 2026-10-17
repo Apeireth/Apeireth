@@ -78,6 +78,15 @@ CLI 隐私逃生门：`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 关闭 filesystem/se
 
 **性格滑杆锁定（裁定 ④）**：四根滑杆各可**锁定**，锁定态持久在数据目录 `trait-locks.json`（与成长账同目录）——锁定后**成长沉积跳过该杆**并留审计痕（同账零移动留痕行，reason 带「已锁定, 跳过沉积」前缀，可查账）；锁定只挡自动成长沉积，显式人动作（调参面板保存 / 学习日志撤销）不受约束。**解锁 = 显式动作**（`apeireth trait unlock <SLIDER>`），无自动解锁路径。命令面与工具面同内核两出口：`apeireth trait report`（打印周报）/ `apeireth trait lock <SLIDER>` / `apeireth trait unlock <SLIDER>`；锁定档读不出来时 fail-closed 全锁定（宁可不动任何杆，也不把坏档读成全解锁）。
 
+**生产接线旋钮表（2026-10-17 收口批：整编族两旋钮 + 暴露面体检 + 发声情绪源；全部默认关 fail-closed，注册即闸）**：
+
+| 旋钮 | 作用 | 档位 / 纪律 |
+|---|---|---|
+| `APEIRETH_ENABLE_PERSONA_CONSOLIDATION=1` | 人格提取步：整编触发点上从近期情节提炼人格增量 → 人格层合并（同类合并 / 矛盾标注「人格张力」，不静默覆盖） | **随整编跑**——要 `APEIRETH_ENABLE_CONSOLIDATION=1` 同开才真跑，整编关 = 显式不跑（自述名册 `persona_consolidation` 行照实 false）；默认关 |
+| `APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE=1` | 整编散列门：整编素材同源同散列跳过重复整编（省算力防重复记忆），变内容照常重摄 | **随整编跑**（同上，名册 `consolidation_hash_gate` 行照实 false）；门自身故障 fail-open 照常整编（真因进 warning 计数，不静默降级）；默认关 |
+| `APEIRETH_ENABLE_EXPOSURE_AUDIT=1` | 暴露面体检工具面 `tool.exposure_audit`：本地只读自查（凭据文件分布 / 明文风险点 / 开放端口面 / 备份包排除项 / 令牌绑定完整性），与 `apeireth exposure report` 同一内核两个出口 | **只读档**——grant 即用零审批（与 `tool.self_status` 同档）；体检不写被测面任何字节、报告永不回密钥值；测不了的项显式「未测」不冒充干净；默认关 |
+| （非旋钮，随发声配置注入） | **情绪→语气微调**：`voice_speak` 每次发声现读 presence/PAD 合成器现值，按冻结映射表微调语速/音量（情绪只调「味道」不改内容） | 无情绪数据 = 原参数零变化（不猜情绪）；显式传参覆盖自动微调；微调幅度有限（语速 ±2 / 音量 ±3 格）；自述名册 `voice_emotion_tune` 行按读取面实际注入事实取值 |
+
 **会话级审批策略（2026-09-12；E-P2 族归一后口径如下）**：`SessionSettings` 支持 `permission_preset`（`read_only` 拒写/执行 / `standard` 沿用审批 / `full` 免审批留日志）+ `approval_remember`（`standard` 下"会话内记住"：某次批准后该会话内**同一授权对象**的后续调用跳过审批——命令面授权对象 = **族**（批"删除族" = 该族所有形态生效，同族换形重放不重批；跨族仍逐族审批），无族命令按逐次操作逐字记住；审批卡带**族标注**（「授权族: …」，人见族而批）；进程内记忆、重启清零；inner 的 `Deny` 永不绕过）。桌面端会话头提供 4 档选择器：只读 / 标准·每次审批 / 标准·会话内记住 / 完全放行。
 
 工具调用走 **`<<<[TOOL_REQUEST]>>>` 已废弃**：v2 工具调用由各 provider 的原生 tool_calls 流式协议处理（OpenAI `tool_calls` 数组），不再走 marker 解析。`crates/capabilities/tools/src/plugin.rs` 的 plugin descriptor（`CapabilityDescriptor`）声明每个工具的 CapabilityId / kind / risk / M2* stage 标注，是唯一权威来源。

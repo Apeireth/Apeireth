@@ -1,9 +1,16 @@
-//! 内容流接入 (J1「内容流接入」——让它看见你的世界)。
+//! 内容流接入 (J1「内容流接入」——让它看见你的世界) + J2 订阅生命周期。
 //!
 //! 面拆两层: [`store`] 订阅源面 (`feeds.json` StoredDoc 拒开 + 敏感面拒绝),
 //! [`summary`] 结构化摘要面 (标题 / 正文截断 / 来源 / 时间), [`tool`] 生产工具
 //! 面 (`tool.content_feed`: 受控拉取 → 摘要 → L2 封套 → 入记忆流)。语义全文见
 //! [`tool`] 模块头。
+//!
+//! # J2 拉取→摄取接缝 + 订阅生命周期
+//!
+//! 拉来的内容自动走**保鲜回路** (散列门 / 摄取队列 / 增量折入, 只读消费记忆的
+//! `enqueue_ingest` 端口, 见 [`ingest`]) + **订阅生命周期** (条目去重账 / 拉取
+//! 失败退避 / 订阅健康度, 见 [`lifecycle`]) + **注意力纪律** (单次/每日摄取上限,
+//! 超限截断如实)。同条目重复拉取 = **零新记忆** (条目账 + 散列门两道去重)。
 //!
 //! # 治理档位 (二选一已钉死)
 //!
@@ -25,10 +32,21 @@ use async_trait::async_trait;
 use crate::exec_pipeline::ToolExecutionPipeline;
 use crate::exec_pipeline::{AroundPolicy, DEFAULT_MAX_TIMEOUT_MS};
 
+pub mod ingest;
+pub mod lifecycle;
 pub mod store;
 pub mod summary;
 pub mod tool;
 
+pub use ingest::{
+    ingest_port, item_content_hash, item_identity, item_source, stable_ingest_content,
+    AttentionLimits, IngestOutcome, IngestPort, IngestRequest, DEFAULT_DAILY_INGESTS,
+    DEFAULT_PER_PULL_ITEMS,
+};
+pub use lifecycle::{
+    FeedHealth, FeedLifecycleBody, FeedLifecycleStore, LifecyclePolicy, LifecycleStats,
+    FEED_LIFECYCLE_DOC_NAME, FEED_LIFECYCLE_DOC_VERSION, FEED_LIFECYCLE_FILE_NAME, ITEM_LEDGER_MAX,
+};
 pub use store::{
     feeds_doc_compat, validate_feed_id, validate_feed_url, FeedKind, FeedSource, FeedStore,
     FeedStoreError, FeedWriteFace, PullRecord, FEEDS_DOC_NAME, FEEDS_DOC_VERSION, FEEDS_FILE_NAME,

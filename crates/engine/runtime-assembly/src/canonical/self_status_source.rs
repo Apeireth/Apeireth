@@ -707,12 +707,25 @@ pub fn roster_from_config(
         // V3-b 通用嗓发声 (`tool.voice_speak`, 注册条件 = 发声配置已注入,
         // 注册即闸), 名册按实际注册条件取值。
         CapabilitySwitch::new("voice_speak", config.voice_speak.is_some()),
+        // R3 生产情绪源接线: 情绪→语气微调的读取面已随发声配置注入 (每次发声
+        // 现读 presence/PAD 合成器现值; 无情绪数据仍零微调)。按**实际注入事实**
+        // 取值 —— 发声配置没带读取面 = 显式未接线, 名册照实 false。
+        CapabilitySwitch::new(
+            "voice_emotion_tune",
+            config
+                .voice_speak
+                .as_ref()
+                .is_some_and(|voice| voice.emotion_reader.is_some()),
+        ),
         // V6-a 任务簿 (`tool.task_board`, 注册条件 = 任务队列已注入, 注册即闸),
         // 名册按实际注册条件取值 (自述任务节与工具面同队同账)。
         CapabilitySwitch::new("task_board", config.task_board.is_some()),
         // 性格周报 (`tool.trait_report`, 裁定 ⑤, 注册条件 = 成长账落位已注入,
         // 注册即闸), 名册按实际注册条件取值 (自述性格节与工具面同账)。
         CapabilitySwitch::new("trait_report", config.trait_report.is_some()),
+        // V5-b 暴露面体检 (`tool.exposure_audit`, 注册条件 = 体检配置已注入,
+        // 注册即闸), 名册按实际注册条件取值。
+        CapabilitySwitch::new("exposure_audit", config.exposure_audit.is_some()),
         // 受控文件写入 (`tool.apply_patch`): 主开关按实际注册条件取值 (配置开启
         // 且工作区根已注入才算生效); 自动放行子档依赖主开关 —— 主开关没注册成,
         // 子档无处生效, 名册照实说 false。

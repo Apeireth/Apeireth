@@ -73,6 +73,7 @@ apeireth gateway serve --port 8080
 | `tool.skill_distill` | ❌ 关闭 | 书→技能沉淀写入口（`APEIRETH_ENABLE_SKILL_DISTILL=1` 开启，需 `APEIRETH_ENABLE_FILE_WRITE=1` 同开——file_write 总闸族，fail-closed）：内容输入（正文 / 文件只读通道）+ 模型侧草稿 → 结构化技能卡 → 技能库（数据目录 `skills/`，每卡一 StoredDoc 拒开语义）。创建重复名拒绝；版本演进（`update`）同名更新**留旧版审计**。**写文件面审批档：每次沉淀都停人工审批**（无自动放行档，审批卡载荷 = 技能卡摘要）|
 | `tool.skill_search` | ❌ 关闭 | 技能库只读检索（`APEIRETH_ENABLE_SKILL_SEARCH=1` 开启，独立于写总闸）：触发词命中 / 按需点名的技能卡经 **L2 封套披露**进上下文（共享引用封套 + 共享预算，未命中卡零注入，卡名轻清单只含名字），**只读档零审批**（`read_only` 会话预设不拒）|
 | `tool.trait_report` | ✅ 启用 | 性格周报（只读档零审批，与 `tool.self_status` 同档）：近 7 天四根特质滑杆的移动量 / 移动原因 top / 锁定态 + 每杆最近移动；数据 = 成长计既有账 `tuning-log.jsonl`（不新造账），无参数（未知字段拒绝即帧）。滑杆锁定态持久在 `trait-locks.json`，锁定后成长沉积跳过该杆并留审计痕；解锁走 `apeireth trait unlock <SLIDER>` 显式动作 |
+| `tool.exposure_audit` | ❌ 关闭 | 暴露面体检（`APEIRETH_ENABLE_EXPOSURE_AUDIT=1` 开启，注册即闸）：本地**只读**自查（凭据文件分布 / 明文风险点 / 开放端口面 / 备份包排除项 / 令牌绑定完整性；测不了的项显式「未测」），报告 schema `apeireth.exposure_report`，体检不写被测面任何字节、永不回密钥值。**只读档零审批**（与 `tool.self_status` 同档）；与 CLI `apeireth exposure report` 同一内核两个出口 |
 
 ## 认证与安全
 

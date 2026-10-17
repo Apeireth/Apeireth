@@ -37,4 +37,6 @@
 > **执行进度注记（2026-10-16）**：
 > 批 L1 ✅（协同模式矿 + 死亡解剖矿 → [01-collaboration-patterns.md](../engineering-experience/01-collaboration-patterns.md) / [02-failure-anatomy.md](../engineering-experience/02-failure-anatomy.md)，精华已回写宪章 §六）；
 > 批 L2 ✅（设计裁定矿 + 方法论矿 → [03-design-verdicts.md](../engineering-experience/03-design-verdicts.md) / [04-methodology.md](../engineering-experience/04-methodology.md)，含裁定↔配方对照速查表）；
-> 批 L3 留待（产品洞察矿 + 对外可读版指南）。
+> 批 L3 ✅（2026-10-17，产品洞察矿 + 对外指南 → [05-product-insights.md](../engineering-experience/05-product-insights.md) / [multi-ai-construction-guide.md](../../02-guides/multi-ai-construction-guide.md)，含洞察↔制度化落点↔指南对照速查表）。
+>
+> **收官注记（2026-10-17）**：**L1 ✅ L2 ✅ L3 ✅ 全矿毕**——§二 五矿脉全部沉淀完毕（协同模式/死亡解剖/设计裁定/方法论/产品洞察 → [01](../engineering-experience/01-collaboration-patterns.md)-[05](../engineering-experience/05-product-insights.md) 小文件族），对外可读版《多 AI 协同施工指南》落 [docs/02-guides](../../02-guides/multi-ai-construction-guide.md)（独立可读、指向两份宪章）；§三 产出物三件全数兑现（小文件族 / 精华回写宪章 §六 / 对外指南）。后续零挂账，本轴封账。

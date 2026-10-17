@@ -364,12 +364,15 @@ pub struct WorkspaceStatus {
 /// 单价「未提供」的显示标注 (零假价格: 缺省即明说未提供, 绝不编价)。
 pub const PRICE_NOT_PROVIDED: &str = "未提供";
 
-/// 内容流面一节 (J1 自述): 订阅数 / 最近拉取, 真值如实。
+/// 内容流面一节 (J1+J2 自述): 订阅数 / 最近拉取 + 生命周期真值, 如实。
 ///
 /// 「最近拉取」逐维 `None` = 尚无拉取 (显式 null + `last_pull_note` 如实注
 /// 「尚无拉取记录」), 绝不编造时间或条数; 探测口缺位/失败 = 全维显式 null +
 /// `reason` (0 装诚实)。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// J2 生命周期字段 (字段级 `None` = 缺源显式 null): 条目级去重数 / 投摄取队列
+/// 数 / 注意力截断数 / 订阅健康 (degraded / 退避)。**只报数字不回内容**。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContentFeedStatus {
     /// 订阅数 (`feeds.json` 真值计数)。
     pub feeds: Option<u64>,
@@ -381,6 +384,16 @@ pub struct ContentFeedStatus {
     pub last_pull_ingested: Option<u64>,
     /// 最近拉取备注 (成败真因 / 「尚无拉取记录」)。
     pub last_pull_note: Option<String>,
+    /// 条目级去重累计 (J2: 同条目重复拉取跳过, `None` = 缺源)。
+    pub dedup_skipped: Option<u64>,
+    /// 投摄取队列累计 (J2: 交进待摄取队列的条目真值, `None` = 缺源)。
+    pub ingest_queued: Option<u64>,
+    /// 注意力上限截断累计 (J2: 超单次/每日上限如实截断, `None` = 缺源)。
+    pub attention_truncated: Option<u64>,
+    /// 标 degraded 的订阅数 (J2: 连续失败达阈值, `None` = 缺源)。
+    pub degraded_feeds: Option<u64>,
+    /// 退避中的订阅数 (J2: 拉取失败退避窗口内, `None` = 缺源)。
+    pub backing_off_feeds: Option<u64>,
     /// 探测缺位/失败的原因 (全维就位时 `None`)。
     pub reason: Option<String>,
 }
@@ -394,6 +407,11 @@ impl ContentFeedStatus {
             last_pull_ok: None,
             last_pull_ingested: None,
             last_pull_note: None,
+            dedup_skipped: None,
+            ingest_queued: None,
+            attention_truncated: None,
+            degraded_feeds: None,
+            backing_off_feeds: None,
             reason: Some(reason.into()),
         }
     }
@@ -910,6 +928,11 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "last_pull_ok": status.last_pull_ok,
             "last_pull_ingested": status.last_pull_ingested,
             "last_pull_note": status.last_pull_note,
+            "dedup_skipped": status.dedup_skipped,
+            "ingest_queued": status.ingest_queued,
+            "attention_truncated": status.attention_truncated,
+            "degraded_feeds": status.degraded_feeds,
+            "backing_off_feeds": status.backing_off_feeds,
             "reason": snapshot
                 .content_feed_reason
                 .clone()
@@ -921,6 +944,11 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "last_pull_ok": null,
             "last_pull_ingested": null,
             "last_pull_note": null,
+            "dedup_skipped": null,
+            "ingest_queued": null,
+            "attention_truncated": null,
+            "degraded_feeds": null,
+            "backing_off_feeds": null,
             "reason": snapshot
                 .content_feed_reason
                 .clone()
@@ -1327,6 +1355,11 @@ mod tests {
                 last_pull_ok: Some(true),
                 last_pull_ingested: Some(4),
                 last_pull_note: Some("2 feeds, 4 items".to_string()),
+                dedup_skipped: Some(1),
+                ingest_queued: Some(4),
+                attention_truncated: Some(0),
+                degraded_feeds: Some(0),
+                backing_off_feeds: Some(0),
                 reason: None,
             }),
             content_feed_reason: None,
@@ -1752,6 +1785,7 @@ mod tests {
             last_pull_ingested: None,
             last_pull_note: Some("尚无拉取记录".to_string()),
             reason: None,
+            ..Default::default()
         });
         let value = render_snapshot(&snapshot);
         assert_eq!(value["content_feed"]["feeds"], 3);

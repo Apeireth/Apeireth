@@ -43,9 +43,9 @@ use super::self_status_source::{
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, EducationModule,
-    FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule, SearchModule,
-    SelfStatusModule, ShellModule, SkillDistillModule, SkillSearchModule, TaskBoardModule,
-    TraitReportModule, VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
+    ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule,
+    SearchModule, SelfStatusModule, ShellModule, SkillDistillModule, SkillSearchModule,
+    TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
 
@@ -307,6 +307,16 @@ pub struct ProductionModulesConfig {
     /// 不新造账); 注册条件 = 成长账落位已注入 (注册即闸), 生产装配默认注入 =
     /// 默认可用。自述性格节 (锁定态 + 最近移动) 与本工具同账同源。
     pub trait_report: Option<TraitGrowthPaths>,
+    /// Register the exposure audit tool (`tool.exposure_audit`, V5-b 暴露面体检)
+    /// when the audit configuration is supplied.
+    ///
+    /// 暴露面体检面: 「帮你看清你暴露了什么」的本地**只读**自查 (体检不写被
+    /// 测面任何字节; 凭据值/密钥值永不出现在报告里, 只报路径词面与计数;
+    /// 测不了的显式「未测」不冒充干净)。与 CLI `apeireth exposure report`
+    /// 同一内核两个出口。治理 = **只读档** (注册即闸
+    /// `APEIRETH_ENABLE_EXPOSURE_AUDIT`, grant 即用零审批, 与
+    /// `tool.self_status` 同档)。默认关 (opt-in)。
+    pub exposure_audit: Option<apeireth_tools_canonical::ExposureAuditConfig>,
 }
 
 impl Default for ProductionModulesConfig {
@@ -354,6 +364,7 @@ impl Default for ProductionModulesConfig {
             skill_search: false,
             skills_dir: None,
             trait_report: None,
+            exposure_audit: None,
         }
     }
 }
@@ -699,6 +710,14 @@ impl ProductionModules {
         // 按实际注册条件取值。自述性格节与工具面同账 (trait_status_probe)。
         if let Some(paths) = &config.trait_report {
             let provider = TraitReportModule::new(trait_growth_probe(paths.clone()));
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 暴露面体检 (`tool.exposure_audit`, V5-b 安全守望, 默认关): 本地只读
+        // 自查 (只读零写, 报告是唯一产出), 与 CLI `apeireth exposure report`
+        // 同一内核两个出口。治理 = 只读档 (注册即闸, grant 即用零审批)。
+        if let Some(audit_config) = config.exposure_audit {
+            let provider = ExposureAuditModule::new(audit_config);
             capabilities.extend(provider.capabilities());
         }
 

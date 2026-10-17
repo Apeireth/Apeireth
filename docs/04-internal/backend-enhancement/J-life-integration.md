@@ -1,6 +1,6 @@
 # J 生活接入轴（life integration）——立轴
 
-> `Status: 🚧 施工中（2026-10-13 J1「内容流接入」落地, 立轴同批）`
+> `Status: 🚧 施工中（2026-10-13 J1「内容流接入」落地, 立轴同批; 2026-10-17 J2「拉取→摄取接缝 + 订阅生命周期」落地）`
 > **范围口径**：J 轴 = 让 Apeireth 接入现代生活与网络（owner 定向：「Apeireth 可以做自己刷视频的模块，对接入现代生活，网络」）。
 > **关系**：想法总纲见 [J-tradewind.md](J-tradewind.md)（生活信息流「信风」：多源订阅 + 摘要 + 陪伴共看）；本文件是 J 轴的**工程立轴**（现状 / 想法 / 缺口 / 分期），随批滚动。承载面（星港）见 [I-starport-builtins.md](I-starport-builtins.md)，治理口径遵 [CONSTRUCTION-DISCIPLINE.md](CONSTRUCTION-DISCIPLINE.md)。
 
@@ -68,7 +68,66 @@
 - [`crates/adapters/cli/src/lib.rs`](../../../crates/adapters/cli/src/lib.rs)：`APEIRETH_ENABLE_CONTENT_FEED=1` 旋钮（注册 + grant + 审批档钩子同源）、内容流自述探测口、记忆流写入面（与感知链同一 episodic 写入）；
 - 测试：`tools/tests/content_feed.rs`（集成: mock 端点 / 大小·超时·协议面拒 / 敏感面 / 自述行）、`runtime-assembly/tests/content_feed_registration.rs`（装配级: 注册 / 名册 / 自述真值 / 真存储入流未保护级）、模块内单测（订阅表拒开 / 摘要结构化 / 封套隔离 / 治理档语义）。
 
-## 2. 想法（轴级, 未排期——一行一事, 排期进 §6 分期表）
+## 1.4 J2 拉取→摄取接缝 + 订阅生命周期（2026-10-17 落地）
+
+> 战场 `crates/capabilities/tools/src/content_feed/`（J1 件叠加）+ 记忆保鲜回路摄取口**只读消费**（`enqueue_ingest` 端口, 不改 freshness 内部件）。J1「拉取即入记忆流」升级为「**走保鲜回路**（去重/队列/折入全自动）」。
+
+**接缝管线图**：
+
+```text
+ pull ──▶ [冻结订阅快照] ──▶ ControlledEgress 拉取文本
+              │
+              ▼
+        结构化摘要（标题/正文截断/来源/时间）
+              │
+   ┌──────────▼─────────── 每条摘要 ────────────┐
+   │ ① 条目账去重（条目级幂等, lifecycle）        │
+   │    同条目重复拉取 ──▶ 跳过 + 去重数 +1       │──▶ 零新记忆（不写 episode, 不投摄取）
+   │ ② 注意力纪律（单次拉取上限 / 每日上限）      │
+   │    超限 ──▶ 截断 + 如实标注（不静默丢）       │
+   │ ③ 未超限未去重 ──▶ 下面两路并行              │
+   └──────────────┬───────────────────────────┘
+                  │
+      ┌───────────┴────────────┐
+      ▼                        ▼
+  EpisodeWriter（J1 原料面）   IngestPort = enqueue_ingest（J2 保鲜回路, 接上时）
+  ──▶ episodic 记忆流          ① 散列增量门（同源同内容去重, 内容级）
+  （L2 召回原料, 未保护）          ② 摄取队列（重启续摄/失败留队列）
+                                 ③ 增量折入（同主题追加不重写）
+      │                        │
+      └───────────┬────────────┘
+                  ▼
+   订阅生命周期账（feed_lifecycle.json）: 条目去重数 / 投摄取数 / 截断数 /
+   逐订阅健康（连续失败→退避放大→degraded）/ 日计数
+                  │
+                  ▼
+   self_status `content_feed` 节扩: dedup_skipped / ingest_queued /
+   attention_truncated / degraded_feeds / backing_off_feeds（只报数字不回内容）
+```
+
+**落点**：`ingest.rs`（`IngestPort`/`IngestOutcome` 逐态映射 `EnqueueOutcome` + 注意力上限 + 条目身份 `source=feed id+条目链接`）、`lifecycle.rs`（条目去重账有界 FIFO + 退避 + 健康度 + 日计数, StoredDoc 拒开）、`tool.rs`（`execute_pull` 接缝）、`store.rs`/`self_status.rs`（自述节字段级加性演进）、CLI 摄取口适配（战场外最小改动报备）。两道去重合防刷屏：**条目账**（条目级, 防重复 episode）+ **散列门**（内容级, 防重复折入）= 同条目二次拉取**零新记忆**。
+
+**测试证据（新增 26 例, 全部行为钉死; J1 既有 14 例零改动全绿）**：
+
+| 验收项 | 测试 | 例数 |
+|---|---|---|
+| 拉取→摄取接缝（source=feed+条目链接, 折入主题=feed） | `content_feed_lifecycle.rs::pull_feeds_item_summaries_into_the_ingest_port` | 1 |
+| 去重断言同条目二次拉取零新记忆 | `content_feed_lifecycle.rs::repeated_pull_of_the_same_items_yields_zero_new_memories`、`content_feed_freshness.rs::repeated_pull_of_the_same_items_yields_zero_new_memories`（真 enqueue） | 2 |
+| 拉取→摄取全链（真散列门/队列/折入） | `content_feed_freshness.rs::pulled_content_lands_in_the_freshness_loop` | 1 |
+| 散列门内容级去重（条目账丢失仍兜底） | `content_feed_freshness.rs::same_content_is_deduped_by_the_hash_gate_when_the_item_ledger_is_reset` | 1 |
+| 幂等账（条目账, 跨进程重开） | `content_feed_lifecycle.rs::item_ledger_is_idempotent_and_survives_a_reopen` + `lifecycle.rs::item_ledger_is_idempotent_per_source` | 2 |
+| 注意力上限截断如实（单次/每日） | `content_feed_lifecycle.rs::attention_per_pull_cap_truncates_and_labels_honestly`、`attention_daily_cap_truncates_and_labels_honestly` | 2 |
+| 拉取失败退避（下次间隔放大, 不锤失败源） | `content_feed_lifecycle.rs::pull_failure_backs_off_the_next_pull` + `lifecycle.rs::backoff_grows_on_consecutive_failures_and_degrades` | 2 |
+| degraded 标注（连续失败 N 次） | `content_feed_lifecycle.rs::consecutive_failures_mark_the_feed_degraded` + `lifecycle.rs::success_resets_backoff_and_degraded` | 2 |
+| 自述节（去重数/投摄取/截断/订阅健康） | `content_feed_lifecycle.rs::self_status_content_feed_section_reports_lifecycle_stats` + `lifecycle.rs::stats_counts_degraded_and_backing_off_honestly` | 2 |
+| 摄取端口故障即帧 | `content_feed_lifecycle.rs::ingest_port_failure_is_a_hard_frame_not_a_silent_drop` | 1 |
+| 其余单测（条目身份/稳定内容/日计数/有界账/存储往返/坏账拒开/上限/结果态） | `ingest.rs` 6 例 + `lifecycle.rs` 其余 | 10 |
+
+**校验（2026-10-17, `-j 2`）**：`cargo test --workspace --all-targets --locked --no-fail-fast -j 2` ✅ 220 结果行 / 5826 passed / 0 failed / 20 ignored（含前批未提交批次, 本批增量=新增 26 测试函数 + 2 测试目标 `content_feed_lifecycle`/`content_feed_freshness`）；`clippy -D warnings` ✅ 0 警告；`fmt --check` ✅ 0 diff；`check-neutral-terms.ps1` ✅ 零命中；`secret-scan.ps1` ✅ 无发现。
+
+**接缝诚实**：摄取端口 `ingest_port: Option<IngestPort>`——未接（`None`, J1 口径）仍走 J1 原料面；生产 CLI 已接真 `enqueue_ingest`（内容流拉取→保鲜回路全自动）。`ingest_queued` 报「投摄取入队累计」（现存待摄取真值见 `memory_ledger.pending_ingest`, V4-b）, 不跨面编造待摄取深度。
+
+
 
 | # | 想法 | 一句话 |
 |---|---|---|
@@ -120,8 +179,8 @@
 ## 5. 缺口（如实, 不假装）
 
 1. **摘要解析是启发式**：标签扫描不引外部解析器, 复杂嵌套 / 特殊转义形态可能取不全——兜底口径是「缺失如实标注」（无标题 =「无标题」, 来源没给时间 = `published_raw: null`）, 不编造;
-2. **无定时拉取 / 后台刷新**：`pull` 是显式动作（每次人批）; 订阅生命周期（定时刷新 / 去重与已读台账）归 J2;
-3. **无去重**：同源重复 `pull` 会重复入记忆流（episode id 带拉取时刻 + 序号, 可辨识但不合并）——归 J2;
+2. **无定时拉取 / 后台刷新**：`pull` 是显式动作（每次人批）; 去重与订阅生命周期（去重账 / 失败退避 / 健康度 / 注意力上限）已随 **J2** 落地（§1.4）, 定时刷新归调度面（后续）;
+3. ~~**无去重**~~ **J2 已补**：同条目重复 `pull` 走条目账 + 散列门两道去重, 零新记忆（§1.4）;
 4. **视频源不在 J1**：owner 的「刷视频」场景需要媒体面 / 播放面 + 平台条款审读 + 防沉迷时长闸, 归 J3（铁律: 不做对抗性抓取、不绕平台风控）;
 5. **内网主机名（非字面量）** 的静态拦截不在工具内（口径: 不做 DNS 决策）, 归受控通道解析后逐跳重验——J1 的 add 面只静态拦 IP 字面量;
 6. **设置面板 / 热更未接**：旋钮目前是 env 面（`APEIRETH_ENABLE_CONTENT_FEED=1`）, 面板化随星港（I 轴）承载面批。
@@ -131,7 +190,7 @@
 | 期 | 内容 | 依赖 |
 |---|---|---|
 | **J1（本批, ✅）内容流接入** | 订阅管理 + 受控拉取 + 结构化摘要 + 入记忆流 + 治理钉死 + 自述行（本文档 §1–§4） | 无 |
-| **J2 订阅生命周期** | 定时拉取 / 刷新、去重与已读台账、摘要正文清洗、拉取台账逐源历史、**注意力纪律**（刷流时长 / 烧钱闸接 A 轴配额真接口, 防沉迷底线） | A 轴配额接口、调度面 |
+| **J2 订阅生命周期** | 去重与已读台账 / 失败退避 / 订阅健康度 / **注意力纪律上限**（单次·每日, 超限截断）✅ 已落地（§1.4）; 定时拉取·刷新 / 摘要正文清洗 / 拉取台账逐源历史 / 烧钱闸接 A 轴配额真接口归后续 | A 轴配额接口、调度面 |
 | **J3 陪伴共看** | 智能预筛 / 陪看点评（模型面）、**视频源接入**（媒体面 + 来源条款审读 + 时长闸）、星港 UI 承载 | I 轴星港、模型面 H |
 | **J4 群体面（可选）** | 匿名化订阅经验共享（星群纪律: 只共享经验, 不含记忆原文） | F 轴星群、共享口径 |
 

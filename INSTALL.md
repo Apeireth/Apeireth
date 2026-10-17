@@ -286,7 +286,12 @@ EOF
 | `APEIRETH_DISABLE_TYPED_RECALL=1` | 关闭承诺/画像/关系三类记忆的**召回读侧**（写侧不动） | 关掉后这三类记忆不再浮现；默认**开**（写读对称，2026-10-06 修复入库不召回的断链） |
 | `APEIRETH_ENABLE_MEMORY_INJECTION=1` | 记忆 overlay 用反幻觉格式（编号证据清单 + 「禁止说『我记得我们以前聊过』」） | 低——纯渲染切换；**默认开**（`=0` 或 `APEIRETH_DISABLE_MEMORY_INJECTION=1` 关回 XML 封闭世界格式） |
 | `APEIRETH_ENABLE_CONSOLIDATION=1` | 每回合后跑确定性记忆整理，提炼洞察落库（稳定 ID 幂等，只从原始证据提炼） | 低——0 模型调用；默认关 |
+| `APEIRETH_ENABLE_PERSONA_CONSOLIDATION=1` | 人格提取步：整编触发点上从近期情节提炼人格增量 → 人格层合并（矛盾标注「人格张力」不静默覆盖） | 低——0 模型调用；**随整编跑**（要 `APEIRETH_ENABLE_CONSOLIDATION=1` 同开，整编关 = 显式不跑）；默认关 |
+| `APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE=1` | 整编散列门：整编素材同源同散列跳过重复整编（省算力防重复记忆），变内容照常重摄 | 低——0 模型调用；**随整编跑**（同上）；默认关 |
+| `APEIRETH_ENABLE_EXPOSURE_AUDIT=1` | 注册暴露面体检工具 `tool.exposure_audit`（本地只读自查：凭据分布/明文风险点/开放端口/备份排除项/令牌绑定） | 低——只读零写零审批，与 `apeireth exposure report` 同一内核；默认关 |
 | `APEIRETH_ENABLE_REFLEXION=1` | 失败闭环：TurnStart 注入历史教训 + AfterTurn 把 Judge 显式否决沉淀为反思 | 低——需 Judge 开启才有信号源；默认关 |
+
+**2026-10-17 生产情绪源（不是旋钮——随发声配置注入，R3 收口）**：`APEIRETH_ENABLE_VOICE_SPEAK=1` 开启发声后，**情绪→语气微调**读取面随发声配置注入——每次发声现读 presence/PAD 合成器现值，按冻结映射表微调语速/音量（愉悦高档 +1/+3、张力高档 -1/0；情绪只调「味道」不改内容）。**无情绪数据 = 原参数零变化**（不猜情绪），显式传参覆盖自动微调。
 
 **shell 审批流示例**（开启后）：
 

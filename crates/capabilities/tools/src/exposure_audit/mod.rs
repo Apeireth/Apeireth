@@ -22,6 +22,9 @@
 pub mod backup_surface;
 pub mod binding_surface;
 pub mod credential_surface;
+/// V5-c 守望巡检漏斗 (筛查→精查→复核→报告 + 成本闸/断点续查/任务接缝):
+/// 本体检面的巡检化编排层, 只读消费本面六项速扫, 不改本面任何口径。
+pub mod funnel;
 pub mod listener_surface;
 pub mod report;
 pub mod tool;

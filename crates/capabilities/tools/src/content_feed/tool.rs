@@ -33,6 +33,15 @@
 //! 可被正常整理/遗忘 (保护是人工显式动作, 不是抓取的默认权力)。写入失败
 //! **即帧** (错误走正式通道报真因, 不静默丢内容)。
 //!
+//! # 拉取→摄取接缝 (J2: 走保鲜回路)
+//!
+//! J1「拉取即入记忆流」升级: 每条摘要再投保鲜回路的 `enqueue_ingest`
+//! ([`crate::content_feed::ingest::IngestPort`], 接上时) —— **散列门 / 摄取队列 /
+//! 增量折入全自动** (同源同内容去重 / 变内容重摄 / 失败留队列)。拉取前先过
+//! **条目账去重** (同条目重复拉取零新记忆) + **注意力纪律** (单次/每日上限, 超限
+//! 截断如实); 订阅**失败退避** + **健康度** (连续失败标 degraded) 逐次记账
+//! ([`crate::content_feed::lifecycle`])。摄取端口未接 (`None`) 时仍走 J1 原料面。
+//!
 //! # 治理 (钉死: 拉取与入库都经审批档)
 //!
 //! 二选一已钉死 —— **拉取与入库都经审批档**: `pull` 每次都停人工审批,
@@ -59,6 +68,10 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::content_feed::ingest::{
+    item_source, stable_ingest_content, AttentionLimits, IngestOutcome, IngestPort, IngestRequest,
+};
+use crate::content_feed::lifecycle::{FeedLifecycleStore, LifecyclePolicy};
 use crate::content_feed::store::{
     validate_feed_id, validate_feed_url, FeedKind, FeedSource, FeedStore, FeedStoreError,
     FeedWriteFace, PullRecord,
@@ -118,6 +131,10 @@ pub const CONTENT_FEED_ENVELOPE_BUDGET_CHARS: usize = 2_400;
 pub const CONTENT_FEED_DISCLOSURE_NOTE: &str = "跨源内容只入记忆流 (L2 封套披露), 不直进提示词";
 
 /// 受信任配置 (组装根注入): 数据目录 / 受控出口通道 / 记忆流写入面。
+///
+/// J2 追加: [`IngestPort`] (投保鲜回路 `enqueue_ingest`, `None` = 未接保鲜回路
+/// 只走 J1 episodic 原料面) + [`AttentionLimits`] (防刷屏上限) +
+/// [`LifecyclePolicy`] (退避 / 健康阈值 / 条目账上限)。
 #[derive(Clone)]
 pub struct ContentFeedConfig {
     /// 数据目录 (`feeds.json` 落点)。
@@ -131,6 +148,13 @@ pub struct ContentFeedConfig {
     pub envelope_budget_chars: usize,
     /// episode 流标签。
     pub session_label: String,
+    /// 摄取端口 (拉取→摄取接缝: 条目摘要投保鲜回路 `enqueue_ingest`)。
+    /// `None` = 未接保鲜回路 (只走 episodic 原料面, J1 口径)。
+    pub ingest_port: Option<IngestPort>,
+    /// 注意力纪律上限 (单次拉取条目 / 每日摄取, 超限截断如实)。
+    pub attention: AttentionLimits,
+    /// 订阅生命周期策略 (退避 / 健康阈值 / 条目账上限)。
+    pub lifecycle: LifecyclePolicy,
 }
 
 impl std::fmt::Debug for ContentFeedConfig {
@@ -140,12 +164,15 @@ impl std::fmt::Debug for ContentFeedConfig {
             .field("egress_policy", &self.egress.policy())
             .field("envelope_budget_chars", &self.envelope_budget_chars)
             .field("session_label", &self.session_label)
+            .field("ingest_port_wired", &self.ingest_port.is_some())
+            .field("attention", &self.attention)
+            .field("lifecycle", &self.lifecycle)
             .finish_non_exhaustive()
     }
 }
 
 impl ContentFeedConfig {
-    /// 组装配置 (预算与流标签取默认口径)。
+    /// 组装配置 (预算 / 流标签 / 注意力 / 生命周期取默认口径; 摄取端口未接)。
     pub fn new(
         data_dir: impl Into<PathBuf>,
         egress: Arc<ControlledEgress>,
@@ -157,6 +184,9 @@ impl ContentFeedConfig {
             episode_writer,
             envelope_budget_chars: CONTENT_FEED_ENVELOPE_BUDGET_CHARS,
             session_label: CONTENT_FEED_SESSION_LABEL.to_string(),
+            ingest_port: None,
+            attention: AttentionLimits::default(),
+            lifecycle: LifecyclePolicy::default(),
         }
     }
 
@@ -171,6 +201,27 @@ impl ContentFeedConfig {
     #[must_use]
     pub fn with_session_label(mut self, label: impl Into<String>) -> Self {
         self.session_label = label.into();
+        self
+    }
+
+    /// 接上摄取端口 (拉走的内容投保鲜回路 `enqueue_ingest`)。
+    #[must_use]
+    pub fn with_ingest_port(mut self, port: IngestPort) -> Self {
+        self.ingest_port = Some(port);
+        self
+    }
+
+    /// 覆盖注意力纪律上限。
+    #[must_use]
+    pub fn with_attention(mut self, attention: AttentionLimits) -> Self {
+        self.attention = attention;
+        self
+    }
+
+    /// 覆盖订阅生命周期策略。
+    #[must_use]
+    pub fn with_lifecycle_policy(mut self, policy: LifecyclePolicy) -> Self {
+        self.lifecycle = policy;
         self
     }
 
@@ -219,12 +270,16 @@ pub struct PullFeedReport {
     pub feed_id: String,
     /// 订阅 URL。
     pub source_url: String,
-    /// 成败状态 (`ok` / `failed: 真因`)。
+    /// 成败状态 (`ok` / `backing_off: ...` / `failed: 真因`)。
     pub status: String,
     /// 入记忆流的条数。
     pub items: u64,
     /// 写入的 episode id 列表。
     pub episode_ids: Vec<String>,
+    /// 条目级去重跳过数 (J2: 同条目重复拉取, 如实)。
+    pub deduped: u64,
+    /// 注意力上限截断数 (J2: 超单次/每日上限, 如实标注)。
+    pub truncated: u64,
 }
 
 /// `tool.content_feed`: 订阅源管理 + 受控拉取 + 结构化摘要 + 入记忆流。
@@ -485,11 +540,17 @@ impl ContentFeedTool {
         }
     }
 
-    /// 拉取 → 结构化摘要 → 封套 → 入记忆流 (跨源内容不进结果)。
+    /// 拉取 → 结构化摘要 → 封套 → 入记忆流 + 投保鲜摄取队列 (跨源内容不进结果)。
+    ///
+    /// J2 拉取→摄取接缝: 每条摘要先过**条目账去重** (同条目重复拉取零新记忆)
+    /// + **注意力纪律** (单次/每日上限, 超限截断如实), 再走 J1 原料面 (episode)
+    /// 与 J2 保鲜回路 ([`IngestPort`] = `enqueue_ingest`, 接上时投递)。订阅
+    /// **失败退避** + **健康度**逐次记账 (生命周期账)。
     ///
     /// 失败语义 (错误即帧): 任一订阅拉取/解码失败 = 整帧错误 (逐条真因 +
-    /// 已入库条数照实报); 记忆流写入失败立即即帧 (不静默丢内容)。拉取台账
-    /// 两种结局都记 (自述「最近拉取」因此诚实)。
+    /// 已入库条数照实报); 记忆流写入失败 / 摄取端口故障立即即帧 (不静默丢)。
+    /// 拉取台账两种结局都记 (自述「最近拉取」因此诚实)。退避中的订阅不拉、
+    /// 如实标 `backing_off` (不算失败)。
     async fn execute_pull(
         &self,
         call: &ToolCall,
@@ -501,26 +562,88 @@ impl ContentFeedTool {
         };
 
         let started_ms = now_ms();
+        let policy = self.config.lifecycle;
+        let attention = self.config.attention;
+        // 生命周期账: 拉取全程一份, 收尾一次落盘 (条目账/健康/日计数同账)。
+        let mut lifecycle = match self.store.lifecycle().load() {
+            Ok(body) => body,
+            Err(error) => {
+                return ToolResult::permanent_error(
+                    &call.id,
+                    format!("content_feed lifecycle ledger refused to open: {error}"),
+                )
+                .with_name(CONTENT_FEED_TOOL_NAME)
+            }
+        };
+
         let mut reports: Vec<PullFeedReport> = Vec::with_capacity(pull_feeds.len());
         let mut failures: Vec<String> = Vec::new();
+        let mut backing_off: Vec<String> = Vec::new();
         let mut ingested: u64 = 0;
+        let mut total_deduped: u64 = 0;
+        let mut total_truncated: u64 = 0;
 
         for feed in pull_feeds {
+            // 订阅失败退避: 退避窗口内不拉 (防锤失败源), 如实标 backing_off。
+            if !lifecycle.pull_due(&feed.feed_id, started_ms) {
+                let after = lifecycle
+                    .feeds
+                    .get(&feed.feed_id)
+                    .and_then(|health| health.next_pull_after_ms)
+                    .unwrap_or(0);
+                reports.push(PullFeedReport {
+                    feed_id: feed.feed_id.clone(),
+                    source_url: feed.url.clone(),
+                    status: format!("backing_off: until {after}"),
+                    items: 0,
+                    episode_ids: Vec::new(),
+                    deduped: 0,
+                    truncated: 0,
+                });
+                backing_off.push(feed.feed_id.clone());
+                continue;
+            }
+
             let mut report = PullFeedReport {
                 feed_id: feed.feed_id.clone(),
                 source_url: feed.url.clone(),
                 status: "ok".to_string(),
                 items: 0,
                 episode_ids: Vec::new(),
+                deduped: 0,
+                truncated: 0,
             };
             match self.fetch_feed_text(&feed.url).await {
                 Ok(document) => {
                     let (_, items) =
                         summarize_feed_document(&feed.feed_id, &feed.url, &document, started_ms);
                     for item in &items {
+                        let source = item_source(&feed.feed_id, item);
+                        // 条目账去重 (条目级幂等): 同条目重复拉取零新记忆。
+                        if lifecycle.item_ingested(&source) {
+                            lifecycle.note_dedup();
+                            report.deduped += 1;
+                            total_deduped += 1;
+                            continue;
+                        }
+                        // 注意力纪律: 单次拉取条目上限 (超限截断如实)。
+                        if report.items >= u64::try_from(attention.per_pull_items).unwrap_or(0) {
+                            lifecycle.note_attention_truncated(1);
+                            report.truncated += 1;
+                            total_truncated += 1;
+                            continue;
+                        }
+                        // 注意力纪律: 每日摄取上限 (超限截断如实)。
+                        if lifecycle.daily_remaining(started_ms, attention.daily_ingests) == 0 {
+                            lifecycle.note_attention_truncated(1);
+                            report.truncated += 1;
+                            total_truncated += 1;
+                            continue;
+                        }
+                        // J1 原料面: 入 episodic 记忆流 (episode)。
                         let episode = self.episode_for_item(item);
                         if let Err(reason) = (self.config.episode_writer)(&episode) {
-                            // 记忆流写入失败即帧 (不静默丢内容)。
+                            let _ = self.store.lifecycle().save(&lifecycle);
                             return ToolResult::permanent_error(
                                 &call.id,
                                 format!(
@@ -533,22 +656,69 @@ impl ContentFeedTool {
                         report.episode_ids.push(episode.id.clone());
                         report.items += 1;
                         ingested += 1;
+                        // J2 拉取→摄取接缝: 投保鲜回路 `enqueue_ingest` (接上时)。
+                        if let Some(port) = &self.config.ingest_port {
+                            let outcome = port(&IngestRequest {
+                                source: source.clone(),
+                                topic: feed.feed_id.clone(),
+                                content: stable_ingest_content(item),
+                                now_ms: started_ms,
+                            });
+                            match outcome {
+                                IngestOutcome::Failed { error } => {
+                                    let _ = self.store.lifecycle().save(&lifecycle);
+                                    return ToolResult::permanent_error(
+                                        &call.id,
+                                        format!(
+                                            "content_feed ingest port failed after {ingested} \
+                                             items: {error}"
+                                        ),
+                                    )
+                                    .with_name(CONTENT_FEED_TOOL_NAME);
+                                }
+                                other => {
+                                    if other.queued() {
+                                        lifecycle.note_ingest_queued();
+                                    }
+                                }
+                            }
+                        }
+                        // 条目账 + 日计数 (注意力预算真值来源)。
+                        lifecycle.mark_item(&source, started_ms, &policy);
                     }
+                    lifecycle.record_feed_success(&feed.feed_id, started_ms);
                 }
                 Err(reason) => {
                     report.status = format!("failed: {reason}");
                     failures.push(format!("{}: {reason}", feed.feed_id));
+                    lifecycle.record_feed_failure(&feed.feed_id, started_ms, &reason, &policy);
                 }
             }
             reports.push(report);
         }
 
+        // 收尾一次落盘生命周期账 (条目账 / 健康 / 日计数原子同账)。
+        if let Err(error) = self.store.lifecycle().save(&lifecycle) {
+            return ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "content_feed lifecycle ledger write failed after {ingested} items: {error}"
+                ),
+            )
+            .with_name(CONTENT_FEED_TOOL_NAME);
+        }
+
         let ok = failures.is_empty();
+        let backoff_note = if backing_off.is_empty() {
+            String::new()
+        } else {
+            format!(", {} backing off", backing_off.len())
+        };
         let note = if ok {
-            format!("{} feeds, {ingested} items", reports.len())
+            format!("{} feeds, {ingested} items{backoff_note}", reports.len())
         } else {
             format!(
-                "{} of {} feeds failed ({} items ingested before failure): {}",
+                "{} of {} feeds failed ({} items ingested before failure){backoff_note}: {}",
                 failures.len(),
                 reports.len(),
                 ingested,
@@ -585,6 +755,9 @@ impl ContentFeedTool {
                 "action": ACTION_PULL,
                 "ok": true,
                 "ingested": ingested,
+                "deduped": total_deduped,
+                "truncated": total_truncated,
+                "backing_off": backing_off.len(),
                 "feeds": feeds,
                 "last_pull_at_ms": started_ms,
                 "note": CONTENT_FEED_DISCLOSURE_NOTE,
@@ -697,6 +870,8 @@ fn pull_report_json(report: &PullFeedReport) -> Value {
         "status": report.status,
         "items": report.items,
         "episode_ids": report.episode_ids,
+        "deduped": report.deduped,
+        "truncated": report.truncated,
     })
 }
 

@@ -468,3 +468,101 @@ fn matrix_switch_rows_match_the_live_roster() {
     let roster = apeireth_runtime_assembly::roster_from_config(&wired, true, false, false, &[]);
     assert!(enabled(&roster, "care_schedule"), "槽注入必须报真值 true");
 }
+
+/// §0.2 生产接线收口批四缝 (persona_consolidation / consolidation_hash_gate /
+/// voice_emotion_tune / exposure_audit) 与名册实况同真值: 文档行写明 env 旋钮名
+/// 与名册行名, 名册行按**实际注册条件**取值 —— 口径行与实况互钉。
+#[test]
+fn matrix_production_wiring_rows_match_the_live_roster() {
+    // 文档面: §0.2 有四缝的 env 旋钮名与名册行名。
+    const MATRIX: &str = include_str!("../../../../docs/03-reference/capabilities-matrix.md");
+    let start = MATRIX.find("### 0.2").expect("§0.2 present");
+    let end = MATRIX[start..]
+        .find("\n---")
+        .map(|offset| start + offset)
+        .unwrap_or(MATRIX.len());
+    let section = &MATRIX[start..end];
+    for needle in [
+        "APEIRETH_ENABLE_PERSONA_CONSOLIDATION",
+        "APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE",
+        "APEIRETH_ENABLE_EXPOSURE_AUDIT",
+        "persona_consolidation",
+        "consolidation_hash_gate",
+        "voice_emotion_tune",
+        "exposure_audit",
+    ] {
+        assert!(section.contains(needle), "§0.2 缺接线行口径: {needle}");
+    }
+
+    let enabled = |roster: &[apeireth_tools_canonical::CapabilitySwitch], name: &str| {
+        roster
+            .iter()
+            .find(|row| row.name == name)
+            .unwrap_or_else(|| panic!("名册缺行 {name}"))
+            .enabled
+    };
+
+    // 实况面: 默认态四行都照实 false (显式未接线, 不复述"配置说开")。
+    let config = ProductionModulesConfig::default();
+    let roster = apeireth_runtime_assembly::roster_from_config(&config, true, false, false, &[]);
+    assert!(
+        !enabled(&roster, "persona_consolidation"),
+        "默认关 = 显式未接线"
+    );
+    assert!(
+        !enabled(&roster, "consolidation_hash_gate"),
+        "默认关 = 显式未接线"
+    );
+    assert!(
+        !enabled(&roster, "voice_emotion_tune"),
+        "发声配置没带情绪读取面 = 显式未接线"
+    );
+    assert!(
+        !enabled(&roster, "exposure_audit"),
+        "体检配置槽缺席 = 照实 false"
+    );
+
+    // 开关 + 上游槽齐备 = 真生效 true (注册即闸的正向面)。
+    let mut wired = ProductionModulesConfig::default();
+    wired.consolidation = true;
+    wired.persona_consolidation = true;
+    wired.consolidation_hash_gate = true;
+    wired.exposure_audit = Some(apeireth_tools_canonical::ExposureAuditConfig::new("."));
+    let voice = apeireth_tools_canonical::VoiceSpeakConfig::new(
+        PathBuf::from("."),
+        apeireth_tools_canonical::voice::fixed_clock(12 * 60),
+    )
+    .with_emotion_reader(Arc::new(|| None));
+    wired.voice_speak = Some(voice);
+    let roster = apeireth_runtime_assembly::roster_from_config(&wired, true, false, false, &[]);
+    assert!(
+        enabled(&roster, "persona_consolidation"),
+        "开关 + 整编触发点齐备必须报真值 true"
+    );
+    assert!(
+        enabled(&roster, "consolidation_hash_gate"),
+        "开关 + 整编触发点齐备必须报真值 true"
+    );
+    assert!(
+        enabled(&roster, "voice_emotion_tune"),
+        "发声配置带情绪读取面必须报真值 true"
+    );
+    assert!(
+        enabled(&roster, "exposure_audit"),
+        "体检配置槽注入必须报真值 true"
+    );
+
+    // 整编触发点缺席 = 随整编跑的两行照实 false (上游槽口径不许分叉)。
+    let mut no_trigger = wired.clone();
+    no_trigger.consolidation = false;
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&no_trigger, true, false, false, &[]);
+    assert!(
+        !enabled(&roster, "persona_consolidation"),
+        "整编关 = 提取步显式不跑"
+    );
+    assert!(
+        !enabled(&roster, "consolidation_hash_gate"),
+        "整编关 = 散列门显式不跑"
+    );
+}
