@@ -4,8 +4,10 @@
 //! owns ordering and slot validation, so CLI, gateway, and future
 //! embedding callers cannot accidentally register a second cognitive or tool spine.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use apeireth_core::kernel::Clock;
 use apeireth_memory::{
@@ -39,15 +41,16 @@ use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{
-    roster_from_config, task_board_status_probe, ProductionSelfStatusSource,
+    proposal_status_probe, roster_from_config, task_board_status_probe, ProductionSelfStatusSource,
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, EducationModule,
-    ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule,
-    SearchModule, SelfStatusModule, ShellModule, SkillDistillModule, SkillSearchModule,
+    ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule, McpModule, ProposalModule,
+    RepoModule, SearchModule, SelfStatusModule, ShellModule, SkillDistillModule, SkillSearchModule,
     TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
+use crate::startup::{StartupPhase, StartupTimeline};
 
 /// Adapter that exposes memory's context-window implementation through the
 /// runtime-owned projection port. It is kept in assembly so the runtime kernel
@@ -317,6 +320,17 @@ pub struct ProductionModulesConfig {
     /// `APEIRETH_ENABLE_EXPOSURE_AUDIT`, grant 即用零审批, 与
     /// `tool.self_status` 同档)。默认关 (opt-in)。
     pub exposure_audit: Option<apeireth_tools_canonical::ExposureAuditConfig>,
+    /// Register the leftover-proposal tool (`tool.proposal_draft`, 自主度第一小步 ·
+    /// 边角料提案面) when the proposal-ledger data directory is supplied.
+    ///
+    /// 提案面 (保守版: 它提案, 人点头): 对发现的边角料起草结构化提案 ——
+    /// **提案只入提案账** (`proposals.jsonl` append-only), 不落任何真面;
+    /// 人审温柔 (detail 恒含「建议你亲自确认」行 + 审批卡逐条请人过目);
+    /// 通过 = 账面标记 accepted, **提案不直接执行** (执行仍走既有工具面的
+    /// 正常审批链)。治理 = **低风险档** (读面 + append 账本, 注册即闸
+    /// `APEIRETH_ENABLE_PROPOSALS`, 默认关 fail-closed, grant 即用零审批)。
+    /// 自述提案节与工具面同一本提案账。默认关 (opt-in)。
+    pub proposals: Option<apeireth_tools_canonical::proposal::ProposalConfig>,
 }
 
 impl Default for ProductionModulesConfig {
@@ -365,6 +379,7 @@ impl Default for ProductionModulesConfig {
             skills_dir: None,
             trait_report: None,
             exposure_audit: None,
+            proposals: None,
         }
     }
 }
@@ -474,12 +489,196 @@ pub struct ProductionModules {
 /// Compatibility alias for [`ProductionModules`].
 pub use ProductionModules as ProductionCognitiveModules;
 
+/// 模块族 (懒加载断言单位): 一族 = 一个开关族在 [`ProductionModules::build`] 里的构造点。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ModuleFamily {
+    /// 文件读工具族 (`filesystem`)。
+    Filesystem,
+    /// 搜索工具族 (`search`)。
+    Search,
+    /// 仓库检视工具族 (`repo`)。
+    Repo,
+    /// 受控写文件族 (`file_write`)。
+    ApplyPatch,
+    /// 工作树改单族 (`worktree_plan`)。
+    WorktreePlan,
+    /// 工作树落盘族 (`worktree_apply`)。
+    WorktreeApply,
+    /// git 写族 (`git_write`)。
+    GitWrite,
+    /// 技能沉淀族 (`skill_distill`)。
+    SkillDistill,
+    /// 技能检索族 (`skill_search`)。
+    SkillSearch,
+    /// Dx-Check 检查族 (`education`)。
+    Education,
+    /// 受控 shell 族 (`shell`)。
+    Shell,
+    /// 受控抓取族 (`fetch`)。
+    Fetch,
+    /// 内容流族 (`content_feed`)。
+    ContentFeed,
+    /// 关怀规则族 (`care_schedule`)。
+    CareSchedule,
+    /// 备份导出族 (`backup`)。
+    BackupExport,
+    /// 发声族 (`voice_speak`)。
+    VoiceSpeak,
+    /// 任务簿族 (`task_board`)。
+    TaskBoard,
+    /// 性格周报族 (`trait_report`)。
+    TraitReport,
+    /// 暴露面体检族 (`exposure_audit`)。
+    ExposureAudit,
+    /// 自省通道族 (`self_status`)。
+    SelfStatus,
+    /// 外部工具桥族 (`mcp`)。
+    Mcp,
+    /// 记忆协调器 (memory_recall / memory_writeback 共用)。
+    MemoryCoordinator,
+    /// 记忆召回族 (`memory_recall`)。
+    MemoryRecall,
+    /// 偏好召回族 (`preference_recall`)。
+    PreferenceRecall,
+    /// 偏好学习族 (`preference_learning`)。
+    PreferenceLearning,
+    /// 评判族 (`judge`)。
+    Judge,
+    /// 自评族 (`self_assessment`)。
+    SelfAssessment,
+    /// 议事族 (`council`)。
+    Council,
+    /// 器官网族 (`organs`)。
+    Organs,
+    /// 反思族 (`reflexion`)。
+    Reflexion,
+    /// 吸收洞察族 (`absorption_insight`)。
+    AbsorptionInsight,
+    /// 羁绊族 (`partner_bond`)。
+    PartnerBond,
+    /// 恒定人格注入族 (人格层槽)。
+    PersonaConstantInjection,
+    /// 记忆写回族 (`memory_writeback`)。
+    MemoryWriteback,
+}
+
+/// 构造探针 (B-P1 懒加载断言口): 族构造点上报一次。
+///
+/// 「开关关 = 不构造」由构造点上报钉住: 未启用族的构造被短路时探针零上报,
+/// 测试即可断言**零构造** (构造点上报, 不是注册点上报)。上报在构造调用紧前:
+/// 组装成功的语义下上报 = 构造发生 (个别族构造含前置校验, 校验失败整机组装
+/// 拒绝, 计数不成账)。
+pub trait ModuleBuildProbe: Send + Sync {
+    /// 某族的构造发生了一次。
+    fn constructed(&self, family: ModuleFamily);
+}
+
+/// 计数构造探针 (测试/诊断用): 按族计构造次数。
+#[derive(Default)]
+pub struct CountingBuildProbe {
+    counts: Mutex<BTreeMap<ModuleFamily, u32>>,
+}
+
+impl CountingBuildProbe {
+    /// 构造计数探针。
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    /// 某族的构造次数 (未构造 = 0)。
+    pub fn count(&self, family: ModuleFamily) -> u32 {
+        *self
+            .counts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&family)
+            .unwrap_or(&0)
+    }
+
+    /// 全部族的构造总次数。
+    pub fn total(&self) -> u32 {
+        self.counts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .values()
+            .sum()
+    }
+}
+
+impl ModuleBuildProbe for CountingBuildProbe {
+    fn constructed(&self, family: ModuleFamily) {
+        *self
+            .counts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(family)
+            .or_insert(0) += 1;
+    }
+}
+
+/// 组装期插桩 (B-P1): 构造探针 + 分段计时, 生产传 [`BuildInstrumentation::default`]
+/// = 全部无操作, 装配行为与不插桩完全一致。
+#[derive(Default)]
+pub struct BuildInstrumentation {
+    /// 构造探针 (懒加载零构造断言口)。
+    pub probe: Option<Arc<dyn ModuleBuildProbe>>,
+    /// 分段计时记录面 (模块构造段落账)。
+    pub timeline: Option<Arc<StartupTimeline>>,
+}
+
+impl BuildInstrumentation {
+    /// 组装期插桩: 构造探针。
+    #[must_use]
+    pub fn with_probe(mut self, probe: Arc<dyn ModuleBuildProbe>) -> Self {
+        self.probe = Some(probe);
+        self
+    }
+
+    /// 组装期插桩: 分段计时记录面。
+    #[must_use]
+    pub fn with_timeline(mut self, timeline: Arc<StartupTimeline>) -> Self {
+        self.timeline = Some(timeline);
+        self
+    }
+
+    fn constructed(&self, family: ModuleFamily) {
+        if let Some(probe) = &self.probe {
+            probe.constructed(family);
+        }
+    }
+}
+
 impl ProductionModules {
     /// Build the canonical registration order.
     pub fn build(
         config: ProductionModulesConfig,
         backends: ProductionBackends,
         clock: Arc<dyn Clock>,
+    ) -> RuntimeResult<Self> {
+        Self::build_instrumented(config, backends, clock, &BuildInstrumentation::default())
+    }
+
+    /// [`Self::build`] 的可插桩形态 (B-P1): 同一装配, 额外接受构造探针与
+    /// 分段计时 (不插桩时与 [`Self::build`] 逐字节同行为)。
+    pub fn build_instrumented(
+        config: ProductionModulesConfig,
+        backends: ProductionBackends,
+        clock: Arc<dyn Clock>,
+        instrument: &BuildInstrumentation,
+    ) -> RuntimeResult<Self> {
+        match &instrument.timeline {
+            Some(timeline) => timeline.measure(StartupPhase::ModulesBuild, || {
+                Self::build_inner(config, backends, clock, instrument)
+            }),
+            None => Self::build_inner(config, backends, clock, instrument),
+        }
+    }
+
+    fn build_inner(
+        config: ProductionModulesConfig,
+        backends: ProductionBackends,
+        clock: Arc<dyn Clock>,
+        instrument: &BuildInstrumentation,
     ) -> RuntimeResult<Self> {
         let mut modules: Vec<Arc<dyn Module>> = Vec::new();
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
@@ -557,6 +756,7 @@ impl ProductionModules {
         let observed_gate = Arc::new(ObservedGate::new());
         if config.filesystem {
             if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::Filesystem);
                 let provider =
                     FilesystemModule::new_with_gate(root.clone(), Arc::clone(&observed_gate));
                 capabilities.extend(provider.capabilities());
@@ -565,6 +765,7 @@ impl ProductionModules {
 
         if config.search {
             if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::Search);
                 let provider = SearchModule::new(root.clone());
                 capabilities.extend(provider.capabilities());
             }
@@ -572,6 +773,7 @@ impl ProductionModules {
 
         if config.repo {
             if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::Repo);
                 let provider = RepoModule::new(root.clone());
                 capabilities.extend(provider.capabilities());
             }
@@ -584,6 +786,7 @@ impl ProductionModules {
         // L3 毁灭无工具面)。
         if config.file_write {
             if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::ApplyPatch);
                 let provider = ApplyPatchModule::new(root.clone(), Arc::clone(&observed_gate));
                 capabilities.extend(provider.capabilities());
             }
@@ -597,6 +800,7 @@ impl ProductionModules {
         // 都人批 (无自动放行档, 审批卡载荷 = 改单摘要), plan 只读零审批。
         if config.worktree_plan && config.file_write {
             if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::WorktreePlan);
                 let provider = WorktreePlanModule::new(root.clone());
                 capabilities.extend(provider.capabilities());
             }
@@ -604,6 +808,7 @@ impl ProductionModules {
 
         if config.worktree_apply && config.file_write {
             if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::WorktreeApply);
                 let provider = WorktreeApplyModule::new(root.clone(), Arc::clone(&observed_gate));
                 capabilities.extend(provider.capabilities());
             }
@@ -614,6 +819,7 @@ impl ProductionModules {
         // (设置可开「自动放行 L1」档), L2 永远人批, L3 拒绝即帧无工具面。
         if config.git_write {
             if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::GitWrite);
                 let provider = GitWriteModule::new(root.clone());
                 capabilities.extend(provider.capabilities());
             }
@@ -627,6 +833,7 @@ impl ProductionModules {
         // 每卡一 StoredDoc (拒开语义)。
         if config.skill_distill && config.file_write {
             if let (Some(root), Some(skills_dir)) = (&backends.workspace_root, &config.skills_dir) {
+                instrument.constructed(ModuleFamily::SkillDistill);
                 let provider = SkillDistillModule::new(root.clone(), skills_dir.clone());
                 capabilities.extend(provider.capabilities());
             }
@@ -634,6 +841,7 @@ impl ProductionModules {
 
         if config.skill_search {
             if let Some(skills_dir) = &config.skills_dir {
+                instrument.constructed(ModuleFamily::SkillSearch);
                 let provider = SkillSearchModule::new(
                     skills_dir.clone(),
                     apeireth_tools_canonical::skill::DEFAULT_SKILL_DISCLOSURE_BUDGET_CHARS,
@@ -644,6 +852,7 @@ impl ProductionModules {
 
         // W2 §4.3 (2026-10-10, 默认关): education Dx-Check 工具 (纯确定性, 0 副作用)。
         if config.education {
+            instrument.constructed(ModuleFamily::Education);
             let provider = EducationModule::new();
             capabilities.extend(provider.capabilities());
         }
@@ -654,11 +863,13 @@ impl ProductionModules {
         // 即帧 (`pipeline.pre_deny`); 开 = shell 行为不变 (审批链照旧走既有
         // 风险映射)。
         if let Some(shell_config) = config.shell {
+            instrument.constructed(ModuleFamily::Shell);
             let provider = ShellModule::new(shell_config.with_file_write(config.file_write));
             capabilities.extend(provider.capabilities());
         }
 
         if let Some(fetch_config) = config.fetch {
+            instrument.constructed(ModuleFamily::Fetch);
             let provider = FetchModule::new(fetch_config);
             capabilities.extend(provider.capabilities());
         }
@@ -668,6 +879,7 @@ impl ProductionModules {
         // (`ContentFeedApprovalHook`): RequireApproval 级 —— 拉取与入库都经
         // 审批档, 改订阅走 write_intent 同族 (改订阅 = 写文件)。
         if let Some(feed_config) = config.content_feed {
+            instrument.constructed(ModuleFamily::ContentFeed);
             let provider = ContentFeedModule::new(feed_config);
             capabilities.extend(provider.capabilities());
         }
@@ -677,6 +889,7 @@ impl ProductionModules {
         // RequireApproval 级 —— 改规则 = 写文件 (write_intent 同族), 每次调用
         // 都停人工审批。
         if let Some(care_dir) = config.care_schedule {
+            instrument.constructed(ModuleFamily::CareSchedule);
             let provider = CareScheduleModule::new(care_dir);
             capabilities.extend(provider.capabilities());
         }
@@ -685,6 +898,7 @@ impl ProductionModules {
         // manifest.json 逐文件摘要 (损坏可检出), 凭据不随行。治理档位在授权层
         // 同源接线 (RequireApproval 级: 每次导出都停人工审批)。
         if let Some(backup_config) = config.backup {
+            instrument.constructed(ModuleFamily::BackupExport);
             let provider = BackupExportModule::new(backup_config);
             capabilities.extend(provider.capabilities());
         }
@@ -694,6 +908,7 @@ impl ProductionModules {
         // care_rules 同源)。治理 = 发声面档 (注册即闸, grant 即发声免逐次
         // 人批, 与 shell 的执行档分立)。合成执行面 = 系统引擎桥 (可注入)。
         if let Some(voice_config) = config.voice_speak {
+            instrument.constructed(ModuleFamily::VoiceSpeak);
             let provider = VoiceSpeakModule::new(
                 voice_config,
                 apeireth_tools_canonical::system_synth_engine(),
@@ -708,6 +923,7 @@ impl ProductionModules {
         // 文件) 每次人批, `task_list` 只读零审批; **无 failed/retry 工具面**
         // (failed 只能人判)。自述任务节与工具面同队同账 (task_board_status_probe)。
         if let Some(queue) = config.task_board.clone() {
+            instrument.constructed(ModuleFamily::TaskBoard);
             let provider = TaskBoardModule::new(queue);
             capabilities.extend(provider.capabilities());
         }
@@ -717,6 +933,7 @@ impl ProductionModules {
         // (与 `tool.self_status` 同档); 注册即闸 (成长账落位注入才注册), 名册
         // 按实际注册条件取值。自述性格节与工具面同账 (trait_status_probe)。
         if let Some(paths) = &config.trait_report {
+            instrument.constructed(ModuleFamily::TraitReport);
             let provider = TraitReportModule::new(trait_growth_probe(paths.clone()));
             capabilities.extend(provider.capabilities());
         }
@@ -725,7 +942,17 @@ impl ProductionModules {
         // 自查 (只读零写, 报告是唯一产出), 与 CLI `apeireth exposure report`
         // 同一内核两个出口。治理 = 只读档 (注册即闸, grant 即用零审批)。
         if let Some(audit_config) = config.exposure_audit {
+            instrument.constructed(ModuleFamily::ExposureAudit);
             let provider = ExposureAuditModule::new(audit_config);
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 自主度第一小步 · 边角料提案面 (`tool.proposal_draft`, 默认关): 它提案,
+        // 人点头 —— 提案只入提案账 (`proposals.jsonl` append-only), 不落任何真面;
+        // 通过 = 账面标记 accepted, 提案不直接执行 (执行仍走既有工具面的正常审批
+        // 链)。治理 = 低风险档 (读面 + append 账本, 注册即闸, grant 即用零审批)。
+        if let Some(proposal_config) = &config.proposals {
+            let provider = ProposalModule::new(proposal_config.clone());
             capabilities.extend(provider.capabilities());
         }
 
@@ -774,11 +1001,18 @@ impl ProductionModules {
             if let Some(queue) = &config.task_board {
                 source = source.with_task_board_probe(task_board_status_probe(Arc::clone(queue)));
             }
+            // 自主度第一小步: 自述提案节与 `tool.proposal_draft` 工具面同一本
+            // 提案账 (同账同源; 缺落位 = 显式 null + 原因)。
+            if let Some(proposal_config) = &config.proposals {
+                source = source
+                    .with_proposal_probe(proposal_status_probe(proposal_config.data_dir.clone()));
+            }
             // 性格节真值 (裁定 ④⑤): 锁定态 + 最近移动与 `tool.trait_report`
             // 同一成长计既有账 (同账同源, 缺落位 = 显式 null + 原因)。
             if let Some(paths) = &config.trait_report {
                 source = source.with_trait_growth_probe(trait_status_probe(paths.clone()));
             }
+            instrument.constructed(ModuleFamily::SelfStatus);
             let provider = SelfStatusModule::new(Arc::new(source));
             capabilities.extend(provider.capabilities());
         }
@@ -794,6 +1028,7 @@ impl ProductionModules {
         let mut mcp_bridge = None;
         let mut mcp_module = None;
         if let Some(server_config) = mcp_server_config {
+            instrument.constructed(ModuleFamily::Mcp);
             let options = McpBridgeOptions::from_env();
             let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
                 RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))
@@ -807,6 +1042,7 @@ impl ProductionModules {
         // Unified Memory 2.0 coordinator wiring
         let mut shared_coordinator: Option<Arc<MemoryCoordinator>> = None;
         if config.memory_recall || config.memory_writeback {
+            instrument.constructed(ModuleFamily::MemoryCoordinator);
             let memory = required(backends.memory.clone(), "memory", "memory")?;
             let governance = required(
                 backends.memory_governance.clone(),
@@ -847,6 +1083,7 @@ impl ProductionModules {
         // Register cognitive modules
         if config.memory_recall {
             let memory = required(backends.memory.clone(), "memory_recall", "memory")?;
+            instrument.constructed(ModuleFamily::MemoryRecall);
             let mut module = MemoryRecallModule::new(memory);
             if let Some(coord) = &shared_coordinator {
                 module = module.with_coordinator(Arc::clone(coord));
@@ -886,6 +1123,7 @@ impl ProductionModules {
         }
 
         if config.preference_recall {
+            instrument.constructed(ModuleFamily::PreferenceRecall);
             modules.push(Arc::new(
                 PreferenceRecallModule::new(required(
                     backends.preferences.clone(),
@@ -899,6 +1137,7 @@ impl ProductionModules {
         // Learning sits beside recall: recall overlays at TurnStart, learning
         // writes at AfterTurn for future turns.
         if config.preference_learning {
+            instrument.constructed(ModuleFamily::PreferenceLearning);
             modules.push(Arc::new(
                 PreferenceLearningModule::new(required(
                     backends.preferences.clone(),
@@ -910,6 +1149,7 @@ impl ProductionModules {
         }
 
         if config.judge.enabled {
+            instrument.constructed(ModuleFamily::Judge);
             modules.push(Arc::new(
                 JudgeModule::new(config.judge, Arc::clone(&observations))
                     .with_telemetry(Arc::clone(&telemetry)),
@@ -917,6 +1157,7 @@ impl ProductionModules {
         }
 
         if config.self_assessment {
+            instrument.constructed(ModuleFamily::SelfAssessment);
             modules.push(Arc::new(
                 SelfAssessmentModule::new(
                     required(
@@ -932,6 +1173,7 @@ impl ProductionModules {
         }
 
         if config.council {
+            instrument.constructed(ModuleFamily::Council);
             modules.push(Arc::new(
                 CouncilModule::new(
                     required(backends.council, "council", "council")?,
@@ -942,10 +1184,12 @@ impl ProductionModules {
         }
 
         if config.organs {
+            instrument.constructed(ModuleFamily::Organs);
             modules.push(Arc::new(OrganModule::new(Arc::clone(&clock))));
         }
 
         if config.reflexion {
+            instrument.constructed(ModuleFamily::Reflexion);
             modules.push(Arc::new(
                 super::cognitive::ReflexionModule::new(
                     required(backends.reflexion_store, "reflexion", "reflexion_store")?,
@@ -957,10 +1201,12 @@ impl ProductionModules {
         }
 
         if config.absorption_insight {
+            instrument.constructed(ModuleFamily::AbsorptionInsight);
             modules.push(Arc::new(super::cognitive::AbsorptionInsightModule::new()));
         }
 
         if config.partner_bond {
+            instrument.constructed(ModuleFamily::PartnerBond);
             let store = required(backends.partner_store, "partner_bond", "partner_store")?;
             let subject_id = backends
                 .typed_recall_identity
@@ -978,6 +1224,7 @@ impl ProductionModules {
         // **缺人格层 = 不注册本模块 = 零注入零变化**; 人格层无自我叙事沉淀时
         // 同样零注入 (未沉淀就是未沉淀, 不编)。
         if let Some(persona) = &backends.persona_layer {
+            instrument.constructed(ModuleFamily::PersonaConstantInjection);
             modules.push(Arc::new(
                 super::cognitive::PersonaConstantInjectionModule::new(Arc::clone(persona))
                     .with_telemetry(Arc::clone(&telemetry)),
@@ -985,6 +1232,7 @@ impl ProductionModules {
         }
 
         if config.memory_writeback {
+            instrument.constructed(ModuleFamily::MemoryWriteback);
             let mut module = MemoryWritebackModule::new(
                 required(backends.memory, "memory_writeback", "memory")?,
                 clock,

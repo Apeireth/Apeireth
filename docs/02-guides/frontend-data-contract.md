@@ -427,6 +427,8 @@ handler：`panel_readonly.rs:158-196`。query 参数（`StreamParams`，`:147-15
 
 **⚠ 前端消费不匹配**：`fetchMemoryStreams` 期望 `{streams: Record<string, episode-like[]>}`（`runtime.ts:757`），与后端实际形状 `{kind, subject, count, entries}` 完全不符 → 恒返 `{}`。见 §5 差距表 G2。（当前 `MemoryView.svelte` 导入了该函数但主流程未调用，`MemoryView.svelte:32`、`116-132`。）
 
+**提案账消费（2026-10-17 关怀/性格上屏批）**：提案卡经 `runtime.ts fetchProposalLedger`（只读 fetch，`gatewayAuthHeaders()` 单源鉴权）消费 `?kind=proposal&limit=N`（提案账 = proposal 流，append-only）；`created_at` unix 秒口径照收换算毫秒上屏，payload 自由 JSON 按约定字段名取标题/正文、取不到如实「—」/JSON 有界摘录；501/404 = 读面缺席 → 「暂无接口」诚实空态（`src/lib/proposal-card.ts`）。
+
 ### 4.4 `GET /v1/panel/memory/episodes` — 记忆条目搜索
 
 handler：`panel_readonly.rs:207-257`。query（`EpisodeParams`，`:198-205`）：`session`（按会话过滤）、`q`（内容子串，**大小写不敏感**，`:234-241`）、`role`、`limit`（默认 50，≤200）。
@@ -997,6 +999,6 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 **C. 锁定动作面**（面板按钮的后端缝，显式动作）：CLI `apeireth trait lock|unlock <slider>`；内核 API `apeireth_runtime_assembly::set_trait_lock(locks_path, param, locked)`（读-改-写 `trait-locks.json`；缺档 = 全解锁默认态，坏档拒绝即帧）。锁定后成长沉积**跳过该杆并留审计痕**（同账零移动留痕行，reason 前缀「已锁定, 跳过沉积」）。
 
-**前端消费现状**：0 消费（待上屏——本批只交数据面/工具面/CLI 面；面板 UI 挂后续批）。
+**前端消费现状**：已上屏（2026-10-17 关怀/性格上屏批，companion-desktop 工作台三卡，零 Rust 触碰）——性格卡（`src/lib/trait-card.ts` + `components/TraitCard.svelte`）：四滑杆现值（本机下发旋钮值，`APEIRETH_TUNE_*` 注入同源）+ 最近移动（桌面 IPC `read_tuning_log`，同一本成长计账）+ 「本周性格周报」区块（成长计既有账 7 天窗**同语义投影**，口径镜像 `orchestration::trait_report`，`tests/trait-card.mjs` 以同批 fixture 钉死；权威读面仍是 `tool.trait_report` / `apeireth trait report`）；锁定态与锁定/解锁按钮 = **只读 + CLI 指引**（`apeireth trait lock|unlock <SLIDER>`，trait 管理面无 HTTP 面，读码实证）；锁定档（`trait-locks.json`）无面板读面 = 锁定态如实「—」（不拿「未锁定」冒充未知）。同批另落关怀卡（关怀节/`care_list` 帧同形消费，工具面自述无面板读面 = 诚实空态）与提案卡（§4.3 proposal 流，`runtime.ts fetchProposalLedger` 只读 fetch + `gatewayAuthHeaders()` 鉴权缝）。
 
 *文档完。任何字段与代码冲突时，以代码为准并回写本文档（含出处行号）。*

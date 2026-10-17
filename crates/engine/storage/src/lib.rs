@@ -26,5 +26,8 @@ pub mod quota;
 pub mod rate_limit;
 
 pub use error::StorageError;
-pub use migrations::{current_version, run_migrations, Migration, LATEST_SCHEMA_VERSION};
+pub use migrations::{
+    current_version, run_migrations, run_migrations_report, Migration, MigrationReport,
+    LATEST_SCHEMA_VERSION,
+};
 pub use pool::{JournalMode, SqliteConfig, SqliteConnectionPool, SynchronousMode};

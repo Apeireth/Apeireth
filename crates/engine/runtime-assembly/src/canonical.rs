@@ -164,9 +164,9 @@ pub use preference_learning::{
     PREFERENCE_LEARNING_MODULE_ID,
 };
 pub use production::{
-    with_memory_context_projection, CognitiveBackends, CognitiveModuleConfig,
-    MemoryContextProjector, ProductionBackends, ProductionCognitiveModules, ProductionModules,
-    ProductionModulesConfig,
+    with_memory_context_projection, BuildInstrumentation, CognitiveBackends, CognitiveModuleConfig,
+    CountingBuildProbe, MemoryContextProjector, ModuleBuildProbe, ModuleFamily, ProductionBackends,
+    ProductionCognitiveModules, ProductionModules, ProductionModulesConfig,
 };
 pub use retrieval_tuning_wire::{
     memory_ledger_tuning_fields, read_retrieval_tuning_log, retrieval_tuning_doc_compat,

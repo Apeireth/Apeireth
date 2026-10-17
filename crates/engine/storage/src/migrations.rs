@@ -91,18 +91,48 @@ pub fn current_version(conn: &Connection) -> Result<i64, StorageError> {
         .map_err(StorageError::from)
 }
 
+/// Migration outcome of one [`run_migrations_report`] pass (测试/剖析可断言口)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MigrationReport {
+    /// True when the database was already at the latest schema version and the
+    /// pass short-circuited **before executing any migration SQL**.
+    pub already_current: bool,
+    /// Versions applied by this pass, in application order (empty = none ran).
+    pub applied: Vec<i64>,
+}
+
 /// Applies all pending migrations.
 pub fn run_migrations(conn: &Connection) -> Result<(), StorageError> {
-    let current = current_version(conn)?;
+    run_migrations_report(conn).map(|_| ())
+}
 
+/// Applies all pending migrations and reports what ran.
+///
+/// 迁移只在需要时跑 (B-P1 版本检查短路): 库已在最新 schema 版本时, 在**执行
+/// 任何迁移 SQL 之前**直接返回 —— 已迁移库不再跑迁移 (不再空开事务、不再扫
+/// 迁移表)。版本落后时行为不变 (逐条跳过 `version <= current` 的迁移)。
+pub fn run_migrations_report(conn: &Connection) -> Result<MigrationReport, StorageError> {
+    let current = current_version(conn)?;
+    if current >= LATEST_SCHEMA_VERSION {
+        return Ok(MigrationReport {
+            already_current: true,
+            applied: Vec::new(),
+        });
+    }
+
+    let mut applied = Vec::new();
     for migration in MIGRATIONS {
         if migration.version <= current {
             continue;
         }
         run_one(conn, migration)?;
+        applied.push(migration.version);
     }
 
-    Ok(())
+    Ok(MigrationReport {
+        already_current: false,
+        applied,
+    })
 }
 
 fn run_one(conn: &Connection, migration: &Migration) -> Result<(), StorageError> {
@@ -159,6 +189,74 @@ mod tests {
 
         let version = pool.read(current_version).unwrap();
         assert_eq!(version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[tokio::test]
+    async fn fresh_database_reports_each_applied_version() {
+        let pool = SqliteConnectionPool::in_memory().await.unwrap();
+
+        let report = pool
+            .write(|conn| run_migrations_report(conn))
+            .await
+            .unwrap();
+        assert!(!report.already_current);
+        assert_eq!(
+            report.applied,
+            MIGRATIONS.iter().map(|m| m.version).collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn migrated_database_short_circuits_without_running_migration_sql() {
+        let pool = SqliteConnectionPool::in_memory().await.unwrap();
+
+        let first = pool
+            .write(|conn| run_migrations_report(conn))
+            .await
+            .unwrap();
+        assert!(!first.already_current);
+
+        // 已迁移库再跑: 版本检查短路 —— 不再应用任何迁移 SQL。
+        let second = pool
+            .write(|conn| run_migrations_report(conn))
+            .await
+            .unwrap();
+        assert!(second.already_current);
+        assert!(second.applied.is_empty());
+    }
+
+    #[tokio::test]
+    async fn version_short_circuit_skips_migration_sql_even_on_empty_schema() {
+        // 短路的黑盒证明: 空 schema + user_version = 最新版 → 迁移**一条都不跑**,
+        // 表仍然不存在 (否则 CREATE IF NOT EXISTS 会把 `facts` 建出来)。
+        let pool = SqliteConnectionPool::in_memory().await.unwrap();
+        pool.write(|conn| {
+            conn.pragma_update(None, "user_version", LATEST_SCHEMA_VERSION)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        let report = pool
+            .write(|conn| run_migrations_report(conn))
+            .await
+            .unwrap();
+        assert!(report.already_current);
+        assert!(report.applied.is_empty());
+
+        let facts_exists: bool = pool
+            .read(|conn| {
+                Ok(conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'facts')",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        assert!(
+            !facts_exists,
+            "已迁移库短路后不得执行任何迁移 DDL (建表即 = 迁移跑了)"
+        );
     }
 
     #[tokio::test]

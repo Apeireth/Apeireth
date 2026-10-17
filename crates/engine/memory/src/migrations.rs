@@ -854,6 +854,10 @@ const APPEND_ONLY_TRIGGERS: &[(&str, &str)] = &[
 /// 事务保护: 基表 + 触发器 + 未执行 migration + 版本簿记在**一个** IMMEDIATE
 /// 事务内执行, 失败整体回滚 (migration SQL 本身保持逐条幂等, 见 `MIGRATIONS`
 /// 注释; 启动期只提交一次, 少一次 WAL 往返)。
+///
+/// 迁移只在需要时跑 (B-P1 版本检查短路): 版本簿记已是完整最新集的库**不再跑
+/// 迁移** —— 不空开事务、不重放幂等 DDL (含建表与触发器); 簿记缺口/落后/无表
+/// 时照常走全量路径, 修复语义在需要时仍然生效。列集校验 (M27) 短路前后都跑。
 pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
     // 0. M27 (L 组): 迁移前列集校验 — 如果同名表已被**别套 schema 家族**
     // (如 `apeireth-storage` 的 `episodes(id, data)` 最小 layout) 创建过,
@@ -861,6 +865,11 @@ pub fn run_migrations(conn: &mut Connection) -> MemoryResult<()> {
     // 之后 INSERT 才以 "no such column" 这种难懂的错爆炸 (样板:
     // `commitments.rs` 的 `validate_schema_columns`).
     validate_owned_schema(conn)?;
+
+    // 0.5 B-P1: 已迁移库短路 —— 簿记满最新集 = 迁移不再跑。
+    if migrations_up_to_date(conn)? {
+        return Ok(());
+    }
 
     // 1..3. 建表 (CREATE IF NOT EXISTS) + 6 流 append-only 触发器注册 (幂等)
     //     + 4. 记录已应用的 migration.
@@ -1000,6 +1009,34 @@ fn migration_applied(conn: &Connection, version: i64) -> MemoryResult<bool> {
         )
         .map_err(MemoryError::from)?;
     Ok(count > 0)
+}
+
+/// 已迁移判定 (B-P1 版本检查短路): `schema_migrations` 簿记存在、条数 = 迁移
+/// 集条数、且最大版本 = 迁移集最新版本 —— 三条齐备才认定「已迁移, 不再跑」。
+/// 簿记表不存在 (全新库)、条数不符 (旧库/半迁移)、最大版本不符 (异常态) 都
+/// 判「需要跑」, 走全量路径。
+fn migrations_up_to_date(conn: &Connection) -> MemoryResult<bool> {
+    let Some(latest) = MIGRATIONS.last().map(|m| m.version) else {
+        return Ok(true);
+    };
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(MemoryError::from)?;
+    if !table_exists {
+        return Ok(false);
+    }
+    let (count, max_version): (i64, Option<i64>) = conn
+        .query_row(
+            "SELECT COUNT(*), MAX(version) FROM schema_migrations",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(MemoryError::from)?;
+    Ok(count == MIGRATIONS.len() as i64 && max_version == Some(latest))
 }
 
 fn now_unix() -> i64 {

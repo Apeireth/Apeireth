@@ -5,10 +5,11 @@
 //! through [`SqliteConnectionPool::write`]. Readers are short-lived closures
 //! over the `r2d2` pool and should be used for queries only.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc as std_mpsc;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
 use r2d2::ManageConnection;
@@ -235,12 +236,13 @@ impl SqliteConnectionPool {
             message: e.to_string(),
         })?;
 
-        // 启动期只建立 1 条空闲读连接, 其余按需补充 (r2d2 默认在 build 时
-        // 建满 max_size 条 —— 每条都是一次文件打开 + PRAGMA 初始化, 是启动期
-        // 重复 I/O)。max_size 上限与并发语义不变, 首次高并发才补到满。
+        // 启动期 0 条空闲读连接, 读用到才建 (r2d2 默认在 build 时建满 max_size
+        // 条 —— 每条都是一次文件打开 + PRAGMA 初始化, 是启动期重复 I/O)。
+        // max_size 上限与并发语义不变; 只读路径首次查询补 1 条并按需补满,
+        // 纯写路径 (如会话存储启动期迁移) 一条读连接都不建。
         let pool = r2d2::Pool::builder()
             .max_size(config.max_connections)
-            .min_idle(Some(1))
+            .min_idle(Some(0))
             .build(manager)
             .map_err(|e| StorageError::Open {
                 path: path.clone(),
@@ -267,10 +269,10 @@ impl SqliteConnectionPool {
             message: e.to_string(),
         })?;
 
-        // 同文件池: 启动期只建 1 条空闲读连接, 其余按需补充 (见 open_with_config)。
+        // 同文件池: 启动期 0 条空闲读连接, 读用到才建 (见 open_with_config)。
         let pool = r2d2::Pool::builder()
             .max_size(config.max_connections)
-            .min_idle(Some(1))
+            .min_idle(Some(0))
             .build(manager)
             .map_err(|e| StorageError::Open {
                 path: PathBuf::from(":memory:"),
@@ -283,6 +285,35 @@ impl SqliteConnectionPool {
     /// Opens a shared in-memory pool with default configuration.
     pub async fn in_memory() -> Result<Self, StorageError> {
         Self::in_memory_with_config(SqliteConfig::default()).await
+    }
+
+    /// Opens a file-backed pool that is **reused per path inside the process**.
+    ///
+    /// 池复用 (B-P1): 同一路径的重复 open 返回同一组底层句柄 (同一条写线程 +
+    /// 同一个 r2d2 读池), 不再每客体各建一套连接。注册表持弱引用 —— 最后一个
+    /// 使用者放手后池整体释放 (句柄与写线程随 Drop 回收), 注册表不留尸体。
+    /// 并发语义不变: `max_size` 上限、单写者串行都作用在同一组句柄上。
+    pub async fn open_shared<P: AsRef<Path>>(path: P) -> Result<Arc<Self>, StorageError> {
+        let key = shared_registry_key(path.as_ref());
+        let mut registry = shared_registry().lock().await;
+        if let Some(existing) = registry.get(&key).and_then(Weak::upgrade) {
+            return Ok(existing);
+        }
+        let pool = Arc::new(Self::open(path.as_ref()).await?);
+        registry.insert(key, Arc::downgrade(&pool));
+        Ok(pool)
+    }
+
+    /// 当前仍存活的共享池条目数 (句柄复用断言口; 死条目顺手清)。
+    pub async fn shared_live_pools() -> usize {
+        let mut registry = shared_registry().lock().await;
+        registry.retain(|_, weak| weak.strong_count() > 0);
+        registry.len()
+    }
+
+    /// 底层读池当前持有的连接句柄数 (不含写线程连接)。
+    pub fn reader_connection_count(&self) -> u32 {
+        self.pool.state().connections
     }
 
     /// Runs a short-lived read closure over a pooled reader connection.
@@ -417,5 +448,124 @@ fn writer_task_error(panicked: &AtomicBool) -> StorageError {
         StorageError::WriteQueue("writer task panicked".to_string())
     } else {
         StorageError::WriteQueue("writer task did not return a result".to_string())
+    }
+}
+
+/// 进程内共享池注册表 (B-P1 池复用): 键 = 归一化绝对路径, 值 = 弱引用。
+/// 打开与查复用在同一把异步锁下串行, 并发 open 同一路径不会建出两套池。
+fn shared_registry() -> &'static tokio::sync::Mutex<HashMap<PathBuf, Weak<SqliteConnectionPool>>> {
+    static REGISTRY: OnceLock<tokio::sync::Mutex<HashMap<PathBuf, Weak<SqliteConnectionPool>>>> =
+        OnceLock::new();
+    REGISTRY.get_or_init(|| tokio::sync::Mutex::new(HashMap::new()))
+}
+
+/// 注册表键归一: 绝对路径 (+ Windows 大小写折叠)。**不用** `canonicalize` ——
+/// 首次 open 时目标文件尚不存在, canonicalize 成败前后键会不一致, 反而拆掉复用。
+fn shared_registry_key(path: &Path) -> PathBuf {
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    if cfg!(windows) {
+        PathBuf::from(absolute.to_string_lossy().to_lowercase())
+    } else {
+        absolute
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 共享注册表是进程级状态: 三例断言活条目数, 彼此串行防互踩。
+    static TEST_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+    async fn serialize() -> tokio::sync::MutexGuard<'static, ()> {
+        TEST_LOCK
+            .get_or_init(|| tokio::sync::Mutex::new(()))
+            .lock()
+            .await
+    }
+
+    fn temp_db(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "apeireth-pool-reuse-{}-{name}.sqlite3",
+            std::process::id()
+        ))
+    }
+
+    #[tokio::test]
+    async fn shared_opens_reuse_one_pool_and_one_handle_set() {
+        let _guard = serialize().await;
+        let path = temp_db("reuse");
+        let first = SqliteConnectionPool::open_shared(&path).await.unwrap();
+        let second = SqliteConnectionPool::open_shared(&path).await.unwrap();
+        let third = SqliteConnectionPool::open_shared(&path).await.unwrap();
+
+        // 复用断言 1: 三次 open 是同一组底层句柄 (同一池 Arc)。
+        assert!(Arc::ptr_eq(&first, &second));
+        assert!(Arc::ptr_eq(&second, &third));
+        // 复用断言 2: 注册表恰 1 条活条目 (句柄数口径)。
+        assert_eq!(SqliteConnectionPool::shared_live_pools().await, 1);
+
+        // 复用断言 3: 读路径只补出 1 条连接句柄, 三次 open 不叠加。
+        first
+            .read(|conn| Ok(conn.query_row("SELECT 1", [], |row| row.get::<_, i64>(0))?))
+            .unwrap();
+        second
+            .read(|conn| Ok(conn.query_row("SELECT 1", [], |row| row.get::<_, i64>(0))?))
+            .unwrap();
+        assert!(first.reader_connection_count() <= 1);
+        assert_eq!(
+            first.reader_connection_count(),
+            second.reader_connection_count()
+        );
+
+        drop(first);
+        drop(second);
+        drop(third);
+        // 最后一个使用者放手后注册表条目回收 (弱引用, 不留尸体)。
+        assert_eq!(SqliteConnectionPool::shared_live_pools().await, 0);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn shared_opens_on_distinct_paths_stay_distinct_pools() {
+        let _guard = serialize().await;
+        let left = temp_db("left");
+        let right = temp_db("right");
+        let a = SqliteConnectionPool::open_shared(&left).await.unwrap();
+        let b = SqliteConnectionPool::open_shared(&right).await.unwrap();
+        let a2 = SqliteConnectionPool::open_shared(&left).await.unwrap();
+
+        assert!(!Arc::ptr_eq(&a, &b));
+        assert!(Arc::ptr_eq(&a, &a2));
+        assert_eq!(SqliteConnectionPool::shared_live_pools().await, 2);
+
+        drop(a);
+        drop(a2);
+        drop(b);
+        assert_eq!(SqliteConnectionPool::shared_live_pools().await, 0);
+        let _ = std::fs::remove_file(&left);
+        let _ = std::fs::remove_file(&right);
+    }
+
+    #[tokio::test]
+    async fn shared_pool_writes_and_reads_behave_like_a_plain_pool() {
+        let _guard = serialize().await;
+        let path = temp_db("rw");
+        let pool = SqliteConnectionPool::open_shared(&path).await.unwrap();
+        pool.write(|conn| {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, v TEXT);
+                 INSERT INTO t (id, v) VALUES (1, 'x');",
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let value: String = pool
+            .read(|conn| Ok(conn.query_row("SELECT v FROM t WHERE id = 1", [], |row| row.get(0))?))
+            .unwrap();
+        assert_eq!(value, "x");
+        drop(pool);
+        let _ = std::fs::remove_file(&path);
     }
 }

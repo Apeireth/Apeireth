@@ -105,6 +105,13 @@ pub const ENABLE_TASK_BOARD_ENV: &str = "APEIRETH_ENABLE_TASK_BOARD";
 // (体检不写被测面任何字节, 报告是唯一产出), 与 CLI `apeireth exposure report`
 // 同一内核两个出口。
 pub const ENABLE_EXPOSURE_AUDIT_ENV: &str = "APEIRETH_ENABLE_EXPOSURE_AUDIT";
+// 自主度第一小步 · 边角料提案面旋钮 (`tool.proposal_draft`): 注册 + 策略 grant
+// (低风险档: 读面 + append 提案账, 不写工作面)。默认关 (fail-closed);
+// `APEIRETH_ENABLE_PROPOSALS=1` = 注册工具 + grant —— grant 即用零审批 (与
+// `tool.self_status` 同档): 它提案, 人点头 (提案只入提案账 `proposals.jsonl`,
+// 通过 = 账面标记 accepted, 提案不直接执行 —— 执行仍走既有工具面的正常审批链)。
+// 开关语义真源在 `apeireth_tools_canonical::proposal` (命名即承诺)。
+pub const ENABLE_PROPOSALS_ENV: &str = "APEIRETH_ENABLE_PROPOSALS";
 // 受控文件写入旋钮 (`tool.apply_patch`, 第七件生产工具): 注册 + 策略 grant +
 // 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_FILE_WRITE=1` = 注册工具 +
 // grant + require_approval —— 每次写入都要人批 (本地审批面板 + IM 审批卡同链)。
@@ -1101,6 +1108,18 @@ fn build_production_governance_parts_from_env() -> (
                 apeireth_tools_canonical::EXPOSURE_AUDIT_CAPABILITY_ID.to_string(),
             ));
     }
+    // 自主度第一小步 · 边角料提案面 (`tool.proposal_draft`): **开关开 = 注册 +
+    // 授权同源** (同一开关值同时决定装配侧注册与本授权面)。低风险档 = grant
+    // 即用 (零审批, 与 `tool.self_status` 同档): 只读 + append 提案账, 不写
+    // 任何工作面; 提案不直接执行 (执行走既有工具面的正常审批链)。
+    if apeireth_tools_canonical::proposal::proposals_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::proposal::PROPOSAL_CAPABILITY_ID.to_string(),
+            ));
+    }
     (pipeline, policy, guard_hook)
 }
 
@@ -1154,13 +1173,26 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
     ),
     String,
 > {
-    let session_store = production_session_store().await?;
+    // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
+    // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
+    // 拆任务后各自持票进运行时工作线程; 顺序语义不变 (运行时组装仍等两侧齐备)。
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
-    let voice_emotion = VoiceEmotionSource::default();
-    let care_heartbeat = CareHeartbeatSource::new();
-    let (cognitive, memory) =
-        build_cognitive_modules_from_env(Arc::clone(&clock), &voice_emotion, &care_heartbeat)
-            .await?;
+    let cognitive_clock = Arc::clone(&clock);
+    let session_task = tokio::spawn(production_session_store());
+    let cognitive_task = tokio::spawn(async move {
+        let voice_emotion = VoiceEmotionSource::default();
+        let care_heartbeat = CareHeartbeatSource::new();
+        let (cognitive, memory) =
+            build_cognitive_modules_from_env(cognitive_clock, &voice_emotion, &care_heartbeat)
+                .await?;
+        Ok::<_, String>((cognitive, memory, voice_emotion, care_heartbeat))
+    });
+    let session_store = session_task
+        .await
+        .map_err(|error| format!("session store assembly task failed: {error}"))??;
+    let (cognitive, memory, voice_emotion, care_heartbeat) = cognitive_task
+        .await
+        .map_err(|error| format!("cognitive assembly task failed: {error}"))??;
     // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根把它注册进域平面,
     // 与运行时共用**同一把** (每域恰一把, W2-③ 承诺不拆)。
     let sessions = Arc::new(apeireth_runtime::SessionManager::new(
@@ -1717,6 +1749,13 @@ async fn build_cognitive_modules_at(
         // 只读档 (grant 即用零审批)。与 CLI `apeireth exposure report` 同一内核
         // 两个出口, 绑定探测口同源。
         exposure_audit: exposure_audit_config_from_env()?,
+        // 自主度第一小步 · 边角料提案面 (`tool.proposal_draft`): 注册即闸
+        // (`APEIRETH_ENABLE_PROPOSALS` 旋钮开才注入提案账落位, 默认关
+        // fail-closed)。提案账 = 数据目录 `proposals.jsonl` (append-only);
+        // 自述提案节与工具面同账同源。
+        proposals: apeireth_tools_canonical::proposal::ProposalConfig::from_env(
+            default_panel_data_dir(),
+        ),
         ..CognitiveModuleConfig::default()
     };
     let sqlite_backend = Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));

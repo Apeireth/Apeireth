@@ -53,6 +53,7 @@ import {startSseFetchStream} from './sse-stream.ts';
 import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 import {normalizeUserRows, normalizeDomainRows, type UserAdminRow, type DomainAdminRow} from './user-admin.ts';
 import {normalizeSkillScan, type SkillShelfScan} from './skill-shelf.ts';
+import {normalizeProposalLedger, PROPOSAL_LEDGER_LIMIT, type ProposalLedger} from './proposal-card.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -2764,4 +2765,26 @@ export async function fetchSkills(config: ApeirethConfig): Promise<SkillShelfSca
   if (res.status === 501 || res.status === 404) return null;
   const data = await checkJson(res);
   return normalizeSkillScan(data);
+}
+
+// --- 提案账读面（契约 frontend-data-contract.md §4.3 记忆六历史流之 proposal 流，
+// 只读 fetch 面）---
+// 提案卡消费：GET /v1/panel/memory/streams?kind=proposal&limit=N →
+// {kind, subject, count, entries[]}（entry.created_at = unix 秒，payload 自由 JSON）。
+// 语义三态（同技能书架）：200 = 真值账（归一为提案账，新 → 旧由视图定序）；
+// 501/404 = 该部署读面缺席 → null（提案卡如实上屏「暂无接口」诚实空态，不硬造端点）；
+// 其余错误（401/网络断等）抛 HttpError 由面板错误行承接（不静默降级成空列表）。
+
+/** GET /v1/panel/memory/streams?kind=proposal —— 提案账只读面（提案卡 loadLedger 注入缝的真源）。 */
+export async function fetchProposalLedger(
+  config: ApeirethConfig,
+  limit: number = PROPOSAL_LEDGER_LIMIT,
+): Promise<ProposalLedger | null> {
+  const query = `?kind=proposal&limit=${encodeURIComponent(String(Math.max(1, Math.floor(limit))))}`;
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/streams${query}`, {
+    headers: await gatewayAuthHeaders(),
+  });
+  if (res.status === 501 || res.status === 404) return null;
+  const data = await checkJson(res);
+  return normalizeProposalLedger(data);
 }

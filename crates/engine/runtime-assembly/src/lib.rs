@@ -8,10 +8,19 @@
 pub mod canonical;
 // W3-① 多户数据隔离 (星群数据层): 用户域数据平面 (三面按域分库 + 跨域拒绝即帧)。
 pub mod domain_plane;
+// B-P1 冷启动冲刺: 启动路径分段计时 (计时器注入) —— 会话/认知库打开、迁移、
+// 模块构造、运行时组装各段可测可断言。
+pub mod startup;
 // V6-a 持久任务队列存储: 与会话账本**同库** (`sessions.sqlite3`) 的任务表
 // (一次 update = 一次 IMMEDIATE 事务原子读改写)。
 pub mod sqlite_session;
 pub mod sqlite_task_queue;
+
+pub use startup::{
+    ScriptedTimer, StartupPhase, StartupSpan, StartupTimeline, StartupTimer, SystemStartupTimer,
+};
+// B-P1 懒加载断言: 模块族构造探针 + 组装期插桩 (开关关 = 不构造, 零构造可断言)。
+pub use canonical::{BuildInstrumentation, CountingBuildProbe, ModuleBuildProbe, ModuleFamily};
 
 pub use domain_plane::{
     session_row_count, DefaultDomainStores, DomainDataCounts, DomainDataPlane, DomainHandles,

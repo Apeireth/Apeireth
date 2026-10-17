@@ -7,20 +7,54 @@ use apeireth_runtime::canonical::{RuntimeError, RuntimeResult, Session, SessionS
 use apeireth_storage::{run_migrations, SqliteConnectionPool, StorageError};
 use async_trait::async_trait;
 
+use crate::startup::{StartupPhase, StartupTimeline};
+
 /// Durable SQLite implementation of the kernel's SessionStore port.
 pub struct SqliteSessionStore {
-    pool: SqliteConnectionPool,
+    /// 持 Arc 而非裸句柄: 共享池注册表按 Arc 存活判复用 (句柄组随本 Arc 保活)。
+    pool: Arc<SqliteConnectionPool>,
 }
 
 impl SqliteSessionStore {
     /// Open a file-backed store and apply storage migrations.
+    ///
+    /// 打开走**进程内共享池** (同一路径重复打开复用同一组底层句柄, 见
+    /// [`SqliteConnectionPool::open_shared`]); 迁移带版本检查短路 (已迁移库
+    /// 不再跑迁移, 见 `apeireth_storage::run_migrations_report`)。
     pub async fn open(path: impl AsRef<std::path::Path>) -> RuntimeResult<Self> {
-        let pool = SqliteConnectionPool::open(path.as_ref())
-            .await
-            .map_err(|error| RuntimeError::session_store_open(error.to_string()))?;
-        pool.write(|connection| run_migrations(connection))
-            .await
-            .map_err(|error| RuntimeError::session_store_open(error.to_string()))?;
+        Self::open_with_timeline(path, None).await
+    }
+
+    /// [`Self::open`] 的分段计时形态 (B-P1): 注入 [`StartupTimeline`] 后
+    /// 逐段落账 `SessionPoolOpen` (连接池建立) 与 `SessionMigrations` (迁移),
+    /// 打开语义与 [`Self::open`] 完全一致。
+    pub async fn open_with_timeline(
+        path: impl AsRef<std::path::Path>,
+        timeline: Option<&Arc<StartupTimeline>>,
+    ) -> RuntimeResult<Self> {
+        let path = path.as_ref();
+        let pool = match timeline {
+            Some(timeline) => {
+                timeline
+                    .measure_async(
+                        StartupPhase::SessionPoolOpen,
+                        SqliteConnectionPool::open_shared(path),
+                    )
+                    .await
+            }
+            None => SqliteConnectionPool::open_shared(path).await,
+        }
+        .map_err(|error| RuntimeError::session_store_open(error.to_string()))?;
+        let migrations = pool.write(|connection| run_migrations(connection));
+        match timeline {
+            Some(timeline) => {
+                timeline
+                    .measure_async(StartupPhase::SessionMigrations, migrations)
+                    .await
+            }
+            None => migrations.await,
+        }
+        .map_err(|error| RuntimeError::session_store_open(error.to_string()))?;
         Ok(Self { pool })
     }
 
@@ -32,7 +66,9 @@ impl SqliteSessionStore {
         pool.write(|connection| run_migrations(connection))
             .await
             .map_err(|error| RuntimeError::session_store_open(error.to_string()))?;
-        Ok(Self { pool })
+        Ok(Self {
+            pool: Arc::new(pool),
+        })
     }
 
     fn storage_error(

@@ -103,6 +103,9 @@ const SUITES = [
   {file: 'user-admin.mjs', name: 'user admin card (list / read-only state / CLI guidance / owner mutations / domain section, real modules)', strip: true},
   {file: 'skill-shelf.mjs', name: 'skill shelf (list / expand / L2 envelope warning head / honest no-face seam, real module)', strip: true},
   {file: 'capture-review.mjs', name: 'capture review card (recent-50 ledger / search filter / same-source review, real modules)', strip: true},
+  {file: 'care-card.mjs', name: 'care card (rules / disturbance discipline / heartbeat two columns / honest no-face / read-only guidance, real module)', strip: true},
+  {file: 'trait-card.mjs', name: 'trait card (four sliders / lock state / weekly report projection / CLI guidance, real modules)', strip: true},
+  {file: 'proposal-card.mjs', name: 'proposal card (proposal ledger IM-card rows / honest no-face / auth seam / read-only, real modules)', strip: true},
 ];
 
 function run({file, strip}) {

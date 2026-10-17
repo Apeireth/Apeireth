@@ -15,7 +15,7 @@
 use std::time::Instant;
 
 use apeireth_memory::SqliteMemoryStore;
-use apeireth_runtime_assembly::SqliteSessionStore;
+use apeireth_runtime_assembly::{SqliteSessionStore, StartupPhase};
 
 use crate::assembly::{assemble_production_profiled, tokio_runtime};
 use crate::support::{cleanup_dir, temp_dir, BenchConfig, Outcome};
@@ -40,12 +40,13 @@ pub fn run_cold_start(cfg: &BenchConfig) -> Vec<Outcome> {
     let mut total = Vec::with_capacity(samples);
     for _ in 0..samples {
         let dir = temp_dir("prof-cold");
+        let tick = Instant::now();
         let (runtime, seg) = rt.block_on(assemble_production_profiled(&dir));
+        total.push(tick.elapsed().as_nanos() as f64);
         memory_open.push(seg.memory_open_ns);
         session_open.push(seg.session_open_ns);
         modules_build.push(seg.modules_build_ns);
         runtime_build.push(seg.runtime_build_ns);
-        total.push(seg.total_ns());
         drop(runtime);
         cleanup_dir(&dir);
     }
@@ -97,6 +98,27 @@ pub fn run_cold_start(cfg: &BenchConfig) -> Vec<Outcome> {
         cleanup_dir(&dir);
     }
 
+    // 会话库分段拆分 (B-P1 计时器注入接缝): 连接池建立段 vs 迁移段,
+    // 每轮全新数据目录 (与 profile-cold-session-open 同真冷口径)。
+    let mut session_pool = Vec::with_capacity(samples);
+    let mut session_migrate = Vec::with_capacity(samples);
+    for i in 0..(warmup + samples) {
+        let dir = temp_dir("prof-cold-session-split");
+        let timeline = apeireth_runtime_assembly::StartupTimeline::system();
+        drop(
+            rt.block_on(SqliteSessionStore::open_with_timeline(
+                dir.join("session.sqlite3"),
+                Some(&timeline),
+            ))
+            .expect("打开会话存储"),
+        );
+        if i >= warmup {
+            session_pool.push(timeline.duration_ns(StartupPhase::SessionPoolOpen) as f64);
+            session_migrate.push(timeline.duration_ns(StartupPhase::SessionMigrations) as f64);
+        }
+        cleanup_dir(&dir);
+    }
+
     let segment = |key: &str, title: &str, op: &str, values: Vec<f64>, note: &str| {
         Outcome::from_ns(key, title, op, "ms", 1, warmup, values, None, note)
     };
@@ -107,14 +129,28 @@ pub fn run_cold_start(cfg: &BenchConfig) -> Vec<Outcome> {
             "冷启动分段-记忆存储打开",
             "SqliteMemoryStore::open 单次 (建库/开连接 + 记忆 schema 迁移)",
             memory_open,
-            "剖析分段 (仅记录, 无目标线); 与 cold-start 同一实现路径",
+            "剖析分段 (仅记录, 无目标线); 与 cold-start 同一实现路径; 与会话存储段并行推进",
         ),
         segment(
             "profile-cold-session-open",
             "冷启动分段-会话存储打开",
             "SqliteSessionStore::open 单次 (连接池建立 + 存储迁移)",
             session_open,
-            "剖析分段 (仅记录, 无目标线); 与 cold-start 同一实现路径",
+            "剖析分段 (仅记录, 无目标线); 与 cold-start 同一实现路径; 与记忆存储段并行推进",
+        ),
+        segment(
+            "profile-cold-session-pool",
+            "冷启动分段-会话库连接池建立",
+            "SqliteSessionStore::open 的 SessionPoolOpen 段 (计时器注入接缝)",
+            session_pool,
+            "剖析分段 (仅记录); 会话存储打开的细分段, 与迁移段首尾相接",
+        ),
+        segment(
+            "profile-cold-session-migrate",
+            "冷启动分段-会话库迁移",
+            "SqliteSessionStore::open 的 SessionMigrations 段 (计时器注入接缝)",
+            session_migrate,
+            "剖析分段 (仅记录); 含版本检查短路 (已迁移库不再跑迁移)",
         ),
         segment(
             "profile-cold-modules-build",
@@ -132,10 +168,10 @@ pub fn run_cold_start(cfg: &BenchConfig) -> Vec<Outcome> {
         ),
         segment(
             "profile-cold-total",
-            "冷启动分段-全程合计",
-            "四段首尾相接合计 (≈ cold-start 口径, 仅多纳秒级计时器调用)",
+            "冷启动分段-全程墙钟",
+            "assemble_production 全程墙钟 (存储两段并行 + 模块组装 + Runtime build)",
             total,
-            "剖析分段 (仅记录, 无目标线); 用于校验分段之和 ≈ 全程",
+            "剖析分段 (仅记录, 无目标线); B-P1 起两存储段并行, 合计以墙钟口径计",
         ),
         segment(
             "profile-cold-memory-memdb",
@@ -154,16 +190,16 @@ pub fn run_cold_start(cfg: &BenchConfig) -> Vec<Outcome> {
         segment(
             "profile-cold-memory-reopen",
             "冷启动参照-记忆存储重开",
-            "同库二次 SqliteMemoryStore::open 单次 (迁移已应用, 空跑簿记)",
+            "同库二次 SqliteMemoryStore::open 单次 (迁移已应用, 版本检查短路)",
             memory_reopen,
             "参照 (仅记录); 与 profile-cold-memory-open 之差 ≈ 首建 schema DDL 成本",
         ),
         segment(
             "profile-cold-session-reopen",
             "冷启动参照-会话存储重开",
-            "同库二次 SqliteSessionStore::open 单次 (迁移已应用, 空跑簿记)",
+            "同库二次 SqliteSessionStore::open 单次 (迁移已应用, 版本检查短路)",
             session_reopen,
-            "参照 (仅记录); 与 profile-cold-session-open 之差 ≈ 首建 schema DDL 成本",
+            "参照 (仅记录); 与 profile-cold-session-open 之差 ≈ 首建 schema DDL 成本; 重开走共享池时另有复用收益",
         ),
     ]
 }

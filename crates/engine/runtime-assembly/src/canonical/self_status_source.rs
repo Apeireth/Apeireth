@@ -17,11 +17,11 @@ use apeireth_core::model_profile::ModelProfile;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::{
     derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
-    ContentFeedStatus, DomainCounts, DomainStatus, MemoryLedgerStats, QuotaDimensionStatus,
-    QuotaMeterReading, QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource,
-    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitStatus, TuningStatus, VoiceStatus,
-    WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED,
-    QUOTA_METER_SCOPE_REQUIRED,
+    ContentFeedStatus, DomainCounts, DomainStatus, MemoryLedgerStats, ProposalStatus,
+    QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot,
+    SelfStatusSource, SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitStatus, TuningStatus,
+    VoiceStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
+    QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
 };
 
 use super::care_heartbeat::CareHeartbeatStatus;
@@ -258,6 +258,16 @@ pub fn task_board_status_probe(
     })
 }
 
+/// 自省通道: 提案节探测口 (自主度第一小步 · 边角料提案面) —— 读提案账
+/// (`proposals.jsonl`) 的待审数 / 分态计数 / 最近提案真值 (只回 id/kind/标题/
+/// 状态, 不回 detail/payload 正文)。
+///
+/// 探测口绑同一本提案账 (与 `tool.proposal_draft` 工具面同账同源): 自述与
+/// 提案面同一真值源。读失败 = `Err(真因)`, 自述节显式 null + 原因, 不编数。
+pub fn proposal_status_probe(data_dir: PathBuf) -> StatusProbe<ProposalStatus> {
+    Arc::new(move || apeireth_tools_canonical::ProposalLedger::under_data_dir(&data_dir).status())
+}
+
 /// 自省通道: 人格节探测口 (`self_status_persona`, V4-a) —— 读人格层落库面
 /// 自述节真值 (信念/边界/偏好/张力计数 + 最后整编时刻, 只计数不回内容)。
 ///
@@ -301,6 +311,8 @@ pub struct ProductionSelfStatusSource {
     task_board: Option<StatusProbe<TaskBoardStatus>>,
     voice: Option<StatusProbe<VoiceStatus>>,
     persona: Option<StatusProbe<apeireth_tools_canonical::PersonaStatusSection>>,
+    /// 提案节真值探测口 (自主度第一小步): 待审数/分态计数/最近提案 (提案账)。
+    proposal: Option<StatusProbe<ProposalStatus>>,
     /// 性格节真值探测口 (裁定 ④⑤): 四杆锁定态 + 最近移动 (成长计既有账)。
     trait_growth: Option<StatusProbe<TraitStatus>>,
 }
@@ -329,6 +341,7 @@ impl ProductionSelfStatusSource {
             task_board: None,
             voice: None,
             persona: None,
+            proposal: None,
             trait_growth: None,
         }
     }
@@ -413,6 +426,15 @@ impl ProductionSelfStatusSource {
     #[must_use]
     pub fn with_voice_probe(mut self, probe: StatusProbe<VoiceStatus>) -> Self {
         self.voice = Some(probe);
+        self
+    }
+
+    /// 接入提案节探测口 (自主度第一小步): 待审数/分态计数/最近提案, 每次自述
+    /// 现探测 (与 `tool.proposal_draft` 工具面同一本提案账, 只回计数与标题不回
+    /// 正文)。
+    #[must_use]
+    pub fn with_proposal_probe(mut self, probe: StatusProbe<ProposalStatus>) -> Self {
+        self.proposal = Some(probe);
         self
     }
 
@@ -643,6 +665,16 @@ impl ProductionSelfStatusSource {
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
 
+        // 提案节 (自主度第一小步): 待审数/分态计数/最近提案, 现探测如实 (与
+        // 提案面同一本提案账 `proposals.jsonl`); 探测口缺位 = 显式 null + 原因。
+        let (proposal, proposal_reason) = match &self.proposal {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("proposal probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
             capabilities: self.capabilities.clone(),
@@ -673,6 +705,8 @@ impl ProductionSelfStatusSource {
             voice_reason,
             persona,
             persona_reason,
+            proposal,
+            proposal_reason,
         }
     }
 }
@@ -749,6 +783,10 @@ pub fn roster_from_config(
         // V5-b 暴露面体检 (`tool.exposure_audit`, 注册条件 = 体检配置已注入,
         // 注册即闸), 名册按实际注册条件取值。
         CapabilitySwitch::new("exposure_audit", config.exposure_audit.is_some()),
+        // 自主度第一小步 · 边角料提案面 (`tool.proposal_draft`, 注册条件 = 提案
+        // 账落位已注入, 注册即闸 `APEIRETH_ENABLE_PROPOSALS` 默认关 fail-closed),
+        // 名册按实际注册条件取值 (自述提案节与工具面同账)。
+        CapabilitySwitch::new("proposals", config.proposals.is_some()),
         // 受控文件写入 (`tool.apply_patch`): 主开关按实际注册条件取值 (配置开启
         // 且工作区根已注入才算生效); 自动放行子档依赖主开关 —— 主开关没注册成,
         // 子档无处生效, 名册照实说 false。

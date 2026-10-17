@@ -564,6 +564,57 @@ pub struct TaskBoardStatus {
     pub blocked: u64,
 }
 
+/// 自述提案节的「最近提案」一行 (只回 id / kind / 标题 / 状态, 不回正文)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposalStatusEntry {
+    /// 提案 id。
+    pub id: String,
+    /// 提案 kind 标签 (`tidy` / `fix_suggest` / `summarize` / `list`)。
+    pub kind: String,
+    /// 标题首行 (人读)。
+    pub title: String,
+    /// 状态标签 (`pending` / `accepted` / `rejected`)。
+    pub state: String,
+}
+
+/// 提案一节 (自主度第一小步 · 边角料提案面): 待审数 / 分态计数 / 最近提案。
+///
+/// 计数与 `tool.proposal_draft` 工具面同一本提案账 (`proposals.jsonl`) 同一
+/// 真值源; 「最近提案」有界 (5 条), 只回 id/kind/标题/状态不回 detail/payload
+/// 正文; 探测口缺位/失败 = 全维显式 null + `reason` (0 装诚实, 不编数)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposalStatus {
+    /// 待审数 (已入账还没点头/摇头)。
+    pub pending: u64,
+    /// 人点头 (标记 accepted) 计数 —— accepted 只是账面标记, 不是执行。
+    pub accepted: u64,
+    /// 人摇头 (标记 rejected) 计数。
+    pub rejected: u64,
+    /// 提案总数 (草稿行计数)。
+    pub total: u64,
+    /// 最近提案 (有界, 新在前)。
+    pub recent: Vec<ProposalStatusEntry>,
+    /// 备注 (「尚无提案记录」/ 坏行跳过如实注)。
+    pub note: Option<String>,
+    /// 探测缺位/失败的原因 (全维就位时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl ProposalStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            pending: 0,
+            accepted: 0,
+            rejected: 0,
+            total: 0,
+            recent: Vec::new(),
+            note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
 /// 人格层一节 (V4-a 人格记忆自述): 信念/边界/偏好/张力计数 + 最后整编真值,
 /// 只计数不回内容 (与自述面「有多少不说是什么」同口径)。
 ///
@@ -692,6 +743,10 @@ pub struct SelfStatusSnapshot {
     pub persona: Option<PersonaStatusSection>,
     /// 人格层一节不可用的原因; 可用时为 `None`。
     pub persona_reason: Option<String>,
+    /// 提案一节 (自主度第一小步: 待审数/分态计数/最近提案)。
+    pub proposal: Option<ProposalStatus>,
+    /// 提案一节不可用的原因; 可用时为 `None`。
+    pub proposal_reason: Option<String>,
 }
 
 impl SelfStatusSnapshot {
@@ -724,6 +779,8 @@ impl SelfStatusSnapshot {
             task_board_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             persona: None,
             persona_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            proposal: None,
+            proposal_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
         }
     }
 }
@@ -780,6 +837,9 @@ pub const SELF_STATUS_SECTIONS: &[&str] = &[
     // V4-a: 人格节入十四节合同 (形状冻结的演进, 附理由: 人格记忆层的计数
     // 真值与最后整编真值, 只计数不回内容)。
     "persona",
+    // 自主度第一小步: 提案节入十五节合同 (形状冻结的演进, 附理由: 边角料
+    // 提案面的待审数/分态计数/最近提案真值 —— 人审面要知道有多少提案待看)。
+    "proposal",
 ];
 
 /// 把一份自述投影成结构化 JSON (字段合同的唯一实现)。
@@ -1112,6 +1172,33 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         }),
     };
 
+    let proposal = match &snapshot.proposal {
+        Some(status) => json!({
+            "pending": status.pending,
+            "accepted": status.accepted,
+            "rejected": status.rejected,
+            "total": status.total,
+            "recent": status.recent,
+            "note": status.note,
+            "reason": snapshot
+                .proposal_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "pending": null,
+            "accepted": null,
+            "rejected": null,
+            "total": null,
+            "recent": null,
+            "note": null,
+            "reason": snapshot
+                .proposal_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
     json!({
         "identity": {
             "product_name": snapshot.identity.product_name,
@@ -1131,6 +1218,7 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "voice": voice,
         "task_board": task_board,
         "persona": persona,
+        "proposal": proposal,
     })
 }
 
@@ -1207,7 +1295,9 @@ impl SelfStatusTool {
     /// 备份节随 G5 (备份恢复) 入合同: 最近备份时间/清单件数自述化;
     /// 任务簿节随 V6-a (任务编排持久队列) 入合同: 分态计数自述化;
     /// 人格节随 V4-a (人格记忆层) 入合同: 信念/边界/偏好/张力计数 + 最后整编
-    /// 真值自述化 (只计数不回内容)。
+    /// 真值自述化 (只计数不回内容);
+    /// 提案节随自主度第一小步 (边角料提案面) 入合同: 待审数/分态计数/最近提案
+    /// 自述化 (accepted 只是账面标记, 不是执行)。
     pub fn output_schema() -> OutputSchema {
         let mut schema = OutputSchema::new();
         for section in SELF_STATUS_SECTIONS {
@@ -1462,6 +1552,21 @@ mod tests {
                 reason: None,
             }),
             persona_reason: None,
+            proposal: Some(ProposalStatus {
+                pending: 1,
+                accepted: 2,
+                rejected: 1,
+                total: 4,
+                recent: vec![ProposalStatusEntry {
+                    id: "prop-1728000900000-1".to_string(),
+                    kind: "tidy".to_string(),
+                    title: "边角料: 三处临时注释待清理".to_string(),
+                    state: "pending".to_string(),
+                }],
+                note: None,
+                reason: None,
+            }),
+            proposal_reason: None,
         }
     }
 
@@ -1490,7 +1595,7 @@ mod tests {
         let result = invoke_tool(fixture_snapshot()).await;
         assert!(result.is_ok(), "{}", result.render());
         let value: Value = serde_json::from_str(&result.render()).expect("structured json");
-        // 缺节即红: fixture 的渲染必须带出冻结节表的每一节 (十四节合同终核)。
+        // 缺节即红: fixture 的渲染必须带出冻结节表的每一节 (十五节合同终核)。
         for section in SELF_STATUS_SECTIONS {
             assert!(value.get(section).is_some(), "missing section {section}");
         }
@@ -1553,6 +1658,43 @@ mod tests {
         assert_eq!(value["persona"]["tensions"], 1);
         assert_eq!(value["persona"]["last_consolidation_at"], 1_728_000_800i64);
         assert_eq!(value["persona"]["reason"], Value::Null);
+        // 提案节真值 (自主度第一小步): 待审数/分态计数/最近提案入帧。
+        assert_eq!(value["proposal"]["pending"], 1);
+        assert_eq!(value["proposal"]["accepted"], 2);
+        assert_eq!(value["proposal"]["rejected"], 1);
+        assert_eq!(value["proposal"]["total"], 4);
+        let recent = value["proposal"]["recent"]
+            .as_array()
+            .expect("recent 提案在场");
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0]["id"], "prop-1728000900000-1");
+        assert_eq!(recent[0]["kind"], "tidy");
+        assert_eq!(recent[0]["state"], "pending");
+        assert_eq!(value["proposal"]["reason"], Value::Null);
+    }
+
+    /// 提案节缺席 = 显式 null + 原因 (0 装诚实, 不编待审数)。
+    #[tokio::test]
+    async fn missing_proposal_section_is_explicit_null_with_a_reason() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.proposal = None;
+        snapshot.proposal_reason = Some("proposal ledger probe failed: bad json".to_string());
+        let result = invoke_tool(snapshot).await;
+        assert!(result.is_ok(), "a missing probe must not fail the frame");
+        let value: Value = serde_json::from_str(&result.render()).expect("structured json");
+        assert_eq!(value["proposal"]["pending"], Value::Null);
+        assert_eq!(value["proposal"]["accepted"], Value::Null);
+        assert_eq!(value["proposal"]["recent"], Value::Null);
+        assert!(
+            value["proposal"]["reason"]
+                .as_str()
+                .unwrap()
+                .contains("proposal ledger probe failed"),
+            "{}",
+            value["proposal"]["reason"]
+        );
+        // 其余节不受牵连。
+        assert_eq!(value["persona"]["core_beliefs"], 2);
     }
 
     /// 性格节真值 (裁定 ④⑤): 四杆锁定态 + 最近移动随调参节如实上报。
@@ -1822,7 +1964,7 @@ mod tests {
         );
     }
 
-    /// 十四节合同终核: 节序显式、schema require 清单全、渲染缺一节即红 ——
+    /// 十五节合同终核: 节序显式、schema require 清单全、渲染缺一节即红 ——
     /// [`SELF_STATUS_SECTIONS`] 是 render / output_schema / fixture 三侧的
     /// 单一真源, 任一侧漂移都红。
     #[test]

@@ -830,3 +830,42 @@ impl CapabilityProvider for ExposureAuditModule {
         vec![self.tool.clone()]
     }
 }
+
+/// Module providing the leftover-proposal tool (`tool.proposal_draft`, 自主度
+/// 第一小步 · 边角料提案面, 保守版: 它提案, 人点头).
+///
+/// 提案面: 对发现的边角料 (重复劳动/小错漏/待整理) 起草结构化提案 ——
+/// **提案只入提案账** (`proposals.jsonl` append-only), 不落任何真面; 人审温柔
+/// (detail 恒含「建议你亲自确认」行 + 审批卡逐条请人过目); 通过 = 账面标记
+/// accepted, **提案不直接执行** (执行仍走既有工具面的正常审批链)。
+///
+/// 治理: **低风险档** (读面 + append 账本) —— 注册即闸
+/// (`APEIRETH_ENABLE_PROPOSALS`, 默认关 fail-closed), grant 即用零审批 (与
+/// `tool.self_status` 同档)。自述提案节与工具面同一本提案账。
+pub struct ProposalModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl ProposalModule {
+    /// Create the proposal module over the proposal-ledger data directory.
+    pub fn new(config: apeireth_tools_canonical::proposal::ProposalConfig) -> Self {
+        Self {
+            tool: apeireth_tools_canonical::proposal_capability(config),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) proposal capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for ProposalModule {
+    fn id(&self) -> &str {
+        "module.tool.proposal_draft"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}

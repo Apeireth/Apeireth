@@ -57,6 +57,13 @@ pub mod object_access;
 pub mod observed_gate;
 pub mod plugin;
 pub mod process;
+// 自主度第一小步 · 边角料提案面 (保守版: 它提案, 人点头): `tool.proposal_draft`
+// 对发现的边角料 (重复劳动/小错漏/待整理) 起草结构化提案 —— **提案只入提案账**
+// (`proposals.jsonl` append-only), 不落任何真面; 人审温柔 (detail 恒含「建议你
+// 亲自确认」行 + 审批卡逐条请人过目); 通过 = 账面标记 accepted, **提案不直接
+// 执行** (执行仍走既有工具面的正常审批链)。风险档 = 低 (读面 + append 账本),
+// 开关 `APEIRETH_ENABLE_PROPOSALS` 注册即闸, 默认关 fail-closed。
+pub mod proposal;
 // 出境脱敏双向闸 (V5-a 安全守望): 占位不可逆指纹 (`__AP_<类>_<指纹12>__`,
 // 会话随机密钥 HMAC 截断) + 还原双闸 (只在受控回程 + 只认本会话登记簿) +
 // 历史回扫 (每次出境前扫工具轨迹/会话历史, 堵历史搭车) + 脱敏账本
@@ -184,6 +191,17 @@ pub use observed_gate::{
     WriteKind, WriteRequest,
 };
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
+pub use proposal::{
+    next_proposal_id, normalize_detail, proposal_capability, proposal_draft_refusal, proposal_id,
+    proposal_pipeline, proposal_review_refusal, proposals_enabled_from_env, ProposalBoundaryGuard,
+    ProposalConfig, ProposalDecision, ProposalDraft, ProposalKind, ProposalLedger,
+    ProposalLedgerEntry, ProposalReview, ProposalReviewCard, ProposalState, ProposalTool,
+    ACTION_ACCEPT, ACTION_DRAFT, ACTION_LIST, ACTION_REJECT, PROPOSALS_ENABLE_ENV,
+    PROPOSAL_CAPABILITY_ID, PROPOSAL_DOC_NAME, PROPOSAL_DOC_VERSION, PROPOSAL_EVIDENCE_HIGHLIGHT,
+    PROPOSAL_LEDGER_FILE, PROPOSAL_NO_EXECUTION_NOTE, PROPOSAL_PERSONAL_CONFIRM_LINE,
+    PROPOSAL_PERSONAL_CONFIRM_MARKER, PROPOSAL_RECENT_LIMIT, PROPOSAL_REVIEW_TONE,
+    PROPOSAL_TIMEOUT_MS, PROPOSAL_TOOL_DESCRIPTION, PROPOSAL_TOOL_NAME,
+};
 pub use redaction_bridge::{
     EgressRedaction, HistoryRescanReport, LedgerEntry, LedgerEvent, RedactionBridge, RedactionHit,
     RedactionSurface, RestoreReport, REDACTION_LEDGER_FILE,
@@ -193,14 +211,14 @@ pub use search::{SearchError, SearchTool};
 pub use self_status::{
     capability_roster, derive_tuning_preset, quota_cost_partial_note, render_snapshot,
     BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus, ContentFeedStatus, DomainCounts,
-    DomainStatus, MemoryLedgerStats, PersonaStatusSection, QuotaDimensionStatus, QuotaMeterReading,
-    QuotaStatus, RetrievalTuningMove, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource,
-    SelfStatusTool, SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitLockStatus,
-    TraitMoveStatus, TraitStatus, TuningStatus, VoiceStatus, WorkspaceStatus,
-    BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN,
-    PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS, PRICE_NOT_PROVIDED,
-    PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
-    RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
+    DomainStatus, MemoryLedgerStats, PersonaStatusSection, ProposalStatus, ProposalStatusEntry,
+    QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, RetrievalTuningMove, SelfStatusIdentity,
+    SelfStatusSnapshot, SelfStatusSource, SelfStatusTool, SessionQuotaProbe, StatusProbe,
+    TaskBoardStatus, TraitLockStatus, TraitMoveStatus, TraitStatus, TuningStatus, VoiceStatus,
+    WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS,
+    MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS,
+    PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED,
+    QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use skill::{

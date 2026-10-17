@@ -3,6 +3,8 @@
 //! 组装内容 (与 `cold-start` / `idle-footprint` 两个基准严格同口径):
 //! 1. SQLite 记忆存储 (rusqlite bundled, 含迁移) 打开;
 //! 2. SQLite 会话存储 (连接池 + 迁移) 打开;
+//!    (B-P1 起 1/2 两段**并行**推进 —— 互不依赖的两个库, 与生产组合根
+//!    `build_canonical_runtime_...` 的双任务并行口径一致)
 //! 3. `ProductionModules::build` 组装生产模块集 (记忆召回 + 记忆写回 +
 //!    文件/搜索/仓库工具模块, 注入记忆/治理/作用域记忆后端与工作区根);
 //! 4. `register_into(Runtime::builder())` 注册模块与能力;
@@ -24,7 +26,7 @@ use apeireth_runtime_assembly::{
     ProductionBackends, ProductionModules, ProductionModulesConfig, SqliteSessionStore,
 };
 
-/// 启动期分段计时 (剖析报告数据源; 固定 4 个计时点, 计时器开销 < 1 µs)。
+/// 启动期分段计时 (剖析报告数据源; 计时点每段一对, 计时器开销 < 1 µs)。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StartupSegments {
     /// SQLite 记忆存储打开 (含记忆 schema 迁移), 纳秒。
@@ -38,9 +40,12 @@ pub struct StartupSegments {
 }
 
 impl StartupSegments {
-    /// 全程合计 (纳秒)。
-    pub fn total_ns(&self) -> f64 {
-        self.memory_open_ns + self.session_open_ns + self.modules_build_ns + self.runtime_build_ns
+    /// 并行关键路径 (纳秒): 两个存储打开段并行推进 (与生产组合根同款口径),
+    /// 全程 ≈ max(存储两段) + 模块构造 + 运行时组装。
+    pub fn critical_path_ns(&self) -> f64 {
+        self.memory_open_ns.max(self.session_open_ns)
+            + self.modules_build_ns
+            + self.runtime_build_ns
     }
 }
 
@@ -53,25 +58,36 @@ pub async fn assemble_production(data_dir: &Path) -> Runtime {
 
 /// 与 [`assemble_production`] 完全同口径 (同一实现), 额外返回分段计时。
 ///
-/// 分段口径: `memory_open` / `session_open` / `modules_build` / `runtime_build`
-/// 四段首尾相接, 合计 ≈ 冷启动全程 (段间仅剩纳秒级计时器调用)。
+/// 分段口径 (B-P1 并行构造): `memory_open` / `session_open` 两段**并行**
+/// (互不依赖的两个库, 与生产组合根 `build_canonical_runtime_...` 同款双任务
+/// 口径), `modules_build` / `runtime_build` 在两侧齐备后串行; 全程以
+/// [`StartupSegments::critical_path_ns`] 逼近墙钟 (墙钟口径由调用方外圈计)。
 pub async fn assemble_production_profiled(data_dir: &Path) -> (Runtime, StartupSegments) {
     let mut seg = StartupSegments::default();
 
-    let tick = Instant::now();
-    let memory =
-        Arc::new(SqliteMemoryStore::open(data_dir.join("memory.sqlite3")).expect("打开记忆存储"));
-    seg.memory_open_ns = tick.elapsed().as_nanos() as f64;
+    let memory_path = data_dir.join("memory.sqlite3");
+    let session_path = data_dir.join("session.sqlite3");
+    let memory_task = tokio::spawn(async move {
+        let tick = Instant::now();
+        let memory = Arc::new(SqliteMemoryStore::open(memory_path).expect("打开记忆存储"));
+        (memory, tick.elapsed().as_nanos() as f64)
+    });
+    let session_task = tokio::spawn(async move {
+        let tick = Instant::now();
+        let sessions = SqliteSessionStore::open(session_path)
+            .await
+            .expect("打开会话存储");
+        (sessions, tick.elapsed().as_nanos() as f64)
+    });
+
+    let (memory, memory_open_ns) = memory_task.await.expect("记忆存储组装任务");
+    seg.memory_open_ns = memory_open_ns;
+    let (sessions, session_open_ns) = session_task.await.expect("会话存储组装任务");
+    seg.session_open_ns = session_open_ns;
 
     let backend = memory.clone() as Arc<dyn MemoryBackend>;
     let governance = memory.clone() as Arc<dyn MemoryGovernanceStore>;
     let scoped = memory.clone() as Arc<dyn ScopedMemoryBackend>;
-
-    let tick = Instant::now();
-    let sessions = SqliteSessionStore::open(data_dir.join("session.sqlite3"))
-        .await
-        .expect("打开会话存储");
-    seg.session_open_ns = tick.elapsed().as_nanos() as f64;
 
     let config = ProductionModulesConfig {
         memory_recall: true,
