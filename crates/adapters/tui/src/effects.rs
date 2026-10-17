@@ -97,5 +97,21 @@ pub fn run(effect: Effect, backend: &mut dyn CockpitBackend, sink: &mut dyn FnMu
                 message: error.to_string(),
             }),
         },
+        Effect::RefreshTasks => match backend.fetch_tasks() {
+            Ok(snapshot) => sink(Input::TasksLoaded(snapshot)),
+            Err(error) => sink(Input::BackendFailed {
+                what: "任务面板刷新".to_string(),
+                message: error.to_string(),
+            }),
+        },
+        Effect::HumanJudgeRetry { task_id, reason } => {
+            match backend.human_judge_retry(&task_id, &reason) {
+                Ok(task) => sink(Input::TaskJudgeDone { task }),
+                Err(error) => sink(Input::TaskJudgeFailed {
+                    task_id: task_id.clone(),
+                    message: error.to_string(),
+                }),
+            }
+        }
     }
 }

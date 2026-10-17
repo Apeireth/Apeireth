@@ -8,10 +8,16 @@
 // (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod backup;
+// V5-b 暴露面体检 CLI 面: `apeireth exposure report [--json] [--out <PATH>]`
+// (安全守望 · 本地只读自查, 只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
+pub mod exposure;
 pub mod gateway_panels;
 pub mod keyring_bootstrap;
 pub mod onboarding;
 pub mod portable_bundle;
+// 裁定 ④⑤ 性格锁定 + 性格周报: `apeireth trait report|lock|unlock`
+// (成长计既有账的只读周报 + 四杆锁定/解锁显式动作面)。
+pub mod trait_command;
 // W3-② 用户身份与角色: `apeireth user add|list|role|remove` 管理面 (owner 角色门)。
 pub mod user_admin;
 
@@ -570,8 +576,9 @@ pub fn task_board_enabled_from_env() -> bool {
 
 /// 发声配置 (注册即闸的另一半): 语句账本落数据目录 (`spoken.jsonl`) +
 /// 勿扰窗口 (同源接缝: `care_rules` 打扰纪律配了窗口 = 引用之, 未落/未配 =
-/// 发声面最小自建 env) + 排队策略 (`APEIRETH_VOICE_INTERRUPT`, 缺省新话打断
-/// 旧话)。坏配置**拒开** (fail-closed, 不静默回退)。
+/// 发声面最小自建 env) + 排队策略 (`APEIRETH_VOICE_INTERRUPT`, 缺省排队串行)
+/// + 发声范围 (`APEIRETH_VOICE_SPEAK_SCOPE`, 缺省仅关怀/提醒, `all` 扩全量)。
+/// 坏配置**拒开** (fail-closed, 不静默回退)。
 pub fn voice_speak_config_from_env(
 ) -> Result<Option<apeireth_tools_canonical::VoiceSpeakConfig>, String> {
     if !voice_speak_enabled_from_env() {
@@ -580,13 +587,15 @@ pub fn voice_speak_config_from_env(
     let quiet =
         apeireth_runtime_assembly::voice_quiet_hours_from_care_rules(default_panel_data_dir())?;
     let playback = apeireth_tools_canonical::PlaybackPolicy::from_env()?;
+    let speak_gate = apeireth_tools_canonical::SpeakGate::from_env()?;
     Ok(Some(
         apeireth_tools_canonical::VoiceSpeakConfig::new(
             default_panel_data_dir(),
             apeireth_tools_canonical::voice::system_quiet_clock(),
         )
         .with_quiet(quiet)
-        .with_playback_policy(playback),
+        .with_playback_policy(playback)
+        .with_speak_gate(speak_gate),
     ))
 }
 
@@ -647,6 +656,10 @@ fn build_production_governance_parts_with_dataset(
     // 自省通道: `tool.self_status` 只读档 —— 默认可用、零审批 (无
     // require_approval)。模型可实测自身状态再发言, 不靠翻文件撞见自己。
     policy.grant(Permission::ExecuteTool("tool.self_status".to_string()));
+    // 性格周报 (`tool.trait_report`, 裁定 ⑤): 只读档 —— 默认可用、零审批
+    // (与 `tool.self_status` 同档: 只读成长计既有账的数字与调整原因, 不写
+    // 不执行不外联)。
+    policy.grant(Permission::ExecuteTool("tool.trait_report".to_string()));
     if enable_local_read_tools {
         policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
         policy.grant(Permission::ExecuteTool("tool.search".to_string()));
@@ -1394,7 +1407,7 @@ async fn build_cognitive_modules_at(
         // `.apeireth/sessions.sqlite3`, 与会话账本默认路径同文件)。`open` 即
         // 崩溃恢复点: running/assigned → pending 重派一次 (attempt 计数防死
         // 循环), 未投递唤醒重投 (redelivered 计数)。
-        let task_db = path.with_file_name("sessions.sqlite3");
+        let task_db = path.with_file_name(TASK_QUEUE_DB_NAME);
         let store = std::sync::Arc::new(
             apeireth_runtime_assembly::SqliteTaskStore::open(task_db)
                 .map_err(|error| format!("task queue store open failed: {error}"))?,
@@ -1472,6 +1485,13 @@ async fn build_cognitive_modules_at(
         // 坏配置拒开), 数据目录与面板其余持久档同位。
         mcp: mcp_enabled,
         mcp_data_dir: mcp_enabled.then(default_panel_data_dir),
+        // 性格周报 (`tool.trait_report`, 裁定 ⑤) + 自述性格节: 成长账 =
+        // `tuning-log.jsonl` (与「性格养成」自校准学习日志**同账**, 不新造账),
+        // 特质锁定档 `trait-locks.json` 同目录。只读零审批; 生产装配默认注入 =
+        // 默认可用 (与 `tool.self_status` 同档)。
+        trait_report: Some(apeireth_runtime_assembly::TraitGrowthPaths::new(
+            apeireth_runtime_assembly::tuning_log_path(),
+        )),
         ..CognitiveModuleConfig::default()
     };
     let sqlite_backend = Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));
@@ -1528,6 +1548,10 @@ async fn build_cognitive_modules_at(
         // 提取步 (persona_consolidation, 默认关) 的落库面、自述人格节的真值源、
         // TurnStart 恒定注入的回取面, 三面同一存储。
         persona_layer: Some(persona_store.clone()),
+        // V4-b 保鲜回路散列增量门落库面 (真接线): 散列账 `source_hash` 与本组合
+        // 同一 `cognitive.sqlite3` 同账 —— 整编散列门 (consolidation_hash_gate,
+        // 默认关) 与自述记忆节的去重计数真值同源。
+        ingest_gate: Some(persona_store.clone()),
         reflexion_store,
         // W2 §4.2: partner 羁绊存储 (InMemory —— 进程内, 重启即散; 持久后端为
         // 后续 sqlite 实现, trait 落点已备)。
@@ -1842,6 +1866,17 @@ fn cognitive_db_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".apeireth/cognitive.sqlite3"))
 }
 
+/// 任务队列表的库文件名 (与会话账本同库: 每域恰一个 `sessions.sqlite3`)。
+const TASK_QUEUE_DB_NAME: &str = "sessions.sqlite3";
+
+/// 默认域任务队列库路径 (与认知库同目录派生, 组合根一处派口径)。
+///
+/// 任务面板面与 `tool.task_board` 工具面必须**同店同账**: 工具面在
+/// `build_cognitive_modules_at` 按其记忆库路径派生同名文件, 默认域两者合一。
+fn task_queue_db_path() -> PathBuf {
+    cognitive_db_path().with_file_name(TASK_QUEUE_DB_NAME)
+}
+
 /// 自省通道: 内容流节探测口 (J1) —— 订阅数/最近拉取取自 `feeds.json` 真值
 /// (与工具同一订阅表、同一 StoredDoc 拒开校验口径); 每次自述现探测, 坏配置
 /// 显式 `null` + 原因, 不让整帧失败 (0 装诚实: 尚无拉取 = 如实注, 不编时间)。
@@ -1871,6 +1906,9 @@ fn voice_status_probe(
 /// ([`apeireth_memory::SqliteMemoryStore::ledger_counts`]), 教训计数取自反思
 /// 教训存储; **只回计数, 不回内容原文**。每次自述现探测; 失败给字段级
 /// `null` + 原因, 不让整帧失败。
+/// V4-b 记忆节扩: 待摄取数 / 最近折入 / 去重计数取自保鲜回路真值
+/// ([`apeireth_memory::SqliteMemoryStore::freshness_status`], 与账本计数同库
+/// 同账); 尚未折入 = 显式 null (不编时间)。
 fn self_status_ledger_probe(
     cognitive_db: PathBuf,
     lessons_root: PathBuf,
@@ -1887,12 +1925,31 @@ fn self_status_ledger_probe(
             Ok(reflections) => (Some(reflections.len() as u64), None),
             Err(error) => (None, Some(format!("lesson store read failed: {error}"))),
         };
+        // V4-b 保鲜回路三真值 (缺源显式 null + 原因, 不编数)。
+        let (pending_ingest, last_fold_at_ms, dedup_skipped, freshness_reason) =
+            match store.freshness_status() {
+                Ok(status) => (
+                    Some(status.pending_ingest),
+                    status.last_fold_at_ms,
+                    Some(status.dedup_skipped),
+                    None,
+                ),
+                Err(error) => (
+                    None,
+                    None,
+                    None,
+                    Some(format!("freshness status query failed: {error}")),
+                ),
+            };
         Ok(apeireth_tools_canonical::MemoryLedgerStats {
             sessions: Some(counts.sessions),
             memories: Some(counts.memories),
             protected: Some(counts.protected),
             lessons,
-            reason,
+            pending_ingest,
+            last_fold_at_ms,
+            dedup_skipped,
+            reason: reason.or(freshness_reason),
         })
     })
 }
@@ -2598,6 +2655,18 @@ pub async fn dispatch_gateway_serve_with(
     services.skills = Some(Arc::new(
         crate::gateway_panels::CliSkillShelf::under_data_dir(&data_dir),
     ));
+    // 任务面板面 (`GET /v1/panel/tasks` 只读 + `POST .../human-judge-retry` 人判
+    // 重试): 与 `tool.task_board` 工具面**同队同账** (同一 `sessions.sqlite3`
+    // 任务表), 附从句柄不重复崩溃恢复 (恢复点只归工具面主句柄的 `open`)。
+    // 任务簿旋钮开才接线 (注册即闸, 默认关 → 501 unsupported 如实报);
+    // 面板边界: 只读 + 人判重试, 增删改派走工具面不进面板。
+    services.tasks = if task_board_enabled_from_env() {
+        Some(Arc::new(crate::gateway_panels::CliTaskBoard::attach_at(
+            task_queue_db_path(),
+        )?))
+    } else {
+        None
+    };
     // W2-②: 客户端令牌表 (令牌族第二面) 显式注入; 远程绑定闸与 TLS 接口桩的
     // 清场事实随装配进审计面 (逃生阀可裸奔, 但必须留痕)。
     let mut state =

@@ -17,7 +17,7 @@
 //!
 //! | 参数 | 单位 | baseline | min | max | max_step | 推导 |
 //! |---|---|---|---|---|---|---|
-//! | [`TunableParam::MemoryFade`] | 遗忘衰减强度倍率 (无量纲) | 1.0 | 0.25 | 4.0 | 0.25 | 有效艾宾浩斯半衰期 = 24h / 倍率 |
+//! | [`TunableParam::MemoryFade`] | 遗忘衰减强度倍率 (无量纲) | 1.0 | 0.25 | 4.0 | 0.25 | 有效艾宾浩斯半衰期 = 基线 90 天 / 倍率 |
 //! | [`TunableParam::CuriosityStrength`] | 好奇强度倍率 (无量纲) | 1.0 | 0.25 | 4.0 | 0.25 | 每日好奇预算 = 2000 × 倍率 |
 //! | [`TunableParam::ToneSaturation`] | 语气情绪饱和倍率 (无量纲) | 1.0 | 0.0 | 2.0 | 0.2 | 情绪注入 EMA 混合项 (0.1/0.2) × 倍率 |
 //! | [`TunableParam::ConsolidationCadence`] | 整合间隔 (回合数) | 1.0 | 1.0 | 10.0 | 1.0 | 每 N 回合触发一次记忆整合 |
@@ -47,7 +47,7 @@ const ZERO_DELTA_EPS: f64 = 1e-9;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TunableParam {
-    /// 遗忘衰减强度 (倍率): 作用于记忆艾宾浩斯衰减, 有效半衰期 = 24h / 倍率。
+    /// 遗忘衰减强度 (倍率): 作用于记忆艾宾浩斯衰减, 有效半衰期 = 基线 90 天 / 倍率。
     MemoryFade,
     /// 好奇强度 (倍率): 作用于 CuriosityEngine 每日好奇预算 (2000 × 倍率)。
     CuriosityStrength,
@@ -129,6 +129,16 @@ impl TunableParam {
             TunableParam::CuriosityStrength => "好奇心强度",
             TunableParam::ToneSaturation => "语气情绪饱和度",
             TunableParam::ConsolidationCadence => "整合节奏",
+        }
+    }
+
+    /// 稳定 id (snake_case, 与 env 旋钮/serde 同名): 输出帧与自述的滑杆标识。
+    pub const fn id(self) -> &'static str {
+        match self {
+            TunableParam::MemoryFade => "memory_fade",
+            TunableParam::CuriosityStrength => "curiosity_strength",
+            TunableParam::ToneSaturation => "tone_saturation",
+            TunableParam::ConsolidationCadence => "consolidation_cadence",
         }
     }
 
@@ -253,6 +263,81 @@ impl TuningValues {
         }
         out
     }
+}
+
+/// 四根特质滑杆的锁定态 (locked = 成长沉积**不再移动**该杆)。
+///
+/// **语义 (裁定 ④ 落地)**:
+/// - 锁定挡的是**自动成长沉积** ([`SelfTuningEngine::observe`] 的调整): 沉积被
+///   **跳过**且留审计痕 (见 [`TRAIT_LOCKED_SKIP_PREFIX`]), 不是"照记不生效";
+/// - 显式人动作 ( [`SelfTuningEngine::revert`] 撤销 / 调参面板保存 ) **不受**
+///   锁定约束 —— 锁护的是"被环境推着走", 不夺主人的手;
+/// - 解锁是**显式动作** ( [`TraitLocks::set`] 置 `false` / 接线层 `unlock`),
+///   无自动解锁路径;
+/// - 默认全解锁 ( [`TraitLocks::default`] ), 持久化由调用方负责 (接线层落
+///   `trait-locks.json`, 与成长计既有账同目录)。
+///
+/// 四个布尔字段与 [`TuningValues`] 同构: 字段即承诺, 新增滑杆必须同步本表与
+/// 全部映射测试。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TraitLocks {
+    /// 遗忘衰减强度滑杆锁定态。
+    pub memory_fade: bool,
+    /// 好奇强度滑杆锁定态。
+    pub curiosity_strength: bool,
+    /// 语气情绪饱和度滑杆锁定态。
+    pub tone_saturation: bool,
+    /// 整合节奏滑杆锁定态。
+    pub consolidation_cadence: bool,
+}
+
+impl TraitLocks {
+    /// 全锁定 (fail-closed 用: 锁定态读不出来时, 宁可不动任何杆)。
+    pub const fn all_locked() -> Self {
+        Self {
+            memory_fade: true,
+            curiosity_strength: true,
+            tone_saturation: true,
+            consolidation_cadence: true,
+        }
+    }
+
+    /// 某杆是否锁定。
+    pub const fn is_locked(self, param: TunableParam) -> bool {
+        match param {
+            TunableParam::MemoryFade => self.memory_fade,
+            TunableParam::CuriosityStrength => self.curiosity_strength,
+            TunableParam::ToneSaturation => self.tone_saturation,
+            TunableParam::ConsolidationCadence => self.consolidation_cadence,
+        }
+    }
+
+    /// 改某杆锁定态 (纯状态; 解锁 = 显式调本方法置 `false`)。
+    pub fn set(&mut self, param: TunableParam, locked: bool) {
+        match param {
+            TunableParam::MemoryFade => self.memory_fade = locked,
+            TunableParam::CuriosityStrength => self.curiosity_strength = locked,
+            TunableParam::ToneSaturation => self.tone_saturation = locked,
+            TunableParam::ConsolidationCadence => self.consolidation_cadence = locked,
+        }
+    }
+
+    /// 是否有任一杆锁定。
+    pub fn any_locked(self) -> bool {
+        TunableParam::ALL.into_iter().any(|p| self.is_locked(p))
+    }
+}
+
+/// 锁定跳过沉积的审计留痕 reason 前缀 (沉积留痕复用成长计既有账, 不新造账)。
+///
+/// 一条留痕 = 一条 [`TuningRecord`] (previous == next, 零移动), reason 形如
+/// `已锁定, 跳过沉积 (审计留痕): <原沉积意图原因>` —— 周报与自述按本前缀识别
+/// "跳过"而非"移动"。
+pub const TRAIT_LOCKED_SKIP_PREFIX: &str = "已锁定, 跳过沉积";
+
+/// 判定一条记录是否为「锁定跳过沉积」的审计留痕。
+pub fn is_trait_locked_skip(record: &TuningRecord) -> bool {
+    record.reason.starts_with(TRAIT_LOCKED_SKIP_PREFIX)
 }
 
 /// 进程内生效值 override (自动校准落地点)。
@@ -593,6 +678,8 @@ pub struct SelfTuningEngine {
     daily_drift: HashMap<(i64, TunableParam), f64>,
     /// 见过的最大事件时间戳 (撤销记录的时间锚, 保持确定性)。
     last_at_epoch_ms: i64,
+    /// 四根特质滑杆的锁定态 (锁定杆的沉积跳过 + 审计留痕)。
+    locks: TraitLocks,
 }
 
 impl Default for SelfTuningEngine {
@@ -615,12 +702,15 @@ impl SelfTuningEngine {
             next_seq: 1,
             daily_drift: HashMap::new(),
             last_at_epoch_ms: 0,
+            locks: TraitLocks::default(),
         }
     }
 
     /// 观察一条使用信号: 有方向证据 → 产生并返回一条 [`TuningRecord`]
     /// (步长上限 + 参数夹紧 + 每日漂移上限依次把关); 无信号/无方向 → None
-    /// (不调也不记)。被上限挡住时**不调、只记**「已达上限」(previous == next)。
+    /// (不调也不记)。被上限挡住时**不调、只记**「已达上限」(previous == next);
+    /// 目标杆**锁定**时沉积**跳过、只留审计痕** (previous == next, reason 带
+    /// [`TRAIT_LOCKED_SKIP_PREFIX`], 不占当日漂移预算)。
     pub fn observe(&mut self, event: TuningEvent) -> Option<TuningRecord> {
         let at = event.at_epoch_ms();
         if at > self.last_at_epoch_ms {
@@ -636,10 +726,26 @@ impl SelfTuningEngine {
         self.observe(event)
     }
 
-    /// 应用一次调整意图, 依次执行: 步长上限截断 → 参数夹紧 → 每日漂移上限把关。
+    /// 应用一次调整意图, 依次执行: 锁定把关 → 步长上限截断 → 参数夹紧 →
+    /// 每日漂移上限把关。
     fn apply(&mut self, intent: TuningIntent, at_epoch_ms: i64) -> TuningRecord {
         let param = intent.param;
         let previous = self.values.get(param);
+        // 锁定把关 (裁定 ④): 目标杆锁定 = 成长沉积**跳过**, 只留审计痕
+        // (previous == next, 不占漂移预算, 不动杆值)。
+        if self.locks.is_locked(param) {
+            let record = TuningRecord {
+                seq: self.next_seq,
+                param,
+                previous,
+                next: previous,
+                reason: format!("{TRAIT_LOCKED_SKIP_PREFIX} (审计留痕): {}", intent.reason),
+                at_epoch_ms,
+            };
+            self.next_seq += 1;
+            self.history.push(record.clone());
+            return record;
+        }
         let step = intent
             .desired_delta
             .clamp(-param.max_step(), param.max_step());
@@ -681,7 +787,8 @@ impl SelfTuningEngine {
     }
 
     /// 撤销某次调整: 把参数恢复为该记录的 `previous` 值, 并追加一条可见的
-    /// 撤销记录 (记录透明); 撤销是主人的显式动作, 不占自动漂移预算。
+    /// 撤销记录 (记录透明); 撤销是主人的显式动作, 不占自动漂移预算, 也**不受**
+    /// 滑杆锁定约束 (锁定只挡自动成长沉积, 不夺主人的手)。
     ///
     /// 第一铲语义: 点值恢复 (不做中间历史重放)。未知 seq → false, 不留痕。
     pub fn revert(&mut self, seq: u64) -> bool {
@@ -719,6 +826,26 @@ impl SelfTuningEngine {
     /// 单参数当前值。
     pub fn value(&self, param: TunableParam) -> f64 {
         self.values.get(param)
+    }
+
+    /// 当前四杆锁定态。
+    pub fn locks(&self) -> TraitLocks {
+        self.locks
+    }
+
+    /// 整体换上锁定态 (接线层从持久档同步时用)。
+    pub fn set_locks(&mut self, locks: TraitLocks) {
+        self.locks = locks;
+    }
+
+    /// 锁定一根滑杆 (显式动作): 此后成长沉积跳过该杆并留审计痕。
+    pub fn lock_param(&mut self, param: TunableParam) {
+        self.locks.set(param, true);
+    }
+
+    /// 解锁一根滑杆 (显式动作, **无自动解锁路径**): 此后成长沉积重新可移动该杆。
+    pub fn unlock_param(&mut self, param: TunableParam) {
+        self.locks.set(param, false);
     }
 }
 
@@ -1106,5 +1233,100 @@ mod tests {
         assert_eq!(engine.effective_values(), seeded);
         assert_eq!(engine.value(TunableParam::ConsolidationCadence), 3.0);
         assert!(engine.history().is_empty());
+    }
+
+    // 13. 滑杆锁定 (裁定 ④): 锁定后成长沉积**跳过**该杆且留审计痕 —— 杆值
+    //     不动、留痕 reason 带锁定前缀、留痕不占当日漂移预算。
+    #[test]
+    fn locked_slider_skips_deposit_and_leaves_audit_trace() {
+        let mut engine = SelfTuningEngine::new();
+        engine.lock_param(TunableParam::MemoryFade);
+        assert!(engine.locks().memory_fade, "锁定态生效");
+        assert!(engine.locks().any_locked());
+        let base = TunableParam::MemoryFade.baseline();
+
+        let record = engine.observe(miss_batch(at(1_000))).expect("留痕必须在");
+        assert_eq!(
+            engine.value(TunableParam::MemoryFade),
+            base,
+            "锁定杆的沉积不得移动杆值"
+        );
+        assert_eq!(record.previous, record.next, "跳过沉积 = 零移动");
+        assert_eq!(record.previous, base);
+        assert!(
+            is_trait_locked_skip(&record),
+            "审计留痕必须可识别: {}",
+            record.reason
+        );
+        assert!(
+            record.reason.contains("未命中占多"),
+            "留痕要带原沉积意图原因 (审计可追): {}",
+            record.reason
+        );
+
+        // 留痕不占当日漂移预算: 解锁后同日立刻可走满 4 步 (跳过 = 没发生)。
+        engine.unlock_param(TunableParam::MemoryFade);
+        let step = TunableParam::MemoryFade.max_step();
+        for index in 0..4_i64 {
+            let moved = engine
+                .observe(hit_batch(at(2_000 + index)))
+                .expect("解锁后可调");
+            assert!(moved.next > moved.previous, "解锁后沉积恢复生效");
+        }
+        assert!(
+            (engine.value(TunableParam::MemoryFade) - (base + 4.0 * step)).abs() < 1e-9,
+            "跳过的沉积不得吃掉日漂移预算"
+        );
+    }
+
+    // 14. 解锁 = 显式动作: 解锁前跳过、解锁后恢复移动; 只锁一根不误伤别杆。
+    #[test]
+    fn unlock_is_explicit_and_only_the_locked_slider_is_held() {
+        let mut engine = SelfTuningEngine::new();
+        engine.set_locks(TraitLocks {
+            curiosity_strength: true,
+            ..TraitLocks::default()
+        });
+        // 检索事件动 MemoryFade: 未锁定, 照常移动。
+        let moved = engine.observe(hit_batch(at(1_000))).expect("未锁定杆照常");
+        assert_eq!(moved.param, TunableParam::MemoryFade);
+        assert!(moved.next > moved.previous);
+        // 教训事件动 CuriosityStrength: 已锁定, 跳过 + 留痕。
+        let skipped = engine
+            .observe(TuningEvent::ReflexionOutcome {
+                turn_succeeded: true,
+                at_epoch_ms: 2_000,
+            })
+            .expect("锁定也要留痕");
+        assert_eq!(skipped.param, TunableParam::CuriosityStrength);
+        assert_eq!(skipped.previous, skipped.next);
+        assert!(is_trait_locked_skip(&skipped));
+        // 显式解锁 → 同类沉积恢复生效。
+        engine.unlock_param(TunableParam::CuriosityStrength);
+        let resumed = engine
+            .observe(TuningEvent::ReflexionOutcome {
+                turn_succeeded: true,
+                at_epoch_ms: 3_000,
+            })
+            .expect("解锁后恢复");
+        assert!(resumed.next > resumed.previous, "解锁恢复成长沉积");
+        assert!(!is_trait_locked_skip(&resumed));
+        // 全锁定常量 (fail-closed 语义的锚)。
+        assert!(TraitLocks::all_locked().any_locked());
+        assert!(TraitLocks::all_locked().is_locked(TunableParam::ToneSaturation));
+        assert!(!TraitLocks::default().any_locked(), "默认全解锁");
+    }
+
+    // 15. 滑杆稳定 id 与 serde 同名 (输出帧/CLI 滑杆名单源, 防漂移)。
+    #[test]
+    fn slider_id_matches_the_serde_name() {
+        for param in TunableParam::ALL {
+            assert_eq!(
+                serde_json::to_value(param).expect("serde"),
+                serde_json::json!(param.id()),
+                "{} 的 id 必须与 serde 同名",
+                param.label()
+            );
+        }
     }
 }

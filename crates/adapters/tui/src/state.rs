@@ -12,6 +12,7 @@ use crate::backend::{
 };
 use crate::command::{self, Command};
 use crate::keys::{self, Action, KeyMode};
+use crate::tasks::{TaskBoardModel, TaskBoardSnapshot, TaskRow};
 use crate::telemetry::{TelemetryModel, TelemetrySnapshot};
 use crate::theme::{CockpitTheme, DigitTicker, MotionMode};
 
@@ -21,6 +22,13 @@ pub const REWIND_STUB_NOTE: &str =
 
 /// 面板 3 内部过程频道的接口桩文案 (显式「未接线」)。
 pub const CHANNEL_STUB_NOTE: &str = "内部过程频道: 未接线 (本批接口桩; 下批消费 events 面只读投影)";
+
+/// 任务面板的人判重试理由 (显式常量, 队列审计照录)。
+pub const TASK_JUDGE_RETRY_REASON: &str = "驾驶舱任务面板人判重试";
+
+/// 面板边界文案 (防越权: 增删改派走工具面)。
+pub const TASK_PANEL_BOUNDARY_NOTE: &str =
+    "任务面板只读 + 人判重试: 增/删/改派/完成走工具面 (人工审批档), 不进面板";
 
 /// 退出阶段 (Ctrl+C 两段式: 先断流再退出)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -219,6 +227,8 @@ pub struct Composer {
 pub enum Overlay {
     /// 帮助浮层。
     Help,
+    /// 任务面板 (面板 7: 只读 + 人判重试)。
+    Tasks,
 }
 
 /// 实时状态条模型 (面板 2)。
@@ -329,6 +339,20 @@ pub enum Input {
     },
     /// 遥测快照已取回 (记忆账本 / 缓存命中 / 治理事件流)。
     TelemetryLoaded(TelemetrySnapshot),
+    /// 任务面板快照已取回 (只读)。
+    TasksLoaded(TaskBoardSnapshot),
+    /// 人判重试已生效 (队列真转移: Failed → Pending)。
+    TaskJudgeDone {
+        /// 重试后的任务行 (id = 被判任务)。
+        task: TaskRow,
+    },
+    /// 人判重试被拒 (拒绝即帧, 如实上屏)。
+    TaskJudgeFailed {
+        /// 任务 id。
+        task_id: String,
+        /// 错误文案。
+        message: String,
+    },
     /// 动效帧。
     Tick,
 }
@@ -376,6 +400,22 @@ pub enum Effect {
     Reconnect,
     /// 拉取遥测快照 (数据轮询, 不是动画)。
     RefreshTelemetry,
+    /// 拉取任务面板快照 (数据轮询, 与既有面板组同节奏)。
+    RefreshTasks,
+    /// 人判重试 (failed 只能人判; 面板唯一动作面)。
+    HumanJudgeRetry {
+        /// 任务 id。
+        task_id: String,
+        /// 人判理由。
+        reason: String,
+    },
+}
+
+/// 数据轮询到点时的效果集 (既有面板组同一节奏: 遥测 + 任务面板一起拉)。
+///
+/// 连接态过滤在外层 (只在 [`ConnectionState::Connected`] 时派发)。
+pub fn poll_effects() -> Vec<Effect> {
+    vec![Effect::RefreshTelemetry, Effect::RefreshTasks]
 }
 
 /// 驾驶舱应用状态。
@@ -413,6 +453,8 @@ pub struct App {
     pub frame: u64,
     /// 遥测面板组 (P2: 记忆账本 / 缓存大数字 / 上下文波形 / 治理灯阵)。
     pub telemetry: TelemetryModel,
+    /// 任务面板组 (R4: 任务列表 / 六态分组计数 / 选中详情)。
+    pub tasks: TaskBoardModel,
 }
 
 impl App {
@@ -435,6 +477,7 @@ impl App {
             ticker: DigitTicker::default(),
             frame: 0,
             telemetry: TelemetryModel::default(),
+            tasks: TaskBoardModel::default(),
         }
     }
 
@@ -450,8 +493,8 @@ impl App {
             Input::ConnectionOk => {
                 self.status.connection = ConnectionState::Connected;
                 self.note(NoteLevel::Info, format!("后端已连接: {}", self.endpoint));
-                // 连上即拉遥测 (数据轮询, 不是动画)。
-                vec![Effect::RefreshTelemetry]
+                // 连上即拉遥测与任务面板 (数据轮询, 不是动画)。
+                poll_effects()
             }
             Input::ConnectionFailed { detail } => {
                 // 连接失败即帧: 状态与错误注记在第一次渲染前就绪, 不白屏。
@@ -536,6 +579,31 @@ impl App {
                 self.telemetry.absorb(snapshot, self.frame);
                 Vec::new()
             }
+            Input::TasksLoaded(snapshot) => {
+                self.tasks.absorb(snapshot);
+                Vec::new()
+            }
+            Input::TaskJudgeDone { task } => {
+                self.note(
+                    NoteLevel::Info,
+                    format!(
+                        "人判重试已生效: {} → 回队待派 (pending); 再派走后端派发, 不自动唤醒",
+                        crate::tasks::short_hash(&task.id)
+                    ),
+                );
+                // 真值随后端: 立即回读一帧快照 (计数/排序不靠本地推演)。
+                vec![Effect::RefreshTasks]
+            }
+            Input::TaskJudgeFailed { task_id, message } => {
+                self.note(
+                    NoteLevel::Error,
+                    format!(
+                        "人判重试被拒 ({}): {message}",
+                        crate::tasks::short_hash(&task_id)
+                    ),
+                );
+                Vec::new()
+            }
             Input::Tick => {
                 self.frame = self.frame.wrapping_add(1);
                 self.ticker.advance();
@@ -583,6 +651,23 @@ impl App {
             }
             Action::NextTab => self.cycle_tab(1),
             Action::PrevTab => self.cycle_tab(-1),
+            Action::ToggleTasks => {
+                if self.overlay == Some(Overlay::Tasks) {
+                    self.overlay = None;
+                    Vec::new()
+                } else {
+                    self.open_tasks()
+                }
+            }
+            Action::SelectPrev => {
+                self.tasks.select_prev();
+                Vec::new()
+            }
+            Action::SelectNext => {
+                self.tasks.select_next();
+                Vec::new()
+            }
+            Action::JudgeRetry => self.judge_retry(),
             Action::Backspace => {
                 self.composer.text.pop();
                 Vec::new()
@@ -597,11 +682,53 @@ impl App {
     }
 
     fn key_mode(&self) -> KeyMode {
-        if self.composer.command_mode || !self.composer.text.is_empty() {
+        if self.overlay == Some(Overlay::Tasks) {
+            // 任务面板是模态面板: 面板键位独占 (只读 + 人判重试)。
+            KeyMode::PanelTasks
+        } else if self.composer.command_mode || !self.composer.text.is_empty() {
             KeyMode::Input
         } else {
             KeyMode::Normal
         }
+    }
+
+    /// 打开任务面板 (Ctrl+T / `/tasks`): 开即拉最新一帧 (打开即真值)。
+    pub fn open_tasks(&mut self) -> Vec<Effect> {
+        self.overlay = Some(Overlay::Tasks);
+        vec![Effect::RefreshTasks]
+    }
+
+    /// 人判重试 (G 组核心: failed 只能人判): 只有选中行是 failed 才触发动作面。
+    fn judge_retry(&mut self) -> Vec<Effect> {
+        let Some(row) = self.tasks.selected_row().cloned() else {
+            self.note(
+                NoteLevel::Warn,
+                "人判重试: 未选中任务 (空态显式 —, 不猜目标)",
+            );
+            return Vec::new();
+        };
+        if !row.judge_retryable() {
+            self.note(
+                NoteLevel::Warn,
+                format!(
+                    "人判重试仅限 failed 任务: {} 当前状态 {}; 失败不自动重试",
+                    crate::tasks::short_hash(&row.id),
+                    row.state_label
+                ),
+            );
+            return Vec::new();
+        }
+        self.note(
+            NoteLevel::Info,
+            format!(
+                "人判重试请求已发出: {} (failed → pending 回队待派)",
+                crate::tasks::short_hash(&row.id)
+            ),
+        );
+        vec![Effect::HumanJudgeRetry {
+            task_id: row.id.clone(),
+            reason: TASK_JUDGE_RETRY_REASON.to_string(),
+        }]
     }
 
     /// Ctrl+C 两段式: 第一段断流 (切断本地收流), 第二段退出。
@@ -707,6 +834,7 @@ impl App {
                 self.overlay = Some(Overlay::Help);
                 Vec::new()
             }
+            Command::Tasks => self.open_tasks(),
             Command::New => {
                 self.next_session_no += 1;
                 let title = format!("会话 {}", self.next_session_no);
@@ -1297,5 +1425,161 @@ mod tests {
             assert!(typed.is_empty());
             assert_eq!(app.composer.text, "a");
         }
+    }
+
+    fn ctrl_t() -> KeyEvent {
+        KeyEvent {
+            code: KeyCode::Char('t'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::empty(),
+        }
+    }
+
+    fn task_row(id: &str, state: crate::tasks::TaskStateView) -> crate::tasks::TaskRow {
+        crate::tasks::TaskRow {
+            id: id.to_string(),
+            title: format!("任务 {id}"),
+            state: Some(state),
+            state_label: state.wire().to_string(),
+            attempts: 1,
+            assignee: Some("worker-a".to_string()),
+            payload_summary: "{\"step\":3}".to_string(),
+            timeline: Vec::new(),
+        }
+    }
+
+    fn task_backend() -> MockBackend {
+        let mut backend = MockBackend::default();
+        backend.tasks = crate::tasks::TaskBoardSnapshot {
+            rows: vec![
+                task_row("task-1", crate::tasks::TaskStateView::Running),
+                task_row("task-2", crate::tasks::TaskStateView::Failed),
+            ],
+            counts: crate::tasks::TaskCounts {
+                running: 1,
+                failed: 1,
+                total: 2,
+                ..crate::tasks::TaskCounts::default()
+            },
+        };
+        backend
+    }
+
+    /// 人判重试链 (面板→API→队列): /tasks 开面板 → 选中 failed → `r` 触发
+    /// `human_judge_retry` 动作面 → 回灌后立即回读真值快照。
+    #[test]
+    fn task_panel_human_judge_retry_flows_through_the_action_face() {
+        let mut app = App::new("http://127.0.0.1:8080", MotionMode::Full);
+        let mut backend = task_backend();
+
+        // 打开面板 (命令面) = 只读拉一帧快照。
+        let effects = type_line(&mut app, "/tasks");
+        assert_eq!(effects, vec![Effect::RefreshTasks]);
+        drive(&mut app, &mut backend, effects);
+        assert!(backend.calls.contains(&BackendCall::FetchTasks));
+        assert_eq!(app.overlay, Some(Overlay::Tasks));
+        assert_eq!(app.tasks.len(), 2);
+
+        // 选中 failed 行 (↓), `r` = 人判重试 (面板唯一动作面)。
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.tasks.selected_id(), Some("task-2"));
+        let effects = app.handle_key(key(KeyCode::Char('r')));
+        assert_eq!(
+            effects,
+            vec![Effect::HumanJudgeRetry {
+                task_id: "task-2".to_string(),
+                reason: TASK_JUDGE_RETRY_REASON.to_string(),
+            }]
+        );
+        drive(&mut app, &mut backend, effects.clone());
+        assert!(
+            backend.calls.contains(&BackendCall::HumanJudgeRetry {
+                task_id: "task-2".to_string(),
+                reason: TASK_JUDGE_RETRY_REASON.to_string(),
+            }),
+            "键盘动作必须走 API 动作面: {:?}",
+            backend.calls
+        );
+        assert!(render_plain(&app).contains("人判重试已生效"));
+        // 队列语义回灌: 重试后行变回队待派 (mock 同形状回放 Failed → Pending)。
+        assert_eq!(
+            backend
+                .calls
+                .iter()
+                .filter(|call| matches!(call, BackendCall::FetchTasks))
+                .count(),
+            2,
+            "重试后立即回读真值快照 (计数不本地推演)"
+        );
+    }
+
+    /// 面板边界 (防越权): 整个面板键盘面只产生「读」+「人判重试」两类效果;
+    /// 非 failed 行按 `r` 拒触发并给真因。
+    #[test]
+    fn task_panel_is_read_plus_judge_retry_only() {
+        let mut app = App::new("http://127.0.0.1:8080", MotionMode::Full);
+        let mut backend = task_backend();
+
+        // 开面板 + 拉快照 (回灌后才有行可选)。
+        let startup = type_line(&mut app, "/tasks");
+        drive(&mut app, &mut backend, startup.clone());
+        let mut all_effects = startup;
+        all_effects.extend(app.handle_key(key(KeyCode::Down)));
+        all_effects.extend(app.handle_key(key(KeyCode::Char('r')))); // failed → 触发
+        all_effects.extend(app.handle_key(key(KeyCode::Char('k')))); // 回上一行 (running)
+        all_effects.extend(app.handle_key(key(KeyCode::Char('r')))); // 非 failed → 拒触发
+        all_effects.extend(app.handle_key(key(KeyCode::Esc))); // 关面板
+        all_effects.extend(app.handle_key(ctrl_t())); // 再开
+
+        for effect in &all_effects {
+            assert!(
+                matches!(
+                    effect,
+                    Effect::RefreshTasks | Effect::HumanJudgeRetry { .. }
+                ),
+                "面板越权效果: {effect:?}"
+            );
+        }
+        let retries = all_effects
+            .iter()
+            .filter(|effect| matches!(effect, Effect::HumanJudgeRetry { .. }))
+            .count();
+        assert_eq!(retries, 1, "只有 failed 行触发一次人判重试");
+        assert!(render_plain(&app).contains("仅限 failed"), "拒触发要给真因");
+        drive(&mut app, &mut backend, all_effects);
+        assert!(
+            !backend.calls.iter().any(|call| matches!(
+                call,
+                BackendCall::SendTurn { .. }
+                    | BackendCall::SetModel { .. }
+                    | BackendCall::Compact { .. }
+            )),
+            "面板不碰会话写面"
+        );
+    }
+
+    /// 轮询刷新: 任务面板与既有面板组同一节奏 (一次到点一起拉)。
+    #[test]
+    fn task_panel_polls_with_the_existing_panel_cadence() {
+        assert_eq!(
+            poll_effects(),
+            vec![Effect::RefreshTelemetry, Effect::RefreshTasks],
+            "数据轮询一次到点: 遥测 + 任务面板同款节奏"
+        );
+        let mut app = App::new("http://127.0.0.1:8080", MotionMode::Full);
+        assert_eq!(app.feed(Input::ConnectionOk), poll_effects());
+    }
+
+    /// Ctrl+T 开/关任务面板 (开即拉最新一帧)。
+    #[test]
+    fn ctrl_t_toggles_the_task_panel_with_an_immediate_refresh() {
+        let mut app = App::new("http://127.0.0.1:8080", MotionMode::Full);
+        let effects = app.handle_key(ctrl_t());
+        assert_eq!(app.overlay, Some(Overlay::Tasks));
+        assert_eq!(effects, vec![Effect::RefreshTasks]);
+        let effects = app.handle_key(ctrl_t());
+        assert_eq!(app.overlay, None);
+        assert!(effects.is_empty(), "关面板不产生动作");
     }
 }

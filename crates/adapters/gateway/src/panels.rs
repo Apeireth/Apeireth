@@ -546,6 +546,11 @@ pub struct GatewayServices {
     /// 的元数据扫描 (StoredDoc 拒开语义, 坏卡列拒不砖库; 不回卡体, 卡体走 L2
     /// 封套面)。适配实现在组合根; 未注入 = `501`。
     pub skills: Option<Arc<dyn crate::skill_shelf::SkillShelfQuery>>,
+    /// 任务面板面 (`GET /v1/panel/tasks` + `POST /v1/panel/tasks/:id/human-judge-retry`):
+    /// [`crate::task_panel::TaskBoardPanel`] 的只读投影 + 人判重试 (failed 只能
+    /// 人判; 增删改派走工具面, 不进本面)。适配实现在组合根 (与 `tool.task_board`
+    /// 同队同账); 未注入 = `501`。
+    pub tasks: Option<Arc<dyn crate::task_panel::TaskBoardPanel>>,
 }
 
 impl GatewayServices {
@@ -577,10 +582,12 @@ impl GatewayServices {
             credentials: None,
             safety_guard: None,
             workbench: None,
-            // 用户/域/技能库面走文件事实服务 (组合根显式注入), 不走旧 PanelData 适配。
+            // 用户/域/技能库/任务面板面走文件事实服务或持久队列 (组合根显式
+            // 注入), 不走旧 PanelData 适配。
             user_admin: None,
             domain_admin: None,
             skills: None,
+            tasks: None,
         }
     }
 }
@@ -739,6 +746,13 @@ pub fn panel_routes() -> Router<GatewayState> {
         .route("/v1/panel/audit", get(list_audit))
         // 技能库只读面 (元数据; 不回卡体, 卡体走 L2 封套面), 见 [`crate::skill_shelf`]。
         .route("/v1/panel/skills", get(crate::skill_shelf::list_skills))
+        // 任务面板面 (只读 + 人判重试), 见 [`crate::task_panel`]: **无增删改派
+        // 路由** (那些是工具面的写面, 面板越权面为零)。
+        .route("/v1/panel/tasks", get(crate::task_panel::list_tasks))
+        .route(
+            "/v1/panel/tasks/:task_id/human-judge-retry",
+            axum::routing::post(crate::task_panel::human_judge_retry),
+        )
         .route("/v1/apeireth/capabilities", get(capabilities))
         // V2-b 用户/域管理面 (owner 档, 见 [`panel_admin_face`]): 列表两口在面板族,
         // 增删改口在 canonical_entry 的 admin 族 (同一 UserTable 服务, 双入口同源)。
@@ -1270,6 +1284,7 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
     let user_admin_supported = services.user_admin.is_some();
     let domain_admin_supported = services.domain_admin.is_some();
     let skills_supported = services.skills.is_some();
+    let tasks_supported = services.tasks.is_some();
 
     let memory_ids = [
         ("memory.read", true, false, &["list", "read"] as &[&str]),
@@ -1328,6 +1343,10 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "skills", "capabilities": [ cap("skills.read", true, false, &["list"], skills_supported, skills_supported) ] },
+            { "name": "tasks", "capabilities": [
+                cap("tasks.read", true, false, &["list"], tasks_supported, tasks_supported),
+                cap("tasks.human_judge_retry", false, true, &["retry"], tasks_supported, tasks_supported),
+            ] },
             { "name": "permissions", "capabilities": [
                 cap("permissions.approval.read", true, false, &["list"], true, true),
                 cap("permissions.approval.resolve", false, true, &["resolve"], true, true),

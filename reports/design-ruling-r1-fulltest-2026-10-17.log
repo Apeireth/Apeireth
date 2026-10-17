@@ -1,0 +1,652 @@
+
+   Compiling apeireth-cli v2.0.0-rc.4 (C:\Users\31683\Apeireth-rust\crates\adapters\cli)
+     Running unittests src\main.rs (target\debug\deps\apeireth_bench_harness-e907a9231eb487b9.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_cli-6c2d336a40e1c65e.exe)
+running 31 tests
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running unittests src\main.rs (target\debug\deps\apeireth-85180a9d1bf45ffd.exe)
+running 22 tests
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\admin_hot_key_decoy.rs (target\debug\deps\admin_hot_key_decoy-84602b798ece2fb7.exe)
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\backup_cli.rs (target\debug\deps\backup_cli-1b31622cd813b2ea.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests\canonical_cli_architecture.rs (target\debug\deps\canonical_cli_architecture-ee8cd2806fea556e.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_cli_bootstrap.rs (target\debug\deps\canonical_cli_bootstrap-8a6b2f63e9cc2e05.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+     Running tests\cli_command_interface.rs (target\debug\deps\cli_command_interface-ace188ff823bfbc4.exe)
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+     Running tests\exposure_cli.rs (target\debug\deps\exposure_cli-59f98fa33fed10ad.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\file_write_knob.rs (target\debug\deps\file_write_knob-4c9c874ae58bea62.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\gateway_panels.rs (target\debug\deps\gateway_panels-a94a0f714ff52a8f.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\git_write_knob.rs (target\debug\deps\git_write_knob-7d1a8a942452d5ca.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\local_read_tools_knob.rs (target\debug\deps\local_read_tools_knob-2a3622cfaabeb545.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests\onboarding.rs (target\debug\deps\onboarding-081355e15a8a9db1.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\production_governance.rs (target\debug\deps\production_governance-9a42360644191353.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\production_knobs.rs (target\debug\deps\production_knobs-b6123f51a8d96c01.exe)
+running 19 tests
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+     Running tests\remote_access_e2e.rs (target\debug\deps\remote_access_e2e-4a98a42142274223.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+     Running tests\resident_gateway_e2e.rs (target\debug\deps\resident_gateway_e2e-48b99104b761cc86.exe)
+running 2 tests
+test second_start_refuses_with_an_explicit_already_running_error ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+     Running tests\self_status_e2e.rs (target\debug\deps\self_status_e2e-1fc4ffd4cca0abc2.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+     Running tests\service_management.rs (target\debug\deps\service_management-e62c1aa63d700370.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.63s
+     Running tests\skill_knob.rs (target\debug\deps\skill_knob-29aec62d1a8ba618.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\skill_shelf_read_face.rs (target\debug\deps\skill_shelf_read_face-4ca1deef80ae9bf8.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\task_board_knob.rs (target\debug\deps\task_board_knob-00c412d733274050.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\task_panel_real_chain.rs (target\debug\deps\task_panel_real_chain-39c83c7ab49e4c7a.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\trait_cli.rs (target\debug\deps\trait_cli-4a91101c24b32092.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests\user_admin.rs (target\debug\deps\user_admin-ebea6e15cbdfe73a.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\user_admin_dual_entry.rs (target\debug\deps\user_admin_dual_entry-fc80595a2fb13de3.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\voice_speak_knob.rs (target\debug\deps\voice_speak_knob-e4879a70a118dd71.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\worktree_knob.rs (target\debug\deps\worktree_knob-e2b05019aea1f029.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_core-9c3f4f3d9ad97f5e.exe)
+running 187 tests
+test result: ok. 187 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+     Running tests\integration_session_lifecycle.rs (target\debug\deps\integration_session_lifecycle-8e56a6948ce7772c.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\integration_v1v2v3.rs (target\debug\deps\integration_v1v2v3-f5824b5f75d49276.exe)
+running 18 tests
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\self_disable.rs (target\debug\deps\self_disable-9922733e3282cef4.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\self_disable_q20_pentest.rs (target\debug\deps\self_disable_q20_pentest-6b17fc24a21840fe.exe)
+running 137 tests
+     Running tests\self_disable_v13_negative.rs (target\debug\deps\self_disable_v13_negative-bc31ad0a31c25238.exe)
+test result: ok. 137 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+running 32 tests
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\twelve_keys_round10_07.rs (target\debug\deps\twelve_keys_round10_07-7bf8c83a76793dd7.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\verdict_keys.rs (target\debug\deps\verdict_keys-bd38da0db27c16c3.exe)
+running 20 tests
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests examples\hello_world.rs (target\debug\examples\hello_world-80323317599f1fbb.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_credentials-2067fca701843b83.exe)
+running 76 tests
+test result: ok. 75 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.48s
+     Running tests\store_integration.rs (target\debug\deps\store_integration-c826046118b5f6be.exe)
+running 29 tests
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_gateway-1085289b0ab6b140.exe)
+running 101 tests
+test result: ok. 101 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+     Running tests\admin_config.rs (target\debug\deps\admin_config-2b5c75e81a48817a.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_anthropic_entry.rs (target\debug\deps\canonical_anthropic_entry-96d40c51d9c83cbf.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_entry_architecture.rs (target\debug\deps\canonical_entry_architecture-7ac078df4c228d63.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_entry_e2e.rs (target\debug\deps\canonical_entry_e2e-c4ebad6af63fe943.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\canonical_minimax_entry.rs (target\debug\deps\canonical_minimax_entry-7c34bef7b0bb81ce.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_openai_compatible_entry.rs (target\debug\deps\canonical_openai_compatible_entry-a22844eeab03d988.exe)
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests\domain_partner_chat.rs (target\debug\deps\domain_partner_chat-de2c22455769ae32.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests\events.rs (target\debug\deps\events-d7790b2dccfae03d.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\gateway_auth_face.rs (target\debug\deps\gateway_auth_face-84f06bdc21fe1eea.exe)
+running 13 tests
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\gateway_token_gate.rs (target\debug\deps\gateway_token_gate-15db0bbbd087dac7.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\im_approval_cards.rs (target\debug\deps\im_approval_cards-1eb2714b35cc8765.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\im_channel_config.rs (target\debug\deps\im_channel_config-87ed831d4f12aa25.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests\im_message_bridge.rs (target\debug\deps\im_message_bridge-48c90ba8e9ea98de.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\multi_client_session.rs (target\debug\deps\multi_client_session-5ba630be5a38af4a.exe)
+running 12 tests
+test a_settings_patch_during_a_running_turn_preserves_both_writes ... ok
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests\panel_metrics_contract.rs (target\debug\deps\panel_metrics_contract-ca2e9140727fdb22.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\panel_routes.rs (target\debug\deps\panel_routes-27ce2fa453bb3832.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\panel_skills_face.rs (target\debug\deps\panel_skills_face-857f58fb6fdb5590.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\panel_tasks_face.rs (target\debug\deps\panel_tasks_face-ddafc15ad839f102.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\resident_service.rs (target\debug\deps\resident_service-1d210e4c5f8dba38.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+     Running tests\round_limit_frame.rs (target\debug\deps\round_limit_frame-ee84f1cbfadb55c0.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\user_admin_endpoints.rs (target\debug\deps\user_admin_endpoints-7f9decb0d6dc4749.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests\user_authorization.rs (target\debug\deps\user_authorization-966637a7a07f23f7.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\user_domain_isolation.rs (target\debug\deps\user_domain_isolation-9b4042387e68d7aa.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_governance-3e98647ec1997d8b.exe)
+running 194 tests
+test result: ok. 194 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_guard-8938622aa8a1a1dc.exe)
+running 33 tests
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\backup_capability_descriptor.rs (target\debug\deps\backup_capability_descriptor-a31b0a4c554308fd.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\guard_tests.rs (target\debug\deps\guard_tests-c52079bee11516c7.exe)
+running 13 tests
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\guard_v31_correctness.rs (target\debug\deps\guard_v31_correctness-3fadef58feedbb9b.exe)
+running 20 tests
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\guard_v32_evaluation.rs (target\debug\deps\guard_v32_evaluation-23ccf55ed7dd127a.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\security_scenarios.rs (target\debug\deps\security_scenarios-a015ec6d949c1973.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests examples\export_guard_scenarios.rs (target\debug\examples\export_guard_scenarios-ff9f201cf7008aac.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests examples\stamp_guard_artifact.rs (target\debug\examples\stamp_guard_artifact-1eaf1e4d3eee3e13.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_memory-272d41918bbfc62a.exe)
+running 823 tests
+test result: ok. 822 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 11.76s
+     Running tests\canonical_memory.rs (target\debug\deps\canonical_memory-0b6ac61592060cb2.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\canonical_retrieval.rs (target\debug\deps\canonical_retrieval-5f359cbdc8e6c474.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\canonical_vector_graph.rs (target\debug\deps\canonical_vector_graph-71656a5ba04709d3.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\integration_six_streams.rs (target\debug\deps\integration_six_streams-752082304f8c94a0.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests\memory_2_tests.rs (target\debug\deps\memory_2_tests-75ef752e919de935.exe)
+running 13 tests
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests\memory_governance_audit_events.rs (target\debug\deps\memory_governance_audit_events-ca1d0a178ca9710a.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests\memory_integration.rs (target\debug\deps\memory_integration-5fa29352085c8c6b.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests\memory_ledger_counts.rs (target\debug\deps\memory_ledger_counts-6f1c5b47d4e34148.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\migration_v1_to_v2.rs (target\debug\deps\migration_v1_to_v2-1f9c43f892737a3c.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running tests\persona_layer.rs (target\debug\deps\persona_layer-3c105fb7133195a9.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests\sqlite.rs (target\debug\deps\sqlite-2e1d3becee80ccb5.exe)
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests\universal_forget.rs (target\debug\deps\universal_forget-efcf2f1d28aaecb8.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests examples\memory_effect_demo.rs (target\debug\examples\memory_effect_demo-af101f31b0be77d5.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_orchestration-0375181c77c69528.exe)
+running 354 tests
+test durable::retry::tests::invalid_skip_scheduled_to_running ... ok
+test result: ok. 354 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests\call_scheduler.rs (target\debug\deps\call_scheduler-6d0c69a55b84afa8.exe)
+running 11 tests
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+     Running tests\compaction_checkpoint.rs (target\debug\deps\compaction_checkpoint-55d0e6e335fa4dd3.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\council_live.rs (target\debug\deps\council_live-0143917a72c7bc12.exe)
+running 1 test
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\council_llm.rs (target\debug\deps\council_llm-1ae0068b95c7da1c.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running tests\job_output_ring.rs (target\debug\deps\job_output_ring-dac6dfb38305be88.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\task_queue.rs (target\debug\deps\task_queue-6c0f879487e246b4.exe)
+running 16 tests
+test reopening_over_the_store_recovers_running_to_pending_with_attempt_accounting ... ok
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_organ-73a60bbfc5cbf49d.exe)
+running 206 tests
+test result: ok. 206 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests\care.rs (target\debug\deps\care-7499f290c3f6a50f.exe)
+running 23 tests
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests\causal_world_model.rs (target\debug\deps\causal_world_model-78ea03553de5d5e9.exe)
+running 5 tests
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\causal_world_model_edges.rs (target\debug\deps\causal_world_model_edges-a0aee762e4987cf7.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\curiosity.rs (target\debug\deps\curiosity-fefa6e82976db309.exe)
+running 4 tests
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\emergence.rs (target\debug\deps\emergence-d84fef430e89a7f3.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\emotion_memory.rs (target\debug\deps\emotion_memory-262893539c9180de.exe)
+running 4 tests
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\hypothesis.rs (target\debug\deps\hypothesis-3eca920040b9c4ef.exe)
+running 5 tests
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\memory.rs (target\debug\deps\memory-7e23b619de72086c.exe)
+running 4 tests
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\organ_live_llm.rs (target\debug\deps\organ_live_llm-dc1ec5facd30cc7e.exe)
+running 2 tests
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\value_cases.rs (target\debug\deps\value_cases-a119cd11fe287e79.exe)
+running 5 tests
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\world_model.rs (target\debug\deps\world_model-6fa78406de273efe.exe)
+running 6 tests
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_perception-11ed5bd772a444d7.exe)
+running 139 tests
+test result: ok. 138 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.02s
+     Running tests\perception_integration.rs (target\debug\deps\perception_integration-ebae0cf7dc881826.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_plugin-8e64f12f18940593.exe)
+running 274 tests
+test result: ok. 274 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_protocol-572b00ec4ddd9281.exe)
+running 190 tests
+test result: ok. 190 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\wire_format.rs (target\debug\deps\wire_format-77ba01f0866ea335.exe)
+running 17 tests
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\wire_format_ext.rs (target\debug\deps\wire_format_ext-4fbc32247d13bb8b.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests examples\live_normalize_minimaxi.rs (target\debug\examples\live_normalize_minimaxi-8092587b5714cb37.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests examples\router_demo.rs (target\debug\examples\router_demo-e432e58ad5396686.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_provider-ea241439545b9f95.exe)
+running 112 tests
+test result: ok. 112 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.78s
+     Running tests\canonical_anthropic.rs (target\debug\deps\canonical_anthropic-9306f29ecfb9418c.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+     Running tests\canonical_minimax.rs (target\debug\deps\canonical_minimax-525c1b6d4b1a6996.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+     Running tests\canonical_openai_compatible.rs (target\debug\deps\canonical_openai_compatible-5fe8f21569eed608.exe)
+running 15 tests
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+     Running tests\canonical_provider_architecture.rs (target\debug\deps\canonical_provider_architecture-04da93b960f1807b.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\minimax_llm_factory.rs (target\debug\deps\minimax_llm_factory-38519ed9718e2f8f.exe)
+running 7 tests
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests\openai_compatible_live.rs (target\debug\deps\openai_compatible_live-eb7c2481ff62f655.exe)
+running 2 tests
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_runtime-299f60aacc410d2c.exe)
+running 138 tests
+test result: ok. 138 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+     Running tests\approval_freeze_convergence.rs (target\debug\deps\approval_freeze_convergence-2e71ede4f06766f2.exe)
+running 10 tests
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\cache_prefix.rs (target\debug\deps\cache_prefix-3d38758429bebf5f.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_agent_loop.rs (target\debug\deps\canonical_agent_loop-18645aa863337d38.exe)
+running 20 tests
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_anthropic_runtime.rs (target\debug\deps\canonical_anthropic_runtime-690d902de38e9087.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_approval_lifecycle.rs (target\debug\deps\canonical_approval_lifecycle-b00b894ec5b0cfa3.exe)
+running 16 tests
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_architecture_invariants.rs (target\debug\deps\canonical_architecture_invariants-28a904ef117edb1b.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\canonical_metrics.rs (target\debug\deps\canonical_metrics-ff5380aaab35d3b4.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_minimax_runtime.rs (target\debug\deps\canonical_minimax_runtime-a55ba25f58a2dde3.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_multi_provider.rs (target\debug\deps\canonical_multi_provider-25dade4fd04502d1.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_openai_compatible_runtime.rs (target\debug\deps\canonical_openai_compatible_runtime-8608f89bf4d90012.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_parallel_dispatch.rs (target\debug\deps\canonical_parallel_dispatch-d1e3d25a9381ebdc.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+     Running tests\canonical_plan_mode.rs (target\debug\deps\canonical_plan_mode-97c02576644271aa.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_repetition_advisory.rs (target\debug\deps\canonical_repetition_advisory-5bebd5b7005b7116.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_runtime_invariants.rs (target\debug\deps\canonical_runtime_invariants-7dd01b1038f725fc.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_subloop.rs (target\debug\deps\canonical_subloop-b7a8e24818bf0af5.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests\canonical_three_provider_routing.rs (target\debug\deps\canonical_three_provider_routing-8171d74d77add823.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\cognitive_module_abi.rs (target\debug\deps\cognitive_module_abi-bb5ff6c34c7dbaa2.exe)
+running 20 tests
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\compaction_checkpoint.rs (target\debug\deps\compaction_checkpoint-bbd8a860b03782fc.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\context_budget.rs (target\debug\deps\context_budget-f0510c192f9cd8be.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\context_overflow.rs (target\debug\deps\context_overflow-73f2a73ce1332505.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\event_log_authority.rs (target\debug\deps\event_log_authority-72eab0238675b2b4.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\minimal_kernel.rs (target\debug\deps\minimal_kernel-02f33c7ad9073f15.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\model_profile_baseline.rs (target\debug\deps\model_profile_baseline-14a7c785c4e5405d.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\session_quota.rs (target\debug\deps\session_quota-438d80a9951dffa3.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_runtime_assembly-60f0f8287deda20d.exe)
+running 132 tests
+test result: ok. 132 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests\apply_patch_preset_semantics.rs (target\debug\deps\apply_patch_preset_semantics-1738604af5d40228.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\approval_history_survives_restart.rs (target\debug\deps\approval_history_survives_restart-f2b96eb4158ad1e8.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests\backup_registration.rs (target\debug\deps\backup_registration-be431f237976a88d.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_builtin_tools.rs (target\debug\deps\canonical_builtin_tools-dbff894922e35654.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_fetch_e2e.rs (target\debug\deps\canonical_fetch_e2e-89ff8c92ac64161a.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+     Running tests\canonical_invoker_handle.rs (target\debug\deps\canonical_invoker_handle-cd9a2e58bd22bc70.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_module_tools.rs (target\debug\deps\canonical_module_tools-197930b135a7a262.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\canonical_organ_module.rs (target\debug\deps\canonical_organ_module-e93fabfc0b3e3e51.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_preference_learning.rs (target\debug\deps\canonical_preference_learning-da932a454d8459ec.exe)
+running 14 tests
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\canonical_shell_approval_e2e.rs (target\debug\deps\canonical_shell_approval_e2e-f8b1e02e8c0ddd06.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests\capability_switch_chains.rs (target\debug\deps\capability_switch_chains-919ce7e65a12f635.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests\care_output_face.rs (target\debug\deps\care_output_face-73300c54b46b17f1.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\cognitive_convergence_vertical.rs (target\debug\deps\cognitive_convergence_vertical-ec2cbe48513d7850.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests\cognitive_vnext_production.rs (target\debug\deps\cognitive_vnext_production-c7b41dab4d0bd832.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests\content_feed_registration.rs (target\debug\deps\content_feed_registration-6559328940174937.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\convergence_production_integration.rs (target\debug\deps\convergence_production_integration-97b352ca2e5bb676.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\file_write_registration.rs (target\debug\deps\file_write_registration-8788e5ad2631a3a6.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\git_write_preset_semantics.rs (target\debug\deps\git_write_preset_semantics-d3249113fc885d4a.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running tests\mcp_bridge_runtime_e2e.rs (target\debug\deps\mcp_bridge_runtime_e2e-6378035f2ca40927.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\memory_provider_e2e.rs (target\debug\deps\memory_provider_e2e-110fef64a794ba2c.exe)
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests\memory_typed_lifecycle.rs (target\debug\deps\memory_typed_lifecycle-2a7edebd6d5352fd.exe)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\orchestrator.rs (target\debug\deps\orchestrator-c98114cbb106dcfd.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\organ_llm_bridge_compat.rs (target\debug\deps\organ_llm_bridge_compat-65bf46a6133cb1e7.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\persona_constant_injection.rs (target\debug\deps\persona_constant_injection-374b95e0b7ecc5b6.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\self_status_runtime_e2e.rs (target\debug\deps\self_status_runtime_e2e-9dd4518ce0377e97.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests\session_checkpoint_roundtrip.rs (target\debug\deps\session_checkpoint_roundtrip-92b18c894be34aad.exe)
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\session_permission_preset.rs (target\debug\deps\session_permission_preset-148b13a8c6da88f4.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\skill_registration.rs (target\debug\deps\skill_registration-fcf5648b16136b93.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\task_board_tool.rs (target\debug\deps\task_board_tool-0d8cf27e6190393d.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\task_queue_store.rs (target\debug\deps\task_queue_store-d1087c0ef31131cc.exe)
+running 5 tests
+test reopening_the_sqlite_store_recovers_running_to_pending_with_attempt_accounting ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+     Running tests\trait_lock_and_report.rs (target\debug\deps\trait_lock_and_report-8aa5564836f3a38a.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests\upgrade_cycle.rs (target\debug\deps\upgrade_cycle-70a63a13662deb2d.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\user_domain_isolation.rs (target\debug\deps\user_domain_isolation-05f2bdf8d26c3fbd.exe)
+running 11 tests
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+     Running tests\worktree_registration.rs (target\debug\deps\worktree_registration-ba65cde0d19a6fa3.exe)
+running 4 tests
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_sdk-513f20cc51508b51.exe)
+running 607 tests
+test result: ok. 607 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+     Running tests\lark_mock.rs (target\debug\deps\lark_mock-9b2e68fceebd8e5f.exe)
+running 27 tests
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests\multilang_ffi.rs (target\debug\deps\multilang_ffi-faa4f3ce13c81d75.exe)
+running 1 test
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\smoke.rs (target\debug\deps\smoke-baa03201830bd7e4.exe)
+running 8 tests
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\test_sdk_client.rs (target\debug\deps\test_sdk_client-e3cc2eb4b18e41ae.exe)
+running 28 tests
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests examples\sdk_demo.rs (target\debug\examples\sdk_demo-d65f906c4016c6d8.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_storage-b72e1d0f1ab6d34f.exe)
+running 115 tests
+test result: ok. 115 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\storage_foundation.rs (target\debug\deps\storage_foundation-9edac7ad256bc54f.exe)
+running 15 tests
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_tools_canonical-e28655727c3db970.exe)
+running 416 tests
+test result: ok. 416 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+     Running unittests src\bin\sandbox_test_child.rs (target\debug\deps\sandbox_test_child-d21ed00be48eaf5c.exe)
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\apply_patch_contract_frames.rs (target\debug\deps\apply_patch_contract_frames-70fd1fb07b267b30.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests\apply_patch_write.rs (target\debug\deps\apply_patch_write-4dd0de1ef286a615.exe)
+running 13 tests
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\architecture_invariants.rs (target\debug\deps\architecture_invariants-c7e087722bdb8006.exe)
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\backup.rs (target\debug\deps\backup-7e98efc53f1b255d.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+     Running tests\content_feed.rs (target\debug\deps\content_feed-720cb27a12036584.exe)
+running 11 tests
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.04s
+     Running tests\delete_path_parity.rs (target\debug\deps\delete_path_parity-015daa909827bf24.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\exec_pipeline.rs (target\debug\deps\exec_pipeline-49cc36169965b86d.exe)
+running 12 tests
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests\exposure_audit.rs (target\debug\deps\exposure_audit-f39d1c4a32a07ed4.exe)
+running 14 tests
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\fetch_execution.rs (target\debug\deps\fetch_execution-8c7d09cca459f0eb.exe)
+running 20 tests
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+     Running tests\git_write_grading.rs (target\debug\deps\git_write_grading-af68a21c711f8c40.exe)
+running 16 tests
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+     Running tests\mcp_bridge_e2e.rs (target\debug\deps\mcp_bridge_e2e-7d34a93ce6a2e222.exe)
+running 14 tests
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests\object_access_judgment.rs (target\debug\deps\object_access_judgment-e3cd4c078c5b5863.exe)
+running 13 tests
+test unobservable_domain_fails_closed_without_running_the_payload ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+     Running tests\process_executor.rs (target\debug\deps\process_executor-962b9cd186475cd4.exe)
+running 25 tests
+test windows_tests::kill_on_job_close_terminates_a_running_child ... ok
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.85s
+     Running tests\shell_execution.rs (target\debug\deps\shell_execution-60781b79c0b2cafb.exe)
+running 11 tests
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+     Running tests\shell_reach_probe.rs (target\debug\deps\shell_reach_probe-075be7802156537c.exe)
+running 2 tests
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\skill_distill.rs (target\debug\deps\skill_distill-0f2f7541c4a916f0.exe)
+running 9 tests
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\skill_governance.rs (target\debug\deps\skill_governance-6e51d1b3003db232.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests\skill_library.rs (target\debug\deps\skill_library-f90bc1311087c2e9.exe)
+running 6 tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests\skill_search.rs (target\debug\deps\skill_search-2606ce503d913023.exe)
+running 7 tests
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests\voice_speak.rs (target\debug\deps\voice_speak-241e8b3fdefbb391.exe)
+running 18 tests
+test result: ok. 16 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.18s
+     Running tests\worktree_apply.rs (target\debug\deps\worktree_apply-7a363ed06187143e.exe)
+running 15 tests
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_tui-aacd38463e8235e2.exe)
+running 67 tests
+test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src\main.rs (target\debug\deps\apeireth_tui-96a94c39249c1877.exe)
+running 3 tests
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

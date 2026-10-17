@@ -470,6 +470,55 @@ impl CapabilityProvider for SelfStatusModule {
     }
 }
 
+/// 性格周报工具的执行时限 (毫秒): 与自述同口径 (进程内只读采集, 到期即归
+/// `timeout.*` 帧)。
+pub const TRAIT_REPORT_TIMEOUT_MS: u64 = 2_000;
+
+/// Module providing the personality growth report (`tool.trait_report`, 裁定 ⑤).
+///
+/// 性格周报: 近 7 天四杆移动量 / 移动原因 top / 锁定态 (数据 = 成长计既有账,
+/// 不新造账)。**只读档零审批** (与 `tool.self_status` 同档: 无写、无执行、
+/// 无外联, 治理侧只做 grant)。执行走五段流水线: 输出归一合同
+/// (`TraitReportTool::output_schema`) 冻结周报帧形状, 超时归既有 `timeout.*`
+/// code 族, 失败即帧。
+pub struct TraitReportModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl TraitReportModule {
+    /// Create the trait-report module bound to a growth-ledger probe.
+    pub fn new(growth: super::trait_growth::TraitGrowthProbe) -> Self {
+        let inner: Arc<dyn ToolCapability> =
+            Arc::new(super::trait_report_tool::TraitReportTool::new(growth));
+        let pipeline = Arc::new(
+            ToolExecutionPipeline::new()
+                .with_around(
+                    AroundPolicy::new()
+                        .with_timeout(TRAIT_REPORT_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+                )
+                .with_output_schema(super::trait_report_tool::TraitReportTool::output_schema()),
+        );
+        Self {
+            tool: Arc::new(PipelinedCapability::new(inner, pipeline)),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) trait-report capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for TraitReportModule {
+    fn id(&self) -> &str {
+        "module.tool.trait_report"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
 /// Module providing the controlled file-write tool (`tool.apply_patch`).
 ///
 /// 受控写文件 (第七件生产工具): 补丁式创建/修改/删除 (动作必须在补丁里显式

@@ -52,4 +52,13 @@ pub use canonical::task_board_tool::{
     TaskBoardTool, TaskBoardWriteFace, ACTION_TASK_ADD, ACTION_TASK_COMPLETE, ACTION_TASK_LIST,
     ACTION_TASK_REASSIGN, TASK_BOARD_ACTIONS, TASK_BOARD_CAPABILITY_ID, TASK_BOARD_TOOL_NAME,
 };
+// 性格锁定 + 性格周报 (裁定 ④⑤): 特质锁定态持久档 (`trait-locks.json`) /
+// 成长计既有账读面 / 只读周报工具面 `tool.trait_report`。
+pub use canonical::{
+    load_trait_locks, now_epoch_ms, read_growth_records, save_trait_locks, set_trait_lock,
+    trait_growth_probe, trait_locks_path, trait_locks_path_for, trait_status_probe,
+    TraitGrowthFacts, TraitGrowthPaths, TraitGrowthProbe, TraitReportModule, TraitReportTool,
+    TRAIT_LOCKS_FILE, TRAIT_REPORT_CAPABILITY_ID, TRAIT_REPORT_FRAME_FIELDS,
+    TRAIT_REPORT_TOOL_NAME,
+};
 pub use sqlite_task_queue::SqliteTaskStore;

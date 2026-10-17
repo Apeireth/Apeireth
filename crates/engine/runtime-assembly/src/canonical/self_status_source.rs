@@ -19,8 +19,8 @@ use apeireth_tools_canonical::{
     derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
     ContentFeedStatus, DomainCounts, DomainStatus, MemoryLedgerStats, QuotaDimensionStatus,
     QuotaMeterReading, QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource,
-    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TuningStatus, VoiceStatus, WorkspaceStatus,
-    BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED,
+    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitStatus, TuningStatus, VoiceStatus,
+    WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED,
     QUOTA_METER_SCOPE_REQUIRED,
 };
 
@@ -280,6 +280,8 @@ pub struct ProductionSelfStatusSource {
     task_board: Option<StatusProbe<TaskBoardStatus>>,
     voice: Option<StatusProbe<VoiceStatus>>,
     persona: Option<StatusProbe<apeireth_tools_canonical::PersonaStatusSection>>,
+    /// 性格节真值探测口 (裁定 ④⑤): 四杆锁定态 + 最近移动 (成长计既有账)。
+    trait_growth: Option<StatusProbe<TraitStatus>>,
 }
 
 impl ProductionSelfStatusSource {
@@ -306,6 +308,7 @@ impl ProductionSelfStatusSource {
             task_board: None,
             voice: None,
             persona: None,
+            trait_growth: None,
         }
     }
 
@@ -404,6 +407,15 @@ impl ProductionSelfStatusSource {
         self
     }
 
+    /// 接入性格节真值探测口 (裁定 ④⑤): 四杆锁定态 + 最近移动, 每次自述现
+    /// 探测 (与 `tool.trait_report` 同一成长计既有账; 缺源/读失败显式 null +
+    /// 原因, 不编锁态/移动史)。
+    #[must_use]
+    pub fn with_trait_growth_probe(mut self, probe: StatusProbe<TraitStatus>) -> Self {
+        self.trait_growth = Some(probe);
+        self
+    }
+
     /// 自述身份 (产品名 / workspace 版本 / 运行时角色)。
     pub fn identity(&self) -> &SelfStatusIdentity {
         &self.identity
@@ -458,13 +470,26 @@ impl ProductionSelfStatusSource {
 
     fn snapshot_with_scope(&self, session: Option<SessionId>) -> SelfStatusSnapshot {
         // 调参状态: 四滑杆当前**生效值** (进程内自动调整 > env 旋钮 > 基线),
-        // 预设名由取值集推导, 自学习开关取装配时的接线事实。
+        // 预设名由取值集推导, 自学习开关取装配时的接线事实。性格节真值
+        // (锁定态 + 最近移动, 裁定 ④⑤) 现读成长账面: 缺源/读失败 = 显式
+        // null + 原因 (0 装诚实, 不编锁态/移动史)。
         let values = [
             TunableParam::MemoryFade.effective(),
             TunableParam::CuriosityStrength.effective(),
             TunableParam::ToneSaturation.effective(),
             TunableParam::ConsolidationCadence.effective(),
         ];
+        let (trait_locked, trait_recent_moves, trait_reason) = match &self.trait_growth {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status.locked), Some(status.recent_moves), None),
+                Err(error) => (
+                    None,
+                    None,
+                    Some(format!("trait growth probe failed: {error}")),
+                ),
+            },
+            None => (None, None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
         let tuning = TuningStatus {
             memory_fade: values[0],
             curiosity_strength: values[1],
@@ -472,6 +497,10 @@ impl ProductionSelfStatusSource {
             consolidation_cadence: values[3],
             preset: derive_tuning_preset(values),
             self_learning: self.self_learning,
+            // 性格节真值真接线 (裁定 ④⑤ 落地批): 锁定态 + 最近移动来自
+            // `trait_growth` 探测口 (成长计既有账, 与 `tool.trait_report` 同账)。
+            locked: trait_locked,
+            recent_moves: trait_recent_moves,
         };
 
         // 记忆账本: 现探测; 失败/缺位 → 计数显式 null + 原因。
@@ -599,7 +628,7 @@ impl ProductionSelfStatusSource {
             memory_ledger,
             memory_ledger_reason,
             tuning: Some(tuning),
-            tuning_reason: None,
+            tuning_reason: trait_reason,
             budget: Some(self.budget_with_quota_reading(session)),
             budget_reason: None,
             workspace: Some(WorkspaceStatus {
@@ -681,6 +710,9 @@ pub fn roster_from_config(
         // V6-a 任务簿 (`tool.task_board`, 注册条件 = 任务队列已注入, 注册即闸),
         // 名册按实际注册条件取值 (自述任务节与工具面同队同账)。
         CapabilitySwitch::new("task_board", config.task_board.is_some()),
+        // 性格周报 (`tool.trait_report`, 裁定 ⑤, 注册条件 = 成长账落位已注入,
+        // 注册即闸), 名册按实际注册条件取值 (自述性格节与工具面同账)。
+        CapabilitySwitch::new("trait_report", config.trait_report.is_some()),
         // 受控文件写入 (`tool.apply_patch`): 主开关按实际注册条件取值 (配置开启
         // 且工作区根已注入才算生效); 自动放行子档依赖主开关 —— 主开关没注册成,
         // 子档无处生效, 名册照实说 false。
@@ -753,6 +785,13 @@ pub fn roster_from_config(
         CapabilitySwitch::new(
             "persona_consolidation",
             config.persona_consolidation && config.consolidation && config.memory_writeback,
+        ),
+        // V4-b 散列增量门挂在记忆写入模块的整编触发点 (`with_ingest_gate`):
+        // 散列门落库面缺席由组装根折进生效视图, 这里再 AND 上游槽 (写入模块 +
+        // 整编触发点) —— 上游槽缺席时静默失效, 名册照实 false。
+        CapabilitySwitch::new(
+            "consolidation_hash_gate",
+            config.consolidation_hash_gate && config.consolidation && config.memory_writeback,
         ),
         CapabilitySwitch::new("reflexion", config.reflexion),
         CapabilitySwitch::new("self_assessment", config.self_assessment),
@@ -947,6 +986,10 @@ mod tests {
                 memories: Some(5),
                 protected: Some(1),
                 lessons: Some(3),
+                // V4-b 保鲜回路三真值随探测口透传 (缺源显式 null 由字段级 Option 承载)。
+                pending_ingest: Some(1),
+                last_fold_at_ms: Some(1_728_000_900_000),
+                dedup_skipped: Some(7),
                 reason: None,
             })
         });
@@ -960,6 +1003,13 @@ mod tests {
         assert_eq!(stats.memories, Some(5));
         assert_eq!(stats.protected, Some(1));
         assert_eq!(stats.lessons, Some(3));
+        assert_eq!(stats.pending_ingest, Some(1), "待摄取数真值透传");
+        assert_eq!(
+            stats.last_fold_at_ms,
+            Some(1_728_000_900_000),
+            "最近折入真值透传"
+        );
+        assert_eq!(stats.dedup_skipped, Some(7), "去重计数真值透传");
         assert!(snapshot.memory_ledger_reason.is_none());
         let workspace = snapshot.workspace.expect("workspace");
         assert_eq!(workspace.credentials_present, Some(true));

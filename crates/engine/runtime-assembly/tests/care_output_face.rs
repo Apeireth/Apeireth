@@ -13,7 +13,8 @@ use apeireth_core::kernel::{
 };
 use apeireth_governance::AllowAll;
 use apeireth_organ::care::{
-    CareEngine, CarePoll, CareRule, CareStore, CareTrigger, FrozenCareClock, RuleFallbackJudge,
+    CareDiscipline, CareEngine, CarePoll, CareRule, CareStore, CareTrigger, FrozenCareClock,
+    RuleFallbackJudge,
 };
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
@@ -276,6 +277,8 @@ async fn self_status_care_section_is_null_with_a_reason_when_the_store_refuses()
 #[tokio::test]
 async fn care_message_enters_the_conversation_flow_via_a_standard_turn() {
     // ① 双引擎: 规则引擎到点 → 发起意愿判定 → 标准回合输入。
+    // 显式关窗隔离 (默认勿扰窗口 23:00-8:00 会拦下 01:00 的到点; 本竖切盯
+    // 输出面, 不是勿扰纪律)。
     let dir = tempfile::tempdir().expect("tempdir");
     let store = CareStore::new(dir.path());
     store
@@ -287,6 +290,13 @@ async fn care_message_enters_the_conversation_flow_via_a_standard_turn() {
             created_at_ms: 1_786_838_400_000,
         })
         .expect("add");
+    let mut body = store.list().expect("list");
+    body.discipline = CareDiscipline {
+        quiet_start_minutes: None,
+        quiet_end_minutes: None,
+        ..CareDiscipline::default()
+    };
+    store.save(&body).expect("save discipline");
     let clock = Arc::new(FrozenCareClock::new(1_786_838_400_000));
     let mut engine = CareEngine::new(store, clock.clone(), Arc::new(RuleFallbackJudge));
     clock.set(1_786_838_400_000 + 3_600_000);

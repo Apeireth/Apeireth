@@ -234,11 +234,18 @@ async fn memory_ledger_counts_match_the_real_stores_without_echoing_content() {
             let lessons = reflexion
                 .list_reflections()
                 .map_err(|error| format!("lesson store read failed: {error}"))?;
+            // V4-b 保鲜回路三真值与账本计数同库现探测 (缺源显式 null)。
+            let freshness = store
+                .freshness_status()
+                .map_err(|error| format!("freshness status query failed: {error}"))?;
             Ok(MemoryLedgerStats {
                 sessions: Some(counts.sessions),
                 memories: Some(counts.memories),
                 protected: Some(counts.protected),
                 lessons: Some(lessons.len() as u64),
+                pending_ingest: Some(freshness.pending_ingest),
+                last_fold_at_ms: freshness.last_fold_at_ms,
+                dedup_skipped: Some(freshness.dedup_skipped),
                 reason: None,
             })
         })
@@ -255,6 +262,10 @@ async fn memory_ledger_counts_match_the_real_stores_without_echoing_content() {
     assert_eq!(ledger["memories"], 3);
     assert_eq!(ledger["protected"], 1);
     assert_eq!(ledger["lessons"], 1);
+    // V4-b 保鲜回路真值: 未摎取 = 待摎取 0 / 去重 0, 尚未摎入 = 显式 null。
+    assert_eq!(ledger["pending_ingest"], 0);
+    assert_eq!(ledger["dedup_skipped"], 0);
+    assert_eq!(ledger["last_fold_at_ms"], Value::Null);
     assert_eq!(ledger["reason"], Value::Null);
     // 计数不回内容原文。
     let rendered = report.to_string();
@@ -275,7 +286,16 @@ async fn missing_data_probes_are_explicit_null_with_reasons() {
     let report = invoke(&tool).await;
 
     let ledger = &report["memory_ledger"];
-    for field in ["sessions", "memories", "protected", "lessons"] {
+    for field in [
+        "sessions",
+        "memories",
+        "protected",
+        "lessons",
+        // V4-b: 保鲜三真值缺源同样显式 null。
+        "pending_ingest",
+        "last_fold_at_ms",
+        "dedup_skipped",
+    ] {
         assert_eq!(ledger[field], Value::Null, "{field} must be explicit null");
     }
     assert!(

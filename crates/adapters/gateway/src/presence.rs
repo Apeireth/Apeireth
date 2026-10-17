@@ -76,6 +76,10 @@ const DEEP_FOCUS_TOOL_THRESHOLD: u32 = 3;
 /// 契约点名的 PAD 原料之一).
 const LONG_TURN_MS: i64 = 30 * 1_000;
 
+/// 情感残响强度 (设计裁定 R1③: 旧事回涌系数 = 0.2) —— 情节记忆被检索回来时
+/// 情绪跟着回一点的固定小量: 每次召回命中把 pleasure 抬这个量。
+pub const EMOTION_RESIDUAL_STRENGTH: f32 = 0.2;
+
 /// Defensive cap on in-flight turn accumulators; entries only leak when a turn
 /// starts and never closes (e.g. a killed request).
 const MAX_IN_FLIGHT_TURNS: usize = 256;
@@ -310,7 +314,8 @@ impl PresenceSynthesizer {
     }
 
     /// A turn committed. Map its facts to a PAD rough estimate (契约: 轮次
-    /// 时长 / 工具调用数 / 审批频率 → PAD 粗估值; 召回命中正向微调):
+    /// 时长 / 工具调用数 / 审批频率 → PAD 粗估值; 召回命中正向微调 =
+    /// 情感残响 [`EMOTION_RESIDUAL_STRENGTH`]):
     /// - arousal rises with rounds, tool calls, and a long turn duration;
     /// - pleasure dips per approval wait, rises per recall hit;
     /// - dominance rises mildly with agency (tool calls).
@@ -322,7 +327,8 @@ impl PresenceSynthesizer {
             a += 0.1;
         }
         let pad = PresencePad {
-            p: 0.1 + 0.15 * turn.recall_hits as f32 - 0.15 * turn.approvals as f32,
+            p: 0.1 + EMOTION_RESIDUAL_STRENGTH * turn.recall_hits as f32
+                - 0.15 * turn.approvals as f32,
             a: a.min(0.8),
             d: 0.1 + 0.04 * turn.tool_calls as f32,
         };
@@ -890,6 +896,29 @@ mod tests {
         // 失败回合:诚实读作摩擦,p 落负。
         let failed = synth.turn_failed(&turn_key(), T0 + 60_000);
         assert!(failed.pad.p < 0.0);
+    }
+
+    /// 情感残响强度 0.2 口径 (设计裁定 R1③): 旧事被检索回来时情绪回一点,
+    /// 每次召回命中 pleasure 回涌 [`EMOTION_RESIDUAL_STRENGTH`]。
+    #[test]
+    fn emotional_residual_strength_is_point_two_per_recall_hit() {
+        assert_eq!(
+            EMOTION_RESIDUAL_STRENGTH, 0.2,
+            "情感残响强度 (旧事回涌系数) 口径 = 0.2"
+        );
+        let mut synth = PresenceSynthesizer::new();
+        let plain = run_turn(&mut synth, &[], 0, 1, 5_000);
+        assert!((plain.pad.p - 0.1).abs() < 1e-6, "无召回 = 基线 0.1");
+        let one = run_turn(&mut synth, &["tool.mcp.recall_memory"], 0, 1, 5_000);
+        assert!((one.pad.p - 0.3).abs() < 1e-6, "一次召回命中 = 残响 +0.2");
+        let two = run_turn(
+            &mut synth,
+            &["tool.mcp.recall_memory", "tool.memory.recall"],
+            0,
+            1,
+            5_000,
+        );
+        assert!((two.pad.p - 0.5).abs() < 1e-6, "两次召回命中 = 残响 +0.4");
     }
 
     #[test]

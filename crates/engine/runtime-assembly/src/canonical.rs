@@ -101,6 +101,14 @@ pub mod self_tuning_wire;
 pub mod task_board_tool;
 #[path = "canonical/tool_modules.rs"]
 pub mod tool_modules;
+/// 性格成长数据面 (裁定 ④⑤): 特质滑杆锁定态持久档 (`trait-locks.json`) +
+/// 成长计既有账 (`tuning-log.jsonl`) 只读读面。
+#[path = "canonical/trait_growth.rs"]
+pub mod trait_growth;
+/// 性格周报工具面 (`tool.trait_report`, 只读零审批): 近 7 天四杆移动量 /
+/// 移动原因 top / 锁定态, 数据 = 成长计既有账 (不新造账)。
+#[path = "canonical/trait_report_tool.rs"]
+pub mod trait_report_tool;
 #[path = "canonical/typed_recall.rs"]
 pub mod typed_recall;
 #[path = "canonical/upgrade_cycle.rs"]
@@ -162,8 +170,18 @@ pub use self_tuning_wire::{
 };
 pub use tool_modules::{
     BackupExportModule, EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule,
-    RepoModule, SearchModule, SelfStatusModule, ShellModule, VoiceSpeakModule,
-    SELF_STATUS_TIMEOUT_MS,
+    RepoModule, SearchModule, SelfStatusModule, ShellModule, TraitReportModule, VoiceSpeakModule,
+    SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
+};
+// 性格成长数据面 (裁定 ④⑤): 特质锁定态持久档 + 成长计既有账读面。
+pub use trait_growth::{
+    load_trait_locks, now_epoch_ms, read_growth_records, save_trait_locks, set_trait_lock,
+    trait_growth_probe, trait_locks_path, trait_locks_path_for, trait_status_probe,
+    TraitGrowthFacts, TraitGrowthPaths, TraitGrowthProbe, TRAIT_LOCKS_FILE,
+};
+// 性格周报工具面 (`tool.trait_report`, 只读零审批)。
+pub use trait_report_tool::{
+    TraitReportTool, TRAIT_REPORT_CAPABILITY_ID, TRAIT_REPORT_FRAME_FIELDS, TRAIT_REPORT_TOOL_NAME,
 };
 pub use typed_recall::SqliteTypedMemoryRecallSource;
 // G5 备份恢复导出面: 备份节探测口 (最近备份时间/清单件数真值或 null) 与

@@ -27,6 +27,16 @@ fn rule(id: &str, trigger: CareTrigger) -> CareRule {
     }
 }
 
+/// 显式关窗纪律: 默认勿扰窗口 23:00-8:00 (裁定 R1⑭) 会先拦下夜间时点;
+/// 盯触发器/其它纪律的测试用本夹具关窗隔离 (被测对象不是勿扰窗口)。
+fn unwindowed() -> CareDiscipline {
+    CareDiscipline {
+        quiet_start_minutes: None,
+        quiet_end_minutes: None,
+        ..CareDiscipline::default()
+    }
+}
+
 struct Fixture {
     _dir: tempfile::TempDir,
     store: CareStore,
@@ -62,7 +72,7 @@ impl Fixture {
 fn inactive_rule_fires_after_n_quiet_hours_and_rearms_after_the_next_window() {
     let fx = fixture(
         vec![rule("check-in", CareTrigger::Inactive { hours: 48 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     let mut engine = fx.engine();
@@ -212,7 +222,7 @@ fn anniversary_rule_fires_on_the_month_day_once_per_year() {
 fn interval_rule_fires_every_n_hours_from_the_last_firing() {
     let fx = fixture(
         vec![rule("pulse", CareTrigger::Interval { hours: 6 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     let mut engine = fx.engine();
@@ -238,7 +248,7 @@ fn interval_rule_fires_every_n_hours_from_the_last_firing() {
 fn dual_engine_without_a_model_still_dispatches_by_rules() {
     let fx = fixture(
         vec![rule("check-in", CareTrigger::Interval { hours: 1 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     // 无模型判定端口: RuleFallbackJudge 是缺省档。
@@ -273,7 +283,7 @@ fn model_context_judge_vetoes_and_redirects_explicitly() {
     // 判定说不 → Declined (台账留痕, 当次到点消费掉)。
     let fx = fixture(
         vec![rule("check-in", CareTrigger::Interval { hours: 1 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     let mut engine = CareEngine::new(
@@ -303,7 +313,7 @@ fn model_context_judge_vetoes_and_redirects_explicitly() {
     // 判定该说 + 说什么方向 → Initiating (focus 进标准回合输入)。
     let fx2 = fixture(
         vec![rule("check-in", CareTrigger::Interval { hours: 1 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     let mut engine2 = CareEngine::new(
@@ -337,7 +347,7 @@ fn model_context_failure_falls_back_to_the_rule_verdict_with_an_honest_note() {
     }
     let fx = fixture(
         vec![rule("check-in", CareTrigger::Interval { hours: 1 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     let mut engine = CareEngine::new(
@@ -400,7 +410,7 @@ fn focus_suppression_holds_care_during_a_live_interaction() {
         vec![rule("pulse", CareTrigger::Interval { hours: 1 })],
         CareDiscipline {
             focus_gap_minutes: 15,
-            ..CareDiscipline::default()
+            ..unwindowed()
         },
         DAY_START,
     );
@@ -430,7 +440,7 @@ fn frequency_cap_holds_care_once_the_window_is_full() {
         CareDiscipline {
             frequency_max: 1,
             frequency_window_hours: 12,
-            ..CareDiscipline::default()
+            ..unwindowed()
         },
         DAY_START,
     );
@@ -469,7 +479,7 @@ fn budget_gate_holds_care_when_the_shared_ledger_is_exhausted() {
     }
     let fx = fixture(
         vec![rule("pulse", CareTrigger::Interval { hours: 1 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     let mut engine = fx.engine().with_budget_gate(Arc::new(ExhaustedBudget));
@@ -610,7 +620,7 @@ fn care_status_reports_rule_count_next_trigger_and_last_care_truth() {
 fn care_initiative_composes_a_standard_turn_input_and_never_a_side_channel() {
     let fx = fixture(
         vec![rule("check-in", CareTrigger::Inactive { hours: 24 })],
-        CareDiscipline::default(),
+        unwindowed(),
         DAY_START,
     );
     let mut engine = fx.engine();
@@ -668,4 +678,186 @@ fn disabled_rules_never_fire_but_stay_archived() {
     fx.clock.set(DAY_START + 10 * HOUR_MS);
     assert!(matches!(engine.poll().expect("poll"), CarePoll::Idle));
     assert_eq!(fx.store.list().expect("list").rules.len(), 1, "留档不删");
+}
+
+/// 裁定 R1 默认口径钉 (⑬⑭⑮): 勿扰 23:00-8:00 (与发声面勿扰窗口同源),
+/// 频率 4h≤1 次 + 日≤5 次, 专注抑制 3 分钟。
+#[test]
+fn care_discipline_defaults_pin_the_ruling_caliber() {
+    let discipline = CareDiscipline::default();
+    assert_eq!(
+        discipline.quiet_start_minutes,
+        Some(23 * 60),
+        "勿扰窗口起 = 23:00 (裁定 R1⑭)"
+    );
+    assert_eq!(
+        discipline.quiet_end_minutes,
+        Some(8 * 60),
+        "勿扰窗口止 = 08:00 (裁定 R1⑭)"
+    );
+    assert!(discipline.in_quiet_window(23 * 60), "23:00 起进窗");
+    assert!(discipline.in_quiet_window(3 * 60), "深夜在窗内");
+    assert!(!discipline.in_quiet_window(12 * 60), "白天不拦");
+    assert_eq!(discipline.frequency_max, 1, "频率上限 = 4h≤1 次 (裁定 R1⑬)");
+    assert_eq!(discipline.frequency_window_hours, 4);
+    assert_eq!(discipline.daily_max, 5, "频率上限 = 日≤5 次 (裁定 R1⑬)");
+    assert_eq!(
+        discipline.focus_gap_minutes, 3,
+        "专注抑制 = 3 分钟 (裁定 R1⑮)"
+    );
+    assert_eq!(discipline.focus_gap_ms(), 3 * MINUTE_MS);
+}
+
+/// 频率上限默认档 ①: 4h≤1 次 —— 滚动窗口内第二发被拦下 (候选拦下不丢)。
+#[test]
+fn default_frequency_cap_holds_the_second_care_within_four_hours() {
+    let fx = fixture(
+        vec![
+            rule("a", CareTrigger::Interval { hours: 1 }),
+            rule("b", CareTrigger::Interval { hours: 1 }),
+        ],
+        unwindowed(),
+        DAY_START,
+    );
+    let mut engine = fx.engine();
+    fx.clock.set(DAY_START + HOUR_MS);
+    assert!(matches!(
+        engine.poll().expect("poll"),
+        CarePoll::Initiating(_)
+    ));
+    fx.clock.set(DAY_START + HOUR_MS + 30 * MINUTE_MS);
+    match engine.poll().expect("poll") {
+        CarePoll::Held { hold, .. } => {
+            assert_eq!(hold, CareHold::FrequencyCap, "4h 滚动窗口档已满")
+        }
+        other => panic!("4h≤1 次: 4 小时内第二发必须拦下: {other:?}"),
+    }
+}
+
+/// 频率上限默认档 ②: 日≤5 次 —— 同一 UTC 日第 6 次被拦 (4h 窗口已空仍拦),
+/// 日界重置后照发。
+#[test]
+fn default_daily_cap_holds_the_sixth_care_of_a_day() {
+    // 台账锚规则 (停用, 只作 record_care 的合法归属, 不参与触发)。
+    let mut rules = vec![rule(
+        "night",
+        CareTrigger::DailyMoment {
+            minutes_of_day: 23 * 60,
+        },
+    )];
+    for index in 0..5 {
+        let mut seed = rule(&format!("seed-{index}"), CareTrigger::Interval { hours: 1 });
+        seed.enabled = false;
+        rules.push(seed);
+    }
+    let fx = fixture(rules, unwindowed(), DAY_START);
+    // 同日已发 5 次 (全部落在 4h 滚动窗口之外)。
+    for (index, hour) in [2_i64, 6, 10, 14, 18].into_iter().enumerate() {
+        let at_ms = DAY_START + hour * HOUR_MS;
+        fx.store
+            .record_care(
+                CareRecord {
+                    rule_id: format!("seed-{index}"),
+                    at_ms,
+                    judge: "rule_fallback".to_string(),
+                    spoke: true,
+                    note: "种子台账 (日档计数)".to_string(),
+                },
+                at_ms,
+            )
+            .expect("seed record");
+    }
+    let mut engine = fx.engine();
+    fx.clock.set(DAY_START + 23 * HOUR_MS);
+    match engine.poll().expect("poll") {
+        CarePoll::Held { hold, .. } => {
+            assert_eq!(
+                hold,
+                CareHold::FrequencyCap,
+                "日档已满 (4h 窗口空也拦): 第 6 次"
+            )
+        }
+        other => panic!("日≤5 次: 当日第 6 发必须拦下: {other:?}"),
+    }
+    // 日界重置: 次日到点照发。
+    fx.clock.set(DAY_START + 86_400_000 + 23 * HOUR_MS);
+    assert!(matches!(
+        engine.poll().expect("poll"),
+        CarePoll::Initiating(_)
+    ));
+}
+
+/// 专注抑制默认档: 连续交互 3 分钟内不打扰 (裁定 R1⑮), 停歇 3 分钟后恢复。
+#[test]
+fn default_focus_suppression_is_three_minutes() {
+    let fx = fixture(
+        vec![rule("pulse", CareTrigger::Interval { hours: 1 })],
+        unwindowed(),
+        DAY_START,
+    );
+    let mut engine = fx.engine();
+    engine.observe_interaction(DAY_START + HOUR_MS - 2 * MINUTE_MS);
+    fx.clock.set(DAY_START + HOUR_MS);
+    match engine.poll().expect("poll") {
+        CarePoll::Held { hold, .. } => assert_eq!(hold, CareHold::Focus, "2 分钟前仍在连续交互期"),
+        other => panic!("3 分钟内必须拦下: {other:?}"),
+    }
+    // 距上次交互 4 分钟 (> 3 分钟) → 恢复。
+    fx.clock.set(DAY_START + HOUR_MS + 2 * MINUTE_MS);
+    assert!(matches!(
+        engine.poll().expect("poll"),
+        CarePoll::Initiating(_)
+    ));
+}
+
+/// 旧行为兼容: 显式配置照常覆盖裁定默认 (旧 22-6 窗 / 2 次 12h / 15 分钟专注 /
+/// 日 10 次都可显式表达, 默认值不锁死旧行为)。
+#[test]
+fn explicit_discipline_values_override_the_ruling_defaults() {
+    let old = CareDiscipline {
+        quiet_start_minutes: Some(22 * 60),
+        quiet_end_minutes: Some(6 * 60),
+        frequency_max: 2,
+        frequency_window_hours: 12,
+        daily_max: 10,
+        focus_gap_minutes: 15,
+        catchup_minutes: 120,
+    };
+    old.validate().expect("显式旧口径配置合法");
+    assert!(
+        old.in_quiet_window(22 * 60 + 30)
+            && !CareDiscipline::default().in_quiet_window(22 * 60 + 30),
+        "显式 22-6 窗口覆盖默认 23-8"
+    );
+    assert!(
+        !old.in_quiet_window(7 * 60) && CareDiscipline::default().in_quiet_window(7 * 60),
+        "07:00 在默认窗内、在显式 22-6 窗外"
+    );
+    assert_eq!(
+        old.focus_gap_ms(),
+        15 * MINUTE_MS,
+        "显式专注抑制覆盖默认 3 分钟"
+    );
+
+    // 行为面: 显式 2/12h 频率照常放行 4 小时内第二发 (默认档会拦)。
+    // 时点取 12:00/13:00 (显式 22-6 窗外), 不让勿扰纪律代跑。
+    let fx = fixture(
+        vec![
+            rule("a", CareTrigger::Interval { hours: 1 }),
+            rule("b", CareTrigger::Interval { hours: 1 }),
+        ],
+        old,
+        DAY_START,
+    );
+    let mut engine = fx.engine();
+    fx.clock.set(DAY_START + 12 * HOUR_MS);
+    assert!(matches!(
+        engine.poll().expect("poll"),
+        CarePoll::Initiating(_)
+    ));
+    fx.clock.set(DAY_START + 13 * HOUR_MS);
+    assert!(
+        matches!(engine.poll().expect("poll"), CarePoll::Initiating(_)),
+        "显式 2/12h 频率照常放行第二发 (旧行为可覆盖)"
+    );
 }

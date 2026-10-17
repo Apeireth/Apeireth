@@ -102,6 +102,9 @@ pub mod speech_arbiter;
 pub mod subagent_llm;
 pub mod task_queue;
 pub mod token_meter;
+// 性格周报 (裁定 ⑤): 成长计既有账的只读汇总 (近 7 天四杆移动量 / 移动原因
+// top / 锁定态; 复用沉积记录不新造账)。
+pub mod trait_report;
 // 跨会话引用封套（不受信任背景 + 按预算披露）: 固定警告头 + 边界标记 + 每源预算 + 省略三态措辞。
 pub mod untrusted_envelope;
 // 工作消耗记账 (第三批·裁决件): 事件日志单趟纯折叠 (取消/中断同答案)。
@@ -191,9 +194,9 @@ pub use runtime_invariants::{
     INV_FORGET_CONFINED_TO_TARGET, INV_FORGET_IDEMPOTENT, INV_SWEEP_KEEPS_PROTECTED,
 };
 pub use self_tuning::{
-    clear_effective_overrides, effective_override, install_effective_values,
-    RetrievalHitMissSignal, SelfTuningEngine, TunableParam, TuningEvent, TuningRecord,
-    TuningSignal, TuningValues, DAY_MS,
+    clear_effective_overrides, effective_override, install_effective_values, is_trait_locked_skip,
+    RetrievalHitMissSignal, SelfTuningEngine, TraitLocks, TunableParam, TuningEvent, TuningRecord,
+    TuningSignal, TuningValues, DAY_MS, TRAIT_LOCKED_SKIP_PREFIX,
 };
 pub use speech_arbiter::{
     ActiveSpeech, ArbiterDecision, SpeechOutputArbiter, SpeechRequest, SpeechStrategy,
@@ -208,6 +211,10 @@ pub use task_queue::{
 pub use token_meter::{
     envelope_of, fold_chars, fold_text, Calibration, MeterReading, MeteredEnvelope, TokenMeter,
     UsageAnchor,
+};
+pub use trait_report::{
+    recent_moves, TraitMove, TraitReasonCount, TraitReport, TraitSliderReport, TRAIT_RECENT_MOVES,
+    TRAIT_REPORT_TOP_REASONS, TRAIT_REPORT_WINDOW_DAYS,
 };
 pub use worktree_sandbox::{
     CommandRunner, RateLimitBackoff, TddPhase, TddStateMachine, WorktreeConfig, WorktreeError,

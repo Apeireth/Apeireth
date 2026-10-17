@@ -32,6 +32,12 @@ pub mod exec_pipeline;
 // 沙箱升级阶梯 · 就地提示面: 边界拒绝消息携带结构化升级引导 (缺什么模式 /
 // 需要什么理由字段), 在决策点引导, 不让用户去翻设置里的永久开关。
 pub mod escalation;
+// V5-b 暴露面体检报告 (安全守望 · 守望的产品化): 「帮你看清你暴露了什么」的
+// 本地只读自查面 —— 凭据文件分布/明文风险点 (sensitive_path 族词表) + 开放端口
+// 面 (受控系统表快照) + 备份包排除项核对 + 令牌↔用户绑定完整性 (W3-②) + 外网
+// 暴露面显式「未测」; 报告 = 分项评分 + 总评, 只读零写 + 零明文留痕;
+// `tool.exposure_audit` (只读档) 与 CLI `apeireth exposure report` 同一内核两出口。
+pub mod exposure_audit;
 pub mod fetch;
 pub mod filesystem;
 // git 写分级生产工具面 (`tool.git_write`, 干活能力轴 P1): 分级词表
@@ -129,6 +135,14 @@ pub use exec_pipeline::{
     RetryPolicy, RiskLevelGateHook, SchemaField, SchemaKind, StageEntry, SupersededResult,
     ToolExecutionPipeline, ToolGuard, ToolGuardRequest, ToolOutcome, DEFAULT_MAX_TIMEOUT_MS,
 };
+pub use exposure_audit::{
+    backup_exclusion_item, format_utc_ms, listener_item, parse_netstat_snapshot, probe_netstat,
+    run_exposure_audit, run_exposure_audit_at, scan_credential_files, scan_plaintext_points,
+    token_binding_item, BindingProbe, BindingSurface, ExposureAuditConfig, ExposureAuditTool,
+    ExposureItem, ExposureReport, Finding, ItemStatus, Listener, ListenerProbe, ListenerScope,
+    ListenerSnapshot, OverallScore, RiskLevel, EXPOSURE_AUDIT_CAPABILITY_ID,
+    EXPOSURE_AUDIT_TOOL_NAME, REPORT_SCHEMA, REPORT_SCHEMA_VERSION,
+};
 pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
 pub use git_write::{
@@ -177,11 +191,11 @@ pub use self_status::{
     BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus, ContentFeedStatus, DomainCounts,
     DomainStatus, MemoryLedgerStats, PersonaStatusSection, QuotaDimensionStatus, QuotaMeterReading,
     QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
-    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TuningStatus, VoiceStatus, WorkspaceStatus,
-    BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN,
-    PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS, PRICE_NOT_PROVIDED,
-    PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
-    RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
+    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitLockStatus, TraitMoveStatus, TraitStatus,
+    TuningStatus, VoiceStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
+    DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY,
+    PRESET_EFFORTLESS, PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED,
+    QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use skill::{
@@ -198,12 +212,14 @@ pub use skill::{
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
 pub use voice::{
-    authorized_voice_speak_policy, system_synth_engine, voice_speak_capability,
-    voice_speak_pipeline, PlaybackPolicy, QuietClock, QuietHours, SpeakOutcome, SpokenLedger,
-    SpokenStatus, SpokenUtterance, SynthEngine, VoiceSpeakBoundaryGuard, VoiceSpeakConfig,
+    authorized_voice_speak_policy, system_synth_engine, tune_voice_params, voice_speak_capability,
+    voice_speak_pipeline, EmotionBand, EmotionReader, PadReading, PlaybackPolicy, QuietClock,
+    QuietHours, SpeakGate, SpeakOutcome, SpeakScope, SpokenLedger, SpokenStatus, SpokenUtterance,
+    SynthEngine, TuneDelta, TunedVoiceParams, VoiceSpeakBoundaryGuard, VoiceSpeakConfig,
     VoiceSpeakParams, VoiceSpeakRiskMappingHook, VoiceSpeakTool, DEFAULT_VOICE_LABEL,
-    SPOKEN_LEDGER_FILE, VOICE_SPEAK_CAPABILITY_ID, VOICE_SPEAK_MAX_TEXT_CHARS,
-    VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_TOOL_DESCRIPTION, VOICE_SPEAK_TOOL_NAME,
+    EMOTION_TUNE_TABLE, SPOKEN_LEDGER_FILE, VOICE_SPEAK_CAPABILITY_ID, VOICE_SPEAK_MAX_TEXT_CHARS,
+    VOICE_SPEAK_SCOPE_ENV, VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_TOOL_DESCRIPTION,
+    VOICE_SPEAK_TOOL_NAME,
 };
 pub use worktree_apply::{
     apply_boundary_refusal, apply_summary, authorized_worktree_apply_policy,

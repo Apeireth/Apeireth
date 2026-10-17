@@ -654,6 +654,17 @@ pub enum SettlementOutcome {
     },
 }
 
+/// 一次快照读的完整结果 (面板读面: 任务表 + 分态计数 + 事件账**同一刻**)。
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskSnapshot {
+    /// 全队任务 (稳定排序: 入队时刻, 同刻按 id)。
+    pub tasks: Vec<TaskRecord>,
+    /// 分态计数 (与 [`TaskQueue::counts`] 同口径)。
+    pub counts: TaskBoardCounts,
+    /// 事件账 (只增; 唤醒信号与状态事件同汇)。
+    pub journal: Vec<TaskEvent>,
+}
+
 /// 自述任务节计数 (真值; `tool.self_status` 任务节的来源)。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskBoardCounts {
@@ -678,8 +689,8 @@ pub struct TaskBoardCounts {
 /// 默认派发次数上限 (崩溃恢复重派超此数熔断为 Blocked)。
 pub const DEFAULT_MAX_ATTEMPTS: u32 = 3;
 
-/// 默认任务链深度上限 (spawn 链 N 层熔断)。
-pub const DEFAULT_MAX_CHAIN_DEPTH: u32 = 4;
+/// 默认任务链深度上限 (spawn 链 N 层熔断) = 5 层 (设计裁定 R1⑳: 环路上限深度 5)。
+pub const DEFAULT_MAX_CHAIN_DEPTH: u32 = 5;
 
 /// 队列配置 (两个熔断: 崩溃死循环 / 环路)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -757,6 +768,28 @@ impl TaskQueue {
         };
         queue.recover_on_open()?;
         Ok(queue)
+    }
+
+    /// 附从句柄: 同店第二把句柄, **不跑崩溃恢复** (开失败面也没有假帧)。
+    ///
+    /// 崩溃恢复 ([`TaskQueue::open`] = 恢复点) 是主句柄的专属语义 —— 每店恰
+    /// 一个主句柄; 附从句柄给同店旁路面板 (读面 + 人判面) 并用。重复恢复会
+    /// 假记 `WakeRedelivered` 审计、把在跑任务重派回 `Pending`, 绝不允许。
+    pub fn attach(store: Arc<dyn TaskStore>, config: TaskQueueConfig) -> Self {
+        Self::attach_with_clock(store, config, system_clock_ms())
+    }
+
+    /// 附从句柄 (注入时钟; 测试用)。
+    pub fn attach_with_clock(
+        store: Arc<dyn TaskStore>,
+        config: TaskQueueConfig,
+        clock: TaskClockMs,
+    ) -> Self {
+        Self {
+            store,
+            clock,
+            config,
+        }
     }
 
     /// 已应用的最大写派号 (跨重启单调)。
@@ -1311,6 +1344,33 @@ impl TaskQueue {
             (left.created_at_ms, &left.id).cmp(&(right.created_at_ms, &right.id))
         });
         Ok(tasks)
+    }
+
+    /// 面板一次快照读: 任务表 + 分态计数 + 事件账**一次**读出 (同一时刻,
+    /// 绝不拼两个时刻的状态); 排序与 [`TaskQueue::list`] 同口径, 计数与
+    /// [`TaskQueue::counts`] 同口径。
+    pub fn snapshot(&self) -> TaskQueueResult<TaskSnapshot> {
+        let state = self.store.read()?;
+        let mut tasks: Vec<TaskRecord> = state.tasks.into_values().collect();
+        tasks.sort_by(|left, right| {
+            (left.created_at_ms, &left.id).cmp(&(right.created_at_ms, &right.id))
+        });
+        let mut counts = TaskBoardCounts::default();
+        for task in &tasks {
+            match task.state {
+                TaskState::Pending => counts.pending += 1,
+                TaskState::Assigned => counts.assigned += 1,
+                TaskState::Running => counts.running += 1,
+                TaskState::Done => counts.done += 1,
+                TaskState::Failed => counts.failed += 1,
+                TaskState::Blocked => counts.blocked += 1,
+            }
+        }
+        Ok(TaskSnapshot {
+            tasks,
+            counts,
+            journal: state.journal,
+        })
     }
 
     /// 分态计数 (自述任务节真值来源)。

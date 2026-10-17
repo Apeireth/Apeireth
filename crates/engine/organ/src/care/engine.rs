@@ -32,7 +32,7 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
-use crate::emergence::{minutes_of_day_from_epoch_ms, Boundaries};
+use crate::emergence::{day_key_from_epoch_ms, minutes_of_day_from_epoch_ms, Boundaries};
 
 use super::rules::{CareRecord, CareRule, CareRulesBody, CareStore, CareStoreError, CareTrigger};
 
@@ -351,7 +351,7 @@ pub enum CareHold {
     QuietWindow,
     /// 连续交互期 (专注抑制: 用户正在对话, 不插话)。
     Focus,
-    /// 频率上限 (每 N 小时最多 M 次, 已满)。
+    /// 频率上限 (滚动窗口档 / 日档任一已满, 默认 4h≤1 次 + 日≤5 次)。
     FrequencyCap,
     /// 关怀预算已耗尽 (同账本接缝: 烧不起就不发)。
     Budget,
@@ -567,7 +567,9 @@ impl CareEngine {
                 return Some(CareHold::Focus);
             }
         }
-        // ③ 频率上限: 窗口内已发 M 次 → 拦下 (不丢, 窗口滑过再发)。
+        // ③ 频率上限 (双档, 设计裁定 R1⑬: 4h≤1 次 + 日≤5 次):
+        //    滚动窗口档满了拦下; 日档 (同一 UTC 日) 满了也拦下 (不丢, 窗口/
+        //    日界滑过再发)。
         let window_start = now_ms - discipline.frequency_window_ms();
         let sent = body
             .history
@@ -575,6 +577,15 @@ impl CareEngine {
             .filter(|record| record.spoke && record.at_ms >= window_start)
             .count();
         if sent >= usize::try_from(discipline.frequency_max).unwrap_or(usize::MAX) {
+            return Some(CareHold::FrequencyCap);
+        }
+        let today = day_key_from_epoch_ms(now_ms);
+        let sent_today = body
+            .history
+            .iter()
+            .filter(|record| record.spoke && day_key_from_epoch_ms(record.at_ms) == today)
+            .count();
+        if sent_today >= usize::try_from(discipline.daily_max).unwrap_or(usize::MAX) {
             return Some(CareHold::FrequencyCap);
         }
         // ④ 关怀预算 (同账本接缝: 关怀回合照常计费, 烧不起就不发)。

@@ -6,7 +6,7 @@
 //! ([`CareDiscipline`] 字段) 配了勿扰窗口时, 组装根**引用它的窗口**
 //! (runtime-assembly 的 `voice_quiet_hours_from_care_rules` 接缝);
 //! 未落 / 未配窗口时回落本面的**最小自建 env** ([`VOICE_QUIET_HOURS_ENV`],
-//! 默认 `22:00-06:00` 跨午夜, 与主动关怀 `quiet_hours` 的既有时段同口径)。
+//! 默认 `23:00-08:00` 跨午夜, 与主动关怀打扰纪律的默认窗口同口径)。
 //!
 //! # 口径
 //!
@@ -27,8 +27,9 @@ use std::sync::Arc;
 /// 勿扰窗口旋钮 (最小自建 env; `care_rules` 配了窗口时以其为准)。
 pub const VOICE_QUIET_HOURS_ENV: &str = "APEIRETH_VOICE_QUIET_HOURS";
 
-/// 默认勿扰窗口 (`22:00-06:00`, 跨午夜; 与主动关怀 `quiet_hours` 同口径)。
-pub const VOICE_QUIET_HOURS_DEFAULT: &str = "22:00-06:00";
+/// 默认勿扰窗口 (`23:00-08:00`, 跨午夜; 与主动关怀打扰纪律的默认窗口同口径,
+/// 设计裁定 R1⑭)。
+pub const VOICE_QUIET_HOURS_DEFAULT: &str = "23:00-08:00";
 
 /// 显式关窗取值 (只有这个词组关闭勿扰; 其余坏值一律拒绝解析)。
 pub const VOICE_QUIET_HOURS_OFF: &str = "off";
@@ -257,6 +258,21 @@ mod tests {
             Some(VOICE_QUIET_HOURS_DEFAULT.to_string()),
             "缺省取默认勿扰窗口 (fail-closed 朝安静)"
         );
+    }
+
+    /// 设计裁定 R1⑭: 勿扰窗口默认 23:00-8:00 (与 care_rules 打扰纪律同源)。
+    #[test]
+    fn default_window_is_2300_to_0800_per_the_ruling() {
+        assert_eq!(
+            VOICE_QUIET_HOURS_DEFAULT, "23:00-08:00",
+            "勿扰窗口默认口径 = 23:00-8:00"
+        );
+        let quiet = QuietHours::default();
+        assert!(quiet.suppressed_at(23 * 60), "23:00 起进窗");
+        assert!(quiet.suppressed_at(3 * 60), "深夜在窗内");
+        assert!(quiet.suppressed_at(8 * 60 - 1), "终点不含");
+        assert!(!quiet.suppressed_at(8 * 60), "08:00 整点已出窗");
+        assert!(!quiet.suppressed_at(12 * 60), "白天不抑制");
     }
 
     #[test]

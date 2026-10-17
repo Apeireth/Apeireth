@@ -8,7 +8,8 @@
 //!    **引用它的窗口** (同一窗口值 + 同一跨午夜语义 + 同一 UTC 当日分钟
 //!    时间基准, [`QuietHours`] 只承接不另造);
 //! 2. `care_rules` 未落 / 未配窗口 → 回落发声面的**最小自建 env**
-//!    (`APEIRETH_VOICE_QUIET_HOURS`, 缺省 `22:00-06:00`);
+//!    (`APEIRETH_VOICE_QUIET_HOURS`, 缺省 `23:00-08:00`, 与关怀纪律默认窗口
+//!    同口径);
 //! 3. `care_rules` 存在但拒开 (坏配置) → **错误即帧式拒开**: 拒绝解析并报
 //!    真因, 不静默回退 (不静默降级纪律)。
 //!
@@ -83,13 +84,46 @@ mod tests {
         let quiet = voice_quiet_hours_from_care_rules(empty.path()).expect("no care_rules");
         assert_eq!(
             quiet.window().map(|window| window.describe()),
-            Some("22:00-06:00".to_string()),
+            Some(apeireth_tools_canonical::voice::VOICE_QUIET_HOURS_DEFAULT.to_string()),
             "care_rules 未落 = 最小自建 env 缺省窗口兜底"
         );
 
-        let unwindowed = data_dir_with(CareRulesBody::default());
+        // 显式未配窗口 (缺省默认已同源 23:00-8:00, 这里钉「未配 → env 兜底」支路)。
+        let unwindowed = data_dir_with(CareRulesBody {
+            discipline: CareDiscipline {
+                quiet_start_minutes: None,
+                quiet_end_minutes: None,
+                ..CareDiscipline::default()
+            },
+            ..CareRulesBody::default()
+        });
         let quiet = voice_quiet_hours_from_care_rules(unwindowed.path()).expect("unwindowed");
         assert!(quiet.suppressed_at(23 * 60), "未配窗口也走 env 兜底");
+    }
+
+    /// 同源钉 (设计裁定 R1⑭): `care_rules` 打扰纪律的默认窗口与发声面最小
+    /// 自建 env 的默认窗口必须是同一个窗口 (两处同改不漂移) + 同一判定口径。
+    #[test]
+    fn care_discipline_default_and_voice_quiet_default_share_one_window() {
+        let care = CareDiscipline::default();
+        let (start, end) = (
+            care.quiet_start_minutes.expect("默认有窗"),
+            care.quiet_end_minutes.expect("默认有窗"),
+        );
+        let window = QuietHours::default().window().expect("发声面缺省有窗");
+        assert_eq!(
+            (window.start_min(), window.end_min()),
+            (start, end),
+            "两处默认勿扰窗口必须同源同值"
+        );
+        assert_eq!(window.describe(), "23:00-08:00", "裁定口径 = 23:00-8:00");
+        for minute in [0, 3 * 60, 8 * 60 - 1, 8 * 60, 12 * 60, 23 * 60] {
+            assert_eq!(
+                care.in_quiet_window(minute),
+                window.contains(minute),
+                "第 {minute} 分钟两处判定必须一致 (同一跨午夜语义)"
+            );
+        }
     }
 
     #[test]

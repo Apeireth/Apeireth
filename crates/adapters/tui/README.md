@@ -45,6 +45,9 @@ cargo install --path crates/adapters/tui && apeireth-tui.exe
 | `PgUp` / `PgDn` | 对话滚动 | |
 | `Tab` | 命令补全 | 命令行内补全命令名 |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | 切换会话页签 | |
+| `Ctrl+T` | 任务面板 (面板 7) | `/tasks` 同口; 只读 + 人判重试 |
+| `↑` / `↓` (面板内 `k` / `j`) | 任务面板选择 | 面板内 `PgUp` / `PgDn` 同义 |
+| `r` | 人判重试 | 任务面板内, 仅 `failed` 任务 (失败不自动重试) |
 | `Backspace` | 删除输入 | |
 
 ## 命令表 (面板 4 会话管理)
@@ -58,6 +61,7 @@ cargo install --path crates/adapters/tui && apeireth-tui.exe
 | `/compact` | 命令链路形状已定 (mock 全程测试) | 既有网关暂无会话压缩端点: 上屏诚实「未接线」提示, 端点就绪即通 |
 | `/rewind` | 时间倒带 (面板 5) | 接口桩: 显式「未接线」, 下批接 continuation / 会话 fork 确定性重放 |
 | `/motion [full\|reduced]` | 动效档切换 | 已接 |
+| `/tasks` | 任务面板 (面板 7: 只读 + 人判重试) | 已接 (读面 `GET /v1/panel/tasks`; 人判重试走 `POST /v1/panel/tasks/{id}/human-judge-retry`; 任务簿旋钮关 = 显式「未接线」501 诚实降级) |
 | `/help` | 帮助浮层 | 已接 |
 | `/quit` | 退出驾驶舱 | 已接 |
 
@@ -114,7 +118,11 @@ LINK OK http://127.0.0.1:8080 │ MODEL demo │ CTX ▰▰▰▱▱▱▱▱ 12
   下批消费 events 面只读投影;
 - 面板 4: 输入行 + `/` 命令补全浮层 + 会话管理命令 (上表);
 - 面板 5: 时间倒带 (双 Esc / `/rewind`) —— 本批接口桩, 显式「未接线」标注;
-- 面板 6: `?` 帮助浮层 (键位表 + 命令表), Ctrl+C 两段式退出。
+- 面板 6: `?` 帮助浮层 (键位表 + 命令表), Ctrl+C 两段式退出;
+- 面板 7 (R4): 任务面板浮层 (`/tasks` / Ctrl+T) —— 上条六态分组计数, 左列
+  任务列表 (id 短哈希 / 标题 / 状态六态 / 尝试数 / 负责人, 选中 `▸`), 右列
+  选中详情 (payload 摘要 + 时间线), 底条动作提示; **只读 + 人判重试** (`r`,
+  仅 `failed`), 增/删/改派/完成走工具面 (人工审批档), 不进面板。
 
 ## 动画清单 (效果 / 帧率 / reduced 行为)
 
@@ -128,7 +136,7 @@ LINK OK http://127.0.0.1:8080 │ MODEL demo │ CTX ▰▰▰▱▱▱▱▱ 12
 | 治理灯渐入点亮 | 新灯 4 帧从暗到亮 | 数据变化 + 动画帧 | 瞬时点亮 |
 | 扫描线 / 跳动数字 / 转动指示 (P1) | 动画帧 | 动画帧 | 全部关闭 |
 | 重绘预算 | 动画帧 ≤5fps (`AnimClock` 帧间隔 ≥200ms 断言); 重绘只在数据变化或动画帧到点发生 | — | 无动画帧: 只在数据变化时重绘 (空闲近零 CPU) |
-| 遥测数据轮询 | 5s (数据节奏, 不是动画节奏) | 计时 | 照常轮询 (数据拉取不受动效档影响) |
+| 遥测 / 任务面板数据轮询 | 5s (数据节奏, 不是动画节奏; 一次到点两组一起拉) | 计时 | 照常轮询 (数据拉取不受动效档影响) |
 
 - 动画 tick 预算: `theme::AnimClock` full 档帧间隔 250ms —— 一秒 ≤5 帧,
   跳时不补帧 (防帧风暴); reduced 档 `interval = 0` 永不到点;
@@ -150,18 +158,49 @@ LINK OK http://127.0.0.1:8080 │ MODEL demo │ CTX ▰▰▰▱▱▱▱▱ 12
 | CTX | 上下文用量波形 | 回合计量 `total_tokens` 真实读数走纸; `context_window` 归一 | 已接; 窗口未知 → 峰值归一 + 角标签 `CTX · ?` |
 | GOV | 治理判定灯阵 | `GET /v1/panel/safety/guard/events?limit=12` (`allow`/`require_approval`/`deny` → 绿/琥珀/红) | 已接; 未知判定不上灯 (不猜色); 端点缺 → 全暗格 + 备注 |
 | 频道 PROCESS FEED | 内部过程事件流 | — | 未接线 (P1 桩保留, 下批接 events 面只读投影) |
+| 任务面板 · 六态分组计数 | pending/assigned/running/done/failed/blocked 计数 | `GET /v1/panel/tasks` 一次快照读的 `counts` | 已接; 任务簿旋钮关 = 501 诚实降级 → "—" |
+| 任务面板 · 任务列表 | id 短哈希 / 标题 / 状态六态 / 尝试数 / 负责人 | 同上 `tasks[]` 行投影 | 已接; 空态两义: 未回灌 "—", 真实空 = `0 行` |
+| 任务面板 · 选中详情 | payload 摘要 + 时间线 | 同上行内 `payload` (摘要截断) + `timeline` (事件账按任务投影) | 已接; 空载荷/无事件 = "—" |
+| 任务面板 · 人判重试 | failed → pending (显式人判动作) | `POST /v1/panel/tasks/{id}/human-judge-retry` (队列 `human_judge_retry` 语义) | 已接; 仅 `failed` 可判 (409 拒绝即帧); 增删改派走工具面不进面板 |
 
-回灌链路: 主循环 5s 轮询 (`Effect::RefreshTelemetry`, 数据节奏独立于动画
-节奏) → 后端端口 `fetch_telemetry` (逐节诚实: 能探到的节给真数, 探不到的节
-显式 `None` + 备注) → `Input::TelemetryLoaded` → 面板组; 连上后端即首拉,
-回合计量 (`usage`) 另走真实读数采样 (缓存大数字 + 波形)。
+回灌链路: 主循环 5s 轮询 (`Effect::RefreshTelemetry` + `Effect::RefreshTasks`,
+数据节奏独立于动画节奏) → 后端端口 `fetch_telemetry` / `fetch_tasks` (逐节
+诚实: 能探到的节给真数, 探不到的节显式 `None` + 备注) → `Input::TelemetryLoaded`
+/ `Input::TasksLoaded` → 面板组; 连上后端即首拉, 回合计量 (`usage`) 另走真实
+读数采样 (缓存大数字 + 波形)。人判重试链: 面板 `r` → `Effect::HumanJudgeRetry`
+→ `human_judge_retry` 端口 → 网关唯一动作面 → 队列 `human_judge_retry`
+(`Failed` → `Pending` + `retry_judged` 审计, 不自动唤醒) → 回读真值快照。
+
+任务面板 (面板 7) 布局 (浮层):
+
+```
+┌ ▐ 任务面板 · TASK BOARD ▌ ────────── TASKS · 6 行 · 只读 + 人判重试 ┐
+│ ┌ 六态分组计数 · TASK COUNTS ───────────────────────────────────┐ │
+│ │ 待派 1 · 已派 1 · 执行 1 · 完成 1 · 失败 1 · 阻塞 1 (合计 6) │ │
+│ └───────────────────────────────────────────────────────────────┘ │
+│ ┌ 任务列表 · TASK LIST ─────┐ ┌ 选中详情 · PAYLOAD / TIMELINE ─┐ │
+│ │  #0b625266 · pending · …  │ │ #0b625666 id: task-4           │ │
+│ │▸ #0b625666 · failed · …   │ │ 状态 failed · 尝试 4 · 负责人 … │ │
+│ │  #0b625566 · blocked · …  │ │ payload 摘要: {"step":3}        │ │
+│ │                           │ │ 时间线 (2):                     │ │
+│ │                           │ │   [1700000000000] enqueued      │ │
+│ └───────────────────────────┘ └────────────────────────────────┘ │
+│  ↑↓/jk 选择 · r 人判重试 (仅 failed) · Ctrl+T / Esc 关闭          │
+│  任务面板只读 + 人判重试: 增/删/改派/完成走工具面 (人工审批档), 不进面板 │
+└───────────────────────────────────────────────────────────────────┘
+```
 
 ## 测试
 
-`cargo test -p apeireth-tui` — 47 个单测 (P1 30 个零回归 + P2 17 个), 覆盖:
+`cargo test -p apeireth-tui` —— 测试数以
+[docs/03-reference/test-baseline.md](../../../docs/03-reference/test-baseline.md)
+为单一真源 (此处不抄写), 覆盖:
 面板状态渲染、命令解析与补全、会话管理命令链路 (mock 后端全程证据链)、
 快捷键表、两段式退出、连接失败即帧、reduced-motion 档、驾驶舱氛围 tokens
 齐备、流式 Markdown / 工具卡片、状态条诚实占位; P2: 点阵计数渲染、
 sparkline 帧循环推进、呼吸辉光帧循环 (reduced 静态)、大数字闪烁一帧、
 治理灯阵点亮序与渐入、角标签渲染、无数据诚实占位 (绝不画假曲线)、
-动画 tick 预算 (≤5fps 断言)、记忆件计数窗口饱和诚实、治理判定三色映射。
+动画 tick 预算 (≤5fps 断言)、记忆件计数窗口饱和诚实、治理判定三色映射;
+R4 任务面板: 六态分组计数/列表列/详情渲染、空态 "—" 两义、合同外状态不猜、
+人判重试链 (面板→API→队列 mock 全程证据链)、只读+人判边界 (面板零写口)、
+轮询同款节奏、短哈希/payload 摘要诚实截断。

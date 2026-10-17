@@ -38,6 +38,8 @@
 | `/v1/approvals/resolve` | POST | 批准/拒绝审批(见 §6) |
 | `/v1/panel/metrics` | GET | 指标聚合快照(见 §8b;会话+全局两层,空态显式空) |
 | `/v1/panel/skills` | GET | 技能库元数据只读面(见 §7d;只回元数据不回卡体,坏卡列拒不砖库) |
+| `/v1/panel/tasks` | GET | 任务面板只读面(见 §7e;一次快照读 = 任务行 + 时间线 + 六态计数) |
+| `/v1/panel/tasks/{task_id}/human-judge-retry` | POST | 人判重试(见 §7e;failed 只能人判,唯一动作面) |
 | `/v1/panel/users` | GET | 用户管理列表(见 §7c;owner 专属) |
 | `/v1/admin/users` | POST | 建户(见 §7c;owner 专属) |
 | `/v1/admin/users/{user_id}` | PATCH / DELETE | 改角色 / 删户(见 §7c;owner 专属) |
@@ -244,6 +246,60 @@ W3-① 目录安全规则 `[a-z0-9_-]`、首字符小写字母或数字,路径�
 端口)、组合根适配 `crates/adapters/cli/src/gateway_panels.rs`(`CliSkillShelf` 读
 `SkillLibrary::scan`)。前端 DTO 契约见 [frontend-data-contract.md](02-guides/frontend-data-contract.md) §10.8。
 
+### §7e 任务面板面 ✅(2026-10-17, 任务面板进驾驶舱批)
+
+`GET /v1/panel/tasks` —— 任务面板只读面(持久任务队列的面板投影, 与 `tool.task_board`
+工具面同队同账);`POST /v1/panel/tasks/{task_id}/human-judge-retry` —— **人判重试**
+(failed 只能人判, 失败绝不自动重试)。
+
+- **面板边界(防越权)**: 本面只有两口——读一次快照 + 人判重试;任务的增/删/改派/
+  完成走 `tool.task_board` 工具面(写面 = 人工审批档), **无对应路由**。
+- **G 组核心(failed 只能人判)**: 人判重试是唯一动作面, 队列语义
+  `human_judge_retry` 的 HTTP 投影(`Failed` → `Pending` + `retry_judged` 审计,
+  回队待派**不自动唤醒**, 再派走派发面);非 `failed` 态 409 `conflict` 拒绝即帧。
+- **一次快照读**(W2-③): `tasks[]` 行(含各自 `timeline` 事件账投影)与 `counts`
+  六态计数同一刻读出, 不拼两次读。
+- **署名只来自解析链**: 人判者 = 角色面绑定用户 > 令牌门客户端名 > `unattributed`;
+  请求无法自称(与角色门同口径)。
+- 过 W2-② 全 API 面令牌门(读与写同门);角色门: GET 全员可读, POST 需
+  `UserCapability::Write`(guest 零写面)。
+- 服务未接线(任务簿旋钮关 = 注册即闸) = 501 `unsupported`(不假装有数据源)。
+
+读面响应(200):
+```json
+{
+  "tasks": [
+    { "id": "task-1", "title": "校对发布清单", "state": "failed", "attempts": 2,
+      "assignee": "worker-a", "created_at_ms": 1728000000000, "updated_at_ms": 1728000000500,
+      "payload": { "step": 3 },
+      "timeline": [ { "kind": "failure_judged", "at_ms": 1728000000500,
+                      "detail": "{\"judge\":\"owner\",\"reason\":\"验收不过\"}" } ] }
+  ],
+  "counts": { "pending": 1, "assigned": 0, "running": 0, "done": 0,
+              "failed": 1, "blocked": 0, "total": 2 }
+}
+```
+
+- **TaskPanelDto**:`id`(`task-<写派号>`, 面板上屏取短哈希)/ `title`/ `state`
+  (六态冻结词表 `pending|assigned|running|done|failed|blocked`)/ `attempts`
+  (派发执行次数)/ `assignee`(可空)/ `created_at_ms` / `updated_at_ms`(**epoch 毫秒**)/
+  `payload`(不透明载荷, 面板给摘要)/ `timeline[]`(该任务的事件账投影:
+  `kind` 冻结词表 + `at_ms` + 可选 `detail` 紧凑 JSON)。
+- `counts` = 六态计数 + `total`(队列 `counts` 同口径真值)。
+
+人判重试(POST, 请求体 `{ "reason": "…" }`, `reason` 可空——空则记显式缺省理由):
+```json
+{ "task": { "id": "task-1", "state": "pending", "…": "重试后的任务行 (同 TaskPanelDto)" } }
+```
+
+- 错误模型(与 §1 同一帧形):401(令牌门)/ 403 `permission_denied`(角色门 /
+  人判面结构性拒绝)/ 404 `not_found`(任务不存在)/ 409 `conflict`(非 failed 态)/
+  501 `unsupported`(服务未接线)。
+
+实现:`crates/adapters/gateway/src/task_panel.rs`(DTO + `TaskBoardPanel`
+bounded-context 端口)、组合根适配 `crates/adapters/cli/src/gateway_panels.rs`
+(`CliTaskBoard` 附到持久任务队列, 附从句柄不重复崩溃恢复)。
+
 ## §8 Trace / Audit / 事件总线
 
 - `GET /v1/panel/traces?limit=20` `[P0]` → `{ "traces": [ { "trace_id": "…", "span_count": 3, "root_span": { … }, "started_at": 123 } ] }`
@@ -358,6 +414,7 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 `sessions.read`、`memory.read/write/forget/protect/unprotect`、`memory.graph.read`、
 `memory.update`（`supported=false`, `available=false`, `reason=not_implemented`）、
 `tools.list`、`skills.read`（技能库元数据只读面，§7d）、
+`tasks.read` / `tasks.human_judge_retry`（任务面板面: 只读投影 + 人判重试，§7e）、
 `permissions.approval.read`、`permissions.approval.resolve`、
 `approvals.read` / `approvals.resolve`（compatibility aliases）、`permissions.grants.read`、
 `permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`、

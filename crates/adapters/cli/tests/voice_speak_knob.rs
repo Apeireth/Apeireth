@@ -68,6 +68,7 @@ fn voice_env_guard() -> (EnvGuard, tempfile::TempDir) {
         ENABLE_VOICE_SPEAK_ENV,
         "APEIRETH_VOICE_QUIET_HOURS",
         "APEIRETH_VOICE_INTERRUPT",
+        "APEIRETH_VOICE_SPEAK_SCOPE",
         "APEIRETH_DATA_DIR",
     ]);
     guard.clear();

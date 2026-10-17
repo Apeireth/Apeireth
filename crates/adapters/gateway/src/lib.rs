@@ -80,6 +80,11 @@ pub mod domain_admin;
 /// (StoredDoc 拒开语义, 坏卡列拒不砖库; 不回卡体, 卡体走 L2 封套面)。
 pub mod skill_shelf;
 
+/// 任务面板面 (`GET /v1/panel/tasks` 只读 + `POST /v1/panel/tasks/:id/human-judge-retry`
+/// 人判重试): 持久任务队列的面板投影端口 (failed 只能人判; 增删改派走工具面,
+/// 不进本面)。
+pub mod task_panel;
+
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the explicitly unwired TLS placeholder surface.
 pub mod remote_access;
@@ -121,6 +126,10 @@ pub use client_tokens::{
 pub use domain_admin::{DomainAdminDto, DomainAdminService, DomainCreateBody};
 pub use skill_shelf::{
     SkillMetaDto, SkillRefusalDto, SkillShelfQuery, SkillShelfScanDto, SkillSourceDto,
+};
+pub use task_panel::{
+    HumanJudgeRetryRequest, HumanJudgeRetryResponse, TaskBoardPanel, TaskBoardSnapshotDto,
+    TaskCountsDto, TaskPanelDto, TaskPanelError, TaskTimelineDto,
 };
 pub use user_admin::{
     UserAdminDto, UserAdminError, UserAdminService, UserCreateBody, UserRolePatchBody,

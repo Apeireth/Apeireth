@@ -24,12 +24,17 @@ use apeireth_gateway::{
     GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto, MemoryCommand,
     MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto, PanelData,
     SafetyGuardQuery, SessionQuery, SessionSummaryDto, SkillMetaDto, SkillRefusalDto,
-    SkillShelfQuery, SkillShelfScanDto, SkillSourceDto, ToolCatalogQuery, ToolDto, TraceCommand,
-    TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto, WorkbenchMemoryProvenanceDto,
-    WorkbenchQuery, WorkbenchToolExecutionDto, WorkbenchTurnDto,
+    SkillShelfQuery, SkillShelfScanDto, SkillSourceDto, TaskBoardPanel, TaskBoardSnapshotDto,
+    TaskCountsDto, TaskPanelDto, TaskPanelError, TaskTimelineDto, ToolCatalogQuery, ToolDto,
+    TraceCommand, TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto,
+    WorkbenchMemoryProvenanceDto, WorkbenchQuery, WorkbenchToolExecutionDto, WorkbenchTurnDto,
 };
 use apeireth_governance::{Permission, PermissionPolicy};
 use apeireth_memory::{GovernedEpisode, MemoryGovernanceStore};
+use apeireth_orchestration::task_queue::{
+    TaskCaller, TaskEvent, TaskQueue, TaskQueueConfig, TaskQueueError, TaskRecord, TaskState,
+    TaskStore,
+};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use apeireth_runtime::canonical::{Runtime, Session, SessionStore};
@@ -1123,6 +1128,9 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // 技能库只读面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
         // `services.skills`)。
         skills: None,
+        // 任务面板面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.tasks`), 与 `tool.task_board` 工具面同队同账。
+        tasks: None,
     }
 }
 
@@ -1182,5 +1190,155 @@ impl SkillShelfQuery for CliSkillShelf {
             count,
             refused,
         })
+    }
+}
+
+/// 任务面板面适配 (组合根): 持久任务队列 → 面板一次快照读 + 人判重试。
+///
+/// 与 `tool.task_board` 工具面**同队同账** (同一 `sessions.sqlite3` 任务表);
+/// 这里持 [`TaskQueue::attach`] 附从句柄 —— 崩溃恢复只归工具面主句柄的
+/// [`TaskQueue::open`] (重复恢复会假记 `WakeRedelivered` 审计、重派在跑任务)。
+///
+/// **面板边界**: 本适配只投影读面与 [`TaskQueue::human_judge_retry`] (failed
+/// 只能人判, 显式动作不自动唤醒); 增/改派/完成走工具面 (人工审批档), 面板
+/// 越权面为零。
+pub struct CliTaskBoard {
+    queue: Arc<TaskQueue>,
+}
+
+impl CliTaskBoard {
+    /// 附到既有任务库上的面板句柄 (不跑崩溃恢复)。
+    pub fn attach(store: Arc<dyn TaskStore>) -> Self {
+        Self {
+            queue: Arc::new(TaskQueue::attach(store, TaskQueueConfig::default())),
+        }
+    }
+
+    /// 打开任务库文件并附上 (任务表与会话账本同库: `sessions.sqlite3`)。
+    pub fn attach_at(db: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let store = Arc::new(
+            apeireth_runtime_assembly::SqliteTaskStore::open(db)
+                .map_err(|error| format!("task queue store open failed: {error}"))?,
+        );
+        Ok(Self::attach(store))
+    }
+}
+
+/// 任务记录 + 同刻事件账 → 面板行 (列表与详情同源一形状)。
+fn project_task(record: &TaskRecord, journal: &[TaskEvent]) -> TaskPanelDto {
+    TaskPanelDto {
+        id: record.id.clone(),
+        title: record.title.clone(),
+        state: record.state.to_string(),
+        attempts: record.attempts,
+        assignee: record.assignee.clone(),
+        created_at_ms: record.created_at_ms,
+        updated_at_ms: record.updated_at_ms,
+        payload: record.payload.clone(),
+        timeline: timeline_for(&record.id, journal),
+    }
+}
+
+/// 按任务过滤事件账 → 时间线 (时间升序, 事件账本身就是只增时间序)。
+///
+/// 投影走事件的序列化形状 (kind/at_ms 冻结词表 + 其余字段进 detail), 不复述
+/// 事件词汇表 —— 新事件种类自动上时间线, 不会静默丢失。
+fn timeline_for(task_id: &str, journal: &[TaskEvent]) -> Vec<TaskTimelineDto> {
+    journal
+        .iter()
+        .filter_map(|event| {
+            let value = serde_json::to_value(event).ok()?;
+            let object = value.as_object()?;
+            let event_task = object
+                .get("task_id")
+                .or_else(|| object.get("parent_task_id"))?
+                .as_str()?;
+            if event_task != task_id {
+                return None;
+            }
+            let kind = object.get("kind")?.as_str()?.to_string();
+            let at_ms = object.get("at_ms")?.as_i64()?;
+            let mut rest = object.clone();
+            rest.remove("kind");
+            rest.remove("at_ms");
+            let detail = (!rest.is_empty()).then(|| serde_json::Value::Object(rest).to_string());
+            Some(TaskTimelineDto {
+                kind,
+                at_ms,
+                detail,
+            })
+        })
+        .collect()
+}
+
+/// 队列错误 → 面板错误帧归因 (HTTP 状态词表在网关面)。
+fn map_task_error(task_id: &str, error: TaskQueueError) -> TaskPanelError {
+    match error {
+        TaskQueueError::NotFound { .. } => TaskPanelError::NotFound {
+            task_id: task_id.to_string(),
+        },
+        TaskQueueError::InvalidTransition { from, .. } => TaskPanelError::InvalidState {
+            task_id: task_id.to_string(),
+            state: from.to_string(),
+        },
+        TaskQueueError::HumanOnly { action } => TaskPanelError::Refused {
+            reason: format!("{action} is human-judged only"),
+        },
+        other => TaskPanelError::Internal {
+            reason: other.to_string(),
+        },
+    }
+}
+
+#[async_trait]
+impl TaskBoardPanel for CliTaskBoard {
+    async fn task_snapshot(&self) -> Result<TaskBoardSnapshotDto, String> {
+        let snapshot = self.queue.snapshot().map_err(errstr)?;
+        let counts = snapshot.counts;
+        Ok(TaskBoardSnapshotDto {
+            tasks: snapshot
+                .tasks
+                .iter()
+                .map(|record| project_task(record, &snapshot.journal))
+                .collect(),
+            counts: TaskCountsDto {
+                pending: counts.pending,
+                assigned: counts.assigned,
+                running: counts.running,
+                done: counts.done,
+                failed: counts.failed,
+                blocked: counts.blocked,
+                total: counts.pending
+                    + counts.assigned
+                    + counts.running
+                    + counts.done
+                    + counts.failed
+                    + counts.blocked,
+            },
+        })
+    }
+
+    async fn human_judge_retry(
+        &self,
+        task_id: &str,
+        judge: &str,
+        reason: &str,
+    ) -> Result<TaskPanelDto, TaskPanelError> {
+        // 人判面: 面板是人的第二出口 (设计第一律), 署名来自网关解析链。
+        match self
+            .queue
+            .human_judge_retry(task_id, &TaskCaller::human(judge), reason)
+        {
+            Ok(record) => {
+                let journal = self
+                    .queue
+                    .journal()
+                    .map_err(|error| TaskPanelError::Internal {
+                        reason: error.to_string(),
+                    })?;
+                Ok(project_task(&record, &journal))
+            }
+            Err(error) => Err(map_task_error(task_id, error)),
+        }
     }
 }

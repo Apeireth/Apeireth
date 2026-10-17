@@ -50,6 +50,16 @@
 //! base64)、字符集转写 (全角/音译)、值内分隔符替换。这些留给出境面检测器
 //! 与后续阶段, 不在本件声称的防御面内。
 //!
+//! # 情感隐私类别 (拍板 ㉓ `FEELING`)
+//!
+//! `__AP_FEELING_<指纹12>__` 是占位族的第 9 个类别 (类别原语见
+//! [`apeireth_governance::input_security`])。**识别=登记簿驱动**: 情感隐私值
+//! 只经显式登记进入本会话登记簿 (调用方标注, 入口
+//! [`RedactionBridge::register_feeling`] / [`RedactionBridge::register_value`]),
+//! 之后与其余类别同待遇 —— 出境/回扫换占位、变体清扫、受控回程按登记簿还原。
+//! 词面 (`我很爱` / `我恨` / `我害怕` 类自述情感句) **只登记不强拦**: 词面
+//! 提示在治理面只作辅助提示, 不自动脱敏、不拦截、不升级裁决。
+//!
 //! # 接线状态 (0 装)
 //!
 //! 本件是机制面: [`crate::guardrail::ToolGuardrail::sweep_output_for_egress`]
@@ -254,6 +264,16 @@ impl RedactionBridge {
             surface: RedactionSurface::ExplicitRegistration,
         });
         RedactionPlaceholder::new(kind, &fingerprint)
+    }
+
+    /// 显式登记一个情感隐私值 (拍板 ㉓ `FEELING` 类别面)。
+    ///
+    /// 识别=登记簿驱动的登记口: 调用方标注这是自述情感值, 本会话登记簿记下
+    /// 后, 该值的裸/变体形态在出境与历史回扫面换 `__AP_FEELING_<指纹12>__`,
+    /// 受控回程按登记簿还原。词面启发式 (自述情感句) 只作辅助提示, 是否登记
+    /// 由调用方裁量 —— 未登记 = 不识别、不脱敏 (只登记不强拦)。
+    pub fn register_feeling(&mut self, value: &str) -> RedactionPlaceholder {
+        self.register_value(PiiKind::Feeling, value)
     }
 
     /// 出境脱敏: 真值面 → 占位符 (检测器命中 + 已登记值的裸/变体形态),
@@ -971,5 +991,34 @@ mod tests {
             "{}",
             report.text
         );
+    }
+
+    /// FEELING 情感隐私类别 (拍板 ㉓): 识别=登记簿驱动 —— 词面命中不脱敏;
+    /// 显式登记后换 `__AP_FEELING_<指纹12>__`, 受控回程按登记簿还原往返。
+    #[test]
+    fn feeling_is_registry_driven_and_roundtrips_through_the_bridge() {
+        const FEELING_VALUE: &str = "背刺";
+        let mut bridge = bridge(16);
+        let spoken = "我恨背刺, 真的恨";
+        // 未登记 = 不识别、不脱敏 (词面只登记不强拦, 文本原样)。
+        let untouched = bridge.redact_for_egress(spoken);
+        assert_eq!(untouched.text, spoken);
+        assert!(untouched.hits.is_empty(), "{:?}", untouched.hits);
+        // 显式登记 (调用方标注 FEELING) → 出境换 FEELING 占位。
+        let token = bridge.register_feeling(FEELING_VALUE);
+        assert_eq!(token.kind, PiiKind::Feeling);
+        assert!(
+            token.render().starts_with("__AP_FEELING_"),
+            "{}",
+            token.render()
+        );
+        let egress = bridge.redact_for_egress(spoken);
+        assert!(!egress.text.contains(FEELING_VALUE), "{}", egress.text);
+        assert!(egress.text.contains(&token.render()), "{}", egress.text);
+        assert!(egress.hits.iter().all(|hit| hit.kind == PiiKind::Feeling));
+        // 受控回程往返: 登记簿命中 → 还原真值。
+        let report = bridge.restore_for_local(&egress.text);
+        assert_eq!(report.text, spoken);
+        assert_eq!(report.restored, vec![token.fingerprint.clone()]);
     }
 }

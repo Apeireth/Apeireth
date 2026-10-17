@@ -27,6 +27,14 @@
 //!   `--motion reduced` 档全部退化为静态;
 //! - 重绘纪律: 只在数据变化或动画帧需要时重绘 (空闲 CPU 目标 <5%);
 //! - 数据诚实纪律: 没数据 = 显式 "—" / 暗格, 未接线数据源显式标注, 绝不编数。
+//!
+//! R4 交付面 (任务面板进驾驶舱):
+//! - 面板 7 任务面板 (`/tasks` / Ctrl+T 浮层): 任务列表 (id 短哈希/标题/状态
+//!   六态/尝试数/负责人) + 六态分组计数 + 选中详情 (payload 摘要/时间线);
+//! - 人判动作 (G 组核心: failed 只能人判): 选中 failed 任务按 `r` 触发
+//!   `human_judge_retry` (键盘→API→队列语义); 面板只做读 + 人判重试,
+//!   增删改派走工具面不进面板 (防越权);
+//! - 轮询刷新与既有面板组同节奏 (5s 数据轮询), 空态 "—" 同语法, 令牌门同源。
 
 #![forbid(unsafe_code)]
 
@@ -38,5 +46,6 @@ pub mod keys;
 pub mod markdown;
 pub mod render;
 pub mod state;
+pub mod tasks;
 pub mod telemetry;
 pub mod theme;

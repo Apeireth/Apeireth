@@ -316,20 +316,26 @@ pub struct CareRecord {
 ///
 /// 四件中的三件是本配置面: 勿扰窗口 / 频率上限 / 专注抑制; 第四件「关怀预算」
 /// 走同账本接缝 (见 [`super::engine::CareBudgetGate`]), 不在配置面。
+///
+/// 默认口径 (设计裁定 R1⑬⑭⑮): 勿扰窗口 23:00-8:00 (与发声面勿扰窗口同源),
+/// 频率 4h≤1 次 + 日≤5 次, 专注抑制 3 分钟。显式字段照常覆盖默认 (旧行为兼容)。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CareDiscipline {
-    /// 勿扰窗口起 (分钟 of day)。
-    #[serde(default)]
+    /// 勿扰窗口起 (分钟 of day; 缺省 = 23:00 默认窗, 显式 null = 关窗)。
+    #[serde(default = "default_quiet_start_minutes")]
     pub quiet_start_minutes: Option<u32>,
-    /// 勿扰窗口止 (分钟 of day; 跨午夜 = 起点 > 终点)。
-    #[serde(default)]
+    /// 勿扰窗口止 (分钟 of day; 跨午夜 = 起点 > 终点; 缺省 = 08:00 默认窗)。
+    #[serde(default = "default_quiet_end_minutes")]
     pub quiet_end_minutes: Option<u32>,
-    /// 频率上限: 每 `frequency_window_hours` 小时最多 `frequency_max` 次。
+    /// 频率上限 (滚动窗口档): 每 `frequency_window_hours` 小时最多 `frequency_max` 次。
     #[serde(default = "default_frequency_max")]
     pub frequency_max: u32,
     /// 频率窗口 (小时)。
     #[serde(default = "default_frequency_window_hours")]
     pub frequency_window_hours: u32,
+    /// 频率上限 (日档): 每个 UTC 日最多 `daily_max` 次 (与滚动窗口档同时生效)。
+    #[serde(default = "default_daily_max")]
+    pub daily_max: u32,
     /// 专注抑制: 距上次交互不足此分钟数 = 连续交互期, 不打扰。
     #[serde(default = "default_focus_gap_minutes")]
     pub focus_gap_minutes: u32,
@@ -338,16 +344,37 @@ pub struct CareDiscipline {
     pub catchup_minutes: u32,
 }
 
+/// 默认勿扰窗口起 = 23:00 (设计裁定 R1⑭; 与发声面 [`QuietHours`] 默认同源)。
+///
+/// [`QuietHours`]: 语义参照发声面安静纪律 (同一窗口值, 同源接缝见
+/// runtime-assembly 的 `voice_quiet_hours_from_care_rules`)。
+fn default_quiet_start_minutes() -> Option<u32> {
+    Some(23 * 60)
+}
+
+/// 默认勿扰窗口止 = 08:00 (跨午夜: 起 > 止)。
+fn default_quiet_end_minutes() -> Option<u32> {
+    Some(8 * 60)
+}
+
+/// 默认频率上限 (滚动窗口档) = 每 4 小时≤1 次 (设计裁定 R1⑬)。
 fn default_frequency_max() -> u32 {
-    2
+    1
 }
 
+/// 默认频率窗口 = 4 小时 (设计裁定 R1⑬: 4h≤1 次)。
 fn default_frequency_window_hours() -> u32 {
-    12
+    4
 }
 
+/// 默认频率上限 (日档) = 每日≤5 次 (设计裁定 R1⑬)。
+fn default_daily_max() -> u32 {
+    5
+}
+
+/// 默认专注抑制 = 3 分钟 (设计裁定 R1⑮: 连续交互 3 分钟内不打扰)。
 fn default_focus_gap_minutes() -> u32 {
-    15
+    3
 }
 
 fn default_catchup_minutes() -> u32 {
@@ -357,10 +384,11 @@ fn default_catchup_minutes() -> u32 {
 impl Default for CareDiscipline {
     fn default() -> Self {
         Self {
-            quiet_start_minutes: None,
-            quiet_end_minutes: None,
+            quiet_start_minutes: default_quiet_start_minutes(),
+            quiet_end_minutes: default_quiet_end_minutes(),
             frequency_max: default_frequency_max(),
             frequency_window_hours: default_frequency_window_hours(),
+            daily_max: default_daily_max(),
             focus_gap_minutes: default_focus_gap_minutes(),
             catchup_minutes: default_catchup_minutes(),
         }
@@ -393,6 +421,9 @@ impl CareDiscipline {
         }
         if self.frequency_max == 0 {
             return Err("frequency_max must be at least 1".to_string());
+        }
+        if self.daily_max == 0 {
+            return Err("daily_max must be at least 1".to_string());
         }
         if self.frequency_window_hours == 0 || self.frequency_window_hours > CARE_TRIGGER_HOURS_MAX
         {
@@ -869,13 +900,21 @@ mod tests {
         assert!(!discipline.in_quiet_window(12 * 60), "白天不在窗口内");
         assert!(
             !CareDiscipline::default().in_quiet_window(12 * 60),
-            "无窗口 = 不拦"
+            "默认窗口 (23:00-8:00) 白天不拦"
+        );
+        assert!(
+            CareDiscipline::default().in_quiet_window(23 * 60)
+                && CareDiscipline::default().in_quiet_window(3 * 60),
+            "默认窗口覆盖深夜 (设计裁定 R1⑭)"
         );
 
         let mut bad = CareDiscipline::default();
         bad.frequency_max = 0;
         assert!(bad.validate().is_err());
         bad.frequency_max = 1;
+        bad.daily_max = 0;
+        assert!(bad.validate().is_err(), "daily_max 至少 1 (坏配置拒开拒写)");
+        bad.daily_max = 1;
         bad.quiet_start_minutes = Some(1440);
         assert!(bad.validate().is_err());
     }

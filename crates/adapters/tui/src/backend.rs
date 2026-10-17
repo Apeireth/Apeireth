@@ -4,6 +4,7 @@
 //! 需要什么」的最小端口 (与桌面端共用同一后端, 0 重复实现)。测试用
 //! [`MockBackend`] 把命令链路全程记录下来。
 
+use crate::tasks::{TaskBoardSnapshot, TaskRow};
 use crate::telemetry::TelemetrySnapshot;
 
 /// token 计量快照。
@@ -198,6 +199,15 @@ pub trait CockpitBackend: Send {
     /// 诚实纪律: 能探到的节给真数; 探不到的节显式 None + 备注 (未接线 /
     /// 窗口饱和 / 端点失败), 不编数; 只有整体连不上才报 Err。
     fn fetch_telemetry(&mut self) -> BackendResult<TelemetrySnapshot>;
+
+    /// 任务面板一次快照读 (只读: 任务行 + 六态分组计数 + 各自时间线)。
+    fn fetch_tasks(&mut self) -> BackendResult<TaskBoardSnapshot>;
+
+    /// 人判重试 (G 组核心: failed 只能人判) —— 面板**唯一**动作面, 走后端
+    /// 队列 `human_judge_retry` 语义 (Failed → Pending, 显式动作不自动唤醒)。
+    ///
+    /// 面板无增删改派口 (防越权): 增/删/改派/完成走工具面, 不在本端口。
+    fn human_judge_retry(&mut self, task_id: &str, reason: &str) -> BackendResult<TaskRow>;
 }
 
 /// 链路调用记录 (mock 后端的证据链)。
@@ -232,6 +242,15 @@ pub enum BackendCall {
     },
     /// 拉取遥测快照。
     FetchTelemetry,
+    /// 拉取任务面板快照 (只读)。
+    FetchTasks,
+    /// 人判重试 (failed 只能人判)。
+    HumanJudgeRetry {
+        /// 任务 id。
+        task_id: String,
+        /// 人判理由。
+        reason: String,
+    },
 }
 
 /// 脚本化 mock 后端: 记录全部调用, 回放预置增量。
@@ -267,6 +286,12 @@ pub struct MockBackend {
     pub telemetry: TelemetrySnapshot,
     /// 遥测拉取失败原因 (None = 成功)。
     pub fail_telemetry: Option<String>,
+    /// 预置任务面板快照。
+    pub tasks: TaskBoardSnapshot,
+    /// 任务快照拉取失败原因 (None = 成功)。
+    pub fail_tasks: Option<String>,
+    /// 人判重试失败原因 (None = 成功)。
+    pub fail_retry: Option<String>,
 }
 
 impl MockBackend {
@@ -376,6 +401,44 @@ impl CockpitBackend for MockBackend {
             Some(detail) => Err(BackendError::Protocol(detail.clone())),
             None => Ok(self.telemetry.clone()),
         }
+    }
+
+    fn fetch_tasks(&mut self) -> BackendResult<TaskBoardSnapshot> {
+        self.calls.push(BackendCall::FetchTasks);
+        match &self.fail_tasks {
+            Some(detail) => Err(BackendError::Protocol(detail.clone())),
+            None => Ok(self.tasks.clone()),
+        }
+    }
+
+    fn human_judge_retry(&mut self, task_id: &str, reason: &str) -> BackendResult<TaskRow> {
+        self.calls.push(BackendCall::HumanJudgeRetry {
+            task_id: task_id.to_string(),
+            reason: reason.to_string(),
+        });
+        if let Some(detail) = &self.fail_retry {
+            return Err(BackendError::Protocol(detail.clone()));
+        }
+        let Some(row) = self
+            .tasks
+            .rows
+            .iter()
+            .find(|row| row.id == task_id)
+            .cloned()
+        else {
+            return Err(BackendError::Http {
+                status: 404,
+                code: "not_found".to_string(),
+                message: format!("任务 {task_id} 不存在"),
+                solution: "刷新任务面板后重试".to_string(),
+            });
+        };
+        // 队列语义: 人判重试 = Failed → Pending (mock 同形状回放)。
+        Ok(TaskRow {
+            state: Some(crate::tasks::TaskStateView::Pending),
+            state_label: "pending".to_string(),
+            ..row
+        })
     }
 }
 

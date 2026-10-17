@@ -45,8 +45,9 @@ use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, EducationModule,
     FetchModule, FilesystemModule, GitWriteModule, McpModule, RepoModule, SearchModule,
     SelfStatusModule, ShellModule, SkillDistillModule, SkillSearchModule, TaskBoardModule,
-    VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
+    TraitReportModule, VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
 };
+use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
 
 /// Adapter that exposes memory's context-window implementation through the
 /// runtime-owned projection port. It is kept in assembly so the runtime kernel
@@ -222,6 +223,12 @@ pub struct ProductionModulesConfig {
     /// 挂在记忆写入模块的整编触发点 (`with_persona_layer`): [`Self::consolidation`]
     /// 关或人格层落库面缺席时显式不跑 (0 装诚实), 名册按实际注册条件取值。
     pub persona_consolidation: bool,
+    /// V4-b 散列增量门 (默认关): 整编触发点上先查摄入散列门 —— 整编素材
+    /// 同源同散列 = 跳过重复整编 (省算力防重复记忆), 变内容照常重摄。
+    ///
+    /// 挂在记忆写入模块的整编触发点 (`with_ingest_gate`): [`Self::consolidation`]
+    /// 关或散列门落库面缺席时显式不跑 (0 装诚实), 名册按实际注册条件取值。
+    pub consolidation_hash_gate: bool,
     /// Register the reflexion failure-feedback module (TurnStart lessons +
     /// AfterTurn judge-failure sedimentation). Off by default.
     pub reflexion: bool,
@@ -293,6 +300,13 @@ pub struct ProductionModulesConfig {
     ///
     /// 缺位时两级技能工具都注册不成 (注册即闸), 名册照实报 false。
     pub skills_dir: Option<PathBuf>,
+    /// Register the personality growth report (`tool.trait_report`, 裁定 ⑤)。
+    ///
+    /// 性格周报: 近 7 天四杆移动量 / 移动原因 top / 锁定态。**只读档零审批**
+    /// (与 `tool.self_status` 同档)。数据 = 成长计既有账 (`tuning-log.jsonl`,
+    /// 不新造账); 注册条件 = 成长账落位已注入 (注册即闸), 生产装配默认注入 =
+    /// 默认可用。自述性格节 (锁定态 + 最近移动) 与本工具同账同源。
+    pub trait_report: Option<TraitGrowthPaths>,
 }
 
 impl Default for ProductionModulesConfig {
@@ -322,6 +336,7 @@ impl Default for ProductionModulesConfig {
             memory_injection: false,
             consolidation: false,
             persona_consolidation: false,
+            consolidation_hash_gate: false,
             reflexion: false,
             partner_bond: false,
             morphology_recall: false,
@@ -338,6 +353,7 @@ impl Default for ProductionModulesConfig {
             skill_distill: false,
             skill_search: false,
             skills_dir: None,
+            trait_report: None,
         }
     }
 }
@@ -389,6 +405,9 @@ pub struct ProductionBackends {
     /// V4-a 人格记忆层落库面 (人格提取步的 `persona_memory_*` 分表).
     /// 缺位 = 人格提取步显式不跑 (默认未接线)。
     pub persona_layer: Option<Arc<dyn apeireth_memory::PersonaMemoryStore>>,
+    /// V4-b 保鲜回路散列增量门落库面 (散列账 `source_hash` 与记忆库同库).
+    /// 缺位 = 整编散列门显式不跑 (默认未接线)。
+    pub ingest_gate: Option<Arc<dyn apeireth_memory::IngestGate>>,
     /// Reflexion failure-feedback store (2026-10-06 W2 记忆闭环批).
     pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
     /// W2 §4.2: partner 羁绊存储 (InMemoryPartnerStore 或未来 sqlite 实现)。
@@ -486,6 +505,9 @@ impl ProductionModules {
         // V4-a 人格提取步的生效值 = 开关 AND 人格层落库面 (面缺席 = 显式不跑).
         roster_config.persona_consolidation =
             config.persona_consolidation && backends.persona_layer.is_some();
+        // V4-b 散列增量门的生效值 = 开关 AND 散列门落库面 (面缺席 = 显式不跑)。
+        roster_config.consolidation_hash_gate =
+            config.consolidation_hash_gate && backends.ingest_gate.is_some();
         let self_status_roster = config.self_status.then(|| {
             roster_from_config(
                 &roster_config,
@@ -671,6 +693,15 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // 性格周报 (`tool.trait_report`, 裁定 ⑤): 近 7 天四杆移动量 / 移动原因
+        // top / 锁定态, 数据 = 成长计既有账 (不新造账)。**只读档零审批**
+        // (与 `tool.self_status` 同档); 注册即闸 (成长账落位注入才注册), 名册
+        // 按实际注册条件取值。自述性格节与工具面同账 (trait_status_probe)。
+        if let Some(paths) = &config.trait_report {
+            let provider = TraitReportModule::new(trait_growth_probe(paths.clone()));
+            capabilities.extend(provider.capabilities());
+        }
+
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
         // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
         // 原因, 注册与其余字段不受影响。
@@ -715,6 +746,11 @@ impl ProductionModules {
             }
             if let Some(queue) = &config.task_board {
                 source = source.with_task_board_probe(task_board_status_probe(Arc::clone(queue)));
+            }
+            // 性格节真值 (裁定 ④⑤): 锁定态 + 最近移动与 `tool.trait_report`
+            // 同一成长计既有账 (同账同源, 缺落位 = 显式 null + 原因)。
+            if let Some(paths) = &config.trait_report {
+                source = source.with_trait_growth_probe(trait_status_probe(paths.clone()));
             }
             let provider = SelfStatusModule::new(Arc::new(source));
             capabilities.extend(provider.capabilities());
@@ -941,6 +977,13 @@ impl ProductionModules {
             if config.persona_consolidation {
                 if let Some(persona) = &backends.persona_layer {
                     module = module.with_persona_layer(Arc::clone(persona));
+                }
+            }
+            // V4-b 散列增量门: 开关 + 散列门落库面齐备才接 (默认未接线);
+            // 运行触发点 = 整编触发点 (with_consolidation), 同一条整编管线。
+            if config.consolidation_hash_gate {
+                if let Some(gate) = &backends.ingest_gate {
+                    module = module.with_ingest_gate(Arc::clone(gate));
                 }
             }
             if let (Some(wiki), Some(graph), Some(associations)) =

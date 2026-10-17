@@ -349,6 +349,97 @@ fn spawn_chain_depth_fuse_refuses_deep_chains_and_audits() {
     assert_eq!(queue.list().expect("list").len(), 3, "被熔断的不落队");
 }
 
+/// 默认熔断深度 = 5 层 (设计裁定 R1⑳): 默认配置 5 层链放行、第 6 层拒绝即帧;
+/// 显式配置照常覆盖 (旧行为兼容: 旧 4 层口径可显式表达)。
+#[test]
+fn default_chain_depth_fuse_is_five_layers_and_explicit_config_still_wins() {
+    assert_eq!(
+        TaskQueueConfig::default().max_chain_depth,
+        5,
+        "环路熔断默认深度 = 5 (设计裁定 R1⑳)"
+    );
+    let store = store();
+    let queue = TaskQueue::open_with_clock(
+        Arc::clone(&store),
+        TaskQueueConfig::default(),
+        fixed_clock(1_700_000_000_000),
+    )
+    .expect("queue opens");
+
+    let EnqueueOutcome::Enqueued {
+        task: mut parent, ..
+    } = queue
+        .enqueue(TaskSpec::new("根", serde_json::Value::Null))
+        .expect("root")
+    else {
+        panic!("根任务必须是新任务")
+    };
+    for depth in 1..=5 {
+        parent = match queue
+            .enqueue(
+                TaskSpec::new(format!("第 {depth} 层"), serde_json::Value::Null)
+                    .with_parent(parent.id.clone()),
+            )
+            .expect("child within the default fuse")
+        {
+            EnqueueOutcome::Enqueued { task, .. } => {
+                assert_eq!(task.chain_depth, depth);
+                task
+            }
+            _ => panic!("默认熔断深度内的子任务必须入队"),
+        };
+    }
+    let refused = queue
+        .enqueue(TaskSpec::new("第 6 层", serde_json::Value::Null).with_parent(parent.id.clone()));
+    assert!(
+        matches!(
+            refused,
+            Err(TaskQueueError::ChainDepthExceeded {
+                depth: 6,
+                max_depth: 5,
+                ..
+            })
+        ),
+        "默认 5 层熔断: 第 6 层必须拒绝即帧: {refused:?}"
+    );
+
+    // 显式配置覆盖 (旧行为兼容: 显式 1 层照常熔断, 默认值不锁死)。
+    let explicit = TaskQueue::open_with_clock(
+        store,
+        TaskQueueConfig {
+            max_attempts: 3,
+            max_chain_depth: 1,
+        },
+        fixed_clock(1_700_000_000_000),
+    )
+    .expect("queue opens");
+    let EnqueueOutcome::Enqueued { task: root, .. } = explicit
+        .enqueue(TaskSpec::new("显式根", serde_json::Value::Null))
+        .expect("root")
+    else {
+        panic!("根任务必须是新任务")
+    };
+    let EnqueueOutcome::Enqueued { task: child, .. } = explicit
+        .enqueue(TaskSpec::new("显式子", serde_json::Value::Null).with_parent(root.id.clone()))
+        .expect("显式 1 层内的子任务入队")
+    else {
+        panic!("显式熔断深度内的子任务必须是新任务")
+    };
+    let refused = explicit
+        .enqueue(TaskSpec::new("显式孙", serde_json::Value::Null).with_parent(child.id.clone()));
+    assert!(
+        matches!(
+            refused,
+            Err(TaskQueueError::ChainDepthExceeded {
+                depth: 2,
+                max_depth: 1,
+                ..
+            })
+        ),
+        "显式配置照常覆盖默认深度: {refused:?}"
+    );
+}
+
 // ============================================================================
 // 6. 结算挂账: 一回合一段, 无重复记账 (金额沿三维账本既有口径)
 // ============================================================================
@@ -732,4 +823,85 @@ fn invalid_specs_are_rejected_as_frames_not_silently_accepted() {
     // 不存在的任务 = NotFound (不静默建)。
     let missing: TaskQueueResult<TaskRecord> = queue.complete("task-999", &human());
     assert!(matches!(missing, Err(TaskQueueError::NotFound { .. })));
+}
+
+// ============================================================================
+// 13. 面板一次快照读: 任务表 + 计数 + 事件账同一刻 (与 list/counts 同口径)
+// ============================================================================
+
+#[test]
+fn snapshot_reads_tasks_counts_and_journal_in_one_moment() {
+    let store = store();
+    let queue = open(Arc::clone(&store));
+    let EnqueueOutcome::Enqueued { task: first, .. } = queue
+        .enqueue(TaskSpec::new("快照甲", serde_json::json!({"step": 1})))
+        .expect("enqueue")
+    else {
+        panic!("必须是新任务");
+    };
+    let EnqueueOutcome::Enqueued { task: second, .. } = queue
+        .enqueue(TaskSpec::new("快照乙", serde_json::Value::Null).with_assignee("worker-a"))
+        .expect("enqueue")
+    else {
+        panic!("必须是新任务");
+    };
+    queue
+        .human_judge_fail(&first.id, &human(), "验收不过")
+        .expect("fail");
+
+    let snapshot = queue.snapshot().expect("snapshot");
+    // 排序与 list 同口径 (入队时刻, 同刻按 id)。
+    let listed: Vec<String> = queue
+        .list()
+        .expect("list")
+        .iter()
+        .map(|task| task.id.clone())
+        .collect();
+    let snapshotted: Vec<String> = snapshot.tasks.iter().map(|task| task.id.clone()).collect();
+    assert_eq!(snapshotted, listed);
+    // 计数与 counts 同口径 (一次读里同出, 不混两刻)。
+    assert_eq!(snapshot.counts, queue.counts().expect("counts"));
+    assert_eq!(snapshot.counts.failed, 1);
+    assert_eq!(snapshot.counts.assigned, 1);
+    // 事件账随同一刻读出: 人判失败审计在列。
+    assert!(snapshot.journal.iter().any(
+        |event| matches!(event, TaskEvent::FailureJudged { task_id, .. } if task_id == &first.id)
+    ));
+    assert!(snapshot.journal.iter().any(
+        |event| matches!(event, TaskEvent::Enqueued { task_id, .. } if task_id == &second.id)
+    ));
+}
+
+// ============================================================================
+// 14. 附从句柄: 同店第二把句柄不重复崩溃恢复 (不假记审计 / 不重派)
+// ============================================================================
+
+#[test]
+fn attached_handles_never_rerun_crash_recovery() {
+    let store = store();
+    let queue = open(Arc::clone(&store));
+    let EnqueueOutcome::Enqueued { task, .. } = queue
+        .enqueue(TaskSpec::new("在跑任务", serde_json::Value::Null).with_assignee("worker-a"))
+        .expect("enqueue")
+    else {
+        panic!("必须是新任务");
+    };
+    queue.drain_wakes().expect("drain");
+    queue.begin_execution(&task.id, &worker()).expect("begin");
+    let before = queue.journal().expect("journal").len();
+
+    // 附从句柄 (旁路面板): Running 原样在跑, 事件账不增, redelivered 不涨。
+    let attached = TaskQueue::attach_with_clock(
+        Arc::clone(&store),
+        TaskQueueConfig::default(),
+        fixed_clock(1_700_000_000_000),
+    );
+    let live = attached.get(&task.id).expect("get");
+    assert_eq!(live.state, TaskState::Running, "附从句柄不重派在跑任务");
+    assert_eq!(live.redelivered, 0);
+    assert_eq!(
+        attached.journal().expect("journal").len(),
+        before,
+        "附从句柄不产生任何恢复审计"
+    );
 }

@@ -37,6 +37,10 @@ tokio = { workspace = true }
 uuid = { workspace = true }
 # W2 §4.1 dreaming: dream 命令缺省日记日期 = 本地今天 (YYYY-MM-DD)
 chrono = { workspace = true }
+# 跨线补位 (宪章 §六.3 编译断点, 报备): lib 面 `src/exposure.rs` 按「文件写入
+# 统一走 fs_err」既有口径写文件 —— fs-err 原只在 dev 面, 机械补进 lib 依赖
+# (仅移面, 0 新外部依赖)。
+fs-err = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

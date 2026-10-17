@@ -292,7 +292,68 @@ CREATE INDEX IF NOT EXISTS idx_dedup_last_seen
         name: "V16__persona_memory_layer",
         sql: V16_SQL,
     },
+    // V4-b 记忆保鲜回路 (保鲜三件套): 散列账 source_hash (同源同散列去重) +
+    // 待摄取清单 ingest_queue (重启续摄 / 失败留队列) + 折入段账
+    // memory_fold_segments (增量折入: 同主题追加不重写, UPDATE/DELETE 触发器
+    // 机器钉死 append-only)。迁移 append-only: 只追加新版本, 老版本不改。
+    Migration {
+        version: 17,
+        name: "V17__memory_freshness_loop",
+        sql: V17_SQL,
+    },
 ];
+
+const V17_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS source_hash (
+    source        TEXT NOT NULL,
+    content_hash  TEXT NOT NULL,
+    first_seen_ms INTEGER NOT NULL,
+    last_seen_ms  INTEGER NOT NULL,
+    ingest_count  INTEGER NOT NULL DEFAULT 0,
+    skip_count    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (source, content_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_source_hash_last_seen
+    ON source_hash(last_seen_ms);
+CREATE TRIGGER IF NOT EXISTS source_hash_no_delete
+BEFORE DELETE ON source_hash BEGIN
+    SELECT RAISE(ABORT, 'source_hash: hard DELETE forbidden (ledger append-only)');
+END;
+
+CREATE TABLE IF NOT EXISTS ingest_queue (
+    id            TEXT PRIMARY KEY,
+    source        TEXT NOT NULL,
+    topic         TEXT NOT NULL,
+    content       TEXT NOT NULL,
+    content_hash  TEXT NOT NULL,
+    state         TEXT NOT NULL,
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    last_error    TEXT,
+    created_ms    INTEGER NOT NULL,
+    updated_ms    INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ingest_queue_source_hash
+    ON ingest_queue(source, content_hash);
+CREATE INDEX IF NOT EXISTS idx_ingest_queue_state
+    ON ingest_queue(state, created_ms);
+
+CREATE TABLE IF NOT EXISTS memory_fold_segments (
+    topic         TEXT NOT NULL,
+    seq           INTEGER NOT NULL,
+    content       TEXT NOT NULL,
+    content_hash  TEXT NOT NULL,
+    folded_at_ms  INTEGER NOT NULL,
+    PRIMARY KEY (topic, seq)
+);
+CREATE TRIGGER IF NOT EXISTS memory_fold_segments_no_rewrite
+BEFORE UPDATE ON memory_fold_segments BEGIN
+    SELECT RAISE(ABORT, 'memory_fold_segments: rewrite forbidden (append-only)');
+END;
+CREATE TRIGGER IF NOT EXISTS memory_fold_segments_no_delete
+BEFORE DELETE ON memory_fold_segments BEGIN
+    SELECT RAISE(ABORT, 'memory_fold_segments: hard DELETE forbidden');
+END;
+"#;
 
 const V16_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS persona_memory_entries (
@@ -1172,11 +1233,15 @@ mod tests {
         // migration 记录无重复.
         // 断言演进 (2026-10, V4-a 人格记忆批): 11 → 12 —— 迁移列表是 append-only
         // 增长面, 每加一条合法迁移本计数 +1 (钉「无重复」语义, 数字随迁移清单走).
+        // 断言演进 (2026-10-17, V4-b 记忆保鲜回路批): 12 → 13 —— 同上语义不变,
+        // 新增 V17__memory_freshness_loop (保鲜三件套三表)。
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            12,
-            "V5..V16 各一条 (V15 = M27 收编 dedup_fingerprints; V16 = V4-a 人格记忆层 persona_memory_* 分表)"
+            13,
+            "V5..V17 各一条 (V15 = M27 收编 dedup_fingerprints; V16 = V4-a 人格记忆层 \
+             persona_memory_* 分表; V17 = V4-b 记忆保鲜回路 source_hash/ingest_queue/\
+             memory_fold_segments)"
         );
     }
 

@@ -15,9 +15,10 @@ use apeireth_protocol::canonical::{ToolCall, ToolOutcome, ToolResult};
 use apeireth_tools_canonical::voice::mock::{MockBehavior, MockSynthEngine};
 use apeireth_tools_canonical::voice::{
     fixed_clock, system_synth_engine, voice_speak_capability, AbsentSynthEngine, PlaybackPolicy,
-    QuietHours, SpokenLedger, SpokenStatus, SynthEngine, VoiceSpeakBoundaryGuard, VoiceSpeakConfig,
-    VoiceSpeakParams, VoiceSpeakRiskMappingHook, VoiceSpeakTool, VOICE_SPEAK_CAPABILITY_ID,
-    VOICE_SPEAK_MAX_TEXT_CHARS, VOICE_SPEAK_TOOL_DESCRIPTION, VOICE_SPEAK_TOOL_NAME,
+    QuietHours, SpeakGate, SpokenLedger, SpokenStatus, SynthEngine, VoiceSpeakBoundaryGuard,
+    VoiceSpeakConfig, VoiceSpeakParams, VoiceSpeakRiskMappingHook, VoiceSpeakTool,
+    VOICE_SPEAK_CAPABILITY_ID, VOICE_SPEAK_MAX_TEXT_CHARS, VOICE_SPEAK_TOOL_DESCRIPTION,
+    VOICE_SPEAK_TOOL_NAME,
 };
 use apeireth_tools_canonical::{PreExecuteHook, PreExecuteRequest, PreVerdict};
 use serde_json::{json, Value};
@@ -35,7 +36,9 @@ fn call(arguments: Value) -> ToolCall {
 }
 
 fn args(text: &str) -> Value {
-    json!({ "text": text })
+    // 本文件的机械面用例是「关怀帧发声」: 申报 `scope: "care"` 过缺省发声
+    // 范围档 (范围自身的钉见 `scope_field_gates_the_frame_kind_on_the_tool_face`)。
+    json!({ "text": text, "scope": "care" })
 }
 
 fn expect_value(result: &ToolResult) -> Value {
@@ -105,7 +108,7 @@ async fn speak_invokes_the_injected_engine_with_resolved_params() {
     );
     let state = engine.state();
     let tool = capability(config(dir.path()), engine, authorized_policy());
-    let mut params = json!({ "text": "你好, 世界", "rate": 2, "volume": 80, "voice": "测试嗓" });
+    let mut params = json!({ "text": "你好, 世界", "scope": "care", "rate": 2, "volume": 80, "voice": "测试嗓" });
 
     let frame = expect_value(&tool.invoke(&call(params.clone())).await);
     assert_eq!(frame["status"], "spoken");
@@ -188,7 +191,9 @@ async fn unknown_or_missing_voice_is_an_honest_error_frame() {
     let tool = capability(config(dir2.path()), engine, authorized_policy());
     let message = expect_error(
         &tool
-            .invoke(&call(json!({ "text": "一句", "voice": "没有这把" })))
+            .invoke(&call(
+                json!({ "text": "一句", "scope": "care", "voice": "没有这把" }),
+            ))
             .await,
     );
     assert!(message.contains("未知嗓"), "{message}");
@@ -205,7 +210,8 @@ async fn unknown_or_missing_voice_is_an_honest_error_frame() {
 // 播放队列语义 (打断 / 串行) + 真停清理
 // ---------------------------------------------------------------------------
 
-/// 新话打断旧话 (缺省档): 旧话终态 `interrupted` 如实入账, 新话照播。
+/// 新话打断旧话 (显式打断档 `APEIRETH_VOICE_INTERRUPT=1`): 旧话终态
+/// `interrupted` 如实入账, 新话照播。
 #[tokio::test]
 async fn interrupt_policy_stops_the_previous_utterance() {
     let dir = temp_dir("interrupt");
@@ -535,6 +541,59 @@ async fn output_contract_freezes_the_report_shape() {
     );
 }
 
+/// 发声范围走工具面 (设计裁定 R1⑰): `scope` 字段判定 —— care 帧出声,
+/// chat 帧 (含未申报) 拒绝即帧; 显式 all 档全量出声 (旧行为兼容)。
+#[tokio::test]
+async fn scope_field_gates_the_frame_kind_on_the_tool_face() {
+    let dir = temp_dir("scope");
+    let engine = Arc::new(MockSynthEngine::new(MockBehavior::AutoComplete));
+    let state = engine.state();
+    let tool = capability(config(dir.path()), engine, authorized_policy());
+
+    let frame = expect_value(
+        &tool
+            .invoke(&call(json!({ "text": "关怀提醒一句", "scope": "care" })))
+            .await,
+    );
+    assert_eq!(frame["status"], "spoken");
+
+    let message = expect_error(
+        &tool
+            .invoke(&call(
+                json!({ "text": "常规划算对话回复", "scope": "chat" }),
+            ))
+            .await,
+    );
+    assert!(message.contains("发声范围"), "{message}");
+    let message = expect_error(&tool.invoke(&call(json!({ "text": "未申报一句" }))).await);
+    assert!(
+        message.contains("发声范围"),
+        "未申报按常规划算对话回复计: {message}"
+    );
+    assert_eq!(
+        state.created(),
+        1,
+        "范围外帧不开播 (引擎只造了 care 帧的播放)"
+    );
+
+    // 旧行为兼容: 显式 all 档 = 全量出声 (常规划算对话回复照常出声)。
+    let dir2 = temp_dir("scope-all");
+    let engine2 = Arc::new(MockSynthEngine::new(MockBehavior::AutoComplete));
+    let tool2 = capability(
+        config(dir2.path()).with_speak_gate(SpeakGate::All),
+        engine2,
+        authorized_policy(),
+    );
+    let frame = expect_value(
+        &tool2
+            .invoke(&call(
+                json!({ "text": "常规划算对话回复", "scope": "chat" }),
+            ))
+            .await,
+    );
+    assert_eq!(frame["status"], "spoken", "显式 all 档: chat 帧照播");
+}
+
 /// 合成失败 / 引擎缺席 = 错误即帧 (不假报已说)。
 #[tokio::test]
 async fn synthesis_failure_and_absent_engine_are_error_frames() {
@@ -573,7 +632,7 @@ async fn self_status_voice_section_reports_ledger_facts_honestly() {
     let engine = Arc::new(MockSynthEngine::new(MockBehavior::AutoComplete));
     let tool = VoiceSpeakTool::new(config(dir.path()), engine);
     let params: VoiceSpeakParams =
-        serde_json::from_value(json!({ "text": "最近说的一句" })).expect("params");
+        serde_json::from_value(json!({ "text": "最近说的一句", "scope": "care" })).expect("params");
 
     // 尚无语句: 空账本如实报 0 + 「尚无语句记录」。
     let empty = tool.ledger().status().expect("empty status");

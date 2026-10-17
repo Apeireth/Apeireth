@@ -1387,6 +1387,9 @@ pub struct MemoryWritebackModule {
     consolidation: bool,
     /// V4-a 人格记忆层: 人格提取步的落库面 (未配置 = 显式不跑, 默认未接线).
     persona: Option<Arc<dyn PersonaMemoryStore>>,
+    /// V4-b 保鲜回路: 散列增量门 (整编素材同源同散列 = 跳过重复整编, 省算力防
+    /// 重复记忆; 未配置 = 门显式不跑, 默认未接线).
+    ingest_gate: Option<Arc<dyn apeireth_memory::IngestGate>>,
     /// 「性格养成」第一铲: 整合节奏计数 (每会话回合数)。触发阈值 =
     /// 体验旋钮 ConsolidationCadence (每 N 回合一次, 1 = 每回合 = 现行为)。
     consolidation_turns: Mutex<std::collections::BTreeMap<String, u64>>,
@@ -1408,6 +1411,7 @@ impl MemoryWritebackModule {
             typed_sink: None,
             consolidation: false,
             persona: None,
+            ingest_gate: None,
             consolidation_turns: Mutex::new(std::collections::BTreeMap::new()),
             clock,
             metrics: ModuleMetrics::default(),
@@ -1465,6 +1469,15 @@ impl MemoryWritebackModule {
         self
     }
 
+    /// 接散列增量门 (V4-b 保鲜回路第①件): 整编触发点上先查门, 整编素材
+    /// **同源同散列** = 跳过重复整编 (省算力防重复记忆); 变内容照常重摄。
+    /// 默认未接线 —— 不配置即门显式不跑 (0 装诚实)。
+    #[must_use]
+    pub fn with_ingest_gate(mut self, gate: Arc<dyn apeireth_memory::IngestGate>) -> Self {
+        self.ingest_gate = Some(gate);
+        self
+    }
+
     /// Attach a unified memory extractor for source compatibility. The materializer
     /// owns extraction for AfterTurn writeback.
     #[must_use]
@@ -1493,6 +1506,28 @@ impl MemoryWritebackModule {
         let counter = turns.entry(session.to_string()).or_insert(0);
         *counter = counter.saturating_add(1);
         *counter % cadence == 0
+    }
+
+    /// 散列增量门的整编素材口径: 治理可见近期情节的**原始证据角色**
+    /// (`user`/`assistant`/`tool`) —— 派生记忆 (整理洞察/人格沉淀) 不入料,
+    /// 与整编提炼素材同口径 (W2: 派生记忆不再入料, 防自我增殖)。
+    ///
+    /// 素材分段 (`role\ncontent`) **去重后按字典序规范拼接** —— 同一素材集合
+    /// 恒得同一散列 (重复行 / 取回顺序都不误判重摄)。无原始证据 = `None`
+    /// (无料可去重, 照常整编, 不查门)。
+    fn consolidation_gate_material(&self, session: &str) -> Option<String> {
+        let episodes = self.persona_source_episodes(session).ok()?;
+        let mut segments: Vec<String> = episodes
+            .iter()
+            .filter(|episode| matches!(episode.role.as_str(), "user" | "assistant" | "tool"))
+            .map(|episode| format!("{}\n{}", episode.role, episode.content))
+            .collect();
+        if segments.is_empty() {
+            return None;
+        }
+        segments.sort();
+        segments.dedup();
+        Some(segments.join("\n\n"))
     }
 
     /// 人格提取步的素材口径: 治理可见的近期情节 (已遗忘情节不入料)。
@@ -1682,36 +1717,83 @@ impl AgentModule for MemoryWritebackModule {
                 // (APEIRETH_TUNE_CONSOLIDATION_CADENCE: 每 N 回合一次, 1 = 每回合
                 // = 现行为, 零变化; 非法值回 1)。
                 if self.consolidation && self.consolidation_due(&session) {
-                    if let Some(coord) = &self.coordinator {
-                        match coord.run_consolidation(&session) {
-                            Ok(report) => {
-                                for insight in report.extracted_insights {
-                                    let episode = Episode {
-                                        id: hash_id("ep-consolidation", &[&insight]),
-                                        timestamp: now,
-                                        role: "consolidation".into(),
-                                        content: format!("[记忆整理洞察] {insight}"),
-                                        session_id: session.clone(),
-                                    };
-                                    if coord.writeback_episode(&episode).is_err() {
-                                        self.metrics.warning();
-                                    }
-                                }
-                            }
-                            Err(_) => self.metrics.warning(),
-                        }
-                    }
-                    // V4-a 人格提取步: 从近期情节提炼人格增量 → 合并策略 (同类合并 /
-                    // 矛盾标注「人格张力」, 不静默覆盖) → 人格层落库。与夜间整编共用
-                    // 同一条管线; persona 存储未配置 = 显式不跑 (默认未接线)。
-                    if let Some(persona) = &self.persona {
-                        match self.persona_source_episodes(&session) {
-                            Ok(episodes) => {
-                                if consolidate_persona(persona.as_ref(), &episodes, now).is_err() {
+                    // V4-b 散列增量门 (保鲜三件套第①件): 整编素材内容散列查门 ——
+                    // 同源同散列 = 跳过重复整编 (省算力防重复记忆), 变内容照常
+                    // 重摄。记账语义: 跳过即记去重计数; 摄取记账在整编步**全部
+                    // 成功后** (失败不污染账, 下次照常重摄); 门自身故障 fail-open
+                    // 照常整编 (真因进 warning 计数, 不静默降级也不挡记忆固化)。
+                    let gate_source = format!("consolidation:{session}");
+                    let gate_material = self.consolidation_gate_material(&session);
+                    let now_ms = now.saturating_mul(1_000);
+                    let mut skip_round = false;
+                    if let (Some(gate), Some(material)) = (&self.ingest_gate, &gate_material) {
+                        match gate.check(&gate_source, material) {
+                            Ok(apeireth_memory::GateDecision::SkipDuplicate { .. }) => {
+                                skip_round = true;
+                                if gate.mark_skipped(&gate_source, material, now_ms).is_err() {
                                     self.metrics.warning();
                                 }
                             }
+                            Ok(apeireth_memory::GateDecision::Ingest { .. }) => {}
                             Err(_) => self.metrics.warning(),
+                        }
+                    }
+                    let mut ran_any = false;
+                    let mut round_ok = true;
+                    if !skip_round {
+                        if let Some(coord) = &self.coordinator {
+                            ran_any = true;
+                            match coord.run_consolidation(&session) {
+                                Ok(report) => {
+                                    for insight in report.extracted_insights {
+                                        let episode = Episode {
+                                            id: hash_id("ep-consolidation", &[&insight]),
+                                            timestamp: now,
+                                            role: "consolidation".into(),
+                                            content: format!("[记忆整理洞察] {insight}"),
+                                            session_id: session.clone(),
+                                        };
+                                        if coord.writeback_episode(&episode).is_err() {
+                                            self.metrics.warning();
+                                            round_ok = false;
+                                        }
+                                    }
+                                }
+                                Err(_) => {
+                                    self.metrics.warning();
+                                    round_ok = false;
+                                }
+                            }
+                        }
+                        // V4-a 人格提取步: 从近期情节提炼人格增量 → 合并策略 (同类合并 /
+                        // 矛盾标注「人格张力」, 不静默覆盖) → 人格层落库。与夜间整编共用
+                        // 同一条管线; persona 存储未配置 = 显式不跑 (默认未接线)。
+                        if let Some(persona) = &self.persona {
+                            ran_any = true;
+                            match self.persona_source_episodes(&session) {
+                                Ok(episodes) => {
+                                    if consolidate_persona(persona.as_ref(), &episodes, now)
+                                        .is_err()
+                                    {
+                                        self.metrics.warning();
+                                        round_ok = false;
+                                    }
+                                }
+                                Err(_) => {
+                                    self.metrics.warning();
+                                    round_ok = false;
+                                }
+                            }
+                        }
+                        // 整编成功才记摄入账 (失败不污染账 = 同素材下次仍可重摄)。
+                        if ran_any && round_ok {
+                            if let (Some(gate), Some(material)) =
+                                (&self.ingest_gate, &gate_material)
+                            {
+                                if gate.mark_ingested(&gate_source, material, now_ms).is_err() {
+                                    self.metrics.warning();
+                                }
+                            }
                         }
                     }
                 }
@@ -3146,6 +3228,330 @@ mod tests {
             .filter(|episode| episode.role == "consolidation")
             .map(|episode| episode.id)
             .collect()
+    }
+
+    /// 脚本化散列门 (测试用): 按预设判定回答, 记录两笔记账动作。
+    struct ScriptedGate {
+        decision: std::sync::Mutex<Result<apeireth_memory::GateDecision, String>>,
+        calls: std::sync::Mutex<Vec<&'static str>>,
+    }
+
+    impl ScriptedGate {
+        fn new(decision: Result<apeireth_memory::GateDecision, String>) -> Arc<Self> {
+            Arc::new(Self {
+                decision: std::sync::Mutex::new(decision),
+                calls: std::sync::Mutex::new(Vec::new()),
+            })
+        }
+
+        fn calls(&self) -> Vec<&'static str> {
+            self.calls.lock().unwrap().clone()
+        }
+    }
+
+    impl apeireth_memory::IngestGate for ScriptedGate {
+        fn check(
+            &self,
+            _source: &str,
+            content: &str,
+        ) -> Result<apeireth_memory::GateDecision, String> {
+            assert!(!content.trim().is_empty(), "门素材不得为空");
+            self.calls.lock().unwrap().push("check");
+            self.decision.lock().unwrap().clone()
+        }
+
+        fn mark_ingested(&self, _source: &str, _content: &str, _now_ms: i64) -> Result<(), String> {
+            self.calls.lock().unwrap().push("ingested");
+            Ok(())
+        }
+
+        fn mark_skipped(&self, _source: &str, _content: &str, _now_ms: i64) -> Result<u64, String> {
+            self.calls.lock().unwrap().push("skipped");
+            Ok(1)
+        }
+    }
+
+    /// V4-b 散列增量门: 同源同散列 = 跳过**整轮**重复整编 (省算力防重复记忆);
+    /// 跳过记去重计数, 不记摄入账。
+    #[tokio::test]
+    async fn hash_gate_skips_a_duplicate_consolidation_round() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        memory
+            .put_episode(&Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "we resolved the build error: xyz".into(),
+                session_id: session.to_string(),
+            })
+            .unwrap();
+        let coordinator = Arc::new(MemoryCoordinator::new(memory.clone(), memory.clone()));
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "resolved the issue");
+        let gate = ScriptedGate::new(Ok(apeireth_memory::GateDecision::SkipDuplicate {
+            content_hash: "0".repeat(16),
+            first_seen_ms: 1,
+            skip_count: 0,
+        }));
+
+        let module = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_consolidation()
+            .with_ingest_gate(gate.clone());
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&candidate),
+                    &invoker,
+                    MEMORY_WRITEBACK_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            insight_ids(&memory, &session.to_string()).is_empty(),
+            "跳过重复整编 = 整轮不跑 (不产任何洞察)"
+        );
+        assert_eq!(
+            gate.calls(),
+            vec!["check", "skipped"],
+            "只查门 + 记去重计数; 摄入记账不得出现"
+        );
+    }
+
+    /// V4-b 散列增量门 fail-open: 门自身故障不挡记忆固化 —— 照常整编, 记账
+    /// 按**整编结局**走 (整编成功 = 如实记一笔摄入, 不因查门失败漏记/伪造)。
+    #[tokio::test]
+    async fn hash_gate_failures_do_not_block_consolidation() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        memory
+            .put_episode(&Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "we resolved the build error: xyz".into(),
+                session_id: session.to_string(),
+            })
+            .unwrap();
+        let coordinator = Arc::new(MemoryCoordinator::new(memory.clone(), memory.clone()));
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "resolved the issue");
+        let gate = ScriptedGate::new(Err("gate store down".to_string()));
+
+        let module = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_consolidation()
+            .with_ingest_gate(gate.clone());
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&candidate),
+                    &invoker,
+                    MEMORY_WRITEBACK_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            insight_ids(&memory, &session.to_string()).len(),
+            2,
+            "门故障 fail-open: 整编照常跑"
+        );
+        assert_eq!(
+            gate.calls(),
+            vec!["check", "ingested"],
+            "查门失败不挡记账: 整编成功照常记摄入 (账按结局, 不按查门结果)"
+        );
+    }
+
+    /// V4-b 记账语义: 整编成功后才记摄入账 (一次成功整编 = 恰好一笔)。
+    #[tokio::test]
+    async fn hash_gate_marks_ingested_once_after_a_successful_round() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        memory
+            .put_episode(&Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "we resolved the build error: xyz".into(),
+                session_id: session.to_string(),
+            })
+            .unwrap();
+        let coordinator = Arc::new(MemoryCoordinator::new(memory.clone(), memory.clone()));
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let candidate = NormalizedResponse::text("answer-1", "fake", "resolved the issue");
+        let gate = ScriptedGate::new(Ok(apeireth_memory::GateDecision::Ingest {
+            content_hash: "0".repeat(16),
+        }));
+
+        let module = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_consolidation()
+            .with_ingest_gate(gate.clone());
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&candidate),
+                    &invoker,
+                    MEMORY_WRITEBACK_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            gate.calls(),
+            vec!["check", "ingested"],
+            "放行 → 整编 → 成功后恰一笔摄入记账"
+        );
+    }
+
+    /// V4-b 三件套端到端 (真散列门): 同素材第二轮跳过 (去重计数 +1, 不产重复
+    /// 记忆); 变素材照常重摄 (去重计数不再涨)。
+    #[tokio::test]
+    async fn hash_gate_dedups_identical_material_and_reingests_changes() {
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        memory
+            .put_episode(&Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "we resolved the build error: xyz".into(),
+                session_id: session.to_string(),
+            })
+            .unwrap();
+        let coordinator = Arc::new(MemoryCoordinator::new(memory.clone(), memory.clone()));
+        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
+            apeireth_core::kernel::Timestamp::from_epoch_millis(1_700_000_000_000)
+                .unwrap()
+                .as_datetime(),
+        ));
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("hi")];
+        let gate_store = Arc::new(apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap());
+        let module = MemoryWritebackModule::new(memory.clone(), Arc::clone(&clock))
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_consolidation()
+            .with_ingest_gate(gate_store.clone());
+
+        // 第一轮: 素材首见 = 放行整编。
+        let first = NormalizedResponse::text("answer-1", "fake", "resolved the issue");
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&first),
+                    &invoker,
+                    MEMORY_WRITEBACK_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        let after_first = insight_ids(&memory, &session.to_string());
+        assert!(!after_first.is_empty(), "第一轮必须整编");
+        assert_eq!(
+            gate_store.freshness_status().unwrap().dedup_skipped,
+            0,
+            "首见不计去重"
+        );
+
+        // 第二轮: 同素材 (同回合内容重复到会) = 跳过重复整编。
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&first),
+                    &invoker,
+                    MEMORY_WRITEBACK_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            insight_ids(&memory, &session.to_string()),
+            after_first,
+            "跳过重复整编 = 不产重复记忆"
+        );
+        assert_eq!(
+            gate_store.freshness_status().unwrap().dedup_skipped,
+            1,
+            "去重计数真值 +1"
+        );
+
+        // 第三轮: 素材有变 = 变内容重摄 (去重计数不再涨, 新洞察落库)。
+        let second = NormalizedResponse::text("answer-2", "fake", "fixed the second issue");
+        module
+            .on_hook(
+                HookPoint::AfterTurn,
+                &context(
+                    &session,
+                    &messages,
+                    Some(&second),
+                    &invoker,
+                    MEMORY_WRITEBACK_MODULE_ID,
+                ),
+            )
+            .await
+            .unwrap();
+        let after_third = insight_ids(&memory, &session.to_string());
+        assert!(
+            after_third.len() > after_first.len(),
+            "变内容必须重摄整编: {after_first:?} -> {after_third:?}"
+        );
+        assert_eq!(
+            gate_store.freshness_status().unwrap().dedup_skipped,
+            1,
+            "重摄不去重"
+        );
     }
 
     /// V4-a 人格提取步: 整编触发点上从近期情节提炼人格增量 → 人格层落库;

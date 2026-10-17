@@ -379,6 +379,7 @@ impl ToolCapability for CareScheduleTool {
                         "quiet_end_minutes": body.discipline.quiet_end_minutes,
                         "frequency_max": body.discipline.frequency_max,
                         "frequency_window_hours": body.discipline.frequency_window_hours,
+                        "daily_max": body.discipline.daily_max,
                         "focus_gap_minutes": body.discipline.focus_gap_minutes,
                         "catchup_minutes": body.discipline.catchup_minutes,
                     },

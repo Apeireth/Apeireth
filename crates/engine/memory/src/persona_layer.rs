@@ -966,11 +966,12 @@ pub fn compress_persona(
     }
 }
 
-/// 未受保护人格条目的慢速遗忘曲线半衰期 (小时) = 30 天.
+/// 未受保护人格条目的慢速遗忘曲线半衰期 (小时) = 90 天
+/// (设计裁定 R1⑩ 口径统一: 与未保护记忆遗忘半衰期同为 90 天).
 ///
 /// 受保护条目 ([`PersonaProtection::On`], 默认) **豁免**遗忘曲线;
 /// 未受保护条目也走慢速曲线 —— 「它是谁」不被时间冲淡。
-pub const PERSONA_SLOW_HALF_LIFE_HOURS: f64 = 24.0 * 30.0;
+pub const PERSONA_SLOW_HALF_LIFE_HOURS: f64 = 24.0 * 90.0;
 
 /// 人格条目遗忘曲线强度: 受保护 = 恒 1.0 (豁免); 未受保护 = 慢速衰减.
 pub fn persona_decay_strength(entry: &PersonaEntry, now_unix: i64) -> f32 {
@@ -1631,6 +1632,16 @@ mod tests {
     /// 保护语义强度: 受保护恒 1.0, 未保护按慢速曲线衰减.
     #[test]
     fn persona_decay_strength_is_exempt_or_slow() {
+        assert_eq!(
+            PERSONA_SLOW_HALF_LIFE_HOURS,
+            24.0 * 90.0,
+            "persona 未保护层慢速半衰期 = 90 天 (设计裁定 R1⑩)"
+        );
+        assert_eq!(
+            PERSONA_SLOW_HALF_LIFE_HOURS,
+            crate::retention::BASELINE_HALF_LIFE_HOURS,
+            "口径统一: persona 未保护层与未保护记忆同一遗忘半衰期"
+        );
         let entry = PersonaEntry {
             id: "persona:x".into(),
             kind: PersonaKind::CoreBelief,
@@ -1648,7 +1659,7 @@ mod tests {
         let slow = persona_decay_strength(&unprotected, one_half_life);
         assert!(
             (slow - 0.5).abs() < 1e-3,
-            "慢速曲线: 一个慢速半衰期 (30 天) 后强度应为 0.5, 实测 {slow}"
+            "慢速曲线: 一个慢速半衰期 (90 天) 后强度应为 0.5, 实测 {slow}"
         );
     }
 

@@ -337,6 +337,8 @@ pub mod continuity_state;
 pub mod coordinator;
 pub mod extraction;
 pub mod facade;
+// V4-b 记忆保鲜回路 (保鲜三件套: 散列增量门 / 可恢复摄取队列 / 增量折入)。
+pub mod freshness;
 pub mod layers;
 pub mod memory_materializer;
 pub mod partner_store_sqlite;
@@ -356,6 +358,7 @@ pub use commitments::{
     CommitmentStatus, SqliteCommitmentStore,
 };
 pub use facade::MemoryMutationFacade;
+pub use freshness::{FreshnessStatus, GateDecision, IngestGate};
 pub use partner_store_sqlite::SqlitePartnerStore;
 pub use persona_store_sqlite::SqlitePersonaProfileStore;
 pub use temporal_graph_store::{

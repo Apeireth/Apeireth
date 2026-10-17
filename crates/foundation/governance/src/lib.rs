@@ -83,10 +83,11 @@ pub mod user_access;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use input_security::{
-    redact_secret_surfaces, session_fingerprint, CredentialDisclosureHook, PiiDetector, PiiFinding,
-    PiiKind, PromptInjectionHeuristic, PromptInjectionHook, PromptInjectionKind,
-    PromptInjectionSignal, RedactionPlaceholder, RedactionPlaceholderMatch,
-    REDACTION_FINGERPRINT_HEX_LEN, REDACTION_PLACEHOLDER_PREFIX, REDACTION_PLACEHOLDER_SUFFIX,
+    redact_secret_surfaces, session_fingerprint, CredentialDisclosureHook, FeelingHint,
+    FeelingHintHeuristic, PiiDetector, PiiFinding, PiiKind, PromptInjectionHeuristic,
+    PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal, RedactionPlaceholder,
+    RedactionPlaceholderMatch, REDACTION_FINGERPRINT_HEX_LEN, REDACTION_PLACEHOLDER_PREFIX,
+    REDACTION_PLACEHOLDER_SUFFIX,
 };
 pub use intent::{
     CredentialPolicy, DestructivePolicy, IntentClass, IntentExplicitness, IntentProvenance,

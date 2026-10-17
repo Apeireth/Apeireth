@@ -982,4 +982,21 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 - **501 / 404 = 该部署读面缺席** → 书架「暂无接口」诚实空态（`SKILL_SHELF_NO_FACE`，不硬造端点、不摆假数据）；其余错误（401 / 网络断等）抛错上屏，不静默降级成空列表；
 - 展开语义保留（L2 封套警示头 + 卡体位），但读面不回卡体 → 正文如实为空串，不编造；卡体披露走 L2 封套面（`skill_search` 对话回合内按触发词披露，见 §10.4）。
 
+### 10.9 性格成长数据面（裁定 ④⑤，2026-10-17：锁定态 + 最近移动 + 性格周报）
+
+出处：`crates/foundation/orchestration/src/self_tuning.rs`（`TraitLocks` / `TuningRecord` / 锁定跳过留痕）、`trait_report.rs`（周报纯汇总）、`crates/engine/runtime-assembly/src/canonical/trait_growth.rs`（落位 + 探测口）、`trait_report_tool.rs`（`tool.trait_report` 帧）。**数据 = 成长计既有账**（`tuning-log.jsonl`，与「性格养成」学习日志同账），锁定档 `trait-locks.json` 同目录（都在 session db 同目录）。滑杆名（稳定 id）：`memory_fade` / `curiosity_strength` / `tone_saturation` / `consolidation_cadence`。
+
+**A. `tool.self_status` → `tuning` 节新增两字段**（调参/性格面板用）：
+
+| 字段 | 类型 | 语义 |
+|---|---|---|
+| `tuning.locked` | object \| null | 四杆锁定态 `{ memory_fade, curiosity_strength, tone_saturation, consolidation_cadence }`（bool；locked = 成长沉积不再移动该杆，解锁是显式动作）；来源缺席/读失败 = `null` + 同节 `reason` |
+| `tuning.recent_moves` | array \| null | 最近移动（新 → 旧，≤4 条）：`{ param: string, label: string(中文名), at_epoch_ms: number(毫秒), delta: number(带符号), reason: string(账面原因原文) }`；缺源 = `null` |
+
+**B. `tool.trait_report` 帧**（性格周报；只读零审批、无参数）：`write_face:"read_only"` / `window_days:7` / `window_from_ms` / `window_to_ms` / `generated_at_ms` / `sliders[4]`（`param, label, value, locked, net_delta, move_count, locked_skipped, last_move|null`）/ `records_in_window` / `locked_skipped` / `skipped_records` / `top_reasons[{reason,count}]`。窗 = 近 7 天（两端含，未来时刻不计）；`net_delta` = 窗内 `Σ(next-previous)`。
+
+**C. 锁定动作面**（面板按钮的后端缝，显式动作）：CLI `apeireth trait lock|unlock <slider>`；内核 API `apeireth_runtime_assembly::set_trait_lock(locks_path, param, locked)`（读-改-写 `trait-locks.json`；缺档 = 全解锁默认态，坏档拒绝即帧）。锁定后成长沉积**跳过该杆并留审计痕**（同账零移动留痕行，reason 前缀「已锁定, 跳过沉积」）。
+
+**前端消费现状**：0 消费（待上屏——本批只交数据面/工具面/CLI 面；面板 UI 挂后续批）。
+
 *文档完。任何字段与代码冲突时，以代码为准并回写本文档（含出处行号）。*

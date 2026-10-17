@@ -10,6 +10,7 @@
 //! 面板 5 时间倒带走双 Esc / `/rewind` (接口桩, 见 [`crate::state`])。
 
 pub mod statusbar;
+pub mod tasks;
 pub mod telemetry;
 
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -60,6 +61,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     );
     if app.overlay == Some(Overlay::Help) {
         render_help(frame, &theme, area);
+    }
+    if app.overlay == Some(Overlay::Tasks) {
+        tasks::draw_panel(frame, app, &theme, area);
     }
 }
 
@@ -371,7 +375,8 @@ fn render_help(frame: &mut Frame<'_>, theme: &CockpitTheme, area: Rect) {
     );
 }
 
-fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+/// 居中矩形 (浮层用; 任务面板与帮助浮层共用一份布局语法)。
+pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let vertical = Layout::vertical([
         Constraint::Percentage((100 - percent_y) / 2),
         Constraint::Percentage(percent_y),

@@ -89,6 +89,16 @@ pub enum PiiKind {
     CredentialUrl,
     /// An environment variable secret assignment (e.g. `export API_KEY=...`).
     EnvSecret,
+    /// Emotional-privacy content (情感隐私): a self-disclosed feeling value
+    /// that the caller explicitly annotated at registration time.
+    ///
+    /// Honest scope (识别=登记簿驱动): this category is **registry-driven** —
+    /// values enter it only through explicit registration on the caller side
+    /// (`register_value` / `register_feeling` on the egress bridge). The word
+    /// face ([`FeelingHintHeuristic`]) only raises advisory hints and never
+    /// produces detector findings, redaction, or governance escalation by
+    /// itself (只登记不强拦).
+    Feeling,
 }
 
 impl PiiKind {
@@ -103,6 +113,7 @@ impl PiiKind {
             Self::IpAddress => "ip_address",
             Self::CredentialUrl => "credential_url",
             Self::EnvSecret => "env_secret",
+            Self::Feeling => "feeling",
         }
     }
 
@@ -117,6 +128,7 @@ impl PiiKind {
             Self::IpAddress => "[REDACTED_IP]",
             Self::CredentialUrl => "[REDACTED_URL_CREDENTIAL]",
             Self::EnvSecret => "[REDACTED_ENV_SECRET]",
+            Self::Feeling => "[REDACTED_FEELING]",
         }
     }
 
@@ -132,6 +144,7 @@ impl PiiKind {
             Self::IpAddress => "IP_ADDRESS",
             Self::CredentialUrl => "CREDENTIAL_URL",
             Self::EnvSecret => "ENV_SECRET",
+            Self::Feeling => "FEELING",
         }
     }
 
@@ -148,6 +161,7 @@ impl PiiKind {
             "IP_ADDRESS" => Some(Self::IpAddress),
             "CREDENTIAL_URL" => Some(Self::CredentialUrl),
             "ENV_SECRET" => Some(Self::EnvSecret),
+            "FEELING" => Some(Self::Feeling),
             _ => None,
         }
     }
@@ -260,7 +274,7 @@ pub fn redact_secret_surfaces(text: &str) -> String {
 //   placeholder := "__AP_" CATEGORY "_" FINGERPRINT12 "__"
 //   CATEGORY     := PiiKind 占位类别 (大写下划线词: EMAIL / PHONE /
 //                   CREDENTIAL_KEY / SSN / CREDIT_CARD / IP_ADDRESS /
-//                   CREDENTIAL_URL / ENV_SECRET)
+//                   CREDENTIAL_URL / ENV_SECRET / FEELING)
 //   FINGERPRINT12 := 12 位小写十六进制 = HMAC-SHA256(会话密钥, 真值)
 //                   前 6 字节的十六进制
 // ```
@@ -537,6 +551,76 @@ impl PromptInjectionHeuristic {
     /// Whether at least one configured prompt-injection pattern matched.
     pub fn has_signal(text: &str) -> bool {
         !Self::signals(text).is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 情感隐私词面辅助提示 (拍板 ㉓ FEELING 类别的最小词面).
+//
+// 诚实口径 (命名即承诺, 识别=登记簿驱动):
+// * **识别主面 = 显式登记**: 情感隐私值的识别与脱敏由调用方显式标注登记
+//   (登记簿面在出境脱敏桥的 `register_value` / `register_feeling`), 登记簿
+//   里没有的值不识别、不脱敏;
+// * **词面仅辅助提示**: 自述情感句启发式 (`我很爱` / `我恨` / `我害怕` 类) 只
+//   产出 [`FeelingHint`] 提示, 供调用方决定要不要登记 —— 命中**不**进
+//   [`PiiDetector::findings`], **不**触发 [`PiiDetector::redact`], **不**进
+//   任何治理裁决 (只登记不强拦, 误报漏报都是常态, 提示不是判定)。
+// ---------------------------------------------------------------------------
+
+/// 最小词面提示模式: 第一人称自述 + 情感动词 (可带程度副词)。故意冻结的
+/// 最小词面 —— 只提示, 不判定。
+static FEELING_HINT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"我(?:很|真|太|最)?(?:爱|恨|害怕|怕|喜欢|讨厌|想念|难过|生气|开心)")
+        .expect("static feeling-hint pattern must compile")
+});
+
+/// One self-disclosed feeling-sentence hint from the word face (辅助提示).
+///
+/// A hint is **not** a finding: it never redacts, never blocks, and never
+/// escalates any governance decision. Byte offsets follow the [`PiiFinding`]
+/// convention.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeelingHint {
+    /// The matched first-person self-report span (e.g. `我恨`).
+    pub cue: String,
+    /// Byte offset of the cue start in the scanned input.
+    pub start: usize,
+    /// Byte offset of the cue end in the scanned input.
+    pub end: usize,
+}
+
+/// Minimal word-face heuristic for self-disclosed feeling sentences
+/// (`我很爱` / `我恨` / `我害怕` 类).
+///
+/// 只登记不强拦: [`FeelingHintHeuristic::hints`] 产出的提示仅供调用方参考
+/// 是否显式登记该情感值; 本启发式不识别"值"本身, 也不进脱敏面或治理面。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FeelingHintHeuristic;
+
+impl FeelingHintHeuristic {
+    /// All word-face hints in `text`, sorted deterministically.
+    pub fn hints(text: &str) -> Vec<FeelingHint> {
+        let mut hints: Vec<FeelingHint> = FEELING_HINT_REGEX
+            .find_iter(text)
+            .map(|matched| FeelingHint {
+                cue: matched.as_str().to_string(),
+                start: matched.start(),
+                end: matched.end(),
+            })
+            .collect();
+        hints.sort_by(|a, b| {
+            a.start
+                .cmp(&b.start)
+                .then_with(|| a.end.cmp(&b.end))
+                .then_with(|| a.cue.cmp(&b.cue))
+        });
+        hints.dedup();
+        hints
+    }
+
+    /// Whether at least one word-face cue matched.
+    pub fn has_hint(text: &str) -> bool {
+        !Self::hints(text).is_empty()
     }
 }
 
@@ -905,6 +989,7 @@ mod tests {
             PiiKind::IpAddress,
             PiiKind::CredentialUrl,
             PiiKind::EnvSecret,
+            PiiKind::Feeling,
         ] {
             let token = kind.placeholder_label(fp);
             assert!(token.starts_with("__AP_"), "{token}");
@@ -1004,5 +1089,71 @@ mod tests {
             token.len(),
             "__AP_".len() + "CREDENTIAL_KEY".len() + 1 + 12 + 2
         );
+    }
+
+    // --- FEELING 情感隐私类别 (拍板 ㉓) --------------------------------------
+
+    /// FEELING 占位族往返: `__AP_FEELING_<指纹12>__` 渲染 → 严格解析 → 原样
+    /// 渲染, 且 scan 带字节偏移找得回。
+    #[test]
+    fn feeling_placeholder_roundtrips_through_the_family() {
+        let fp = session_fingerprint(b"session-key-a", "我很爱我的猫");
+        let token = PiiKind::Feeling.placeholder_label(&fp);
+        assert_eq!(token, format!("__AP_FEELING_{fp}__"));
+        let parsed = RedactionPlaceholder::parse(&token)
+            .unwrap_or_else(|| panic!("FEELING token must parse: {token}"));
+        assert_eq!(parsed, RedactionPlaceholder::new(PiiKind::Feeling, &fp));
+        assert_eq!(parsed.render(), token);
+        let text = format!("心里话: {token} 收尾");
+        let matches = RedactionPlaceholder::scan(&text);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].placeholder.kind, PiiKind::Feeling);
+        assert_eq!(&text[matches[0].start..matches[0].end], token);
+        // 占位符只带类别 + 指纹, 不带真值。
+        assert!(!token.contains("我很爱我的猫"));
+    }
+
+    /// 识别=登记簿驱动如实: 词面命中**不**产 finding、**不**触发脱敏 ——
+    /// 情感隐私的识别只来自显式登记面 (登记簿在出境脱敏桥), 词面仅提示。
+    #[test]
+    fn feeling_identification_is_registry_driven_not_word_face() {
+        let text = "我恨背刺, 真的恨";
+        // 词面有提示 (辅助提示面存在)。
+        assert!(FeelingHintHeuristic::has_hint(text));
+        // 但检测器对情感句零命中: 不是 finding。
+        assert!(
+            PiiDetector::findings(text)
+                .iter()
+                .all(|f| f.kind != PiiKind::Feeling),
+            "词面命中不得进 findings"
+        );
+        assert!(!PiiDetector::contains_pii(text));
+        // 脱敏面对情感句原样不动 (不强拦、不吞文本)。
+        assert_eq!(PiiDetector::redact(text), text);
+    }
+
+    /// 只登记不强拦: 词面提示产出但不升级任何治理裁决 (Allow 原样)。
+    #[tokio::test]
+    async fn feeling_word_face_hints_are_advisory_and_never_block() {
+        let text = "我害怕明天, 我很爱这个家";
+        let hints = FeelingHintHeuristic::hints(text);
+        assert_eq!(hints.len(), 2, "{hints:?}");
+        assert_eq!(hints[0].cue, "我害怕");
+        assert_eq!(&text[hints[0].start..hints[0].end], "我害怕");
+        assert_eq!(hints[1].cue, "我很爱");
+        // 第三人称叙述不是自述情感句 (最小词面只认「我…」)。
+        assert!(!FeelingHintHeuristic::has_hint("他恨背刺, 她很爱那只猫"));
+
+        // 提示不强拦: 治理钩子对纯情感句一律 Allow。
+        let cap = CapabilityId::new("tool.voice_speak").unwrap();
+        let args = json!({ "text": "我恨背刺" });
+        assert!(PromptInjectionHook
+            .evaluate(&dispatch_request(&cap, &args, 1))
+            .await
+            .is_allowed());
+        assert!(CredentialDisclosureHook
+            .evaluate(&dispatch_request(&cap, &args, 1))
+            .await
+            .is_allowed());
     }
 }

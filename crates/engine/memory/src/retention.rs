@@ -22,9 +22,10 @@ use crate::{EpisodeQuery, EpisodeStore, MemoryResult, SqliteMemoryStore};
 /// `inv_sweep_keeps_protected` invariant is registered under).
 pub const CLEANUP_AUDIT_MODULE: &str = "retention";
 
-/// 艾宾浩斯半衰期基线 (小时) —— 现状硬编码常量 (24h = 1 天)。
+/// 艾宾浩斯半衰期基线 (小时) = 90 天 (设计裁定 R1⑩: 未保护记忆遗忘半衰期
+/// 90 天; 保护豁免不变 —— protected 依旧不进淘汰)。
 /// `APEIRETH_TUNE_MEMORY_FADE` 未设/非法 = 衰减倍率 1.0 = 本值 (零变化)。
-pub const BASELINE_HALF_LIFE_HOURS: f64 = 24.0;
+pub const BASELINE_HALF_LIFE_HOURS: f64 = 90.0 * 24.0;
 
 /// 当前生效的艾宾浩斯半衰期 (小时):
 /// `BASELINE_HALF_LIFE_HOURS / MemoryFade 倍率`。
@@ -32,7 +33,7 @@ pub const BASELINE_HALF_LIFE_HOURS: f64 = 24.0;
 /// - 倍率来自体验旋钮 [`TunableParam::MemoryFade`] (env `APEIRETH_TUNE_MEMORY_FADE`,
 ///   非法值回默认 1.0), 自动校准引擎的落地值经进程内 override 生效。
 /// - 倍率 > 1 = 忘得更快 (半衰期缩短), < 1 = 记得更久。
-/// - 未设 = 倍率 1.0 = 现状 24h, 行为零变化。
+/// - 未设 = 倍率 1.0 = 基线 90 天, 行为零变化 (显式倍率仍可覆盖)。
 pub fn effective_half_life_hours() -> f64 {
     BASELINE_HALF_LIFE_HOURS / TunableParam::MemoryFade.effective()
 }
@@ -60,7 +61,7 @@ pub struct RetentionPolicy {
     pub max_age_secs: Option<i64>,
     /// Forget when decay strength (half-life hours) falls below this (0, 1].
     pub min_strength: Option<f32>,
-    /// Half-life used when `min_strength` is set. Baseline 24h, scaled by the
+    /// Half-life used when `min_strength` is set. Baseline 90 天, scaled by the
     /// experience knob `APEIRETH_TUNE_MEMORY_FADE` (see [`effective_half_life_hours`]).
     pub half_life_hours: f64,
 }
@@ -71,7 +72,7 @@ impl Default for RetentionPolicy {
             max_count: None,
             max_age_secs: None,
             min_strength: None,
-            // 艾宾浩斯半衰期 (体验旋钮 MemoryFade): 未设 = 倍率 1.0 = 24h 现状。
+            // 艾宾浩斯半衰期 (体验旋钮 MemoryFade): 未设 = 倍率 1.0 = 基线 90 天。
             half_life_hours: effective_half_life_hours(),
         }
     }
@@ -390,6 +391,29 @@ mod tests {
             RetentionPolicy::default().half_life_hours,
             effective_half_life_hours()
         );
+    }
+
+    /// 遗忘半衰期 90 天口径 (设计裁定 R1⑩): 未保护记忆基线 = 90 天 (2160h);
+    /// 保护豁免不变 (protected 仍跳过淘汰); 显式半衰期仍可覆盖 (旧行为兼容)。
+    #[test]
+    fn forget_half_life_defaults_to_ninety_days_and_stays_overridable() {
+        assert_eq!(
+            BASELINE_HALF_LIFE_HOURS, 2160.0,
+            "遗忘半衰期基线 = 90 天 × 24h = 2160h"
+        );
+        assert_eq!(
+            RetentionPolicy::default().half_life_hours,
+            2160.0,
+            "未设旋钮 = 默认遗忘半衰期 90 天"
+        );
+        // 一个半衰期后强度恰 0.5 (公式与常量同口径)。
+        assert!(
+            (decay_strength(0, 90 * 24 * 3600, BASELINE_HALF_LIFE_HOURS) - 0.5).abs() < 1e-5,
+            "90 天 = 一个半衰期 → 强度 0.5"
+        );
+        // 显式配置仍可覆盖 (旧行为兼容: 旧 24h 口径照常可表达)。
+        let explicit = RetentionPolicy::default().with_min_strength(0.5, 24.0);
+        assert_eq!(explicit.half_life_hours, 24.0, "显式半衰期覆盖默认 90 天");
     }
 
     #[test]

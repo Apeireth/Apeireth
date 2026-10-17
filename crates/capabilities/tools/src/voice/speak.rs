@@ -7,11 +7,15 @@
 //!    `[-10, 10]` / 音量 `[0, 100]` / 嗓名须在**系统已装嗓清单**内;
 //! 2. **安静纪律**: 勿扰窗口内**错误即帧** (抑制出声, 不静默吞请求、
 //!    不假报已说; 风险钩子与工具面双保险, 同一窗口同一文案);
-//! 3. **合成即播** ([`crate::voice::synth`]): 系统语音引擎受控子进程,
+//! 3. **发声范围** (设计裁定 R1⑰): 缺省**仅关怀/提醒帧出声** —— 常规划算
+//!    对话回复不出声 (拒绝即帧; 话帧申报 `scope` = 最简判定面), 可配置
+//!    扩全量 ([`SpeakGate::All`] / `APEIRETH_VOICE_SPEAK_SCOPE=all`);
+//! 4. **合成即播** ([`crate::voice::synth`]): 系统语音引擎受控子进程,
 //!    文本走 stdin 数据通道 (脚本零插值);
-//! 4. **受控播放** ([`crate::voice::playback`]): 同时只播一条, 新话打断
-//!    旧话可配; 播放票据 Drop = 真停 (取消/超时不留僵尸播放);
-//! 5. **语句账本** ([`crate::voice::ledger`]): `spoken.jsonl` append-only
+//! 5. **受控播放** ([`crate::voice::playback`]): 同时只播一条, 缺省排队串行
+//!    (排队话帧上限 3 条, 满则拒新即帧; 新话打断旧话可配); 播放票据
+//!    Drop = 真停 (取消/超时不留僵尸播放);
+//! 6. **语句账本** ([`crate::voice::ledger`]): `spoken.jsonl` append-only
 //!    记「说了什么/何时/哪把嗓/时长」。
 //!
 //! # 治理 (发声面档: 与 shell 的执行档**分立**, 不借壳)
@@ -29,6 +33,13 @@
 //!
 //! 合成文本**全文只进语句账本**; 错误帧 / 输出帧 / 审批载荷只带字符数、
 //! 嗓名、时长、状态 —— 文本原文不上任何日志面。
+//!
+//! # 情绪→语气微调 (拍板 ⑱)
+//!
+//! 发声前**现读当前情绪态** (PAD 三维, 注入读取面), 按冻结映射表微调
+//! 语速/音量 ([`crate::voice::emotion_tune`]): 无情绪数据 = 原参数零变化;
+//! 显式传参覆盖自动微调 (用户给的优先); 微调幅度有限 (防夸张)。生效参数
+//! (含微调结果) 如实进出帧与语句账本。生产情绪源未接线, 现状 = 零微调。
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -44,12 +55,14 @@ use serde::{Deserialize, Serialize};
 use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
 };
+use crate::voice::emotion_tune::{tune_voice_params, EmotionReader};
 use crate::voice::ledger::{
     spoken_utterance_id, SpokenLedger, SpokenStatus, SpokenUtterance, DEFAULT_VOICE_LABEL,
     SPOKEN_LEDGER_FILE,
 };
 use crate::voice::playback::{
     begin_speech, wait_playback, PlaybackController, PlaybackPolicy, SpeechTicket, TryBeginError,
+    SPEECH_QUEUE_MAX,
 };
 use crate::voice::quiet::{QuietClock, QuietHours};
 use crate::voice::synth::{SynthEngine, SynthRequest};
@@ -87,16 +100,95 @@ pub const VOICE_RATE_DEFAULT: i32 = 0;
 /// 缺省音量 (满格)。
 pub const VOICE_VOLUME_DEFAULT: u32 = 100;
 
+/// 发声范围旋钮 (`APEIRETH_VOICE_SPEAK_SCOPE`): `care`(缺省) = 仅关怀/提醒
+/// 帧出声, `all` = 全量出声。坏值拒绝解析 (fail-closed: 不猜意图)。
+pub const VOICE_SPEAK_SCOPE_ENV: &str = "APEIRETH_VOICE_SPEAK_SCOPE";
+
+/// 话帧的发声范围申报 (设计裁定 R1⑰ 的最简判定面: 调用参数自带来源档)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeakScope {
+    /// 关怀/提醒帧 (主动关怀 / 作息 / 纪念日提醒)。
+    Care,
+    /// 常规划算对话回复。
+    Chat,
+}
+
+/// 发声范围档 (设计裁定 R1⑰: 仅关怀/提醒出声起步, 可配置扩全量)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SpeakGate {
+    /// 仅关怀/提醒帧出声 (缺省): 常规划算对话回复不出声 (拒绝即帧)。
+    #[default]
+    CareOnly,
+    /// 全量出声 (显式扩围; 旧行为兼容档)。
+    All,
+}
+
+impl SpeakGate {
+    /// 稳定标签 (`care` / `all`)。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::CareOnly => "care",
+            Self::All => "all",
+        }
+    }
+
+    /// 解析旋钮值: `care` = 仅关怀/提醒, `all` = 全量; 其余拒绝 (fail-closed)。
+    pub fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim() {
+            "care" => Ok(Self::CareOnly),
+            "all" => Ok(Self::All),
+            other => Err(format!(
+                "拒绝配置: {VOICE_SPEAK_SCOPE_ENV} 只接受 care (仅关怀/提醒) 或 all (全量), \
+                 got {other:?}"
+            )),
+        }
+    }
+
+    /// 从 env 解析 (缺省 = 仅关怀/提醒; 坏值报错, 不静默回退)。
+    pub fn from_env() -> Result<Self, String> {
+        let raw = std::env::var(VOICE_SPEAK_SCOPE_ENV).unwrap_or_default();
+        if raw.trim().is_empty() {
+            return Ok(Self::default());
+        }
+        Self::parse(&raw).map_err(|error| format!("{VOICE_SPEAK_SCOPE_ENV}: {error}"))
+    }
+
+    /// 本话帧是否在发声范围内 (未申报按常规划算对话回复计 —— fail-closed
+    /// 朝安静, 不替调用方猜来源)。
+    pub const fn admits(self, scope: Option<SpeakScope>) -> bool {
+        match self {
+            Self::All => true,
+            Self::CareOnly => matches!(scope, Some(SpeakScope::Care)),
+        }
+    }
+}
+
+/// 发声范围判定 (设计裁定 R1⑰): 返回 `Some(拒绝即帧文案)` 即不出声。
+pub fn speak_scope_refusal(gate: SpeakGate, params: &VoiceSpeakParams) -> Option<String> {
+    if gate.admits(params.scope) {
+        return None;
+    }
+    Some(format!(
+        "拒绝发声: 发声范围=仅关怀/提醒帧 (本帧是常规划算对话回复, 不出声); \
+         要全量出声请显式配 {VOICE_SPEAK_SCOPE_ENV}=all"
+    ))
+}
+
 /// 工具描述全文 (注册声明与文档引用同一份文本)。
 pub const VOICE_SPEAK_TOOL_DESCRIPTION: &str = "Speak one utterance aloud through the \
   system speech engine (synthesis and playback are one controlled call). Parameters: \
-  `text` (required, non-empty, at most 2000 characters), `rate` (optional speech rate \
+  `text` (required, non-empty, at most 2000 characters), `scope` (frame kind: \
+  `care` for care/reminder frames, `chat` for ordinary conversation replies; the \
+  default speech scope admits care/reminder frames only, so chat replies are refused \
+  unless the host expands the scope), `rate` (optional speech rate \
   in [-10, 10], refused outside the range), `volume` (optional loudness in [0, 100], \
   refused outside the range), `voice` (optional name from the installed system voice \
   list; omit it for the system default voice; an unknown name is refused and the \
   refusal lists the installed voices). Playback is exclusive: at most one utterance \
-  plays at a time, and a new utterance either interrupts the previous one or queues \
-  behind it per configuration. Failures are honest error frames: no engine, no \
+  plays at a time; by default a new utterance queues behind the current one (at most \
+  3 queued frames; overflow is refused with an error frame) and interrupting the \
+  previous utterance is configurable. Failures are honest error frames: no engine, no \
   installed voice, synthesis errors, and do-not-disturb windows never pretend the \
   utterance was spoken. Every spoken (or half-spoken) utterance is appended to the \
   `spoken.jsonl` accountability ledger.";
@@ -116,25 +208,13 @@ pub struct VoiceSpeakParams {
     /// 嗓名 (系统已装嗓清单内的名字; 缺省 = 系统默认嗓)。
     #[serde(default)]
     pub voice: Option<String>,
+    /// 话帧发声范围申报 (设计裁定 R1⑰: `care` = 关怀/提醒帧, `chat` =
+    /// 常规划算对话回复; 未申报按 `chat` 计 —— 缺省档不出声)。
+    #[serde(default)]
+    pub scope: Option<SpeakScope>,
 }
 
 impl VoiceSpeakParams {
-    /// 解析后的生效语速。
-    pub const fn effective_rate(&self) -> i32 {
-        match self.rate {
-            Some(rate) => rate,
-            None => VOICE_RATE_DEFAULT,
-        }
-    }
-
-    /// 解析后的生效音量。
-    pub const fn effective_volume(&self) -> u32 {
-        match self.volume {
-            Some(volume) => volume,
-            None => VOICE_VOLUME_DEFAULT,
-        }
-    }
-
     /// 文本字符数 (输出帧 / 账本口径; 不是字节数)。
     pub fn text_chars(&self) -> usize {
         self.text.chars().count()
@@ -223,7 +303,8 @@ pub struct SpeakOutcome {
     pub engine: String,
 }
 
-/// 发声配置 (账本落点 + 勿扰窗口 + 排队策略; 时钟显式注入)。
+/// 发声配置 (账本落点 + 勿扰窗口 + 发声范围 + 排队策略 + 情绪读取面;
+/// 时钟显式注入)。
 #[derive(Clone)]
 pub struct VoiceSpeakConfig {
     /// 语句账本路径 (`spoken.jsonl`)。
@@ -232,8 +313,12 @@ pub struct VoiceSpeakConfig {
     pub quiet: QuietHours,
     /// 本地墙钟「当日第几分钟」读数 (组装根注入)。
     pub quiet_clock: QuietClock,
-    /// 新话与旧话的关系 (缺省 = 新话打断旧话)。
+    /// 新话与旧话的关系 (缺省 = 排队串行, 设计裁定 R1⑯)。
     pub playback: PlaybackPolicy,
+    /// 发声范围档 (缺省 = 仅关怀/提醒, 设计裁定 R1⑰)。
+    pub speak_gate: SpeakGate,
+    /// 当前情绪态读取面 (拍板 ⑱; 缺省 = 不接 = 无情绪数据 = 零微调)。
+    pub emotion_reader: Option<EmotionReader>,
 }
 
 impl std::fmt::Debug for VoiceSpeakConfig {
@@ -242,19 +327,23 @@ impl std::fmt::Debug for VoiceSpeakConfig {
             .field("ledger_path", &self.ledger_path)
             .field("quiet", &self.quiet)
             .field("playback", &self.playback)
+            .field("speak_gate", &self.speak_gate)
+            .field("emotion_reader", &self.emotion_reader.is_some())
             .finish_non_exhaustive()
     }
 }
 
 impl VoiceSpeakConfig {
-    /// 数据目录落点 (`<data_dir>/spoken.jsonl`) + 显式时钟 (缺省勿扰窗口与
-    /// 打断档; 面上旋钮由组装根按 env 覆盖)。
+    /// 数据目录落点 (`<data_dir>/spoken.jsonl`) + 显式时钟 (缺省勿扰窗口 /
+    /// 排队档 / 仅关怀档; 面上旋钮由组装根按 env 覆盖)。
     pub fn new(data_dir: impl AsRef<Path>, quiet_clock: QuietClock) -> Self {
         Self {
             ledger_path: data_dir.as_ref().join(SPOKEN_LEDGER_FILE),
             quiet: QuietHours::default(),
             quiet_clock,
             playback: PlaybackPolicy::default(),
+            speak_gate: SpeakGate::default(),
+            emotion_reader: None,
         }
     }
 
@@ -272,10 +361,26 @@ impl VoiceSpeakConfig {
         self
     }
 
+    /// 覆盖发声范围档 (设计裁定 R1⑰: 缺省仅关怀/提醒; `All` = 扩全量)。
+    #[must_use]
+    pub fn with_speak_gate(mut self, gate: SpeakGate) -> Self {
+        self.speak_gate = gate;
+        self
+    }
+
     /// 覆盖账本落点。
     #[must_use]
     pub fn with_ledger_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.ledger_path = path.into();
+        self
+    }
+
+    /// 接上当前情绪态读取面 (拍板 ⑱: `voice_speak` 每次发声现读一次)。
+    ///
+    /// 不接 = 无情绪数据 = 原参数零变化 (fail-closed 朝原参数, 不猜情绪)。
+    #[must_use]
+    pub fn with_emotion_reader(mut self, reader: EmotionReader) -> Self {
+        self.emotion_reader = Some(reader);
         self
     }
 }
@@ -334,7 +439,8 @@ impl VoiceSpeakTool {
         &self.engine
     }
 
-    /// 发声一次 (校验 → 安静纪律 → 选嗓 → 合成即播 → 账本)。
+    /// 发声一次 (校验 → 安静纪律 → 发声范围 → 选嗓 → 情绪微调 → 合成即播
+    /// → 账本)。
     ///
     /// 失败一律 `Err(拒绝即帧文案)`, 文案不回显文本原文 (脱敏口径)。
     pub async fn speak_once(&self, params: &VoiceSpeakParams) -> Result<SpeakOutcome, String> {
@@ -345,23 +451,36 @@ impl VoiceSpeakTool {
         if let Some(refusal) = self.config.quiet.suppression((self.config.quiet_clock)()) {
             return Err(refusal);
         }
+        // 发声范围纪律 (设计裁定 R1⑰): 缺省仅关怀/提醒帧出声。
+        if let Some(refusal) = speak_scope_refusal(self.config.speak_gate, params) {
+            return Err(refusal);
+        }
         // 选嗓 (系统已装嗓清单是唯一事实源; 无嗓/未知嗓/清单不可用都错误即帧)。
         let engine = Arc::clone(&self.engine);
         let installed = tokio::task::spawn_blocking(move || engine.installed_voices())
             .await
             .map_err(|error| format!("已装嗓清单采集失败: {error}"))??;
         let voice = resolve_voice(&installed, params)?;
+        // 情绪→语气微调 (拍板 ⑱): 现读当前情绪态, 缺省参数吃冻结映射表微调;
+        // 无情绪数据 = 原参数零变化; 显式传参覆盖自动微调 (用户给的优先)。
+        let emotion = self.config.emotion_reader.as_ref().and_then(|read| read());
+        let tuned = tune_voice_params(params.rate, params.volume, emotion);
         let request = SynthRequest {
             text: params.text.clone(),
             voice: voice.clone(),
-            rate: params.effective_rate(),
-            volume: params.effective_volume(),
+            rate: tuned.rate,
+            volume: tuned.volume,
         };
-        // 合成即播 (独占; 新话打断旧话可配)。
+        // 合成即播 (独占; 缺省排队串行, 队满拒新即帧)。
         let ticket = match begin_speech(&self.playback, &request).await {
             Ok(ticket) => ticket,
             Err(TryBeginError::Busy) => {
                 return Err("拒绝发声: 播放槽忙 (串行档不应到达此处, 如实拒)".to_string())
+            }
+            Err(TryBeginError::QueueFull) => {
+                return Err(format!(
+                    "拒绝发声: 话帧队列已满 (上限 {SPEECH_QUEUE_MAX} 条, 拒新不丢旧, 如实拒)"
+                ))
             }
             Err(TryBeginError::Start(reason)) => {
                 return Err(format!("合成失败 (错误即帧, 不假发声): {reason}"))
@@ -426,6 +545,11 @@ impl ToolCapability for VoiceSpeakTool {
                     "text": {
                         "type": "string",
                         "description": "The utterance to speak (non-empty, at most 2000 characters)."
+                    },
+                    "scope": {
+                        "type": "string",
+                        "enum": ["care", "chat"],
+                        "description": "Frame kind: `care` for care/reminder frames (admitted by the default speech scope), `chat` for ordinary conversation replies (refused unless the host expands the scope to all)."
                     },
                     "rate": {
                         "type": "integer",
@@ -656,6 +780,9 @@ mod tests {
             rate: None,
             volume: None,
             voice: None,
+            // 本文件的用例是「关怀帧发声」的机械面测试: 申报 care 过缺省发声
+            // 范围档 (发声范围自身的钉见 `speak_scope_gate_*` 组)。
+            scope: Some(SpeakScope::Care),
         }
     }
 
@@ -749,5 +876,193 @@ mod tests {
             .expect_err("勿扰窗口内拒绝即帧");
         assert!(refusal.contains("勿扰窗口"), "{refusal}");
         assert_eq!(state.created(), 0, "勿扰抑制: 引擎零调用 (不造播放)");
+    }
+
+    /// 情绪→语气微调真走到引擎请求 (拍板 ⑱), 且显式传参覆盖自动微调。
+    #[tokio::test]
+    async fn emotion_tune_reaches_the_engine_and_explicit_params_win() {
+        use crate::voice::emotion_tune::PadReading;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config = VoiceSpeakConfig::new(dir.path(), fixed_clock(12 * 60)).with_emotion_reader(
+            Arc::new(|| {
+                Some(PadReading {
+                    pleasure: 0.9,
+                    arousal: 0.1,
+                    dominance: 0.0,
+                })
+            }),
+        );
+        let engine = Arc::new(crate::voice::mock::MockSynthEngine::new(
+            crate::voice::mock::MockBehavior::AutoComplete,
+        ));
+        let state = engine.state();
+        let tool = VoiceSpeakTool::new(config, engine);
+
+        // 愉悦高档: 缺省语速吃 +1; 缺省音量已是满格, +3 如实钳在上界。
+        let outcome = tool.speak_once(&params("轻快一句")).await.expect("speak");
+        assert_eq!(outcome.rate, VOICE_RATE_DEFAULT + 1);
+        assert_eq!(outcome.volume, VOICE_VOLUME_MAX);
+        let request = state.requests();
+        assert_eq!(
+            (request[0].rate, request[0].volume),
+            (VOICE_RATE_DEFAULT + 1, VOICE_VOLUME_MAX),
+            "微调后的生效参数必须原样进引擎请求"
+        );
+
+        // 显式语速覆盖自动微调 (用户给的优先), 音量缺省仍吃微调。
+        let explicit = VoiceSpeakParams {
+            rate: Some(4),
+            ..params("定速一句")
+        };
+        let outcome = tool.speak_once(&explicit).await.expect("speak");
+        assert_eq!(outcome.rate, 4);
+        let request = state.requests();
+        assert_eq!(request[1].rate, 4, "显式语速不吃微调");
+    }
+
+    /// 无情绪数据 = 原参数零变化 (读取面未接 = 缺省参数原样)。
+    #[tokio::test]
+    async fn voice_speak_without_emotion_data_keeps_original_parameters() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config = VoiceSpeakConfig::new(dir.path(), fixed_clock(12 * 60));
+        let engine = Arc::new(crate::voice::mock::MockSynthEngine::new(
+            crate::voice::mock::MockBehavior::AutoComplete,
+        ));
+        let state = engine.state();
+        let tool = VoiceSpeakTool::new(config, engine);
+        let outcome = tool.speak_once(&params("原参数一句")).await.expect("speak");
+        assert_eq!(
+            (outcome.rate, outcome.volume),
+            (VOICE_RATE_DEFAULT, VOICE_VOLUME_DEFAULT)
+        );
+        let request = state.requests();
+        assert_eq!(
+            (request[0].rate, request[0].volume),
+            (VOICE_RATE_DEFAULT, VOICE_VOLUME_DEFAULT),
+            "无情绪数据零微调"
+        );
+    }
+
+    /// 发声范围默认档 (设计裁定 R1⑰): 缺省仅关怀/提醒帧出声; 常规划算对话
+    /// 回复 (含未申报) 拒绝即帧且引擎零调用。
+    #[tokio::test]
+    async fn speak_scope_gate_admits_care_frames_only_by_default() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let engine = Arc::new(crate::voice::mock::MockSynthEngine::new(
+            crate::voice::mock::MockBehavior::AutoComplete,
+        ));
+        let state = engine.state();
+        let tool = VoiceSpeakTool::new(
+            VoiceSpeakConfig::new(dir.path(), fixed_clock(12 * 60)),
+            engine,
+        );
+
+        let chat = VoiceSpeakParams {
+            scope: Some(SpeakScope::Chat),
+            ..params("常规划算对话回复")
+        };
+        let refusal = tool.speak_once(&chat).await.expect_err("chat 帧不出声");
+        assert!(refusal.contains("发声范围"), "{refusal}");
+        let undeclared = VoiceSpeakParams {
+            scope: None,
+            ..params("未申报话帧")
+        };
+        let refusal = tool
+            .speak_once(&undeclared)
+            .await
+            .expect_err("未申报按常规划算对话回复计, 不出声");
+        assert!(refusal.contains("发声范围"), "{refusal}");
+        assert_eq!(state.created(), 0, "范围外话帧: 引擎零调用 (不造播放)");
+
+        // 关怀/提醒帧照出声。
+        tool.speak_once(&params("关怀提醒一句"))
+            .await
+            .expect("care 帧发声");
+        assert_eq!(state.created(), 1);
+    }
+
+    /// 旧行为兼容: 显式 `all` 档 = 全量出声 (常规划算对话回复照常出声)。
+    #[tokio::test]
+    async fn explicit_all_scope_restores_full_speaking() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let engine = Arc::new(crate::voice::mock::MockSynthEngine::new(
+            crate::voice::mock::MockBehavior::AutoComplete,
+        ));
+        let state = engine.state();
+        let tool = VoiceSpeakTool::new(
+            VoiceSpeakConfig::new(dir.path(), fixed_clock(12 * 60)).with_speak_gate(SpeakGate::All),
+            engine,
+        );
+        let chat = VoiceSpeakParams {
+            scope: Some(SpeakScope::Chat),
+            ..params("常规划算对话回复")
+        };
+        tool.speak_once(&chat).await.expect("all 档: chat 照播");
+        let undeclared = VoiceSpeakParams {
+            scope: None,
+            ..params("未申报话帧")
+        };
+        tool.speak_once(&undeclared)
+            .await
+            .expect("all 档: 未申报照播");
+        assert_eq!(state.created(), 2, "全量档: 引擎照常发声");
+    }
+
+    /// 发声范围旋钮解析 (fail-closed) + 纯判定面钉。
+    #[test]
+    fn speak_scope_knob_parses_care_or_all_and_refuses_garbage() {
+        assert_eq!(
+            SpeakGate::default(),
+            SpeakGate::CareOnly,
+            "缺省 = 仅关怀/提醒 (设计裁定 R1⑰)"
+        );
+        assert_eq!(SpeakGate::parse("care").expect("care"), SpeakGate::CareOnly);
+        assert_eq!(SpeakGate::parse("all").expect("all"), SpeakGate::All);
+        assert!(SpeakGate::parse("everything").is_err(), "坏值拒绝解析");
+        let chat = VoiceSpeakParams {
+            scope: Some(SpeakScope::Chat),
+            ..params("一句")
+        };
+        assert!(speak_scope_refusal(SpeakGate::CareOnly, &chat).is_some());
+        assert!(speak_scope_refusal(SpeakGate::All, &chat).is_none());
+    }
+
+    /// 队满拒新 = 错误即帧 (设计裁定 R1⑯: 排队上限 3 条, 钉「拒新」不「丢
+    /// 最旧」)。
+    #[tokio::test]
+    async fn full_speech_queue_refuses_the_new_frame_as_an_error_frame() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let engine = Arc::new(crate::voice::mock::MockSynthEngine::new(
+            crate::voice::mock::MockBehavior::Hold,
+        ));
+        let state = engine.state();
+        let tool = VoiceSpeakTool::new(
+            VoiceSpeakConfig::new(dir.path(), fixed_clock(12 * 60))
+                .with_playback_policy(PlaybackPolicy::QueueSerial),
+            engine,
+        );
+        // 在播一条 (Hold 不收尾, 占住播放槽; 不占队位)。
+        let ticket = tool
+            .playback()
+            .try_begin(&SynthRequest {
+                text: "在播".to_string(),
+                voice: None,
+                rate: 0,
+                volume: 100,
+            })
+            .expect("在播占槽");
+        // 占满 3 个排队位 (确定性)。
+        let slots: Vec<_> = (0..SPEECH_QUEUE_MAX)
+            .map(|_| tool.playback().try_reserve_queue().expect("queue slot"))
+            .collect();
+        let refusal = tool
+            .speak_once(&params("溢出一句"))
+            .await
+            .expect_err("队满必须拒新即帧");
+        assert!(refusal.contains("队列已满"), "{refusal}");
+        assert_eq!(state.requests().len(), 1, "拒新: 溢出话帧不开播");
+        assert!(ticket.playback().is_running(), "拒新不丢最旧 (在播照旧)");
+        drop(slots);
+        drop(ticket);
     }
 }

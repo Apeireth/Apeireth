@@ -5,6 +5,8 @@
 pub enum Command {
     /// 打开帮助浮层。
     Help,
+    /// 打开任务面板 (只读 + 人判重试)。
+    Tasks,
     /// 新建会话页签。
     New,
     /// 续接账本中的既有会话。
@@ -89,6 +91,11 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         summary: "打开帮助浮层",
     },
     CommandSpec {
+        name: "tasks",
+        usage: "/tasks",
+        summary: "任务面板 (只读 + 人判重试, 增删改派走工具面)",
+    },
+    CommandSpec {
         name: "new",
         usage: "/new",
         summary: "新建会话页签",
@@ -148,6 +155,7 @@ pub fn parse_command(input: &str) -> Result<Command, CommandError> {
     let lower = name.to_ascii_lowercase();
     match lower.as_str() {
         "help" => Ok(Command::Help),
+        "tasks" => Ok(Command::Tasks),
         "new" => Ok(Command::New),
         "resume" => Ok(Command::Resume {
             target: arg.map(str::to_string),
@@ -196,6 +204,7 @@ mod tests {
     #[test]
     fn parses_every_supported_command() {
         assert_eq!(parse_command("/help").unwrap(), Command::Help);
+        assert_eq!(parse_command("/tasks").unwrap(), Command::Tasks);
         assert_eq!(parse_command("/new").unwrap(), Command::New);
         assert_eq!(
             parse_command("/resume abc-123").unwrap(),

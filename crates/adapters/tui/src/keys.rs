@@ -23,6 +23,14 @@ pub enum Action {
     PrevTab,
     /// 两段式退出的第一/二段 (Ctrl+C)。
     QuitStep,
+    /// 打开/关闭任务面板 (Ctrl+T; `/tasks` 打开)。
+    ToggleTasks,
+    /// 任务面板: 选上一行 (↑ / k)。
+    SelectPrev,
+    /// 任务面板: 选下一行 (↓ / j)。
+    SelectNext,
+    /// 任务面板: 人判重试选中的 failed 任务 (r)。
+    JudgeRetry,
     /// 退格。
     Backspace,
     /// 命令补全 (Tab)。
@@ -33,13 +41,15 @@ pub enum Action {
     Ignored,
 }
 
-/// 按键上下文: 光标在正文还是在输入/命令行。
+/// 按键上下文: 光标在正文、输入/命令行, 还是任务面板 (模态)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyMode {
     /// 正文浏览态。
     Normal,
     /// 输入态 (命令行或普通输入)。
     Input,
+    /// 任务面板态 (模态: 面板键位独占, 只读 + 人判重试)。
+    PanelTasks,
 }
 
 /// 一行键位说明 (帮助浮层直接上屏)。
@@ -101,6 +111,21 @@ pub const KEY_TABLE: &[KeyBinding] = &[
         note: "",
     },
     KeyBinding {
+        keys: "Ctrl+T",
+        action: "任务面板",
+        note: "/tasks 同口; 只读 + 人判重试",
+    },
+    KeyBinding {
+        keys: "↑ / ↓",
+        action: "任务面板选择",
+        note: "面板内 j/k 同义",
+    },
+    KeyBinding {
+        keys: "r",
+        action: "人判重试",
+        note: "任务面板内, 仅 failed (失败不自动重试)",
+    },
+    KeyBinding {
         keys: "Backspace",
         action: "删除输入",
         note: "",
@@ -113,8 +138,23 @@ pub fn map_key(key: KeyEvent, mode: KeyMode) -> Action {
         return Action::Ignored;
     }
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    if ctrl && key.code == KeyCode::Char('c') {
+        return Action::QuitStep;
+    }
+    if ctrl && key.code == KeyCode::Char('t') {
+        return Action::ToggleTasks;
+    }
+    if mode == KeyMode::PanelTasks {
+        // 任务面板 (模态): 只读导航 + 人判重试, 其余键不进输入行 (防越权面)。
+        return match key.code {
+            KeyCode::Up | KeyCode::Char('k') | KeyCode::PageUp => Action::SelectPrev,
+            KeyCode::Down | KeyCode::Char('j') | KeyCode::PageDown => Action::SelectNext,
+            KeyCode::Char('r') => Action::JudgeRetry,
+            KeyCode::Esc => Action::Escape,
+            _ => Action::Ignored,
+        };
+    }
     match key.code {
-        KeyCode::Char('c') if ctrl => Action::QuitStep,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::ALT) => Action::Ignored,
         KeyCode::Char(' ') if ctrl => Action::Ignored,
         KeyCode::BackTab => Action::PrevTab,
@@ -244,5 +284,56 @@ mod tests {
             ),
             Action::Ignored
         );
+    }
+
+    /// 任务面板键位: 模态导航 + 人判重试 + Ctrl+T 全局; 面板内其余键不进输入行。
+    #[test]
+    fn panel_tasks_mode_maps_navigation_and_judge_retry_only() {
+        let press_plain = |code| press(code, KeyModifiers::NONE);
+        assert_eq!(
+            map_key(press_plain(KeyCode::Up), KeyMode::PanelTasks),
+            Action::SelectPrev
+        );
+        assert_eq!(
+            map_key(press_plain(KeyCode::Char('k')), KeyMode::PanelTasks),
+            Action::SelectPrev
+        );
+        assert_eq!(
+            map_key(press_plain(KeyCode::Down), KeyMode::PanelTasks),
+            Action::SelectNext
+        );
+        assert_eq!(
+            map_key(press_plain(KeyCode::Char('j')), KeyMode::PanelTasks),
+            Action::SelectNext
+        );
+        assert_eq!(
+            map_key(press_plain(KeyCode::Char('r')), KeyMode::PanelTasks),
+            Action::JudgeRetry
+        );
+        assert_eq!(
+            map_key(press_plain(KeyCode::Esc), KeyMode::PanelTasks),
+            Action::Escape
+        );
+        // 面板是模态: 普通字符/回车不进输入行 (面板无写口, 防越权面)。
+        assert_eq!(
+            map_key(press_plain(KeyCode::Char('t')), KeyMode::PanelTasks),
+            Action::Ignored
+        );
+        assert_eq!(
+            map_key(press_plain(KeyCode::Enter), KeyMode::PanelTasks),
+            Action::Ignored
+        );
+        // Ctrl+T 全局 (正文 / 输入 / 面板都认)。
+        for mode in [KeyMode::Normal, KeyMode::Input, KeyMode::PanelTasks] {
+            assert_eq!(
+                map_key(press(KeyCode::Char('t'), KeyModifiers::CONTROL), mode),
+                Action::ToggleTasks
+            );
+        }
+        // 键位表: 新键位入表 (帮助浮层即真键位)。
+        let keys: Vec<&str> = KEY_TABLE.iter().map(|row| row.keys).collect();
+        for required in ["Ctrl+T", "↑ / ↓", "r"] {
+            assert!(keys.contains(&required), "键位表缺 {required}");
+        }
     }
 }

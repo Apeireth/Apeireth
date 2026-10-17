@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct DecayConfig {
-    /// Half-life in hours (default 24 = 1 day)
+    /// Half-life in hours (default = 遗忘半衰期基线 90 天, per 设计裁定 R1⑩)
     pub half_life_hours: f64,
 }
 
@@ -15,7 +15,7 @@ impl Default for DecayConfig {
     fn default() -> Self {
         Self {
             // 艾宾浩斯半衰期 (体验旋钮 MemoryFade, 与 retention 同一推导):
-            // 未设 = 倍率 1.0 = 24h 现状, 零变化。
+            // 未设 = 倍率 1.0 = 基线 90 天, 零变化。
             half_life_hours: crate::retention::effective_half_life_hours(),
         }
     }
@@ -94,16 +94,32 @@ mod tests {
 
     #[test]
     fn half_life_24h() {
-        let e = DecayEngine::new();
+        // 显式配置仍可覆盖 (旧行为兼容: 旧 24h 半衰期照常可表达)。
+        let e = DecayEngine::with_config(DecayConfig {
+            half_life_hours: 24.0,
+        });
         let yesterday = Utc::now() - chrono::Duration::hours(24);
         let s = e.strength(yesterday);
         assert!((s - 0.5).abs() < 0.05);
     }
 
     #[test]
+    fn half_life_defaults_to_90_days() {
+        // 设计裁定 R1⑩: 默认遗忘半衰期 = 90 天 (一个半衰期后强度 ≈ 0.5)。
+        let e = DecayEngine::new();
+        let one_half_life_ago = Utc::now() - chrono::Duration::days(90);
+        let s = e.strength(one_half_life_ago);
+        assert!(
+            (s - 0.5).abs() < 0.05,
+            "90 天 = 一个半衰期 → ≈0.5, 实际 {s}"
+        );
+    }
+
+    #[test]
     fn should_forget_threshold() {
         let e = DecayEngine::new();
-        let very_old = Utc::now() - chrono::Duration::days(30);
+        // 远超 90 天默认半衰期 → 低于 0.5 阈值 → 遗忘 (未保护记忆口径)。
+        let very_old = Utc::now() - chrono::Duration::days(300);
         assert!(e.should_forget(very_old, 0.5));
     }
 
@@ -116,16 +132,16 @@ mod tests {
 
     #[test]
     fn virtual_clock_half_life_without_waiting() {
-        // 虚拟时钟: 0 真等待验证 24h 半衰期
+        // 虚拟时钟: 0 真等待验证默认 90 天半衰期
         let vc = vclock();
         let e = DecayEngine::with_config_and_clock(DecayConfig::default(), Arc::new(vc.clone()));
         let last = vc.current();
         assert!((e.strength(last) - 1.0).abs() < 1e-6, "刚访问强度应接近 1");
-        vc.advance(chrono::Duration::hours(24));
+        vc.advance(chrono::Duration::days(90));
         let s = e.strength(last);
-        assert!((s - 0.5).abs() < 0.01, "24h 半衰期应 ≈0.5, 实际 {s}");
-        // 快进 30 天 → 应被遗忘
-        vc.advance(chrono::Duration::days(29));
-        assert!(e.should_forget(last, 0.5), "30 天后应低于遗忘阈值");
+        assert!((s - 0.5).abs() < 0.01, "90 天半衰期应 ≈0.5, 实际 {s}");
+        // 再快进 90 天 (合计 180 天) → 应被遗忘
+        vc.advance(chrono::Duration::days(90));
+        assert!(e.should_forget(last, 0.5), "180 天后应低于遗忘阈值");
     }
 }

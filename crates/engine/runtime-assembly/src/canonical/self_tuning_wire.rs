@@ -20,9 +20,11 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::stored_doc::{self, DocCompat};
 use apeireth_orchestration::self_tuning::{
-    install_effective_values, RetrievalHitMissSignal, SelfTuningEngine, TunableParam, TuningRecord,
-    TuningSignal, TuningValues,
+    install_effective_values, RetrievalHitMissSignal, SelfTuningEngine, TraitLocks, TunableParam,
+    TuningRecord, TuningSignal, TuningValues,
 };
+
+use super::trait_growth::{load_trait_locks, set_trait_lock, trait_locks_path_for};
 
 /// 学习日志文件名 (数据目录, 与 session db 同目录落位)。
 pub const TUNING_LOG_FILE: &str = "tuning-log.jsonl";
@@ -33,7 +35,7 @@ pub const TUNING_LOG_DOC_NAME: &str = "tuning-log-record";
 pub const TUNING_LOG_DOC_VERSION: u32 = 1;
 
 /// 学习日志的逐记录版本契约 (信封)。
-fn tuning_log_doc_compat() -> DocCompat {
+pub fn tuning_log_doc_compat() -> DocCompat {
     DocCompat::exact(TUNING_LOG_DOC_NAME, TUNING_LOG_DOC_VERSION)
 }
 
@@ -52,7 +54,7 @@ pub fn migrate_legacy_tuning_log_file(
 /// 自学习开关 env (默认关, 仅 `1` 开)。
 pub const SELF_TUNING_ENABLE_ENV: &str = "APEIRETH_ENABLE_SELF_TUNING";
 
-/// 自校准接线层: 引擎 + 真接信号源 + 日志落盘 + 生效值落地。
+/// 自校准接线层: 引擎 + 真接信号源 + 日志落盘 + 生效值落地 + 滑杆锁定态。
 #[derive(Debug)]
 pub struct SelfTuningWire {
     engine: Mutex<SelfTuningEngine>,
@@ -60,20 +62,30 @@ pub struct SelfTuningWire {
     retrieval: RetrievalHitMissSignal,
     log_path: PathBuf,
     log_failures: AtomicU64,
+    /// 特质锁定态持久档 (与学习日志同目录, 见 [`Self::locks_path`])。
+    locks_path: PathBuf,
+    /// 锁定态读取失败计数 (期间 fail-closed 全锁定; 0 装诚实)。
+    lock_failures: AtomicU64,
 }
 
 impl SelfTuningWire {
     /// 构造接线层: 引擎以给定初值起步 (调参面板/env 旋钮值 = 自动校准的起点),
-    /// 并立即把初值装进 override (引擎是启用期间的唯一权威)。
+    /// 并立即把初值装进 override (引擎是启用期间的唯一权威)。锁定态从持久档
+    /// 现读 (缺档 = 全解锁默认态)。
     pub fn new(log_path: PathBuf, initial: TuningValues) -> Self {
         let engine = SelfTuningEngine::with_initial(initial);
         install_effective_values(engine.effective_values());
-        Self {
+        let locks_path = trait_locks_path_for(&log_path);
+        let wire = Self {
             engine: Mutex::new(engine),
             retrieval: RetrievalHitMissSignal::new(),
             log_path,
             log_failures: AtomicU64::new(0),
-        }
+            locks_path,
+            lock_failures: AtomicU64::new(0),
+        };
+        wire.refresh_locks();
+        wire
     }
 
     /// 从 env 构造: `APEIRETH_ENABLE_SELF_TUNING=1` 才启用 (默认关 → None);
@@ -100,8 +112,10 @@ impl SelfTuningWire {
         while self.observe_signal(&self.retrieval).is_some() {}
     }
 
-    /// 从信号源拉一条并观察 (注入点轮询式用法)。
+    /// 从信号源拉一条并观察 (注入点轮询式用法)。观察前现读锁定态:
+    /// 锁定杆的沉积**跳过并留审计痕**, 落同一本成长账。
     pub fn observe_signal(&self, signal: &dyn TuningSignal) -> Option<TuningRecord> {
+        self.refresh_locks();
         let mut engine = self
             .engine
             .lock()
@@ -123,6 +137,49 @@ impl SelfTuningWire {
     /// 日志追加失败计数 (0 装诚实: 持久化失败不静默)。
     pub fn log_failures(&self) -> u64 {
         self.log_failures.load(Ordering::Relaxed)
+    }
+
+    /// 特质锁定态持久档路径 (与学习日志同目录的 `trait-locks.json`)。
+    pub fn locks_path(&self) -> &Path {
+        &self.locks_path
+    }
+
+    /// 锁定态读取失败计数 (期间 fail-closed 全锁定; 0 装诚实)。
+    pub fn lock_failures(&self) -> u64 {
+        self.lock_failures.load(Ordering::Relaxed)
+    }
+
+    /// 从持久档现读锁定态并装进引擎 (观察前调用; 锁定动作跨进程即时生效)。
+    ///
+    /// **fail-closed**: 读不出来 = 全锁定 (宁可这轮不长也不动任何杆), 计入
+    /// [`SelfTuningWire::lock_failures`] —— 坏档绝不被读成"全解锁"去放行移动。
+    fn refresh_locks(&self) {
+        let locks = match load_trait_locks(&self.locks_path) {
+            Ok(locks) => locks,
+            Err(_) => {
+                self.lock_failures.fetch_add(1, Ordering::Relaxed);
+                TraitLocks::all_locked()
+            }
+        };
+        self.engine
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .set_locks(locks);
+    }
+
+    /// 显式锁定一根滑杆 (裁定 ④): 持久到锁定档并即时生效; 此后成长沉积跳过
+    /// 该杆、留审计痕。
+    pub fn lock_param(&self, param: TunableParam) -> Result<TraitLocks, String> {
+        let locks = set_trait_lock(&self.locks_path, param, true)?;
+        self.refresh_locks();
+        Ok(locks)
+    }
+
+    /// 显式解锁一根滑杆 (裁定 ④: **解锁 = 显式动作**, 无自动解锁路径)。
+    pub fn unlock_param(&self, param: TunableParam) -> Result<TraitLocks, String> {
+        let locks = set_trait_lock(&self.locks_path, param, false)?;
+        self.refresh_locks();
+        Ok(locks)
     }
 
     /// 落日志 (JSONL 追加, 每行一个逐记录信封 [`stored_doc::StoredDoc`])

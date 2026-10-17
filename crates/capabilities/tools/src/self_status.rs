@@ -91,11 +91,17 @@ pub struct MemoryLedgerStats {
     pub protected: Option<u64>,
     /// 教训数 (反思沉淀的教训计数)。
     pub lessons: Option<u64>,
+    /// 待摄取数 (V4-b 保鲜回路: 摄取队列 `pending` 真值; 缺源 = `None` 显式 null)。
+    pub pending_ingest: Option<u64>,
+    /// 最近折入真值 (V4-b: epoch 毫秒; 尚未折入 = `None`, 显式 null 不编时间)。
+    pub last_fold_at_ms: Option<i64>,
+    /// 去重计数 (V4-b: 散列增量门跳过重复摄取的累计真值; 缺源 = `None`)。
+    pub dedup_skipped: Option<u64>,
     /// 局部缺失原因 (某计数探测失败时给出; 与字段级 null 配对)。
     pub reason: Option<String>,
 }
 
-/// 四滑杆调参状态 (体验参数生效值 + 预设名 + 自学习开关)。
+/// 四滑杆调参状态 (体验参数生效值 + 预设名 + 自学习开关 + 性格节真值)。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TuningStatus {
     /// 遗忘衰减强度倍率当前生效值。
@@ -110,6 +116,50 @@ pub struct TuningStatus {
     pub preset: String,
     /// 自学习 (自动调参) 开关的当前生效值。
     pub self_learning: bool,
+    /// 四杆锁定态 (locked = 成长沉积不再移动该杆; 解锁是显式动作)。
+    /// `None` = 锁定态来源未接线/读取失败 (帧内显式 null + 原因, 不编)。
+    pub locked: Option<TraitLockStatus>,
+    /// 最近移动 (成长计既有账的实际移动, 新 → 旧, 最多 4 条)。
+    /// `None` = 来源未接线/读取失败 (同上)。
+    pub recent_moves: Option<Vec<TraitMoveStatus>>,
+}
+
+/// 四杆锁定态 (与调参面板四滑杆同名同序)。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TraitLockStatus {
+    /// 遗忘衰减强度滑杆锁定态。
+    pub memory_fade: bool,
+    /// 好奇强度滑杆锁定态。
+    pub curiosity_strength: bool,
+    /// 语气情绪饱和度滑杆锁定态。
+    pub tone_saturation: bool,
+    /// 整合节奏滑杆锁定态。
+    pub consolidation_cadence: bool,
+}
+
+/// 一根滑杆的最近一次实际移动 (性格节「最近移动」的一行)。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TraitMoveStatus {
+    /// 滑杆 id (snake_case: `memory_fade` / `curiosity_strength` /
+    /// `tone_saturation` / `consolidation_cadence`)。
+    pub param: String,
+    /// 滑杆中文名 (与调参面板同名)。
+    pub label: String,
+    /// 移动时刻 (epoch 毫秒)。
+    pub at_epoch_ms: i64,
+    /// 移动量 (带符号)。
+    pub delta: f64,
+    /// 移动原因 (成长计既有账的沉积原因原文)。
+    pub reason: String,
+}
+
+/// 性格节附加真值: 锁定态 + 最近移动 (由成长计数据面探测口现读)。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TraitStatus {
+    /// 四杆锁定态。
+    pub locked: TraitLockStatus,
+    /// 最近移动 (新 → 旧)。
+    pub recent_moves: Vec<TraitMoveStatus>,
 }
 
 /// 预设名: 省心档 (遗忘更强 / 好奇更收敛 / 语气更淡 / 整合更慢)。
@@ -544,9 +594,10 @@ pub struct SelfStatusSnapshot {
     pub memory_ledger: Option<MemoryLedgerStats>,
     /// 记忆账本不可用的原因; 可用时为 `None`。
     pub memory_ledger_reason: Option<String>,
-    /// 调参状态。
+    /// 调参状态 (含性格节真值: 四杆锁定态 + 最近移动)。
     pub tuning: Option<TuningStatus>,
-    /// 调参状态不可用的原因; 可用时为 `None`。
+    /// 调参节缺源/局部缺失的原因 (来源缺席或性格节锁定态/最近移动没测到);
+    /// 齐全时为 `None`。
     pub tuning_reason: Option<String>,
     /// 预算。
     pub budget: Option<BudgetStatus>,
@@ -696,6 +747,10 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "memories": stats.memories,
             "protected": stats.protected,
             "lessons": stats.lessons,
+            // V4-b 保鲜回路真值 (待摄取数 / 最近折入 / 去重计数); 缺源显式 null。
+            "pending_ingest": stats.pending_ingest,
+            "last_fold_at_ms": stats.last_fold_at_ms,
+            "dedup_skipped": stats.dedup_skipped,
             "reason": snapshot
                 .memory_ledger_reason
                 .clone()
@@ -706,6 +761,9 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "memories": null,
             "protected": null,
             "lessons": null,
+            "pending_ingest": null,
+            "last_fold_at_ms": null,
+            "dedup_skipped": null,
             "reason": snapshot
                 .memory_ledger_reason
                 .clone()
@@ -723,6 +781,9 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             },
             "preset": status.preset,
             "self_learning": status.self_learning,
+            // 性格节真值 (裁定 ④⑤): 锁定态 + 最近移动; 来源缺失 = 显式 null。
+            "locked": status.locked,
+            "recent_moves": status.recent_moves,
             "reason": snapshot.tuning_reason,
         }),
         None => json!({
@@ -734,6 +795,8 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             },
             "preset": null,
             "self_learning": null,
+            "locked": null,
+            "recent_moves": null,
             "reason": snapshot
                 .tuning_reason
                 .clone()
@@ -1187,6 +1250,9 @@ mod tests {
                 memories: Some(5),
                 protected: Some(1),
                 lessons: Some(0),
+                pending_ingest: Some(3),
+                last_fold_at_ms: Some(1_700_000_000_000),
+                dedup_skipped: Some(4),
                 reason: None,
             }),
             memory_ledger_reason: None,
@@ -1197,6 +1263,19 @@ mod tests {
                 consolidation_cadence: 2.0,
                 preset: derive_tuning_preset([1.5, 0.75, 0.8, 2.0]),
                 self_learning: false,
+                locked: Some(TraitLockStatus {
+                    memory_fade: true,
+                    curiosity_strength: false,
+                    tone_saturation: false,
+                    consolidation_cadence: false,
+                }),
+                recent_moves: Some(vec![TraitMoveStatus {
+                    param: "memory_fade".to_string(),
+                    label: "遗忘衰减强度".to_string(),
+                    at_epoch_ms: 1_700_000_000_000,
+                    delta: 0.25,
+                    reason: "检索命中 4/未命中 0: 召回供给充裕, 遗忘衰减上调一档".to_string(),
+                }]),
             }),
             tuning_reason: None,
             budget: Some(BudgetStatus {
@@ -1349,6 +1428,13 @@ mod tests {
         assert_eq!(value["memory_ledger"]["memories"], 5);
         assert_eq!(value["memory_ledger"]["protected"], 1);
         assert_eq!(value["memory_ledger"]["lessons"], 0);
+        // V4-b 保鲜回路三真值随记忆节如实上报 (待摄取数 / 最近折入 / 去重计数)。
+        assert_eq!(value["memory_ledger"]["pending_ingest"], 3);
+        assert_eq!(
+            value["memory_ledger"]["last_fold_at_ms"],
+            1_700_000_000_000i64
+        );
+        assert_eq!(value["memory_ledger"]["dedup_skipped"], 4);
         assert_eq!(value["tuning"]["preset"], PRESET_EFFORTLESS);
         assert_eq!(value["budget"]["max_rounds_per_turn"], 8);
         assert_eq!(value["budget"]["max_tool_calls_per_round"], 16);
@@ -1367,6 +1453,51 @@ mod tests {
         assert_eq!(value["persona"]["tensions"], 1);
         assert_eq!(value["persona"]["last_consolidation_at"], 1_728_000_800i64);
         assert_eq!(value["persona"]["reason"], Value::Null);
+    }
+
+    /// 性格节真值 (裁定 ④⑤): 四杆锁定态 + 最近移动随调参节如实上报。
+    #[tokio::test]
+    async fn tuning_section_reports_lock_state_and_recent_moves() {
+        let result = invoke_tool(fixture_snapshot()).await;
+        assert!(result.is_ok(), "{}", result.render());
+        let value: Value = serde_json::from_str(&result.render()).expect("structured json");
+        assert_eq!(value["tuning"]["locked"]["memory_fade"], true);
+        assert_eq!(value["tuning"]["locked"]["curiosity_strength"], false);
+        assert_eq!(value["tuning"]["locked"]["tone_saturation"], false);
+        assert_eq!(value["tuning"]["locked"]["consolidation_cadence"], false);
+        let moves = value["tuning"]["recent_moves"]
+            .as_array()
+            .expect("recent moves 在场");
+        assert_eq!(moves.len(), 1);
+        assert_eq!(moves[0]["param"], "memory_fade");
+        assert_eq!(moves[0]["label"], "遗忘衰减强度");
+        assert_eq!(moves[0]["delta"], 0.25);
+        assert_eq!(moves[0]["at_epoch_ms"], 1_700_000_000_000i64);
+        assert!(
+            moves[0]["reason"].as_str().is_some_and(|r| !r.is_empty()),
+            "最近移动必须带原因"
+        );
+    }
+
+    /// 性格节来源缺席 = 显式 null + 原因 (0 装诚实, 不编锁定态/最近移动)。
+    #[tokio::test]
+    async fn missing_trait_status_is_explicit_null_with_a_reason() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.tuning_reason = Some("trait growth probe failed: bad json".to_string());
+        if let Some(tuning) = snapshot.tuning.as_mut() {
+            tuning.locked = None;
+            tuning.recent_moves = None;
+        }
+        let result = invoke_tool(snapshot).await;
+        let value: Value = serde_json::from_str(&result.render()).expect("structured json");
+        assert_eq!(value["tuning"]["locked"], Value::Null);
+        assert_eq!(value["tuning"]["recent_moves"], Value::Null);
+        assert_eq!(
+            value["tuning"]["reason"],
+            "trait growth probe failed: bad json"
+        );
+        // 生效值与锁定态不同源: 缺一不编另一, 值照实在场。
+        assert_eq!(value["tuning"]["values"]["memory_fade"], 1.5);
     }
 
     #[tokio::test]
@@ -1639,6 +1770,9 @@ mod tests {
             memories: None,
             protected: None,
             lessons: None,
+            pending_ingest: None,
+            last_fold_at_ms: None,
+            dedup_skipped: None,
             reason: Some("lesson store not wired".to_string()),
         });
         snapshot.memory_ledger_reason = None;
@@ -1646,10 +1780,40 @@ mod tests {
         assert_eq!(value["memory_ledger"]["sessions"], 1);
         assert_eq!(value["memory_ledger"]["memories"], Value::Null);
         assert_eq!(value["memory_ledger"]["lessons"], Value::Null);
+        // V4-b 保鲜三真值缺源同样显式 null (不编数)。
+        assert_eq!(value["memory_ledger"]["pending_ingest"], Value::Null);
+        assert_eq!(value["memory_ledger"]["last_fold_at_ms"], Value::Null);
+        assert_eq!(value["memory_ledger"]["dedup_skipped"], Value::Null);
         assert!(value["memory_ledger"]["reason"]
             .as_str()
             .unwrap()
             .contains("lesson store not wired"));
+    }
+
+    /// V4-b 记忆节扩: 待摄取数 / 最近折入 / 去重计数真值如实; 尚未折入 =
+    /// 显式 null (不编时间)。
+    #[test]
+    fn memory_ledger_freshness_fields_report_truth_or_explicit_null() {
+        let mut snapshot = fixture_snapshot();
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["memory_ledger"]["pending_ingest"], 3);
+        assert_eq!(
+            value["memory_ledger"]["last_fold_at_ms"],
+            1_700_000_000_000i64
+        );
+        assert_eq!(value["memory_ledger"]["dedup_skipped"], 4);
+
+        // 尚未折入: 最近折入显式 null (不编时间), 其余真值照常。
+        if let Some(stats) = snapshot.memory_ledger.as_mut() {
+            stats.pending_ingest = Some(0);
+            stats.last_fold_at_ms = None;
+            stats.dedup_skipped = Some(0);
+        }
+        let unfilled = render_snapshot(&snapshot);
+        assert_eq!(unfilled["memory_ledger"]["pending_ingest"], 0);
+        assert_eq!(unfilled["memory_ledger"]["last_fold_at_ms"], Value::Null);
+        assert_eq!(unfilled["memory_ledger"]["dedup_skipped"], 0);
+        assert!(SelfStatusTool::output_schema().validate(&unfilled).is_ok());
     }
 
     #[test]

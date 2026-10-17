@@ -388,6 +388,36 @@ impl CockpitBackend for HttpGatewayBackend {
         }
         Ok(snapshot)
     }
+
+    fn fetch_tasks(&mut self) -> BackendResult<crate::tasks::TaskBoardSnapshot> {
+        // 任务面板只读面 (一次快照读): 任务行 + 六态分组计数 + 时间线同一刻。
+        let body = self.get("/v1/panel/tasks")?;
+        let value: Value = parse_json(&body)?;
+        Ok(crate::tasks::snapshot_from_json(&value))
+    }
+
+    fn human_judge_retry(
+        &mut self,
+        task_id: &str,
+        reason: &str,
+    ) -> BackendResult<crate::tasks::TaskRow> {
+        // 人判重试 (failed 只能人判): 面板唯一动作面, 走后端队列语义。
+        let payload = json!({ "reason": reason });
+        let response = self
+            .with_auth(
+                self.client
+                    .post(self.url(&format!("/v1/panel/tasks/{task_id}/human-judge-retry"))),
+            )
+            .json(&payload)
+            .send()
+            .map_err(|error| unreachable_error(&self.endpoint, error))?;
+        let text = read_body(response)?;
+        let value: Value = parse_json(&text)?;
+        let task = value
+            .get("task")
+            .ok_or_else(|| BackendError::Protocol("人判重试响应缺 task 对象".to_string()))?;
+        Ok(crate::tasks::row_from_json(task))
+    }
 }
 
 /// 单节拉取失败的诚实记录: 备注 + 首个「连不上」错误留作整体错误。
@@ -748,6 +778,69 @@ mod tests {
         );
     }
 
+    /// 任务面板读面: 合同形状如实解码 (未知状态不猜分组, 空载荷摘要 "—")。
+    #[test]
+    fn task_snapshots_decode_from_the_contract_shape_without_guessing() {
+        let value = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "校对", "state": "failed", "attempts": 2,
+                "assignee": "worker-a", "created_at_ms": 1, "updated_at_ms": 2,
+                "payload": {"step": 3},
+                "timeline": [{"kind": "failure_judged", "at_ms": 2, "detail": "{}"}]
+            }, {
+                "id": "task-2", "title": "怪态", "state": "maybe", "attempts": 0,
+                "assignee": null, "created_at_ms": 3, "updated_at_ms": 3,
+                "payload": null, "timeline": []
+            }],
+            "counts": {"pending": 0, "assigned": 0, "running": 0, "done": 0,
+                       "failed": 1, "blocked": 0, "total": 2}
+        });
+        let snapshot = crate::tasks::snapshot_from_json(&value);
+        assert_eq!(snapshot.counts.failed, 1);
+        assert_eq!(
+            snapshot.rows[0].state,
+            Some(crate::tasks::TaskStateView::Failed)
+        );
+        assert!(snapshot.rows[0].judge_retryable());
+        assert_eq!(snapshot.rows[1].state, None, "合同外状态不猜分组");
+        assert_eq!(
+            snapshot.rows[1].payload_summary,
+            crate::tasks::HONEST_PLACEHOLDER
+        );
+    }
+
+    /// 人判重试链 (面板→API): POST 目标是唯一动作面, 错误帧解码为类型化错误。
+    #[test]
+    fn human_judge_retry_posts_to_the_single_action_face() {
+        let captured = serve_one_and_capture(|endpoint| {
+            let _ = HttpGatewayBackend::with_token(&endpoint, Some("judge-token-1"))
+                .expect("backend")
+                .human_judge_retry("task-7", "缺口已补");
+        });
+        assert!(
+            captured.contains("POST /v1/panel/tasks/task-7/human-judge-retry"),
+            "人判重试走唯一动作面: {captured}"
+        );
+        assert!(
+            captured
+                .to_ascii_lowercase()
+                .contains("authorization: bearer judge-token-1"),
+            "人判动作同样带令牌 (令牌门同源): {captured}"
+        );
+
+        let typed = decode_error_frame(
+            409,
+            r#"{"error":{"message":"任务 task-7 当前状态 running 不允许人判重试 (只有 failed 能重试)","code":"conflict","solution":"失败不自动重试"}}"#,
+        );
+        match typed {
+            BackendError::Http { status, code, .. } => {
+                assert_eq!(status, 409);
+                assert_eq!(code, "conflict");
+            }
+            other => panic!("预期 Http 错误帧, 得到 {other:?}"),
+        }
+    }
+
     /// 全端点带 Bearer (W2-② 认证面全网关化): TUI 的每个请求族 (探活 / 模型 /
     /// 面板 / 会话设置 / chat) 都随请求呈现令牌 —— 令牌门覆盖全 API 面后,
     /// 这是 TUI 全程零断的前提 (缺一族就 401)。
@@ -776,6 +869,22 @@ mod tests {
                     let _ = HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
                         .expect("backend")
                         .list_sessions();
+                }),
+            ),
+            (
+                "panel tasks",
+                Box::new(|endpoint| {
+                    let _ = HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
+                        .expect("backend")
+                        .fetch_tasks();
+                }),
+            ),
+            (
+                "human judge retry",
+                Box::new(|endpoint| {
+                    let _ = HttpGatewayBackend::with_token(&endpoint, Some("family-token-1"))
+                        .expect("backend")
+                        .human_judge_retry("task-1", "缺口已补");
                 }),
             ),
             (

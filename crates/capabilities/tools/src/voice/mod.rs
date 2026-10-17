@@ -21,15 +21,20 @@
 //!   │
 //!   ├─ 安静纪律 (quiet): 勿扰窗口内错误即帧 (同源接缝: care_rules 打扰
 //!   │    纪律配了窗口 = 引用之, 否则 APEIRETH_VOICE_QUIET_HOURS 最小
-//!   │    自建 env, 默认 22:00-06:00; 时间基准与关怀纪律同为 UTC 当日分钟)
+//!   │    自建 env, 默认 23:00-08:00; 时间基准与关怀纪律同为 UTC 当日分钟)
+//!   │
+//!   ├─ 发声范围 (speak scope, 设计裁定 R1⑰): 缺省仅关怀/提醒帧出声,
+//!   │    常规划算对话回复不出声 (拒绝即帧); APEIRETH_VOICE_SPEAK_SCOPE=all
+//!   │    显式扩全量
 //!   │
 //!   ├─ 合成即播 (synth): 系统语音引擎受控子进程
 //!   │    Windows = 系统托管语音封装桥 (脚本零插值, 请求走 stdin JSON);
 //!   │    其余平台 = 缺席面 (错误即帧, 不假嗓)。执行面是 trait, 测试假引擎注入。
 //!   │
-//!   ├─ 受控播放 (playback): 独占槽 (同时只播一条) + 新话打断旧话可配
-//!   │    (APEIRETH_VOICE_INTERRUPT: 1 打断 / 0 排队串行);
-//!   │    SpeechTicket Drop = 真停 + 出槽 (取消/超时/收尾三路零僵尸播放)
+//!   ├─ 受控播放 (playback): 独占槽 (同时只播一条) + 缺省排队串行
+//!   │    (APEIRETH_VOICE_INTERRUPT 缺省 0 排队 / 1 打断; 排队话帧上限 3 条,
+//!   │    满则拒新即帧); SpeechTicket Drop = 真停 + 出槽 (取消/超时/收尾三路
+//!   │    零僵尸播放)
 //!   │
 //!   └─ 语句账本 (ledger): <data_dir>/spoken.jsonl append-only
 //!        说了什么 / 何时 / 哪把嗓 / 时长 (合成失败不入账 = 没说话;
@@ -43,8 +48,12 @@
 //! - **发声面档**: grant 即发声 (免逐次人批), 拦截面 = 参数边界 + 勿扰窗口 +
 //!   独占播放 + 账本全责; 与 shell 的「每次人批」执行档**不借壳不分档混用**;
 //! - **脱敏**: 合成文本全文只进语句账本; 错误帧/输出帧只带字符数、嗓名、
-//!   时长、状态 (文本原文不上任何日志面)。
+//!   时长、状态 (文本原文不上任何日志面);
+//! - **情绪→语气微调** (拍板 ⑱, `emotion_tune`): 发声前现读当前情绪态
+//!   (PAD), 按冻结映射表微调语速/音量 —— 无情绪数据 = 原参数零变化,
+//!   显式传参覆盖自动微调, 微调幅度有限 (防夸张)。
 
+pub mod emotion_tune;
 pub mod ledger;
 pub mod mock;
 pub mod playback;
@@ -52,26 +61,33 @@ pub mod quiet;
 pub mod speak;
 pub mod synth;
 
+pub use emotion_tune::{
+    apply_tune, tune_voice_params, EmotionBand, EmotionReader, PadReading, TuneDelta, TuneRow,
+    TunedVoiceParams, EMOTION_TUNE_TABLE, HIGH_PLEASURE_MIN, HIGH_TENSION_AROUSAL_MIN,
+    HIGH_TENSION_PLEASURE_MAX, TUNE_RATE_DELTA_CAP, TUNE_VOLUME_DELTA_CAP,
+};
+
 pub use ledger::{
     spoken_utterance_id, voice_excerpt, SpokenLedger, SpokenStatus, SpokenUtterance,
     DEFAULT_VOICE_LABEL, SPOKEN_DOC_NAME, SPOKEN_DOC_VERSION, SPOKEN_LEDGER_FILE,
     VOICE_EXCERPT_MAX_CHARS,
 };
 pub use playback::{
-    begin_speech, wait_playback, PlaybackController, PlaybackPolicy, SpeechTicket, TryBeginError,
-    PLAYBACK_POLL_MS, VOICE_INTERRUPT_ENV,
+    begin_speech, wait_playback, PlaybackController, PlaybackPolicy, QueueSlot, SpeechTicket,
+    TryBeginError, PLAYBACK_POLL_MS, SPEECH_QUEUE_MAX, VOICE_INTERRUPT_ENV,
 };
 pub use quiet::{
     fixed_clock, system_quiet_clock, utc_minutes_of_day, QuietClock, QuietHours, QuietWindow,
     MINUTES_PER_DAY, VOICE_QUIET_HOURS_DEFAULT, VOICE_QUIET_HOURS_ENV, VOICE_QUIET_HOURS_OFF,
 };
 pub use speak::{
-    authorized_voice_speak_policy, resolve_voice, speak_request_refusal, voice_speak_capability,
-    voice_speak_pipeline, SpeakOutcome, VoiceSpeakBoundaryGuard, VoiceSpeakConfig,
-    VoiceSpeakParams, VoiceSpeakRiskMappingHook, VoiceSpeakTool, VOICE_RATE_DEFAULT,
-    VOICE_RATE_MAX, VOICE_RATE_MIN, VOICE_SPEAK_CAPABILITY_ID, VOICE_SPEAK_MAX_TEXT_CHARS,
-    VOICE_SPEAK_MAX_TIMEOUT_MS, VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_TOOL_DESCRIPTION,
-    VOICE_SPEAK_TOOL_NAME, VOICE_VOLUME_DEFAULT, VOICE_VOLUME_MAX, VOICE_VOLUME_MIN,
+    authorized_voice_speak_policy, resolve_voice, speak_request_refusal, speak_scope_refusal,
+    voice_speak_capability, voice_speak_pipeline, SpeakGate, SpeakOutcome, SpeakScope,
+    VoiceSpeakBoundaryGuard, VoiceSpeakConfig, VoiceSpeakParams, VoiceSpeakRiskMappingHook,
+    VoiceSpeakTool, VOICE_RATE_DEFAULT, VOICE_RATE_MAX, VOICE_RATE_MIN, VOICE_SPEAK_CAPABILITY_ID,
+    VOICE_SPEAK_MAX_TEXT_CHARS, VOICE_SPEAK_MAX_TIMEOUT_MS, VOICE_SPEAK_SCOPE_ENV,
+    VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_TOOL_DESCRIPTION, VOICE_SPEAK_TOOL_NAME,
+    VOICE_VOLUME_DEFAULT, VOICE_VOLUME_MAX, VOICE_VOLUME_MIN,
 };
 pub use synth::{
     build_probe_script, build_speak_script, build_voices_script, parse_synth_payload, parse_voices,
