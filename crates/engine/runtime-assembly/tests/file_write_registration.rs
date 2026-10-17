@@ -141,7 +141,7 @@ fn roster_projection_is_stable_for_the_file_write_rows() {
     let mut config = ProductionModulesConfig::default();
     config.file_write = true;
     config.file_write_auto_pass = true;
-    let roster = roster_from_config(&config, true, false, true, &[]);
+    let roster = roster_from_config(&config, true, false, false, true, &[]);
     let file_write: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("file_write"))
@@ -152,7 +152,7 @@ fn roster_projection_is_stable_for_the_file_write_rows() {
         vec![("file_write", true), ("file_write_auto_pass", true)]
     );
     // 无工作区根: 注册条件不成立, 两行都照实 false。
-    let roster = roster_from_config(&config, false, false, true, &[]);
+    let roster = roster_from_config(&config, false, false, false, true, &[]);
     let file_write: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("file_write"))

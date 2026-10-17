@@ -630,8 +630,11 @@ impl UserAccess {
 
 /// 写一条 `gateway.user_action` 审计行 (W3-② 授权面)。
 ///
-/// `allowed` 是角色门裁决 (`allow` / `deny`); 无审计面 (内嵌直调) = 不写,
-/// 不伪造。
+/// `allowed` 是角色门裁决 (`allow` / `deny`); `domain` 是该行**所涉用户域**
+/// (V2-c 域标注: 管理动作 = 目标域, 授权裁决 = 行为域; `None` = 无域标注)。
+/// 标注进 detail 的 `domain=<id>` 记号 (域视图审计面据此归属, 见
+/// [`crate::domain_context::audit_detail_domain`]); 取值有界截断 (外部可控
+/// 输入不无界进审计行)。无审计面 (内嵌直调) = 不写, 不伪造。
 pub fn record_user_action(
     observations: Option<&crate::events::RuntimeObservationSink>,
     user: Option<&str>,
@@ -639,21 +642,26 @@ pub fn record_user_action(
     action: &str,
     endpoint: &str,
     allowed: bool,
+    domain: Option<&str>,
 ) {
     let Some(observations) = observations else {
         return;
     };
-    observations.buffer_audit(
-        USER_ACTION_AUDIT_EVENT,
-        Some(format!(
-            "user={} role={} action={} endpoint={} decision={}",
-            user.unwrap_or("unbound"),
-            role.map(UserRole::as_str).unwrap_or("unbound"),
-            action,
-            endpoint,
-            if allowed { "allow" } else { "deny" },
-        )),
+    let mut detail = format!(
+        "user={} role={} action={} endpoint={} decision={}",
+        user.unwrap_or("unbound"),
+        role.map(UserRole::as_str).unwrap_or("unbound"),
+        action,
+        endpoint,
+        if allowed { "allow" } else { "deny" },
     );
+    if let Some(domain) = domain {
+        detail.push_str(&format!(
+            " domain={}",
+            crate::canonical_entry::truncate_label(domain)
+        ));
+    }
+    observations.buffer_audit(USER_ACTION_AUDIT_EVENT, Some(detail));
 }
 
 /// 客户端令牌配置缺陷。每个变体对加载都是致命的: 坏配置拒绝打开。

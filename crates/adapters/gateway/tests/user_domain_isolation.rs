@@ -7,8 +7,9 @@
 //!    存在性不泄露), 写拒且他域账本零改动;
 //! 3. **域级点名拒**: 自称域头 (`x-apeireth-domain`) ≠ 本域 → 403
 //!    `domain_forbidden` **恒定帧** (目标域存在与否同帧);
-//! 4. **面闸**: 非默认域只开按域路由的面 (`/v1/sessions/*`), 其余面 403
-//!    fail-closed (面未按域开放, 不出默认域数据)。
+//! 4. **面闸**: 非默认域只开按域路由的面 (W3-③ 起 `/v1/chat*`、`/v1/apeireth/events`;
+//!    V2-c 起面板读面/审批面/管理面逐面开放, 按域过滤证据见 `domain_faces_open.rs`),
+//!    其余面 403 fail-closed (面未按域开放, 不出默认域数据)。
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -360,11 +361,13 @@ async fn non_default_domains_are_confined_to_the_domain_routed_surface() {
     let router = router(&harness).await;
 
     // 非默认域: 未按域开放的面一律 403 `domain_forbidden` (不出默认域数据)。
-    // (W3-③ 演进注记: `/v1/chat` 面已按域开放并走该域伙伴运行时, 见
-    // `domain_partner_chat.rs` 全链证据; 本例保留未开放面的收敛断言。)
+    // (演进注记: `/v1/chat` 面已按域开放 (W3-③, 见 `domain_partner_chat.rs`
+    // 全链证据); `/v1/panel/sessions` 等面板读面已按域开放 (V2-c 逐面开放,
+    // 见 `domain_faces_open.rs` 按域过滤证据); 本例保留未开放面的收敛断言。)
     for (method, uri, body) in [
         ("GET", "/v1/models", Body::empty()),
-        ("GET", "/v1/panel/sessions", Body::empty()),
+        ("GET", "/v1/panel/traces", Body::empty()),
+        ("GET", "/v1/panel/skills", Body::empty()),
     ] {
         let response = router
             .clone()

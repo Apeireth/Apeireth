@@ -194,12 +194,13 @@ pub use self_status::{
     capability_roster, derive_tuning_preset, quota_cost_partial_note, render_snapshot,
     BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus, ContentFeedStatus, DomainCounts,
     DomainStatus, MemoryLedgerStats, PersonaStatusSection, QuotaDimensionStatus, QuotaMeterReading,
-    QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
-    SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitLockStatus, TraitMoveStatus, TraitStatus,
-    TuningStatus, VoiceStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
-    DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY,
-    PRESET_EFFORTLESS, PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED,
-    QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
+    QuotaStatus, RetrievalTuningMove, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource,
+    SelfStatusTool, SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitLockStatus,
+    TraitMoveStatus, TraitStatus, TuningStatus, VoiceStatus, WorkspaceStatus,
+    BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN,
+    PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS, PRICE_NOT_PROVIDED,
+    PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use skill::{

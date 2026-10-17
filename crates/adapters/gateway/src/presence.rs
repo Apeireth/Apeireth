@@ -610,6 +610,16 @@ impl PresenceService {
         Some(synth.current_pad())
     }
 
+    /// 装配级读取口 (常驻宿主接线缝): presence 发起闸同源问询 —— 常驻关怀
+    /// 心跳经闭包闸桥到本口, 与其他 initiative 生产者共用同一份防唠叨预算;
+    /// 估计器锁不可用 = fail-closed 不放行 (宁少勿多, 不冒充额度)。
+    pub fn try_take_initiative(&self, now_ms: i64) -> bool {
+        self.synthesizer
+            .lock()
+            .map(|mut synth| synth.try_take_initiative(now_ms))
+            .unwrap_or(false)
+    }
+
     /// Publish one heartbeat frame. Called by the heartbeat task once per
     /// [`HEARTBEAT_INTERVAL_SECS`]; also directly callable in tests.
     pub fn emit_heartbeat(&self) {
@@ -1032,6 +1042,18 @@ mod tests {
         assert_eq!(synth.initiative_used_in_window(), INITIATIVE_DAILY_CAP);
         // 窗口滚动后恢复。
         assert!(synth.try_take_initiative(T0 + INITIATIVE_WINDOW_MS));
+    }
+
+    #[test]
+    fn the_service_level_initiative_port_consumes_the_same_budget() {
+        // 装配级读取口与合成器本体是同一份防唠叨预算 (同源闸, 不是第二本账):
+        // 常驻宿主经它问询, 与其他 initiative 生产者共享同一限量。
+        let service = PresenceService::new(EventBus::new(4));
+        for expected in [true, true, true, false] {
+            assert_eq!(service.try_take_initiative(T0), expected);
+        }
+        // 窗口滚动后恢复 (窗口语义与合成器本体一致)。
+        assert!(service.try_take_initiative(T0 + INITIATIVE_WINDOW_MS));
     }
 
     // 总线接线

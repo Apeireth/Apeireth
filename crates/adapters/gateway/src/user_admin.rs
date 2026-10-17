@@ -286,6 +286,24 @@ fn checked_id(raw: &str) -> Result<String, UserAdminError> {
         .map_err(|error| UserAdminError::Invalid(error.to_string()))
 }
 
+/// V2-c 管理动作审计行的**目标域**标注 (`domain=<id>` 记号): 域引用缺省 =
+/// user_id 同名域 (与域解析链同一缺省语义); 词面未过 [`DomainUserId`] 目录
+/// 安全闸 = 不标注 (fail-closed, 未核实值不进审计行)。
+fn target_domain_label(domain: Option<&str>, user_id: &str) -> Option<String> {
+    checked_domain_ref(domain.unwrap_or(user_id)).ok()
+}
+
+/// 目标用户的域标注 (查表取该用户**实际**域引用, 缺省 user_id 同名域;
+/// 查无/表坏 = 不标注, fail-closed)。
+fn target_user_domain(service: &UserAdminService, user_id: &str) -> Option<String> {
+    let table = service.load().ok()?;
+    let record = table
+        .users
+        .into_iter()
+        .find(|record| record.user_id == user_id)?;
+    Some(record.domain.unwrap_or(record.user_id))
+}
+
 /// 域引用词面校验 (域引用缺省落 `users/<id>/` 目录, 同一把路径安全闸)。
 fn checked_domain_ref(raw: &str) -> Result<String, UserAdminError> {
     checked_id(raw)
@@ -335,6 +353,8 @@ pub async fn create_user(
         body.domain.as_deref(),
     ) {
         Ok(created) => {
+            // V2-c 域标注: 管理动作 = 目标域 (新建用户的域引用, 缺省同名域)。
+            let domain_label = target_domain_label(created.domain.as_deref(), &created.user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -342,6 +362,7 @@ pub async fn create_user(
                 "user_add",
                 &endpoint,
                 true,
+                domain_label.as_deref(),
             );
             (
                 StatusCode::CREATED,
@@ -350,6 +371,8 @@ pub async fn create_user(
                 .into_response()
         }
         Err(error) => {
+            // V2-c 域标注: 失败行按意图目标标注 (域引用缺省同名域)。
+            let domain_label = target_domain_label(body.domain.as_deref(), &body.user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -357,6 +380,7 @@ pub async fn create_user(
                 "user_add",
                 &endpoint,
                 false,
+                domain_label.as_deref(),
             );
             error_response(&error)
         }
@@ -376,6 +400,8 @@ pub async fn patch_user(
     let endpoint = format!("/v1/admin/users/{user_id}");
     match service.set_role(&user_id, &body.role) {
         Ok(updated) => {
+            // V2-c 域标注: 管理动作 = 目标域 (该用户的实际域引用)。
+            let domain_label = target_domain_label(updated.domain.as_deref(), &updated.user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -383,10 +409,13 @@ pub async fn patch_user(
                 "user_role_change",
                 &endpoint,
                 true,
+                domain_label.as_deref(),
             );
             (StatusCode::OK, Json(serde_json::json!({ "user": updated }))).into_response()
         }
         Err(error) => {
+            // V2-c 域标注: 失败行按查表的目标域标注 (查无 = 不标注)。
+            let domain_label = target_user_domain(service, &user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -394,6 +423,7 @@ pub async fn patch_user(
                 "user_role_change",
                 &endpoint,
                 false,
+                domain_label.as_deref(),
             );
             error_response(&error)
         }
@@ -412,6 +442,8 @@ pub async fn delete_user(
     let endpoint = format!("/v1/admin/users/{user_id}");
     match service.remove(&user_id) {
         Ok(removed) => {
+            // V2-c 域标注: 管理动作 = 目标域 (被删用户的实际域引用)。
+            let domain_label = target_domain_label(removed.domain.as_deref(), &removed.user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -419,6 +451,7 @@ pub async fn delete_user(
                 "user_remove",
                 &endpoint,
                 true,
+                domain_label.as_deref(),
             );
             (
                 StatusCode::OK,
@@ -427,6 +460,8 @@ pub async fn delete_user(
                 .into_response()
         }
         Err(error) => {
+            // V2-c 域标注: 失败行按查表的目标域标注 (查无 = 不标注)。
+            let domain_label = target_user_domain(service, &user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -434,6 +469,7 @@ pub async fn delete_user(
                 "user_remove",
                 &endpoint,
                 false,
+                domain_label.as_deref(),
             );
             error_response(&error)
         }

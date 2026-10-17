@@ -31,6 +31,17 @@
 > self_status 十四节合同（persona 节四面 + 缺节即红断言）、`self_status_persona` 探测口、
 > TurnStart 恒定注入接线、capabilities-matrix §0.2 开关行；上表为外部审计基线口径，对外引用
 > 保持上表，现场以复测类实数为准。
+>
+> **复测注记（2026-10-17，心跳宿主两步接线批校验）**：同命令（加 `-j 2`）复测 = **224 套件 /
+> 5898 passed / 0 failed / 20 ignored**，exit 0（「套件」= 测试二进制目标计数；本批 +1 =
+> `cli/tests/care_heartbeat_host.rs` 心跳宿主接线套件）。本批增量 = 心跳宿主两步接线
+> （gateway presence 装配级读取口 + 宿主三注入点：闸经 `FnInitiativeGate` 注入 `CareEngine`
+> / dispatch 接 `Runtime::execute` / `care_status_probe_with_heartbeat` 注自述关怀节，
+> 双闸齐开才起）+ 自述关怀节心跳两列 null→真值 + capabilities-matrix §0.2 `retrieval_tuning`
+> 开关行与名册互钉（新增测试 6 例）；接线对照表与测试证据见
+> `artifacts/care-heartbeat-host-wiring-report.md`，日志
+> `artifacts/care-heartbeat-host-wiring-workspace-test.log`。上表为外部审计基线口径，对外引用
+> 保持上表，现场以复测类实数为准。
 
 ## 2. 口径定义
 

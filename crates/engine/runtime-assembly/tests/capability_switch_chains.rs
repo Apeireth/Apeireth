@@ -437,7 +437,8 @@ fn matrix_switch_rows_match_the_live_roster() {
 
     // 实况面: 名册有这四行; 配置槽缺席照实 false (不复述"配置说开")。
     let config = ProductionModulesConfig::default();
-    let roster = apeireth_runtime_assembly::roster_from_config(&config, true, false, false, &[]);
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&config, true, false, false, false, &[]);
     let enabled = |roster: &[apeireth_tools_canonical::CapabilitySwitch], name: &str| {
         roster
             .iter()
@@ -465,7 +466,8 @@ fn matrix_switch_rows_match_the_live_roster() {
     // 槽注入 = 注册条件达成, 名册照实 true (注册即闸的正向面)。
     let mut wired = ProductionModulesConfig::default();
     wired.care_schedule = Some(PathBuf::from("."));
-    let roster = apeireth_runtime_assembly::roster_from_config(&wired, true, false, false, &[]);
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&wired, true, false, false, false, &[]);
     assert!(enabled(&roster, "care_schedule"), "槽注入必须报真值 true");
 }
 
@@ -504,7 +506,8 @@ fn matrix_production_wiring_rows_match_the_live_roster() {
 
     // 实况面: 默认态四行都照实 false (显式未接线, 不复述"配置说开")。
     let config = ProductionModulesConfig::default();
-    let roster = apeireth_runtime_assembly::roster_from_config(&config, true, false, false, &[]);
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&config, true, false, false, false, &[]);
     assert!(
         !enabled(&roster, "persona_consolidation"),
         "默认关 = 显式未接线"
@@ -534,7 +537,8 @@ fn matrix_production_wiring_rows_match_the_live_roster() {
     )
     .with_emotion_reader(Arc::new(|| None));
     wired.voice_speak = Some(voice);
-    let roster = apeireth_runtime_assembly::roster_from_config(&wired, true, false, false, &[]);
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&wired, true, false, false, false, &[]);
     assert!(
         enabled(&roster, "persona_consolidation"),
         "开关 + 整编触发点齐备必须报真值 true"
@@ -556,7 +560,7 @@ fn matrix_production_wiring_rows_match_the_live_roster() {
     let mut no_trigger = wired.clone();
     no_trigger.consolidation = false;
     let roster =
-        apeireth_runtime_assembly::roster_from_config(&no_trigger, true, false, false, &[]);
+        apeireth_runtime_assembly::roster_from_config(&no_trigger, true, false, false, false, &[]);
     assert!(
         !enabled(&roster, "persona_consolidation"),
         "整编关 = 提取步显式不跑"
@@ -564,5 +568,57 @@ fn matrix_production_wiring_rows_match_the_live_roster() {
     assert!(
         !enabled(&roster, "consolidation_hash_gate"),
         "整编关 = 散列门显式不跑"
+    );
+}
+
+/// §0.2 V4-c 检索调权行 (`retrieval_tuning`) 与名册实况同真值: 文档行写明 env
+/// 旋钮名与名册行名, 名册行按**接线事实 AND 上游槽 (记忆召回)**取值 ——
+/// 口径行与实况互钉。
+#[test]
+fn matrix_retrieval_tuning_row_matches_the_live_roster() {
+    // 文档面: §0.2 有检索调权的 env 旋钮名与名册行名。
+    const MATRIX: &str = include_str!("../../../../docs/03-reference/capabilities-matrix.md");
+    let start = MATRIX.find("### 0.2").expect("§0.2 present");
+    let end = MATRIX[start..]
+        .find("\n---")
+        .map(|offset| start + offset)
+        .unwrap_or(MATRIX.len());
+    let section = &MATRIX[start..end];
+    for needle in ["APEIRETH_ENABLE_RETRIEVAL_TUNING", "retrieval_tuning"] {
+        assert!(section.contains(needle), "§0.2 缺检索调权行口径: {needle}");
+    }
+
+    let enabled = |roster: &[apeireth_tools_canonical::CapabilitySwitch], name: &str| {
+        roster
+            .iter()
+            .find(|row| row.name == name)
+            .unwrap_or_else(|| panic!("名册缺行 {name}"))
+            .enabled
+    };
+
+    // 实况面: 接线事实缺席 (开关默认关) = 显式未接线, 照实 false。
+    let config = ProductionModulesConfig::default();
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&config, true, false, false, false, &[]);
+    assert!(!enabled(&roster, "retrieval_tuning"), "默认关 = 显式未接线");
+
+    // 接线事实 + 上游槽 (记忆召回) 齐备 = 真生效 true (注册即闸的正向面)。
+    let mut wired = ProductionModulesConfig::default();
+    wired.memory_recall = true;
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&wired, true, false, true, false, &[]);
+    assert!(
+        enabled(&roster, "retrieval_tuning"),
+        "接线 + 召回槽齐备必须报真值 true"
+    );
+
+    // 上游槽缺席 = 静默失效照实 false (与自学习行同一口径, 不许分叉)。
+    let mut no_recall = wired.clone();
+    no_recall.memory_recall = false;
+    let roster =
+        apeireth_runtime_assembly::roster_from_config(&no_recall, true, false, true, false, &[]);
+    assert!(
+        !enabled(&roster, "retrieval_tuning"),
+        "记忆召回缺席 = 无处生效照实 false"
     );
 }

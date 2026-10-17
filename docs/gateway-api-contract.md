@@ -11,8 +11,8 @@
 - Base URL:`http://127.0.0.1:{port}`(port 由桌面壳为 sidecar 动态分配;手动运行时默认 8080)
 - 编码:UTF-8 JSON;时间戳统一 **epoch 毫秒**(`timestamp` 字段)
 - 认证:**全 API 面令牌门**(W2-② 起,chat/事件流/面板/会话/审批/admin 族,唯一豁免 `/health` 探活)。三态口径(env `APEIRETH_GATEWAY_TOKEN` + 客户端令牌表 `APEIRETH_GATEWAY_TOKENS`/`client-tokens.json`,任一在场=强制态):强制态=`Authorization: Bearer <token>` 必须命中令牌族任一枚(恒定时间比较,缺失 401 `auth_missing_key` / 伪造 401 `auth_invalid_key`,拒绝入审计 `gateway.auth_rejected`,过门入审计 `gateway.auth_client client=<客户端名>`);两面皆空=放行但每次记警告帧 `gateway_auth_unprotected` + 审计 `gateway.auth_unprotected`(兼容路径,保守过渡);显式 `none`=操作者明示不设防,放行不告警但审计留痕(与客户端令牌表互斥,配置矛盾拒开)。桌面壳启动侧车时自铸 32 字节随机令牌注入(生产恒为强制态);客户端令牌表每客户端一枚(name→token,过门审计带客户端名)。非回环绑定(`APEIRETH_LISTEN`/`--bind`)强制令牌:令牌族两面皆空时拒绝启动(fail-closed)
-- 授权(W3-② 起,角色门):用户表 `users.json`(StoredDoc 拒开语义)在场=**角色面激活**,过门客户端名沿令牌→用户→角色链(`client-tokens.json` 条目 `user_id` + 用户表 `client_names`)解析为问责身份,按治理层 role 权限矩阵过闸——写面(chat/会话写/记忆写,非读方法)需 `Write`、admin 族与面板族**管理面**(`/v1/panel/grants/revoke`、`/v1/panel/users`、`/v1/panel/domains`)需 `AdminControl`(owner 档)、`/v1/approvals/resolve` 需 `ApprovalL2` 且**跨用户审批拒**(owner 可批任意会话,其余角色只可批本人绑定会话的审批);读面(GET)全员可读。未绑定用户的受闸请求 fail-closed 拒(403 `permission_denied`);未配置用户表=兼容路径(W2-② 行为逐字不变,不新增拒绝面)。角色只来自令牌绑定的解析链,请求无法自称角色(自称客户端名另有 name↔token 绑定校验)。每次裁决落审计 `gateway.user_action user=<id> role=<role> action=<能力> endpoint=<路径> decision=allow|deny`
-- 数据域(W3-① 起,域门):请求沿令牌→user_id 链解析**用户域**(未绑定=默认域,单户兼容;未开域的绑定用户留默认域;域配置坏=403 `domain_refused` 拒开,真因入审计 `gateway.domain_refused`)。`/v1/sessions/*` **按域路由**(每域自己的会话库+配额账本;他域/不存在的会话 id **同帧** 404 `session_not_found`,存在性不泄露);W3-③ 起 `/v1/chat`、`/v1/chat/completions`(走该域**伙伴运行时实例**:模型/记忆/配额/写闸全按域;域文档 persona/model 覆盖缺省回落全局,`session_id` 落本域账本)与 `/v1/apeireth/events`(`?domain=` 自称域与域头同语义;按域过滤——只投**本域在册会话**的事件帧,他域/不存在同帧读作不存在)亦按域开放,非默认域无伙伴运行时实例=403 `domain_refused`(fail-closed,不用默认域代跑);其余面对非默认域 **403 `domain_forbidden`** fail-closed(面未按用户域开放,不泄露默认域数据)。可选自称域头 `x-apeireth-domain` 与本域不符=403 `domain_forbidden` **恒定帧**(目标域存在与否同帧)
+- 授权(W3-② 起,角色门):用户表 `users.json`(StoredDoc 拒开语义)在场=**角色面激活**,过门客户端名沿令牌→用户→角色链(`client-tokens.json` 条目 `user_id` + 用户表 `client_names`)解析为问责身份,按治理层 role 权限矩阵过闸——写面(chat/会话写/记忆写,非读方法)需 `Write`、admin 族与面板族**管理面**(`/v1/panel/grants/revoke`、`/v1/panel/users`、`/v1/panel/domains`)需 `AdminControl`(owner 档)、`/v1/approvals/resolve` 需 `ApprovalL2` 且**跨用户审批拒**(owner 可批任意会话,其余角色只可批本人绑定会话的审批);读面(GET)全员可读。未绑定用户的受闸请求 fail-closed 拒(403 `permission_denied`);未配置用户表=兼容路径(W2-② 行为逐字不变,不新增拒绝面)。角色只来自令牌绑定的解析链,请求无法自称角色(自称客户端名另有 name↔token 绑定校验)。每次裁决落审计 `gateway.user_action user=<id> role=<role> action=<能力> endpoint=<路径> decision=allow|deny`。V2-c 起该审计行另带域标注 `domain=<id>` 记号(授权裁决=行为域,管理动作=目标域);`/v1/approvals/resolve` 在角色门之外先过**归属域校验**(V2-c,见下行)——他域会话的审批对 owner 亦同帧 404,跨用户归属闸只在同域内判定
+- 数据域(W3-① 起,域门):请求沿令牌→user_id 链解析**用户域**(未绑定=默认域,单户兼容;未开域的绑定用户留默认域;域配置坏=403 `domain_refused` 拒开,真因入审计 `gateway.domain_refused`)。`/v1/sessions/*` **按域路由**(每域自己的会话库+配额账本;他域/不存在的会话 id **同帧** 404 `session_not_found`,存在性不泄露);W3-③ 起 `/v1/chat`、`/v1/chat/completions`(走该域**伙伴运行时实例**:模型/记忆/配额/写闸全按域;域文档 persona/model 覆盖缺省回落全局,`session_id` 落本域账本)与 `/v1/apeireth/events`(`?domain=` 自称域与域头同语义;按域过滤——只投**本域在册会话**的事件帧,他域/不存在同帧读作不存在)亦按域开放,非默认域无伙伴运行时实例=403 `domain_refused`(fail-closed,不用默认域代跑);**V2-c 起面板/审批/管理面逐面开放**:面板读面按域过滤返回——`/v1/panel/sessions`(本域账本直读,与 `/v1/sessions/*` 同一写闸同一账本)、`/v1/panel/memory/episodes`、`/v1/panel/graph`(行会话归属 ∈ 本域在册)、`/v1/panel/audit`(行归属记号 `session=<id>`/`domain=<id>`)、`/v1/panel/grants`、`/v1/panel/tasks`(行无域归属记号 = 域视图零行,计数按可见行重算,fail-closed),**面板行可见 ⇔ 事件帧投递**(与事件面共用同一在册探测,面板订阅与事件域永远一致);`/v1/approvals`、`/v1/approvals/resolve` 过**归属域校验**(他域会话的审批读/解与不存在**同帧** 404 `session_not_found`,owner 亦无跨域通路);users/domains 管理面(`/v1/panel/users|domains`、`/v1/admin/users*|domains*`)**保持全局**(owner 全局视角,不按域过滤)但管理动作审计带 `domain=<目标域>` 标注;面板族写面(`/v1/panel/grants/revoke`、`/v1/panel/tasks/*/human-judge-retry`)与其余面对非默认域 **403 `domain_forbidden`** fail-closed(面未按用户域开放,不泄露默认域数据)。可选自称域头 `x-apeireth-domain` 与本域不符=403 `domain_forbidden` **恒定帧**(目标域存在与否同帧)
 - 错误模型:
   ```json
   { "error": { "code": "invalid_request | not_found | unsupported | runtime_error | auth_failed", "message": "人类可读信息" } }
@@ -89,6 +89,9 @@
 - **name↔token 绑定 (W2-③ 令牌隔离)**:请求可带自称名头 `x-apeireth-client`;自称名
   必须与令牌绑定的客户端名一致,否则 401 `auth_invalid_key`(无绑定的自称名同样
   拒绝,fail-closed)。审计署名键**只来自令牌绑定**,请求自称名永不改写署名。
+- **面板按域 (V2-c)**:非默认域读**本域账本直读面**(与 `/v1/sessions/*` 同一写闸
+  同一账本),行与计数只含本域在册会话(A 域看不到 B 域计数);默认域/域面未接线
+  = 全量返回(零回归)。
 
 ## §5 记忆
 
@@ -120,6 +123,10 @@ forget/protect/unprotect 请求 `{ "expected_rev": 0, "reason": "可选" }` → 
 graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episode" } ], "edges": [ { "from": "…", "to": "…", "weight": 1.0, "label": "可选" } ] }`。
 (v1 语义:session → episode 包含边,源自真实存储数据)
 
+面板按域(V2-c):episodes 行按会话归属过滤(行 `session_id` ∈ 本域在册才进域视图),
+graph 会话节点在册才留、情节节点随本域会话的包含边留下;行无归属记号不进域视图
+(fail-closed);默认域/域面未接线 = 全量(零回归)。
+
 ## §6 工具与审批
 
 `GET /v1/tools/list` `[P0]` →
@@ -134,6 +141,7 @@ graph 响应 `{ "nodes": [ { "id": "…", "label": "…", "kind": "session|episo
 - `GET /v1/approvals?session={id}` → `{ "session": "…", "approvals": [ { "approval_id": "…", "session": "…", "tool_name": "…", "capability_id": "…", "governance_hook": "…", "governance_reason": "…", "request": "…", "trace_id": "…", "created_at": 123, "expires_at": 123 } ] }`
 - `POST /v1/approvals/resolve` 请求 `{ "session": "…", "approval": "…", "decision": "approve|reject", "reason": "可选" }` → 与 `/v1/chat` 响应同形状(解析后继续原回合)
 - 跨用户审批(W3-②,角色面激活时):resolve 除 `ApprovalL2` 能力外还过**归属闸**——owner 可批任意会话的审批,其余角色只可批本人绑定会话的审批(会话归属=首个具名写者);跨用户/未归属/未绑定一律 403 `permission_denied`(审计 `gateway.user_action action=approval_ownership decision=deny`)
+- 归属域校验(V2-c,先于上述归属闸):目标会话不在**本域账本在册**时,收件箱读与 resolve 一律与不存在**同帧** 404 `session_not_found`(跨域归属拒,存在性不泄露;owner 亦无跨域通路);本域过闸后 resolve 续跑走**本域伙伴运行时实例**(无伙伴实例 = 403 `domain_refused` 拒开不代跑)
 
 ## §7 授权管理 ✅
 
@@ -200,7 +208,9 @@ W3-① 目录安全规则 `[a-z0-9_-]`、首字符小写字母或数字,路径�
    `users/<user_id>/` 目录名,不安全 id 一律拒);
 5. **审计**:每次管理动作落一行
    `gateway.user_action user=<id> role=<role> action=user_add|user_role_change|user_remove|domain_create endpoint=<路径> decision=allow|deny`
-   (角色门自身另有 `action=admin_control` 行;令牌值零泄漏)。
+   (角色门自身另有 `action=admin_control` 行;令牌值零泄漏)。V2-c 起行内另带域标注
+   `domain=<目标域>` 记号(管理动作=目标域;失败行按意图目标/查表标注,未核实不标注;
+   授权裁决行=行为域)——标注行随域视图审计面归属,管理面本身仍保持全局。
 
 > 装载快照边界(诚实声明):管理动作**落盘即为事实**(每操作重读,双入口互见);
 > 令牌门/角色门的**运行期**判定按 W2-②/W3-② 装载期快照语义——新建用户的绑定随
@@ -309,6 +319,9 @@ bounded-context 端口)、组合根适配 `crates/adapters/cli/src/gateway_panel
   ```
 - `GET /v1/panel/audit?limit=100` `[P1]` → `{ "events": [ { "ts": 123, "event": "chat.turn.completed", "service": "runtime", "detail": "…" } ] }`
   由 RuntimeEventSink 的审计端口归档；网关不再从响应结果反推一套 turn 事实。
+  面板按域(V2-c):审计行按归属记号过滤(`session=<id>` 走本域在册探测、
+  `domain=<id>` 与本域比对),无归属记号行不进域视图(fail-closed);在册探测与
+  事件面同一把(面板订阅与事件域一致)。
 - `GET /v1/apeireth/events` ✅ — Runtime Event Spine 的 SSE 投影:
   `backend_ready`(启动,仅广播一次)/ `turn_started` / `turn_delta` / `turn_completed` /
   `approval_required` / `approval_resolved` / `presence_state`(见下)。

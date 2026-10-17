@@ -8,6 +8,10 @@
 // (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
 // 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
 pub mod backup;
+// 心跳关怀常驻宿主接线面 (care-heartbeat-producer.md §7 接线清单 (b)):
+// 闸经 FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute +
+// 自述关怀节心跳两列真值口; 双闸齐开 (CARE + CARE_HEARTBEAT) 才起。
+pub mod care_heartbeat;
 // V5-b 暴露面体检 CLI 面: `apeireth exposure report [--json] [--out <PATH>]`
 // (安全守望 · 本地只读自查, 只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
 pub mod exposure;
@@ -21,6 +25,7 @@ pub mod trait_command;
 // W3-② 用户身份与角色: `apeireth user add|list|role|remove` 管理面 (owner 角色门)。
 pub mod user_admin;
 
+pub use care_heartbeat::CareHeartbeatSource;
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
 use std::path::PathBuf;
@@ -1126,15 +1131,17 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     ),
     String,
 > {
-    let (runtime, session_store, memory, policy, guard_hook, _voice_emotion) =
+    let (runtime, session_store, memory, policy, guard_hook, _voice_emotion, _care_heartbeat) =
         build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
     Ok((runtime, session_store, memory, policy, guard_hook))
 }
 
 /// 生产网关路径的运行时组装 (R3 接线出口): 与
 /// [`build_canonical_runtime_with_sessions_from_env`] 同一装配, 额外出口
-/// [`VoiceEmotionSource`] 绑定位 —— 网关装配出 presence/PAD 合成器后把它绑上,
-/// 发声微调即读合成器现值。
+/// [`VoiceEmotionSource`] 绑定位与 [`CareHeartbeatSource`] 绑定位 —— 网关装配
+/// 出 presence/PAD 合成器后把情绪源绑上, 发声微调即读合成器现值; 常驻宿主
+/// 把 care 心跳绑定位起成常驻心跳生产者后, 自述关怀节心跳两列转真值
+/// (双闸齐开才起, 见 [`CareHeartbeatSource::start`])。
 pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() -> Result<
     (
         Runtime,
@@ -1143,14 +1150,17 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
         Arc<std::sync::Mutex<PermissionPolicy>>,
         Arc<BehaviorChainGuardHook>,
         VoiceEmotionSource,
+        CareHeartbeatSource,
     ),
     String,
 > {
     let session_store = production_session_store().await?;
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     let voice_emotion = VoiceEmotionSource::default();
+    let care_heartbeat = CareHeartbeatSource::new();
     let (cognitive, memory) =
-        build_cognitive_modules_from_env(Arc::clone(&clock), &voice_emotion).await?;
+        build_cognitive_modules_from_env(Arc::clone(&clock), &voice_emotion, &care_heartbeat)
+            .await?;
     // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根把它注册进域平面,
     // 与运行时共用**同一把** (每域恰一把, W2-③ 承诺不拆)。
     let sessions = Arc::new(apeireth_runtime::SessionManager::new(
@@ -1166,6 +1176,7 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
         policy,
         guard_hook,
         voice_emotion,
+        care_heartbeat,
     ))
 }
 
@@ -1181,12 +1192,19 @@ async fn build_domain_partner_runtime(
     sessions: Arc<apeireth_runtime::SessionManager>,
     memory_db: PathBuf,
     voice_emotion: &VoiceEmotionSource,
+    care_heartbeat: &CareHeartbeatSource,
 ) -> Result<Runtime, String> {
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     // 域伙伴运行时不注入备份导出面 (跨域打包面收口到 owner 本地操作, 见
     // [`default_domain_backup_config`]); 名册照实报 `backup_export: false`。
-    let (cognitive, _memory) =
-        build_cognitive_modules_at(memory_db, Arc::clone(&clock), None, voice_emotion).await?;
+    let (cognitive, _memory) = build_cognitive_modules_at(
+        memory_db,
+        Arc::clone(&clock),
+        None,
+        voice_emotion,
+        care_heartbeat,
+    )
+    .await?;
     let (runtime, _policy, _guard_hook) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok(runtime)
@@ -1368,6 +1386,7 @@ pub enum CanonicalCliTurn {
 async fn build_cognitive_modules_from_env(
     clock: Arc<dyn apeireth_core::kernel::Clock>,
     voice_emotion: &VoiceEmotionSource,
+    care_heartbeat: &CareHeartbeatSource,
 ) -> Result<
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
@@ -1380,6 +1399,7 @@ async fn build_cognitive_modules_from_env(
         clock,
         default_domain_backup_config(),
         voice_emotion,
+        care_heartbeat,
     )
     .await
 }
@@ -1402,6 +1422,7 @@ async fn build_cognitive_modules_at(
     clock: Arc<dyn apeireth_core::kernel::Clock>,
     backup_config: Option<apeireth_tools_canonical::backup::BackupExportConfig>,
     voice_emotion: &VoiceEmotionSource,
+    care_heartbeat: &CareHeartbeatSource,
 ) -> Result<
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
@@ -1770,10 +1791,18 @@ async fn build_cognitive_modules_at(
         self_tuning: apeireth_runtime_assembly::SelfTuningWire::from_env(
             apeireth_runtime_assembly::tuning_log_path(),
         ),
+        // V4-c 检索维度自进化: 「检索调权」默认关 fail-closed;
+        // `APEIRETH_ENABLE_RETRIEVAL_TUNING=1` 才接自进化接线层 (注入后命中回执
+        // → 证据 → 层权重/条目显著性小幅调权, 自进化账 `retrieval_tuning.jsonl`
+        // 与 session db 同目录落位, append-only)。
+        retrieval_tuning: apeireth_runtime_assembly::RetrievalTuningWire::from_env(
+            apeireth_runtime_assembly::retrieval_tuning_log_path(),
+        ),
         // 自省通道: 记忆账本 / 凭据存在性探测口 + 授权层旋钮的名册行。
         self_status_ledger: Some(self_status_ledger_probe(
             path.clone(),
             reflexion_store_root_from_env(),
+            apeireth_runtime_assembly::retrieval_tuning_log_path(),
         )),
         self_status_credentials: Some(self_status_credentials_probe(default_panel_data_dir())),
         self_status_extras: vec![apeireth_tools_canonical::CapabilitySwitch::new(
@@ -1826,15 +1855,18 @@ async fn build_cognitive_modules_at(
         // 自省通道: 内容流节探测口 (J1 接线, 兑现并行批报备的「归 J1 线」):
         // 订阅数/最近拉取现探测如实 (与工具同一订阅表同一校验口径)。
         self_status_content_feed: Some(content_feed_status_probe(default_panel_data_dir())),
-        // 自省通道: 双引擎关怀节探测口 (V3-a 接线): 规则数/下次触发/最近关怀
-        // 现探测如实 (与工具同一 `care_rules.json` 同一拒开口径)。时钟走系统时钟;
-        // 交互观察锚点未接线 (久未联系类规则退化为规则创建时刻锚, 如实)。
+        // 自省通道: 双引擎关怀节探测口 (V3-a 接线 + 心跳态随行): 规则数/下次
+        // 触发/最近关怀现探测如实 (与工具同一 `care_rules.json` 同一拒开口径),
+        // 心跳两列现读常驻心跳生产者真值 ([`CareHeartbeatSource`] 绑定位;
+        // 未起/停机 = 显式 null, 不冒充在跑)。时钟走系统时钟; 交互观察锚点未
+        // 接线 (久未联系类规则退化为规则创建时刻锚, 如实)。
         self_status_care: Some({
             use apeireth_organ::care::CareClock;
-            apeireth_runtime_assembly::care_status_probe(
+            apeireth_runtime_assembly::care_status_probe_with_heartbeat(
                 default_panel_data_dir(),
                 std::sync::Arc::new(|| apeireth_organ::care::SystemCareClock.now_ms()),
                 std::sync::Arc::new(|| None),
+                Some(care_heartbeat.status_probe()),
             )
         }),
         // 自省通道: 备份节探测口 (G5 接线): 最近备份时间/清单件数真值现探测
@@ -2113,9 +2145,13 @@ fn voice_status_probe(
 /// V4-b 记忆节扩: 待摄取数 / 最近折入 / 去重计数取自保鲜回路真值
 /// ([`apeireth_memory::SqliteMemoryStore::freshness_status`], 与账本计数同库
 /// 同账); 尚未折入 = 显式 null (不编时间)。
+/// V4-c 记忆节扩: 进化次数 / 最近调权真值取自检索自进化账
+/// (`retrieval_tuning.jsonl`, 与调权同一本账只读读回); 尚未调权 = 显式
+/// null (不编移动)。
 fn self_status_ledger_probe(
     cognitive_db: PathBuf,
     lessons_root: PathBuf,
+    retrieval_tuning_log: PathBuf,
 ) -> apeireth_tools_canonical::StatusProbe<apeireth_tools_canonical::MemoryLedgerStats> {
     use apeireth_memory::reflexion::ReflexionStore as _;
     Arc::new(move || {
@@ -2145,6 +2181,17 @@ fn self_status_ledger_probe(
                     Some(format!("freshness status query failed: {error}")),
                 ),
             };
+        // V4-c 检索调权两真值 (缺档 = 有账零调权如实 0; 读失败 = 显式 null +
+        // 原因, 不编移动)。
+        let (retrieval_tuning_count, last_retrieval_tuning, tuning_reason) =
+            match apeireth_runtime_assembly::read_retrieval_tuning_log(&retrieval_tuning_log) {
+                Ok(summary) => {
+                    let (count, last) =
+                        apeireth_runtime_assembly::memory_ledger_tuning_fields(&summary);
+                    (count, last, None)
+                }
+                Err(error) => (None, None, Some(error)),
+            };
         Ok(apeireth_tools_canonical::MemoryLedgerStats {
             sessions: Some(counts.sessions),
             memories: Some(counts.memories),
@@ -2153,7 +2200,9 @@ fn self_status_ledger_probe(
             pending_ingest,
             last_fold_at_ms,
             dedup_skipped,
-            reason: reason.or(freshness_reason),
+            retrieval_tuning_count,
+            last_retrieval_tuning,
+            reason: reason.or(freshness_reason).or(tuning_reason),
         })
     })
 }
@@ -2801,7 +2850,7 @@ pub async fn dispatch_gateway_serve_with(
         None => None,
     };
 
-    let (runtime, sessions, memory, policy, guard_hook, voice_emotion) =
+    let (runtime, sessions, memory, policy, guard_hook, voice_emotion, care_heartbeat) =
         build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
     let runtime = Arc::new(runtime);
     let governance = Arc::new(
@@ -2880,6 +2929,20 @@ pub async fn dispatch_gateway_serve_with(
     // 现值, 情绪→语气微调生效; 合成器缺席 (如纯 CLI 形态) = 无情绪数据 =
     // 零微调 (fail-safe 朝原参数)。
     voice_emotion.bind(&state.presence);
+    // 心跳关怀常驻宿主接线 (care-heartbeat-producer.md §7 接线清单 (b)):
+    // 双闸齐开 (APEIRETH_ENABLE_CARE + APEIRETH_ENABLE_CARE_HEARTBEAT) 才起 ——
+    // 闸经 FnInitiativeGate 桥 presence `try_take_initiative` 同源闸注入
+    // CareEngine, 发起回调接 Runtime::execute (标准回合照常计费), 心跳真值
+    // 已随自述关怀节探针就位 (未起 = 两列显式 null)。开关关 = 零动作零线程。
+    // 关怀回合目标会话 = 常驻进程级关怀会话 (普通转写); 间隔非法拒绝即帧。
+    let care_config = apeireth_runtime_assembly::CareHeartbeatConfig::from_env()?;
+    care_heartbeat.start(
+        &care_config,
+        Arc::clone(&runtime),
+        &state.presence,
+        default_panel_data_dir(),
+        SessionId::new(),
+    )?;
     // W3-②: 用户角色面显式注入 (users.json StoredDoc 拒开 + 令牌↔用户绑定一致性
     // fail-closed); 未配置用户表 = 角色面未激活 (兼容路径, 行为逐字不变)。
     let user_access = apeireth_gateway::UserAccess::load(&data_dir, &client_tokens)
@@ -2911,7 +2974,13 @@ pub async fn dispatch_gateway_serve_with(
             );
             continue;
         };
-        match build_domain_partner_runtime(domain_sessions, domain_memory_db, &voice_emotion).await
+        match build_domain_partner_runtime(
+            domain_sessions,
+            domain_memory_db,
+            &voice_emotion,
+            &care_heartbeat,
+        )
+        .await
         {
             Ok(partner) => {
                 domain_instances.insert(domain_id, Arc::new(partner));
@@ -2967,9 +3036,12 @@ pub async fn dispatch_gateway_serve_with(
             token_env = apeireth_gateway::GatewayTokenGate::ENV
         );
     }
-    apeireth_gateway::serve_state_with_shutdown(listener, state, graceful_shutdown_signal())
-        .await
-        .map_err(|error| format!("gateway server failed: {error}"))?;
+    let served =
+        apeireth_gateway::serve_state_with_shutdown(listener, state, graceful_shutdown_signal())
+            .await;
+    // 优雅停机收尾: 心跳线程随停机收 (join 回收, 不僵尸; 停机后零 poll 零发起)。
+    care_heartbeat.shutdown();
+    served.map_err(|error| format!("gateway server failed: {error}"))?;
 
     Ok(format!("server stopped at {url}"))
 }

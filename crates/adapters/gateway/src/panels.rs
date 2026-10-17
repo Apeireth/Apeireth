@@ -16,14 +16,19 @@
 
 use std::sync::{Arc, RwLock};
 
-use apeireth_runtime::canonical::Runtime;
+use apeireth_core::kernel::SessionId;
+use apeireth_runtime::canonical::{Runtime, Session};
 use async_trait::async_trait;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+
+use crate::domain_context::{
+    audit_detail_domain, audit_detail_session, request_scope, DomainContext, DomainScope,
+};
 
 /// Shared router state: the runtime, optional panel backends, and the
 /// gateway-level SSE event bus.
@@ -832,6 +837,146 @@ pub(crate) fn panel_error(message: String) -> Response {
         .into_response()
 }
 
+// ---------------------------------------------------------------------------
+// V2-c 面板按域过滤 (非默认域 = 按域过滤返回; 默认域/域面未接线 = 零回归)
+// ---------------------------------------------------------------------------
+//
+// 行的**域归属**依据 (口径唯一, 与事件面同一在册探测 [`DomainScope::owns`]):
+// 1. 行内会话 id (会话行 `id` / 记忆行 `session_id` / 图节点 `session:<id>` 约定)
+//    → 本域账本在册探测;
+// 2. 审计行归属记号 (`session=<id>` / `domain=<id>`, 见 [`audit_detail_session`] /
+//    [`audit_detail_domain`]);
+// 3. 两者皆无 = 无归属记号的行 → **不进域视图** (fail-closed, 宁拒不泄)。
+// 默认域 (owner 全局视角) / 域面未接线 = 全量返回 (兼容路径逐字零变化)。
+
+/// 会话摘要投影 (本域账本直读面): 与组合根会话投影同形 (一次快照读)。
+fn session_summary(session: &Session) -> SessionSummaryDto {
+    SessionSummaryDto {
+        id: session.id.to_string(),
+        title: session_title(session),
+        created_at: session.created_at.epoch_millis(),
+        updated_at: session.updated_at.epoch_millis(),
+        message_count: session.messages.len(),
+        revision: session.revision,
+    }
+}
+
+/// 会话标题 = 首条用户消息的有界摘录 (无用户消息 = 无标题, 不编造)。
+fn session_title(session: &Session) -> Option<String> {
+    use apeireth_protocol::canonical::{ContentPart, MessageRole};
+
+    session
+        .messages
+        .iter()
+        .find(|message| message.role == MessageRole::User)
+        .map(|message| ContentPart::join_text(&message.content))
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .map(|text| {
+            const TITLE_CHARS: usize = 40;
+            let mut out: String = text.chars().take(TITLE_CHARS).collect();
+            if text.chars().count() > TITLE_CHARS {
+                out.push('…');
+            }
+            out
+        })
+}
+
+/// 记忆行按域过滤: 行会话归属 ∈ 本域在册才进域视图。
+async fn filter_episodes(scope: &DomainScope, episodes: Vec<EpisodeDto>) -> Vec<EpisodeDto> {
+    if !scope.is_restricted() {
+        return episodes;
+    }
+    let mut kept = Vec::new();
+    for row in episodes {
+        let owned = match row.session_id.parse::<SessionId>() {
+            Ok(session) => scope.owns(session).await,
+            Err(_) => false,
+        };
+        if owned {
+            kept.push(row);
+        }
+    }
+    kept
+}
+
+/// 记忆图按域过滤: 会话节点 (`session:<id>` 投影约定) 在册才留, 情节节点随
+/// 本域会话的包含边留下; 无归属节点/边不进域视图 (fail-closed)。
+async fn filter_memory_graph(scope: &DomainScope, graph: MemoryGraphDto) -> MemoryGraphDto {
+    if !scope.is_restricted() {
+        return graph;
+    }
+    let MemoryGraphDto { nodes, edges } = graph;
+    let mut kept_ids: Vec<String> = Vec::new();
+    for node in &nodes {
+        let Some(raw) = node.id.strip_prefix("session:") else {
+            continue;
+        };
+        let owned = match raw.parse::<SessionId>() {
+            Ok(session) => scope.owns(session).await,
+            Err(_) => false,
+        };
+        if owned {
+            kept_ids.push(node.id.clone());
+        }
+    }
+    let kept_edges: Vec<GraphEdgeDto> = edges
+        .into_iter()
+        .filter(|edge| {
+            if kept_ids.contains(&edge.from) {
+                if !kept_ids.contains(&edge.to) {
+                    kept_ids.push(edge.to.clone());
+                }
+                true
+            } else {
+                false
+            }
+        })
+        .collect();
+    let kept_nodes = nodes
+        .into_iter()
+        .filter(|node| kept_ids.contains(&node.id))
+        .collect();
+    MemoryGraphDto {
+        nodes: kept_nodes,
+        edges: kept_edges,
+    }
+}
+
+/// 审计行按域过滤: 会话记号 → 在册探测; `domain=` 标注 → 与本域比对;
+/// 无归属记号 → 不进域视图 (fail-closed)。
+async fn filter_audit(
+    scope: &DomainScope,
+    domain_id: Option<&str>,
+    events: Vec<AuditDto>,
+) -> Vec<AuditDto> {
+    if !scope.is_restricted() {
+        return events;
+    }
+    let mut kept = Vec::new();
+    for row in events {
+        let detail = row.detail.as_deref().unwrap_or("");
+        let visible = if let Some(session) = audit_detail_session(detail) {
+            scope.owns(session).await
+        } else {
+            audit_detail_domain(detail).is_some_and(|claimed| Some(claimed) == domain_id)
+        };
+        if visible {
+            kept.push(row);
+        }
+    }
+    kept
+}
+
+/// 授权行按域过滤: 授权行 (permission/capability) 无域归属记号 → 域视图为空
+/// (fail-closed; 全局治理口径行的归属标注随后续批, 补齐即按上表生效)。
+fn filter_grants(scope: &DomainScope, grants: Vec<GrantDto>) -> Vec<GrantDto> {
+    if scope.is_restricted() {
+        return Vec::new();
+    }
+    grants
+}
+
 fn limit_of(query: Option<usize>) -> usize {
     query.unwrap_or(50).clamp(1, 500)
 }
@@ -845,7 +990,33 @@ struct LimitQuery {
 // Handlers
 // ---------------------------------------------------------------------------
 
-async fn list_sessions(State(state): State<GatewayState>) -> Response {
+async fn list_sessions(
+    State(state): State<GatewayState>,
+    domain: Option<Extension<DomainContext>>,
+) -> Response {
+    let scope = match request_scope(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/panel/sessions",
+    ) {
+        Ok(scope) => scope,
+        Err(refusal) => return refusal,
+    };
+    // V2-c 非默认域: 本域账本直读 (与 `/v1/sessions/*` 同一写闸同一账本,
+    // 一次快照读) —— 他域行物理不在本域库, 计数天然隔离。
+    if let Some(manager) = scope.manager() {
+        return match manager.store().list().await {
+            Ok(rows) => {
+                let sessions = rows.iter().map(session_summary).collect::<Vec<_>>();
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({ "sessions": sessions })),
+                )
+                    .into_response()
+            }
+            Err(error) => panel_error(error.to_string()),
+        };
+    }
     let Some(sessions) = &state.services.sessions else {
         return unsupported("sessions.read");
     };
@@ -898,16 +1069,33 @@ async fn trace_detail(State(state): State<GatewayState>, Path(trace_id): Path<St
     }
 }
 
-async fn list_audit(State(state): State<GatewayState>, Query(q): Query<LimitQuery>) -> Response {
+async fn list_audit(
+    State(state): State<GatewayState>,
+    domain: Option<Extension<DomainContext>>,
+    Query(q): Query<LimitQuery>,
+) -> Response {
+    let context = domain.as_ref().map(|Extension(context)| context);
+    let scope = match request_scope(&state, context, "/v1/panel/audit") {
+        Ok(scope) => scope,
+        Err(refusal) => return refusal,
+    };
     let Some(audit) = &state.services.audit else {
         return unsupported("audit.read");
     };
     match audit.list_audit(limit_of(q.limit)).await {
-        Ok(events) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "events": events })),
-        )
-            .into_response(),
+        Ok(events) => {
+            let events = filter_audit(
+                &scope,
+                context.and_then(|context| context.user_id()),
+                events,
+            )
+            .await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "events": events })),
+            )
+                .into_response()
+        }
         Err(e) => panel_error(e),
     }
 }
@@ -1016,8 +1204,17 @@ struct EpisodeMutationRequest {
 
 async fn list_episodes(
     State(state): State<GatewayState>,
+    domain: Option<Extension<DomainContext>>,
     Query(q): Query<EpisodeQuery>,
 ) -> Response {
+    let scope = match request_scope(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/panel/memory/episodes",
+    ) {
+        Ok(scope) => scope,
+        Err(refusal) => return refusal,
+    };
     if let Some(response) = memory_unavailable(&state) {
         return response;
     }
@@ -1026,11 +1223,14 @@ async fn list_episodes(
         .list_episodes(q.session.as_deref(), q.q.as_deref(), limit_of(q.limit))
         .await
     {
-        Ok(episodes) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "episodes": episodes })),
-        )
-            .into_response(),
+        Ok(episodes) => {
+            let episodes = filter_episodes(&scope, episodes).await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "episodes": episodes })),
+            )
+                .into_response()
+        }
         Err(e) => panel_error(e),
     }
 }
@@ -1124,13 +1324,27 @@ async fn forget_episode(
     }
 }
 
-async fn memory_graph(State(state): State<GatewayState>) -> Response {
+async fn memory_graph(
+    State(state): State<GatewayState>,
+    domain: Option<Extension<DomainContext>>,
+) -> Response {
+    let scope = match request_scope(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/panel/graph",
+    ) {
+        Ok(scope) => scope,
+        Err(refusal) => return refusal,
+    };
     if let Some(response) = memory_unavailable(&state) {
         return response;
     }
     let memory = state.services.memory.as_ref().expect("checked above");
     match memory.memory_graph().await {
-        Ok(graph) => (StatusCode::OK, Json(graph)).into_response(),
+        Ok(graph) => {
+            let graph = filter_memory_graph(&scope, graph).await;
+            (StatusCode::OK, Json(graph)).into_response()
+        }
         Err(e) => panel_error(e),
     }
 }
@@ -1151,17 +1365,31 @@ struct RevokeGrantRequest {
     capability: String,
 }
 
-async fn list_grants(State(state): State<GatewayState>) -> Response {
+async fn list_grants(
+    State(state): State<GatewayState>,
+    domain: Option<Extension<DomainContext>>,
+) -> Response {
+    let scope = match request_scope(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/panel/grants",
+    ) {
+        Ok(scope) => scope,
+        Err(refusal) => return refusal,
+    };
     if let Some(response) = permissions_unavailable(&state) {
         return response;
     }
     let grants = state.services.grants.as_ref().expect("checked above");
     match grants.list_grants().await {
-        Ok(grants) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "grants": grants })),
-        )
-            .into_response(),
+        Ok(grants) => {
+            let grants = filter_grants(&scope, grants);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "grants": grants })),
+            )
+                .into_response()
+        }
         Err(e) => panel_error(e),
     }
 }

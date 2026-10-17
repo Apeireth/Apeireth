@@ -1071,6 +1071,8 @@ async fn require_user_capability(
     let endpoint = request.uri().path().to_string();
     if let Some(capability) = required_user_capability(request.method(), &endpoint) {
         let allowed = context.allows(capability);
+        // V2-c 域标注: 授权裁决 = 行为域 (行为者所在域)。
+        let domain_label = crate::domain_context::action_domain_label(&state, context.user_id());
         record_user_action(
             Some(state.observations.as_ref()),
             context.user_id(),
@@ -1078,6 +1080,7 @@ async fn require_user_capability(
             capability.label(),
             &endpoint,
             allowed,
+            domain_label.as_deref(),
         );
         if !allowed {
             let message = if context.user_id().is_some() {
@@ -1135,13 +1138,17 @@ fn cross_user_approval_refusal(
     if allowed {
         return None;
     }
+    // V2-c 域标注: 授权裁决 = 行为域 (行为者所在域)。
+    let actor = context.and_then(|context| context.user_id());
+    let domain_label = crate::domain_context::action_domain_label(state, actor);
     record_user_action(
         Some(state.observations.as_ref()),
-        context.and_then(|context| context.user_id()),
+        actor,
         context.and_then(|context| context.role()),
         "approval_ownership",
         "/v1/approvals/resolve",
         false,
+        domain_label.as_deref(),
     );
     Some(
         ErrorFrame::response(
@@ -1154,6 +1161,46 @@ fn cross_user_approval_refusal(
         )
         .into_response(),
     )
+}
+
+/// 审批归属域校验 (V2-c: 跨用户审批闸 W3-② 的**跨域**升级)。
+///
+/// 审批是会话的资源级归属: 域面接线时, 目标会话必须在**本域账本在册** ——
+/// 他域会话与不存在的会话 id **同帧** 404 `session_not_found` (存在性不泄露,
+/// W3-① 资源级跨域语义, 与 `/v1/sessions/*`、`?session=` 事件订阅同一口径)。
+/// 在册探测失败按不在册处理 (fail-closed, 宁拒不泄)。owner 的全局视角只在
+/// users/domains 管理面 (V2-c), **审批面无跨域通路** (升级前 owner 可批任意
+/// 会话的审批, 升级后跨域同帧 404)。
+///
+/// 域面未接线 = 不校验 (W2/W3-② 既有审批语义逐字零变化)。
+/// 返回 `Some(帧)` = 不得继续读/解该审批。
+async fn approval_session_refusal(
+    state: &GatewayState,
+    domain: Option<&Extension<crate::domain_context::DomainContext>>,
+    endpoint: &str,
+    session: SessionId,
+) -> Option<Response> {
+    use crate::domain_context::domain_refused_frame;
+
+    let Some(plane) = state.domains.as_ref() else {
+        return None;
+    };
+    let Some(bound) = domain.and_then(|Extension(context)| context.domain.as_ref()) else {
+        return None;
+    };
+    let manager = match plane.sessions(bound) {
+        Ok(manager) => manager,
+        Err(error) => return Some(domain_refused_frame(state, endpoint, &error)),
+    };
+    // 他域/不存在同帧读作不存在 (跨域归属拒 = 资源级 404, 不发 403 泄露存在性)。
+    if manager.contains(&session).await.unwrap_or(false) {
+        return None;
+    }
+    Some(ErrorFrame::response(
+        StatusCode::NOT_FOUND,
+        ErrorCode::SessionNotFound,
+        format!("session {session} does not exist"),
+    ))
 }
 
 /// Build the production router over an explicit [`GatewayState`] (lets tests
@@ -1491,6 +1538,14 @@ fn chat_execution<'a>(
         });
     };
     let Some(plane) = state.domain_runtimes.as_ref() else {
+        // 实例面未注入: 默认域仍是组合根注入的现运行时 (零变化, 不陪非默认域
+        // 一起拒); 非默认域拒开不代跑。
+        if bound.is_default() {
+            return Ok(DomainChatExecution {
+                runtime: &state.runtime,
+                context: apeireth_runtime::canonical::DomainRuntimeContext::default(),
+            });
+        }
         return Err(crate::domain_context::domain_refused_frame(
             state,
             endpoint,
@@ -1584,16 +1639,38 @@ async fn native_resolve_approval(
     State(state): State<GatewayState>,
     identity: Option<Extension<ClientIdentity>>,
     user: Option<Extension<UserContext>>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
     Json(request): Json<CanonicalApprovalRequest>,
 ) -> Result<Response, HttpError> {
     let session = request.session;
+    // V2-c 跨域归属拒 (资源级, 先于角色/归属判定 —— 他域会话与不存在同帧,
+    // 连「此处有审批」都不泄露)。
+    if let Some(refusal) =
+        approval_session_refusal(&state, domain.as_ref(), "/v1/approvals/resolve", session).await
+    {
+        state.observations.flush().await;
+        return Ok(refusal);
+    }
     // W3-② 跨用户审批拒: 归属闸在角色门能力判定之后 (owner 可批任意会话)。
     if let Some(refusal) = cross_user_approval_refusal(&state, session, user.as_ref()) {
         state.observations.flush().await;
         return Ok(refusal);
     }
+    // V2-c: 续跑走**本域伙伴实例** (默认域/域面未接线 = 现运行时, 零变化)。
+    let execution = match chat_execution(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/approvals/resolve",
+    ) {
+        Ok(execution) => execution,
+        Err(refusal) => {
+            state.observations.flush().await;
+            return Ok(refusal);
+        }
+    };
     let attribution = attribution_for(&state, identity.as_ref());
-    let outcome = resolve_approval_attributed(state.runtime.as_ref(), request, attribution).await;
+    let outcome =
+        resolve_approval_attributed(execution.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
     let outcome = outcome.map_err(|error| http_error(error, Some(session)))?;
     publish_turn_delta(&state.events, &outcome);
@@ -1613,9 +1690,30 @@ struct ApprovalInboxResponse {
 
 async fn list_pending_approvals(
     State(state): State<GatewayState>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
     Query(query): Query<ApprovalInboxQuery>,
-) -> Result<Json<ApprovalInboxResponse>, HttpError> {
-    let approvals = state
+) -> Result<Response, HttpError> {
+    // V2-c 跨域归属拒: 本域不在册的会话 id 与不存在同帧 (审批收件箱同样不泄
+    // 他域会话的存在性)。
+    if let Some(refusal) =
+        approval_session_refusal(&state, domain.as_ref(), "/v1/approvals", query.session).await
+    {
+        state.observations.flush().await;
+        return Ok(refusal);
+    }
+    // V2-c: 收件箱读**本域伙伴实例**的挂起审批 (默认域/域面未接线 = 现运行时)。
+    let execution = match chat_execution(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/approvals",
+    ) {
+        Ok(execution) => execution,
+        Err(refusal) => {
+            state.observations.flush().await;
+            return Ok(refusal);
+        }
+    };
+    let approvals = execution
         .runtime
         .pending_approvals(query.session)
         .await
@@ -1626,7 +1724,8 @@ async fn list_pending_approvals(
     Ok(Json(ApprovalInboxResponse {
         session: query.session,
         approvals,
-    }))
+    })
+    .into_response())
 }
 
 fn chat_http_response(outcome: CanonicalChatOutcome) -> Response {

@@ -95,7 +95,11 @@ pub use execute::{
     ApprovalResolution, ContextBlock, TurnOutcome, TurnRequest, TurnResponse,
     PLAN_MODE_EXIT_TOOL_NAME,
 };
-pub use heartbeat::{FlowLock, HeartbeatScheduler, HeartbeatTask, HeartbeatTriggerSource};
+pub use heartbeat::{
+    FlowLock, HeartbeatDispatch, HeartbeatPoll, HeartbeatPollOutcome, HeartbeatProducer,
+    HeartbeatProducerConfig, HeartbeatProducerStatus, HeartbeatScheduler, HeartbeatTask,
+    HeartbeatTriggerSource,
+};
 pub use metrics::{
     DistributionSummary, MetricsRegistry, MetricsSnapshot, SessionAggregate, TurnMetrics,
     TurnOutcomeKind, WindowAggregate, DEFAULT_METRICS_WINDOW_TURNS, MAX_TRACKED_SESSIONS,

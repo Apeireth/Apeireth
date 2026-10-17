@@ -1085,33 +1085,21 @@ pub struct EventsQuery {
 }
 
 /// 事件订阅的域过滤面 (W3-③ 星群: 域事件按域隔离)。
-#[derive(Clone)]
-enum DomainEventScope {
-    /// 域面未接线: 全量订阅 (兼容路径零变化)。
-    Unrestricted,
-    /// 按域过滤: 只投递**本域在册会话**的事件帧 (分库之下他域会话按本域
-    /// 账本读作不存在, 与 W3-① 同语义); 本域数据面未开 = 会话帧全不投
-    /// (fail-closed, 宁拒不泄)。无会话归属的进程级帧 (生命周期等) 照常。
-    OwnDomain(Option<Arc<apeireth_runtime::canonical::SessionManager>>),
-}
+///
+/// V2-c: 范围类型收敛到面板/事件**共享**的 [`crate::domain_context::DomainScope`]
+/// (同一在册探测) —— 面板订阅与事件面对「哪些会话属于本域」永远一致。
+///
+/// - [`DomainScope::Unrestricted`] (域面未接线/默认域): 全量订阅 (兼容路径零变化);
+/// - [`DomainScope::OwnDomain`]: 只投递**本域在册会话**的事件帧 (分库之下他域
+///   会话按本域账本读作不存在, 与 W3-① 同语义); 本域数据面未开 = 会话帧全不投
+///   (fail-closed, 宁拒不泄)。无会话归属的进程级帧 (生命周期等) 照常。
+type DomainEventScope = crate::domain_context::DomainScope;
 
-impl DomainEventScope {
-    /// 该会话是否归属本订阅域 (在册探测; 失败按不在册处理 —— fail-closed,
-    /// 宁拒不泄, 与「他域读作不存在」同一语义)。
-    async fn owns(&self, session: SessionId) -> bool {
-        match self {
-            Self::Unrestricted => true,
-            Self::OwnDomain(None) => false,
-            Self::OwnDomain(Some(manager)) => manager.contains(&session).await.unwrap_or(false),
-        }
-    }
-
-    /// 该帧是否投递本订阅 (会话帧按本域在册判定; 无会话归属的进程级帧照常)。
-    async fn admits(&self, event: &GatewayEvent) -> bool {
-        match event_session(event) {
-            None => true,
-            Some(session) => self.owns(session).await,
-        }
+/// 该帧是否投递本订阅 (会话帧按本域在册判定; 无会话归属的进程级帧照常)。
+async fn domain_admits(scope: &DomainEventScope, event: &GatewayEvent) -> bool {
+    match event_session(event) {
+        None => true,
+        Some(session) => scope.owns(session).await,
     }
 }
 
@@ -1243,7 +1231,7 @@ pub async fn events_handler(
                     match item {
                         Ok(event) => {
                             if scoped.map_or(true, |session| is_session_event(&event, session))
-                                && domain_scope.admits(&event).await
+                                && domain_admits(&domain_scope, &event).await
                             {
                                 Some(BusItem::Event(event))
                             } else {

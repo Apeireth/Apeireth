@@ -585,7 +585,7 @@ async fn git_write_registers_only_when_enabled_and_reports_roster_switches() {
         .all(|capability| capability.id().as_str() != GIT_WRITE_CAPABILITY_ID));
 
     // 自省名册: 两个开关照实报告 (子档依赖主开关)。
-    let roster = roster_from_config(&config, true, false, true, &[]);
+    let roster = roster_from_config(&config, true, false, false, true, &[]);
     let git_rows: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("git_write"))
@@ -597,7 +597,7 @@ async fn git_write_registers_only_when_enabled_and_reports_roster_switches() {
     );
     let mut sub_only = base();
     sub_only.git_write_auto_pass_l1 = true;
-    let roster = roster_from_config(&sub_only, true, false, true, &[]);
+    let roster = roster_from_config(&sub_only, true, false, false, true, &[]);
     let git_rows: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("git_write"))

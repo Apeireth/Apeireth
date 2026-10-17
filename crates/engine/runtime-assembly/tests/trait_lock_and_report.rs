@@ -274,7 +274,7 @@ async fn trait_report_numbers_are_correct_on_the_production_face() {
         .iter()
         .all(|capability| capability.id().as_str() != TRAIT_REPORT_CAPABILITY_ID));
     let source = ProductionSelfStatusSource::new(
-        apeireth_runtime_assembly::roster_from_config(&config, false, false, false, &[]),
+        apeireth_runtime_assembly::roster_from_config(&config, false, false, false, false, &[]),
         false,
         None,
     );

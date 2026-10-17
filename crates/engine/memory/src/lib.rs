@@ -345,6 +345,8 @@ pub mod partner_store_sqlite;
 pub mod persona_store_sqlite;
 pub mod reconciler;
 pub mod retrieval_pipeline;
+// V4-c 检索维度自进化 (证据账 + 有界调权内核 + 生效值落地槽)。
+pub mod retrieval_tuning;
 pub mod scope;
 pub mod temporal_graph_store;
 pub mod universal_forget;
@@ -394,6 +396,10 @@ pub use reconciler::{
 pub use retrieval_pipeline::{
     unicode_tokens, BasicLexicalCandidateSource, HybridRetrievalPipeline, LexicalCandidateSource,
     MemoryCandidateSource, RetrievalStatus, StaticVectorCandidateSource, VectorCandidateSource,
+};
+pub use retrieval_tuning::{
+    entry_target_id, EffectiveRanking, EvidenceSignal, EvidenceTally, RetrievalDimension,
+    RetrievalTuningEngine, RetrievalTuningRecord, SelectedAttribution, TuningEvidence,
 };
 pub use scope::{
     DeterministicReranker, EmbeddingError, EmbeddingProvider, InMemoryPersonaProfileStore,

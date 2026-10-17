@@ -120,6 +120,14 @@ fn count_user_refs(table: &UserTable, domain_id: &DomainUserId) -> usize {
         .count()
 }
 
+/// V2-c 管理动作审计行的**目标域**标注 (开域动作 = 被开的域 id; 词面未过
+/// [`DomainUserId`] 目录安全闸 = 不标注, fail-closed, 未核实值不进审计行)。
+fn target_domain_label(domain_id: &str) -> Option<String> {
+    DomainUserId::new(domain_id.trim())
+        .ok()
+        .map(|id| id.as_str().to_string())
+}
+
 /// 域角色词面 → 域角色 (过治理层冻结词表 [`UserRole::parse`], 词表口径唯一)。
 fn parse_domain_role(raw: Option<&str>) -> Result<DomainRole, UserDomainError> {
     let role = UserRole::parse(raw.unwrap_or(UserRole::Owner.as_str())).map_err(|error| {
@@ -171,6 +179,8 @@ pub async fn create_domain(
     let role = match parse_domain_role(body.role.as_deref()) {
         Ok(role) => role,
         Err(error) => {
+            // V2-c 域标注: 管理动作 = 目标域 (意图开的域)。
+            let domain_label = target_domain_label(&body.user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -178,6 +188,7 @@ pub async fn create_domain(
                 "domain_create",
                 &endpoint,
                 false,
+                domain_label.as_deref(),
             );
             return domain_error_response(&error);
         }
@@ -193,6 +204,8 @@ pub async fn create_domain(
         user_counts.as_ref(),
     ) {
         Ok(created) => {
+            // V2-c 域标注: 管理动作 = 目标域 (被开的域)。
+            let domain_label = target_domain_label(&created.user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -200,6 +213,7 @@ pub async fn create_domain(
                 "domain_create",
                 &endpoint,
                 true,
+                domain_label.as_deref(),
             );
             (
                 StatusCode::CREATED,
@@ -208,6 +222,8 @@ pub async fn create_domain(
                 .into_response()
         }
         Err(error) => {
+            // V2-c 域标注: 管理动作 = 目标域 (意图开的域)。
+            let domain_label = target_domain_label(&body.user_id);
             record_user_action(
                 Some(state.observations.as_ref()),
                 user.user_id(),
@@ -215,6 +231,7 @@ pub async fn create_domain(
                 "domain_create",
                 &endpoint,
                 false,
+                domain_label.as_deref(),
             );
             domain_error_response(&error)
         }

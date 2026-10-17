@@ -145,6 +145,10 @@
 
 ## 7. 0 装诚实
 
+> 历史口径（2026-10-17 立）: 本节首条「常驻心跳生产者（定时 poll）未接线」已随
+> 后续批交付 —— 见 [care-heartbeat-producer.md](care-heartbeat-producer.md)
+> （生产者接缝 + 开关 + 测试证据）; 本节其余条目照旧保留原值。
+
 - **常驻心跳生产者（定时 poll）未接线**：本批交付的是它调用的工具性内核
   （`CareEngine::poll` → 候选 → 判定 → 标准回合输入）+ 工具/自述/治理/旋钮；
   常驻循环归常驻进程线（运行时已有 `canonical::heartbeat` 调度接缝 + gateway

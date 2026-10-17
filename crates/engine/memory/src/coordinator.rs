@@ -665,7 +665,11 @@ impl MemoryCoordinator {
             sources.push(vs);
         }
 
-        let pipeline = HybridRetrievalPipeline::new(self.ranking);
+        // V4-c 检索维度自进化: 排序权重取**生效值** (调权落地 override; 无调权
+        // 在场 = 原配置原值, 零改动回落)。
+        let pipeline = HybridRetrievalPipeline::new(crate::retrieval_tuning::effective_ranking_or(
+            self.ranking,
+        ));
         let (ranked_candidates, mut status) = pipeline.retrieve_with_status(
             &query.query_text,
             &query.visible_scopes,

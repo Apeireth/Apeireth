@@ -246,6 +246,10 @@ async fn memory_ledger_counts_match_the_real_stores_without_echoing_content() {
                 pending_ingest: Some(freshness.pending_ingest),
                 last_fold_at_ms: freshness.last_fold_at_ms,
                 dedup_skipped: Some(freshness.dedup_skipped),
+                // V4-c 检索调权两真值: 本组合未开调权 = 有账零调权如实 (0 +
+                // 显式 null, 不编移动)。
+                retrieval_tuning_count: Some(0),
+                last_retrieval_tuning: None,
                 reason: None,
             })
         })
@@ -266,6 +270,9 @@ async fn memory_ledger_counts_match_the_real_stores_without_echoing_content() {
     assert_eq!(ledger["pending_ingest"], 0);
     assert_eq!(ledger["dedup_skipped"], 0);
     assert_eq!(ledger["last_fold_at_ms"], Value::Null);
+    // V4-c 检索调权真值: 有账零调权 = 0 + 最近调权显式 null (不编移动)。
+    assert_eq!(ledger["retrieval_tuning_count"], 0);
+    assert_eq!(ledger["last_retrieval_tuning"], Value::Null);
     assert_eq!(ledger["reason"], Value::Null);
     // 计数不回内容原文。
     let rendered = report.to_string();

@@ -52,6 +52,10 @@ pub use session::*;
 pub use subloop::*;
 pub use trace::*;
 
+/// 常驻心跳关怀生产者装配面 (V3-a 收尾一针): 定时 poll 关怀内核 → 命中发起
+/// 标准回合 (开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸, 默认关 fail-closed)。
+#[path = "canonical/care_heartbeat.rs"]
+pub mod care_heartbeat;
 #[path = "canonical/causal_world_model.rs"]
 pub mod causal_world_model;
 #[path = "canonical/cognitive.rs"]
@@ -90,6 +94,9 @@ pub mod preference_learning;
 pub mod production;
 #[path = "canonical/repetition_advisory.rs"]
 pub mod repetition_advisory;
+/// V4-c 检索维度自进化接线层 (证据账 + `retrieval_tuning.jsonl` 落盘 + 调权落地)。
+#[path = "canonical/retrieval_tuning_wire.rs"]
+pub mod retrieval_tuning_wire;
 /// 「性格养成」第一铲: 自校准接线层 (引擎落地 + tuning-log.jsonl 落盘)。
 #[path = "canonical/self_status_source.rs"]
 pub mod self_status_source;
@@ -118,6 +125,11 @@ pub mod upgrade_cycle;
 #[path = "canonical/voice_quiet.rs"]
 pub mod voice_quiet;
 
+pub use care_heartbeat::{
+    CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer, CareHeartbeatStatus,
+    CARE_ENABLE_ENV, CARE_HEARTBEAT_ENABLE_ENV, CARE_HEARTBEAT_POLL_INTERVAL_ENV,
+    DEFAULT_CARE_HEARTBEAT_POLL_INTERVAL_SECS,
+};
 pub use experiment_field::{
     Experiment, ExperimentField, ExperimentStatus, FailureLearningRecord, FailureLearningSink,
     NoopVMRunner, VMRunner, Verdict, WikiFailureLearningSink,
@@ -155,6 +167,13 @@ pub use production::{
     with_memory_context_projection, CognitiveBackends, CognitiveModuleConfig,
     MemoryContextProjector, ProductionBackends, ProductionCognitiveModules, ProductionModules,
     ProductionModulesConfig,
+};
+pub use retrieval_tuning_wire::{
+    memory_ledger_tuning_fields, read_retrieval_tuning_log, retrieval_tuning_doc_compat,
+    retrieval_tuning_enabled_from_env_value, retrieval_tuning_log_path,
+    retrieval_tuning_log_path_from_session_db, RetrievalTuningLedgerSummary, RetrievalTuningWire,
+    SignalSurface, RETRIEVAL_TUNING_DOC_NAME, RETRIEVAL_TUNING_DOC_VERSION,
+    RETRIEVAL_TUNING_ENABLE_ENV, RETRIEVAL_TUNING_LOG_FILE,
 };
 pub use self_status_source::{
     budget_status_from_configured, budget_status_from_constants, care_status_probe,

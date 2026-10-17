@@ -199,14 +199,67 @@ fn judge_identity(
 /// `GET /v1/panel/tasks` —— 任务面板只读面 (一次快照读; 过令牌门, 读面全员可读)。
 ///
 /// 未接线 (端口未注入) = 501 `unsupported` 如实报, 不假装有数据源。
-pub async fn list_tasks(State(state): State<GatewayState>) -> Response {
+///
+/// V2-c 面板按域: 非默认域 = 按域过滤返回 (与其余面板面同一铁律 —— 行有域归属
+/// 记号才进域视图)。任务投影行 (`TaskPanelDto`) **无域归属记号** (id/标题/状态/
+/// 载荷均非归属字段), 故域视图为零行 + 零计数 (fail-closed, 宁拒不泄);
+/// 计数一律**按可见行重算**, 共享快照的计数不得泄进域视图 (A 域看不进 B 域
+/// 计数)。任务行的域归属标注残余见交付记录 (随任务队列投影批补, 补齐即按
+/// 记号判定)。
+pub async fn list_tasks(
+    State(state): State<GatewayState>,
+    domain: Option<Extension<crate::domain_context::DomainContext>>,
+) -> Response {
+    let scope = match crate::domain_context::request_scope(
+        &state,
+        domain.as_ref().map(|Extension(context)| context),
+        "/v1/panel/tasks",
+    ) {
+        Ok(scope) => scope,
+        Err(refusal) => return refusal,
+    };
     let Some(tasks) = &state.services.tasks else {
         return crate::panels::unsupported("tasks.read");
     };
     match tasks.task_snapshot().await {
-        Ok(snapshot) => (StatusCode::OK, Json(snapshot)).into_response(),
+        Ok(snapshot) => {
+            let snapshot = domain_scoped_snapshot(&scope, snapshot);
+            (StatusCode::OK, Json(snapshot)).into_response()
+        }
         Err(message) => crate::panels::panel_error(message),
     }
+}
+
+/// 域视图快照: 行按域归属过滤 + 分态计数按**可见行**重算 (不复述共享计数)。
+fn domain_scoped_snapshot(
+    scope: &crate::domain_context::DomainScope,
+    snapshot: TaskBoardSnapshotDto,
+) -> TaskBoardSnapshotDto {
+    if !scope.is_restricted() {
+        return snapshot;
+    }
+    // 任务投影行无域归属记号 → 无行进域视图; 计数由可见行重算 (此处恒为零)。
+    let tasks: Vec<TaskPanelDto> = Vec::new();
+    let counts = counts_from_rows(&tasks);
+    TaskBoardSnapshotDto { tasks, counts }
+}
+
+/// 分态计数 = 可见行的分态聚合 (六态词表 + 合计), 与行同一刻同源。
+fn counts_from_rows(tasks: &[TaskPanelDto]) -> TaskCountsDto {
+    let mut counts = TaskCountsDto::default();
+    for task in tasks {
+        match task.state.as_str() {
+            "pending" => counts.pending += 1,
+            "assigned" => counts.assigned += 1,
+            "running" => counts.running += 1,
+            "done" => counts.done += 1,
+            "failed" => counts.failed += 1,
+            "blocked" => counts.blocked += 1,
+            _ => {}
+        }
+    }
+    counts.total = tasks.len() as u64;
+    counts
 }
 
 /// `POST /v1/panel/tasks/{task_id}/human-judge-retry` —— 人判重试 (唯一动作面)。

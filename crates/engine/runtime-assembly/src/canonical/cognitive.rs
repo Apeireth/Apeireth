@@ -956,6 +956,9 @@ pub struct MemoryRecallModule {
     /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层 —— 本模块的召回
     /// 结果是**真接**的检索命中/未命中信号源 (每轮记一次, 凑批由接线层聚合)。
     self_tuning: Option<Arc<crate::canonical::self_tuning_wire::SelfTuningWire>>,
+    /// V4-c 检索维度自进化 (默认无 = 关): 注入回执喂证据账, 调权由接线层
+    /// 裁决落账 —— 本模块的**注入回执**是它的信号面 (无回执 = 显式不进化)。
+    retrieval_tuning: Option<Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>>,
 }
 
 /// W3 community 分诊的图谱 fact 读取上限 (社区检测的被动分析输入规模)。
@@ -1076,7 +1079,19 @@ impl MemoryRecallModule {
             morphology_recall: false,
             community_triage: None,
             self_tuning: None,
+            retrieval_tuning: None,
         }
+    }
+
+    /// V4-c 检索维度自进化: 接入自进化接线层 (默认无 = 调权关)。
+    /// 本模块每次召回把注入回执喂给接线层 (真接信号面)。
+    #[must_use]
+    pub fn with_retrieval_tuning(
+        mut self,
+        wire: Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>,
+    ) -> Self {
+        self.retrieval_tuning = Some(wire);
+        self
     }
 
     /// 「性格养成」第一铲: 接入自校准接线层 (默认无 = 自学习关)。
@@ -1090,21 +1105,32 @@ impl MemoryRecallModule {
         self
     }
 
+    /// 回执/信号时间戳: 显式时钟优先, 缺时钟回系统时间 (缺系统时间回 0)。
+    fn now_epoch_ms(&self) -> i64 {
+        self.clock
+            .as_ref()
+            .map(|clock| clock.now().timestamp_millis())
+            .unwrap_or_else(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_millis() as i64)
+                    .unwrap_or(0)
+            })
+    }
+
     /// 真接信号: 把一轮召回结果 (选中 ≥1 候选 = 命中, 空 = 未命中) 记进
     /// 自校准接线层; 无接线层 = 自学习关, 什么都不做。
     fn feed_retrieval_signal(&self, hit: bool) {
         if let Some(wire) = &self.self_tuning {
-            let at_epoch_ms = self
-                .clock
-                .as_ref()
-                .map(|clock| clock.now().timestamp_millis())
-                .unwrap_or_else(|| {
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|duration| duration.as_millis() as i64)
-                        .unwrap_or(0)
-                });
-            wire.record_retrieval_round(hit, at_epoch_ms);
+            wire.record_retrieval_round(hit, self.now_epoch_ms());
+        }
+    }
+
+    /// V4-c 真接信号面: 把一轮召回的**注入回执**喂给自进化接线层 (回执 =
+    /// 后续使用证据的唯一真值面; 无接线层 = 调权关, 什么都不做)。
+    fn feed_retrieval_tuning(&self, selected: &apeireth_memory::SelectedMemoryAccess) {
+        if let Some(wire) = &self.retrieval_tuning {
+            wire.record_injection_round(&selected.selected_attribution, self.now_epoch_ms());
         }
     }
 
@@ -1246,6 +1272,8 @@ impl AgentModule for MemoryRecallModule {
                     Ok(Some(selected)) => {
                         // 真接信号: 本轮召回选中了候选 = 命中, 全空 = 未命中。
                         self.feed_retrieval_signal(!selected.selected_candidate_ids.is_empty());
+                        // V4-c: 注入回执喂证据账 (选中集为空的轮按空轮报)。
+                        self.feed_retrieval_tuning(&selected);
                         if let Some(recorder) = &self.access_recorder {
                             recorder.record_selected(&session, &selected);
                         }
@@ -1279,6 +1307,10 @@ impl AgentModule for MemoryRecallModule {
                     Ok(None) => {
                         // 真接信号: 无候选可召回 = 未命中轮。
                         self.feed_retrieval_signal(false);
+                        // V4-c: 空轮如实报给接线层 (非机会轮, 不裁决证据)。
+                        if let Some(wire) = &self.retrieval_tuning {
+                            wire.record_empty_round(self.now_epoch_ms());
+                        }
                         if let Some(recorder) = &self.access_recorder {
                             recorder.clear(&session);
                         }
@@ -4212,5 +4244,83 @@ mod tests {
             "有人格层必须注册恒定注入模块: {:?}",
             present.ids()
         );
+    }
+
+    /// V4-c 检索面真接线: MemoryRecallModule 的注入回执喂自进化接线层 ——
+    /// 首轮注入回执待决 (信号面在场, 无证据不调权), 次轮再命中 = 正信号 →
+    /// 调权真落账 (`retrieval_tuning.jsonl`) 且真落生效值。
+    #[tokio::test]
+    async fn recall_round_receipts_feed_the_retrieval_tuning_wire() {
+        use super::super::retrieval_tuning_wire::{
+            read_retrieval_tuning_log, RetrievalTuningWire, SignalSurface,
+        };
+
+        let session = SessionId::new();
+        let memory = Arc::new(FakeMemory::default());
+        let scoped = Arc::new(FakeScoped {
+            episodes: std::sync::Mutex::new(vec![Episode {
+                id: "e1".into(),
+                timestamp: 1,
+                role: "user".into(),
+                content: "主人明天要交线代作业".into(),
+                session_id: session.to_string(),
+            }]),
+        });
+        let coordinator = Arc::new(
+            MemoryCoordinator::new(memory.clone(), memory.clone()).with_scoped_backend(scoped),
+        );
+        let invoker: Arc<dyn super::super::module::ModuleInvoker> = Arc::new(FixedInvoker {
+            response: NormalizedResponse::text("x", "fake", "ok"),
+            calls: AtomicU64::new(0),
+        });
+        let messages = vec![NormalizedMessage::user("主人明天要交线代作业吗")];
+        let log = std::env::temp_dir().join(format!(
+            "apeireth-recall-tuning-{}.jsonl",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&log);
+        let wire = Arc::new(RetrievalTuningWire::new(log.clone()));
+        let module = MemoryRecallModule::new(memory.clone())
+            .with_coordinator(Arc::clone(&coordinator))
+            .with_retrieval_tuning(Arc::clone(&wire));
+
+        // 第一轮: e1 注入 → 回执待决 (无证据不调权), 信号面在场。
+        module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(&session, &messages, None, &invoker, MEMORY_RECALL_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wire.evolution_count(), 0, "首轮回执待决不调权");
+        assert_eq!(
+            wire.signal_surface(),
+            SignalSurface::Present {
+                selective_rounds: 1
+            }
+        );
+        assert_eq!(wire.pending_receipts()[0].id, "e1");
+
+        // 第二轮: e1 再命中 = 正信号 → 条目 + 归因维度各动一步, 落账。
+        module
+            .on_hook(
+                HookPoint::TurnStart,
+                &context(&session, &messages, None, &invoker, MEMORY_RECALL_MODULE_ID),
+            )
+            .await
+            .unwrap();
+        assert_eq!(wire.evolution_count(), 2, "{:?}", wire.last_move());
+        let summary = read_retrieval_tuning_log(&log).expect("自进化账已落");
+        assert_eq!(summary.evolution_count(), 2);
+        assert!(
+            summary
+                .last_move()
+                .unwrap()
+                .evidence
+                .contains("注入后命中回执"),
+            "{:?}",
+            summary.last_move()
+        );
+        let _ = std::fs::remove_file(&log);
     }
 }

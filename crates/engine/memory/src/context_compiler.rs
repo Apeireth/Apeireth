@@ -5,6 +5,7 @@
 //! persisted transcripts are never mutated.
 
 use crate::layers::MemoryRecallResult;
+use crate::retrieval_tuning::{RetrievalDimension, SelectedAttribution};
 
 /// The transient overlay and the candidates that actually made it into it.
 ///
@@ -19,6 +20,17 @@ pub struct SelectedMemoryAccess {
     /// IDs of candidates whose sanitized lines were included in `overlay`, in
     /// the same order in which they appear in the overlay.
     pub selected_candidate_ids: Vec<String>,
+    /// 注入回执归因 (V4-c): 与 `selected_candidate_ids` 同序的逐条显著维度
+    /// 归因; 无评分分量数据的条目维度如实为 `None` (不编造归因)。
+    pub selected_attribution: Vec<SelectedAttribution>,
+}
+
+/// 从选中条目推导注入回执归因 (显著维度 = 分量最大者, 全零 = 无归因)。
+fn attribution_for(id: &str, components: Option<crate::ScoreComponents>) -> SelectedAttribution {
+    SelectedAttribution::new(
+        id,
+        components.and_then(|c| RetrievalDimension::dominant(&c)),
+    )
 }
 
 /// Callback interface for observing candidates after overlay selection.
@@ -97,6 +109,7 @@ impl ClosedWorldContextCompiler {
 
         let mut current_chars = lines.iter().map(|l| l.len() + 1).sum::<usize>();
         let mut selected_candidate_ids = Vec::new();
+        let mut selected_attribution = Vec::new();
 
         for item in &recalled.items {
             let sanitized_content = sanitize_text(&item.content);
@@ -113,6 +126,7 @@ impl ClosedWorldContextCompiler {
 
             current_chars += line.len() + 1;
             lines.push(line);
+            selected_attribution.push(attribution_for(&item.id, item.score_components));
             selected_candidate_ids.push(item.id.clone());
         }
 
@@ -120,6 +134,7 @@ impl ClosedWorldContextCompiler {
         Some(SelectedMemoryAccess {
             overlay: lines.join("\n"),
             selected_candidate_ids,
+            selected_attribution,
         })
     }
 
@@ -144,6 +159,7 @@ impl ClosedWorldContextCompiler {
         const RULES_RESERVE: usize = 160;
         let mut entries: Vec<String> = Vec::new();
         let mut selected_candidate_ids = Vec::new();
+        let mut selected_attribution = Vec::new();
         let mut current_chars = RULES_RESERVE;
         for item in &recalled.items {
             let sanitized_content = sanitize_text(&item.content);
@@ -153,6 +169,7 @@ impl ClosedWorldContextCompiler {
             }
             current_chars += cost;
             entries.push(sanitized_content);
+            selected_attribution.push(attribution_for(&item.id, item.score_components));
             selected_candidate_ids.push(item.id.clone());
         }
         loop {
@@ -164,12 +181,14 @@ impl ClosedWorldContextCompiler {
                 return Some(SelectedMemoryAccess {
                     overlay: rendered,
                     selected_candidate_ids,
+                    selected_attribution,
                 });
             }
             if entries.pop().is_none() {
                 return None;
             }
             selected_candidate_ids.pop();
+            selected_attribution.pop();
         }
     }
 
@@ -289,6 +308,42 @@ mod tests {
         assert_eq!(
             compiler.compile(&recalled, session_id, max_chars),
             Some(selected.overlay)
+        );
+    }
+
+    /// V4-c 注入回执归因: 选中条目逐条携带显著维度 (无分量数据 = 显式 None,
+    /// 不编造归因), 与 `selected_candidate_ids` 同序。
+    #[test]
+    fn selected_access_reports_dimension_attribution_without_inventing_it() {
+        let mut recalled = recalled(vec![
+            ("with-components", "semantic content"),
+            ("without-components", "plain content"),
+        ]);
+        recalled.items[0].score_components = Some(crate::ScoreComponents {
+            semantic: 0.8,
+            lexical: 0.2,
+            ..crate::ScoreComponents::default()
+        });
+        let session_id = "session-attr";
+        let compiler = ClosedWorldContextCompiler::default();
+        let selected = compiler
+            .compile_with_selected_access(&recalled, session_id, 4_096)
+            .expect("overlay");
+
+        assert_eq!(
+            selected.selected_candidate_ids,
+            vec!["with-components", "without-components"]
+        );
+        assert_eq!(selected.selected_attribution.len(), 2);
+        assert_eq!(selected.selected_attribution[0].id, "with-components");
+        assert_eq!(
+            selected.selected_attribution[0].dominant_dimension,
+            Some(RetrievalDimension::Semantic)
+        );
+        assert_eq!(selected.selected_attribution[1].id, "without-components");
+        assert_eq!(
+            selected.selected_attribution[1].dominant_dimension, None,
+            "无分量数据 = 归因显式缺席, 不编造"
         );
     }
 

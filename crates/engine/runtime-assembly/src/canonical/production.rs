@@ -426,6 +426,10 @@ pub struct ProductionBackends {
     /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层, 接上后
     /// MemoryRecallModule 的召回结果作为真接信号喂给引擎。
     pub self_tuning: Option<Arc<crate::canonical::self_tuning_wire::SelfTuningWire>>,
+    /// V4-c 检索维度自进化 (默认无 = 调权关): 自进化接线层, 接上后
+    /// MemoryRecallModule 的注入回执作为真接信号面喂给引擎 (证据裁决 +
+    /// `retrieval_tuning.jsonl` 自进化账落盘 + 调权生效值落地)。
+    pub retrieval_tuning: Option<Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>>,
     /// 自省通道: 记忆账本计数探测口 (会话/记忆/保护/教训计数, 只回计数)。
     pub self_status_ledger: Option<StatusProbe<MemoryLedgerStats>>,
     /// 自省通道: 凭据存在性探测口 (只回布尔, 不回显凭据本体)。
@@ -508,9 +512,12 @@ impl ProductionModules {
         roster_config.mcp = mcp_server_config
             .as_ref()
             .is_some_and(|servers| servers.enabled_servers().next().is_some());
-        // 自学习 / 类型化召回的生效值 = 接线事实 AND 上游槽 (自学习信号只走
-        // 记忆召回模块, 类型化召回候选只走记忆协调器)。
+        // 自学习 / 类型化召回 / 检索调权的生效值 = 接线事实 AND 上游槽 (自学习
+        // 信号只走记忆召回模块, 类型化召回候选只走记忆协调器, 检索调权的注入
+        // 回执面只走记忆召回模块)。
         let self_tuning_effective = backends.self_tuning.is_some() && config.memory_recall;
+        let retrieval_tuning_effective =
+            backends.retrieval_tuning.is_some() && config.memory_recall;
         let typed_recall_effective =
             backends.typed_recall.is_some() && (config.memory_recall || config.memory_writeback);
         // V4-a 人格提取步的生效值 = 开关 AND 人格层落库面 (面缺席 = 显式不跑).
@@ -524,6 +531,7 @@ impl ProductionModules {
                 &roster_config,
                 backends.workspace_root.is_some(),
                 self_tuning_effective,
+                retrieval_tuning_effective,
                 typed_recall_effective,
                 &backends.self_status_extras,
             )
@@ -845,6 +853,10 @@ impl ProductionModules {
             }
             if let Some(wire) = &backends.self_tuning {
                 module = module.with_self_tuning(Arc::clone(wire));
+            }
+            // V4-c 检索维度自进化: 注入回执面挂记忆召回模块 (默认无 = 调权关)。
+            if let Some(wire) = &backends.retrieval_tuning {
+                module = module.with_retrieval_tuning(Arc::clone(wire));
             }
             if let (Some(wiki), Some(graph), Some(associations)) =
                 (&backends.wiki, &backends.graph, &backends.associations)

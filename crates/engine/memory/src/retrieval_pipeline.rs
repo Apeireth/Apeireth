@@ -249,6 +249,8 @@ impl HybridRetrievalPipeline {
                     status.lexical_candidates += 1;
                 }
                 candidate.score = candidate.score_components.weighted(&self.ranking);
+                // V4-c: 条目显著性加成 (调权生效值; 未调条目 = 0, 零改动)。
+                candidate.score += crate::retrieval_tuning::entry_salience(&candidate.id);
                 match by_id.get_mut(&candidate.id) {
                     Some(existing) => {
                         existing.score_components.semantic = existing
@@ -259,7 +261,8 @@ impl HybridRetrievalPipeline {
                             .score_components
                             .lexical
                             .max(candidate.score_components.lexical);
-                        existing.score = existing.score_components.weighted(&self.ranking);
+                        existing.score = existing.score_components.weighted(&self.ranking)
+                            + crate::retrieval_tuning::entry_salience(&existing.id);
                     }
                     None => {
                         by_id.insert(candidate.id.clone(), candidate);
@@ -648,5 +651,50 @@ mod tests {
             s.contains("…[尾部 600 字符已省略]…"),
             "over budget truncates with the graded note: {s}"
         );
+    }
+
+    /// V4-c 调权真生效: 条目显著性生效值真进检索排序 (无 override 时零改动回落)。
+    #[test]
+    fn installed_entry_salience_changes_retrieval_ordering() {
+        let _guard = crate::retrieval_tuning::EFFECTIVE_TEST_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        crate::retrieval_tuning::clear_effective();
+        let scope = MemoryScope::Global;
+        let source = BasicLexicalCandidateSource::new(vec![
+            candidate("a", "rust memory retrieval design", scope.clone()),
+            candidate("b", "rust memory retrieval notes", scope.clone()),
+        ]);
+        let pipeline = HybridRetrievalPipeline::default();
+
+        // 未调权: 同分按 id 序, a 在前。
+        let items = pipeline
+            .retrieve("rust memory", &[scope.clone()], &[&source], 2, 1_000)
+            .unwrap();
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+
+        let mut engine = crate::retrieval_tuning::RetrievalTuningEngine::new();
+        engine.observe(&crate::retrieval_tuning::TuningEvidence::positive(
+            "b", None, 1_000,
+        ));
+        crate::retrieval_tuning::install_effective(engine.effective());
+        let items = pipeline
+            .retrieve("rust memory", &[scope], &[&source], 2, 1_000)
+            .unwrap();
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b", "a"],
+            "调权后的显著性加成必须真进排序 (不装学习)"
+        );
+        crate::retrieval_tuning::clear_effective();
     }
 }

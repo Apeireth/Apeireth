@@ -162,7 +162,7 @@ fn roster_projection_follows_the_worktree_registration_condition() {
     config.file_write = true;
     config.worktree_plan = true;
     config.worktree_apply = true;
-    let roster = roster_from_config(&config, true, false, true, &[]);
+    let roster = roster_from_config(&config, true, false, false, true, &[]);
     let rows: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("worktree_"))
@@ -174,7 +174,7 @@ fn roster_projection_follows_the_worktree_registration_condition() {
     );
 
     // 无工作区根: 注册条件不成立, 两行都照实 false。
-    let roster = roster_from_config(&config, false, false, true, &[]);
+    let roster = roster_from_config(&config, false, false, false, true, &[]);
     let rows: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("worktree_"))

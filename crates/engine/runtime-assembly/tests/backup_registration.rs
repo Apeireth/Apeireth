@@ -84,13 +84,13 @@ async fn production_registers_the_backup_export_tool_only_when_configured() {
         sources_at(&temp.path().join("second")),
         BackupHooks::none(),
     ));
-    let roster = roster_from_config(&with_roster, true, false, false, &[]);
+    let roster = roster_from_config(&with_roster, true, false, false, false, &[]);
     let row = roster
         .iter()
         .find(|switch| switch.name == "backup_export")
         .expect("backup_export roster row");
     assert!(row.enabled, "配置在场时名册必须报 true");
-    let roster = roster_from_config(&base_config(), true, false, false, &[]);
+    let roster = roster_from_config(&base_config(), true, false, false, false, &[]);
     let row = roster
         .iter()
         .find(|switch| switch.name == "backup_export")

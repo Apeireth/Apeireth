@@ -62,8 +62,13 @@
 //!
 //! # 0 装诚实
 //!
-//! - 常驻心跳生产者 (定时 [`CareEngine::poll`]) **未接线**: 本模块是它调用的
-//!   工具性内核, 接线归常驻进程线 (与 initiative 生产者同一条待接线通道)。
+//! - 常驻心跳生产者 (定时 [`CareEngine::poll`]) 已交付在运行时
+//!   `canonical::heartbeat` 调度缝 + runtime-assembly 装配
+//!   (`CareHeartbeatProducer`, 开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸
+//!   默认关 fail-closed); 常驻宿主的启动注入点 (presence `try_take_initiative`
+//!   同源闸 → [`CareInitiativeGate`], 以及自述关怀节的心跳态探测口) 已在
+//!   常驻宿主接线 (cli 组合根 `care_heartbeat` 模块, 双闸齐开才起; 2026-10-17
+//!   随行) —— 开关关/未起 = 心跳不自动起, 自述心跳两列显式 null (不冒充)。
 //! - 交互观察 ([`CareEngine::observe_interaction`]) 是进程内值; 重启后
 //!   久未联系类规则以规则创建时刻为锚 (如实)。
 //! - 关怀预算闸 ([`CareBudgetGate`]) 是同账本接缝的前置问询; **记账本身**随
@@ -74,10 +79,11 @@ pub mod rules;
 pub mod tool;
 
 pub use engine::{
-    AlwaysAdmitBudget, CareBudgetGate, CareBudgetVerdict, CareCandidate, CareClock, CareEngine,
-    CareHold, CareInitiative, CareJudge, CareJudgeMode, CareJudgmentInput, CareMaterialSource,
-    CareModelPort, CarePoll, CareVerdict, FnBudgetGate, FrozenCareClock, ModelContextJudge,
-    NoRecentMaterial, RuleFallbackJudge, SystemCareClock,
+    AlwaysAdmitBudget, AlwaysTakeInitiative, CareBudgetGate, CareBudgetVerdict, CareCandidate,
+    CareClock, CareEngine, CareHold, CareInitiative, CareInitiativeGate, CareJudge, CareJudgeMode,
+    CareJudgmentInput, CareMaterialSource, CareModelPort, CarePoll, CareVerdict, FnBudgetGate,
+    FnInitiativeGate, FrozenCareClock, ModelContextJudge, NoRecentMaterial, RuleFallbackJudge,
+    SystemCareClock,
 };
 pub use rules::{
     care_rules_doc_compat, validate_care_material, validate_care_rule_id, CareDiscipline,

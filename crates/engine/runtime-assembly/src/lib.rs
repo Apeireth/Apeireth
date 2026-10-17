@@ -44,6 +44,24 @@ pub use canonical::{
     TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use sqlite_session::SqliteSessionStore;
+// V4-c 检索维度自进化: 注入后命中回执 → 证据 → 层权重/条目显著性小幅调权,
+// 自进化账 `retrieval_tuning.jsonl` (append-only) + 开关
+// `APEIRETH_ENABLE_RETRIEVAL_TUNING` (默认关 fail-closed)。
+pub use canonical::{
+    memory_ledger_tuning_fields, read_retrieval_tuning_log, retrieval_tuning_doc_compat,
+    retrieval_tuning_enabled_from_env_value, retrieval_tuning_log_path,
+    retrieval_tuning_log_path_from_session_db, RetrievalTuningLedgerSummary, RetrievalTuningWire,
+    SignalSurface, RETRIEVAL_TUNING_DOC_NAME, RETRIEVAL_TUNING_DOC_VERSION,
+    RETRIEVAL_TUNING_ENABLE_ENV, RETRIEVAL_TUNING_LOG_FILE,
+};
+// 常驻心跳关怀生产者 (V3-a 收尾一针): 装配句柄 + 开关 (注册即闸 fail-closed) +
+// 自述关怀节心跳态探测口 (下次 poll 时刻 / 最近心跳命中)。
+pub use canonical::care_heartbeat::{
+    CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer, CareHeartbeatStatus,
+    CARE_ENABLE_ENV, CARE_HEARTBEAT_ENABLE_ENV, CARE_HEARTBEAT_POLL_INTERVAL_ENV,
+    DEFAULT_CARE_HEARTBEAT_POLL_INTERVAL_SECS,
+};
+pub use canonical::self_status_source::care_status_probe_with_heartbeat;
 // V6-a 任务编排持久队列: sqlite 任务表 (会话账本同库) + `tool.task_board` 工具面
 // (含治理档钩子) + 自述任务节探测口。
 pub use canonical::self_status_source::task_board_status_probe;

@@ -26,8 +26,12 @@
 //!   `reason`), 不在这里生成消息正文 —— 消息由标准回合生成 (零新消息通道)。
 //! - 无模型配置 = [`RuleFallbackJudge`] 纯规则照发; 模型判定失败/解析失败 =
 //!   回退规则判定并在判定理由里如实注明真因。
-//! - 常驻心跳生产者 (定时 `poll`) **未接线**: 本模块是它调用的工具性内核
-//!   (poll → 候选 → 判定 → 标准回合输入), 接线归常驻进程线。
+//! - 常驻心跳生产者已交付在 `canonical::heartbeat` 调度缝 + runtime-assembly
+//!   装配 (`CareHeartbeatProducer`, 开关 `APEIRETH_ENABLE_CARE_HEARTBEAT`
+//!   注册即闸默认关); 常驻宿主的启动注入点 (presence `try_take_initiative`
+//!   同源闸 → [`CareInitiativeGate`]) 已在常驻宿主接线 (cli 组合根
+//!   `care_heartbeat` 模块, 2026-10-17 随行); 未注入 = 显式不发起限量
+//!   的单内核档 (见 [`AlwaysTakeInitiative`])。
 
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -328,6 +332,54 @@ where
     }
 }
 
+/// 发起闸 (try_take_initiative 同源接缝)。
+///
+/// 与常驻进程 presence 面的发起限量 (`try_take_initiative`) **同一闸源**:
+/// 关怀发起与其他 initiative 生产者共用同一份防唠叨预算 (宁少勿多)。闸只在
+/// 「有到点候选且打扰纪律四件已放行」时被问询 (空转 poll零消耗); 闸拒绝 =
+/// [`CareHold::InitiativeGate`] 拦下 —— **候选不丢**, 窗口滑过重试。
+pub trait CareInitiativeGate: Send + Sync {
+    /// 尝试占用一个发起额度: `true` = 放行发起; `false` = 本轮不发起。
+    fn try_take_initiative(&self, now_ms: i64) -> bool;
+}
+
+/// 恒放行发起闸 (内核单用的缺省档)。
+///
+/// **0 装诚实**: 生产装配必须注入 presence 同源闸 (见 [`FnInitiativeGate`]);
+/// 本缺省档只保证内核单独可用 (测试/工具面), 不代表生产没有发起限量。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AlwaysTakeInitiative;
+
+impl CareInitiativeGate for AlwaysTakeInitiative {
+    fn try_take_initiative(&self, _now_ms: i64) -> bool {
+        true
+    }
+}
+
+/// 闭包发起闸 (组装根把 presence 的 `try_take_initiative` 接进本闸)。
+pub struct FnInitiativeGate<F> {
+    take: F,
+}
+
+impl<F> FnInitiativeGate<F>
+where
+    F: Fn(i64) -> bool + Send + Sync,
+{
+    /// 绑定问询闭包。
+    pub fn new(take: F) -> Self {
+        Self { take }
+    }
+}
+
+impl<F> CareInitiativeGate for FnInitiativeGate<F>
+where
+    F: Fn(i64) -> bool + Send + Sync,
+{
+    fn try_take_initiative(&self, now_ms: i64) -> bool {
+        (self.take)(now_ms)
+    }
+}
+
 /// 近期记忆素材源 (模型情境引擎的增色输入缝; 缺省 = 纯规则)。
 pub trait CareMaterialSource: Send + Sync {
     /// 取该候选的近期记忆素材 (只读摘录, 由组装根注入来源)。
@@ -355,6 +407,9 @@ pub enum CareHold {
     FrequencyCap,
     /// 关怀预算已耗尽 (同账本接缝: 烧不起就不发)。
     Budget,
+    /// 发起闸拦下 (try_take_initiative 同源闸拒绝: 防唠叨发起限量已用尽;
+    /// 候选不丢, 窗口滑过重试)。
+    InitiativeGate,
 }
 
 impl CareHold {
@@ -365,6 +420,7 @@ impl CareHold {
             Self::Focus => "focus",
             Self::FrequencyCap => "frequency_cap",
             Self::Budget => "budget",
+            Self::InitiativeGate => "initiative_gate",
         }
     }
 }
@@ -381,7 +437,7 @@ pub enum CarePoll {
         /// 判定 (含理由)。
         verdict: CareVerdict,
     },
-    /// 打扰纪律拦下 (候选拦下不丢, 下次心跳重试)。
+    /// 打扰纪律/发起闸拦下 (候选拦下不丢, 下次心跳重试)。
     Held {
         /// 规则 id。
         rule_id: String,
@@ -433,6 +489,7 @@ pub struct CareEngine {
     judge: Arc<dyn CareJudge>,
     material: Arc<dyn CareMaterialSource>,
     budget: Arc<dyn CareBudgetGate>,
+    initiative: Arc<dyn CareInitiativeGate>,
     last_interaction_ms: Option<i64>,
 }
 
@@ -445,6 +502,7 @@ impl CareEngine {
             judge,
             material: Arc::new(NoRecentMaterial),
             budget: Arc::new(AlwaysAdmitBudget),
+            initiative: Arc::new(AlwaysTakeInitiative),
             last_interaction_ms: None,
         }
     }
@@ -460,6 +518,14 @@ impl CareEngine {
     #[must_use]
     pub fn with_budget_gate(mut self, gate: Arc<dyn CareBudgetGate>) -> Self {
         self.budget = gate;
+        self
+    }
+
+    /// 注入发起闸 (try_take_initiative 同源接缝: 与其他 initiative 生产者
+    /// 共用同一份防唠叨预算)。
+    #[must_use]
+    pub fn with_initiative_gate(mut self, gate: Arc<dyn CareInitiativeGate>) -> Self {
+        self.initiative = gate;
         self
     }
 
@@ -484,12 +550,14 @@ impl CareEngine {
         );
     }
 
-    /// 每次心跳调用一次: 取第一个到点规则 → 打扰纪律 → 发起意愿判定。
+    /// 每次心跳调用一次: 取第一个到点规则 → 打扰纪律 → 发起闸 → 发起意愿判定。
     ///
     /// 顺序固定 (先立规矩再谈温度): 勿扰窗口 → 专注抑制 → 频率上限 →
-    /// 关怀预算 → 判定。纪律拦下 = [`CarePoll::Held`] (候选不丢, 重试);
-    /// 判定说不 = [`CarePoll::Declined`] (当次到点消费掉, 台账留痕);
-    /// 判定该说 = [`CarePoll::Initiating`] (发起留痕 + 台账)。
+    /// 关怀预算 → 发起闸 (try_take_initiative 同源) → 判定。纪律/闸拦下 =
+    /// [`CarePoll::Held`] (候选不丢, 重试); 判定说不 = [`CarePoll::Declined`]
+    /// (当次到点消费掉, 台账留痕); 判定该说 = [`CarePoll::Initiating`]
+    /// (发起留痕 + 台账)。发起闸拦下时**零判定零记账** —— 纯规则轮询路径
+    /// 不碰模型 (poll 本身零模型调用)。
     pub fn poll(&mut self) -> Result<CarePoll, CareStoreError> {
         let now_ms = self.clock.now_ms();
         let body = self.store.list()?;
@@ -502,6 +570,15 @@ impl CareEngine {
             return Ok(CarePoll::Held {
                 rule_id: rule.id.clone(),
                 hold,
+            });
+        }
+
+        // 发起闸 (try_take_initiative 同源): 纪律放行后、判定前问询 ——
+        // 拒绝 = 候选不丢 (Held 重试), 且本轮零判定零记账。
+        if !self.initiative.try_take_initiative(now_ms) {
+            return Ok(CarePoll::Held {
+                rule_id: rule.id.clone(),
+                hold: CareHold::InitiativeGate,
             });
         }
 
@@ -690,5 +767,124 @@ mod tests {
                 verdict.reason
             );
         }
+    }
+
+    fn open_discipline() -> CareDiscipline {
+        CareDiscipline {
+            quiet_start_minutes: None,
+            quiet_end_minutes: None,
+            ..CareDiscipline::default()
+        }
+    }
+
+    fn due_interval_rule() -> CareRule {
+        CareRule {
+            id: "check-in".to_string(),
+            trigger: CareTrigger::Interval { hours: 1 },
+            material: "问问他最近怎么样".to_string(),
+            enabled: true,
+            created_at_ms: 1_700_000_000_000,
+        }
+    }
+
+    /// 发起闸 (try_take_initiative 同源) 拦下 = Held: 候选不丢 (不消耗发起锚点),
+    /// 零判定零记账; 闸放行才发起。
+    #[test]
+    fn the_initiative_gate_holds_without_losing_the_candidate_or_recording_it() {
+        let (_dir, store) = store_with(&due_interval_rule(), open_discipline());
+        let clock = Arc::new(FrozenCareClock::new(1_700_000_000_000));
+        let consulted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let admitted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let gate = FnInitiativeGate::new({
+            let consulted = Arc::clone(&consulted);
+            let admitted = Arc::clone(&admitted);
+            move |_at_ms| {
+                consulted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                admitted.load(std::sync::atomic::Ordering::SeqCst)
+            }
+        });
+        let mut engine = CareEngine::new(store, clock.clone(), Arc::new(RuleFallbackJudge))
+            .with_initiative_gate(Arc::new(gate));
+        clock.set(1_700_000_000_000 + 3_600_000);
+
+        assert_eq!(
+            engine.poll().expect("poll"),
+            CarePoll::Held {
+                rule_id: "check-in".to_string(),
+                hold: CareHold::InitiativeGate,
+            },
+            "发起闸拒绝 = 拦下 (候选拦下不丢)"
+        );
+        let body = engine.store().list().expect("list");
+        assert!(
+            body.history.is_empty(),
+            "发起闸拦下不写台账: {:?}",
+            body.history
+        );
+        assert!(
+            body.fired_at.is_empty(),
+            "发起锚点不消耗 (候选不丢, 窗口滑过重试): {:?}",
+            body.fired_at
+        );
+
+        admitted.store(true, std::sync::atomic::Ordering::SeqCst);
+        match engine.poll().expect("poll") {
+            CarePoll::Initiating(initiative) => {
+                assert_eq!(initiative.candidate.rule_id, "check-in");
+            }
+            other => panic!("闸放行后必须发起: {other:?}"),
+        }
+        assert_eq!(
+            consulted.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "发起闸只在有到点候选且纪律放行时被问询"
+        );
+    }
+
+    /// 发起闸在打扰纪律之后才被问询: 纪律拦下/无到点候选 = 零问询零消耗
+    /// (防唠叨预算不被空转 poll 烧掉)。
+    #[test]
+    fn the_initiative_gate_is_only_consulted_after_the_discipline_passes() {
+        // ① 无到点候选: Idle, 闸零问询。
+        let rule = CareRule {
+            created_at_ms: 1_700_000_000_000,
+            ..due_interval_rule()
+        };
+        let (_dir, store) = store_with(&rule, open_discipline());
+        let clock = Arc::new(FrozenCareClock::new(1_700_000_000_000));
+        let consulted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut engine = CareEngine::new(store, clock.clone(), Arc::new(RuleFallbackJudge))
+            .with_initiative_gate(Arc::new(FnInitiativeGate::new({
+                let consulted = Arc::clone(&consulted);
+                move |_at_ms| {
+                    consulted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    true
+                }
+            })));
+        assert_eq!(engine.poll().expect("idle"), CarePoll::Idle);
+
+        // ② 到点但勿扰窗口内: Held(QuietWindow), 闸仍零问询。
+        let clock = Arc::new(FrozenCareClock::new(1_700_000_000_000 + 3_600_000));
+        let (_dir, store) = store_with(&due_interval_rule(), CareDiscipline::default());
+        let mut engine = CareEngine::new(store, clock.clone(), Arc::new(RuleFallbackJudge))
+            .with_initiative_gate(Arc::new(FnInitiativeGate::new({
+                let consulted = Arc::clone(&consulted);
+                move |_at_ms| {
+                    consulted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    true
+                }
+            })));
+        assert_eq!(
+            engine.poll().expect("hold"),
+            CarePoll::Held {
+                rule_id: "check-in".to_string(),
+                hold: CareHold::QuietWindow,
+            }
+        );
+        assert_eq!(
+            consulted.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "纪律拦下时发起闸零问询 (预算不被空转烧掉)"
+        );
     }
 }

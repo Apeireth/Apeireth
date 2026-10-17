@@ -24,6 +24,7 @@ use apeireth_tools_canonical::{
     QUOTA_METER_SCOPE_REQUIRED,
 };
 
+use super::care_heartbeat::CareHeartbeatStatus;
 use super::production::ProductionModulesConfig;
 use super::session::Session;
 use super::{execute::MAX_TOOL_CALLS_PER_ROUND, runtime::DEFAULT_MAX_ROUNDS};
@@ -183,10 +184,27 @@ pub fn domain_status_probe(
 /// `last_interaction_ms()` 取进程内交互观察 (缺位时久未联系类规则以规则创建
 /// 时刻为锚, 如实)。拒开 (StoredDoc 语义) = `Err(真因)`, 自述节显式 null +
 /// 原因, 不编数。
+///
+/// 本入口不带心跳态探测口 (关怀节心跳两列显式 null = 心跳生产者未接线/未运行);
+/// 要心跳真值用 [`care_status_probe_with_heartbeat`]。
 pub fn care_status_probe(
     data_dir: PathBuf,
     now_ms: Arc<dyn Fn() -> i64 + Send + Sync>,
     last_interaction_ms: Arc<dyn Fn() -> Option<i64> + Send + Sync>,
+) -> StatusProbe<CareStatus> {
+    care_status_probe_with_heartbeat(data_dir, now_ms, last_interaction_ms, None)
+}
+
+/// 自省通道: 双引擎关怀节探测口 + **心跳态** (V3-a 收尾一针)。
+///
+/// 在 [`care_status_probe`] 的规则/关怀真值之上, 把常驻心跳生产者的心跳态
+/// (下次 poll 时刻 / 最近心跳命中) 投进关怀节两列; `heartbeat` 缺位 = 两列
+/// 显式 null (未接线/未运行, 如实, 不冒充)。
+pub fn care_status_probe_with_heartbeat(
+    data_dir: PathBuf,
+    now_ms: Arc<dyn Fn() -> i64 + Send + Sync>,
+    last_interaction_ms: Arc<dyn Fn() -> Option<i64> + Send + Sync>,
+    heartbeat: Option<Arc<dyn Fn() -> CareHeartbeatStatus + Send + Sync>>,
 ) -> StatusProbe<CareStatus> {
     Arc::new(move || {
         let store = apeireth_organ::care::CareStore::new(data_dir.clone());
@@ -204,11 +222,14 @@ pub fn care_status_probe(
                 )
             })
             .or_else(|| Some("尚无关怀记录".to_string()));
+        let heartbeat = heartbeat.as_ref().map(|probe| probe());
         Ok(CareStatus {
             rules: Some(status.rules),
             next_trigger_at_ms: status.next_trigger_at_ms,
             last_care_at_ms: status.last_care.as_ref().map(|record| record.at_ms),
             last_care_note,
+            heartbeat_next_poll_at_ms: heartbeat.and_then(|state| state.next_poll_at_ms),
+            heartbeat_last_hit_at_ms: heartbeat.and_then(|state| state.last_hit_at_ms),
             reason: None,
         })
     })
@@ -675,8 +696,9 @@ impl SelfStatusSource for ProductionSelfStatusSource {
 /// 开关 (开关生效链审计续): 记忆固化挂在记忆写入模块、检索深度自适应与
 /// 图社区分诊挂在记忆召回模块、前瞻召回挂在记忆召回模块、记忆注入挂在
 /// 记忆协调器 —— 上游槽缺席时下游开关静默失效, 名册一律照实报 false。
-/// `self_tuning` / `typed_recall` 两个注入槽参数为接线事实, 本函数再 AND
-/// 上游槽 (自学习挂记忆召回, 类型化召回挂记忆协调器), 与配置行同口径。
+/// `self_tuning` / `typed_recall` / `retrieval_tuning` 三个注入槽参数为接线事实,
+/// 本函数再 AND 上游槽 (自学习挂记忆召回, 类型化召回挂记忆协调器, 检索调权
+/// 挂记忆召回), 与配置行同口径。
 ///
 /// MCP 外部工具桥一行的自报语义 (如实): 桥已装配**且**有可用服务器配置
 /// 才算外部工具面生效 —— 已启用但无服务器配置 = 无外部工具 (照实 false);
@@ -686,6 +708,7 @@ pub fn roster_from_config(
     config: &ProductionModulesConfig,
     workspace_root_present: bool,
     self_tuning: bool,
+    retrieval_tuning: bool,
     typed_recall: bool,
     extras: &[CapabilitySwitch],
 ) -> Vec<CapabilitySwitch> {
@@ -827,6 +850,10 @@ pub fn roster_from_config(
         // 自学习信号只走记忆召回模块 (`with_self_tuning`): 召回缺席时接线
         // 无处生效, 名册照实 false (接线事实 AND 上游槽)。
         CapabilitySwitch::new("self_tuning", self_tuning && config.memory_recall),
+        // V4-c 检索调权 (`APEIRETH_ENABLE_RETRIEVAL_TUNING`, 默认关 fail-closed)
+        // 挂记忆召回模块 (`with_retrieval_tuning`): 召回缺席时注入回执面无处
+        // 供给, 名册照实 false (接线事实 AND 上游槽)。
+        CapabilitySwitch::new("retrieval_tuning", retrieval_tuning && config.memory_recall),
     ];
     roster.extend(extras.iter().cloned());
     roster.sort_by(|a, b| a.name.cmp(&b.name));
@@ -882,7 +909,7 @@ mod tests {
         config.fetch = None;
         config.organs = true;
         let extras = vec![CapabilitySwitch::new("local_read_tools", true)];
-        let roster = roster_from_config(&config, true, true, true, &extras);
+        let roster = roster_from_config(&config, true, true, false, true, &extras);
         let by_name: std::collections::HashMap<&str, bool> = roster
             .iter()
             .map(|row| (row.name.as_str(), row.enabled))
@@ -897,7 +924,7 @@ mod tests {
         assert_eq!(by_name["filesystem"], true);
 
         // 无工作区根 = 本地文件工具没注册成, 名册照实说 false。
-        let roster = roster_from_config(&config, false, true, true, &extras);
+        let roster = roster_from_config(&config, false, true, false, true, &extras);
         let by_name: std::collections::HashMap<&str, bool> = roster
             .iter()
             .map(|row| (row.name.as_str(), row.enabled))
@@ -919,7 +946,7 @@ mod tests {
         config.community_triage = true;
         config.memory_injection = true;
         config.proactive_recall = Some(apeireth_memory::ProactiveRecallPolicy::default());
-        let roster = roster_from_config(&config, true, true, true, &[]);
+        let roster = roster_from_config(&config, true, true, false, true, &[]);
         let by_name: std::collections::HashMap<&str, bool> = roster
             .iter()
             .map(|row| (row.name.as_str(), row.enabled))
@@ -933,7 +960,7 @@ mod tests {
 
         config.memory_recall = true;
         config.memory_writeback = true;
-        let roster = roster_from_config(&config, true, true, true, &[]);
+        let roster = roster_from_config(&config, true, true, false, true, &[]);
         let by_name: std::collections::HashMap<&str, bool> = roster
             .iter()
             .map(|row| (row.name.as_str(), row.enabled))
@@ -1003,6 +1030,16 @@ mod tests {
                 pending_ingest: Some(1),
                 last_fold_at_ms: Some(1_728_000_900_000),
                 dedup_skipped: Some(7),
+                // V4-c 检索调权两真值随探测口透传 (同口径)。
+                retrieval_tuning_count: Some(4),
+                last_retrieval_tuning: Some(apeireth_tools_canonical::RetrievalTuningMove {
+                    target: "entry:mem-a".to_string(),
+                    signal: "positive".to_string(),
+                    previous: 0.0,
+                    next: 0.01,
+                    at_epoch_ms: 1_728_000_950_000,
+                    evidence: "注入后命中回执: 正 1 / 负 0 (mem-a)".to_string(),
+                }),
                 reason: None,
             })
         });
@@ -1023,6 +1060,15 @@ mod tests {
             "最近折入真值透传"
         );
         assert_eq!(stats.dedup_skipped, Some(7), "去重计数真值透传");
+        assert_eq!(stats.retrieval_tuning_count, Some(4), "进化次数真值透传");
+        assert_eq!(
+            stats
+                .last_retrieval_tuning
+                .as_ref()
+                .map(|move_| move_.target.as_str()),
+            Some("entry:mem-a"),
+            "最近调权真值透传"
+        );
         assert!(snapshot.memory_ledger_reason.is_none());
         let workspace = snapshot.workspace.expect("workspace");
         assert_eq!(workspace.credentials_present, Some(true));
@@ -1294,5 +1340,37 @@ mod tests {
             "{:?}",
             snapshot.persona_reason
         );
+    }
+
+    /// V4-c 检索调权名册行: 接线事实 AND 记忆召回上游槽 (上游缺席照实 false,
+    /// 开关生效链审计同口径)。
+    #[test]
+    fn retrieval_tuning_roster_row_reports_the_wiring_fact_and_upstream_slot() {
+        let config = ProductionModulesConfig::default();
+        let rows = roster_from_config(&config, true, false, true, false, &[]);
+        let by_name: std::collections::HashMap<&str, bool> = rows
+            .iter()
+            .map(|switch| (switch.name.as_str(), switch.enabled))
+            .collect();
+        assert_eq!(by_name["retrieval_tuning"], true, "接线事实 + 上游槽在场");
+
+        let mut without_recall = config.clone();
+        without_recall.memory_recall = false;
+        let rows = roster_from_config(&without_recall, true, false, true, false, &[]);
+        let by_name: std::collections::HashMap<&str, bool> = rows
+            .iter()
+            .map(|switch| (switch.name.as_str(), switch.enabled))
+            .collect();
+        assert_eq!(
+            by_name["retrieval_tuning"], false,
+            "记忆召回缺席 = 注入回执面无处供给, 名册照实 false"
+        );
+
+        let rows = roster_from_config(&config, true, false, false, false, &[]);
+        let by_name: std::collections::HashMap<&str, bool> = rows
+            .iter()
+            .map(|switch| (switch.name.as_str(), switch.enabled))
+            .collect();
+        assert_eq!(by_name["retrieval_tuning"], false, "未接线 = 照实 false");
     }
 }

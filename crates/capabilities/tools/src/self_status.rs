@@ -81,7 +81,9 @@ impl CapabilitySwitch {
 /// 记忆账本计数 (纯计数元数据; 缺失的计数显式 `None` → JSON `null`)。
 ///
 /// **永不回内容原文**: 只有数字, 没有记忆文本。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// (V4-c 起含浮点前后权重, 不再派生 `Eq`; 比较用 `PartialEq`。)
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct MemoryLedgerStats {
     /// 会话数 (episode 流里的不同会话计数)。
     pub sessions: Option<u64>,
@@ -97,8 +99,31 @@ pub struct MemoryLedgerStats {
     pub last_fold_at_ms: Option<i64>,
     /// 去重计数 (V4-b: 散列增量门跳过重复摄取的累计真值; 缺源 = `None`)。
     pub dedup_skipped: Option<u64>,
+    /// 进化次数 (V4-c 检索维度自进化: 自进化账 `retrieval_tuning.jsonl` 的真实
+    /// 调权移动行数; 缺源 = `None` 显式 null, 0 = 有账未调权)。
+    pub retrieval_tuning_count: Option<u64>,
+    /// 最近调权真值 (V4-c: 何时/因何证据/何维度/前后权重; 尚未调权 = `None`
+    /// 显式 null, 不编移动)。
+    pub last_retrieval_tuning: Option<RetrievalTuningMove>,
     /// 局部缺失原因 (某计数探测失败时给出; 与字段级 null 配对)。
     pub reason: Option<String>,
+}
+
+/// 最近一次检索调权真值 (记忆节「最近调权」的一行; 只回数字与原因摘要)。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RetrievalTuningMove {
+    /// 何维度: `dimension:<id>` (层权重) 或 `entry:<memory_id>` (条目显著性)。
+    pub target: String,
+    /// 判定信号 (`positive` / `negative`)。
+    pub signal: String,
+    /// 调整前权重。
+    pub previous: f64,
+    /// 调整后权重。
+    pub next: f64,
+    /// 调权时刻 (epoch 毫秒)。
+    pub at_epoch_ms: i64,
+    /// 因何证据 (回执摘要, 与自进化账同一行同源)。
+    pub evidence: String,
 }
 
 /// 四滑杆调参状态 (体验参数生效值 + 预设名 + 自学习开关 + 性格节真值)。
@@ -422,6 +447,9 @@ impl ContentFeedStatus {
 /// 「最近关怀」`None` = 尚无关怀 (显式 null + `last_care_note` 如实注「尚无
 /// 关怀记录」), 绝不编造时间或判定; 探测口缺位/失败 = 全维显式 null +
 /// `reason` (0 装诚实)。
+///
+/// 心跳态两列 (V3-a 收尾一针: 常驻心跳关怀生产者): `None` = 心跳生产者
+/// 未接线/未运行 (如实), 绝不冒充在跑。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CareStatus {
     /// 关怀规则数 (`care_rules.json` 真值计数)。
@@ -432,6 +460,10 @@ pub struct CareStatus {
     pub last_care_at_ms: Option<i64>,
     /// 最近关怀判定真值 (发起/说不 + 判定档 + 理由)。
     pub last_care_note: Option<String>,
+    /// 心跳态: 下次 poll 时刻 (epoch 毫秒); `None` = 心跳生产者未运行/未接线。
+    pub heartbeat_next_poll_at_ms: Option<i64>,
+    /// 心跳态: 最近心跳命中 (关怀发起) 时刻; `None` = 尚无心跳命中。
+    pub heartbeat_last_hit_at_ms: Option<i64>,
     /// 探测缺位/失败的原因 (全维就位时 `None`)。
     pub reason: Option<String>,
 }
@@ -444,6 +476,8 @@ impl CareStatus {
             next_trigger_at_ms: None,
             last_care_at_ms: None,
             last_care_note: None,
+            heartbeat_next_poll_at_ms: None,
+            heartbeat_last_hit_at_ms: None,
             reason: Some(reason.into()),
         }
     }
@@ -769,6 +803,10 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "pending_ingest": stats.pending_ingest,
             "last_fold_at_ms": stats.last_fold_at_ms,
             "dedup_skipped": stats.dedup_skipped,
+            // V4-c 检索维度自进化真值 (进化次数 / 最近调权); 尚未调权 = 显式
+            // null 不编移动。
+            "retrieval_tuning_count": stats.retrieval_tuning_count,
+            "last_retrieval_tuning": stats.last_retrieval_tuning,
             "reason": snapshot
                 .memory_ledger_reason
                 .clone()
@@ -782,6 +820,8 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "pending_ingest": null,
             "last_fold_at_ms": null,
             "dedup_skipped": null,
+            "retrieval_tuning_count": null,
+            "last_retrieval_tuning": null,
             "reason": snapshot
                 .memory_ledger_reason
                 .clone()
@@ -962,6 +1002,10 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "next_trigger_at_ms": status.next_trigger_at_ms,
             "last_care_at_ms": status.last_care_at_ms,
             "last_care_note": status.last_care_note,
+            // 心跳态 (V3-a 收尾一针): 下次 poll 时刻 / 最近心跳命中;
+            // 未接线/未运行 = 显式 null (如实)。
+            "heartbeat_next_poll_at_ms": status.heartbeat_next_poll_at_ms,
+            "heartbeat_last_hit_at_ms": status.heartbeat_last_hit_at_ms,
             "reason": snapshot.care_reason.clone().or_else(|| status.reason.clone()),
         }),
         None => json!({
@@ -969,6 +1013,8 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "next_trigger_at_ms": null,
             "last_care_at_ms": null,
             "last_care_note": null,
+            "heartbeat_next_poll_at_ms": null,
+            "heartbeat_last_hit_at_ms": null,
             "reason": snapshot
                 .care_reason
                 .clone()
@@ -1281,6 +1327,15 @@ mod tests {
                 pending_ingest: Some(3),
                 last_fold_at_ms: Some(1_700_000_000_000),
                 dedup_skipped: Some(4),
+                retrieval_tuning_count: Some(2),
+                last_retrieval_tuning: Some(RetrievalTuningMove {
+                    target: "dimension:semantic".to_string(),
+                    signal: "positive".to_string(),
+                    previous: 0.25,
+                    next: 0.26,
+                    at_epoch_ms: 1_700_000_100_000,
+                    evidence: "注入后命中回执: 正 1 / 负 0 (mem-a)".to_string(),
+                }),
                 reason: None,
             }),
             memory_ledger_reason: None,
@@ -1368,6 +1423,9 @@ mod tests {
                 next_trigger_at_ms: Some(1_728_000_900_000),
                 last_care_at_ms: Some(1_728_000_400_000),
                 last_care_note: Some("morning: spoke (rule_fallback)".to_string()),
+                // V3-a 收尾一针: 心跳态两列入 fixture (下次 poll 时刻 / 最近心跳命中)。
+                heartbeat_next_poll_at_ms: Some(1_728_001_000_000),
+                heartbeat_last_hit_at_ms: Some(1_728_000_400_000),
                 reason: None,
             }),
             care_reason: None,
@@ -1442,6 +1500,15 @@ mod tests {
         assert_eq!(
             value["care"]["last_care_note"],
             "morning: spoke (rule_fallback)"
+        );
+        // V3-a 收尾一针: 心跳态两列 (下次 poll 时刻 / 最近心跳命中) 真值入帧。
+        assert_eq!(
+            value["care"]["heartbeat_next_poll_at_ms"],
+            1_728_001_000_000i64
+        );
+        assert_eq!(
+            value["care"]["heartbeat_last_hit_at_ms"],
+            1_728_000_400_000i64
         );
         assert_eq!(value["care"]["reason"], Value::Null);
         assert_eq!(value["content_feed"]["feeds"], 2);
@@ -1614,7 +1681,8 @@ mod tests {
     }
 
     /// V3-a 自述关怀行: 规则数/下次触发/最近关怀如实 —— 尚无关怀 = 显式 null +
-    /// 如实注, 不编时间不编判定。
+    /// 如实注, 不编时间不编判定。V3-a 收尾一针: 心跳态两列 (下次 poll 时刻 /
+    /// 最近心跳命中) 同口径 —— 未接线/未运行 = 显式 null, 不冒充在跑。
     #[test]
     fn care_section_reports_rule_count_next_trigger_and_last_care_honestly() {
         let mut snapshot = fixture_snapshot();
@@ -1623,6 +1691,8 @@ mod tests {
             next_trigger_at_ms: Some(1_728_100_000_000),
             last_care_at_ms: None,
             last_care_note: Some("尚无关怀记录".to_string()),
+            heartbeat_next_poll_at_ms: None,
+            heartbeat_last_hit_at_ms: None,
             reason: None,
         });
         let value = render_snapshot(&snapshot);
@@ -1630,11 +1700,31 @@ mod tests {
         assert_eq!(value["care"]["next_trigger_at_ms"], 1_728_100_000_000i64);
         assert_eq!(value["care"]["last_care_at_ms"], Value::Null);
         assert_eq!(value["care"]["last_care_note"], "尚无关怀记录");
+        assert_eq!(value["care"]["heartbeat_next_poll_at_ms"], Value::Null);
+        assert_eq!(value["care"]["heartbeat_last_hit_at_ms"], Value::Null);
         assert_eq!(value["care"]["reason"], Value::Null);
+
+        // 心跳态真值在场 = 照真值报 (下次 poll 时刻 / 最近心跳命中)。
+        snapshot.care = Some(CareStatus {
+            heartbeat_next_poll_at_ms: Some(1_728_100_300_000),
+            heartbeat_last_hit_at_ms: Some(1_728_090_000_000),
+            ..snapshot.care.clone().expect("care fixture")
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(
+            value["care"]["heartbeat_next_poll_at_ms"],
+            1_728_100_300_000i64
+        );
+        assert_eq!(
+            value["care"]["heartbeat_last_hit_at_ms"],
+            1_728_090_000_000i64
+        );
 
         // 探测口失败 = 全维显式 null + 原因 (0 装诚实)。
         let unavailable = CareStatus::unavailable("care_rules.json refused to open");
         assert_eq!(unavailable.rules, None);
+        assert_eq!(unavailable.heartbeat_next_poll_at_ms, None);
+        assert_eq!(unavailable.heartbeat_last_hit_at_ms, None);
         assert_eq!(
             unavailable.reason.as_deref(),
             Some("care_rules.json refused to open")
@@ -1807,6 +1897,8 @@ mod tests {
             pending_ingest: None,
             last_fold_at_ms: None,
             dedup_skipped: None,
+            retrieval_tuning_count: None,
+            last_retrieval_tuning: None,
             reason: Some("lesson store not wired".to_string()),
         });
         snapshot.memory_ledger_reason = None;
@@ -1822,6 +1914,66 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("lesson store not wired"));
+    }
+
+    /// V4-c 记忆节扩: 进化次数 / 最近调权真值如实 (何时/因何证据/何维度/
+    /// 前后权重); 尚未调权 = 显式 null 不编移动, 缺源 = 显式 null + 原因。
+    #[test]
+    fn memory_ledger_retrieval_tuning_fields_report_truth_or_explicit_null() {
+        let mut snapshot = fixture_snapshot();
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["memory_ledger"]["retrieval_tuning_count"], 2);
+        assert_eq!(
+            value["memory_ledger"]["last_retrieval_tuning"]["target"],
+            "dimension:semantic"
+        );
+        assert_eq!(
+            value["memory_ledger"]["last_retrieval_tuning"]["signal"],
+            "positive"
+        );
+        assert_eq!(
+            value["memory_ledger"]["last_retrieval_tuning"]["previous"],
+            0.25
+        );
+        assert_eq!(
+            value["memory_ledger"]["last_retrieval_tuning"]["next"],
+            0.26
+        );
+        assert_eq!(
+            value["memory_ledger"]["last_retrieval_tuning"]["at_epoch_ms"],
+            1_700_000_100_000i64
+        );
+        assert!(value["memory_ledger"]["last_retrieval_tuning"]["evidence"]
+            .as_str()
+            .unwrap()
+            .contains("注入后命中回执"));
+        assert!(SelfStatusTool::output_schema().validate(&value).is_ok());
+
+        // 有账未调权: 计数 0 + 最近调权显式 null (不编移动)。
+        if let Some(stats) = snapshot.memory_ledger.as_mut() {
+            stats.retrieval_tuning_count = Some(0);
+            stats.last_retrieval_tuning = None;
+        }
+        let zero = render_snapshot(&snapshot);
+        assert_eq!(zero["memory_ledger"]["retrieval_tuning_count"], 0);
+        assert_eq!(zero["memory_ledger"]["last_retrieval_tuning"], Value::Null);
+
+        // 缺源: 全维显式 null + 原因 (0 装诚实, 不编数)。
+        snapshot.memory_ledger = None;
+        snapshot.memory_ledger_reason = Some("retrieval tuning ledger probe not wired".to_string());
+        let missing = render_snapshot(&snapshot);
+        assert_eq!(
+            missing["memory_ledger"]["retrieval_tuning_count"],
+            Value::Null
+        );
+        assert_eq!(
+            missing["memory_ledger"]["last_retrieval_tuning"],
+            Value::Null
+        );
+        assert!(missing["memory_ledger"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("not wired"));
     }
 
     /// V4-b 记忆节扩: 待摄取数 / 最近折入 / 去重计数真值如实; 尚未折入 =

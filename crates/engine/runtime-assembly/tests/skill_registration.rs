@@ -155,7 +155,7 @@ async fn roster_reports_skill_switches_from_effective_config() {
 #[test]
 fn roster_projection_is_stable_for_the_skill_rows() {
     let config = skill_config(true, true, true);
-    let roster = roster_from_config(&config, true, false, true, &[]);
+    let roster = roster_from_config(&config, true, false, false, true, &[]);
     let skill_rows: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("skill_"))
@@ -168,7 +168,7 @@ fn roster_projection_is_stable_for_the_skill_rows() {
 
     let mut no_dir = config;
     no_dir.skills_dir = None;
-    let roster = roster_from_config(&no_dir, true, false, true, &[]);
+    let roster = roster_from_config(&no_dir, true, false, false, true, &[]);
     let skill_rows: Vec<_> = roster
         .iter()
         .filter(|row| row.name.starts_with("skill_"))
