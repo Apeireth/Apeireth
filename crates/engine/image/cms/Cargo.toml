@@ -1,0 +1,31 @@
+# Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors.
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Modified 2026-10-18 for the Apeireth workspace: crate identifiers, tooling knob
+# names and product references renamed to neutral names; generated metadata producer
+# strings neutralised; scope adaptations recorded in
+# docs/04-internal/license-port/gate1-license.md. Original license terms unchanged.
+[package]
+name = "apeireth-image-cms"
+description = "Pure-Rust ICC v2/v4 colour management: profile parsing and writing, transforms, rendering intents, black point compensation"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+
+[dependencies]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = "1"
+
+[dev-dependencies]
+moxcms = "0.8"

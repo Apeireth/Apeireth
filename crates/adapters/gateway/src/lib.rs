@@ -60,6 +60,10 @@ pub mod im_bridge;
 /// IM quick access: approval cards and four-state closure (paired audit writes).
 pub mod im_approval;
 
+/// IM quick access: proposal card push + button decisions (autonomy proposal
+/// face wiring — same chain and envelope as the approval card).
+pub mod im_proposal;
+
 /// W2-② client credential system: per-client token table (name → token, env /
 /// json config faces with stored-doc refuse-to-open semantics).
 pub mod client_tokens;
@@ -84,6 +88,15 @@ pub mod skill_shelf;
 /// 人判重试): 持久任务队列的面板投影端口 (failed 只能人判; 增删改派走工具面,
 /// 不进本面)。
 pub mod task_panel;
+
+/// 关怀面板只读面 (`GET /v1/panel/care`): `care_rules.json` 的 `care_list` 帧
+/// 同形投影 + 关怀节真值 (含心跳两列) 端口 (与 `tool.care_schedule` 同表同
+/// 拒开口径; 零写面)。
+pub mod care_panel;
+
+/// 性格面板只读面 (`GET /v1/panel/traits`): 成长计既有账 + 锁定档的四滑杆
+/// 现值/锁定态/最近移动投影端口 (与 `tool.trait_report` 同账同源; 零写面)。
+pub mod trait_panel;
 
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
 /// and the explicitly unwired TLS placeholder surface.
@@ -123,6 +136,9 @@ pub use client_tokens::{
     CLIENT_TOKENS_ENV, CLIENT_TOKENS_FILE, SESSION_CLIENT_AUDIT_EVENT, USER_ACTION_AUDIT_EVENT,
 };
 
+pub use care_panel::{
+    CareDisciplineDto, CarePanelDto, CarePanelQuery, CarePanelStatusDto, CareRecordDto, CareRuleDto,
+};
 pub use domain_admin::{DomainAdminDto, DomainAdminService, DomainCreateBody};
 pub use skill_shelf::{
     SkillMetaDto, SkillRefusalDto, SkillShelfQuery, SkillShelfScanDto, SkillSourceDto,
@@ -130,6 +146,9 @@ pub use skill_shelf::{
 pub use task_panel::{
     HumanJudgeRetryRequest, HumanJudgeRetryResponse, TaskBoardPanel, TaskBoardSnapshotDto,
     TaskCountsDto, TaskPanelDto, TaskPanelError, TaskTimelineDto,
+};
+pub use trait_panel::{
+    TraitLocksDto, TraitMoveDto, TraitPanelDto, TraitPanelQuery, TraitValuesDto, TuningRecordDto,
 };
 pub use user_admin::{
     UserAdminDto, UserAdminError, UserAdminService, UserCreateBody, UserRolePatchBody,
@@ -162,6 +181,11 @@ pub use im_channels::{
     assemble_im_channels, doc_compat, im_channels_path, ImChannelAssembly, ImChannelConfig,
     ImChannelSpec, ImConfigError, IM_CHANNELS_DOC_NAME, IM_CHANNELS_DOC_VERSION, IM_CHANNELS_ENV,
     IM_CHANNELS_FILE,
+};
+pub use im_proposal::{
+    im_decided_by, is_proposal_payload, pending_push_drafts, proposal_card_envelope,
+    ImProposalClosure, ImProposalClosureResult, ImProposalDecider, ImProposalFace,
+    ProposalPushResult, PROPOSAL_CARD_NO_DEADLINE_MS,
 };
 
 pub use events::{

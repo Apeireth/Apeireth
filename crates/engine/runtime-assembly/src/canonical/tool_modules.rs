@@ -869,3 +869,289 @@ impl CapabilityProvider for ProposalModule {
         vec![Arc::clone(&self.tool)]
     }
 }
+
+/// Module providing the image-ops tool (`tool.image_ops`, 创作工具面 W1 · 图像操作).
+///
+/// 图像操作面: 工作区限域读 → 闭合操作词表管道 (resize/crop/rotate/flip/
+/// format_convert/brightness/contrast/grayscale/blur/sharpen/watermark_text) →
+/// 工作区限域原子写。受控面 = 敏感面拒 + 炸弹图上限 + 格式白名单
+/// (png/jpeg/webp/bmp) + 读前观测门禁 (未读不得覆盖写, 与读工具同一张观测表)。
+///
+/// 治理: **受控文件写族** (输出写归档文件写入族, 见工具模块头) —— 注册即闸
+/// (`APEIRETH_ENABLE_IMAGE_OPS` + `file_write` 唯一写总闸 + 工作区根, 默认关
+/// fail-closed)。自述创作节与工具面同一计数器 (`ImageOpsActivity`)。
+pub struct ImageOpsModule {
+    tool: Arc<apeireth_tools_canonical::ImageOpsTool>,
+    activity: Arc<apeireth_tools_canonical::ImageOpsActivity>,
+}
+
+impl ImageOpsModule {
+    /// Create the image-ops module rooted at `workspace_root`, sharing the
+    /// read-observation gate with the read tools and the file-write tool.
+    pub fn new(workspace_root: impl Into<PathBuf>, gate: Arc<ObservedGate>) -> Self {
+        let activity = Arc::new(apeireth_tools_canonical::ImageOpsActivity::new());
+        let tool = Arc::new(apeireth_tools_canonical::ImageOpsTool::new(
+            workspace_root,
+            gate,
+            Arc::clone(&activity),
+        ));
+        Self { tool, activity }
+    }
+
+    /// Access the underlying image-ops tool.
+    pub fn tool(&self) -> &Arc<apeireth_tools_canonical::ImageOpsTool> {
+        &self.tool
+    }
+
+    /// 创作节计数器 (与 `tool.self_status` 创作节同一实例, 同源同账)。
+    pub fn activity(&self) -> Arc<apeireth_tools_canonical::ImageOpsActivity> {
+        Arc::clone(&self.activity)
+    }
+}
+
+impl CapabilityProvider for ImageOpsModule {
+    fn id(&self) -> &str {
+        "module.tool.image_ops"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        let tool: Arc<dyn ToolCapability> = self.tool.clone();
+        vec![tool]
+    }
+}
+
+/// Module providing the doc-ops tool (`tool.doc_ops`, 创作工具面 W2 · 文档操作).
+///
+/// 受控读写族: PDF 读 (info/extract_text) + DOCX 读 (extract_text/outline) +
+/// PDF 基础写 (merge/split/extract_pages/watermark_text, 批量管道)。受控面 =
+/// 工作区限域 + 敏感面拒 + 大小/页数上限 + 创建类原子写 (只创建不覆盖)。
+///
+/// 治理: 注册即闸 (`APEIRETH_ENABLE_DOC_OPS`, 默认关 fail-closed); **写面
+/// 双重约束** —— 写动作受 [`super::production::ProductionModulesConfig::file_write`]
+/// 唯一写总闸 (组装根注入同一开关值, 关 = 拒写不拒读) + `DocOpsApprovalHook`
+/// 每次人批 (无自动放行档)。自述创作节与工具面同一计数器 (`DocOpsCounters`)。
+pub struct DocOpsModule {
+    tool: Arc<dyn ToolCapability>,
+    counters: Arc<apeireth_tools_canonical::DocOpsCounters>,
+}
+
+impl DocOpsModule {
+    /// Create the doc-ops module from trusted configuration (含写总闸注入)。
+    pub fn new(config: apeireth_tools_canonical::DocOpsConfig) -> Self {
+        let counters = apeireth_tools_canonical::DocOpsCounters::new();
+        Self {
+            tool: apeireth_tools_canonical::doc_ops_capability_shared(
+                config,
+                Arc::clone(&counters),
+            ),
+            counters,
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) doc-ops capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+
+    /// 创作节计数器 (与 `tool.self_status` 创作节同一实例, 同源同账)。
+    pub fn counters(&self) -> Arc<apeireth_tools_canonical::DocOpsCounters> {
+        Arc::clone(&self.counters)
+    }
+}
+
+impl CapabilityProvider for DocOpsModule {
+    fn id(&self) -> &str {
+        "module.tool.doc_ops"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the sheet-ops tool (`tool.sheet_ops`, 创作工具面 K3 · 表格操作).
+///
+/// 受控读写族: CSV 读 (read/summary) + 筛排聚合 (filter/sort/aggregate) +
+/// 计算列 (formula) + 导出 (export_csv)。受控面 = 工作区限域 + 敏感面拒 +
+/// 行列/字节上限 (防炸弹表) + 创建类原子写 (只创建不覆盖) + 数值精度如实
+/// (f64 不静默取整, NaN/inf 零产出)。
+///
+/// 治理: 注册即闸 (`APEIRETH_ENABLE_SHEET_OPS`, 默认关 fail-closed); **写面
+/// 双重约束** —— 写动作受 [`super::production::ProductionModulesConfig::file_write`]
+/// 唯一写总闸 (组装根注入同一开关值, 关 = 拒写不拒读) + `SheetOpsApprovalHook`
+/// 每次人批 (无自动放行档)。自述创作节与工具面同一计数器 (`SheetOpsCounters`)。
+pub struct SheetOpsModule {
+    tool: Arc<dyn ToolCapability>,
+    counters: Arc<apeireth_tools_canonical::SheetOpsCounters>,
+}
+
+impl SheetOpsModule {
+    /// Create the sheet-ops module from trusted configuration (含写总闸注入)。
+    pub fn new(config: apeireth_tools_canonical::SheetOpsConfig) -> Self {
+        let counters = apeireth_tools_canonical::SheetOpsCounters::new();
+        Self {
+            tool: apeireth_tools_canonical::sheet_ops_capability_shared(
+                config,
+                Arc::clone(&counters),
+            ),
+            counters,
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) sheet-ops capability.
+    pub fn tool(&self) -> &Arc<dyn ToolCapability> {
+        &self.tool
+    }
+
+    /// 创作节计数器 (与 `tool.self_status` 创作节同一实例, 同源同账)。
+    pub fn counters(&self) -> Arc<apeireth_tools_canonical::SheetOpsCounters> {
+        Arc::clone(&self.counters)
+    }
+}
+
+impl CapabilityProvider for SheetOpsModule {
+    fn id(&self) -> &str {
+        "module.tool.sheet_ops"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the device-sense tool (`tool.device_sense`, K 轴 L1 在场感知).
+///
+/// 在场感知面: 设备表 (`devices.json` StoredDoc 拒开, **白名单制默认零设备**)
+/// + 适配器插槽 (mock 已接固定 fixture, 真实协议族留插槽不接) + 敏感面
+/// (摄像头类 = 显式授权 + 审计账 `device-sense-audit.jsonl`)。
+///
+/// 治理: **只读档** —— 注册即闸 (`APEIRETH_ENABLE_DEVICE_SENSE`, 默认关
+/// fail-closed), grant 即用 (零审批, 与 `tool.self_status` 同档); 摄像头类
+/// 读面的显式授权 + 审计在工具边界强制 (审计缺位不放行)。自述在场节与工具面
+/// 同一本设备表同一进程内感知计数。
+pub struct DeviceSenseModule {
+    tool: Arc<dyn ToolCapability>,
+    activity: Arc<apeireth_tools_canonical::device::sense::DeviceSenseActivity>,
+}
+
+impl DeviceSenseModule {
+    /// Create the device-sense module over the trusted device-table data directory.
+    pub fn new(config: apeireth_tools_canonical::device::sense::DeviceSenseConfig) -> Self {
+        let activity =
+            Arc::new(apeireth_tools_canonical::device::sense::DeviceSenseActivity::new());
+        let tool = apeireth_tools_canonical::device::sense::device_sense_capability(
+            config,
+            Arc::clone(&activity),
+        );
+        Self { tool, activity }
+    }
+
+    /// Access the underlying (pipeline-wrapped) device-sense capability.
+    pub fn tool(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+
+    /// 在场节计数器 (与 `tool.self_status` 在场节同一实例, 同源同账)。
+    pub fn activity(&self) -> Arc<apeireth_tools_canonical::device::sense::DeviceSenseActivity> {
+        Arc::clone(&self.activity)
+    }
+}
+
+impl CapabilityProvider for DeviceSenseModule {
+    fn id(&self) -> &str {
+        "module.tool.device_sense"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the weather tool (`tool.weather`, K 轴 L1/L2 天气感知 + 提醒信号).
+///
+/// 天气面: 公开天气读数 (mock 档 = 固定 fixture **如实标注数据源**; live 档 =
+/// 受控出口通道 / fetch 族**留插槽不接**) + 提醒信号 (`weather-signals.jsonl`
+/// append-only, **只交信号** —— 勿扰/频率等提醒纪律归提醒侧消费)。
+///
+/// 治理: **只读档** —— 注册即闸 (与 `tool.device_sense` 同一在场感知族开关
+/// `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed), grant 即用零审批。
+pub struct WeatherModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl WeatherModule {
+    /// Create the weather module from trusted configuration.
+    pub fn new(config: apeireth_tools_canonical::device::weather::WeatherConfig) -> Self {
+        Self {
+            tool: apeireth_tools_canonical::device::weather::weather_capability(config),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) weather capability.
+    pub fn tool(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for WeatherModule {
+    fn id(&self) -> &str {
+        "module.tool.weather"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the controlled device-execution tool (`tool.device_control`,
+/// K 轴 L3 受控执行 / L4 代理代办骨架).
+///
+/// 三拍执行 (`plan` → `preview` → `execute`, 前两拍零副作用、执行拍真执行 +
+/// 状态账 `device-actions.jsonl` append-only) + 动作三档分级 (reversible
+/// 审批档可配自动档 / irreversible 永逐次人批 / money 永逐次人批 + IM 卡) +
+/// 设备白名单 (只读消费 L1 `devices.json` 同一本设备表, 未登记/未启用拒绝即帧)。
+/// 执行面 = mock 适配器 (灯/空调/微波炉 fixture, 真实协议族后插)。
+///
+/// 治理: 分级审批档由 `DeviceControlApprovalHook` 唯一承载 (与本地审批面板 /
+/// IM 审批卡同链)。注册即闸 (双闸 `APEIRETH_ENABLE_DEVICE_SENSE` +
+/// `APEIRETH_ENABLE_DEVICE_CONTROL`, 默认关 fail-closed)。
+pub struct DeviceControlModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl DeviceControlModule {
+    /// Create the device-control module from trusted configuration
+    /// (状态账落位 + reversible 自动档; 白名单 = 同数据目录 `devices.json`)。
+    pub fn new(
+        config: apeireth_tools_canonical::device::device_control::DeviceControlConfig,
+    ) -> Self {
+        let devices_file = config
+            .data_dir
+            .join(apeireth_tools_canonical::device::registry::DEVICES_FILE);
+        let runner =
+            apeireth_tools_canonical::device::device_control::DeviceControlRunner::mock_with_file_whitelist(
+                config,
+                devices_file,
+            );
+        Self {
+            tool: apeireth_tools_canonical::device::device_control::device_control_capability(
+                runner,
+            ),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) device-control capability.
+    pub fn tool(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for DeviceControlModule {
+    fn id(&self) -> &str {
+        "module.tool.device_control"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}

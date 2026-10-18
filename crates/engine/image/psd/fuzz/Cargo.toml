@@ -1,0 +1,114 @@
+# Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors.
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Modified 2026-10-18 for the Apeireth workspace: crate identifiers, tooling knob
+# names and product references renamed to neutral names; generated metadata producer
+# strings neutralised; scope adaptations recorded in
+# docs/04-internal/license-port/gate1-license.md. Original license terms unchanged.
+[package]
+name = "apeireth-image-psd-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+# Standalone: excluded from the family workspace.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+apeireth-image-psd = { path = ".." }
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "descriptor"
+path = "fuzz_targets/descriptor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "abr"
+path = "fuzz_targets/abr.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "image_source_data"
+path = "fuzz_targets/image_source_data.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grd"
+path = "fuzz_targets/grd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ase"
+path = "fuzz_targets/ase.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "aco"
+path = "fuzz_targets/aco.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "patterns"
+path = "fuzz_targets/patterns.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filter_effects"
+path = "fuzz_targets/filter_effects.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metadata"
+path = "fuzz_targets/metadata.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tagged"
+path = "fuzz_targets/tagged.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "resources"
+path = "fuzz_targets/resources.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "atn"
+path = "fuzz_targets/atn.rs"
+test = false
+doc = false
+bench = false

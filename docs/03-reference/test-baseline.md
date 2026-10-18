@@ -42,6 +42,16 @@
 > `artifacts/care-heartbeat-host-wiring-report.md`，日志
 > `artifacts/care-heartbeat-host-wiring-workspace-test.log`。上表为外部审计基线口径，对外引用
 > 保持上表，现场以复测类实数为准。
+>
+> **复测注记（2026-10-18，许可搬运线第一批·图像核心）**：同命令（加 `-j 2`）**按排除他线在途编译红
+> crate 的口径**（`--exclude apeireth-tools-canonical`；红面归口 W1 线自检收口，全量复验待收口后
+> 回填）复测 = **287 套件 / 7580 passed / 0 failed / 48 ignored**，exit 0（隔离 target 目录
+> `target/licport` 出数，同命令面同 `--locked`；共享 target 与他线并发构建互撞 LNK1104 已在
+> `docs/04-internal/license-port/gate4-integration.md` §6 登记）。本批增量 = 图像核心 vendored
+> 家族 10 crate（迁移测试 **77 套件 / 2307 passed / 0 failed / 32 ignored**）+ 接口层
+> `apeireth-image-core` 冒烟 **9 例**；四关质检卷宗 `docs/04-internal/license-port/`，日志
+> `artifacts/licport-workspace-test-isolated.log`。上表为外部审计基线口径，对外引用保持上表，
+> 现场以复测类实数为准。
 
 ## 2. 口径定义
 

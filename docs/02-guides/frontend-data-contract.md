@@ -999,6 +999,45 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 **C. 锁定动作面**（面板按钮的后端缝，显式动作）：CLI `apeireth trait lock|unlock <slider>`；内核 API `apeireth_runtime_assembly::set_trait_lock(locks_path, param, locked)`（读-改-写 `trait-locks.json`；缺档 = 全解锁默认态，坏档拒绝即帧）。锁定后成长沉积**跳过该杆并留审计痕**（同账零移动留痕行，reason 前缀「已锁定, 跳过沉积」）。
 
-**前端消费现状**：已上屏（2026-10-17 关怀/性格上屏批，companion-desktop 工作台三卡，零 Rust 触碰）——性格卡（`src/lib/trait-card.ts` + `components/TraitCard.svelte`）：四滑杆现值（本机下发旋钮值，`APEIRETH_TUNE_*` 注入同源）+ 最近移动（桌面 IPC `read_tuning_log`，同一本成长计账）+ 「本周性格周报」区块（成长计既有账 7 天窗**同语义投影**，口径镜像 `orchestration::trait_report`，`tests/trait-card.mjs` 以同批 fixture 钉死；权威读面仍是 `tool.trait_report` / `apeireth trait report`）；锁定态与锁定/解锁按钮 = **只读 + CLI 指引**（`apeireth trait lock|unlock <SLIDER>`，trait 管理面无 HTTP 面，读码实证）；锁定档（`trait-locks.json`）无面板读面 = 锁定态如实「—」（不拿「未锁定」冒充未知）。同批另落关怀卡（关怀节/`care_list` 帧同形消费，工具面自述无面板读面 = 诚实空态）与提案卡（§4.3 proposal 流，`runtime.ts fetchProposalLedger` 只读 fetch + `gatewayAuthHeaders()` 鉴权缝）。
+**前端消费现状**：已上屏（2026-10-17 关怀/性格上屏批 + 2026-10-17 面板读面微批，companion-desktop 工作台三卡）——性格卡（`src/lib/trait-card.ts` + `components/TraitCard.svelte`）取数缝已**一行换源真数据**：`runtime.ts fetchTraits`（`GET /v1/panel/traits` 只读 fetch，过 `gatewayAuthHeaders()` 令牌缝，见 §10.11）→ 四滑杆现值（**生效值真值**：进程内自动调整 > env 旋钮 > 基线）+ 锁定态 + 最近移动 + 「本周性格周报」区块（成长计既有账 7 天窗**同语义投影**，口径镜像 `orchestration::trait_report`，`tests/trait-card.mjs` 以同批 fixture 钉死；权威读面仍是 `tool.trait_report` / `apeireth trait report`）；锁定/解锁按钮 = **只读 + CLI 指引**（`apeireth trait lock|unlock <SLIDER>`，锁定/解锁**写面**无 HTTP 面——面板只有只读面）；该部署读面缺席（501/404）= 现值/锁定态/周报如实「—」（`TRAIT_LOCK_NO_FACE`，不拿「未锁定」冒充未知）。同批另落关怀卡（`runtime.ts fetchCare`，见 §10.10）与提案卡（§4.3 proposal 流，`runtime.ts fetchProposalLedger` 只读 fetch + `gatewayAuthHeaders()` 鉴权缝）。
+
+### 10.10 关怀读面（`GET /v1/panel/care`，2026-10-17 面板读面微批：care_list 帧同形 + 心跳两列）
+
+出处：`crates/adapters/gateway/src/care_panel.rs`（DTO + `CarePanelQuery` 端口 + handler）、`crates/adapters/cli/src/gateway_panels.rs`（`CliCarePanel`——读 `care_rules.json`，与 `tool.care_schedule` 同表同拒开口径；心跳两列现读常驻心跳生产者真值，与 `tool.self_status` 关怀节同一绑定）；端点合同表与错误模型见 [gateway-api-contract.md](../gateway-api-contract.md) §7f。
+
+- `GET /v1/panel/care` → `{ "status": CareStatus, "rules": [CareRuleRow], "discipline": CareDiscipline, "last_care": CareRecord | null }`（一次快照读，各节同出一刻）。
+
+| 节 / 字段 | 类型 | 说明 / 出处 |
+|---|---|---|
+| `rules[]` | object[] | **`care_list` 帧 `rule_json` 同形**：`id` / `trigger{kind,…}`（四类闭合词表，内联 `kind` 标签）/ `trigger_kind` / `material` / `enabled` / `created_at_ms`（epoch 毫秒）+ 两列真值补列 `last_fired_at_ms`（每规则发起锚，`null` = 尚无发起记录）、`next_trigger_at_ms`（`CareTrigger::next_occurrence_ms` 同口径真值） |
+| `discipline` | object | **`care_list` 帧同形**：`quiet_start_minutes` / `quiet_end_minutes`（分钟 of day，`null` = 显式关窗）/ `frequency_max` / `frequency_window_hours` / `daily_max` / `focus_gap_minutes` / `catchup_minutes` |
+| `last_care` | object \| null | **`care_list` 帧 `record_json` 同形**：`{rule_id, at_ms, judge, spoke, note}`；`null` = 尚无关怀 |
+| `status` | object | **`tool.self_status` 关怀节真值**（同一表体投影）：`rules`（真值计数）/ `next_trigger_at_ms`（`null` = 无启用规则）/ `last_care_at_ms` / `last_care_note`（判定文案同口径）/ **心跳两列** `heartbeat_next_poll_at_ms` / `heartbeat_last_hit_at_ms`（`null` = 心跳生产者未接线/未运行，不冒充在跑） |
+
+**前端消费现状**：关怀卡（`src/lib/care-card.ts` + `components/CareCard.svelte`，工作台关怀卡）取数缝已**一行换源真数据**：`runtime.ts fetchCare`（只读 fetch，过 `gatewayAuthHeaders()` 令牌缝）→ `normalizeCareSnapshot`（`last_care` → `lastCare` 归一；形状不符行丢弃不编默认值，陌生载荷判 null 不冒充空表）。
+
+- 200 = 规则列表（最近触发/下次触发真值列）/ 打扰纪律 / 心跳两列 / 摘要三列全真值；
+- **501 / 404 = 该部署读面缺席** → 「暂无接口」诚实空态（`CARE_NO_FACE`，不硬造端点、不摆假数据）；其余错误（401 / 网络断等）抛错上屏，不静默降级成空表；
+- 只读纪律不变：改规则走 `tool.care_schedule`（care_add/care_remove 每调用停人工审批），面板零写面、指引不代跑。
+
+### 10.11 性格读面（`GET /v1/panel/traits`，2026-10-17 面板读面微批：与 `tool.trait_report` 同账同源）
+
+出处：`crates/adapters/gateway/src/trait_panel.rs`（DTO + `TraitPanelQuery` 端口 + handler）、`crates/adapters/cli/src/gateway_panels.rs`（`CliTraitPanel`——读成长计既有账 `tuning-log.jsonl` + 锁定档 `trait-locks.json`，与 `tool.trait_report` / 自述调参节**同账同源**）；端点合同表与错误模型见 [gateway-api-contract.md](../gateway-api-contract.md) §7f；周报语义见 §10.9B。
+
+- `GET /v1/panel/traits` → `{ "values": TraitValues, "locked": TraitLocks, "recent_moves": [TraitMove], "records": [TuningLogEntry], "skipped_records": n }`（一次快照读，各节同出一刻）。
+
+| 字段 | 类型 | 说明 / 出处 |
+|---|---|---|
+| `values` | object | 四滑杆现值（生效值：进程内自动调整 > env 旋钮 > 基线，§10.9A 调参节同源）：`{memory_fade, curiosity_strength, tone_saturation, consolidation_cadence}` 各 number |
+| `locked` | object | 四杆锁定态（`trait-locks.json` 真值；缺档 = 全解锁默认态）：同形四键各 boolean |
+| `recent_moves[]` | object[] | 最近移动（新 → 旧，≤4 条；`trait_report::recent_moves` 同判据，零移动留痕与未来时刻不计）：`{param, label, at_epoch_ms, delta, reason}`（§10.9A 同形） |
+| `records[]` | object[] | 成长计既有账账面行（含零移动留痕行）：`{seq, param, previous, next, reason, at_epoch_ms}`（`TuningRecord` 同形）——周报 7 天窗同账投影的数据面 |
+| `skipped_records` | number | 账面坏行跳过计数（0 装诚实，不静默吞；坏行不进 `records`） |
+
+**前端消费现状**：性格卡（`src/lib/trait-card.ts` + `components/TraitCard.svelte`）取数缝已**一行换源真数据**：`runtime.ts fetchTraits`（只读 fetch，过 `gatewayAuthHeaders()` 令牌缝）→ `normalizeTraitSnapshot`（`records` 逐行归一坏行丢弃；缺键显式 `null` 不编数不编「未锁定」；陌生载荷判 `null` 不冒充空账）。
+
+- 200 = 四滑杆现值 / 锁定态 / 最近移动 / 本周性格周报全真值（周报 = `records` 的 7 天窗投影，`tests/trait-card.mjs` 对照同批 fixture 钉死）；
+- **501 / 404 = 该部署读面缺席** → 缺源显「—」诚实空态（`TRAIT_LOCK_NO_FACE`，不拿「未锁定」冒充未知）；其余错误抛错上屏，不静默降级成空账；
+- 只读纪律不变：锁定/解锁走 CLI `apeireth trait lock|unlock <SLIDER>`（显式动作，写面无 HTTP 面），面板按钮只给指引不代跑。
 
 *文档完。任何字段与代码冲突时，以代码为准并回写本文档（含出处行号）。*

@@ -395,7 +395,7 @@ async fn the_self_status_care_section_reports_the_live_heartbeat_columns() {
         cognitive_db.path().join("cognitive.sqlite3"),
     );
 
-    let (runtime, _sessions, _memory, _policy, _guard, _voice, care_heartbeat) =
+    let (runtime, _sessions, _memory, _policy, _guard, _voice, care_heartbeat, _cost_router) =
         build_canonical_runtime_with_sessions_and_voice_emotion_from_env()
             .await
             .expect("keyless 生产装配");

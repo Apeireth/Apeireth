@@ -40,6 +40,8 @@
 | `/v1/panel/skills` | GET | 技能库元数据只读面(见 §7d;只回元数据不回卡体,坏卡列拒不砖库) |
 | `/v1/panel/tasks` | GET | 任务面板只读面(见 §7e;一次快照读 = 任务行 + 时间线 + 六态计数) |
 | `/v1/panel/tasks/{task_id}/human-judge-retry` | POST | 人判重试(见 §7e;failed 只能人判,唯一动作面) |
+| `/v1/panel/care` | GET | 关怀规则只读面(见 §7f;care_list 帧同形 + 心跳两列) |
+| `/v1/panel/traits` | GET | 性格成长账只读面(见 §7f;四滑杆现值 + 锁定态 + 最近移动,与 `tool.trait_report` 同账同源) |
 | `/v1/panel/users` | GET | 用户管理列表(见 §7c;owner 专属) |
 | `/v1/admin/users` | POST | 建户(见 §7c;owner 专属) |
 | `/v1/admin/users/{user_id}` | PATCH / DELETE | 改角色 / 删户(见 §7c;owner 专属) |
@@ -310,6 +312,95 @@ W3-① 目录安全规则 `[a-z0-9_-]`、首字符小写字母或数字,路径�
 bounded-context 端口)、组合根适配 `crates/adapters/cli/src/gateway_panels.rs`
 (`CliTaskBoard` 附到持久任务队列, 附从句柄不重复崩溃恢复)。
 
+### §7f 关怀/性格面板只读面 ✅(2026-10-17, 面板读面微批)
+
+两口同批:`GET /v1/panel/care`(关怀)+ `GET /v1/panel/traits`(性格)。照技能库只读面
+先例(§7d:形状 + 端口 + 组合根适配);过 W2-② 全 API 面令牌门;读面(GET)角色门全员
+可读(非管理面);W3-① 域门:两面都是默认域数据(`care_rules.json` / `tuning-log.jsonl` /
+`trait-locks.json` 在数据根),非默认域请求按「面未按用户域开放」403 `domain_forbidden`
+恒定帧(fail-closed,同 §7d)。服务未接线 = 501 `unsupported`(不假装有数据源);读失败
+(StoredDoc 拒开/坏档)= 500 `runtime_error` 报真因(错误即帧,不静默降级成空表)。
+两面**零写面**:改规则走 `tool.care_schedule`(care_add/care_remove = 写文件同族,每调用
+停人工审批),锁定/解锁走 CLI `apeireth trait lock|unlock`(显式动作)。
+
+**`GET /v1/panel/care`** —— 关怀规则只读面(与 `tool.care_schedule` 同一 `care_rules.json`
+同一拒开口径)。响应(200)= `care_list` 帧同形三节 + 关怀节真值:
+
+```json
+{
+  "status": {
+    "rules": 2,
+    "next_trigger_at_ms": 1728000007200,
+    "last_care_at_ms": 1728000000000,
+    "last_care_note": "morning: spoke (rule_fallback): 早安问候",
+    "heartbeat_next_poll_at_ms": 1728000000500,
+    "heartbeat_last_hit_at_ms": 1728000000000
+  },
+  "rules": [
+    { "id": "morning",
+      "trigger": { "kind": "daily_moment", "minutes_of_day": 450 },
+      "trigger_kind": "daily_moment", "material": "早安问候", "enabled": true,
+      "created_at_ms": 1727000000000,
+      "last_fired_at_ms": 1728000000000, "next_trigger_at_ms": 1728000007200 }
+  ],
+  "discipline": {
+    "quiet_start_minutes": 1380, "quiet_end_minutes": 480,
+    "frequency_max": 1, "frequency_window_hours": 4, "daily_max": 5,
+    "focus_gap_minutes": 3, "catchup_minutes": 120
+  },
+  "last_care": { "rule_id": "morning", "at_ms": 1728000000000,
+                 "judge": "rule_fallback", "spoke": true, "note": "早安问候" }
+}
+```
+
+- **`rules` 行 = `care_list` 帧 `rule_json` 同形**(`id` / `trigger` / `trigger_kind` /
+  `material` / `enabled` / `created_at_ms` 逐字同名同义;`trigger` = organ `CareTrigger`
+  同一 serde 形状,内联 `kind` 标签,四类闭合词表)+ 两列真值补列:`last_fired_at_ms`
+  (每规则发起锚,`null` = 尚无发起记录)、`next_trigger_at_ms`
+  (`CareTrigger::next_occurrence_ms` 同口径真值)。
+- **`discipline` / `last_care` = `care_list` 帧同形**(打扰纪律七字段 / `record_json`
+  五字段;`quiet_*_minutes: null` = 显式关窗;`last_care: null` = 尚无关怀)。
+- **`status` = `tool.self_status` 关怀节真值**(规则数 / 下次触发 / 最近关怀含判定文案,
+  与自述关怀节**同一表体投影**)+ **心跳两列**:`heartbeat_next_poll_at_ms` /
+  `heartbeat_last_hit_at_ms`(`null` = 心跳生产者未接线/未运行,不冒充在跑)。
+- 一次快照读(W2-③):表体一次装载,各节同出一刻。
+
+**`GET /v1/panel/traits`** —— 性格成长账只读面(与 `tool.trait_report` / 自述调参节
+**同账同源**:同一本 `tuning-log.jsonl` + 同一份 `trait-locks.json`,同一套判据)。
+响应(200):
+
+```json
+{
+  "values": { "memory_fade": 1.25, "curiosity_strength": 1.0,
+              "tone_saturation": 1.0, "consolidation_cadence": 1.0 },
+  "locked": { "memory_fade": true, "curiosity_strength": false,
+              "tone_saturation": false, "consolidation_cadence": false },
+  "recent_moves": [
+    { "param": "memory_fade", "label": "遗忘衰减强度", "at_epoch_ms": 1728000000000,
+      "delta": 0.25, "reason": "上调一档" }
+  ],
+  "records": [
+    { "seq": 1, "param": "memory_fade", "previous": 1.0, "next": 1.25,
+      "reason": "上调一档", "at_epoch_ms": 1728000000000 }
+  ],
+  "skipped_records": 0
+}
+```
+
+- `values` = 四滑杆现值(生效值:进程内自动调整 > env 旋钮 > 基线,`tool.self_status`
+  调参节同源);`locked` = 四杆锁定态(`trait-locks.json` 真值;缺档 = 全解锁默认态)。
+- `recent_moves` = 最近移动(新 → 旧,≤4 条;`trait_report::recent_moves` 同判据:
+  零移动留痕与未来时刻不计移动)。
+- `records` = 成长计既有账账面行(含零移动留痕行;周报 7 天窗同账投影的数据面);
+  `skipped_records` = 账面坏行跳过计数(0 装诚实,不静默吞)。
+- 锁定档坏档 = 500 报真因(绝不读成全解锁放行);一次快照读(W2-③)。
+
+实现:`crates/adapters/gateway/src/care_panel.rs` / `trait_panel.rs`(DTO +
+`CarePanelQuery` / `TraitPanelQuery` bounded-context 端口)、组合根适配
+`crates/adapters/cli/src/gateway_panels.rs`(`CliCarePanel` 读 `care_rules.json` +
+心跳真值口;`CliTraitPanel` 读成长计账 + 锁定档)。前端 DTO 契约见
+[frontend-data-contract.md](02-guides/frontend-data-contract.md) §10.10 / §10.11。
+
 ## §8 Trace / Audit / 事件总线
 
 - `GET /v1/panel/traces?limit=20` `[P0]` → `{ "traces": [ { "trace_id": "…", "span_count": 3, "root_span": { … }, "started_at": 123 } ] }`
@@ -428,6 +519,7 @@ initiative(他从 `dreaming_consolidation` 苏醒主动开口)是独立事件类
 `memory.update`（`supported=false`, `available=false`, `reason=not_implemented`）、
 `tools.list`、`skills.read`（技能库元数据只读面，§7d）、
 `tasks.read` / `tasks.human_judge_retry`（任务面板面: 只读投影 + 人判重试，§7e）、
+`care.read`（关怀规则只读面，§7f）、`traits.read`（性格成长账只读面，§7f）、
 `permissions.approval.read`、`permissions.approval.resolve`、
 `approvals.read` / `approvals.resolve`（compatibility aliases）、`permissions.grants.read`、
 `permissions.revoke`、`organs.list`、`modules.list`、`trace.read`、`audit.read`、`activity.sse`、

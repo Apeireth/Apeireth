@@ -1,4 +1,4 @@
-﻿# 中性表述纪律扫描器
+# 中性表述纪律扫描器
 # 用途：本战役所有新改动的表述纪律自动过检——新增行中不得出现任何第三方
 # 产品/项目标识或"移植/借鉴/参照实现"类来源措辞。只扫 git diff 的新增行
 # （'+' 开头）与未跟踪新文件全文，历史存量行不误伤；产物与归档目录不参与。
@@ -21,10 +21,43 @@ $forbidden = @(
   'donor'
 )
 
+# 许可搬运线补强（2026-10-18，宪章〇之二）：第三方产品/项目标识覆盖到搬运源身份——
+# 代码/注释/散文零该类标识，署名只走「许可署名头」豁免（见下）。
+$forbidden += @(
+  'photocraft',
+  'storytold',
+  'ArtCraft'
+)
+
+# 许可署名头豁免（2026-10-18，宪章〇之二「许可署名头」类，法律义务 > 行文风格）：
+# **只豁免版权/许可/商标声明行本身**（Copyright / SPDX / 许可文本 / 商标声明 /
+# 版权主体行），不豁免任何叙述、命名或注释行。理由：搬运文件的版权头与 NOTICE
+# 落档必须原样保留、改动必须声明，这是 Apache-2.0 §4 等许可条款的硬义务。
+$licenseRe = 'Copyright \(c\)|Copyright ©|SPDX-License-Identifier|Licensed under|Permission is hereby granted|WITHOUT WARRANTY|Apache License, Version 2\.0|at your option|MIT OR Apache-2\.0|Apache-2\.0 OR MIT|MIT License|Redistribution and use in source|trademarks? of|Open Font License|SCOWL license|版权主体|版权所有|许可协议'
+$licensed = 0
+
 # 结构性豁免：命中若仅来自这些**真实字符串**（真实路径/真实文件名/本表自身）
 # 则按"路径保持准确"规则保留、不计违规；豁免计数随输出给出便于审计。
 $exemptRe = 'legacy/donor/|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
-$exemptFiles = @('scripts/check-neutral-terms.ps1', 'docs/design/tui-power-design-research.md')  # 设计调研文档=事实引注特权（研究的天职是引注，同真实路径豁免原则）
+# 文件级豁免 = 事实引注特权（研究的天职是引注，同真实路径豁免原则）：
+#   - 扫描器与搬运工具自身：替换规则必须含源标识字面量；
+#   - 设计调研文档：事实引注；
+#   - 许可搬运线四关报告：溯源/版权主体清单必须点名真实上游（引注）。
+$exemptFiles = @(
+  'scripts/check-neutral-terms.ps1',
+  'scripts/vendor-image-core.ps1',
+  # 研究引注豁免：调研文档点名真实项目=事实引用（tui 先例同类，2026-10-18）
+  'docs/design/tui-power-design-research.md',
+  'docs/04-internal/philosophy-study/05-craft-family.md',
+  'docs/design/readme-research-notes.md',
+  'crates/engine/image/NOTICE.md',
+  'OSS_NOTICE.md',
+  'docs/04-internal/license-port/README.md',
+  'docs/04-internal/license-port/gate1-license.md',
+  'docs/04-internal/license-port/gate2-quality.md',
+  'docs/04-internal/license-port/gate3-security.md',
+  'docs/04-internal/license-port/gate4-integration.md'
+)
 $exempted = 0
 
 $changed = @()
@@ -50,12 +83,14 @@ foreach ($f in (cmd /c "git ls-files --others --exclude-standard 2>nul")) { if (
 $hits = 0
 foreach ($file in $targets) {
   if (-not (Test-Path $file)) { continue }
+  # 文件级豁免（事实引注特权）对两条分支一致生效
+  if ($exemptFiles -contains $file) { $exempted++; continue }
   if ($untracked.ContainsKey($file)) {
-    if ($exemptFiles -contains $file) { continue }
     $allLines = @(Get-Content $file)
     for ($i = 0; $i -lt $allLines.Count; $i++) {
       foreach ($pat in $forbidden) {
         if ($allLines[$i] -match $pat) {
+          if ($allLines[$i] -match $licenseRe) { $licensed++; continue }
           if ($allLines[$i] -match $exemptRe) { $exempted++; continue }
           Write-Output "HIT   ${file}:$($i+1)  [$pat]  $($allLines[$i].Trim())"
           $hits++
@@ -71,6 +106,7 @@ foreach ($file in $targets) {
     if ($row.StartsWith('+') -and -not $row.StartsWith('+++')) {
       foreach ($pat in $forbidden) {
         if ($row -match $pat) {
+          if ($row -match $licenseRe) { $licensed++; continue }
           if ($row -match $exemptRe) { $exempted++; continue }
           Write-Output "HIT   ${file}:$lineNo  [$pat]  $($row.Substring(1).Trim())"
           $hits++
@@ -81,8 +117,11 @@ foreach ($file in $targets) {
   }
 }
 
+if ($licensed -gt 0) {
+  Write-Output "EXEMPT  $licensed license-attribution line(s) skipped (许可署名头类：版权/许可/商标声明行，法律义务 > 行文风格，见 `$licenseRe)"
+}
 if ($exempted -gt 0) {
-  Write-Output "EXEMPT  $exempted structural hit(s) skipped (real path/name strings, see `$exemptRe)"
+  Write-Output "EXEMPT  $exempted structural hit(s) skipped (real path/name strings & fact-citation files, see `$exemptRe / `$exemptFiles)"
 }
 
 if ($hits -eq 0) {

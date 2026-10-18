@@ -43,7 +43,9 @@ use sha2::{Digest, Sha256};
 ///   `tool.skill_distill` (技能库沉淀写, 同受 file_write 写总闸;
 ///   `tool.skill_search` 是只读检索面, 不入本名单) /
 ///   `tool.backup_export` (备份导出写文件面: 全量打包落盘 bundle, 虽读记忆
-///   但产出是持久写, 只读会话不应打包外带);
+///   但产出是持久写, 只读会话不应打包外带) /
+///   `tool.sheet_ops` (表格操作面含写面: 变换动作带 `output` 落新文件 +
+///   `export_csv` 导出, 只读会话不应落表);
 /// - 出口: `tool.fetch` / `tool.repo` (remote 读发布) —— 只读会话不应外联;
 /// - 凭据: `credential.read` / `secret.read` / `env.read` (环境变量含 secret);
 /// - 删除: `fs.delete`;
@@ -63,6 +65,14 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "tool.worktree_apply",
         "tool.skill_distill",
         "tool.backup_export",
+        // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`): 含写面 (变换动作带
+        // `output` 落新文件 / `export_csv` 导出) —— 与 `tool.filesystem` 同口径
+        // 「含写权的面整个算写」, 只读会话不应落表; 「读」在 `tool.self_status`
+        // (创作节自述), 不在本名单。同族 W1/W2 的 `tool.image_ops` /
+        // `tool.doc_ops` 现不在名单 (家族口径缺口, 已登记待各归口线收口)。
+        "tool.sheet_ops",
+  "tool.image_ops",
+  "tool.doc_ops",
         // V3-b 通用嗓发声 (`tool.voice_speak`): 发声面执行档 —— 合成即播是
         // 对外发声的执行面 (语句账本落盘同为副作用), 只读会话不应开口;
         // 「读」在 `tool.self_status` (语音节自述), 不在本名单。

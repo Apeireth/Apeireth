@@ -1,39 +1,30 @@
-<!-- 性格卡（R2 性格锁定上屏）：四滑杆现值 + 锁定态 + 最近移动 +「本周性格周报」
-     区块。锁定/解锁按钮 = CLI 指引（trait 管理面无 HTTP 面，读码定：只读 + 指引，
-     界面不代跑）；周报区块 = 成长计既有账（tuning-log.jsonl）7 天窗投影，与
-     tool.trait_report 同账同语义（详见 trait-card.ts 头注）。 -->
+<!-- 性格卡（R2 性格锁定上屏 + 面板读面换源）：四滑杆现值 + 锁定态 + 最近移动 +
+     「本周性格周报」区块。取数缝（loadTraits）真源 = runtime 只读 fetch
+     （GET /v1/panel/traits，与 tool.trait_report 同账同源）；读面缺席（501/404）
+     = 缺源显「—」诚实空态。锁定/解锁按钮 = CLI 指引（锁定/解锁写面无 HTTP 面，
+     面板只有只读面，读码定：只读 + 指引，界面不代跑）；周报区块 = 成长计既有账
+     （tuning-log.jsonl）7 天窗投影，与 tool.trait_report 同账同语义
+     （详见 trait-card.ts 头注）。 -->
 <script lang="ts">
   import {SlidersHorizontal, Lock, Unlock} from 'lucide-svelte';
-  import {
-    traitCardView,
-    traitLockCommand,
-    type TraitLocksLike,
-    type TraitValuesLike,
-    type TuningLogEntryLike,
-  } from '../trait-card';
+  import {traitCardView, traitLockCommand, type TraitSnapshot} from '../trait-card';
 
   interface Props {
-    /** 四滑杆现值（本机下发旋钮值，APEIRETH_TUNE_* 同源）；null = 缺源显「—」。 */
-    values?: TraitValuesLike | null;
-    /** 锁定态（trait-locks.json）；当前无面板读面 → null = 「—」（不冒充未锁定）。 */
-    locks?: TraitLocksLike | null;
-    /** 成长计既有账取数缝（桌面 IPC readTuningLog 真源）；null = 读不到账。 */
-    loadMoves?: () => Promise<TuningLogEntryLike[] | null>;
-    /** 账面坏行跳过计数；读面缺席 = null → 「—」。 */
-    skippedRecords?: number | null;
+    /** 取数缝：性格快照注入（GET /v1/panel/traits 真源，一行换源）；null = 读面缺席（诚实空态）。 */
+    loadTraits?: () => Promise<TraitSnapshot | null>;
   }
-  let {values = null, locks = null, loadMoves, skippedRecords = null}: Props = $props();
+  let {loadTraits}: Props = $props();
 
-  let moves = $state<readonly TuningLogEntryLike[] | null>(null);
+  let snapshot = $state<TraitSnapshot | null>(null);
   let errorText = $state('');
   let loading = $state(false);
   let guideLine = $state('');
 
   async function refresh(): Promise<void> {
-    if (!loadMoves) return;
+    if (!loadTraits) return;
     loading = true;
     try {
-      moves = await loadMoves();
+      snapshot = await loadTraits();
       errorText = '';
     } catch (error) {
       errorText = error instanceof Error ? error.message : String(error);
@@ -42,7 +33,14 @@
     }
   }
 
-  const view = $derived(traitCardView({values, locks, moves, skippedRecords}));
+  const view = $derived(
+    traitCardView({
+      values: snapshot?.values ?? null,
+      locks: snapshot?.locks ?? null,
+      moves: snapshot?.moves ?? null,
+      skippedRecords: snapshot?.skippedRecords ?? null,
+    }),
+  );
 
   $effect(() => {
     void refresh();
@@ -158,7 +156,7 @@
         </div>
       {/each}
     </div>
-    <p class="tc-foot">只读纪律：本卡零写面——锁定/解锁是 CLI 显式动作（trait 管理面无 HTTP 面，读码定）</p>
+    <p class="tc-foot">只读纪律：本卡零写面——锁定/解锁是 CLI 显式动作（写面无 HTTP 面，面板只有只读面）</p>
   {/if}
 </div>
 

@@ -4,6 +4,9 @@
 //   2. 空态：读面缺席 = 「暂无接口」诚实空态，null → 「—」，不编 0 不编时刻。
 //   3. 只读纪律：写面指引只登记命令文本（care_add/care_remove 停人工审批），
 //      本卡零动作面；触发器语义描述与下次触发推算逐字对齐 organ/care/rules.rs。
+//   4. 换源渲染：真源 = runtime.fetchCare（GET /v1/panel/care，care_list 帧同形 +
+//      关怀节真值，与 tool.care_schedule / tool.self_status 同账同源）；形状不符
+//      行丢弃不编默认值；读面缺席 = CARE_NO_FACE 诚实空态。
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
@@ -270,5 +273,142 @@ check('规则行投影: 缺源列「—」+ 真因（不编造）', () => {
   assert.equal(row.nextTrigger, '—', '参数缺位不编时刻');
   assert.ok(row.nextTriggerNote.includes('不编时刻'));
 });
+
+// ---------------------------------------------------------------------------
+// 6. 换源渲染（真模块 runtime.fetchCare → careCardView）：读面真数据点亮全卡；
+//    形状不符行丢弃不编默认值；501/404 = 诚实空态保留
+// ---------------------------------------------------------------------------
+{
+  const runtime = await import('../src/lib/runtime.ts');
+  /** 合同形状样例：GET /v1/panel/care（care_list 帧同形三节 + 关怀节真值）。 */
+  const CARE_FACE_BODY = {
+    status: {
+      rules: 2,
+      next_trigger_at_ms: Date.UTC(2024, 9, 4, 7, 30),
+      last_care_at_ms: Date.UTC(2024, 9, 4, 5, 0),
+      last_care_note: 'morning: spoke (rule_fallback): 早安问候',
+      heartbeat_next_poll_at_ms: Date.UTC(2024, 9, 4, 6, 5),
+      heartbeat_last_hit_at_ms: Date.UTC(2024, 9, 4, 5, 0),
+      reason: null,
+    },
+    rules: [
+      {
+        id: 'morning',
+        trigger: {kind: 'daily_moment', minutes_of_day: 450},
+        trigger_kind: 'daily_moment',
+        material: '早安问候',
+        enabled: true,
+        created_at_ms: Date.UTC(2024, 9, 1),
+        last_fired_at_ms: Date.UTC(2024, 9, 4, 4, 0),
+        next_trigger_at_ms: Date.UTC(2024, 9, 4, 7, 30),
+      },
+      {id: 'broken-row'}, // 形状不符行：丢弃，不编默认值
+    ],
+    discipline: {
+      quiet_start_minutes: 23 * 60,
+      quiet_end_minutes: 8 * 60,
+      frequency_max: 1,
+      frequency_window_hours: 4,
+      daily_max: 5,
+      focus_gap_minutes: 3,
+      catchup_minutes: 120,
+    },
+    last_care: {
+      rule_id: 'morning',
+      at_ms: Date.UTC(2024, 9, 4, 5, 0),
+      judge: 'rule_fallback',
+      spoke: true,
+      note: '早安问候',
+    },
+  };
+  const realFetch = globalThis.fetch;
+  const realWindow = globalThis.window;
+  const calls = [];
+  globalThis.window = {
+    __TAURI_INTERNALS__: {
+      invoke: async (cmd) => (cmd === 'get_gateway_token' ? 'tok-care-face-1' : null),
+    },
+  };
+  globalThis.fetch = async (input, init) => {
+    calls.push({url: String(input), headers: new Headers(init?.headers)});
+    return new Response(JSON.stringify(CARE_FACE_BODY), {
+      status: 200,
+      headers: {'content-type': 'application/json'},
+    });
+  };
+  try {
+    const snapshot = await runtime.fetchCare({baseUrl: 'http://gateway.test', apiKey: '', model: ''});
+    assert.equal(calls.length, 1, '换源后取数只走读面一次');
+    assert.ok(
+      calls[0].url.endsWith('/v1/panel/care'),
+      `真源 = GET /v1/panel/care（实际=${calls[0].url}）`,
+    );
+    assert.equal(
+      calls[0].headers.get('authorization'),
+      'Bearer tok-care-face-1',
+      '只读面同过令牌门缝（gatewayAuthHeaders 单源）',
+    );
+    assert.ok(snapshot !== null, '200 = 真值快照');
+    assert.equal(snapshot.rules.length, 1, '形状不符行丢弃（不编默认值）');
+    assert.equal(snapshot.lastCare.rule_id, 'morning', 'last_care → lastCare 归一');
+    const view = careCardView(snapshot, NOW);
+    assert.equal(view.available, true);
+    assert.equal(view.ruleRows.length, 1);
+    assert.equal(view.ruleRows[0].id, 'morning');
+    assert.equal(view.ruleRows[0].nextTrigger, '2024-10-04 07:30');
+    assert.equal(view.ruleRows[0].nextTriggerNote, '真值（读面给定）', '读面给定 = 真值列');
+    assert.equal(view.ruleRows[0].lastFired, '2024-10-04 04:00', '发起锚真值列上屏');
+    const byKey = Object.fromEntries(view.disciplineRows.map((row) => [row.key, row]));
+    assert.equal(byKey.quiet.value, '23:00-08:00', '打扰纪律真值');
+    assert.equal(view.heartbeatRows[0].value, '2024-10-04 06:05', '心跳两列真值');
+    const summary = Object.fromEntries(view.summaryRows.map((row) => [row.key, row]));
+    assert.equal(summary.rules.value, '2', '规则数真值（不编 0）');
+    assert.equal(summary.next_trigger.value, '2024-10-04 07:30');
+    assert.equal(summary.last_care.value, '2024-10-04 05:00');
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realWindow === undefined) delete globalThis.window;
+    else globalThis.window = realWindow;
+  }
+  check('换源后关怀真值渲染: fetchCare 真数据点亮规则/纪律/心跳/摘要（坏行丢弃）', () => {});
+}
+
+{
+  // 读面缺席（501/404）→ null = 诚实空态承接（不硬造端点、不静默降级成空表）；
+  // 陌生载荷同判 null（不把不认识的响应冒充空规则表）。
+  const runtime = await import('../src/lib/runtime.ts');
+  const {normalizeCareSnapshot} = await import('../src/lib/care-card.ts');
+  const realFetch = globalThis.fetch;
+  try {
+    for (const status of [501, 404]) {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify({error: {code: 'unsupported'}}), {
+          status,
+          headers: {'content-type': 'application/json'},
+        });
+      const snapshot = await runtime.fetchCare({baseUrl: 'http://gateway.test', apiKey: '', model: ''});
+      assert.equal(snapshot, null, `读面缺席 ${status} → null（诚实空态）`);
+    }
+    assert.equal(normalizeCareSnapshot({bogus: 1}), null, '陌生载荷 → null（不冒充空表）');
+    assert.equal(normalizeCareSnapshot(null), null);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  check('换源后读面缺席: 501/404 → null（CARE_NO_FACE 诚实空态保留）', () => {});
+}
+
+{
+  // 源码镜像：换源接线（loadCare 注入缝 ← fetchCare 只读面）。
+  const runtimeSrc = readFileSync(join(testsDir, '..', 'src', 'lib', 'runtime.ts'), 'utf8');
+  assert.ok(runtimeSrc.includes('/v1/panel/care'), 'runtime.ts 只读 fetch 面在案');
+  assert.ok(
+    /fetchCare[\s\S]{0,500}gatewayAuthHeaders\(\)/.test(runtimeSrc),
+    'fetchCare 过令牌门缝（gatewayAuthHeaders 单源）',
+  );
+  assert.ok(workbenchSrc.includes('loadCare={'), '一行换源：注入缝接真源');
+  assert.ok(workbenchSrc.includes('fetchCare(config)'), '真源 = runtime.fetchCare');
+  assert.ok(!workbenchSrc.includes('loadCareSnapshot'), '旧占位缝已换（不留假旋钮）');
+  check('源码镜像: 换源接线（loadCare 注入缝 ← runtime.fetchCare）', () => {});
+}
 
 console.log('care-card: all checks passed');

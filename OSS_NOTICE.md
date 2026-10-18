@@ -366,7 +366,49 @@ per Apache License 2.0 §4(d):
 
 ---
 
+## 12. 许可搬运线第一批：图像核心 vendored 家族 attribution（2026-10-18 追加节）
+
+> 归口说明：§1-§8 的「借鉴源码」线是**机制研究 + 借鉴实现**；本节是**许可搬运线**的
+> vendored 源码 attribution（逐文件搬运、版权头原样保留、改动逐件声明）。四关质检卷宗：
+> `docs/04-internal/license-port/`（许可/质量/安全/集成四报告 + 前后对照）。
+
+### 12.1 搬运对象（许可 MIT OR Apache-2.0 —— 宽松协议放行，过四关质检）
+
+| 项 | 值 |
+|---|---|
+| 上游 | `storytold/photocraft`（github.com/storytold/photocraft） |
+| 版权主体 | Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors |
+| 许可 | **MIT OR Apache-2.0**（双许可任选；原文原样落档 `crates/engine/image/LICENSE-MIT`、`crates/engine/image/LICENSE-APACHE`） |
+| 取材版本 | `main @ 8407d9ccb125af52944fca9d228383459f94aaef`（2026-10-18；tarball SHA-256 `6EB9A622…A948`） |
+| 搬入面 | 图像核心四类（编解码/图层/滤镜/几何）+ 依赖闭包共 10 crate，中性命名 `apeireth-image-*`（`crates/engine/image/`）；接口层 `apeireth-image-core` 为本项目原创（Apache-2.0 OR MIT） |
+| 商标 | 上游社区名称/字标/标识为其商标（**不在许可覆盖内**，原文见 `crates/engine/image/NOTICE.md` §2）；本项目 0 使用，命名与生成元数据全中性 |
+
+### 12.2 随代码进入的第三方材料（详见 `crates/engine/image/NOTICE.md` §3）
+
+| 材料 | 版权主体 | 许可 | 义务落点 |
+|---|---|---|---|
+| X11 `rgb.txt` 颜色名查找表（`codecs/src/codecs/xpm/x11_colors.rs`） | X.Org Foundation and X11 contributors | MIT (X.Org app/rgb) | 本节 + 家族 NOTICE.md 致谢 |
+| 人脸检测 CNN 权重与推理代码（`algo/data/libfacedetection.bin`、`algo/src/faces/`） | Copyright (c) 2015-2019, Shiqi Yu | BSD-3-Clause | 许可原文随附 `algo/data/LICENSE-libfacedetection.txt` |
+| 合成 CMYK ICC 剖面（`cms/profiles/coated-cmyk-synth.icc`，生成物） | 上游贡献者 | CC0-1.0 | 本节登记 |
+
+### 12.3 依赖面新增许可成分
+
+- `jpeg-encoder`（JPEG 编码）：`(MIT OR Apache-2.0) AND IJG` —— **IJG（Independent JPEG
+  Group）许可成分在此按其条款致谢**；`deny.toml` 以最小面例外（仅该 crate）放行。
+- 其余新增依赖均为 MIT/Apache-2.0/BSD/Zlib 系宽松许可（`cargo deny check licenses bans
+  sources` 全绿，2026-10-18 实测；完整闭包清单 `artifacts/licport-dep-closure.txt`）。
+
+### 12.4 改动声明（Apache-2.0 §4(b)）
+
+搬运文件逐件带署名头：未改动件标 `Imported unchanged 2026-10-18`；改动件标
+`Modified 2026-10-18 for the Apeireth workspace: …`（中性化改写 + 范围适配，清单见
+`docs/04-internal/license-port/gate1-license.md` §8）。逐文件对账：
+`artifacts/vendor-image-core-files.txt`；重放工具：`scripts/vendor-image-core.ps1`。
+
+---
+
 **Last-Modified**: 2026-08-10 21:50 (P13-1 R128 阶段 D 新写)
+**增补**: 2026-10-18 §12 许可搬运线第一批 attribution 追加（许可搬运线施工，主代理验收）
 **Format**: OSS NOTICE 1.0 (基于 Apache 2.0 §4(d) "NOTICE" 条款 + cargo-about 0.8.4 借鉴 8/11 致谢扩展)
 **0 主动 commit 严守**: 本文件写到主仓, **0 主动 commit**, Mavis 整合 #5 commit 时机拍板
 **0 主动 push 严守**: 等 1.0 release 配 GitHub remote

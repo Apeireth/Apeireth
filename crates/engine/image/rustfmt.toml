@@ -1,0 +1,6 @@
+# vendored 图像引擎家族的格式化配置：与上游同款（宽行 + 紧凑小项）。
+# 理由（2026-10-18 许可搬运线第一批）：搬运面保持上游排版可对账——同步上游时文件
+# diff 只含语义改动，不含格式化噪音。rustfmt 按文件目录向上发现本配置，只作用于
+# crates/engine/image/ 家族（本仓其余面仍走根 rustfmt.toml 的 stable 默认风格）。
+max_width = 160
+use_small_heuristics = "Max"

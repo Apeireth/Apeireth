@@ -177,8 +177,9 @@ pub use retrieval_tuning_wire::{
 };
 pub use self_status_source::{
     budget_status_from_configured, budget_status_from_constants, care_status_probe,
-    domain_status_probe, max_rounds_per_turn_constant, max_tool_calls_per_round_constant,
-    persona_status_probe, roster_from_config, session_quota_probe, task_board_status_probe,
+    cost_routing_probe, doc_ops_status_probe, domain_status_probe, image_ops_status_probe,
+    max_rounds_per_turn_constant, max_tool_calls_per_round_constant, persona_status_probe,
+    roster_from_config, session_quota_probe, sheet_ops_status_probe, task_board_status_probe,
     ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED, BUDGET_SOURCE_CONFIGURED_NOTE,
     BUDGET_SOURCE_CONSTANT,
 };
@@ -188,8 +189,9 @@ pub use self_tuning_wire::{
     TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use tool_modules::{
-    BackupExportModule, EducationModule, FetchModule, FilesystemModule, GitWriteModule, McpModule,
-    RepoModule, SearchModule, SelfStatusModule, ShellModule, TraitReportModule, VoiceSpeakModule,
+    BackupExportModule, DeviceControlModule, DocOpsModule, EducationModule, FetchModule,
+    FilesystemModule, GitWriteModule, ImageOpsModule, McpModule, RepoModule, SearchModule,
+    SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule, VoiceSpeakModule,
     SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
 };
 // 性格成长数据面 (裁定 ④⑤): 特质锁定态持久档 + 成长计既有账读面。

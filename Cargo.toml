@@ -22,6 +22,20 @@ members = [
     "crates/adapters/cli",
     # 终端驾驶舱 (全屏 TUI 客户端, P1)
     "crates/adapters/tui",
+    # 许可搬运线第一批：图像核心 vendored 家族（中性命名 `apeireth-image-*`，只搬
+    # 编解码/图层/滤镜/几何四类核心）+ 我们的接口层 `apeireth-image-core`；
+    # 溯源与四关质检见 docs/04-internal/license-port/
+    "crates/engine/image/core",
+    "crates/engine/image/geom",
+    "crates/engine/image/cms",
+    "crates/engine/image/color",
+    "crates/engine/image/raster",
+    "crates/engine/image/doc",
+    "crates/engine/image/vector",
+    "crates/engine/image/compose",
+    "crates/engine/image/algo",
+    "crates/engine/image/codecs",
+    "crates/engine/image/psd",
     # 基准复现 harness (bench-only 包, publish = false; 不计入 18 个产品 crate)
     "benches",
 ]

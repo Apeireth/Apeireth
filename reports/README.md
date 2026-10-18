@@ -1,4 +1,26 @@
-# reports/ — R12 收尾报告
+# reports/ — 报告库（F-02 出库后口径）
+
+> **F-02 大资产出库执行批（2026-10-18）· 批量日志迁出说明**
+> v1.0 时代批量工作日志 + UUID/短哈希工作日志共 **878 件 / 34.7MB** 已打包迁 release 资产暂存区
+> `release-assets/reports-archive-2026-07-08.tar`（随 Release 资产分发，`release-assets/` 不入 git 跟踪面）；
+> **git 历史不动**，历史 blob 可按文件名找回。
+> **711 处 docs 引用不改**——docs/ 与代码注释中出现的报告名属历史卷宗口径，**历史引用名保留**，
+> 迁出不改写引用；需要取回时按名从 release 资产包或 git 历史获取。
+> 逐件迁移清单（路径 + 字节数 + sha256）：
+> [../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv](../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv)。
+
+## 本目录现状（2026-10-18 起）
+
+- **已迁出（878 件）**：文件名带 2026-07/08 日期的 v1.0 时代批量日志（`agent-*`、`decision-*`、
+  `rNN-*`、`round*`、`1.0-release-*`、`achievement-*`、`dispatch-*` 等）+ UUID/短哈希命名工作日志。
+- **留库（195 件 tracked）**：近期证据/验收报告（2026-09~10）、`benchmark-baseline.md` /
+  `benchmark-reproduction.md`、`diagnostics-review/`、`pet-real-smoke-2026-10-11/`、`audit-2026-08-19/`、
+  `tp30/`、`r18-snapshots/`、`evidence-V10-qa2-A11-A20/` 等证据件，及无日期的评审/验收/设计裁定文档。
+- 目录名与报告名在历史文档中的引用一律保留原值（历史不追溯改写纪律）。
+
+---
+
+## reports/ — R12 收尾报告（历史口径，R12 收尾时点登记）
 
 > **范围**: R12 接手期间的所有报告 (12 份)
 > **创建时间**: R12 收尾任务 T16 (technical_writer) + R12 评审

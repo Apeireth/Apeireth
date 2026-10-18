@@ -46,6 +46,8 @@ jobs:
         run: python scripts/guard_ml/analyze_shadow.py --self-test
 
       - name: Verify generated files and privacy invariants
+        # 4 大 jsonl 是导出再生物（F-02 出库批后库内不再存放，见 scripts/guard_ml/README.md）；
+        # 本步断言的是上一步 export_guard_scenarios 的导出产物，与库内是否有件无关。
         shell: bash
         run: |
           python - <<'PY'

@@ -3,6 +3,10 @@
 // （下次 poll / 最近命中）。
 //
 // 合同出处（镜像消费，不改写）：
+//   - 面板读面 `GET /v1/panel/care`（gateway-api-contract.md §7f /
+//     frontend-data-contract.md §10.10）：care_list 帧同形三节（rules/discipline/
+//     last_care）+ 关怀节真值（status：规则数/下次触发/最近关怀/心跳两列），
+//     与 `tool.care_schedule` `care_list` / `tool.self_status` 关怀节同账同源；
 //   - `tool.self_status` 关怀节（`crates/capabilities/tools/src/self_status.rs`
 //     `CareStatus`）：rules / next_trigger_at_ms / last_care_at_ms / last_care_note /
 //     heartbeat_next_poll_at_ms / heartbeat_last_hit_at_ms / reason —— 缺源显式
@@ -19,10 +23,10 @@
 // （care_add/care_remove = 改规则 = 写文件同族，每调用停人工审批，无自动放行档）；
 // 面板写面可后续。指引只登记命令文本，界面不代跑。
 //
-// 取数缝（诚实边界）：关怀读面当前只在工具面自述（面板无 HTTP/IPC 读面，读码
-// 实证——gateway 路由无 /v1/panel/care 族、桌面桥无 care 读命令）——卡片经注入缝
-// 收 CareSnapshot；读面缺席 = 诚实空态（CARE_NO_FACE），不硬造端点、不摆假数据。
-// 读面落地后一行换源（同技能书架先例）。
+// 取数缝（诚实边界）：关怀读面 = `GET /v1/panel/care`（runtime.ts `fetchCare`
+// 只读 fetch，一行换源注入本卡）；该部署读面缺席（501/404）= 诚实空态
+// （CARE_NO_FACE），不硬造端点、不摆假数据。工具面自述（tool.self_status 关怀节 /
+// tool.care_schedule care_list）仍是权威读面，本卡是同一本账的人类界面投影。
 
 import {DASH} from './chat-shell/turn-telemetry.ts';
 
@@ -111,12 +115,124 @@ export interface CareSnapshot {
 }
 
 // ---------------------------------------------------------------------------
+// 读面归一（GET /v1/panel/care → 快照；形状不符行丢弃，不编默认值冒充真值）
+// ---------------------------------------------------------------------------
+
+function nullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/** 关怀节真值归一（`CareStatus` 同形；缺字段显式 null，不编数）。 */
+export function normalizeCareStatus(raw: unknown): CareStatusLike {
+  const rec = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    rules: nullableNumber(rec.rules),
+    next_trigger_at_ms: nullableNumber(rec.next_trigger_at_ms),
+    last_care_at_ms: nullableNumber(rec.last_care_at_ms),
+    last_care_note: nullableString(rec.last_care_note),
+    heartbeat_next_poll_at_ms: nullableNumber(rec.heartbeat_next_poll_at_ms),
+    heartbeat_last_hit_at_ms: nullableNumber(rec.heartbeat_last_hit_at_ms),
+    reason: nullableString(rec.reason),
+  };
+}
+
+/**
+ * 一条规则行归一（care_list 帧 `rule_json` 同形 + 真值补列）。形状不符的行
+ * 直接丢（缺 id / 缺创建锚 / 触发器缺 kind），不编默认值冒充真值。
+ */
+export function normalizeCareRule(raw: unknown): CareRuleLike | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rec = raw as Record<string, unknown>;
+  const id = rec.id;
+  const created = rec.created_at_ms;
+  const trigger = rec.trigger;
+  if (typeof id !== 'string' || id === '') return null;
+  if (typeof created !== 'number' || !Number.isFinite(created)) return null;
+  if (!trigger || typeof trigger !== 'object') return null;
+  const triggerRec = trigger as Record<string, unknown>;
+  if (typeof triggerRec.kind !== 'string') return null;
+  return {
+    id,
+    trigger: {
+      kind: triggerRec.kind,
+      hours: nullableNumber(triggerRec.hours) ?? undefined,
+      minutes_of_day: nullableNumber(triggerRec.minutes_of_day) ?? undefined,
+      month: nullableNumber(triggerRec.month) ?? undefined,
+      day: nullableNumber(triggerRec.day) ?? undefined,
+    },
+    trigger_kind: typeof rec.trigger_kind === 'string' ? rec.trigger_kind : undefined,
+    material: typeof rec.material === 'string' ? rec.material : undefined,
+    enabled: typeof rec.enabled === 'boolean' ? rec.enabled : undefined,
+    created_at_ms: created,
+    last_fired_at_ms: nullableNumber(rec.last_fired_at_ms),
+    next_trigger_at_ms: nullableNumber(rec.next_trigger_at_ms),
+  };
+}
+
+/** 打扰纪律归一（care_list 帧 discipline 节同形；缺字段显式 null/缺位）。 */
+export function normalizeCareDiscipline(raw: unknown): CareDisciplineLike | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rec = raw as Record<string, unknown>;
+  return {
+    quiet_start_minutes: nullableNumber(rec.quiet_start_minutes),
+    quiet_end_minutes: nullableNumber(rec.quiet_end_minutes),
+    frequency_max: nullableNumber(rec.frequency_max) ?? undefined,
+    frequency_window_hours: nullableNumber(rec.frequency_window_hours) ?? undefined,
+    daily_max: nullableNumber(rec.daily_max) ?? undefined,
+    focus_gap_minutes: nullableNumber(rec.focus_gap_minutes) ?? undefined,
+    catchup_minutes: nullableNumber(rec.catchup_minutes) ?? undefined,
+  };
+}
+
+/** 关怀台账一行归一（care_list 帧 `record_json` 同形）；形状不符 = null。 */
+export function normalizeCareRecord(raw: unknown): CareRecordLike | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rec = raw as Record<string, unknown>;
+  const {rule_id: ruleId, at_ms: at, judge, spoke, note} = rec;
+  if (typeof ruleId !== 'string' || ruleId === '') return null;
+  if (typeof at !== 'number' || !Number.isFinite(at)) return null;
+  if (typeof judge !== 'string' || typeof spoke !== 'boolean' || typeof note !== 'string') {
+    return null;
+  }
+  return {rule_id: ruleId, at_ms: at, judge, spoke, note};
+}
+
+/**
+ * 归一 `GET /v1/panel/care` 响应帧 → 关怀卡取数缝快照（`last_care` → `lastCare`）。
+ * 载荷一个已知节都没有 = 读不了这帧（返回 null → 诚实空态），不把陌生载荷
+ * 冒充空规则表。
+ */
+export function normalizeCareSnapshot(raw: unknown): CareSnapshot | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const rec = raw as Record<string, unknown>;
+  const known = ['status', 'rules', 'discipline', 'last_care'];
+  if (!known.some((key) => key in rec)) return null;
+  const rules: CareRuleLike[] = [];
+  if (Array.isArray(rec.rules)) {
+    for (const item of rec.rules) {
+      const rule = normalizeCareRule(item);
+      if (rule) rules.push(rule);
+    }
+  }
+  return {
+    status: normalizeCareStatus(rec.status),
+    rules,
+    discipline: normalizeCareDiscipline(rec.discipline),
+    lastCare: normalizeCareRecord(rec.last_care),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 诚实口径常量
 // ---------------------------------------------------------------------------
 
-/** 读面缺席时的诚实空态口径（不硬造端点，不摆假旋钮）。 */
+/** 读面缺席（501/404）时的诚实空态口径（不硬造端点，不摆假旋钮）。 */
 export const CARE_NO_FACE =
-  '关怀读面暂无接口（关怀数据只在工具面自述：tool.self_status 关怀节 / tool.care_schedule care_list）——如实上屏，不硬造端点、不摆假数据';
+  '关怀读面暂无接口（该部署无 GET /v1/panel/care；工具面自述仍是真源：tool.self_status 关怀节 / tool.care_schedule care_list）——如实上屏，不硬造端点、不摆假数据';
 
 /** 只读纪律注（写面归口工具，面板零写面）。 */
 export const CARE_READ_ONLY_NOTE =

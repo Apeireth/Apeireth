@@ -24,6 +24,20 @@ pub mod backup;
 // 受控拉取 + 结构化摘要 + 入记忆流 (L2 封套披露, 跨源内容不直进提示词);
 // 治理 = RequireApproval 级 (拉取与入库都经审批档, 改订阅走 write_intent 同族)。
 pub mod content_feed;
+// K 轴 · 物理在场与设备控制 (`device/`, K1 在场感知骨架 + L3/L4 受控执行骨架):
+// 设备表 `devices.json` (StoredDoc 拒开, 白名单制默认零设备) + 适配器插槽图
+// (mock 已接固定 fixture, 真实协议族留插槽不接) + `tool.device_sense` (摄像头类
+// 敏感读面: 显式授权 + 审计) + `tool.weather` (mock 档如实标注数据源 + 提醒
+// 信号只交信号) + `device_control` (L3/L4 三拍执行骨架, 另批)。感知族总开关
+// `APEIRETH_ENABLE_DEVICE_SENSE` 注册即闸, 默认关 fail-closed。
+pub mod device;
+// 创作工具面 W2: 文档操作 (`tool.doc_ops`, 受控读写族) —— 闭合操作词表
+// (pdf_info/pdf_extract_text/docx_extract_text/docx_outline 读 +
+// pdf_merge/pdf_split/pdf_extract_pages/pdf_watermark_text 写) + 工作区限域 +
+// 敏感面拒 + 大小/页数上限 + 创建类原子写 (只创建不覆盖) + 批量管道;
+// 注册即闸 `APEIRETH_ENABLE_DOC_OPS`, 写面每次人批, 默认关 fail-closed。
+// 依赖报备: flate2/quick-xml 为锁定文件既有传递依赖的同版本复用 (0 新外部包)。
+pub mod doc_ops;
 pub mod education;
 pub mod egress;
 // 工具执行五段流水线: pre-execute 瀑布 → 单调 Guard → around(超时/重试) →
@@ -44,6 +58,13 @@ pub mod filesystem;
 // (L1 可逆/L2 出网/L3 毁灭拒绝即帧) + 词法分级执行面 + 受控通道 + 分级风险映射。
 pub mod git_write;
 pub mod guardrail;
+// 创作工具面 W1: 图像操作 (`tool.image_ops`, 受控文件写族 + 受控读面) ——
+// 闭合操作词表 (resize/crop/rotate/flip/format_convert/brightness/contrast/
+// grayscale/blur/sharpen/watermark_text) + 工作区限域读写 + 敏感面拒 +
+// 炸弹图上限 + 格式白名单 (png/jpeg/webp/bmp) + 多操作管道 + 原子写;
+// 输出写归档**文件写入族** (读码定归档, 见模块头), 注册即闸
+// `APEIRETH_ENABLE_IMAGE_OPS` + `file_write` 唯一写总闸, 默认关 fail-closed。
+pub mod image_ops;
 pub mod mcp;
 // MCP 工具桥 (最后一公里接线): 服务器配置面 (env / 数据目录 StoredDoc 拒开语义) +
 // 每服务器一连接 (生命周期 + 断线重连后重发现) + 动态工具 (mcp:<server>:<tool>,
@@ -64,6 +85,7 @@ pub mod process;
 // 执行** (执行仍走既有工具面的正常审批链)。风险档 = 低 (读面 + append 账本),
 // 开关 `APEIRETH_ENABLE_PROPOSALS` 注册即闸, 默认关 fail-closed。
 pub mod proposal;
+pub mod proposal_push;
 // 出境脱敏双向闸 (V5-a 安全守望): 占位不可逆指纹 (`__AP_<类>_<指纹12>__`,
 // 会话随机密钥 HMAC 截断) + 还原双闸 (只在受控回程 + 只认本会话登记簿) +
 // 历史回扫 (每次出境前扫工具轨迹/会话历史, 堵历史搭车) + 脱敏账本
@@ -81,6 +103,14 @@ pub mod skill;
 // 缺失字段显式 null + 原因, 不整帧失败。
 pub mod self_status;
 mod sensitive_path;
+// 创作工具面 K3: 表格操作 (`tool.sheet_ops`, 受控读写族) —— 闭合操作词表
+// (read/summary/filter/sort/aggregate/formula 读 + export_csv 写, 变换动作带
+// output 即写) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表) + 创建类
+// 原子写 (只创建不覆盖) + 数值精度如实 (f64 不静默取整, NaN/inf 零产出);
+// 注册即闸 `APEIRETH_ENABLE_SHEET_OPS`, 写面受 file_write 唯一写总闸 + 每次
+// 人批, 默认关 fail-closed。本批只 CSV; xlsx 读入排下批 (容器读端复用
+// `doc_ops` 已报备的 ZIP 读端)。
+pub mod sheet_ops;
 pub mod shell;
 pub mod spill;
 pub mod stealth_crawler;
@@ -133,6 +163,17 @@ pub use content_feed::{
     DEFAULT_DAILY_INGESTS, DEFAULT_PER_PULL_ITEMS, FEEDS_DOC_NAME, FEED_LIFECYCLE_FILE_NAME,
     ITEM_LEDGER_MAX,
 };
+pub use doc_ops::{
+    authorized_doc_ops_policy, doc_ops_approval_reason, doc_ops_capability,
+    doc_ops_capability_shared, doc_ops_enabled_from_env, doc_ops_params_refusal, doc_ops_pipeline,
+    is_doc_ops_write_action, DocOpsApprovalHook, DocOpsBoundaryGuard, DocOpsConfig, DocOpsCounters,
+    DocOpsError, DocOpsParams, DocOpsRiskMappingHook, DocOpsRunner, DocOpsTool,
+    ACTION_DOCX_EXTRACT_TEXT, ACTION_DOCX_OUTLINE, ACTION_PDF_EXTRACT_PAGES,
+    ACTION_PDF_EXTRACT_TEXT, ACTION_PDF_INFO, ACTION_PDF_MERGE, ACTION_PDF_SPLIT,
+    ACTION_PDF_WATERMARK_TEXT, DOC_OPS_ACTIONS, DOC_OPS_CAPABILITY_ID, DOC_OPS_ENABLE_ENV,
+    DOC_OPS_MAX_INPUT_BYTES, DOC_OPS_MAX_PAGES, DOC_OPS_MAX_TEXT_CHARS, DOC_OPS_READ_ACTIONS,
+    DOC_OPS_TIMEOUT_MS, DOC_OPS_TOOL_DESCRIPTION, DOC_OPS_TOOL_NAME, DOC_OPS_WRITE_ACTIONS,
+};
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
 pub use escalation::{
@@ -166,6 +207,13 @@ pub use git_write::{
 };
 pub use guardrail::{
     EgressSweepResult, LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult,
+};
+pub use image_ops::{
+    image_ops_enabled_from_env, FlipAxis, ImageFormatKind, ImageOperation, ImageOpsActivity,
+    ImageOpsError, ImageOpsParams, ImageOpsReport, ImageOpsTool, OperationSpec,
+    IMAGE_OPS_CAPABILITY_ID, IMAGE_OPS_COUNT_SCOPE_NOTE, IMAGE_OPS_ENABLE_ENV, IMAGE_OPS_TOOL_NAME,
+    MAX_IMAGE_DIM, MAX_IMAGE_PIXELS, MAX_INPUT_BYTES, MAX_PIPELINE_STEPS, MAX_WATERMARK_SCALE,
+    MAX_WATERMARK_TEXT_CHARS, OPERATION_VOCABULARY, SUPPORTED_FORMATS,
 };
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
@@ -202,6 +250,10 @@ pub use proposal::{
     PROPOSAL_PERSONAL_CONFIRM_MARKER, PROPOSAL_RECENT_LIMIT, PROPOSAL_REVIEW_TONE,
     PROPOSAL_TIMEOUT_MS, PROPOSAL_TOOL_DESCRIPTION, PROPOSAL_TOOL_NAME,
 };
+pub use proposal_push::{
+    ProposalPushLedger, ProposalPushOutcome, ProposalPushRecord, ProposalPushStats,
+    PROPOSAL_PUSH_DOC_NAME, PROPOSAL_PUSH_DOC_VERSION, PROPOSAL_PUSH_LEDGER_FILE,
+};
 pub use redaction_bridge::{
     EgressRedaction, HistoryRescanReport, LedgerEntry, LedgerEvent, RedactionBridge, RedactionHit,
     RedactionSurface, RestoreReport, REDACTION_LEDGER_FILE,
@@ -210,15 +262,29 @@ pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
 pub use self_status::{
     capability_roster, derive_tuning_preset, quota_cost_partial_note, render_snapshot,
-    BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus, ContentFeedStatus, DomainCounts,
-    DomainStatus, MemoryLedgerStats, PersonaStatusSection, ProposalStatus, ProposalStatusEntry,
-    QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, RetrievalTuningMove, SelfStatusIdentity,
-    SelfStatusSnapshot, SelfStatusSource, SelfStatusTool, SessionQuotaProbe, StatusProbe,
-    TaskBoardStatus, TraitLockStatus, TraitMoveStatus, TraitStatus, TuningStatus, VoiceStatus,
-    WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS,
-    MODEL_PROFILE_UNKNOWN, PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS,
-    PRICE_NOT_PROVIDED, PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED,
-    QUOTA_METER_SCOPE_REQUIRED, RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
+    BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus, ContentFeedStatus,
+    DevicePresenceStatus, DocOpsOpCount, DocOpsStatus, DomainCounts, DomainStatus, ImageOpsOpCount,
+    ImageOpsStatus, MemoryLedgerStats, PersonaStatusSection, ProposalPushStatusEntry,
+    ProposalStatus, ProposalStatusEntry, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus,
+    RetrievalTuningMove, SelfStatusIdentity, SelfStatusSnapshot, SelfStatusSource, SelfStatusTool,
+    SessionQuotaProbe, SheetOpsOpCount, SheetOpsStatus, StatusProbe, TaskBoardStatus,
+    TraitLockStatus, TraitMoveStatus, TraitStatus, TuningStatus, VoiceStatus, WorkspaceStatus,
+    BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED, DISPOSITION_PRESETS, MODEL_PROFILE_UNKNOWN,
+    PRESET_BALANCED, PRESET_CUSTOM, PRESET_DEEP_MEMORY, PRESET_EFFORTLESS, PRICE_NOT_PROVIDED,
+    PRODUCT_NAME, QUOTA_COST_PARTIAL, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    RUNTIME_ROLE_GATEWAY_SIDECAR, SELF_STATUS_SECTIONS,
+};
+pub use sheet_ops::{
+    authorized_sheet_ops_policy, is_sheet_ops_write_action, sheet_ops_approval_reason,
+    sheet_ops_capability, sheet_ops_capability_shared, sheet_ops_enabled_from_env,
+    sheet_ops_params_refusal, sheet_ops_pipeline, SheetOpsApprovalHook, SheetOpsBoundaryGuard,
+    SheetOpsConfig, SheetOpsCounters, SheetOpsError, SheetOpsParams, SheetOpsRiskMappingHook,
+    SheetOpsRunner, SheetOpsTool, ACTION_AGGREGATE, ACTION_EXPORT_CSV, ACTION_FILTER,
+    ACTION_FORMULA, ACTION_READ, ACTION_SORT, ACTION_SUMMARY, AGGREGATE_FUNCTIONS,
+    DEFAULT_MAX_COLS, DEFAULT_MAX_PREVIEW_ROWS, DEFAULT_MAX_ROWS, FILTER_PREDICATES,
+    SHEET_OPS_ACTIONS, SHEET_OPS_CAPABILITY_ID, SHEET_OPS_ENABLE_ENV, SHEET_OPS_READ_ACTIONS,
+    SHEET_OPS_TIMEOUT_MS, SHEET_OPS_TOOL_DESCRIPTION, SHEET_OPS_TOOL_NAME,
+    SHEET_OPS_TRANSFORM_ACTIONS, SHEET_OPS_WRITE_ACTIONS, SORT_ORDERS,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use skill::{

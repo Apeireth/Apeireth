@@ -20,7 +20,9 @@
 ## 3. 口径纪律
 
 - **测试数字**：单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)——其余文档只引用不抄写。
-- **crate 口径**：`workspace = 20 members（19 crates + bench harness）`。
+- **crate 口径**：`workspace = 31 members（30 crates + bench harness）`（2026-10-18 许可搬运线
+  第一批 +11：图像核心 vendored 家族 10 crate + 接口层 1 crate，见 docs/04-internal/license-port/；
+  历史口径（2026-10-18 前）：20 members（19 crates + bench harness））。
 - **版本**：以根 `Cargo.toml` `[workspace.package] version` 为准（现 `2.0.0-rc.4`）；发版前按
   [docs/04-internal/release-checklist.md](docs/04-internal/release-checklist.md) 清版本残留。
 - **历史不追溯改写**：带日期的历史记录保留原值，需要时加「历史口径（日期）」标注。

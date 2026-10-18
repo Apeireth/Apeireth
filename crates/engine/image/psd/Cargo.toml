@@ -1,0 +1,43 @@
+# Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors.
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Modified 2026-10-18 for the Apeireth workspace: crate identifiers, tooling knob
+# names and product references renamed to neutral names; generated metadata producer
+# strings neutralised; scope adaptations recorded in
+# docs/04-internal/license-port/gate1-license.md. Original license terms unchanged.
+[package]
+name = "apeireth-image-psd"
+description = "Faithful, lossless reader and writer for Adobe Photoshop PSD (v1) and PSB (v2) files"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[lib]
+name = "apeireth_image_psd"
+path = "src/lib.rs"
+
+[features]
+# Real-file corpus tests (opt-in; `cargo xtask test-corpus`). Fail when the corpus is missing.
+corpus = []
+default = []
+serde = ["dep:serde"]
+testgen = []
+
+[dependencies]
+thiserror = "2"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+serde = { version = "1", features = ["derive", "rc"], optional = true }
+
+[dev-dependencies]
+proptest = "1"
+apeireth-image-psd = { path = ".", features = ["testgen"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"

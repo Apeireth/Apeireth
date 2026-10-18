@@ -1,16 +1,16 @@
-<!-- 关怀卡（V3-a 双引擎关怀上屏）：关怀规则列表（四类触发器/参数/最近触发/下次
-     触发）+ 打扰纪律（勿扰窗口/频率上限/专注抑制）只读展示 + 心跳态两列（下次
-     poll / 最近命中）。只读纪律：零动作面——配置改写走 tool.care_schedule（停人工
-     审批），面板写面可后续，指引只给命令文本不代跑。
-     取数（诚实边界）：关怀读面当前只在工具面自述（无 HTTP/IPC 读面）——卡片经
-     注入缝（loadCare）收快照；缺席 = 「暂无接口」诚实空态，不硬造端点、不摆假
-     数据（详见 care-card.ts 头注）。 -->
+<!-- 关怀卡（V3-a 双引擎关怀上屏 + 面板读面换源）：关怀规则列表（四类触发器/参数/
+     最近触发/下次触发）+ 打扰纪律（勿扰窗口/频率上限/专注抑制）只读展示 + 心跳态
+     两列（下次 poll / 最近命中）。只读纪律：零动作面——配置改写走 tool.care_schedule
+     （停人工审批），面板写面可后续，指引只给命令文本不代跑。
+     取数缝（loadCare）真源 = runtime 只读 fetch（GET /v1/panel/care，与
+     tool.care_schedule / tool.self_status 同账同源）；读面缺席（501/404）=
+     「暂无接口」诚实空态，不硬造端点、不摆假数据（详见 care-card.ts 头注）。 -->
 <script lang="ts">
   import {HeartPulse} from 'lucide-svelte';
   import {careCardView, type CareSnapshot} from '../care-card';
 
   interface Props {
-    /** 取数缝：关怀快照注入（读面落地后一行换源）；返回 null = 读面缺席（诚实空态）。 */
+    /** 取数缝：关怀快照注入（GET /v1/panel/care 真源，一行换源）；返回 null = 读面缺席（诚实空态）。 */
     loadCare?: () => Promise<CareSnapshot | null>;
   }
   let {loadCare}: Props = $props();
@@ -86,7 +86,7 @@
       {/each}
     </div>
 
-    <div class="cc-sec-head">打扰纪律（只读展示；改写走 care_schedule 工具/CLI，面板可后续）</div>
+    <div class="cc-sec-head">打扰纪律（只读展示；改写走 care_schedule 工具面，面板可后续）</div>
     <div class="cc-rows">
       {#each view.disciplineRows as row (row.key)}
         <div class="cc-row">

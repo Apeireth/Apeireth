@@ -19,14 +19,16 @@ use std::sync::Arc;
 
 use apeireth_core::Episode;
 use apeireth_gateway::{
-    AuditCommand, AuditDto, AuditQuery, EpisodeDto, EpisodeMutationDto, GatewayServices,
-    GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto, GraphNodeDto,
-    GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto, MemoryCommand,
-    MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto, PanelData,
-    SafetyGuardQuery, SessionQuery, SessionSummaryDto, SkillMetaDto, SkillRefusalDto,
+    AuditCommand, AuditDto, AuditQuery, CareDisciplineDto, CarePanelDto, CarePanelQuery,
+    CarePanelStatusDto, CareRecordDto, CareRuleDto, EpisodeDto, EpisodeMutationDto,
+    GatewayServices, GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto,
+    GraphNodeDto, GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto,
+    MemoryCommand, MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto,
+    PanelData, SafetyGuardQuery, SessionQuery, SessionSummaryDto, SkillMetaDto, SkillRefusalDto,
     SkillShelfQuery, SkillShelfScanDto, SkillSourceDto, TaskBoardPanel, TaskBoardSnapshotDto,
     TaskCountsDto, TaskPanelDto, TaskPanelError, TaskTimelineDto, ToolCatalogQuery, ToolDto,
-    TraceCommand, TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto,
+    TraceCommand, TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto, TraitLocksDto,
+    TraitMoveDto, TraitPanelDto, TraitPanelQuery, TraitValuesDto, TuningRecordDto,
     WorkbenchMemoryProvenanceDto, WorkbenchQuery, WorkbenchToolExecutionDto, WorkbenchTurnDto,
 };
 use apeireth_governance::{Permission, PermissionPolicy};
@@ -35,9 +37,11 @@ use apeireth_orchestration::task_queue::{
     TaskCaller, TaskEvent, TaskQueue, TaskQueueConfig, TaskQueueError, TaskRecord, TaskState,
     TaskStore,
 };
+use apeireth_orchestration::trait_report::{recent_moves, TRAIT_RECENT_MOVES};
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use apeireth_runtime::canonical::{Runtime, Session, SessionStore};
+use apeireth_runtime_assembly::{CareHeartbeatStatus, TraitGrowthFacts, TraitGrowthPaths};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -1131,6 +1135,10 @@ pub fn gateway_services(panel: Arc<CliPanelData>) -> GatewayServices {
         // 任务面板面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
         // `services.tasks`), 与 `tool.task_board` 工具面同队同账。
         tasks: None,
+        // 关怀/性格面板面同口径: 适配器由组合根在装配点注入 (见 cli::lib 的
+        // `services.care` / `services.traits`), 与工具面同表同账。
+        care: None,
+        traits: None,
     }
 }
 
@@ -1340,5 +1348,190 @@ impl TaskBoardPanel for CliTaskBoard {
             }
             Err(error) => Err(map_task_error(task_id, error)),
         }
+    }
+}
+
+/// 关怀面板面适配 (组合根): `care_rules.json` → `care_list` 帧同形 + 关怀节真值。
+///
+/// 与 `tool.care_schedule` **同表同拒开口径** (同一 StoredDoc 规则表; 拒开 =
+/// 失败帧报真因, 不静默降级); 心跳两列现读 [`CareHeartbeatSource`] 真值 (与
+/// 自述关怀节同一绑定, 未起 = 两列显式 null)。一次快照读: 表体一次装载,
+/// 帧同形三节与关怀节真值同刻投影 —— 不拼两次读。
+///
+/// **零写面**: 改规则走 `tool.care_schedule` (care_add/care_remove = 写文件同族,
+/// 每调用停人工审批), 本适配只读。
+pub struct CliCarePanel {
+    store: apeireth_organ::care::CareStore,
+    heartbeat: Arc<dyn Fn() -> CareHeartbeatStatus + Send + Sync>,
+    last_interaction_ms: Arc<dyn Fn() -> Option<i64> + Send + Sync>,
+}
+
+impl CliCarePanel {
+    /// 挂在数据目录下的规则表 (`<data_dir>/care_rules.json`)。
+    ///
+    /// `heartbeat` = 自述关怀节心跳两列同一真值口 (`CareHeartbeatSource::
+    /// status_probe`); 时钟走关怀内核同一时钟合同 (`SystemCareClock`); 交互观察
+    /// 锚点未接线 (久未联系类规则退化为规则创建时刻锚, 与自述关怀节同口径)。
+    pub fn new(
+        data_dir: impl Into<std::path::PathBuf>,
+        heartbeat: Arc<dyn Fn() -> CareHeartbeatStatus + Send + Sync>,
+    ) -> Self {
+        Self {
+            store: apeireth_organ::care::CareStore::new(data_dir),
+            heartbeat,
+            last_interaction_ms: Arc::new(|| None),
+        }
+    }
+}
+
+/// care_list 帧 `rule_json` 同形 + 两列真值补列 (发起锚 / 下次触发)。
+fn care_rule_dto(
+    rule: &apeireth_organ::care::CareRule,
+    body: &apeireth_organ::care::CareRulesBody,
+    now_ms: i64,
+    last_interaction_ms: Option<i64>,
+) -> Result<CareRuleDto, String> {
+    let last_fired_at_ms = body.last_fired(&rule.id);
+    Ok(CareRuleDto {
+        id: rule.id.clone(),
+        // 触发器投影走 organ `CareTrigger` 的同一 serde 形状 (内联 kind 标签),
+        // 与 care_list 帧逐字同形。
+        trigger: serde_json::to_value(&rule.trigger).map_err(errstr)?,
+        trigger_kind: rule.trigger.kind_label().to_string(),
+        material: rule.material.clone(),
+        enabled: rule.enabled,
+        created_at_ms: rule.created_at_ms,
+        last_fired_at_ms,
+        next_trigger_at_ms: rule.trigger.next_occurrence_ms(
+            now_ms,
+            rule.created_at_ms,
+            last_fired_at_ms,
+            last_interaction_ms,
+        ),
+    })
+}
+
+/// care_list 帧 discipline 节同形投影。
+fn care_discipline_dto(discipline: &apeireth_organ::care::CareDiscipline) -> CareDisciplineDto {
+    CareDisciplineDto {
+        quiet_start_minutes: discipline.quiet_start_minutes,
+        quiet_end_minutes: discipline.quiet_end_minutes,
+        frequency_max: discipline.frequency_max,
+        frequency_window_hours: discipline.frequency_window_hours,
+        daily_max: discipline.daily_max,
+        focus_gap_minutes: discipline.focus_gap_minutes,
+        catchup_minutes: discipline.catchup_minutes,
+    }
+}
+
+/// care_list 帧 `record_json` 同形投影。
+fn care_record_dto(record: &apeireth_organ::care::CareRecord) -> CareRecordDto {
+    CareRecordDto {
+        rule_id: record.rule_id.clone(),
+        at_ms: record.at_ms,
+        judge: record.judge.clone(),
+        spoke: record.spoke,
+        note: record.note.clone(),
+    }
+}
+
+#[async_trait]
+impl CarePanelQuery for CliCarePanel {
+    async fn care_frame(&self) -> Result<CarePanelDto, String> {
+        use apeireth_organ::care::CareClock;
+        // 一次快照读: 表体一次装载, 各节同出一刻。
+        let body = self.store.list().map_err(errstr)?;
+        let now_ms = apeireth_organ::care::SystemCareClock.now_ms();
+        let last_interaction_ms = (self.last_interaction_ms)();
+        let status = body.status_at(now_ms, last_interaction_ms);
+        let heartbeat = (self.heartbeat)();
+        let rules = body
+            .rules
+            .iter()
+            .map(|rule| care_rule_dto(rule, &body, now_ms, last_interaction_ms))
+            .collect::<Result<Vec<_>, String>>()?;
+        Ok(CarePanelDto {
+            status: CarePanelStatusDto {
+                rules: status.rules,
+                next_trigger_at_ms: status.next_trigger_at_ms,
+                last_care_at_ms: status.last_care.as_ref().map(|record| record.at_ms),
+                last_care_note: status.last_care_note(),
+                heartbeat_next_poll_at_ms: heartbeat.next_poll_at_ms,
+                heartbeat_last_hit_at_ms: heartbeat.last_hit_at_ms,
+            },
+            rules,
+            discipline: care_discipline_dto(&body.discipline),
+            last_care: status.last_care.as_ref().map(care_record_dto),
+        })
+    }
+}
+
+/// 性格面板面适配 (组合根): 成长计既有账 + 锁定档 → 四滑杆现值 / 锁定态 /
+/// 最近移动。
+///
+/// 与 `tool.trait_report` / 自述调参节**同账同源**: 同一本成长计账
+/// (`tuning-log.jsonl`) + 同一份锁定档 (`trait-locks.json`), 同一套判据
+/// (`trait_report::recent_moves`); 锁定档坏档 = 失败帧即报真因 (绝不读成
+/// 全解锁)。一次快照读: 账面一次扫描, 各节同出一刻。
+///
+/// **零写面**: 锁定/解锁走 CLI 显式动作 (`apeireth trait lock|unlock`),
+/// 调参走工具面/自动调参, 本适配只读。
+pub struct CliTraitPanel {
+    paths: TraitGrowthPaths,
+}
+
+impl CliTraitPanel {
+    /// 以成长计既有账路径为锚 (锁定档 = 同目录 `trait-locks.json`, 与
+    /// `tool.trait_report` 同一落位)。
+    pub fn new(paths: TraitGrowthPaths) -> Self {
+        Self { paths }
+    }
+}
+
+#[async_trait]
+impl TraitPanelQuery for CliTraitPanel {
+    async fn trait_frame(&self) -> Result<TraitPanelDto, String> {
+        // 一次快照读: 账面一次扫描 (成长计既有账 + 锁定档), 各节同出一刻。
+        let facts = TraitGrowthFacts::read(&self.paths)?;
+        let now_ms = apeireth_runtime_assembly::now_epoch_ms();
+        let moves = recent_moves(&facts.records, now_ms, TRAIT_RECENT_MOVES)
+            .into_iter()
+            .map(|movement| TraitMoveDto {
+                param: movement.param.id().to_string(),
+                label: movement.label,
+                at_epoch_ms: movement.at_epoch_ms,
+                delta: movement.delta,
+                reason: movement.reason,
+            })
+            .collect();
+        let records = facts
+            .records
+            .iter()
+            .map(|record| TuningRecordDto {
+                seq: record.seq,
+                param: record.param.id().to_string(),
+                previous: record.previous,
+                next: record.next,
+                reason: record.reason.clone(),
+                at_epoch_ms: record.at_epoch_ms,
+            })
+            .collect();
+        Ok(TraitPanelDto {
+            values: TraitValuesDto {
+                memory_fade: facts.values.memory_fade,
+                curiosity_strength: facts.values.curiosity_strength,
+                tone_saturation: facts.values.tone_saturation,
+                consolidation_cadence: facts.values.consolidation_cadence,
+            },
+            locked: TraitLocksDto {
+                memory_fade: facts.locks.memory_fade,
+                curiosity_strength: facts.locks.curiosity_strength,
+                tone_saturation: facts.locks.tone_saturation,
+                consolidation_cadence: facts.locks.consolidation_cadence,
+            },
+            recent_moves: moves,
+            records,
+            skipped_records: facts.skipped,
+        })
     }
 }

@@ -1,5 +1,17 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 许可搬运线第一批：图像核心（四关质检）(2026-10-18)
+
+宽松协议（MIT OR Apache-2.0）放行搬运 + 宪章〇之二四关质检逐关出报告（`docs/04-internal/license-port/`）：
+
+- **搬运面（只搬核心四类：编解码/图层/滤镜/几何 + 依赖闭包）**：十 crate 逐文件可对账搬入 `crates/engine/image/{geom,cms,color,raster,doc,vector,compose,algo,codecs,psd}`（363 文件 / 126k 行，`unsafe_code=forbid` 全程），中性命名 `apeireth-image-*`；UI/平台层与第三方资产 0 搬。
+- **接口层**：`apeireth-image-core`（我方原创）——`decode/encode` / `RasterImage`（裁切/缩放/模糊/锐化便利口）/ `LayerDocument`+`flatten` / `engine::*` 直取口，冒烟测试 **9 例**全绿（PNG 逐字节往返 / 错误面 / 几何 / 滤镜 / 图层合成 / PSD 字节稳定往返）。**接线归 W1 图像操作工具面**（本批不触碰其战场）。
+- **许可关**：版权头原样保留 + 逐文件 `Modified`/`Imported unchanged` 声明（Apache-2.0 §4(a)(b)）+ NOTICE 双落档（`crates/engine/image/NOTICE.md` + `OSS_NOTICE.md` §12）+ 版权主体清单 6 项 + 商标零使用 + 中性扫描器新增「许可署名头」豁免类（只豁免版权/许可/商标声明行）。
+- **质量关**：搬前审计（上游 1960 个 `#[test]` 静态面 / 0 unsafe / 依赖浅 / 维护活跃）+ 搬后实测（迁移测试 **77 套件 / 2307 passed / 0 failed**）；1 例金标断言按「钉行为不钉字面」演进为 ULP ≤ 1（理由与证据入 gate2 §5）。
+- **安全关**：secret-scan 0 命中 / **0 build.rs** / 0 网络 0 进程执行 API / cargo-audit 闭包 0 漏洞 / cargo-deny licenses+bans+sources 全 ok（`jpeg-encoder` 的 IJG 成分走最小面例外 + 按条款致谢）。
+- **集成关**：workspace 20→**31 members**（30 crates + bench harness，AGENTS.md 口径同步）；**一条命令可复跑复现**（`scripts/vendor-image-core.ps1` + 两道收尾步：家族 rustfmt 收口 + 合成 ICC 再生成；实测 367 文件 366 件逐字节一致）；体积/依赖树前后对照入 gate4（闭包 76 包，净新 24 外部包）。
+- **实证（2026-10-18，本批实测口径）**：接口冒烟 9/9 + 迁移面 2307/0 fail + 全仓零回归对照（`--exclude apeireth-tools-canonical` 口径，见下）+ fmt 本批面 0 diff + 中性扫描本批面 0 命中。**现场红如实报**：共享工作树存在他线在途编译红（`apeireth-tools-canonical` 12 errors，红点在其未跟踪新文件），按「他人在途红标红不代改」报备待归口收口，全量复验命令与回填位见 gate4 §3/§6；同批报备项已收口：中性扫描补强后他线两份在途调研文档曾出 20 命中（研究引注性质），归口线自注册事实引注豁免后全仓复测 **OK 0 命中**。
+
 ## [Unreleased] — 后端增强四波交付终账 + 总装批收口 (2026-10-13)
 
 后端增强工程（`docs/04-internal/backend-enhancement/`）四波交付终账（各一行带测试数，数字均出自各批交付记录 / 门禁实跑）+ 总装批六件收口：

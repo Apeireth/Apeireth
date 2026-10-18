@@ -12,16 +12,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use apeireth_core::cost_router::{CostRouter, CostRoutingStatus};
 use apeireth_core::kernel::SessionId;
 use apeireth_core::model_profile::ModelProfile;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::{
     derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
-    ContentFeedStatus, DomainCounts, DomainStatus, MemoryLedgerStats, ProposalStatus,
-    QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity, SelfStatusSnapshot,
-    SelfStatusSource, SessionQuotaProbe, StatusProbe, TaskBoardStatus, TraitStatus, TuningStatus,
-    VoiceStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE, DATA_PROBE_NOT_WIRED,
-    QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
+    ContentFeedStatus, DomainCounts, DomainStatus, ImageOpsStatus, MemoryLedgerStats,
+    ProposalStatus, QuotaDimensionStatus, QuotaMeterReading, QuotaStatus, SelfStatusIdentity,
+    SelfStatusSnapshot, SelfStatusSource, SessionQuotaProbe, StatusProbe, TaskBoardStatus,
+    TraitStatus, TuningStatus, VoiceStatus, WorkspaceStatus, BUDGET_SOURCE_CONSTANT_NOTE,
+    DATA_PROBE_NOT_WIRED, QUOTA_DEPTH_NOT_WIRED, QUOTA_METER_SCOPE_REQUIRED,
 };
 
 use super::care_heartbeat::CareHeartbeatStatus;
@@ -134,6 +135,13 @@ pub fn session_quota_probe(db_path: PathBuf) -> SessionQuotaProbe {
     })
 }
 
+/// 自省通道: 成本分级路由节探测口 (H-P2) —— 现读路由器真值 (主开关 + 最近
+/// 一次路由决策), 与任务选型**同一台** [`CostRouter`] (同源)。尚无任务被
+/// 路由就照实报「尚无任务被路由」, 不编造档位/选定 (0 装诚实)。
+pub fn cost_routing_probe(router: Arc<CostRouter>) -> StatusProbe<CostRoutingStatus> {
+    Arc::new(move || Ok(router.status()))
+}
+
 /// 自省通道: 用户域节探测口 (W3-①) —— 现探测当前域的域文档真值与域内计数。
 ///
 /// - 域身份 (id/显示名/角色/创建时刻) 每次现读域文档 (坏域配置拒开, 如实);
@@ -211,17 +219,9 @@ pub fn care_status_probe_with_heartbeat(
         let status = store
             .status(now_ms(), last_interaction_ms())
             .map_err(|error| error.to_string())?;
-        let last_care_note = status
-            .last_care
-            .as_ref()
-            .map(|record| {
-                let action = if record.spoke { "spoke" } else { "declined" };
-                format!(
-                    "{}: {} ({}): {}",
-                    record.rule_id, action, record.judge, record.note
-                )
-            })
-            .or_else(|| Some("尚无关怀记录".to_string()));
+        // 「最近关怀」文案走表体同一投影口径 (CareStoreStatus::last_care_note,
+        // 与关怀面板读面同源, 不另写格式)。
+        let last_care_note = status.last_care_note();
         let heartbeat = heartbeat.as_ref().map(|probe| probe());
         Ok(CareStatus {
             rules: Some(status.rules),
@@ -268,6 +268,57 @@ pub fn proposal_status_probe(data_dir: PathBuf) -> StatusProbe<ProposalStatus> {
     Arc::new(move || apeireth_tools_canonical::ProposalLedger::under_data_dir(&data_dir).status())
 }
 
+/// 自省通道: 创作节探测口 (创作工具面 W1 · 图像操作) —— 读 `tool.image_ops`
+/// 工具面同一计数器的最近操作计数 (进程内计数, 重启清零, 不落账不造账)。
+///
+/// 探测口绑同一个 [`apeireth_tools_canonical::ImageOpsActivity`] 实例 (与工具面
+/// 同源同账); 只回计数与操作名, **零路径零文件名** (脱敏口径)。
+pub fn image_ops_status_probe(
+    activity: Arc<apeireth_tools_canonical::ImageOpsActivity>,
+) -> StatusProbe<ImageOpsStatus> {
+    Arc::new(move || Ok(activity.status()))
+}
+
+/// 自省通道: 创作节探测口 (创作工具面 W2 · 文档操作) —— 读 `tool.doc_ops`
+/// 工具面同一计数器的进程内计数 (重启清零, 不落账不造账)。
+///
+/// 探测口绑同一个 [`apeireth_tools_canonical::DocOpsCounters`] 实例 (与工具面
+/// 同源同账); 只回计数与操作名, **零路径零文件名** (脱敏口径)。
+pub fn doc_ops_status_probe(
+    counters: Arc<apeireth_tools_canonical::DocOpsCounters>,
+) -> StatusProbe<apeireth_tools_canonical::DocOpsStatus> {
+    Arc::new(move || Ok(counters.status()))
+}
+
+/// 自省通道: 创作节探测口 (创作工具面 K3 · 表格操作) —— 读 `tool.sheet_ops`
+/// 工具面同一计数器的进程内计数 (重启清零, 不落账不造账)。
+///
+/// 探测口绑同一个 [`apeireth_tools_canonical::SheetOpsCounters`] 实例 (与工具面
+/// 同源同账); 只回计数与操作名, **零路径零文件名** (脱敏口径)。
+pub fn sheet_ops_status_probe(
+    counters: Arc<apeireth_tools_canonical::SheetOpsCounters>,
+) -> StatusProbe<apeireth_tools_canonical::SheetOpsStatus> {
+    Arc::new(move || Ok(counters.status()))
+}
+
+/// 自省通道: 在场节探测口 (K 轴 L1 在场感知) —— 现探测设备表真值
+/// (设备数 / 白名单数) 与最近感知 (进程内感知计数)。
+///
+/// 探测口绑同一本设备表 (`devices.json`) 与同一个
+/// [`apeireth_tools_canonical::device::sense::DeviceSenseActivity`] 实例 (与
+/// `tool.device_sense` 工具面同表同账): 自述与感知面同一真值源。设备表拒开
+/// (StoredDoc 语义) = `Err(真因)`, 自述节显式 null + 原因, 不编数 (0 装诚实)。
+pub fn device_presence_probe(
+    data_dir: PathBuf,
+    activity: Arc<apeireth_tools_canonical::device::sense::DeviceSenseActivity>,
+) -> StatusProbe<apeireth_tools_canonical::DevicePresenceStatus> {
+    Arc::new(move || {
+        let registry =
+            apeireth_tools_canonical::device::registry::DeviceRegistry::under_data_dir(&data_dir);
+        apeireth_tools_canonical::device::sense::device_presence_status(&registry, &activity)
+    })
+}
+
 /// 自省通道: 人格节探测口 (`self_status_persona`, V4-a) —— 读人格层落库面
 /// 自述节真值 (信念/边界/偏好/张力计数 + 最后整编时刻, 只计数不回内容)。
 ///
@@ -304,6 +355,8 @@ pub struct ProductionSelfStatusSource {
     budget: BudgetStatus,
     quota: Option<SessionQuotaProbe>,
     model_profile: Option<ModelProfile>,
+    /// 成本分级路由节真值探测口 (H-P2): 路由器开关 + 最近决策 (同源现读)。
+    cost_routing: Option<StatusProbe<CostRoutingStatus>>,
     domain: Option<StatusProbe<DomainStatus>>,
     content_feed: Option<StatusProbe<ContentFeedStatus>>,
     care: Option<StatusProbe<CareStatus>>,
@@ -315,6 +368,14 @@ pub struct ProductionSelfStatusSource {
     proposal: Option<StatusProbe<ProposalStatus>>,
     /// 性格节真值探测口 (裁定 ④⑤): 四杆锁定态 + 最近移动 (成长计既有账)。
     trait_growth: Option<StatusProbe<TraitStatus>>,
+    /// 创作节真值探测口 (创作工具面 W1): 最近操作计数 (工具面同一计数器)。
+    image_ops: Option<StatusProbe<ImageOpsStatus>>,
+    /// 创作节真值探测口 (创作工具面 W2 · 文档操作): 进程内计数 (同一计数器)。
+    doc_ops: Option<StatusProbe<apeireth_tools_canonical::DocOpsStatus>>,
+    /// 在场节真值探测口 (K 轴 L1): 设备数/白名单数/最近感知 (同表同计数)。
+    device_presence: Option<StatusProbe<apeireth_tools_canonical::DevicePresenceStatus>>,
+    /// 创作节真值探测口 (创作工具面 K3 · 表格操作): 进程内计数 (同一计数器)。
+    sheet_ops: Option<StatusProbe<apeireth_tools_canonical::SheetOpsStatus>>,
 }
 
 impl ProductionSelfStatusSource {
@@ -334,6 +395,7 @@ impl ProductionSelfStatusSource {
             budget: budget_status_from_constants(),
             quota: None,
             model_profile: None,
+            cost_routing: None,
             domain: None,
             content_feed: None,
             care: None,
@@ -343,6 +405,10 @@ impl ProductionSelfStatusSource {
             persona: None,
             proposal: None,
             trait_growth: None,
+            image_ops: None,
+            doc_ops: None,
+            device_presence: None,
+            sheet_ops: None,
         }
     }
 
@@ -380,6 +446,14 @@ impl ProductionSelfStatusSource {
     #[must_use]
     pub fn with_model_profile(mut self, profile: ModelProfile) -> Self {
         self.model_profile = Some(profile);
+        self
+    }
+
+    /// 注入成本分级路由节探测口 (H-P2): 路由器真值 (开关 + 最近一次路由
+    /// 决策) 每次自述现读 (与任务选型同一台 [`CostRouter`], 同源)。
+    #[must_use]
+    pub fn with_cost_routing_probe(mut self, probe: StatusProbe<CostRoutingStatus>) -> Self {
+        self.cost_routing = Some(probe);
         self
     }
 
@@ -456,6 +530,47 @@ impl ProductionSelfStatusSource {
     #[must_use]
     pub fn with_trait_growth_probe(mut self, probe: StatusProbe<TraitStatus>) -> Self {
         self.trait_growth = Some(probe);
+        self
+    }
+
+    /// 接入创作节探测口 (创作工具面 W1): 最近操作计数, 每次自述现探测 (与
+    /// `tool.image_ops` 工具面同一计数器, 只计数不回路径)。
+    #[must_use]
+    pub fn with_image_ops_probe(mut self, probe: StatusProbe<ImageOpsStatus>) -> Self {
+        self.image_ops = Some(probe);
+        self
+    }
+
+    /// 接入创作节探测口 (创作工具面 W2 · 文档操作): 进程内计数, 每次自述
+    /// 现探测 (与 `tool.doc_ops` 工具面同一计数器, 只计数不回路径)。
+    #[must_use]
+    pub fn with_doc_ops_probe(
+        mut self,
+        probe: StatusProbe<apeireth_tools_canonical::DocOpsStatus>,
+    ) -> Self {
+        self.doc_ops = Some(probe);
+        self
+    }
+
+    /// 接入在场节探测口 (K 轴 L1 在场感知): 设备数/白名单数/最近感知, 每次
+    /// 自述现探测 (与 `tool.device_sense` 工具面同一本设备表同一进程内计数)。
+    #[must_use]
+    pub fn with_device_presence_probe(
+        mut self,
+        probe: StatusProbe<apeireth_tools_canonical::DevicePresenceStatus>,
+    ) -> Self {
+        self.device_presence = Some(probe);
+        self
+    }
+
+    /// 接入创作节探测口 (创作工具面 K3 · 表格操作): 进程内计数, 每次自述
+    /// 现探测 (与 `tool.sheet_ops` 工具面同一计数器, 只计数不回路径)。
+    #[must_use]
+    pub fn with_sheet_ops_probe(
+        mut self,
+        probe: StatusProbe<apeireth_tools_canonical::SheetOpsStatus>,
+    ) -> Self {
+        self.sheet_ops = Some(probe);
         self
     }
 
@@ -594,6 +709,16 @@ impl ProductionSelfStatusSource {
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
 
+        // 成本分级路由一节 (H-P2): 当前档/选定模型/回退标注真值, 现读路由器
+        // 状态; 探测口缺位 = 显式 null + 原因 (0 装诚实, 不编档位/选定)。
+        let (cost_routing, cost_routing_reason) = match &self.cost_routing {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("cost routing probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
         // 用户域一节 (W3-① 域节): 当前域 id/角色/域内计数, 现探测如实;
         // 探测口缺位 = 显式 null + 原因 (W3-2 报备的域面接线在本批落地)。
         let (domain, domain_reason) = match &self.domain {
@@ -675,6 +800,49 @@ impl ProductionSelfStatusSource {
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
 
+        // 创作节 (创作工具面 W1): 最近操作计数, 现探测如实 (与 `tool.image_ops`
+        // 工具面同一计数器, 只计数不回路径); 探测口缺位 = 显式 null + 原因。
+        let (image_ops, image_ops_reason) = match &self.image_ops {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("image ops probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 创作节 (创作工具面 W2 · 文档操作): 进程内计数, 现探测如实 (与
+        // `tool.doc_ops` 工具面同一计数器, 只计数不回路径); 探测口缺位 =
+        // 显式 null + 原因。
+        let (doc_ops, doc_ops_reason) = match &self.doc_ops {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("doc ops probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 在场节 (K 轴 L1 在场感知): 设备数/白名单数/最近感知, 现探测如实 (与
+        // `tool.device_sense` 工具面同一本设备表同一进程内计数); 探测口缺位 =
+        // 显式 null + 原因。
+        let (device_presence, device_presence_reason) = match &self.device_presence {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("device presence probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
+        // 创作节 (创作工具面 K3 · 表格操作): 进程内计数, 现探测如实 (与
+        // `tool.sheet_ops` 工具面同一计数器, 只计数不回路径); 探测口缺位 =
+        // 显式 null + 原因。
+        let (sheet_ops, sheet_ops_reason) = match &self.sheet_ops {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("sheet ops probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
             capabilities: self.capabilities.clone(),
@@ -691,6 +859,8 @@ impl ProductionSelfStatusSource {
             workspace_reason,
             model,
             model_reason,
+            cost_routing,
+            cost_routing_reason,
             domain,
             domain_reason,
             content_feed,
@@ -707,6 +877,20 @@ impl ProductionSelfStatusSource {
             persona_reason,
             proposal,
             proposal_reason,
+            image_ops,
+            image_ops_reason,
+            // W2 文档操作线归口接线 (2026-10-17): 探测口真接 (与 `tool.doc_ops`
+            // 工具面同一计数器, 同源同账), 替换先前的机械补位占位。
+            doc_ops,
+            doc_ops_reason,
+            // K 轴 L1 在场感知: 探测口真接 (与 `tool.device_sense` 工具面同一本
+            // 设备表同一进程内感知计数, 同源同账)。
+            device_presence,
+            device_presence_reason,
+            // K3 表格操作线归口接线 (2026-10-18): 探测口真接 (与 `tool.sheet_ops`
+            // 工具面同一计数器, 同源同账), 替换先前的机械补位占位。
+            sheet_ops,
+            sheet_ops_reason,
         }
     }
 }
@@ -795,6 +979,36 @@ pub fn roster_from_config(
             "file_write_auto_pass",
             config.file_write_auto_pass && config.file_write && workspace_root_present,
         ),
+        // 创作工具面 W1 · 图像操作 (`tool.image_ops`): 输出写归档**文件写入族**
+        // (读码定归档), 按实际注册条件取值 —— 开关 + `file_write` 唯一写总闸 +
+        // 工作区根三者齐备才算生效 (子依赖写总闸, fail-closed)。自述创作节与
+        // 工具面同一计数器。
+        CapabilitySwitch::new(
+            "image_ops",
+            config.image_ops && config.file_write && workspace_root_present,
+        ),
+        // 创作工具面 W2 · 文档操作 (`tool.doc_ops`): 按实际注册条件取值 ——
+        // 开关 + 配置落位即注册 (读面不背写总闸, 文档读是第一公民); 写动作
+        // 受 `file_write` 唯一写总闸约束 (运行时拒写不拒读)。自述创作节与
+        // 工具面同一计数器。
+        CapabilitySwitch::new("doc_ops", config.doc_ops.is_some()),
+        // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`): 按实际注册条件取值 ——
+        // 开关 + 配置落位即注册 (读面不背写总闸, 表格读是第一公民); 写动作
+        // 受 `file_write` 唯一写总闸约束 (运行时拒写不拒读)。自述创作节与
+        // 工具面同一计数器。
+        CapabilitySwitch::new("sheet_ops", config.sheet_ops.is_some()),
+        // K 轴 L1 在场感知 (`tool.device_sense`, 注册条件 = 感知配置已注入,
+        // 注册即闸 `APEIRETH_ENABLE_DEVICE_SENSE` 默认关 fail-closed), 名册按
+        // 实际注册条件取值 (自述在场节与工具面同表同源)。
+        CapabilitySwitch::new("device_sense", config.device_sense.is_some()),
+        // K 轴 L1 天气读面 (`tool.weather`, 注册条件 = 天气配置已注入, 与
+        // `tool.device_sense` 同族一闸), 名册按实际注册条件取值。
+        CapabilitySwitch::new("weather", config.weather.is_some()),
+        // K 轴 L3/L4 受控执行 (`tool.device_control`, 注册条件 = 执行配置已
+        // 注入, 注册即闸: 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` +
+        // `APEIRETH_ENABLE_DEVICE_CONTROL` 默认关 fail-closed), 名册按实际
+        // 注册条件取值 (自述设备节与工具面同账)。
+        CapabilitySwitch::new("device_control", config.device_control.is_some()),
         // git 写分级 (`tool.git_write`): 主开关按实际注册条件取值 (配置开启
         // 且工作区根已注入才算生效); 「自动放行 L1」子档依赖主开关, 且只放
         // L1 可逆本地写 —— L2 出网永远人批不入子档。
@@ -1269,6 +1483,72 @@ mod tests {
         assert!(snapshot.model.is_none());
         assert!(snapshot
             .model_reason
+            .as_deref()
+            .unwrap()
+            .contains(DATA_PROBE_NOT_WIRED));
+    }
+
+    /// H-P2 成本分级路由节: 路由器真值 (开关 + 最近一次路由决策) 同源现读
+    /// 进快照 —— 没路由过照实说, 路由过报当前档/选定模型/回退标注真值。
+    #[test]
+    fn the_cost_routing_probe_reaches_the_self_report_snapshot() {
+        use apeireth_core::cost_router::{CostRouter, CostRoutingConfig, CostTier, RoutingRequest};
+        use apeireth_core::model_profile::{ModelProfile, ModelProfileTable};
+        let row = |id: &str, input: Option<u64>, output: Option<u64>| ModelProfile {
+            model_id: id.to_string(),
+            context_window: Some(32_768),
+            max_output: Some(8_192),
+            supports_tools: Some(true),
+            supports_streaming: Some(true),
+            input_price_micros: input,
+            output_price_micros: output,
+            cache_read_price_micros: None,
+            capabilities_flags: Vec::new(),
+        };
+        let table = ModelProfileTable::new(vec![
+            row("default-model", None, None),
+            row("cheap-model", Some(100), Some(100)),
+        ]);
+        let router = Arc::new(CostRouter::new(
+            table,
+            Some("default-model".to_string()),
+            CostRoutingConfig::from_env_values(Some("1"), None).expect("config"),
+        ));
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None)
+            .with_cost_routing_probe(cost_routing_probe(Arc::clone(&router)));
+        // 尚无任务被路由: 如实报「尚无任务被路由」, 不编档位/选定。
+        let snapshot = source.snapshot();
+        let status = snapshot.cost_routing.expect("routing section must arrive");
+        assert!(status.enabled, "开关真值");
+        assert!(status.decision.is_none(), "没路由过不编决策");
+        assert!(status
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("no task has been routed"));
+        assert!(snapshot.cost_routing_reason.is_none());
+
+        // 路由一个任务后: 当前档/选定模型/回退标注真值进快照 (同源)。
+        router
+            .route(&RoutingRequest::new().with_explicit_tier(CostTier::Standard))
+            .expect("routing is on");
+        let snapshot = source.snapshot();
+        let status = snapshot.cost_routing.expect("routing section must arrive");
+        let decision = status.decision.expect("decision truth");
+        assert_eq!(decision.tier, CostTier::Standard);
+        assert_eq!(
+            decision.selected_model.as_deref(),
+            Some("cheap-model"),
+            "有价格证据按省钱选"
+        );
+        assert!(!decision.used_fallback, "有候选不是回退");
+
+        // 探测口缺位: 显式 null + 原因 (0 装诚实)。
+        let source = ProductionSelfStatusSource::new(Vec::new(), false, None);
+        let snapshot = source.snapshot();
+        assert!(snapshot.cost_routing.is_none());
+        assert!(snapshot
+            .cost_routing_reason
             .as_deref()
             .unwrap()
             .contains(DATA_PROBE_NOT_WIRED));

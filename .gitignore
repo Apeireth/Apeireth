@@ -300,6 +300,10 @@ frontend/companion-desktop/shot-*.png
 # 外部源码抽取暂存（研究线临时区）：绝不入库（借鉴源码产物不留痕迹），收口即删
 _lx_src/
 
+# F-02 资产出库批（2026-10-18）：release 资产暂存区——迁出的批量日志/可再生导出件
+# 打包件只随 Release 资产分发，不入 git 跟踪面；迁移清单见 docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv
+release-assets/
+
 # 外部源码抽取暂存（研究线临时区）：绝不入库，收口即删
 _research/
 research/dagger-git/

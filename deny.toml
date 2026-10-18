@@ -47,6 +47,14 @@ allow = [
     "Zlib",
 ]
 
+# 许可搬运线第一批（2026-10-18）：jpeg-encoder 0.6.x 声明 `(MIT OR Apache-2.0) AND IJG`。
+# IJG = Independent JPEG Group License（FSF Free/Libre、宽松非 copyleft、Debian main）。
+# 走**最小面**例外：只对该 crate 放行 IJG 成分（不进全局 allow，不影响其余依赖图）；
+# IJG 的文档致谢义务落在 OSS_NOTICE.md 许可搬运线节 + docs/04-internal/license-port/gate1-license.md。
+[[licenses.exceptions]]
+name = "jpeg-encoder"
+allow = ["IJG"]
+
 # ----------------------------------------------------------------------------
 # Bans — 多版本 / wildcards / 黑名单
 # ----------------------------------------------------------------------------

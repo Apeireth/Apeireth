@@ -1,15 +1,19 @@
 // 性格卡逻辑面（R2 性格锁定上屏）：四滑杆现值 + 锁定态 + 最近移动 + 「本周性格
 // 周报」区块 + 锁定/解锁 CLI 指引。
 //
-// 合同出处（镜像消费，不改写）：frontend-data-contract.md §10.9（裁定 ④⑤）——
-//   A. `tool.self_status` 调参/性格节：四杆值 + `tuning.locked`（四杆锁定态）+
+// 合同出处（镜像消费，不改写）：frontend-data-contract.md §10.9 / §10.11——
+//   A. 面板读面 `GET /v1/panel/traits`（gateway-api-contract.md §7f，与
+//      `tool.trait_report` 同账同源：同一本 tuning-log.jsonl + 同一份
+//      trait-locks.json）：values 四滑杆现值（生效值）+ locked 四杆锁定态 +
+//      recent_moves 最近移动 + records 账面行 + skipped_records 坏行计数；
+//   B. `tool.self_status` 调参/性格节：四杆值 + `tuning.locked`（四杆锁定态）+
 //      `tuning.recent_moves`（≤4 条，新 → 旧：{param,label,at_epoch_ms,delta,reason}）；
-//   B. `tool.trait_report` 帧（只读零审批）：近 7 天窗（两端含，未来时刻不计）、
+//   C. `tool.trait_report` 帧（只读零审批）：近 7 天窗（两端含，未来时刻不计）、
 //      sliders[]（value/locked/net_delta/move_count/locked_skipped/last_move）、
 //      top_reasons、records_in_window、locked_skipped、skipped_records；
-//   C. 锁定动作面：CLI `apeireth trait lock|unlock <SLIDER>`（内核 API
-//      `set_trait_lock`）；**无 HTTP 管理面**（读码实证：gateway 无 trait 路由）——
-//      故锁定/解锁按钮只给 CLI 指引、不代跑（只读 + 指引纪律）。
+//   D. 锁定动作面：CLI `apeireth trait lock|unlock <SLIDER>`（内核 API
+//      `set_trait_lock`）；锁定/解锁**写面**无 HTTP 面（面板只有只读面
+//      `/v1/panel/traits`）——故锁定/解锁按钮只给 CLI 指引、不代跑（只读 + 指引纪律）。
 //
 // 数据 = 成长计既有账（tuning-log.jsonl，与「性格养成」学习日志同账，不新造账）；
 // 周报区块是同一本账的 7 天窗**投影**，口径逐项镜像 `orchestration::trait_report`
@@ -17,8 +21,9 @@
 // 由 tests/trait-card.mjs 对照同批 fixture 钉死。权威读面 = `tool.trait_report`
 // （对话内）/ `apeireth trait report`（CLI）；本卡是人类界面的同账投影。
 //
-// 锁定档（trait-locks.json）无面板读面（读码实证）：锁定态缺源显「—」+ 真因，
-// 绝不拿「未锁定」冒充未知。
+// 锁定档（trait-locks.json）读面 = `GET /v1/panel/traits`（缺档 = 全解锁默认态、
+// 坏档即帧）；该部署读面缺席（501/404）时锁定态显「—」+ 真因，绝不拿「未锁定」
+// 冒充未知。
 
 import {DASH} from './chat-shell/turn-telemetry.ts';
 
@@ -85,6 +90,76 @@ export interface TraitMoveLike {
   at_epoch_ms: number;
   delta: number;
   reason: string;
+}
+
+// ---------------------------------------------------------------------------
+// 读面归一（GET /v1/panel/traits → 快照；坏行丢弃不编值，同账面扫描语义）
+// ---------------------------------------------------------------------------
+
+function traitNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function traitBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
+/** 四杆现值归一（缺键显式 null，不编数）。 */
+function traitValuesOf(raw: unknown): TraitValuesLike {
+  const rec = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    memory_fade: traitNumber(rec.memory_fade),
+    curiosity_strength: traitNumber(rec.curiosity_strength),
+    tone_saturation: traitNumber(rec.tone_saturation),
+    consolidation_cadence: traitNumber(rec.consolidation_cadence),
+  };
+}
+
+/** 四杆锁定态归一（缺键显式 null = 未知，不编「未锁定」）。 */
+function traitLocksOf(raw: unknown): TraitLocksLike {
+  const rec = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    memory_fade: traitBoolean(rec.memory_fade),
+    curiosity_strength: traitBoolean(rec.curiosity_strength),
+    tone_saturation: traitBoolean(rec.tone_saturation),
+    consolidation_cadence: traitBoolean(rec.consolidation_cadence),
+  };
+}
+
+/**
+ * 性格卡取数缝的快照（`GET /v1/panel/traits` 一次快照读的投影；每块都可缺席）。
+ * `moves` = 成长计既有账账面行（周报/最近移动同账投影的数据面；坏行丢弃）。
+ */
+export interface TraitSnapshot {
+  values: TraitValuesLike | null;
+  locks: TraitLocksLike | null;
+  moves: TuningLogEntryLike[] | null;
+  skippedRecords: number | null;
+}
+
+/**
+ * 归一 `GET /v1/panel/traits` 响应帧 → 性格卡取数缝快照。
+ * 载荷一个已知节都没有 = 读不了这帧（返回 null → 缺源显「—」），不把陌生载荷
+ * 冒充空账。
+ */
+export function normalizeTraitSnapshot(raw: unknown): TraitSnapshot | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const rec = raw as Record<string, unknown>;
+  const known = ['values', 'locked', 'recent_moves', 'records', 'skipped_records'];
+  if (!known.some((key) => key in rec)) return null;
+  const moves: TuningLogEntryLike[] = [];
+  if (Array.isArray(rec.records)) {
+    for (const item of rec.records) {
+      const entry = normalizeTuningEntry(item);
+      if (entry) moves.push(entry);
+    }
+  }
+  return {
+    values: traitValuesOf(rec.values),
+    locks: traitLocksOf(rec.locked),
+    moves,
+    skippedRecords: traitNumber(rec.skipped_records),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -282,14 +357,15 @@ export const TRAIT_LOCK_GUIDANCE: ReadonlyArray<TraitGuidanceRow> = [
 // 诚实口径常量
 // ---------------------------------------------------------------------------
 
+/** 读面缺席（501/404）时锁定态的诚实空态口径（不拿「未锁定」冒充未知）。 */
 export const TRAIT_LOCK_NO_FACE =
-  '锁定档（trait-locks.json）暂无面板读面——锁定态如实显「—」，不拿「未锁定」冒充未知；锁定/解锁走 CLI apeireth trait lock|unlock <SLIDER>（面板按钮只给指引）';
+  '锁定态暂无接口（该部署无 GET /v1/panel/traits）——锁定态如实显「—」，不拿「未锁定」冒充未知；锁定/解锁走 CLI apeireth trait lock|unlock <SLIDER>（面板按钮只给指引）';
 
 export const TRAIT_WEEK_NOTE =
-  '周报 = 成长计既有账（tuning-log.jsonl）近 7 天窗投影（与 tool.trait_report 同账同语义：两端含、未来时刻不计、零移动留痕不计移动）；权威读面 = tool.trait_report / apeireth trait report';
+  '周报 = 成长计既有账（tuning-log.jsonl）近 7 天窗投影（与 tool.trait_report 同账同语义：两端含、未来时刻不计、零移动留痕不计移动）；读面 = GET /v1/panel/traits（同账同源），权威读面 = tool.trait_report / apeireth trait report';
 
 export const TRAIT_VALUES_NOTE =
-  '现值 = 本机下发的旋钮值（与 APEIRETH_TUNE_* 注入同源）；权威真值在 tool.self_status 调参节（四杆值 + 锁定态 + 最近移动同账）';
+  '现值 = 面板读面真值（GET /v1/panel/traits：TuningParam 生效值 = 进程内自动调整 > env 旋钮 > 基线，与 tool.self_status 调参节 / tool.trait_report 同账）';
 
 // ---------------------------------------------------------------------------
 // 卡片视图映射（纯函数；null → 「—」，未知不用 0 冒充）

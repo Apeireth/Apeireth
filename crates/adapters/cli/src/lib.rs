@@ -112,6 +112,20 @@ pub const ENABLE_EXPOSURE_AUDIT_ENV: &str = "APEIRETH_ENABLE_EXPOSURE_AUDIT";
 // 通过 = 账面标记 accepted, 提案不直接执行 —— 执行仍走既有工具面的正常审批链)。
 // 开关语义真源在 `apeireth_tools_canonical::proposal` (命名即承诺)。
 pub const ENABLE_PROPOSALS_ENV: &str = "APEIRETH_ENABLE_PROPOSALS";
+// 创作工具面 W2 · 文档操作旋钮 (`tool.doc_ops`, 受控读写族): 注册 + 策略 grant。
+// 默认关 (fail-closed); `APEIRETH_ENABLE_DOC_OPS=1` = 注册工具 + grant —— 读面
+// (pdf_info/pdf_extract_text/docx_extract_text/docx_outline) grant 即用零审批;
+// 写面 (merge/split/extract_pages/watermark_text) 受 `file_write` 唯一写总闸
+// (关 = 拒写不拒读) + `DocOpsApprovalHook` 每次人批 (无自动放行档)。开关语义
+// 真源在 `apeireth_tools_canonical::doc_ops` (命名即承诺)。
+pub const ENABLE_DOC_OPS_ENV: &str = "APEIRETH_ENABLE_DOC_OPS";
+// 创作工具面 K3 · 表格操作旋钮 (`tool.sheet_ops`, 受控读写族): 注册 + 策略 grant。
+// 默认关 (fail-closed); `APEIRETH_ENABLE_SHEET_OPS=1` = 注册工具 + grant —— 读面
+// (read/summary/filter/sort/aggregate/formula 不带 output) grant 即用零审批;
+// 写面 (带 output 的变换动作 / export_csv) 受 `file_write` 唯一写总闸
+// (关 = 拒写不拒读) + `SheetOpsApprovalHook` 每次人批 (无自动放行档)。开关语义
+// 真源在 `apeireth_tools_canonical::sheet_ops` (命名即承诺)。
+pub const ENABLE_SHEET_OPS_ENV: &str = "APEIRETH_ENABLE_SHEET_OPS";
 // 受控文件写入旋钮 (`tool.apply_patch`, 第七件生产工具): 注册 + 策略 grant +
 // 风险档位。默认关 (fail-closed); `APEIRETH_ENABLE_FILE_WRITE=1` = 注册工具 +
 // grant + require_approval —— 每次写入都要人批 (本地审批面板 + IM 审批卡同链)。
@@ -146,6 +160,12 @@ pub const ENABLE_WORKTREE_APPLY_ENV: &str = "APEIRETH_ENABLE_WORKTREE_APPLY";
 // 是只读档 (零审批、零写盘), 独立旋钮不依赖写总闸。
 pub const ENABLE_SKILL_DISTILL_ENV: &str = "APEIRETH_ENABLE_SKILL_DISTILL";
 pub const ENABLE_SKILL_SEARCH_ENV: &str = "APEIRETH_ENABLE_SKILL_SEARCH";
+// 创作工具面 W1 图像操作旋钮 (`tool.image_ops`, 受控文件写族): 子依赖
+// file_write 唯一写总闸 (fail-closed, 单独设本旋钮而写总闸关 = 无效果)。
+// 默认关 (fail-closed); 开 = 注册 + grant + require_approval (输出写归档
+// 文件写入族, 每次图像写入都人批, 无自动放行档)。开关语义真源在
+// `apeireth_tools_canonical::image_ops` (命名即承诺)。
+pub const ENABLE_IMAGE_OPS_ENV: &str = "APEIRETH_ENABLE_IMAGE_OPS";
 // MCP 外部工具桥旋钮 (轻默认, 默认关): `APEIRETH_ENABLE_MCP=1` 时装配外部工具桥,
 // 服务器列表走 `APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json` (拒开语义)。
 const ENABLE_MCP_ENV: &str = "APEIRETH_ENABLE_MCP";
@@ -462,6 +482,74 @@ fn model_profile_table_from_env() -> Result<apeireth_core::model_profile::ModelP
         .map_err(|error| format!("model profile configuration refused to load: {error}"))
 }
 
+/// 成本分级路由主开关 (H-P2, fail-closed): `APEIRETH_COST_ROUTING=1` 才开,
+/// 其他取值一律关 (见 [`apeireth_core::cost_router::CostRoutingConfig::switch_enabled`])。
+pub fn cost_routing_enabled_from_env() -> bool {
+    apeireth_core::cost_router::CostRoutingConfig::switch_enabled(
+        std::env::var(apeireth_core::cost_router::COST_ROUTING_ENV)
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// 成本分级路由配置面 (H-P2): 开关 (`APEIRETH_COST_ROUTING`) + 档位映射
+/// (`APEIRETH_COST_ROUTING_PREFERRED`, 每档首选模型覆盖)。任一层坏 = 整体
+/// 拒开 (fail-closed, 值自由报错)。
+pub fn cost_routing_config_from_env(
+) -> Result<apeireth_core::cost_router::CostRoutingConfig, String> {
+    apeireth_core::cost_router::CostRoutingConfig::from_env_values(
+        std::env::var(apeireth_core::cost_router::COST_ROUTING_ENV)
+            .ok()
+            .as_deref(),
+        std::env::var(apeireth_core::cost_router::COST_ROUTING_PREFERRED_ENV)
+            .ok()
+            .as_deref(),
+    )
+    .map_err(|error| format!("cost routing configuration refused to load: {error}"))
+}
+
+/// 成本分级路由器装配 (H-P2): 画像表 (筛选来源) + 生效模型 (回退目标,
+/// [`active_model_id`] 同一解析口径) + 配置面。坏配置拒开: 走启动错误正式
+/// 通道, 不静默回退。
+pub fn cost_router_from_env() -> Result<Arc<apeireth_core::cost_router::CostRouter>, String> {
+    let config = cost_routing_config_from_env()?;
+    let profiles = model_profile_table_from_env()?;
+    Ok(Arc::new(apeireth_core::cost_router::CostRouter::new(
+        profiles,
+        active_model_id(),
+        config,
+    )))
+}
+
+/// CLI 任务的路由信号口径 (H-P2): 上下文规模 = 提示字符数 / 4 的**启发式
+/// 估计** (非计量, 只够定档用); 工具调用数信号缺位 (如实 `None`, 不猜);
+/// `chat` 回合带工具循环 = 任务需要工具。
+pub fn routing_request_for_prompt(prompt: &str) -> apeireth_core::cost_router::RoutingRequest {
+    let estimated_context_tokens =
+        u64::try_from(prompt.chars().count().div_ceil(4)).unwrap_or(u64::MAX);
+    apeireth_core::cost_router::RoutingRequest::new()
+        .with_requires_tools(true)
+        .with_estimated_context_tokens(estimated_context_tokens)
+}
+
+/// 回合模型解析 (H-P2 任务选型): 显式 `--model` > 成本路由选定 > 默认模型。
+///
+/// 显式模型直接胜出 (显式 > 自动); 路由开关关 = 回 `None` (fail-closed,
+/// 零行为变化, 回合仍走默认模型); 开 = 回路由决策的选定模型 (无候选回退时
+/// 回的就是默认模型 id, 回退标注在自述路由节如实)。
+pub fn resolve_turn_model(
+    user_model: Option<String>,
+    router: &apeireth_core::cost_router::CostRouter,
+    prompt: &str,
+) -> Option<String> {
+    if let Some(model) = user_model {
+        return Some(model);
+    }
+    router
+        .route(&routing_request_for_prompt(prompt))
+        .and_then(|decision| decision.selected_model)
+}
+
 /// Build the production governance policy from an explicit local-read choice.
 ///
 /// The explicit boolean keeps the policy deterministic and easy to test. The
@@ -595,6 +683,16 @@ pub fn skill_search_enabled_from_env() -> bool {
     std::env::var(ENABLE_SKILL_SEARCH_ENV)
         .ok()
         .is_some_and(|value| value.trim() == "1")
+}
+
+/// 创作工具面 W1 图像操作 (`tool.image_ops`) 旋钮: 受控文件写族 —— 依赖写总闸
+/// `APEIRETH_ENABLE_FILE_WRITE=1` (输出写归档文件写入族, fail-closed —— 单独设
+/// 本旋钮而写总闸关 = 无效果)。开 = 注册 + grant + require_approval (每次图像
+/// 写入都人批, 无自动放行档); 开关取值语义 (只认显式 "1") 真源在
+/// [`apeireth_tools_canonical::image_ops`]。
+pub fn image_ops_enabled_from_env() -> bool {
+    file_write_enabled_from_env()
+        && apeireth_tools_canonical::image_ops::image_ops_enabled_from_env()
 }
 
 /// 内容流接入 (`tool.content_feed`, J1) 旋钮: 独立开关, 默认关 (fail-closed)。
@@ -753,6 +851,9 @@ pub fn build_production_governance_parts(
         false,
         // 同口径: 显式布尔构建器不含任务簿旋钮 (默认不进授权面, fail-closed)。
         false,
+        // 同口径: 显式布尔构建器不含创作工具面图像操作旋钮 (默认不进授权面,
+        // fail-closed)。
+        false,
     )
 }
 
@@ -769,6 +870,7 @@ fn build_production_governance_parts_with_dataset(
     care_schedule: bool,
     backup_export: bool,
     task_board: bool,
+    image_ops: bool,
 ) -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -882,6 +984,17 @@ fn build_production_governance_parts_with_dataset(
         policy.grant(Permission::ExecuteTool(
             apeireth_runtime_assembly::TASK_BOARD_CAPABILITY_ID.to_string(),
         ));
+    }
+    // 创作工具面 W1 (`tool.image_ops`, 受控文件写族) 授权面 (开关开 = 注册 +
+    // 授权, 同源整改口径): grant + require_approval —— 输出写归档**文件写入族**,
+    // **每次图像写入都停人工审批** (本地审批面板 + IM 审批卡同链, 无自动放行档);
+    // 受控面 (工作区限域 / 敏感面拒 / 炸弹图上限 / 格式白名单 / 原子写 / 读前
+    // 观测门禁) 由工具层全责。
+    if image_ops {
+        policy.grant(Permission::ExecuteTool(
+            apeireth_tools_canonical::IMAGE_OPS_CAPABILITY_ID.to_string(),
+        ));
+        policy.require_approval_for(apeireth_tools_canonical::IMAGE_OPS_CAPABILITY_ID);
     }
     let policy = Arc::new(std::sync::Mutex::new(policy));
     let mut guard = BehaviorChainGuardHook::new();
@@ -1045,6 +1158,7 @@ fn build_production_governance_parts_from_env() -> (
         care_schedule_enabled_from_env(),
         backup_export_enabled_from_env(),
         task_board_enabled_from_env(),
+        image_ops_enabled_from_env(),
     );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -1120,6 +1234,82 @@ fn build_production_governance_parts_from_env() -> (
                 apeireth_tools_canonical::proposal::PROPOSAL_CAPABILITY_ID.to_string(),
             ));
     }
+    // 创作工具面 W2 · 文档操作 (`tool.doc_ops`): **开关开 = 注册 + 授权同源**
+    // (同一开关值同时决定装配侧注册与本授权面)。读面 grant 即用 (零审批);
+    // 写面审批档由 [`apeireth_tools_canonical::DocOpsApprovalHook`] 唯一承载
+    // —— 每次写面都人批 (无自动放行档); 写总闸 (`file_write`) 关时写动作在
+    // 工具面拒绝即帧 (读面不受影响)。
+    let pipeline = if apeireth_tools_canonical::doc_ops_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::DOC_OPS_CAPABILITY_ID.to_string(),
+            ));
+        pipeline.with(Arc::new(apeireth_tools_canonical::DocOpsApprovalHook::new()))
+    } else {
+        pipeline
+    };
+    // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`): **开关开 = 注册 + 授权同源**
+    // (同一开关值同时决定装配侧注册与本授权面)。读面 grant 即用 (零审批);
+    // 写面审批档由 [`apeireth_tools_canonical::SheetOpsApprovalHook`] 唯一承载
+    // —— 每次写面都人批 (无自动放行档); 写总闸 (`file_write`) 关时写动作在
+    // 工具面拒绝即帧 (读面不受影响)。
+    let pipeline = if apeireth_tools_canonical::sheet_ops_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::SHEET_OPS_CAPABILITY_ID.to_string(),
+            ));
+        pipeline.with(Arc::new(
+            apeireth_tools_canonical::SheetOpsApprovalHook::new(),
+        ))
+    } else {
+        pipeline
+    };
+    // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): **开关开 = 注册 +
+    // 授权同源** (同一开关值同时决定装配侧注册与本授权面)。只读档 = **grant
+    // 即用** (零审批, 与 `tool.self_status` 同档): 白名单设备读 + 天气公开读;
+    // 摄像头类敏感读面的显式授权 + 审计在工具边界强制 (审计缺位不放行)。
+    if apeireth_tools_canonical::device::sense::device_sense_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::device::sense::DEVICE_SENSE_CAPABILITY_ID.to_string(),
+            ));
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::device::weather::WEATHER_CAPABILITY_ID.to_string(),
+            ));
+    }
+    // K 轴 L3/L4 受控执行 (`tool.device_control`): **双闸开 = 注册 + 授权同源**
+    // (`APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL` 齐开,
+    // 默认关 fail-closed)。只 grant「工具面有人拍板」, **分级审批档由
+    // [`DeviceControlApprovalHook`] 唯一承载** —— reversible 审批档 (自动档
+    // 子开关只此档可配) / irreversible **永远逐次人批** / money **永远逐次
+    // 人批 + IM 审批卡** (与本地审批面板 / IM 审批卡同一链)。
+    let pipeline =
+        if apeireth_tools_canonical::device::device_control::device_control_enabled_from_env() {
+            policy
+                .lock()
+                .expect("permission policy lock poisoned (0 装诚实)")
+                .grant(Permission::ExecuteTool(
+                    apeireth_tools_canonical::device::device_control::DEVICE_CONTROL_CAPABILITY_ID
+                        .to_string(),
+                ));
+            pipeline.with(Arc::new(
+            apeireth_tools_canonical::device::device_control::DeviceControlApprovalHook::new()
+                .with_auto_pass_reversible(
+                    apeireth_tools_canonical::device::device_control::device_control_auto_pass_reversible_from_env(),
+                ),
+        ))
+        } else {
+            pipeline
+        };
     (pipeline, policy, guard_hook)
 }
 
@@ -1150,8 +1340,16 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     ),
     String,
 > {
-    let (runtime, session_store, memory, policy, guard_hook, _voice_emotion, _care_heartbeat) =
-        build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
+    let (
+        runtime,
+        session_store,
+        memory,
+        policy,
+        guard_hook,
+        _voice_emotion,
+        _care_heartbeat,
+        _cost_router,
+    ) = build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
     Ok((runtime, session_store, memory, policy, guard_hook))
 }
 
@@ -1160,7 +1358,8 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
 /// [`VoiceEmotionSource`] 绑定位与 [`CareHeartbeatSource`] 绑定位 —— 网关装配
 /// 出 presence/PAD 合成器后把情绪源绑上, 发声微调即读合成器现值; 常驻宿主
 /// 把 care 心跳绑定位起成常驻心跳生产者后, 自述关怀节心跳两列转真值
-/// (双闸齐开才起, 见 [`CareHeartbeatSource::start`])。
+/// (双闸齐开才起, 见 [`CareHeartbeatSource::start`])。成本分级路由器绑定位
+/// (H-P2) 同款出口: 任务选型与自述路由节**同一台**路由器 (同源)。
 pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() -> Result<
     (
         Runtime,
@@ -1170,6 +1369,7 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
         Arc<BehaviorChainGuardHook>,
         VoiceEmotionSource,
         CareHeartbeatSource,
+        Arc<apeireth_core::cost_router::CostRouter>,
     ),
     String,
 > {
@@ -1182,17 +1382,24 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
     let cognitive_task = tokio::spawn(async move {
         let voice_emotion = VoiceEmotionSource::default();
         let care_heartbeat = CareHeartbeatSource::new();
-        let (cognitive, memory) =
+        let (cognitive, memory, cost_router) =
             build_cognitive_modules_from_env(cognitive_clock, &voice_emotion, &care_heartbeat)
                 .await?;
-        Ok::<_, String>((cognitive, memory, voice_emotion, care_heartbeat))
+        Ok::<_, String>((
+            cognitive,
+            memory,
+            voice_emotion,
+            care_heartbeat,
+            cost_router,
+        ))
     });
     let session_store = session_task
         .await
         .map_err(|error| format!("session store assembly task failed: {error}"))??;
-    let (cognitive, memory, voice_emotion, care_heartbeat) = cognitive_task
-        .await
-        .map_err(|error| format!("cognitive assembly task failed: {error}"))??;
+    let (cognitive, memory, voice_emotion, care_heartbeat, cost_router) =
+        cognitive_task
+            .await
+            .map_err(|error| format!("cognitive assembly task failed: {error}"))??;
     // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根把它注册进域平面,
     // 与运行时共用**同一把** (每域恰一把, W2-③ 承诺不拆)。
     let sessions = Arc::new(apeireth_runtime::SessionManager::new(
@@ -1209,6 +1416,7 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
         guard_hook,
         voice_emotion,
         care_heartbeat,
+        cost_router,
     ))
 }
 
@@ -1229,7 +1437,9 @@ async fn build_domain_partner_runtime(
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
     // 域伙伴运行时不注入备份导出面 (跨域打包面收口到 owner 本地操作, 见
     // [`default_domain_backup_config`]); 名册照实报 `backup_export: false`。
-    let (cognitive, _memory) = build_cognitive_modules_at(
+    // 路由器绑定位同样丢弃 (本批任务源路由只接 CLI chat 面; 域伙伴运行时的
+    // 自述路由节照实报「尚无任务被路由」)。
+    let (cognitive, _memory, _cost_router) = build_cognitive_modules_at(
         memory_db,
         Arc::clone(&clock),
         None,
@@ -1374,11 +1584,27 @@ fn session_db_path() -> PathBuf {
 ///
 /// Dataset recording is installed during the inner canonical bootstrap and
 /// the returned observation sink is added additively, so both observers see
-/// the same runtime event spine.
-pub async fn build_canonical_runtime_from_env_with_observability(
-) -> Result<(Arc<Runtime>, Arc<apeireth_gateway::RuntimeObservationSink>), String> {
-    let (runtime, sessions, memory, policy, guard_hook) =
-        build_canonical_runtime_with_sessions_from_env().await?;
+/// the same runtime event spine. The third handle is the cost-tier router
+/// (H-P2) bound into the self-report routing section — one router shared by
+/// task selection and self-report (same source of truth).
+pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
+    (
+        Arc<Runtime>,
+        Arc<apeireth_gateway::RuntimeObservationSink>,
+        Arc<apeireth_core::cost_router::CostRouter>,
+    ),
+    String,
+> {
+    let (
+        runtime,
+        sessions,
+        memory,
+        policy,
+        guard_hook,
+        _voice_emotion,
+        _care_heartbeat,
+        cost_router,
+    ) = build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
     let runtime = Arc::new(runtime);
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
@@ -1403,7 +1629,7 @@ pub async fn build_canonical_runtime_from_env_with_observability(
         services.audit_commands.clone(),
     ));
     runtime.add_event_sink(observer.clone());
-    Ok((runtime, observer))
+    Ok((runtime, observer, cost_router))
 }
 
 /// Completed turn or a pending approval that still has its [`ApprovalId`].
@@ -1423,6 +1649,7 @@ async fn build_cognitive_modules_from_env(
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
         Arc<dyn MemoryBackend>,
+        Arc<apeireth_core::cost_router::CostRouter>,
     ),
     String,
 > {
@@ -1459,6 +1686,7 @@ async fn build_cognitive_modules_at(
     (
         apeireth_runtime_assembly::ProductionCognitiveModules,
         Arc<dyn MemoryBackend>,
+        Arc<apeireth_core::cost_router::CostRouter>,
     ),
     String,
 > {
@@ -1470,6 +1698,10 @@ async fn build_cognitive_modules_at(
     };
     use apeireth_runtime_assembly::{CognitiveBackends, CognitiveModuleConfig, JudgeConfig};
     use apeireth_storage::SqliteConnectionPool;
+
+    // 成本分级路由 (H-P2): 画像表 + 生效模型 + 配置面装配一台路由器 ——
+    // 自述路由节与任务选型**同一台** (同源)。坏配置拒开 (启动错误正式通道)。
+    let cost_router = cost_router_from_env()?;
 
     let path = memory_db;
     let pool = Arc::new(
@@ -1756,6 +1988,40 @@ async fn build_cognitive_modules_at(
         proposals: apeireth_tools_canonical::proposal::ProposalConfig::from_env(
             default_panel_data_dir(),
         ),
+        // 创作工具面 W1 (`tool.image_ops`, 受控文件写族): 注册即闸 (旋钮开 +
+        // `file_write` 唯一写总闸 + 工作区根, 注册条件在组装根把关); 输出写归档
+        // 文件写入族, 每次图像写入都人批 (授权面同源 grant + require_approval)。
+        // 自述创作节与工具面同一计数器。
+        image_ops: image_ops_enabled_from_env(),
+        // 创作工具面 W2 · 文档操作 (`tool.doc_ops`, 受控读写族): 注册即闸
+        // (`APEIRETH_ENABLE_DOC_OPS` 旋钮开才注入配置, 默认关 fail-closed)。
+        // 写总闸由组装根注入 (`file_write` 同一开关值, 关 = 拒写不拒读);
+        // 自述创作节与工具面同一计数器 (探针随配置注入)。
+        doc_ops: apeireth_tools_canonical::DocOpsConfig::from_env(workspace_root.clone()),
+        // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`, 受控读写族): 注册即闸
+        // (`APEIRETH_ENABLE_SHEET_OPS` 旋钮开才注入配置, 默认关 fail-closed)。
+        // 写总闸由组装根注入 (`file_write` 同一开关值, 关 = 拒写不拒读);
+        // 自述创作节与工具面同一计数器 (探针随配置注入)。
+        sheet_ops: apeireth_tools_canonical::SheetOpsConfig::from_env(workspace_root.clone()),
+        // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): 注册即闸
+        // (`APEIRETH_ENABLE_DEVICE_SENSE` 旋钮开才注入落位, 默认关 fail-closed)。
+        // 设备表 = 数据目录 `devices.json` (StoredDoc 拒开, 白名单制默认零设备);
+        // 天气 = mock 档 (如实标注数据源); 自述在场节与工具面同表同源。
+        device_sense: apeireth_tools_canonical::device::sense::DeviceSenseConfig::from_env(
+            default_panel_data_dir(),
+        ),
+        weather: apeireth_tools_canonical::device::weather::WeatherConfig::from_env(
+            default_panel_data_dir(),
+        ),
+        // K 轴 L3/L4 受控执行 (`tool.device_control`): 注册即闸 (双闸
+        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`
+        // 齐开才注入配置, 默认关 fail-closed)。白名单 = `devices.json` 同一本
+        // 设备表 (只读消费); 执行面 = mock 适配器 (真实协议族后插) + 状态账
+        // `device-actions.jsonl` (append-only); 自述设备节与工具面同账。
+        device_control:
+            apeireth_tools_canonical::device::device_control::DeviceControlConfig::from_env(
+                default_panel_data_dir(),
+            ),
         ..CognitiveModuleConfig::default()
     };
     let sqlite_backend = Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));
@@ -1869,6 +2135,11 @@ async fn build_cognitive_modules_at(
             let table = model_profile_table_from_env()?;
             active_model_id().map(|model| table.resolve(&model).into_owned())
         },
+        // 自省通道: 成本分级路由节 (H-P2) —— 主开关 + 最近一次路由决策真值
+        // 同源现读 (尚无任务被路由照实报, 不编档位/选定)。
+        self_status_cost_routing: Some(apeireth_runtime_assembly::cost_routing_probe(Arc::clone(
+            &cost_router,
+        ))),
         // 自省通道: 用户域节探测口 (W3-① 接线, 兑现 W3-2 报备的域面归口):
         // 首次组装 = 采用语义 (数据根原位数据标记为默认用户域, 零迁移零丢失),
         // 域节报当前域 id/角色/域内计数真值 (坏域配置在可失败边界拒开)。
@@ -1925,7 +2196,7 @@ async fn build_cognitive_modules_at(
     let modules =
         apeireth_runtime_assembly::ProductionCognitiveModules::build(config, backends, clock)
             .map_err(|error| error.to_string())?;
-    Ok((modules, memory))
+    Ok((modules, memory, cost_router))
 }
 
 /// 认知侧 LLM 工厂 (council / orchestrator / dream) 的凭据解析链与主 runtime
@@ -2337,7 +2608,11 @@ pub async fn dispatch_canonical_chat(
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
         .transpose()?;
-    let (runtime, observer) = build_canonical_runtime_from_env_with_observability().await?;
+    let (runtime, observer, cost_router) =
+        build_canonical_runtime_from_env_with_observability().await?;
+    // 成本分级路由 (H-P2 任务选型): 显式 `--model` > 路由选定 > 默认模型;
+    // 开关关 = fail-closed 零行为变化。路由决策即自述路由节真值 (同一路由器)。
+    let model = resolve_turn_model(model, &cost_router, &prompt);
     let result = execute_canonical_cli_turn(&runtime, prompt.as_str(), model, session).await;
     observer.flush().await;
     // 普通用户自动调参: 回合一结束回写用量（best-effort, 不影响回合结果;
@@ -2497,7 +2772,9 @@ pub async fn dispatch_canonical_approval(
     let approval = approval
         .parse::<ApprovalId>()
         .map_err(|error| error.to_string())?;
-    let (runtime, observer) = build_canonical_runtime_from_env_with_observability().await?;
+    // 审批延续回合沿用原请求的模型 (模型已在原回合定好), 本路径不重路由。
+    let (runtime, observer, _cost_router) =
+        build_canonical_runtime_from_env_with_observability().await?;
     let result = resolve_canonical_cli_approval(&runtime, session, approval, decision).await;
     observer.flush().await;
     result
@@ -2889,8 +3166,19 @@ pub async fn dispatch_gateway_serve_with(
         None => None,
     };
 
-    let (runtime, sessions, memory, policy, guard_hook, voice_emotion, care_heartbeat) =
-        build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
+    // 机械补位 (编译断点, 网关语义零改动): 组装出口新增路由器绑定位 (H-P2),
+    // 网关路径不接任务源路由, 丢弃该绑定位 —— 其自述路由节照实报「尚无任务
+    // 被路由」(网关面路由接线不在本批战场)。
+    let (
+        runtime,
+        sessions,
+        memory,
+        policy,
+        guard_hook,
+        voice_emotion,
+        care_heartbeat,
+        _cost_router,
+    ) = build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
     let runtime = Arc::new(runtime);
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
@@ -2947,6 +3235,22 @@ pub async fn dispatch_gateway_serve_with(
     services.skills = Some(Arc::new(
         crate::gateway_panels::CliSkillShelf::under_data_dir(&data_dir),
     ));
+    // 关怀面板只读面 (GET /v1/panel/care): `care_list` 帧同形 + 关怀节真值
+    // (含心跳两列) —— 与 `tool.care_schedule` 同一 `care_rules.json` 同一拒开
+    // 口径; 心跳两列现读常驻心跳生产者真值 (与自述关怀节同一绑定, 未起 = 显式
+    // null, 不冒充在跑)。只读零写面 (改规则走工具面, 每调用停人工审批)。
+    services.care = Some(Arc::new(crate::gateway_panels::CliCarePanel::new(
+        default_panel_data_dir(),
+        care_heartbeat.status_probe(),
+    )));
+    // 性格面板只读面 (GET /v1/panel/traits): 四滑杆现值/锁定态/最近移动 ——
+    // 与 `tool.trait_report` **同账同源** (同一成长计既有账 tuning-log.jsonl +
+    // 同一锁定档 trait-locks.json)。只读零写面 (锁定/解锁走 CLI 显式动作)。
+    services.traits = Some(Arc::new(crate::gateway_panels::CliTraitPanel::new(
+        apeireth_runtime_assembly::TraitGrowthPaths::new(
+            apeireth_runtime_assembly::tuning_log_path(),
+        ),
+    )));
     // 任务面板面 (`GET /v1/panel/tasks` 只读 + `POST .../human-judge-retry` 人判
     // 重试): 与 `tool.task_board` 工具面**同队同账** (同一 `sessions.sqlite3`
     // 任务表), 附从句柄不重复崩溃恢复 (恢复点只归工具面主句柄的 `open`)。

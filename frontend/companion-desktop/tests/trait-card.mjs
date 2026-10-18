@@ -4,7 +4,11 @@
 //      top_reasons（降序 + 同数字典序、5 封顶）/ last_move —— 与
 //      orchestration::trait_report 同账同语义（同批 fixture 对照钉死）。
 //   3. 最近移动：新 → 旧、≤4 条、零移动留痕与未来不计。
-//   4. 锁定/解锁按钮 = CLI 指引（trait 管理面无 HTTP 面，读码定：只读 + 指引）。
+//   4. 锁定/解锁按钮 = CLI 指引（锁定/解锁写面无 HTTP 面，面板只有只读面
+//      /v1/panel/traits：只读 + 指引）。
+//   5. 换源渲染：真源 = runtime.fetchTraits（GET /v1/panel/traits，与
+//      tool.trait_report 同账同源）；坏行丢弃不编默认值；读面缺席 = 缺源「—」
+//      诚实空态（TRAIT_LOCK_NO_FACE）。
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
@@ -183,7 +187,9 @@ check('锁定态: 已锁定/未锁定如实显示；缺源「—」+ 真因（�
   assert.equal(byParam.memory_fade.locked, '已锁定');
   assert.equal(byParam.curiosity_strength.locked, '未锁定');
   assert.equal(byParam.tone_saturation.locked, '—', '缺源 = 「—」（不冒充）');
-  assert.ok(byParam.tone_saturation.lockedNote.includes('暂无面板读面'));
+  // 演进断言（面板读面微批）：锁定态真源已换 GET /v1/panel/traits，缺源文案改
+  // 「暂无接口」（读面缺席 501/404 的诚实空态）；「不冒充未锁定」语义不变。
+  assert.ok(byParam.tone_saturation.lockedNote.includes('暂无接口'));
   assert.ok(TRAIT_LOCK_NO_FACE.includes('不拿「未锁定」冒充未知'));
 
   const noFace = traitCardView({values: null, locks: null, moves: [], nowMs: NOW});
@@ -228,7 +234,7 @@ check('CLI 指引: lock/unlock/report 命令逐字 + 按钮只给指引零代跑
   );
   assert.ok(panelSrc.includes('traitLockCommand('), '锁定/解锁按钮走 CLI 指引纯函数');
   assert.ok(!panelSrc.includes('fetch('), '性格卡零 fetch');
-  assert.ok(!panelSrc.includes('invoke('), '性格卡零 IPC 写面（readTuningLog 取数缝在外）');
+  assert.ok(!panelSrc.includes('invoke('), '性格卡零 IPC 写面（取数缝 = runtime 只读 fetch）');
   assert.ok(!/\b(POST|PATCH|DELETE|PUT)\b/.test(panelSrc), '性格卡零写动词');
   assert.ok(panelSrc.includes('界面不代跑'), '不代跑口径上屏');
   assert.ok(!traitSrc.includes('fetch('), '性格逻辑件零网络面');
@@ -256,9 +262,134 @@ check('源码镜像: 周报区块/锁定指引/工作台接线/取数缝', () =>
   assert.ok(panelSrc.includes('view.lockGuidance'), '锁定指引区在案');
   assert.ok(panelSrc.includes('只读纪律'), '只读纪律脚注在案');
   assert.ok(workbenchSrc.includes('<TraitCard'), '工作台挂性格卡');
-  assert.ok(workbenchSrc.includes('readTuningLog()'), '最近移动取数缝 ← 桌面 IPC 真源');
-  assert.ok(workbenchSrc.includes('capabilityEnvFromConfig'), '现值 = 下发旋钮值（APEIRETH_TUNE_* 同源）');
+  // 演进断言（面板读面微批）：取数缝真源从桌面 IPC（readTuningLog）/ 下发旋钮值
+  // 换成面板读面 GET /v1/panel/traits（与 tool.trait_report 同账同源；现值 = 生效
+  // 值真值，不再拿下发旋钮值冒充）——旧两套取数路径清掉，不留双源。
+  assert.ok(workbenchSrc.includes('loadTraits={'), '一行换源：注入缝接真源');
+  assert.ok(workbenchSrc.includes('fetchTraits(config)'), '真源 = runtime.fetchTraits');
+  assert.ok(!workbenchSrc.includes('readTuningLog()'), '旧桌面 IPC 缝已换（不留双源）');
   assert.ok(traitSrc.includes('tool.trait_report'), '权威读面口径在案（不冒充工具读面）');
 });
+
+// ---------------------------------------------------------------------------
+// 6. 换源渲染（真模块 runtime.fetchTraits → traitCardView）：现值/锁定态/最近移动/
+//    周报全真值（与 tool.trait_report 同账）；坏行丢弃；501/404 = 缺源「—」保留
+// ---------------------------------------------------------------------------
+{
+  const runtime = await import('../src/lib/runtime.ts');
+  /** 合同形状样例：GET /v1/panel/traits（values/locked/recent_moves/records/skipped_records）。 */
+  const TRAIT_FACE_BODY = {
+    values: {memory_fade: 1.25, curiosity_strength: 1, tone_saturation: 1, consolidation_cadence: 1},
+    locked: {
+      memory_fade: true,
+      curiosity_strength: false,
+      tone_saturation: false,
+      consolidation_cadence: false,
+    },
+    recent_moves: [
+      {param: 'memory_fade', label: '遗忘衰减强度', at_epoch_ms: NOW - DAY_MS, delta: 0.25, reason: '上调一档'},
+    ],
+    records: [
+      {seq: 1, param: 'tone_saturation', previous: 1, next: 1.2, reason: '过平淡', at_epoch_ms: NOW - 2 * DAY_MS},
+      {seq: 2, param: 'memory_fade', previous: 1, next: 1.25, reason: '上调一档', at_epoch_ms: NOW - DAY_MS},
+      {seq: 99, param: 'broken-row'}, // 形状不符行：丢弃，不编默认值
+    ],
+    skipped_records: 1,
+  };
+  const realFetch = globalThis.fetch;
+  const realWindow = globalThis.window;
+  const calls = [];
+  globalThis.window = {
+    __TAURI_INTERNALS__: {
+      invoke: async (cmd) => (cmd === 'get_gateway_token' ? 'tok-trait-face-1' : null),
+    },
+  };
+  globalThis.fetch = async (input, init) => {
+    calls.push({url: String(input), headers: new Headers(init?.headers)});
+    return new Response(JSON.stringify(TRAIT_FACE_BODY), {
+      status: 200,
+      headers: {'content-type': 'application/json'},
+    });
+  };
+  try {
+    const snapshot = await runtime.fetchTraits({baseUrl: 'http://gateway.test', apiKey: '', model: ''});
+    assert.equal(calls.length, 1, '换源后取数只走读面一次');
+    assert.ok(
+      calls[0].url.endsWith('/v1/panel/traits'),
+      `真源 = GET /v1/panel/traits（实际=${calls[0].url}）`,
+    );
+    assert.equal(
+      calls[0].headers.get('authorization'),
+      'Bearer tok-trait-face-1',
+      '只读面同过令牌门缝（gatewayAuthHeaders 单源）',
+    );
+    assert.ok(snapshot !== null, '200 = 真值快照');
+    assert.equal(snapshot.moves.length, 2, '形状不符行丢弃（不编默认值）');
+    assert.equal(snapshot.skippedRecords, 1, '坏行计数真值透传');
+    const view = traitCardView({
+      values: snapshot.values,
+      locks: snapshot.locks,
+      moves: snapshot.moves,
+      skippedRecords: snapshot.skippedRecords,
+      nowMs: NOW,
+    });
+    const byParam = Object.fromEntries(view.sliderRows.map((row) => [row.param, row]));
+    assert.equal(byParam.memory_fade.value, '1.25', '现值真值上屏');
+    assert.equal(byParam.memory_fade.locked, '已锁定', '锁定态真值（换源后不再「—」）');
+    assert.equal(byParam.memory_fade.lastMoveNote, '上调一档', '最近移动真值');
+    assert.equal(byParam.tone_saturation.locked, '未锁定', '缺档默认全解锁如实');
+    assert.equal(view.recentMoveRows.map((row) => row.reason).join(','), '上调一档,过平淡', '新 → 旧');
+    const totals = Object.fromEntries(view.week.totals.map((row) => [row.key, row]));
+    assert.equal(totals.records_in_window.value, '2', '周报同账投影（窗内账面行）');
+    assert.equal(totals.skipped_records.value, '1', '坏行计数真值（不再「—」）');
+    const fade = view.week.rows.find((row) => row.param === 'memory_fade');
+    assert.equal(fade.netDelta, '+0.25');
+    assert.equal(fade.moveCount, '1');
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realWindow === undefined) delete globalThis.window;
+    else globalThis.window = realWindow;
+  }
+  check('换源后性格真值渲染: fetchTraits 真数据点亮现值/锁定态/最近移动/周报（坏行丢弃）', () => {});
+}
+
+{
+  // 读面缺席（501/404）→ null = 缺源「—」诚实空态承接；陌生载荷同判 null
+  // （不把不认识的响应冒充空账）。
+  const runtime = await import('../src/lib/runtime.ts');
+  const {normalizeTraitSnapshot} = await import('../src/lib/trait-card.ts');
+  const realFetch = globalThis.fetch;
+  try {
+    for (const status of [501, 404]) {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify({error: {code: 'unsupported'}}), {
+          status,
+          headers: {'content-type': 'application/json'},
+        });
+      const snapshot = await runtime.fetchTraits({baseUrl: 'http://gateway.test', apiKey: '', model: ''});
+      assert.equal(snapshot, null, `读面缺席 ${status} → null（诚实空态）`);
+    }
+    assert.equal(normalizeTraitSnapshot({bogus: 1}), null, '陌生载荷 → null（不冒充空账）');
+    const empty = normalizeTraitSnapshot({records: [], skipped_records: 0, values: {}, locked: {}});
+    assert.deepEqual(empty.moves, [], '空账按空报（0 = 测得为零）');
+    assert.equal(empty.values.memory_fade, null, '缺键显式 null（不编数）');
+    assert.equal(empty.locks.memory_fade, null, '缺键显式 null（不编「未锁定」）');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  check('换源后读面缺席: 501/404 → null（TRAIT_LOCK_NO_FACE 诚实空态保留）', () => {});
+}
+
+{
+  // 源码镜像：换源接线（loadTraits 注入缝 ← fetchTraits 只读面）。
+  const runtimeSrc = readFileSync(join(testsDir, '..', 'src', 'lib', 'runtime.ts'), 'utf8');
+  assert.ok(runtimeSrc.includes('/v1/panel/traits'), 'runtime.ts 只读 fetch 面在案');
+  assert.ok(
+    /fetchTraits[\s\S]{0,500}gatewayAuthHeaders\(\)/.test(runtimeSrc),
+    'fetchTraits 过令牌门缝（gatewayAuthHeaders 单源）',
+  );
+  assert.ok(workbenchSrc.includes('fetchTraits(config)'), '真源 = runtime.fetchTraits');
+  check('源码镜像: 换源接线（loadTraits 注入缝 ← runtime.fetchTraits）', () => {});
+}
 
 console.log('trait-card: all checks passed');

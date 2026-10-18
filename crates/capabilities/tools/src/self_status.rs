@@ -21,6 +21,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use apeireth_core::cost_router::CostRoutingStatus;
 use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_core::model_profile::ModelProfile;
 use apeireth_core::RELEASE_VERSION;
@@ -577,11 +578,28 @@ pub struct ProposalStatusEntry {
     pub state: String,
 }
 
+/// 自述提案节的「最近推送」一行 (只回提案 id / 渠道 / 时刻 / 推送结果, 不回卡正文)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposalPushStatusEntry {
+    /// 提案 id (推送幂等键)。
+    pub proposal_id: String,
+    /// 推送到的 IM 渠道 id。
+    pub channel_id: String,
+    /// 推送时刻 (epoch 毫秒)。
+    pub at_ms: i64,
+    /// 推送结果标签 (`pushed` / `failed`; `failed` = 留账待重试, 如实)。
+    pub outcome: String,
+}
+
 /// 提案一节 (自主度第一小步 · 边角料提案面): 待审数 / 分态计数 / 最近提案。
 ///
 /// 计数与 `tool.proposal_draft` 工具面同一本提案账 (`proposals.jsonl`) 同一
 /// 真值源; 「最近提案」有界 (5 条), 只回 id/kind/标题/状态不回 detail/payload
 /// 正文; 探测口缺位/失败 = 全维显式 null + `reason` (0 装诚实, 不编数)。
+///
+/// **推送列** (自主度提案面接线批): `pushed` / `recent_pushes` 与提案卡推送账
+/// (`proposal-pushes.jsonl`) 同一真值源 —— 已推送数 / 最近推送随自述上报,
+/// 失败推送照实标 `failed` (留账待重试, 不藏)。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProposalStatus {
     /// 待审数 (已入账还没点头/摇头)。
@@ -594,6 +612,14 @@ pub struct ProposalStatus {
     pub total: u64,
     /// 最近提案 (有界, 新在前)。
     pub recent: Vec<ProposalStatusEntry>,
+    /// 已推送数 (成功推到 IM 渠道的去重提案 id 计数; 幂等键 = 提案 id)。
+    /// `#[serde(default)]`: 旧自述载荷无此列照读 (存量 = 0)。
+    #[serde(default)]
+    pub pushed: u64,
+    /// 最近推送 (有界, 新在前; 含 `failed` 留账行, 如实)。
+    /// `#[serde(default)]`: 旧自述载荷无此列照读 (存量 = 空)。
+    #[serde(default)]
+    pub recent_pushes: Vec<ProposalPushStatusEntry>,
     /// 备注 (「尚无提案记录」/ 坏行跳过如实注)。
     pub note: Option<String>,
     /// 探测缺位/失败的原因 (全维就位时 `None`)。
@@ -609,6 +635,205 @@ impl ProposalStatus {
             rejected: 0,
             total: 0,
             recent: Vec::new(),
+            pushed: 0,
+            recent_pushes: Vec::new(),
+            note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 创作节逐操作计数一行 (闭合词表成员名 + 计数; 0 = 本进程未跑过该操作, 如实)。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageOpsOpCount {
+    /// 操作词表成员名 (`resize` / `crop` / `rotate` / ...)。
+    pub operation: String,
+    /// 应用计数。
+    pub count: u64,
+}
+
+/// 创作节 (创作工具面 W1 · 图像操作): 最近操作计数, 只计数不回路径, 如实。
+///
+/// 计数口径与 `tool.image_ops` 工具面同一实例同一真值源: **进程内计数**
+/// (本进程生命周期内的最近操作, 重启清零), 不落账不造账 —— 0 装诚实,
+/// 不拿磁盘账冒充。`last_op_at_ms` / `last_call_ops` 为 `None` = 尚无操作
+/// (显式 null + `note` 如实注「尚无操作记录」), 绝不编造时刻或序列;
+/// `denied` = 拒绝即帧次数 (错误即帧也计数, 不藏拒绝)。脱敏口径: 本节
+/// **零路径零文件名**, 只回计数与操作名。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageOpsStatus {
+    /// 工具调用次数 (成败都计)。
+    pub calls: u64,
+    /// 成功应用的操作步数累计 (管道内每一步都计)。
+    pub ops_applied: u64,
+    /// 拒绝即帧次数。
+    pub denied: u64,
+    /// 闭合词表逐操作计数 (行序 = 词表序; 0 = 未跑, 不省行)。
+    pub by_operation: Vec<ImageOpsOpCount>,
+    /// 最近一次成功操作时刻 (epoch 毫秒); `None` = 尚无操作。
+    pub last_op_at_ms: Option<i64>,
+    /// 最近一调用的操作序列 (`resize -> grayscale` 词表名, 有界)。
+    pub last_call_ops: Option<String>,
+    /// 备注 (「尚无操作记录」/ 计数口径注记)。
+    pub note: Option<String>,
+    /// 探测缺位/失败的原因 (真值齐全时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl ImageOpsStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null/零 + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            calls: 0,
+            ops_applied: 0,
+            denied: 0,
+            by_operation: Vec::new(),
+            last_op_at_ms: None,
+            last_call_ops: None,
+            note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 创作节逐操作计数一行 (W2 文档操作: 闭合词表成员名 + 计数; 0 = 本进程未跑过,
+/// 如实不省行)。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocOpsOpCount {
+    /// 操作词表成员名 (`pdf_info` / `pdf_extract_text` / ...)。
+    pub operation: String,
+    /// 成功执行计数。
+    pub count: u64,
+}
+
+/// 创作节 (创作工具面 W2 · 文档操作): 进程内计数, 只计数不回路径, 如实。
+///
+/// 计数口径与 `tool.doc_ops` 工具面同一实例同一真值源: **进程内计数**
+/// (重启清零), 不落账不造账。`last_op_at_ms` / `last_action` 为 `None` =
+/// 尚无操作 (显式 null + `note` 如实注「尚无操作记录」), 绝不编造时刻或动作;
+/// `denied` = 拒绝即帧次数 (错误即帧也计数, 不藏拒绝); `pages_touched` =
+/// 读+写处理页数累计。脱敏口径: 本节**零路径零文件名**, 只回计数与操作名。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocOpsStatus {
+    /// 工具调用次数 (成败都计)。
+    pub calls: u64,
+    /// 读+写处理页数累计。
+    pub pages_touched: u64,
+    /// 拒绝即帧次数。
+    pub denied: u64,
+    /// 闭合词表逐操作成功计数 (行序 = 词表序; 0 = 未跑, 不省行)。
+    pub by_operation: Vec<DocOpsOpCount>,
+    /// 最近一次成功操作时刻 (epoch 毫秒); `None` = 尚无操作。
+    pub last_op_at_ms: Option<i64>,
+    /// 最近一次成功动作词表名; `None` = 尚无操作。
+    pub last_action: Option<String>,
+    /// 备注 (「尚无操作记录」/ 计数口径注记)。
+    pub note: Option<String>,
+    /// 探测缺位/失败的原因 (真值齐全时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl DocOpsStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null/零 + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            calls: 0,
+            pages_touched: 0,
+            denied: 0,
+            by_operation: Vec::new(),
+            last_op_at_ms: None,
+            last_action: None,
+            note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 创作节逐操作计数一行 (K3 表格操作: 闭合词表动作名 + 计数; 0 = 本进程未
+/// 跑过, 如实不省行)。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SheetOpsOpCount {
+    /// 操作词表动作名 (`read` / `summary` / `filter` / `sort` / `aggregate` /
+    /// `formula` / `export_csv`)。
+    pub operation: String,
+    /// 成功执行计数。
+    pub count: u64,
+}
+
+/// 创作节 (创作工具面 K3 · 表格操作): 进程内计数, 只计数不回路径, 如实。
+///
+/// 计数口径与 `tool.sheet_ops` 工具面同一实例同一真值源: **进程内计数**
+/// (重启清零), 不落账不造账。`last_op_at_ms` / `last_action` 为 `None` =
+/// 尚无操作 (显式 null + `note` 如实注「尚无操作记录」), 绝不编造时刻或动作;
+/// `denied` = 拒绝即帧次数 (错误即帧也计数, 不藏拒绝); `rows_touched` =
+/// 读+写处理行数累计。脱敏口径: 本节**零路径零文件名**, 只回计数与操作名。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SheetOpsStatus {
+    /// 工具调用次数 (成败都计)。
+    pub calls: u64,
+    /// 读+写处理行数累计。
+    pub rows_touched: u64,
+    /// 拒绝即帧次数。
+    pub denied: u64,
+    /// 闭合词表逐动作成功计数 (行序 = 词表序; 0 = 未跑, 不省行)。
+    pub by_operation: Vec<SheetOpsOpCount>,
+    /// 最近一次成功操作时刻 (epoch 毫秒); `None` = 尚无操作。
+    pub last_op_at_ms: Option<i64>,
+    /// 最近一次成功动作词表名; `None` = 尚无操作。
+    pub last_action: Option<String>,
+    /// 备注 (「尚无操作记录」/ 计数口径注记)。
+    pub note: Option<String>,
+    /// 探测缺位/失败的原因 (真值齐全时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl SheetOpsStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null/零 + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            calls: 0,
+            rows_touched: 0,
+            denied: 0,
+            by_operation: Vec::new(),
+            last_op_at_ms: None,
+            last_action: None,
+            note: None,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// 在场节 (K 轴 L1 在场感知): 设备数 / 白名单数 / 最近感知, 真值如实。
+///
+/// 计数与 `tool.device_sense` 工具面同一本设备表 (`devices.json`) 同一真值源:
+/// `devices` = 表内设备总数 (含停用), `whitelisted` = 白名单数 (enabled 才可
+/// 感知, 白名单制默认零设备)。「最近感知」两列 `None` = 尚无感知 (显式 null,
+/// 不编时间); 来源是**进程内计数** (重启清零, `note` 如实注明)。设备表拒开
+/// (StoredDoc 语义) = 全维显式 null + `reason` (0 装诚实, 不编数)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DevicePresenceStatus {
+    /// 设备数 (`devices.json` 表内行数, 含停用)。
+    pub devices: Option<u64>,
+    /// 白名单数 (表内且 `enabled`, 底线①: 显式启用才可感知)。
+    pub whitelisted: Option<u64>,
+    /// 最近感知时刻 (epoch 毫秒); `None` = 尚无感知。
+    pub last_sense_at_ms: Option<i64>,
+    /// 最近感知摘要 (有界: 几台/什么源; `None` = 尚无感知)。
+    pub last_sense_note: Option<String>,
+    /// 备注 (缺省表注 / 进程内计数口径注记)。
+    pub note: Option<String>,
+    /// 探测缺位/失败的原因 (真值齐全时 `None`)。
+    pub reason: Option<String>,
+}
+
+impl DevicePresenceStatus {
+    /// 不可用 (探测口缺位/失败): 全维显式 null + 原因。
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            devices: None,
+            whitelisted: None,
+            last_sense_at_ms: None,
+            last_sense_note: None,
             note: None,
             reason: Some(reason.into()),
         }
@@ -747,6 +972,26 @@ pub struct SelfStatusSnapshot {
     pub proposal: Option<ProposalStatus>,
     /// 提案一节不可用的原因; 可用时为 `None`。
     pub proposal_reason: Option<String>,
+    /// 成本分级路由一节 (H-P2: 当前档/选定模型/回退标注真值)。
+    pub cost_routing: Option<CostRoutingStatus>,
+    /// 成本分级路由一节不可用的原因; 可用时为 `None`。
+    pub cost_routing_reason: Option<String>,
+    /// 创作节 (创作工具面 W1: 最近操作计数, 只计数不回路径)。
+    pub image_ops: Option<ImageOpsStatus>,
+    /// 创作节不可用的原因; 可用时为 `None`。
+    pub image_ops_reason: Option<String>,
+    /// 创作节 (创作工具面 W2 · 文档操作: 进程内计数, 只计数不回路径)。
+    pub doc_ops: Option<DocOpsStatus>,
+    /// 创作文档操作节不可用的原因; 可用时为 `None`。
+    pub doc_ops_reason: Option<String>,
+    /// 在场节 (K 轴 L1 在场感知: 设备数/白名单数/最近感知)。
+    pub device_presence: Option<DevicePresenceStatus>,
+    /// 在场节不可用的原因; 可用时为 `None`。
+    pub device_presence_reason: Option<String>,
+    /// 创作节 (创作工具面 K3 · 表格操作: 进程内计数, 只计数不回路径)。
+    pub sheet_ops: Option<SheetOpsStatus>,
+    /// 创作表格操作节不可用的原因; 可用时为 `None`。
+    pub sheet_ops_reason: Option<String>,
 }
 
 impl SelfStatusSnapshot {
@@ -781,6 +1026,16 @@ impl SelfStatusSnapshot {
             persona_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             proposal: None,
             proposal_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            cost_routing: None,
+            cost_routing_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            image_ops: None,
+            image_ops_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            doc_ops: None,
+            doc_ops_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            device_presence: None,
+            device_presence_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            sheet_ops: None,
+            sheet_ops_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
         }
     }
 }
@@ -840,6 +1095,24 @@ pub const SELF_STATUS_SECTIONS: &[&str] = &[
     // 自主度第一小步: 提案节入十五节合同 (形状冻结的演进, 附理由: 边角料
     // 提案面的待审数/分态计数/最近提案真值 —— 人审面要知道有多少提案待看)。
     "proposal",
+    // H-P2: 成本分级路由节入十六节合同 (形状冻结的演进, 附理由: 成本分级
+    // 路由的当前档/选定模型/回退标注真值自述化 —— 选型可解释、回退不粉饰)。
+    "cost_routing",
+    // 创作工具面 W1: 创作节入十七节合同 (形状冻结的演进, 附理由: 图像操作
+    // 的最近操作计数自述化 —— agent 创作面的用量如实可见; 只计数不回路径)。
+    "image_ops",
+    // 创作工具面 W2: 文档操作节入十八节合同 (形状冻结的演进, 附理由: 文档
+    // 读写族的进程内计数自述化 —— 读了/写了多少页、拒了多少次如实可见;
+    // 只计数不回路径, 与 image_ops 创作节同口径)。
+    "doc_ops",
+    // K 轴 L1 在场感知: 在场节入十九节合同 (形状冻结的演进, 附理由: 物理在场
+    // 骨架的设备数/白名单数/最近感知真值自述化 —— 白名单制默认零设备的实况
+    // 要让 agent 自己看得见; 最近感知为进程内计数口径, 如实注明)。
+    "presence",
+    // 创作工具面 K3: 表格操作节入二十节合同 (形状冻结的演进, 附理由: 表格
+    // 读写族的进程内计数自述化 —— 读了/写了多少行、拒了多少次如实可见;
+    // 只计数不回路径, 与 image_ops/doc_ops 创作节同口径)。
+    "sheet_ops",
 ];
 
 /// 把一份自述投影成结构化 JSON (字段合同的唯一实现)。
@@ -994,6 +1267,55 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "prices_display": PRICE_NOT_PROVIDED,
             "reason": snapshot
                 .model_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    let cost_routing = match &snapshot.cost_routing {
+        Some(status) => {
+            let decision = status.decision.as_ref();
+            json!({
+                "enabled": status.enabled,
+                "tier": decision.map(|decision| decision.tier.as_str()),
+                "tier_source": decision.map(|decision| decision.tier_source.as_str()),
+                "selected_model": decision.and_then(|decision| decision.selected_model.clone()),
+                "price_display": decision
+                    .and_then(|decision| decision.selected_profile.as_ref())
+                    .map(prices_display)
+                    .unwrap_or_else(|| PRICE_NOT_PROVIDED.to_string()),
+                "used_fallback": decision.map(|decision| decision.used_fallback),
+                "fallback_reason": decision.and_then(|decision| decision.fallback_reason.clone()),
+                "selected_reason": decision.map(|decision| decision.selection_reason.clone()),
+                "candidates": decision
+                    .map(|decision| {
+                        decision
+                            .candidates
+                            .iter()
+                            .map(|profile| {
+                                json!({
+                                    "model_id": profile.model_id,
+                                    "price_display": prices_display(profile),
+                                })
+                            })
+                            .collect::<Vec<Value>>()
+                    })
+                    .unwrap_or_default(),
+                "reason": status.reason.clone(),
+            })
+        }
+        None => json!({
+            "enabled": null,
+            "tier": null,
+            "tier_source": null,
+            "selected_model": null,
+            "price_display": PRICE_NOT_PROVIDED,
+            "used_fallback": null,
+            "fallback_reason": null,
+            "selected_reason": null,
+            "candidates": [],
+            "reason": snapshot
+                .cost_routing_reason
                 .clone()
                 .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
         }),
@@ -1179,6 +1501,9 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "rejected": status.rejected,
             "total": status.total,
             "recent": status.recent,
+            // 推送列 (自主度提案面接线): 已推送数 / 最近推送, 与推送账同源。
+            "pushed": status.pushed,
+            "recent_pushes": status.recent_pushes,
             "note": status.note,
             "reason": snapshot
                 .proposal_reason
@@ -1191,9 +1516,128 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "rejected": null,
             "total": null,
             "recent": null,
+            "pushed": null,
+            "recent_pushes": null,
             "note": null,
             "reason": snapshot
                 .proposal_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    // 创作节 (创作工具面 W1): 最近操作计数, 只计数不回路径 (脱敏口径)。
+    let image_ops = match &snapshot.image_ops {
+        Some(status) => json!({
+            "calls": status.calls,
+            "ops_applied": status.ops_applied,
+            "denied": status.denied,
+            "by_operation": status.by_operation,
+            "last_op_at_ms": status.last_op_at_ms,
+            "last_call_ops": status.last_call_ops,
+            "note": status.note,
+            "reason": snapshot
+                .image_ops_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "calls": null,
+            "ops_applied": null,
+            "denied": null,
+            "by_operation": null,
+            "last_op_at_ms": null,
+            "last_call_ops": null,
+            "note": null,
+            "reason": snapshot
+                .image_ops_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    // 创作节 (创作工具面 W2 · 文档操作): 进程内计数, 只计数不回路径 (脱敏口径)。
+    let doc_ops = match &snapshot.doc_ops {
+        Some(status) => json!({
+            "calls": status.calls,
+            "pages_touched": status.pages_touched,
+            "denied": status.denied,
+            "by_operation": status.by_operation,
+            "last_op_at_ms": status.last_op_at_ms,
+            "last_action": status.last_action,
+            "note": status.note,
+            "reason": snapshot
+                .doc_ops_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "calls": null,
+            "pages_touched": null,
+            "denied": null,
+            "by_operation": null,
+            "last_op_at_ms": null,
+            "last_action": null,
+            "note": null,
+            "reason": snapshot
+                .doc_ops_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    // 在场节 (K 轴 L1 在场感知): 设备数/白名单数/最近感知, 真值如实 (白名单制
+    // 默认零设备); 最近感知为进程内计数口径, 缺省表/尚无感知都不编造。
+    let presence = match &snapshot.device_presence {
+        Some(status) => json!({
+            "devices": status.devices,
+            "whitelisted": status.whitelisted,
+            "last_sense_at_ms": status.last_sense_at_ms,
+            "last_sense_note": status.last_sense_note,
+            "note": status.note,
+            "reason": snapshot
+                .device_presence_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "devices": null,
+            "whitelisted": null,
+            "last_sense_at_ms": null,
+            "last_sense_note": null,
+            "note": null,
+            "reason": snapshot
+                .device_presence_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
+    // 创作节 (创作工具面 K3 · 表格操作): 进程内计数, 只计数不回路径 (脱敏口径)。
+    let sheet_ops = match &snapshot.sheet_ops {
+        Some(status) => json!({
+            "calls": status.calls,
+            "rows_touched": status.rows_touched,
+            "denied": status.denied,
+            "by_operation": status.by_operation,
+            "last_op_at_ms": status.last_op_at_ms,
+            "last_action": status.last_action,
+            "note": status.note,
+            "reason": snapshot
+                .sheet_ops_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "calls": null,
+            "rows_touched": null,
+            "denied": null,
+            "by_operation": null,
+            "last_op_at_ms": null,
+            "last_action": null,
+            "note": null,
+            "reason": snapshot
+                .sheet_ops_reason
                 .clone()
                 .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
         }),
@@ -1211,6 +1655,7 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "budget": budget,
         "workspace": workspace,
         "model": model,
+        "cost_routing": cost_routing,
         "domain": domain,
         "content_feed": content_feed,
         "care": care,
@@ -1219,6 +1664,10 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "task_board": task_board,
         "persona": persona,
         "proposal": proposal,
+        "image_ops": image_ops,
+        "doc_ops": doc_ops,
+        "presence": presence,
+        "sheet_ops": sheet_ops,
     })
 }
 
@@ -1289,6 +1738,8 @@ impl SelfStatusTool {
     ///
     /// 具体字段允许显式 null (来源缺失), 但**节**不可缺席 —— 自述的形状冻结。
     /// 模型画像节随 H-P1 (模型画像表) 入合同: 路由/成本的依据数据面自述化;
+    /// 成本分级路由节随 H-P2 (成本分级路由) 入合同: 当前档/选定模型/回退标注
+    /// 真值自述化 (选型可解释, 无价模型价格照实「未提供」);
     /// 用户域节随 W3-① (多户数据隔离) 入合同: 当前域 id/角色/域内计数自述化;
     /// 内容流节随 J1 (内容流接入) 入合同: 订阅数/最近拉取自述化;
     /// 关怀节随 V3-a (双引擎主动关怀) 入合同: 规则数/下次触发/最近关怀自述化;
@@ -1297,7 +1748,11 @@ impl SelfStatusTool {
     /// 人格节随 V4-a (人格记忆层) 入合同: 信念/边界/偏好/张力计数 + 最后整编
     /// 真值自述化 (只计数不回内容);
     /// 提案节随自主度第一小步 (边角料提案面) 入合同: 待审数/分态计数/最近提案
-    /// 自述化 (accepted 只是账面标记, 不是执行)。
+    /// 自述化 (accepted 只是账面标记, 不是执行);
+    /// 创作节随创作工具面 W1 (图像操作) 入合同: 最近操作计数自述化 (只计数不回
+    /// 路径, 进程内计数口径如实注明);
+    /// 在场节随 K 轴 L1 (在场感知骨架) 入合同: 设备数/白名单数/最近感知自述化
+    /// (白名单制默认零设备的实况可见, 最近感知为进程内计数口径)。
     pub fn output_schema() -> OutputSchema {
         let mut schema = OutputSchema::new();
         for section in SELF_STATUS_SECTIONS {
@@ -1362,10 +1817,13 @@ impl ToolCapability for SelfStatusTool {
         NormalizedTool::new("self_status")
             .with_description(
                 "Read-only structured self-report: identity, capability switches in force, memory \
-                 ledger counts (numbers only), tuning state, turn budgets, workspace facts, and \
-                 the active model profile (context window, tool support, unit prices — missing \
-                 prices read as not provided, never invented). Reports measured state only; \
-                 credential values are never echoed.",
+                 ledger counts (numbers only), tuning state, turn budgets, workspace facts, the \
+                 active model profile (context window, tool support, unit prices — missing \
+                 prices read as not provided, never invented), cost-tier routing state \
+                 (current tier, selected model, honest fallback annotation), and physical \
+                 device presence (device count, whitelist count, last sensing - whitelist \
+                 with zero devices by default). Reports measured \
+                 state only; credential values are never echoed.",
             )
             .with_parameters(params)
     }
@@ -1563,10 +2021,200 @@ mod tests {
                     title: "边角料: 三处临时注释待清理".to_string(),
                     state: "pending".to_string(),
                 }],
+                pushed: 1,
+                recent_pushes: vec![ProposalPushStatusEntry {
+                    proposal_id: "prop-1728000900000-1".to_string(),
+                    channel_id: "primary".to_string(),
+                    at_ms: 1_728_000_950_000,
+                    outcome: "pushed".to_string(),
+                }],
                 note: None,
                 reason: None,
             }),
             proposal_reason: None,
+            cost_routing: Some(CostRoutingStatus {
+                enabled: true,
+                decision: Some(apeireth_core::cost_router::RoutingDecision {
+                    tier: apeireth_core::cost_router::CostTier::Standard,
+                    tier_source: apeireth_core::cost_router::TierSource::Default,
+                    selected_model: Some("model-a".to_string()),
+                    selected_profile: Some(ModelProfile {
+                        model_id: "model-a".to_string(),
+                        context_window: Some(32_768),
+                        max_output: Some(8_192),
+                        supports_tools: Some(true),
+                        supports_streaming: Some(false),
+                        input_price_micros: None,
+                        output_price_micros: None,
+                        cache_read_price_micros: None,
+                        capabilities_flags: vec!["system_prompt".to_string()],
+                    }),
+                    // 候选真值: 无价行按能力在场 (价格标注「未提供」), 缺一半
+                    // 行逐项标注 (缺的不补, 绝不编价)。
+                    candidates: vec![
+                        ModelProfile {
+                            model_id: "model-a".to_string(),
+                            context_window: Some(32_768),
+                            max_output: Some(8_192),
+                            supports_tools: Some(true),
+                            supports_streaming: Some(false),
+                            input_price_micros: None,
+                            output_price_micros: None,
+                            cache_read_price_micros: None,
+                            capabilities_flags: vec!["system_prompt".to_string()],
+                        },
+                        ModelProfile {
+                            model_id: "model-b".to_string(),
+                            context_window: Some(65_536),
+                            max_output: Some(8_192),
+                            supports_tools: Some(true),
+                            supports_streaming: Some(true),
+                            input_price_micros: Some(2_000),
+                            output_price_micros: None,
+                            cache_read_price_micros: None,
+                            capabilities_flags: Vec::new(),
+                        },
+                    ],
+                    used_fallback: false,
+                    fallback_reason: None,
+                    selection_reason:
+                        "no comparable unit price among candidates (prices not provided); keeping \
+                         the default model since it is a capability-qualified standard candidate"
+                            .to_string(),
+                }),
+                reason: None,
+            }),
+            cost_routing_reason: None,
+            image_ops: Some(ImageOpsStatus {
+                calls: 3,
+                ops_applied: 5,
+                denied: 1,
+                by_operation: vec![
+                    ImageOpsOpCount {
+                        operation: "resize".to_string(),
+                        count: 2,
+                    },
+                    ImageOpsOpCount {
+                        operation: "grayscale".to_string(),
+                        count: 1,
+                    },
+                    ImageOpsOpCount {
+                        operation: "watermark_text".to_string(),
+                        count: 2,
+                    },
+                ],
+                last_op_at_ms: Some(1_728_000_960_000),
+                last_call_ops: Some("resize -> grayscale".to_string()),
+                note: Some(
+                    "进程内计数: 本进程生命周期内的最近操作计数 (重启清零), 不落账不造账"
+                        .to_string(),
+                ),
+                reason: None,
+            }),
+            image_ops_reason: None,
+            doc_ops: Some(DocOpsStatus {
+                calls: 5,
+                pages_touched: 9,
+                denied: 1,
+                by_operation: vec![
+                    DocOpsOpCount {
+                        operation: "pdf_info".to_string(),
+                        count: 2,
+                    },
+                    DocOpsOpCount {
+                        operation: "pdf_extract_text".to_string(),
+                        count: 1,
+                    },
+                    DocOpsOpCount {
+                        operation: "docx_extract_text".to_string(),
+                        count: 1,
+                    },
+                    DocOpsOpCount {
+                        operation: "docx_outline".to_string(),
+                        count: 0,
+                    },
+                    DocOpsOpCount {
+                        operation: "pdf_merge".to_string(),
+                        count: 0,
+                    },
+                    DocOpsOpCount {
+                        operation: "pdf_split".to_string(),
+                        count: 0,
+                    },
+                    DocOpsOpCount {
+                        operation: "pdf_extract_pages".to_string(),
+                        count: 1,
+                    },
+                    DocOpsOpCount {
+                        operation: "pdf_watermark_text".to_string(),
+                        count: 0,
+                    },
+                ],
+                last_op_at_ms: Some(1_728_000_970_000),
+                last_action: Some("pdf_extract_pages".to_string()),
+                note: Some(
+                    "进程内计数: 本进程生命周期内的最近操作计数 (重启清零), 不落账不造账"
+                        .to_string(),
+                ),
+                reason: None,
+            }),
+            doc_ops_reason: None,
+            device_presence: Some(DevicePresenceStatus {
+                devices: Some(3),
+                whitelisted: Some(2),
+                last_sense_at_ms: Some(1_728_000_980_000),
+                last_sense_note: Some(
+                    "2 台白名单设备已感知 (mock 档 = 固定 fixture 数据)".to_string(),
+                ),
+                note: Some(
+                    "设备表已载入 (devices.json); 最近感知为进程内计数 (重启清零)".to_string(),
+                ),
+                reason: None,
+            }),
+            device_presence_reason: None,
+            sheet_ops: Some(SheetOpsStatus {
+                calls: 4,
+                rows_touched: 12,
+                denied: 1,
+                by_operation: vec![
+                    SheetOpsOpCount {
+                        operation: "read".to_string(),
+                        count: 1,
+                    },
+                    SheetOpsOpCount {
+                        operation: "summary".to_string(),
+                        count: 1,
+                    },
+                    SheetOpsOpCount {
+                        operation: "filter".to_string(),
+                        count: 1,
+                    },
+                    SheetOpsOpCount {
+                        operation: "sort".to_string(),
+                        count: 0,
+                    },
+                    SheetOpsOpCount {
+                        operation: "aggregate".to_string(),
+                        count: 1,
+                    },
+                    SheetOpsOpCount {
+                        operation: "formula".to_string(),
+                        count: 0,
+                    },
+                    SheetOpsOpCount {
+                        operation: "export_csv".to_string(),
+                        count: 0,
+                    },
+                ],
+                last_op_at_ms: Some(1_728_000_990_000),
+                last_action: Some("aggregate".to_string()),
+                note: Some(
+                    "进程内计数: 本进程生命周期内的最近操作计数 (重启清零), 不落账不造账"
+                        .to_string(),
+                ),
+                reason: None,
+            }),
+            sheet_ops_reason: None,
         }
     }
 
@@ -1595,7 +2243,7 @@ mod tests {
         let result = invoke_tool(fixture_snapshot()).await;
         assert!(result.is_ok(), "{}", result.render());
         let value: Value = serde_json::from_str(&result.render()).expect("structured json");
-        // 缺节即红: fixture 的渲染必须带出冻结节表的每一节 (十五节合同终核)。
+        // 缺节即红: fixture 的渲染必须带出冻结节表的每一节 (节合同终核)。
         for section in SELF_STATUS_SECTIONS {
             assert!(value.get(section).is_some(), "missing section {section}");
         }
@@ -1670,7 +2318,47 @@ mod tests {
         assert_eq!(recent[0]["id"], "prop-1728000900000-1");
         assert_eq!(recent[0]["kind"], "tidy");
         assert_eq!(recent[0]["state"], "pending");
+        // 推送列 (自主度提案面接线): 已推送数 / 最近推送随自述上报。
+        assert_eq!(value["proposal"]["pushed"], 1);
+        let recent_pushes = value["proposal"]["recent_pushes"]
+            .as_array()
+            .expect("recent_pushes 在场");
+        assert_eq!(recent_pushes.len(), 1);
+        assert_eq!(recent_pushes[0]["proposal_id"], "prop-1728000900000-1");
+        assert_eq!(recent_pushes[0]["channel_id"], "primary");
+        assert_eq!(recent_pushes[0]["outcome"], "pushed");
+        assert_eq!(recent_pushes[0]["at_ms"], 1_728_000_950_000i64);
         assert_eq!(value["proposal"]["reason"], Value::Null);
+        // 在场节真值 (K 轴 L1): 设备数/白名单数/最近感知入帧。
+        assert_eq!(value["presence"]["devices"], 3);
+        assert_eq!(value["presence"]["whitelisted"], 2);
+        assert_eq!(value["presence"]["last_sense_at_ms"], 1_728_000_980_000i64);
+        assert!(value["presence"]["last_sense_note"]
+            .as_str()
+            .unwrap()
+            .contains("2 台白名单设备已感知"));
+        assert!(value["presence"]["note"]
+            .as_str()
+            .unwrap()
+            .contains("进程内计数"));
+        assert_eq!(value["presence"]["reason"], Value::Null);
+    }
+
+    /// 在场节缺源 = 显式 null + 原因 (0 装诚实, 不编设备数)。
+    #[test]
+    fn presence_section_without_a_source_is_explicit_null_with_a_reason() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.device_presence = None;
+        snapshot.device_presence_reason =
+            Some("device table refused to open: bad devices.json".to_string());
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["presence"]["devices"], Value::Null);
+        assert_eq!(value["presence"]["whitelisted"], Value::Null);
+        assert_eq!(value["presence"]["last_sense_at_ms"], Value::Null);
+        assert!(value["presence"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("device table refused to open"));
     }
 
     /// 提案节缺席 = 显式 null + 原因 (0 装诚实, 不编待审数)。
@@ -1685,6 +2373,8 @@ mod tests {
         assert_eq!(value["proposal"]["pending"], Value::Null);
         assert_eq!(value["proposal"]["accepted"], Value::Null);
         assert_eq!(value["proposal"]["recent"], Value::Null);
+        assert_eq!(value["proposal"]["pushed"], Value::Null);
+        assert_eq!(value["proposal"]["recent_pushes"], Value::Null);
         assert!(
             value["proposal"]["reason"]
                 .as_str()
@@ -1964,7 +2654,7 @@ mod tests {
         );
     }
 
-    /// 十五节合同终核: 节序显式、schema require 清单全、渲染缺一节即红 ——
+    /// 节合同终核: 节序显式、schema require 清单全、渲染缺一节即红 ——
     /// [`SELF_STATUS_SECTIONS`] 是 render / output_schema / fixture 三侧的
     /// 单一真源, 任一侧漂移都红。
     #[test]
@@ -2577,5 +3267,240 @@ mod tests {
                 "自述必须无密钥面字段: {name}"
             );
         }
+    }
+
+    #[test]
+    fn the_cost_routing_section_projects_tier_selected_and_fallback_truth() {
+        // 自述路由节 (H-P2): 当前档 / 选定模型 / 回退标注, 全部真值投影。
+        let value = render_snapshot(&fixture_snapshot());
+        let routing = &value["cost_routing"];
+        assert_eq!(routing["enabled"], true, "开关真值");
+        assert_eq!(routing["tier"], "standard", "当前档真值");
+        assert_eq!(routing["tier_source"], "default", "档位来源可解释");
+        assert_eq!(routing["selected_model"], "model-a", "选定模型真值");
+        assert_eq!(routing["used_fallback"], false, "回退标注真值");
+        assert_eq!(routing["price_display"], PRICE_NOT_PROVIDED, "绝不编价");
+        assert!(routing["reason"].is_null());
+        // 候选真值: 无价行价格标注「未提供」, 缺一半行逐项标注 (缺的不补)。
+        let candidates = routing["candidates"].as_array().expect("candidate list");
+        assert_eq!(candidates[0]["model_id"], "model-a");
+        assert_eq!(candidates[0]["price_display"], PRICE_NOT_PROVIDED);
+        assert_eq!(
+            candidates[1]["price_display"],
+            format!("input=2000, output={PRICE_NOT_PROVIDED}, cache_read={PRICE_NOT_PROVIDED}"),
+            "缺一半如实逐项标注, 不编另一半"
+        );
+
+        // 回退决策: 回退标注 true + 如实原因进帧 (不粉饰)。
+        let mut snapshot = fixture_snapshot();
+        snapshot.cost_routing = Some(CostRoutingStatus {
+            enabled: true,
+            decision: Some(apeireth_core::cost_router::RoutingDecision {
+                tier: apeireth_core::cost_router::CostTier::Capable,
+                tier_source: apeireth_core::cost_router::TierSource::Explicit,
+                selected_model: Some("default-model".to_string()),
+                selected_profile: Some(ModelProfile::unknown("default-model")),
+                candidates: Vec::new(),
+                used_fallback: true,
+                fallback_reason: Some("no model row passes the capable filter".to_string()),
+                selection_reason: "fallback: default model kept as the explicit fallback"
+                    .to_string(),
+            }),
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        let routing = &value["cost_routing"];
+        assert_eq!(routing["tier"], "capable");
+        assert_eq!(routing["tier_source"], "explicit");
+        assert_eq!(routing["used_fallback"], true, "回退标注真值");
+        assert_eq!(
+            routing["fallback_reason"],
+            "no model row passes the capable filter"
+        );
+        assert_eq!(routing["selected_model"], "default-model");
+        assert_eq!(
+            routing["price_display"], PRICE_NOT_PROVIDED,
+            "未知模型绝不编价"
+        );
+    }
+
+    #[test]
+    fn the_cost_routing_section_without_a_decision_is_explicit_null_with_a_reason() {
+        // 开关关 (fail-closed): 档位/选定显式 null + 如实原因, 不冒充在路由。
+        let mut snapshot = fixture_snapshot();
+        snapshot.cost_routing = Some(CostRoutingStatus {
+            enabled: false,
+            decision: None,
+            reason: Some(
+                "cost-tier routing switch is off (APEIRETH_COST_ROUTING=1 enables it); no tier is in force"
+                    .to_string(),
+            ),
+        });
+        let value = render_snapshot(&snapshot);
+        let routing = &value["cost_routing"];
+        assert_eq!(routing["enabled"], false);
+        assert_eq!(routing["tier"], Value::Null);
+        assert_eq!(routing["selected_model"], Value::Null);
+        assert_eq!(routing["used_fallback"], Value::Null, "没决策不谎报 false");
+        assert!(routing["reason"]
+            .as_str()
+            .unwrap()
+            .contains("APEIRETH_COST_ROUTING"));
+
+        // 无来源: 整节显式 null + 原因 (0 装诚实)。
+        snapshot.cost_routing = None;
+        snapshot.cost_routing_reason = Some("routing source not wired".to_string());
+        let value = render_snapshot(&snapshot);
+        let routing = &value["cost_routing"];
+        assert_eq!(routing["enabled"], Value::Null);
+        assert_eq!(routing["tier"], Value::Null);
+        assert_eq!(routing["candidates"], json!([]));
+        assert_eq!(routing["price_display"], PRICE_NOT_PROVIDED);
+        assert!(routing["reason"]
+            .as_str()
+            .unwrap()
+            .contains("routing source not wired"));
+    }
+
+    /// 创作节 (创作工具面 W1): 最近操作计数如实, 只计数不回路径 (脱敏口径);
+    /// 缺来源 = 整节显式 null + 原因 (0 装诚实, 不编数)。
+    #[test]
+    fn image_ops_creation_section_reports_operation_counts_without_paths() {
+        let value = render_snapshot(&fixture_snapshot());
+        let creation = &value["image_ops"];
+        assert_eq!(creation["calls"], 3);
+        assert_eq!(creation["ops_applied"], 5);
+        assert_eq!(creation["denied"], 1);
+        assert_eq!(creation["by_operation"][0]["operation"], "resize");
+        assert_eq!(creation["by_operation"][0]["count"], 2);
+        assert_eq!(creation["last_call_ops"], "resize -> grayscale");
+        // 脱敏口径: 创作节零路径零文件名 (节内不出现路径分隔符/扩展名文件名)。
+        let rendered = creation.to_string();
+        assert!(!rendered.contains('/'), "创作节零路径: {rendered}");
+        assert!(!rendered.contains('\\'), "创作节零路径: {rendered}");
+        assert!(!rendered.contains(".png"), "创作节零文件名: {rendered}");
+        assert!(creation["last_op_at_ms"].is_number());
+
+        // 尚无操作: last_op_at_ms / last_call_ops 显式 null + 如实注, 不编时刻。
+        let mut snapshot = fixture_snapshot();
+        snapshot.image_ops = Some(ImageOpsStatus {
+            calls: 0,
+            ops_applied: 0,
+            denied: 0,
+            by_operation: vec![],
+            last_op_at_ms: None,
+            last_call_ops: None,
+            note: Some("尚无操作记录".to_string()),
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["image_ops"]["last_op_at_ms"], Value::Null);
+        assert_eq!(value["image_ops"]["last_call_ops"], Value::Null);
+        assert_eq!(value["image_ops"]["note"], "尚无操作记录");
+
+        // 缺来源: 整节显式 null + 原因 (0 装诚实)。
+        let mut snapshot = fixture_snapshot();
+        snapshot.image_ops = None;
+        snapshot.image_ops_reason = Some("image ops source not wired".to_string());
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["image_ops"]["calls"], Value::Null);
+        assert_eq!(value["image_ops"]["by_operation"], Value::Null);
+        assert!(value["image_ops"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("image ops source not wired"));
+    }
+
+    /// 创作节 (创作工具面 W2 · 文档操作): 进程内计数如实 (页数/拒绝/逐操作),
+    /// 只计数不回路径; 缺来源 = 整节显式 null + 原因 (0 装诚实, 不编数)。
+    #[test]
+    fn doc_ops_creation_section_reports_page_counts_without_paths() {
+        let value = render_snapshot(&fixture_snapshot());
+        let section = &value["doc_ops"];
+        assert_eq!(section["calls"], 5);
+        assert_eq!(section["pages_touched"], 9);
+        assert_eq!(section["denied"], 1);
+        assert_eq!(section["by_operation"][0]["operation"], "pdf_info");
+        assert_eq!(section["by_operation"][0]["count"], 2);
+        assert_eq!(section["by_operation"].as_array().unwrap().len(), 8);
+        assert_eq!(section["last_action"], "pdf_extract_pages");
+        assert!(section["last_op_at_ms"].is_number());
+
+        // 尚无操作: 显式 null + 如实注, 不编时刻不编动作。
+        let mut snapshot = fixture_snapshot();
+        snapshot.doc_ops = Some(DocOpsStatus {
+            calls: 0,
+            pages_touched: 0,
+            denied: 0,
+            by_operation: vec![],
+            last_op_at_ms: None,
+            last_action: None,
+            note: Some("尚无操作记录".to_string()),
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["doc_ops"]["last_op_at_ms"], Value::Null);
+        assert_eq!(value["doc_ops"]["last_action"], Value::Null);
+        assert_eq!(value["doc_ops"]["note"], "尚无操作记录");
+
+        // 缺来源: 整节显式 null + 原因 (0 装诚实)。
+        let mut snapshot = fixture_snapshot();
+        snapshot.doc_ops = None;
+        snapshot.doc_ops_reason = Some("doc ops source not wired".to_string());
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["doc_ops"]["calls"], Value::Null);
+        assert_eq!(value["doc_ops"]["by_operation"], Value::Null);
+        assert!(value["doc_ops"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("doc ops source not wired"));
+    }
+
+    /// 表格操作创作节 (K3): 逐动作计数如实, 零路径零文件名 (脱敏口径)。
+    #[test]
+    fn sheet_ops_creation_section_reports_action_counts_without_paths() {
+        let value = render_snapshot(&fixture_snapshot());
+        let section = &value["sheet_ops"];
+        assert_eq!(section["calls"], 4);
+        assert_eq!(section["rows_touched"], 12);
+        assert_eq!(section["denied"], 1);
+        assert_eq!(section["by_operation"][0]["operation"], "read");
+        assert_eq!(section["by_operation"][0]["count"], 1);
+        assert_eq!(section["by_operation"].as_array().unwrap().len(), 7);
+        assert_eq!(section["last_action"], "aggregate");
+        assert!(section["last_op_at_ms"].is_number());
+
+        // 脱敏口径: 本节零路径零文件名。
+        let rendered = value.to_string();
+        assert!(!rendered.contains(".csv"), "{rendered}");
+
+        // 尚无操作: 显式 null + 如实注, 不编时刻不编动作。
+        let mut snapshot = fixture_snapshot();
+        snapshot.sheet_ops = Some(SheetOpsStatus {
+            calls: 0,
+            rows_touched: 0,
+            denied: 0,
+            by_operation: vec![],
+            last_op_at_ms: None,
+            last_action: None,
+            note: Some("尚无操作记录".to_string()),
+            reason: None,
+        });
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["sheet_ops"]["last_op_at_ms"], Value::Null);
+        assert_eq!(value["sheet_ops"]["last_action"], Value::Null);
+        assert_eq!(value["sheet_ops"]["note"], "尚无操作记录");
+
+        // 缺来源: 整节显式 null + 原因 (0 装诚实)。
+        let mut snapshot = fixture_snapshot();
+        snapshot.sheet_ops = None;
+        snapshot.sheet_ops_reason = Some("sheet ops source not wired".to_string());
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["sheet_ops"]["calls"], Value::Null);
+        assert_eq!(value["sheet_ops"]["by_operation"], Value::Null);
+        assert!(value["sheet_ops"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("sheet ops source not wired"));
     }
 }

@@ -25,6 +25,20 @@ apeireth-orchestration = { path = "../../foundation/orchestration" }
 async-trait = { workspace = true }
 encoding_rs = "0.8"
 futures = { workspace = true }
+# 创作工具面 W1 (图像操作 `tool.image_ops`): 纯 Rust 图像编解码/处理库 `image`
+# (MIT OR Apache-2.0, 与本仓 Apache-2.0 OR MIT 双协议兼容: 两种协议都允许再
+# 分发与私用, 任选其一、互不传染) —— **本批唯一新引入外部依赖, 报备在此**。
+# 特性面只开格式白名单四种 (png/jpeg/webp/bmp), default-features 关闭 (不带
+# 其余编解码器与并行后端)。选库不自研的理由: 四格式编解码自研 = 造轮子反模式
+# (PNG 的 zlib 流 / JPEG 的 DCT / WebP 的熵编码合计数万行, 自写反而扩大攻击面);
+# 图像操作算术 (亮度/对比度/灰度/水印字模) 仍为本仓自实现 (逐通道确定性算术)。
+# 如实标注: 该库 WebP 编码器只有**无损**档 (不冒充有损)。
+image = { version = "0.25.10", default-features = false, features = [
+    "png",
+    "jpeg",
+    "webp",
+    "bmp",
+] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -35,6 +49,14 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 url = "2.5.8"
+
+# 文档操作面 (W2 `tool.doc_ops`) 依赖报备 —— **0 新外部包**: 两者都是 Cargo.lock
+# 既有传递依赖 (png / wayland-scanner 等同源) 的同版本直接化引用, 版本钉死
+# (`=` 精确) 保证锁定文件版本轴零漂移。分工: `flate2` = PDF 内容流 zlib 解压 +
+# ZIP deflate 条目解压; `quick-xml` = DOCX (OOXML) XML 解析。ZIP 容器读端是
+# `doc_ops.rs` 内纯 Rust 最小实现 (只读, 不引 zip 容器包)。
+flate2 = "=1.1.10"
+quick-xml = "=0.41.0"
 
 # Windows process containment uses the same windows-sys convention as the
 # companion crate. The dependency is target-scoped so non-Windows builds never

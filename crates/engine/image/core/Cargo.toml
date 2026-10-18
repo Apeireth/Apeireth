@@ -1,0 +1,26 @@
+# Copyright (c) 2026 The Apeireth Authors.
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+[package]
+name = "apeireth-image-core"
+description = "Image core facade: neutral, stable interface over the vendored image engine family"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+apeireth-image-geom = { path = "../geom" }
+apeireth-image-cms = { path = "../cms" }
+apeireth-image-color = { path = "../color" }
+apeireth-image-raster = { path = "../raster" }
+apeireth-image-doc = { path = "../doc" }
+apeireth-image-vector = { path = "../vector" }
+apeireth-image-compose = { path = "../compose" }
+apeireth-image-algo = { path = "../algo" }
+apeireth-image-codecs = { path = "../codecs" }
+apeireth-image-psd = { path = "../psd" }
+thiserror = "2"

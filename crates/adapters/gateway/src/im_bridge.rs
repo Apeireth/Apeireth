@@ -7,7 +7,11 @@
 //!   流回 IM (每段一次出站, 截断必带标记并计丢弃字符);
 //! - **同源**: IM 会话与桌面会话是同一个 [`SessionId`], 映射表
 //!   ([`ImSessionMapStore`]) 持久化到数据目录 (存储文档拒开语义);
-//! - 审批卡片按钮回调走 [`ImApprovalCloser`] 的四态闭合 (见 [`crate::im_approval`])。
+//! - 审批卡片按钮回调走 [`ImApprovalCloser`] 的四态闭合 (见 [`crate::im_approval`]);
+//! - 提案卡出站 + 按钮落账走 [`crate::im_proposal`] (自主度提案面接线): 提案
+//!   入账 → 人审卡**同链同信封**推到 IM 渠道 (「建议你亲自确认」行随卡到手机),
+//!   批准/拒绝按钮 → `proposal accept/reject` 落账 (decided_by = IM 用户 + 渠道
+//!   标注); 推送幂等键 = 提案 id, 推送失败留账待重试 (IM 失败不丢提案)。
 //!
 //! HTTP 面: [`im_router`] 提供 `POST /v1/im/channels/{channel_id}/events`
 //! (入站回调体 + `X-Im-Signature` 签名头), 未配置 IM 时整面不挂载 (本地零回归)。
@@ -25,6 +29,7 @@ use apeireth_sdk::im::{
     ImInboundEvent, ImInboundMessage, ImOutboundText, ImSegmentPolicy, ImSegmentation,
     ImSendReceipt, ImSender,
 };
+use apeireth_tools_canonical::proposal_push::{ProposalPushOutcome, ProposalPushRecord};
 use async_trait::async_trait;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -41,6 +46,10 @@ use crate::im_approval::{
     ImApprovalRequest, ImApprovalResolution, ImApprovalResolver,
 };
 use crate::im_channels::ImChannelAssembly;
+use crate::im_proposal::{
+    is_proposal_payload, proposal_card_envelope, ImProposalClosure, ImProposalClosureResult,
+    ImProposalFace, ProposalPushResult,
+};
 
 /// 会话映射表的文件名。
 pub const IM_SESSIONS_FILE: &str = "im-sessions.json";
@@ -354,6 +363,9 @@ pub enum ImBridgeError {
     /// 会话映射缺失 (卡片回调找不到同源会话)。
     #[error("im conversation is not mapped to a session: {0}")]
     UnmappedConversation(String),
+    /// 提案记账失败 (提案账/推送账读写失败 —— 留账失败必须报真因, 不静默)。
+    #[error("im proposal push bookkeeping failed: {0}")]
+    PushBookkeeping(String),
 }
 
 /// 入站处理结果 (HTTP 面直接回给对端)。
@@ -397,6 +409,20 @@ pub enum ImInboundResult {
         /// 回执段数。
         reply_segments: usize,
     },
+    /// 提案卡按钮已落账 (`proposal accept/reject`; 一提案一决定, 恒不执行)。
+    ProposalDecided {
+        /// 落账记录 (`decided_by` 如实署名)。
+        closure: ImProposalClosure,
+        /// 回执段数。
+        reply_segments: usize,
+    },
+    /// 提案卡按钮被拒即帧 (重复点击 / 查无 / 缺署名: 真因如实, 0 静默)。
+    ProposalRefused {
+        /// 拒绝的真实原因。
+        reason: String,
+        /// 回执段数。
+        reply_segments: usize,
+    },
 }
 
 /// 双向消息桥 (入站解码 → 会话回合 → 分段回流 / 审批卡片 → 四态闭合)。
@@ -407,6 +433,8 @@ pub struct ImBridge {
     sessions: Arc<Mutex<ImSessionMapStore>>,
     handler: Arc<dyn ImTurnHandler>,
     approvals: Arc<ImApprovalCloser>,
+    /// 提案面接线 (提案卡出站 + 按钮落账; `None` = 未接线, 提案面 inert)。
+    proposals: Option<Arc<ImProposalFace>>,
     segment_override: Option<ImSegmentPolicy>,
     clock: Arc<dyn Clock>,
 }
@@ -433,9 +461,17 @@ impl ImBridge {
             sessions,
             handler,
             approvals,
+            proposals: None,
             segment_override: None,
             clock: Arc::new(SystemClock),
         }
+    }
+
+    /// 接入提案面 (自主度提案面接线: 提案卡出站 + `proposal accept/reject`
+    /// 落账; 缺省 = 未接线, 提案按钮回调照实报「未接线」, 既有链零回归)。
+    pub fn with_proposal_face(mut self, face: Arc<ImProposalFace>) -> Self {
+        self.proposals = Some(face);
+        self
     }
 
     /// 注入时钟 (超时判定口径; 测试与运行时共用同一时钟)。
@@ -520,6 +556,12 @@ impl ImBridge {
             let card = notice.approval_card();
             self.deliver_card(target, &message.conversation_id, &card)
                 .await?;
+            // 提案入账 → 推送 (提案卡出站接线): 本回合落地的提案草稿随人审卡
+            // 推到同一 IM 会话 (幂等 + 失败留账, IM 失败不丢提案)。
+            if self.proposals.is_some() {
+                self.push_proposal_cards(&target.id, &message.conversation_id)
+                    .await?;
+            }
             return Ok(ImInboundResult::ApprovalRequested {
                 session,
                 pair_id: notice.pair_id.clone(),
@@ -531,6 +573,11 @@ impl ImBridge {
         let reply_segments = self
             .deliver_segments(target, &message.conversation_id, &segmentation)
             .await?;
+        // 提案入账 → 推送 (提案卡出站接线, 同上)。
+        if self.proposals.is_some() {
+            self.push_proposal_cards(&target.id, &message.conversation_id)
+                .await?;
+        }
         Ok(ImInboundResult::Replied {
             session,
             segments: reply_segments,
@@ -540,12 +587,18 @@ impl ImBridge {
     }
 
     /// 卡片按钮 → 四态闭合 (审计配对原子) → 回执回流。
+    ///
+    /// 提案卡按钮 (subject = `tool.proposal_draft`) 走 [`crate::im_proposal`]:
+    /// `proposal accept/reject` 落账 (一提案一决定), 不进审批四态闭合。
     pub async fn handle_card_action(
         &self,
         target: &ImChannelTarget,
         _kind: ImChannelKind,
         action: ImCardAction,
     ) -> Result<ImInboundResult, ImBridgeError> {
+        if is_proposal_payload(&action.payload) {
+            return self.handle_proposal_click(target, action).await;
+        }
         let session = {
             let store = self
                 .sessions
@@ -584,6 +637,130 @@ impl ImBridge {
                 reason: "approval round already closed".to_string(),
             }),
         }
+    }
+
+    /// 提案卡按钮 → `proposal accept/reject` 落账 (decided_by = IM 用户 + 渠道
+    /// 标注) → 回执回流。
+    ///
+    /// 一提案一决定: 重复点击走工具面的拒绝即帧 (真因如实); 提案不设超时,
+    /// 什么时候点都按账面判 (一提案一决定只看提案账)。未接提案面 = 照实报
+    /// 「未接线」(拒绝即帧, 不假装能落账)。
+    async fn handle_proposal_click(
+        &self,
+        target: &ImChannelTarget,
+        action: ImCardAction,
+    ) -> Result<ImInboundResult, ImBridgeError> {
+        let Some(face) = &self.proposals else {
+            let reason = "提案按钮回调未接线: 本桥未配置提案面 (ImProposalFace), \
+                          落账面缺位"
+                .to_string();
+            let reply_segments = self
+                .deliver_segments(target, &action.conversation_id, &self.segment_text(&reason))
+                .await?;
+            return Ok(ImInboundResult::ProposalRefused {
+                reason,
+                reply_segments,
+            });
+        };
+        match face
+            .decider
+            .decide_from_click(&target.id, &action.operator_id, &action.payload)
+            .await
+        {
+            ImProposalClosureResult::Decided(closure) => {
+                let reply_segments = self
+                    .deliver_segments(
+                        target,
+                        &action.conversation_id,
+                        &self.segment_text(&closure.reply_text),
+                    )
+                    .await?;
+                Ok(ImInboundResult::ProposalDecided {
+                    closure,
+                    reply_segments,
+                })
+            }
+            ImProposalClosureResult::Refused { reason } => {
+                let reply_segments = self
+                    .deliver_segments(target, &action.conversation_id, &self.segment_text(&reason))
+                    .await?;
+                Ok(ImInboundResult::ProposalRefused {
+                    reason,
+                    reply_segments,
+                })
+            }
+        }
+    }
+
+    /// 提案卡出站: 提案入账 → 人审卡 (**同链同信封**: 与 IM 审批卡同一条
+    /// [`Self::deliver_card`] 出站链、同一个 [`ImApprovalCard`] 信封) → IM 会话。
+    ///
+    /// - **推送幂等键 = 提案 id**: 已推送 (推送账 `pushed` 行) 的不再推 ——
+    ///   同提案不重复推送;
+    /// - **失败留账**: 推送失败写 `failed` 行 (带真因) 待重试 —— IM 失败不丢
+    ///   提案, 提案本体永远在提案账 (`proposals.jsonl`);
+    /// - 未接提案面 = 空结果 (inert), 既有链零回归。
+    ///
+    /// 逐提案结果照实返回 (回执引用 / 失败真因), 0 静默降级。
+    pub async fn push_proposal_cards(
+        &self,
+        channel_id: &str,
+        conversation_id: &str,
+    ) -> Result<Vec<ProposalPushResult>, ImBridgeError> {
+        let Some(face) = &self.proposals else {
+            return Ok(Vec::new());
+        };
+        let target = self
+            .channels
+            .get(channel_id)
+            .ok_or_else(|| ImBridgeError::UnknownChannel(channel_id.to_string()))?;
+        let drafts = face
+            .pending_drafts()
+            .map_err(ImBridgeError::PushBookkeeping)?;
+        let now_ms = Timestamp::from_clock(self.clock.as_ref()).epoch_millis();
+        let mut results = Vec::new();
+        for draft in drafts {
+            let envelope = proposal_card_envelope(&draft);
+            match self.deliver_card(target, conversation_id, &envelope).await {
+                Ok(receipt) => {
+                    face.record_push(&ProposalPushRecord {
+                        proposal_id: draft.id.clone(),
+                        channel_id: channel_id.to_string(),
+                        conversation_id: conversation_id.to_string(),
+                        outcome: ProposalPushOutcome::Pushed,
+                        message_ref: Some(receipt.message_ref.clone()),
+                        reason: None,
+                        at_ms: now_ms,
+                    })
+                    .map_err(ImBridgeError::PushBookkeeping)?;
+                    results.push(ProposalPushResult {
+                        proposal_id: draft.id,
+                        outcome: ProposalPushOutcome::Pushed,
+                        detail: receipt.message_ref,
+                    });
+                }
+                Err(error) => {
+                    // 失败留账 (真因) 待重试: IM 失败不丢提案。
+                    let reason = error.to_string();
+                    face.record_push(&ProposalPushRecord {
+                        proposal_id: draft.id.clone(),
+                        channel_id: channel_id.to_string(),
+                        conversation_id: conversation_id.to_string(),
+                        outcome: ProposalPushOutcome::Failed,
+                        message_ref: None,
+                        reason: Some(reason.clone()),
+                        at_ms: now_ms,
+                    })
+                    .map_err(ImBridgeError::PushBookkeeping)?;
+                    results.push(ProposalPushResult {
+                        proposal_id: draft.id,
+                        outcome: ProposalPushOutcome::Failed,
+                        detail: reason,
+                    });
+                }
+            }
+        }
+        Ok(results)
     }
 
     /// 桌面侧待审批 → IM 审批卡片 (同源绑定会话映射)。

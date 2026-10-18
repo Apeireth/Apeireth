@@ -212,6 +212,8 @@ const GATEWAY_CALL_SITES = [
   {path: '/v1/safety/guard/evaluate', call: () => runtime.evaluateGuard(cfg, {})},
   {path: '/v1/workbench/turn', call: () => runtime.fetchWorkbenchTurn(cfg)},
   {path: '/v1/panel/skills', call: () => runtime.fetchSkills(cfg)},
+  {path: '/v1/panel/care', call: () => runtime.fetchCare(cfg)},
+  {path: '/v1/panel/traits', call: () => runtime.fetchTraits(cfg)},
 ];
 
 {

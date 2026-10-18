@@ -644,3 +644,114 @@ async fn bootstrap_refuses_a_broken_model_profiles_env() {
         "{error}"
     );
 }
+
+/// H-P2 成本分级路由开关 fail-closed: 只有精确 `1` 开, 其他一律关
+/// (garbage 绝不误开); 档位映射坏形状整体拒开 (值自由报错)。
+#[test]
+fn cost_routing_switch_fails_closed_and_the_tier_mapping_refuses_broken_shapes() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    for off in ["0", "true", "yes", "2", ""] {
+        let _g_off = EnvGuard::set("APEIRETH_COST_ROUTING", Some(off));
+        assert!(
+            !apeireth_cli::cost_routing_enabled_from_env(),
+            "fail-closed: {off:?} 必须关"
+        );
+    }
+    let _g_on = EnvGuard::set("APEIRETH_COST_ROUTING", Some("1"));
+    assert!(apeireth_cli::cost_routing_enabled_from_env());
+
+    // 档位映射: 未知档位词拒开 (词表闭合)。
+    let _g_bad = EnvGuard::set(
+        "APEIRETH_COST_ROUTING_PREFERRED",
+        Some(r#"{"luxury": "model-x"}"#),
+    );
+    let error = apeireth_cli::cost_routing_config_from_env().expect_err("坏映射必须拒开");
+    assert!(
+        error.contains("cost routing configuration refused to load"),
+        "{error}"
+    );
+
+    // 正常映射: 每档首选模型覆盖; 空白 = 无覆盖。
+    let _g_ok = EnvGuard::set(
+        "APEIRETH_COST_ROUTING_PREFERRED",
+        Some(r#"{"frugal": "model-a"}"#),
+    );
+    let config = apeireth_cli::cost_routing_config_from_env().expect("mapping parses");
+    assert!(config.enabled, "开关随 env 真值");
+    assert_eq!(config.preferred_models.len(), 1, "一档一覆盖");
+    let _g_blank = EnvGuard::set("APEIRETH_COST_ROUTING_PREFERRED", Some("  "));
+    let config = apeireth_cli::cost_routing_config_from_env().expect("blank mapping");
+    assert!(config.preferred_models.is_empty(), "空白 = 无覆盖");
+}
+
+/// H-P2 配置面 fail-closed: 坏 `APEIRETH_COST_ROUTING_PREFERRED` = 装配拒开
+/// (启动错误正式通道), 不静默忽略。
+#[tokio::test]
+async fn bootstrap_refuses_a_broken_cost_routing_tiers_env() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _g_tiers = EnvGuard::set("APEIRETH_COST_ROUTING_PREFERRED", Some("{ not json"));
+    let _g_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&temp_db("cost-routing")));
+    let _g_sdb = EnvGuard::set(
+        "APEIRETH_SESSION_DB",
+        Some(&temp_db("cost-routing-session")),
+    );
+    let Err(error) = build_canonical_runtime_with_sessions_from_env().await else {
+        panic!("坏档位映射必须拒开");
+    };
+    assert!(
+        error.contains("cost routing configuration refused to load"),
+        "{error}"
+    );
+}
+
+/// H-P2 回合模型解析: 显式 `--model` > 成本路由选定 > 默认模型; 开关关 =
+/// fail-closed 零行为变化。
+#[test]
+fn resolve_turn_model_prefers_the_explicit_model_then_routing_then_the_default() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let data_dir =
+        std::env::temp_dir().join(format!("apeireth-knob-cost-routing-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data_dir);
+    std::fs::create_dir_all(&data_dir).expect("create test data dir");
+    let data_dir = data_dir.to_string_lossy().into_owned();
+    let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("default-model"));
+    let _g_profiles = EnvGuard::set(
+        "APEIRETH_MODEL_PROFILES",
+        Some(
+            r#"[
+                {"model_id": "default-model", "context_window": 32768, "supports_tools": true},
+                {"model_id": "cheap-model", "context_window": 32768, "supports_tools": true,
+                 "input_price_micros": 100, "output_price_micros": 100}
+            ]"#,
+        ),
+    );
+    let _g_preferred = EnvGuard::set("APEIRETH_COST_ROUTING_PREFERRED", None);
+    let _g_routing_off = EnvGuard::set("APEIRETH_COST_ROUTING", None);
+
+    let router = apeireth_cli::cost_router_from_env().expect("router assembles");
+    assert_eq!(
+        apeireth_cli::resolve_turn_model(None, &router, "hello"),
+        None,
+        "开关关 fail-closed: 不路由, 回合仍走默认模型"
+    );
+    assert_eq!(
+        apeireth_cli::resolve_turn_model(Some("pinned".to_string()), &router, "hello").as_deref(),
+        Some("pinned"),
+        "显式 --model 最高"
+    );
+
+    let _g_routing_on = EnvGuard::set("APEIRETH_COST_ROUTING", Some("1"));
+    let router = apeireth_cli::cost_router_from_env().expect("router assembles");
+    assert_eq!(
+        apeireth_cli::resolve_turn_model(None, &router, "hello").as_deref(),
+        Some("cheap-model"),
+        "开闸 + 有价格证据: 按省钱选"
+    );
+    assert_eq!(
+        apeireth_cli::resolve_turn_model(Some("pinned".to_string()), &router, "hello").as_deref(),
+        Some("pinned"),
+        "显式 --model 仍胜出 (显式 > 自动)"
+    );
+    let _ = std::fs::remove_dir_all(&data_dir);
+}

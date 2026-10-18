@@ -312,6 +312,19 @@ pub struct CareRecord {
     pub note: String,
 }
 
+impl CareRecord {
+    /// 「最近关怀」判定真值文案 (发起/说不 + 判定档 + 理由)。
+    ///
+    /// 自述关怀节与关怀面板读面**同一口径** (谁都不另写一套格式)。
+    pub fn status_note(&self) -> String {
+        let action = if self.spoke { "spoke" } else { "declined" };
+        format!(
+            "{}: {} ({}): {}",
+            self.rule_id, action, self.judge, self.note
+        )
+    }
+}
+
 /// 打扰纪律配置 (先立规矩再谈温度)。
 ///
 /// 四件中的三件是本配置面: 勿扰窗口 / 频率上限 / 专注抑制; 第四件「关怀预算」
@@ -472,6 +485,31 @@ impl CareRulesBody {
     /// 某规则上次发起/判定时刻。
     pub fn last_fired(&self, rule_id: &str) -> Option<i64> {
         self.fired_at.get(rule_id).copied()
+    }
+
+    /// 自述关怀节真值 (纯投影: 同一表体一次读出的规则数 / 下次触发 / 最近关怀)。
+    ///
+    /// `tool.self_status` 关怀节与关怀面板读面 (`GET /v1/panel/care`) **同一
+    /// 投影**: 同一表体一次装载, 谁都不拼两次读、不另写一套推算 (口径唯一)。
+    pub fn status_at(&self, now_ms: i64, last_interaction_ms: Option<i64>) -> CareStoreStatus {
+        let next_trigger_at_ms = self
+            .rules
+            .iter()
+            .filter(|rule| rule.enabled)
+            .map(|rule| {
+                rule.trigger.next_occurrence_ms(
+                    now_ms,
+                    rule.created_at_ms,
+                    self.last_fired(&rule.id),
+                    last_interaction_ms,
+                )
+            })
+            .min();
+        CareStoreStatus {
+            rules: self.rules.len() as u64,
+            next_trigger_at_ms,
+            last_care: self.last_care().cloned(),
+        }
     }
 }
 
@@ -696,6 +734,20 @@ pub struct CareStoreStatus {
     pub last_care: Option<CareRecord>,
 }
 
+impl CareStoreStatus {
+    /// 「最近关怀」判定真值注 (无记录 = 「尚无关怀记录」如实)。
+    ///
+    /// 自述关怀节与关怀面板读面同一文案口径 (见 [`CareRecord::status_note`])。
+    pub fn last_care_note(&self) -> Option<String> {
+        Some(
+            self.last_care
+                .as_ref()
+                .map(CareRecord::status_note)
+                .unwrap_or_else(|| "尚无关怀记录".to_string()),
+        )
+    }
+}
+
 impl CareStore {
     /// 自述关怀节真值 (纯读, 现探测)。
     ///
@@ -709,24 +761,7 @@ impl CareStore {
         last_interaction_ms: Option<i64>,
     ) -> Result<CareStoreStatus, CareStoreError> {
         let body = self.load()?.unwrap_or_default();
-        let next_trigger_at_ms = body
-            .rules
-            .iter()
-            .filter(|rule| rule.enabled)
-            .map(|rule| {
-                rule.trigger.next_occurrence_ms(
-                    now_ms,
-                    rule.created_at_ms,
-                    body.last_fired(&rule.id),
-                    last_interaction_ms,
-                )
-            })
-            .min();
-        Ok(CareStoreStatus {
-            rules: body.rules.len() as u64,
-            next_trigger_at_ms,
-            last_care: body.last_care().cloned(),
-        })
+        Ok(body.status_at(now_ms, last_interaction_ms))
     }
 }
 

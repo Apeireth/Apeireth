@@ -24,7 +24,9 @@
 //!
 //! 提案账的待审数 / 最近提案随 `tool.self_status` 的 `proposal` 节上报
 //! ([`ProposalLedger::status`] → [`crate::self_status::ProposalStatus`]),
-//! 与工具面同账同源。
+//! 与工具面同账同源; 推送列 (已推送数 / 最近推送) 与同目录推送账
+//! [`crate::proposal_push::ProposalPushLedger`] 同源 (提案卡推没推到 IM 渠道
+//! 照实报)。提案工具本身**不推送** —— 推送是 IM 桥的外联动作, 痕迹进推送账。
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -407,10 +409,13 @@ impl ProposalLedger {
         Ok(state)
     }
 
-    /// 自述提案节的现探测 (待审数 / 分态计数 / 最近提案, 真值如实)。
+    /// 自述提案节的现探测 (待审数 / 分态计数 / 最近提案 + 推送列, 真值如实)。
     ///
     /// 只回 id / kind / 标题 / 状态 (最近提案有界 5 条), 不回 detail/payload
-    /// 正文 —— 与自述面「有多少不说是什么」同口径。
+    /// 正文 —— 与自述面「有多少不说是什么」同口径。**推送列** (已推送数 /
+    /// 最近推送) 与提案账同目录的推送账 [`crate::proposal_push::ProposalPushLedger`]
+    /// (`proposal-pushes.jsonl`) 同源: 提案卡推没推到 IM 渠道照实报, 失败
+    /// 推送标 `failed` 留账待重试; 推送账缺文件 = 0 推送真值 (不是错误)。
     pub fn status(&self) -> Result<ProposalStatus, String> {
         let scan = self.scan()?;
         let mut note: Option<String> = None;
@@ -467,12 +472,27 @@ impl ProposalLedger {
         if total == 0 && note.is_none() {
             note = Some("尚无提案记录".to_string());
         }
+        // 推送列 (自主度提案面接线): 与提案账同目录的推送账同源 (缺文件 = 0
+        // 推送真值); 推送账坏行跳过如实并入备注, 读失败照实报不编数。
+        let push_stats = crate::proposal_push::ProposalPushLedger::at(
+            self.path
+                .with_file_name(crate::proposal_push::PROPOSAL_PUSH_LEDGER_FILE),
+        )
+        .status()?;
+        if let Some(push_note) = push_stats.note {
+            note = Some(match note {
+                Some(existing) => format!("{existing}; {push_note}"),
+                None => push_note,
+            });
+        }
         Ok(ProposalStatus {
             pending,
             accepted,
             rejected,
             total,
             recent,
+            pushed: push_stats.pushed,
+            recent_pushes: push_stats.recent,
             note,
             reason: None,
         })

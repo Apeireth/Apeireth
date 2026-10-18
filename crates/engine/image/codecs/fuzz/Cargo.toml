@@ -1,0 +1,70 @@
+# Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors.
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Modified 2026-10-18 for the Apeireth workspace: crate identifiers, tooling knob
+# names and product references renamed to neutral names; generated metadata producer
+# strings neutralised; scope adaptations recorded in
+# docs/04-internal/license-port/gate1-license.md. Original license terms unchanged.
+[package]
+name = "apeireth-image-codecs-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone workspace so the main workspace's `crates/*` glob and lints do
+# not apply (cargo-fuzz needs nightly + sanitizer flags).
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+apeireth-image-codecs = { path = ".." }
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "decode_any"
+path = "fuzz_targets/decode_any.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_png"
+path = "fuzz_targets/decode_png.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_jpeg"
+path = "fuzz_targets/decode_jpeg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_tiff"
+path = "fuzz_targets/decode_tiff.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_exr"
+path = "fuzz_targets/decode_exr.rs"
+test = false
+doc = false
+bench = false
+
+
+[[bin]]
+name = "decode_gif"
+path = "fuzz_targets/decode_gif.rs"
+test = false
+doc = false
+bench = false

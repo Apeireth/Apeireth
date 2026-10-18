@@ -71,6 +71,12 @@ pub mod user_domain;
 /// 模型画像表 (`ModelProfile`/`ModelProfileTable`): 三层配置 (内置基线 /
 /// 数据目录拒开档 / env 覆盖) + 显式 unknown, 单价缺省 None 绝不编价。
 pub mod model_profile;
+// 成本分级路由 (H-P2 模型面轴「更省」): 任务按成本/能力自动选模型。
+/// 成本分级路由 (`CostRouter`): 分级词表 (`frugal|standard|capable|premium`)
+/// + 路由规则 (显式档 > 启发式推断 > 默认 standard) + 档位映射配置 (每档首选
+/// 模型), 依据数据面是 [`model_profile`] 画像表; 无价模型不参与价格比较,
+/// **绝不编价**。
+pub mod cost_router;
 // 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 空闲看门狗 + 超时类独立 code。
 /// 统一超时熔合小库 (`Deadline` / `clamp_timeout` / `IdleWatchdog`)。
 pub mod deadline;

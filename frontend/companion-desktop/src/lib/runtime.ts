@@ -54,6 +54,8 @@ import {parseUsageChunk, type TurnUsage} from './chat-shell/turn-telemetry.ts';
 import {normalizeUserRows, normalizeDomainRows, type UserAdminRow, type DomainAdminRow} from './user-admin.ts';
 import {normalizeSkillScan, type SkillShelfScan} from './skill-shelf.ts';
 import {normalizeProposalLedger, PROPOSAL_LEDGER_LIMIT, type ProposalLedger} from './proposal-card.ts';
+import {normalizeCareSnapshot, type CareSnapshot} from './care-card.ts';
+import {normalizeTraitSnapshot, type TraitSnapshot} from './trait-card.ts';
 
 const STORAGE_KEY = 'apeireth-config';
 const SECRET_CONFIG_KEYS = new Set([
@@ -2787,4 +2789,41 @@ export async function fetchProposalLedger(
   if (res.status === 501 || res.status === 404) return null;
   const data = await checkJson(res);
   return normalizeProposalLedger(data);
+}
+
+// --- 关怀读面（契约 gateway-api-contract.md §7f / frontend-data-contract.md §10.10，
+// 只读 fetch 面）---
+// 关怀卡消费：GET /v1/panel/care → care_list 帧同形三节（rules/discipline/last_care）
+// + 关怀节真值（status，含心跳两列）——与 tool.care_schedule / tool.self_status
+// 同账同源。语义三态（同技能书架）：200 = 真值快照（归一为关怀卡快照）；
+// 501/404 = 该部署读面缺席 → null（关怀卡如实上屏「暂无接口」诚实空态，不硬造端点）；
+// 其余错误（401/网络断等）抛 HttpError 由卡片错误行承接（不静默降级成空列表）。
+
+/** GET /v1/panel/care —— 关怀规则只读面（关怀卡 loadCare 注入缝的真源）。 */
+export async function fetchCare(config: ApeirethConfig): Promise<CareSnapshot | null> {
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/care`, {
+    headers: await gatewayAuthHeaders(),
+  });
+  if (res.status === 501 || res.status === 404) return null;
+  const data = await checkJson(res);
+  return normalizeCareSnapshot(data);
+}
+
+// --- 性格读面（契约 gateway-api-contract.md §7f / frontend-data-contract.md §10.11，
+// 只读 fetch 面）---
+// 性格卡消费：GET /v1/panel/traits → values 四滑杆现值 + locked 锁定态 +
+// recent_moves 最近移动 + records 成长计账面行 + skipped_records 坏行计数——
+// 与 tool.trait_report 同账同源（同一本 tuning-log.jsonl + 同一份 trait-locks.json）。
+// 语义三态（同技能书架）：200 = 真值快照（归一为性格卡快照）；
+// 501/404 = 该部署读面缺席 → null（性格卡缺源显「—」诚实空态，不硬造端点）；
+// 其余错误（401/网络断等）抛 HttpError 由卡片错误行承接（不静默降级成空账）。
+
+/** GET /v1/panel/traits —— 性格成长账只读面（性格卡 loadTraits 注入缝的真源）。 */
+export async function fetchTraits(config: ApeirethConfig): Promise<TraitSnapshot | null> {
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traits`, {
+    headers: await gatewayAuthHeaders(),
+  });
+  if (res.status === 501 || res.status === 404) return null;
+  const data = await checkJson(res);
+  return normalizeTraitSnapshot(data);
 }

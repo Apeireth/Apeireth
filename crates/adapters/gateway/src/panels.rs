@@ -556,6 +556,14 @@ pub struct GatewayServices {
     /// 人判; 增删改派走工具面, 不进本面)。适配实现在组合根 (与 `tool.task_board`
     /// 同队同账); 未注入 = `501`。
     pub tasks: Option<Arc<dyn crate::task_panel::TaskBoardPanel>>,
+    /// 关怀面板只读面 (`GET /v1/panel/care`): [`crate::care_panel::CarePanelQuery`]
+    /// 的 `care_list` 帧同形投影 + 关怀节真值 (含心跳两列; 与 `tool.care_schedule`
+    /// 同表同拒开口径)。适配实现在组合根; 未注入 = `501`。
+    pub care: Option<Arc<dyn crate::care_panel::CarePanelQuery>>,
+    /// 性格面板只读面 (`GET /v1/panel/traits`): [`crate::trait_panel::TraitPanelQuery`]
+    /// 的四滑杆现值/锁定态/最近移动投影 (与 `tool.trait_report` 同账同源)。
+    /// 适配实现在组合根; 未注入 = `501`。
+    pub traits: Option<Arc<dyn crate::trait_panel::TraitPanelQuery>>,
 }
 
 impl GatewayServices {
@@ -587,12 +595,14 @@ impl GatewayServices {
             credentials: None,
             safety_guard: None,
             workbench: None,
-            // 用户/域/技能库/任务面板面走文件事实服务或持久队列 (组合根显式
-            // 注入), 不走旧 PanelData 适配。
+            // 用户/域/技能库/任务面板/关怀/性格面板面走文件事实服务或持久队列
+            // (组合根显式注入), 不走旧 PanelData 适配。
             user_admin: None,
             domain_admin: None,
             skills: None,
             tasks: None,
+            care: None,
+            traits: None,
         }
     }
 }
@@ -751,6 +761,12 @@ pub fn panel_routes() -> Router<GatewayState> {
         .route("/v1/panel/audit", get(list_audit))
         // 技能库只读面 (元数据; 不回卡体, 卡体走 L2 封套面), 见 [`crate::skill_shelf`]。
         .route("/v1/panel/skills", get(crate::skill_shelf::list_skills))
+        // 关怀面板只读面 (care_list 帧同形 + 心跳两列), 见 [`crate::care_panel`]:
+        // **零写面** (改规则走 `tool.care_schedule`, 停人工审批)。
+        .route("/v1/panel/care", get(crate::care_panel::list_care))
+        // 性格面板只读面 (四滑杆现值/锁定态/最近移动), 见 [`crate::trait_panel`]:
+        // **零写面** (锁定/解锁走 CLI 显式动作)。
+        .route("/v1/panel/traits", get(crate::trait_panel::list_traits))
         // 任务面板面 (只读 + 人判重试), 见 [`crate::task_panel`]: **无增删改派
         // 路由** (那些是工具面的写面, 面板越权面为零)。
         .route("/v1/panel/tasks", get(crate::task_panel::list_tasks))
@@ -1513,6 +1529,8 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
     let domain_admin_supported = services.domain_admin.is_some();
     let skills_supported = services.skills.is_some();
     let tasks_supported = services.tasks.is_some();
+    let care_supported = services.care.is_some();
+    let traits_supported = services.traits.is_some();
 
     let memory_ids = [
         ("memory.read", true, false, &["list", "read"] as &[&str]),
@@ -1571,6 +1589,8 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             { "name": "memory", "capabilities": memory },
             { "name": "tools", "capabilities": [ cap("tools.list", true, false, &["list"], tools_supported, tools_supported) ] },
             { "name": "skills", "capabilities": [ cap("skills.read", true, false, &["list"], skills_supported, skills_supported) ] },
+            { "name": "care", "capabilities": [ cap("care.read", true, false, &["list"], care_supported, care_supported) ] },
+            { "name": "traits", "capabilities": [ cap("traits.read", true, false, &["read"], traits_supported, traits_supported) ] },
             { "name": "tasks", "capabilities": [
                 cap("tasks.read", true, false, &["list"], tasks_supported, tasks_supported),
                 cap("tasks.human_judge_retry", false, true, &["retry"], tasks_supported, tasks_supported),

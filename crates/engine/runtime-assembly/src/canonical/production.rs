@@ -41,13 +41,15 @@ use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{
-    proposal_status_probe, roster_from_config, task_board_status_probe, ProductionSelfStatusSource,
+    doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
+    sheet_ops_status_probe, task_board_status_probe, ProductionSelfStatusSource,
 };
 use super::tool_modules::{
-    ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, EducationModule,
-    ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule, McpModule, ProposalModule,
-    RepoModule, SearchModule, SelfStatusModule, ShellModule, SkillDistillModule, SkillSearchModule,
-    TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
+    ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
+    EducationModule, ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule,
+    ImageOpsModule, McpModule, ProposalModule, RepoModule, SearchModule, SelfStatusModule,
+    SheetOpsModule, ShellModule, SkillDistillModule, SkillSearchModule, TaskBoardModule,
+    TraitReportModule, VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
 use crate::startup::{StartupPhase, StartupTimeline};
@@ -331,6 +333,69 @@ pub struct ProductionModulesConfig {
     /// `APEIRETH_ENABLE_PROPOSALS`, 默认关 fail-closed, grant 即用零审批)。
     /// 自述提案节与工具面同一本提案账。默认关 (opt-in)。
     pub proposals: Option<apeireth_tools_canonical::proposal::ProposalConfig>,
+    /// Register the image-ops tool (`tool.image_ops`, 创作工具面 W1 · 图像操作).
+    ///
+    /// 图像操作面: 工作区限域读 → 闭合操作词表管道 (resize/crop/rotate/flip/
+    /// format_convert/brightness/contrast/grayscale/blur/sharpen/watermark_text)
+    /// → 工作区限域原子写 (临时文件 + 换名, 失败不留半成品)。受控面 = 敏感面拒
+    /// + 大小/像素上限 (防炸弹图) + 格式白名单 (png/jpeg/webp/bmp) + 读前观测门禁
+    /// (未读不得覆盖写, 与读工具同一张观测表)。输出写**归档文件写入族** (读码定
+    /// 归档: 治理层族词表是冻结面, 图像写 = 写文件, 不另立图像写入族)。注册条件
+    /// = 本开关 + [`Self::file_write`] (唯一写总闸) + 工作区根 + 共享读前观测门禁
+    /// (注册即闸)。默认关 (opt-in, fail-closed)。自述创作节与工具面同一计数器。
+    pub image_ops: bool,
+    /// Register the doc-ops tool (`tool.doc_ops`, 创作工具面 W2 · 文档操作).
+    ///
+    /// 受控读写族: PDF 读 (info/extract_text) + DOCX 读 (extract_text/outline) +
+    /// PDF 基础写 (merge/split/extract_pages/watermark_text, 批量管道)。受控面 =
+    /// 工作区限域 + 敏感面拒 + 大小/页数上限 + 创建类原子写 (只创建不覆盖)。
+    /// **写面双重约束**: 写动作受 [`Self::file_write`] 唯一写总闸 (组装根把同一
+    /// 开关值注入 [`apeireth_tools_canonical::DocOpsConfig::with_write_gate`],
+    /// 关 = 拒写不拒读) + 审批档每次人批 (无自动放行档)。注册条件 = 本开关 +
+    /// 工作区根 (注册即闸; 读面不背写总闸, 文档读是本面的第一公民)。默认关
+    /// (opt-in, fail-closed)。自述创作节与工具面同一计数器。
+    pub doc_ops: Option<apeireth_tools_canonical::DocOpsConfig>,
+    /// Register the sheet-ops tool (`tool.sheet_ops`, 创作工具面 K3 · 表格操作).
+    ///
+    /// 受控读写族: CSV 读 (read/summary) + 筛排聚合 (filter/sort/aggregate) +
+    /// 计算列 (formula) + 导出 (export_csv)。受控面 = 工作区限域 + 敏感面拒 +
+    /// 行列/字节上限 (防炸弹表) + 创建类原子写 (只创建不覆盖) + 数值精度如实
+    /// (f64 不静默取整, NaN/inf 零产出)。**写面双重约束**: 写动作受
+    /// [`Self::file_write`] 唯一写总闸 (组装根把同一开关值注入
+    /// [`apeireth_tools_canonical::SheetOpsConfig::with_write_gate`], 关 = 拒写
+    /// 不拒读) + 审批档每次人批 (无自动放行档)。注册条件 = 本开关 + 工作区根
+    /// (注册即闸; 读面不背写总闸, 表格读是本面的第一公民)。默认关 (opt-in,
+    /// fail-closed)。自述创作节与工具面同一计数器。本批只 CSV; xlsx 读入排下批。
+    pub sheet_ops: Option<apeireth_tools_canonical::SheetOpsConfig>,
+    /// Register the device-sense tool (`tool.device_sense`, K 轴 L1 在场感知).
+    ///
+    /// 在场感知面: 设备表 (`devices.json` StoredDoc 拒开, **白名单制默认零设备**)
+    /// + 适配器插槽 (mock 已接固定 fixture, 真实协议族留插槽不接) + 摄像头类
+    /// 敏感读面 (显式授权 + 审计账)。治理 = **只读档** (注册即闸
+    /// `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed, grant 即用零审批)。
+    /// 自述在场节与工具面同一本设备表同一进程内感知计数。默认关 (opt-in)。
+    pub device_sense: Option<apeireth_tools_canonical::device::sense::DeviceSenseConfig>,
+    /// Register the weather tool (`tool.weather`, K 轴 L1/L2 天气感知 + 提醒信号).
+    ///
+    /// 天气面: 公开天气读数 (mock 档 = 固定 fixture **如实标注数据源**; live 档 =
+    /// 受控出口通道 / fetch 族**留插槽不接**) + 提醒信号 (只交信号: 勿扰/频率等
+    /// 提醒纪律归提醒侧消费)。治理 = **只读档** (注册即闸, 与 `tool.device_sense`
+    /// 同一在场感知族开关 `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed)。
+    /// 默认关 (opt-in)。
+    pub weather: Option<apeireth_tools_canonical::device::weather::WeatherConfig>,
+    /// Register the device-control tool (`tool.device_control`, K 轴 L3/L4 受控执行骨架).
+    ///
+    /// 设备受控执行面: 三拍执行 (plan → preview → execute, 前两拍零副作用、
+    /// 执行拍真执行 + 状态账 `device-actions.jsonl` append-only) + 动作三档分级
+    /// (reversible 审批档可配自动档 / irreversible 永逐次人批 / money 永逐次
+    /// 人批 + IM 卡) + 设备白名单 (只读消费 L1 [`Self::device_sense`] 同一本
+    /// `devices.json`, 未登记/未启用拒绝即帧)。执行面 = mock 适配器 (灯/空调/
+    /// 微波炉 fixture, 真实协议族后插)。治理档在治理链
+    /// (`DeviceControlApprovalHook` 唯一承载)。注册条件 = 配置注入 (注册即闸,
+    /// 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`,
+    /// 默认关 fail-closed)。默认关 (opt-in)。
+    pub device_control:
+        Option<apeireth_tools_canonical::device::device_control::DeviceControlConfig>,
 }
 
 impl Default for ProductionModulesConfig {
@@ -380,6 +445,12 @@ impl Default for ProductionModulesConfig {
             trait_report: None,
             exposure_audit: None,
             proposals: None,
+            image_ops: false,
+            doc_ops: None,
+            sheet_ops: None,
+            device_sense: None,
+            weather: None,
+            device_control: None,
         }
     }
 }
@@ -458,6 +529,10 @@ pub struct ProductionBackends {
     /// 自省通道: 生效模型的画像 (H-P1 模型画像表解析结果; 未知模型传显式
     /// unknown 行; 缺位时模型节显式 null + 原因)。
     pub self_status_model_profile: Option<apeireth_core::model_profile::ModelProfile>,
+    /// 自省通道: 成本分级路由节探测口 (H-P2: 主开关 + 最近一次路由决策真值,
+    /// 与任务选型同一台路由器同源现读; 缺位时路由节显式 null + 原因)。
+    pub self_status_cost_routing:
+        Option<StatusProbe<apeireth_core::cost_router::CostRoutingStatus>>,
     /// 自省通道: 用户域节探测口 (W3-①: 当前域 id/角色/域内计数, 现探测如实)。
     pub self_status_domain: Option<StatusProbe<apeireth_tools_canonical::DomainStatus>>,
     /// 自省通道: 内容流面探测口 (J1: 订阅数/最近拉取, 现探测如实)。
@@ -530,6 +605,18 @@ pub enum ModuleFamily {
     TraitReport,
     /// 暴露面体检族 (`exposure_audit`)。
     ExposureAudit,
+    /// 创作工具面 W1 · 图像操作族 (`image_ops`)。
+    ImageOps,
+    /// 创作工具面 W2 · 文档操作族 (`doc_ops`)。
+    DocOps,
+    /// 创作工具面 K3 · 表格操作族 (`sheet_ops`)。
+    SheetOps,
+    /// K 轴 L1 在场感知族 (`device_sense`)。
+    DeviceSense,
+    /// K 轴 L1 天气感知族 (`weather`)。
+    Weather,
+    /// K 轴 L3/L4 受控执行族 (`device_control`)。
+    DeviceControl,
     /// 自省通道族 (`self_status`)。
     SelfStatus,
     /// 外部工具桥族 (`mcp`)。
@@ -956,6 +1043,83 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // 创作工具面 W1 · 图像操作 (`tool.image_ops`, 默认关): 闭合操作词表管道 +
+        // 工作区限域读写 + 敏感面拒 + 炸弹图上限 + 格式白名单 + 原子写。注册条件 =
+        // 开关 + `file_write` 唯一写总闸 + 工作区根 + 共享读前观测门禁 (注册即闸,
+        // 与 `tool.apply_patch` 同受一闸一观测表); 输出写归档文件写入族。
+        // 计数器句柄留给自述创作节 (同源同账)。
+        let mut image_ops_activity = None;
+        if config.image_ops && config.file_write {
+            if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::ImageOps);
+                let provider = ImageOpsModule::new(root.clone(), Arc::clone(&observed_gate));
+                image_ops_activity = Some(provider.activity());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 创作工具面 W2 · 文档操作 (`tool.doc_ops`, 默认关): 受控读写族 (PDF 读 +
+        // DOCX 读 + PDF 基础写批量管道) + 工作区限域 + 敏感面拒 + 大小/页数上限 +
+        // 创建类原子写 (只创建不覆盖)。注册条件 = 开关 + 配置落位 (注册即闸);
+        // **写面双重约束** = `file_write` 唯一写总闸 (组装根注入同一开关值,
+        // 关 = 拒写不拒读) + 审批档每次人批。计数器句柄留给自述创作节 (同源同账)。
+        let mut doc_ops_counters = None;
+        if let Some(doc_ops_config) = &config.doc_ops {
+            instrument.constructed(ModuleFamily::DocOps);
+            let provider =
+                DocOpsModule::new(doc_ops_config.clone().with_write_gate(config.file_write));
+            doc_ops_counters = Some(provider.counters());
+            capabilities.extend(provider.capabilities());
+        }
+
+        // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`, 默认关): 受控读写族 (CSV 读 +
+        // 筛排聚合 + 计算列 + 导出) + 工作区限域 + 敏感面拒 + 行列/字节上限
+        // (防炸弹表) + 创建类原子写 (只创建不覆盖) + 数值精度如实 (f64 不静默
+        // 取整, NaN/inf 零产出)。注册条件 = 开关 + 配置落位 (注册即闸);
+        // **写面双重约束** = `file_write` 唯一写总闸 (组装根注入同一开关值,
+        // 关 = 拒写不拒读) + 审批档每次人批。计数器句柄留给自述创作节 (同源同账)。
+        let mut sheet_ops_counters = None;
+        if let Some(sheet_ops_config) = &config.sheet_ops {
+            instrument.constructed(ModuleFamily::SheetOps);
+            let provider =
+                SheetOpsModule::new(sheet_ops_config.clone().with_write_gate(config.file_write));
+            sheet_ops_counters = Some(provider.counters());
+            capabilities.extend(provider.capabilities());
+        }
+
+        // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`, 默认关): 白名单制
+        // 默认零设备 (devices.json StoredDoc 拒开) + mock 适配器 (真实协议插槽留
+        // 位不接) + 摄像头类敏感读面 (显式授权 + 审计) + 天气 mock 档如实标注
+        // 数据源 + 提醒信号只交信号。注册条件 = 配置注入 (注册即闸
+        // `APEIRETH_ENABLE_DEVICE_SENSE`, 默认关 fail-closed)。感知计数器句柄留给
+        // 自述在场节 (同源同账)。
+        let mut device_sense_activity = None;
+        if let Some(device_config) = &config.device_sense {
+            instrument.constructed(ModuleFamily::DeviceSense);
+            let provider = super::tool_modules::DeviceSenseModule::new(device_config.clone());
+            device_sense_activity = Some(provider.activity());
+            capabilities.extend(provider.capabilities());
+        }
+        if let Some(weather_config) = &config.weather {
+            instrument.constructed(ModuleFamily::Weather);
+            let provider = super::tool_modules::WeatherModule::new(weather_config.clone());
+            capabilities.extend(provider.capabilities());
+        }
+
+        // K 轴 L3/L4 受控执行骨架 (`tool.device_control`, 默认关): 三拍执行
+        // (plan/preview 零副作用 → execute 真执行 + 状态账 append-only) + 三档
+        // 分级审批 (reversible 审批档可配自动档 / irreversible 永逐次人批 /
+        // money 永逐次人批 + IM 卡) + 设备白名单 (只读消费 L1 `devices.json`
+        // 同一本设备表)。注册条件 = 配置注入 (注册即闸: 双闸
+        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`,
+        // 见 `DeviceControlConfig::from_env`, 默认关 fail-closed)。
+        if let Some(device_control_config) = &config.device_control {
+            instrument.constructed(ModuleFamily::DeviceControl);
+            let provider =
+                super::tool_modules::DeviceControlModule::new(device_control_config.clone());
+            capabilities.extend(provider.capabilities());
+        }
+
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
         // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
         // 原因, 注册与其余字段不受影响。
@@ -979,6 +1143,9 @@ impl ProductionModules {
             }
             if let Some(profile) = &backends.self_status_model_profile {
                 source = source.with_model_profile(profile.clone());
+            }
+            if let Some(probe) = &backends.self_status_cost_routing {
+                source = source.with_cost_routing_probe(Arc::clone(probe));
             }
             if let Some(probe) = &backends.self_status_domain {
                 source = source.with_domain_probe(Arc::clone(probe));
@@ -1011,6 +1178,34 @@ impl ProductionModules {
             // 同一成长计既有账 (同账同源, 缺落位 = 显式 null + 原因)。
             if let Some(paths) = &config.trait_report {
                 source = source.with_trait_growth_probe(trait_status_probe(paths.clone()));
+            }
+            // 创作工具面 W1: 自述创作节 (最近操作计数) 与 `tool.image_ops` 工具面
+            // 同一计数器 (同源同账); 面没注册 = 创作节显式 null + 原因。
+            if let Some(activity) = &image_ops_activity {
+                source = source.with_image_ops_probe(image_ops_status_probe(Arc::clone(activity)));
+            }
+            // 创作工具面 W2: 自述创作节 (文档操作计数) 与 `tool.doc_ops` 工具面
+            // 同一计数器 (同源同账); 面没注册 = 创作节显式 null + 原因。
+            if let Some(counters) = &doc_ops_counters {
+                source = source.with_doc_ops_probe(doc_ops_status_probe(Arc::clone(counters)));
+            }
+            // 创作工具面 K3: 自述创作节 (表格操作计数) 与 `tool.sheet_ops` 工具面
+            // 同一计数器 (同源同账); 面没注册 = 创作节显式 null + 原因。
+            if let Some(counters) = &sheet_ops_counters {
+                source = source.with_sheet_ops_probe(sheet_ops_status_probe(Arc::clone(counters)));
+            }
+            // K 轴 L1: 自述在场节 (设备数/白名单数/最近感知) 与 `tool.device_sense`
+            // 工具面同一本设备表同一进程内感知计数 (同源同账; 面没注册 = 在场节
+            // 显式 null + 原因)。
+            if let (Some(device_config), Some(activity)) =
+                (&config.device_sense, &device_sense_activity)
+            {
+                source = source.with_device_presence_probe(
+                    super::self_status_source::device_presence_probe(
+                        device_config.data_dir.clone(),
+                        Arc::clone(activity),
+                    ),
+                );
             }
             instrument.constructed(ModuleFamily::SelfStatus);
             let provider = SelfStatusModule::new(Arc::new(source));

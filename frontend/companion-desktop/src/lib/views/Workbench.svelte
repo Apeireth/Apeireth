@@ -2,9 +2,10 @@
      住户卡 = UserAdminPanel（用户列表 + owner 管理面 + 当前域节 + CLI 指引）；
      技能卡 = SkillShelfPanel（技能库同源只读 + 展开卡体 + L2 封套警示头）；
      随手记卡 = 最近 50 条账本（与快捷窗回看同源：CaptureLedger）+ 搜索过滤。
-     关怀/性格/提案三卡（关怀·性格上屏批）：关怀卡（规则/打扰纪律/心跳态只读）、
-     性格卡（四滑杆现值 + 锁定态 + 最近移动 + 本周性格周报 + 锁定解锁 CLI 指引）、
-     提案卡（提案账最近 N 条 IM 卡风格，「建议你亲自确认」行）。
+     关怀/性格/提案三卡（关怀·性格上屏批 + 面板读面微批）：关怀卡（规则/打扰纪律/
+     心跳态只读，真源 GET /v1/panel/care）、性格卡（四滑杆现值 + 锁定态 + 最近移动 +
+     本周性格周报 + 锁定解锁 CLI 指引，真源 GET /v1/panel/traits）、提案卡（提案账
+     最近 N 条 IM 卡风格，「建议你亲自确认」行）。
      本文件是工作台卡片区容器（组件本体各自独立），接线处见
      components/Workbench.svelte 的挂载点。 -->
 <script lang="ts">
@@ -15,8 +16,7 @@
   import CareCard from '../components/CareCard.svelte';
   import TraitCard from '../components/TraitCard.svelte';
   import ProposalCard from '../components/ProposalCard.svelte';
-  import {fetchSkills, fetchProposalLedger} from '../runtime';
-  import {capabilityEnvFromConfig, readTuningLog} from '../desktop-bridge';
+  import {fetchSkills, fetchProposalLedger, fetchCare, fetchTraits} from '../runtime';
   import {
     CAPTURE_REVIEW_LIMIT,
     captureReviewRows,
@@ -25,24 +25,6 @@
   import {CaptureLedger} from '../../features/quick/quick-capture.ts';
 
   let {config}: {config: ApeirethConfig} = $props();
-
-  /** 四滑杆现值 = 本机下发旋钮值（capabilityEnvFromConfig 的 tune_*，APEIRETH_TUNE_* 同源）。 */
-  const traitValues = $derived.by(() => {
-    const tune = capabilityEnvFromConfig(config.capabilities);
-    return {
-      memory_fade: tune.tune_memory_fade,
-      curiosity_strength: tune.tune_curiosity_strength,
-      tone_saturation: tune.tune_tone_saturation,
-      consolidation_cadence: tune.tune_consolidation_cadence,
-    };
-  });
-
-  /**
-   * 关怀读面暂无 HTTP/IPC 接口（数据只在工具面自述：tool.self_status 关怀节 /
-   * tool.care_schedule care_list）——如实返回 null = 诚实空态；读面落地后此处
-   * 一行换源（同技能书架先例），不硬造端点。
-   */
-  const loadCareSnapshot = async () => null;
 
   /** 随手记账本（与快捷窗回看同一本账，只读消费；账本是回看缓存，记忆流是真源）。 */
   const ledger = new CaptureLedger();
@@ -64,12 +46,10 @@
 <div class="wbv-cards">
   <UserAdminPanel {config} />
   <SkillShelfPanel loadCards={() => fetchSkills(config)} />
-  <CareCard loadCare={loadCareSnapshot} />
-  <TraitCard
-    values={traitValues}
-    locks={null}
-    loadMoves={() => readTuningLog()}
-  />
+  <!-- 关怀/性格注入缝一行换源（面板读面微批）：真源 = runtime 只读 fetch；
+       读面缺席（501/404）= 卡内诚实空态（CARE_NO_FACE / 缺源「—」），不硬造端点。 -->
+  <CareCard loadCare={() => fetchCare(config)} />
+  <TraitCard loadTraits={() => fetchTraits(config)} />
   <ProposalCard loadLedger={() => fetchProposalLedger(config)} />
 
   <div class="cp-card">
