@@ -12,11 +12,11 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| **结果** | **199 套件 / 5360 passed / 0 failed / 22 ignored** |
-| **日期** | 2026-10-16 |
+| **结果** | **322 套件 / 8515 passed / 0 failed / 52 ignored** |
+| **日期** | 2026-10-18 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **来源** | 外部体验审计本机实测（2026-10-16，附录「审计者实测基线」，可按同命令复现） |
+| **来源** | 小批总装批本机全量实测（2026-10-18，同命令可复现；日志 `artifacts/wave2-final-workspace-test.log`） |
 
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
@@ -61,6 +61,14 @@
 > 词表 11→13（+11 例）；同批工程收口（凭据绊线 JWT/Bearer 两处空槽、认知调度器严格 FIFO、体验
 > 旋钮测试减敏、deny 治理对账、只读预设补设备执行面/关怀规则面）不单独计套件。日志
 > `artifacts/wave-1018-final-workspace-test.log`。
+>
+> **复测注记（2026-10-18，小批总装批校验）**：同命令（加 `-j 2`）全量复测 =
+> **322 套件 / 8515 passed / 0 failed / 52 ignored**，exit 0。较上一口径（8509 passed）+6 例：
+> ①`docx_from_markdown` 补 `numbering.xml` +1 例（六件包 + 正文引用 ⊆ numbering 定义交叉校验）
+> ②`sheet_ops` 新增 `export_xlsx` +4 例（往返逐格 / 五件包 XML 检视 / 受控面同族 / 坏输入拒）
+> ③其余 +1 为同批词表钉与自述节计数调整（`tools` lib 562→567；`--test sheet_ops` 23 passed）；
+> 前端独立 workspace `pnpm test` 82/82 suites 不并入本表。日志
+> `artifacts/wave2-final-workspace-test.log`；clippy `--workspace -D warnings` 0 警告、`cargo fmt --check` 0 diff 同批亲跑。
 
 ## 2. 口径定义
 
@@ -78,6 +86,7 @@
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
+| 2026-10-16 | 199 套件 / 5360 passed / 0 failed / 22 ignored | 外部体验审计本机实测（初版 §1 现行基线，2026-10-18 小批总装批刷新后移入历史） |
 | 2026-10-13 | 5243 passed / 0 failed / 22 ignored，190 套件 | `cargo test --workspace --locked -j 2` 全量实测 |
 | 2026-10-06 | 3418 passed / 0 failed / 19 ignored，129 套件 | W2 接线批后实测（当日复核批口径 3406） |
 | 2026-09-30 | 4829 passed / 0 failed，161 套件 | rc.3 批 |
@@ -85,13 +94,14 @@
 | 2026-09-05 | 3120 passed / 0 failed / 13 ignored | 对账批 |
 | 2026-08-28 | 1739 passed（A 块后） | v2.0.0-rc.1 收盘期 |
 
-> 冻结口径说明：`README.md` / `README.zh-CN.md` 的徽章数字（3695）为 owner 冻结口径，
-> 本文件不代改、也不以冻结值覆盖实测值。
+> 冻结口径说明：`README.md` / `README.zh-CN.md` 的徽章数字现行口径 = **8509 passed / 0 failed
+> （2026-10-18 大波口径，owner 换回 README 时同步）**，本文件不代改 README；历史冻结值 3695 已随
+> 2026-10-18 README 换回退役，不再适用。数字刷新时徽章与本表 §1 同日同口径同步。
 
 ## 4. 引用方式
 
 - 其他文档写「测试基线见 [docs/03-reference/test-baseline.md](test-baseline.md)」，
-  需要具体数字时写「（2026-10-16 口径，详见 test-baseline.md）」并注明日期。
+  需要具体数字时写「（2026-10-18 口径，详见 test-baseline.md）」并注明日期。
 - 徽章等必须内联数字的场合：数字取本文件 §1，并保持与本文件同步刷新。
 
 _本文档由「落差清账·文本可信度批」创建（审计修 B-01 / C-07，2026-10-16）。_

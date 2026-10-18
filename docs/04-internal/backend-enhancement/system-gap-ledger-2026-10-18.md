@@ -72,8 +72,8 @@
 | # | 缺口 | 真源（改状态请改真源并在此行同步） | 现值状态 |
 |---|---|---|---|
 | 1 | 安全缺口 G1–G10 | `ROADMAP.md` §4 安全缺口账 + `E-threat-model.md` §5 | G4/G10 ✅；其余 🟡/未销（以 ROADMAP 为准） |
-| 2 | D20 三族诚实残余（IM 触发器未接 / live IM 未实测 / xlsx 写出后置 / DOCX 无主题无字体美化无 numbering.xml / 图核换档偏差登记） | `00-backlog.md` D20 | 🟡 如实登记 |
-| 3 | D21 文档面债（口径漂移 26 处 / rc.1 时代规格无历史横幅 / 11 crate README 陈旧 / matrix 缺 device_control 行 / test-baseline 表头 / CHANGELOG broken link） | `00-backlog.md` D21 | 🟡 部分修（28 文件已修），余待各归口线 |
+| 2 | D20 三族诚实残余（**IM 桥整座无生产构造点（`ImBridge::new`/`im_router` 全仓仅 tests 引用，非仅触发器未接）** / live IM 未实测 / xlsx 写出**已交付 fb35148b** / DOCX **已有 numbering.xml 一级 bullet 00484bf7**，仍无主题、无字体美化 / 图核换档偏差登记） | `00-backlog.md` D20 | 🟡 部分收口（xlsx 写出、DOCX 编号外观已销；余 IM 链路与图核偏差） |
+| 3 | D21 文档面债（口径漂移 26 处 / rc.1 时代规格无历史横幅 / 11 crate README 陈旧 / matrix **device_control 行已补 8b31abeb（§1.1 独立行仍缺）** / test-baseline 表头 / CHANGELOG broken link） | `00-backlog.md` D21 | 🟡 部分修（28 文件 deef3bed + matrix 8b31abeb），余待各归口线 |
 | 4 | D11 客户端令牌管理界面（后端令牌表/门已好，UI 缺） | `00-backlog.md` D11 | 🟡 未开工 |
 | 5 | D8 治理流程整机合练（智囊团审议 + 物理多签从未真跑通过一次；multi-sig 无密码学效力） | `00-backlog.md` D8 / G9 | 🟡 设计在，合练未做 |
 | 6 | K 轴 L3/L4 IM 审批链的运行时触发器接线 | `00-backlog.md` D20① + `K-device-approval-im-push.md` | 🟡 显式提交口已有，生产桥未接 |
@@ -81,7 +81,7 @@
 | 8 | Q27 守门级数「7 重/9 重」两处 LOCKED 文本不一致（代码实证倾向 7 重 v7，改 LOCKED 行需 owner 明示解锁） | `docs/design/founder-ai-qa.md` Q27 | 🟡 待 owner 一字 |
 | 9 | 三段式遗忘默认关闭；`acp.rs` 仅 schema；`p2p_mesh.rs` 明文非加密；`vm_sandbox` blocked | 各交付卷宗 / 学术线扫描 §五 已标注 | 🟡 已知未接线（0 装已标） |
 | 10 | Docx/xlsx 写出（xlsx 写面后置，唯一表格写出口 = CSV） | D20② | 🟡 后置 |
-| 11 | **依赖告警 10 条（Dependabot open，2026-10-18 实查）**：1 high + 5 medium + 4 low。前端 `frontend/companion-desktop`：source-map-js **high**（fix 1.2.2）、katex low ×2（fix 0.18.2）、dompurify low ×2（fix 3.4.16）；`legacy/archived/**` 5 份 Cargo.lock + `research/llm_judge/Cargo.lock`：rustls medium（fix 0.23.45） | GitHub Dependabot alerts API（open 状态，2026-10-18 核查） | 🟡 未处置。建议：①前端 4 条走小批升级（升级 + 构建/测试验证）；②legacy/archived 与 research 锁文件属非产品面 → 由 owner 定口径（dependabot.yml 忽略 或 删除归档锁文件），不要让告警长期挂着污染视线 |
+| 11 | **依赖告警 10 条（Dependabot open，2026-10-18 实查；前端 4 条已清，余 6 条非产品面）**：1 high + 5 medium + 4 low。前端 `frontend/companion-desktop`：source-map-js **high**（fix 1.2.2）、katex low ×2（fix 0.18.2）、dompurify low ×2（fix 3.4.16）——**均已清（7c07566a）**；`legacy/archived/**` 5 份 Cargo.lock + `research/llm_judge/Cargo.lock`：rustls medium（fix 0.23.45） | GitHub Dependabot alerts API（open 状态，2026-10-18 核查） | 🟡 部分处置：①前端 4 条**已清**（7c07566a：dompurify 3.4.16 / katex 0.18.2 / source-map-js 1.2.2，`pnpm audit` 4→0，check/build/test 82/82 全绿）；②legacy/archived 与 research 锁文件属非产品面 → 由 owner 定口径（dependabot.yml 忽略 或 删除归档锁文件），不要让告警长期挂着污染视线 |
 
 > 本索引只维护「指针 + 现值状态」；**改细节改真源**，避免双写漂移（改完回来同步这一行）。
 
@@ -138,3 +138,4 @@
 | 日期 | 结论 | 执行 |
 |---|---|---|
 | 2026-10-18 | 初版建立：四轨 12 条 SG + 10 条现存缺口索引 + 6 条 NT + 4 条 NF；全部 🟡 待拍板 | 总装主线 |
+| 2026-10-18 | 小批总装复核：D23 前端 4 条销账（7c07566a）、D20 xlsx 写出（fb35148b）与 DOCX numbering（00484bf7）收口、D21 matrix device_control 行补齐（8b31abeb）；余 6 条 rustls 告警待 owner 口径 | 总装主线 |

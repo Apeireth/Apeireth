@@ -36,8 +36,8 @@
 | 项 | 值 |
 |---|---|
 | 命令 | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| 结果 | **199 套件 / 5360 passed / 0 failed / 22 ignored** |
-| 日期 | 2026-10-16 |
+| 结果 | **322 套件 / 8515 passed / 0 failed / 52 ignored**（2026-10-18 小批总装批全量实测，单一真源见 [test-baseline.md](test-baseline.md)） |
+| 日期 | 2026-10-18 |
 | 工具链 | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 / rustup 1.29.1；MSVC 14.44.35207 + Windows SDK 10.0.26100.0 |
 
 > 22 ignored 全部为需真 API key / 真硬件的 live E2E，CI 默认不跑；数字逐批增长，以

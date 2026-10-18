@@ -1,5 +1,15 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 小批总装：DOCX 列表外观 / xlsx 写出 / 前端依赖清账 / 矩阵真源补齐 (2026-10-18)
+
+四批并行小批（1.5h 窗口）总装，另含总装批真源刷新：
+
+- **DOCX 列表外观**：`docx_from_markdown` 包由五件扩为**六件**，新增 `word/numbering.xml`（`abstractNum 0` + 一级 `lvl`：`numFmt=bullet` / `lvlText="•"` / `ind left=720 hanging=360`；`num numId=1` 对齐正文既有 `numPr`）+ 内容类型 Override + 正文关系 rId2；测试 +1（正文 `w:numId` 引用集 ⊆ numbering 定义集、num→abstractNum→lvl 链在场），append 钉死「numbering.xml 与底稿逐字节一致」；诚实边界：只有一级 bullet，**有序列表暂与无序同样渲染为项目符号**（解析层无 ordered/bullet 分型，读回归一 `- `），未用真实字处理消费端验证。
+- **xlsx 写出（D20② 收口）**：`tool.sheet_ops` 新增 `export_xlsx`（写面/恒写）——最小单 sheet（五件包：`[Content_Types].xml` / `_rels/.rels` / `xl/workbook.xml` / `xl/_rels/workbook.xml.rels` / `xl/worksheets/sheet1.xml`；数值词面 → `<v>`、其余 → `inlineStr`、XML 转义、XML 1.0 非法字符显式拒绝），**复用 `doc_ops` ZIP 写端 0 新依赖**；受控面与 `export_csv` 完全同族（写总闸 + 每次人批 + 限域 + 敏感面 + 创建类原子写 + 三层上限）；明确不支持公式/多工作表/样式/共享字符串/布尔错误格；测试 +4（往返逐格 / 五件包 XML 检视 / 受控面同族 / 坏输入拒）+ 词表钉 2 改。
+- **前端依赖清账（D23 产品面 4 条销账）**：dompurify 3.4.16 / katex 0.18.2 / source-map-js 1.2.2（取最低修复版，未跨大版）；`pnpm audit` 4→0；`pnpm install --frozen-lockfile` exit 0、`pnpm run check` 0 error、`pnpm run build` exit 0、`pnpm test` **82/82 suites**。诚实边界：katex 0.17→0.18 属 0.x minor，仅 type-check+build+Node 冒烟背书，浏览器视觉未 e2e；`legacy/archived/**` 与 `research/llm_judge/` 的 6 条 rustls 告警属非产品面，处置口径待 owner（D23）。
+- **能力矩阵真源补齐（D21 部分销账）**：§0.2 补 `device_control` 开关行（`APEIRETH_ENABLE_DEVICE_CONTROL` 双闸依赖 `APEIRETH_ENABLE_DEVICE_SENSE`、三拍执行、三档词表 8/3/2、审批族、两本账、失败重试、真参数预览、只读预设 pin、名册/自述节、四级口径）；§1.1 自述行「二十节 → **二十一节**」并补 `device_control`；关键诚实：**计划卡→IM 推送链 = IMPLEMENTED 未接线**（全仓仅测试构造），money 档 `im_card_id` 出卡来源在生产装配下未闭合。
+- **真源刷新（2026-10-18 总装批亲跑，`-j 2`）**：`cargo test --workspace --all-targets --locked --no-fail-fast` → **322 套件 / 8515 passed / 0 failed / 52 ignored**（exit 0，较 8509 +6）；`cargo clippy --workspace --all-targets --locked -- -D warnings` → 0 警告；`cargo fmt --check` → 0 diff；`check-neutral-terms` 新增行 0 命中、`secret-scan` 干净。数字真源 `docs/03-reference/test-baseline.md`（§1 已刷新、旧 199/5360 移入历史口径），`capabilities-matrix §0.1` 同日同步；日志 `artifacts/wave2-final-workspace-test.log`。
+
 ## [Unreleased] — 大波：K 轴设备审批链 / 提醒闭环+L5 守护 / 创作面补齐 / 图像操作换核 (2026-10-18)
 
 四批并行施工总装（K 轴能力面补全 + 创作面补齐 + 许可搬运线第一批的换核收口），另含同批工程收口：
