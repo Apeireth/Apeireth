@@ -78,6 +78,8 @@
 
 | D22 | **「系统级能力」缺口四轨（2026-10-18 AI OS 全景调研产出，🟡 待 owner 拍板排序）**：T1 内核健壮性（SG-01 可取消 worker+进程树 / SG-02 上下文语义页+检查点）｜T2 系统接口面（SG-03 UIA 只读控制图 / SG-04 动作层+回放）｜T3 生态与多户（SG-05 插件隔离+签名 / SG-06 技能包 / SG-07 记忆对象级 grant）｜T4 产品可见面（SG-08 记忆面板 / SG-09 端侧推理 / SG-10 跨设备同步 / SG-11 SDK·OTA·回放 / SG-12 模型路由策略层）。**条目细节、验收判据、成本、明确不做（NT-01…06）、形态不同（NF-01…04）全部在台账**：[system-gap-ledger-2026-10-18.md](system-gap-ledger-2026-10-18.md)；排序依据见全景对照 [docs/04-internal/ai-os-landscape-2026-10-18.md](../../ai-os-landscape-2026-10-18.md)。拍板后：选中项转任务卡并排期、落地补能力矩阵行+测试基线、状态改 ✅ 留提交号；不做项注明日期留史 | 台账 = 唯一业务真源（本行只是索引）；台账由总装线每波复核、owner 拍板改状态 | 台账 + 全景对照 + 两份 artifacts 调研 |
 
+| D23 | **Dependabot 开放告警 10 条（2026-10-18 实查）**：1 high + 5 medium + 4 low。①前端 `frontend/companion-desktop`：source-map-js **high**（fix 1.2.2）、katex low ×2（fix 0.18.2）、dompurify low ×2（fix 3.4.16）；②`legacy/archived/**` 5 份 Cargo.lock + `research/llm_judge/Cargo.lock`：rustls medium（fix 0.23.45） | 处置建议：①前端 4 条走小批升级（升级 + 构建/测试验证，锁文件同提交）；②legacy/archived 与 research 锁文件属非产品面 → 需 owner 一句口径：`dependabot.yml` 忽略 或 删除归档锁文件（倾向忽略，历史归档不追溯改）；③台账索引见 [system-gap-ledger-2026-10-18.md](system-gap-ledger-2026-10-18.md) §二 #11 | GitHub Dependabot alerts API 实查（open 状态） |
+
 ## 与既有账目的关系
 
 - 性能红行现状见 `reports/benchmark-reproduction.md`；开关权力现状见 `docs/02-guides/capability-switch-power-audit.md`；

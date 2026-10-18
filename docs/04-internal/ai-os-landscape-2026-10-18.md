@@ -111,6 +111,11 @@ P4 升级流 + 借鉴决策总表（30 项目）：6 类插件协议、ContextBr
 | 扩展/生态 | 工具面词表 + MCP client + 技能沉淀（distill/search） | IMPLEMENTED（缺签名/分发） |
 | UI/shell | companion-desktop（Svelte+Tauri）+ CLI + TUI | PRODUCTION WIRED（前端独立 workspace） |
 
+> **口径对账（2026-10-18 架构调研线）**：`stage1/9-organs.md` 的 9 器官（body/brain/…）是**设计词表**；
+> `crates/engine/organ` 实现层是 9 个认知 `OrganKind`（W1/W2/W3/E4/F4/F1/F6/E7/Memory），其中
+> W1/W2 为回合瞬态、`OrganModule` 默认 env 关（四级口径：IMPLEMENTED，未默认启用）；
+> 「五层混合检索」= BM25 / 向量 / RRF / ACT-R / 三层渐进披露，另有 4 层逻辑记忆 + 5 维时空 + 9 维打分并存。
+
 > 与阶段 1/2/3 的对照：**器官/治理/记忆/调度/工具这些内核要素大多落地且有测试**；
 > **进程拓扑/5 层总线/6 DB/OTA 这些 v1 系统形态在 v2 重构中被简化或未继承**（工程取舍，不是遗漏）。
 

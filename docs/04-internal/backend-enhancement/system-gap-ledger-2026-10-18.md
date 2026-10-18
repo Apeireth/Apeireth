@@ -81,6 +81,7 @@
 | 8 | Q27 守门级数「7 重/9 重」两处 LOCKED 文本不一致（代码实证倾向 7 重 v7，改 LOCKED 行需 owner 明示解锁） | `docs/design/founder-ai-qa.md` Q27 | 🟡 待 owner 一字 |
 | 9 | 三段式遗忘默认关闭；`acp.rs` 仅 schema；`p2p_mesh.rs` 明文非加密；`vm_sandbox` blocked | 各交付卷宗 / 学术线扫描 §五 已标注 | 🟡 已知未接线（0 装已标） |
 | 10 | Docx/xlsx 写出（xlsx 写面后置，唯一表格写出口 = CSV） | D20② | 🟡 后置 |
+| 11 | **依赖告警 10 条（Dependabot open，2026-10-18 实查）**：1 high + 5 medium + 4 low。前端 `frontend/companion-desktop`：source-map-js **high**（fix 1.2.2）、katex low ×2（fix 0.18.2）、dompurify low ×2（fix 3.4.16）；`legacy/archived/**` 5 份 Cargo.lock + `research/llm_judge/Cargo.lock`：rustls medium（fix 0.23.45） | GitHub Dependabot alerts API（open 状态，2026-10-18 核查） | 🟡 未处置。建议：①前端 4 条走小批升级（升级 + 构建/测试验证）；②legacy/archived 与 research 锁文件属非产品面 → 由 owner 定口径（dependabot.yml 忽略 或 删除归档锁文件），不要让告警长期挂着污染视线 |
 
 > 本索引只维护「指针 + 现值状态」；**改细节改真源**，避免双写漂移（改完回来同步这一行）。
 
