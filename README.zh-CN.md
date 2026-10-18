@@ -17,9 +17,9 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 [![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
 
-> 口径注记：**workspace = 31 members（30 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）。（审计修 A-11 / B-02）
-> Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-18 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。（审计修 A-03）
-> `honest gaps` 徽章 = 静态快照——手维护、不做动态计数（残余增删时手工改数）。数字取[诚实边界](#boundaries)「已定义、未接线」点名的接线残余：`/v1/ws` 服务端路由未接 · 无 Noise 握手 · 无洋葱路由 · SDK WS 传输层是桩 = 4 处。（小巧思 ③）
+> 口径注记：**workspace = 31 members（30 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）。
+> Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-18 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。
+> `honest gaps` 徽章 = 静态快照——手维护、不做动态计数（残余增删时手工改数）。数字取[诚实边界](#boundaries)「已定义、未接线」点名的接线残余：`/v1/ws` 服务端路由未接 · 无 Noise 握手 · 无洋葱路由 · SDK WS 传输层是桩 = 4 处。
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -59,7 +59,7 @@
 > *我还没做完。没接线的，我挂「未接线」。*
 > *这就是全部的我。—— Apeireth*
 
-*（每一句都有出处：[场景三幕](#acts) · [诚实边界](#boundaries) · [掀开引擎盖](#hood)。（小巧思 ①））*
+*（每一句都有出处：[场景三幕](#acts) · [诚实边界](#boundaries) · [掀开引擎盖](#hood)。）*
 
 ---
 
@@ -100,7 +100,7 @@
 | 绿萝（第一幕） | **随手记**入记忆流 + **五层混合检索** | [随手记交付记录](docs/04-internal/backend-enhancement/quick-capture-delivery.md) · [核心机制讲解](docs/02-guides/core-mechanisms-explained.md) |
 | 标黄三处（第二幕） | **审批卡**——副作用先过你的批准；`Failed` 只能人判（失败绝不自动重试） | [IM 快捷接入 · 审批卡片](docs/02-guides/im-quick-access.md) · [V6-a 任务队列交付记录](docs/04-internal/backend-enhancement/V6-a-task-queue-delivery.md) |
 
-*本表把场景对到机制与它的交付记录——许的是机制，不是场景本身；关怀规则面默认关（`APEIRETH_ENABLE_CARE=1` 显式开）——[capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md)。（小巧思 ②）*
+*本表把场景对到机制与它的交付记录——许的是机制，不是场景本身；关怀规则面默认关（`APEIRETH_ENABLE_CARE=1` 显式开）——[capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md)。*
 
 ---
 
@@ -134,7 +134,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ### 三步开始
 
-1. 双击桌面图标 → 选服务商 → 填密钥 → 开聊。密钥优先进**系统钥匙串**（`APEIRETH_KEYRING_BACKEND=auto`）；钥匙串不可用时**退化为环境变量/内存后端**——诚实边界见 `apeireth-credentials` crate（文件后端为明文，zeroize 未实现前不宣称）（审计修 A-07）；
+1. 双击桌面图标 → 选服务商 → 填密钥 → 开聊。密钥优先进**系统钥匙串**（`APEIRETH_KEYRING_BACKEND=auto`）；钥匙串不可用时**退化为环境变量/内存后端**——诚实边界见 `apeireth-credentials` crate（文件后端为明文，zeroize 未实现前不宣称）；
 2. 先聊两句试试——它会用你的话回答你，不是用模板；
 3. 想调它的性子？设置页「性格与记忆」：四个滑杆、三档预设（省心 / 均衡 / 深度记忆）——**你调的每一档它都记得，也都可以反悔**。
 
@@ -152,18 +152,18 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ### 已定义、未接线
 
-- **WebSocket 8 帧全双工（审计修 A-04）**：协议契约已定义（`protocol::ws_v1` + 测试）并被 SDK 文档引用；但 **HTTP 服务端还没接它**（无 `/v1/ws` 路由），能力面板自报 `not_assembled`。把它当协议参考，别当可用端点。
-- **P2P mesh（审计修 A-05）**：**明文 mesh**——`payload_hex` 是十六进制明文，`payload_len_hex` 只是长度（不是校验和），`packet_id` 由 (node_id, len) 推出——不保证唯一、不防重放。今天**没有 Noise 握手、没有洋葱路由**；那在 v2.1 路线图上。
-- **SDK（审计修 A-15）**：`pub const STUB_MODE: bool = true;`——WS 传输层是显式桩（`unimplemented!()` + 编译期门），绝不做假装实现。
+- **WebSocket 8 帧全双工**：协议契约已定义（`protocol::ws_v1` + 测试）并被 SDK 文档引用；但 **HTTP 服务端还没接它**（无 `/v1/ws` 路由），能力面板自报 `not_assembled`。把它当协议参考，别当可用端点。
+- **P2P mesh**：**明文 mesh**——`payload_hex` 是十六进制明文，`payload_len_hex` 只是长度（不是校验和），`packet_id` 由 (node_id, len) 推出——不保证唯一、不防重放。今天**没有 Noise 握手、没有洋葱路由**；那在 v2.1 路线图上。
+- **SDK**：`pub const STUB_MODE: bool = true;`——WS 传输层是显式桩（`unimplemented!()` + 编译期门），绝不做假装实现。
 
 ### 诚实的边线
 
-- **凭据（审计修 A-07）**：系统钥匙串可用就用，不可用退环境变量 / 内存后端；文件后端是明文，`SecretString` 不做 zeroize——实现之前我们不宣称。
-- **服务商（审计修 A-08）**：**真实三家：OpenAI 兼容 / MiniMax / Anthropic。** Gemini 与 OpenAI-Responses 只是协议归一器（`protocol::adapters`）——没接成 provider。
-- **进程隔离（审计修 A-09）**：**Windows = Job Object + AppContainer**；**Linux/macOS = 只有进程组 + rlimits（无文件/网络隔离）**——所以 shell 工具在 Windows 之外默认拒开。
-- **记忆数学（审计修 A-12）**：随船的数学吸收模块（公开经典模型的应用改造：Betti 洞探测、Kuramoto 相锁、Chronicle 结晶、DualScaled 场）是**简化 / 实验级**——例如 β₂ 腔数是恒 0 占位、Chronicle 用单次 SHA-256 锚定而非 Merkle 链；正交残差分层提炼记忆（MGS 残差金字塔，公开数值方法的应用改造）是完整实现。细节在各 crate 模块文档里。
+- **凭据**：系统钥匙串可用就用，不可用退环境变量 / 内存后端；文件后端是明文，`SecretString` 不做 zeroize——实现之前我们不宣称。
+- **服务商**：**真实三家：OpenAI 兼容 / MiniMax / Anthropic。** Gemini 与 OpenAI-Responses 只是协议归一器（`protocol::adapters`）——没接成 provider。
+- **进程隔离**：**Windows = Job Object + AppContainer**；**Linux/macOS = 只有进程组 + rlimits（无文件/网络隔离）**——所以 shell 工具在 Windows 之外默认拒开。
+- **记忆数学**：随船的数学吸收模块（公开经典模型的应用改造：Betti 洞探测、Kuramoto 相锁、Chronicle 结晶、DualScaled 场）是**简化 / 实验级**——例如 β₂ 腔数是恒 0 占位、Chronicle 用单次 SHA-256 锚定而非 Merkle 链；正交残差分层提炼记忆（MGS 残差金字塔，公开数值方法的应用改造）是完整实现。细节在各 crate 模块文档里。
 
-### 默认开了什么（审计修 A-10）
+### 默认开了什么
 
 全表 → [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md)；真源 = `production.rs` 默认值 + CLI env 覆盖层。简版：
 
@@ -181,7 +181,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 - **记忆可导出**——它记得的东西是你的，随时可导出、可删除，绝不做人质（[founder-ai-qa](docs/design/founder-ai-qa.md) 裁定：数据主权在人）。
 - **底线会重长**——它自己的底线 / 信念删后重新长，除非你上锁（设计裁定，[founder-ai-qa](docs/design/founder-ai-qa.md)；同一语义今天已交付的面 = 守卫只能拒绝、不能放行——见[诚实边界](#boundaries)）。
 - *You can wipe it, but it grows back into itself.* / *你可以清空它，但它会再长成它。*
-- 诚实注记：**无「复活承诺」**——备份恢复不是复活，是同一份记忆重生（[founder-ai-qa](docs/design/founder-ai-qa.md)）。（小巧思 ④）
+- 诚实注记：**无「复活承诺」**——备份恢复不是复活，是同一份记忆重生（[founder-ai-qa](docs/design/founder-ai-qa.md)）。
 
 ---
 
@@ -229,7 +229,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 - **历史追加写死**：数据库触发器级禁止改写，外加哈希链防篡改——它记得的事，赖不掉也改不掉；
 - **五层混合检索**：词法抓一字不差、语义抓意思相近、激活度让最近常聊的自然浮起——所以你随口一句"那个……"它也接得住；
 - **会淡但不会错**：久远的按记忆曲线变淡（像人一样），但受保护的永不忘——这条是**穷尽证明过的数学**，不是口号；纠错走"撤回"，不删历史。
-- **诚实层级注记（审计修 A-12）**：随船的*数学*吸收模块是**简化 / 实验级**（见上文[诚实的边线](#boundaries)）；MGS 残差金字塔（公开数值方法的应用改造）是完整实现。
+- **诚实层级注记**：随船的*数学*吸收模块是**简化 / 实验级**（见上文[诚实的边线](#boundaries)）；MGS 残差金字塔（公开数值方法的应用改造）是完整实现。
 
 > 你以前说过，这盆花对你很重要。——它没忘。哪怕你以为那只是随口一提。
 
@@ -256,7 +256,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ### Crate 地图——诚实的行
 
-每个 crate **实际是什么**（审计修 A-04 / A-05 / A-06 / A-07 / A-08 / A-09 / A-12 / A-15）：
+每个 crate **实际是什么**：
 
 | 层 | Crate | 它实际是什么 | 真实入口 |
 |---|---|---|---|
@@ -283,7 +283,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 # 1. 测试是真的
 cargo test --workspace --all-targets --locked --no-fail-fast
 # 预期：0 失败。测试数字只住一处：docs/03-reference/test-baseline.md
-# （2026-10-18 口径；复跑会自己打印当前计数）。（审计修 A-03）
+# （2026-10-18 口径；复跑会自己打印当前计数）。
 
 # 2. 红线是真的：纯 Safe Rust + 零警告
 cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -317,7 +317,7 @@ cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
 
 ### 承诺与证据同行
 
-本表不加一句新承诺——每行引文都取自上文原句，每行配一枚可查账的指针（小巧思 ⑧）：
+本表不加一句新承诺——每行引文都取自上文原句，每行配一枚可查账的指针：
 
 | 承诺（上文原话） | 证据（可查账指针） |
 |---|---|
@@ -386,7 +386,7 @@ cargo run -p apeireth-cli -- chat "你好，还记得我吗？"
 
 *Star 历史图占位——成长曲线图定稿后连本行一起替换；图未定稿前，星标历史先以文字链自查：[stargazers](../../stargazers)。*
 
-*图注：**它的成长**——图是数据，注是灵魂。（小巧思 ⑤）*
+*图注：**它的成长**——图是数据，注是灵魂。*
 
 ---
 
@@ -424,4 +424,4 @@ Apache-2.0 OR MIT 双许可。来源沿革以 git 历史与 docs 归档为准（
 
 *本 README 由它的工程伙伴维护。*
 *发现「宣称 ≠ 实现」请开一条 [Issue](../../issues)——我们把它当事故处理。*
-*不假装，也包括这份 README 本身。（小巧思 ⑫）*
+*不假装，也包括这份 README 本身。*

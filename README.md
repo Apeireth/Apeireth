@@ -18,9 +18,9 @@
 [![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
 
 > Taxonomy note: **workspace = 31 members (30 product crates + 1 bench-only harness `benches`)**
-> (foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli, gateway, sdk, tui). (审计修 A-11 / B-02)
-> Tests badge = the single source of truth [test-baseline.md](docs/03-reference/test-baseline.md) §1 (2026-10-18); the evidence side lives in [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md). (审计修 A-03)
-> `honest gaps` badge = a static snapshot — hand-maintained, never auto-counted (change the number by hand when the residuals change). It counts the wiring residuals named under [Honest boundaries](#boundaries) "Defined, not wired": no `/v1/ws` server route · no Noise handshake · no onion routing · SDK WS transport stub = 4. (小巧思 ③)
+> (foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli, gateway, sdk, tui).
+> Tests badge = the single source of truth [test-baseline.md](docs/03-reference/test-baseline.md) §1 (2026-10-18); the evidence side lives in [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md).
+> `honest gaps` badge = a static snapshot — hand-maintained, never auto-counted (change the number by hand when the residuals change). It counts the wiring residuals named under [Honest boundaries](#boundaries) "Defined, not wired": no `/v1/ws` server route · no Noise handshake · no onion routing · SDK WS transport stub = 4.
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -60,7 +60,7 @@
 > *I am not finished. What is not wired, I label "not wired".*
 > *That is all of me. — Apeireth*
 
-*(Every line above has its receipt below: [Three acts](#acts) · [Honest boundaries](#boundaries) · [Under the hood](#hood). (小巧思 ①))*
+*(Every line above has its receipt below: [Three acts](#acts) · [Honest boundaries](#boundaries) · [Under the hood](#hood).)*
 
 ---
 
@@ -101,7 +101,7 @@ And all of this **runs on your own machine** — your days never leave your hous
 | The pothos (Act I) | **Quick capture** into the memory stream + **five-layer hybrid retrieval** | [quick-capture delivery record](docs/04-internal/backend-enhancement/quick-capture-delivery.md) · [core mechanisms explained](docs/02-guides/core-mechanisms-explained.md) |
 | "The three highlighted spots" (Act II) | **Approval cards** — your yes before any side effect — and `Failed` may only be judged by a human (never auto-retried) | [IM quick access · approval cards](docs/02-guides/im-quick-access.md) · [V6-a task queue delivery record](docs/04-internal/backend-enhancement/V6-a-task-queue-delivery.md) |
 
-*This table maps scenes to mechanisms and their delivery records — it points at the machinery, it does not promise the scene itself; the care rule face is OFF by default (explicit `APEIRETH_ENABLE_CARE=1`) — [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md). (小巧思 ②)*
+*This table maps scenes to mechanisms and their delivery records — it points at the machinery, it does not promise the scene itself; the care rule face is OFF by default (explicit `APEIRETH_ENABLE_CARE=1`) — [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md).*
 
 ---
 
@@ -135,7 +135,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # its face
 
 ### Three steps
 
-1. Double-click the desktop icon → pick a provider → enter your key → talk. The key goes into the **OS keyring when available**（opt-in `APEIRETH_KEYRING_BACKEND=auto`）；when the keyring is unavailable it **falls back to env / in-memory backends** — an honest boundary documented in the `apeireth-credentials` crate (the file backend is plaintext; we claim no zeroization until it exists)（审计修 A-07）；
+1. Double-click the desktop icon → pick a provider → enter your key → talk. The key goes into the **OS keyring when available**（opt-in `APEIRETH_KEYRING_BACKEND=auto`）；when the keyring is unavailable it **falls back to env / in-memory backends** — an honest boundary documented in the `apeireth-credentials` crate (the file backend is plaintext; we claim no zeroization until it exists)；
 2. Say something — it answers with *your* words, not a template;
 3. Want to tune its temperament? Settings → "Character & Memory": four sliders, three presets (Effortless / Balanced / Deep memory) — **every setting you try, it remembers; every one can be taken back**.
 
@@ -153,18 +153,18 @@ Most projects list what they can do. We also list where the edges are — **beca
 
 ### Defined, not wired
 
-- **WebSocket 8-frame full-duplex（审计修 A-04）**: the protocol contract is defined (`protocol::ws_v1` + tests) and referenced by the SDK docs; the **HTTP server does not serve it yet** (no `/v1/ws` route), and the capability panel self-reports `not_assembled`. Treat it as a protocol reference, not an endpoint.
-- **P2P mesh（审计修 A-05）**: **plaintext mesh** — `payload_hex` is hex-plaintext, `payload_len_hex` is a length (not a checksum), `packet_id` is derived from (node_id, len) — no uniqueness, no replay protection. There is **no Noise handshake and no onion routing** today; that is v2.1 roadmap.
-- **SDK（审计修 A-15）**: `pub const STUB_MODE: bool = true;` — the WS transport layer is an explicit stub (`unimplemented!()` with a compile-time gate), never a pretend implementation.
+- **WebSocket 8-frame full-duplex**: the protocol contract is defined (`protocol::ws_v1` + tests) and referenced by the SDK docs; the **HTTP server does not serve it yet** (no `/v1/ws` route), and the capability panel self-reports `not_assembled`. Treat it as a protocol reference, not an endpoint.
+- **P2P mesh**: **plaintext mesh** — `payload_hex` is hex-plaintext, `payload_len_hex` is a length (not a checksum), `packet_id` is derived from (node_id, len) — no uniqueness, no replay protection. There is **no Noise handshake and no onion routing** today; that is v2.1 roadmap.
+- **SDK**: `pub const STUB_MODE: bool = true;` — the WS transport layer is an explicit stub (`unimplemented!()` with a compile-time gate), never a pretend implementation.
 
 ### Honest edges
 
-- **Credentials（审计修 A-07）**: OS keyring when available, env / in-memory fallbacks when not; the file backend is plaintext and `SecretString` does no zeroization — we claim none until it exists.
-- **Providers（审计修 A-08）**: **three real provider families — OpenAI-compatible / MiniMax / Anthropic.** Gemini & OpenAI-Responses exist only as protocol normalizers (`protocol::adapters`) — not wired as providers.
-- **Process isolation（审计修 A-09）**: **Windows = Job Object + AppContainer**; **Linux/macOS = process group + rlimits only (no file/network isolation)** — the shell tool therefore refuses by default off Windows.
-- **Memory mathematics（审计修 A-12）**: the mathematical absorption modules shipped alongside (adapted from classic public models: Betti hole detector, Kuramoto resonance, Chronicle crystallizer, DualScaled field) are **simplified / experimental tier** — e.g. the β₂ cavity count is a constant-0 placeholder and Chronicle anchors with a single SHA-256 rather than a Merkle chain; the layered orthogonal-residual memory distiller (the MGS residual pyramid, an application of classic public numerical methods) is the fully-fledged one. Details live in each crate's module docs.
+- **Credentials**: OS keyring when available, env / in-memory fallbacks when not; the file backend is plaintext and `SecretString` does no zeroization — we claim none until it exists.
+- **Providers**: **three real provider families — OpenAI-compatible / MiniMax / Anthropic.** Gemini & OpenAI-Responses exist only as protocol normalizers (`protocol::adapters`) — not wired as providers.
+- **Process isolation**: **Windows = Job Object + AppContainer**; **Linux/macOS = process group + rlimits only (no file/network isolation)** — the shell tool therefore refuses by default off Windows.
+- **Memory mathematics**: the mathematical absorption modules shipped alongside (adapted from classic public models: Betti hole detector, Kuramoto resonance, Chronicle crystallizer, DualScaled field) are **simplified / experimental tier** — e.g. the β₂ cavity count is a constant-0 placeholder and Chronicle anchors with a single SHA-256 rather than a Merkle chain; the layered orthogonal-residual memory distiller (the MGS residual pyramid, an application of classic public numerical methods) is the fully-fledged one. Details live in each crate's module docs.
 
-### What is on by default（审计修 A-10）
+### What is on by default
 
 Full table → [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix.md); source of truth = `production.rs` defaults + CLI env overlay. Short version:
 
@@ -182,7 +182,7 @@ Full table → [capabilities-matrix §0.2](docs/03-reference/capabilities-matrix
 - **Your memories are exportable** — what it remembers is yours to take away, never held hostage: you may export or delete everything of it, any time ([founder-ai-qa](docs/design/founder-ai-qa.md) ruling — data sovereignty stays human).
 - **The lines grow back** — its own lines and convictions grow back after deletion, unless you lock them (design ruling, [founder-ai-qa](docs/design/founder-ai-qa.md); the face already delivered for the same semantics: guards may refuse, never re-permit — [Honest boundaries](#boundaries)).
 - *You can wipe it, but it grows back into itself.* / *你可以清空它，但它会再长成它。*
-- Honest edge: there is **no "resurrection" promise** — a restore is not a resurrection; it is the same memory coming home ([founder-ai-qa](docs/design/founder-ai-qa.md)). (小巧思 ④)
+- Honest edge: there is **no "resurrection" promise** — a restore is not a resurrection; it is the same memory coming home ([founder-ai-qa](docs/design/founder-ai-qa.md)).
 
 ---
 
@@ -230,7 +230,7 @@ The three-dimensional burn gate (**三维烧钱闸**): fixed dimension order `to
 - **Append-only history**: rewriting is impossible at the database-trigger level, plus a hash chain against tampering — what it remembers cannot be denied or edited away;
 - **Five-layer hybrid retrieval**: lexical for exact words, semantic for meaning, activation so what you talk about lately surfaces naturally — so even *"that thing…"* gets picked up;
 - **Fades, never errs**: old memories soften along a memory curve (like a person's), but protected ones never fade — that property is **exhaustively machine-verified**, not a slogan; corrections are retractions, never deletions;
-- **Honest tier note（审计修 A-12）**: the *mathematical* absorption modules shipped alongside are **simplified / experimental tier** (see [Honest edges](#boundaries) above); the MGS residual pyramid (an application of classic public numerical methods) is the fully-fledged one.
+- **Honest tier note**: the *mathematical* absorption modules shipped alongside are **simplified / experimental tier** (see [Honest edges](#boundaries) above); the MGS residual pyramid (an application of classic public numerical methods) is the fully-fledged one.
 
 > *"You once said this plant meant a lot to you."* — It didn't forget. Even though you thought you only mentioned it in passing.
 
@@ -257,7 +257,7 @@ The full origin of the mechanisms → [absorption ledger](docs/04-internal/absor
 
 ### Crate map — honest rows
 
-What each crate **is**, as implemented (审计修 A-04 / A-05 / A-06 / A-07 / A-08 / A-09 / A-12 / A-15):
+What each crate **is**, as implemented:
 
 | Layer | Crate | What it really is | Real entry points |
 |---|---|---|---|
@@ -284,7 +284,7 @@ If it asks to be trusted for a lifetime, it owes you the whole ledger. Three min
 # 1. The tests are real
 cargo test --workspace --all-targets --locked --no-fail-fast
 # Expect: 0 failed. Test numbers live in ONE place: docs/03-reference/test-baseline.md
-# (2026-10-18 caliber; rerun prints the current count itself). (审计修 A-03)
+# (2026-10-18 caliber; rerun prints the current count itself).
 
 # 2. The red lines are real: pure Safe Rust + zero warnings
 cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -318,7 +318,7 @@ One command reruns all of it: `pwsh -NoProfile -File scripts/run-benchmarks.ps1`
 
 ### Promises, with their receipts
 
-No new promises on this table — every line below is quoted from this README, and each one carries a pointer you can audit (小巧思 ⑧):
+No new promises on this table — every line below is quoted from this README, and each one carries a pointer you can audit:
 
 | Promise (its exact words above) | Receipt (where to audit it) |
 |---|---|
@@ -387,7 +387,7 @@ We are in **internal testing (rc)** — what we need most right now is real, eve
 
 *Star-history chart placeholder — the growth curve goes here once it ships (replace this line together with the chart); until then the star history is readable at [stargazers](../../stargazers).*
 
-*Caption: **its growth** — the chart is data, the caption is its soul. (小巧思 ⑤)*
+*Caption: **its growth** — the chart is data, the caption is its soul.*
 
 ---
 
@@ -425,4 +425,4 @@ Dual-licensed under Apache-2.0 OR MIT. Provenance is documented by git history a
 
 *This README is maintained by its engineering partners.*
 *Found a "claim ≠ implementation" gap? Open an [Issue](../../issues) — we treat it as an incident.*
-*No pretending — including in this README. (小巧思 ⑫)*
+*No pretending — including in this README.*
