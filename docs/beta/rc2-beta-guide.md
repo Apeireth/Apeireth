@@ -4,7 +4,7 @@
 
 ## 一、安装（2 分钟）
 
-1. 下载 `Apeireth Companion_2.0.0-rc.4_x64-setup.exe`（[Releases 页](../../releases)）；
+1. 下载 `Apeireth Companion_2.0.0-rc.4_x64-setup.exe`（[Releases 页](https://github.com/Apeireth/Apeireth/releases)）；
 2. （可选）核对 SHA256 与 `SHA256SUMS.txt` 一致——我们所有数字都可复核；
 3. 双击安装（默认装到 `C:\Program Files\Apeireth Companion`）→ 桌面出现快捷方式。
 

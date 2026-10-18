@@ -50,10 +50,10 @@ Author:          主代理 Mavis
 
 | 维度 | 真账 |
 |---|---|
-| **Workspace** | **18 crates** (foundation 6 / engine 8 / capabilities 1 / adapters 3), 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；此前"16 crates"口径因 2026-09-04 `0e542d03` 抽出 runtime-assembly 作废） |
-| **架构收敛** | v1 86-crate → v2 18-crate = **79.1% 收敛**（17-crate 口径于 2026-10-06 `apeireth-guard` 加入后更新） |
+| **Workspace** | **31 members（30 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + 图像核心家族 11 = 30 crates；2026-10-18 许可搬运线 +11，见 [license-port/](license-port/)）, 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；历史口径：2026-10-18 前 20 members / 此前 18 crates） |
+| **架构收敛** | v1 86-crate → v2 30 crate = **65.1% 收敛**（2026-10-18 口径；79.1% 为 18-crate 历史口径——图像家族是 vendored 内核，不与 v1 业务 crate 同轴比较） |
 | **哲学锚** | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
-| **测试** | **5360 passed / 0 failed / 22 ignored**（190 suites，2026-10-13 全量实测 `cargo test --workspace --locked -j 2`; 历史: 2026-09-05 3120/13、2026-08-28 A 块后 1739) |
+| **测试** | **单一真源 [test-baseline.md](../03-reference/test-baseline.md)**（2026-10-18 全量 `-j 2` 口径，本文不抄写数字）；历史：2026-10-13 实测 5360 passed / 0 failed / 22 ignored（190 suites）、2026-09-05 3120/13、2026-08-28 A 块后 1739 |
 | **clippy** | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |
 | **7 capability trait** | MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor 全真接 |
 | **9 organ** | **9/9 真实现** (E4/F1/F4/F6/W1/W2/W3/E7/Memory, 整合 #2 commit `bbf70293`) |
@@ -121,7 +121,7 @@ Author:          主代理 Mavis
 | # | 守门 | 命令 | 期望 |
 |---|---|---|---|
 | 1 | **clippy 0 警告** | `cargo clippy --workspace --all-targets --locked -- -D warnings` | 0 warning, 0 error |
-| 2 | **workspace tests 0 失败** | `cargo test --workspace --locked` | 0 FAILED (2026-10-13 实测 5360 passed / 22 ignored：真实 LLM E2E、Xcap 硬件 smoke 等) |
+| 2 | **workspace tests 0 失败** | `cargo test --workspace --locked` | 0 FAILED（现行口径见 [test-baseline.md](../03-reference/test-baseline.md)；2026-10-13 历史实测 5360 passed / 22 ignored：真实 LLM E2E、Xcap 硬件 smoke 等） |
 | 3 | **legacy compat path < 100 引用** | `grep -r "legacy/" crates/ \| wc -l` | < 100 (legacy/ 在 workspace exclude) |
 | 4 | **LOCKED 5 项 0 触碰** (详 §10) | (CI 比对 src 改动) | 9 哲学锚本体 + 13 键 + 3 不可变脊柱 + workspace.version + R11 baseline 全 0 改 |
 | 5 | **哲学锚表头 0 减** | (CI 比对 9 锚 description 行数) | NINE_ANCHORS_HARDCODE 编译期断言不 panic |
@@ -129,8 +129,8 @@ Author:          主代理 Mavis
 **手动验证真账** (接手人首件事):
 ```bash
 cd C:\Users\31683\Apeireth-rust
-git log --oneline -5                                    # 期望 HEAD = 7647d2c9 (2026-09-05 对账基线; 历史收盘 6f9c3dee)
-cargo test --workspace --locked                          # 期望: 5360 passed, 0 failed, 22 ignored (2026-10-13 口径)
+git log --oneline -5                                    # 期望 HEAD = f6831c95 (2026-10-18; 历史 2026-09-05 对账基线 7647d2c9)
+cargo test --workspace --locked                          # 期望: 0 failed（现行口径见 docs/03-reference/test-baseline.md；2026-10-13 历史口径 5360 passed / 22 ignored）
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望: 0 警告
 cargo test --workspace --doc --locked                   # 期望: 0 FAILED
 git status                                             # 期望: clean 或仅 .harness-* untracked
@@ -174,7 +174,7 @@ git status                                             # 期望: clean 或仅 .h
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 18-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 31 members 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 ```
 
 **0 装诚实标** (主代理 A 块 O-6 复盘真账): 之前 A 块 5 commit O-6 三阶审查 sections **多描述 WHAT 不是 WHY**. 这是 O-6 失守. amend 后修订版 sections 真答案 + 拒 alternatives + 拒理由. 详 `A-block-o6-true-account.md` + 修订版 5 sections 真账.
@@ -201,7 +201,7 @@ git status                                             # 期望: clean 或仅 .h
 ```
 任务: <明确产出, 不是模糊方向, 例: "派子代理调研 A 块 5 缺口真生产路径, 写报告 docs/04-internal/A-block-5-gaps-research.md">
 必读: <文档 file:line, 例: docs/04-internal/cognitive-module-wiring.md:20-35>
-必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 5360 passed>
+必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 0 failed（现行口径见 docs/03-reference/test-baseline.md）>
 必写: <报告结构, 含 0 装诚实真账 + 0 触碰 LOCKED 声明>
 不 commit: <等主代理审 (Q1 C1 policy)>
 ```
@@ -326,7 +326,7 @@ docs/04-internal/9-organ-progress-2026-08-28.md  ← 9 organ 实时进度
 - O-6 三阶审查:
   - 总体最优: <在更大语境 (release 路线图 / 工作量约束 / 上下游依赖) 里, 这个改动是不是最优切入点? 与 alternatives 比较 + 选最优 + 拒理由>
   - 系统最优: <在 Apeireth 子系统依赖图 (governance → orchestration → memory → runtime → organ) 里, 改动放在哪一层最合适? 与 alternatives 比较 + 选最优 + 拒理由>
-  - 架构最优: <在 workspace 18-crate 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
+  - 架构最优: <在 workspace 31 members 拓扑 + 单向依赖 + trait object 设计下, 公开 API 形状 + crate 边界 + 0 引新外部 dep, 这个方案是不是最优? 拒的 alternatives + 拒理由>
 - 影响面: <文件清单 + 行数>
 - 后续 stage: <如果分阶段, 列下一步>
 ```
@@ -456,7 +456,7 @@ git commit --no-verify -m "..."   # 跳过所有 hook
 ```bash
 cd C:\Users\31683\Apeireth-rust
 git log --oneline -5                                            # 确认 HEAD 与文档一致
-cargo test --workspace --locked                                  # 期望 5360 passed / 0 failed / 22 ignored（2026-10-13 口径）
+cargo test --workspace --locked                                  # 期望 0 failed（现行口径见 docs/03-reference/test-baseline.md；2026-10-13 历史 5360 passed / 22 ignored）
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望 0 警告
 cargo test --workspace --doc --locked                           # 期望 0 FAILED
 rustfmt crates/<your_file>.rs                                   # 单文件 fmt (不要 cargo fmt -- file)
@@ -526,7 +526,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory real_llm_call_smoke -
 | **9 哲学锚本体** | `crates/foundation/core/src/eight_anchors.rs:58-79` (enum `PhilosophicalAnchor8`) | `NINE_ANCHORS_HARDCODE` 编译期锁 (line 222-366) | 主人明确授权 (例: 2026-08-27 加 O-6). 哲学锚本体升级 = 子代理可调研, 主代理必拍板. |
 | **13 键** | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` 显式标 | 已拍板降级为哲学标准, 不接回 runtime 强制. |
 | **3 项不可变脊柱** | `crates/foundation/core/src/onion.rs:249` | Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义 | 同上, 主人明确授权例外. |
-| **workspace.version** | `Cargo.toml` (workspace.package) | `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 "1.2.0 双轴制" 已终结，workspace 轴现与产品轴一致） | 随 release 推进 (rc.1 → 2.0.0 等), 主代理/release authority 拍板. |
+| **workspace.version** | `Cargo.toml` (workspace.package) | `"2.0.0-rc.4"`（2026-10-18 文档审计批核对；历史：2026-08-30 RC1 起 `2.0.0-rc.1`，旧 "1.2.0 双轴制" 已终结，workspace 轴与产品轴一致） | 随 release 推进 (rc.4 → 2.0.0 等), 主代理/release authority 拍板. |
 | **R11 baseline 3 值** | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (R11_V1141/1131/1136_BASELINE const) + `legacy/donor/apeireth-blueprint-impl/src/r_measure.rs:228-231` (RMeasureAll::drift hardcode) — active workspace 无 const source | 0.8682 / 0.8532 / 0.9063 (R11 ASI R-Measure 数字严守) | R11 数字更新需 R12 spec 重新审定 + active workspace 迁回, 主代理拍板. |
 
 **改前必查**:
@@ -544,7 +544,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 1. **9 哲学锚本体**: 主人明确授权 (例: 2026-08-27 加 O-6). 哲学锚本体升级 = 子代理可调研, **主代理必拍板** (per O-6 description).
 2. **13 键**: 已拍板降级, 不接回 runtime 强制. 想接回 = 推翻 P0 拍板, 主代理必写 0 装诚实复盘.
 3. **3 项不可变脊柱**: 同 #1 主人明确授权.
-4. **workspace.version**: 随 release 推进 (现 2.0.0-rc.1; 下一次随 v2.0.0 GA 拍板). 主代理/release authority 拍板.
+4. **workspace.version**: 随 release 推进 (现 2.0.0-rc.4; 下一次随 v2.0.0 GA 拍板). 主代理/release authority 拍板.
 5. **R11 baseline 3 值**: R11 数字更新需 R12 spec 重新审定, 主代理拍板.
 
 **0 装诚实标**: 例外**必须有主代理拍板记录** (in commit message 或 plan doc). 0 例外 = 0 改 LOCKED.
@@ -576,7 +576,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 8. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
 9. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
 10. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-11. 跑 cargo test --workspace --locked (期望 5360 passed / 0 failed / 22 ignored，2026-10-13 口径)
+11. 跑 cargo test --workspace --locked (期望 0 failed；现行口径见 docs/03-reference/test-baseline.md，2026-10-13 历史 5360 passed / 22 ignored)
 12. 跑 cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 警告)
 ```
 
@@ -619,7 +619,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 | 5 | **文档数字不复测, 复用旧值** | 文档写 3119 但实测 3120（2026-09-05 对账批真账） | 必实测 `cargo test --workspace --locked`, 不用历史值 |
 | 6 | **`--force-with-lease` 凭据 stale** | push rejected "stale info" | 改 `--force-with-lease=main:<expected-old-tip>` (验证 remote ref 状态), 不裸 `--force` |
 | 7 | **pub struct 在 impl block 内** | 编译错 "struct is not supported in 'trait's or 'impl's" | 移到 module level (impl block 外) |
-| 8 | **Cargo.toml workspace.version 改** | workspace.version 是 release authority（现 2.0.0-rc.1, per 6b81c210 2026-08-30 RC1 发布） | release 拍板才改 (per §10 真例外 #4) |
+| 8 | **Cargo.toml workspace.version 改** | workspace.version 是 release authority（现 2.0.0-rc.4） | release 拍板才改 (per §10 真例外 #4) |
 | 9 | **amend 没 `git add`, `write-tree` 输出 HEAD^{tree}** | amend 后 `git diff --stat` 显示修了, 但 `git show HASH:path` 实际是旧 blob (Round 1 真账: 5e18e65b msg 修了但 tree 没修) | amend 后必自验 tree: `git show HASH:path | grep <fix>`. 不依赖 `git diff --stat`. 见 .harness-step-log §3.6 + 0 装诚实标续 |
 | 10 | **`git fetch` 失败 ≠ `git push` 失败** | TCP 阻 fetch 但 push 实际成功 (Round 1 真账: 2 commits 实际 push 上了 origin, 但主代理凭 fetch 失败误判 + amend + followup, Round 3 fetch 通才发现 origin 已 advance, 改 force push) | 失败诊断: `git fetch` 跟 `git push` 是独立 channel, 各自状态. 怀疑 push 状态时, retry push 看 error code, 不要凭 fetch 失败推断 push. 见 .harness-step-log §3 |
 | 11 | **PowerShell `^{tree}` syntax gotcha** | `git rev-parse HEAD^{tree}` 中 `^{}` 被 pwsh 当特殊字符 (Round 1 真账: 第 1 次 amend 工序错, 第二次 update-ref 覆盖了第一次 chain) | quote 整段: `git rev-parse 'HEAD^{tree}'` 或 `-F file` 替代 inline msg. amend 工序需 quote, 否则 amend 错位. 见 .harness-step-log §3.4 |

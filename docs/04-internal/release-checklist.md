@@ -37,8 +37,8 @@
 - [ ] 测试基线刷新：跑 `cargo test --workspace --all-targets --locked --no-fail-fast`，
       更新 [docs/03-reference/test-baseline.md](../03-reference/test-baseline.md)（单一真源），
       旧值移入其「历史口径」表；**其余文档只引用不抄写**
-- [ ] crate 口径核对：`workspace = 20 members（19 crates + bench harness）`（成员有变时先改
-      ARCHITECTURE.md / INSTALL.md / README 草稿，再全仓 grep 旧口径）
+- [ ] crate 口径核对：`workspace = 31 members（30 crates + bench harness）`（成员有变时先改
+      ARCHITECTURE.md / INSTALL.md / README 本体，再全仓 grep 旧口径）
 - [ ] 徽章数字与链接目标对齐（Tests 徽章 → capabilities-matrix §0.1 有据）
 - [ ] 未接线能力的标注仍在（WebSocket 服务端 / DSL 洋葱 / SDK STUB_MODE 等，见
       [capabilities-matrix.md](../03-reference/capabilities-matrix.md) §0.2）

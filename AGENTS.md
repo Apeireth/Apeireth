@@ -9,7 +9,7 @@
 
 - `0 装` = 不假装：未接线写「未接线」，桩写 `unimplemented!()`/`Err(NotImplemented)` 并显式断言；
   默认关闭的能力不得写成系统现状；live E2E 没跑过就写「未实测」。
-- 双向性：不许把「已实现未接线」说成 0 装，也不许把 0 装说成已接线。
+- 双向性：不许把「已实现未接线」说成 0 装，也不许把 0 装说成已接线；凡写 `已实现`/`已接线`，按**四级口径**（IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED，定义见 [docs/01-architecture/system-capabilities.md](docs/01-architecture/system-capabilities.md) 头部）标注落在哪一级。
 - 每个数字必须可复核（命令 + 日期 + 工具链）；无脚本不写数字。
 
 ## 2. 中性表述

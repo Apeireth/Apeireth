@@ -1,14 +1,14 @@
 # Apeireth 2.0 团队接手一站式参考全景手册 (One-Stop Team Handover Reference Manual)
 
-> **版本**: 2.0.0-preview  
-> **更新日期**: 2026-08-30  
+> **版本**: 2.0.0-rc.4  
+> **更新日期**: 2026-10-18（文档审计批：crate 口径 20→31 members；正文主体仍为 2026-08-30 快照）  
 > **适用对象**: 核心研发团队、架构师、安全审计员与后续接手人员  
 > **核心原则**: 严守 9 哲学锚 (S-1~S-3, O-1~O-6)、5 项 LOCKED 资产与 100% 纯 Safe Rust 零 unsafe
 
 ---
 
 ## 目录
-1. [项目全貌与 20-Member 依赖拓扑](#1-项目全貌与-20-member-依赖拓扑)
+1. [项目全貌与 31-Member 依赖拓扑](#1-项目全貌与-31-member-依赖拓扑)
 2. [5 项 LOCKED 核心资产与 9 哲学锚守则](#2-5-项-locked-核心资产与-9-哲学锚守则)
 3. [全域系统能力与核心 API 一览表](#3-全域系统能力与核心-api-一览表)
 4. [外部 170+ 标杆与同类工程演进图谱（历史）](#4-外部-170-标杆与同类工程演进图谱)
@@ -18,9 +18,9 @@
 
 ---
 
-## 1. 项目全貌与 20-Member 依赖拓扑
+## 1. 项目全貌与 31-Member 依赖拓扑
 
-> 口径（审计修 B-02）：workspace = 20 members（19 crates + bench harness；adapters 4 = cli/gateway/sdk/tui）。
+> 口径（2026-10-18 文档审计批）：workspace = 31 members（30 crates + bench harness；adapters 4 = cli/gateway/sdk/tui；图像核心家族 11 = 接口层 `apeireth-image-core` + 10 vendored crate）。
 
 Apeireth 2.0 采用严格的**四层单向依赖微内核架构**，杜绝跨层逆向引用与循环依赖：
 

@@ -1,6 +1,6 @@
 # 多 AI 协同施工指南（对外可读版）
 
-> `Status: ✅ 批 L3 交付（2026-10-17，纯文档批 · 未 commit）`
+> `Status: ✅ 批 L3 交付（2026-10-17；2026-10-18 文档审计批核对：已随 `36ecceda` 入库）`
 > 面向：**新协作者（人与 AI）**——第一次在本仓库动手施工的人，读这一份就够进场。
 > 定位：**独立可读**（不依赖其他文档也能照做），但每一节都指向权威文件——
 > 两份宪章是最高法：工程总纲 [ENGINEER-MANIFESTO.md](../04-internal/ENGINEER-MANIFESTO.md)（改 src / 改 doc / 派子代理前必读）与
@@ -19,7 +19,7 @@
 
 1. **读两份宪章**：[ENGINEER-MANIFESTO.md](../04-internal/ENGINEER-MANIFESTO.md)（哲学锚与工程规范）+ [CONSTRUCTION-DISCIPLINE.md](../04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md)（施工纪律）。冲突时以它们为准；
 2. **记住设计第一律：AI 先用、人后用**（宪章 §〇）：一切工具性能力的第一用户是 agent 自己——能力先做成**工具**（模型可调用、过治理、入名册），人类界面是同内核的**包装出口**（不另起炉灶、不两套逻辑）。硬判据：**删掉人类界面后，该能力对 agent 仍然完整可用**；
-3. **0 装 PASS（诚实纪律）**：未接线写「未接线」，桩要显式断言，未实测写「未实测」；双向——也不许把"已实现未接线"说成没做。默认关闭的能力不得写成系统现状；
+3. **0 装 PASS（诚实纪律）**：未接线写「未接线」，桩要显式断言，未实测写「未实测」；双向——也不许把"已实现未接线"说成没做（四级口径：IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED，标注落在哪一级）。默认关闭的能力不得写成系统现状；
 4. **中性表述**：代码/注释/提交零第三方产品名、零来源沿革类措辞；交付前跑 `scripts/check-neutral-terms.ps1` 必须零命中（豁免表只收真实路径这类结构性豁免，**命中先改表述，不先改豁免表**）；
 5. **LOCKED 5 项 0 触碰**：9 哲学锚本体 / 13 键 / 3 不可变脊柱 / workspace 版本轴 / R11 baseline——版本轴仅 release authority 可改；
 6. **声明你的战场**：写明本批的 `write_scope`（动哪些文件），见 §二；

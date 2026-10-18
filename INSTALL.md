@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **当前基线**: 默认分支 `main`、**workspace = 20 members（19 crates + bench harness）**（v2.0.0-rc.4）；测试基线见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-16 口径：**199 套件 / 5360 passed / 0 failed / 22 ignored**），历史口径见 CHANGELOG；`legacy/` 不参与构建。
+> **当前基线**: 默认分支 `main`、**workspace = 31 members（30 crates + bench harness）**（v2.0.0-rc.4；2026-10-18 许可搬运线 image 家族 +11 后口径）；测试基线**单一真源**见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-18 全量 `-j 2` 口径在该文件，本文不抄写数字），历史口径见 CHANGELOG；`legacy/` 不参与构建。
 
 ---
 
@@ -177,7 +177,7 @@ cargo run --bin apeireth session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（测试基线单一真源见 docs/03-reference/test-baseline.md；2026-10-16 口径：199 套件 / 5360 passed / 0 failed / 22 ignored，以现场实测为准）
+# 2. Test（测试基线单一真源见 docs/03-reference/test-baseline.md；现行口径以该文件 2026-10-18 全量 -j 2 实测为准，本文不抄写数字）
 cargo test --workspace --all-targets --locked --no-fail-fast
 
 # 3. Clippy（应该 0 warning）
@@ -331,4 +331,4 @@ apeireth approve --session <sid> --approval <approval-id>   # 主人批准后才
 _安装指南 v1 修订版（leader 亲自产出）._
 _依据我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
 _主哲学 9 锚穿透 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装 / O-6 永远追求最优 NEW 2026-08-27; per R125 B5 升级 + R126 P1-2 实施 + 2026-08-27 加 O-6，审计修 A-14)._
-_前置依赖为实测最小集（2026-10-16 核对；审计修 D-01/D-02/D-03），测试基线单一真源见 docs/03-reference/test-baseline.md（审计修 B-01）；crate 口径 = workspace 20 members（19 crates + bench harness，审计修 B-02）；版本 v2.0.0-rc.4（审计修 B-03）._
+_前置依赖为实测最小集（2026-10-16 核对；审计修 D-01/D-02/D-03），测试基线单一真源见 docs/03-reference/test-baseline.md（审计修 B-01）；crate 口径 = workspace 31 members（30 crates + bench harness；2026-10-18 许可搬运线 image 家族 +11 后更新）；版本 v2.0.0-rc.4._

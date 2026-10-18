@@ -8,9 +8,9 @@ Historical design proposals and archived implementations live under `docs/archiv
 
 ```text
 apeireth/
-> Workspace taxonomy: **workspace = 20 members（19 product crates + 1 bench-only harness）**
-> (foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli, gateway, sdk, tui + `benches` harness)。
-> crate 口径统一见本文件下表与 [INSTALL.md](INSTALL.md)（审计修 B-02 / A-11）。
+> Workspace taxonomy: **workspace = 31 members（30 product crates + 1 bench-only harness）**
+> (foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + image family 11 = `crates/engine/image/*`（接口层 `apeireth-image-core` + 10 vendored crate） + `benches` harness)。
+> crate 口径统一见本文件下表与 [INSTALL.md](INSTALL.md)（2026-10-18 许可搬运线 image 家族 +11 后更新）。
 
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials
@@ -27,8 +27,8 @@ apeireth/
 └── previews/              # design/reference assets
 ```
 
-The root `Cargo.toml` is the only product Rust workspace. It contains twenty
-workspace members — nineteen product crates plus the bench-only harness
+The root `Cargo.toml` is the only product Rust workspace. It contains thirty-one
+workspace members — thirty product crates plus the bench-only harness
 (`benches`, `publish = false`) — grouped by responsibility rather than
 development history:
 
@@ -38,6 +38,7 @@ development history:
 | Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ`, `apeireth-guard` | mechanism kernel, concrete production assembly, provider adapters, persistence, memory, perception, and organ domains, plus the behavior-chain safety guard (`crates/engine/guard`, added by the 2026-10-06 collaborator batch) |
 | Capabilities | `apeireth-tools-canonical` | built-in tools and the single process-execution boundary |
 | Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk`, `apeireth-tui` | HTTP gateway, command-line entry point, SDK surface, terminal cockpit (full-screen TUI client) |
+| Image family | `apeireth-image-core` (interface layer) + 10 vendored crates (`crates/engine/image/{core,geom,cms,color,raster,doc,vector,compose,algo,codecs,psd}`) | image engine consumed by `tool.image_ops`: controlled decode, pixel geometry/filters, layer compositing, layered-document probing (added 2026-10-18, +11 members) |
 | Bench harness | `benches` | benchmark reproduction harness (workspace member, not a product crate) |
 
 `frontend/companion-desktop/src-tauri` has its own workspace and is deliberately

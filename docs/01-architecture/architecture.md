@@ -1,7 +1,7 @@
 # Apeireth Architecture
 
-> 当前基线：默认分支 `main`，tag `v2.0.0-rc.1`（测试基线见 `research/baselines/`）。
-> 根 Cargo workspace（18 个 crate）+ 独立的
+> 当前基线：默认分支 `main`，workspace.version `v2.0.0-rc.4`（2026-10-18 文档审计批核对；历史 tag `v2.0.0-rc.1`）；测试基线见单一真源 [test-baseline.md](../03-reference/test-baseline.md)。
+> 根 Cargo workspace（**31 members = 30 crates + bench harness**；历史口径 18/20 members）+ 独立的
 > `frontend/companion-desktop` workspace。历史遗留实现不属于生产依赖。
 
 ## Layer view

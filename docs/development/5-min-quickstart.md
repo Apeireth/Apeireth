@@ -22,7 +22,7 @@ Clone the repository and verify the core workspace:
 git clone https://github.com/Apeireth/Apeireth.git
 cd apeireth-rust
 
-# 2. Run all workspace tests (18 crates)
+# 2. Run all workspace tests (31 members = 30 crates + bench harness)
 cargo test --workspace
 ```
 
@@ -45,7 +45,7 @@ cargo run -p apeireth-cli -- gateway serve --port 8080
 Test the health endpoint:
 ```bash
 curl http://127.0.0.1:8080/health
-# {"status":"ok","version":"2.0.0-rc.1","engine":"apeireth"}
+# {"status":"ok","version":"2.0.0-rc.4","engine":"apeireth"}
 ```
 
 ---

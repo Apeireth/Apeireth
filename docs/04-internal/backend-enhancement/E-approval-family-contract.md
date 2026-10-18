@@ -329,7 +329,7 @@ argv 顺序变）再执行——批准为**改过参数的动作**背书 = 静�
 目标全量）；workspace 全量门禁以并发各线收口后一次实跑为准——本批交付时并发
 在途批自留两个测试目标编译红线（`voice_speak` / `task_board_knob`，均在彼批
 战场，标红不代改）。数字口径见
-[test-baseline.md](../03-reference/test-baseline.md)，本批实测值随批报告。
+[test-baseline.md](../../03-reference/test-baseline.md)，本批实测值随批报告。
 
 ### 11.8 已知边界（如实）
 

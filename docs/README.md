@@ -59,7 +59,7 @@ docs/
 
 ## 当前基线（2026-10-16 文本可信度批对账；2026-10-06 / 2026-08-27 快照保留在下方）
 
-默认分支 `main`（HEAD 以实际提交为准），workspace.version `v2.0.0-rc.4`；**workspace = 20 members（19 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）+ 独立前端 workspace；测试基线单一真源见 [03-reference/test-baseline.md](03-reference/test-baseline.md)；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。（审计修 A-14 / B-02 / B-03）
+默认分支 `main`（HEAD 以实际提交为准），workspace.version `v2.0.0-rc.4`；**workspace = 31 members（30 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + 图像核心家族 11（`crates/engine/image/*`：接口层 `apeireth-image-core` + 10 vendored crate）= 30 crates） + 独立前端 workspace；测试基线单一真源见 [03-reference/test-baseline.md](03-reference/test-baseline.md)；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。（2026-10-18 文档审计批更新 crate 口径）
 
 历史快照（2026-08-27）：`main` @ `d6910cf7`，tag `v2.0.0-alpha.1`，13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）。
 

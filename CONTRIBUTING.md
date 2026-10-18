@@ -9,7 +9,7 @@
 ## 必读
 
 - [docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md) — 哲学（9 锚 / 三洋葱 / 0 装 PASS）
-- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（workspace = 20 members：19 crates + bench harness 分组）
+- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（workspace = 31 members：30 crates + bench harness 分组）
 - [docs/01-architecture/security.md](docs/01-architecture/security.md) — 安全模型
 - [docs/03-reference/crates.md](docs/03-reference/crates.md) — crates 索引
 - [docs/04-internal/design-intent.md](docs/04-internal/design-intent.md) — 设计意图与我们拍板历史
@@ -23,7 +23,7 @@
 
 ```bash
 cargo check --workspace --all-targets   # 编译全 target 干净（含 examples/bins/tests）
-cargo test --workspace                  # 全量测试 0 失败（当前 workspace 20 members；基线见 docs/03-reference/test-baseline.md）
+cargo test --workspace                  # 全量测试 0 失败（当前 workspace 31 members；基线见 docs/03-reference/test-baseline.md）
 cargo fmt --all --check                 # 格式
 ```
 

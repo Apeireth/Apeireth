@@ -144,6 +144,30 @@ conversation_id)` 铸一个桌面会话并写进数据目录 `im-sessions.json`
 - **未配置 IM 时本地审批零回归**：无渠道则装配 inert、路由不挂载，本地
   `execute_chat` / `resolve_approval` 原路径不受影响。
 
+## 件四：设备审批卡 → IM 推送链（2026-10-18 K 轴批补注）
+
+设备动作（`tool.device_control`）的计划卡复用**同一条** IM 出站链，不另立第二套卡信封：
+
+- **同链同信封**：设备审批卡 = 既有 `ImApprovalCard` 信封，走同一 `deliver_card` 出站链；
+  `approval_ref = pair_id = plan_id`（推送幂等键 = 一计划一决定闭合身份），动作摘要 =
+  卡载荷规范字节 SHA-256（载荷被改 → 摘要不符）。
+- **批准即执行**：按钮批准走与模型侧/面板侧**同一台执行核心**（三拍绑定 + 预览票一次性 +
+  分级审批证据照常生效）；状态账 `approved_by = im:人@渠道` + `im_card_id`（送达回执）。
+- **money 档必须 IM 卡**（三面断言：面板侧缺 `im_card_id` 拒 / IM 批准账行必带送达回执 /
+  查无送达记录的点击拒绝零执行）；`irreversible` 可面板或 IM（同执行核心同语义）。
+  **拒绝 = 关账零执行；一计划一决定**。
+- **两本账**：推送账 `device-approval-pushes.jsonl`（`plan_id` 幂等 + 失败 `failed` 行带真因
+  与卡载荷，`retry_device_approval_pushes` 凭账重建、重启可续）+ 按钮决定账
+  `device-approval-decisions.jsonl`（一计划一决定 + 如实署名）。
+- **回调路由分家**：设备计划卡 `subject = tool.device_control.plan`，与工具审批卡
+  （`subject` = 能力 id，走四态闭合链）互不碰撞；卡不设超时（远期哨兵
+  `DEVICE_CARD_NO_DEADLINE_MS`），一次性闸门在执行面。
+- **未接线照实报**：设备面未注册时桥的出站面 inert（0 假旋钮）。
+
+证据：`crates/adapters/gateway/tests/im_device_cards.rs`（8 例：信封同构 / 批准签名执行 /
+money 卡三面 / 幂等 / 失败留账重试 / 拒绝关账 / 未接线如实 / 路由零碰撞）；交付卷宗见
+`docs/04-internal/backend-enhancement/K-device-approval-im-push.md`。
+
 ## 测试证据（`crates/adapters/gateway/tests/`，全部 mock IM 端点，0 真实网络）
 
 | 测试 | 证据 |
@@ -185,4 +209,6 @@ SDK wire 面另有 27 个单测（`crates/adapters/sdk/src/im/`：kind 词表 / 
   `assemble_im_channels`、`ImSessionMapStore`、`ImTurnHandler`、
   `CanonicalChainHandler`、`ImBridge`、`im_router`、`ImApprovalNotice`、
   `ImApprovalCloser`、`ImApprovalClosure`、`ImApprovalResolver`、
-  `ImApprovalAuditCommit`、`MemoryApprovalAudit`、`FileApprovalAudit`。
+  `ImApprovalAuditCommit`、`MemoryApprovalAudit`、`FileApprovalAudit`；
+- 设备审批推送（件四）：`ImBridge::push_device_approval_cards`、
+  `retry_device_approval_pushes`、`DeviceApprovalCard`、`DEVICE_CARD_NO_DEADLINE_MS`。

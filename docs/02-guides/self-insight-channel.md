@@ -1,14 +1,14 @@
 # 自省通道：结构化自述与敏感面边界
 
 > 给维护 Apeireth 的人：模型如何**实测自身状态再发言**，以及自省的边界在哪里。
-> 机制描述以真实代码为准（自省通道批，写作时点 v2.0.0-rc.2）。
+> 机制描述以真实代码为准（自省通道批，写作时点 v2.0.0-rc.2；**2026-10-18 文档审计批补注**：自述冻结合同已由六节扩至**二十一节**，见 §2.1 说明）。
 > 用户向的旋钮说明见 [user-manual.md](user-manual.md)；外部工具面见 [mcp-external-tools.md](mcp-external-tools.md)。
 
 ```
 [Document-Meta]
 Document:        docs/02-guides/self-insight-channel.md
 Version:         Self-Insight-Rev-A（自省通道批）
-Last-Modified:   2026-10-11
+Last-Modified:   2026-10-18（补注二十一节口径）
 Status:          🟢 活跃
 ```
 
@@ -41,15 +41,24 @@ Status:          🟢 活跃
 | 维度 | 翻配置文件 | `self_status` |
 |---|---|---|
 | 取值 | 配置文本（可能与生效值不符） | **真实生效值**（装配真正用的开关、进程内生效调参） |
-| 形状 | 随文件布局漂移 | 冻结合同（六节恒在场，缺失显式 `null` + 原因） |
+| 形状 | 随文件布局漂移 | 冻结合同（二十一节恒在场，缺失显式 `null` + 原因；首批六节见 §2.1） |
 | 边界 | 凭据可能同视野 | 凭据只回存在性布尔，本体绝不回显 |
 
 ### 2.1 字段表（输出合同）
 
-顶层六节**恒在场**（输出归一合同 [`OutputSchema`](../../crates/capabilities/tools/src/self_status.rs)
-要求六节都是对象）；来源缺失/读取失败的**字段显式 `null` 并在同节 `reason`
+顶层**二十一节**恒在场（输出归一合同 [`OutputSchema`](../../crates/capabilities/tools/src/self_status.rs)
+要求各节都是对象）；来源缺失/读取失败的**字段显式 `null` 并在同节 `reason`
 给出原因**，整帧仍然成功——自述宁可如实说"这块我没测到"，不整帧失败，更不
 编造数字。
+
+> **2026-10-18 补注（节数演进）**：下表是自省通道批的首批六节（`identity` /
+> `capabilities` / `memory_ledger` / `tuning` / `budget` / `workspace`）字段表，
+> 作为历史快照保留原样。此后随各批落地新增 15 节：`model` / `domain` /
+> `content_feed` / `care` / `backup` / `voice` / `task_board` / `persona` /
+> `proposal`（含推送列）/ `cost_routing` / `image_ops` / `doc_ops` / `presence` /
+> `sheet_ops` / `device_control`（2026-10-18 K 轴设备审批 IM 推送批入合同），
+> 合计 **二十一节**；各节字段以 `self_status.rs` 与
+> [capabilities-matrix.md](../03-reference/capabilities-matrix.md) §0.2 为真源。
 
 | 节 | 字段 | 类型 | 语义 | 缺失时 |
 |---|---|---|---|---|

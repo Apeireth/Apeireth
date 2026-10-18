@@ -1,6 +1,6 @@
 # Apeireth 用户手册（v2 工程重构线）
 
-> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（写作时点 v2.0.0-alpha.1 / 13-crate；当前 **workspace 20 members（19 crates + bench harness）/ v2.0.0-rc.4**，能力性判断以下方 2026-10-06 对账注与台账为准）。
+> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（写作时点 v2.0.0-alpha.1 / 13-crate；当前 **workspace 31 members（30 crates + bench harness）/ v2.0.0-rc.4**（2026-10-18 文档审计批更新 crate 口径），能力性判断以下方 2026-10-06 对账注与台账为准）。
 > 快速跑起来见 [quick-start.md](quick-start.md)；部署见 [deployment.md](deployment.md)；架构总览见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)。
 
 ```
@@ -11,7 +11,9 @@ Last-Modified:   2026-08-27
 Status:          🟢 活跃
 ```
 
-> ⚠️ **2026-10-06 对账注**：本文正文写于 v2.0.0-alpha.1（13-crate）时代。当前工作区为 **18-crate**（foundation 6 / engine 8 / capabilities 1 / adapters 3，2026-10-06 新增 `crates/engine/guard`）。正文中"记忆端到端管线不在工作区里"等**能力性判断已被后续批次取代**（记忆 v2.2 生产收口于 2026-09-19 整合，见 `docs/04-internal/live-verification-ledger.md` #26），读前请对照该台账；本文主体内容待按当前实现重写。
+> ⚠️ **2026-10-06 对账注（历史口径）**：本文正文写于 v2.0.0-alpha.1（13-crate）时代。2026-10-06 时点工作区为 **18-crate**（foundation 6 / engine 8 / capabilities 1 / adapters 3，2026-10-06 新增 `crates/engine/guard`）。正文中"记忆端到端管线不在工作区里"等**能力性判断已被后续批次取代**（记忆 v2.2 生产收口于 2026-09-19 整合，见 `docs/04-internal/live-verification-ledger.md` #26），读前请对照该台账；本文主体内容待按当前实现重写。
+>
+> **2026-10-18 文档审计批注**：crate 口径已再变为 31 members（30 crates + bench harness；许可搬运线 image 家族 +11）；现行测试口径见单一真源 [test-baseline.md](../03-reference/test-baseline.md)。
 
 ## 1. Apeireth 是什么（v2）
 
@@ -151,6 +153,31 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | SDK 真接（HTTP / WS 调 `apeireth-gateway`）| ⏳ R21（stub 守门）|
 | 13 键编译期 hardcode + 13 键测试契约 | ✅ 在 core 跑（`crates/foundation/core/tests/verdict_keys.rs` 等）|
 
+## 8.5 2026-10 能力增量补注（文档审计批，2026-10-18）
+
+> 本节只补「正文写作后已落地」的现值能力，不重写上方历史正文；逐项真源见
+> [capabilities-matrix.md](../03-reference/capabilities-matrix.md) §0.2（默认开关以
+> `crates/engine/runtime-assembly/src/canonical/production.rs` 实况为准）与
+> [test-baseline.md](../03-reference/test-baseline.md)（测试口径）。
+
+- **设备面**：`tool.device_control` = 三拍受控执行 + 三档分级 + 白名单 + 状态账；
+  money 档必须 IM 审批卡（两本账 + `plan_id` 幂等 + 失败留账重试，见
+  [im-quick-access.md](im-quick-access.md) 件四）。`tool.guard_watch` = 看家守护骨架，
+  **只看不动**（告警零设备动作）、`APEIRETH_ENABLE_GUARD_WATCH` 依赖
+  `APEIRETH_ENABLE_DEVICE_SENSE` 双闸 fail-closed；守护告警按「守护例外档」可破勿扰，
+  但必带「守护告警」标注 + 独立频率上限。`tool.care_schedule` 提醒闭环（L2）已接。
+- **创作面**：`tool.image_ops` 换引擎级创作内核 `apeireth-image-core`，操作词表 **13** 个
+  （新增 `layers_composite` / `psd_read_info`），产品代码对第三方图像库的直接依赖清零；
+  `tool.doc_ops` 已支持 **DOCX 写面**（`docx_from_markdown` / `docx_append`，样式层最小
+  `word/styles.xml`，不生 `numbering.xml`）；`tool.sheet_ops` 已支持 **xlsx 读入**
+  （三种单元格形态、公式格取缓存值不重算；**写面只出 CSV**，xlsx 写出后置）。
+- **治理/会话面**：只读会话预设的执法面已覆盖 `tool.device_control` / `tool.care_schedule`
+  的写/执行面（`read_only` 下显式拒绝，见 `permission_preset.rs`）；凭据泄漏绊线补 JWT 与
+  通用 Bearer 形态；认知调度器淘汰策略改**严格 FIFO**；deny 治理对账清 33 条过期 skip、
+  4 条 unmaintained 三处同步。
+- **自省面**：`tool.self_status` 冻结合同已扩至**二十一节**（新增 `device_control` 等，
+  见 [self-insight-channel.md](self-insight-channel.md)）。
+
 ## 9. FAQ
 
 | 问题 | 答案 |
@@ -158,7 +185,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | 怎么跑？ | `cargo run -p apeireth-cli -- gateway serve --port 8080`（HTTP）或 `cargo run -p apeireth-cli -- chat "<prompt>"`（CLI）。 |
 | 换模型？ | `APEIRETH_API_KEY` / `APEIRETH_ANTHROPIC_KEY` / `OPENAI_API_KEY` 任一即可，按 fallback 顺序生效。改 provider 不用重编译（plugin 注入）。 |
 | 启用 shell/fetch？ | bootstrap 时 `BuiltinToolsPlugin::with_options(root, BuiltinToolsOptions { shell: Some(...), fetch: Some(...) })`。CLI 默认不启用。 |
-| 工具被拒了？ | 预期行为：要么工具未启用（opt-in 关），要么 governance hook deny / RequireApproval。当前 AllowAll 默认下工具不拒；启用 hook 后才生效。 |
+| 工具被拒了？ | 先看开关是否开启（opt-in 工具未开 = 未注册即拒，见 [capability-switch-power-audit.md](capability-switch-power-audit.md)）；再看 governance 决策（`Deny` / `RequireApproval` 四态）；最终以 `tool.self_status` 的 `capabilities` 名册生效值为准。 |
 | 我想接一个 IDE 一样的自定义模型？ | 实现 `ProviderCapability` trait + 注册为 plugin；参考 `crates/engine/provider/src/canonical_minimax.rs` 作为示例。 |
 | Docker？ | `Dockerfile` 多架构已修；本机无 docker 详见 [CI 实测为准](https://github.com/Apeireth/Apeireth/actions)。 |
 | 我看到的"13 键"在哪？ | `crates/foundation/core/src/philosophy.rs` + 测试 `crates/foundation/core/tests/verdict_keys.rs` 等。当前未接 canonical 执行路径（见 §8）。|

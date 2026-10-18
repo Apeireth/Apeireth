@@ -7,7 +7,7 @@
 
 > **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**: 本手册描述各能力域的**库级实现契约 (IMPLEMENTED)**。四个状态层级不可混淆：
 > **IMPLEMENTED（代码存在）** ≠ **PRODUCTION WIRED（接入 canonical 运行时主路径）** ≠ **DEFAULT ENABLED（无需 opt-in 即开启）** ≠ **HARDWARE VALIDATED（真机验证）**。
-> 除特别标注外，模块均为显式 opt-in，**未**接入 canonical 运行时默认路径，**未**默认启用。当前已验证基线见测试基线单一真源 [test-baseline.md](../03-reference/test-baseline.md)（2026-10-16 口径：199 套件 / 5360 passed / 0 failed / 22 ignored；命令与历史口径同文件，本文不再抄写）。库级已验证但未接线的 P2 能力（turn-scoped `ModuleInvoker`、`OrganModule`、`PreferenceLearning` 闭环、principle approvals、`topic_predictor`、continuation/reflexion/spill/检索确定性加固）状态详见 `CHANGELOG.md` Unreleased 段。
+> 除特别标注外，模块均为显式 opt-in，**未**接入 canonical 运行时默认路径，**未**默认启用。当前已验证基线见测试基线单一真源 [test-baseline.md](../03-reference/test-baseline.md)（2026-10-18 全量 `-j 2` 口径在该文件；2026-10-16 历史口径 199 套件 / 5360 passed / 22 ignored；命令与历史口径同文件，本文不再抄写）。库级已验证但未接线的 P2 能力（turn-scoped `ModuleInvoker`、`OrganModule`、`PreferenceLearning` 闭环、principle approvals、`topic_predictor`、continuation/reflexion/spill/检索确定性加固）状态详见 `CHANGELOG.md` Unreleased 段。
 
 ---
 
@@ -209,4 +209,4 @@ graph TD
 1. **Fail-Closed 默认安全原则**：任何解析异常、校验冲突或超时，系统一律按最严格安全策略拒绝，绝不默认放行。
 2. **纯 Safe Rust 编译屏障**：全工作区开启 `#![deny(unsafe_code)]`，核心凭据开启 `#![forbid(unsafe_code)]`，零 C-FFI 外部黑盒。
 3. **零凭据落盘 (Zero-Secret Persistence)**：API Key、Master Token 仅以 `SecretString` / `SecretBuf` 存在于内存中，离开作用域自动物理清零（Zeroize），严禁进入日志、Trace、持久化 DB 或 Prompt。
-4. **不可变核心资产 0 漂移**：9 哲学锚、13 键原则、3 项不可变脊柱（Self-Disable、L0 HA、13 键 Cache）、workspace.version 2.0.0-rc.1（2026-08-30 RC1 发布起, per 6b81c210） 与 R11 baseline 三值严格保持绝对锁定。
+4. **不可变核心资产 0 漂移**：9 哲学锚、13 键原则、3 项不可变脊柱（Self-Disable、L0 HA、13 键 Cache）、workspace.version 2.0.0-rc.4（2026-10-18 文档审计批核对；历史：2026-08-30 RC1 起 2.0.0-rc.1） 与 R11 baseline 三值严格保持绝对锁定。
