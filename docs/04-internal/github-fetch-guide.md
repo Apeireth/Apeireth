@@ -13,6 +13,24 @@
 
 ## 二、候选节点池（32 个，来自公共加速池——**每次用前测活，别信历史**）
 
+### 实测快照（2026-10-18 页面节点检测，17/17 可用——**仅作初始排序提示**）
+
+| 排序 | 节点 | 当时延迟 | 排序 | 节点 | 当时延迟 |
+|---|---|---|---|---|---|
+| 1 | `gh-proxy.com` | 381ms | 10 | `g.blfrp.cn` | 839ms |
+| 2 | `github.chenc.dev` | 512ms | 11 | `ghp.keleyaa.com` | 897ms |
+| 3 | `jiashu.1win.eu.org` | 550ms | 12 | `gh.catmak.name` | 919ms |
+| 4 | `gitproxy.mrhjx.cn` | 593ms | 13 | `gh.noki.icu` | 1006ms |
+| 5 | `gh.b52m.cn` | 620ms | 14 | `gh.dpik.top` | 1053ms |
+| 6 | `ghfast.top` | 653ms | 15 | `ghfile.geekertao.top` | 1054ms |
+| 7 | `gh.nxnow.top` | 740ms | 16 | `tvv.tw` | 1163ms |
+| 8 | `ghpxy.hwinzniej.top` | 780ms | 17 | `fastgit.cc` | 1681ms |
+| 9 | `github.ednovas.xyz` | 806ms | | | |
+
+**按此顺序先试快的**——但每次仍然测活（延迟分钟级都会漂）。
+
+### 全量池（含上表 17 个 + 15 个备用）
+
 ```
 https://git.tangbai.cc            https://gh.927223.xyz
 https://gh-proxy.com              https://ghfile.geekertao.top
