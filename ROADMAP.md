@@ -136,6 +136,24 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 >
 > 逐条「敌人怎么利用」、处置注全文与残余（如实）见 [E-threat-model.md](docs/04-internal/backend-enhancement/E-threat-model.md) §4/§5；波次挂靠与派工以 owner 拍板为准，不假称已排期。
 
+> **AI OS 对照缺口账（2026-10-18 立，🟡 待 owner 拍板排序；条目与验收判据见
+> [system-gap-ledger-2026-10-18.md](docs/04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md)，
+> 排序依据见 [ai-os-landscape-2026-10-18.md](docs/04-internal/ai-os-landscape-2026-10-18.md)）**：
+> 市面 15 个自称 AI OS 的样本里 47% 是营销叙事，2026 年的真实分水岭是权限模型（我们已是稀缺项）；
+> 真正的系统级缺口分四轨——
+>
+> | 轨 | 内容（SG 条目 id） | 量级 |
+> |---|---|---|
+> | T1 内核健壮性 | SG-01 可取消 worker+进程树 / SG-02 上下文语义页+检查点 | M / M |
+> | T2 系统接口面 | SG-03 UIA 只读控制图 / SG-04 动作层+回放（人批+审计） | L（拆两步） |
+> | T3 生态与多户 | SG-05 插件隔离+签名 / SG-06 技能包 / SG-07 记忆对象级 grant | M–L / M / M |
+> | T4 产品可见面 | SG-08 记忆面板 / SG-09 端侧推理 / SG-10 跨设备同步 / SG-11 SDK·OTA·回放 / SG-12 路由策略层 | S–M / M / M–L / M 各 / M |
+>
+> **明确不做（NT 条目）**：计费/账号/订阅/商店分成、自研基础大模型、通用 syscall+第三方 OS 应用生态、
+> 远程 kernel/DAG 编排、KV-cache 级内存层级、对外文案自称 AI OS。**形态不同（NF 条目）**不是技术债：
+> 多租户 OS ≠ 每户独立伙伴实例；工具型助手 ≠ 数字伙伴。拍板后：条目状态改 🟢 并转任务卡，落地补
+> 能力矩阵行 + 测试基线 + 提交号。
+
 | P | 任务 | 说明 | 依赖 |
 |---|---|---|---|
 | **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |

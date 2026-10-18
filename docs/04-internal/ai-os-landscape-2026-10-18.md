@@ -6,6 +6,8 @@
 > 作者:            总装主线（阶段 1/2/3 卷宗 + 两份外部调研 + 现行系统实况）
 > 外部调研底座:    `artifacts/ai-os-market-scan-2026-10-18.md`（15 个商业样本，宣称级证据）+
 >                  `artifacts/agent-os-architecture-scan-2026-10-18.md`（8 个学术/开源 agent OS，分层对照）
+> 落地台账:        `docs/04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md`（SG 条目：缺陷/建议、
+>                  验收判据、成本、明确不做 NT、形态不同 NF；**本报告是依据，台账是唯一业务真源**）
 > 口径:            本报告只做「我们的设想 vs 市场宣称 vs 我们实况」的对照与排序依据，**不替 owner 拍板**；
 >                  对外部产品只做公开信息引注，未安装/未运行/未逆向任何第三方产品；成本量级为 1 名熟悉仓库的
 >                  Rust 工程师估算（S < 2 周 / M 4–8 周 / L 8–16 周 / XL > 16 周）。

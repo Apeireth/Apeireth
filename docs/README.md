@@ -44,6 +44,9 @@ docs/
 | [03-reference/glossary.md](03-reference/glossary.md) | 术语表（品牌/架构/记忆/她本身/安全）|
 | [04-internal/design-intent.md](04-internal/design-intent.md) | 设计意图与拍板历史 |
 | [04-internal/backlog.md](04-internal/backlog.md) | 唯一权威台账 |
+| [04-internal/backend-enhancement/00-backlog.md](04-internal/backend-enhancement/00-backlog.md) | 后端增强批次账（D 编号待办/残余/真源索引；每波总装更新）|
+| **[04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md](04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md)** | **系统级能力缺口台账（SG/NT/NF 条目 · 防遗忘 · 拍板后转任务卡；每波复核）** |
+| [04-internal/ai-os-landscape-2026-10-18.md](04-internal/ai-os-landscape-2026-10-18.md) | 「AI OS」市场全景对照调研（商业 15 样本 + 学术 8 样本 + 四轨建议；只读宣称级证据）|
 | [04-internal/release-plan.md](04-internal/release-plan.md) | 发布计划 |
 | [design/01-DESIGN-SYSTEM.md](design/01-DESIGN-SYSTEM.md) | 前端设计系统（视觉令牌/层序规范）|
 | [design/frontend-handoff.md](design/frontend-handoff.md) | 前端交接（现状/联调/坑与纪律/欠账，接手先读）|
