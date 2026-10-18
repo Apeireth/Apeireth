@@ -26,8 +26,13 @@
 - **版本**：以根 `Cargo.toml` `[workspace.package] version` 为准（现 `2.0.0-rc.4`）；发版前按
   [docs/04-internal/release-checklist.md](docs/04-internal/release-checklist.md) 清版本残留。
 - **历史不追溯改写**：带日期的历史记录保留原值，需要时加「历史口径（日期）」标注。
-- **README.md / README.zh-CN.md 本体冻结**（owner 所有）：README 类修正一律落在
-  `docs/design/README-draft-pending.md`（未来换回版），并在草稿头部注记「审计修 A-xx」。
+- **README.md / README.zh-CN.md = owner 面版（2026-10-18 已换回，草稿机制退役）**：owner 口令
+  「readme换」后，`docs/design/README-draft-pending.md` / `README.zh-CN-draft-pending.md`
+  （门面重排 + 小巧思 + 术语血统版）已换入本体并删除草稿；此后 README 类修正**直接改本体**、
+  提交正文报 owner 复核，不再走「草稿-待换回」两段机制。**徽章/正文里的测试数字必须与
+  [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md) 同日同口径，手改同步**。
+  历史卷宗（`docs/design/readme-research-notes.md`、`docs/design/readme-term-lineage-audit-2026-10-18.md`）
+  保留原样、不追溯改写。
 - 默认开关以 `crates/engine/runtime-assembly/src/canonical/production.rs` 实况为准，
   现值表见 [docs/03-reference/capabilities-matrix.md](docs/03-reference/capabilities-matrix.md) §0.2。
 

@@ -1,8 +1,13 @@
 # README 术语血统镊子批 · 术语血统对照表 + 镊子改动清单（2026-10-18）
 
+> **归档注记（2026-10-18，owner 口令「readme换」后）**：本文审计的两份草稿
+> （`docs/design/README-draft-pending.md` / `README.zh-CN-draft-pending.md`）已按 owner 口令
+> 换入 `README.md` / `README.zh-CN.md` 本体并删除；本文保留为审计卷宗、原路径引用不追溯改写
+> （文内草稿路径即当时的施工对象）。
+
 ```text
 [Document-Meta]
-范围:  docs/design/README-draft-pending.md + README.zh-CN-draft-pending.md（只动术语）。
+范围:  docs/design/README-draft-pending.md + README.zh-CN-draft-pending.md（只动术语；2026-10-18 已换入 README 本体并删除草稿，见上方归档注记）。
 纪律:  镊子原则（每处 ≤2 行、只换词不重写句子）；中性表述扫描；不 commit；
        审计修正 / 门面批 / 小巧思成果零删改；LOCKED 锚本体 0 触碰。
 上限:  自研术语新增 = 6 处（3 词 × 2 文件，已用满）；术语密度不升反降（见 §五）。
