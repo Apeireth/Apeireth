@@ -31,6 +31,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::device::device_control::DeviceControlStatus;
 use crate::exec_pipeline::{OutputSchema, SchemaKind};
 
 /// 产品标识 (中性工程事实: 自述身份, 不引任何第三方标识)。
@@ -451,6 +452,9 @@ impl ContentFeedStatus {
 ///
 /// 心跳态两列 (V3-a 收尾一针: 常驻心跳关怀生产者): `None` = 心跳生产者
 /// 未接线/未运行 (如实), 绝不冒充在跑。
+///
+/// 天气提醒计数 (K 轴 L2 提醒侧消费端): `weather-signals.jsonl` 真值计数
+/// (只交信号的天气提醒信号总数), 与提醒侧消费面同一本信号账。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CareStatus {
     /// 关怀规则数 (`care_rules.json` 真值计数)。
@@ -465,6 +469,8 @@ pub struct CareStatus {
     pub heartbeat_next_poll_at_ms: Option<i64>,
     /// 心跳态: 最近心跳命中 (关怀发起) 时刻; `None` = 尚无心跳命中。
     pub heartbeat_last_hit_at_ms: Option<i64>,
+    /// 天气提醒计数 (`weather-signals.jsonl` 信号真值计数; `None` = 信号账读不到)。
+    pub weather_reminders: Option<u64>,
     /// 探测缺位/失败的原因 (全维就位时 `None`)。
     pub reason: Option<String>,
 }
@@ -479,6 +485,7 @@ impl CareStatus {
             last_care_note: None,
             heartbeat_next_poll_at_ms: None,
             heartbeat_last_hit_at_ms: None,
+            weather_reminders: None,
             reason: Some(reason.into()),
         }
     }
@@ -992,6 +999,11 @@ pub struct SelfStatusSnapshot {
     pub sheet_ops: Option<SheetOpsStatus>,
     /// 创作表格操作节不可用的原因; 可用时为 `None`。
     pub sheet_ops_reason: Option<String>,
+    /// 设备受控执行节 (K 轴 L3/L4: 控制计数/最近动作真值, 与 `tool.device_control`
+    /// 工具面同账同源)。
+    pub device_control: Option<DeviceControlStatus>,
+    /// 设备受控执行节不可用的原因; 可用时为 `None`。
+    pub device_control_reason: Option<String>,
 }
 
 impl SelfStatusSnapshot {
@@ -1036,6 +1048,8 @@ impl SelfStatusSnapshot {
             device_presence_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             sheet_ops: None,
             sheet_ops_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            device_control: None,
+            device_control_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
         }
     }
 }
@@ -1113,6 +1127,11 @@ pub const SELF_STATUS_SECTIONS: &[&str] = &[
     // 读写族的进程内计数自述化 —— 读了/写了多少行、拒了多少次如实可见;
     // 只计数不回路径, 与 image_ops/doc_ops 创作节同口径)。
     "sheet_ops",
+    // K 轴 L3/L4 受控执行: 设备受控执行节入二十一节合同 (形状冻结的演进,
+    // 附理由: 设备动作的控制计数/最近动作真值自述化 —— 执行了多少动作、
+    // 最近动了什么/谁批的要让 agent 自己看得见; 只回计数与动作标签, 不回
+    // 参数正文, 与在场节同目录同口径)。
+    "device_control",
 ];
 
 /// 把一份自述投影成结构化 JSON (字段合同的唯一实现)。
@@ -1388,6 +1407,8 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             // 未接线/未运行 = 显式 null (如实)。
             "heartbeat_next_poll_at_ms": status.heartbeat_next_poll_at_ms,
             "heartbeat_last_hit_at_ms": status.heartbeat_last_hit_at_ms,
+            // 天气提醒计数 (K 轴 L2 提醒侧消费端): 信号账真值计数。
+            "weather_reminders": status.weather_reminders,
             "reason": snapshot.care_reason.clone().or_else(|| status.reason.clone()),
         }),
         None => json!({
@@ -1397,6 +1418,7 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
             "last_care_note": null,
             "heartbeat_next_poll_at_ms": null,
             "heartbeat_last_hit_at_ms": null,
+            "weather_reminders": null,
             "reason": snapshot
                 .care_reason
                 .clone()
@@ -1643,6 +1665,40 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         }),
     };
 
+    // 设备受控执行节 (K 轴 L3/L4 受控执行): 控制计数/最近动作, 真值如实 (与
+    // `tool.device_control` 工具面同一执行核心同一状态账); 只回计数与动作
+    // 标签, 不回参数正文 (脱敏口径)。
+    let device_control = match &snapshot.device_control {
+        Some(status) => json!({
+            "devices_total": status.devices_total,
+            "devices_enabled": status.devices_enabled,
+            "actions_executed": status.actions_executed,
+            "executed_reversible": status.executed_reversible,
+            "executed_irreversible": status.executed_irreversible,
+            "executed_money": status.executed_money,
+            "last_action": status.last_action,
+            "note": status.note,
+            "reason": snapshot
+                .device_control_reason
+                .clone()
+                .or_else(|| status.reason.clone()),
+        }),
+        None => json!({
+            "devices_total": null,
+            "devices_enabled": null,
+            "actions_executed": null,
+            "executed_reversible": null,
+            "executed_irreversible": null,
+            "executed_money": null,
+            "last_action": null,
+            "note": null,
+            "reason": snapshot
+                .device_control_reason
+                .clone()
+                .unwrap_or_else(|| DATA_PROBE_NOT_WIRED.to_string()),
+        }),
+    };
+
     json!({
         "identity": {
             "product_name": snapshot.identity.product_name,
@@ -1668,6 +1724,7 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         "doc_ops": doc_ops,
         "presence": presence,
         "sheet_ops": sheet_ops,
+        "device_control": device_control,
     })
 }
 
@@ -1752,7 +1809,9 @@ impl SelfStatusTool {
     /// 创作节随创作工具面 W1 (图像操作) 入合同: 最近操作计数自述化 (只计数不回
     /// 路径, 进程内计数口径如实注明);
     /// 在场节随 K 轴 L1 (在场感知骨架) 入合同: 设备数/白名单数/最近感知自述化
-    /// (白名单制默认零设备的实况可见, 最近感知为进程内计数口径)。
+    /// (白名单制默认零设备的实况可见, 最近感知为进程内计数口径);
+    /// 设备受控执行节随 K 轴 L3/L4 (受控执行骨架) 入合同: 控制计数/最近动作
+    /// 自述化 (执行了多少动作、最近动了什么/谁批的可见, 只回计数与动作标签)。
     pub fn output_schema() -> OutputSchema {
         let mut schema = OutputSchema::new();
         for section in SELF_STATUS_SECTIONS {
@@ -1822,7 +1881,9 @@ impl ToolCapability for SelfStatusTool {
                  prices read as not provided, never invented), cost-tier routing state \
                  (current tier, selected model, honest fallback annotation), and physical \
                  device presence (device count, whitelist count, last sensing - whitelist \
-                 with zero devices by default). Reports measured \
+                 with zero devices by default) plus controlled device execution (action \
+                 counts per grade and the last action, from the append-only action ledger). \
+                 Reports measured \
                  state only; credential values are never echoed.",
             )
             .with_parameters(params)
@@ -1974,6 +2035,8 @@ mod tests {
                 // V3-a 收尾一针: 心跳态两列入 fixture (下次 poll 时刻 / 最近心跳命中)。
                 heartbeat_next_poll_at_ms: Some(1_728_001_000_000),
                 heartbeat_last_hit_at_ms: Some(1_728_000_400_000),
+                // K 轴 L2 提醒侧消费端: 天气提醒计数入 fixture。
+                weather_reminders: Some(4),
                 reason: None,
             }),
             care_reason: None,
@@ -2215,6 +2278,20 @@ mod tests {
                 reason: None,
             }),
             sheet_ops_reason: None,
+            device_control: Some(DeviceControlStatus {
+                devices_total: 3,
+                devices_enabled: 2,
+                actions_executed: 2,
+                executed_reversible: 1,
+                executed_irreversible: 1,
+                executed_money: 0,
+                last_action: Some(
+                    "lamp / power_off @ 1728001000000 (谁批: im:u_demo@primary)".to_string(),
+                ),
+                note: None,
+                reason: None,
+            }),
+            device_control_reason: None,
         }
     }
 
@@ -2263,6 +2340,8 @@ mod tests {
             value["care"]["heartbeat_last_hit_at_ms"],
             1_728_000_400_000i64
         );
+        // K 轴 L2 提醒侧消费端: 天气提醒计数真值入帧。
+        assert_eq!(value["care"]["weather_reminders"], 4);
         assert_eq!(value["care"]["reason"], Value::Null);
         assert_eq!(value["content_feed"]["feeds"], 2);
         assert_eq!(
@@ -2342,6 +2421,35 @@ mod tests {
             .unwrap()
             .contains("进程内计数"));
         assert_eq!(value["presence"]["reason"], Value::Null);
+        // 设备受控执行节真值 (K 轴 L3/L4): 控制计数/最近动作入帧。
+        assert_eq!(value["device_control"]["devices_total"], 3);
+        assert_eq!(value["device_control"]["devices_enabled"], 2);
+        assert_eq!(value["device_control"]["actions_executed"], 2);
+        assert_eq!(value["device_control"]["executed_reversible"], 1);
+        assert_eq!(value["device_control"]["executed_irreversible"], 1);
+        assert_eq!(value["device_control"]["executed_money"], 0);
+        assert_eq!(
+            value["device_control"]["last_action"],
+            "lamp / power_off @ 1728001000000 (谁批: im:u_demo@primary)"
+        );
+        assert_eq!(value["device_control"]["reason"], Value::Null);
+    }
+
+    /// 设备受控执行节缺源 = 显式 null + 原因 (0 装诚实, 不编控制计数)。
+    #[test]
+    fn device_control_section_without_a_source_is_explicit_null_with_a_reason() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.device_control = None;
+        snapshot.device_control_reason =
+            Some("device control probe failed: 状态账读取失败".to_string());
+        let value = render_snapshot(&snapshot);
+        assert_eq!(value["device_control"]["actions_executed"], Value::Null);
+        assert_eq!(value["device_control"]["executed_money"], Value::Null);
+        assert_eq!(value["device_control"]["last_action"], Value::Null);
+        assert!(value["device_control"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("device control probe failed"));
     }
 
     /// 在场节缺源 = 显式 null + 原因 (0 装诚实, 不编设备数)。
@@ -2502,6 +2610,7 @@ mod tests {
         assert_eq!(value["care"]["rules"], Value::Null);
         assert_eq!(value["care"]["next_trigger_at_ms"], Value::Null);
         assert_eq!(value["care"]["last_care_at_ms"], Value::Null);
+        assert_eq!(value["care"]["weather_reminders"], Value::Null);
         assert!(
             value["care"]["reason"]
                 .as_str()
@@ -2525,6 +2634,7 @@ mod tests {
             last_care_note: Some("尚无关怀记录".to_string()),
             heartbeat_next_poll_at_ms: None,
             heartbeat_last_hit_at_ms: None,
+            weather_reminders: Some(2),
             reason: None,
         });
         let value = render_snapshot(&snapshot);
@@ -2534,6 +2644,8 @@ mod tests {
         assert_eq!(value["care"]["last_care_note"], "尚无关怀记录");
         assert_eq!(value["care"]["heartbeat_next_poll_at_ms"], Value::Null);
         assert_eq!(value["care"]["heartbeat_last_hit_at_ms"], Value::Null);
+        // K 轴 L2: 天气提醒计数照信号账真值报 (只交信号的提醒侧消费面同账)。
+        assert_eq!(value["care"]["weather_reminders"], 2);
         assert_eq!(value["care"]["reason"], Value::Null);
 
         // 心跳态真值在场 = 照真值报 (下次 poll 时刻 / 最近心跳命中)。

@@ -357,7 +357,7 @@ pub struct ProductionModulesConfig {
     pub doc_ops: Option<apeireth_tools_canonical::DocOpsConfig>,
     /// Register the sheet-ops tool (`tool.sheet_ops`, 创作工具面 K3 · 表格操作).
     ///
-    /// 受控读写族: CSV 读 (read/summary) + 筛排聚合 (filter/sort/aggregate) +
+    /// 受控读写族: 表读 CSV / xlsx (read/summary) + 筛排聚合 (filter/sort/aggregate) +
     /// 计算列 (formula) + 导出 (export_csv)。受控面 = 工作区限域 + 敏感面拒 +
     /// 行列/字节上限 (防炸弹表) + 创建类原子写 (只创建不覆盖) + 数值精度如实
     /// (f64 不静默取整, NaN/inf 零产出)。**写面双重约束**: 写动作受
@@ -365,7 +365,8 @@ pub struct ProductionModulesConfig {
     /// [`apeireth_tools_canonical::SheetOpsConfig::with_write_gate`], 关 = 拒写
     /// 不拒读) + 审批档每次人批 (无自动放行档)。注册条件 = 本开关 + 工作区根
     /// (注册即闸; 读面不背写总闸, 表格读是本面的第一公民)。默认关 (opt-in,
-    /// fail-closed)。自述创作节与工具面同一计数器。本批只 CSV; xlsx 读入排下批。
+    /// fail-closed)。自述创作节与工具面同一计数器。读面认 CSV + xlsx
+    /// (`.xlsx` 后缀词面判定); 写面只出 CSV (xlsx 写出后置)。
     pub sheet_ops: Option<apeireth_tools_canonical::SheetOpsConfig>,
     /// Register the device-sense tool (`tool.device_sense`, K 轴 L1 在场感知).
     ///
@@ -396,6 +397,16 @@ pub struct ProductionModulesConfig {
     /// 默认关 fail-closed)。默认关 (opt-in)。
     pub device_control:
         Option<apeireth_tools_canonical::device::device_control::DeviceControlConfig>,
+    /// Register the guard-watch tool (`tool.guard_watch`, K 轴 L5 看家骨架).
+    ///
+    /// 守护面: 守护规则 (`guard-rules.json` StoredDoc 拒开, 规则 = 设备状态阈值 /
+    /// 时序条件) + 巡检判定 (白名单设备只读感知) + 告警账 (`guard-alerts.jsonl`
+    /// append-only) —— 告警 = 关怀候选高优先 (打扰纪律守护例外档: 破勿扰可配 +
+    /// 「守护告警」标注 + 频率独立上限, 提醒侧消费端同源接缝)。**只看不动**:
+    /// 告警不触发任何设备动作 (动手仍走 [`Self::device_control`] 三拍人批)。
+    /// 注册条件 = 配置注入 (注册即闸, 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` +
+    /// `APEIRETH_ENABLE_GUARD_WATCH`, 默认关 fail-closed)。默认关 (opt-in)。
+    pub guard_watch: Option<apeireth_tools_canonical::device::guard_watch::GuardWatchConfig>,
 }
 
 impl Default for ProductionModulesConfig {
@@ -451,6 +462,7 @@ impl Default for ProductionModulesConfig {
             device_sense: None,
             weather: None,
             device_control: None,
+            guard_watch: None,
         }
     }
 }
@@ -617,6 +629,8 @@ pub enum ModuleFamily {
     Weather,
     /// K 轴 L3/L4 受控执行族 (`device_control`)。
     DeviceControl,
+    /// K 轴 L5 看家骨架族 (`guard_watch`)。
+    GuardWatch,
     /// 自省通道族 (`self_status`)。
     SelfStatus,
     /// 外部工具桥族 (`mcp`)。
@@ -1113,10 +1127,24 @@ impl ProductionModules {
         // 同一本设备表)。注册条件 = 配置注入 (注册即闸: 双闸
         // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`,
         // 见 `DeviceControlConfig::from_env`, 默认关 fail-closed)。
+        let mut device_control_runner = None;
         if let Some(device_control_config) = &config.device_control {
             instrument.constructed(ModuleFamily::DeviceControl);
             let provider =
                 super::tool_modules::DeviceControlModule::new(device_control_config.clone());
+            device_control_runner = Some(Arc::clone(provider.runner()));
+            capabilities.extend(provider.capabilities());
+        }
+
+        // K 轴 L5 看家骨架 (`tool.guard_watch`, 默认关): 守护规则面 (阈值/时序
+        // 条件, StoredDoc 拒开) + 巡检判定 + 告警账 (告警 = 关怀候选高优先,
+        // 提醒侧消费端同源接缝)。**只看不动**: 告警零设备动作 (动手仍走
+        // `tool.device_control` 三拍人批)。注册条件 = 配置注入 (注册即闸: 双闸
+        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH`,
+        // 见 `GuardWatchConfig::from_env`, 默认关 fail-closed)。
+        if let Some(guard_watch_config) = &config.guard_watch {
+            instrument.constructed(ModuleFamily::GuardWatch);
+            let provider = super::tool_modules::GuardWatchModule::new(guard_watch_config.clone());
             capabilities.extend(provider.capabilities());
         }
 
@@ -1205,6 +1233,14 @@ impl ProductionModules {
                         device_config.data_dir.clone(),
                         Arc::clone(activity),
                     ),
+                );
+            }
+            // K 轴 L3/L4 受控执行: 自述设备受控执行节 (控制计数/最近动作真值)
+            // 与 `tool.device_control` 工具面同一执行核心同一状态账 (同源同账;
+            // 面没注册 = 该节显式 null + 原因, 不编数)。
+            if let Some(runner) = &device_control_runner {
+                source = source.with_device_control_probe(
+                    super::self_status_source::device_control_status_probe(Arc::clone(runner)),
                 );
             }
             instrument.constructed(ModuleFamily::SelfStatus);

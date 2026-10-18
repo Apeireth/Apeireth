@@ -38,6 +38,7 @@ use std::sync::Arc;
 
 use crate::emergence::{day_key_from_epoch_ms, minutes_of_day_from_epoch_ms, Boundaries};
 
+use super::reminder::CareTier;
 use super::rules::{CareRecord, CareRule, CareRulesBody, CareStore, CareStoreError, CareTrigger};
 
 /// 关怀时钟 (可注入: 生产用系统时钟, 测试用冻结时钟)。
@@ -90,17 +91,19 @@ impl CareClock for FrozenCareClock {
     }
 }
 
-/// 关怀候选 (每条到点规则 → 素材 + 时机)。
+/// 关怀候选 (每条到点规则 / 提醒信号 → 素材 + 时机)。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CareCandidate {
-    /// 触发的规则 id。
+    /// 触发的规则 id (提醒/告警信号 = 信号稳定身份)。
     pub rule_id: String,
     /// 触发器语义描述 (时机的可读形态)。
     pub trigger: String,
     /// 时机: 到点时刻 (epoch 毫秒)。
     pub due_ms: i64,
-    /// 素材: 关怀内容素材 (规则自带)。
+    /// 素材: 关怀内容素材 (规则自带 / 信号建议语)。
     pub material: String,
+    /// 来源档 (规则 / 提醒信号 / 守护告警): 打扰纪律分档 + 守护告警标注同源。
+    pub tier: CareTier,
 }
 
 impl CareCandidate {
@@ -110,6 +113,7 @@ impl CareCandidate {
             trigger: rule.trigger.describe(),
             due_ms,
             material: rule.material.clone(),
+            tier: CareTier::Rule,
         }
     }
 }
@@ -203,11 +207,21 @@ pub struct CareJudgmentInput {
 impl CareJudgmentInput {
     /// 显式判定请求文本 (模型侧只回结构化判定, 不生成消息正文)。
     pub fn to_prompt(&self) -> String {
+        let annotation = self
+            .candidate
+            .tier
+            .annotation()
+            .map(|mark| format!(", 标注: {mark}"))
+            .unwrap_or_default();
         let mut prompt = format!(
             "请判定这次主动关怀该不该发起, 只输出结构化判定 JSON ({{\"speak\": bool, \"focus\": \
-             string|null, \"reason\": string}}), 不要生成消息正文。\n关怀候选: 规则 {} ({})\n素材: \
-             {}",
-            self.candidate.rule_id, self.candidate.trigger, self.candidate.material
+             string|null, \"reason\": string}}), 不要生成消息正文。\n关怀候选: 规则 {} ({}, 来源档 \
+             {}{})\n素材: {}",
+            self.candidate.rule_id,
+            self.candidate.trigger,
+            self.candidate.tier.label(),
+            annotation,
+            self.candidate.material
         );
         if !self.recent_material.is_empty() {
             prompt.push_str("\n近期记忆素材:");
@@ -462,13 +476,16 @@ pub struct CareInitiative {
 impl CareInitiative {
     /// 标准回合输入 (零新消息通道: 关怀发起 = 走标准回合, 生成的关怀消息
     /// 随标准回合进会话流, IM 推送走既有推送缝)。
+    ///
+    /// 守护告警档 (破勿扰发起) **必带「守护告警」标注** —— 人看得见它为什么
+    /// 破窗 (打扰纪律守护例外档的诚实留痕)。
     pub fn to_turn_input(&self) -> String {
         let focus = self
             .verdict
             .focus
             .as_deref()
             .unwrap_or(self.candidate.material.as_str());
-        format!(
+        let body = format!(
             "[care:{rule}] 时机: {trigger} (到点 {due}); 素材: {material}; 发起意愿判定: \
              {mode} 该说 (理由: {reason}); 说什么方向: {focus}. 请以一句关怀消息回应这次主动关怀。",
             rule = self.candidate.rule_id,
@@ -478,7 +495,11 @@ impl CareInitiative {
             mode = self.verdict.mode.label(),
             reason = self.verdict.reason,
             focus = focus,
-        )
+        );
+        match self.candidate.tier.annotation() {
+            Some(mark) => format!("[{mark}] {body}"),
+            None => body,
+        }
     }
 }
 
@@ -558,45 +579,78 @@ impl CareEngine {
     /// (当次到点消费掉, 台账留痕); 判定该说 = [`CarePoll::Initiating`]
     /// (发起留痕 + 台账)。发起闸拦下时**零判定零记账** —— 纯规则轮询路径
     /// 不碰模型 (poll 本身零模型调用)。
+    ///
+    /// 提醒/告警信号走同一管道 (同源纪律): [`Self::poll_reminder`]。
     pub fn poll(&mut self) -> Result<CarePoll, CareStoreError> {
-        let now_ms = self.clock.now_ms();
+        let now_ms = self.now_ms();
         let body = self.store.list()?;
         let Some(rule) = self.first_due_rule(&body, now_ms) else {
             return Ok(CarePoll::Idle);
         };
 
-        // 打扰纪律 (四件, 顺序固定)。
-        if let Some(hold) = self.discipline_hold(&body, now_ms) {
+        // 打扰纪律 (四件, 顺序固定; 规则档 = 无守护例外)。
+        if let Some(hold) = self.discipline_hold_for(&body, now_ms, CareTier::Rule) {
             return Ok(CarePoll::Held {
                 rule_id: rule.id.clone(),
                 hold,
             });
         }
+        let candidate = CareCandidate::from_rule(rule, now_ms);
+        self.admit_candidate(now_ms, candidate)
+    }
 
+    /// 现时刻 (epoch 毫秒; 时钟可注入)。
+    pub(crate) fn now_ms(&self) -> i64 {
+        self.clock.now_ms()
+    }
+
+    /// 纪律之后、判定之前的统一收口: 发起闸 (try_take_initiative 同源) →
+    /// 发起意愿判定 → 台账留痕 (规则档随发起留痕锚点, 信号档只留台账)。
+    ///
+    /// 发起闸拒绝 = [`CarePoll::Held`] (候选不丢, 且零判定零记账); 判定说不 =
+    /// [`CarePoll::Declined`] (当次消费掉, 台账留痕); 判定该说 =
+    /// [`CarePoll::Initiating`]。守护告警档的发起**必带「守护告警」标注**
+    /// (台账 note + 标准回合输入同源)。
+    pub(crate) fn admit_candidate(
+        &self,
+        now_ms: i64,
+        candidate: CareCandidate,
+    ) -> Result<CarePoll, CareStoreError> {
         // 发起闸 (try_take_initiative 同源): 纪律放行后、判定前问询 ——
         // 拒绝 = 候选不丢 (Held 重试), 且本轮零判定零记账。
         if !self.initiative.try_take_initiative(now_ms) {
             return Ok(CarePoll::Held {
-                rule_id: rule.id.clone(),
+                rule_id: candidate.rule_id.clone(),
                 hold: CareHold::InitiativeGate,
             });
         }
 
         // 发起意愿判定 (显式判定面)。
-        let candidate = CareCandidate::from_rule(rule, now_ms);
         let input = CareJudgmentInput {
             recent_material: self.material.recent_material(&candidate),
             candidate,
         };
         let verdict = self.judge.judge(&input);
+        let mut note = verdict.reason.clone();
+        if let Some(mark) = input.candidate.tier.annotation() {
+            note = format!("{mark}: {note}");
+        }
         let record = CareRecord {
             rule_id: input.candidate.rule_id.clone(),
             at_ms: now_ms,
             judge: verdict.mode.label().to_string(),
             spoke: verdict.speak,
-            note: verdict.reason.clone(),
+            note,
+            kind: input.candidate.tier.label().to_string(),
         };
-        self.store.record_care(record, now_ms)?;
+        if input.candidate.tier == CareTier::Rule {
+            // 规则档: 发起留痕 (fired_at 锚点) + 台账同写。
+            self.store.record_care(record, now_ms)?;
+        } else {
+            // 信号档 (提醒/守护告警): 只留台账 (发起留痕锚点归规则;
+            // 信号去重走消费位, 见 care::reminder 模块 0 装诚实注)。
+            self.store.record_signal_care(record)?;
+        }
         if !verdict.speak {
             return Ok(CarePoll::Declined {
                 rule_id: input.candidate.rule_id,
@@ -627,43 +681,90 @@ impl CareEngine {
         })
     }
 
-    fn discipline_hold(&self, body: &CareRulesBody, now_ms: i64) -> Option<CareHold> {
+    /// 打扰纪律 (同源: 规则 / 提醒 / 守护告警共用同一本 [`super::rules::CareDiscipline`])。
+    ///
+    /// 分档语义 (守护例外档 = 唯一例外, 可配):
+    ///
+    /// - **勿扰窗口**: 守护告警档默认**可破勿扰** (设计裁定: 安全告警破窗必带
+    ///   「守护告警」标注, 见 [`CareInitiative::to_turn_input`]);
+    ///   [`super::rules::CareDiscipline::guard_alert_breaks_quiet`] 配成 `false`
+    ///   = 例外档收起, 守护告警照常被勿扰拦。提醒档 / 规则档照常被拦 (同源纪律);
+    /// - **专注抑制**: 三档照常生效 (例外档只破勿扰一项, 不是全豁免);
+    /// - **频率上限**: 提醒档与规则档**同账** (同源: 都计普通双档 4h≤1 + 日≤5,
+    ///   守护告警不占这份预算); 守护告警走**独立上限**
+    ///   ([`super::rules::CareDiscipline::guard_frequency_max`] /
+    ///   [`super::rules::CareDiscipline::guard_frequency_window_hours`], 默认 1
+    ///   小时 ≤ 3 条) —— 普通频率不误伤安全告警, 守护频率自己有界;
+    /// - **关怀预算**: 三档照常生效 (关怀回合照常计费)。
+    pub(crate) fn discipline_hold_for(
+        &self,
+        body: &CareRulesBody,
+        now_ms: i64,
+        tier: CareTier,
+    ) -> Option<CareHold> {
         let discipline = &body.discipline;
-        // ① 勿扰窗口 (与 initiative 语义的安静窗口同口径)。
-        let boundaries = Boundaries {
-            quiet_start_minutes: discipline.quiet_start_minutes,
-            quiet_end_minutes: discipline.quiet_end_minutes,
-            ..Boundaries::default()
-        };
-        if boundaries.in_quiet_window(minutes_of_day_from_epoch_ms(now_ms)) {
-            return Some(CareHold::QuietWindow);
+        // ① 勿扰窗口 (与 initiative 语义的安静窗口同口径; 守护例外档可破窗)。
+        let guard_breaks_quiet = tier.is_guard_alert() && discipline.guard_alert_breaks_quiet;
+        if !guard_breaks_quiet {
+            let boundaries = Boundaries {
+                quiet_start_minutes: discipline.quiet_start_minutes,
+                quiet_end_minutes: discipline.quiet_end_minutes,
+                ..Boundaries::default()
+            };
+            if boundaries.in_quiet_window(minutes_of_day_from_epoch_ms(now_ms)) {
+                return Some(CareHold::QuietWindow);
+            }
         }
-        // ② 专注抑制: 距上次交互不足窗口 = 连续交互期, 不插话。
+        // ② 专注抑制: 距上次交互不足窗口 = 连续交互期, 不插话 (三档同源)。
         if let Some(last) = self.last_interaction_ms {
             if now_ms.saturating_sub(last) < discipline.focus_gap_ms() {
                 return Some(CareHold::Focus);
             }
         }
-        // ③ 频率上限 (双档, 设计裁定 R1⑬: 4h≤1 次 + 日≤5 次):
-        //    滚动窗口档满了拦下; 日档 (同一 UTC 日) 满了也拦下 (不丢, 窗口/
-        //    日界滑过再发)。
-        let window_start = now_ms - discipline.frequency_window_ms();
-        let sent = body
-            .history
-            .iter()
-            .filter(|record| record.spoke && record.at_ms >= window_start)
-            .count();
-        if sent >= usize::try_from(discipline.frequency_max).unwrap_or(usize::MAX) {
-            return Some(CareHold::FrequencyCap);
-        }
-        let today = day_key_from_epoch_ms(now_ms);
-        let sent_today = body
-            .history
-            .iter()
-            .filter(|record| record.spoke && day_key_from_epoch_ms(record.at_ms) == today)
-            .count();
-        if sent_today >= usize::try_from(discipline.daily_max).unwrap_or(usize::MAX) {
-            return Some(CareHold::FrequencyCap);
+        // ③ 频率上限 (分档): 守护告警独立上限; 规则 / 提醒同账双档。
+        if tier.is_guard_alert() {
+            let window_start = now_ms - discipline.guard_frequency_window_ms();
+            let guard_sent = body
+                .history
+                .iter()
+                .filter(|record| {
+                    record.spoke
+                        && record.kind == CareTier::GuardAlert.label()
+                        && record.at_ms >= window_start
+                })
+                .count();
+            if guard_sent >= usize::try_from(discipline.guard_frequency_max).unwrap_or(usize::MAX) {
+                return Some(CareHold::FrequencyCap);
+            }
+        } else {
+            // 滚动窗口档 + 日档 (设计裁定 R1⑬: 4h≤1 次 + 日≤5 次); 守护告警
+            // 台账**不占**这份预算 (独立上限, 不误伤普通关怀频率)。
+            let window_start = now_ms - discipline.frequency_window_ms();
+            let sent = body
+                .history
+                .iter()
+                .filter(|record| {
+                    record.spoke
+                        && record.kind != CareTier::GuardAlert.label()
+                        && record.at_ms >= window_start
+                })
+                .count();
+            if sent >= usize::try_from(discipline.frequency_max).unwrap_or(usize::MAX) {
+                return Some(CareHold::FrequencyCap);
+            }
+            let today = day_key_from_epoch_ms(now_ms);
+            let sent_today = body
+                .history
+                .iter()
+                .filter(|record| {
+                    record.spoke
+                        && record.kind != CareTier::GuardAlert.label()
+                        && day_key_from_epoch_ms(record.at_ms) == today
+                })
+                .count();
+            if sent_today >= usize::try_from(discipline.daily_max).unwrap_or(usize::MAX) {
+                return Some(CareHold::FrequencyCap);
+            }
         }
         // ④ 关怀预算 (同账本接缝: 关怀回合照常计费, 烧不起就不发)。
         if let CareBudgetVerdict::Exhausted { .. } = self.budget.admit(now_ms) {
@@ -751,6 +852,7 @@ mod tests {
                 trigger: "每日作息时刻 08:30".to_string(),
                 due_ms: 1_700_000_000_000,
                 material: "问候早安".to_string(),
+                tier: CareTier::Rule,
             },
             recent_material: Vec::new(),
         };

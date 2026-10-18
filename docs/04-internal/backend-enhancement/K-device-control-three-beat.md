@@ -143,7 +143,9 @@ cargo test -p apeireth-image-algo --lib --locked -j 2
 - **已接线**：三拍执行、三档分级、白名单（内存 + `devices.json` 只读消费桥）、
   mock 适配器（灯/空调/微波炉）、状态账、审批卡载荷、双闸开关、生产装配
   （注册即闸 + 授权面 + 治理钩子）。
-- **未接线**（如实）：真实家居协议族 / 购买渠道族（`DeviceAdapter` trait 留插槽）、
-  IM 审批卡的推送面（gateway 属禁区，本批交付**卡载荷** `DeviceApprovalCard`
-  由 IM 面消费）、`tool.self_status` 的设备节探针接线（自述节类型
-  `DeviceControlStatus` 已就绪，接线归口自述面批次）。
+- **未接线**（如实）：真实家居协议族 / 购买渠道族（`DeviceAdapter` trait 留插槽）。
+- **收尾缝报备更新（2026-10-18，设备审批卡→IM 批）**：本节原报备的两条未接线
+  已由 [`K-device-approval-im-push.md`](K-device-approval-im-push.md) 接线 ——
+  IM 审批卡推送面（gateway 消费 `DeviceApprovalCard` 卡载荷，同链同信封 +
+  plan_id 幂等 + 失败留账重试 + 按钮批准/拒绝落账）与 `tool.self_status`
+  设备节探针（`DeviceControlStatus` 接 `self_status_source` 统一探测口）。

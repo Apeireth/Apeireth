@@ -1421,6 +1421,10 @@ fn care_discipline_dto(discipline: &apeireth_organ::care::CareDiscipline) -> Car
         daily_max: discipline.daily_max,
         focus_gap_minutes: discipline.focus_gap_minutes,
         catchup_minutes: discipline.catchup_minutes,
+        // 守护例外档三列 (K 轴 L2/L5 批随行): 与 care_list 帧同形。
+        guard_alert_breaks_quiet: discipline.guard_alert_breaks_quiet,
+        guard_frequency_max: discipline.guard_frequency_max,
+        guard_frequency_window_hours: discipline.guard_frequency_window_hours,
     }
 }
 
@@ -1432,6 +1436,7 @@ fn care_record_dto(record: &apeireth_organ::care::CareRecord) -> CareRecordDto {
         judge: record.judge.clone(),
         spoke: record.spoke,
         note: record.note.clone(),
+        kind: record.kind.clone(),
     }
 }
 

@@ -137,6 +137,9 @@ async fn care_frame_is_isomorphic_to_the_care_list_tool_frame() {
                 judge: "rule_fallback".to_string(),
                 spoke: true,
                 note: "早安问候".to_string(),
+                // 跨线机械补位 (K 轴 L2 消费端批报备): 台账新增来源档列, 规则档
+                // 缺省语义不变。
+                kind: "rule".to_string(),
             },
             now - 3_600_000,
         )

@@ -54,6 +54,10 @@ pub use canonical::{
     TUNING_LOG_DOC_NAME, TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
 pub use sqlite_session::SqliteSessionStore;
+// 跨线机械补位 (设备受控执行自述批报备, K 轴 L2 消费端批代补编译断点): 自述
+// 来源 trait 的根级再导出 (trait 本体在 `apeireth_tools_canonical`,
+// `device_control_status_probe` 测试按根级路径引用)。
+pub use apeireth_tools_canonical::SelfStatusSource;
 // V4-c 检索维度自进化: 注入后命中回执 → 证据 → 层权重/条目显著性小幅调权,
 // 自进化账 `retrieval_tuning.jsonl` (append-only) + 开关
 // `APEIRETH_ENABLE_RETRIEVAL_TUNING` (默认关 fail-closed)。
@@ -72,6 +76,13 @@ pub use canonical::care_heartbeat::{
     DEFAULT_CARE_HEARTBEAT_POLL_INTERVAL_SECS,
 };
 pub use canonical::self_status_source::care_status_probe_with_heartbeat;
+// 提醒侧消费桥 (K 轴 L2 提醒 + L5 守护告警 → care 同源接缝): 两本信号账 →
+// 关怀候选 (同源打扰纪律; 守护例外档) + 关怀节天气提醒计数真值源。
+pub use canonical::care_reminder::{
+    guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
+    WeatherSignalFeed,
+};
+pub use canonical::self_status_source::weather_reminder_count;
 // V6-a 任务编排持久队列: sqlite 任务表 (会话账本同库) + `tool.task_board` 工具面
 // (含治理档钩子) + 自述任务节探测口。
 pub use canonical::self_status_source::task_board_status_probe;
@@ -80,12 +91,17 @@ pub use canonical::self_status_source::task_board_status_probe;
 // K 轴 L3/L4 受控执行骨架: `tool.device_control` 装配模块 (三拍执行 + 三档
 // 分级审批 + 白名单只读消费 L1 设备表)。
 pub use canonical::self_status_source::device_presence_probe;
+// K 轴 L3/L4 受控执行自述接线 (设备审批卡→IM 批): 自述设备受控执行节探测口
+// (控制计数/最近动作, 与 `tool.device_control` 工具面同账同源)。
+pub use canonical::self_status_source::device_control_status_probe;
 pub use canonical::task_board_tool::{
     task_board_approval_reason, task_board_write_face_for_action, TaskBoardApprovalHook,
     TaskBoardTool, TaskBoardWriteFace, ACTION_TASK_ADD, ACTION_TASK_COMPLETE, ACTION_TASK_LIST,
     ACTION_TASK_REASSIGN, TASK_BOARD_ACTIONS, TASK_BOARD_CAPABILITY_ID, TASK_BOARD_TOOL_NAME,
 };
-pub use canonical::tool_modules::{DeviceControlModule, DeviceSenseModule, WeatherModule};
+pub use canonical::tool_modules::{
+    DeviceControlModule, DeviceSenseModule, GuardWatchModule, WeatherModule,
+};
 // 性格锁定 + 性格周报 (裁定 ④⑤): 特质锁定态持久档 (`trait-locks.json`) /
 // 成长计既有账读面 / 只读周报工具面 `tool.trait_report`。
 pub use canonical::{

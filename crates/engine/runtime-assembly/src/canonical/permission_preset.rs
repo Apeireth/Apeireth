@@ -376,7 +376,7 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::kernel::{TraceId, system_clock};
+    use apeireth_core::kernel::{system_clock, TraceId};
     use apeireth_governance::{Permission, PermissionGovernanceHook, PermissionPolicy};
     use apeireth_runtime::canonical::{InMemorySessionStore, Session};
 

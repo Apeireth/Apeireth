@@ -1117,6 +1117,7 @@ impl CapabilityProvider for WeatherModule {
 /// `APEIRETH_ENABLE_DEVICE_CONTROL`, 默认关 fail-closed)。
 pub struct DeviceControlModule {
     tool: Arc<dyn ToolCapability>,
+    runner: Arc<apeireth_tools_canonical::device::device_control::DeviceControlRunner>,
 }
 
 impl DeviceControlModule {
@@ -1135,8 +1136,9 @@ impl DeviceControlModule {
             );
         Self {
             tool: apeireth_tools_canonical::device::device_control::device_control_capability(
-                runner,
+                Arc::clone(&runner),
             ),
+            runner,
         }
     }
 
@@ -1144,11 +1146,56 @@ impl DeviceControlModule {
     pub fn tool(&self) -> Arc<dyn ToolCapability> {
         Arc::clone(&self.tool)
     }
+
+    /// 执行核心 (只读消费口: 自述设备受控执行节探测口绑它, 与工具面同账同源)。
+    pub fn runner(
+        &self,
+    ) -> &Arc<apeireth_tools_canonical::device::device_control::DeviceControlRunner> {
+        &self.runner
+    }
 }
 
 impl CapabilityProvider for DeviceControlModule {
     fn id(&self) -> &str {
         "module.tool.device_control"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool)]
+    }
+}
+
+/// Module providing the home-guard watch tool (`tool.guard_watch`, K 轴 L5 看家骨架).
+///
+/// 守护面: 守护规则 (`guard-rules.json` StoredDoc 拒开, 规则 = 设备状态阈值 /
+/// 时序条件) + 巡检判定 (白名单设备只读感知) + 告警账 (`guard-alerts.jsonl`
+/// append-only, 告警 = 关怀候选高优先)。**只看不动**: 闭合动作词表零执行,
+/// 告警不触发任何设备动作 (动手仍走 `tool.device_control` 三拍人批)。
+///
+/// 治理: **只读档** —— 注册即闸 (双闸 `APEIRETH_ENABLE_DEVICE_SENSE` +
+/// `APEIRETH_ENABLE_GUARD_WATCH`, 默认关 fail-closed), grant 即用零审批。
+pub struct GuardWatchModule {
+    tool: Arc<dyn ToolCapability>,
+}
+
+impl GuardWatchModule {
+    /// Create the guard-watch module from trusted configuration
+    /// (设备表 / 守护规则表 / 告警账同数据目录; 白名单 = `devices.json` 同一本)。
+    pub fn new(config: apeireth_tools_canonical::device::guard_watch::GuardWatchConfig) -> Self {
+        Self {
+            tool: apeireth_tools_canonical::device::guard_watch::guard_watch_capability(config),
+        }
+    }
+
+    /// Access the underlying (pipeline-wrapped) guard-watch capability.
+    pub fn tool(&self) -> Arc<dyn ToolCapability> {
+        Arc::clone(&self.tool)
+    }
+}
+
+impl CapabilityProvider for GuardWatchModule {
+    fn id(&self) -> &str {
+        "module.tool.guard_watch"
     }
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {

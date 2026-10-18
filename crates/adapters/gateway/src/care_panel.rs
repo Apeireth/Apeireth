@@ -45,6 +45,12 @@ pub struct CareDisciplineDto {
     pub focus_gap_minutes: u32,
     /// 作息时刻过点补发窗口 (分钟)。
     pub catchup_minutes: u32,
+    /// 守护例外档: 守护告警可破勿扰 (可配; 默认 `true`, 破窗发起必带标注)。
+    pub guard_alert_breaks_quiet: bool,
+    /// 守护告警独立频率上限 (每窗口最多几条)。
+    pub guard_frequency_max: u32,
+    /// 守护告警独立频率窗口 (小时)。
+    pub guard_frequency_window_hours: u32,
 }
 
 /// 一条关怀规则 (care_list 帧 `rule_json` 同形 + 两列真值补列)。
@@ -81,12 +87,19 @@ pub struct CareRecordDto {
     pub spoke: bool,
     /// 如实备注。
     pub note: String,
+    /// 来源档 (`rule` / `reminder` / `guard_alert`; 频率上限分档计数同源口径)。
+    pub kind: String,
 }
 
 /// 关怀节真值 (`tool.self_status` 关怀节同形, 含心跳两列)。
 ///
 /// 帧级读失败走 500 错误帧 (错误即帧), 不降级成「全维 null + reason」;
 /// 心跳两列 `null` = 心跳生产者未接线/未运行 (如实, 不冒充在跑)。
+///
+/// 同形口径注记 (K 轴 L2/L5 批报备): `tool.self_status` 关怀节另有一列
+/// `weather_reminders` (天气提醒计数, 信号账真值), 本面板 status DTO **暂不
+/// 投影** (面板读面随后续批次对齐), 差列如实注明不冒充全同形; discipline /
+/// last_care 两节已随 care_list 帧同形 (守护例外档三列 + 台账来源档列)。
 #[derive(Debug, Clone, Serialize)]
 pub struct CarePanelStatusDto {
     /// 关怀规则数 (真值计数)。

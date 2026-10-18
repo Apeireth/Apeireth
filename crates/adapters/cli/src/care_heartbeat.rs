@@ -8,7 +8,10 @@
 //! ② **发起回调**: `dispatch` 接 [`Runtime::execute`] 标准回合 (零新消息通道,
 //!    生成的关怀消息进会话流普通转写, 关怀回合照常计费);
 //! ③ **自述关怀节**: [`CareHeartbeatSource::status_probe`] 注进
-//!    `care_status_probe_with_heartbeat` —— 心跳两列从显式 null 转真值。
+//!    `care_status_probe_with_heartbeat` —— 心跳两列从显式 null 转真值;
+//! ④ **提醒信号源** (K 轴 L2/L5 消费端): 天气提醒信号 (`weather-signals.jsonl`)
+//!    与守护告警 (`guard-alerts.jsonl`) 的消费桥随心跳一起起 —— 提醒 = 关怀
+//!    候选的一种, 走同一套打扰纪律 (守护例外档在内核), 零新消息通道。
 //!
 //! **双闸齐开才起** ([`CareHeartbeatConfig`], 注册即闸 fail-closed):
 //! `APEIRETH_ENABLE_CARE=1` 且 `APEIRETH_ENABLE_CARE_HEARTBEAT=1` 才建心跳线程;
@@ -24,7 +27,10 @@ use apeireth_organ::care::{
 };
 use apeireth_runtime::canonical::heartbeat::HeartbeatDispatch;
 use apeireth_runtime::canonical::{Runtime, TurnRequest};
-use apeireth_runtime_assembly::{CareHeartbeatConfig, CareHeartbeatProducer, CareHeartbeatStatus};
+use apeireth_runtime_assembly::{
+    CareHeartbeatConfig, CareHeartbeatProducer, CareHeartbeatStatus, GuardAlertFeed,
+    WeatherSignalFeed,
+};
 
 /// 发起缝失败留痕的有界容量 (只留最近若干条真因, 不无界长)。
 const DISPATCH_ERROR_LOG_MAX: usize = 32;
@@ -114,7 +120,7 @@ impl CareHeartbeatSource {
             move |now_ms| presence.try_take_initiative(now_ms)
         });
         let engine = CareEngine::new(
-            CareStore::new(care_dir),
+            CareStore::new(care_dir.clone()),
             Arc::new(SystemCareClock),
             Arc::new(RuleFallbackJudge),
         )
@@ -127,11 +133,18 @@ impl CareHeartbeatSource {
             errors: Arc::clone(&self.errors),
         };
         // ③ 注册即闸: enabled 已核 = 起常驻线程, 真值随探针进自述关怀节。
-        let Some(producer) = CareHeartbeatProducer::start_care(
+        // ④ 提醒信号源 (K 轴 L2/L5 消费端): 天气提醒 + 守护告警两本账的消费桥
+        //    随心跳消费 (同源纪律; 账空 = 零消费零动作)。
+        let reminder_feeds: Vec<Arc<dyn apeireth_organ::care::ReminderFeed>> = vec![
+            Arc::new(WeatherSignalFeed::under_data_dir(&care_dir)),
+            Arc::new(GuardAlertFeed::under_data_dir(&care_dir)),
+        ];
+        let Some(producer) = CareHeartbeatProducer::start_care_with_feeds(
             config,
             engine,
             || SystemCareClock.now_ms(),
             dispatch,
+            reminder_feeds,
         ) else {
             return Ok(false);
         };

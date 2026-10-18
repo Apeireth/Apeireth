@@ -75,6 +75,10 @@ fn sample_frame() -> CarePanelDto {
             daily_max: 5,
             focus_gap_minutes: 3,
             catchup_minutes: 120,
+            // 合同演进随行 (K 轴 L2/L5 批): 守护例外档三列入 fixture。
+            guard_alert_breaks_quiet: true,
+            guard_frequency_max: 3,
+            guard_frequency_window_hours: 1,
         },
         last_care: Some(CareRecordDto {
             rule_id: "morning".to_string(),
@@ -82,6 +86,8 @@ fn sample_frame() -> CarePanelDto {
             judge: "rule_fallback".to_string(),
             spoke: true,
             note: "早安问候".to_string(),
+            // 合同演进随行 (K 轴 L2/L5 批): 台账来源档列。
+            kind: "rule".to_string(),
         }),
     }
 }
@@ -186,7 +192,8 @@ async fn care_endpoint_projects_the_care_list_frame_shape_with_heartbeat_columns
     assert_eq!(rule["last_fired_at_ms"], 1_728_000_000_000i64);
     assert_eq!(rule["next_trigger_at_ms"], 1_728_007_800_000i64);
 
-    // discipline: care_list 帧 discipline 节逐字段同名。
+    // discipline: care_list 帧 discipline 节逐字段同名 (合同演进 K 轴 L2/L5 批:
+    // 随 care_list 帧加守护例外档三列, 同形镜像照跟)。
     let discipline = &body["discipline"];
     let mut keys: Vec<&str> = discipline
         .as_object()
@@ -203,13 +210,17 @@ async fn care_endpoint_projects_the_care_list_frame_shape_with_heartbeat_columns
             "focus_gap_minutes",
             "frequency_max",
             "frequency_window_hours",
+            "guard_alert_breaks_quiet",
+            "guard_frequency_max",
+            "guard_frequency_window_hours",
             "quiet_end_minutes",
             "quiet_start_minutes"
         ]
     );
     assert_eq!(discipline["quiet_start_minutes"], 23 * 60);
 
-    // last_care: care_list 帧 `record_json` 逐字段同名 (null = 尚无关怀)。
+    // last_care: care_list 帧 `record_json` 逐字段同名 (null = 尚无关怀; 合同
+    // 演进 K 轴 L2/L5 批: 随 care_list 帧加台账来源档列 `kind`)。
     let record = &body["last_care"];
     let mut keys: Vec<&str> = record
         .as_object()
@@ -218,7 +229,10 @@ async fn care_endpoint_projects_the_care_list_frame_shape_with_heartbeat_columns
         .map(String::as_str)
         .collect();
     keys.sort_unstable();
-    assert_eq!(keys, vec!["at_ms", "judge", "note", "rule_id", "spoke"]);
+    assert_eq!(
+        keys,
+        vec!["at_ms", "judge", "kind", "note", "rule_id", "spoke"]
+    );
     assert_eq!(record["spoke"], true);
 
     // status: 关怀节真值 + 心跳两列 (null 语义在空态例钉)。
@@ -278,6 +292,10 @@ async fn empty_care_table_is_an_explicit_empty_state() {
             daily_max: 5,
             focus_gap_minutes: 3,
             catchup_minutes: 120,
+            // 合同演进随行 (K 轴 L2/L5 批): 守护例外档三列入 fixture。
+            guard_alert_breaks_quiet: true,
+            guard_frequency_max: 3,
+            guard_frequency_window_hours: 1,
         },
         last_care: None,
     };

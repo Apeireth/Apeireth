@@ -72,9 +72,20 @@
 //! 自产帧与结果帧里的路径只回工作区相对拼写; 越界 / 敏感面 / 词法攻击面的
 //! 拒绝帧不回显路径; 自述创作节只回计数, 零路径零文件名。
 //!
-//! # 表格文件面 (诚实边界)
-//! 本批只做 **CSV**; xlsx (= zip + xml, 与文档面 DOCX 同族容器) 读入**排下批**
-//! —— 容器读端可复用 `doc_ops` 已报备的 ZIP 读端, 本批不接、不冒充。
+//! # 表格文件面 (读: CSV + xlsx; 写: 仅 CSV)
+//! - **读面**认两种输入格式, 按**后缀词面**判定 (`.xlsx` → xlsx 面, 其余 →
+//!   CSV 面): CSV = UTF-8 (可带 BOM) + RFC 4180 逗号方言 (见上); xlsx =
+//!   OOXML 表格容器 (ZIP + XML, 与文档面 DOCX 同族容器, **复用 `doc_ops` 已报备
+//!   ZIP 读端**, 解压预算同族), 单元格认三形态 —— 共享字符串 (`t="s"`) /
+//!   内联字符串 (`t="inlineStr"`) / 数值格 (`t="n"` 或缺省, 原词面如实实在),
+//!   字符串结果格 `t="str"` 按其 `<v>` 文本; 其余类型 (`b`/`e`/`d`/未知) 显式
+//!   拒绝不猜值。工作表取 `workbook.xml` 首个 `<sheet>` 声明 (经 rels 解析);
+//!   xlsx 稀疏格网缺格**补空** (格式语义), 落在表头宽度之外的格**拒绝即帧**。
+//! - **公式格口径钉死**: `<f>` 在场 = 公式格, 一律取**缓存值**(`<v>`)且不重算
+//!   —— 共享公式不展开计算, 帧内 `formula_cells` 计数如实标注; **无缓存值的
+//!   公式格拒绝即帧** (不编造值)。
+//! - **写面**只出 **CSV** (见 [`serialize_csv`]); xlsx 写出**后置**, 本批不接、
+//!   不冒充 (xlsx 输入经变换/导出落盘 = 规范 CSV)。
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -187,18 +198,22 @@ pub const SHEET_OPS_COUNT_SCOPE_NOTE: &str =
     "进程内计数: 本进程生命周期内的最近操作计数 (重启清零), 不落账不造账";
 
 /// 工具描述全文 (注册声明与文档引用同一份文本)。
-pub const SHEET_OPS_TOOL_DESCRIPTION: &str = "Read and transform CSV tables inside \
-  the workspace root (controlled read/write family). Closed vocabulary: \
-  read (header + row preview), summary (shape, column names, type guesses), \
-  filter (eq/ne/lt/lte/gt/gte/contains on one column), sort (stable, asc/desc, \
-  empty cells always last), aggregate (sum/avg/count/min/max on one column), \
-  formula (a four-function computed column), export_csv (canonical CSV out). \
-  filter/sort/formula write a new file only when `output` is given; every write \
-  is created atomically, never overwrites an existing file, and waits for a \
-  human approval. Paths must stay inside the workspace root; credential \
-  surfaces are refused; oversized or bomb-like tables (bytes/rows/columns) are \
-  refused, never silently truncated. Numbers are plain f64 and are reported \
-  faithfully (no silent rounding); NaN/inf never appear in results.";
+pub const SHEET_OPS_TOOL_DESCRIPTION: &str = "Read and transform tables inside \
+  the workspace root (controlled read/write family). Inputs: .csv files and \
+  .xlsx workbooks (the first worksheet; shared-string, inline-string and \
+  numeric cells; formula cells report their cached values, never recomputed). \
+  Closed vocabulary: read (header + row preview), summary (shape, column names, \
+  type guesses), filter (eq/ne/lt/lte/gt/gte/contains on one column), sort \
+  (stable, asc/desc, empty cells always last), aggregate \
+  (sum/avg/count/min/max on one column), formula (a four-function computed \
+  column), export_csv (canonical CSV out). filter/sort/formula write a new file \
+  only when `output` is given; every write is created atomically, never \
+  overwrites an existing file, and waits for a human approval; outputs are CSV \
+  (xlsx writing is not offered yet). Paths must stay inside the workspace root; \
+  credential surfaces are refused; oversized or bomb-like tables \
+  (bytes/rows/columns) are refused, never silently truncated. Numbers are plain \
+  f64 and are reported faithfully (no silent rounding); NaN/inf never appear in \
+  results.";
 
 // ---------------------------------------------------------------------------
 // 错误 (拒绝即帧: 真因如实, 不静默降级)
@@ -429,7 +444,7 @@ fn resolve_contained(
                 return Err(SheetOpsError::ReadFailed(format!(
                     "input table unreadable ({})",
                     error.kind()
-                )))
+                )));
             }
         }
     } else {
@@ -474,7 +489,7 @@ fn resolve_output_spelling(candidate: &Path) -> Result<PathBuf, SheetOpsError> {
                 return Err(SheetOpsError::WriteFailed(format!(
                     "output directory is not accessible ({}); 输出目录不可访问",
                     error.kind()
-                )))
+                )));
             }
         }
     }
@@ -750,6 +765,623 @@ pub fn serialize_csv(sheet: &Sheet) -> String {
         write_row(row, &mut out);
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// xlsx (OOXML 表格) 读端: ZIP 容器 (复用 doc_ops 已报备 ZIP 读端) + XML 格网
+// ---------------------------------------------------------------------------
+
+/// 输入格式 (按**后缀词面**判定: `.xlsx` → xlsx 面, 其余 → CSV 面)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SheetInputFormat {
+    /// CSV (UTF-8 + RFC 4180 逗号方言)。
+    Csv,
+    /// xlsx (OOXML 表格容器: ZIP + XML)。
+    Xlsx,
+}
+
+impl SheetInputFormat {
+    /// 词面名 (`csv` / `xlsx`, 帧内 `input_format` 同值)。
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Csv => "csv",
+            Self::Xlsx => "xlsx",
+        }
+    }
+
+    /// 从请求路径的后缀词面判定 (大小写不敏感; 无后缀 / 其它后缀 = CSV 面)。
+    pub fn from_requested(requested: &str) -> Self {
+        let is_xlsx = Path::new(requested)
+            .extension()
+            .is_some_and(|extension| extension.to_string_lossy().eq_ignore_ascii_case("xlsx"));
+        if is_xlsx {
+            Self::Xlsx
+        } else {
+            Self::Csv
+        }
+    }
+}
+
+/// 表格载入元数据 (格式 + xlsx 公式格如实计数)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetLoadMeta {
+    /// 输入格式 (后缀词面判定)。
+    pub format: SheetInputFormat,
+    /// xlsx 公式格计数 (取缓存值口径, 未重算; CSV 恒 0)。
+    pub formula_cells: u64,
+}
+
+/// ZIP 读端错误 → 表格错误 (解压炸弹归上限拒, 其余归解析拒; 真因如实)。
+fn map_container_error(error: crate::doc_ops::DocOpsError) -> SheetOpsError {
+    match error {
+        crate::doc_ops::DocOpsError::UncompressedTooLarge { bytes, cap } => {
+            SheetOpsError::LimitExceeded(format!(
+                "xlsx 容器解压后 {bytes} 字节超过解压预算 {cap} 字节 (防解压炸弹, 宁拒不截)"
+            ))
+        }
+        other => SheetOpsError::ParseFailed(format!("xlsx 容器: {}", other.message())),
+    }
+}
+
+/// XML 实体解码 (预定义实体 + 数字引用; 未知实体按缺字显式 `?`, 不编字形)。
+fn decode_xml_entity(entity: &str) -> String {
+    match entity {
+        "amp" => "&".to_string(),
+        "lt" => "<".to_string(),
+        "gt" => ">".to_string(),
+        "quot" => "\"".to_string(),
+        "apos" => "'".to_string(),
+        other => {
+            let digits = other.strip_prefix('#').unwrap_or_default();
+            let code = if let Some(hex) = digits
+                .strip_prefix('x')
+                .or_else(|| digits.strip_prefix('X'))
+            {
+                u32::from_str_radix(hex, 16).ok()
+            } else {
+                digits.parse::<u32>().ok()
+            };
+            code.and_then(char::from_u32)
+                .map(String::from)
+                .unwrap_or("?".to_string())
+        }
+    }
+}
+
+/// xlsx 共享字符串表 (`xl/sharedStrings.xml`): 每 `<si>` 一串 (run 文本拼接)。
+fn xlsx_shared_strings(xml: &str) -> Result<Vec<String>, SheetOpsError> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let mut reader = Reader::from_str(xml);
+    let mut strings: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_text = false;
+    loop {
+        let event = reader.read_event().map_err(|error| {
+            SheetOpsError::ParseFailed(format!("sharedStrings.xml 标记损坏: {error}"))
+        })?;
+        match event {
+            Event::Start(start) => match start.local_name().as_ref() {
+                b"si" => current.clear(),
+                b"t" => in_text = true,
+                _ => {}
+            },
+            Event::Text(text) => {
+                if in_text {
+                    current.push_str(&text.decode().map_err(|error| {
+                        SheetOpsError::ParseFailed(format!("共享字符串文本解码失败: {error}"))
+                    })?);
+                }
+            }
+            Event::GeneralRef(reference) => {
+                if in_text {
+                    let raw = reference.into_inner();
+                    let entity = std::str::from_utf8(&raw).unwrap_or_default();
+                    current.push_str(&decode_xml_entity(entity));
+                }
+            }
+            Event::End(end) => match end.local_name().as_ref() {
+                b"t" => in_text = false,
+                b"si" => strings.push(std::mem::take(&mut current)),
+                _ => {}
+            },
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    Ok(strings)
+}
+
+/// `workbook.xml` 首个 `<sheet>` 声明的关系 id (`r:id` / `id` 属性)。
+fn xlsx_first_sheet_rel_id(xml: &str) -> Result<String, SheetOpsError> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let mut reader = Reader::from_str(xml);
+    loop {
+        let event = reader.read_event().map_err(|error| {
+            SheetOpsError::ParseFailed(format!("workbook.xml 标记损坏: {error}"))
+        })?;
+        match event {
+            Event::Start(start) | Event::Empty(start) => {
+                if start.local_name().as_ref() == b"sheet" {
+                    for attribute in start.attributes() {
+                        let attribute = attribute.map_err(|error| {
+                            SheetOpsError::ParseFailed(format!("workbook.xml 属性损坏: {error}"))
+                        })?;
+                        if attribute.key.local_name().as_ref() == b"id" {
+                            return Ok(attribute
+                                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                .map_err(|error| {
+                                    SheetOpsError::ParseFailed(format!(
+                                        "workbook.xml 关系 id 损坏: {error}"
+                                    ))
+                                })?
+                                .into_owned());
+                        }
+                    }
+                    return Err(SheetOpsError::ParseFailed(
+                        "workbook.xml 首个 <sheet> 缺关系 id (无法定位工作表)".to_string(),
+                    ));
+                }
+            }
+            Event::Eof => {
+                return Err(SheetOpsError::ParseFailed(
+                    "workbook.xml 无 <sheet> 声明 (不是工作簿)".to_string(),
+                ));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `xl/_rels/workbook.xml.rels`: 关系 id → 工作表包内路径 (子集只认工作表目标)。
+fn xlsx_sheet_target(xml: &str, rel_id: &str) -> Result<String, SheetOpsError> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let mut reader = Reader::from_str(xml);
+    loop {
+        let event = reader.read_event().map_err(|error| {
+            SheetOpsError::ParseFailed(format!("workbook.xml.rels 标记损坏: {error}"))
+        })?;
+        match event {
+            Event::Start(start) | Event::Empty(start) => {
+                if start.local_name().as_ref() == b"Relationship" {
+                    let mut id = String::new();
+                    let mut target = String::new();
+                    for attribute in start.attributes() {
+                        let attribute = attribute.map_err(|error| {
+                            SheetOpsError::ParseFailed(format!(
+                                "workbook.xml.rels 属性损坏: {error}"
+                            ))
+                        })?;
+                        match attribute.key.local_name().as_ref() {
+                            b"Id" => {
+                                id = attribute
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    .map_err(|error| {
+                                        SheetOpsError::ParseFailed(format!(
+                                            "workbook.xml.rels Id 损坏: {error}"
+                                        ))
+                                    })?
+                                    .into_owned();
+                            }
+                            b"Target" => {
+                                target = attribute
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    .map_err(|error| {
+                                        SheetOpsError::ParseFailed(format!(
+                                            "workbook.xml.rels Target 损坏: {error}"
+                                        ))
+                                    })?
+                                    .into_owned();
+                            }
+                            _ => {}
+                        }
+                    }
+                    if id == rel_id {
+                        if target.contains("..") {
+                            return Err(SheetOpsError::ParseFailed(
+                                "工作表关系目标含 .. (包内穿越拒绝)".to_string(),
+                            ));
+                        }
+                        let package_path = if let Some(absolute) = target.strip_prefix('/') {
+                            absolute.to_string()
+                        } else {
+                            format!("xl/{target}")
+                        };
+                        return Ok(package_path);
+                    }
+                }
+            }
+            Event::Eof => {
+                return Err(SheetOpsError::ParseFailed(format!(
+                    "workbook.xml.rels 无关系 {rel_id} (无法定位工作表)"
+                )));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// 单元格列引用 (`A1` 形: 前导字母 = 列) → 0 基列号。
+fn xlsx_column_of(reference: &str) -> Result<usize, SheetOpsError> {
+    let letters: String = reference
+        .chars()
+        .take_while(char::is_ascii_alphabetic)
+        .collect();
+    let rest = &reference[letters.len()..];
+    if letters.is_empty() || rest.is_empty() || !rest.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(SheetOpsError::ParseFailed(format!(
+            "单元格引用 {reference:?} 不是合法 A1 形 (拒绝不猜位)"
+        )));
+    }
+    if letters.len() > 7 {
+        return Err(SheetOpsError::ParseFailed(format!(
+            "单元格引用 {reference:?} 列字母超界 (拒绝不猜位)"
+        )));
+    }
+    let mut column = 0usize;
+    for character in letters.chars() {
+        column = column * 26 + (character.to_ascii_uppercase() as usize - 'A' as usize + 1);
+    }
+    Ok(column - 1)
+}
+
+/// 一行的稀疏格 (0 基列号 → 单元文本)。
+type XlsxRow = Vec<(usize, String)>;
+
+/// 解析工作表 XML → 稀疏行序列 + 公式格计数 (口径见模块文档: 公式格取缓存值)。
+fn xlsx_parse_sheet(xml: &str, shared: &[String]) -> Result<(Vec<XlsxRow>, u64), SheetOpsError> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    #[derive(Default)]
+    struct CellState {
+        column: usize,
+        kind: Option<String>,
+        value: String,
+        inline: String,
+        has_value: bool,
+        has_inline: bool,
+        formula: bool,
+    }
+
+    let mut reader = Reader::from_str(xml);
+    let mut rows: Vec<XlsxRow> = Vec::new();
+    let mut row: XlsxRow = Vec::new();
+    let mut next_column = 0usize;
+    let mut row_open = false;
+    let mut cell: Option<CellState> = None;
+    let mut in_value = false;
+    let mut in_text = false;
+    let mut in_inline = false;
+    let mut formula_cells = 0u64;
+
+    loop {
+        let event = reader
+            .read_event()
+            .map_err(|error| SheetOpsError::ParseFailed(format!("worksheet 标记损坏: {error}")))?;
+        match event {
+            Event::Start(start) => match start.local_name().as_ref() {
+                b"row" => {
+                    row_open = true;
+                    row = XlsxRow::new();
+                    next_column = 0;
+                }
+                b"c" => {
+                    let mut column = next_column;
+                    let mut kind: Option<String> = None;
+                    for attribute in start.attributes() {
+                        let attribute = attribute.map_err(|error| {
+                            SheetOpsError::ParseFailed(format!("单元格属性损坏: {error}"))
+                        })?;
+                        match attribute.key.local_name().as_ref() {
+                            b"r" => {
+                                let reference = attribute
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    .map_err(|error| {
+                                        SheetOpsError::ParseFailed(format!(
+                                            "单元格引用损坏: {error}"
+                                        ))
+                                    })?
+                                    .into_owned();
+                                column = xlsx_column_of(&reference)?;
+                            }
+                            b"t" => {
+                                kind = Some(
+                                    attribute
+                                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                        .map_err(|error| {
+                                            SheetOpsError::ParseFailed(format!(
+                                                "单元格类型损坏: {error}"
+                                            ))
+                                        })?
+                                        .into_owned(),
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let Some(kind) = kind.as_deref() {
+                        if !matches!(kind, "s" | "inlineStr" | "str" | "n") {
+                            return Err(SheetOpsError::ParseFailed(format!(
+                                "单元格类型 t={kind:?} 不在子集 (只认 s/inlineStr/str/n/缺省), \
+                                 显式拒绝不猜值"
+                            )));
+                        }
+                    }
+                    next_column = column + 1;
+                    cell = Some(CellState {
+                        column,
+                        kind,
+                        ..CellState::default()
+                    });
+                }
+                b"v" => in_value = true,
+                b"f" => {
+                    if let Some(state) = cell.as_mut() {
+                        state.formula = true;
+                    }
+                }
+                b"is" => in_inline = true,
+                b"t" => {
+                    if in_inline {
+                        in_text = true;
+                    }
+                }
+                _ => {}
+            },
+            Event::Empty(empty) => match empty.local_name().as_ref() {
+                b"row" => {
+                    // 显式空行: 文档序中占一行 (全空单元)。
+                    rows.push(XlsxRow::new());
+                }
+                b"c" => {
+                    // 空单元: 占位不取值 (稀疏格网语义)。
+                    if row_open {
+                        let mut column = next_column;
+                        for attribute in empty.attributes() {
+                            let attribute = attribute.map_err(|error| {
+                                SheetOpsError::ParseFailed(format!("单元格属性损坏: {error}"))
+                            })?;
+                            if attribute.key.local_name().as_ref() == b"r" {
+                                let reference = attribute
+                                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                    .map_err(|error| {
+                                        SheetOpsError::ParseFailed(format!(
+                                            "单元格引用损坏: {error}"
+                                        ))
+                                    })?
+                                    .into_owned();
+                                column = xlsx_column_of(&reference)?;
+                            }
+                        }
+                        next_column = column + 1;
+                    }
+                }
+                b"f" => {
+                    if let Some(state) = cell.as_mut() {
+                        state.formula = true;
+                    }
+                }
+                b"is" => {}
+                b"t" | b"v" => {}
+                _ => {}
+            },
+            Event::Text(text) => {
+                let decoded = text.decode().map_err(|error| {
+                    SheetOpsError::ParseFailed(format!("文本解码失败: {error}"))
+                })?;
+                if in_value {
+                    if let Some(state) = cell.as_mut() {
+                        state.value.push_str(&decoded);
+                        state.has_value = true;
+                    }
+                } else if in_text {
+                    if let Some(state) = cell.as_mut() {
+                        state.inline.push_str(&decoded);
+                        state.has_inline = true;
+                    }
+                }
+            }
+            Event::GeneralRef(reference) => {
+                if in_value || in_text {
+                    let raw = reference.into_inner();
+                    let entity = std::str::from_utf8(&raw).unwrap_or_default();
+                    let decoded = decode_xml_entity(entity);
+                    if in_value {
+                        if let Some(state) = cell.as_mut() {
+                            state.value.push_str(&decoded);
+                            state.has_value = true;
+                        }
+                    } else if let Some(state) = cell.as_mut() {
+                        state.inline.push_str(&decoded);
+                        state.has_inline = true;
+                    }
+                }
+            }
+            Event::End(end) => match end.local_name().as_ref() {
+                b"v" => in_value = false,
+                b"t" => in_text = false,
+                b"is" => in_inline = false,
+                b"c" => {
+                    let state = cell.take().ok_or_else(|| {
+                        SheetOpsError::ParseFailed("单元格闭合无开 (标记损坏)".to_string())
+                    })?;
+                    if row.iter().any(|(column, _)| *column == state.column) {
+                        return Err(SheetOpsError::ParseFailed(format!(
+                            "同一行重复列引用 (列 {}), 拒绝不猜位",
+                            state.column + 1
+                        )));
+                    }
+                    let text = match state.kind.as_deref() {
+                        Some("s") => {
+                            let index: usize = state.value.trim().parse().map_err(|_| {
+                                SheetOpsError::ParseFailed(format!(
+                                    "共享字符串索引 {:?} 不是合法整数 (拒绝不猜值)",
+                                    state.value
+                                ))
+                            })?;
+                            shared.get(index).cloned().ok_or_else(|| {
+                                SheetOpsError::ParseFailed(format!(
+                                    "共享字符串索引 {index} 越界 (表共 {} 项)",
+                                    shared.len()
+                                ))
+                            })?
+                        }
+                        Some("inlineStr") => state.inline,
+                        Some("str") => state.value,
+                        Some("n") | None => state.value,
+                        Some(other) => {
+                            return Err(SheetOpsError::ParseFailed(format!(
+                                "单元格类型 t={other:?} 不在子集, 显式拒绝不猜值"
+                            )));
+                        }
+                    };
+                    if state.formula {
+                        formula_cells += 1;
+                        if !state.has_value && !state.has_inline {
+                            return Err(SheetOpsError::ParseFailed(format!(
+                                "公式格 (列 {}) 无缓存值: 本面不重算公式 (取缓存值 + 标注口径), \
+                                 不编造值",
+                                state.column + 1
+                            )));
+                        }
+                    }
+                    row.push((state.column, text));
+                }
+                b"row" => {
+                    row_open = false;
+                    rows.push(std::mem::take(&mut row));
+                }
+                _ => {}
+            },
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    if cell.is_some() {
+        return Err(SheetOpsError::ParseFailed(
+            "worksheet 末尾有未闭合单元格 (标记损坏)".to_string(),
+        ));
+    }
+    Ok((rows, formula_cells))
+}
+
+/// 稀疏行序列 → 密实 [`Sheet`] (表头规则与 CSV 同一把尺: 非空、唯一;
+/// xlsx 缺格补空, 越宽拒绝即帧)。
+fn xlsx_rows_to_sheet(rows: Vec<XlsxRow>, config: &SheetOpsConfig) -> Result<Sheet, SheetOpsError> {
+    if rows.is_empty() {
+        return Err(SheetOpsError::ParseFailed(
+            "空表无表头 (零行输入拒绝; 仅表头 = 0 数据行)".to_string(),
+        ));
+    }
+    let header = &rows[0];
+    let width = header.iter().map(|(column, _)| *column).max().unwrap_or(0) + 1;
+    let mut columns = vec![String::new(); width];
+    for (column, name) in header {
+        columns[*column] = name.clone();
+    }
+    for (index, name) in columns.iter().enumerate() {
+        if name.trim().is_empty() {
+            return Err(SheetOpsError::ParseFailed(format!(
+                "表头第 {} 列列名为空 (列须可点名; xlsx 缺格不补位)",
+                index + 1
+            )));
+        }
+        if columns.iter().take(index).any(|earlier| earlier == name) {
+            return Err(SheetOpsError::ParseFailed(format!(
+                "表头列名 {name:?} 重复 (列名须唯一可点名)"
+            )));
+        }
+    }
+    if columns.len() > config.max_cols {
+        return Err(SheetOpsError::LimitExceeded(format!(
+            "表有 {} 列, 超过列上限 {} (防炸弹表, 宁拒不截)",
+            columns.len(),
+            config.max_cols
+        )));
+    }
+    let mut out_rows: Vec<Vec<String>> = Vec::with_capacity(rows.len().saturating_sub(1));
+    for (offset, row) in rows.iter().skip(1).enumerate() {
+        if let Some((column, _)) = row.iter().find(|(column, _)| *column >= width) {
+            return Err(SheetOpsError::ParseFailed(format!(
+                "第 {} 行第 {} 列落在表头 {width} 列之外 (xlsx 缺格补空, 越宽拒绝即帧)",
+                offset + 2,
+                column + 1
+            )));
+        }
+        let mut dense = vec![String::new(); width];
+        for (column, text) in row {
+            dense[*column] = text.clone();
+        }
+        out_rows.push(dense);
+    }
+    if out_rows.len() > config.max_rows {
+        return Err(SheetOpsError::LimitExceeded(format!(
+            "表有 {} 数据行, 超过行上限 {} (防炸弹表, 宁拒不截)",
+            out_rows.len(),
+            config.max_rows
+        )));
+    }
+    Ok(Sheet {
+        columns,
+        rows: out_rows,
+    })
+}
+
+/// 解析一份 xlsx 表 (限域外的字节安全由调用方承担): 返回 (表, 公式格计数)。
+///
+/// 子集钉死: ZIP 容器 (stored/deflate, 复用 `doc_ops` ZIP 读端, 解压预算同族) +
+/// `workbook.xml` 首个工作表 (rels 解析) + 单元格三形态; 其余显式拒绝不降级。
+pub fn parse_xlsx_table(
+    bytes: &[u8],
+    config: &SheetOpsConfig,
+) -> Result<(Sheet, u64), SheetOpsError> {
+    let budget = config
+        .max_input_bytes
+        .saturating_mul(crate::doc_ops::ZIP_DECOMPRESSION_BUDGET_FACTOR);
+    let entries = crate::doc_ops::zip_read_entries(bytes, budget).map_err(map_container_error)?;
+    let entry = |name: &str| -> Option<&crate::doc_ops::ZipEntry> {
+        entries.iter().find(|entry| entry.name == name)
+    };
+    let workbook = entry("xl/workbook.xml").ok_or_else(|| {
+        SheetOpsError::ParseFailed("xlsx 容器缺 xl/workbook.xml (不是工作簿)".to_string())
+    })?;
+    let rels = entry("xl/_rels/workbook.xml.rels").ok_or_else(|| {
+        SheetOpsError::ParseFailed(
+            "xlsx 容器缺 xl/_rels/workbook.xml.rels (无法定位工作表)".to_string(),
+        )
+    })?;
+    let workbook_xml = std::str::from_utf8(&workbook.data)
+        .map_err(|_| SheetOpsError::ParseFailed("xl/workbook.xml 不是 UTF-8".to_string()))?;
+    let rels_xml = std::str::from_utf8(&rels.data).map_err(|_| {
+        SheetOpsError::ParseFailed("xl/_rels/workbook.xml.rels 不是 UTF-8".to_string())
+    })?;
+    let rel_id = xlsx_first_sheet_rel_id(workbook_xml)?;
+    let target = xlsx_sheet_target(rels_xml, &rel_id)?;
+    let worksheet = entry(&target).ok_or_else(|| {
+        SheetOpsError::ParseFailed(format!(
+            "xlsx 容器缺工作表条目 {target} (workbook.xml 首个 sheet 声明所指)"
+        ))
+    })?;
+    let worksheet_xml = std::str::from_utf8(&worksheet.data)
+        .map_err(|_| SheetOpsError::ParseFailed("工作表 XML 不是 UTF-8".to_string()))?;
+    let shared = match entry("xl/sharedStrings.xml") {
+        Some(entry) => {
+            let xml = std::str::from_utf8(&entry.data).map_err(|_| {
+                SheetOpsError::ParseFailed("sharedStrings.xml 不是 UTF-8".to_string())
+            })?;
+            xlsx_shared_strings(xml)?
+        }
+        None => Vec::new(),
+    };
+    let (rows, formula_cells) = xlsx_parse_sheet(worksheet_xml, &shared)?;
+    let sheet = xlsx_rows_to_sheet(rows, config)?;
+    Ok((sheet, formula_cells))
 }
 
 // ---------------------------------------------------------------------------
@@ -1147,7 +1779,8 @@ fn eval_expression(expr: &Expr, row: &[String], row_number: usize) -> Result<f64
 pub struct SheetOpsParams {
     /// 动作 (闭合词表)。
     pub action: Option<String>,
-    /// 输入表 (工作区相对拼写或其内绝对拼写)。
+    /// 输入表 (工作区相对拼写或其内绝对拼写; 后缀 `.xlsx` 走 xlsx 读端,
+    /// 其余走 CSV 读端)。
     pub source: Option<String>,
     /// 输出 CSV (变换动作可选; `export_csv` 必填) —— 在场即写面。
     pub output: Option<String>,
@@ -1570,8 +2203,8 @@ impl SheetOpsRunner {
         }
         let action = params.action.as_deref().unwrap_or_default();
         let source = params.source.as_deref().unwrap_or_default();
-        let sheet = self.load_sheet(source)?;
-        match action {
+        let (sheet, meta) = self.load_sheet(source)?;
+        let outcome = match action {
             ACTION_READ => self.read_rows(params, source, &sheet),
             ACTION_SUMMARY => Ok((self.summary(source, &sheet), sheet.rows.len() as u64)),
             ACTION_FILTER => self.filter(params, source, &sheet),
@@ -1582,13 +2215,43 @@ impl SheetOpsRunner {
             other => Err(SheetOpsError::ParamRejected(format!(
                 "未知动作 {other:?} (闭合词表外)"
             ))),
-        }
+        };
+        outcome.map(|(mut frame, rows)| {
+            if let Value::Object(map) = &mut frame {
+                annotate_sheet_meta(map, &meta);
+            }
+            (frame, rows)
+        })
     }
 
-    /// 解析一份受控 CSV 表 (限域 + 敏感面 + 字节上限 + 防炸弹表三道)。
-    fn load_sheet(&self, requested: &str) -> Result<Sheet, SheetOpsError> {
+    /// 解析一份受控表格输入 (限域 + 敏感面 + 字节上限 + 防炸弹表三道)。
+    ///
+    /// 格式按**后缀词面**判定 ([`SheetInputFormat::from_requested`]): `.xlsx`
+    /// 走 xlsx 读端, 其余走 CSV 读端。
+    fn load_sheet(&self, requested: &str) -> Result<(Sheet, SheetLoadMeta), SheetOpsError> {
         let (_path, bytes) = read_input(&self.config, requested)?;
-        parse_csv_table(&bytes, &self.config)
+        match SheetInputFormat::from_requested(requested) {
+            SheetInputFormat::Csv => {
+                let sheet = parse_csv_table(&bytes, &self.config)?;
+                Ok((
+                    sheet,
+                    SheetLoadMeta {
+                        format: SheetInputFormat::Csv,
+                        formula_cells: 0,
+                    },
+                ))
+            }
+            SheetInputFormat::Xlsx => {
+                let (sheet, formula_cells) = parse_xlsx_table(&bytes, &self.config)?;
+                Ok((
+                    sheet,
+                    SheetLoadMeta {
+                        format: SheetInputFormat::Xlsx,
+                        formula_cells,
+                    },
+                ))
+            }
+        }
     }
 
     /// 目标列下标 (不存在拒绝即帧, 点名列)。
@@ -1774,7 +2437,7 @@ impl SheetOpsRunner {
                 return Err(SheetOpsError::TypeMixed(format!(
                     "sort: 列 {:?} 数值与文本混型, 排序轴无法诚实裁定 (拒绝, 不静默分轴)",
                     sheet.columns[index]
-                )))
+                )));
             }
         };
         let desc = order == "desc";
@@ -1858,7 +2521,7 @@ impl SheetOpsRunner {
                     return Err(SheetOpsError::TypeMixed(format!(
                         "aggregate: 列 {:?} 的单元 {cell:?} 非数值 (类型混拒绝, 不静默跳行)",
                         sheet.columns[index]
-                    )))
+                    )));
                 }
             }
         }
@@ -1868,7 +2531,7 @@ impl SheetOpsRunner {
             "avg" | "min" | "max" if count == 0 => {
                 return Err(SheetOpsError::AggregateEmpty(format!(
                     "aggregate: {function} 的可聚合值为空集 (不冒充 0; sum/count 可空)"
-                )))
+                )));
             }
             "avg" => values.iter().sum::<f64>() / count as f64,
             "min" => values.iter().copied().fold(f64::INFINITY, f64::min),
@@ -2020,6 +2683,27 @@ fn into_map(value: Value) -> serde_json::Map<String, Value> {
     value.as_object().cloned().unwrap_or_default()
 }
 
+/// 帧随行: 输入格式恒注 (`input_format`); xlsx 另注 `formula_cells` 计数,
+/// 有公式格时带缓存值口径注记 (CSV 恒 0, 不注)。
+fn annotate_sheet_meta(frame: &mut serde_json::Map<String, Value>, meta: &SheetLoadMeta) {
+    frame.insert(
+        "input_format".to_string(),
+        Value::String(meta.format.name().to_string()),
+    );
+    if meta.format == SheetInputFormat::Xlsx {
+        frame.insert("formula_cells".to_string(), json!(meta.formula_cells));
+        if meta.formula_cells > 0 {
+            frame.insert(
+                "notes".to_string(),
+                json!([format!(
+                    "公式格 {} 个: 一律取缓存值未重算 (共享公式不展开, 如实标注口径)",
+                    meta.formula_cells
+                )]),
+            );
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 工具面 (声明名 `sheet_ops`, 五段流水线)
 // ---------------------------------------------------------------------------
@@ -2086,7 +2770,7 @@ impl ToolCapability for SheetOpsTool {
                     },
                     "source": {
                         "type": "string",
-                        "description": "Input CSV path (workspace-relative or absolute inside the workspace root)."
+                        "description": "Input table path (workspace-relative or absolute inside the workspace root). A `.xlsx` suffix reads an xlsx workbook (first worksheet); any other suffix reads CSV."
                     },
                     "output": {
                         "type": "string",
@@ -2535,5 +3219,450 @@ mod tests {
                 "{action} 恒读 (多余 output 已被参数矩阵拒)"
             );
         }
+    }
+
+    // ---- xlsx 读面行为钉 (K3 留缝收口: 三形态 / 公式口径 / 坏拒 / 上限) ----
+
+    /// 手写 ZIP 容器 (stored 条目; 独立于生产写端手写, 防写读同模自证)。
+    fn zip_stored(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        fn crc32(data: &[u8]) -> u32 {
+            let mut crc = 0xFFFF_FFFFu32;
+            for byte in data {
+                crc ^= u32::from(*byte);
+                for _ in 0..8 {
+                    let mask = (crc & 1).wrapping_neg();
+                    crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+                }
+            }
+            !crc
+        }
+        let mut out = Vec::new();
+        let mut central = Vec::new();
+        for (name, data) in entries {
+            let offset = out.len() as u32;
+            let crc = crc32(data);
+            out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
+            out.extend_from_slice(&20u16.to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(&crc.to_le_bytes());
+            out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes());
+            out.extend_from_slice(name.as_bytes());
+            out.extend_from_slice(data);
+
+            central.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
+            central.extend_from_slice(&20u16.to_le_bytes());
+            central.extend_from_slice(&20u16.to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&crc.to_le_bytes());
+            central.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            central.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            central.extend_from_slice(&(name.len() as u16).to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&0u16.to_le_bytes());
+            central.extend_from_slice(&0u32.to_le_bytes());
+            central.extend_from_slice(&offset.to_le_bytes());
+            central.extend_from_slice(name.as_bytes());
+        }
+        let cd_offset = out.len() as u32;
+        out.extend_from_slice(&central);
+        let cd_size = central.len() as u32;
+        out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+        out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+        out.extend_from_slice(&cd_size.to_le_bytes());
+        out.extend_from_slice(&cd_offset.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out
+    }
+
+    /// `xl/workbook.xml` (首个 `<sheet>` 声明 `r:id="rId1"`)。
+    fn workbook_xml() -> String {
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+         <workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" \
+         xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
+         <sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>"
+            .to_string()
+    }
+
+    /// `xl/_rels/workbook.xml.rels` (`rId1` → `worksheets/sheet1.xml`)。
+    fn rels_xml() -> String {
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+         <Relationship Id=\"rId1\" \
+         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" \
+         Target=\"worksheets/sheet1.xml\"/></Relationships>"
+            .to_string()
+    }
+
+    /// 最小 xlsx 容器 (workbook + rels + sheet1, 可选 sharedStrings)。
+    fn xlsx_book(sheet_xml: &str, shared: Option<&[&str]>) -> Vec<u8> {
+        let worksheet = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+             <worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\
+             <sheetData>{sheet_xml}</sheetData></worksheet>"
+        );
+        let shared_xml = shared.map(|items| {
+            let body: String = items
+                .iter()
+                .map(|item| format!("<si><t>{item}</t></si>"))
+                .collect();
+            format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+                 <sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\
+                 {body}</sst>"
+            )
+        });
+        let workbook = workbook_xml();
+        let rels = rels_xml();
+        let mut entries: Vec<(&str, &[u8])> = vec![
+            ("xl/workbook.xml", workbook.as_bytes()),
+            ("xl/_rels/workbook.xml.rels", rels.as_bytes()),
+            ("xl/worksheets/sheet1.xml", worksheet.as_bytes()),
+        ];
+        if let Some(xml) = &shared_xml {
+            entries.push(("xl/sharedStrings.xml", xml.as_bytes()));
+        }
+        zip_stored(&entries)
+    }
+
+    /// 装配 xlsx 工作区 (fixture 落盘, 回 runner)。
+    fn xlsx_runner(
+        bytes: &[u8],
+        limits: Option<(u64, usize, usize)>,
+    ) -> (SheetOpsRunner, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("t.xlsx"), bytes).expect("落 fixture");
+        let mut config = SheetOpsConfig::new(dir.path()).with_write_gate(true);
+        if let Some((max_input_bytes, max_rows, max_cols)) = limits {
+            config = config.with_limits(max_input_bytes, max_rows, max_cols, 100);
+        }
+        (SheetOpsRunner::new(config), dir)
+    }
+
+    /// 快捷调用 (只用 action + source 的读面)。
+    fn run_on(runner: &SheetOpsRunner, action: &str, source: &str) -> Result<Value, SheetOpsError> {
+        runner.run(&SheetOpsParams {
+            action: Some(action.to_string()),
+            source: Some(source.to_string()),
+            ..SheetOpsParams::default()
+        })
+    }
+
+    /// ㉙ xlsx 读面: 三形态单元格如实读入 (共享字符串 / 内联字符串 / 数值格原词面,
+    /// 外加字符串结果格 `t="str"`), read/summary 同口径。
+    #[test]
+    fn xlsx_reads_shared_string_inline_string_and_numeric_cells() {
+        let rows = "<row r=\"1\">\
+            <c r=\"A1\" t=\"s\"><v>0</v></c>\
+            <c r=\"B1\" t=\"inlineStr\"><is><t>数量</t></is></c>\
+            <c r=\"C1\" t=\"s\"><v>1</v></c></row>\
+            <row r=\"2\">\
+            <c r=\"A2\" t=\"s\"><v>2</v></c>\
+            <c r=\"B2\"><v>42</v></c>\
+            <c r=\"C2\" t=\"inlineStr\"><is><t>ok &amp; fine</t></is></c></row>\
+            <row r=\"3\">\
+            <c r=\"A3\" t=\"str\"><v>raw</v></c>\
+            <c r=\"B3\" t=\"n\"><v>3.5</v></c>\
+            <c r=\"C3\"/></row>";
+        let (runner, _dir) = xlsx_runner(
+            &xlsx_book(rows, Some(&["名称", "备注", "shared-value"])),
+            None,
+        );
+        let frame = run_on(&runner, ACTION_READ, "t.xlsx").expect("xlsx 可读");
+        assert_eq!(frame["input_format"], "xlsx");
+        assert_eq!(frame["formula_cells"], 0);
+        assert_eq!(frame["columns"], json!(["名称", "数量", "备注"]));
+        assert_eq!(frame["row_count"], 2);
+        assert_eq!(
+            frame["rows"],
+            json!([["shared-value", "42", "ok & fine"], ["raw", "3.5", ""],]),
+            "三形态 + 缺格补空, 数值格原词面如实"
+        );
+        let frame = run_on(&runner, ACTION_SUMMARY, "t.xlsx").expect("summary 可读");
+        assert_eq!(frame["columns"][0]["type"], "text");
+        assert_eq!(
+            frame["columns"][1]["type"], "float",
+            "42 与 3.5 同列 = float (逐列类型猜测口径不变)"
+        );
+        assert_eq!(frame["columns"][2]["type"], "text");
+        assert_eq!(frame["columns"][2]["empty_cells"], 1);
+    }
+
+    /// ㉚ xlsx 公式格口径钉死: 一律取缓存值未重算 (共享公式不展开), 帧内如实标注。
+    #[test]
+    fn xlsx_formula_cells_take_cached_values_and_are_annotated() {
+        let rows = "<row r=\"1\">\
+            <c r=\"A1\" t=\"inlineStr\"><is><t>x</t></is></c>\
+            <c r=\"B1\" t=\"inlineStr\"><is><t>sum</t></is></c></row>\
+            <row r=\"2\">\
+            <c r=\"A2\"><v>41</v></c>\
+            <c r=\"B2\"><f>A2*2</f><v>82</v></c></row>\
+            <row r=\"3\">\
+            <c r=\"A3\"><v>42</v></c>\
+            <c r=\"B3\"><f t=\"shared\" si=\"0\"/><v>84</v></c></row>";
+        let (runner, _dir) = xlsx_runner(&xlsx_book(rows, None), None);
+        let frame = run_on(&runner, ACTION_READ, "t.xlsx").expect("可读");
+        assert_eq!(
+            frame["rows"],
+            json!([["41", "82"], ["42", "84"]]),
+            "公式格取缓存值 (不重算); 共享公式格同样取缓存值"
+        );
+        assert_eq!(frame["formula_cells"], 2);
+        let notes = frame["notes"].as_array().expect("notes 在场");
+        let note = notes[0].as_str().expect("注记文本");
+        assert!(note.contains("缓存值"), "{note}");
+        assert!(note.contains("共享公式不展开"), "{note}");
+    }
+
+    /// ㉛ xlsx 公式格无缓存值 = 拒绝即帧 (不重算公式, 不编造值)。
+    #[test]
+    fn xlsx_formula_cells_without_cached_values_are_refused() {
+        let rows = "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>x</t></is></c></row>\
+            <row r=\"2\"><c r=\"A2\"><f>B2*2</f></c></row>";
+        let (runner, _dir) = xlsx_runner(&xlsx_book(rows, None), None);
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("无缓存值公式格必拒");
+        assert!(
+            error.frame().contains("缓存值") && error.frame().contains("不编造值"),
+            "{}",
+            error.frame()
+        );
+    }
+
+    /// ㉜ 坏 xlsx 拒 (容器层): 非 ZIP / 缺 workbook / 缺 rels / 关系对不上,
+    /// 各自拒绝即帧 (真因如实, 不降级)。
+    #[test]
+    fn bad_xlsx_containers_are_refused_with_honest_frames() {
+        let worksheet = "<worksheet><sheetData/></worksheet>";
+        // 非 ZIP 容器。
+        let (runner, _dir) = xlsx_runner(b"not a zip container", None);
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("非容器必拒");
+        assert!(
+            error.frame().contains("sheet_ops.parse_error"),
+            "{}",
+            error.frame()
+        );
+        // 缺 workbook。
+        let (runner, _dir) = xlsx_runner(
+            &zip_stored(&[("xl/worksheets/sheet1.xml", worksheet.as_bytes())]),
+            None,
+        );
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("缺 workbook 必拒");
+        assert!(
+            error.frame().contains("xl/workbook.xml"),
+            "{}",
+            error.frame()
+        );
+        // 缺 rels。
+        let (runner, _dir) = xlsx_runner(
+            &zip_stored(&[
+                ("xl/workbook.xml", workbook_xml().as_bytes()),
+                ("xl/worksheets/sheet1.xml", worksheet.as_bytes()),
+            ]),
+            None,
+        );
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("缺 rels 必拒");
+        assert!(
+            error.frame().contains("workbook.xml.rels"),
+            "{}",
+            error.frame()
+        );
+        // 关系 id 对不上 (工作表定位不了)。
+        let wrong_rels = rels_xml().replace("rId1", "rId9");
+        let (runner, _dir) = xlsx_runner(
+            &zip_stored(&[
+                ("xl/workbook.xml", workbook_xml().as_bytes()),
+                ("xl/_rels/workbook.xml.rels", wrong_rels.as_bytes()),
+                ("xl/worksheets/sheet1.xml", worksheet.as_bytes()),
+            ]),
+            None,
+        );
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("坏关系必拒");
+        assert!(
+            error.frame().contains("无法定位工作表"),
+            "{}",
+            error.frame()
+        );
+    }
+
+    /// ㉝ 坏 xlsx 拒 (单元格层): 未知类型 / 共享索引越界 / 坏引用 / 同行重复列,
+    /// 各自拒绝即帧 (显式拒, 不猜值)。
+    #[test]
+    fn bad_xlsx_cells_are_refused_with_honest_frames() {
+        let cases: &[(&str, &str, Option<&[&str]>, &str)] = &[
+            (
+                "bool-type",
+                "<row r=\"1\"><c r=\"A1\" t=\"b\"><v>1</v></c></row>",
+                None,
+                "不在子集",
+            ),
+            (
+                "shared-index",
+                "<row r=\"1\"><c r=\"A1\" t=\"s\"><v>9</v></c></row>",
+                Some(&["only"]),
+                "越界",
+            ),
+            (
+                "bad-reference",
+                "<row r=\"1\"><c r=\"1A\"><v>1</v></c></row>",
+                None,
+                "A1 形",
+            ),
+            (
+                "duplicate-column",
+                "<row r=\"1\"><c r=\"A1\"><v>1</v></c><c r=\"A1\"><v>2</v></c></row>",
+                None,
+                "重复列引用",
+            ),
+        ];
+        for (tag, rows, shared, needle) in cases {
+            let (runner, _dir) = xlsx_runner(&xlsx_book(rows, *shared), None);
+            let error = run_on(&runner, ACTION_READ, "t.xlsx")
+                .err()
+                .unwrap_or_else(|| panic!("{tag} 必须拒绝即帧"));
+            assert!(
+                error.frame().contains(needle),
+                "{tag} 帧必须点名真因 {needle:?}: {}",
+                error.frame()
+            );
+        }
+    }
+
+    /// ㉞ xlsx 稀疏格网口径: 缺格补空 (格式语义), 越宽拒绝即帧, 表头空列名/重名拒。
+    #[test]
+    fn xlsx_sparse_grid_fills_gaps_and_refuses_wider_rows() {
+        let sparse = "<row r=\"1\">\
+            <c r=\"A1\" t=\"inlineStr\"><is><t>ha</t></is></c>\
+            <c r=\"B1\" t=\"inlineStr\"><is><t>hb</t></is></c>\
+            <c r=\"C1\" t=\"inlineStr\"><is><t>hc</t></is></c></row>\
+            <row r=\"2\">\
+            <c r=\"A2\" t=\"inlineStr\"><is><t>x</t></is></c>\
+            <c r=\"C2\" t=\"inlineStr\"><is><t>y</t></is></c></row>\
+            <row r=\"3\"><c r=\"B3\" t=\"inlineStr\"><is><t>z</t></is></c></row>";
+        let (runner, _dir) = xlsx_runner(&xlsx_book(sparse, None), None);
+        let frame = run_on(&runner, ACTION_READ, "t.xlsx").expect("稀疏格网可读");
+        assert_eq!(
+            frame["rows"],
+            json!([["x", "", "y"], ["", "z", ""]]),
+            "缺格补空"
+        );
+
+        let wider = "<row r=\"1\">\
+            <c r=\"A1\" t=\"inlineStr\"><is><t>ha</t></is></c>\
+            <c r=\"B1\" t=\"inlineStr\"><is><t>hb</t></is></c></row>\
+            <row r=\"2\"><c r=\"C2\"><v>1</v></c></row>";
+        let (runner, _dir) = xlsx_runner(&xlsx_book(wider, None), None);
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("越宽行必拒");
+        assert!(error.frame().contains("之外"), "{}", error.frame());
+
+        let gap_header = "<row r=\"1\">\
+            <c r=\"A1\" t=\"inlineStr\"><is><t>ha</t></is></c>\
+            <c r=\"C1\" t=\"inlineStr\"><is><t>hc</t></is></c></row>";
+        let (runner, _dir) = xlsx_runner(&xlsx_book(gap_header, None), None);
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("表头缺格必拒");
+        assert!(error.frame().contains("列名为空"), "{}", error.frame());
+    }
+
+    /// ㉟ 防炸弹表: xlsx 解压预算 / 数据行 / 列数三层上限各自拒绝即帧 (宁拒不截)。
+    #[test]
+    fn xlsx_caps_refuse_bomb_workbooks() {
+        // 解压预算: 超高压缩比条目在小预算配置下拒绝 (防解压炸弹)。
+        let bomb_row = format!(
+            "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>{}</t></is></c></row>",
+            "a".repeat(100_000)
+        );
+        let worksheet = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+             <worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\
+             <sheetData>{bomb_row}</sheetData></worksheet>"
+        );
+        let entries = [
+            crate::doc_ops::ZipEntry {
+                name: "xl/workbook.xml".to_string(),
+                data: workbook_xml().into_bytes(),
+            },
+            crate::doc_ops::ZipEntry {
+                name: "xl/_rels/workbook.xml.rels".to_string(),
+                data: rels_xml().into_bytes(),
+            },
+            crate::doc_ops::ZipEntry {
+                name: "xl/worksheets/sheet1.xml".to_string(),
+                data: worksheet.into_bytes(),
+            },
+        ];
+        let bomb =
+            crate::doc_ops::zip_write_entries(&entries, crate::doc_ops::ZipCompression::Deflate)
+                .expect("生产写端可产出炸弹表 fixture");
+        assert!(
+            bomb.len() < 8_192,
+            "fixture 压缩后须小 (才触发解压预算而非字节上限): {}",
+            bomb.len()
+        );
+        let (runner, _dir) = xlsx_runner(&bomb, Some((8_192, 100, 10)));
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("解压超预算必拒");
+        assert!(
+            error.frame().contains("解压预算") && error.frame().contains("limit_exceeded"),
+            "{}",
+            error.frame()
+        );
+
+        // 数据行上限。
+        let rows = "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>h</t></is></c></row>\
+            <row r=\"2\"><c r=\"A2\"><v>1</v></c></row>\
+            <row r=\"3\"><c r=\"A3\"><v>2</v></c></row>";
+        let (runner, _dir) = xlsx_runner(&xlsx_book(rows, None), Some((8 * 1024 * 1024, 1, 10)));
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("行超上限必拒");
+        assert!(error.frame().contains("行上限"), "{}", error.frame());
+
+        // 列上限。
+        let cols = "<row r=\"1\">\
+            <c r=\"A1\" t=\"inlineStr\"><is><t>a</t></is></c>\
+            <c r=\"B1\" t=\"inlineStr\"><is><t>b</t></is></c>\
+            <c r=\"C1\" t=\"inlineStr\"><is><t>c</t></is></c></row>";
+        let (runner, _dir) = xlsx_runner(&xlsx_book(cols, None), Some((8 * 1024 * 1024, 10, 2)));
+        let error = run_on(&runner, ACTION_READ, "t.xlsx").expect_err("列超上限必拒");
+        assert!(error.frame().contains("列上限"), "{}", error.frame());
+    }
+
+    /// ㊱ xlsx 输入的写面口径: 产物是规范 CSV (xlsx 写出后置如实), 写面词表
+    /// 零 xlsx 写动作。
+    #[test]
+    fn xlsx_input_exports_canonical_csv_and_the_write_vocab_is_csv_only() {
+        assert_eq!(
+            SHEET_OPS_WRITE_ACTIONS,
+            ["export_csv"].as_slice(),
+            "写面词表只有 export_csv (xlsx 写出后置, 不冒充)"
+        );
+        let rows = "<row r=\"1\">\
+            <c r=\"A1\" t=\"s\"><v>0</v></c>\
+            <c r=\"B1\" t=\"inlineStr\"><is><t>数量</t></is></c></row>\
+            <row r=\"2\">\
+            <c r=\"A2\" t=\"s\"><v>1</v></c>\
+            <c r=\"B2\"><v>42</v></c></row>";
+        let (runner, dir) = xlsx_runner(&xlsx_book(rows, Some(&["名称", "值"])), None);
+        let frame = runner
+            .run(&SheetOpsParams {
+                action: Some(ACTION_EXPORT_CSV.to_string()),
+                source: Some("t.xlsx".to_string()),
+                output: Some("out.csv".to_string()),
+                ..SheetOpsParams::default()
+            })
+            .expect("xlsx 读入可导出规范 CSV");
+        assert_eq!(frame["input_format"], "xlsx");
+        assert_eq!(frame["rows_written"], 1);
+        let csv = std::fs::read_to_string(dir.path().join("out.csv")).expect("产物已落盘");
+        assert_eq!(csv, "名称,数量\n值,42\n", "规范 CSV (LF 行尾, 末尾换行)");
     }
 }

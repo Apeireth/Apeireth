@@ -56,6 +56,9 @@
 //! - [`rules`]: 触发器数据面 —— `care_rules.json` StoredDoc 拒开 + 打扰纪律配置
 //!   + 发起留痕 (写面归 write_intent 同族: 改规则 = 写文件);
 //! - [`engine`]: 双引擎判定面 —— 规则引擎 + 判定面 + 打扰纪律 + 标准回合输入;
+//! - [`reminder`]: 提醒侧消费端 (K 轴 L2/L5 同源接缝) —— 天气提醒信号 /
+//!   守护告警 = 关怀候选的一种, 走同一套打扰纪律 (守护例外档: 破勿扰可配 +
+//!   「守护告警」标注 + 独立频率上限);
 //! - [`tool`]: 工具面 —— `tool.care_schedule` (增删列, RequireApproval 级) +
 //!   治理钩子; 自述关怀节 (规则数 / 下次触发 / 最近关怀真值) 由组装根把
 //!   [`CareStore::status`] 投影到 `tool.self_status` 的关怀节。
@@ -75,6 +78,7 @@
 //!   标准回合落会话配额账本 (关怀回合照常计费, 无免费通道)。
 
 pub mod engine;
+pub mod reminder;
 pub mod rules;
 pub mod tool;
 
@@ -84,6 +88,10 @@ pub use engine::{
     CareJudgmentInput, CareMaterialSource, CareModelPort, CarePoll, CareVerdict, FnBudgetGate,
     FnInitiativeGate, FrozenCareClock, ModelContextJudge, NoRecentMaterial, RuleFallbackJudge,
     SystemCareClock,
+};
+pub use reminder::{
+    consume_reminders, is_guard_alert_record, CareTier, MemoryReminderFeed, ReminderCandidate,
+    ReminderConsumeError, ReminderFeed, GUARD_ALERT_ANNOTATION,
 };
 pub use rules::{
     care_rules_doc_compat, validate_care_material, validate_care_rule_id, CareDiscipline,

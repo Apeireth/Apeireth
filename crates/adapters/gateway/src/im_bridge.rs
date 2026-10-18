@@ -29,6 +29,10 @@ use apeireth_sdk::im::{
     ImInboundEvent, ImInboundMessage, ImOutboundText, ImSegmentPolicy, ImSegmentation,
     ImSendReceipt, ImSender,
 };
+use apeireth_tools_canonical::device::approval::{
+    DeviceApprovalPushOutcome, DeviceApprovalPushRecord,
+};
+use apeireth_tools_canonical::device::device_control::DeviceApprovalCard;
 use apeireth_tools_canonical::proposal_push::{ProposalPushOutcome, ProposalPushRecord};
 use async_trait::async_trait;
 use axum::extract::{Path, State};
@@ -46,6 +50,10 @@ use crate::im_approval::{
     ImApprovalRequest, ImApprovalResolution, ImApprovalResolver,
 };
 use crate::im_channels::ImChannelAssembly;
+use crate::im_device::{
+    device_card_envelope, is_device_approval_payload, DeviceApprovalPushResult,
+    ImDeviceApprovalFace, ImDeviceClosure, ImDeviceClosureResult,
+};
 use crate::im_proposal::{
     is_proposal_payload, proposal_card_envelope, ImProposalClosure, ImProposalClosureResult,
     ImProposalFace, ProposalPushResult,
@@ -423,6 +431,20 @@ pub enum ImInboundResult {
         /// 回执段数。
         reply_segments: usize,
     },
+    /// 设备审批卡按钮已批准/拒绝落账 (decided_by 如实署名; 批准即执行)。
+    DeviceDecided {
+        /// 落账记录 (批准 = 状态账记录 id 在场)。
+        closure: ImDeviceClosure,
+        /// 回执段数。
+        reply_segments: usize,
+    },
+    /// 设备审批卡按钮被拒即帧 (重复点击 / 查无送达 / 缺署名: 真因如实, 0 静默)。
+    DeviceRefused {
+        /// 拒绝的真实原因。
+        reason: String,
+        /// 回执段数。
+        reply_segments: usize,
+    },
 }
 
 /// 双向消息桥 (入站解码 → 会话回合 → 分段回流 / 审批卡片 → 四态闭合)。
@@ -435,6 +457,9 @@ pub struct ImBridge {
     approvals: Arc<ImApprovalCloser>,
     /// 提案面接线 (提案卡出站 + 按钮落账; `None` = 未接线, 提案面 inert)。
     proposals: Option<Arc<ImProposalFace>>,
+    /// 设备审批面接线 (设备审批卡出站 + 按钮批准/拒绝落账; `None` = 未接线,
+    /// 设备面 inert)。
+    device_approvals: Option<Arc<ImDeviceApprovalFace>>,
     segment_override: Option<ImSegmentPolicy>,
     clock: Arc<dyn Clock>,
 }
@@ -462,6 +487,7 @@ impl ImBridge {
             handler,
             approvals,
             proposals: None,
+            device_approvals: None,
             segment_override: None,
             clock: Arc::new(SystemClock),
         }
@@ -471,6 +497,13 @@ impl ImBridge {
     /// 落账; 缺省 = 未接线, 提案按钮回调照实报「未接线」, 既有链零回归)。
     pub fn with_proposal_face(mut self, face: Arc<ImProposalFace>) -> Self {
         self.proposals = Some(face);
+        self
+    }
+
+    /// 接入设备审批面 (设备审批卡→IM 推送链: 卡出站 + 按钮批准/拒绝落账;
+    /// 缺省 = 未接线, 设备按钮回调照实报「未接线」, 既有链零回归)。
+    pub fn with_device_approval_face(mut self, face: Arc<ImDeviceApprovalFace>) -> Self {
+        self.device_approvals = Some(face);
         self
     }
 
@@ -599,6 +632,9 @@ impl ImBridge {
         if is_proposal_payload(&action.payload) {
             return self.handle_proposal_click(target, action).await;
         }
+        if is_device_approval_payload(&action.payload) {
+            return self.handle_device_click(target, action).await;
+        }
         let session = {
             let store = self
                 .sessions
@@ -692,6 +728,56 @@ impl ImBridge {
         }
     }
 
+    /// 设备审批卡按钮 → 设备动作批准/拒绝落账 (decided_by = IM 用户 + 渠道
+    /// 标注) → 回执回流。
+    ///
+    /// 批准即执行 (与模型侧/面板侧同一台执行核心); 一计划一决定, 重复点击走
+    /// 拒绝即帧 (真因如实); 查无送达记录的点击不可信, 拒绝即帧 (money 档无
+    /// 送达回执 = 无 IM 卡)。未接设备审批面 = 照实报「未接线」(拒绝即帧,
+    /// 不假装能落账)。
+    async fn handle_device_click(
+        &self,
+        target: &ImChannelTarget,
+        action: ImCardAction,
+    ) -> Result<ImInboundResult, ImBridgeError> {
+        let Some(face) = &self.device_approvals else {
+            let reason = "设备审批卡按钮回调未接线: 本桥未配置设备审批面 \
+                          (ImDeviceApprovalFace), 落账面缺位"
+                .to_string();
+            let reply_segments = self
+                .deliver_segments(target, &action.conversation_id, &self.segment_text(&reason))
+                .await?;
+            return Ok(ImInboundResult::DeviceRefused {
+                reason,
+                reply_segments,
+            });
+        };
+        match face.decide_from_click(&target.id, &action.operator_id, &action.payload) {
+            ImDeviceClosureResult::Decided(closure) => {
+                let reply_segments = self
+                    .deliver_segments(
+                        target,
+                        &action.conversation_id,
+                        &self.segment_text(&closure.reply_text),
+                    )
+                    .await?;
+                Ok(ImInboundResult::DeviceDecided {
+                    closure,
+                    reply_segments,
+                })
+            }
+            ImDeviceClosureResult::Refused { reason } => {
+                let reply_segments = self
+                    .deliver_segments(target, &action.conversation_id, &self.segment_text(&reason))
+                    .await?;
+                Ok(ImInboundResult::DeviceRefused {
+                    reason,
+                    reply_segments,
+                })
+            }
+        }
+    }
+
     /// 提案卡出站: 提案入账 → 人审卡 (**同链同信封**: 与 IM 审批卡同一条
     /// [`Self::deliver_card`] 出站链、同一个 [`ImApprovalCard`] 信封) → IM 会话。
     ///
@@ -759,6 +845,154 @@ impl ImBridge {
                     });
                 }
             }
+        }
+        Ok(results)
+    }
+
+    /// 推一张设备审批卡并留推送账 (送达 = `pushed` 行 + 回执; 失败 = `failed` 行
+    /// 带真因, 留账待重试)。留账失败必须报真因 ([`ImBridgeError::PushBookkeeping`]),
+    /// 不静默。
+    async fn push_one_device_card(
+        &self,
+        face: &ImDeviceApprovalFace,
+        target: &ImChannelTarget,
+        channel_id: &str,
+        conversation_id: &str,
+        card: &DeviceApprovalCard,
+        now_ms: i64,
+    ) -> Result<DeviceApprovalPushResult, ImBridgeError> {
+        let envelope = device_card_envelope(card, now_ms);
+        match self.deliver_card(target, conversation_id, &envelope).await {
+            Ok(receipt) => {
+                let message_ref = receipt.message_ref.clone();
+                face.record_push(&DeviceApprovalPushRecord {
+                    card: card.clone(),
+                    channel_id: channel_id.to_string(),
+                    conversation_id: conversation_id.to_string(),
+                    outcome: DeviceApprovalPushOutcome::Pushed,
+                    message_ref: Some(message_ref.clone()),
+                    reason: None,
+                    at_ms: now_ms,
+                })
+                .map_err(ImBridgeError::PushBookkeeping)?;
+                Ok(DeviceApprovalPushResult {
+                    plan_id: card.plan_id.clone(),
+                    outcome: DeviceApprovalPushOutcome::Pushed,
+                    detail: message_ref,
+                })
+            }
+            Err(error) => {
+                // 失败留账 (真因) 待重试: IM 失败不丢卡。
+                let reason = error.to_string();
+                face.record_push(&DeviceApprovalPushRecord {
+                    card: card.clone(),
+                    channel_id: channel_id.to_string(),
+                    conversation_id: conversation_id.to_string(),
+                    outcome: DeviceApprovalPushOutcome::Failed,
+                    message_ref: None,
+                    reason: Some(reason.clone()),
+                    at_ms: now_ms,
+                })
+                .map_err(ImBridgeError::PushBookkeeping)?;
+                Ok(DeviceApprovalPushResult {
+                    plan_id: card.plan_id.clone(),
+                    outcome: DeviceApprovalPushOutcome::Failed,
+                    detail: reason,
+                })
+            }
+        }
+    }
+
+    /// 设备审批卡出站: 卡载荷 → 动作计划卡 (**同链同信封**: 与 IM 审批卡同一条
+    /// [`Self::deliver_card`] 出站链、同一个 [`ImApprovalCard`] 信封) → IM 会话。
+    ///
+    /// - **推送幂等键 = 动作 plan_id**: 已送达 (推送账 `pushed` 行) 的不再推 ——
+    ///   同计划不重复推送 (结果集不含幂等跳过项);
+    /// - **失败留账**: 推送失败写 `failed` 行 (带真因 + 卡载荷) 待重试
+    ///   ([`Self::retry_device_approval_pushes`]) —— IM 失败不丢卡;
+    /// - 未接设备审批面 = 空结果 (inert), 既有链零回归。
+    ///
+    /// 逐卡结果照实返回 (回执引用 / 失败真因), 0 静默降级。
+    pub async fn push_device_approval_cards(
+        &self,
+        channel_id: &str,
+        conversation_id: &str,
+        cards: &[DeviceApprovalCard],
+    ) -> Result<Vec<DeviceApprovalPushResult>, ImBridgeError> {
+        let Some(face) = &self.device_approvals else {
+            return Ok(Vec::new());
+        };
+        let target = self
+            .channels
+            .get(channel_id)
+            .ok_or_else(|| ImBridgeError::UnknownChannel(channel_id.to_string()))?;
+        let pushed = face
+            .pushes
+            .pushed_plan_ids()
+            .map_err(ImBridgeError::PushBookkeeping)?;
+        let now_ms = Timestamp::from_clock(self.clock.as_ref()).epoch_millis();
+        let mut results = Vec::new();
+        for card in cards {
+            if pushed.contains(&card.plan_id) {
+                continue;
+            }
+            let result = self
+                .push_one_device_card(face, target, channel_id, conversation_id, card, now_ms)
+                .await?;
+            results.push(result);
+        }
+        Ok(results)
+    }
+
+    /// 设备审批卡重试: 失败留账的卡凭**推送账行内载荷**重建出站 (不需要外部
+    /// 记忆, 重启后同账重试); 已送达的计划不进重试集 (幂等键挡)。渠道未配置
+    /// 也照实留 `failed` 行 (真因), 不静默。
+    pub async fn retry_device_approval_pushes(
+        &self,
+    ) -> Result<Vec<DeviceApprovalPushResult>, ImBridgeError> {
+        let Some(face) = &self.device_approvals else {
+            return Ok(Vec::new());
+        };
+        let pending = face
+            .pushes
+            .pending_retry()
+            .map_err(ImBridgeError::PushBookkeeping)?;
+        let now_ms = Timestamp::from_clock(self.clock.as_ref()).epoch_millis();
+        let mut results = Vec::new();
+        for record in pending {
+            let Some(target) = self.channels.get(&record.channel_id) else {
+                let reason = format!(
+                    "设备审批卡重试失败: 渠道 {:?} 未配置 (留账待下次重试)",
+                    record.channel_id
+                );
+                face.record_push(&DeviceApprovalPushRecord {
+                    card: record.card.clone(),
+                    channel_id: record.channel_id.clone(),
+                    conversation_id: record.conversation_id.clone(),
+                    outcome: DeviceApprovalPushOutcome::Failed,
+                    message_ref: None,
+                    reason: Some(reason.clone()),
+                    at_ms: now_ms,
+                })
+                .map_err(ImBridgeError::PushBookkeeping)?;
+                results.push(DeviceApprovalPushResult {
+                    plan_id: record.card.plan_id.clone(),
+                    outcome: DeviceApprovalPushOutcome::Failed,
+                    detail: reason,
+                });
+                continue;
+            };
+            let result = self
+                .push_one_device_card(
+                    face,
+                    target,
+                    &record.channel_id,
+                    &record.conversation_id,
+                    &record.card,
+                    now_ms,
+                )
+                .await?;
+            results.push(result);
         }
         Ok(results)
     }

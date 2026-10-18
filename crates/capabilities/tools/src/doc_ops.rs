@@ -16,6 +16,8 @@
 //! | `pdf_split` | 写 | 一入多出: 逐页拆分为独立 PDF (批量管道) |
 //! | `pdf_extract_pages` | 写 | 多页选页: 1 起页码列表 → 单一 PDF |
 //! | `pdf_watermark_text` | 写 | 逐页叠对角水印文字 (WinAnsi 可编码文本) |
+//! | `docx_from_markdown` | 写 | Markdown → DOCX 最小生成 (标题/段落/列表/粗斜体) |
+//! | `docx_append` | 写 | 追加段落到副本 (原容器条目原样, 只创建不覆盖) |
 //!
 //! # 受控面 (四道硬边界 + 两道写语义)
 //!
@@ -43,7 +45,16 @@
 //!   新页树 + 经典 xref 表输出; 水印文字须 WinAnsi 可编码 (子集外拒绝即帧)。
 //! - **DOCX 读**: ZIP 容器 (stored / deflate 两种条目, ZIP64 显式拒绝) +
 //!   `word/document.xml` (OOXML 文字处理标记, UTF-8); 标题层级取段落样式
-//!   `HeadingN`, 列表取 `w:numPr`。**写面后置** (本批只读 + Markdown 转出)。
+//!   `HeadingN`, 列表取 `w:numPr`。
+//! - **DOCX 写** (结构面): `docx_from_markdown` 认 Markdown 结构子集
+//!   (ATX 标题 `#`..`######` / 逐行一段 / 列表项 `-` `*` `+` 与 `N.` `N)` /
+//!   行内 `**粗**` `*斜*` `_斜_`), 生成最小 OOXML 包 (内容类型 + 根关系 +
+//!   `word/document.xml` 三件); **样式最小如实**: 无 `styles.xml` / 无字体美化,
+//!   标题以 `HeadingN` 段落样式名承载、列表以 `w:numPr` 标记承载 (字形与编号
+//!   外观由消费端决定)。`docx_append` 在副本的 `word/document.xml` body 尾部
+//!   追加纯文本段落 (逐行一段), 其余容器条目原样搬动 (只动 `word/document.xml`);
+//!   **只创建不覆盖**, 与写族同一原子写门禁。嵌套列表 / 引用块 / 表格 / 图片 /
+//!   表式排版不在子集, 标记不成对按字面保留 (不猜语义)。
 //!
 //! # 治理 (受控读写族)
 //!
@@ -58,9 +69,10 @@
 //! # 依赖报备 (取材口径: 复用 workspace 既有闭包, 0 新外部包)
 //!
 //! - `flate2` (Cargo.lock 既有传递依赖, 同版本复用): PDF 内容流 zlib 解压 +
-//!   ZIP deflate 条目解压;
+//!   ZIP deflate 条目解压/压缩;
 //! - `quick-xml` (Cargo.lock 既有传递依赖, 同版本复用): DOCX XML 解析;
-//! - ZIP 容器读端为本文件内纯 Rust 最小实现 (只读, 无第三方 zip 包)。
+//! - ZIP 容器读写端为本文件内纯 Rust 最小实现 (读: stored + deflate; 写:
+//!   stored / deflate 两档, 同一子集对称, 无第三方 zip 包)。
 //!   两者均为锁定文件既有 `[[package]]` 的直接化引用, 版本零漂移。
 
 use std::collections::{BTreeMap, HashMap};
@@ -123,8 +135,12 @@ pub const ACTION_PDF_SPLIT: &str = "pdf_split";
 pub const ACTION_PDF_EXTRACT_PAGES: &str = "pdf_extract_pages";
 /// 写面动作: `pdf_watermark_text`。
 pub const ACTION_PDF_WATERMARK_TEXT: &str = "pdf_watermark_text";
+/// 写面动作: `docx_from_markdown` (Markdown → DOCX 最小生成)。
+pub const ACTION_DOCX_FROM_MARKDOWN: &str = "docx_from_markdown";
+/// 写面动作: `docx_append` (副本追加段落)。
+pub const ACTION_DOCX_APPEND: &str = "docx_append";
 
-/// 闭合动作词表 (8 个)。
+/// 闭合动作词表 (10 个)。
 pub const DOC_OPS_ACTIONS: &[&str] = &[
     ACTION_PDF_INFO,
     ACTION_PDF_EXTRACT_TEXT,
@@ -134,6 +150,8 @@ pub const DOC_OPS_ACTIONS: &[&str] = &[
     ACTION_PDF_SPLIT,
     ACTION_PDF_EXTRACT_PAGES,
     ACTION_PDF_WATERMARK_TEXT,
+    ACTION_DOCX_FROM_MARKDOWN,
+    ACTION_DOCX_APPEND,
 ];
 
 /// 读面词表 (grant 即用零审批)。
@@ -150,6 +168,8 @@ pub const DOC_OPS_WRITE_ACTIONS: &[&str] = &[
     ACTION_PDF_SPLIT,
     ACTION_PDF_EXTRACT_PAGES,
     ACTION_PDF_WATERMARK_TEXT,
+    ACTION_DOCX_FROM_MARKDOWN,
+    ACTION_DOCX_APPEND,
 ];
 
 /// 工具描述全文 (注册声明与文档引用同一份文本)。
@@ -160,11 +180,14 @@ pub const DOC_OPS_TOOL_DESCRIPTION: &str = "Read and transform documents inside 
   one PDF), pdf_watermark_text (diagonal text watermark on every page) - the \
   write face creates new files atomically and never overwrites an existing one \
   (every write waits for a human approval). DOCX face: docx_extract_text \
-  (markdown out) and docx_outline (heading levels) - read-only this batch. \
-  Paths must stay inside the workspace root; credential surfaces are refused; \
-  inputs over the size cap and PDFs over the page cap are refused, never \
-  silently truncated. Encrypted PDFs and streams outside the declared subset \
-  are refused with an explicit reason.";
+  (markdown out) and docx_outline (heading levels) as reads; docx_from_markdown \
+  (minimal markdown-to-DOCX generation: headings, paragraphs, lists, bold/italic \
+  structure) and docx_append (append text paragraphs to a copy) as writes - \
+  minimal styling only, no font beautification, and the markdown subset refuses \
+  nothing silently (unmatched markers stay literal). Paths must stay inside the \
+  workspace root; credential surfaces are refused; inputs over the size cap and \
+  PDFs over the page cap are refused, never silently truncated. Encrypted PDFs \
+  and streams outside the declared subset are refused with an explicit reason.";
 
 // ---------------------------------------------------------------------------
 // 错误 (拒绝即帧: 真因如实, 不静默降级)
@@ -195,6 +218,13 @@ pub enum DocOpsError {
         /// 生效上限。
         cap: u64,
     },
+    /// 容器解压后总字节超过解压预算 (防解压炸弹, 宁拒不截)。
+    UncompressedTooLarge {
+        /// 实际解压字节。
+        bytes: u64,
+        /// 生效预算。
+        cap: u64,
+    },
     /// 解析失败 (坏容器/坏结构, 真因在描述里)。
     Parse(String),
     /// 子集外 (加密文档 / 未支持滤器 / 未支持编码 / ZIP64): 显式拒绝不降级。
@@ -222,6 +252,10 @@ impl DocOpsError {
             Self::TooManyPages { pages, cap } => format!(
                 "拒绝文档操作: PDF 页数 {pages} 超过页数上限 {cap} (宁拒不截: \
                  请分批处理或提高上限)"
+            ),
+            Self::UncompressedTooLarge { bytes, cap } => format!(
+                "拒绝文档操作: 容器解压后 {bytes} 字节超过解压预算 {cap} 字节 \
+                 (防解压炸弹, 宁拒不截)"
             ),
             Self::Parse(detail) => format!("拒绝文档操作: 解析失败 —— {detail}"),
             Self::Unsupported(detail) => {
@@ -252,6 +286,15 @@ pub const DOC_OPS_MAX_PAGES: u64 = 1_000;
 
 /// 默认提取文本返回上限 (字符): 超限显式 `truncated`, 不悄悄丢。
 pub const DOC_OPS_MAX_TEXT_CHARS: usize = 200_000;
+
+/// Markdown / 追加文源文字符上限 (字符): 超限拒绝即帧 (宁拒不截, 不截断生成)。
+pub const DOC_OPS_MAX_SOURCE_CHARS: usize = 200_000;
+
+/// Markdown / 追加文段落上限 (段): 超限拒绝即帧 (防超长段落流拖垮单次调用)。
+pub const DOC_OPS_MAX_SOURCE_PARAGRAPHS: usize = 10_000;
+
+/// ZIP 解压预算系数: 解压预算 = 输入字节上限 × 本系数 (防解压炸弹, 宁拒不截)。
+pub(crate) const ZIP_DECOMPRESSION_BUDGET_FACTOR: u64 = 8;
 
 /// 文档操作面配置 (工作区根 + 三道上限 + 写总闸注入)。
 ///
@@ -452,6 +495,13 @@ fn write_output_create_only(path: &Path, bytes: &[u8]) -> Result<(), DocOpsError
     })
 }
 
+/// 共享 ZIP 解压预算 (输入字节上限 × [`ZIP_DECOMPRESSION_BUDGET_FACTOR`])。
+fn zip_decompression_budget(config: &DocOpsConfig) -> u64 {
+    config
+        .max_input_bytes
+        .saturating_mul(ZIP_DECOMPRESSION_BUDGET_FACTOR)
+}
+
 /// 读入一个受控输入 (限域 + 敏感面 + 大小上限)。
 fn read_input(config: &DocOpsConfig, requested: &str) -> Result<(PathBuf, Vec<u8>), DocOpsError> {
     let path = resolve_contained(&config.workspace_root, requested, true)?;
@@ -468,16 +518,17 @@ fn read_input(config: &DocOpsConfig, requested: &str) -> Result<(PathBuf, Vec<u8
 }
 
 // ---------------------------------------------------------------------------
-// ZIP 最小读端 (纯 Rust, 只读: stored + deflate; ZIP64 显式拒绝)
+// ZIP 最小读写端 (纯 Rust: 读 stored + deflate / 写 stored + deflate;
+// ZIP64 显式拒绝; 读写同一子集对称)
 // ---------------------------------------------------------------------------
 
 /// ZIP 容器里的一个条目 (已解出数据)。
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ZipEntry {
+pub(crate) struct ZipEntry {
     /// 条目名 (含路径, `/` 分隔)。
-    name: String,
+    pub(crate) name: String,
     /// 条目数据 (已按压缩方法展开)。
-    data: Vec<u8>,
+    pub(crate) data: Vec<u8>,
 }
 
 /// 读端中央目录条目 (定位 + 压缩信息)。
@@ -490,7 +541,13 @@ struct ZipDirEntry {
 }
 
 /// 从 ZIP 字节流读出全部条目 (只认 stored / deflate, ZIP64 显式拒绝)。
-fn zip_read_entries(bytes: &[u8]) -> Result<Vec<ZipEntry>, DocOpsError> {
+///
+/// `decompressed_budget` 是**解压预算** (全部条目展开后总字节上限, 防解压炸弹):
+/// 超预算拒绝即帧 [`DocOpsError::UncompressedTooLarge`] (宁拒不截, 不落盘不截断)。
+pub(crate) fn zip_read_entries(
+    bytes: &[u8],
+    decompressed_budget: u64,
+) -> Result<Vec<ZipEntry>, DocOpsError> {
     let eocd_at = find_eocd(bytes).ok_or_else(|| {
         DocOpsError::Parse("ZIP 容器缺中央目录结尾记录 (不是有效 docx 容器)".to_string())
     })?;
@@ -541,6 +598,7 @@ fn zip_read_entries(bytes: &[u8]) -> Result<Vec<ZipEntry>, DocOpsError> {
     }
 
     let mut out = Vec::with_capacity(entries.len());
+    let mut total_uncompressed: u64 = 0;
     for entry in entries {
         if entry.name.ends_with('/') {
             continue;
@@ -567,7 +625,8 @@ fn zip_read_entries(bytes: &[u8]) -> Result<Vec<ZipEntry>, DocOpsError> {
                 raw.to_vec()
             }
             8 => {
-                let mut decoder = flate2::read::DeflateDecoder::new(raw);
+                let remaining = decompressed_budget.saturating_sub(total_uncompressed);
+                let mut decoder = flate2::read::DeflateDecoder::new(raw).take(remaining + 1);
                 let mut expanded = Vec::new();
                 decoder.read_to_end(&mut expanded).map_err(|error| {
                     DocOpsError::Parse(format!("ZIP 条目 {} 解压失败: {error}", entry.name))
@@ -581,6 +640,13 @@ fn zip_read_entries(bytes: &[u8]) -> Result<Vec<ZipEntry>, DocOpsError> {
                 )))
             }
         };
+        total_uncompressed = total_uncompressed.saturating_add(data.len() as u64);
+        if total_uncompressed > decompressed_budget {
+            return Err(DocOpsError::UncompressedTooLarge {
+                bytes: total_uncompressed,
+                cap: decompressed_budget,
+            });
+        }
         out.push(ZipEntry {
             name: entry.name,
             data,
@@ -632,6 +698,136 @@ fn slice(bytes: &[u8], at: usize, len: usize) -> Result<&[u8], DocOpsError> {
     Ok(&bytes[at..end])
 }
 
+/// 写端压缩档位 (与读端子集同一对称面: stored / deflate 两档)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ZipCompression {
+    /// 不压缩 (method 0)。
+    Stored,
+    /// 原始 deflate (method 8)。
+    Deflate,
+}
+
+/// ZIP CRC-32 (条目完整性字段; 与读端同一校验口径)。
+fn zip_crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for byte in data {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = (crc & 1).wrapping_neg();
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+/// 把条目序列写成合法 ZIP 容器 (本地头 + 中央目录 + 结尾记录; 名字按 UTF-8
+/// 声明 (通用标志位 bit 11); 时间戳零值如实, 不编造时间)。
+///
+/// 物理字段上限如实钉死 (名字 ≤ 64 KiB - 1, 数据 / 偏移 ≤ 4 GiB - 1, 条目数
+/// ≤ 65535): 超出**拒绝即帧**, 不截断不换 ZIP64。字节量级的防炸弹预检由调用方
+/// 参数矩阵 (输入上限 / 源文上限) 承担, 本端只钉容器物理上限。
+pub(crate) fn zip_write_entries(
+    entries: &[ZipEntry],
+    compression: ZipCompression,
+) -> Result<Vec<u8>, DocOpsError> {
+    if entries.len() > u16::MAX as usize {
+        return Err(DocOpsError::Parse(format!(
+            "ZIP 写端: 条目数 {} 超过 65535 (ZIP64 不在子集, 拒绝不截断)",
+            entries.len()
+        )));
+    }
+    let method: u16 = match compression {
+        ZipCompression::Stored => 0,
+        ZipCompression::Deflate => 8,
+    };
+    let mut out = Vec::new();
+    let mut central = Vec::new();
+    for entry in entries {
+        let name = entry.name.as_bytes();
+        if name.len() > u16::MAX as usize {
+            return Err(DocOpsError::Parse(
+                "ZIP 写端: 条目名超过 65535 字节 (拒绝不截断)".to_string(),
+            ));
+        }
+        let data: &[u8] = &entry.data;
+        let raw: Vec<u8> = match compression {
+            ZipCompression::Stored => data.to_vec(),
+            ZipCompression::Deflate => {
+                let mut encoder =
+                    flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+                std::io::Write::write_all(&mut encoder, data).map_err(|error| {
+                    DocOpsError::Io(format!("ZIP 写端 deflate 压缩失败: {error}"))
+                })?;
+                encoder.finish().map_err(|error| {
+                    DocOpsError::Io(format!("ZIP 写端 deflate 收尾失败: {error}"))
+                })?
+            }
+        };
+        if raw.len() > u32::MAX as usize || data.len() > u32::MAX as usize {
+            return Err(DocOpsError::Parse(
+                "ZIP 写端: 条目数据超过 4 GiB (ZIP64 不在子集, 拒绝不截断)".to_string(),
+            ));
+        }
+        if out.len() > u32::MAX as usize {
+            return Err(DocOpsError::Parse(
+                "ZIP 写端: 容器偏移超过 4 GiB (ZIP64 不在子集, 拒绝不截断)".to_string(),
+            ));
+        }
+        let offset = out.len() as u32;
+        let crc = zip_crc32(data);
+
+        out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
+        out.extend_from_slice(&20u16.to_le_bytes()); // version needed
+        out.extend_from_slice(&0x0800u16.to_le_bytes()); // 名字按 UTF-8 声明
+        out.extend_from_slice(&method.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes()); // mod time (零值如实)
+        out.extend_from_slice(&0u16.to_le_bytes()); // mod date (零值如实)
+        out.extend_from_slice(&crc.to_le_bytes());
+        out.extend_from_slice(&(raw.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes()); // extra length
+        out.extend_from_slice(name);
+        out.extend_from_slice(&raw);
+
+        central.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
+        central.extend_from_slice(&20u16.to_le_bytes()); // version made by
+        central.extend_from_slice(&20u16.to_le_bytes()); // version needed
+        central.extend_from_slice(&0x0800u16.to_le_bytes());
+        central.extend_from_slice(&method.to_le_bytes());
+        central.extend_from_slice(&0u16.to_le_bytes());
+        central.extend_from_slice(&0u16.to_le_bytes());
+        central.extend_from_slice(&crc.to_le_bytes());
+        central.extend_from_slice(&(raw.len() as u32).to_le_bytes());
+        central.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        central.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        central.extend_from_slice(&0u16.to_le_bytes()); // extra length
+        central.extend_from_slice(&0u16.to_le_bytes()); // comment length
+        central.extend_from_slice(&0u16.to_le_bytes()); // disk number start
+        central.extend_from_slice(&0u16.to_le_bytes()); // internal attributes
+        central.extend_from_slice(&0u32.to_le_bytes()); // external attributes
+        central.extend_from_slice(&offset.to_le_bytes());
+        central.extend_from_slice(name);
+    }
+    if central.len() > u32::MAX as usize {
+        return Err(DocOpsError::Parse(
+            "ZIP 写端: 中央目录超过 4 GiB (ZIP64 不在子集, 拒绝不截断)".to_string(),
+        ));
+    }
+    let cd_offset = out.len() as u32;
+    out.extend_from_slice(&central);
+    let cd_size = central.len() as u32;
+    out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
+    out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+    out.extend_from_slice(&cd_size.to_le_bytes());
+    out.extend_from_slice(&cd_offset.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
+    Ok(out)
+}
+
 // ---------------------------------------------------------------------------
 // DOCX (OOXML) 读端: 正文提取 (Markdown 转出) + 标题大纲
 // ---------------------------------------------------------------------------
@@ -665,8 +861,13 @@ fn heading_level(style: &str) -> Option<u32> {
 }
 
 /// 从 DOCX 容器字节流抽出段落序列 (样式 / 列表标记 / 文本)。
-fn docx_parse_paragraphs(bytes: &[u8]) -> Result<Vec<DocxParagraph>, DocOpsError> {
-    let entries = zip_read_entries(bytes)?;
+///
+/// `decompressed_budget` 是容器解压预算 (见 [`zip_read_entries`])。
+fn docx_parse_paragraphs(
+    bytes: &[u8],
+    decompressed_budget: u64,
+) -> Result<Vec<DocxParagraph>, DocOpsError> {
+    let entries = zip_read_entries(bytes, decompressed_budget)?;
     let document = entries
         .iter()
         .find(|entry| entry.name == "word/document.xml")
@@ -853,6 +1054,315 @@ fn docx_paragraphs_to_outline(paragraphs: &[DocxParagraph]) -> Vec<(u32, String)
             heading_level(&paragraph.style).map(|level| (level, text.to_string()))
         })
         .collect()
+}
+
+// ---------------------------------------------------------------------------
+// DOCX (OOXML) 写端: Markdown → DOCX 最小生成 + 副本追加段落 (结构面)
+// ---------------------------------------------------------------------------
+
+/// 行内 run (着色最小面: 粗 / 斜; 标记不嵌套不重叠)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DocxRun {
+    /// run 文本 (原文, 已解行内标记)。
+    text: String,
+    /// 粗体 (`**...**`)。
+    bold: bool,
+    /// 斜体 (`*...*` / `_..._`)。
+    italic: bool,
+}
+
+/// Markdown 结构块 (标题 / 列表项 / 正文段; 逐行一块)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DocxBlock {
+    /// 标题级别 (1..=6, ATX `#`..`######`); 非标题 = [`None`]。
+    heading: Option<u32>,
+    /// 列表项 (`-` `*` `+` 或 `N.` `N)`; 落 `w:numPr` 标记, 外观不承诺)。
+    list: bool,
+    /// 行内 run 序列。
+    runs: Vec<DocxRun>,
+}
+
+/// XML 1.0 非法控制字符 (拒绝即帧, 不静默剔除不猜)。
+fn is_xml_illegal_char(character: char) -> bool {
+    matches!(
+        character,
+        '\u{0}'..='\u{8}' | '\u{B}' | '\u{C}' | '\u{E}'..='\u{1F}'
+    )
+}
+
+/// XML 文本转义 (预定义五实体; 其余码位原样)。
+fn xml_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// 行内强调解析 (子集钉死: `**粗**` / `*斜*` / `_斜_`)。
+///
+/// 最左配对、内容非空且不跨行; 不成对 / 重叠标记按字面保留 (不猜语义,
+/// 不支持嵌套着色)。
+fn parse_inline_runs(text: &str) -> Vec<DocxRun> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut runs: Vec<DocxRun> = Vec::new();
+    let mut literal = String::new();
+    let mut index = 0usize;
+    while index < chars.len() {
+        let (marker, marker_len): (&str, usize) =
+            if chars[index] == '*' && chars.get(index + 1) == Some(&'*') {
+                ("**", 2)
+            } else if chars[index] == '*' {
+                ("*", 1)
+            } else if chars[index] == '_' {
+                ("_", 1)
+            } else {
+                literal.push(chars[index]);
+                index += 1;
+                continue;
+            };
+        let open = index + marker_len;
+        let mut found = None;
+        let mut scan = open;
+        while scan + marker_len <= chars.len() {
+            let candidate: String = chars[scan..scan + marker_len].iter().collect();
+            if candidate == marker {
+                found = Some(scan);
+                break;
+            }
+            scan += 1;
+        }
+        match found {
+            Some(close) if close > open => {
+                let body: String = chars[open..close].iter().collect();
+                if body.is_empty() {
+                    // 空内容不成对 (如 `****`): 按字面保留, 不造空 run。
+                    literal.push_str(marker);
+                    index = open;
+                    continue;
+                }
+                if !literal.is_empty() {
+                    runs.push(DocxRun {
+                        text: std::mem::take(&mut literal),
+                        bold: false,
+                        italic: false,
+                    });
+                }
+                runs.push(DocxRun {
+                    text: body,
+                    bold: marker == "**",
+                    italic: marker != "**",
+                });
+                index = close + marker_len;
+            }
+            _ => {
+                literal.push_str(marker);
+                index = open;
+            }
+        }
+    }
+    if !literal.is_empty() {
+        runs.push(DocxRun {
+            text: literal,
+            bold: false,
+            italic: false,
+        });
+    }
+    runs
+}
+
+/// Markdown 结构面解析 (子集钉死): ATX 标题 `#`..`######` / 逐行一段 /
+/// 列表项 / 行内粗斜。空行 = 段落分隔; 空结构 (零段落) 拒绝即帧。
+fn parse_markdown_blocks(text: &str) -> Result<Vec<DocxBlock>, DocOpsError> {
+    let mut blocks: Vec<DocxBlock> = Vec::new();
+    for raw_line in text.split('\n') {
+        let line = raw_line.trim_end_matches('\r');
+        if line.trim().is_empty() {
+            continue;
+        }
+        let trimmed = line.trim_start();
+        let hashes = trimmed.chars().take_while(|&c| c == '#').count();
+        if (1..=6).contains(&hashes) && trimmed[hashes..].starts_with(' ') {
+            let content = trimmed[hashes..].trim();
+            if content.is_empty() {
+                continue; // 空标题丢弃 (不编造标题文本)。
+            }
+            blocks.push(DocxBlock {
+                heading: Some(hashes as u32),
+                list: false,
+                runs: parse_inline_runs(content),
+            });
+            continue;
+        }
+        if ["- ", "* ", "+ "]
+            .iter()
+            .any(|marker| trimmed.starts_with(marker))
+        {
+            let content = trimmed[2..].trim();
+            if content.is_empty() {
+                continue; // 空列表项丢弃 (不编造项文本)。
+            }
+            blocks.push(DocxBlock {
+                heading: None,
+                list: true,
+                runs: parse_inline_runs(content),
+            });
+            continue;
+        }
+        let digits: String = trimmed.chars().take_while(char::is_ascii_digit).collect();
+        if !digits.is_empty() {
+            let rest = &trimmed[digits.len()..];
+            if rest.starts_with(". ") || rest.starts_with(") ") {
+                let content = rest[2..].trim();
+                if content.is_empty() {
+                    continue; // 空列表项丢弃 (不编造项文本)。
+                }
+                blocks.push(DocxBlock {
+                    heading: None,
+                    list: true,
+                    runs: parse_inline_runs(content),
+                });
+                continue;
+            }
+        }
+        blocks.push(DocxBlock {
+            heading: None,
+            list: false,
+            runs: parse_inline_runs(line),
+        });
+    }
+    if blocks.is_empty() {
+        return Err(DocOpsError::InvalidParam(
+            "源文无段落 (空结构拒绝, 不生成空文档)".to_string(),
+        ));
+    }
+    Ok(blocks)
+}
+
+/// 追加文逐行一段 (空行忽略; CRLF 容忍)。
+fn source_paragraph_lines(text: &str) -> Vec<String> {
+    text.split('\n')
+        .map(|line| line.trim_end_matches('\r'))
+        .filter(|line| !line.trim().is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// run → OOXML run 标记 (着色最小面: 粗 / 斜)。
+fn docx_run_xml(run: &DocxRun) -> String {
+    let props = match (run.bold, run.italic) {
+        (false, false) => String::new(),
+        (true, false) => "<w:rPr><w:b/></w:rPr>".to_string(),
+        (false, true) => "<w:rPr><w:i/></w:rPr>".to_string(),
+        (true, true) => "<w:rPr><w:b/><w:i/></w:rPr>".to_string(),
+    };
+    format!(
+        "<w:r>{props}<w:t xml:space=\"preserve\">{}</w:t></w:r>",
+        xml_escape(&run.text)
+    )
+}
+
+/// 块 → 段落标记 (标题 = `w:pStyle HeadingN`; 列表 = `w:numPr`)。
+fn docx_paragraph_xml(block: &DocxBlock) -> String {
+    let mut props = String::new();
+    if let Some(level) = block.heading {
+        props.push_str(&format!("<w:pStyle w:val=\"Heading{level}\"/>"));
+    }
+    if block.list {
+        props.push_str("<w:numPr><w:numId w:val=\"1\"/></w:numPr>");
+    }
+    let ppr = if props.is_empty() {
+        String::new()
+    } else {
+        format!("<w:pPr>{props}</w:pPr>")
+    };
+    let runs: String = block.runs.iter().map(docx_run_xml).collect();
+    format!("<w:p>{ppr}{runs}</w:p>")
+}
+
+/// 块序列 → `word/document.xml` 全文 (最小 OOXML 文字处理标记)。
+fn docx_document_xml(blocks: &[DocxBlock]) -> String {
+    let body: String = blocks.iter().map(docx_paragraph_xml).collect();
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+         <w:body>{body}</w:body></w:document>"
+    )
+}
+
+/// 最小 OOXML 包 (三件: 内容类型 + 根关系 + 正文) —— 样式最小如实:
+/// 无 `styles.xml` 无字体美化, 标题/列表只落结构标记。
+fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
+    let types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+         <Default Extension=\"rels\" \
+         ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+         <Default Extension=\"xml\" ContentType=\"application/xml\"/>\
+         <Override PartName=\"/word/document.xml\" \
+         ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>\
+         </Types>";
+    let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+         <Relationship Id=\"rId1\" \
+         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" \
+         Target=\"word/document.xml\"/></Relationships>";
+    zip_write_entries(
+        &[
+            ZipEntry {
+                name: "[Content_Types].xml".to_string(),
+                data: types.as_bytes().to_vec(),
+            },
+            ZipEntry {
+                name: "_rels/.rels".to_string(),
+                data: rels.as_bytes().to_vec(),
+            },
+            ZipEntry {
+                name: "word/document.xml".to_string(),
+                data: document_xml.as_bytes().to_vec(),
+            },
+        ],
+        ZipCompression::Deflate,
+    )
+}
+
+/// 副本追加段落: 只动 `word/document.xml` 的 body 尾部 (节属性 `w:sectPr`
+/// 若在 body 尾则插它之前 —— 依规节属性恒是 body 尾子), 其余标记一字不动。
+fn docx_append_paragraphs(document_xml: &str, lines: &[String]) -> Result<String, DocOpsError> {
+    let body_end = document_xml.rfind("</w:body>").ok_or_else(|| {
+        DocOpsError::Parse("word/document.xml 缺 </w:body> (不是合法文字处理文档)".to_string())
+    })?;
+    let mut insert_at = body_end;
+    let before = &document_xml[..body_end];
+    if let Some(sect_close) = before.rfind("</w:sectPr>") {
+        if before[sect_close + "</w:sectPr>".len()..].trim().is_empty() {
+            let sect_open = before[..sect_close].rfind("<w:sectPr").ok_or_else(|| {
+                DocOpsError::Parse(
+                    "word/document.xml 节属性标记不成对 (有 </w:sectPr> 无 <w:sectPr; 拒绝不猜)"
+                        .to_string(),
+                )
+            })?;
+            insert_at = sect_open;
+        }
+    }
+    let mut added = String::new();
+    for line in lines {
+        added.push_str(&format!(
+            "<w:p><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
+            xml_escape(line)
+        ));
+    }
+    let mut out = String::with_capacity(document_xml.len() + added.len());
+    out.push_str(&document_xml[..insert_at]);
+    out.push_str(&added);
+    out.push_str(&document_xml[insert_at..]);
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -2816,11 +3326,12 @@ fn watermark_content(text: &str) -> Result<Vec<u8>, DocOpsError> {
 pub struct DocOpsParams {
     /// 动作 (闭合词表)。
     pub action: Option<String>,
-    /// 单输入 (除 merge 外全部动作)。
+    /// 单输入 (读面四动作 / split / extract_pages / watermark_text / docx_append)。
     pub input: Option<String>,
     /// 多输入 (`pdf_merge`)。
     pub inputs: Option<Vec<String>>,
-    /// 单输出文件 (merge / extract_pages / watermark_text)。
+    /// 单输出文件 (merge / extract_pages / watermark_text / docx_from_markdown /
+    /// docx_append)。
     pub output: Option<String>,
     /// 输出目录 (`pdf_split`)。
     pub output_dir: Option<String>,
@@ -2830,6 +3341,9 @@ pub struct DocOpsParams {
     pub watermark_text: Option<String>,
     /// 提取字符预算 (≤ 配置上限, 读面两提取动作)。
     pub max_chars: Option<u64>,
+    /// 源文 (`docx_from_markdown`: Markdown 源文; `docx_append`: 追加段落文,
+    /// 逐行一段)。
+    pub text: Option<String>,
 }
 
 /// 参数矩阵校验 (纯判定, 工具面与边界 Guard 同一真源): 返回 `Some(拒绝错误)` 即拒。
@@ -2940,7 +3454,55 @@ pub fn doc_ops_params_refusal(config: &DocOpsConfig, params: &DocOpsParams) -> O
                 return Some(refusal);
             }
         }
+        ACTION_DOCX_FROM_MARKDOWN => {
+            if let Some(refusal) = require_text(params.text.as_ref(), "text") {
+                return Some(refusal);
+            }
+            if let Some(refusal) = require_text(params.output.as_ref(), "output") {
+                return Some(refusal);
+            }
+        }
+        ACTION_DOCX_APPEND => {
+            if let Some(refusal) = require_text(params.input.as_ref(), "input") {
+                return Some(refusal);
+            }
+            if let Some(refusal) = require_text(params.text.as_ref(), "text") {
+                return Some(refusal);
+            }
+            if let Some(refusal) = require_text(params.output.as_ref(), "output") {
+                return Some(refusal);
+            }
+        }
         _ => {}
+    }
+
+    // 源文面 (DOCX 写面两动作): 字符 / 段落上限宁拒不截; XML 非法控制字符
+    // 拒绝即帧 (不静默剔除不猜)。
+    if matches!(action, ACTION_DOCX_FROM_MARKDOWN | ACTION_DOCX_APPEND) {
+        let source = params.text.as_deref().unwrap_or_default();
+        let chars = source.chars().count();
+        if chars > DOC_OPS_MAX_SOURCE_CHARS {
+            return Some(DocOpsError::InvalidParam(format!(
+                "{action}: 源文 {chars} 字符超过 {DOC_OPS_MAX_SOURCE_CHARS} 字符上限 \
+                 (宁拒不截, 不截断生成)"
+            )));
+        }
+        // 段落口径钉死: 非空行 = 一段 (与解析面逐行一段同一把尺)。
+        let paragraphs = source
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count();
+        if paragraphs > DOC_OPS_MAX_SOURCE_PARAGRAPHS {
+            return Some(DocOpsError::InvalidParam(format!(
+                "{action}: 源文 {paragraphs} 段超过 {DOC_OPS_MAX_SOURCE_PARAGRAPHS} 段上限 \
+                 (宁拒不截)"
+            )));
+        }
+        if source.chars().any(is_xml_illegal_char) {
+            return Some(DocOpsError::InvalidParam(format!(
+                "{action}: 源文含 XML 非法控制字符 (拒绝即帧, 不静默剔除不猜)"
+            )));
+        }
     }
 
     // 写面写总闸 (宪法级 `file_write` 唯一写总闸, 组装根注入): 关 = 写动作
@@ -3098,6 +3660,8 @@ impl DocOpsRunner {
             ACTION_PDF_SPLIT => self.pdf_split(params),
             ACTION_PDF_EXTRACT_PAGES => self.pdf_extract_pages(params),
             ACTION_PDF_WATERMARK_TEXT => self.pdf_watermark_text(params),
+            ACTION_DOCX_FROM_MARKDOWN => self.docx_from_markdown(params),
+            ACTION_DOCX_APPEND => self.docx_append(params),
             other => Err(DocOpsError::InvalidParam(format!(
                 "未知动作 {other:?} (闭合词表外)"
             ))),
@@ -3187,7 +3751,7 @@ impl DocOpsRunner {
     fn docx_extract_text(&self, params: &DocOpsParams) -> Result<Value, DocOpsError> {
         let requested = params.input.as_deref().unwrap_or_default();
         let (_path, bytes) = read_input(&self.config, requested)?;
-        let paragraphs = docx_parse_paragraphs(&bytes)?;
+        let paragraphs = docx_parse_paragraphs(&bytes, zip_decompression_budget(&self.config))?;
         let markdown = docx_paragraphs_to_markdown(&paragraphs);
         let budget = text_budget(&self.config, params.max_chars);
         let mut truncated = false;
@@ -3219,7 +3783,7 @@ impl DocOpsRunner {
     fn docx_outline(&self, params: &DocOpsParams) -> Result<Value, DocOpsError> {
         let requested = params.input.as_deref().unwrap_or_default();
         let (_path, bytes) = read_input(&self.config, requested)?;
-        let paragraphs = docx_parse_paragraphs(&bytes)?;
+        let paragraphs = docx_parse_paragraphs(&bytes, zip_decompression_budget(&self.config))?;
         let outline = docx_paragraphs_to_outline(&paragraphs);
         let entries: Vec<Value> = outline
             .iter()
@@ -3231,6 +3795,72 @@ impl DocOpsRunner {
             "input": requested,
             "outline": entries,
             "headings": outline.len(),
+        }))
+    }
+
+    /// `docx_from_markdown`: Markdown → DOCX 最小生成 (结构面; 样式最小如实)。
+    fn docx_from_markdown(&self, params: &DocOpsParams) -> Result<Value, DocOpsError> {
+        let text = params.text.as_deref().unwrap_or_default();
+        let output = params.output.as_deref().unwrap_or_default();
+        let blocks = parse_markdown_blocks(text)?;
+        let document_xml = docx_document_xml(&blocks);
+        let bytes = docx_package(&document_xml)?;
+        let path = resolve_contained(&self.config.workspace_root, output, false)?;
+        write_output_create_only(&path, &bytes)?;
+        Ok(json!({
+            "action": ACTION_DOCX_FROM_MARKDOWN,
+            "status": "ok",
+            "output": output,
+            "paragraphs": blocks.len(),
+            "bytes_written": bytes.len() as u64,
+            "notes": [
+                "样式最小如实: 标题以 HeadingN 段落样式名承载, 列表以 numPr 标记承载, \
+                 无 styles.xml 无字体美化 (字形/编号外观由消费端决定)"
+            ],
+        }))
+    }
+
+    /// `docx_append`: 副本追加段落 (逐行一段, 空行忽略)。
+    ///
+    /// 只动 `word/document.xml` (body 尾部插入, 节属性前让位), 其余容器条目
+    /// **内容**原样搬动 (重组容器压缩档位统一 deflate, 内容字节零改动);
+    /// 只创建不覆盖 (创建类原子写, 与写族同一门禁)。
+    fn docx_append(&self, params: &DocOpsParams) -> Result<Value, DocOpsError> {
+        let input = params.input.as_deref().unwrap_or_default();
+        let output = params.output.as_deref().unwrap_or_default();
+        let text = params.text.as_deref().unwrap_or_default();
+        let lines = source_paragraph_lines(text);
+        let (_path, bytes) = read_input(&self.config, input)?;
+        let mut entries = zip_read_entries(&bytes, zip_decompression_budget(&self.config))?;
+        let Some(document) = entries
+            .iter_mut()
+            .find(|entry| entry.name == "word/document.xml")
+        else {
+            return Err(DocOpsError::Parse(
+                "DOCX 容器缺 word/document.xml (不是文字处理文档)".to_string(),
+            ));
+        };
+        let updated = {
+            let original_xml = std::str::from_utf8(&document.data).map_err(|_| {
+                DocOpsError::Unsupported("word/document.xml 不是 UTF-8".to_string())
+            })?;
+            docx_append_paragraphs(original_xml, &lines)?
+        };
+        document.data = updated.into_bytes();
+        let packed = zip_write_entries(&entries, ZipCompression::Deflate)?;
+        let path = resolve_contained(&self.config.workspace_root, output, false)?;
+        write_output_create_only(&path, &packed)?;
+        Ok(json!({
+            "action": ACTION_DOCX_APPEND,
+            "status": "ok",
+            "input": input,
+            "output": output,
+            "paragraphs_appended": lines.len(),
+            "bytes_written": packed.len() as u64,
+            "notes": [
+                "只动 word/document.xml: 其余容器条目内容原样搬动 (重组统一 deflate 档, \
+                 内容字节零改动)"
+            ],
         }))
     }
 
@@ -3458,11 +4088,11 @@ impl ToolCapability for DocOpsTool {
                     "action": {
                         "type": "string",
                         "enum": DOC_OPS_ACTIONS,
-                        "description": "Closed vocabulary: pdf_info / pdf_extract_text / docx_extract_text / docx_outline (reads); pdf_merge / pdf_split / pdf_extract_pages / pdf_watermark_text (writes, each waits for a human approval)."
+                        "description": "Closed vocabulary: pdf_info / pdf_extract_text / docx_extract_text / docx_outline (reads); pdf_merge / pdf_split / pdf_extract_pages / pdf_watermark_text / docx_from_markdown / docx_append (writes, each waits for a human approval)."
                     },
                     "input": {
                         "type": "string",
-                        "description": "Single input path (workspace-relative or absolute inside the workspace root)."
+                        "description": "Single input path (workspace-relative or absolute inside the workspace root): the four read actions, pdf_split, pdf_extract_pages, pdf_watermark_text, and the existing DOCX that docx_append copies from."
                     },
                     "inputs": {
                         "type": "array",
@@ -3471,7 +4101,7 @@ impl ToolCapability for DocOpsTool {
                     },
                     "output": {
                         "type": "string",
-                        "description": "Output file for pdf_merge / pdf_extract_pages / pdf_watermark_text. Created atomically, never overwrites an existing file."
+                        "description": "Output file for pdf_merge / pdf_extract_pages / pdf_watermark_text / docx_from_markdown / docx_append. Created atomically, never overwrites an existing file."
                     },
                     "output_dir": {
                         "type": "string",
@@ -3490,6 +4120,10 @@ impl ToolCapability for DocOpsTool {
                         "type": "integer",
                         "minimum": 1,
                         "description": "Optional tighter character budget for the two extract actions (the configured cap still applies)."
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Source text for the two DOCX write actions. docx_from_markdown: markdown subset (ATX headings #..######, one paragraph per line, list items - * + or N. N), inline **bold** / *italic* / _italic_; unmatched markers stay literal). docx_append: paragraphs to append, one per line (blank lines skipped). Refused over the source caps or with XML-illegal control characters."
                     }
                 },
                 "required": ["action"],
@@ -4669,5 +5303,423 @@ mod tests {
             !rendered_text.contains("memo.pdf") && !rendered_text.contains(".pdf"),
             "创作节零路径零文件名: {rendered_text}"
         );
+    }
+
+    // ---- DOCX 写面行为钉 (W2 留缝收口: 生成 / 追加 / 受控面同族) ----
+
+    /// 解压预算 (测试直调口用宽松档)。
+    const TEST_ZIP_BUDGET: u64 = 64 * 1024 * 1024;
+
+    /// 读回产物段落 (自家读端解回 = 同源自洽核对)。
+    fn read_back_paragraphs(bytes: &[u8]) -> Vec<DocxParagraph> {
+        docx_parse_paragraphs(bytes, TEST_ZIP_BUDGET).expect("自家产物可由自家读端解回")
+    }
+
+    /// 开写总闸的工作区配置 (生产由组装根注入 `file_write` 同一开关值)。
+    fn write_config(tag: &str) -> DocOpsConfig {
+        DocOpsConfig::new(workspace(tag)).with_write_gate(true)
+    }
+
+    /// `docx_from_markdown` 快捷调用。
+    fn from_markdown(
+        config: &DocOpsConfig,
+        text: &str,
+        output: &str,
+    ) -> Result<Value, DocOpsError> {
+        DocOpsRunner::new(config.clone()).run(&DocOpsParams {
+            action: Some(ACTION_DOCX_FROM_MARKDOWN.to_string()),
+            text: Some(text.to_string()),
+            output: Some(output.to_string()),
+            ..DocOpsParams::default()
+        })
+    }
+
+    /// ㉑ DOCX 生成: Markdown 结构面矩阵 (标题/段落/列表/粗斜体) 生成后用自家
+    /// 读端解回 = 同源自洽 (列表往返归一为 `- ` 项, 行内着色不往返且如实)。
+    #[test]
+    fn docx_from_markdown_covers_the_structure_matrix_and_round_trips() {
+        let markdown = "# Title One\n\
+            \n\
+            Plain paragraph\n\
+            ## Sub *i* and **b**\n\
+            - bullet one\n\
+            * bullet two\n\
+            + bullet three\n\
+            1. ordered one\n\
+            2) ordered two\n\
+            Escaped ** unmatched\n\
+            2*3*4\n";
+        let config = write_config("docx-md");
+        let frame = from_markdown(&config, markdown, "out.docx").expect("结构面矩阵可生成");
+        assert_eq!(frame["status"], "ok");
+        assert_eq!(frame["paragraphs"], 10);
+        let bytes = std::fs::read(config.workspace_root.join("out.docx")).expect("产物已落盘");
+        let paragraphs = read_back_paragraphs(&bytes);
+        let shape: Vec<(&str, bool, &str)> = paragraphs
+            .iter()
+            .map(|paragraph| {
+                (
+                    paragraph.style.as_str(),
+                    paragraph.numbered,
+                    paragraph.text.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                ("Heading1", false, "Title One"),
+                ("", false, "Plain paragraph"),
+                ("Heading2", false, "Sub i and b"),
+                ("", true, "bullet one"),
+                ("", true, "bullet two"),
+                ("", true, "bullet three"),
+                ("", true, "ordered one"),
+                ("", true, "ordered two"),
+                ("", false, "Escaped ** unmatched"),
+                ("", false, "234"),
+            ]
+        );
+        // 往返归一如实: 标题回 `#`, 列表项回 `- ` (编号/项目符号外观不承诺),
+        // 行内着色不往返 (读端只取文本)。
+        let markdown_out = docx_paragraphs_to_markdown(&paragraphs);
+        assert_eq!(
+            markdown_out,
+            "# Title One\nPlain paragraph\n## Sub i and b\n- bullet one\n- bullet two\n\
+             - bullet three\n- ordered one\n- ordered two\nEscaped ** unmatched\n234"
+        );
+    }
+
+    /// ㉒ DOCX 生成: 一例手工 XML 检视 (包三件 / 结构标记 / 转义 / 样式最小如实)。
+    #[test]
+    fn the_generated_docx_is_inspected_by_hand_at_the_xml_level() {
+        let markdown = "# Head\n\nplain a & b < c\n\n- item\n\n**bold** and *ital*\n";
+        let config = write_config("docx-xml");
+        from_markdown(&config, markdown, "hand.docx").expect("可生成");
+        let bytes = std::fs::read(config.workspace_root.join("hand.docx")).expect("产物已落盘");
+        // ZIP 词面手工检视: 本地头签名 + 结尾记录签名在场。
+        assert!(bytes.starts_with(b"PK\x03\x04"), "本地头签名必须在场");
+        assert!(
+            bytes
+                .windows(4)
+                .any(|window| window == [0x50u8, 0x4b, 0x05, 0x06].as_slice()),
+            "结尾记录签名必须在场"
+        );
+        let entries = zip_read_entries(&bytes, TEST_ZIP_BUDGET).expect("写端产物读端可解回");
+        let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["[Content_Types].xml", "_rels/.rels", "word/document.xml"],
+            "最小包恰三件"
+        );
+        let document = &entries
+            .iter()
+            .find(|entry| entry.name == "word/document.xml")
+            .expect("正文件在场")
+            .data;
+        let xml = std::str::from_utf8(document).expect("UTF-8");
+        assert!(xml.contains("<w:pStyle w:val=\"Heading1\"/>"), "标题样式名");
+        assert!(
+            xml.contains("<w:numPr><w:numId w:val=\"1\"/></w:numPr>"),
+            "列表标记"
+        );
+        assert!(xml.contains("<w:rPr><w:b/></w:rPr>"), "粗体标记");
+        assert!(xml.contains("<w:rPr><w:i/></w:rPr>"), "斜体标记");
+        assert!(
+            xml.contains("<w:t xml:space=\"preserve\">plain a &amp; b &lt; c</w:t>"),
+            "文本转义: {xml}"
+        );
+        // 样式最小如实: 无 styles.xml 无字体美化 (只有结构标记)。
+        assert!(
+            !names.iter().any(|name| name.contains("styles")),
+            "无 styles.xml (样式最小, 不冒充美化)"
+        );
+        let types = std::str::from_utf8(&entries[0].data).expect("UTF-8");
+        assert!(types.contains("/word/document.xml"), "内容类型登记正文");
+        let rels = std::str::from_utf8(&entries[1].data).expect("UTF-8");
+        assert!(
+            rels.contains("Target=\"word/document.xml\""),
+            "根关系指向正文"
+        );
+    }
+
+    /// ㉓ DOCX 追加: 副本追加段落 (原段不动, 序不乱, 空行忽略), 创建类原子写
+    /// (只创建不覆盖, 二次同名拒绝且底稿一字不改)。
+    #[test]
+    fn docx_append_appends_paragraphs_and_never_overwrites() {
+        let config = write_config("docx-append");
+        from_markdown(&config, "# Base\n\n- item\n", "base.docx").expect("底稿可生成");
+        let base_bytes = std::fs::read(config.workspace_root.join("base.docx")).expect("底稿在场");
+        let runner = DocOpsRunner::new(config.clone());
+        let frame = runner
+            .run(&DocOpsParams {
+                action: Some(ACTION_DOCX_APPEND.to_string()),
+                input: Some("base.docx".to_string()),
+                text: Some("appended one\nappended two\n\nappended three\n".to_string()),
+                output: Some("appended.docx".to_string()),
+                ..DocOpsParams::default()
+            })
+            .expect("追加可执行");
+        assert_eq!(frame["status"], "ok");
+        assert_eq!(frame["paragraphs_appended"], 3, "空行忽略 (逐行一段口径)");
+        let bytes = std::fs::read(config.workspace_root.join("appended.docx")).expect("产物已落盘");
+        let paragraphs = read_back_paragraphs(&bytes);
+        let texts: Vec<&str> = paragraphs
+            .iter()
+            .map(|paragraph| paragraph.text.as_str())
+            .collect();
+        assert_eq!(
+            texts,
+            vec![
+                "Base",
+                "item",
+                "appended one",
+                "appended two",
+                "appended three"
+            ]
+        );
+        assert_eq!(paragraphs[0].style, "Heading1", "原段样式不动");
+        assert!(paragraphs[1].numbered, "原列表标记不动");
+        // 只创建不覆盖: 同名输出拒绝即帧, 底稿一字不改。
+        let error = runner
+            .run(&DocOpsParams {
+                action: Some(ACTION_DOCX_APPEND.to_string()),
+                input: Some("base.docx".to_string()),
+                text: Some("again".to_string()),
+                output: Some("appended.docx".to_string()),
+                ..DocOpsParams::default()
+            })
+            .expect_err("同名输出必须拒");
+        assert!(matches!(error, DocOpsError::OutputExists(_)), "{error:?}");
+        assert_eq!(
+            std::fs::read(config.workspace_root.join("base.docx")).expect("底稿在场"),
+            base_bytes,
+            "底稿原状 (追加是副本面)"
+        );
+    }
+
+    /// ㉔ DOCX 追加: 非目标条目内容原样搬动; 节属性前让位 (`w:sectPr` 依规恒是
+    /// body 尾子)。
+    #[test]
+    fn docx_append_keeps_other_entries_and_inserts_before_the_section_properties() {
+        let document = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+             <w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+             <w:body><w:p><w:r><w:t>first</w:t></w:r></w:p>\
+             <w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/></w:sectPr></w:body></w:document>";
+        let custom = b"custom-styles-bytes".to_vec();
+        let bytes = zip_stored(&[
+            ("word/document.xml", document.as_bytes()),
+            ("word/styles.xml", custom.as_slice()),
+        ]);
+        let (config, name) = with_input("docx-sect", "in.docx", &bytes);
+        let frame = DocOpsRunner::new(config.clone())
+            .run(&DocOpsParams {
+                action: Some(ACTION_DOCX_APPEND.to_string()),
+                input: Some(name),
+                text: Some("after body".to_string()),
+                output: Some("out.docx".to_string()),
+                ..DocOpsParams::default()
+            })
+            .expect("可追加");
+        assert_eq!(frame["paragraphs_appended"], 1);
+        let out = std::fs::read(config.workspace_root.join("out.docx")).expect("产物已落盘");
+        let entries = zip_read_entries(&out, TEST_ZIP_BUDGET).expect("可解回");
+        let styles = entries
+            .iter()
+            .find(|entry| entry.name == "word/styles.xml")
+            .expect("条目还在");
+        assert_eq!(styles.data, custom, "非目标条目内容零改动");
+        let xml = std::str::from_utf8(
+            &entries
+                .iter()
+                .find(|entry| entry.name == "word/document.xml")
+                .expect("正文在场")
+                .data,
+        )
+        .expect("UTF-8");
+        let inserted = xml.find("after body").expect("追加段落在场");
+        let sect = xml.find("<w:sectPr").expect("节属性在场");
+        let body_end = xml.find("</w:body>").expect("body 尾标在场");
+        assert!(
+            inserted < sect && sect < body_end,
+            "追加段落必须插在节属性之前: {xml}"
+        );
+    }
+
+    /// ㉕ DOCX 追加: 坏容器拒绝即帧 (非 ZIP / 缺正文件 / 缺 body 尾标), 真因如实。
+    #[test]
+    fn docx_append_refuses_broken_containers_with_honest_frames() {
+        let (config, _) = with_input("docx-broken", "broken.docx", b"this is not a zip container");
+        let runner = DocOpsRunner::new(config.clone());
+        let call = |input: &str| DocOpsParams {
+            action: Some(ACTION_DOCX_APPEND.to_string()),
+            input: Some(input.to_string()),
+            text: Some("x".to_string()),
+            output: Some("out.docx".to_string()),
+            ..DocOpsParams::default()
+        };
+        let error = runner.run(&call("broken.docx")).expect_err("非 ZIP 必拒");
+        assert!(
+            error.message().contains("解析失败"),
+            "真因必须是解析拒: {}",
+            error.message()
+        );
+        std::fs::write(
+            config.workspace_root.join("nodoc.docx"),
+            zip_stored(&[("[Content_Types].xml", b"x".as_slice())]),
+        )
+        .expect("fixture");
+        let error = runner.run(&call("nodoc.docx")).expect_err("缺正文件必拒");
+        assert!(
+            error.message().contains("word/document.xml"),
+            "真因必须点名缺件: {}",
+            error.message()
+        );
+        std::fs::write(
+            config.workspace_root.join("nobody.docx"),
+            zip_stored(&[(
+                "word/document.xml",
+                b"<w:document><w:body><w:p>hi</w:p>".as_slice(),
+            )]),
+        )
+        .expect("fixture");
+        let error = runner
+            .run(&call("nobody.docx"))
+            .expect_err("缺 body 尾标必拒");
+        assert!(
+            error.message().contains("w:body"),
+            "真因必须点名缺尾标: {}",
+            error.message()
+        );
+    }
+
+    /// ㉖ DOCX 写面源文上限: 字符/段落上限宁拒不截; XML 非法控制字符拒绝不剔除;
+    /// 空结构拒绝不生成空文档。
+    #[test]
+    fn docx_source_caps_refuse_instead_of_truncating() {
+        let config = write_config("docx-caps");
+        let over_chars = "a".repeat(DOC_OPS_MAX_SOURCE_CHARS + 1);
+        let error = from_markdown(&config, &over_chars, "a.docx").expect_err("字符超上限必拒");
+        assert!(error.message().contains("字符上限"), "{}", error.message());
+        let over_paragraphs = "p\n".repeat(DOC_OPS_MAX_SOURCE_PARAGRAPHS + 1);
+        let error = from_markdown(&config, &over_paragraphs, "b.docx").expect_err("段落超上限必拒");
+        assert!(error.message().contains("段上限"), "{}", error.message());
+        let error =
+            from_markdown(&config, "bad\u{0}char", "c.docx").expect_err("XML 非法控制字符必拒");
+        assert!(error.message().contains("控制字符"), "{}", error.message());
+        let error = from_markdown(&config, "# \n- \n", "d.docx").expect_err("空结构必拒");
+        assert!(error.message().contains("无段落"), "{}", error.message());
+    }
+
+    /// ㉗ DOCX 写面受控面同族: 写总闸 fail-closed + 每次人批 (无自动放行档) +
+    /// 敏感面/越界拒绝即帧。
+    #[tokio::test]
+    async fn docx_write_actions_share_the_controlled_face() {
+        fn dispatch(action: &str) -> GovernanceRequest<'static> {
+            let capability: &'static CapabilityId = Box::leak(Box::new(
+                CapabilityId::new(DOC_OPS_CAPABILITY_ID).expect("capability id"),
+            ));
+            let arguments: &'static Value = Box::leak(Box::new(json!({ "action": action })));
+            GovernanceRequest::new(
+                Action::CapabilityDispatch {
+                    capability,
+                    arguments,
+                },
+                SessionId::new(),
+                TraceId::new(),
+                1,
+            )
+        }
+        let root = workspace("docx-gate");
+        std::fs::write(
+            root.join("id_rsa.docx"),
+            fixture_docx(&[para(None, false, "x")]),
+        )
+        .expect("fixture");
+        let mut append = DocOpsParams {
+            action: Some(ACTION_DOCX_APPEND.to_string()),
+            input: Some("id_rsa.docx".to_string()),
+            text: Some("x".to_string()),
+            output: Some("out.docx".to_string()),
+            ..DocOpsParams::default()
+        };
+        // 写总闸关 = 拒写不拒读 (fail-closed, 与写族同一把闸)。
+        let closed = DocOpsConfig::new(&root);
+        let error = DocOpsRunner::new(closed.clone())
+            .run(&append)
+            .expect_err("写总闸关必拒写");
+        assert!(
+            matches!(error, DocOpsError::WriteGateClosed(_)),
+            "{error:?}"
+        );
+        let error = from_markdown(&closed, "x", "out2.docx").expect_err("写总闸关必拒写");
+        assert!(
+            matches!(error, DocOpsError::WriteGateClosed(_)),
+            "{error:?}"
+        );
+        std::fs::write(
+            root.join("plain.docx"),
+            fixture_docx(&[para(Some("Heading1"), false, "head")]),
+        )
+        .expect("fixture");
+        DocOpsRunner::new(closed)
+            .run(&params(ACTION_DOCX_OUTLINE, "plain.docx"))
+            .expect("读面不受写总闸约束 (fail-closed 只挡写)");
+
+        // 敏感面 / 越界拒绝即帧 (限域 + 敏感面同族)。
+        let open = DocOpsConfig::new(&root).with_write_gate(true);
+        let error = DocOpsRunner::new(open.clone())
+            .run(&append)
+            .expect_err("凭据面必拒");
+        assert!(matches!(error, DocOpsError::SensitiveSurface), "{error:?}");
+        append.input = Some("plain.docx".to_string());
+        append.output = Some("../out.docx".to_string());
+        let error = DocOpsRunner::new(open)
+            .run(&append)
+            .expect_err("越界输出必拒");
+        assert!(
+            matches!(error, DocOpsError::OutsideWorkspace(_)),
+            "{error:?}"
+        );
+
+        // 每次人批 (无自动放行档)。
+        let hook = DocOpsApprovalHook::new();
+        for action in [ACTION_DOCX_FROM_MARKDOWN, ACTION_DOCX_APPEND] {
+            let decision = hook.evaluate(&dispatch(action)).await;
+            assert!(
+                matches!(decision, Decision::RequireApproval { .. }),
+                "{action} 必须每次人批: {decision:?}"
+            );
+        }
+    }
+
+    /// ㉘ ZIP 写端: stored / deflate 两档对称 (写端产物读端解回一字不差;
+    /// stored 档字节原样在场, 防写读同模自证)。
+    #[test]
+    fn zip_write_entries_roundtrips_both_compression_modes() {
+        let entries = vec![
+            ZipEntry {
+                name: "a.txt".to_string(),
+                data: b"hello zip".to_vec(),
+            },
+            ZipEntry {
+                name: "dir/b.txt".to_string(),
+                data: vec![7u8; 4096],
+            },
+        ];
+        for compression in [ZipCompression::Stored, ZipCompression::Deflate] {
+            let bytes = zip_write_entries(&entries, compression).expect("写端可产出");
+            assert!(bytes.starts_with(b"PK\x03\x04"), "本地头签名");
+            if compression == ZipCompression::Stored {
+                assert!(
+                    bytes
+                        .windows(9)
+                        .any(|window| window == b"hello zip".as_slice()),
+                    "stored 档字节原样在场"
+                );
+            }
+            let back = zip_read_entries(&bytes, TEST_ZIP_BUDGET).expect("读端可解回");
+            assert_eq!(back, entries, "{compression:?} 档一字不差");
+        }
     }
 }

@@ -300,7 +300,7 @@ fn default_enabled() -> bool {
 /// 一条关怀台账 (自述「最近关怀」真值来源)。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CareRecord {
-    /// 触发的规则 id。
+    /// 触发的规则 id (提醒/守护告警信号 = 信号稳定身份)。
     pub rule_id: String,
     /// 发起/判定时刻 (epoch 毫秒)。
     pub at_ms: i64,
@@ -308,8 +308,19 @@ pub struct CareRecord {
     pub judge: String,
     /// 是否真的发起 (false = 显式判定说不, 留痕)。
     pub spoke: bool,
-    /// 如实备注 (判定理由 / 内容方向; 不编造)。
+    /// 如实备注 (判定理由 / 内容方向; 不编造; 守护告警破窗发起带「守护告警」标注)。
     pub note: String,
+    /// 来源档 (闭合词表 `rule` / `reminder` / `guard_alert`; 缺省 `rule` = 旧账兼容)。
+    ///
+    /// 频率上限分档的计数口径: `guard_alert` 走守护独立上限, 其余同账
+    /// (同源纪律, 见 [`super::engine`])。
+    #[serde(default = "default_care_record_kind")]
+    pub kind: String,
+}
+
+/// 旧账兼容缺省来源档 = 规则档 (`rule`)。
+fn default_care_record_kind() -> String {
+    "rule".to_string()
 }
 
 impl CareRecord {
@@ -355,6 +366,17 @@ pub struct CareDiscipline {
     /// 作息时刻过点补发窗口 (分钟): 过点后此窗口内仍补发, 超窗当日跳过。
     #[serde(default = "default_catchup_minutes")]
     pub catchup_minutes: u32,
+    /// 守护例外档: 守护告警可破勿扰 (可配; 缺省 `true` = 默认破勿扰, 破窗发起
+    /// 必带「守护告警」标注 + 独立频率上限, 见 [`super::engine`])。
+    #[serde(default = "default_guard_alert_breaks_quiet")]
+    pub guard_alert_breaks_quiet: bool,
+    /// 守护告警独立频率上限: 每 `guard_frequency_window_hours` 小时最多
+    /// `guard_frequency_max` 条 (与普通频率**独立**: 不占普通预算也不被误伤)。
+    #[serde(default = "default_guard_frequency_max")]
+    pub guard_frequency_max: u32,
+    /// 守护告警独立频率窗口 (小时)。
+    #[serde(default = "default_guard_frequency_window_hours")]
+    pub guard_frequency_window_hours: u32,
 }
 
 /// 默认勿扰窗口起 = 23:00 (设计裁定 R1⑭; 与发声面 [`QuietHours`] 默认同源)。
@@ -394,6 +416,22 @@ fn default_catchup_minutes() -> u32 {
     120
 }
 
+/// 默认守护例外档 = 破勿扰 (设计裁定: 安全告警默认可破勿扰, 但必带「守护告警」
+/// 标注 + 独立频率上限; 显式配 `false` 可收起例外档)。
+fn default_guard_alert_breaks_quiet() -> bool {
+    true
+}
+
+/// 默认守护告警独立频率上限 = 每小时 ≤ 3 条 (安全告警要到得了, 也不能刷屏)。
+fn default_guard_frequency_max() -> u32 {
+    3
+}
+
+/// 默认守护告警独立频率窗口 = 1 小时。
+fn default_guard_frequency_window_hours() -> u32 {
+    1
+}
+
 impl Default for CareDiscipline {
     fn default() -> Self {
         Self {
@@ -404,6 +442,9 @@ impl Default for CareDiscipline {
             daily_max: default_daily_max(),
             focus_gap_minutes: default_focus_gap_minutes(),
             catchup_minutes: default_catchup_minutes(),
+            guard_alert_breaks_quiet: default_guard_alert_breaks_quiet(),
+            guard_frequency_max: default_guard_frequency_max(),
+            guard_frequency_window_hours: default_guard_frequency_window_hours(),
         }
     }
 }
@@ -445,12 +486,28 @@ impl CareDiscipline {
                 self.frequency_window_hours
             ));
         }
+        if self.guard_frequency_max == 0 {
+            return Err("guard_frequency_max must be at least 1".to_string());
+        }
+        if self.guard_frequency_window_hours == 0
+            || self.guard_frequency_window_hours > CARE_TRIGGER_HOURS_MAX
+        {
+            return Err(format!(
+                "guard_frequency_window_hours must be 1..={CARE_TRIGGER_HOURS_MAX}, got {}",
+                self.guard_frequency_window_hours
+            ));
+        }
         Ok(())
     }
 
     /// 频率窗口毫秒数。
     pub fn frequency_window_ms(&self) -> i64 {
         i64::from(self.frequency_window_hours) * 3_600_000
+    }
+
+    /// 守护告警独立频率窗口毫秒数 (与普通频率**独立**计量)。
+    pub fn guard_frequency_window_ms(&self) -> i64 {
+        i64::from(self.guard_frequency_window_hours) * 3_600_000
     }
 
     /// 专注抑制毫秒数。
@@ -687,6 +744,18 @@ impl CareStore {
     ) -> Result<CareRulesBody, CareStoreError> {
         let mut body = self.load()?.unwrap_or_default();
         body.fired_at.insert(record.rule_id.clone(), fired_at_ms);
+        body.history.push(record);
+        while body.history.len() > CARE_HISTORY_MAX_COUNT {
+            body.history.remove(0);
+        }
+        self.save(&body)?;
+        Ok(body)
+    }
+
+    /// 记一笔**信号档**关怀台账 (提醒 / 守护告警): 只留台账, **不碰发起留痕**
+    /// (`fired_at` 锚点只归规则档 —— 信号去重走消费位, 见 [`super::reminder`])。
+    pub fn record_signal_care(&self, record: CareRecord) -> Result<CareRulesBody, CareStoreError> {
+        let mut body = self.load()?.unwrap_or_default();
         body.history.push(record);
         while body.history.len() > CARE_HISTORY_MAX_COUNT {
             body.history.remove(0);
@@ -970,6 +1039,7 @@ mod tests {
                         judge: "rule_fallback".to_string(),
                         spoke: true,
                         note: "规则兜底发起".to_string(),
+                        kind: "rule".to_string(),
                     },
                     1_700_000_000_000 + i as i64 * 1_000,
                 )

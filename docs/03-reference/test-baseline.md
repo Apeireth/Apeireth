@@ -52,6 +52,15 @@
 > `apeireth-image-core` 冒烟 **9 例**；四关质检卷宗 `docs/04-internal/license-port/`，日志
 > `artifacts/licport-workspace-test-isolated.log`。上表为外部审计基线口径，对外引用保持上表，
 > 现场以复测类实数为准。
+>
+> **复测注记（2026-10-18，四批大收卷·总装批校验）**：同命令（加 `-j 2`）**全量口径**复测 =
+> **322 套件 / 8509 passed / 0 failed / 52 ignored**，exit 0（**首次全量回填**：许可搬运线第一批
+> 当时的 `--exclude apeireth-tools-canonical` 287 套件口径已收口 —— 换核批把该 crate 接回树内，
+> 全量含其全部目标）。本波四批增量 = ①K 轴 L3/L4 设备审批卡→IM 推送链（+17 例）②K 轴 L2 提醒
+> 闭环 + L5 守护骨架（+22 例）③创作面补齐 xlsx 读入 + DOCX 写面（+15 例）④图像操作换创作内核 +
+> 词表 11→13（+11 例）；同批工程收口（凭据绊线 JWT/Bearer 两处空槽、认知调度器严格 FIFO、体验
+> 旋钮测试减敏、deny 治理对账、只读预设补设备执行面/关怀规则面）不单独计套件。日志
+> `artifacts/wave-1018-final-workspace-test.log`。
 
 ## 2. 口径定义
 

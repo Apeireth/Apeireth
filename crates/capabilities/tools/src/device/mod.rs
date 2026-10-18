@@ -18,18 +18,28 @@
 //! 模块布局 (K1 感知件与 L3/L4 件同目录并行落位, 各建各件、互不覆盖):
 //!
 //! - [`device_control`]: 受控执行骨架 (本批, K 轴 L3/L4)。
+//! - [`approval`]: 设备审批卡→IM 推送链的两本账 (推送账 `device-approval-pushes.jsonl`
+//!   + 按钮决定账 `device-approval-decisions.jsonl`: 推送幂等键 = 动作 plan_id /
+//!   失败留账待重试 / 一计划一决定, 执行语义仍在 [`device_control`] 状态账)。
 //! - [`registry`] / [`adapter`] / [`sense`] / [`audit`] / [`weather`]: K1 在场感知
 //!   骨架件 (K 轴 L1/L2 批, 落位登记) —— 设备表 (`devices.json` StoredDoc 拒开,
 //!   白名单默认零设备) + 适配器插槽图 (mock 已接固定 fixture, 真实协议族留插槽
 //!   不接) + `tool.device_sense` (摄像头类敏感读面: 显式授权 + 审计) +
 //!   `tool.weather` (mock 档如实标注数据源 + 提醒信号只交信号)。
+//! - [`guard_watch`]: 守护骨架件 (K 轴 L5 批) —— 守护规则面 (`guard-rules.json`
+//!   StoredDoc 拒开, 规则 = 设备状态阈值 / 时序条件) + 告警账
+//!   (`guard-alerts.jsonl` append-only) + `tool.guard_watch` (**只看不动**:
+//!   告警 = 关怀候选高优先, 零设备动作); 开关 `APEIRETH_ENABLE_GUARD_WATCH`
+//!   依赖 [`sense::DEVICE_SENSE_ENABLE_ENV`] 双闸齐开, 默认关 fail-closed。
 //!
 //! (K1 落位登记: 白名单注册表在 [`registry`] 内自持, [`device_control`] 可只读
 //! 消费; 感知族总开关 `APEIRETH_ENABLE_DEVICE_SENSE`
 //! ([`sense::DEVICE_SENSE_ENABLE_ENV`]), 默认关 fail-closed。)
 pub mod adapter;
+pub mod approval;
 pub mod audit;
 pub mod device_control;
+pub mod guard_watch;
 pub mod registry;
 pub mod sense;
 pub mod weather;

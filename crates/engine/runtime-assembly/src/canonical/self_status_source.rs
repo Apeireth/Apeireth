@@ -203,11 +203,13 @@ pub fn care_status_probe(
     care_status_probe_with_heartbeat(data_dir, now_ms, last_interaction_ms, None)
 }
 
-/// 自省通道: 双引擎关怀节探测口 + **心跳态** (V3-a 收尾一针)。
+/// 自省通道: 双引擎关怀节探测口 + **心跳态** (V3-a 收尾一针) + 天气提醒计数
+/// (K 轴 L2 提醒侧消费端)。
 ///
 /// 在 [`care_status_probe`] 的规则/关怀真值之上, 把常驻心跳生产者的心跳态
 /// (下次 poll 时刻 / 最近心跳命中) 投进关怀节两列; `heartbeat` 缺位 = 两列
-/// 显式 null (未接线/未运行, 如实, 不冒充)。
+/// 显式 null (未接线/未运行, 如实, 不冒充)。天气提醒计数 =
+/// [`weather_reminder_count`] (与提醒侧消费面同一本信号账)。
 pub fn care_status_probe_with_heartbeat(
     data_dir: PathBuf,
     now_ms: Arc<dyn Fn() -> i64 + Send + Sync>,
@@ -223,6 +225,7 @@ pub fn care_status_probe_with_heartbeat(
         // 与关怀面板读面同源, 不另写格式)。
         let last_care_note = status.last_care_note();
         let heartbeat = heartbeat.as_ref().map(|probe| probe());
+        let weather_reminders = weather_reminder_count(&data_dir)?;
         Ok(CareStatus {
             rules: Some(status.rules),
             next_trigger_at_ms: status.next_trigger_at_ms,
@@ -230,9 +233,23 @@ pub fn care_status_probe_with_heartbeat(
             last_care_note,
             heartbeat_next_poll_at_ms: heartbeat.and_then(|state| state.next_poll_at_ms),
             heartbeat_last_hit_at_ms: heartbeat.and_then(|state| state.last_hit_at_ms),
+            weather_reminders: Some(weather_reminders),
             reason: None,
         })
     })
+}
+
+/// 天气提醒信号计数 (关怀节「天气提醒计数」的真值源): `weather-signals.jsonl`
+/// 逐记录计数 (与提醒侧消费面同一本信号账)。
+///
+/// 缺账 = `0` 条 (合法空态, 如实); 账在但读失败 = `Err(真因)` (拒开, 不编数)。
+pub fn weather_reminder_count(data_dir: &std::path::Path) -> Result<u64, String> {
+    let ledger = apeireth_tools_canonical::device::weather::SignalLedger::under_data_dir(data_dir);
+    if !ledger.path().exists() {
+        return Ok(0);
+    }
+    let scan = ledger.scan()?;
+    Ok(scan.records.len() as u64)
 }
 
 /// 自省通道: 任务节探测口 (V6-a) —— 读持久任务队列的分态计数真值
@@ -319,6 +336,20 @@ pub fn device_presence_probe(
     })
 }
 
+/// 自省通道: 设备受控执行节探测口 (K 轴 L3/L4 受控执行) —— 现探测
+/// `tool.device_control` 工具面**同一台执行核心**的自述节真值 (白名单设备数 /
+/// 控制计数 / 最近动作, 真值如实)。
+///
+/// 探测口绑同一个 [`apeireth_tools_canonical::device::device_control::DeviceControlRunner`]
+/// 实例 (与工具面同账同源: 状态账 + 同一白名单); 只回计数与动作标签,
+/// **不回参数正文** (脱敏口径)。读失败 = `Err(真因)`, 自述节显式 null + 原因,
+/// 不编数 (0 装诚实)。
+pub fn device_control_status_probe(
+    runner: Arc<apeireth_tools_canonical::device::device_control::DeviceControlRunner>,
+) -> StatusProbe<apeireth_tools_canonical::device::device_control::DeviceControlStatus> {
+    Arc::new(move || runner.status())
+}
+
 /// 自省通道: 人格节探测口 (`self_status_persona`, V4-a) —— 读人格层落库面
 /// 自述节真值 (信念/边界/偏好/张力计数 + 最后整编时刻, 只计数不回内容)。
 ///
@@ -376,6 +407,10 @@ pub struct ProductionSelfStatusSource {
     device_presence: Option<StatusProbe<apeireth_tools_canonical::DevicePresenceStatus>>,
     /// 创作节真值探测口 (创作工具面 K3 · 表格操作): 进程内计数 (同一计数器)。
     sheet_ops: Option<StatusProbe<apeireth_tools_canonical::SheetOpsStatus>>,
+    /// 设备受控执行节真值探测口 (K 轴 L3/L4): 控制计数/最近动作 (工具面同一
+    /// 执行核心同一状态账)。
+    device_control:
+        Option<StatusProbe<apeireth_tools_canonical::device::device_control::DeviceControlStatus>>,
 }
 
 impl ProductionSelfStatusSource {
@@ -409,6 +444,7 @@ impl ProductionSelfStatusSource {
             doc_ops: None,
             device_presence: None,
             sheet_ops: None,
+            device_control: None,
         }
     }
 
@@ -571,6 +607,18 @@ impl ProductionSelfStatusSource {
         probe: StatusProbe<apeireth_tools_canonical::SheetOpsStatus>,
     ) -> Self {
         self.sheet_ops = Some(probe);
+        self
+    }
+
+    /// 接入设备受控执行节探测口 (K 轴 L3/L4 受控执行): 控制计数/最近动作,
+    /// 每次自述现探测 (与 `tool.device_control` 工具面同一执行核心同一状态账,
+    /// 只回计数与动作标签不回参数正文)。
+    #[must_use]
+    pub fn with_device_control_probe(
+        mut self,
+        probe: StatusProbe<apeireth_tools_canonical::device::device_control::DeviceControlStatus>,
+    ) -> Self {
+        self.device_control = Some(probe);
         self
     }
 
@@ -843,6 +891,17 @@ impl ProductionSelfStatusSource {
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
 
+        // 设备受控执行节 (K 轴 L3/L4 受控执行): 控制计数/最近动作, 现探测如实
+        // (与 `tool.device_control` 工具面同一执行核心同一状态账, 只回计数与
+        // 动作标签); 探测口缺位 = 显式 null + 原因。
+        let (device_control, device_control_reason) = match &self.device_control {
+            Some(probe) => match probe() {
+                Ok(status) => (Some(status), None),
+                Err(error) => (None, Some(format!("device control probe failed: {error}"))),
+            },
+            None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
+        };
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
             capabilities: self.capabilities.clone(),
@@ -891,6 +950,11 @@ impl ProductionSelfStatusSource {
             // 工具面同一计数器, 同源同账), 替换先前的机械补位占位。
             sheet_ops,
             sheet_ops_reason,
+            // K 轴 L3/L4 受控执行归口接线 (2026-10-18, 设备审批卡→IM 批):
+            // 探测口真接 (与 `tool.device_control` 工具面同一执行核心同一状态账,
+            // 同源同账), 控制计数/最近动作真值自述化。
+            device_control,
+            device_control_reason,
         }
     }
 }
@@ -1009,6 +1073,10 @@ pub fn roster_from_config(
         // `APEIRETH_ENABLE_DEVICE_CONTROL` 默认关 fail-closed), 名册按实际
         // 注册条件取值 (自述设备节与工具面同账)。
         CapabilitySwitch::new("device_control", config.device_control.is_some()),
+        // K 轴 L5 看家骨架 (`tool.guard_watch`, 注册条件 = 守护配置已注入,
+        // 双闸 `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH`),
+        // 名册按实际注册条件取值。
+        CapabilitySwitch::new("guard_watch", config.guard_watch.is_some()),
         // git 写分级 (`tool.git_write`): 主开关按实际注册条件取值 (配置开启
         // 且工作区根已注入才算生效); 「自动放行 L1」子档依赖主开关, 且只放
         // L1 可逆本地写 —— L2 出网永远人批不入子档。

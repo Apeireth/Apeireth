@@ -25,20 +25,14 @@ apeireth-orchestration = { path = "../../foundation/orchestration" }
 async-trait = { workspace = true }
 encoding_rs = "0.8"
 futures = { workspace = true }
-# 创作工具面 W1 (图像操作 `tool.image_ops`): 纯 Rust 图像编解码/处理库 `image`
-# (MIT OR Apache-2.0, 与本仓 Apache-2.0 OR MIT 双协议兼容: 两种协议都允许再
-# 分发与私用, 任选其一、互不传染) —— **本批唯一新引入外部依赖, 报备在此**。
-# 特性面只开格式白名单四种 (png/jpeg/webp/bmp), default-features 关闭 (不带
-# 其余编解码器与并行后端)。选库不自研的理由: 四格式编解码自研 = 造轮子反模式
-# (PNG 的 zlib 流 / JPEG 的 DCT / WebP 的熵编码合计数万行, 自写反而扩大攻击面);
-# 图像操作算术 (亮度/对比度/灰度/水印字模) 仍为本仓自实现 (逐通道确定性算术)。
-# 如实标注: 该库 WebP 编码器只有**无损**档 (不冒充有损)。
-image = { version = "0.25.10", default-features = false, features = [
-    "png",
-    "jpeg",
-    "webp",
-    "bmp",
-] }
+# 创作工具面 W1 (图像操作 `tool.image_ops`) 换创作内核: 编解码与像素几何/滤镜
+# 走引擎级创作内核 `apeireth-image-core` (workspace 内部接口层 + 图像核心家族,
+# 许可与四关质检见 docs/04-internal/license-port/)。换核后产品代码**零外部
+# 图像库直接依赖**: 白名单四格式 (png/jpeg/webp/bmp) 编解码由核面接管 (jpeg
+# 有损质量 90 / webp 无损档, 与换核前口径一致)。如实登记: 核面内部对
+# bmp/gif/tga 等格式的编解码仍委派外部纯 Rust 图像库 (属核面依赖闭包既有
+# 登记, 见 artifacts/licport-dep-closure.txt), 本层不再直接引用。
+apeireth-image-core = { path = "../../engine/image/core" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -53,8 +47,9 @@ url = "2.5.8"
 # 文档操作面 (W2 `tool.doc_ops`) 依赖报备 —— **0 新外部包**: 两者都是 Cargo.lock
 # 既有传递依赖 (png / wayland-scanner 等同源) 的同版本直接化引用, 版本钉死
 # (`=` 精确) 保证锁定文件版本轴零漂移。分工: `flate2` = PDF 内容流 zlib 解压 +
-# ZIP deflate 条目解压; `quick-xml` = DOCX (OOXML) XML 解析。ZIP 容器读端是
-# `doc_ops.rs` 内纯 Rust 最小实现 (只读, 不引 zip 容器包)。
+# ZIP deflate 条目解压/压缩; `quick-xml` = DOCX (OOXML) XML 解析。ZIP 容器读写端
+# 是 `doc_ops.rs` 内纯 Rust 最小实现 (读写同一 stored/deflate 子集对称, 不引 zip
+# 容器包)。
 flate2 = "=1.1.10"
 quick-xml = "=0.41.0"
 
@@ -85,6 +80,14 @@ libc = { version = "0.2.189" }
 
 [dev-dependencies]
 tempfile = "3"
+# 测试专用 (金标准像素断言的 fixture 生成/回读 + 换核前后一致性抽样的换核前
+# 旧实现): 非产品依赖, 特性面仍只开白名单四格式。
+image = { version = "0.25.10", default-features = false, features = [
+    "png",
+    "jpeg",
+    "webp",
+    "bmp",
+] }
 
 [target.'cfg(unix)'.dev-dependencies]
 libc = { version = "0.2.189" }

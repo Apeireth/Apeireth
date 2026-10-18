@@ -6,8 +6,9 @@
 //!
 //! # 操作词表 (闭合)
 //! `resize` / `crop` / `rotate` / `flip` / `format_convert` / `brightness` /
-//! `contrast` / `grayscale` / `blur` / `sharpen` / `watermark_text` —— 十一项
-//! 枚举即全集 ([`OPERATION_VOCABULARY`]), 表外操作名与逐操作多余/缺失参数一律
+//! `contrast` / `grayscale` / `blur` / `sharpen` / `watermark_text` /
+//! `layers_composite` / `psd_read_info` —— 十三项枚举即全集
+//! ([`OPERATION_VOCABULARY`]), 表外操作名与逐操作多余/缺失参数一律
 //! **拒绝即帧** ([`ImageOpsError::ParamRejected`]), 无静默忽略、无半应用。
 //!
 //! # 受控面
@@ -49,13 +50,24 @@
 //! 注册即闸 [`IMAGE_OPS_ENABLE_ENV`] (`APEIRETH_ENABLE_IMAGE_OPS`), 默认关
 //! fail-closed (只认显式 `"1"`)。
 //!
-//! # 外部依赖报备 (本批唯一新引入)
-//! 图像编解码用纯 Rust 图像库 `image` (MIT OR Apache-2.0, 与本仓 Apache-2.0 OR
-//! MIT 双协议兼容, 任选其一、互不传染), 特性面只开 png/jpeg/webp/bmp 四种白名单
-//! 格式 (default-features 关闭, 不引入其余编解码器与并行后端)。选它而自实现
-//! 编解码的理由: 四格式编解码自研 = 造轮子反模式 (PNG 的 zlib 流 / JPEG 的 DCT /
-//! WebP 的熵编码合计数万行, 自写反而扩大攻击面)。webp 输出面如实标注: 该库
-//! 的 WebP 编码器只支持**无损**编码 (无损即无损, 不冒充有损)。
+//! # 创作内核消费面 (换核报备)
+//! 编解码 / 像素几何 / 滤镜走引擎级创作内核 `apeireth-image-core` (workspace
+//! 内部接口层 + 图像核心家族, 许可与四关质检见 docs/04-internal/license-port/):
+//! 解码 = 核面 codecs 限幅解码 (炸弹图上限同款), 编码 = 核面 encode (jpeg 有损
+//! 质量 90 / webp 无损档, 与换核前口径一致; bmp 经核面引擎直取口, 接口层无 bmp
+//! 档), 裁切 = `RasterImage::cropped`, 模糊/锐化 = 引擎滤镜面 `apply_in` 显式
+//! extent (边像素外扩语义; 门面 `blurred/sharpened` 的邻域读透明档会把不透明边
+//! 压半透明, 与工具契约不符), 缩放 = 引擎
+//! 直取口画布内重采样 (边像素外扩语义, 不透明图边缘不衰减; 门面 `resized` 的
+//! 边缘衰减语义与工具契约不符), 旋转/翻转 = 引擎直取口
+//! `engine::algo::transform::warp_surface` (整数单应 + Nearest, 90°/180°/270°/
+//! 镜像是像素置换, 逐像素全等), 图层合成 = 引擎合成数学
+//! `engine::color::blend::composite`, PSD 信息读 = `engine::psd`。
+//! brightness / contrast / grayscale / watermark_text 保留自研 (逐通道确定性
+//! 算术 + 点阵字模, 不在核面)。产品代码零外部图像库直接依赖; 核面内部对
+//! bmp/gif/tga 等格式仍委派外部纯 Rust 图像库 (核面依赖闭包既有登记,
+//! artifacts/licport-dep-closure.txt)。webp 输出面如实标注: 编码只走**无损**档
+//! (无损即无损, 不冒充有损)。
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -63,15 +75,19 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use apeireth_core::kernel::CapabilityId;
+use apeireth_image_core::engine::algo::resample::{resize_surface_in_canvas, Resample};
+use apeireth_image_core::engine::algo::transform::{warp_surface, Homography, Interp};
+use apeireth_image_core::engine::algo::{apply_in, FilterParams};
+use apeireth_image_core::engine::codecs::{
+    self as codecs, ChannelLayout, CodecError, DecodeOptions, EncodeOptions, Format, Limits,
+};
+use apeireth_image_core::engine::color::blend::{composite as blend_composite, BlendMode};
+use apeireth_image_core::engine::geom::Rect;
+use apeireth_image_core::engine::psd::PsdFile;
+use apeireth_image_core::{encode as core_encode, OutputFormat, RasterImage};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
-use image::codecs::bmp::BmpEncoder;
-use image::codecs::jpeg::JpegEncoder;
-use image::codecs::png::PngEncoder;
-use image::codecs::webp::WebPEncoder;
-use image::imageops::{self, FilterType};
-use image::{ImageEncoder, ImageError, ImageFormat, ImageReader, Limits, Rgba, RgbaImage};
 use serde::Deserialize;
 
 use crate::observed_gate::{
@@ -108,11 +124,14 @@ pub const MAX_WATERMARK_TEXT_CHARS: usize = 64;
 /// 水印字模放大倍数上限 (每字模像素 = scale × scale 方块)。
 pub const MAX_WATERMARK_SCALE: u32 = 8;
 
-/// jpeg 编码质量 (该库 jpeg 编码器是整数 DCT 有损编码; 质量固定 90, 不开放旋钮)。
+/// jpeg 编码质量 (核面 jpeg 编码器是整数 DCT 有损编码; 质量固定 90, 不开放旋钮)。
 const JPEG_QUALITY: u8 = 90;
 
+/// `psd_read_info` 汇报的图层名列表上限 (超出带截断标记, 不静默丢)。
+pub const MAX_PSD_LAYER_NAMES: usize = 64;
+
 /// 操作词表 (闭合): 枚举即全集, 顺序 = 自述创作节逐操作计数的行序。
-pub const OPERATION_VOCABULARY: [&str; 11] = [
+pub const OPERATION_VOCABULARY: [&str; 13] = [
     "resize",
     "crop",
     "rotate",
@@ -124,6 +143,8 @@ pub const OPERATION_VOCABULARY: [&str; 11] = [
     "blur",
     "sharpen",
     "watermark_text",
+    "layers_composite",
+    "psd_read_info",
 ];
 
 /// 格式白名单 (闭合): 输入内容嗅探与输出目标格式双侧只认这四种。
@@ -173,24 +194,24 @@ impl ImageFormatKind {
         Self::from_name(extension)
     }
 
-    /// 内容嗅探格式 → 白名单成员; 白名单外回 `None`。
-    pub fn from_image_format(format: ImageFormat) -> Option<Self> {
+    /// 核面内容嗅探格式 → 白名单成员; 白名单外回 `None`。
+    pub fn from_codec_format(format: Format) -> Option<Self> {
         match format {
-            ImageFormat::Png => Some(Self::Png),
-            ImageFormat::Jpeg => Some(Self::Jpeg),
-            ImageFormat::WebP => Some(Self::Webp),
-            ImageFormat::Bmp => Some(Self::Bmp),
+            Format::Png => Some(Self::Png),
+            Format::Jpeg => Some(Self::Jpeg),
+            Format::WebP => Some(Self::Webp),
+            Format::Bmp => Some(Self::Bmp),
             _ => None,
         }
     }
 
-    /// 解码器/编码器格式轴。
-    pub const fn as_image_format(self) -> ImageFormat {
+    /// 解码器/编码器格式轴 (核面)。
+    pub const fn as_codec_format(self) -> Format {
         match self {
-            Self::Png => ImageFormat::Png,
-            Self::Jpeg => ImageFormat::Jpeg,
-            Self::Webp => ImageFormat::WebP,
-            Self::Bmp => ImageFormat::Bmp,
+            Self::Png => Format::Png,
+            Self::Jpeg => Format::Jpeg,
+            Self::Webp => Format::WebP,
+            Self::Bmp => Format::Bmp,
         }
     }
 }
@@ -204,7 +225,7 @@ pub enum FlipAxis {
     Vertical,
 }
 
-/// 闭合操作词表的十一种操作 (每种参数在校验期逐项核对, 拒绝即帧)。
+/// 闭合操作词表的十三种操作 (每种参数在校验期逐项核对, 拒绝即帧)。
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImageOperation {
     /// 缩放到精确目标尺寸 (width / height, 双边 1..=MAX_IMAGE_DIM)。
@@ -275,6 +296,25 @@ pub enum ImageOperation {
         /// 字模放大倍数 (1..=8)。
         scale: u32,
     },
+    /// 图层合成 (核面合成数学: overlay 受控读解码后以 Normal 源叠加贴到工作图
+    /// (x, y), opacity 0.0..=1.0; 整框须落在图内, 框外像素一个不动)。
+    LayersComposite {
+        /// 叠加图路径 (工作区限域, 同一读面: 白名单 + 上限 + 敏感面拒 + 观测)。
+        overlay: String,
+        /// 贴合起点 x。
+        x: u32,
+        /// 贴合起点 y。
+        y: u32,
+        /// 图层不透明度 (0.0 全透明 – 1.0 不透明)。
+        opacity: f64,
+    },
+    /// PSD 信息读 (只读探针: 解析分层文档头与图层清单, 不改像素、不写盘;
+    /// 产出进汇报探针节 [`ImageOpsReport::psd_infos`])。
+    PsdReadInfo {
+        /// 分层文档路径 (工作区限域, 同一读面路径口径; 内容走 PSD 解析而非
+        /// 白名单像素解码)。
+        path: String,
+    },
 }
 
 impl ImageOperation {
@@ -292,6 +332,8 @@ impl ImageOperation {
             Self::Blur { .. } => "blur",
             Self::Sharpen { .. } => "sharpen",
             Self::WatermarkText { .. } => "watermark_text",
+            Self::LayersComposite { .. } => "layers_composite",
+            Self::PsdReadInfo { .. } => "psd_read_info",
         }
     }
 
@@ -438,6 +480,40 @@ impl ImageOperation {
                     scale: scale as u32,
                 })
             }
+            "layers_composite" => {
+                spec.require_exact("layers_composite", &["overlay", "x", "y", "opacity"])?;
+                let overlay = spec.text("layers_composite", "overlay")?;
+                if overlay.trim().is_empty() {
+                    return reject(
+                        "layers_composite: overlay 不得为空 (工作区相对拼写); 空路径拒绝"
+                            .to_string(),
+                    );
+                }
+                let x = spec.int("layers_composite", "x")?;
+                let y = spec.int("layers_composite", "y")?;
+                let opacity = spec.float("layers_composite", "opacity")?;
+                if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+                    return reject(format!(
+                        "layers_composite: opacity 必须是 0.0..=1.0 的有限数, 得到 {opacity}"
+                    ));
+                }
+                Ok(Self::LayersComposite {
+                    overlay,
+                    x: coord("layers_composite", "x", x)?,
+                    y: coord("layers_composite", "y", y)?,
+                    opacity,
+                })
+            }
+            "psd_read_info" => {
+                spec.require_exact("psd_read_info", &["path"])?;
+                let path = spec.text("psd_read_info", "path")?;
+                if path.trim().is_empty() {
+                    return reject(
+                        "psd_read_info: path 不得为空 (工作区相对拼写); 空路径拒绝".to_string(),
+                    );
+                }
+                Ok(Self::PsdReadInfo { path })
+            }
             other => reject(format!(
                 "操作名 {other:?} 不在闭合词表 {:?} (表外操作拒绝即帧)",
                 OPERATION_VOCABULARY
@@ -512,6 +588,12 @@ pub struct OperationSpec {
     pub text: Option<String>,
     /// watermark_text 放大倍数。
     pub scale: Option<i64>,
+    /// layers_composite 叠加图路径。
+    pub overlay: Option<String>,
+    /// layers_composite 图层不透明度。
+    pub opacity: Option<f64>,
+    /// psd_read_info 分层文档路径。
+    pub path: Option<String>,
 }
 
 impl OperationSpec {
@@ -556,6 +638,15 @@ impl OperationSpec {
         }
         if self.scale.is_some() {
             present.push("scale");
+        }
+        if self.overlay.is_some() {
+            present.push("overlay");
+        }
+        if self.opacity.is_some() {
+            present.push("opacity");
+        }
+        if self.path.is_some() {
+            present.push("path");
         }
         present
     }
@@ -605,6 +696,7 @@ impl OperationSpec {
         match field {
             "factor" => self.factor,
             "sigma" => self.sigma,
+            "opacity" => self.opacity,
             _ => None,
         }
         .ok_or_else(|| ImageOpsError::ParamRejected(format!("{op}: {field} 缺失")))
@@ -615,6 +707,8 @@ impl OperationSpec {
             "axis" => &self.axis,
             "format" => &self.format,
             "text" => &self.text,
+            "overlay" => &self.overlay,
+            "path" => &self.path,
             _ => &None,
         }
         .clone()
@@ -713,6 +807,49 @@ pub struct ImageOpsParams {
     pub operations: Vec<OperationSpec>,
 }
 
+/// `psd_read_info` 探针产出 (只读信息面; 路径只回工作区相对拼写 —— 脱敏口径)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PsdInfoReport {
+    /// 分层文档的相对拼写。
+    pub path: String,
+    /// 文档宽 (像素, 头部宣称值)。
+    pub width: u32,
+    /// 文档高 (像素, 头部宣称值)。
+    pub height: u32,
+    /// 位深 (每通道位数)。
+    pub depth: u16,
+    /// 通道数。
+    pub channels: u16,
+    /// 色彩模式词面 (核面文档头实值)。
+    pub color_mode: String,
+    /// 文档版本词面 (`psd` / `psb`)。
+    pub version: String,
+    /// 图层数 (图层记录条数)。
+    pub layer_count: usize,
+    /// 图层名 (顺序 = 图层记录顺序, 上限 [`MAX_PSD_LAYER_NAMES`])。
+    pub layer_names: Vec<String>,
+    /// 图层名列表是否被截断 (截断不静默: 比对 `layer_count` 亦可知)。
+    pub layer_names_capped: bool,
+}
+
+impl PsdInfoReport {
+    /// 投影成结构化 JSON (字段合同的唯一实现)。
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "path": self.path,
+            "width": self.width,
+            "height": self.height,
+            "depth": self.depth,
+            "channels": self.channels,
+            "color_mode": self.color_mode,
+            "version": self.version,
+            "layer_count": self.layer_count,
+            "layer_names": self.layer_names,
+            "layer_names_capped": self.layer_names_capped,
+        })
+    }
+}
+
 /// 一次成功调用的产出汇报 (路径只回工作区相对拼写 —— 脱敏口径)。
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImageOpsReport {
@@ -734,6 +871,8 @@ pub struct ImageOpsReport {
     pub overwrote: bool,
     /// 落盘字节数。
     pub bytes_written: u64,
+    /// `psd_read_info` 探针产出 (管道内出现顺序; 无探针 = 空表)。
+    pub psd_infos: Vec<PsdInfoReport>,
 }
 
 impl ImageOpsReport {
@@ -749,6 +888,7 @@ impl ImageOpsReport {
             "operations": self.operations,
             "overwrote": self.overwrote,
             "bytes_written": self.bytes_written,
+            "psd_infos": self.psd_infos.iter().map(PsdInfoReport::to_json).collect::<Vec<_>>(),
         })
     }
 }
@@ -1022,11 +1162,8 @@ impl ImageOpsTool {
         redacted
     }
 
-    /// 读面: 工作区限域读 + 观测记录 (观测门禁同款) + 大小上限 + 内容嗅探白名单。
-    fn read_input(
-        &self,
-        requested: &str,
-    ) -> Result<(PathBuf, Vec<u8>, ImageFormatKind), ImageOpsError> {
+    /// 读面公共底座: 工作区限域读 + 观测记录 (观测门禁同款) + 大小上限 (按实读判定)。
+    fn read_workspace_bytes(&self, requested: &str) -> Result<(PathBuf, Vec<u8>), ImageOpsError> {
         let request_path = self.observed_spelling(requested);
         let canonical = match self.resolve_contained(requested, true) {
             Ok(path) => path,
@@ -1069,12 +1206,21 @@ impl ImageOpsTool {
             self.gate.observe_present(&canonical, version);
             self.gate.observe_present(&request_path, version);
         }
-        let guessed = image::guess_format(&bytes).map_err(|_| {
+        Ok((canonical, bytes))
+    }
+
+    /// 像素输入读面: 受控读 (见 [`Self::read_workspace_bytes`]) + 内容嗅探白名单。
+    fn read_input(
+        &self,
+        requested: &str,
+    ) -> Result<(PathBuf, Vec<u8>, ImageFormatKind), ImageOpsError> {
+        let (canonical, bytes) = self.read_workspace_bytes(requested)?;
+        let guessed = codecs::detect(&bytes).ok_or_else(|| {
             ImageOpsError::FormatRejected(
                 "input format cannot be sniffed from content; 输入内容不是可识别图像".to_string(),
             )
         })?;
-        let format = ImageFormatKind::from_image_format(guessed).ok_or_else(|| {
+        let format = ImageFormatKind::from_codec_format(guessed).ok_or_else(|| {
             ImageOpsError::FormatRejected(format!(
                 "input format {:?} is outside the whitelist {:?}; 白名单外格式拒绝",
                 guessed, SUPPORTED_FORMATS
@@ -1083,20 +1229,22 @@ impl ImageOpsTool {
         Ok((canonical, bytes, format))
     }
 
-    /// 解码: 解码器 Limits (维度 + 分配上限) + 解码后像素复核 (防炸弹图三层)。
-    fn decode(&self, bytes: &[u8]) -> Result<RgbaImage, ImageOpsError> {
-        let mut reader = ImageReader::new(std::io::Cursor::new(bytes))
-            .with_guessed_format()
-            .map_err(|error| {
-                ImageOpsError::DecodeFailed(format!("input format sniff failed ({})", error.kind()))
-            })?;
-        let mut limits = Limits::default();
-        limits.max_image_width = Some(MAX_IMAGE_DIM);
-        limits.max_image_height = Some(MAX_IMAGE_DIM);
-        limits.max_alloc = Some(MAX_IMAGE_PIXELS.saturating_mul(4));
-        reader.limits(limits);
-        let decoded = reader.decode().map_err(|error| match error {
-            ImageError::Limits(detail) => ImageOpsError::LimitExceeded(format!(
+    /// 解码: 核面限幅解码 (解码器 Limits = 维度 + 像素 + 分配上限, 防炸弹图三层)
+    /// + 解码后像素复核, 归一 RGBA8 (与换核前 `to_rgba8` 同口径)。
+    fn decode(&self, bytes: &[u8]) -> Result<RasterImage, ImageOpsError> {
+        let options = DecodeOptions {
+            limits: Limits {
+                max_width: MAX_IMAGE_DIM,
+                max_height: MAX_IMAGE_DIM,
+                max_pixels: MAX_IMAGE_PIXELS,
+                max_alloc: MAX_IMAGE_PIXELS.saturating_mul(4),
+            },
+            // 换核前解码语义 = 按存储像素 (不做 EXIF 转正); 核面默认转正, 显式
+            // 关掉保工具面行为零变化。
+            keep_orientation: true,
+        };
+        let decoded = codecs::decode_with(bytes, &options).map_err(|error| match error {
+            CodecError::LimitExceeded(detail) => ImageOpsError::LimitExceeded(format!(
                 "decoder limit refused the image ({detail}); 解码期上限拒绝 (防炸弹图)"
             )),
             other => ImageOpsError::DecodeFailed(format!("image decode failed ({other})")),
@@ -1108,7 +1256,8 @@ impl ImageOpsTool {
                 "decoded image has {pixels} pixels > {MAX_IMAGE_PIXELS} cap; 像素超上限 (防炸弹图)"
             )));
         }
-        Ok(decoded.to_rgba8())
+        RasterImage::from_rgba8(width, height, decoded.to_rgba8())
+            .map_err(|error| ImageOpsError::DecodeFailed(format!("image decode failed ({error})")))
     }
 
     /// 输出格式裁定: `format_convert` 最后一个显式指定 > 输出扩展名 > 输入格式;
@@ -1131,8 +1280,8 @@ impl ImageOpsTool {
             .and_then(|ext| ext.to_str())
             .map(str::to_ascii_lowercase);
         if let Some(extension) = &extension {
-            match ImageFormat::from_path(Path::new(output)) {
-                Ok(path_format) => match ImageFormatKind::from_image_format(path_format) {
+            match codecs::from_extension(extension) {
+                Some(path_format) => match ImageFormatKind::from_codec_format(path_format) {
                     Some(extension_format) => {
                         let target = explicit.unwrap_or(extension_format);
                         if target != extension_format {
@@ -1153,7 +1302,7 @@ impl ImageOpsTool {
                         )))
                     }
                 },
-                Err(_) => {
+                None => {
                     // 未知扩展名 (非图像后缀): 目标格式由显式指定或输入格式决定。
                 }
             }
@@ -1162,45 +1311,52 @@ impl ImageOpsTool {
     }
 
     /// 编码整幅在内存完成 (编码失败 = 拒绝即帧, 不落盘不留半成品)。
-    fn encode(&self, image: &RgbaImage, format: ImageFormatKind) -> Result<Vec<u8>, ImageOpsError> {
+    /// 契约有旋钮处显式钉值 (jpeg 质量 90) 走核面引擎直取口; 无旋钮处走接口层
+    /// 门面 (png / webp 无损档)。bmp 门面无档位, 走引擎直取口。
+    fn encode(
+        &self,
+        image: &RasterImage,
+        format: ImageFormatKind,
+    ) -> Result<Vec<u8>, ImageOpsError> {
         let (width, height) = image.dimensions();
-        let mut out = Vec::new();
         let result = match format {
-            ImageFormatKind::Png => PngEncoder::new(&mut out)
-                .write_image(
-                    image.as_raw(),
-                    width,
-                    height,
-                    image::ExtendedColorType::Rgba8,
-                )
-                .map_err(|error| error.to_string()),
-            ImageFormatKind::Jpeg => {
-                let rgb = composite_on_white(image);
-                JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY)
-                    .write_image(&rgb, width, height, image::ExtendedColorType::Rgb8)
-                    .map_err(|error| error.to_string())
+            ImageFormatKind::Png => {
+                core_encode(image, OutputFormat::Png).map_err(|error| error.to_string())
             }
-            ImageFormatKind::Webp => WebPEncoder::new_lossless(&mut out)
-                .write_image(
-                    image.as_raw(),
-                    width,
-                    height,
-                    image::ExtendedColorType::Rgba8,
-                )
-                .map_err(|error| error.to_string()),
-            ImageFormatKind::Bmp => BmpEncoder::new(&mut out)
-                .write_image(
-                    image.as_raw(),
-                    width,
-                    height,
-                    image::ExtendedColorType::Rgba8,
-                )
-                .map_err(|error| error.to_string()),
+            ImageFormatKind::Webp => {
+                core_encode(image, OutputFormat::WebP).map_err(|error| error.to_string())
+            }
+            ImageFormatKind::Jpeg => {
+                // jpeg 无 alpha: 白底合成 (透明像素变白, 不留黑底) 后交核面有损编码。
+                let rgb = composite_on_white(image);
+                match codecs::Image::from_u8(width, height, ChannelLayout::Rgb, rgb) {
+                    Ok(flat) => codecs::encode(
+                        &flat,
+                        Format::Jpeg,
+                        &EncodeOptions {
+                            jpeg_quality: JPEG_QUALITY,
+                            // 4:4:4 色度抽样 = 换核前编码同档 (无色度抽样),
+                            // 显式钉住; 核面默认档是 4:2:0, 不沿用。
+                            jpeg_chroma_subsampling: false,
+                            ..EncodeOptions::default()
+                        },
+                    )
+                    .map_err(|error| error.to_string()),
+                    Err(error) => Err(error.to_string()),
+                }
+            }
+            ImageFormatKind::Bmp => {
+                let raw = image.data().to_vec();
+                match codecs::Image::from_u8(width, height, ChannelLayout::Rgba, raw) {
+                    Ok(flat) => codecs::encode(&flat, Format::Bmp, &EncodeOptions::default())
+                        .map_err(|error| error.to_string()),
+                    Err(error) => Err(error.to_string()),
+                }
+            }
         };
         result.map_err(|detail| {
             ImageOpsError::EncodeFailed(format!("encode to {} failed ({detail})", format.name()))
-        })?;
-        Ok(out)
+        })
     }
 
     /// 一次调用的完整执行面: 校验 → 读 → 解码 → 管道 → 编码 → 受控原子写。
@@ -1235,8 +1391,9 @@ impl ImageOpsTool {
         let input_size = image.dimensions();
 
         // ④ 操作管道: 顺序应用, 中途拒绝 = 全无产出 (目标原状)。
+        let mut psd_infos: Vec<PsdInfoReport> = Vec::new();
         for operation in &operations {
-            apply_operation(&mut image, operation)?;
+            self.apply_operation(&mut image, operation, &mut psd_infos)?;
         }
 
         // ⑤ 输出格式裁定 (显式 > 扩展名 > 输入)。
@@ -1289,6 +1446,7 @@ impl ImageOpsTool {
                 .collect(),
             overwrote,
             bytes_written: encoded.len() as u64,
+            psd_infos,
         })
     }
 
@@ -1317,7 +1475,7 @@ impl ToolCapability for ImageOpsTool {
                 },
                 "operations": {
                     "type": "array",
-                    "description": "Operation pipeline applied in order (max 32 steps). Closed vocabulary: resize, crop, rotate, flip, format_convert, brightness, contrast, grayscale, blur, sharpen, watermark_text",
+                    "description": "Operation pipeline applied in order (max 32 steps). Closed vocabulary: resize, crop, rotate, flip, format_convert, brightness, contrast, grayscale, blur, sharpen, watermark_text, layers_composite, psd_read_info",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -1326,7 +1484,7 @@ impl ToolCapability for ImageOpsTool {
                                 "enum": [
                                     "resize", "crop", "rotate", "flip", "format_convert",
                                     "brightness", "contrast", "grayscale", "blur", "sharpen",
-                                    "watermark_text"
+                                    "watermark_text", "layers_composite", "psd_read_info"
                                 ]
                             },
                             "width": { "type": "integer" },
@@ -1341,7 +1499,10 @@ impl ToolCapability for ImageOpsTool {
                             "sigma": { "type": "number", "exclusiveMinimum": 0.0, "maximum": 32.0 },
                             "threshold": { "type": "integer", "minimum": 0, "maximum": 255 },
                             "text": { "type": "string", "minLength": 1, "maxLength": 64 },
-                            "scale": { "type": "integer", "minimum": 1, "maximum": 8 }
+                            "scale": { "type": "integer", "minimum": 1, "maximum": 8 },
+                            "overlay": { "type": "string", "minLength": 1 },
+                            "opacity": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                            "path": { "type": "string", "minLength": 1 }
                         },
                         "required": ["op"],
                         "additionalProperties": false
@@ -1358,11 +1519,13 @@ impl ToolCapability for ImageOpsTool {
             .with_description(
                 "Controlled image editing for the agent: read one workspace image, apply an \
                  ordered operation pipeline (resize, crop, rotate, flip, format_convert, \
-                 brightness, contrast, grayscale, blur, sharpen, watermark_text), and write the \
-                 result back into the workspace as png/jpeg/webp/bmp. Everything is \
-                 workspace-scoped, credential/key paths are refused, oversized or bomb-like \
-                 images are rejected, and the write is atomic (temp file + rename) with \
-                 read-before-overwrite observation gating.",
+                 brightness, contrast, grayscale, blur, sharpen, watermark_text, \
+                 layers_composite, psd_read_info), and write the result back into the workspace \
+                 as png/jpeg/webp/bmp. Everything is workspace-scoped, credential/key paths are \
+                 refused, oversized or bomb-like images are rejected, and the write is atomic \
+                 (temp file + rename) with read-before-overwrite observation gating. \
+                 layers_composite blends a second workspace image at (x, y) with opacity; \
+                 psd_read_info is a read-only probe reported in psd_infos.",
             )
             .with_parameters(params)
     }
@@ -1392,89 +1555,336 @@ impl ToolCapability for ImageOpsTool {
     }
 }
 
-/// 逐操作像素应用 (顺序语义: 前一步的产物是后一步的输入; 几何类越界拒绝即帧)。
-fn apply_operation(image: &mut RgbaImage, operation: &ImageOperation) -> Result<(), ImageOpsError> {
-    match operation {
-        ImageOperation::Resize { width, height } => {
-            *image = imageops::resize(image, *width, *height, FilterType::Triangle);
-        }
-        ImageOperation::Crop {
-            x,
-            y,
-            width,
-            height,
-        } => {
-            let (image_width, image_height) = image.dimensions();
-            if *x >= image_width
-                || *y >= image_height
-                || x.saturating_add(*width) > image_width
-                || y.saturating_add(*height) > image_height
-            {
-                return Err(ImageOpsError::ParamRejected(format!(
-                    "crop: 矩形 ({}x{} @ {}, {}) 超出图幅 {}x{}; 裁剪越界拒绝",
-                    width, height, x, y, image_width, image_height
-                )));
+/// RGBA8 缓冲重建 (长度恒等于 w×h×4, 调用方不变量; 破约 = 内部缺陷, 响亮暴露
+/// 而非谎帧 —— 与 [`ImageOpsTool::new`] 的 capability id 同一处置)。
+fn rebuild_rgba8(width: u32, height: u32, pixels: Vec<u8>) -> RasterImage {
+    RasterImage::from_rgba8(width, height, pixels).expect("rgba8 buffer length matches dimensions")
+}
+
+/// 像素置换类几何 (rotate/flip) 走引擎直取口: 整数单应 + Nearest 采样 = 纯像素
+/// 重排, 逐像素全等 (90°/180°/270°/镜像不做插值, 不引入新像素值)。核面 warp
+/// 输出四周各留 1px 滤波余量, 内容恰在 (0, 0, dst_width, dst_height)。
+fn warp_permute(
+    image: &RasterImage,
+    matrix: [f64; 9],
+    dst_width: u32,
+    dst_height: u32,
+) -> Result<RasterImage, ImageOpsError> {
+    let (width, height) = image.dimensions();
+    let surface = image.to_surface().map_err(|error| {
+        ImageOpsError::LimitExceeded(format!("几何变换: 像素面构建失败 ({error})"))
+    })?;
+    let warped = warp_surface(
+        &surface,
+        Rect::from_xywh(0, 0, width, height),
+        &Homography(matrix),
+        Interp::Nearest,
+    )
+    .map_err(|error| {
+        ImageOpsError::LimitExceeded(format!(
+            "几何变换: 核面重排失败 ({error:?}); 变换分配上限拒绝"
+        ))
+    })?;
+    RasterImage::from_surface(&warped, Rect::from_xywh(0, 0, dst_width, dst_height)).map_err(
+        |error| ImageOpsError::LimitExceeded(format!("几何变换: 像素面取回失败 ({error})")),
+    )
+}
+
+/// 图层合成: overlay 以 Normal 源叠加贴到工作图 `(x, y)`, opacity 0.0..=1.0;
+/// 整框须落在图内 (越界拒绝即帧), 框外像素一个不动。合成数学 = 核面
+/// `engine::color::blend::composite` (W3C/PDF 通用公式, 直通 alpha), 量化回 u8
+/// 用核面同款四舍五入 (`clamp 后 ×255 + 0.5`)。
+fn composite_layer(
+    image: &mut RasterImage,
+    overlay: &RasterImage,
+    x: u32,
+    y: u32,
+    opacity: f64,
+) -> Result<(), ImageOpsError> {
+    let (image_width, image_height) = image.dimensions();
+    let (overlay_width, overlay_height) = overlay.dimensions();
+    if x.saturating_add(overlay_width) > image_width
+        || y.saturating_add(overlay_height) > image_height
+    {
+        return Err(ImageOpsError::ParamRejected(format!(
+            "layers_composite: 图层 {}x{} @ {}, {} 超出图幅 {}x{}; 图层越界拒绝",
+            overlay_width, overlay_height, x, y, image_width, image_height
+        )));
+    }
+    let mut pixels = image.data().to_vec();
+    let overlay_pixels = overlay.data();
+    let opacity = opacity as f32;
+    for row in 0..overlay_height {
+        for column in 0..overlay_width {
+            let source = &overlay_pixels[((row * overlay_width + column) * 4) as usize..][..4];
+            let base = (((y + row) * image_width + x + column) * 4) as usize;
+            let backdrop = [
+                f32::from(pixels[base]) / 255.0,
+                f32::from(pixels[base + 1]) / 255.0,
+                f32::from(pixels[base + 2]) / 255.0,
+                f32::from(pixels[base + 3]) / 255.0,
+            ];
+            let over = [
+                f32::from(source[0]) / 255.0,
+                f32::from(source[1]) / 255.0,
+                f32::from(source[2]) / 255.0,
+                f32::from(source[3]) / 255.0,
+            ];
+            let blended = blend_composite(BlendMode::Normal, backdrop, over, opacity);
+            for (channel, value) in blended.iter().enumerate() {
+                pixels[base + channel] = (value.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
             }
-            *image = imageops::crop_imm(image, *x, *y, *width, *height).to_image();
-        }
-        ImageOperation::Rotate { angle_deg } => {
-            *image = match angle_deg {
-                90 => imageops::rotate90(image),
-                180 => imageops::rotate180(image),
-                _ => imageops::rotate270(image),
-            };
-        }
-        ImageOperation::Flip { axis } => {
-            *image = match axis {
-                FlipAxis::Horizontal => imageops::flip_horizontal(image),
-                FlipAxis::Vertical => imageops::flip_vertical(image),
-            };
-        }
-        ImageOperation::FormatConvert { .. } => {
-            // 只定目标编码格式, 不动像素 (编码在收尾一次完成)。
-        }
-        ImageOperation::Brightness { amount } => {
-            let amount = *amount;
-            for pixel in image.pixels_mut() {
-                let [r, g, b, a] = pixel.0;
-                pixel.0 = [
-                    clamp_channel(r, amount),
-                    clamp_channel(g, amount),
-                    clamp_channel(b, amount),
-                    a,
-                ];
-            }
-        }
-        ImageOperation::Contrast { factor } => {
-            let factor = *factor;
-            for pixel in image.pixels_mut() {
-                let [r, g, b, a] = pixel.0;
-                pixel.0 = [
-                    stretch_channel(r, factor),
-                    stretch_channel(g, factor),
-                    stretch_channel(b, factor),
-                    a,
-                ];
-            }
-        }
-        ImageOperation::Grayscale => {
-            for pixel in image.pixels_mut() {
-                let [r, g, b, a] = pixel.0;
-                let luma = luma(r, g, b);
-                pixel.0 = [luma, luma, luma, a];
-            }
-        }
-        ImageOperation::Blur { sigma } => {
-            *image = imageops::blur(image, *sigma);
-        }
-        ImageOperation::Sharpen { sigma, threshold } => {
-            *image = imageops::unsharpen(image, *sigma, *threshold);
-        }
-        ImageOperation::WatermarkText { text, x, y, scale } => {
-            draw_watermark(image, text, *x, *y, *scale)?;
         }
     }
+    *image = rebuild_rgba8(image_width, image_height, pixels);
     Ok(())
+}
+
+impl ImageOpsTool {
+    /// 逐操作像素应用 (顺序语义: 前一步的产物是后一步的输入; 几何类越界拒绝即帧)。
+    /// 换核分工: resize/crop/blur/sharpen = `RasterImage` 核面方法; rotate/flip =
+    /// 引擎直取口像素置换 ([`warp_permute`]); layers_composite = 核面合成数学
+    /// ([`composite_layer`]); psd_read_info = 核面分层文档解析 (只读探针, 不改
+    /// 像素); brightness/contrast/grayscale/watermark_text 保留自研逐通道算术。
+    fn apply_operation(
+        &self,
+        image: &mut RasterImage,
+        operation: &ImageOperation,
+        psd_infos: &mut Vec<PsdInfoReport>,
+    ) -> Result<(), ImageOpsError> {
+        match operation {
+            ImageOperation::Resize { width, height } => {
+                // 缩放走引擎直取口的**画布内**重采样 (边像素外扩语义: 不透明图
+                // 缩放后边缘仍不透明 —— 金标准①纯色逐像素不漂移)。接口层门面
+                // `resized` 是 `resize_surface` (边缘向默认像素衰减语义), 会把
+                // 不透明边压成半透明, 与工具契约不符, 读码定直取。
+                let (source_width, source_height) = image.dimensions();
+                let surface = image.to_surface().map_err(|error| {
+                    ImageOpsError::LimitExceeded(format!("resize: 像素面构建失败 ({error})"))
+                })?;
+                let scaled = resize_surface_in_canvas(
+                    &surface,
+                    f64::from(*width) / f64::from(source_width),
+                    f64::from(*height) / f64::from(source_height),
+                    Resample::Bilinear,
+                    Rect::from_xywh(0, 0, source_width, source_height),
+                );
+                *image = RasterImage::from_surface(&scaled, Rect::from_xywh(0, 0, *width, *height))
+                    .map_err(|error| {
+                        ImageOpsError::LimitExceeded(format!(
+                            "resize: 核面重采样失败 ({error}); 重采样分配上限拒绝"
+                        ))
+                    })?;
+            }
+            ImageOperation::Crop {
+                x,
+                y,
+                width,
+                height,
+            } => {
+                let (image_width, image_height) = image.dimensions();
+                if *x >= image_width
+                    || *y >= image_height
+                    || x.saturating_add(*width) > image_width
+                    || y.saturating_add(*height) > image_height
+                {
+                    return Err(ImageOpsError::ParamRejected(format!(
+                        "crop: 矩形 ({}x{} @ {}, {}) 超出图幅 {}x{}; 裁剪越界拒绝",
+                        width, height, x, y, image_width, image_height
+                    )));
+                }
+                *image = image.cropped(*x, *y, *width, *height).map_err(|error| {
+                    ImageOpsError::LimitExceeded(format!(
+                        "crop: 核面裁切失败 ({error}); 裁切分配上限拒绝"
+                    ))
+                })?;
+            }
+            ImageOperation::Rotate { angle_deg } => {
+                let (width, height) = image.dimensions();
+                let (matrix, dst_width, dst_height) = match angle_deg {
+                    // 顺时针 90°: dst(x, y) = src(y, H-1-x); 逆时针 90° = 270°。
+                    90 => (
+                        [0.0, -1.0, f64::from(height), 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                        height,
+                        width,
+                    ),
+                    180 => (
+                        [
+                            -1.0,
+                            0.0,
+                            f64::from(width),
+                            0.0,
+                            -1.0,
+                            f64::from(height),
+                            0.0,
+                            0.0,
+                            1.0,
+                        ],
+                        width,
+                        height,
+                    ),
+                    _ => (
+                        [0.0, 1.0, 0.0, -1.0, 0.0, f64::from(width), 0.0, 0.0, 1.0],
+                        height,
+                        width,
+                    ),
+                };
+                *image = warp_permute(image, matrix, dst_width, dst_height)?;
+            }
+            ImageOperation::Flip { axis } => {
+                let (width, height) = image.dimensions();
+                let matrix = match axis {
+                    FlipAxis::Horizontal => {
+                        [-1.0, 0.0, f64::from(width), 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+                    }
+                    FlipAxis::Vertical => {
+                        [1.0, 0.0, 0.0, 0.0, -1.0, f64::from(height), 0.0, 0.0, 1.0]
+                    }
+                };
+                *image = warp_permute(image, matrix, width, height)?;
+            }
+            ImageOperation::FormatConvert { .. } => {
+                // 只定目标编码格式, 不动像素 (编码在收尾一次完成)。
+            }
+            ImageOperation::Brightness { amount } => {
+                let amount = *amount;
+                let (width, height) = image.dimensions();
+                let mut pixels = image.data().to_vec();
+                for pixel in pixels.chunks_exact_mut(4) {
+                    pixel[0] = clamp_channel(pixel[0], amount);
+                    pixel[1] = clamp_channel(pixel[1], amount);
+                    pixel[2] = clamp_channel(pixel[2], amount);
+                }
+                *image = rebuild_rgba8(width, height, pixels);
+            }
+            ImageOperation::Contrast { factor } => {
+                let factor = *factor;
+                let (width, height) = image.dimensions();
+                let mut pixels = image.data().to_vec();
+                for pixel in pixels.chunks_exact_mut(4) {
+                    pixel[0] = stretch_channel(pixel[0], factor);
+                    pixel[1] = stretch_channel(pixel[1], factor);
+                    pixel[2] = stretch_channel(pixel[2], factor);
+                }
+                *image = rebuild_rgba8(width, height, pixels);
+            }
+            ImageOperation::Grayscale => {
+                let (width, height) = image.dimensions();
+                let mut pixels = image.data().to_vec();
+                for pixel in pixels.chunks_exact_mut(4) {
+                    let value = luma(pixel[0], pixel[1], pixel[2]);
+                    pixel[0] = value;
+                    pixel[1] = value;
+                    pixel[2] = value;
+                }
+                *image = rebuild_rgba8(width, height, pixels);
+            }
+            ImageOperation::Blur { sigma } => {
+                // 高斯模糊走引擎滤镜面 `apply_in` 显式 extent: 邻域滤镜**边像素
+                // 外扩** (不透明图模糊后边缘仍不透明, 与换核前同语义)。接口层
+                // 门面 `blurred` 是无 extent 档 (邻域读透明), 会把不透明边压
+                // 半透明 (实测 alpha 偏差逾百), 与工具契约不符, 读码定直取。
+                let (width, height) = image.dimensions();
+                let region = Rect::from_xywh(0, 0, width, height);
+                let surface = image.to_surface().map_err(|error| {
+                    ImageOpsError::LimitExceeded(format!("blur: 像素面构建失败 ({error})"))
+                })?;
+                let blurred = apply_in(
+                    &surface,
+                    &FilterParams::GaussianBlur { radius: *sigma },
+                    region,
+                    region,
+                    None,
+                    region,
+                );
+                *image = RasterImage::from_surface(&blurred, region).map_err(|error| {
+                    ImageOpsError::LimitExceeded(format!(
+                        "blur: 核面高斯模糊失败 ({error}); 滤镜分配上限拒绝"
+                    ))
+                })?;
+            }
+            ImageOperation::Sharpen { sigma, threshold } => {
+                // 反锐化掩蔽: amount 固定 100% (与换核前 unsharpen 同语义),
+                // threshold 层级轴不变; 同 blur 走 `apply_in` 显式 extent。
+                let (width, height) = image.dimensions();
+                let region = Rect::from_xywh(0, 0, width, height);
+                let surface = image.to_surface().map_err(|error| {
+                    ImageOpsError::LimitExceeded(format!("sharpen: 像素面构建失败 ({error})"))
+                })?;
+                let sharpened = apply_in(
+                    &surface,
+                    &FilterParams::UnsharpMask {
+                        amount: 100.0,
+                        radius: *sigma,
+                        threshold: *threshold as f32,
+                    },
+                    region,
+                    region,
+                    None,
+                    region,
+                );
+                *image = RasterImage::from_surface(&sharpened, region).map_err(|error| {
+                    ImageOpsError::LimitExceeded(format!(
+                        "sharpen: 核面反锐化失败 ({error}); 滤镜分配上限拒绝"
+                    ))
+                })?;
+            }
+            ImageOperation::WatermarkText { text, x, y, scale } => {
+                let (width, height) = image.dimensions();
+                let mut pixels = image.data().to_vec();
+                draw_watermark(&mut pixels, width, height, text, *x, *y, *scale)?;
+                *image = rebuild_rgba8(width, height, pixels);
+            }
+            ImageOperation::LayersComposite {
+                overlay,
+                x,
+                y,
+                opacity,
+            } => {
+                // 叠加图走同一受控读面 (白名单 + 上限 + 敏感面拒 + 观测) 再解码。
+                let (_canonical, bytes, _format) = self.read_input(overlay)?;
+                let overlay_image = self.decode(&bytes)?;
+                composite_layer(image, &overlay_image, *x, *y, *opacity)?;
+            }
+            ImageOperation::PsdReadInfo { path } => {
+                // 只读探针: 同一受控读面 (路径/敏感面/上限/观测), 内容走分层
+                // 文档解析而非白名单像素解码; 产出进汇报探针节, 像素零改动。
+                let (canonical, bytes) = self.read_workspace_bytes(path)?;
+                psd_infos.push(self.psd_info(&canonical, &bytes)?);
+            }
+        }
+        Ok(())
+    }
+
+    /// `psd_read_info` 探针: 核面分层文档头 + 图层清单 (只读; 解析失败拒绝即帧)。
+    fn psd_info(&self, canonical: &Path, bytes: &[u8]) -> Result<PsdInfoReport, ImageOpsError> {
+        let document = PsdFile::from_bytes(bytes)
+            .map_err(|error| ImageOpsError::DecodeFailed(format!("psd parse failed ({error})")))?;
+        let root = self.canonical_root()?;
+        let layer_count = document.layers().len();
+        let layer_names = document
+            .layers()
+            .iter()
+            .map(|layer| layer.name())
+            .take(MAX_PSD_LAYER_NAMES)
+            .collect();
+        Ok(PsdInfoReport {
+            path: self.relative_display(canonical, &root),
+            width: document.header.width,
+            height: document.header.height,
+            depth: document.header.depth,
+            channels: document.header.channels,
+            color_mode: format!("{:?}", document.header.color_mode),
+            version: if document.header.version.is_psb() {
+                "psb".to_string()
+            } else {
+                "psd".to_string()
+            },
+            layer_count,
+            layer_names,
+            layer_names_capped: layer_count > MAX_PSD_LAYER_NAMES,
+        })
+    }
 }
 
 /// 亮度通道算术: 饱和加 (alpha 不动)。
@@ -1499,15 +1909,16 @@ fn luma(r: u8, g: u8, b: u8) -> u8 {
 }
 
 /// jpeg 无 alpha: 白底合成 (透明像素变白, 不留黑底)。
-fn composite_on_white(image: &RgbaImage) -> Vec<u8> {
-    let mut rgb = Vec::with_capacity(image.as_raw().len() / 4 * 3);
-    for Rgba([r, g, b, a]) in image.pixels() {
-        let alpha = f64::from(*a) / 255.0;
+fn composite_on_white(image: &RasterImage) -> Vec<u8> {
+    let mut rgb = Vec::with_capacity(image.data().len() / 4 * 3);
+    for pixel in image.data().chunks_exact(4) {
+        let [r, g, b, a] = [pixel[0], pixel[1], pixel[2], pixel[3]];
+        let alpha = f64::from(a) / 255.0;
         let blend =
             |channel: u8| (f64::from(channel) * alpha + 255.0 * (1.0 - alpha)).round() as u8;
-        rgb.push(blend(*r));
-        rgb.push(blend(*g));
-        rgb.push(blend(*b));
+        rgb.push(blend(r));
+        rgb.push(blend(g));
+        rgb.push(blend(b));
     }
     rgb
 }
@@ -1515,7 +1926,9 @@ fn composite_on_white(image: &RgbaImage) -> Vec<u8> {
 /// 文字水印: 内置 5×7 点阵字模, 白色不透明像素按 scale×scale 方块落笔;
 /// 字模框必须整框落在图内 (越界拒绝即帧), 框外像素一个不动。
 fn draw_watermark(
-    image: &mut RgbaImage,
+    pixels: &mut [u8],
+    image_width: u32,
+    image_height: u32,
     text: &str,
     x: u32,
     y: u32,
@@ -1524,14 +1937,12 @@ fn draw_watermark(
     let glyph_count = text.chars().count() as u32;
     let box_width = glyph_count.saturating_mul(6).saturating_mul(scale);
     let box_height = 7u32.saturating_mul(scale);
-    let (image_width, image_height) = image.dimensions();
     if x.saturating_add(box_width) > image_width || y.saturating_add(box_height) > image_height {
         return Err(ImageOpsError::ParamRejected(format!(
             "watermark_text: 字框 {}x{} @ {}, {} 超出图幅 {}x{}; 字框越界拒绝",
             box_width, box_height, x, y, image_width, image_height
         )));
     }
-    let white = Rgba([255u8, 255, 255, 255]);
     for (index, ch) in text.chars().enumerate() {
         let glyph_x = x + index as u32 * 6 * scale;
         for (row, row_pixels) in glyph_rows(ch).iter().enumerate() {
@@ -1544,7 +1955,8 @@ fn draw_watermark(
                         let px = glyph_x + column as u32 * scale + dx;
                         let py = y + row as u32 * scale + dy;
                         if px < image_width && py < image_height {
-                            image.put_pixel(px, py, white);
+                            let base = ((py * image_width + px) * 4) as usize;
+                            pixels[base..base + 4].copy_from_slice(&[255, 255, 255, 255]);
                         }
                     }
                 }
@@ -1712,13 +2124,16 @@ mod tests {
         std::env::remove_var(IMAGE_OPS_ENABLE_ENV);
     }
 
-    /// 词表闭合: 十一名成员逐一可解析 (缺参即拒, 无参者合法), 表外名拒绝即帧。
+    /// 词表闭合: 十三名成员逐一可解析 (缺参即拒, 无参者合法), 表外名拒绝即帧。
     #[test]
     fn operation_vocabulary_is_closed_and_parses() {
+        // 演进断言 (2026-10-18 换创作内核批·能力扩展): 计数 11 → 13, 按本断言
+        // 自身授权条款「增删须显式改表并补测试」执行 —— 新增 layers_composite /
+        // psd_read_info 两个词表成员, 行为钉在 tests/image_ops_core_swap.rs。
         assert_eq!(
             OPERATION_VOCABULARY.len(),
-            11,
-            "词表冻结为十一项, 增删须显式改表并补测试"
+            13,
+            "词表冻结为十三项, 增删须显式改表并补测试"
         );
         for name in OPERATION_VOCABULARY {
             let bare = ImageOperation::parse(&spec(name));

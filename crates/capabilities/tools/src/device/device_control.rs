@@ -1067,6 +1067,10 @@ pub struct PreviewFrame {
     pub device_action: String,
     /// 分级。
     pub grade: ActionGrade,
+    /// 动作参数 (与 plan 拍同值; 审批卡载荷从这里取真参数, 不藏参数)。
+    /// `#[serde(default)]`: 旧帧载荷无此列照读 (存量 = 空参数)。
+    #[serde(default)]
+    pub params: Value,
     /// 执行前状态快照 (只读)。
     pub before: DeviceState,
     /// 执行后状态投影 (未执行, 只是"将发生什么")。
@@ -1266,7 +1270,8 @@ pub struct DeviceApprovalCard {
 }
 
 impl DeviceApprovalCard {
-    /// 从预览帧载荷成审批卡 (预览效果原样进卡)。
+    /// 从预览帧载荷成审批卡 (预览效果原样进卡, 动作参数随卡不藏 —— 卡载荷自足,
+    /// IM 推送链按卡即可重建执行计划)。
     pub fn from_preview(preview: &PreviewFrame) -> Self {
         let grade = preview.grade;
         Self {
@@ -1275,7 +1280,7 @@ impl DeviceApprovalCard {
             device_name: preview.device_name.clone(),
             device_action: preview.device_action.clone(),
             grade: grade.as_str().to_string(),
-            params: json!({}),
+            params: preview.params.clone(),
             effects: preview.effects.clone(),
             requires_im_card: grade.approval_requirement(false).requires_im_card(),
             approval_note: approval_note_for(grade).to_string(),
@@ -1334,8 +1339,8 @@ pub fn approval_note_for(grade: ActionGrade) -> &'static str {
     }
 }
 
-/// 分级风险标注 (审批卡载荷同文)。
-fn grade_risk_label(grade: &str) -> &'static str {
+/// 分级风险标注 (审批卡载荷同文; IM 审批卡信封的 `risk_level` 同源取值)。
+pub fn grade_risk_label(grade: &str) -> &'static str {
     match grade {
         "reversible" => "medium",
         "irreversible" | "money" => "high",
@@ -1476,6 +1481,7 @@ impl DeviceControlRunner {
             device_name: plan.device_name,
             device_action: device_action.to_string(),
             grade: plan.grade,
+            params: plan.params,
             before,
             after,
             effects,

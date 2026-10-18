@@ -1,5 +1,16 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 大波：K 轴设备审批链 / 提醒闭环+L5 守护 / 创作面补齐 / 图像操作换核 (2026-10-18)
+
+四批并行施工总装（K 轴能力面补全 + 创作面补齐 + 许可搬运线第一批的换核收口），另含同批工程收口：
+
+- **K 轴 L3/L4 设备审批卡 → IM 推送链**：`DeviceApprovalCard` 携真参数（`PreviewFrame.params`，与 plan 同值）经同链同信封推 IM；**批准即执行**（与面板/模型侧同一台 `DeviceControlRunner`，三拍绑定 + 预览票一次性），**拒绝=不执行+关账**；**money 档必须 IM 卡**（送达回执 `im_card_id` 三面断言）、irreversible 可面板或 IM；两本账（推送账幂等键=动作 `plan_id` + failed 行带真因与卡载荷留痕；决定账一计划一决定 + `decided_by=im:人@渠道` 署名）；失败重试凭账本载荷重建（重启可续）；回执帧 `DeviceDecided`/`DeviceRefused`；回调 subject `tool.device_control.plan` 与工具审批卡 subject 分家。自述 `device_control` 节入冻结合同（**二十一节**）。
+- **K 轴 L2 提醒闭环 + L5 守护骨架**：天气信号/守护告警作为关怀候选 → 与规则**同一本** `care_rules.json` 纪律（勿扰/专注/频率同账/预算）与同一条抑制管道，台账新增 `kind` 列（`rule`/`reminder`/`guard_alert`，旧账凭 serde 缺省兼容）；**守护例外档**（可配，默认破勿扰 + 必带「守护告警」标注双留痕 + 独立频率上限 1h≤3，不占普通预算）；`tool.guard_watch`（L5）**只看不动**——规则表 `guard-rules.json` StoredDoc 同族拒开、阈值+时序条件判定、缺读数不编造，命中告警入 `guard-alerts.jsonl`（关怀候选高优先），动作词表零执行（测试钉死无 `device-actions.jsonl`），双闸 `APEIRETH_ENABLE_GUARD_WATCH`（依赖 `DEVICE_SENSE`）fail-closed；自述关怀节扩天气提醒计数。
+- **创作面补齐**：`tool.sheet_ops` 增 **xlsx 读入**（`.xlsx` 词面判定 + 复用 ZIP 读端 + 解压预算防炸弹；sharedString/inlineStr/数值格/t="str" 三形态 + 公式格口径钉死「取缓存值不重算、共享公式不展开、无缓存值拒绝即帧」；坏容器/坏格/越宽拒）；`tool.doc_ops` 增 **DOCX 写面** `docx_from_markdown`（Markdown 结构子集 → 最小 OOXML 包三件）+ `docx_append`（副本追加、只动 `word/document.xml`、`w:sectPr` 前让位）；ZIP 写端（stored/deflate 对称，纯 Rust，0 新外部依赖）；受控面同族（限域/敏感面/三层上限/创建类原子写/写总闸+每次人批）。样式最小如实（无 `styles.xml`/无字体美化，外观归消费端）。
+- **图像操作换创作内核**：`tool.image_ops` 七操作改用引擎级创作内核 `apeireth-image-core`（编解码/几何/图层/滤镜经核面；decode 三上限逐项同值 + `keep_orientation`，四格式编解码全走核面），**产品代码外部图像库直接依赖清零**（`image` 降 dev-dependency 仅作金标准 fixture 与换核前基线）；借核新增 `layers_composite` / `psd_read_info`（词表 **11→13**）；两处读码定的语义修正（边缘语义改走画布内重采样/引擎直取口、jpeg 显式钉 4:4:4 对齐换核前档）。换档差异**按偏差上界 + 不变量如实登记**：crop/rotate/flip/亮度/对比/灰度/无损往返逐像素全等；resize 偏差 27/255（缩）与 1/255（放，上界 32）、blur 1/255（上界 4）、sharpen 0/255（上界 2）、jpeg 6/255（上界 12）；纯色图滤镜逐像素不漂移。
+- **同批工程收口**：只读预设补 `tool.device_control`（执行面）/`tool.care_schedule`（写面）+ 读面 pin（`device_sense`/`weather`/`guard_watch` 只看不动）；凭据绊线补 **JWT 与通用 Bearer** 两处「命名即承诺」空槽；认知调度器有界淘汰改**严格 FIFO**（按提交序、跳过正在跑的任务，TCB 公开结构 0 改）；体验旋钮测试减敏（生产/测试拆缝 `effective_with`，宿主 env 不再污染断言）；`deny` 治理对账（清 33 条过期 skip + 4 条 unmaintained 三处同步登记）；取材通道实测定案（`web_fetch` 通通用网页 / crates.io tarball 首选 / GitHub 走节点池）。
+- **实证（2026-10-18 总装批亲跑，`-j 2`）**：`cargo test --workspace --all-targets --locked --no-fail-fast` → **322 套件 / 8509 passed / 0 failed / 52 ignored**（exit 0，日志 `artifacts/wave-1018-final-workspace-test.log`；全量数字见 [test-baseline](docs/03-reference/test-baseline.md)）；`cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告；`cargo fmt --check` 0 diff；中性扫描零命中；secret-scan 干净；`cargo deny check` 四类全 ok（advisories/bans/licenses/sources）。0 触碰 LOCKED 5 项；外部依赖净增 0（工具面换核为 workspace 内部边 +1）。
+
 ## [Unreleased] — 许可搬运线第一批：图像核心（四关质检）(2026-10-18)
 
 宽松协议（MIT OR Apache-2.0）放行搬运 + 宪章〇之二四关质检逐关出报告（`docs/04-internal/license-port/`）：

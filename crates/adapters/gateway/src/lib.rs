@@ -64,6 +64,12 @@ pub mod im_approval;
 /// face wiring — same chain and envelope as the approval card).
 pub mod im_proposal;
 
+/// IM quick access: device approval card push + approve/reject button closure
+/// (K axis L3/L4 — same chain and envelope as the approval card; approve =
+/// execute on the shared runner, money grade needs the delivery receipt as its
+/// IM card id).
+pub mod im_device;
+
 /// W2-② client credential system: per-client token table (name → token, env /
 /// json config faces with stored-doc refuse-to-open semantics).
 pub mod client_tokens;
@@ -181,6 +187,11 @@ pub use im_channels::{
     assemble_im_channels, doc_compat, im_channels_path, ImChannelAssembly, ImChannelConfig,
     ImChannelSpec, ImConfigError, IM_CHANNELS_DOC_NAME, IM_CHANNELS_DOC_VERSION, IM_CHANNELS_ENV,
     IM_CHANNELS_FILE,
+};
+pub use im_device::{
+    device_card_envelope, is_device_approval_payload, DeviceApprovalPushResult,
+    ImDeviceApprovalFace, ImDeviceClosure, ImDeviceClosureResult, DEVICE_APPROVAL_CARD_SUBJECT,
+    DEVICE_CARD_NO_DEADLINE_MS,
 };
 pub use im_proposal::{
     im_decided_by, is_proposal_payload, pending_push_drafts, proposal_card_envelope,

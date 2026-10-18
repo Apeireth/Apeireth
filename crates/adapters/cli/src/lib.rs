@@ -1310,6 +1310,20 @@ fn build_production_governance_parts_from_env() -> (
         } else {
             pipeline
         };
+    // K 轴 L5 看家骨架 (`tool.guard_watch`): **双闸开 = 注册 + 授权同源**
+    // (`APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH` 齐开,
+    // 默认关 fail-closed)。只读档 = grant 即用 (零审批, 与 `tool.self_status`
+    // 同档): 守护规则读 + 白名单设备感知 + 告警账 append。**只看不动**: 告警
+    // 零设备动作 (动手仍走 `tool.device_control` 三拍人批)。
+    if apeireth_tools_canonical::device::guard_watch::guard_watch_enabled_from_env() {
+        policy
+            .lock()
+            .expect("permission policy lock poisoned (0 装诚实)")
+            .grant(Permission::ExecuteTool(
+                apeireth_tools_canonical::device::guard_watch::GUARD_WATCH_CAPABILITY_ID
+                    .to_string(),
+            ));
+    }
     (pipeline, policy, guard_hook)
 }
 
@@ -2022,6 +2036,14 @@ async fn build_cognitive_modules_at(
             apeireth_tools_canonical::device::device_control::DeviceControlConfig::from_env(
                 default_panel_data_dir(),
             ),
+        // K 轴 L5 看家骨架 (`tool.guard_watch`): 注册即闸 (双闸
+        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH` 齐开才
+        // 注入配置, 默认关 fail-closed)。守护规则 = `guard-rules.json` (StoredDoc
+        // 拒开, 规则 = 阈值/时序条件); 告警 = `guard-alerts.jsonl` (关怀候选高
+        // 优先, 打扰纪律守护例外档); **只看不动** (零设备动作)。
+        guard_watch: apeireth_tools_canonical::device::guard_watch::GuardWatchConfig::from_env(
+            default_panel_data_dir(),
+        ),
         ..CognitiveModuleConfig::default()
     };
     let sqlite_backend = Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));

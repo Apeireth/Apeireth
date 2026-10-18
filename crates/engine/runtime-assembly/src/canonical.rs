@@ -56,6 +56,10 @@ pub use trace::*;
 /// 标准回合 (开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸, 默认关 fail-closed)。
 #[path = "canonical/care_heartbeat.rs"]
 pub mod care_heartbeat;
+/// 提醒侧消费桥 (K 轴 L2 提醒 + L5 守护告警 → care 引擎同源接缝): 两本信号账 →
+/// 关怀候选 (同源打扰纪律; 守护例外档)。
+#[path = "canonical/care_reminder.rs"]
+pub mod care_reminder;
 #[path = "canonical/causal_world_model.rs"]
 pub mod causal_world_model;
 #[path = "canonical/cognitive.rs"]
@@ -130,6 +134,10 @@ pub use care_heartbeat::{
     CARE_ENABLE_ENV, CARE_HEARTBEAT_ENABLE_ENV, CARE_HEARTBEAT_POLL_INTERVAL_ENV,
     DEFAULT_CARE_HEARTBEAT_POLL_INTERVAL_SECS,
 };
+pub use care_reminder::{
+    guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
+    WeatherSignalFeed,
+};
 pub use experiment_field::{
     Experiment, ExperimentField, ExperimentStatus, FailureLearningRecord, FailureLearningSink,
     NoopVMRunner, VMRunner, Verdict, WikiFailureLearningSink,
@@ -177,11 +185,11 @@ pub use retrieval_tuning_wire::{
 };
 pub use self_status_source::{
     budget_status_from_configured, budget_status_from_constants, care_status_probe,
-    cost_routing_probe, doc_ops_status_probe, domain_status_probe, image_ops_status_probe,
-    max_rounds_per_turn_constant, max_tool_calls_per_round_constant, persona_status_probe,
-    roster_from_config, session_quota_probe, sheet_ops_status_probe, task_board_status_probe,
-    ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED, BUDGET_SOURCE_CONFIGURED_NOTE,
-    BUDGET_SOURCE_CONSTANT,
+    cost_routing_probe, device_control_status_probe, doc_ops_status_probe, domain_status_probe,
+    image_ops_status_probe, max_rounds_per_turn_constant, max_tool_calls_per_round_constant,
+    persona_status_probe, roster_from_config, session_quota_probe, sheet_ops_status_probe,
+    task_board_status_probe, ProductionSelfStatusSource, BUDGET_SOURCE_CONFIGURED,
+    BUDGET_SOURCE_CONFIGURED_NOTE, BUDGET_SOURCE_CONSTANT,
 };
 pub use self_tuning_wire::{
     consolidation_cadence_turns, migrate_legacy_tuning_log_file, tuning_log_path,
@@ -190,9 +198,9 @@ pub use self_tuning_wire::{
 };
 pub use tool_modules::{
     BackupExportModule, DeviceControlModule, DocOpsModule, EducationModule, FetchModule,
-    FilesystemModule, GitWriteModule, ImageOpsModule, McpModule, RepoModule, SearchModule,
-    SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule, VoiceSpeakModule,
-    SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
+    FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, RepoModule,
+    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
+    VoiceSpeakModule, SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
 };
 // 性格成长数据面 (裁定 ④⑤): 特质锁定态持久档 + 成长计既有账读面。
 pub use trait_growth::{

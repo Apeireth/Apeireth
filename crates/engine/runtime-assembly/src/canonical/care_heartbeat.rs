@@ -27,9 +27,10 @@
 //! 已在常驻宿主接线 (cli 组合根 `care_heartbeat` 模块, 2026-10-17 随行);
 //! 本面仍不自带闸、不自带回合执行权 (组装根注入, 同源不二闸)。
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use apeireth_organ::care::{CareEngine, CarePoll};
+use apeireth_organ::care::{CareEngine, CarePoll, ReminderFeed};
 use apeireth_runtime::canonical::heartbeat::{
     HeartbeatDispatch, HeartbeatPoll, HeartbeatPollOutcome, HeartbeatProducer,
     HeartbeatProducerConfig,
@@ -126,18 +127,35 @@ pub struct CareHeartbeatStatus {
     pub hits: u64,
 }
 
-/// `CareEngine::poll` → 心跳 poll 面的适配 (零新逻辑: 判定/纪律/发起闸全在内核)。
+/// `CareEngine::poll` + 提醒侧消费 → 心跳 poll 面的适配 (零新逻辑: 判定/纪律/
+/// 发起闸全在内核)。
 ///
 /// poll 本身零模型调用 = 缺省判定档 (`RuleFallbackJudge` 纯规则) 的口径;
 /// 注入模型判定档时, 模型调用发生在「候选到点」的判定面 (引擎二), 不在轮询。
+///
+/// 提醒侧 (K 轴 L2/L5 同源接缝): 规则面无发起时按注入的
+/// [`ReminderFeed`] 逐源消费天气提醒信号 / 守护告警 (同源纪律,
+/// [`apeireth_organ::care::consume_reminders`]); 未注入信号源 = 与旧行为一致
+/// (纯规则轮询)。
 pub struct CareHeartbeatPoll {
     engine: CareEngine,
+    reminders: Vec<Arc<dyn ReminderFeed>>,
 }
 
 impl CareHeartbeatPoll {
-    /// 包一层关怀内核。
+    /// 包一层关怀内核 (纯规则轮询档)。
     pub fn new(engine: CareEngine) -> Self {
-        Self { engine }
+        Self {
+            engine,
+            reminders: Vec::new(),
+        }
+    }
+
+    /// 注入一个提醒信号源 (可多次叠加: 天气账 / 守护告警账各一)。
+    #[must_use]
+    pub fn with_reminder_feed(mut self, feed: Arc<dyn ReminderFeed>) -> Self {
+        self.reminders.push(feed);
+        self
     }
 
     /// 内核本体 (喂交互观察等进程内值的入口)。
@@ -149,15 +167,31 @@ impl CareHeartbeatPoll {
 impl HeartbeatPoll for CareHeartbeatPoll {
     fn poll(&mut self) -> Result<HeartbeatPollOutcome, String> {
         match self.engine.poll() {
-            Ok(CarePoll::Initiating(initiative)) => Ok(HeartbeatPollOutcome::Initiate {
-                turn_input: initiative.to_turn_input(),
-                at_ms: initiative.at_ms,
-            }),
-            Ok(CarePoll::Idle) | Ok(CarePoll::Held { .. }) | Ok(CarePoll::Declined { .. }) => {
-                Ok(HeartbeatPollOutcome::Quiet)
+            Ok(CarePoll::Initiating(initiative)) => {
+                return Ok(HeartbeatPollOutcome::Initiate {
+                    turn_input: initiative.to_turn_input(),
+                    at_ms: initiative.at_ms,
+                });
             }
-            Err(error) => Err(format!("{error}")),
+            Ok(CarePoll::Idle) | Ok(CarePoll::Held { .. }) | Ok(CarePoll::Declined { .. }) => {}
+            Err(error) => return Err(format!("{error}")),
         }
+        // 提醒侧消费 (同源纪律): 规则面无发起才轮到信号; 拦下不标消费 (候选
+        // 不丢, 下拍重试); 至多一个发起 (心跳一次只发一回合)。
+        for index in 0..self.reminders.len() {
+            let feed = Arc::clone(&self.reminders[index]);
+            match apeireth_organ::care::consume_reminders(&mut self.engine, feed.as_ref()) {
+                Ok(Some(initiative)) => {
+                    return Ok(HeartbeatPollOutcome::Initiate {
+                        turn_input: initiative.to_turn_input(),
+                        at_ms: initiative.at_ms,
+                    });
+                }
+                Ok(None) => {}
+                Err(error) => return Err(format!("{error}")),
+            }
+        }
+        Ok(HeartbeatPollOutcome::Quiet)
     }
 }
 
@@ -207,7 +241,32 @@ impl CareHeartbeatProducer {
         C: Fn() -> i64 + Send + Sync + 'static,
         D: HeartbeatDispatch + 'static,
     {
-        Self::start(config, now_ms, CareHeartbeatPoll::new(engine), dispatch)
+        Self::start_care_with_feeds(config, engine, now_ms, dispatch, Vec::new())
+    }
+
+    /// 关怀内核档 + **提醒信号源** (K 轴 L2 提醒 / L5 守护告警消费端): 规则
+    /// 轮询后逐源消费提醒/告警信号 (同源纪律, 守护例外档在内核)。
+    ///
+    /// 信号源从两本信号账取数 (`weather-signals.jsonl` / `guard-alerts.jsonl`
+    /// 的消费桥, 见 [`super::care_reminder`]); 传空 `feeds` = 纯规则档
+    /// ([`Self::start_care`] 旧行为)。消费随心跳开关走 (注册即闸), 账空 = 零
+    /// 消费零动作。
+    pub fn start_care_with_feeds<C, D>(
+        config: &CareHeartbeatConfig,
+        engine: CareEngine,
+        now_ms: C,
+        dispatch: D,
+        feeds: Vec<Arc<dyn ReminderFeed>>,
+    ) -> Option<Self>
+    where
+        C: Fn() -> i64 + Send + Sync + 'static,
+        D: HeartbeatDispatch + 'static,
+    {
+        let mut poll = CareHeartbeatPoll::new(engine);
+        for feed in feeds {
+            poll = poll.with_reminder_feed(feed);
+        }
+        Self::start(config, now_ms, poll, dispatch)
     }
 
     /// 心跳态真值 (自述关怀节心跳投影的来源)。

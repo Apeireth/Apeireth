@@ -597,6 +597,7 @@ fn care_status_reports_rule_count_next_trigger_and_last_care_truth() {
                 judge: "rule_fallback".to_string(),
                 spoke: true,
                 note: "规则兜底: 触发器到点即发, 不漏关怀".to_string(),
+                kind: "rule".to_string(),
             },
             DAY_START + 8 * HOUR_MS + 30 * MINUTE_MS,
         )
@@ -762,6 +763,7 @@ fn default_daily_cap_holds_the_sixth_care_of_a_day() {
                     judge: "rule_fallback".to_string(),
                     spoke: true,
                     note: "种子台账 (日档计数)".to_string(),
+                    kind: "rule".to_string(),
                 },
                 at_ms,
             )
@@ -822,6 +824,8 @@ fn explicit_discipline_values_override_the_ruling_defaults() {
         daily_max: 10,
         focus_gap_minutes: 15,
         catchup_minutes: 120,
+        // 守护例外档字段 (本批新增, 跨线机械补位): 取裁定默认, 本例只钉旧行为覆盖。
+        ..CareDiscipline::default()
     };
     old.validate().expect("显式旧口径配置合法");
     assert!(

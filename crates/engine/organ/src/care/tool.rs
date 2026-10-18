@@ -247,6 +247,8 @@ fn record_json(record: &CareRecord) -> Value {
         "judge": record.judge,
         "spoke": record.spoke,
         "note": record.note,
+        // 来源档 (rule / reminder / guard_alert): 频率上限分档计数的同源口径。
+        "kind": record.kind,
     })
 }
 
@@ -382,6 +384,11 @@ impl ToolCapability for CareScheduleTool {
                         "daily_max": body.discipline.daily_max,
                         "focus_gap_minutes": body.discipline.focus_gap_minutes,
                         "catchup_minutes": body.discipline.catchup_minutes,
+                        // 守护例外档 (打扰纪律唯一例外, 可配): 破勿扰 + 标注 +
+                        // 频率独立上限 (同源配置面全量可见, 不留暗旋钮)。
+                        "guard_alert_breaks_quiet": body.discipline.guard_alert_breaks_quiet,
+                        "guard_frequency_max": body.discipline.guard_frequency_max,
+                        "guard_frequency_window_hours": body.discipline.guard_frequency_window_hours,
                     },
                     "last_care": body.last_care().map(record_json),
                 }),

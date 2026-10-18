@@ -33,7 +33,8 @@ pub mod content_feed;
 pub mod device;
 // 创作工具面 W2: 文档操作 (`tool.doc_ops`, 受控读写族) —— 闭合操作词表
 // (pdf_info/pdf_extract_text/docx_extract_text/docx_outline 读 +
-// pdf_merge/pdf_split/pdf_extract_pages/pdf_watermark_text 写) + 工作区限域 +
+// pdf_merge/pdf_split/pdf_extract_pages/pdf_watermark_text/docx_from_markdown/
+// docx_append 写) + 工作区限域 +
 // 敏感面拒 + 大小/页数上限 + 创建类原子写 (只创建不覆盖) + 批量管道;
 // 注册即闸 `APEIRETH_ENABLE_DOC_OPS`, 写面每次人批, 默认关 fail-closed。
 // 依赖报备: flate2/quick-xml 为锁定文件既有传递依赖的同版本复用 (0 新外部包)。
@@ -108,8 +109,8 @@ mod sensitive_path;
 // output 即写) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表) + 创建类
 // 原子写 (只创建不覆盖) + 数值精度如实 (f64 不静默取整, NaN/inf 零产出);
 // 注册即闸 `APEIRETH_ENABLE_SHEET_OPS`, 写面受 file_write 唯一写总闸 + 每次
-// 人批, 默认关 fail-closed。本批只 CSV; xlsx 读入排下批 (容器读端复用
-// `doc_ops` 已报备的 ZIP 读端)。
+// 人批, 默认关 fail-closed。读面认 CSV + xlsx (xlsx 读端复用 `doc_ops` 已报备
+// 的 ZIP 读端); 写面只出 CSV (xlsx 写出后置, 不冒充)。
 pub mod sheet_ops;
 pub mod shell;
 pub mod spill;
@@ -210,10 +211,10 @@ pub use guardrail::{
 };
 pub use image_ops::{
     image_ops_enabled_from_env, FlipAxis, ImageFormatKind, ImageOperation, ImageOpsActivity,
-    ImageOpsError, ImageOpsParams, ImageOpsReport, ImageOpsTool, OperationSpec,
+    ImageOpsError, ImageOpsParams, ImageOpsReport, ImageOpsTool, OperationSpec, PsdInfoReport,
     IMAGE_OPS_CAPABILITY_ID, IMAGE_OPS_COUNT_SCOPE_NOTE, IMAGE_OPS_ENABLE_ENV, IMAGE_OPS_TOOL_NAME,
-    MAX_IMAGE_DIM, MAX_IMAGE_PIXELS, MAX_INPUT_BYTES, MAX_PIPELINE_STEPS, MAX_WATERMARK_SCALE,
-    MAX_WATERMARK_TEXT_CHARS, OPERATION_VOCABULARY, SUPPORTED_FORMATS,
+    MAX_IMAGE_DIM, MAX_IMAGE_PIXELS, MAX_INPUT_BYTES, MAX_PIPELINE_STEPS, MAX_PSD_LAYER_NAMES,
+    MAX_WATERMARK_SCALE, MAX_WATERMARK_TEXT_CHARS, OPERATION_VOCABULARY, SUPPORTED_FORMATS,
 };
 pub use mcp::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, McpClient, McpContent, McpError,
