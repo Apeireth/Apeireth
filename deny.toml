@@ -64,6 +64,18 @@ multiple-versions = "deny"   # ← 多版本强制 deny, 业界顶尖标准
 wildcards = "allow"
 deny = []
 skip = [
+    # ---- 2026-10-18 D5 对账（`cargo deny check bans` 实测）：删 25 个 unnecessary-skip
+    # (单版本) + 8 个 unmatched-skip (不在 [graph] 4 target 图内) ----
+    # 删除清单（原条目内容见本文件 commit 历史；记录在此供审计）：
+    #   unnecessary: bitflags block-buffer cipher compact_str convert_case crossterm
+    #   crypto-common digest fallible-iterator foldhash http indexmap inout mio ratatui
+    #   rustc-hash serde_spanned sha2 socket2 strum toml toml_datetime tower
+    #   unicode-width winnow
+    #   unmatched: tungstenite tokio-tungstenite bit-set bit-vec gloo-net fancy-regex
+    #   hmac notify
+    # 原则（同 2026-08-17 台账#40）：过期/无用的 skip 会掩盖未来真实的多版本问题 ——
+    # 依赖树收敛后立刻退役对应条目，等真出现多版本时由 deny 红 + 带理由 skip 重新登记。
+
     # ---- Windows 系统 crate (业界共识: skip) ----
     # 实测剩余多版本: windows-sys / windows-targets / windows_x86_64_gnu / windows_x86_64_msvc
     # (其余 windows-* 已单版本或不在 [graph] 4 target 图内, 2026-08-17 台账#40 已删)
@@ -72,22 +84,9 @@ skip = [
 
     # ---- 其他业界共识 skip 的多版本 ----
     { name = "hashbrown", reason = "wasmtime 也 skip (waiting on lots of crates to update)" },
-    { name = "bitflags", reason = "1.x vs 2.x API 不兼容, 需要逐步迁移" },
-    { name = "http", reason = "0.x vs 1.x API 不兼容, hyper 依赖决定" },
-    { name = "indexmap", reason = "1.x vs 2.x serde 兼容" },
     { name = "itertools", reason = "0.10/11/13/14 — 多 crate 各自钉版本" },
     { name = "syn", reason = "1.x/2.x/3.x — proc macro crate 决定" },
-    { name = "toml", reason = "跟随 toml_edit 版本" },
-    { name = "toml_datetime", reason = "跟随 toml_edit 版本" },
-    { name = "tower", reason = "0.4 vs 0.5 — reqwest/axum 决定" },
     { name = "tower-http", reason = "跟随 tower 版本" },
-    { name = "tungstenite", reason = "0.21 vs 0.25 — reqwest 决定" },
-    # R21 续修 #12 security D-S2 (tokio-tungstenite 0.24+0.25 duplicate):
-    # axum 0.7.9 要 0.24.x, apeireth-bus 要 0.25.x, 跨 minor version 不能 cargo [patch.crates-io] unify
-    # (0.24.x 和 0.25.x 是 disjoint version specs). R21+ 续 axum 0.7.9→0.8+ 真修 (届时 axum 内部已用 0.25+).
-    # 0 实际安全风险 (API 兼容, 业界普遍接受 minor bump).
-    { name = "tokio-tungstenite", reason = "R21 #12 security D-S2: axum 0.7.9 (0.24.x) + apeireth-bus (0.25.x) 跨 minor dup, 待 axum 0.8+ 升" },
-    { name = "winnow", reason = "3 个版本 — 跟随 toml 版本" },
 
     # ---- 待 R19 T10 收敛的 crate (有理由收敛) ----
     { name = "thiserror", reason = "thiserror 1.0 vs 2.0 双版本 — 待 R19 T10 全量升 2.0 或 1.0" },
@@ -95,39 +94,16 @@ skip = [
     { name = "getrandom", reason = "3 个版本 (0.2/0.3/0.4) — 待 R19 T10 收敛" },
     { name = "rand", reason = "0.8 vs 0.10 — 跟随 getrandom 版本" },
     { name = "rand_core", reason = "跟随 rand 版本" },
-    { name = "mio", reason = "tokio 决定" },
     { name = "rustix", reason = "0.38 vs 1.x — 等 rustix 自己升" },
-    { name = "socket2", reason = "tokio 决定" },
     { name = "cpufeatures", reason = "wasmtime 也 skip (requires update to sha2)" },
     { name = "linux-raw-sys", reason = "rustix 决定" },
-    { name = "serde_spanned", reason = "跟随 toml 版本" },
-    { name = "unicode-width", reason = "crossterm 决定" },
-    { name = "bit-set", reason = "bit-vec 0.5 vs 0.8" },
-    { name = "bit-vec", reason = "bit-set 决定" },
-    { name = "convert_case", reason = "syn 决定" },
-    { name = "foldhash", reason = "hashbrown 决定" },
-    { name = "gloo-net", reason = "leptos 决定" },
 
-    # ---- R139-1-retry 2026-08-11: 16 duplicate 收敛 (跨 workspace member 各自拉, baseline 一致) ----
-    { name = "block-buffer", reason = "0.10 (digest 0.10) + 0.12 (digest 0.11) — digest 版本决定, 等 apeireth-keyring 升 digest 0.11" },
-    { name = "compact_str", reason = "serde 决定" },
-    { name = "crossterm", reason = "ratatui 决定" },
-    { name = "crypto-common", reason = "digest 0.11 链" },
-    { name = "digest", reason = "0.10 (apeireth-keyring) + 0.11 (postgres-protocol) — 等 R19+ 收敛" },
-    { name = "fallible-iterator", reason = "postgres 决定" },
-    { name = "fancy-regex", reason = "regex 决定" },
-    { name = "hmac", reason = "0.12 (apeireth-keyring) + 0.13 (postgres-protocol)" },
-    # lru duplicate 已随 ratatui 0.30 迁移消失 (2026-10-12: 0.12 线出树, 全树单一
-    # 0.18.5 修复线), 对应 skip 退役清空 (原理由: 0.12.5 (ratatui 固定) vs 0.18.2)。
-    { name = "notify", reason = "0.6 vs 0.7 — 等所有 consumer 升 0.7" },
-    { name = "ratatui", reason = "0.x 跨 minor — workspace 决定" },
-    { name = "rustc-hash", reason = "tokio / anyhow 决定" },
-    { name = "sha2", reason = "0.10 (keyring) + 0.10 (other) 跨 minor dup" },
-    { name = "strum", reason = "proc macro 决定" },
+    # ---- R139-1-retry 2026-08-11 的 16 duplicate 收敛：至 2026-10-18 已全部收敛为单版本,
+    #      对应 skip 条目已退役（见上方删除清单），此处仅留沿革注记 ----
+    # 2026-08-17 台账#40 已清 19 unnecessary-skip + 12 unmatched-skip；本批再清 33 条。
+
     # ---- CI fix 2026-08 (依赖升级后新增多版本, 有理由 skip) ----
     { name = "chacha20", reason = "0.9 vs 0.10 — RustCrypto 依赖树决定" },
-    { name = "cipher", reason = "0.4 vs 0.5 — RustCrypto 依赖树决定" },
-    { name = "inout", reason = "0.1 vs 0.2 — RustCrypto 依赖树决定" },
     { name = "nom", reason = "1.x vs 8.0 — tract 0.23 引入 nom 8, 旧链保留 1.x" },
     # ---- PR #7 / 迁移收敛新增多版本 (有理由 skip) ----
     { name = "drm", reason = "gbm 0.18 (drm 0.14) vs libwayshot-xcap 0.3 (drm 0.15) 依赖树分裂" },
@@ -154,6 +130,27 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
 ignore = [
+    # ========================================================================
+    # 2026-10-18 D5 对账批：首破 0-ignore（4 条 unmaintained，全部 transitive、
+    # 0 直接业务依赖、0 known vulnerability）。三处同步（deny.toml / audit.toml /
+    # .github/workflows/cargo-audit.yml --ignore），复核日 2026-10-18。
+    # ========================================================================
+    # paste 1.0.15 ← pulp ← exr ← apeireth-image-codecs ← apeireth-image-core
+    #   ← apeireth-tools-canonical（许可搬运线 vendored 图像家族的 EXR 支撑链）。
+    #   上游已归档, 无安全升级路径。缓解: 我们对外只暴露 png/jpeg/webp/bmp 四格式,
+    #   EXR 属核面保留能力; 若将来放弃 EXR 承诺, 去掉 exr 依赖即消。
+    "RUSTSEC-2024-0436",
+    # zbus_names / zvariant / zvariant_derive 5.x 家族 ← zbus 5.19 ← xcap 0.9.8
+    #   ← apeireth-perception（屏幕采集面）。RustSec 2026-10 新判「不再作为独立
+    #   crate 维护，迁移到 zbus 6」，而 xcap 0.9.8 钉 zbus 5.x —— 无安全升级路径，
+    #   只能等上游 xcap 升 zbus 6。0 直接业务依赖。
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0372",
+    #
+    # 说明: 本清单只收 unmaintained 类（非漏洞）; vulnerability / unsound 仍 0 ignore。
+    # 每次依赖树变动后复核: 条目若变成 advisory-not-detected 即删 (同 2026-10-06 批)。
+    #
     # R25 Agent D 2026-08-10 — 0 vulnerabilities verified.
     # 上次验证: 2026-08-09 .github/workflows/cargo-audit.yml 跑 cargo audit --json
     #   → "vulnerabilities": {"found": [], "count": 0}

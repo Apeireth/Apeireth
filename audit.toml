@@ -11,6 +11,16 @@
 
 [advisories]
 ignore = [
+    # 2026-10-18 D5 对账批：与 deny.toml [advisories].ignore / cargo-audit.yml
+    # --ignore 三处同步（复核日 2026-10-18）。4 条全为 unmaintained 类、transitive、
+    # 0 直接业务依赖、0 known vulnerability：
+    #   paste            ← pulp ← exr ← 图像核心家族（EXR 支撑链）
+    #   zbus_names/zvariant/zvariant_derive 5.x ← zbus ← xcap ← apeireth-perception
+    # 均无安全升级路径（paste 已归档；zbus 6 迁移需等 xcap 升），只能上游解决。
+    "RUSTSEC-2024-0436",
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0372",
     # 2026-10-03 曾短接 3 条 (apeireth-tui → ratatui 0.29 → paste / lru 0.12
     # transitive 未修复面)。2026-10-12 零债清偿批: ratatui 0.30 迁移落地,
     # 依赖树复核 paste 已不存在、lru 单一 0.18.5 修复线 —— 三条面已消, ignore

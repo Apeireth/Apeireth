@@ -68,8 +68,16 @@ jobs:
         # transitive 未修复面)。2026-10-12 零债清偿批: ratatui 0.30 迁移落地,
         # 三条面已消 (paste 不在依赖树, lru 单一 0.18.5 修复线), --ignore 清空,
         # 与 audit.toml / deny.toml 三处同步。
+        # 2026-10-18 D5 对账批: 首破 0-ignore —— 4 条 unmaintained (paste 经图像核心
+        # 家族 EXR 链 / zbus 5.x 家族经 xcap → apeireth-perception), 全 transitive、
+        # 0 直接业务依赖、0 known vulnerability、无安全升级路径; 三处同步 ignore。
+        # 复核日 2026-10-18; 条目变 unmatched 即删。
         run: |
           cargo audit --json --deny warnings \
+            --ignore RUSTSEC-2024-0436 \
+            --ignore RUSTSEC-2026-0370 \
+            --ignore RUSTSEC-2026-0371 \
+            --ignore RUSTSEC-2026-0372 \
             > audit-report.json || echo "audit non-zero exit captured in report"
 
       - name: Convert JSON report to SARIF (R66)
