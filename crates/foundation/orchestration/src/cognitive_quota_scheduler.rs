@@ -28,7 +28,8 @@
 //! 3. **`held_locks` 不是真锁**: 只是 "resource → task" 字符串记账表, 供 PIP 提升
 //!    优先级; 真正的互斥由调用方持有。
 //! 4. **有界性**: `tasks` 表上限 [`MAX_TRACKED_TASKS`]; 终态任务需调用方显式
-//!    `complete_task()` 回收 (map 删除), 超上限时淘汰最旧的未入队条目。
+//!    `complete_task()` 回收 (map 删除), 超上限时按**提交序淘汰最早提交**的条目
+//!    (严格 FIFO; 正在跑的任务不淘汰, 等它回收)。
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
@@ -204,6 +205,10 @@ struct SchedulerInner {
     tasks: HashMap<String, CognitiveTaskControlBlock>,
     active_running_task: Option<String>,
     held_locks: HashMap<String, String>, // Resource -> TaskId
+    /// 提交序计数 (单调递增, 只增不减; 用于有界淘汰的**严格 FIFO** 判据).
+    submit_seq_counter: u64,
+    /// `task_id` → 提交序 (与 `tasks` 同生命周期: 提交登记, 回收/淘汰注销).
+    submit_order: HashMap<String, u64>,
 }
 
 impl Default for CognitiveQuotaScheduler {
@@ -227,6 +232,8 @@ impl CognitiveQuotaScheduler {
                 tasks: HashMap::new(),
                 active_running_task: None,
                 held_locks: HashMap::new(),
+                submit_seq_counter: 0,
+                submit_order: HashMap::new(),
             })),
         }
     }
@@ -241,20 +248,36 @@ impl CognitiveQuotaScheduler {
         if inner.tasks.contains_key(&tid) {
             return Err(format!("duplicate task_id: {tid}"));
         }
-        // M1: tasks 表有界 — 超上限淘汰条目。**0 装诚实**: TCB 不带插入时间戳,
-        // 这里按 `task_id` 字典序最小淘汰 (确定性, 但不等于"最旧提交者");
-        // 要严格 FIFO 淘汰需给 TCB 加 submit_seq (债登记: 00-backlog.md 债栏 D7)。
+        // M1: tasks 表有界 — 超上限淘汰**最早提交**的条目 (严格 FIFO, D7 已清)。
+        // 判据用调度器侧的 `submit_seq` (提交序), 不依赖 `task_id` 字典序; 正在跑的
+        // 任务不淘汰 (它的执行上下文已交给调用方, 抽走跟踪态会让 `complete_task`
+        // 谎报「从未存在」)。`submit_seq` 只增不减, 不随时钟回拨失真。
         while inner.tasks.len() >= MAX_TRACKED_TASKS {
-            let oldest = inner.tasks.keys().min().cloned();
-            match oldest {
+            let victim = inner
+                .submit_order
+                .iter()
+                .filter(|(id, _)| inner.active_running_task.as_ref() != Some(id))
+                .min_by_key(|(_, seq)| **seq)
+                .map(|(id, _)| id.clone());
+            match victim {
                 Some(id) => {
                     inner.tasks.remove(&id);
+                    inner.submit_order.remove(&id);
+                    // 清掉残留队列登记, 不留腐化 id (schedule_next 的 stale-skip
+                    // 仍是兜底, 但淘汰时顺手清干净更省事)。
+                    for queue in inner.run_queues.values_mut() {
+                        queue.retain(|queued| queued != &id);
+                    }
                 }
+                // 表已满且只剩正在跑的那一个 — 不再淘汰 (等它回收)。
                 None => break,
             }
         }
         let prio = tcb.effective_priority;
+        let seq = inner.submit_seq_counter;
+        inner.submit_seq_counter = inner.submit_seq_counter.saturating_add(1);
         inner.tasks.insert(tid.clone(), tcb);
+        inner.submit_order.insert(tid.clone(), seq);
         if let Some(queue) = inner.run_queues.get_mut(&prio) {
             queue.push_back(tid);
         }
@@ -306,6 +329,8 @@ impl CognitiveQuotaScheduler {
         if inner.active_running_task.as_deref() == Some(task_id) {
             inner.active_running_task = None;
         }
+        // 提交序登记同生命周期注销 (回收后不再参与淘汰序).
+        inner.submit_order.remove(task_id);
         // 释放该任务持有的资源记账 (PIP 权重随之失效).
         inner.held_locks.retain(|_, holder| holder != task_id);
         existed
@@ -523,7 +548,7 @@ mod tests {
         );
     }
 
-    /// M1 回归: tasks 表有界 (上限 MAX_TRACKED_TASKS, 超限淘汰最旧未入队条目).
+    /// M1 回归: tasks 表有界 (上限 MAX_TRACKED_TASKS, 超限淘汰**最早提交**条目).
     #[test]
     fn m1_tracked_tasks_bounded() {
         let scheduler = CognitiveQuotaScheduler::new();
@@ -536,6 +561,60 @@ mod tests {
             scheduler.tracked_task_count() <= MAX_TRACKED_TASKS,
             "tasks 表超限: {}",
             scheduler.tracked_task_count()
+        );
+    }
+
+    /// D7 已清回归: 有界淘汰按**提交序**(严格 FIFO), 不按 `task_id` 字典序。
+    ///
+    /// 构造「字典序最小 = 最后提交」: 提交序为 `t01024, t01023, ...`, 于是旧实现
+    /// (字典序最小) 会淘汰**最后提交**的 `t00001` —— 恰好是反的。新实现必须淘汰
+    /// 最先进来的 `t01024`。
+    #[test]
+    fn m1_eviction_is_strict_fifo_by_submit_order() {
+        let scheduler = CognitiveQuotaScheduler::new();
+        let first_submitted = format!("t{:05}", MAX_TRACKED_TASKS);
+        let last_submitted = "t00001".to_string();
+        for i in 0..MAX_TRACKED_TASKS {
+            let id = format!("t{:05}", MAX_TRACKED_TASKS - i);
+            scheduler
+                .submit_task(tcb(&id, CognitivePriority::IdleMaintenance))
+                .unwrap();
+        }
+        // 超上限一次 → 触发一次淘汰。
+        scheduler
+            .submit_task(tcb("t00000", CognitivePriority::IdleMaintenance))
+            .unwrap();
+        assert!(
+            !scheduler.complete_task(&first_submitted),
+            "最早提交者应被淘汰 (得到仍在跟踪表)"
+        );
+        assert!(
+            scheduler.complete_task(&last_submitted),
+            "最后提交者不该被淘汰 (得到已消失)"
+        );
+    }
+
+    /// D7 已清回归: 正在跑的任务不被淘汰 (它的执行上下文已在调用方手里)。
+    #[test]
+    fn m1_eviction_skips_the_running_task() {
+        let scheduler = CognitiveQuotaScheduler::new();
+        let first_submitted = format!("t{:05}", MAX_TRACKED_TASKS);
+        for i in 0..MAX_TRACKED_TASKS {
+            let id = format!("t{:05}", MAX_TRACKED_TASKS - i);
+            scheduler
+                .submit_task(tcb(&id, CognitivePriority::IdleMaintenance))
+                .unwrap();
+        }
+        // 派发 → `first_submitted` 成为正在跑的任务 (队列已出队)。
+        let dispatched = scheduler.schedule_next().expect("应有可派发任务");
+        assert_eq!(dispatched.task_id, first_submitted);
+        // 超上限 → 淘汰跳到次早提交者, 不抽走正在跑的任务。
+        scheduler
+            .submit_task(tcb("t00000", CognitivePriority::IdleMaintenance))
+            .unwrap();
+        assert!(
+            scheduler.complete_task(&first_submitted),
+            "正在跑的任务不该被淘汰"
         );
     }
 
