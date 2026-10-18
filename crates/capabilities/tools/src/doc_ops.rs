@@ -48,13 +48,16 @@
 //!   `HeadingN`, 列表取 `w:numPr`。
 //! - **DOCX 写** (结构面): `docx_from_markdown` 认 Markdown 结构子集
 //!   (ATX 标题 `#`..`######` / 逐行一段 / 列表项 `-` `*` `+` 与 `N.` `N)` /
-//!   行内 `**粗**` `*斜*` `_斜_`), 生成最小 OOXML 包 (内容类型 + 根关系 +
-//!   `word/document.xml` 三件); **样式最小如实**: 无 `styles.xml` / 无字体美化,
-//!   标题以 `HeadingN` 段落样式名承载、列表以 `w:numPr` 标记承载 (字形与编号
-//!   外观由消费端决定)。`docx_append` 在副本的 `word/document.xml` body 尾部
-//!   追加纯文本段落 (逐行一段), 其余容器条目原样搬动 (只动 `word/document.xml`);
-//!   **只创建不覆盖**, 与写族同一原子写门禁。嵌套列表 / 引用块 / 表格 / 图片 /
-//!   表式排版不在子集, 标记不成对按字面保留 (不猜语义)。
+//!   行内 `**粗**` `*斜*` `_斜_`), 生成最小 OOXML 包 (内容类型 + 根关系 + 正文
+//!   关系 + `word/document.xml` + `word/styles.xml` 五件); **样式层最小如实**:
+//!   样式表只给 Normal / Heading1..6 (带大纲级别 + 16/14/13/12/11/11pt 字号阶梯)
+//!   / ListParagraph / 粗斜体字符样式 + 默认字体族与正文字号, **无主题、无字体
+//!   美化、无自定义编号外观** (列表仍以 `w:numPr` 标记承载, 编号外观由消费端
+//!   决定; 本批不生成 numbering.xml)。`docx_append` 在副本的
+//!   `word/document.xml` body 尾部追加纯文本段落 (逐行一段), 其余容器条目原样
+//!   搬动 (只动 `word/document.xml`); **只创建不覆盖**, 与写族同一原子写门禁。
+//!   嵌套列表 / 引用块 / 表格 / 图片 / 表式排版不在子集, 标记不成对按字面保留
+//!   (不猜语义)。
 //!
 //! # 治理 (受控读写族)
 //!
@@ -182,9 +185,14 @@ pub const DOC_OPS_TOOL_DESCRIPTION: &str = "Read and transform documents inside 
   (every write waits for a human approval). DOCX face: docx_extract_text \
   (markdown out) and docx_outline (heading levels) as reads; docx_from_markdown \
   (minimal markdown-to-DOCX generation: headings, paragraphs, lists, bold/italic \
-  structure) and docx_append (append text paragraphs to a copy) as writes - \
-  minimal styling only, no font beautification, and the markdown subset refuses \
-  nothing silently (unmatched markers stay literal). Paths must stay inside the \
+  structure) and docx_append (append text paragraphs to a copy) as writes - the \
+  generated package carries a minimal style layer (Normal, Heading1..6 with \
+  outline levels and a stepwise size ladder, ListParagraph, bold/italic character \
+  styles, default font family and body size); there is no theme, no font \
+  beautification, no custom numbering look, and no numbering.xml is generated \
+  (list numbering stays a numPr marker whose look the consumer decides), and the \
+  markdown subset refuses nothing silently (unmatched markers stay literal). \
+  Paths must stay inside the \
   workspace root; credential surfaces are refused; inputs over the size cap and \
   PDFs over the page cap are refused, never silently truncated. Encrypted PDFs \
   and streams outside the declared subset are refused with an explicit reason.";
@@ -1297,8 +1305,79 @@ fn docx_document_xml(blocks: &[DocxBlock]) -> String {
     )
 }
 
-/// 最小 OOXML 包 (三件: 内容类型 + 根关系 + 正文) —— 样式最小如实:
-/// 无 `styles.xml` 无字体美化, 标题/列表只落结构标记。
+/// `Heading1..6` 样式条目 (标题 = 加粗 + 字号阶梯 + 大纲级别; 纯结构, 零字体美化)。
+fn docx_heading_styles_xml() -> String {
+    // 半磅值 (1/2 pt): 16 / 14 / 13 / 12 / 11 / 11pt 阶梯。
+    const SIZES: [u32; 6] = [32, 28, 26, 24, 22, 22];
+    // 段前距 (twips): 逐级收窄。
+    const BEFORE: [u32; 6] = [240, 200, 160, 120, 120, 120];
+    let mut out = String::new();
+    for level in 1..=6u32 {
+        let index = (level - 1) as usize;
+        let before = BEFORE[index];
+        let size = SIZES[index];
+        let outline = level - 1;
+        out.push_str(&format!(
+            "<w:style w:type=\"paragraph\" w:styleId=\"Heading{level}\">\
+             <w:name w:val=\"heading {level}\"/>\
+             <w:basedOn w:val=\"Normal\"/>\
+             <w:next w:val=\"Normal\"/>\
+             <w:qFormat/>\
+             <w:pPr><w:keepNext/><w:spacing w:before=\"{before}\" w:after=\"120\"/>\
+             <w:outlineLvl w:val=\"{outline}\"/></w:pPr>\
+             <w:rPr><w:b/><w:sz w:val=\"{size}\"/><w:szCs w:val=\"{size}\"/></w:rPr>\
+             </w:style>"
+        ));
+    }
+    out
+}
+
+/// 最小样式层 (`word/styles.xml`): 文档默认 (Calibri 11pt 正文, 行距 1.1 + 段后
+/// 160 twips) + `Normal` + `Heading1..6` + `ListParagraph` + `Strong`/`Emphasis`
+/// 字符样式。
+///
+/// **最小如实 (0 装边界)**: 无主题、无字体美化 (不换字体族/不加颜色/不加阴影)、
+/// 无自定义编号外观 (列表仍是 `w:numPr` 标记, 本批不生成 `numbering.xml`, 编号
+/// 与项目符号外观由消费端决定)。样式名与正文里 `w:pStyle` 的引用同名同源, 消费
+/// 端按名解析即得标题层级观感; 渲染结果仍取决于消费端样式表实现。
+fn docx_styles_xml() -> String {
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <w:styles xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+         <w:docDefaults>\
+         <w:rPrDefault><w:rPr>\
+         <w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\" w:cs=\"Calibri\"/>\
+         <w:sz w:val=\"22\"/><w:szCs w:val=\"22\"/>\
+         </w:rPr></w:rPrDefault>\
+         <w:pPrDefault><w:pPr>\
+         <w:spacing w:after=\"160\" w:line=\"264\" w:lineRule=\"auto\"/>\
+         </w:pPr></w:pPrDefault>\
+         </w:docDefaults>\
+         <w:style w:type=\"paragraph\" w:default=\"1\" w:styleId=\"Normal\">\
+         <w:name w:val=\"Normal\"/><w:qFormat/></w:style>\
+         {}\
+         <w:style w:type=\"paragraph\" w:styleId=\"ListParagraph\">\
+         <w:name w:val=\"List Paragraph\"/><w:basedOn w:val=\"Normal\"/>\
+         <w:qFormat/><w:pPr><w:ind w:left=\"720\"/></w:pPr></w:style>\
+         <w:style w:type=\"character\" w:default=\"1\" w:styleId=\"DefaultParagraphFont\">\
+         <w:name w:val=\"Default Paragraph Font\"/><w:uiPriority w:val=\"1\"/>\
+         <w:semiHidden/><w:unhideWhenUsed/></w:style>\
+         <w:style w:type=\"character\" w:styleId=\"Strong\">\
+         <w:name w:val=\"Strong\"/><w:basedOn w:val=\"DefaultParagraphFont\"/>\
+         <w:qFormat/><w:rPr><w:b/></w:rPr></w:style>\
+         <w:style w:type=\"character\" w:styleId=\"Emphasis\">\
+         <w:name w:val=\"Emphasis\"/><w:basedOn w:val=\"DefaultParagraphFont\"/>\
+         <w:qFormat/><w:rPr><w:i/></w:rPr></w:style>\
+         </w:styles>",
+        docx_heading_styles_xml()
+    )
+}
+
+/// 最小 OOXML 包 (五件: 内容类型 + 根关系 + 正文关系 + 正文 + 样式层)。
+///
+/// 2026-10-18 样式层补齐: `word/_rels/document.xml.rels` 把正文指向 `styles.xml`,
+/// `[Content_Types].xml` 登记样式部件内容类型 —— 五件缺一即 Word 判「样式缺失」,
+/// 故三处一起给 (不靠消费端容错)。
 fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
     let types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
          <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
@@ -1307,12 +1386,19 @@ fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
          <Default Extension=\"xml\" ContentType=\"application/xml\"/>\
          <Override PartName=\"/word/document.xml\" \
          ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>\
+         <Override PartName=\"/word/styles.xml\" \
+         ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>\
          </Types>";
     let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
          <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
          <Relationship Id=\"rId1\" \
          Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" \
          Target=\"word/document.xml\"/></Relationships>";
+    let document_rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+         <Relationship Id=\"rId1\" \
+         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" \
+         Target=\"styles.xml\"/></Relationships>";
     zip_write_entries(
         &[
             ZipEntry {
@@ -1324,8 +1410,16 @@ fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
                 data: rels.as_bytes().to_vec(),
             },
             ZipEntry {
+                name: "word/_rels/document.xml.rels".to_string(),
+                data: document_rels.as_bytes().to_vec(),
+            },
+            ZipEntry {
                 name: "word/document.xml".to_string(),
                 data: document_xml.as_bytes().to_vec(),
+            },
+            ZipEntry {
+                name: "word/styles.xml".to_string(),
+                data: docx_styles_xml().into_bytes(),
             },
         ],
         ZipCompression::Deflate,
@@ -3798,7 +3892,7 @@ impl DocOpsRunner {
         }))
     }
 
-    /// `docx_from_markdown`: Markdown → DOCX 最小生成 (结构面; 样式最小如实)。
+    /// `docx_from_markdown`: Markdown → DOCX 最小生成 (结构面; 样式层最小如实)。
     fn docx_from_markdown(&self, params: &DocOpsParams) -> Result<Value, DocOpsError> {
         let text = params.text.as_deref().unwrap_or_default();
         let output = params.output.as_deref().unwrap_or_default();
@@ -3814,8 +3908,9 @@ impl DocOpsRunner {
             "paragraphs": blocks.len(),
             "bytes_written": bytes.len() as u64,
             "notes": [
-                "样式最小如实: 标题以 HeadingN 段落样式名承载, 列表以 numPr 标记承载, \
-                 无 styles.xml 无字体美化 (字形/编号外观由消费端决定)"
+                "样式层最小如实: 标题以 HeadingN 引用同源样式表 (Normal/Heading1..6/\
+                 ListParagraph/粗斜字符样式), 列表以 numPr 标记承载; 无主题、无字体美化、\
+                 无自定义编号外观 (不生成 numbering.xml, 字形/编号外观由消费端决定)"
             ],
         }))
     }
@@ -5315,6 +5410,56 @@ mod tests {
         docx_parse_paragraphs(bytes, TEST_ZIP_BUDGET).expect("自家产物可由自家读端解回")
     }
 
+    /// 按名取条目全文 (测试检视用: 缺件即 panic 点名)。
+    fn entry_text<'a>(entries: &'a [ZipEntry], name: &str) -> &'a str {
+        std::str::from_utf8(
+            &entries
+                .iter()
+                .find(|entry| entry.name == name)
+                .unwrap_or_else(|| panic!("{name} 必须在场"))
+                .data,
+        )
+        .expect("条目必须是 UTF-8")
+    }
+
+    /// 按固定前缀抽出属性值集合 (`w:pStyle` 引用集 / `w:styleId` 定义集),
+    /// 测试用最小扫描: 只认「前缀 + 值 + 闭合引号」这一固定形状。
+    fn attribute_values(xml: &str, prefix: &str) -> std::collections::BTreeSet<String> {
+        let mut values = std::collections::BTreeSet::new();
+        let mut rest = xml;
+        while let Some(start) = rest.find(prefix) {
+            let after = &rest[start + prefix.len()..];
+            let end = after.find('"').expect("属性值必须闭合");
+            values.insert(after[..end].to_string());
+            rest = &after[end..];
+        }
+        values
+    }
+
+    /// XML 部件良构检查: 开闭标记逐层配对到正文尾 (样式层不在自家读端覆盖面,
+    /// 故单验标记成对, 坏标记会整体拒绝而不静默通过)。
+    fn assert_well_formed_xml(label: &str, xml: &str) {
+        use quick_xml::events::Event;
+        let mut reader = quick_xml::Reader::from_str(xml);
+        let mut depth = 0usize;
+        loop {
+            match reader
+                .read_event()
+                .unwrap_or_else(|error| panic!("{label} 标记损坏: {error}"))
+            {
+                Event::Start(_) => depth += 1,
+                Event::End(_) => {
+                    depth = depth
+                        .checked_sub(1)
+                        .unwrap_or_else(|| panic!("{label} 闭合标记多于开标记"))
+                }
+                Event::Eof => break,
+                _ => {}
+            }
+        }
+        assert_eq!(depth, 0, "{label} 开标记必须全部闭合");
+    }
+
     /// 开写总闸的工作区配置 (生产由组装根注入 `file_write` 同一开关值)。
     fn write_config(tag: &str) -> DocOpsConfig {
         DocOpsConfig::new(workspace(tag)).with_write_gate(true)
@@ -5390,7 +5535,7 @@ mod tests {
         );
     }
 
-    /// ㉒ DOCX 生成: 一例手工 XML 检视 (包三件 / 结构标记 / 转义 / 样式最小如实)。
+    /// ㉒ DOCX 生成: 一例手工 XML 检视 (五件包逐件 / 结构标记 / 转义 / 样式层同源)。
     #[test]
     fn the_generated_docx_is_inspected_by_hand_at_the_xml_level() {
         let markdown = "# Head\n\nplain a & b < c\n\n- item\n\n**bold** and *ital*\n";
@@ -5409,15 +5554,44 @@ mod tests {
         let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
         assert_eq!(
             names,
-            vec!["[Content_Types].xml", "_rels/.rels", "word/document.xml"],
-            "最小包恰三件"
+            vec![
+                "[Content_Types].xml",
+                "_rels/.rels",
+                "word/_rels/document.xml.rels",
+                "word/document.xml",
+                "word/styles.xml",
+            ],
+            "最小包恰五件 (正文 + 样式层, 样式部件三处一起给)"
         );
-        let document = &entries
-            .iter()
-            .find(|entry| entry.name == "word/document.xml")
-            .expect("正文件在场")
-            .data;
-        let xml = std::str::from_utf8(document).expect("UTF-8");
+        // 五件 XML 部件逐件良构 (标记成对; 样式层不在自家读端覆盖面, 单验)。
+        for name in [
+            "[Content_Types].xml",
+            "_rels/.rels",
+            "word/_rels/document.xml.rels",
+            "word/document.xml",
+            "word/styles.xml",
+        ] {
+            assert_well_formed_xml(name, entry_text(&entries, name));
+        }
+        // 逐件内容检视: 内容类型 / 根关系 / 正文关系 / 正文 / 样式层。
+        let types = entry_text(&entries, "[Content_Types].xml");
+        assert!(types.contains("/word/document.xml"), "内容类型登记正文");
+        assert!(
+            types.contains("/word/styles.xml") && types.contains("wordprocessingml.styles+xml"),
+            "内容类型登记样式部件: {types}"
+        );
+        let rels = entry_text(&entries, "_rels/.rels");
+        assert!(
+            rels.contains("Target=\"word/document.xml\""),
+            "根关系指向正文"
+        );
+        let document_rels = entry_text(&entries, "word/_rels/document.xml.rels");
+        assert!(
+            document_rels.contains("Target=\"styles.xml\"")
+                && document_rels.contains("/relationships/styles"),
+            "正文关系指向样式层: {document_rels}"
+        );
+        let xml = entry_text(&entries, "word/document.xml");
         assert!(xml.contains("<w:pStyle w:val=\"Heading1\"/>"), "标题样式名");
         assert!(
             xml.contains("<w:numPr><w:numId w:val=\"1\"/></w:numPr>"),
@@ -5429,22 +5603,91 @@ mod tests {
             xml.contains("<w:t xml:space=\"preserve\">plain a &amp; b &lt; c</w:t>"),
             "文本转义: {xml}"
         );
-        // 样式最小如实: 无 styles.xml 无字体美化 (只有结构标记)。
+        // 样式层最小如实: Normal 为默认段落样式, Heading1 带大纲级别,
+        // 列表段落与粗/斜字符样式在场, 无主题/无字体美化 (不写主题部件)。
+        let styles = entry_text(&entries, "word/styles.xml");
         assert!(
-            !names.iter().any(|name| name.contains("styles")),
-            "无 styles.xml (样式最小, 不冒充美化)"
+            styles.contains("<w:style w:type=\"paragraph\" w:default=\"1\" w:styleId=\"Normal\">"),
+            "Normal 是默认段落样式: {styles}"
         );
-        let types = std::str::from_utf8(&entries[0].data).expect("UTF-8");
-        assert!(types.contains("/word/document.xml"), "内容类型登记正文");
-        let rels = std::str::from_utf8(&entries[1].data).expect("UTF-8");
         assert!(
-            rels.contains("Target=\"word/document.xml\""),
-            "根关系指向正文"
+            styles.contains("<w:style w:type=\"paragraph\" w:styleId=\"Heading1\">")
+                && styles.contains("<w:outlineLvl w:val=\"0\"/>"),
+            "Heading1 带大纲级别 0: {styles}"
+        );
+        assert!(
+            styles.contains("w:styleId=\"ListParagraph\""),
+            "列表段落样式在场"
+        );
+        assert!(styles.contains("w:styleId=\"Strong\""), "粗体字符样式在场");
+        assert!(
+            styles.contains("w:styleId=\"Emphasis\""),
+            "斜体字符样式在场"
+        );
+        // 正文引用与样式表定义同名同源: 引用必须在定义内 (悬空 = 样式缺失)。
+        let references = attribute_values(xml, "<w:pStyle w:val=\"");
+        let definitions = attribute_values(styles, "w:styleId=\"");
+        assert!(
+            references.contains("Heading1"),
+            "正文标题引用必须在场: {references:?}"
+        );
+        assert!(
+            references.is_subset(&definitions),
+            "正文样式引用悬空: 引用 {references:?} 定义 {definitions:?}"
+        );
+        assert!(
+            !names.iter().any(|name| name.contains("theme")),
+            "无主题部件 (样式层不冒充主题)"
+        );
+    }
+
+    /// ㉒ᵇ DOCX 生成: 六级标题交叉校验 —— 正文 `w:pStyle="HeadingN"` 引用集与
+    /// `word/styles.xml` 的 `w:styleId="HeadingN"` 定义集逐级比对 (6 级全覆盖,
+    /// 引用不悬空), 且每级带对应大纲级别。
+    #[test]
+    fn docx_heading_references_are_backed_by_style_definitions() {
+        let markdown = "# L1\n\n## L2\n\n### L3\n\n#### L4\n\n##### L5\n\n###### L6\n";
+        let config = write_config("docx-headings");
+        let frame = from_markdown(&config, markdown, "headings.docx").expect("六级标题可生成");
+        assert_eq!(frame["paragraphs"], 6, "六级标题 = 六段");
+        let bytes = std::fs::read(config.workspace_root.join("headings.docx")).expect("产物已落盘");
+        let entries = zip_read_entries(&bytes, TEST_ZIP_BUDGET).expect("可解回");
+        let references = attribute_values(
+            entry_text(&entries, "word/document.xml"),
+            "<w:pStyle w:val=\"",
+        );
+        let definitions = attribute_values(entry_text(&entries, "word/styles.xml"), "w:styleId=\"");
+        let styles = entry_text(&entries, "word/styles.xml");
+        for level in 1..=6u32 {
+            let id = format!("Heading{level}");
+            assert!(references.contains(&id), "正文缺 {id} 引用: {references:?}");
+            assert!(
+                definitions.contains(&id),
+                "样式表缺 {id} 定义: {definitions:?}"
+            );
+            assert!(
+                styles.contains(&format!("<w:outlineLvl w:val=\"{}\"/>", level - 1)),
+                "{id} 缺大纲级别 {}: {styles}",
+                level - 1
+            );
+        }
+        assert_eq!(
+            references,
+            (1..=6u32)
+                .map(|level| format!("Heading{level}"))
+                .collect::<std::collections::BTreeSet<String>>(),
+            "正文引用集必须恰是六级标题 (无多无少)"
+        );
+        assert!(
+            references.is_subset(&definitions),
+            "引用必须落在定义内: 悬空 = {:?}",
+            references.difference(&definitions).collect::<Vec<_>>()
         );
     }
 
     /// ㉓ DOCX 追加: 副本追加段落 (原段不动, 序不乱, 空行忽略), 创建类原子写
-    /// (只创建不覆盖, 二次同名拒绝且底稿一字不改)。
+    /// (只创建不覆盖, 二次同名拒绝且底稿一字不改), 样式层条目与底稿逐字节一致
+    /// (append 只动 `word/document.xml`)。
     #[test]
     fn docx_append_appends_paragraphs_and_never_overwrites() {
         let config = write_config("docx-append");
@@ -5480,6 +5723,34 @@ mod tests {
         );
         assert_eq!(paragraphs[0].style, "Heading1", "原段样式不动");
         assert!(paragraphs[1].numbered, "原列表标记不动");
+        // append 只动 `word/document.xml`: 样式层与正文关系条目内容与底稿逐字节一致。
+        let base_entries = zip_read_entries(&base_bytes, TEST_ZIP_BUDGET).expect("底稿可解回");
+        let out_entries = zip_read_entries(&bytes, TEST_ZIP_BUDGET).expect("副本可解回");
+        let entry_bytes = |entries: &[ZipEntry], name: &str| -> Vec<u8> {
+            entries
+                .iter()
+                .find(|entry| entry.name == name)
+                .unwrap_or_else(|| panic!("{name} 必须在场"))
+                .data
+                .clone()
+        };
+        for name in [
+            "[Content_Types].xml",
+            "_rels/.rels",
+            "word/_rels/document.xml.rels",
+            "word/styles.xml",
+        ] {
+            assert_eq!(
+                entry_bytes(&out_entries, name),
+                entry_bytes(&base_entries, name),
+                "append 只动 document.xml: {name} 必须与底稿逐字节一致"
+            );
+        }
+        assert_ne!(
+            entry_bytes(&out_entries, "word/document.xml"),
+            entry_bytes(&base_entries, "word/document.xml"),
+            "正文必须真的变了 (追加段落)"
+        );
         // 只创建不覆盖: 同名输出拒绝即帧, 底稿一字不改。
         let error = runner
             .run(&DocOpsParams {
