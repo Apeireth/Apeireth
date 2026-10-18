@@ -50,6 +50,8 @@ $exemptFiles = @(
   'docs/design/tui-power-design-research.md',
   'docs/04-internal/philosophy-study/05-craft-family.md',
   'docs/design/readme-research-notes.md',
+  # 研究引注豁免：AI OS 市场对照（2026-10-18，第三方产品名仅作事实引注，不进代码/文案）
+  'docs/04-internal/ai-os-landscape-2026-10-18.md',
   'crates/engine/image/NOTICE.md',
   'OSS_NOTICE.md',
   'docs/04-internal/license-port/README.md',
