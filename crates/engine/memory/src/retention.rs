@@ -395,6 +395,11 @@ mod tests {
 
     /// 遗忘半衰期 90 天口径 (设计裁定 R1⑩): 未保护记忆基线 = 90 天 (2160h);
     /// 保护豁免不变 (protected 仍跳过淘汰); 显式半衰期仍可覆盖 (旧行为兼容)。
+    ///
+    /// D6 测试减敏 (2026-10-18): 默认策略取**生效**半衰期 —— 宿主 env 旋钮设了
+    /// `APEIRETH_TUNE_MEMORY_FADE` 就会按倍率缩放, 原断言「未设旋钮 = 2160」会被
+    /// 宿主环境污染成假红。改为「默认策略 = 生效值 (同一推导)」+「未设旋钮 = 90 天」
+    /// 走纯判据面 (`parse_env_value(None)`, 不读宿主 env) 两头分别钉。
     #[test]
     fn forget_half_life_defaults_to_ninety_days_and_stays_overridable() {
         assert_eq!(
@@ -403,8 +408,13 @@ mod tests {
         );
         assert_eq!(
             RetentionPolicy::default().half_life_hours,
+            effective_half_life_hours(),
+            "默认策略 = 生效半衰期 (同一推导)"
+        );
+        assert_eq!(
+            BASELINE_HALF_LIFE_HOURS / TunableParam::MemoryFade.parse_env_value(None),
             2160.0,
-            "未设旋钮 = 默认遗忘半衰期 90 天"
+            "未设旋钮 (倍率 1.0) = 基线 90 天"
         );
         // 一个半衰期后强度恰 0.5 (公式与常量同口径)。
         assert!(

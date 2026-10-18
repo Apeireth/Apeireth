@@ -106,12 +106,24 @@ mod tests {
     #[test]
     fn half_life_defaults_to_90_days() {
         // 设计裁定 R1⑩: 默认遗忘半衰期 = 90 天 (一个半衰期后强度 ≈ 0.5)。
+        // D6 测试减敏 (2026-10-18): 宿主 env 旋钮会按倍率缩放**生效**半衰期 ——
+        // 「一个半衰期 → 0.5」改用生效值表述 (任何 env 下都成立); 「未设旋钮 =
+        // 基线 90 天」另用纯判据面钉 (不读宿主 env)。
         let e = DecayEngine::new();
-        let one_half_life_ago = Utc::now() - chrono::Duration::days(90);
+        let half_life_hours = DecayConfig::default().half_life_hours;
+        let one_half_life_ago =
+            Utc::now() - chrono::Duration::seconds((half_life_hours * 3600.0) as i64);
         let s = e.strength(one_half_life_ago);
         assert!(
-            (s - 0.5).abs() < 0.05,
-            "90 天 = 一个半衰期 → ≈0.5, 实际 {s}"
+            (s - 0.5).abs() < 0.02,
+            "一个生效半衰期 → ≈0.5, 实际 {s} (半衰期 {half_life_hours}h)"
+        );
+        assert_eq!(
+            crate::retention::BASELINE_HALF_LIFE_HOURS
+                / apeireth_orchestration::self_tuning::TunableParam::MemoryFade
+                    .parse_env_value(None),
+            2160.0,
+            "未设旋钮 (倍率 1.0) → 基线 2160h = 90 天"
         );
     }
 
@@ -132,16 +144,19 @@ mod tests {
 
     #[test]
     fn virtual_clock_half_life_without_waiting() {
-        // 虚拟时钟: 0 真等待验证默认 90 天半衰期
+        // 虚拟时钟: 0 真等待验证半衰期 (D6 减敏: 用**生效**半衰期推进虚拟时间,
+        // 不假设宿主 env 未设旋钮)。
         let vc = vclock();
-        let e = DecayEngine::with_config_and_clock(DecayConfig::default(), Arc::new(vc.clone()));
+        let config = DecayConfig::default();
+        let half_life = chrono::Duration::seconds((config.half_life_hours * 3600.0) as i64);
+        let e = DecayEngine::with_config_and_clock(config, Arc::new(vc.clone()));
         let last = vc.current();
         assert!((e.strength(last) - 1.0).abs() < 1e-6, "刚访问强度应接近 1");
-        vc.advance(chrono::Duration::days(90));
+        vc.advance(half_life);
         let s = e.strength(last);
-        assert!((s - 0.5).abs() < 0.01, "90 天半衰期应 ≈0.5, 实际 {s}");
-        // 再快进 90 天 (合计 180 天) → 应被遗忘
-        vc.advance(chrono::Duration::days(90));
-        assert!(e.should_forget(last, 0.5), "180 天后应低于遗忘阈值");
+        assert!((s - 0.5).abs() < 0.01, "一个半衰期应 ≈0.5, 实际 {s}");
+        // 再快进一个半衰期 (合计两个) → 应被遗忘
+        vc.advance(half_life);
+        assert!(e.should_forget(last, 0.5), "两个半衰期后应低于遗忘阈值");
     }
 }

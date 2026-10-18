@@ -171,10 +171,20 @@ impl TunableParam {
     /// 各常量的使用/构造点调用本方法取值 —— 未设 env 且无 override 时恒等于
     /// baseline (= 现状常量), 行为零变化。
     pub fn effective(self) -> f64 {
+        self.effective_with(std::env::var(self.env_name()).ok().as_deref())
+    }
+
+    /// 生效值的**纯判据版**: 与 [`Self::effective`] 同一套优先级 (override > env
+    /// 文本 > baseline), 但 env 文本由调用方显式给出 (`None` = 旋钮未设)。
+    ///
+    /// 存在的理由 (D6 测试减敏): 测试若直接断言 [`Self::effective`] 等于基线,
+    /// 就会被**宿主环境变量**污染 —— 开发机/CI 上设了同名旋钮即假红。把"读 env"
+    /// 与"按 env 判值"拆开, 测试走纯判据面 (恒确定), 生产路径仍走 `effective`。
+    pub fn effective_with(self, env_text: Option<&str>) -> f64 {
         if let Some(values) = effective_override() {
             return values.get(self);
         }
-        self.parse_env_value(std::env::var(self.env_name()).ok().as_deref())
+        self.parse_env_value(env_text)
     }
 }
 
@@ -1172,13 +1182,28 @@ mod tests {
     }
 
     // 10. 生效值优先级: override > env > baseline; 清除后回落。
+    //
+    // D6 测试减敏 (2026-10-18): 原版用 `effective()` 断言「无 env = 基线」——宿主
+    // 环境变量一设就假红。env 面改走纯判据 `effective_with(Some/None)`, override
+    // 面仍走 `effective()` (override 分支不读 env, 确定)。
     #[test]
     fn effective_prefers_override_then_env_baseline() {
         clear_effective_overrides();
+        let tone = TunableParam::ToneSaturation;
         assert_eq!(
-            TunableParam::ToneSaturation.effective(),
-            TunableParam::ToneSaturation.baseline(),
-            "无 env 无 override = 基线 (零变化)"
+            tone.effective_with(None),
+            tone.baseline(),
+            "无 env 文本无 override = 基线 (零变化)"
+        );
+        assert_eq!(
+            tone.effective_with(Some("0.6")),
+            0.6,
+            "env 文本合法 = 取该值"
+        );
+        assert_eq!(
+            tone.effective_with(Some("not-a-number")),
+            tone.baseline(),
+            "env 文本非法 = 回基线"
         );
         install_effective_values(TuningValues {
             memory_fade: 0.5,
@@ -1188,11 +1213,15 @@ mod tests {
         });
         assert_eq!(TunableParam::MemoryFade.effective(), 0.5);
         assert_eq!(TunableParam::ConsolidationCadence.effective(), 2.0);
-        clear_effective_overrides();
+        // override 优先于 env 文本 (同一判据面钉死)。
         assert_eq!(
-            TunableParam::MemoryFade.effective(),
-            TunableParam::MemoryFade.baseline()
+            TunableParam::MemoryFade.effective_with(Some("0.9")),
+            0.5,
+            "override 胜过 env 文本"
         );
+        clear_effective_overrides();
+        let fade = TunableParam::MemoryFade;
+        assert_eq!(fade.effective_with(None), fade.baseline());
     }
 
     // 11. 信号注入点: 检索计数器按批发事件, 不满一批不发。
