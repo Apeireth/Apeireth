@@ -38,6 +38,10 @@
 - **LOCKED 5 项 0 触碰**：9 哲学锚本体 / 13 键 / 3 不可变脊柱 / workspace.version / R11 baseline——
   workspace.version 仅 release authority 可改。
 
+## 4.5 取材通道（调研/搬运/下载批必读）
+
+- GitHub 取材按 [docs/04-internal/github-fetch-guide.md](docs/04-internal/github-fetch-guide.md)：**先测活再取材**（池子延迟不稳，别信历史）、raw 优先于 API（API 匿名限速是盲等主因）、失败快退换节点、**绝不经第三方中转传凭据**。
+
 ## 5. 校验命令（交付前必跑，`-j 2` 口径）
 
 ```powershell
