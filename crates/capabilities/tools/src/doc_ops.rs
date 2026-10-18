@@ -49,11 +49,15 @@
 //! - **DOCX 写** (结构面): `docx_from_markdown` 认 Markdown 结构子集
 //!   (ATX 标题 `#`..`######` / 逐行一段 / 列表项 `-` `*` `+` 与 `N.` `N)` /
 //!   行内 `**粗**` `*斜*` `_斜_`), 生成最小 OOXML 包 (内容类型 + 根关系 + 正文
-//!   关系 + `word/document.xml` + `word/styles.xml` 五件); **样式层最小如实**:
-//!   样式表只给 Normal / Heading1..6 (带大纲级别 + 16/14/13/12/11/11pt 字号阶梯)
-//!   / ListParagraph / 粗斜体字符样式 + 默认字体族与正文字号, **无主题、无字体
-//!   美化、无自定义编号外观** (列表仍以 `w:numPr` 标记承载, 编号外观由消费端
-//!   决定; 本批不生成 numbering.xml)。`docx_append` 在副本的
+//!   关系 + `word/document.xml` + `word/styles.xml` + `word/numbering.xml` 六件);
+//!   **样式层最小如实**: 样式表只给 Normal / Heading1..6 (带大纲级别 +
+//!   16/14/13/12/11/11pt 字号阶梯) / ListParagraph / 粗斜体字符样式 + 默认字体族
+//!   与正文字号, **无主题、无字体美化**; **编号层最小如实**: `numbering.xml` 只给
+//!   一级项目符号 (`w:numFmt bullet` + `w:lvlText "•"` + 左缩进 720 / 悬挂 360
+//!   twips), 正文列表条目以 `w:numPr` → `w:numId="1"` 指向它, 故项目符号由包内
+//!   定义可见; **有序列表当前与无序列表同样渲染为项目符号** —— 解析层尚无
+//!   ordered/bullet 分型 (`N.` `N)` 与 `-` `*` `+` 落同一 `numId=1`, 读回归一
+//!   `- ` 的既有口径不变), 不冒充编号支持。`docx_append` 在副本的
 //!   `word/document.xml` body 尾部追加纯文本段落 (逐行一段), 其余容器条目原样
 //!   搬动 (只动 `word/document.xml`); **只创建不覆盖**, 与写族同一原子写门禁。
 //!   嵌套列表 / 引用块 / 表格 / 图片 / 表式排版不在子集, 标记不成对按字面保留
@@ -188,11 +192,14 @@ pub const DOC_OPS_TOOL_DESCRIPTION: &str = "Read and transform documents inside 
   structure) and docx_append (append text paragraphs to a copy) as writes - the \
   generated package carries a minimal style layer (Normal, Heading1..6 with \
   outline levels and a stepwise size ladder, ListParagraph, bold/italic character \
-  styles, default font family and body size); there is no theme, no font \
-  beautification, no custom numbering look, and no numbering.xml is generated \
-  (list numbering stays a numPr marker whose look the consumer decides), and the \
-  markdown subset refuses nothing silently (unmatched markers stay literal). \
-  Paths must stay inside the \
+  styles, default font family and body size) and a minimal numbering layer \
+  (word/numbering.xml: one bullet level whose numPr numId 1 the list paragraphs \
+  reference, so lists show a visible bullet); there is no theme and no font \
+  beautification, and ordered lists currently render as the same bullet (the \
+  parser does not distinguish ordered from bullet items, and the read side \
+  normalizes every list item to a `- ` item), so no numbered-list support is \
+  claimed; the markdown subset refuses nothing silently (unmatched markers stay \
+  literal). Paths must stay inside the \
   workspace root; credential surfaces are refused; inputs over the size cap and \
   PDFs over the page cap are refused, never silently truncated. Encrypted PDFs \
   and streams outside the declared subset are refused with an explicit reason.";
@@ -1084,7 +1091,8 @@ struct DocxRun {
 struct DocxBlock {
     /// 标题级别 (1..=6, ATX `#`..`######`); 非标题 = [`None`]。
     heading: Option<u32>,
-    /// 列表项 (`-` `*` `+` 或 `N.` `N)`; 落 `w:numPr` 标记, 外观不承诺)。
+    /// 列表项 (`-` `*` `+` 或 `N.` `N)`; 落 `w:numPr numId=1` 标记, 外观由
+    /// `numbering.xml` 的一级项目符号定义给出 —— 有序与无序当前同外观, 不区分)。
     list: bool,
     /// 行内 run 序列。
     runs: Vec<DocxRun>,
@@ -1337,9 +1345,10 @@ fn docx_heading_styles_xml() -> String {
 /// 字符样式。
 ///
 /// **最小如实 (0 装边界)**: 无主题、无字体美化 (不换字体族/不加颜色/不加阴影)、
-/// 无自定义编号外观 (列表仍是 `w:numPr` 标记, 本批不生成 `numbering.xml`, 编号
-/// 与项目符号外观由消费端决定)。样式名与正文里 `w:pStyle` 的引用同名同源, 消费
-/// 端按名解析即得标题层级观感; 渲染结果仍取决于消费端样式表实现。
+/// 样式层本身**不含编号定义** (列表外观独立成 `numbering.xml`, 见
+/// [`docx_numbering_xml`]; 此处只给段落/字符样式)。样式名与正文里 `w:pStyle`
+/// 的引用同名同源, 消费端按名解析即得标题层级观感; 渲染结果仍取决于消费端样式表
+/// 实现。
 fn docx_styles_xml() -> String {
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
@@ -1373,11 +1382,40 @@ fn docx_styles_xml() -> String {
     )
 }
 
-/// 最小 OOXML 包 (五件: 内容类型 + 根关系 + 正文关系 + 正文 + 样式层)。
+/// 最小编号层 (`word/numbering.xml`): 一个 `w:abstractNum` + 一个 `w:num`。
+///
+/// 正文列表条目以 `w:numPr > w:numId w:val="1"` 引用本文件的 `w:num w:numId="1"`,
+/// 后者经 `w:abstractNumId w:val="0"` 落到 `w:abstractNum w:abstractNumId="0"` 的
+/// `w:lvl w:ilvl="0"` (项目符号 `•`, 左缩进 720 + 悬挂 360 twips)。
+///
+/// **最小如实 (0 装边界)**: 只给一级 bullet, 且**有序列表当前与无序列表同样渲染为
+/// 项目符号** —— 解析层尚无 ordered/bullet 分型 (Markdown 的 `-` `*` `+` 与
+/// `N.` `N)` 都落同一 `numId=1`, 读回归一为 `- `), 故此处不写 `w:numFmt
+/// w:val="decimal"` 也不写多级 `w:lvl`: 编号支持要等解析层先有分型, 本层不假装
+/// 提供。消费端按关系 (rId2) 与内容类型找到本部件即得项目符号外观。
+fn docx_numbering_xml() -> String {
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+     <w:numbering xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+     <w:abstractNum w:abstractNumId=\"0\">\
+     <w:lvl w:ilvl=\"0\">\
+     <w:numFmt w:val=\"bullet\"/>\
+     <w:lvlText w:val=\"•\"/>\
+     <w:lvlJc w:val=\"left\"/>\
+     <w:pPr><w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr>\
+     </w:lvl>\
+     </w:abstractNum>\
+     <w:num w:numId=\"1\"><w:abstractNumId w:val=\"0\"/></w:num>\
+     </w:numbering>"
+        .to_string()
+}
+
+/// 最小 OOXML 包 (六件: 内容类型 + 根关系 + 正文关系 + 正文 + 样式层 + 编号层)。
 ///
 /// 2026-10-18 样式层补齐: `word/_rels/document.xml.rels` 把正文指向 `styles.xml`,
-/// `[Content_Types].xml` 登记样式部件内容类型 —— 五件缺一即 Word 判「样式缺失」,
-/// 故三处一起给 (不靠消费端容错)。
+/// `[Content_Types].xml` 登记样式部件内容类型 —— 缺一即 Word 判「样式缺失」。
+/// 编号层同口径: 正文关系再给 rId2 → `numbering.xml`, 内容类型同步登记编号部件,
+/// 正文里的 `w:numPr numId="1"` 才解析得到项目符号 (悬空 numId = 消费端不显示
+/// 符号), 故三处 (正文标记 / 关系 / 内容类型) 一起给, 不靠消费端容错。
 fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
     let types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
          <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
@@ -1388,6 +1426,8 @@ fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
          ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>\
          <Override PartName=\"/word/styles.xml\" \
          ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>\
+         <Override PartName=\"/word/numbering.xml\" \
+         ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/>\
          </Types>";
     let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
          <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
@@ -1398,7 +1438,10 @@ fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
          <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
          <Relationship Id=\"rId1\" \
          Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" \
-         Target=\"styles.xml\"/></Relationships>";
+         Target=\"styles.xml\"/>\
+         <Relationship Id=\"rId2\" \
+         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" \
+         Target=\"numbering.xml\"/></Relationships>";
     zip_write_entries(
         &[
             ZipEntry {
@@ -1420,6 +1463,10 @@ fn docx_package(document_xml: &str) -> Result<Vec<u8>, DocOpsError> {
             ZipEntry {
                 name: "word/styles.xml".to_string(),
                 data: docx_styles_xml().into_bytes(),
+            },
+            ZipEntry {
+                name: "word/numbering.xml".to_string(),
+                data: docx_numbering_xml().into_bytes(),
             },
         ],
         ZipCompression::Deflate,
@@ -3908,9 +3955,11 @@ impl DocOpsRunner {
             "paragraphs": blocks.len(),
             "bytes_written": bytes.len() as u64,
             "notes": [
-                "样式层最小如实: 标题以 HeadingN 引用同源样式表 (Normal/Heading1..6/\
-                 ListParagraph/粗斜字符样式), 列表以 numPr 标记承载; 无主题、无字体美化、\
-                 无自定义编号外观 (不生成 numbering.xml, 字形/编号外观由消费端决定)"
+                "样式层与编号层最小如实: 标题以 HeadingN 引用同源样式表 (Normal/\
+                 Heading1..6/ListParagraph/粗斜字符样式); 列表以 numPr numId=1 引用 \
+                 numbering.xml 的一级项目符号 (左缩进 720 + 悬挂 360 twips); 无主题、\
+                 无字体美化; 有序列表当前同样渲染为项目符号 (解析层无 ordered/bullet \
+                 分型, 读回归一 `- `), 不冒充编号支持"
             ],
         }))
     }
@@ -5535,7 +5584,8 @@ mod tests {
         );
     }
 
-    /// ㉒ DOCX 生成: 一例手工 XML 检视 (五件包逐件 / 结构标记 / 转义 / 样式层同源)。
+    /// ㉒ DOCX 生成: 一例手工 XML 检视 (六件包逐件 / 结构标记 / 转义 / 样式层与
+    /// 编号层同源)。
     #[test]
     fn the_generated_docx_is_inspected_by_hand_at_the_xml_level() {
         let markdown = "# Head\n\nplain a & b < c\n\n- item\n\n**bold** and *ital*\n";
@@ -5560,25 +5610,32 @@ mod tests {
                 "word/_rels/document.xml.rels",
                 "word/document.xml",
                 "word/styles.xml",
+                "word/numbering.xml",
             ],
-            "最小包恰五件 (正文 + 样式层, 样式部件三处一起给)"
+            "最小包恰六件 (正文 + 样式层 + 编号层, 两个部件三处一起给)"
         );
-        // 五件 XML 部件逐件良构 (标记成对; 样式层不在自家读端覆盖面, 单验)。
+        // 六件 XML 部件逐件良构 (标记成对; 样式/编号层不在自家读端覆盖面, 单验)。
         for name in [
             "[Content_Types].xml",
             "_rels/.rels",
             "word/_rels/document.xml.rels",
             "word/document.xml",
             "word/styles.xml",
+            "word/numbering.xml",
         ] {
             assert_well_formed_xml(name, entry_text(&entries, name));
         }
-        // 逐件内容检视: 内容类型 / 根关系 / 正文关系 / 正文 / 样式层。
+        // 逐件内容检视: 内容类型 / 根关系 / 正文关系 / 正文 / 样式层 / 编号层。
         let types = entry_text(&entries, "[Content_Types].xml");
         assert!(types.contains("/word/document.xml"), "内容类型登记正文");
         assert!(
             types.contains("/word/styles.xml") && types.contains("wordprocessingml.styles+xml"),
             "内容类型登记样式部件: {types}"
+        );
+        assert!(
+            types.contains("/word/numbering.xml")
+                && types.contains("wordprocessingml.numbering+xml"),
+            "内容类型登记编号部件: {types}"
         );
         let rels = entry_text(&entries, "_rels/.rels");
         assert!(
@@ -5591,6 +5648,12 @@ mod tests {
                 && document_rels.contains("/relationships/styles"),
             "正文关系指向样式层: {document_rels}"
         );
+        assert!(
+            document_rels.contains("Id=\"rId2\"")
+                && document_rels.contains("Target=\"numbering.xml\"")
+                && document_rels.contains("/relationships/numbering"),
+            "正文关系指向编号层 (rId2, 标准 numbering 关系): {document_rels}"
+        );
         let xml = entry_text(&entries, "word/document.xml");
         assert!(xml.contains("<w:pStyle w:val=\"Heading1\"/>"), "标题样式名");
         assert!(
@@ -5602,6 +5665,32 @@ mod tests {
         assert!(
             xml.contains("<w:t xml:space=\"preserve\">plain a &amp; b &lt; c</w:t>"),
             "文本转义: {xml}"
+        );
+        // 编号层最小如实: 一级项目符号定义 + numId=1 指向 abstractNum 0, 正文的
+        // numPr numId=1 与之一致 (悬空 numId = 消费端不显示符号)。
+        let numbering = entry_text(&entries, "word/numbering.xml");
+        assert!(
+            numbering.contains("<w:abstractNum w:abstractNumId=\"0\">"),
+            "编号层必须有抽象编号定义: {numbering}"
+        );
+        assert!(
+            numbering.contains("<w:lvl w:ilvl=\"0\">")
+                && numbering.contains("<w:numFmt w:val=\"bullet\"/>")
+                && numbering.contains("<w:lvlText w:val=\"•\"/>"),
+            "一级项目符号定义 (bullet + •): {numbering}"
+        );
+        assert!(
+            numbering.contains("<w:lvlJc w:val=\"left\"/>")
+                && numbering.contains("<w:ind w:left=\"720\" w:hanging=\"360\"/>"),
+            "项目符号对齐与缩进 (左 720 / 悬挂 360): {numbering}"
+        );
+        assert!(
+            numbering.contains("<w:num w:numId=\"1\"><w:abstractNumId w:val=\"0\"/></w:num>"),
+            "numId=1 指向抽象编号 0: {numbering}"
+        );
+        assert!(
+            xml.contains("<w:numId w:val=\"1\"/>"),
+            "正文列表引用 numId=1 (与编号层对齐)"
         );
         // 样式层最小如实: Normal 为默认段落样式, Heading1 带大纲级别,
         // 列表段落与粗/斜字符样式在场, 无主题/无字体美化 (不写主题部件)。
@@ -5685,9 +5774,72 @@ mod tests {
         );
     }
 
+    /// ㉒ᶜ DOCX 生成: 编号交叉校验 —— 正文出现过的每个 `w:numId` 值都能在
+    /// `word/numbering.xml` 找到 `w:num w:numId="…"` 定义 (悬空 numId = 消费端
+    /// 不显示符号, 故引用集必须是定义集子集); 同时 `w:num` 指向的抽象编号也必须在场。
+    #[test]
+    fn docx_list_numbering_references_are_backed_by_numbering_definitions() {
+        // 有序项与无序项混排 (当前同渲染为项目符号, 引用同一 numId=1)。
+        let markdown = "- bullet a\n\n* bullet b\n\n1. ordered a\n\n2) ordered b\n";
+        let config = write_config("docx-numbering");
+        let frame = from_markdown(&config, markdown, "lists.docx").expect("列表可生成");
+        assert_eq!(frame["paragraphs"], 4, "四个列表项 = 四段");
+        let bytes = std::fs::read(config.workspace_root.join("lists.docx")).expect("产物已落盘");
+        let entries = zip_read_entries(&bytes, TEST_ZIP_BUDGET).expect("可解回");
+        let xml = entry_text(&entries, "word/document.xml");
+        let numbering = entry_text(&entries, "word/numbering.xml");
+        let references = attribute_values(xml, "<w:numId w:val=\"");
+        assert_eq!(
+            references.len(),
+            1,
+            "正文只引用一个编号定义 (一级项目符号): {references:?}"
+        );
+        let number_definitions = attribute_values(numbering, "<w:num w:numId=\"");
+        assert!(
+            references.is_subset(&number_definitions),
+            "正文 numId 悬空 (消费端不会显示符号): 引用 {references:?} 定义 \
+             {number_definitions:?}"
+        );
+        // 每个 numId 定义必须指向在场的抽象编号 (链条 num → abstractNum → lvl)。
+        let abstract_definitions = attribute_values(numbering, "<w:abstractNum w:abstractNumId=\"");
+        for definition in &number_definitions {
+            let link = format!("<w:num w:numId=\"{definition}\"><w:abstractNumId w:val=\"");
+            let targets = attribute_values(numbering, &link);
+            assert_eq!(
+                targets.len(),
+                1,
+                "numId={definition} 必须恰指向一个抽象编号: {numbering}"
+            );
+            assert!(
+                targets.is_subset(&abstract_definitions),
+                "numId={definition} 指向的抽象编号未定义: 目标 {targets:?} 定义 \
+                 {abstract_definitions:?}"
+            );
+        }
+        assert!(
+            numbering.contains("<w:lvl w:ilvl=\"0\">")
+                && numbering.contains("<w:numFmt w:val=\"bullet\"/>"),
+            "抽象编号必须带一级 bullet 级别: {numbering}"
+        );
+        // 读端只看 document.xml: 编号层在场不影响读回 (段落数/文本口径零改动)。
+        let paragraphs = read_back_paragraphs(&bytes);
+        let texts: Vec<&str> = paragraphs
+            .iter()
+            .map(|paragraph| paragraph.text.as_str())
+            .collect();
+        assert_eq!(
+            texts,
+            vec!["bullet a", "bullet b", "ordered a", "ordered b"]
+        );
+        assert!(
+            paragraphs.iter().all(|paragraph| paragraph.numbered),
+            "读端按 numPr 标记判列表项 (与编号层定义无关)"
+        );
+    }
+
     /// ㉓ DOCX 追加: 副本追加段落 (原段不动, 序不乱, 空行忽略), 创建类原子写
-    /// (只创建不覆盖, 二次同名拒绝且底稿一字不改), 样式层条目与底稿逐字节一致
-    /// (append 只动 `word/document.xml`)。
+    /// (只创建不覆盖, 二次同名拒绝且底稿一字不改), 样式层/编号层条目与底稿逐字节
+    /// 一致 (append 只动 `word/document.xml`)。
     #[test]
     fn docx_append_appends_paragraphs_and_never_overwrites() {
         let config = write_config("docx-append");
@@ -5723,7 +5875,8 @@ mod tests {
         );
         assert_eq!(paragraphs[0].style, "Heading1", "原段样式不动");
         assert!(paragraphs[1].numbered, "原列表标记不动");
-        // append 只动 `word/document.xml`: 样式层与正文关系条目内容与底稿逐字节一致。
+        // append 只动 `word/document.xml`: 样式层/编号层与正文关系条目内容与底稿
+        // 逐字节一致 (编号定义不随追加重写, 引用口径也不变)。
         let base_entries = zip_read_entries(&base_bytes, TEST_ZIP_BUDGET).expect("底稿可解回");
         let out_entries = zip_read_entries(&bytes, TEST_ZIP_BUDGET).expect("副本可解回");
         let entry_bytes = |entries: &[ZipEntry], name: &str| -> Vec<u8> {
@@ -5739,6 +5892,7 @@ mod tests {
             "_rels/.rels",
             "word/_rels/document.xml.rels",
             "word/styles.xml",
+            "word/numbering.xml",
         ] {
             assert_eq!(
                 entry_bytes(&out_entries, name),
