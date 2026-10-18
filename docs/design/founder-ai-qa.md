@@ -173,8 +173,9 @@
 
 ## 七、数据与资产
 
-**Q26【F-02 大资产出库】** 🟡（方案表已备，等你点头执行）
+**Q26【F-02 大资产出库】** 🟢（**已按默认推进执行完毕**，2026-10-18 F-02 出库批）
 - **默认推进**：v1.0 日志→release 资产、previews→git-lfs、guard_ml→外置（可再生）。
+- **执行结果（2026-10-18 复核）**：manifest **916 行**（878 reports→`release-assets/reports-archive-2026-07-08.tar`；34 previews→**git-lfs 指针、路径零断链**；4 guard_ml jsonl→外置 tar），合计处置 **97.66MB**；现 `git ls-files reports previews scripts/guard_ml` = 240 件 / 46.2MB on-disk；必留库的 `scenarios.jsonl` + `fixture_artifact.json` 未动（`include_str!` 编译期依赖），`cargo test -p apeireth-guard` 迁移前后均绿。**仅 `artifacts/`（395 件 / 172MB on-disk）继续留账**，要不要一起出库等你一个字（出库会动 1000+ 处引用，我建议随下一轮资产批做，不单独抢跑）。
 - 你的立场：___
 
 **Q27【LOCKED 两口径】** 🔴（philosophy.md"9 重 v9" vs ROADMAP"7 重守门 v7"——两处 LOCKED 不能擅动）
