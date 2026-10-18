@@ -65,14 +65,22 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         "tool.worktree_apply",
         "tool.skill_distill",
         "tool.backup_export",
-        // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`): 含写面 (变换动作带
-        // `output` 落新文件 / `export_csv` 导出) —— 与 `tool.filesystem` 同口径
-        // 「含写权的面整个算写」, 只读会话不应落表; 「读」在 `tool.self_status`
-        // (创作节自述), 不在本名单。同族 W1/W2 的 `tool.image_ops` /
-        // `tool.doc_ops` 现不在名单 (家族口径缺口, 已登记待各归口线收口)。
+        // 创作工具面 (W1/W2/W3): 三面都**含写面** —— `tool.image_ops` 的
+        // transform/crop/watermark 带 `output` 落新文件, `tool.doc_ops` 的 PDF
+        // 拆/并/水印与 DOCX 生成/追加落新文件, `tool.sheet_ops` 的变换与
+        // `export_csv` 落新文件; 与 `tool.filesystem` 同口径「含写权的面整个算
+        // 写」, 只读会话不应落盘; 三面的「读」(info/extract) 在 `tool.self_status`
+        // 创作节自述, 不在本名单。**家族口径缺口已于 2026-10-18 治理收口批补齐**。
         "tool.sheet_ops",
-  "tool.image_ops",
-  "tool.doc_ops",
+        "tool.image_ops",
+        "tool.doc_ops",
+        // K 轴 L3/L4 设备受控执行 (`tool.device_control`): 对真实设备动手是
+        // **执行面**(开/关/调参), 只读会话不得驱动; L3 白名单 + L4 动钱/不可逆
+        // 永人批是它自己的门, 但读-only 预设应先于它整体拒绝。
+        "tool.device_control",
+        // 主动关怀规则面 (`tool.care_schedule`): 增删规则 = 改持久化关怀配置
+        // (写面), 只读会话不应改; 「读」在 `tool.self_status` 关怀节。
+        "tool.care_schedule",
         // V3-b 通用嗓发声 (`tool.voice_speak`): 发声面执行档 —— 合成即播是
         // 对外发声的执行面 (语句账本落盘同为副作用), 只读会话不应开口;
         // 「读」在 `tool.self_status` (语音节自述), 不在本名单。
@@ -352,10 +360,7 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
                         && matches!(verdict.decision, Decision::RequireApproval { .. })
                     {
                         write_lock_or_recover(&self.awaiting_approval).insert(
-                            (
-                                request.session.to_string(),
-                                capability.as_str().to_string(),
-                            ),
+                            (request.session.to_string(), capability.as_str().to_string()),
                             authorization,
                         );
                     }
@@ -371,7 +376,7 @@ impl GovernanceHook for PermissionPresetGovernanceHook {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::kernel::{system_clock, TraceId};
+    use apeireth_core::kernel::{TraceId, system_clock};
     use apeireth_governance::{Permission, PermissionGovernanceHook, PermissionPolicy};
     use apeireth_runtime::canonical::{InMemorySessionStore, Session};
 
@@ -762,6 +767,12 @@ mod tests {
             "tool.git_write",
             "tool.worktree_apply",
             "fs.write",
+            // 创作三面 + 设备执行面 + 关怀规则面 (2026-10-18 治理收口批)
+            "tool.image_ops",
+            "tool.doc_ops",
+            "tool.sheet_ops",
+            "tool.device_control",
+            "tool.care_schedule",
             // 出口 / 远端副作用
             "tool.fetch",
             "tool.repo",
@@ -787,6 +798,11 @@ mod tests {
             "tool.worktree_plan",
             "fs.read",
             "unknown.reader",
+            // K 轴读面: 感知/天气/守护都**只看不动** —— 设备动作归
+            // `tool.device_control`(写/执行面, 已在上方名单), 守护只看不发动作。
+            "tool.device_sense",
+            "tool.weather",
+            "tool.guard_watch",
         ] {
             assert!(
                 !is_write_or_execute_capability(&CapabilityId::new(id).unwrap()),
