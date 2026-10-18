@@ -1,8 +1,8 @@
 //! 表格操作工具面 (`tool.sheet_ops`, 声明名 `sheet_ops`) —— 受控读写族 (K3)。
 //!
 //! 设计第一律「AI 先用」的表格面: 模型可直接读 CSV 表、查摘要、筛行、排序、
-//! 聚合、加计算列、导出 CSV, 同一内核未来再接人类界面出口。本面 = **工具面先行**:
-//! 模型可调用、过治理、入名册、随自述上报。
+//! 聚合、加计算列、导出 CSV / xlsx, 同一内核未来再接人类界面出口。本面 =
+//! **工具面先行**: 模型可调用、过治理、入名册、随自述上报。
 //!
 //! # 操作词表 (闭合, 未知动作拒绝即帧)
 //!
@@ -15,6 +15,7 @@
 //! | `aggregate` | 读 | 按列聚合 sum/avg/count/min/max (f64 如实) |
 //! | `formula` | 读(可写) | 四则运算计算列 (新列追加, 原文不改) |
 //! | `export_csv` | 写 | 规范 CSV 再序列化导出 (方言归一) |
+//! | `export_xlsx` | 写 | 最小 xlsx 工作簿导出 (单 sheet `Sheet1`, 文本/数值格) |
 //!
 //! 「读(可写)」= 带 `output` 参数即写面 (结果落新文件), 不带即内存返回行预览。
 //!
@@ -72,7 +73,7 @@
 //! 自产帧与结果帧里的路径只回工作区相对拼写; 越界 / 敏感面 / 词法攻击面的
 //! 拒绝帧不回显路径; 自述创作节只回计数, 零路径零文件名。
 //!
-//! # 表格文件面 (读: CSV + xlsx; 写: 仅 CSV)
+//! # 表格文件面 (读: CSV + xlsx; 写: CSV + 最小 xlsx)
 //! - **读面**认两种输入格式, 按**后缀词面**判定 (`.xlsx` → xlsx 面, 其余 →
 //!   CSV 面): CSV = UTF-8 (可带 BOM) + RFC 4180 逗号方言 (见上); xlsx =
 //!   OOXML 表格容器 (ZIP + XML, 与文档面 DOCX 同族容器, **复用 `doc_ops` 已报备
@@ -84,8 +85,14 @@
 //! - **公式格口径钉死**: `<f>` 在场 = 公式格, 一律取**缓存值**(`<v>`)且不重算
 //!   —— 共享公式不展开计算, 帧内 `formula_cells` 计数如实标注; **无缓存值的
 //!   公式格拒绝即帧** (不编造值)。
-//! - **写面**只出 **CSV** (见 [`serialize_csv`]); xlsx 写出**后置**, 本批不接、
-//!   不冒充 (xlsx 输入经变换/导出落盘 = 规范 CSV)。
+//! - **写面**两出口, 同一把尺 (同一参数矩阵 / 写总闸 / 人批 / 限域 / 原子写):
+//!   `export_csv` 出规范 CSV ([`serialize_csv`]); `export_xlsx` 出最小 xlsx
+//!   工作簿 ([`serialize_xlsx`], 五件包 + 单 sheet `Sheet1`, 文本格 `inlineStr` /
+//!   数值格 `<v>`, 复用 `doc_ops` 已报备 ZIP 写端)。
+//! - **xlsx 写出不支持面 (显式钉死)**: 公式 (不写 `<f>`, 不重算)、多工作表
+//!   (恒一个 `Sheet1`)、样式 / 数字格式、布尔与错误格类型 (`b`/`e` 不产出;
+//!   `TRUE`/`FALSE` 按文本如实)、共享字符串 (`sharedStrings.xml` 不产出)。
+//!   调用方在 `export_xlsx` 结果帧的 `unsupported` 字段能看到这份边界清单。
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -144,8 +151,10 @@ pub const ACTION_AGGREGATE: &str = "aggregate";
 pub const ACTION_FORMULA: &str = "formula";
 /// 动作: `export_csv` (规范 CSV 导出, 写面)。
 pub const ACTION_EXPORT_CSV: &str = "export_csv";
+/// 动作: `export_xlsx` (最小 xlsx 工作簿导出, 写面; 单 sheet `Sheet1`)。
+pub const ACTION_EXPORT_XLSX: &str = "export_xlsx";
 
-/// 闭合动作词表 (7 个)。
+/// 闭合动作词表 (8 个)。
 pub const SHEET_OPS_ACTIONS: &[&str] = &[
     ACTION_READ,
     ACTION_SUMMARY,
@@ -154,6 +163,7 @@ pub const SHEET_OPS_ACTIONS: &[&str] = &[
     ACTION_AGGREGATE,
     ACTION_FORMULA,
     ACTION_EXPORT_CSV,
+    ACTION_EXPORT_XLSX,
 ];
 
 /// 纯读动作 (grant 即用零审批; 不带 `output` 的变换动作也是纯读)。
@@ -162,8 +172,8 @@ pub const SHEET_OPS_READ_ACTIONS: &[&str] = &[ACTION_READ, ACTION_SUMMARY, ACTIO
 /// 变换动作 (不带 `output` = 读; 带 `output` = 写面)。
 pub const SHEET_OPS_TRANSFORM_ACTIONS: &[&str] = &[ACTION_FILTER, ACTION_SORT, ACTION_FORMULA];
 
-/// 恒写动作 (`export_csv` 必落盘)。
-pub const SHEET_OPS_WRITE_ACTIONS: &[&str] = &[ACTION_EXPORT_CSV];
+/// 恒写动作 (`export_csv` / `export_xlsx` 必落盘)。
+pub const SHEET_OPS_WRITE_ACTIONS: &[&str] = &[ACTION_EXPORT_CSV, ACTION_EXPORT_XLSX];
 
 /// filter 谓词词表 (闭合)。
 pub const FILTER_PREDICATES: &[&str] = &["eq", "ne", "lt", "lte", "gt", "gte", "contains"];
@@ -206,10 +216,16 @@ pub const SHEET_OPS_TOOL_DESCRIPTION: &str = "Read and transform tables inside \
   type guesses), filter (eq/ne/lt/lte/gt/gte/contains on one column), sort \
   (stable, asc/desc, empty cells always last), aggregate \
   (sum/avg/count/min/max on one column), formula (a four-function computed \
-  column), export_csv (canonical CSV out). filter/sort/formula write a new file \
-  only when `output` is given; every write is created atomically, never \
-  overwrites an existing file, and waits for a human approval; outputs are CSV \
-  (xlsx writing is not offered yet). Paths must stay inside the workspace root; \
+  column), export_csv (canonical CSV out), export_xlsx (minimal single-sheet \
+  workbook out). filter/sort/formula write a new file only when `output` is \
+  given; every write is created atomically, never overwrites an existing file, \
+  and waits for a human approval. CSV outputs take any name; export_xlsx \
+  requires an `output` ending in .xlsx. The workbook is always one sheet named \
+  Sheet1: text cells are inlineStr, numeric-looking cells are numeric, empty \
+  cells are absent; formulas (never written or recomputed), extra worksheets, \
+  cell styles/number formats, shared strings and boolean/error cell types are \
+  NOT supported (booleans are written as plain text) and are listed in the \
+  result's `unsupported` field. Paths must stay inside the workspace root; \
   credential surfaces are refused; oversized or bomb-like tables \
   (bytes/rows/columns) are refused, never silently truncated. Numbers are plain \
   f64 and are reported faithfully (no silent rounding); NaN/inf never appear in \
@@ -250,6 +266,9 @@ pub enum SheetOpsError {
     WriteGateClosed(String),
     /// 输出目标已存在 (只创建不覆盖, 原子写门禁)。
     OutputExists(String),
+    /// 目标格式表达不了的内容 (xlsx 不支持面 / XML 1.0 不允许的字符), 拒绝即帧,
+    /// 不静默剥除、不降级、不编造。
+    Unsupported(String),
     /// 原子写失败 (文案已剥根前缀)。
     WriteFailed(String),
 }
@@ -270,6 +289,7 @@ impl SheetOpsError {
             Self::ReadFailed(_) => "sheet_ops.read_failed",
             Self::WriteGateClosed(_) => "sheet_ops.write_gate_closed",
             Self::OutputExists(_) => "sheet_ops.output_exists",
+            Self::Unsupported(_) => "sheet_ops.unsupported",
             Self::WriteFailed(_) => "sheet_ops.write_failed",
         }
     }
@@ -286,6 +306,7 @@ impl SheetOpsError {
             | Self::ReadFailed(detail)
             | Self::WriteGateClosed(detail)
             | Self::OutputExists(detail)
+            | Self::Unsupported(detail)
             | Self::WriteFailed(detail) => detail.clone(),
             Self::PathRejected => "requested path is refused by the path guard (traversal or \
                  protected system path); 路径不回显 (脱敏口径)"
@@ -1385,6 +1406,196 @@ pub fn parse_xlsx_table(
 }
 
 // ---------------------------------------------------------------------------
+// xlsx 写端 (最小工作簿: 五件包 + 单 sheet; 复用 doc_ops 已报备 ZIP 写端)
+// ---------------------------------------------------------------------------
+
+/// xlsx 输出的工作表名 (恒一个 sheet; 名字即承诺: 本面不出多 sheet)。
+pub const XLSX_SHEET_NAME: &str = "Sheet1";
+
+/// xlsx 写出的**不支持面**清单 (结果帧 `unsupported` 字段同文, 调用方可见)。
+pub const XLSX_UNSUPPORTED: &[&str] = &[
+    "formulas: never written and never recomputed (source formulas arrive as cached values)",
+    "multiple worksheets: the package always has exactly one sheet named Sheet1",
+    "cell styles and number formats: none are emitted",
+    "shared strings: text cells are inlineStr, sharedStrings.xml is not emitted",
+    "boolean and error cell types: not emitted (TRUE/FALSE and error text stay plain text)",
+];
+
+/// A1 列字母 (0 基列号 → `A`..`Z`, `AA`..`ZZ`; 列数上限由参数矩阵把关)。
+fn xlsx_column_letters(mut column: usize) -> String {
+    let mut letters = String::new();
+    loop {
+        letters.push((b'A' + (column % 26) as u8) as char);
+        if column < 26 {
+            break;
+        }
+        column = column / 26 - 1;
+    }
+    letters.chars().rev().collect()
+}
+
+/// XML 文本转义 (`&` / `<` / `>` / `"` / `'`) + XML 1.0 非法字符**拒绝即帧**。
+///
+/// 非法字符不静默剥除: 剥了就是内容造假 (与「宁拒不截」同一把尺)。
+fn xlsx_escape_xml(text: &str) -> Result<String, SheetOpsError> {
+    let mut out = String::with_capacity(text.len() + 8);
+    for character in text.chars() {
+        match character {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            '\t' | '\n' | '\r' => out.push(character),
+            other if (other as u32) < 0x20 || other == '\u{FFFE}' || other == '\u{FFFF}' => {
+                return Err(SheetOpsError::Unsupported(format!(
+                    "xlsx 写出: 单元含 XML 1.0 不允许的字符 U+{:04X}; 拒绝写出 \
+                     (不静默剥除, 不编造内容)",
+                    other as u32
+                )));
+            }
+            other => out.push(other),
+        }
+    }
+    Ok(out)
+}
+
+/// 一个单元: 空串 = **格缺席** (读端稀疏格网补空); 数值词面 → `<v>` 原词面照抄
+/// (不重排精度, 回读逐字一致); 其余 → 文本格 `inlineStr`。
+///
+/// `TRUE`/`FALSE`/`NaN`/`inf` 等不在数值轴, 按文本如实 (不冒充布尔/错误类型)。
+fn xlsx_cell_xml(reference: &str, text: &str) -> Result<String, SheetOpsError> {
+    if text.is_empty() {
+        return Ok(String::new());
+    }
+    let escaped = xlsx_escape_xml(text)?;
+    if parse_number(text).is_some() {
+        return Ok(format!("<c r=\"{reference}\"><v>{escaped}</v></c>"));
+    }
+    let preserve = if text.starts_with(char::is_whitespace) || text.ends_with(char::is_whitespace) {
+        " xml:space=\"preserve\""
+    } else {
+        ""
+    };
+    Ok(format!(
+        "<c r=\"{reference}\" t=\"inlineStr\"><is><t{preserve}>{escaped}</t></is></c>"
+    ))
+}
+
+/// 一行 (行号 1 基): 全空行**显式占位** `<row r="N"/>` (读端按行序回一行空行,
+/// 不吞行)。
+fn xlsx_row_xml(cells: &[String], row_number: usize) -> Result<String, SheetOpsError> {
+    let mut body = String::new();
+    for (index, text) in cells.iter().enumerate() {
+        let reference = format!("{}{}", xlsx_column_letters(index), row_number);
+        body.push_str(&xlsx_cell_xml(&reference, text)?);
+    }
+    if body.is_empty() {
+        Ok(format!("<row r=\"{row_number}\"/>"))
+    } else {
+        Ok(format!("<row r=\"{row_number}\">{body}</row>"))
+    }
+}
+
+/// `xl/worksheets/sheet1.xml`: `dimension` + `sheetData` (表头行 + 数据行)。
+fn xlsx_worksheet_xml(sheet: &Sheet) -> Result<String, SheetOpsError> {
+    let last_column = xlsx_column_letters(sheet.columns.len().saturating_sub(1));
+    let last_row = sheet.rows.len() + 1;
+    let mut sheet_data = String::new();
+    sheet_data.push_str(&xlsx_row_xml(&sheet.columns, 1)?);
+    for (offset, row) in sheet.rows.iter().enumerate() {
+        sheet_data.push_str(&xlsx_row_xml(row, offset + 2)?);
+    }
+    Ok(format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\
+         <dimension ref=\"A1:{last_column}{last_row}\"/>\
+         <sheetData>{sheet_data}</sheetData></worksheet>"
+    ))
+}
+
+/// 最小 xlsx 包 (五件, 顺序稳定便于人读): 内容类型 + 根关系 + 工作簿 +
+/// 工作簿关系 + 工作表; ZIP 写端复用 [`crate::doc_ops::zip_write_entries`]。
+fn xlsx_package(sheet: &Sheet) -> Result<Vec<u8>, SheetOpsError> {
+    let worksheet = xlsx_worksheet_xml(sheet)?;
+    let types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+         <Default Extension=\"rels\" \
+         ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+         <Default Extension=\"xml\" ContentType=\"application/xml\"/>\
+         <Override PartName=\"/xl/workbook.xml\" \
+         ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\
+         <Override PartName=\"/xl/worksheets/sheet1.xml\" \
+         ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\
+         </Types>";
+    let root_rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+         <Relationship Id=\"rId1\" \
+         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" \
+         Target=\"xl/workbook.xml\"/></Relationships>";
+    let workbook = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" \
+         xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
+         <sheets><sheet name=\"{XLSX_SHEET_NAME}\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>"
+    );
+    let workbook_rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+         <Relationship Id=\"rId1\" \
+         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" \
+         Target=\"worksheets/sheet1.xml\"/></Relationships>";
+    let entries = [
+        crate::doc_ops::ZipEntry {
+            name: "[Content_Types].xml".to_string(),
+            data: types.as_bytes().to_vec(),
+        },
+        crate::doc_ops::ZipEntry {
+            name: "_rels/.rels".to_string(),
+            data: root_rels.as_bytes().to_vec(),
+        },
+        crate::doc_ops::ZipEntry {
+            name: "xl/workbook.xml".to_string(),
+            data: workbook.into_bytes(),
+        },
+        crate::doc_ops::ZipEntry {
+            name: "xl/_rels/workbook.xml.rels".to_string(),
+            data: workbook_rels.as_bytes().to_vec(),
+        },
+        crate::doc_ops::ZipEntry {
+            name: "xl/worksheets/sheet1.xml".to_string(),
+            data: worksheet.into_bytes(),
+        },
+    ];
+    crate::doc_ops::zip_write_entries(&entries, crate::doc_ops::ZipCompression::Deflate).map_err(
+        |error| SheetOpsError::WriteFailed(format!("xlsx 容器写出失败: {}", error.message())),
+    )
+}
+
+/// xlsx 序列化 (最小工作簿): 单 sheet [`XLSX_SHEET_NAME`], 文本格 `inlineStr` /
+/// 数值格 `<v>` / 空格缺席; 写读互证口径见本文件测试 (往返逐格一致)。
+///
+/// 参数面先验: 零列 (`Sheet` 无表头) 与参差行 (行宽 ≠ 表头列数) 拒绝即帧 ——
+/// 不补空不截断, 产物结构不撒谎。
+pub fn serialize_xlsx(sheet: &Sheet) -> Result<Vec<u8>, SheetOpsError> {
+    if sheet.columns.is_empty() {
+        return Err(SheetOpsError::Unsupported(
+            "xlsx 写出: 空表无表头 (至少一列), 拒绝产出无列表".to_string(),
+        ));
+    }
+    for (index, row) in sheet.rows.iter().enumerate() {
+        if row.len() != sheet.columns.len() {
+            return Err(SheetOpsError::Unsupported(format!(
+                "xlsx 写出: 第 {} 行有 {} 单元, 表头 {} 列 (参差行拒绝, 不补空不截断)",
+                index + 2,
+                row.len(),
+                sheet.columns.len()
+            )));
+        }
+    }
+    xlsx_package(sheet)
+}
+
+// ---------------------------------------------------------------------------
 // 数值轴 (词面 → f64; NaN/inf/溢出词面永远是文本)
 // ---------------------------------------------------------------------------
 
@@ -1782,7 +1993,7 @@ pub struct SheetOpsParams {
     /// 输入表 (工作区相对拼写或其内绝对拼写; 后缀 `.xlsx` 走 xlsx 读端,
     /// 其余走 CSV 读端)。
     pub source: Option<String>,
-    /// 输出 CSV (变换动作可选; `export_csv` 必填) —— 在场即写面。
+    /// 输出目标 (变换动作可选; `export_csv` / `export_xlsx` 必填) —— 在场即写面。
     pub output: Option<String>,
     /// 目标列名 (filter / sort / aggregate)。
     pub column: Option<String>,
@@ -1805,7 +2016,7 @@ pub struct SheetOpsParams {
     pub limit: Option<u64>,
 }
 
-/// 写面判定 (闭合词表; `export_csv` 恒写, 变换动作带 `output` 即写)。
+/// 写面判定 (闭合词表; `export_csv` / `export_xlsx` 恒写, 变换动作带 `output` 即写)。
 pub fn is_sheet_ops_write_action(action: &str, has_output: bool) -> bool {
     if SHEET_OPS_WRITE_ACTIONS.contains(&action) {
         return true;
@@ -2212,6 +2423,7 @@ impl SheetOpsRunner {
             ACTION_AGGREGATE => self.aggregate(params, source, &sheet),
             ACTION_FORMULA => self.formula(params, source, &sheet),
             ACTION_EXPORT_CSV => self.export_csv(params, source, &sheet),
+            ACTION_EXPORT_XLSX => self.export_xlsx(params, source, &sheet),
             other => Err(SheetOpsError::ParamRejected(format!(
                 "未知动作 {other:?} (闭合词表外)"
             ))),
@@ -2623,6 +2835,52 @@ impl SheetOpsRunner {
         ))
     }
 
+    /// `export_xlsx`: 最小 xlsx 工作簿导出 (单 sheet, 五件包; 只创建不覆盖)。
+    ///
+    /// 受控面与 `export_csv` 完全同族: 写总闸 / 每次人批 / 工作区限域 / 敏感面拒 /
+    /// 创建类原子写 / 三层上限——都在参数矩阵与执行面同一处判定, 本方法只多做
+    /// 一件格式事: `output` 须以 `.xlsx` 结尾 (产物后缀不谎报格式)。
+    fn export_xlsx(
+        &self,
+        params: &SheetOpsParams,
+        source: &str,
+        sheet: &Sheet,
+    ) -> Result<(Value, u64), SheetOpsError> {
+        let output = params.output.as_deref().unwrap_or_default();
+        if !output.to_ascii_lowercase().ends_with(".xlsx") {
+            return Err(SheetOpsError::ParamRejected(format!(
+                "export_xlsx: output 必须以 .xlsx 结尾 (后缀即格式, 不让产物谎报格式), \
+                 得到 {output:?}"
+            )));
+        }
+        let bytes = serialize_xlsx(sheet)?;
+        let path = resolve_contained(&self.config.workspace_root, output, false)?;
+        write_output_create_only(&path, &bytes)?;
+        let root = std::fs::canonicalize(&self.config.workspace_root).map_err(|_| {
+            SheetOpsError::ReadFailed(
+                "workspace root is not accessible; 工作区根不可访问".to_string(),
+            )
+        })?;
+        Ok((
+            json!({
+                "action": ACTION_EXPORT_XLSX,
+                "status": "ok",
+                "source": source,
+                "output": relative_display(&path, &root),
+                "output_format": "xlsx",
+                "sheet_name": XLSX_SHEET_NAME,
+                "row_count": sheet.rows.len(),
+                // 与 export_csv 同口径: rows_written = 数据行 (表头另计 cells_written)。
+                "rows_written": sheet.rows.len(),
+                "column_count": sheet.columns.len(),
+                "cells_written": (sheet.rows.len() + 1) * sheet.columns.len(),
+                "bytes_written": bytes.len() as u64,
+                "unsupported": XLSX_UNSUPPORTED,
+            }),
+            sheet.rows.len() as u64,
+        ))
+    }
+
     /// 变换产出的出口: 带 `output` = 创建类原子写 (只创建不覆盖), 不带 = 内存
     /// 行预览 (上限 [`SheetOpsConfig::max_preview_rows`], 超出显式 `truncated`)。
     fn emit_rows(
@@ -2766,7 +3024,7 @@ impl ToolCapability for SheetOpsTool {
                     "action": {
                         "type": "string",
                         "enum": SHEET_OPS_ACTIONS,
-                        "description": "Closed vocabulary: read / summary / aggregate (reads); filter / sort / formula (reads, or writes when `output` is given); export_csv (write, each waits for a human approval)."
+                        "description": "Closed vocabulary: read / summary / aggregate (reads); filter / sort / formula (reads, or writes when `output` is given); export_csv and export_xlsx (writes, each waits for a human approval)."
                     },
                     "source": {
                         "type": "string",
@@ -2774,7 +3032,7 @@ impl ToolCapability for SheetOpsTool {
                     },
                     "output": {
                         "type": "string",
-                        "description": "Optional output CSV for filter/sort/formula; required for export_csv. Created atomically, never overwrites an existing file."
+                        "description": "Optional output file for filter/sort/formula (CSV); required for export_csv (CSV) and export_xlsx (must end in .xlsx, single sheet Sheet1: text as inlineStr, numbers as numbers, no formulas/styles/multi-sheet). Created atomically, never overwrites an existing file."
                     },
                     "column": {
                         "type": "string",
@@ -2865,8 +3123,8 @@ pub fn sheet_ops_approval_reason(action: &str) -> String {
 
 /// 表格操作审批档钩子 (治理链, 与本地审批面板 / IM 审批卡同链)。
 ///
-/// **写面每次人批** (带 `output` 的变换动作与 `export_csv`, 无自动放行档);
-/// 纯读放行; 词表外动作 fail-closed 停审批 (不静默放行)。
+/// **写面每次人批** (带 `output` 的变换动作与 `export_csv` / `export_xlsx`, 无自动
+/// 放行档); 纯读放行; 词表外动作 fail-closed 停审批 (不静默放行)。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SheetOpsApprovalHook;
 
@@ -3199,10 +3457,24 @@ mod tests {
         );
     }
 
-    /// 写面判定钉死: export_csv 恒写, 变换动作带 output 才写。
+    /// 写面判定钉死: export_csv / export_xlsx 恒写, 变换动作带 output 才写。
     #[test]
     fn write_face_classification_is_pinned() {
-        assert!(is_sheet_ops_write_action(ACTION_EXPORT_CSV, false));
+        assert_eq!(
+            SHEET_OPS_WRITE_ACTIONS,
+            [ACTION_EXPORT_CSV, ACTION_EXPORT_XLSX].as_slice(),
+            "恒写动作恰好两个 (CSV / 最小 xlsx)"
+        );
+        for action in SHEET_OPS_WRITE_ACTIONS {
+            assert!(
+                is_sheet_ops_write_action(action, false),
+                "{action} 不带 output 也恒写"
+            );
+            assert!(
+                is_sheet_ops_write_action(action, true),
+                "{action} 带 output 恒写"
+            );
+        }
         for action in SHEET_OPS_TRANSFORM_ACTIONS {
             assert!(
                 !is_sheet_ops_write_action(action, false),
@@ -3636,14 +3908,14 @@ mod tests {
         assert!(error.frame().contains("列上限"), "{}", error.frame());
     }
 
-    /// ㊱ xlsx 输入的写面口径: 产物是规范 CSV (xlsx 写出后置如实), 写面词表
-    /// 零 xlsx 写动作。
+    /// ㊱ xlsx 输入的写面口径: 规范 CSV 与最小 xlsx 两出口同一把尺, 写面词表
+    /// 恰好这两个恒写动作。
     #[test]
-    fn xlsx_input_exports_canonical_csv_and_the_write_vocab_is_csv_only() {
+    fn xlsx_input_exports_canonical_csv_and_the_write_vocab_is_csv_plus_xlsx() {
         assert_eq!(
             SHEET_OPS_WRITE_ACTIONS,
-            ["export_csv"].as_slice(),
-            "写面词表只有 export_csv (xlsx 写出后置, 不冒充)"
+            [ACTION_EXPORT_CSV, ACTION_EXPORT_XLSX].as_slice(),
+            "写面词表 = export_csv + export_xlsx (两个恒写动作, 不夹带其它写出口)"
         );
         let rows = "<row r=\"1\">\
             <c r=\"A1\" t=\"s\"><v>0</v></c>\
@@ -3664,5 +3936,326 @@ mod tests {
         assert_eq!(frame["rows_written"], 1);
         let csv = std::fs::read_to_string(dir.path().join("out.csv")).expect("产物已落盘");
         assert_eq!(csv, "名称,数量\n值,42\n", "规范 CSV (LF 行尾, 末尾换行)");
+    }
+
+    // ---- xlsx 写面行为钉 (写读互证 / 五件包 / 受控面同族 / 坏输入拒) ----
+
+    /// 写面 runner (写总闸开; 与 export_csv 同一把尺的受控面)。
+    fn write_runner(
+        workspace: &std::path::Path,
+        limits: Option<(u64, usize, usize)>,
+    ) -> SheetOpsRunner {
+        let mut config = SheetOpsConfig::new(workspace).with_write_gate(true);
+        if let Some((max_input_bytes, max_rows, max_cols)) = limits {
+            config = config.with_limits(max_input_bytes, max_rows, max_cols, 100);
+        }
+        SheetOpsRunner::new(config)
+    }
+
+    /// `export_xlsx` 的调用参数 (source → output)。
+    fn export_xlsx_params(source: &str, output: &str) -> SheetOpsParams {
+        SheetOpsParams {
+            action: Some(ACTION_EXPORT_XLSX.to_string()),
+            source: Some(source.to_string()),
+            output: Some(output.to_string()),
+            ..SheetOpsParams::default()
+        }
+    }
+
+    /// 审批钩子同步求值 (治理链同一真源; 测试内用 block_on, 不另起 runtime)。
+    fn approval_decision(arguments: Value) -> Decision {
+        let capability: &'static CapabilityId = Box::leak(Box::new(
+            CapabilityId::new(SHEET_OPS_CAPABILITY_ID).expect("capability id"),
+        ));
+        let arguments: &'static Value = Box::leak(Box::new(arguments));
+        let request = GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability,
+                arguments,
+            },
+            apeireth_core::kernel::SessionId::new(),
+            apeireth_core::kernel::TraceId::new(),
+            1,
+        );
+        futures::executor::block_on(SheetOpsApprovalHook::new().evaluate(&request))
+    }
+
+    /// ㊲ export_xlsx 往返: 本工具写出 → 本工具读入, 逐格与源一致
+    /// (数值/文本/空/中文/特殊字符 `& < >`; 布尔按文本如实)。
+    #[test]
+    fn export_xlsx_roundtrips_through_the_xlsx_reader() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("in.csv"),
+            "name,qty,price,note,flag\n\
+             apple,3,1.25,A & B < C > D,TRUE\n\
+             pear,,0.5,中文文本,FALSE\n\
+             ,7,-2e3,  spaced  ,\n",
+        )
+        .expect("fixture");
+        std::fs::write(dir.path().join("header.csv"), "a,b\n").expect("fixture");
+        let runner = write_runner(dir.path(), None);
+
+        let frame = runner
+            .run(&export_xlsx_params("in.csv", "out.xlsx"))
+            .expect("导出成功");
+        assert_eq!(frame["action"], ACTION_EXPORT_XLSX);
+        assert_eq!(frame["status"], "ok");
+        assert_eq!(frame["output"], "out.xlsx");
+        assert_eq!(frame["output_format"], "xlsx");
+        assert_eq!(frame["sheet_name"], XLSX_SHEET_NAME);
+        assert_eq!(frame["row_count"], 3);
+        assert_eq!(frame["rows_written"], 3);
+        assert_eq!(frame["column_count"], 5);
+        assert_eq!(frame["cells_written"], 20);
+        assert!(frame["bytes_written"].as_u64().expect("字节数") > 0);
+        assert_eq!(
+            frame["unsupported"].as_array().expect("边界清单").len(),
+            XLSX_UNSUPPORTED.len(),
+            "不支持面清单随帧如实给调用方"
+        );
+
+        let read = run_on(&runner, ACTION_READ, "out.xlsx").expect("回读成功");
+        assert_eq!(read["input_format"], "xlsx");
+        assert_eq!(
+            read["columns"],
+            json!(["name", "qty", "price", "note", "flag"])
+        );
+        assert_eq!(
+            read["rows"],
+            json!([
+                ["apple", "3", "1.25", "A & B < C > D", "TRUE"],
+                ["pear", "", "0.5", "中文文本", "FALSE"],
+                ["", "7", "-2e3", "  spaced  ", ""],
+            ]),
+            "逐格往返一致 (数值/文本/空/中文/特殊字符/布尔按文本)"
+        );
+
+        // 仅表头 (0 数据行) 也往返: 表头行在场, 数据行零行 (不吞成空表)。
+        runner
+            .run(&export_xlsx_params("header.csv", "header.xlsx"))
+            .expect("仅表头可导出");
+        let read = run_on(&runner, ACTION_READ, "header.xlsx").expect("回读成功");
+        assert_eq!(read["columns"], json!(["a", "b"]));
+        assert_eq!(read["row_count"], 0);
+        assert_eq!(read["rows"], json!([]));
+    }
+
+    /// ㊳ 五件包与 XML 语义: 内容类型/关系齐全, sheet1.xml 的 inlineStr 与数值
+    /// 标记正确, XML 转义正确, 公式/布尔/错误/sharedStrings 零产出。
+    #[test]
+    fn export_xlsx_emits_five_part_package_with_escaped_inline_and_numeric_cells() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("in.csv"),
+            "name,flag,qty\nA & B < C > D,TRUE,42\nx,7,\n",
+        )
+        .expect("fixture");
+        let runner = write_runner(dir.path(), None);
+        runner
+            .run(&export_xlsx_params("in.csv", "out.xlsx"))
+            .expect("导出成功");
+
+        let bytes = std::fs::read(dir.path().join("out.xlsx")).expect("产物在场");
+        let entries = crate::doc_ops::zip_read_entries(&bytes, 1 << 20).expect("容器可读");
+        let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "[Content_Types].xml",
+                "_rels/.rels",
+                "xl/workbook.xml",
+                "xl/_rels/workbook.xml.rels",
+                "xl/worksheets/sheet1.xml",
+            ],
+            "五件包按稳定顺序在场"
+        );
+        let part = |name: &str| -> String {
+            let entry = entries
+                .iter()
+                .find(|entry| entry.name == name)
+                .expect("部件在场");
+            String::from_utf8(entry.data.clone()).expect("部件是 UTF-8 XML")
+        };
+
+        let types = part("[Content_Types].xml");
+        for expected in [
+            "<Default Extension=\"rels\"",
+            "<Default Extension=\"xml\"",
+            "PartName=\"/xl/workbook.xml\"",
+            "PartName=\"/xl/worksheets/sheet1.xml\"",
+        ] {
+            assert!(types.contains(expected), "缺 {expected}: {types}");
+        }
+
+        let root_rels = part("_rels/.rels");
+        assert!(
+            root_rels.contains("relationships/officeDocument")
+                && root_rels.contains("Target=\"xl/workbook.xml\""),
+            "{root_rels}"
+        );
+
+        let workbook = part("xl/workbook.xml");
+        assert!(
+            workbook.contains("<sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>"),
+            "{workbook}"
+        );
+
+        let workbook_rels = part("xl/_rels/workbook.xml.rels");
+        assert!(
+            workbook_rels.contains("Target=\"worksheets/sheet1.xml\""),
+            "{workbook_rels}"
+        );
+
+        let sheet = part("xl/worksheets/sheet1.xml");
+        assert!(
+            sheet.contains("<dimension ref=\"A1:C3\"/>"),
+            "维度按实际格网 (表头行 + 数据行): {sheet}"
+        );
+        assert!(
+            sheet.contains("<c r=\"A1\" t=\"inlineStr\"><is><t>name</t></is></c>"),
+            "表头行 = 文本格 inlineStr: {sheet}"
+        );
+        assert!(
+            sheet.contains("A &amp; B &lt; C &gt; D"),
+            "XML 转义必须做 (& < >): {sheet}"
+        );
+        assert!(
+            sheet.contains("<c r=\"C2\"><v>42</v></c>"),
+            "数值格用 <v> 原词面: {sheet}"
+        );
+        assert!(
+            sheet.contains("<c r=\"B3\"><v>7</v></c>"),
+            "数值格用 <v> 原词面: {sheet}"
+        );
+        assert!(
+            !sheet.contains("r=\"C3\""),
+            "空串 = 格缺席 (读端稀疏格网补空): {sheet}"
+        );
+        assert!(
+            sheet.contains("<c r=\"B2\" t=\"inlineStr\"><is><t>TRUE</t></is></c>"),
+            "布尔按文本如实, 不冒充 b 类型: {sheet}"
+        );
+        for unsupported in ["<f", "t=\"b\"", "t=\"e\"", "sharedStrings"] {
+            assert!(
+                !sheet.contains(unsupported),
+                "不支持面零产出 ({unsupported}): {sheet}"
+            );
+        }
+    }
+
+    /// ㊴ 受控面同族: 写总闸关拒 / 每次写人批 / 同名不许覆盖且底稿字节不变。
+    #[test]
+    fn export_xlsx_is_gated_by_write_gate_human_approval_and_create_only() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("in.csv"), "a\n1\n").expect("fixture");
+
+        // 写总闸关 = 拒写不拒读 (xlsx 出口与 CSV 出口同一道闸)。
+        let closed = SheetOpsRunner::new(SheetOpsConfig::new(dir.path()));
+        let error = closed
+            .run(&export_xlsx_params("in.csv", "closed.xlsx"))
+            .expect_err("总闸关必拒");
+        assert!(
+            matches!(error, SheetOpsError::WriteGateClosed(_)),
+            "{}",
+            error.frame()
+        );
+        assert!(!dir.path().join("closed.xlsx").exists(), "拒绝不得留产物");
+
+        // 每次写人批: 审批钩子对 export_xlsx 恒 require_approval (无自动放行档)。
+        let decision = approval_decision(json!({
+            "action": ACTION_EXPORT_XLSX,
+            "source": "in.csv",
+            "output": "o.xlsx",
+        }));
+        let Decision::RequireApproval { reason } = decision else {
+            panic!("xlsx 写面必须每次人批: {decision:?}");
+        };
+        assert!(reason.contains("每次写面都停人工审批"), "{reason}");
+
+        // 只创建不覆盖: 同名目标拒绝 (OutputExists) 且底稿字节不变。
+        let runner = write_runner(dir.path(), None);
+        std::fs::write(dir.path().join("keep.xlsx"), b"preexisting-bytes").expect("底稿");
+        let before = std::fs::read(dir.path().join("keep.xlsx")).expect("底稿可读");
+        let error = runner
+            .run(&export_xlsx_params("in.csv", "keep.xlsx"))
+            .expect_err("同名必拒");
+        assert!(
+            matches!(error, SheetOpsError::OutputExists(_)),
+            "{}",
+            error.frame()
+        );
+        let after = std::fs::read(dir.path().join("keep.xlsx")).expect("底稿可读");
+        assert_eq!(before, after, "命中已存在 = 底稿字节不变 (不覆盖)");
+    }
+
+    /// ㊵ 坏输入拒绝即帧: 行上限 / 空表 (零行) / 缺 output / 后缀谎报 / XML
+    /// 不允许的字符 —— 各自拒绝, 且拒绝不落产物。
+    #[test]
+    fn export_xlsx_refuses_limits_empty_tables_bad_params_and_unrepresentable_text() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("rows.csv"), "a\n1\n2\n").expect("fixture");
+        std::fs::write(dir.path().join("empty.csv"), "").expect("fixture");
+        std::fs::write(dir.path().join("nul.csv"), b"a\n\x00\n").expect("fixture");
+
+        // 三层上限的行层 (超限在载入期拒绝, 产物不落盘)。
+        let tight = write_runner(dir.path(), Some((8 * 1024 * 1024, 1, 10)));
+        let error = tight
+            .run(&export_xlsx_params("rows.csv", "rows.xlsx"))
+            .expect_err("行超上限必拒");
+        assert!(
+            matches!(error, SheetOpsError::LimitExceeded(_)),
+            "{}",
+            error.frame()
+        );
+        assert!(!dir.path().join("rows.xlsx").exists(), "拒绝不留产物");
+
+        let runner = write_runner(dir.path(), None);
+
+        // 空表 (零行, 无表头) = 坏输入拒绝帧。
+        let error = runner
+            .run(&export_xlsx_params("empty.csv", "empty.xlsx"))
+            .expect_err("空表必拒");
+        assert!(
+            matches!(error, SheetOpsError::ParseFailed(_)),
+            "{}",
+            error.frame()
+        );
+
+        // 恒写动作必须点名 output。
+        let error = runner
+            .run(&SheetOpsParams {
+                action: Some(ACTION_EXPORT_XLSX.to_string()),
+                source: Some("rows.csv".to_string()),
+                ..SheetOpsParams::default()
+            })
+            .expect_err("缺 output 必拒");
+        assert!(
+            error.frame().contains("缺参数 [output]"),
+            "{}",
+            error.frame()
+        );
+
+        // 后缀即格式: .csv 名字不许装 xlsx 内容。
+        let error = runner
+            .run(&export_xlsx_params("rows.csv", "lie.csv"))
+            .expect_err("后缀谎报必拒");
+        assert!(
+            matches!(error, SheetOpsError::ParamRejected(_)),
+            "{}",
+            error.frame()
+        );
+        assert!(!dir.path().join("lie.csv").exists(), "拒绝不留产物");
+
+        // XML 1.0 不允许的字符: 拒绝写出 (不静默剥除, 不编造内容)。
+        let error = runner
+            .run(&export_xlsx_params("nul.csv", "nul.xlsx"))
+            .expect_err("非法字符必拒");
+        assert!(
+            error.frame().contains("sheet_ops.unsupported") && error.frame().contains("U+0000"),
+            "{}",
+            error.frame()
+        );
+        assert!(!dir.path().join("nul.xlsx").exists(), "拒绝不留产物");
     }
 }

@@ -169,7 +169,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 - **创作面**：`tool.image_ops` 换引擎级创作内核 `apeireth-image-core`，操作词表 **13** 个
   （新增 `layers_composite` / `psd_read_info`），产品代码对第三方图像库的直接依赖清零；
   `tool.doc_ops` 已支持 **DOCX 写面**（`docx_from_markdown` / `docx_append`，样式/编号层最小：`word/styles.xml` + `word/numbering.xml`（一级 bullet，有序列表暂不区分））；`tool.sheet_ops` 已支持 **xlsx 读入**
-  （三种单元格形态、公式格取缓存值不重算；**写面只出 CSV**，xlsx 写出后置）。
+  （三种单元格形态、公式格取缓存值不重算；**写面出 CSV 与 xlsx**（`export_xlsx`：最小单 sheet，无公式/多表/样式））。
 - **治理/会话面**：只读会话预设的执法面已覆盖 `tool.device_control` / `tool.care_schedule`
   的写/执行面（`read_only` 下显式拒绝，见 `permission_preset.rs`）；凭据泄漏绊线补 JWT 与
   通用 Bearer 形态；认知调度器淘汰策略改**严格 FIFO**；deny 治理对账清 33 条过期 skip、

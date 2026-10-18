@@ -761,7 +761,7 @@ impl DocOpsStatus {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SheetOpsOpCount {
     /// 操作词表动作名 (`read` / `summary` / `filter` / `sort` / `aggregate` /
-    /// `formula` / `export_csv`)。
+    /// `formula` / `export_csv` / `export_xlsx`)。
     pub operation: String,
     /// 成功执行计数。
     pub count: u64,

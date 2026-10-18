@@ -105,12 +105,13 @@ pub mod skill;
 pub mod self_status;
 mod sensitive_path;
 // 创作工具面 K3: 表格操作 (`tool.sheet_ops`, 受控读写族) —— 闭合操作词表
-// (read/summary/filter/sort/aggregate/formula 读 + export_csv 写, 变换动作带
-// output 即写) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表) + 创建类
-// 原子写 (只创建不覆盖) + 数值精度如实 (f64 不静默取整, NaN/inf 零产出);
+// (read/summary/filter/sort/aggregate/formula 读 + export_csv/export_xlsx 写,
+// 变换动作带 output 即写) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表) +
+// 创建类原子写 (只创建不覆盖) + 数值精度如实 (f64 不静默取整, NaN/inf 零产出);
 // 注册即闸 `APEIRETH_ENABLE_SHEET_OPS`, 写面受 file_write 唯一写总闸 + 每次
 // 人批, 默认关 fail-closed。读面认 CSV + xlsx (xlsx 读端复用 `doc_ops` 已报备
-// 的 ZIP 读端); 写面只出 CSV (xlsx 写出后置, 不冒充)。
+// 的 ZIP 读端); 写面出 CSV + xlsx (xlsx 写端 = 最小单 sheet, 无公式/多表/样式,
+// 不支持面显式拒绝, 不冒充)。
 pub mod sheet_ops;
 pub mod shell;
 pub mod spill;
