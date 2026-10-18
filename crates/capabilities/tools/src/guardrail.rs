@@ -69,6 +69,100 @@ fn find_ascii_ci(haystack: &str, needle: &str) -> Option<usize> {
         .position(|w| w.eq_ignore_ascii_case(nee))
 }
 
+/// base64url 字母表判定 (JWT 三段共用).
+fn is_base64url_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'-' || b == b'_'
+}
+
+/// opaque Bearer 令牌值可出现的字节 (base64 / base64url / URL-safe 可见字符).
+fn is_opaque_token_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'~' | b'+' | b'/' | b'=' | b'-')
+}
+
+/// 定位首个 JWT 形状令牌, 返回 `(start, end)` 字节区间.
+///
+/// 判据 (手写, 不引 regex 依赖): 以 `eyJ` 起头 (base64url 编码的 JSON 对象头,
+/// 首字节 `{` + ASCII 字母必然落在这一前缀上) —— 其后为恰好三段 `.` 分隔的
+/// base64url 段: 头段 ≥8、载荷段 ≥4、签名字段 ≥8 (或为空, 即 `alg=none` 的
+/// 未签名 `h.p.` 形态), 整体 ≥20 字节. 任一条件不满足即不当凭据 (保守: 宁可
+/// 漏判也不误伤长段 base64 文本)。
+fn find_jwt_span(text: &str) -> Option<(usize, usize)> {
+    let hay = text.as_bytes();
+    let mut from = 0usize;
+    while let Some(rel) = text[from..].find("eyJ") {
+        let start = from + rel;
+        let mut seg_lens = [0usize; 3];
+        let mut seg = 0usize;
+        let mut i = start;
+        while i < hay.len() {
+            let b = hay[i];
+            if is_base64url_byte(b) {
+                seg_lens[seg] += 1;
+                i += 1;
+            } else if b == b'.' && seg < 2 {
+                seg += 1;
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        if seg == 2
+            && seg_lens[0] >= 8
+            && seg_lens[1] >= 4
+            && (seg_lens[2] == 0 || seg_lens[2] >= 8)
+            && (i - start) >= 20
+        {
+            return Some((start, i));
+        }
+        from = start + 3;
+        if from >= text.len() {
+            break;
+        }
+    }
+    None
+}
+
+/// 定位首个 `Authorization: Bearer <opaque>` 形状的值区间, 返回值 `(start, end)`.
+///
+/// 只认显式头语法: 回看窗口内须有 `authorization` 关键字, 其后 `bearer` + 空白 +
+/// 单段 opaque 值 (16..=4096 字节、无空白)。短值 / 散文里的 "Bearer" 一词 /
+/// 不含 Authorization 上下文的短语都不命中 (保守: 漏判可接受, 误伤正常文本不可
+/// 接受 —— 这一族形状本身模糊, 宁窄勿宽)。
+fn find_bearer_span(text: &str) -> Option<(usize, usize)> {
+    let hay = text.as_bytes();
+    let mut from = 0usize;
+    while let Some(rel) = find_ascii_ci(&text[from..], "bearer") {
+        let kw_start = from + rel;
+        let after_kw = kw_start + "bearer".len();
+        // 回看窗口: 头部语法上下文 (`Authorization` 与之相隔通常 < 32 字节)。
+        let window_start = kw_start.saturating_sub(64);
+        let context_ok = find_ascii_ci(&text[window_start..kw_start], "authorization").is_some();
+        // 关键字前不得紧贴字母数字 (避免词内命中)。
+        let boundary_ok = kw_start == 0 || !hay[kw_start - 1].is_ascii_alphanumeric();
+        let mut i = after_kw;
+        let mut saw_space = false;
+        while i < hay.len() && (hay[i] == b' ' || hay[i] == b'\t') {
+            saw_space = true;
+            i += 1;
+        }
+        if boundary_ok && context_ok && saw_space {
+            let value_start = i;
+            while i < hay.len() && is_opaque_token_byte(hay[i]) {
+                i += 1;
+            }
+            let value_len = i - value_start;
+            if (16..=4096).contains(&value_len) {
+                return Some((value_start, i));
+            }
+        }
+        from = after_kw;
+        if from >= text.len() {
+            break;
+        }
+    }
+    None
+}
+
 impl ToolGuardrail {
     pub fn new() -> Self {
         Self
@@ -280,7 +374,22 @@ impl ToolGuardrail {
             }
         }
 
-        // 6. 明文口令赋值扫描 (W1 §2.2 设计点名: `password\s*[:=]\s*\S+`; 手写等价,
+        // 6. JWT 扫描 (header.payload.signature). 此前 `JwtToken` 变体只有声明、
+        //    没有检测面 —— 命名即承诺的空槽, 本批补齐 (D18).
+        if let Some((start, end)) = find_jwt_span(&sanitized) {
+            leaked_kinds.push(LeakedCredentialKind::JwtToken);
+            sanitized.replace_range(start..end, "[REDACTED_JWT]");
+        }
+
+        // 7. 通用 Bearer 令牌扫描 (`Bearer <opaque>`). 与 6 同属「声明了类别但没接
+        //    检测」的空槽; 6 先收口后本步只会看到 `[REDACTED_JWT]` 标签 (含 `[`,
+        //    不在 opaque 字母表内), 两族互不吞并。
+        if let Some((start, end)) = find_bearer_span(&sanitized) {
+            leaked_kinds.push(LeakedCredentialKind::GenericBearer);
+            sanitized.replace_range(start..end, "[REDACTED_BEARER]");
+        }
+
+        // 8. 明文口令赋值扫描 (W1 §2.2 设计点名: `password\s*[:=]\s*\S+`; 手写等价,
         //    不引 regex 依赖)。值截断到行尾 (截断而非放行), key 名保留可读。
         //    匹配用 ASCII 快速比较 —— 不走 to_lowercase 的字节偏移 (中文输出下
         //    大小写折叠可能移位, 切片会错位)。
@@ -472,5 +581,94 @@ mod tests {
         assert!(!res2.is_clean);
         assert!(res2.sanitized_output.contains("[REDACTED_PASSWORD]"));
         assert!(!res2.sanitized_output.contains("realsecret"));
+    }
+
+    /// D18 收口: `JwtToken` 变体此前只有声明、零检测面 (命名即承诺的空槽)。
+    #[test]
+    fn jwt_token_is_detected_and_redacted() {
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.\
+                   eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.\
+                   SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        let raw = format!("上游返回: Authorization: Bearer {jwt} (之后正常)");
+        let res = ToolGuardrail::scan_and_sanitize_output(&raw);
+        assert!(!res.is_clean);
+        assert!(res.leaked_kinds.contains(&LeakedCredentialKind::JwtToken));
+        assert!(res.sanitized_output.contains("[REDACTED_JWT]"));
+        assert!(!res.sanitized_output.contains("eyJ"));
+        assert!(
+            res.sanitized_output.contains("之后正常"),
+            "非命中文段原样保留: {}",
+            res.sanitized_output
+        );
+    }
+
+    /// 形状不完整 (两段 / 签名过短) 或只是长 base64 文本 —— 不当 JWT。
+    #[test]
+    fn jwt_shape_requires_three_segments_and_long_enough_signature() {
+        for raw in [
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0", // 只有两段
+            "eyJhbGciOiJIUzI1NiJ9.abc.def",         // 段长不足
+            "prefix eyJhbGciOiJIUzI1NiJ9 suffix",   // 单词形
+            "no eyJ marker here",                   // 无前缀
+        ] {
+            let res = ToolGuardrail::scan_and_sanitize_output(raw);
+            assert!(res.is_clean, "{raw} 不该被当 JWT: {res:?}");
+        }
+    }
+
+    /// 未签名 `h.p.` 形态 (alg=none, 尾段为空) 也算 JWT 形状。
+    #[test]
+    fn unsigned_jwt_with_trailing_dot_is_detected() {
+        let raw = "token=eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.";
+        let res = ToolGuardrail::scan_and_sanitize_output(raw);
+        assert!(res.leaked_kinds.contains(&LeakedCredentialKind::JwtToken));
+        assert!(res.sanitized_output.contains("[REDACTED_JWT]"));
+    }
+
+    /// `GenericBearer` 同为空槽, 本批补齐: 只认 Authorization 头部上下文。
+    #[test]
+    fn authorization_bearer_token_is_detected_and_redacted() {
+        let raw = "request headers: Authorization: Bearer opaqueTokenValue1234567890abc end";
+        let res = ToolGuardrail::scan_and_sanitize_output(raw);
+        assert!(res
+            .leaked_kinds
+            .contains(&LeakedCredentialKind::GenericBearer));
+        assert!(res.sanitized_output.contains("[REDACTED_BEARER]"));
+        assert!(!res
+            .sanitized_output
+            .contains("opaqueTokenValue1234567890abc"));
+        assert!(res.sanitized_output.contains("end"));
+    }
+
+    /// 散文里的 "Bearer" / 无 Authorization 上下文 / 短值 —— 一律不误伤。
+    #[test]
+    fn bearer_word_without_header_context_is_not_flagged() {
+        for raw in [
+            "The bearer configuration mechanism is documented elsewhere.",
+            "Bearer opaqueTokenValue1234567890abc",
+            "Authorization: Bearer short",
+            "authorization header explained",
+        ] {
+            let res = ToolGuardrail::scan_and_sanitize_output(raw);
+            assert!(res.is_clean, "{raw} 不该被当 Bearer: {res:?}");
+        }
+    }
+
+    /// 两族互不吞并: JWT 先收口, Bearer 步只看到 `[REDACTED_JWT]` 标签 (含 `[`
+    /// 不在 opaque 字母表), 不重复计类。
+    #[test]
+    fn jwt_and_bearer_kinds_do_not_double_flag() {
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.\
+                   eyJzdWIiOiIxMjM0NTY3ODkwIn0.\
+                   SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        let raw = format!("Authorization: Bearer {jwt}");
+        let res = ToolGuardrail::scan_and_sanitize_output(&raw);
+        assert!(res.leaked_kinds.contains(&LeakedCredentialKind::JwtToken));
+        assert!(
+            !res.leaked_kinds
+                .contains(&LeakedCredentialKind::GenericBearer),
+            "{res:?}"
+        );
+        assert!(!res.sanitized_output.contains("[REDACTED_BEARER]"));
     }
 }
