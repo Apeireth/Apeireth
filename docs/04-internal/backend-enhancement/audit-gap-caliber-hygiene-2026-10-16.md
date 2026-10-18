@@ -207,3 +207,36 @@
 | 4 | `scripts/release/*` v1.0 发布脚本族「6 重守门 v7」留痕 | 随发布脚本归档批迁 `docs/archive/` 或加时代横幅 |
 
 _本报告由「落差清账·口径尾账批」产出（审计修 B-04 / B-05 / D13 / F-02，2026-10-16）。四件对照表 §0；F-02 去留方案表 §4.3；扫描与门禁记录 §5。_
+
+## 8. 附录：守门口径代码实证（2026-10-18 补测，供 §7 第 2 项拍板用）
+
+§7 第 2 项（LOCKED 异口径：`philosophy.md` 「9 重 v9」vs `ROADMAP` §13「7 重 v7」）此前只有文档侧对照，缺代码侧实证。2026-10-18 补测如下，**结论：v2 实装既不是 7 也不是 9，而是「门值集合」——整数层数是 v1.0 时代 lineage 标签，不是 v2 的工程计数**。
+
+### 8.1 复现命令与结果
+
+| # | 命令（仓库根） | 结果 |
+|---|---|---|
+| A | `git grep -c -i "seven_fold\|evidence_guard\|action_rail" -- crates` | **0 命中**：v1.0 时代的 `seven_fold_guard` / `evidence_guard` / `action_rail` 三个守门承载 crate **均未迁入 v2** |
+| B | `(Get-ChildItem crates/foundation/governance/src -Filter *.rs).Count` | **22** 个治理模块（含 `colang.rs`、`tool_guard.rs`、`evidence.rs`、`action_binding.rs`、`approval_closure.rs`、`rate_limit.rs`、`sandbox_ladder.rs`、`untrusted_mark.rs` 等） |
+| C | `git grep -n "five gates in sequence" -- crates/foundation/governance/src/lib.rs` | `lib.rs:29`：「…This is the "five gates in sequence" arrangement from the nested prototype, **generalized so gates are values rather than…**」——v2 明确把门做成**门值**，不再做固定层数装配 |
+| D | `Get-Content crates/foundation/governance/src/evidence.rs -TotalCount 5` | 文件头自述：「…**This is a library checker, not a ninth "fold" of the canonical pipeline.**」——v2 代码**显式否认**「第 9 重」这种层数叙事 |
+| E | `Get-Content crates/foundation/governance/src/tool_guard.rs -TotalCount 5` | 「monotonic tool guard interface: a guard may refuse, never allow」——守门是**单调哨兵**（只拒不放），可装任意多个，层数无工程意义 |
+
+### 8.2 三口径对照（拍板素材）
+
+| 口径 | 出处 | 性质 | 与代码的关系 |
+|---|---|---|---|
+| **9 重 v9** | `docs/01-architecture/philosophy.md:10`（O-1 锚描述）、`Cargo.toml:148` `guard_gates_version` 值、`hard_walls` 字符串值 | v1.0 发布时代自描述 | v1.0 代码 lineage 的末值（v6→v7→v8→v9，含 action_rail / flow_executor / evidence_guard）；**v2 代码无这三个载体** |
+| **7 重 v7** | `ROADMAP.md` §13「守门级数」行（声明为唯一现值出处） | 2026-10-16 口径尾账批统一后的**现值标签** | v2 代码有 `colang`（第 6 重对应物）与 `tool_guard`/`evidence`（第 7/9 重对应物），但**没有按 7 层装配**，也无编译期断言守 7 |
+| **门值集合（实装）** | `crates/foundation/governance/src/*`（22 模块）、`ToolGuard` 单调接口 | **v2 真实工程事实** | 装配多少门由运行时决定（默认装配见 `crates/engine/runtime-assembly/src/canonical/`），可增可减，`-D warnings` 与测试守的是门的行为契约，不是层数 |
+
+### 8.3 建议（给 owner 三选一）
+
+- **建议 A（推荐，最小改动）**：现值口径改为「**守门 = `governance` 门值集合 + `ToolGuard` 单调哨兵；层数（7/9）仅为 v1.0 lineage 标签，v2 不作工程断言**」。落地物 = `ROADMAP.md` §13 该行加一句限定语（**LOCKED 面，需 owner 明示解锁**）+ `philosophy.md` O-1 保持 0 触碰（锚本体不写死数字的做法可留到哲学锚修订单）。
+- **建议 B**：反向认 9 重 v9 为准 → 需在 v2 补 `evidence_guard` 等载体或改口径，**成本高且与 v2「门值」架构相悖**，不建议。
+- **建议 C**：维持现状两口径并存（本报告 §1.3 已登记）→ 代价是每轮对外文案都要回避层数，**长期债**，不建议。
+
+> 对外文案（README 门面 / 发布说明）本轮已按建议 A 的**工程侧**执行：不把「7 重 / 9 重」写成现行能力事实；层数只在历史沿革与 lineage 卷宗里出现。LOCKED 文本本批 0 触碰，等 owner 一字解锁。
+
+_本节由 2026-10-18 口径补测批补入（只读代码取证 + 文档登记，0 触碰 LOCKED / 0 改 src）。_
+

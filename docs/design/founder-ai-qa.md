@@ -179,7 +179,10 @@
 
 **Q27【LOCKED 两口径】** 🔴（philosophy.md"9 重 v9" vs ROADMAP"7 重守门 v7"——两处 LOCKED 不能擅动）
 - **默认推进**：我建议以 ROADMAP 7 重 v7 为现值、philosophy.md 加历史标注（但 LOCKED 面需你明示解锁）。
+- **2026-10-18 补测（代码侧实证，详见 [audit-gap-caliber-hygiene §8](../04-internal/backend-enhancement/audit-gap-caliber-hygiene-2026-10-16.md)）**：v2 实装既不是 7 也不是 9，而是**门值集合**——`crates/foundation/governance` 22 个治理模块 + `ToolGuard` 单调哨兵（只拒不放，可装任意多个）；`evidence.rs` 文件头自述「**not a ninth "fold" of the canonical pipeline**」，`lib.rs:29` 写「gates are **values** rather than…」。v1.0 的三个层数载体（`seven_fold_guard`/`evidence_guard`/`action_rail`）`git grep` 在 `crates/` **0 命中**。
+- **修正后建议**：口径改成「**守门 = governance 门值集合 + 单调 ToolGuard；层数 7/9 仅是 v1.0 lineage 标签，v2 不作工程断言**」；对外文案不把层数写成现行能力。**LOCKED 文本我 0 触碰**（ROADMAP §13 那一行要加限定语，等你一字解锁）。
 - 你的立场：___
+
 
 **Q28【皮套与音色（资产活）】** 🟡
 - **默认推进**：等资产（Live2D 模型/音色样本）到位再开工；机制面已留缝（骨架 2D 在建/合成器可换嗓）。

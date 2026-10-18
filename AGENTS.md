@@ -42,7 +42,7 @@
 
 ## 4.5 取材通道（调研/搬运/下载批必读）
 
-- GitHub 取材按 [docs/04-internal/github-fetch-guide.md](docs/04-internal/github-fetch-guide.md)：**先测活再取材**（池子延迟不稳，别信历史）、raw 优先于 API（API 匿名限速是盲等主因）、失败快退换节点、**绝不经第三方中转传凭据**。
+- 取材按 [docs/04-internal/github-fetch-guide.md](docs/04-internal/github-fetch-guide.md) §〇 通道实测选路：**Rust crate 源码 → crates.io tarball**（不经 GitHub、许可原件齐）、**通用网页/文档 → `web_fetch`**（2026-10-18 实测 200）、**GitHub 内容 → 节点池**（`web_fetch` 在 GitHub 域定死 `fetch failed`，别试）。**先测活再取材**（池子延迟不稳，别信历史）、raw 优先于 API（API 匿名限速是盲等主因）、失败快退换节点、**绝不经第三方中转传凭据**。
 
 ## 5. 校验命令（交付前必跑，`-j 2` 口径）
 

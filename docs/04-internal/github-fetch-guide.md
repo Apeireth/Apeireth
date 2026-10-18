@@ -1,15 +1,46 @@
-# 取材通道指南（GitHub 加速节点池 · 每次进场自测活）
+# 取材通道指南（通用网页 / crates.io / GitHub 加速节点池）
 
-> `Status: 📋 工具指南（2026-10-18 立；owner 裁定：池子延迟不稳，**不预筛，每次自己测**）`
-> 用途：调研/搬运/下载类批需要访问 GitHub 时，**先测活再取材**，不要盲等官方 API 限速。
+> `Status: 📋 工具指南（2026-10-18 立，2026-10-18 补通道实测；owner 裁定：池子延迟不稳，**不预筛，每次自己测**）`
+> 用途：调研/搬运/下载类批需要取外部内容时，**先在 §〇 选对通道、再测活**，不要盲等官方 API 限速。
+
+## 〇、本机通道实测（2026-10-18，**权威口径，先看这节**）
+
+harness 已切到 DeepSeek 官方 Search/Fetch API（`web_search` / `web_fetch` 工具）。当日实测结论：
+
+| 通道 | 实测证据 | 结论 |
+|---|---|---|
+| `web_fetch`（DP 官方 Fetch API）· 通用网页 | `example.com` / `crates.io/crates/tokio` / `docs.rs/tokio` 均 **HTTP 200** 返回 Markdown | **通用网页取证首选**，无需代理 |
+| `web_fetch` · GitHub 域 | `github.com/ooolabdev/ooosplat`、`raw.githubusercontent.com/…/README.md` → `TypeError: fetch failed`（连续 2 次） | **本机到 GitHub 链路层不可达，不是插件故障**；GitHub 内容别指望 `web_fetch`，走 §二 节点池 |
+| crates.io API（`pwsh` 直连） | `api/v1/crates/tokio` → 200 / **1533ms**；`api/v1/crates/itoa/1.0.15/download` → 200 / **852ms** / 11,231 B / `tar -xzf` 解出 14 文件 | **GitHub 之外最稳的源码通道**：Rust crate 直接取官方 `.crate` tarball（Apache/MIT 许可与 `Cargo.toml` 原件齐全，比搬 GitHub 更可信） |
+| docs.rs 源码页（`web_fetch`） | `/crate/tokio/1.53.3/source/src/lib.rs` → 200 | 单文件源码**可读**（带行号噪声 + 会截断）；适合读、不适合批量搬 |
+| GitHub 加速节点池 | 见 §二 | 非 crate 仓库（README/许可/单文件/整个仓库）的兜底通道 |
+
+### crate 源码直取配方（不经 GitHub，2026-10-18 实测）
+
+```powershell
+# 1) 取 .crate tarball（crates.io 要求带 User-Agent，缺了会 403）
+$ver = '1.0.15'; $name = 'itoa'
+$tmp = Join-Path $env:TEMP 'crate-src'; New-Item -ItemType Directory -Force $tmp | Out-Null
+Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 `
+  -Headers @{'User-Agent'='apeireth-build/2.0 (vendor-research)'} `
+  -Uri "https://crates.io/api/v1/crates/$name/$ver/download" -OutFile "$tmp\$name.crate"
+# 2) 解包（Windows 自带 tar）
+tar -xzf "$tmp\$name.crate" -C $tmp
+# 3) 许可/版本核对直接看解出来的 Cargo.toml + LICENSE*
+```
+
+> 边界：crates.io 只有已发布 crate；仓库里未发布的目录（workspace 子 crate、示例、CI 脚本）取不到——那部分仍要 GitHub 通道。
+> 计费/QPS：Search 与 Fetch 各 5 QPS（官方文档口径，2026-10-18 查）；批量取材别打满。
 
 ## 一、取材优先序（能不走 API 就不走）
 
-1. **raw 文件** → 直连 `raw.githubusercontent.com` 试一次，不行走加速前缀；
-2. **README/文件内容** → raw 路径（`https://raw.githubusercontent.com/<o>/<r>/<branch>/README.md`）**优于 API**（API 匿名限速 60 次/小时，是盲等的主因）；
-3. **仓库元数据/许可/清单** → GitHub API（省着用：合并查询、缓存到临时文件复用）；
-4. **克隆/大文件** → 加速前缀（下表）+ `git clone`/curl；
-5. **全部失败** → 本地 TUN/代理通道（`http://127.0.0.1:7900`）兜底。
+1. **Rust crate 源码** → crates.io tarball（§〇 配方，**最优：不经 GitHub、许可原件齐**）；
+2. **通用网页/文档/许可页** → `web_fetch` 直接取；
+3. **raw 文件** → 直连 `raw.githubusercontent.com` 试一次，不行走加速前缀；
+4. **README/文件内容** → raw 路径（`https://raw.githubusercontent.com/<o>/<r>/<branch>/README.md`）**优于 API**（API 匿名限速 60 次/小时，是盲等的主因）；
+5. **仓库元数据/许可/清单** → crates.io API（Rust crate）/ GitHub API（非 crate 仓库，省着用：合并查询、缓存到临时文件复用）；
+6. **克隆/大文件** → 加速前缀（下表）+ `git clone`/curl；
+7. **全部失败** → 本地 TUN/代理通道（`http://127.0.0.1:7900`）兜底。
 
 ## 二、候选节点池（32 个，来自公共加速池——**每次用前测活，别信历史**）
 
