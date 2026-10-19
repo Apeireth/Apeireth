@@ -6,8 +6,14 @@
 //!      逐帧解析；扩展查询协议为**驱动扩展缝**（如实报，不假通）；
 //!   2. 传输纪律 —— TLS 经 SSLRequest 协商（'S' 放行/'N' 拒绝如实报）；
 //!      明文通道沿用信使同款双确认（`plain-insecure` + allow 标志）；
-//!   3. 只读口径 —— 复用 sqlite_workbench::ensure_readonly_sql（纵深与
-//!      SQLite 面同一道闸），行上限同一 [`sqlite_workbench::SQL_ROW_LIMIT`]；
+//!   3. 只读口径（两层分工、纵深兜底）—— 第一层：`ensure_readonly_sql` 词法级
+//!      保守只读闸（连接前即拒写类/DDL/多语句，拒掉绝大多数；同一道闸与
+//!      SQLite 面共用），行上限同一 [`sqlite_workbench::SQL_ROW_LIMIT`]；
+//!      第二层：本驱动把用户查询包进**服务端只读事务**（`BEGIN READ ONLY` →
+//!      用户查询 → `COMMIT`，失败 `ROLLBACK` 收尾），只读事务属性由服务端强制，
+//!      检查器万一漏网的写入在事务内被服务端拒。第二层是兜底、不替代第一层；
+//!      事务控制语句为本驱动自拼固定串，不走用户面、不经检查器。`BEGIN` 失败
+//!      即整体失败（fail-closed：不裸跑用户查询）；
 //!   4. 0 装 —— 文本格式值如实按字符串/NULL 回传（不猜类型）；协议漂移
 //!      /错误帧（ErrorResponse）带服务端原话如实报。
 //!
@@ -393,6 +399,78 @@ async fn read_message<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<(u8, Ve
     Ok((header[0], payload))
 }
 
+/// 一轮简单查询收集到的结果（事务控制语句轮为空壳）。
+#[derive(Debug, Default)]
+struct PgRows {
+    columns: Vec<String>,
+    rows: Vec<Vec<serde_json::Value>>,
+    truncated: bool,
+}
+
+/// 一轮简单查询（'Q' 一发 → 读到 ReadyForQuery 'Z' 收束）。`collect` 为真时收集
+/// 列/行（限幅 [`SQL_ROW_LIMIT`]，超出截断如实标注）；事务控制语句轮
+/// （BEGIN READ ONLY / COMMIT / ROLLBACK）不收集。'E' 记服务端原话但仍读到
+/// 'Z' 收尾（响应读完、不留半读帧），收束时返回 Err；帧序漂移如实报。
+async fn run_simple_query<W, R>(
+    writer: &mut W,
+    reader: &mut R,
+    sql: &str,
+    collect: bool,
+) -> Result<PgRows, String>
+where
+    W: AsyncWrite + Unpin,
+    R: AsyncBufRead + Unpin,
+{
+    writer
+        .write_all(&build_query(sql))
+        .await
+        .map_err(|error| format!("查询帧写失败：{error}"))?;
+    writer
+        .flush()
+        .await
+        .map_err(|error| format!("刷写失败：{error}"))?;
+
+    let mut out = PgRows::default();
+    let mut failure: Option<String> = None;
+    loop {
+        let (kind, payload) = read_message(reader).await?;
+        match kind {
+            b'T' => {
+                if collect {
+                    out.columns = parse_row_description(&payload)?;
+                }
+            }
+            b'D' => {
+                if !collect {
+                    continue;
+                }
+                if out.rows.len() >= SQL_ROW_LIMIT {
+                    out.truncated = true;
+                    continue;
+                }
+                let values = parse_data_row(&payload)?;
+                out.rows.push(
+                    values
+                        .into_iter()
+                        .map(|value| match value {
+                            Some(text) => serde_json::Value::String(text),
+                            None => serde_json::Value::Null,
+                        })
+                        .collect(),
+                );
+            }
+            b'C' => {}
+            b'E' => failure = Some(parse_error_message(&payload)),
+            b'Z' => break,
+            other => return Err(format!("查询阶段协议漂移（帧类型 {}）", other as char)),
+        }
+    }
+    match failure {
+        Some(message) => Err(message),
+        None => Ok(out),
+    }
+}
+
 fn tls_provider() -> std::sync::Arc<rustls::crypto::CryptoProvider> {
     if let Some(provider) = rustls::crypto::CryptoProvider::get_default() {
         return provider.clone();
@@ -587,52 +665,35 @@ pub async fn query_postgres(config: PgConfig, sql: String) -> Result<SqlQueryRes
         }
     }
 
-    // 简单查询。
-    writer
-        .write_all(&build_query(checked))
+    // 只读事务包裹（纵深第二层，见文件头契约 3）：BEGIN READ ONLY → 用户查询 →
+    // COMMIT，服务端只读事务属性兜底检查器漏网；查询失败则 ROLLBACK 收尾并读完
+    // 响应，连接不留悬挂事务/半读帧。
+    run_simple_query(&mut writer, &mut reader, "BEGIN READ ONLY", false)
         .await
-        .map_err(|error| format!("查询帧写失败：{error}"))?;
-    writer
-        .flush()
-        .await
-        .map_err(|error| format!("刷写失败：{error}"))?;
+        .map_err(|error| format!("只读事务开启失败（不执行用户查询，fail-closed）：{error}"))?;
 
-    let mut columns: Vec<String> = Vec::new();
-    let mut rows: Vec<Vec<serde_json::Value>> = Vec::new();
-    let mut truncated = false;
-    loop {
-        let (kind, payload) = read_message(&mut reader).await?;
-        match kind {
-            b'T' => columns = parse_row_description(&payload)?,
-            b'D' => {
-                if rows.len() >= SQL_ROW_LIMIT {
-                    truncated = true;
-                    continue;
-                }
-                let values = parse_data_row(&payload)?;
-                rows.push(
-                    values
-                        .into_iter()
-                        .map(|value| match value {
-                            Some(text) => serde_json::Value::String(text),
-                            None => serde_json::Value::Null,
-                        })
-                        .collect(),
-                );
-            }
-            b'C' => {}
-            b'E' => return Err(format!("查询失败：{}", parse_error_message(&payload))),
-            b'Z' => break,
-            other => return Err(format!("查询阶段协议漂移（帧类型 {}）", other as char)),
+    let outcome = run_simple_query(&mut writer, &mut reader, checked, true).await;
+    let rows_out = match outcome {
+        Ok(rows_out) => rows_out,
+        Err(error) => {
+            return Err(
+                match run_simple_query(&mut writer, &mut reader, "ROLLBACK", false).await {
+                    Ok(_) => format!("查询失败：{error}"),
+                    Err(cleanup) => format!("查询失败：{error}；ROLLBACK 收尾亦失败：{cleanup}"),
+                },
+            );
         }
-    }
+    };
+    run_simple_query(&mut writer, &mut reader, "COMMIT", false)
+        .await
+        .map_err(|error| format!("只读事务提交失败：{error}"))?;
 
     Ok(SqlQueryResult {
-        columns,
-        row_count: rows.len(),
-        truncated,
+        columns: rows_out.columns,
+        row_count: rows_out.rows.len(),
+        truncated: rows_out.truncated,
         duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-        rows,
+        rows: rows_out.rows,
     })
 }
 
@@ -812,7 +873,83 @@ mod tests {
         println!("  [6] scram parse & verify OK");
     }
 
-    /// 本地假服务端端到端：真 TCP + 真协议对账（明文双确认路径 + 明文口令认证）。
+    /// 简单帧（类型 + Int32 长度 + 载荷）。
+    fn simple_frame(kind: u8, payload: &[u8]) -> Vec<u8> {
+        let mut frame = vec![kind];
+        frame.extend_from_slice(&((payload.len() + 4) as i32).to_be_bytes());
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    /// CommandComplete 帧（标签 + 尾 0）。
+    fn command_complete(tag: &str) -> Vec<u8> {
+        let mut payload = tag.as_bytes().to_vec();
+        payload.push(0);
+        simple_frame(b'C', &payload)
+    }
+
+    /// ReadyForQuery 帧（事务状态字节：'I' 空闲 / 'T' 事务中 / 'E' 失败事务）。
+    fn ready_query(status: u8) -> Vec<u8> {
+        simple_frame(b'Z', &[status])
+    }
+
+    /// 读一发查询帧（'Q' + 长度 + SQL + 尾 0），返回 SQL 文本。
+    async fn read_query_sql<R: AsyncBufRead + Unpin>(reader: &mut R) -> String {
+        let mut header = [0u8; 5];
+        reader.read_exact(&mut header).await.unwrap();
+        assert_eq!(header[0], b'Q', "查询帧类型字节");
+        let len = i32::from_be_bytes([header[1], header[2], header[3], header[4]]) as usize;
+        let mut body = vec![0u8; len - 4];
+        reader.read_exact(&mut body).await.unwrap();
+        assert_eq!(body.pop(), Some(0), "查询帧尾 0");
+        String::from_utf8_lossy(&body).into_owned()
+    }
+
+    /// 假服务端握手 + 明文口令认证（启动帧 → 334 → 口令帧 → Ok → Ready）。
+    async fn fake_auth_handshake<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin>(
+        reader: &mut R,
+        writer: &mut W,
+    ) {
+        // 读启动帧（无类型字节：4 字节长度 + 主体）。
+        let mut len_buf = [0u8; 4];
+        reader.read_exact(&mut len_buf).await.unwrap();
+        let len = i32::from_be_bytes(len_buf) as usize;
+        let mut body = vec![0u8; len - 4];
+        reader.read_exact(&mut body).await.unwrap();
+        let startup = String::from_utf8_lossy(&body).into_owned();
+        assert!(
+            startup.contains("user\0app"),
+            "启动帧携带用户（版本号打头，用包含判定）"
+        );
+
+        // 明文口令认证：334 → 口令 → Ok。
+        writer
+            .write_all(&simple_frame(b'R', &3i32.to_be_bytes()))
+            .await
+            .unwrap();
+        // 口令帧：类型字节 'p' + 长度 + 口令（读帧必须先吃类型字节）。
+        let mut pass_header = [0u8; 5];
+        reader.read_exact(&mut pass_header).await.unwrap();
+        assert_eq!(pass_header[0], b'p', "口令帧类型字节");
+        let plen = i32::from_be_bytes([
+            pass_header[1],
+            pass_header[2],
+            pass_header[3],
+            pass_header[4],
+        ]) as usize;
+        let mut pass = vec![0u8; plen - 4];
+        reader.read_exact(&mut pass).await.unwrap();
+        assert_eq!(pass, b"secret\0".to_vec(), "口令帧内容");
+
+        writer
+            .write_all(&simple_frame(b'R', &0i32.to_be_bytes()))
+            .await
+            .unwrap();
+        writer.write_all(&ready_query(b'I')).await.unwrap();
+    }
+
+    /// 本地假服务端端到端：真 TCP + 真协议对账（明文双确认路径 + 明文口令认证），
+    /// 并断言只读事务包裹帧序列（BEGIN READ ONLY → 查询 → COMMIT）。
     #[tokio::test]
     async fn end_to_end_against_fake_server() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -821,59 +958,19 @@ mod tests {
             let (stream, _) = listener.accept().await.unwrap();
             let (read_half, mut write_half) = stream.into_split();
             let mut reader = BufReader::new(read_half);
+            fake_auth_handshake(&mut reader, &mut write_half).await;
 
-            // 读启动帧（无类型字节：4 字节长度 + 主体）。
-            let mut len_buf = [0u8; 4];
-            reader.read_exact(&mut len_buf).await.unwrap();
-            let len = i32::from_be_bytes(len_buf) as usize;
-            let mut body = vec![0u8; len - 4];
-            reader.read_exact(&mut body).await.unwrap();
-            let startup = String::from_utf8_lossy(&body).into_owned();
-            assert!(
-                startup.contains("user\0app"),
-                "启动帧携带用户（版本号打头，用包含判定）"
-            );
+            // 只读事务包裹帧序列（纵深第二层）：BEGIN READ ONLY → 查询 → COMMIT。
+            let first = read_query_sql(&mut reader).await;
+            assert_eq!(first, "BEGIN READ ONLY", "事务开启帧");
+            write_half
+                .write_all(&command_complete("BEGIN"))
+                .await
+                .unwrap();
+            write_half.write_all(&ready_query(b'T')).await.unwrap();
 
-            // 明文口令认证：334 → 口令 → Ok。
-            let mut auth = vec![b'R'];
-            auth.extend_from_slice(&8i32.to_be_bytes());
-            auth.extend_from_slice(&3i32.to_be_bytes());
-            write_half.write_all(&auth).await.unwrap();
-            // 口令帧：类型字节 'p' + 长度 + 口令（读帧必须先吃类型字节）。
-            let mut pass_header = [0u8; 5];
-            reader.read_exact(&mut pass_header).await.unwrap();
-            assert_eq!(pass_header[0], b'p', "口令帧类型字节");
-            let plen = i32::from_be_bytes([
-                pass_header[1],
-                pass_header[2],
-                pass_header[3],
-                pass_header[4],
-            ]) as usize;
-            let mut pass = vec![0u8; plen - 4];
-            reader.read_exact(&mut pass).await.unwrap();
-            assert_eq!(pass, b"secret\0".to_vec(), "口令帧内容");
-
-            let mut ok = vec![b'R'];
-            ok.extend_from_slice(&8i32.to_be_bytes());
-            ok.extend_from_slice(&0i32.to_be_bytes());
-            write_half.write_all(&ok).await.unwrap();
-            let mut ready = vec![b'Z'];
-            ready.extend_from_slice(&5i32.to_be_bytes());
-            ready.push(b'I');
-            write_half.write_all(&ready).await.unwrap();
-
-            // 读查询帧（类型字节 'Q' + 长度 + SQL）。
-            let mut q_header = [0u8; 5];
-            reader.read_exact(&mut q_header).await.unwrap();
-            assert_eq!(q_header[0], b'Q', "查询帧类型字节");
-            let qlen =
-                i32::from_be_bytes([q_header[1], q_header[2], q_header[3], q_header[4]]) as usize;
-            let mut qbody = vec![0u8; qlen - 4];
-            reader.read_exact(&mut qbody).await.unwrap();
-            assert!(
-                String::from_utf8_lossy(&qbody).contains("SELECT"),
-                "查询帧携带只读 SQL"
-            );
+            let second = read_query_sql(&mut reader).await;
+            assert_eq!(second, "SELECT name, note FROM t", "查询帧携带只读 SQL");
 
             // 回 RowDescription（2 列）。
             let mut desc_payload = vec![0u8, 2];
@@ -881,26 +978,34 @@ mod tests {
                 desc_payload.extend_from_slice(name);
                 desc_payload.extend_from_slice(&[0u8; 18]);
             }
-            let mut desc = vec![b'T'];
-            desc.extend_from_slice(&((desc_payload.len() + 4) as i32).to_be_bytes());
-            desc.extend_from_slice(&desc_payload);
-            write_half.write_all(&desc).await.unwrap();
+            write_half
+                .write_all(&simple_frame(b'T', &desc_payload))
+                .await
+                .unwrap();
 
             // 回 DataRow（'alice' / NULL）。
             let mut data_payload = vec![0u8, 2];
             data_payload.extend_from_slice(&5i32.to_be_bytes());
             data_payload.extend_from_slice(b"alice");
             data_payload.extend_from_slice(&(-1i32).to_be_bytes());
-            let mut data = vec![b'D'];
-            data.extend_from_slice(&((data_payload.len() + 4) as i32).to_be_bytes());
-            data.extend_from_slice(&data_payload);
-            write_half.write_all(&data).await.unwrap();
+            write_half
+                .write_all(&simple_frame(b'D', &data_payload))
+                .await
+                .unwrap();
 
-            let mut complete = vec![b'C'];
-            complete.extend_from_slice(&13i32.to_be_bytes());
-            complete.extend_from_slice(b"SELECT 1\0");
-            write_half.write_all(&complete).await.unwrap();
-            write_half.write_all(&ready).await.unwrap();
+            write_half
+                .write_all(&command_complete("SELECT 1"))
+                .await
+                .unwrap();
+            write_half.write_all(&ready_query(b'T')).await.unwrap();
+
+            let third = read_query_sql(&mut reader).await;
+            assert_eq!(third, "COMMIT", "事务收束帧");
+            write_half
+                .write_all(&command_complete("COMMIT"))
+                .await
+                .unwrap();
+            write_half.write_all(&ready_query(b'I')).await.unwrap();
         });
 
         let config = PgConfig {
@@ -936,5 +1041,65 @@ mod tests {
 
         server.await.unwrap();
         println!("  [3] end-to-end fake server OK");
+    }
+
+    /// 错误路径收尾：查询被服务端拒 → ROLLBACK 必达并读完响应（帧序列断言），
+    /// 连接不留悬挂事务（纵深第二层的收尾纪律）。
+    #[tokio::test]
+    async fn error_path_rolls_back_read_only_transaction() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let (read_half, mut write_half) = stream.into_split();
+            let mut reader = BufReader::new(read_half);
+            fake_auth_handshake(&mut reader, &mut write_half).await;
+
+            assert_eq!(
+                read_query_sql(&mut reader).await,
+                "BEGIN READ ONLY",
+                "事务开启帧"
+            );
+            write_half
+                .write_all(&command_complete("BEGIN"))
+                .await
+                .unwrap();
+            write_half.write_all(&ready_query(b'T')).await.unwrap();
+
+            // 服务端拒（只读事务属性兜底演练）：ErrorResponse 后仍给 ReadyForQuery。
+            assert_eq!(read_query_sql(&mut reader).await, "SELECT boom FROM t");
+            write_half
+                .write_all(&simple_frame(b'E', b"SERROR\0Mread only violation\0\0"))
+                .await
+                .unwrap();
+            write_half.write_all(&ready_query(b'E')).await.unwrap();
+
+            // 收尾帧必达：ROLLBACK → 读完响应（CommandComplete + ReadyForQuery）。
+            assert_eq!(read_query_sql(&mut reader).await, "ROLLBACK");
+            write_half
+                .write_all(&command_complete("ROLLBACK"))
+                .await
+                .unwrap();
+            write_half.write_all(&ready_query(b'I')).await.unwrap();
+        });
+
+        let config = PgConfig {
+            host: "127.0.0.1".to_string(),
+            port,
+            tls: "plain-insecure".to_string(),
+            allow_insecure_plain: true,
+            user: "app".to_string(),
+            database: Some("main".to_string()),
+            password: Some("secret".to_string()),
+        };
+        let error = query_postgres(config, "SELECT boom FROM t".to_string())
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("查询失败") && error.contains("read only violation"),
+            "服务端原话如实回传：{error}"
+        );
+        server.await.unwrap();
+        println!("  [7] error path rollback OK");
     }
 }

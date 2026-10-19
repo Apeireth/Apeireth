@@ -8,8 +8,14 @@
 //!   2. 传输纪律 —— TLS 经能力协商（CLIENT_SSL，握手响应前升级）；明文双确认
 //!      同款（plain-insecure + allow）；caching_sha2 全认证仅在 TLS 下走明文
 //!      口令（明文通道如实拒，防口令明线）；
-//!   3. 只读口径 —— 复用 sqlite_workbench::ensure_readonly_sql（纵深同一道闸），
-//!      行上限同一 [`sqlite_workbench::SQL_ROW_LIMIT`]；
+//!   3. 只读口径（两层分工、纵深兜底）—— 第一层：`ensure_readonly_sql` 词法级
+//!      保守只读闸（连接前即拒写类/DDL/多语句，拒掉绝大多数；同一道闸与
+//!      SQLite 面共用），行上限同一 [`sqlite_workbench::SQL_ROW_LIMIT`]；
+//!      第二层：本驱动把用户查询包进**服务端只读事务**（`START TRANSACTION READ
+//!      ONLY` → 用户查询 → `COMMIT`，失败 `ROLLBACK` 收尾），只读事务属性由
+//!      服务端强制，检查器万一漏网的写入在事务内被服务端拒。第二层是兜底、不替代
+//!      第一层；事务控制语句为本驱动自拼固定串，不走用户面、不经检查器。开启失败
+//!      即整体失败（fail-closed：不裸跑用户查询）；
 //!   4. 0 装 —— 长度编码越界/包漂移/错误包（0xFF）带服务端原话如实报；
 //!      文本协议值如实按字符串/NULL 回传（不猜类型）。
 //!
@@ -377,6 +383,103 @@ async fn read_packet<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<(u8, Vec
     Ok((header[3], payload))
 }
 
+/// 一轮 COM_QUERY 收集到的结果（事务控制语句轮为空壳）。
+#[derive(Debug, Default)]
+struct MySqlRows {
+    columns: Vec<String>,
+    rows: Vec<Vec<serde_json::Value>>,
+    truncated: bool,
+}
+
+/// 一轮 COM_QUERY（命令相位每条命令序号从 0 起：新命令重置序号）：发文本协议
+/// 查询包 → 收响应至本轮结束。`collect` 为真时按结果集收集（OK 空结果 / 列定义
+/// +EOF+行+EOF，限幅 [`SQL_ROW_LIMIT`]，超出截断如实标注）；事务控制语句轮
+/// （START TRANSACTION READ ONLY / COMMIT / ROLLBACK）只认 OK。0xFF 带服务端
+/// 原话如实报；包漂移如实报。
+async fn run_com_query<W, R>(
+    writer: &mut W,
+    reader: &mut R,
+    sql: &str,
+    collect: bool,
+) -> Result<MySqlRows, String>
+where
+    W: AsyncWrite + Unpin,
+    R: AsyncBufRead + Unpin,
+{
+    let mut query_payload = vec![0x03];
+    query_payload.extend_from_slice(sql.as_bytes());
+    writer
+        .write_all(&build_packet(0, &query_payload))
+        .await
+        .map_err(|error| format!("查询包写失败：{error}"))?;
+    writer
+        .flush()
+        .await
+        .map_err(|error| format!("刷写失败：{error}"))?;
+
+    let (_, first) = read_packet(reader).await?;
+    if first.first() == Some(&0xff) {
+        return Err(parse_error_packet(&first));
+    }
+    if !collect {
+        return match first.first() {
+            Some(0x00) => Ok(MySqlRows::default()),
+            other => Err(format!("控制语句响应漂移（首字节 {other:?}）")),
+        };
+    }
+    if first.first() == Some(&0x00) {
+        return Ok(MySqlRows::default()); // OK：空结果如实回空。
+    }
+    let (column_count, _) = decode_lenenc(&first)?;
+    let mut columns = Vec::with_capacity(column_count as usize);
+    for _ in 0..column_count {
+        let (_, def) = read_packet(reader).await?;
+        // 列定义 41：4 段 lenenc 串（catalog/schema/table/org_table）后是 name。
+        let mut cursor = 0usize;
+        for _skip in 0..4 {
+            let (len, used) = decode_lenenc(&def[cursor..])?;
+            cursor += used + len as usize;
+        }
+        let (name_len, used) = decode_lenenc(&def[cursor..])?;
+        cursor += used;
+        columns
+            .push(String::from_utf8_lossy(&def[cursor..cursor + name_len as usize]).into_owned());
+    }
+    // EOF 标记（未启用 DEPRECATE_EOF）。
+    let (_, eof) = read_packet(reader).await?;
+    if eof.first() != Some(&0xfe) {
+        return Err("列定义后未见 EOF 标记（协议漂移）".to_string());
+    }
+    let mut out = MySqlRows {
+        columns,
+        ..MySqlRows::default()
+    };
+    loop {
+        let (_, payload) = read_packet(reader).await?;
+        if payload.first() == Some(&0xfe) && payload.len() < 9 {
+            break; // 行结束 EOF
+        }
+        if payload.first() == Some(&0xff) {
+            return Err(parse_error_packet(&payload));
+        }
+        if out.rows.len() >= SQL_ROW_LIMIT {
+            out.truncated = true;
+            continue;
+        }
+        let values = parse_text_row(&payload, out.columns.len())?;
+        out.rows.push(
+            values
+                .into_iter()
+                .map(|value| match value {
+                    Some(text) => serde_json::Value::String(text),
+                    None => serde_json::Value::Null,
+                })
+                .collect(),
+        );
+    }
+    Ok(out)
+}
+
 fn tls_provider() -> std::sync::Arc<rustls::crypto::CryptoProvider> {
     if let Some(provider) = rustls::crypto::CryptoProvider::get_default() {
         return provider.clone();
@@ -538,84 +641,40 @@ pub async fn query_mysql(config: MySqlConfig, sql: String) -> Result<SqlQueryRes
         }
     }
 
-    // COM_QUERY 文本协议。
-    let mut query_payload = vec![0x03];
-    query_payload.extend_from_slice(checked.as_bytes());
-    writer
-        .write_all(&build_packet(seq, &query_payload))
-        .await
-        .map_err(|error| format!("查询包写失败：{error}"))?;
-    writer
-        .flush()
-        .await
-        .map_err(|error| format!("刷写失败：{error}"))?;
+    // 只读事务包裹（纵深第二层，见文件头契约 3）：START TRANSACTION READ ONLY →
+    // 用户查询 → COMMIT，服务端只读事务属性兜底检查器漏网；查询失败则 ROLLBACK
+    // 收尾并读完响应，连接不留悬挂事务。
+    run_com_query(
+        &mut writer,
+        &mut reader,
+        "START TRANSACTION READ ONLY",
+        false,
+    )
+    .await
+    .map_err(|error| format!("只读事务开启失败（不执行用户查询，fail-closed）：{error}"))?;
 
-    let (_, first) = read_packet(&mut reader).await?;
-    if first.first() == Some(&0xff) {
-        return Err(format!("查询失败：{}", parse_error_packet(&first)));
-    }
-    if first.first() == Some(&0x00) {
-        return Ok(SqlQueryResult {
-            columns: Vec::new(),
-            rows: Vec::new(),
-            row_count: 0,
-            truncated: false,
-            duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-        });
-    }
-    let (column_count, _) = decode_lenenc(&first)?;
-    let mut columns = Vec::with_capacity(column_count as usize);
-    for _ in 0..column_count {
-        let (_, def) = read_packet(&mut reader).await?;
-        // 列定义 41：4 段 lenenc 串（catalog/schema/table/org_table）后是 name。
-        let mut cursor = 0usize;
-        for _skip in 0..4 {
-            let (len, used) = decode_lenenc(&def[cursor..])?;
-            cursor += used + len as usize;
+    let outcome = run_com_query(&mut writer, &mut reader, checked, true).await;
+    let out = match outcome {
+        Ok(out) => out,
+        Err(error) => {
+            return Err(
+                match run_com_query(&mut writer, &mut reader, "ROLLBACK", false).await {
+                    Ok(_) => format!("查询失败：{error}"),
+                    Err(cleanup) => format!("查询失败：{error}；ROLLBACK 收尾亦失败：{cleanup}"),
+                },
+            );
         }
-        let (name_len, used) = decode_lenenc(&def[cursor..])?;
-        cursor += used;
-        columns
-            .push(String::from_utf8_lossy(&def[cursor..cursor + name_len as usize]).into_owned());
-    }
-    // EOF 标记（未启用 DEPRECATE_EOF）。
-    let (_, eof) = read_packet(&mut reader).await?;
-    if eof.first() != Some(&0xfe) {
-        return Err("列定义后未见 EOF 标记（协议漂移）".to_string());
-    }
-    let mut rows: Vec<Vec<serde_json::Value>> = Vec::new();
-    let mut truncated = false;
-    loop {
-        let (row_seq, payload) = read_packet(&mut reader).await?;
-        if payload.first() == Some(&0xfe) && payload.len() < 9 {
-            break; // 行结束 EOF
-        }
-        if payload.first() == Some(&0xff) {
-            return Err(format!("查询失败：{}", parse_error_packet(&payload)));
-        }
-        if rows.len() >= SQL_ROW_LIMIT {
-            truncated = true;
-            continue;
-        }
-        let values = parse_text_row(&payload, columns.len())?;
-        rows.push(
-            values
-                .into_iter()
-                .map(|value| match value {
-                    Some(text) => serde_json::Value::String(text),
-                    None => serde_json::Value::Null,
-                })
-                .collect(),
-        );
-        let _ = row_seq;
-    }
+    };
+    run_com_query(&mut writer, &mut reader, "COMMIT", false)
+        .await
+        .map_err(|error| format!("只读事务提交失败：{error}"))?;
 
     Ok(SqlQueryResult {
-        columns,
-        row_count: rows.len(),
-        truncated,
+        columns: out.columns,
+        row_count: out.rows.len(),
+        truncated: out.truncated,
         duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-        rows,
+        rows: out.rows,
     })
 }
 
@@ -738,5 +797,210 @@ mod tests {
         assert!(parse_error_packet(error_packet).contains("Access denied"));
         assert!(parse_error_packet(error_packet).contains("1045"));
         println!("  [3] text rows & errors OK");
+    }
+
+    /// 最小 V10 握手包载荷（同 handshake_and_auth 布局；插件取
+    /// mysql_native_password，假服务端不校验认证响应内容）。
+    fn greeting_payload() -> Vec<u8> {
+        let mut payload = vec![10u8];
+        payload.extend_from_slice(b"8.0.0\0");
+        payload.extend_from_slice(&7u32.to_le_bytes());
+        payload.extend_from_slice(b"12345678");
+        payload.push(0);
+        payload.extend_from_slice(&0x0200u16.to_le_bytes()); // caps low 含 PROTOCOL_41
+        payload.push(0x21);
+        payload.extend_from_slice(&2u16.to_le_bytes());
+        payload.extend_from_slice(&0x0008u16.to_le_bytes()); // caps high 含 PLUGIN_AUTH
+        payload.push(21);
+        payload.extend_from_slice(&[0u8; 10]);
+        payload.extend_from_slice(b"abcdefghijkl\0");
+        payload.extend_from_slice(b"mysql_native_password\0");
+        payload
+    }
+
+    /// OK 包载荷（头 0x00 + 影响行 0 + 自增 id 0 + 状态 2 字节 + 告警 2 字节）。
+    fn ok_payload() -> Vec<u8> {
+        vec![0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00]
+    }
+
+    /// 读一发 COM_QUERY 包并断言序号从 0 起（命令相位每条命令重置序号），返回 SQL。
+    async fn read_com_query<R: AsyncBufRead + Unpin>(reader: &mut R) -> String {
+        let (seq, payload) = read_packet(reader).await.unwrap();
+        assert_eq!(seq, 0, "新命令序号从 0 起");
+        assert_eq!(payload.first(), Some(&0x03), "COM_QUERY 命令字节");
+        String::from_utf8_lossy(&payload[1..]).into_owned()
+    }
+
+    /// 假服务端握手 + 认证收束（握手 V10 → 握手响应 → OK）。
+    async fn fake_handshake<R: AsyncBufRead + Unpin, W: AsyncWrite + Unpin>(
+        reader: &mut R,
+        writer: &mut W,
+    ) {
+        writer
+            .write_all(&build_packet(0, &greeting_payload()))
+            .await
+            .unwrap();
+        let (seq, response) = read_packet(reader).await.unwrap();
+        assert_eq!(seq, 1, "握手响应序号");
+        assert!(response.windows(4).any(|w| w == b"app\0"), "用户在响应内");
+        writer
+            .write_all(&build_packet(2, &ok_payload()))
+            .await
+            .unwrap();
+    }
+
+    /// 本地假服务端端到端：握手+认证 → 只读事务包裹帧序列（START TRANSACTION READ
+    /// ONLY → 查询 → COMMIT）→ 文本协议结果集往返。
+    #[tokio::test]
+    async fn end_to_end_against_fake_server() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let (read_half, mut write_half) = stream.into_split();
+            let mut reader = BufReader::new(read_half);
+            fake_handshake(&mut reader, &mut write_half).await;
+
+            // 只读事务包裹帧序列（纵深第二层）。
+            assert_eq!(
+                read_com_query(&mut reader).await,
+                "START TRANSACTION READ ONLY",
+                "事务开启帧"
+            );
+            write_half
+                .write_all(&build_packet(1, &ok_payload()))
+                .await
+                .unwrap();
+
+            // 用户查询：1 列 1 行。
+            assert_eq!(read_com_query(&mut reader).await, "SELECT name FROM t");
+            write_half
+                .write_all(&build_packet(1, &encode_lenenc(1)))
+                .await
+                .unwrap();
+            let mut def = Vec::new();
+            for field in [
+                b"def".as_slice(),
+                b"main".as_slice(),
+                b"t".as_slice(),
+                b"t".as_slice(),
+            ] {
+                def.extend_from_slice(&encode_lenenc(field.len() as u64));
+                def.extend_from_slice(field);
+            }
+            def.extend_from_slice(&encode_lenenc(4));
+            def.extend_from_slice(b"name");
+            write_half.write_all(&build_packet(2, &def)).await.unwrap();
+            write_half
+                .write_all(&build_packet(3, &[0xfe, 0, 0, 0, 0]))
+                .await
+                .unwrap();
+            let mut row = encode_lenenc(5);
+            row.extend_from_slice(b"alice");
+            write_half.write_all(&build_packet(4, &row)).await.unwrap();
+            write_half
+                .write_all(&build_packet(5, &[0xfe, 0, 0, 0, 0]))
+                .await
+                .unwrap();
+
+            // 事务收束。
+            assert_eq!(read_com_query(&mut reader).await, "COMMIT");
+            write_half
+                .write_all(&build_packet(1, &ok_payload()))
+                .await
+                .unwrap();
+        });
+
+        let config = MySqlConfig {
+            host: "127.0.0.1".to_string(),
+            port,
+            tls: "plain-insecure".to_string(),
+            allow_insecure_plain: true,
+            user: "app".to_string(),
+            database: Some("main".to_string()),
+            password: Some("secret".to_string()),
+        };
+        let result = query_mysql(config, "SELECT name FROM t".to_string())
+            .await
+            .unwrap();
+        assert_eq!(result.columns, vec!["name"]);
+        assert_eq!(result.row_count, 1);
+        assert!(!result.truncated);
+        assert_eq!(result.rows[0][0], serde_json::json!("alice"));
+
+        // 只读口径在连接前即拒（纵深第一道）。
+        let mut write_config = base_config();
+        write_config.host = "127.0.0.1".to_string();
+        write_config.port = port;
+        write_config.tls = "plain-insecure".to_string();
+        write_config.allow_insecure_plain = true;
+        assert!(
+            query_mysql(write_config, "DELETE FROM t".to_string())
+                .await
+                .is_err(),
+            "写类必须在连接前拒绝"
+        );
+
+        server.await.unwrap();
+        println!("  [4] end-to-end fake server OK");
+    }
+
+    /// 错误路径收尾：查询被服务端拒（0xFF）→ ROLLBACK 必达并读完响应（帧序列
+    /// 断言），连接不留悬挂事务（纵深第二层的收尾纪律）。
+    #[tokio::test]
+    async fn error_path_rolls_back_read_only_transaction() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let (read_half, mut write_half) = stream.into_split();
+            let mut reader = BufReader::new(read_half);
+            fake_handshake(&mut reader, &mut write_half).await;
+
+            assert_eq!(
+                read_com_query(&mut reader).await,
+                "START TRANSACTION READ ONLY",
+                "事务开启帧"
+            );
+            write_half
+                .write_all(&build_packet(1, &ok_payload()))
+                .await
+                .unwrap();
+
+            // 服务端拒（只读事务属性兜底演练）：错误包带原话。
+            assert_eq!(read_com_query(&mut reader).await, "SELECT boom FROM t");
+            let mut error = vec![0xffu8, 0x4a, 0x04, b'#', b'H', b'Y', b'0', b'0', b'0'];
+            error.extend_from_slice(b"write denied by read only transaction");
+            write_half
+                .write_all(&build_packet(1, &error))
+                .await
+                .unwrap();
+
+            // 收尾帧必达：ROLLBACK → 读完响应（OK）。
+            assert_eq!(read_com_query(&mut reader).await, "ROLLBACK");
+            write_half
+                .write_all(&build_packet(1, &ok_payload()))
+                .await
+                .unwrap();
+        });
+
+        let config = MySqlConfig {
+            host: "127.0.0.1".to_string(),
+            port,
+            tls: "plain-insecure".to_string(),
+            allow_insecure_plain: true,
+            user: "app".to_string(),
+            database: Some("main".to_string()),
+            password: Some("secret".to_string()),
+        };
+        let error = query_mysql(config, "SELECT boom FROM t".to_string())
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("查询失败") && error.contains("write denied by read only transaction"),
+            "服务端原话如实回传：{error}"
+        );
+        server.await.unwrap();
+        println!("  [5] error path rollback OK");
     }
 }
