@@ -35,6 +35,18 @@
 //! [`CircadianState::window_at`]；回合开始注入负荷与时长 →
 //! [`SleepPressure::accumulate`]；整编批处理完成后 → [`SleepPressure::relieve`]；
 //! [`SleepPressure::consolidation_urgency`] → `self_status` 一节 + dreaming 闸。
+//!
+//! # W3.1 节律门（默认关，crate 内纯函数）
+//!
+//! [`proactive_gate`] 把相位 / 超日窗口 / 整编紧迫度合成为一个
+//! [`ProactiveGate`]（`Allowed` / `QuietHours` / `RestWindow` /
+//! `ConsolidationDue`），供调用方在主动接触前咨询。它是纯函数：不读时钟、
+//! 不写状态、不调度整编；既有 API 语义与输出不变（本批只新增函数，未接线）。
+//!
+//! 接线点（W3.2 装配面）：心跳采集 [`CircadianState::phase_at`] /
+//! [`CircadianState::window_at`] / [`SleepPressure::consolidation_urgency`] 后调用
+//! [`proactive_gate`]；`QuietHours` / `RestWindow` 抑制主动消息，
+//! `ConsolidationDue` 路由到整编批处理。**本批不接 runtime**。
 
 use serde::{Deserialize, Serialize};
 
@@ -355,6 +367,74 @@ impl SleepUrgency {
     }
 }
 
+/// 主动接触闸（节律门）结果。
+///
+/// [`proactive_gate`] 的返回值；门只给出「现在适合主动接触吗」的确定性判断，
+/// 不发送消息、不调度整编、不落盘，由调用方按结果决定。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProactiveGate {
+    /// 无节律阻碍：允许主动接触。
+    Allowed,
+    /// 睡眠窗勿扰（深夜 / 黎明）：抑制主动接触。
+    QuietHours,
+    /// 超日休息窗：抑制主动接触。
+    RestWindow,
+    /// 睡眠压力高：应安排整编；抑制主动接触。
+    ConsolidationDue,
+}
+
+impl ProactiveGate {
+    /// 中文名。
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Allowed => "允许",
+            Self::QuietHours => "勿扰",
+            Self::RestWindow => "休息窗",
+            Self::ConsolidationDue => "待整编",
+        }
+    }
+
+    /// 是否允许主动接触（只有 [`Self::Allowed`] 为真）。
+    pub const fn allows_proactive(self) -> bool {
+        matches!(self, Self::Allowed)
+    }
+
+    /// 是否应安排整编（只有 [`Self::ConsolidationDue`] 为真）。
+    pub const fn should_consolidate(self) -> bool {
+        matches!(self, Self::ConsolidationDue)
+    }
+}
+
+/// 节律门：`(phase, window, urgency) → ProactiveGate`（纯函数）。
+///
+/// 规则按顺序求值，**首个命中生效**：
+///
+/// 1. 相位为深夜 / 黎明（[`CircadianPhase::is_sleep`]）→ [`ProactiveGate::QuietHours`]；
+/// 2. 睡眠压力紧迫度为 [`SleepUrgency::High`] → [`ProactiveGate::ConsolidationDue`]；
+/// 3. 超日窗口为休息（[`UltradianPhase::Rest`]）→ [`ProactiveGate::RestWindow`]；
+/// 4. 其余 → [`ProactiveGate::Allowed`]。
+///
+/// 优先级是显式的：睡窗勿扰压过紧迫度与超日休息（睡眠窗内不主动接触）；
+/// 高紧迫度压过超日休息（整编是后台动作，不与「休息窗不发主动消息」冲突）。
+/// `window.remaining_ms` 被忽略——快照的相位是唯一依据；本函数不读时钟、
+/// 无 IO、无 RNG，同一输入必得同一输出。
+pub const fn proactive_gate(
+    phase: CircadianPhase,
+    window: UltradianWindow,
+    urgency: SleepUrgency,
+) -> ProactiveGate {
+    if phase.is_sleep() {
+        ProactiveGate::QuietHours
+    } else if matches!(urgency, SleepUrgency::High) {
+        ProactiveGate::ConsolidationDue
+    } else if matches!(window.phase, UltradianPhase::Rest) {
+        ProactiveGate::RestWindow
+    } else {
+        ProactiveGate::Allowed
+    }
+}
+
 /// 睡满 16 小时 @ `load = 1.0` 时睡眠压力饱和到 1 的标定常量。
 pub const SLEEP_PRESSURE_FULL_WAKE_MS: u64 = 16 * 60 * 60 * 1000;
 /// 休息 8 小时把压力从 1 清到 0 的标定常量。
@@ -427,6 +507,15 @@ mod tests {
     use super::*;
 
     const TZ: i32 = 8 * 60;
+
+    const FOCUS_WINDOW: UltradianWindow = UltradianWindow {
+        phase: UltradianPhase::Focus,
+        remaining_ms: 1,
+    };
+    const REST_WINDOW: UltradianWindow = UltradianWindow {
+        phase: UltradianPhase::Rest,
+        remaining_ms: 1,
+    };
 
     /// 默认配置下，本地 `hour:minute` 对应的 epoch 毫秒（UTC+8）。
     fn local_ms(hour: u8, minute: u8) -> i64 {
@@ -694,5 +783,146 @@ mod tests {
         let json = serde_json::to_string(&config).expect("配置应可序列化");
         let back: CircadianConfig = serde_json::from_str(&json).expect("配置应可反序列化");
         assert_eq!(config, back);
+    }
+
+    #[test]
+    fn proactive_gate_quiet_hours_for_sleep_phases() {
+        for phase in [CircadianPhase::DeepNight, CircadianPhase::Dawn] {
+            for urgency in [SleepUrgency::Low, SleepUrgency::Normal, SleepUrgency::High] {
+                for window in [FOCUS_WINDOW, REST_WINDOW] {
+                    let gate = proactive_gate(phase, window, urgency);
+                    assert_eq!(
+                        gate,
+                        ProactiveGate::QuietHours,
+                        "{phase:?}/{window:?}/{urgency:?} 应为勿扰"
+                    );
+                    assert!(!gate.allows_proactive());
+                    assert!(!gate.should_consolidate());
+                    assert_eq!(gate.label(), "勿扰");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn proactive_gate_high_urgency_is_consolidation_due_outside_quiet_hours() {
+        for phase in [
+            CircadianPhase::Morning,
+            CircadianPhase::Day,
+            CircadianPhase::Evening,
+            CircadianPhase::Night,
+        ] {
+            for window in [FOCUS_WINDOW, REST_WINDOW] {
+                let gate = proactive_gate(phase, window, SleepUrgency::High);
+                assert_eq!(
+                    gate,
+                    ProactiveGate::ConsolidationDue,
+                    "{phase:?}/{window:?} 高紧迫度应待整编"
+                );
+                assert!(gate.should_consolidate());
+                assert!(!gate.allows_proactive());
+            }
+        }
+    }
+
+    #[test]
+    fn proactive_gate_rest_window_blocks_low_and_normal_urgency() {
+        for phase in [
+            CircadianPhase::Morning,
+            CircadianPhase::Day,
+            CircadianPhase::Evening,
+            CircadianPhase::Night,
+        ] {
+            for urgency in [SleepUrgency::Low, SleepUrgency::Normal] {
+                let gate = proactive_gate(phase, REST_WINDOW, urgency);
+                assert_eq!(
+                    gate,
+                    ProactiveGate::RestWindow,
+                    "{phase:?}/{urgency:?} 休息窗应抑制主动接触"
+                );
+                assert!(!gate.allows_proactive());
+                assert!(!gate.should_consolidate());
+            }
+        }
+    }
+
+    #[test]
+    fn proactive_gate_allows_focus_window_without_high_urgency() {
+        for phase in [
+            CircadianPhase::Morning,
+            CircadianPhase::Day,
+            CircadianPhase::Evening,
+            CircadianPhase::Night,
+        ] {
+            for urgency in [SleepUrgency::Low, SleepUrgency::Normal] {
+                let gate = proactive_gate(phase, FOCUS_WINDOW, urgency);
+                assert_eq!(
+                    gate,
+                    ProactiveGate::Allowed,
+                    "{phase:?}/{urgency:?} 专注窗应允许主动接触"
+                );
+                assert!(gate.allows_proactive());
+                assert!(!gate.should_consolidate());
+                assert_eq!(gate.label(), "允许");
+            }
+        }
+    }
+
+    #[test]
+    fn proactive_gate_precedence_is_explicit() {
+        // 睡窗勿扰 > 高紧迫度 > 超日休息 > 允许。
+        assert_eq!(
+            proactive_gate(CircadianPhase::Dawn, REST_WINDOW, SleepUrgency::High),
+            ProactiveGate::QuietHours
+        );
+        assert_eq!(
+            proactive_gate(CircadianPhase::Night, REST_WINDOW, SleepUrgency::High),
+            ProactiveGate::ConsolidationDue
+        );
+        assert_eq!(
+            proactive_gate(CircadianPhase::Night, REST_WINDOW, SleepUrgency::Normal),
+            ProactiveGate::RestWindow
+        );
+        assert_eq!(
+            proactive_gate(CircadianPhase::Day, FOCUS_WINDOW, SleepUrgency::Low),
+            ProactiveGate::Allowed
+        );
+    }
+
+    #[test]
+    fn proactive_gate_is_deterministic_and_ignores_remaining_ms() {
+        let rest_zero = UltradianWindow {
+            phase: UltradianPhase::Rest,
+            remaining_ms: 0,
+        };
+        let rest_long = UltradianWindow {
+            phase: UltradianPhase::Rest,
+            remaining_ms: u64::MAX,
+        };
+        assert_eq!(
+            proactive_gate(CircadianPhase::Night, rest_zero, SleepUrgency::Normal),
+            proactive_gate(CircadianPhase::Night, rest_long, SleepUrgency::Normal)
+        );
+        assert_eq!(
+            proactive_gate(CircadianPhase::Night, rest_zero, SleepUrgency::Normal),
+            ProactiveGate::RestWindow
+        );
+
+        let focus_short = UltradianWindow {
+            phase: UltradianPhase::Focus,
+            remaining_ms: 1,
+        };
+        let focus_long = UltradianWindow {
+            phase: UltradianPhase::Focus,
+            remaining_ms: u64::MAX,
+        };
+        assert_eq!(
+            proactive_gate(CircadianPhase::Day, focus_short, SleepUrgency::Low),
+            proactive_gate(CircadianPhase::Day, focus_long, SleepUrgency::Low)
+        );
+        assert_eq!(
+            proactive_gate(CircadianPhase::Day, focus_short, SleepUrgency::Low),
+            ProactiveGate::Allowed
+        );
     }
 }
