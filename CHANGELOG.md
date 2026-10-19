@@ -1,5 +1,18 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 生物机制族 W1：九个机制内核 v0（2026-10-19）
+
+七线并行施工批总装（2h 窗口）：生物机制族 W1 九条内核 v0 全部入库，**+137 个新单测**（organ +79 / guard +18 / orchestration +40），**全部 IMPLEMENTED 未接线**（生产 0 调用点，0 装分级如实标注）：
+- **SG-13 神经调质**（peireth-organ::neuromodulation）：六种调质慢变量（多巴胺 RPE / 血清素 / 催产素 / 皮质醇 / 去甲 / 乙酰胆碱）+ 文档化 6×6 耦合 + ehavior_params() 六项映射（warmth/patience/initiative/curiosity/caution/verbosity），21 测试。
+- **SG-14 异稳态 + SG-23 节律/睡眠压力**（peireth-organ::homeostasis / circadian）：生命体征五项 + 三档阈值 + 文档化优先级表 + 趋势外推预测调节；昼夜相位 / 超日节律 / 腺苷式睡眠压力与整编紧迫度（0.35/0.70），25 测试。
+- **SG-15 免疫记忆 + 炎症收口**（peireth-guard::immune_memory）：事件签名归一化（SHA-256 前 16 hex）+ 分级响应 + 耐受/冷却收口 + self 容忍 + 固定容量 store，18 测试。
+- **SG-16 痛觉学习 + SG-17 再生四期**（peireth-orchestration::nociception / ecovery_protocol）：失败分类 → 习惯化 → 慢性化（10min 窗 ≥4 次）→ 修复脱敏/放弃；止血→炎症→增生→重塑→Resolved 状态机 + 瘢痕账（risk=1-1/(1+hits)），26 测试。
+- **SG-19 依恋 / 分离-重聚**（peireth-organ::attachment）：分离时长四类 + 重聚强度上限 + **内疚/指责黑名单 10 条**（216 组组合全断言干净）+ 线索选点确定性排序，19 测试。
+- **SG-20 交互修复**（peireth-organ::social_repair）：六类不确定性信号 → 六种修复动作（≤2 动作、≤1 问句、rationale 不回灌原文）+ 共同注意，14 测试。
+- **SG-24 群体感应升级门**（peireth-orchestration::quorum）：信号权重 / 衰减 / 阈值 / 冷却 / 消费一次（同一波只升议一次），14 测试。
+- **全量实测（2026-10-19 总装批亲跑，`-j 2`）**：322 套件 / **8652 passed / 0 failed / 52 ignored**（exit 0；上口径 8515 → +137）；三 crate scoped clippy 0 警告、`cargo fmt --check` 0 diff、中性扫描新增行 0 命中、secret-scan 干净。数字真源 docs/03-reference/test-baseline.md（§1 已刷新，旧 8515 移入历史口径）；日志 rtifacts/wave-bio-w1-workspace-test.log。
+- **诚实边界**：九条全部 **IMPLEMENTED 库级、未接线**——无 self_status 节、未接治理链 / care / dreaming / council / 失败处理链；生物是灵感源非保真模拟。W2 = 剩余 5 条内核（SG-18 生命周期 / SG-21 练习场 / SG-22 仪式 / SG-25 生态健康 / SG-26 承载力）+ 14 条全部接线。
+
 ## [Unreleased] — 小批总装：DOCX 列表外观 / xlsx 写出 / 前端依赖清账 / 矩阵真源补齐 (2026-10-18)
 
 四批并行小批（1.5h 窗口）总装，另含总装批真源刷新：
