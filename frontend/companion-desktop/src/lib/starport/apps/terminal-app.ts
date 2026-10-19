@@ -7,7 +7,10 @@
 //   2. 真实执行 —— 走 Tauri run_workspace_command 真进程，无假输出；
 //      code === null = 非正常终了（超时强杀/信号），truncated 如实外显；
 //   3. 桌面壳守卫 —— 非 Tauri 环境如实说明，不设假按钮；
-//   4. mount 返回 cleanup（清理恰好一次）。
+//   4. 权限边界明示 —— 面板明示「以当前用户权限执行 / 不受审批链保护 /
+//      非操作系统沙箱 / enable_shell 只关智能体工具面」（0 装：不许文案
+//      暗示不存在的保护；口径见 docs/02-guides/permission-surfaces.md）；
+//   5. mount 返回 cleanup（清理恰好一次）。
 
 import type {AppContribution} from '../contribution-registry';
 
@@ -50,7 +53,13 @@ export function createTerminalApp(): AppContribution {
     mount: (container: unknown) => {
       const root = container as HTMLElement;
       const doc = root.ownerDocument;
-      const note = el(doc, 'div', 'helm-note', '用户直操终端：工作区钉死 / 30s 超时强杀 / 输出 256KB 截断（原生侧钉死）；智能体驱动走审批族（接线缝）。');
+      const note = el(doc, 'div', 'helm-note', '用户直操终端：工作目录钉死（仅钉当前目录）/ 30s 超时强杀直接子进程（树杀待接，孙进程可能遗留）/ 输出 256KB 截断（原生侧钉死）；智能体驱动走审批族（接线缝）。');
+      const boundary = el(
+        doc,
+        'div',
+        'helm-note',
+        '权限边界：本终端以当前 Windows 用户权限执行命令，不受智能体审批链保护、不是操作系统沙箱；enable_shell=false（APEIRETH_ENABLE_SHELL=0，Shell 命令工具关）关闭的是智能体工具面，不影响此处。',
+      );
       const wsInput = el(doc, 'input', 'helm-workspace');
       wsInput.placeholder = '工作区绝对路径';
       const cmdInput = el(doc, 'input', 'helm-command');
@@ -58,7 +67,7 @@ export function createTerminalApp(): AppContribution {
       const runBtn = el(doc, 'button', 'helm-run', '执行');
       const status = el(doc, 'div', 'helm-status');
       const output = el(doc, 'pre', 'helm-output');
-      root.append(note, wsInput, cmdInput, runBtn, status, output);
+      root.append(note, boundary, wsInput, cmdInput, runBtn, status, output);
 
       if (!isDesktop()) {
         status.textContent = '终端面需要桌面壳（当前为 Web 构建）——不设假按钮，执行禁用。';

@@ -32,6 +32,7 @@ docs/
 | **[04-internal/kani-verification-playbook.md](04-internal/kani-verification-playbook.md)** | **Kani 形式化验证实战手册（动验证面必读: 14 坑 + 配方检查单 + 本地环境）** |
 | **[04-internal/ops-network-playbook.md](04-internal/ops-network-playbook.md)** | **运维与网络排障手册（代理/大文件下载/WSL 修复/shell 陷阱）** |
 | [02-guides/user-manual.md](02-guides/user-manual.md) | 用户手册（功能详解/FAQ）|
+| [02-guides/permission-surfaces.md](02-guides/permission-surfaces.md) | 权限面边界说明（智能体工具面 / 桌面用户直操面 / 工作目录非沙箱三层区分 + 超时杀进程边界）|
 | [02-guides/deployment.md](02-guides/deployment.md) | 部署（环境变量/持久化/前端接入/故障排查）|
 | [02-guides/development.md](02-guides/development.md) | 开发指南（代码地图/模式/陷阱/提交规范）|
 | [02-guides/first-contribution.md](02-guides/first-contribution.md) | 新人上手指南（good-first-issue → 第一个 PR 动线）|
