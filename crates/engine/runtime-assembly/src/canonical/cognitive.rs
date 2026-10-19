@@ -22,6 +22,14 @@ use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
     CouncilInvoker, Proposal,
 };
+use apeireth_organ::context_assembly::{AssemblyPolicy, ContextAssembler, ContextBlock};
+use apeireth_organ::homeostasis::{
+    HomeostasisRegulator, RegulationPlan, VitalSign, VitalSignReading, VitalSignSet,
+};
+use apeireth_organ::prompt_assembly::{
+    repair_guidance, AssemblyGuard, AssemblyRole, PromptAssembler, REPAIR_DIRECTIVE_PLACEHOLDER,
+};
+use apeireth_organ::social_repair::RepairPlan;
 use apeireth_plugin::experience::{
     extract_experience, AssociationStore, KnowledgeGraphStore, WikiEntryStore,
 };
@@ -2639,6 +2647,425 @@ pub const DEFERRED_COGNITIVE_SLOTS: &[(&str, &str)] = &[
         "adapter deferred; no second runtime loop",
     ),
 ];
+
+// ============================================================================
+// W3.2 装配面: 修复指令 + 上下文策略 (两个默认关的开关)
+// ============================================================================
+//
+// 能力级别 (四级口径): IMPLEMENTED (crate 内接线) + 默认关. **不是**
+// DEFAULT ENABLED、**不是** PRODUCTION WIRED: `production.rs` 未注册
+// [`BioAssemblyModule`], 装配根接线属后续批次; 本模块只装配显式交来的输入.
+//
+// - `APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE=1` + 显式注入 [`RepairPlan`]:
+//   [`PromptAssembler::with_repair_plan`] 注册 `RepairDirectiveSource`, 把
+//   [`REPAIR_DIRECTIVE_PLACEHOLDER`] 放进 system 角色的独立 core 块;
+// - `APEIRETH_ENABLE_BIO_CONTEXT_POLICY=1` + 显式预算/已用量: 由实测
+//   ContextPressure (其余 4 维取健康基线中性值) → `HomeostasisRegulator::regulate`
+//   → `AssemblyPolicy::from_plan` → `ContextAssembler::with_policy` 参与装配;
+// - 两开关都关 / 无数据: 既有输出逐字节不变 (不构造体征、不注册 source、不发
+//   overlay; 模块钩子直接 `ModuleOutcome::continue_()`).
+//
+// **未接线 (如实标注)**: cognitive 侧没有会话纠正/矛盾事件台账, 所以
+// `UncertaintySignal` 采集与 `social_repair::plan_repair` 调用**不在本批**;
+// [`RepairPlan`] 只能由调用方显式注入, 本模块**不**从任意文本臆造信号.
+
+/// 修复指令装配开关 env 名 (仅显式 `1` 开, 默认关 fail-closed).
+pub const BIO_REPAIR_GUIDANCE_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE";
+
+/// 上下文策略装配开关 env 名 (仅显式 `1` 开, 默认关 fail-closed).
+pub const BIO_CONTEXT_POLICY_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_CONTEXT_POLICY";
+
+/// 装配面模块 id (slot ledger 键; 改 id = 兼容性变更).
+pub const BIO_ASSEMBLY_MODULE_ID: &str = "cognitive.bio_assembly";
+
+/// 修复指令块名 (core 块: 预算回收不截断该段).
+const BIO_REPAIR_BLOCK_NAME: &str = "bio_repair_directive";
+
+/// 非核心上下文块名 (预算报告可读).
+const BIO_CONTEXT_BLOCK_NAME: &str = "bio_context";
+
+/// 无预算数据时的装配上限: 不限额 (不发明预算数字, 等于不裁剪).
+const BIO_UNBOUNDED_BUDGET_CHARS: usize = usize::MAX;
+
+/// 开关解析 (纯函数): 仅显式 `1` 开, 其余 (未设 / 空串 / `0` / `true` /
+/// `yes` / `on`) 一律关 (默认关 fail-closed).
+pub fn bio_switch_enabled_from_env_value(value: Option<&str>) -> bool {
+    value.is_some_and(|value| value.trim() == "1")
+}
+
+/// 两个默认关的装配开关 (逐开关独立; 全关 = 今日行为逐字节不变).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BioAssemblySwitches {
+    repair_guidance: bool,
+    context_policy: bool,
+}
+
+impl BioAssemblySwitches {
+    /// 全关 (默认; 等价于本批之前的行为).
+    pub const fn disabled() -> Self {
+        Self {
+            repair_guidance: false,
+            context_policy: false,
+        }
+    }
+
+    /// 从 env 构造: 两个 env 都只认显式 `"1"`, 其余一律关 (fail-closed).
+    pub fn from_env() -> Self {
+        Self::from_values(
+            std::env::var(BIO_REPAIR_GUIDANCE_ENABLE_ENV)
+                .ok()
+                .as_deref(),
+            std::env::var(BIO_CONTEXT_POLICY_ENABLE_ENV).ok().as_deref(),
+        )
+    }
+
+    /// 从两个原始值构造 (纯函数, 便于 fail-closed 表测试而不动进程 env).
+    pub fn from_values(repair_guidance: Option<&str>, context_policy: Option<&str>) -> Self {
+        Self {
+            repair_guidance: bio_switch_enabled_from_env_value(repair_guidance),
+            context_policy: bio_switch_enabled_from_env_value(context_policy),
+        }
+    }
+
+    /// 设置修复指令开关 (链式).
+    pub fn with_repair_guidance(mut self, enabled: bool) -> Self {
+        self.repair_guidance = enabled;
+        self
+    }
+
+    /// 设置上下文策略开关 (链式).
+    pub fn with_context_policy(mut self, enabled: bool) -> Self {
+        self.context_policy = enabled;
+        self
+    }
+
+    /// 修复指令开关现况.
+    pub const fn repair_guidance(self) -> bool {
+        self.repair_guidance
+    }
+
+    /// 上下文策略开关现况.
+    pub const fn context_policy(self) -> bool {
+        self.context_policy
+    }
+
+    /// 两个开关是否都关 (关 = 零行为变化, 钩子不做任何装配).
+    pub const fn is_disabled(self) -> bool {
+        !self.repair_guidance && !self.context_policy
+    }
+}
+
+/// 显式交来的非核心上下文块 (策略只折叠 / 裁剪非核心块; 核心块只有修复段).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BioContextBlock {
+    /// 块正文 (调用方自有文本, 通常来自召回 / 投影面).
+    pub content: String,
+    /// 单块字符上限 (`None` = 只受总预算约束).
+    pub cap_chars: Option<usize>,
+}
+
+impl BioContextBlock {
+    /// 构造一个非核心上下文块.
+    pub fn new(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            cap_chars: None,
+        }
+    }
+
+    /// 设置单块字符上限 (链式).
+    pub fn with_cap(mut self, cap_chars: usize) -> Self {
+        self.cap_chars = Some(cap_chars);
+        self
+    }
+}
+
+/// 一次装配的显式输入: 每个字段都由调用方给出, 本模块不从任意文本臆造.
+#[derive(Debug, Clone, Default)]
+pub struct BioTurnInput {
+    /// 本回合可用的修复计划 (来自 `social_repair::plan_repair` 或调用方).
+    pub repair_plan: Option<RepairPlan>,
+    /// 本回合要注入的非核心上下文块.
+    pub context_blocks: Vec<BioContextBlock>,
+    /// 本回合上下文预算 (字符); `None` = 无预算数据 (不构造体征 → 默认策略).
+    pub context_budget_chars: Option<usize>,
+    /// 本回合上下文已用量 (字符); 无预算数据时不参与判定.
+    pub context_used_chars: Option<usize>,
+}
+
+impl BioTurnInput {
+    /// 空输入 (= 什么都不装配).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 注入修复计划 (链式).
+    pub fn with_repair_plan(mut self, plan: RepairPlan) -> Self {
+        self.repair_plan = Some(plan);
+        self
+    }
+
+    /// 注入上下文预算与已用量 (链式; 两者都给才参与 ContextPressure 判定).
+    pub fn with_context_usage(mut self, used_chars: usize, budget_chars: usize) -> Self {
+        self.context_used_chars = Some(used_chars);
+        self.context_budget_chars = Some(budget_chars);
+        self
+    }
+
+    /// 追加一个非核心上下文块 (链式).
+    pub fn with_context_block(mut self, block: BioContextBlock) -> Self {
+        self.context_blocks.push(block);
+        self
+    }
+}
+
+/// 一次装配的可观测结果 (全部字段来自本次装配, 不含用户原文).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BioTurnAssembly {
+    /// 装配后的 system 角色 overlay (顺序: 修复段在前, 非核心块在后).
+    pub overlays: Vec<PromptOverlay>,
+    /// 本次实际使用的装配策略 (无数据 / 开关关 = `AssemblyPolicy::default()`).
+    pub policy: AssemblyPolicy,
+    /// 本次的调节计划 (`None` = 没有体征数据, 未构造调节).
+    pub regulation: Option<RegulationPlan>,
+    /// 是否真的注册了修复指令 source (false = 组装输出与未接线一致).
+    pub repair_registered: bool,
+    /// 进入修复段的动作数 (≤ [`apeireth_organ::social_repair::MAX_REPAIR_MOVES`]).
+    pub repair_moves: usize,
+    /// 策略生效后的装配预算 (只有「开关开 + 预算与已用量都给」时给出;
+    /// `None` = 没构造体征: 无策略收紧 / 无数据 / 开关关).
+    pub effective_budget_chars: Option<usize>,
+    /// 装配中没有定义、被原样保留的占位符 (正常应为空; 空 = 全部解析).
+    pub undefined_vars: Vec<String>,
+}
+
+/// 上下文压力: 已用量 / 预算, 夹到 `[0, 1]` (预算 `0` 视为无压力).
+fn bio_context_pressure(used_chars: usize, budget_chars: usize) -> f64 {
+    if budget_chars == 0 {
+        return 0.0;
+    }
+    (used_chars.min(budget_chars) as f64) / (budget_chars as f64)
+}
+
+/// 上下文策略映射结果 (策略 + 调节计划 + 生效预算).
+struct BioContextPolicy {
+    policy: AssemblyPolicy,
+    regulation: Option<RegulationPlan>,
+    effective_budget_chars: Option<usize>,
+}
+
+/// 体征 → 策略映射 (纯函数, 无 IO / 无时钟).
+///
+/// 只在「策略开关开 + 预算与已用量都给 + 预算 > 0」时构造 [`VitalSignSet`];
+/// 其余情况一律返回默认策略 (行为不变). 只有 ContextPressure 是实测值,
+/// 其余 4 维沿用 [`VitalSignSet::healthy`] 的中性基线 (设定值附近, 不越限).
+///
+/// 用 [`HomeostasisRegulator::regulate`] 而非 `regulate_with_trend`: cognitive
+/// 侧没有上一窗口的体征快照, 不做趋势外推 (不编造第二窗口数据 —— 0 装诚实).
+fn bio_context_policy(switches: BioAssemblySwitches, input: &BioTurnInput) -> BioContextPolicy {
+    let inactive = BioContextPolicy {
+        policy: AssemblyPolicy::default(),
+        regulation: None,
+        effective_budget_chars: None,
+    };
+    if !switches.context_policy() {
+        return inactive;
+    }
+    let Some(budget_chars) = input.context_budget_chars.filter(|budget| *budget > 0) else {
+        // 无预算数据: 不发明预算 → 默认策略 (行为不变).
+        return inactive;
+    };
+    let Some(used_chars) = input.context_used_chars else {
+        // 有预算但无已用量: 不猜占用率 → 默认策略 (行为不变).
+        return inactive;
+    };
+    let pressure = bio_context_pressure(used_chars, budget_chars);
+    let vitals = VitalSignSet::healthy().with(
+        VitalSign::ContextPressure,
+        VitalSignReading::defaults_for(VitalSign::ContextPressure, pressure),
+    );
+    let regulation = HomeostasisRegulator::new().regulate(&vitals);
+    let policy = AssemblyPolicy::from_plan(&regulation);
+    BioContextPolicy {
+        policy,
+        effective_budget_chars: Some(policy.effective_budget_chars(budget_chars)),
+        regulation: Some(regulation),
+    }
+}
+
+/// 装配一次: 修复指令段 (system 独立 core 块) + 策略化非核心上下文块.
+///
+/// 两开关都关时整条装配面停用: 返回空 `overlays` + 默认策略 + 不构造体征
+/// (与未接线逐字节一致, 即使输入全给); 开关开但输入为空 (空 plan / 无预算)
+/// 时同样不注册、不改策略.
+pub fn assemble_bio_turn(switches: BioAssemblySwitches, input: &BioTurnInput) -> BioTurnAssembly {
+    if switches.is_disabled() {
+        return BioTurnAssembly {
+            overlays: Vec::new(),
+            policy: AssemblyPolicy::default(),
+            regulation: None,
+            repair_registered: false,
+            repair_moves: 0,
+            effective_budget_chars: None,
+            undefined_vars: Vec::new(),
+        };
+    }
+    let context_policy = bio_context_policy(switches, input);
+    let configured_budget = input
+        .context_budget_chars
+        .filter(|budget| *budget > 0)
+        .unwrap_or(BIO_UNBOUNDED_BUDGET_CHARS);
+    let mut prompt = PromptAssembler::new();
+    let mut context = ContextAssembler::new(configured_budget).with_policy(context_policy.policy);
+
+    // 修复指令段: 只有「开关开 + 有可渲染动作」才注册 source 并放置独立块.
+    let mut repair_registered = false;
+    let mut repair_moves = 0_usize;
+    if switches.repair_guidance() {
+        if let Some(plan) = &input.repair_plan {
+            if let Some(section) = repair_guidance(plan) {
+                repair_moves = section.moves().len();
+                repair_registered = true;
+                prompt = prompt.with_repair_plan(plan);
+                context = context.push(
+                    ContextBlock::new(BIO_REPAIR_BLOCK_NAME, REPAIR_DIRECTIVE_PLACEHOLDER)
+                        .core(true),
+                );
+            }
+        }
+    }
+
+    for block in &input.context_blocks {
+        let mut injected = ContextBlock::new(BIO_CONTEXT_BLOCK_NAME, block.content.clone());
+        if let Some(cap_chars) = block.cap_chars {
+            injected = injected.with_cap(cap_chars);
+        }
+        context = context.push(injected);
+    }
+
+    let mut guard = AssemblyGuard::new();
+    let (blocks, report) = prompt.assemble(&context, AssemblyRole::System, &mut guard);
+    let overlays = blocks
+        .into_iter()
+        .filter(|block| !block.content.trim().is_empty())
+        .map(|block| PromptOverlay::system(block.content))
+        .collect();
+    BioTurnAssembly {
+        overlays,
+        policy: context_policy.policy,
+        regulation: context_policy.regulation,
+        repair_registered,
+        repair_moves,
+        effective_budget_chars: context_policy.effective_budget_chars,
+        undefined_vars: report.undefined,
+    }
+}
+
+/// 可见 transcript 的字符数 (只取长度: 文本本身不进入装配输入).
+fn transcript_chars(messages: &[NormalizedMessage]) -> usize {
+    messages
+        .iter()
+        .map(|message| ContentPart::join_text(&message.content).chars().count())
+        .sum()
+}
+
+/// W3.2 装配面模块: `TurnStart` 装配修复指令段 + 策略化上下文块.
+///
+/// 默认关 (两个开关都关或 env 未设) 时钩子直接返回
+/// `ModuleOutcome::continue_()`: 不注册 source、不构造体征、不发 overlay.
+/// 开关开时也只装配**显式注入**的 [`RepairPlan`] / 上下文块 / 预算 ——
+/// 没有输入就是零变化, 不从任意文本臆造信号 (0 装诚实).
+///
+/// **未接线 (如实标注)**: `production.rs` 尚未注册本模块, 无会话事件源驱动
+/// `UncertaintySignal`; 计划与预算需装配根显式注入.
+#[derive(Debug)]
+pub struct BioAssemblyModule {
+    manifest: ModuleManifest,
+    switches: BioAssemblySwitches,
+    repair_plan: Option<RepairPlan>,
+    context_blocks: Vec<BioContextBlock>,
+    context_budget_chars: Option<usize>,
+}
+
+impl BioAssemblyModule {
+    /// 按给定开关构造 (默认关 = 行为不变).
+    pub fn new(switches: BioAssemblySwitches) -> Self {
+        Self {
+            manifest: ModuleManifest::new(BIO_ASSEMBLY_MODULE_ID, "Cognitive Bio Assembly"),
+            switches,
+            repair_plan: None,
+            context_blocks: Vec::new(),
+            context_budget_chars: None,
+        }
+    }
+
+    /// 从 env 构造 (两个 env 都只认显式 `"1"`, 默认关 fail-closed).
+    pub fn from_env() -> Self {
+        Self::new(BioAssemblySwitches::from_env())
+    }
+
+    /// 注入本回合修复计划 (链式; 仅修复指令开关开时生效).
+    pub fn with_repair_plan(mut self, plan: Option<RepairPlan>) -> Self {
+        self.repair_plan = plan;
+        self
+    }
+
+    /// 注入本回合非核心上下文块 (链式; 仅上下文策略开关开时受策略折叠).
+    pub fn with_context_blocks(mut self, blocks: Vec<BioContextBlock>) -> Self {
+        self.context_blocks = blocks;
+        self
+    }
+
+    /// 注入本回合上下文预算 (链式; 无预算 = 默认策略, 行为不变).
+    pub fn with_context_budget(mut self, budget_chars: usize) -> Self {
+        self.context_budget_chars = Some(budget_chars);
+        self
+    }
+
+    /// 开关现况 (观测口).
+    pub const fn switches(&self) -> BioAssemblySwitches {
+        self.switches
+    }
+
+    /// 装配一次 (`used_chars` = 本回合已用量; 无预算数据时被忽略).
+    pub fn assemble(&self, used_chars: Option<usize>) -> BioTurnAssembly {
+        let input = BioTurnInput {
+            repair_plan: self.repair_plan.clone(),
+            context_blocks: self.context_blocks.clone(),
+            context_budget_chars: self.context_budget_chars,
+            context_used_chars: used_chars,
+        };
+        assemble_bio_turn(self.switches, &input)
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentModule for BioAssemblyModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook != HookPoint::TurnStart || self.switches.is_disabled() {
+            return Ok(ModuleOutcome::continue_());
+        }
+        // 已用量只取 transcript 长度 (数字), 原文不进入装配输入.
+        let used_chars = self
+            .switches
+            .context_policy()
+            .then(|| transcript_chars(ctx.messages));
+        let assembly = self.assemble(used_chars);
+        let mut outcome = ModuleOutcome::continue_();
+        for overlay in assembly.overlays {
+            outcome = outcome.with_prompt_overlay(overlay);
+        }
+        Ok(outcome)
+    }
+}
 
 #[cfg(test)]
 mod tests {
