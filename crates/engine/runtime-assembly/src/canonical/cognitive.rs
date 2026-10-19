@@ -4477,9 +4477,10 @@ mod tests {
                 MEMORY_RECALL_MODULE_ID,
                 PREFERENCE_RECALL_MODULE_ID,
                 SELF_ASSESSMENT_MODULE_ID,
-                // 生物机制族 W3.2: production 注册的 TurnStart 装配模块 (默认关,
-                // 关时钩子直接 continue_ = 零 overlay 零变化); 槽位顺序固定。
-                BIO_ASSEMBLY_MODULE_ID,
+                // 生物机制族 W3.2: BioAssemblyModule 为懒注册（两个 env 全关 =
+                // 不构造 = 不注册，见 startup_instrumentation 的懒加载语义）；
+                // 因此默认配置下不占槽位，开关开时注册在 self_assessment 与
+                // memory_writeback 之间（顺序由 production 注册点固定）。
                 MEMORY_WRITEBACK_MODULE_ID,
             ]
         );

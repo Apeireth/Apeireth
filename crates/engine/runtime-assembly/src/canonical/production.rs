@@ -32,9 +32,9 @@ use apeireth_tools_canonical::{
 
 use super::capability::CapabilityProvider;
 use super::cognitive::{
-    BioAssemblyModule, CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule,
-    JudgeObservations, MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule,
-    PreferenceRecallModule, SelfAssessmentModule,
+    BioAssemblyModule, BioAssemblySwitches, CognitiveTelemetry, CouncilModule, JudgeConfig,
+    JudgeModule, JudgeObservations, MemoryRecallAccessStore, MemoryRecallModule,
+    MemoryWritebackModule, PreferenceRecallModule, SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::memory_typed_sink::CanonicalMemoryTypedSink;
@@ -1478,11 +1478,14 @@ impl ProductionModules {
 
         // 生物机制族 W3.2: 修复指令段 + 策略化上下文块的 TurnStart overlay 装配点。
         // 两个开关默认关（`APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` /
-        // `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`，只认 "1"）：关时钩子直接
-        // `continue_()` = 零 overlay 零变化；开时也只装配装配根**显式注入**的
-        // `RepairPlan` / 上下文块 / 预算（会话事件源与注入面待 W3.3），
+        // `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`，只认 "1"）——**全关 = 不注册**
+        // （懒加载语义：未启用 = 不构造 = 不注册，探针零上报）；开时也只装配
+        // 装配根**显式注入**的 `RepairPlan` / 上下文块 / 预算（会话事件源待 W3.3），
         // 不从任意文本臆造信号。
-        modules.push(Arc::new(BioAssemblyModule::from_env()));
+        let bio_switches = BioAssemblySwitches::from_env();
+        if !bio_switches.is_disabled() {
+            modules.push(Arc::new(BioAssemblyModule::new(bio_switches)));
+        }
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
