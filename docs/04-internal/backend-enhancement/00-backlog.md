@@ -80,6 +80,8 @@
 
 | D23 | **Dependabot 开放告警 10 条（2026-10-18 实查）**：1 high + 5 medium + 4 low。①前端 `frontend/companion-desktop`：source-map-js **high**（fix 1.2.2）、katex low ×2（fix 0.18.2）、dompurify low ×2（fix 3.4.16）——**4 条已清（7c07566a：dompurify 3.4.16 / katex 0.18.2 / source-map-js 1.2.2，pnpm audit 4→0）**；②`legacy/archived/**` 5 份 Cargo.lock + `research/llm_judge/Cargo.lock`：rustls medium（fix 0.23.45） | 处置建议：①前端 4 条走小批升级（升级 + 构建/测试验证，锁文件同提交）；②legacy/archived 与 research 锁文件属非产品面 → 需 owner 一句口径：`dependabot.yml` 忽略 或 删除归档锁文件（倾向忽略，历史归档不追溯改）；③台账索引见 [system-gap-ledger-2026-10-18.md](system-gap-ledger-2026-10-18.md) §二 #11 | GitHub Dependabot alerts API 实查（open 状态） |
 
+| D24 | **生物机制族 14 条全部采纳（2026-10-19 owner：全都要，当工程做）**：SG-13 神经调质 / SG-14 异稳态生命体征 / SG-23 节律+睡眠压力 / SG-15 免疫记忆+炎症收口 / SG-16 痛觉学习 / SG-17 再生四期 / SG-19 依恋分离-重聚 / SG-20 社交认知与交互修复 / SG-24 群体感应升级门（以上 **W1 内核批，2026-10-19 并行施工**）；SG-18 凋亡/神经发生 / SG-21 游戏/幼态延续 / SG-22 仪式 / SG-25 共生菌群 / SG-26 承载力·演替·关键种（W2）。**细节与验收判据见台账**：[system-gap-ledger-2026-10-18.md](system-gap-ledger-2026-10-18.md)「生物机制族」节；灵感来源 [06-biosphere-inspiration-2026-10-18.md](../../philosophy-study/06-biosphere-inspiration-2026-10-18.md) | W1 = 纯机制内核 v0（模块+类型+测试+模块文档，不接线）；W2 = 接线 + self_status 节 + 矩阵行 + 剩余 5 条；生物是灵感源非保真模拟，0 装分级标注 | 台账 + 灵感清单 |
+
 ## 与既有账目的关系
 
 - 性能红行现状见 `reports/benchmark-reproduction.md`；开关权力现状见 `docs/02-guides/capability-switch-power-audit.md`；
