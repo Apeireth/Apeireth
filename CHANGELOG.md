@@ -1,5 +1,17 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 生物机制族 W3.2：装配面接线（5 条 PRODUCTION WIRED，默认关；2026-10-19）
+
+五线并行 + 装配根总装：把 W3.1 的内接线接进生产装配（**+68 新测**；全部默认关、开关只认显式 "1"、关时逐字节零变化）：
+- **SG-15 免疫→guard hook（生产入口）**（peireth-cli）：APEIRETH_ENABLE_IMMUNE_MEMORY；BehaviorChainGuardHook 创建后按 env 挂 Arc<ImmuneMemory>（只认 "1"）；默认关句柄为 None。7 测试。
+- **SG-19+SG-22 依恋/仪式→care（心跳装配）**（untime-assembly::care_reminder/care_heartbeat）：APEIRETH_ENABLE_BIO_CARE_CANDIDATES、BioCareInputs 供给口 + 缺省空供给；心跳 poll 末位逐条喂 poll_bio_candidate（勿扰/频率/预算全走内核）。**生产数据供给（presence/memory/仪式状态）未接 ⇒ 开关开也 0 候选**（如实）。19 测试。
+- **SG-14+SG-23 稳态/节律→cognitive 装配**（cognitive.rs + BioAssemblyModule 生产注册）：APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE / APEIRETH_ENABLE_BIO_CONTEXT_POLICY；修复指令进 system 独立 core 块、上下文策略按显式注入的预算/块生效；无数据=默认策略，不编趋势/预算/信号。11 测试。
+- **SG-24 quorum→orchestrator 装配**：APEIRETH_ENABLE_QUORUM_GATE；deliberate() 门开走 decide_with_invoker_gated（Hold/Cooldown 不召开、tick Held(GateBlock)、不伪造否决），信号自动源接器官链失败与审议回流。10 测试。
+- **SG-26 容量→自述 io_mechanisms**（self_status_source.rs + production.rs）：APEIRETH_ENABLE_BIO_SELF_STATUS；capabilities.bio_mechanisms 子对象（**21 节合同不变**），14 机制格，默认关 mechanisms:null+原因；承载力 probe 读与 	ool.task_board 同一任务队列；其余 13 条 wired:false。10 测试 + 合同测试。
+- **装配根总装（Lead）**：production.rs 注册 BioAssemblyModule + 自述源挂观测面 + 矩阵 §0.2 新开关行 + 既有「名册全为布尔」断言豁免 io_mechanisms（子对象非开关）。
+- **接线盘点**：14 条 = **PRODUCTION WIRED 5**（免疫/审议门/修复 prompt/上下文策略/容量自述）+ **半程 4**（调质→tone、依恋+仪式→care 数据供给、节律门）+ **未接线 5**（痛觉/再生/生命周期/练习场/生态健康内核已入库）。W3.3 = 数据供给 + 事件源 + 端到端。
+- **门禁**：全量工作区实测见 test-baseline（本批）；scoped：assembly lib 169、e2e 12、4 个新装配测试 37、cli 38、tools 592 全绿；clippy -D warnings 0；fmt 0 diff。
+
 ## [Unreleased] — 生物机制族 W3.1：六条「内接线」入库（默认关，2026-10-19）
 
 六线并行施工批：把已交付的内核接进 crate 内既有缝（**+77 新单测**，全部**默认关 + 可回退**）：

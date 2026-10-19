@@ -98,6 +98,21 @@
 > 提交：SG-18 0e3eb71｜SG-21 69038cde｜SG-22 6d0361e｜SG-25 283f37e｜SG-26 67dd06a。
 > **⇒ 14/14 内核全部入库（W1+W2 合计 +228 新单测）。**
 >
+> **W3.2 交付记录（2026-10-19，五线并行 + 装配根总装）**：装配面接线入库（**+68 新测**：
+> 新装配测试文件 4 个共 37 + cli 7 + tools 7 + 单元 17）。提交：cli 免疫挂载 3f255505｜
+> care 候选 9a11ea6｜修复/上下文策略 627b002d｜审议门 8c506173｜bio_mechanisms 85984bdb｜
+> **装配根总装（Lead）** = production.rs 注册 BioAssemblyModule + 自述源挂 io_mechanisms
+> + 承载力 probe 读同一任务队列 + 矩阵 §0.2 开关行 + 名册布尔断言豁免。
+>
+> **接线盘点（14 条）**：
+> - **PRODUCTION WIRED（默认关）5 条**：SG-14 稳态→上下文策略｜SG-15 免疫→guard hook（cli 挂载）｜
+>   SG-20 修复→prompt 组装｜SG-24 quorum→审议门｜SG-26 容量→自述 bio_mechanisms；
+> - **半程 4 条**：SG-13 调质→tone（映射已备，装配未持 NeuromodulatorState）｜
+>   SG-19 依恋 + SG-22 仪式→care（管道已接，**生产数据供给 presence/memory/仪式状态未接 ⇒ 0 候选**）｜
+>   SG-23 节律门（装配未接心跳主动消息闸）；
+> - **未接线 5 条**：SG-16/17 痛觉/再生、SG-18 生命周期、SG-21 练习场、SG-25 生态健康（内核已入库）。
+> - **W3.3** = 数据供给 + 事件源（会话纠正/外部异常）+ 失败链/play 端到端 + 剩余装配。
+>
 > **W3.1 交付记录（2026-10-19，六线并行，crate 内接线）**：六条「内接线」API 全部入库（**+77 新单测**：
 > guard +10 / organ +57（care 24 + context/circadian 14 + tone 10 + prompt 9）/ orchestration +10），
 > scoped 门禁全绿（organ 377 / guard 61 / orchestration 447 passed；clippy 0；fmt 0 diff）。

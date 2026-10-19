@@ -84,6 +84,8 @@
 
 | D25 | **环境敏感测试偶发失败（2026-10-19 全量 W2 总装发现）**：process::appcontainer::tests::probe_appcontainer_launch_succeeds_with_step_attribution 在全量并行运行中 1 次失败（CreateProcessW(AppContainer): 系统找不到指定的文件 (os error 2)）；**单独跑与单 crate lib 复跑均通过（585/0）**，与生物机制族 W2 改动无因果（本批仅新增模块文件与 lib 注册）。处置建议：①查探针依赖（AppContainer profile/临时文件/作业对象在并行负载下的竞争）；②若确属环境依赖，改 #[ignore] + 真机位专项跑（需 owner 口径，不掩盖）；③在该测试内加注释与重试/诊断输出 | rtifacts/wave-bio-w2-workspace-test.log（失败帧）/ -rerun.log（复跑） | 🟡 待处置 |
 
+| D26 | **Windows 端口保留导致 socket 测试偶发 WSAEACCES 10013（2026-10-19 全量 W3.2 发现 + 已实测规避）**：环境 `netsh int ipv4 show excludedportrange protocol=tcp` 存在 administered 保留区间 `50000-50059`；mock server 用 `TcpListener::bind("127.0.0.1:0")` 在系统分配命中保留区间时偶发 `WSAEACCES 10013`（标准 `-j 2` 全量跑 5–12 个 socket 套件偶发失败；单套件复跑全绿，产品面 0 失败）。**已实测规避**：同命令 + `-j 1` + `RUST_TEST_THREADS=4` 降并发 → 全 326 套件 / 8889 passed / 0 failed（日志 `artifacts/wave-bio-w32f-workspace-test.log`）；手工 2000 次顺序 bind 0 失败、并发压力下才复现，故归因「并发分配触发保留区间」。彻底修：①管理员 `net stop winnat` 后删保留区间（环境侧不入仓）；②测试侧加 bind 重试（仅 10013 时重试一次，长期修法）。 | 失败帧 `artifacts/wave-bio-w32b-workspace-test.log`（10 套件）/ `wave-bio-w32d`（5 套件）/ `wave-bio-w32e`（12 套件）；绿跑 `wave-bio-w32f` | 🟡 环境侧待处置（已有绿跑口径） |
+
 ## 与既有账目的关系
 
 - 性能红行现状见 `reports/benchmark-reproduction.md`；开关权力现状见 `docs/02-guides/capability-switch-power-audit.md`；

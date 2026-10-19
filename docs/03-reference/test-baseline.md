@@ -12,11 +12,11 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| **结果** | **322 套件 / 8820 passed / 0 failed / 52 ignored** |
+| **结果** | **326 套件 / 8889 passed / 0 failed / 52 ignored** |
 | **日期** | 2026-10-19 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **来源** | 生物机制族 W3.1 总装批本机全量实测（2026-10-19，同命令可复现；日志 `artifacts/wave-bio-w31-workspace-test.log`） |
+| **来源** | 生物机制族 W3.2 总装批本机全量实测（2026-10-19；命令同口径但加并发规避 `-j 1` + `RUST_TEST_THREADS=4`，原因见 D26；日志 `artifacts/wave-bio-w32f-workspace-test.log`） |
 
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
@@ -83,6 +83,14 @@
 > CreateProcessW(AppContainer): 系统找不到指定的文件）；单独跑与单 crate lib 复跑均通过，
 > 本批全量亦通过 —— 已登记 **D25**（待专项处置），不当作本波回归。日志
 > `artifacts/wave-bio-w31-workspace-test.log`。
+> **复测注记（2026-10-19，生物机制族 W3.2 总装批校验）**：全量复测 =
+> **326 套件 / 8889 passed / 0 failed / 52 ignored**（上口径 8820 → **+69**：W3.2 新增装配面
+> 与观测面测试，含 4 个新装配测试文件 = 套件数 322 → 326）。**口径差异如实说明**：标准
+> -j 2 全量本轮多次触发 **D26 环境问题**（Windows administered 保留端口区间 50000-50059
+> 被 mock server 临时端口分配偶发命中 → WSAEACCES 10013，5–12 个 socket 测试套件偶发失败；
+> 单套件复跑均绿，产品面 0 失败）；最终权威绿跑 = **同命令 + -j 1 + RUST_TEST_THREADS=4
+> 降并发规避**，全 326 套件 0 失败。D26 记录于  0-backlog，彻底修需管理员移除保留区间
+> 或测试侧加 bind 重试。日志 `artifacts/wave-bio-w32f-workspace-test.log`。
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |
@@ -99,7 +107,7 @@
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
-| 2026-10-19 | 322 套件 / 8652 passed / 0 failed / 52 ignored | 生物机制族 W1 批（§1 曾用，2026-10-19 W3.1 批刷新后移入历史） |`n| 2026-10-18 | 322 套件 / 8515 passed / 0 failed / 52 ignored | 小批总装批（§1 曾用，2026-10-19 生物机制族 W1 批刷新后移入历史） |`n| 2026-10-16 | 199 套件 / 5360 passed / 0 failed / 22 ignored | 外部体验审计本机实测（初版 §1 现行基线，2026-10-18 小批总装批刷新后移入历史） |
+| 2026-10-19 | 322 套件 / 8820 passed / 0 failed / 52 ignored | 生物机制族 W3.1 批（§1 曾用，2026-10-19 W3.2 批刷新后移入历史） |`n| 2026-10-19 | 322 套件 / 8652 passed / 0 failed / 52 ignored | 生物机制族 W1 批（§1 曾用，2026-10-19 W3.1 批刷新后移入历史） |`n| 2026-10-18 | 322 套件 / 8515 passed / 0 failed / 52 ignored | 小批总装批（§1 曾用，2026-10-19 生物机制族 W1 批刷新后移入历史） |`n| 2026-10-16 | 199 套件 / 5360 passed / 0 failed / 22 ignored | 外部体验审计本机实测（初版 §1 现行基线，2026-10-18 小批总装批刷新后移入历史） |
 | 2026-10-13 | 5243 passed / 0 failed / 22 ignored，190 套件 | `cargo test --workspace --locked -j 2` 全量实测 |
 | 2026-10-06 | 3418 passed / 0 failed / 19 ignored，129 套件 | W2 接线批后实测（当日复核批口径 3406） |
 | 2026-09-30 | 4829 passed / 0 failed，161 套件 | rc.3 批 |
