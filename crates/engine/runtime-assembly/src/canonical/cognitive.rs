@@ -4477,6 +4477,9 @@ mod tests {
                 MEMORY_RECALL_MODULE_ID,
                 PREFERENCE_RECALL_MODULE_ID,
                 SELF_ASSESSMENT_MODULE_ID,
+                // 生物机制族 W3.2: production 注册的 TurnStart 装配模块 (默认关,
+                // 关时钩子直接 continue_ = 零 overlay 零变化); 槽位顺序固定。
+                BIO_ASSEMBLY_MODULE_ID,
                 MEMORY_WRITEBACK_MODULE_ID,
             ]
         );

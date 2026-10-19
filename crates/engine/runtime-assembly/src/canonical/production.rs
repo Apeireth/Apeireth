@@ -25,15 +25,16 @@ use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
 use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
+use apeireth_tools_canonical::self_status::BioMechanismKind;
 use apeireth_tools_canonical::{
     CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
 };
 
 use super::capability::CapabilityProvider;
 use super::cognitive::{
-    CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
-    MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule,
-    SelfAssessmentModule,
+    BioAssemblyModule, CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule,
+    JudgeObservations, MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule,
+    PreferenceRecallModule, SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::memory_typed_sink::CanonicalMemoryTypedSink;
@@ -41,8 +42,9 @@ use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{
-    doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
-    sheet_ops_status_probe, task_board_status_probe, ProductionSelfStatusSource,
+    capacity_bio_probe, doc_ops_status_probe, image_ops_status_probe, proposal_status_probe,
+    roster_from_config, sheet_ops_status_probe, task_board_status_probe,
+    ProductionSelfStatusSource,
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
@@ -1222,6 +1224,18 @@ impl ProductionModules {
             if let Some(counters) = &sheet_ops_counters {
                 source = source.with_sheet_ops_probe(sheet_ops_status_probe(Arc::clone(counters)));
             }
+            // 生物机制族 W3.2: `capabilities.bio_mechanisms` 只读聚合面。挂面 =
+            // 子对象恒在场（默认关时 `mechanisms: null` + 原因「未启用」，
+            // 零 probe 调用；开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 "1"）。
+            // 承载力探测口读**同一本**任务队列（与 `tool.task_board` 同队同账），
+            // 其余 13 条一律 `wired:false` + 「未接线」，不编数值。
+            source = source.with_bio_self_status_from_env();
+            if let Some(queue) = &config.task_board {
+                source.register_bio_probe(
+                    BioMechanismKind::Capacity,
+                    capacity_bio_probe(Arc::clone(queue), None),
+                );
+            }
             // K 轴 L1: 自述在场节 (设备数/白名单数/最近感知) 与 `tool.device_sense`
             // 工具面同一本设备表同一进程内感知计数 (同源同账; 面没注册 = 在场节
             // 显式 null + 原因)。
@@ -1461,6 +1475,14 @@ impl ProductionModules {
                     .with_telemetry(Arc::clone(&telemetry)),
             ));
         }
+
+        // 生物机制族 W3.2: 修复指令段 + 策略化上下文块的 TurnStart overlay 装配点。
+        // 两个开关默认关（`APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` /
+        // `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`，只认 "1"）：关时钩子直接
+        // `continue_()` = 零 overlay 零变化；开时也只装配装配根**显式注入**的
+        // `RepairPlan` / 上下文块 / 预算（会话事件源与注入面待 W3.3），
+        // 不从任意文本臆造信号。
+        modules.push(Arc::new(BioAssemblyModule::from_env()));
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
