@@ -42,6 +42,12 @@ use super::engine::{CareCandidate, CareEngine, CareInitiative, CarePoll};
 use super::rules::{CareRecord, CareStoreError};
 
 /// 候选来源档 (打扰纪律分档的输入标签; 台账 `kind` 列同词表)。
+///
+/// 既有三档 `rule` / `reminder` / `guard_alert` 语义不变; W3.1 新增两档
+/// `ritual` / `reunion` 是生物机制候选源 (SG-22 仪式 / SG-19 分离-重聚),
+/// 由 [`super::CareConfig::bio_candidates_enabled`] 总开关控制 (默认关,
+/// 关闭时永不产出)。两档与 `reminder` 同走**普通频率账** (不占守护独立上限),
+/// 台账经 `record_signal_care` 落 `kind` 列 (不碰规则 `fired_at` 锚点)。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CareTier {
@@ -51,6 +57,10 @@ pub enum CareTier {
     Reminder,
     /// 守护告警 (L5 看家: 安全告警 = 高优先关怀候选, 带守护例外档)。
     GuardAlert,
+    /// 仪式候选 (SG-22 仪式内核 → care 候选源; 默认关, 见 [`super::CareConfig`])。
+    Ritual,
+    /// 重聚候选 (SG-19 分离-重聚内核 → care 候选源; 默认关, 见 [`super::CareConfig`])。
+    Reunion,
 }
 
 impl CareTier {
@@ -60,6 +70,8 @@ impl CareTier {
             Self::Rule => "rule",
             Self::Reminder => "reminder",
             Self::GuardAlert => "guard_alert",
+            Self::Ritual => "ritual",
+            Self::Reunion => "reunion",
         }
     }
 
@@ -67,13 +79,18 @@ impl CareTier {
     pub const fn annotation(self) -> Option<&'static str> {
         match self {
             Self::GuardAlert => Some(GUARD_ALERT_ANNOTATION),
-            Self::Rule | Self::Reminder => None,
+            Self::Rule | Self::Reminder | Self::Ritual | Self::Reunion => None,
         }
     }
 
     /// 守护例外档判定 (只有守护告警带例外档语义)。
     pub const fn is_guard_alert(self) -> bool {
         matches!(self, Self::GuardAlert)
+    }
+
+    /// 生物机制候选档判定 (仪式 / 重聚; 默认关, 开关见 [`super::CareConfig`])。
+    pub const fn is_bio(self) -> bool {
+        matches!(self, Self::Ritual | Self::Reunion)
     }
 }
 

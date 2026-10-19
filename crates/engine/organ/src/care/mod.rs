@@ -61,7 +61,12 @@
 //!   「守护告警」标注 + 独立频率上限);
 //! - [`tool`]: 工具面 —— `tool.care_schedule` (增删列, RequireApproval 级) +
 //!   治理钩子; 自述关怀节 (规则数 / 下次触发 / 最近关怀真值) 由组装根把
-//!   [`CareStore::status`] 投影到 `tool.self_status` 的关怀节。
+//!   [`CareStore::status`] 投影到 `tool.self_status` 的关怀节;
+//! - [`ritual_candidate`] / [`reunion`]: 生物机制候选源 (W3.1) —— SG-22 仪式
+//!   内核的 `Due` / `DueSoft` 与 SG-19 分离-重聚内核的非 `Brief` 重聚计划转成
+//!   [`CareCandidate`], 由 [`CareEngine::poll_bio_candidate`] 走**同一条**打扰
+//!   纪律管道 (勿扰 / 专注 / 频率 / 预算 → 发起闸 → 判定 → 台账); 默认关
+//!   ([`CareConfig::bio_candidates_enabled`] = `false`), 关闭时永不产出。
 //!
 //! # 0 装诚实
 //!
@@ -76,11 +81,39 @@
 //!   久未联系类规则以规则创建时刻为锚 (如实)。
 //! - 关怀预算闸 ([`CareBudgetGate`]) 是同账本接缝的前置问询; **记账本身**随
 //!   标准回合落会话配额账本 (关怀回合照常计费, 无免费通道)。
+//! - W3.1 生物机制候选源是 **crate 内接线**: 候选源 + 纪律管道入口已实现并有
+//!   测试, 但 **runtime-assembly 尚未注入 replay 数据 / 打开开关** (待 W3.2);
+//!   默认关 = 既有 care 行为逐字节不变, 不声称 PRODUCTION WIRED / DEFAULT
+//!   ENABLED。
 
 pub mod engine;
 pub mod reminder;
+pub mod reunion;
+pub mod ritual_candidate;
 pub mod rules;
 pub mod tool;
+
+/// care 调度接线配置 (生物机制候选源开关; W3.1 默认关, 可回退)。
+///
+/// 单独成类型而不是散在引擎字段里: 装配面 (runtime-assembly) 只需注入这一份
+/// 配置; 开关关闭时 [`ritual_candidate::ritual_candidates_for`] /
+/// [`reunion::reunion_candidate_for`] 恒返回空, 且
+/// [`CareEngine::poll_bio_candidate`] 也拒绝发起 (双保险, 默认 fail-closed)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CareConfig {
+    /// 仪式 / 重聚候选总开关。
+    ///
+    /// **默认 `false`**: 两类生物机制候选永不产出, 既有 care 行为 (规则 /
+    /// 提醒 / 守护告警) 逐字节不变。W3.2 装配面才允许打开。
+    pub bio_candidates_enabled: bool,
+}
+
+impl CareConfig {
+    /// 生物机制候选是否启用 (默认 `false`)。
+    pub const fn bio_candidates_enabled(&self) -> bool {
+        self.bio_candidates_enabled
+    }
+}
 
 pub use engine::{
     AlwaysAdmitBudget, AlwaysTakeInitiative, CareBudgetGate, CareBudgetVerdict, CareCandidate,
@@ -93,6 +126,8 @@ pub use reminder::{
     consume_reminders, is_guard_alert_record, CareTier, MemoryReminderFeed, ReminderCandidate,
     ReminderConsumeError, ReminderFeed, GUARD_ALERT_ANNOTATION,
 };
+pub use reunion::{reunion_candidate, reunion_candidate_for};
+pub use ritual_candidate::{ritual_candidates, ritual_candidates_for, RitualCandidatePriority};
 pub use rules::{
     care_rules_doc_compat, validate_care_material, validate_care_rule_id, CareDiscipline,
     CareRecord, CareRule, CareRulesBody, CareStore, CareStoreError, CareStoreStatus, CareTrigger,

@@ -32,6 +32,10 @@
 //!   同源闸 → [`CareInitiativeGate`]) 已在常驻宿主接线 (cli 组合根
 //!   `care_heartbeat` 模块, 2026-10-17 随行); 未注入 = 显式不发起限量
 //!   的单内核档 (见 [`AlwaysTakeInitiative`])。
+//! - W3.1 生物机制候选 (仪式 / 重聚) 的纪律管道入口
+//!   [`CareEngine::poll_bio_candidate`] 已实现并有测试; 产候选面由
+//!   [`super::CareConfig::bio_candidates_enabled`] 总开关控制, **默认关**
+//!   (关闭时零发起零记账); runtime-assembly 装配待 W3.2。
 
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -40,6 +44,7 @@ use crate::emergence::{day_key_from_epoch_ms, minutes_of_day_from_epoch_ms, Boun
 
 use super::reminder::CareTier;
 use super::rules::{CareRecord, CareRule, CareRulesBody, CareStore, CareStoreError, CareTrigger};
+use super::CareConfig;
 
 /// 关怀时钟 (可注入: 生产用系统时钟, 测试用冻结时钟)。
 pub trait CareClock: Send + Sync {
@@ -511,6 +516,7 @@ pub struct CareEngine {
     material: Arc<dyn CareMaterialSource>,
     budget: Arc<dyn CareBudgetGate>,
     initiative: Arc<dyn CareInitiativeGate>,
+    care_config: CareConfig,
     last_interaction_ms: Option<i64>,
 }
 
@@ -524,6 +530,7 @@ impl CareEngine {
             material: Arc::new(NoRecentMaterial),
             budget: Arc::new(AlwaysAdmitBudget),
             initiative: Arc::new(AlwaysTakeInitiative),
+            care_config: CareConfig::default(),
             last_interaction_ms: None,
         }
     }
@@ -548,6 +555,23 @@ impl CareEngine {
     pub fn with_initiative_gate(mut self, gate: Arc<dyn CareInitiativeGate>) -> Self {
         self.initiative = gate;
         self
+    }
+
+    /// 注入 care 接线配置 (生物机制候选开关; 默认关, 见 [`CareConfig`])。
+    #[must_use]
+    pub fn with_care_config(mut self, config: CareConfig) -> Self {
+        self.care_config = config;
+        self
+    }
+
+    /// 当前接线配置 (含生物机制候选开关)。
+    pub fn care_config(&self) -> CareConfig {
+        self.care_config
+    }
+
+    /// 生物机制候选 (仪式 / 重聚) 是否启用 (默认 `false`)。
+    pub fn bio_candidates_enabled(&self) -> bool {
+        self.care_config.bio_candidates_enabled()
     }
 
     /// 规则表存储 (自述探测口同源读它)。
@@ -597,6 +621,42 @@ impl CareEngine {
         }
         let candidate = CareCandidate::from_rule(rule, now_ms);
         self.admit_candidate(now_ms, candidate)
+    }
+
+    /// 生物机制候选 (仪式 / 重聚) 的统一裁决入口: 与规则 / 提醒**同一条**纪律管道。
+    ///
+    /// - **开关关 (默认)**: 直接 [`CarePoll::Idle`] —— defense-in-depth, 即使调用方
+    ///   绕过产候选面的开关, 内核也不发起 (零判定零记账); 既有 care 行为不变;
+    /// - **开关开**: 勿扰窗口 → 专注抑制 → 频率上限 → 关怀预算 → 发起闸
+    ///   (try_take_initiative 同源) → 发起意愿判定 → **信号档台账**
+    ///   (`kind` = `ritual` / `reunion`; 不碰规则 `fired_at` 锚点, 不伪造规则);
+    /// - 纪律 / 发起闸拦下 = [`CarePoll::Held`] (候选不丢, 重试); 判定说不 =
+    ///   [`CarePoll::Declined`]; 判定该说 = [`CarePoll::Initiating`]。
+    ///
+    /// 非生物档候选 (规则 / 提醒 / 守护告警) 各有自己的入口, 串档显式拒绝
+    /// ([`CareStoreError::Refused`]), 不静默改档。
+    pub fn poll_bio_candidate(
+        &mut self,
+        candidate: &CareCandidate,
+    ) -> Result<CarePoll, CareStoreError> {
+        if !self.care_config.bio_candidates_enabled() {
+            return Ok(CarePoll::Idle);
+        }
+        if !candidate.tier.is_bio() {
+            return Err(CareStoreError::Refused(format!(
+                "candidate tier {} is not a bio candidate (ritual/reunion expected)",
+                candidate.tier.label()
+            )));
+        }
+        let now_ms = self.now_ms();
+        let body = self.store.list()?;
+        if let Some(hold) = self.discipline_hold_for(&body, now_ms, candidate.tier) {
+            return Ok(CarePoll::Held {
+                rule_id: candidate.rule_id.clone(),
+                hold,
+            });
+        }
+        self.admit_candidate(now_ms, candidate.clone())
     }
 
     /// 现时刻 (epoch 毫秒; 时钟可注入)。
@@ -778,6 +838,7 @@ impl CareEngine {
 mod tests {
     use super::*;
     use crate::care::rules::{CareDiscipline, CareRule};
+    use crate::care::CareConfig;
 
     fn store_with(rule: &CareRule, discipline: CareDiscipline) -> (tempfile::TempDir, CareStore) {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -988,5 +1049,148 @@ mod tests {
             0,
             "纪律拦下时发起闸零问询 (预算不被空转烧掉)"
         );
+    }
+
+    fn bio_candidate(rule_id: &str, tier: CareTier) -> CareCandidate {
+        CareCandidate {
+            rule_id: rule_id.to_string(),
+            trigger: "生物机制候选".to_string(),
+            due_ms: 1_700_000_000_000,
+            material: "ritual.morning_check_in.due".to_string(),
+            tier,
+        }
+    }
+
+    /// 默认关: 生物机制候选入口直接 Idle, 零判定零记账 (既有 care 行为不受影响)。
+    #[test]
+    fn bio_candidates_are_off_by_default_and_idle_without_ledger_writes() {
+        let (_dir, store) = store_with(&due_interval_rule(), open_discipline());
+        let clock = Arc::new(FrozenCareClock::new(1_700_000_000_000));
+        let mut engine = CareEngine::new(store, clock, Arc::new(RuleFallbackJudge));
+        assert!(!engine.bio_candidates_enabled());
+        assert_eq!(engine.care_config(), CareConfig::default());
+
+        let candidate = bio_candidate("ritual.morning_check_in.due", CareTier::Ritual);
+        assert_eq!(
+            engine.poll_bio_candidate(&candidate).expect("off = idle"),
+            CarePoll::Idle
+        );
+        let body = engine.store().list().expect("list");
+        assert!(body.history.is_empty(), "开关关零记账: {:?}", body.history);
+        assert!(body.fired_at.is_empty(), "开关关零发起锚点");
+    }
+
+    /// 开关开: 生物机制候选走既有纪律管道 (频率 / 发起闸 / 判定), 台账走信号档。
+    #[test]
+    fn bio_candidates_use_the_same_discipline_and_signal_ledger() {
+        let (_dir, store) = store_with(&due_interval_rule(), open_discipline());
+        let clock = Arc::new(FrozenCareClock::new(1_700_000_000_000));
+        let mut engine = CareEngine::new(store, clock, Arc::new(RuleFallbackJudge))
+            .with_care_config(CareConfig {
+                bio_candidates_enabled: true,
+            });
+        assert!(engine.bio_candidates_enabled());
+        let candidate = bio_candidate("reunion.days", CareTier::Reunion);
+
+        match engine.poll_bio_candidate(&candidate).expect("poll") {
+            CarePoll::Initiating(initiative) => {
+                assert_eq!(initiative.candidate, candidate);
+                assert_eq!(initiative.verdict.mode, CareJudgeMode::RuleFallback);
+                assert_eq!(initiative.at_ms, 1_700_000_000_000);
+            }
+            other => panic!("开关开且纪律放行必须发起: {other:?}"),
+        }
+        let body = engine.store().list().expect("list");
+        assert_eq!(body.history.len(), 1);
+        assert_eq!(body.history[0].kind, "reunion", "信号档台账来源档");
+        assert!(body.fired_at.is_empty(), "信号档不碰规则 fired_at 锚点");
+
+        // 同一条候选再次轮询: 普通频率上限 (默认 4h≤1) 拦下, 候选不丢。
+        assert_eq!(
+            engine.poll_bio_candidate(&candidate).expect("poll"),
+            CarePoll::Held {
+                rule_id: "reunion.days".to_string(),
+                hold: CareHold::FrequencyCap,
+            }
+        );
+        assert_eq!(
+            engine.store().list().expect("list").history.len(),
+            1,
+            "拦下不追加台账"
+        );
+    }
+
+    /// 生物机制候选同样先过勿扰窗口 (默认 23:00-8:00), 拦下零记账。
+    #[test]
+    fn bio_candidates_are_held_by_the_quiet_window_without_recording() {
+        // 1_700_000_000_000 = 22:13:20 UTC; +1h = 23:13:20 UTC, 落在默认勿扰窗内。
+        let clock = Arc::new(FrozenCareClock::new(1_700_000_003_600_000));
+        let (_dir, store) = store_with(&due_interval_rule(), CareDiscipline::default());
+        let mut engine = CareEngine::new(store, clock, Arc::new(RuleFallbackJudge))
+            .with_care_config(CareConfig {
+                bio_candidates_enabled: true,
+            });
+        let candidate = bio_candidate("ritual.morning_check_in.due", CareTier::Ritual);
+        assert_eq!(
+            engine.poll_bio_candidate(&candidate).expect("hold"),
+            CarePoll::Held {
+                rule_id: "ritual.morning_check_in.due".to_string(),
+                hold: CareHold::QuietWindow,
+            }
+        );
+        let body = engine.store().list().expect("list");
+        assert!(body.history.is_empty(), "勿扰拦下零记账");
+    }
+
+    /// 串档显式拒绝: 规则 / 提醒 / 守护告警各走自己的入口。
+    #[test]
+    fn bio_entry_refuses_non_bio_tiers() {
+        let (_dir, store) = store_with(&due_interval_rule(), open_discipline());
+        let clock = Arc::new(FrozenCareClock::new(1_700_000_000_000));
+        let mut engine = CareEngine::new(store, clock, Arc::new(RuleFallbackJudge))
+            .with_care_config(CareConfig {
+                bio_candidates_enabled: true,
+            });
+        let candidate = bio_candidate("check-in", CareTier::Rule);
+        let error = engine.poll_bio_candidate(&candidate).unwrap_err();
+        assert!(matches!(error, CareStoreError::Refused(_)), "{error}");
+        assert!(engine.store().list().expect("list").history.is_empty());
+    }
+
+    /// 既有规则轮询在默认关开关下逐字段不变 (候选 / 判定 / 台账 / 发起锚点)。
+    #[test]
+    fn existing_rule_poll_is_unchanged_with_the_default_off_switch() {
+        const AT: i64 = 1_700_000_003_600_000;
+        let (_dir, store) = store_with(&due_interval_rule(), open_discipline());
+        let clock = Arc::new(FrozenCareClock::new(AT));
+        let mut engine = CareEngine::new(store, clock, Arc::new(RuleFallbackJudge));
+        assert!(!engine.bio_candidates_enabled());
+
+        match engine.poll().expect("poll") {
+            CarePoll::Initiating(initiative) => {
+                assert_eq!(
+                    initiative.candidate,
+                    CareCandidate {
+                        rule_id: "check-in".to_string(),
+                        trigger: "间隔循环 每 1 小时".to_string(),
+                        due_ms: AT,
+                        material: "问问他最近怎么样".to_string(),
+                        tier: CareTier::Rule,
+                    },
+                    "既有规则候选逐字段不变"
+                );
+                assert_eq!(
+                    initiative.verdict,
+                    CareVerdict::rule_fallback("问问他最近怎么样"),
+                    "既有判定逐字段不变"
+                );
+                assert_eq!(initiative.at_ms, AT);
+            }
+            other => panic!("既有规则到点必须照常发起: {other:?}"),
+        }
+        let body = engine.store().list().expect("list");
+        assert_eq!(body.history.len(), 1);
+        assert_eq!(body.history[0].kind, "rule");
+        assert_eq!(body.last_fired("check-in"), Some(AT));
     }
 }
