@@ -110,6 +110,10 @@ pub mod untrusted_envelope;
 // 工作消耗记账 (第三批·裁决件): 事件日志单趟纯折叠 (取消/中断同答案)。
 pub mod work_consumption;
 pub mod worktree_sandbox;
+// 生物机制族 W1（2026-10-19）：痛觉学习 / 再生四期 / 群体感应升级门（纯内核，未接线）。
+pub mod nociception;
+pub mod quorum;
+pub mod recovery_protocol;
 
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
