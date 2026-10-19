@@ -39,6 +39,8 @@ pub mod device;
 // 注册即闸 `APEIRETH_ENABLE_DOC_OPS`, 写面每次人批, 默认关 fail-closed。
 // 依赖报备: flate2/quick-xml 为锁定文件既有传递依赖的同版本复用 (0 新外部包)。
 pub mod doc_ops;
+// 生物机制族 W2（2026-10-19）：工具生态健康度（多样性/冗余/重叠，纯内核未接线）。
+pub mod ecosystem_health;
 pub mod education;
 pub mod egress;
 // 工具执行五段流水线: pre-execute 瀑布 → 单调 Guard → around(超时/重试) →
