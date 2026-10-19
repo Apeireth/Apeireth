@@ -17,6 +17,14 @@
 //! 原因**, 整帧仍然成功返回 —— 自述宁可如实说"这块我没测到", 不整帧失败,
 //! 更不编造数字。输出经既有 [`ToolOutcome`] 归一合同冻结
 //! (见 [`SelfStatusTool::output_schema`]), 超时归 `timeout.*` 既有 code 族。
+//!
+//! # 生物机制族只读聚合 (W3.2)
+//!
+//! 14 条生物机制 (SG-13…SG-26) 不逐个新增顶层节 (21 节合同冻结): 统一挂在既有
+//! `capabilities` 节内的 [`CAPABILITIES_BIO_MECHANISMS`] 只读子对象上, 每机制
+//! 一格 `{stage, value, threshold, last_action, wired, reason}`。默认关
+//! ([`BIO_SELF_STATUS_ENABLE_ENV`] 只认 `"1"`), 关时 `mechanisms` 显式 `null`
+//! + 原因「未启用」; 未接线/采集失败的格显式 `null` + 原因, 绝不编数值。
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -1004,6 +1012,13 @@ pub struct SelfStatusSnapshot {
     pub device_control: Option<DeviceControlStatus>,
     /// 设备受控执行节不可用的原因; 可用时为 `None`。
     pub device_control_reason: Option<String>,
+    /// 生物机制族只读聚合 (W3.2 装配面): 挂在既有 `capabilities` 节内的
+    /// `bio_mechanisms` 子对象 (14 条机制逐格读数; **不新增顶层节**)。
+    ///
+    /// `None` = 本组装面未挂该观测面 → 渲染面**省略**该键, 旧帧形状不变
+    /// (兼容旧消费者); `Some` = 观测面已挂, 未启用时子对象恒在场并显式给出
+    /// 「未启用」原因。
+    pub bio_mechanisms: Option<BioMechanismsStatus>,
 }
 
 impl SelfStatusSnapshot {
@@ -1050,6 +1065,9 @@ impl SelfStatusSnapshot {
             sheet_ops_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             device_control: None,
             device_control_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
+            // 生物机制观测面未挂: 子对象缺省 (旧帧形状不变); 挂上观测面由装配根
+            // 注入 [`BioMechanismsStatus`] (W3.2)。
+            bio_mechanisms: None,
         }
     }
 }
@@ -1082,6 +1100,9 @@ pub type StatusProbe<T> = Arc<dyn Fn() -> Result<T, String> + Send + Sync>;
 /// [`render_snapshot`] 的渲染面、[`SelfStatusTool::output_schema`] 的 require
 /// 清单、fixture 的在场面三侧同表 —— 缺任何一节 = 合同违约 (断言见
 /// `the_frozen_section_contract_is_the_single_source_for_render_and_schema`)。
+///
+/// **W3.2 生物机制族**不新增顶层节: 14 条机制的只读聚合挂在既有
+/// `capabilities` 节内的 [`CAPABILITIES_BIO_MECHANISMS`] 子对象上, 本表仍 21 节。
 pub const SELF_STATUS_SECTIONS: &[&str] = &[
     "identity",
     "capabilities",
@@ -1134,16 +1155,280 @@ pub const SELF_STATUS_SECTIONS: &[&str] = &[
     "device_control",
 ];
 
+/// `capabilities` 节内的生物机制只读子对象键名 (W3.2 装配面)。
+///
+/// **不是顶层节**: 21 节冻结合同不变, 14 条机制统一挂在既有 `capabilities`
+/// 节内（台账 W3 计划「观测聚合」策略）。
+pub const CAPABILITIES_BIO_MECHANISMS: &str = "bio_mechanisms";
+
+/// 生物机制自述开关的 env 名: 只认显式 `"1"`，其余任何取值 = 关 (fail-closed)。
+pub const BIO_SELF_STATUS_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_SELF_STATUS";
+
+/// 开关关时的整节原因（0 装诚实: 明说未启用，不冒充已采集）。
+pub const BIO_SELF_STATUS_DISABLED_REASON: &str = "未启用: APEIRETH_ENABLE_BIO_SELF_STATUS != 1 \
+     (默认关, fail-closed; 启用后才采集已接线机制的只读值)";
+
+/// 机制未接线时的逐行原因（不编数值）。
+pub const BIO_MECHANISM_NOT_WIRED_REASON: &str = "未接线: 本装配面未注册该机制的只读数据源 \
+     (W3.2 只读聚合, 不编数值)";
+
+/// 机制装配阶段: 未接线（本组装面无运行时数据源）。
+pub const BIO_STAGE_NOT_WIRED: &str = "not_wired";
+
+/// 机制装配阶段: 已接线（本组装面注册了只读探测口）。
+pub const BIO_STAGE_WIRED: &str = "wired";
+
+/// 解析 [`BIO_SELF_STATUS_ENABLE_ENV`] 的原始值: 只认 `"1"` (fail-closed)。
+///
+/// 纯函数（不读进程 env），与既有 `APEIRETH_ENABLE_*` 开关同一惯例:
+/// 未设 / `"0"` / `"true"` / 垃圾值一律为关。
+pub fn bio_self_status_enabled_from_env_value(raw: Option<&str>) -> bool {
+    raw == Some("1")
+}
+
+/// 生物机制族 14 条机制的闭合词表（W3.2 装配面）。
+///
+/// 与台账 SG-13…SG-26 同名一一对应；枚举声明序 = 自述行序（聚合按此序逐格
+/// 采集，不随注册表迭代顺序漂移）。**不是**新的顶层自述节。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BioMechanismKind {
+    /// SG-13 神经调质慢变量。
+    Neuromodulation,
+    /// SG-14 异稳态 / 生命体征。
+    Homeostasis,
+    /// SG-23 节律 + 睡眠压力。
+    Circadian,
+    /// SG-15 免疫记忆 + 炎症收口。
+    ImmuneMemory,
+    /// SG-16 痛觉学习。
+    Nociception,
+    /// SG-17 再生四期。
+    Recovery,
+    /// SG-19 依恋 / 分离-重聚。
+    Attachment,
+    /// SG-20 社会认知 / 交互修复。
+    SocialRepair,
+    /// SG-24 群体感应升级门。
+    Quorum,
+    /// SG-18 凋亡 / 神经发生（资产生命周期）。
+    Lifecycle,
+    /// SG-21 游戏 / 幼态延续。
+    Play,
+    /// SG-22 仪式。
+    Ritual,
+    /// SG-25 共生菌群（工具生态健康度）。
+    EcosystemHealth,
+    /// SG-26 承载力 / 演替 / 关键种。
+    Capacity,
+}
+
+impl BioMechanismKind {
+    /// 14 条机制的规范顺序（自述行序 = 此序；闭合词表，不增不减不漂移）。
+    pub const ALL: [Self; 14] = [
+        Self::Neuromodulation,
+        Self::Homeostasis,
+        Self::Circadian,
+        Self::ImmuneMemory,
+        Self::Nociception,
+        Self::Recovery,
+        Self::Attachment,
+        Self::SocialRepair,
+        Self::Quorum,
+        Self::Lifecycle,
+        Self::Play,
+        Self::Ritual,
+        Self::EcosystemHealth,
+        Self::Capacity,
+    ];
+
+    /// 稳定 snake_case 名（自述 JSON 键；与台账英文名同名）。
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Neuromodulation => "neuromodulation",
+            Self::Homeostasis => "homeostasis",
+            Self::Circadian => "circadian",
+            Self::ImmuneMemory => "immune_memory",
+            Self::Nociception => "nociception",
+            Self::Recovery => "recovery",
+            Self::Attachment => "attachment",
+            Self::SocialRepair => "social_repair",
+            Self::Quorum => "quorum",
+            Self::Lifecycle => "lifecycle",
+            Self::Play => "play",
+            Self::Ritual => "ritual",
+            Self::EcosystemHealth => "ecosystem_health",
+            Self::Capacity => "capacity",
+        }
+    }
+
+    /// 由稳定名解析；词表外 = `None`（不隐式创建机制）。
+    pub fn from_str_name(raw: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.as_str() == raw)
+    }
+}
+
+/// 一格机制的只读读数（`capabilities.bio_mechanisms` 子对象的一行）。
+///
+/// 六字段冻结合同: `stage` / `value` / `threshold` / `last_action` / `wired` /
+/// `reason`。未接线或采集失败的格一律显式 `null` + 原因，绝不编数值。
+///
+/// serde: 容器级 `#[serde(default)]` 让缺字段的旧/局部载荷按「未接线」缺省，
+/// 不因新增字段读崩（向前兼容）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BioMechanismReading {
+    /// 装配阶段标签（[`BIO_STAGE_NOT_WIRED`] / [`BIO_STAGE_WIRED`]）。
+    pub stage: String,
+    /// 当前读数（机制自定的只读 JSON 值）；取不到 = 显式 `null`。
+    pub value: Option<Value>,
+    /// 机制当前生效的判定阈值；无阈值 / 未接线 = 显式 `null`。
+    pub threshold: Option<f64>,
+    /// 最近动作的有界摘要；尚无动作 = 显式 `null`。
+    pub last_action: Option<String>,
+    /// 接线事实: 本组装面是否注册了该机制的只读探测口。
+    ///
+    /// 与采集成败分开: 注册但读失败 = `wired: true` + `value: null` + 原因；
+    /// 未注册 = `wired: false` + `stage: "not_wired"` + 原因。
+    pub wired: bool,
+    /// 未接线 / 未启用 / 采集失败的原因；正常采集 = `None`。
+    pub reason: Option<String>,
+}
+
+impl Default for BioMechanismReading {
+    fn default() -> Self {
+        Self::not_wired(BIO_MECHANISM_NOT_WIRED_REASON)
+    }
+}
+
+impl BioMechanismReading {
+    /// 未接线一格: `stage = not_wired`、`wired = false`、值/阈值/动作全
+    /// `null` + 原因（0 装诚实，不编数值）。
+    pub fn not_wired(reason: impl Into<String>) -> Self {
+        Self {
+            stage: BIO_STAGE_NOT_WIRED.to_string(),
+            value: None,
+            threshold: None,
+            last_action: None,
+            wired: false,
+            reason: Some(reason.into()),
+        }
+    }
+
+    /// 采集成功一格: `stage = wired`、`wired = true`；值/阈值/动作按真值
+    /// （机制无阈值 / 尚无动作时可显式 `None`）。
+    pub fn wired(
+        value: Option<Value>,
+        threshold: Option<f64>,
+        last_action: Option<String>,
+    ) -> Self {
+        Self {
+            stage: BIO_STAGE_WIRED.to_string(),
+            value,
+            threshold,
+            last_action,
+            wired: true,
+            reason: None,
+        }
+    }
+
+    /// 采集失败一格（探测口已注册但读失败）: 接线事实 `wired = true`、
+    /// `stage = wired`、值/阈值/动作全 `null` + 真因（不整帧失败）。
+    pub fn probe_failed(reason: impl Into<String>) -> Self {
+        Self {
+            stage: BIO_STAGE_WIRED.to_string(),
+            value: None,
+            threshold: None,
+            last_action: None,
+            wired: true,
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+/// `capabilities` 节内的生物机制只读聚合子对象（W3.2 装配面）。
+///
+/// **合同（兼容旧消费者）**:
+/// - 观测面未挂载（[`SelfStatusSnapshot::bio_mechanisms`] = `None`）: 渲染面
+///   **省略**该键，旧帧形状逐键不变；
+/// - 观测面已挂载且开关关: `{"enabled": false, "mechanisms": null, "reason":
+///   "<未启用>"}` —— 一格也不采集，`mechanisms` 显式 `null`（不是"采集到 0"）；
+/// - 观测面已挂载且开关开: `mechanisms` = 14 条机制逐格读数（未注册的格
+///   `wired: false` + 原因「未接线」；注册但读失败 = `null` + 真因；
+///   正常 = 真值）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BioMechanismsStatus {
+    /// 采集开关的生效值（`APEIRETH_ENABLE_BIO_SELF_STATUS=1` 才为 `true`）。
+    pub enabled: bool,
+    /// 逐机制读数（行序 = [`BioMechanismKind::ALL`]）；`None` = 开关关，
+    /// 一格也不采集。
+    pub mechanisms: Option<BTreeMap<BioMechanismKind, BioMechanismReading>>,
+    /// 整节未启用 / 不可用的原因；正常采集 = `None`。
+    pub reason: Option<String>,
+}
+
+impl Default for BioMechanismsStatus {
+    fn default() -> Self {
+        Self::disabled(BIO_SELF_STATUS_DISABLED_REASON)
+    }
+}
+
+impl BioMechanismsStatus {
+    /// 开关关（或观测面未启用）: `mechanisms` 显式 `null` + 原因
+    /// （不冒充采集，也不把「没采」写成 0）。
+    pub fn disabled(reason: impl Into<String>) -> Self {
+        Self {
+            enabled: false,
+            mechanisms: None,
+            reason: Some(reason.into()),
+        }
+    }
+
+    /// 开关开且已采集: 14 格读数（未注册的格由调用方填
+    /// [`BioMechanismReading::not_wired`]）。
+    pub fn enabled_with(mechanisms: BTreeMap<BioMechanismKind, BioMechanismReading>) -> Self {
+        Self {
+            enabled: true,
+            mechanisms: Some(mechanisms),
+            reason: None,
+        }
+    }
+
+    /// 一格读数（缺格 = `None`，不隐式造格）。
+    pub fn reading(&self, kind: BioMechanismKind) -> Option<&BioMechanismReading> {
+        self.mechanisms.as_ref().and_then(|rows| rows.get(&kind))
+    }
+}
+
+/// 生物机制只读探测口（一格机制一次现读）。
+///
+/// `now_ms` = 采集时刻（epoch 毫秒，由装配面时钟注入，机制内核零系统时钟）；
+/// 失败回 `Err(真因)` —— 自述格显式 `null` + 原因，**不**让整帧失败。
+pub trait BioMechanismProbe: Send + Sync {
+    /// 现读一格机制读数。
+    fn snapshot(&self, now_ms: i64) -> Result<BioMechanismReading, String>;
+}
+
 /// 把一份自述投影成结构化 JSON (字段合同的唯一实现)。
 ///
 /// 合同要点: **所有字段恒在场**; 来源缺失/失败的字段显式 `null` 并在同节
 /// `reason` 给出原因 —— 不是缺字段, 不是整帧失败。
 pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
-    let capabilities: serde_json::Map<String, Value> = snapshot
+    let mut capabilities: serde_json::Map<String, Value> = snapshot
         .capabilities
         .iter()
         .map(|entry| (entry.name.clone(), Value::Bool(entry.enabled)))
         .collect();
+    // W3.2 生物机制族只读聚合: 只挂在既有 `capabilities` 节内 (非顶层节)。
+    // 观测面未挂载 = 省略该键 (旧帧形状不变); 挂载后未启用 = 子对象显式
+    // `mechanisms: null` + 「未启用」原因。
+    if let Some(bio) = &snapshot.bio_mechanisms {
+        capabilities.insert(
+            CAPABILITIES_BIO_MECHANISMS.to_string(),
+            render_bio_mechanisms(bio),
+        );
+    }
 
     let memory_ledger = match &snapshot.memory_ledger {
         Some(stats) => json!({
@@ -1748,6 +2033,41 @@ fn prices_display(profile: &ModelProfile) -> String {
     )
 }
 
+/// 把生物机制只读聚合投影成结构化 JSON (子对象合同的唯一实现)。
+///
+/// 行序 = [`BioMechanismKind::ALL`]（`BTreeMap` 键序即词表序）；开关关时
+/// `mechanisms` 显式 `null`，一格也不采集。
+fn render_bio_mechanisms(status: &BioMechanismsStatus) -> Value {
+    let mechanisms = status
+        .mechanisms
+        .as_ref()
+        .map(|rows| {
+            Value::Object(
+                rows.iter()
+                    .map(|(kind, reading)| {
+                        (
+                            kind.as_str().to_string(),
+                            json!({
+                                "stage": reading.stage,
+                                "value": reading.value,
+                                "threshold": reading.threshold,
+                                "last_action": reading.last_action,
+                                "wired": reading.wired,
+                                "reason": reading.reason,
+                            }),
+                        )
+                    })
+                    .collect(),
+            )
+        })
+        .unwrap_or(Value::Null);
+    json!({
+        "enabled": status.enabled,
+        "mechanisms": mechanisms,
+        "reason": status.reason,
+    })
+}
+
 /// 把一维配额行投影成结构化 JSON (字段合同的唯一实现)。
 fn render_quota_dimension(row: &QuotaDimensionStatus) -> Value {
     json!({
@@ -1812,6 +2132,11 @@ impl SelfStatusTool {
     /// (白名单制默认零设备的实况可见, 最近感知为进程内计数口径);
     /// 设备受控执行节随 K 轴 L3/L4 (受控执行骨架) 入合同: 控制计数/最近动作
     /// 自述化 (执行了多少动作、最近动了什么/谁批的可见, 只回计数与动作标签)。
+    ///
+    /// **W3.2 生物机制族**: 不新增顶层节 —— 14 条机制的只读聚合挂在既有
+    /// `capabilities` 节内的 [`CAPABILITIES_BIO_MECHANISMS`] 子对象上
+    /// （未挂观测面时该键缺省；挂上后未启用 = `mechanisms: null` + 原因）。
+    /// 本 schema 的 require 清单仍是 [`SELF_STATUS_SECTIONS`] 的 21 节。
     pub fn output_schema() -> OutputSchema {
         let mut schema = OutputSchema::new();
         for section in SELF_STATUS_SECTIONS {
@@ -2292,7 +2617,31 @@ mod tests {
                 reason: None,
             }),
             device_control_reason: None,
+            bio_mechanisms: Some(fixture_bio_mechanisms()),
         }
+    }
+
+    /// 生物机制只读聚合的 fixture: 14 格全在场, 仅 `capacity` 一格有真值
+    /// (其余 13 格如实「未接线」), 钉住逐格六字段合同。
+    fn fixture_bio_mechanisms() -> BioMechanismsStatus {
+        let mut rows = BTreeMap::new();
+        for kind in BioMechanismKind::ALL {
+            let reading = if kind == BioMechanismKind::Capacity {
+                BioMechanismReading::wired(
+                    Some(json!({
+                        "active_tasks": 2,
+                        "pending": 1,
+                        "observed_at_ms": 1_728_001_000_000i64,
+                    })),
+                    Some(8.0),
+                    Some("任务队列：2 个执行槽在跑".to_string()),
+                )
+            } else {
+                BioMechanismReading::not_wired(BIO_MECHANISM_NOT_WIRED_REASON)
+            };
+            rows.insert(kind, reading);
+        }
+        BioMechanismsStatus::enabled_with(rows)
     }
 
     struct FixedSource {
@@ -3614,5 +3963,231 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("sheet ops source not wired"));
+    }
+
+    /// W3.2 生物机制族: 14 条机制的闭合词表 (与台账 SG-13…SG-26 同名同序,
+    /// 不增不减不漂移; 名字唯一)。
+    #[test]
+    fn bio_mechanism_kind_vocabulary_is_the_closed_fourteen() {
+        assert_eq!(BioMechanismKind::ALL.len(), 14);
+        let names: Vec<&str> = BioMechanismKind::ALL
+            .iter()
+            .map(|kind| kind.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "neuromodulation",
+                "homeostasis",
+                "circadian",
+                "immune_memory",
+                "nociception",
+                "recovery",
+                "attachment",
+                "social_repair",
+                "quorum",
+                "lifecycle",
+                "play",
+                "ritual",
+                "ecosystem_health",
+                "capacity",
+            ]
+        );
+        let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
+        assert_eq!(unique.len(), names.len(), "词表名必须唯一");
+        for (kind, name) in BioMechanismKind::ALL.iter().zip(names) {
+            assert_eq!(BioMechanismKind::from_str_name(name), Some(*kind));
+        }
+        assert_eq!(BioMechanismKind::from_str_name("unknown"), None);
+        // serde 名与稳定名同轴 (JSON 键不随 Debug 派生漂移)。
+        assert_eq!(
+            serde_json::to_value(BioMechanismKind::ImmuneMemory).unwrap(),
+            json!("immune_memory")
+        );
+    }
+
+    /// W3.2 env 开关惯例: 只认显式 "1", 其余取值一律关 (fail-closed)。
+    #[test]
+    fn bio_self_status_switch_only_accepts_explicit_one() {
+        assert!(!bio_self_status_enabled_from_env_value(None));
+        assert!(bio_self_status_enabled_from_env_value(Some("1")));
+        for raw in ["0", "true", "TRUE", "yes", "on", "", "01", " 1 "] {
+            assert!(
+                !bio_self_status_enabled_from_env_value(Some(raw)),
+                "{raw:?} 不等于 \"1\", 必须为关"
+            );
+        }
+        assert_eq!(
+            BIO_SELF_STATUS_ENABLE_ENV,
+            "APEIRETH_ENABLE_BIO_SELF_STATUS"
+        );
+    }
+
+    /// W3.2 serde 兼容: 局部/旧载荷缺字段 = 按「未接线」缺省, 不读崩;
+    /// 六字段合同序列化完整。
+    #[test]
+    fn bio_mechanism_reading_serde_is_forward_compatible() {
+        let missing: BioMechanismReading = serde_json::from_value(json!({})).expect("defaults");
+        assert_eq!(missing.stage, BIO_STAGE_NOT_WIRED);
+        assert!(!missing.wired);
+        assert!(missing.value.is_none());
+        assert!(missing.threshold.is_none());
+        assert!(missing.last_action.is_none());
+        assert_eq!(
+            missing.reason.as_deref(),
+            Some(BIO_MECHANISM_NOT_WIRED_REASON)
+        );
+
+        let wired: BioMechanismReading =
+            serde_json::from_value(json!({ "wired": true, "value": 3 })).expect("partial");
+        assert!(wired.wired);
+        assert_eq!(wired.value, Some(json!(3)));
+        assert!(wired.threshold.is_none(), "缺字段 = 显式 null, 不编 0");
+
+        // 六字段合同: 序列化后一个不少。
+        let encoded = serde_json::to_value(BioMechanismReading::wired(
+            Some(json!({"active_tasks": 1})),
+            Some(4.0),
+            Some("一档".to_string()),
+        ))
+        .expect("serialize");
+        for field in [
+            "stage",
+            "value",
+            "threshold",
+            "last_action",
+            "wired",
+            "reason",
+        ] {
+            assert!(encoded.get(field).is_some(), "缺字段 {field}: {encoded}");
+        }
+        assert_eq!(encoded["stage"], BIO_STAGE_WIRED);
+        assert_eq!(encoded["wired"], true);
+        assert!(encoded["reason"].is_null());
+
+        // 聚合子对象同样向前兼容: 空载荷 = 未启用缺省。
+        let status: BioMechanismsStatus = serde_json::from_value(json!({})).expect("defaults");
+        assert!(!status.enabled);
+        assert!(status.mechanisms.is_none());
+        assert!(status
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains(BIO_SELF_STATUS_ENABLE_ENV));
+    }
+
+    /// W3.2 兼容旧消费者: 观测面未挂载 = capabilities 逐键仍是布尔, 一个键不多
+    /// （既有 e2e 的「名册全为布尔」断言不被生物聚合破）。
+    #[test]
+    fn bio_mechanisms_absent_keeps_the_legacy_capabilities_shape() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.bio_mechanisms = None;
+        let value = render_snapshot(&snapshot);
+        let capabilities = value["capabilities"].as_object().expect("roster object");
+        assert!(
+            capabilities.get(CAPABILITIES_BIO_MECHANISMS).is_none(),
+            "未挂观测面不得出现子对象键"
+        );
+        assert_eq!(capabilities.len(), snapshot.capabilities.len());
+        for (name, switch) in capabilities {
+            assert!(switch.is_boolean(), "{name} 必须仍是布尔: {switch}");
+        }
+        assert!(SelfStatusTool::output_schema().validate(&value).is_ok());
+    }
+
+    /// W3.2 默认关: 观测面已挂但开关关 = mechanisms 显式 null + 「未启用」原因,
+    /// 不冒充采集、不把「没采」写成 0。
+    #[test]
+    fn bio_mechanisms_disabled_renders_null_mechanisms_with_a_reason() {
+        let mut snapshot = fixture_snapshot();
+        snapshot.bio_mechanisms = Some(BioMechanismsStatus::disabled(
+            BIO_SELF_STATUS_DISABLED_REASON,
+        ));
+        let value = render_snapshot(&snapshot);
+        let bio = &value["capabilities"][CAPABILITIES_BIO_MECHANISMS];
+        assert_eq!(bio["enabled"], false);
+        assert_eq!(bio["mechanisms"], Value::Null);
+        assert!(bio["reason"].as_str().unwrap().contains("未启用"));
+        assert!(bio["reason"]
+            .as_str()
+            .unwrap()
+            .contains(BIO_SELF_STATUS_ENABLE_ENV));
+        assert!(SelfStatusTool::output_schema().validate(&value).is_ok());
+    }
+
+    /// W3.2 启用面: 14 格逐格六字段合同 —— 已接线格带真值/阈值/最近动作,
+    /// 未接线格 `wired:false` + 值 null + 原因「未接线」(不编数值)。
+    #[test]
+    fn bio_mechanisms_wired_and_unwired_rows_carry_the_frozen_fields() {
+        let value = render_snapshot(&fixture_snapshot());
+        let bio = &value["capabilities"][CAPABILITIES_BIO_MECHANISMS];
+        assert_eq!(bio["enabled"], true);
+        assert!(bio["reason"].is_null());
+        let rows = bio["mechanisms"].as_object().expect("mechanisms object");
+        assert_eq!(rows.len(), BioMechanismKind::ALL.len());
+
+        let capacity = &rows["capacity"];
+        assert_eq!(capacity["stage"], BIO_STAGE_WIRED);
+        assert_eq!(capacity["wired"], true);
+        assert_eq!(capacity["value"]["active_tasks"], 2);
+        assert_eq!(capacity["threshold"], 8.0);
+        assert_eq!(capacity["last_action"], "任务队列：2 个执行槽在跑");
+        assert!(capacity["reason"].is_null());
+
+        for kind in BioMechanismKind::ALL {
+            let row = &rows[kind.as_str()];
+            for field in [
+                "stage",
+                "value",
+                "threshold",
+                "last_action",
+                "wired",
+                "reason",
+            ] {
+                assert!(row.get(field).is_some(), "{kind:?} 缺字段 {field}: {row}");
+            }
+            if kind != BioMechanismKind::Capacity {
+                assert_eq!(row["wired"], false, "{kind:?}");
+                assert_eq!(row["stage"], BIO_STAGE_NOT_WIRED, "{kind:?}");
+                assert_eq!(row["value"], Value::Null, "{kind:?}");
+                assert_eq!(row["threshold"], Value::Null, "{kind:?}");
+                assert_eq!(row["last_action"], Value::Null, "{kind:?}");
+                assert!(
+                    row["reason"].as_str().unwrap().contains("未接线"),
+                    "{kind:?}: {row}"
+                );
+            }
+        }
+    }
+
+    /// W3.2 合同边界: 生物聚合**不新增顶层节** —— 21 节不变, schema 仍是
+    /// 冻结节表, 渲染面顶层键集一致; 同一快照重复渲染逐字节一致 (确定性)。
+    #[test]
+    fn bio_mechanisms_adds_no_top_level_section_and_renders_deterministically() {
+        assert_eq!(SELF_STATUS_SECTIONS.len(), 21, "冻结合同仍是二十一节");
+        assert!(!SELF_STATUS_SECTIONS.contains(&CAPABILITIES_BIO_MECHANISMS));
+        let schema = SelfStatusTool::output_schema();
+        let declared: Vec<&str> = schema
+            .fields()
+            .iter()
+            .map(|field| field.name.as_str())
+            .collect();
+        assert_eq!(declared, SELF_STATUS_SECTIONS);
+
+        let snapshot = fixture_snapshot();
+        let first = render_snapshot(&snapshot);
+        let second = render_snapshot(&snapshot);
+        assert_eq!(first, second, "同输入必须同输出");
+        assert!(first.get(CAPABILITIES_BIO_MECHANISMS).is_none());
+        let rendered: std::collections::BTreeSet<&str> = first
+            .as_object()
+            .expect("object frame")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let frozen: std::collections::BTreeSet<&str> =
+            SELF_STATUS_SECTIONS.iter().copied().collect();
+        assert_eq!(rendered, frozen);
+        assert!(schema.validate(&first).is_ok());
     }
 }
