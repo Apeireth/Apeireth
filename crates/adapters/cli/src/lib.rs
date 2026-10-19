@@ -38,6 +38,7 @@ use apeireth_governance::{
     PermissionPolicy, PromptInjectionHook,
 };
 use apeireth_guard::{
+    immune_memory::{ImmuneMemory, DEFAULT_CAPACITY},
     ClassifierEnforcementMode, DatasetRecorder, IntentInput, IntentInterpreter,
     JointRiskClassifier, RuleIntentInterpreter,
 };
@@ -63,6 +64,17 @@ pub const GUARD_DATASET_PATH_ENV: &str = "APEIRETH_GUARD_DATASET_PATH";
 pub const GUARD_ML_MODE_ENV: &str = "APEIRETH_GUARD_ML_MODE";
 /// Local JSON model artifact path. Paths are never returned in Guard status.
 pub const GUARD_ML_MODEL_ENV: &str = "APEIRETH_GUARD_ML_MODEL";
+
+/// 免疫记忆旋钮（生物机制族 W3.2，默认关）：`APEIRETH_ENABLE_IMMUNE_MEMORY=1`
+/// 时才在生产入口把 [`apeireth_guard::immune_memory::ImmuneMemory`] 挂到
+/// [`BehaviorChainGuardHook`]；未设 / 空值 / 其它值一律关（fail-closed）。
+///
+/// 开关取值真源 = [`immune_memory_enabled_from_value`]；挂载点唯一 =
+/// [`attach_immune_memory_if_enabled`]（生产入口
+/// [`build_production_governance_parts_from_env`] 的 guard 构造处）。共享句柄经
+/// 返回的 hook 的 [`BehaviorChainGuardHook::shared_immune_memory`] 取回（与 hook
+/// 内观察同一份 `Arc`）；cli 诊断 / 自述面尚未读取它（W3.3 再接）。
+pub const ENABLE_IMMUNE_MEMORY_ENV: &str = "APEIRETH_ENABLE_IMMUNE_MEMORY";
 
 /// Legacy opt-in for the local filesystem and search tools. Accepted for
 /// compatibility; the tools are granted by default now.
@@ -854,6 +866,9 @@ pub fn build_production_governance_parts(
         // 同口径: 显式布尔构建器不含创作工具面图像操作旋钮 (默认不进授权面,
         // fail-closed)。
         false,
+        // 同口径: 免疫记忆是 env 旋钮 (`APEIRETH_ENABLE_IMMUNE_MEMORY`, 默认关),
+        // 显式布尔构建器不挂载 (需要时走 from_env 同源旋钮)。
+        false,
     )
 }
 
@@ -871,6 +886,7 @@ fn build_production_governance_parts_with_dataset(
     backup_export: bool,
     task_board: bool,
     image_ops: bool,
+    immune_memory: bool,
 ) -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -1001,6 +1017,9 @@ fn build_production_governance_parts_with_dataset(
     if let Some(dataset) = dataset {
         guard = guard.with_dataset_recorder(dataset);
     }
+    // 生物机制族 W3.2: 免疫记忆默认关, 开关开才在 hook 构造处挂载 (挂载后只在
+    // Deny / RequireApproval 出口追加分级信号, allow/deny 主结论与风险分不变)。
+    guard = attach_immune_memory_if_enabled(guard, immune_memory);
     guard = configure_guard_classifier(guard);
     let guard_hook = Arc::new(guard);
 
@@ -1139,6 +1158,38 @@ fn production_guard_dataset_recorder() -> Option<Arc<DatasetRecorder>> {
     Some(recorder)
 }
 
+/// 免疫记忆旋钮取值解析（fail-closed）：只认显式 `"1"`（容忍首尾空白）。
+///
+/// `None`（未设）/ `""` / `"0"` / `"true"` / `"yes"` / `"01"` / 任意怪值一律关。
+/// 入参是 `Option<&str>` 而不是直接读 env：测试可直接喂值，不依赖也不污染
+/// 进程环境。
+pub fn immune_memory_enabled_from_value(value: Option<&str>) -> bool {
+    value.is_some_and(|value| value.trim() == "1")
+}
+
+/// 从进程环境读免疫记忆旋钮：`APEIRETH_ENABLE_IMMUNE_MEMORY=1` 才开（默认关，
+/// fail-closed；不提供 `DISABLE_*` 逃生门，未设即关）。
+pub fn immune_memory_enabled_from_env() -> bool {
+    immune_memory_enabled_from_value(std::env::var(ENABLE_IMMUNE_MEMORY_ENV).ok().as_deref())
+}
+
+/// 按开关值把免疫记忆挂到 guard hook（默认关 = 原样返回，零行为变化）。
+///
+/// 开时以默认容量 [`DEFAULT_CAPACITY`] / 默认冷却窗建一份进程内
+/// [`ImmuneMemory`]。挂载点唯一（生产入口 guard 构造处），保证「开关 → 挂载 →
+/// 共享句柄」同源：句柄经返回的 hook 的
+/// [`BehaviorChainGuardHook::shared_immune_memory`] 取回（与 hook 内观察同一份
+/// `Arc`），cli 诊断 / 自述面尚未读取它（W3.3 再接）。
+fn attach_immune_memory_if_enabled(
+    guard: BehaviorChainGuardHook,
+    enabled: bool,
+) -> BehaviorChainGuardHook {
+    if !enabled {
+        return guard;
+    }
+    guard.with_immune_memory(Arc::new(ImmuneMemory::with_capacity(DEFAULT_CAPACITY)))
+}
+
 fn build_production_governance_parts_from_env() -> (
     GovernancePipeline,
     Arc<std::sync::Mutex<PermissionPolicy>>,
@@ -1159,6 +1210,7 @@ fn build_production_governance_parts_from_env() -> (
         backup_export_enabled_from_env(),
         task_board_enabled_from_env(),
         image_ops_enabled_from_env(),
+        immune_memory_enabled_from_env(),
     );
 
     // 2026-09-08: shell/fetch 用户旋钮 = 注册 + 策略 grant + require_approval.
@@ -3663,5 +3715,148 @@ mod capability_switch_chain_tests {
         assert_eq!(result.side_call_count, 7, "越界钳制到 7 个规范顾问位");
 
         restore_env(previous);
+    }
+}
+
+/// 生物机制族 W3.2 免疫记忆 → 生产入口挂载（默认关）测试组。
+///
+/// env 是进程全局：两个 env 用例串在同一把锁后，并用 Drop 守卫逐键保存-恢复
+/// （用例 panic 也不残留）；解析用例直接喂 `Option<&str>`，完全不碰进程 env。
+#[cfg(test)]
+mod immune_memory_switch_tests {
+    use super::*;
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 单个 env 键的保存-恢复守卫（不依赖外部清场，进程 env 零残留）。
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: Option<&str>) -> Self {
+            let previous = std::env::var(key).ok();
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
+    /// env 解析（开）：只认显式 `"1"`（既有惯例容忍首尾空白）。
+    #[test]
+    fn switch_value_accepts_only_explicit_one() {
+        assert!(immune_memory_enabled_from_value(Some("1")));
+        assert!(
+            immune_memory_enabled_from_value(Some(" 1 ")),
+            "既有惯例容忍首尾空白，语义仍是显式 \"1\""
+        );
+    }
+
+    /// env 解析（关）：「0」/空/未设/怪值一律关（fail-closed）。
+    #[test]
+    fn switch_value_rejects_zero_empty_unset_and_odd_values() {
+        assert!(!immune_memory_enabled_from_value(None), "未设必须关");
+        for value in ["", " ", "0", "true", "yes", "on", "01", "1.0", "2", "十一"] {
+            assert!(
+                !immune_memory_enabled_from_value(Some(value)),
+                "只认显式 \"1\"，值 {value:?} 必须关 (fail-closed)"
+            );
+        }
+    }
+
+    /// 开关开：hook 挂载成功且 enabled；默认容量 / 默认冷却窗；句柄可取回。
+    #[test]
+    fn switch_on_mounts_immune_memory_into_the_guard_hook() {
+        let guard = attach_immune_memory_if_enabled(BehaviorChainGuardHook::new(), true);
+        assert!(guard.immune_memory_enabled(), "开关开必须挂载免疫记忆");
+        let shared = guard
+            .shared_immune_memory()
+            .expect("挂载后必须能取回共享句柄 (与 hook 内观察同一份 Arc)");
+        assert_eq!(
+            shared.lock().cooldown_ms(),
+            apeireth_guard::immune_memory::DEFAULT_COOLDOWN_MS,
+            "挂载必须用免疫记忆内核的默认冷却窗"
+        );
+    }
+
+    /// 默认关：默认构造的 hook 与今天逐字节一致（未挂载、无句柄）；开关关时
+    /// 挂载面原样返回。
+    #[test]
+    fn switch_off_keeps_the_hook_default_and_unmounted() {
+        let default_hook = BehaviorChainGuardHook::new();
+        assert!(
+            !default_hook.immune_memory_enabled(),
+            "默认构造的 hook 必须 immune_memory_enabled()==false"
+        );
+        assert!(
+            default_hook.shared_immune_memory().is_none(),
+            "默认构造的 hook 不得持免疫记忆句柄"
+        );
+        let off = attach_immune_memory_if_enabled(BehaviorChainGuardHook::new(), false);
+        assert!(!off.immune_memory_enabled(), "开关关必须原样返回 (不挂载)");
+        assert!(off.shared_immune_memory().is_none());
+    }
+
+    /// 生产入口（真装配路径）：env 开关 `"1"` = 返回的 guard hook 已挂载。
+    #[test]
+    fn production_entry_mounts_immune_memory_when_env_is_one() {
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _env = EnvVarGuard::set(ENABLE_IMMUNE_MEMORY_ENV, Some("1"));
+        let (_, _, guard_hook) = build_production_governance_parts_from_env();
+        assert!(
+            guard_hook.immune_memory_enabled(),
+            "APEIRETH_ENABLE_IMMUNE_MEMORY=1 必须经生产入口挂到 guard hook"
+        );
+    }
+
+    /// 生产入口默认关证据：未设开关 = 返回的 guard hook 未挂载（fail-closed）。
+    #[test]
+    fn production_entry_leaves_immune_memory_off_by_default() {
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _env = EnvVarGuard::set(ENABLE_IMMUNE_MEMORY_ENV, None);
+        let (_, _, guard_hook) = build_production_governance_parts_from_env();
+        assert!(
+            !guard_hook.immune_memory_enabled(),
+            "未设开关必须默认关 (fail-closed): hook 与今天逐字节一致"
+        );
+        assert!(
+            guard_hook.shared_immune_memory().is_none(),
+            "默认关不得持免疫记忆句柄"
+        );
+    }
+
+    /// 0 装诚实 + 不打凭据：本批新增「解析 + 挂载」区间零日志语句 —— 开关只看
+    /// 一个布尔 env，不打印 env 值 / 凭据。源码经 `include_str!` 编译期嵌入，
+    /// 新增 `println!/eprintln!/dbg!/tracing::/log::` 即红。
+    #[test]
+    fn switch_surface_adds_no_logging() {
+        const SOURCE: &str = include_str!("lib.rs");
+        let region = SOURCE
+            .split_once("/// 免疫记忆旋钮取值解析")
+            .and_then(|(_, rest)| rest.split_once("fn build_production_governance_parts_from_env"))
+            .map(|(region, _)| region)
+            .expect("本批新增面必须仍可定位 (标记漂移 = 测试失效，不是通过)");
+        for needle in ["println!", "eprintln!", "dbg!", "tracing::", "log::"] {
+            assert!(
+                !region.contains(needle),
+                "免疫记忆开关面不得新增日志输出 (命中 {needle}): 不打 env 值 / 凭据"
+            );
+        }
     }
 }
