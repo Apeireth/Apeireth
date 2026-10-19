@@ -82,6 +82,8 @@
 
 | D24 | **生物机制族 14 条全部采纳（2026-10-19 owner：全都要，当工程做）**：SG-13 神经调质 / SG-14 异稳态生命体征 / SG-23 节律+睡眠压力 / SG-15 免疫记忆+炎症收口 / SG-16 痛觉学习 / SG-17 再生四期 / SG-19 依恋分离-重聚 / SG-20 社交认知与交互修复 / SG-24 群体感应升级门（以上 **W1 内核批，2026-10-19 并行施工**）；SG-18 凋亡/神经发生 / SG-21 游戏/幼态延续 / SG-22 仪式 / SG-25 共生菌群 / SG-26 承载力·演替·关键种（W2）。**细节与验收判据见台账**：[system-gap-ledger-2026-10-18.md](system-gap-ledger-2026-10-18.md)「生物机制族」节；灵感来源 [06-biosphere-inspiration-2026-10-18.md](../../philosophy-study/06-biosphere-inspiration-2026-10-18.md) | W1 = 纯机制内核 v0（模块+类型+测试+模块文档，不接线）；W2 = 接线 + self_status 节 + 矩阵行 + 剩余 5 条；生物是灵感源非保真模拟，0 装分级标注 | 台账 + 灵感清单 |
 
+| D25 | **环境敏感测试偶发失败（2026-10-19 全量 W2 总装发现）**：process::appcontainer::tests::probe_appcontainer_launch_succeeds_with_step_attribution 在全量并行运行中 1 次失败（CreateProcessW(AppContainer): 系统找不到指定的文件 (os error 2)）；**单独跑与单 crate lib 复跑均通过（585/0）**，与生物机制族 W2 改动无因果（本批仅新增模块文件与 lib 注册）。处置建议：①查探针依赖（AppContainer profile/临时文件/作业对象在并行负载下的竞争）；②若确属环境依赖，改 #[ignore] + 真机位专项跑（需 owner 口径，不掩盖）；③在该测试内加注释与重试/诊断输出 | rtifacts/wave-bio-w2-workspace-test.log（失败帧）/ -rerun.log（复跑） | 🟡 待处置 |
+
 ## 与既有账目的关系
 
 - 性能红行现状见 `reports/benchmark-reproduction.md`；开关权力现状见 `docs/02-guides/capability-switch-power-audit.md`；

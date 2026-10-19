@@ -1,5 +1,27 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 生物机制族 W3.1：六条「内接线」入库（默认关，2026-10-19）
+
+六线并行施工批：把已交付的内核接进 crate 内既有缝（**+77 新单测**，全部**默认关 + 可回退**）：
+- **SG-15 免疫→guard hook**（peireth-guard::hook）：with_immune_memory(Arc<ImmuneMemory>)，仅在 Deny/RequireApproval 出口 observe；证据/verdict 只追加 immune 字段，主结论不变；10 测试。
+- **SG-20 修复→prompt 组装**（peireth-organ::prompt_assembly）：RepairDirectiveSource + PromptAssembler::with_repair_plan，修复指令段模板固定、原文不回灌、≤2 动作/≤1 问句；9 测试。
+- **SG-24 quorum→审议触发**（peireth-orchestration::council）：QuorumGate + decide_gated/decide_with_invoker_gated；Escalate 放行并携带 reasons、Hold/Cooldown 不召开且不伪造结论；10 测试。
+- **SG-19+SG-22 依恋/仪式→care**（peireth-organ::care）：新增 itual_candidate/eunion 两候选源（Due/DueSoft→候选；重聚仅非 Brief；无内疚词黑名单测试）+ CareConfig.bio_candidates_enabled（默认 false）+ 既有勿扰/频率/预算全管道裁决；24 测试。
+- **SG-14+SG-23 稳态/节律→上下文组装**（peireth-organ::context_assembly/circadian）：AssemblyPolicy::from_plan（整编前置/降检索深度/预算调整/调用方标志）+ proactive_gate（睡窗 > urgency > 超日 Rest）；14 测试。
+- **SG-13 调质→语气**（peireth-organ::tone）：ehavior_tone_style/	one_hint_with_params，基线参数下与既有语气逐字一致；10 测试。
+- **诚实边界**：六条均为 **crate 内接线（IMPLEMENTED / DEFAULT DISABLED）**，**非 PRODUCTION WIRED**——runtime-assembly / cli / production.rs 的装配与开关登记属 W3.2；接线点已在各提交正文列出。
+- **门禁**：scoped 测试 organ 377 / guard 61 / orchestration 447 全绿；clippy -D warnings 0；cargo fmt --check 0 diff；中性/secret 扫描干净。
+
+## [Unreleased] — 生物机制族 W2：剩余五条内核 v0（14/14 内核齐，2026-10-19）
+
+五线并行施工批：生物机制族**剩余 5 条内核 v0** 全部入库（**+91 新单测**），至此 **14/14 内核全部交付**（W1 137 + W2 91 = **228 个新机制单测**）；**全部 IMPLEMENTED 未接线**（生产 0 调用点，W3 分批接线）：
+- **SG-18 资产生命周期**（peireth-orchestration::lifecycle）：Newborn→Trial→Mature→Retiring→Retired（可 revive），退役必留墓碑、evaluate 幂等、冷静期、失败超限退役、容量淘汰带墓碑交还，21 测试。
+- **SG-21 游戏/练习场**（peireth-organ::play）：低风险练习会话（默认 20k tokens / 15min / 强制 opt-in / 记忆隔离），状态机严格、产出只进 PlayOutcome（无主体记忆写 API），18 测试。
+- **SG-22 仪式**（peireth-organ::ritual）：早/晚/周/纪念日/共同项目五类仪式，规则表含 muted/重复守卫/宽限降级；**streak/skip 完全不参与判定**（无断签内疚语义），15 测试。
+- **SG-25 工具生态健康度**（peireth-tools-canonical::ecosystem_health）：多样性/冗余/重叠三轴 + dysbiosis 加权 + 确定性排序，纯只读、只给建议不剪枝，18 测试。
+- **SG-26 承载力/演替/关键种**（peireth-orchestration::capacity）：承载力四档判定（80%/soft/hard、u128 防溢出）+ 演替状态机（含回滚超时标记）+ 关键种风险清单，19 测试。
+- **诚实边界**：W2 五条与 W1 九条一样**全部 IMPLEMENTED 库级、未接线**——无 self_status 节、未接工具注册表/上下文预算/清理链/care 调度；生物是灵感源非保真模拟。**W3 = 14 条全部接线**（接线点已由各内核交付记录列明）。
+
 ## [Unreleased] — 生物机制族 W1：九个机制内核 v0（2026-10-19）
 
 七线并行施工批总装（2h 窗口）：生物机制族 W1 九条内核 v0 全部入库，**+137 个新单测**（organ +79 / guard +18 / orchestration +40），**全部 IMPLEMENTED 未接线**（生产 0 调用点，0 装分级如实标注）：

@@ -92,6 +92,39 @@
 > **W1 全部为「机制内核 v0」**：只交付模块 + 类型 + 单元测试 + 模块文档（生物原型/工程边界/未接线声明），
 > 不改运行时装配、不改 self_status 合同、不碰 LOCKED；接线与矩阵行在 W2 统一收口。
 >
+> **W2 交付记录（2026-10-19，五线并行）**：剩余 5 条内核 v0 全部入库（**+91 新单测**：
+> orchestration +40（lifecycle 21 + capacity 19）/ organ +33（play 18 + ritual 15）/ tools +18），
+> scoped 门禁全绿（organ 320 / orchestration 437 / tools 585 passed；clippy 0；fmt 0 diff）。
+> 提交：SG-18 0e3eb71｜SG-21 69038cde｜SG-22 6d0361e｜SG-25 283f37e｜SG-26 67dd06a。
+> **⇒ 14/14 内核全部入库（W1+W2 合计 +228 新单测）。**
+>
+> **W3.1 交付记录（2026-10-19，六线并行，crate 内接线）**：六条「内接线」API 全部入库（**+77 新单测**：
+> guard +10 / organ +57（care 24 + context/circadian 14 + tone 10 + prompt 9）/ orchestration +10），
+> scoped 门禁全绿（organ 377 / guard 61 / orchestration 447 passed；clippy 0；fmt 0 diff）。
+> 提交：SG-15→hook 3703055｜SG-20→prompt 53ba705b｜SG-24→council 2a0858b9｜
+> SG-19+22→care 7559ca01｜SG-14+23→context 8a0725d1｜SG-13→tone 3f86bfd6。
+> **接线进度 = 6/14 的 crate 内接线（全部默认关、可回退）；PRODUCTION WIRED 待 W3.2 装配面**（注入点已由各批列明：
+> cli hook 挂载 / runtime-assembly context-cognitive-orchestrator 三处 / production.rs 开关表）。
+>
+### W3 接线计划（2026-10-19 定，14/14 内核入库后）
+
+> 目标：把 14 条内核从「库级 IMPLEMENTED」接到「PRODUCTION WIRED / DEFAULT ENABLED（默认关）」，每接一条：
+> ①接线代码 + 装配级测试；②capabilities-matrix 行（四级口径）；③self_status 观测（方式见下）；④台账状态改 🔵→✅。
+> **self_status 合同策略（先定，避免接线批各自为政）**：不逐个加节（21 节合同已冻结，逐节扩会让合同碎片化），
+> 统一走「**观测聚合**」：在既有 capabilities 节内新增只读子对象 io_mechanisms（每机制一栏：stage/值/阈值/最近动作），
+> 合同节数不变、字段缺省 
+ull + reason；若 owner 要独立节，另立「合同扩展批」评估。
+
+| 批次 | 内容（SG） | 目标缝（代码） | 验收判据 |
+|---|---|---|---|
+| **W3.1 crate 内接线（6 批并行）** | 免疫→guard hook（SG-15）｜社交修复→prompt_assembly（SG-20）｜仪式→care reminder（SG-22）｜quorum→审议触发（SG-24）｜依恋→care 投递/会话恢复（SG-19）｜稳态+节律→care/dreaming 闸（SG-14/23） | peireth-guard::hook / peireth-organ::{prompt_assembly, care} / peireth-orchestration（council 触发） | 装配级测试（crate 内可跑）+ 行为开关默认关 + 回退路径 |
+| **W3.2 跨 crate 接线（4 批并行）** | 生命周期→工具/技能/记忆清理（SG-18）｜承载力→上下文/记忆配额（SG-26）｜生态健康→self_status 只读（SG-25）｜神经调质→tone/人格缩放（SG-13） | untime-assembly + 各 face 注入点 | cargo test --workspace 零回归 + 自述新字段 + 默认关 |
+| **W3.3 跨 crate 接线（2 批）** | 痛觉/再生→失败处理链 + harness_patch（SG-16/17）｜游戏→opt-in 卡 + 调度器沙箱（SG-21） | 失败处理链 / gateway 审批卡 / orchestration 调度 | 端到端一例（失败→诊断→修复→瘢痕；play opt-in→沙箱→产出） |
+| **W3.4 合同/文档面** | 14 条矩阵行 + capabilities 节 io_mechanisms 子对象 + CHANGELOG + 台账收口 | matrix / self_status / CHANGELOG / ledger | 口径守门 0 新增违规、SSoT 数字同步 |
+
+> 接线纪律：**默认关 + 灰度**；每条接线必须保留「关掉即回原行为」的回退路径；不碰 LOCKED；
+> 接线批各自带装配级测试，总装批跑全量并刷新基线。
+
 > **W1 交付记录（2026-10-19，七线并行，2h 窗口）**：9 条全部入库，**137 个新单测**
 > （organ +79 / guard +18 / orchestration +40）；scoped 门禁全绿（organ 287 / guard 51 / orchestration 397 passed；
 > clippy 0 警告；fmt 0 diff；中性/secret 扫描干净）。提交：SG-13 192cc327｜SG-14+23 1544e54｜
