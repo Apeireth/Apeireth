@@ -6,14 +6,40 @@
 //!
 //! Security boundaries enforced here:
 //! - only http/https URLs are forwarded (any other scheme is rejected)
+//! - the relay target is gated by address class (`gate_target`): the loopback
+//!   face (local gateway / local model runtimes — deliberate carve-out, see
+//!   `gate_target`) and public unicast only; private, link-local, shared,
+//!   multicast, unspecified, documentation, benchmarking and reserved ranges
+//!   are refused, for IP literals (including decimal/hex/short spellings and
+//!   IPv4-mapped IPv6, which the URL parser normalizes) and for **every**
+//!   address a host name resolves to
+//! - DNS pinning: the connection uses exactly the addresses the gate checked
+//!   (`resolve_to_addrs`), never a second resolution, which closes the
+//!   first-hop DNS-rebinding window
+//! - redirects are bounded by [`MAX_REDIRECT_HOPS`] and every hop re-passes the
+//!   target gate at the reqwest redirect-policy layer
+//! - only whitelisted request headers are forwarded (`filter_headers`):
+//!   routing (`Host`), session (`Cookie`) and framing (`Content-Length`, ...)
+//!   headers never leave the process
 //! - the whole request (send + body read) is bounded by [`REQUEST_TIMEOUT`]
 //! - the relayed response body is capped at [`MAX_RESPONSE_BYTES`]
 //! - credential header values never appear in logs or error strings
 //!   ([`sanitize_error`], layered on the [`DesktopLogger`] redaction passes)
+//!
+//! Residual risks (documented, not solved in this module):
+//! - the loopback carve-out is a **class** carve-out: any local HTTP service,
+//!   not only the gateway/model-runtime faces, stays reachable through the
+//!   relay under IPC abuse. Narrowing it to registered local endpoints needs a
+//!   cross-file endpoint-registration face (out of this file's scope).
+//! - redirect hops to *other* hosts are gated per hop (scheme + address
+//!   classes + resolver pre-check) but that hop connection re-resolves DNS, so
+//!   a rebinding window remains on those hops; the first hop (and same-host
+//!   hops) are pinned to the checked addresses.
 
 use crate::logging::DesktopLogger;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::net::ToSocketAddrs;
 use std::time::Duration;
 
 /// Cap on a relayed response body (5 MiB). Model lists and provider error
@@ -37,6 +63,28 @@ const SENSITIVE_HEADERS: [&str; 6] = [
     "cookie",
 ];
 
+/// Request headers the relay forwards (lowercase names): credential faces,
+/// content negotiation and content type. Everything else is dropped — routing
+/// (`host`), session (`cookie`), framing (`content-length`, `transfer-encoding`,
+/// `connection`, `upgrade`), forwarding (`forwarded`, `x-forwarded-*`) and
+/// browser opt-ins: the far side derives routing/framing from the URL and
+/// body, and the relay is not a browser.
+const FORWARDED_HEADERS: [&str; 6] = [
+    "authorization",
+    "x-api-key",
+    "api-key",
+    "x-auth-token",
+    "content-type",
+    "accept",
+];
+
+/// Suffix rule for provider API version pins (`<api>-version` wire headers).
+const VERSION_HEADER_SUFFIX: &str = "-version";
+
+/// Maximum redirect hops the relay follows. Every hop re-passes the target
+/// gate; exceeding the cap aborts the request instead of following.
+pub const MAX_REDIRECT_HOPS: usize = 5;
+
 /// Response relayed back to the webview, mirroring the IPC return contract
 /// `{ status, body_text, content_type }`.
 #[derive(Debug, Clone, Serialize)]
@@ -49,16 +97,25 @@ pub struct ProviderResponse {
 /// Validate the relay target and return it parsed.
 ///
 /// Only `http`/`https` URLs with a host are forwarded; every other scheme
-/// (`file:`, `ftp:`, `javascript:`, `data:`, ...) is refused.
+/// (`file:`, `ftp:`, `javascript:`, `data:`, ...) is refused. The address-class
+/// gate (`gate_target`) runs on top of this in `relay_via`; this function only
+/// pins scheme and host presence.
 pub fn validate_url(url: &str) -> Result<reqwest::Url, String> {
     let parsed =
         reqwest::Url::parse(url.trim()).map_err(|_| "provider_request: invalid URL".to_string())?;
-    match (parsed.scheme(), parsed.host_str()) {
-        ("http" | "https", Some(_)) => Ok(parsed),
-        ("http" | "https", None) => Err("provider_request: URL has no host".to_string()),
+    check_scheme_and_host(&parsed).map_err(|detail| format!("provider_request: {detail}"))?;
+    Ok(parsed)
+}
+
+/// Scheme/host pre-check shared by the entry gate and the redirect gate
+/// (unprefixed detail; callers add their own message prefix).
+fn check_scheme_and_host(target: &reqwest::Url) -> Result<(), String> {
+    match (target.scheme(), target.host_str()) {
+        ("http" | "https", Some(_)) => Ok(()),
+        ("http" | "https", None) => Err("URL has no host".to_string()),
         _ => Err(format!(
-            "provider_request: URL scheme '{}' is not allowed (http/https only)",
-            parsed.scheme()
+            "URL scheme '{}' is not allowed (http/https only)",
+            target.scheme()
         )),
     }
 }
@@ -87,6 +144,204 @@ pub fn validate_method(method: &str) -> Result<reqwest::Method, String> {
 fn is_sensitive_header(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     SENSITIVE_HEADERS.iter().any(|entry| *entry == lower)
+}
+
+/// Enforce the request-header whitelist: only [`FORWARDED_HEADERS`] (plus the
+/// `*-version` suffix rule) reach the transport, values untouched. Called on
+/// the caller-supplied map before anything else, so credential detection and
+/// the wire see the same header set.
+pub fn filter_headers(headers: &HashMap<String, String>) -> HashMap<String, String> {
+    headers
+        .iter()
+        .filter(|(name, _)| is_forwarded_header(name))
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect()
+}
+
+fn is_forwarded_header(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    FORWARDED_HEADERS.contains(&lower.as_str()) || lower.ends_with(VERSION_HEADER_SUFFIX)
+}
+
+// ---------------------------------------------------------------------------
+// Target address gate: which address classes the relay may talk to.
+//
+// Allowed: the loopback face and public unicast. Everything else is refused
+// with a fixed reason label. Applied to IP literals and to every resolved
+// address of a host name.
+// ---------------------------------------------------------------------------
+
+/// The target gate's verdict for one address: `Ok` for the loopback face and
+/// public unicast, `Err(reason)` for every refused class.
+fn gate_address(ip: std::net::IpAddr) -> Result<(), &'static str> {
+    match ip {
+        std::net::IpAddr::V4(v4) => gate_ipv4(v4),
+        std::net::IpAddr::V6(v6) => gate_ipv6(v6),
+    }
+}
+
+/// Address-class gate for one IPv4 address.
+fn gate_ipv4(ip: std::net::Ipv4Addr) -> Result<(), &'static str> {
+    // 127.0.0.0/8 is the deliberate loopback-face carve-out (see `gate_target`).
+    if ip.is_loopback() {
+        return Ok(());
+    }
+    let [a, b, c, _] = ip.octets();
+    let denied = match (a, b, c) {
+        (0, ..) => Some("unspecified"),
+        (10, ..) => Some("private"),
+        (100, 64..=127, _) => Some("shared"),
+        (169, 254, _) => Some("link-local"),
+        (172, 16..=31, _) => Some("private"),
+        (192, 0, 0) => Some("reserved"),
+        (192, 0, 2) => Some("documentation"),
+        (192, 88, 99) => Some("reserved"),
+        (192, 168, _) => Some("private"),
+        (198, 18..=19, _) => Some("benchmarking"),
+        (198, 51, 100) => Some("documentation"),
+        (203, 0, 113) => Some("documentation"),
+        (224..=239, ..) => Some("multicast"),
+        (240.., ..) => Some("reserved"),
+        _ => None,
+    };
+    denied.map_or(Ok(()), Err)
+}
+
+/// Address-class gate for one IPv6 address.
+fn gate_ipv6(ip: std::net::Ipv6Addr) -> Result<(), &'static str> {
+    // ::1 is the deliberate loopback-face carve-out (see `gate_target`).
+    if ip.is_loopback() {
+        return Ok(());
+    }
+    if ip.is_unspecified() {
+        return Err("unspecified");
+    }
+    if ip.is_multicast() {
+        return Err("multicast");
+    }
+    // IPv4-mapped (`::ffff:a.b.c.d`) and legacy IPv4-compatible (`::a.b.c.d`)
+    // spellings gate as the IPv4 address they embed.
+    if let Some(embedded) = embedded_ipv4(&ip) {
+        return gate_ipv4(embedded);
+    }
+    let segments = ip.segments();
+    let denied = if (segments[0] & 0xfe00) == 0xfc00 {
+        Some("private") // fc00::/7 unique-local
+    } else if (segments[0] & 0xffc0) == 0xfe80 {
+        Some("link-local") // fe80::/10
+    } else if segments[0] == 0x2001 && (segments[1] & 0xfe00) == 0 {
+        Some("reserved") // 2001::/23 protocol assignments
+    } else if segments[0] == 0x2001 && segments[1] == 0x0db8 {
+        Some("documentation") // 2001:db8::/32
+    } else if segments[0] == 0x0100 && segments[1..4] == [0, 0, 0] {
+        Some("reserved") // 100::/64 discard-only
+    } else if (segments[0] & 0xe000) == 0x2000 {
+        None // 2000::/3 global unicast
+    } else {
+        Some("non-global")
+    };
+    denied.map_or(Ok(()), Err)
+}
+
+/// The IPv4 address embedded in an IPv4-mapped (`::ffff:a.b.c.d`) or legacy
+/// IPv4-compatible (`::a.b.c.d`) IPv6 address.
+fn embedded_ipv4(ip: &std::net::Ipv6Addr) -> Option<std::net::Ipv4Addr> {
+    let octets = ip.octets();
+    let mapped = octets[..10] == [0u8; 10] && octets[10] == 0xff && octets[11] == 0xff;
+    let compatible = octets[..12] == [0u8; 12];
+    if mapped || compatible {
+        Some(std::net::Ipv4Addr::new(
+            octets[12], octets[13], octets[14], octets[15],
+        ))
+    } else {
+        None
+    }
+}
+
+/// Every resolved address of a host must pass `gate_address` (fail closed:
+/// one refused address refuses the whole target).
+fn gate_resolved_addrs(host: &str, addrs: &[std::net::SocketAddr]) -> Result<(), String> {
+    for addr in addrs {
+        if let Err(reason) = gate_address(addr.ip()) {
+            return Err(format!(
+                "target host '{host}' resolves to a refused address ({reason})"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The host as the gate classifies it: the URL's host string with IPv6
+/// brackets removed (`host_str()` keeps them — see `is_loopback_target`), so
+/// bracketed literals reach the address-class gate instead of the resolver.
+fn gate_host_str(target: &reqwest::Url) -> Option<String> {
+    target.host_str().map(|host| {
+        host.trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_string()
+    })
+}
+
+/// Resolve (when needed) and gate the relay target; returns the addresses the
+/// connection must use.
+///
+/// **Loopback carve-out (product design, deliberate):** loopback targets are
+/// the local face — the local gateway and local model runtimes are first-class
+/// relay targets (their base URLs are loopback), so 127.0.0.0/8 and ::1 pass.
+/// Everything else non-public is refused. The returned addresses are the ones
+/// the transport pins the connection to, so the checked addresses are the
+/// connected addresses (no second resolution at connect time).
+async fn gate_target(target: &reqwest::Url) -> Result<Vec<std::net::SocketAddr>, String> {
+    let host =
+        gate_host_str(target).ok_or_else(|| "provider_request: URL has no host".to_string())?;
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        gate_address(ip)
+            .map_err(|reason| format!("provider_request: target address refused ({reason})"))?;
+        return Ok(Vec::new());
+    }
+    let port = target.port_or_known_default().unwrap_or(0);
+    let addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host((host.as_str(), port))
+        .await
+        .map_err(|_| format!("provider_request: target host '{host}' did not resolve"))?
+        .collect();
+    if addrs.is_empty() {
+        return Err(format!(
+            "provider_request: target host '{host}' did not resolve"
+        ));
+    }
+    gate_resolved_addrs(&host, &addrs).map_err(|detail| format!("provider_request: {detail}"))?;
+    Ok(addrs)
+}
+
+/// Message prefix for a refused redirect hop (pin-able by tests and visible to
+/// the webview as a distinct verdict).
+fn redirect_refused(detail: String) -> String {
+    format!("provider_request: redirect refused: {detail}")
+}
+
+/// Per-hop gate for a redirect target (synchronous face: the redirect policy
+/// cannot await). Same address classes as `gate_target`, including a blocking
+/// resolver pre-check for host names; see the module docs for the residual
+/// (cross-host hops are checked here but connected via fresh DNS).
+fn gate_redirect_target(target: &reqwest::Url) -> Result<(), String> {
+    check_scheme_and_host(target).map_err(redirect_refused)?;
+    let host =
+        gate_host_str(target).ok_or_else(|| redirect_refused("URL has no host".to_string()))?;
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return gate_address(ip)
+            .map_err(|reason| redirect_refused(format!("target address refused ({reason})")));
+    }
+    let port = target.port_or_known_default().unwrap_or(0);
+    let addrs: Vec<std::net::SocketAddr> = (host.as_str(), port)
+        .to_socket_addrs()
+        .map_err(|_| redirect_refused(format!("target host '{host}' did not resolve")))?
+        .collect();
+    if addrs.is_empty() {
+        return Err(redirect_refused(format!(
+            "target host '{host}' did not resolve"
+        )));
+    }
+    gate_resolved_addrs(&host, &addrs).map_err(redirect_refused)
 }
 
 /// Values of credential-bearing headers, collected so they can be scrubbed
@@ -215,8 +470,10 @@ pub fn is_provider_not_configured_frame(response: &ProviderResponse) -> bool {
 /// No-credential gate: with no provider key in the request, an outbound call
 /// would only ever be answered with an authentication error by the far side.
 /// Such calls are answered locally with [`provider_not_configured_frame`] and
-/// never leave the process. Loopback targets and any request carrying a
-/// non-empty credential header pass through untouched.
+/// never leave the process. "Configured" means a non-empty **forwardable**
+/// credential header (the whitelist's credential faces): a credential that the
+/// header filter strips does not make a call configured, because it can never
+/// reach the far side. Loopback targets pass through untouched.
 fn unconfigured_suppression(
     target: &reqwest::Url,
     headers: &HashMap<String, String>,
@@ -235,14 +492,19 @@ fn unconfigured_suppression(
 /// never lets those reach a log line or error string.
 #[derive(Clone)]
 pub struct RelayRequest {
-    /// Validated relay target.
+    /// Validated relay target (scheme/host + address-class gated).
     pub url: reqwest::Url,
     /// Validated relay verb.
     pub method: reqwest::Method,
-    /// Caller-supplied headers, forwarded as given.
+    /// Whitelisted request headers to forward (see `filter_headers`);
+    /// constructed by `relay_via` from the caller's map.
     pub headers: HashMap<String, String>,
     /// Optional request body.
     pub body: Option<String>,
+    /// Addresses the target gate validated for this target: the transport
+    /// pins the connection to them (empty for IP-literal hosts, which need no
+    /// resolution).
+    pub connect_addrs: Vec<std::net::SocketAddr>,
 }
 
 /// The transport's answer for one relayed call, before IPC framing.
@@ -269,6 +531,38 @@ pub trait RelayTransport: Send + Sync {
     ) -> impl std::future::Future<Output = Result<RelayResponse, String>> + Send;
 }
 
+/// Redirect policy for the relay: bounded hops, and every hop re-passes the
+/// target gate (scheme + address classes, with a blocking resolver pre-check
+/// for host names). Gate verdicts travel as the error cause chain.
+fn redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() > MAX_REDIRECT_HOPS {
+            return attempt.error(std::io::Error::other(redirect_refused(
+                "too many redirects".to_string(),
+            )));
+        }
+        match gate_redirect_target(attempt.url()) {
+            Ok(()) => attempt.follow(),
+            Err(detail) => attempt.error(std::io::Error::other(detail)),
+        }
+    })
+}
+
+/// Describe a transport error without echoing URLs: the top-level message
+/// (`without_url`) plus its cause chain, so gate verdicts ride through (they
+/// surface as causes of the redirect/request error).
+fn transport_error_message(error: reqwest::Error) -> String {
+    let error = error.without_url();
+    let mut message = error.to_string();
+    let mut cause = std::error::Error::source(&error);
+    while let Some(source) = cause {
+        message.push_str(": ");
+        message.push_str(&source.to_string());
+        cause = source.source();
+    }
+    message
+}
+
 /// Production transport: one bounded [`reqwest`] call (timeout + body cap).
 pub struct ReqwestTransport;
 
@@ -281,8 +575,19 @@ impl RelayTransport for ReqwestTransport {
         request: RelayRequest,
     ) -> impl std::future::Future<Output = Result<RelayResponse, String>> + Send {
         async move {
-            let client = reqwest::Client::builder()
+            let pinned_host = request.url.host_str().map(str::to_string);
+            let mut builder = reqwest::Client::builder()
                 .timeout(REQUEST_TIMEOUT)
+                .redirect(redirect_policy());
+            // DNS pinning: connect to exactly the addresses the target gate
+            // checked, instead of re-resolving at connect time. (URL-embedded
+            // ports always win over the pinned ports; only the IPs are pinned.)
+            if !request.connect_addrs.is_empty() {
+                if let Some(host) = pinned_host.as_deref() {
+                    builder = builder.resolve_to_addrs(host, &request.connect_addrs);
+                }
+            }
+            let client = builder
                 .build()
                 .map_err(|error| format!("provider_request: HTTP client build failed: {error}"))?;
 
@@ -304,7 +609,10 @@ impl RelayTransport for ReqwestTransport {
             }
 
             let mut response = outbound.send().await.map_err(|error| {
-                format!("provider_request: request failed: {}", error.without_url())
+                format!(
+                    "provider_request: request failed: {}",
+                    transport_error_message(error)
+                )
             })?;
 
             let status = response.status().as_u16();
@@ -328,7 +636,7 @@ impl RelayTransport for ReqwestTransport {
             while let Some(chunk) = response.chunk().await.map_err(|error| {
                 format!(
                     "provider_request: response read failed: {}",
-                    error.without_url()
+                    transport_error_message(error)
                 )
             })? {
                 body_acc.push(&chunk)?;
@@ -360,9 +668,13 @@ pub async fn send_provider_request(
         .map_err(|message| sanitize_error(&message, &secrets))
 }
 
-/// Relay one call over `transport`, applying validation and the
-/// not-configured gate first: a credential-less outbound call is answered with
-/// the synthetic frame and never reaches the transport.
+/// Relay one call over `transport`, applying validation and gates in order:
+/// scheme/host → method → header whitelist → not-configured gate →
+/// target address gate (DNS + classes) → transport. The whitelist runs before
+/// the credential gate so "configured" is judged on the headers that can
+/// actually reach the far side, and the not-configured gate runs before the
+/// target gate so a credential-less outbound probe performs no network
+/// activity at all — not even a DNS query.
 async fn relay_via<T: RelayTransport>(
     transport: &T,
     url: &str,
@@ -372,15 +684,18 @@ async fn relay_via<T: RelayTransport>(
 ) -> Result<ProviderResponse, String> {
     let target = validate_url(url)?;
     let verb = validate_method(method)?;
-    if let Some(frame) = unconfigured_suppression(&target, headers) {
+    let headers = filter_headers(headers);
+    if let Some(frame) = unconfigured_suppression(&target, &headers) {
         return Ok(frame);
     }
+    let connect_addrs = gate_target(&target).await?;
     let response = transport
         .send(RelayRequest {
             url: target,
             method: verb,
-            headers: headers.clone(),
+            headers,
             body: body.map(str::to_string),
+            connect_addrs,
         })
         .await?;
     Ok(ProviderResponse {
@@ -651,9 +966,12 @@ mod tests {
         let transport = FakeTransport::new();
         let headers =
             HashMap::from([("Authorization".to_string(), "Bearer sk-live-1".to_string())]);
+        // 演进断言（B2 目标闸，理由）：relay_via 现在在出网前做地址/DNS 闸，
+        // 假域名离线不可解析必然被闸下；改钉公网 IP 字面量（不出网，假传输面），
+        // 被钉不变量「已配置呼叫原样过境」本身一字未改。
         let response = relay_via(
             &transport,
-            "https://api.example.com/v1/models",
+            "https://93.184.216.34/v1/models",
             "GET",
             &headers,
             Some(r#"{"probe":true}"#),
@@ -666,7 +984,7 @@ mod tests {
             "a configured call reaches the transport exactly once"
         );
         let sent = transport.last_call();
-        assert_eq!(sent.url.as_str(), "https://api.example.com/v1/models");
+        assert_eq!(sent.url.as_str(), "https://93.184.216.34/v1/models");
         assert_eq!(sent.method, reqwest::Method::GET);
         assert_eq!(
             sent.headers.get("Authorization").map(String::as_str),
@@ -717,5 +1035,347 @@ mod tests {
         assert!(body["error"]["solution"].is_string());
         assert_eq!(body["host"], "api.example.com");
         assert!(is_provider_not_configured_frame(&frame));
+    }
+
+    // -----------------------------------------------------------------------
+    // SSRF 目标闸 (B2): 地址类闸 + 字面量变体 + 重定向闸 + 请求头白名单。
+    // -----------------------------------------------------------------------
+
+    /// One credential header, so the not-configured gate does not shadow the
+    /// target gate in these assertions.
+    fn configured_headers() -> HashMap<String, String> {
+        HashMap::from([("Authorization".to_string(), "Bearer sk-test-1".to_string())])
+    }
+
+    /// The address the gate classifies for a URL's host (IPv6 brackets and
+    /// IPv4-mapped / legacy IPv4-compatible spellings unwrapped), so variant
+    /// spellings can be compared against their canonical form.
+    fn host_ip(url: &str) -> std::net::IpAddr {
+        let parsed = reqwest::Url::parse(url).expect("parseable test URL");
+        let host = gate_host_str(&parsed).expect("host");
+        let ip: std::net::IpAddr = host.parse().expect("host must be an IP literal here");
+        match ip {
+            std::net::IpAddr::V6(v6) => embedded_ipv4(&v6).map(std::net::IpAddr::V4).unwrap_or(ip),
+            other => other,
+        }
+    }
+
+    #[test]
+    fn ip_literal_variants_normalize_into_their_address_class() {
+        // 十进制整数 IP / 十六进制 / 短格式 / IPv4 映射 IPv6：URL 解析器已规范化，
+        // 闸按规范化后的地址判类，不按字面拼写做字符串判断。
+        for (variant, canonical) in [
+            ("http://167772161/", "http://10.0.0.1/"),
+            ("http://0xa000001/", "http://10.0.0.1/"),
+            ("http://10.1/", "http://10.0.0.1/"),
+            ("http://2852039166/", "http://169.254.169.254/"),
+            ("http://[::ffff:10.0.0.1]/", "http://10.0.0.1/"),
+            (
+                "http://[::ffff:169.254.169.254]/",
+                "http://169.254.169.254/",
+            ),
+            ("http://[::ffff:192.168.0.1]/", "http://192.168.0.1/"),
+            ("http://2130706433/", "http://127.0.0.1/"),
+            ("http://0x7f000001/", "http://127.0.0.1/"),
+            ("http://127.1/", "http://127.0.0.1/"),
+            ("http://[::ffff:127.0.0.1]/", "http://127.0.0.1/"),
+        ] {
+            assert_eq!(
+                host_ip(variant),
+                host_ip(canonical),
+                "{variant} must normalize to the class of {canonical}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn refuses_non_public_target_literals() {
+        for url in [
+            // private IPv4
+            "http://10.0.0.1/",
+            "http://172.16.0.1/",
+            "http://192.168.1.1/",
+            // the same classes via decimal / hex / short spellings
+            "http://167772161/",
+            "http://0xa000001/",
+            "http://10.1/",
+            "http://2852039166/",
+            // IPv4-mapped IPv6 spellings of refused IPv4 classes
+            "http://[::ffff:10.0.0.1]/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://[::ffff:192.168.0.1]/",
+            "http://[::10.0.0.1]/",
+            // link-local / unique-local
+            "http://169.254.169.254/",
+            "http://[fe80::1]/",
+            "http://[fd00::1]/",
+            "http://[fc00::1]/",
+            // multicast / unspecified / broadcast
+            "http://224.0.0.1/",
+            "http://[ff02::1]/",
+            "http://0.0.0.0/",
+            "http://[::]/",
+            "http://255.255.255.255/",
+            // shared / benchmarking / documentation / protocol-assignment
+            "http://100.64.0.1/",
+            "http://198.18.0.1/",
+            "http://192.0.2.1/",
+            "http://198.51.100.1/",
+            "http://203.0.113.1/",
+            "http://[2001:db8::1]/",
+            "http://[2001::1]/",
+        ] {
+            let transport = FakeTransport::new();
+            let outcome = relay_via(&transport, url, "GET", &configured_headers(), None).await;
+            let Err(message) = outcome else {
+                panic!("{url} must be refused by the target gate");
+            };
+            assert!(
+                message.contains("target address refused"),
+                "{url} must be refused by the address-class gate: {message}"
+            );
+            assert_eq!(
+                transport.call_count(),
+                0,
+                "{url} must never reach the transport"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn public_target_literals_relay() {
+        for url in [
+            "https://93.184.216.34/v1/models",
+            "http://[2001:4860:4860::8888]/v1/models",
+        ] {
+            let transport = FakeTransport::new();
+            let response = relay_via(&transport, url, "GET", &configured_headers(), None)
+                .await
+                .expect("public unicast targets relay");
+            assert_eq!(transport.call_count(), 1, "{url} is public and must relay");
+            assert_eq!(response.status, 200);
+        }
+    }
+
+    #[tokio::test]
+    async fn every_resolved_address_must_pass_the_gate() {
+        // 混合应答：一个公网地址不能给私网地址买路（fail closed）。
+        let mixed = [
+            "1.2.3.4:443".parse::<std::net::SocketAddr>().expect("addr"),
+            "10.0.0.1:443"
+                .parse::<std::net::SocketAddr>()
+                .expect("addr"),
+        ];
+        assert!(
+            gate_resolved_addrs("mixed.test", &mixed).is_err(),
+            "one refused address must refuse the whole target"
+        );
+        let public = ["1.2.3.4:443".parse::<std::net::SocketAddr>().expect("addr")];
+        assert!(gate_resolved_addrs("public.test", &public).is_ok());
+    }
+
+    #[tokio::test]
+    async fn localhost_name_is_the_local_face() {
+        // DNS path pin: a name (not a literal) that resolves loopback passes
+        // the gate as the local face. Offline-safe: resolved from the hosts
+        // file, no network traffic.
+        let target = validate_url("http://localhost:8080/v1/models").expect("valid URL");
+        let addrs = gate_target(&target).await.expect("localhost resolves");
+        assert!(!addrs.is_empty(), "resolution must yield addresses");
+        assert!(
+            addrs.iter().all(|addr| gate_address(addr.ip()).is_ok()),
+            "every resolved address must be the local face"
+        );
+    }
+
+    #[test]
+    fn redirect_targets_re_pass_the_gate() {
+        for url in [
+            "http://10.0.0.1/secret",
+            "http://169.254.169.254/latest/meta-data",
+            "http://[::ffff:192.168.0.1]/x",
+            "file:///etc/passwd",
+            "http://[fd00::1]/x",
+        ] {
+            let target = reqwest::Url::parse(url).expect("parseable");
+            assert!(
+                gate_redirect_target(&target).is_err(),
+                "{url} must be refused as a redirect hop"
+            );
+        }
+        for url in [
+            "http://127.0.0.1:9000/health",
+            "https://93.184.216.34/v1/models",
+        ] {
+            let target = reqwest::Url::parse(url).expect("parseable");
+            assert!(
+                gate_redirect_target(&target).is_ok(),
+                "{url} must pass as a redirect hop"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn request_headers_are_whitelisted_before_the_wire() {
+        let transport = FakeTransport::new();
+        let mut headers = configured_headers();
+        headers.insert("x-api-key".to_string(), "sk-x-1".to_string());
+        headers.insert("api-version".to_string(), "2024-01-01".to_string());
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        headers.insert("Accept".to_string(), "application/json".to_string());
+        // stripped faces: routing / session / framing / forwarding / browser
+        headers.insert("Host".to_string(), "attacker.test".to_string());
+        headers.insert("Cookie".to_string(), "session=1".to_string());
+        headers.insert("Content-Length".to_string(), "0".to_string());
+        headers.insert("Connection".to_string(), "keep-alive".to_string());
+        headers.insert("X-Forwarded-For".to_string(), "1.2.3.4".to_string());
+        headers.insert("user-agent".to_string(), "probe".to_string());
+
+        relay_via(
+            &transport,
+            "https://93.184.216.34/v1/models",
+            "GET",
+            &headers,
+            None,
+        )
+        .await
+        .expect("configured call relays");
+        let sent = transport.last_call();
+        for kept in [
+            "Authorization",
+            "x-api-key",
+            "api-version",
+            "content-type",
+            "Accept",
+        ] {
+            assert!(sent.headers.contains_key(kept), "{kept} must be forwarded");
+        }
+        for stripped in [
+            "Host",
+            "Cookie",
+            "Content-Length",
+            "Connection",
+            "X-Forwarded-For",
+            "user-agent",
+        ] {
+            assert!(
+                !sent.headers.contains_key(stripped),
+                "{stripped} must be stripped"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn stripped_credential_headers_do_not_configure_a_call() {
+        // A credential that only rides on a stripped header can never reach the
+        // far side, so the call stays "unconfigured" and no request leaves.
+        let transport = FakeTransport::new();
+        let headers = HashMap::from([("Cookie".to_string(), "session=1".to_string())]);
+        let response = relay_via(
+            &transport,
+            "https://93.184.216.34/v1/models",
+            "GET",
+            &headers,
+            None,
+        )
+        .await
+        .expect("the gate answers locally");
+        assert_eq!(
+            transport.call_count(),
+            0,
+            "a stripped credential must not produce an outbound call"
+        );
+        assert!(is_provider_not_configured_frame(&response));
+    }
+
+    /// Local one-shot responder: answers its first connection with `response`.
+    fn spawn_responder(response: String) -> (u16, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind test responder");
+        let port = listener.local_addr().expect("test responder addr").port();
+        let handle = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = std::io::Read::read(&mut stream, &mut buf);
+                let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
+            }
+        });
+        (port, handle)
+    }
+
+    #[tokio::test]
+    async fn redirect_to_an_internal_target_is_refused() {
+        let (port, handle) = spawn_responder(
+            "HTTP/1.1 302 Found\r\nLocation: http://10.0.0.1/secret\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                .to_string(),
+        );
+        let outcome = send_provider_request(
+            &format!("http://127.0.0.1:{port}/start"),
+            "GET",
+            &HashMap::new(),
+            None,
+        )
+        .await;
+        let _ = handle.join();
+        let message = outcome.expect_err("the redirect hop must be refused");
+        assert!(
+            message.contains("redirect refused"),
+            "the gate verdict must surface: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn redirect_to_a_permitted_target_is_followed() {
+        let (target_port, target_handle) = spawn_responder(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nConnection: close\r\n\r\nsecond-hop-ok"
+                .to_string(),
+        );
+        let (entry_port, entry_handle) = spawn_responder(format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{target_port}/models\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        ));
+        let response = send_provider_request(
+            &format!("http://127.0.0.1:{entry_port}/start"),
+            "GET",
+            &HashMap::new(),
+            None,
+        )
+        .await
+        .expect("a permitted redirect hop relays");
+        let _ = entry_handle.join();
+        let _ = target_handle.join();
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body_text, "second-hop-ok");
+    }
+
+    #[tokio::test]
+    async fn redirect_chains_are_bounded() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind loop responder");
+        let port = listener.local_addr().expect("loop responder addr").port();
+        // Self-redirect loop; accepts are bounded so the detached thread
+        // cannot outlive the test binary by more than one stuck accept.
+        std::thread::spawn(move || {
+            for _ in 0..32 {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    break;
+                };
+                let mut buf = [0u8; 4096];
+                let _ = std::io::Read::read(&mut stream, &mut buf);
+                let response = format!(
+                    "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{port}/loop\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                );
+                let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
+            }
+        });
+        let outcome = send_provider_request(
+            &format!("http://127.0.0.1:{port}/loop"),
+            "GET",
+            &HashMap::new(),
+            None,
+        )
+        .await;
+        let message = outcome.expect_err("the redirect chain must be cut");
+        assert!(
+            message.contains("too many redirects"),
+            "the hop cap must surface: {message}"
+        );
     }
 }
