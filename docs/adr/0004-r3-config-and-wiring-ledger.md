@@ -115,3 +115,17 @@ purpose_fragments = 0，且全表 TODO-OWNER/UNCLASSIFIED 不增加。
 ①触发路径（wiring.yaml / claims.yaml / 脚本变更）②命令为 `wiring_report.py --verify`
 ③`continue-on-error: true` 灰度 ④日志/artifact 落盘 ⑤失败输出含缺失项清单。
 架构线 review 通过后两周转 blocking；改动 workflow 需重新 review。
+
+### 7.6 验收记录（2026-10-20，架构线）
+
+**R3b foundation 批（commit `66dac8cd`）：通过。**
+
+- 提交版四数（`--stats` 可复核）：`entries 155 / TODO-OWNER 132（↓13，foundation 子集 15→0）/ UNCLASSIFIED 154（↓1）/ purpose_fragments 26（↓6，foundation 子集 = 0）`；
+- foundation 15 条 `owner != TODO-OWNER` 且 **evidence 全部非空**（15/15）；架构线抽查 5/5：`路径:行` 真实读取该 env（`APEIRETH_ANTHROPIC_KEY` 等命中 `std::env::var` 或 env 常量）；
+- 范围合规：该提交只动 `docs/architecture/env-registry.toml`；工具升级另 commit `8530c5bf`（`scripts/wiring_report.py` / wiring.yaml / workflow / gitignore）；
+- **条件**：ADR §7.5 的「purpose_fragments = 0」按**本批处理子集**执行——全表 26 处碎片随后续 layer 批次清零，**R3b 收口时全表必须 = 0**；TODO-OWNER 132 继续按 §7.3 分批降。
+
+**R3c workflow（`.github/workflows/wiring-ledger.yml`，commit `8530c5bf`）：review 通过（report-only）。**
+
+- 五点时：触发路径覆盖 `docs/status/**`、`env-registry.toml`、`wiring_report.py`、`crates/**` ✅；R3a registry 覆盖与 wiring drift 为 blocking（生成物禁手改，与 docs_truth 同模式）✅；R3c 四列交叉校验用 `--crosscheck` + `continue-on-error: true`（灰度至 2026-11-03）✅；日志落盘 + artifact ✅；失败输出含缺失项清单（由 `wiring_report.py` 输出，后续以一次样例核对）⚪待核。
+- **转 blocking 前需再次 review**：删除 `continue-on-error`、确认缺失项清单样例、与架构线同步 `current_wave`。
