@@ -1195,10 +1195,10 @@ name = "APEIRETH_MASTER_TOKEN"
 default = "n/a"
 layer = "foundation"
 owner = "apeireth-credentials"
-purpose = "默认高危服务名单 (master token 类)"
+purpose = "v1 legacy companion 主令牌（当前 workspace/前端均无读取点；归档实现见 legacy/donor/apeireth-companion；重启需 ADR + 新读取点）"
 level = "UNCLASSIFIED"
-status = "current"
-evidence = "scan-only:crates/foundation/credentials/src/gate.rs:53"
+status = "deprecated"
+evidence = "external:legacy/donor/apeireth-companion/examples/companion_serve.rs:1960"
 
 [[entries]]
 name = "APEIRETH_MAX_TOOL_CALLS"
