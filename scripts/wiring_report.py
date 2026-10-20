@@ -42,6 +42,8 @@ CLAIMS = ROOT / "docs" / "status" / "claims.yaml"
 MATRIX = ROOT / "docs" / "03-reference" / "capabilities-matrix.md"
 ENV_RE = re.compile(r"APEIRETH_[A-Z0-9_]+")
 FRAGMENT_RE = re.compile(r"<!--|-->|!\s*!\s*#|^\s*[!#]|^\s*[.·]{3,}")
+# ADR-0004 §7.7：测试/基准夹具（不参与 PRODUCTION WIRED 证据要求、不计入四级口径）
+TEST_ONLY_RE = re.compile(r"^APEIRETH_IMAGE_UNSHARP_|^APEIRETH_UNIQ_SECRET_MARKER_")
 SWITCH_HINT = re.compile(r"(ENABLE|DISABLE|FEATURE|ALLOW|STRICT|FORCE|SWITCH|TOGGLE|REQUIRE)")
 PROD_PREFIXES = ("crates/", "frontend/companion-desktop/src-tauri/src/")
 PROD_ROOTS = (
@@ -349,6 +351,9 @@ def render_registry(entries: list[dict], stats_note: str) -> str:
         lines.append("[[entries]]")
         for key in ("name", "default", "layer", "owner", "purpose", "level", "status"):
             lines.append(f"{key} = {toml_str(str(e.get(key, '')))}")
+        kind = str(e.get("kind", "")).strip()
+        if kind:
+            lines.append(f"kind = {toml_str(kind)}")
         evidence = str(e.get("evidence", "")).strip()
         if evidence:
             lines.append(f"evidence = {toml_str(evidence)}")
@@ -701,6 +706,41 @@ def cmd_crosscheck(strict: bool) -> int:
     return 0
 
 
+def cmd_mark_test_only() -> int:
+    """ADR-0004 §7.7 尾批：测试/基准夹具 env 标 kind=test-only（purpose 允许 TODO-PURPOSE 并注记）。"""
+    entries = registry_entries()
+    changed = 0
+    marked = 0
+    note_text = "测试/基准夹具，非产品开关"
+    for entry in entries:
+        name = str(entry.get("name"))
+        if not TEST_ONLY_RE.search(name):
+            continue
+        marked += 1
+        purpose = str(entry.get("purpose", "")).strip()
+        if "TODO" in purpose or not purpose or FRAGMENT_RE.search(purpose):
+            entry["purpose"] = f"TODO-PURPOSE — {note_text}"
+        elif note_text not in purpose:
+            entry["purpose"] = _clean_purpose(purpose.rstrip("。；; ") + f"（{note_text}）")
+        if entry.get("kind") != "test-only":
+            changed += 1
+        entry["kind"] = "test-only"
+    product_todo = [
+        str(e.get("name")) for e in entries
+        if e.get("kind") != "test-only" and "TODO" in str(e.get("purpose", ""))
+    ]
+    note = (f"R3b 尾批（ADR-0004 §7.7）：{marked} 条测试/基准夹具 kind=test-only（purpose 允许 TODO-PURPOSE，"
+            f"注明「{note_text}」；不参与 PRODUCTION WIRED 证据要求）；产品开关禁止 TODO-PURPOSE")
+    REGISTRY.write_text(render_registry(entries, note), encoding="utf-8")
+    print(f"mark-test-only: marked={marked} changed={changed} "
+          f"product_TODO_PURPOSE={len(product_todo)}")
+    print(f"table: {_counts_line(entries)}")
+    if product_todo:
+        print(f"FAIL: 产品开关仍有 TODO-PURPOSE: {product_todo}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_stats() -> int:
     committed = scan_env(committed=True)
     working = scan_env(committed=False)
@@ -709,6 +749,8 @@ def cmd_stats() -> int:
     print(f"env names: committed={len(committed)} working_tree={len(working)} "
           f"in_flight={len(set(working) - set(committed))}")
     print(f"registry: {_counts_line(entries)}")
+    print(f"kind: test_only={sum(1 for e in entries if e.get('kind') == 'test-only')} "
+          f"product={sum(1 for e in entries if e.get('kind') != 'test-only')}")
     print(f"wiring: claims={len(claims)}")
     return 0
 
@@ -722,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fill-owners-from-claims", action="store_true",
                         help="R3b：按 claims 证据填 claims 覆盖开关的 owner/purpose")
     parser.add_argument("--fill-layer", default="", help="R3b：按层填实 owner/evidence/purpose/default")
+    parser.add_argument("--mark-test-only", action="store_true",
+                        help="ADR-0004 §7.7：测试/基准夹具标 kind=test-only")
     parser.add_argument("--crosscheck", action="store_true",
                         help="R3c：wiring ↔ claims 交叉校验（默认 report-only；--strict 升 blocking）")
     parser.add_argument("--strict", action="store_true")
@@ -736,6 +780,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_fill_owners()
     if args.fill_layer:
         return cmd_fill_layer(args.fill_layer)
+    if args.mark_test_only:
+        return cmd_mark_test_only()
     if args.gen:
         return cmd_gen()
     if args.verify:

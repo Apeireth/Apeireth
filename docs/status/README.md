@@ -32,6 +32,7 @@ python scripts/wiring_report.py --verify                 # 生成物 drift 检�
 python scripts/wiring_report.py --check-env-registry     # env 登记覆盖/重复/TODO 统计（CI）
 python scripts/wiring_report.py --fill-owners-from-claims  # R3b：按 claims 证据填开关 owner/purpose
 python scripts/wiring_report.py --fill-layer foundation   # R3b：按层填实 owner/evidence/purpose/default
+python scripts/wiring_report.py --mark-test-only          # ADR-0004 §7.7：测试/基准夹具标 kind=test-only
 python scripts/wiring_report.py --crosscheck             # R3c：wiring ↔ claims 四列证据交叉校验（report-only）
 python scripts/wiring_report.py --stats                  # 记分牌：entries / TODO-OWNER / UNCLASSIFIED
 ```
