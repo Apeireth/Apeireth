@@ -1,6 +1,7 @@
 # 0007. R7 上下文/提示/会话单一化
 
-- **Status**: Proposed（架构线草案 2026-10-20；待 owner 裁决后 Accepted 并进 Wave 3 施工）
+- **Status**: **Accepted**（owner 2026-10-20「按建议来」；施工按 R7-1..R7-4 分批）
+- **Owner 裁决（2026-10-20，按建议）**: ①dormant 3 scheduler → **归档**（`RecalibrationScheduler`/`CognitiveQuotaScheduler` 直接归档；`HeartbeatScheduler` 先 R7-1 复核 `HeartbeatProducer` 是否内嵌，内嵌则留 active）；②`PromptCacheStabilizer` → **删除**（无 cache-prefix 稳定性收益证据；要接线另开 ADR）；③`HeartbeatScheduler` 复核结论为"内嵌即 active、否则归档"；④SessionStore 改名 **接受**（`SessionLifecycleStore`/`SessionNoteStore`）。
 - **Date**: 2026-10-20
 - **Depends on**: R2 扩展 ABI（ADR-0008 草案）——**R2 未 Accepted 前不施工**；R7 的 trait/类型收敛需要 R2 的扩展点边界先定
 - **Owners**: 架构线（spec/验收）· 各线实施（分 R7-1..R7-4 批）

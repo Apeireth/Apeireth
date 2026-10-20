@@ -1,6 +1,7 @@
 # 0008. R2 扩展 ABI 统一（Extension ABI / 单注册表 / 单命名）
 
-- **Status**: Proposed（架构线草案 2026-10-20；待 owner 裁决后 Accepted 并进 Wave 3 施工）
+- **Status**: **Accepted**（owner 2026-10-20「按建议来」；施工按 R2-1..R2-5 分批）
+- **Owner 裁决（2026-10-20，按建议）**: ①canonical 名 = **`BehaviorModule`/`BehaviorRegistry`**（迁移后删 alias）；②**批准删除** plugin 重复 `CapabilityRegistry`（并入 `ExtensionDescriptor.capabilities`，保留 PluginManager 内部索引语义）；③R2-4 改名批次 **等生物线当前批收口后**执行；④`PluginManager` **保留原名**（ABI 配置期角色实现名）。
 - **Date**: 2026-10-20
 - **Depends on**: 无（R2 是 R1b/R7 的前置；本 ADR 为它们解锁）
 - **Owners**: 架构线（spec/验收）· 各线实施（R2-1..R2-4 批）
