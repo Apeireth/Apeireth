@@ -413,15 +413,15 @@ per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md:65-67` + v2 治理 runtime:
 
 **HTTP 透传**: 前端 `runtime.ts` 处理 `403 FORBIDDEN` + `409 CONFLICT` → 弹主人审批 UI (companion-desktop 待 R13 接力审后真实施, 估 4-6 周).
 
-### 7.2 13 键降级为哲学标准 (RUNTIME_ENFORCED = false)
+### 7.2 键集（现行 14 键）降级为哲学标准 (RUNTIME_ENFORCED = false)
 
-per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md:64-66`: 13 键降级决策 = `RUNTIME_ENFORCED = false`, **不强制** runtime. 哲学锚 O-5 (不假装) 要求 0 装诚实标 "13 键非强制".
+per `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md:64-66`: 键集（现行 14 键）降级决策 = `RUNTIME_ENFORCED = false`, **不强制** runtime. 哲学锚 O-5 (不假装) 要求 0 装诚实标 "键集（现行 14 键）非强制".
 
 ### 7.3 8 守门 vs Self-Disable 保护
 
-per `docs/04-internal/v2.0.0-release-path.md:55-56`: 工程规范 5 重守门 (clippy / tests / legacy compat / 13 键 LOCKED / 哲学锚表头).（口径注（审计修 B-04）：此处 5 重 = CI 五门，非守门级数；守门级数现值 = 7 重守门 v7，见 ROADMAP §13）
+per `docs/04-internal/v2.0.0-release-path.md:55-56`: 工程规范 5 重守门 (clippy / tests / legacy compat / 键集（现行 14 键） LOCKED / 哲学锚表头).（口径注（审计修 B-04）：此处 5 重 = CI 五门，非守门级数；守门级数现值 = 7 重守门 v7，见 ROADMAP §13）
 
-**Self-Disable**: 真生产时如遇 clippy 失败 / tests 失败 / 13 键泄漏, 系统 self-disable (per 哲学锚 O-1 安全优先).
+**Self-Disable**: 真生产时如遇 clippy 失败 / tests 失败 / 键集（现行 14 键）泄漏, 系统 self-disable (per 哲学锚 O-1 安全优先).
 
 ---
 
@@ -453,7 +453,7 @@ per `docs/04-internal/v2.0.0-release-path.md:30-36`:
 cargo clippy --workspace --all-targets --locked -- -D warnings  # ✅ 0 警告
 cargo test --workspace --locked                                   # ✅ 0 FAILED
 # legacy compat path < 100 引用 (✅)
-# 13 键 LOCKED + 9 哲学锚 + workspace.version 2.0.0-rc.1（2026-08-30 RC1 发布起, per 6b81c210）+ R11 baseline 3 值 0 触碰 (✅)
+# 键集（现行 14 键） LOCKED + 9 哲学锚 + workspace.version 2.0.0-rc.1（2026-08-30 RC1 发布起, per 6b81c210）+ R11 baseline 3 值 0 触碰 (✅)
 # 哲学锚表头 0 减 (✅)
 ```
 

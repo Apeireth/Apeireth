@@ -8,7 +8,7 @@ the product workspace.
 
 | Package | Path | Responsibility |
 | --- | --- | --- |
-| `apeireth-core` | `crates/foundation/core` | 9 哲学锚、13 键判别词汇表、3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 Verdict Cache)、Stable domain primitives, IDs, events, lifecycle, and clock vocabulary |
+| `apeireth-core` | `crates/foundation/core` | 9 哲学锚、键集（现行 14 键）判别词汇表、3 项不可变脊柱 (Self-Disable / L0 HA / 键集（现行 14 键） Verdict Cache)、Stable domain primitives, IDs, events, lifecycle, and clock vocabulary |
 | `apeireth-protocol` | `crates/foundation/protocol` | Canonical normalized requests/results and provider protocol translation |
 | `apeireth-plugin` | `crates/foundation/plugin` | Plugin lifecycle, capability descriptors, registries, and provider/tool contracts |
 | `apeireth-governance` | `crates/foundation/governance` | Allow, deny, approval, OWASP ASI-01 工具描述投毒审计 (`tool_desc_audit`)、外部不可信内容信封包裹与逃逸中和 (`untrusted_mark`)、8 类 PII 检测与 `EnvSecret` 行解析 (`input_security`)、4 阶信任多尺度滑动窗口限流 (`rate_limit`) |
