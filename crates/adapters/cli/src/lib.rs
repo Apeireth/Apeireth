@@ -1556,6 +1556,14 @@ async fn build_canonical_runtime_with_parts(
             Arc::clone(sessions.store()),
         );
     builder = builder.with_governance(Arc::new(preset_governance));
+    // 生物机制族 W3.3: 痛觉评估（默认关；`APEIRETH_ENABLE_BIO_PAIN=1` 才开
+    // 观测记账；只观测不改变错误/重试/错误处理决策，真账见 runtime 侧测试）。
+    if std::env::var("APEIRETH_ENABLE_BIO_PAIN")
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
+    {
+        builder = builder.with_bio_pain(true);
+    }
     // W3-①/③: 注入预组装写闸 (每域恰一把 —— 默认域与域平面共用同一实例,
     // 伙伴域用自己的那一把)。
     builder = builder.with_session_manager(sessions);

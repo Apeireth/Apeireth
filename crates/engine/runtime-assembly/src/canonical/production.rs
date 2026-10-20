@@ -1519,6 +1519,18 @@ impl ProductionModules {
             modules.push(Arc::new(BioAssemblyModule::new(bio_switches)));
         }
 
+        // 生物机制族 W3.3: 调质→tone 的 TurnStart 尾部 overlay 装配点。
+        // `APEIRETH_ENABLE_BIO_TONE` 只认 "1" —— **全关 = 不构造不注册**
+        // （懒加载语义：未启用 = 不构造 = 不注册）。开时构造共享 `ToneState` +
+        // 模块；真实反馈事件源尚未接（状态经 wiring 暴露，由后续批注入），
+        // 所以打开后也只有显式事件才移动档位、基线档仍零 overlay。
+        if let Some(wiring) = super::care_heartbeat::bio_tone::bio_tone_wiring_from_env({
+            let clock = Arc::clone(&clock);
+            Arc::new(move || clock.now().timestamp_millis() as u64)
+        }) {
+            modules.push(wiring.module() as Arc<dyn Module>);
+        }
+
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
             let mut module = MemoryWritebackModule::new(

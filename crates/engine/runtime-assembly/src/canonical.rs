@@ -135,9 +135,9 @@ pub mod upgrade_cycle;
 pub mod voice_quiet;
 
 pub use care_heartbeat::{
-    CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer, CareHeartbeatStatus,
-    CARE_ENABLE_ENV, CARE_HEARTBEAT_ENABLE_ENV, CARE_HEARTBEAT_POLL_INTERVAL_ENV,
-    DEFAULT_CARE_HEARTBEAT_POLL_INTERVAL_SECS,
+    bio_circadian, bio_tone, CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer,
+    CareHeartbeatStatus, CARE_ENABLE_ENV, CARE_HEARTBEAT_ENABLE_ENV,
+    CARE_HEARTBEAT_POLL_INTERVAL_ENV, DEFAULT_CARE_HEARTBEAT_POLL_INTERVAL_SECS,
 };
 pub use care_reminder::{
     guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
