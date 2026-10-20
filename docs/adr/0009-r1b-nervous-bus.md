@@ -179,10 +179,11 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
      publish；care/circadian/play/quorum 的消费面迁移依赖 R1b-3 信号源，不在本批。
 4. **R1b-3 缺失信号源**（生物线；交接单：`docs/architecture/r1b-3-handoff-2026-10-20.md`）
    - ritual / sleep pressure / scar learn / session event source；补不了的保留 NotWired + reason。
-   - 逐源定性：ritual done/skip 接（工具 execute 后 publish + care 候选订阅）；session event 接最小面
-     （桥映射 TurnStart/AfterTurn 回合边界，不含 compaction/masking）；sleep pressure 先取证（模块内
-     自消费则如实 NotWired）；scar learn 倾向如实 NotWired（生产闭环与订阅方都不存在时不硬接）。
-   - 验证：每个信号源有生产 publish 点 + 订阅测试；台账逐行如实；交接单 §4 清单逐项勾。
+   - 主管线复核（2026-10-20）收窄为**零新增信号变体**：ritual 已由 `RitualStateStore` 共享文件打通
+     （工具写盘 → CLI care heartbeat 同拍读盘），只补端到端测试与陈旧注释清理；sleep pressure 为模块内
+     自消费、scar learn 无生产者/订阅者、session event 的真实消费方需 `UncertaintySignal` 而非回合边界
+     ——三者如实保持 `NotWired` + 具体 reason，待真实消费方出现再按"生产者+订阅者同批"原则补批次。
+   - 验证：ritual 端到端测试；台账逐行如实；交接单 §4 清单逐项勾；总线无新增变体。
 5. **R1b-4 收口**（架构线）
    - schema v2（additive）、自述渲染、contract wave_note / handbook / integration-plan 记分牌、
      基线新增文件条目；`docs_truth.py --verify --check`；Wave 4 收口提交。
