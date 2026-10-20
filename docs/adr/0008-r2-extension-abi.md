@@ -8,15 +8,17 @@
 - **例外关联**: 无（纯重命名/删除重复实现；不新增扩展点）
 - **预算净额**: 净删除（plugin 重复 CapabilityRegistry + 命名 alias），无新增结构
 
-## 1. 背景（2026-10-20 实测）
+## 1. 背景（2026-10-20 实测，不沿用 2026-10-18 审计数字）
 
-`contract.toml [extension_points]` 已登记 6 个扩展点面，`[[extension_debt]]` 记录三条债务：
+> 逐项清单（alias 矩阵 / 注册表构造点 / 批次 file-level 范围 / 待 owner 问题）见 [docs/architecture/r2-inventory-2026-10-20.md](../architecture/r2-inventory-2026-10-20.md)。
+
+`contract.toml [extension_points]` 已登记 6 个扩展点面，`[[extension_debt]]` 记录三条债务（证据见下）：
 
 | 债务 | 实测证据（2026-10-20） |
 |---|---|
 | 两套扩展 ABI + 三份注册表 | `pub trait BehaviorModule`（`runtime/src/canonical/module.rs:426`）与 `pub trait Plugin`（`foundation/plugin/src/plugin.rs:72`）；注册表 `PluginManager`（34 处，src 33）、`BehaviorRegistry`（10）、`CapabilityRegistry`（26） |
-| foundation/plugin 内同名 `CapabilityRegistry` | **2 个定义**：`runtime/src/canonical/capability.rs`（canonical，contract 已登记）与 `foundation/plugin/src/registry.rs`（未被生产外部使用） |
-| 命名漂移 | `AgentModule` **75 处**（src 35 文件，alias 无定义行）；`ModuleRegistry` 5 处；canonical 应为 `BehaviorModule` / `BehaviorRegistry` |
+| foundation/plugin 内同名 `CapabilityRegistry` | **2 个定义**：`runtime/src/canonical/capability.rs:49`（canonical，contract 已登记）与 `foundation/plugin/src/registry.rs:122`（**plugin 内部**被 `PluginManager` 用作 id→owner 索引，`manager.rs:32`；外部 0 消费） |
+| 命名漂移 | `AgentModule` 75 处（src **9 文件**；alias 定义 `module.rs:443`）；`ModuleRegistry` 5 处（alias `module.rs:496`）；canonical 应为 `BehaviorModule` / `BehaviorRegistry` |
 
 约束：foundation **不能依赖** engine（`plugin` 是 foundation，`BehaviorRegistry` 在 runtime）→ "物理单注册表"不可行；可行目标是 **单 ABI 家族 + 单命名 + 单 id→owner 索引**，物理注册表按层各一但共享同一套描述/目录契约。
 
