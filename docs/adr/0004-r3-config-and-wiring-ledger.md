@@ -139,3 +139,22 @@ purpose_fragments = 0，且全表 TODO-OWNER/UNCLASSIFIED 不增加。
 - evidence：owner 填实者 0 缺失；架构线跨 5 层抽查 5/5 `路径:行` 真实读取（provider/cli/tools/image/compose/core）。
 - **尾批裁决（一句）**：测试/基准夹具 env 与新字段 `kind = "test-only"` 归一类——`APEIRETH_IMAGE_UNSHARP_*`（7 条，仅 benches/tests 引用）与 `APEIRETH_UNIQ_SECRET_MARKER_12345`（secret-scan 夹具）**允许 `purpose = "TODO-PURPOSE"` 但必须同时 `kind = "test-only"` 并注明"测试/基准夹具，非产品开关"**；产品开关（`kind` 缺省 = `product`）**禁止** TODO-PURPOSE，purpose 必须来自源码文档注释。test-only 条目不参与 PRODUCTION WIRED 证据要求，仍占 entries 计数、不计入四级口径。
 - 后续：R3b 收尾仅剩该裁决落地（效率线一批）；R3c report-only 至 2026-11-03 后按 §7.4/§7.5 再 review 转 blocking。
+
+### 7.8 注释/动态名条目的 evidence 口径裁决（2026-10-20，架构线）
+
+**证据双形态**：
+
+- `direct:`（推荐）——显式 `pub const ... = "NAME"`、`std::env::var("NAME")` 或 env 读取封装处；**产品开关只认 direct**；
+- `scan-only:`（受限）——名称仅出现在注释、`format!` 动态拼接、测试/基准夹具中，无显式独立读取点；
+  仅 `kind = "test-only" | "derived"` 可用，且 `level` 必须 `UNCLASSIFIED`，不参与 PRODUCTION WIRED 证据与四级口径。
+
+**`kind` 枚举**：`product`（缺省）/ `test-only` / `derived`。
+`derived` = 动态前缀或拼接名（如 `APEIRETH_TUNE_`、`APEIRETH_REG_*`）——不是独立开关，purpose 必须注明"动态拼接/非独立开关"。
+
+**棘轮**：`derived` 条数只减；清理二选一——①源码补显式 const 升级为 direct；②确认非开关后删除条目。
+例外：`APEIRETH_TUNE_` 纯前缀**保留为 derived**（`arch_guard` 扫描会产生该名，删条目会让守卫重新报 W3）。
+
+**本批 7 条处理**：`APEIRETH_TUNE_` + 4 条 `APEIRETH_TUNE_*` → `kind="derived"`、evidence 前缀 `scan-only:`；
+`APEIRETH_REG_APEIRETH_CORE_A/B` → `kind="test-only"`、evidence `scan-only:`（测试夹具）。
+
+**`arch_guard` 扫描口径不改**（不为数据形状改规则）；归类由登记表承担，守卫只看"名是否登记"。
