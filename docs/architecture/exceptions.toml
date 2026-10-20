@@ -1,0 +1,31 @@
+# ============================================================================
+# 架构例外登记簿 (Exception Register)
+# ============================================================================
+# 用途: 为"必须暂时违反契约、但已登记且有到期日"的改动留痕。
+# 规则 (推荐值, 待 owner 裁决; 契约 [exceptions] 段为准):
+#   - 结构/方向类 (weight>=10) 不允许走例外, 只能走 ADR 改契约;
+#   - 每波新增例外权重合计 <= per_wave_weight_budget (默认 3);
+#   - 全仓同时活跃例外 <= active_exceptions_max (默认 2);
+#   - 例外最多存活 expiry_waves 波 (默认 2), 到期未清 -> 守卫 strict 直接红;
+#   - 净零: 依赖边/重复概念类"加 1 必须同批删 >=1";
+#   - 发版冻结窗口 (release_freeze) 预算 0。
+# 每条必填: id / fingerprint / weight / owner / reason / created_wave / expires_wave / removal_task。
+# 守卫读取: scripts/arch_guard.py (tomllib), 缺字段/到期/超预算 -> 违规。
+# ============================================================================
+
+version = 1
+updated_at = "2026-10-20"
+
+# 示例 (取消注释并填实后生效):
+# [[exceptions]]
+# id = "EXC-0001"
+# fingerprint = "edge apeireth-cli -> apeireth-orchestration"
+# weight = 3
+# owner = "cli-line"
+# reason = "临时: 装配迁移期需要直接读取 orchestrator 类型"
+# created_wave = 1
+# expires_wave = 3
+# removal_task = "00-backlog#D27 / ADR-0003 §迁移步骤 4"
+# adr = ""                      # weight>=10 时必填 docs/adr/000X-*.md 路径
+
+exceptions = []

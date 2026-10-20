@@ -11,11 +11,13 @@
   流程：
   1) 校验/补齐 GIT_AUTHOR_* / GIT_COMMITTER_*（默认取 -AuthorName/-AuthorEmail 或 git config user.*）；
   2) 对 staged 改动跑 secret-scan（有脚本时）+ check-neutral-terms；
-  3) git -c core.hooksPath=.githooks commit（commit-msg 校验 O-6 三段 + pre-commit 校验 author/LOCKED）。
+  3) 架构守卫 arch_guard（灰度 report-only；-ArchStrict 升格拦截）；
+  4) git -c core.hooksPath=.githooks commit（commit-msg 校验 O-6 三段 + pre-commit 校验 author/LOCKED）。
 
 .USAGE
   pwsh scripts/commit.ps1 -MessageFile $env:TEMP\msg.txt
   pwsh scripts/commit.ps1 -MessageFile msg.txt -AuthorName Mavis -AuthorEmail Mavis@apeireth.local
+  pwsh scripts/commit.ps1 -MessageFile msg.txt -ArchStrict      # 架构守卫违规即阻断
   pwsh scripts/commit.ps1 -MessageFile msg.txt -NoVerify        # 真例外时跳过 hooks（慎用）
   pwsh scripts/commit.ps1 -DryRun -MessageFile msg.txt          # 只打印将执行的动作
 
@@ -27,6 +29,7 @@ param(
     [string]$AuthorName = "",
     [string]$AuthorEmail = "",
     [switch]$NoVerify,
+    [switch]$ArchStrict,
     [switch]$DryRun
 )
 
@@ -57,6 +60,19 @@ if (Test-Path "scripts/check-neutral-terms.ps1") {
     Write-Host "== check-neutral-terms ..."
     pwsh -NoProfile -File scripts/check-neutral-terms.ps1
     if ($LASTEXITCODE -ne 0) { throw "check-neutral-terms failed" }
+}
+
+# 2.5) 架构守卫（灰度 report-only；-ArchStrict 升格拦截）
+#     口径: docs/architecture/README.md / ADR-0001；灰度至 2026-11-03 后默认 strict。
+if (Test-Path "scripts/arch_guard.py") {
+    Write-Host "== arch_guard ..."
+    $archMode = if ($ArchStrict) { "--strict" } else { "--report" }
+    python scripts/arch_guard.py $archMode
+    $archExit = $LASTEXITCODE
+    if ($archExit -ne 0) {
+        if ($ArchStrict) { throw "arch_guard failed (exit=$archExit; see logs/arch-guard.log)" }
+        Write-Warning "arch_guard 报告问题（灰度期不阻断；见 logs/arch-guard.log）。可用 -ArchStrict 升格拦截。"
+    }
 }
 
 # 3) commit（按次启用 hooks）

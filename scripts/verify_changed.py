@@ -11,11 +11,13 @@
   python scripts/verify_changed.py --base origin/main                 # 按 base..HEAD 的 diff
   python scripts/verify_changed.py --files crates/engine/core/src/lib.rs  # 显式指定（测试/手动）
   python scripts/verify_changed.py --log logs/fast-gate.log           # 输出落盘（默认 logs/）
+  python scripts/verify_changed.py --arch-strict                      # 架构守卫违规即失败（默认仅报告）
 
 口径:
 - 改动 .rs 映射到最近 Cargo.toml 所属 crate；Cargo.toml/Lock 改动 = 全 workspace。
 - 受影响 = 改动 crate + 传递闭包（反向依赖）——依赖方的测试可能暴露接口破坏。
 - test 优先 `cargo nextest run`（per-test 超时/并行/机器可读），无 nextest 回退 `cargo test`。
+- arch_guard（架构契约守卫）先跑：默认 report-only，`--arch-strict` 升格拦截；详见 docs/architecture/。
 - 退出码 = 任一阶段失败即 1；日志全量保留在 --log 指向文件。
 """
 
@@ -127,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-clippy", action="store_true")
     parser.add_argument("--no-test", action="store_true")
     parser.add_argument("--no-check", action="store_true")
+    parser.add_argument("--no-arch", action="store_true", help="跳过架构守卫（arch_guard）")
+    parser.add_argument("--arch-strict", action="store_true", help="arch_guard 违规即失败（默认仅报告）")
     parser.add_argument("--log", default=str(DEFAULT_LOG))
     args = parser.parse_args(argv)
 
@@ -137,6 +141,21 @@ def main(argv: list[str] | None = None) -> int:
     log_path.write_text(f"verify_changed run: {time.strftime('%Y-%m-%d %H:%M:%S')}\n", encoding="utf-8")
 
     files = changed_files(args.base, args.files)
+
+    # 架构守卫（arch_guard）：默认 report-only；--arch-strict 升格拦截。
+    # 放在 Rust 过滤之前——契约/文档批同样需要架构检查（contract.toml 是代码之外的架构真源）。
+    if not args.no_arch:
+        print("== arch_guard ... ", end="", flush=True)
+        arch_mode = "--strict" if args.arch_strict else "--report"
+        code = _run([sys.executable, "scripts/arch_guard.py", arch_mode], log_path)
+        if code == 0:
+            print("OK")
+        else:
+            print(f"WARN(exit={code})")
+            if args.arch_strict:
+                print("FAST GATE FAILED: arch_guard（详见日志）")
+                return 1
+
     rust_files = [f for f in files if f.endswith((".rs", ".toml"))]
     if not rust_files:
         print(f"no Rust/Toml changes ({len(files)} files changed) — docs-only; run doc gates instead.")

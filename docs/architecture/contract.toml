@@ -1,0 +1,194 @@
+# ============================================================================
+# Apeireth 架构契约（Architecture Contract）— 唯一可执行真源
+# ============================================================================
+# 状态: v0.1 草案 (2026-10-20, 待 owner 裁决后转 adjudicated)
+# 读取者: scripts/arch_guard.py (CI / fast gate / 本地提交前)
+#
+# 原则:
+#   1. 本文件是可执行契约, 不是叙事文档。叙事由 contract -> README/ARCHITECTURE 生成。
+#   2. accepted-current = 2026-10-20 实测接受现状 (≠ 目标); target = 待 owner 裁决。
+#   3. 棘轮: 允许集合只减不增; 新增依赖边/开关/结构必须 ADR + 本文件变更。
+#   4. 不替代、不修改 LOCKED 5 项; 与 LOCKED 冲突时以 LOCKED 为准。
+#
+# 0 装边界 (2026-10-20 实测来源):
+#   - 依赖边: cargo metadata --no-deps (kind != dev) = 118 条生产边
+#   - 开关名: `rg -o 'APEIRETH_[A-Z0-9_]+' crates --glob '*.rs'` = 158 distinct
+#   - 最大 src 文件: 实测 ~6150 行 (crates/capabilities/tools/src/doc_ops.rs)
+# ============================================================================
+
+[meta]
+version = "1.0"
+updated_at = "2026-10-20"
+status = "adjudicated"            # 规则体系已裁决生效（ADR-0001）
+status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；target 条款逐项 TODO-OWNER；架构改动按 owner 指示暂缓（2026-10-20）"
+adjudication = "owner 授权代裁 2026-10-20（'你了解项目全貌做出判断就行'）；决策记录见 docs/adr/0001-adopt-architecture-contract.md"
+current_wave = 1                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
+wave_note = "Wave 1 = 契约规则落地批 (纯新增+3 处小改, 0 源码改动, 0 LOCKED 触碰; 例外预算按 ADR-0001 定稿)"
+rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
+
+[workspace]
+members = 31
+product_crates = 30
+bench_crates = 1
+version = "2.0.0-rc.4"
+test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
+
+[locked]
+# 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
+nine_anchors = "crates/foundation/core/src/eight_anchors.rs"
+keys_file = "crates/foundation/core/src/philosophy.rs"
+spine_file = "crates/foundation/core/src/onion.rs"
+workspace_version_source = "Cargo.toml"
+r11_baseline = "legacy/ (历史归档, 只引用, 不改)"
+# 0 装注记: 现行为 14 键 (PHL-01..08, philosophy.rs:107-128/159-198),
+# "13 键"表述漂移待 owner 修正 (架构体检 P0-①)。
+
+[layers]
+foundation = [
+  "apeireth-core", "apeireth-protocol", "apeireth-plugin",
+  "apeireth-governance", "apeireth-credentials", "apeireth-orchestration",
+]
+engine = [
+  "apeireth-runtime", "apeireth-runtime-assembly", "apeireth-provider",
+  "apeireth-storage", "apeireth-memory", "apeireth-perception",
+  "apeireth-organ", "apeireth-guard",
+]
+capabilities = ["apeireth-tools-canonical"]
+adapters = ["apeireth-gateway", "apeireth-cli", "apeireth-sdk", "apeireth-tui"]
+image_family = [
+  "apeireth-image-core", "apeireth-image-algo", "apeireth-image-cms",
+  "apeireth-image-codecs", "apeireth-image-color", "apeireth-image-compose",
+  "apeireth-image-doc", "apeireth-image-geom", "apeireth-image-psd",
+  "apeireth-image-raster", "apeireth-image-vector",
+]
+bench = ["apeireth-bench-harness"]
+
+[deps]
+# 层方向允许表 (现状接受, 2026-10-20 实测)。新增层边必须先过 ADR 并改本表。
+allowed_layer_edges = [
+  "foundation->foundation",
+  "engine->foundation", "engine->engine", "engine->capabilities",
+  "capabilities->foundation", "capabilities->engine", "capabilities->image_family",
+  "adapters->foundation", "adapters->engine", "adapters->capabilities", "adapters->adapters",
+  "image_family->image_family",
+  "bench->*",
+]
+forbid_production_cycles = true
+forbid_dev_cycles = true
+
+# 现状已知异常边 (实测存在; 不是"允许新增"的许可, 是待裁决债务)。
+[[flagged_edges]]
+from = "apeireth-tools-canonical"
+to = "apeireth-image-core"
+why = "capabilities->engine(image_family): image_ops 直连引擎级创作内核"
+target = "TODO-OWNER: 注册为引擎服务/迁能力边, 或 ADR 确认永久例外"
+
+[[flagged_edges]]
+from = "apeireth-gateway"
+to = "apeireth-sdk"
+why = "adapter->adapter: gateway 复用 sdk::im 类型"
+target = "TODO-OWNER: IM 类型下沉 protocol/tools"
+
+[[flagged_edges]]
+from = "apeireth-plugin"
+to = "apeireth-orchestration"
+why = "foundation 内反向依赖: LlmFactory/SubagentRole mirror (llm_orchestration_mirror.rs 自认反向依赖成环)"
+target = "TODO-OWNER: 删除 mirror, 契约下沉 plugin 或 protocol"
+
+# 现役装配根 (允许多个但必须登记; 目标收敛到 runtime-assembly + 薄适配器)。
+[[composition_roots]]
+crate = "apeireth-runtime-assembly"
+file = "src/canonical/production.rs"
+role = "目标装配根 (保留)"
+
+[[composition_roots]]
+crate = "apeireth-cli"
+file = "src/lib.rs"
+role = "CLI 引导 (目标: 只做参数/输入输出, 装配迁回 assembly)"
+
+[[composition_roots]]
+crate = "apeireth-gateway"
+file = "src/canonical_entry.rs"
+role = "Gateway 引导 (目标同上)"
+
+[extension_points]
+# 唯一扩展点登记。新增能力必须复用其一; 新增扩展点/注册表 = 结构变更, 必须 ADR。
+module_trait = "crates/engine/runtime/src/canonical/module.rs::BehaviorModule (alias AgentModule)"
+plugin_trait = "crates/foundation/plugin/src/plugin.rs::Plugin"
+module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry (alias ModuleRegistry)"
+capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
+plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
+sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
+
+# 已登记技术债 (目标: 收敛为一套 Extension ABI / 一个注册表 / 一套命名)。
+[[extension_debt]]
+item = "两套扩展 ABI (Plugin / BehaviorModule) 与三份注册表 (PluginManager / BehaviorRegistry / CapabilityRegistry)"
+target = "TODO-OWNER: R2 扩展 ABI 统一"
+
+[[extension_debt]]
+item = "foundation/plugin 内同名 CapabilityRegistry (id->owner 索引) 未被生产外部使用"
+target = "TODO-OWNER: 删除或并入唯一注册表"
+
+[[extension_debt]]
+item = "命名漂移: Module / BehaviorModule / AgentModule / ModuleRegistry / BehaviorRegistry"
+target = "TODO-OWNER: 统一命名 (一个概念一个名字)"
+
+# 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
+[[concepts]]
+name = "ContextAssembler"
+canonical = "crates/foundation/orchestration/src/context_budget.rs"
+known_debt = ["crates/engine/organ/src/context_assembly.rs"]
+target = "TODO-OWNER: R7 上下文组装单一化"
+
+[[concepts]]
+name = "ContextBlock"
+canonical = "crates/foundation/orchestration/src/context_budget.rs"
+known_debt = ["crates/engine/organ/src/context_assembly.rs"]
+target = "TODO-OWNER: R7"
+
+[[concepts]]
+name = "CapabilityRegistry"
+canonical = "crates/engine/runtime/src/canonical/capability.rs"
+known_debt = ["crates/foundation/plugin/src/registry.rs"]
+target = "TODO-OWNER: R2"
+
+[env]
+# 开关登记: 新增 APEIRETH_* 开关必须登记 (owner/默认/层级/用途) 否则守卫红。
+# 扫描口径: workspace 包 src/**/*.rs (guard 实测 154 distinct, 2026-10-20);
+#           `rg` 全 crates 含 tests 为 158 distinct —— 守卫只按 src 计, 两口径不混用。
+# 逐条登记字段迁移见 R3。
+policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
+max_distinct_names = 160            # 棘轮: 只减不增（按 src 口径）
+baseline_file = "scripts/arch-baseline.txt"
+# 目标: env 读取收敛到 config 模块; 现状散在 148 文件 (基线登记, 只减不增)。
+allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置卡
+
+[budgets]
+max_file_loc = 6300                 # 现状最大 src ~6150 (doc_ops.rs); 只减不增
+max_workspace_crates = 31           # 目标: 图像家族移出后 20; 只减不增
+max_production_edges = 118          # 2026-10-20 实测; 只减不增 (新增需 ADR)
+
+[exceptions]
+# 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)
+status = "accepted (ADR-0001)"
+unit = "weight"                    # 按权重分计量，不按条数（避免小额噪音吃配额）
+weights = { size = 1, doc = 1, edge = 3, duplicate = 3, env = 3, direction = 10, structural = 10 }
+default_budget_weight = 0          # 结构/方向类默认 0
+structural_budget_weight = 0       # W10 结构/方向违规永远不走例外，只能 ADR 改契约
+per_wave_weight_budget = 3         # 每波新增例外权重上限（W3 最多 1 条 / W1 最多 3 条）
+active_exceptions_max = 2          # 全仓同时活跃例外上限
+expiry_waves = 2                   # 例外存活上限（波）
+net_zero = true                    # 加 1 必须同批删 >=1
+net_zero_scope = ["edge", "duplicate"]          # 依赖边 / 重复概念；env/尺寸不适用净零
+env_net_zero_exempt = "新增 env 名需登记（默认关+零变化测试），不要求净零；未登记即 W3 违规"
+release_freeze_budget = 0          # 发版冻结窗口预算 0
+release_freeze_note = "冻结窗口由 release authority 置 release_freeze=true；已有例外须在 tag 前清零"
+override_max_active = 1            # owner 特批同时活跃上限
+override_scope = "仅 P0 安全/修复；不适用结构类；不占每波权重，占活跃上限"
+extend_policy = "不允许自动续期：延期=新开一条+删旧条，占新波预算"
+fingerprint_drift_policy = "违规形态变化视为新例外，重新登记"
+baseline_update_policy = "仅架构波收口评审由 lead 执行；CI 校验 baseline diff 只减不增"
+approval_policy = { structural = "owner", debt = "engineering-lead", size_doc = "arch_guard-auto" }
+strict_requires_adr_above_weight = 10
+register_file = "docs/architecture/exceptions.toml"
+release_freeze = false              # release authority 在冻结窗口置 true
