@@ -34,10 +34,10 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | Wave 4 已落 | **R7-2.1**：`ContextAssembler` 单一管线（orchestration 唯一实现 + organ 策略桥，concept known_debt 清零，`c8cb34a4`）；**R1b-1a**：神经信号总线内核/唯一钩子桥/开关单入口（`10ec68ae`，默认关、生产暂无订阅者）；**R1b-1b**：生物开关读取收敛到装配根单入口 + 台账 4 行更正 + 3 条结构校验（`6837d9b7`，默认关零行为变化） |
 | Wave 3 已落 | **R7**：`ContextBlock` 单一化（R7-2a `0bdd9bb4` / R7-2b `a93fdbb3`）、`SessionStore` 三义→`SessionLifecycleStore`/`SessionNoteStore`（R7-3 `1cbaee95`/`3c0bcde1`）、dormant scheduler 归档（R7-4b，含 bench 同步 `2481200b`）、`PromptCacheStabilizer` 删除（R7-4a `51bb6cfa`）、Heartbeat 复核保留 active（`b36ee05e`）；**R2**：Extension ABI 家族（R2-2 `56ae816b`）、PluginManager/BehaviorRegistry 双 catalog（R2-3a/b `911e2f49`/`b5f75ba9`）、plugin 内部索引 `CapabilityIndex`（`d8aa87af`）、命名迁移 BehaviorModule/BehaviorRegistry（R2-4 `efcce6c4`） |
 | 待 owner 裁决 | **无**（Wave 4 已授权 m01750；R4b / 14 键 / R7 / R2 / R1b 均已裁决） |
-| 在途违规（灰度期不阻断） | 无新增在途违规；`arch_guard --report` VIOLATIONS 1 = 已知 `[W1] size-grow cognitive.rs 4757→4763`（R7-2.1 导入 +2 行 + R1b-1b from_flags +4 行，Wave 4 收口重钉基线；灰度期 report-only 如实披露）；STALE 1 = `size play_tools.rs 1414`（R1b-1b 删行后变小，收口缩表） |
+| 在途违规（灰度期不阻断） | 无未登记在途违规；`arch_guard --report` VIOLATIONS 0 / exceptions=1：`EXC-0002`（`size-grow cognitive.rs 4757→4763`，weight=1，created_wave=4，expires_wave=6；R7-2.1 导入 +2 + R1b-1b from_flags +4，到期前真实拆分清偿；守卫已抑制并输出 NOTE）；STALE 1 = `size play_tools.rs 1414`（R1b-1b 删行后变小，收口缩表） |
 | 效率线 R3a 现状 | `env-registry.toml` 155 条；R3b foundation 批验收（ADR-0004 §7.6）；R3c report-only 至 2026-11-03 后 review |
 | 基线 | `scripts/arch-baseline.txt`（Wave 3 收口缩表：删失效条目 3 条 + 尺寸缩 1 条；只减不增） |
-| 已登记的已知债务 | `contract.toml [flagged_edges]` 3 条；`[extension_debt]` **0**（R2 收口清零）；`[concepts].known_debt` **0 组**（R7-2.1 `c8cb34a4` 已合并） |
+| 已登记的已知债务 | `contract.toml [flagged_edges]` 3 条；`[extension_debt]` **0**（R2 收口清零）；`[concepts].known_debt` **0 组**（R7-2.1 `c8cb34a4` 已合并）；`exceptions.toml` 活跃例外 **1** 条（`EXC-0002` size 类 weight=1） |
 | 未完成项 | Wave 4+：R1b-2 机制迁移（生物线，待其 WIP 收口后交接；R1b-1b 已完成）/ R1b-3 缺失信号源；R8 实施（spec Accepted ADR-0010，安全线） / R6 验证架构实施 R6-A..D（spec Accepted ADR-0011，效率线） / R5 取消可恢复 worker；R3c（2026-11-03 后）；R4a-2 条件性 workspace 提取（owner 触发，当前建议不触发） |
 
 ## 4. 每波收口 SOP（架构线主持）
@@ -106,3 +106,4 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 2026-10-20 | **Wave 4 波中交付**：R7-2.1 `ContextAssembler` 单一管线（orchestration 唯一实现 + organ 策略桥，concept known_debt 清零）；R1b-1a 神经信号总线内核 + 唯一钩子桥 + 开关单入口 + 装配根接线（默认关、生产暂无订阅者）；已知 W1 待收口重钉 | `c8cb34a4` / `10ec68ae` |
 | 2026-10-20 | 波中事故与修复：R2-3c 漏检（Debug impl 调 `PluginManager::capabilities()`）由全 workspace check 暴露并修复 `ae1f8779`；R7-4b-2 归档 scheduler 后 bench 未同步（E0432）→ bench 归档 `2481200b`；两起均记入 r2-/r7-inventory §7 教训（0 调用结论必须编译兜底；跨目标漏检） | `ae1f8779` / `2481200b` |
 | 2026-10-20 | **R1b-1b 交付**：生物开关读取收敛到装配根单入口（删除 6 个 env 读取构造，4 个安装函数收 `NervousSwitchboard`/显式 bool；CLI 侧读取点如实保留待 R1b-2/3）；台账 4 行漂移更正（SG-18/SG-25 → PRODUCTION WIRED、SG-22 ritual_producer → Wired、SG-26 缺口实况）+ 3 条结构校验单测；lib 277 passed、62 测试目标全绿、clippy/fmt 绿；已知 W1 更新为 cognitive 4757→4763、新增 STALE 1（play_tools 1414）留收口 | `6837d9b7` |
+| 2026-10-20 | **EXC-0002 登记**：R7-2.1 + R1b-1b 引入的 `cognitive.rs` 尺寸增长（4757→4763，+6 行）按 ADR-0001 走 size 类例外（weight=1，created_wave=4，expires_wave=6，owner=architecture-line），不改基线（只减不增原则未破）；守卫输出 VIOLATIONS 0 + 抑制 NOTE；清偿任务 = 收口期把开关构造迁出 cognitive.rs | `docs/architecture/exceptions.toml` |
