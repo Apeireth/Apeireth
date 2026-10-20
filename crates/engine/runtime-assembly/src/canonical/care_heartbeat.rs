@@ -51,6 +51,19 @@
 //! 已在常驻宿主接线 (cli 组合根 `care_heartbeat` 模块, 2026-10-17 随行);
 //! 本面仍不自带闸、不自带回合执行权 (组装根注入, 同源不二闸)。
 
+// 生物机制族 W3.3 新增装配面 (调质 → 语气 / 节律门)。
+//
+// 本批禁改 `canonical.rs` (另有 agent 占用, 注册由 Lead 后续做), 因此两个新文件先挂在
+// 本模块下编译, 对外路径 = `canonical::care_heartbeat::{bio_tone, bio_circadian}`。
+// **Lead 注册时二选一, 勿重复声明**:
+// ① 在 `canonical.rs` 写 `pub use care_heartbeat::{bio_circadian, bio_tone};` (不重复
+//    编译, 推荐); 或
+// ② 把下面两行 `#[path]` 声明迁到 `canonical.rs` 并删除这里的两行。
+#[path = "bio_circadian.rs"]
+pub mod bio_circadian;
+#[path = "bio_tone.rs"]
+pub mod bio_tone;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -60,6 +73,7 @@ use apeireth_runtime::canonical::heartbeat::{
     HeartbeatProducerConfig,
 };
 
+use self::bio_circadian::{BioCircadianDecision, BioCircadianGate};
 use super::care_reminder::{
     bio_care_candidates, bio_care_candidates_enabled_from_env_value,
     bio_care_config_from_env_value, BioCareInputs, NoBioCareInputs, BIO_CARE_CANDIDATES_ENABLE_ENV,
@@ -247,6 +261,10 @@ pub struct CareHeartbeatStatus {
 ///
 /// 消费顺序 (固定, 防唠叨):
 ///
+/// 0. 节律门 (W3.3, 默认关: 未注入 [`BioCircadianGate`] = 与旧行为一致):
+///    开关开且门不许 (`QuietHours` / `RestWindow` / `ConsolidationDue`) → 直接
+///    `Quiet`, 规则/提醒/生物候选一拍都不读; 门决策留在 gate 观测字段, 用于区分
+///    「未到点」与「被节律门拦下」;
 /// 1. 规则轮询 [`CareEngine::poll`];
 /// 2. 提醒侧 (K 轴 L2/L5 同源接缝): 逐源消费天气提醒信号 / 守护告警;
 /// 3. 生物机制候选 (W3.2, 默认关: 未注入 [`BioCarePoll`] = 与旧行为一致):
@@ -257,6 +275,7 @@ pub struct CareHeartbeatPoll {
     engine: CareEngine,
     reminders: Vec<Arc<dyn ReminderFeed>>,
     bio_care: Option<BioCarePoll>,
+    circadian: Option<BioCircadianGate>,
 }
 
 impl CareHeartbeatPoll {
@@ -266,6 +285,7 @@ impl CareHeartbeatPoll {
             engine,
             reminders: Vec::new(),
             bio_care: None,
+            circadian: None,
         }
     }
 
@@ -283,6 +303,27 @@ impl CareHeartbeatPoll {
     pub fn with_bio_care(mut self, bio_care: BioCarePoll) -> Self {
         self.bio_care = Some(bio_care);
         self
+    }
+
+    /// 注入节律门 (W3.3; 未注入 = 旧行为)。
+    ///
+    /// 开关是第二道门: gate 自身 `enabled = false` 时 [`BioCircadianGate::decide`]
+    /// 返回 `Disabled` 且不读时钟, poll 继续走原逻辑 (逐字节不变)。
+    #[must_use]
+    pub fn with_circadian_gate(mut self, gate: BioCircadianGate) -> Self {
+        self.circadian = Some(gate);
+        self
+    }
+
+    /// 最近一次节律门决策 (观测口: 心跳 `Quiet` 时区分「未到点」与「被节律门拦下」)。
+    ///
+    /// `None` = 未注入节律门或尚未 poll; `Some(Allowed)` + `Quiet` = 门放行但无到点
+    /// 候选; `Some(Suppressed(gate))` + `Quiet` = 被节律门拦下 (具体档位可读)。
+    #[must_use]
+    pub fn circadian_decision(&self) -> Option<BioCircadianDecision> {
+        self.circadian
+            .as_ref()
+            .and_then(BioCircadianGate::last_decision)
     }
 
     /// 内核本体 (喂交互观察等进程内值的入口)。
@@ -320,6 +361,15 @@ fn bio_care_tick(
 
 impl HeartbeatPoll for CareHeartbeatPoll {
     fn poll(&mut self) -> Result<HeartbeatPollOutcome, String> {
+        // 节律门 (W3.3, 默认关): 最前咨询 —— 开关关 = 不读时钟零变化; 开关开且门
+        // 不许 = 直接 Quiet (不新增 outcome 类型), 规则/提醒/生物候选一拍都不读。
+        // 「未到点」与「被节律门拦下」都是 Quiet, 区分靠 gate 的 last_decision
+        // 观测字段 (`Allowed` vs `Suppressed(_)`, 见 circadian_decision())。
+        if let Some(gate) = self.circadian.as_mut() {
+            if gate.decide().is_suppressed() {
+                return Ok(HeartbeatPollOutcome::Quiet);
+            }
+        }
         match self.engine.poll() {
             Ok(CarePoll::Initiating(initiative)) => {
                 return Ok(HeartbeatPollOutcome::Initiate {
