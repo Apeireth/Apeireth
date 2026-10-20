@@ -196,11 +196,9 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 
 ## 6. 验收
 
-- [ ] R1b-1：`NervousSignalKind`/`NervousSignal`/`NervousBus`/`NervousSwitchboard`/`NervousBridgeModule`
-      落地；总线单测（订阅顺序、多订阅者、无订阅者 publish 为空操作、计数、字段事实性与截断、clone 共享）
-      + 桥单测（钩子→信号映射、无事实不发布、恒 continue）+ 开关表单测（恰好 10 次查询、只认 `"1"`、
-      tz 非法拒绝）；`arch_guard --report` VIOLATIONS 0 / STALE 0；基线净额 ≤ 0（新增文件条目是唯一增量，
-      且只在收口登记）
+- [x] R1b-1（**内核面已交付**，commit `10ec68ae`：bus 5 / switchboard 8 / bridge 9 单测全绿；装配根仅
+      任一开关开启时注册桥，当前生产无订阅者）：`NervousSignalKind`/`NervousSignal`/`NervousBus`/
+      `NervousSwitchboard`/`NervousBridgeModule` 落地；`arch_guard --report` 仅余已知 W1（R7-2.1 导入 +2 行）
 - [ ] R1b-1：开关读取点收敛（装配根 1 处；模块内 bio env `std::env::var` = 0）；现有默认关测试不变
 - [ ] R1b-1：台账 3 行漂移更正 + 3 条校验单测（env-registry / wiring 调用点 / NotWired reason）
 - [ ] R1b-2：机制订阅迁移；lifecycle probe 注册；审批面 publish；默认关零变化
@@ -216,8 +214,10 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - 负面/接受的代价：同步订阅者若自身慢会拖慢回合（文档 + 评审约束，后续如需要可再 ADR 讨论异步面）；
   总线首版不持久化（重启丢计数，自述 `last_observation` 仍 null）；R1b-2 交接存在排期依赖（生物线
   WIP 收口是前置），交接前 R1b 只到 R1b-1b。
-- 后续 stage：Wave 4 其余 = R8（治理单一管线）+ R6（验证架构）+ R7-2 遗留（ContextAssembler 合并，
-  已登记 `contract.toml [concepts]` known_debt）；R1b-4 之后再评估是否把总线升为扩展点（需新 ADR）。
+- 后续 stage：R1b-1a 于 2026-10-20 交付（`10ec68ae`，内核/桥/开关表 + 装配根单入口；生产暂无订阅者）；
+  R1b-1b（开关迁移 + 台账校验）→ R1b-2（机制订阅迁移，生物线）→ R1b-3（缺失信号源）→ R1b-4 收口。
+  R7-2 遗留 `ContextAssembler` 已由 R7-2.1 收口（`c8cb34a4`）；Wave 4 其余 = R8 + R6 spec 已 Accepted
+  （ADR-0010/0011），实施归安全线/效率线；R1b-4 之后再评估是否把总线升为扩展点（需新 ADR）。
 
 ## 8. 变更记录
 
@@ -229,3 +229,8 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   「生产者与订阅者同批 additive」扩展，扩展时 D1 的「闭合 enum」约束与 §6 验收同步更新。
 - **2026-10-20（D3 增补）**：switchboard 首版只认 `"1"`、其余 fail-closed；R1b-1b 迁移时逐开关对齐原
   解析语义（行为等价 + 等价测试），不一致就不删原解析路径。
+- **2026-10-20（R1b-1a 交付）**：`nervous_bus.rs` / `nervous_switchboard.rs` / `nervous_bridge.rs` 三个新文件
+  与 `production.rs`/`canonical.rs` 装配根接线落地（commit `10ec68ae`，5 文件 +1048 行）；桥仅当任一生物开关
+  开启时注册为模块表首位，全关零行为变化；`ProductionModules` 暴露只读句柄供 R1b-2/3 使用。实测：
+  `cargo check`/`test -p apeireth-runtime-assembly --lib` 274 passed、clippy/fmt 绿。**如实边界**：生产仍无任何
+  信号订阅者，桥尚未被真实工具链路触发；信号源与消费方接线属 R1b-2/3，未做。

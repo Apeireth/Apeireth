@@ -80,3 +80,28 @@
 - **基线 STALE**：`concept ContextBlock crates/engine/organ/src/context_assembly.rs` 已失效（定义迁走）——
   Wave 3 收口缩表时删除该行；`size crates/foundation/orchestration/src/lib.rs 1432` 同为收口缩表候选
   （R7-4 删代码引起，非本次改动）。
+
+## 8. R7-2.1 执行结果（2026-10-20，已落地）
+
+**R7-2.1**（commit `c8cb34a4`）：ADR-0007 §2.1 遗留项收口——`ContextAssembler` 单一化。
+
+- foundation/orchestration `context_budget.rs` 成为唯一装配管线：新增 `AssemblyPolicyHook`
+  （默认恒等的 `effective_budget_chars` / `max_non_core_layers` / `fold_non_core`），管线为
+  cap → fold → 非 core 降序贪心切 → spill；无钩子时输出与旧管线逐字节一致。
+- engine/organ `context_assembly.rs` 删本地 `ContextAssembler` 实现与 `assemble_budgeted_blocks_raw`
+  （约 148 行），改 `#[doc(inline)] pub use` 单一实现 + `OrganAssemblyPolicy`（tiered policy→钩子）+
+  `ContextAssemblerPolicyExt::with_policy`（调用形状 `with_policy(policy)` 不变）；`lib.rs` 导出面同步。
+- `runtime-assembly/canonical/cognitive.rs` 补 `ContextAssemblerPolicyExt` 导入（调用点 :2919）。
+- `docs/architecture/contract.toml`：`[[concepts]].ContextAssembler` canonical 从 organ 改指
+  orchestration，`known_debt = []`（重复概念债务清零）。
+
+**验收（实测，2026-10-20，HEAD 207b3e02 工作树）**：
+
+- `cargo test -p apeireth-orchestration -p apeireth-organ --lib --locked` = 440 / 377 passed、0 failed
+  （含新增 4 条钩子测试与既有管线 golden 测试）；
+- `cargo test -p apeireth-runtime-assembly --lib --locked` = 274 passed / 0 failed（含 R1b-1a 新模块）；
+- `cargo clippy -p apeireth-orchestration -p apeireth-organ -p apeireth-runtime-assembly --lib
+  -- -D warnings` exit 0；`cargo fmt --check` 0 diff；
+- `python scripts/arch_guard.py --report`：VIOLATIONS 1 = 已知 `[W1] size-grow
+  crates/engine/runtime-assembly/src/canonical/cognitive.rs 4757 -> 4759`（导入多行 +2；Wave 4 收口
+  按实测重钉基线，灰度期 report-only 如实披露）；concept W10 随 canonical 改指清零。

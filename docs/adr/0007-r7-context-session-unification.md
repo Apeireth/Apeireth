@@ -77,10 +77,11 @@ ADR-0002 R7 目标："`ContextAssembler`/`ContextBlock`/`assemble_tiered` 各收
 | R7-1 | 活跃面/消费点清单（不改码） | `15ddffd4` | 每项文件:行证据入 [r7-inventory](../architecture/r7-inventory-2026-10-20.md) |
 | R7-2a | organ 删自有 `ContextBlock`，改再导出 orchestration canonical | `0bdd9bb4` | `pub struct ContextBlock` 定义=1；organ lib 377 passed；clippy/fmt 绿 |
 | R7-2b | 删 runtime `ContextBlock` 再导出，调用方直连 canonical | `a93fdbb3` | runtime/tests/context_budget 7 passed；cli production_knobs 22 passed；旧路径引用 0 |
+| R7-2.1 | `ContextAssembler` 单一管线（orchestration 唯一实现 + organ 策略桥），concept known_debt 清零 | `c8cb34a4` | orchestration 440 / organ 377 / runtime-assembly 274 passed；clippy/fmt 绿；`arch_guard` 仅余已知 W1 |
 | R7-3 | `SessionStore` 三义→`SessionLifecycleStore`/`SessionNoteStore` | `1cbaee95` / `3c0bcde1` | memory 846 passed / 1 ignored；`memory::SessionStore` 引用 0 |
 | R7-4a | `PromptCacheStabilizer` 孤岛归档 | `51bb6cfa` | legacy/archived + MANIFEST；orchestration 绿；残留仅注释 3 处 |
 | R7-4b-1 | `RecalibrationScheduler` 归档 | `14c0e9a0` | memory 846 passed / 1 ignored |
 | R7-4b-2 | `CognitiveQuotaScheduler` 归档（含 bench 同步） | `d5a4c537` / `2481200b` | orchestration 436 passed；bench harness check exit 0 |
 | 复核 | `HeartbeatScheduler` 内嵌 `HeartbeatProducer` → active 保留（不归档） | `b36ee05e` | heartbeat.rs:268/:284/:310/:359 证据 |
 
-**遗留**：`ContextAssembler` 两个实现（organ tiered policy / orchestration budget+spill）语义不同，ADR §2.1 的单一装配器合并留 Wave 4 债（contract concepts known_debt）；本 ADR 验收范围仅类型/命名/调度面收敛。
+**遗留已收口**：`ContextAssembler` 两个实现已于 **R7-2.1（Wave 4，2026-10-20，commit `c8cb34a4`）**合并——orchestration `context_budget.rs` 为唯一装配管线（`AssemblyPolicyHook` 策略钩子：预算收紧/非 core 层数/非 core 折叠），organ 只保留 `OrganAssemblyPolicy` 策略桥与 `ContextAssemblerPolicyExt::with_policy` 调用形状；`contract.toml [[concepts]].ContextAssembler` canonical 改指 orchestration、known_debt 清零。ADR-0007 §2.1 遗留债**清零**。
