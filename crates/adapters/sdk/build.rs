@@ -17,9 +17,10 @@ fn main() {
     let header_path = crate_dir.join("apeireth_sdk.h");
 
     // cbindgen 标准 Builder API (不用 Config struct 的 file 形式, 0 触碰 private field)
-    // CI fix 2026-08: R146 合并后 crate 含 lark/livekit/sandbox/voice 子模块,
+    // CI fix 2026-08: R146 合并后 crate 曾含 lark/livekit/sandbox/voice 子模块,
     // cbindgen 0.29 解析全模块树会撞子模块语法 (ParseSyntaxError) → 用 parse.include
     // 只解析 c.rs (C-ABI 5 fn 所在), 0 触碰其余模块.
+    // 2026-10-20 R4b: 四岛已归档, include 白名单保留 (防后续子模块回潮再撞同一坑)。
     let mut config = cbindgen::Config::default();
     // include 相对 crate root 的 glob (src/c.rs 而非 c.rs — 0.29 按文件路径匹配)
     config.parse.include = Some(vec!["src/c.rs".to_string()]);

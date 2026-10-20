@@ -1,7 +1,7 @@
 //! R177 sdk organ Kani proofs (W12)
 //!
-//! R4b (2026-10-20): livekit / voice / sandbox 三岛归档后仅 lark 保留，
-//! 子模块计数 = 1（ADR-0005 §3）。
+//! R4b (2026-10-20): livekit / voice / sandbox / lark 全部归档后，
+//! 保留子模块计数 = 0（im 为自有 wire 面，不计子 SDK 岛；ADR-0005 §3）。
 
 #![allow(missing_docs)]
 
@@ -9,7 +9,7 @@ use crate::*;
 
 #[test]
 fn r177_sdk_01_submodule_count() {
-    assert_eq!(SDK_SUBMODULE_COUNT, 1);
+    assert_eq!(SDK_SUBMODULE_COUNT, 0);
 }
 
 #[test]
@@ -31,17 +31,17 @@ fn r177_sdk_04_result_basic() {
 
 #[test]
 fn r177_sdk_05_submodule_check() {
-    assert_eq!(SDK_SUBMODULE_COUNT, 1);
+    assert_eq!(SDK_SUBMODULE_COUNT, 0);
 }
 
 #[cfg(kani)]
 #[kani::proof]
 fn r177_sdk_kani_01_submodule_count() {
-    assert_eq!(SDK_SUBMODULE_COUNT, 1);
+    assert_eq!(SDK_SUBMODULE_COUNT, 0);
 }
 
 #[cfg(kani)]
 #[kani::proof]
 fn r177_sdk_kani_02_submodules_enabled() {
-    assert_eq!(SDK_SUBMODULE_COUNT, 1);
+    assert_eq!(SDK_SUBMODULE_COUNT, 0);
 }

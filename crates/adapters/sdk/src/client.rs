@@ -513,7 +513,7 @@ impl AuthPipeline {
     /// 读 API key (per M5 访问器, 替代原 pub 字段).
     ///
     /// 返 `&str` 供 bearer_auth / auth_header 组装用; 调用方自负保密责任
-    /// (0 进日志 / 0 进错误消息 — 同 livekit/lark holder 的铁律).
+    /// (0 进日志 / 0 进错误消息 — 同密钥持有面的铁律).
     pub fn api_key(&self) -> &str {
         &self.api_key
     }
