@@ -73,6 +73,13 @@
 pub mod bio_circadian;
 #[path = "bio_tone.rs"]
 pub mod bio_tone;
+// 生物机制族 W3.5 · 资产生命周期装配面 (SG-18, 默认关)。同 W3.3 口径: 本批
+// 禁改 `canonical.rs`, 新文件先挂本模块下编译, 对外路径
+// `canonical::care_heartbeat::bio_lifecycle`; Lead 总装时二选一:
+// ① `canonical.rs` 写 `pub use care_heartbeat::bio_lifecycle;` (不重复编译, 推荐);
+// ② 把下面两行 `#[path]` 声明迁到 `canonical.rs` 并删除这两行。
+#[path = "bio_lifecycle.rs"]
+pub mod bio_lifecycle;
 
 use std::sync::Arc;
 use std::time::Duration;
