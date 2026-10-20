@@ -12,6 +12,19 @@
 - **B7 治理链端到端合练**（#7）：现役 M-of-N 逻辑票链三路径（通过/拒绝/超时）+ 防凑票对抗用例 + 审计落盘断言，演练记录落 `docs/04-internal/governance-chain-drill-2026-10-20.md`（缺口 6 项如实登记：编排未接线/物理多签留 v2.1 等）。**逻辑票 ≠ 密码学多签**（严守口径）。
 - **B8 发布资产校验**（#8）：`scripts/verify-release-assets.ps1`（哈希三口径 + Authenticode 如实报 + 缺项不装过）+ 流程文档 + 排期 4 项（签名证书/可复现构建等 owner 决策）。
 
+## [Unreleased] — 生物机制族 W3.5：剩余接线 + ADR-0003 神经系统只读聚合（全部默认关；2026-10-20）
+
+收尾批（**+~100 新测**，全部默认关、关时逐字节零变化；架构准入 A 类）：
+- **SG-22 仪式状态存储**（`runtime-assembly::canonical::ritual_state_store`）：`<care_dir>/ritual_state.json`（StoredDoc v1 信封 + 原子写 + 坏档 fail-closed 不覆盖），cli care 供给从 store 读、`record_ritual_done/skip` 显式注入口（完成事件源待接，如实）；复用 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES`，关 = 零读写。15 测试。
+- **SG-18 生命周期接线 + 生产注册**（`bio_lifecycle` + `bio_production_wiring`）：真实工具结果（`AfterToolResult`）驱动 5 态账本，`APEIRETH_ENABLE_BIO_LIFECYCLE` 只认 "1"、关 = 不构造不注册不读时钟；开时以装配根真实工具名播种 `Newborn`。19 测试。
+- **SG-13 tone 真实事件源**（`bio_tone`）：复用既有模块钩子面——工具成功 → `TaskSuccess`、工具/运行时失败 → `TaskFailure`（其余 7 档仍仅显式注入，如实）；production 持共享 `Arc<ToneState>` + `attach_tone_feedback_sink`。10 测试。
+- **self_status 生物机制观测扩展**（`bio_mechanism_probes`）：6 条只读 probe（免疫账/审议门账/心跳状态/play 账/痛觉/再生，全部脱敏、失败单格 null+真因）；`self_status_source.rs` 2587 → 2064 行（低于基线，arch_guard size-grow 修复）。22 测试。
+- **ADR-0003 交付（R1a）**：新增 `nervous_snapshot.rs` + `capabilities.nervous_system` 只读子对象（schema v1：version + summary + 14 条 mechanism 的 level/enabled_env/signal_sources/gaps；`last_observation` 恒 null 不伪造）。**顶层 21 节冻结合同不变**（ADR「21→22 节」措辞按子对象口径落地，差异已记录）。11 测试。
+- **装配瘦身**：`production.rs` 1723 → 1663 行（arch_guard 基线 1686），biology 装配块抽到 `bio_production_wiring.rs`；`arch_guard --strict` **VIOLATIONS 0**（STALE 2 = 可缩表基线，归效率线）。
+- **接线盘点（14 条）**：**PRODUCTION WIRED（默认关）13 条**（W3.5 补齐 SG-18 生命周期、SG-22 仪式）；**IMPLEMENTED 1 条** = SG-25 生态健康（**无真实信号源**：`ToolProfile.capabilities` 所需能力标签在运行时不存在，拼标签=伪接线；需工具能力 taxonomy，B 类 ADR 前置）。观测面已接 **2/14 格**（容量 + 练习场；其余 probe 实现就绪、待迟绑定，下一批）。
+- **诚实边界**：全部默认关、非 DEFAULT ENABLED / HARDWARE VALIDATED；无 live E2E；`nervous_system` 为 capabilities 内第二个只读子对象；仪式完成事件源/生命周期持久化/tone 其余 7 档事件源仍未接（如实）。
+- **门禁**：见 test-baseline 本批；scoped 全绿（assembly lib 214 / cli lib 56 / 各新老装配测试）、clippy 0、fmt 0 diff、arch_guard 0 违规。
+
 ## [Unreleased] — 生物机制族 W3.4：收口接线（recovery + 节律门生产装配，全部默认关；2026-10-20）
 
 两批并行 + 矩阵收口（**+~130 新测**，全部默认关、关时逐字节零变化）：

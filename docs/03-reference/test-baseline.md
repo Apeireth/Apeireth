@@ -100,6 +100,17 @@
 > §1 改为绿跑口径 9076；首轮 9075 口径移入 §3 历史备查。日志
 > `artifacts/wave-dts-authoritative-full-2026-10-20.log`。
 
+> **复测注记（2026-10-20，生物机制族 W3.5 总装批校验）**：本批全量实测 = **338 套件 / 8997 passed /
+> 0 failed / 51 ignored**（命令加 `-j 1` + `RUST_TEST_THREADS=4` 规避 D26）。**口径提示**：该轮跑时
+> 另一条施工线（R4b「SDK 三岛归档」）的 staged 改动在途（`legacy/archived/sdk-islands/` 重命名已入
+> index），工作树测试面与 §1 现行口径（336 套件 / 9076 passed）不同——主要差异 = SDK 归档岛测试尚未
+> 计入，故 passed 数低于 §1。**本数字不替换 §1 单一真源**，仅作本批交付证据；待 R4b 落地后由基线线
+> 统一复跑并刷新 §1。本批新增测试证据（scoped，全部绿）：assembly lib 214、`bio_lifecycle_wiring` 11、
+> `bio_lifecycle_production` 4、`bio_tone_feedback` 8、`bio_mechanisms_self_status` 22、`nervous_snapshot`
+> 11、`self_status_runtime_e2e` 12、`startup_instrumentation` 9、cli lib 56、`care_heartbeat_host` 4；
+> `arch_guard --strict` VIOLATIONS 0（STALE 11 = 其它线在途缩表项）。日志
+> `artifacts/wave-bio-w35-workspace-test.log`。
+
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |
