@@ -31,6 +31,7 @@
 | ADR | 标题 | 状态 | 关联 |
 |---|---|---|---|
 | [0001](0001-adopt-architecture-contract.md) | 采纳架构契约体系与例外预算 | Accepted | contract.toml / arch_guard.py / 例外预算旋钮 |
+| [0002](0002-target-architecture-v1.md) | 目标架构 v1——七项重构方向收敛 | **Proposed（待 owner 裁决）** | R0-R8 / 波次路线 / 记分牌 |
 
 ## 命名
 
