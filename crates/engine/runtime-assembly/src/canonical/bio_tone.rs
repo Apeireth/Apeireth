@@ -1,4 +1,4 @@
-//! 生物机制族 W3.3 · 调质 → 语气装配面 (默认关, fail-closed)。
+//! 生物机制族 W3.3 · 调质 → 语气装配面 (默认关, fail-closed; W3.5 补真实事件源半程)。
 //!
 //! # 机制
 //!
@@ -6,12 +6,39 @@
 //! [`apeireth_organ::tone`] 的调质语气桥 (两者 W1/W3.1 已备, 本批**零改动**):
 //!
 //! ```text
-//! 显式反馈事件 (ToneState::apply_feedback)
-//!   └─ ToneFeedbackKind → NeuromodulatorEvent → NeuromodulatorState::apply(event, now_ms)
-//!        └─ behavior_params() → tone_hint_with_params(bond, params)
-//!             └─ BioToneModule (HookPoint::TurnStart)
-//!                  └─ 一个独立 PromptOverlay::system (追加在装配尾部, 不碰既有前缀)
+//! 真实事件源 (既有运行时钩子, 见下节) ──┐
+//! 显式注入口 (ToneState::apply_feedback) ─┤
+//!                                         └─ ToneFeedbackKind → NeuromodulatorEvent
+//!   → NeuromodulatorState::apply(event, now_ms)
+//!      └─ behavior_params() → tone_hint_with_params(bond, params)
+//!           └─ BioToneModule (HookPoint::TurnStart)
+//!                └─ 一个独立 PromptOverlay::system (装配尾部, 不碰既有前缀)
 //! ```
+//!
+//! # 真实事件源 (本批接线; 复用既有钩子面, 不新建总线)
+//!
+//! 事件源 = [`BioToneModule`] 在既有模块钩子上的旁路观察, **仅开关开时消费**
+//! (关 = 模块不注册且 `enabled = false` 双闸, 零观察零状态变化):
+//!
+//! | 既有真实事件 | 确定性判定 | 反馈档 | 说明 |
+//! |---|---|---|---|
+//! | [`HookPoint::AfterToolResult`] + [`ToolResult`] | `ToolResult::is_ok()` | [`ToneFeedbackKind::TaskSuccess`] | 协议层显式结算为成功 |
+//! | [`HookPoint::AfterToolResult`] + [`ToolResult`] | `ToolOutcome::Error { .. }` | [`ToneFeedbackKind::TaskFailure`] | 协议层显式结算为失败 (可重试/不可重试同档) |
+//! | [`HookPoint::OnError`] + 错误文本 | `error` 存在 | [`ToneFeedbackKind::TaskFailure`] | 运行时 / 模块失败的 best-effort 观察钩 |
+//!
+//! 映射规则: 缺载荷 (`tool_result` / `error` 为 `None`) = 无事件 = 不注入; 其它钩子
+//! (含 `TurnStart`) 不产生反馈。不读用户文本、不做情感 / 意图推断 —— 只把协议里
+//! **已有显式判决**的结局映射成事件, 不替任何一档编造信号。
+//!
+//! 粒度为**工具调用**级: 一次结算 = 一次脉冲, 无节流 / 无去重; 高频工具面会更快把
+//! 六维推离基线 (已知量化缺口, 窗口未标定)。状态仍在基线档时不发 overlay。
+//!
+//! **未接的真实源 (诚实边界)**: 用户显式好评 / 差评的采集入口在装配面不存在 ——
+//! `self_tuning::TuningEvent::ToneFeedback`、`value_cases::Feedback`、
+//! `online_calibration::UserFeedback`、`orchestrator::OrchestratorFeedback` 四份接口
+//! 当前均无生产调用方 (接口已备待接)。故 [`ToneFeedbackKind`] 其余七档
+//! (RewardPrediction / SocialPositive / SocialNegative / Threat / Novelty / Quiet /
+//! UserCorrection) 仍只经显式注入口 [`ToneState::apply_feedback`] 进入。
 //!
 //! # 开关 (默认关)
 //!
@@ -34,17 +61,22 @@
 //! 历史 / 既有 system 前缀 / provider 缓存前缀; 同一回合最多一块, 文本来自固定词表
 //! (`tone_hint_with_params` 的基线句 + 【调质语气】固定片段), 不含用户原文。
 //!
-//! # 0 装诚实 (能力级别: IMPLEMENTED + 默认关; 非 PRODUCTION WIRED)
+//! # 0 装诚实 (能力级别: PRODUCTION WIRED, 默认关; 非 DEFAULT ENABLED, 无 live E2E)
 //!
-//! - **事件源未接**: 真实反馈事件源 (工具结果 / 用户纠错检测 / 社交反馈识别) **未接**;
-//!   本批只有显式注入口 [`ToneState::apply_feedback`] (测试/宿主可调), 不读事件流、
-//!   **不编事件**。
+//! - **事件源半程**: 已接 = 工具结算成功 / 失败 + 运行时错误 (上表三行, 确定性映射,
+//!   复用既有钩子面); 未接 = 用户显式好评 / 差评采集 (四处接口无生产调用方), 其余
+//!   七档只有显式注入口。不读文本、不猜情绪、不做情感识别。
 //! - **关系快照未接**: [`BondCharacterSnapshot`] 缺省为 `default()`; 真实羁绊存储
 //!   (`BondCharacterStore`) 未读取, 需宿主经 [`ToneState::set_bond_snapshot`] 显式注入。
 //! - **时间注入**: 逻辑时刻由构造时注入的 [`ToneClock`] 给出, 状态机自身不读系统时钟;
 //!   生产 = 系统时钟, 测试 = 冻结时钟。
-//! - **无持久化 / 无遥测 / 无 live E2E**: 重启丢调质状态; `production.rs` 尚未注册
-//!   本模块 —— 注册由 Lead 后续做 ([`bio_tone_wiring_from_env`] 是可调 helper)。
+//! - **无持久化 / 无遥测 / 无 live E2E**: 重启丢调质状态; `production.rs` 已注册
+//!   本模块 (`APEIRETH_ENABLE_BIO_TONE=1` 才构造) 并保存共享状态句柄
+//!   ([`crate::canonical::production::ProductionModules::bio_tone_state`]), 但无
+//!   live E2E 实测。
+//! - **反馈注入点**: 装配根另有
+//!   [`crate::canonical::production::ProductionModules::attach_tone_feedback_sink`]
+//!   供其它既有反馈点 (例如未来的用户好评 / 差评采集) 持句柄旁路注入, 不复制总线。
 //! - 调质是工程标签, 不宣称主观情绪、意识或生理真实性。
 
 #![forbid(unsafe_code)]
@@ -58,6 +90,7 @@ use apeireth_organ::neuromodulation::{
 use apeireth_organ::tone::{
     behavior_tone_style, tone_hint, tone_hint_with_params, BehaviorToneStyle, BondCharacterSnapshot,
 };
+use apeireth_protocol::canonical::ToolResult;
 
 use crate::canonical::module::{
     AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
@@ -160,6 +193,31 @@ impl ToneFeedbackReceipt {
     #[must_use]
     pub fn changed(&self) -> bool {
         self.before != self.after
+    }
+}
+
+/// 真实事件 → 反馈档的确定性映射 (既有钩子面, 零情感推断; 映射表见模块文档)。
+///
+/// - [`HookPoint::AfterToolResult`] + [`ToolResult`]: 成功 →
+///   [`ToneFeedbackKind::TaskSuccess`], 失败 → [`ToneFeedbackKind::TaskFailure`];
+/// - [`HookPoint::OnError`] + 错误文本 → [`ToneFeedbackKind::TaskFailure`];
+/// - 缺载荷 / 其它钩子 → `None` (无事件 = 不注入; 不从缺失数据编信号)。
+#[must_use]
+pub fn tone_feedback_from_hook(
+    hook: HookPoint,
+    tool_result: Option<&ToolResult>,
+    error: Option<&str>,
+) -> Option<ToneFeedbackKind> {
+    match hook {
+        HookPoint::AfterToolResult => tool_result.map(|result| {
+            if result.is_ok() {
+                ToneFeedbackKind::TaskSuccess
+            } else {
+                ToneFeedbackKind::TaskFailure
+            }
+        }),
+        HookPoint::OnError => error.map(|_| ToneFeedbackKind::TaskFailure),
+        _ => None,
     }
 }
 
@@ -294,9 +352,11 @@ pub struct BioToneTurn {
 
 /// 调质 → 语气装配模块 (`HookPoint::TurnStart` 尾部独立 system 块)。
 ///
-/// - 开关关 / 非 `TurnStart` 钩子 → `ModuleOutcome::continue_()` (零 overlay);
-/// - 开关开但调质仍在基线档 → 同样零 overlay (不编「调质语气」);
-/// - 开关开 + 显式反馈事件把语气档推离基线 → exactly one `PromptOverlay::system`。
+/// - 开关关: 所有钩子 → `ModuleOutcome::continue_()` (不观察事件、不注入状态、
+///   零 overlay; defense-in-depth 第二道门);
+/// - 开关开: 非 `TurnStart` 钩子只做**真实事件旁路** (工具结算 / 运行时错误 →
+///   [`tone_feedback_from_hook`]), 不产 overlay、不改指令; `TurnStart` 只读装配:
+///   基线档零 overlay, 非基线档 exactly one `PromptOverlay::system`。
 pub struct BioToneModule {
     manifest: ModuleManifest,
     enabled: bool,
@@ -342,6 +402,27 @@ impl BioToneModule {
             overlay,
         }
     }
+
+    /// 旁路消费一次既有钩子上的真实事件 (只推进调质状态, 不产 overlay)。
+    ///
+    /// - 开关关 → `None` (零观察、状态不动);
+    /// - 无事件载荷 / 非事件钩子 → `None` (无事件 = 不注入);
+    /// - 有事件 → 一次 [`ToneState::apply_feedback`] 回执 (可诊断 / 可断言)。
+    ///
+    /// 幂等口径: 同一事件重复投递 = 重复脉冲 (状态机累积, **非幂等**); 只有状态
+    /// 到达 clamp 界后, 后续同向事件才 `changed() == false` (有界)。
+    pub fn record_hook_feedback(
+        &self,
+        hook: HookPoint,
+        tool_result: Option<&ToolResult>,
+        error: Option<&str>,
+    ) -> Option<ToneFeedbackReceipt> {
+        if !self.enabled {
+            return None;
+        }
+        let feedback = tone_feedback_from_hook(hook, tool_result, error)?;
+        Some(self.state.apply_feedback(feedback))
+    }
 }
 
 #[async_trait::async_trait]
@@ -353,9 +434,15 @@ impl AgentModule for BioToneModule {
     async fn on_hook(
         &self,
         hook: HookPoint,
-        _ctx: &ModuleContext<'_>,
+        ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
-        if hook != HookPoint::TurnStart || !self.enabled {
+        if !self.enabled {
+            return Ok(ModuleOutcome::continue_());
+        }
+        if hook != HookPoint::TurnStart {
+            // 真实事件源 (既有钩子面): 工具结算 / 运行时错误旁路推进调质状态。
+            // 不产 overlay (overlay 只在回合起点装配), 指令恒为 Continue。
+            self.record_hook_feedback(hook, ctx.tool_result(), ctx.error);
             return Ok(ModuleOutcome::continue_());
         }
         let Some(overlay) = self.assemble().overlay else {
@@ -646,5 +733,98 @@ mod tests {
         let receipt = state.apply_feedback(ToneFeedbackKind::Quiet);
         assert_eq!(receipt.at_ms, 7);
         assert_eq!(ticks.load(Ordering::SeqCst), 1, "每个事件恰好读一次");
+    }
+
+    #[test]
+    fn real_hook_events_map_to_the_documented_feedback_kinds_and_ignore_missing_payloads() {
+        let ok = ToolResult::ok("call_ok", serde_json::Value::Null);
+        let retryable = ToolResult::retryable_error("call_retry", "timeout");
+        let permanent = ToolResult::permanent_error("call_perm", "bad argument");
+
+        assert_eq!(
+            tone_feedback_from_hook(HookPoint::AfterToolResult, Some(&ok), None),
+            Some(ToneFeedbackKind::TaskSuccess),
+            "工具成功 = TaskSuccess"
+        );
+        for failed in [&retryable, &permanent] {
+            assert_eq!(
+                tone_feedback_from_hook(HookPoint::AfterToolResult, Some(failed), None),
+                Some(ToneFeedbackKind::TaskFailure),
+                "工具失败 (可重试/不可重试) 同档 = TaskFailure"
+            );
+        }
+        assert_eq!(
+            tone_feedback_from_hook(HookPoint::OnError, None, Some("module hook failed")),
+            Some(ToneFeedbackKind::TaskFailure),
+            "运行时/模块错误 = TaskFailure"
+        );
+
+        // 缺载荷 = 无事件 (不从缺失数据编信号); 其它钩子不产生反馈。
+        assert_eq!(
+            tone_feedback_from_hook(HookPoint::AfterToolResult, None, None),
+            None
+        );
+        assert_eq!(
+            tone_feedback_from_hook(HookPoint::OnError, None, None),
+            None
+        );
+        for hook in [
+            HookPoint::TurnStart,
+            HookPoint::BeforeModelCall,
+            HookPoint::AfterModelResponse,
+            HookPoint::BeforeToolCall,
+            HookPoint::BeforeFinalCommit,
+            HookPoint::AfterTurn,
+        ] {
+            assert_eq!(
+                tone_feedback_from_hook(hook, Some(&ok), Some("ignored")),
+                None,
+                "{hook:?} 不是反馈事件源"
+            );
+        }
+
+        // 开关关 = 零观察: 同一真实事件不推进状态。
+        let state = baseline_state();
+        let disabled = BioToneModule::new(false, Arc::clone(&state));
+        assert!(disabled
+            .record_hook_feedback(HookPoint::AfterToolResult, Some(&ok), None)
+            .is_none());
+        assert!(state.is_baseline(), "开关关 = 真实事件也不观察");
+
+        // 开关开 = 真实事件一次投递一次回执 (单次事件未必移动离散档位:
+        // 状态已变、overlay 仍等档位真的移动, 见零 overlay 语义)。
+        let baseline_vector = state.vector();
+        let enabled = BioToneModule::new(true, Arc::clone(&state));
+        let receipt = enabled
+            .record_hook_feedback(HookPoint::AfterToolResult, Some(&permanent), None)
+            .expect("开关开 + 真实事件");
+        assert_eq!(receipt.feedback, ToneFeedbackKind::TaskFailure);
+        assert!(receipt.changed());
+        assert_ne!(state.vector(), baseline_vector, "事件真的进了状态机");
+    }
+
+    #[test]
+    fn repeated_identical_events_are_not_deduplicated_and_are_bounded_by_the_clamp() {
+        let state = baseline_state();
+        let first = state.apply_feedback(ToneFeedbackKind::TaskFailure);
+        assert!(first.changed(), "首次同向事件推进状态 (非幂等)");
+        let second = state.apply_feedback(ToneFeedbackKind::TaskFailure);
+        assert!(second.changed(), "重复投递 = 重复脉冲 (不去重)");
+
+        let mut saturated = None;
+        for _ in 0..256 {
+            let receipt = state.apply_feedback(ToneFeedbackKind::TaskFailure);
+            if !receipt.changed() {
+                saturated = Some(receipt);
+                break;
+            }
+        }
+        let receipt = saturated.expect("持续同向事件必须到达 clamp 界");
+        assert_eq!(
+            state.vector(),
+            receipt.after,
+            "clamp 后同向事件不再改变状态 (有界)"
+        );
+        assert!(!state.is_baseline());
     }
 }

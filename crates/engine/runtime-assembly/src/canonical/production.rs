@@ -26,16 +26,17 @@ use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
 use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
-use apeireth_tools_canonical::self_status::BioMechanismKind;
 use apeireth_tools_canonical::{
     CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
 };
 
 use super::capability::CapabilityProvider;
+use super::care_heartbeat::bio_lifecycle::BioLifecycleState;
+use super::care_heartbeat::bio_tone::ToneState;
 use super::cognitive::{
-    BioAssemblyModule, BioAssemblySwitches, CognitiveTelemetry, CouncilModule, JudgeConfig,
-    JudgeModule, JudgeObservations, MemoryRecallAccessStore, MemoryRecallModule,
-    MemoryWritebackModule, PreferenceRecallModule, SelfAssessmentModule,
+    CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
+    MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule,
+    SelfAssessmentModule,
 };
 use super::error::{RuntimeError, RuntimeResult};
 use super::memory_typed_sink::CanonicalMemoryTypedSink;
@@ -43,9 +44,8 @@ use super::module::Module;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{
-    capacity_bio_probe, doc_ops_status_probe, image_ops_status_probe, proposal_status_probe,
-    roster_from_config, sheet_ops_status_probe, task_board_status_probe,
-    ProductionSelfStatusSource,
+    doc_ops_status_probe, image_ops_status_probe, proposal_status_probe, roster_from_config,
+    sheet_ops_status_probe, task_board_status_probe, ProductionSelfStatusSource,
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
@@ -56,6 +56,11 @@ use super::tool_modules::{
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
 use crate::startup::{StartupPhase, StartupTimeline};
+
+// 生物机制族装配块（W3.2/W3.3/W3.5）搬至同 crate 子模块，`production.rs`
+// 只保留调用与字段；子模块声明放此处（`canonical.rs` 本批禁改）。
+#[path = "bio_production_wiring.rs"]
+mod bio_production_wiring;
 
 /// Adapter that exposes memory's context-window implementation through the
 /// runtime-owned projection port. It is kept in assembly so the runtime kernel
@@ -577,6 +582,12 @@ pub struct ProductionModules {
     /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根把 guard 免疫记忆
     /// 共享句柄迟绑定到器官审议门 (W3.3 外部事件源; 默认不接).
     organ_module: Option<Arc<OrganModule>>,
+    /// 生物机制族 W3.3: 调质状态句柄 (`APEIRETH_ENABLE_BIO_TONE=1` 才 `Some`),
+    /// 与注册的 tone 模块共享同一 `Arc<ToneState>` (真实事件源注入 / 诊断).
+    bio_tone_state: Option<Arc<ToneState>>,
+    /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (`APEIRETH_ENABLE_BIO_LIFECYCLE=1`
+    /// 才 `Some`), 与注册模块共享同一 `Arc`; 供自述 probe 后续迟绑定.
+    bio_lifecycle_state: Option<Arc<BioLifecycleState>>,
 }
 
 /// Compatibility alias for [`ProductionModules`].
@@ -1160,25 +1171,14 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
-        // 生物机制族 W3.3 · 游戏练习场 (`tool.play_propose` / `tool.play_start` /
-        // `tool.play_finish` / `tool.play_abort`, 默认关): 四个工具模块共享**同一本**
-        // 内存练习账本 (内核 `apeireth_organ::play` 零改动), 只提案 / opt-in 后开场 /
-        // 结束提炼 / 幂等中止, **不提供 shell 与写文件能力**, 产物只走
-        // `PlayOutcome.artifacts` 元数据 (`sandbox_dir` 只是受控目录标识, 非 OS 级
-        // 隔离, 不创建目录)。注册即闸: env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"`
-        // (默认关 fail-closed) **且** 已登记工作区根注入 (缺根 = 无法证明
-        // `sandbox_dir` 包含性 = 不注册); 全关 = 不构造 = 零注册 (懒加载语义)。
-        // 审批钩子 `PlayApprovalHook` 未在装配根注册 (审批链由适配器接线, 本批
-        // 无 IM opt-in 卡; 工具面唯一强制门槛 = env 闸 + 显式 `user_opt_in=true`)。
-        if let Some(play) = super::play_tools::bio_play_wiring_from_env(
+        // 生物机制族 W3.3 · 游戏练习场 (`tool.play_*` 四工具, 默认关): 装配块在
+        // `bio_production_wiring::install_bio_play`（env 只认 "1" 且工作区根注入）。
+        bio_production_wiring::install_bio_play(
+            &mut capabilities,
+            &clock,
             backends.workspace_root.as_deref(),
-            Arc::clone(&clock),
-        ) {
-            for module in play.into_modules() {
-                instrument.constructed(ModuleFamily::BioPlay);
-                capabilities.extend(module.capabilities());
-            }
-        }
+            instrument,
+        );
 
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
         // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
@@ -1254,18 +1254,10 @@ impl ProductionModules {
             if let Some(counters) = &sheet_ops_counters {
                 source = source.with_sheet_ops_probe(sheet_ops_status_probe(Arc::clone(counters)));
             }
-            // 生物机制族 W3.2: `capabilities.bio_mechanisms` 只读聚合面。挂面 =
-            // 子对象恒在场（默认关时 `mechanisms: null` + 原因「未启用」，
-            // 零 probe 调用；开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 "1"）。
-            // 承载力探测口读**同一本**任务队列（与 `tool.task_board` 同队同账），
-            // 其余 13 条一律 `wired:false` + 「未接线」，不编数值。
-            source = source.with_bio_self_status_from_env();
-            if let Some(queue) = &config.task_board {
-                source.register_bio_probe(
-                    BioMechanismKind::Capacity,
-                    capacity_bio_probe(Arc::clone(queue), None),
-                );
-            }
+            // 生物机制族 W3.2: `capabilities.bio_mechanisms` 只读聚合面（装配块
+            // 已搬至 `bio_production_wiring`，含承载力同队同账探测口）。
+            source =
+                bio_production_wiring::install_bio_self_status(source, config.task_board.as_ref());
             // K 轴 L1: 自述在场节 (设备数/白名单数/最近感知) 与 `tool.device_sense`
             // 工具面同一本设备表同一进程内感知计数 (同源同账; 面没注册 = 在场节
             // 显式 null + 原因)。
@@ -1508,28 +1500,11 @@ impl ProductionModules {
             ));
         }
 
-        // 生物机制族 W3.2: 修复指令段 + 策略化上下文块的 TurnStart overlay 装配点。
-        // 两个开关默认关（`APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` /
-        // `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`，只认 "1"）——**全关 = 不注册**
-        // （懒加载语义：未启用 = 不构造 = 不注册，探针零上报）；开时也只装配
-        // 装配根**显式注入**的 `RepairPlan` / 上下文块 / 预算（会话事件源待 W3.3），
-        // 不从任意文本臆造信号。
-        let bio_switches = BioAssemblySwitches::from_env();
-        if !bio_switches.is_disabled() {
-            modules.push(Arc::new(BioAssemblyModule::new(bio_switches)));
-        }
-
-        // 生物机制族 W3.3: 调质→tone 的 TurnStart 尾部 overlay 装配点。
-        // `APEIRETH_ENABLE_BIO_TONE` 只认 "1" —— **全关 = 不构造不注册**
-        // （懒加载语义：未启用 = 不构造 = 不注册）。开时构造共享 `ToneState` +
-        // 模块；真实反馈事件源尚未接（状态经 wiring 暴露，由后续批注入），
-        // 所以打开后也只有显式事件才移动档位、基线档仍零 overlay。
-        if let Some(wiring) = super::care_heartbeat::bio_tone::bio_tone_wiring_from_env({
-            let clock = Arc::clone(&clock);
-            Arc::new(move || clock.now().timestamp_millis() as u64)
-        }) {
-            modules.push(wiring.module() as Arc<dyn Module>);
-        }
+        // 生物机制族 W3.2 / W3.3 / W3.5: 修复指令段 + 调质 tone + 生命周期
+        // （开关全默认关，关 = 不构造不注册）。装配块在
+        // `bio_production_wiring::install_bio_modules`，句柄回传装配根。
+        let bio_wiring =
+            bio_production_wiring::install_bio_modules(&mut modules, &clock, &capabilities);
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
@@ -1594,6 +1569,8 @@ impl ProductionModules {
             mcp_bridge,
             mcp_module,
             organ_module,
+            bio_tone_state: bio_wiring.tone_state,
+            bio_lifecycle_state: bio_wiring.lifecycle_state,
         })
     }
 
