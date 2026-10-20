@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
 use apeireth_governance::AllowAll;
+use apeireth_orchestration::context_budget::ContextBlock;
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError,
@@ -20,8 +21,8 @@ use apeireth_protocol::canonical::{
     NormalizedResponse, NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
-    budget_context_blocks, AgentModule, ContextBlock, HookPoint, ModuleContext, ModuleError,
-    ModuleManifest, ModuleOutcome, Runtime, TurnRequest,
+    budget_context_blocks, AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest,
+    ModuleOutcome, Runtime, TurnRequest,
 };
 use async_trait::async_trait;
 

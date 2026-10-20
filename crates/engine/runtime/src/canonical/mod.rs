@@ -99,8 +99,7 @@ pub use events::{
 };
 pub use execute::{
     budget_context_blocks, budget_context_blocks_with_spill, plan_mode_exit_declaration,
-    ApprovalResolution, ContextBlock, TurnOutcome, TurnRequest, TurnResponse,
-    PLAN_MODE_EXIT_TOOL_NAME,
+    ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse, PLAN_MODE_EXIT_TOOL_NAME,
 };
 pub use heartbeat::{
     FlowLock, HeartbeatDispatch, HeartbeatPoll, HeartbeatPollOutcome, HeartbeatProducer,

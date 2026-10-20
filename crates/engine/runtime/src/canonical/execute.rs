@@ -80,7 +80,7 @@ use apeireth_protocol::canonical::{
     NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
 
-pub use apeireth_orchestration::context_budget::ContextBlock;
+use apeireth_orchestration::context_budget::ContextBlock;
 
 use super::approval::{
     approval_action_binding, approval_arguments_summary, approval_command_text,
