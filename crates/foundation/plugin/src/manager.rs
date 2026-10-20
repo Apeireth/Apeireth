@@ -407,9 +407,38 @@ impl PluginManager {
     }
 }
 
+impl crate::extension::ExtensionCatalog for PluginManager {
+    fn extension_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .plugins()
+            .ids()
+            .map(|id| id.as_str().to_string())
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    fn describe(&self, id: &str) -> Option<crate::extension::ExtensionDescriptor> {
+        let plugin_id = apeireth_core::kernel::PluginId::new(id).ok()?;
+        let plugin = self.plugins().get(&plugin_id).ok()?;
+        let manifest = plugin.manifest();
+        let mut descriptor = crate::extension::ExtensionDescriptor::new(
+            manifest.id.as_str().to_string(),
+            crate::extension::ExtensionKind::Plugin,
+            "apeireth-plugin",
+            0,
+        );
+        for capability in &manifest.capabilities {
+            descriptor = descriptor.with_capability(capability.id.as_str().to_string());
+        }
+        Some(descriptor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::extension::ExtensionCatalog;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use apeireth_core::kernel::{system_clock, TraceId};
@@ -918,5 +947,20 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.render(), r#"{"v":7}"#);
+    }
+    #[test]
+    fn extension_catalog_lists_plugins_and_capabilities() {
+        let log = Arc::new(BootLog::default());
+        let mut m = PluginManager::new();
+        m.register(Builder::new("p.a", &log).build()).unwrap();
+
+        assert_eq!(ExtensionCatalog::extension_ids(&m), vec!["p.a"]);
+        assert!(ExtensionCatalog::contains(&m, "p.a"));
+        assert!(!ExtensionCatalog::contains(&m, "p.missing"));
+
+        let d = ExtensionCatalog::describe(&m, "p.a").unwrap();
+        assert_eq!(d.kind, crate::extension::ExtensionKind::Plugin);
+        assert_eq!(d.owner_crate, "apeireth-plugin");
+        assert_eq!(d.id, "p.a");
     }
 }
