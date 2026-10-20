@@ -13,6 +13,10 @@
 | `gap.memory_update` | NOT IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
+| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `68fa5643b7de` | 2026-11-20 |
+| `sec.storage_envelope_crypto` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
+| `sec.governance_chain_drill` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
+| `rel.release_asset_verify` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 
 ## 使用
 

@@ -148,3 +148,71 @@ claims:
     owner: tools
     next_review: "2026-11-20"
     notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。"
+
+  - id: sec.gateway_tls
+    title: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_TLS_CERT
+    sources:
+      - crates/adapters/gateway/src/remote_access.rs
+      - crates/adapters/gateway/src/canonical_entry.rs
+      - crates/adapters/gateway/src/lib.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/adapters/gateway/tests/tls_serve.rs
+    verified_at: 68fa5643b7de94eeb174ffbd1876ff0f6181d5bd
+    verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
+    owner: gateway
+    next_review: "2026-11-20"
+    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。"
+
+  - id: sec.storage_envelope_crypto
+    title: "会话/记忆静态信封加密 + 备份恢复（B6 库级）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/engine/storage/src/crypto
+      - crates/engine/storage/tests/crypto_invariants.rs
+      - crates/engine/storage/tests/sealed_backup_restore.rs
+    tests:
+      - crates/engine/storage/tests/crypto_invariants.rs
+      - crates/engine/storage/tests/sealed_backup_restore.rs
+    verified_at: 68fa5643b7de94eeb174ffbd1876ff0f6181d5bd
+    verify_cmd: "cargo test -p apeireth-storage --test crypto_invariants"
+    owner: storage
+    next_review: "2026-11-20"
+    notes: "分区 DEK + AES-256-GCM 信封 + KEK 三槽包裹 + 备份恢复不变量测试；会话/记忆读写路径生产接线未在本批（cli/runtime 未见消费）——0 装口径：IMPLEMENTED，不称 PRODUCTION WIRED。"
+
+  - id: sec.governance_chain_drill
+    title: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/foundation/governance/tests/governance_chain_drill.rs
+      - docs/04-internal/governance-chain-drill-2026-10-20.md
+    tests:
+      - crates/foundation/governance/tests/governance_chain_drill.rs
+    verified_at: 68fa5643b7de94eeb174ffbd1876ff0f6181d5bd
+    verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
+    owner: governance
+    next_review: "2026-11-20"
+    notes: "通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。"
+
+  - id: rel.release_asset_verify
+    title: "发布资产校验脚本（SHA-256 + 签名状态如实报，B8）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - scripts/verify-release-assets.ps1
+      - docs/packaging/release-asset-verification.md
+      - docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md
+    tests: []
+    verified_at: 68fa5643b7de94eeb174ffbd1876ff0f6181d5bd
+    verify_cmd: "pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>"
+    owner: release
+    next_review: "2026-11-20"
+    notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。"
