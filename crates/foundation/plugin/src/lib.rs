@@ -17,7 +17,7 @@
 //! contradicted the others.
 //!
 //! This crate replaces that with two registries and a rule: [`PluginRegistry`]
-//! owns plugins, [`CapabilityRegistry`] owns the id-to-owner index, and nothing
+//! owns plugins, [`CapabilityIndex`] owns the id-to-owner index, and nothing
 //! else stores a second copy of either fact. The index is an index, not a copy —
 //! a capability's declaration continues to live only in its owner's manifest.
 //! Typed views over the registries are encouraged, and [`PluginManager`] provides
@@ -39,7 +39,7 @@
 //! ```text
 //!   PluginManifest  declares  ->  CapabilityDescriptor (id + kind)
 //!         |                              |
-//!    PluginRegistry                CapabilityRegistry (id -> owner)
+//!    PluginRegistry                CapabilityIndex (id -> owner)
 //!         \                              /
 //!          `------  PluginManager  ------'
 //!                  lifecycle + typed views

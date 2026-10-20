@@ -29,14 +29,14 @@ use crate::capability::{CapabilityDescriptor, CapabilityKind};
 use crate::error::{PluginError, PluginResult};
 use crate::plugin::{Plugin, PluginContext};
 use crate::provider::ProviderCapability;
-use crate::registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};
+use crate::registry::{CapabilityIndex, CapabilityRecord, PluginRegistry};
 use crate::tool::ToolCapability;
 
 /// Owns plugin lifecycle and answers capability queries.
 #[derive(Default)]
 pub struct PluginManager {
     plugins: PluginRegistry,
-    capabilities: CapabilityRegistry,
+    capabilities: CapabilityIndex,
     /// Order in which plugins were started, so shutdown can reverse it.
     start_order: Vec<PluginId>,
 }
