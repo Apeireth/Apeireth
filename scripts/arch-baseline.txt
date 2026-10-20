@@ -2,7 +2,7 @@
 # 生成: python scripts/arch_guard.py --update-baseline
 # 规则: 新指纹不在本文件 = 违规; 本文件中已消失的指纹 = 可缩表。
 
-# --- edge (112) ---
+# --- edge (111) ---
 edge apeireth-bench-harness -> apeireth-core
 edge apeireth-bench-harness -> apeireth-gateway
 edge apeireth-bench-harness -> apeireth-memory
@@ -106,7 +106,6 @@ edge apeireth-runtime-assembly -> apeireth-protocol
 edge apeireth-runtime-assembly -> apeireth-runtime
 edge apeireth-runtime-assembly -> apeireth-storage
 edge apeireth-runtime-assembly -> apeireth-tools-canonical
-edge apeireth-sdk -> apeireth-core
 edge apeireth-sdk -> apeireth-protocol
 edge apeireth-tools-canonical -> apeireth-core
 edge apeireth-tools-canonical -> apeireth-governance
@@ -274,7 +273,7 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (66) ---
+# --- size (65) ---
 size crates/adapters/cli/src/gateway_panels.rs 1542
 size crates/adapters/cli/src/lib.rs 3887
 size crates/adapters/cli/src/onboarding.rs 1353
@@ -324,7 +323,6 @@ size crates/engine/organ/src/world_model.rs 1336
 size crates/engine/runtime-assembly/src/canonical/cognitive.rs 4757
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2435
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1414
-size crates/engine/runtime-assembly/src/canonical/production.rs 1667
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1204
 size crates/engine/runtime/src/canonical/bio_pain.rs 1294
