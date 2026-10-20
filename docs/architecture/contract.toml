@@ -20,8 +20,9 @@
 version = "1.0"
 updated_at = "2026-10-20"
 status = "adjudicated"            # 规则体系已裁决生效（ADR-0001）
-status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；target 条款逐项 TODO-OWNER；架构改动按 owner 指示暂缓（2026-10-20）"
+status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；目标架构 v1 已裁决（ADR-0002）；Wave 2 单项 ADR-0003/0004/0005 已出；R4b 等 owner 裁决"
 adjudication = "owner 授权代裁 2026-10-20（'你了解项目全貌做出判断就行'）；决策记录见 docs/adr/0001-adopt-architecture-contract.md"
+target_architecture = { adr = "docs/adr/0002-target-architecture-v1.md", status = "accepted-2026-10-20", waves = "ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a（Wave 2）" }
 current_wave = 1                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
 wave_note = "Wave 1 = 契约规则落地批 (纯新增+3 处小改, 0 源码改动, 0 LOCKED 触碰; 例外预算按 ADR-0001 定稿)"
 rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
@@ -63,6 +64,17 @@ image_family = [
 ]
 bench = ["apeireth-bench-harness"]
 
+[vendored]
+# vendored 内核家族（ADR-0005 R4a）。现状仍在 workspace；R4a-1 只做主门禁隔离，
+# R4a-2（条件触发）才抽独立 workspace。主门禁 --exclude 清单从本表唯一生成，禁止手抄第二份。
+image_family = [
+  "apeireth-image-core", "apeireth-image-algo", "apeireth-image-cms",
+  "apeireth-image-codecs", "apeireth-image-color", "apeireth-image-compose",
+  "apeireth-image-doc", "apeireth-image-geom", "apeireth-image-psd",
+  "apeireth-image-raster", "apeireth-image-vector",
+]
+note = "R4a-1 (Wave 2): 主门禁 --exclude 本表 11 包 + 独立 image CI; R4a-2: 独立 workspace 抽取（条件）"
+
 [deps]
 # 层方向允许表 (现状接受, 2026-10-20 实测)。新增层边必须先过 ADR 并改本表。
 allowed_layer_edges = [
@@ -81,19 +93,19 @@ forbid_dev_cycles = true
 from = "apeireth-tools-canonical"
 to = "apeireth-image-core"
 why = "capabilities->engine(image_family): image_ops 直连引擎级创作内核"
-target = "TODO-OWNER: 注册为引擎服务/迁能力边, 或 ADR 确认永久例外"
+target = "R4a (ADR-0005): Wave 2 主门禁隔离; Wave 4 条件抽取独立 workspace"
 
 [[flagged_edges]]
 from = "apeireth-gateway"
 to = "apeireth-sdk"
 why = "adapter->adapter: gateway 复用 sdk::im 类型"
-target = "TODO-OWNER: IM 类型下沉 protocol/tools"
+target = "R4b (ADR-0005): owner 裁决（建议归档 SDK 四孤岛; IM 类型下沉 protocol/tools）"
 
 [[flagged_edges]]
 from = "apeireth-plugin"
 to = "apeireth-orchestration"
 why = "foundation 内反向依赖: LlmFactory/SubagentRole mirror (llm_orchestration_mirror.rs 自认反向依赖成环)"
-target = "TODO-OWNER: 删除 mirror, 契约下沉 plugin 或 protocol"
+target = "R2 (单项 ADR 待出, Wave 3): 删除 mirror, 契约下沉 plugin 或 protocol"
 
 # 现役装配根 (允许多个但必须登记; 目标收敛到 runtime-assembly + 薄适配器)。
 [[composition_roots]]
@@ -123,34 +135,34 @@ sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
 # 已登记技术债 (目标: 收敛为一套 Extension ABI / 一个注册表 / 一套命名)。
 [[extension_debt]]
 item = "两套扩展 ABI (Plugin / BehaviorModule) 与三份注册表 (PluginManager / BehaviorRegistry / CapabilityRegistry)"
-target = "TODO-OWNER: R2 扩展 ABI 统一"
+target = "R2 (单项 ADR 待出, Wave 3): 统一 Extension ABI + 单注册表 + 单命名"
 
 [[extension_debt]]
 item = "foundation/plugin 内同名 CapabilityRegistry (id->owner 索引) 未被生产外部使用"
-target = "TODO-OWNER: 删除或并入唯一注册表"
+target = "R2 (Wave 3): 删除或并入唯一注册表"
 
 [[extension_debt]]
 item = "命名漂移: Module / BehaviorModule / AgentModule / ModuleRegistry / BehaviorRegistry"
-target = "TODO-OWNER: 统一命名 (一个概念一个名字)"
+target = "R2 (单项 ADR 待出, Wave 3): 统一命名（一个概念一个名字）"
 
 # 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
 [[concepts]]
 name = "ContextAssembler"
 canonical = "crates/foundation/orchestration/src/context_budget.rs"
 known_debt = ["crates/engine/organ/src/context_assembly.rs"]
-target = "TODO-OWNER: R7 上下文组装单一化"
+target = "R7 (单项 ADR 待出, Wave 3): 上下文组装单一化"
 
 [[concepts]]
 name = "ContextBlock"
 canonical = "crates/foundation/orchestration/src/context_budget.rs"
 known_debt = ["crates/engine/organ/src/context_assembly.rs"]
-target = "TODO-OWNER: R7"
+target = "R7 (单项 ADR 待出, Wave 3)"
 
 [[concepts]]
 name = "CapabilityRegistry"
 canonical = "crates/engine/runtime/src/canonical/capability.rs"
 known_debt = ["crates/foundation/plugin/src/registry.rs"]
-target = "TODO-OWNER: R2"
+target = "R2 (单项 ADR 待出, Wave 3)"
 
 [env]
 # 开关登记: 新增 APEIRETH_* 开关必须登记 (owner/默认/层级/用途) 否则守卫红。

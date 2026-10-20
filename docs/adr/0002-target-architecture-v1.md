@@ -1,6 +1,6 @@
 # 0002. 目标架构 v1 —— 七项重构方向收敛（Proposed）
 
-- **Status**: Proposed（待 owner 裁决；裁决前**架构改动保持冻结**，本 ADR 只写目标、不动代码）
+- **Status**: Accepted（owner 2026-10-20「按你的建议来吧」；架构按本 ADR 方向启动，逐项仍走单项 ADR）
 - **Date**: 2026-10-20
 - **Owners**: 架构线（主笔）→ owner（裁决）
 - **Supersedes**: —
@@ -73,9 +73,9 @@
 
 ## 8. 验收与裁决位
 
-- [ ] owner 裁决本 ADR（Accept / 改 / 退）
-- [ ] 裁决后：`contract.toml` target 条款逐项转 accepted（每项配单项 ADR）
-- [ ] Wave 2 启动前：R1a spec、R3 config schema、R4 迁出方案各出单项 ADR（Proposed）
+- [x] owner 裁决本 ADR（2026-10-20 Accept：「按你的建议来吧」）
+- [ ] 裁决后：`contract.toml` target 条款逐项转 accepted（每项配单项 ADR：0003 R1a / 0004 R3 / 0005 R4a 已出）
+- [ ] Wave 2 启动前：R1a spec、R3 config schema、R4 迁出方案各出单项 ADR（Proposed）——**已出，见 ADR-0003/0004/0005**
 - [ ] 每波收口：`arch_guard --strict` 0 新增 + 基线缩表 + 记分牌无指标变差
 
 ## 9. 性质与回滚

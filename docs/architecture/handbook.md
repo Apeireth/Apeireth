@@ -28,8 +28,9 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 |---|---|
 | 规则体系 | **已生效**（ADR-0001，commit `8bfefb1b`）；灰度 report-only 至 **2026-11-03** |
 | 三线协作契约 | **已生效**（commit `8e9dd3ae`） |
-| 目标架构 v1 | **Proposed**（ADR-0002，待 owner 裁决；**裁决前不动结构**） |
-| 架构波次 | `current_wave = 1`（Wave 1 = 规则落地批） |
+| 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR 已出：0003 R1a / 0004 R3 / 0005 R4a |
+| 架构波次 | `current_wave = 1`（Wave 1 = 规则落地批；Wave 2 待启动：R0 剩余 + R1a + R3a + R4a） |
+| 待 owner 裁决 | ADR-0005 R4b（SDK 孤岛归档 vs 接线；perception 去留） |
 | 基线 | 356 条（edge 118 / devcycle 1 / env 154 / size 70 / concept 6 / ext 7） |
 | 已登记的已知债务 | `contract.toml` `[flagged_edges]`（3 条）/ `[extension_debt]`（3 条）/ `[concepts].known_debt`（2 组）；target 均 `TODO-OWNER` |
 | 未完成项 | ADR-0002 裁决；R0 剩余（ARCHITECTURE 生成物/14 键表述/crate 口径）；R1a/R3/R4 单项 ADR；wiring ledger（R3） |

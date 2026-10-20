@@ -31,7 +31,10 @@
 | ADR | 标题 | 状态 | 关联 |
 |---|---|---|---|
 | [0001](0001-adopt-architecture-contract.md) | 采纳架构契约体系与例外预算 | Accepted | contract.toml / arch_guard.py / 例外预算旋钮 |
-| [0002](0002-target-architecture-v1.md) | 目标架构 v1——七项重构方向收敛 | **Proposed（待 owner 裁决）** | R0-R8 / 波次路线 / 记分牌 |
+| [0002](0002-target-architecture-v1.md) | 目标架构 v1——七项重构方向收敛 | Accepted | R0-R8 / 波次路线 / 记分牌 |
+| [0003](0003-r1a-nervous-readonly-snapshot.md) | R1a 神经系统·只读聚合（spec） | Accepted（实施归生物线） | Wave 2 / self_status 22 节 |
+| [0004](0004-r3-config-and-wiring-ledger.md) | R3 配置 schema + env 登记 + wiring ledger | Accepted（实施归效率线） | Wave 2-4 / env-registry / 接线账 |
+| [0005](0005-r4-crate-topology-surgery.md) | R4 crate 拓扑手术——图像家族门禁隔离 + SDK/perception 裁决 | Accepted（R4a）；**R4b 待 owner** | Wave 2 / 门禁时间 / 归档 |
 
 ## 命名
 
