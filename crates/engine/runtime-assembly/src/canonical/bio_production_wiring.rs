@@ -38,8 +38,8 @@ use apeireth_tools_canonical::self_status::{
 
 use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
-    bio_lifecycle_enabled_from_env_value, bio_lifecycle_wiring_from_env_value, BioLifecycleState,
-    LifecycleClock, BIO_LIFECYCLE_ENABLE_ENV,
+    bio_lifecycle_enabled_from_env_value, bio_lifecycle_wiring_from_env_value_with_store_dir,
+    BioLifecycleState, LifecycleClock, BIO_LIFECYCLE_ENABLE_ENV,
 };
 use crate::canonical::care_heartbeat::bio_tone::{bio_tone_wiring_from_env, ToneState};
 use crate::canonical::care_heartbeat::CareHeartbeatStatus;
@@ -72,6 +72,7 @@ pub(super) fn install_bio_modules(
     modules: &mut Vec<Arc<dyn Module>>,
     clock: &Arc<dyn Clock>,
     capabilities: &[Arc<dyn ToolCapability>],
+    lifecycle_store_dir: Option<&std::path::Path>,
 ) -> BioWiringHandles {
     // W3.2: 修复指令段 + 策略化上下文块的 TurnStart overlay 装配点。
     // 两个开关默认关（`APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` /
@@ -109,10 +110,11 @@ pub(super) fn install_bio_modules(
             .iter()
             .map(|tool| tool.declaration().name)
             .collect();
-        if let Some(wiring) = bio_lifecycle_wiring_from_env_value(
+        if let Some(wiring) = bio_lifecycle_wiring_from_env_value_with_store_dir(
             lifecycle_raw.as_deref(),
             lifecycle_clock,
             &registered_tool_names,
+            lifecycle_store_dir,
         ) {
             lifecycle_state = Some(Arc::clone(wiring.state()));
             modules.push(wiring.module() as Arc<dyn Module>);

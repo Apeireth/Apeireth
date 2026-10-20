@@ -29,6 +29,25 @@
 //! 装载/卸载事件；凭格式编造使用次数 = 伪接线。内核仍支持这三类，留给有
 //! 真实事件源的接线批。
 //!
+//! W3.6 起账本可选绑定文件账（见下节「可选持久化」），不改变以上信号口径与
+//! 「零动作」语义：账本仍是内存真值，文件只是重启恢复用的快照。
+//!
+//! # 可选持久化（W3.6 收尾，默认关）
+//!
+//! 账本默认**纯内存**：不传目录 = 与 W3.5 逐字节一致（零文件、零读写）。
+//! 显式传入 care 目录时，[`BioLifecycleState`] 绑定 [`LifecycleStateStore`]：
+//!
+//! - 启动装载 `<care_dir>/lifecycle_state.json`（StoredDoc 信封
+//!   [`LIFECYCLE_STATE_DOC_NAME`] v1）；缺失 = 合法空账；坏档 = 空账 + 诊断 +
+//!   **本进程拒写**（原档逐字节不动）；
+//! - 写入时机：每回合收口 [`BioLifecycleState::evaluate`] 后，**且自上次成功
+//!   落盘以来账本确有变化**时原子写一次（确定性：无 debounce、不读系统时钟）；
+//!   显式 [`BioLifecycleState::persist`] 可提前刷盘。播种是每个启动从真实声明
+//!   清单重建的注册事实，不单独落盘（随下一次回合收口一起写）；
+//! - 持久化子集：全部 [`LifecycleRecord`]（含墓碑）+ 策略 + 容量 + 三个累计
+//!   计数；`last_transitions` / `last_action` 是瞬时面，**不落盘**；
+//! - 单写者假设：同进程一把锁串行读写；跨进程文件锁未做（见 store 模块注）。
+//!
 //! # 开关（默认关，fail-closed）
 //!
 //! 装配门 = env [`BIO_LIFECYCLE_ENABLE_ENV`]（`APEIRETH_ENABLE_BIO_LIFECYCLE`，
@@ -57,8 +76,12 @@
 //! - **self_status 未注册**：本模块提供 [`bio_lifecycle_probe`]
 //!   （`BioMechanismProbe`，值 = 账本只读快照），但注册一行
 //!   `register_bio_probe(BioMechanismKind::Lifecycle, ...)` 由 Lead 在装配根做；
-//! - **无持久化 / 无遥测落盘 / 无 live E2E**：重启丢账本；`last_transitions`
-//!   只保留最近一次非空 `evaluate` 批次；
+//! - **持久化默认关**：文件账已实现并测试，但生产装配根尚未传入 care 目录
+//!   （`bio_production_wiring.rs` 本批禁改，接线由 Lead 做一行）；不传目录 =
+//!   纯内存 = 今天的行为，一次文件 I/O 都没有。**不是 DEFAULT ENABLED**；
+//! - **无 telemetry 落盘 / 无 live E2E**：重启恢复由装配级测试用临时目录覆盖，
+//!   未在真实宿主进程重启复测；`last_transitions` 只保留最近一次非空
+//!   `evaluate` 批次（瞬时面，不落盘）；
 //! - **不宣称清理**：题面「生命周期→工具/技能/记忆清理」中的「清理」本批不做，
 //!   内核文档也明确「只给判定，不做动作」；本装配面保持同一纪律。
 //!
@@ -71,12 +94,29 @@
 //!   `rejected_after_retire_total` 并更新 `last_action`，复活仍走内核显式
 //!   `revive`（本装配面不提供动作入口）；
 //! - 容量淘汰不是静默丢记录：`evicted_total` 累加，被淘汰记录由内核按规则
-//!   补墓碑后交还（本模块只计数，不归档——归档面留给上层）。
+//!   补墓碑后交还（本模块只计数，不归档——归档面留给上层）；
+//! - 文件账（绑定时）：缺失 = 合法空态；坏档拒开且本进程拒写（原档不覆盖）；
+//!   写只在 `evaluate` 后、且账本自上次成功落盘以来确有变化时发生一次，
+//!   同输入序列 → 同字节；
+//! - 默认关 / 无目录：零文件、零读写、零额外时钟读取，观测面与纯内存逐字节一致。
 
 #![forbid(unsafe_code)]
 
+// W3.6 收尾：文件账存储。本批禁改 `canonical.rs`，经 `#[path]` 挂在本模块下编译，
+// 对外路径 `canonical::care_heartbeat::bio_lifecycle::lifecycle_state_store`；
+// Lead 迁移本模块到 `canonical.rs` 时该子模块随父模块一起走，无需另加声明。
+#[path = "lifecycle_state_store.rs"]
+pub mod lifecycle_state_store;
+
+pub use self::lifecycle_state_store::{
+    lifecycle_state_doc_compat, LifecycleCounters, LifecycleStateBody, LifecycleStateStore,
+    LifecycleStateStoreError, LIFECYCLE_STATE_DOC_NAME, LIFECYCLE_STATE_DOC_VERSION,
+    LIFECYCLE_STATE_FILE_NAME,
+};
+
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use apeireth_orchestration::lifecycle::{
@@ -142,7 +182,8 @@ pub struct BioLifecycleObservation {
 /// 生命周期装配状态（装配面唯一持有者）：内存账本 + 注入时钟 + 只读计数器。
 ///
 /// 线程安全：`Mutex<LifecycleLedger>` + 原子计数器；钩子串行执行，锁竞争可忽略。
-/// **不读系统时钟、不落盘、不触碰任何外部资产**。
+/// **不读系统时钟、不触碰任何外部资产**；文件 I/O 仅在显式绑定
+/// [`LifecycleStateStore`] 后发生（默认不绑定 = 纯内存）。
 pub struct BioLifecycleState {
     ledger: Mutex<LifecycleLedger>,
     clock: LifecycleClock,
@@ -151,6 +192,23 @@ pub struct BioLifecycleState {
     evicted_total: AtomicU64,
     rejected_after_retire_total: AtomicU64,
     last_action: Mutex<Option<String>>,
+    /// 可选文件账；`None` = 纯内存（默认，零文件 I/O）。
+    store: Option<LifecycleStateStore>,
+    /// 自上次成功落盘以来账本是否确有变化（决定 `evaluate` 后是否写一次）。
+    dirty: AtomicBool,
+    /// 持久化诊断（启动装载失败真因 / 落盘失败计数与最近真因）。
+    persistence: Mutex<PersistenceDiagnostics>,
+}
+
+/// 持久化诊断（只增不减的失败计数 + 最近真因；启动装载失败 = 本进程拒写）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct PersistenceDiagnostics {
+    /// 启动装载失败真因；`Some` = 坏档，保持空账且**拒绝后续写入**。
+    load_error: Option<String>,
+    /// 落盘失败次数（进程内累计；成功不清零历史）。
+    save_failures: u64,
+    /// 最近一次落盘失败真因。
+    last_save_error: Option<String>,
 }
 
 impl BioLifecycleState {
@@ -171,6 +229,85 @@ impl BioLifecycleState {
             evicted_total: AtomicU64::new(0),
             rejected_after_retire_total: AtomicU64::new(0),
             last_action: Mutex::new(None),
+            store: None,
+            dirty: AtomicBool::new(false),
+            persistence: Mutex::new(PersistenceDiagnostics::default()),
+        }
+    }
+
+    /// 绑定文件账（**构造期链式调用**，启动即装载，不 panic）。
+    ///
+    /// - 文件缺失 = 合法空账（不创建文件）；
+    /// - 装载成功 = 账本 / 策略 / 容量 / 累计计数原样恢复，瞬时观测面从空开始；
+    /// - 坏档 = 空账 + [`Self::persistence_load_diagnostic`] 真因，且本进程
+    ///   **拒绝写入**（不覆盖原档）。
+    ///
+    /// 运行期不换账：绑定后再调用本方法会用磁盘内容覆盖内存账，不在本 API
+    /// 契约内（只应在 `new` / `with_policy` 之后立刻调用一次）。
+    #[must_use]
+    pub fn with_store(mut self, store: LifecycleStateStore) -> Self {
+        self.store = Some(store);
+        self.dirty.store(false, Ordering::SeqCst);
+        *self.lock_persistence() = PersistenceDiagnostics::default();
+        self.restore_from_store();
+        self
+    }
+
+    /// [`Self::with_store`] 的 care 目录便捷形态：
+    /// 绑定 `<care_dir>/lifecycle_state.json`（目录不存在时缺省为空账，
+    /// 首次落盘原子写会按需创建父目录）。
+    #[must_use]
+    pub fn with_store_from_dir(mut self, care_dir: impl Into<PathBuf>) -> Self {
+        self.with_store(LifecycleStateStore::under_care_dir(care_dir))
+    }
+
+    /// 是否绑定了文件账（默认 `false` = 纯内存，零文件 I/O）。
+    #[must_use]
+    pub fn persistence_enabled(&self) -> bool {
+        self.store.is_some()
+    }
+
+    /// 绑定的 `lifecycle_state.json` 路径（未绑定 = `None`）。
+    #[must_use]
+    pub fn persistence_path(&self) -> Option<&Path> {
+        self.store.as_ref().map(LifecycleStateStore::path)
+    }
+
+    /// 启动装载诊断：`None` = 文件缺失或装载成功；`Some` = 坏档真因
+    /// （此时账本为空且本进程拒写）。
+    #[must_use]
+    pub fn persistence_load_diagnostic(&self) -> Option<String> {
+        self.lock_persistence().load_error.clone()
+    }
+
+    /// 落盘失败次数（进程内累计；无文件账 = 恒 0）。
+    #[must_use]
+    pub fn persistence_save_failures(&self) -> u64 {
+        self.lock_persistence().save_failures
+    }
+
+    /// 最近一次落盘失败真因（成功后保留历史，便于排障）。
+    #[must_use]
+    pub fn persistence_last_save_error(&self) -> Option<String> {
+        self.lock_persistence().last_save_error.clone()
+    }
+
+    /// 显式刷盘（优雅停机 / 测试）：
+    ///
+    /// - `Ok(false)` = 未绑定文件账（纯内存，零 I/O，账本不动）；
+    /// - `Ok(true)` = 已原子写一次；
+    /// - `Err` = 坏档拒写 / 写失败（真因同时计入诊断，账本仍是内存真值）。
+    pub fn persist(&self) -> Result<bool, String> {
+        if self.store.is_none() {
+            return Ok(false);
+        }
+        match self.persist_ledger() {
+            Ok(()) => Ok(true),
+            Err(error) => {
+                let message = error.to_string();
+                self.note_save_failure(&message);
+                Err(message)
+            }
         }
     }
 
@@ -218,6 +355,7 @@ impl BioLifecycleState {
             }
         }
         if added > 0 {
+            self.dirty.store(true, Ordering::SeqCst);
             self.set_last_action(format!("seeded {added} tools"));
         }
         added
@@ -263,11 +401,13 @@ impl BioLifecycleState {
         };
         match recorded {
             Ok(()) => {
+                self.dirty.store(true, Ordering::SeqCst);
                 let label = if ok { "ok" } else { "error" };
                 self.set_last_action(format!("tool_result {name} {label}"));
                 Ok(())
             }
             Err(LifecycleError::AlreadyRetired(_)) => {
+                self.dirty.store(true, Ordering::SeqCst);
                 self.rejected_after_retire_total
                     .fetch_add(1, Ordering::SeqCst);
                 self.set_last_action(format!("tool_result {name} ignored (retired)"));
@@ -284,17 +424,22 @@ impl BioLifecycleState {
     }
 
     /// [`evaluate`](Self::evaluate) 的显式时刻形态（测试 / 回放）。
+    ///
+    /// 绑定文件账时，本方法是**唯一自动落盘点**：评估完成后若账本自上次成功
+    /// 落盘以来确有变化（工具结果 / 淘汰 / 迁移 / 计数），原子写一次；无变化
+    /// 或未绑定 = 不写。落盘失败不影响返回的迁移，也不打断回合（真因进诊断）。
     pub fn evaluate_at(&self, now_ms: u64) -> Vec<LifecycleTransition> {
         let transitions = self.lock_ledger().evaluate(now_ms);
-        if transitions.is_empty() {
-            return transitions;
+        if !transitions.is_empty() {
+            self.dirty.store(true, Ordering::SeqCst);
+            self.transitions_total
+                .fetch_add(transitions.len() as u64, Ordering::SeqCst);
+            if let Some(last) = transitions.last() {
+                self.set_last_action(describe_transition(last));
+            }
+            *self.lock_last_transitions() = transitions.clone();
         }
-        self.transitions_total
-            .fetch_add(transitions.len() as u64, Ordering::SeqCst);
-        if let Some(last) = transitions.last() {
-            self.set_last_action(describe_transition(last));
-        }
-        *self.lock_last_transitions() = transitions.clone();
+        self.persist_after_evaluate();
         transitions
     }
 
@@ -329,12 +474,89 @@ impl BioLifecycleState {
     }
 
     fn note_eviction(&self, evicted: &LifecycleRecord) {
+        self.dirty.store(true, Ordering::SeqCst);
         self.evicted_total.fetch_add(1, Ordering::SeqCst);
         self.set_last_action(format!(
             "evicted {} ({})",
             evicted.asset_id,
             evicted.stage.as_str()
         ));
+    }
+
+    /// 启动装载（仅构造期调用）：成功 = 账本 / 计数替换；失败 = 空账 + 诊断。
+    fn restore_from_store(&self) {
+        let Some(store) = &self.store else {
+            return;
+        };
+        match store.load() {
+            Ok(None) => {}
+            Ok(Some(body)) => match body.ledger() {
+                Ok(ledger) => {
+                    *self.lock_ledger() = ledger;
+                    self.transitions_total
+                        .store(body.counters.transitions_total, Ordering::SeqCst);
+                    self.evicted_total
+                        .store(body.counters.evicted_total, Ordering::SeqCst);
+                    self.rejected_after_retire_total
+                        .store(body.counters.rejected_after_retire_total, Ordering::SeqCst);
+                }
+                Err(error) => self.note_load_error(error.to_string()),
+            },
+            Err(error) => self.note_load_error(error.to_string()),
+        }
+    }
+
+    fn note_load_error(&self, error: String) {
+        self.lock_persistence().load_error = Some(bounded(error));
+    }
+
+    /// `evaluate` 后的自动落盘：未绑定 / 无变化 = 不写；失败只记诊断。
+    fn persist_after_evaluate(&self) {
+        if self.store.is_none() || !self.dirty.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Err(error) = self.persist_ledger() {
+            self.note_save_failure(&error.to_string());
+        }
+    }
+
+    /// 一次完整的「整本账快照 → 原子写」。
+    ///
+    /// 启动装载失败（坏档）时**拒绝写入**：不覆盖原档，返回真因。
+    /// dirty 在快照前清除、失败时恢复：快照期间发生的并发变更会把 dirty 重新
+    /// 置真，宁可多写一次也不丢一次更新。
+    fn persist_ledger(&self) -> Result<(), LifecycleStateStoreError> {
+        let Some(store) = &self.store else {
+            return Ok(());
+        };
+        if let Some(reason) = self.lock_persistence().load_error.clone() {
+            return Err(LifecycleStateStoreError::Refused(format!(
+                "store load failed at startup; refusing to overwrite: {reason}"
+            )));
+        }
+        self.dirty.store(false, Ordering::SeqCst);
+        let body = {
+            let ledger = self.lock_ledger();
+            LifecycleStateBody::from_ledger(
+                &ledger,
+                LifecycleCounters {
+                    transitions_total: self.transitions_total.load(Ordering::SeqCst),
+                    evicted_total: self.evicted_total.load(Ordering::SeqCst),
+                    rejected_after_retire_total: self
+                        .rejected_after_retire_total
+                        .load(Ordering::SeqCst),
+                },
+            )
+        };
+        store.save(&body).inspect_err(|_| {
+            self.dirty.store(true, Ordering::SeqCst);
+        })
+    }
+
+    fn note_save_failure(&self, error: &str) {
+        let mut persistence = self.lock_persistence();
+        persistence.save_failures = persistence.save_failures.saturating_add(1);
+        persistence.last_save_error = Some(bounded(error.to_string()));
     }
 
     fn set_last_action(&self, action: String) {
@@ -355,6 +577,12 @@ impl BioLifecycleState {
 
     fn lock_last_action(&self) -> MutexGuard<'_, Option<String>> {
         self.last_action
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn lock_persistence(&self) -> MutexGuard<'_, PersistenceDiagnostics> {
+        self.persistence
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -507,6 +735,12 @@ impl BioLifecycleWiring {
     pub fn module(&self) -> Arc<dyn AgentModule> {
         Arc::clone(&self.module)
     }
+
+    /// 启动装载诊断（纯内存 / 装载成功 = `None`；坏档 = 真因）。
+    #[must_use]
+    pub fn persistence_load_diagnostic(&self) -> Option<String> {
+        self.state.persistence_load_diagnostic()
+    }
 }
 
 /// 开关值 → 模块（开关关 = `None`；供宿主自带 [`BioLifecycleState`] 时使用）。
@@ -519,37 +753,69 @@ pub fn bio_lifecycle_module_from_env_value(
         .then(|| Arc::new(BioLifecycleModule::new(true, state)) as Arc<dyn AgentModule>)
 }
 
-/// 开关值 → (共享状态 + 模块)；开关关 = `None`（懒加载，一次时钟都不读）。
+/// 开关值 → (共享状态 + 模块 + 可选文件账目录)；开关关 = `None`
+/// （懒加载：不构造状态、不读时钟、不碰目录）。
 ///
 /// `registered_tool_names` 是装配根持有的**真实工具声明名**（例如
 /// `ProductionModules::capabilities().iter().map(|tool| tool.declaration().name)`）：
 /// 它们以 `Newborn` 入账，之后按真实派发结果记账。传空切片 = 只跟踪运行期
 /// 首次出现的工具（动态发现场景），不编造种子。
+///
+/// `store_dir = None` = 纯内存（与 W3.5 逐字节一致，零文件 I/O）；
+/// `Some(care_dir)` = 启动装载 `<care_dir>/lifecycle_state.json`，之后每回合
+/// 收口 `evaluate` 后按需原子写（见 [`BioLifecycleState::evaluate_at`]）。
+/// 坏档不 panic：状态保持空账、真因经 [`BioLifecycleWiring::persistence_load_diagnostic`]
+/// 返回，且本进程拒写（不覆盖原档）。
+#[must_use]
+pub fn bio_lifecycle_wiring_from_env_value_with_store_dir(
+    raw: Option<&str>,
+    clock: LifecycleClock,
+    registered_tool_names: &[String],
+    store_dir: Option<&Path>,
+) -> Option<BioLifecycleWiring> {
+    if !bio_lifecycle_enabled_from_env_value(raw) {
+        return None;
+    }
+    let state = match store_dir {
+        Some(dir) => BioLifecycleState::new(clock).with_store_from_dir(dir),
+        None => BioLifecycleState::new(clock),
+    };
+    state.seed_tool_names(registered_tool_names);
+    let state = Arc::new(state);
+    let module: Arc<dyn AgentModule> = Arc::new(BioLifecycleModule::new(true, Arc::clone(&state)));
+    Some(BioLifecycleWiring { state, module })
+}
+
+/// 兼容入口：不绑定文件账（纯内存，行为与 W3.5 逐字节一致）。
+///
+/// 等价于 [`bio_lifecycle_wiring_from_env_value_with_store_dir`] 传
+/// `store_dir = None`；生产接线请用带目录的新入口（`bio_production_wiring.rs`
+/// 本批禁改，接线由 Lead 做）。
 #[must_use]
 pub fn bio_lifecycle_wiring_from_env_value(
     raw: Option<&str>,
     clock: LifecycleClock,
     registered_tool_names: &[String],
 ) -> Option<BioLifecycleWiring> {
-    if !bio_lifecycle_enabled_from_env_value(raw) {
-        return None;
-    }
-    let state = Arc::new(BioLifecycleState::new(clock));
-    state.seed_tool_names(registered_tool_names);
-    let module: Arc<dyn AgentModule> = Arc::new(BioLifecycleModule::new(true, Arc::clone(&state)));
-    Some(BioLifecycleWiring { state, module })
+    bio_lifecycle_wiring_from_env_value_with_store_dir(raw, clock, registered_tool_names, None)
 }
 
-/// 从 env 现值装配（同 [`bio_lifecycle_wiring_from_env_value`] 的 fail-closed 口径）。
+/// 从 env 现值装配（fail-closed 口径同
+/// [`bio_lifecycle_wiring_from_env_value`]）。
+///
+/// `store_dir = None` = 纯内存；`Some(care_dir)` = 绑定文件账。开关关时目录
+/// 一次都不碰（返回 `None`）。
 #[must_use]
 pub fn bio_lifecycle_wiring_from_env(
     clock: LifecycleClock,
     registered_tool_names: &[String],
+    store_dir: Option<&Path>,
 ) -> Option<BioLifecycleWiring> {
-    bio_lifecycle_wiring_from_env_value(
+    bio_lifecycle_wiring_from_env_value_with_store_dir(
         std::env::var(BIO_LIFECYCLE_ENABLE_ENV).ok().as_deref(),
         clock,
         registered_tool_names,
+        store_dir,
     )
 }
 

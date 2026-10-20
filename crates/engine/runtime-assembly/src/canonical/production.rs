@@ -1012,6 +1012,9 @@ impl ProductionModules {
         // (增删列, 四类触发器词表)。治理档位在治理链 (`CareScheduleApprovalHook`):
         // RequireApproval 级 —— 改规则 = 写文件 (write_intent 同族), 每次调用
         // 都停人工审批。
+        // W3.6: 关怀数据目录同时作为生命周期账本持久化目录（开关关 = 纯内存，
+        // 不建文件；目录缺省 = 不持久化），故先克隆再按需搬迁。
+        let bio_lifecycle_store_dir = config.care_schedule.clone();
         if let Some(care_dir) = config.care_schedule {
             instrument.constructed(ModuleFamily::CareSchedule);
             let provider = CareScheduleModule::new(care_dir);
@@ -1503,10 +1506,15 @@ impl ProductionModules {
             ));
         }
 
-        // W3.2 / W3.3 / W3.5: 修复指令段 + 调质 tone + 生命周期装配块 (全默认关,
-        // 关 = 不构造不注册), 句柄回传装配根。
-        let bio_wiring =
-            bio_production_wiring::install_bio_modules(&mut modules, &clock, &capabilities);
+        // W3.2 / W3.3 / W3.5 / W3.6: 修复指令段 + 调质 tone + 生命周期装配块 (全默认关,
+        // 关 = 不构造不注册), 句柄回传装配根；生命周期账本持久化目录 = 关怀数据目录
+        // （缺省 None = 纯内存，不建文件）。
+        let bio_wiring = bio_production_wiring::install_bio_modules(
+            &mut modules,
+            &clock,
+            &capabilities,
+            bio_lifecycle_store_dir.as_deref(),
+        );
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
