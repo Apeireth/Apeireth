@@ -1,0 +1,150 @@
+# 文档状态声明唯一真源（Docs Truth System · P0 试点）
+#
+# 规则：
+# - 每条 claim = 一个"可核验的状态声明"；id 全局唯一、永不复用。
+# - level 取四级口径：IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED；
+#   缺口用 NOT IMPLEMENTED。
+# - sources 是证据文件；`scripts/docs_truth.py --verify` 会核对存在性，并用
+#   `git diff <verified_at> -- <sources>` 计算 STALE（源码动过而 verified_at 未更新 = 过期）。
+# - switch_env 非空时 verify 会核对 env 常量在 crates/ 中存在。
+# - verified_at 必须是 commit hash；**改完对应源码后必须更新它并跑 verify**。
+# - 生成物 docs/status/STATUS.md 由 `--gen` 产出，禁止手改。
+#
+# 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
+version: 1
+updated_at: "2026-10-20"
+
+claims:
+  - id: rt.provider_router
+    title: "跨 provider fallback + 健康态（运行时路由）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/runtime/src/canonical/provider.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
+    tests:
+      - crates/engine/runtime/tests/canonical_multi_provider.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。"
+
+  - id: core.cost_router
+    title: "成本分级路由（H-P2，四档选模）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_COST_ROUTING
+    sources:
+      - crates/foundation/core/src/cost_router.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/foundation/core/src/cost_router.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-core cost_router"
+    owner: core
+    next_review: "2026-11-20"
+    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。"
+
+  - id: tool.task_board
+    title: "任务簿（V6-a 持久任务队列工具面）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_TASK_BOARD
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/task_board_tool.rs
+      - crates/foundation/orchestration/src/task_queue.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/task_board_tool.rs
+      - crates/adapters/cli/tests/task_board_knob.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
+    owner: runtime-assembly
+    next_review: "2026-11-20"
+    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。"
+
+  - id: tool.mcp_bridge
+    title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_MCP
+    sources:
+      - crates/capabilities/tools/src/mcp_bridge/bridge.rs
+      - crates/capabilities/tools/src/mcp_bridge/catalog.rs
+      - crates/capabilities/tools/src/mcp_bridge/config.rs
+      - crates/capabilities/tools/src/mcp_bridge/governance.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+    tests:
+      - crates/capabilities/tools/src/mcp_bridge/config.rs
+      - crates/capabilities/tools/src/mcp_bridge/catalog.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。"
+
+  - id: tool.voice_speak
+    title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_VOICE_SPEAK
+    sources:
+      - crates/capabilities/tools/src/voice/speak.rs
+      - crates/capabilities/tools/src/voice/playback.rs
+      - crates/capabilities/tools/src/voice/ledger.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/capabilities/tools/tests/voice_speak.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。"
+
+  - id: gap.memory_update
+    title: "记忆更新/更正（既有事实编辑）——缺口"
+    level: NOT IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/adapters/gateway/src/panels.rs
+    tests:
+      - crates/adapters/gateway/tests/panel_routes.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
+    owner: gateway
+    next_review: "2026-11-20"
+    notes: "capability universe: memory.update supported=false / reason=not_implemented；底层 bitemporal upsert/invalidate 已存在，缺治理面。"
+
+  - id: gap.prompt_stabilizer_unwired
+    title: "PromptCacheStabilizer / EphemeralContextSnapshot——库级已实现、生产未接线"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/foundation/orchestration/src/prompt_stabilizer.rs
+    tests:
+      - crates/foundation/orchestration/src/prompt_stabilizer.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-orchestration prompt_stabilizer"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "2026-10-20 grep 实测：runtime/runtime-assembly/adapters 对 EphemeralContextSnapshot/PromptCacheStabilizer/assemble_tiered 零生产引用。"
+
+  - id: sec.linux_containment
+    title: "Linux 进程遏制边界（partial，如实）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/capabilities/tools/src/process/linux.rs
+      - crates/capabilities/tools/src/process/platform.rs
+    tests:
+      - crates/capabilities/tools/tests/process_executor.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。"

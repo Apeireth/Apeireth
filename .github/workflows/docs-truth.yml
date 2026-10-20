@@ -1,0 +1,43 @@
+name: Docs truth (P0 report-only)
+
+# 文档事实体系 P0（第三线，2026-10-20）：
+# claims.yaml = 唯一状态真源；STATUS.md = 生成物。
+# P0 阶段两步都 report-only（continue-on-error），P1 起改为阻塞
+# （STALE/FAIL 对"源码变更触达的 claim"必须在本 PR 内复核并更新 verified_at）。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'docs/status/**'
+      - 'scripts/docs_truth.py'
+      - 'crates/**'
+  pull_request:
+    paths:
+      - 'docs/status/**'
+      - 'scripts/docs_truth.py'
+      - 'crates/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs-truth:
+    name: docs truth gate (P0 report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify claims (evidence + staleness)
+        continue-on-error: true
+        run: |
+          python3 scripts/docs_truth.py --verify
+
+      - name: Check generated STATUS.md drift
+        continue-on-error: true
+        run: |
+          python3 scripts/docs_truth.py --check
