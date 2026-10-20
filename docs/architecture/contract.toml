@@ -20,16 +20,16 @@
 version = "1.0"
 updated_at = "2026-10-20"
 status = "adjudicated"            # 规则体系已裁决生效（ADR-0001）
-status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；目标架构 v1 已裁决（ADR-0002）；Wave 2 单项 ADR-0003/0004/0005 已出；R4b 等 owner 裁决"
+status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；目标架构 v1 已裁决（ADR-0002）；Wave 2 单项 ADR-0003/0004/0005 已出并收口；Wave 3 收口 (2026-10-20): ADR-0007 R7 / ADR-0008 R2 Accepted 并交付（R2-2..R2-5 / R7-2..R7-4），R4b 四岛归档完成；R3c 待 2026-11-03 后 review"
 adjudication = "owner 授权代裁 2026-10-20（'你了解项目全貌做出判断就行'）；决策记录见 docs/adr/0001-adopt-architecture-contract.md"
-target_architecture = { adr = "docs/adr/0002-target-architecture-v1.md", status = "accepted-2026-10-20", waves = "ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a（Wave 2）" }
-current_wave = 3                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
-wave_note = "Wave 2 收口 (2026-10-20): ADR-0002 Accepted + ADR-0003 R1a 交付 (W3.5 神经系统只读聚合) + R4a-1 门禁隔离 + R0 完成 + R3b 主体完成 (env 登记 155 条 TODO=0); Wave 3 = R2/R7 设计 + R1b 准备 + R4b 归档执行 + R3c 验收"
+target_architecture = { adr = "docs/adr/0002-target-architecture-v1.md", status = "accepted-2026-10-20", waves = "ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a（Wave 2）；ADR-0007 R7 / ADR-0008 R2（Wave 3）" }
+current_wave = 4                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
+wave_note = "Wave 3 收口 (2026-10-20): R4b 归档执行完成（perception + SDK 四岛，members 31→30）；R7 交付（ContextBlock 单一化 / SessionStore 三义→单 trait+域内命名 / dormant scheduler 归档 / PromptCacheStabilizer 删除）；R2 交付（Extension ABI 家族 + 双 catalog 实现 / plugin 重复 CapabilityRegistry 退出公共面 / 命名迁移 BehaviorModule·BehaviorRegistry / 契约扩展面收敛）；Wave 4 = R1b + R8 + R6；R3c 待 2026-11-03 后 review"
 rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
 
 [workspace]
-members = 31
-product_crates = 30
+members = 30
+product_crates = 29
 bench_crates = 1
 version = "2.0.0-rc.4"
 test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
@@ -51,8 +51,7 @@ foundation = [
 ]
 engine = [
   "apeireth-runtime", "apeireth-runtime-assembly", "apeireth-provider",
-  "apeireth-storage", "apeireth-memory", "apeireth-perception",
-  "apeireth-organ", "apeireth-guard",
+  "apeireth-storage", "apeireth-memory", "apeireth-organ", "apeireth-guard",
 ]
 capabilities = ["apeireth-tools-canonical"]
 adapters = ["apeireth-gateway", "apeireth-cli", "apeireth-sdk", "apeireth-tui"]
@@ -125,44 +124,36 @@ role = "Gateway 引导 (目标同上)"
 
 [extension_points]
 # 唯一扩展点登记。新增能力必须复用其一; 新增扩展点/注册表 = 结构变更, 必须 ADR。
-module_trait = "crates/engine/runtime/src/canonical/module.rs::BehaviorModule (alias AgentModule)"
+# 统一 ABI 家族（R2, ADR-0008 §2.1）: foundation/plugin/src/extension.rs 的
+# ExtensionKind / ExtensionDescriptor / ExtensionCatalog; 注册表对外须实现
+# ExtensionCatalog（现存 PluginManager 与 BehaviorRegistry 两个实现）。
+module_trait = "crates/engine/runtime/src/canonical/module.rs::BehaviorModule"
 plugin_trait = "crates/foundation/plugin/src/plugin.rs::Plugin"
-module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry (alias ModuleRegistry)"
+module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry"
 capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
 plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
 sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
 
-# 已登记技术债 (目标: 收敛为一套 Extension ABI / 一个注册表 / 一套命名)。
-[[extension_debt]]
-item = "两套扩展 ABI (Plugin / BehaviorModule) 与三份注册表 (PluginManager / BehaviorRegistry / CapabilityRegistry)"
-target = "R2 (ADR-0008 Proposed, Wave 3): 统一 Extension ABI + 单注册表 + 单命名"
-
-[[extension_debt]]
-item = "foundation/plugin 内同名 CapabilityRegistry (id->owner 索引) 未被生产外部使用"
-target = "R2 (ADR-0008 §2.2, Wave 3): 删除 foundation/plugin 重复 CapabilityRegistry"
-
-[[extension_debt]]
-item = "命名漂移: Module / BehaviorModule / AgentModule / ModuleRegistry / BehaviorRegistry"
-target = "R2 (ADR-0008 §2.3, Wave 3): 统一命名（AgentModule/ModuleRegistry → BehaviorModule/BehaviorRegistry）"
+# 已登记技术债: R2 收口（2026-10-20）后清零。新增结构变更须先出 ADR 再登记。
 
 # 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
 [[concepts]]
 name = "ContextAssembler"
-canonical = "crates/foundation/orchestration/src/context_budget.rs"
-known_debt = ["crates/engine/organ/src/context_assembly.rs"]
-target = "R7 (ADR-0007 Proposed, Wave 3): 上下文组装单一化"
+canonical = "crates/engine/organ/src/context_assembly.rs"
+known_debt = ["crates/foundation/orchestration/src/context_budget.rs"]
+target = "R7-2 后续（Wave 4）: ADR-0007 §2.1 单一装配器合并；两条路径语义不同（organ tiered policy / orchestration budget+spill），Wave 3 只收敛类型"
 
 [[concepts]]
 name = "ContextBlock"
 canonical = "crates/foundation/orchestration/src/context_budget.rs"
-known_debt = ["crates/engine/organ/src/context_assembly.rs"]
-target = "R7 (ADR-0007 Proposed, Wave 3)"
+known_debt = []
+target = "R7（ADR-0007 Accepted）: 已完成 2026-10-20（R7-2a/b；organ 仅再导出，定义=1）"
 
 [[concepts]]
 name = "CapabilityRegistry"
 canonical = "crates/engine/runtime/src/canonical/capability.rs"
-known_debt = ["crates/foundation/plugin/src/registry.rs"]
-target = "R2 (单项 ADR 待出, Wave 3)"
+known_debt = []
+target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部 id→owner 索引更名 CapabilityIndex（非同名公共概念）"
 
 [env]
 # 开关登记: 新增 APEIRETH_* 开关必须登记 (owner/默认/层级/用途) 否则守卫红。
@@ -181,7 +172,7 @@ allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置�
 
 [budgets]
 max_file_loc = 6300                 # 现状最大 src ~6150 (doc_ops.rs); 只减不增
-max_workspace_crates = 31           # 目标: 图像家族移出后 20; 只减不增
+max_workspace_crates = 30           # 目标: 图像家族移出后 20; 只减不增
 max_production_edges = 118          # 2026-10-20 实测; 只减不增 (新增需 ADR)
 
 [exceptions]

@@ -1,6 +1,6 @@
 # 架构守卫集成计划（草案）
 
-> `Status: 📝 v0.1 草案（2026-10-20）`
+> `Status: 📝 v0.2（2026-10-20；Wave 3 收口更新）`
 > 原则：**先 report-only，后 blocking；不改现有脚本的默认行为**。本文件是接入补丁说明，不自动改任何现有文件。
 
 ## 1. 本地接入（两处，各一行）
@@ -8,7 +8,7 @@
 ### 1.0 已完成（2026-10-20 契约落地批）
 
 - `.gitignore` 已加 `!scripts/arch_guard.py`（跨批常驻工具入库，与 `docs_truth.py`/`verify_changed.py` 同族）；
-- 基线已生成：`scripts/arch-baseline.txt`（356 条：edge 118 / devcycle 1 / env 154 / size 70 / concept 6 / ext 7）；
+- 基线已生成：`scripts/arch-baseline.txt`（Wave 3 收口实测 **340 条**：env 153 / edge 111 / size 65 / ext 6 / concept 4 / devcycle 1；初版 2026-10-20 为 356 条）；
 - **三处接入已完成（灰度 report-only）**：
   - `scripts/verify_changed.py`：新增 arch 阶段（`--arch-strict` 才拦截；默认仅报告，且对文档批也生效）；
   - `scripts/commit.ps1`：新增 `-ArchStrict` 开关，默认 report-only + 警告；
@@ -53,23 +53,23 @@ workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-
 
 ## 4. 记分牌（每波对比，只允许一项以上变好、任何一项变差需例外）
 
-| 指标 | 采集 | 当前基线（2026-10-20 实测） | 方向 |
+| 指标 | 采集 | 当前值（Wave 3 收口，2026-10-20 实测） | 方向 |
 |---|---|---|---|
-| workspace members | `cargo metadata` | 31 | 图像家族出主仓后降至 20 |
-| 生产依赖边 | arch_guard | 118 | 只减不增（新增需 ADR） |
-| 裸 env 名 / 出现次数 / 文件 | arch_guard + rg | 158 / 1,106 / 148（rg 口径）；guard src 口径 155（2026-10-20） | 只减 |
-| env 登记 `TODO-OWNER` / `UNCLASSIFIED` | `env-registry.toml`（效率线 `--stats`） | 155 / 155（2026-10-20 首播，登记先行占位，非四级口径） | 每波只减 |
-| 最大 src 文件行数 | arch_guard | ~6,150（doc_ops.rs） | 只减 |
-| 同名概念定义数 | arch_guard | ContextAssembler 2 / ContextBlock 2 / CapabilityRegistry 2 | 只减 |
-| 例外活跃数/权重 | exceptions.toml | 0 / 0 | 有上限、到期清 |
-| 未接线字样 | `rg -c '未接线'` | 253 | 只减 |
-| claims 覆盖 | docs_truth | 12 条 | 只增 |
-| 生物机制观测格 | self_status_source | 14 条仅 1 probe | 只增 |
-| 全量门禁耗时 | 日志 | >18 分钟（2026-10-20 并行门禁实测）；R4a-1 门禁隔离已生效，**分层后实测待 Wave 2 收口** | 只减 |
+| workspace members | `cargo metadata` | **30**（R4b 归档后；目标 20） | 图像家族出主仓后降至 20 |
+| 生产依赖边 | arch_guard | **111** | 只减不增（新增需 ADR） |
+| 裸 env 名 / 出现次数 / 文件 | arch_guard + rg | guard src 口径 **154**；rg 历史口径 158 / 1,106 / 148（2026-10-20 初测） | 只减 |
+| env 登记 `TODO-OWNER` / `UNCLASSIFIED` | `env-registry.toml`（效率线 `--stats`） | 155 条登记（R3b 主体完成；历史口径 155/155 首播） | 每波只减 |
+| 最大 src 文件行数 | arch_guard | **6,150**（doc_ops.rs） | 只减 |
+| 同名概念定义数 | arch_guard | ContextAssembler **2** / ContextBlock **1**（R7-2 收敛）/ CapabilityRegistry **1**（R2 收敛） | 只减 |
+| 例外活跃数/权重 | exceptions.toml | **0 / 0** | 有上限、到期清 |
+| 未接线字样 | `rg -c '未接线'` | 253（2026-10-20 初测，Wave 3 未刷新） | 只减 |
+| claims 覆盖 | docs_truth | 12 条（2026-10-20 初测，Wave 3 未刷新） | 只增 |
+| 生物机制观测格 | self_status_source | 14 条中 probe 7 条（W3.6 批，生物线交付） | 只增 |
+| 全量门禁耗时 | 日志 | >18 分钟（2026-10-20 初测）；R4a-1 图像家族隔离已生效，Wave 3 收口全量日志见 `artifacts/wave3-close-full-test2.log` | 只减 |
 
 ## 5. 后续（v0.2 路线）
 
-1. `ARCHITECTURE.md` 改为 `contract.toml` 生成物 + `--check` 漂移检测——**R0 已完成（2026-10-20）**：`scripts/arch_doc.py` → [ARCHITECTURE.generated.md](ARCHITECTURE.generated.md)（31 members / 118 边，CI `--check`）；根 `ARCHITECTURE.md` 的手写依赖表已退役，改为指针 + 人工边界规则；
+1. `ARCHITECTURE.md` 改为 `contract.toml` 生成物 + `--check` 漂移检测——**R0 已完成（2026-10-20）**：`scripts/arch_doc.py` → [ARCHITECTURE.generated.md](ARCHITECTURE.generated.md)（Wave 3 收口后 30 members / 111 边，CI `--check`）；根 `ARCHITECTURE.md` 的手写依赖表已退役，改为指针 + 人工边界规则；
 2. `claims.yaml` 与能力矩阵逐行映射（接线账）；
 3. env 读取位置收敛到 config 模块后，按文件卡（`allowed_read_locations`）；
 4. 依赖边的"代码级使用"核验（可选：`cargo udeps` 或自研 grep）；

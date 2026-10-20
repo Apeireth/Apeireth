@@ -72,3 +72,18 @@
 - **总体最优**：只统一"描述/命名/索引"，不强行合并两个角色 trait——收益（一个概念一个名字、可枚举的扩展面）大、风险（配置期 provider 被逼实现运行期钩子）小；拒 ①合并为单 trait（职责错配）②只改文档不改命名（alias 继续漂移）。
 - **系统最优**：共享 ABI 类型放 foundation/plugin（最底层可依赖方向），runtime 的 BehaviorRegistry 实现同一 catalog；拒 ①把 catalog 放 runtime（foundation 反向依赖）②新建第 4 个注册表（违反单注册表目标）。
 - **架构最优**：先清单→再加 additive ABI→再迁注册面→最后改名删 alias，每步可验证可回滚；拒 ①一步全改（75 处 rename 无法审）②先改名后加 ABI（中间态双口径更久）。
+
+## 6. 交付记录（2026-10-20 收口）
+
+| 批 | 交付 | commit | 验证（实测） |
+|---|---|---|---|
+| R2-1 | alias 矩阵/注册表调用方/plugin CapabilityRegistry 消费方清单 | `f9e17b35` | 证据入 [r2-inventory](../architecture/r2-inventory-2026-10-20.md) |
+| R2-2 | `ExtensionKind`/`ExtensionDescriptor`/`ExtensionCatalog`（additive） | `56ae816b` | foundation/plugin 4 tests passed；仅 std、0 行为变化 |
+| R2-3a | `PluginManager` 实现 `ExtensionCatalog` | `911e2f49` | plugin 5 tests passed |
+| R2-3b | `BehaviorRegistry` 实现 `ExtensionCatalog` + canonical 名补齐 | `b5f75ba9` | runtime/tests/extension_catalog 1 passed |
+| R2-3c | plugin 重复 `CapabilityRegistry` 退出公共面（`pub(crate)`，删 `PluginManager::capabilities()`） | `2da976ee` + 回归修复 `ae1f8779` | plugin 279 passed；runtime Debug 调用点修复（全 workspace check 兜底） |
+| R2-3d | 内部 id→owner 索引更名 `CapabilityIndex`（公共概念单义） | `d8aa87af` | plugin 279 passed；clippy/fmt 绿 |
+| R2-4 | `AgentModule`→`BehaviorModule`、`ModuleRegistry`→`BehaviorRegistry`，删两 alias | `efcce6c4` | 22 文件；旧名 `git grep` = 0；workspace check exit 0（含并行线 WIP） |
+| R2-5 | 契约收敛：`[extension_points]` 去 alias、`[[extension_debt]]` 清零、concepts known_debt 收敛 | 本收口批 | `arch_guard` VIOLATIONS 0（生物线在途 1 条除外）；extension_debt=0 |
+
+**遗留**：`CapabilityRegistry` canonical 仅 runtime 定义；plugin 内部索引已改名，不再是同名公共概念。

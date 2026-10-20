@@ -69,3 +69,18 @@ ADR-0002 R7 目标："`ContextAssembler`/`ContextBlock`/`assemble_tiered` 各收
 - **总体最优**：R7 消除"同名三义/双类型/五调度器"，是后续所有上下文类改动的返工率来源；拒 ①只清注释不改结构（歧义仍在）②等 R2 全完成再设计（Wave 3 空转）——故本 ADR 可先 Proposed、施工在 R2 Accepted 后。
 - **系统最优**：类型收敛到最底共享层，装配器留在 organ（职责=认知装配），会话契约留在 runtime（职责=会话生命周期）；拒 ①全部搬 runtime（organ 反向依赖）②全部搬 organ（runtime 反向依赖）。
 - **架构最优**：先取证活跃面再删（dormant≠死），删除可逆归档；拒 ①按旧审计数字直接删（可能误删在用）②保留"留而不接"（假接线）。
+
+## 6. 交付记录（2026-10-20 收口）
+
+| 批 | 交付 | commit | 验证（实测） |
+|---|---|---|---|
+| R7-1 | 活跃面/消费点清单（不改码） | `15ddffd4` | 每项文件:行证据入 [r7-inventory](../architecture/r7-inventory-2026-10-20.md) |
+| R7-2a | organ 删自有 `ContextBlock`，改再导出 orchestration canonical | `0bdd9bb4` | `pub struct ContextBlock` 定义=1；organ lib 377 passed；clippy/fmt 绿 |
+| R7-2b | 删 runtime `ContextBlock` 再导出，调用方直连 canonical | `a93fdbb3` | runtime/tests/context_budget 7 passed；cli production_knobs 22 passed；旧路径引用 0 |
+| R7-3 | `SessionStore` 三义→`SessionLifecycleStore`/`SessionNoteStore` | `1cbaee95` / `3c0bcde1` | memory 846 passed / 1 ignored；`memory::SessionStore` 引用 0 |
+| R7-4a | `PromptCacheStabilizer` 孤岛归档 | `51bb6cfa` | legacy/archived + MANIFEST；orchestration 绿；残留仅注释 3 处 |
+| R7-4b-1 | `RecalibrationScheduler` 归档 | `14c0e9a0` | memory 846 passed / 1 ignored |
+| R7-4b-2 | `CognitiveQuotaScheduler` 归档（含 bench 同步） | `d5a4c537` / `2481200b` | orchestration 436 passed；bench harness check exit 0 |
+| 复核 | `HeartbeatScheduler` 内嵌 `HeartbeatProducer` → active 保留（不归档） | `b36ee05e` | heartbeat.rs:268/:284/:310/:359 证据 |
+
+**遗留**：`ContextAssembler` 两个实现（organ tiered policy / orchestration budget+spill）语义不同，ADR §2.1 的单一装配器合并留 Wave 4 债（contract concepts known_debt）；本 ADR 验收范围仅类型/命名/调度面收敛。

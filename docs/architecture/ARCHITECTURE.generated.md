@@ -4,7 +4,7 @@
 
 > 唯一真源：`docs/architecture/contract.toml`；数据：`cargo metadata --no-deps`（生产边，kind != dev）。
 > 重新生成：`python scripts/arch_doc.py --gen`；漂移检查：`python scripts/arch_doc.py --check`（CI）。
-> 实测：workspace members = 31，生产依赖边 = 118。
+> 实测：workspace members = 30，生产依赖边 = 111。
 
 ## 1. 层 → crate
 
@@ -13,7 +13,7 @@
 | **adapters** | `apeireth-cli`, `apeireth-gateway`, `apeireth-sdk`, `apeireth-tui` |
 | **bench** | `apeireth-bench-harness` |
 | **capabilities** | `apeireth-tools-canonical` |
-| **engine** | `apeireth-guard`, `apeireth-memory`, `apeireth-organ`, `apeireth-perception`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
+| **engine** | `apeireth-guard`, `apeireth-memory`, `apeireth-organ`, `apeireth-provider`, `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-storage` |
 | **foundation** | `apeireth-core`, `apeireth-credentials`, `apeireth-governance`, `apeireth-orchestration`, `apeireth-plugin`, `apeireth-protocol` |
 | **image_family**（vendored 家族，门禁隔离见 ADR-0005 R4a） | `apeireth-image-algo`, `apeireth-image-cms`, `apeireth-image-codecs`, `apeireth-image-color`, `apeireth-image-compose`, `apeireth-image-core`, `apeireth-image-doc`, `apeireth-image-geom`, `apeireth-image-psd`, `apeireth-image-raster`, `apeireth-image-vector` |
 
@@ -99,10 +99,6 @@
 | `apeireth-organ` | `apeireth-orchestration` | engine → foundation ✅ |
 | `apeireth-organ` | `apeireth-plugin` | engine → foundation ✅ |
 | `apeireth-organ` | `apeireth-protocol` | engine → foundation ✅ |
-| `apeireth-perception` | `apeireth-core` | engine → foundation ✅ |
-| `apeireth-perception` | `apeireth-memory` | engine → engine ✅ |
-| `apeireth-perception` | `apeireth-orchestration` | engine → foundation ✅ |
-| `apeireth-perception` | `apeireth-plugin` | engine → foundation ✅ |
 | `apeireth-plugin` | `apeireth-core` | foundation → foundation ✅ |
 | `apeireth-plugin` | `apeireth-orchestration` | foundation → foundation ✅ |
 | `apeireth-plugin` | `apeireth-protocol` | foundation → foundation ✅ |
@@ -128,9 +124,6 @@
 | `apeireth-runtime-assembly` | `apeireth-runtime` | engine → engine ✅ |
 | `apeireth-runtime-assembly` | `apeireth-storage` | engine → engine ✅ |
 | `apeireth-runtime-assembly` | `apeireth-tools-canonical` | engine → capabilities ✅ |
-| `apeireth-sdk` | `apeireth-core` | adapters → foundation ✅ |
-| `apeireth-sdk` | `apeireth-credentials` | adapters → foundation ✅ |
-| `apeireth-sdk` | `apeireth-plugin` | adapters → foundation ✅ |
 | `apeireth-sdk` | `apeireth-protocol` | adapters → foundation ✅ |
 | `apeireth-tools-canonical` | `apeireth-core` | capabilities → foundation ✅ |
 | `apeireth-tools-canonical` | `apeireth-governance` | capabilities → foundation ✅ |

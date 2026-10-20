@@ -55,7 +55,7 @@
 | 波 | 内容 | 出口判据 |
 |---|---|---|
 | **Wave 2**（2-3 周） | R0 剩余 + R1a 神经只读聚合 + R3a config schema/env 登记 + R4a 图像家族迁出 | `arch_guard --strict` 0 新增；图像家族迁出后全量门禁可分层；R1a 观测 14 条全有读数（只读） |
-| **Wave 3**（3-4 周） | R2 扩展 ABI + R7 上下文单一化 + R3b wiring ledger + R4b SDK/perception 裁决执行 | 扩展点收敛为 1 套；重复实现清零；wiring ledger 覆盖 PRODUCTION WIRED |
+| **Wave 3**（3-4 周） | R2 扩展 ABI + R7 上下文单一化 + R3b wiring ledger + R4b SDK/perception 裁决执行 | 扩展点收敛为 1 套；重复实现清零；wiring ledger 覆盖 PRODUCTION WIRED（**2026-10-20 已收口**：R7/R2 见 ADR-0007/0008 §6；R3b 主体完成；R4b 四岛归档执行完成） |
 | **Wave 4**（3-4 周） | R1b 订阅迁移 + R8 治理管线 + R6 验证架构 + 阶段 6 最小闭环 | 生物信号上总线；治理单一管线；四层验收有最小可跑闭环 |
 | **Wave 5**（4-6 周） | R5 可取消 worker + 上下文页/检查点 + 发版冻结准备 | 插话能停/中断能续；冻结期例外清零 |
 
@@ -63,7 +63,7 @@
 
 - **总体最优**：先把"神经/扩展/配置"三个横切面收敛，再做运行时健壮性——因为 R1a/R3/R7 直接降低后续每一项重构的返工率。拒的替代：①先做 R5（可取消 worker）——它依赖扩展/信号边界，边界未定会二次返工；②先重写 crate 拓扑——按现状 30 crate 的职责划分已够用，先动拓扑收益低于横切面。
 - **系统最优**：R2/R7 动 foundation+runtime，R1 动 runtime-assembly+organ，R3 动 cli+runtime-assembly，R4 只动构建面——四个方向互不重叠，可按波并行；R5 留到最后，避免在移动的边界上做并发模型。拒的替代：①一次性全并行——同工作树共享 index/构建锁，冲突成本高于收益；②串行一条线做——周期过长，生物线的机制实施会停摆。
-- **架构最优**：目标形态不引入新 crate、不新增外部依赖、不改 LOCKED 5 项；全部收敛在现有 31 members 内完成（R4 反而减少 members）。拒的替代：①新建"架构层 crate"承载神经系统——为架构引入编译依赖，违反最小内核；②推倒重写——8889+ 测试与治理资产是护城河。
+- **架构最优**：目标形态不引入新 crate、不新增外部依赖、不改 LOCKED 5 项；全部收敛在现有 29-30 members 内完成（R4 反而减少 members：31→30 members / 30→29 crates）。拒的替代：①新建"架构层 crate"承载神经系统——为架构引入编译依赖，违反最小内核；②推倒重写——8,000+ 测试与治理资产是护城河（数字以 [test-baseline.md](../03-reference/test-baseline.md) 为单一真源）。
 
 ## 7. 风险与明确不做
 
@@ -74,9 +74,9 @@
 ## 8. 验收与裁决位
 
 - [x] owner 裁决本 ADR（2026-10-20 Accept：「按你的建议来吧」）
-- [ ] 裁决后：`contract.toml` target 条款逐项转 accepted（每项配单项 ADR：0003 R1a / 0004 R3 / 0005 R4a 已出）
-- [ ] Wave 2 启动前：R1a spec、R3 config schema、R4 迁出方案各出单项 ADR（Proposed）——**已出，见 ADR-0003/0004/0005**
-- [ ] 每波收口：`arch_guard --strict` 0 新增 + 基线缩表 + 记分牌无指标变差
+- [x] 裁决后：`contract.toml` target 条款逐项转 accepted（每项配单项 ADR：0003 R1a / 0004 R3 / 0005 R4a 已出；Wave 3 的 0007 R7 / 0008 R2 已出并交付）
+- [x] Wave 2 启动前：R1a spec、R3 config schema、R4 迁出方案各出单项 ADR（Proposed）——**已出，见 ADR-0003/0004/0005**
+- [x] 每波收口：`arch_guard --strict` 0 新增 + 基线缩表 + 记分牌无指标变差（Wave 2、Wave 3 收口实录见 handbook §8 / integration-plan §4；R3c report-only 例外单列）
 
 ## 9. 性质与回滚
 

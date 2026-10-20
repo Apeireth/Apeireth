@@ -1,14 +1,14 @@
 # 架构线续作手册（Handover / Continuity）
 
-> `Status: ✅ 活跃（2026-10-20；v1）`
+> `Status: ✅ 活跃（2026-10-20；v1.2，Wave 3 收口版）`
 > 目的（O-4 任何人都能接手）：任何 AI 线或人类接手架构线时，只读这一页 + 四个入口就能继续，不需要重新读 2.7MB 卷宗。
-> 证据基线：2026-10-20 实测（crates=31 / edges=118 / env=154 / max_src_loc=6150 / 基线 356 条）。
+> 证据基线：2026-10-20 实测（crates=30 / edges=111 / env=154 / max_src_loc=6150 / 基线条目见 `scripts/arch-baseline.txt`）。
 
 ## 1. 四个入口（按顺序）
 
 1. [架构契约](contract.toml) —— 唯一可执行真源（结构规则/extension points/预算/例外参数）；
 2. [ADR-0001](../adr/0001-adopt-architecture-contract.md) —— 规则体系为什么存在、例外预算怎么定；
-3. [ADR-0002](../adr/0002-target-architecture-v1.md) —— 目标架构 v1（R0-R8 收敛 + 波次路线），**当前 Proposed，裁决前架构冻结**；
+3. [ADR-0002](../adr/0002-target-architecture-v1.md) —— 目标架构 v1（R0-R8 收敛 + 波次路线），**Accepted（2026-10-20 owner 拍板）**；
 4. [三线协作契约](line-coordination.md) —— 文件所有权/提交纪律/波次日历。
 
 运行工具：[arch_guard.py](../../scripts/arch_guard.py)；基线：[arch-baseline.txt](../../scripts/arch-baseline.txt)；准入：[intake-checklist.md](intake-checklist.md)。
@@ -28,30 +28,29 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 |---|---|
 | 规则体系 | **已生效**（ADR-0001，commit `8bfefb1b`）；灰度 report-only 至 **2026-11-03** |
 | 三线协作契约 | **已生效**（commit `8e9dd3ae`） |
-| 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR 已出：0003 R1a / 0004 R3 / 0005 R4a |
-| 架构波次 | `current_wave = 2`（Wave 1 规则落地已收口；Wave 2 进行中：R0 剩余 + R1a 合并生物线 W3.5 + R3a + R4a-1） |
-| Wave 2 已落 | R4a-1：`scripts/gate_full.ps1`（契约驱动 exclude）+ `.github/workflows/image-family.yml`；`arch_guard` 补例外抑制/登记表双通道/`--print-vendored` |
-| 待 owner 裁决 | **无**（R4b 已裁决：SDK 四孤岛 + perception 归档，ADR-0005 §3；14 键已正式化，ADR-0006） |
-| R4b 执行 | 实施线待派：按 ADR-0005 §3.1 迁移清单（SDK 四孤岛 23.6k 行 + perception 6.3k 行 → legacy/archived；members 31→30）；架构线验收 |
-| 在途违规（灰度期不阻断） | 生物线施工期 2 条 W1：`production.rs` +37 行 / `self_status_source.rs` +414 行；Wave 2 收口随基线更新。env 新开关已由效率线 R3a 登记转正（EXC-0001 已退休） |
-| 效率线 R3a 现状（2026-10-20 同步） | `env-registry.toml` 已播种 **155 条**（level=UNCLASSIFIED 占位，owner=TODO-OWNER）；`wiring.yaml` gaps 已按 R3c 口径生成；**R3b foundation 批已验收**（15 条填实、foundation TODO=0、抽查 5/5 evidence 真实，ADR-0004 §7.6）；R3c workflow review 通过（report-only） |
-| 基线 | 356 条（edge 118 / devcycle 1 / env 154 / size 70 / concept 6 / ext 7） |
-| 已登记的已知债务 | `contract.toml` `[flagged_edges]`（3 条）/ `[extension_debt]`（3 条）/ `[concepts].known_debt`（2 组）；target 均 `TODO-OWNER` |
-| 未完成项 | ADR-0002 裁决；R0 剩余（ARCHITECTURE 生成物/14 键表述/crate 口径）；R1a/R3/R4 单项 ADR；wiring ledger（R3） |
+| 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR：0003 R1a / 0004 R3 / 0005 R4a；Wave 3：0007 R7 / 0008 R2 均 **Accepted 且交付** |
+| 架构波次 | `current_wave = 4`（Wave 3 于 2026-10-20 收口；Wave 4 = R1b + R8 + R6） |
+| Wave 3 已落 | **R7**：`ContextBlock` 单一化（R7-2a `0bdd9bb4` / R7-2b `a93fdbb3`）、`SessionStore` 三义→`SessionLifecycleStore`/`SessionNoteStore`（R7-3 `1cbaee95`/`3c0bcde1`）、dormant scheduler 归档（R7-4b，含 bench 同步 `2481200b`）、`PromptCacheStabilizer` 删除（R7-4a `51bb6cfa`）、Heartbeat 复核保留 active（`b36ee05e`）；**R2**：Extension ABI 家族（R2-2 `56ae816b`）、PluginManager/BehaviorRegistry 双 catalog（R2-3a/b `911e2f49`/`b5f75ba9`）、plugin 内部索引 `CapabilityIndex`（`d8aa87af`）、命名迁移 BehaviorModule/BehaviorRegistry（R2-4 `efcce6c4`） |
+| 待 owner 裁决 | **无**（R4b 已裁决；14 键已正式化 ADR-0006；R7/R2 已 Accepted） |
+| 在途违规（灰度期不阻断） | 生物线 W3.6 在途 3 文件（`cli/lib.rs` 等）；其收口后由架构线复核尺寸/基线 |
+| 效率线 R3a 现状 | `env-registry.toml` 155 条；R3b foundation 批验收（ADR-0004 §7.6）；R3c report-only 至 2026-11-03 后 review |
+| 基线 | `scripts/arch-baseline.txt`（Wave 3 收口缩表：删失效条目 3 条 + 尺寸缩 1 条；只减不增） |
+| 已登记的已知债务 | `contract.toml [flagged_edges]` 3 条；`[extension_debt]` **0**（R2 收口清零）；`[concepts].known_debt` 1 组（ContextAssembler，Wave 4 合并） |
+| 未完成项 | Wave 4+：R1b 神经系统订阅迁移 / R8 治理管线 / R6 验证架构 / R5 取消可恢复 worker；R3c（2026-11-03 后）；R4a-2 条件性 workspace 提取（owner 触发） |
 
 ## 4. 每波收口 SOP（架构线主持）
 
 1. `python scripts/arch_guard.py --report` → 看违规/可缩表；
 2. 对照记分牌（ADR-0002 §4）逐项记录"变好/持平/变差"；变差项必须有例外或 ADR；
-3. `--update-baseline` 缩表（只允许删行/改小），CI 会校验 baseline diff 只减；
+3. 缩表：逐条人工只删/改小（`--update-baseline` 会按现状整体重建、可能带入增长项——仅在 diff 确认只减后使用，正常收口直接删失效行/改小尺寸）；CI 会校验 baseline diff 只减；
 4. `contract.toml` `current_wave += 1` + 写 `wave_note`；
 5. 出波次复盘一页（问题/决策/下一步），引用 ADR 编号。
 
 ## 5. 裁决位（不能代替 owner 拍板的）
 
-- ADR-0002 是否接受、接受后逐项单项 ADR；
-- **14 键表述正式化**（涉及 LOCKED 定义，必须 owner 授权）；
-- R4 的 SDK 孤岛/perception 整包处置（接线 or 归档）；
+- 目标架构后续单项 ADR（Wave 4+：R1b / R8 / R6 / R5）；
+- **14 键表述**已正式化（ADR-0006），后续变更仍须 owner 授权；
+- R4a-2 条件性 workspace 提取的触发阈值（members 下降节奏由 owner 决定）；
 - 产品形态（单进程永久 vs 多进程阶梯）——决定 R5 边界；
 - 冻结窗口宣布（owner/release authority，架构线不单方面冻结）。
 
@@ -76,7 +75,8 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | `docs/architecture/integration-plan.md` | 三处接入与记分牌 |
 | `docs/architecture/line-coordination.md` | 三线协作契约 |
 | `docs/adr/0001-*.md` | 规则体系裁决 |
-| `docs/adr/0002-*.md` | 目标架构 v1（Proposed） |
+| `docs/adr/0002-*.md` | 目标架构 v1（**Accepted**） |
+| `docs/adr/0007-*.md` / `docs/adr/0008-*.md` | R7 上下文/会话单一化、R2 扩展 ABI 统一（均 **Accepted 且交付**） |
 | `scripts/arch_guard.py` / `scripts/arch-baseline.txt` | 守卫与棘轮基线 |
 | `scripts/gate_full.ps1` | 全量门禁（主 workspace 排除 vendored 图像家族 + 图像独立门禁，清单读契约） |
 | `scripts/arch_doc.py` / `ARCHITECTURE.generated.md` | R0 架构依赖图生成物（契约+metadata，CI `--check` 防漂移） |
@@ -90,7 +90,7 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 |---|---|---|
 | **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03） |
 | **W2 架构手术** | **2026-10-20 收口** | ADR-0002 Accepted；ADR-0003 **R1a 交付**（生物线 `151e9aea`/`77b1c1fb`：nervous_snapshot 647 行 + probes 578 行 + 测试 1,205 行，默认关；`self_status_source.rs` −173 行）；R4a-1 门禁隔离；R0 完成（依赖表生成物 + CI）；R3b 主体完成（env 登记 155 条，TODO-OWNER 0、fragments 0，验收见 ADR-0004 §7.7）；缩表 2 条、守卫 0 违规 |
-| **W3 架构手术** | **进行中（不提前收口）** | R2/R7 ADR 草案已出（Proposed，待 owner 裁决）；R4b 四岛收口（23,649 行归档 + lark 解耦）；R3b 主体完成（155 条 TODO-OWNER=0）；R3c 待 2026-11-03 后 review；③ c 头环境阻塞；R1b 待 R2 |
+| **W3 架构手术** | **2026-10-20 收口** | R7 交付：ContextBlock 单一化（`0bdd9bb4`/`a93fdbb3`）+ SessionStore 三义收敛（`1cbaee95`/`3c0bcde1`）+ dormant scheduler 归档（`14c0e9a0`/`d5a4c537`，Heartbeat 复核保留 `b36ee05e`）+ PromptCacheStabilizer 删除（`51bb6cfa`）+ bench 同步（`2481200b`）；R2 交付：Extension ABI 家族（`56ae816b`）+ 双 catalog（`911e2f49`/`b5f75ba9`）+ plugin 内部索引更名（`d8aa87af`）+ 命名迁移（`efcce6c4`）；R4b 四岛收口（23,649 行归档 + lark 解耦）；R3b 主体完成（155 条 TODO-OWNER=0）；R3c 待 2026-11-03 后 review；缩表 3 删 1 缩、守卫 0 违规（生物线在途 1 条除外） |
 
 ## 9. 变更记录
 
@@ -100,4 +100,5 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 2026-10-20 | 手册 v1.1：Wave 2 单项 ADR + R4a-1 门禁隔离（gate_full/image CI）+ arch_guard 例外抑制/登记表双通道/`--print-vendored` | commit `5e68f644` |
 | 2026-10-20 | Wave 2 收口（R1a 交付 + R3b 主体完成 + 缩基线 2 条）；R4b 执行：B 归档干净、A 内容全落地但遭**共享 index 抢占**拆成 `df78542f`(混) + `6dccb1d2`(净)，裁决 **R2 接受现状不重写历史**（并行线 5 秒级连提，重写会二次事故）；事故登记入 ADR-0005 §3.2 | `22771a50` / `e8e7db33` / `6dccb1d2` |
 | 2026-10-20 | **R4b 四岛收口**：lark 解耦（im 自有 wire 原语，行为保持）+ 归档，SDK 四孤岛 42 文件/23,649 行全部迁 `legacy/archived/sdk-islands/`；mutation 验证 = lark 代码引用 0、guard crates=30/edges=112/env=154/VIOLATIONS 0；遗留 = 5 依赖清理批 + c 头重生成 + 文档对齐 + STALE 11 缩表（Wave 3 收口） | `29387d78` / `23cae7cc` |
-| 2026-10-20 | **Wave 3 中段复盘**：①文档对齐 `545d0d7f` ②依赖清理 `9f4baa3d` ④R7 ADR `4ea2729c` + R2 ADR `6bd8c9c9`（均 Proposed 待 owner）⑤14 键批 3 `981022e9` ⑥精准缩表 2 条 `d56f172b`（STALE 0）；阻塞：③ c 头（环境无 cbindgen，不伪造）、R2/R7 待裁决、R3c 待 11-03、Wave 3 不提前收口；剩余脏账 = 生物线在途 cli/lib.rs 尺寸增长（非本线） | `d56f172b` |
+| 2026-10-20 | **Wave 3 收口**：R7 全批交付（ContextBlock 收敛 / SessionStore 改名 / dormant scheduler 归档 / PromptCacheStabilizer 删除 / Heartbeat 复核保留）+ R2 全批交付（Extension ABI 家族 / 双 catalog / plugin 内部 CapabilityIndex / 命名迁移 BehaviorModule·BehaviorRegistry）；契约 `current_wave=4`、extension_debt 清零、concepts known_debt 收敛为 1 组；基线收口实测 **340 条**（env 153 / edge 111 / size 65 / ext 6 / concept 4 / devcycle 1；删失效条目 3 条 + orchestration/lib.rs 1432→1427 缩 1 条）；Wave 4 = R1b + R8 + R6 | `efcce6c4` / `d8aa87af` / `096f1266` / `2481200b` |
+| 2026-10-20 | 波中事故与修复：R2-3c 漏检（Debug impl 调 `PluginManager::capabilities()`）由全 workspace check 暴露并修复 `ae1f8779`；R7-4b-2 归档 scheduler 后 bench 未同步（E0432）→ bench 归档 `2481200b`；两起均记入 r2-/r7-inventory §7 教训（0 调用结论必须编译兜底；跨目标漏检） | `ae1f8779` / `2481200b` |
