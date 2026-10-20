@@ -1,5 +1,17 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 生物机制族 W3.3：收尾接线（6 批，全部默认关；2026-10-20）
+
+六条并行批 + 装配根总装，把剩余内核接进生产（默认关、开关只认显式 `"1"`、关时逐字节零变化）：
+- **care 真实数据供给**：cli 组合根注入 `CareBioSupply`——`PresenceService` Turn 帧 → `last_seen`、`SessionStore` → 可续线索；仪式状态存储未接 ⇒ 仪式 0 候选（如实）；+10 测试。
+- **play 端到端**：`tool.play_propose/start/finish/abort` 四工具面 + opt-in 显式门 + 沙箱路径纪律（复用既有 guardrail，目录不创建、拒绝逃逸）；`APEIRETH_ENABLE_BIO_PLAY` 懒注册；+25 测试。
+- **痛觉→失败链**：`record_call_completed`（串行/并行/取消三调用点）收口 → `PainLedger` 评估（Runtime 级账本、跨会话慢性化、cause_key 无敏感信息、成功分支按能力脱敏）；**只观测记账、不改错误/重试决策**；`RuntimeBuilder::with_bio_pain` + cli `APEIRETH_ENABLE_BIO_PAIN` 默认关；+21 测试。
+- **quorum 外部源**：guard 免疫升级（Open+Tier3Lockdown ⇔ escalated）→ `QuorumSignal{kind:Conflict, source:"guard.immune"}` 进审议门；按 `(record_key, occurrences)` 节流防常开；cli 组合根共享同一份 `Arc<ImmuneMemory>` 迟绑定；双开关默认关；+12 测试。
+- **调质→tone**：`ToneState`（显式反馈事件注入）+ `BioToneModule`（TurnStart 尾部独立 overlay，防破缓存前缀）；`APEIRETH_ENABLE_BIO_TONE` 懒注册进 production；真实反馈事件源未接 ⇒ 半程；+16 单测 + 8 装配测试。
+- **节律门→心跳**：`BioCircadianGate` + `CareHeartbeatPoll::with_circadian_gate`，`poll()` 最前 `decide()`，Suppressed → Quiet 整拍零读取；`APEIRETH_ENABLE_BIO_CIRCADIAN`；生产装配（时区/睡眠压力配置源）留下一批 ⇒ 半程；+9 装配测试。
+- **接线盘点（14 条）**：**PRODUCTION WIRED 9**（SG-13 调质→tone 模块｜SG-14 稳态→策略｜SG-15 免疫→hook｜SG-16 痛觉→失败链｜SG-19 依恋→care｜SG-20 修复→prompt｜SG-21 play｜SG-24 审议门｜SG-26 容量→自述）+ **半程 2**（SG-22 仪式→care 缺状态存储｜SG-23 节律门缺生产装配）+ **未接线 3**（SG-17 再生、SG-18 生命周期、SG-25 生态健康）。
+- **门禁**：scoped 全绿：assembly lib 194、cli lib 48、runtime lib 163/tests 322、既有 startup/懒加载断言全绿；clippy `-D warnings` 0；fmt 0 diff。**全量工作区复验未完成**（跑到 24 套件 / 186 passed / 0 failed 时收工中止，下一批补全量 + test-baseline 刷新）。
+
 ## [Unreleased] — 生物机制族 W3.2：装配面接线（5 条 PRODUCTION WIRED，默认关；2026-10-19）
 
 五线并行 + 装配根总装：把 W3.1 的内接线接进生产装配（**+68 新测**；全部默认关、开关只认显式 "1"、关时逐字节零变化）：
