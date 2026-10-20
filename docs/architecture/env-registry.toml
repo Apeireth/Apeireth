@@ -16,7 +16,7 @@
 version = 1
 updated_at = "2026-10-20"
 
-# R3b 尾批（ADR-0004 §7.7）：8 条测试/基准夹具 kind=test-only（purpose 允许 TODO-PURPOSE，注明「测试/基准夹具，非产品开关」；不参与 PRODUCTION WIRED 证据要求）；产品开关禁止 TODO-PURPOSE
+# ADR-0004 §7.7/§7.8：kind=product 仅 direct: 证据（const/env::var/封装点）；test-only|derived 用 scan-only: 且 level=UNCLASSIFIED；derived 计数只减
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_"
@@ -26,7 +26,8 @@ owner = "apeireth-cli"
 purpose = "`apeireth onboard` —— 首次使用引导（OOBE）：分流普通用户 / 专业用户。 一次引导完成四件事（按顺序）： 1. **简单介绍**：Apeireth 是什么、有哪些命令、什么默认关闭； 2. **用户分流**：普通用"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/onboarding.rs:95"
+kind = "derived"
+evidence = "scan-only:crates/adapters/cli/src/onboarding.rs:95"
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_KEY"
@@ -36,7 +37,7 @@ owner = "apeireth-provider"
 purpose = "Build the plugin from environment configuration, with safe vendor defaults for non-secret fields. Follows the repository"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/credentials.rs:53;crates/engine/provider/src/credentials.rs:92;crates/engine/provider/src/credentials.rs:258"
+evidence = "direct:crates/adapters/cli/src/lib.rs:2615;direct:crates/adapters/cli/src/onboarding.rs:112;direct:crates/adapters/cli/src/onboarding.rs:966"
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_MODELS"
@@ -46,7 +47,7 @@ owner = "apeireth-provider"
 purpose = "Build the plugin from environment configuration, with safe vendor defaults for non-secret fields. Follows the repository"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/canonical_anthropic.rs:497;crates/adapters/cli/src/onboarding.rs:136;crates/adapters/cli/src/onboarding.rs:966"
+evidence = "direct:crates/adapters/cli/src/onboarding.rs:136;direct:crates/adapters/cli/src/onboarding.rs:966;direct:crates/engine/provider/src/canonical_anthropic.rs:497"
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_URL"
@@ -56,7 +57,7 @@ owner = "apeireth-provider"
 purpose = "Build the plugin from environment configuration, with safe vendor defaults for non-secret fields. Follows the repository"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/canonical_anthropic.rs:493;crates/adapters/cli/src/onboarding.rs:128;crates/adapters/cli/src/onboarding.rs:966"
+evidence = "direct:crates/adapters/cli/src/onboarding.rs:128;direct:crates/adapters/cli/src/onboarding.rs:966;direct:crates/engine/provider/src/canonical_anthropic.rs:493"
 
 [[entries]]
 name = "APEIRETH_API_"
@@ -66,7 +67,8 @@ owner = "apeireth-cli"
 purpose = "`apeireth onboard` —— 首次使用引导（OOBE）：分流普通用户 / 专业用户。 一次引导完成四件事（按顺序）： 1. **简单介绍**：Apeireth 是什么、有哪些命令、什么默认关闭； 2. **用户分流**：普通用"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/onboarding.rs:93"
+kind = "derived"
+evidence = "scan-only:crates/adapters/cli/src/onboarding.rs:93"
 
 [[entries]]
 name = "APEIRETH_API_KEY"
@@ -76,7 +78,7 @@ owner = "apeireth-provider"
 purpose = "Production credential resolution for canonical providers. A canonical [`ProviderCapability`] never stores a secret as a"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:2328;crates/adapters/cli/src/lib.rs:2420;crates/adapters/cli/src/lib.rs:3036"
+evidence = "direct:crates/adapters/cli/src/lib.rs:2328;direct:crates/adapters/cli/src/lib.rs:2420;direct:crates/adapters/cli/src/lib.rs:2441"
 
 [[entries]]
 name = "APEIRETH_API_MODELS"
@@ -86,7 +88,7 @@ owner = "apeireth-provider"
 purpose = "Build the plugin from environment configuration, with safe vendor defaults for non-secret fields. Precedence (§42): `APE"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/canonical_minimax.rs:329;crates/adapters/cli/src/onboarding.rs:135;crates/adapters/cli/src/onboarding.rs:965"
+evidence = "direct:crates/adapters/cli/src/onboarding.rs:135;direct:crates/adapters/cli/src/onboarding.rs:965;direct:crates/engine/provider/src/canonical_minimax.rs:329"
 
 [[entries]]
 name = "APEIRETH_API_URL"
@@ -96,7 +98,7 @@ owner = "apeireth-provider"
 purpose = "Build the plugin from environment configuration, with safe vendor defaults for non-secret fields."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/canonical_minimax.rs:325;crates/adapters/cli/src/onboarding.rs:127;crates/adapters/cli/src/onboarding.rs:965"
+evidence = "direct:crates/adapters/cli/src/onboarding.rs:127;direct:crates/adapters/cli/src/onboarding.rs:965;direct:crates/engine/provider/src/canonical_minimax.rs:325"
 
 [[entries]]
 name = "APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN"
@@ -106,7 +108,7 @@ owner = "apeireth-cli"
 purpose = "心跳关怀常驻宿主接线面 (care-heartbeat-producer.md §7 接线清单 (b))。 常驻宿主 (gateway serve 组合根) 在这里把三个注入点一次接齐: ① **发起闸**: presence 发起闸的装配"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/care_heartbeat.rs:112;crates/adapters/cli/src/care_heartbeat.rs:374;crates/adapters/cli/src/care_heartbeat.rs:381"
+evidence = "direct:crates/adapters/cli/src/care_heartbeat.rs:112;direct:crates/adapters/cli/src/care_heartbeat.rs:374;direct:crates/adapters/cli/src/care_heartbeat.rs:381"
 
 [[entries]]
 name = "APEIRETH_CACHE_TRACE"
@@ -116,7 +118,7 @@ owner = "apeireth-runtime"
 purpose = "Debug-only prefix-cache diagnostic brief for provider requests. Provider prefix caching reuses the longest byte-identica"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime/src/canonical/cache_trace.rs:20;crates/engine/runtime/src/canonical/cache_trace.rs:10;crates/engine/runtime/src/canonical/cache_trace.rs:16"
+evidence = "direct:crates/engine/runtime/src/canonical/cache_trace.rs:20"
 
 [[entries]]
 name = "APEIRETH_CARE_HEARTBEAT_POLL_INTERVAL_SECS"
@@ -126,7 +128,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "常驻心跳关怀生产者 (V3-a 收尾一针) 的装配面: 让「它会想起你」真的自动发生。 内核 (V3-a 已备) 是 [`CareEngine::poll`]: 规则触发 + 打扰纪律四件 + 发起闸 (try_take_initiativ"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/lib.rs:75;crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:108;crates/engine/runtime-assembly/src/canonical.rs:140"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical.rs:140;direct:crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:108;direct:crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:148"
 
 [[entries]]
 name = "APEIRETH_COGNITIVE_COUNCIL"
@@ -136,7 +138,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:58;crates/adapters/cli/src/lib.rs:1893"
+evidence = "direct:crates/adapters/cli/src/lib.rs:58;direct:crates/adapters/cli/src/lib.rs:1893"
 
 [[entries]]
 name = "APEIRETH_COGNITIVE_DB"
@@ -146,7 +148,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "用户域数据平面 (W3-① 多户数据隔离·星群数据层): 三面按域分库 + 跨域拒绝即帧。 星群架构 (**星群为骨、共享为翼**) 的数据层落地: 每户一域, 每域自己的 **会话库 / 记忆库 / 配额账本** (配额账本随会话库分域,"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:55;crates/adapters/cli/src/lib.rs:2495;crates/adapters/cli/src/lib.rs:1806"
+evidence = "direct:crates/adapters/cli/src/lib.rs:55;direct:crates/adapters/cli/src/lib.rs:1806;direct:crates/adapters/cli/src/lib.rs:2495"
 
 [[entries]]
 name = "APEIRETH_COGNITIVE_JUDGE"
@@ -156,7 +158,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:57;crates/adapters/cli/src/lib.rs:1890"
+evidence = "direct:crates/adapters/cli/src/lib.rs:57;direct:crates/adapters/cli/src/lib.rs:1890"
 
 [[entries]]
 name = "APEIRETH_CONTEXT_BUDGET_CHARS"
@@ -166,7 +168,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:215;crates/adapters/cli/src/lib.rs:418;crates/adapters/cli/src/onboarding.rs:595"
+evidence = "direct:crates/adapters/cli/src/lib.rs:215;direct:crates/adapters/cli/src/lib.rs:418;direct:crates/adapters/cli/src/onboarding.rs:595"
 
 [[entries]]
 name = "APEIRETH_CONTINUITY_ID"
@@ -176,7 +178,7 @@ owner = "apeireth-memory"
 purpose = "Environment variable that overrides the process-level continuity anchor."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/memory/src/continuity_link.rs:18;crates/engine/memory/src/lib.rs:60;crates/engine/memory/src/continuity_link.rs:151"
+evidence = "direct:crates/engine/memory/src/continuity_link.rs:18;direct:crates/engine/memory/src/continuity_link.rs:151;direct:crates/engine/memory/src/lib.rs:60"
 
 [[entries]]
 name = "APEIRETH_COST_ROUTING"
@@ -186,7 +188,7 @@ owner = "apeireth-core"
 purpose = "成本分级路由 (`CostRouter`) —— 模型面轴 (H-P2「更省」) 的任务选型面。 任务按**成本/能力**自动选模型: 任务描述先定**成本档** (分级词表 [`CostTier`]: `frugal|standard|c"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/foundation/core/src/cost_router.rs:73;crates/adapters/cli/src/lib.rs:501;crates/adapters/cli/src/lib.rs:513"
+evidence = "direct:crates/adapters/cli/src/lib.rs:501;direct:crates/adapters/cli/src/lib.rs:513;direct:crates/capabilities/tools/src/self_status.rs:3796"
 
 [[entries]]
 name = "APEIRETH_COST_ROUTING_PREFERRED"
@@ -196,7 +198,7 @@ owner = "apeireth-core"
 purpose = "成本分级路由 (`CostRouter`) —— 模型面轴 (H-P2「更省」) 的任务选型面。 任务按**成本/能力**自动选模型: 任务描述先定**成本档** (分级词表 [`CostTier`]: `frugal|standard|c"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/core/src/cost_router.rs:79;crates/foundation/core/src/cost_router.rs:418;crates/adapters/cli/src/lib.rs:516"
+evidence = "direct:crates/adapters/cli/src/lib.rs:516;direct:crates/foundation/core/src/cost_router.rs:79;direct:crates/foundation/core/src/cost_router.rs:418"
 
 [[entries]]
 name = "APEIRETH_COUNCIL_ADVISORS"
@@ -206,7 +208,7 @@ owner = "apeireth-cli"
 purpose = "构造 Council 后端（2026-09-08 用户旋钮批）：优先 OpenAI-compatible （DeepSeek 等, env 配置时）→ 回退 MiniMax → 最后 Noop（0 装, advisors 会 显式 NotI"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3066;crates/adapters/cli/src/lib.rs:3621;crates/adapters/cli/src/lib.rs:3717"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3066;direct:crates/adapters/cli/src/lib.rs:3621;direct:crates/adapters/cli/src/lib.rs:3717"
 
 [[entries]]
 name = "APEIRETH_COUNCIL_TIMEOUT_MS"
@@ -216,7 +218,7 @@ owner = "apeireth-orchestration"
 purpose = "(live 实锤 PerformanceAdvisor 超时→DeferToHuman), 30s 覆盖实测延迟"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3071;crates/adapters/cli/src/lib.rs:3622;crates/foundation/orchestration/src/lib.rs:514"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3071;direct:crates/adapters/cli/src/lib.rs:3622"
 
 [[entries]]
 name = "APEIRETH_DATA_DIR"
@@ -226,17 +228,18 @@ owner = "apeireth-cli"
 purpose = "G5 备份恢复 CLI 面: `apeireth backup export|restore|verify` (本地操作)。 同一引擎 ([`apeireth_tools_canonical::backup`]) 的第二个出口: 模型面是"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3519;crates/adapters/cli/src/user_admin.rs:37;crates/adapters/cli/src/backup.rs:70"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3519"
 
 [[entries]]
 name = "APEIRETH_DISABLE_"
 default = "off"
 layer = "adapters"
 owner = "apeireth-cli"
-purpose = "**默认开** (未设 = 开)。显式关走两条路, 与 typed_recall 逃生门同款语义"
+purpose = "**默认开** (未设 = 开)。显式关走两条路, 与 typed_recall 逃生门同款语义（动态拼接/非独立开关）"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:193;crates/adapters/cli/src/lib.rs:246"
+kind = "derived"
+evidence = "scan-only:crates/adapters/cli/src/lib.rs:193;scan-only:crates/adapters/cli/src/lib.rs:246"
 
 [[entries]]
 name = "APEIRETH_DISABLE_LOCAL_READ_TOOLS"
@@ -246,7 +249,7 @@ owner = "apeireth-cli"
 purpose = "Privacy escape hatch: when set to `1`, the local filesystem and search tools are NOT granted, even though they default t"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:84;crates/adapters/cli/src/lib.rs:229;crates/adapters/cli/src/lib.rs:224"
+evidence = "direct:crates/adapters/cli/src/lib.rs:84;direct:crates/adapters/cli/src/lib.rs:229"
 
 [[entries]]
 name = "APEIRETH_DISABLE_MEMORY_INJECTION"
@@ -256,7 +259,7 @@ owner = "apeireth-cli"
 purpose = "反幻觉注入格式 (记忆核心族, **默认开**): 开启时记忆 overlay 用编号 证据清单 + 「禁止说『我记得我们以前聊过』」规则; `APEIRETH_ENABLE_MEMORY_INJECTION=0`"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:197;crates/adapters/cli/src/lib.rs:331;crates/adapters/cli/src/lib.rs:329"
+evidence = "direct:crates/adapters/cli/src/lib.rs:197;direct:crates/adapters/cli/src/lib.rs:331"
 
 [[entries]]
 name = "APEIRETH_DISABLE_ONBOARDING"
@@ -266,7 +269,7 @@ owner = "apeireth-cli"
 purpose = "`apeireth onboard` —— 首次使用引导（OOBE）：分流普通用户 / 专业用户。 一次引导完成四件事（按顺序）： 1. **简单介绍**：Apeireth 是什么、有哪些命令、什么默认关闭； 2. **用户分流**：普通用"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/onboarding.rs:40;crates/adapters/cli/src/onboarding.rs:548;crates/adapters/cli/src/onboarding.rs:974"
+evidence = "direct:crates/adapters/cli/src/onboarding.rs:40;direct:crates/adapters/cli/src/onboarding.rs:548;direct:crates/adapters/cli/src/onboarding.rs:974"
 
 [[entries]]
 name = "APEIRETH_DISABLE_PREFERENCE_LEARNING"
@@ -276,7 +279,7 @@ owner = "apeireth-cli"
 purpose = "偏好学习装配旋钮 (记忆核心族, **默认开**): 开启时 `cognitive.preference_learning` 模块注册 (双索引写回 + 召回三段展开); `APEIRETH_ENABLE_PREFERENCE_LEARNI"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:196;crates/adapters/cli/src/lib.rs:340;crates/adapters/cli/src/lib.rs:336"
+evidence = "direct:crates/adapters/cli/src/lib.rs:196;direct:crates/adapters/cli/src/lib.rs:340"
 
 [[entries]]
 name = "APEIRETH_DISABLE_PROACTIVE_RECALL"
@@ -286,7 +289,7 @@ owner = "apeireth-cli"
 purpose = "env 变量名不变 (向后兼容), 各配一个 DISABLE 逃生门"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:195;crates/adapters/cli/src/lib.rs:268;crates/adapters/cli/src/lib.rs:266"
+evidence = "direct:crates/adapters/cli/src/lib.rs:195;direct:crates/adapters/cli/src/lib.rs:268"
 
 [[entries]]
 name = "APEIRETH_DISABLE_TYPED_RECALL"
@@ -296,7 +299,7 @@ owner = "apeireth-cli"
 purpose = "记忆核心族默认开旋钮的统一语义 (逃生门惯例与"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:190;crates/adapters/cli/src/lib.rs:278;crates/adapters/cli/src/lib.rs:245"
+evidence = "direct:crates/adapters/cli/src/lib.rs:190;direct:crates/adapters/cli/src/lib.rs:278"
 
 [[entries]]
 name = "APEIRETH_EMBEDDING_KEY"
@@ -306,7 +309,7 @@ owner = "apeireth-provider"
 purpose = "Optional environment variable carrying the bearer token for the endpoint."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/embeddings.rs:35;crates/engine/provider/src/embeddings.rs:98;crates/engine/provider/src/embeddings.rs:47"
+evidence = "direct:crates/engine/provider/src/embeddings.rs:35;direct:crates/engine/provider/src/embeddings.rs:98"
 
 [[entries]]
 name = "APEIRETH_EMBEDDING_MODEL"
@@ -316,7 +319,7 @@ owner = "apeireth-provider"
 purpose = "OpenAI-compatible embeddings transport for semantic memory recall. 2026-10-06 W2 接线批: 差距审计 (`docs/04-internal/v1-vs-v2-c"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/embeddings.rs:33;crates/engine/provider/src/embeddings.rs:96;crates/engine/provider/src/embeddings.rs:97"
+evidence = "direct:crates/adapters/cli/src/lib.rs:310;direct:crates/adapters/cli/src/lib.rs:315;direct:crates/adapters/cli/src/lib.rs:322"
 
 [[entries]]
 name = "APEIRETH_EMBEDDING_URL"
@@ -326,17 +329,18 @@ owner = "apeireth-provider"
 purpose = "OpenAI-compatible embeddings transport for semantic memory recall. 2026-10-06 W2 接线批: 差距审计 (`docs/04-internal/v1-vs-v2-c"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/embeddings.rs:31;crates/engine/provider/src/embeddings.rs:94;crates/engine/provider/src/embeddings.rs:95"
+evidence = "direct:crates/adapters/cli/src/lib.rs:310;direct:crates/adapters/cli/src/lib.rs:312;direct:crates/adapters/cli/src/lib.rs:322"
 
 [[entries]]
 name = "APEIRETH_ENABLE_"
 default = "off"
 layer = "engine"
 owner = "apeireth-runtime-assembly"
-purpose = "群体感应审议门开关 env: 仅 `\"1\"` 开, 其余 (未设置 / 空 / `\"0\"` / `\"true\"` / 任意值) 一律关."
+purpose = "群体感应审议门开关 env: 仅 `\"1\"` 开, 其余 (未设置 / 空 / `\"0\"` / `\"true\"` / 任意值) 一律关.（动态拼接/非独立开关）"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:193;crates/adapters/cli/src/lib.rs:246;crates/engine/runtime-assembly/src/canonical/orchestrator.rs:709"
+kind = "derived"
+evidence = "scan-only:crates/adapters/cli/src/lib.rs:193;scan-only:crates/adapters/cli/src/lib.rs:246;scan-only:crates/engine/runtime-assembly/src/canonical/orchestrator.rs:709"
 
 [[entries]]
 name = "APEIRETH_ENABLE_ABSORPTION_INSIGHT"
@@ -346,7 +350,7 @@ owner = "apeireth-cli"
 purpose = "**W2 §4.4 旋钮** (2026-10-10, 默认关): 研究吸收批认知体操"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3168;crates/adapters/cli/src/lib.rs:3165"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3168"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BACKUP_EXPORT"
@@ -356,7 +360,7 @@ owner = "apeireth-cli"
 purpose = "默认关 (fail-closed); 恢复/校验不走工具面 (CLI 本地操作: `apeireth backup`)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:103;crates/adapters/cli/src/lib.rs:730"
+evidence = "direct:crates/adapters/cli/src/lib.rs:103;direct:crates/adapters/cli/src/lib.rs:730"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_CARE_CANDIDATES"
@@ -366,7 +370,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "常驻心跳关怀生产者 (V3-a 收尾一针) 的装配面: 让「它会想起你」真的自动发生。 内核 (V3-a 已备) 是 [`CareEngine::poll`]: 规则触发 + 打扰纪律四件 + 发起闸 (try_take_initiativ"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/care_heartbeat.rs:89;crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:96;crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:246"
+evidence = "direct:crates/adapters/cli/src/care_heartbeat.rs:89;direct:crates/adapters/cli/src/care_heartbeat.rs:562;direct:crates/adapters/cli/src/care_heartbeat.rs:952"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_CIRCADIAN"
@@ -376,7 +380,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "生物机制族 W3.3 · 节律门装配面 (默认关, fail-closed)。 机制 内核 [`apeireth_organ::circadian`] (W1/W3.1 已备, 本批**零改动**) 把昼夜相位 / 超日窗口 / 睡眠压力合"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:57;crates/adapters/cli/src/care_heartbeat.rs:82;crates/engine/runtime-assembly/src/canonical/bio_circadian.rs:321"
+evidence = "direct:crates/adapters/cli/src/care_heartbeat.rs:82;direct:crates/adapters/cli/src/care_heartbeat.rs:544;direct:crates/adapters/cli/src/care_heartbeat.rs:1324"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_CONTEXT_POLICY"
@@ -386,7 +390,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "[`REPAIR_DIRECTIVE_PLACEHOLDER`] 放进 system 角色的独立 core 块"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/cognitive.rs:2676;crates/engine/runtime-assembly/src/canonical/cognitive.rs:2718;crates/engine/runtime-assembly/src/canonical/production.rs:1513"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical/cognitive.rs:2676;direct:crates/engine/runtime-assembly/src/canonical/cognitive.rs:2718;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:47"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_LIFECYCLE"
@@ -396,7 +400,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "生物机制族 W3.5 · 资产生命周期装配面（SG-18，默认关）。 机制与信号链（只观测记账，0 动作） 内核 [`apeireth_orchestration::lifecycle`]（W2 已入库，本批**零改动**）： `Newbo"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:94;crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:550;crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:607"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:94;direct:crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:550;direct:crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs:607"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_PAIN"
@@ -406,7 +410,7 @@ owner = "apeireth-cli"
 purpose = "观测记账；只观测不改变错误/重试/错误处理决策，真账见 runtime 侧测试）"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:1561;crates/adapters/cli/src/lib.rs:1559"
+evidence = "direct:crates/adapters/cli/src/lib.rs:1561;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:65;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:443"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_PLAY"
@@ -416,7 +420,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "生物机制族 W3.3 · 游戏练习场工具面 (`tool.play_propose` / `tool.play_start` / `tool.play_finish` / `tool.play_abort`)。 机制 内核 [`apeire"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/play_tools.rs:58;crates/engine/runtime-assembly/src/canonical.rs:181;crates/engine/runtime-assembly/src/canonical/play_tools.rs:247"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical.rs:181;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:51;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:559"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE"
@@ -426,7 +430,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "修复指令装配开关 env 名 (仅显式 `1` 开, 默认关 fail-closed)."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/cognitive.rs:2673;crates/engine/runtime-assembly/src/canonical/cognitive.rs:2715;crates/engine/runtime-assembly/src/canonical/production.rs:1512"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical/cognitive.rs:2673;direct:crates/engine/runtime-assembly/src/canonical/cognitive.rs:2715;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:48"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_SELF_STATUS"
@@ -436,7 +440,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "子对象恒在场（默认关时 `mechanisms: null` + 原因「未启用」"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/self_status_source.rs:31;crates/engine/runtime-assembly/src/canonical/self_status_source.rs:186;crates/engine/runtime-assembly/src/canonical/self_status_source.rs:221"
+evidence = "direct:crates/capabilities/tools/src/self_status.rs:1165;direct:crates/capabilities/tools/src/self_status.rs:1168;direct:crates/capabilities/tools/src/self_status.rs:1373"
 
 [[entries]]
 name = "APEIRETH_ENABLE_BIO_TONE"
@@ -446,7 +450,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "生物机制族 W3.3 · 调质 → 语气装配面 (默认关, fail-closed)。 机制 内核 [`apeireth_organ::neuromodulation`] 的六维慢变量状态机 + [`apeireth_organ::tone"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/bio_tone.rs:68;crates/engine/runtime-assembly/src/canonical/bio_tone.rs:418;crates/engine/runtime-assembly/src/canonical/bio_tone.rs:441"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical/bio_tone.rs:101;direct:crates/engine/runtime-assembly/src/canonical/bio_tone.rs:505;direct:crates/engine/runtime-assembly/src/canonical/bio_tone.rs:528"
 
 [[entries]]
 name = "APEIRETH_ENABLE_CARE"
@@ -456,7 +460,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "常驻心跳关怀生产者 (V3-a 收尾一针) 的装配面: 让「它会想起你」真的自动发生。 内核 (V3-a 已备) 是 [`CareEngine::poll`]: 规则触发 + 打扰纪律四件 + 发起闸 (try_take_initiativ"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/lib.rs:75;crates/adapters/cli/src/lib.rs:99;crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:100"
+evidence = "direct:crates/adapters/cli/src/lib.rs:99;direct:crates/adapters/cli/src/lib.rs:722;direct:crates/engine/runtime-assembly/src/canonical.rs:139"
 
 [[entries]]
 name = "APEIRETH_ENABLE_CARE_HEARTBEAT"
@@ -466,7 +470,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "常驻心跳关怀生产者 (V3-a 收尾一针) 的装配面: 让「它会想起你」真的自动发生。 内核 (V3-a 已备) 是 [`CareEngine::poll`]: 规则触发 + 打扰纪律四件 + 发起闸 (try_take_initiativ"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/lib.rs:75;crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:104;crates/engine/runtime-assembly/src/canonical.rs:139"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical.rs:139;direct:crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:104;direct:crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs:169"
 
 [[entries]]
 name = "APEIRETH_ENABLE_COMMUNITY_TRIAGE"
@@ -476,7 +480,7 @@ owner = "apeireth-cli"
 purpose = "**W3 旋钮** (2026-10-10, 默认关): community 社区分诊接检索前置"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3151;crates/adapters/cli/src/lib.rs:3149"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3151"
 
 [[entries]]
 name = "APEIRETH_ENABLE_CONSOLIDATION"
@@ -486,7 +490,7 @@ owner = "apeireth-cli"
 purpose = "V4-a 人格提取步 (`persona_consolidation`) 旋钮: 注册即闸, 默认关 (fail-closed)。开 = 挂上人格提取步 —— 提取步**随整编跑** (整编触发点上从 近期情节提炼人格增量 → 人格层合并,"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:204;crates/adapters/cli/src/lib.rs:347;crates/adapters/cli/src/onboarding.rs:638"
+evidence = "direct:crates/adapters/cli/src/lib.rs:204;direct:crates/adapters/cli/src/lib.rs:347;direct:crates/adapters/cli/src/onboarding.rs:638"
 
 [[entries]]
 name = "APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE"
@@ -496,7 +500,7 @@ owner = "apeireth-cli"
 purpose = "V4-b 整编散列门旋钮 (`consolidation_hash_gate`): 注册即闸, 默认关"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:212;crates/adapters/cli/src/lib.rs:366;crates/adapters/cli/src/lib.rs:210"
+evidence = "direct:crates/adapters/cli/src/lib.rs:212;direct:crates/adapters/cli/src/lib.rs:366"
 
 [[entries]]
 name = "APEIRETH_ENABLE_CONTENT_FEED"
@@ -506,7 +510,7 @@ owner = "apeireth-cli"
 purpose = "内容流接入旋钮 (`tool.content_feed`, J1): 注册 + 策略 grant + 审批档钩子"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:94;crates/adapters/cli/src/lib.rs:713;crates/adapters/cli/src/lib.rs:91"
+evidence = "direct:crates/adapters/cli/src/lib.rs:94;direct:crates/adapters/cli/src/lib.rs:713"
 
 [[entries]]
 name = "APEIRETH_ENABLE_DEVICE_AUTO_PASS_REVERSIBLE"
@@ -516,7 +520,7 @@ owner = "apeireth-tools-canonical"
 purpose = "reversible 档「自动放行」子档 (依赖 [`DEVICE_CONTROL_ENABLE_ENV`]): **只对 `reversible` 档生效** —— irreversible / money 两档永远逐次人批, 本开关怎么"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/device/device_control.rs:114;crates/capabilities/tools/src/device/device_control.rs:138;crates/capabilities/tools/src/device/device_control.rs:181"
+evidence = "direct:crates/capabilities/tools/src/device/device_control.rs:114;direct:crates/capabilities/tools/src/device/device_control.rs:138;direct:crates/capabilities/tools/src/device/device_control.rs:181"
 
 [[entries]]
 name = "APEIRETH_ENABLE_DEVICE_CONTROL"
@@ -526,7 +530,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Register the device-control tool (`tool.device_control`, K 轴 L3/L4 受控执行骨架). 设备受控执行面: 三拍执行 (plan → preview → execute, 前两拍"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/device/device_control.rs:109;crates/capabilities/tools/src/device/device_control.rs:125;crates/capabilities/tools/src/device/device_control.rs:2764"
+evidence = "direct:crates/capabilities/tools/src/device/device_control.rs:109;direct:crates/capabilities/tools/src/device/device_control.rs:125;direct:crates/capabilities/tools/src/device/device_control.rs:2764"
 
 [[entries]]
 name = "APEIRETH_ENABLE_DEVICE_SENSE"
@@ -536,7 +540,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Register the device-sense tool (`tool.device_sense`, K 轴 L1 在场感知). 在场感知面: 设备表 (`devices.json` StoredDoc 拒开, **白名单制默认零设备*"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/device/weather.rs:41;crates/capabilities/tools/src/device/guard_watch.rs:56;crates/capabilities/tools/src/device/sense.rs:64"
+evidence = "direct:crates/capabilities/tools/src/device/device_control.rs:105;direct:crates/capabilities/tools/src/device/device_control.rs:125;direct:crates/capabilities/tools/src/device/device_control.rs:2759"
 
 [[entries]]
 name = "APEIRETH_ENABLE_DOC_OPS"
@@ -546,7 +550,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Module providing the doc-ops tool (`tool.doc_ops`, 创作工具面 W2 · 文档操作). 受控读写族: PDF 读 (info/extract_text) + DOCX 读 (extract_"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/doc_ops.rs:127;crates/adapters/cli/src/lib.rs:133;crates/capabilities/tools/src/lib.rs:177"
+evidence = "direct:crates/adapters/cli/src/lib.rs:133;direct:crates/capabilities/tools/src/doc_ops.rs:127;direct:crates/capabilities/tools/src/doc_ops.rs:381"
 
 [[entries]]
 name = "APEIRETH_ENABLE_EDUCATION"
@@ -556,7 +560,7 @@ owner = "apeireth-cli"
 purpose = "**W2 §4.3 旋钮** (2026-10-10, 默认关): education Dx-Check 换元检查工具"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3159;crates/adapters/cli/src/lib.rs:3620;crates/adapters/cli/src/lib.rs:3655"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3159;direct:crates/adapters/cli/src/lib.rs:3620;direct:crates/adapters/cli/src/lib.rs:3655"
 
 [[entries]]
 name = "APEIRETH_ENABLE_EXPOSURE_AUDIT"
@@ -566,7 +570,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Register the exposure audit tool (`tool.exposure_audit`, V5-b 暴露面体检) when the audit configuration is supplied. 暴露面体检面: 「"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:119;crates/adapters/cli/src/lib.rs:374;crates/adapters/cli/src/lib.rs:115"
+evidence = "direct:crates/adapters/cli/src/lib.rs:119;direct:crates/adapters/cli/src/lib.rs:374"
 
 [[entries]]
 name = "APEIRETH_ENABLE_FETCH"
@@ -576,7 +580,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:89;crates/adapters/cli/src/lib.rs:1222;crates/adapters/cli/src/lib.rs:1903"
+evidence = "direct:crates/adapters/cli/src/lib.rs:89;direct:crates/adapters/cli/src/lib.rs:1222;direct:crates/adapters/cli/src/lib.rs:1903"
 
 [[entries]]
 name = "APEIRETH_ENABLE_FILE_WRITE"
@@ -586,7 +590,7 @@ owner = "apeireth-tools-canonical"
 purpose = "创作工具面 W1: 图像操作 (`tool.image_ops`) —— 受控文件写族 + 受控读面. 面向谁 设计第一律「AI 先用」: 本面的第一用户是 agent 自己 (它能编辑图片); 同一内核 将来外接人类界面做第二出口 (删掉"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:147;crates/adapters/cli/src/lib.rs:607;crates/capabilities/tools/src/image_ops.rs:31"
+evidence = "direct:crates/adapters/cli/src/lib.rs:147;direct:crates/adapters/cli/src/lib.rs:607"
 
 [[entries]]
 name = "APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS"
@@ -596,7 +600,7 @@ owner = "apeireth-cli"
 purpose = "「自动放行已读文件的修改」子档 (依赖主开关, 同 shellSandbox 嵌套依赖模式)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:152;crates/adapters/cli/src/lib.rs:616;crates/adapters/cli/src/lib.rs:149"
+evidence = "direct:crates/adapters/cli/src/lib.rs:152;direct:crates/adapters/cli/src/lib.rs:616"
 
 [[entries]]
 name = "APEIRETH_ENABLE_GIT_WRITE"
@@ -606,7 +610,7 @@ owner = "apeireth-cli"
 purpose = "git 写分级旋钮 (`tool.git_write`, 干活能力轴 P1): 注册 + 策略 grant + 分级"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:157;crates/adapters/cli/src/lib.rs:649;crates/adapters/cli/src/lib.rs:154"
+evidence = "direct:crates/adapters/cli/src/lib.rs:157;direct:crates/adapters/cli/src/lib.rs:649"
 
 [[entries]]
 name = "APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1"
@@ -616,7 +620,7 @@ owner = "apeireth-cli"
 purpose = "**L2 出网永不自动放行** (push/fetch/remote 每次都人批)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:161;crates/adapters/cli/src/lib.rs:658;crates/adapters/cli/src/lib.rs:158"
+evidence = "direct:crates/adapters/cli/src/lib.rs:161;direct:crates/adapters/cli/src/lib.rs:658"
 
 [[entries]]
 name = "APEIRETH_ENABLE_GUARD_WATCH"
@@ -626,7 +630,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Register the guard-watch tool (`tool.guard_watch`, K 轴 L5 看家骨架). 守护面: 守护规则 (`guard-rules.json` StoredDoc 拒开, 规则 = 设备状态阈值"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/device/guard_watch.rs:74;crates/capabilities/tools/src/device/guard_watch.rs:1123;crates/capabilities/tools/src/device/mod.rs:32"
+evidence = "direct:crates/capabilities/tools/src/device/guard_watch.rs:74;direct:crates/capabilities/tools/src/device/guard_watch.rs:1123"
 
 [[entries]]
 name = "APEIRETH_ENABLE_IMAGE_OPS"
@@ -636,7 +640,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Module providing the image-ops tool (`tool.image_ops`, 创作工具面 W1 · 图像操作). 图像操作面: 工作区限域读 → 闭合操作词表管道 (resize/crop/rotate/fl"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/image_ops.rs:107;crates/adapters/cli/src/lib.rs:180;crates/capabilities/tools/src/lib.rs:218"
+evidence = "direct:crates/adapters/cli/src/lib.rs:180;direct:crates/capabilities/tools/src/image_ops.rs:107;direct:crates/capabilities/tools/src/image_ops.rs:2095"
 
 [[entries]]
 name = "APEIRETH_ENABLE_IMMUNE_MEMORY"
@@ -646,7 +650,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "P-arch (2026-08-28): OrganOrchestrator 类似 `AwakeCompanion` 真实施 v2. - 9 organ process 串联 (per R11 spec §4.1: E4 → F1 → F4"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:77;crates/adapters/cli/src/lib.rs:1173;crates/adapters/cli/src/lib.rs:3843"
+evidence = "direct:crates/adapters/cli/src/lib.rs:77;direct:crates/adapters/cli/src/lib.rs:1173;direct:crates/adapters/cli/src/lib.rs:3843"
 
 [[entries]]
 name = "APEIRETH_ENABLE_LOCAL_READ_TOOLS"
@@ -656,7 +660,7 @@ owner = "apeireth-cli"
 purpose = "Legacy opt-in for the local filesystem and search tools. Accepted for compatibility; the tools are granted by default no"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:81;crates/adapters/cli/src/lib.rs:235;crates/adapters/cli/src/lib.rs:225"
+evidence = "direct:crates/adapters/cli/src/lib.rs:81;direct:crates/adapters/cli/src/lib.rs:235"
 
 [[entries]]
 name = "APEIRETH_ENABLE_MCP"
@@ -666,7 +670,7 @@ owner = "apeireth-cli"
 purpose = "服务器列表走 `APEIRETH_MCP_SERVERS` / 数据目录 `mcp-servers.json` (拒开语义)"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:183;crates/adapters/cli/src/lib.rs:1906;crates/adapters/cli/src/lib.rs:181"
+evidence = "direct:crates/adapters/cli/src/lib.rs:183;direct:crates/adapters/cli/src/lib.rs:1906"
 
 [[entries]]
 name = "APEIRETH_ENABLE_MEMORY_INJECTION"
@@ -676,7 +680,7 @@ owner = "apeireth-cli"
 purpose = "2026-10-06 W2 记忆闭环批: 反幻觉注入格式 / 每轮记忆整理 / 失败闭环"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:203;crates/adapters/cli/src/lib.rs:331;crates/adapters/cli/src/onboarding.rs:637"
+evidence = "direct:crates/adapters/cli/src/lib.rs:203;direct:crates/adapters/cli/src/lib.rs:331;direct:crates/adapters/cli/src/onboarding.rs:637"
 
 [[entries]]
 name = "APEIRETH_ENABLE_MORPHOLOGY_RECALL"
@@ -686,7 +690,7 @@ owner = "apeireth-cli"
 purpose = "**W2 §4.3 旋钮** (2026-10-10, 默认关): 查询形态学自适应检索深度"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3143;crates/adapters/cli/src/lib.rs:3141"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3143"
 
 [[entries]]
 name = "APEIRETH_ENABLE_ONERING_LEDGER"
@@ -696,7 +700,7 @@ owner = "apeireth-cli"
 purpose = "**W3 onering 账本消费旋钮** (2026-10-10, 默认关)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:2875;crates/adapters/cli/src/lib.rs:2871"
+evidence = "direct:crates/adapters/cli/src/lib.rs:2875"
 
 [[entries]]
 name = "APEIRETH_ENABLE_ONION_LAYER"
@@ -706,7 +710,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "W3 三洋葱 L3-L5 **物理执行面接线**: 双洋葱判定 (`DoubleOnionGate`) 的治理钩子化。 **架构位置** (2026-10-10): 生产治理管线 = `PermissionGovernanceHook` ("
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:1120;crates/engine/runtime-assembly/src/canonical/onion_layer.rs:6;crates/adapters/cli/src/lib.rs:1117"
+evidence = "direct:crates/adapters/cli/src/lib.rs:1120"
 
 [[entries]]
 name = "APEIRETH_ENABLE_ORGANS"
@@ -716,7 +720,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:184;crates/adapters/cli/src/lib.rs:1896;crates/adapters/cli/src/onboarding.rs:640"
+evidence = "direct:crates/adapters/cli/src/lib.rs:184;direct:crates/adapters/cli/src/lib.rs:1896;direct:crates/adapters/cli/src/onboarding.rs:640"
 
 [[entries]]
 name = "APEIRETH_ENABLE_PARTNER_BOND"
@@ -726,7 +730,7 @@ owner = "apeireth-cli"
 purpose = "**W2 §4.2 旋钮** (2026-10-10, 默认关): partner 双向羁绊"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3135;crates/adapters/cli/src/lib.rs:3133"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3135"
 
 [[entries]]
 name = "APEIRETH_ENABLE_PERCEPTION"
@@ -736,7 +740,7 @@ owner = "apeireth-perception"
 purpose = "P-arch (2026-08-27): A3 Perception 0 装接口 (O-6 重构批次 Refactor-3). **O-6 重构**: trait 抽象层搬到 `apeireth-plugin` (foundation),"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/perception/src/lib.rs:39;crates/engine/perception/src/memory_link.rs:41;crates/engine/perception/src/memory_link.rs:75"
+evidence = "direct:crates/engine/perception/src/lib.rs:39;direct:crates/engine/perception/src/memory_link.rs:41;direct:crates/engine/perception/src/memory_link.rs:75"
 
 [[entries]]
 name = "APEIRETH_ENABLE_PERSONA_CONSOLIDATION"
@@ -746,7 +750,7 @@ owner = "apeireth-cli"
 purpose = "V4-a 人格提取步旋钮 (`persona_consolidation`): 注册即闸, 默认关 (fail-closed)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:208;crates/adapters/cli/src/lib.rs:357;crates/adapters/cli/src/lib.rs:206"
+evidence = "direct:crates/adapters/cli/src/lib.rs:208;direct:crates/adapters/cli/src/lib.rs:357"
 
 [[entries]]
 name = "APEIRETH_ENABLE_PREFERENCE_LEARNING"
@@ -756,7 +760,7 @@ owner = "apeireth-cli"
 purpose = "偏好学习装配旋钮 (记忆核心族, **默认开**): 开启时 `cognitive.preference_learning`"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:185;crates/adapters/cli/src/lib.rs:339;crates/adapters/cli/src/onboarding.rs:636"
+evidence = "direct:crates/adapters/cli/src/lib.rs:185;direct:crates/adapters/cli/src/lib.rs:339;direct:crates/adapters/cli/src/onboarding.rs:636"
 
 [[entries]]
 name = "APEIRETH_ENABLE_PROACTIVE_RECALL"
@@ -766,7 +770,7 @@ owner = "apeireth-cli"
 purpose = "(默认开 + 逃生门)、语义向量阶段 (真实现 + opt-in, 词法回退兜底)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:189;crates/adapters/cli/src/lib.rs:268;crates/adapters/cli/src/onboarding.rs:635"
+evidence = "direct:crates/adapters/cli/src/lib.rs:189;direct:crates/adapters/cli/src/lib.rs:268;direct:crates/adapters/cli/src/onboarding.rs:635"
 
 [[entries]]
 name = "APEIRETH_ENABLE_PROPOSALS"
@@ -776,7 +780,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Register the leftover-proposal tool (`tool.proposal_draft`, 自主度第一小步 · 边角料提案面) when the proposal-ledger data directory is"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/proposal.rs:69;crates/adapters/cli/src/lib.rs:126;crates/capabilities/tools/src/lib.rs:251"
+evidence = "direct:crates/adapters/cli/src/lib.rs:126;direct:crates/capabilities/tools/src/lib.rs:251;direct:crates/capabilities/tools/src/proposal.rs:69"
 
 [[entries]]
 name = "APEIRETH_ENABLE_QUORUM_GATE"
@@ -786,7 +790,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "P-arch (2026-08-28): OrganOrchestrator 类似 `AwakeCompanion` 真实施 v2. - 9 organ process 串联 (per R11 spec §4.1: E4 → F1 → F4"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/orchestrator.rs:711;crates/engine/runtime-assembly/src/canonical/orchestrator.rs:733;crates/engine/runtime-assembly/src/canonical/orchestrator.rs:57"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:50;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:523;direct:crates/engine/runtime-assembly/src/canonical/orchestrator.rs:711"
 
 [[entries]]
 name = "APEIRETH_ENABLE_REFLEXION"
@@ -796,7 +800,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:213;crates/adapters/cli/src/lib.rs:397;crates/adapters/cli/src/onboarding.rs:639"
+evidence = "direct:crates/adapters/cli/src/lib.rs:213;direct:crates/adapters/cli/src/lib.rs:397;direct:crates/adapters/cli/src/onboarding.rs:639"
 
 [[entries]]
 name = "APEIRETH_ENABLE_RETRIEVAL_TUNING"
@@ -806,7 +810,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "检索维度自进化接线层 (RetrievalTuningWire) —— V4-c 的落地接线。 **职责** (引擎本身保持纯确定性、无 IO): - 持有 [`RetrievalTuningEngine`], 把**注入后命中回执** ("
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs:48;crates/engine/runtime-assembly/src/lib.rs:69;crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs:115"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical.rs:201;direct:crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs:48;direct:crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs:115"
 
 [[entries]]
 name = "APEIRETH_ENABLE_SELF_TUNING"
@@ -816,7 +820,7 @@ owner = "apeireth-orchestration"
 purpose = "自动校准引擎 (Self-Tuning Engine) — 「性格养成」第一铲的核心机制件。 **定位** (设计契约 2026-11 性格养成批)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/lib.rs:53;crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:55;crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:94"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical.rs:213;direct:crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:55;direct:crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:94"
 
 [[entries]]
 name = "APEIRETH_ENABLE_SHEET_OPS"
@@ -826,7 +830,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Module providing the sheet-ops tool (`tool.sheet_ops`, 创作工具面 K3 · 表格操作). 受控读写族: CSV 读 (read/summary) + 筛排聚合 (filter/sort"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/sheet_ops.rs:138;crates/adapters/cli/src/lib.rs:140;crates/capabilities/tools/src/lib.rs:289"
+evidence = "direct:crates/adapters/cli/src/lib.rs:140;direct:crates/capabilities/tools/src/lib.rs:289;direct:crates/capabilities/tools/src/sheet_ops.rs:138"
 
 [[entries]]
 name = "APEIRETH_ENABLE_SHELL"
@@ -836,7 +840,7 @@ owner = "apeireth-cli"
 purpose = "organs / preference_learning 为认知模块装配旋钮"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:88;crates/adapters/cli/src/lib.rs:1219;crates/adapters/cli/src/lib.rs:1900"
+evidence = "direct:crates/adapters/cli/src/lib.rs:88;direct:crates/adapters/cli/src/lib.rs:1219;direct:crates/adapters/cli/src/lib.rs:1900"
 
 [[entries]]
 name = "APEIRETH_ENABLE_SKILL_DISTILL"
@@ -846,7 +850,7 @@ owner = "apeireth-cli"
 purpose = "是只读档 (零审批、零写盘), 独立旋钮不依赖写总闸"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:173;crates/adapters/cli/src/lib.rs:688"
+evidence = "direct:crates/adapters/cli/src/lib.rs:173;direct:crates/adapters/cli/src/lib.rs:688"
 
 [[entries]]
 name = "APEIRETH_ENABLE_SKILL_SEARCH"
@@ -856,7 +860,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:174;crates/adapters/cli/src/lib.rs:695"
+evidence = "direct:crates/adapters/cli/src/lib.rs:174;direct:crates/adapters/cli/src/lib.rs:695"
 
 [[entries]]
 name = "APEIRETH_ENABLE_TASK_BOARD"
@@ -866,7 +870,7 @@ owner = "apeireth-cli"
 purpose = "V6-a 任务簿 (`tool.task_board`) 旋钮 (V6-a 任务编排持久队列): 默认关"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:113;crates/adapters/cli/src/lib.rs:750;crates/adapters/cli/src/lib.rs:111"
+evidence = "direct:crates/adapters/cli/src/lib.rs:113;direct:crates/adapters/cli/src/lib.rs:750"
 
 [[entries]]
 name = "APEIRETH_ENABLE_VOICE_SPEAK"
@@ -876,7 +880,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Register the general-voice speech tool (`tool.voice_speak`, V3-b 通用嗓闭环) when the voice configuration is supplied. 发声面: 文"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:109;crates/adapters/cli/src/lib.rs:740;crates/capabilities/tools/src/voice/speak.rs:23"
+evidence = "direct:crates/adapters/cli/src/lib.rs:109;direct:crates/adapters/cli/src/lib.rs:740"
 
 [[entries]]
 name = "APEIRETH_ENABLE_WORKTREE_APPLY"
@@ -886,7 +890,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:168;crates/adapters/cli/src/lib.rs:678"
+evidence = "direct:crates/adapters/cli/src/lib.rs:168;direct:crates/adapters/cli/src/lib.rs:678"
 
 [[entries]]
 name = "APEIRETH_ENABLE_WORKTREE_PLAN"
@@ -896,7 +900,7 @@ owner = "apeireth-cli"
 purpose = "放行档), plan 只读零审批"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:167;crates/adapters/cli/src/lib.rs:668;crates/adapters/cli/src/lib.rs:663"
+evidence = "direct:crates/adapters/cli/src/lib.rs:167;direct:crates/adapters/cli/src/lib.rs:668"
 
 [[entries]]
 name = "APEIRETH_ENABLE_WORKTREE_SANDBOX"
@@ -906,7 +910,7 @@ owner = "apeireth-cli"
 purpose = "构造 subagent Orchestrator (工厂配方与 `build_council_from_env` 同源; 0 装: 没有 key 显式报错, 不造调用时才失败的假可用)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:2489;crates/adapters/cli/src/lib.rs:2391;crates/adapters/cli/src/lib.rs:2486"
+evidence = "direct:crates/adapters/cli/src/lib.rs:2489"
 
 [[entries]]
 name = "APEIRETH_GATEWAY_TOKEN"
@@ -916,7 +920,7 @@ owner = "apeireth-credentials"
 purpose = "常驻服务令牌面 (W2-① G10 协同)。 常驻服务安装面 (`packaging/service/apeireth-service.ps1` 的 install 动作) 生成一枚持久令牌存入平台凭据库 —— **明文不落盘**; 服务进"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/exposure.rs:21;crates/adapters/cli/src/trait_command.rs:23;crates/adapters/cli/src/backup.rs:31"
+evidence = "direct:crates/adapters/cli/src/backup.rs:31;direct:crates/adapters/cli/src/backup.rs:264;direct:crates/adapters/cli/src/backup.rs:270"
 
 [[entries]]
 name = "APEIRETH_GATEWAY_TOKENS"
@@ -926,7 +930,7 @@ owner = "apeireth-gateway"
 purpose = "客户端凭证体系 (W2-②/W3-②): 每客户端令牌表 (name → token) 的配置面与校验面, 外加用户绑定面 (name → token → **user_id** → **role**, W3-②)。 两个入口, 一份 fa"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/gateway/src/client_tokens.rs:35;crates/adapters/gateway/src/lib.rs:143;crates/adapters/gateway/src/remote_access.rs:153"
+evidence = "direct:crates/adapters/gateway/src/client_tokens.rs:35;direct:crates/adapters/gateway/src/client_tokens.rs:177;direct:crates/adapters/gateway/src/client_tokens.rs:207"
 
 [[entries]]
 name = "APEIRETH_GATEWAY_URL"
@@ -936,7 +940,7 @@ owner = "apeireth-tui"
 purpose = "用法文本"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/tui/src/main.rs:41;crates/adapters/tui/src/main.rs:64;crates/adapters/tui/src/main.rs:334"
+evidence = "direct:crates/adapters/tui/src/main.rs:41;direct:crates/adapters/tui/src/main.rs:64;direct:crates/adapters/tui/src/main.rs:334"
 
 [[entries]]
 name = "APEIRETH_GUARD_DATASET_ENABLED"
@@ -946,7 +950,7 @@ owner = "apeireth-cli"
 purpose = "Enables the desensitized Guard dataset event stream when set to `1`."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:60;crates/adapters/cli/src/lib.rs:1146"
+evidence = "direct:crates/adapters/cli/src/lib.rs:60;direct:crates/adapters/cli/src/lib.rs:1146"
 
 [[entries]]
 name = "APEIRETH_GUARD_DATASET_PATH"
@@ -956,7 +960,7 @@ owner = "apeireth-cli"
 purpose = "Optional JSONL path for the composition-owned Guard dataset recorder."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:62;crates/adapters/cli/src/lib.rs:1152"
+evidence = "direct:crates/adapters/cli/src/lib.rs:62;direct:crates/adapters/cli/src/lib.rs:1152"
 
 [[entries]]
 name = "APEIRETH_GUARD_ML_MODE"
@@ -966,7 +970,7 @@ owner = "apeireth-cli"
 purpose = "Local Guard model mode: disabled, shadow, advisory, or enforce."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:64;crates/adapters/cli/src/lib.rs:1126"
+evidence = "direct:crates/adapters/cli/src/lib.rs:64;direct:crates/adapters/cli/src/lib.rs:1126"
 
 [[entries]]
 name = "APEIRETH_GUARD_ML_MODEL"
@@ -976,7 +980,7 @@ owner = "apeireth-cli"
 purpose = "Local JSON model artifact path. Paths are never returned in Guard status."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:66;crates/adapters/cli/src/lib.rs:1132"
+evidence = "direct:crates/adapters/cli/src/lib.rs:66;direct:crates/adapters/cli/src/lib.rs:1132"
 
 [[entries]]
 name = "APEIRETH_HOME"
@@ -986,7 +990,7 @@ owner = "apeireth-cli"
 purpose = "Portable USB Agent Bundle Synthesizer (随身 U 盘生命体便携化打包器). Architectural Foundations Enables zero-install, plug-and-play A"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/portable_bundle.rs:58;crates/adapters/cli/src/portable_bundle.rs:74"
+evidence = "direct:crates/adapters/cli/src/portable_bundle.rs:58;direct:crates/adapters/cli/src/portable_bundle.rs:74"
 
 [[entries]]
 name = "APEIRETH_IMAGE_FX_NOCACHE"
@@ -996,7 +1000,7 @@ owner = "apeireth-image-compose"
 purpose = "CPU reference compositor. Flattens a [`Document`] layer tree into straight-alpha RGBA (f32) for any rectangle. It encode"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/compose/src/lib.rs:1689"
+evidence = "direct:crates/engine/image/compose/src/lib.rs:1689"
 
 [[entries]]
 name = "APEIRETH_IMAGE_MOTION_CASES"
@@ -1006,7 +1010,7 @@ owner = "apeireth-image-algo"
 purpose = "Reproduce in release with --ignored --nocapture. APEIRETH_IMAGE_MOTION_WIDTH/HEIGHT default to"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/algo/src/blur/motion_bench.rs:119;crates/engine/image/algo/src/blur/motion_bench.rs:123;crates/engine/image/algo/src/blur/motion_bench.rs:202"
+evidence = "direct:crates/engine/image/algo/src/blur/motion_bench.rs:119;direct:crates/engine/image/algo/src/blur/motion_bench.rs:123"
 
 [[entries]]
 name = "APEIRETH_IMAGE_MOTION_CHANNELS"
@@ -1016,7 +1020,7 @@ owner = "apeireth-image-algo"
 purpose = "Reproduce in release with --ignored --nocapture. APEIRETH_IMAGE_MOTION_WIDTH/HEIGHT default to 1500/1000; APEIRETH_IMAGE"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/algo/src/blur/motion_bench.rs:214;crates/engine/image/algo/src/blur/motion_bench.rs:204"
+evidence = "direct:crates/engine/image/algo/src/blur/motion_bench.rs:214"
 
 [[entries]]
 name = "APEIRETH_IMAGE_MOTION_HEIGHT"
@@ -1026,7 +1030,7 @@ owner = "apeireth-image-algo"
 purpose = "Opt-in release comparisons against the Motion Blur row kernel merged in upstream PR 902."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/algo/src/blur/motion_bench.rs:212"
+evidence = "direct:crates/engine/image/algo/src/blur/motion_bench.rs:212"
 
 [[entries]]
 name = "APEIRETH_IMAGE_MOTION_MODE"
@@ -1036,7 +1040,7 @@ owner = "apeireth-image-algo"
 purpose = "Reproduce in release with --ignored --nocapture. APEIRETH_IMAGE_MOTION_WIDTH/HEIGHT default to 1500/1000; APEIRETH_IMAGE"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/algo/src/blur/motion_bench.rs:219;crates/engine/image/algo/src/blur/motion_bench.rs:220;crates/engine/image/algo/src/blur/motion_bench.rs:203"
+evidence = "direct:crates/engine/image/algo/src/blur/motion_bench.rs:219;direct:crates/engine/image/algo/src/blur/motion_bench.rs:220"
 
 [[entries]]
 name = "APEIRETH_IMAGE_MOTION_RUNS"
@@ -1046,7 +1050,7 @@ owner = "apeireth-image-algo"
 purpose = "Reproduce in release with --ignored --nocapture. APEIRETH_IMAGE_MOTION_WIDTH/HEIGHT default to"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/algo/src/blur/motion_bench.rs:213;crates/engine/image/algo/src/blur/motion_bench.rs:202"
+evidence = "direct:crates/engine/image/algo/src/blur/motion_bench.rs:213"
 
 [[entries]]
 name = "APEIRETH_IMAGE_MOTION_VARIABLE_ALPHA"
@@ -1056,7 +1060,7 @@ owner = "apeireth-image-algo"
 purpose = "Reproduce in release with --ignored --nocapture. APEIRETH_IMAGE_MOTION_WIDTH/HEIGHT default to 1500/1000; APEIRETH_IMAGE"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/algo/src/blur/motion_bench.rs:223;crates/engine/image/algo/src/blur/motion_bench.rs:205"
+evidence = "direct:crates/engine/image/algo/src/blur/motion_bench.rs:223"
 
 [[entries]]
 name = "APEIRETH_IMAGE_MOTION_WIDTH"
@@ -1066,17 +1070,18 @@ owner = "apeireth-image-algo"
 purpose = "Opt-in release comparisons against the Motion Blur row kernel merged in upstream PR 902."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/algo/src/blur/motion_bench.rs:211;crates/engine/image/algo/src/blur/motion_bench.rs:201"
+evidence = "direct:crates/engine/image/algo/src/blur/motion_bench.rs:211"
 
 [[entries]]
 name = "APEIRETH_IMAGE_REGEN_PROFILES"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-cms"
-purpose = "The shipped synthetic CMYK profile (generated by [`crate::synth::coated_cmyk`]; regenerate"
+purpose = "The shipped synthetic CMYK profile (generated by [`crate::synth::coated_cmyk`]; regenerate（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/image/cms/src/builtin.rs:272"
+kind = "test-only"
+evidence = "scan-only:crates/engine/image/cms/src/builtin.rs:272"
 
 [[entries]]
 name = "APEIRETH_IMAGE_UNSHARP_CASES"
@@ -1087,7 +1092,7 @@ purpose = "Opt-in benchmark of the adaptive production path against the frozen o
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:30;crates/engine/image/algo/src/sharpen/tests.rs:339"
+evidence = "scan-only:crates/engine/image/algo/src/sharpen/fft_bench.rs:30;scan-only:crates/engine/image/algo/src/sharpen/tests.rs:339"
 
 [[entries]]
 name = "APEIRETH_IMAGE_UNSHARP_CHANNELS"
@@ -1098,7 +1103,7 @@ purpose = "TODO-PURPOSE — 测试/基准夹具，非产品开关"
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/engine/image/algo/src/sharpen/tests.rs:327"
+evidence = "scan-only:crates/engine/image/algo/src/sharpen/tests.rs:327"
 
 [[entries]]
 name = "APEIRETH_IMAGE_UNSHARP_DEPTH"
@@ -1109,7 +1114,7 @@ purpose = "Opt-in benchmark of the adaptive production path against the frozen o
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:22;crates/engine/image/algo/src/sharpen/fft_bench.rs:82;crates/engine/image/algo/src/sharpen/tests.rs:320"
+evidence = "scan-only:crates/engine/image/algo/src/sharpen/fft_bench.rs:22;scan-only:crates/engine/image/algo/src/sharpen/fft_bench.rs:82;scan-only:crates/engine/image/algo/src/sharpen/tests.rs:320"
 
 [[entries]]
 name = "APEIRETH_IMAGE_UNSHARP_HEIGHT"
@@ -1120,7 +1125,7 @@ purpose = "Opt-in benchmark of the adaptive production path against the frozen o
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:19;crates/engine/image/algo/src/sharpen/tests.rs:318"
+evidence = "scan-only:crates/engine/image/algo/src/sharpen/fft_bench.rs:19;scan-only:crates/engine/image/algo/src/sharpen/tests.rs:318"
 
 [[entries]]
 name = "APEIRETH_IMAGE_UNSHARP_MODE"
@@ -1131,7 +1136,7 @@ purpose = "TODO-PURPOSE — 测试/基准夹具，非产品开关"
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/engine/image/algo/src/sharpen/tests.rs:337"
+evidence = "scan-only:crates/engine/image/algo/src/sharpen/tests.rs:337"
 
 [[entries]]
 name = "APEIRETH_IMAGE_UNSHARP_REPS"
@@ -1142,7 +1147,7 @@ purpose = "Opt-in benchmark of the adaptive production path against the frozen o
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:20;crates/engine/image/algo/src/sharpen/tests.rs:318"
+evidence = "scan-only:crates/engine/image/algo/src/sharpen/fft_bench.rs:20;scan-only:crates/engine/image/algo/src/sharpen/tests.rs:318"
 
 [[entries]]
 name = "APEIRETH_IMAGE_UNSHARP_WIDTH"
@@ -1153,7 +1158,7 @@ purpose = "Opt-in benchmark of the adaptive production path against the frozen o
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:19;crates/engine/image/algo/src/sharpen/tests.rs:318"
+evidence = "scan-only:crates/engine/image/algo/src/sharpen/fft_bench.rs:19;scan-only:crates/engine/image/algo/src/sharpen/tests.rs:318"
 
 [[entries]]
 name = "APEIRETH_IM_CHANNELS"
@@ -1163,7 +1168,7 @@ owner = "apeireth-gateway"
 purpose = "IM 快捷接入: 渠道配置面 (件一)。 两个入口, 一份 fail-closed 契约"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/gateway/src/im_channels.rs:21;crates/adapters/gateway/src/im_channels.rs:148;crates/adapters/gateway/src/im_channels.rs:169"
+evidence = "direct:crates/adapters/gateway/src/im_channels.rs:21;direct:crates/adapters/gateway/src/im_channels.rs:148;direct:crates/adapters/gateway/src/im_channels.rs:169"
 
 [[entries]]
 name = "APEIRETH_KEYRING_BACKEND"
@@ -1173,7 +1178,7 @@ owner = "apeireth-credentials"
 purpose = "**后端选择器** — 装配期一次性选择."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/keyring_bootstrap.rs:103;crates/adapters/cli/src/keyring_bootstrap.rs:205;crates/adapters/cli/src/keyring_bootstrap.rs:222"
+evidence = "direct:crates/adapters/cli/src/keyring_bootstrap.rs:78;direct:crates/adapters/cli/src/keyring_bootstrap.rs:103;direct:crates/adapters/cli/src/keyring_bootstrap.rs:106"
 
 [[entries]]
 name = "APEIRETH_KEYRING_DIR"
@@ -1183,7 +1188,7 @@ owner = "apeireth-cli"
 purpose = "fallback dir (EncryptedFile backend 用, 默认 ~/.apeireth/keyring/)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/keyring_bootstrap.rs:115;crates/adapters/cli/src/keyring_bootstrap.rs:239;crates/adapters/cli/src/keyring_bootstrap.rs:267"
+evidence = "direct:crates/adapters/cli/src/keyring_bootstrap.rs:115;direct:crates/adapters/cli/src/keyring_bootstrap.rs:239;direct:crates/adapters/cli/src/keyring_bootstrap.rs:242"
 
 [[entries]]
 name = "APEIRETH_LISTEN"
@@ -1193,7 +1198,7 @@ owner = "apeireth-gateway"
 purpose = "远程访问面 (W2-②, F 轴 P3): 绑定地址旋钮 + 非回环绑定的 fail-closed 闸 + TLS 面真接线 (安全加固批 B5)。 三条承诺"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/gateway/src/remote_access.rs:31;crates/adapters/gateway/src/remote_access.rs:68;crates/adapters/gateway/src/lib.rs:168"
+evidence = "direct:crates/adapters/cli/src/main.rs:13;direct:crates/adapters/gateway/src/lib.rs:168;direct:crates/adapters/gateway/src/remote_access.rs:31"
 
 [[entries]]
 name = "APEIRETH_MASTER_TOKEN"
@@ -1203,7 +1208,7 @@ owner = "apeireth-credentials"
 purpose = "默认高危服务名单 (master token 类)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/credentials/src/gate.rs:53"
+evidence = "scan-only:crates/foundation/credentials/src/gate.rs:53"
 
 [[entries]]
 name = "APEIRETH_MAX_TOOL_CALLS"
@@ -1213,7 +1218,7 @@ owner = "apeireth-cli"
 purpose = "轮数 / 单轮工具调用预算旋钮 (APEIRETH_MAX_TURN_ROUNDS /"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:217;crates/adapters/cli/src/lib.rs:439;crates/adapters/cli/src/onboarding.rs:605"
+evidence = "direct:crates/adapters/cli/src/lib.rs:217;direct:crates/adapters/cli/src/lib.rs:439;direct:crates/adapters/cli/src/onboarding.rs:605"
 
 [[entries]]
 name = "APEIRETH_MAX_TURN_ROUNDS"
@@ -1223,7 +1228,7 @@ owner = "apeireth-cli"
 purpose = "预算一节与运行时装配同源: 同一条可配置旋钮解析路径的取值"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:216;crates/adapters/cli/src/lib.rs:430;crates/adapters/cli/src/onboarding.rs:600"
+evidence = "direct:crates/adapters/cli/src/lib.rs:216;direct:crates/adapters/cli/src/lib.rs:430;direct:crates/adapters/cli/src/onboarding.rs:600"
 
 [[entries]]
 name = "APEIRETH_MCP_READONLY_PRESET"
@@ -1233,7 +1238,7 @@ owner = "apeireth-tools-canonical"
 purpose = "Environment variable releasing server-declared read-only tools (`1` = on)."
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/mcp_bridge/config.rs:27;crates/capabilities/tools/src/mcp_bridge/mod.rs:48;crates/capabilities/tools/src/mcp_bridge/config.rs:366"
+evidence = "direct:crates/capabilities/tools/src/mcp_bridge/config.rs:27;direct:crates/capabilities/tools/src/mcp_bridge/config.rs:366;direct:crates/capabilities/tools/src/mcp_bridge/mod.rs:48"
 
 [[entries]]
 name = "APEIRETH_MCP_SERVERS"
@@ -1243,7 +1248,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "Register the external tool bridge (MCP) module. When enabled, the server list is loaded at assembly time from"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/mcp_bridge/config.rs:24;crates/capabilities/tools/src/mcp_bridge/mod.rs:48;crates/capabilities/tools/src/mcp_bridge/config.rs:257"
+evidence = "direct:crates/capabilities/tools/src/mcp_bridge/config.rs:24;direct:crates/capabilities/tools/src/mcp_bridge/config.rs:257;direct:crates/capabilities/tools/src/mcp_bridge/config.rs:279"
 
 [[entries]]
 name = "APEIRETH_MODEL"
@@ -1253,7 +1258,7 @@ owner = "apeireth-gateway"
 purpose = "Runtime configuration hot reload (`/v1/admin/config`). The gateway keeps an effective runtime config in an [`RwLock`] on"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:477;crates/adapters/gateway/src/admin.rs:30;crates/adapters/gateway/src/admin.rs:76"
+evidence = "direct:crates/adapters/cli/src/lib.rs:477;direct:crates/adapters/cli/src/onboarding.rs:142;direct:crates/adapters/cli/src/onboarding.rs:965"
 
 [[entries]]
 name = "APEIRETH_MODEL_PROFILES"
@@ -1263,7 +1268,7 @@ owner = "apeireth-core"
 purpose = "env 入口: `APEIRETH_MODEL_PROFILES` (JSON 覆盖层)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/core/src/model_profile.rs:41;crates/foundation/core/src/model_profile.rs:365;crates/foundation/core/src/model_profile.rs:405"
+evidence = "direct:crates/foundation/core/src/model_profile.rs:41;direct:crates/foundation/core/src/model_profile.rs:365;direct:crates/foundation/core/src/model_profile.rs:405"
 
 [[entries]]
 name = "APEIRETH_MORPHOLOGY_TEMPERATURE"
@@ -1273,7 +1278,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "W2 §4.3: 形态学自适应检索深度 (纯函数, 供 recall 前置与测试)。 `crawl_budget` [1,6] 为查询形态学 softmax 预算 (Shallow 1 / Standard 3 / Deep 6); 只能在"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/organ/src/morphology.rs:174;crates/engine/organ/src/morphology.rs:171;crates/engine/runtime-assembly/src/canonical/cognitive.rs:1057"
+evidence = "direct:crates/engine/organ/src/morphology.rs:174"
 
 [[entries]]
 name = "APEIRETH_OPENAI_KEY"
@@ -1283,7 +1288,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:2616"
+evidence = "direct:crates/adapters/cli/src/lib.rs:2616"
 
 [[entries]]
 name = "APEIRETH_OPENAI_MODELS"
@@ -1293,7 +1298,7 @@ owner = "apeireth-provider"
 purpose = "Build the plugin from environment configuration, with a safe vendor default for the non-secret base URL. `APEIRETH_OPENA"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/canonical_openai_compatible.rs:547;crates/adapters/cli/src/lib.rs:1589;crates/adapters/cli/src/lib.rs:2307"
+evidence = "direct:crates/adapters/cli/src/lib.rs:1589;direct:crates/adapters/cli/src/lib.rs:2307;direct:crates/adapters/cli/src/lib.rs:2401"
 
 [[entries]]
 name = "APEIRETH_OPENAI_URL"
@@ -1303,7 +1308,7 @@ owner = "apeireth-provider"
 purpose = "Build the plugin from environment configuration, with a safe vendor"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/canonical_openai_compatible.rs:543;crates/adapters/gateway/src/admin.rs:28;crates/adapters/gateway/src/admin.rs:69"
+evidence = "direct:crates/adapters/cli/src/onboarding.rs:967;direct:crates/adapters/gateway/src/admin.rs:28;direct:crates/adapters/gateway/src/admin.rs:69"
 
 [[entries]]
 name = "APEIRETH_PERSONA_ID"
@@ -1313,7 +1318,7 @@ owner = "apeireth-cli"
 purpose = "Typed memory 的显式主体身份 (写侧 persona delta 与读侧 typed 召回共用)。 本地产品单主体: 默认 `apeireth` / `local-user`, 多主体部署用"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:198;crates/adapters/cli/src/lib.rs:296;crates/adapters/cli/src/onboarding.rs:968"
+evidence = "direct:crates/adapters/cli/src/lib.rs:198;direct:crates/adapters/cli/src/lib.rs:296;direct:crates/adapters/cli/src/onboarding.rs:968"
 
 [[entries]]
 name = "APEIRETH_PORTABLE"
@@ -1323,17 +1328,18 @@ owner = "apeireth-cli"
 purpose = "Portable USB Agent Bundle Synthesizer (随身 U 盘生命体便携化打包器). Architectural Foundations Enables zero-install, plug-and-play A"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/portable_bundle.rs:59;crates/adapters/cli/src/portable_bundle.rs:75;crates/adapters/cli/src/portable_bundle.rs:137"
+evidence = "direct:crates/adapters/cli/src/portable_bundle.rs:59;direct:crates/adapters/cli/src/portable_bundle.rs:75;direct:crates/adapters/cli/src/portable_bundle.rs:137"
 
 [[entries]]
 name = "APEIRETH_QUOTA_MAX_"
 default = "n/a"
 layer = "adapters"
 owner = "apeireth-cli"
-purpose = "(APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS /"
+purpose = "(APEIRETH_MAX_TURN_ROUNDS / APEIRETH_MAX_TOOL_CALLS /（动态拼接/非独立开关）"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:2206"
+kind = "derived"
+evidence = "scan-only:crates/adapters/cli/src/lib.rs:2206"
 
 [[entries]]
 name = "APEIRETH_QUOTA_MAX_COST_MICROS"
@@ -1343,7 +1349,7 @@ owner = "apeireth-cli"
 purpose = "会话配额旋钮 (APEIRETH_QUOTA_MAX_TOKENS / APEIRETH_QUOTA_MAX_TOOL_STEPS /"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:220;crates/adapters/cli/src/lib.rs:469;crates/adapters/cli/src/lib.rs:462"
+evidence = "direct:crates/adapters/cli/src/lib.rs:220;direct:crates/adapters/cli/src/lib.rs:469"
 
 [[entries]]
 name = "APEIRETH_QUOTA_MAX_TOKENS"
@@ -1353,7 +1359,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:218;crates/adapters/cli/src/lib.rs:449;crates/adapters/cli/src/lib.rs:443"
+evidence = "direct:crates/adapters/cli/src/lib.rs:218;direct:crates/adapters/cli/src/lib.rs:449"
 
 [[entries]]
 name = "APEIRETH_QUOTA_MAX_TOOL_STEPS"
@@ -1363,7 +1369,7 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:219;crates/adapters/cli/src/lib.rs:458;crates/adapters/cli/src/lib.rs:453"
+evidence = "direct:crates/adapters/cli/src/lib.rs:219;direct:crates/adapters/cli/src/lib.rs:458"
 
 [[entries]]
 name = "APEIRETH_REASONING_ENABLED"
@@ -1373,7 +1379,7 @@ owner = "apeireth-provider"
 purpose = "从环境变量构造 (对齐 http_dispatch from_env 风格)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/reasoning_adapter.rs:196;crates/engine/provider/src/reasoning_adapter.rs:192"
+evidence = "direct:crates/engine/provider/src/reasoning_adapter.rs:196"
 
 [[entries]]
 name = "APEIRETH_REASONING_MODEL_FILTERS"
@@ -1383,7 +1389,7 @@ owner = "apeireth-provider"
 purpose = "从环境变量构造 (对齐 http_dispatch from_env 风格): - `APEIRETH_REASONING_ENABLED` = \"1\"/\"true\" 开启 (默认关)"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/reasoning_adapter.rs:199;crates/engine/provider/src/reasoning_adapter.rs:193"
+evidence = "direct:crates/engine/provider/src/reasoning_adapter.rs:199"
 
 [[entries]]
 name = "APEIRETH_REASONING_TAG"
@@ -1393,7 +1399,7 @@ owner = "apeireth-provider"
 purpose = "从环境变量构造 (对齐 http_dispatch from_env 风格): - `APEIRETH_REASONING_ENABLED` = \"1\"/\"true\" 开启 (默认关) - `APEIRETH_REASONING_MODEL"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/provider/src/reasoning_adapter.rs:205;crates/engine/provider/src/reasoning_adapter.rs:194"
+evidence = "direct:crates/engine/provider/src/reasoning_adapter.rs:205"
 
 [[entries]]
 name = "APEIRETH_REFLEXION_DIR"
@@ -1403,27 +1409,29 @@ owner = "apeireth-cli"
 purpose = "Canonical Apeireth command-line entry points. The CLI is a thin adapter: it bootstraps one canonical runtime, constructs"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:214;crates/adapters/cli/src/lib.rs:404;crates/adapters/cli/src/lib.rs:402"
+evidence = "direct:crates/adapters/cli/src/lib.rs:214;direct:crates/adapters/cli/src/lib.rs:404"
 
 [[entries]]
 name = "APEIRETH_REG_APEIRETH_CORE_A"
 default = "n/a"
 layer = "foundation"
 owner = "apeireth-core"
-purpose = "apeireth_verify::regression_assert ("
+purpose = "apeireth_verify::regression_assert (（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/core/src/lib.rs:2267"
+kind = "test-only"
+evidence = "scan-only:crates/foundation/core/src/lib.rs:2267"
 
 [[entries]]
 name = "APEIRETH_REG_APEIRETH_CORE_B"
 default = "n/a"
 layer = "foundation"
 owner = "apeireth-core"
-purpose = "apeireth_verify::regression_assert ("
+purpose = "apeireth_verify::regression_assert (（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/core/src/lib.rs:2273"
+kind = "test-only"
+evidence = "scan-only:crates/foundation/core/src/lib.rs:2273"
 
 [[entries]]
 name = "APEIRETH_SESSION_DB"
@@ -1433,7 +1441,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "学习日志落位: 与 session db 同目录 (路径风格对齐现有 session db 落位 ——"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:225;crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs:326;crates/adapters/cli/src/lib.rs:56"
+evidence = "direct:crates/adapters/cli/src/lib.rs:56;direct:crates/adapters/cli/src/lib.rs:1652;direct:crates/engine/runtime-assembly/src/canonical/retrieval_tuning_wire.rs:326"
 
 [[entries]]
 name = "APEIRETH_SHELL_SANDBOX"
@@ -1443,7 +1451,7 @@ owner = "apeireth-tools-canonical"
 purpose = "**W1 §2.4 沙箱开关** (2026-10-10, 默认**开** —— 设计拍板\"产品定位=桌面 伴侣\"): 开 = 文件限定工作区 + 断网 (AppContainer, 不可实施时**拒绝执行**,"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:3127;crates/capabilities/tools/src/shell.rs:805;crates/capabilities/tools/src/process/windows.rs:1147"
+evidence = "direct:crates/adapters/cli/src/lib.rs:3127;direct:crates/capabilities/tools/src/process/windows.rs:1147;direct:crates/capabilities/tools/src/shell.rs:805"
 
 [[entries]]
 name = "APEIRETH_SUBJECT_ID"
@@ -1453,7 +1461,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "**W2 §4.2 partner 羁绊模块** (2026-10-10): 双向落点 —— - `TurnStart` **关系状态注入** (`PromptOverlay::system`): 羁绊阶段/深度/演化次数, 供语气与信任校"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/cli/src/lib.rs:199;crates/adapters/cli/src/lib.rs:297;crates/adapters/cli/src/onboarding.rs:968"
+evidence = "direct:crates/adapters/cli/src/lib.rs:199;direct:crates/adapters/cli/src/lib.rs:297;direct:crates/adapters/cli/src/onboarding.rs:968"
 
 [[entries]]
 name = "APEIRETH_TLS_CERT"
@@ -1463,7 +1471,7 @@ owner = "apeireth-gateway"
 purpose = "Serve over an explicit [`GatewayState`] until the listener closes or a shutdown fires (see [`serve_with_shutdown`] for t"
 level = "PRODUCTION WIRED"
 status = "current"
-evidence = "crates/adapters/gateway/src/remote_access.rs:38;crates/adapters/gateway/src/lib.rs:168;crates/adapters/gateway/src/remote_access.rs:231"
+evidence = "direct:crates/adapters/gateway/src/lib.rs:168;direct:crates/adapters/gateway/src/remote_access.rs:38;direct:crates/adapters/gateway/src/remote_access.rs:231"
 
 [[entries]]
 name = "APEIRETH_TLS_KEY"
@@ -1473,7 +1481,7 @@ owner = "apeireth-gateway"
 purpose = "Serve over an explicit [`GatewayState`] until the listener closes or a shutdown fires (see [`serve_with_shutdown`] for t"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/gateway/src/remote_access.rs:42;crates/adapters/gateway/src/lib.rs:168;crates/adapters/gateway/src/remote_access.rs:232"
+evidence = "direct:crates/adapters/gateway/src/lib.rs:168;direct:crates/adapters/gateway/src/remote_access.rs:42;direct:crates/adapters/gateway/src/remote_access.rs:232"
 
 [[entries]]
 name = "APEIRETH_TUI_MOTION"
@@ -1483,17 +1491,18 @@ owner = "apeireth-tui"
 purpose = "用法文本"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/adapters/tui/src/main.rs:41;crates/adapters/tui/src/main.rs:70;crates/adapters/tui/src/main.rs:335"
+evidence = "direct:crates/adapters/tui/src/main.rs:41;direct:crates/adapters/tui/src/main.rs:70;direct:crates/adapters/tui/src/main.rs:335"
 
 [[entries]]
 name = "APEIRETH_TUNE_"
 default = "n/a"
 layer = "foundation"
 owner = "apeireth-orchestration"
-purpose = "从 env 构造: `APEIRETH_ENABLE_SELF_TUNING=1` 才启用 (默认关 → None)"
+purpose = "从 env 构造: `APEIRETH_ENABLE_SELF_TUNING=1` 才启用 (默认关 → None)（动态拼接/非独立开关）"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/orchestration/src/self_tuning.rs:1147;crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:92"
+kind = "derived"
+evidence = "scan-only:crates/foundation/orchestration/src/self_tuning.rs:1147;scan-only:crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:92"
 
 [[entries]]
 name = "APEIRETH_TUNE_CONSOLIDATION_CADENCE"
@@ -1503,7 +1512,8 @@ owner = "apeireth-orchestration"
 purpose = "自动校准引擎 (Self-Tuning Engine) — 「性格养成」第一铲的核心机制件。 **定位** (设计契约 2026-11 性格养成批): - **重设计·轻默认**: 自学习默认关 (`APEIRETH_ENABLE_SELF"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/orchestration/src/self_tuning.rs:121;crates/foundation/orchestration/src/self_tuning.rs:27;crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:243"
+kind = "derived"
+evidence = "scan-only:crates/foundation/orchestration/src/self_tuning.rs:121;scan-only:crates/foundation/orchestration/src/self_tuning.rs:27;scan-only:crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:243"
 
 [[entries]]
 name = "APEIRETH_TUNE_CURIOSITY_STRENGTH"
@@ -1513,7 +1523,8 @@ owner = "apeireth-orchestration"
 purpose = "自动校准引擎 (Self-Tuning Engine) — 「性格养成」第一铲的核心机制件。 **定位** (设计契约 2026-11 性格养成批): - **重设计·轻默认**: 自学习默认关 (`APEIRETH_ENABLE_SELF"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/orchestration/src/self_tuning.rs:119;crates/foundation/orchestration/src/self_tuning.rs:26;crates/engine/organ/src/curiosity.rs:108"
+kind = "derived"
+evidence = "scan-only:crates/foundation/orchestration/src/self_tuning.rs:119;scan-only:crates/foundation/orchestration/src/self_tuning.rs:26;scan-only:crates/engine/organ/src/curiosity.rs:108"
 
 [[entries]]
 name = "APEIRETH_TUNE_MEMORY_FADE"
@@ -1523,7 +1534,8 @@ owner = "apeireth-orchestration"
 purpose = "自动校准引擎 (Self-Tuning Engine) — 「性格养成」第一铲的核心机制件。 **定位** (设计契约 2026-11 性格养成批): - **重设计·轻默认**: 自学习默认关 (`APEIRETH_ENABLE_SELF"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/orchestration/src/self_tuning.rs:118;crates/foundation/orchestration/src/self_tuning.rs:26;crates/engine/memory/src/retention.rs:27"
+kind = "derived"
+evidence = "scan-only:crates/foundation/orchestration/src/self_tuning.rs:118;scan-only:crates/foundation/orchestration/src/self_tuning.rs:26;scan-only:crates/engine/memory/src/retention.rs:27"
 
 [[entries]]
 name = "APEIRETH_TUNE_TONE_SATURATION"
@@ -1533,7 +1545,8 @@ owner = "apeireth-orchestration"
 purpose = "自动校准引擎 (Self-Tuning Engine) — 「性格养成」第一铲的核心机制件。 **定位** (设计契约 2026-11 性格养成批): - **重设计·轻默认**: 自学习默认关 (`APEIRETH_ENABLE_SELF"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/foundation/orchestration/src/self_tuning.rs:120;crates/foundation/orchestration/src/self_tuning.rs:27;crates/engine/organ/src/tone.rs:73"
+kind = "derived"
+evidence = "scan-only:crates/foundation/orchestration/src/self_tuning.rs:120;scan-only:crates/foundation/orchestration/src/self_tuning.rs:27;scan-only:crates/engine/organ/src/tone.rs:73"
 
 [[entries]]
 name = "APEIRETH_UNIQ_SECRET_MARKER_12345"
@@ -1544,7 +1557,7 @@ purpose = "TODO-PURPOSE — 测试/基准夹具，非产品开关"
 level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
-evidence = "crates/capabilities/tools/src/shell.rs:1275;crates/capabilities/tools/src/shell.rs:1285;crates/capabilities/tools/src/shell.rs:1291"
+evidence = "scan-only:crates/capabilities/tools/src/shell.rs:1275;scan-only:crates/capabilities/tools/src/shell.rs:1275;scan-only:crates/capabilities/tools/src/shell.rs:1285"
 
 [[entries]]
 name = "APEIRETH_VOICE_INTERRUPT"
@@ -1554,7 +1567,7 @@ owner = "apeireth-tools-canonical"
 purpose = "通用嗓 TTS 面 (`tool.voice_speak`) —— 让它开口说话 (V3-b 通用嗓闭环)。 定制音色 = 资产活后置; 本面只做**系统已装嗓**的通用发声闭环 (哲学卡 01-companion-family「原声语音+"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/voice/playback.rs:27;crates/capabilities/tools/src/voice/playback.rs:62;crates/capabilities/tools/src/voice/playback.rs:69"
+evidence = "direct:crates/capabilities/tools/src/voice/mod.rs:77;direct:crates/capabilities/tools/src/voice/playback.rs:27;direct:crates/capabilities/tools/src/voice/playback.rs:62"
 
 [[entries]]
 name = "APEIRETH_VOICE_QUIET_HOURS"
@@ -1564,7 +1577,7 @@ owner = "apeireth-runtime-assembly"
 purpose = "发声面勿扰窗口的同源接缝 (V3-b 发声 × V3-a 关怀纪律)。 同源裁定 (先读对方的口径) 安静纪律要求发声面的勿扰窗口与关怀纪律**同一个窗口**: 1. `care_rules.json` 的打扰纪律 ([`CareDisci"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/voice/quiet.rs:28;crates/capabilities/tools/src/voice/mod.rs:81;crates/capabilities/tools/src/voice/quiet.rs:173"
+evidence = "direct:crates/capabilities/tools/src/voice/mod.rs:81;direct:crates/capabilities/tools/src/voice/quiet.rs:28;direct:crates/capabilities/tools/src/voice/quiet.rs:173"
 
 [[entries]]
 name = "APEIRETH_VOICE_SPEAK_SCOPE"
@@ -1574,4 +1587,4 @@ owner = "apeireth-tools-canonical"
 purpose = "通用嗓 TTS 面 (`tool.voice_speak`) —— 让它开口说话 (V3-b 通用嗓闭环)。 定制音色 = 资产活后置; 本面只做**系统已装嗓**的通用发声闭环 (哲学卡 01-companion-family「原声语音+"
 level = "UNCLASSIFIED"
 status = "current"
-evidence = "crates/capabilities/tools/src/voice/mod.rs:88;crates/capabilities/tools/src/voice/speak.rs:105;crates/capabilities/tools/src/voice/speak.rs:142"
+evidence = "direct:crates/capabilities/tools/src/lib.rs:314;direct:crates/capabilities/tools/src/voice/mod.rs:88;direct:crates/capabilities/tools/src/voice/speak.rs:105"
