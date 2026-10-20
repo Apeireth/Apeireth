@@ -199,8 +199,13 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - [x] R1b-1（**内核面已交付**，commit `10ec68ae`：bus 5 / switchboard 8 / bridge 9 单测全绿；装配根仅
       任一开关开启时注册桥，当前生产无订阅者）：`NervousSignalKind`/`NervousSignal`/`NervousBus`/
       `NervousSwitchboard`/`NervousBridgeModule` 落地；`arch_guard --report` 仅余已知 W1（R7-2.1 导入 +2 行）
-- [ ] R1b-1：开关读取点收敛（装配根 1 处；模块内 bio env `std::env::var` = 0）；现有默认关测试不变
-- [ ] R1b-1：台账 3 行漂移更正 + 3 条校验单测（env-registry / wiring 调用点 / NotWired reason）
+- [x] R1b-1：开关读取点收敛（**已交付** `6837d9b7`：runtime-assembly 四个生物安装函数收
+      `NervousSwitchboard`/显式 bool，`BioAssemblySwitches::from_env` 等 6 个 env 读取构造删除；
+      模块内生物开关 `std::env::var` = 0；CLI 侧 care/pain/circadian 读取点属 R1b-2/3，如实保留；
+      默认关行为零变化，测试改显式布尔入口）
+- [x] R1b-1：台账漂移更正（**4 行**：SG-18/SG-25 → PRODUCTION WIRED、SG-22 ritual_producer → Wired、
+      SG-26 缺口实况）+ 3 条校验单测（env-registry / wiring 装配根且无 pending / NotWired reason +
+      parser fail-closed），`6837d9b7`
 - [ ] R1b-2：机制订阅迁移；lifecycle probe 注册；审批面 publish；默认关零变化
 - [ ] R1b-3：缺失信号源如实补齐或如实 NotWired；台账 14/14 逐行有据
 - [ ] R1b-4：schema v2 additive；自述渲染；contract wave_note / handbook / integration-plan 同步；
@@ -214,8 +219,9 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - 负面/接受的代价：同步订阅者若自身慢会拖慢回合（文档 + 评审约束，后续如需要可再 ADR 讨论异步面）；
   总线首版不持久化（重启丢计数，自述 `last_observation` 仍 null）；R1b-2 交接存在排期依赖（生物线
   WIP 收口是前置），交接前 R1b 只到 R1b-1b。
-- 后续 stage：R1b-1a 于 2026-10-20 交付（`10ec68ae`，内核/桥/开关表 + 装配根单入口；生产暂无订阅者）；
-  R1b-1b（开关迁移 + 台账校验）→ R1b-2（机制订阅迁移，生物线）→ R1b-3（缺失信号源）→ R1b-4 收口。
+- 后续 stage：R1b-1a 于 2026-10-20 交付（`10ec68ae`，内核/桥/开关表 + 装配根单入口）；R1b-1b 于同日交付
+  （`6837d9b7`，开关读取收敛到装配根 + 台账 4 行更正 + 3 条校验）；后续 R1b-2（机制订阅迁移，生物线）→
+  R1b-3（缺失信号源）→ R1b-4 收口。
   R7-2 遗留 `ContextAssembler` 已由 R7-2.1 收口（`c8cb34a4`）；Wave 4 其余 = R8 + R6 spec 已 Accepted
   （ADR-0010/0011），实施归安全线/效率线；R1b-4 之后再评估是否把总线升为扩展点（需新 ADR）。
 
@@ -234,3 +240,14 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   开启时注册为模块表首位，全关零行为变化；`ProductionModules` 暴露只读句柄供 R1b-2/3 使用。实测：
   `cargo check`/`test -p apeireth-runtime-assembly --lib` 274 passed、clippy/fmt 绿。**如实边界**：生产仍无任何
   信号订阅者，桥尚未被真实工具链路触发；信号源与消费方接线属 R1b-2/3，未做。
+- **2026-10-20（R1b-1b 交付）**：开关读取收敛到装配根单入口（commit `6837d9b7`，13 文件 +257/−222）。
+  `install_bio_modules`/`install_bio_play`/`install_bio_ritual_tools`/`install_bio_self_status` 改收
+  `&NervousSwitchboard`/显式 `bool`，删除 `BioAssemblySwitches::from_env`、`BioAssemblyModule::from_env`、
+  `bio_tone_wiring_from_env`、`bio_play_wiring_from_env`、`bio_ritual_wiring_from_env`、
+  `bio_lifecycle_wiring_from_env` 六个 env 读取构造；`production.rs` 四个调用点传 switchboard 解析值。
+  台账更正 4 行（SG-18/SG-25 → PRODUCTION WIRED、SG-22 ritual_producer → Wired、SG-26 缺口实况），
+  新增 3 条结构校验单测。实测：`cargo check -p apeireth-runtime-assembly --all-targets` exit 0；
+  `cargo test -p apeireth-runtime-assembly --locked -j 2` 62 目标全 ok、lib 277 passed、nervous_snapshot
+  11 passed；clippy/fmt 绿；`docs_truth.py --verify --check` exit 0。**如实边界**：CLI 侧 care 心跳、痛觉/
+  再生、节律门仍各自读 env（R1b-2/3 收敛）；`NervousSwitchboard` 的 CareCandidates/Pain/Circadian 三格
+  本批只解析记录、暂无新消费方；arch_guard 仍余已知 W1（cognitive.rs 4757→4763，Wave 4 收口重钉）。

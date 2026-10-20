@@ -251,3 +251,30 @@ bio env 常量在 **17 个 src 文件**中出现（`Select-String -List` 实测�
 8. 钩子派发：`execute.rs:2447-2460` 的 `for module in &self.modules { ... module.on_hook(hook, &context).await ... }`（8 个 `HookPoint` 变体）。
 9. probe 注册：`bio_production_wiring.rs:390-403`（capacity + play + 5 迟绑定）；lifecycle probe 未注册证据：`bio_lifecycle.rs:76-78,825-826` + `git grep "BioMechanismKind::Lifecycle" -- crates/engine/runtime-assembly/src/` 仅命中 `bio_lifecycle.rs` 自身。
 10. 审批注入：`canonical_approval.rs:36` `apply_approval_social_feedback(bio_tone.as_ref(), feedback)`；`git grep -n "apply_feedback" -- crates/` 生产调用方仅 `bio_tone.rs` 自身映射（`:458/:467`）与 `canonical_approval.rs` 路径。
+
+## 11. R1b-1b 交付后的实况订正（2026-10-20，commit `6837d9b7`）
+
+> 本节只订正本文上游"交付前"取证事实；设计口径以 ADR-0009（含 §8 变更记录）为准。特别地，
+> §8 表 R1b-1 行列出的 10 个信号变体**已被 ADR-0009 §8 收窄**为 2 个事实信号
+> （`ToolOutcome` / `ErrorObserved`）；其余信号按"生产者与订阅者同批 additive"扩展。
+
+1. **开关读取点**：runtime-assembly 内四个生物安装函数改收 `&NervousSwitchboard` / 显式 `bool`；
+   删除的 env 读取构造 6 个：`BioAssemblySwitches::from_env`、`BioAssemblyModule::from_env`、
+   `bio_tone_wiring_from_env`、`bio_play_wiring_from_env`、`bio_ritual_wiring_from_env`、
+   `bio_lifecycle_wiring_from_env`（分别改为 `from_flags` / `*_from_enabled*`）。
+   复核命令：`git grep -n "std::env::var" -- crates/engine/runtime-assembly/src/canonical/` —— 残留均为
+   非本批范围（retrieval/self_tuning/orchestrator/care-host 与 R1a 自述只读解析）或
+   `nervous_switchboard.rs` 装配根唯一入口。
+2. **台账**：4 行漂移更正（SG-18.lifecycle → PRODUCTION WIRED；SG-22.ritual `ritual_producer` → Wired、
+   级别保留 Half；SG-25.ecosystem_health → PRODUCTION WIRED；SG-26.capacity 缺口文本改"最多 8/14"）。
+   新增 3 条校验单测：`every_enabled_env_is_registered_in_the_env_registry` /
+   `production_wired_rows_name_an_assembly_root_and_never_pending` /
+   `unwired_signals_carry_reasons_and_parsers_fail_closed`。
+3. **实测**：`cargo test -p apeireth-runtime-assembly --locked -j 2` 62 个测试目标全 ok，lib 277 passed
+   （`nervous_snapshot` 11 passed，summary = `production_wired=13 / half=1 / unwired=0`）；clippy/fmt 绿。
+4. **如实边界（未做/未声称）**：生产仍无任何总线订阅者（R1b-2 才接）；CLI 侧 care 心跳、痛觉/再生、
+   节律门仍各自读 env；`NervousSwitchboard` 的 CareCandidates / Pain / Circadian 三格本批只解析记录、
+   暂无新消费方；`last_observation` 仍 null；`wiring.yaml` 仍只覆盖 4/14 机制（R3b 覆盖面，未变）。
+5. **guard 实况**：`arch_guard --report` = wave=4 / crates=30 / edges=111 / env=154 / exceptions=0；
+   VIOLATIONS 1（已知 `[W1] size-grow cognitive.rs 4757→4763`，Wave 4 收口重钉）；STALE 1
+   （`size play_tools.rs 1414`，收口缩表）。
