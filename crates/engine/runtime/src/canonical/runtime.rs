@@ -701,7 +701,7 @@ impl std::fmt::Debug for Runtime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Runtime")
             .field("plugins", &self.plugins.plugins().len())
-            .field("capabilities", &self.plugins.capabilities().len())
+            .field("capabilities", &self.plugins.records().len())
             .field("providers", &self.providers.len())
             .field("governance", &self.governance.name())
             .field("config", &self.config)
