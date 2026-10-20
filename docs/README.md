@@ -47,6 +47,9 @@ docs/
 | [04-internal/backlog.md](04-internal/backlog.md) | 唯一权威台账 |
 | [04-internal/backend-enhancement/00-backlog.md](04-internal/backend-enhancement/00-backlog.md) | 后端增强批次账（D 编号待办/残余/真源索引；每波总装更新）|
 | **[04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md](04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md)** | **系统级能力缺口台账（SG/NT/NF 条目 · 防遗忘 · 拍板后转任务卡；每波复核）** |
+| [04-internal/backend-enhancement/security-hardening-delivery-2026-10-20.md](04-internal/backend-enhancement/security-hardening-delivery-2026-10-20.md) | 安全加固线交付报告（外部审计 8 项隐患 B1-B8 全收口 · 修法/残余/owner 决策位）|
+| [04-internal/governance-chain-drill-2026-10-20.md](04-internal/governance-chain-drill-2026-10-20.md) | 治理链端到端合练记录（M-of-N 逻辑票三路径实测 · 链路图 · 缺口 6 项如实登记）|
+| [packaging/release-asset-verification.md](packaging/release-asset-verification.md) | 发布资产校验与签名流程（哈希三口径校验脚本 · 发布者/用户两侧 · 排期 4 项）|
 | [04-internal/ai-os-landscape-2026-10-18.md](04-internal/ai-os-landscape-2026-10-18.md) | 「AI OS」市场全景对照调研（商业 15 样本 + 学术 8 样本 + 四轨建议；只读宣称级证据）|
 | [04-internal/release-plan.md](04-internal/release-plan.md) | 发布计划 |
 | [design/01-DESIGN-SYSTEM.md](design/01-DESIGN-SYSTEM.md) | 前端设计系统（视觉令牌/层序规范）|
