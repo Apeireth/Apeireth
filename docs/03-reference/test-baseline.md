@@ -144,6 +144,17 @@
 > 已移走的文档注释为切片终点（`35c4b24a` 修正，非生产缺陷），该跑已中止、数字不可作基线；权威全量
 > 待他线 R2-4/R7 收敛后按同命令面（`-j 1` + `RUST_TEST_THREADS=4`）复跑并刷新 §1。**§1 本轮不替换**。
 
+> **复测注记（2026-10-20，生物机制族 W3.7 SG-25 生态位观测面 v0 校验）**：本批 = 仓内策展表
+	> （`tool_taxonomy`，40 条工具 id/名 → 13 类标签，静态快照真源）+ `tool_ecosystem_probe` 经 `BioProbeSlots`
+	> 迟绑定接入 `APEIRETH_ENABLE_BIO_SELF_STATUS`（不新增 env），观测面 **7/14 → 8/14**（`9133c7bb`）。
+	> **scoped 全绿证据**：`tool_taxonomy` 单测 5、`tool_ecosystem_probe` 单测 6、`bio_tool_ecosystem` 集成 3、
+	> `cargo test -p apeireth-runtime-assembly --locked` 全目标 0 failed（lib 252 + 全部集成绿）、`bio_ritual_tools`
+	> 5；`cargo clippy -p apeireth-runtime-assembly --all-targets -D warnings` 0、`cargo fmt --check` 0 diff、
+	> `arch_guard --strict` VIOLATIONS 0。**全量本轮未出数（如实）**：W3.7 首跑因 cli 架构守卫旧切片终点失败
+	> （`35c4b24a` 已修，非生产缺陷）且该跑在他线在途改动上启动、已中止不可作基线；权威全量须**单线独占**按
+	> 同命令面（`-j 1` + `RUST_TEST_THREADS=4`）复跑（今晚双线并发全量曾致 image-compose OOM，数字不可发布），
+	> 跑完再替换 §1。**§1 本轮不替换**。
+
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |

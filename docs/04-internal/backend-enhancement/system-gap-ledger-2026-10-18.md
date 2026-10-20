@@ -109,10 +109,10 @@
 > **持久化**：生命周期账本 `lifecycle_state.json`（StoredDoc v1、原子写、坏档拒开不覆盖、启动重放、
 > 回合收口写一次；关/目录缺省=纯内存）；单写者、无 WAL/schema 迁移（如实）。
 >
-> **W3.7 交付记录（2026-10-20，事件源批 + 仪式完成面批）**：tone 事件源两档补真实源 + SG-22 仪式
-> 完成事件源落地（scoped **+~34 新测**）。
+> **W3.7 交付记录（2026-10-20，三批）**：tone 事件源两档补真实源 + SG-22 仪式
+> 完成事件源落地 + SG-25 生态位观测面 v0（scoped **+~30 新测**）。
 > 提交：`53e7aa09`（Novelty 首见 + 人批/人拒社会结论 + 审批分派拆模块）｜`35c4b24a`（架构守卫切片终点
-> 跟随拆分修正）｜`7e98744d`（仪式完成/跳过工具面，默认关，装配级注册）。
+> 跟随拆分修正）｜`7e98744d`（仪式完成/跳过工具面，默认关，装配级注册）｜`9133c7bb`（SG-25 生态位观测面 v0：策展表 + 生态格迟绑定，观测面 8/14）。
 >
 > **tone 事件源 5/9 已接**：TaskSuccess/TaskFailure（W3.5 工具结局 + 运行时错误）、Novelty（工具名
 > 进程内首见，`AfterToolResult`，不读文本不推断）、SocialPositive/SocialNegative（CLI 人批/人拒，
@@ -127,7 +127,9 @@
 > 宿主 `ritual_inputs` 读同一文件；纯 CLI chat 无心跳 = 写入暂无候选消费（如实）；单写者设计，显式
 > `record_ritual_done/skip` 注入口保留（与工具面并用无跨实例锁 = 具名缺口）。
 >
-> **W3.7 剩余**：①SG-25 工具能力 taxonomy（B 类 ADR 前置）；②R1b 订阅迁移
+> **SG-25 生态位观测面 v0 已交付（默认关，观测面）**：`tool_taxonomy` 40 条工具 id/名 → 13 类标签策展表（代码内常量快照真源；未覆盖工具如实计 untagged，覆盖数上报，不从描述推断）+ `tool_ecosystem_probe` 经 `BioProbeSlots` 迟绑定接入既有 `APEIRETH_ENABLE_BIO_SELF_STATUS`（不新增 env）；观测面 **7/14 → 8/14**，槽空/关 = 单格 null + 真因。**W3.5 盘点里的 IMPLEMENTED 1 条（SG-25）据此升为 PRODUCTION WIRED（默认关）**；完整 taxonomy 合同（工具声明携带标签）仍 B 类 ADR 前置，未做。
+>
+> **W3.7 剩余**：①SG-25 v0 观测面已交付（完整 taxonomy 合同/工具声明携带标签仍 B 类 ADR 前置）；②R1b 订阅迁移
 > （`nervous_system.observed` 验收 7/14 → 上升）；③发布收口 + 全量基线统一复跑（当前 §1 口径受其它线
 > R4b/R7 归档在途影响，本批只追加证据注记、不替换 §1）。
 >
