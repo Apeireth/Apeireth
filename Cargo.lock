@@ -600,8 +600,6 @@ dependencies = [
  "aes",
  "anyhow",
  "apeireth-core",
- "apeireth-credentials",
- "apeireth-plugin",
  "apeireth-protocol",
  "async-trait",
  "base64",
@@ -621,7 +619,6 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "uuid",
  "wiremock",
 ]
 
