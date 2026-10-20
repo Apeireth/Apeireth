@@ -1,6 +1,6 @@
 # 0005. R4 crate 拓扑手术——图像家族门禁隔离 + SDK/perception 裁决
 
-- **Status**: Accepted（R4a 授权代裁 2026-10-20「按你的建议来吧」）；**R4b 待 owner 裁决**
+- **Status**: Accepted（R4a 与 **R4b 均** owner 2026-10-20「拍板的话按你建议来吧」授权；src 移动按协作契约派实施线执行，架构线出迁移清单/验收）
 - **Date**: 2026-10-20
 - **Owners**: 架构线（主导/验收）· 各实施线（CI/打包配合）
 - **Supersedes**: —
@@ -32,12 +32,25 @@
 - `contract.toml [vendored]` 登记 11 包；`arch_guard` 规则：vendored 包不作为 workspace 节点参与层方向判定（允许 `capabilities→vendored`；其它层引用需 ADR）；
 - 依赖基线：图像内部 28 条 workspace 边从主基线移除（缩表），`tools→image-core` 由 disputed edge 转为 vendored edge 登记。
 
-## 3. R4b 待 owner 裁决（两项）
+## 3. R4b 裁决（owner 2026-10-20「拍板的话按你建议来吧」）
 
-| 项 | 现状 | 选项 | 架构线建议 |
+**取证（2026-10-20 实测）**：
+- SDK 四孤岛（lark 6,741 / livekit 6,517 / voice 6,170 / sandbox 4,221 = 23,649 行）：`crates/` 内 **sdk 之外零引用**；仅 sdk 自身 examples/tests 有 7 处 lark；gateway 无 `/v1/tools/*` 路由（契约断头，founding-design-v2 §10 自述）。
+- perception（约 6,300 行）：全仓 Cargo.toml **无任何 crate 依赖它**（仅自身声明）——无生产消费者，属孤岛。
+
+**裁定**：
+| 项 | 裁定 | 依据 | 执行 |
 |---|---|---|---|
-| **SDK 四个孤岛**（lark 6,741 / livekit 6,517 / voice 6,170 / sandbox 4,221 = 23,649 行） | gateway 无 `/v1/tools/*` 路由；`founding-design-v2 §10` 自述"契约断头待裁决"；`STUB_MODE=true` | A 归档（迁 `legacy/` 或 release-assets tar + 指针）；B 接线（约 3-4 周 + 逐子 SDK 治理） | **A 归档**：无生产消费者、契约断头、维护成本 > 收益；未来需要时按 ADR 重引入 |
-| **perception 整包**（约 6,300 行） | 需取证是否被 production 消费（K 轴截图/窗口显著性口径待核） | A 保留；B 归档 | 先取证再定；若已被 K 轴生产路径消费则保留，否则归档 |
+| SDK 四孤岛 | **归档**（迁 `legacy/archived/sdk-islands/` + manifest + 恢复指引；sdk 保留 client/wire/im 等在用面） | sdk 外零引用、契约断头、维护成本>收益 | 实施线按 §3.1 清单执行 |
+| perception 整包 | **归档**（迁 `legacy/archived/perception/`；主 workspace 移除该成员；恢复 = revert/从 legacy 迁回） | 零依赖者 = 不可达代码 | 同上 |
+
+### 3.1 迁移清单（实施线执行，架构线验收）
+
+1. SDK：`git mv crates/adapters/sdk/src/{lark,livekit,voice,sandbox}` → `legacy/archived/sdk-islands/`；删 `lib.rs` 对应 mod 声明与 compile-time 自检；迁/删 examples+tests 中 lark 引用（7 处）；保留 Cargo.toml 依赖或清理（以 `cargo check -p apeireth-sdk` 为准）；补 `legacy/archived/sdk-islands/MANIFEST.md`（原路径/行数/恢复方式/许可）。
+2. perception：`git mv crates/engine/perception legacy/archived/perception`；根 `Cargo.toml` members 移除；`Cargo.lock` 随 `cargo check` 更新；能力矩阵/claims 中 perception 相关行按四级口径标注"已归档（2026-10-20，ADR-0005 R4b）"。
+3. 文案：`founding-design-v2 §10` 决策项标"已裁决：归档"；能力矩阵/README honest gaps 如涉及同步。
+4. 验收：`cargo metadata` members 31→30（图像家族仍在，R4a-2 另计）；`cargo check -p apeireth-sdk -p apeireth-gateway -p apeireth-cli` 通过；`arch_guard --strict` 无新增（归档会删边/包，基线缩表走 Wave 收口）；许可/NOTICE 迁移核对。
+5. 回滚：`git revert` 或从 legacy 迁回 + 恢复 members/mod 声明（单批可逆）。
 
 ## 4. 迁移 / 回滚 / 验收
 

@@ -34,7 +34,8 @@
 | [0002](0002-target-architecture-v1.md) | 目标架构 v1——七项重构方向收敛 | Accepted | R0-R8 / 波次路线 / 记分牌 |
 | [0003](0003-r1a-nervous-readonly-snapshot.md) | R1a 神经系统·只读聚合（spec） | Accepted（实施归生物线） | Wave 2 / self_status 22 节 |
 | [0004](0004-r3-config-and-wiring-ledger.md) | R3 配置 schema + env 登记 + wiring ledger | Accepted（实施归效率线） | Wave 2-4 / env-registry / 接线账 |
-| [0005](0005-r4-crate-topology-surgery.md) | R4 crate 拓扑手术——图像家族门禁隔离 + SDK/perception 裁决 | Accepted（R4a）；**R4b 待 owner** | Wave 2 / 门禁时间 / 归档 |
+| [0005](0005-r4-crate-topology-surgery.md) | R4 crate 拓扑手术——图像家族门禁隔离 + SDK/perception 归档裁决 | Accepted（R4a/R4b；执行派实施线） | Wave 2 / 门禁时间 / 归档清单 |
+| [0006](0006-formalize-14-keys.md) | 14 键正式化——LOCKED 键集口径修正 | Accepted（owner 2026-10-20） | AGENTS/ROADMAP/契约口径 |
 
 ## 命名
 

@@ -41,8 +41,8 @@ keys_file = "crates/foundation/core/src/philosophy.rs"
 spine_file = "crates/foundation/core/src/onion.rs"
 workspace_version_source = "Cargo.toml"
 r11_baseline = "legacy/ (历史归档, 只引用, 不改)"
-# 0 装注记: 现行为 14 键 (PHL-01..08, philosophy.rs:107-128/159-198),
-# "13 键"表述漂移待 owner 修正 (架构体检 P0-①)。
+# 0 装注记: 现行为 14 键 (PHL-01..08, philosophy.rs:107-128/159-198);
+# 2026-10-20 经 ADR-0006 正式化; 历史「13 键」为 PHL-07 时代口径。
 
 [layers]
 foundation = [

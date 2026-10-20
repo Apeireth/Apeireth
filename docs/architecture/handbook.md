@@ -31,7 +31,8 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR 已出：0003 R1a / 0004 R3 / 0005 R4a |
 | 架构波次 | `current_wave = 2`（Wave 1 规则落地已收口；Wave 2 进行中：R0 剩余 + R1a 合并生物线 W3.5 + R3a + R4a-1） |
 | Wave 2 已落 | R4a-1：`scripts/gate_full.ps1`（契约驱动 exclude）+ `.github/workflows/image-family.yml`；`arch_guard` 补例外抑制/登记表双通道/`--print-vendored` |
-| 待 owner 裁决 | ADR-0005 R4b（SDK 孤岛归档 vs 接线；perception 去留） |
+| 待 owner 裁决 | **无**（R4b 已裁决：SDK 四孤岛 + perception 归档，ADR-0005 §3；14 键已正式化，ADR-0006） |
+| R4b 执行 | 实施线待派：按 ADR-0005 §3.1 迁移清单（SDK 四孤岛 23.6k 行 + perception 6.3k 行 → legacy/archived；members 31→30）；架构线验收 |
 | 在途违规（灰度期不阻断） | 生物线施工期 3 条：`APEIRETH_ENABLE_BIO_LIFECYCLE` 未登记（W3）+ `production.rs`/`self_status_source.rs` 尺寸增长（W1×2）；Wave 2 收口随基线更新/登记处理 |
 | 基线 | 356 条（edge 118 / devcycle 1 / env 154 / size 70 / concept 6 / ext 7） |
 | 已登记的已知债务 | `contract.toml` `[flagged_edges]`（3 条）/ `[extension_debt]`（3 条）/ `[concepts].known_debt`（2 组）；target 均 `TODO-OWNER` |
@@ -86,7 +87,7 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 波 | 收口 | 结果 |
 |---|---|---|
 | **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03） |
-| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005 已出；R4a-1 门禁隔离落地（`gate_full.ps1` 待 Wave 2 收口实测耗时）；R1a 与生物线 W3.5 观测扩展合并中；生物线施工期 2 条尺寸 W1 待收口更新基线（env 已由 EXC-0001 抑制） |
+| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005/0006 已出；R4b 裁决（SDK 四孤岛 + perception 归档，执行待派）；14 键正式化（AGENTS/ROADMAP/契约）；R4a-1 门禁隔离落地（`gate_full.ps1` 待 Wave 2 收口实测耗时）；R1a 与生物线 W3.5 观测扩展合并中；生物线施工期 2 条尺寸 W1 待收口更新基线（env 已由 EXC-0001 抑制） |
 
 ## 9. 变更记录
 

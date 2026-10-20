@@ -42,7 +42,7 @@
   scope = crate 名或文档路径。**1 commit = 1 任务**。
 - 正文必带（模板见 ENGINEER-MANIFESTO §8.2）：0 装诚实真账（测试 / clippy / 0 触碰 LOCKED / 0 引新外部 dep）
   + **O-6 三阶审查**（总体最优 / 系统最优 / 架构最优，各带拒的 alternatives 与拒理由）+ 影响面 + 后续 stage。
-- **LOCKED 5 项 0 触碰**：9 哲学锚本体 / 13 键 / 3 不可变脊柱 / workspace.version / R11 baseline——
+- **LOCKED 5 项 0 触碰**：9 哲学锚本体 / **键集**（现行 **14 键** PHL-01..08；历史「13 键」为 2026-10-11 PHL-08 之前口径，见 ADR-0006）/ 3 不可变脊柱 / workspace.version / R11 baseline——
   workspace.version 仅 release authority 可改。
 
 ## 4.5 取材通道（调研/搬运/下载批必读）

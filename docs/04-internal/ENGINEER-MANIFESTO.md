@@ -13,6 +13,8 @@
 > - `ROADMAP.md` — 顶层路线 (§3/§3.5/§3.6/§4)
 > - `CHANGELOG.md` — 12/12 ledger + 9/10 RC + R12 + 8 spec + A 块真账
 
+> **复核注（2026-10-20，ADR-0006）：键集正式化**——现行为 **14 键** `PhilosophyKey`（PHL-01..08；2026-10-11 PHL-08 主人特批直加，源码 `philosophy.rs:56-61/107-128` 留痕）。本文成文于 2026-08-28，正文中「13 键」均为 PHL-08 之前的历史口径，**保留原文不追溯改写**；LOCKED 现值表述以 [AGENTS.md](../../../AGENTS.md) §1 与 [ROADMAP.md](../../../ROADMAP.md) §13 为准。
+
 ```
 [Document-Meta]
 Document:        docs/04-internal/ENGINEER-MANIFESTO.md
