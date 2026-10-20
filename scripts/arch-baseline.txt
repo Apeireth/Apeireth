@@ -335,8 +335,8 @@ size crates/engine/organ/src/world_model.rs 1336
 size crates/engine/runtime-assembly/src/canonical/cognitive.rs 4757
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2435
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1414
-size crates/engine/runtime-assembly/src/canonical/production.rs 1686
-size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2173
+size crates/engine/runtime-assembly/src/canonical/production.rs 1667
+size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1204
 size crates/engine/runtime/src/canonical/bio_pain.rs 1294
 size crates/engine/runtime/src/canonical/execute.rs 4987

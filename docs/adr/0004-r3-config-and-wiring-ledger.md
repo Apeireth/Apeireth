@@ -129,3 +129,13 @@ purpose_fragments = 0，且全表 TODO-OWNER/UNCLASSIFIED 不增加。
 
 - 五点时：触发路径覆盖 `docs/status/**`、`env-registry.toml`、`wiring_report.py`、`crates/**` ✅；R3a registry 覆盖与 wiring drift 为 blocking（生成物禁手改，与 docs_truth 同模式）✅；R3c 四列交叉校验用 `--crosscheck` + `continue-on-error: true`（灰度至 2026-11-03）✅；日志落盘 + artifact ✅；失败输出含缺失项清单（由 `wiring_report.py` 输出，后续以一次样例核对）⚪待核。
 - **转 blocking 前需再次 review**：删除 `continue-on-error`、确认缺失项清单样例、与架构线同步 `current_wave`。
+
+### 7.7 四批验收 + 尾批口径裁决（2026-10-20，架构线）
+
+**R3b engine / capabilities / adapters / image_family 四批：全部通过。**
+
+- 提交：`846468bb`（capabilities）、`e8b98e85`（adapters）、`ed6e2d16`（image_family，终批）、engine 批同模式；**每批只动 `env-registry.toml`**（架构线逐 commit 核 stat）。
+- 终态四数：`entries 155 / TODO-OWNER 0 / UNCLASSIFIED 147 / purpose_fragments 0`——**R3b 主体完成**；
+- evidence：owner 填实者 0 缺失；架构线跨 5 层抽查 5/5 `路径:行` 真实读取（provider/cli/tools/image/compose/core）。
+- **尾批裁决（一句）**：测试/基准夹具 env 与新字段 `kind = "test-only"` 归一类——`APEIRETH_IMAGE_UNSHARP_*`（7 条，仅 benches/tests 引用）与 `APEIRETH_UNIQ_SECRET_MARKER_12345`（secret-scan 夹具）**允许 `purpose = "TODO-PURPOSE"` 但必须同时 `kind = "test-only"` 并注明"测试/基准夹具，非产品开关"**；产品开关（`kind` 缺省 = `product`）**禁止** TODO-PURPOSE，purpose 必须来自源码文档注释。test-only 条目不参与 PRODUCTION WIRED 证据要求，仍占 entries 计数、不计入四级口径。
+- 后续：R3b 收尾仅剩该裁决落地（效率线一批）；R3c report-only 至 2026-11-03 后按 §7.4/§7.5 再 review 转 blocking。

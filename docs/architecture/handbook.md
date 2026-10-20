@@ -89,7 +89,8 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 波 | 收口 | 结果 |
 |---|---|---|
 | **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03） |
-| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005/0006 已出；R4b 裁决（SDK 四孤岛 + perception 归档，执行待派）；14 键正式化（AGENTS/ROADMAP/契约）；R4a-1 门禁隔离落地；**R0 完成**（ARCHITECTURE.md 手写依赖表退役 → 生成物 + CI `--check`）；R1a 与生物线 W3.5 观测扩展合并中；守卫当前 0 违规、2 条可缩表项待 Wave 2 收口 |
+| **W2 架构手术** | **2026-10-20 收口** | ADR-0002 Accepted；ADR-0003 **R1a 交付**（生物线 `151e9aea`/`77b1c1fb`：nervous_snapshot 647 行 + probes 578 行 + 测试 1,205 行，默认关；`self_status_source.rs` −173 行）；R4a-1 门禁隔离；R0 完成（依赖表生成物 + CI）；R3b 主体完成（env 登记 155 条，TODO-OWNER 0、fragments 0，验收见 ADR-0004 §7.7）；缩表 2 条、守卫 0 违规 |
+| **W3 架构手术** | **进行中** | R2 扩展 ABI / R7 上下文统一 ADR 草案；R1b 订阅化准备；R4b 归档执行（SDK 四孤岛 + perception）；R3c 2026-11-03 后 review 转 blocking |
 
 ## 9. 变更记录
 
