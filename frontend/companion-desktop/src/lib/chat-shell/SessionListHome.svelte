@@ -641,9 +641,9 @@
     align-items: center;
     gap: 7px;
     width: 100%;
-    padding: 5px 6px;
+    padding: 5px 8px;
     border: 0;
-    border-radius: 7px;
+    border-radius: 8px;
     background: transparent;
     cursor: pointer;
     font-size: 12px;
@@ -704,17 +704,23 @@
     width: 100%;
     padding: 12px 14px;
     border: 1px solid var(--ap-line);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--ap-panel);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+    /* 美术走查（2026-10-18）：行卡与工具卡同一套浮起语汇（顶沿内高光 + 淡投影），
+       hover 从「霓虹外发光」收成「边框亮一档 + 轻微抬升」。 */
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
     cursor: pointer;
     text-align: left;
-    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    transition: border-color var(--ap-dur-fast) var(--ap-ease-out),
+      box-shadow var(--ap-dur-fast) var(--ap-ease-out),
+      transform var(--ap-dur-fast) var(--ap-ease-out);
   }
   .session-row:hover {
-    border-color: rgba(255, 210, 122, 0.45);
-    box-shadow: 0 0 22px -8px rgba(255, 210, 122, 0.3);
+    border-color: color-mix(in srgb, var(--ap-gold) 34%, transparent);
+    transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-pop);
   }
   /* 三栏主从：选中行金线 active 态（已验收语言——hover 金细线的常驻版） */
   .session-row.active {
