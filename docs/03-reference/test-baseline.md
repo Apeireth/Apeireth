@@ -153,7 +153,7 @@
 	> `arch_guard --strict` VIOLATIONS 0。**全量本轮未出数（如实）**：W3.7 首跑因 cli 架构守卫旧切片终点失败
 	> （`35c4b24a` 已修，非生产缺陷）且该跑在他线在途改动上启动、已中止不可作基线；权威全量须**单线独占**按
 	> 同命令面（`-j 1` + `RUST_TEST_THREADS=4`）复跑（今晚双线并发全量曾致 image-compose OOM，数字不可发布），
-	> 跑完再替换 §1。**§1 本轮不替换**。
+	> **今晚全量尝试如实登记**：①21:30 起跑，22:04 进程被环境终止于 image 套件（日志 `artifacts/wave-bio-w37c-workspace-test.log`：139/340 套件、唯一失败 = 已知 D27 环境敏感 `storage_atomic` 用例、无编译错误）；②22:22 起跑在编译期被他线在途 R1b-4a（`nervous_snapshot.rs` schema v2 迁移）签名变更阻断（非本批文件，见 `wave-bio-w37c-workspace-test2.log`）；③22:25 起跑在 owner 收工口令下主动停止。三跑均不作为基线数字，§1 仍待明日单线独占全量刷新后广播。**§1 本轮不替换**。
 
 ## 2. 口径定义
 
