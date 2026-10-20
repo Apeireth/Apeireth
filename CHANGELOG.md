@@ -12,6 +12,15 @@
 - **B7 治理链端到端合练**（#7）：现役 M-of-N 逻辑票链三路径（通过/拒绝/超时）+ 防凑票对抗用例 + 审计落盘断言，演练记录落 `docs/04-internal/governance-chain-drill-2026-10-20.md`（缺口 6 项如实登记：编排未接线/物理多签留 v2.1 等）。**逻辑票 ≠ 密码学多签**（严守口径）。
 - **B8 发布资产校验**（#8）：`scripts/verify-release-assets.ps1`（哈希三口径 + Authenticode 如实报 + 缺项不装过）+ 流程文档 + 排期 4 项（签名证书/可复现构建等 owner 决策）。
 
+## [Unreleased] — 生物机制族 W3.6：观测面 7/14 + 生命周期持久化（全部默认关；2026-10-20）
+
+两批收尾（**+31 新测**，全部默认关、关时逐字节零变化；架构准入 A 类）：
+- **self_status probe 迟绑定生产接入**（`BioProbeSlots`）：免疫账/心跳状态/审议门账/痛觉/再生 5 条 probe 经"共享槽 + reader"接进装配根——来源构造早、句柄出现晚的时序矛盾用迟绑定解决；槽空 = 单格 `null` + 真因、整帧仍成功；CLI chat/approve 与常驻网关两条已 `Arc` 化路径绑定 pain/再生 reader（`Weak<Runtime>` 无环）。**观测面 `bio_mechanisms` 已接 7/14 格**（容量 + 练习场 + 5 迟绑定），`nervous_system.observed` 随渲染帧自动上升。+12 单测。
+- **生命周期账本持久化**（`lifecycle_state_store`）：`<care_dir>/lifecycle_state.json`（StoredDoc v1 + 原子写 + 坏档拒开不覆盖），启动重放、`AfterTurn` evaluate 后按变更写一次（无 WAL，回合中崩溃丢该回合记账如实）；关/目录缺省 = **纯内存**零文件零读取。+19 测试。
+- **门禁**：scoped 全绿——assembly lib 235、`bio_mechanisms_self_status` 22、`nervous_snapshot` 11、`self_status_runtime_e2e` 12、`bio_lifecycle_persistence` 10、`bio_lifecycle_production`/`wiring` 4/11、cli lib 56、`care_heartbeat_host` 4；clippy 0、fmt 0 diff、`arch_guard --strict` VIOLATIONS 0。
+- **诚实边界**：全部默认关、非 DEFAULT ENABLED；pain/再生读取口只在两条 `Arc` 化路径绑定（session/域伙伴运行时=未接线，如实）；immune 需 `IMMUNE_MEMORY=1`、quorum 需 `ORGANS=1` 才有真句柄；care 恒填（未启动=真值 0/null）；生命周期持久化单写者无跨进程锁、无 schema 迁移；无 live E2E。
+- **剩余（W3.7）**：tone 其余 7 档事件源、仪式完成事件源、SG-25 工具能力 taxonomy（B 类 ADR 前置）、R1b 订阅迁移（以 `nervous_system.observed` 为验收指标 7/14→r）、发布收口 + 全量基线统一复跑。
+
 ## [Unreleased] — 生物机制族 W3.5：剩余接线 + ADR-0003 神经系统只读聚合（全部默认关；2026-10-20）
 
 收尾批（**+~100 新测**，全部默认关、关时逐字节零变化；架构准入 A 类）：

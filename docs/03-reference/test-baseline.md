@@ -111,6 +111,18 @@
 > `arch_guard --strict` VIOLATIONS 0（STALE 11 = 其它线在途缩表项）。日志
 > `artifacts/wave-bio-w35-workspace-test.log`。
 
+> **复测注记（2026-10-20，生物机制族 W3.6 总装批校验）**：本批 = probe 迟绑定生产接入（`f7a436a9`，
+> 观测面 2/14 → **7/14**）+ 生命周期账本持久化（`8c4fa5c2`），**+31 新测**（probe 12 + 持久化 19）。
+> **scoped 全绿证据**：assembly lib 235、`bio_mechanisms_self_status` 22、`nervous_snapshot` 11、
+> `self_status_runtime_e2e` 12、`bio_lifecycle_persistence` 10、`bio_lifecycle_production` 4、
+> `bio_lifecycle_wiring` 11、cli lib 56、`care_heartbeat_host` 4；`cargo clippy --all-targets -D warnings`
+> 0、`cargo fmt --check` 0 diff、`arch_guard --strict` VIOLATIONS 0。
+> **全量口径本轮未出数（如实）**：两次降并发（`-j 1` + `RUST_TEST_THREADS=4`）全量均在他线在途改动上
+> 编译中断——①`apeireth-memory` (lib) 1 error；②`apeireth-runtime` (lib) E0252 重复导入 3 errors
+> （R7 序列 ContextBlock/会话 trait 收敛在途），均非本批文件（本批代码已提交、scoped 绿）。**本批不替换
+> §1 单一真源**，仅登记交付证据；待跨线收口稳定后按同命令面统一复跑并刷新 §1。日志
+> `artifacts/wave-bio-w36-full-test.log` / `artifacts/wave-bio-w36-full-test2.log`。
+
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |
