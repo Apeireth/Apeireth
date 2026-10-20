@@ -37,6 +37,7 @@
 | [0005](0005-r4-crate-topology-surgery.md) | R4 crate 拓扑手术——图像家族门禁隔离 + SDK/perception 归档裁决 | Accepted（R4a/R4b；执行派实施线） | Wave 2 / 门禁时间 / 归档清单 |
 | [0006](0006-formalize-14-keys.md) | 14 键正式化——LOCKED 键集口径修正 | Accepted（owner 2026-10-20） | AGENTS/ROADMAP/契约口径 |
 | [0007](0007-r7-context-session-unification.md) | R7 上下文/提示/会话单一化 | **Proposed**（依赖 R2；待 owner 裁决） | Wave 3 / ContextBlock·SessionStore·scheduler 收敛 |
+| [0008](0008-r2-extension-abi.md) | R2 扩展 ABI 统一（单 ABI 家族 / 单注册表 / 单命名） | **Proposed**（待 owner 裁决；R1b/R7 前置） | Wave 3 / extension_debt·AgentModule 命名漂移 |
 
 ## 命名
 
