@@ -51,7 +51,7 @@ impl SessionRecord {
 }
 
 /// Session 存储 trait.
-pub trait SessionStore {
+pub trait SessionNoteStore {
     /// 插入或更新一个 Session (upsert).
     fn upsert_session(&self, session: &Session) -> MemoryResult<()>;
     /// 读取 session.
@@ -73,7 +73,7 @@ impl crate::SqliteMemoryStore {
     }
 }
 
-impl SessionStore for crate::SqliteMemoryStore {
+impl SessionNoteStore for crate::SqliteMemoryStore {
     fn upsert_session(&self, session: &Session) -> MemoryResult<()> {
         Self::validate_session(session)?;
         let conn = self.conn()?;
@@ -699,9 +699,9 @@ mod tests {
     #[test]
     fn session_upsert_and_get() {
         let store = SqliteMemoryStore::open_in_memory().unwrap();
-        <SqliteMemoryStore as SessionStore>::upsert_session(&store, &make_session("s1", 1000))
+        <SqliteMemoryStore as SessionNoteStore>::upsert_session(&store, &make_session("s1", 1000))
             .unwrap();
-        let got = <SqliteMemoryStore as SessionStore>::get_session(&store, "s1")
+        let got = <SqliteMemoryStore as SessionNoteStore>::get_session(&store, "s1")
             .unwrap()
             .unwrap();
         assert_eq!(got.started_at, 1000);
@@ -711,12 +711,12 @@ mod tests {
     #[test]
     fn session_upsert_updates_last_active() {
         let store = SqliteMemoryStore::open_in_memory().unwrap();
-        <SqliteMemoryStore as SessionStore>::upsert_session(&store, &make_session("s1", 1000))
+        <SqliteMemoryStore as SessionNoteStore>::upsert_session(&store, &make_session("s1", 1000))
             .unwrap();
         let mut s = make_session("s1", 1000);
         s.last_active_at = 5000;
-        <SqliteMemoryStore as SessionStore>::upsert_session(&store, &s).unwrap();
-        let got = <SqliteMemoryStore as SessionStore>::get_session(&store, "s1")
+        <SqliteMemoryStore as SessionNoteStore>::upsert_session(&store, &s).unwrap();
+        let got = <SqliteMemoryStore as SessionNoteStore>::get_session(&store, "s1")
             .unwrap()
             .unwrap();
         assert_eq!(got.started_at, 1000);
@@ -726,17 +726,17 @@ mod tests {
     #[test]
     fn session_close_idempotent() {
         let store = SqliteMemoryStore::open_in_memory().unwrap();
-        <SqliteMemoryStore as SessionStore>::upsert_session(&store, &make_session("s1", 1000))
+        <SqliteMemoryStore as SessionNoteStore>::upsert_session(&store, &make_session("s1", 1000))
             .unwrap();
-        <SqliteMemoryStore as SessionStore>::close_session(&store, "s1", 2000).unwrap();
+        <SqliteMemoryStore as SessionNoteStore>::close_session(&store, "s1", 2000).unwrap();
         // 重复关闭不报错
-        <SqliteMemoryStore as SessionStore>::close_session(&store, "s1", 3000).unwrap();
-        let got = <SqliteMemoryStore as SessionStore>::get_session(&store, "s1")
+        <SqliteMemoryStore as SessionNoteStore>::close_session(&store, "s1", 3000).unwrap();
+        let got = <SqliteMemoryStore as SessionNoteStore>::get_session(&store, "s1")
             .unwrap()
             .unwrap();
         // 第一次的关闭时间
         assert_eq!(got.closed_at, Some(2000));
-        let open = <SqliteMemoryStore as SessionStore>::list_open_sessions(&store).unwrap();
+        let open = <SqliteMemoryStore as SessionNoteStore>::list_open_sessions(&store).unwrap();
         assert!(open.is_empty());
     }
 

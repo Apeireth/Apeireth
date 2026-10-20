@@ -250,13 +250,13 @@ pub use migrations::{
     run_migrations, run_migrations_on_pool, Migration as SchemaMigration, MIGRATIONS,
 };
 pub use provenance::{normalize_meta, validate_meta, EpisodeMeta, Provenance};
-pub use session_note::{NoteQuery, NoteRecord, NoteStore, SessionRecord, SessionStore};
+pub use session_note::{NoteQuery, NoteRecord, NoteStore, SessionNoteStore, SessionRecord};
 // Core Capability Expansion Phase 2: 后端会话生命周期 (state machine + 乐观并发).
-// 独立于 SessionStore trait (旧 upsert 不变), 走 inherent impl on SqliteMemoryStore.
+// 独立于 SessionNoteStore trait (旧 upsert 不变), 走 inherent impl on SqliteMemoryStore.
 pub mod session_lifecycle;
 pub use session_lifecycle::{
-    SessionLifecycleError, SessionLifecycleRecord, SessionScope, SessionState,
-    SessionStore as SessionLifecycleStore,
+    SessionLifecycleError, SessionLifecycleRecord, SessionLifecycleStore, SessionScope,
+    SessionState,
 };
 // Core Capability Expansion Phase 3: 记忆治理 (forget/protect/update, 不破坏 append-only episodes).
 pub mod memory_governance;

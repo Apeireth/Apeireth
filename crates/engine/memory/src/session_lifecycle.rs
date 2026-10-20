@@ -1,7 +1,7 @@
 //! Core Capability Expansion Phase 2 — 后端会话生命周期 (真实 source of truth).
 //!
 //! 设计目标: 让 backend session 成为真实生命周期 source of truth, 但**不**粗暴删除既有
-//! `SessionStore` trait (旧 upsert 仍只写 4 列, 向后兼容). 本模块走 inherent impl on
+//! `SessionNoteStore` trait (旧 upsert 仍只写 4 列, 向后兼容). 本模块走 inherent impl on
 //! `SqliteMemoryStore`, 操作 V5 扩展列 (title/scope/project_id/state/metadata/revision/...).
 //!
 //! ## Session Domain Model
@@ -253,10 +253,10 @@ const SELECT_COLS: &str = "id, title, scope, project_id, state, started_at, last
 
 /// Session 生命周期存储接口 (inherent impl on SqliteMemoryStore).
 ///
-/// 命名用 `SessionStore` trait 以表达"这是会话生命周期的正式存储契约"; 与旧
-/// `session_note::SessionStore` 区分 (旧 trait 只做 upsert/get/close/list 的 4 列操作).
-/// 为避免同名冲突, lib.rs re-export 时用 `SessionLifecycleStore` 别名.
-pub trait SessionStore {
+/// 命名用 `SessionLifecycleStore` trait 以表达"这是会话生命周期的正式存储契约"; 与旧
+/// `session_note::SessionNoteStore` 区分 (旧 trait 只做 upsert/get/close/list 的 4 列操作).
+/// 与 `session_note` 侧 `SessionNoteStore` 区分：本 trait 是会话生命周期的正式存储契约。
+pub trait SessionLifecycleStore {
     /// 创建新会话 (active, revision=0). 已存在同 id → Conflict (不覆盖).
     fn create_session(
         &self,
@@ -309,7 +309,7 @@ pub trait SessionStore {
     ) -> Result<SessionLifecycleRecord, SessionLifecycleError>;
 }
 
-impl SessionStore for SqliteMemoryStore {
+impl SessionLifecycleStore for SqliteMemoryStore {
     fn create_session(
         &self,
         id: &str,
@@ -774,10 +774,10 @@ mod tests {
 
     #[test]
     fn session_legacy_client_compat() {
-        // 旧 SessionStore trait 只写 4 列 (title/scope/state/revision = NULL/默认).
+        // 旧 SessionNoteStore trait 只写 4 列 (title/scope/state/revision = NULL/默认).
         // 生命周期读取必须兼容: NULL state → Active, NULL revision → 0.
         let s = store();
-        use crate::SessionStore as LegacySessionStore;
+        use crate::SessionNoteStore as LegacySessionNoteStore;
         let old = apeireth_core::kernel::memory::Session {
             id: "legacy-1".into(),
             started_at: 1000,

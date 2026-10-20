@@ -69,7 +69,7 @@ pub const MIGRATIONS: &[Migration] = &[
     // Core Capability Expansion Phase 2: sessions 表生命周期扩展列.
     // 向后兼容铁律: 全部新增列 NULLable / 有默认值, 存量行 ALTER 后自动取默认语义
     // (title NULL→"未命名", state NULL→active, revision NULL→0, scope NULL→global).
-    // 不改既有 sessions 列定义, 不动既有 SessionStore trait 行为 (旧 upsert 仍只写 4 列).
+    // 不改既有 sessions 列定义, 不动既有 SessionNoteStore trait 行为 (旧 upsert 仍只写 4 列).
     // SQLite ALTER TABLE 一次一列 → 多条语句.
     Migration {
         version: 5,
