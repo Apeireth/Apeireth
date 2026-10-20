@@ -88,7 +88,6 @@ pub mod llm;
 pub mod output_retention;
 // 计划模式（协作状态投影）: 事件流折叠 (init/apply/stateVersion) + 切换延迟落账 + 只改提示词投影。
 pub mod plan_mode;
-pub mod prompt_stabilizer;
 // 循环质感 · 件一: 重复调用提醒 (纯劝告通道, 不拦截执行、不进审计判定)。
 pub mod repetition_advisory;
 // 循环质感 · 件二: 运行时不变量注册表 (离线已证性质的线上守卫, 观察层)。
@@ -184,10 +183,6 @@ pub use lineage_spawning::{
 pub use output_retention::{
     omission_note, prefix_within_bytes, prefix_within_chars, retain_fragment_within_bytes,
     retain_within_bytes, suffix_within_chars, OmittedHow, OmittedWhere, RetainedOutput,
-};
-pub use prompt_stabilizer::{
-    assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
-    StabilizedRole,
 };
 pub use repetition_advisory::{
     append_result_context, canonical_arguments, chain_key, params_preview, AdvisoryLevel,
