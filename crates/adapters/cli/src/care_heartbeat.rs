@@ -14,9 +14,10 @@
 //!    候选的一种, 走同一套打扰纪律 (守护例外档在内核), 零新消息通道。
 //! ⑤ **生物候选供给** (W3.3, 默认关): `APEIRETH_ENABLE_BIO_CARE_CANDIDATES=1`
 //!    时才构造 [`CareBioSupply`] 并把心跳接到 `start_care_with_feeds_and_bio`:
-//!    presence 回合帧 → 上次可见时刻; 会话账本 → 可续线索; 仪式状态存储未接
-//!    ⇒ 仪式 0 候选 (如实, 不编)。开关关 = 不构造供给、不订阅 presence、不读
-//!    会话, 走与接线前同一 `start_care_with_feeds` 调用 (逐字节一致)。
+//!    presence 回合帧 → 上次可见时刻; 会话账本 → 可续线索; **仪式状态存储**
+//!    (`ritual_state.json`, W3.5) → 仪式状态 + 显式排程 (缺省空排程 ⇒ 0 候选)。
+//!    开关关 = 不构造供给、不订阅 presence、不读会话、不读写仪式存储, 走与接线前
+//!    同一 `start_care_with_feeds` 调用 (逐字节一致)。
 //! ⑥ **节律门** (W3.4, 默认关): `APEIRETH_ENABLE_BIO_CIRCADIAN=1` (只认 `"1"`)
 //!    时才构造 [`BioCircadianGate`] 并接到
 //!    `start_care_with_feeds_and_circadian` /
@@ -45,10 +46,20 @@
 //!   读取失败 / 无用户消息 / 空账本 = 无线索 (不编摘要)。口径边界: 该口是全量
 //!   `list` (无轻量 recent 口), 每拍一次, 成本随会话账本增长 (运维侧如实登记;
 //!   后续可补按域/按时间窗的轻量读取口, 不在本批改其它 crate)。
-//! - **仪式状态**: organ `ritual` 只有纯内核 (`RitualState` + `plan_rituals`),
-//!   **没有状态存储 API** ⇒ 本供给 [`BioCareInputs::ritual_inputs`] 恒空,
-//!   仪式 0 候选 (如实标注, 不编到点状态)。
-//! - 开关默认关; 关 = 零订阅、零会话读取、零候选。**不称 DEFAULT ENABLED。**
+//! - **仪式状态** (W3.5 已接存储): `<care_dir>/ritual_state.json` 由
+//!   [`RitualStateStore`] 读写 —— StoredDoc 信封 (拒开语义) + 持久档原子写, 与
+//!   `care_rules.json` 同一文件账范式。`body.config` = 显式排程; 缺失回落 organ
+//!   `RitualConfig::default()` 空排程 ⇒ **默认 0 候选 (不主动)**, 显式配置排程才
+//!   有到点候选。坏文件 = fail-closed: 不产候选 + [`CareHeartbeatSource::ritual_state_error`]
+//!   留真因, **不静默回退空表、不覆盖损坏文件**。**完成事件源: 待后续从 care
+//!   交互 / 工具面接** —— 本批提供显式注入口
+//!   [`CareHeartbeatSource::record_ritual_done`] / `record_ritual_skip` (cli 装配
+//!   处绑定到 start 的成功路径); 未接事件源前候选不会被自动消账 (同一到点状态
+//!   仍由 care 频率/预算/发起闸限流)。
+//! - 开关默认关; 关 = 零订阅、零会话读取、零仪式存储读写、零候选。
+//!   **不称 DEFAULT ENABLED。** 四级口径: 仪式存储 = **IMPLEMENTED + PRODUCTION
+//!   WIRED (装配默认关)** —— 不是 DEFAULT ENABLED, 不是 HARDWARE VALIDATED;
+//!   显式排程来源与完成事件源见上 (半程, 如实)。
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -62,6 +73,7 @@ use apeireth_organ::care::{
     SystemCareClock,
 };
 use apeireth_organ::circadian::CircadianConfig;
+use apeireth_organ::ritual::RitualKind;
 use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use apeireth_runtime::canonical::heartbeat::HeartbeatDispatch;
 use apeireth_runtime::canonical::{Runtime, Session, SessionStore, TurnRequest};
@@ -74,7 +86,7 @@ use apeireth_runtime_assembly::canonical::care_heartbeat::{
 };
 use apeireth_runtime_assembly::canonical::care_reminder::{
     bio_care_candidates_enabled_from_env_value, BioCareInputs, ReunionInputs, RitualInputs,
-    BIO_CARE_CANDIDATES_ENABLE_ENV,
+    RitualStateStore, BIO_CARE_CANDIDATES_ENABLE_ENV,
 };
 use apeireth_runtime_assembly::{
     CareHeartbeatConfig, CareHeartbeatProducer, CareHeartbeatStatus, GuardAlertFeed,
@@ -243,20 +255,53 @@ fn last_user_message_summary(session: &Session) -> Option<String> {
     (!summary.is_empty()).then_some(summary)
 }
 
-/// 生物候选真实供给 (W3.3): presence 上次可见 + 会话可续线索。
+/// 生物候选真实供给 (W3.3 / W3.5): presence 上次可见 + 会话可续线索 + 仪式状态。
 ///
 /// 只在 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES=1` 时构造; 构造即订阅 presence
-/// (开关关 = 连构造都不发生)。仪式供给恒空 —— organ 无仪式状态存储, 如实。
+/// (开关关 = 连构造都不发生)。仪式状态来自 [`RitualStateStore`]
+/// (`<care_dir>/ritual_state.json`, W3.5); 读取失败 = 诊断口留真因 + 本拍
+/// 不产仪式候选 (fail-closed, 不静默回退空表)。
 struct CareBioSupply {
     presence: PresenceMomentProbe,
     clues: Box<dyn ResumeClueSource>,
+    /// 仪式状态存储 (开关开时由装配面构造并绑定, 与显式注入口共享同一实例)。
+    ritual: Arc<RitualStateStore>,
+    /// 仪式状态读失败真因 (诊断口; 坏文件 fail-closed 留痕)。
+    ritual_error: Arc<Mutex<Option<String>>>,
+}
+
+impl CareBioSupply {
+    /// 记下仪式状态读失败真因 (覆盖旧因 = 最近一次真值; 诊断口读取)。
+    fn note_ritual_error(&self, message: String) {
+        *self
+            .ritual_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(message);
+    }
+
+    /// 读成功 = 清掉旧错误 (修复后的文件不再挂旧真因)。
+    fn clear_ritual_error(&self) {
+        *self
+            .ritual_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    }
 }
 
 impl BioCareInputs for CareBioSupply {
     fn ritual_inputs(&self) -> RitualInputs {
-        // 仪式状态存储未接 (organ ritual 只有纯内核) ⇒ 零状态零排程 = 0 候选。
-        // 不填默认排程、不编 last_done_ms。
-        RitualInputs::default()
+        // 仪式状态存储 (W3.5): 读 `<care_dir>/ritual_state.json`; 缺失 = 合法空态,
+        // 坏文件 = fail-closed (不产候选 + 留真因, 不编状态、不覆盖损坏文件)。
+        match self.ritual.inputs() {
+            Ok((config, states)) => {
+                self.clear_ritual_error();
+                RitualInputs { states, config }
+            }
+            Err(error) => {
+                self.note_ritual_error(format!("{error}"));
+                RitualInputs::default()
+            }
+        }
     }
 
     fn reunion_inputs(&self) -> Option<ReunionInputs> {
@@ -270,16 +315,21 @@ impl BioCareInputs for CareBioSupply {
     }
 }
 
-/// 宿主装配 (W3.3, 默认关): env 原始值 → (care 接线配置, 生物候选供给面)。
+/// 宿主装配 (W3.3 / W3.5, 默认关): env 原始值 → (care 接线配置, 生物候选供给面)。
 ///
 /// 非 `"1"` 一律 `None` —— **连供给都不构造** (零 presence 订阅、零会话读取、
-/// 零候选), 调用方据此走接线前的 `start_care_with_feeds` 原路径。
+/// 零仪式存储读写), 调用方据此走接线前的 `start_care_with_feeds` 原路径。
+///
+/// `ritual` = 装配面在开关开时构造的仪式状态存储 (`<care_dir>/ritual_state.json`);
+/// `ritual_error` = 与供给面共享的读失败真因槽位 (诊断口)。
 fn host_bio_care_assembly(
     raw: Option<&str>,
     presence: &Arc<PresenceService>,
     sessions: Arc<dyn SessionStore>,
     handle: &tokio::runtime::Handle,
     care_session: SessionId,
+    ritual: Arc<RitualStateStore>,
+    ritual_error: Arc<Mutex<Option<String>>>,
 ) -> Option<(CareConfig, BioCarePoll)> {
     if !bio_care_candidates_enabled_from_env_value(raw) {
         return None;
@@ -292,6 +342,8 @@ fn host_bio_care_assembly(
             handle: handle.clone(),
             care_session,
         }),
+        ritual,
+        ritual_error,
     };
     bio_care_assembly_from_env_value(raw, Box::new(supply), clock)
 }
@@ -378,6 +430,13 @@ pub fn host_bio_circadian_assembly(
 pub struct CareHeartbeatSource {
     producer: Arc<Mutex<Option<CareHeartbeatProducer>>>,
     errors: Arc<Mutex<Vec<String>>>,
+    /// 仪式状态存储绑定位 (开关开 + `start` 成功 = `Some`; 关/未起 = `None`)。
+    ///
+    /// 绑定只发生在 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES=1` 的 `start` 成功
+    /// 路径: 开关关 = 不构造、不读、不写 (`record_ritual_done` 返回 `Ok(false)`)。
+    ritual: Arc<Mutex<Option<Arc<RitualStateStore>>>>,
+    /// 仪式状态读失败真因 (与供给面共享; 诊断口, 不静默吞错)。
+    ritual_error: Arc<Mutex<Option<String>>>,
 }
 
 impl CareHeartbeatSource {
@@ -427,7 +486,9 @@ impl CareHeartbeatSource {
     /// 才构造 [`CareBioSupply`] 并把 `CareConfig{bio_candidates_enabled:true}`
     /// 注入 engine, 走 `start_care_with_feeds_and_bio`; 其余取值 = 不构造供给
     /// (零 presence 订阅、零会话读取), 走 `start_care_with_feeds` **原路径** ——
-    /// 与接线前逐字节一致。
+    /// 与接线前逐字节一致。**W3.5**: 同一开关下构造并绑定仪式状态存储
+    /// (`<care_dir>/ritual_state.json`), 供 [`Self::record_ritual_done`] 写回;
+    /// 开关关 = 连存储都不构造 (零读取零写入)。
     ///
     /// **节律门 (W3.4, 默认关)**: `APEIRETH_ENABLE_BIO_CIRCADIAN=1` 时才构造
     /// 节律门并接到 `start_care_with_feeds_and_circadian` /
@@ -499,14 +560,24 @@ impl CareHeartbeatSource {
         //    不构造供给 (零 presence 订阅/零会话读取), 随后走接线前的原生产者
         //    路径 (逐字节一致)。开关开才把 care 配置注入 engine 并接供给面。
         let bio_raw = std::env::var(BIO_CARE_CANDIDATES_ENABLE_ENV).ok();
+        // W3.5 仪式状态存储绑定位: 只在「开关开 + 生产者真起」后写入 self。
+        let mut ritual_to_bind: Option<Arc<RitualStateStore>> = None;
         let bio = if bio_care_candidates_enabled_from_env_value(bio_raw.as_deref()) {
-            host_bio_care_assembly(
+            // W3.5 仪式状态存储: 只在开关开时构造 (关 = 零读取零写入, 连路径都不碰)。
+            let ritual = Arc::new(RitualStateStore::under_data_dir(&care_dir));
+            let assembled = host_bio_care_assembly(
                 bio_raw.as_deref(),
                 presence,
                 Arc::clone(runtime.sessions_arc().store()),
                 &handle,
                 session,
-            )
+                Arc::clone(&ritual),
+                Arc::clone(&self.ritual_error),
+            );
+            if assembled.is_some() {
+                ritual_to_bind = Some(ritual);
+            }
+            assembled
         } else {
             None
         };
@@ -572,6 +643,13 @@ impl CareHeartbeatSource {
             return Ok(false);
         };
         *slot = Some(producer);
+        // 生产者真起才绑定仪式状态存储 (未起 = 注入口保持 Ok(false) 零写入)。
+        if let Some(ritual) = ritual_to_bind {
+            *self
+                .ritual
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(ritual);
+        }
         Ok(true)
     }
 
@@ -613,6 +691,71 @@ impl CareHeartbeatSource {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
     }
+
+    /// 仪式状态存储是否已绑定 (开关开 + `start` 成功 = `true`; 关/未起 = `false`)。
+    ///
+    /// 未绑定 = [`Self::record_ritual_done`] / [`Self::record_ritual_skip`] 恒
+    /// `Ok(false)` 且零文件操作 (不创建 `ritual_state.json`)。
+    pub fn has_ritual_state_store(&self) -> bool {
+        self.ritual
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_some()
+    }
+
+    /// 显式**仪式完成**注入口 (W3.5): 生产**没有**「仪式完成」事件源, 本口为
+    /// 宿主/后续 care 交互或工具面提供的显式写回点。
+    ///
+    /// - `kind` = 完成的仪式; `now_ms` = 完成时刻 (Unix 毫秒, 调用方注入;
+    ///   存储侧单调: 时钟回拨不回退完成时刻);
+    /// - 开关关 / 未 `start` / 供给未绑定 = `Ok(false)`: **零读取零写入**, 不创建
+    ///   文件 (默认关行为逐字节不变);
+    /// - 已绑定 = 写下 `<care_dir>/ritual_state.json` 并返回 `Ok(true)`; 坏文件 /
+    ///   IO 失败 = `Err(真因)` (fail-closed, 不覆盖损坏文件)。
+    ///
+    /// **完成事件源: 待后续从 care 交互 / 工具面接** —— 本批只接注入口, 没有
+    /// 自动「候选被接受 = 仪式完成」的推定 (候选被交付 ≠ 用户完成了仪式)。
+    pub fn record_ritual_done(&self, kind: RitualKind, now_ms: u64) -> Result<bool, String> {
+        let store = self
+            .ritual
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let Some(store) = store else {
+            return Ok(false);
+        };
+        store
+            .record_done(kind, now_ms)
+            .map(|_state| true)
+            .map_err(|error| error.to_string())
+    }
+
+    /// 显式**仪式跳过**注入口 (W3.5): 只给 `skipped_count` +1 (统计字段, 内核
+    /// 判定不读它), 不动 `last_done_ms` / 静默 / 连续完成 —— 跳过不是完成, 也
+    /// 不产生补课或惩罚。开关关 / 未绑定 = `Ok(false)` 零写入。
+    pub fn record_ritual_skip(&self, kind: RitualKind) -> Result<bool, String> {
+        let store = self
+            .ritual
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let Some(store) = store else {
+            return Ok(false);
+        };
+        store
+            .record_skip(kind)
+            .map(|_state| true)
+            .map_err(|error| error.to_string())
+    }
+
+    /// 最近一次仪式状态读失败真因 (`None` = 无错误 / 未读; 坏文件 fail-closed
+    /// 的真因在此暴露, 不静默回退空表)。
+    pub fn ritual_state_error(&self) -> Option<String> {
+        self.ritual_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
 }
 
 /// 发起缝的标准回合执行 (与常驻宿主同一接法: 心跳线程上同步等回合收束)。
@@ -648,11 +791,15 @@ mod tests {
     use apeireth_gateway::{EventBus, PresenceBreath, PresencePad, PresenceSource};
     use apeireth_organ::care::CareTier;
     use apeireth_organ::circadian::{CircadianPhase, ProactiveGate};
-    use apeireth_organ::ritual::RitualConfig;
+    use apeireth_organ::ritual::{
+        Cadence, RitualConfig, RitualKind, RitualSchedule, RitualState, Window,
+    };
     use apeireth_protocol::canonical::NormalizedMessage;
     use apeireth_runtime::canonical::InMemorySessionStore;
     use apeireth_runtime_assembly::canonical::care_heartbeat::bio_circadian::BioCircadianDecision;
-    use apeireth_runtime_assembly::canonical::care_reminder::bio_care_candidates;
+    use apeireth_runtime_assembly::canonical::care_reminder::{
+        bio_care_candidates, RitualStateBody,
+    };
 
     use super::*;
 
@@ -689,11 +836,37 @@ mod tests {
         }
     }
 
-    fn supply(last_turn_at_ms: i64, clues: Option<Vec<ResumeThread>>) -> CareBioSupply {
+    /// 空仪式存储: 路径指向一个即删临时目录 —— 文件缺失 = 合法空态, 只读不落盘。
+    fn empty_ritual_store() -> Arc<RitualStateStore> {
+        let dir = tempfile::tempdir().expect("tempdir");
+        Arc::new(RitualStateStore::under_data_dir(dir.path()))
+    }
+
+    fn supply_with_ritual(
+        ritual: Arc<RitualStateStore>,
+        last_turn_at_ms: i64,
+        clues: Option<Vec<ResumeThread>>,
+    ) -> CareBioSupply {
         CareBioSupply {
             presence: PresenceMomentProbe::for_test(last_turn_at_ms),
             clues: Box::new(FixedClues(clues)),
+            ritual,
+            ritual_error: Arc::new(Mutex::new(None)),
         }
+    }
+
+    fn supply(last_turn_at_ms: i64, clues: Option<Vec<ResumeThread>>) -> CareBioSupply {
+        supply_with_ritual(empty_ritual_store(), last_turn_at_ms, clues)
+    }
+
+    /// 显式排程: 晨间问候每日到点, 宽限 6 小时 (仅测试注入; 生产缺省不配排程)。
+    fn ritual_config() -> RitualConfig {
+        RitualConfig::new(vec![RitualSchedule::new(
+            RitualKind::MorningCheckIn,
+            Cadence::Daily,
+            Window::Flexible,
+            6 * HOUR_MS,
+        )])
     }
 
     fn frame(at: i64, significance: PresenceSignificance) -> PresenceState {
@@ -720,11 +893,15 @@ mod tests {
         }
     }
 
-    /// ① 开关解析 fail-closed: 默认关, 只认 `"1"`; 关 = 连供给都不构造。
+    /// ① 开关解析 fail-closed: 默认关, 只认 `"1"`; 关 = 连供给都不构造,
+    /// 仪式状态存储零读取零写入 (不创建 `ritual_state.json`)。
     #[tokio::test]
     async fn host_bio_assembly_is_fail_closed_and_only_accepts_one() {
         let presence = PresenceService::new(EventBus::new(4));
         let sessions: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ritual = Arc::new(RitualStateStore::under_data_dir(dir.path()));
+        let ritual_error = Arc::new(Mutex::new(None));
         for raw in [
             None,
             Some(""),
@@ -740,9 +917,15 @@ mod tests {
                     Arc::clone(&sessions),
                     &tokio::runtime::Handle::current(),
                     SessionId::new(),
+                    Arc::clone(&ritual),
+                    Arc::clone(&ritual_error),
                 )
                 .is_none(),
                 "非 \"1\" 一律关 (零构造零订阅零读取): {raw:?}"
+            );
+            assert!(
+                !ritual.path().exists(),
+                "默认关 = 零仪式存储读写 (不建文件): {raw:?}"
             );
         }
 
@@ -752,12 +935,18 @@ mod tests {
             sessions,
             &tokio::runtime::Handle::current(),
             SessionId::new(),
+            ritual,
+            ritual_error,
         )
         .expect("开关开 = 造出供给面");
         assert!(care_config.bio_candidates_enabled());
         assert!(
             !CareConfig::default().bio_candidates_enabled(),
             "缺省配置 = 关"
+        );
+        assert!(
+            !dir.path().join("ritual_state.json").exists(),
+            "构造供给不读不写: 首拍才读存储"
         );
         assert_eq!(
             BIO_CARE_CANDIDATES_ENABLE_ENV,
@@ -923,9 +1112,9 @@ mod tests {
         );
     }
 
-    /// ⑨ 仪式状态存储未接: ritual 供给恒空 ⇒ 仪式 0 候选 (如实, 不编到点状态)。
+    /// ⑨ 空仪式存储: 文件缺失 = 合法空态 ⇒ 零状态零排程 = 仪式 0 候选 (不编)。
     #[test]
-    fn ritual_stays_empty_until_a_ritual_state_store_is_wired() {
+    fn an_empty_ritual_state_store_yields_zero_ritual_candidates() {
         let last_seen = NOW - i64::try_from(3 * DAY_MS).expect("fits");
         let bio = supply(
             last_seen,
@@ -933,8 +1122,18 @@ mod tests {
         );
 
         let ritual = bio.ritual_inputs();
-        assert!(ritual.states.is_empty(), "无仪式状态存储 ⇒ 零状态");
+        assert!(
+            ritual.states.is_empty(),
+            "缺失文件 ⇒ 零状态 (不编 last_done)"
+        );
         assert_eq!(ritual.config, RitualConfig::default(), "不填默认排程");
+        assert!(
+            bio.ritual_error
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .is_none(),
+            "缺失文件不是错误"
+        );
 
         let candidates = bio_care_candidates(&enabled(), &bio, NOW);
         assert_eq!(candidates.len(), 1);
@@ -944,6 +1143,132 @@ mod tests {
                 .all(|candidate| candidate.tier != CareTier::Ritual),
             "仪式 0 候选"
         );
+    }
+
+    /// ⑯ W3.5 主路径: 存储里有状态 + 显式排程 ⇒ 开关开时仪式候选出现;
+    /// 开关关 = 内核门零候选 (即使存储有数据)。
+    #[test]
+    fn a_persisted_ritual_state_and_schedule_produce_a_ritual_candidate_when_the_switch_is_on() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = Arc::new(RitualStateStore::under_data_dir(dir.path()));
+        store
+            .save(&RitualStateBody {
+                config: Some(ritual_config()),
+                states: vec![RitualState::fresh(RitualKind::MorningCheckIn)],
+            })
+            .expect("仪式账落盘");
+        let bio = supply_with_ritual(Arc::clone(&store), 0, None);
+
+        let ritual = bio.ritual_inputs();
+        assert_eq!(
+            ritual.states.len(),
+            1,
+            "状态来自 `<care_dir>/ritual_state.json`"
+        );
+        assert_eq!(ritual.config, ritual_config(), "显式排程来自存储");
+        assert!(
+            bio.ritual_error
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .is_none(),
+            "读成功不挂错误"
+        );
+
+        let candidates = bio_care_candidates(&enabled(), &bio, NOW);
+        assert_eq!(
+            candidates.len(),
+            1,
+            "开关开 + 有状态 + 有排程 = 仪式候选: {candidates:?}"
+        );
+        assert_eq!(candidates[0].tier, CareTier::Ritual);
+        assert_eq!(candidates[0].rule_id, "ritual.morning_check_in.due");
+
+        assert!(
+            bio_care_candidates(&CareConfig::default(), &bio, NOW).is_empty(),
+            "开关关: 连供给都不读, 零候选"
+        );
+    }
+
+    /// ⑰ 坏文件 fail-closed: 不产仪式候选 + 真因留痕 + 不覆盖损坏文件
+    /// (不静默回退空表重写)。
+    #[test]
+    fn a_corrupt_ritual_state_file_fails_closed_and_reports_the_cause() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = Arc::new(RitualStateStore::under_data_dir(dir.path()));
+        std::fs::write(store.path(), "{ not json").expect("写坏文件");
+        let bio = supply_with_ritual(Arc::clone(&store), 0, None);
+
+        let ritual = bio.ritual_inputs();
+        assert!(ritual.states.is_empty(), "坏文件 = 不编状态");
+        assert_eq!(ritual.config, RitualConfig::default(), "不回退显式排程");
+        let reported = bio
+            .ritual_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+            .expect("坏文件真因留痕");
+        assert!(reported.contains("refused to open"), "真因: {reported}");
+
+        assert!(
+            bio_care_candidates(&enabled(), &bio, NOW).is_empty(),
+            "坏文件 = 仪式 0 候选 (fail-closed)"
+        );
+        assert_eq!(
+            std::fs::read_to_string(store.path()).expect("读文件"),
+            "{ not json",
+            "读取不清洗损坏文件"
+        );
+    }
+
+    /// ⑱ 显式完成/跳过注入口: 开关关/未绑定 = `Ok(false)` 零写入; 绑定后写回,
+    /// 独立实例下次读一致 (真落盘, 不是内存缓存)。
+    #[test]
+    fn the_explicit_ritual_ports_are_zero_write_noops_until_bound_then_persist() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = CareHeartbeatSource::new();
+        assert!(!source.has_ritual_state_store(), "未 start = 未绑定");
+        assert_eq!(
+            source.record_ritual_done(RitualKind::MorningCheckIn, millis_u64(NOW)),
+            Ok(false),
+            "开关关/未绑定 = 零写入"
+        );
+        assert_eq!(
+            source.record_ritual_skip(RitualKind::MorningCheckIn),
+            Ok(false)
+        );
+        assert!(
+            !dir.path().join("ritual_state.json").exists(),
+            "未绑定 = 不创建 ritual_state.json"
+        );
+        assert!(source.ritual_state_error().is_none());
+
+        // `start` 成功路径才绑定 (此处直接注内部槽位, 免起心跳线程)。
+        let store = Arc::new(RitualStateStore::under_data_dir(dir.path()));
+        *source
+            .ritual
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::clone(&store));
+        assert!(source.has_ritual_state_store());
+
+        assert_eq!(
+            source.record_ritual_done(RitualKind::MorningCheckIn, millis_u64(NOW)),
+            Ok(true),
+            "绑定后写入成功"
+        );
+        assert_eq!(
+            source.record_ritual_skip(RitualKind::MorningCheckIn),
+            Ok(true)
+        );
+
+        let (config, states) = RitualStateStore::under_data_dir(dir.path())
+            .inputs()
+            .expect("新实例装载");
+        assert_eq!(config, RitualConfig::default(), "未写排程 = organ 默认");
+        assert_eq!(states.len(), 1);
+        assert_eq!(states[0].kind, RitualKind::MorningCheckIn);
+        assert_eq!(states[0].last_done_ms, millis_u64(NOW), "完成时刻落盘");
+        assert_eq!(states[0].consecutive_done, 1);
+        assert_eq!(states[0].skipped_count, 1, "跳过计数落盘");
     }
 
     /// ⑩ 真 PresenceService 回合帧 → 探针 (订阅路径实测): 回合帧入探针,

@@ -37,15 +37,20 @@
 //! / 发起闸 → 判定 → 台账; 本面不绕过任何一道)
 //! ```
 //!
-//! **数据供给边界 (如实)**: 生产侧的仪式状态存储 / presence 上次可见时刻 /
-//! memory replay 可续线索**尚未接** (W3.3)。因此装配缺省用
-//! [`NoBioCareInputs`] —— 开关打开也**零候选**; 测试用 fake 供给验证
-//! 「有数据 → 候选 → 过 care 管道」。取不到数据必须返回空 / `None`, 不编造。
+//! **数据供给边界 (如实, W3.5 更新)**: **仪式状态存储已接** ——
+//! [`ritual_state_store::RitualStateStore`] 读 `<care_dir>/ritual_state.json`
+//! (StoredDoc 拒开 + 原子写), 生产由 cli 装配面 (`CareHeartbeatSource`) 注入;
+//! 排程缺省回落 organ 空排程 ⇒ **默认 0 候选 (不主动)**, 显式配置排程才有到点
+//! 候选。重聚的 presence 上次可见 / 可续线索同样由 cli 宿主注入 (W3.3); 装配
+//! 缺省仍用 [`NoBioCareInputs`] 空供给。测试用 fake 供给验证「有数据 → 候选 →
+//! 过 care 管道」。取不到数据必须返回空 / `None`, 不编造。
 //!
-//! **候选消费不回写供给**: 本面只产候选, care 管道裁决后不把
-//! `ritual.last_done_ms` / 重聚已读位写回供给 (状态存储归 W3.3); 同一到点状态
-//! 在频率/预算/发起闸放行后可能再次发起 —— 现有纪律仍是唯一限流, 本面不加
-//! 第二套节奏。
+//! **候选消费不回写供给 (W3.5 收窄)**: 本面只产候选, care 管道裁决后**仍不**
+//! 自动把 `ritual.last_done_ms` 写回 —— 生产没有「仪式完成」事件源, 写回走 cli
+//! 装配面的显式注入口 `CareHeartbeatSource::record_ritual_done(kind, now_ms)`
+//! (完成事件源: 待后续从 care 交互 / 工具面接); 同一到点状态在频率/预算/发起闸
+//! 放行后可能再次发起 —— 现有纪律仍是唯一限流, 本面不加第二套节奏。重聚已读位
+//! 仍未回写。
 //!
 //! # 0 装诚实
 //!
@@ -68,6 +73,15 @@ use apeireth_organ::ritual::{RitualConfig, RitualState};
 
 use apeireth_tools_canonical::device::guard_watch::{GuardAlert, GuardAlertLedger};
 use apeireth_tools_canonical::device::weather::{ReminderSignal, SignalLedger};
+
+/// 仪式状态存储 (`ritual_state.json`, SG-22 补半程): StoredDoc 拒开语义 + 持久档
+/// 原子写, 与 `care_rules.json` 同一文件账范式; 由 cli 生物供给在开关打开时读取。
+#[path = "ritual_state_store.rs"]
+pub mod ritual_state_store;
+pub use ritual_state_store::{
+    ritual_state_doc_compat, RitualStateBody, RitualStateStore, RitualStateStoreError,
+    RITUAL_STATE_DOC_NAME, RITUAL_STATE_DOC_VERSION, RITUAL_STATE_FILE_NAME,
+};
 
 /// 天气提醒信号 → 关怀提醒候选的消费桥 (`weather-signals.jsonl`)。
 pub struct WeatherSignalFeed {
@@ -285,9 +299,10 @@ pub struct ReunionInputs {
 
 /// 生物机制候选供给口 (W3.2 装配缝): 仪式状态 / 重聚输入由宿主注入。
 ///
-/// 生产数据供给尚未接 (W3.3): 装配缺省用 [`NoBioCareInputs`] (恒空供给),
-/// 因此**开关打开也不产候选**。取不到数据必须返回空 / `None` —— 不编造
-/// 「上次可见」「可续线索」「仪式状态」。
+/// 生产侧由 cli 宿主注入真实供给 (presence / 会话线索 / 仪式状态存储, 见
+/// `crates/adapters/cli/src/care_heartbeat.rs`); 装配缺省仍用
+/// [`NoBioCareInputs`] (恒空供给, 测试/无宿主场景)。取不到数据必须返回空 /
+/// `None` —— 不编造「上次可见」「可续线索」「仪式状态」。
 pub trait BioCareInputs: Send {
     /// 仪式状态 + 排程; 缺省空 = 无仪式候选。
     fn ritual_inputs(&self) -> RitualInputs {
@@ -300,7 +315,7 @@ pub trait BioCareInputs: Send {
     }
 }
 
-/// 装配缺省空供给: 仪式 / 重聚都不产候选 (W3.3 接真实数据源前的诚实默认)。
+/// 装配缺省空供给: 仪式 / 重聚都不产候选 (无宿主注入供给时的诚实默认)。
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoBioCareInputs;
 

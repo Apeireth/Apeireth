@@ -358,6 +358,14 @@ async fn the_resident_host_stays_quiet_when_the_gates_are_not_both_open() {
     assert_eq!(source.status().hits, 0, "零动作: 零命中");
     assert_eq!(provider.call_count(), 0, "零动作零模型调用零计费");
     assert!(
+        !dir.path().join("ritual_state.json").exists(),
+        "零动作: 仪式状态存储零读写 (不建文件)"
+    );
+    assert!(
+        !source.has_ritual_state_store(),
+        "零动作: 仪式状态存储未绑定 (注入口 fail-closed)"
+    );
+    assert!(
         runtime
             .sessions()
             .load(&session)
