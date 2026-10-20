@@ -174,10 +174,13 @@ def baseline_numbers() -> dict:
     d = re.search(r"\|\s*\*\*日期\*\*\s*\|\s*(\d{4}-\d{2}-\d{2})", text)
     if not d:
         raise SystemExit(f"cannot parse baseline date from {BASELINE}")
+    tail = text[m.start(): text.find("\n", m.end()) if text.find("\n", m.end()) != -1 else len(text)]
+    ignored = re.search(r"(\d+)\s+ignored", tail)
     return {
         "suites": int(m.group(1)),
         "passed": int(m.group(2)),
         "failed": int(m.group(3)),
+        "ignored": int(ignored.group(1)) if ignored else 0,
         "date": d.group(1),
     }
 
@@ -383,6 +386,87 @@ def cmd_gen() -> int:
     return 0
 
 
+def parse_test_log(path: Path) -> dict:
+    """从一次全量 `cargo test` 日志汇总 套件/passed/failed/ignored。"""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    pattern = re.compile(r"test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored")
+    suites = passed = failed = ignored = 0
+    for match in pattern.finditer(text):
+        suites += 1
+        passed += int(match.group(1))
+        failed += int(match.group(2))
+        ignored += int(match.group(3))
+    if suites == 0:
+        raise SystemExit(f"no 'test result' lines found in {path}")
+    return {"suites": suites, "passed": passed, "failed": failed, "ignored": ignored}
+
+
+def cmd_baseline_check(log: str) -> int:
+    lp = Path(log)
+    if not lp.is_absolute():
+        lp = ROOT / lp
+    got = parse_test_log(lp)
+    base = baseline_numbers()
+    print(f"log : {got}")
+    print(f"SSoT: {base}")
+    diff = {k: (base.get(k), got[k]) for k in ("suites", "passed", "failed", "ignored") if base.get(k) != got[k]}
+    if diff:
+        print(f"FAIL: log totals != test-baseline §1: {diff}", file=sys.stderr)
+        return 1
+    print("OK: log totals match test-baseline §1")
+    return 0
+
+
+def cmd_gen_matrix_01(write: bool, force: bool) -> int:
+    """把 matrix §0.1 的 结果/日期 两行同步为单一真源（默认 dry-run；文件有在途改动时拒绝写）。"""
+    base = baseline_numbers()
+    rel = MATRIX.relative_to(ROOT).as_posix()
+    text = MATRIX.read_text(encoding="utf-8")
+    result_re = re.compile(r"^\| 结果 \|.*$", re.M)
+    date_re = re.compile(r"^\| 日期 \|.*$", re.M)
+    old_result = result_re.search(text)
+    old_date = date_re.search(text)
+    if not old_result or not old_date:
+        print("FAIL: matrix §0.1 rows not found", file=sys.stderr)
+        return 1
+    new_result = (
+        f"| 结果 | **{base['suites']} 套件 / {base['passed']} passed / {base['failed']} failed / "
+        f"{base['ignored']} ignored**（单一真源 [test-baseline.md](test-baseline.md)） |"
+    )
+    new_date = f"| 日期 | {base['date']} |"
+    print(f"§0.1 结果: {old_result.group(0).strip()}")
+    print(f"     =>  {new_result}")
+    print(f"§0.1 日期: {old_date.group(0).strip()}")
+    print(f"     =>  {new_date}")
+    old_nums = re.search(
+        r"(\d+)\s*套件\s*/\s*(\d+)\s+passed\s*/\s*(\d+)\s+(?:failed|product-failed).*?(\d+)\s+ignored",
+        old_result.group(0),
+    )
+    old_day = re.search(r"(\d{4}-\d{2}-\d{2})", old_date.group(0))
+    if old_nums and old_day and (
+        int(old_nums.group(1)),
+        int(old_nums.group(2)),
+        int(old_nums.group(3)),
+        int(old_nums.group(4)),
+        old_day.group(1),
+    ) == (base["suites"], base["passed"], base["failed"], base["ignored"], base["date"]):
+        print("OK: matrix §0.1 已与单一真源一致（含 product-failed 口径），无需更新")
+        return 0
+    dirty = _run(["git", "status", "--porcelain", "--", rel]).stdout.strip()
+    if dirty:
+        print(f"WARN: {rel} 有未提交改动（他线在途）；叠加不覆盖 → {'拒绝写入' if write and not force else '仅 dry-run'}")
+        if write and not force:
+            return 1
+    if not write:
+        print("dry-run: no file written；matrix 干净后加 --write。")
+        return 0
+    new_text = result_re.sub(lambda _: new_result, text, count=1)
+    new_text = date_re.sub(lambda _: new_date, new_text, count=1)
+    MATRIX.write_text(new_text, encoding="utf-8")
+    print(f"updated: {rel}")
+    return 0
+
+
 def cmd_check() -> int:
     if not STATUS_DOC.exists():
         print(f"FAIL: {STATUS_DOC.relative_to(ROOT)} missing; run --gen", file=sys.stderr)
@@ -416,6 +500,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--gen", action="store_true")
     parser.add_argument("--gen-badges", action="store_true", help="README tests 徽章 ← test-baseline 单一真源")
+    parser.add_argument("--gen-matrix-01", action="store_true", help="matrix §0.1 结果/日期 ← 单一真源（默认 dry-run）")
+    parser.add_argument("--write", action="store_true", help="配合 --gen-matrix-01 真正写盘")
+    parser.add_argument("--force", action="store_true", help="忽略他线在途改动（不推荐）")
+    parser.add_argument("--baseline-check", action="store_true", help="核对测试日志汇总 vs test-baseline §1")
+    parser.add_argument("--log", default="", help="配合 --baseline-check 的 cargo test 日志路径")
     parser.add_argument("--matrix-check", action="store_true", help="matrix 环境变量/claims 开关一致性自查")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--block-stale", action="store_true", help="STALE 即 exit 1（P1c changed-claim 阻塞口径）")
@@ -429,6 +518,12 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_gen()
     if args.gen_badges:
         return sync_badges(write=True)
+    if args.gen_matrix_01:
+        return cmd_gen_matrix_01(args.write, args.force)
+    if args.baseline_check:
+        if not args.log:
+            parser.error("--baseline-check requires --log <cargo test log>")
+        return cmd_baseline_check(args.log)
     if args.matrix_check:
         return cmd_matrix_check(args.strict)
     if args.check:

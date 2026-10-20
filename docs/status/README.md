@@ -17,6 +17,8 @@ python scripts/docs_truth.py --verify            # 核验（P0 report-only：结
 python scripts/docs_truth.py --verify --block-stale  # STALE 即 exit 1（P1c changed-claim 阻塞口径）
 python scripts/docs_truth.py --gen               # 生成 STATUS.md
 python scripts/docs_truth.py --gen-badges        # README tests 徽章 ← test-baseline 单一真源
+python scripts/docs_truth.py --gen-matrix-01     # matrix §0.1 结果/日期 ← 单一真源（默认 dry-run；有在途改动拒绝写）
+python scripts/docs_truth.py --baseline-check --log <cargo-test.log>  # 全量日志汇总 ↔ test-baseline §1 核对
 python scripts/docs_truth.py --matrix-check      # matrix 环境变量 / claims 开关互钉自查
 python scripts/docs_truth.py --check             # 生成物 drift + README 徽章一致性
 ```
