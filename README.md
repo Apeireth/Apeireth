@@ -9,7 +9,7 @@
 
 **It remembers what you say in passing, stays quiet when you are busy, and never gives up the lines it refuses to cross.**
 
-[![Tests](https://img.shields.io/badge/tests-8889%20passed%20%7C%200%20failed%20(2026--10--19)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
+[![Tests](https://img.shields.io/badge/tests-9075%20passed%20%7C%200%20failed%20(2026--10--20)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
 [![Workspace](https://img.shields.io/badge/workspace-31%20members-blue.svg?logo=rust)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%2B%20Linux-lightgrey.svg)](INSTALL.md)
 [![Status](https://img.shields.io/badge/status-rc%20internal%20test-orange.svg)](ROADMAP.md)
