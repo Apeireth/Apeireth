@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use apeireth_core::kernel::Clock;
+use apeireth_guard::hook::SharedImmuneMemory;
 use apeireth_memory::{
     AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
     MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
@@ -573,6 +574,9 @@ pub struct ProductionModules {
     telemetry: Arc<CognitiveTelemetry>,
     mcp_bridge: Option<Arc<McpToolBridge>>,
     mcp_module: Option<Arc<McpModule>>,
+    /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根把 guard 免疫记忆
+    /// 共享句柄迟绑定到器官审议门 (W3.3 外部事件源; 默认不接).
+    organ_module: Option<Arc<OrganModule>>,
 }
 
 /// Compatibility alias for [`ProductionModules`].
@@ -789,6 +793,8 @@ impl ProductionModules {
     ) -> RuntimeResult<Self> {
         let mut modules: Vec<Arc<dyn Module>> = Vec::new();
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
+        // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
+        let mut organ_module: Option<Arc<OrganModule>> = None;
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
@@ -1454,7 +1460,9 @@ impl ProductionModules {
 
         if config.organs {
             instrument.constructed(ModuleFamily::Organs);
-            modules.push(Arc::new(OrganModule::new(Arc::clone(&clock))));
+            let module = Arc::new(OrganModule::new(Arc::clone(&clock)));
+            organ_module = Some(Arc::clone(&module));
+            modules.push(module as Arc<dyn Module>);
         }
 
         if config.reflexion {
@@ -1573,6 +1581,7 @@ impl ProductionModules {
             telemetry,
             mcp_bridge,
             mcp_module,
+            organ_module,
         })
     }
 
@@ -1632,6 +1641,24 @@ impl ProductionModules {
     /// The MCP dynamic tool module bag, when the MCP slot is enabled.
     pub fn mcp_module(&self) -> Option<&Arc<McpModule>> {
         self.mcp_module.as_ref()
+    }
+
+    /// W3.3 外部事件源: 把 guard 免疫记忆共享句柄接到器官模块的审议门.
+    ///
+    /// 组合根在治理 hook 构造后调用 `hook.shared_immune_memory()` (hook 未挂载
+    /// 免疫记忆时为 `None`) —— 传进来的必须是 hook 正在使用的**同一份**句柄,
+    /// 这样 hook 的 `observe` 与审议门的拉取看同一份状态. 未启用器官模块
+    /// (`config.organs = false`) 或句柄为 `None` 时不做任何事; 返回是否真的挂上.
+    ///
+    /// **默认零行为变化**: 不调用本方法 / 传 `None` = 审议门从未读免疫记忆.
+    pub fn attach_immune_memory(&self, memory: Option<SharedImmuneMemory>) -> bool {
+        match (&self.organ_module, memory) {
+            (Some(module), Some(memory)) => {
+                module.attach_immune_memory(memory);
+                true
+            }
+            _ => false,
+        }
     }
 }
 
