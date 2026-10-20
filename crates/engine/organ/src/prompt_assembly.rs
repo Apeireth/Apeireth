@@ -483,7 +483,7 @@ impl PromptAssembler {
             let (content, r) = self.expand_text(&b.content, role, guard);
             report.merge(r);
             out.push(ContextBlock {
-                name: b.name,
+                name: b.name.clone(),
                 content,
                 core: b.core,
                 cap_chars: b.cap_chars,
@@ -505,7 +505,7 @@ impl PromptAssembler {
             let (content, r) = self.expand_text(&b.content, role, guard);
             report.merge(r);
             re = re.push(ContextBlock {
-                name: b.name,
+                name: b.name.clone(),
                 content,
                 core: b.core,
                 cap_chars: b.cap_chars,

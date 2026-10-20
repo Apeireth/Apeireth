@@ -40,39 +40,11 @@
 use crate::homeostasis::{RegulationAction, RegulationPlan};
 use serde::{Deserialize, Serialize};
 
-/// Named injection block.
-#[derive(Debug, Clone)]
-pub struct ContextBlock {
-    /// Block name (debug / budget report).
-    pub name: &'static str,
-    /// Block body (may contain newlines).
-    pub content: String,
-    /// Core block: never truncated by the total budget.
-    pub core: bool,
-    /// Per-block cap (`None` = unlimited, still subject to total budget).
-    pub cap_chars: Option<usize>,
-}
-
-impl ContextBlock {
-    pub fn new(name: &'static str, content: impl Into<String>) -> Self {
-        Self {
-            name,
-            content: content.into(),
-            core: false,
-            cap_chars: None,
-        }
-    }
-
-    pub fn core(mut self, core: bool) -> Self {
-        self.core = core;
-        self
-    }
-
-    pub fn with_cap(mut self, cap: usize) -> Self {
-        self.cap_chars = Some(cap);
-        self
-    }
-}
+// Single definition: the orchestration primitive re-exported under the old
+// `apeireth_organ` path (ADR-0007 §2.1 — organ keeps the assembler only, not a
+// duplicate block type).
+#[doc(inline)]
+pub use apeireth_orchestration::context_budget::ContextBlock;
 
 /// Assembly policy derived from a homeostasis regulation plan (default off).
 ///
@@ -228,7 +200,7 @@ impl ContextAssembler {
     pub fn budget_report(&self) -> Vec<(String, usize)> {
         self.blocks
             .iter()
-            .map(|b| (b.name.to_string(), b.content.chars().count()))
+            .map(|b| (b.name.clone(), b.content.chars().count()))
             .collect()
     }
 
@@ -318,7 +290,7 @@ fn assemble_budgeted_blocks_raw(
         .zip(capped)
         .filter(|(_, s)| !s.trim().is_empty())
         .map(|(b, s)| ContextBlock {
-            name: b.name,
+            name: b.name.clone(),
             content: s,
             core: b.core,
             cap_chars: b.cap_chars,
@@ -616,7 +588,7 @@ mod tests {
             .with_policy(policy);
         assert_eq!(assembler.effective_total_budget_chars(), 750);
         let blocks = assembler.assemble_budgeted_blocks();
-        let names: Vec<&str> = blocks.iter().map(|b| b.name).collect();
+        let names: Vec<&str> = blocks.iter().map(|b| b.name.as_str()).collect();
         assert_eq!(names, vec!["layer0", "core", "layer1"]);
     }
 
