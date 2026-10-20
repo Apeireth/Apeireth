@@ -92,6 +92,11 @@ pub mod organ_llm_bridge;
 pub mod organ_module;
 #[path = "canonical/permission_preset.rs"]
 pub mod permission_preset;
+/// 生物机制族 W3.3 · 游戏练习场工具面 (`tool.play_propose` / `tool.play_start` /
+/// `tool.play_finish` / `tool.play_abort`, 默认关): 只做模型可调的四出口, 内核
+/// (`apeireth_organ::play`) 零改动; env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"`。
+#[path = "canonical/play_tools.rs"]
+pub mod play_tools;
 #[path = "canonical/preference_learning.rs"]
 pub mod preference_learning;
 #[path = "canonical/production.rs"]
@@ -166,6 +171,18 @@ pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FA
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};
 pub use permission_preset::{
     human_approval_floor_applies, is_write_or_execute_capability, PermissionPresetGovernanceHook,
+};
+// 生物机制族 W3.3 · 游戏练习场工具面 (默认关): 装配门 + 四件套 + 路径纪律 + 审批钩子
+// (钩子未在装配根注册, 见模块头 0 装边界)。
+pub use play_tools::{
+    bio_play_enabled_from_env_value, bio_play_wiring_from_env, bio_play_wiring_from_env_value,
+    play_approval_reason, play_error_code, validate_play_sandbox_dir, BioPlayState, BioPlayWiring,
+    PlayAbortModule, PlayApprovalHook, PlayFinishModule, PlayProposeModule, PlayStartModule,
+    BIO_PLAY_ENABLE_ENV, MAX_OUTCOME_ITEMS, MAX_OUTCOME_ITEM_BYTES, MAX_PROPOSAL_CANDIDATES,
+    MAX_SANDBOX_DIR_BYTES, MAX_SKILLS_PER_TOPIC, PLAY_ABORT_CAPABILITY_ID, PLAY_ABORT_TOOL_NAME,
+    PLAY_CAPABILITY_IDS, PLAY_FINISH_CAPABILITY_ID, PLAY_FINISH_TOOL_NAME,
+    PLAY_PROPOSE_CAPABILITY_ID, PLAY_PROPOSE_TOOL_NAME, PLAY_START_CAPABILITY_ID,
+    PLAY_START_TOOL_NAME,
 };
 pub use preference_learning::{
     PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity,

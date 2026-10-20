@@ -633,6 +633,10 @@ pub enum ModuleFamily {
     DeviceControl,
     /// K 轴 L5 看家骨架族 (`guard_watch`)。
     GuardWatch,
+    /// 生物机制族 W3.3 · 游戏练习场工具族 (`play_*`, 默认关): 四个工具模块各自
+    /// 一个构造点 (propose/start/finish/abort, 共享同一本内存账本);
+    /// env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"` 且工作区根注入才构造。
+    BioPlay,
     /// 自省通道族 (`self_status`)。
     SelfStatus,
     /// 外部工具桥族 (`mcp`)。
@@ -1148,6 +1152,26 @@ impl ProductionModules {
             instrument.constructed(ModuleFamily::GuardWatch);
             let provider = super::tool_modules::GuardWatchModule::new(guard_watch_config.clone());
             capabilities.extend(provider.capabilities());
+        }
+
+        // 生物机制族 W3.3 · 游戏练习场 (`tool.play_propose` / `tool.play_start` /
+        // `tool.play_finish` / `tool.play_abort`, 默认关): 四个工具模块共享**同一本**
+        // 内存练习账本 (内核 `apeireth_organ::play` 零改动), 只提案 / opt-in 后开场 /
+        // 结束提炼 / 幂等中止, **不提供 shell 与写文件能力**, 产物只走
+        // `PlayOutcome.artifacts` 元数据 (`sandbox_dir` 只是受控目录标识, 非 OS 级
+        // 隔离, 不创建目录)。注册即闸: env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"`
+        // (默认关 fail-closed) **且** 已登记工作区根注入 (缺根 = 无法证明
+        // `sandbox_dir` 包含性 = 不注册); 全关 = 不构造 = 零注册 (懒加载语义)。
+        // 审批钩子 `PlayApprovalHook` 未在装配根注册 (审批链由适配器接线, 本批
+        // 无 IM opt-in 卡; 工具面唯一强制门槛 = env 闸 + 显式 `user_opt_in=true`)。
+        if let Some(play) = super::play_tools::bio_play_wiring_from_env(
+            backends.workspace_root.as_deref(),
+            Arc::clone(&clock),
+        ) {
+            for module in play.into_modules() {
+                instrument.constructed(ModuleFamily::BioPlay);
+                capabilities.extend(module.capabilities());
+            }
         }
 
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
