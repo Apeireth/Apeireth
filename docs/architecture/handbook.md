@@ -28,15 +28,16 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 |---|---|
 | 规则体系 | **已生效**（ADR-0001，commit `8bfefb1b`）；灰度 report-only 至 **2026-11-03** |
 | 三线协作契约 | **已生效**（commit `8e9dd3ae`） |
-| 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR：0003 R1a / 0004 R3 / 0005 R4a；Wave 3：0007 R7 / 0008 R2 均 **Accepted 且交付** |
+| 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR：0003 R1a / 0004 R3 / 0005 R4a；Wave 3：0007 R7 / 0008 R2 均 **Accepted 且交付**；Wave 4：0009 R1b **Accepted（2026-10-20，owner 授权 Wave 4 按建议推进）** |
 | 架构波次 | `current_wave = 4`（Wave 3 于 2026-10-20 收口；Wave 4 = R1b + R8 + R6） |
+| Wave 4 进行中 | **R1b**：证据包 `r1b-inventory-2026-10-20.md`（`0d520312`）+ ADR-0009 Accepted；R1b-1 总线内核/开关表/台账校验施工中；R1b-2 机制迁移待生物线 WIP 收口后交接；R4a-2 不触发（owner 建议已采纳）；R8/R6 待启动 |
 | Wave 3 已落 | **R7**：`ContextBlock` 单一化（R7-2a `0bdd9bb4` / R7-2b `a93fdbb3`）、`SessionStore` 三义→`SessionLifecycleStore`/`SessionNoteStore`（R7-3 `1cbaee95`/`3c0bcde1`）、dormant scheduler 归档（R7-4b，含 bench 同步 `2481200b`）、`PromptCacheStabilizer` 删除（R7-4a `51bb6cfa`）、Heartbeat 复核保留 active（`b36ee05e`）；**R2**：Extension ABI 家族（R2-2 `56ae816b`）、PluginManager/BehaviorRegistry 双 catalog（R2-3a/b `911e2f49`/`b5f75ba9`）、plugin 内部索引 `CapabilityIndex`（`d8aa87af`）、命名迁移 BehaviorModule/BehaviorRegistry（R2-4 `efcce6c4`） |
-| 待 owner 裁决 | **无**（R4b 已裁决；14 键已正式化 ADR-0006；R7/R2 已 Accepted） |
-| 在途违规（灰度期不阻断） | 生物线 W3.6 在途 3 文件（`cli/lib.rs` 等）；其收口后由架构线复核尺寸/基线 |
+| 待 owner 裁决 | **无**（Wave 4 已授权 m01750；R4b / 14 键 / R7 / R2 / R1b 均已裁决） |
+| 在途违规（灰度期不阻断） | **无**（生物线 W3.7 已提交 `7e98744d`；工作树仅其文档 3 个 M；`arch_guard` VIOLATIONS 0） |
 | 效率线 R3a 现状 | `env-registry.toml` 155 条；R3b foundation 批验收（ADR-0004 §7.6）；R3c report-only 至 2026-11-03 后 review |
 | 基线 | `scripts/arch-baseline.txt`（Wave 3 收口缩表：删失效条目 3 条 + 尺寸缩 1 条；只减不增） |
 | 已登记的已知债务 | `contract.toml [flagged_edges]` 3 条；`[extension_debt]` **0**（R2 收口清零）；`[concepts].known_debt` 1 组（ContextAssembler，Wave 4 合并） |
-| 未完成项 | Wave 4+：R1b 神经系统订阅迁移 / R8 治理管线 / R6 验证架构 / R5 取消可恢复 worker；R3c（2026-11-03 后）；R4a-2 条件性 workspace 提取（owner 触发） |
+| 未完成项 | Wave 4+：R1b-1b（开关迁移+台账校验）/ R1b-2 机制迁移（生物线，待其 WIP 收口）/ R1b-3 缺失信号源；R8 治理管线 / R6 验证架构 / R5 取消可恢复 worker；R3c（2026-11-03 后）；R4a-2 条件性 workspace 提取（owner 触发，当前建议不触发） |
 
 ## 4. 每波收口 SOP（架构线主持）
 
@@ -48,7 +49,7 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 
 ## 5. 裁决位（不能代替 owner 拍板的）
 
-- 目标架构后续单项 ADR（Wave 4+：R1b / R8 / R6 / R5）；
+- 目标架构后续单项 ADR（Wave 4+：R8 / R6 / R5；R1b 已 Accepted ADR-0009）；
 - **14 键表述**已正式化（ADR-0006），后续变更仍须 owner 授权；
 - R4a-2 条件性 workspace 提取的触发阈值（members 下降节奏由 owner 决定）；
 - 产品形态（单进程永久 vs 多进程阶梯）——决定 R5 边界；
