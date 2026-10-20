@@ -1,5 +1,17 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 安全加固批：8 项外部审计隐患修复（B1-B8，2026-10-19/20）
+
+外部安全审计《Apeireth-安全隐患分析》8 项风险全部收口（8 commits：`8f71d0c0`/`06246661`/`a786b733`/`2aab3add`/`1574335f`/`333c3471`/`1f65852b`/`1213fbdd`）：
+- **B1 SQL 只读闸加固**（#1 高危）：`ensure_readonly_sql` 从字符串前缀升级为词法级保守核对（WITH 引导 DML/CTE 内嵌 DML/EXPLAIN ANALYZE 写类/SELECT INTO/FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY`/MySQL `START TRANSACTION READ ONLY` 服务端只读事务双保险（失败 ROLLBACK 收尾）；桌面 crate +16 测试。
+- **B2 Provider 中继 SSRF 收紧**（#3）：目标类闸（私网/链路本地/组播/保留段拒，IP 变体规范化判类 + 修 IPv6 括号误送 DNS 真 bug）+ DNS 钉址（首跳 rebinding 窗关闭）+ 重定向逐跳闸（5 跳）+ 请求头白名单；+11 测试。残余如实：回环类级口子待「本地端点注册面」、公网 allowlist 待续。
+- **B3 文件操作收口登记根**（#4）：canonicalize 分量级祖先校验（junction 逃逸实测拒、`..` 逃逸小债顺手清）、fail-closed、IPC 契约不破；+9 测试。残余：TOCTOU 窗口未闭（已缓解）。
+- **B4 终端权限边界明示**（#2）：面板文案明示「以当前 Windows 用户权限执行/不受审批链保护/非沙箱」+ 新文档 `docs/02-guides/permission-surfaces.md` 三层权限面 + 4 条文案测试钉子。
+- **B5 Gateway TLS 真接线**（#5）：接口桩退役——PEM 真加载（证书链 + 三种私钥编码 + 配对校验）fail-closed 拒启动、tokio-rustls listener、TlsSurface 真实三态；**live TLS 握手 E2E 真测**；0 新外部包（+4 依赖边，三包已在 lock 树）；`.gitignore` 加测试夹具例外。能力级 PRODUCTION WIRED（默认不启用）。
+- **B6 静态信封加密 + 备份恢复**（#6）：分区级 DEK + AES-256-GCM SealedField（AAD 绑分区 id 防跨分区挪用）+ KeyWrapFile 三槽 KEK 包裹（口令 KDF/恢复件/KekAnchor）+ SealedBackup（恢复先全量校验才原子落盘 = 宁拒不损；密钥丢失显式不可恢复无后门）；184 测试（三不变量钉死）；0 新外部 dep。残余：列级改造未接线、P1 字段定级待拍板。
+- **B7 治理链端到端合练**（#7）：现役 M-of-N 逻辑票链三路径（通过/拒绝/超时）+ 防凑票对抗用例 + 审计落盘断言，演练记录落 `docs/04-internal/governance-chain-drill-2026-10-20.md`（缺口 6 项如实登记：编排未接线/物理多签留 v2.1 等）。**逻辑票 ≠ 密码学多签**（严守口径）。
+- **B8 发布资产校验**（#8）：`scripts/verify-release-assets.ps1`（哈希三口径 + Authenticode 如实报 + 缺项不装过）+ 流程文档 + 排期 4 项（签名证书/可复现构建等 owner 决策）。
+
 ## [Unreleased] — 生物机制族 W3.3：收尾接线（6 批，全部默认关；2026-10-20）
 
 六条并行批 + 装配根总装，把剩余内核接进生产（默认关、开关只认显式 `"1"`、关时逐字节零变化）：
