@@ -31,10 +31,12 @@
 | 位置 | 实现者 | 说明 |
 |---|---|---|
 | `runtime/src/canonical/session.rs:802` | `InMemorySessionStore`(:859)、`SqliteSessionStore`(assembly `sqlite_session.rs:92`)、测试 `RecordingStore` | **canonical 会话契约**（ADR-0007 §2.2 保留为唯一公共名） |
-| `memory/src/session_lifecycle.rs:259` | `SqliteMemoryStore`(:312) | 域内生命周期 store → 拟改名 `SessionLifecycleStore` |
-| `memory/src/session_note.rs:54` | `SqliteMemoryStore`(:76) | 域内 note store → 拟改名 `SessionNoteStore` |
+| `memory/src/session_lifecycle.rs:259` | `SqliteMemoryStore`(:312) | 域内生命周期 store → **已改名 `SessionLifecycleStore`**（`1cbaee95`） |
+| `memory/src/session_note.rs:54` | `SqliteMemoryStore`(:76) | 域内 note store → **已改名 `SessionNoteStore`**（`1cbaee95`） |
 
 **结论**：3 个 trait 实为"1 公共契约 + 2 域 store"同名冲突；ADR-0007 §2.2 的"重命名+文档说明"成立，**不需要合并语义**（避免把域职责塞进公共契约）。
+
+**R7-3 执行状态（2026-10-20，已完成）**：memory 侧已改名（commit `1cbaee95`，trait+impl+导出+集成测试+注释同步）；memory 内 `\bSessionStore\b` 残留 **0**、全仓 `memory::SessionStore` 引用 **0**；依赖方 `apeireth-runtime-assembly` / `apeireth-gateway` 的 `--all-targets` 编译 exit 0；runtime canonical `SessionStore` 保持唯一公共契约。
 
 ## 4. ContextBlock / ContextAssembler
 
