@@ -39,6 +39,7 @@
 | [0007](0007-r7-context-session-unification.md) | R7 上下文/提示/会话单一化 | **Accepted + 已交付**（2026-10-20 收口） | Wave 3 / ContextBlock·SessionStore·scheduler 收敛 |
 | [0008](0008-r2-extension-abi.md) | R2 扩展 ABI 统一（单 ABI 家族 / 单注册表 / 单命名） | **Accepted + 已交付**（2026-10-20 收口） | Wave 3 / extension_debt·AgentModule 命名漂移 |
 | [0009](0009-r1b-nervous-bus.md) | R1b 神经系统——同步信号总线 / 开关单入口 / 台账可校验 | **Accepted**（2026-10-20，owner 授权 Wave 4） | Wave 4 / 总线·开关表·台账校验 |
+| [0010](0010-r8-governance-pipeline.md) | R8 治理单一管线——六段编排 / 单一入口 / 审计可落地 | **Accepted**（2026-10-20，owner 授权 Wave 4） | Wave 4 / 治理编排·入口收敛·审计落地 |
 
 ## 命名
 
