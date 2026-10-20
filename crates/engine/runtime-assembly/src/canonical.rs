@@ -120,8 +120,16 @@ pub mod self_tuning_wire;
 /// (写面 = write_intent 同族, failed 只能人判无工具面)。
 #[path = "canonical/task_board_tool.rs"]
 pub mod task_board_tool;
+/// SG-25 工具生态健康 · 迟绑定只读探测口: 装配末端填入的静态剖面 →
+/// 已投影画像 → 内核公式; 读数只观测不剪枝, 槽空/零收录 = 未接线真因。
+#[path = "canonical/tool_ecosystem_probe.rs"]
+pub mod tool_ecosystem_probe;
 #[path = "canonical/tool_modules.rs"]
 pub mod tool_modules;
+/// SG-25 工具能力策展表 v0: 生产 `ToolCapability` 声明无能力标签, 本表显式登记
+/// 工具身份 → 封闭词汇表标签; 未收录不猜测 (如实计 untagged, 不参与分数)。
+#[path = "canonical/tool_taxonomy.rs"]
+pub mod tool_taxonomy;
 /// 性格成长数据面 (裁定 ④⑤): 特质滑杆锁定态持久档 (`trait-locks.json`) +
 /// 成长计既有账 (`tuning-log.jsonl`) 只读读面。
 #[path = "canonical/trait_growth.rs"]
@@ -225,11 +233,18 @@ pub use self_tuning_wire::{
     tuning_log_path_from_session_db, SelfTuningWire, SELF_TUNING_ENABLE_ENV, TUNING_LOG_DOC_NAME,
     TUNING_LOG_DOC_VERSION, TUNING_LOG_FILE,
 };
+pub use tool_ecosystem_probe::{
+    tool_ecosystem_bio_probe, ToolEcosystemProbe, ToolEcosystemSlot, ToolEcosystemSnapshot,
+};
 pub use tool_modules::{
     BackupExportModule, DeviceControlModule, DocOpsModule, EducationModule, FetchModule,
     FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, RepoModule,
     SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
     VoiceSpeakModule, SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
+};
+pub use tool_taxonomy::{
+    capability_identity, project_capabilities, taxonomy_entry_for, TaxonomyEntry,
+    TaxonomyProjection, TAXONOMY_TAGS, TOOL_TAXONOMY, TOOL_TAXONOMY_VERSION,
 };
 // 性格成长数据面 (裁定 ④⑤): 特质锁定态持久档 + 成长计既有账读面。
 pub use trait_growth::{

@@ -52,6 +52,7 @@ use crate::canonical::self_status_source::{
     capacity_bio_probe, care_heartbeat_probe, immune_quorum_probe, pain_probe, play_probe,
     quorum_trace_probe, recovery_probe, PainSnapshotReader, ProductionSelfStatusSource,
 };
+use crate::canonical::tool_ecosystem_probe::{tool_ecosystem_bio_probe, ToolEcosystemSlot};
 
 use super::{BuildInstrumentation, ModuleFamily, ProductionModules};
 
@@ -195,7 +196,7 @@ pub type QuorumTraceReader = Arc<dyn Fn() -> Option<QuorumTrace> + Send + Sync>;
 /// - **默认关**：自述开关关时 [`install_bio_self_status`] 不注册任何迟绑定
 ///   probe，且不武装本槽 —— 后续 `fill_*` 一律 no-op，槽保持全空（`is_empty`），
 ///   一次读取都不发生，自述帧逐字节不变；
-/// - **开关开**：5 条 probe 先注册（接线事实 `wired:true`），句柄未到 = 该格
+/// - **开关开**：6 条 probe 先注册（接线事实 `wired:true`），句柄未到 = 该格
 ///   `value:null` + 真因「未接线」，整帧仍成功；句柄填入后同格转真值；
 /// - 槽只存**只读共享句柄**（同一份账 / 同一状态闭包），不复制状态、不叠加第二
 ///   层缓冲；重复 fill 覆盖为最后一个句柄（与 `attach` 一次调用语义一致）。
@@ -211,6 +212,8 @@ pub struct BioProbeSlots {
     quorum_trace: Arc<Mutex<Option<QuorumTraceReader>>>,
     /// SG-16/17 痛觉 + 再生：runtime 只读快照读取口（两格共用同一读取口）。
     pain_reader: Arc<Mutex<Option<PainSnapshotReader>>>,
+    /// SG-25 工具生态健康：装配末端填入的静态工具剖面快照（只读）。
+    ecosystem: Arc<ToolEcosystemSlot>,
 }
 
 /// 槽锁读取（持锁线程 panic 后槽内容未损坏，按 L 组口径恢复而非级联 panic）。
@@ -225,19 +228,20 @@ impl BioProbeSlots {
         Self::default()
     }
 
-    /// 是否已武装（自述开关开 = 安装点注册了 5 条迟绑定 probe）。
+    /// 是否已武装（自述开关开 = 安装点注册了 6 条迟绑定 probe）。
     #[must_use]
     pub fn is_armed(&self) -> bool {
         self.armed.load(Ordering::Acquire)
     }
 
-    /// 四个槽是否全空（默认关证据：关时恒空，`fill_*` 全 no-op）。
+    /// 五个槽是否全空（默认关证据：关时恒空，`fill_*` 全 no-op）。
     #[must_use]
     pub fn is_empty(&self) -> bool {
         lock_slot(&self.immune).is_none()
             && lock_slot(&self.care_status).is_none()
             && lock_slot(&self.quorum_trace).is_none()
             && lock_slot(&self.pain_reader).is_none()
+            && self.ecosystem.is_empty()
     }
 
     /// 安装点武装/解除（只由 [`install_bio_self_status`] 调；非公开）。
@@ -291,6 +295,21 @@ impl BioProbeSlots {
             return false;
         };
         self.fill_quorum_trace(Arc::new(move || module.last_quorum_trace()))
+    }
+
+    /// 填 SG-25 工具生态静态剖面（装配末端能力表装配完毕后调用一次）。
+    ///
+    /// 未武装（自述开关关）= no-op，槽保持空，零读取、零投影；返回是否真的填了。
+    pub(super) fn fill_ecosystem_profiles(&self, capabilities: &[Arc<dyn ToolCapability>]) -> bool {
+        if !self.is_armed() {
+            return false;
+        }
+        self.ecosystem.fill(capabilities)
+    }
+
+    /// SG-25 工具生态解剖面槽（装配安装点绑定 probe 用；槽空 = 未接线真因）。
+    fn ecosystem_slot(&self) -> Arc<ToolEcosystemSlot> {
+        Arc::clone(&self.ecosystem)
     }
 
     /// SG-15 免疫记忆 probe（槽空 = `Err(未接线)` → 单格 null + 真因）。
@@ -359,7 +378,7 @@ impl<T: Clone + Send + 'static> BioMechanismProbe for LateBoundSlotProbe<T> {
 /// 挂面 = 子对象恒在场（开关关时 `mechanisms: null` + 原因「未启用」，
 /// 零 probe 调用；开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 "1"）。
 /// 承载力探测口读**同一本**任务队列（与 `tool.task_board` 同队同账）；
-/// 练习场账本（W3.5 接入）与四工具面同一 `Arc`；W3.6 的 5 条迟绑定 probe
+/// 练习场账本（W3.5 接入）与四工具面同一 `Arc`；W3.6/W3.7 的 6 条迟绑定 probe
 /// （免疫记忆 / 关怀心跳 / 审议门 / 痛觉 / 再生）只在开关开时注册 —— 注册即
 /// 接线事实，句柄未到 = 单格 `null` + 「未接线」真因；开关关 = 一条都不注册、
 /// 槽不武装、`fill_*` 全 no-op。其余格一律 `wired:false` + 「未接线」，不编数值。
@@ -401,6 +420,10 @@ fn install_bio_self_status_with(
         source.register_bio_probe(BioMechanismKind::Quorum, slots.quorum_probe());
         source.register_bio_probe(BioMechanismKind::Nociception, slots.pain_probe());
         source.register_bio_probe(BioMechanismKind::Recovery, slots.recovery_probe());
+        source.register_bio_probe(
+            BioMechanismKind::EcosystemHealth,
+            tool_ecosystem_bio_probe(slots.ecosystem_slot()),
+        );
     }
     source
 }
@@ -469,6 +492,37 @@ mod tests {
     use apeireth_tools_canonical::SelfStatusSource;
 
     use crate::canonical::self_status_source::BioMechanismRegistry;
+
+    use apeireth_core::kernel::CapabilityId;
+    use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
+    use async_trait::async_trait;
+
+    struct StubTool {
+        id: CapabilityId,
+        name: &'static str,
+    }
+
+    #[async_trait]
+    impl ToolCapability for StubTool {
+        fn id(&self) -> &CapabilityId {
+            &self.id
+        }
+
+        fn declaration(&self) -> NormalizedTool {
+            NormalizedTool::new(self.name)
+        }
+
+        async fn invoke(&self, call: &ToolCall) -> ToolResult {
+            ToolResult::ok(&call.id, serde_json::json!({}))
+        }
+    }
+
+    fn stub_tool(id: &'static str, name: &'static str) -> Arc<dyn ToolCapability> {
+        Arc::new(StubTool {
+            id: CapabilityId::new(id).expect("static capability id is valid"),
+            name,
+        })
+    }
 
     /// 与生产同款的最小自述来源（空名册，无其它探测口）。
     fn source() -> ProductionSelfStatusSource {
@@ -705,7 +759,7 @@ mod tests {
         assert_eq!(value["proliferation"], 1);
     }
 
-    /// ⑤ 空槽：5 条迟绑定 probe 注册即接线（`wired:true`），但值显式 `null`
+    /// ⑤ 空槽：6 条迟绑定 probe 注册即接线（`wired:true`），但值显式 `null`
     /// + 真因「未接线」，整帧仍成功（不撒谎成 0，也不整帧失败）。
     #[test]
     fn empty_slots_render_a_null_cell_with_the_not_wired_reason() {
@@ -719,6 +773,7 @@ mod tests {
             BioMechanismKind::Quorum,
             BioMechanismKind::Nociception,
             BioMechanismKind::Recovery,
+            BioMechanismKind::EcosystemHealth,
         ] {
             let row = status.reading(kind).expect("late-bound row");
             assert!(row.wired, "注册 = 接线事实成立: {kind:?}");
@@ -733,13 +788,13 @@ mod tests {
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         assert_eq!(rows.len(), 14);
         let unwired = rows.values().filter(|row| !row.wired).count();
-        assert_eq!(unwired, 9, "未注册的 9 格如实未接线");
+        assert_eq!(unwired, 8, "未注册的 8 格如实未接线 (14 - 6 注册)");
     }
 
-    /// ⑥ 全填 + 任务队列 + 练习账：wired 计数从本批前的 2 升到 7/14，
-    /// 且 7 格值全为真值（不是 null）。
+    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测：wired 计数 = 8/14，
+    /// 且 8 格值全为真值（不是 null）。
     #[test]
-    fn five_filled_slots_raise_the_wired_count_to_seven() {
+    fn filled_slots_raise_the_wired_count_to_eight() {
         let slots = armed_slots();
         let queue = task_queue();
         let play = play_state();
@@ -749,13 +804,18 @@ mod tests {
         assert!(slots.fill_care_status(Arc::new(CareHeartbeatStatus::default)));
         assert!(slots.fill_quorum_trace(Arc::new(|| None)));
         assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
+        assert!(slots.fill_ecosystem_profiles(&[stub_tool("tool.filesystem", "filesystem")]));
         let status = bio_status(&source);
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         let wired: Vec<&BioMechanismKind> = BioMechanismKind::ALL
             .iter()
             .filter(|kind| rows.get(kind).is_some_and(|row| row.wired))
             .collect();
-        assert_eq!(wired.len(), 7, "2 (capacity/play) + 5 迟绑定 = 7/14");
+        assert_eq!(
+            wired.len(),
+            8,
+            "2 (capacity/play) + 6 迟绑定 (含工具生态) = 8/14"
+        );
         for kind in [
             BioMechanismKind::Capacity,
             BioMechanismKind::Play,
@@ -764,6 +824,7 @@ mod tests {
             BioMechanismKind::Quorum,
             BioMechanismKind::Nociception,
             BioMechanismKind::Recovery,
+            BioMechanismKind::EcosystemHealth,
         ] {
             let row = rows.get(&kind).expect("wired row");
             assert!(row.wired, "{kind:?}");

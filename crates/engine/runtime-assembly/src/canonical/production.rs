@@ -1321,6 +1321,11 @@ impl ProductionModules {
             mcp_module = Some(module);
         }
 
+        // SG-25 工具生态健康: 静态能力表装配完毕 → 把剖面填入迟绑定只读槽
+        // (开关关 = fill no-op, 槽保持空、probe 未注册, 自述帧逐字节不变)。
+        // 快照 = 装配期的静态注册面; 运行期动态发现的外部工具不在其中 (如实缺口)。
+        bio_probe_slots.fill_ecosystem_profiles(&capabilities);
+
         // Unified Memory 2.0 coordinator wiring
         let mut shared_coordinator: Option<Arc<MemoryCoordinator>> = None;
         if config.memory_recall || config.memory_writeback {
