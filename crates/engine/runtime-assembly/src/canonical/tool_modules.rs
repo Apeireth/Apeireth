@@ -19,7 +19,7 @@ use apeireth_tools_canonical::{
 };
 
 use super::capability::CapabilityProvider;
-
+use super::self_status_source::nervous_snapshot::nervous_self_status_tool;
 /// Module providing filesystem capabilities (`tool.filesystem`).
 pub struct FilesystemModule {
     tool: Arc<FilesystemTool>,
@@ -446,7 +446,7 @@ pub struct SelfStatusModule {
 impl SelfStatusModule {
     /// Create the self-status module bound to a self-report source.
     pub fn new(source: Arc<dyn SelfStatusSource>) -> Self {
-        let inner: Arc<dyn ToolCapability> = Arc::new(SelfStatusTool::new(source));
+        let inner = nervous_self_status_tool(source);
         let pipeline = Arc::new(
             ToolExecutionPipeline::new()
                 .with_around(

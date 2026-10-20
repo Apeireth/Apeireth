@@ -13,11 +13,18 @@
 //! SG-26) 的只读探测口收成 `capabilities.bio_mechanisms` 子对象 (不新增顶层
 //! 节)。开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 `"1"`, 默认关; 关时整节
 //! `mechanisms: null` + 原因「未启用」, 一格也不采。默认不注册任何 probe =
-//! 全部 `wired: false` + 原因「未接线」, 绝不编数值。本批接上的第一条**已有
-//! 运行时数据源**是承载力 (SG-26): [`capacity_bio_probe`] 读运行时同一个任务
-//! 队列的分态计数真值 (与 `tool.task_board` 同队同账)。
+//! 全部 `wired: false` + 原因「未接线」, 绝不编数值。本批 (W3.5) 提供 6 条
+//! **已有运行时数据源**的只读 probe 实现 (免疫记忆 SG-15 / 审议门 SG-24 /
+//! 关怀心跳 SG-19 / 练习账 SG-21 / 痛觉 SG-16 / 再生 SG-17) + 承载力 SG-26
+//! ([`capacity_bio_probe`]); **probe 实现 ≠ 装配根已注册**: 生产装配根当前只
+//! 注册承载力一格, 其余 6 格要 Lead 在装配根按可用句柄注册 (默认关, 关时零
+//! 采集)。注册但读失败 = 单格 `null` + 真因, 整帧仍成功。
+//!
+//! ADR-0003 R1a 神经系统只读聚合: [`nervous_snapshot`] 以
+//! `capabilities.nervous_system` 子对象挂载 (与 `bio_mechanisms` 并列, **仍非
+//! 顶层节**); 开关与 `APEIRETH_ENABLE_BIO_SELF_STATUS` 共用, 关时不读 env、
+//! 不构造快照且旧帧逐字节不变。
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -26,9 +33,8 @@ use apeireth_core::kernel::SessionId;
 use apeireth_core::model_profile::ModelProfile;
 use apeireth_orchestration::self_tuning::TunableParam;
 use apeireth_tools_canonical::self_status::{
-    bio_self_status_enabled_from_env_value, BioMechanismKind, BioMechanismProbe,
-    BioMechanismReading, BioMechanismsStatus, BIO_MECHANISM_NOT_WIRED_REASON,
-    BIO_SELF_STATUS_DISABLED_REASON, BIO_SELF_STATUS_ENABLE_ENV, BIO_STAGE_WIRED,
+    BioMechanismKind, BioMechanismProbe, BioMechanismReading, BIO_MECHANISM_NOT_WIRED_REASON,
+    BIO_SELF_STATUS_ENABLE_ENV, BIO_STAGE_WIRED,
 };
 use apeireth_tools_canonical::{
     derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
@@ -43,6 +49,14 @@ use super::care_heartbeat::CareHeartbeatStatus;
 use super::production::ProductionModulesConfig;
 use super::session::Session;
 use super::{execute::MAX_TOOL_CALLS_PER_ROUND, runtime::DEFAULT_MAX_ROUNDS};
+
+/// ADR-0003 R1a 神经系统只读聚合（`capabilities.nervous_system` 子对象）。
+///
+/// 位置按 ADR-0003 落 `canonical/nervous_snapshot.rs`；因 `canonical.rs` 本批
+/// 禁改，模块以 `#[path]` 挂在 `self_status_source` 下（公开路径
+/// `canonical::self_status_source::nervous_snapshot`，见模块文档的差异说明）。
+#[path = "nervous_snapshot.rs"]
+pub mod nervous_snapshot;
 
 /// 预算取值口径: 读编译期常量 (可配置口径未接线的回退)。
 pub const BUDGET_SOURCE_CONSTANT: &str = "constant";
@@ -154,140 +168,6 @@ pub fn session_quota_probe(db_path: PathBuf) -> SessionQuotaProbe {
 /// 路由就照实报「尚无任务被路由」, 不编造档位/选定 (0 装诚实)。
 pub fn cost_routing_probe(router: Arc<CostRouter>) -> StatusProbe<CostRoutingStatus> {
     Arc::new(move || Ok(router.status()))
-}
-
-/// 生物机制族只读聚合的装配注册表 (W3.2 装配面)。
-///
-/// 契约 (0 装诚实):
-/// - **默认不注册任何 probe**: 开关开时 14 条机制全部 `wired: false` +
-///   原因「未接线」, 不编数值;
-/// - **默认关**: 开关只认 `APEIRETH_ENABLE_BIO_SELF_STATUS="1"` (fail-closed);
-///   关时整节 `mechanisms: null` + 原因「未启用」, **一个 probe 都不调用**;
-/// - 开关开且注册了 probe 才采值; 单格 probe 失败 = 该格 `null` + 真因,
-///   不整帧失败; 采集顺序 = [`BioMechanismKind::ALL`] (确定性)。
-pub struct BioMechanismRegistry {
-    enabled: bool,
-    now_ms: Arc<dyn Fn() -> i64 + Send + Sync>,
-    probes: BTreeMap<BioMechanismKind, Arc<dyn BioMechanismProbe>>,
-}
-
-impl BioMechanismRegistry {
-    /// 显式开关值 + 空注册表 (装配根注入；不读进程 env, 测试可复现)。
-    pub fn new(enabled: bool) -> Self {
-        Self {
-            enabled,
-            now_ms: Arc::new(super::trait_growth::now_epoch_ms),
-            probes: BTreeMap::new(),
-        }
-    }
-
-    /// 从进程 env 现值构造 (`APEIRETH_ENABLE_BIO_SELF_STATUS`; 只认 `"1"`)。
-    pub fn from_env() -> Self {
-        Self::from_env_value(std::env::var(BIO_SELF_STATUS_ENABLE_ENV).ok().as_deref())
-    }
-
-    /// 从 env 原始值构造 (纯函数, 测试可注入, 不碰进程 env)。
-    pub fn from_env_value(raw: Option<&str>) -> Self {
-        Self::new(bio_self_status_enabled_from_env_value(raw))
-    }
-
-    /// 注入采集时钟 (epoch 毫秒；缺省系统时钟, 测试注入固定值保证确定性)。
-    #[must_use]
-    pub fn with_now_ms(mut self, now_ms: Arc<dyn Fn() -> i64 + Send + Sync>) -> Self {
-        self.now_ms = now_ms;
-        self
-    }
-
-    /// 开关生效值 (只认 `"1"`)。
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-
-    /// 注册一格机制只读探测口 (装配入口)。
-    ///
-    /// 注册 ≠ 启用: 开关关时不调用; 同名后注册覆盖先注册。
-    pub fn register_bio_probe(
-        &mut self,
-        kind: BioMechanismKind,
-        probe: Arc<dyn BioMechanismProbe>,
-    ) {
-        self.probes.insert(kind, probe);
-    }
-
-    /// 聚合一份只读快照: 关 = `mechanisms: null` + 原因; 开 = 14 格读数
-    /// (未注册的格 `wired: false` + 原因「未接线」; 读失败 = null + 真因)。
-    pub fn snapshot(&self) -> BioMechanismsStatus {
-        if !self.enabled {
-            return BioMechanismsStatus::disabled(BIO_SELF_STATUS_DISABLED_REASON);
-        }
-        let now_ms = (self.now_ms)();
-        let mut mechanisms = BTreeMap::new();
-        for kind in BioMechanismKind::ALL {
-            let reading = match self.probes.get(&kind) {
-                Some(probe) => match probe.snapshot(now_ms) {
-                    // 注册成功 = 接线事实成立; `stage`/`wired` 由注册表统一置位,
-                    // probe 只负责值/阈值/最近动作 (不冒充未接线)。
-                    Ok(reading) => BioMechanismReading {
-                        stage: BIO_STAGE_WIRED.to_string(),
-                        wired: true,
-                        ..reading
-                    },
-                    Err(error) => {
-                        BioMechanismReading::probe_failed(format!("机制探测失败: {error}"))
-                    }
-                },
-                None => BioMechanismReading::not_wired(BIO_MECHANISM_NOT_WIRED_REASON),
-            };
-            mechanisms.insert(kind, reading);
-        }
-        BioMechanismsStatus::enabled_with(mechanisms)
-    }
-}
-
-/// 生物机制「承载力」(SG-26) 只读探测口: 读运行时**同一个**任务队列
-/// ([`apeireth_orchestration::task_queue::TaskQueue`], 与 `tool.task_board`
-/// 同队同账) 的分态计数真值, 以 `assigned + running` 作为已用并发承载读数。
-///
-/// `active_task_limit` = 装配根注入的**生效**并发上限 (`None` = 未配置,
-/// 阈值显式 `null`, 绝不编阈值)。只读: 不认领/不改派/不结算任务; 读失败回
-/// `Err(真因)`, 自述格显式 `null` + 原因。
-pub fn capacity_bio_probe(
-    queue: Arc<apeireth_orchestration::task_queue::TaskQueue>,
-    active_task_limit: Option<u64>,
-) -> Arc<dyn BioMechanismProbe> {
-    Arc::new(CapacityTaskQueueProbe {
-        queue,
-        active_task_limit,
-    })
-}
-
-/// 承载力探测口本体 (真实运行时任务队列读数)。
-struct CapacityTaskQueueProbe {
-    queue: Arc<apeireth_orchestration::task_queue::TaskQueue>,
-    active_task_limit: Option<u64>,
-}
-
-impl BioMechanismProbe for CapacityTaskQueueProbe {
-    fn snapshot(&self, now_ms: i64) -> Result<BioMechanismReading, String> {
-        let counts = self
-            .queue
-            .counts()
-            .map_err(|error| format!("task queue read failed: {error}"))?;
-        let active_tasks = counts.assigned.saturating_add(counts.running);
-        // u64 → f64 是展示口径 (阈值字段是 JSON number; 不作为精确容量运算)。
-        let threshold = self.active_task_limit.map(|limit| limit as f64);
-        Ok(BioMechanismReading::wired(
-            Some(serde_json::json!({
-                "active_tasks": active_tasks,
-                "pending": counts.pending,
-                "assigned": counts.assigned,
-                "running": counts.running,
-                "observed_at_ms": now_ms,
-            })),
-            threshold,
-            None,
-        ))
-    }
 }
 
 /// 自省通道: 用户域节探测口 (W3-①) —— 现探测当前域的域文档真值与域内计数。
@@ -522,6 +402,17 @@ pub fn persona_status_probe(
         })
     })
 }
+
+/// 生物机制族观测实现面（W3.2 注册表 + W3.5 六条 probe）拆在
+/// [`bio_mechanism_probes`] 子模块, 此处重导出保持既有公开路径不变。
+#[path = "bio_mechanism_probes.rs"]
+pub mod bio_mechanism_probes;
+
+pub use bio_mechanism_probes::{
+    capacity_bio_probe, care_heartbeat_probe, immune_quorum_probe, pain_probe, play_probe,
+    quorum_gate_probe, quorum_trace_probe, recovery_probe, BioMechanismRegistry,
+    PainSnapshotReader,
+};
 
 /// 生产自述来源: 装配期收集生效值, 调用期现探测 data 系。
 pub struct ProductionSelfStatusSource {
