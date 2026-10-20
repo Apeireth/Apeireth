@@ -1,5 +1,7 @@
 # 多模态感知层配置指南 (Multimodal Perception Guide)
 
+> ⚠️ **归档说明（2026-10-20）**：`apeireth-perception` 已按 ADR-0005 R4b 归档至 `legacy/archived/perception/`（恢复见该目录 MANIFEST）；本文保留为历史/恢复参考，当前产品 workspace 不包含该 crate。
+
 本文档介绍 Apeireth v2.0 感知层（`apeireth-perception`）的多模态后端装配、配置与安全准则。
 
 ---

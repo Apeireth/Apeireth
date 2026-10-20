@@ -1,7 +1,7 @@
 # Apeireth Architecture
 
 > 当前基线：默认分支 `main`，workspace.version `v2.0.0-rc.4`（2026-10-18 文档审计批核对；历史 tag `v2.0.0-rc.1`）；测试基线见单一真源 [test-baseline.md](../03-reference/test-baseline.md)。
-> 根 Cargo workspace（**31 members = 30 crates + bench harness**；历史口径 18/20 members）+ 独立的
+> 根 Cargo workspace（**30 members = 29 crates + bench harness**；历史口径 18/20/31 members；`apeireth-perception` 于 2026-10-20 归档，ADR-0005 R4b）+ 独立的
 > `frontend/companion-desktop` workspace。历史遗留实现不属于生产依赖。
 
 ## Layer view
@@ -30,7 +30,7 @@ contracts. The current dependency graph is intentionally explicit in the root
 | Group | Crates | Ownership |
 | --- | --- | --- |
 | Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | Stable domain primitives, normalized protocol types, capability/plugin contracts, governance decisions, credential backends, orchestration/council/context |
-| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ`, `apeireth-guard` | Runtime kernel, concrete production assembly, vendor provider capabilities, SQLite/storage foundation, durable memory/retrieval, perception, Organ domain, and the behavior-chain safety guard |
+| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-organ`, `apeireth-guard` | Runtime kernel, concrete production assembly, vendor provider capabilities, SQLite/storage foundation, durable memory/retrieval, Organ domain, and the behavior-chain safety guard |
 | Capabilities | `apeireth-tools-canonical` | Built-in filesystem/search/repository/fetch/shell capabilities and the canonical process execution boundary |
 | Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP/CLI/SDK entry surfaces; no second orchestration root |
 

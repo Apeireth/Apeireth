@@ -17,7 +17,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 [![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
 
-> 口径注记：**workspace = 31 members（30 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）。
+> 口径注记：**workspace = 30 members（29 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 7 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）；`apeireth-perception` 已归档（2026-10-20，ADR-0005 R4b）。
 > Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-18 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。
 > `honest gaps` 徽章 = 静态快照——手维护、不做动态计数（残余增删时手工改数）。数字取[诚实边界](#boundaries)「已定义、未接线」点名的接线残余：`/v1/ws` 服务端路由未接 · 无 Noise 握手 · 无洋葱路由 · SDK WS 传输层是桩 = 4 处。
 
