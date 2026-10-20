@@ -89,7 +89,7 @@
 > -j 2 全量本轮多次触发 **D26 环境问题**（Windows administered 保留端口区间 50000-50059
 > 被 mock server 临时端口分配偶发命中 → WSAEACCES 10013，5–12 个 socket 测试套件偶发失败；
 > 单套件复跑均绿，产品面 0 失败）；最终权威绿跑 = **同命令 + -j 1 + RUST_TEST_THREADS=4
-> 降并发规避**，全 326 套件 0 失败。D26 记录于  0-backlog，彻底修需管理员移除保留区间
+> 降并发规避**，全 326 套件 0 失败。D26 记录于 00-backlog，彻底修需管理员移除保留区间
 > 或测试侧加 bind 重试。日志 `artifacts/wave-bio-w32f-workspace-test.log`。
 > **复测注记（2026-10-20，第三线权威复跑 / D27 证据链补全）**：生物机制族 W3.4 首轮全量日志
 > `artifacts/wave-bio-w34-workspace-test.log` 汇总 = 336 套件 / 9075 passed / **1 failed** / 52 ignored，
@@ -122,6 +122,16 @@
 > （R7 序列 ContextBlock/会话 trait 收敛在途），均非本批文件（本批代码已提交、scoped 绿）。**本批不替换
 > §1 单一真源**，仅登记交付证据；待跨线收口稳定后按同命令面统一复跑并刷新 §1。日志
 > `artifacts/wave-bio-w36-full-test.log` / `artifacts/wave-bio-w36-full-test2.log`。
+
+
+> **复测注记（2026-10-20，生物机制族 W3.7 事件源批校验）**：本批 = tone 事件源两档（`53e7aa09`：
+> 工具名进程内首见 → Novelty；CLI 审批落账后人批/人拒 → SocialPositive/SocialNegative），tone 事件源
+> **5/9**。**scoped 全绿证据**：bio_tone lib 12、`bio_tone_feedback` 10（含本批新增 2）、cli lib 56、
+> `canonical_cli_bootstrap` 6、早前 assembly lib 237；`cargo clippy -p apeireth-cli -p
+> apeireth-runtime-assembly --all-targets -D warnings` 0、`cargo fmt --check` 0 diff、`arch_guard
+> --strict` VIOLATIONS 0（STALE 1 = cli lib 可缩表 3887→3870，归效率线）。**全量本轮未出数（如实）**：
+> 他线 R2-4 命名迁移 / R7 归档在途，且本机页文件耗尽使 nextest 编译期 `os error 1455`（
+> `logs/verify-changed-w37b.log`）；**不替换 §1**，待跨线收口后按同命令面统一复跑刷新。环境事件登记 D28。
 
 ## 2. 口径定义
 
