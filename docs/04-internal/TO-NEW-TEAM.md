@@ -20,7 +20,7 @@ Author:          主代理 Mavis
 
 1. **Apeireth 不是"写完的软件", 是一个会自我升级的系统** — v2.0.0-rc.1 只是它第一次真正站起来的骨架. 你们的活不是"维护", 是"让它继续长大".
 2. **这个仓库里 0 装诚实比代码量重要** — 每一处 TODO 都是真的没做, 每一处 ✅ 都是真的过了. 我们宁可被骂慢, 不假装快.
-3. **9 条哲学锚 + 13 键 + 5 重守门是信任地基, 是 LOCKED 的** — 你们可以改任何代码, 但这几样改之前先问自己: 你凭什么动它?
+3. **9 条哲学锚 + 键集（现行 14 键） + 5 重守门是信任地基, 是 LOCKED 的** — 你们可以改任何代码, 但这几样改之前先问自己: 你凭什么动它?
 
 ---
 
@@ -56,7 +56,7 @@ Author:          主代理 Mavis
 |---|---|---|
 | `docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md` | **唯一接手入口**: 意图 + 进度 + 数字真账 + 给新团队的话 (Final-2.1, A 块后) | `6f9c3dee` |
 | `docs/04-internal/TO-NEW-TEAM.md` | **本文**: 给新团队的话 + 文件地图 + 工作流 | `6f9c3dee` |
-| `docs/04-internal/ENGINEER-MANIFESTO.md` | **工程师团队 reference 手册** (14 章, 9 哲学锚 + 13 键 + 5 重守门 + O-6 三阶审查 + 派子代理 + force push + 8 真实陷阱, 改 src / 改 doc / 派子代理 前必读) | `6f9c3dee` |
+| `docs/04-internal/ENGINEER-MANIFESTO.md` | **工程师团队 reference 手册** (14 章, 9 哲学锚 + 键集（现行 14 键） + 5 重守门 + O-6 三阶审查 + 派子代理 + force push + 8 真实陷阱, 改 src / 改 doc / 派子代理 前必读) | `6f9c3dee` |
 | `docs/04-internal/HANDOFF-NOTES.md` | 子代理 D 接手人手册 11 节 (逐项检查清单) | `0ec9ccae` |
 | `docs/04-internal/v2.0.0-rc-roadmap.md` | 10 RC + 验收标准 + 接手人清单 | 早期 |
 | `docs/01-architecture/organ-orchestrator-completion-plan.md` | **A 块 5 stage 计划 + O-6 复盘 §7** (新增, A 块完整化真账) | `434dc0a5` |
@@ -222,8 +222,8 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" \
 | LOCKED 项 | 位置 | 说明 |
 |---|---|---|
 | 9 哲学锚本体 | `crates/foundation/core/src/eight_anchors.rs:58-79` | `NINE_ANCHORS_HARDCODE` 编译期锁 |
-| 13 键 | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` |
-| 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` | Self-Disable / L0 HA / 13 键 verdict cache |
+| 键集（现行 14 键） | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` |
+| 3 项不可变脊柱 | `crates/foundation/core/src/onion.rs:249` | Self-Disable / L0 HA / 键集（现行 14 键） verdict cache |
 | workspace.version | `Cargo.toml` | `"2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210；旧 "1.2.0 双轴制" 已终结） |
 | R11 baseline 3 值 | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (active workspace 无 const source) | 0.8682 / 0.8532 / 0.9063 (数字严守, R12 spec 重新审定后迁回) |
 

@@ -7,7 +7,7 @@
 | S-1 北极星 | Everything serves the ASI north star (五原型) |
 | S-2 实事求是 | Verify before writing; truth over narrative |
 | S-3 质量工程化 NEW | Engineering rigor over narrative — CI gates + Kani proofs + clippy 0-warning (R126 P1-2 升) |
-| O-1 安全优先 NEW | Safety precedes all other concerns — 9 重 v9 + 13 键 verdict cache + 3 项不可变脊柱 (R126 P1-2 升) |
+| O-1 安全优先 NEW | Safety precedes all other concerns — 9 重 v9 + 键集（现行 14 键） verdict cache + 3 项不可变脊柱 (R126 P1-2 升) |
 | O-2 前人肩上 | Stand on prior work (borrow, attribute, adapt) |
 | O-3 干到底 | Finish what we start; no half-measures |
 | O-4 任何人都能接手 | Any newcomer can onboard from docs alone |

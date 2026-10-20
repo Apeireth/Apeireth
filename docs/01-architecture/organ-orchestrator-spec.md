@@ -154,7 +154,7 @@ per `v2-architecture-reflection.md` §6 (子代理 R11 整合 v1 AwakeCompanion 
 | 项 | 说明 |
 |---|---|
 | **位置** | `philosophy.md` + `governance` crate (per `cognitive-module-wiring.md` §110) |
-| **真实现** | ✅ 9 哲学锚 + 13 键 LOCKED (per O-6) |
+| **真实现** | ✅ 9 哲学锚 + 键集（现行 14 键） LOCKED (per O-6) |
 | **不变量** | "0 触碰 LOCKED" 子代理 R11 baseline 0 改 (per §9 0 触碰 LOCKED) |
 | **v1 AwakeCompanion 串接** | `organs.rs:152-157` BlockByPrinciple → `sovereignty.report_violation` → 熔断证据 |
 | **v2 OrganOrchestrator 待做** | ⏳ 实施时调用 `SovereigntyGate::report_violation` 物理隔离 |
@@ -190,7 +190,7 @@ per `v2-architecture-reflection.md` §6 (子代理 R11 整合 v1 AwakeCompanion 
 | **真实现** | ✅ 9 organ 全 done (per `organ/src/lib.rs:11-28` 子代理 R1-R8 真实现) |
 | **v1 AwakeCompanion 串接** | `organs.rs:96-106` `self.loop_.tick()` = E7 emergence 8 门控 + 调 9 organ (注: v1 AwakeCompanion 不显式串联 9 organ, 只调 EmergenceLoop 单 process, 9 organ 各自独立接受 `context_hint`) |
 | **v2 OrganOrchestrator 待做** | ⏳ 实施时 OrganOrchestrator.tick() 按 §4 顺序串 9 organ process, 各 organ output 喂下一 organ |
-| **5 重守门** | per §10 (cargo test 0 FAILED + cargo clippy 0 warnings + 13 键 LOCKED + workspace.version + R11 baseline) |
+| **5 重守门** | per §10 (cargo test 0 FAILED + cargo clippy 0 warnings + 键集（现行 14 键） LOCKED + workspace.version + R11 baseline) |
 
 ### L4: 主人审批 (governance 3 hook + 7 advisor 加权 + 主人 Veto)
 
@@ -399,7 +399,7 @@ per 主代理 Mavis 设计 (子代理 R11 整合 v1 AwakeCompanion 真路径):
 |---|---|---|
 | **5 项 LOCKED** | ✅ 0 触碰 | per `10-locked.md` + `philosophy.md` (9 锚) |
 | **9 哲学锚本体** | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
-| **13 键** | ✅ 0 触碰 | per `governance` 13 键 verdict cache |
+| **键集（现行 14 键）** | ✅ 0 触碰 | per `governance` 键集（现行 14 键） verdict cache |
 | **workspace.version = "2.0.0-rc.1"**（2026-08-30 RC1 发布起, per 6b81c210） | ✅ 0 触碰 | per `Cargo.toml:46` |
 | **R11 baseline** | ✅ 0 触碰 | `cognitive.rs` 12 slot 0 改 + Cargo.lock 0 行 diff (本文仅文档) |
 
@@ -423,7 +423,7 @@ per `FINAL-HANDOFF-V2.0.0-RC.1.md` §10 接手人 actionable:
 **5 重守门** (per `v2-architecture-reflection.md:289-291`):
 1. `cargo test --workspace --locked 2>&1 | tail -3` → workspace 0 FAILED (本批 0 改 Rust 代码, 应维持 0 FAILED)
 2. `cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tail -3` → 0 warnings (本批 0 改 Rust 代码, 应维持 0)
-3. 13 键 LOCKED (per governance) → 0 改
+3. 键集（现行 14 键） LOCKED (per governance) → 0 改
 4. workspace.version = "2.0.0-rc.1"（2026-08-30 RC1 发布起, per 6b81c210） (per `Cargo.toml:46`) → 0 改
 5. R11 baseline (per `cognitive-module-wiring.md`) → 0 改
 

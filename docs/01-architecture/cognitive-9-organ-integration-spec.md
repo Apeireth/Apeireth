@@ -146,7 +146,7 @@
   - `cargo test --workspace --locked 0 FAILED`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings 0 警告`
   - legacy compat path < 100 引用
-  - 13 键 LOCKED + 9 哲学锚本体 + workspace.version + R11 baseline 0 触碰
+  - 键集（现行 14 键） LOCKED + 9 哲学锚本体 + workspace.version + R11 baseline 0 触碰
   - 哲学锚表头 0 减
 - **真实施估时**: 1-2 周 (9 organ 串联入口 + sandbox 跑通).
 
@@ -660,7 +660,7 @@ LlmFactory 真接 (v2.1) → 真渲染 Initiative.action.label() → 自然话�
   1. clippy 0 警告
   2. workspace tests 0 失败
   3. legacy compat path < 100 引用
-  4. 13 键 LOCKED + 9 哲学锚本体 + workspace.version + R11 baseline 0 触碰
+  4. 键集（现行 14 键） LOCKED + 9 哲学锚本体 + workspace.version + R11 baseline 0 触碰
   5. 哲学锚表头 0 减
 - **失败 → 自动回滚** (per `v2-architecture-reflection.md:291`).
 - **真实施估时**: 1-2 周 (9 organ 串联入口 + sandbox 跑通).
@@ -784,7 +784,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 1. **`apeireth_locked_items.rs` baseline 0 改** (5 项 LOCKED 项本体文件)
 2. **9 哲学锚本体** `crates/foundation/core/src/eight_anchors.rs:58-79` enum 顺序
    0 改 (LOCKED, O-6 已加升 8→9)
-3. **13 键** `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false`
+3. **键集（现行 14 键）** `crates/foundation/core/src/philosophy.rs:142` `RUNTIME_ENFORCED = false`
    0 改 (LOCKED, 降级为哲学标准)
 4. **3 项不可变脊柱** `crates/foundation/core/src/onion.rs:249` 0 改 (LOCKED, 仅 rustfmt)
 5. **`Cargo.toml:46`** `workspace.version = "2.0.0-rc.1"`（2026-08-30 RC1 发布起, per 6b81c210） 0 改 (LOCKED)
@@ -856,7 +856,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 ### 13.1 5/5 done (v2.0-rc.1 已就位)
 
 - ✅ **#1 RC-5/6/7 + 9 organ 真实现全 done** (整合 #2 commit `bbf70293`)
-- ✅ **#2 哲学锚 ledger 待核** (子代理 K + 主代理亲做 0 装诚实修正, 9 锚 LOCKED + 13 键降级)
+- ✅ **#2 哲学锚 ledger 待核** (子代理 K + 主代理亲做 0 装诚实修正, 9 锚 LOCKED + 键集（现行 14 键）降级)
 - ✅ **#3 12 consumer 弃用迁移** (子代理 H 独立判断 + 子代理 I 真写 RC-11 migration script)
 - ✅ **#4 RC-10 line header AAD + APX2 envelope** (子代理 E 审查 + 主代理 O-6 #23 commit)
 - ✅ **#5 cognitive module 不变量 + 9 organ trait 抽象边界** (子代理 J 核验 0 触碰 LOCKED)
@@ -980,7 +980,7 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 - **WIRED, OFF by default**: 真接但默认关闭 (per `cognitive-module-wiring.md:26-27` judge/council; 旧称 "SLOT READY" 已弃用, R13 接力审修正)
 - **AGENT MODULE**: `AgentModule` ABI (cognitive module 用, 独立于 7 capability trait)
 - **OrganTrait**: `OrganTrait` ABI (9 organ 用)
-- **5 重守门**: clippy 0 / tests 0 / 13 键 LOCKED / workspace.version / R11 baseline
+- **5 重守门**: clippy 0 / tests 0 / 键集（现行 14 键） LOCKED / workspace.version / R11 baseline
 - **13 重 gate**: 8 重 E7 emergence + 5 重 v2 扩展 (SovereigntyFrozen / EmotionLow / CouncilVeto / PolicyInactive / GateBlock)
 - **5 状态机**: Idle / Draft / Proposed / Ratified / Active (PolicyStage 前向声明)
 - **8 重门控**: UserQuiet / QuietHours / DailyLimit / LlmBudget / DepthLow / RhythmUnknown / RhythmVeto / DriveLow
