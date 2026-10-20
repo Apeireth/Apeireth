@@ -274,18 +274,19 @@ const _MODULE_COUNT: usize = {
 // =============================================================================
 // R146: 5 SDK -> 1 apeireth-sdk (feature flags)
 // 2026-10-20 R4b (ADR-0005 §3): livekit / voice / sandbox 三岛迁
-// `legacy/archived/sdk-islands/`；lark 保留（IM 面的内部 wire 依赖，解耦后另立任务归档）。
+// `legacy/archived/sdk-islands/`；lark 保留（im 已解耦为自有 wire 原语，
+// lark 归档另立任务）。
 // =============================================================================
 
 #[cfg(feature = "lark")]
 pub mod lark;
 // IM 快捷接入 wire 面 (渠道 kind / 入站解码 / 出站信封 / 审批卡片 / 分段 / 传输)。
-// `im-feishu` 渠道消费 lark 适配族 (webhook 信封解析 + 消息内容形状 + 消息预算),
-// 因此与 lark 同门控; test 构建恒编译, 保证 wire 面单测进入默认测试面。
-#[cfg(any(feature = "lark", test))]
+// wire 原语 (信封解析 / 内容形状 / 消息预算) 在 `im::wire` 自有面内维护,
+// 0 跨模块消费; 恒编译, 保证网关 (`apeireth_sdk::im`) 与 wire 面单测不受
+// feature 组合影响。
 pub mod im;
 
 // 保留的子 SDK 编译期常量 (per O-5 不假装, 透明可见):
-// 仅 lark 1 个（im 的 wire 依赖）；livekit / voice / sandbox 已归档。
+// 仅 lark 1 个（独立适配族; im 已解耦）。livekit / voice / sandbox 已归档。
 #[allow(dead_code)]
 pub const SDK_SUBMODULE_COUNT: usize = 1;

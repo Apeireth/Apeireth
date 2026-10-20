@@ -19,7 +19,7 @@ pub const IM_CHANNEL_KIND_COUNT: usize = 3;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ImChannelKind {
-    /// `im-feishu` 渠道 (消息/卡片 wire 面消费 [`crate::lark`] 适配族)。
+    /// `im-feishu` 渠道 (消息/卡片 wire 面走 im 自有 wire 原语)。
     ImFeishu,
     /// `im-wecom` 渠道。
     ImWecom,
@@ -56,7 +56,7 @@ impl ImChannelKind {
     /// 该 kind 单条文本消息的字节上限 (分段策略的上界)。
     pub const fn max_text_bytes(self) -> usize {
         match self {
-            Self::ImFeishu => crate::lark::MAX_MESSAGE_TEXT_BYTES,
+            Self::ImFeishu => crate::im::wire::MAX_MESSAGE_TEXT_BYTES,
             Self::ImWecom => 4096,
             Self::ImQq => 4096,
         }
@@ -249,7 +249,7 @@ mod tests {
     fn kind_message_budgets_are_bounded() {
         for kind in ImChannelKind::ALL {
             assert!(kind.max_text_bytes() > 0);
-            assert!(kind.max_text_bytes() <= crate::lark::MAX_MESSAGE_TEXT_BYTES);
+            assert!(kind.max_text_bytes() <= crate::im::wire::MAX_MESSAGE_TEXT_BYTES);
         }
     }
 }

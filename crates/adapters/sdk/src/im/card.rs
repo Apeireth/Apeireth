@@ -3,7 +3,7 @@
 //! 卡片是**展示面**, 不是授权面: 按钮载荷 [`ImButtonPayload`] 只携带闭合所需的
 //! 身份 (approval_ref / pair_id / round / subject) 与本地超时戳 (`expires_at_ms`),
 //! 治理闭合仍在网关侧走 `approval_closure` 四态词表。`im-feishu` 渠道的卡片
-//! wire 消费 [`crate::lark::message::CardContent`] (同形状元素数组), 其余 kind
+//! wire 走 im 自有内容形状 `CardContent` (同形状元素数组), 其余 kind
 //! 走本适配器的模板信封 (按钮载荷一致)。
 
 use std::collections::HashMap;
@@ -191,10 +191,10 @@ pub fn card_digest_annotation(card: &ImApprovalCard) -> String {
     }
 }
 
-/// `im-feishu` 渠道: 消费 [`crate::lark::message::CardContent`] 元素形状
+/// `im-feishu` 渠道: 消费 im 自有 `CardContent` 元素形状
 /// (header + div 文本 + action 按钮), 按钮 `value` 即 [`ImButtonPayload`]。
 fn render_feishu_card(card: &ImApprovalCard) -> ImResult<serde_json::Value> {
-    use crate::lark::message::CardContent;
+    use crate::im::wire::CardContent;
 
     let mut content = CardContent::plain("待审批操作", card.command_text.clone());
     content.header.insert(
