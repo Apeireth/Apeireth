@@ -46,6 +46,8 @@ use sha2::{Digest, Sha256};
 ///   但产出是持久写, 只读会话不应打包外带) /
 ///   `tool.sheet_ops` (表格操作面含写面: 变换动作带 `output` 落新文件 +
 ///   `export_csv` 导出, 只读会话不应落表);
+///   `tool.ritual_done` / `tool.ritual_skip` (W3.7 仪式完成面: 本地写
+///   `<care_dir>/ritual_state.json` 的仪式统计, 只读会话不应改账面);
 /// - 出口: `tool.fetch` / `tool.repo` (remote 读发布) —— 只读会话不应外联;
 /// - 凭据: `credential.read` / `secret.read` / `env.read` (环境变量含 secret);
 /// - 删除: `fs.delete`;
@@ -85,6 +87,11 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         // 对外发声的执行面 (语句账本落盘同为副作用), 只读会话不应开口;
         // 「读」在 `tool.self_status` (语音节自述), 不在本名单。
         "tool.voice_speak",
+        // 生物机制族 W3.7 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`):
+        // 两个都是**本地写** (改 `<care_dir>/ritual_state.json` 的仪式统计),
+        // 只读会话不应改账面; 读侧在 `tool.self_status` 的生物机制子对象。
+        "tool.ritual_done",
+        "tool.ritual_skip",
         "fs.write",
         // 出口 / 远端副作用
         "tool.fetch",

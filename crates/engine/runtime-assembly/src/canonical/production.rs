@@ -1183,6 +1183,15 @@ impl ProductionModules {
             instrument,
         );
 
+        // W3.7 · 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`, 默认关):
+        // 复用族总闸 + 关怀数据目录注入; 双工具写同一本 `<care_dir>/ritual_state.json`
+        // (与 care 心跳同一目录), 补「仪式完成」显式事件源。
+        bio_production_wiring::install_bio_ritual_tools(
+            &mut capabilities,
+            &clock,
+            bio_lifecycle_store_dir.as_deref(),
+        );
+
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
         // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
         // 原因, 注册与其余字段不受影响。

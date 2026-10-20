@@ -106,6 +106,11 @@ pub mod repetition_advisory;
 /// V4-c 检索维度自进化接线层 (证据账 + `retrieval_tuning.jsonl` 落盘 + 调权落地)。
 #[path = "canonical/retrieval_tuning_wire.rs"]
 pub mod retrieval_tuning_wire;
+/// 生物机制族 W3.7 · 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`, 默认关):
+/// 补「仪式完成」显式事件源 (模型在用户明确确认/明确拒绝后调用), 双工具共享
+/// `<care_dir>/ritual_state.json` 存储; 复用族总闸 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES`。
+#[path = "canonical/ritual_tools.rs"]
+pub mod ritual_tools;
 /// 「性格养成」第一铲: 自校准接线层 (引擎落地 + tuning-log.jsonl 落盘)。
 #[path = "canonical/self_status_source.rs"]
 pub mod self_status_source;
@@ -188,6 +193,7 @@ pub use preference_learning::{
     PreferenceEvidence, PreferenceLearningModule, PreferenceLearningStats, PreferencePolarity,
     PREFERENCE_LEARNING_MODULE_ID,
 };
+// 生物机制族 W3.7 · 仪式完成面 (默认关): 装配门 + 两件套 + 种类词表。
 pub use production::{
     with_memory_context_projection, BuildInstrumentation, CognitiveBackends, CognitiveModuleConfig,
     CountingBuildProbe, MemoryContextProjector, ModuleBuildProbe, ModuleFamily, ProductionBackends,
@@ -199,6 +205,12 @@ pub use retrieval_tuning_wire::{
     retrieval_tuning_log_path_from_session_db, RetrievalTuningLedgerSummary, RetrievalTuningWire,
     SignalSurface, RETRIEVAL_TUNING_DOC_NAME, RETRIEVAL_TUNING_DOC_VERSION,
     RETRIEVAL_TUNING_ENABLE_ENV, RETRIEVAL_TUNING_LOG_FILE,
+};
+pub use ritual_tools::{
+    bio_ritual_wiring_from_env, bio_ritual_wiring_from_env_value, ritual_kind_labels,
+    BioRitualState, BioRitualWiring, RitualDoneModule, RitualDoneTool, RitualSkipModule,
+    RitualSkipTool, RITUAL_CAPABILITY_IDS, RITUAL_DONE_CAPABILITY_ID, RITUAL_DONE_TOOL_NAME,
+    RITUAL_SKIP_CAPABILITY_ID, RITUAL_SKIP_TOOL_NAME,
 };
 pub use self_status_source::{
     budget_status_from_configured, budget_status_from_constants, care_status_probe,

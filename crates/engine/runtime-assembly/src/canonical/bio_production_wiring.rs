@@ -151,6 +151,30 @@ pub(super) fn install_bio_play(
     Some(state)
 }
 
+/// 生物机制族 W3.7 · 仪式完成面两工具注册点（复用族总闸
+/// `APEIRETH_ENABLE_BIO_CARE_CANDIDATES`，默认关）。
+///
+/// 注册即闸：env 只认 "1" **且** 关怀数据目录已注入（缺目录 = 无处落盘 =
+/// 不注册）；全关 = 不构造 = 零注册、不创建 `ritual_state.json`。两工具共享
+/// 同一本 `<care_dir>/ritual_state.json` 存储（与 care 心跳同一目录）。
+///
+/// **0 装诚实**：不新增 `ModuleFamily` 构造探针（与 `install_bio_modules` 的
+/// 生命周期模块同口径：不为单一模块膨胀族枚举）。
+pub(super) fn install_bio_ritual_tools(
+    capabilities: &mut Vec<Arc<dyn ToolCapability>>,
+    clock: &Arc<dyn Clock>,
+    care_dir: Option<&std::path::Path>,
+) {
+    let Some(wiring) =
+        crate::canonical::ritual_tools::bio_ritual_wiring_from_env(care_dir, Arc::clone(clock))
+    else {
+        return;
+    };
+    for module in wiring.into_modules() {
+        capabilities.extend(module.capabilities());
+    }
+}
+
 /// 迟绑定槽未填时 probe 回的真因（单格 `null` + 该原因，整帧仍成功）。
 const BIO_PROBE_SLOT_EMPTY_REASON: &str = "未接线: 迟绑定句柄未填 (装配根尚未交付该句柄, 不编值)";
 
