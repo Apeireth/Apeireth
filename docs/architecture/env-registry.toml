@@ -16,7 +16,7 @@
 version = 1
 updated_at = "2026-10-20"
 
-# R3b layer=engine 批: owner=crate 证据、purpose=源码文档注释、default=源码默认值；evidence 路径:行 必填；level 保守（claims 覆盖按 claim，其余 UNCLASSIFIED）
+# R3b layer=capabilities 批: owner=crate 证据、purpose=源码文档注释、default=源码默认值；evidence 路径:行 必填；level 保守（claims 覆盖按 claim，其余 UNCLASSIFIED）
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_"
@@ -490,10 +490,11 @@ status = "current"
 name = "APEIRETH_ENABLE_DEVICE_AUTO_PASS_REVERSIBLE"
 default = "off"
 layer = "capabilities"
-owner = "TODO-OWNER"
-purpose = "reversible 档「自动放行」子档 (依赖 [`DEVICE_CONTROL_ENABLE_ENV`]): **只对 `reversible` 档生效** —— irreversible / money 两档永远逐次人批, 本开关怎么开都绕不过 (分级矩阵测试钉死)。"
+owner = "apeireth-tools-canonical"
+purpose = "reversible 档「自动放行」子档 (依赖 [`DEVICE_CONTROL_ENABLE_ENV`]): **只对 `reversible` 档生效** —— irreversible / money 两档永远逐次人批, 本开关怎么"
 level = "UNCLASSIFIED"
 status = "current"
+evidence = "crates/capabilities/tools/src/device/device_control.rs:114;crates/capabilities/tools/src/device/device_control.rs:138;crates/capabilities/tools/src/device/device_control.rs:181"
 
 [[entries]]
 name = "APEIRETH_ENABLE_DEVICE_CONTROL"
@@ -557,10 +558,11 @@ status = "current"
 name = "APEIRETH_ENABLE_FILE_WRITE"
 default = "off"
 layer = "capabilities"
-owner = "TODO-OWNER"
-purpose = "! 治理层族词表 `apeireth_governance::approval_family` 是冻结面 (新族必须显式 ! 入表并补测试), 现有写族 [`WriteContent`] = 「文件写入族」覆盖「改内容 / 追加 / ! 覆盖输出 / 原地截断」; 图像输出写 ="
+owner = "apeireth-tools-canonical"
+purpose = "创作工具面 W1: 图像操作 (`tool.image_ops`) —— 受控文件写族 + 受控读面. 面向谁 设计第一律「AI 先用」: 本面的第一用户是 agent 自己 (它能编辑图片); 同一内核 将来外接人类界面做第二出口 (删掉"
 level = "UNCLASSIFIED"
 status = "current"
+evidence = "crates/adapters/cli/src/lib.rs:147;crates/adapters/cli/src/lib.rs:607;crates/capabilities/tools/src/image_ops.rs:31"
 
 [[entries]]
 name = "APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS"
@@ -1147,10 +1149,11 @@ status = "current"
 name = "APEIRETH_MCP_READONLY_PRESET"
 default = "n/a"
 layer = "capabilities"
-owner = "TODO-OWNER"
+owner = "apeireth-tools-canonical"
 purpose = "Environment variable releasing server-declared read-only tools (`1` = on)."
 level = "UNCLASSIFIED"
 status = "current"
+evidence = "crates/capabilities/tools/src/mcp_bridge/config.rs:27;crates/capabilities/tools/src/mcp_bridge/mod.rs:48;crates/capabilities/tools/src/mcp_bridge/config.rs:366"
 
 [[entries]]
 name = "APEIRETH_MCP_SERVERS"
@@ -1347,10 +1350,11 @@ evidence = "crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:225
 name = "APEIRETH_SHELL_SANDBOX"
 default = "n/a"
 layer = "capabilities"
-owner = "TODO-OWNER"
+owner = "apeireth-tools-canonical"
 purpose = "**W1 §2.4 沙箱开关** (2026-10-10, 默认**开** —— 设计拍板\"产品定位=桌面 伴侣\"): 开 = 文件限定工作区 + 断网 (AppContainer, 不可实施时**拒绝执行**,"
 level = "UNCLASSIFIED"
 status = "current"
+evidence = "crates/adapters/cli/src/lib.rs:3127;crates/capabilities/tools/src/shell.rs:805;crates/capabilities/tools/src/process/windows.rs:1147"
 
 [[entries]]
 name = "APEIRETH_SUBJECT_ID"
@@ -1443,19 +1447,21 @@ evidence = "crates/foundation/orchestration/src/self_tuning.rs:120;crates/founda
 name = "APEIRETH_UNIQ_SECRET_MARKER_12345"
 default = "n/a"
 layer = "capabilities"
-owner = "TODO-OWNER"
+owner = "apeireth-tools-canonical"
 purpose = "TODO-PURPOSE"
 level = "UNCLASSIFIED"
 status = "current"
+evidence = "crates/capabilities/tools/src/shell.rs:1275;crates/capabilities/tools/src/shell.rs:1285;crates/capabilities/tools/src/shell.rs:1291"
 
 [[entries]]
 name = "APEIRETH_VOICE_INTERRUPT"
 default = "n/a"
 layer = "capabilities"
-owner = "TODO-OWNER"
-purpose = "!   │    其余平台 = 缺席面 (错误即帧, 不假嗓)。执行面是 trait, 测试假引擎注入。 !   │ !   ├─ 受控播放 (playback): 独占槽 (同时只播一条) + 缺省排队串行"
+owner = "apeireth-tools-canonical"
+purpose = "通用嗓 TTS 面 (`tool.voice_speak`) —— 让它开口说话 (V3-b 通用嗓闭环)。 定制音色 = 资产活后置; 本面只做**系统已装嗓**的通用发声闭环 (哲学卡 01-companion-family「原声语音+"
 level = "UNCLASSIFIED"
 status = "current"
+evidence = "crates/capabilities/tools/src/voice/playback.rs:27;crates/capabilities/tools/src/voice/playback.rs:62;crates/capabilities/tools/src/voice/playback.rs:69"
 
 [[entries]]
 name = "APEIRETH_VOICE_QUIET_HOURS"
@@ -1471,7 +1477,8 @@ evidence = "crates/capabilities/tools/src/voice/quiet.rs:28;crates/capabilities/
 name = "APEIRETH_VOICE_SPEAK_SCOPE"
 default = "n/a"
 layer = "capabilities"
-owner = "TODO-OWNER"
-purpose = "!   │    自建 env, 默认 23:00-08:00; 时间基准与关怀纪律同为 UTC 当日分钟) !   │ !   ├─ 发声范围 (speak scope, 设计裁定 R1⑰): 缺省仅关怀/提醒帧出声,"
+owner = "apeireth-tools-canonical"
+purpose = "通用嗓 TTS 面 (`tool.voice_speak`) —— 让它开口说话 (V3-b 通用嗓闭环)。 定制音色 = 资产活后置; 本面只做**系统已装嗓**的通用发声闭环 (哲学卡 01-companion-family「原声语音+"
 level = "UNCLASSIFIED"
 status = "current"
+evidence = "crates/capabilities/tools/src/voice/mod.rs:88;crates/capabilities/tools/src/voice/speak.rs:105;crates/capabilities/tools/src/voice/speak.rs:142"
