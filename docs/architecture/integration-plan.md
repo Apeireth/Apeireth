@@ -69,7 +69,7 @@ workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-
 
 ## 5. 后续（v0.2 路线）
 
-1. `ARCHITECTURE.md` 改为 `contract.toml` 生成物 + `--check` 漂移检测；
+1. `ARCHITECTURE.md` 改为 `contract.toml` 生成物 + `--check` 漂移检测——**companion 版已落**（`scripts/arch_doc.py` → [ARCHITECTURE.generated.md](ARCHITECTURE.generated.md) + CI `--check`）；下一步把正文的依赖/结构节替换为生成块（R0 收尾）；
 2. `claims.yaml` 与能力矩阵逐行映射（接线账）；
 3. env 读取位置收敛到 config 模块后，按文件卡（`allowed_read_locations`）；
 4. 依赖边的"代码级使用"核验（可选：`cargo udeps` 或自研 grep）；

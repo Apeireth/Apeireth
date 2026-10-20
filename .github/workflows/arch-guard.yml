@@ -44,6 +44,11 @@ jobs:
           python scripts/arch_guard.py --report
           exit 0
 
+      - name: Arch doc drift check (R0, generated deps)
+        shell: pwsh
+        run: |
+          python scripts/arch_doc.py --check
+
       - name: Baseline ratchet (report-only)
         if: github.event_name == 'pull_request'
         shell: pwsh

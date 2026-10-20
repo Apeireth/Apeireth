@@ -214,6 +214,8 @@ crates/apeireth-integration-e2e/.*.log
 !scripts/verify_changed.py
 # 架构守卫（architecture contract / arch_guard）：仓库常驻工具（2026-10-20 架构契约草案批）
 !scripts/arch_guard.py
+# 架构文档生成器（R0 / arch_doc）：仓库常驻工具（2026-10-20 架构线）
+!scripts/arch_doc.py
 # R3a env 登记表 + wiring ledger 生成/校验器（ADR-0004；2026-10-20 第三线）
 !scripts/wiring_report.py
 

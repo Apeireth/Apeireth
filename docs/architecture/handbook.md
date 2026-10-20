@@ -79,6 +79,7 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | `docs/adr/0002-*.md` | 目标架构 v1（Proposed） |
 | `scripts/arch_guard.py` / `scripts/arch-baseline.txt` | 守卫与棘轮基线 |
 | `scripts/gate_full.ps1` | 全量门禁（主 workspace 排除 vendored 图像家族 + 图像独立门禁，清单读契约） |
+| `scripts/arch_doc.py` / `ARCHITECTURE.generated.md` | R0 架构依赖图生成物（契约+metadata，CI `--check` 防漂移） |
 | `docs/architecture/env-registry.toml` | 开关登记表（R3a，格式由架构线定、效率线播种） |
 | `.github/workflows/arch-guard.yml` | 架构守卫 CI（report-only 至 2026-11-03） |
 | `.github/workflows/image-family.yml` | 图像家族独立 CI（R4a-1） |

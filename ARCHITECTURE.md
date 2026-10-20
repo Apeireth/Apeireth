@@ -4,6 +4,10 @@ This document describes the current product baseline in the root repository.
 Historical design proposals and archived implementations live under `docs/archive/`,
 `legacy/`, and `reports/`; they are not part of the built product workspace.
 
+> **机器可读依赖图（R0）**：[docs/architecture/ARCHITECTURE.generated.md](docs/architecture/ARCHITECTURE.generated.md)
+> ——由 `scripts/arch_doc.py --gen` 从 [contract.toml](docs/architecture/contract.toml) + `cargo metadata` 生成，
+> CI 用 `--check` 防漂移；手写依赖表以生成物为准（历史教训：文档声明 32 条 vs 实测 118 条）。
+
 ## Current structure
 
 ```text
