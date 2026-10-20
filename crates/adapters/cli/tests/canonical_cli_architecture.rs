@@ -43,7 +43,7 @@ fn canonical_cli_chat_path_enters_runtime_execute() {
 fn canonical_cli_bootstrap_uses_the_runtime_builder_and_its_entry_adapter() {
     let body = function_body(
         "pub async fn dispatch_canonical_chat",
-        "/// Bootstrap and resolve a pending approval on the production session store.",
+        "/// **守夜人 Nightwatch**",
     );
 
     assert!(
