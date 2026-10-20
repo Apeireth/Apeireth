@@ -45,23 +45,33 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 ### D1 信号类型与总线（R1b-1）
 
 - 新文件 `crates/engine/runtime-assembly/src/canonical/nervous_bus.rs`：
-  - `NervousSignal`（闭合 enum，首版）：`ToolOutcome { ok, tool, at_ms }`、`ApprovalSocial { kind, at_ms }`、
-    `ToneFeedback { kind, at_ms }`、`LifecycleTransition { kind, at_ms }`、`RitualDone { at_ms }`、
-    `RitualSkip { at_ms }`、`SleepPressure { value, at_ms }`、`ScarLearn { kind, at_ms }`、
-    `SessionEvent { kind, at_ms }`、`CapabilityReading { kind, at_ms }`。信号**只承载事实，不承载机制状态**。
-  - `NervousBus`：`subscribe(SubscriberId, Arc<dyn NervousSubscriber>)`、`publish(NervousSignal)`、
-    `counters()`（按信号 kind 计数）、`subscriber_count()`；订阅表 `parking_lot::RwLock<Vec<..>>`，
-    publish 时按订阅顺序同步调用；订阅者不得阻塞（文档约束）；总线**无持久化、无背压、不跨进程**。
-  - `NervousSubscriber` trait：`fn on_signal(&self, signal: &NervousSignal);` —— 同步、无 async、
-    不返回错误（订阅者自身状态失败写自己的 reason，不上抛成回合失败）。
+  - `NervousSignalKind`（首版 2 类）：`ToolOutcome` / `ErrorObserved`——只承载**已发生的事实**
+    （§8 变更记录：首版收窄，理由见下条）。
+  - `NervousSignal`（闭合 enum，首版 2 变体）：`ToolOutcome { ok, tool: Option<String>, retryable }`、
+    `ErrorObserved { message }`。信号**只承载事实，不承载机制状态、不带时间戳**（需要时间的订阅者自取时钟；
+    总线不做时钟）。其余信号（审批社交事实 / 调质反馈 / 生命周期迁移 / 仪式完成与跳过 / 睡眠压力 /
+    疤痕学习 / 会话事件 / 能力读数）**不预定义**：闭合枚举按「生产者与订阅者同批落地」additive 扩展，
+    由 R1b-2 / R1b-3 逐批加入。0 装口径：不定义当前无生产者的信号，避免「类型存在 = 事实存在」的假象。
+  - `NervousBus`（`Clone + Default`，内部 `Arc` 共享）：`subscribe(kind, Arc<dyn Fn(&NervousSignal) + Send + Sync>)
+    -> usize`（订阅票号）、`publish(&NervousSignal) -> usize`（投递数）、`subscriber_count(kind)`、
+    `published_count(kind)`、`delivered_total()`、`is_idle()`、`snapshot() -> NervousBusSnapshot
+    { subscribers, published, delivered }`；订阅表 `parking_lot::RwLock<BTreeMap<kind, Vec<..>>>`，
+    publish 时按订阅顺序**同步**调用，回调在锁外执行（不持锁调用外部代码）；总线**无持久化、无背压、
+    不跨进程**。
+  - 订阅者约定（文档 + 评审约束）：同步、不得阻塞、不返回错误（订阅者自身状态失败写自己的 reason，
+    不上抛成回合失败）。闭包形状替代 trait 形状：订阅者只需一个回调，闭包免去为每种订阅者建类型；
+    §8 记录该实施期形状变更。
 - 位置约束：模块内部私有（`pub(crate)`/`pub(super)` 面），**不**挂到 `apeireth_runtime` 公共 ABI，
   **不**在 `contract.toml [extension_points]` 登记；R1b-4 收口后如真实订阅者稳定再单开 ADR 讨论 ABI。
 
 ### D2 单一桥模块（R1b-1 骨架，R1b-2 迁移完成）
 
-- 新增 `NervousBridgeModule`（实现 `Module`，`manifest().id = "nervous.bridge"`），**注册在模块表首位**；
-  它是唯一把 `HookPoint` 派发映射为 `NervousSignal` 的点：`AfterToolResult`（ok/fail）、`OnError`、
-  `TurnStart`（会话事件）、`AfterTurn`（sleep pressure 等）。
+- 新增 `NervousBridgeModule`（实现 `BehaviorModule`，`manifest().id = "nervous.bridge"`），**注册在模块表首位**；
+  它是唯一把 `HookPoint` 派发映射为 `NervousSignal` 的点。R1b-1 首版只映射**有确定事实源**的两个钩子：
+  `AfterToolResult` → `ToolOutcome`（ok / tool / retryable）、`OnError` → `ErrorObserved`（message）；
+  其余钩子返回 `None`（`TurnStart` 会话事件、`AfterTurn` 睡眠压力等要等 R1b-2/R1b-3 的生产者落地后
+  再在同一桥里 additive 加映射，避免桥先编造事实）。桥恒返回 `ModuleOutcome::continue_()`——
+  发布信号不改变回合结果、不阻塞、不上抛错误。
 - R1b-1 只落桥 + 总线 + 计数（不迁移既有机制行为：既有模块仍各自 observe，桥只新增一路无人订阅的
   publish，默认关 = 零构造）；R1b-2 再把 `bio_tone` / `bio_lifecycle` / `care_heartbeat` /
   `bio_circadian` / `play` / `quorum` 的观测改成订阅总线，删除各自重复过滤。
@@ -78,6 +88,9 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - 开关关 = 零订阅、零构造、零行为变化（延续 R1a `reads = 0` 测试口径）；解析语义与原各解析函数
   逐字节一致（允许 `"1"` 的开关不得突然接受 `"true"`——R1b-1 用现有 `*_from_env_value` 函数，
   只把「读 env」这一步挪到装配根）。
+- **实施期口径（§8）**：R1b-1a 的 switchboard 首版按「只认 `"1"`、其余 fail-closed（视为关）」实现，
+  并以单测钉住「恰好查询 9 开关 + 1 参数各一次」。R1b-1b 迁移时必须逐开关对齐原解析语义
+  （若某开关原解析接受 `"true"`/其它值，迁移批必须行为等价并补等价测试），**不一致就不删原解析路径**。
 
 ### D4 适配器只 publish，不直写机制状态（R1b-2）
 
@@ -145,8 +158,9 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 ## 4. 迁移计划（分步、每步可验证）
 
 1. **R1b-1a 总线内核 + 桥骨架 + 开关表**（架构线，新增文件为主）
-   - 新增 `nervous_bus.rs`（`NervousSignal` / `NervousBus` / `NervousSubscriber`）、`nervous_switchboard.rs`
-     （10 字段解析）、`nervous_bridge.rs`（`NervousBridgeModule`，默认关不注册）。
+   - 新增 `nervous_bus.rs`（`NervousSignalKind` / `NervousSignal` / `NervousBus`）、
+     `nervous_switchboard.rs`（9 开关 + 1 参数解析）、`nervous_bridge.rs`（`NervousBridgeModule`，
+     装配根仅在 `NervousSwitchboard::any_enabled()` 为真时注册；全关 = 不注册 = 零行为变化）。
    - `production.rs` 唯一构造点：装配根解析 switchboard → 传给 `install_bio_*`；桥仅在
      `APEIRETH_ENABLE_BIO_SELF_STATUS`（或独立内部条件）打开时注册？→ **裁决：桥不新增开关**，
      与总线一起仅由装配根构造、默认零订阅（无订阅者 = publish 为空操作），不改变任何默认行为。
@@ -182,9 +196,11 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 
 ## 6. 验收
 
-- [ ] R1b-1：`NervousSignal`/`NervousBus`/`NervousSwitchboard` 落地；总线单测（订阅顺序、重复订阅、
-      无订阅者 publish 为空操作、计数、订阅者不可阻塞的文档约束）；`arch_guard --report` VIOLATIONS 0 /
-      STALE 0；基线净额 ≤ 0（新增文件条目是唯一增量，且只在收口登记）
+- [ ] R1b-1：`NervousSignalKind`/`NervousSignal`/`NervousBus`/`NervousSwitchboard`/`NervousBridgeModule`
+      落地；总线单测（订阅顺序、多订阅者、无订阅者 publish 为空操作、计数、字段事实性与截断、clone 共享）
+      + 桥单测（钩子→信号映射、无事实不发布、恒 continue）+ 开关表单测（恰好 10 次查询、只认 `"1"`、
+      tz 非法拒绝）；`arch_guard --report` VIOLATIONS 0 / STALE 0；基线净额 ≤ 0（新增文件条目是唯一增量，
+      且只在收口登记）
 - [ ] R1b-1：开关读取点收敛（装配根 1 处；模块内 bio env `std::env::var` = 0）；现有默认关测试不变
 - [ ] R1b-1：台账 3 行漂移更正 + 3 条校验单测（env-registry / wiring 调用点 / NotWired reason）
 - [ ] R1b-2：机制订阅迁移；lifecycle probe 注册；审批面 publish；默认关零变化
@@ -202,3 +218,14 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   WIP 收口是前置），交接前 R1b 只到 R1b-1b。
 - 后续 stage：Wave 4 其余 = R8（治理单一管线）+ R6（验证架构）+ R7-2 遗留（ContextAssembler 合并，
   已登记 `contract.toml [concepts]` known_debt）；R1b-4 之后再评估是否把总线升为扩展点（需新 ADR）。
+
+## 8. 变更记录
+
+- **2026-10-20（实施期收窄，R1b-1a 施工中）**：D1 的信号面从「10 变体 + 时间戳 + `NervousSubscriber`
+  trait」收窄为「2 变体事实信号（`ToolOutcome` / `ErrorObserved`）+ 闭包订阅 + 计数快照」；D2 的桥首版
+  只映射 `AfterToolResult` / `OnError`。理由：①0 装——不定义当前无生产者的信号（其余 8 类要到
+  R1b-2/R1b-3 才有发布点，预定义会让「类型存在」被误读为「事实存在」）；②时间戳应由需要时间的订阅者
+  自取，总线不做时钟可少一条注入面；③闭包比 trait 少一层类型样板，订阅者只需一个回调。其余信号按
+  「生产者与订阅者同批 additive」扩展，扩展时 D1 的「闭合 enum」约束与 §6 验收同步更新。
+- **2026-10-20（D3 增补）**：switchboard 首版只认 `"1"`、其余 fail-closed；R1b-1b 迁移时逐开关对齐原
+  解析语义（行为等价 + 等价测试），不一致就不删原解析路径。
