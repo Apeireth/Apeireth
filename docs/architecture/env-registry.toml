@@ -16,7 +16,7 @@
 version = 1
 updated_at = "2026-10-20"
 
-# R3b layer=image_family 批: owner=crate 证据、purpose=源码文档注释、default=源码默认值；evidence 路径:行 必填；level 保守（claims 覆盖按 claim，其余 UNCLASSIFIED）
+# R3b 尾批（ADR-0004 §7.7）：8 条测试/基准夹具 kind=test-only（purpose 允许 TODO-PURPOSE，注明「测试/基准夹具，非产品开关」；不参与 PRODUCTION WIRED 证据要求）；产品开关禁止 TODO-PURPOSE
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_"
@@ -1083,9 +1083,10 @@ name = "APEIRETH_IMAGE_UNSHARP_CASES"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-algo"
-purpose = "Opt-in benchmark of the adaptive production path against the frozen original."
+purpose = "Opt-in benchmark of the adaptive production path against the frozen original.（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:30;crates/engine/image/algo/src/sharpen/tests.rs:339"
 
 [[entries]]
@@ -1093,9 +1094,10 @@ name = "APEIRETH_IMAGE_UNSHARP_CHANNELS"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-algo"
-purpose = "TODO-PURPOSE"
+purpose = "TODO-PURPOSE — 测试/基准夹具，非产品开关"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/engine/image/algo/src/sharpen/tests.rs:327"
 
 [[entries]]
@@ -1103,9 +1105,10 @@ name = "APEIRETH_IMAGE_UNSHARP_DEPTH"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-algo"
-purpose = "Opt-in benchmark of the adaptive production path against the frozen original."
+purpose = "Opt-in benchmark of the adaptive production path against the frozen original.（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:22;crates/engine/image/algo/src/sharpen/fft_bench.rs:82;crates/engine/image/algo/src/sharpen/tests.rs:320"
 
 [[entries]]
@@ -1113,9 +1116,10 @@ name = "APEIRETH_IMAGE_UNSHARP_HEIGHT"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-algo"
-purpose = "Opt-in benchmark of the adaptive production path against the frozen original."
+purpose = "Opt-in benchmark of the adaptive production path against the frozen original.（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:19;crates/engine/image/algo/src/sharpen/tests.rs:318"
 
 [[entries]]
@@ -1123,9 +1127,10 @@ name = "APEIRETH_IMAGE_UNSHARP_MODE"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-algo"
-purpose = "TODO-PURPOSE"
+purpose = "TODO-PURPOSE — 测试/基准夹具，非产品开关"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/engine/image/algo/src/sharpen/tests.rs:337"
 
 [[entries]]
@@ -1133,9 +1138,10 @@ name = "APEIRETH_IMAGE_UNSHARP_REPS"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-algo"
-purpose = "Opt-in benchmark of the adaptive production path against the frozen original."
+purpose = "Opt-in benchmark of the adaptive production path against the frozen original.（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:20;crates/engine/image/algo/src/sharpen/tests.rs:318"
 
 [[entries]]
@@ -1143,9 +1149,10 @@ name = "APEIRETH_IMAGE_UNSHARP_WIDTH"
 default = "n/a"
 layer = "image_family"
 owner = "apeireth-image-algo"
-purpose = "Opt-in benchmark of the adaptive production path against the frozen original."
+purpose = "Opt-in benchmark of the adaptive production path against the frozen original.（测试/基准夹具，非产品开关）"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/engine/image/algo/src/sharpen/fft_bench.rs:19;crates/engine/image/algo/src/sharpen/tests.rs:318"
 
 [[entries]]
@@ -1533,9 +1540,10 @@ name = "APEIRETH_UNIQ_SECRET_MARKER_12345"
 default = "n/a"
 layer = "capabilities"
 owner = "apeireth-tools-canonical"
-purpose = "TODO-PURPOSE"
+purpose = "TODO-PURPOSE — 测试/基准夹具，非产品开关"
 level = "UNCLASSIFIED"
 status = "current"
+kind = "test-only"
 evidence = "crates/capabilities/tools/src/shell.rs:1275;crates/capabilities/tools/src/shell.rs:1285;crates/capabilities/tools/src/shell.rs:1291"
 
 [[entries]]
