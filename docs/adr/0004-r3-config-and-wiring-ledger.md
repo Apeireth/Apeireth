@@ -77,7 +77,6 @@ R3a 交付后，R1a 的 `nervous_system` 与 R1b 的开关收敛直接复用 env
 否则 capability ledger 不认。EXC-0001 即按此转正退休（见 exceptions.toml 索引注）。
 
 ### 7.3 R3b 排序（架构线批准效率线建议）
-
 1. **先填 claims 覆盖的开关 owner**（当前 16 条 claims 对应开关）——理由：claims 是能力真源，
    owner 最明确、收益最高；
 2. **再按 layer 分批清 TODO**：`foundation → engine → capabilities → adapters`（依赖方向，先稳后动）；
@@ -91,3 +90,28 @@ R3a 交付后，R1a 的 `nervous_system` 与 R1b 的开关收敛直接复用 env
 arch_guard 管结构/依赖/env 名，wiring ledger 管"实现→接线→启用→验证"四列证据）；
 升格前保留两周 report-only；口径：`PRODUCTION WIRED` 必须有生产引用，`IMPLEMENTED` 必须有
 `gaps` 原因，缺证据即 FAIL。R3c 具体批次由效率线排期，架构线验收。
+
+### 7.5 R3b foundation 批验收标准（2026-10-20 架构线裁定）
+
+**允许的动作范围**：只改 `docs/architecture/env-registry.toml`（entries 的 owner/purpose/level/status 字段）与必要文档；不改源码、不改契约、不新增开关。
+**证据标准**：
+- `owner` = 读取该 env 的 crate/组件名（如 `apeireth-runtime`），**不得填团队名、不得留 TODO-OWNER**；
+- 新增**可选字段 `evidence`**（string，`路径:行号`，多个用 `;` 分隔）记录"读取点"证据；
+  foundation 批中每个 `owner != TODO-OWNER` 的条目 `evidence` 必须非空；
+- `level` 保守取值：claims 覆盖的按 claim 的级别；否则留 `UNCLASSIFIED`；`IMPLEMENTED` 必须能指向
+  "实现存在但无生产引用"的 gaps；**禁止无生产引用却标 `PRODUCTION WIRED`**；
+- `purpose` 必须来自源码文档注释并清洗：**不得以 `!` 开头、不得含代码注释碎片（`#`/行尾 `//`）**；
+- `default` 必须与源码默认值一致（关时默认 off，除非显式白名单）。
+
+**每批 commit 正文必须报四数**（`--stats` 可复核）：
+`entries / TODO-OWNER / UNCLASSIFIED / purpose_fragments`；要求 foundation 子集 TODO-OWNER 归零、
+purpose_fragments = 0，且全表 TODO-OWNER/UNCLASSIFIED 不增加。
+
+**架构线验收**：
+1. `tomllib` 解析通过；2. `arch_guard --strict` 无新增违规；3. 三数单调；4. `purpose` 碎片 = 0；
+5. **抽查 ≥10%（至少 5 条）**：`evidence` 路径:行确实读取该 env；6. 只动允许文件。
+
+**R3c workflow review 点**（效率线提交 report-only 版本后）：
+①触发路径（wiring.yaml / claims.yaml / 脚本变更）②命令为 `wiring_report.py --verify`
+③`continue-on-error: true` 灰度 ④日志/artifact 落盘 ⑤失败输出含缺失项清单。
+架构线 review 通过后两周转 blocking；改动 workflow 需重新 review。
