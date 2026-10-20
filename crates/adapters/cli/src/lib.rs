@@ -4,23 +4,17 @@
 //! a canonical turn request, and delegates execution to
 //! `Runtime::execute_outcome`. Pending approvals keep their `ApprovalId`.
 
-// v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend
-// (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
-// 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
+// v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend; 本模块只做 bootstrap 集成.
 pub mod backup;
-// 心跳关怀常驻宿主接线面 (care-heartbeat-producer.md §7 接线清单 (b)):
-// 闸经 FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute +
-// 自述关怀节心跳两列真值口; 双闸齐开 (CARE + CARE_HEARTBEAT) 才起。
+// 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
 pub mod care_heartbeat;
-// V5-b 暴露面体检 CLI 面: `apeireth exposure report [--json] [--out <PATH>]`
-// (安全守望 · 本地只读自查, 只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
+// V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
 pub mod exposure;
 pub mod gateway_panels;
 pub mod keyring_bootstrap;
 pub mod onboarding;
 pub mod portable_bundle;
-// 裁定 ④⑤ 性格锁定 + 性格周报: `apeireth trait report|lock|unlock`
-// (成长计既有账的只读周报 + 四杆锁定/解锁显式动作面)。
+// 裁定 ④⑤ 性格锁定 + 性格周报 (成长计既有账只读周报 + 四杆锁定/解锁显式动作面)。
 pub mod trait_command;
 // W3-② 用户身份与角色: `apeireth user add|list|role|remove` 管理面 (owner 角色门)。
 pub mod user_admin;
@@ -47,7 +41,7 @@ use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
     TurnRequest, TurnResponse,
 };
-use apeireth_runtime_assembly::SqliteSessionStore;
+use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 
 /// One persistent SQLite database is shared by the cognitive backends.
@@ -66,14 +60,10 @@ pub const GUARD_ML_MODE_ENV: &str = "APEIRETH_GUARD_ML_MODE";
 pub const GUARD_ML_MODEL_ENV: &str = "APEIRETH_GUARD_ML_MODEL";
 
 /// 免疫记忆旋钮（生物机制族 W3.2，默认关）：`APEIRETH_ENABLE_IMMUNE_MEMORY=1`
-/// 时才在生产入口把 [`apeireth_guard::immune_memory::ImmuneMemory`] 挂到
+/// 时才把 [`apeireth_guard::immune_memory::ImmuneMemory`] 挂到
 /// [`BehaviorChainGuardHook`]；未设 / 空值 / 其它值一律关（fail-closed）。
-///
-/// 开关取值真源 = [`immune_memory_enabled_from_value`]；挂载点唯一 =
-/// [`attach_immune_memory_if_enabled`]（生产入口
-/// [`build_production_governance_parts_from_env`] 的 guard 构造处）。共享句柄经
-/// 返回的 hook 的 [`BehaviorChainGuardHook::shared_immune_memory`] 取回（与 hook
-/// 内观察同一份 `Arc`）；cli 诊断 / 自述面尚未读取它（W3.3 再接）。
+/// 共享句柄经 hook 的 [`BehaviorChainGuardHook::shared_immune_memory`] 取回，
+/// 经 `attach_immune_memory` 交器官审议门 + W3.6 自述槽（同一份 `Arc`）。
 pub const ENABLE_IMMUNE_MEMORY_ENV: &str = "APEIRETH_ENABLE_IMMUNE_MEMORY";
 
 /// Legacy opt-in for the local filesystem and search tools. Accepted for
@@ -1380,22 +1370,15 @@ fn build_production_governance_parts_from_env() -> (
 }
 
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
-///
-/// Provider implementations are injected as plugins. Credentials are resolved
-/// at execution time, so neither the runtime nor a provider stores API keys.
+/// Provider plugins carry credentials resolution at execution time (never stored).
 pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
     let (runtime, _, _, _, _) = build_canonical_runtime_with_sessions_from_env().await?;
     Ok(runtime)
 }
 
-/// Build the runtime and return the shared session-store, memory-backend and
-/// permission-policy handles alongside it, so the gateway can serve the
-/// sessions/memory/permissions introspection surfaces from the same durable
-/// stores and the same live policy.
-///
-/// 情绪源绑定位不随本入口出口 (无 presence/PAD 合成器的调用形态 = 无情绪数据 =
-/// 零微调); 生产网关路径走
-/// [`build_canonical_runtime_with_sessions_and_voice_emotion_from_env`] 取绑定位。
+/// Build the runtime and return the shared session-store / memory-backend /
+/// permission-policy handles alongside it (same stores and live policy that the
+/// gateway introspection surfaces serve). 情绪源绑定位不随本口出口。
 pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     (
         Runtime,
@@ -1419,26 +1402,29 @@ pub async fn build_canonical_runtime_with_sessions_from_env() -> Result<
     Ok((runtime, session_store, memory, policy, guard_hook))
 }
 
-/// 生产网关路径的运行时组装 (R3 接线出口): 与
-/// [`build_canonical_runtime_with_sessions_from_env`] 同一装配, 额外出口
-/// [`VoiceEmotionSource`] 绑定位与 [`CareHeartbeatSource`] 绑定位 —— 网关装配
-/// 出 presence/PAD 合成器后把情绪源绑上, 发声微调即读合成器现值; 常驻宿主
-/// 把 care 心跳绑定位起成常驻心跳生产者后, 自述关怀节心跳两列转真值
-/// (双闸齐开才起, 见 [`CareHeartbeatSource::start`])。成本分级路由器绑定位
-/// (H-P2) 同款出口: 任务选型与自述路由节**同一台**路由器 (同源)。
-pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() -> Result<
-    (
-        Runtime,
-        Arc<dyn SessionStore>,
-        Arc<dyn MemoryBackend>,
-        Arc<std::sync::Mutex<PermissionPolicy>>,
-        Arc<BehaviorChainGuardHook>,
-        VoiceEmotionSource,
-        CareHeartbeatSource,
-        Arc<apeireth_core::cost_router::CostRouter>,
-    ),
-    String,
-> {
+/// 生产网关路径的运行时组装 (R3 接线出口): 同一装配 + 情绪源/心跳源绑定位 +
+/// 成本路由器 (H-P2); 生物 probe 迟绑定槽不随本口出口。
+type CanonicalRuntimeParts = (
+    Runtime,
+    Arc<dyn SessionStore>,
+    Arc<dyn MemoryBackend>,
+    Arc<std::sync::Mutex<PermissionPolicy>>,
+    Arc<BehaviorChainGuardHook>,
+    VoiceEmotionSource,
+    CareHeartbeatSource,
+    Arc<apeireth_core::cost_router::CostRouter>,
+);
+
+pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env(
+) -> Result<CanonicalRuntimeParts, String> {
+    let (parts, _bio_probe_slots) = build_canonical_runtime_assembly_from_env().await?;
+    Ok(parts)
+}
+
+/// 上面公开入口的装配本体: 额外回传 W3.6 生物 probe 迟绑定槽（给已 `Arc` 化的
+/// 调用方填痛觉读取口; 槽未武装 = no-op, 默认关零变化）。
+async fn build_canonical_runtime_assembly_from_env(
+) -> Result<(CanonicalRuntimeParts, BioProbeSlots), String> {
     // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
     // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
     // 拆任务后各自持票进运行时工作线程; 顺序语义不变 (运行时组装仍等两侧齐备)。
@@ -1466,8 +1452,10 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
         cognitive_task
             .await
             .map_err(|error| format!("cognitive assembly task failed: {error}"))??;
-    // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根把它注册进域平面,
-    // 与运行时共用**同一把** (每域恰一把, W2-③ 承诺不拆)。
+    // W3.6: 自述关怀心跳 probe 迟绑定 (槽未武装 = no-op, 默认关零变化)。
+    let bio_probe_slots = cognitive.bio_probe_slots();
+    bio_probe_slots.fill_care_status(care_heartbeat.status_probe());
+    // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根注册进域平面 (每域恰一把)。
     let sessions = Arc::new(apeireth_runtime::SessionManager::new(
         Arc::clone(&session_store),
         Arc::clone(&clock),
@@ -1475,25 +1463,31 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env() 
     let (runtime, policy, guard_hook) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok((
-        runtime,
-        session_store,
-        memory,
-        policy,
-        guard_hook,
-        voice_emotion,
-        care_heartbeat,
-        cost_router,
+        (
+            runtime,
+            session_store,
+            memory,
+            policy,
+            guard_hook,
+            voice_emotion,
+            care_heartbeat,
+            cost_router,
+        ),
+        bio_probe_slots,
     ))
 }
 
-/// W3-③ 逐域伙伴运行时组装 (星群正身, 「每户各得其伴」): 该域自己的
-/// **会话写闸** (与域数据面同一把 —— 记忆/配额/写闸全按域) + 该域自己的
-/// **记忆库** (`users/<id>/data/cognitive.sqlite3`, 每户独立记忆域) +
-/// 与默认域同款的进程旋钮 (预算/配额/单价表等全局口径)。
-///
-/// 模型/性格人设按域可配不在此处: 覆盖随域文档解析
-/// ([`apeireth_runtime::canonical::DomainRuntimePlane::context_for`]), 缺省
-/// 回落全局默认。
+/// W3.6: 迟绑定痛觉/再生读取口到已 `Arc` 化的 runtime (Weak 无环; Fill 前 = 该格真因)。
+fn bind_bio_pain_reader(slots: &BioProbeSlots, runtime: &Arc<Runtime>) {
+    let weak = Arc::downgrade(runtime);
+    slots.fill_pain_reader(Arc::new(move || {
+        weak.upgrade()
+            .map(|runtime| runtime.bio_pain_snapshot())
+            .ok_or_else(|| "runtime 已释放: 痛觉迟绑定读取口失效".to_string())
+    }));
+}
+
+/// W3-③ 逐域伙伴运行时组装 (星群正身): 该域自己的会话写闸 + 独立记忆库 + 同款旋钮。
 async fn build_domain_partner_runtime(
     sessions: Arc<apeireth_runtime::SessionManager>,
     memory_db: PathBuf,
@@ -1501,10 +1495,9 @@ async fn build_domain_partner_runtime(
     care_heartbeat: &CareHeartbeatSource,
 ) -> Result<Runtime, String> {
     let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
-    // 域伙伴运行时不注入备份导出面 (跨域打包面收口到 owner 本地操作, 见
-    // [`default_domain_backup_config`]); 名册照实报 `backup_export: false`。
-    // 路由器绑定位同样丢弃 (本批任务源路由只接 CLI chat 面; 域伙伴运行时的
-    // 自述路由节照实报「尚无任务被路由」)。
+    // 域伙伴运行时不注入备份导出面 (跨域打包面收口到 owner 本地操作; 名册照实报
+    // `backup_export: false`), 路由器绑定位同样丢弃 (本批任务源路由只接 CLI chat
+    // 面, 自述路由节如实报未路由)。
     let (cognitive, _memory, _cost_router) = build_cognitive_modules_at(
         memory_db,
         Arc::clone(&clock),
@@ -1513,6 +1506,10 @@ async fn build_domain_partner_runtime(
         care_heartbeat,
     )
     .await?;
+    // W3.6: 域伙伴运行时同样把关怀心跳 probe 迟绑定到自己的槽 (开关关 = no-op)。
+    cognitive
+        .bio_probe_slots()
+        .fill_care_status(care_heartbeat.status_probe());
     let (runtime, _policy, _guard_hook) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok(runtime)
@@ -1656,16 +1653,9 @@ fn session_db_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(".apeireth/sessions.sqlite3"))
 }
 
-/// Build the direct CLI runtime with the same trace/audit observer used by the
-/// HTTP gateway. The CLI has no SSE transport, but its turns must still be
-/// observable and durable through the gateway bounded-context ports.
-/// Build the direct CLI runtime together with its trace/audit observer.
-///
-/// Dataset recording is installed during the inner canonical bootstrap and
-/// the returned observation sink is added additively, so both observers see
-/// the same runtime event spine. The third handle is the cost-tier router
-/// (H-P2) bound into the self-report routing section — one router shared by
-/// task selection and self-report (same source of truth).
+/// Build the direct CLI runtime together with its trace/audit observer (both
+/// observers see the same event spine) and the cost-tier router (H-P2: one
+/// router shared by task selection and self-report).
 pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
     (
         Arc<Runtime>,
@@ -1675,16 +1665,21 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
     String,
 > {
     let (
-        runtime,
-        sessions,
-        memory,
-        policy,
-        guard_hook,
-        _voice_emotion,
-        _care_heartbeat,
-        cost_router,
-    ) = build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
+        (
+            runtime,
+            sessions,
+            memory,
+            policy,
+            guard_hook,
+            _voice_emotion,
+            _care_heartbeat,
+            cost_router,
+        ),
+        bio_probe_slots,
+    ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
+    // W3.6: 痛觉/再生 probe 迟绑定到 runtime 自身 (Weak 无环)。
+    bind_bio_pain_reader(&bio_probe_slots, &runtime);
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
@@ -3261,16 +3256,21 @@ pub async fn dispatch_gateway_serve_with(
     // 网关路径不接任务源路由, 丢弃该绑定位 —— 其自述路由节照实报「尚无任务
     // 被路由」(网关面路由接线不在本批战场)。
     let (
-        runtime,
-        sessions,
-        memory,
-        policy,
-        guard_hook,
-        voice_emotion,
-        care_heartbeat,
-        _cost_router,
-    ) = build_canonical_runtime_with_sessions_and_voice_emotion_from_env().await?;
+        (
+            runtime,
+            sessions,
+            memory,
+            policy,
+            guard_hook,
+            voice_emotion,
+            care_heartbeat,
+            _cost_router,
+        ),
+        bio_probe_slots,
+    ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
+    // W3.6: 常驻宿主同样把痛觉/再生 probe 迟绑定到 runtime。
+    bind_bio_pain_reader(&bio_probe_slots, &runtime);
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,

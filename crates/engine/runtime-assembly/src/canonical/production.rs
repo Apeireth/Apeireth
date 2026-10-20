@@ -57,10 +57,10 @@ use super::tool_modules::{
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
 use crate::startup::{StartupPhase, StartupTimeline};
 
-// 生物机制族装配块（W3.2/W3.3/W3.5）搬至同 crate 子模块，`production.rs`
-// 只保留调用与字段；子模块声明放此处（`canonical.rs` 本批禁改）。
+// 生物机制族装配块（W3.2/W3.3/W3.5/W3.6）搬至子模块；`production.rs` 只留调用与字段。
 #[path = "bio_production_wiring.rs"]
 mod bio_production_wiring;
+pub use bio_production_wiring::BioProbeSlots;
 
 /// Adapter that exposes memory's context-window implementation through the
 /// runtime-owned projection port. It is kept in assembly so the runtime kernel
@@ -579,15 +579,14 @@ pub struct ProductionModules {
     telemetry: Arc<CognitiveTelemetry>,
     mcp_bridge: Option<Arc<McpToolBridge>>,
     mcp_module: Option<Arc<McpModule>>,
-    /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根把 guard 免疫记忆
-    /// 共享句柄迟绑定到器官审议门 (W3.3 外部事件源; 默认不接).
+    /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
     organ_module: Option<Arc<OrganModule>>,
-    /// 生物机制族 W3.3: 调质状态句柄 (`APEIRETH_ENABLE_BIO_TONE=1` 才 `Some`),
-    /// 与注册的 tone 模块共享同一 `Arc<ToneState>` (真实事件源注入 / 诊断).
+    /// 生物机制族 W3.3: 调质状态句柄 (开关开才 `Some`, 与注册模块共享同一 `Arc`)。
     bio_tone_state: Option<Arc<ToneState>>,
-    /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (`APEIRETH_ENABLE_BIO_LIFECYCLE=1`
-    /// 才 `Some`), 与注册模块共享同一 `Arc`; 供自述 probe 后续迟绑定.
+    /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (开关开才 `Some`, 与注册模块同一 `Arc`)。
     bio_lifecycle_state: Option<Arc<BioLifecycleState>>,
+    /// 生物机制族 W3.6: 自述 probe 迟绑定共享槽 (开关关 = 槽不武装, 零读取).
+    bio_probe_slots: BioProbeSlots,
 }
 
 /// Compatibility alias for [`ProductionModules`].
@@ -806,6 +805,8 @@ impl ProductionModules {
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
         let mut organ_module: Option<Arc<OrganModule>> = None;
+        // W3.6: 自述 probe 迟绑定槽 (安装点按开关武装; cli/组合根后续填句柄).
+        let bio_probe_slots = BioProbeSlots::new();
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
@@ -827,9 +828,8 @@ impl ProductionModules {
         };
 
         // 自省通道: 能力名册在任何字段移动之前投影 —— 名册即**实际用于装配的**
-        // config 生效值 (读真实生效值, 不是配置文本的复述)。注入槽级的注册
-        // 条件 (图谱槽 / 外部工具服务器面) 先折进生效视图, 名册不复述
-        // "配置说开"而注册没成的事实。
+        // config 生效值; 注入槽级的注册条件 (图谱槽 / 外部工具服务器面) 先折进
+        // 生效视图, 名册不复述 "配置说开"而注册没成的事实。
         let mut roster_config = config.clone();
         roster_config.community_triage = config.community_triage && backends.graph.is_some();
         roster_config.mcp = mcp_server_config
@@ -1171,9 +1171,8 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
-        // 生物机制族 W3.3 · 游戏练习场 (`tool.play_*` 四工具, 默认关): 装配块在
-        // `bio_production_wiring::install_bio_play`（env 只认 "1" 且工作区根注入）；
-        // 返回共享练习账本句柄（关 = None），供自述 `bio_mechanisms.play` probe 只读接入。
+        // W3.3 · 游戏练习场 (`tool.play_*`, 默认关): 装配块在 `install_bio_play`
+        // (env 只认 "1" 且工作区根注入), 返回共享账本句柄供自述 play probe 只读接入。
         let bio_play_state = bio_production_wiring::install_bio_play(
             &mut capabilities,
             &clock,
@@ -1250,17 +1249,17 @@ impl ProductionModules {
             if let Some(counters) = &doc_ops_counters {
                 source = source.with_doc_ops_probe(doc_ops_status_probe(Arc::clone(counters)));
             }
-            // 创作工具面 K3: 自述创作节 (表格操作计数) 与 `tool.sheet_ops` 工具面
-            // 同一计数器 (同源同账); 面没注册 = 创作节显式 null + 原因。
+            // 创作工具面 K3: 自述创作节与 `tool.sheet_ops` 工具面同一计数器 (同源同账)。
             if let Some(counters) = &sheet_ops_counters {
                 source = source.with_sheet_ops_probe(sheet_ops_status_probe(Arc::clone(counters)));
             }
-            // 生物机制族 W3.2/W3.5: `capabilities.bio_mechanisms` 只读聚合面（装配块
-            // 已搬至 `bio_production_wiring`，含承载力同队同账 + 练习场账本探测口）。
+            // W3.2/W3.5/W3.6: `capabilities.bio_mechanisms` 只读聚合面 (装配块已搬
+            // 至 `bio_production_wiring`; 迟绑定槽由组合根在 build 后填句柄)。
             source = bio_production_wiring::install_bio_self_status(
                 source,
                 config.task_board.as_ref(),
                 bio_play_state.as_ref(),
+                &bio_probe_slots,
             );
             // K 轴 L1: 自述在场节 (设备数/白名单数/最近感知) 与 `tool.device_sense`
             // 工具面同一本设备表同一进程内感知计数 (同源同账; 面没注册 = 在场节
@@ -1504,9 +1503,8 @@ impl ProductionModules {
             ));
         }
 
-        // 生物机制族 W3.2 / W3.3 / W3.5: 修复指令段 + 调质 tone + 生命周期
-        // （开关全默认关，关 = 不构造不注册）。装配块在
-        // `bio_production_wiring::install_bio_modules`，句柄回传装配根。
+        // W3.2 / W3.3 / W3.5: 修复指令段 + 调质 tone + 生命周期装配块 (全默认关,
+        // 关 = 不构造不注册), 句柄回传装配根。
         let bio_wiring =
             bio_production_wiring::install_bio_modules(&mut modules, &clock, &capabilities);
 
@@ -1556,6 +1554,9 @@ impl ProductionModules {
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
 
+        // W3.6: 器官模块装配后把审议门账读取口交给自述槽 (未装配 = no-op).
+        bio_probe_slots.fill_from_organ_module(organ_module.as_ref());
+
         let mut seen = std::collections::BTreeSet::new();
         for module in &modules {
             let id = module.manifest().id.clone();
@@ -1575,6 +1576,7 @@ impl ProductionModules {
             organ_module,
             bio_tone_state: bio_wiring.tone_state,
             bio_lifecycle_state: bio_wiring.lifecycle_state,
+            bio_probe_slots,
         })
     }
 
@@ -1624,9 +1626,7 @@ impl ProductionModules {
     }
 
     /// The external tool bridge assembled for the MCP slot, when enabled.
-    ///
-    /// Adapters keep this handle to run the asynchronous connect/discovery
-    /// pass and to emit the redacted startup log.
+    /// Adapters keep this handle to run the asynchronous connect/discovery pass.
     pub fn mcp_bridge(&self) -> Option<&Arc<McpToolBridge>> {
         self.mcp_bridge.as_ref()
     }
@@ -1636,15 +1636,14 @@ impl ProductionModules {
         self.mcp_module.as_ref()
     }
 
-    /// W3.3 外部事件源: 把 guard 免疫记忆共享句柄接到器官模块的审议门.
+    /// W3.3 外部事件源: 把 guard 免疫记忆共享句柄接到器官模块的审议门, 并把
+    /// **同一份**句柄填进 W3.6 自述槽 (开关关 = 槽未武装, fill no-op)。传进来的
+    /// 必须是 hook 正在使用的同一份句柄 (否则观测与门读的不是同一份状态);
+    /// 未启用器官模块或句柄为 `None` 时不做任何事, 返回是否真的挂上审议门。
     ///
-    /// 组合根在治理 hook 构造后调用 `hook.shared_immune_memory()` (hook 未挂载
-    /// 免疫记忆时为 `None`) —— 传进来的必须是 hook 正在使用的**同一份**句柄,
-    /// 这样 hook 的 `observe` 与审议门的拉取看同一份状态. 未启用器官模块
-    /// (`config.organs = false`) 或句柄为 `None` 时不做任何事; 返回是否真的挂上.
-    ///
-    /// **默认零行为变化**: 不调用本方法 / 传 `None` = 审议门从未读免疫记忆.
+    /// **默认零行为变化**: 不调用本方法 / 传 `None` = 审议门从未读免疫记忆。
     pub fn attach_immune_memory(&self, memory: Option<SharedImmuneMemory>) -> bool {
+        self.bio_probe_slots.fill_immune_memory(memory.clone());
         match (&self.organ_module, memory) {
             (Some(module), Some(memory)) => {
                 module.attach_immune_memory(memory);
