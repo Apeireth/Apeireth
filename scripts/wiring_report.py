@@ -42,8 +42,12 @@ CLAIMS = ROOT / "docs" / "status" / "claims.yaml"
 MATRIX = ROOT / "docs" / "03-reference" / "capabilities-matrix.md"
 ENV_RE = re.compile(r"APEIRETH_[A-Z0-9_]+")
 FRAGMENT_RE = re.compile(r"<!--|-->|!\s*!\s*#|^\s*[!#]|^\s*[.·]{3,}")
-# ADR-0004 §7.7：测试/基准夹具（不参与 PRODUCTION WIRED 证据要求、不计入四级口径）
-TEST_ONLY_RE = re.compile(r"^APEIRETH_IMAGE_UNSHARP_|^APEIRETH_UNIQ_SECRET_MARKER_")
+# ADR-0004 §7.7/§7.8：kind 枚举 product（缺省）/ test-only / derived
+TEST_ONLY_RE = re.compile(
+    r"^APEIRETH_IMAGE_UNSHARP_|^APEIRETH_UNIQ_SECRET_MARKER_"
+    r"|^APEIRETH_REG_|^APEIRETH_IMAGE_REGEN_PROFILES$")
+# 待架构线裁决：真实 env 但本仓无 direct 读取点（不在产品 direct 校验里静默通过）
+PENDING_EVIDENCE_RULING = {"APEIRETH_MASTER_TOKEN"}
 SWITCH_HINT = re.compile(r"(ENABLE|DISABLE|FEATURE|ALLOW|STRICT|FORCE|SWITCH|TOGGLE|REQUIRE)")
 PROD_PREFIXES = ("crates/", "frontend/companion-desktop/src-tauri/src/")
 PROD_ROOTS = (
@@ -706,6 +710,76 @@ def cmd_crosscheck(strict: bool) -> int:
     return 0
 
 
+def _direct_refs(rec: dict | None) -> list[tuple[str, int]]:
+    """产品开关的 direct 证据：显式 const / env::var 读取 / env 读取封装点（非注释行）。"""
+    if not rec:
+        return []
+    refs: dict[tuple[str, int], None] = {}
+    for rel, line, kind in rec.get("reads") or []:
+        if kind in {"readref", "read", "const", "symboluse", "code"}:
+            refs[(rel, line)] = None
+    return sorted(refs)
+
+
+def _scan_refs(rec: dict | None, limit: int = 3) -> list[tuple[str, int]]:
+    """scan-only 证据：任意出现行，代码行优先、注释行兜底。"""
+    if not rec:
+        return []
+    reads = sorted((rec.get("reads") or []), key=lambda r: (r[2] == "comment", r[1]))
+    return [(rel, line) for rel, line, _kind in reads[:limit]]
+
+
+def cmd_finalize_kinds() -> int:
+    """ADR-0004 §7.7/§7.8：kind 归类 + evidence 双形态（product=direct / test-only|derived=scan-only）。"""
+    entries = registry_entries()
+    scan = scan_env(committed=True)
+    violations: list[str] = []
+    kinds: dict[str, int] = {"product": 0, "test-only": 0, "derived": 0}
+    for entry in entries:
+        name = str(entry.get("name"))
+        rec = scan.get(name)
+        if TEST_ONLY_RE.search(name):
+            kind = "test-only"
+            note = "测试/基准夹具，非产品开关"
+        elif name.endswith("_") or name.startswith("APEIRETH_TUNE_"):
+            kind = "derived"
+            note = "动态拼接/非独立开关"
+        else:
+            kind = "product"
+            note = ""
+        kinds[kind] += 1
+        if kind == "product":
+            entry.pop("kind", None)
+            refs = _direct_refs(rec)
+            if refs:
+                entry["evidence"] = ";".join(f"direct:{rel}:{line}" for rel, line in refs[:3])
+            else:
+                refs = _scan_refs(rec)
+                entry["evidence"] = ";".join(f"scan-only:{rel}:{line}" for rel, line in refs[:3])
+                if name not in PENDING_EVIDENCE_RULING:
+                    violations.append(f"{name}: product 无 direct 证据")
+        else:
+            entry["kind"] = kind
+            purpose = str(entry.get("purpose", "")).strip()
+            if note not in purpose:
+                purpose = _clean_purpose((purpose + f"（{note}）").lstrip())
+            entry["purpose"] = purpose
+            refs = _scan_refs(rec)
+            entry["evidence"] = ";".join(f"scan-only:{rel}:{line}" for rel, line in refs[:3])
+    note = ("ADR-0004 §7.7/§7.8：kind=product 仅 direct: 证据（const/env::var/封装点）；"
+            "test-only|derived 用 scan-only: 且 level=UNCLASSIFIED；derived 计数只减")
+    REGISTRY.write_text(render_registry(entries, note), encoding="utf-8")
+    print(f"finalize-kinds: {kinds}  table: {_counts_line(entries)}")
+    pending = [e["name"] for e in entries if str(e.get("name")) in PENDING_EVIDENCE_RULING]
+    if pending:
+        print(f"  PENDING_RULING (本仓无 direct 读取点，按裁决前保留 product+scan-only): {pending}")
+    for item in violations:
+        print(f"  VIOLATION: {item}", file=sys.stderr)
+    if violations:
+        return 1
+    return 0
+
+
 def cmd_mark_test_only() -> int:
     """ADR-0004 §7.7 尾批：测试/基准夹具 env 标 kind=test-only（purpose 允许 TODO-PURPOSE 并注记）。"""
     entries = registry_entries()
@@ -750,7 +824,10 @@ def cmd_stats() -> int:
           f"in_flight={len(set(working) - set(committed))}")
     print(f"registry: {_counts_line(entries)}")
     print(f"kind: test_only={sum(1 for e in entries if e.get('kind') == 'test-only')} "
-          f"product={sum(1 for e in entries if e.get('kind') != 'test-only')}")
+          f"derived={sum(1 for e in entries if e.get('kind') == 'derived')} "
+          f"product={sum(1 for e in entries if e.get('kind') not in ('test-only', 'derived'))}")
+    print(f"evidence: direct={sum(1 for e in entries if str(e.get('evidence', '')).startswith('direct:'))} "
+          f"scan_only={sum(1 for e in entries if str(e.get('evidence', '')).startswith('scan-only:'))}")
     print(f"wiring: claims={len(claims)}")
     return 0
 
@@ -766,6 +843,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fill-layer", default="", help="R3b：按层填实 owner/evidence/purpose/default")
     parser.add_argument("--mark-test-only", action="store_true",
                         help="ADR-0004 §7.7：测试/基准夹具标 kind=test-only")
+    parser.add_argument("--finalize-kinds", action="store_true",
+                        help="ADR-0004 §7.7/§7.8：kind 归类 + evidence 双形态")
     parser.add_argument("--crosscheck", action="store_true",
                         help="R3c：wiring ↔ claims 交叉校验（默认 report-only；--strict 升 blocking）")
     parser.add_argument("--strict", action="store_true")
@@ -782,6 +861,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_fill_layer(args.fill_layer)
     if args.mark_test_only:
         return cmd_mark_test_only()
+    if args.finalize_kinds:
+        return cmd_finalize_kinds()
     if args.gen:
         return cmd_gen()
     if args.verify:

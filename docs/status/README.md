@@ -33,12 +33,16 @@ python scripts/wiring_report.py --check-env-registry     # env 登记覆盖/重�
 python scripts/wiring_report.py --fill-owners-from-claims  # R3b：按 claims 证据填开关 owner/purpose
 python scripts/wiring_report.py --fill-layer foundation   # R3b：按层填实 owner/evidence/purpose/default
 python scripts/wiring_report.py --mark-test-only          # ADR-0004 §7.7：测试/基准夹具标 kind=test-only
+python scripts/wiring_report.py --finalize-kinds         # ADR-0004 §7.7/§7.8：kind 归类 + evidence 双形态
 python scripts/wiring_report.py --crosscheck             # R3c：wiring ↔ claims 四列证据交叉校验（report-only）
 python scripts/wiring_report.py --stats                  # 记分牌：entries / TODO-OWNER / UNCLASSIFIED
 ```
 
 - R3b 顺序（架构线批准）：先 claims 覆盖开关 → 再按 layer `foundation → engine → capabilities → adapters`；
-  每批 commit 报 `--stats` 的 entries / TODO-OWNER / UNCLASSIFIED 三数，只许下降。
+  每批 commit 报 `--stats` 的 entries / TODO-OWNER / UNCLASSIFIED / purpose_fragments 四数，只许向"下降/不升"走。
+- 登记表 `kind` 枚举（ADR-0004 §7.7/§7.8）：`product`（缺省）/ `test-only`（测试/基准夹具）/ `derived`
+  （动态拼接/非独立开关，计数只减）。`evidence` 双形态：产品开关只认 `direct:`（显式 const /
+  `std::env::var("NAME")` / env 读取封装点）；`scan-only:` 仅限 test-only/derived，且 level 必须 UNCLASSIFIED。
 - R3c 灰度：交叉校验 CI 先 report-only 至 **2026-11-03**，到期后去 `continue-on-error` 并加 `--strict`
   （架构线复核后转 blocking）；`level` 的 `UNCLASSIFIED` 仅是登记先行占位（ADR-0004 §7.1），不是四级口径。
 
