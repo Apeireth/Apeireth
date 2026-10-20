@@ -41,16 +41,26 @@
 **裁定**：
 | 项 | 裁定 | 依据 | 执行 |
 |---|---|---|---|
-| SDK 四孤岛 | **归档**（迁 `legacy/archived/sdk-islands/` + manifest + 恢复指引；sdk 保留 client/wire/im 等在用面） | sdk 外零引用、契约断头、维护成本>收益 | 实施线按 §3.1 清单执行 |
+| SDK 四孤岛 | **A 档（本批）**：`livekit`/`voice`/`sandbox` 三岛归档（16,908 行）；**lark 暂缓**（见下表） | 三岛 sdk 外零引用；lark 被保留面 `sdk::im` 内部依赖（`im/message.rs:81,87,135`、`im/channel.rs:59`、`im/card.rs:197` test、`lib.rs:288` feature 门），gateway 经 `apeireth_sdk::im` 依赖 | 实施线按 §3.1（本批只 3 岛） |
+| **lark**（6,741 行） | **暂缓归档**（另立解耦任务，Wave 3 内排期） | 取证修正：sdk 外零引用属实，但 **sdk 内部 `im → lark` 真实边**（wire 原语 WebhookEvent/EventType/TextContent/CardContent/MAX_MESSAGE_TEXT_BYTES/错误映射）；直接搬走会弄断 gateway 的 `apeireth_sdk::im` | 先解耦（抽 wire 原语到 `im` 自有模块 ~250-350 行、行为保持）再归档；解耦属设计归属变更，需单独 commit + 验收 |
 | perception 整包 | **归档**（迁 `legacy/archived/perception/`；主 workspace 移除该成员；恢复 = revert/从 legacy 迁回） | 零依赖者 = 不可达代码 | 同上 |
 
 ### 3.1 迁移清单（实施线执行，架构线验收）
 
-1. SDK：`git mv crates/adapters/sdk/src/{lark,livekit,voice,sandbox}` → `legacy/archived/sdk-islands/`；删 `lib.rs` 对应 mod 声明与 compile-time 自检；迁/删 examples+tests 中 lark 引用（7 处）；保留 Cargo.toml 依赖或清理（以 `cargo check -p apeireth-sdk` 为准）；补 `legacy/archived/sdk-islands/MANIFEST.md`（原路径/行数/恢复方式/许可）。
+1. SDK（**本批 A 档 = 3 岛**）：`git mv crates/adapters/sdk/src/{livekit,voice,sandbox}` → `legacy/archived/sdk-islands/`；删 `lib.rs` 对应 3 个 mod 声明与失效自检；保留 `pub mod lark`、`lark` feature 与 `im` 的 cfg 门原样；清三岛专属 feature/optional deps；example 只移除三岛 demo（lark demo 保留）；补 `legacy/archived/sdk-islands/MANIFEST.md`（原路径/行数/恢复方式/许可 + **lark 暂缓原因与证据**）。**lark 归档另立任务**：先抽 wire 原语到 `im` 自有模块（行为保持），再按同一清单归档；解耦为独立 commit + 独立验收。
 2. perception：`git mv crates/engine/perception legacy/archived/perception`；根 `Cargo.toml` members 移除；`Cargo.lock` 随 `cargo check` 更新；能力矩阵/claims 中 perception 相关行按四级口径标注"已归档（2026-10-20，ADR-0005 R4b）"。
 3. 文案：`founding-design-v2 §10` 决策项标"已裁决：归档"；能力矩阵/README honest gaps 如涉及同步。
 4. 验收：`cargo metadata` members 31→30（图像家族仍在，R4a-2 另计）；`cargo check -p apeireth-sdk -p apeireth-gateway -p apeireth-cli` 通过；`arch_guard --strict` 无新增（归档会删边/包，基线缩表走 Wave 收口）；许可/NOTICE 迁移核对。
 5. 回滚：`git revert` 或从 legacy 迁回 + 恢复 members/mod 声明（单批可逆）。
+
+### 3.2 执行记录（2026-10-20，R2：接受现状 + 事故登记）
+
+- **B（perception）**: `e8e7db33` 干净单任务；24 paths（20 rename + MANIFEST + 根 Cargo.toml + Cargo.lock + founding §10），members 31→30，`cargo check -p gateway -p cli` exit 0，Cargo.lock −108 包。
+- **A（SDK 三岛）**: 内容已全部落地但被**共享 index 抢占**拆成两半——`df78542f`（env-registry 改动 + 32 rename 混合）与 `6dccb1d2`（mod/Cargo/自检/MANIFEST 编辑，干净）；实际功能态 = 两者叠加，子代理已实测 `cargo check -p apeireth-sdk --all-targets` exit 0、`cargo test -p apeireth-sdk --lib` 220 passed/0 failed、`cargo fmt --check` exit 0、members=30、三岛引用 0。
+- **裁决 R2（不重写历史）**: 并行线在 17:10:09/17:10:14/随后数分钟内 5 秒级连提，此刻 `git reset` 重放会**二次事故**；故接受现状，明确缺陷边界——`df78542f` 单点 checkout 不可编译（rename 已移走、lib.rs 仍声明），**禁止以该点做 bisect/单点 CI**，以 `6dccb1d2` 及之后为可用树。未 push（无 upstream），影响限于本地历史整洁度，不触碰内容。
+- **流程修复（待落地）**: ①`commit.ps1` 只提交显式路径白名单（禁止扫全部 staged），或提交前检测"staged 属于其他线"即中止；②多线共享工作树时，提交前 5 秒互斥窗口/口头让行；③历史事故登记：见 handbook 变更记录。
+- **B 遗留（另立清理，不伪称已对齐）**: 3 条注释引用（tools/content_feed、organ/lib、plugin/perception.rs）；`crates.md`/`architecture.md`/`perception-setup.md` 未对齐；arch_guard STALE 5 条 perception 边/env（基线缩表在 Wave 3 收口由架构线做）；`capabilities-matrix.md` 属效率线在途文件，0 触碰。
+- **lark**: 解耦任务另立（抽 wire 原语 ~250-350 行到 im 自有模块，行为保持）→ 再按本清单归档；本批不动 lark。
 
 ## 4. 迁移 / 回滚 / 验收
 
