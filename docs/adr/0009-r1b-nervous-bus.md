@@ -177,9 +177,12 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
    - 验证：每模块默认关零变化测试；`bio_*` 集成测试；全量门禁由全量线执行并广播。
    - 批次拆分（交接单 §3）：R1b-2a bio_tone 订阅 → R1b-2b bio_lifecycle 订阅 + probe → R1b-2c 审批面
      publish；care/circadian/play/quorum 的消费面迁移依赖 R1b-3 信号源，不在本批。
-4. **R1b-3 缺失信号源**（生物线）
+4. **R1b-3 缺失信号源**（生物线；交接单：`docs/architecture/r1b-3-handoff-2026-10-20.md`）
    - ritual / sleep pressure / scar learn / session event source；补不了的保留 NotWired + reason。
-   - 验证：每个信号源有生产 publish 点 + 订阅测试；台账逐行如实。
+   - 逐源定性：ritual done/skip 接（工具 execute 后 publish + care 候选订阅）；session event 接最小面
+     （桥映射 TurnStart/AfterTurn 回合边界，不含 compaction/masking）；sleep pressure 先取证（模块内
+     自消费则如实 NotWired）；scar learn 倾向如实 NotWired（生产闭环与订阅方都不存在时不硬接）。
+   - 验证：每个信号源有生产 publish 点 + 订阅测试；台账逐行如实；交接单 §4 清单逐项勾。
 5. **R1b-4 收口**（架构线）
    - schema v2（additive）、自述渲染、contract wave_note / handbook / integration-plan 记分牌、
      基线新增文件条目；`docs_truth.py --verify --check`；Wave 4 收口提交。
