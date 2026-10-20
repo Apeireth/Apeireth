@@ -3209,10 +3209,14 @@ pub async fn dispatch_gateway_serve_with(
         .map_err(|error| error.to_string())?;
     let bind_clearance = apeireth_gateway::enforce_remote_bind(bind, &gate, &client_tokens)
         .map_err(|error| error.to_string())?;
-    // TLS 面接口桩: 占位旋钮被设置就显式喊破 (未接线 = 流量仍明文), 不装死。
-    let tls_notice = apeireth_gateway::tls_surface_status().warning();
-    if let Some(notice) = &tls_notice {
-        eprintln!("WARNING: {notice}");
+    // TLS 面 (B5 真接线): 旋钮在场即真加载; 材料坏 = fail-closed 拒启动
+    // (不是警告后照跑 —— 接口桩语义已退役)。
+    let tls_surface = apeireth_gateway::tls_surface_status();
+    if let Some(notice) = tls_surface.notice() {
+        eprintln!("{notice}");
+    }
+    if let Some(refusal) = tls_surface.refusal() {
+        return Err(refusal);
     }
 
     // 单实例占位先行: 活着的既有实例直接显式拒绝 (不装配运行时、不双开)。
@@ -3424,10 +3428,12 @@ pub async fn dispatch_gateway_serve_with(
     for (event, detail) in bind_clearance.audit_facts {
         state.observations.buffer_audit(&event, detail);
     }
-    if let Some(notice) = tls_notice {
+    // TLS 面真接线后审计事件如实: 已启用 = `gateway.tls_enabled`
+    // (旧 `gateway.tls_unwired` 只属于已退役的接口桩语义, 不再产生)。
+    if let Some(notice) = tls_surface.notice() {
         state
             .observations
-            .buffer_audit("gateway.tls_unwired", Some(notice));
+            .buffer_audit("gateway.tls_enabled", Some(notice));
     }
     let address = format!("{bind}:{port}");
     let listener = tokio::net::TcpListener::bind(&address).await.map_err(|error| {
@@ -3443,7 +3449,13 @@ pub async fn dispatch_gateway_serve_with(
     let local_addr = listener
         .local_addr()
         .map_err(|error| format!("local_addr: {error}"))?;
-    let url = format!("http://{local_addr}");
+    // URL 协议名如实: TLS 面启用时是 https, 明文面是 http (不谎报协议)。
+    let scheme = if tls_surface.is_enabled() {
+        "https"
+    } else {
+        "http"
+    };
+    let url = format!("{scheme}://{local_addr}");
 
     if local_addr.ip().is_loopback() {
         eprintln!("canonical gateway started at {url}");

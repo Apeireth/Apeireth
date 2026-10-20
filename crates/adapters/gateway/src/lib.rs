@@ -105,7 +105,7 @@ pub mod care_panel;
 pub mod trait_panel;
 
 /// W2-② remote access face: listen knob, non-loopback fail-closed bind gate,
-/// and the explicitly unwired TLS placeholder surface.
+/// and the wired TLS surface (material loading fail-closed, real TLS listener).
 pub mod remote_access;
 
 pub use barge_in::{
@@ -128,10 +128,11 @@ pub use canonical_entry::{
     build_gateway_state, build_gateway_state_with_services, canonical_router,
     canonical_router_with_panels, canonical_router_with_services, canonical_router_with_state,
     execute_chat, execute_chat_attributed, resolve_approval, resolve_approval_attributed,
-    serve_canonical, serve_canonical_with_services, serve_state_with_shutdown, serve_with_shutdown,
-    CanonicalApprovalRequest, CanonicalChatOutcome, CanonicalChatRequest, CanonicalChatResponse,
-    CanonicalEntryError, CanonicalExecutionEvent, CanonicalPendingApproval, GateVerdict,
-    GatewayTokenGate, SessionAttribution, UNAUTHENTICATED_PROBE_PATHS,
+    serve_canonical, serve_canonical_with_services, serve_state_with_shutdown,
+    serve_state_with_tls, serve_with_shutdown, CanonicalApprovalRequest, CanonicalChatOutcome,
+    CanonicalChatRequest, CanonicalChatResponse, CanonicalEntryError, CanonicalExecutionEvent,
+    CanonicalPendingApproval, GateVerdict, GatewayTokenGate, SessionAttribution,
+    UNAUTHENTICATED_PROBE_PATHS,
 };
 
 pub use client_tokens::{
@@ -161,9 +162,10 @@ pub use user_admin::{
 };
 
 pub use remote_access::{
-    bind_scope, enforce_remote_bind, resolve_listen_bind, resolve_listen_bind_from,
-    tls_surface_status, tls_surface_status_from, BindScope, RemoteBindClearance, RemoteBindError,
-    TlsSurface, DEFAULT_BIND, LISTEN_ENV, TLS_CERT_ENV, TLS_KEY_ENV,
+    bind_scope, enforce_remote_bind, load_tls_material, resolve_listen_bind,
+    resolve_listen_bind_from, resolve_tls_material, resolve_tls_material_from, tls_surface_status,
+    tls_surface_status_from, BindScope, RemoteBindClearance, RemoteBindError, TlsConfigError,
+    TlsMaterial, TlsSurface, DEFAULT_BIND, LISTEN_ENV, TLS_CERT_ENV, TLS_KEY_ENV,
 };
 
 pub use admin::{

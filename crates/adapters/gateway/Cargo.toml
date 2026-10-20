@@ -34,6 +34,17 @@ apeireth-tools-canonical = { path = "../../capabilities/tools" }
 # 仓库统一文件 IO 约定 (clippy.toml: std::fs → fs_err)
 fs-err = { workspace = true }
 sha2 = { workspace = true }
+# W2-② TLS 面真接线 (安全加固批 B5, 主代理拍板 2026-10-20): 服务端 TLS 协议栈 +
+# tokio IO 适配 + PEM/DER 材料解析。0 新外部包: 三包已随 workspace reqwest
+# rustls-tls 在 Cargo.lock 树 (rustls 0.23.x / tokio-rustls 0.26.x / rustls-pki-types
+# 1.15.x), 此处只 +3 依赖边; default-features 关掉 aws_lc_rs 家族 (树内 provider
+# = ring, 见 Cargo.lock), 不引新包。
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "logging", "tls12"] }
+rustls-pki-types = "1.15"
+# TLS 面连接组装 (hyper-util 本就是 workspace 依赖, 0 新外部包): HTTP/1+2 协商 +
+# 优雅停机 + 服务胶 (axum 0.7 的 serve 只收 TcpListener, TLS 面须自行接线)。
+hyper-util = { workspace = true, features = ["server", "service", "http1", "http2", "tokio"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

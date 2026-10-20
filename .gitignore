@@ -86,6 +86,10 @@ reports/.tmp-cosign-keygen/
 # 台账 #28 加固 (A4 SEC2): 密钥/证书/密钥库类文件通配忽略
 # (此前仅针对性忽略 **/cosign.key, 实测 secret.pem 不被忽略)
 *.pem
+# B5 TLS 测试夹具例外 (2026-10-20): 自签测试链, 仅测试用途, 零真实信任价值,
+# 生成口径见 crates/adapters/gateway/tests/fixtures/tls/README.md。不加例外 =
+# *.pem 通配吞掉夹具, clone 后重跑测试即断。secret-scan 按夹具放行。
+!crates/adapters/gateway/tests/fixtures/tls/*.pem
 *.key
 *.p12
 *.pfx
