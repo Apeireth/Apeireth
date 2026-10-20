@@ -99,3 +99,4 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 2026-10-20 | 手册 v1（规则落地同日） | commit `8bfefb1b` / `8e9dd3ae` |
 | 2026-10-20 | 手册 v1.1：Wave 2 单项 ADR + R4a-1 门禁隔离（gate_full/image CI）+ arch_guard 例外抑制/登记表双通道/`--print-vendored` | commit `5e68f644` |
 | 2026-10-20 | Wave 2 收口（R1a 交付 + R3b 主体完成 + 缩基线 2 条）；R4b 执行：B 归档干净、A 内容全落地但遭**共享 index 抢占**拆成 `df78542f`(混) + `6dccb1d2`(净)，裁决 **R2 接受现状不重写历史**（并行线 5 秒级连提，重写会二次事故）；事故登记入 ADR-0005 §3.2 | `22771a50` / `e8e7db33` / `6dccb1d2` |
+| 2026-10-20 | **R4b 四岛收口**：lark 解耦（im 自有 wire 原语，行为保持）+ 归档，SDK 四孤岛 42 文件/23,649 行全部迁 `legacy/archived/sdk-islands/`；mutation 验证 = lark 代码引用 0、guard crates=30/edges=112/env=154/VIOLATIONS 0；遗留 = 5 依赖清理批 + c 头重生成 + 文档对齐 + STALE 11 缩表（Wave 3 收口） | `29387d78` / `23cae7cc` |

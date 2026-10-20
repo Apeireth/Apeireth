@@ -60,7 +60,8 @@
 - **裁决 R2（不重写历史）**: 并行线在 17:10:09/17:10:14/随后数分钟内 5 秒级连提，此刻 `git reset` 重放会**二次事故**；故接受现状，明确缺陷边界——`df78542f` 单点 checkout 不可编译（rename 已移走、lib.rs 仍声明），**禁止以该点做 bisect/单点 CI**，以 `6dccb1d2` 及之后为可用树。未 push（无 upstream），影响限于本地历史整洁度，不触碰内容。
 - **流程修复（待落地）**: ①`commit.ps1` 只提交显式路径白名单（禁止扫全部 staged），或提交前检测"staged 属于其他线"即中止；②多线共享工作树时，提交前 5 秒互斥窗口/口头让行；③历史事故登记：见 handbook 变更记录。
 - **B 遗留（另立清理，不伪称已对齐）**: 3 条注释引用（tools/content_feed、organ/lib、plugin/perception.rs）；`crates.md`/`architecture.md`/`perception-setup.md` 未对齐；arch_guard STALE 5 条 perception 边/env（基线缩表在 Wave 3 收口由架构线做）；`capabilities-matrix.md` 属效率线在途文件，0 触碰。
-- **lark**: 解耦任务另立（抽 wire 原语 ~250-350 行到 im 自有模块，行为保持）→ 再按本清单归档；本批不动 lark。
+- **lark（已解耦 + 归档，2026-10-20）**: `29387d78` 解耦（新增 `sdk/src/im/wire.rs` 504 行=im 自用 wire 原语：WebhookEvent/EventType 三类信封严格解析、TextContent/CardContent、MAX_MESSAGE_TEXT_BYTES=4096、3 变体 WireError；im 5 文件改引自有 wire；`pub mod im` 去 feature 门；+10 测试；唯一可观察差异 = `ImError::Decode.reason` 诊断前缀收敛，判定/分类/字段/出站 JSON 逐行等价并经 gateway 40 测试复核）→ `23cae7cc` 归档（lark 10 文件/6,741 非空行 + `tests/lark_mock.rs` 1,130 行迁 legacy；删 pub mod/feature/default/demo；MANIFEST 补齐四岛合计 42/23,649）。**架构线独立复核**: `git grep 'crate::lark|apeireth_sdk::lark' -- crates/` = 0；guard `crates=30 / edges=112 / env=154 / VIOLATIONS 0`；工作树 clean；sdk check/test(92)/fmt/clippy/gateway IM 40 tests 均绿。
+- **遗留债务（显式，不伪称清零）**: ①5 个 lark 专用常规依赖（chrono/aes/base64/apeireth-core/fs-err）保留待依赖清理批（删除需动根 Cargo.lock）；②`apeireth_sdk.h`（c feature 生成物）仍含历史 LarkError 注释，待重生成批；③文档对齐（crates.md/architecture.md/perception-setup.md + 3 条 perception 注释引用）；④arch_guard STALE 11（perception 4 边+env、sdk 2 旧边、size 条目）→ Wave 3 收口缩表。
 
 ## 4. 迁移 / 回滚 / 验收
 
