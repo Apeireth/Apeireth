@@ -59,3 +59,17 @@ cargo fmt --check                                                    # 期望 0 
 
 - 数字对外引用时对照 test-baseline.md 现行口径；不一致如实报「本批实测值 + 日期」，不代改真源。
 - 纯文档批同样跑校验；扫描类收尾（旧版本号 / 旧口径词）要求现值文档零命中、历史卷宗如实登记。
+
+### 5.1 AI 高频批的快反馈（2026-10-20 效率批；全量仍按 §5 在 wave 收口跑）
+
+```powershell
+python scripts/verify_changed.py                 # fast gate: 改动 crate + 反向依赖的 check/clippy/nextest
+python scripts/docs_truth.py --verify --check    # 文档状态真源：claims 证据/staleness/生成物漂移
+pwsh scripts/commit.ps1 -MessageFile <msg.txt>   # 显式 author + staged secret/neutral + 按次启用 .githooks
+```
+
+- fast gate 输出落 `logs/verify-changed.log`，**按落盘退出码判定**（不做管道直判）；不产生对外测试数字。
+- 改文档或改被 `docs/status/claims.yaml` 覆盖的源码后必跑 `docs_truth.py --verify`；`STALE` =
+  源码动过而 `verified_at` 未更新，交付 commit 前须复核并 bump。
+- 提交走 `commit.ps1`（不全局设 `core.hooksPath`，避免拦住同工作树并行线）；详细口径见
+  [docs/02-guides/fast-feedback-gate.md](docs/02-guides/fast-feedback-gate.md)。
