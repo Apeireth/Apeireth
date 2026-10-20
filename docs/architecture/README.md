@@ -14,7 +14,7 @@
 | [`scripts/arch_guard.py`](../../scripts/arch_guard.py) | 架构守卫（fitness functions） | 只读仓；`--report` / `--strict` / `--update-baseline` |
 | [`scripts/arch-baseline.txt`](../../scripts/arch-baseline.txt) | 棘轮基线（现存违规快照，只减不增） | 仅 `--update-baseline` 生成；评审后缩表 |
 
-配套：[功能准入清单](intake-checklist.md)、[ADR 流程](../adr/README.md)、[集成计划](integration-plan.md)。
+配套：[功能准入清单](intake-checklist.md)、[三线协作契约](line-coordination.md)、[ADR 流程](../adr/README.md)、[集成计划](integration-plan.md)。
 
 ## 2. 三类"新增"只允许走三条通道
 
