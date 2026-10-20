@@ -1542,6 +1542,11 @@ async fn build_canonical_runtime_with_parts(
         keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(resolver);
     let (governance, policy, guard_hook) = build_production_governance_parts_from_env();
+    // 生物机制族 W3.3 外部事件源: 免疫记忆只在 `APEIRETH_ENABLE_IMMUNE_MEMORY=1`
+    // 时挂到 guard hook; `shared_immune_memory()` 取回的是 hook 正在使用的同一份
+    // 句柄 (hook 的 observe 与器官审议门的 Conflict 拉取共享状态)。未挂载 = None
+    // = 不接线, 器官模块与审议门行为逐字节不变。
+    cognitive.attach_immune_memory(guard_hook.shared_immune_memory());
     // Session-level permission presets (read_only/standard/full) layer on top
     // of the production policy. The wrapper reads the session's durable
     // settings on every capability dispatch and delegates everything else.
