@@ -41,6 +41,7 @@ WIRING = ROOT / "docs" / "status" / "wiring.yaml"
 CLAIMS = ROOT / "docs" / "status" / "claims.yaml"
 MATRIX = ROOT / "docs" / "03-reference" / "capabilities-matrix.md"
 ENV_RE = re.compile(r"APEIRETH_[A-Z0-9_]+")
+FRAGMENT_RE = re.compile(r"<!--|-->|!\s*!\s*#|^\s*[!#]|^\s*[.·]{3,}")
 SWITCH_HINT = re.compile(r"(ENABLE|DISABLE|FEATURE|ALLOW|STRICT|FORCE|SWITCH|TOGGLE|REQUIRE)")
 PROD_PREFIXES = ("crates/", "frontend/companion-desktop/src-tauri/src/")
 PROD_ROOTS = (
@@ -147,8 +148,38 @@ def purpose_near(lines: list[str], idx: int) -> str:
     return " ".join(reversed(parts))[:140].strip()
 
 
+def doc_comment_above(lines: list[str], idx: int) -> str:
+    """取该行上方最近的连续文档注释（`///` / `//!`）；无则取单行 `//` 注释。"""
+    parts: list[str] = []
+    j = idx - 1
+    while j >= 0:
+        s = lines[j].strip()
+        if s.startswith("///") or s.startswith("//!"):
+            parts.append(s.lstrip("/!").strip())
+            j -= 1
+            continue
+        break
+    if parts:
+        return _clean_purpose(" ".join(reversed(parts)))
+    if idx - 1 >= 0 and lines[idx - 1].strip().startswith("//"):
+        return _clean_purpose(lines[idx - 1].strip().lstrip("/").strip())
+    return ""
+
+
+def default_hint(lines: list[str], idx: int) -> str:
+    """从读取点附近推断源码默认值（on/off）；无法判定返回空串。"""
+    window = " ".join(lines[max(0, idx - 4):min(len(lines), idx + 5)])
+    match = re.search(r'unwrap_or(?:_else)?\(\s*"([^"]*)"', window)
+    if match:
+        value = match.group(1).strip().lower()
+        return "on" if value in {"1", "true", "on", "yes"} else "off"
+    if re.search(r"\.is_some\(\)|\.is_ok\(\)", window):
+        return "off"
+    return ""
+
+
 def scan_env(committed: bool) -> dict[str, dict]:
-    """扫描 env 名 -> {crate, files, first_file, purpose}。committed=True 用 HEAD 口径。"""
+    """扫描 env 名 -> {crate, layer, files, reads[(rel,line,is_comment)], doc, purpose, default_hint}。"""
     contract = load_contract()
     layers = crate_layers(contract)
     dirty, untracked = dirty_and_untracked() if committed else (set(), set())
@@ -159,32 +190,120 @@ def scan_env(committed: bool) -> dict[str, dict]:
         if text is None:
             continue
         lines = text.splitlines()
+        file_names: set[str] = set()
         for idx, line in enumerate(lines):
             for match in ENV_RE.finditer(line):
                 name = match.group(0)
+                file_names.add(name)
                 rec = found.setdefault(name, {
                     "crate": crate,
                     "layer": layers.get(crate, "unknown"),
                     "files": set(),
+                    "reads": [],
+                    "symbols": set(),
+                    "doc": "",
                     "purpose": "",
+                    "default_hint": "",
                 })
+                stripped = line.strip()
+                if stripped.startswith(("//", "/*", "*")):
+                    kind = "comment"
+                elif "env::var" in line or "var_os(" in line:
+                    kind = "read"
+                elif "const " in line and "= " in line:
+                    kind = "const"
+                    sym = re.search(r"const\s+([A-Z][A-Z0-9_]*)", line)
+                    if sym:
+                        rec["symbols"].add(sym.group(1))
+                else:
+                    kind = "code"
                 rec["files"].add(rel)
+                rec["reads"].append((rel, idx + 1, kind))
+                if not rec["doc"]:
+                    rec["doc"] = doc_comment_above(lines, idx)
                 if not rec["purpose"]:
                     rec["purpose"] = purpose_near(lines, idx)
+                if not rec["default_hint"] and not is_comment_line(line):
+                    rec["default_hint"] = infer_default(lines, idx)
+        # 第二遍：把 `env::var(CONST)` 的读取点也记为证据（常量名不含字面 env 名时仍可核读取路径）
+        for name in file_names:
+            rec = found[name]
+            for symbol in rec.get("symbols") or ():
+                pattern = re.compile(rf"\b(?:env::)?var(?:_os)?\(\s*{re.escape(symbol)}\b")
+                for j, line2 in enumerate(lines):
+                    if pattern.search(line2):
+                        rec["reads"].append((rel, j + 1, "readref"))
+    # 第三遍：跨文件找常量符号的使用点（如 `env_flag(COST_ROUTING_ENV)`），作为读取路径证据
+    symbol_owner: dict[str, str] = {}
+    for name, rec in found.items():
+        for symbol in rec.get("symbols") or ():
+            symbol_owner.setdefault(symbol, name)
+    if symbol_owner:
+        combined = re.compile(r"\b(" + "|".join(
+            re.escape(symbol) for symbol in sorted(symbol_owner)) + r")\b")
+        for _crate, _path, rel in workspace_src_files():
+            text = committed_text(rel, dirty, untracked) if committed else _path.read_text(
+                encoding="utf-8", errors="replace")
+            if text is None:
+                continue
+            for j, line2 in enumerate(text.splitlines()):
+                if line2.strip().startswith(("//", "/*", "*")):
+                    continue
+                for match in combined.finditer(line2):
+                    found[symbol_owner[match.group(1)]]["reads"].append((rel, j + 1, "symboluse"))
     return found
 
 
-def env_refs_working() -> dict[str, list[str]]:
-    """工作树口径 env -> 出现文件列表（wiring ledger 的生产引用证据）。"""
+def is_comment_line(line: str) -> bool:
+    return line.strip().startswith(("//", "/*", "*"))
+
+
+EVIDENCE_PRIORITY = {"readref": 0, "read": 1, "symboluse": 2, "const": 3, "code": 4, "comment": 5}
+
+
+def evidence_of(rec: dict) -> str:
+    """读取证据优先级：env::var(CONST) 读取点 > 字面读取 > const 定义 > 其它代码 > 注释。"""
+    reads = list(rec.get("reads") or [])
+    dedup: dict[tuple[str, str], tuple[str, int, str]] = {}
+    for read in reads:
+        dedup[(read[0], str(read[1]))] = read
+    picked = sorted(dedup.values(), key=lambda r: (EVIDENCE_PRIORITY.get(r[2], 9), r[1]))[:3]
+    return ";".join(f"{read[0]}:{read[1]}" for read in picked)
+
+
+def infer_default(lines: list[str], idx: int) -> str:
+    """从语句内（读取行起、到分号止）推断源码默认值；无法判定返回空串。"""
+    seg = " ".join(lines[idx:min(len(lines), idx + 14)])
+    seg = seg.split(";", 1)[0]
+    for pattern in (
+        r"unwrap_or\(\s*Duration::from_millis\((\d[\d_]*)\)",
+        r"unwrap_or\(\s*Duration::from_secs\((\d[\d_]*)\)",
+    ):
+        match = re.search(pattern, seg)
+        if match:
+            return str(int(match.group(1).replace("_", "")))
+    match = re.search(r'unwrap_or\(\s*"([^"]*)"', seg)
+    if match:
+        value = match.group(1).strip()
+        return "on" if value.lower() in {"1", "true", "on", "yes"} else "off"
+    match = re.search(r"unwrap_or\(\s*([0-9]+(?:\.[0-9]+)?)\s*\)", seg)
+    if match:
+        return match.group(1)
+    if "BackendKind::Auto" in seg or "unwrap_or(Auto)" in seg:
+        return "auto"
+    if "unwrap_or_default()" in seg:
+        return "default"
+    return ""
+
+
+def env_refs_committed() -> dict[str, list[str]]:
+    """committed HEAD 口径 env -> 出现文件（wiring 生成物必须与 CI checkout 树一致，排除未提交文件）。"""
+    scan = scan_env(committed=True)
     refs: dict[str, list[str]] = {}
-    for _crate, path, rel in workspace_src_files():
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        for name in set(ENV_RE.findall(text)):
-            refs.setdefault(name, []).append(rel)
-    return {name: sorted(set(paths)) for name, paths in refs.items()}
+    for name, rec in scan.items():
+        paths = {read[0] for read in (rec.get("reads") or []) if read[2] != "comment"}
+        refs[name] = sorted(paths)
+    return refs
 
 
 def default_of(name: str) -> str:
@@ -214,6 +333,9 @@ def render_registry(entries: list[dict], stats_note: str) -> str:
         lines.append("[[entries]]")
         for key in ("name", "default", "layer", "owner", "purpose", "level", "status"):
             lines.append(f"{key} = {toml_str(str(e.get(key, '')))}")
+        evidence = str(e.get("evidence", "")).strip()
+        if evidence:
+            lines.append(f"evidence = {toml_str(evidence)}")
         lines.append("")
     return "\n".join(lines).rstrip("\n") + "\n"
 
@@ -267,10 +389,8 @@ def cmd_check_env_registry() -> int:
     names = [str(e.get("name")) for e in entries]
     dup = sorted({n for n in names if names.count(n) > 1})
     missing = sorted(set(committed) - set(names))
-    print(f"env registry: entries={len(names)} committed={len(committed)} "
-          f"coverage={len(set(committed) & set(names))}/{len(committed)}")
-    print(f"  TODO-OWNER={sum(1 for e in entries if e.get('owner') == 'TODO-OWNER')}  "
-          f"UNCLASSIFIED={sum(1 for e in entries if e.get('level') == 'UNCLASSIFIED')}")
+    print(f"env registry: {_counts_line(entries)}")
+    print(f"  coverage={len(set(committed) & set(names))}/{len(committed)}  committed={len(committed)}")
     if dup:
         print(f"FAIL: duplicate entries: {dup}", file=sys.stderr)
     for name in missing:
@@ -313,7 +433,7 @@ def render_block_list(lines: list[str], indent: str, items: list[str]) -> None:
 
 def render_wiring() -> str:
     claims = load_claims()
-    refs = env_refs_working()
+    refs = env_refs_committed()
     matrix_text = MATRIX.read_text(encoding="utf-8")
     digest = hashlib.sha256(CLAIMS.read_bytes()).hexdigest()
     out: list[str] = [
@@ -415,12 +535,83 @@ def _clean_purpose(text: str, limit: int = 120) -> str:
     return text[:limit]
 
 
-def _registry_counts(entries: list[dict]) -> tuple[int, int, int]:
+def _registry_counts(entries: list[dict]) -> tuple[int, int, int, int]:
+    fragments = sum(1 for e in entries if FRAGMENT_RE.search(str(e.get("purpose", ""))))
     return (
         len(entries),
         sum(1 for e in entries if e.get("owner") == "TODO-OWNER"),
         sum(1 for e in entries if e.get("level") == "UNCLASSIFIED"),
+        fragments,
     )
+
+
+def _counts_line(entries: list[dict]) -> str:
+    entries_n, todo, unclassified, fragments = _registry_counts(entries)
+    return (f"entries={entries_n}  TODO-OWNER={todo}  "
+            f"UNCLASSIFIED={unclassified}  purpose_fragments={fragments}")
+
+
+def cmd_fill_layer(layer: str) -> int:
+    """R3b 按层填实：owner=读取该 env 的 crate（证据），purpose=源码文档注释，default=源码默认值。"""
+    scan = scan_env(committed=True)
+    claims = load_claims()
+    claim_by_switch = {str(c.get("switch_env")): c for c in claims if c.get("switch_env")}
+    entries = registry_entries()
+    target = [e for e in entries if str(e.get("layer")) == layer]
+    if not target:
+        print(f"FAIL: no registry entries in layer={layer}", file=sys.stderr)
+        return 1
+    problems: list[str] = []
+    for entry in target:
+        name = str(entry.get("name"))
+        rec = scan.get(name)
+        if not rec:
+            problems.append(f"{name}: committed HEAD 扫描无读取点")
+            continue
+        reads = rec.get("reads") or []
+        if not reads:
+            problems.append(f"{name}: 无读取行")
+            continue
+        evidence = evidence_of(rec)
+        purpose = str(rec.get("doc") or "").strip() or _clean_purpose(str(entry.get("purpose", "")))
+        if not purpose or FRAGMENT_RE.search(purpose):
+            purpose = "TODO-PURPOSE"
+        claim = claim_by_switch.get(name)
+        level = str(claim.get("level")) if claim else "UNCLASSIFIED"
+        default = str(rec.get("default_hint") or "")
+        if claim and str(claim.get("default") or "") in ("ON", "OFF"):
+            default = "on" if str(claim.get("default")) == "ON" else "off"
+        if not default:
+            if name.startswith("APEIRETH_TUNE_") and name != "APEIRETH_TUNE_":
+                default = "baseline"  # 源码: self_tuning.rs 模块文档「缺省/非法 → baseline」
+            elif name == "APEIRETH_KEYRING_BACKEND":
+                default = "auto"  # 源码: keyring.rs from_env_str「缺省/未知 → Auto」
+            elif SWITCH_HINT.search(name):
+                default = "off"
+            else:
+                default = "n/a"
+        entry.update({
+            "owner": rec["crate"],
+            "purpose": purpose,
+            "default": default,
+            "level": level,
+            "status": "current",
+            "evidence": evidence,
+        })
+    subset = [e for e in entries if str(e.get("layer")) == layer]
+    subset_counts = _registry_counts(subset)
+    note = (f"R3b layer={layer} 批: owner=crate 证据、purpose=源码文档注释、default=源码默认值；"
+            f"evidence 路径:行 必填；level 保守（claims 覆盖按 claim，其余 UNCLASSIFIED）")
+    REGISTRY.write_text(render_registry(entries, note), encoding="utf-8")
+    print(f"fill-layer {layer}: subset entries={subset_counts[0]} TODO-OWNER={subset_counts[1]} "
+          f"UNCLASSIFIED={subset_counts[2]} purpose_fragments={subset_counts[3]}")
+    print(f"table: {_counts_line(entries)}")
+    for item in problems:
+        print(f"  INFO: {item}")
+    if subset_counts[1] or subset_counts[3]:
+        print("FAIL: foundation 子集要求 TODO-OWNER=0 且 purpose_fragments=0", file=sys.stderr)
+        return 1
+    return 0
 
 
 def cmd_fill_owners() -> int:
@@ -466,7 +657,7 @@ def cmd_fill_owners() -> int:
 def cmd_crosscheck(strict: bool) -> int:
     """R3c：wiring ledger 与 claims 交叉校验（PRODUCTION WIRED 有生产引用；IMPLEMENTED 有 gaps 原因）。"""
     claims = load_claims()
-    refs = env_refs_working()
+    refs = env_refs_committed()
     problems: list[str] = []
     for claim in claims:
         cid = str(claim.get("id", ""))
@@ -498,9 +689,7 @@ def cmd_stats() -> int:
     claims = load_claims()
     print(f"env names: committed={len(committed)} working_tree={len(working)} "
           f"in_flight={len(set(working) - set(committed))}")
-    print(f"registry: entries={len(entries)} "
-          f"owner_TODO={sum(1 for e in entries if e.get('owner') == 'TODO-OWNER')} "
-          f"level_UNCLASSIFIED={sum(1 for e in entries if e.get('level') == 'UNCLASSIFIED')}")
+    print(f"registry: {_counts_line(entries)}")
     print(f"wiring: claims={len(claims)}")
     return 0
 
@@ -513,6 +702,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--fill-owners-from-claims", action="store_true",
                         help="R3b：按 claims 证据填 claims 覆盖开关的 owner/purpose")
+    parser.add_argument("--fill-layer", default="", help="R3b：按层填实 owner/evidence/purpose/default")
     parser.add_argument("--crosscheck", action="store_true",
                         help="R3c：wiring ↔ claims 交叉校验（默认 report-only；--strict 升 blocking）")
     parser.add_argument("--strict", action="store_true")
@@ -525,6 +715,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_check_env_registry()
     if args.fill_owners_from_claims:
         return cmd_fill_owners()
+    if args.fill_layer:
+        return cmd_fill_layer(args.fill_layer)
     if args.gen:
         return cmd_gen()
     if args.verify:

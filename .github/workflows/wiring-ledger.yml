@@ -37,13 +37,27 @@ jobs:
 
       - name: env registry coverage (R3a)
         run: |
-          python3 scripts/wiring_report.py --check-env-registry
+          set -o pipefail
+          mkdir -p logs
+          python3 scripts/wiring_report.py --check-env-registry 2>&1 | tee logs/wiring-ledger.log
 
       - name: wiring ledger drift (generated; no hand-edit)
         run: |
-          python3 scripts/wiring_report.py --verify
+          set -o pipefail
+          mkdir -p logs
+          python3 scripts/wiring_report.py --verify 2>&1 | tee -a logs/wiring-ledger.log
 
       - name: R3c cross-check (report-only until 2026-11-03)
         continue-on-error: true
         run: |
-          python3 scripts/wiring_report.py --crosscheck
+          set -o pipefail
+          mkdir -p logs
+          python3 scripts/wiring_report.py --crosscheck 2>&1 | tee -a logs/wiring-ledger.log
+
+      - name: Upload wiring ledger log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiring-ledger-log
+          path: logs/wiring-ledger.log
+          if-no-files-found: warn

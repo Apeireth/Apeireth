@@ -98,11 +98,8 @@ items:
       production_refs:
         - "crates/adapters/cli/src/lib.rs"
         - "crates/capabilities/tools/src/voice/ledger.rs"
-        - "crates/capabilities/tools/src/voice/mod.rs"
         - "crates/capabilities/tools/src/voice/playback.rs"
         - "crates/capabilities/tools/src/voice/speak.rs"
-        - "crates/engine/runtime-assembly/src/canonical/production.rs"
-        - "crates/engine/runtime-assembly/src/canonical/tool_modules.rs"
     default_enabled: false
     validated:
       tests:
@@ -304,7 +301,6 @@ items:
       production_refs:
         - "crates/engine/organ/src/tone.rs"
         - "crates/engine/runtime-assembly/src/canonical/bio_tone.rs"
-        - "crates/engine/runtime-assembly/src/canonical/production.rs"
     default_enabled: false
     validated:
       tests:

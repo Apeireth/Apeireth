@@ -326,3 +326,7 @@ research/praisonai-git/
 
 # 装配校验脚本的瞬态日志目录（scripts/check-assembly-matrix.ps1 输出），不入库
 /logs/
+
+# Python 缓存（scripts/ 运行副产物，不入库；2026-10-20 效率线）
+__pycache__/
+*.pyc
