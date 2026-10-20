@@ -25,8 +25,10 @@ use apeireth_organ::tone::CautionLevel;
 use apeireth_protocol::canonical::{
     ContentPart, NormalizedMessage, NormalizedResponse, ToolResult,
 };
+use apeireth_runtime::ApprovalDecision;
 use apeireth_runtime_assembly::canonical::care_heartbeat::bio_tone::{
-    ToneFeedbackKind, ToneState, BIO_TONE_ENABLE_ENV, BIO_TONE_MODULE_ID, TONE_CLAUSE_LABEL,
+    apply_approval_social_feedback, approval_social_feedback, ToneFeedbackKind, ToneState,
+    BIO_TONE_ENABLE_ENV, BIO_TONE_MODULE_ID, TONE_CLAUSE_LABEL,
 };
 use apeireth_runtime_assembly::canonical::module::{
     BehaviorModule, HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
@@ -509,4 +511,57 @@ async fn hooks_without_a_real_payload_never_move_the_state() {
     }
     assert_eq!(state.vector(), before, "缺载荷 = 无事件 = 状态不动");
     assert!(state.is_baseline());
+}
+
+// ============================================
+// 9. 审批面社会反馈源 (W3.7: 装配根真实消费点)
+// ============================================
+
+/// 只有真实社会结论才产生信号: 人批 → 正, 人拒 → 负, 取消 → 不编事件。
+#[test]
+fn approval_social_feedback_maps_real_decisions_only() {
+    assert_eq!(
+        approval_social_feedback(&ApprovalDecision::Approve),
+        Some(ToneFeedbackKind::SocialPositive)
+    );
+    assert_eq!(
+        approval_social_feedback(&ApprovalDecision::Reject {
+            reason: Some("reversible risk".into()),
+        }),
+        Some(ToneFeedbackKind::SocialNegative)
+    );
+    assert_eq!(
+        approval_social_feedback(&ApprovalDecision::Cancel { reason: None }),
+        None,
+        "取消 = 收回请求, 不构成社会结论 (不编事件)"
+    );
+}
+
+/// 开关关 (无句柄) = 不观察零变化; 开关开 = 同一状态对象真的被推进。
+#[test]
+fn approval_social_feedback_advances_state_only_with_a_handle() {
+    let state = Arc::new(ToneState::new(Arc::new(|| NOW_MS as u64)));
+    assert!(state.is_baseline(), "构造必须是基线档 (不编造初始语气)");
+    let before = state.behavior_params();
+
+    assert!(
+        !apply_approval_social_feedback(None, Some(ToneFeedbackKind::SocialPositive)),
+        "无句柄 (开关关) 不得推进任何状态"
+    );
+    assert!(state.is_baseline());
+
+    assert!(
+        apply_approval_social_feedback(Some(&state), Some(ToneFeedbackKind::SocialPositive)),
+        "句柄在场 = 审批面反馈真的进共享状态机"
+    );
+    assert_ne!(
+        state.behavior_params(),
+        before,
+        "人批确实把调质向量推离基线 (单次脉冲只动数值, 不必然跨离散语气档)"
+    );
+
+    assert!(
+        !apply_approval_social_feedback(Some(&state), None),
+        "无社会结论 (取消) 时即便句柄在场也不推进"
+    );
 }

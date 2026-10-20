@@ -1,4 +1,4 @@
-//! 生物机制族 W3.3 · 调质 → 语气装配面 (默认关, fail-closed; W3.5 补真实事件源半程)。
+//! 生物机制族 W3.3 · 调质 → 语气装配面 (默认关, fail-closed; W3.5/W3.7 补真实事件源)。
 //!
 //! # 机制
 //!
@@ -25,20 +25,30 @@
 //! | [`HookPoint::AfterToolResult`] + [`ToolResult`] | `ToolResult::is_ok()` | [`ToneFeedbackKind::TaskSuccess`] | 协议层显式结算为成功 |
 //! | [`HookPoint::AfterToolResult`] + [`ToolResult`] | `ToolOutcome::Error { .. }` | [`ToneFeedbackKind::TaskFailure`] | 协议层显式结算为失败 (可重试/不可重试同档) |
 //! | [`HookPoint::OnError`] + 错误文本 | `error` 存在 | [`ToneFeedbackKind::TaskFailure`] | 运行时 / 模块失败的 best-effort 观察钩 |
+//! | [`HookPoint::AfterToolResult`] + [`ToolCall`] | 工具名在**本进程内首次出现** (模块持有首见集, 重复 / 空名不注入) | [`ToneFeedbackKind::Novelty`] | 新工具面首次触达 = 确定性新颖信号, 不做内容推断 |
 //!
-//! 映射规则: 缺载荷 (`tool_result` / `error` 为 `None`) = 无事件 = 不注入; 其它钩子
+//! 映射规则: 缺载荷 (`tool_call` / `tool_result` / `error` 为 `None`) = 无事件 = 不注入; 其它钩子
 //! (含 `TurnStart`) 不产生反馈。不读用户文本、不做情感 / 意图推断 —— 只把协议里
-//! **已有显式判决**的结局映射成事件, 不替任何一档编造信号。
+//! **已有显式判决**的结局与显式载荷映射成事件, 不替任何一档编造信号。
+//! 首见集口径: 进程生命周期内按工具名去重 (工具名来自名册, 有限集合); 不区分会话、
+//! 无 TTL / 无淘汰, 重启归零。
 //!
 //! 粒度为**工具调用**级: 一次结算 = 一次脉冲, 无节流 / 无去重; 高频工具面会更快把
 //! 六维推离基线 (已知量化缺口, 窗口未标定)。状态仍在基线档时不发 overlay。
 //!
+//! **装配面社会反馈源 (W3.7)**: CLI 审批落账 (`apeireth approve` / `apeireth reject`)
+//! 在 resolve 成功后, 经装配根交付的共享状态句柄 (`ProductionModules::bio_tone_state`)
+//! 旁路注入一次社会反馈 —— 人批 → [`ToneFeedbackKind::SocialPositive`], 人拒 →
+//! [`ToneFeedbackKind::SocialNegative`], 取消 (`cancel`) = 收回请求、不构成社会结论
+//! = 不注入。该源在装配根层, 不经模块钩子; **不改审批结论、不参与权限判定**, 只把
+//! 已经发生的人机社会结果记成调质脉冲。开关关时装配根不交付句柄 = 零观察零变化。
+//!
 //! **未接的真实源 (诚实边界)**: 用户显式好评 / 差评的采集入口在装配面不存在 ——
 //! `self_tuning::TuningEvent::ToneFeedback`、`value_cases::Feedback`、
 //! `online_calibration::UserFeedback`、`orchestrator::OrchestratorFeedback` 四份接口
-//! 当前均无生产调用方 (接口已备待接)。故 [`ToneFeedbackKind`] 其余七档
-//! (RewardPrediction / SocialPositive / SocialNegative / Threat / Novelty / Quiet /
-//! UserCorrection) 仍只经显式注入口 [`ToneState::apply_feedback`] 进入。
+//! 当前均无生产调用方 (接口已备待接)。故 [`ToneFeedbackKind`] 其余四档
+//! (RewardPrediction / Threat / Quiet / UserCorrection) 仍只经显式注入口
+//! [`ToneState::apply_feedback`] 进入。
 //!
 //! # 开关 (默认关)
 //!
@@ -63,9 +73,11 @@
 //!
 //! # 0 装诚实 (能力级别: PRODUCTION WIRED, 默认关; 非 DEFAULT ENABLED, 无 live E2E)
 //!
-//! - **事件源半程**: 已接 = 工具结算成功 / 失败 + 运行时错误 (上表三行, 确定性映射,
-//!   复用既有钩子面); 未接 = 用户显式好评 / 差评采集 (四处接口无生产调用方), 其余
-//!   七档只有显式注入口。不读文本、不猜情绪、不做情感识别。
+//! - **事件源 (W3.7 半程)**: 已接 = 工具结算成功 / 失败 + 运行时错误 + 新工具首见
+//!   Novelty (上表四行, 复用既有钩子面) + 审批面人批 / 人拒 (装配根句柄, 见上节);
+//!   未接 = 用户显式好评 / 差评采集 (四处接口无生产调用方), 其余**四档**
+//!   (RewardPrediction / Threat / Quiet / UserCorrection) 只有显式注入口。不读文本、
+//!   不猜情绪、不做情感识别。
 //! - **关系快照未接**: [`BondCharacterSnapshot`] 缺省为 `default()`; 真实羁绊存储
 //!   (`BondCharacterStore`) 未读取, 需宿主经 [`ToneState::set_bond_snapshot`] 显式注入。
 //! - **时间注入**: 逻辑时刻由构造时注入的 [`ToneClock`] 给出, 状态机自身不读系统时钟;
@@ -74,13 +86,14 @@
 //!   本模块 (`APEIRETH_ENABLE_BIO_TONE=1` 才构造) 并保存共享状态句柄
 //!   ([`crate::canonical::production::ProductionModules::bio_tone_state`]), 但无
 //!   live E2E 实测。
-//! - **反馈注入点**: 装配根另有
-//!   [`crate::canonical::production::ProductionModules::attach_tone_feedback_sink`]
+//! - **反馈注入点**: 句柄已有真实消费方 (CLI 审批面 `approval_tone_feedback`); 装配根
+//!   另有 [`crate::canonical::production::ProductionModules::attach_tone_feedback_sink`]
 //!   供其它既有反馈点 (例如未来的用户好评 / 差评采集) 持句柄旁路注入, 不复制总线。
 //! - 调质是工程标签, 不宣称主观情绪、意识或生理真实性。
 
 #![forbid(unsafe_code)]
 
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use apeireth_organ::neuromodulation::{
@@ -90,7 +103,8 @@ use apeireth_organ::neuromodulation::{
 use apeireth_organ::tone::{
     behavior_tone_style, tone_hint, tone_hint_with_params, BehaviorToneStyle, BondCharacterSnapshot,
 };
-use apeireth_protocol::canonical::ToolResult;
+use apeireth_protocol::canonical::{ToolCall, ToolResult};
+use apeireth_runtime::ApprovalDecision;
 
 use crate::canonical::module::{
     BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
@@ -361,6 +375,7 @@ pub struct BioToneModule {
     manifest: ModuleManifest,
     enabled: bool,
     state: Arc<ToneState>,
+    seen_tools: Mutex<BTreeSet<String>>,
 }
 
 impl BioToneModule {
@@ -371,6 +386,7 @@ impl BioToneModule {
             manifest: ModuleManifest::new(BIO_TONE_MODULE_ID, "Bio Tone Modulation"),
             enabled,
             state,
+            seen_tools: Mutex::new(BTreeSet::new()),
         }
     }
 
@@ -409,19 +425,56 @@ impl BioToneModule {
     /// - 无事件载荷 / 非事件钩子 → `None` (无事件 = 不注入);
     /// - 有事件 → 一次 [`ToneState::apply_feedback`] 回执 (可诊断 / 可断言)。
     ///
-    /// 幂等口径: 同一事件重复投递 = 重复脉冲 (状态机累积, **非幂等**); 只有状态
-    /// 到达 clamp 界后, 后续同向事件才 `changed() == false` (有界)。
+    /// 本入口不观察工具名 (即不含 Novelty 源); 钩子面请用
+    /// [`Self::record_hook_observation`]。
     pub fn record_hook_feedback(
         &self,
         hook: HookPoint,
         tool_result: Option<&ToolResult>,
         error: Option<&str>,
     ) -> Option<ToneFeedbackReceipt> {
+        self.record_hook_observation(hook, None, tool_result, error)
+            .into_iter()
+            .next()
+    }
+
+    /// 旁路消费一次既有钩子上的全部真实事件 (只推进调质状态, 不产 overlay)。
+    ///
+    /// 事件顺序固定 (确定性): ①工具结算 / 运行时错误 (见
+    /// [`tone_feedback_from_hook`]) → ②`AfterToolResult` 上工具名首见 → Novelty。
+    /// 开关关 = **零观察**: 不写首见集、不回执 (关时逐字节零变化)。
+    pub fn record_hook_observation(
+        &self,
+        hook: HookPoint,
+        tool_call: Option<&ToolCall>,
+        tool_result: Option<&ToolResult>,
+        error: Option<&str>,
+    ) -> Vec<ToneFeedbackReceipt> {
         if !self.enabled {
-            return None;
+            return Vec::new();
         }
-        let feedback = tone_feedback_from_hook(hook, tool_result, error)?;
-        Some(self.state.apply_feedback(feedback))
+        let mut receipts = Vec::new();
+        if let Some(feedback) = tone_feedback_from_hook(hook, tool_result, error) {
+            receipts.push(self.state.apply_feedback(feedback));
+        }
+        if hook == HookPoint::AfterToolResult {
+            let name = tool_call
+                .map(|call| call.name.trim())
+                .filter(|n| !n.is_empty());
+            if let Some(name) = name {
+                let mut seen = self.lock_seen_tools();
+                if seen.insert(name.to_owned()) {
+                    receipts.push(self.state.apply_feedback(ToneFeedbackKind::Novelty));
+                }
+            }
+        }
+        receipts
+    }
+
+    fn lock_seen_tools(&self) -> MutexGuard<'_, BTreeSet<String>> {
+        self.seen_tools
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -440,9 +493,9 @@ impl BehaviorModule for BioToneModule {
             return Ok(ModuleOutcome::continue_());
         }
         if hook != HookPoint::TurnStart {
-            // 真实事件源 (既有钩子面): 工具结算 / 运行时错误旁路推进调质状态。
-            // 不产 overlay (overlay 只在回合起点装配), 指令恒为 Continue。
-            self.record_hook_feedback(hook, ctx.tool_result(), ctx.error);
+            // 真实事件源 (既有钩子面): 工具结算 / 运行时错误 / 工具名首见旁路推进
+            // 调质状态。不产 overlay (overlay 只在回合起点装配), 指令恒为 Continue。
+            self.record_hook_observation(hook, ctx.tool_call(), ctx.tool_result(), ctx.error);
             return Ok(ModuleOutcome::continue_());
         }
         let Some(overlay) = self.assemble().overlay else {
@@ -503,6 +556,35 @@ pub fn bio_tone_wiring_from_env_value(
 #[must_use]
 pub fn bio_tone_wiring_from_env(clock: ToneClock) -> Option<BioToneWiring> {
     bio_tone_wiring_from_env_value(std::env::var(BIO_TONE_ENABLE_ENV).ok().as_deref(), clock)
+}
+
+/// 审批面社会反馈映射 (W3.7 装配面真实源, 纯映射): 人批 → 社会正结果,
+/// 人拒 → 社会负结果; 取消 = 收回请求, 不构成社会结论 (返回 `None`, 不编事件)。
+///
+/// 只做枚举映射, 不读文本 / 不判意图; 反馈档是工程标签, 不宣称主观情绪。
+#[must_use]
+pub fn approval_social_feedback(decision: &ApprovalDecision) -> Option<ToneFeedbackKind> {
+    match decision {
+        ApprovalDecision::Approve => Some(ToneFeedbackKind::SocialPositive),
+        ApprovalDecision::Reject { .. } => Some(ToneFeedbackKind::SocialNegative),
+        ApprovalDecision::Cancel { .. } => None,
+    }
+}
+
+/// 把一次审批面社会结论推进共享调质状态 (句柄与结论都真存在时才推进; 返回是否推进)。
+///
+/// 开关关 = `state == None` = 不回调、不观察、零变化 (与未接线逐字节一致)。
+pub fn apply_approval_social_feedback(
+    state: Option<&Arc<ToneState>>,
+    feedback: Option<ToneFeedbackKind>,
+) -> bool {
+    match (state, feedback) {
+        (Some(state), Some(feedback)) => {
+            state.apply_feedback(feedback);
+            true
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -801,6 +883,74 @@ mod tests {
         assert_eq!(receipt.feedback, ToneFeedbackKind::TaskFailure);
         assert!(receipt.changed());
         assert_ne!(state.vector(), baseline_vector, "事件真的进了状态机");
+    }
+
+    #[test]
+    fn first_sighting_of_a_tool_name_is_novelty_and_repeats_are_not() {
+        let state = baseline_state();
+        let module = BioToneModule::new(true, Arc::clone(&state));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "tool.weather".into(),
+            arguments: serde_json::Value::Null,
+        };
+        let ok = ToolResult::ok("call_1", serde_json::Value::Null);
+
+        let first = module.record_hook_observation(
+            HookPoint::AfterToolResult,
+            Some(&call),
+            Some(&ok),
+            None,
+        );
+        assert_eq!(first.len(), 2, "结算 + 首见各一次脉冲");
+        assert_eq!(first[0].feedback, ToneFeedbackKind::TaskSuccess);
+        assert_eq!(first[1].feedback, ToneFeedbackKind::Novelty);
+        assert!(first[1].changed(), "Novelty 事件真的进了状态机");
+
+        let repeat = module.record_hook_observation(
+            HookPoint::AfterToolResult,
+            Some(&call),
+            Some(&ok),
+            None,
+        );
+        assert_eq!(repeat.len(), 1, "重复工具名不再产生 Novelty");
+        assert_eq!(repeat[0].feedback, ToneFeedbackKind::TaskSuccess);
+
+        // 空名 = 无事件 (不从缺失数据编信号); 非 AfterToolResult 钩子即便带 tool_call 也不看名。
+        let mut blank = call.clone();
+        blank.name = "   ".into();
+        let blank_receipts = module.record_hook_observation(
+            HookPoint::AfterToolResult,
+            Some(&blank),
+            Some(&ok),
+            None,
+        );
+        assert!(blank_receipts
+            .iter()
+            .all(|receipt| receipt.feedback != ToneFeedbackKind::Novelty));
+        let before_hook =
+            module.record_hook_observation(HookPoint::BeforeToolCall, Some(&call), None, None);
+        assert!(before_hook.is_empty(), "非事件钩子不产生反馈");
+    }
+
+    #[test]
+    fn novelty_source_is_zero_change_when_the_switch_is_off() {
+        let state = baseline_state();
+        let module = BioToneModule::new(false, Arc::clone(&state));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "tool.weather".into(),
+            arguments: serde_json::Value::Null,
+        };
+        let ok = ToolResult::ok("call_1", serde_json::Value::Null);
+        let receipts = module.record_hook_observation(
+            HookPoint::AfterToolResult,
+            Some(&call),
+            Some(&ok),
+            None,
+        );
+        assert!(receipts.is_empty());
+        assert!(state.is_baseline(), "开关关 = 首见集不写、状态不动");
     }
 
     #[test]

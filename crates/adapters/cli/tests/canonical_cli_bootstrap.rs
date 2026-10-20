@@ -106,9 +106,10 @@ async fn the_cli_bootstrap_fans_out_guard_dataset_and_trace_audit_observation() 
     let data_dir = data_dir.to_string_lossy().into_owned();
     let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
 
-    let (runtime, observer, _cost_router) = build_canonical_runtime_from_env_with_observability()
-        .await
-        .expect("the production CLI bootstrap builds with all observers");
+    let (runtime, observer, _cost_router, _bio_tone) =
+        build_canonical_runtime_from_env_with_observability()
+            .await
+            .expect("the production CLI bootstrap builds with all observers");
     let CanonicalCliTurn::Completed(outcome) =
         execute_canonical_cli_turn(&runtime, "hello", None, None)
             .await

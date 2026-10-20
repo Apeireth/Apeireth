@@ -6,6 +6,8 @@
 
 // v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend; 本模块只做 bootstrap 集成.
 pub mod backup;
+// 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
+pub mod canonical_approval;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
 pub mod care_heartbeat;
 // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
@@ -19,6 +21,7 @@ pub mod trait_command;
 // W3-② 用户身份与角色: `apeireth user add|list|role|remove` 管理面 (owner 角色门)。
 pub mod user_admin;
 
+pub use canonical_approval::dispatch_canonical_approval;
 pub use care_heartbeat::CareHeartbeatSource;
 pub use portable_bundle::{PortableBundleManifest, PortableBundleSynthesizer};
 
@@ -42,6 +45,8 @@ use apeireth_runtime::canonical::{
     TurnRequest, TurnResponse,
 };
 use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
+// W3.7 调质状态句柄类型 (审批面分派在 `canonical_approval` 模块消费)。
+use apeireth_runtime_assembly::canonical::bio_tone::ToneState;
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 
 /// One persistent SQLite database is shared by the cognitive backends.
@@ -1417,14 +1422,15 @@ type CanonicalRuntimeParts = (
 
 pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env(
 ) -> Result<CanonicalRuntimeParts, String> {
-    let (parts, _bio_probe_slots) = build_canonical_runtime_assembly_from_env().await?;
+    let (parts, _bio_probe_slots, _bio_tone) = build_canonical_runtime_assembly_from_env().await?;
     Ok(parts)
 }
 
 /// 上面公开入口的装配本体: 额外回传 W3.6 生物 probe 迟绑定槽（给已 `Arc` 化的
-/// 调用方填痛觉读取口; 槽未武装 = no-op, 默认关零变化）。
+/// 调用方填痛觉读取口; 槽未武装 = no-op, 默认关零变化）与 W3.7 共享调质状态句柄
+/// （审批面社会反馈源; 开关关 = None）。
 async fn build_canonical_runtime_assembly_from_env(
-) -> Result<(CanonicalRuntimeParts, BioProbeSlots), String> {
+) -> Result<(CanonicalRuntimeParts, BioProbeSlots, Option<Arc<ToneState>>), String> {
     // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
     // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
     // 拆任务后各自持票进运行时工作线程; 顺序语义不变 (运行时组装仍等两侧齐备)。
@@ -1455,6 +1461,8 @@ async fn build_canonical_runtime_assembly_from_env(
     // W3.6: 自述关怀心跳 probe 迟绑定 (槽未武装 = no-op, 默认关零变化)。
     let bio_probe_slots = cognitive.bio_probe_slots();
     bio_probe_slots.fill_care_status(care_heartbeat.status_probe());
+    // W3.7: 调质状态句柄必须在模块被装配根消费前取出 (开关关 = None)。
+    let bio_tone = cognitive.bio_tone_state();
     // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根注册进域平面 (每域恰一把)。
     let sessions = Arc::new(apeireth_runtime::SessionManager::new(
         Arc::clone(&session_store),
@@ -1474,6 +1482,7 @@ async fn build_canonical_runtime_assembly_from_env(
             cost_router,
         ),
         bio_probe_slots,
+        bio_tone,
     ))
 }
 
@@ -1661,6 +1670,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         Arc<Runtime>,
         Arc<apeireth_gateway::RuntimeObservationSink>,
         Arc<apeireth_core::cost_router::CostRouter>,
+        Option<Arc<ToneState>>,
     ),
     String,
 > {
@@ -1676,6 +1686,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
             cost_router,
         ),
         bio_probe_slots,
+        bio_tone,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
     // W3.6: 痛觉/再生 probe 迟绑定到 runtime 自身 (Weak 无环)。
@@ -1703,7 +1714,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         services.audit_commands.clone(),
     ));
     runtime.add_event_sink(observer.clone());
-    Ok((runtime, observer, cost_router))
+    Ok((runtime, observer, cost_router, bio_tone))
 }
 
 /// Completed turn or a pending approval that still has its [`ApprovalId`].
@@ -2690,7 +2701,7 @@ pub async fn dispatch_canonical_chat(
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
         .transpose()?;
-    let (runtime, observer, cost_router) =
+    let (runtime, observer, cost_router, _bio_tone) =
         build_canonical_runtime_from_env_with_observability().await?;
     // 成本分级路由 (H-P2 任务选型): 显式 `--model` > 路由选定 > 默认模型;
     // 开关关 = fail-closed 零行为变化。路由决策即自述路由节真值 (同一路由器)。
@@ -2840,26 +2851,6 @@ pub async fn dispatch_nightwatch_watch(
 
         tokio::time::sleep(std::time::Duration::from_secs(interval_secs.max(1))).await;
     }
-}
-
-/// Bootstrap and resolve a pending approval on the production session store.
-pub async fn dispatch_canonical_approval(
-    session: String,
-    approval: String,
-    decision: ApprovalDecision,
-) -> Result<ApprovalResolution, String> {
-    let session = session
-        .parse::<SessionId>()
-        .map_err(|error| error.to_string())?;
-    let approval = approval
-        .parse::<ApprovalId>()
-        .map_err(|error| error.to_string())?;
-    // 审批延续回合沿用原请求的模型 (模型已在原回合定好), 本路径不重路由。
-    let (runtime, observer, _cost_router) =
-        build_canonical_runtime_from_env_with_observability().await?;
-    let result = resolve_canonical_cli_approval(&runtime, session, approval, decision).await;
-    observer.flush().await;
-    result
 }
 
 /// **W3 onering 账本消费旋钮** (2026-10-10, 默认关):
@@ -3267,6 +3258,7 @@ pub async fn dispatch_gateway_serve_with(
             _cost_router,
         ),
         bio_probe_slots,
+        _bio_tone,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
     // W3.6: 常驻宿主同样把痛觉/再生 probe 迟绑定到 runtime。
