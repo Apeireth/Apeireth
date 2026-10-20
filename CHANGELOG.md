@@ -12,15 +12,16 @@
 - **B7 治理链端到端合练**（#7）：现役 M-of-N 逻辑票链三路径（通过/拒绝/超时）+ 防凑票对抗用例 + 审计落盘断言，演练记录落 `docs/04-internal/governance-chain-drill-2026-10-20.md`（缺口 6 项如实登记：编排未接线/物理多签留 v2.1 等）。**逻辑票 ≠ 密码学多签**（严守口径）。
 - **B8 发布资产校验**（#8）：`scripts/verify-release-assets.ps1`（哈希三口径 + Authenticode 如实报 + 缺项不装过）+ 流程文档 + 排期 4 项（签名证书/可复现构建等 owner 决策）。
 
-## [Unreleased] — 生物机制族 W3.7：调质真实事件源（Novelty 首见 + 人批/人拒社会结论；全部默认关；2026-10-20）
+## [Unreleased] — 生物机制族 W3.7：调质真实事件源 + 仪式完成事件源（全部默认关；2026-10-20）
 
-单批（**+~24 新测**，默认关、关时逐字节零变化；架构准入 A 类）：
+两批（**+~34 新测**，默认关、关时逐字节零变化；架构准入 A 类）：
 - **Novelty 事件源**（`runtime-assembly::canonical::bio_tone`）：`HookPoint::AfterToolResult` + `ToolCall`，工具名**本进程内首见**注入一次 `ToneFeedbackKind::Novelty`（模块持首见集 `BTreeSet`，重复 / 空名不注入；不读用户文本、不做内容 / 意图推断）；首见集无 TTL / 无淘汰、重启归零（如实）。+2 单测，bio_tone lib 12 passed。
 - **装配面社会反馈源**：CLI 审批落账（`apeireth approve` / `apeireth reject`）在 `resolve` **成功后**经 `ProductionModules::bio_tone_state` 共享句柄旁路注入——人批 → `SocialPositive`、人拒 → `SocialNegative`、取消 = 不注入（收回请求，不构成社会结论）；**不改审批结论、不参与权限判定**；开关关 = 装配根不交付句柄 = 零回调零变化。纯函数面 `approval_social_feedback` / `apply_approval_social_feedback` 沉在装配面，集成测试 `bio_tone_feedback` 10 passed。
-- **事件源进度（9 档）**：已接 **5/9** = TaskSuccess / TaskFailure（W3.5 工具结局 + 运行时错误）、Novelty（W3.7 首见）、SocialPositive / SocialNegative（W3.7 审批面）；**其余 4 档**（RewardPrediction / Threat / Quiet / UserCorrection）仍仅显式注入口（四处用户反馈接口无生产调用方），如实未接。
+- **SG-22 仪式完成事件源**（`runtime-assembly::canonical::ritual_tools`）：`tool.ritual_done` / `tool.ritual_skip` 两模型面工具注册于 production 装配——复用 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` 总闸（只认精确 `"1"`）**且**需关怀数据目录（缺目录 = 拒绝注册）；调用即写 `<care_dir>/ritual_state.json`（StoredDoc v1 + 原子写 + 坏档 fail-closed 不覆盖），只写统计（done 时刻/连续数、skip 计数），**不改既有判定 / 审批 / 权限链**。**事件语义 = 模型在用户明确确认后调用，非自动推定、非打卡**（SG-22「可静默、不可打卡」底线保持）。消费侧 = care 心跳宿主 `ritual_inputs` 读同一文件；纯 CLI chat 无心跳 = 写入暂无候选消费（如实）。单写者设计，显式 `record_ritual_done/skip` 注入口保留（与工具面并用无跨实例锁 = 具名缺口）。5 单测 + 5 集成测试。
+- **事件源进度（tone 9 档）**：已接 **5/9** = TaskSuccess / TaskFailure（W3.5 工具结局 + 运行时错误）、Novelty（W3.7 首见）、SocialPositive / SocialNegative（W3.7 审批面）；**其余 4 档**（RewardPrediction / Threat / Quiet / UserCorrection）仍仅显式注入口（四处用户反馈接口无生产调用方），如实未接。
 - **装配根尺寸**：审批分派拆到 `crates/adapters/cli/src/canonical_approval.rs`（公开路径 re-export 不变），cli lib 3887 → 3870，`arch_guard --strict` VIOLATIONS 0（STALE 1 = 可缩表，归效率线）。
-- **门禁（scoped）**：cli lib 56、bio_tone lib 12、`bio_tone_feedback` 10、`canonical_cli_bootstrap` 6、早前 assembly lib 237；clippy 0、fmt 0 diff。**全量未出数**：他线 R2-4 命名迁移 / R7 归档在途 + 本机页文件耗尽（nextest `os error 1455`）如实登记，§1 不替换。
-- **诚实边界**：全部默认关、非 DEFAULT ENABLED / HARDWARE VALIDATED；无 live E2E；审批社会源只在 CLI 两条命令路径（网关审批面板未接）；tone 其余 4 档无真实源。
+- **门禁（scoped）**：assembly 全目标 0 failed（含新 10 测试）、cli lib 56、bio_tone lib 12、`bio_tone_feedback` 10、`canonical_cli_bootstrap` 6、`canonical_cli_architecture` 2；clippy 0、fmt 0 diff。**全量复核如实**：首跑（20:46 启动）出现 1 失败 = cli 架构守卫仍引用已移走的文档注释（本次 `35c4b24a` 修正，非生产缺陷）；该跑已中止、数字不可作基线，重跑待他线 R2-4/R7 收敛 + D28 页文件缓解后登记，§1 不替换。
+- **诚实边界**：全部默认关、非 DEFAULT ENABLED / HARDWARE VALIDATED；无 live E2E；审批社会源只在 CLI 两条命令路径（网关审批面板未接）；仪式工具无心跳宿主时无消费侧；tone 其余 4 档无真实源。
 
 ## [Unreleased] — 生物机制族 W3.6：观测面 7/14 + 生命周期持久化（全部默认关；2026-10-20）
 

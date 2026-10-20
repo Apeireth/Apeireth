@@ -109,8 +109,10 @@
 > **持久化**：生命周期账本 `lifecycle_state.json`（StoredDoc v1、原子写、坏档拒开不覆盖、启动重放、
 > 回合收口写一次；关/目录缺省=纯内存）；单写者、无 WAL/schema 迁移（如实）。
 >
-> **W3.7 交付记录（2026-10-20，事件源批）**：tone 事件源两档补真实源（scoped **+~24 新测**）。
-> 提交：`53e7aa09`（Novelty 首见 + 人批/人拒社会结论 + 审批分派拆模块）。
+> **W3.7 交付记录（2026-10-20，事件源批 + 仪式完成面批）**：tone 事件源两档补真实源 + SG-22 仪式
+> 完成事件源落地（scoped **+~34 新测**）。
+> 提交：`53e7aa09`（Novelty 首见 + 人批/人拒社会结论 + 审批分派拆模块）｜`35c4b24a`（架构守卫切片终点
+> 跟随拆分修正）｜`7e98744d`（仪式完成/跳过工具面，默认关，装配级注册）。
 >
 > **tone 事件源 5/9 已接**：TaskSuccess/TaskFailure（W3.5 工具结局 + 运行时错误）、Novelty（工具名
 > 进程内首见，`AfterToolResult`，不读文本不推断）、SocialPositive/SocialNegative（CLI 人批/人拒，
@@ -118,8 +120,15 @@
 > （RewardPrediction/Threat/Quiet/UserCorrection）仍仅显式注入口，如实。首见集进程内去重、无
 > TTL/无淘汰（重启归零）；无 live E2E；网关审批面板未接（如实）。
 >
-> **W3.7 剩余**：①仪式完成事件源；②SG-25 工具能力 taxonomy（B 类 ADR 前置）；③R1b 订阅迁移
-> （`nervous_system.observed` 验收 7/14 → 上升）；④发布收口 + 全量基线统一复跑（当前 §1 口径受其它线
+> **SG-22 仪式完成事件源已接（默认关）**：`tool.ritual_done` / `tool.ritual_skip` 两模型面工具注册于
+> production 装配（复用 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` 总闸 + care 数据目录；只认精确 `"1"`，
+> 缺目录 = 拒绝注册），调用即写 `<care_dir>/ritual_state.json`（StoredDoc v1 原子写、坏档 fail-closed）。
+> **事件语义 = 模型在用户明确确认后调用，不做自动推定、不打卡**（SG-22 底线保持）；消费侧 = care 心跳
+> 宿主 `ritual_inputs` 读同一文件；纯 CLI chat 无心跳 = 写入暂无候选消费（如实）；单写者设计，显式
+> `record_ritual_done/skip` 注入口保留（与工具面并用无跨实例锁 = 具名缺口）。
+>
+> **W3.7 剩余**：①SG-25 工具能力 taxonomy（B 类 ADR 前置）；②R1b 订阅迁移
+> （`nervous_system.observed` 验收 7/14 → 上升）；③发布收口 + 全量基线统一复跑（当前 §1 口径受其它线
 > R4b/R7 归档在途影响，本批只追加证据注记、不替换 §1）。
 >
 > **W3.5 交付记录（2026-10-20，四批并行 + 总装）**：剩余接线收口（**+~100 新测**）。

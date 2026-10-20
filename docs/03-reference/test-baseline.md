@@ -133,6 +133,17 @@
 > 他线 R2-4 命名迁移 / R7 归档在途，且本机页文件耗尽使 nextest 编译期 `os error 1455`（
 > `logs/verify-changed-w37b.log`）；**不替换 §1**，待跨线收口后按同命令面统一复跑刷新。环境事件登记 D28。
 
+> **复测注记（2026-10-20，生物机制族 W3.7 仪式完成面批校验）**：本批 = SG-22 完成事件源
+> （`7e98744d`：`tool.ritual_done`/`tool.ritual_skip`，默认关，复用 bio 候选总闸 + care 数据目录），
+> 完成源从「无」→ 工具面。**scoped 全绿证据**：`ritual_tools` 单元 5 passed、`bio_ritual_tools` 集成
+> 5 passed（默认关零注册零文件 / 无目录拒注册 / 开时恰好两工具且真实调用写出 StoredDoc v1 /
+> 非精确值全关 / 两 id 属 write_or_execute）、`cargo test -p apeireth-runtime-assembly --locked` 全目标
+> 0 failed、cli 架构守卫 2 passed；`cargo clippy -p apeireth-cli -p apeireth-runtime-assembly
+> --all-targets -D warnings` 0、`cargo fmt --check` 0 diff、`arch_guard --strict` VIOLATIONS 0。
+> **全量如实登记**：20:46 启动的首跑出现 1 失败 = `canonical_cli_architecture` 仍以 `53e7aa09`
+> 已移走的文档注释为切片终点（`35c4b24a` 修正，非生产缺陷），该跑已中止、数字不可作基线；权威全量
+> 待他线 R2-4/R7 收敛后按同命令面（`-j 1` + `RUST_TEST_THREADS=4`）复跑并刷新 §1。**§1 本轮不替换**。
+
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |
