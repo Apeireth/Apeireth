@@ -157,6 +157,95 @@ def _today() -> _dt.date:
     return _dt.date.today()
 
 
+# ---------------------------------------------------------------- test baseline / README badge
+
+BASELINE = ROOT / "docs" / "03-reference" / "test-baseline.md"
+MATRIX = ROOT / "docs" / "03-reference" / "capabilities-matrix.md"
+READMES = (ROOT / "README.md", ROOT / "README.zh-CN.md")
+BADGE_RE = re.compile(r"tests-\d+%20passed%20%7C%20\d+%20failed%20\([0-9-]+\)-(?:success|critical)\.svg")
+
+
+def baseline_numbers() -> dict:
+    """从单一真源 test-baseline.md 读测试数字（不手抄）。"""
+    text = BASELINE.read_text(encoding="utf-8")
+    m = re.search(r"(\d+)\s*套件\s*/\s*(\d+)\s+passed\s*/\s*(\d+)\s+failed", text)
+    if not m:
+        raise SystemExit(f"cannot parse baseline numbers from {BASELINE}")
+    d = re.search(r"\|\s*\*\*日期\*\*\s*\|\s*(\d{4}-\d{2}-\d{2})", text)
+    if not d:
+        raise SystemExit(f"cannot parse baseline date from {BASELINE}")
+    return {
+        "suites": int(m.group(1)),
+        "passed": int(m.group(2)),
+        "failed": int(m.group(3)),
+        "date": d.group(1),
+    }
+
+
+def badge_url() -> str:
+    n = baseline_numbers()
+    dash_date = n["date"].replace("-", "--")
+    status = "success" if n["failed"] == 0 else "critical"
+    return f"tests-{n['passed']}%20passed%20%7C%20{n['failed']}%20failed%20({dash_date})-{status}.svg"
+
+
+def sync_badges(write: bool) -> int:
+    """把两份 README 的 tests 徽章同步为单一真源数字。"""
+    want = badge_url()
+    changed = 0
+    for path in READMES:
+        text = path.read_text(encoding="utf-8")
+        new_text, count = BADGE_RE.subn(want, text)
+        if count != 1:
+            print(f"FAIL: expected exactly 1 tests badge in {path.relative_to(ROOT)}, found {count}", file=sys.stderr)
+            return 1
+        if new_text != text:
+            changed += 1
+            if write:
+                path.write_text(new_text, encoding="utf-8")
+            print(f"{'updated' if write else 'would update'}: {path.relative_to(ROOT)}")
+    print(f"badge target: {want}  (baseline {baseline_numbers()})")
+    if not changed:
+        print("OK: badges already match baseline")
+    return 0
+
+
+def matrix_env_tokens() -> list[str]:
+    text = MATRIX.read_text(encoding="utf-8")
+    tokens: list[str] = []
+    for m in re.finditer(r"APEIRETH_[A-Z0-9_]+", text):
+        token = m.group(0)
+        # 通配写法（APEIRETH_ENABLE_* / APEIRETH_DISABLE_*）跳过
+        if text[m.end():m.end() + 1] == "*":
+            continue
+        if token.endswith("_"):
+            continue
+        tokens.append(token)
+    return sorted(set(tokens))
+
+
+def cmd_matrix_check(strict: bool) -> int:
+    tokens = matrix_env_tokens()
+    missing = [t for t in tokens if not grep_in_crates(t)]
+    print(f"matrix env tokens: {len(tokens)}; missing in crates/: {len(missing)}")
+    for token in missing:
+        print(f"  MISSING: {token}")
+    # claims 的 switch_env 应出现在 matrix（状态表与开关表互钉）
+    data = load_claims(DEFAULT_CLAIMS)
+    matrix_text = MATRIX.read_text(encoding="utf-8")
+    claim_missing = [
+        str(claim.get("switch_env"))
+        for claim in data.get("claims") or []
+        if claim.get("switch_env") and str(claim["switch_env"]) not in matrix_text
+    ]
+    if claim_missing:
+        print(f"claims switch_env not present in matrix: {', '.join(claim_missing)}")
+    if missing or claim_missing:
+        return 1 if strict else 0
+    print("OK: matrix env tokens all found in crates/; claims switches all present in matrix")
+    return 0
+
+
 # ---------------------------------------------------------------- commands
 
 def cmd_verify(claims_path: Path, strict: bool) -> int:
@@ -300,16 +389,33 @@ def cmd_check() -> int:
     if expected != actual:
         print(f"FAIL: {STATUS_DOC.relative_to(ROOT)} drift; run --gen", file=sys.stderr)
         return 1
-    print("OK: STATUS.md matches claims.yaml")
+    # README 徽章必须与 test-baseline 单一真源一致（AGENTS §3 同日同口径）
+    want = badge_url()
+    bad = []
+    for path in READMES:
+        text = path.read_text(encoding="utf-8")
+        match = BADGE_RE.search(text)
+        if not match:
+            bad.append(f"{path.relative_to(ROOT)}: tests badge not found")
+        elif match.group(0) != want:
+            bad.append(f"{path.relative_to(ROOT)}: badge {match.group(0)} != {want}")
+    if bad:
+        for item in bad:
+            print(f"FAIL: {item}", file=sys.stderr)
+        print("run: python scripts/docs_truth.py --gen-badges", file=sys.stderr)
+        return 1
+    print("OK: STATUS.md matches claims.yaml; README badges match baseline")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Docs Truth System (P0)")
+    parser = argparse.ArgumentParser(description="Docs Truth System (P0/P1)")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--gen", action="store_true")
+    parser.add_argument("--gen-badges", action="store_true", help="README tests 徽章 ← test-baseline 单一真源")
+    parser.add_argument("--matrix-check", action="store_true", help="matrix 环境变量/claims 开关一致性自查")
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("--strict", action="store_true", help="STALE / REVIEW_DUE 也 exit 1")
+    parser.add_argument("--strict", action="store_true", help="STALE / REVIEW_DUE / matrix 缺失也 exit 1")
     parser.add_argument("--claims", default=str(DEFAULT_CLAIMS))
     args = parser.parse_args(argv)
     claims_path = Path(args.claims)
@@ -317,6 +423,10 @@ def main(argv: list[str] | None = None) -> int:
         claims_path = ROOT / claims_path
     if args.gen:
         return cmd_gen()
+    if args.gen_badges:
+        return sync_badges(write=True)
+    if args.matrix_check:
+        return cmd_matrix_check(args.strict)
     if args.check:
         return cmd_check()
     if args.verify:

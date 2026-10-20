@@ -16,7 +16,9 @@
 python scripts/docs_truth.py --verify            # 核验（P0 report-only：结构/证据缺失才 exit 1）
 python scripts/docs_truth.py --verify --strict   # STALE / REVIEW_DUE 也 exit 1
 python scripts/docs_truth.py --gen               # 生成 STATUS.md
-python scripts/docs_truth.py --check             # 生成物 drift 检查
+python scripts/docs_truth.py --gen-badges        # README tests 徽章 ← test-baseline 单一真源
+python scripts/docs_truth.py --matrix-check      # matrix 环境变量 / claims 开关互钉自查
+python scripts/docs_truth.py --check             # 生成物 drift + README 徽章一致性
 ```
 
 ## 口径

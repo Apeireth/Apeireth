@@ -9,7 +9,7 @@
 
 **它记得你随口说的话、在你忙时闭嘴、有自己不肯丢的底线。**
 
-[![Tests](https://img.shields.io/badge/tests-8509%20passed%20%7C%200%20failed%20(2026--10--18)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
+[![Tests](https://img.shields.io/badge/tests-8889%20passed%20%7C%200%20failed%20(2026--10--19)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
 [![Workspace](https://img.shields.io/badge/workspace-31%20members-blue.svg?logo=rust)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%2B%20Linux-lightgrey.svg)](INSTALL.md)
 [![Status](https://img.shields.io/badge/status-rc%20%E5%86%85%E6%B5%8B-orange.svg)](ROADMAP.md)
