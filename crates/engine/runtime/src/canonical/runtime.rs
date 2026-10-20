@@ -55,6 +55,7 @@ use apeireth_protocol::canonical::{ModelDescriptor, ModelFeature};
 use serde::Serialize;
 
 use super::approval::PendingApprovalView;
+use super::bio_pain::{BioPainSnapshot, BioPainState};
 use super::capability::CapabilityRegistry;
 use super::context::{ContextProjector, NoContextProjector};
 use super::error::{RuntimeError, RuntimeResult};
@@ -161,6 +162,12 @@ pub struct RuntimeConfig {
     /// postures changes the prompt projection and nothing else. Default `false`:
     /// a runtime that never engages the mechanism is byte-for-byte unchanged.
     pub plan_mode_enabled: bool,
+    /// 痛觉评估 (SG-16) 在失败处理链上的观测开关。默认 `false`: 关闭时
+    /// `record_call_completed` 不取锁、不写账本, `ToolFailed` 事件与
+    /// `CapabilityCompleted` 轨迹逐字节不变。开启后仍在原有落账**之后**只追加
+    /// 只读评估 (`Runtime::bio_pain_snapshot`), 不改变任何错误处理/重试决策。
+    /// 见 [`super::bio_pain`]。
+    pub bio_pain_enabled: bool,
     /// Session-scoped cognitive quota ceilings (opt-in spend gate). `None` on a
     /// dimension means no limit; the metering itself always runs so the
     /// self-report's consumption column stays real. See
@@ -245,6 +252,7 @@ impl Default for RuntimeConfig {
             context_spill_root: None,
             repetition_advisory: RepetitionPolicy::default(),
             plan_mode_enabled: false,
+            bio_pain_enabled: false,
             quota: super::quota::SessionQuotaLimits::default(),
             cost_rates: None,
             metrics_window_turns: super::metrics::DEFAULT_METRICS_WINDOW_TURNS,
@@ -347,6 +355,10 @@ pub struct Runtime {
     /// G-P1 指标面: 回合收束指标的进程内滚动窗口 (会话 + 全局两层),回合
     /// 收束埋点写这里, `/v1/panel/metrics` 从这里读 (见 [`super::metrics`])。
     pub(super) metrics: Arc<super::metrics::MetricsRegistry>,
+    /// 运行时级痛觉账本 (SG-16, 默认关): 只在
+    /// [`RuntimeConfig::bio_pain_enabled`] 为真时由失败路径写入; 跨会话,
+    /// 只观测不决策。见 [`super::bio_pain`]。
+    pub(super) bio_pain: Mutex<BioPainState>,
 }
 
 impl Runtime {
@@ -389,6 +401,24 @@ impl Runtime {
     /// 指标注册表 (G-P1 指标数据源): 回合收束指标的进程内滚动窗口。
     pub fn metrics(&self) -> &super::metrics::MetricsRegistry {
         &self.metrics
+    }
+
+    /// 痛觉观测面的只读快照 (SG-16)。
+    ///
+    /// 默认关时返回 `enabled = false` 的空快照; 开启后返回运行时级账本当前
+    /// 全部组与最近 [`super::bio_pain::DEFAULT_BIO_PAIN_OBSERVATIONS`] 条评估。
+    /// 读取本身不改变任何状态。本访问器**不是**事件通道: 评估从不伪造
+    /// session / trace 事件。
+    pub fn bio_pain_snapshot(&self) -> BioPainSnapshot {
+        self.bio_pain_guard().snapshot(self.config.bio_pain_enabled)
+    }
+
+    /// 痛觉账本写闸: 持锁线程 panic 后账本数据并未损坏, 按 L 组口径恢复而非
+    /// 把一次 panic 放大成之后所有失败路径的级联 panic。默认关路径不取此锁。
+    pub(super) fn bio_pain_guard(&self) -> std::sync::MutexGuard<'_, BioPainState> {
+        self.bio_pain
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Return a live, secret-free projection for diagnostics and capability
@@ -903,6 +933,24 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Enable the bio-pain observation of the failure path (SG-16), default off.
+    ///
+    /// When enabled, every completed tool call is folded into a runtime-level
+    /// pain ledger *after* its existing session/trace records have landed:
+    /// failures are assessed (class approximation + habituation + chronic
+    /// progression) and successes repair the capability's recorded causes.
+    /// The assessment is observational only — it never changes the tool result,
+    /// the error text, or any retry/error-handling decision — and is readable
+    /// through [`Runtime::bio_pain_snapshot`]. When disabled (the default),
+    /// `record_call_completed` takes no extra lock and writes no ledger, so the
+    /// `ToolFailed` event and `CapabilityCompleted` trace stay byte-for-byte
+    /// identical. See [`super::bio_pain`].
+    #[must_use]
+    pub fn with_bio_pain(mut self, enabled: bool) -> Self {
+        self.config.bio_pain_enabled = enabled;
+        self
+    }
+
     /// Set the session-scoped cognitive quota ceilings (opt-in spend gate).
     ///
     /// `None` on a dimension = no limit; consumption metering runs either way.
@@ -1066,6 +1114,7 @@ impl RuntimeBuilder {
                 .map(|generator| Arc::new(CompactionEngine::new(generator))),
             call_scheduler: self.call_scheduler,
             metrics,
+            bio_pain: Mutex::new(BioPainState::new()),
         })
     }
 }

@@ -3348,6 +3348,14 @@ impl Runtime {
 
     /// Completion records of one invoked call: the failure record (when the
     /// call failed) and the completion trace entry, in that order.
+    ///
+    /// With [`RuntimeConfig::bio_pain_enabled`](super::runtime::RuntimeConfig)
+    /// on, the bio-pain assessment (SG-16) is appended **after** those two
+    /// records as an observational side effect: it reads the finished
+    /// [`ToolResult`] and writes the runtime-level pain ledger only. It never
+    /// changes the result, the error text, the emitted events, or any retry /
+    /// error-handling decision. With it off (the default) this function is the
+    /// same two records it has always been, byte for byte.
     fn record_call_completed(
         &self,
         session: &mut Session,
@@ -3383,6 +3391,23 @@ impl Runtime {
                 round,
             },
         );
+
+        // 痛觉观测 (SG-16, 默认关): 事实证明之后才追加只读评估。开关关闭时
+        // 整段不执行 —— 不取锁、不写账本, 事件/轨迹与未接线前逐字节一致。
+        // 开启时也只记录评估: `recommended` 不落地为动作, 不新增 RetryPolicy。
+        if self.config.bio_pain_enabled {
+            let now_ms = u64::try_from(Timestamp::from_clock(clock).epoch_millis()).unwrap_or(0);
+            let mut bio_pain = self.bio_pain_guard();
+            match super::bio_pain::failure_class_for_result(result) {
+                Some(class) => {
+                    bio_pain.observe_failure(capability.as_str(), class, &result.render(), now_ms)
+                }
+                // `None` 只表示这次调用成功 (失败信号不成立) → 记修复。
+                None => {
+                    bio_pain.observe_success(capability.as_str(), now_ms);
+                }
+            }
+        }
     }
 
     /// Open the human-facing approval for one paused dispatch and freeze the
@@ -4265,6 +4290,10 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::canonical::session::SessionEvent;
+    use crate::canonical::trace::TraceEntry;
+    use apeireth_core::kernel::{Clock, VirtualClock};
+    use apeireth_orchestration::nociception::{FailureClass, Habituation, Recommendation};
 
     /// Wired behaviour pin: the transcript estimate is exactly the per-message
     /// `chars / 4` sum the compress-checkpoint trigger has always consumed.
@@ -4630,5 +4659,326 @@ mod tests {
             bytes, pinned,
             "composed array byte-pinned to the cache-friendly order"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // 痛觉评估接线 (W3.3 SG-16): 默认关零回归, 开启只观测 + 记账
+    // ------------------------------------------------------------------
+
+    const PAIN_NOW_MS: i64 = 1_700_000_000_000;
+
+    fn now_ms() -> u64 {
+        u64::try_from(PAIN_NOW_MS).expect("fixed clock is non-negative")
+    }
+
+    fn pain_clock() -> Arc<dyn Clock> {
+        Arc::new(VirtualClock::new(
+            Timestamp::from_epoch_millis(PAIN_NOW_MS)
+                .expect("fixed timestamp")
+                .as_datetime(),
+        ))
+    }
+
+    struct CompletionFixture {
+        runtime: Runtime,
+        session: Session,
+        trace: ExecutionTrace,
+        request: RequestId,
+        trace_id: TraceId,
+        capability: CapabilityId,
+        call: ToolCall,
+        at: Timestamp,
+    }
+
+    async fn completion_fixture(bio_pain: bool) -> CompletionFixture {
+        let clock = pain_clock();
+        let at = Timestamp::from_clock(clock.as_ref());
+        let runtime = Runtime::builder()
+            .with_clock(clock)
+            .with_bio_pain(bio_pain)
+            .build()
+            .await
+            .expect("runtime builds");
+        let session_id = SessionId::new();
+        let session = runtime
+            .sessions()
+            .load_or_create(session_id)
+            .await
+            .expect("session loads");
+        let request = RequestId::new();
+        let trace_id = TraceId::new();
+        let trace = ExecutionTrace::new(trace_id, session_id, request);
+        let capability = CapabilityId::new("tool.calculator").expect("capability id");
+        let call = ToolCall {
+            id: "call_1".to_string(),
+            name: "calculator".to_string(),
+            arguments: serde_json::json!({ "a": 1, "b": 1 }),
+        };
+        CompletionFixture {
+            runtime,
+            session,
+            trace,
+            request,
+            trace_id,
+            capability,
+            call,
+            at,
+        }
+    }
+
+    impl CompletionFixture {
+        /// One `record_call_completed` through the default call.
+        fn complete(&mut self, result: &ToolResult) {
+            self.complete_call(self.call.clone(), result);
+        }
+
+        /// One `record_call_completed` through an explicit call (parallel slots
+        /// commit per completed entry, each with its own tool call).
+        fn complete_call(&mut self, call: ToolCall, result: &ToolResult) {
+            self.runtime.record_call_completed(
+                &mut self.session,
+                &mut self.trace,
+                self.request,
+                self.trace_id,
+                1,
+                &call,
+                &self.capability,
+                result,
+            );
+        }
+    }
+
+    #[test]
+    fn bio_pain_is_disabled_in_the_default_configuration() {
+        assert!(
+            !crate::canonical::runtime::RuntimeConfig::default().bio_pain_enabled,
+            "默认关: 未显式 with_bio_pain(true) 的运行时零接线"
+        );
+    }
+
+    /// 默认关证据: 失败路径写出的 `ToolFailed` 事件与 `CapabilityCompleted`
+    /// 轨迹与接线前逐字段一致; 账本/观测面完全为空。
+    #[tokio::test]
+    async fn bio_pain_off_keeps_the_failure_event_and_trace_byte_identical() {
+        let mut fixture = completion_fixture(false).await;
+        fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
+
+        let expected_event = SessionEvent {
+            at: fixture.at,
+            request: fixture.request,
+            trace: fixture.trace_id,
+            event: SessionEventKind::ToolFailed {
+                capability: Some(fixture.capability.clone()),
+                tool_call_id: "call_1".to_string(),
+                error: "error: upstream timeout".to_string(),
+                round: 1,
+            },
+        };
+        assert_eq!(
+            fixture.session.events,
+            vec![expected_event],
+            "失败事件不得多一条、少一条或改一个字段"
+        );
+
+        let expected_entry = TraceEntry {
+            at: fixture.at,
+            event: TraceEvent::CapabilityCompleted {
+                capability: fixture.capability.clone(),
+                tool_call_id: "call_1".to_string(),
+                succeeded: false,
+                round: 1,
+            },
+        };
+        assert_eq!(
+            fixture.trace.entries,
+            vec![expected_entry],
+            "完成轨迹不得被观测追加"
+        );
+
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        assert!(!snapshot.enabled);
+        assert_eq!(snapshot.assessed, 0);
+        assert_eq!(snapshot.repaired, 0);
+        assert!(snapshot.observations.is_empty(), "默认关不写观测");
+        assert!(snapshot.groups.is_empty(), "默认关不写账本");
+    }
+
+    /// 开启: 评估追加在既有事件/轨迹**之后**, 且不改变它们的数量与内容。
+    #[tokio::test]
+    async fn bio_pain_on_appends_an_assessment_after_the_existing_records() {
+        let mut fixture = completion_fixture(true).await;
+        fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
+
+        assert_eq!(fixture.session.events.len(), 1, "既有失败事件仍恰一条");
+        assert!(matches!(
+            fixture.session.events[0].event,
+            SessionEventKind::ToolFailed { .. }
+        ));
+        assert_eq!(fixture.trace.entries.len(), 1, "完成轨迹仍恰一条");
+        assert_eq!(fixture.trace.entries[0].at, fixture.at);
+
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        assert!(snapshot.enabled);
+        assert_eq!(snapshot.assessed, 1);
+        assert_eq!(snapshot.observations.len(), 1);
+        let observation = &snapshot.observations[0];
+        assert_eq!(observation.capability, "tool.calculator");
+        assert_eq!(
+            observation.cause_key,
+            crate::canonical::bio_pain::failure_cause_key(
+                "tool.calculator",
+                FailureClass::Transient,
+                "error: upstream timeout"
+            )
+        );
+        assert_eq!(observation.class, FailureClass::Transient);
+        assert_eq!(observation.recommended, Recommendation::Retry);
+        assert_eq!(observation.habituation, Habituation::Normal);
+        assert!(!observation.chronic);
+        assert_eq!(observation.at_ms, now_ms(), "注入时钟决定评估时间");
+        assert_eq!(snapshot.groups.len(), 1);
+        assert_eq!(snapshot.groups[0].hits, 1);
+    }
+
+    /// 连续失败经真实收口递进: 前两次 Normal/Retry, 第 3 次 Habituated/Retry,
+    /// 第 4 次 chronic/Sensitized/Diagnose (内核阈值口径)。
+    #[tokio::test]
+    async fn repeated_wired_failures_progress_to_habituation_then_chronic() {
+        let mut fixture = completion_fixture(true).await;
+        let failure = ToolResult::retryable_error("call_1", "upstream timeout");
+        for _ in 0..3 {
+            fixture.complete(&failure);
+        }
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        assert_eq!(snapshot.observations[0].habituation, Habituation::Normal);
+        assert_eq!(
+            snapshot.observations[2].habituation,
+            Habituation::Habituated
+        );
+        assert_eq!(snapshot.observations[2].recommended, Recommendation::Retry);
+        assert!(!snapshot.observations[2].chronic);
+
+        fixture.complete(&failure);
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let fourth = snapshot.observations.last().expect("有第四次观测");
+        assert!(fourth.chronic, "第 4 次达慢性阈值");
+        assert_eq!(fourth.habituation, Habituation::Sensitized);
+        assert_eq!(fourth.recommended, Recommendation::Diagnose);
+        assert_eq!(snapshot.groups[0].hits, 4);
+    }
+
+    #[tokio::test]
+    async fn a_permanent_tool_failure_is_observed_as_systematic() {
+        let mut fixture = completion_fixture(true).await;
+        fixture.complete(&ToolResult::permanent_error("call_1", "bad argument"));
+
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let observation = &snapshot.observations[0];
+        assert_eq!(observation.class, FailureClass::Systematic);
+        assert_eq!(observation.habituation, Habituation::Sensitized);
+        assert_eq!(observation.recommended, Recommendation::Diagnose);
+        assert!(
+            observation.cause_key.starts_with("systematic:"),
+            "类别进入归一键: {}",
+            observation.cause_key
+        );
+        assert_eq!(snapshot.groups[0].class, FailureClass::Systematic);
+    }
+
+    /// 成功修复闭环: 一次成功覆盖该能力全部已记账原因 (脱敏), 修复后再失败
+    /// 从 Normal 重新开始, 且修复后复发被账本记一次。
+    #[tokio::test]
+    async fn a_successful_call_repairs_the_recorded_causes_of_its_capability() {
+        let mut fixture = completion_fixture(true).await;
+        fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
+        fixture.complete(&ToolResult::permanent_error("call_1", "bad argument"));
+        assert_eq!(fixture.runtime.bio_pain_snapshot().groups.len(), 2);
+
+        fixture.complete(&ToolResult::ok("call_1", serde_json::json!("2")));
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        assert_eq!(snapshot.repaired, 2, "成功修复该能力的全部已记账原因");
+        assert_eq!(snapshot.assessed, 2, "成功不是失败评估");
+        for group in &snapshot.groups {
+            assert_eq!(group.last_repair_ms, now_ms());
+            assert_eq!(group.sessions, 0, "修复开始新会话");
+            assert_eq!(group.sensitivity, 1, "敏化权重回落");
+        }
+
+        fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let relapse = snapshot.observations.last().expect("复发观测");
+        assert_eq!(
+            relapse.habituation,
+            Habituation::Normal,
+            "修复后从脱敏态重新开始"
+        );
+        assert!(!relapse.chronic);
+        let group = snapshot
+            .groups
+            .iter()
+            .find(|group| group.cause_key == relapse.cause_key)
+            .expect("复发组仍在");
+        assert_eq!(group.repair_failures, 1, "修复后复发被记账");
+    }
+
+    /// 并行窗口的两个提交点 (正常提交 `execute.rs:3837` 与取消排水
+    /// `execute.rs:4072`) 对每个 `SlotOutcome::Completed` 各调一次共享收口。
+    /// 这里按模型序提交两笔完成, 证明每次完成恰一条评估、同因归入同组,
+    /// 且事件/轨迹仍是每调用恰一条。
+    #[tokio::test]
+    async fn a_parallel_window_commit_records_one_assessment_per_completed_call() {
+        let mut fixture = completion_fixture(true).await;
+        for (id, message) in [
+            ("call_a", "upstream timeout"),
+            ("call_b", "upstream timeout"),
+        ] {
+            let call = ToolCall {
+                id: id.to_string(),
+                name: "calculator".to_string(),
+                arguments: serde_json::json!({}),
+            };
+            fixture.complete_call(call, &ToolResult::retryable_error(id, message));
+        }
+
+        assert_eq!(fixture.session.events.len(), 2, "每笔失败恰一条事件");
+        assert_eq!(fixture.trace.entries.len(), 2, "每笔完成恰一条轨迹");
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        assert_eq!(snapshot.assessed, 2);
+        assert_eq!(snapshot.observations.len(), 2);
+        assert_eq!(snapshot.groups.len(), 1, "同能力同原因归一组");
+        assert_eq!(snapshot.groups[0].hits, 2);
+        assert!(!snapshot.observations[1].chronic, "两次未达慢性阈值");
+    }
+
+    #[tokio::test]
+    async fn a_success_without_a_recorded_failure_repairs_nothing() {
+        let mut fixture = completion_fixture(true).await;
+        fixture.complete(&ToolResult::ok("call_1", serde_json::json!(1)));
+
+        let snapshot = fixture.runtime.bio_pain_snapshot();
+        assert_eq!(snapshot.assessed, 0);
+        assert_eq!(snapshot.repaired, 0);
+        assert!(snapshot.groups.is_empty());
+        assert_eq!(fixture.session.events.len(), 0, "成功不写失败事件");
+    }
+
+    /// 确定性: 同一失败序列 + 同一注入时钟 → 同一份观测快照 (无系统时钟、
+    /// 无随机数)。快照只含能力/归一键/计数, 不含 trace/session 身份。
+    #[tokio::test]
+    async fn the_pain_snapshot_is_deterministic_for_the_same_failure_sequence() {
+        let mut first = completion_fixture(true).await;
+        let mut second = completion_fixture(true).await;
+        for fixture in [&mut first, &mut second] {
+            fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
+            fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
+            fixture.complete(&ToolResult::permanent_error("call_1", "bad argument"));
+            fixture.complete(&ToolResult::ok("call_1", serde_json::json!("2")));
+        }
+
+        let first_snapshot = first.runtime.bio_pain_snapshot();
+        let second_snapshot = second.runtime.bio_pain_snapshot();
+        assert_eq!(first_snapshot, second_snapshot);
+        assert_eq!(first_snapshot.assessed, 3);
+        assert_eq!(first_snapshot.repaired, 2, "成功修复两个已记账原因");
     }
 }
