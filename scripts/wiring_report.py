@@ -166,6 +166,20 @@ def doc_comment_above(lines: list[str], idx: int) -> str:
     return ""
 
 
+def module_doc(lines: list[str]) -> str:
+    """文件级模块文档（`//!`）——条目附近无 doc 注释时的来源兜底（仍属源码文档注释）。"""
+    parts: list[str] = []
+    for line in lines[:80]:
+        s = line.strip()
+        if s.startswith("//!"):
+            parts.append(s[3:].strip())
+        elif not parts and (not s or s.startswith("#!")):
+            continue
+        elif parts:
+            break
+    return _clean_purpose(" ".join(parts))[:160]
+
+
 def default_hint(lines: list[str], idx: int) -> str:
     """从读取点附近推断源码默认值（on/off）；无法判定返回空串。"""
     window = " ".join(lines[max(0, idx - 4):min(len(lines), idx + 5)])
@@ -190,6 +204,7 @@ def scan_env(committed: bool) -> dict[str, dict]:
         if text is None:
             continue
         lines = text.splitlines()
+        file_m_doc = module_doc(lines)
         file_names: set[str] = set()
         for idx, line in enumerate(lines):
             for match in ENV_RE.finditer(line):
@@ -202,6 +217,7 @@ def scan_env(committed: bool) -> dict[str, dict]:
                     "reads": [],
                     "symbols": set(),
                     "doc": "",
+                    "module_doc": file_m_doc,
                     "purpose": "",
                     "default_hint": "",
                 })
@@ -574,8 +590,11 @@ def cmd_fill_layer(layer: str) -> int:
             continue
         evidence = evidence_of(rec)
         purpose = str(rec.get("doc") or "").strip() or _clean_purpose(str(entry.get("purpose", "")))
-        if not purpose or FRAGMENT_RE.search(purpose):
+        if not purpose or FRAGMENT_RE.search(purpose) or purpose == "TODO-PURPOSE":
+            purpose = str(rec.get("module_doc") or "").strip() or "TODO-PURPOSE"
+        if FRAGMENT_RE.search(purpose):
             purpose = "TODO-PURPOSE"
+        purpose = _clean_purpose(purpose)
         claim = claim_by_switch.get(name)
         level = str(claim.get("level")) if claim else "UNCLASSIFIED"
         default = str(rec.get("default_hint") or "")
