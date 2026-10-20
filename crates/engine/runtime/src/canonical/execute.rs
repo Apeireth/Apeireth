@@ -3350,9 +3350,10 @@ impl Runtime {
     /// call failed) and the completion trace entry, in that order.
     ///
     /// With [`RuntimeConfig::bio_pain_enabled`](super::runtime::RuntimeConfig)
-    /// on, the bio-pain assessment (SG-16) is appended **after** those two
-    /// records as an observational side effect: it reads the finished
-    /// [`ToolResult`] and writes the runtime-level pain ledger only. It never
+    /// on, the bio-pain assessment (SG-16) and the recovery-case bookkeeping
+    /// (SG-17) are appended **after** those two records as an observational side
+    /// effect: it reads the finished [`ToolResult`] and writes the runtime-level
+    /// pain ledger + `(capability, cause_key)` recovery cases only. It never
     /// changes the result, the error text, the emitted events, or any retry /
     /// error-handling decision. With it off (the default) this function is the
     /// same two records it has always been, byte for byte.
@@ -3392,9 +3393,11 @@ impl Runtime {
             },
         );
 
-        // 痛觉观测 (SG-16, 默认关): 事实证明之后才追加只读评估。开关关闭时
-        // 整段不执行 —— 不取锁、不写账本, 事件/轨迹与未接线前逐字节一致。
-        // 开启时也只记录评估: `recommended` 不落地为动作, 不新增 RetryPolicy。
+        // 痛觉观测 (SG-16) + 再生案例记账 (SG-17, 默认关, 同开关): 事实证明之后
+        // 才追加只读记账。开关关闭时整段不执行 —— 不取锁、不写账本, 事件/轨迹与
+        // 未接线前逐字节一致。开启时也只记录评估与案例状态: `recommended` 不落地
+        // 为动作, 不新增 RetryPolicy; 案例迁移发生在 `observe_failure` 内部的
+        // `assess` 之后, 成功收尾发生在 `observe_success` 内部。
         if self.config.bio_pain_enabled {
             let now_ms = u64::try_from(Timestamp::from_clock(clock).epoch_millis()).unwrap_or(0);
             let mut bio_pain = self.bio_pain_guard();

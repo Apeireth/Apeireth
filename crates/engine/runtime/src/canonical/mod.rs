@@ -26,7 +26,7 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
-// W3.3 SG-16: 痛觉评估 (失败处理链观测+记账, 默认关) 的运行时接线面。
+// W3.3/W3.4 SG-16/17: 痛觉评估 + 再生案例记账 (失败处理链观测, 默认关) 的运行时接线面。
 pub mod bio_pain;
 pub mod cache_trace;
 pub mod capability;
@@ -81,8 +81,9 @@ pub use approval::{
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 pub use bio_pain::{
-    classify_retryability, failure_cause_key, failure_class_for_result, BioPainObservation,
-    BioPainSnapshot, DEFAULT_BIO_PAIN_OBSERVATIONS,
+    classify_retryability, failure_cause_key, failure_class_for_result, recovery_target_phase,
+    BioPainObservation, BioPainSnapshot, BioRecoveryCaseSnapshot, BioRecoveryPhaseCounts,
+    BioRecoverySnapshot, DEFAULT_BIO_PAIN_OBSERVATIONS,
 };
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
