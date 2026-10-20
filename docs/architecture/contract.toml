@@ -173,6 +173,9 @@ policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时�
 max_distinct_names = 160            # 棘轮: 只减不增（按 src 口径）
 baseline_file = "scripts/arch-baseline.txt"
 registry_file = "docs/architecture/env-registry.toml"   # R3a 登记表（ADR-0004）; 登记名无需进基线
+# level 枚举与占位口径（ADR-0004 §7）：UNCLASSIFIED = 登记先行占位，不属四级口径、不得对外宣称
+level_values = ["PRODUCTION WIRED", "IMPLEMENTED", "NOT IMPLEMENTED", "UNCLASSIFIED"]
+placeholder_policy = "UNCLASSIFIED/TODO-OWNER 同记分牌每波只减; arch_guard 不校验 level; 四级口径由 claims/wiring ledger 承担"
 # 目标: env 读取收敛到 config 模块; 现状散在 148 文件 (基线登记, 只减不增)。
 allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置卡
 

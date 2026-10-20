@@ -57,7 +57,8 @@ workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-
 |---|---|---|---|
 | workspace members | `cargo metadata` | 31 | 图像家族出主仓后降至 20 |
 | 生产依赖边 | arch_guard | 118 | 只减不增（新增需 ADR） |
-| 裸 env 名 / 出现次数 / 文件 | arch_guard + rg | 158 / 1,106 / 148 | 只减 |
+| 裸 env 名 / 出现次数 / 文件 | arch_guard + rg | 158 / 1,106 / 148（rg 口径）；guard src 口径 155（2026-10-20） | 只减 |
+| env 登记 `TODO-OWNER` / `UNCLASSIFIED` | `env-registry.toml`（效率线 `--stats`） | 155 / 155（2026-10-20 首播，登记先行占位，非四级口径） | 每波只减 |
 | 最大 src 文件行数 | arch_guard | ~6,150（doc_ops.rs） | 只减 |
 | 同名概念定义数 | arch_guard | ContextAssembler 2 / ContextBlock 2 / CapabilityRegistry 2 | 只减 |
 | 例外活跃数/权重 | exceptions.toml | 0 / 0 | 有上限、到期清 |

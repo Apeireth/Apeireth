@@ -55,3 +55,39 @@
 ## 6. 后续
 
 R3a 交付后，R1a 的 `nervous_system` 与 R1b 的开关收敛直接复用 env-registry 的 owner/level 字段；R6 的分层门禁复用 wiring ledger 的 validated 列。
+
+## 7. 口径补充（2026-10-20 效率线施工同步 → 架构线裁定）
+
+### 7.1 `UNCLASSIFIED` 的正式定义（回应效率线提问）
+
+- `level` 枚举 = `PRODUCTION WIRED | IMPLEMENTED | NOT IMPLEMENTED | UNCLASSIFIED`；
+- **`UNCLASSIFIED` 是"登记先行占位"，不是四级口径之一**：只表示"该开关已登记但尚未分级"，
+  **不得用于对外宣称**，也不等于任何交付级别；
+- 机器口径：`arch_guard` **不校验** level 值（它只查 env 名是否登记）；四级口径仍由
+  `claims.yaml` + wiring ledger 承担——**不把占位符做成第二套能力状态**；
+- 计数纪律：`UNCLASSIFIED` 与 `TODO-OWNER` 同列记分牌，**每波只减不增**；R3b 收口时
+  允许为 `IMPLEMENTED`/`NOT IMPLEMENTED` 或待验证的 `PRODUCTION WIRED`（须有证据）。
+- 未来若要把 level 升级为 strict 机器校验（例如禁止 UNCLASSIFIED 上线），**先改本 ADR 定口径再改守卫**，
+  不允许守卫先行倒逼登记表造假。
+
+### 7.2 登记先行（registration-first）
+
+新开关可先登记（`owner = "TODO-OWNER"`、`level = "UNCLASSIFIED"`、`status = "current"`），
+即解除 `arch_guard` 的 W3「未登记」违规；但**收口必须补默认关 + 关时零变化测试**，
+否则 capability ledger 不认。EXC-0001 即按此转正退休（见 exceptions.toml 索引注）。
+
+### 7.3 R3b 排序（架构线批准效率线建议）
+
+1. **先填 claims 覆盖的开关 owner**（当前 16 条 claims 对应开关）——理由：claims 是能力真源，
+   owner 最明确、收益最高；
+2. **再按 layer 分批清 TODO**：`foundation → engine → capabilities → adapters`（依赖方向，先稳后动）；
+3. 每批 commit 正文报 `entries / TODO-OWNER / UNCLASSIFIED` 三个计数（`--stats` 可复核），
+   三个数只许向"TODO/UNCLASSIFIED 下降"走；
+4. 数据质量：种子抽取的 `purpose` 含 HTML 注释碎片（如 `! ! # ...`）时以源码为准清洗，不算能力声明。
+
+### 7.4 R3c 升门禁
+
+`wiring_report.py --verify` 从 report-only 升为 **CI 交叉校验门禁**（与 `arch_guard` 分工：
+arch_guard 管结构/依赖/env 名，wiring ledger 管"实现→接线→启用→验证"四列证据）；
+升格前保留两周 report-only；口径：`PRODUCTION WIRED` 必须有生产引用，`IMPLEMENTED` 必须有
+`gaps` 原因，缺证据即 FAIL。R3c 具体批次由效率线排期，架构线验收。

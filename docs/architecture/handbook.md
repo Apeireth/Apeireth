@@ -33,7 +33,8 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | Wave 2 已落 | R4a-1：`scripts/gate_full.ps1`（契约驱动 exclude）+ `.github/workflows/image-family.yml`；`arch_guard` 补例外抑制/登记表双通道/`--print-vendored` |
 | 待 owner 裁决 | **无**（R4b 已裁决：SDK 四孤岛 + perception 归档，ADR-0005 §3；14 键已正式化，ADR-0006） |
 | R4b 执行 | 实施线待派：按 ADR-0005 §3.1 迁移清单（SDK 四孤岛 23.6k 行 + perception 6.3k 行 → legacy/archived；members 31→30）；架构线验收 |
-| 在途违规（灰度期不阻断） | 生物线施工期 3 条：`APEIRETH_ENABLE_BIO_LIFECYCLE` 未登记（W3）+ `production.rs`/`self_status_source.rs` 尺寸增长（W1×2）；Wave 2 收口随基线更新/登记处理 |
+| 在途违规（灰度期不阻断） | 生物线施工期 2 条 W1：`production.rs` +37 行 / `self_status_source.rs` +414 行；Wave 2 收口随基线更新。env 新开关已由效率线 R3a 登记转正（EXC-0001 已退休） |
+| 效率线 R3a 现状（2026-10-20 同步） | `env-registry.toml` 已播种 **155 条**（level=UNCLASSIFIED 占位，owner=TODO-OWNER）；`wiring.yaml` gaps 已按 R3c 口径生成；R3b 排序已批准（claims 覆盖先填 → 按 layer 分批 → 三计数只减） |
 | 基线 | 356 条（edge 118 / devcycle 1 / env 154 / size 70 / concept 6 / ext 7） |
 | 已登记的已知债务 | `contract.toml` `[flagged_edges]`（3 条）/ `[extension_debt]`（3 条）/ `[concepts].known_debt`（2 组）；target 均 `TODO-OWNER` |
 | 未完成项 | ADR-0002 裁决；R0 剩余（ARCHITECTURE 生成物/14 键表述/crate 口径）；R1a/R3/R4 单项 ADR；wiring ledger（R3） |
