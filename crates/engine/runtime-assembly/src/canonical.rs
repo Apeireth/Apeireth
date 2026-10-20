@@ -79,6 +79,18 @@ pub mod harness_patch;
 pub mod invariant_registry;
 #[path = "canonical/memory_typed_sink.rs"]
 pub mod memory_typed_sink;
+/// Wave 4 / ADR-0009 R1b-1a · 唯一 HookPoint→信号映射模块 (装配根首位注册;
+/// 恒 `continue_`, 只发布不改回合)。
+#[path = "canonical/nervous_bridge.rs"]
+pub mod nervous_bridge;
+/// Wave 4 / ADR-0009 R1b-1a · 神经信号总线 (运行时内部私有同步面): 闭包订阅、
+/// 同步投递、零订阅零副作用; 不挂公共 ABI、不登记扩展点、不跨 + 层导出。
+#[path = "canonical/nervous_bus.rs"]
+pub mod nervous_bus;
+/// Wave 4 / ADR-0009 R1b-1a · 生物开关表: 9 开关 + 1 参数一次解析 (17 文件→1 处),
+/// fail-closed 只认 `"1"`; 全关 = 不注册总线桥 = 零行为变化。
+#[path = "canonical/nervous_switchboard.rs"]
+pub mod nervous_switchboard;
 /// 守夜人 Nightwatch — 离线闲时审计器 (2026-10-10, 主人批准设计)。
 #[path = "canonical/nightwatch.rs"]
 pub mod nightwatch;
@@ -179,6 +191,14 @@ pub use cognitive::{
 pub use dream_llm::{FallbackMetaThinker, LlmMetaThinker};
 pub use guard_observer::GuardDatasetObserver;
 pub use memory_typed_sink::CanonicalMemoryTypedSink;
+pub use nervous_bridge::{bridge_signal, NervousBridgeModule, NERVOUS_BRIDGE_MODULE_ID};
+pub use nervous_bus::{
+    NervousBus, NervousBusSnapshot, NervousSignal, NervousSignalKind, MAX_SIGNAL_TEXT_CHARS,
+};
+pub use nervous_switchboard::{
+    BioSwitch, NervousSwitchboard, NervousSwitchboardError, CIRCADIAN_TZ_OFFSET_ENV,
+    CIRCADIAN_TZ_OFFSET_LIMIT_MIN, DEFAULT_CIRCADIAN_TZ_OFFSET_MIN,
+};
 pub use onion_layer::{onion_layer_for_capability, OnionLayerHook};
 pub use organ_llm_bridge::{InvokerLlmFactory, InvokerLlmInstance, INVOKER_LLM_FACTORY_NAME};
 pub use organ_module::{OrganModule, OrganModuleObservation, ORGAN_MODULE_ID};

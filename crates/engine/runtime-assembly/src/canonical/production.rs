@@ -41,6 +41,9 @@ use super::cognitive::{
 use super::error::{RuntimeError, RuntimeResult};
 use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
+use super::nervous_bridge::NervousBridgeModule;
+use super::nervous_bus::NervousBus;
+use super::nervous_switchboard::NervousSwitchboard;
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{
@@ -587,6 +590,11 @@ pub struct ProductionModules {
     bio_lifecycle_state: Option<Arc<BioLifecycleState>>,
     /// 生物机制族 W3.6: 自述 probe 迟绑定共享槽 (开关关 = 槽不武装, 零读取).
     bio_probe_slots: BioProbeSlots,
+    /// Wave 4 / ADR-0009 R1b-1a: 神经信号总线句柄 (适配器只 publish; 与注册的桥
+    /// 共享同一 `Arc`)。全关时照常构造, 但没有桥/订阅者 = 零投递。
+    nervous_bus: Arc<NervousBus>,
+    /// Wave 4 / ADR-0009 R1b-1a: 本次装配生效的开关快照 (一次解析, 诊断读).
+    nervous_switchboard: NervousSwitchboard,
 }
 
 /// Compatibility alias for [`ProductionModules`].
@@ -802,6 +810,18 @@ impl ProductionModules {
         instrument: &BuildInstrumentation,
     ) -> RuntimeResult<Self> {
         let mut modules: Vec<Arc<dyn Module>> = Vec::new();
+        // Wave 4 / ADR-0009 R1b-1a: 神经信号总线 + 开关表一次解析 (9 开关 + 1
+        // 参数, fail-closed)。全关 = 不注册桥 = 零行为变化; 任一开关开 = 桥在
+        // 模块表首位注册, 这是唯一的 HookPoint→信号映射点。
+        let nervous_bus = Arc::new(NervousBus::new());
+        let nervous_switchboard = NervousSwitchboard::from_env().map_err(|error| {
+            RuntimeError::misconfigured(format!("nervous switchboard refused to load: {error}"))
+        })?;
+        if nervous_switchboard.any_enabled() {
+            modules.push(
+                Arc::new(NervousBridgeModule::new(nervous_bus.as_ref().clone())) as Arc<dyn Module>,
+            );
+        }
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
         let mut organ_module: Option<Arc<OrganModule>> = None;
@@ -1599,7 +1619,20 @@ impl ProductionModules {
             bio_tone_state: bio_wiring.tone_state,
             bio_lifecycle_state: bio_wiring.lifecycle_state,
             bio_probe_slots,
+            nervous_bus,
+            nervous_switchboard,
         })
+    }
+
+    /// Wave 4 / ADR-0009 R1b-1a: 神经信号总线句柄 (适配器只 publish, 不直写
+    /// `ToneState`; 与注册的桥共享同一 `Arc`)。
+    pub fn nervous_bus(&self) -> Arc<NervousBus> {
+        Arc::clone(&self.nervous_bus)
+    }
+
+    /// 本次装配生效的开关快照 (`NervousSwitchboard::from_env` 一次解析)。
+    pub fn nervous_switchboard(&self) -> &NervousSwitchboard {
+        &self.nervous_switchboard
     }
 
     /// Attach the context-window projector using its default policy.
