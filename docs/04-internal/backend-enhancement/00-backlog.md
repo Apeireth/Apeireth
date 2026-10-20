@@ -3,7 +3,7 @@
 > `Status: 📋 待办（2026-10-02）`
 > 纪律：本页**只列想法**（一行一事）；细节一律折进同目录小文件（每文件一主题）。
 > 开工时认领想法 → 拆批派工 → 细节文件随批更新；想法完成就在本页标 ✅ 并把细节文件归档。
-> 状态列（2026-10-13 文档同步批刷新）词表：**✅ 已交付**（指针到交付记录）／**🔧 在飞**（在建或部分交付，含他线在途）／**📋 未开工**。
+> 状态列（2026-10-13 文档同步批刷新；**2026-10-20 第三线源码对账：H/D 行已按源码更新**）词表：**✅ 已交付**（指针到交付记录）／**🔧 在飞**（在建或部分交付，含他线在途）／**📋 未开工**。
 
 ## 后续方向（2026-10-15 立）
 
@@ -16,14 +16,14 @@
 | A | **配额真接口** | 四维配额从"只有类型"变"真执行"——烧钱闸数值化 | 🔧 在飞：P1 token/步数 + P2 花费维**已交付**（配额三维计量/超限即帧/自述真值，见细节文件 P1、P2 实施记录；数据面合同 [frontend-data-contract.md](../../02-guides/frontend-data-contract.md) §10.2）；深度维**暂无接口**（如实），P3 待开工 | [A-quota-real-interface.md](A-quota-real-interface.md) |
 | B | **性能极致** | 找写得不好的开刀：冷启动红行、热点、并行 | 📋 未开工（横切纪律随波验收；file_lock 负载 flake 已定根 2026-10-12、锁竞争仍列热点测量对象——见细节文件现状） | [B-performance.md](B-performance.md) |
 | C | **记忆深化** | consolidation/reflexion/自调校/图谱向量上生产 | 🔧 在飞：随手记入口面**已交付**（[quick-capture-delivery.md](quick-capture-delivery.md)）；夜间整编/教训回路/图谱向量生产待开工 | [C-memory-deepening.md](C-memory-deepening.md) |
-| D | **干活能力** | worktree_apply 受控写 + git 写分级（commit 级走审批） | 🔧 在飞：P1 git 写分级 ✅（[git-write-tiering-delivery.md](git-write-tiering-delivery.md)）、P2 worktree_apply ✅（[worktree-apply-delivery.md](worktree-apply-delivery.md)）；P3 任务编排、P4 MCP 深化待 | [D-doing-work.md](D-doing-work.md) |
+| D | **干活能力** | worktree_apply 受控写 + git 写分级（commit 级走审批） | 🔧 在飞：P1 git 写分级 ✅（[git-write-tiering-delivery.md](git-write-tiering-delivery.md)）、P2 worktree_apply ✅（[worktree-apply-delivery.md](worktree-apply-delivery.md)）；P3 任务编排 ✅（V6-a 持久任务队列 + `tool.task_board`，默认关，交付记录 [V6-a-task-queue-delivery.md](V6-a-task-queue-delivery.md)）；P4 MCP 深化 🔧（工具桥/catalog/治理映射 ✅，管理界面待） | [D-doing-work.md](D-doing-work.md) |
 | E | **安全纵深** | 沙箱对象级判定、审批族归一、多用户权限 | 🔧 在飞：P1 威胁模型 ✅（[E-threat-model.md](E-threat-model.md)）+ W1-③ 令牌加固/W2-② 认证面/W3-① 域数据门/W3-② 角色门**已交付**（销账对齐见 [E-threat-model.md](E-threat-model.md) §4/§5 处置注）；E-P2 审批族归一、E-P3 沙箱对象级判定**在飞** | [E-security-depth.md](E-security-depth.md) |
 | F | **服务端形态** | headless daemon、多客户端复用、远程访问（T2 中枢） | 🔧 在飞：W2-① daemon 化 ✅、W2-② 远程认证面 ✅（[W2-2-remote-access-auth-delivery.md](W2-2-remote-access-auth-delivery.md)）、W2-③ 多客户端会话复用 ✅（[W2-3-multi-client-session-reuse.md](W2-3-multi-client-session-reuse.md)）、W3-① 跨户数据面 ✅（[W3-1-multi-user-data-isolation.md](W3-1-multi-user-data-isolation.md)）、W3-② 角色门 ✅（[W3-2-user-identity-roles.md](W3-2-user-identity-roles.md)）、W3-③ 星群逐域伙伴实例 ✅（[W3-3-domain-partner-instances.md](W3-3-domain-partner-instances.md)：每户伙伴运行时实例 + 域级模型/人设 + chat/事件面按域开放）；TLS 真接线（现接口桩）、域面余面（面板/审批按域）、P4 部署形态待 | [F-server-form.md](F-server-form.md) |
 | G | **观测与可靠** | 指标数据源、崩溃恢复、备份 | 🔧 在飞：P1 指标数据源 ✅（`GET /v1/panel/metrics`，见细节文件文末交付记录；**前端消费待上屏**→债栏 D9）；P2 tracing 时间线、P3 崩溃恢复、P4 备份待 | [G-observability.md](G-observability.md) |
 | K | **物理在场与设备控制** | 五层：L1 感知（传感器/摄像头/环境读）→L2 提醒（天气/推测预警）→L3 受控执行（家电白名单）→L4 代理代办（购物/下单——动钱永远人批）→L5 守护（看家/异常告警）。四底线：设备白名单/动钱人批/不可逆零自主/先模拟后执行。能力宪章=owner 与友人对话实录（2026-10-18） | [K-life-presence.md](K-life-presence.md) |
 | L | **会话经验沉淀** | 431 轮/104 子代理的工程经验→项目资产（协同模式/死亡解剖/设计裁定/方法论/产品洞察五矿脉） | [L-experience-distillation.md](L-experience-distillation.md) |
 | P | **吸收自动化（P 轴 · Practice 沉淀）** | 书→技能/随手记/历史即记忆——把『吸收优秀实践』变成产品本能 | 🔧 在建：P1 书→技能**已交付**（见 [P 轴分期](I-absorption-automation.md) 分期表；交付记录随线落盘）；随手记入口面 ✅（[quick-capture-delivery.md](quick-capture-delivery.md)）；P2-P4 待排期 | [P 轴分期](I-absorption-automation.md)（P1 书→技能已交付；候选池 [吸收候选池](../absorption-candidates-2026-10.md)） |
-| H | **模型面** | 多模型路由/fallback、成本分级 | 🔧 在飞：P1 模型画像表 ✅（见细节文件 P1 实施记录；单价表来源已供 A-P2 花费维）；P2 fallback、P3 路由、P4 成本分级待 | [H-model-plane.md](H-model-plane.md) |
+| H | **模型面** | 多模型路由/fallback、成本分级 | ✅ 基本交付：P1 模型画像表 ✅（[H-model-plane.md](H-model-plane.md) P1 记录）；P2 fallback ✅（`runtime::canonical::provider::ProviderRouter` 跨 provider fallback+健康态，2026-09 基线移植）；P3 路由 ✅ / P4 成本分级 ✅（H-P2 `CostRouter` 四档，CLI chat 任务选型已接、默认关 `APEIRETH_COST_ROUTING`）；余：网关路径任务源路由、显式档 CLI 旗标、缓存经济（`PromptCacheStabilizer` 未接线） | [H-model-plane.md](H-model-plane.md) |
 | I | **内置应用面（星港）** | 多标签壳+贡献点注册表+内置件面（伴星/星笺/深望等 15 面），批次按工程速度 | ✅ 17 面全部点亮（2026-10-11，批次台账见细节文件）；🔧 增强位随批清（最末两件等 W1/E 契约） | [I-starport-builtins.md](I-starport-builtins.md) |
 | J | **生活信息流（信风）** | 多源订阅+摘要+陪伴共看，接入现代生活与网络 | 🔧 在建：J1 内容流接入在途（`tool.content_feed` 订阅/拉取/摘要/入记忆流 + 自述订阅节，治理档位已钉死；交付记录随线落盘） | [J-tradewind.md](J-tradewind.md) |
 | K | **便携随身（星槎）** | U 盘随身：绿色单体+数据随身+现场收紧放权 | 🔧 在飞：打包随身脚本/数据随身/真判定已点亮（I 星港批次记录「星槎便携」）；现场收紧放权（E 联动）、自愈备份（G 联动）待 | [K-starraft.md](K-starraft.md) |

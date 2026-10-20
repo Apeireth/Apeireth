@@ -131,6 +131,7 @@ cargo run -p apeireth-companion --example companion_serve
 - 真正"按 model 选 provider"需要接入 `MultiLlmRouter` 全套 (V1.1 中期路线, ROI 评估中).
 - 当前实现: **多 provider 配置** + **TOML 化** + **env override**, **不** 包含 `MultiLlmRouter` 串行 fallback 试验.
 - 0 装 PASS: 当前路径 = "切 base_url" + "切 model", 失败返 Degraded. 不假装已实现完整 fallback.
+- **2026-10-20 注（第三线源码对账）**：以上是 1.x 自定义 LLM 管线历史口径；现行 runtime 侧 `ProviderRouter`（`crates/engine/runtime/src/canonical/provider.rs`）已具备跨 provider fallback+健康态（候选过滤/fallback 顺序/EMA/retryable 才下抛），成本分级路由 `CostRouter`（H-P2，默认关 `APEIRETH_COST_ROUTING`）已交付——本页「不含 fallback」不代指内核路由。
 
 ---
 

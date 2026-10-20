@@ -11,6 +11,11 @@
 
 ---
 
+> **复核注（2026-10-20，第三线；不追溯改写历史正文）**：本文为 2026-08-29 规格口径，两处已与现行代码不符，对外引用以现行真源为准：
+> ① **§4.3 Linux 遏制**——现行 `crates/capabilities/tools/src/process/linux.rs` 明确**不承诺** cgroup/seccomp/namespace，只提供进程组边界 + `setrlimit`（地址空间/CPU/文件大小/进程数）+ `PR_SET_PDEATHSIG` + `PR_SET_NO_NEW_PRIVS`（memory / process-count 为 partial）；macOS 同为 partial。
+> ② **WebSocket 8 帧全双工**——服务端路由未接（README honest gaps「no /v1/ws server route」），协议类型/契约在 `apeireth-protocol`，属库级。
+> 复核卷宗：`artifacts/vcp-vs-apeireth-source-verification-2026-10-20.md`。
+
 ## 目录
 1. [系统能力架构全景](#1-系统能力架构全景)
 2. [基石与安全治理能力域 (Foundation & Governance)](#2-基石与安全治理能力域)
@@ -179,7 +184,7 @@ graph TD
 
 ### 4.3 进程安全容器与资源硬隔离 (`process_executor.rs`)
 * **Windows**：绑定至真实内核 `Job Object`，设置进程内存硬上限与活动进程并发数限制，退出时强行连带终止全部子进程树；
-* **Linux**：绑定至 `cgroups` 与命名空间，限制 CPU/内存配额与网络访问。
+* **Linux**：**历史口径已过时（2026-10-20 复核）**——现行实现只提供进程组边界 + `setrlimit`（地址空间/CPU/文件大小/进程数）+ `PR_SET_PDEATHSIG` + `PR_SET_NO_NEW_PRIVS`，**不承诺** cgroup/seccomp/namespace/网络隔离（`crates/capabilities/tools/src/process/linux.rs` 头注；memory/process-count 为 partial，见 `IsolationCapabilities`）。macOS 同为 partial。
 
 ---
 

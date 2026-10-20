@@ -8,6 +8,12 @@
 
 ---
 
+> **历史口径横幅（2026-09 编制时口径；2026-10-20 第三线复核留痕，正文历史值不改写）**：本文是 17/18-crate 时代的规划与核验存档。两处与现行代码不符：
+> ① **§1.4「Linux cgroups v2 与资源硬配额 ✅100% PASS」**——现行 Linux 后端**不承诺** cgroup/seccomp/namespace，只做进程组 + rlimits + PDEATHSIG + NO_NEW_PRIVS（`crates/capabilities/tools/src/process/linux.rs`）；
+> ② **§1.6「8 帧全双工 WebSocket 网关 ✅100% PASS」**——服务端路由未接（README honest gaps「no /v1/ws server route」）。
+> 第三部分 11 个下一代模块中 8 个后来已入库（多为库级/实验接线），`digital_life_roamer` / `p2p_mesh_sync` / `portable_vault` 至今无文件。
+> 复核卷宗：`artifacts/vcp-vs-apeireth-source-verification-2026-10-20.md`。
+
 ## 目录
 
 1. [第一部分：Apeireth 2.0 已实装核心模块代码行级核验清单](#第一部分apeireth-20-已实装核心模块代码行级核验清单)
@@ -85,7 +91,7 @@
 | `repo_map.rs` | `SymbolParser`, `RepoDependencyGraph`, `RepoMapGenerator` | 跨语言 AST 符号提取（Rust/Py/TS/Go）；个性化 PageRank 幂迭代收敛；Token 预算二分剪裁。 | ✅ 100% PASS |
 | `apply_patch.rs` | `TransactionalPatchApplier` | 多文件两阶段事务打补丁；上下文唯一性校验；100% 自动原子回滚。 | ✅ 100% PASS |
 | `guardrail.rs` | `pre_call_guard`, `post_call_guard` | Pre-Call 拦截路径穿越与危险命令；Post-Call 敏感凭据/私钥出站绊线（Tripwire）。 | ✅ 100% PASS |
-| `process/executor.rs` | `ProcessExecutor` | Windows `CREATE_SUSPENDED -> JobObject` 树遏制；Linux cgroups v2 与资源硬配额。 | ✅ 100% PASS |
+| `process/executor.rs` | `ProcessExecutor` | Windows `CREATE_SUSPENDED -> JobObject` 树遏制；Linux cgroups v2 与资源硬配额。**⚠️ 历史口径（2026-10-20 复核）：Linux 不承诺 cgroup，见抬头横幅。** | ✅ 100% PASS（历史口径） |
 | `mcp.rs` | `McpClient`, `McpTransport` | Model Context Protocol JSON-RPC 2.0 标准客户端（握手、工具发现与调用）。 | ✅ 100% PASS |
 
 ---
@@ -104,7 +110,7 @@
 | 模块文件 | 核心结构体 / 函数 | 通信与感知能力 | 状态与单测覆盖 |
 |---|---|---|:---:|
 | `file_fetcher.rs` | `TransparentFileFetcher` | 跨节点透明文件 Base64 穿透；SHA-256 缓存与防路径穿越沙箱。 | ✅ 100% PASS |
-| `duplex_gateway.rs` | `DuplexFrame`, `SentenceDivider` | 8 帧体系全双工 WebSocket 网关；流式分句；毫秒级 Barge-in 打断控制。 | ✅ 100% PASS |
+| `duplex_gateway.rs` | `DuplexFrame`, `SentenceDivider` | 8 帧体系全双工 WebSocket 网关；流式分句；毫秒级 Barge-in 打断控制。**⚠️ 历史口径（2026-10-20 复核）：HTTP 服务端路由未接，见抬头横幅。** | ✅ 100% PASS（历史口径） |
 | `voice/minimax_tts.rs` | `MinimaxTtsClient` | MiniMax LIVE 128kbps 32kHz 高保真语音流式生成；3D PAD 情感参数调制。 | ✅ 100% PASS |
 
 ---
