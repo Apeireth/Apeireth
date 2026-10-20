@@ -58,3 +58,25 @@
 
 - 本清单为**静态证据**，未跑运行时探针；"dormant" 判定允许被运行时证据推翻（推翻即更新本清单）。
 - 未修改任何 crate 源码；未新增/删除文件。
+
+## 7. R7-2 执行结果（2026-10-20，已落地）
+
+**R7-2a**（commit `0bdd9bb4`）：organ 删自有多余 `ContextBlock` 定义（原 `organ/src/context_assembly.rs:45`），改为
+`#[doc(inline)] pub use apeireth_orchestration::context_budget::ContextBlock;`；适配 organ 内 3 处构造点
+（`name: String`）与 1 处 names 收集（`as_str`）；旧路径 `apeireth_organ::ContextBlock` 保留可用。
+**R7-2b**（commit `a93fdbb3`）：删 runtime `execute.rs:83` re-export（改私有 `use`）、`canonical/mod.rs:102` 与
+`lib.rs:18` re-export；两处调用方（`runtime/tests/context_budget.rs`、`adapters/cli/tests/production_knobs.rs`）
+直连 orchestration canonical。
+**附带修复**（commit `ae1f8779`）：R2-3c 删 `PluginManager::capabilities()` 后 runtime `Debug` 漏改致 E0599，
+改 `records().len()`；详见 `r2-inventory-2026-10-20.md` §7。
+
+**验收（实测，2026-10-20）**：
+- `git grep 'pub struct ContextBlock' -- crates/` = **1**（仅 `orchestration/src/context_budget.rs:34`）；
+- `cargo test -p apeireth-organ --lib` 377 passed；`cargo test -p apeireth-runtime --test context_budget` 7 passed；
+  `cargo test -p apeireth-cli --test production_knobs` 22 passed；
+- `cargo check -p apeireth-runtime -p apeireth-runtime-assembly -p apeireth-cli --all-targets` exit 0；
+  clippy 0 告警、`cargo fmt --check` 0 diff；
+- 残留 `runtime::canonical::ContextBlock` 引用 = 0。
+- **基线 STALE**：`concept ContextBlock crates/engine/organ/src/context_assembly.rs` 已失效（定义迁走）——
+  Wave 3 收口缩表时删除该行；`size crates/foundation/orchestration/src/lib.rs 1432` 同为收口缩表候选
+  （R7-4 删代码引起，非本次改动）。

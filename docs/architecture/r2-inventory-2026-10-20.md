@@ -49,3 +49,17 @@
 
 - 静态证据，未跑运行时；plugin `CapabilityRegistry` 的"内部使用"已点名文件行，删除前仍须 `cargo check` 验证。
 - 未修改任何 crate 源码。
+
+## 7. R2-3c 漏检与修复（2026-10-20，commit ae1f8779）
+
+R2-3c（`2da976ee`）按"外部 0 调用"grep 删除 `PluginManager::capabilities()`，但
+`runtime/src/canonical/runtime.rs:704` 的 `Debug` 实现仍在调用 → `cargo check -p apeireth-runtime
+--all-targets` 报 E0599（private field, not a method）。本轮 R7-2 下游验证时发现，改用公开
+`records().len()`（语义等价，仅 Debug 计数，无行为影响）。
+
+**教训（写入 R2 取证口径）**：
+1. "外部 0 调用"结论必须由编译验证（`cargo check --all-targets`）兜底，不能只凭 grep 计数；
+2. fast gate（`verify_changed.py`）未能拦截该回归的原因待查（反向依赖覆盖口径可能未含本次
+   trait/impl 面），在 Wave 收口效率线复盘中复核；
+3. R2-3 批次计划已列"触 `runtime/src/canonical/runtime.rs`"，但 R2-3c 实施时未按 file-level
+   checklist 全量编译 → 后续 R2 批次收口固定跑 `cargo check --all-targets` + 相关测试。
