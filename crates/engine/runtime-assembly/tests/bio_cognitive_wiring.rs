@@ -5,10 +5,11 @@
 //! ContextPressure 高 → 收敛策略 / 无预算数据 → 默认策略 /
 //! 策略对非核心块真折叠 / 用户原文与信号原文不进装配文本.
 //!
-//! 装配面能力级别: IMPLEMENTED + 默认关 (不是 DEFAULT ENABLED、不是
-//! PRODUCTION WIRED); 本文件只证明装配级行为, 不证明 production.rs 已注册模块.
+//! 装配面能力级别: PRODUCTION WIRED + 默认关 (不是 DEFAULT ENABLED); 本文件
+//! 只证明装配级行为, 生产注册点见 `bio_production_wiring::install_bio_modules`
+//! (R1b-1a 起装配根按开关注册, 默认关 = 不注册).
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, SessionId};
 use apeireth_organ::homeostasis::{RegulationAction, Severity};
@@ -22,8 +23,7 @@ use apeireth_protocol::canonical::{
 };
 use apeireth_runtime_assembly::canonical::cognitive::{
     assemble_bio_turn, bio_switch_enabled_from_env_value, BioAssemblyModule, BioAssemblySwitches,
-    BioContextBlock, BioTurnInput, BIO_ASSEMBLY_MODULE_ID, BIO_CONTEXT_POLICY_ENABLE_ENV,
-    BIO_REPAIR_GUIDANCE_ENABLE_ENV,
+    BioContextBlock, BioTurnInput, BIO_ASSEMBLY_MODULE_ID,
 };
 use apeireth_runtime_assembly::canonical::module::{
     BehaviorModule, HookPoint, InvocationContext, ModuleContext, ModuleInvocationError,
@@ -171,33 +171,25 @@ fn switch_value_parsing_is_fail_closed() {
     assert!(!policy.is_disabled());
 }
 
-/// 2) env 开关: 未设 = 关; 非 `1` 不开; `1` 才逐开关打开.
+/// 2) 装配根开关: 显式布尔逐开关独立; 全关 = `is_disabled`.
+///
+/// R1b-1b 起本模块不再自行读 env: 两个开关值由装配根 `NervousSwitchboard`
+/// 一次性解析后经 `from_flags` 显式传入, 本测试覆盖该构造器的纯语义.
 #[test]
-fn env_switches_default_off_and_only_explicit_one_enables() {
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-    let _guard = ENV_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    std::env::remove_var(BIO_REPAIR_GUIDANCE_ENABLE_ENV);
-    std::env::remove_var(BIO_CONTEXT_POLICY_ENABLE_ENV);
-    assert!(
-        BioAssemblySwitches::from_env().is_disabled(),
-        "未设 = 两个开关都关"
+fn explicit_flags_default_off_and_enable_only_what_is_passed() {
+    let off = BioAssemblySwitches::from_flags(false, false);
+    assert!(off.is_disabled(), "两个 false = 全关");
+    let repair = BioAssemblySwitches::from_flags(true, false);
+    assert_eq!(
+        (repair.repair_guidance(), repair.context_policy()),
+        (true, false)
     );
-    std::env::set_var(BIO_REPAIR_GUIDANCE_ENABLE_ENV, "true");
-    assert!(
-        BioAssemblySwitches::from_env().is_disabled(),
-        "非 1 (true) 不开"
+    assert!(!repair.is_disabled());
+    let both = BioAssemblySwitches::from_flags(true, true);
+    assert_eq!(
+        (both.repair_guidance(), both.context_policy()),
+        (true, true)
     );
-    std::env::set_var(BIO_REPAIR_GUIDANCE_ENABLE_ENV, "1");
-    let repair = BioAssemblySwitches::from_env();
-    assert!(repair.repair_guidance() && !repair.context_policy());
-    std::env::set_var(BIO_CONTEXT_POLICY_ENABLE_ENV, "1");
-    let both = BioAssemblySwitches::from_env();
-    assert!(both.repair_guidance() && both.context_policy() && !both.is_disabled());
-    std::env::remove_var(BIO_REPAIR_GUIDANCE_ENABLE_ENV);
-    std::env::remove_var(BIO_CONTEXT_POLICY_ENABLE_ENV);
-    assert!(BioAssemblySwitches::from_env().is_disabled());
 }
 
 /// 3) 两开关关: 即使输入全给 (plan + 块 + 高压力预算) 也零输出、默认策略.

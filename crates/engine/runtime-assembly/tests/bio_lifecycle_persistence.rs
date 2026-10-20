@@ -10,21 +10,21 @@
 //! ⑦ `evaluate` 是唯一自动落盘点（工具结果 / 播种只记内存），且同输入同字节；
 //! ⑧ 容量淘汰与退役墓碑 round-trip（`evicted_total` / `tombstone` 不丢）；
 //! ⑨ 落盘失败不打断回合（诊断计数），障碍解除后下一次收口重试成功；
-//! ⑩ env 接线入口：开关关 = 目录一次都不碰；开关开 + 目录 = 绑定落盘。
+//! ⑩ 装配根接线入口（R1b-1b）：开关关 = 目录一次都不碰；开关开 + 目录 = 绑定落盘。
 //!
-//! **0 装诚实**：生产装配根尚未传目录（`bio_production_wiring.rs` 本批禁改，
-//! Lead 接线）；无 live E2E；跨进程锁未做（单写者）。
+//! **0 装诚实**：生产装配根已传目录（`bio_production_wiring::install_bio_modules`，
+//! R1b-1b 起开关值由 `NervousSwitchboard` 解析后显式传入）；无 live E2E；
+//! 跨进程锁未做（单写者）。
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 
 use apeireth_orchestration::lifecycle::{LifecyclePolicy, LifecycleStage, RetireReason};
 use apeireth_runtime_assembly::canonical::care_heartbeat::bio_lifecycle::{
-    bio_lifecycle_wiring_from_env, bio_lifecycle_wiring_from_env_value,
+    bio_lifecycle_wiring_from_enabled_with_store_dir, bio_lifecycle_wiring_from_env_value,
     bio_lifecycle_wiring_from_env_value_with_store_dir, BioLifecycleState, LifecycleClock,
-    BIO_LIFECYCLE_ENABLE_ENV, LIFECYCLE_STATE_DOC_NAME, LIFECYCLE_STATE_DOC_VERSION,
-    LIFECYCLE_STATE_FILE_NAME,
+    LIFECYCLE_STATE_DOC_NAME, LIFECYCLE_STATE_DOC_VERSION, LIFECYCLE_STATE_FILE_NAME,
 };
 
 const NOW_MS: u64 = 1_760_000_000_000;
@@ -481,84 +481,35 @@ fn a_write_failure_is_diagnosed_and_retried_without_breaking_the_ledger() {
 }
 
 // ============================================
-// ⑩ env 接线入口：开关关不碰目录；开关开 + 目录 = 绑定落盘
+// ⑩ 装配根接线入口（R1b-1b：开关值由装配根解析后显式传入）：
+//    开关关不碰目录；开关开 + 目录 = 绑定落盘
 // ============================================
 
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-fn env_lock() -> MutexGuard<'static, ()> {
-    ENV_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-struct EnvSwitch(Option<String>);
-
-impl EnvSwitch {
-    fn set(value: &str) -> Self {
-        let previous = std::env::var(BIO_LIFECYCLE_ENABLE_ENV).ok();
-        std::env::set_var(BIO_LIFECYCLE_ENABLE_ENV, value);
-        Self(previous)
-    }
-
-    fn unset() -> Self {
-        let previous = std::env::var(BIO_LIFECYCLE_ENABLE_ENV).ok();
-        std::env::remove_var(BIO_LIFECYCLE_ENABLE_ENV);
-        Self(previous)
-    }
-}
-
-impl Drop for EnvSwitch {
-    fn drop(&mut self) {
-        match &self.0 {
-            Some(value) => std::env::set_var(BIO_LIFECYCLE_ENABLE_ENV, value),
-            None => std::env::remove_var(BIO_LIFECYCLE_ENABLE_ENV),
-        }
-    }
-}
-
 #[test]
-fn the_env_entry_binds_a_store_dir_only_when_enabled() {
-    let _lock = env_lock();
-
+fn the_enabled_flag_binds_a_store_dir_only_when_on() {
     let disabled_dir = tempfile::tempdir().expect("tempdir");
-    {
-        let _switch = EnvSwitch::set("0");
-        let (clock, reads) = counting_clock(NOW_MS);
-        let wiring = bio_lifecycle_wiring_from_env(
-            clock,
-            &names(&["filesystem"]),
-            Some(disabled_dir.path()),
-        );
-        assert!(wiring.is_none(), "env 关 = 不构造");
-        assert_eq!(reads.load(Ordering::SeqCst), 0);
-    }
+    let (clock, reads) = counting_clock(NOW_MS);
+    let wiring = bio_lifecycle_wiring_from_enabled_with_store_dir(
+        false,
+        clock,
+        &names(&["filesystem"]),
+        Some(disabled_dir.path()),
+    );
+    assert!(wiring.is_none(), "开关关 = 不构造");
+    assert_eq!(reads.load(Ordering::SeqCst), 0);
     assert!(
         dir_entries(disabled_dir.path()).is_empty(),
-        "env 关 = 目录一次都不碰"
+        "开关关 = 目录一次都不碰"
     );
 
-    {
-        let _switch = EnvSwitch::unset();
-        assert!(
-            bio_lifecycle_wiring_from_env(
-                fixed_clock(NOW_MS),
-                &names(&["filesystem"]),
-                Some(disabled_dir.path())
-            )
-            .is_none(),
-            "env 未设置 = 默认关"
-        );
-    }
-
     let enabled_dir = tempfile::tempdir().expect("tempdir");
-    let _switch = EnvSwitch::set("1");
-    let wiring = bio_lifecycle_wiring_from_env(
+    let wiring = bio_lifecycle_wiring_from_enabled_with_store_dir(
+        true,
         fixed_clock(NOW_MS),
         &names(&["filesystem"]),
         Some(enabled_dir.path()),
     )
-    .expect("env 开");
+    .expect("开关开");
     assert!(wiring.state().persistence_enabled());
     assert_eq!(
         wiring.state().persistence_path(),

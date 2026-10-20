@@ -63,7 +63,8 @@ pub const NERVOUS_MECHANISM_TOTAL: usize = 14;
 pub const IMMUNE_MEMORY_ENABLE_ENV: &str = "APEIRETH_ENABLE_IMMUNE_MEMORY";
 /// 痛觉 / 再生共用开关 env 名（生产解析在 cli；此处只引用既有名字）。
 pub const BIO_PAIN_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_PAIN";
-/// 生命周期装配入口 env 名（`bio_lifecycle` 模块的既有名字；装配根注册待 Lead）。
+/// 生命周期装配入口 env 名（`bio_lifecycle` 模块的既有名字；装配根已由
+/// `bio_production_wiring::install_bio_modules` 注册，见 `production.rs`）。
 pub const BIO_LIFECYCLE_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_LIFECYCLE";
 
 /// 机制接线级别（台账四级口径的三种现状。
@@ -539,19 +540,16 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
     },
     MechanismSpec {
         id: "SG-18.lifecycle",
-        level: MechanismLevel::Implemented,
+        level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_LIFECYCLE_ENABLE_ENV),
         parser: bio_switch_enabled_from_env_value,
-        wiring: "assembly-entry-ready::root-registration-pending",
+        wiring: "production-assembly::bio_production_wiring.install_bio_modules",
         signals: &[SignalSpec {
             id: "tool_lifecycle_ledger",
-            state: SignalState::NotWired,
-            reason: Some("production.rs 装配根未注册（本批禁改，待 Lead）"),
+            state: SignalState::Wired,
+            reason: None,
         }],
-        gaps: &[
-            "装配入口已备；production.rs 装配根注册待 Lead（本批禁改）",
-            "self_status.bio_mechanisms 未注册 lifecycle probe",
-        ],
+        gaps: &["self_status.bio_mechanisms 未注册 lifecycle probe（R1b-2 接线）"],
     },
     MechanismSpec {
         id: "SG-21.play",
@@ -571,7 +569,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::Half,
         enabled_env: Some(BIO_CARE_CANDIDATES_ENABLE_ENV),
         parser: bio_care_candidates_enabled_from_env_value,
-        wiring: "care-candidates-pipeline",
+        wiring: "production-assembly::install_bio_ritual_tools + care-candidates-pipeline",
         signals: &[
             SignalSpec {
                 id: "ritual_state_store",
@@ -580,24 +578,27 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             },
             SignalSpec {
                 id: "ritual_producer",
-                state: SignalState::NotWired,
-                reason: Some("仪式生产者未接 ⇒ 0 候选（如实）"),
+                state: SignalState::Wired,
+                reason: None,
             },
         ],
-        gaps: &["仪式状态存储已接；仪式生产者未接 ⇒ 0 候选（如实）"],
+        gaps: &["纯 CLI chat 无心跳宿主 ⇒ 仪式写入暂无候选消费（W3.7 工具面已接，候选侧留 R1b-2）"],
     },
     MechanismSpec {
         id: "SG-25.ecosystem_health",
-        level: MechanismLevel::Implemented,
+        level: MechanismLevel::ProductionWired,
         enabled_env: None,
         parser: never_enabled,
-        wiring: "kernel-only",
+        wiring: "production-assembly::install_bio_self_status + tool_ecosystem_probe",
         signals: &[SignalSpec {
-            id: "ecosystem_health_kernel",
-            state: SignalState::NotWired,
-            reason: Some("内核在场但无装配入口/开关，未被生产消费"),
+            id: "ecosystem_probe",
+            state: SignalState::Wired,
+            reason: None,
         }],
-        gaps: &["IMPLEMENTED 未接线：内核在场，无装配入口/无开关"],
+        gaps: &[
+            "策展表为代码内常量快照（未覆盖 tools 如实 untagged）",
+            "完整 taxonomy 合同（工具声明自带标签）B 类 ADR 前置",
+        ],
     },
     MechanismSpec {
         id: "SG-26.capacity",
@@ -610,7 +611,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             state: SignalState::Wired,
             reason: None,
         }],
-        gaps: &["bio_mechanisms 14 格当前只注册 1 格（其余 wired:false）"],
+        gaps: &["bio_mechanisms 观测面最多 8/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
     },
 ];
 
@@ -643,5 +644,80 @@ mod tests {
         });
         assert!(value.is_none());
         assert_eq!(reads.get(), 0, "开关关时一个 env 都不读");
+    }
+
+    // R1b-1b 台账可校验（ADR-0009 D5）：三条结构校验。
+
+    /// 校验 ①：每个 `enabled_env` 都必须登记在 env-registry（新增开关先登记）。
+    #[test]
+    fn every_enabled_env_is_registered_in_the_env_registry() {
+        let registry = include_str!("../../../../../docs/architecture/env-registry.toml");
+        for spec in &MECHANISMS {
+            if let Some(name) = spec.enabled_env {
+                assert!(
+                    registry.contains(&format!("name = \"{name}\"")),
+                    "{} 的开关 {name} 未登记于 docs/architecture/env-registry.toml",
+                    spec.id
+                );
+            }
+        }
+    }
+
+    /// 校验 ②：PRODUCTION WIRED 必须指向真实装配根且不留 pending 占位；其余级别必带 gaps。
+    #[test]
+    fn production_wired_rows_name_an_assembly_root_and_never_pending() {
+        for spec in &MECHANISMS {
+            if spec.level == MechanismLevel::ProductionWired {
+                assert!(
+                    spec.wiring.starts_with("production-assembly::")
+                        || spec.wiring.starts_with("cli-assembly::"),
+                    "{} 声称 PRODUCTION WIRED 但 wiring 不是装配根路径: {}",
+                    spec.id,
+                    spec.wiring
+                );
+                assert!(
+                    !spec.wiring.contains("pending"),
+                    "{} 的 wiring 仍含 pending 占位: {}",
+                    spec.id,
+                    spec.wiring
+                );
+            } else {
+                assert!(
+                    !spec.gaps.is_empty(),
+                    "{} 非 PRODUCTION WIRED 必须带 gaps，不隐藏未接段",
+                    spec.id
+                );
+            }
+        }
+    }
+
+    /// 校验 ③：未接/半程信号必带真因；开关解析必须 fail-closed（`None` = 关）。
+    #[test]
+    fn unwired_signals_carry_reasons_and_parsers_fail_closed() {
+        for spec in &MECHANISMS {
+            for signal in spec.signals {
+                if signal.state != SignalState::Wired {
+                    let reason = signal.reason.unwrap_or_default();
+                    assert!(
+                        !reason.trim().is_empty(),
+                        "{} 的 {} 未接/半程但无真因",
+                        spec.id,
+                        signal.id
+                    );
+                }
+            }
+            if spec.enabled_env.is_some() {
+                assert!(
+                    !(spec.parser)(None),
+                    "{} 的开关解析必须 fail-closed（None = 关）",
+                    spec.id
+                );
+                assert!(
+                    (spec.parser)(Some("1")),
+                    "{} 的开关解析必须认显式 1（否则台账说开而实际永不生效）",
+                    spec.id
+                );
+            }
+        }
     }
 }

@@ -43,7 +43,7 @@ use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
 use super::nervous_bridge::NervousBridgeModule;
 use super::nervous_bus::NervousBus;
-use super::nervous_switchboard::NervousSwitchboard;
+use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{
@@ -1195,12 +1195,14 @@ impl ProductionModules {
         }
 
         // W3.3 · 游戏练习场 (`tool.play_*`, 默认关): 装配块在 `install_bio_play`
-        // (env 只认 "1" 且工作区根注入), 返回共享账本句柄供自述 play probe 只读接入。
+        // (开关值来自装配根一次性解析的 `NervousSwitchboard`, 且要求工作区根注入),
+        // 返回共享账本句柄供自述 play probe 只读接入。
         let bio_play_state = bio_production_wiring::install_bio_play(
             &mut capabilities,
             &clock,
             backends.workspace_root.as_deref(),
             instrument,
+            nervous_switchboard.switch_enabled(BioSwitch::Play),
         );
 
         // W3.7 · 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`, 默认关):
@@ -1210,6 +1212,7 @@ impl ProductionModules {
             &mut capabilities,
             &clock,
             bio_lifecycle_store_dir.as_deref(),
+            nervous_switchboard.switch_enabled(BioSwitch::CareCandidates),
         );
 
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
@@ -1292,6 +1295,7 @@ impl ProductionModules {
                 config.task_board.as_ref(),
                 bio_play_state.as_ref(),
                 &bio_probe_slots,
+                nervous_switchboard.switch_enabled(BioSwitch::SelfStatus),
             );
             // K 轴 L1: 自述在场节 (设备数/白名单数/最近感知) 与 `tool.device_sense`
             // 工具面同一本设备表同一进程内感知计数 (同源同账; 面没注册 = 在场节
@@ -1548,6 +1552,7 @@ impl ProductionModules {
             &clock,
             &capabilities,
             bio_lifecycle_store_dir.as_deref(),
+            &nervous_switchboard,
         );
 
         if config.memory_writeback {

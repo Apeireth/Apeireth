@@ -67,9 +67,11 @@
 //!
 //! # 0 装诚实（能力级别：IMPLEMENTED + 接线入口已备；**非** PRODUCTION WIRED）
 //!
-//! - `production.rs` 本批禁改（另一施工线独占）：**装配根尚未注册本模块**，
-//!   [`bio_lifecycle_wiring_from_env`] 是留给 Lead 总装的入口；
-//! - `canonical.rs` 本批禁改（Lead 独占）：模块暂挂在
+//! - 装配根已由 Lead 总装注册（`installation via
+//!   bio_production_wiring::install_bio_modules`，见 `production.rs`）；
+//!   [`bio_lifecycle_wiring_from_enabled_with_store_dir`] 接收装配根已解析的
+//!   布尔开关（R1b-1b），本模块不自行读 env；
+//! - `canonical.rs` 的模块声明由 Lead 独占：模块暂挂在
 //!   [`super::care_heartbeat`] 下编译，对外路径
 //!   `canonical::care_heartbeat::bio_lifecycle`；Lead 注册时可迁到
 //!   `canonical.rs`（见 `care_heartbeat.rs` 顶部同款迁移说明）；
@@ -801,19 +803,21 @@ pub fn bio_lifecycle_wiring_from_env_value(
     bio_lifecycle_wiring_from_env_value_with_store_dir(raw, clock, registered_tool_names, None)
 }
 
-/// 从 env 现值装配（fail-closed 口径同
-/// [`bio_lifecycle_wiring_from_env_value`]）。
+/// 从装配根已解析的布尔开关装配（fail-closed 口径同
+/// [`bio_lifecycle_wiring_from_env_value`]；R1b-1b：env 读取收敛到
+/// `NervousSwitchboard`，本 helper 不读 env）。
 ///
 /// `store_dir = None` = 纯内存；`Some(care_dir)` = 绑定文件账。开关关时目录
 /// 一次都不碰（返回 `None`）。
 #[must_use]
-pub fn bio_lifecycle_wiring_from_env(
+pub fn bio_lifecycle_wiring_from_enabled_with_store_dir(
+    enabled: bool,
     clock: LifecycleClock,
     registered_tool_names: &[String],
     store_dir: Option<&Path>,
 ) -> Option<BioLifecycleWiring> {
     bio_lifecycle_wiring_from_env_value_with_store_dir(
-        std::env::var(BIO_LIFECYCLE_ENABLE_ENV).ok().as_deref(),
+        enabled.then_some("1"),
         clock,
         registered_tool_names,
         store_dir,

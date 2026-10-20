@@ -552,10 +552,11 @@ pub fn bio_tone_wiring_from_env_value(
     Some(BioToneWiring { state, module })
 }
 
-/// 从 env 现值装配 (同 [`bio_tone_wiring_from_env_value`] 的 fail-closed 口径)。
+/// 从装配根已解析的布尔开关装配 (R1b-1b: env 读取收敛到 `NervousSwitchboard`;
+/// 本 helper 不读 env, 开关关 = `None`)。
 #[must_use]
-pub fn bio_tone_wiring_from_env(clock: ToneClock) -> Option<BioToneWiring> {
-    bio_tone_wiring_from_env_value(std::env::var(BIO_TONE_ENABLE_ENV).ok().as_deref(), clock)
+pub fn bio_tone_wiring_from_enabled(enabled: bool, clock: ToneClock) -> Option<BioToneWiring> {
+    bio_tone_wiring_from_env_value(enabled.then_some("1"), clock)
 }
 
 /// 审批面社会反馈映射 (W3.7 装配面真实源, 纯映射): 人批 → 社会正结果,

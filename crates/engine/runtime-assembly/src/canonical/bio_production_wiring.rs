@@ -32,19 +32,18 @@ use apeireth_guard::hook::SharedImmuneMemory;
 use apeireth_orchestration::task_queue::TaskQueue;
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::self_status::{
-    bio_self_status_enabled_from_env_value, BioMechanismKind, BioMechanismProbe,
-    BioMechanismReading, BIO_SELF_STATUS_ENABLE_ENV,
+    BioMechanismKind, BioMechanismProbe, BioMechanismReading,
 };
 
 use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
-    bio_lifecycle_enabled_from_env_value, bio_lifecycle_wiring_from_env_value_with_store_dir,
-    BioLifecycleState, LifecycleClock, BIO_LIFECYCLE_ENABLE_ENV,
+    bio_lifecycle_wiring_from_enabled_with_store_dir, BioLifecycleState, LifecycleClock,
 };
-use crate::canonical::care_heartbeat::bio_tone::{bio_tone_wiring_from_env, ToneState};
+use crate::canonical::care_heartbeat::bio_tone::{bio_tone_wiring_from_enabled, ToneState};
 use crate::canonical::care_heartbeat::CareHeartbeatStatus;
 use crate::canonical::cognitive::{BioAssemblyModule, BioAssemblySwitches};
 use crate::canonical::module::Module;
+use crate::canonical::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use crate::canonical::orchestrator::QuorumTrace;
 use crate::canonical::organ_module::OrganModule;
 use crate::canonical::play_tools::BioPlayState;
@@ -74,35 +73,41 @@ pub(super) fn install_bio_modules(
     clock: &Arc<dyn Clock>,
     capabilities: &[Arc<dyn ToolCapability>],
     lifecycle_store_dir: Option<&std::path::Path>,
+    switchboard: &NervousSwitchboard,
 ) -> BioWiringHandles {
     // W3.2: 修复指令段 + 策略化上下文块的 TurnStart overlay 装配点。
-    // 两个开关默认关（`APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` /
-    // `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`，只认 "1"）——**全关 = 不注册**
-    // （懒加载语义：未启用 = 不构造 = 不注册，探针零上报）；开时也只装配
-    // 装配根**显式注入**的 `RepairPlan` / 上下文块 / 预算。
-    let bio_switches = BioAssemblySwitches::from_env();
+    // 两个开关值由装配根从 `NervousSwitchboard` 一次性解析后传入（R1b-1b：
+    // 本函数不再读 env）——**全关 = 不注册**（懒加载语义：未启用 = 不构造 =
+    // 不注册，探针零上报）；开时也只装配装配根**显式注入**的 `RepairPlan` /
+    // 上下文块 / 预算。
+    let bio_switches = BioAssemblySwitches::from_flags(
+        switchboard.switch_enabled(BioSwitch::RepairGuidance),
+        switchboard.switch_enabled(BioSwitch::ContextPolicy),
+    );
     if !bio_switches.is_disabled() {
         modules.push(Arc::new(BioAssemblyModule::new(bio_switches)));
     }
 
-    // W3.3: 调质→tone 的 TurnStart 尾部 overlay 装配点。`APEIRETH_ENABLE_BIO_TONE`
-    // 只认 "1" —— **全关 = 不构造不注册**。开时构造共享 `ToneState` + 模块，
-    // 并把状态句柄交给装配根（`bio_tone_state` / `attach_tone_feedback_sink`）。
+    // W3.3: 调质→tone 的 TurnStart 尾部 overlay 装配点。开关值来自
+    // `NervousSwitchboard`（R1b-1b）—— **关 = 不构造不注册**。开时构造共享
+    // `ToneState` + 模块，并把状态句柄交给装配根（`bio_tone_state` /
+    // `attach_tone_feedback_sink`）。
     let mut tone_state = None;
-    if let Some(wiring) = bio_tone_wiring_from_env({
-        let clock = Arc::clone(clock);
-        Arc::new(move || clock.now().timestamp_millis() as u64)
-    }) {
+    if let Some(wiring) =
+        bio_tone_wiring_from_enabled(switchboard.switch_enabled(BioSwitch::Tone), {
+            let clock = Arc::clone(clock);
+            Arc::new(move || clock.now().timestamp_millis() as u64)
+        })
+    {
         tone_state = Some(Arc::clone(wiring.state()));
         modules.push(wiring.module() as Arc<dyn Module>);
     }
 
-    // W3.5 (SG-18): 资产生命周期观测模块。`APEIRETH_ENABLE_BIO_LIFECYCLE` 只认
-    // "1" —— 关 = 不构造状态、不构造模块、一次时钟都不读。开时以装配根的真实
-    // 工具声明名播种 `Newborn` 资产，状态句柄交给装配根供自述 probe 迟绑定。
+    // W3.5 (SG-18): 资产生命周期观测模块。开关值来自 `NervousSwitchboard`
+    // （R1b-1b）—— 关 = 不构造状态、不构造模块、一次时钟都不读。开时以装配根
+    // 的真实工具声明名播种 `Newborn` 资产，状态句柄交给装配根供自述 probe 迟绑定。
     let mut lifecycle_state = None;
-    let lifecycle_raw = std::env::var(BIO_LIFECYCLE_ENABLE_ENV).ok();
-    if bio_lifecycle_enabled_from_env_value(lifecycle_raw.as_deref()) {
+    if switchboard.switch_enabled(BioSwitch::Lifecycle) {
         let lifecycle_clock: LifecycleClock = {
             let clock = Arc::clone(clock);
             Arc::new(move || clock.now().timestamp_millis() as u64)
@@ -111,8 +116,8 @@ pub(super) fn install_bio_modules(
             .iter()
             .map(|tool| tool.declaration().name)
             .collect();
-        if let Some(wiring) = bio_lifecycle_wiring_from_env_value_with_store_dir(
-            lifecycle_raw.as_deref(),
+        if let Some(wiring) = bio_lifecycle_wiring_from_enabled_with_store_dir(
+            true,
             lifecycle_clock,
             &registered_tool_names,
             lifecycle_store_dir,
@@ -141,9 +146,13 @@ pub(super) fn install_bio_play(
     clock: &Arc<dyn Clock>,
     workspace_root: Option<&std::path::Path>,
     instrument: &BuildInstrumentation,
+    enabled: bool,
 ) -> Option<Arc<BioPlayState>> {
-    let play =
-        crate::canonical::play_tools::bio_play_wiring_from_env(workspace_root, Arc::clone(clock))?;
+    let play = crate::canonical::play_tools::bio_play_wiring_from_enabled(
+        enabled,
+        workspace_root,
+        Arc::clone(clock),
+    )?;
     let state = Arc::clone(play.state());
     for module in play.into_modules() {
         instrument.constructed(ModuleFamily::BioPlay);
@@ -165,10 +174,13 @@ pub(super) fn install_bio_ritual_tools(
     capabilities: &mut Vec<Arc<dyn ToolCapability>>,
     clock: &Arc<dyn Clock>,
     care_dir: Option<&std::path::Path>,
+    enabled: bool,
 ) {
-    let Some(wiring) =
-        crate::canonical::ritual_tools::bio_ritual_wiring_from_env(care_dir, Arc::clone(clock))
-    else {
+    let Some(wiring) = crate::canonical::ritual_tools::bio_ritual_wiring_from_enabled(
+        enabled,
+        care_dir,
+        Arc::clone(clock),
+    ) else {
         return;
     };
     for module in wiring.into_modules() {
@@ -387,10 +399,8 @@ pub(super) fn install_bio_self_status(
     task_board: Option<&Arc<TaskQueue>>,
     bio_play_state: Option<&Arc<BioPlayState>>,
     slots: &BioProbeSlots,
+    enabled: bool,
 ) -> ProductionSelfStatusSource {
-    let enabled = bio_self_status_enabled_from_env_value(
-        std::env::var(BIO_SELF_STATUS_ENABLE_ENV).ok().as_deref(),
-    );
     install_bio_self_status_with(source, task_board, bio_play_state, slots, enabled)
 }
 

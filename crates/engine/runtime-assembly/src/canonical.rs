@@ -208,7 +208,7 @@ pub use permission_preset::{
 // 生物机制族 W3.3 · 游戏练习场工具面 (默认关): 装配门 + 四件套 + 路径纪律 + 审批钩子
 // (钩子未在装配根注册, 见模块头 0 装边界)。
 pub use play_tools::{
-    bio_play_enabled_from_env_value, bio_play_wiring_from_env, bio_play_wiring_from_env_value,
+    bio_play_enabled_from_env_value, bio_play_wiring_from_enabled, bio_play_wiring_from_env_value,
     play_approval_reason, play_error_code, validate_play_sandbox_dir, BioPlayState, BioPlayWiring,
     PlayAbortModule, PlayApprovalHook, PlayFinishModule, PlayProposeModule, PlayStartModule,
     BIO_PLAY_ENABLE_ENV, MAX_OUTCOME_ITEMS, MAX_OUTCOME_ITEM_BYTES, MAX_PROPOSAL_CANDIDATES,
@@ -235,7 +235,7 @@ pub use retrieval_tuning_wire::{
     RETRIEVAL_TUNING_ENABLE_ENV, RETRIEVAL_TUNING_LOG_FILE,
 };
 pub use ritual_tools::{
-    bio_ritual_wiring_from_env, bio_ritual_wiring_from_env_value, ritual_kind_labels,
+    bio_ritual_wiring_from_enabled, bio_ritual_wiring_from_env_value, ritual_kind_labels,
     BioRitualState, BioRitualWiring, RitualDoneModule, RitualDoneTool, RitualSkipModule,
     RitualSkipTool, RITUAL_CAPABILITY_IDS, RITUAL_DONE_CAPABILITY_ID, RITUAL_DONE_TOOL_NAME,
     RITUAL_SKIP_CAPABILITY_ID, RITUAL_SKIP_TOOL_NAME,

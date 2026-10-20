@@ -1,7 +1,7 @@
 //! R1b-1a · 神经系统开关单入口（ADR-0009 D3）。
 //!
-//! 现状（`docs/architecture/r1b-inventory-2026-10-20.md` §3）：9 个生物机制开关
-//! 散落在 **17 个 src 文件**里各自解析（`BioAssemblySwitches::from_env` /
+//! 现状（`docs/architecture/r1b-inventory-2026-10-20.md` §3）：R1b-1a 之前，9 个
+//! 生物机制开关散落在 **17 个 src 文件**里各自解析（`BioAssemblySwitches::from_env` /
 //! `bio_tone_wiring_from_env` / `std::env::var(BIO_LIFECYCLE_ENABLE_ENV)` /
 //! CLI 痛觉与节律门各自读等）。本模块把「一次解析、一次记录」收进装配根：
 //! [`NervousSwitchboard::from_env`] 是**唯一**同时读取这 9 个开关 + 节律时区
@@ -15,9 +15,16 @@
 //! - 节律时区偏移是唯一**参数**（分钟，±14h，缺省 `0` = UTC，不推断本地时区）：
 //!   非法值**拒绝**（返回错误，不静默回退 0）。
 //!
+//! R1b-1b（2026-10-20 起）：装配根已把解析结果显式传给模块安装函数，
+//! `BioAssemblySwitches::from_env` / `bio_tone_wiring_from_env` /
+//! `bio_play_wiring_from_env` / `bio_ritual_wiring_from_env` /
+//! `bio_lifecycle_wiring_from_env` 与 `BioAssemblyModule::from_env` 已删除
+//! （改为 `from_flags` / `*_from_enabled*` 接收布尔值）。CLI 侧 care 心跳与痛觉
+//! 门仍有独立读取点，待生物线迁移（不在 R1b-1b 边界内，如实保留）。
+//!
 //! 唯一仍在本文件保留字面量的 env 名是 [`CIRCADIAN_TZ_OFFSET_ENV`]：它当前只
 //! 定义在适配器 `crates/adapters/cli/src/care_heartbeat.rs`（架构方向不允许
-//! 装配层反向依赖适配器）。R1b-1b 迁移时 CLI 改为引用本常量，届时字面量收敛为 1 处。
+//! 装配层反向依赖适配器）。CLI 改用本常量时字面量收敛为 1 处，待生物线。
 
 use thiserror::Error;
 

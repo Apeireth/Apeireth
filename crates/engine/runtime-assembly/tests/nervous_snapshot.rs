@@ -188,44 +188,32 @@ fn mechanisms_are_exactly_fourteen_unique_and_follow_the_contract_order() {
 }
 
 #[test]
-fn half_and_unwired_rows_expose_level_gaps_and_reasons() {
+fn half_rows_expose_gaps_and_reasons_and_wired_rows_are_honest() {
     let value = snapshot_from_values(|_| None, 0).to_value();
     let half = mechanism(&value, "SG-22.ritual");
     assert_eq!(half["level"], json!("HALF"));
     assert!(!half["gaps"].as_array().expect("gaps").is_empty());
-    assert!(half["signal_sources"]
-        .as_array()
-        .expect("signals")
-        .iter()
-        .any(|signal| {
-            signal["state"] != json!("wired")
-                && !signal["reason"].as_str().unwrap_or_default().is_empty()
-        }));
 
+    // SG-18 / SG-25 自 R1b-1b 起已是 PRODUCTION WIRED（装配根注册），但仍必须
+    // 如实列出残余缺口；不得再出现「装配根注册待 Lead」这类过期占位。
     for id in ["SG-18.lifecycle", "SG-25.ecosystem_health"] {
         let row = mechanism(&value, id);
-        assert_eq!(row["level"], json!("IMPLEMENTED"), "{id}");
+        assert_eq!(row["level"], json!("PRODUCTION WIRED"), "{id}");
         assert!(!row["gaps"].as_array().expect("gaps").is_empty(), "{id}");
         assert!(
-            row["signal_sources"]
+            !row["gaps"]
                 .as_array()
-                .expect("signals")
+                .unwrap()
                 .iter()
-                .any(|signal| {
-                    signal["state"] != json!("wired")
-                        && !signal["reason"].as_str().unwrap_or_default().is_empty()
-                }),
-            "{id} 未接线条目必须有 reason"
+                .any(|gap| gap.as_str().unwrap_or_default().contains("待 Lead")),
+            "{id} 台账不得保留过期占位"
         );
     }
     assert!(mechanism(&value, "SG-18.lifecycle")["gaps"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|gap| gap
-            .as_str()
-            .unwrap_or_default()
-            .contains("装配根注册待 Lead")));
+        .any(|gap| gap.as_str().unwrap_or_default().contains("lifecycle probe")));
     assert!(mechanism(&value, "SG-25.ecosystem_health")["enabled_env"].is_null());
 }
 
@@ -271,9 +259,11 @@ fn summary_counts_match_the_mechanism_rows() {
         summary.total,
         "三档之和必须等于总数"
     );
-    assert_eq!(summary.production_wired, 11);
+    // R1b-1b：SG-18 / SG-25 由 IMPLEMENTED 更正为 PRODUCTION WIRED（装配根已注册，
+    // 残余缺口仍在 gaps 如实列出），故 production_wired 13 / half 1 / unwired 0。
+    assert_eq!(summary.production_wired, 13);
     assert_eq!(summary.half, 1);
-    assert_eq!(summary.unwired, 2);
+    assert_eq!(summary.unwired, 0);
     assert_eq!(summary.observed, 1);
     let value = snapshot.to_value();
     assert_eq!(value["summary"]["total"], json!(summary.total));

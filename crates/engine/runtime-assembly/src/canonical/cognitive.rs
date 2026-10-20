@@ -2711,21 +2711,22 @@ impl BioAssemblySwitches {
         }
     }
 
-    /// 从 env 构造: 两个 env 都只认显式 `"1"`, 其余一律关 (fail-closed).
-    pub fn from_env() -> Self {
-        Self::from_values(
-            std::env::var(BIO_REPAIR_GUIDANCE_ENABLE_ENV)
-                .ok()
-                .as_deref(),
-            std::env::var(BIO_CONTEXT_POLICY_ENABLE_ENV).ok().as_deref(),
-        )
-    }
-
     /// 从两个原始值构造 (纯函数, 便于 fail-closed 表测试而不动进程 env).
     pub fn from_values(repair_guidance: Option<&str>, context_policy: Option<&str>) -> Self {
         Self {
             repair_guidance: bio_switch_enabled_from_env_value(repair_guidance),
             context_policy: bio_switch_enabled_from_env_value(context_policy),
+        }
+    }
+
+    /// 从装配根已解析的布尔开关构造 (R1b-1b: env 读取收敛到 `NervousSwitchboard`).
+    ///
+    /// 本构造器**不读 env**: 两个开关值由组合根一次性解析后显式传入, 避免同一开关
+    /// 在库内出现第二个读取点.
+    pub const fn from_flags(repair_guidance: bool, context_policy: bool) -> Self {
+        Self {
+            repair_guidance,
+            context_policy,
         }
     }
 
@@ -3001,9 +3002,12 @@ impl BioAssemblyModule {
         }
     }
 
-    /// 从 env 构造 (两个 env 都只认显式 `"1"`, 默认关 fail-closed).
-    pub fn from_env() -> Self {
-        Self::new(BioAssemblySwitches::from_env())
+    /// 从装配根已解析的布尔开关构造 (R1b-1b: 本模块不再自行读 env).
+    pub fn from_flags(repair_guidance: bool, context_policy: bool) -> Self {
+        Self::new(BioAssemblySwitches::from_flags(
+            repair_guidance,
+            context_policy,
+        ))
     }
 
     /// 注入本回合修复计划 (链式; 仅修复指令开关开时生效).

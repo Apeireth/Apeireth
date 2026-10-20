@@ -179,18 +179,15 @@ pub fn bio_ritual_wiring_from_env_value(
     Some(BioRitualWiring { state, modules })
 }
 
-/// 从进程 env 现值装配 (装配根调用; 同 [`bio_ritual_wiring_from_env_value`] 口径)。
-pub fn bio_ritual_wiring_from_env(
+/// 从装配根已解析的布尔开关装配 (R1b-1b: env 读取收敛到 `NervousSwitchboard`;
+/// 本 helper 不读 env, 开关关 = `None`)。仪式完成面复用关怀候选族总闸, 由装配根
+/// 以 `BioSwitch::CareCandidates` 的解析结果显式传入。
+pub fn bio_ritual_wiring_from_enabled(
+    enabled: bool,
     care_dir: Option<&Path>,
     clock: Arc<dyn Clock>,
 ) -> Option<BioRitualWiring> {
-    bio_ritual_wiring_from_env_value(
-        std::env::var(BIO_CARE_CANDIDATES_ENABLE_ENV)
-            .ok()
-            .as_deref(),
-        care_dir,
-        clock,
-    )
+    bio_ritual_wiring_from_env_value(enabled.then_some("1"), care_dir, clock)
 }
 
 // ============================================

@@ -238,16 +238,14 @@ pub fn bio_play_wiring_from_env_value(
     Some(BioPlayWiring { state, modules })
 }
 
-/// 从进程 env 现值装配 (装配根调用; 同 [`bio_play_wiring_from_env_value`] 口径)。
-pub fn bio_play_wiring_from_env(
+/// 从装配根已解析的布尔开关装配 (R1b-1b: env 读取收敛到 `NervousSwitchboard`;
+/// 本 helper 不读 env, 开关关 = `None`)。
+pub fn bio_play_wiring_from_enabled(
+    enabled: bool,
     workspace_root: Option<&Path>,
     clock: Arc<dyn Clock>,
 ) -> Option<BioPlayWiring> {
-    bio_play_wiring_from_env_value(
-        std::env::var(BIO_PLAY_ENABLE_ENV).ok().as_deref(),
-        workspace_root,
-        clock,
-    )
+    bio_play_wiring_from_env_value(enabled.then_some("1"), workspace_root, clock)
 }
 
 // ============================================
