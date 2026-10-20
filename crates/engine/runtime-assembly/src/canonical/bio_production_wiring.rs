@@ -33,7 +33,10 @@ use crate::canonical::care_heartbeat::bio_lifecycle::{
 use crate::canonical::care_heartbeat::bio_tone::{bio_tone_wiring_from_env, ToneState};
 use crate::canonical::cognitive::{BioAssemblyModule, BioAssemblySwitches};
 use crate::canonical::module::Module;
-use crate::canonical::self_status_source::{capacity_bio_probe, ProductionSelfStatusSource};
+use crate::canonical::play_tools::BioPlayState;
+use crate::canonical::self_status_source::{
+    capacity_bio_probe, play_probe, ProductionSelfStatusSource,
+};
 
 use super::{BuildInstrumentation, ModuleFamily, ProductionModules};
 
@@ -113,31 +116,35 @@ pub(super) fn install_bio_modules(
 /// `sandbox_dir` 包含性 = 不注册）；全关 = 不构造 = 零注册。四工具模块共享
 /// 同一本内存练习账本，产物只走 `PlayOutcome.artifacts` 元数据；审批钩子仍由
 /// 适配器接线（本装配根不注册）。
+///
+/// 返回共享练习账本句柄（关 = `None`），供自述 `bio_mechanisms.play` probe 只读接入。
 pub(super) fn install_bio_play(
     capabilities: &mut Vec<Arc<dyn ToolCapability>>,
     clock: &Arc<dyn Clock>,
     workspace_root: Option<&std::path::Path>,
     instrument: &BuildInstrumentation,
-) {
-    if let Some(play) =
-        crate::canonical::play_tools::bio_play_wiring_from_env(workspace_root, Arc::clone(clock))
-    {
-        for module in play.into_modules() {
-            instrument.constructed(ModuleFamily::BioPlay);
-            capabilities.extend(module.capabilities());
-        }
+) -> Option<Arc<BioPlayState>> {
+    let play =
+        crate::canonical::play_tools::bio_play_wiring_from_env(workspace_root, Arc::clone(clock))?;
+    let state = Arc::clone(play.state());
+    for module in play.into_modules() {
+        instrument.constructed(ModuleFamily::BioPlay);
+        capabilities.extend(module.capabilities());
     }
+    Some(state)
 }
 
 /// W3.2 自述 `capabilities.bio_mechanisms` 挂面。
 ///
 /// 挂面 = 子对象恒在场（开关关时 `mechanisms: null` + 原因「未启用」，
 /// 零 probe 调用；开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 "1"）。
-/// 承载力探测口读**同一本**任务队列（与 `tool.task_board` 同队同账），
-/// 其余 13 条一律 `wired:false` + 「未接线」，不编数值。
+/// 承载力探测口读**同一本**任务队列（与 `tool.task_board` 同队同账）；
+/// 练习场账本（W3.5 接入）与四工具面同一 `Arc`；其余 12 条一律
+/// `wired:false` + 「未接线」，不编数值。
 pub(super) fn install_bio_self_status(
     source: ProductionSelfStatusSource,
     task_board: Option<&Arc<TaskQueue>>,
+    bio_play_state: Option<&Arc<BioPlayState>>,
 ) -> ProductionSelfStatusSource {
     let mut source = source.with_bio_self_status_from_env();
     if let Some(queue) = task_board {
@@ -145,6 +152,9 @@ pub(super) fn install_bio_self_status(
             BioMechanismKind::Capacity,
             capacity_bio_probe(Arc::clone(queue), None),
         );
+    }
+    if let Some(play) = bio_play_state {
+        source.register_bio_probe(BioMechanismKind::Play, play_probe(Arc::clone(play)));
     }
     source
 }

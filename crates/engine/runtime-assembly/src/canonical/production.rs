@@ -1172,8 +1172,9 @@ impl ProductionModules {
         }
 
         // 生物机制族 W3.3 · 游戏练习场 (`tool.play_*` 四工具, 默认关): 装配块在
-        // `bio_production_wiring::install_bio_play`（env 只认 "1" 且工作区根注入）。
-        bio_production_wiring::install_bio_play(
+        // `bio_production_wiring::install_bio_play`（env 只认 "1" 且工作区根注入）；
+        // 返回共享练习账本句柄（关 = None），供自述 `bio_mechanisms.play` probe 只读接入。
+        let bio_play_state = bio_production_wiring::install_bio_play(
             &mut capabilities,
             &clock,
             backends.workspace_root.as_deref(),
@@ -1254,10 +1255,13 @@ impl ProductionModules {
             if let Some(counters) = &sheet_ops_counters {
                 source = source.with_sheet_ops_probe(sheet_ops_status_probe(Arc::clone(counters)));
             }
-            // 生物机制族 W3.2: `capabilities.bio_mechanisms` 只读聚合面（装配块
-            // 已搬至 `bio_production_wiring`，含承载力同队同账探测口）。
-            source =
-                bio_production_wiring::install_bio_self_status(source, config.task_board.as_ref());
+            // 生物机制族 W3.2/W3.5: `capabilities.bio_mechanisms` 只读聚合面（装配块
+            // 已搬至 `bio_production_wiring`，含承载力同队同账 + 练习场账本探测口）。
+            source = bio_production_wiring::install_bio_self_status(
+                source,
+                config.task_board.as_ref(),
+                bio_play_state.as_ref(),
+            );
             // K 轴 L1: 自述在场节 (设备数/白名单数/最近感知) 与 `tool.device_sense`
             // 工具面同一本设备表同一进程内感知计数 (同源同账; 面没注册 = 在场节
             // 显式 null + 原因)。
