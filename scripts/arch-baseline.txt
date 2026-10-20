@@ -2,7 +2,7 @@
 # 生成: python scripts/arch_guard.py --update-baseline
 # 规则: 新指纹不在本文件 = 违规; 本文件中已消失的指纹 = 可缩表。
 
-# --- edge (118) ---
+# --- edge (112) ---
 edge apeireth-bench-harness -> apeireth-core
 edge apeireth-bench-harness -> apeireth-gateway
 edge apeireth-bench-harness -> apeireth-memory
@@ -81,10 +81,6 @@ edge apeireth-organ -> apeireth-governance
 edge apeireth-organ -> apeireth-orchestration
 edge apeireth-organ -> apeireth-plugin
 edge apeireth-organ -> apeireth-protocol
-edge apeireth-perception -> apeireth-core
-edge apeireth-perception -> apeireth-memory
-edge apeireth-perception -> apeireth-orchestration
-edge apeireth-perception -> apeireth-plugin
 edge apeireth-plugin -> apeireth-core
 edge apeireth-plugin -> apeireth-orchestration
 edge apeireth-plugin -> apeireth-protocol
@@ -111,8 +107,6 @@ edge apeireth-runtime-assembly -> apeireth-runtime
 edge apeireth-runtime-assembly -> apeireth-storage
 edge apeireth-runtime-assembly -> apeireth-tools-canonical
 edge apeireth-sdk -> apeireth-core
-edge apeireth-sdk -> apeireth-credentials
-edge apeireth-sdk -> apeireth-plugin
 edge apeireth-sdk -> apeireth-protocol
 edge apeireth-tools-canonical -> apeireth-core
 edge apeireth-tools-canonical -> apeireth-governance
@@ -125,7 +119,7 @@ edge apeireth-tui -> apeireth-credentials
 # --- devcycle (1) ---
 devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provider
 
-# --- env (154) ---
+# --- env (153) ---
 env APEIRETH_ANTHROPIC_
 env APEIRETH_ANTHROPIC_KEY
 env APEIRETH_ANTHROPIC_MODELS
@@ -196,7 +190,6 @@ env APEIRETH_ENABLE_ONERING_LEDGER
 env APEIRETH_ENABLE_ONION_LAYER
 env APEIRETH_ENABLE_ORGANS
 env APEIRETH_ENABLE_PARTNER_BOND
-env APEIRETH_ENABLE_PERCEPTION
 env APEIRETH_ENABLE_PERSONA_CONSOLIDATION
 env APEIRETH_ENABLE_PREFERENCE_LEARNING
 env APEIRETH_ENABLE_PROACTIVE_RECALL
@@ -281,7 +274,7 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (70) ---
+# --- size (66) ---
 size crates/adapters/cli/src/gateway_panels.rs 1542
 size crates/adapters/cli/src/lib.rs 3887
 size crates/adapters/cli/src/onboarding.rs 1353
@@ -290,10 +283,6 @@ size crates/adapters/gateway/src/events.rs 1623
 size crates/adapters/gateway/src/panels.rs 1641
 size crates/adapters/gateway/src/presence.rs 1299
 size crates/adapters/sdk/src/client.rs 1553
-size crates/adapters/sdk/src/livekit/mod.rs 1343
-size crates/adapters/sdk/src/livekit/session.rs 2056
-size crates/adapters/sdk/src/sandbox/mod.rs 1442
-size crates/adapters/sdk/src/voice/mod.rs 1303
 size crates/adapters/tui/src/state.rs 1585
 size crates/capabilities/tools/src/device/device_control.rs 3144
 size crates/capabilities/tools/src/device/guard_watch.rs 1348
