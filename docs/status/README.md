@@ -30,8 +30,15 @@ R3a（ADR-0004，env 登记 + wiring ledger）：
 python scripts/wiring_report.py --gen                    # 生成 docs/status/wiring.yaml（禁手改）
 python scripts/wiring_report.py --verify                 # 生成物 drift 检查（CI）
 python scripts/wiring_report.py --check-env-registry     # env 登记覆盖/重复/TODO 统计（CI）
-python scripts/wiring_report.py --stats                  # 记分牌数字（env/registry/wiring）
+python scripts/wiring_report.py --fill-owners-from-claims  # R3b：按 claims 证据填开关 owner/purpose
+python scripts/wiring_report.py --crosscheck             # R3c：wiring ↔ claims 四列证据交叉校验（report-only）
+python scripts/wiring_report.py --stats                  # 记分牌：entries / TODO-OWNER / UNCLASSIFIED
 ```
+
+- R3b 顺序（架构线批准）：先 claims 覆盖开关 → 再按 layer `foundation → engine → capabilities → adapters`；
+  每批 commit 报 `--stats` 的 entries / TODO-OWNER / UNCLASSIFIED 三数，只许下降。
+- R3c 灰度：交叉校验 CI 先 report-only 至 **2026-11-03**，到期后去 `continue-on-error` 并加 `--strict`
+  （架构线复核后转 blocking）；`level` 的 `UNCLASSIFIED` 仅是登记先行占位（ADR-0004 §7.1），不是四级口径。
 
 ## 口径
 

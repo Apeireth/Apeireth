@@ -398,6 +398,99 @@ def cmd_verify() -> int:
     return 1
 
 
+# R3b 第一批：与 claims 开关同源、应同 owner 的伴生配置（有证据的成对/同文件变量）
+RELATED_OWNERS = {
+    "APEIRETH_TLS_KEY": ("gateway", "TLS 私钥（与 APEIRETH_TLS_CERT 成对；B5 交付）"),
+    "APEIRETH_COST_ROUTING_PREFERRED": (
+        "core", "成本分级路由档位映射（H-P2；与 APEIRETH_COST_ROUTING 同源 cost_router.rs）"),
+}
+
+
+def _clean_purpose(text: str, limit: int = 120) -> str:
+    """清洗启发式 purpose 的 HTML 注释碎片等噪音（不算能力声明，不写 level）。"""
+    text = re.sub(r"<!--.*?-->", " ", str(text), flags=re.S)
+    text = re.sub(r"<[^>]*>", " ", text)
+    text = re.sub(r"[!#]{1,}\s*", " ", text)
+    text = re.sub(r"\s+", " ", text).strip(" !#:;，。")
+    return text[:limit]
+
+
+def _registry_counts(entries: list[dict]) -> tuple[int, int, int]:
+    return (
+        len(entries),
+        sum(1 for e in entries if e.get("owner") == "TODO-OWNER"),
+        sum(1 for e in entries if e.get("level") == "UNCLASSIFIED"),
+    )
+
+
+def cmd_fill_owners() -> int:
+    """R3b：按 claims 证据填 claims 覆盖开关的 owner/purpose（不改 level/status）。"""
+    entries = registry_entries()
+    names = {str(e.get("name")) for e in entries}
+    claims = load_claims()
+    wanted: dict[str, tuple[str, str]] = {}
+    for claim in claims:
+        switch = claim.get("switch_env")
+        if not switch:
+            continue
+        owner = str(claim.get("owner") or "TODO-OWNER")
+        purpose = f"{_clean_purpose(str(claim.get('title', '')))}（claims: {claim.get('id')}）"
+        wanted.setdefault(str(switch), (owner, purpose))
+    for name, (owner, purpose) in RELATED_OWNERS.items():
+        if name in names:
+            wanted.setdefault(name, (owner, purpose))
+    missing = sorted(set(wanted) - names)
+    if missing:
+        print(f"FAIL: claims 开关未在登记表: {missing}", file=sys.stderr)
+        return 1
+    before = _registry_counts(entries)
+    changed = 0
+    for entry in entries:
+        name = str(entry.get("name"))
+        if name not in wanted:
+            continue
+        owner, purpose = wanted[name]
+        if entry.get("owner") != owner or entry.get("purpose") != purpose:
+            changed += 1
+        entry["owner"] = owner
+        entry["purpose"] = purpose
+    note = (f"R3b 第一批: claims 覆盖开关 owner/purpose 已填（{changed} 条变更，来源 claims 证据）；"
+            "level 仍 UNCLASSIFIED（ADR-0004 §7.1：登记先行占位，四级口径由 claims/wiring 承担）")
+    REGISTRY.write_text(render_registry(entries, note), encoding="utf-8")
+    after = _registry_counts(entries)
+    print(f"fill-owners: changed={changed}  entries={after[0]}  "
+          f"TODO-OWNER {before[1]} -> {after[1]}  UNCLASSIFIED {before[2]} -> {after[2]}")
+    return 0
+
+
+def cmd_crosscheck(strict: bool) -> int:
+    """R3c：wiring ledger 与 claims 交叉校验（PRODUCTION WIRED 有生产引用；IMPLEMENTED 有 gaps 原因）。"""
+    claims = load_claims()
+    refs = env_refs_working()
+    problems: list[str] = []
+    for claim in claims:
+        cid = str(claim.get("id", ""))
+        level = str(claim.get("level", ""))
+        switch = claim.get("switch_env")
+        sources = [str(s) for s in (claim.get("sources") or [])]
+        wired = {s for s in sources if is_production_source(s)}
+        if switch:
+            wired.update(refs.get(str(switch), []))
+        notes = str(claim.get("notes") or "").strip()
+        if level == "PRODUCTION WIRED" and not wired:
+            problems.append(f"{cid}: PRODUCTION WIRED 但无生产引用")
+        if level in ("IMPLEMENTED", "NOT IMPLEMENTED") and not notes:
+            problems.append(f"{cid}: {level} 但无 gaps 原因（notes 为空）")
+        if not claim.get("tests") and "无自动测试" not in notes and level == "PRODUCTION WIRED":
+            problems.append(f"{cid}: PRODUCTION WIRED 但 tests 为空且 notes 未说明")
+    print(f"crosscheck: claims={len(claims)} problems={len(problems)} (mode={'strict' if strict else 'report-only'})")
+    for item in problems:
+        print(f"  VIOLATION: {item}")
+    if problems and strict:
+        return 1
+    return 0
+
+
 def cmd_stats() -> int:
     committed = scan_env(committed=True)
     working = scan_env(committed=False)
@@ -418,6 +511,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check-env-registry", action="store_true")
     parser.add_argument("--gen", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--fill-owners-from-claims", action="store_true",
+                        help="R3b：按 claims 证据填 claims 覆盖开关的 owner/purpose")
+    parser.add_argument("--crosscheck", action="store_true",
+                        help="R3c：wiring ↔ claims 交叉校验（默认 report-only；--strict 升 blocking）")
+    parser.add_argument("--strict", action="store_true")
     parser.add_argument("--stats", action="store_true")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
@@ -425,10 +523,14 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_seed(args.force)
     if args.check_env_registry:
         return cmd_check_env_registry()
+    if args.fill_owners_from_claims:
+        return cmd_fill_owners()
     if args.gen:
         return cmd_gen()
     if args.verify:
         return cmd_verify()
+    if args.crosscheck:
+        return cmd_crosscheck(args.strict)
     if args.stats:
         return cmd_stats()
     parser.print_help()

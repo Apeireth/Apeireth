@@ -1,0 +1,49 @@
+name: Wiring ledger (R3c report-only)
+
+# ADR-0004 R3b/R3c（实施=效率线；schema/review=架构线 2026-10-20 裁定）：
+#  - R3a env registry 覆盖检查 + wiring.yaml drift = blocking（生成物禁手改，与 docs_truth 同模式）；
+#  - R3c 交叉校验（wiring ledger 四列证据：PRODUCTION WIRED 必须有生产引用 / IMPLEMENTED 必须有 gaps 原因）
+#    = report-only，灰度至 2026-11-03；到期后删除 continue-on-error 并加 --strict，由架构线复核后转 blocking。
+# 分工（架构线裁定 §7.4）：arch_guard 管结构/依赖/env 名；wiring ledger 管四列证据。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'docs/status/**'
+      - 'docs/architecture/env-registry.toml'
+      - 'scripts/wiring_report.py'
+      - 'crates/**'
+  pull_request:
+    paths:
+      - 'docs/status/**'
+      - 'docs/architecture/env-registry.toml'
+      - 'scripts/wiring_report.py'
+      - 'crates/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wiring-ledger:
+    name: wiring ledger (R3a/R3c)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: env registry coverage (R3a)
+        run: |
+          python3 scripts/wiring_report.py --check-env-registry
+
+      - name: wiring ledger drift (generated; no hand-edit)
+        run: |
+          python3 scripts/wiring_report.py --verify
+
+      - name: R3c cross-check (report-only until 2026-11-03)
+        continue-on-error: true
+        run: |
+          python3 scripts/wiring_report.py --crosscheck
