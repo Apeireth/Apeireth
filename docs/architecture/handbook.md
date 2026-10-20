@@ -86,11 +86,11 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 波 | 收口 | 结果 |
 |---|---|---|
 | **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03） |
-| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005 已出；R4a-1 门禁隔离落地；R1a 与生物线 W3.5 观测扩展合并中；生物线施工期 3 条在途违规待收口处理 |
+| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005 已出；R4a-1 门禁隔离落地（`gate_full.ps1` 待 Wave 2 收口实测耗时）；R1a 与生物线 W3.5 观测扩展合并中；生物线施工期 2 条尺寸 W1 待收口更新基线（env 已由 EXC-0001 抑制） |
 
 ## 9. 变更记录
 
 | 日期 | 变更 | 证据 |
 |---|---|---|
 | 2026-10-20 | 手册 v1（规则落地同日） | commit `8bfefb1b` / `8e9dd3ae` |
-| 2026-10-20 | v1.1：Wave 2 单项 ADR + R4a-1 门禁隔离（gate_full/image CI）+ arch_guard 例外抑制/登记表双通道 | commit 待补，见 `git log` |
+| 2026-10-20 | 手册 v1.1：Wave 2 单项 ADR + R4a-1 门禁隔离（gate_full/image CI）+ arch_guard 例外抑制/登记表双通道/`--print-vendored` | commit `5e68f644` |
