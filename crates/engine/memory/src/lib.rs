@@ -196,7 +196,7 @@ pub use ensemble::{
 };
 pub use online_calibration::{
     AdaptiveBaseline, CalibrationCoefficients, Coeff, DriftAlarm, DriftDetector, LinearCalibration,
-    RecalibrationScheduler, ScheduleReport, UserFeedback as CalibrationFeedback,
+    UserFeedback as CalibrationFeedback,
 };
 
 pub use reflexion::{
