@@ -17,6 +17,10 @@
 | `sec.storage_envelope_crypto` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
+| `sec.sql_readonly_gate` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
+| `sec.provider_proxy_ssrf` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
+| `sec.desktop_file_roots` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
+| `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 
 ## 使用
 

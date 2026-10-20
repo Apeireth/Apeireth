@@ -1,6 +1,6 @@
 # docs/status — 文档事实体系的机器真源
 
-> `Status: 🔧 P0 试点（2026-10-20 第三线落地）`
+> `Status: 🔧 P1 试点（2026-10-20 第三线落地；P1c 起 CI 阻塞）`
 > 目的：让"状态/默认开关/证据"只有一个真源，且源码一变就能被 `--verify` 发现（STALE）。
 
 ## 文件
@@ -14,7 +14,7 @@
 
 ```powershell
 python scripts/docs_truth.py --verify            # 核验（P0 report-only：结构/证据缺失才 exit 1）
-python scripts/docs_truth.py --verify --strict   # STALE / REVIEW_DUE 也 exit 1
+python scripts/docs_truth.py --verify --block-stale  # STALE 即 exit 1（P1c changed-claim 阻塞口径）
 python scripts/docs_truth.py --gen               # 生成 STATUS.md
 python scripts/docs_truth.py --gen-badges        # README tests 徽章 ← test-baseline 单一真源
 python scripts/docs_truth.py --matrix-check      # matrix 环境变量 / claims 开关互钉自查
@@ -27,7 +27,7 @@ python scripts/docs_truth.py --check             # 生成物 drift + README 徽�
 - `STALE` = `git diff <verified_at> -- <sources>` 非空 → 源码动过而声明未复核；**改源码后的批必须更新 `verified_at` 并重跑 verify**。
 - `FAIL` = 证据缺失（source/test 路径不存在、switch_env 在 `crates/` 找不到、字段缺失/重复 id）。
 - 生成物 drift、生成区手改 → `--check` 失败。
-- P0 阶段 CI 为 report-only；P1 起 STALE/FAIL 对"源码变更触达的 claim"阻塞。
+- P1c 起 CI 阻塞：FAIL / STALE / 生成物（含 README 徽章）drift 都红；REVIEW_DUE 只提示。
 
 ## 新增一条 claim 的最短路径
 

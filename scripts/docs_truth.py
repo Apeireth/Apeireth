@@ -248,7 +248,7 @@ def cmd_matrix_check(strict: bool) -> int:
 
 # ---------------------------------------------------------------- commands
 
-def cmd_verify(claims_path: Path, strict: bool) -> int:
+def cmd_verify(claims_path: Path, strict: bool, block_stale: bool = False) -> int:
     data = load_claims(claims_path)
     claims = data.get("claims") or []
     if not claims:
@@ -258,7 +258,8 @@ def cmd_verify(claims_path: Path, strict: bool) -> int:
     seen: set[str] = set()
     rows: list[dict] = []
     errors = 0
-    warnings = 0
+    stale_count = 0
+    review_count = 0
     for i, claim in enumerate(claims, 1):
         cid = str(claim.get("id") or f"<claim-{i}>")
         problems: list[str] = []
@@ -302,10 +303,10 @@ def cmd_verify(claims_path: Path, strict: bool) -> int:
             errors += 1
         elif stale:
             status = "STALE"
-            warnings += 1
+            stale_count += 1
         elif review_due:
             status = "REVIEW_DUE"
-            warnings += 1
+            review_count += 1
         else:
             status = "OK"
         rows.append(
@@ -330,10 +331,12 @@ def cmd_verify(claims_path: Path, strict: bool) -> int:
         if r["detail"]:
             print(f"{''.ljust(width)}  -> {r['detail']}")
     print()
-    print(f"claims={len(rows)} fail={errors} warn={warnings}")
+    print(f"claims={len(rows)} fail={errors} stale={stale_count} review_due={review_count}")
     if errors:
         return 1
-    if strict and warnings:
+    if block_stale and stale_count:
+        return 1
+    if strict and (stale_count or review_count):
         return 1
     return 0
 
@@ -415,6 +418,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gen-badges", action="store_true", help="README tests 徽章 ← test-baseline 单一真源")
     parser.add_argument("--matrix-check", action="store_true", help="matrix 环境变量/claims 开关一致性自查")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--block-stale", action="store_true", help="STALE 即 exit 1（P1c changed-claim 阻塞口径）")
     parser.add_argument("--strict", action="store_true", help="STALE / REVIEW_DUE / matrix 缺失也 exit 1")
     parser.add_argument("--claims", default=str(DEFAULT_CLAIMS))
     args = parser.parse_args(argv)
@@ -430,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         return cmd_check()
     if args.verify:
-        return cmd_verify(claims_path, args.strict)
+        return cmd_verify(claims_path, args.strict, args.block_stale)
     parser.print_help()
     return 0
 

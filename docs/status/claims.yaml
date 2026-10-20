@@ -216,3 +216,63 @@ claims:
     owner: release
     next_review: "2026-11-20"
     notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。"
+
+  - id: sec.sql_readonly_gate
+    title: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs
+      - frontend/companion-desktop/src-tauri/src/pg_client.rs
+      - frontend/companion-desktop/src-tauri/src/mysql_client.rs
+    tests: []
+    verified_at: 5f52813d
+    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "WITH 引导 DML/CTE 内嵌 DML/EXPLAIN ANALYZE/SELECT INTO/FOR UPDATE 全拒（fail-closed）；PG BEGIN READ ONLY / MySQL START TRANSACTION READ ONLY 事务包裹；桌面 crate 151 passed（交付记录，无跨平台 live E2E）。"
+
+  - id: sec.provider_proxy_ssrf
+    title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
+    tests: []
+    verified_at: 5f52813d
+    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked provider_proxy"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。"
+
+  - id: sec.desktop_file_roots
+    title: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src-tauri/src/workspace_list.rs
+    tests: []
+    verified_at: 5f52813d
+    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked workspace_list"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "junction/`..` 逃逸实测拒绝；残余：TOCTOU 窗口未闭（std 无句柄级原子绑定，已缓解为操作规范）、live E2E 未实测（如实）。"
+
+  - id: sec.terminal_permission_surfaces
+    title: "终端权限边界明示 + 三层权限面文档（B4）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src/lib/starport/apps/terminal-app.ts
+      - docs/02-guides/permission-surfaces.md
+    tests:
+      - frontend/companion-desktop/tests/starport-face-apps.mjs
+    verified_at: 5f52813d
+    verify_cmd: "cd frontend/companion-desktop && pnpm test"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。"
