@@ -8,12 +8,12 @@
 | Scheduler | 定义 | 接线证据 | 判定 |
 |---|---|---|---|
 | `CallScheduler` | `foundation/orchestration/src/call_scheduler.rs:272` | runtime `execute.rs:2014/3671` 使用；`runtime.rs:355/733/1032` 字段+`with_call_scheduler` | **active**（请求期调度） |
-| `HeartbeatScheduler` | `runtime/src/canonical/heartbeat.rs:67` | 仅同文件（构造点 `:284/:460` 疑为测试）；`care_heartbeat.rs:9` 仅注释提及 | **dormant（待复核 producer 是否内嵌）** |
+| `HeartbeatScheduler` | `runtime/src/canonical/heartbeat.rs:67` | **被 `HeartbeatProducer` 内嵌**：字段 `:268`（`scheduler: Arc<Mutex<HeartbeatScheduler>>`）、构造 `:284`、访问器 `:310`、run loop 参数 `:359`；R7-4 复核（2026-10-20）发现早先"仅测试构造"结论有误（此前 grep 被截断到前 6 行） | **active（保留）** |
 | `NightwatchIdleScheduler` | `runtime-assembly/src/canonical/nightwatch.rs:334` | CLI `dispatch_nightwatch`（`cli/src/lib.rs:2714+`）内构造 `:2811` | **active**（CLI 显式命令路径） |
 | `RecalibrationScheduler` | `memory/src/online_calibration.rs:418` | 仅 memory `lib.rs:199` re-export，无其他 src 构造/使用 | **dormant（export-only）** |
 | `CognitiveQuotaScheduler` | `orchestration/src/cognitive_quota_scheduler.rs:198` | 仅 orchestration `lib.rs:132` re-export，无其他 src 构造/使用 | **dormant（export-only）** |
 
-**结论**：活跃路径 = **2**（CallScheduler + NightwatchIdleScheduler），已满足 ADR-0007 "≤2" 目标；dormant 3 个待 R7-1 决策（接线取证 or 归档 `legacy/archived/schedulers/`）。
+**结论**：活跃路径 = **3**（CallScheduler + NightwatchIdleScheduler + HeartbeatScheduler）；但 R7 目标口径为"dormant 清零、活跃面可复核"，Heartbeat 是 Producer 内嵌调度缝（非独立注册）→ 保留；dormant 2 个（Recalibration/CognitiveQuota）已于 R7-4b-1/2 归档。
 
 ## 2. PromptCacheStabilizer
 
