@@ -46,6 +46,16 @@
 //! [`NoBioCareInputs`] 空供给 ⇒ 开关开也不产候选。开关默认关 = 既有 care 面
 //! 输出逐字节不变。
 //!
+//! # 节律门装配 (W3.4, 默认关)
+//!
+//! [`CareHeartbeatProducer::start_care_with_feeds_and_circadian`] /
+//! [`CareHeartbeatProducer::start_care_with_feeds_bio_and_circadian`] 把
+//! [`BioCircadianGate`] (W3.3 装配内核已备) 注入心跳最前: 门不许 = 整拍
+//! `Quiet`, 规则 / 提醒 / 生物候选零读取。`None` = 不注入门 = 与旧方法同一
+//! 组装路径 (**输出逐字节一致**)。开关与**显式时区**配置由调用方解析:
+//! 生产 = cli 组合根 `care_heartbeat` 模块 (`APEIRETH_ENABLE_BIO_CIRCADIAN`
+//! 只认 `"1"`; 时区偏移 env 缺省 0 = **UTC, 不推断本地时区**)。
+//!
 //! **0 装诚实**: 常驻宿主的启动注入点 (presence `try_take_initiative` 同源闸 →
 //! [`apeireth_organ::care::CareInitiativeGate`], 发起回调 → `Runtime::execute`)
 //! 已在常驻宿主接线 (cli 组合根 `care_heartbeat` 模块, 2026-10-17 随行);
@@ -503,11 +513,82 @@ impl CareHeartbeatProducer {
         Self::start(config, now_ms, poll, dispatch)
     }
 
+    /// 关怀内核 + 提醒信号源 + **节律门** (W3.4 生产装配点, 默认关)。
+    ///
+    /// `circadian = None` = 不注入门 (**与 [`Self::start_care_with_feeds`] 同一
+    /// 组装路径, 输出逐字节一致**); `Some(gate)` = 心跳每拍最前咨询门, 门不许
+    /// (`QuietHours` / `RestWindow` / `ConsolidationDue`) → 整拍
+    /// [`HeartbeatPollOutcome::Quiet`], 规则 / 提醒 / 生物候选一拍都不读。
+    ///
+    /// 开关不在本方法内读 env: 调用方解析开关并决定传 `None` 还是 `Some(gate)`
+    /// (生产 = cli 组合根 `care_heartbeat` 模块, 默认关, 只认 `"1"`)。门关时
+    /// 不构造、不读时钟, 本方法 `None` 分支即原路径。
+    pub fn start_care_with_feeds_and_circadian<C, D>(
+        config: &CareHeartbeatConfig,
+        engine: CareEngine,
+        now_ms: C,
+        dispatch: D,
+        feeds: Vec<Arc<dyn ReminderFeed>>,
+        circadian: Option<BioCircadianGate>,
+    ) -> Option<Self>
+    where
+        C: Fn() -> i64 + Send + Sync + 'static,
+        D: HeartbeatDispatch + 'static,
+    {
+        let poll = Self::care_poll_with_extras(engine, feeds, None, circadian);
+        Self::start(config, now_ms, poll, dispatch)
+    }
+
+    /// 关怀内核 + 提醒信号源 + 生物机制候选 + **节律门** (W3.4 生产装配点,
+    /// 默认关)。
+    ///
+    /// `circadian = None` = 不注入门 (**与 [`Self::start_care_with_feeds_and_bio`]
+    /// 同一组装路径, 输出逐字节一致**); `Some(gate)` = 门最前 (先于规则 / 提醒 /
+    /// 生物候选), 门不许 → 整拍 `Quiet`, 三类候选一拍都不读 (供给口零读取)。
+    ///
+    /// `bio_care` 的开关双门口径同 [`Self::start_care_with_feeds_and_bio`]
+    /// (装配门 + engine [`CareConfig`]); 门的开关解析与时钟/会话起点由调用方给
+    /// (生产 = cli 组合根, 默认关)。
+    pub fn start_care_with_feeds_bio_and_circadian<C, D>(
+        config: &CareHeartbeatConfig,
+        engine: CareEngine,
+        now_ms: C,
+        dispatch: D,
+        feeds: Vec<Arc<dyn ReminderFeed>>,
+        bio_care: BioCarePoll,
+        circadian: Option<BioCircadianGate>,
+    ) -> Option<Self>
+    where
+        C: Fn() -> i64 + Send + Sync + 'static,
+        D: HeartbeatDispatch + 'static,
+    {
+        let poll = Self::care_poll_with_extras(engine, feeds, Some(bio_care), circadian);
+        Self::start(config, now_ms, poll, dispatch)
+    }
+
     /// 纯规则/提醒 poll 面 (两个 start 变体共用的组装步)。
     fn care_poll(engine: CareEngine, feeds: Vec<Arc<dyn ReminderFeed>>) -> CareHeartbeatPoll {
         let mut poll = CareHeartbeatPoll::new(engine);
         for feed in feeds {
             poll = poll.with_reminder_feed(feed);
+        }
+        poll
+    }
+
+    /// 新的可选注入口 (生物候选 / 节律门) 共用组装步: `None` = 不注入, 与各自
+    /// 旧方法逐字节同行为 (旧方法保持原调用路径不变)。
+    fn care_poll_with_extras(
+        engine: CareEngine,
+        feeds: Vec<Arc<dyn ReminderFeed>>,
+        bio_care: Option<BioCarePoll>,
+        circadian: Option<BioCircadianGate>,
+    ) -> CareHeartbeatPoll {
+        let mut poll = Self::care_poll(engine, feeds);
+        if let Some(bio_care) = bio_care {
+            poll = poll.with_bio_care(bio_care);
+        }
+        if let Some(gate) = circadian {
+            poll = poll.with_circadian_gate(gate);
         }
         poll
     }

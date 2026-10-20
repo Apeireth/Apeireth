@@ -17,6 +17,16 @@
 //!    presence 回合帧 → 上次可见时刻; 会话账本 → 可续线索; 仪式状态存储未接
 //!    ⇒ 仪式 0 候选 (如实, 不编)。开关关 = 不构造供给、不订阅 presence、不读
 //!    会话, 走与接线前同一 `start_care_with_feeds` 调用 (逐字节一致)。
+//! ⑥ **节律门** (W3.4, 默认关): `APEIRETH_ENABLE_BIO_CIRCADIAN=1` (只认 `"1"`)
+//!    时才构造 [`BioCircadianGate`] 并接到
+//!    `start_care_with_feeds_and_circadian` /
+//!    `start_care_with_feeds_bio_and_circadian`: 心跳最前咨询门, 门不许 = 整拍
+//!    `Quiet` (规则 / 提醒 / 生物候选零读取)。**时区显式配置**:
+//!    `APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN` (分钟) 缺省 `0` = **UTC (不是本地
+//!    时区推断)**; 其余 `CircadianConfig` 字段取内核 `Default` 工程缺省
+//!    (07:00 起 / 23:00 睡 / 25 分钟专注 / 5 分钟休息)。坏时区 = 拒绝即帧
+//!    (`Err`, 不猜)。开关关 = 不构造门、不读时钟 (连时区 env 都不读), 走与
+//!    接线前同一生产者调用 (逐字节一致)。
 //!
 //! **双闸齐开才起** ([`CareHeartbeatConfig`], 注册即闸 fail-closed):
 //! `APEIRETH_ENABLE_CARE=1` 且 `APEIRETH_ENABLE_CARE_HEARTBEAT=1` 才建心跳线程;
@@ -51,9 +61,14 @@ use apeireth_organ::care::{
     CareClock, CareConfig, CareEngine, CareStore, FnInitiativeGate, RuleFallbackJudge,
     SystemCareClock,
 };
+use apeireth_organ::circadian::CircadianConfig;
 use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use apeireth_runtime::canonical::heartbeat::HeartbeatDispatch;
 use apeireth_runtime::canonical::{Runtime, Session, SessionStore, TurnRequest};
+use apeireth_runtime_assembly::canonical::care_heartbeat::bio_circadian::{
+    bio_circadian_enabled_from_env_value, bio_circadian_wiring_from_env_value, BioCircadianGate,
+    CircadianGateClock, BIO_CIRCADIAN_ENABLE_ENV,
+};
 use apeireth_runtime_assembly::canonical::care_heartbeat::{
     bio_care_assembly_from_env_value, BioCareClock, BioCarePoll,
 };
@@ -77,6 +92,18 @@ const RESUME_THREAD_SUMMARY_CHARS_MAX: usize = 120;
 const RESUME_THREAD_SALIENCE: f32 = 0.5;
 /// 线索排序占位情绪权重 (无情绪估计来源 ⇒ 0.0, 不冒充)。
 const RESUME_THREAD_EMOTION_WEIGHT: f32 = 0.0;
+
+/// 节律门时区偏移 env (分钟): **显式配置**, 缺省 `0` = UTC。
+///
+/// **不是本地时区推断**: 本面不读系统时区 / 用户设置 / 环境时区; 想接本地
+/// 时区必须由宿主人肉配置本 env (例如北京时间 = `480`)。
+pub const BIO_CIRCADIAN_TZ_OFFSET_MIN_ENV: &str = "APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN";
+
+/// 节律门时区偏移缺省值 = `0` 分钟 (UTC; 显式口径, 不推断本地时区)。
+pub const DEFAULT_BIO_CIRCADIAN_TZ_OFFSET_MIN: i32 = 0;
+
+/// 时区偏移允许范围上限 (分钟 = ±14 小时; 与内核 `CircadianConfig` 夹取口径一致)。
+pub const BIO_CIRCADIAN_TZ_OFFSET_MIN_LIMIT: i32 = 14 * 60;
 
 /// presence 「上次可见」探针 (W3.3): 只采回合帧, 心跳帧不计入。
 ///
@@ -269,6 +296,79 @@ fn host_bio_care_assembly(
     bio_care_assembly_from_env_value(raw, Box::new(supply), clock)
 }
 
+/// 节律门显式配置 (W3.4 生产装配): env 原始值 → [`CircadianConfig`]。
+///
+/// 只从 env 读**时区偏移分钟**; 其余字段取 [`CircadianConfig::default()`] 的
+/// 工程缺省 —— **本批所列字段**:
+///
+/// | 字段 | 取值 | 来源 |
+/// | --- | --- | --- |
+/// | `tz_offset_minutes` | env 或 `0` (= UTC) | 本函数 (显式, **不推断本地时区**) |
+/// | `wake_hour` | `7` | 内核 `Default` |
+/// | `sleep_hour` | `23` | 内核 `Default` |
+/// | `ultradian_focus_ms` | 25 分钟 | 内核 `Default` |
+/// | `ultradian_rest_ms` | 5 分钟 | 内核 `Default` |
+///
+/// - 缺省 (`None`) = `0` 分钟 = **UTC** (显式口径; 不读系统时区/用户设置);
+/// - 非整数 / 超出 `±14h` = `Err` (拒绝即帧, 不猜、不静默夹取)。
+pub fn bio_circadian_config_from_env_value(
+    raw_tz_offset_min: Option<&str>,
+) -> Result<CircadianConfig, String> {
+    let tz_offset_minutes = match raw_tz_offset_min {
+        None => DEFAULT_BIO_CIRCADIAN_TZ_OFFSET_MIN,
+        Some(raw) => {
+            let parsed: i32 = raw.trim().parse().map_err(|_| {
+                format!(
+                    "拒绝配置: {BIO_CIRCADIAN_TZ_OFFSET_MIN_ENV} 必须是整数分钟 (可含负号), got {raw:?}"
+                )
+            })?;
+            if !(-BIO_CIRCADIAN_TZ_OFFSET_MIN_LIMIT..=BIO_CIRCADIAN_TZ_OFFSET_MIN_LIMIT)
+                .contains(&parsed)
+            {
+                return Err(format!(
+                    "拒绝配置: {BIO_CIRCADIAN_TZ_OFFSET_MIN_ENV} 必须在 ±{BIO_CIRCADIAN_TZ_OFFSET_MIN_LIMIT} 分钟 (±14h) 内, got {parsed}"
+                ));
+            }
+            parsed
+        }
+    };
+    let base = CircadianConfig::default();
+    Ok(CircadianConfig::new(
+        base.wake_hour,
+        base.sleep_hour,
+        tz_offset_minutes,
+        base.ultradian_focus_ms,
+        base.ultradian_rest_ms,
+    ))
+}
+
+/// 节律门装配 (W3.4, 默认关): env 原始值 + 显式时钟 + 会话起点 → 门。
+///
+/// - 开关 [`BIO_CIRCADIAN_ENABLE_ENV`] 非 `"1"` → `Ok(None)`: **不构造门、不读
+///   时钟、不解析时区** (调用方据此走原生产者路径, 零行为变化);
+/// - 开关开 → 解析时区 (坏值 `Err`, 拒绝即帧) 后经
+///   [`bio_circadian_wiring_from_env_value`] 构造门 (懒加载语义: 关 = 不构造)。
+///
+/// `session_start_ms` = 超日窗口起点 (调用方显式给; 生产口径见
+/// [`CareHeartbeatSource::start`]: 装配时刻读一次同一时钟, **不持久化、不跨重启**)。
+pub fn host_bio_circadian_assembly(
+    enable_raw: Option<&str>,
+    tz_offset_raw: Option<&str>,
+    clock: CircadianGateClock,
+    session_start_ms: i64,
+) -> Result<Option<BioCircadianGate>, String> {
+    if !bio_circadian_enabled_from_env_value(enable_raw) {
+        return Ok(None);
+    }
+    let config = bio_circadian_config_from_env_value(tz_offset_raw)?;
+    Ok(bio_circadian_wiring_from_env_value(
+        enable_raw,
+        clock,
+        config,
+        session_start_ms,
+    ))
+}
+
 /// 心跳关怀生产者的共享句柄 (自述关怀节心跳两列的真值源, 后绑定位)。
 ///
 /// 与发声情绪源同型: 组合根建运行时就把 [`Self::status_probe`] 注进自述关怀节
@@ -329,6 +429,14 @@ impl CareHeartbeatSource {
     /// (零 presence 订阅、零会话读取), 走 `start_care_with_feeds` **原路径** ——
     /// 与接线前逐字节一致。
     ///
+    /// **节律门 (W3.4, 默认关)**: `APEIRETH_ENABLE_BIO_CIRCADIAN=1` 时才构造
+    /// 节律门并接到 `start_care_with_feeds_and_circadian` /
+    /// `start_care_with_feeds_bio_and_circadian`; 时区偏移由
+    /// [`BIO_CIRCADIAN_TZ_OFFSET_MIN_ENV`] 显式配置 (缺省 `0` = **UTC, 不推断
+    /// 本地时区**; 坏值 `Err` 拒绝即帧); 会话起点 = 本装配点读一次同一时钟
+    /// (**不持久化、不跨重启**)。其余取值 = 不构造门、不读时钟, 走原生产者
+    /// 路径 (逐字节一致)。
+    ///
     /// `session` = 关怀回合的目标会话 (发起 = 标准回合, 生成的关怀消息进该
     /// 会话流的普通转写): 由常驻宿主显式注入 —— 本批最小接线取常驻进程级
     /// 关怀会话, 「进哪条对话」的产品面策略随后续拍板, 缝在此不焊死。
@@ -365,6 +473,28 @@ impl CareHeartbeatSource {
             Arc::new(RuleFallbackJudge),
         )
         .with_initiative_gate(Arc::new(gate));
+        // ⑥ 节律门 (W3.4, 默认关) —— 先于 ⑤ 装配: 坏时区在 presence 订阅前
+        //    拒绝即帧 (无副作用)。关 = 不构造门、不读时钟 (连时区 env 都不读),
+        //    随后走接线前的原生产者调用 (逐字节一致); 开 = 先校验显式时区配置
+        //    (坏值拒绝即帧, 不猜), 再以装配时刻读一次同一时钟作超日窗口起点
+        //    (**不持久化、不跨重启**; 重启 = 新一轮超日周期; 首帧快照由门构造
+        //    再读一次同一时钟)。时区缺省 0 = UTC, 不推断本地时区。
+        let circadian: Option<BioCircadianGate> = {
+            let enable_raw = std::env::var(BIO_CIRCADIAN_ENABLE_ENV).ok();
+            if bio_circadian_enabled_from_env_value(enable_raw.as_deref()) {
+                let clock: CircadianGateClock = Arc::new(|| SystemCareClock.now_ms());
+                let session_start_ms = clock();
+                let tz_raw = std::env::var(BIO_CIRCADIAN_TZ_OFFSET_MIN_ENV).ok();
+                host_bio_circadian_assembly(
+                    enable_raw.as_deref(),
+                    tz_raw.as_deref(),
+                    clock,
+                    session_start_ms,
+                )?
+            } else {
+                None
+            }
+        };
         // ⑤ 生物候选真实供给 (W3.3, 默认关): env 非 "1" = 连会话账本句柄都不取,
         //    不构造供给 (零 presence 订阅/零会话读取), 随后走接线前的原生产者
         //    路径 (逐字节一致)。开关开才把 care 配置注入 engine 并接供给面。
@@ -398,9 +528,30 @@ impl CareHeartbeatSource {
             Arc::new(WeatherSignalFeed::under_data_dir(&care_dir)),
             Arc::new(GuardAlertFeed::under_data_dir(&care_dir)),
         ];
-        let producer = match bio {
-            // 开关开: 生物候选在规则/提醒之后取供给 → 候选 → 同一纪律管道。
-            Some((_, bio_poll)) => CareHeartbeatProducer::start_care_with_feeds_and_bio(
+        let producer = match (bio, circadian) {
+            // 生物候选 + 节律门 (两开关都开): 门最前, 门不许 = 整拍 Quiet。
+            (Some((_, bio_poll)), Some(gate)) => {
+                CareHeartbeatProducer::start_care_with_feeds_bio_and_circadian(
+                    config,
+                    engine,
+                    || SystemCareClock.now_ms(),
+                    dispatch,
+                    reminder_feeds,
+                    bio_poll,
+                    Some(gate),
+                )
+            }
+            // 只有节律门开: 规则/提醒面 + 门 (无生物候选供给)。
+            (None, Some(gate)) => CareHeartbeatProducer::start_care_with_feeds_and_circadian(
+                config,
+                engine,
+                || SystemCareClock.now_ms(),
+                dispatch,
+                reminder_feeds,
+                Some(gate),
+            ),
+            // 门关 (默认) + 生物候选开: 与接线前同一调用, 逐字节一致。
+            (Some((_, bio_poll)), None) => CareHeartbeatProducer::start_care_with_feeds_and_bio(
                 config,
                 engine,
                 || SystemCareClock.now_ms(),
@@ -408,8 +559,8 @@ impl CareHeartbeatSource {
                 reminder_feeds,
                 bio_poll,
             ),
-            // 开关关 (默认): 与接线前同一调用, 零候选零行为变化。
-            None => CareHeartbeatProducer::start_care_with_feeds(
+            // 两开关都关 (默认): 与接线前同一调用, 零候选零行为变化。
+            (None, None) => CareHeartbeatProducer::start_care_with_feeds(
                 config,
                 engine,
                 || SystemCareClock.now_ms(),
@@ -491,12 +642,16 @@ impl HeartbeatDispatch for RuntimeTurnDispatch {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
+
     use apeireth_core::kernel::{Timestamp, VirtualClock};
     use apeireth_gateway::{EventBus, PresenceBreath, PresencePad, PresenceSource};
     use apeireth_organ::care::CareTier;
+    use apeireth_organ::circadian::{CircadianPhase, ProactiveGate};
     use apeireth_organ::ritual::RitualConfig;
     use apeireth_protocol::canonical::NormalizedMessage;
     use apeireth_runtime::canonical::InMemorySessionStore;
+    use apeireth_runtime_assembly::canonical::care_heartbeat::bio_circadian::BioCircadianDecision;
     use apeireth_runtime_assembly::canonical::care_reminder::bio_care_candidates;
 
     use super::*;
@@ -835,5 +990,180 @@ mod tests {
             tokio::task::yield_now().await;
         }
         assert_eq!(probe.last_seen_ms(), before, "心跳帧不覆盖回合时刻");
+    }
+
+    /// ⑪ 节律门开关 fail-closed: 只认 `"1"`; 关 = 不构造门、连时钟都不读
+    /// (连时区 env 也不解析)。
+    #[test]
+    fn bio_circadian_env_switch_is_fail_closed_and_lazy() {
+        assert_eq!(BIO_CIRCADIAN_ENABLE_ENV, "APEIRETH_ENABLE_BIO_CIRCADIAN");
+        for raw in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("true"),
+            Some("TRUE"),
+            Some("yes"),
+            Some("on"),
+            Some("2"),
+            Some("01"),
+        ] {
+            let reads = Arc::new(AtomicUsize::new(0));
+            let observed = Arc::clone(&reads);
+            let clock: CircadianGateClock = Arc::new(move || {
+                observed.fetch_add(1, Ordering::SeqCst);
+                NOW
+            });
+            let gate = host_bio_circadian_assembly(raw, Some("480"), clock, NOW)
+                .expect("关 = 合法 (不解析时区)");
+            assert!(gate.is_none(), "非 \"1\" 一律关: {raw:?}");
+            assert_eq!(
+                reads.load(Ordering::SeqCst),
+                0,
+                "关 = 不构造门 = 零时钟读取: {raw:?}"
+            );
+        }
+
+        let clock: CircadianGateClock = Arc::new(|| NOW);
+        let gate = host_bio_circadian_assembly(Some("1"), Some("480"), clock, NOW)
+            .expect("开 = 合法")
+            .expect("开 = 构造门");
+        assert!(gate.enabled());
+        assert_eq!(gate.state().config().tz_offset_minutes, 480);
+        assert_eq!(gate.ticks(), 0, "构造不咨询, 只初始化首帧快照");
+    }
+
+    /// ⑫ 显式时区配置: 缺省 `0` = **UTC (不推断本地时区)**; 坏值/越界拒绝即帧。
+    #[test]
+    fn the_explicit_timezone_defaults_to_utc_and_rejects_bad_values() {
+        assert_eq!(
+            BIO_CIRCADIAN_TZ_OFFSET_MIN_ENV,
+            "APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN"
+        );
+        assert_eq!(DEFAULT_BIO_CIRCADIAN_TZ_OFFSET_MIN, 0);
+
+        let base = CircadianConfig::default();
+        let utc = bio_circadian_config_from_env_value(None).expect("缺省合法");
+        assert_eq!(utc.tz_offset_minutes, 0, "缺省 0 = UTC, 不是本地时区推断");
+        // 其余字段 = 内核 `Default` 工程缺省 (本批未开 env 的字段, 已列文档)。
+        assert_eq!(utc.wake_hour, base.wake_hour);
+        assert_eq!(utc.sleep_hour, base.sleep_hour);
+        assert_eq!(utc.ultradian_focus_ms, base.ultradian_focus_ms);
+        assert_eq!(utc.ultradian_rest_ms, base.ultradian_rest_ms);
+
+        for (raw, expected) in [
+            (Some("480"), 480),
+            (Some("0"), 0),
+            (Some(" -300 "), -300),
+            (Some("840"), 840),
+            (Some("-840"), -840),
+        ] {
+            assert_eq!(
+                bio_circadian_config_from_env_value(raw)
+                    .expect("显式值合法")
+                    .tz_offset_minutes,
+                expected,
+                "显式时区原样生效: {raw:?}"
+            );
+        }
+        for bad in [
+            Some(""),
+            Some("abc"),
+            Some("8.5"),
+            Some("+"),
+            Some("841"),
+            Some("-841"),
+            Some("9999"),
+        ] {
+            assert!(
+                bio_circadian_config_from_env_value(bad).is_err(),
+                "坏值/越界拒绝即帧 (不猜、不静默夹取): {bad:?}"
+            );
+        }
+    }
+
+    /// ⑬ 时区生效差异: 同一 epoch, UTC 17:00 = 昼 (放行) / 北京 01:00 = 深夜
+    /// (拦下) —— 时区不是猜出来的。
+    #[test]
+    fn the_timezone_offset_changes_the_gate_outcome_for_the_same_epoch() {
+        let now = -25_200_000; // UTC 17:00 = 北京 01:00 (深夜)
+        let mut utc =
+            host_bio_circadian_assembly(Some("1"), None, Arc::new(move || now), now - 60_000)
+                .expect("合法")
+                .expect("开");
+        let mut beijing = host_bio_circadian_assembly(
+            Some("1"),
+            Some("480"),
+            Arc::new(move || now),
+            now - 60_000,
+        )
+        .expect("合法")
+        .expect("开");
+
+        assert_eq!(
+            utc.state().inputs().phase,
+            CircadianPhase::Day,
+            "同一 epoch 在 UTC 视图 = 昼"
+        );
+        assert_eq!(utc.decide(), BioCircadianDecision::Allowed, "UTC 视图放行");
+        assert_eq!(
+            beijing.decide(),
+            BioCircadianDecision::Suppressed(ProactiveGate::QuietHours),
+            "同一 epoch 在北京视图 = 深夜勿扰 (时区显式生效)"
+        );
+    }
+
+    /// ⑭ 会话起点口径: `session_start_ms` 由调用方显式给 (生产 = 装配时刻读
+    /// 一次同一时钟), 构造不改写; 起点决定超日窗口 (26 分钟前 = 休息窗 ⇒ 拦下;
+    /// 1 分钟前 = 专注窗 ⇒ 放行)。
+    #[test]
+    fn the_session_start_is_explicit_and_anchors_the_ultradian_window() {
+        let reads = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&reads);
+        let clock: CircadianGateClock = Arc::new(move || {
+            observed.fetch_add(1, Ordering::SeqCst);
+            NOW
+        });
+        let mut rest =
+            host_bio_circadian_assembly(Some("1"), Some("480"), clock, NOW - 26 * 60_000)
+                .expect("合法")
+                .expect("开");
+        assert_eq!(
+            reads.load(Ordering::SeqCst),
+            1,
+            "构造读一次时钟 (首帧快照); session_start 不由构造改写"
+        );
+        assert_eq!(rest.state().session_start_ms(), NOW - 26 * 60_000);
+        assert_eq!(
+            rest.decide(),
+            BioCircadianDecision::Suppressed(ProactiveGate::RestWindow),
+            "26 分钟前起点 = 25 分钟专注窗已过, 当前休息窗"
+        );
+
+        let mut focus =
+            host_bio_circadian_assembly(Some("1"), Some("480"), Arc::new(|| NOW), NOW - 60_000)
+                .expect("合法")
+                .expect("开");
+        assert_eq!(
+            focus.decide(),
+            BioCircadianDecision::Allowed,
+            "1 分钟前起点 = 专注窗 + 昼 = 放行"
+        );
+    }
+
+    /// ⑮ 默认关: 未设开关 = 不构造门; 即使时区 env 是坏值也不解析 (关 = 原
+    /// 路径, 零时钟读取)。
+    #[test]
+    fn the_default_off_path_never_parses_the_timezone_or_touches_the_clock() {
+        let reads = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&reads);
+        let clock: CircadianGateClock = Arc::new(move || {
+            observed.fetch_add(1, Ordering::SeqCst);
+            NOW
+        });
+        let gate = host_bio_circadian_assembly(None, Some("not-a-number"), clock, NOW)
+            .expect("关 = 不解析时区 (坏值也不报错)");
+        assert!(gate.is_none(), "默认关 = 不构造门");
+        assert_eq!(reads.load(Ordering::SeqCst), 0, "默认关 = 零时钟读取");
     }
 }
