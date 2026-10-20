@@ -18,6 +18,7 @@
 //! baseline migration SQL kept for on-disk compatibility.
 
 pub mod cache;
+pub mod crypto;
 pub mod error;
 pub mod machine_id;
 pub mod migrations;
