@@ -24,7 +24,6 @@ mod hybrid_search;
 mod idle_footprint;
 mod os_sandbox;
 mod profile_startup;
-mod quota_scheduler;
 mod saga_rollback;
 mod spill_truncate;
 mod support;
@@ -34,7 +33,6 @@ use support::{print_outcome, BenchConfig, Outcome};
 /// 全部基准的稳定 key 列表 (与 README 性能目标表/报告行一一对应)。
 const BENCH_NAMES: &[&str] = &[
     "hybrid-search",
-    "quota-scheduler",
     "causal-cow",
     "saga-rollback",
     "barge-in",
@@ -82,7 +80,6 @@ fn main() {
 fn run_one(name: &str, cfg: &BenchConfig) -> Option<Vec<Outcome>> {
     match name {
         "hybrid-search" => Some(hybrid_search::run(cfg)),
-        "quota-scheduler" => Some(quota_scheduler::run(cfg)),
         "fold-surface" => Some(fold_surface::run(cfg)),
         "spill-truncate" => Some(spill_truncate::run(cfg)),
         "atomic-write" => Some(atomic_write::run(cfg)),
