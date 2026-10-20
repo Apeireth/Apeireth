@@ -738,3 +738,29 @@ impl ModuleInvoker for RuntimeModuleInvoker {
         })
     }
 }
+
+impl apeireth_plugin::ExtensionCatalog for BehaviorRegistry {
+    fn extension_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .modules()
+            .iter()
+            .map(|module| module.manifest().id.clone())
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    fn describe(&self, id: &str) -> Option<apeireth_plugin::ExtensionDescriptor> {
+        let module = self
+            .modules()
+            .iter()
+            .find(|module| module.manifest().id == id)?;
+        let manifest = module.manifest();
+        Some(apeireth_plugin::ExtensionDescriptor::new(
+            manifest.id.clone(),
+            apeireth_plugin::ExtensionKind::BehaviorModule,
+            "apeireth-runtime",
+            0,
+        ))
+    }
+}
