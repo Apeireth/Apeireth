@@ -276,3 +276,69 @@ claims:
     owner: companion-desktop
     next_review: "2026-11-20"
     notes: "4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。"
+
+  - id: bio.tone
+    title: "神经调质→语气（W3.4 生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_TONE
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/bio_tone.rs
+      - crates/engine/organ/src/tone.rs
+    tests:
+      - crates/engine/runtime-assembly/src/canonical/bio_tone.rs
+    verified_at: 83933edd
+    verify_cmd: "cargo test -p apeireth-runtime-assembly bio_tone"
+    owner: runtime-assembly
+    next_review: "2026-11-20"
+    notes: "TurnStart 尾部独立 overlay；真实反馈事件源未接（半程，如实）；env 只认 \"1\"，默认关。"
+
+  - id: bio.circadian
+    title: "节律门→心跳主动消息闸（W3.4 生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CIRCADIAN
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/bio_circadian.rs
+      - crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs
+      - crates/adapters/cli/src/care_heartbeat.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_circadian_production.rs
+    verified_at: 83933edd
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_circadian_production"
+    owner: cli
+    next_review: "2026-11-20"
+    notes: "心跳最前 decide()；显式 UTC 缺省 tz offset；睡眠压力生产源未接（门内压力恒 0，如实）。"
+
+  - id: bio.nociception_pain
+    title: "痛觉→失败链（W3.4 接失败链，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_PAIN
+    sources:
+      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/foundation/orchestration/src/nociception.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/engine/runtime/tests/bio_pain_wiring.rs
+    verified_at: 83933edd
+    verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。"
+
+  - id: bio.recovery_protocol
+    title: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_PAIN
+    sources:
+      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/foundation/orchestration/src/recovery_protocol.rs
+    tests:
+      - crates/engine/runtime/tests/bio_pain_wiring.rs
+    verified_at: 83933edd
+    verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "RecoveryCase 状态机已接失败链；ScarLedger::learn 未接（如实）。"

@@ -21,6 +21,10 @@
 | `sec.provider_proxy_ssrf` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `sec.desktop_file_roots` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
+| `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `83933edd` | 2026-11-20 |
+| `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `83933edd` | 2026-11-20 |
+| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `83933edd` | 2026-11-20 |
+| `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `83933edd` | 2026-11-20 |
 
 ## 使用
 
