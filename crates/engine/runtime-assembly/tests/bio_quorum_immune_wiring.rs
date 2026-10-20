@@ -38,7 +38,7 @@ use apeireth_orchestration::Council;
 use apeireth_plugin::organ::{OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait};
 use apeireth_protocol::canonical::NormalizedResponse;
 use apeireth_runtime_assembly::canonical::module::{
-    AgentModule, HookPoint, InvocationContext, ModuleContext, ModuleInvocationError,
+    BehaviorModule, HookPoint, InvocationContext, ModuleContext, ModuleInvocationError,
     ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
 };
 use apeireth_runtime_assembly::canonical::orchestrator::{

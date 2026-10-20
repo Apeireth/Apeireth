@@ -439,8 +439,6 @@ pub trait BehaviorModule: Send + Sync {
 
 /// Compatibility alias for the renamed behavior trait.
 pub use BehaviorModule as Module;
-/// Compatibility alias retained for existing embedders.
-pub use BehaviorModule as AgentModule;
 
 /// Canonical registry for all runtime modules.
 ///
@@ -491,9 +489,6 @@ impl From<Vec<Arc<dyn BehaviorModule>>> for BehaviorRegistry {
         Self { modules }
     }
 }
-
-/// Compatibility name for the old registry.
-pub use BehaviorRegistry as ModuleRegistry;
 
 /// Reject duplicate capability ids or model-facing names between two tool sets.
 pub fn reject_tool_identity_collisions(

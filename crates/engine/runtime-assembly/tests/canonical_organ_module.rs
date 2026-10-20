@@ -27,8 +27,8 @@ use apeireth_protocol::canonical::{
     NormalizedResponse, NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
-    AgentModule, CognitiveBackends, CognitiveModuleConfig, OrganModule, ProductionCognitiveModules,
-    Runtime, TurnOutcome, TurnRequest, ORGAN_MODULE_ID,
+    BehaviorModule, CognitiveBackends, CognitiveModuleConfig, OrganModule,
+    ProductionCognitiveModules, Runtime, TurnOutcome, TurnRequest, ORGAN_MODULE_ID,
 };
 use async_trait::async_trait;
 

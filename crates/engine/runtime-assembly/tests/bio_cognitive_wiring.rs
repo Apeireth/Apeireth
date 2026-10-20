@@ -26,7 +26,7 @@ use apeireth_runtime_assembly::canonical::cognitive::{
     BIO_REPAIR_GUIDANCE_ENABLE_ENV,
 };
 use apeireth_runtime_assembly::canonical::module::{
-    AgentModule, HookPoint, InvocationContext, ModuleContext, ModuleInvocationError,
+    BehaviorModule, HookPoint, InvocationContext, ModuleContext, ModuleInvocationError,
     ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker, ModuleOutcome,
 };
 use apeireth_runtime_assembly::canonical::subloop::{

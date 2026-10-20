@@ -29,7 +29,7 @@ use apeireth_runtime_assembly::canonical::care_heartbeat::bio_tone::{
     ToneState, BIO_TONE_ENABLE_ENV, BIO_TONE_MODULE_ID, TONE_CLAUSE_LABEL,
 };
 use apeireth_runtime_assembly::canonical::module::{
-    AgentModule, HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
+    BehaviorModule, HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
     ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
     ModuleOutcome,
 };
@@ -78,7 +78,7 @@ impl SubLoopSpawner for NoSubLoop {
 static NO_SUB_LOOP: NoSubLoop = NoSubLoop;
 
 async fn run_hook(
-    module: &dyn AgentModule,
+    module: &dyn BehaviorModule,
     hook: HookPoint,
     messages: &[NormalizedMessage],
 ) -> Result<ModuleOutcome, ModuleError> {

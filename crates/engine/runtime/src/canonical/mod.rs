@@ -111,11 +111,10 @@ pub use metrics::{
     TurnOutcomeKind, WindowAggregate, DEFAULT_METRICS_WINDOW_TURNS, MAX_TRACKED_SESSIONS,
 };
 pub use module::{
-    AgentModule, BehaviorModule, BehaviorRegistry, HookPoint, InvocationContext, InvocationOrigin,
-    Module, ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError,
-    ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker, ModuleManifest,
-    ModuleOutcome, ModuleRegistry, PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH,
-    DEFAULT_MAX_MODULE_INVOCATIONS,
+    BehaviorModule, BehaviorRegistry, HookPoint, InvocationContext, InvocationOrigin, Module,
+    ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
+    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay,
+    DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use quota::{

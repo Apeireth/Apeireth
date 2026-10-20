@@ -143,7 +143,7 @@ impl GovernanceHook for AllowAll {
 
 async fn build_runtime(
     provider: Arc<CapturingProvider>,
-    modules: Vec<Arc<dyn apeireth_runtime::canonical::AgentModule>>,
+    modules: Vec<Arc<dyn apeireth_runtime::canonical::BehaviorModule>>,
 ) -> Runtime {
     let mut builder = Runtime::builder()
         .with_default_model(MODEL)

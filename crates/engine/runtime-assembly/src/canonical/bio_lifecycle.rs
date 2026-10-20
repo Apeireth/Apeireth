@@ -127,7 +127,7 @@ use apeireth_tools_canonical::self_status::{BioMechanismProbe, BioMechanismReadi
 use serde::{Deserialize, Serialize};
 
 use crate::canonical::module::{
-    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
+    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
 };
 
 /// 装配开闸 env 名（仅显式 `"1"` 开，其余一律关 fail-closed）。
@@ -691,7 +691,7 @@ impl BioLifecycleModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for BioLifecycleModule {
+impl BehaviorModule for BioLifecycleModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -720,7 +720,7 @@ impl AgentModule for BioLifecycleModule {
 /// 装配结果：共享生命周期状态 + 一个模块（`module()` 交给装配根注册）。
 pub struct BioLifecycleWiring {
     state: Arc<BioLifecycleState>,
-    module: Arc<dyn AgentModule>,
+    module: Arc<dyn BehaviorModule>,
 }
 
 impl BioLifecycleWiring {
@@ -732,7 +732,7 @@ impl BioLifecycleWiring {
 
     /// 待注册模块（`RuntimeBuilder::with_module` / `ProductionModules` 同口）。
     #[must_use]
-    pub fn module(&self) -> Arc<dyn AgentModule> {
+    pub fn module(&self) -> Arc<dyn BehaviorModule> {
         Arc::clone(&self.module)
     }
 
@@ -748,9 +748,9 @@ impl BioLifecycleWiring {
 pub fn bio_lifecycle_module_from_env_value(
     raw: Option<&str>,
     state: Arc<BioLifecycleState>,
-) -> Option<Arc<dyn AgentModule>> {
+) -> Option<Arc<dyn BehaviorModule>> {
     bio_lifecycle_enabled_from_env_value(raw)
-        .then(|| Arc::new(BioLifecycleModule::new(true, state)) as Arc<dyn AgentModule>)
+        .then(|| Arc::new(BioLifecycleModule::new(true, state)) as Arc<dyn BehaviorModule>)
 }
 
 /// 开关值 → (共享状态 + 模块 + 可选文件账目录)；开关关 = `None`
@@ -782,7 +782,8 @@ pub fn bio_lifecycle_wiring_from_env_value_with_store_dir(
     };
     state.seed_tool_names(registered_tool_names);
     let state = Arc::new(state);
-    let module: Arc<dyn AgentModule> = Arc::new(BioLifecycleModule::new(true, Arc::clone(&state)));
+    let module: Arc<dyn BehaviorModule> =
+        Arc::new(BioLifecycleModule::new(true, Arc::clone(&state)));
     Some(BioLifecycleWiring { state, module })
 }
 

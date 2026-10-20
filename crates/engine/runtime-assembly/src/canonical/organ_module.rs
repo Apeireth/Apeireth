@@ -6,7 +6,7 @@
 //! provider path:
 //!
 //! ```text
-//! Main Loop → ModuleRegistry → OrganModule → OrganOrchestrator → 9 organs
+//! Main Loop → BehaviorRegistry → OrganModule → OrganOrchestrator → 9 organs
 //! ```
 //!
 //! # Ownership rules enforced here
@@ -58,7 +58,7 @@ use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use async_trait::async_trait;
 
 use super::module::{
-    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
+    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
 };
 use super::orchestrator::{
     quorum_now_ms_from_i64, LocalOrchestratorRelationship, OrchestratorBoundaries,
@@ -234,7 +234,7 @@ impl OrganModule {
 }
 
 #[async_trait]
-impl AgentModule for OrganModule {
+impl BehaviorModule for OrganModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

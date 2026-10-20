@@ -21,7 +21,7 @@ use apeireth_protocol::canonical::{
     NormalizedResponse, NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
-    budget_context_blocks, AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest,
+    budget_context_blocks, BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest,
     ModuleOutcome, Runtime, TurnRequest,
 };
 use async_trait::async_trait;
@@ -231,7 +231,7 @@ struct InjectOverlays {
 }
 
 #[async_trait]
-impl AgentModule for InjectOverlays {
+impl BehaviorModule for InjectOverlays {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

@@ -30,7 +30,7 @@ use apeireth_runtime_assembly::canonical::care_heartbeat::bio_lifecycle::{
     BIO_LIFECYCLE_MODULE_ID,
 };
 use apeireth_runtime_assembly::canonical::module::{
-    AgentModule, HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
+    BehaviorModule, HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
     ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
     ModuleOutcome,
 };
@@ -131,7 +131,7 @@ fn error_result(name: &str) -> ToolResult {
 }
 
 async fn run_hook(
-    module: &dyn AgentModule,
+    module: &dyn BehaviorModule,
     hook: HookPoint,
     tool_call: Option<&ToolCall>,
     tool_result: Option<&ToolResult>,

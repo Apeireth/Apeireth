@@ -18,7 +18,7 @@ use apeireth_protocol::canonical::{
     NormalizedResponse, NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
-    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome, Runtime,
+    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome, Runtime,
     RuntimeError, TraceEvent, TurnRequest,
 };
 use async_trait::async_trait;
@@ -158,7 +158,7 @@ struct InjectOverlays {
 }
 
 #[async_trait]
-impl AgentModule for InjectOverlays {
+impl BehaviorModule for InjectOverlays {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

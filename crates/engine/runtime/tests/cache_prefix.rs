@@ -23,7 +23,7 @@ use apeireth_protocol::canonical::{
     NormalizedResponse, NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
-    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
+    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
     PromptOverlay, Runtime, TurnRequest,
 };
 use async_trait::async_trait;
@@ -144,7 +144,7 @@ impl VaryingOverlays {
 }
 
 #[async_trait]
-impl AgentModule for VaryingOverlays {
+impl BehaviorModule for VaryingOverlays {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -271,7 +271,7 @@ impl CrossSourceOverlay {
 }
 
 #[async_trait]
-impl AgentModule for CrossSourceOverlay {
+impl BehaviorModule for CrossSourceOverlay {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

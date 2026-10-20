@@ -45,8 +45,8 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use super::module::{
-    AgentModule, HookPoint, ModuleContext, ModuleDirective, ModuleError, ModuleInvocationRequest,
-    ModuleManifest, ModuleOutcome, PromptOverlay,
+    BehaviorModule, HookPoint, ModuleContext, ModuleDirective, ModuleError,
+    ModuleInvocationRequest, ModuleManifest, ModuleOutcome, PromptOverlay,
 };
 
 /// Stable ids are the slot ledger keys.  Changing one is a compatibility
@@ -450,7 +450,7 @@ fn bond_stage_cn(stage: &apeireth_memory::partner::BondStage) -> &'static str {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for PartnerBondModule {
+impl BehaviorModule for PartnerBondModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -527,7 +527,7 @@ impl PersonaConstantInjectionModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for PersonaConstantInjectionModule {
+impl BehaviorModule for PersonaConstantInjectionModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -897,7 +897,7 @@ impl Default for AbsorptionInsightModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for AbsorptionInsightModule {
+impl BehaviorModule for AbsorptionInsightModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -1233,7 +1233,7 @@ impl MemoryRecallModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for MemoryRecallModule {
+impl BehaviorModule for MemoryRecallModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -1591,7 +1591,7 @@ impl MemoryWritebackModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for MemoryWritebackModule {
+impl BehaviorModule for MemoryWritebackModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -1888,7 +1888,7 @@ impl PreferenceRecallModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for PreferenceRecallModule {
+impl BehaviorModule for PreferenceRecallModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -2061,7 +2061,7 @@ impl ReflexionModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for ReflexionModule {
+impl BehaviorModule for ReflexionModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -2273,7 +2273,7 @@ impl JudgeModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for JudgeModule {
+impl BehaviorModule for JudgeModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -2405,7 +2405,7 @@ impl SelfAssessmentModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for SelfAssessmentModule {
+impl BehaviorModule for SelfAssessmentModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -2503,7 +2503,7 @@ impl CouncilModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for CouncilModule {
+impl BehaviorModule for CouncilModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -2616,7 +2616,7 @@ fn parse_advisor_verdict(text: &str) -> Result<AdvisorVerdict, CouncilCallError>
 
 /// Convert a perception text event into the canonical request boundary.
 ///
-/// Perception remains an input adapter, not an AgentModule.  Only the text
+/// Perception remains an input adapter, not an BehaviorModule.  Only the text
 /// payload is accepted in this release; voice, vision, and tactile channels
 /// remain explicit `NotImplemented` paths in the perception crate.
 pub fn turn_request_from_perception(
@@ -3040,7 +3040,7 @@ impl BioAssemblyModule {
 }
 
 #[async_trait::async_trait]
-impl AgentModule for BioAssemblyModule {
+impl BehaviorModule for BioAssemblyModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
