@@ -128,7 +128,7 @@ pub use call_scheduler::{
 pub use care_potential_field::{CareAction, CarePotentialField};
 pub use cognitive_quota_scheduler::{
     CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
-    CognitiveQuotaScheduler, CognitiveTaskControlBlock,
+    CognitiveTaskControlBlock,
 };
 pub use compaction_checkpoint::{
     compaction_due, detect_unclosed_compactions, fold_checkpoints, pair_safe_end,
