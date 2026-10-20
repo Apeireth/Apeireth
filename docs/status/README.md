@@ -8,6 +8,7 @@
 | 文件 | 性质 | 维护方式 |
 |---|---|---|
 | [`claims.yaml`](claims.yaml) | **唯一真源**：每条 claim = `id / level（四級口径）/ default / switch_env / sources / tests / verified_at / verify_cmd / owner / next_review` | 人工编辑 + `scripts/docs_truth.py --verify` 校验 |
+| [`wiring.yaml`](wiring.yaml) | **生成物**（R3a，ADR-0004）：接线账 20 项 = `id / capability / implemented(sources) / wired(production refs) / default_enabled / validated(tests+claims_id) / gaps` | **禁止手改**；`python scripts/wiring_report.py --gen`；CI `--verify` 查漂移 |
 | [`STATUS.md`](STATUS.md) | 生成物：状态仪表盘 | **禁止手改**；`python scripts/docs_truth.py --gen` |
 
 ## 用法
@@ -21,6 +22,15 @@ python scripts/docs_truth.py --gen-matrix-01     # matrix §0.1 结果/日期 �
 python scripts/docs_truth.py --baseline-check --log <cargo-test.log>  # 全量日志汇总 ↔ test-baseline §1 核对
 python scripts/docs_truth.py --matrix-check      # matrix 环境变量 / claims 开关互钉自查
 python scripts/docs_truth.py --check             # 生成物 drift + README 徽章一致性
+```
+
+R3a（ADR-0004，env 登记 + wiring ledger）：
+
+```powershell
+python scripts/wiring_report.py --gen                    # 生成 docs/status/wiring.yaml（禁手改）
+python scripts/wiring_report.py --verify                 # 生成物 drift 检查（CI）
+python scripts/wiring_report.py --check-env-registry     # env 登记覆盖/重复/TODO 统计（CI）
+python scripts/wiring_report.py --stats                  # 记分牌数字（env/registry/wiring）
 ```
 
 ## 口径

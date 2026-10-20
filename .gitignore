@@ -214,6 +214,8 @@ crates/apeireth-integration-e2e/.*.log
 !scripts/verify_changed.py
 # 架构守卫（architecture contract / arch_guard）：仓库常驻工具（2026-10-20 架构契约草案批）
 !scripts/arch_guard.py
+# R3a env 登记表 + wiring ledger 生成/校验器（ADR-0004；2026-10-20 第三线）
+!scripts/wiring_report.py
 
 # TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
 # 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),
