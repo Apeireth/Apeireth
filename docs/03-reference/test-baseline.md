@@ -12,11 +12,11 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| **结果** | **326 套件 / 8889 passed / 0 failed / 52 ignored** |
-| **日期** | 2026-10-19 |
+| **结果** | **336 套件 / 9075 passed / 0 product-failed（1 环境敏感 D27，复跑绿）/ 52 ignored** |
+| **日期** | 2026-10-20 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **来源** | 生物机制族 W3.2 总装批本机全量实测（2026-10-19；命令同口径但加并发规避 `-j 1` + `RUST_TEST_THREADS=4`，原因见 D26；日志 `artifacts/wave-bio-w32f-workspace-test.log`） |
+| **来源** | 生物机制族 W3.4 总装批本机全量实测（2026-10-20；命令同口径但加并发规避 `-j 1` + `RUST_TEST_THREADS=4`，原因见 D26；日志 `artifacts/wave-bio-w34-workspace-test.log`） |
 
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
@@ -107,7 +107,11 @@
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
-| 2026-10-19 | 322 套件 / 8820 passed / 0 failed / 52 ignored | 生物机制族 W3.1 批（§1 曾用，2026-10-19 W3.2 批刷新后移入历史） |`n| 2026-10-19 | 322 套件 / 8652 passed / 0 failed / 52 ignored | 生物机制族 W1 批（§1 曾用，2026-10-19 W3.1 批刷新后移入历史） |`n| 2026-10-18 | 322 套件 / 8515 passed / 0 failed / 52 ignored | 小批总装批（§1 曾用，2026-10-19 生物机制族 W1 批刷新后移入历史） |`n| 2026-10-16 | 199 套件 / 5360 passed / 0 failed / 22 ignored | 外部体验审计本机实测（初版 §1 现行基线，2026-10-18 小批总装批刷新后移入历史） |
+| 2026-10-19 | 326 套件 / 8889 passed / 0 failed / 52 ignored | 生物机制族 W3.3 批（§1 曾用，2026-10-20 W3.4 批刷新后移入历史） |
+| 2026-10-19 | 322 套件 / 8820 passed / 0 failed / 52 ignored | 生物机制族 W3.1 批（§1 曾用，2026-10-19 W3.2 批刷新后移入历史） |
+| 2026-10-19 | 322 套件 / 8652 passed / 0 failed / 52 ignored | 生物机制族 W1 批（§1 曾用，2026-10-19 W3.1 批刷新后移入历史） |
+| 2026-10-18 | 322 套件 / 8515 passed / 0 failed / 52 ignored | 小批总装批（§1 曾用，2026-10-19 生物机制族 W1 批刷新后移入历史） |
+| 2026-10-16 | 199 套件 / 5360 passed / 0 failed / 22 ignored | 外部体验审计本机实测（初版 §1 现行基线，2026-10-18 小批总装批刷新后移入历史） |
 | 2026-10-13 | 5243 passed / 0 failed / 22 ignored，190 套件 | `cargo test --workspace --locked -j 2` 全量实测 |
 | 2026-10-06 | 3418 passed / 0 failed / 19 ignored，129 套件 | W2 接线批后实测（当日复核批口径 3406） |
 | 2026-09-30 | 4829 passed / 0 failed，161 套件 | rc.3 批 |

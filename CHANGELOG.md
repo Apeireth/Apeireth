@@ -12,6 +12,14 @@
 - **B7 治理链端到端合练**（#7）：现役 M-of-N 逻辑票链三路径（通过/拒绝/超时）+ 防凑票对抗用例 + 审计落盘断言，演练记录落 `docs/04-internal/governance-chain-drill-2026-10-20.md`（缺口 6 项如实登记：编排未接线/物理多签留 v2.1 等）。**逻辑票 ≠ 密码学多签**（严守口径）。
 - **B8 发布资产校验**（#8）：`scripts/verify-release-assets.ps1`（哈希三口径 + Authenticode 如实报 + 缺项不装过）+ 流程文档 + 排期 4 项（签名证书/可复现构建等 owner 决策）。
 
+## [Unreleased] — 生物机制族 W3.4：收口接线（recovery + 节律门生产装配，全部默认关；2026-10-20）
+
+两批并行 + 矩阵收口（**+~130 新测**，全部默认关、关时逐字节零变化）：
+- **再生协议接失败链**（`apeireth-runtime::canonical::bio_pain`）：`recovery_protocol` 状态机挂到 W3.3 唯一失败收口——`Backoff→Hemostasis`/`Diagnose→Inflammation`/`Abandon→Proliferation` 开案，同因升级每次推进一步（Remodeling 再失败按 `Relapse` 回 Inflammation），成功沿合法前向事件补到 `Resolved` 后移出活跃账；`Runtime::bio_recovery_snapshot()` 观测；同 `APEIRETH_ENABLE_BIO_PAIN` 开关，**只观测记账、不改错误/重试决策**；`ScarLedger::learn` 未接。+11 模块测试 + 2 真实链路 E2E。
+- **节律门生产装配**（cli `care_heartbeat` + runtime-assembly `care_heartbeat`）：`CareHeartbeatPoll::with_circadian_gate` 接到 `poll()` 最前，`Suppressed → Quiet` 整拍零读取；producer 新增两个非破坏性入口（`start_care_with_feeds_and_circadian` / `start_care_with_feeds_bio_and_circadian`）；cli `APEIRETH_ENABLE_BIO_CIRCADIAN` + `APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN`（缺省 0=UTC，**显式不推断本地时区**，坏值/越界拒绝即帧）；+8 装配测试 + 5 cli 单测。
+- **接线盘点（14 条）**：**PRODUCTION WIRED 11**（新增 SG-17 再生、SG-23 节律门）+ **半程 1**（SG-22 仪式缺状态存储）+ **未接线 2**（SG-18 生命周期、SG-25 生态健康）；**14/14 内核 + 11 条生产装配（全部默认关）**。
+- **门禁**：全量 `cargo test --workspace --all-targets --locked --no-fail-fast -j 1`（`RUST_TEST_THREADS=4`，规避 D26 端口 flake）= **336 套件 / 9075 passed / 1 环境敏感 flake（D27：`storage_atomic::write_atomic_refuses_preexisting_tmp_name`，该套件整跑复测 199 passed/0 failed）/ 0 产品失败**；clippy `--workspace --all-targets -D warnings` 0；`cargo fmt --check` 0 diff；数字以 test-baseline 单一真源为准（本批已刷新）。
+
 ## [Unreleased] — 生物机制族 W3.3：收尾接线（6 批，全部默认关；2026-10-20）
 
 六条并行批 + 装配根总装，把剩余内核接进生产（默认关、开关只认显式 `"1"`、关时逐字节零变化）：
