@@ -15,8 +15,9 @@
 //! # W3.1 组装策略（默认关，crate 内接线）
 //!
 //! [`AssemblyPolicy`] 把异稳态 [`RegulationPlan`](crate::homeostasis::RegulationPlan)
-//! 映射到本块的字符预算管线。默认策略 = [`AssemblyPolicy::default`]（全 `false`），
-//! 既有输出逐字节不变；只有显式 [`ContextAssembler::with_policy`] 才启用。
+//! 映射到 orchestration 的单一组装管线（本模块只保留策略桥）。默认策略 =
+//! [`AssemblyPolicy::default`]（全 `false`），既有输出逐字节不变；只有显式
+//! [`ContextAssemblerPolicyExt::with_policy`] 才启用。
 //!
 //! | 调节动作 | `AssemblyPolicy` 字段 | 组装效果 |
 //! |---|---|---|
@@ -149,153 +150,62 @@ impl AssemblyPolicy {
     }
 }
 
-/// Ordered block pipeline: total budget + core protection + greedy truncate.
-///
-/// [`Self::policy`] defaults to [`AssemblyPolicy::default`], which keeps the
-/// legacy behavior byte-for-byte. [`Self::with_policy`] is the only opt-in switch.
-pub struct ContextAssembler {
-    blocks: Vec<ContextBlock>,
-    total_budget_chars: usize,
-    policy: AssemblyPolicy,
-}
+// Single definition: the orchestration pipeline re-exported under the old
+// `apeireth_organ` path (ADR-0007 §2.1 — organ keeps the regulation policy
+// bridge only, not a duplicate assembler).
+#[doc(inline)]
+pub use apeireth_orchestration::context_budget::{AssemblyPolicyHook, ContextAssembler};
 
-impl ContextAssembler {
-    /// Total budget in Unicode scalar values (minimum 100).
-    pub fn new(total_budget_chars: usize) -> Self {
-        Self {
-            blocks: Vec::new(),
-            total_budget_chars: total_budget_chars.max(100),
-            policy: AssemblyPolicy::default(),
-        }
+/// Organ bridge from a regulation [`AssemblyPolicy`] to the foundation's
+/// [`AssemblyPolicyHook`]. This mapping is the only organ-specific part of
+/// assembly: cap → fold → greedy cut → spill stay in one implementation.
+#[derive(Debug, Clone, Copy)]
+pub struct OrganAssemblyPolicy(AssemblyPolicy);
+
+impl OrganAssemblyPolicy {
+    /// Wrap a regulation policy.
+    pub fn new(policy: AssemblyPolicy) -> Self {
+        Self(policy)
     }
 
-    /// Enable an assembly policy (chainable). Default = legacy behavior.
-    pub fn with_policy(mut self, policy: AssemblyPolicy) -> Self {
-        self.policy = policy;
-        self
-    }
-
-    /// Current policy (default = all flags off).
-    pub fn policy(&self) -> AssemblyPolicy {
-        self.policy
-    }
-
-    /// Configured total budget (constructor value, before policy tightening).
-    pub fn total_budget_chars(&self) -> usize {
-        self.total_budget_chars
-    }
-
-    /// Effective total budget after policy tightening.
-    pub fn effective_total_budget_chars(&self) -> usize {
-        self.policy.effective_budget_chars(self.total_budget_chars)
-    }
-
-    /// Register a block (order preserved; core blocks should be registered first).
-    pub fn push(mut self, block: ContextBlock) -> Self {
-        self.blocks.push(block);
-        self
-    }
-
-    /// Diagnostic: `(name, char_count)` per registered block (pre-policy, pre-budget).
-    pub fn budget_report(&self) -> Vec<(String, usize)> {
-        self.blocks
-            .iter()
-            .map(|b| (b.name.clone(), b.content.chars().count()))
-            .collect()
-    }
-
-    /// Budgeted assembly: truncated contents, empty / whitespace-only dropped.
-    pub fn assemble_budgeted(&self) -> Vec<String> {
-        self.assemble_budgeted_blocks()
-            .into_iter()
-            .map(|b| b.content)
-            .collect()
-    }
-
-    /// Budgeted assembly keeping name / core / cap metadata.
-    pub fn assemble_budgeted_blocks(&self) -> Vec<ContextBlock> {
-        if self.policy.is_default() {
-            return assemble_budgeted_blocks_raw(&self.blocks, self.total_budget_chars, false);
-        }
-        let blocks = self.policy_blocks();
-        let budget = self.policy.effective_budget_chars(self.total_budget_chars);
-        assemble_budgeted_blocks_raw(&blocks, budget, self.policy.consolidate_before_overflow)
-    }
-
-    /// Block view after recall-depth layer selection (core blocks always stay).
-    fn policy_blocks(&self) -> Vec<ContextBlock> {
-        if !self.policy.reduce_recall_depth {
-            return self.blocks.clone();
-        }
-        let mut kept = Vec::with_capacity(self.blocks.len());
-        let mut non_core_layers = 0_usize;
-        for block in &self.blocks {
-            if block.core {
-                kept.push(block.clone());
-            } else if non_core_layers < AssemblyPolicy::REDUCED_RECALL_MAX_LAYERS {
-                non_core_layers += 1;
-                kept.push(block.clone());
-            }
-        }
-        kept
+    /// The wrapped regulation policy.
+    pub fn policy(self) -> AssemblyPolicy {
+        self.0
     }
 }
 
-/// Shared block pipeline: cap → optional non-core fold → total-budget greedy cut.
-///
-/// The default path passes `fold_non_core = false` and the configured budget,
-/// so the legacy output is preserved byte-for-byte.
-fn assemble_budgeted_blocks_raw(
-    blocks: &[ContextBlock],
-    total_budget_chars: usize,
-    fold_non_core: bool,
-) -> Vec<ContextBlock> {
-    let mut capped: Vec<String> = blocks
-        .iter()
-        .map(|b| {
-            let capped: String = b
-                .content
-                .chars()
-                .take(b.cap_chars.unwrap_or(usize::MAX))
-                .collect();
-            if fold_non_core && !b.core {
-                let folded_len =
-                    capped.chars().count() / AssemblyPolicy::CONSOLIDATION_FOLD_DIVISOR;
-                capped.chars().take(folded_len).collect()
-            } else {
-                capped
-            }
-        })
-        .collect();
-    let mut total: usize = capped.iter().map(|s| s.chars().count()).sum();
-    if total > total_budget_chars {
-        let mut order: Vec<usize> = (0..blocks.len()).filter(|&i| !blocks[i].core).collect();
-        order.sort_by_key(|&i| std::cmp::Reverse(capped[i].chars().count()));
-        for i in order {
-            if total <= total_budget_chars {
-                break;
-            }
-            let len = capped[i].chars().count();
-            if len == 0 {
-                continue;
-            }
-            let over = total - total_budget_chars;
-            let cut = len.min(over);
-            capped[i] = capped[i].chars().take(len - cut).collect();
-            total -= cut;
+impl AssemblyPolicyHook for OrganAssemblyPolicy {
+    fn effective_budget_chars(&self, configured_budget_chars: usize) -> usize {
+        self.0.effective_budget_chars(configured_budget_chars)
+    }
+
+    fn max_non_core_layers(&self) -> Option<usize> {
+        if self.0.reduce_recall_depth {
+            Some(AssemblyPolicy::REDUCED_RECALL_MAX_LAYERS)
+        } else {
+            None
         }
     }
-    blocks
-        .iter()
-        .zip(capped)
-        .filter(|(_, s)| !s.trim().is_empty())
-        .map(|(b, s)| ContextBlock {
-            name: b.name.clone(),
-            content: s,
-            core: b.core,
-            cap_chars: b.cap_chars,
-        })
-        .collect()
+
+    fn fold_non_core(&self) -> bool {
+        self.0.consolidate_before_overflow
+    }
+}
+
+/// Chainable regulation-policy opt-in for the foundation assembler, kept at the
+/// historical `apeireth_organ` call site (ADR-0007 §2.1 preserves the call
+/// shape: `ContextAssembler::new(n).with_policy(policy)`).
+///
+/// Default (never called) = legacy byte-identical output.
+pub trait ContextAssemblerPolicyExt {
+    /// Bind a regulation policy.
+    fn with_policy(self, policy: AssemblyPolicy) -> Self;
+}
+
+impl ContextAssemblerPolicyExt for ContextAssembler {
+    fn with_policy(self, policy: AssemblyPolicy) -> Self {
+        self.with_policy_hook(std::sync::Arc::new(OrganAssemblyPolicy::new(policy)))
+    }
 }
 
 /// Hydra-style tiered concatenation: smaller tier numbers sort first.

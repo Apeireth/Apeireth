@@ -22,7 +22,9 @@ use apeireth_orchestration::{
     Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
     CouncilInvoker, Proposal,
 };
-use apeireth_organ::context_assembly::{AssemblyPolicy, ContextAssembler, ContextBlock};
+use apeireth_organ::context_assembly::{
+    AssemblyPolicy, ContextAssembler, ContextAssemblerPolicyExt, ContextBlock,
+};
 use apeireth_organ::homeostasis::{
     HomeostasisRegulator, RegulationPlan, VitalSign, VitalSignReading, VitalSignSet,
 };

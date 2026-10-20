@@ -76,7 +76,10 @@ pub mod tone;
 pub mod value_cases;
 pub mod world_model;
 
-pub use context_assembly::{assemble_tiered, ContextAssembler, ContextBlock};
+pub use context_assembly::{
+    assemble_tiered, AssemblyPolicyHook, ContextAssembler, ContextAssemblerPolicyExt, ContextBlock,
+    OrganAssemblyPolicy,
+};
 pub use experience_growth::{
     build_promotion_hint, list_latest, mark_proposed, ready_for_capability, verify_experience,
     PracticeExperience, EMA_ALPHA, PROMOTE_MIN_SCORE, PROMOTE_MIN_VERIFIES,

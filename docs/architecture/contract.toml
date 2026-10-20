@@ -139,9 +139,9 @@ sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
 # 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
 [[concepts]]
 name = "ContextAssembler"
-canonical = "crates/engine/organ/src/context_assembly.rs"
-known_debt = ["crates/foundation/orchestration/src/context_budget.rs"]
-target = "R7-2 后续（Wave 4）: ADR-0007 §2.1 单一装配器合并；两条路径语义不同（organ tiered policy / orchestration budget+spill），Wave 3 只收敛类型"
+canonical = "crates/foundation/orchestration/src/context_budget.rs"
+known_debt = []
+target = "R7-2.1（ADR-0007 §2.1 Accepted）: 已完成 2026-10-20（cap→fold→greedy cut→spill 单一管线；organ 只留 AssemblyPolicy→hook 策略桥）"
 
 [[concepts]]
 name = "ContextBlock"
