@@ -112,5 +112,5 @@ pub use perception_backend::{
 };
 pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError, ProviderHotConfig};
-pub use registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};
+pub use registry::{CapabilityRecord, PluginRegistry};
 pub use tool::{FrozenInvocation, ToolCapability};

@@ -280,10 +280,6 @@ impl PluginManager {
     }
 
     /// The canonical capability index.
-    pub fn capabilities(&self) -> &CapabilityRegistry {
-        &self.capabilities
-    }
-
     /// The full record for a capability: declaration, owner, and availability.
     pub fn record(&self, id: &CapabilityId) -> PluginResult<CapabilityRecord<'_>> {
         let owner = self.capabilities.owner(id)?;
@@ -809,7 +805,7 @@ mod tests {
             1,
             "the rejected plugin must not be registered"
         );
-        assert_eq!(m.capabilities().len(), 1);
+        assert_eq!(m.records().len(), 1);
     }
 
     #[test]
@@ -843,7 +839,7 @@ mod tests {
                 && challenger.as_str() == "tool.calculator_b"
         ));
         assert_eq!(manager.plugins().len(), 1);
-        assert_eq!(manager.capabilities().len(), 1);
+        assert_eq!(manager.records().len(), 1);
     }
 
     #[test]
@@ -872,7 +868,7 @@ mod tests {
             } if missing == capability
         ));
         assert!(manager.plugins().is_empty());
-        assert!(manager.capabilities().is_empty());
+        assert!(manager.records().is_empty());
     }
 
     #[test]
@@ -898,7 +894,7 @@ mod tests {
             } if missing == capability
         ));
         assert!(manager.plugins().is_empty());
-        assert!(manager.capabilities().is_empty());
+        assert!(manager.records().is_empty());
     }
 
     #[test]
@@ -925,7 +921,7 @@ mod tests {
             } if undeclared == capability
         ));
         assert!(manager.plugins().is_empty());
-        assert!(manager.capabilities().is_empty());
+        assert!(manager.records().is_empty());
     }
 
     #[tokio::test]

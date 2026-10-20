@@ -119,7 +119,7 @@ impl PluginRegistry {
 ///
 /// An index over the manifests, never a copy of them.
 #[derive(Debug, Default, Clone)]
-pub struct CapabilityRegistry {
+pub(crate) struct CapabilityRegistry {
     owners: BTreeMap<CapabilityId, PluginId>,
 }
 
