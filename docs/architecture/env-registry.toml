@@ -16,7 +16,7 @@
 version = 1
 updated_at = "2026-10-20"
 
-# ADR-0004 §7.7/§7.8：kind=product 仅 direct: 证据（const/env::var/封装点）；test-only|derived 用 scan-only: 且 level=UNCLASSIFIED；derived 计数只减
+# R4b perception 整包归档（ADR-0005 §3）后清理孤儿登记：APEIRETH_ENABLE_PERCEPTION 的源码读取点随 crate 迁入 legacy/archived，登记表删除；entries 与 arch_guard env 口径对齐
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_"
@@ -731,16 +731,6 @@ purpose = "**W2 §4.2 旋钮** (2026-10-10, 默认关): partner 双向羁绊"
 level = "UNCLASSIFIED"
 status = "current"
 evidence = "direct:crates/adapters/cli/src/lib.rs:3135"
-
-[[entries]]
-name = "APEIRETH_ENABLE_PERCEPTION"
-default = "off"
-layer = "engine"
-owner = "apeireth-perception"
-purpose = "P-arch (2026-08-27): A3 Perception 0 装接口 (O-6 重构批次 Refactor-3). **O-6 重构**: trait 抽象层搬到 `apeireth-plugin` (foundation),"
-level = "UNCLASSIFIED"
-status = "current"
-evidence = "direct:crates/engine/perception/src/lib.rs:39;direct:crates/engine/perception/src/memory_link.rs:41;direct:crates/engine/perception/src/memory_link.rs:75"
 
 [[entries]]
 name = "APEIRETH_ENABLE_PERSONA_CONSOLIDATION"
