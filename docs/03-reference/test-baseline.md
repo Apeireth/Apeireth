@@ -12,11 +12,11 @@
 | 项 | 值 |
 |---|---|
 | **命令** | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| **结果** | **336 套件 / 9075 passed / 0 failed / 52 ignored**（产品面 0 失败；1 环境敏感 D27 已单跑/整跑复测绿，见注记） |
+| **结果** | **336 套件 / 9076 passed / 0 failed / 52 ignored**（权威绿跑；首轮 D27 环境敏感失败已复跑转绿，证据链见 §1 复测注记） |
 | **日期** | 2026-10-20 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **来源** | 生物机制族 W3.4 总装批本机全量实测（2026-10-20；命令同口径但加并发规避 `-j 1` + `RUST_TEST_THREADS=4`，原因见 D26；日志 `artifacts/wave-bio-w34-workspace-test.log`） |
+| **来源** | 第三线权威复跑（2026-10-20；同命令面 + 并发规避 `-j 1` + `RUST_TEST_THREADS=4`，原因见 D26；日志 `artifacts/wave-dts-authoritative-full-2026-10-20.log`，exit 0；首轮 W3.4 全量日志见 §1 复测注记） |
 
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
@@ -91,6 +91,15 @@
 > 单套件复跑均绿，产品面 0 失败）；最终权威绿跑 = **同命令 + -j 1 + RUST_TEST_THREADS=4
 > 降并发规避**，全 326 套件 0 失败。D26 记录于  0-backlog，彻底修需管理员移除保留区间
 > 或测试侧加 bind 重试。日志 `artifacts/wave-bio-w32f-workspace-test.log`。
+> **复测注记（2026-10-20，第三线权威复跑 / D27 证据链补全）**：生物机制族 W3.4 首轮全量日志
+> `artifacts/wave-bio-w34-workspace-test.log` 汇总 = 336 套件 / 9075 passed / **1 failed** / 52 ignored，
+> 失败帧 = `apeireth-core --lib` 的 `storage_atomic::tests::write_atomic_refuses_preexisting_tmp_name`
+> （D27 环境敏感；首轮 §1 曾以「产品面 0 失败」口径记 0 failed 但缺绿跑日志背书）。2026-10-20 第三线
+> 按同口径（`-j 1` + `RUST_TEST_THREADS=4`，`--no-fail-fast --all-targets --locked`）权威复跑 =
+> **336 套件 / 9076 passed / 0 failed / 52 ignored，exit 0**（该测试 `... ok`；+1 = 失败测试转绿）。
+> §1 改为绿跑口径 9076；首轮 9075 口径移入 §3 历史备查。日志
+> `artifacts/wave-dts-authoritative-full-2026-10-20.log`。
+
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |
@@ -107,6 +116,7 @@
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
+| 2026-10-20 | 336 套件 / 9075 passed / 1 failed / 52 ignored（产品面 0 失败） | 生物机制族 W3.4 首轮全量（D27 环境敏感 1 失败；非绿跑口径；第三线权威复跑 9076 绿后移入历史） |
 | 2026-10-19 | 326 套件 / 8889 passed / 0 failed / 52 ignored | 生物机制族 W3.3 批（§1 曾用，2026-10-20 W3.4 批刷新后移入历史） |
 | 2026-10-19 | 322 套件 / 8820 passed / 0 failed / 52 ignored | 生物机制族 W3.1 批（§1 曾用，2026-10-19 W3.2 批刷新后移入历史） |
 | 2026-10-19 | 322 套件 / 8652 passed / 0 failed / 52 ignored | 生物机制族 W1 批（§1 曾用，2026-10-19 W3.1 批刷新后移入历史） |
