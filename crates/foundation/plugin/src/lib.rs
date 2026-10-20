@@ -56,11 +56,13 @@ pub mod capability;
 pub mod credentials;
 pub mod error;
 pub mod experience;
+pub mod extension;
 pub mod llm_factory;
 // O-6 归位 (2026-09-08): plugin LlmFactory → orchestration 镜像 trait 桥.
 // 桥归 plugin (依赖 orchestration 且拥有 plugin 侧 trait), 单一事实源,
 // CLI/gateway/测试共用 (拒绝 composition root 各写一份的复制漂移).
 pub mod llm_orchestration_mirror;
+pub use extension::{ExtensionCatalog, ExtensionDescriptor, ExtensionKind};
 pub use llm_orchestration_mirror::MirrorLlmFactory;
 pub mod manager;
 pub mod manifest;
