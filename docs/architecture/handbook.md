@@ -89,7 +89,7 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 波 | 收口 | 结果 |
 |---|---|---|
 | **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03） |
-| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005/0006 已出；R4b 裁决（SDK 四孤岛 + perception 归档，执行待派）；14 键正式化（AGENTS/ROADMAP/契约）；R4a-1 门禁隔离落地（`gate_full.ps1` 待 Wave 2 收口实测耗时）；R1a 与生物线 W3.5 观测扩展合并中；生物线施工期 2 条尺寸 W1 待收口更新基线（env 已由 EXC-0001 抑制） |
+| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005/0006 已出；R4b 裁决（SDK 四孤岛 + perception 归档，执行待派）；14 键正式化（AGENTS/ROADMAP/契约）；R4a-1 门禁隔离落地；**R0 完成**（ARCHITECTURE.md 手写依赖表退役 → 生成物 + CI `--check`）；R1a 与生物线 W3.5 观测扩展合并中；守卫当前 0 违规、2 条可缩表项待 Wave 2 收口 |
 
 ## 9. 变更记录
 

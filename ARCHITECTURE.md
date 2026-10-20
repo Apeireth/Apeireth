@@ -33,17 +33,14 @@ apeireth/
 
 The root `Cargo.toml` is the only product Rust workspace. It contains thirty-one
 workspace members — thirty product crates plus the bench-only harness
-(`benches`, `publish = false`) — grouped by responsibility rather than
-development history:
+(`benches`, `publish = false`).
 
-| Group | Packages | Responsibility |
-| --- | --- | --- |
-| Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials`, `apeireth-orchestration` | stable types, wire contracts, plugin contracts, policy, credential resolution, orchestration |
-| Engine | `apeireth-runtime`, `apeireth-runtime-assembly`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory`, `apeireth-perception`, `apeireth-organ`, `apeireth-guard` | mechanism kernel, concrete production assembly, provider adapters, persistence, memory, perception, and organ domains, plus the behavior-chain safety guard (`crates/engine/guard`, added by the 2026-10-06 collaborator batch) |
-| Capabilities | `apeireth-tools-canonical` | built-in tools and the single process-execution boundary |
-| Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk`, `apeireth-tui` | HTTP gateway, command-line entry point, SDK surface, terminal cockpit (full-screen TUI client) |
-| Image family | `apeireth-image-core` (interface layer) + 10 vendored crates (`crates/engine/image/{core,geom,cms,color,raster,doc,vector,compose,algo,codecs,psd}`) | image engine consumed by `tool.image_ops`: controlled decode, pixel geometry/filters, layer compositing, layered-document probing (added 2026-10-18, +11 members) |
-| Bench harness | `benches` | benchmark reproduction harness (workspace member, not a product crate) |
+**结构/依赖表已退役为生成物（R0，2026-10-20）**：层→crate 清单、118 条生产依赖边、
+层方向判定、装配根登记全部由
+[docs/architecture/ARCHITECTURE.generated.md](docs/architecture/ARCHITECTURE.generated.md)
+从 [contract.toml](docs/architecture/contract.toml) + `cargo metadata` 生成；
+CI 用 `scripts/arch_doc.py --check` 拦漂移。本文件只保留人读叙述与所有权边界——
+**依赖边以生成物为准，禁止在此手写第二份**（历史教训：本文件曾声明 32 条边，实测 118 条）。
 
 `frontend/companion-desktop/src-tauri` has its own workspace and is deliberately
 not a member of the root workspace. `legacy/` is reference material only and is
@@ -53,42 +50,18 @@ pre-freeze cleanup.
 
 ## Dependency direction
 
-Dependencies flow inward toward stable contracts and downward through the
-runtime layers:
+Dependencies flow inward toward stable contracts and downward through the runtime layers.
+The **authoritative** production edge list and layer-direction verdict are generated in
+[`ARCHITECTURE.generated.md`](docs/architecture/ARCHITECTURE.generated.md)
+(2026-10-20 实测：31 members / 118 production edges)。手改该生成物或在此手写第二份依赖表
+均视为契约违规：增删依赖边的唯一方式是改代码 + `Cargo.toml`，然后由 `arch_guard` 与
+`arch_doc --gen` 反映。
 
-```text
-foundation/core ──┐
-foundation/protocol ──┼──> foundation/plugin/governance/credentials
-                     │
-engine/storage ──────┼──> engine/memory
-                     └──> engine/provider ───────────┐
-engine/runtime ──────────────────────────────────────┼──> adapters/gateway
-engine/runtime-assembly ──> runtime + memory/organ/  │
-                             storage/tools ──────────┘
-capabilities/tools ─────────────────────────────────┘
-adapters/cli ──> runtime-assembly + gateway
-adapters/sdk ──> protocol
-```
+人工边界规则（生成器表达不了的部分，仍需人守）：
 
-The effective package edges are:
-
-```text
-governance -> core
-protocol -> core
-plugin -> core, protocol
-memory -> storage, core
-provider -> core, plugin, protocol
-tools-canonical -> core, plugin, protocol
-runtime -> core, governance, plugin, protocol
-runtime-assembly -> runtime, memory, organ, storage, tools, provider
-gateway -> core, protocol, runtime
-cli -> core, gateway, plugin, provider, runtime, tools-canonical
-sdk -> protocol
-```
-
-Foundation packages do not depend on adapters. Runtime owns orchestration and
-abstract ports; runtime-assembly owns concrete cognitive/tool/storage wiring.
-Gateway and CLI translate external requests and do not create a second runtime.
+- foundation 包不依赖 adapters；
+- runtime 拥有编排与抽象端口；runtime-assembly 拥有具体装配；
+- gateway / CLI 只做外部请求翻译，不创建第二个 runtime。
 
 ## Ownership boundaries
 
