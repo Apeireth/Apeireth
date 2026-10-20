@@ -158,3 +158,11 @@ purpose_fragments = 0，且全表 TODO-OWNER/UNCLASSIFIED 不增加。
 `APEIRETH_REG_APEIRETH_CORE_A/B` → `kind="test-only"`、evidence `scan-only:`（测试夹具）。
 
 **`arch_guard` 扫描口径不改**（不为数据形状改规则）；归类由登记表承担，守卫只看"名是否登记"。
+
+### 7.9 架构线接管裁决（2026-10-20，效率线收尾后 4 项）
+
+1. **`APEIRETH_MASTER_TOKEN` evidence**：本仓无 direct 读取点（仅 `gate.rs:53` 文档 + workspace 外 companion 消费）。禁止补假 direct/假 const。**新增受限证据形态 `external: <仓库外/workspace 外消费点>`**（仅限产品开关 + 外部消费者场景）：须附 companion 侧 `路径:行`；当前维持 `product + scan-only + PENDING` 标签。**Wave 3 收口前**必须落 `external:` 证据，否则删除登记（同批处理 `arch_guard` 注释扫描口径，不得永久 PENDING）。
+2. **derived 确认**：登记表实有 **10 条** derived（`ANTHROPIC_`/`API_`/`DISABLE_`/`ENABLE_`/`QUOTA_MAX_` 5 条前缀 + `TUNE_` 组 5 条）；**全部确认有效**（CLOSEOUT 所指 5 条 = TUNE 组）。按 §7.8 只减：补显式 const 升 direct 或确认非开关后删除。
+3. **R3c 转 blocking**：按原批准计划，**2026-11-03 到期后**由架构线 review（删 `continue-on-error` + 缺失项清单样例 + `current_wave` 同步）再转；不提前。
+4. **matrix MCP advisory**：`APEIRETH_ENABLE_MCP` 已有 env-registry 登记，但 matrix 缺行属**生成物未覆盖**——**不手工补 matrix §0.1/§0.2**（会漂移）；纳入 DTS P1b 生成清单（生成时自动从 env-registry 带出）；紧急手改须标注并由生成器覆盖验证。
+5. **效率线交付报告**：`artifacts/third-line-delivery-report-2026-10-20.md` 按本仓 artifacts 惯例**保持 untracked**，不额外 commit；长期交接真源 = 已入库的 `docs/status/CLOSEOUT-2026-10-20.md`（§5 移交项本裁决即接管记录）。
