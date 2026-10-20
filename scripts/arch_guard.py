@@ -388,12 +388,25 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
         if entry.startswith("devcycle ") and entry[9:] not in dev_cycles:
             rep.add_stale(entry)
 
-    # 4. env 开关
+    # 4. env 开关（基线 + 登记表双通道；登记表由 R3a 建立，见 ADR-0004）
     env_names, defs = scan_env_and_defs(roots, workspace_crates)
     rep.metrics["env_names"] = len(env_names)
+    registered: set[str] = set()
+    reg_rel = str(contract.env.get("registry_file", "")).strip()
+    if reg_rel:
+        reg_path = Path(reg_rel)
+        if not reg_path.is_absolute():
+            reg_path = ROOT / reg_path
+        if reg_path.exists():
+            reg_data = _read_toml(reg_path)
+            for entry in reg_data.get("entries", []):
+                if isinstance(entry, dict) and entry.get("name"):
+                    registered.add(str(entry["name"]))
+    rep.metrics["env_registered"] = len(registered)
     for name in sorted(env_names):
-        if f"env {name}" not in baseline:
-            rep.violation(3, "env", f"env {name}", "新增 APEIRETH_* 开关未登记（需默认关+零变化测试+登记）")
+        if f"env {name}" in baseline or name in registered:
+            continue
+        rep.violation(3, "env", f"env {name}", "新增 APEIRETH_* 开关未登记（需默认关+零变化测试+登记）")
     for entry in sorted(baseline):
         if entry.startswith("env ") and entry[4:] not in env_names:
             rep.add_stale(entry)
@@ -496,6 +509,21 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
                       "发版冻结窗口不允许任何活跃例外")
     rep.metrics["exceptions_active"] = len(active)
 
+    # 8.5 例外抑制: 已登记、未到期且指纹匹配的违规从结果扣除（审计记录在 notes）。
+    #     只有可债务化的类别可被抑制；exception-* / concept-canonical / ext / cycle 不允许。
+    suppressible = {"edge", "direction", "env", "size", "duplicate"}
+    active_by_fp = {e["fingerprint"]: e for e in exceptions if int(e["expires_wave"]) >= wave}
+    if active_by_fp:
+        kept: list[dict] = []
+        for v in rep.violations:
+            exc = active_by_fp.get(v["fingerprint"])
+            if exc is not None and v["category"] in suppressible:
+                rep.note(f"例外抑制: {v['fingerprint']} <- {exc['id']} "
+                         f"(owner={exc['owner']}, expires_wave={exc['expires_wave']})")
+            else:
+                kept.append(v)
+        rep.violations = kept
+
     # 9. 装配根 / flagged / locked 文件存在性
     for root in contract.composition_roots:
         path = ROOT / "crates"
@@ -523,10 +551,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--report", action="store_true")
     parser.add_argument("--update-baseline", action="store_true")
+    parser.add_argument("--print-vendored", action="store_true",
+                        help="输出契约 [vendored].image_family（供 gate 脚本生成 --exclude）")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     contract = load_contract(Path(args.contract))
+    if args.print_vendored:
+        for name in contract.data.get("vendored", {}).get("image_family", []):
+            print(name)
+        return 0
     if args.exceptions:
         contract.exceptions_cfg["register_file"] = args.exceptions
     baseline_path = Path(args.baseline)

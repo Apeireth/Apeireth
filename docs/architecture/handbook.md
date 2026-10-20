@@ -29,8 +29,10 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 规则体系 | **已生效**（ADR-0001，commit `8bfefb1b`）；灰度 report-only 至 **2026-11-03** |
 | 三线协作契约 | **已生效**（commit `8e9dd3ae`） |
 | 目标架构 v1 | **Accepted**（ADR-0002，2026-10-20 owner 拍板）；Wave 2 单项 ADR 已出：0003 R1a / 0004 R3 / 0005 R4a |
-| 架构波次 | `current_wave = 1`（Wave 1 = 规则落地批；Wave 2 待启动：R0 剩余 + R1a + R3a + R4a） |
+| 架构波次 | `current_wave = 2`（Wave 1 规则落地已收口；Wave 2 进行中：R0 剩余 + R1a 合并生物线 W3.5 + R3a + R4a-1） |
+| Wave 2 已落 | R4a-1：`scripts/gate_full.ps1`（契约驱动 exclude）+ `.github/workflows/image-family.yml`；`arch_guard` 补例外抑制/登记表双通道/`--print-vendored` |
 | 待 owner 裁决 | ADR-0005 R4b（SDK 孤岛归档 vs 接线；perception 去留） |
+| 在途违规（灰度期不阻断） | 生物线施工期 3 条：`APEIRETH_ENABLE_BIO_LIFECYCLE` 未登记（W3）+ `production.rs`/`self_status_source.rs` 尺寸增长（W1×2）；Wave 2 收口随基线更新/登记处理 |
 | 基线 | 356 条（edge 118 / devcycle 1 / env 154 / size 70 / concept 6 / ext 7） |
 | 已登记的已知债务 | `contract.toml` `[flagged_edges]`（3 条）/ `[extension_debt]`（3 条）/ `[concepts].known_debt`（2 组）；target 均 `TODO-OWNER` |
 | 未完成项 | ADR-0002 裁决；R0 剩余（ARCHITECTURE 生成物/14 键表述/crate 口径）；R1a/R3/R4 单项 ADR；wiring ledger（R3） |
@@ -74,10 +76,21 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | `docs/adr/0001-*.md` | 规则体系裁决 |
 | `docs/adr/0002-*.md` | 目标架构 v1（Proposed） |
 | `scripts/arch_guard.py` / `scripts/arch-baseline.txt` | 守卫与棘轮基线 |
-| `.github/workflows/arch-guard.yml` | CI（report-only 至 2026-11-03） |
+| `scripts/gate_full.ps1` | 全量门禁（主 workspace 排除 vendored 图像家族 + 图像独立门禁，清单读契约） |
+| `docs/architecture/env-registry.toml` | 开关登记表（R3a，格式由架构线定、效率线播种） |
+| `.github/workflows/arch-guard.yml` | 架构守卫 CI（report-only 至 2026-11-03） |
+| `.github/workflows/image-family.yml` | 图像家族独立 CI（R4a-1） |
 
-## 8. 变更记录
+## 8. 波次日志
+
+| 波 | 收口 | 结果 |
+|---|---|---|
+| **W1 规则落地** | 2026-10-20 | 契约/守卫/基线 356 条/ADR-0001/协作契约落地；`arch_guard --strict` 0 违规；进入灰度（report-only 至 2026-11-03） |
+| **W2 架构手术（进行中）** | — | ADR-0002 Accepted；ADR-0003/0004/0005 已出；R4a-1 门禁隔离落地；R1a 与生物线 W3.5 观测扩展合并中；生物线施工期 3 条在途违规待收口处理 |
+
+## 9. 变更记录
 
 | 日期 | 变更 | 证据 |
 |---|---|---|
 | 2026-10-20 | 手册 v1（规则落地同日） | commit `8bfefb1b` / `8e9dd3ae` |
+| 2026-10-20 | v1.1：Wave 2 单项 ADR + R4a-1 门禁隔离（gate_full/image CI）+ arch_guard 例外抑制/登记表双通道 | commit 待补，见 `git log` |

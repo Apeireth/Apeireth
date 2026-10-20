@@ -1,0 +1,45 @@
+# 图像家族独立 CI（ADR-0005 R4a-1）
+# 主门禁已排除图像家族（scripts/gate_full.ps1）；本 workflow 单独守图像家族。
+name: image-family
+
+on:
+  pull_request:
+    paths:
+      - "crates/engine/image/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "docs/architecture/contract.toml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/engine/image/**"
+  schedule:
+    - cron: "0 18 * * *"   # 每日 UTC 18:00（= 北京时间 02:00）夜间跑
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-gate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+
+      - name: Image family gate (test + clippy)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/gate_full.ps1 -ImageOnly
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-family-gate-log
+          path: logs/gate-full.log
+          if-no-files-found: ignore

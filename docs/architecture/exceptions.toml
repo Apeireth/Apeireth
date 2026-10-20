@@ -28,4 +28,17 @@ updated_at = "2026-10-20"
 # removal_task = "00-backlog#D27 / ADR-0003 §迁移步骤 4"
 # adr = ""                      # weight>=10 时必填 docs/adr/000X-*.md 路径
 
-exceptions = []
+# --- 生效例外 ---
+# EXC-0001（首个真实例外）: 生物线在途 W3.5/bio_lifecycle 新开关未登记。
+# 依据: bio_lifecycle.rs:32-48 自述默认关/fail-closed/三层零变化语义（源码文档为证）。
+# 移除: Wave 2 收口时转入 env-registry.toml（R3a）并删除本例外；零变化测试由生物线收口批提供。
+[[exceptions]]
+id = "EXC-0001"
+fingerprint = "env APEIRETH_ENABLE_BIO_LIFECYCLE"
+weight = 3
+owner = "bio-line"
+reason = "W3.5/bio_lifecycle 在途；开关默认关 fail-closed（源码 :32-48）；登记表 R3a 未建前先记例外"
+created_wave = 2
+expires_wave = 4
+removal_task = "Wave 2 收口: 转 env-registry.toml + 生物线零变化测试; 到期未清则 strict 红"
+adr = ""

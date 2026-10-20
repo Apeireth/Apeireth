@@ -1,0 +1,28 @@
+# ============================================================================
+# env 开关登记表（Env Registry）— ADR-0004 R3a
+# ============================================================================
+# 用途: 唯一开关登记真源。`arch_guard` 对 APEIRETH_* 的判定 = 基线 OR 本表。
+#       R3a 阶段由效率线从实测 154 条自动播种；`owner = "TODO-OWNER"` 起步，
+#       每波收口要求 TODO-OWNER 数量下降（记分牌项，见 integration-plan）。
+# 每条字段: name / default / layer / owner / purpose / level / status
+#   level  : PRODUCTION WIRED | IMPLEMENTED | NOT IMPLEMENTED | DEFAULT ON 白名单说明
+#   status : current | migrated | deprecated
+# 纪律: 新增开关必须先登记（默认关 + 关时零变化测试），否则 arch_guard W3 违规；
+#       deprecated 的开关不得再出现在 src（R3c 守卫收紧）。
+# 生成/播种: 效率线维护（R3a）；格式由架构线定（ADR-0004），变更需 ADR。
+# ============================================================================
+
+version = 1
+updated_at = "2026-10-20"
+
+# 示例（取消注释并填实后生效）:
+# [[entries]]
+# name = "APEIRETH_ENABLE_BIO_LIFECYCLE"
+# default = "off"
+# layer = "runtime-assembly"
+# owner = "bio-line"
+# purpose = "SG-18 生命周期接线（默认关，关时逐字节零变化）"
+# level = "PRODUCTION WIRED"
+# status = "current"
+
+entries = []

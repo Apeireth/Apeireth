@@ -23,8 +23,8 @@ status = "adjudicated"            # 规则体系已裁决生效（ADR-0001）
 status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；目标架构 v1 已裁决（ADR-0002）；Wave 2 单项 ADR-0003/0004/0005 已出；R4b 等 owner 裁决"
 adjudication = "owner 授权代裁 2026-10-20（'你了解项目全貌做出判断就行'）；决策记录见 docs/adr/0001-adopt-architecture-contract.md"
 target_architecture = { adr = "docs/adr/0002-target-architecture-v1.md", status = "accepted-2026-10-20", waves = "ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a（Wave 2）" }
-current_wave = 1                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
-wave_note = "Wave 1 = 契约规则落地批 (纯新增+3 处小改, 0 源码改动, 0 LOCKED 触碰; 例外预算按 ADR-0001 定稿)"
+current_wave = 2                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
+wave_note = "Wave 2 = ADR-0002 Accepted; ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a 已出; R4a-1 门禁隔离落地; R1a 与生物线 W3.5 观测扩展合并中"
 rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
 
 [workspace]
@@ -172,6 +172,7 @@ target = "R2 (单项 ADR 待出, Wave 3)"
 policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
 max_distinct_names = 160            # 棘轮: 只减不增（按 src 口径）
 baseline_file = "scripts/arch-baseline.txt"
+registry_file = "docs/architecture/env-registry.toml"   # R3a 登记表（ADR-0004）; 登记名无需进基线
 # 目标: env 读取收敛到 config 模块; 现状散在 148 文件 (基线登记, 只减不增)。
 allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置卡
 
