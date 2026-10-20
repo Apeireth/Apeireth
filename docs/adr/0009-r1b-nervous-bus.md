@@ -170,10 +170,13 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
    - `nervous_snapshot.rs` 加 3 条校验单测 + 更正 3 行漂移；`wiring_report.py --verify` 绿。
    - 验证：`cargo test -p apeireth-runtime-assembly --lib`；`cargo clippy -- -D warnings`；`cargo fmt --check`；
      `python scripts/arch_guard.py --report` VIOLATIONS 0 / STALE 0。
-3. **R1b-2 机制订阅迁移 + lifecycle probe**（生物线主笔，交接条件：其当前 WIP 已提交且全量绿）
+3. **R1b-2 机制订阅迁移 + lifecycle probe**（生物线主笔，交接条件：其当前 WIP 已提交且全量绿；
+   交接单：`docs/architecture/r1b-2-handoff-2026-10-20.md`）
    - bio_tone / bio_lifecycle / care_heartbeat / bio_circadian / play / quorum 改订阅；审批面改 publish；
      lifecycle probe 注册；台账 wiring 字段更新为 bus 路径。
    - 验证：每模块默认关零变化测试；`bio_*` 集成测试；全量门禁由全量线执行并广播。
+   - 批次拆分（交接单 §3）：R1b-2a bio_tone 订阅 → R1b-2b bio_lifecycle 订阅 + probe → R1b-2c 审批面
+     publish；care/circadian/play/quorum 的消费面迁移依赖 R1b-3 信号源，不在本批。
 4. **R1b-3 缺失信号源**（生物线）
    - ritual / sleep pressure / scar learn / session event source；补不了的保留 NotWired + reason。
    - 验证：每个信号源有生产 publish 点 + 订阅测试；台账逐行如实。
