@@ -597,15 +597,10 @@ dependencies = [
 name = "apeireth-sdk"
 version = "2.0.0-rc.4"
 dependencies = [
- "aes",
  "anyhow",
- "apeireth-core",
  "apeireth-protocol",
  "async-trait",
- "base64",
  "cbindgen",
- "chrono",
- "fs-err",
  "futures",
  "napi",
  "napi-derive",

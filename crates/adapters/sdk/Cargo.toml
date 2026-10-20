@@ -9,9 +9,8 @@ repository.workspace = true
 description = "Apeireth 客户端 SDK（阶段 6 stub: 6 工具白名单 + 鉴权 5 组件 + WS 8 帧协议类型已就位; 真实 HTTP/WS 待 R21 接, 显式 `unimplemented!()` 守门. 0 PyO3, 0 .venv, 纯 Rust）"
 
 [dependencies]
-# 2026-10-20 R4b: lark 适配族已迁 `legacy/archived/sdk-islands/lark`。下列依赖现仅归档岛
-# 使用，因本批硬约束 0 触碰根 Cargo.lock（删除会强制锁文件变更）而保留声明：
-# chrono / aes / base64 / apeireth-core / fs-err。恢复 lark 时 0 补依赖；依赖清理批统一移除。
+# 2026-10-20 R4b: 四岛已迁 `legacy/archived/sdk-islands/`; 依赖清理批已移除仅归档岛使用的
+# chrono / aes / base64 / apeireth-core / fs-err（恢复 lark 时按 MANIFEST 补回）。
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -22,16 +21,7 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 url = "2"
-# 归档面遗留：chrono 原用于 lark calendar/approval（见上方依赖说明）
-chrono = { workspace = true }
 apeireth-protocol = { path = "../../foundation/protocol" }
-# 归档面遗留：lark webhook 的 AES-256-CBC 解密 + base64（见上方依赖说明）
-aes = "0.8"
-base64 = "0.22"
-# 仓库统一文件 IO 约定 (clippy.toml: std::fs → fs_err)
-fs-err = { workspace = true }
-# 归档面遗留：lark 客户端复用 storage_atomic + deadline（见上方依赖说明）
-apeireth-core = { path = "../../foundation/core" }
 
 # R122-8 (Multi-Lang SDK skeleton, 2026-08-10)
 # cfg-gated optional deps, 跨语言桥 feature 默认关 (0 装, O-5 实质守门 per R25)
