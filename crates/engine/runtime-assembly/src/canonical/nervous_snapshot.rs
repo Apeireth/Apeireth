@@ -445,6 +445,11 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
                 state: SignalState::Wired,
                 reason: None,
             },
+            SignalSpec {
+                id: "approval_social",
+                state: SignalState::Wired,
+                reason: None,
+            },
         ],
         gaps: &["5/9 档事件源已接（结局映射 3 + 工具首见 Novelty + 人批/人拒）；其余 4 档仅显式注入"],
     },
