@@ -194,7 +194,12 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
         ))
         .await;
     assert!(matches!(governance_verdict.decision, Decision::Deny { .. }));
-    assert_eq!(governance_verdict.hook, "permission_governance");
+    // R8-B2 后治理裁决统一经 GovernanceChain 单入口, verdict 元数据如实标注
+    // `governance_chain` (R8-B1 适配器交付映射, 见
+    // docs/architecture/r8-b-entry-convergence-design.md §7); 裁决行为不变
+    // (tool.shell 仍拒), 四态判定种类与旧入口等价真账见
+    // tests/governance_chain_equivalence.rs。
+    assert_eq!(governance_verdict.hook, "governance_chain");
 
     let CanonicalCliTurn::Completed(outcome) =
         execute_canonical_cli_turn(&runtime, "hi", None, None)

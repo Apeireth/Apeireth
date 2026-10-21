@@ -13,6 +13,7 @@ pub mod care_heartbeat;
 // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
 pub mod exposure;
 pub mod gateway_panels;
+pub mod governance_chain;
 pub mod keyring_bootstrap;
 pub mod onboarding;
 pub mod portable_bundle;
@@ -1556,7 +1557,7 @@ async fn build_canonical_runtime_with_parts(
             Arc::new(governance),
             Arc::clone(sessions.store()),
         );
-    builder = builder.with_governance(Arc::new(preset_governance));
+    builder = builder.with_governance(governance_chain::adapt_gate(Arc::new(preset_governance)));
     // 生物机制族 W3.3: 痛觉评估（默认关；`APEIRETH_ENABLE_BIO_PAIN=1` 才开
     // 观测记账；只观测不改变错误/重试/错误处理决策，真账见 runtime 侧测试）。
     if std::env::var("APEIRETH_ENABLE_BIO_PAIN")
