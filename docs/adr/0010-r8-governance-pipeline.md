@@ -216,3 +216,18 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
 - **实测**：`cargo test -p apeireth-governance --lib --locked -j 2` = 204 passed / 0 failed
   （其中 `chain::` 10 passed）；`cargo clippy -p apeireth-governance --all-targets --locked -- -D warnings`
   exit 0；`cargo fmt -p apeireth-governance --check` 0 diff；0 新外部 dep、0 新开关、0 新 crate。
+
+### 2026-10-21（R8-B 设计候选登记，未实施）
+
+- **交付**：`docs/architecture/r8-b-entry-convergence-design.md` —— R8-B 入口收敛设计候选。
+  实测确认 `GovernancePipeline` 已实现 `GovernanceHook`（`governance/src/lib.rs:563-604`），
+  故 chain 的 Gate 面无需改 governance crate；真正的收敛点在**装配根**：
+  CLI `build_production_governance_parts_from_env`（`cli/src/lib.rs:1188`）→
+  `PermissionPresetGovernanceHook`（`runtime-assembly/src/canonical/permission_preset.rs:129`）
+  → `Runtime::with_governance`（`runtime/src/canonical/runtime.rs:801`）。
+- **候选方案**：A 入口链 + 保留动作级 pipeline（不推荐，重复评估）；B 新增
+  `GovernanceHook` 适配器把 chain 变成 runtime 唯一治理面（推荐，runtime 零改动、
+  回滚=换回 `Arc<GovernancePipeline>`）；C 先落持久审计、收敛延后。
+- **如实 IS NOT IMPLEMENTED**：R8-B/C/D 仍未实施；本记录只登记设计候选与证据命令，
+  未写任何生产代码。未决问题（动作级审计体积、持久 sink 介质、IM 审计对是否并入
+  `AuditHashChain`、多签来源、与生物线 R1b-2c 同窗口施工）待 owner/安全线裁决。
