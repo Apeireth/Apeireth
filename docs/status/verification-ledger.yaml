@@ -15,7 +15,7 @@
 #   自动漂移检查（新 unsafe crate / 新形式化目标未登记即红）属效率线 R6-C/D 后续。
 # - 只读校验器已落：`python scripts/verify_ledger.py`（schema / 证据路径存在性 /
 #   signoff 零装下限 / summary 一致性 / id 与同层唯一；退出码 0 通过 1 有错）。
-#   写入脚本与 docs_truth 集成仍归效率线 R6-C。
+#   写入脚本仍归效率线 R6-C；docs-truth.yml 门禁步骤已接（2026-10-21 E4）。
 # - 只登记有证据的条目；未运行 = NOT RUN，未覆盖 = NOT COVERED，禁止预填。
 
 version: 1

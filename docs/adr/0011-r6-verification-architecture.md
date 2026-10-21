@@ -171,9 +171,11 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
       可追溯性 **NOT MET**，不勾选、不伪造 CI 结果）
 - [x] `docs/status/formal-coverage.md` 存在并登记 Kani 终局矩阵 11 件 / TLA / Miri /
       未覆盖边界（D6；2026-10-21 由架构线落，并订正 workflow「22 件」旧口径为 11 件）
-- [ ] `docs_truth.py --verify --check` 覆盖 ledger 校验后 exit 0（R6-C 脚本化，归效率线；
-      独立只读校验器 `scripts/verify_ledger.py` 已于 2026-10-21 由架构线落，实测 exit 0，
-      docs_truth 侧集成仍待效率线）
+- [x] 文档真源门禁覆盖 ledger 校验（R6-C 脚本化，归效率线；**2026-10-21 E4 落地**：
+      `docs-truth.yml` 增 setup-python + `python scripts/verify_ledger.py --quiet` 步骤，
+      本地/CI 口径 exit 0；`docs_truth.py` 本体不内嵌（保留其无 PyYAML 回退模式），
+      门禁真源 = CI 步骤；本地实测 exit 0（远端 CI 首跑仍受 E3 同源阻塞：本地提交未推），
+      负向测试：改坏 summary 计数 / evidence 路径 → exit 1 → 恢复 → exit 0）
 
 ## 7. 后果（Consequences）
 
@@ -238,3 +240,13 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
   实跑约 14.8 分钟、非夜间 CI）、连续绿 0 次/绿分 0、失败兜底与通知未验证。`nightly-full.yml`
   本地 `yaml.safe_load` OK（on=schedule/workflow_dispatch，job=nightly-full-gate）。
   E4（ledger 门禁）不受阻，照做；不推远端、不改 `rust.yml` PR 门禁口径。
+
+- **2026-10-21（E4 四层验收台账接门禁，效率线重启批）**：`docs-truth.yml` 增
+  `setup-python@v5` + `python -m pip install --quiet pyyaml` +
+  `python scripts/verify_ledger.py --quiet` 步骤，paths 增 `scripts/verify_ledger.py`；
+  门禁真源 = CI 步骤（`docs_truth.py` 本体不内嵌该校验，保留其无 PyYAML 回退模式）。
+  本地负向测试（2026-10-21 实跑）：基线 `[verify_ledger] OK: errors=0 warnings=0 infos=5`
+  exit 0；改 `summary.entries 5→6` → `summary.entries=6 与实况 5 不一致` exit 1；恢复后
+  evidence 路径改不存在 → `V-formal-002: evidence 路径不存在` exit 1；恢复 → exit 0、
+  文件 SHA-256 与备份一致、`git diff` 仅头部注释行。**signoff 0 条不变、不代签**；
+  owner 签核与阶段 6 演练仍 NOT RUN / NOT MET。
