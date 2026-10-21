@@ -106,6 +106,10 @@ pub mod skill;
 // 缺失字段显式 null + 原因, 不整帧失败。
 pub mod self_status;
 mod sensitive_path;
+// D26 (2026-10-21): 测试共享 bind 重试助手 (仅 Windows WSAEACCES 10013 有界
+// 重试); 集成测试经 `tests/common/mod.rs` 的 `#[path]` 引入同一份源文件。
+#[cfg(test)]
+pub(crate) mod test_support;
 // 创作工具面 K3: 表格操作 (`tool.sheet_ops`, 受控读写族) —— 闭合操作词表
 // (read/summary/filter/sort/aggregate/formula 读 + export_csv/export_xlsx 写,
 // 变换动作带 output 即写) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表) +

@@ -22,8 +22,12 @@ use apeireth_tools_canonical::{
 };
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
+
+// D26 (2026-10-21): 回环 bind 走共享重试助手 (仅 Windows WSAEACCES 10013 有界
+// 重试), 见 `tests/common/mod.rs` 与 `src/test_support.rs`。
+mod common;
 
 // ---------------------------------------------------------------------------
 // mock 端点 (与受控 fetch 集成测试同款回环服务器)
@@ -34,7 +38,9 @@ where
     F: FnOnce(TcpStream) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,
 {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = common::bind_loopback_ephemeral()
+        .await
+        .expect("bind loopback listener");
     let port = listener.local_addr().unwrap().port();
     let handle = tokio::spawn(async move {
         let (socket, _) = listener.accept().await.unwrap();

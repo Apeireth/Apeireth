@@ -22,8 +22,12 @@ use apeireth_tools_canonical::{
 };
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
+
+// D26 (2026-10-21): 回环 bind 走共享重试助手 (仅 Windows WSAEACCES 10013 有界
+// 重试), 见 `tests/common/mod.rs` 与 `src/test_support.rs`。
+mod common;
 
 // ---------------------------------------------------------------------------
 // mock 端点 (回环服务器, 可服务多次)
@@ -68,7 +72,9 @@ const RSS_TWO: &[u8] = br#"<?xml version="1.0"?>
 
 /// 服务 `times` 次同款 RSS 响应 (每个拉取一次连接)。
 async fn serve_rss(times: usize) -> (u16, JoinHandle<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = common::bind_loopback_ephemeral()
+        .await
+        .expect("bind loopback listener");
     let port = listener.local_addr().unwrap().port();
     let handle = tokio::spawn(async move {
         for _ in 0..times {
@@ -90,7 +96,9 @@ async fn serve_rss(times: usize) -> (u16, JoinHandle<()>) {
 
 /// 接受连接但永不响应 (受控通道超时 = 拉取失败真因)。
 async fn serve_silent_forever() -> (u16, JoinHandle<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = common::bind_loopback_ephemeral()
+        .await
+        .expect("bind loopback listener");
     let port = listener.local_addr().unwrap().port();
     let handle = tokio::spawn(async move {
         loop {

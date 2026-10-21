@@ -811,7 +811,9 @@ mod tests {
 
     #[tokio::test]
     async fn pinned_resolver_contacts_validated_address() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener = crate::test_support::bind_loopback_ephemeral()
+            .await
+            .expect("bind loopback listener");
         let port = listener.local_addr().unwrap().port();
 
         let server = tokio::spawn(async move {
@@ -861,7 +863,9 @@ mod tests {
 
     #[tokio::test]
     async fn redirect_to_denied_destination_is_rejected_before_contact() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener = crate::test_support::bind_loopback_ephemeral()
+            .await
+            .expect("bind loopback listener");
         let port = listener.local_addr().unwrap().port();
 
         // 首跳 = 入表的 IP 字面量 (M12 语义: 显式入表即信任, 会被真实联系),
@@ -905,7 +909,9 @@ mod tests {
 
     #[tokio::test]
     async fn direct_ip_transport_works() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener = crate::test_support::bind_loopback_ephemeral()
+            .await
+            .expect("bind loopback listener");
         let port = listener.local_addr().unwrap().port();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
@@ -989,7 +995,9 @@ mod tests {
     async fn allowlisted_hostname_pointing_at_loopback_is_denied_before_contact() {
         // 端到端: allowlist 主机名 + 桩 resolver 指回环 —— 在联系服务器之前
         // 就被 validate_resolved 拒绝 (M12 纵深)。
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener = crate::test_support::bind_loopback_ephemeral()
+            .await
+            .expect("bind loopback listener");
         let port = listener.local_addr().unwrap().port();
         // 断言服务器永不被联系: 直接丢弃 listener, 若有连接会即刻 RST。
         drop(listener);
