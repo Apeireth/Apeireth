@@ -15,6 +15,10 @@
 | `sec.linux_containment` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `d2621788` | 2026-11-20 |
 | `sec.storage_envelope_crypto` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
+| `gov.chain_skeleton` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
+| `gov.chain_hook_adapter` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
+| `gov.reflection_queue` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
+| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `sec.sql_readonly_gate` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |

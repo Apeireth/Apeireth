@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 59283e6b11a42702ed617cf5b2565d5e91d068574742e422816aaabeae93f438
-claims_total: 20
+claims_sha256: 1912958e52a5b422da5a0c066cb07963d251147b2eb07f23717f8f215b7ef758
+claims_total: 24
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -193,6 +193,68 @@ items:
       claims_id: "sec.storage_envelope_crypto"
     gaps:
       - "未达 PRODUCTION WIRED：分区 DEK + AES-256-GCM 信封 + KEK 三槽包裹 + 备份恢复不变量测试；会话/记忆读写路径生产接线未在本批（cli/runtime 未见消费）——0 装口径：IMPLEMENTED，不称 PRODUCTION WIRED。"
+  - id: "gov.chain_skeleton"
+    capability: "R8-A 治理链六段顺序执行骨架——库内可跑，生产零调用"
+    implemented:
+      sources:
+        - "crates/foundation/governance/src/chain.rs"
+        - "crates/foundation/governance/src/lib.rs"
+    wired:
+      production_refs:
+        - "crates/foundation/governance/src/chain.rs"
+        - "crates/foundation/governance/src/lib.rs"
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/foundation/governance/src/chain.rs"
+      claims_id: "gov.chain_skeleton"
+    gaps:
+      - "未达 PRODUCTION WIRED：R8-A fd74a669：六段顺序执行 + 四注入端口（占位签名 fail-closed）；git grep 生产侧零调用；R8-B2/B3 未落地，治理面仍未进生产调用链。"
+  - id: "gov.chain_hook_adapter"
+    capability: "R8-B1 ChainGovernanceHook 适配器——零生产接线"
+    implemented:
+      sources:
+        - "crates/foundation/governance/src/chain.rs"
+    wired:
+      production_refs:
+        - "crates/foundation/governance/src/chain.rs"
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/foundation/governance/src/chain.rs"
+      claims_id: "gov.chain_hook_adapter"
+    gaps:
+      - "未达 PRODUCTION WIRED：R8-B1 b6d902ce：把 chain 接入 GovernanceHook 面；未接到任何生产装配根（git grep 生产引用为空）；如实 IMPLEMENTED，不冒称 PRODUCTION WIRED。"
+  - id: "gov.reflection_queue"
+    capability: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
+    implemented:
+      sources:
+        - "crates/foundation/governance/src/chain.rs"
+    wired:
+      production_refs:
+        - "crates/foundation/governance/src/chain.rs"
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/foundation/governance/src/chain.rs"
+      claims_id: "gov.reflection_queue"
+    gaps:
+      - "未达 PRODUCTION WIRED：R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面，默认未装配到任何生产链 → 零行为变化。"
+  - id: "gov.chain_drill_ci"
+    capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，尚未首跑）"
+    implemented:
+      sources:
+        - ".github/workflows/rust.yml"
+    wired:
+      production_refs:
+        []
+    default_enabled: "n/a"
+    validated:
+      tests:
+        - "crates/foundation/governance/tests/governance_chain_drill.rs"
+      claims_id: "gov.chain_drill_ci"
+    gaps:
+      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤（allow/deny/require-approval 三路径）；本地等价命令 3 passed；远端 CI 尚未首跑（0 次），故仅登记 IMPLEMENTED 证据面。"
   - id: "sec.governance_chain_drill"
     capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
     implemented:
