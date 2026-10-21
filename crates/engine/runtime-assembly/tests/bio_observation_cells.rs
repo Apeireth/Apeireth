@@ -5,8 +5,8 @@
 //!    `mechanisms: null`，迟绑定槽不武装、一个 probe 都不调用；
 //! 2. 全开：装配根在模块安装后用同一份生产句柄填槽 →
 //!    `neuromodulation` / `circadian` / `ritual` 三格 `wired: true` 且带真值；
-//!    本装配观测面 wired 计数 = 10/14（未配任务板 ⇒ 承载力格不注册；练习开关未开），
-//!    其余格如实 `wired:false` + 真因；
+//!    本装配观测面 wired 计数 = 11/14（未配任务板 ⇒ 承载力格不注册；练习开关未开），
+//!    其余格如实 `wired:false` + 真因（上下文装配格已注册但策略开关关 ⇒ 单格 null）；
 //! 3. 只读：三格读数不含写动作字段，且 `tool.ritual_done` 账本在采帧前后字节不变；
 //! 4. 开关只认字面 `"1"`（`" 1 "` / `"true"` 等一律关，fail-closed）。
 //!
@@ -33,6 +33,7 @@ use serde_json::{json, Value};
 const NOW_MS: i64 = 1_700_000_000_123;
 const TONE_ENV: &str = "APEIRETH_ENABLE_BIO_TONE";
 const CARE_CANDIDATES_ENV: &str = "APEIRETH_ENABLE_BIO_CARE_CANDIDATES";
+const CONTEXT_POLICY_ENV: &str = "APEIRETH_ENABLE_BIO_CONTEXT_POLICY";
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -51,6 +52,7 @@ impl EnvSwitches {
         std::env::set_var(BIO_SELF_STATUS_ENABLE_ENV, "1");
         std::env::set_var(TONE_ENV, "1");
         std::env::set_var(CARE_CANDIDATES_ENV, "1");
+        std::env::set_var(CONTEXT_POLICY_ENV, "1");
         Self
     }
 
@@ -58,6 +60,7 @@ impl EnvSwitches {
         std::env::remove_var(BIO_SELF_STATUS_ENABLE_ENV);
         std::env::remove_var(TONE_ENV);
         std::env::remove_var(CARE_CANDIDATES_ENV);
+        std::env::remove_var(CONTEXT_POLICY_ENV);
         Self
     }
 }
@@ -67,6 +70,7 @@ impl Drop for EnvSwitches {
         std::env::remove_var(BIO_SELF_STATUS_ENABLE_ENV);
         std::env::remove_var(TONE_ENV);
         std::env::remove_var(CARE_CANDIDATES_ENV);
+        std::env::remove_var(CONTEXT_POLICY_ENV);
     }
 }
 
@@ -90,6 +94,7 @@ fn base_config(care: Option<PathBuf>) -> ProductionModulesConfig {
         preference_recall: false,
         self_assessment: false,
         care_schedule: care,
+        context_budget_chars: Some(24_000),
         ..ProductionModulesConfig::default()
     }
 }
@@ -209,13 +214,22 @@ async fn the_three_new_cells_read_real_production_state_and_never_write() {
     let after = std::fs::read(&ledger).expect("账本字节 after");
     assert_eq!(before, after, "自述采帧不得改写仪式账本");
 
+    // 上下文装配格（SG-14）：策略开关开 + 装配根注入预算 → 真值（尚未发生回合）。
+    let homeostasis = &rows["homeostasis"];
+    assert_eq!(homeostasis["wired"], json!(true), "{homeostasis}");
+    let value = &homeostasis["value"];
+    assert_eq!(value["context_policy_enabled"], json!(true), "{value}");
+    assert_eq!(value["configured_budget_chars"], json!(24_000), "{value}");
+    assert_eq!(value["assembled_turns"], json!(0), "{value}");
+    assert!(value["last_assembly"].is_null(), "{value}");
+
     let wired = rows
         .values()
         .filter(|row| row["wired"] == json!(true))
         .count();
     assert_eq!(
-        wired, 10,
-        "观测面 = 10/14：本装配未配任务板（承载力格不注册）且练习开关未开 → 14 - 2"
+        wired, 11,
+        "观测面 = 11/14：未配任务板（承载力格不注册）+ 练习开关未开 → 14 - 2 - 1"
     );
 }
 

@@ -60,6 +60,7 @@ pub mod bio_approval_social;
 /// 只读探测口 —— 值来自装配根正在使用的同一份状态, 开关关一条不注册。
 #[path = "canonical/bio_extra_probes.rs"]
 pub mod bio_extra_probes;
+
 /// 常驻心跳关怀生产者装配面 (V3-a 收尾一针): 定时 poll 关怀内核 → 命中发起
 /// 标准回合 (开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸, 默认关 fail-closed)。
 #[path = "canonical/care_heartbeat.rs"]
@@ -72,6 +73,8 @@ pub mod care_reminder;
 pub mod causal_world_model;
 #[path = "canonical/cognitive.rs"]
 pub mod cognitive;
+#[path = "canonical/context_budget.rs"]
+pub mod context_budget;
 #[path = "canonical/cost_telemetry.rs"]
 pub mod cost_telemetry;
 #[path = "canonical/dream_llm.rs"]
@@ -171,7 +174,8 @@ pub use bio_approval_social::{
     approval_social_outcome, BioApprovalSocialSource, APPROVAL_SOCIAL_SOURCE,
 };
 pub use bio_extra_probes::{
-    circadian_probe, neuromodulation_probe, ritual_state_probe, CircadianProbeConfig,
+    circadian_probe, homeostasis_bio_probe, neuromodulation_probe, ritual_state_probe,
+    CircadianProbeConfig, HomeostasisObservationSource, HomeostasisTurnObservation,
 };
 pub use care_heartbeat::{
     bio_circadian, bio_tone, CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer,
@@ -181,6 +185,10 @@ pub use care_heartbeat::{
 pub use care_reminder::{
     guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
     WeatherSignalFeed,
+};
+pub use context_budget::{
+    context_budget_chars_from_env, context_budget_chars_from_env_value, CONTEXT_BUDGET_ENV,
+    DEFAULT_CONTEXT_BUDGET_CHARS,
 };
 pub use experiment_field::{
     Experiment, ExperimentField, ExperimentStatus, FailureLearningRecord, FailureLearningSink,

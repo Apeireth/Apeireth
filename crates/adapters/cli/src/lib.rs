@@ -409,11 +409,7 @@ pub fn reflexion_store_root_from_env() -> PathBuf {
 /// 逐字节不变。未设 / 非法值 = 默认 `DEFAULT_CONTEXT_BUDGET_CHARS` (24000 字符
 /// ≈ 6k token 量级, 推导见 runtime `DEFAULT_CONTEXT_BUDGET_CHARS`)。
 pub fn context_budget_chars_from_env() -> usize {
-    std::env::var(CONTEXT_BUDGET_CHARS_ENV)
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .filter(|&chars| chars > 0)
-        .unwrap_or(apeireth_runtime::DEFAULT_CONTEXT_BUDGET_CHARS)
+    apeireth_runtime_assembly::canonical::context_budget_chars_from_env()
 }
 
 /// 回合轮数预算旋钮 (预算显式化): `APEIRETH_MAX_TURN_ROUNDS=N` = 单回合逻辑
@@ -2033,6 +2029,9 @@ async fn build_cognitive_modules_at(
         // 队列); 治理档在治理链 (写面 = write_intent 同族每次人批, failed
         // 只能人判无工具面)。自述任务节与工具面同队同账 (探针随队列注入)。
         task_board: task_board_queue,
+        // 生物机制族 Wave 4 (SG-14): 上下文预算同时交给装配面模块（与组装器
+        // 同一真源解析）——上下文策略开关开时，该预算成为本回合装配预算。
+        context_budget_chars: Some(context_budget_chars_from_env()),
         // 受控文件写入旋钮 (`tool.apply_patch`): 注册工具 + 风险档位同源
         // (治理层 grant/approval 用同一 env 解析, 即效一致)。子档依赖主开关。
         file_write: file_write_enabled_from_env(),

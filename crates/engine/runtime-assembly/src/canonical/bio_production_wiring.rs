@@ -37,7 +37,8 @@ use apeireth_tools_canonical::self_status::{
 };
 
 use crate::canonical::bio_extra_probes::{
-    circadian_probe, neuromodulation_probe, ritual_state_probe, CircadianProbeConfig,
+    circadian_probe, homeostasis_bio_probe, neuromodulation_probe, ritual_state_probe,
+    CircadianProbeConfig, HomeostasisObservationSource,
 };
 use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
@@ -50,7 +51,9 @@ use crate::canonical::care_heartbeat::bio_tone::{
 use crate::canonical::care_heartbeat::CareHeartbeatStatus;
 use crate::canonical::care_reminder::RitualStateStore;
 use crate::canonical::cognitive::{BioAssemblyModule, BioAssemblySwitches};
-use crate::canonical::module::Module;
+use crate::canonical::module::{
+    BehaviorModule, HookPoint, Module, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
+};
 use crate::canonical::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use crate::canonical::orchestrator::QuorumTrace;
 use crate::canonical::organ_module::OrganModule;
@@ -71,6 +74,8 @@ pub(super) struct BioWiringHandles {
     pub(super) tone_subscriber: Option<BioToneBusSubscriber>,
     /// W3.5 生命周期状态（与注册模块共享同一 `Arc`）。
     pub(super) lifecycle_state: Option<Arc<BioLifecycleState>>,
+    /// Wave 4 SG-14 上下文装配观测源（与装配面模块同一回合记录；开关关 = None）。
+    pub(super) homeostasis_source: Option<Arc<HomeostasisObservationSource>>,
 }
 
 /// 在装配根的同一位置注册 W3.2 / W3.3 / W3.5 模块。
@@ -83,6 +88,7 @@ pub(super) fn install_bio_modules(
     clock: &Arc<dyn Clock>,
     capabilities: &[Arc<dyn ToolCapability>],
     lifecycle_store_dir: Option<&std::path::Path>,
+    context_budget_chars: Option<usize>,
     switchboard: &NervousSwitchboard,
 ) -> BioWiringHandles {
     // W3.2: 修复指令段 + 策略化上下文块的 TurnStart overlay 装配点。
@@ -94,8 +100,23 @@ pub(super) fn install_bio_modules(
         switchboard.switch_enabled(BioSwitch::RepairGuidance),
         switchboard.switch_enabled(BioSwitch::ContextPolicy),
     );
+    let mut homeostasis_source = None;
     if !bio_switches.is_disabled() {
-        modules.push(Arc::new(BioAssemblyModule::new(bio_switches)));
+        // Wave 4 (SG-14): 组装器同一预算注入装配面模块 —— 上下文策略开关开时该预算
+        // 参与本回合「压力 → 调节 → 策略」链路（开关关 = 不注册 = 零变化）。
+        let mut module = BioAssemblyModule::new(bio_switches);
+        if let Some(budget) = context_budget_chars.filter(|budget| *budget > 0) {
+            module = module.with_context_budget(budget);
+        }
+        let homeostasis = Arc::new(HomeostasisObservationSource::new(
+            bio_switches,
+            context_budget_chars,
+        ));
+        modules.push(Arc::new(ObservedBioAssemblyModule::new(
+            Arc::new(module),
+            Arc::clone(&homeostasis),
+        )));
+        homeostasis_source = Some(homeostasis);
     }
 
     // W3.3: 调质→tone 的 TurnStart 尾部 overlay 装配点。开关值来自
@@ -147,9 +168,68 @@ pub(super) fn install_bio_modules(
         tone_state,
         tone_subscriber,
         lifecycle_state,
+        homeostasis_source,
     }
 }
 
+/// Wave 4 SG-14: 装配面模块的**观测装饰器** —— 行为仍由 [`BioAssemblyModule`]
+/// 产出（同一 `assemble`、同一开关/预算），本包装只把每回合装配结果记进
+/// [`HomeostasisObservationSource`]，供自述 homeostasis 格读数。
+///
+/// 为什么用装饰器而不是改 `cognitive.rs`：`cognitive.rs` 已有架构线 size 例外
+/// （EXC-0002，owner=architecture-line）；生物线的观测职责留在生物装配扩展点，
+/// 不占他线的例外额度，也不改行为模块契约。
+struct ObservedBioAssemblyModule {
+    inner: Arc<BioAssemblyModule>,
+    source: Arc<HomeostasisObservationSource>,
+}
+
+impl ObservedBioAssemblyModule {
+    fn new(inner: Arc<BioAssemblyModule>, source: Arc<HomeostasisObservationSource>) -> Self {
+        Self { inner, source }
+    }
+}
+
+/// 可见 transcript 字符数（只取长度；文本本身不进装配输入，与内核同口径）。
+fn visible_transcript_chars(messages: &[apeireth_protocol::canonical::NormalizedMessage]) -> usize {
+    messages
+        .iter()
+        .map(|message| {
+            apeireth_protocol::canonical::ContentPart::join_text(&message.content)
+                .chars()
+                .count()
+        })
+        .sum()
+}
+
+#[async_trait::async_trait]
+impl BehaviorModule for ObservedBioAssemblyModule {
+    fn manifest(&self) -> &ModuleManifest {
+        self.inner.manifest()
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook != HookPoint::TurnStart || self.inner.switches().is_disabled() {
+            return Ok(ModuleOutcome::continue_());
+        }
+        let used_chars = self
+            .inner
+            .switches()
+            .context_policy()
+            .then(|| visible_transcript_chars(ctx.messages));
+        let assembly = self.inner.assemble(used_chars);
+        self.source.record(used_chars, assembly.clone());
+        let mut outcome = ModuleOutcome::continue_();
+        for overlay in assembly.overlays {
+            outcome = outcome.with_prompt_overlay(overlay);
+        }
+        Ok(outcome)
+    }
+}
 /// 生物机制族 W3.3 · 游戏练习场四工具注册点（`APEIRETH_ENABLE_BIO_PLAY` 默认关）。
 ///
 /// 注册即闸：env 只认 "1" **且** 工作区根已注入（缺根 = 无法证明
@@ -256,6 +336,8 @@ pub struct BioProbeSlots {
     circadian: Arc<Mutex<Option<CircadianProbeConfig>>>,
     /// Wave 4 SG-22 仪式：`tool.ritual_done/skip` 写入的同一本仪式账。
     ritual: Arc<Mutex<Option<Arc<RitualStateStore>>>>,
+    /// Wave 4 SG-14 上下文装配：装配面模块同一回合记录（只读观测源）。
+    homeostasis: Arc<Mutex<Option<Arc<HomeostasisObservationSource>>>>,
 }
 
 /// 槽锁读取（持锁线程 panic 后槽内容未损坏，按 L 组口径恢复而非级联 panic）。
@@ -288,6 +370,7 @@ impl BioProbeSlots {
             && lock_slot(&self.tone).is_none()
             && lock_slot(&self.circadian).is_none()
             && lock_slot(&self.ritual).is_none()
+            && lock_slot(&self.homeostasis).is_none()
     }
 
     /// 安装点武装/解除（只由 [`install_bio_self_status`] 调；非公开）。
@@ -383,6 +466,26 @@ impl BioProbeSlots {
         }
     }
 
+    /// 填上下文装配观测源（与 `ObservedBioAssemblyModule` 同一回合记录）。
+    ///
+    /// 未武装 / 无模块（两个装配开关全关 = 模块本就不注册）= no-op，如实不接。
+    pub fn fill_homeostasis(&self, source: Option<&Arc<HomeostasisObservationSource>>) -> bool {
+        match (self.is_armed(), source) {
+            (true, Some(source)) => {
+                *lock_slot(&self.homeostasis) = Some(Arc::clone(source));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Wave 4 SG-14 homeostasis probe（迟绑定：槽空 = 未接线真因）。
+    fn homeostasis_probe(&self) -> Arc<dyn BioMechanismProbe> {
+        Arc::new(LateBoundSlotProbe {
+            slot: Arc::clone(&self.homeostasis),
+            build: homeostasis_bio_probe,
+        })
+    }
     /// 从 organ 模块填审议门账读取口（模块未装配 = no-op，如实不接）。
     pub(super) fn fill_from_organ_module(&self, module: Option<&Arc<OrganModule>>) -> bool {
         let Some(module) = module.cloned() else {
@@ -553,6 +656,7 @@ fn install_bio_self_status_with(
         source.register_bio_probe(BioMechanismKind::Neuromodulation, slots.tone_probe());
         source.register_bio_probe(BioMechanismKind::Circadian, slots.circadian_probe());
         source.register_bio_probe(BioMechanismKind::Ritual, slots.ritual_probe());
+        source.register_bio_probe(BioMechanismKind::Homeostasis, slots.homeostasis_probe());
     }
     source
 }
@@ -689,6 +793,12 @@ mod tests {
             std::process::id()
         ));
         Arc::new(RitualStateStore::at(path))
+    }
+    fn homeostasis_source() -> Arc<HomeostasisObservationSource> {
+        Arc::new(HomeostasisObservationSource::new(
+            BioAssemblySwitches::from_flags(true, true),
+            Some(24_000),
+        ))
     }
 
     fn bio_status(source: &ProductionSelfStatusSource) -> BioMechanismsStatus {
@@ -934,6 +1044,7 @@ mod tests {
             BioMechanismKind::Neuromodulation,
             BioMechanismKind::Circadian,
             BioMechanismKind::Ritual,
+            BioMechanismKind::Homeostasis,
         ] {
             let row = status.reading(kind).expect("late-bound row");
             assert!(row.wired, "注册 = 接线事实成立: {kind:?}");
@@ -948,13 +1059,13 @@ mod tests {
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         assert_eq!(rows.len(), 14);
         let unwired = rows.values().filter(|row| !row.wired).count();
-        assert_eq!(unwired, 4, "未注册的 4 格如实未接线 (14 - 10 注册)");
+        assert_eq!(unwired, 3, "未注册的 3 格如实未接线 (14 - 11 注册)");
     }
 
-    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账 + 调质/昼夜/仪式观测：
-    /// wired 计数 = 12/14，且 12 格值全为真值（不是 null）。
+    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账 + 调质/昼夜/仪式/上下文装配观测：
+    /// wired 计数 = 13/14，且 13 格值全为真值（不是 null）。
     #[test]
-    fn filled_slots_raise_the_wired_count_to_twelve() {
+    fn filled_slots_raise_the_wired_count_to_thirteen() {
         let slots = armed_slots();
         let queue = task_queue();
         let play = play_state();
@@ -969,6 +1080,7 @@ mod tests {
         assert!(slots.fill_tone_state(Some(&tone_state())));
         assert!(slots.fill_circadian_config(CircadianProbeConfig::new(0, true)));
         assert!(slots.fill_ritual_store(Some(&ritual_store())));
+        assert!(slots.fill_homeostasis(Some(&homeostasis_source())));
         let status = bio_status(&source);
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         let wired: Vec<&BioMechanismKind> = BioMechanismKind::ALL
@@ -977,8 +1089,8 @@ mod tests {
             .collect();
         assert_eq!(
             wired.len(),
-            12,
-            "2 (capacity/play) + 10 迟绑定 (含工具生态/生命周期/调质/昼夜/仪式) = 12/14"
+            13,
+            "2 (capacity/play) + 11 迟绑定 (含工具生态/生命周期/调质/昼夜/仪式/上下文装配) = 13/14"
         );
         for kind in [
             BioMechanismKind::Capacity,
@@ -993,6 +1105,7 @@ mod tests {
             BioMechanismKind::Neuromodulation,
             BioMechanismKind::Circadian,
             BioMechanismKind::Ritual,
+            BioMechanismKind::Homeostasis,
         ] {
             let row = rows.get(&kind).expect("wired row");
             assert!(row.wired, "{kind:?}");

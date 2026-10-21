@@ -202,6 +202,9 @@ pub struct ProductionModulesConfig {
     /// ([`super::task_board_tool::TaskBoardApprovalHook`]) 唯一承载; **无
     /// failed/retry 工具面** (failed 只能人判)。默认关 (opt-in)。
     pub task_board: Option<Arc<apeireth_orchestration::task_queue::TaskQueue>>,
+    /// 生物机制族 Wave 4 (SG-14): 上下文预算 (字符) 注入装配面模块;
+    /// `None` = 不注入 (默认策略, 行为不变)。与 cli 组装器同一 env 真源。
+    pub context_budget_chars: Option<usize>,
     /// Register the external tool bridge (MCP) module.
     ///
     /// When enabled, the server list is loaded at assembly time from
@@ -442,6 +445,7 @@ impl Default for ProductionModulesConfig {
             voice_speak: None,
             backup: None,
             task_board: None,
+            context_budget_chars: None,
             mcp: false,
             mcp_data_dir: None,
             preference_learning: false,
@@ -1562,6 +1566,7 @@ impl ProductionModules {
             &clock,
             &capabilities,
             bio_lifecycle_store_dir.as_deref(),
+            config.context_budget_chars,
             &nervous_switchboard,
         );
         // R1b-2a: 调质事件源收敛到总线订阅——开关开才有订阅者, 拿到总线后注册
@@ -1579,6 +1584,8 @@ impl ProductionModules {
             nervous_switchboard.circadian_tz_offset_min(),
             nervous_switchboard.switch_enabled(BioSwitch::Circadian),
         ));
+        // Wave 4 homeostasis 行为接线: 装配装饰器的观测源（开关关时 fill no-op）。
+        bio_probe_slots.fill_homeostasis(bio_wiring.homeostasis_source.as_ref());
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);

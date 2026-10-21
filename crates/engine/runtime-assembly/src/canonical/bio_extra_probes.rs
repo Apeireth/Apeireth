@@ -22,7 +22,8 @@
 //! - 仪式账本读失败（损坏 / 版本不符）= 该格 `null` + fail-closed 真因，绝不在
 //!   探测路径上重写账本。
 
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use apeireth_organ::circadian::{proactive_gate, CircadianConfig, CircadianState, SleepUrgency};
 use apeireth_organ::neuromodulation::NeuromodulatorVector;
@@ -32,6 +33,7 @@ use serde_json::{json, Map, Value};
 
 use crate::canonical::bio_tone::ToneState;
 use crate::canonical::care_reminder::RitualStateStore;
+use crate::canonical::cognitive::{BioAssemblySwitches, BioTurnAssembly};
 
 /// 昼夜节律观测配置（开关板转交的穷举事实：只含时区偏移与门开关）。
 ///
@@ -60,6 +62,11 @@ impl CircadianProbeConfig {
 /// f32 工程参数 → JSON 数值（4 位小数，消除 `0.8f32 → 0.800000011920929` 噪声）。
 fn round4(value: f32) -> f64 {
     (f64::from(value) * 10_000.0).round() / 10_000.0
+}
+
+/// f64 比率 → JSON 数值（同 4 位小数口径）。
+fn round4_f64(value: f64) -> f64 {
+    (value * 10_000.0).round() / 10_000.0
 }
 
 /// 六维向量 → 稳定 JSON 对象（键名 = 内核字段名）。
@@ -238,6 +245,168 @@ impl BioMechanismProbe for RitualProbe {
 // 测试
 // ============================================================
 
+/// 一次装配的观测快照（最近一回合；`None` = 尚未装配过）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct HomeostasisTurnObservation {
+    /// 本回合已用量（字符；`None` = 策略开关关 / 未取 transcript）。
+    pub used_chars: Option<usize>,
+    /// 本回合装配结果（策略 / 调节计划 / 修复段 / 生效预算均在此）。
+    pub assembly: BioTurnAssembly,
+}
+
+/// 上下文装配观测源：装配面模块每回合把结果记到这里，自述 homeostasis 格只读。
+///
+/// 为什么单独一个源：`BioAssemblyModule` 自身不持有「最近一回合」状态（内核
+/// 纯函数、零 IO）；观测职责放在装配扩展点（`ObservedBioAssemblyModule`）
+/// 而不是改内核模块，所有权与 0 装边界都留在生物线。
+#[derive(Debug)]
+pub struct HomeostasisObservationSource {
+    switches: BioAssemblySwitches,
+    configured_budget_chars: Option<usize>,
+    last: Mutex<Option<HomeostasisTurnObservation>>,
+    assembled_turns: AtomicU64,
+}
+
+impl HomeostasisObservationSource {
+    /// 由装配根已知事实构造（开关 + 预算；不读 env、不读时钟）。
+    #[must_use]
+    pub fn new(switches: BioAssemblySwitches, configured_budget_chars: Option<usize>) -> Self {
+        Self {
+            switches,
+            configured_budget_chars,
+            last: Mutex::new(None),
+            assembled_turns: AtomicU64::new(0),
+        }
+    }
+
+    /// 两个装配开关的现况（只读事实）。
+    #[must_use]
+    pub const fn switches(&self) -> BioAssemblySwitches {
+        self.switches
+    }
+
+    /// 装配根注入的上下文预算（字符；`None` = 未注入）。
+    #[must_use]
+    pub const fn configured_budget_chars(&self) -> Option<usize> {
+        self.configured_budget_chars
+    }
+
+    /// 记录一次真实装配（由观测装饰器在 `TurnStart` 调用；唯一写入口）。
+    pub fn record(&self, used_chars: Option<usize>, assembly: BioTurnAssembly) {
+        if let Ok(mut slot) = self.last.lock() {
+            *slot = Some(HomeostasisTurnObservation {
+                used_chars,
+                assembly,
+            });
+        }
+        self.assembled_turns.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// 已记录的装配回合数（单调递增；只用于如实标注）。
+    #[must_use]
+    pub fn assembled_turns(&self) -> u64 {
+        self.assembled_turns.load(Ordering::Acquire)
+    }
+
+    /// 最近一回合装配（`None` = 尚未发生真实回合）。
+    #[must_use]
+    pub fn last(&self) -> Option<HomeostasisTurnObservation> {
+        self.last
+            .lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().cloned())
+    }
+}
+
+fn pressure_ratio(used_chars: usize, budget_chars: usize) -> f64 {
+    if budget_chars == 0 {
+        return 0.0;
+    }
+    (used_chars.min(budget_chars) as f64) / (budget_chars as f64)
+}
+
+struct HomeostasisProbe {
+    source: Arc<HomeostasisObservationSource>,
+}
+
+impl BioMechanismProbe for HomeostasisProbe {
+    fn snapshot(&self, _now_ms: i64) -> Result<BioMechanismReading, String> {
+        let switches = self.source.switches();
+        if !switches.context_policy() {
+            return Ok(BioMechanismReading::not_wired(
+                "上下文策略开关未开：本模块只做修复指令段装配，压力→调节链路未启用".to_string(),
+            ));
+        }
+        let budget = self.source.configured_budget_chars();
+        let mut value = Map::new();
+        value.insert("context_policy_enabled".into(), json!(true));
+        value.insert(
+            "repair_guidance_enabled".into(),
+            json!(switches.repair_guidance()),
+        );
+        value.insert("configured_budget_chars".into(), json!(budget));
+        value.insert(
+            "assembled_turns".into(),
+            json!(self.source.assembled_turns()),
+        );
+        let last = self.source.last();
+        let last_json = match &last {
+            None => Value::Null,
+            Some(observation) => {
+                let assembly = &observation.assembly;
+                let policy = assembly.policy;
+                let pressure = match (observation.used_chars, budget.filter(|value| *value > 0)) {
+                    (Some(used), Some(limit)) => Some(round4_f64(pressure_ratio(used, limit))),
+                    _ => None,
+                };
+                let regulation = match &assembly.regulation {
+                    None => Value::Null,
+                    Some(plan) => json!({
+                        "severity": format!("{:?}", plan.severity).to_lowercase(),
+                        "actions": plan.actions().len(),
+                        "predicted": plan.predicted_count(),
+                        "noop": plan.is_noop(),
+                    }),
+                };
+                json!({
+                    "used_chars": observation.used_chars,
+                    "pressure": pressure,
+                    "policy": {
+                        "consolidate_before_overflow": policy.consolidate_before_overflow,
+                        "reduce_recall_depth": policy.reduce_recall_depth,
+                        "throttle_proactive_messages": policy.throttle_proactive_messages,
+                        "restore_budget": policy.restore_budget,
+                        "escalate_to_human": policy.escalate_to_human,
+                    },
+                    "effective_budget_chars": assembly.effective_budget_chars,
+                    "regulation": regulation,
+                    "repair_registered": assembly.repair_registered,
+                    "repair_moves": assembly.repair_moves,
+                    "overlay_count": assembly.overlays.len(),
+                    "undefined_vars_count": assembly.undefined_vars.len(),
+                })
+            }
+        };
+        value.insert("last_assembly".into(), last_json);
+        value.insert(
+            "basis".into(),
+            json!("装配面模块 TurnStart 真实装配记录（只记数字与策略，不含用户原文）"),
+        );
+        Ok(BioMechanismReading::wired(
+            Some(Value::Object(value)),
+            None,
+            None,
+        ))
+    }
+}
+
+/// 上下文装配行为 probe（SG-14；值来自装配面模块真实回合记录）。
+#[must_use]
+pub fn homeostasis_bio_probe(
+    source: Arc<HomeostasisObservationSource>,
+) -> Arc<dyn BioMechanismProbe> {
+    Arc::new(HomeostasisProbe { source })
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -407,5 +576,57 @@ mod tests {
         let (config, states) = store.inputs().expect("inputs");
         assert_eq!(config, RitualConfig::default());
         assert!(states.is_empty());
+    }
+
+    #[test]
+    fn homeostasis_probe_is_not_wired_until_the_context_policy_switch_is_on() {
+        let source = Arc::new(HomeostasisObservationSource::new(
+            BioAssemblySwitches::from_flags(true, false),
+            Some(24_000),
+        ));
+        let reading = homeostasis_bio_probe(source)
+            .snapshot(1_000)
+            .expect("probe");
+        assert!(!reading.wired, "策略开关关 = 如实未接线");
+        let reason = reading.reason.expect("reason");
+        assert!(reason.contains("上下文策略开关未开"), "reason={reason}");
+    }
+
+    #[test]
+    fn homeostasis_probe_reports_the_last_real_assembly_and_pressure() {
+        let switches = BioAssemblySwitches::from_flags(true, true);
+        let source = Arc::new(HomeostasisObservationSource::new(switches, Some(1_000)));
+        let assembly = crate::canonical::cognitive::assemble_bio_turn(
+            switches,
+            &crate::canonical::cognitive::BioTurnInput::new(),
+        );
+        source.record(Some(250), assembly);
+        let value = homeostasis_bio_probe(source)
+            .snapshot(1_000)
+            .expect("probe")
+            .value
+            .expect("value");
+        assert_eq!(value["configured_budget_chars"], 1_000);
+        assert_eq!(value["assembled_turns"], 1);
+        let last = &value["last_assembly"];
+        assert_eq!(last["used_chars"], 250);
+        assert_eq!(last["pressure"], 0.25);
+        assert_eq!(last["policy"]["consolidate_before_overflow"], false);
+        assert!(last["regulation"].is_null(), "无体征 = 不构造调节");
+    }
+
+    #[test]
+    fn homeostasis_probe_reports_no_turn_yet_honestly() {
+        let source = Arc::new(HomeostasisObservationSource::new(
+            BioAssemblySwitches::from_flags(false, true),
+            Some(2_000),
+        ));
+        let value = homeostasis_bio_probe(source)
+            .snapshot(1_000)
+            .expect("probe")
+            .value
+            .expect("value");
+        assert!(value["last_assembly"].is_null(), "尚无回合 = null 不编读数");
+        assert_eq!(value["assembled_turns"], 0);
     }
 }

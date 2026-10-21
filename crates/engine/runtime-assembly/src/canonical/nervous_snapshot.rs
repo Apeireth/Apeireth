@@ -474,7 +474,10 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
                 reason: Some("仅 ContextPressure 实测，其余维度中性基线"),
             },
         ],
-        gaps: &["仅 ContextPressure 实测，其余维度中性基线"],
+        gaps: &[
+            "仅 ContextPressure 实测，其余维度中性基线",
+            "观测格已注册（Wave 4：装配面装饰器记录每回合已用/预算/压力/策略/调节；只读，不剪枝、不改行为）",
+        ],
     },
     MechanismSpec {
         id: "SG-23.circadian",
@@ -699,7 +702,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             state: SignalState::Wired,
             reason: None,
         }],
-        gaps: &["bio_mechanisms 观测面最多 12/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + R1b-2b 生命周期 1 + Wave 4 调质/昼夜/仪式 3 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
+        gaps: &["bio_mechanisms 观测面最多 13/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + R1b-2b 生命周期 1 + Wave 4 调质/昼夜/仪式/上下文装配 4 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
     },
 ];
 
