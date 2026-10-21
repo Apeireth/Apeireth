@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 发布流水线资产校验接线：SHA256SUMS 生成 + 逐件校验随发布执行（2026-10-21）
+
+- **接线**：`.github/workflows/publish-release.yml` 的 Windows 构建 job 在 NSIS 构建后新增两步——`generate-release-manifest.ps1` 生成 `SHA256SUMS`/`releaseon`，`verify-release-assets.ps1` 逐件比对哈希，exit 0 才上传制品；`SHA256SUMS`/`releaseon` 随 Release 发布（`files:` 增两项），发布说明改为「流水线内已校验」。
+- **口径**：校验脚本 B8 已交付并实测（2026-10-20 正反 7 用例）；本批只做流水线接线，不改校验逻辑，不改签名状态（发布物仍未签名，如实）。
+- **诚实边界**：远程 CI 首跑未实测（需 tag 触发，本批不造 tag、不推远端）；本地 smoke 用假产物验证正路 PASS / 篡改 FAIL 两路；claim `rel.release_asset_verify` 抬级由效率线按 claims 口径裁定。
+- **验证**：workflow YAML 解析通过（PyYAML）；两个脚本本地 smoke 正反两路 exit 0/1 符合预期。
+
 ## [Unreleased] — Wave 4 观测补格：调质/昼夜/仪式/上下文装配四格自述读数 + 环境敏感测试去抖（默认关零行为变化，2026-10-21）
 
 - **观测面 9/14 → 13/14**（`capabilities.bio_mechanisms`）：新增 `runtime-assembly::canonical::bio_extra_probes` 三个只读 probe —— 调质（`ToneState` 真实向量/基线/行为参数/语气档；与 R1b-2a 订阅者共享同一状态）、昼夜（按 `APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN` 时区偏移 + 注入时钟纯算相位/振幅/局部时刻/窗口/主动门；睡眠压力如实 `null` + 原因「累加器由 CLI care 心跳持有，装配根无读取面」）、仪式（`<care_dir>/ritual_state.json` 只读 `RitualStateStore`：状态数/日程数/计划决策/可行动数）。

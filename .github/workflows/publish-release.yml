@@ -59,6 +59,28 @@ jobs:
           $version = '${{ github.ref_name }}'.TrimStart('v')
           ./packaging/desktop/build-desktop-nsis.ps1 -Version $version -Target x86_64-pc-windows-msvc
 
+      - name: Generate SHA-256 manifest (SHA256SUMS)
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          ./scripts/generate-release-manifest.ps1 -DistDir target/desktop-nsis -Version $version -ReleaseTag '${{ github.ref_name }}'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Verify installer assets against the manifest
+        shell: pwsh
+        run: |
+          $manifest = "target/desktop-nsis/SHA256SUMS"
+          $installers = @(Get-ChildItem -Path target/desktop-nsis -Filter *.exe -File)
+          if ($installers.Count -eq 0) {
+            Write-Error "no installer artifact found under target/desktop-nsis"
+            exit 1
+          }
+          foreach ($installer in $installers) {
+            Write-Host "verifying $($installer.Name) against $manifest"
+            ./scripts/verify-release-assets.ps1 -ArtifactPath $installer.FullName -ManifestPath $manifest
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -90,6 +112,8 @@ jobs:
           files: |
             release-assets/*.exe
             release-assets/*.sha256
+            release-assets/SHA256SUMS
+            release-assets/releaseon
           body: |
             ## 🌟 Apeireth 2.0+ Cognitive Microkernel & AGI Operating System
 
@@ -100,7 +124,7 @@ jobs:
             ### ⬇️ Downloads
 
             - **Windows 10/11 (x64)**: download `Apeireth Companion_<version>_x64-setup.exe` (version = this tag without the leading `v`), double-click to install. The installer bundles the complete backend (sidecar) — no Rust toolchain or compilation required.
-            - Integrity: the matching `.sha256` asset carries the SHA-256 checksum.
+            - Integrity: `SHA256SUMS` lists the SHA-256 of every published asset and is verified in the build pipeline before publishing; each installer also ships its own `.sha256` sidecar.
             - macOS / Linux: no prebuilt installer yet — build from source per [INSTALL.md](INSTALL.md).
 
             ---

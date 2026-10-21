@@ -22,14 +22,19 @@
 2. **汇总清单**：`scripts/generate-release-manifest.ps1` 扫描 `dist/` 生成
    `SHA256SUMS`（每行 `<哈希>  <文件名>`）与 `releaseon`（产物清单 JSON：版本 /
    提交号 / 产物分类 / 逐件哈希；文件名沿用生成脚本现名）。
-3. **发布前自检（本批新增）**：对每个产物跑
+3. **发布前自检（2026-10-21 起由发布流水线自动执行）**：`.github/workflows/publish-release.yml`
+   的 Windows 构建 job 在 `build-desktop-nsis` 之后依次执行
 
    ```powershell
-   pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath dist\<产物> -ManifestPath dist\SHA256SUMS
+   pwsh -File scripts/generate-release-manifest.ps1 -DistDir target/desktop-nsis -Version <tag> -ReleaseTag <tag>
+   pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath <每个 *.exe> -ManifestPath target/desktop-nsis/SHA256SUMS
    ```
 
-   哈希全部一致（exit 0）才进入发布；任何 FAIL（不一致/缺项）即停，先查清再发。
+   哈希全部一致（exit 0）才上传制品并进入发布；任何 FAIL（不一致/缺项）即停。
+   `SHA256SUMS` 与 `releaseon` 随 Release 一并发布。手工等价命令仍为
+   `pwsh -File scripts/verify-release-assets.ps1 -ArtifactPath dist\<产物> -ManifestPath dist\SHA256SUMS`。
 4. **随包发布**：`SHA256SUMS`（与 `releaseon`）与安装包同页发布，供用户侧校验。
+   （2026-10-21 起由 `publish-release.yml` 的 `files:` 一并上传。）
 5. **签名步骤（排期待办）**：代码签名证书接入后，在本步对 exe/MSI 签名并把签名
    状态写入 `releaseon`。**当前发布物未签名，如实标注，不假装**。
 
@@ -76,6 +81,7 @@ Linux / macOS 用 `sha256sum -c SHA256SUMS`（或 `shasum -a 256`）比对同一
 | 代码签名证书接入 | **排期待办（未交付）** | owner 决策（证书采购/托管/时间戳服务），登记不实施 |
 | 可复现构建证明 | **排期待办（未交付）** | 哈希只证明「文件=清单」；「二进制←源码提交」的证明链未建立 |
 | 其他平台校验链 | **未实测** | 本批只在 Windows 实测；Linux/macOS 命令按 §3.4 等价，未跑过不称已验证 |
+| 发布流水线自动校验 | **已接线（2026-10-21）**：`publish-release.yml` Windows job 构建后生成 `SHA256SUMS`/`releaseon` 并逐件校验，exit 0 才上传/发布；清单随 Release 发布 | 远程 CI 首跑未实测（需 tag 触发）；本地脚本正反两路 smoke 实测通过；是否把 claim 从 IMPLEMENTED 抬到 PRODUCTION WIRED 由效率线按 `docs/status/claims.yaml` 口径裁定 |
 
 ## 5. 关联材料
 
