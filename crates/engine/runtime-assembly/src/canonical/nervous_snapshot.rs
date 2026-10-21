@@ -604,7 +604,10 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
                 ),
             },
         ],
-        gaps: &["消费方需 UncertaintySignal（非回合边界）；回合边界信号不足以驱动真实消费"],
+        gaps: &[
+            "消费方需 UncertaintySignal（非回合边界）；回合边界信号不足以驱动真实消费",
+            "观测格已注册（Wave 4：人工拒绝审批 = 真实社会摩擦信号，总线订阅折算修复计划；只读，不改行为）",
+        ],
     },
     MechanismSpec {
         id: "SG-24.quorum",
@@ -702,7 +705,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             state: SignalState::Wired,
             reason: None,
         }],
-        gaps: &["bio_mechanisms 观测面最多 13/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + R1b-2b 生命周期 1 + Wave 4 调质/昼夜/仪式/上下文装配 4 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
+        gaps: &["bio_mechanisms 观测面最多 14/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + R1b-2b 生命周期 1 + Wave 4 调质/昼夜/仪式/上下文装配/社会修复 5 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
     },
 ];
 

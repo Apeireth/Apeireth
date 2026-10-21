@@ -60,6 +60,10 @@ pub mod bio_approval_social;
 /// 只读探测口 —— 值来自装配根正在使用的同一份状态, 开关关一条不注册。
 #[path = "canonical/bio_extra_probes.rs"]
 pub mod bio_extra_probes;
+/// Wave 4 SG-20 · 社会修复观测面: 人工拒绝审批（ApprovalSocial=Rejected）经总线
+/// 订阅折算修复计划（只读观测）；修复指引族开关关 = 不构造不订阅。
+#[path = "canonical/bio_social_repair.rs"]
+pub mod bio_social_repair;
 
 /// 常驻心跳关怀生产者装配面 (V3-a 收尾一针): 定时 poll 关怀内核 → 命中发起
 /// 标准回合 (开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸, 默认关 fail-closed)。
@@ -176,6 +180,10 @@ pub use bio_approval_social::{
 pub use bio_extra_probes::{
     circadian_probe, homeostasis_bio_probe, neuromodulation_probe, ritual_state_probe,
     CircadianProbeConfig, HomeostasisObservationSource, HomeostasisTurnObservation,
+};
+pub use bio_social_repair::{
+    social_repair_bio_probe, SocialRepairObservation, SocialRepairObservationSource,
+    SocialRepairProbe, SOCIAL_REPAIR_BASIS, SOCIAL_REPAIR_EVENT_BASIS,
 };
 pub use care_heartbeat::{
     bio_circadian, bio_tone, CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer,

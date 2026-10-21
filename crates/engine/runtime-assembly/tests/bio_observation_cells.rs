@@ -5,7 +5,7 @@
 //!    `mechanisms: null`，迟绑定槽不武装、一个 probe 都不调用；
 //! 2. 全开：装配根在模块安装后用同一份生产句柄填槽 →
 //!    `neuromodulation` / `circadian` / `ritual` 三格 `wired: true` 且带真值；
-//!    本装配观测面 wired 计数 = 11/14（未配任务板 ⇒ 承载力格不注册；练习开关未开），
+//!    本装配观测面 wired 计数 = 12/14（未配任务板 ⇒ 承载力格不注册；练习开关未开），
 //!    其余格如实 `wired:false` + 真因（上下文装配格已注册但策略开关关 ⇒ 单格 null）；
 //! 3. 只读：三格读数不含写动作字段，且 `tool.ritual_done` 账本在采帧前后字节不变；
 //! 4. 开关只认字面 `"1"`（`" 1 "` / `"true"` 等一律关，fail-closed）。
@@ -34,6 +34,7 @@ const NOW_MS: i64 = 1_700_000_000_123;
 const TONE_ENV: &str = "APEIRETH_ENABLE_BIO_TONE";
 const CARE_CANDIDATES_ENV: &str = "APEIRETH_ENABLE_BIO_CARE_CANDIDATES";
 const CONTEXT_POLICY_ENV: &str = "APEIRETH_ENABLE_BIO_CONTEXT_POLICY";
+const REPAIR_GUIDANCE_ENV: &str = "APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE";
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -53,6 +54,7 @@ impl EnvSwitches {
         std::env::set_var(TONE_ENV, "1");
         std::env::set_var(CARE_CANDIDATES_ENV, "1");
         std::env::set_var(CONTEXT_POLICY_ENV, "1");
+        std::env::set_var(REPAIR_GUIDANCE_ENV, "1");
         Self
     }
 
@@ -61,6 +63,7 @@ impl EnvSwitches {
         std::env::remove_var(TONE_ENV);
         std::env::remove_var(CARE_CANDIDATES_ENV);
         std::env::remove_var(CONTEXT_POLICY_ENV);
+        std::env::remove_var(REPAIR_GUIDANCE_ENV);
         Self
     }
 }
@@ -71,6 +74,7 @@ impl Drop for EnvSwitches {
         std::env::remove_var(TONE_ENV);
         std::env::remove_var(CARE_CANDIDATES_ENV);
         std::env::remove_var(CONTEXT_POLICY_ENV);
+        std::env::remove_var(REPAIR_GUIDANCE_ENV);
     }
 }
 
@@ -169,6 +173,16 @@ async fn the_three_new_cells_read_real_production_state_and_never_write() {
     let ledger = dir.join("ritual_state.json");
     let before = std::fs::read(&ledger).expect("账本应已落盘");
 
+    // SG-20 事件源：真实总线发布一次「人工拒绝」→ 社会修复观测源折算修复计划。
+    use apeireth_runtime_assembly::canonical::{ApprovalSocialOutcome, NervousSignal};
+    let delivered = modules
+        .nervous_bus()
+        .publish(&NervousSignal::approval_social(
+            ApprovalSocialOutcome::Rejected,
+            "cli.approval",
+        ));
+    assert!(delivered >= 1, "拒绝信号必须至少投递给社会修复订阅者");
+
     let frame = self_status_frame(&modules).await;
     let rows = mechanism_rows(&frame);
 
@@ -223,13 +237,25 @@ async fn the_three_new_cells_read_real_production_state_and_never_write() {
     assert_eq!(value["assembled_turns"], json!(0), "{value}");
     assert!(value["last_assembly"].is_null(), "{value}");
 
+    // 社会修复格（SG-20）：人工拒绝 = 真实事件源 → 观测到 1 次摩擦 + 内核修复计划。
+    let social_repair = &rows["social_repair"];
+    assert_eq!(social_repair["wired"], json!(true), "{social_repair}");
+    let value = &social_repair["value"];
+    assert_eq!(value["rejections_seen"], json!(1), "{value}");
+    assert_eq!(
+        value["last_plan"]["moves"],
+        json!(["acknowledge_uncertainty", "restate_understanding"]),
+        "{value}"
+    );
+    assert_eq!(value["last_plan"]["ask_user"], json!(false), "{value}");
+
     let wired = rows
         .values()
         .filter(|row| row["wired"] == json!(true))
         .count();
     assert_eq!(
-        wired, 11,
-        "观测面 = 11/14：未配任务板（承载力格不注册）+ 练习开关未开 → 14 - 2 - 1"
+        wired, 12,
+        "观测面 = 12/14：未配任务板（承载力格不注册）+ 练习开关未开 → 14 - 2"
     );
 }
 

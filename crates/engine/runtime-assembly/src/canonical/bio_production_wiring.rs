@@ -40,6 +40,7 @@ use crate::canonical::bio_extra_probes::{
     circadian_probe, homeostasis_bio_probe, neuromodulation_probe, ritual_state_probe,
     CircadianProbeConfig, HomeostasisObservationSource,
 };
+use crate::canonical::bio_social_repair::{social_repair_bio_probe, SocialRepairObservationSource};
 use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
     bio_lifecycle_probe, bio_lifecycle_wiring_from_enabled_with_store_dir, BioLifecycleState,
@@ -76,6 +77,8 @@ pub(super) struct BioWiringHandles {
     pub(super) lifecycle_state: Option<Arc<BioLifecycleState>>,
     /// Wave 4 SG-14 上下文装配观测源（与装配面模块同一回合记录；开关关 = None）。
     pub(super) homeostasis_source: Option<Arc<HomeostasisObservationSource>>,
+    /// Wave 4 SG-20 社会修复观测源（订阅人工拒绝信号；修复指引族开关关 = None）。
+    pub(super) social_repair_source: Option<Arc<SocialRepairObservationSource>>,
 }
 
 /// 在装配根的同一位置注册 W3.2 / W3.3 / W3.5 模块。
@@ -118,6 +121,11 @@ pub(super) fn install_bio_modules(
         )));
         homeostasis_source = Some(homeostasis);
     }
+    // Wave 4 (SG-20): 社会修复观测源 —— 事件源 = 人工拒绝审批（ApprovalSocial=Rejected）。
+    // 只在修复指引族开关开时构造；总线订阅由装配根在总线就绪后注册（关 = None = 零订阅）。
+    let social_repair_source = bio_switches
+        .repair_guidance()
+        .then(|| Arc::new(SocialRepairObservationSource::new(bio_switches)));
 
     // W3.3: 调质→tone 的 TurnStart 尾部 overlay 装配点。开关值来自
     // `NervousSwitchboard`（R1b-1b）—— **关 = 不构造不注册**。开时构造共享
@@ -169,6 +177,7 @@ pub(super) fn install_bio_modules(
         tone_subscriber,
         lifecycle_state,
         homeostasis_source,
+        social_repair_source,
     }
 }
 
@@ -338,6 +347,8 @@ pub struct BioProbeSlots {
     ritual: Arc<Mutex<Option<Arc<RitualStateStore>>>>,
     /// Wave 4 SG-14 上下文装配：装配面模块同一回合记录（只读观测源）。
     homeostasis: Arc<Mutex<Option<Arc<HomeostasisObservationSource>>>>,
+    /// Wave 4 SG-20 社会修复：人工拒绝信号订阅源的只读观测源。
+    social_repair: Arc<Mutex<Option<Arc<SocialRepairObservationSource>>>>,
 }
 
 /// 槽锁读取（持锁线程 panic 后槽内容未损坏，按 L 组口径恢复而非级联 panic）。
@@ -371,6 +382,7 @@ impl BioProbeSlots {
             && lock_slot(&self.circadian).is_none()
             && lock_slot(&self.ritual).is_none()
             && lock_slot(&self.homeostasis).is_none()
+            && lock_slot(&self.social_repair).is_none()
     }
 
     /// 安装点武装/解除（只由 [`install_bio_self_status`] 调；非公开）。
@@ -479,6 +491,19 @@ impl BioProbeSlots {
         }
     }
 
+    /// 填社会修复观测源（订阅人工拒绝信号；与自述 probe 同一 `Arc`）。
+    ///
+    /// 未武装 / 无源（修复指引族开关关 = 源本就不构造）= no-op，如实不接。
+    pub fn fill_social_repair(&self, source: Option<&Arc<SocialRepairObservationSource>>) -> bool {
+        match (self.is_armed(), source) {
+            (true, Some(source)) => {
+                *lock_slot(&self.social_repair) = Some(Arc::clone(source));
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Wave 4 SG-14 homeostasis probe（迟绑定：槽空 = 未接线真因）。
     fn homeostasis_probe(&self) -> Arc<dyn BioMechanismProbe> {
         Arc::new(LateBoundSlotProbe {
@@ -486,6 +511,14 @@ impl BioProbeSlots {
             build: homeostasis_bio_probe,
         })
     }
+    /// Wave 4 SG-20 社会修复 probe（迟绑定：槽空 = 未接线真因）。
+    fn social_repair_probe(&self) -> Arc<dyn BioMechanismProbe> {
+        Arc::new(LateBoundSlotProbe {
+            slot: Arc::clone(&self.social_repair),
+            build: social_repair_bio_probe,
+        })
+    }
+
     /// 从 organ 模块填审议门账读取口（模块未装配 = no-op，如实不接）。
     pub(super) fn fill_from_organ_module(&self, module: Option<&Arc<OrganModule>>) -> bool {
         let Some(module) = module.cloned() else {
@@ -657,6 +690,7 @@ fn install_bio_self_status_with(
         source.register_bio_probe(BioMechanismKind::Circadian, slots.circadian_probe());
         source.register_bio_probe(BioMechanismKind::Ritual, slots.ritual_probe());
         source.register_bio_probe(BioMechanismKind::Homeostasis, slots.homeostasis_probe());
+        source.register_bio_probe(BioMechanismKind::SocialRepair, slots.social_repair_probe());
     }
     source
 }
@@ -794,6 +828,12 @@ mod tests {
         ));
         Arc::new(RitualStateStore::at(path))
     }
+    fn social_repair_source() -> Arc<SocialRepairObservationSource> {
+        Arc::new(SocialRepairObservationSource::new(
+            BioAssemblySwitches::from_flags(true, false),
+        ))
+    }
+
     fn homeostasis_source() -> Arc<HomeostasisObservationSource> {
         Arc::new(HomeostasisObservationSource::new(
             BioAssemblySwitches::from_flags(true, true),
@@ -1045,6 +1085,7 @@ mod tests {
             BioMechanismKind::Circadian,
             BioMechanismKind::Ritual,
             BioMechanismKind::Homeostasis,
+            BioMechanismKind::SocialRepair,
         ] {
             let row = status.reading(kind).expect("late-bound row");
             assert!(row.wired, "注册 = 接线事实成立: {kind:?}");
@@ -1059,13 +1100,13 @@ mod tests {
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         assert_eq!(rows.len(), 14);
         let unwired = rows.values().filter(|row| !row.wired).count();
-        assert_eq!(unwired, 3, "未注册的 3 格如实未接线 (14 - 11 注册)");
+        assert_eq!(unwired, 2, "未注册的 2 格如实未接线 (14 - 12 注册)");
     }
 
-    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账 + 调质/昼夜/仪式/上下文装配观测：
-    /// wired 计数 = 13/14，且 13 格值全为真值（不是 null）。
+    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账 + 调质/昼夜/仪式/上下文装配/社会修复观测：
+    /// wired 计数 = 14/14，且 14 格值全为真值（不是 null）。
     #[test]
-    fn filled_slots_raise_the_wired_count_to_thirteen() {
+    fn filled_slots_raise_the_wired_count_to_fourteen() {
         let slots = armed_slots();
         let queue = task_queue();
         let play = play_state();
@@ -1081,6 +1122,7 @@ mod tests {
         assert!(slots.fill_circadian_config(CircadianProbeConfig::new(0, true)));
         assert!(slots.fill_ritual_store(Some(&ritual_store())));
         assert!(slots.fill_homeostasis(Some(&homeostasis_source())));
+        assert!(slots.fill_social_repair(Some(&social_repair_source())));
         let status = bio_status(&source);
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         let wired: Vec<&BioMechanismKind> = BioMechanismKind::ALL
@@ -1089,8 +1131,8 @@ mod tests {
             .collect();
         assert_eq!(
             wired.len(),
-            13,
-            "2 (capacity/play) + 11 迟绑定 (含工具生态/生命周期/调质/昼夜/仪式/上下文装配) = 13/14"
+            14,
+            "2 (capacity/play) + 12 迟绑定 (含工具生态/生命周期/调质/昼夜/仪式/上下文装配/社会修复) = 14/14"
         );
         for kind in [
             BioMechanismKind::Capacity,
@@ -1106,6 +1148,7 @@ mod tests {
             BioMechanismKind::Circadian,
             BioMechanismKind::Ritual,
             BioMechanismKind::Homeostasis,
+            BioMechanismKind::SocialRepair,
         ] {
             let row = rows.get(&kind).expect("wired row");
             assert!(row.wired, "{kind:?}");

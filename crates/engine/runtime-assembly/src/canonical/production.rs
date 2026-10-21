@@ -1574,6 +1574,10 @@ impl ProductionModules {
         if let Some(subscriber) = &bio_wiring.tone_subscriber {
             subscriber.subscribe(&nervous_bus);
         }
+        // Wave 4 (SG-20): 社会修复观测源订阅人工拒绝信号（源 None = 开关关 = 零订阅）。
+        if let Some(source) = bio_wiring.social_repair_source.as_ref() {
+            source.subscribe(&nervous_bus);
+        }
         // R1b-2b: 生命周期账本在模块安装后才存在 → 迟绑定槽填同一 Arc
         //（自述开关关时 fill no-op；槽空 = 单格 null + 未接线真因）。
         bio_probe_slots.fill_lifecycle_state(bio_wiring.lifecycle_state.as_ref());
@@ -1586,6 +1590,7 @@ impl ProductionModules {
         ));
         // Wave 4 homeostasis 行为接线: 装配装饰器的观测源（开关关时 fill no-op）。
         bio_probe_slots.fill_homeostasis(bio_wiring.homeostasis_source.as_ref());
+        bio_probe_slots.fill_social_repair(bio_wiring.social_repair_source.as_ref());
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
