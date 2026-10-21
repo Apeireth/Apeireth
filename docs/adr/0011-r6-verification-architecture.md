@@ -168,7 +168,9 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
       `main=fb68f5d3` 落后本地 194 提交、默认分支 workflow 列表无此文件，`workflow_dispatch`
       API 返回 404（`.git-credentials` 的 PAT 有效且 scope 含 repo/workflow，`/user`=200，
       但默认分支缺载体时 dispatch 不可用）；本地 YAML `safe_load` OK，首跑仍 0 次 →
-      可追溯性 **NOT MET**，不勾选、不伪造 CI 结果）
+      可追溯性 **NOT MET**，不勾选、不伪造 CI 结果；**2026-10-21 owner 裁决「不用推送，
+      都本地就行」→ E3 按 NOT MET 收口**，本地全量实跑证据保留：`logs/gate-full.log` +
+      E1 权威复跑 341/8570/0/51（见 test-baseline §1），但不计作夜间 CI 可追溯）
 - [x] `docs/status/formal-coverage.md` 存在并登记 Kani 终局矩阵 11 件 / TLA / Miri /
       未覆盖边界（D6；2026-10-21 由架构线落，并订正 workflow「22 件」旧口径为 11 件）
 - [x] 文档真源门禁覆盖 ledger 校验（R6-C 脚本化，归效率线；**2026-10-21 E4 落地**：
@@ -239,7 +241,10 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
   数字**；四问如实——覆盖率未测（99% 未覆盖口径未验证）、1200s wall 未实测（本地 full 最近
   实跑约 14.8 分钟、非夜间 CI）、连续绿 0 次/绿分 0、失败兜底与通知未验证。`nightly-full.yml`
   本地 `yaml.safe_load` OK（on=schedule/workflow_dispatch，job=nightly-full-gate）。
-  E4（ledger 门禁）不受阻，照做；不推远端、不改 `rust.yml` PR 门禁口径。
+  E4（ledger 门禁）不受阻，照做；不改 `rust.yml` PR 门禁口径。
+  **2026-10-21 owner 裁决：不用推送，都本地就行** → E3 按 NOT MET 收口，不再尝试远端
+  dispatch；本地全量实跑（`logs/gate-full.log`，E1 权威复跑 341/8570/0/51）保留为替代
+  证据，但不计作「夜间 CI 可追溯」。后续 owner 改变决定时可原样重启 E3。
 
 - **2026-10-21（E4 四层验收台账接门禁，效率线重启批）**：`docs-truth.yml` 增
   `setup-python@v5` + `python -m pip install --quiet pyyaml` +
