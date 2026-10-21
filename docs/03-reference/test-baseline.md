@@ -11,12 +11,12 @@
 
 | 项 | 值 |
 |---|---|
-| **命令** | `cargo test --workspace --all-targets --locked --no-fail-fast` |
-| **结果** | **336 套件 / 9076 passed / 0 failed / 52 ignored**（权威绿跑；首轮 D27 环境敏感失败已复跑转绿，证据链见 §1 复测注记） |
-| **日期** | 2026-10-20 |
+| **命令** | `pwsh scripts/gate_full.ps1 -FailIfBusy`（R6-A 唯一全量执行器：main workspace `cargo test --workspace --all-targets --locked --no-fail-fast --exclude <图像家族 11 crate>` + 图像家族独立同命令；等价于全 workspace 口径） |
+| **结果** | **341 套件 / 8570 passed / 0 failed / 51 ignored**（main 264 套件 / 6263 passed / 19 ignored + image 家族 77 套件 / 2307 passed / 32 ignored；首轮环境敏感失败口径已退役，见 §3） |
+| **日期** | 2026-10-21 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **来源** | 第三线权威复跑（2026-10-20；同命令面 + 并发规避 `-j 1` + `RUST_TEST_THREADS=4`，原因见 D26；日志 `artifacts/wave-dts-authoritative-full-2026-10-20.log`，exit 0；首轮 W3.4 全量日志见 §1 复测注记） |
+| **来源** | 架构线以 R6-A 唯一全量执行器实测（2026-10-21，26.8 分钟，exit 0，HEAD `f2dad300`；日志 `artifacts/wave4-close-full-2026-10-21.log` 与 `logs/gate-full.log`）；Wave 4 收口批广播。全量门禁执行线（效率线/生物线）接管后以其实测刷新 |
 
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
@@ -195,6 +195,7 @@
 
 | 日期 | 结果 | 备注 |
 |---|---|---|
+| 2026-10-21 | 341 套件 / 8570 passed / 0 failed / 51 ignored | Wave 4 收口（gate_full 实测；R4b 四岛归档后首次全量口径：main 6263 + image 2307；较 2026-10-20 的 9076 下降主要来自 R4b 归档移除的测试（SDK 607→92 等）与新增机制的净差） |
 | 2026-10-20 | 336 套件 / 9075 passed / 1 failed / 52 ignored（产品面 0 失败） | 生物机制族 W3.4 首轮全量（D27 环境敏感 1 失败；非绿跑口径；第三线权威复跑 9076 绿后移入历史） |
 | 2026-10-19 | 326 套件 / 8889 passed / 0 failed / 52 ignored | 生物机制族 W3.3 批（§1 曾用，2026-10-20 W3.4 批刷新后移入历史） |
 | 2026-10-19 | 322 套件 / 8820 passed / 0 failed / 52 ignored | 生物机制族 W3.1 批（§1 曾用，2026-10-19 W3.2 批刷新后移入历史） |
@@ -208,8 +209,7 @@
 | 2026-09-05 | 3120 passed / 0 failed / 13 ignored | 对账批 |
 | 2026-08-28 | 1739 passed（A 块后） | v2.0.0-rc.1 收盘期 |
 
-> 冻结口径说明：`README.md` / `README.zh-CN.md` 的徽章数字现行口径 = **8509 passed / 0 failed
-> （2026-10-18 大波口径，owner 换回 README 时同步）**，本文件不代改 README；历史冻结值 3695 已随
+> 冻结口径说明：`README.md` / `README.zh-CN.md` 的徽章数字现行口径 = **8570 passed / 0 failed（2026-10-21 Wave 4 收口口径）**，与 §1 同日同口径同步；历史冻结值（8509 / 3695）已退役，不再适用。
 > 2026-10-18 README 换回退役，不再适用。数字刷新时徽章与本表 §1 同日同口径同步。
 
 ## 4. 引用方式

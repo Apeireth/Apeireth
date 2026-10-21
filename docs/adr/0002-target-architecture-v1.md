@@ -56,7 +56,7 @@
 |---|---|---|
 | **Wave 2**（2-3 周） | R0 剩余 + R1a 神经只读聚合 + R3a config schema/env 登记 + R4a 图像家族迁出 | `arch_guard --strict` 0 新增；图像家族迁出后全量门禁可分层；R1a 观测 14 条全有读数（只读） |
 | **Wave 3**（3-4 周） | R2 扩展 ABI + R7 上下文单一化 + R3b wiring ledger + R4b SDK/perception 裁决执行 | 扩展点收敛为 1 套；重复实现清零；wiring ledger 覆盖 PRODUCTION WIRED（**2026-10-20 已收口**：R7/R2 见 ADR-0007/0008 §6；R3b 主体完成；R4b 四岛归档执行完成） |
-| **Wave 4**（3-4 周） | R1b 订阅迁移 + R8 治理管线 + R6 验证架构 + 阶段 6 最小闭环 | 生物信号上总线；治理单一管线；四层验收有最小可跑闭环 |
+| **Wave 4**（3-4 周） | R1b 订阅迁移 + R8 治理管线 + R6 验证架构 + 阶段 6 最小闭环 | 生物信号上总线；治理单一管线；四层验收有最小可跑闭环（**2026-10-21 已收口**：R1b 见 ADR-0009（1a/1b/2a/2b/2c/3/4a 交付、4b 收口）；R8 见 ADR-0010（A/B1/C 交付、D 部分；B2/B3 待安全线）；R6 见 ADR-0011（A/B 交付、C/D 载体已落；夜间运行与签核待效率线/owner）） |
 | **Wave 5**（4-6 周） | R5 可取消 worker + 上下文页/检查点 + 发版冻结准备 | 插话能停/中断能续；冻结期例外清零 |
 
 ## 6. O-6 三阶审查
@@ -76,7 +76,7 @@
 - [x] owner 裁决本 ADR（2026-10-20 Accept：「按你的建议来吧」）
 - [x] 裁决后：`contract.toml` target 条款逐项转 accepted（每项配单项 ADR：0003 R1a / 0004 R3 / 0005 R4a 已出；Wave 3 的 0007 R7 / 0008 R2 已出并交付）
 - [x] Wave 2 启动前：R1a spec、R3 config schema、R4 迁出方案各出单项 ADR（Proposed）——**已出，见 ADR-0003/0004/0005**
-- [x] 每波收口：`arch_guard --strict` 0 新增 + 基线缩表 + 记分牌无指标变差（Wave 2、Wave 3 收口实录见 handbook §8 / integration-plan §4；R3c report-only 例外单列）
+- [x] 每波收口：`arch_guard --strict` 0 新增 + 基线缩表 + 记分牌无指标变差（Wave 2、Wave 3、**Wave 4（2026-10-21：缩表 2 条、全量 341 套件 / 8570 passed、carries 如实）** 收口实录见 handbook §9 / integration-plan §4；R3c report-only 例外单列）
 
 ## 9. 性质与回滚
 

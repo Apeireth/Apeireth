@@ -53,19 +53,19 @@ workflow 内含 **baseline 只减检查**（PR 时对比 base 的 `scripts/arch-
 
 ## 4. 记分牌（每波对比，只允许一项以上变好、任何一项变差需例外）
 
-| 指标 | 采集 | 当前值（Wave 3 收口，2026-10-20 实测） | 方向 |
+| 指标 | 采集 | 当前值（Wave 4 收口，2026-10-21 实测） | 方向 |
 |---|---|---|---|
-| workspace members | `cargo metadata` | **30**（R4b 归档后；目标 20） | 图像家族出主仓后降至 20 |
+| workspace members | `cargo metadata` | **30**（图像家族仍在主仓；目标 20） | 图像家族出主仓后降至 20 |
 | 生产依赖边 | arch_guard | **111** | 只减不增（新增需 ADR） |
-| 裸 env 名 / 出现次数 / 文件 | arch_guard + rg | guard src 口径 **154**；rg 历史口径 158 / 1,106 / 148（2026-10-20 初测） | 只减 |
-| env 登记 `TODO-OWNER` / `UNCLASSIFIED` | `env-registry.toml`（效率线 `--stats`） | 155 条登记（R3b 主体完成；历史口径 155/155 首播） | 每波只减 |
+| 裸 env 名 / 出现次数 / 文件 | arch_guard + `wiring_report --stats` | guard src 口径 **154**；registry entries **154** | 只减 |
+| env 登记 `TODO-OWNER` / `UNCLASSIFIED` | `wiring_report.py --stats`（效率线） | entries **154**；TODO-OWNER **0**；UNCLASSIFIED **146**；kind: product 133 / test_only 11 / derived 10 | 每波只减 |
 | 最大 src 文件行数 | arch_guard | **6,150**（doc_ops.rs） | 只减 |
-| 同名概念定义数 | arch_guard | ContextAssembler **2** / ContextBlock **1**（R7-2 收敛）/ CapabilityRegistry **1**（R2 收敛） | 只减 |
-| 例外活跃数/权重 | exceptions.toml | **0 / 0** | 有上限、到期清 |
-| 未接线字样 | `rg -c '未接线'` | 253（2026-10-20 初测，Wave 3 未刷新） | 只减 |
-| claims 覆盖 | docs_truth | 12 条（2026-10-20 初测，Wave 3 未刷新） | 只增 |
-| 生物机制观测格 | self_status_source | 14 条中 probe 7 条（W3.6 批，生物线交付） | 只增 |
-| 全量门禁耗时 | 日志 | >18 分钟（2026-10-20 初测）；R4a-1 图像家族隔离已生效，Wave 3 收口全量日志见 `artifacts/wave3-close-full-test2.log` | 只减 |
+| 同名概念定义数 | arch_guard | ContextAssembler **1**（R7-2.1 收敛）/ ContextBlock **1** / CapabilityRegistry **1** | 只减 |
+| 例外活跃数/权重 | exceptions.toml | **2 / 2**（EXC-0002 cognitive 4763、EXC-0003 tool_modules 1216；weight=1、expires_wave=6，清偿任务在收口后执行） | 有上限、到期清 |
+| 未接线字样 | `git grep -c '未接线' -- crates/` 求和 | **299**（2026-10-21 口径；旧记分牌 253 为不同采集法，不可直接比较） | 只减 |
+| claims 覆盖 | docs_truth | **20 条**（PRODUCTION WIRED 10 / IMPLEMENTED 9 / NOT IMPLEMENTED 1，2026-10-21 实测） | 只增 |
+| 生物机制观测格 | self_status_source 台账 | 14 条机制中 **9/14** 观测格注册（R1b-2b 迟绑定 5 + W3.7 生态 1 + 承载力 + 练习等；R1b-2c 未新增观测格） | 只增 |
+| 全量门禁耗时 | 日志 | **26.8 分钟**（2026-10-21 `gate_full`，main 264 + image 77 套件；R6-A 唯执行器/锁/失败分类生效；日志 `artifacts/wave4-close-full-2026-10-21.log`） | 只减 |
 
 ## 5. 后续（v0.2 路线）
 

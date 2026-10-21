@@ -223,8 +223,8 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
       收敛到 `BioLifecycleBusSubscriber`（`AfterTurn` 仍走钩子，回合边界信号归 R1b-3），lifecycle
       观测格经迟绑定槽注册（8/14 → 9/14，仅开关全开）（`a71639f9`，交付记录 `0f4ef4dc`）；
       默认关零行为变化；验收记录见 `r1b-2-handoff-2026-10-20.md` §5/§8
-- [ ] R1b-2c：审批面 publish（需新增 `NervousSignalKind::ApprovalSocial`；按 §8 收窄原则
-      「生产者+订阅者同批 additive」办，未开工）
+- [x] R1b-2c（**2026-10-21 生物线交付、架构线复核**）：`NervousSignalKind::ApprovalSocial` 按 §8「生产者+订阅者同批 additive」新增——审批社交发布路径与调质订阅同批落地，默认关零行为变化；
+      证据：代码 `f2dad300` + 交付记录 `815d85e7`；全量门禁 Wave 4 收口批绿（`artifacts/wave4-close-full-2026-10-21.log`，341 套件 / 8570 passed / 0 failed）。
 - [x] R1b-3（**2026-10-21 交付，架构线**）：零新增信号变体——ritual 走 `RitualStateStore` 文件通道
       （新增端到端测试 `a_ritual_tool_write_is_visible_to_the_next_heartbeat_beat`：工具写盘 → 同拍读到
       `last_done_ms` → 两周期后产仪式候选）；`sleep_pressure`（门内自消费）/ `scar_ledger_learn`
@@ -233,8 +233,8 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - [x] R1b-4a：schema v2 additive（**2026-10-20 提前交付**）：`nervous_system.bus` 报
       subscribers/published/delivered 聚合计数，`last_observation` 恒 null；未绑总线时 `bus=null`；
       v1 字段逐字节不变；装配根把唯一 `NervousBus` 经 `SelfStatusModule::new_with_bus` 接入
-- [ ] R1b-4b（收口项）：contract wave_note / handbook / integration-plan 记分牌同步；
-      `docs_truth.py --verify --check` exit 0；`wiring_report.py --verify` exit 0
+- [x] R1b-4b（收口项，**2026-10-21 收口批完成**）：contract wave_note / handbook / integration-plan 记分牌同步；
+      `docs_truth.py --verify --check` exit 0；`wiring_report.py --verify` exit 0；全量数字见 test-baseline §1。
 - [ ] LOCKED 5 项 0 触碰 / 0 新外部 dep / 0 新开关 / 0 新 crate
 
 ## 7. 后果（Consequences）
@@ -247,8 +247,8 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - 后续 stage：R1b-1a 于 2026-10-20 交付（`10ec68ae`，内核/桥/开关表 + 装配根单入口）；R1b-1b 于同日交付
   （`6837d9b7`，开关读取收敛到装配根 + 台账 4 行更正 + 3 条校验）；**R1b-4a 提前交付**（2026-10-20，
   `nervous_system` schema v2 additive：`bus` 聚合计数观测面，v1 字段不变）；R1b-2a/2b 由生物线交付并复核
-  （2026-10-21），R1b-2c 待生物线；**R1b-3 于 2026-10-21 由架构线交付（零新增信号变体，见 §8）**；后续
-  R1b-4b 收口。
+  （2026-10-21）；**R1b-2c 于同日由生物线交付并复核**（`ApprovalSocial` 同批 additive）；**R1b-3 于 2026-10-21 由架构线交付（零新增信号变体，见 §8）**；后续
+  R1b-4b 于 2026-10-21 收口批完成。
   R7-2 遗留 `ContextAssembler` 已由 R7-2.1 收口（`c8cb34a4`）；Wave 4 其余 = R8 + R6 spec 已 Accepted
   （ADR-0010/0011），实施归安全线/效率线；R1b-4b 之后再评估是否把总线升为扩展点（需新 ADR）。
 
@@ -316,3 +316,15 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - **如实边界**：本批未新增任何 enum 变体/开关/依赖；三源 `NotWired` 是取证结论不是占位；全量门禁数字
   归 Wave 4 收口批。
 - **交付记录**：`docs/architecture/r1b-3-handoff-2026-10-20.md` §4/§6。
+### 2026-10-21（R1b 收口：2c 复核 + 4b 收口，Wave 4 关闭）
+
+- **R1b-2c 复核**：`NervousSignalKind::ApprovalSocial` 属 §8「生产者+订阅者同批」的 additive 小版本；
+  默认关零行为变化成立（生物线 scoped 测试 + 全量门禁同批验证）。
+- **R1b-4b 收口**：`contract.toml` wave_note / handbook §3 / `integration-plan §4` 记分牌同步；
+  `docs_truth --verify --check`、`wiring_report --verify` 绿；基线缩表 2 条；`current_wave` 4→5。
+- **实测**：`pwsh scripts/gate_full.ps1 -FailIfBusy` = main 264 套件 / 6263 passed / 19 ignored +
+  image 家族 77 套件 / 2307 passed / 32 ignored → **341 套件 / 8570 passed / 0 failed / 51 ignored**
+  （2026-10-21，26.8 min，exit 0，HEAD `f2dad300`，日志 `artifacts/wave4-close-full-2026-10-21.log`）。
+- **未做（如实）**：全量数字由架构线以 R6-A 唯一执行器代跑广播，全量门禁执行线接管后以其实测刷新；
+  R8-B2/B3、R6-C/D 签核、夜间 full 首次运行仍归他线。
+

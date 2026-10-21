@@ -20,11 +20,11 @@
 version = "1.0"
 updated_at = "2026-10-20"
 status = "adjudicated"            # 规则体系已裁决生效（ADR-0001）
-status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；目标架构 v1 已裁决（ADR-0002）；Wave 2 单项 ADR-0003/0004/0005 已出并收口；Wave 3 收口 (2026-10-20): ADR-0007 R7 / ADR-0008 R2 Accepted 并交付（R2-2..R2-5 / R7-2..R7-4），R4b 四岛归档完成；R3c 待 2026-11-03 后 review；Wave 4 启动: ADR-0009 R1b Accepted（总线/开关表/台账校验 spec）；ADR-0010 R8 Accepted（治理单一管线 spec）；ADR-0011 R6 Accepted（三层门禁/四层验收载体 spec）；R1b-1a/R1b-1b 已交付（6837d9b7：生物开关读取收敛装配根单入口 + 台账 4 行更正 + 3 条结构校验）；R1b-4a schema v2 additive 已交付（nervous_system.bus 聚合计数，v1 字段不变；EXC-0003 登记 tool_modules 尺寸）；R1b-2/3 待生物线交接、R1b-4b 待收口）"
+status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；目标架构 v1 已裁决（ADR-0002）；Wave 2 单项 ADR-0003/0004/0005 已出并收口；Wave 3 收口 (2026-10-20): ADR-0007 R7 / ADR-0008 R2 Accepted 并交付（R2-2..R2-5 / R7-2..R7-4），R4b 四岛归档完成；R3c 待 2026-11-03 后 review；Wave 4 启动: ADR-0009 R1b Accepted（总线/开关表/台账校验 spec）；ADR-0010 R8 Accepted（治理单一管线 spec）；ADR-0011 R6 Accepted（三层门禁/四层验收载体 spec）；R1b-1a/R1b-1b 已交付（6837d9b7：生物开关读取收敛装配根单入口 + 台账 4 行更正 + 3 条结构校验）；R1b-4a schema v2 additive 已交付（nervous_system.bus 聚合计数，v1 字段不变；EXC-0003 登记 tool_modules 尺寸）；R1b-2/3 待生物线交接、R1b-4b 待收口；Wave 4 收口 (2026-10-21): ADR-0009 R1b（1a/1b/2a/2b/2c/3/4a 交付、4b 收口）/ ADR-0010 R8（A/B1/C 交付、D 部分；B2/B3 待安全线）/ ADR-0011 R6（A/B 交付、C/D 载体；夜间运行与四层签核待效率线/owner）；全量 341 套件 / 8570 passed 见 test-baseline；current_wave=5)"
 adjudication = "owner 授权代裁 2026-10-20（'你了解项目全貌做出判断就行'）；决策记录见 docs/adr/0001-adopt-architecture-contract.md"
-target_architecture = { adr = "docs/adr/0002-target-architecture-v1.md", status = "accepted-2026-10-20", waves = "ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a（Wave 2）；ADR-0007 R7 / ADR-0008 R2（Wave 3）；ADR-0009 R1b（Wave 4）；ADR-0010 R8（Wave 4）；ADR-0011 R6（Wave 4）" }
-current_wave = 4                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
-wave_note = "Wave 3 收口 (2026-10-20): R4b 归档执行完成（perception + SDK 四岛，members 31→30）；R7 交付（ContextBlock 单一化 / SessionStore 三义→单 trait+域内命名 / dormant scheduler 归档 / PromptCacheStabilizer 删除）；R2 交付（Extension ABI 家族 + 双 catalog 实现 / plugin 重复 CapabilityRegistry 退出公共面 / 命名迁移 BehaviorModule·BehaviorRegistry / 契约扩展面收敛）；Wave 4 = R1b + R8 + R6；R3c 待 2026-11-03 后 review"
+target_architecture = { adr = "docs/adr/0002-target-architecture-v1.md", status = "accepted-2026-10-20", waves = "ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a（Wave 2）；ADR-0007 R7 / ADR-0008 R2（Wave 3）；ADR-0009 R1b（Wave 4）；ADR-0010 R8（Wave 4）；ADR-0011 R6（Wave 4）；Wave 4 收口 2026-10-21（current_wave=5）" }
+current_wave = 5                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
+wave_note = "Wave 4 收口 (2026-10-21): R1b 交付（R1b-1a 总线/桥/开关表、1b 开关读取收敛+台账校验、2a/2b/2c 机制订阅迁移与 ApprovalSocial 发布、3 三缺源如实定性、4a schema v2 additive；4b 收口项随本批）；R8 交付（R8-A GovernanceChain 六段骨架、R8-B1 ChainGovernanceHook、R8-C 延迟反思队列、R8-D 演练入 CI 部分；B2/B3 待安全线）；R6 交付（R6-A/B gate_full 唯一执行器+CI 守卫改读契约、R6-C/D 载体：verification-ledger.yaml / formal-coverage.md / nightly-full.yml；夜间未运行、四层签核 0 条）；Wave 5 = R5 取消可恢复 worker + 收口；R3c 待 2026-11-03 后 review"
 rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
 
 [workspace]
