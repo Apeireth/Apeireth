@@ -12,9 +12,9 @@ Historical design proposals and archived implementations live under `docs/archiv
 
 ```text
 apeireth/
-> Workspace taxonomy: **workspace = 31 members（30 product crates + 1 bench-only harness）**
-> (foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + image family 11 = `crates/engine/image/*`（接口层 `apeireth-image-core` + 10 vendored crate） + `benches` harness)。
-> crate 口径统一见本文件下表与 [INSTALL.md](INSTALL.md)（2026-10-18 许可搬运线 image 家族 +11 后更新）。
+> Workspace taxonomy: **workspace = 30 members（29 product crates + 1 bench-only harness）**
+> (foundation 6 / engine 7 + image family 11 / capabilities 1 / adapters 4 = 29 + `benches` harness)。
+> crate 口径统一见本文件下表与 [INSTALL.md](INSTALL.md)（2026-10-20 R4b 归档 `apeireth-perception` 后更新；历史口径 31 members 见 [AGENTS.md](AGENTS.md) §3 与 CHANGELOG）。
 
 ├── crates/
 │   ├── foundation/       # stable domain types, protocol, plugins, policy, credentials

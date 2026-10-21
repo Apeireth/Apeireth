@@ -66,7 +66,7 @@ docs/
 
 ## 当前基线（2026-10-16 文本可信度批对账；2026-10-06 / 2026-08-27 快照保留在下方）
 
-默认分支 `main`（HEAD 以实际提交为准），workspace.version `v2.0.0-rc.4`；**workspace = 31 members（30 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + 图像核心家族 11（`crates/engine/image/*`：接口层 `apeireth-image-core` + 10 vendored crate）= 30 crates） + 独立前端 workspace；测试基线单一真源见 [03-reference/test-baseline.md](03-reference/test-baseline.md)；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。（2026-10-18 文档审计批更新 crate 口径）
+默认分支 `main`（HEAD 以实际提交为准），workspace.version `v2.0.0-rc.4`；**workspace = 30 members（29 crates + bench harness）**（foundation 6 / engine 7 + 图像核心家族 11（`crates/engine/image/*`：接口层 `apeireth-image-core` + 10 vendored crate）/ capabilities 1 / adapters 4 = 29 crates）+ 独立前端 workspace；测试基线单一真源见 [03-reference/test-baseline.md](03-reference/test-baseline.md)，全量门禁走 `scripts/gate_full.ps1`（R6-A 唯一执行器）；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。（2026-10-20 R4b 归档 `apeireth-perception` 后口径；2026-10-18 审计批口径为 31 members）
 
 历史快照（2026-08-27）：`main` @ `d6910cf7`，tag `v2.0.0-alpha.1`，13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）。
 
