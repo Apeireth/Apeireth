@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 神经总线 R1b-2a：调质事件面收敛到总线订阅（默认关零行为变化，2026-10-21）
+
+- **事件面单入口**（`runtime-assembly::canonical::bio_tone`）：生产事件源由「模块 `on_hook` 旁路扫 `AfterToolResult`/`OnError`」改为「`nervous.bridge` → `NervousBus` → `BioToneBusSubscriber` 订阅」。同一事件只推进一次，无双写；模块 `on_hook` 只保留 `TurnStart` 语气装配，`record_hook_observation` 降为显式测试入口（保留向后兼容语义）。
+- **共享状态与首见集**：订阅者与模块共享同一 `Arc<ToneState>` 与同一 `ToneSeenTools` 首见集合，Novelty「工具名进程内首见」语义不变；订阅者 `handle` 纯函数映射 `NervousSignal` → 既有 `ToneFeedbackKind`（`ToolOutcome` → TaskSuccess/TaskFailure、`ErrorObserved` → TaskFailure、首见工具名 → Novelty）。
+- **默认关零变化**：开关关 = 不构造订阅者 = 总线零订阅零发布；语气状态与尾部叠加逐字节不变（既有零变化测试保持绿）。
+- **门禁（scoped）**：assembly 全目标 62 套件 / 676 passed / 0 failed（lib 281；bio_tone 单测 16、`bio_tone_feedback` 10、`bio_tone_wiring` 8）；clippy `-D warnings` 0、`fmt --check` 0 diff、`arch_guard --strict` VIOLATIONS 0、`docs_truth --verify --check` OK。
+- **后续**：R1b-2b（lifecycle 订阅 `ToolOutcome` + Lifecycle 探针，观测面 9/14）、R1b-2c（`ApprovalSocial` 信号生产+消费同批）、R1b-3（ritual E2E + 3 源 NotWired 定性）。权威全量仍未出数，§1 未替换。
+
 ## [Unreleased] — 安全加固批：8 项外部审计隐患修复（B1-B8，2026-10-19/20）
 
 外部安全审计《Apeireth-安全隐患分析》8 项风险全部收口（8 commits：`8f71d0c0`/`06246661`/`a786b733`/`2aab3add`/`1574335f`/`333c3471`/`1f65852b`/`1213fbdd`）：

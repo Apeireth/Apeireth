@@ -155,6 +155,18 @@
 	> 同命令面（`-j 1` + `RUST_TEST_THREADS=4`）复跑（今晚双线并发全量曾致 image-compose OOM，数字不可发布），
 	> **今晚全量尝试如实登记**：①21:30 起跑，22:04 进程被环境终止于 image 套件（日志 `artifacts/wave-bio-w37c-workspace-test.log`：139/340 套件、唯一失败 = 已知 D27 环境敏感 `storage_atomic` 用例、无编译错误）；②22:22 起跑在编译期被他线在途 R1b-4a（`nervous_snapshot.rs` schema v2 迁移）签名变更阻断（非本批文件，见 `wave-bio-w37c-workspace-test2.log`）；③22:25 起跑在 owner 收工口令下主动停止。三跑均不作为基线数字，§1 仍待明日单线独占全量刷新后广播。**§1 本轮不替换**。
 
+> **复测注记（2026-10-21，R1b-2a 调质订阅总线批校验）**：本批 = 调质事件面从「模块 `on_hook` 旁路扫
+> `AfterToolResult`/`OnError`」收敛到「`nervous.bridge` → `NervousBus` → `BioToneBusSubscriber` 订阅」
+> （`404919f6`，默认关）。订阅者与模块共享同一 `Arc<ToneState>` 与同一首见集合（Novelty 语义不变）；
+> 开关关 = 不构造订阅者、总线零订阅零发布、语气状态与叠加逐字节零变化。**scoped 全绿证据**：
+> `cargo test -p apeireth-runtime-assembly --locked` 全目标 **62 套件 / 676 passed / 0 failed**（lib 281；
+> bio_tone 单测 16、`bio_tone_feedback` 10、`bio_tone_wiring` 8）；`cargo clippy -p apeireth-runtime-assembly
+> --all-targets -- -D warnings` 0、`cargo fmt --check` 0 diff、`arch_guard --strict` VIOLATIONS 0（STALE 1 =
+> `play_tools.rs` 可缩表；EXC-0002/0003 属架构线在途例外）、`docs_truth --verify --check` OK。
+> **验收（R1b-2 handoff）**：既有 tone 测试全绿 + 新「总线订阅与旧 hook 观测路径终态等价」测试；
+> 开关开时订阅生效、关时总线零订阅；无双重推进。**未做（如实）**：R1b-2b/2c、R1b-3 未开始；
+> 权威全量仍未出数。**§1 本轮不替换**。
+
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |

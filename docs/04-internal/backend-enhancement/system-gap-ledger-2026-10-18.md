@@ -98,6 +98,19 @@
 > 提交：SG-18 0e3eb71｜SG-21 69038cde｜SG-22 6d0361e｜SG-25 283f37e｜SG-26 67dd06a。
 > **⇒ 14/14 内核全部入库（W1+W2 合计 +228 新单测）。**
 >
+> **R1b-2a 交付记录（2026-10-21）**：调质事件面收敛到神经总线订阅（默认关零行为变化）。提交：`404919f6`。
+> `bio_tone` 的生产事件源由「模块 `on_hook` 旁路扫 `AfterToolResult`/`OnError`」改为
+> 「`nervous.bridge` → `NervousBus` → `BioToneBusSubscriber` 订阅」；模块 `on_hook` 只保留 `TurnStart`
+> 语气装配；订阅者与模块共享同一 `Arc<ToneState>` 与同一首见集合（Novelty 语义不变）；开关关 = 不构造
+> 订阅者 / 总线零订阅零发布 / 语气与叠加逐字节零变化。事件仍只推进一次（无 on_hook + 订阅双写）。
+> **验收（R1b-2 handoff 口径）**：既有 tone 测试全绿 + 新「总线订阅与旧 hook 观测路径终态等价」测试；
+> 开关开时 `NervousBus::published_count(ToolOutcome/ErrorObserved)` 生效；默认关总线零订阅。
+> 测试：assembly 全目标 **62 套件 / 676 passed / 0 failed**（lib 281）；bio_tone 单测 16、
+> `bio_tone_feedback` 10、`bio_tone_wiring` 8；clippy 0、fmt 0 diff、`arch_guard --strict` VIOLATIONS 0、
+> `docs_truth --verify --check` OK。**未做（如实）**：R1b-2b（lifecycle 订阅 ToolOutcome + Lifecycle 探针
+> 9/14）、R1b-2c（`ApprovalSocial` 信号生产+消费同批）、R1b-3（ritual E2E + 3 源 NotWired 定性）；
+> 权威全量仍未出数（§1 未替换）。
+
 > **W3.6 交付记录（2026-10-20，两批）**：观测面与持久化收尾（**+31 新测**）。
 > 提交：probe 迟绑定生产接入 `f7a436a9`｜生命周期账本持久化 `8c4fa5c2`。
 >
