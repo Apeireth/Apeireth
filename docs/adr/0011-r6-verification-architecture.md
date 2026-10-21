@@ -160,10 +160,14 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
 - [ ] `gate_full.ps1` 并发实测：两实例不同时跑，第二条等待或 `-FailIfBusy` 失败（R6-A）
 - [ ] 失败日志含 `FAILURE_CLASS`，OOM 场景实测识别为 `oom`（R6-A）
 - [ ] `rust.yml` 内 `grep -E '24 LOCKED|13 键'` 零命中且守门仍通过（R6-B）
-- [ ] `verification-ledger.yaml` 至少 1 条四层齐全 + `signoff.owner/date` 非空（R6-C）
-- [ ] 阶段 6 闭环演练一次：清单关卡 + 签核 + 反思归档条目（R6-C）
-- [ ] 夜间 full workflow 存在且有最近一次结果可追溯（R6-D）
-- [ ] `docs_truth.py --verify --check` 覆盖 ledger 校验后 exit 0
+- [ ] `verification-ledger.yaml` 至少 1 条四层齐全 + `signoff.owner/date` 非空（R6-C；
+      载体 2026-10-21 已落，schema + 5 条单层条目；四层齐全 0 条、signoff 0 条，等 owner 签核）
+- [ ] 阶段 6 闭环演练一次：清单关卡 + 签核 + 反思归档条目（R6-C；**NOT RUN**，须 owner 参与）
+- [ ] 夜间 full workflow 存在且有最近一次结果可追溯（R6-D；载体 2026-10-21 已落
+      `.github/workflows/nightly-full.yml`，尚未有 CI 运行 → 可追溯性 **NOT MET**）
+- [x] `docs/status/formal-coverage.md` 存在并登记 Kani 终局矩阵 11 件 / TLA / Miri /
+      未覆盖边界（D6；2026-10-21 由架构线落，并订正 workflow「22 件」旧口径为 11 件）
+- [ ] `docs_truth.py --verify --check` 覆盖 ledger 校验后 exit 0（R6-C 脚本化，归效率线）
 
 ## 7. 后果（Consequences）
 
@@ -193,3 +197,20 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
   `docs_truth.py` / claims 流程。**R6-C/D 仍归效率线**（需要其脚本与 owner 签核流程）。
   恢复方式：效率线接管时直接以本批 commit 为起点继续，所有权在 handbook 裁决位更正。
   拒：让 R6 无限等待（Wave 4 无法收口）；拒：绕开 ADR 直接改 CI（本记录即口径）。
+
+- **2026-10-21（R6-C/D 载体批，架构线落载体，验收仍归效率线 + owner）**：R6-A/B 提交后
+  效率线仍无开工记录；为避免 Wave 4 收口长期悬空，架构线只落**载体**，不动 PR 门禁口径、
+  不代替 owner 签核：
+  ① `docs/status/verification-ledger.yaml`（D4 schema：id/claim/layer/level/evidence/
+  verify_cmd/bounded/signoff/verified_at；5 条单层条目 = formal×2 + scenario×3；
+  **四层齐全 0 条、signoff 0 条、阶段 6 演练 NOT RUN**——需要 owner 真实签核才能达标）；
+  ② `docs/status/formal-coverage.md`（D6：Kani 终局矩阵 11 件逐件登记、matrix 外
+  harness 一律按「未覆盖/不阻塞」口径、TLA 本机不入 CI、Miri 面与限制、明确未覆盖清单）；
+  ③ `.github/workflows/nightly-full.yml`（R6-D 载体：cron 每日 UTC 18:00 + dispatch，
+  windows-latest 跑 `gate_full.ps1 -FailIfBusy`，日志 artifact；**尚未有 CI 运行 = NOT RUN**）；
+  ④ 顺带订正 `.github/workflows/kani.yml` 的「22 件」旧口径注释与汇总门文案为 11 件
+  （2026-10-13 K18 终局矩阵实况；历史口径保留说明，避免第二真源）。
+  **不做**：PR 层降级（rust.yml 每次 PR 全量 nextest → PR fast 子集 + 夜间 full）需要
+  与全量门禁执行线排期，且会改变对外数字产生路径；`docs_truth.py` 对 ledger 的脚本化
+  漂移校验、夜间结果回填、owner 签核流程均归效率线 R6-C/D 正式验收。
+  拒：把「载体已落」写成「R6-C/D 已验收」（0 装）；拒：架构线代签 owner signoff。

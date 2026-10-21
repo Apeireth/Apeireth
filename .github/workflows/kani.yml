@@ -17,9 +17,11 @@ name: Kani formal verification (approval SM + 6 property families)
 # ===== 并行化 + 路径豁免改造 (2026-10-10, 主人拍板 ①+③) =====
 # 原单 job 串行 17 步, 一轮反馈 45m~2h; 改为:
 #   - changes: 已验证面变更检测 —— 未触碰 → 汇总门秒绿 (无关 PR 免等);
-#   - verify:  22 harness 矩阵并行 (各自独立 job, 结果独立可见, fail-fast 关);
+#   - verify:  11 harness 矩阵并行 (各自独立 job, 结果独立可见, fail-fast 关);
 #   - 汇总门:  job 名 = 分支保护 required check 原名 (契约零破坏), needs 聚合。
-# 纪律不松: 触碰已验证面 = 22 件全绿才放行; 钉 Kani 0.68.0 防发版漂移。
+# 纪律不松: 触碰已验证面 = 11 件全绿才放行; 钉 Kani 0.68.0 防发版漂移。
+# (旧口径「22 件」为 2026-10-10 并行化改造时的历史注释; 2026-10-13 K18 终局矩阵
+#  定为 11 件本机实证可证全集 —— 2026-10-21 已按矩阵实况修正注释与汇总门文案。)
 
 on:
   push:
@@ -147,24 +149,24 @@ jobs:
         run: timeout 45m cargo kani --manifest-path research/verification/kani/Cargo.toml --harness "${{ matrix.harness }}"
 
   # ===== 汇总门: job 名 = 分支保护 required check 原名 (契约零破坏) =====
-  # 触碰已验证面: 22 件矩阵全绿才绿; 未触碰: 秒绿 (路径豁免)。
+  # 触碰已验证面: 11 件矩阵全绿才绿; 未触碰: 秒绿 (路径豁免)。
   kani-required-gate:
     name: cargo kani (approval SM + property families, mirror crate)
     needs: [changes, verify]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: 聚合 22 件矩阵 / 路径豁免判定
+      - name: 聚合 11 件矩阵 / 路径豁免判定
         run: |
           VERIFIED="${{ needs.changes.outputs.verified }}"
           RESULT="${{ needs.verify.result }}"
           echo "verified=$VERIFIED verify_result=$RESULT"
           if [ "$VERIFIED" != "true" ]; then
-            echo "✅ 未触碰已验证面, 路径豁免 (证明要求不变: 触碰即 22 件全绿)"
+            echo "✅ 未触碰已验证面, 路径豁免 (证明要求不变: 触碰即 11 件全绿)"
             exit 0
           fi
           if [ "$RESULT" = "success" ]; then
-            echo "✅ 22 件 harness 全部证完"
+            echo "✅ 11 件 harness 全部证完"
             exit 0
           fi
           echo "::error::kani 矩阵存在失败/未跑完 ($RESULT), 证明门不放行"
