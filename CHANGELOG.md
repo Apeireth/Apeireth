@@ -1,5 +1,15 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Wave 4 观测补格：调质/昼夜/仪式三格自述读数 + 环境敏感测试去抖（默认关零行为变化，2026-10-21）
+
+- **观测面 9/14 → 12/14**（`capabilities.bio_mechanisms`）：新增 `runtime-assembly::canonical::bio_extra_probes` 三个只读 probe —— 调质（`ToneState` 真实向量/基线/行为参数/语气档；与 R1b-2a 订阅者共享同一状态）、昼夜（按 `APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN` 时区偏移 + 注入时钟纯算相位/振幅/局部时刻/窗口/主动门；睡眠压力如实 `null` + 原因「累加器由 CLI care 心跳持有，装配根无读取面」）、仪式（`<care_dir>/ritual_state.json` 只读 `RitualStateStore`：状态数/日程数/计划决策/可行动数）。
+- **接线方式**：三格各走 `BioProbeSlots` 迟绑定槽（`tone`/`circadian`/`ritual`），装配根在能力表 / 关怀目录 / 调质句柄就绪后 fill；开关关 = 槽不武装 = 零 fill = 单格 `null` + 未接线真因（不编读数）；仅在 `APEIRETH_ENABLE_BIO_SELF_STATUS=1` 时注册，不新增 env。
+- **口径如实**：调质/昼夜 = 真实内存状态（`wired`）；仪式 = 本地状态文件只读快照（`wired`，无跨进程事件，写者仍是 W3.7 工具面）；睡眠压力 = 父格 `wired` 下的 `not_wired` 子字段。
+- **环境敏感测试去抖**（`18691532`）：D27 `storage_atomic` 两测试改进程唯一后缀（pid + 测试序号），不再赌全局序号窗口；D25 AppContainer 探针有界重试 3 次（50/100ms）且测试侧环境拒绝显式 SKIP（不假绿、能力判定不被瞬时抖动永久缓存）；D26 新增 `tools::test_support` 单源 helper（仅 Windows `WSAEACCES 10013` 有界重试 ≤8×5ms）并迁移 tools crate 10 处 `TcpListener::bind`；D18 取证 = `962f30a8` 已落地（JWT + GenericBearer 扫描器），本批 0 改动。
+- **门禁（scoped）**：`cargo test -p apeireth-runtime-assembly --locked -j 2` 全目标 0 failed（lib 300；新增集成 `bio_observation_cells` 3 绿）；`cargo test -p apeireth-core --lib` 199、`-p apeireth-tools-canonical --lib` 595、`fetch_execution` 22、`content_feed` 13、`content_feed_lifecycle` 11 全绿；两 crate clippy `-D warnings` 0 / fmt 0 diff。`verify_changed --arch-strict --no-test` 唯一未过项 = 他线在途未提交的 `crates/adapters/cli/src/lib.rs` 尺寸（3878→3886，非本批文件，本批 0 触碰 cli）。
+- **诚实边界**：默认关（非 DEFAULT ENABLED）；三格读数只读、0 写动作；无 live E2E；观测面 12/14，缺 homeostasis 行为接线（需注入真实 context budget）与 social_repair 事件源；D28（页文件耗尽）属环境侧，登记不改代码。
+- **后续**：homeostasis 行为接线 + social_repair 事件源 → 观测面 14/14；claims 抬级首批 4 条（`docs/04-internal/backend-enhancement/implemented-to-wired-plan-2026-10-21.md`）；发布收口。
+
 ## [Unreleased] — 神经总线 R1b-2c：审批社交信号经总线发布（默认关零行为变化，2026-10-21）
 
 - **新信号类别**（`runtime-assembly::canonical::nervous_bus`）：`NervousSignalKind::ApprovalSocial`（`ALL` 2→3）+ `ApprovalSocialOutcome { Approved, Rejected, Cancelled }` + `NervousSignal::approval_social(outcome, source)`；三态显式、**取消不编事件**、拒绝理由文本不进信号（防 PII 进总线）。

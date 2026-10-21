@@ -98,6 +98,16 @@
 > 提交：SG-18 0e3eb71｜SG-21 69038cde｜SG-22 6d0361e｜SG-25 283f37e｜SG-26 67dd06a。
 > **⇒ 14/14 内核全部入库（W1+W2 合计 +228 新单测）。**
 >
+> **Wave 4 观测补格交付记录（2026-10-21）**：`bio_mechanisms` 观测面 9/14 → **12/14**（默认关零注册）。提交
+> `73107ff0`（`runtime-assembly::canonical::bio_extra_probes`：调质 / 昼夜 / 仪式三 probe + 三个 `BioProbeSlots`
+> 迟绑定槽 + 装配根 fill）与环境债批 `18691532`（D25/D26/D27 测试去抖；D18 取证 = `962f30a8` 已落地、0 改动）。
+> **口径**：调质/昼夜 = 真实内存状态（`wired`）；仪式 = 本地状态文件只读快照（`wired`，无跨进程事件，写者仍是
+> W3.7 工具面）；睡眠压力 = 父格 `wired` 下的 `not_wired` 子字段（原因：累加器由 CLI care 心跳持有，装配根无读取面）；
+> 开关关 = 槽不武装 / 零 fill / 单格 `null` + 未接线真因。**门禁**：assembly 全目标 0 failed（lib 300；新集成
+> `bio_observation_cells` 3）、core/tools lib 199/595 全绿、clippy/fmt 绿；`arch_guard --strict` 本批 0 违规（fast-gate
+> 唯一失败项为他在途 cli lib 尺寸）。**未做（如实）**：观测面缺 homeostasis 行为接线（需注入真实 context budget）与
+> social_repair 事件源；默认关；无 live E2E。
+
 > **R1b-2c 交付记录（2026-10-21）**：审批社交信号经神经总线发布（默认关零行为变化）。提交：`f2dad300`。
 > 新增总线信号类别 `NervousSignalKind::ApprovalSocial`（三态 `Approved`/`Rejected`/`Cancelled`；**取消不编事件**；拒绝理由文本不进信号，防 PII 进总线）；发布方 = `runtime-assembly::canonical::bio_approval_social::BioApprovalSocialSource`（`production.rs` 按调质开关交付句柄，开关关 = `None` = 零发布）；消费方 = 调质订阅者（`Approved`→`SocialPositive`、`Rejected`→`SocialNegative`，同一事件只推进一次）；CLI 审批在 `resolve` 成功后发布；删除 `bio_tone` 直写助手（发布 = 唯一真源）。
 > **门禁**：assembly 62 套件 0 failed（lib 291）；CLI lib 56 + 集成套件全绿（跳过一条他线在途 R1b-3 测试，随后由他线 `0b71cd6f` 提交并复跑绿）；clippy `-D warnings` 0 / fmt 0 / `arch_guard --strict` VIOLATIONS 0；`verify_changed --arch-strict --no-test` FAST GATE PASSED；cli lib 3886→3878 守住既有 3879 棘轮。**未做**：无 live E2E；审批路径外无生产发布方；四档仍只有显式注入口。

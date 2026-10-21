@@ -172,6 +172,19 @@
 > **复测注记（2026-10-21，R1b-2b 生命周期订阅总线批校验）**：本批 = `bio_lifecycle` 工具结果面从「模块 `on_hook` 扫描 `AfterToolResult`」收敛到「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」，并接通 `BioMechanismKind::Lifecycle` 观测格（`bio_mechanisms` 观测面 8/14 → 9/14；默认关零注册/零订阅/零 fill）。实测：`cargo test -p apeireth-runtime-assembly --locked` 全目标绿（lib **284** passed；集成套件 0 failed；`bio_lifecycle_wiring` **11** passed、`nervous_snapshot` **28** passed）；`cargo clippy -p apeireth-runtime-assembly --all-targets --locked -- -D warnings` 0；`cargo fmt -p apeireth-runtime-assembly --check` 0；`arch_guard --strict` VIOLATIONS 0（STALE 1 = play_tools.rs 可缩表）；`docs_truth --verify --check` OK。
 > **fast-gate（verify_changed.py）未出全链绿，如实登记**：①/② 次 nextest 构建阶段 `link.exe` exit 1102 / 页面文件不足（环境，记 `00-backlog` D28）；③ 次 check 阶段被在途未提交 governance 改动阻断（`error[E0277]` `crates/foundation/governance/src/chain.rs:372` `(dyn ChainClock + 'static)` 未实现 `Debug`）。scoped 门禁在阻断前已跑绿（上列数字）。
 > **口径**：全量工作区测试本批未跑（他线在途并发构建，数字不作基线）；**§1 本轮不替换**；等单线独占全量后再统一刷新 §1 + README 徽章。
+> **复测注记（2026-10-21，Wave 4 观测补格 + 环境债去抖批校验）**：本批 = ①`bio_extra_probes` 三格自述读数
+> （调质 / 昼夜 / 仪式）经迟绑定槽接入 `APEIRETH_ENABLE_BIO_SELF_STATUS`（观测面 9/14 → **12/14**，默认关零注册零 fill）；
+> ②`18691532` 环境敏感测试去抖（D25 AppContainer 探针有界重试 + SKIP 显式化、D26 tools crate 10 处 bind 重试 helper、
+> D27 storage_atomic 进程唯一后缀）；③D18 取证 = `962f30a8` 已落地、本批 0 代码改动。
+> **scoped 全绿证据**：`cargo test -p apeireth-runtime-assembly --locked -j 2` 全目标 0 failed（lib **300**；
+> 新集成 `bio_observation_cells` **3**；`bio_lifecycle_wiring` 11 / `nervous_snapshot` 13 / `bio_tool_ecosystem` 3 /
+> `bio_ritual_tools` 5）；`cargo test -p apeireth-core --lib` **199**；`-p apeireth-tools-canonical --lib` **595**；
+> 集成 `fetch_execution` 22 / `content_feed` 13 / `content_feed_lifecycle` 11；两 crate `clippy -D warnings` 0、fmt 0 diff。
+> **fast-gate 未全绿（如实）**：`verify_changed --arch-strict --no-test` 唯一失败 = 他线在途未提交的
+> `crates/adapters/cli/src/lib.rs` 尺寸 3878→3886（非本批文件；本批改动 arch 检查 0 违规）。
+> **口径**：全量工作区测试本批未跑（他线并发提交中）；**§1 本轮不替换**。全量执行权与 §1 刷新归效率线
+> （`7153f5db`，`gate_full.ps1 -FailIfBusy` 唯一执行器；现行 §1 = 341 套件 / 8570 passed / 0 failed / 51 ignored，2026-10-21）。
+
 > **复测注记（2026-10-21，R1b-2c 审批社交总线批校验）**：`cargo test -p apeireth-runtime-assembly --locked -j 2`
 > → 62 套件 / 0 failed（lib 291 passed）；`cargo test -p apeireth-cli --locked -j 2` → 56 lib + 各集成套件全绿
 > （该次全量跑跳过一条他线在途 R1b-3 端到端测试，随后由他线 `0b71cd6f` 提交并复跑绿）；`cargo clippy -p
