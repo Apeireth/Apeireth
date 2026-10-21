@@ -86,10 +86,10 @@ pub mod user_access;
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use chain::{
     AuditSink, ChainClock, ChainConfig, ChainError, ChainGovernanceHook, ChainOutcome, ChainRecord,
-    ChainSignatureMode, FixedChainClock, GovernanceChain, GovernancePhase,
-    ImmediateReflectionScheduler, InMemoryAuditSink, MultiSignVerification, MultiSignVerifier,
-    PlaceholderMultiSignVerifier, ReflectionSchedule, ReflectionScheduler, SystemChainClock,
-    GOVERNANCE_CHAIN_VERSION,
+    ChainSignatureMode, DelayedReflectionScheduler, FixedChainClock, GovernanceChain,
+    GovernancePhase, ImmediateReflectionScheduler, InMemoryAuditSink, MultiSignVerification,
+    MultiSignVerifier, PlaceholderMultiSignVerifier, ReflectionDue, ReflectionSchedule,
+    ReflectionScheduler, SystemChainClock, GOVERNANCE_CHAIN_VERSION,
 };
 pub use input_security::{
     redact_secret_surfaces, session_fingerprint, CredentialDisclosureHook, FeelingHint,

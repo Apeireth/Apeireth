@@ -168,7 +168,10 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
 - [x] R8-A：`NotConfigured` 显式而非静默跳过；`signature_mode` 标注占位；不新建 crate/依赖
 - [ ] R8-B：入口收敛为 `GovernanceChain::run` 单点（grep 证据）；CLI/gateway 既有治理测试全绿
 - [ ] R8-B：审计落账不再分叉（gateway IM 与 runtime 审批都经 `ApprovalClosure` 段）；持久 sink 可配置
-- [ ] R8-C：到期测试可控时钟；autopilot 保持 NOT IMPLEMENTED；默认关闭零行为变化
+- [x] R8-C：到期测试可控时钟；autopilot 保持 NOT IMPLEMENTED；默认关闭零行为变化
+      （2026-10-21 交付 `DelayedReflectionScheduler` + `ReflectionDue` + `run` 起始审计
+      `governance.reflection_due`；默认 `ImmediateReflectionScheduler` 零行为变化，实测
+      governance lib 214 passed；autopilot / 常驻反思执行器仍 NOT IMPLEMENTED）
 - [ ] R8-D：wiring.yaml 覆盖治理面；`governance-chain` 集成测试入 CI
 - [x] LOCKED 5 项 0 触碰 / 0 新外部 dep / 0 新开关 / 0 新 crate / 六段语义不变
 
@@ -246,3 +249,17 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
   0 failed（新增 5 条适配器测试）；clippy `-D warnings` exit 0；`fmt --check` 0 diff。
 - **如实边界**：无生产装配构造适配器；`Runtime` 仍持 `Arc<GovernancePipeline>` 包装；
   未跑全 workspace 门禁。
+
+### 2026-10-21（R8-C 延迟反思队列交付）
+
+- **交付**：`crates/foundation/governance/src/chain.rs` 新增
+  `ReflectionScheduler::take_due`（默认空 = 零行为变化）、`ReflectionDue`
+  （token / audit_hash / scheduled_at / due_at）与 `DelayedReflectionScheduler`
+  （进程内延迟队列，clock + delay_ms 注入，一次只交还一次）；`GovernanceChain::run`
+  在裁决前 `sweep_due_reflections`，把到期反思以 `governance.reflection_due` 落审计，
+  审计失败即 `Denied{phase: Reflection}`（fail-closed）。纯新增 + 默认实现不变，**零生产接线**。
+- **归属**：沿 R8-A/R8-B1 先例（安全线 idle，owner 授权做到底）。
+- **实测**：`cargo test -p apeireth-governance --lib --locked -j 2` = 214 passed /
+  0 failed（新增 5 条队列/到期/失败关闭测试）；clippy `-D warnings` exit 0；`fmt --check` 0 diff。
+- **如实边界**：autopilot、常驻反思执行器、反思结果回写（学习面）均 NOT IMPLEMENTED；
+  延迟仅在进程内、进程重启即丢（不是持久队列）；无生产装配注入；未跑全 workspace 门禁。

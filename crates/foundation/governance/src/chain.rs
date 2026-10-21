@@ -306,6 +306,28 @@ pub enum ReflectionSchedule {
 pub trait ReflectionScheduler: Send + Sync {
     /// Schedule reflection for one audit hash.
     fn schedule(&self, audit_hash: &str, timestamp: Timestamp) -> ReflectionSchedule;
+
+    /// Take the reflections whose delay has elapsed (R8-C).
+    ///
+    /// Default: nothing is ever due (matches the immediate scheduler, whose
+    /// reflection is bookkeeping only). A delayed scheduler returns due items
+    /// once; the chain audits each one it receives.
+    fn take_due(&self, _now: Timestamp) -> Vec<ReflectionDue> {
+        Vec::new()
+    }
+}
+
+/// One reflection whose in-process delay has elapsed (R8-C).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReflectionDue {
+    /// Opaque token handed out when the reflection was scheduled.
+    pub token: String,
+    /// Audit hash the reflection is about.
+    pub audit_hash: String,
+    /// When the reflection was scheduled.
+    pub scheduled_at: Timestamp,
+    /// When the delay elapsed.
+    pub due_at: Timestamp,
 }
 
 /// Default scheduler: in-process bookkeeping only.
@@ -336,6 +358,112 @@ impl ReflectionScheduler for ImmediateReflectionScheduler {
             &audit_hash[..audit_hash.len().min(12)]
         );
         ReflectionSchedule::Scheduled { token }
+    }
+}
+
+/// In-process delayed reflection queue (R8-C).
+///
+/// `schedule` records a pending reflection due `delay_ms` after the supplied
+/// instant; `take_due` hands the elapsed ones back exactly once so the chain can
+/// audit them. No thread, daemon, persistence, or autopilot: it is a queue, not
+/// a runner (autopilot stays NOT IMPLEMENTED, ADR-0010 D5).
+pub struct DelayedReflectionScheduler {
+    clock: Arc<dyn ChainClock>,
+    delay_ms: i64,
+    counter: Mutex<u64>,
+    pending: Mutex<Vec<PendingReflection>>,
+}
+
+impl std::fmt::Debug for DelayedReflectionScheduler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DelayedReflectionScheduler")
+            .field("delay_ms", &self.delay_ms)
+            .field("pending", &self.pending_len())
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PendingReflection {
+    token: String,
+    audit_hash: String,
+    scheduled_at: Timestamp,
+    due_at: Timestamp,
+}
+
+impl DelayedReflectionScheduler {
+    /// A queue with `delay_ms` (clamped to non-negative) at the given clock.
+    pub fn new(clock: Arc<dyn ChainClock>, delay_ms: i64) -> Self {
+        Self {
+            clock,
+            delay_ms: delay_ms.max(0),
+            counter: Mutex::new(0),
+            pending: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Configured delay in milliseconds.
+    pub const fn delay_ms(&self) -> i64 {
+        self.delay_ms
+    }
+
+    /// Number of reflections still waiting for their delay.
+    pub fn pending_len(&self) -> usize {
+        self.pending
+            .lock()
+            .map(|pending| pending.len())
+            .unwrap_or(0)
+    }
+
+    /// [`ReflectionScheduler::take_due`] evaluated at the scheduler's own clock.
+    pub fn take_due_now(&self) -> Vec<ReflectionDue> {
+        <Self as ReflectionScheduler>::take_due(self, self.clock.now())
+    }
+}
+
+impl ReflectionScheduler for DelayedReflectionScheduler {
+    fn schedule(&self, audit_hash: &str, timestamp: Timestamp) -> ReflectionSchedule {
+        let mut counter = self.counter.lock().expect("reflection counter poisoned");
+        *counter += 1;
+        let token = format!(
+            "reflection-{}-{}-{}",
+            counter,
+            timestamp.epoch_millis(),
+            &audit_hash[..audit_hash.len().min(12)]
+        );
+        let due_at =
+            Timestamp::from_epoch_millis(timestamp.epoch_millis().saturating_add(self.delay_ms))
+                .unwrap_or(timestamp);
+        self.pending
+            .lock()
+            .expect("reflection queue poisoned")
+            .push(PendingReflection {
+                token: token.clone(),
+                audit_hash: audit_hash.to_string(),
+                scheduled_at: timestamp,
+                due_at,
+            });
+        ReflectionSchedule::Scheduled { token }
+    }
+
+    fn take_due(&self, now: Timestamp) -> Vec<ReflectionDue> {
+        let now_ms = now.epoch_millis();
+        let mut pending = self.pending.lock().expect("reflection queue poisoned");
+        let mut due = Vec::new();
+        pending.retain(|item| {
+            if item.due_at.epoch_millis() <= now_ms {
+                due.push(ReflectionDue {
+                    token: item.token.clone(),
+                    audit_hash: item.audit_hash.clone(),
+                    scheduled_at: item.scheduled_at,
+                    due_at: item.due_at,
+                });
+                false
+            } else {
+                true
+            }
+        });
+        due
     }
 }
 
@@ -481,6 +609,14 @@ impl GovernanceChain {
         };
 
         let timestamp = self.clock.now();
+        // R8-C: before deciding anything, audit reflections whose in-process
+        // delay elapsed. A broken audit sink stays fail-closed.
+        if let Err(reason) = self.sweep_due_reflections(timestamp) {
+            return ChainOutcome::Denied {
+                phase: GovernancePhase::Reflection,
+                reason,
+            };
+        }
         let subject = Self::subject_of(request);
         let signature_mode = self.multi_sign.mode();
         let mut record = ChainRecord {
@@ -665,6 +801,21 @@ impl GovernanceChain {
                 record.reflection_token = Some(token);
             }
         }
+    }
+
+    /// Audit every reflection whose in-process delay has elapsed (R8-C).
+    ///
+    /// The default scheduler never reports due items, so this is a no-op unless
+    /// a [`DelayedReflectionScheduler`] is injected. Each due reflection is
+    /// appended exactly once; a sink failure is returned as a reason so `run`
+    /// can fail closed at [`GovernancePhase::Reflection`].
+    fn sweep_due_reflections(&self, now: Timestamp) -> Result<(), String> {
+        for due in self.reflection.take_due(now) {
+            self.audit
+                .append("governance.reflection_due", &due.audit_hash, now)
+                .map_err(|error| format!("{}: {error}", GovernancePhase::Reflection.label()))?;
+        }
+        Ok(())
     }
 
     fn note_denial(record: &mut ChainRecord, phase: GovernancePhase) {
@@ -1063,5 +1214,104 @@ mod tests {
         let hook = ChainGovernanceHook::new(chain);
         hook.approval_resolved(&SessionId::new(), &CapabilityId::new("tool.shell").unwrap());
         assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    // -- R8-C delayed reflection queue --------------------------------------
+
+    const T0: i64 = 1_700_000_000_000;
+
+    fn fixed_clock() -> Arc<FixedChainClock> {
+        Arc::new(FixedChainClock::new(T0))
+    }
+
+    fn timestamp_ms(epoch_millis: i64) -> Timestamp {
+        Timestamp::from_epoch_millis(epoch_millis).expect("valid instant")
+    }
+
+    #[test]
+    fn delayed_scheduler_releases_each_due_reflection_once() {
+        let scheduler = DelayedReflectionScheduler::new(fixed_clock(), 5_000);
+        assert_eq!(scheduler.delay_ms(), 5_000);
+        let ReflectionSchedule::Scheduled { token } =
+            scheduler.schedule("hash-abc", timestamp_ms(T0))
+        else {
+            panic!("expected scheduled");
+        };
+        assert!(token.starts_with("reflection-1-"), "token = {token}");
+        assert_eq!(scheduler.pending_len(), 1);
+
+        assert!(ReflectionScheduler::take_due(&scheduler, timestamp_ms(T0 + 4_999)).is_empty());
+        let due = ReflectionScheduler::take_due(&scheduler, timestamp_ms(T0 + 5_000));
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].token, token);
+        assert_eq!(due[0].audit_hash, "hash-abc");
+        assert_eq!(due[0].scheduled_at, timestamp_ms(T0));
+        assert_eq!(due[0].due_at, timestamp_ms(T0 + 5_000));
+        assert_eq!(scheduler.pending_len(), 0);
+        assert!(ReflectionScheduler::take_due(&scheduler, timestamp_ms(T0 + 60_000)).is_empty());
+    }
+
+    #[test]
+    fn delayed_scheduler_take_due_now_uses_its_clock() {
+        let scheduler = DelayedReflectionScheduler::new(fixed_clock(), 0);
+        let _ = scheduler.schedule("hash-now", timestamp_ms(T0));
+        let due = scheduler.take_due_now();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].audit_hash, "hash-now");
+        assert!(scheduler.take_due_now().is_empty());
+    }
+
+    #[tokio::test]
+    async fn chain_audits_due_reflections_before_deciding() {
+        let sink = Arc::new(InMemoryAuditSink::new());
+        let clock = fixed_clock();
+        let chain = GovernanceChain::new(Arc::new(FixedDecision(Decision::Allow, "fixed_allow")))
+            .with_clock(clock.clone())
+            .with_reflection_scheduler(Arc::new(DelayedReflectionScheduler::new(clock, 0)))
+            .with_audit_sink(sink.clone());
+
+        assert!(chain.run(&completion_request("m")).await.is_allowed());
+        assert_eq!(sink.len(), 1);
+        // The first run scheduled a reflection due immediately; the next run
+        // audits it before deciding.
+        assert!(chain.run(&completion_request("m")).await.is_allowed());
+        assert_eq!(sink.len(), 3);
+        let records = sink.records();
+        assert_eq!(records[1].event_kind, "governance.reflection_due");
+        assert_eq!(records[2].event_kind, "governance.allowed");
+        sink.verify().expect("chain must verify");
+    }
+
+    #[tokio::test]
+    async fn default_scheduler_never_reports_due_reflections() {
+        let sink = Arc::new(InMemoryAuditSink::new());
+        let chain = GovernanceChain::new(Arc::new(FixedDecision(Decision::Allow, "fixed_allow")))
+            .with_clock(fixed_clock())
+            .with_audit_sink(sink.clone());
+        assert!(chain.run(&completion_request("m")).await.is_allowed());
+        assert!(chain.run(&completion_request("m")).await.is_allowed());
+        assert_eq!(sink.len(), 2);
+        for record in sink.records() {
+            assert_eq!(record.event_kind, "governance.allowed");
+        }
+    }
+
+    #[tokio::test]
+    async fn chain_fails_closed_when_due_reflection_audit_fails() {
+        let clock = fixed_clock();
+        let scheduler = Arc::new(DelayedReflectionScheduler::new(clock.clone(), 0));
+        let _ = scheduler.schedule("hash-pending", timestamp_ms(T0));
+        let chain = GovernanceChain::new(Arc::new(FixedDecision(Decision::Allow, "fixed_allow")))
+            .with_clock(clock)
+            .with_reflection_scheduler(scheduler)
+            .with_audit_sink(Arc::new(FailingAudit));
+        let outcome = chain.run(&completion_request("m")).await;
+        assert!(matches!(
+            outcome,
+            ChainOutcome::Denied {
+                phase: GovernancePhase::Reflection,
+                ..
+            }
+        ));
     }
 }
