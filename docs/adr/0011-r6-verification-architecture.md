@@ -164,7 +164,11 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
       载体 2026-10-21 已落，schema + 5 条单层条目；四层齐全 0 条、signoff 0 条，等 owner 签核）
 - [ ] 阶段 6 闭环演练一次：清单关卡 + 签核 + 反思归档条目（R6-C；**NOT RUN**，须 owner 参与）
 - [ ] 夜间 full workflow 存在且有最近一次结果可追溯（R6-D；载体 2026-10-21 已落
-      `.github/workflows/nightly-full.yml`，尚未有 CI 运行 → 可追溯性 **NOT MET**）
+      `.github/workflows/nightly-full.yml`；**2026-10-21 E3 首跑尝试阻塞**：远端默认分支
+      `main=fb68f5d3` 落后本地 194 提交、默认分支 workflow 列表无此文件，`workflow_dispatch`
+      API 返回 404（`.git-credentials` 的 PAT 有效且 scope 含 repo/workflow，`/user`=200，
+      但默认分支缺载体时 dispatch 不可用）；本地 YAML `safe_load` OK，首跑仍 0 次 →
+      可追溯性 **NOT MET**，不勾选、不伪造 CI 结果）
 - [x] `docs/status/formal-coverage.md` 存在并登记 Kani 终局矩阵 11 件 / TLA / Miri /
       未覆盖边界（D6；2026-10-21 由架构线落，并订正 workflow「22 件」旧口径为 11 件）
 - [ ] `docs_truth.py --verify --check` 覆盖 ledger 校验后 exit 0（R6-C 脚本化，归效率线；
@@ -222,3 +226,15 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
   （发现并修正 `summary.claims_with_entries` 4->5 的真实漂移）；`.gitignore` 加
   `!scripts/verify_ledger.py`（`*.py` 忽略规则例外，与 arch_guard/arch_doc 同法）。
   仍归效率线：写入脚本、`docs_truth` 集成、夜间结果回填与 owner 签核。
+
+- **2026-10-21（E3 R6-D 夜间首跑阻塞，效率线重启批）**：按 restart-brief E3 尝试触发
+  `.github/workflows/nightly-full.yml`（`workflow_dispatch`，`main_only=true`）未成，阻塞证据：
+  ①远端默认分支 `main=fb68f5d3`（2026-10-18），本地 `main` 领先 194 提交，夜间载体只在本地
+  提交链；②`GET /repos/Apeireth/Apeireth/actions/workflows` 返回 26 个默认分支 workflow，
+  无 `nightly-full`；③`POST .../actions/workflows/nightly-full.yml/dispatches` = HTTP 404；
+  ④凭据侧不阻塞：`.git-credentials` 内 PAT 有效（`/user` 200，scope 含 `repo`/`workflow`），
+  但默认分支缺载体时 dispatch API 不可用。**结论：首跑 0 次、无 run URL/artifact，不回填伪造
+  数字**；四问如实——覆盖率未测（99% 未覆盖口径未验证）、1200s wall 未实测（本地 full 最近
+  实跑约 14.8 分钟、非夜间 CI）、连续绿 0 次/绿分 0、失败兜底与通知未验证。`nightly-full.yml`
+  本地 `yaml.safe_load` OK（on=schedule/workflow_dispatch，job=nightly-full-gate）。
+  E4（ledger 门禁）不受阻，照做；不推远端、不改 `rust.yml` PR 门禁口径。

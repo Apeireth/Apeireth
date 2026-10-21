@@ -50,18 +50,18 @@ pwsh scripts/gate_full.ps1 -ClassifyLog logs/gate-full.log
 
 | CI workflow | 对应层 | 现状 |
 |---|---|---|
-| `rust.yml` → `rust-tests`（3 OS matrix，nextest） | full（PR 触发，非 nightly 专属） | 现行；R6-C 将评估夜间化与成本分层 |
+| `rust.yml` → `rust-tests`（3 OS matrix，nextest） | full（PR 触发，非 nightly 专属） | 现行；R6-D 夜间化载体已落（`nightly-full.yml`），PR 层降级待排期 |
 | `rust.yml` → `hard-walls`（守门 1–6） | arch（契约口径） | 守门 1/3/4 已于 R6-B 改为读契约真源（LOCKED / R11 / 14 键）；旧「24 LOCKED / 13 键」字面量 0 残留 |
 | `arch-guard.yml`、`wiring-ledger.yml`、`docs-truth.yml`、`doc-caliber.yml` | arch | 灰度 report-only 至 2026-11-03（arch-guard / wiring-ledger） |
-| `kani.yml`（22 harness 矩阵 + 汇总门）、`miri.yml` | 形式化面 | 保持 blocking（无 `continue-on-error`）；覆盖边界待 R6-D `formal-coverage.md` 登记 |
+| `kani.yml`（22 harness 矩阵 + 汇总门）、`miri.yml` | 形式化面 | 保持 blocking（无 `continue-on-error`）；覆盖边界待 R6-C `formal-coverage.md` 登记 |
 | `image-family.yml`、`gate_full.ps1 -ImageOnly` | full（图像家族） | 已交付（R4a-1） |
 
 ## 4. 未交付（如实）
 
 | 项 | 状态 |
 |---|---|
-| R6-C：夜间 full 调度 + 成本分层（PR 只跑 fast/affected） | NOT IMPLEMENTED（效率线实施，需 owner 拍板夜间频率/载体） |
-| R6-D：四层验收载体 `docs/status/verification-ledger.yaml`、形式化边界 `docs/status/formal-coverage.md` | NOT IMPLEMENTED（效率线实施） |
+| R6-D：夜间 full 调度 + 成本分层（PR 只跑 fast/affected） | 载体已落（`.github/workflows/nightly-full.yml`，2026-10-21）；**首跑阻塞**：远端默认分支 `main=fb68f5d3` 落后本地 194 提交、默认分支无该 workflow，dispatch API 404 → 首跑 0 次、可追溯性 NOT MET；PR 层降级未做 |
+| R6-C：四层验收载体 `docs/status/verification-ledger.yaml`、形式化边界 `docs/status/formal-coverage.md` | 载体已落（5 条单层条目、四层齐全 0、signoff 0，2026-10-21）；只读校验器 `scripts/verify_ledger.py` 已落；`docs_truth` 集成与 owner 签核待做 → 验收 NOT MET |
 | arch-guard / wiring-ledger 转 blocking | 计划 2026-11-03 后由架构线复核执行 |
 
-四层验收制（形式验证 / 基准复现 / 场景实测 / 主人签核）的定义以 [founding-design-v2 §7](../01-architecture/founding-design-v2.md) 为准；R6-D 交付前，「已验收」只能按四级诚实口径标注。
+四层验收制（形式验证 / 基准复现 / 场景实测 / 主人签核）的定义以 [founding-design-v2 §7](../01-architecture/founding-design-v2.md) 为准；R6-C 交付前，「已验收」只能按四级诚实口径标注。
