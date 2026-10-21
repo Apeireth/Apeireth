@@ -1,12 +1,39 @@
-//! TLS 服务面钉测 (安全加固批 B5): 真加载 → 真启用 → 真握手; 坏材料拒启动。
+//! TLS 服务面钉测 (安全加固批 B5 + B5-TEST 补测): 真加载 → 真启用 → 真握手;
+//! 坏材料拒启动。
 //!
-//! 0 装口径: live TLS 握手 E2E **已实测** (自签测试链 + 以测试 CA 为根锚的
-//! HTTPS 客户端真握手, 2026-10-20, 本文件即是脚本); 覆盖面 = 树内默认协议族
-//! (TLS 1.2/1.3) × RSA-2048 测试证书链。测试夹具为一次性生成的自签材料,
-//! 见 `tests/fixtures/tls/README.md`, 私钥仅测试用途、无任何真实信任价值。
+//! 0 装口径 (实测矩阵, 2026-10-21 复测; 每格给出可查的测试名):
+//!
+//! | 维度 | 口径 | 钉住的测试 |
+//! | --- | --- | --- |
+//! | 合法链真启用 + live 握手 E2E | 已实测 | `a_valid_chain_really_serves_tls_and_the_handshake_completes` |
+//! | 协议版本 1.2 / 1.3 分别钉版本握手 | 已实测 | `the_protocol_version_matrix_negotiates_each_pinned_version` |
+//! | RSA-2048 测试链 (加载 + 握手) | 已实测 | 同第一行 (该行材料即 RSA 链) |
+//! | ECDSA P-256 测试链 (加载 + 握手) | 已实测 | `ecdsa_p256_material_loads_and_really_handshakes` |
+//! | 冷启动换证书轮换 + 旧信任面拒 | 已实测 | `certificate_rotation_is_a_cold_start_swap_and_stale_trust_is_refused` |
+//! | 坏文件 / 半套配置拒启动 | 已实测 | `unset_knobs_keep_plaintext_loopback_while_bad_material_refuses_to_start`、`half_configured_knobs_refuse_to_start` |
+//! | 未设旋钮明文回环 / 逃生阀不变 | 已实测 | `unset_knobs_keep_plaintext_loopback_while_bad_material_refuses_to_start`、`loopback_and_escape_valve_semantics_are_unchanged` |
+//! | 生产 (非自签) 证书面 | **未实测** | 无真实生产证书可用 (自签材料零真实信任价值); 验证清单见下 |
+//! | 运行中热重载证书 | **未接线** | 如实标注: 材料只在启动加载一次, 换证书 = 重启 (见轮换测试注释) |
+//!
+//! 生产证书面 (未实测) 的可复跑验证清单 —— 操作者持真实材料执行:
+//!
+//! 1. 备真实链 `fullchain.pem` (叶 + 中间, 叶在前) 与私钥 `privkey.pem`
+//!    (PKCS#8 / PKCS#1 / SEC1 任一);
+//! 2. `APEIRETH_TLS_CERT=fullchain.pem` `APEIRETH_TLS_KEY=privkey.pem`
+//!    启动网关 (非回环绑定照旧过令牌闸): 期望出现 `TLS enabled: ...`
+//!    接线确认行, 对外 URL 为 `https://`, 且无任何明文降级提示;
+//! 3. 任一 TLS 客户端对 `https://<域名>:<端口>/health` 发 GET: 期望 200、
+//!    证书链校验通过 (叶 + 中间完整)、协商版本 ∈ {1.2, 1.3};
+//! 4. 明文客户端对同端口发 HTTP 请求: 期望拿不到明文响应 (至多 TLS 告警);
+//! 5. 换一把不配对私钥重启: 期望启动被拒, 错误文本点名配对失败
+//!    (`PairingRefused` 口径)。
+//!
+//! 测试夹具全部为一次性生成的自签材料, 生成口径见
+//! `tests/fixtures/tls/README.md`; 私钥仅测试用途、无任何真实信任价值。
 //!
 //! 每条钉住的行为: 合法证书链真启用并真握手 / 坏文件拒启动 / 半套配置拒启动 /
-//! 未设旋钮明文回环不变 / 非回环逃生阀与回环语义不变。
+//! 未设旋钮明文回环不变 / 非回环逃生阀与回环语义不变 / 分协议版本握手 /
+//! ECC 材料加载与握手 / 冷启动轮换语义 (旧信任面拒)。
 
 use std::sync::Arc;
 
@@ -229,4 +256,175 @@ async fn loopback_and_escape_valve_semantics_are_unchanged() {
     let detail = cleared.audit_facts[0].1.clone().unwrap_or_default();
     assert!(detail.contains("mode=declared_none"), "{detail}");
     assert!(detail.contains("escape valve"), "{detail}");
+}
+
+// ── B5-TEST 补测面: 协议矩阵 / ECC 材料 / 冷启动轮换 ────────────────────────
+
+/// 测试用客户端 TLS 面: 以指定 CA 为根锚; `pinned_versions` 非空即钉协议版本。
+fn test_tls_client(
+    ca_path: &str,
+    pinned_versions: &[&'static rustls::SupportedProtocolVersion],
+) -> tokio_rustls::TlsConnector {
+    use rustls_pki_types::pem::PemObject;
+    let mut roots = rustls::RootCertStore::empty();
+    for cert in rustls_pki_types::CertificateDer::pem_file_iter(ca_path).expect("CA PEM 可读") {
+        roots
+            .add(cert.expect("CA 段可解析"))
+            .expect("CA 可入根锚库");
+    }
+    let builder = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ));
+    let builder = if pinned_versions.is_empty() {
+        builder
+            .with_safe_default_protocol_versions()
+            .expect("默认版本集合法")
+    } else {
+        builder
+            .with_protocol_versions(pinned_versions)
+            .expect("钉住的版本集合法")
+    };
+    let config = builder.with_root_certificates(roots).with_no_client_auth();
+    tokio_rustls::TlsConnector::from(Arc::new(config))
+}
+
+/// 对服务口完成一次真握手, 回协商出的协议版本 (失败回可断言的病因字符串)。
+async fn handshake_version(
+    connector: &tokio_rustls::TlsConnector,
+    port: u16,
+) -> Result<rustls::ProtocolVersion, String> {
+    let tcp = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .map_err(|error| error.to_string())?;
+    let server_name = rustls_pki_types::ServerName::try_from("localhost")
+        .map_err(|error| error.to_string())?
+        .to_owned();
+    let stream = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        connector.connect(server_name, tcp),
+    )
+    .await
+    .map_err(|_| "handshake timeout".to_string())?
+    .map_err(|error| error.to_string())?;
+    stream
+        .get_ref()
+        .1
+        .protocol_version()
+        .ok_or_else(|| "handshake produced no negotiated version".to_string())
+}
+
+/// 起一个 TLS 服务面 (显式材料), 回 (端口, 服务任务, 停机闸)。
+async fn serve_tls_on(
+    material: apeireth_gateway::TlsMaterial,
+) -> (
+    u16,
+    tokio::task::JoinHandle<std::io::Result<()>>,
+    tokio::sync::oneshot::Sender<()>,
+) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(serve_state_with_tls(
+        listener,
+        gateway_state().await,
+        Some(material),
+        async move {
+            let _ = shutdown_rx.await;
+        },
+    ));
+    (port, server, shutdown_tx)
+}
+
+/// 协议版本矩阵 (B5-TEST ①): 客户端钉 1.2、钉 1.3 各真握手一次, 断言协商出
+/// 预期版本。服务端配置含 TLS 1.2 面 (rustls tls12 feature B5 已开)。
+#[tokio::test]
+async fn the_protocol_version_matrix_negotiates_each_pinned_version() {
+    let material = load_tls_material(&fixture("server-chain.pem"), &fixture("server-key.pem"))
+        .expect("服务端材料真加载");
+    let (port, server, shutdown_tx) = serve_tls_on(material).await;
+
+    let cases: [(
+        &[&'static rustls::SupportedProtocolVersion],
+        rustls::ProtocolVersion,
+    ); 2] = [
+        (&[&rustls::version::TLS12], rustls::ProtocolVersion::TLSv1_2),
+        (&[&rustls::version::TLS13], rustls::ProtocolVersion::TLSv1_3),
+    ];
+    for (pinned, expected) in cases {
+        let connector = test_tls_client(&fixture("ca-cert.pem"), pinned);
+        let negotiated = handshake_version(&connector, port)
+            .await
+            .expect("钉版本握手必须成功");
+        assert_eq!(negotiated, expected, "客户端钉版本握手须协商出预期版本");
+    }
+
+    let _ = shutdown_tx.send(());
+    server.await.unwrap().expect("TLS 服务面优雅收尾");
+}
+
+/// ECC 面 (B5-TEST ②): ECDSA P-256 自签链真加载 + 真握手 (第二算法族材料面)。
+#[tokio::test]
+async fn ecdsa_p256_material_loads_and_really_handshakes() {
+    let material = load_tls_material(
+        &fixture("server-ecdsa-chain.pem"),
+        &fixture("server-ecdsa-key.pem"),
+    )
+    .expect("ECDSA P-256 材料必须真加载成功");
+    assert_eq!(material.chain_len(), 2, "ECDSA 链两段都要吃进");
+
+    let (port, server, shutdown_tx) = serve_tls_on(material).await;
+    let connector = test_tls_client(&fixture("ca-ecdsa-cert.pem"), &[]);
+    let negotiated = handshake_version(&connector, port)
+        .await
+        .expect("ECDSA P-256 链真握手必须成功");
+    assert!(
+        matches!(
+            negotiated,
+            rustls::ProtocolVersion::TLSv1_2 | rustls::ProtocolVersion::TLSv1_3
+        ),
+        "{negotiated:?}"
+    );
+
+    let _ = shutdown_tx.send(());
+    server.await.unwrap().expect("TLS 服务面优雅收尾");
+}
+
+/// 证书轮换 (B5-TEST ③) = **冷启动换材料**: 重启后新证书真生效, 只信旧证书面
+/// 的客户端被拒 (不许默默沿用旧证书)。
+///
+/// 如实标注: **热重载未接线** —— 材料只在启动加载一次 (serve 入口
+/// `resolve_tls_material()`), 运行中替换 PEM 文件不会生效, 换证书 = 重启。
+#[tokio::test]
+async fn certificate_rotation_is_a_cold_start_swap_and_stale_trust_is_refused() {
+    // 第一轮启动: 证书面 A;信 A 的客户端握手成功 (旧证书面生效)。
+    let material_a = load_tls_material(&fixture("server-chain.pem"), &fixture("server-key.pem"))
+        .expect("轮换前材料加载");
+    let (port_a, server_a, shutdown_a) = serve_tls_on(material_a).await;
+    let client_a = test_tls_client(&fixture("ca-cert.pem"), &[]);
+    handshake_version(&client_a, port_a)
+        .await
+        .expect("旧证书面生效时握手必须成功");
+    let _ = shutdown_a.send(());
+    server_a.await.unwrap().expect("第一轮收尾");
+
+    // 第二轮启动 (冷启动边界): 证书面 B —— 换证书 = 重启, 无热重载。
+    let material_b =
+        load_tls_material(&fixture("server-b-chain.pem"), &fixture("server-b-key.pem"))
+            .expect("轮换后材料加载");
+    let (port_b, server_b, shutdown_b) = serve_tls_on(material_b).await;
+
+    // 新证书真生效: 信 B 的客户端握手成功。
+    let client_b = test_tls_client(&fixture("ca-b-cert.pem"), &[]);
+    handshake_version(&client_b, port_b)
+        .await
+        .expect("重启后新证书面必须生效");
+
+    // 旧证书面已下线: 只信 A 的客户端必须被拒。
+    let err = handshake_version(&client_a, port_b)
+        .await
+        .expect_err("只信旧证书面的客户端必须被拒");
+    assert!(!err.is_empty(), "拒绝要有因");
+
+    let _ = shutdown_b.send(());
+    server_b.await.unwrap().expect("第二轮收尾");
 }
