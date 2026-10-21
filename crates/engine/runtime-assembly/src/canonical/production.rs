@@ -30,6 +30,7 @@ use apeireth_tools_canonical::{
     CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
 };
 
+use super::bio_approval_social::BioApprovalSocialSource;
 use super::capability::CapabilityProvider;
 use super::care_heartbeat::bio_lifecycle::BioLifecycleState;
 use super::care_heartbeat::bio_tone::ToneState;
@@ -1649,6 +1650,18 @@ impl ProductionModules {
     /// 本次装配生效的开关快照 (`NervousSwitchboard::from_env` 一次解析)。
     pub fn nervous_switchboard(&self) -> &NervousSwitchboard {
         &self.nervous_switchboard
+    }
+
+    /// Wave 4 / ADR-0009 R1b-2c: 审批社交信号源句柄。
+    ///
+    /// 只有调质开关开时才交付 (`Some`); 开关关 = `None` = 审批路径不发布、
+    /// 总线零计数, 与未接线逐字节一致。句柄与注册的调质订阅者共享同一条
+    /// [`NervousBus`](super::nervous_bus::NervousBus) (同一 `Arc`)。
+    #[must_use]
+    pub fn bio_approval_social_source(&self) -> Option<Arc<BioApprovalSocialSource>> {
+        self.nervous_switchboard
+            .switch_enabled(BioSwitch::Tone)
+            .then(|| Arc::new(BioApprovalSocialSource::new((*self.nervous_bus).clone())))
     }
 
     /// Attach the context-window projector using its default policy.

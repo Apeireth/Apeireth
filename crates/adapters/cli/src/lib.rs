@@ -44,9 +44,8 @@ use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
     TurnRequest, TurnResponse,
 };
+use apeireth_runtime_assembly::canonical::BioApprovalSocialSource;
 use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
-// W3.7 调质状态句柄类型 (审批面分派在 `canonical_approval` 模块消费)。
-use apeireth_runtime_assembly::canonical::bio_tone::ToneState;
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
 
 /// One persistent SQLite database is shared by the cognitive backends.
@@ -1420,17 +1419,17 @@ type CanonicalRuntimeParts = (
     Arc<apeireth_core::cost_router::CostRouter>,
 );
 
+type BioHandle = Option<Arc<BioApprovalSocialSource>>;
+type BioParts = (CanonicalRuntimeParts, BioProbeSlots, BioHandle);
+
 pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env(
 ) -> Result<CanonicalRuntimeParts, String> {
-    let (parts, _bio_probe_slots, _bio_tone) = build_canonical_runtime_assembly_from_env().await?;
+    let (parts, _slots, _approval) = build_canonical_runtime_assembly_from_env().await?;
     Ok(parts)
 }
 
-/// 上面公开入口的装配本体: 额外回传 W3.6 生物 probe 迟绑定槽（给已 `Arc` 化的
-/// 调用方填痛觉读取口; 槽未武装 = no-op, 默认关零变化）与 W3.7 共享调质状态句柄
-/// （审批面社会反馈源; 开关关 = None）。
-async fn build_canonical_runtime_assembly_from_env(
-) -> Result<(CanonicalRuntimeParts, BioProbeSlots, Option<Arc<ToneState>>), String> {
+/// 装配本体: 额外回传 W3.6 probe 槽与 R1b-2c 审批社交源句柄 (开关关 = None)。
+async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String> {
     // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
     // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
     // 拆任务后各自持票进运行时工作线程; 顺序语义不变 (运行时组装仍等两侧齐备)。
@@ -1461,8 +1460,8 @@ async fn build_canonical_runtime_assembly_from_env(
     // W3.6: 自述关怀心跳 probe 迟绑定 (槽未武装 = no-op, 默认关零变化)。
     let bio_probe_slots = cognitive.bio_probe_slots();
     bio_probe_slots.fill_care_status(care_heartbeat.status_probe());
-    // W3.7: 调质状态句柄必须在模块被装配根消费前取出 (开关关 = None)。
-    let bio_tone = cognitive.bio_tone_state();
+    // R1b-2c: 审批社交源句柄必须在模块被装配根消费前取出 (开关关 = None)。
+    let bio_approval = cognitive.bio_approval_social_source();
     // W3-①: 默认用户域的会话写闸在此预组装 —— 组合根注册进域平面 (每域恰一把)。
     let sessions = Arc::new(apeireth_runtime::SessionManager::new(
         Arc::clone(&session_store),
@@ -1482,7 +1481,7 @@ async fn build_canonical_runtime_assembly_from_env(
             cost_router,
         ),
         bio_probe_slots,
-        bio_tone,
+        bio_approval,
     ))
 }
 
@@ -1670,7 +1669,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         Arc<Runtime>,
         Arc<apeireth_gateway::RuntimeObservationSink>,
         Arc<apeireth_core::cost_router::CostRouter>,
-        Option<Arc<ToneState>>,
+        BioHandle,
     ),
     String,
 > {
@@ -1686,7 +1685,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
             cost_router,
         ),
         bio_probe_slots,
-        bio_tone,
+        bio_approval,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
     // W3.6: 痛觉/再生 probe 迟绑定到 runtime 自身 (Weak 无环)。
@@ -1714,7 +1713,7 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         services.audit_commands.clone(),
     ));
     runtime.add_event_sink(observer.clone());
-    Ok((runtime, observer, cost_router, bio_tone))
+    Ok((runtime, observer, cost_router, bio_approval))
 }
 
 /// Completed turn or a pending approval that still has its [`ApprovalId`].
@@ -2701,7 +2700,7 @@ pub async fn dispatch_canonical_chat(
     let session = session
         .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
         .transpose()?;
-    let (runtime, observer, cost_router, _bio_tone) =
+    let (runtime, observer, cost_router, _bio_approval) =
         build_canonical_runtime_from_env_with_observability().await?;
     // 成本分级路由 (H-P2 任务选型): 显式 `--model` > 路由选定 > 默认模型;
     // 开关关 = fail-closed 零行为变化。路由决策即自述路由节真值 (同一路由器)。
@@ -3258,7 +3257,7 @@ pub async fn dispatch_gateway_serve_with(
             _cost_router,
         ),
         bio_probe_slots,
-        _bio_tone,
+        _bio_approval,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
     // W3.6: 常驻宿主同样把痛觉/再生 probe 迟绑定到 runtime。

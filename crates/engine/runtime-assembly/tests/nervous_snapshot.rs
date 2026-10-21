@@ -229,11 +229,24 @@ fn half_rows_expose_gaps_and_reasons_and_wired_rows_are_honest() {
             "{id} 台账不得保留过期占位"
         );
     }
-    assert!(mechanism(&value, "SG-18.lifecycle")["gaps"]
+    // R1b-2b 起 lifecycle 观测格已经迟绑定槽注册: 台账只留真实残余 (AfterTurn 仍走
+    // 钩子), 不得再声称探针缺失。
+    let lifecycle_gaps: Vec<&str> = mechanism(&value, "SG-18.lifecycle")["gaps"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|gap| gap.as_str().unwrap_or_default().contains("lifecycle probe")));
+        .filter_map(|gap| gap.as_str())
+        .collect();
+    assert!(
+        lifecycle_gaps.iter().any(|gap| gap.contains("AfterTurn")),
+        "SG-18 真实残余缺口必须如实列出: {lifecycle_gaps:?}"
+    );
+    assert!(
+        !lifecycle_gaps
+            .iter()
+            .any(|gap| gap.contains("lifecycle probe") || gap.contains("探针未注册")),
+        "SG-18 探针已注册, 台账不得保留过期缺口: {lifecycle_gaps:?}"
+    );
     assert!(mechanism(&value, "SG-25.ecosystem_health")["enabled_env"].is_null());
 }
 

@@ -52,6 +52,10 @@ pub use session::*;
 pub use subloop::*;
 pub use trace::*;
 
+/// Wave 4 / ADR-0009 R1b-2c · 审批社交信号源 (生产面): CLI 人工决定 → `ApprovalSocial`
+/// 信号 → 调质订阅者; 取消不发布, 拒绝理由不进信号; 默认关时装配根不交付句柄。
+#[path = "canonical/bio_approval_social.rs"]
+pub mod bio_approval_social;
 /// 常驻心跳关怀生产者装配面 (V3-a 收尾一针): 定时 poll 关怀内核 → 命中发起
 /// 标准回合 (开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸, 默认关 fail-closed)。
 #[path = "canonical/care_heartbeat.rs"]
@@ -159,6 +163,9 @@ pub mod upgrade_cycle;
 #[path = "canonical/voice_quiet.rs"]
 pub mod voice_quiet;
 
+pub use bio_approval_social::{
+    approval_social_outcome, BioApprovalSocialSource, APPROVAL_SOCIAL_SOURCE,
+};
 pub use care_heartbeat::{
     bio_circadian, bio_tone, CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer,
     CareHeartbeatStatus, CARE_ENABLE_ENV, CARE_HEARTBEAT_ENABLE_ENV,
@@ -193,7 +200,8 @@ pub use guard_observer::GuardDatasetObserver;
 pub use memory_typed_sink::CanonicalMemoryTypedSink;
 pub use nervous_bridge::{bridge_signal, NervousBridgeModule, NERVOUS_BRIDGE_MODULE_ID};
 pub use nervous_bus::{
-    NervousBus, NervousBusSnapshot, NervousSignal, NervousSignalKind, MAX_SIGNAL_TEXT_CHARS,
+    ApprovalSocialOutcome, NervousBus, NervousBusSnapshot, NervousSignal, NervousSignalKind,
+    MAX_SIGNAL_TEXT_CHARS,
 };
 pub use nervous_switchboard::{
     BioSwitch, NervousSwitchboard, NervousSwitchboardError, CIRCADIAN_TZ_OFFSET_ENV,

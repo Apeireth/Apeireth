@@ -17,9 +17,10 @@
 //!
 //! # 真实事件源 (R1b-2a: 观测面收敛到总线订阅)
 //!
-//! 生产事件源 = [`NervousBus`] 订阅: 桥模块 (`NervousBridgeModule`) 把既有钩子载荷
-//! 归一成信号, 本模块的 [`BioToneBusSubscriber`] 订阅 `ToolOutcome` + `ErrorObserved`
-//! 两类信号 (同一事件只经桥 → 总线 → 订阅者一次, 不在钩子面重复推进), **仅开关开时
+//! 生产事件源 = [`NervousBus`] 订阅: 桥模块 (`NervousBridgeModule`) 把既有工具/错误钩子
+//! 载荷归一成信号, CLI 审批路径把人工决定发布成信号; 本模块的 [`BioToneBusSubscriber`]
+//! 订阅 `ToolOutcome` + `ErrorObserved` + `ApprovalSocial` 三类信号 (同一事件只经
+//! 发布 → 总线 → 订阅者一次, 不在钩子面重复推进), **仅开关开时
 //! 构造订阅者并注册** (关 = 模块不注册、总线零订阅者、`enabled = false` 双闸,
 //! 零观察零状态变化):
 //!
@@ -29,6 +30,9 @@
 //! | [`NervousSignal::ToolOutcome`] | `ok == false` | [`ToneFeedbackKind::TaskFailure`] | 协议层显式结算为失败 (可重试/不可重试同档) |
 //! | [`NervousSignal::ErrorObserved`] | 信号存在 | [`ToneFeedbackKind::TaskFailure`] | 运行时 / 模块失败的 best-effort 观察 (桥归一, 同原 `OnError` 口径) |
 //! | [`NervousSignal::ToolOutcome`] + `tool` | 工具名在**本进程内首次出现** (与模块共享首见集, 重复 / 空名不注入) | [`ToneFeedbackKind::Novelty`] | 新工具面首次触达 = 确定性新颖信号, 不做内容推断 |
+//! | [`NervousSignal::ApprovalSocial`] | `outcome == approved` | [`ToneFeedbackKind::SocialPositive`] | 人工审批落账后由 CLI 审批路径发布 (R1b-2c) |
+//! | [`NervousSignal::ApprovalSocial`] | `outcome == rejected` | [`ToneFeedbackKind::SocialNegative`] | 同上; 拒绝理由不进信号 |
+//! | [`NervousSignal::ApprovalSocial`] | `outcome == cancelled` | 无反馈 | 人取消 = 收回请求, 未形成社会结论 (不编事件) |
 //!
 //! 映射规则: 无事件载荷的信号不产生反馈; 不读用户文本、不做情感 / 意图推断 —— 只把
 //! 协议里**已有显式判决**的结局映射成事件, 不替任何一档编造信号。
@@ -38,12 +42,13 @@
 //! 粒度为**工具调用**级: 一次结算 = 一次脉冲, 无节流 / 无去重; 高频工具面会更快把
 //! 六维推离基线 (已知量化缺口, 窗口未标定)。状态仍在基线档时不发 overlay。
 //!
-//! **装配面社会反馈源 (W3.7)**: CLI 审批落账 (`apeireth approve` / `apeireth reject`)
-//! 在 resolve 成功后, 经装配根交付的共享状态句柄 (`ProductionModules::bio_tone_state`)
-//! 旁路注入一次社会反馈 —— 人批 → [`ToneFeedbackKind::SocialPositive`], 人拒 →
-//! [`ToneFeedbackKind::SocialNegative`], 取消 (`cancel`) = 收回请求、不构成社会结论
-//! = 不注入。该源在装配根层, 不经模块钩子; **不改审批结论、不参与权限判定**, 只把
-//! 已经发生的人机社会结果记成调质脉冲。开关关时装配根不交付句柄 = 零观察零变化。
+//! **装配面社会反馈源 (R1b-2c)**: CLI 审批落账 (`apeireth approve` / `apeireth reject`)
+//! 在 resolve 成功后, 经装配根交付的 [`BioApprovalSocialSource`]
+//! (`ProductionModules::bio_approval_social_source`) 把决定发布成 `ApprovalSocial`
+//! 信号, 本模块订阅者据此注入社会反馈档 —— 人批 → [`ToneFeedbackKind::SocialPositive`],
+//! 人拒 → [`ToneFeedbackKind::SocialNegative`], 取消 (`cancel`) = 收回请求、不构成社会
+//! 结论 = 不发布。旧「CLI 直写共享状态」路径已在 R1b-2c 删除: 发布是唯一真源,
+//! **不改审批结论、不参与权限判定**。开关关时装配根不交付句柄 = 零发布零变化。
 //!
 //! **未接的真实源 (诚实边界)**: 用户显式好评 / 差评的采集入口在装配面不存在 ——
 //! `self_tuning::TuningEvent::ToneFeedback`、`value_cases::Feedback`、
@@ -91,8 +96,9 @@
 //!   本模块 (`APEIRETH_ENABLE_BIO_TONE=1` 才构造) 并保存共享状态句柄
 //!   ([`crate::canonical::production::ProductionModules::bio_tone_state`]), 但无
 //!   live E2E 实测。
-//! - **反馈注入点**: 句柄已有真实消费方 (CLI 审批面 `approval_tone_feedback`); 装配根
-//!   另有 [`crate::canonical::production::ProductionModules::attach_tone_feedback_sink`]
+//! - **反馈注入点**: 生产事件源 = 总线订阅 (工具结局/错误由桥发布, 审批决定由
+//!   [`BioApprovalSocialSource`] 发布); 装配根另有
+//!   [`crate::canonical::production::ProductionModules::attach_tone_feedback_sink`]
 //!   供其它既有反馈点 (例如未来的用户好评 / 差评采集) 持句柄旁路注入, 不复制总线。
 //! - 调质是工程标签, 不宣称主观情绪、意识或生理真实性。
 
@@ -109,13 +115,15 @@ use apeireth_organ::tone::{
     behavior_tone_style, tone_hint, tone_hint_with_params, BehaviorToneStyle, BondCharacterSnapshot,
 };
 use apeireth_protocol::canonical::{ToolCall, ToolResult};
-use apeireth_runtime::ApprovalDecision;
 
+use crate::canonical::bio_approval_social::BioApprovalSocialSource;
 use crate::canonical::module::{
     BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
     PromptOverlay,
 };
-use crate::canonical::nervous_bus::{NervousBus, NervousSignal, NervousSignalKind};
+use crate::canonical::nervous_bus::{
+    ApprovalSocialOutcome, NervousBus, NervousSignal, NervousSignalKind,
+};
 
 /// 装配开闸 env 名 (仅显式 `"1"` 开, 其余一律关 fail-closed)。
 pub const BIO_TONE_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_TONE";
@@ -246,25 +254,30 @@ pub fn tone_feedback_from_hook(
     }
 }
 
-/// 总线信号 → 反馈档的确定性映射 (R1b-2a: 生产事件源收敛到 `NervousBus` 订阅)。
+/// 总线信号 → 反馈档的确定性映射 (R1b-2a/R1b-2c: 生产事件源收敛到 `NervousBus` 订阅)。
 ///
 /// - [`NervousSignal::ToolOutcome`] `{ ok: true, .. }` → [`ToneFeedbackKind::TaskSuccess`];
 /// - [`NervousSignal::ToolOutcome`] `{ ok: false, .. }` → [`ToneFeedbackKind::TaskFailure`];
-/// - [`NervousSignal::ErrorObserved`] → [`ToneFeedbackKind::TaskFailure`]。
+/// - [`NervousSignal::ErrorObserved`] → [`ToneFeedbackKind::TaskFailure`];
+/// - [`NervousSignal::ApprovalSocial`] `approved` → [`ToneFeedbackKind::SocialPositive`],
+///   `rejected` → [`ToneFeedbackKind::SocialNegative`], `cancelled` → `None` (未形成社会结论)。
 ///
 /// 与 [`tone_feedback_from_hook`] 同口径 (桥已把钩子载荷归一成信号), 不做额外解释;
 /// Novelty 首见判定不在本函数 (需要共享首见集, 见 [`BioToneBusSubscriber::handle`])。
 #[must_use]
-pub fn tone_feedback_from_signal(signal: &NervousSignal) -> ToneFeedbackKind {
+pub fn tone_feedback_from_signal(signal: &NervousSignal) -> Option<ToneFeedbackKind> {
     match signal {
-        NervousSignal::ToolOutcome { ok, .. } => {
-            if *ok {
-                ToneFeedbackKind::TaskSuccess
-            } else {
-                ToneFeedbackKind::TaskFailure
-            }
-        }
-        NervousSignal::ErrorObserved { .. } => ToneFeedbackKind::TaskFailure,
+        NervousSignal::ToolOutcome { ok, .. } => Some(if *ok {
+            ToneFeedbackKind::TaskSuccess
+        } else {
+            ToneFeedbackKind::TaskFailure
+        }),
+        NervousSignal::ErrorObserved { .. } => Some(ToneFeedbackKind::TaskFailure),
+        NervousSignal::ApprovalSocial { outcome, .. } => match outcome {
+            ApprovalSocialOutcome::Approved => Some(ToneFeedbackKind::SocialPositive),
+            ApprovalSocialOutcome::Rejected => Some(ToneFeedbackKind::SocialNegative),
+            ApprovalSocialOutcome::Cancelled => None,
+        },
     }
 }
 
@@ -586,10 +599,14 @@ impl BioToneBusSubscriber {
 
     /// 处理一条总线信号 (显式注入入口 / 等价性测试): 映射 + Novelty 首见, 返回回执。
     ///
-    /// 事件顺序固定 (确定性): ①信号映射 (见 [`tone_feedback_from_signal`]) →
-    /// ②`ToolOutcome` 上工具名首见 → Novelty (空名 / 重复名不注入)。
+    /// 事件顺序固定 (确定性): ①信号映射 (见 [`tone_feedback_from_signal`]; `cancelled`
+    /// 审批 = 无反馈, 不产生回执) → ②`ToolOutcome` 上工具名首见 → Novelty
+    /// (空名 / 重复名不注入)。
     pub fn handle(&self, signal: &NervousSignal) -> Vec<ToneFeedbackReceipt> {
-        let mut receipts = vec![self.state.apply_feedback(tone_feedback_from_signal(signal))];
+        let mut receipts = Vec::new();
+        if let Some(feedback) = tone_feedback_from_signal(signal) {
+            receipts.push(self.state.apply_feedback(feedback));
+        }
         if let NervousSignal::ToolOutcome {
             tool: Some(tool), ..
         } = signal
@@ -605,20 +622,27 @@ impl BioToneBusSubscriber {
         receipts
     }
 
-    /// 订阅总线两类信号 (`ToolOutcome` + `ErrorObserved`); 返回注册后两类订阅者总数。
+    /// 订阅总线三类信号 (`ToolOutcome` + `ErrorObserved` + `ApprovalSocial`);
+    /// 返回注册后三类订阅者总数。
     ///
-    /// 订阅后同一条信号只经此路径推进一次 (模块 `on_hook` 已不再扫描这两类钩子)。
+    /// 订阅后同一条信号只经此路径推进一次 (模块 `on_hook` 已不再扫描钩子事件;
+    /// 审批面也只经发布路径, 不再直写状态)。
     pub fn subscribe(&self, bus: &NervousBus) -> usize {
         let tool_side = Self::new(Arc::clone(&self.state), Arc::clone(&self.seen_tools));
         let error_side = Self::new(Arc::clone(&self.state), Arc::clone(&self.seen_tools));
+        let approval_side = Self::new(Arc::clone(&self.state), Arc::clone(&self.seen_tools));
         bus.subscribe(NervousSignalKind::ToolOutcome, move |signal| {
             tool_side.handle(signal);
         });
         bus.subscribe(NervousSignalKind::ErrorObserved, move |signal| {
             error_side.handle(signal);
         });
+        bus.subscribe(NervousSignalKind::ApprovalSocial, move |signal| {
+            approval_side.handle(signal);
+        });
         bus.subscriber_count(NervousSignalKind::ToolOutcome)
             + bus.subscriber_count(NervousSignalKind::ErrorObserved)
+            + bus.subscriber_count(NervousSignalKind::ApprovalSocial)
     }
 
     fn lock_seen_tools(&self) -> MutexGuard<'_, BTreeSet<String>> {
@@ -696,35 +720,6 @@ pub fn bio_tone_wiring_from_env_value(
 #[must_use]
 pub fn bio_tone_wiring_from_enabled(enabled: bool, clock: ToneClock) -> Option<BioToneWiring> {
     bio_tone_wiring_from_env_value(enabled.then_some("1"), clock)
-}
-
-/// 审批面社会反馈映射 (W3.7 装配面真实源, 纯映射): 人批 → 社会正结果,
-/// 人拒 → 社会负结果; 取消 = 收回请求, 不构成社会结论 (返回 `None`, 不编事件)。
-///
-/// 只做枚举映射, 不读文本 / 不判意图; 反馈档是工程标签, 不宣称主观情绪。
-#[must_use]
-pub fn approval_social_feedback(decision: &ApprovalDecision) -> Option<ToneFeedbackKind> {
-    match decision {
-        ApprovalDecision::Approve => Some(ToneFeedbackKind::SocialPositive),
-        ApprovalDecision::Reject { .. } => Some(ToneFeedbackKind::SocialNegative),
-        ApprovalDecision::Cancel { .. } => None,
-    }
-}
-
-/// 把一次审批面社会结论推进共享调质状态 (句柄与结论都真存在时才推进; 返回是否推进)。
-///
-/// 开关关 = `state == None` = 不回调、不观察、零变化 (与未接线逐字节一致)。
-pub fn apply_approval_social_feedback(
-    state: Option<&Arc<ToneState>>,
-    feedback: Option<ToneFeedbackKind>,
-) -> bool {
-    match (state, feedback) {
-        (Some(state), Some(feedback)) => {
-            state.apply_feedback(feedback);
-            true
-        }
-        _ => false,
-    }
 }
 
 #[cfg(test)]
@@ -1126,23 +1121,62 @@ mod tests {
         assert_eq!(
             tone_feedback_from_signal(&NervousSignal::tool_outcome(true, Some("weather"), false)),
             tone_feedback_from_hook(HookPoint::AfterToolResult, Some(&ok), None)
-                .expect("成功结算有映射")
         );
         assert_eq!(
             tone_feedback_from_signal(&NervousSignal::tool_outcome(false, Some("repo"), true)),
             tone_feedback_from_hook(HookPoint::AfterToolResult, Some(&failed), None)
-                .expect("失败结算有映射")
         );
         assert_eq!(
             tone_feedback_from_signal(&NervousSignal::error_observed("bridge failed")),
             tone_feedback_from_hook(HookPoint::OnError, None, Some("bridge failed"))
-                .expect("错误观察有映射")
         );
         assert_eq!(
             tone_feedback_from_signal(&NervousSignal::tool_outcome(true, None, false)),
-            ToneFeedbackKind::TaskSuccess,
+            Some(ToneFeedbackKind::TaskSuccess),
             "无工具名不影响结算档 (Novelty 才需要工具名)"
         );
+    }
+
+    #[test]
+    fn approval_signal_maps_the_three_state_fact_only() {
+        use crate::canonical::nervous_bus::ApprovalSocialOutcome;
+
+        assert_eq!(
+            tone_feedback_from_signal(&NervousSignal::approval_social(
+                ApprovalSocialOutcome::Approved,
+                "cli.approval",
+            )),
+            Some(ToneFeedbackKind::SocialPositive)
+        );
+        assert_eq!(
+            tone_feedback_from_signal(&NervousSignal::approval_social(
+                ApprovalSocialOutcome::Rejected,
+                "cli.approval",
+            )),
+            Some(ToneFeedbackKind::SocialNegative)
+        );
+        assert_eq!(
+            tone_feedback_from_signal(&NervousSignal::approval_social(
+                ApprovalSocialOutcome::Cancelled,
+                "cli.approval",
+            )),
+            None,
+            "人取消 = 未形成社会结论, 不注入反馈"
+        );
+    }
+
+    #[test]
+    fn cancelled_approval_signal_produces_no_receipt_and_no_state_change() {
+        let state = baseline_state();
+        let subscriber =
+            BioToneBusSubscriber::new(Arc::clone(&state), Arc::new(Mutex::new(BTreeSet::new())));
+        let before = state.behavior_params();
+        let receipts = subscriber.handle(&NervousSignal::approval_social(
+            crate::canonical::nervous_bus::ApprovalSocialOutcome::Cancelled,
+            "cli.approval",
+        ));
+        assert!(receipts.is_empty(), "取消不产生反馈回执");
+        assert_eq!(state.behavior_params(), before, "取消不改变调质向量");
     }
 
     #[test]
@@ -1255,9 +1289,10 @@ mod tests {
         let bus = NervousBus::new();
         assert!(bus.is_idle(), "空总线: 零订阅零发布");
 
-        assert_eq!(subscriber.subscribe(&bus), 2, "两类信号各一个订阅者");
+        assert_eq!(subscriber.subscribe(&bus), 3, "三类信号各一个订阅者");
         assert_eq!(bus.subscriber_count(NervousSignalKind::ToolOutcome), 1);
         assert_eq!(bus.subscriber_count(NervousSignalKind::ErrorObserved), 1);
+        assert_eq!(bus.subscriber_count(NervousSignalKind::ApprovalSocial), 1);
 
         let before = state.vector();
         let delivered = bus.publish(&NervousSignal::tool_outcome(

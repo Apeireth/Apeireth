@@ -11,12 +11,15 @@
 //! 5. 九类反馈档 → 内核事件一一映射 (文档口径不因本批接线改变);
 //! 6. 同事件重复投递 = 重复脉冲 (非幂等), 到 clamp 界后有界;
 //! 7. `attach_tone_feedback_sink` 注入点: 开关关不回调, 开关开把同一状态交给
-//!    既有反馈点, 事件源旁路注入后注册模块的 TurnStart 立刻可见。
+//!    既有反馈点, 事件源旁路注入后注册模块的 TurnStart 立刻可见;
+//! 8. 模块钩子不再观测事件 (R1b-2a: 观测面收敛到总线订阅);
+//! 9. 审批社交信号源 (R1b-2c): 人批/人拒经总线进共享调质状态, 取消不发布;
+//!    开关关 = 无源句柄 = 零发布零变化。
 //!
 //! **0 装诚实**: 真实源 = 桥 (`NervousBridgeModule`) 归一后的**结局事件** (工具结算
-//! Ok/Error、运行时错误), 经总线订阅进入调质状态; 模块钩子不再扫描这两类事件。
-//! 不读用户文本、不做情感推断; 用户显式好评/差评采集入口仍未接 (四处接口无生产
-//! 调用方), 四档只有显式注入口; 无 live E2E; 开关关 = 缺省。
+//! Ok/Error、运行时错误) + CLI 审批路径发布的人工决定 (R1b-2c), 经总线订阅进入调质
+//! 状态; 模块钩子不再扫描这两类事件。不读用户文本、不做情感推断; 用户显式好评/差评
+//! 采集入口仍未接 (四处接口无生产调用方), 四档只有显式注入口; 无 live E2E; 开关关 = 缺省。
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -27,9 +30,9 @@ use apeireth_protocol::canonical::{
     ContentPart, NormalizedMessage, NormalizedResponse, ToolResult,
 };
 use apeireth_runtime::ApprovalDecision;
+use apeireth_runtime_assembly::canonical::bio_approval_social::approval_social_outcome;
 use apeireth_runtime_assembly::canonical::care_heartbeat::bio_tone::{
-    apply_approval_social_feedback, approval_social_feedback, ToneFeedbackKind, ToneState,
-    BIO_TONE_ENABLE_ENV, BIO_TONE_MODULE_ID, TONE_CLAUSE_LABEL,
+    ToneFeedbackKind, ToneState, BIO_TONE_ENABLE_ENV, BIO_TONE_MODULE_ID, TONE_CLAUSE_LABEL,
 };
 use apeireth_runtime_assembly::canonical::module::{
     BehaviorModule, HookPoint, InvocationContext, ModuleContext, ModuleDirective, ModuleError,
@@ -527,54 +530,93 @@ async fn module_hooks_are_no_longer_an_event_source_but_the_bus_is() {
 }
 
 // ============================================
-// 9. 审批面社会反馈源 (W3.7: 装配根真实消费点)
+// 9. 审批社交信号源 (R1b-2c: 发布是唯一真源; 总线下游 = 调质订阅者)
 // ============================================
 
-/// 只有真实社会结论才产生信号: 人批 → 正, 人拒 → 负, 取消 → 不编事件。
+/// 只有真实社会结论才发布: 人批 → Approved, 人拒 → Rejected, 取消 → 不编事件。
 #[test]
-fn approval_social_feedback_maps_real_decisions_only() {
+fn approval_social_outcome_maps_real_decisions_only() {
+    use apeireth_runtime_assembly::canonical::nervous_bus::ApprovalSocialOutcome;
+
     assert_eq!(
-        approval_social_feedback(&ApprovalDecision::Approve),
-        Some(ToneFeedbackKind::SocialPositive)
+        approval_social_outcome(&ApprovalDecision::Approve),
+        Some(ApprovalSocialOutcome::Approved)
     );
     assert_eq!(
-        approval_social_feedback(&ApprovalDecision::Reject {
+        approval_social_outcome(&ApprovalDecision::Reject {
             reason: Some("reversible risk".into()),
         }),
-        Some(ToneFeedbackKind::SocialNegative)
+        Some(ApprovalSocialOutcome::Rejected)
     );
     assert_eq!(
-        approval_social_feedback(&ApprovalDecision::Cancel { reason: None }),
+        approval_social_outcome(&ApprovalDecision::Cancel { reason: None }),
         None,
         "取消 = 收回请求, 不构成社会结论 (不编事件)"
     );
 }
 
-/// 开关关 (无句柄) = 不观察零变化; 开关开 = 同一状态对象真的被推进。
-#[test]
-fn approval_social_feedback_advances_state_only_with_a_handle() {
-    let state = Arc::new(ToneState::new(Arc::new(|| NOW_MS as u64)));
-    assert!(state.is_baseline(), "构造必须是基线档 (不编造初始语气)");
+/// 开关开: 发布真的经订阅者推进共享调质状态; 取消不发布、零变化。
+#[tokio::test]
+async fn approval_decision_reaches_the_shared_tone_state_only_through_the_bus() {
+    let (modules, _probe) = build_with_env(Some("1"));
+    let state = modules.bio_tone_state().expect("调质开关开 = 有共享状态");
+    let source = modules
+        .bio_approval_social_source()
+        .expect("调质开关开 = 装配根交付审批社交源");
+    let bus = modules.nervous_bus();
     let before = state.behavior_params();
 
-    assert!(
-        !apply_approval_social_feedback(None, Some(ToneFeedbackKind::SocialPositive)),
-        "无句柄 (开关关) 不得推进任何状态"
+    assert_eq!(
+        source.publish(&ApprovalDecision::Approve),
+        Some(1),
+        "人批信号刚好投递给一个调质订阅者"
     );
-    assert!(state.is_baseline());
-
-    assert!(
-        apply_approval_social_feedback(Some(&state), Some(ToneFeedbackKind::SocialPositive)),
-        "句柄在场 = 审批面反馈真的进共享状态机"
-    );
+    assert_eq!(bus.published_count(NervousSignalKind::ApprovalSocial), 1);
     assert_ne!(
         state.behavior_params(),
         before,
-        "人批确实把调质向量推离基线 (单次脉冲只动数值, 不必然跨离散语气档)"
+        "人批经总线真的推进共享调质状态 (发布 = 唯一真源)"
     );
 
-    assert!(
-        !apply_approval_social_feedback(Some(&state), None),
-        "无社会结论 (取消) 时即便句柄在场也不推进"
+    let after_approve = state.behavior_params();
+    assert_eq!(
+        source.publish(&ApprovalDecision::Cancel { reason: None }),
+        None,
+        "取消 = 不发布"
     );
+    assert_eq!(
+        bus.published_count(NervousSignalKind::ApprovalSocial),
+        1,
+        "取消不记账"
+    );
+    assert_eq!(state.behavior_params(), after_approve, "取消零变化");
+
+    assert_eq!(
+        source.publish(&ApprovalDecision::Reject {
+            reason: Some("理由文本不进信号".into()),
+        }),
+        Some(1)
+    );
+    assert_ne!(
+        state.behavior_params(),
+        after_approve,
+        "人拒推进社会负反馈 (理由不进信号)"
+    );
+}
+
+/// 开关关: 无源句柄 = 零发布零变化 (与未接线逐字节一致)。
+#[test]
+fn approval_source_is_absent_when_the_switch_is_off() {
+    let (modules, _probe) = build_with_env(None);
+    assert!(
+        modules.bio_approval_social_source().is_none(),
+        "开关关 = 装配根不交付审批社交源"
+    );
+    assert_eq!(
+        modules
+            .nervous_bus()
+            .published_count(NervousSignalKind::ApprovalSocial),
+        0
+    );
+    assert!(modules.nervous_bus().is_idle(), "关 = 总线全空闲");
 }

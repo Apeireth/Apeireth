@@ -23,27 +23,55 @@ pub const MAX_SIGNAL_TEXT_CHARS: usize = 256;
 
 /// 信号类别：机制可订阅的稳定词表。
 ///
-/// R1b-1a 只定义**来源已接**的两类（`HookPoint::AfterToolResult` /
-/// `HookPoint::OnError`）；其余缺失信号源（tone_feedback / sleep_pressure /
-/// scar_ledger_learn / ritual_producer 等）由 R1b-2/R1b-3 在补源时**新增
-/// 类别**，不得复用现有类别假装已接。
+/// 类别只在**生产者已接**时新增（R1b-1a: `HookPoint::AfterToolResult` /
+/// `HookPoint::OnError` 两类；R1b-2c: 审批人决定三类），不得复用现有类别
+/// 假装已接；其余缺失信号源（tone_feedback / sleep_pressure /
+/// scar_ledger_learn / session_event_source）由 R1b-3 逐源定性。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum NervousSignalKind {
     /// 一次工具调用已产生结果（成功与失败都是观测事实）。
     ToolOutcome,
     /// 一次可观测失败（运行时或模块错误文本）。
     ErrorObserved,
+    /// 一次人工审批决定（人批/人拒/人取消；R1b-2c 起由 CLI 审批路径发布）。
+    ApprovalSocial,
 }
 
 impl NervousSignalKind {
     /// 全部类别（顺序稳定；台账 v2 与测试按此遍历）。
-    pub const ALL: [Self; 2] = [Self::ToolOutcome, Self::ErrorObserved];
+    pub const ALL: [Self; 3] = [Self::ToolOutcome, Self::ErrorObserved, Self::ApprovalSocial];
 
     /// 稳定短标签（台账/日志用，随 schema 冻结）。
     pub const fn label(self) -> &'static str {
         match self {
             Self::ToolOutcome => "tool_outcome",
             Self::ErrorObserved => "error_observed",
+            Self::ApprovalSocial => "approval_social",
+        }
+    }
+}
+
+/// 人工审批决定的三态事实（R1b-2c）。
+///
+/// 只表达"人做了什么决定"，不携带理由文本/权限判定/情绪强度——
+/// 理由属于审批面审计记录，不进总线（避免 PII 与二次真源）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ApprovalSocialOutcome {
+    /// 人批准。
+    Approved,
+    /// 人拒绝。
+    Rejected,
+    /// 人取消（未形成批/拒结论）。
+    Cancelled,
+}
+
+impl ApprovalSocialOutcome {
+    /// 稳定短标签。
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Approved => "approved",
+            Self::Rejected => "rejected",
+            Self::Cancelled => "cancelled",
         }
     }
 }
@@ -84,6 +112,13 @@ pub enum NervousSignal {
         /// 失败文本（已截断）。
         message: String,
     },
+    /// 人工审批决定（R1b-2c；来源标签截断规则同 [`MAX_SIGNAL_TEXT_CHARS`]）。
+    ApprovalSocial {
+        /// 人做出的决定三态。
+        outcome: ApprovalSocialOutcome,
+        /// 决定来源（如 `cli.approval`；截断，仅用于归因，不含理由文本）。
+        source: String,
+    },
 }
 
 impl NervousSignal {
@@ -105,11 +140,20 @@ impl NervousSignal {
         }
     }
 
+    /// 人工审批决定信号（来源标签截断规则同 [`MAX_SIGNAL_TEXT_CHARS`]）。
+    pub fn approval_social(outcome: ApprovalSocialOutcome, source: &str) -> Self {
+        Self::ApprovalSocial {
+            outcome,
+            source: truncate_text(source),
+        }
+    }
+
     /// 本信号所属类别。
     pub const fn kind(&self) -> NervousSignalKind {
         match self {
             Self::ToolOutcome { .. } => NervousSignalKind::ToolOutcome,
             Self::ErrorObserved { .. } => NervousSignalKind::ErrorObserved,
+            Self::ApprovalSocial { .. } => NervousSignalKind::ApprovalSocial,
         }
     }
 }
@@ -336,6 +380,36 @@ mod tests {
             }
         );
         assert_eq!(signal.kind(), NervousSignalKind::ToolOutcome);
+    }
+
+    #[test]
+    fn approval_social_signal_carries_the_decision_outcome_only() {
+        let bus = NervousBus::new();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let probe = Arc::clone(&seen);
+        bus.subscribe(NervousSignalKind::ApprovalSocial, move |signal| {
+            probe.lock().push(signal.clone());
+        });
+
+        assert_eq!(
+            bus.publish(&NervousSignal::approval_social(
+                ApprovalSocialOutcome::Approved,
+                "cli.approval",
+            )),
+            1
+        );
+        assert_eq!(
+            seen.lock().clone(),
+            vec![NervousSignal::ApprovalSocial {
+                outcome: ApprovalSocialOutcome::Approved,
+                source: "cli.approval".to_string(),
+            }]
+        );
+        assert_eq!(bus.published_count(NervousSignalKind::ApprovalSocial), 1);
+        // 其它类别零计数: 新类别不与工具结局/错误混流。
+        assert_eq!(bus.published_count(NervousSignalKind::ToolOutcome), 0);
+        assert_eq!(bus.published_count(NervousSignalKind::ErrorObserved), 0);
+        assert_eq!(NervousSignalKind::ALL.len(), 3);
     }
 
     #[test]
