@@ -5,15 +5,15 @@
 
 | id | level | default | switch_env | verified_at | next_review |
 |---|---|---|---|---|---|
-| `rt.provider_router` | PRODUCTION WIRED | ON | - | `bdd64957` | 2026-11-20 |
-| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `bdd64957` | 2026-11-20 |
-| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `bdd64957` | 2026-11-20 |
-| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `bdd64957` | 2026-11-20 |
-| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `bdd64957` | 2026-11-20 |
+| `rt.provider_router` | PRODUCTION WIRED | ON | - | `d2621788` | 2026-11-20 |
+| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `d2621788` | 2026-11-20 |
+| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `d2621788` | 2026-11-20 |
+| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `d2621788` | 2026-11-20 |
+| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `d2621788` | 2026-11-20 |
 | `gap.memory_update` | NOT IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
-| `gap.prompt_stabilizer_unwired` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
+| `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `d2621788` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
-| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `68fa5643b7de` | 2026-11-20 |
+| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `d2621788` | 2026-11-20 |
 | `sec.storage_envelope_crypto` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
@@ -21,9 +21,9 @@
 | `sec.provider_proxy_ssrf` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `sec.desktop_file_roots` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
-| `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `83933edd` | 2026-11-20 |
-| `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `83933edd` | 2026-11-20 |
-| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `83933edd` | 2026-11-20 |
+| `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `d2621788` | 2026-11-20 |
+| `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `d2621788` | 2026-11-20 |
+| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `d2621788` | 2026-11-20 |
 | `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `83933edd` | 2026-11-20 |
 
 ## 使用

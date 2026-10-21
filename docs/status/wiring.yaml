@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 3f99393f4b58bf3ab1837e7aa9d1d0c4e55b8a010c09ecf9c9aad0fac96db0c8
+claims_sha256: 59283e6b11a42702ed617cf5b2565d5e91d068574742e422816aaabeae93f438
 claims_total: 20
 items:
   - id: "rt.provider_router"
@@ -123,20 +123,20 @@ items:
     gaps:
       - "未达 PRODUCTION WIRED：capability universe: memory.update supported=false / reason=not_implemented；底层 bitemporal upsert/invalidate 已存在，缺治理面。"
   - id: "gap.prompt_stabilizer_unwired"
-    capability: "PromptCacheStabilizer / EphemeralContextSnapshot——库级已实现、生产未接线"
+    capability: "PromptCacheStabilizer 已归档（R7-4a，可逆保留）——生产中不存在该能力"
     implemented:
       sources:
-        - "crates/foundation/orchestration/src/prompt_stabilizer.rs"
+        - "legacy/archived/prompt-stabilizer/prompt_stabilizer.rs"
     wired:
       production_refs:
-        - "crates/foundation/orchestration/src/prompt_stabilizer.rs"
+        []
     default_enabled: "n/a"
     validated:
       tests:
-        - "crates/foundation/orchestration/src/prompt_stabilizer.rs"
+        - "legacy/archived/prompt-stabilizer/prompt_stabilizer.rs"
       claims_id: "gap.prompt_stabilizer_unwired"
     gaps:
-      - "未达 PRODUCTION WIRED：2026-10-20 grep 实测：runtime/runtime-assembly/adapters 对 EphemeralContextSnapshot/PromptCacheStabilizer/assemble_tiered 零生产引用。"
+      - "未达 PRODUCTION WIRED：2026-10-21 复核：R7-4a（51bb6cfa，ADR-0007 Accepted）将 prompt-cache 孤岛归档至 legacy/archived/prompt-stabilizer（含 MANIFEST，可逆）；workspace crates 仅剩注释引用、无生产消费点，故由…"
   - id: "sec.linux_containment"
     capability: "Linux 进程遏制边界（partial，如实）"
     implemented:

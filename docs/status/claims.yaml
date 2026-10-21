@@ -25,7 +25,7 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: bdd64957
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -41,7 +41,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: bdd64957
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -59,7 +59,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: bdd64957
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -79,7 +79,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: bdd64957
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -97,7 +97,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: bdd64957
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -119,19 +119,19 @@ claims:
     notes: "capability universe: memory.update supported=false / reason=not_implemented；底层 bitemporal upsert/invalidate 已存在，缺治理面。"
 
   - id: gap.prompt_stabilizer_unwired
-    title: "PromptCacheStabilizer / EphemeralContextSnapshot——库级已实现、生产未接线"
-    level: IMPLEMENTED
+    title: "PromptCacheStabilizer 已归档（R7-4a，可逆保留）——生产中不存在该能力"
+    level: NOT IMPLEMENTED
     default: null
     switch_env: null
     sources:
-      - crates/foundation/orchestration/src/prompt_stabilizer.rs
+      - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
     tests:
-      - crates/foundation/orchestration/src/prompt_stabilizer.rs
-    verified_at: bdd64957
-    verify_cmd: "cargo test -p apeireth-orchestration prompt_stabilizer"
+      - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
+    verified_at: d2621788
+    verify_cmd: "Test-Path legacy/archived/prompt-stabilizer/prompt_stabilizer.rs; git grep -n PromptCacheStabilizer -- crates"
     owner: orchestration
     next_review: "2026-11-20"
-    notes: "2026-10-20 grep 实测：runtime/runtime-assembly/adapters 对 EphemeralContextSnapshot/PromptCacheStabilizer/assemble_tiered 零生产引用。"
+    notes: "2026-10-21 复核：R7-4a（51bb6cfa，ADR-0007 Accepted）将 prompt-cache 孤岛归档至 legacy/archived/prompt-stabilizer（含 MANIFEST，可逆）；workspace crates 仅剩注释引用、无生产消费点，故由 IMPLEMENTED 改为 NOT IMPLEMENTED。"
 
   - id: sec.linux_containment
     title: "Linux 进程遏制边界（partial，如实）"
@@ -161,7 +161,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 68fa5643b7de94eeb174ffbd1876ff0f6181d5bd
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -287,7 +287,7 @@ claims:
       - crates/engine/organ/src/tone.rs
     tests:
       - crates/engine/runtime-assembly/src/canonical/bio_tone.rs
-    verified_at: 83933edd
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-runtime-assembly bio_tone"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -304,7 +304,7 @@ claims:
       - crates/adapters/cli/src/care_heartbeat.rs
     tests:
       - crates/engine/runtime-assembly/tests/bio_circadian_production.rs
-    verified_at: 83933edd
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_circadian_production"
     owner: cli
     next_review: "2026-11-20"
@@ -321,7 +321,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: 83933edd
+    verified_at: d2621788
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"
