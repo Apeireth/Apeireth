@@ -3,6 +3,8 @@
 > **用途**：全仓测试数字的唯一真源。其他文档（INSTALL / SECURITY / ROADMAP / README 草稿 /
 > capabilities-matrix 等）**只引用本文件、不抄写数字**；数字刷新只改本文件一处。
 > **维护**：每次全量实测收卷后更新本表，并在「历史口径」追加旧行（带日期保留，不追溯改写）。
+> **维护权/执行权（2026-10-21 起）**：由效率线（全量门禁执行线）持有；全量唯一执行器 =
+> `pwsh scripts/gate_full.ps1 -FailIfBusy`（不自拼 cargo test；锁/失败分类由 R6-A 执行器负责）。
 > **性质**：本节为「落差清账·文本可信度批」（审计修 A-03 / B-01 / C-07）落点。
 
 ---
@@ -16,7 +18,7 @@
 | **日期** | 2026-10-21 |
 | **工具链** | rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30) / rustup 1.29.1 |
 | **构建环境（Windows 实测）** | MSVC 14.44.35207（VS Build Tools 2022，C++ workload）+ Windows SDK 10.0.26100.0 |
-| **来源** | 架构线以 R6-A 唯一全量执行器实测（2026-10-21，26.8 分钟，exit 0，HEAD `f2dad300`；日志 `artifacts/wave4-close-full-2026-10-21.log` 与 `logs/gate-full.log`）；Wave 4 收口批广播。全量门禁执行线（效率线/生物线）接管后以其实测刷新 |
+| **来源** | 由全量门禁执行线（效率线）执行（接管日期 2026-10-21；Wave 4 收口时由架构线以 R6-A 执行器代跑的事实保留于此）：`pwsh scripts/gate_full.ps1 -FailIfBusy` 实测 2026-10-21、26.8 分钟、exit 0、HEAD `f2dad300`；日志 `artifacts/wave4-close-full-2026-10-21.log` 与 `logs/gate-full.log` |
 
 > 复现提示：先 `cargo build --workspace --locked`（约 4 min，CARGO_BUILD_JOBS=8），再跑上表命令
 > （约 11 min）；数字随批次增长属正常，**以最近一次全量实测为准**，逐批交付文档只报自己批的增量。
