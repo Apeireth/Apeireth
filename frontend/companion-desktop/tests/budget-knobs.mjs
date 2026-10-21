@@ -47,6 +47,10 @@ const executeRust = readFileSync(
   'utf8',
 );
 const cliRust = readFileSync(join(repoRoot, 'crates', 'adapters', 'cli', 'src', 'lib.rs'), 'utf8');
+const contextBudgetRust = readFileSync(
+  join(repoRoot, 'crates', 'engine', 'runtime-assembly', 'src', 'canonical', 'context_budget.rs'),
+  'utf8',
+);
 const supervisorRust = readFileSync(
   join(testsDir, '..', 'src-tauri', 'src', 'backend_supervisor.rs'),
   'utf8',
@@ -119,7 +123,16 @@ console.log('--- budget knob face ---');
   }
   assert.equal(resolveBudgetLimitInput('9999999', ctx).value, 9999999, '无上界钳制：大正整数直通');
   assert.ok(runtimeRust.includes('pub const DEFAULT_CONTEXT_BUDGET_CHARS: usize = 24_000;'), '默认常量同源');
-  assert.ok(/chars > 0/.test(cliRust), '后端解析 = 正数过滤（越界/非法回默认）');
+  // Wave 4（SG-14）起解析收成单一真源：cli 只转调装配根入口，正数过滤语义在
+  // runtime-assembly::canonical::context_budget（源码级镜像跟随真源迁移）。
+  assert.ok(
+    cliRust.includes('context_budget_chars_from_env'),
+    'cli 转调单一真源入口（不再自带第二套解析）',
+  );
+  assert.ok(
+    /chars > 0/.test(contextBudgetRust),
+    '后端解析 = 正数过滤（越界/非法回默认）—— 真源在 runtime-assembly::canonical::context_budget',
+  );
   console.log('  -> PASS: 上下文字符预算 = 正整数直通、越界/非法回默认（无上界钳制）');
 }
 
