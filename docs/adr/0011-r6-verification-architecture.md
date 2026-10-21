@@ -167,7 +167,9 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
       `.github/workflows/nightly-full.yml`，尚未有 CI 运行 → 可追溯性 **NOT MET**）
 - [x] `docs/status/formal-coverage.md` 存在并登记 Kani 终局矩阵 11 件 / TLA / Miri /
       未覆盖边界（D6；2026-10-21 由架构线落，并订正 workflow「22 件」旧口径为 11 件）
-- [ ] `docs_truth.py --verify --check` 覆盖 ledger 校验后 exit 0（R6-C 脚本化，归效率线）
+- [ ] `docs_truth.py --verify --check` 覆盖 ledger 校验后 exit 0（R6-C 脚本化，归效率线；
+      独立只读校验器 `scripts/verify_ledger.py` 已于 2026-10-21 由架构线落，实测 exit 0，
+      docs_truth 侧集成仍待效率线）
 
 ## 7. 后果（Consequences）
 
@@ -214,3 +216,9 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
   与全量门禁执行线排期，且会改变对外数字产生路径；`docs_truth.py` 对 ledger 的脚本化
   漂移校验、夜间结果回填、owner 签核流程均归效率线 R6-C/D 正式验收。
   拒：把「载体已落」写成「R6-C/D 已验收」（0 装）；拒：架构线代签 owner signoff。
+- **2026-10-21（R6-C 载体补强：台账只读校验器）**：新增 `scripts/verify_ledger.py`
+  （只读；校验 schema/证据路径存在性/非 signoff 层 signoff 必须 null/无 signoff 不得
+  HARDWARE VALIDATED/summary 计数一致性/同 claim 同层唯一），实测 `exit 0`
+  （发现并修正 `summary.claims_with_entries` 4->5 的真实漂移）；`.gitignore` 加
+  `!scripts/verify_ledger.py`（`*.py` 忽略规则例外，与 arch_guard/arch_doc 同法）。
+  仍归效率线：写入脚本、`docs_truth` 集成、夜间结果回填与 owner 签核。

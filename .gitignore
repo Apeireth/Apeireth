@@ -218,6 +218,8 @@ crates/apeireth-integration-e2e/.*.log
 !scripts/arch_doc.py
 # R3a env 登记表 + wiring ledger 生成/校验器（ADR-0004；2026-10-20 第三线）
 !scripts/wiring_report.py
+# 四层验收台账只读校验器（ADR-0011 D4；2026-10-21 架构线 R6-C 载体批）
+!scripts/verify_ledger.py
 
 # TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
 # 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),

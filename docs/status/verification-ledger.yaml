@@ -1,19 +1,22 @@
 # 四层验收台账（verification-ledger）
 
-> 载体来源：ADR-0011 D4（founding-design-v2 §7 四层验收制的可执行形态）。
-> **本文件是四层验收的结构化真源**；`docs/04-internal/live-verification-ledger.md`
-> 保留为叙述型历史绿表，只引用本表 id，不再新增条目。
->
-> 规则（0 装）：
-> - 一条 = 一层。同一 claim 的 `formal` / `bench` / `scenario` / `signoff` 四层各有一条时，
->   才算**四层齐全**（可宣称「已验收」）；缺任一层 → 不得宣称「已验收」。
-> - 无 `signoff` 层的 claim，`level` 最高 `PRODUCTION WIRED`，不得写 `HARDWARE VALIDATED`。
-> - `signoff` 必须是真实人类批准（owner 或授权人），只记 owner 标识与日期，不入密钥。
-> - 阶段 6 最小闭环 = 清单当关卡（本表有条目）+ 人工签核（signoff 层）+ 反思归档
->   （`docs/architecture/handbook.md` 每波复盘引用 ledger id）。
-> - 本文件由效率线实现脚本读写（R6-C 后续）；当前为架构线手工落表（2026-10-21），
->   自动漂移检查（新 unsafe crate / 新形式化目标未登记即红）属效率线 R6-C/D 后续。
-> - 只登记有证据的条目；未运行 = NOT RUN，未覆盖 = NOT COVERED，禁止预填。
+# 载体来源：ADR-0011 D4（founding-design-v2 §7 四层验收制的可执行形态）。
+# **本文件是四层验收的结构化真源**；`docs/04-internal/live-verification-ledger.md`
+# 保留为叙述型历史绿表，只引用本表 id，不再新增条目。
+#
+# 规则（0 装）：
+# - 一条 = 一层。同一 claim 的 `formal` / `bench` / `scenario` / `signoff` 四层各有一条时，
+#   才算**四层齐全**（可宣称「已验收」）；缺任一层 → 不得宣称「已验收」。
+# - 无 `signoff` 层的 claim，`level` 最高 `PRODUCTION WIRED`，不得写 `HARDWARE VALIDATED`。
+# - `signoff` 必须是真实人类批准（owner 或授权人），只记 owner 标识与日期，不入密钥。
+# - 阶段 6 最小闭环 = 清单当关卡（本表有条目）+ 人工签核（signoff 层）+ 反思归档
+#   （`docs/architecture/handbook.md` 每波复盘引用 ledger id）。
+# - 本文件由效率线实现脚本读写（R6-C 后续）；当前为架构线手工落表（2026-10-21），
+#   自动漂移检查（新 unsafe crate / 新形式化目标未登记即红）属效率线 R6-C/D 后续。
+# - 只读校验器已落：`python scripts/verify_ledger.py`（schema / 证据路径存在性 /
+#   signoff 零装下限 / summary 一致性 / id 与同层唯一；退出码 0 通过 1 有错）。
+#   写入脚本与 docs_truth 集成仍归效率线 R6-C。
+# - 只登记有证据的条目；未运行 = NOT RUN，未覆盖 = NOT COVERED，禁止预填。
 
 version: 1
 updated_at: "2026-10-21"
@@ -21,7 +24,7 @@ updated_at: "2026-10-21"
 # 汇总（0 装口径，人工维护；脚本化后由生成器产出）
 summary:
   entries: 5
-  claims_with_entries: 4
+  claims_with_entries: 5
   four_layer_complete: 0        # 没有任何 claim 同时具备 formal+bench+scenario+signoff
   signoff_entries: 0            # 尚无 owner 签核条目
   stage6_drill: NOT RUN         # 清单/签核/反思归档三段的端到端演练未执行
