@@ -173,6 +173,10 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
       `governance.reflection_due`；默认 `ImmediateReflectionScheduler` 零行为变化，实测
       governance lib 214 passed；autopilot / 常驻反思执行器仍 NOT IMPLEMENTED）
 - [ ] R8-D：wiring.yaml 覆盖治理面；`governance-chain` 集成测试入 CI
+      （2026-10-21 部分交付：`rust.yml` 新增 `Governance chain drill (R8-D)` 步骤，
+      实测 `cargo test -p apeireth-governance --test governance_chain_drill` = 3 passed；
+      `docs/status/wiring.yaml` 治理面登记仍待效率线（生成器 `scripts/wiring_report.py`
+      属效率线资产，见 ADR-0011 归属）——本条未勾选）
 - [x] LOCKED 5 项 0 触碰 / 0 新外部 dep / 0 新开关 / 0 新 crate / 六段语义不变
 
 ## 7. 后果（Consequences）
@@ -263,3 +267,14 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
   0 failed（新增 5 条队列/到期/失败关闭测试）；clippy `-D warnings` exit 0；`fmt --check` 0 diff。
 - **如实边界**：autopilot、常驻反思执行器、反思结果回写（学习面）均 NOT IMPLEMENTED；
   延迟仅在进程内、进程重启即丢（不是持久队列）；无生产装配注入；未跑全 workspace 门禁。
+
+### 2026-10-21（R8-D 部分交付：治理链演练入 CI）
+
+- **交付**：`.github/workflows/rust.yml` 的 rust-tests job 增加
+  `Governance chain drill (R8-D)` 步骤，显式跑
+  `cargo test -p apeireth-governance --test governance_chain_drill --locked`。
+  该测试覆盖六段串联三路径（allow / deny / require-approval 演练）。
+- **实测**：`cargo test -p apeireth-governance --test governance_chain_drill --locked -j 2`
+  = 3 passed / 0 failed。
+- **如实边界**：`docs/status/wiring.yaml` 的治理面登记未做（生成器与登记面属效率线，
+  见 ADR-0011 D7）；R8-D 验收未全勾；CI 侧新增步骤尚未在远端实际运行过（本地等价命令已跑通）。

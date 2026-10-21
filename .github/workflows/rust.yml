@@ -77,6 +77,10 @@ jobs:
       - name: Canonical process isolation integration tests
         run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
 
+      # R8-D: 治理链六段串联 + 三路径演练必须进 CI（ADR-0010 §4）
+      - name: Governance chain drill (R8-D)
+        run: cargo test -p apeireth-governance --test governance_chain_drill --locked -- --nocapture
+
       - name: Upload JUnit report
         if: always()
         uses: actions/upload-artifact@v7
