@@ -39,7 +39,9 @@ use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
     bio_lifecycle_wiring_from_enabled_with_store_dir, BioLifecycleState, LifecycleClock,
 };
-use crate::canonical::care_heartbeat::bio_tone::{bio_tone_wiring_from_enabled, ToneState};
+use crate::canonical::care_heartbeat::bio_tone::{
+    bio_tone_wiring_from_enabled, BioToneBusSubscriber, ToneState,
+};
 use crate::canonical::care_heartbeat::CareHeartbeatStatus;
 use crate::canonical::cognitive::{BioAssemblyModule, BioAssemblySwitches};
 use crate::canonical::module::Module;
@@ -59,6 +61,8 @@ use super::{BuildInstrumentation, ModuleFamily, ProductionModules};
 pub(super) struct BioWiringHandles {
     /// W3.3 调质状态（与注册模块共享同一 `Arc`）。
     pub(super) tone_state: Option<Arc<ToneState>>,
+    /// R1b-2a 调质总线订阅者（开关开才构造；装配根拿到总线后 `subscribe`）。
+    pub(super) tone_subscriber: Option<BioToneBusSubscriber>,
     /// W3.5 生命周期状态（与注册模块共享同一 `Arc`）。
     pub(super) lifecycle_state: Option<Arc<BioLifecycleState>>,
 }
@@ -92,7 +96,12 @@ pub(super) fn install_bio_modules(
     // `NervousSwitchboard`（R1b-1b）—— **关 = 不构造不注册**。开时构造共享
     // `ToneState` + 模块，并把状态句柄交给装配根（`bio_tone_state` /
     // `attach_tone_feedback_sink`）。
+    //
+    // R1b-2a: 事件源收敛到总线订阅——句柄额外携带总线订阅者，装配根拿到总线后
+    // 注册（关 = `None` = 零订阅者）。模块 `on_hook` 不再扫描 AfterToolResult /
+    // OnError，同一事件只经桥 → 总线 → 订阅者一次。
     let mut tone_state = None;
+    let mut tone_subscriber = None;
     if let Some(wiring) =
         bio_tone_wiring_from_enabled(switchboard.switch_enabled(BioSwitch::Tone), {
             let clock = Arc::clone(clock);
@@ -100,6 +109,7 @@ pub(super) fn install_bio_modules(
         })
     {
         tone_state = Some(Arc::clone(wiring.state()));
+        tone_subscriber = Some(wiring.subscriber());
         modules.push(wiring.module() as Arc<dyn Module>);
     }
 
@@ -129,6 +139,7 @@ pub(super) fn install_bio_modules(
 
     BioWiringHandles {
         tone_state,
+        tone_subscriber,
         lifecycle_state,
     }
 }

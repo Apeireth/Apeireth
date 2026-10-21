@@ -1,11 +1,11 @@
 //! 生物机制族 W3.4 · 调质 → 语气「真实反馈事件源」装配级测试
-//! (`APEIRETH_ENABLE_BIO_TONE`, 默认关)。
+//! (`APEIRETH_ENABLE_BIO_TONE`, 默认关; R1b-2a 起事件源 = 总线订阅)。
 //!
-//! 覆盖本批补的半程 (不是 W1/W3.1 内核单测、也不是既有 `bio_tone_wiring.rs`
+//! 覆盖装配面半程 (不是 W1/W3.1 内核单测、也不是既有 `bio_tone_wiring.rs`
 //! 静态接线的重复):
 //! 1. 开关关: 装配零构造零注册, 无状态句柄/无 attach 回调 (逐字节零变化);
 //! 2. 开关开: 状态句柄与注册模块共享同一 `Arc<ToneState>`; 无反馈 = 基线零 overlay;
-//! 3. 真实工具失败事件 (`AfterToolResult` + `ToolResult::Error`) → 档位移动 →
+//! 3. 真实工具失败事件 (总线 `ToolOutcome` ok=false) → 档位移动 →
 //!    `TurnStart` 出现一个尾部独立 system 块 (端到端模块级);
 //! 4. 真实工具成功事件 → 同向可观测移动 + 非基线档 overlay;
 //! 5. 九类反馈档 → 内核事件一一映射 (文档口径不因本批接线改变);
@@ -13,9 +13,10 @@
 //! 7. `attach_tone_feedback_sink` 注入点: 开关关不回调, 开关开把同一状态交给
 //!    既有反馈点, 事件源旁路注入后注册模块的 TurnStart 立刻可见。
 //!
-//! **0 装诚实**: 真实源 = 运行时既有钩子上的**结局事件** (工具结算 Ok/Error、
-//! 运行时错误), 不读用户文本、不做情感推断; 用户显式好评/差评采集入口仍未接
-//! (四处接口无生产调用方), 七档只有显式注入口; 无 live E2E; 开关关 = 缺省。
+//! **0 装诚实**: 真实源 = 桥 (`NervousBridgeModule`) 归一后的**结局事件** (工具结算
+//! Ok/Error、运行时错误), 经总线订阅进入调质状态; 模块钩子不再扫描这两类事件。
+//! 不读用户文本、不做情感推断; 用户显式好评/差评采集入口仍未接 (四处接口无生产
+//! 调用方), 四档只有显式注入口; 无 live E2E; 开关关 = 缺省。
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -35,6 +36,7 @@ use apeireth_runtime_assembly::canonical::module::{
     ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
     ModuleOutcome,
 };
+use apeireth_runtime_assembly::canonical::nervous_bus::{NervousSignal, NervousSignalKind};
 use apeireth_runtime_assembly::canonical::subloop::{
     SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
 };
@@ -197,6 +199,22 @@ fn overlay_text(outcome: &ModuleOutcome) -> String {
     ContentPart::join_text(&outcome.prompt_overlays[0].message().content)
 }
 
+/// R1b-2a: 生产事件源 = 总线订阅; 测试用发布驱动 (不再经模块钩子)。
+fn publish_tool_outcome(modules: &ProductionModules, ok: bool, tool: Option<&str>) {
+    let delivered = modules
+        .nervous_bus()
+        .publish(&NervousSignal::tool_outcome(ok, tool, false));
+    assert_eq!(delivered, 1, "开关开 = 订阅者已注册, 一次发布必须投递一次");
+}
+
+/// 运行时 / 模块错误观察信号 (桥归一后的 `OnError` 等价物)。
+fn publish_error_observed(modules: &ProductionModules, message: &str) {
+    let delivered = modules
+        .nervous_bus()
+        .publish(&NervousSignal::error_observed(message));
+    assert_eq!(delivered, 1, "开关开 = 订阅者已注册, 一次发布必须投递一次");
+}
+
 // ============================================
 // 1. 开关关 = 零构造 / 零注册 / 零状态 / 零 attach
 // ============================================
@@ -215,6 +233,22 @@ fn the_switch_off_assembly_has_no_state_no_module_and_no_attach() {
         modules.ids()
     );
     assert_eq!(probe.total(), 0, "未启用族零构造 (懒加载语义)");
+    assert!(
+        modules.nervous_bus().is_idle(),
+        "开关关 = 总线零订阅者 (无事件路径)"
+    );
+    assert_eq!(
+        modules
+            .nervous_bus()
+            .subscriber_count(NervousSignalKind::ToolOutcome),
+        0
+    );
+    assert_eq!(
+        modules
+            .nervous_bus()
+            .subscriber_count(NervousSignalKind::ErrorObserved),
+        0
+    );
 
     let mut called = false;
     assert!(
@@ -273,23 +307,16 @@ async fn real_tool_failures_move_the_state_and_surface_a_cautious_overlay() {
     let module = tone_module(&modules);
     let state: Arc<ToneState> = modules.bio_tone_state().expect("开关开");
 
-    let failed = ToolResult::permanent_error("call-1", "permission denied");
     for _ in 0..3 {
-        let outcome = run_hook(
-            module.as_ref(),
-            HookPoint::AfterToolResult,
-            &[NormalizedMessage::user(CANARY)],
-            Some(&failed),
-            None,
-        )
-        .await
-        .expect("tool result hook");
-        assert_eq!(
-            outcome,
-            ModuleOutcome::continue_(),
-            "事件钩子只推进状态, 不产 overlay、不改指令"
-        );
+        publish_tool_outcome(&modules, false, None);
     }
+    assert_eq!(
+        modules
+            .nervous_bus()
+            .published_count(NervousSignalKind::ToolOutcome),
+        3,
+        "失败事件经桥 → 总线 → 订阅者一次 (发布计数可证, 模块钩子不重复消费)"
+    );
 
     assert!(!state.is_baseline(), "真实失败事件必须把档位推离基线");
     assert_eq!(
@@ -325,17 +352,8 @@ async fn real_tool_successes_move_the_state_and_surface_an_overlay() {
     let state: Arc<ToneState> = modules.bio_tone_state().expect("开关开");
     let before = state.vector();
 
-    let ok = ToolResult::ok("call-ok", serde_json::json!({ "status": "done" }));
     for _ in 0..4 {
-        run_hook(
-            module.as_ref(),
-            HookPoint::AfterToolResult,
-            &[],
-            Some(&ok),
-            None,
-        )
-        .await
-        .expect("tool result hook");
+        publish_tool_outcome(&modules, true, None);
     }
 
     assert!(
@@ -406,29 +424,11 @@ fn nine_feedback_kinds_map_one_to_one_to_their_documented_events() {
 #[tokio::test]
 async fn repeated_identical_events_are_not_deduplicated_under_the_module_surface() {
     let (modules, _probe) = build_with_env(Some("1"));
-    let module = tone_module(&modules);
     let state: Arc<ToneState> = modules.bio_tone_state().expect("开关开");
-    let failed = ToolResult::retryable_error("call-retry", "upstream timeout");
 
-    run_hook(
-        module.as_ref(),
-        HookPoint::AfterToolResult,
-        &[],
-        Some(&failed),
-        None,
-    )
-    .await
-    .expect("第一次投递");
+    publish_tool_outcome(&modules, false, None);
     let after_first = state.vector();
-    run_hook(
-        module.as_ref(),
-        HookPoint::AfterToolResult,
-        &[],
-        Some(&failed),
-        None,
-    )
-    .await
-    .expect("第二次投递");
+    publish_tool_outcome(&modules, false, None);
     let after_second = state.vector();
 
     assert_ne!(
@@ -481,11 +481,11 @@ async fn the_attach_injection_point_feeds_the_same_state_the_module_reads() {
 }
 
 // ============================================
-// 8. 事件载荷缺失 / 非事件钩子不编馈 (模块面)
+// 8. 模块钩子不再观测事件 (R1b-2a: 观测面收敛到总线订阅)
 // ============================================
 
 #[tokio::test]
-async fn hooks_without_a_real_payload_never_move_the_state() {
+async fn module_hooks_are_no_longer_an_event_source_but_the_bus_is() {
     let (modules, _probe) = build_with_env(Some("1"));
     let module = tone_module(&modules);
     let state: Arc<ToneState> = modules.bio_tone_state().expect("开关开");
@@ -506,11 +506,24 @@ async fn hooks_without_a_real_payload_never_move_the_state() {
         assert_eq!(
             outcome,
             ModuleOutcome::continue_(),
-            "{hook:?} 无可观测载荷 = 零输出"
+            "{hook:?} 模块钩子 = 恒 Continue (不再旁路观测)"
         );
     }
-    assert_eq!(state.vector(), before, "缺载荷 = 无事件 = 状态不动");
-    assert!(state.is_baseline());
+    assert_eq!(
+        state.vector(),
+        before,
+        "模块钩子不再推进状态: 同一事件只经总线订阅一次 (不双写)"
+    );
+
+    // 同一个 OnError 语义经桥 → 总线 → 订阅者 = 真的有事件。
+    publish_error_observed(&modules, "bridge failed");
+    assert_ne!(state.vector(), before, "总线订阅者仍然消费错误信号");
+    assert_eq!(
+        modules
+            .nervous_bus()
+            .published_count(NervousSignalKind::ErrorObserved),
+        1
+    );
 }
 
 // ============================================

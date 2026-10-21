@@ -1557,6 +1557,11 @@ impl ProductionModules {
             bio_lifecycle_store_dir.as_deref(),
             &nervous_switchboard,
         );
+        // R1b-2a: 调质事件源收敛到总线订阅——开关开才有订阅者, 拿到总线后注册
+        // (关 = `None` = 不注册 = 总线零订阅者 = 零变化)。
+        if let Some(subscriber) = &bio_wiring.tone_subscriber {
+            subscriber.subscribe(&nervous_bus);
+        }
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
