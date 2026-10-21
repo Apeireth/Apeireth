@@ -89,3 +89,5 @@
   架构线在 Wave 4 期间按 ADR-0011 §9 / ADR-0010 §9 的「归属临时调整」代做的部分（R6-A/B、R8-A/B1/C、
   R1b-1a/1b/3/4a），自本页生效起回归各线，不再扩大架构线施工面。
 - R6-C/D 的**四层签核只能 owner 本人签**（`verification-ledger.yaml` signoff），任何线不得代签。
+
+- **2026-10-21 效率线重启批完成（架构线验收）**：`d2621788..3d6d3d44` 共 10 提交——E1 test-baseline 维护/全量执行权接管、E2 治理面登记（claims 20→24 均 IMPLEMENTED）、E4 台账校验接入 docs-truth；E3 夜间 CI 按 owner 裁决「不推送、全本地」收口为 NOT MET（未冒称夜间 CI）；门禁全绿，crates 零改动。安全线自 `d2621788` 起 0 提交，S1/S2 待启动；R6-C/D 正式验收仍需 owner 签核。

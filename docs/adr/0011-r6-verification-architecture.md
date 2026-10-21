@@ -156,10 +156,10 @@ R6「验证架构」的问题**不是缺门禁，而是门禁语义不齐、口�
 
 ## 6. 验收
 
-- [ ] `docs/02-guides/verification-architecture.md` 存在且与 D1 表一致（R6-A）
-- [ ] `gate_full.ps1` 并发实测：两实例不同时跑，第二条等待或 `-FailIfBusy` 失败（R6-A）
-- [ ] 失败日志含 `FAILURE_CLASS`，OOM 场景实测识别为 `oom`（R6-A）
-- [ ] `rust.yml` 内 `grep -E '24 LOCKED|13 键'` 零命中且守门仍通过（R6-B）
+- [x] `docs/02-guides/verification-architecture.md` 存在且与 D1 表一致（R6-A） — 2026-10-21 复核：已满足（`5858fc1f`）。
+- [x] `gate_full.ps1` 并发实测：两实例不同时跑，第二条等待或 `-FailIfBusy` 失败（R6-A） — 2026-10-21 复核：已满足（`5858fc1f`）。
+- [x] 失败日志含 `FAILURE_CLASS`，OOM 场景实测识别为 `oom`（R6-A） — 2026-10-21 复核：已满足（`5858fc1f`）。
+- [x] `rust.yml` 内 `grep -E '24 LOCKED|13 键'` 零命中且守门仍通过（R6-B） — 2026-10-21 复核：已满足（`5858fc1f`）。
 - [ ] `verification-ledger.yaml` 至少 1 条四层齐全 + `signoff.owner/date` 非空（R6-C；
       载体 2026-10-21 已落，schema + 5 条单层条目；四层齐全 0 条、signoff 0 条，等 owner 签核）
 - [ ] 阶段 6 闭环演练一次：清单关卡 + 签核 + 反思归档条目（R6-C；**NOT RUN**，须 owner 参与）

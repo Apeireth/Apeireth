@@ -172,11 +172,11 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
       （2026-10-21 交付 `DelayedReflectionScheduler` + `ReflectionDue` + `run` 起始审计
       `governance.reflection_due`；默认 `ImmediateReflectionScheduler` 零行为变化，实测
       governance lib 214 passed；autopilot / 常驻反思执行器仍 NOT IMPLEMENTED）
-- [ ] R8-D：wiring.yaml 覆盖治理面；`governance-chain` 集成测试入 CI
-      （2026-10-21 部分交付：`rust.yml` 新增 `Governance chain drill (R8-D)` 步骤，
-      实测 `cargo test -p apeireth-governance --test governance_chain_drill` = 3 passed；
-      `docs/status/wiring.yaml` 治理面登记仍待效率线（生成器 `scripts/wiring_report.py`
-      属效率线资产，见 ADR-0011 归属）——本条未勾选）
+- [x] R8-D：wiring.yaml 覆盖治理面；`governance-chain` 集成测试入 CI — 2026-10-21 复核：wiring 治理面已由效率线 E2 `306e4ee2` 登记（4 条 gov.* claim）；CI 演练步骤见 `60627d8e`（本地 3 passed；远端 CI 未推送运行）。
+      （2026-10-21 交付记录：`rust.yml` 新增 `Governance chain drill (R8-D)` 步骤，实测
+      `cargo test -p apeireth-governance --test governance_chain_drill` = 3 passed；wiring 治理面
+      同日由效率线 E2 `306e4ee2` 登记并 `wiring_report --verify` 复查通过；该 CI 步骤尚未在
+      远端 CI 运行（本地仓库未推送），不计作「CI 可追溯」证据。）
 - [x] LOCKED 5 项 0 触碰 / 0 新外部 dep / 0 新开关 / 0 新 crate / 六段语义不变
 
 ## 7. 后果（Consequences）

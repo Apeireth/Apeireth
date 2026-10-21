@@ -37,8 +37,8 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 在途违规（本波） | 无未登记在途违规；`arch_guard --report` VIOLATIONS 0 / exceptions=2（`EXC-0002` cognitive.rs 4763、`EXC-0003` tool_modules.rs 1216，weight=1、expires_wave=6，NOTE 抑制）/ STALE **0**（本批缩表 2 条） |
 | 效率线 R3a 现状 | `env-registry.toml` 155 条；R3b foundation 批验收（ADR-0004 §7.6）；R3c report-only 至 2026-11-03 后 review |
 | 基线 | `scripts/arch-baseline.txt`（340 条；Wave 4 收口缩表 2 条 = `play_tools.rs` 1414→1412、`cli/lib.rs` 3879→3878；只减不增） |
-| 已登记的已知债务 | `contract.toml [flagged_edges]` 3 条；`[extension_debt]` **0**（R2 收口清零）；`[concepts].known_debt` **0 组**（R7-2.1 已合并）；`exceptions.toml` 活跃例外 **2** 条（EXC-0002/EXC-0003，均 size 类 weight=1、expires_wave=6，清偿任务见例外条目） |
-| 未完成项 | Wave 5+：R5 取消可恢复 worker（未开工，待 owner 启动）；R8-B2/B3（CLI 装配根切换 / 持久 `AuditSink` + IM 审计对，待安全线）；R8-D 余项（wiring 台账治理面，待效率线）；R6-C/D 正式验收（夜间 full 尚未运行、四层签核 0 条）；R3c 2026-11-03 后 review；R4a-2 条件性提取（owner 触发） |
+| 已登记的已知债务 | `contract.toml [flagged_edges]` 3 条；`[extension_debt]` **0**（R2 收口清零）；`[concepts].known_debt` **0 组**（R7-2.1 已合并）；CI 注释残留旧口径（`24 LOCKED` 见 cosign/dependabot/o6-anchor 等非 active guard 注释，待清）；`exceptions.toml` 活跃例外 **2** 条（EXC-0002/EXC-0003，均 size 类 weight=1、expires_wave=6，清偿任务见例外条目） |
+| 未完成项 | Wave 5+：R5 取消可恢复 worker（未开工，待 owner 启动）；R8-B2/B3（CLI 装配根切换 / 持久 `AuditSink` + IM 审计对，待安全线）；R8-D wiring 台账治理面已由效率线 E2 登记（ADR-0010 §6 已勾选；CI 演练步骤仅本地，远端未运行）；R6-C/D 正式验收（夜间 full **NOT MET**：owner 2026-10-21 裁决不推送、全本地；本地全量证据 341/8570；四层签核 0 条）；R3c 2026-11-03 后 review；R4a-2 条件性提取（owner 触发） |
 
 ## 4. 每波收口 SOP（架构线主持）
 
@@ -124,3 +124,4 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 2026-10-21 | **R1b-3 交付**（架构线，零新增信号变体）：ritual 已由 `RitualStateStore` 共享文件打通（工具写 `<care_dir>/ritual_state.json` → CLI care heartbeat 同拍读盘），只补端到端测试 `a_ritual_tool_write_is_visible_to_the_next_heartbeat_beat` + 清理陈旧注释；`sleep_pressure` / `scar_ledger_learn` / `session_event_source` 取证后如实 `NotWired` + 具体 reason；实测 runtime-assembly lib 291 passed / nervous_snapshot 13 passed / cli lib 57 passed、clippy·fmt 绿；guard VIOLATIONS 0（exceptions=2 / STALE 1 保持） | （R1b-3 交付批） |
 | 2026-10-21 | **R1b-2c 交付并复核**（生物线）：`NervousSignalKind::ApprovalSocial` 生产者+订阅者同批 additive（代码 `f2dad300` / 记录 `815d85e7`），默认关零行为变化；全量门禁随 Wave 4 收口批绿 | `f2dad300`/`815d85e7` |
 | 2026-10-21 | **Wave 4 收口**：R1b/R8/R6 交付矩阵见 §3；全量 `pwsh scripts/gate_full.ps1 -FailIfBusy` = main 264 套件 / 6263 passed + image 77 套件 / 2307 passed = **341 套件 / 8570 passed / 0 failed / 51 ignored**（HEAD `f2dad300`，26.8 min，exit 0）；基线缩表 2 条（`play_tools.rs` 1412、`cli/lib.rs` 3878）；`test-baseline.md` 现行基线刷新；`current_wave=5`；carries 如实（R8-B2/B3、R8-D wiring、R6-C/D 签核、夜间 full 未运行、R5 未开工）；R3c 2026-11-03 后 review | 收口批 commit |
+| 2026-10-21 | **效率线重启批验收**（`d2621788..3d6d3d44` 10 提交）：E1 test-baseline 维护/全量执行权接管（数字未变 341/8570/0/51）；E2 治理面 4 条 claim（claims 20→24，均 IMPLEMENTED）+ wiring 重生成；E4 `verify_ledger.py` 接入 docs-truth（负向测试留记录）；E3 夜间 CI 按 owner 裁决**不推送、全本地 → NOT MET 保留**；D29/DTS/口径修复随批；本行验收 = docs_truth / arch_doc / wiring / guard / ledger 全绿，crates 零改动（仅 nervous_snapshot 注释 +5 属生物线） |
