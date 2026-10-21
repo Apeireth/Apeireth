@@ -231,3 +231,18 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
 - **如实 IS NOT IMPLEMENTED**：R8-B/C/D 仍未实施；本记录只登记设计候选与证据命令，
   未写任何生产代码。未决问题（动作级审计体积、持久 sink 介质、IM 审计对是否并入
   `AuditHashChain`、多签来源、与生物线 R1b-2c 同窗口施工）待 owner/安全线裁决。
+
+### 2026-10-21（R8-B1 适配器交付）
+
+- **交付**：`crates/foundation/governance/src/chain.rs` 新增 `ChainGovernanceHook`
+  （`GovernanceChain` → `GovernanceHook` 适配器，方案 B 第一步）：一次评估 = 一次
+  chain run；`ChainOutcome` 映射为 `GovernanceVerdict`（Allowed→Allow、
+  Denied→`<phase>: <reason>`、RequireApproval→RequireApproval、NotConfigured→
+  `not configured at <phase>`）；`approval_resolved` 经新增 `GovernanceChain::gate()`
+  访问器转发给 gate。纯新增类型 + 访问器，**零生产接线**。
+- **归属**：沿 R8-A 先例（安全线 idle，owner 授权做到底）；R8-B2（CLI 装配根切换）与
+  R8-B3（持久 `AuditSink` + IM 审计对）仍待安全线/owner 裁决。
+- **实测**：`cargo test -p apeireth-governance --lib --locked -j 2` = 209 passed /
+  0 failed（新增 5 条适配器测试）；clippy `-D warnings` exit 0；`fmt --check` 0 diff。
+- **如实边界**：无生产装配构造适配器；`Runtime` 仍持 `Arc<GovernancePipeline>` 包装；
+  未跑全 workspace 门禁。

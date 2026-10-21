@@ -38,11 +38,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use apeireth_core::kernel::Timestamp;
+use apeireth_core::kernel::{CapabilityId, SessionId, Timestamp};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{AuditHashChain, GovernanceHook, GovernanceRequest};
+use crate::{AuditHashChain, Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict};
 
 /// Schema version of [`ChainRecord`]. Bump only for additive/breaking changes
 /// that a reader must be able to tell apart; v1 is the R8-A skeleton.
@@ -461,6 +461,14 @@ impl GovernanceChain {
         &self.audit
     }
 
+    /// The injected gate hook, when one is configured.
+    ///
+    /// Exposed so the R8-B1 [`ChainGovernanceHook`] adapter can forward
+    /// [`GovernanceHook::approval_resolved`] to the gate.
+    pub fn gate(&self) -> Option<&Arc<dyn GovernanceHook>> {
+        self.gate.as_ref()
+    }
+
     /// Run the chain for one request.
     ///
     /// `request` already carries the turn's `TurnSecurityContext`, so no
@@ -672,11 +680,82 @@ enum HumanAuthorityStep {
     Denied(String),
 }
 
+// ---------------------------------------------------------------------------
+// R8-B1: chain as a governance hook
+// ---------------------------------------------------------------------------
+
+/// Adapter that exposes [`GovernanceChain`] wherever a [`GovernanceHook`] is
+/// expected (ADR-0010 §9, R8-B1).
+///
+/// One evaluation = one chain run, so every action decided through this hook
+/// goes through the six ordered phases. The runtime keeps its
+/// `Arc<dyn GovernanceHook>` interface, which is why R8-B2 needs no runtime
+/// change (design candidate §3, 方案 B).
+///
+/// NOT WIRED: no production assembly constructs this type yet (R8-B2).
+pub struct ChainGovernanceHook {
+    chain: Arc<GovernanceChain>,
+}
+
+impl ChainGovernanceHook {
+    /// Wrap a chain.
+    pub fn new(chain: Arc<GovernanceChain>) -> Self {
+        Self { chain }
+    }
+
+    /// The wrapped chain.
+    pub fn chain(&self) -> &Arc<GovernanceChain> {
+        &self.chain
+    }
+}
+
+impl std::fmt::Debug for ChainGovernanceHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChainGovernanceHook")
+            .field("gate", &self.chain.gate().map(|gate| gate.name()))
+            .finish()
+    }
+}
+
+#[async_trait::async_trait]
+impl GovernanceHook for ChainGovernanceHook {
+    fn name(&self) -> &str {
+        "governance_chain"
+    }
+
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        self.evaluate_verbose(request).await.decision
+    }
+
+    async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
+        let decision = match self.chain.run(request).await {
+            ChainOutcome::Allowed(_) => Decision::Allow,
+            ChainOutcome::Denied { phase, reason } => {
+                Decision::deny(format!("{}: {reason}", phase.label()))
+            }
+            ChainOutcome::RequireApproval(_) => {
+                Decision::require_approval("governance chain requires human approval")
+            }
+            ChainOutcome::NotConfigured { phase } => Decision::deny(format!(
+                "governance chain not configured at {}",
+                phase.label()
+            )),
+        };
+        GovernanceVerdict::new(self.name(), decision)
+    }
+
+    fn approval_resolved(&self, session: &SessionId, capability: &CapabilityId) {
+        if let Some(gate) = self.chain.gate() {
+            gate.approval_resolved(session, capability);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use apeireth_core::kernel::{SessionId, TraceId};
+    use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
     use async_trait::async_trait;
 
     use super::*;
@@ -897,5 +976,92 @@ mod tests {
         let back: ChainRecord = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back, record);
         assert!(json.contains("\"decision\":\"allowed\""));
+    }
+
+    // -- R8-B1 adapter: chain as a governance hook --------------------------
+
+    #[tokio::test]
+    async fn chain_hook_allowed_path_maps_to_allow_and_audits() {
+        let sink = Arc::new(InMemoryAuditSink::new());
+        let chain = Arc::new(
+            GovernanceChain::new(Arc::new(FixedDecision(Decision::Allow, "fixed_allow")))
+                .with_audit_sink(sink.clone()),
+        );
+        let hook = ChainGovernanceHook::new(chain);
+        assert_eq!(hook.name(), "governance_chain");
+        let verdict = hook.evaluate_verbose(&completion_request("m")).await;
+        assert_eq!(verdict.decision, Decision::Allow);
+        assert_eq!(verdict.hook, "governance_chain");
+        assert_eq!(sink.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn chain_hook_deny_carries_the_phase_label() {
+        let chain = Arc::new(GovernanceChain::new(Arc::new(FixedDecision(
+            Decision::deny("blocked by policy"),
+            "fixed_deny",
+        ))));
+        let verdict = ChainGovernanceHook::new(chain)
+            .evaluate_verbose(&completion_request("m"))
+            .await;
+        let Decision::Deny { reason } = verdict.decision else {
+            panic!("expected deny");
+        };
+        assert!(reason.starts_with("gate: "), "reason = {reason}");
+        assert!(reason.contains("blocked by policy"));
+    }
+
+    #[tokio::test]
+    async fn chain_hook_require_approval_stays_distinct() {
+        let chain = Arc::new(GovernanceChain::new(Arc::new(FixedDecision(
+            Decision::require_approval("needs owner"),
+            "fixed_approval",
+        ))));
+        let hook = ChainGovernanceHook::new(chain);
+        let decision = GovernanceHook::evaluate(&hook, &completion_request("m")).await;
+        assert!(matches!(decision, Decision::RequireApproval { .. }));
+    }
+
+    #[tokio::test]
+    async fn chain_hook_without_gate_fails_closed() {
+        let hook = ChainGovernanceHook::new(Arc::new(GovernanceChain::without_gate()));
+        let decision = GovernanceHook::evaluate(&hook, &completion_request("m")).await;
+        let Decision::Deny { reason } = decision else {
+            panic!("expected deny");
+        };
+        assert!(
+            reason.contains("not configured at gate"),
+            "reason = {reason}"
+        );
+    }
+
+    #[tokio::test]
+    async fn chain_hook_forwards_approval_resolved_to_gate() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CountingApproval(Arc<AtomicUsize>);
+
+        #[async_trait]
+        impl GovernanceHook for CountingApproval {
+            fn name(&self) -> &str {
+                "counting_approval"
+            }
+
+            async fn evaluate(&self, _request: &GovernanceRequest<'_>) -> Decision {
+                Decision::Allow
+            }
+
+            fn approval_resolved(&self, _session: &SessionId, _capability: &CapabilityId) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let chain = Arc::new(GovernanceChain::new(Arc::new(CountingApproval(
+            counter.clone(),
+        ))));
+        let hook = ChainGovernanceHook::new(chain);
+        hook.approval_resolved(&SessionId::new(), &CapabilityId::new("tool.shell").unwrap());
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
 }

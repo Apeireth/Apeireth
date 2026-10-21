@@ -1,6 +1,6 @@
 # R8-B 入口收敛设计候选（未实施）
 
-> 状态：设计候选 / NOT IMPLEMENTED。ADR-0010 R8-B 条目仍为未实施。
+> 状态：设计候选 **+ R8-B1 已交付（2026-10-21，§7）**；R8-B2/B3 与 R8-C/D 仍 NOT IMPLEMENTED。
 > 目的：把「治理入口 3 → 1（`GovernanceChain::run`）」这个目标拆成可验证的批次，
 > 并如实登记**不能机械替换**的结构原因，供安全线（R8-B/C/D 的既有归属）或架构线
 > 接续实施时直接使用。
@@ -126,5 +126,25 @@ git grep -n 'struct PermissionPresetGovernanceHook' -- crates
 git grep -n 'struct BehaviorChainGuardHook' -- crates
 ```
 
-以上命令 2026-10-21 实测；本文件为设计候选，**未写任何生产代码**（0 装：R8-B 仍
-NOT IMPLEMENTED）。
+以上命令 2026-10-21 实测；§1–§5 为设计候选（未写生产代码）；R8-B1 适配器已交付
+（§7），R8-B2/B3 与 R8-C/D 仍 NOT IMPLEMENTED。
+
+## 7. 交付记录
+
+### 2026-10-21（R8-B1）
+
+- **交付**：`crates/foundation/governance/src/chain.rs` 新增 `ChainGovernanceHook`
+  （`Arc<GovernanceChain>` 适配为 `GovernanceHook`）：`name() = "governance_chain"`；
+  `evaluate_verbose` = `chain.run` 后映射 `ChainOutcome` → `GovernanceVerdict`
+  （Allowed→Allow、Denied→`gate: <reason>`、RequireApproval→RequireApproval、
+  NotConfigured→`not configured at <phase>`）；`approval_resolved` 经新增
+  `GovernanceChain::gate()` 访问器转发给 gate。附 `Debug` 实现（只报 gate 名）。
+- **性质**：纯新增类型 + 访问器，**零生产接线**（R8-B2 才切装配根）；运行时接口
+  不变，回滚 = 删除该类型与一行导出。
+- **实测**：`cargo test -p apeireth-governance --lib --locked -j 2` = 209 passed /
+  0 failed（新增 5 条适配器测试）；`cargo clippy -p apeireth-governance --all-targets
+  --locked -- -D warnings` exit 0；`cargo fmt -p apeireth-governance --check` 0 diff。
+- **如实边界**：无生产装配构造 `ChainGovernanceHook`；`Runtime` 仍持
+  `Arc<GovernancePipeline>` 包装；R8-B2（CLI 装配根切换）与 R8-B3（持久
+  `AuditSink` + IM 审计对）未实施；未跑全 workspace 门禁（本批仅 governance 面）。
+
