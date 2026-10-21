@@ -8,8 +8,9 @@
 //! (aes-gcm/sha2/rand) 已在锁内, KDF 包不在; 引新包列报告待拍板不动手,
 //! 本模块按标准构造复用 `sha2` 自实现并以公开向量钉死正确性。
 //!
-//! **0 装诚实**: 迭代强度参数**待拍板/未实测** —— [`DEFAULT_PBKDF2_ITERATIONS`]
-//! 是保守常量, 不是强度结论; 生产取值应随机器画像实测后拍板。
+//! **0 装诚实**: 默认迭代数已按拍板取 **600_000** (对齐公开口令硬化建议
+//! 口径, 2026-10-21 B6-DEEP 调参: 210k → 600k); **解锁一次的开销未实测**
+//! (600k 全速路径未在测试里跑满, 见 [`DEFAULT_PBKDF2_ITERATIONS`] 注)。
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -20,8 +21,13 @@ use crate::crypto::error::CryptoError;
 /// KDF 标识 (写进包裹槽位, 恢复时按 id 选派生路径)。
 pub const KDF_KIND: &str = "pbkdf2-hmac-sha256";
 
-/// 默认 PBKDF2 迭代数: **待拍板/未实测** (保守常量, 非强度结论)。
-pub const DEFAULT_PBKDF2_ITERATIONS: u32 = 210_000;
+/// 默认 PBKDF2 迭代数: **600_000** (2026-10-21 拍板值, 对齐公开口令硬化
+/// 建议口径; 由测试钉死字面值防漂移)。
+///
+/// **性能未实测**: 解锁一次的开销 (600k × PBKDF2-HMAC-SHA-256) 没跑过
+/// 实测数字, 如实登记; 测试面刻意用小迭代数 (算法正确性由公开标准向量钉,
+/// 与迭代数无关)。
+pub const DEFAULT_PBKDF2_ITERATIONS: u32 = 600_000;
 
 /// 口令盐长度 (16 字节, 随机生成)。
 pub const SALT_LEN: usize = 16;
@@ -56,7 +62,7 @@ impl KdfParams {
         })
     }
 
-    /// 随机盐 + 默认迭代数 (**待拍板**默认值)。
+    /// 随机盐 + 默认迭代数 (600k 拍板值, 见 [`DEFAULT_PBKDF2_ITERATIONS`])。
     pub fn with_random_salt_default() -> Result<Self, CryptoError> {
         use rand::RngCore;
         let mut salt = [0u8; SALT_LEN];
@@ -248,5 +254,12 @@ mod tests {
         assert_eq!(params.kind, KDF_KIND);
         assert_eq!(params.iterations, DEFAULT_PBKDF2_ITERATIONS);
         assert_eq!(decode_hex(&params.salt_hex).len(), SALT_LEN);
+    }
+
+    #[test]
+    fn default_iterations_are_pinned_to_the_approved_600k_value() {
+        // 拍板值字面钉死 (2026-10-21: 210k → 600k, 对齐公开口令硬化建议口径);
+        // 改这个数 = 改安全语义, 必须走拍板 + 同步本测试。
+        assert_eq!(DEFAULT_PBKDF2_ITERATIONS, 600_000);
     }
 }

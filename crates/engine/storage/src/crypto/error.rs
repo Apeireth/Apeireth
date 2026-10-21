@@ -61,6 +61,14 @@ pub enum CryptoError {
     #[error("crypto io error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// SQLite failure on the column seam ([`crate::crypto::SqliteFieldSink`]).
+    #[error("crypto sqlite error: {0}")]
+    Db(#[from] rusqlite::Error),
+
+    /// Storage migration failure while opening a real schema on the seam.
+    #[error("crypto storage migration error: {0}")]
+    Migration(#[from] crate::StorageError),
+
     /// JSON (de)serialization failure for wrap files and manifests.
     #[error("crypto json error: {0}")]
     Json(#[from] serde_json::Error),

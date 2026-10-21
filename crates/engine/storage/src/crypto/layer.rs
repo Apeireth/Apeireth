@@ -6,8 +6,10 @@
 //! 写入封缄、读取开封, 换后端不动加密语义。
 //!
 //! 装饰层只管**值**的机密性/完整性 (AES-256-GCM + 分区 AAD); 键
-//! (`field_key`) 是检索身份, 不在加密范围 —— 列级接入时哪些列作键、
-//! 哪些列进值, 由各存储 owner 按敏感字段清单定 (见批报告)。
+//! (`field_key`) 是检索身份, 不在加密范围 —— 列级接入时哪些列进加密、
+//! 哪些列保明, 由 [`crate::crypto::classification`] 单一真源定级
+//! ([`crate::crypto::FieldClass::must_seal`] = 必封缄两档: 内容列 +
+//! 内容指纹哈希列), 再经 [`crate::crypto::SqliteFieldSink`] 等真实后端接缝接入。
 
 use crate::crypto::error::CryptoError;
 use crate::crypto::partition::PartitionKey;

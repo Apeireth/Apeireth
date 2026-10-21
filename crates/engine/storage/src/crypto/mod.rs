@@ -38,23 +38,34 @@
 //! `sha2` (HMAC-SHA-256 + PBKDF2 构造) / `rand` (OsRng nonce 随机源) /
 //! `serde`+`serde_json` (包裹件与清单 JSON) / `zeroize`+`hex` (密钥材料
 //! 零化与编码, 与 credentials 层同款)。KDF 为标准 PBKDF2-HMAC-SHA-256
-//! 构造的仓内实现, 已钉标准测试向量 (见 [`kdf`]); 迭代强度参数**待拍板**。
+//! 构造的仓内实现, 已钉标准测试向量 (见 [`kdf`]); 默认迭代数已拍板 600k
+//! (2026-10-21 调参, 性能未实测, 见 [`kdf::DEFAULT_PBKDF2_ITERATIONS`])。
+//!
+//! ## 列级定级 (哪些列进加密, 单一真源)
+//!
+//! 定级表 + 理由 + 残余见 [`classification`] (代码 + 测试逐行钉):
+//! 内容列与**内容指纹哈希列**进 P0 加密; 向量/聚合元数据/检索键保明;
+//! 未勘列 fail-closed 显式待定。列级接缝 (真实表上的封缄读写示范) 见
+//! [`sqlite_sink`]。
 //!
 //! ## 0 装诚实边界
 //!
 //! - 平台凭据库/桌面侧车 keychain 的 [`anchor::KekAnchor`] 具体实现**未接线**
 //!   (归口装配面/桌面侧车线), engine 层只定义锚定接口;
-//! - 落盘面 (sessions/cognitive 各表) 的逐列接入**未接线**——本模块交付
-//!   加密面原语与往返证明, 列级改造归口各存储 owner (敏感字段清单见批报告);
-//! - KDF 迭代强度未实测 (待拍板), 默认值是保守常量不是强度结论。
+//! - **列级接入示范已交** (IMPLEMENTED): [`sqlite_sink::SqliteFieldSink`] 在
+//!   storage 真实表上端到端封缄读写 (往返/重启/篡改拒读有测试); 各存储
+//!   owner (memory 等) 真读写路径的逐列改造**未接线**, 归口各 owner;
+//! - KDF 默认迭代 600k 的解锁开销**未实测** (拍板值已由测试钉字面)。
 
 pub mod anchor;
 pub mod backup;
+pub mod classification;
 pub mod error;
 pub mod kdf;
 pub mod layer;
 pub mod partition;
 pub mod sealed;
+pub mod sqlite_sink;
 pub mod wrap;
 
 pub use anchor::KekAnchor;
@@ -62,6 +73,7 @@ pub use backup::{
     export_sealed_backup, restore_sealed_backup, verify_sealed_backup, BackupEntry,
     SealedBackupManifest, SealedRestoreReport, KEY_LOSS_BOUNDARY,
 };
+pub use classification::{classify_column, FieldClass};
 pub use error::CryptoError;
 pub use kdf::{
     derive_kek_from_passphrase, pbkdf2_hmac_sha256, KdfParams, DEFAULT_PBKDF2_ITERATIONS,
@@ -69,4 +81,5 @@ pub use kdf::{
 pub use layer::{FieldSink, SealingLayer};
 pub use partition::{PartitionId, PartitionKey};
 pub use sealed::SealedField;
+pub use sqlite_sink::{SealedTable, SqliteFieldSink};
 pub use wrap::{KekSource, KeyWrapFile, KeyWrapSlot, RecoveryKey, UnlockKey};
