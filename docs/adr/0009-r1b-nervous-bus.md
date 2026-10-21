@@ -180,7 +180,10 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
    - 批次拆分（交接单 §3）：R1b-2a bio_tone 订阅 → R1b-2b bio_lifecycle 订阅 + probe → R1b-2c 审批面
      publish；care/circadian/play/quorum 的消费面迁移依赖 R1b-3 信号源，不在本批。
 4. **R1b-3 缺失信号源**（生物线；交接单：`docs/architecture/r1b-3-handoff-2026-10-20.md`）
-   - ritual / sleep pressure / scar learn / session event source；补不了的保留 NotWired + reason。
+   - **2026-10-21 已由架构线交付（零新增信号变体）**：ritual 不改代码（文件即通道：工具写
+     `<care_dir>/ritual_state.json`、care heartbeat 同拍读盘），只补端到端测试与陈旧注释清理；
+     sleep pressure / scar learn / session event source 三者如实保持 `NotWired` + 具体 reason。
+   - 原计划 ritual / sleep pressure / scar learn / session event source；补不了的保留 NotWired + reason。
    - 主管线复核（2026-10-20）收窄为**零新增信号变体**：ritual 已由 `RitualStateStore` 共享文件打通
      （工具写盘 → CLI care heartbeat 同拍读盘），只补端到端测试与陈旧注释清理；sleep pressure 为模块内
      自消费、scar learn 无生产者/订阅者、session event 的真实消费方需 `UncertaintySignal` 而非回合边界
@@ -222,7 +225,11 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
       默认关零行为变化；验收记录见 `r1b-2-handoff-2026-10-20.md` §5/§8
 - [ ] R1b-2c：审批面 publish（需新增 `NervousSignalKind::ApprovalSocial`；按 §8 收窄原则
       「生产者+订阅者同批 additive」办，未开工）
-- [ ] R1b-3：缺失信号源如实补齐或如实 NotWired；台账 14/14 逐行有据
+- [x] R1b-3（**2026-10-21 交付，架构线**）：零新增信号变体——ritual 走 `RitualStateStore` 文件通道
+      （新增端到端测试 `a_ritual_tool_write_is_visible_to_the_next_heartbeat_beat`：工具写盘 → 同拍读到
+      `last_done_ms` → 两周期后产仪式候选）；`sleep_pressure`（门内自消费）/ `scar_ledger_learn`
+      （无生产者-订阅方）/ `session_event_source`（消费方需 `UncertaintySignal`）三行如实 `NotWired`
+      + 具体 reason；陈旧注释清理；交付记录见 `r1b-3-handoff-2026-10-20.md` §6 / §8 变更记录
 - [x] R1b-4a：schema v2 additive（**2026-10-20 提前交付**）：`nervous_system.bus` 报
       subscribers/published/delivered 聚合计数，`last_observation` 恒 null；未绑总线时 `bus=null`；
       v1 字段逐字节不变；装配根把唯一 `NervousBus` 经 `SelfStatusModule::new_with_bus` 接入
@@ -239,8 +246,9 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   WIP 收口是前置），交接前 R1b 只到 R1b-1b。
 - 后续 stage：R1b-1a 于 2026-10-20 交付（`10ec68ae`，内核/桥/开关表 + 装配根单入口）；R1b-1b 于同日交付
   （`6837d9b7`，开关读取收敛到装配根 + 台账 4 行更正 + 3 条校验）；**R1b-4a 提前交付**（2026-10-20，
-  `nervous_system` schema v2 additive：`bus` 聚合计数观测面，v1 字段不变）；后续 R1b-2（机制订阅迁移，
-  生物线）→ R1b-3（缺失信号源）→ R1b-4b 收口。
+  `nervous_system` schema v2 additive：`bus` 聚合计数观测面，v1 字段不变）；R1b-2a/2b 由生物线交付并复核
+  （2026-10-21），R1b-2c 待生物线；**R1b-3 于 2026-10-21 由架构线交付（零新增信号变体，见 §8）**；后续
+  R1b-4b 收口。
   R7-2 遗留 `ContextAssembler` 已由 R7-2.1 收口（`c8cb34a4`）；Wave 4 其余 = R8 + R6 spec 已 Accepted
   （ADR-0010/0011），实施归安全线/效率线；R1b-4b 之后再评估是否把总线升为扩展点（需新 ADR）。
 
@@ -293,3 +301,18 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   边界信号，归 R1b-3）；全 workspace 全量门禁未在复核时由架构线复跑（归 Wave 4 收口批）。
 - **复核证据**：`arch_guard --report` VIOLATIONS 0（exceptions=2，STALE 1 = play_tools 待缩表）；
   `docs_truth --verify --check` exit 0；生物线未伪造 `claims.yaml` 的 `verified_at`。
+
+### 2026-10-21（R1b-3 交付，架构线）
+
+- **范围**：零新增信号变体。ritual 生产-消费通道已存在（`tool.ritual_done` / `tool.ritual_skip` 经
+  `RitualStateStore` 写 `<care_dir>/ritual_state.json`，CLI care heartbeat 每拍同路径读取）→ 不改代码，
+  只补端到端测试 + 清理陈旧注释；`sleep_pressure` / `scar_ledger_learn` / `session_event_source` 三源
+  取证后如实保留 `NotWired` + 具体 reason（门内自消费 / 无生产者-订阅方 / 消费方需 `UncertaintySignal`）。
+- **验证**：新增 cli 测试 `care_heartbeat::tests::a_ritual_tool_write_is_visible_to_the_next_heartbeat_beat`
+  （工具执行写盘 → 同拍读到 `last_done_ms` = 注入时钟值 → 刚完成不重复到点 → 两周期后产仪式候选）；
+  `cargo test -p apeireth-runtime-assembly --lib` 291 passed（含生物线在途 WIP 测试）；
+  `--test nervous_snapshot` 13 passed；`cargo test -p apeireth-cli --lib` 57 passed；clippy/fmt 绿；
+  `arch_guard --report` VIOLATIONS 0（exceptions=2 / STALE 1 不变；cli/lib.rs 尺寸 W1 属生物线 2c 在途）。
+- **如实边界**：本批未新增任何 enum 变体/开关/依赖；三源 `NotWired` 是取证结论不是占位；全量门禁数字
+  归 Wave 4 收口批。
+- **交付记录**：`docs/architecture/r1b-3-handoff-2026-10-20.md` §4/§6。

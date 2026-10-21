@@ -703,8 +703,10 @@ impl CareHeartbeatSource {
             .is_some()
     }
 
-    /// 显式**仪式完成**注入口 (W3.5): 生产**没有**「仪式完成」事件源, 本口为
-    /// 宿主/后续 care 交互或工具面提供的显式写回点。
+    /// 显式**仪式完成**注入口 (W3.5; W3.7 复核更新): 生产事件源已存在 ——
+    /// `tool.ritual_done` / `tool.ritual_skip` 经 `RitualStateStore` 写
+    /// `<care_dir>/ritual_state.json`, 心跳每拍从同路径现读 (文件即通道, 无需总线
+    /// 信号); 本口保留为宿主/后续 care 交互的**可选**显式写回点。
     ///
     /// - `kind` = 完成的仪式; `now_ms` = 完成时刻 (Unix 毫秒, 调用方注入;
     ///   存储侧单调: 时钟回拨不回退完成时刻);
@@ -713,8 +715,7 @@ impl CareHeartbeatSource {
     /// - 已绑定 = 写下 `<care_dir>/ritual_state.json` 并返回 `Ok(true)`; 坏文件 /
     ///   IO 失败 = `Err(真因)` (fail-closed, 不覆盖损坏文件)。
     ///
-    /// **完成事件源: 待后续从 care 交互 / 工具面接** —— 本批只接注入口, 没有
-    /// 自动「候选被接受 = 仪式完成」的推定 (候选被交付 ≠ 用户完成了仪式)。
+    /// 仍不做「候选被接受 = 仪式完成」的推定 (候选被交付 ≠ 用户完成了仪式)。
     pub fn record_ritual_done(&self, kind: RitualKind, now_ms: u64) -> Result<bool, String> {
         let store = self
             .ritual
@@ -1186,6 +1187,75 @@ mod tests {
         assert!(
             bio_care_candidates(&CareConfig::default(), &bio, NOW).is_empty(),
             "开关关: 连供给都不读, 零候选"
+        );
+    }
+
+    /// ⑯b R1b-3 端到端（文件即通道）: 模型面工具执行写盘 ⇒ 下一次心跳读盘
+    /// 产出仪式候选。跨模块无需新增总线信号变体。
+    #[tokio::test]
+    async fn a_ritual_tool_write_is_visible_to_the_next_heartbeat_beat() {
+        use apeireth_core::kernel::Clock;
+        use apeireth_plugin::ToolCapability;
+        use apeireth_protocol::canonical::ToolCall;
+        use apeireth_runtime_assembly::canonical::ritual_tools::{BioRitualState, RitualDoneTool};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = Arc::new(RitualStateStore::under_data_dir(dir.path()));
+        // 装配面先落下显式排程 (存储是唯一真源, 心跳侧不填默认排程)。
+        store
+            .save(&RitualStateBody {
+                config: Some(ritual_config()),
+                states: Vec::new(),
+            })
+            .expect("排程落盘");
+
+        let base = Timestamp::from_epoch_millis(NOW).expect("valid timestamp");
+        let state = Arc::new(BioRitualState::new(
+            RitualStateStore::under_data_dir(dir.path()),
+            Arc::new(VirtualClock::new(base.as_datetime())),
+        ));
+        let tool = RitualDoneTool::new(state);
+        let call = ToolCall {
+            id: "call-1".to_string(),
+            name: "ritual_done".to_string(),
+            arguments: serde_json::json!({ "kind": "morning_check_in" }),
+        };
+        let result = tool.invoke(&call).await;
+        assert!(result.is_ok(), "工具执行失败: {result:?}");
+
+        let bio = supply_with_ritual(Arc::clone(&store), 0, None);
+        let ritual = bio.ritual_inputs();
+        assert_eq!(ritual.states.len(), 1, "工具写盘 ⇒ 下一拍读得到状态");
+        assert_eq!(ritual.states[0].kind, RitualKind::MorningCheckIn);
+        assert_eq!(
+            ritual.states[0].last_done_ms,
+            u64::try_from(NOW).expect("fits"),
+            "写盘时刻 = 装配注入时钟的值 (不臆造)"
+        );
+
+        let just_done = bio_care_candidates(&enabled(), &bio, NOW);
+        assert!(
+            just_done
+                .iter()
+                .all(|candidate| candidate.tier != CareTier::Ritual),
+            "刚完成的仪式不应立刻再次到点: {just_done:?}"
+        );
+
+        // 到点判定按 24h 周期: 两个周期后同一份存储 ⇒ 仪式候选可见。
+        let later = NOW + 2 * 24 * 60 * 60 * 1000;
+        let candidates = bio_care_candidates(&enabled(), &bio, later);
+        assert_eq!(
+            candidates.len(),
+            1,
+            "周期到点后心跳读同一文件 ⇒ 仪式候选: {candidates:?}"
+        );
+        assert_eq!(candidates[0].tier, CareTier::Ritual);
+        assert!(
+            candidates[0]
+                .rule_id
+                .starts_with("ritual.morning_check_in."),
+            "候选规则来自同一仪式排程: {}",
+            candidates[0].rule_id
         );
     }
 

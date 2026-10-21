@@ -298,3 +298,19 @@ bio env 常量在 **17 个 src 文件**中出现（`Select-String -List` 实测�
 5. **如实边界**：生产仍无订阅者（R1b-2 接），故计数为 0；按 kind 明细未落；`last_observation` 仍 null；
    `tool_modules.rs` 尺寸增长已登记 `EXC-0003`（1204→1216，weight=1，expires_wave=6，清偿任务=
    把总线观测面绑定移出 tool_modules 或合并构造）。
+
+## 13. R1b-3 交付后的实况（2026-10-21，架构线）
+
+1. **决定：零新增信号变体**。ritual 的生产-消费通道已存在（`tool.ritual_done` / `tool.ritual_skip`
+   经 `RitualStateStore` 写 `<care_dir>/ritual_state.json`，CLI care heartbeat 每拍同路径读取）→
+   总线增益 = 0，故不 publish、不加 enum 变体；只补端到端测试与清理陈旧注释。
+2. **三缺源如实 `NotWired` + 具体 reason**（`nervous_snapshot.rs`）：`sleep_pressure`（门内自消费，
+   跨模块无消费方）、`scar_ledger_learn`（生产闭环与订阅方均未存在，`ScarLedger::learn` 生产调用 0）、
+   `session_event_source`（消费方需 `UncertaintySignal`，回合边界信号不足）。
+3. **端到端证据**：cli `care_heartbeat::tests::a_ritual_tool_write_is_visible_to_the_next_heartbeat_beat`
+   （工具执行写盘 → 同拍读到 `last_done_ms` = 注入时钟值 → 刚完成不重复到点 → 两周期后产仪式候选）；
+   实测 runtime-assembly lib 291 passed / `tests/nervous_snapshot.rs` 13 passed / cli lib 57 passed；
+   clippy·fmt 绿。
+4. **如实边界**：本批未新增开关/依赖/信号；台账其余行未动（SG-13 tone_feedback 的 `ApprovalSocial`
+   扩展归生物线 R1b-2c）；全量门禁数字归 Wave 4 收口批。
+5. **交付记录**：`docs/architecture/r1b-3-handoff-2026-10-20.md` §4/§6；ADR-0009 §6/§8。

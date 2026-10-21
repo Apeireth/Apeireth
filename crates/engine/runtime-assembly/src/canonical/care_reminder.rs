@@ -45,12 +45,13 @@
 //! 缺省仍用 [`NoBioCareInputs`] 空供给。测试用 fake 供给验证「有数据 → 候选 →
 //! 过 care 管道」。取不到数据必须返回空 / `None`, 不编造。
 //!
-//! **候选消费不回写供给 (W3.5 收窄)**: 本面只产候选, care 管道裁决后**仍不**
-//! 自动把 `ritual.last_done_ms` 写回 —— 生产没有「仪式完成」事件源, 写回走 cli
-//! 装配面的显式注入口 `CareHeartbeatSource::record_ritual_done(kind, now_ms)`
-//! (完成事件源: 待后续从 care 交互 / 工具面接); 同一到点状态在频率/预算/发起闸
-//! 放行后可能再次发起 —— 现有纪律仍是唯一限流, 本面不加第二套节奏。重聚已读位
-//! 仍未回写。
+//! **候选消费不回写供给 (W3.5 收窄, W3.7 复核更新)**: 本面只产候选, care 管道
+//! 裁决后**仍不**自动把 `ritual.last_done_ms` 写回 —— 但「仪式完成」事件源已存在:
+//! `tool.ritual_done` / `tool.ritual_skip`（W3.7 工具面）经 `RitualStateStore` 写
+//! `<care_dir>/ritual_state.json`，cli care heartbeat 每拍从同路径读取（文件即通道，
+//! 无需新增总线信号）；`CareHeartbeatSource::record_ritual_done(kind, now_ms)` 保留为
+//! 宿主显式注入口（可选用）。同一到点状态在频率/预算/发起闸放行后可能再次发起 ——
+//! 现有纪律仍是唯一限流, 本面不加第二套节奏。重聚已读位仍未回写。
 //!
 //! # 0 装诚实
 //!

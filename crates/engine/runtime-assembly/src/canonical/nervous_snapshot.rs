@@ -483,10 +483,10 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             SignalSpec {
                 id: "sleep_pressure",
                 state: SignalState::NotWired,
-                reason: Some("睡眠压力源未接（门内压力恒 0）"),
+                reason: Some("门内自消费（set_pressure 显式注入），跨模块无消费方，总线无增益"),
             },
         ],
-        gaps: &["睡眠压力源未接（门内压力恒 0）"],
+        gaps: &["门内自消费（set_pressure 显式注入），跨模块无消费方，总线无增益"],
     },
     MechanismSpec {
         id: "SG-15.immune_memory",
@@ -543,10 +543,12 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             SignalSpec {
                 id: "scar_ledger_learn",
                 state: SignalState::NotWired,
-                reason: Some("ScarLedger::learn 未接"),
+                reason: Some(
+                    "生产闭环与订阅方均未存在（ScarLedger::learn 生产调用 0；裸 publish 属装），留独立 ADR",
+                ),
             },
         ],
-        gaps: &["ScarLedger::learn 未接"],
+        gaps: &["生产闭环与订阅方均未存在（ScarLedger::learn 生产调用 0；裸 publish 属装）"],
     },
     MechanismSpec {
         id: "SG-19.attachment",
@@ -583,10 +585,12 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             SignalSpec {
                 id: "session_event_source",
                 state: SignalState::NotWired,
-                reason: Some("会话事件源未接（仅显式注入 RepairPlan）"),
+                reason: Some(
+                    "消费方需 UncertaintySignal（非回合边界）；回合边界信号不足以驱动真实消费",
+                ),
             },
         ],
-        gaps: &["会话事件源未接（仅显式注入 RepairPlan）"],
+        gaps: &["消费方需 UncertaintySignal（非回合边界）；回合边界信号不足以驱动真实消费"],
     },
     MechanismSpec {
         id: "SG-24.quorum",
