@@ -1,4 +1,8 @@
-//! ADR-0003 / R1a：神经系统只读聚合（schema v1，`capabilities.nervous_system`）。
+//! ADR-0003 / R1a：神经系统只读聚合（schema v2，`capabilities.nervous_system`）。
+//!
+//! v2 = v1 字段全部不变、只 additive 增加 `bus` 子对象（订阅/发布/投递计数，
+//! ADR-0009 §D7 / R1b-4a）；`last_observation` 仍一律 `null`（总线不保留历史，
+//! 不编造读数）。`bus = null` 表示本帧未绑总线（例如测试或未接线构造）。
 //!
 //! **合同口径（与 ADR 措辞的差异，已按实际落地）**：ADR 原文写「21 节 → 22 节」；
 //! 本实现沿用 W3.2 `bio_mechanisms` 的既有口径——**顶层 21 节冻结合同不变**，
@@ -47,6 +51,7 @@ use crate::canonical::cognitive::{
     bio_switch_enabled_from_env_value, BIO_CONTEXT_POLICY_ENABLE_ENV,
     BIO_REPAIR_GUIDANCE_ENABLE_ENV,
 };
+use crate::canonical::nervous_bus::{NervousBus, NervousBusSnapshot};
 use crate::canonical::orchestrator::{quorum_gate_enabled_from_env_value, QUORUM_GATE_ENABLE_ENV};
 use crate::canonical::play_tools::{bio_play_enabled_from_env_value, BIO_PLAY_ENABLE_ENV};
 
@@ -54,8 +59,8 @@ use crate::canonical::play_tools::{bio_play_enabled_from_env_value, BIO_PLAY_ENA
 pub const CAPABILITIES_SECTION: &str = "capabilities";
 /// `capabilities` 节内的只读子对象键（与 `bio_mechanisms` 并列，非顶层节）。
 pub const NERVOUS_SYSTEM_SUBOBJECT: &str = "nervous_system";
-/// schema 版本（v1 = ADR-0003 冻结形状）。
-pub const NERVOUS_SNAPSHOT_VERSION: u32 = 1;
+/// schema 版本（v2 = v1 字段不变 + `bus` additive，ADR-0009 §D7 / R1b-4a）。
+pub const NERVOUS_SNAPSHOT_VERSION: u32 = 2;
 /// 机制总数（SG-13…SG-26 共 14 条，闭合词表）。
 pub const NERVOUS_MECHANISM_TOTAL: usize = 14;
 
@@ -140,15 +145,33 @@ pub struct NervousSummary {
     pub observed: usize,
 }
 
-/// `capabilities.nervous_system` 只读子对象（schema v1）。
+/// 总线观测面（schema v2 additive；ADR-0009 §D7 / R1b-4a）。
+///
+/// 只报**已发生的事实**：订阅者/发布/投递计数从 [`NervousBus::snapshot`] 现取。
+/// 总线不保留历史信号载荷，故 `last_observation` 恒 `null`（不编造读数）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NervousBusStatus {
+    /// 全部信号类别的订阅者数合计。
+    pub subscribers: usize,
+    /// 全部信号类别的发布次数合计。
+    pub published: u64,
+    /// 全部类别累计投递次数。
+    pub delivered: u64,
+    /// 恒 `null`：总线不保留历史观测（ADR-0009）。
+    pub last_observation: Option<String>,
+}
+
+/// `capabilities.nervous_system` 只读子对象（schema v2）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NervousSnapshot {
-    /// schema 版本（恒 1）。
+    /// schema 版本（恒 [`NERVOUS_SNAPSHOT_VERSION`]）。
     pub version: u32,
     /// 汇总计数。
     pub summary: NervousSummary,
     /// 14 条机制（行序 = [`BioMechanismKind::ALL`]，确定性）。
     pub mechanisms: Vec<NervousMechanism>,
+    /// 总线观测面；本帧未绑总线时为 `null`（v2 additive 字段）。
+    pub bus: Option<NervousBusStatus>,
 }
 
 /// env 读取口（测试注入；默认读进程 env）。
@@ -165,6 +188,16 @@ pub fn snapshot_from_env(observed: usize) -> NervousSnapshot {
 pub fn snapshot_from_values(
     read: impl Fn(&str) -> Option<String>,
     observed: usize,
+) -> NervousSnapshot {
+    snapshot_from_values_with_bus(read, observed, None)
+}
+
+/// 采集一份带总线观测面的快照（v2 additive；`bus = None` 时与 v1 语义一致）。
+#[must_use]
+pub fn snapshot_from_values_with_bus(
+    read: impl Fn(&str) -> Option<String>,
+    observed: usize,
+    bus: Option<NervousBusStatus>,
 ) -> NervousSnapshot {
     let mechanisms: Vec<NervousMechanism> = MECHANISMS
         .iter()
@@ -197,6 +230,7 @@ pub fn snapshot_from_values(
         version: NERVOUS_SNAPSHOT_VERSION,
         summary,
         mechanisms,
+        bus,
     }
 }
 
@@ -233,12 +267,24 @@ fn summarize(mechanisms: &[NervousMechanism], observed: usize) -> NervousSummary
 ///   其余字段由 [`snapshot_from_env`] 按既有解析函数现采。
 #[must_use]
 pub fn nervous_system_from_frame(frame: &Value) -> Option<Value> {
-    nervous_system_from_frame_with(frame, |name| std::env::var(name).ok())
+    nervous_system_from_frame_with(frame, |name| std::env::var(name).ok(), None)
+}
+
+/// 把总线快照折成 `nervous_system.bus` 子对象（纯函数，不采进程 env）。
+#[must_use]
+fn bus_status(snapshot: &NervousBusSnapshot) -> NervousBusStatus {
+    NervousBusStatus {
+        subscribers: snapshot.subscribers.values().copied().sum(),
+        published: snapshot.published.values().copied().sum(),
+        delivered: snapshot.delivered,
+        last_observation: None,
+    }
 }
 
 fn nervous_system_from_frame_with(
     frame: &Value,
     read: impl Fn(&str) -> Option<String>,
+    bus: Option<NervousBusStatus>,
 ) -> Option<Value> {
     let capabilities = frame.get(CAPABILITIES_SECTION)?.as_object()?;
     let bio = capabilities.get("bio_mechanisms")?;
@@ -254,7 +300,7 @@ fn nervous_system_from_frame_with(
                 .count()
         })
         .unwrap_or(0);
-    Some(snapshot_from_values(read, observed).to_value())
+    Some(snapshot_from_values_with_bus(read, observed, bus).to_value())
 }
 
 /// `tool.self_status` 只读装饰器：在既有帧的 `capabilities` 节内插入
@@ -262,6 +308,8 @@ fn nervous_system_from_frame_with(
 pub struct NervousSelfStatusTool {
     inner: Arc<dyn ToolCapability>,
     env: EnvReader,
+    /// 可选的神经总线观测面（schema v2 additive；`None` = 不报 `bus` 子对象）。
+    bus: Option<NervousBus>,
 }
 
 impl NervousSelfStatusTool {
@@ -271,6 +319,7 @@ impl NervousSelfStatusTool {
         Self {
             inner,
             env: Arc::new(|name| std::env::var(name).ok()),
+            bus: None,
         }
     }
 
@@ -281,9 +330,19 @@ impl NervousSelfStatusTool {
         self
     }
 
+    /// 绑定总线观测面（R1b-4a：帧内 `capabilities.nervous_system.bus` 计数）。
+    #[must_use]
+    pub fn with_bus(mut self, bus: NervousBus) -> Self {
+        self.bus = Some(bus);
+        self
+    }
+
     fn decorate(&self, mut result: ToolResult) -> ToolResult {
         if let ToolOutcome::Ok { value } = &mut result.outcome {
-            if let Some(nervous) = nervous_system_from_frame_with(value, |name| (self.env)(name)) {
+            let bus = self.bus.as_ref().map(|bus| bus_status(&bus.snapshot()));
+            if let Some(nervous) =
+                nervous_system_from_frame_with(value, |name| (self.env)(name), bus)
+            {
                 if let Some(capabilities) = value
                     .get_mut(CAPABILITIES_SECTION)
                     .and_then(Value::as_object_mut)
@@ -331,6 +390,17 @@ pub fn nervous_self_status_tool(source: Arc<dyn SelfStatusSource>) -> Arc<dyn To
     Arc::new(NervousSelfStatusTool::new(Arc::new(SelfStatusTool::new(
         source,
     ))))
+}
+
+/// 生产接线口（R1b-4a）：在 [`nervous_self_status_tool`] 基础上绑定总线观测面，
+/// 帧内 `capabilities.nervous_system.bus` 报订阅/发布/投递计数（默认连上装配根
+/// 唯一 [`NervousBus`]；开关关时整节缺席，旧帧形状逐字节不变）。
+#[must_use]
+pub fn nervous_self_status_tool_with_bus(
+    source: Arc<dyn SelfStatusSource>,
+    bus: NervousBus,
+) -> Arc<dyn ToolCapability> {
+    Arc::new(NervousSelfStatusTool::new(Arc::new(SelfStatusTool::new(source))).with_bus(bus))
 }
 
 // ---------------------------------------------------------------------------
@@ -638,10 +708,14 @@ mod tests {
             }
         });
         let reads = std::cell::Cell::new(0usize);
-        let value = nervous_system_from_frame_with(&frame, |_| {
-            reads.set(reads.get() + 1);
-            Some("1".to_string())
-        });
+        let value = nervous_system_from_frame_with(
+            &frame,
+            |_| {
+                reads.set(reads.get() + 1);
+                Some("1".to_string())
+            },
+            None,
+        );
         assert!(value.is_none());
         assert_eq!(reads.get(), 0, "开关关时一个 env 都不读");
     }

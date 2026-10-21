@@ -1319,7 +1319,10 @@ impl ProductionModules {
                 );
             }
             instrument.constructed(ModuleFamily::SelfStatus);
-            let provider = SelfStatusModule::new(Arc::new(source));
+            // R1b-4a：自述帧 `capabilities.nervous_system.bus` 报总线观测面
+            // （装配根唯一 NervousBus；本帧未绑 = null，不编造计数）。
+            let provider =
+                SelfStatusModule::new_with_bus(Arc::new(source), nervous_bus.as_ref().clone());
             capabilities.extend(provider.capabilities());
         }
 

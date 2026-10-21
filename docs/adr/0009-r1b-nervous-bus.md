@@ -125,8 +125,10 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 ### D7 schema 版本
 
 - `nervous_system` schema v1 形状**冻结不变**；R1b-4 只做 additive `v2`：新增 `bus` 子对象
-  （`signals_total` / 按 kind 计数 / 订阅者数）。`last_observation` **仍** 为 `null`（不填「最近信号时间」，
-  避免第二真源；Q5 裁决）。
+  （`subscribers` / `published` / `delivered` 聚合计数 + `last_observation`）。`last_observation` **仍** 为
+  `null`（不填「最近信号时间」，避免第二真源；Q5 裁决）。
+- **实施期口径（§8 变更记录）**：R1b-4a 首版只落**聚合计数**（避免按 kind 的 map 变成未经消费的第二计数
+  真源）；按 kind 明细若真实订阅方需要，按「生产者+消费者同批 additive」原则另开小版本，不在 v2 预定义。
 
 ### 不改什么
 
@@ -215,7 +217,10 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
       parser fail-closed），`6837d9b7`
 - [ ] R1b-2：机制订阅迁移；lifecycle probe 注册；审批面 publish；默认关零变化
 - [ ] R1b-3：缺失信号源如实补齐或如实 NotWired；台账 14/14 逐行有据
-- [ ] R1b-4：schema v2 additive；自述渲染；contract wave_note / handbook / integration-plan 同步；
+- [x] R1b-4a：schema v2 additive（**2026-10-20 提前交付**）：`nervous_system.bus` 报
+      subscribers/published/delivered 聚合计数，`last_observation` 恒 null；未绑总线时 `bus=null`；
+      v1 字段逐字节不变；装配根把唯一 `NervousBus` 经 `SelfStatusModule::new_with_bus` 接入
+- [ ] R1b-4b（收口项）：contract wave_note / handbook / integration-plan 记分牌同步；
       `docs_truth.py --verify --check` exit 0；`wiring_report.py --verify` exit 0
 - [ ] LOCKED 5 项 0 触碰 / 0 新外部 dep / 0 新开关 / 0 新 crate
 
@@ -227,10 +232,11 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   总线首版不持久化（重启丢计数，自述 `last_observation` 仍 null）；R1b-2 交接存在排期依赖（生物线
   WIP 收口是前置），交接前 R1b 只到 R1b-1b。
 - 后续 stage：R1b-1a 于 2026-10-20 交付（`10ec68ae`，内核/桥/开关表 + 装配根单入口）；R1b-1b 于同日交付
-  （`6837d9b7`，开关读取收敛到装配根 + 台账 4 行更正 + 3 条校验）；后续 R1b-2（机制订阅迁移，生物线）→
-  R1b-3（缺失信号源）→ R1b-4 收口。
+  （`6837d9b7`，开关读取收敛到装配根 + 台账 4 行更正 + 3 条校验）；**R1b-4a 提前交付**（2026-10-20，
+  `nervous_system` schema v2 additive：`bus` 聚合计数观测面，v1 字段不变）；后续 R1b-2（机制订阅迁移，
+  生物线）→ R1b-3（缺失信号源）→ R1b-4b 收口。
   R7-2 遗留 `ContextAssembler` 已由 R7-2.1 收口（`c8cb34a4`）；Wave 4 其余 = R8 + R6 spec 已 Accepted
-  （ADR-0010/0011），实施归安全线/效率线；R1b-4 之后再评估是否把总线升为扩展点（需新 ADR）。
+  （ADR-0010/0011），实施归安全线/效率线；R1b-4b 之后再评估是否把总线升为扩展点（需新 ADR）。
 
 ## 8. 变更记录
 
@@ -258,3 +264,13 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   11 passed；clippy/fmt 绿；`docs_truth.py --verify --check` exit 0。**如实边界**：CLI 侧 care 心跳、痛觉/
   再生、节律门仍各自读 env（R1b-2/3 收敛）；`NervousSwitchboard` 的 CareCandidates/Pain/Circadian 三格
   本批只解析记录、暂无新消费方；arch_guard 仍余已知 W1（cognitive.rs 4757→4763，Wave 4 收口重钉）。
+- **2026-10-20（R1b-4a 提前交付）**：`nervous_system` schema v1→v2（additive）：新增 `bus` 子对象
+  （`subscribers` / `published` / `delivered` 聚合计数 + `last_observation` 恒 `null`）。生产路径：
+  `production.rs` 把装配根唯一 `NervousBus` 传给 `SelfStatusModule::new_with_bus`，帧内
+  `capabilities.nervous_system.bus` 现取计数；未绑总线（如普通工具构造/测试）时 `bus = null`，不编造。
+  `tool_modules.rs` 新增 `new_with_bus` 并把原构造体抽成私有 `with_tool`（+12 行，登记 `EXC-0003`
+  size 类 weight=1，expires_wave=6）；v1 三字段形状逐字节不变。实测：`cargo check
+  -p apeireth-runtime-assembly --all-targets` exit 0；lib 277 passed；`tests/nervous_snapshot.rs`
+  13 passed（新增 bus 计数/int 测试）；clippy/fmt 绿；`arch_guard --report` VIOLATIONS 0
+  （EXC-0002/0003 抑制 NOTE）+ STALE 1（play_tools 1414，收口缩表）。**如实边界**：生产仍无信号订阅者
+  （R1b-2 才接），故计数实际为 0；按 kind 明细未落（见 D7 实施期口径）。

@@ -278,3 +278,23 @@ bio env 常量在 **17 个 src 文件**中出现（`Select-String -List` 实测�
 5. **guard 实况**：`arch_guard --report` = wave=4 / crates=30 / edges=111 / env=154 / exceptions=0；
    VIOLATIONS 1（已知 `[W1] size-grow cognitive.rs 4757→4763`，Wave 4 收口重钉）；STALE 1
    （`size play_tools.rs 1414`，收口缩表）。
+
+## 12. R1b-4a 提前交付：schema v2 additive（2026-10-20/21）
+
+1. **动因**：R1b-2 交接单要求验收「真实订阅者」——需要一个可断言的观测面，否则生物线只能靠日志/副作用
+   间接验证；v2 的 `bus` 计数可在 `tool.self_status` 帧内直接断言。故把 R1b-4 的 additive 部分提前，
+   收口项（wave_note/记分牌）仍留 R1b-4b。
+2. **形状**：`capabilities.nervous_system` = v1 三字段（version/summary/mechanisms）逐字节不变 +
+   `bus: { subscribers, published, delivered, last_observation } | null`；`last_observation` 恒 null。
+   未绑总线（普通构造/测试）时 `bus = null`，不编造 0 以外的读数；绑定时计数从 `NervousBus::snapshot()`
+   现取（聚合值，不做按 kind 的 map——避免未经消费的第二计数真源）。
+3. **接线**：`production.rs` 装配根把唯一 `NervousBus` 传给 `SelfStatusModule::new_with_bus`（仅在
+   self-status 面装配块内）；`tool_modules.rs` 增加构造并把原构造体抽私有 `with_tool`；总线在
+   `nervous_snapshot.rs` 侧只读消费（`NervousSelfStatusTool::with_bus`）。
+4. **实测**：`cargo check -p apeireth-runtime-assembly --all-targets --locked` exit 0；
+   `cargo test -p apeireth-runtime-assembly --locked -j 2` 全目标 ok、lib 277 passed、
+   `tests/nervous_snapshot.rs` 13 passed（+2 bus 计数/构造测试）；clippy/fmt 绿；
+   `arch_guard --report` VIOLATIONS 0 + exceptions=2（EXC-0002/0003 抑制 NOTE）+ STALE 1。
+5. **如实边界**：生产仍无订阅者（R1b-2 接），故计数为 0；按 kind 明细未落；`last_observation` 仍 null；
+   `tool_modules.rs` 尺寸增长已登记 `EXC-0003`（1204→1216，weight=1，expires_wave=6，清偿任务=
+   把总线观测面绑定移出 tool_modules 或合并构造）。

@@ -17,10 +17,11 @@ use std::sync::Arc;
 
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
+use apeireth_runtime_assembly::canonical::nervous_bus::{NervousBus, NervousSignal};
 use apeireth_runtime_assembly::canonical::self_status_source::nervous_snapshot::{
-    nervous_self_status_tool, snapshot_from_values, EnvReader, NervousMechanism,
-    NervousSelfStatusTool, NervousSnapshot, NERVOUS_MECHANISM_TOTAL, NERVOUS_SNAPSHOT_VERSION,
-    NERVOUS_SYSTEM_SUBOBJECT,
+    nervous_self_status_tool, snapshot_from_values, snapshot_from_values_with_bus, EnvReader,
+    NervousMechanism, NervousSelfStatusTool, NervousSnapshot, NERVOUS_MECHANISM_TOTAL,
+    NERVOUS_SNAPSHOT_VERSION, NERVOUS_SYSTEM_SUBOBJECT,
 };
 use apeireth_runtime_assembly::canonical::self_status_source::ProductionSelfStatusSource;
 use apeireth_runtime_assembly::canonical::tool_modules::SelfStatusModule;
@@ -50,6 +51,20 @@ async fn plain_frame(source: ProductionSelfStatusSource) -> Value {
 async fn decorated_frame(source: ProductionSelfStatusSource, env: EnvReader) -> Value {
     let inner: Arc<dyn ToolCapability> = Arc::new(SelfStatusTool::new(Arc::new(source)));
     let tool = NervousSelfStatusTool::new(inner).with_env(env);
+    let result = tool.invoke(&call()).await;
+    assert!(result.is_ok(), "整帧必须成功: {}", result.render());
+    serde_json::from_str(&result.render()).expect("structured self-status json")
+}
+
+async fn decorated_frame_with_bus(
+    source: ProductionSelfStatusSource,
+    env: EnvReader,
+    bus: NervousBus,
+) -> Value {
+    let inner: Arc<dyn ToolCapability> = Arc::new(SelfStatusTool::new(Arc::new(source)));
+    let tool = NervousSelfStatusTool::new(inner)
+        .with_env(env)
+        .with_bus(bus);
     let result = tool.invoke(&call()).await;
     assert!(result.is_ok(), "整帧必须成功: {}", result.render());
     serde_json::from_str(&result.render()).expect("structured self-status json")
@@ -114,17 +129,22 @@ fn mechanism<'a>(value: &'a Value, id: &str) -> &'a Value {
 }
 
 #[test]
-fn snapshot_is_version_one_and_keeps_the_frozen_field_shape() {
+fn snapshot_is_version_two_and_keeps_the_additive_bus_field() {
     let value = snapshot_from_values(|_| None, 0).to_value();
     assert_eq!(value["version"], json!(NERVOUS_SNAPSHOT_VERSION));
+    assert_eq!(value["version"], json!(2), "R1b-4a 起 schema v2");
     assert_eq!(
         value
             .as_object()
             .expect("object")
             .keys()
             .collect::<Vec<_>>(),
-        vec!["mechanisms", "summary", "version"],
-        "schema v1 顶层字段不得漂移"
+        vec!["bus", "mechanisms", "summary", "version"],
+        "schema v2 顶层字段 = v1 三字段 + bus（additive）"
+    );
+    assert!(
+        value["bus"].is_null(),
+        "未绑总线时 bus 必须是 null，不编造计数"
     );
     let summary = value["summary"].as_object().expect("summary object");
     assert_eq!(
@@ -360,7 +380,8 @@ async fn decoration_adds_the_subobject_under_capabilities_only() {
     assert!(!SELF_STATUS_SECTIONS.contains(&NERVOUS_SYSTEM_SUBOBJECT));
     assert!(decorated.get(NERVOUS_SYSTEM_SUBOBJECT).is_none());
     let nervous = &decorated["capabilities"][NERVOUS_SYSTEM_SUBOBJECT];
-    assert_eq!(nervous["version"], json!(1));
+    assert_eq!(nervous["version"], json!(2));
+    assert!(nervous["bus"].is_null(), "未绑总线时 bus 为 null");
     assert_eq!(nervous["mechanisms"].as_array().unwrap().len(), 14);
     assert_eq!(nervous["summary"]["total"], json!(14));
     assert_eq!(nervous["summary"]["observed"], json!(0));
@@ -421,8 +442,9 @@ async fn self_status_module_uses_the_nervous_decorator() {
     let value: Value = serde_json::from_str(&result.render()).expect("json");
     assert_eq!(
         value["capabilities"][NERVOUS_SYSTEM_SUBOBJECT]["version"],
-        json!(1)
+        json!(2)
     );
+    assert!(value["capabilities"][NERVOUS_SYSTEM_SUBOBJECT]["bus"].is_null());
     // 工具 id/声明保持不变（装饰器只改帧，不改工具身份）。
     assert_eq!(capabilities[0].id().as_str(), "tool.self_status");
     assert_eq!(
@@ -431,4 +453,50 @@ async fn self_status_module_uses_the_nervous_decorator() {
             .as_str(),
         "tool.self_status"
     );
+}
+
+#[tokio::test]
+async fn bus_observation_reports_real_counts_and_never_fabricates_last_observation() {
+    let bus = NervousBus::new();
+    let received = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = Arc::clone(&received);
+    let _ticket = bus.subscribe(
+        apeireth_runtime_assembly::canonical::nervous_bus::NervousSignalKind::ToolOutcome,
+        move |_signal: &NervousSignal| {
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        },
+    );
+    let _ = bus.publish(&NervousSignal::tool_outcome(
+        true,
+        Some("tool.self_status"),
+        false,
+    ));
+    let _ = bus.publish(&NervousSignal::error_observed("boom"));
+    assert_eq!(received.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+    let value = decorated_frame_with_bus(source_with_face(true), env_all_on(), bus).await;
+    let bus_status = &value["capabilities"][NERVOUS_SYSTEM_SUBOBJECT]["bus"];
+    assert_eq!(bus_status["subscribers"], json!(1));
+    assert_eq!(bus_status["published"], json!(2));
+    assert_eq!(bus_status["delivered"], json!(1));
+    assert!(
+        bus_status["last_observation"].is_null(),
+        "总线不保留历史载荷，last_observation 必须为 null"
+    );
+}
+
+#[tokio::test]
+async fn self_status_module_with_bus_attaches_the_bus_face() {
+    let module =
+        SelfStatusModule::new_with_bus(Arc::new(source_with_face(true)), NervousBus::new());
+    let capabilities = module.capabilities();
+    assert_eq!(capabilities.len(), 1);
+    let result = capabilities[0].invoke(&call()).await;
+    assert!(result.is_ok());
+    let value: Value = serde_json::from_str(&result.render()).expect("json");
+    let nervous = &value["capabilities"][NERVOUS_SYSTEM_SUBOBJECT];
+    assert_eq!(nervous["version"], json!(2));
+    assert_eq!(nervous["bus"]["subscribers"], json!(0));
+    assert_eq!(nervous["bus"]["published"], json!(0));
+    assert_eq!(nervous["bus"]["delivered"], json!(0));
 }
