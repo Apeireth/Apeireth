@@ -56,6 +56,10 @@ pub use trace::*;
 /// 信号 → 调质订阅者; 取消不发布, 拒绝理由不进信号; 默认关时装配根不交付句柄。
 #[path = "canonical/bio_approval_social.rs"]
 pub mod bio_approval_social;
+/// Wave 4 观测面补格: 调质 (SG-13) / 昼夜节律 (SG-23) / 仪式 (SG-22) 三条真实
+/// 只读探测口 —— 值来自装配根正在使用的同一份状态, 开关关一条不注册。
+#[path = "canonical/bio_extra_probes.rs"]
+pub mod bio_extra_probes;
 /// 常驻心跳关怀生产者装配面 (V3-a 收尾一针): 定时 poll 关怀内核 → 命中发起
 /// 标准回合 (开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸, 默认关 fail-closed)。
 #[path = "canonical/care_heartbeat.rs"]
@@ -165,6 +169,9 @@ pub mod voice_quiet;
 
 pub use bio_approval_social::{
     approval_social_outcome, BioApprovalSocialSource, APPROVAL_SOCIAL_SOURCE,
+};
+pub use bio_extra_probes::{
+    circadian_probe, neuromodulation_probe, ritual_state_probe, CircadianProbeConfig,
 };
 pub use care_heartbeat::{
     bio_circadian, bio_tone, CareHeartbeatConfig, CareHeartbeatPoll, CareHeartbeatProducer,

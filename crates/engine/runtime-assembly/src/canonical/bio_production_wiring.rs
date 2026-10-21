@@ -5,9 +5,10 @@
 //!   W3.5 `bio_lifecycle` 的注册点（env 默认关，关 = 不构造不注册）；
 //! - [`install_bio_play`]：W3.3 游戏练习场四工具注册点（env 默认关）；
 //! - [`install_bio_self_status`]：W3.2 自述 `bio_mechanisms` 子对象挂面；
-//! - [`BioProbeSlots`]（W3.6 / R1b-2b）：自述 probe 的**共享迟绑定槽** —— probe
-//!   先注册、句柄后填（免疫记忆 / 关怀心跳 / 审议门账 / 痛觉再生读取口 /
-//!   生命周期账），默认关时槽不武装、`fill_*` 全 no-op、零读取；
+//! - [`BioProbeSlots`]（W3.6 / R1b-2b / Wave 4 观测补格）：自述 probe 的
+//!   **共享迟绑定槽** —— probe 先注册、句柄后填（免疫记忆 / 关怀心跳 / 审议门账 /
+//!   痛觉再生读取口 / 生命周期账 / 调质状态 / 昼夜节律配置 / 仪式账），默认关时
+//!   槽不武装、`fill_*` 全 no-op、零读取；
 //! - [`ProductionModules`] 的生物句柄 getter（字段定义仍在 `production.rs`）。
 //!
 //! 本模块由 `production.rs` 以 `#[path = "bio_production_wiring.rs"]` 声明为
@@ -35,6 +36,9 @@ use apeireth_tools_canonical::self_status::{
     BioMechanismKind, BioMechanismProbe, BioMechanismReading,
 };
 
+use crate::canonical::bio_extra_probes::{
+    circadian_probe, neuromodulation_probe, ritual_state_probe, CircadianProbeConfig,
+};
 use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
     bio_lifecycle_probe, bio_lifecycle_wiring_from_enabled_with_store_dir, BioLifecycleState,
@@ -44,6 +48,7 @@ use crate::canonical::care_heartbeat::bio_tone::{
     bio_tone_wiring_from_enabled, BioToneBusSubscriber, ToneState,
 };
 use crate::canonical::care_heartbeat::CareHeartbeatStatus;
+use crate::canonical::care_reminder::RitualStateStore;
 use crate::canonical::cognitive::{BioAssemblyModule, BioAssemblySwitches};
 use crate::canonical::module::Module;
 use crate::canonical::nervous_switchboard::{BioSwitch, NervousSwitchboard};
@@ -182,22 +187,27 @@ pub(super) fn install_bio_play(
 ///
 /// **0 装诚实**：不新增 `ModuleFamily` 构造探针（与 `install_bio_modules` 的
 /// 生命周期模块同口径：不为单一模块膨胀族枚举）。
+///
+/// 返回两工具共享的仪式账句柄（供组装根填 `BioProbeSlots` 的 SG-22 观测槽；
+/// 开关关 / 缺目录 = `None`，槽保持空 = 该格如实「未接线」）。
 pub(super) fn install_bio_ritual_tools(
     capabilities: &mut Vec<Arc<dyn ToolCapability>>,
     clock: &Arc<dyn Clock>,
     care_dir: Option<&std::path::Path>,
     enabled: bool,
-) {
+) -> Option<Arc<RitualStateStore>> {
     let Some(wiring) = crate::canonical::ritual_tools::bio_ritual_wiring_from_enabled(
         enabled,
         care_dir,
         Arc::clone(clock),
     ) else {
-        return;
+        return None;
     };
+    let store = Arc::new(wiring.state().store().clone());
     for module in wiring.into_modules() {
         capabilities.extend(module.capabilities());
     }
+    Some(store)
 }
 
 /// 迟绑定槽未填时 probe 回的真因（单格 `null` + 该原因，整帧仍成功）。
@@ -220,7 +230,7 @@ pub type QuorumTraceReader = Arc<dyn Fn() -> Option<QuorumTrace> + Send + Sync>;
 /// - **默认关**：自述开关关时 [`install_bio_self_status`] 不注册任何迟绑定
 ///   probe，且不武装本槽 —— 后续 `fill_*` 一律 no-op，槽保持全空（`is_empty`），
 ///   一次读取都不发生，自述帧逐字节不变；
-/// - **开关开**：6 条 probe 先注册（接线事实 `wired:true`），句柄未到 = 该格
+/// - **开关开**：10 条 probe 先注册（接线事实 `wired:true`），句柄未到 = 该格
 ///   `value:null` + 真因「未接线」，整帧仍成功；句柄填入后同格转真值；
 /// - 槽只存**只读共享句柄**（同一份账 / 同一状态闭包），不复制状态、不叠加第二
 ///   层缓冲；重复 fill 覆盖为最后一个句柄（与 `attach` 一次调用语义一致）。
@@ -240,6 +250,12 @@ pub struct BioProbeSlots {
     ecosystem: Arc<ToolEcosystemSlot>,
     /// R1b-2b SG-18 生命周期：注册模块同一本账的只读读取口。
     lifecycle: Arc<Mutex<Option<Arc<BioLifecycleState>>>>,
+    /// Wave 4 SG-13 调质：`BioToneModule` / 总线订阅者同一份状态。
+    tone: Arc<Mutex<Option<Arc<ToneState>>>>,
+    /// Wave 4 SG-23 昼夜节律：开关板时区偏移 + 门开关（纯函数快照）。
+    circadian: Arc<Mutex<Option<CircadianProbeConfig>>>,
+    /// Wave 4 SG-22 仪式：`tool.ritual_done/skip` 写入的同一本仪式账。
+    ritual: Arc<Mutex<Option<Arc<RitualStateStore>>>>,
 }
 
 /// 槽锁读取（持锁线程 panic 后槽内容未损坏，按 L 组口径恢复而非级联 panic）。
@@ -254,13 +270,13 @@ impl BioProbeSlots {
         Self::default()
     }
 
-    /// 是否已武装（自述开关开 = 安装点注册了 6 条迟绑定 probe）。
+    /// 是否已武装（自述开关开 = 安装点注册了 10 条迟绑定 probe）。
     #[must_use]
     pub fn is_armed(&self) -> bool {
         self.armed.load(Ordering::Acquire)
     }
 
-    /// 六个槽是否全空（默认关证据：关时恒空，`fill_*` 全 no-op）。
+    /// 九个槽是否全空（默认关证据：关时恒空，`fill_*` 全 no-op）。
     #[must_use]
     pub fn is_empty(&self) -> bool {
         lock_slot(&self.immune).is_none()
@@ -269,6 +285,9 @@ impl BioProbeSlots {
             && lock_slot(&self.pain_reader).is_none()
             && self.ecosystem.is_empty()
             && lock_slot(&self.lifecycle).is_none()
+            && lock_slot(&self.tone).is_none()
+            && lock_slot(&self.circadian).is_none()
+            && lock_slot(&self.ritual).is_none()
     }
 
     /// 安装点武装/解除（只由 [`install_bio_self_status`] 调；非公开）。
@@ -323,6 +342,41 @@ impl BioProbeSlots {
         match (self.is_armed(), state) {
             (true, Some(state)) => {
                 *lock_slot(&self.lifecycle) = Some(Arc::clone(state));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// 填调质状态句柄（与 `BioToneModule` / 总线订阅者同一 `Arc`）。
+    ///
+    /// 未武装 / 无状态 = no-op（开关关 = 槽恒空，零读取）；返回是否真的填了。
+    pub fn fill_tone_state(&self, state: Option<&Arc<ToneState>>) -> bool {
+        match (self.is_armed(), state) {
+            (true, Some(state)) => {
+                *lock_slot(&self.tone) = Some(Arc::clone(state));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// 填昼夜节律观测配置（开关板时区偏移 + 门开关；纯数据，无句柄）。
+    pub fn fill_circadian_config(&self, config: CircadianProbeConfig) -> bool {
+        if !self.is_armed() {
+            return false;
+        }
+        *lock_slot(&self.circadian) = Some(config);
+        true
+    }
+
+    /// 填仪式账句柄（与 `tool.ritual_done/skip` 同一本 `<care_dir>/ritual_state.json`）。
+    ///
+    /// 未武装 / 无账本（关怀数据目录未配 = 工具面本就不注册）= no-op，如实不接。
+    pub fn fill_ritual_store(&self, store: Option<&Arc<RitualStateStore>>) -> bool {
+        match (self.is_armed(), store) {
+            (true, Some(store)) => {
+                *lock_slot(&self.ritual) = Some(Arc::clone(store));
                 true
             }
             _ => false,
@@ -399,6 +453,30 @@ impl BioProbeSlots {
             build: bio_lifecycle_probe,
         })
     }
+
+    /// Wave 4 SG-13 调质 probe（槽空 = 未接线真因）。
+    fn tone_probe(&self) -> Arc<dyn BioMechanismProbe> {
+        Arc::new(LateBoundSlotProbe {
+            slot: Arc::clone(&self.tone),
+            build: neuromodulation_probe,
+        })
+    }
+
+    /// Wave 4 SG-23 昼夜节律 probe（纯函数快照，槽空 = 未接线真因）。
+    fn circadian_probe(&self) -> Arc<dyn BioMechanismProbe> {
+        Arc::new(LateBoundSlotProbe {
+            slot: Arc::clone(&self.circadian),
+            build: circadian_probe,
+        })
+    }
+
+    /// Wave 4 SG-22 仪式 probe（槽空 = 未接线真因）。
+    fn ritual_probe(&self) -> Arc<dyn BioMechanismProbe> {
+        Arc::new(LateBoundSlotProbe {
+            slot: Arc::clone(&self.ritual),
+            build: ritual_state_probe,
+        })
+    }
 }
 
 /// 槽绑定 probe：每次采集现读槽（短持锁、克隆句柄后立即放锁）。
@@ -426,9 +504,9 @@ impl<T: Clone + Send + 'static> BioMechanismProbe for LateBoundSlotProbe<T> {
 /// 挂面 = 子对象恒在场（开关关时 `mechanisms: null` + 原因「未启用」，
 /// 零 probe 调用；开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 "1"）。
 /// 承载力探测口读**同一本**任务队列（与 `tool.task_board` 同队同账）；
-/// 练习场账本（W3.5 接入）与四工具面同一 `Arc`；W3.6/W3.7/R1b-2b 的 7 条迟绑定
-/// probe（免疫记忆 / 关怀心跳 / 审议门 / 痛觉 / 再生 / 工具生态 / 生命周期）
-/// 只在开关开时注册 —— 注册即
+/// 练习场账本（W3.5 接入）与四工具面同一 `Arc`；W3.6/W3.7/R1b-2b/Wave-4 的 10 条
+/// 迟绑定 probe（免疫记忆 / 关怀心跳 / 审议门 / 痛觉 / 再生 / 工具生态 / 生命周期 /
+/// 调质 / 昼夜节律 / 仪式）只在开关开时注册 —— 注册即
 /// 接线事实，句柄未到 = 单格 `null` + 「未接线」真因；开关关 = 一条都不注册、
 /// 槽不武装、`fill_*` 全 no-op。其余格一律 `wired:false` + 「未接线」，不编数值。
 pub(super) fn install_bio_self_status(
@@ -472,6 +550,9 @@ fn install_bio_self_status_with(
             tool_ecosystem_bio_probe(slots.ecosystem_slot()),
         );
         source.register_bio_probe(BioMechanismKind::Lifecycle, slots.lifecycle_probe());
+        source.register_bio_probe(BioMechanismKind::Neuromodulation, slots.tone_probe());
+        source.register_bio_probe(BioMechanismKind::Circadian, slots.circadian_probe());
+        source.register_bio_probe(BioMechanismKind::Ritual, slots.ritual_probe());
     }
     source
 }
@@ -593,6 +674,21 @@ mod tests {
         let slots = BioProbeSlots::new();
         slots.arm(true);
         slots
+    }
+
+    fn tone_state() -> Arc<ToneState> {
+        let clock: crate::canonical::care_heartbeat::bio_tone::ToneClock = Arc::new(|| 1_000_u64);
+        Arc::new(ToneState::new(clock))
+    }
+
+    fn ritual_store() -> Arc<RitualStateStore> {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let seq = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-bio-ritual-probe-{}-{seq}.json",
+            std::process::id()
+        ));
+        Arc::new(RitualStateStore::at(path))
     }
 
     fn bio_status(source: &ProductionSelfStatusSource) -> BioMechanismsStatus {
@@ -835,6 +931,9 @@ mod tests {
             BioMechanismKind::Recovery,
             BioMechanismKind::EcosystemHealth,
             BioMechanismKind::Lifecycle,
+            BioMechanismKind::Neuromodulation,
+            BioMechanismKind::Circadian,
+            BioMechanismKind::Ritual,
         ] {
             let row = status.reading(kind).expect("late-bound row");
             assert!(row.wired, "注册 = 接线事实成立: {kind:?}");
@@ -849,13 +948,13 @@ mod tests {
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         assert_eq!(rows.len(), 14);
         let unwired = rows.values().filter(|row| !row.wired).count();
-        assert_eq!(unwired, 7, "未注册的 7 格如实未接线 (14 - 7 注册)");
+        assert_eq!(unwired, 4, "未注册的 4 格如实未接线 (14 - 10 注册)");
     }
 
-    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账：wired 计数 = 9/14，
-    /// 且 9 格值全为真值（不是 null）。
+    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账 + 调质/昼夜/仪式观测：
+    /// wired 计数 = 12/14，且 12 格值全为真值（不是 null）。
     #[test]
-    fn filled_slots_raise_the_wired_count_to_nine() {
+    fn filled_slots_raise_the_wired_count_to_twelve() {
         let slots = armed_slots();
         let queue = task_queue();
         let play = play_state();
@@ -867,6 +966,9 @@ mod tests {
         assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
         assert!(slots.fill_ecosystem_profiles(&[stub_tool("tool.filesystem", "filesystem")]));
         assert!(slots.fill_lifecycle_state(Some(&lifecycle_state())));
+        assert!(slots.fill_tone_state(Some(&tone_state())));
+        assert!(slots.fill_circadian_config(CircadianProbeConfig::new(0, true)));
+        assert!(slots.fill_ritual_store(Some(&ritual_store())));
         let status = bio_status(&source);
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         let wired: Vec<&BioMechanismKind> = BioMechanismKind::ALL
@@ -875,8 +977,8 @@ mod tests {
             .collect();
         assert_eq!(
             wired.len(),
-            9,
-            "2 (capacity/play) + 7 迟绑定 (含工具生态/生命周期) = 9/14"
+            12,
+            "2 (capacity/play) + 10 迟绑定 (含工具生态/生命周期/调质/昼夜/仪式) = 12/14"
         );
         for kind in [
             BioMechanismKind::Capacity,
@@ -888,6 +990,9 @@ mod tests {
             BioMechanismKind::Recovery,
             BioMechanismKind::EcosystemHealth,
             BioMechanismKind::Lifecycle,
+            BioMechanismKind::Neuromodulation,
+            BioMechanismKind::Circadian,
+            BioMechanismKind::Ritual,
         ] {
             let row = rows.get(&kind).expect("wired row");
             assert!(row.wired, "{kind:?}");

@@ -31,6 +31,7 @@ use apeireth_tools_canonical::{
 };
 
 use super::bio_approval_social::BioApprovalSocialSource;
+use super::bio_extra_probes::CircadianProbeConfig;
 use super::capability::CapabilityProvider;
 use super::care_heartbeat::bio_lifecycle::BioLifecycleState;
 use super::care_heartbeat::bio_tone::ToneState;
@@ -1208,8 +1209,9 @@ impl ProductionModules {
 
         // W3.7 · 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`, 默认关):
         // 复用族总闸 + 关怀数据目录注入; 双工具写同一本 `<care_dir>/ritual_state.json`
-        // (与 care 心跳同一目录), 补「仪式完成」显式事件源。
-        bio_production_wiring::install_bio_ritual_tools(
+        // (与 care 心跳同一目录), 补「仪式完成」显式事件源。返回的账句柄在自述槽
+        // 武装后（见下方 self_status 块之后）填入 SG-22 观测槽。
+        let bio_ritual_store = bio_production_wiring::install_bio_ritual_tools(
             &mut capabilities,
             &clock,
             bio_lifecycle_store_dir.as_deref(),
@@ -1326,6 +1328,10 @@ impl ProductionModules {
                 SelfStatusModule::new_with_bus(Arc::new(source), nervous_bus.as_ref().clone());
             capabilities.extend(provider.capabilities());
         }
+
+        // Wave 4 观测补格: 自述槽此时已按开关武装 → 把仪式账句柄填入 SG-22 观测槽
+        //（开关关 / 缺目录 = `None` = 槽保持空；fill 未知武装时 no-op）。
+        bio_probe_slots.fill_ritual_store(bio_ritual_store.as_ref());
 
         // External tool bridge (MCP): the slot is opt-in, and enabling it
         // loads the server list at assembly time (env primary, data-directory
@@ -1566,6 +1572,13 @@ impl ProductionModules {
         // R1b-2b: 生命周期账本在模块安装后才存在 → 迟绑定槽填同一 Arc
         //（自述开关关时 fill no-op；槽空 = 单格 null + 未接线真因）。
         bio_probe_slots.fill_lifecycle_state(bio_wiring.lifecycle_state.as_ref());
+        // Wave 4 观测补格: 调质句柄与昼夜节律配置在模块安装后填入迟绑定槽
+        //（自述开关关时 fill no-op；槽空 = 单格 null + 未接线真因）。
+        bio_probe_slots.fill_tone_state(bio_wiring.tone_state.as_ref());
+        bio_probe_slots.fill_circadian_config(CircadianProbeConfig::new(
+            nervous_switchboard.circadian_tz_offset_min(),
+            nervous_switchboard.switch_enabled(BioSwitch::Circadian),
+        ));
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);

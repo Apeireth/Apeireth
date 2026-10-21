@@ -451,7 +451,10 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
                 reason: None,
             },
         ],
-        gaps: &["5/9 档事件源已接（结局映射 3 + 工具首见 Novelty + 人批/人拒）；其余 4 档仅显式注入"],
+        gaps: &[
+            "5/9 档事件源已接（结局映射 3 + 工具首见 Novelty + 人批/人拒）；其余 4 档仅显式注入",
+            "观测格已注册（Wave 4：迟绑定槽填同一 `ToneState`，只读向量/行为参数；槽空 = null + 真因）",
+        ],
     },
     MechanismSpec {
         id: "SG-14.homeostasis",
@@ -491,7 +494,10 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
                 reason: Some("门内自消费（set_pressure 显式注入），跨模块无消费方，总线无增益"),
             },
         ],
-        gaps: &["门内自消费（set_pressure 显式注入），跨模块无消费方，总线无增益"],
+        gaps: &[
+            "门内自消费（set_pressure 显式注入），跨模块无消费方，总线无增益",
+            "观测格已注册（Wave 4：装配根开关 + 时区偏移注入；睡眠压力累加器只在 cli care 心跳侧，本格如实 null + 原因）",
+        ],
     },
     MechanismSpec {
         id: "SG-15.immune_memory",
@@ -661,7 +667,10 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
                 reason: None,
             },
         ],
-        gaps: &["纯 CLI chat 无心跳宿主 ⇒ 仪式写入暂无候选消费（工具面 + 同路径读取已接；端到端测试归 R1b-3）"],
+        gaps: &[
+            "纯 CLI chat 无心跳宿主 ⇒ 仪式写入暂无候选消费（工具面 + 同路径读取已接；端到端测试归 R1b-3）",
+            "观测格已注册（Wave 4：迟绑定槽填 `tool.ritual_done` / `tool.ritual_skip` 同一本账；只读统计，不投递、不打卡）",
+        ],
     },
     MechanismSpec {
         id: "SG-25.ecosystem_health",
@@ -690,7 +699,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             state: SignalState::Wired,
             reason: None,
         }],
-        gaps: &["bio_mechanisms 观测面最多 9/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + R1b-2b 生命周期 1 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
+        gaps: &["bio_mechanisms 观测面最多 12/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + R1b-2b 生命周期 1 + Wave 4 调质/昼夜/仪式 3 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
     },
 ];
 
