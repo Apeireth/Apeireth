@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Wave 4 收尾：生物观测面 14/14 + 桌面 CI 执行面 + 发布收口对账（2026-10-21）
+
+- **SG-20 社会修复观测面**（`14b4a5c2`，默认关）：事件源 = 人工审批被拒（`ApprovalSocial=Rejected`，真实人工介入信号）→ 经 `NervousBus` 订阅折算内核 `plan_repair`（固定映射 `UserCorrection` → 承认不确定 + 复述理解；不含问句、不含用户原话/拒绝理由）→ 自述 `bio_mechanisms.social_repair` 只读读数。`bio_mechanisms` 观测面 **13/14 → 14/14**；行为面（写 prompt 修复指令/据此提问）仍未接线，矩阵与文档如实标注。装配：`install_bio_modules` 开关开构造观测源、装配根总线订阅、`BioProbeSlots` 第 8 槽、`BioMechanismKind::SocialRepair` 注册；关 = 零订阅零计数。assembly 63 套件 / **708 passed** / 0 failed（lib 309；新增 4 单测 + 集成测试真实 publish 一次拒绝后断言计划）。
+- **桌面 CI 执行面**（`343d5963`）：`companion-desktop-ci.yml` 的 tauri-shell 增 `cargo test --workspace --all-targets`（本地 140 passed / 3 ignored / 0 failed + integration 11；B1/B2/B3 相关 50/50），svelte-ui 增 `pnpm test`（本地 **82/82 suites**），`node-version: 20 → 22`（runner 66/82 套件依赖 `--experimental-strip-types`，Node 20 反证 16 PASS/66 FAIL）。本地实测已登记；**CI 远端 ubuntu 首跑未验证**（本地 Windows），`supervisor_lifecycle` 在 CI 走显式 SKIP（根 workspace 未构建）。
+- **发布收口对账**（`3769c57d`，只改 release-checklist）：4 勾（`--version`=`apeireth 2.0.0-rc.4`、基线§1 复核、未接线标注、历史不追改）/ 6 未勾（均带实证与归口）。**阻塞级发现 R-1**：`scripts/check-release-version.ps1` 实测 exit 1（`crates/engine/image/{codecs,psd}/fuzz` 独立 [workspace] 的 fuzz `0.0.0` 被递归扫入），而发布工作流首关以 `-Strict` 调用它 ⇒ **当前推 `v*` tag 必在第一步失败**，交发布线裁定（排除 fuzz 子工程或豁免）。
+- **环境注记（如实）**：本机 `%TEMP%` 对本仓新编译测试进程自 2026-10-21 17:40 前后出现 `os error 5`（cmd/python 可写、Rust 测试 exe 拒绝；同日 17:00 前同批测试可正常写）；本批测试以 `TEMP/TMP=<repo>\target\tmp-test` 覆盖运行（等价 CI 临时目录语义），已登记 `00-backlog` D30，不掩盖。
+
 ## [Unreleased] — 发布流水线资产校验接线：SHA256SUMS 生成 + 逐件校验随发布执行（2026-10-21）
 
 - **接线**：`.github/workflows/publish-release.yml` 的 Windows 构建 job 在 NSIS 构建后新增两步——`generate-release-manifest.ps1` 生成 `SHA256SUMS`/`releaseon`，`verify-release-assets.ps1` 逐件比对哈希，exit 0 才上传制品；`SHA256SUMS`/`releaseon` 随 Release 发布（`files:` 增两项），发布说明改为「流水线内已校验」。

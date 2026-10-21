@@ -98,6 +98,15 @@
 > 提交：SG-18 0e3eb71｜SG-21 69038cde｜SG-22 6d0361e｜SG-25 283f37e｜SG-26 67dd06a。
 > **⇒ 14/14 内核全部入库（W1+W2 合计 +228 新单测）。**
 >
+> **Wave 4 收尾交付记录（2026-10-21）**：`bio_mechanisms` 观测面 13/14 → **14/14**（默认关）。
+> 提交 `14b4a5c2`（SG-20 社会修复观测面：人工拒绝审批 = 真实事件源，经 `NervousBus` 订阅折算
+> 内核 `plan_repair`，只读；行为面仍未接线）+ `343d5963`（桌面 CI 执行面：tauri-shell `cargo test`
+> 140 passed / 3 ignored、svelte-ui `pnpm test` 82/82、node 20→22）+ `3769c57d`（发布收口对账
+> 4 勾/6 未勾，R-1 版本门禁红登记）。**门禁**：assembly 63 套件 / 708 passed / 0 failed（lib 309）、
+> clippy/fmt 绿；桌面测试本机实测数字见 CHANGELOG 同日节。**环境注记**：本机 `%TEMP%` 对新建 Rust
+> 测试进程 17:40 前后起拒写（`os error 5`），本批以 `TEMP/TMP=<repo>\target\tmp-test` 覆盖运行，
+> 已登记 `00-backlog` D30。**未做**：social_repair 行为面（写 prompt/据此提问）仍未接线；CI 远端
+> 首跑未验证；R-1 待发布线裁定。
 > **Wave 4 观测补格交付记录（2026-10-21）**：`bio_mechanisms` 观测面 9/14 → **13/14**（默认关零注册）。提交
 > `73107ff0`（`runtime-assembly::canonical::bio_extra_probes`：调质 / 昼夜 / 仪式三 probe + 三个 `BioProbeSlots`
 > 迟绑定槽 + 装配根 fill）与环境债批 `18691532`（D25/D26/D27 测试去抖；D18 取证 = `962f30a8` 已落地、0 改动）。

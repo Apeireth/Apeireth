@@ -172,6 +172,17 @@
 > **复测注记（2026-10-21，R1b-2b 生命周期订阅总线批校验）**：本批 = `bio_lifecycle` 工具结果面从「模块 `on_hook` 扫描 `AfterToolResult`」收敛到「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」，并接通 `BioMechanismKind::Lifecycle` 观测格（`bio_mechanisms` 观测面 8/14 → 9/14；默认关零注册/零订阅/零 fill）。实测：`cargo test -p apeireth-runtime-assembly --locked` 全目标绿（lib **284** passed；集成套件 0 failed；`bio_lifecycle_wiring` **11** passed、`nervous_snapshot` **28** passed）；`cargo clippy -p apeireth-runtime-assembly --all-targets --locked -- -D warnings` 0；`cargo fmt -p apeireth-runtime-assembly --check` 0；`arch_guard --strict` VIOLATIONS 0（STALE 1 = play_tools.rs 可缩表）；`docs_truth --verify --check` OK。
 > **fast-gate（verify_changed.py）未出全链绿，如实登记**：①/② 次 nextest 构建阶段 `link.exe` exit 1102 / 页面文件不足（环境，记 `00-backlog` D28）；③ 次 check 阶段被在途未提交 governance 改动阻断（`error[E0277]` `crates/foundation/governance/src/chain.rs:372` `(dyn ChainClock + 'static)` 未实现 `Debug`）。scoped 门禁在阻断前已跑绿（上列数字）。
 > **口径**：全量工作区测试本批未跑（他线在途并发构建，数字不作基线）；**§1 本轮不替换**；等单线独占全量后再统一刷新 §1 + README 徽章。
+> **复测注记（2026-10-21，Wave 4 收尾批校验：SG-20 观测面 14/14 + 桌面 CI 执行面）**：本批 = ①SG-20 社会修复
+> 观测面（人工拒绝审批 = 事件源，总线订阅 → 内核 `plan_repair` 只读折算；默认关零订阅）→ `bio_mechanisms`
+> 观测面 **14/14**；②`companion-desktop-ci.yml` 执行面补齐（tauri-shell `cargo test`、svelte-ui `pnpm test`、
+> node 20→22）。**scoped 实测**：`cargo test -p apeireth-runtime-assembly --locked -j 2` → 63 套件 /
+> **708 passed** / 0 failed（lib 309；`bio_social_repair` 4、`bio_observation_cells` 3、`nervous_snapshot` 13）；
+> 桌面 `cargo test --workspace --all-targets`（src-tauri）→ lib 140 passed / 3 ignored + integration 11；
+> `pnpm test` → **82/82 suites**；clippy/fmt 绿。**环境注记（如实）**：本机 `%TEMP%` 对本仓新编译测试进程
+> 自 2026-10-21 17:40 前后起拒写（`os error 5`；`cmd`/`python` 可写），本批测试以
+> `TEMP/TMP=<repo>\target\tmp-test` 覆盖运行（等价 CI 临时目录语义），非代码回归，登记 `00-backlog` D30。
+> **口径**：全量工作区测试本批未跑（效率线执行权）；桌面三组数字为本机 Windows 实测，**CI 远端 ubuntu
+> 首跑未验证**；**§1 本轮不替换**。
 > **复测注记（2026-10-21，Wave 4 SG-14 homeostasis 行为接线批校验）**：本批 = `context_budget` 单真源
 > （`APEIRETH_CONTEXT_BUDGET_CHARS`，cli 与装配根转调同一函数）+ `install_bio_modules` 注入预算 +
 > `ObservedBioAssemblyModule` TurnStart 回合观测（只记数字/策略，不含用户原文）+ `BioProbeSlots` 第 7 槽 +
