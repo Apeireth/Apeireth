@@ -72,3 +72,20 @@
 - 本页 2026-10-20 生效；三线各存链接（owner 转告）。
 - 变更：架构线主笔 + 受影响线互认 + owner 知会；变更记录进 ADR 索引。
 - 违反本页的处置：登记例外 → 到期未清 → `arch_guard --strict` 拦截。
+
+## 9. 重启登记（2026-10-21，Wave 4 收口后）
+
+两条已收尾/停机的线由 owner 重启，开工入口为本页 + 各自重启简报（仓库内唯一入口，勿另口头传递）：
+
+| 线 | 收尾/停机 | 重启简报 | 本轮任务 |
+|---|---|---|---|
+| 效率线（第三线） | 2026-10-20 收尾（`docs/status/CLOSEOUT-2026-10-20.md`） | [restart-brief-efficiency-2026-10-21.md](restart-brief-efficiency-2026-10-21.md) | E1 test-baseline 维护/全量执行权接管；E2 R8-D wiring 余项；E3 R6-D 夜间 full 首跑；E4 R6-C 校验器接门禁；E5 边界 |
+| 安全线 | 2026-10-20 13:50 停机交接（`artifacts/security-line-handover-2026-10-20.md`） | [restart-brief-security-2026-10-21.md](restart-brief-security-2026-10-21.md) | S1 R8-B2 CLI 装配根切换；S2 R8-B3 持久 AuditSink + IM 审计对；S3 自有残项先报 owner；S4 边界 |
+
+- 当前基线（2026-10-21）：`HEAD=5f6ee7da`、`wave=5`、全量 341 套件 / 8570 passed / 0 failed / 51 ignored
+  （`artifacts/wave4-close-full-2026-10-21.log`）、guard VIOLATIONS 0 / exceptions=2 / STALE 0、
+  `docs_truth` / `arch_doc` / `wiring_report` 均绿。
+- 归属原则不变：契约/守卫/基线/ADR = 架构线；测试真源执行 = 效率线；R8 实施 = 安全线；生物机制接线 = 生物线。
+  架构线在 Wave 4 期间按 ADR-0011 §9 / ADR-0010 §9 的「归属临时调整」代做的部分（R6-A/B、R8-A/B1/C、
+  R1b-1a/1b/3/4a），自本页生效起回归各线，不再扩大架构线施工面。
+- R6-C/D 的**四层签核只能 owner 本人签**（`verification-ledger.yaml` signoff），任何线不得代签。
