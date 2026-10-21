@@ -170,6 +170,15 @@
 > **复测注记（2026-10-21，R1b-2b 生命周期订阅总线批校验）**：本批 = `bio_lifecycle` 工具结果面从「模块 `on_hook` 扫描 `AfterToolResult`」收敛到「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」，并接通 `BioMechanismKind::Lifecycle` 观测格（`bio_mechanisms` 观测面 8/14 → 9/14；默认关零注册/零订阅/零 fill）。实测：`cargo test -p apeireth-runtime-assembly --locked` 全目标绿（lib **284** passed；集成套件 0 failed；`bio_lifecycle_wiring` **11** passed、`nervous_snapshot` **28** passed）；`cargo clippy -p apeireth-runtime-assembly --all-targets --locked -- -D warnings` 0；`cargo fmt -p apeireth-runtime-assembly --check` 0；`arch_guard --strict` VIOLATIONS 0（STALE 1 = play_tools.rs 可缩表）；`docs_truth --verify --check` OK。
 > **fast-gate（verify_changed.py）未出全链绿，如实登记**：①/② 次 nextest 构建阶段 `link.exe` exit 1102 / 页面文件不足（环境，记 `00-backlog` D28）；③ 次 check 阶段被在途未提交 governance 改动阻断（`error[E0277]` `crates/foundation/governance/src/chain.rs:372` `(dyn ChainClock + 'static)` 未实现 `Debug`）。scoped 门禁在阻断前已跑绿（上列数字）。
 > **口径**：全量工作区测试本批未跑（他线在途并发构建，数字不作基线）；**§1 本轮不替换**；等单线独占全量后再统一刷新 §1 + README 徽章。
+> **复测注记（2026-10-21，R1b-2c 审批社交总线批校验）**：`cargo test -p apeireth-runtime-assembly --locked -j 2`
+> → 62 套件 / 0 failed（lib 291 passed）；`cargo test -p apeireth-cli --locked -j 2` → 56 lib + 各集成套件全绿
+> （该次全量跑跳过一条他线在途 R1b-3 端到端测试，随后由他线 `0b71cd6f` 提交并复跑绿）；`cargo clippy -p
+> apeireth-runtime-assembly -p apeireth-cli --all-targets --locked -- -D warnings` → 0；`cargo fmt --check` 0 diff；
+> `python scripts/arch_guard.py --strict` → VIOLATIONS 0；`python scripts/verify_changed.py --files <11 文件>
+> --arch-strict --no-test` → FAST GATE PASSED（check 5.3s / clippy 7.6s）。
+> **口径**：全量工作区测试本批未跑（他线仍在并发提交）；**§1 本轮不替换**；待单线独占全量后统一刷新 §1 + README 徽章。
+> **默认关**：开关关 = 装配根不交付审批社交源 = 零发布 = 总线 `is_idle()`，审批结论 / 权限判定零变化（逐字节测试）。
+
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |

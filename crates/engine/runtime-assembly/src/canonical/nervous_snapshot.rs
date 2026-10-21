@@ -433,7 +433,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_TONE_ENABLE_ENV),
         parser: bio_tone_enabled_from_env_value,
-        wiring: "production-assembly::bio_tone + NervousBus 订阅（R1b-2a）",
+        wiring: "production-assembly::bio_tone + NervousBus 订阅（R1b-2a）+ 审批社交发布（R1b-2c）",
         signals: &[
             SignalSpec {
                 id: "tone_module",

@@ -98,6 +98,11 @@
 > 提交：SG-18 0e3eb71｜SG-21 69038cde｜SG-22 6d0361e｜SG-25 283f37e｜SG-26 67dd06a。
 > **⇒ 14/14 内核全部入库（W1+W2 合计 +228 新单测）。**
 >
+> **R1b-2c 交付记录（2026-10-21）**：审批社交信号经神经总线发布（默认关零行为变化）。提交：`f2dad300`。
+> 新增总线信号类别 `NervousSignalKind::ApprovalSocial`（三态 `Approved`/`Rejected`/`Cancelled`；**取消不编事件**；拒绝理由文本不进信号，防 PII 进总线）；发布方 = `runtime-assembly::canonical::bio_approval_social::BioApprovalSocialSource`（`production.rs` 按调质开关交付句柄，开关关 = `None` = 零发布）；消费方 = 调质订阅者（`Approved`→`SocialPositive`、`Rejected`→`SocialNegative`，同一事件只推进一次）；CLI 审批在 `resolve` 成功后发布；删除 `bio_tone` 直写助手（发布 = 唯一真源）。
+> **门禁**：assembly 62 套件 0 failed（lib 291）；CLI lib 56 + 集成套件全绿（跳过一条他线在途 R1b-3 测试，随后由他线 `0b71cd6f` 提交并复跑绿）；clippy `-D warnings` 0 / fmt 0 / `arch_guard --strict` VIOLATIONS 0；`verify_changed --arch-strict --no-test` FAST GATE PASSED；cli lib 3886→3878 守住既有 3879 棘轮。**未做**：无 live E2E；审批路径外无生产发布方；四档仍只有显式注入口。
+> **R1b-3 状态**：由架构线 `0b71cd6f` 收口（ritual 文件通道端到端 + 三源如实 `NotWired`），与交接单 §R1b-3 结论一致。
+
 > **R1b-2a 交付记录（2026-10-21）**：调质事件面收敛到神经总线订阅（默认关零行为变化）。提交：`404919f6`。
 > `bio_tone` 的生产事件源由「模块 `on_hook` 旁路扫 `AfterToolResult`/`OnError`」改为
 > 「`nervous.bridge` → `NervousBus` → `BioToneBusSubscriber` 订阅」；模块 `on_hook` 只保留 `TurnStart`
@@ -241,7 +246,8 @@ ull + reason；若 owner 要独立节，另立「合同扩展批」评估。
 | 批次 | 内容（SG） | 目标缝（代码） | 验收判据 |
 |---|---|---|---|
 | **W3.1 crate 内接线（6 批并行）** | 免疫→guard hook（SG-15）｜社交修复→prompt_assembly（SG-20）｜仪式→care reminder（SG-22）｜quorum→审议触发（SG-24）｜依恋→care 投递/会话恢复（SG-19）｜稳态+节律→care/dreaming 闸（SG-14/23） | peireth-guard::hook / peireth-organ::{prompt_assembly, care} / peireth-orchestration（council 触发） | 装配级测试（crate 内可跑）+ 行为开关默认关 + 回退路径 |
-| **W3.2 跨 crate 接线（4 批并行）** | 生命周期→工具/技能/记忆清理（SG-18）｜承载力→上下文/记忆配额（SG-26）｜生态健康→self_status 只读（SG-25）｜神经调质→tone/人格缩放（SG-13） | untime-assembly + 各 face 注入点 | cargo test --workspace 零回归 + 自述新字段 + 默认关 |
+| **W3.2 跨 crate 接线（4 批并行）** | 生命周期→工具/技能/记忆清理（SG-18）｜承载力→上下文/记忆配额（SG-26）｜生态健康→self_status 只读（SG-25）｜神经调质→tone/人格缩放（SG-13） | 
+untime-assembly + 各 face 注入点 | cargo test --workspace 零回归 + 自述新字段 + 默认关 |
 | **W3.3 跨 crate 接线（2 批）** | 痛觉/再生→失败处理链 + harness_patch（SG-16/17）｜游戏→opt-in 卡 + 调度器沙箱（SG-21） | 失败处理链 / gateway 审批卡 / orchestration 调度 | 端到端一例（失败→诊断→修复→瘢痕；play opt-in→沙箱→产出） |
 | **W3.4 合同/文档面** | 14 条矩阵行 + capabilities 节 io_mechanisms 子对象 + CHANGELOG + 台账收口 | matrix / self_status / CHANGELOG / ledger | 口径守门 0 新增违规、SSoT 数字同步 |
 

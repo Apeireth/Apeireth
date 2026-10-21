@@ -1,5 +1,14 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 神经总线 R1b-2c：审批社交信号经总线发布（默认关零行为变化，2026-10-21）
+
+- **新信号类别**（`runtime-assembly::canonical::nervous_bus`）：`NervousSignalKind::ApprovalSocial`（`ALL` 2→3）+ `ApprovalSocialOutcome { Approved, Rejected, Cancelled }` + `NervousSignal::approval_social(outcome, source)`；三态显式、**取消不编事件**、拒绝理由文本不进信号（防 PII 进总线）。
+- **发布唯一真源**（`runtime-assembly::canonical::bio_approval_social`）：新模块只做「`ApprovalDecision` → 信号」纯映射 + 发布句柄 `BioApprovalSocialSource`；`production.rs` 按调质开关交付 `Option<Arc<BioApprovalSocialSource>>`（开关关 = `None` = 零发布）；CLI 审批路径在 `resolve` 成功后经句柄发布（取消不发布）；**删除** `bio_tone` 的 `approval_social_feedback` / `apply_approval_social_feedback` 直写助手（不留第二真源）。
+- **消费收敛**：调质订阅者扩到三类信号（`ToolOutcome` / `ErrorObserved` / `ApprovalSocial`）；`Approved` → `SocialPositive`、`Rejected` → `SocialNegative`；同一事件只推进一次。
+- **门禁（scoped）**：assembly 62 套件 / 0 failed（lib 291）；CLI lib 56 + 集成套件全绿（全量跑一次跳过一条**他线在途** R1b-3 端到端测试，该测试随后由他线 `0b71cd6f` 提交并复跑绿）；clippy `-D warnings` 0、`fmt --check` 0、`arch_guard --strict` VIOLATIONS 0、`verify_changed --arch-strict --no-test` FAST GATE PASSED；cli lib 3886→3878 行守住既有尺寸棘轮 3879。
+- **诚实边界**：默认关（非 DEFAULT ENABLED）；无 live E2E（审批命令 → 调质状态为进程内集成测试，跨进程 / 真实 turn 未测）；审批路径外无生产发布方；四档（RewardPrediction / Threat / Quiet / UserCorrection）仍只有显式注入口。
+- **后续**：R1b-3 已由架构线 `0b71cd6f` 收口（ritual 文件通道端到端 + 三源如实 `NotWired`）；权威全量单线独占复跑并刷新 test-baseline §1 + README 徽章；发布收口。
+
 ## [Unreleased] — 神经总线 R1b-2b：生命周期工具结果面收敛到总线订阅 + Lifecycle 观测格（默认关零行为变化，2026-10-21）
 
 - **工具结果面单入口**（`runtime-assembly::canonical::bio_lifecycle`）：`AfterToolResult` 记账由「模块 `on_hook` 扫描」改为「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」。订阅者与注册模块共享同一 `Arc<BioLifecycleState>`；`ToolOutcome` 写账（结果名 → 调用名回退），`ErrorObserved` 不是工具使用事实、明确不写账；模块 `on_hook` 只保留 `AfterTurn` 回合收口评估，同一事件只推进一次。
@@ -89,7 +98,8 @@
 
 五线并行 + 装配根总装：把 W3.1 的内接线接进生产装配（**+68 新测**；全部默认关、开关只认显式 "1"、关时逐字节零变化）：
 - **SG-15 免疫→guard hook（生产入口）**（peireth-cli）：APEIRETH_ENABLE_IMMUNE_MEMORY；BehaviorChainGuardHook 创建后按 env 挂 Arc<ImmuneMemory>（只认 "1"）；默认关句柄为 None。7 测试。
-- **SG-19+SG-22 依恋/仪式→care（心跳装配）**（untime-assembly::care_reminder/care_heartbeat）：APEIRETH_ENABLE_BIO_CARE_CANDIDATES、BioCareInputs 供给口 + 缺省空供给；心跳 poll 末位逐条喂 poll_bio_candidate（勿扰/频率/预算全走内核）。**生产数据供给（presence/memory/仪式状态）未接 ⇒ 开关开也 0 候选**（如实）。19 测试。
+- **SG-19+SG-22 依恋/仪式→care（心跳装配）**（
+untime-assembly::care_reminder/care_heartbeat）：APEIRETH_ENABLE_BIO_CARE_CANDIDATES、BioCareInputs 供给口 + 缺省空供给；心跳 poll 末位逐条喂 poll_bio_candidate（勿扰/频率/预算全走内核）。**生产数据供给（presence/memory/仪式状态）未接 ⇒ 开关开也 0 候选**（如实）。19 测试。
 - **SG-14+SG-23 稳态/节律→cognitive 装配**（cognitive.rs + BioAssemblyModule 生产注册）：APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE / APEIRETH_ENABLE_BIO_CONTEXT_POLICY；修复指令进 system 独立 core 块、上下文策略按显式注入的预算/块生效；无数据=默认策略，不编趋势/预算/信号。11 测试。
 - **SG-24 quorum→orchestrator 装配**：APEIRETH_ENABLE_QUORUM_GATE；deliberate() 门开走 decide_with_invoker_gated（Hold/Cooldown 不召开、tick Held(GateBlock)、不伪造否决），信号自动源接器官链失败与审议回流。10 测试。
 - **SG-26 容量→自述 io_mechanisms**（self_status_source.rs + production.rs）：APEIRETH_ENABLE_BIO_SELF_STATUS；capabilities.bio_mechanisms 子对象（**21 节合同不变**），14 机制格，默认关 mechanisms:null+原因；承载力 probe 读与 	ool.task_board 同一任务队列；其余 13 条 wired:false。10 测试 + 合同测试。
@@ -103,7 +113,9 @@
 - **SG-15 免疫→guard hook**（peireth-guard::hook）：with_immune_memory(Arc<ImmuneMemory>)，仅在 Deny/RequireApproval 出口 observe；证据/verdict 只追加 immune 字段，主结论不变；10 测试。
 - **SG-20 修复→prompt 组装**（peireth-organ::prompt_assembly）：RepairDirectiveSource + PromptAssembler::with_repair_plan，修复指令段模板固定、原文不回灌、≤2 动作/≤1 问句；9 测试。
 - **SG-24 quorum→审议触发**（peireth-orchestration::council）：QuorumGate + decide_gated/decide_with_invoker_gated；Escalate 放行并携带 reasons、Hold/Cooldown 不召开且不伪造结论；10 测试。
-- **SG-19+SG-22 依恋/仪式→care**（peireth-organ::care）：新增 itual_candidate/eunion 两候选源（Due/DueSoft→候选；重聚仅非 Brief；无内疚词黑名单测试）+ CareConfig.bio_candidates_enabled（默认 false）+ 既有勿扰/频率/预算全管道裁决；24 测试。
+- **SG-19+SG-22 依恋/仪式→care**（peireth-organ::care）：新增 
+itual_candidate/
+eunion 两候选源（Due/DueSoft→候选；重聚仅非 Brief；无内疚词黑名单测试）+ CareConfig.bio_candidates_enabled（默认 false）+ 既有勿扰/频率/预算全管道裁决；24 测试。
 - **SG-14+SG-23 稳态/节律→上下文组装**（peireth-organ::context_assembly/circadian）：AssemblyPolicy::from_plan（整编前置/降检索深度/预算调整/调用方标志）+ proactive_gate（睡窗 > urgency > 超日 Rest）；14 测试。
 - **SG-13 调质→语气**（peireth-organ::tone）：ehavior_tone_style/	one_hint_with_params，基线参数下与既有语气逐字一致；10 测试。
 - **诚实边界**：六条均为 **crate 内接线（IMPLEMENTED / DEFAULT DISABLED）**，**非 PRODUCTION WIRED**——runtime-assembly / cli / production.rs 的装配与开关登记属 W3.2；接线点已在各提交正文列出。
@@ -125,7 +137,8 @@
 - **SG-13 神经调质**（peireth-organ::neuromodulation）：六种调质慢变量（多巴胺 RPE / 血清素 / 催产素 / 皮质醇 / 去甲 / 乙酰胆碱）+ 文档化 6×6 耦合 + ehavior_params() 六项映射（warmth/patience/initiative/curiosity/caution/verbosity），21 测试。
 - **SG-14 异稳态 + SG-23 节律/睡眠压力**（peireth-organ::homeostasis / circadian）：生命体征五项 + 三档阈值 + 文档化优先级表 + 趋势外推预测调节；昼夜相位 / 超日节律 / 腺苷式睡眠压力与整编紧迫度（0.35/0.70），25 测试。
 - **SG-15 免疫记忆 + 炎症收口**（peireth-guard::immune_memory）：事件签名归一化（SHA-256 前 16 hex）+ 分级响应 + 耐受/冷却收口 + self 容忍 + 固定容量 store，18 测试。
-- **SG-16 痛觉学习 + SG-17 再生四期**（peireth-orchestration::nociception / ecovery_protocol）：失败分类 → 习惯化 → 慢性化（10min 窗 ≥4 次）→ 修复脱敏/放弃；止血→炎症→增生→重塑→Resolved 状态机 + 瘢痕账（risk=1-1/(1+hits)），26 测试。
+- **SG-16 痛觉学习 + SG-17 再生四期**（peireth-orchestration::nociception / 
+ecovery_protocol）：失败分类 → 习惯化 → 慢性化（10min 窗 ≥4 次）→ 修复脱敏/放弃；止血→炎症→增生→重塑→Resolved 状态机 + 瘢痕账（risk=1-1/(1+hits)），26 测试。
 - **SG-19 依恋 / 分离-重聚**（peireth-organ::attachment）：分离时长四类 + 重聚强度上限 + **内疚/指责黑名单 10 条**（216 组组合全断言干净）+ 线索选点确定性排序，19 测试。
 - **SG-20 交互修复**（peireth-organ::social_repair）：六类不确定性信号 → 六种修复动作（≤2 动作、≤1 问句、rationale 不回灌原文）+ 共同注意，14 测试。
 - **SG-24 群体感应升级门**（peireth-orchestration::quorum）：信号权重 / 衰减 / 阈值 / 冷却 / 消费一次（同一波只升议一次），14 测试。
