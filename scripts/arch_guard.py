@@ -189,6 +189,36 @@ def scan_sizes(roots: dict[str, Path], crates: set[str]) -> dict[str, int]:
     return sizes
 
 
+# ADR-0011 D5: CI 口径单一真源。workflow 内不得再出现「现行」旧口径字面量；
+# 历史注释里复述「23/24 LOCKED crate 已撤销」「13 键为历史口径」不算违规，
+# 只有仍在生效的守门步骤名/手抄清单命中才判定。
+CI_CALIBER_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("24 LOCKED active guard", re.compile(r"守门\s*1:[^\n]*24\s*LOCKED")),
+    ("13 键 active guard", re.compile(r"守门\s*4:[^\n]*13\s*键")),
+    ("13 键 verdict literal", re.compile(r"13\s*键\s*verdict")),
+    ("handwritten LOCKED crate list", re.compile(r'LOCKED="apeireth-')),
+)
+
+
+def scan_ci_caliber() -> list[tuple[str, int, str]]:
+    """扫描 .github/workflows/*.yml 的现行旧口径字面量，返回 (rel, line, 命中文案)。"""
+    hits: list[tuple[str, int, str]] = []
+    wf_dir = ROOT / ".github" / "workflows"
+    if not wf_dir.exists():
+        return hits
+    for path in sorted(wf_dir.glob("*.yml")):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        rel = _norm(str(path.relative_to(ROOT)))
+        for idx, line in enumerate(lines, start=1):
+            for label, pattern in CI_CALIBER_PATTERNS:
+                if pattern.search(line):
+                    hits.append((rel, idx, label))
+    return hits
+
+
 # --------------------------------------------------------------------- cycles
 
 def sccs(nodes: list[str], edges: dict[str, set[str]]) -> list[list[str]]:
@@ -523,6 +553,11 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
             else:
                 kept.append(v)
         rep.violations = kept
+
+    # 8.7 CI 口径单一真源（ADR-0011 D5）：workflow 内零现行旧口径字面量
+    for rel, line_no, label in scan_ci_caliber():
+        rep.violation(3, "caliber", f"ci-caliber {rel}:{line_no}",
+                      f"workflow 出现现行旧口径「{label}」（须引用契约/真源，ADR-0011 D5）")
 
     # 9. 装配根 / flagged / locked 文件存在性
     for root in contract.composition_roots:

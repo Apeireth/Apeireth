@@ -129,22 +129,43 @@ jobs:
             echo "base_sha=$BASE" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: "守门: 0 触碰 24 LOCKED crate + R11 baseline"
+      - name: "守门: 契约 [locked] 源码 0 触碰 + R11 baseline"
         run: |
           BASE="${{ steps.base.outputs.base_sha }}"
           if [ -z "$BASE" ]; then
             echo "::warning::base_sha 空, 跳过守门"
             exit 0
           fi
-          # 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
-          # 注: 之前漏 apeireth-graph (commit 71984e03 CODEOWNERS sync 发现)
-          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
-          HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' | grep -E "crates/($(echo $LOCKED | tr ' ' '|'))/" || true)
-          if [ -n "$HITS" ]; then
-            echo "::error::LOCKED crate 被触碰: $HITS"
+          # ADR-0011 D5：LOCKED 口径唯一真源 = docs/architecture/contract.toml [locked]；
+          # 禁止手抄 crate 清单（历史 24 LOCKED 口径已形式撤销，R148）。
+          LOCKED_FILES=$(python3 - <<'PY'
+          import tomllib
+          with open("docs/architecture/contract.toml", "rb") as f:
+              contract = tomllib.load(f)
+          for _key, path in contract.get("locked", {}).items():
+              if isinstance(path, str) and path.endswith(".rs"):
+                  print(path)
+          PY
+          )
+          if [ -z "$LOCKED_FILES" ]; then
+            echo "::error::无法从 contract.toml [locked] 读取受锁源码"
             exit 1
           fi
-          echo "✅ 0 触碰 24 LOCKED crate"
+          EXISTING=""
+          for f in $LOCKED_FILES; do
+            if [ -f "$f" ]; then
+              EXISTING="$EXISTING $f"
+            else
+              echo "::error::契约登记的受锁文件不存在: $f"
+              exit 1
+            fi
+          done
+          HITS=$(git diff --name-only "$BASE"...HEAD -- $EXISTING 2>/dev/null || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::契约 [locked] 源码被触碰: $HITS"
+            exit 1
+          fi
+          echo "✅ 0 触碰契约 [locked] 源码 ($EXISTING)"
 
           # R11 baseline 3 值 (per APEIRETH-CONVENTIONS §11)
           R11_FILE="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"
