@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 治理单一入口 R8-B2/B3：装配根切换 + 持久审计 + IM 审批对经链（2026-10-21）
+
+- **R8-B2 装配根切换**：CLI 生产治理收敛 `GovernanceChain::run` 单点（gate = preset 包装层语义不变）；四态行为等价真账（Allow/Deny/RequireApproval/NotConfigured）；唯一行为差异 = verdict 元数据标 `governance_chain`（R8-B1 适配器交付映射）。
+- **R8-B3 持久审计**：`FileChainAuditSink` jsonl 落盘哈希链（重放重建 + 拒篡改 + 重启 `verify()` 收口 + savepoint 回滚）；IM 审批对经链落账（`approval.asked`/`approval.decision` 同一账本）；账本开不出响亮降级内存账（D4 口径）；追加失败 fail-closed 不变。
+- **真账**：gateway 309 passed / 0 failed；CLI 233 passed + 1 环境红（service dry-run 的计划任务 cmdlet 在受限子进程上下文被拒访问，同命令人工执行 exit 0，非代码面）；0 新外部 dep。
+
 ## [Unreleased] — Wave 4 收尾：生物观测面 14/14 + 桌面 CI 执行面 + 发布收口对账（2026-10-21）
 
 - **SG-20 社会修复观测面**（`14b4a5c2`，默认关）：事件源 = 人工审批被拒（`ApprovalSocial=Rejected`，真实人工介入信号）→ 经 `NervousBus` 订阅折算内核 `plan_repair`（固定映射 `UserCorrection` → 承认不确定 + 复述理解；不含问句、不含用户原话/拒绝理由）→ 自述 `bio_mechanisms.social_repair` 只读读数。`bio_mechanisms` 观测面 **13/14 → 14/14**；行为面（写 prompt 修复指令/据此提问）仍未接线，矩阵与文档如实标注。装配：`install_bio_modules` 开关开构造观测源、装配根总线订阅、`BioProbeSlots` 第 8 槽、`BioMechanismKind::SocialRepair` 注册；关 = 零订阅零计数。assembly 63 套件 / **708 passed** / 0 failed（lib 309；新增 4 单测 + 集成测试真实 publish 一次拒绝后断言计划）。

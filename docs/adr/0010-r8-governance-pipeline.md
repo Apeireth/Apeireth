@@ -166,8 +166,8 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
 - [x] R8-A：`GovernanceChain`/`GovernancePhase`/`ChainOutcome`/`ChainRecord` 落地；四 trait 默认实现；
       六段集成测试（allow / deny / require-approval / not-configured / 审计落地 / 自停用）全绿
 - [x] R8-A：`NotConfigured` 显式而非静默跳过；`signature_mode` 标注占位；不新建 crate/依赖
-- [ ] R8-B：入口收敛为 `GovernanceChain::run` 单点（grep 证据）；CLI/gateway 既有治理测试全绿
-- [ ] R8-B：审计落账不再分叉（gateway IM 与 runtime 审批都经 `ApprovalClosure` 段）；持久 sink 可配置
+- [x] R8-B（B2，2026-10-21）：入口收敛为 `GovernanceChain::run` 单点；CLI 既有治理测试全绿（`4e380a69` 装配根切 `governance_chain::production` → `ChainGovernanceHook`；四态行为等价真账 `tests/governance_chain_equivalence.rs`）
+- [ ] R8-B（B3，2026-10-21 部分落地）：IM 审批对**经链落账**已落（`ChainApprovalAudit` 把 `approval.asked`/`approval.decision` 一对写进链审计账本，单一账本可回答「这次审批进了哪条链」）+ 持久 sink 可配置已落（`FileChainAuditSink`，重启后 `verify()` 收口）；**未销**：`ApprovalClosure` 段主动产 asked 半对仍 skipped（消费式落账已由 IM 闭合路径经链覆盖，段内生成留待接线）
 - [x] R8-C：到期测试可控时钟；autopilot 保持 NOT IMPLEMENTED；默认关闭零行为变化
       （2026-10-21 交付 `DelayedReflectionScheduler` + `ReflectionDue` + `run` 起始审计
       `governance.reflection_due`；默认 `ImmediateReflectionScheduler` 零行为变化，实测
@@ -200,6 +200,13 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
 | Q6 | 真多签时间点 | v2.1（NOT IMPLEMENTED 至彼时） |
 
 ## 9. 变更记录
+
+### 2026-10-21（R8-B2 + R8-B3 交付：装配根切换 + 持久审计 + IM 审批对经链）
+
+- **交付（R8-B2）**：`crates/adapters/cli/src/governance_chain.rs`——`adapt_gate`/`adapt_gate_with`/`production`；装配根 `build_canonical_runtime_with_parts` 切 `with_governance(governance_chain::production(...))`（gate = `PermissionPresetGovernanceHook(GovernancePipeline)` 作为链 Gate 段，preset 语义不变）；四态行为等价测试 `tests/governance_chain_equivalence.rs`（Allow/Deny/RequireApproval/NotConfigured）。唯一行为差异：verdict 元数据按 R8-B1 适配器映射（`verdict.hook = "governance_chain"`、拒绝理由带 `gate: ` 前缀），canonical_cli_bootstrap 归因期望同步（其余 35 处 `.hook` 断言经扫描均为工厂直测不受影响）。
+- **交付（R8-B3）**：`crates/adapters/gateway/src/chain_audit.rs`——`FileChainAuditSink`（jsonl 落盘 + 打开重放重建哈希链 + 逐条比对 hash 拒篡改 + `verify()` 收口 + savepoint 截断回滚）与 `ChainApprovalAudit`（`ApprovalAuditSink` + `ImApprovalAuditCommit`，pair 两半经链落账 `approval.asked`/`approval.decision`，subject 编码 `{pair_id}#{round}:{subject}[:outcome]`）；生产装配注入持久 sink（`APEIRETH_DATA_DIR`/`~/.apeireth/governance-audit.jsonl`），账本开不出 = **响亮降级内存账**（D4「默认仍是内存」口径，不静默）。
+- **验收真账**：重启后链 `verify()` 通过（持久化往返测试）；追加失败 fail-closed（`ChainOutcome::Denied`）；gateway 309 passed / 0 failed（IM 审批测试全绿）；0 新外部 dep（serde_json/fs-err/apeireth-core 均既有）。
+- **如实未销**：`ApprovalClosure` 段产 asked 半对仍 skipped（见 §6 注记）；真 Ed25519 多签仍 v2.1 NOT IMPLEMENTED；单写者假设（多进程并发追加分叉链）已在 0 装口径注明。
 
 ### 2026-10-21（R8-A 实施归属临时调整 + spec 收窄）
 
