@@ -54,6 +54,8 @@ pub mod approval_closure;
 pub mod approval_family;
 pub mod approval_policy;
 pub mod audit;
+// R8 治理单一管线（ADR-0010）：六段治理顺序执行 + 注入端口（多签/审计/反思/时钟）。
+pub mod chain;
 pub mod colang;
 pub mod eval;
 pub mod evidence;
@@ -82,6 +84,12 @@ pub mod untrusted_mark;
 pub mod user_access;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
+pub use chain::{
+    AuditSink, ChainClock, ChainConfig, ChainError, ChainOutcome, ChainRecord, ChainSignatureMode,
+    FixedChainClock, GovernanceChain, GovernancePhase, ImmediateReflectionScheduler,
+    InMemoryAuditSink, MultiSignVerification, MultiSignVerifier, PlaceholderMultiSignVerifier,
+    ReflectionSchedule, ReflectionScheduler, SystemChainClock, GOVERNANCE_CHAIN_VERSION,
+};
 pub use input_security::{
     redact_secret_surfaces, session_fingerprint, CredentialDisclosureHook, FeelingHint,
     FeelingHintHeuristic, PiiDetector, PiiFinding, PiiKind, PromptInjectionHeuristic,

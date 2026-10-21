@@ -163,14 +163,14 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
 
 ## 6. 验收
 
-- [ ] R8-A：`GovernanceChain`/`GovernancePhase`/`ChainOutcome`/`ChainRecord` 落地；四 trait 默认实现；
+- [x] R8-A：`GovernanceChain`/`GovernancePhase`/`ChainOutcome`/`ChainRecord` 落地；四 trait 默认实现；
       六段集成测试（allow / deny / require-approval / not-configured / 审计落地 / 自停用）全绿
-- [ ] R8-A：`NotConfigured` 显式而非静默跳过；`signature_mode` 标注占位；不新建 crate/依赖
+- [x] R8-A：`NotConfigured` 显式而非静默跳过；`signature_mode` 标注占位；不新建 crate/依赖
 - [ ] R8-B：入口收敛为 `GovernanceChain::run` 单点（grep 证据）；CLI/gateway 既有治理测试全绿
 - [ ] R8-B：审计落账不再分叉（gateway IM 与 runtime 审批都经 `ApprovalClosure` 段）；持久 sink 可配置
 - [ ] R8-C：到期测试可控时钟；autopilot 保持 NOT IMPLEMENTED；默认关闭零行为变化
 - [ ] R8-D：wiring.yaml 覆盖治理面；`governance-chain` 集成测试入 CI
-- [ ] LOCKED 5 项 0 触碰 / 0 新外部 dep / 0 新开关 / 0 新 crate / 六段语义不变
+- [x] LOCKED 5 项 0 触碰 / 0 新外部 dep / 0 新开关 / 0 新 crate / 六段语义不变
 
 ## 7. 后果（Consequences）
 
@@ -191,3 +191,28 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
 | Q4 | gateway `may_resolve_approval` 是否算流程段 | 不算（身份策略函数，保留） |
 | Q5 | MEWG 加权是否进 R8 | 不进（G5 另立 ADR） |
 | Q6 | 真多签时间点 | v2.1（NOT IMPLEMENTED 至彼时） |
+
+## 9. 变更记录
+
+### 2026-10-21（R8-A 实施归属临时调整 + spec 收窄）
+
+- **归属**：安全线自 2026-10-20 21:00 起零提交（`git log` 实测），owner 先前授权 Wave 4「按建议做到底」；
+  R8-A（纯库内骨架，不触 CLI/gateway）由架构线实施。R8-B/C/D（入口收敛、持久 sink、反思运行器）
+  仍需安全线接管；接管时以本批 commit 为起点，不需要回滚。
+  拒：无限等待（阻塞 Wave 4 收口）；绕开 ADR 直接改 CLI/gateway 热点。
+- **spec 收窄 1（签名面）**：`GovernanceChain::run(&self, request: &GovernanceRequest<'_>)` 只收 request。
+  `GovernanceRequest` 已携带 `security_context: Option<&TurnSecurityContext>`（§1 类型），再加一个
+  并列参数会出现两个真源。`TurnSecurityContext` 参与判定的接线属 R8-B。
+- **spec 收窄 2（多签输入）**：R8-A 的签名集合放在 `ChainConfig.human_authority_signatures`
+  （无 runtime 审批环可读）；R8-B `run` 增参或改从 request 携带时再迁移，属 additive。
+- **已交付（R8-A）**：`crates/foundation/governance/src/chain.rs` — `GovernancePhase`（7 段，含
+  `Reflection`）/`ChainOutcome`/`ChainRecord`/`ChainSignatureMode`；四注入端口
+  `MultiSignVerifier`/`AuditSink`/`ReflectionScheduler`/`ChainClock` 与默认实现
+  （`PlaceholderMultiSignVerifier` 显式 fail-closed / `InMemoryAuditSink` 复用 `AuditHashChain` /
+  `ImmediateReflectionScheduler` 进程内记账 / `SystemChainClock`）；`ChainError`；10 条链测试。
+- **如实未交付**：Deliberation 段仍为库内 helper 未被 chain 调用（record 里记 `skipped`）；
+  `ApprovalClosure` 段只记录 `RequireApproval` 并审计，不消费审批对；Self-disable 段仅记录需要，
+  `SelfDisableAudit` 未接线；反思调度无守护进程；真多签 NOT IMPLEMENTED（v2.1）。
+- **实测**：`cargo test -p apeireth-governance --lib --locked -j 2` = 204 passed / 0 failed
+  （其中 `chain::` 10 passed）；`cargo clippy -p apeireth-governance --all-targets --locked -- -D warnings`
+  exit 0；`cargo fmt -p apeireth-governance --check` 0 diff；0 新外部 dep、0 新开关、0 新 crate。
