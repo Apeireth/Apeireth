@@ -433,7 +433,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_TONE_ENABLE_ENV),
         parser: bio_tone_enabled_from_env_value,
-        wiring: "production-assembly::bio_tone",
+        wiring: "production-assembly::bio_tone + NervousBus 订阅（R1b-2a）",
         signals: &[
             SignalSpec {
                 id: "tone_module",
@@ -442,11 +442,11 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             },
             SignalSpec {
                 id: "tone_feedback",
-                state: SignalState::NotWired,
-                reason: Some("真实反馈事件源未接（半程）"),
+                state: SignalState::Wired,
+                reason: None,
             },
         ],
-        gaps: &["真实反馈事件源未接（调质只有装配门，无运行时反馈闭环）"],
+        gaps: &["5/9 档事件源已接（结局映射 3 + 工具首见 Novelty + 人批/人拒）；其余 4 档仅显式注入"],
     },
     MechanismSpec {
         id: "SG-14.homeostasis",
@@ -613,13 +613,13 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_LIFECYCLE_ENABLE_ENV),
         parser: bio_switch_enabled_from_env_value,
-        wiring: "production-assembly::bio_production_wiring.install_bio_modules",
+        wiring: "production-assembly::bio_production_wiring.install_bio_modules + NervousBus 订阅（R1b-2b）",
         signals: &[SignalSpec {
             id: "tool_lifecycle_ledger",
             state: SignalState::Wired,
             reason: None,
         }],
-        gaps: &["self_status.bio_mechanisms 未注册 lifecycle probe（R1b-2 接线）"],
+        gaps: &["AfterTurn 评估仍走钩子（R1b-2b 只迁工具结果面）；self_status 观测格经迟绑定槽已注册"],
     },
     MechanismSpec {
         id: "SG-21.play",
@@ -652,7 +652,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
                 reason: None,
             },
         ],
-        gaps: &["纯 CLI chat 无心跳宿主 ⇒ 仪式写入暂无候选消费（W3.7 工具面已接，候选侧留 R1b-2）"],
+        gaps: &["纯 CLI chat 无心跳宿主 ⇒ 仪式写入暂无候选消费（工具面 + 同路径读取已接；端到端测试归 R1b-3）"],
     },
     MechanismSpec {
         id: "SG-25.ecosystem_health",
@@ -681,7 +681,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
             state: SignalState::Wired,
             reason: None,
         }],
-        gaps: &["bio_mechanisms 观测面最多 8/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
+        gaps: &["bio_mechanisms 观测面最多 9/14 格注册（W3.6 迟绑定 5 + W3.7 生态 1 + R1b-2b 生命周期 1 + 承载力 + 练习）；其余格 wired:false 且各带真因"],
     },
 ];
 

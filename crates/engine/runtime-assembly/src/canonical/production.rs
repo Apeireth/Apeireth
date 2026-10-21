@@ -1562,6 +1562,9 @@ impl ProductionModules {
         if let Some(subscriber) = &bio_wiring.tone_subscriber {
             subscriber.subscribe(&nervous_bus);
         }
+        // R1b-2b: 生命周期账本在模块安装后才存在 → 迟绑定槽填同一 Arc
+        //（自述开关关时 fill no-op；槽空 = 单格 null + 未接线真因）。
+        bio_probe_slots.fill_lifecycle_state(bio_wiring.lifecycle_state.as_ref());
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);

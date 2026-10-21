@@ -4,8 +4,9 @@
 //! ① env 开关只认 `"1"`，其余 fail-closed；关 = 不构造、一次时钟都不读；
 //! ② 开关关（defense-in-depth）= 所有钩子 `continue_()`、零 overlay、账本不动；
 //! ③ 开关开 = 纯观测模块，所有钩子仍 `continue_()`（不改变回合可观察行为）；
-//! ④ 真实信号链：`AfterToolResult` 工具结果 → 账本 → `AfterTurn` 迁移；
-//! ⑤ 工具名解析（结果名优先、回退调用名、未注册工具首次出现即入账）；
+//! ④ 真实信号链（R1b-2b 起走总线）：桥把 `AfterToolResult` 翻成 `ToolOutcome`
+//!    → 总线订阅 → 账本 → `AfterTurn` 迁移；模块钩子不再扫该点（无双写）；
+//! ⑤ 工具名解析（结果名优先、回退调用名、未注册工具首现入账）由桥承担；
 //! ⑥ 失败证据只在超过试用失败上限后退役（内核语义），留墓碑；
 //! ⑦ 闲置退役走注入时钟 + 冷静期（不读系统时钟）；
 //! ⑧ 已退役资产被真实使用不静默复活（拒绝计数 + 留墓碑）；
@@ -34,6 +35,8 @@ use apeireth_runtime_assembly::canonical::module::{
     ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
     ModuleOutcome,
 };
+use apeireth_runtime_assembly::canonical::nervous_bridge::bridge_signal;
+use apeireth_runtime_assembly::canonical::nervous_bus::NervousBus;
 use apeireth_runtime_assembly::canonical::self_status_source::BioMechanismRegistry;
 use apeireth_runtime_assembly::canonical::subloop::{
     SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
@@ -157,6 +160,16 @@ async fn run_hook(
     module.on_hook(hook, &ctx).await
 }
 
+/// R1b-2b 真实信号链：桥把 `AfterToolResult` 翻成 `ToolOutcome` → 总线 → 订阅者记账。
+///
+/// 模块 `on_hook` 已不再扫描该钩子（同一事件只推进一次），本 helper 是迁移后
+/// 测试驱动账本的唯一入口；工具名解析（结果名优先、回退调用名）由桥完成。
+fn publish_tool_result(bus: &NervousBus, call: Option<&ToolCall>, result: &ToolResult) {
+    let signal = bridge_signal(HookPoint::AfterToolResult, call, Some(result), None)
+        .expect("AfterToolResult 必须产生 ToolOutcome");
+    assert_eq!(bus.publish(&signal), 1, "生命周期订阅者恰好收到一次");
+}
+
 fn names(names: &[&str]) -> Vec<String> {
     names.iter().map(|name| (*name).to_string()).collect()
 }
@@ -278,6 +291,12 @@ async fn a_real_tool_result_reaches_the_ledger_and_promotes_to_mature() {
             .expect("开关开");
     let module = wiring.module();
     let state = wiring.state();
+    let bus = NervousBus::new();
+    assert_eq!(
+        wiring.subscriber().subscribe(&bus),
+        1,
+        "R1b-2b: 开关开 = 订阅总线上的一条 ToolOutcome"
+    );
     let call = call("filesystem");
     let result = ok_result("filesystem");
 
@@ -290,14 +309,7 @@ async fn a_real_tool_result_reaches_the_ledger_and_promotes_to_mature() {
     );
 
     for _ in 0..3 {
-        run_hook(
-            module.as_ref(),
-            HookPoint::AfterToolResult,
-            Some(&call),
-            Some(&result),
-        )
-        .await
-        .expect("tool result");
+        publish_tool_result(&bus, Some(&call), &result);
         run_hook(module.as_ref(), HookPoint::AfterTurn, None, None)
             .await
             .expect("turn");
@@ -321,35 +333,22 @@ async fn tool_result_name_wins_over_call_name_and_unknown_tools_register() {
     let clock = TestClock::new(NOW_MS);
     let wiring =
         bio_lifecycle_wiring_from_env_value(Some("1"), clock.clock(), &names(&[])).expect("开关开");
-    let module = wiring.module();
     let state = wiring.state();
+    let bus = NervousBus::new();
+    assert_eq!(wiring.subscriber().subscribe(&bus), 1);
 
     // 结果自带名字 = 实际派发的工具名（优先于调用侧名字）。
     let declared = call("declared_name");
     let mut actual = ok_result("actual_name");
     actual.name = Some("actual_name".to_string());
-    run_hook(
-        module.as_ref(),
-        HookPoint::AfterToolResult,
-        Some(&declared),
-        Some(&actual),
-    )
-    .await
-    .expect("hook");
+    publish_tool_result(&bus, Some(&declared), &actual);
     assert!(state.ledger().get("actual_name").is_some());
     assert!(state.ledger().get("declared_name").is_none());
 
     // 结果无名字 → 回退调用侧名字；未注册工具首次出现即入账。
     let fallback = call("dynamic_tool");
     let anonymous = ToolResult::ok("call_dynamic_tool", serde_json::json!({"ok": true}));
-    run_hook(
-        module.as_ref(),
-        HookPoint::AfterToolResult,
-        Some(&fallback),
-        Some(&anonymous),
-    )
-    .await
-    .expect("hook");
+    publish_tool_result(&bus, Some(&fallback), &anonymous);
     let ledger = state.ledger();
     let asset = ledger.get("dynamic_tool").expect("dynamic tool");
     assert_eq!(asset.stage, LifecycleStage::Newborn);
@@ -358,14 +357,7 @@ async fn tool_result_name_wins_over_call_name_and_unknown_tools_register() {
     // 结果名空白 + 调用名空白 → 无可归属资产，不编名字。
     let blank_call = call("   ");
     let blank_result = ok_result("   ");
-    run_hook(
-        module.as_ref(),
-        HookPoint::AfterToolResult,
-        Some(&blank_call),
-        Some(&blank_result),
-    )
-    .await
-    .expect("hook");
+    publish_tool_result(&bus, Some(&blank_call), &blank_result);
     assert_eq!(state.observation().assets_total, 2);
 }
 
@@ -380,18 +372,13 @@ async fn failed_tool_results_retire_only_after_the_trial_failure_limit() {
         .expect("开关开");
     let module = wiring.module();
     let state = wiring.state();
+    let bus = NervousBus::new();
+    assert_eq!(wiring.subscriber().subscribe(&bus), 1);
     let call = call("flaky");
     let result = error_result("flaky");
 
     for _ in 0..LifecyclePolicy::default().max_trial_failures {
-        run_hook(
-            module.as_ref(),
-            HookPoint::AfterToolResult,
-            Some(&call),
-            Some(&result),
-        )
-        .await
-        .expect("failure");
+        publish_tool_result(&bus, Some(&call), &result);
         run_hook(module.as_ref(), HookPoint::AfterTurn, None, None)
             .await
             .expect("turn");
@@ -405,14 +392,7 @@ async fn failed_tool_results_retire_only_after_the_trial_failure_limit() {
     assert_eq!(asset.trial_failures, 3);
     assert!(state.observation().last_transitions.is_empty());
 
-    run_hook(
-        module.as_ref(),
-        HookPoint::AfterToolResult,
-        Some(&call),
-        Some(&result),
-    )
-    .await
-    .expect("fourth failure");
+    publish_tool_result(&bus, Some(&call), &result);
     run_hook(module.as_ref(), HookPoint::AfterTurn, None, None)
         .await
         .expect("turn");
@@ -481,17 +461,12 @@ async fn retired_assets_are_not_silently_revived_by_real_use() {
         .expect("开关开");
     let module = wiring.module();
     let state = wiring.state();
+    let bus = NervousBus::new();
+    assert_eq!(wiring.subscriber().subscribe(&bus), 1);
     let call = call("flaky");
     let failure = error_result("flaky");
     for _ in 0..=LifecyclePolicy::default().max_trial_failures {
-        run_hook(
-            module.as_ref(),
-            HookPoint::AfterToolResult,
-            Some(&call),
-            Some(&failure),
-        )
-        .await
-        .expect("failure");
+        publish_tool_result(&bus, Some(&call), &failure);
         run_hook(module.as_ref(), HookPoint::AfterTurn, None, None)
             .await
             .expect("turn");
@@ -502,14 +477,7 @@ async fn retired_assets_are_not_silently_revived_by_real_use() {
     );
 
     let success = ok_result("flaky");
-    run_hook(
-        module.as_ref(),
-        HookPoint::AfterToolResult,
-        Some(&call),
-        Some(&success),
-    )
-    .await
-    .expect("hook");
+    publish_tool_result(&bus, Some(&call), &success);
 
     let asset = state.ledger().get("flaky").expect("asset").clone();
     assert_eq!(asset.stage, LifecycleStage::Retired, "墓碑不被静默抹掉");

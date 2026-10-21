@@ -7,16 +7,17 @@
 //! 墓碑可恢复。本模块只做四件事：
 //!
 //! ```text
-//! 工具声明清单 (装配根注入)                 ── seed_tool_names ──┐
-//! HookPoint::AfterToolResult (真实派发结果) ── observe_tool_outcome ─┤
-//!                                                                  ├─ LifecycleLedger (内存, 注入时钟)
-//! HookPoint::AfterTurn (真实回合收口)      ── evaluate ────────────┘
-//!                                                                  └─ BioLifecycleObservation / BioMechanismProbe
+//! 工具声明清单 (装配根注入)                      ── seed_tool_names ──┐
+//! nervous.bridge → NervousBus (R1b-2b 总线订阅)  ── observe_tool_outcome ─┤
+//!                                                                        ├─ LifecycleLedger (内存, 注入时钟)
+//! HookPoint::AfterTurn (真实回合收口, 仍走钩子)  ── evaluate ────────────┘
+//!                                                                        └─ BioLifecycleObservation / BioMechanismProbe
 //! ```
 //!
-//! - **信号源 1（真实）**：`HookPoint::AfterToolResult` 的 `tool_result.is_ok()`
-//!   与工具名（优先 `ToolResult::name`，回退 `ToolCall::name`）。每次真实派发
-//!   记一次成功使用或失败尝试。
+//! - **信号源 1（真实，R1b-2b 起走总线订阅）**：桥把 `HookPoint::AfterToolResult`
+//!   翻成 `NervousSignal::ToolOutcome`（工具名 = 结果名优先、回退调用名），
+//!   本模块的 [`BioLifecycleBusSubscriber`] 订阅后写入账本；模块 `on_hook`
+//!   不再扫描该钩子（同一事件只推进一次，无双写）。
 //! - **信号源 2（真实）**：装配根调用 [`ProductionModules::capabilities`]
 //!   得到的工具声明清单，经 [`bio_lifecycle_wiring_from_env_value`] 注入为
 //!   `Newborn` 资产（**注册事实**，不是编造使用）。所以长期未被触达的工具
@@ -75,9 +76,9 @@
 //!   [`super::care_heartbeat`] 下编译，对外路径
 //!   `canonical::care_heartbeat::bio_lifecycle`；Lead 注册时可迁到
 //!   `canonical.rs`（见 `care_heartbeat.rs` 顶部同款迁移说明）；
-//! - **self_status 未注册**：本模块提供 [`bio_lifecycle_probe`]
-//!   （`BioMechanismProbe`，值 = 账本只读快照），但注册一行
-//!   `register_bio_probe(BioMechanismKind::Lifecycle, ...)` 由 Lead 在装配根做；
+//! - **self_status 已注册（R1b-2b）**：装配根经迟绑定槽注册
+//!   `BioMechanismKind::Lifecycle` probe（[`bio_lifecycle_probe`]，值 = 账本只读快照）；
+//!   开关开时候迟绑定槽被填，关时该格 `null` + 未接线真因（不编读数）；
 //! - **持久化默认关**：文件账已实现并测试，但生产装配根尚未传入 care 目录
 //!   （`bio_production_wiring.rs` 本批禁改，接线由 Lead 做一行）；不传目录 =
 //!   纯内存 = 今天的行为，一次文件 I/O 都没有。**不是 DEFAULT ENABLED**；
@@ -131,6 +132,7 @@ use serde::{Deserialize, Serialize};
 use crate::canonical::module::{
     BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
 };
+use crate::canonical::nervous_bus::{NervousBus, NervousSignal, NervousSignalKind};
 
 /// 装配开闸 env 名（仅显式 `"1"` 开，其余一律关 fail-closed）。
 pub const BIO_LIFECYCLE_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_LIFECYCLE";
@@ -627,7 +629,7 @@ fn bounded(text: String) -> String {
     truncated
 }
 
-/// 资产生命周期观测模块（`AfterToolResult` + `AfterTurn` 两个真实钩子）。
+/// 资产生命周期观测模块（`AfterTurn` 真实钩子 + R1b-2b 总线订阅 `ToolOutcome`）。
 ///
 /// - 关 → `ModuleOutcome::continue_()`，不读时钟、不碰账本；
 /// - 开 → 记录真实工具结果、回合收口评估一次，**恒回 `continue_()`**：
@@ -701,21 +703,61 @@ impl BehaviorModule for BioLifecycleModule {
     async fn on_hook(
         &self,
         hook: HookPoint,
-        ctx: &ModuleContext<'_>,
+        _ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
         if !self.enabled {
             return Ok(ModuleOutcome::continue_());
         }
-        match hook {
-            HookPoint::AfterToolResult => {
-                self.record_tool_result(ctx.tool_call, ctx.tool_result);
-            }
-            HookPoint::AfterTurn => {
-                self.state.evaluate();
-            }
-            _ => {}
+        // R1b-2b: 工具结果面已收敛到总线订阅（同一事件只推进一次）；
+        // 本钩子只保留回合收口评估，`AfterToolResult` = 零动作。
+        if hook == HookPoint::AfterTurn {
+            self.state.evaluate();
         }
         Ok(ModuleOutcome::continue_())
+    }
+}
+
+/// R1b-2b · 生命周期总线订阅者：把桥发布的 [`NervousSignal::ToolOutcome`] 写进账本。
+///
+/// 与模块共享同一 [`BioLifecycleState`]（同一 `Arc`、同一本账）；工具名解析已在
+/// 桥内完成（结果名优先、回退调用名），本订阅者不再接触钩子上下文。
+/// `ErrorObserved` 不是工具使用事实（不归属资产），明确忽略。
+#[derive(Clone)]
+pub struct BioLifecycleBusSubscriber {
+    state: Arc<BioLifecycleState>,
+}
+
+impl BioLifecycleBusSubscriber {
+    /// 绑定共享账本。
+    #[must_use]
+    pub fn new(state: Arc<BioLifecycleState>) -> Self {
+        Self { state }
+    }
+
+    /// 共享账本（测试 / 观测同一真值）。
+    #[must_use]
+    pub fn state(&self) -> &Arc<BioLifecycleState> {
+        &self.state
+    }
+
+    /// 处理一条信号；返回是否真的记了一次工具使用/失败。
+    #[must_use]
+    pub fn handle(&self, signal: &NervousSignal) -> bool {
+        let NervousSignal::ToolOutcome { ok, tool, .. } = signal else {
+            return false;
+        };
+        let Some(name) = tool.as_deref().filter(|name| !name.trim().is_empty()) else {
+            return false;
+        };
+        self.state.observe_tool_outcome(name, *ok).is_ok()
+    }
+
+    /// 订阅总线上的 `ToolOutcome`；返回订阅句柄序号（关 = 本方法不被调用）。
+    pub fn subscribe(&self, bus: &NervousBus) -> usize {
+        let subscriber = self.clone();
+        bus.subscribe(NervousSignalKind::ToolOutcome, move |signal| {
+            subscriber.handle(signal);
+        })
     }
 }
 
@@ -736,6 +778,12 @@ impl BioLifecycleWiring {
     #[must_use]
     pub fn module(&self) -> Arc<dyn BehaviorModule> {
         Arc::clone(&self.module)
+    }
+
+    /// R1b-2b 总线订阅者（与模块共享同一账本；开关开才构造）。
+    #[must_use]
+    pub fn subscriber(&self) -> BioLifecycleBusSubscriber {
+        BioLifecycleBusSubscriber::new(Arc::clone(&self.state))
     }
 
     /// 启动装载诊断（纯内存 / 装载成功 = `None`；坏档 = 真因）。
@@ -972,5 +1020,65 @@ mod tests {
         assert_eq!(value["assets_total"], 1);
         assert_eq!(value["observed_at_ms"], 123);
         assert_eq!(value["stage_counts"]["trial"], 1);
+    }
+
+    #[test]
+    fn bus_subscriber_writes_shared_ledger_and_ignores_non_tool_signals() {
+        let state = state();
+        state.seed_tool_names_at(&["filesystem".to_string()], NOW_MS);
+        let subscriber = BioLifecycleBusSubscriber::new(Arc::clone(&state));
+        let bus = NervousBus::new();
+        assert_eq!(subscriber.subscribe(&bus), 1);
+
+        // 成功/失败都是真实使用事实；ErrorObserved 不归属工具, 不碰账本。
+        assert_eq!(
+            bus.publish(&NervousSignal::tool_outcome(
+                true,
+                Some("filesystem"),
+                false
+            )),
+            1
+        );
+        assert_eq!(
+            state.ledger().get("filesystem").expect("asset").use_count,
+            1
+        );
+        let before = state.observation();
+        assert!(!subscriber.handle(&NervousSignal::error_observed("boom")));
+        assert!(!subscriber.handle(&NervousSignal::tool_outcome(true, None, false)));
+        assert!(!subscriber.handle(&NervousSignal::tool_outcome(true, Some("   "), false)));
+        assert_eq!(state.observation(), before, "无名信号不改账本");
+    }
+
+    #[test]
+    fn wiring_exposes_a_bus_subscriber_that_shares_the_module_ledger() {
+        let wiring = bio_lifecycle_wiring_from_enabled_with_store_dir(
+            true,
+            frozen_clock(),
+            &["filesystem".to_string()],
+            None,
+        )
+        .expect("开关开");
+        let subscriber = wiring.subscriber();
+        let bus = NervousBus::new();
+        assert_eq!(subscriber.subscribe(&bus), 1);
+        assert_eq!(
+            bus.publish(&NervousSignal::tool_outcome(
+                true,
+                Some("filesystem"),
+                false
+            )),
+            1
+        );
+        assert_eq!(
+            wiring
+                .state()
+                .ledger()
+                .get("filesystem")
+                .expect("asset")
+                .use_count,
+            1,
+            "订阅者与模块共享同一账本"
+        );
     }
 }

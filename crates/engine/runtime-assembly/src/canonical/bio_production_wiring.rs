@@ -5,9 +5,9 @@
 //!   W3.5 `bio_lifecycle` 的注册点（env 默认关，关 = 不构造不注册）；
 //! - [`install_bio_play`]：W3.3 游戏练习场四工具注册点（env 默认关）；
 //! - [`install_bio_self_status`]：W3.2 自述 `bio_mechanisms` 子对象挂面；
-//! - [`BioProbeSlots`]（W3.6）：自述 probe 的**共享迟绑定槽** —— probe 先注册、
-//!   句柄后填（免疫记忆 / 关怀心跳 / 审议门账 / 痛觉再生读取口），默认关时
-//!   槽不武装、`fill_*` 全 no-op、零读取；
+//! - [`BioProbeSlots`]（W3.6 / R1b-2b）：自述 probe 的**共享迟绑定槽** —— probe
+//!   先注册、句柄后填（免疫记忆 / 关怀心跳 / 审议门账 / 痛觉再生读取口 /
+//!   生命周期账），默认关时槽不武装、`fill_*` 全 no-op、零读取；
 //! - [`ProductionModules`] 的生物句柄 getter（字段定义仍在 `production.rs`）。
 //!
 //! 本模块由 `production.rs` 以 `#[path = "bio_production_wiring.rs"]` 声明为
@@ -37,7 +37,8 @@ use apeireth_tools_canonical::self_status::{
 
 use crate::canonical::capability::CapabilityProvider;
 use crate::canonical::care_heartbeat::bio_lifecycle::{
-    bio_lifecycle_wiring_from_enabled_with_store_dir, BioLifecycleState, LifecycleClock,
+    bio_lifecycle_probe, bio_lifecycle_wiring_from_enabled_with_store_dir, BioLifecycleState,
+    LifecycleClock,
 };
 use crate::canonical::care_heartbeat::bio_tone::{
     bio_tone_wiring_from_enabled, BioToneBusSubscriber, ToneState,
@@ -237,6 +238,8 @@ pub struct BioProbeSlots {
     pain_reader: Arc<Mutex<Option<PainSnapshotReader>>>,
     /// SG-25 工具生态健康：装配末端填入的静态工具剖面快照（只读）。
     ecosystem: Arc<ToolEcosystemSlot>,
+    /// R1b-2b SG-18 生命周期：注册模块同一本账的只读读取口。
+    lifecycle: Arc<Mutex<Option<Arc<BioLifecycleState>>>>,
 }
 
 /// 槽锁读取（持锁线程 panic 后槽内容未损坏，按 L 组口径恢复而非级联 panic）。
@@ -257,7 +260,7 @@ impl BioProbeSlots {
         self.armed.load(Ordering::Acquire)
     }
 
-    /// 五个槽是否全空（默认关证据：关时恒空，`fill_*` 全 no-op）。
+    /// 六个槽是否全空（默认关证据：关时恒空，`fill_*` 全 no-op）。
     #[must_use]
     pub fn is_empty(&self) -> bool {
         lock_slot(&self.immune).is_none()
@@ -265,6 +268,7 @@ impl BioProbeSlots {
             && lock_slot(&self.quorum_trace).is_none()
             && lock_slot(&self.pain_reader).is_none()
             && self.ecosystem.is_empty()
+            && lock_slot(&self.lifecycle).is_none()
     }
 
     /// 安装点武装/解除（只由 [`install_bio_self_status`] 调；非公开）。
@@ -310,6 +314,19 @@ impl BioProbeSlots {
         }
         *lock_slot(&self.pain_reader) = Some(reader);
         true
+    }
+
+    /// 填生命周期账读取口（与 `bio_lifecycle` 注册模块同一 `Arc`）。
+    ///
+    /// 未武装 / 无状态 = no-op（开关关 = 槽恒空，零读取）；返回是否真的填了。
+    pub fn fill_lifecycle_state(&self, state: Option<&Arc<BioLifecycleState>>) -> bool {
+        match (self.is_armed(), state) {
+            (true, Some(state)) => {
+                *lock_slot(&self.lifecycle) = Some(Arc::clone(state));
+                true
+            }
+            _ => false,
+        }
     }
 
     /// 从 organ 模块填审议门账读取口（模块未装配 = no-op，如实不接）。
@@ -374,6 +391,14 @@ impl BioProbeSlots {
             build: recovery_probe,
         })
     }
+
+    /// R1b-2b SG-18 生命周期 probe（迟绑定：槽空 = 未接线真因）。
+    fn lifecycle_probe(&self) -> Arc<dyn BioMechanismProbe> {
+        Arc::new(LateBoundSlotProbe {
+            slot: Arc::clone(&self.lifecycle),
+            build: bio_lifecycle_probe,
+        })
+    }
 }
 
 /// 槽绑定 probe：每次采集现读槽（短持锁、克隆句柄后立即放锁）。
@@ -401,8 +426,9 @@ impl<T: Clone + Send + 'static> BioMechanismProbe for LateBoundSlotProbe<T> {
 /// 挂面 = 子对象恒在场（开关关时 `mechanisms: null` + 原因「未启用」，
 /// 零 probe 调用；开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 "1"）。
 /// 承载力探测口读**同一本**任务队列（与 `tool.task_board` 同队同账）；
-/// 练习场账本（W3.5 接入）与四工具面同一 `Arc`；W3.6/W3.7 的 6 条迟绑定 probe
-/// （免疫记忆 / 关怀心跳 / 审议门 / 痛觉 / 再生）只在开关开时注册 —— 注册即
+/// 练习场账本（W3.5 接入）与四工具面同一 `Arc`；W3.6/W3.7/R1b-2b 的 7 条迟绑定
+/// probe（免疫记忆 / 关怀心跳 / 审议门 / 痛觉 / 再生 / 工具生态 / 生命周期）
+/// 只在开关开时注册 —— 注册即
 /// 接线事实，句柄未到 = 单格 `null` + 「未接线」真因；开关关 = 一条都不注册、
 /// 槽不武装、`fill_*` 全 no-op。其余格一律 `wired:false` + 「未接线」，不编数值。
 pub(super) fn install_bio_self_status(
@@ -445,6 +471,7 @@ fn install_bio_self_status_with(
             BioMechanismKind::EcosystemHealth,
             tool_ecosystem_bio_probe(slots.ecosystem_slot()),
         );
+        source.register_bio_probe(BioMechanismKind::Lifecycle, slots.lifecycle_probe());
     }
     source
 }
@@ -548,6 +575,18 @@ mod tests {
     /// 与生产同款的最小自述来源（空名册，无其它探测口）。
     fn source() -> ProductionSelfStatusSource {
         ProductionSelfStatusSource::new(Vec::new(), false, None)
+    }
+
+    fn lifecycle_state() -> Arc<BioLifecycleState> {
+        let clock: LifecycleClock = Arc::new(|| 1_000_u64);
+        let wiring = bio_lifecycle_wiring_from_enabled_with_store_dir(
+            true,
+            clock,
+            &["filesystem".to_string()],
+            None,
+        )
+        .expect("lifecycle wiring");
+        Arc::clone(wiring.state())
     }
 
     fn armed_slots() -> BioProbeSlots {
@@ -780,7 +819,7 @@ mod tests {
         assert_eq!(value["proliferation"], 1);
     }
 
-    /// ⑤ 空槽：6 条迟绑定 probe 注册即接线（`wired:true`），但值显式 `null`
+    /// ⑤ 空槽：7 条迟绑定 probe 注册即接线（`wired:true`），但值显式 `null`
     /// + 真因「未接线」，整帧仍成功（不撒谎成 0，也不整帧失败）。
     #[test]
     fn empty_slots_render_a_null_cell_with_the_not_wired_reason() {
@@ -795,6 +834,7 @@ mod tests {
             BioMechanismKind::Nociception,
             BioMechanismKind::Recovery,
             BioMechanismKind::EcosystemHealth,
+            BioMechanismKind::Lifecycle,
         ] {
             let row = status.reading(kind).expect("late-bound row");
             assert!(row.wired, "注册 = 接线事实成立: {kind:?}");
@@ -809,13 +849,13 @@ mod tests {
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         assert_eq!(rows.len(), 14);
         let unwired = rows.values().filter(|row| !row.wired).count();
-        assert_eq!(unwired, 8, "未注册的 8 格如实未接线 (14 - 6 注册)");
+        assert_eq!(unwired, 7, "未注册的 7 格如实未接线 (14 - 7 注册)");
     }
 
-    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测：wired 计数 = 8/14，
-    /// 且 8 格值全为真值（不是 null）。
+    /// ⑥ 全填 + 任务队列 + 练习账 + 工具生态观测 + 生命周期账：wired 计数 = 9/14，
+    /// 且 9 格值全为真值（不是 null）。
     #[test]
-    fn filled_slots_raise_the_wired_count_to_eight() {
+    fn filled_slots_raise_the_wired_count_to_nine() {
         let slots = armed_slots();
         let queue = task_queue();
         let play = play_state();
@@ -826,6 +866,7 @@ mod tests {
         assert!(slots.fill_quorum_trace(Arc::new(|| None)));
         assert!(slots.fill_pain_reader(pain_reader(pain_snapshot())));
         assert!(slots.fill_ecosystem_profiles(&[stub_tool("tool.filesystem", "filesystem")]));
+        assert!(slots.fill_lifecycle_state(Some(&lifecycle_state())));
         let status = bio_status(&source);
         let rows = status.mechanisms.as_ref().expect("14 格在场");
         let wired: Vec<&BioMechanismKind> = BioMechanismKind::ALL
@@ -834,8 +875,8 @@ mod tests {
             .collect();
         assert_eq!(
             wired.len(),
-            8,
-            "2 (capacity/play) + 6 迟绑定 (含工具生态) = 8/14"
+            9,
+            "2 (capacity/play) + 7 迟绑定 (含工具生态/生命周期) = 9/14"
         );
         for kind in [
             BioMechanismKind::Capacity,
@@ -846,6 +887,7 @@ mod tests {
             BioMechanismKind::Nociception,
             BioMechanismKind::Recovery,
             BioMechanismKind::EcosystemHealth,
+            BioMechanismKind::Lifecycle,
         ] {
             let row = rows.get(&kind).expect("wired row");
             assert!(row.wired, "{kind:?}");

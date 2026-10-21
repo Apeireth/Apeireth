@@ -11,13 +11,17 @@
 //! | `OnError` | `ModuleContext::error: Some(&str)` 且文本非空白 | [`NervousSignal::ErrorObserved`] |
 //! | 其余钩子 | — | `None`（不编造信号） |
 //!
+//! `ToolOutcome.tool` 的解析与迁移前机制钩子口径一致：结果名优先，缺省回退
+//! 调用名（两者都空 = `None`，不编名字）；否则只订阅总线的机制会静默丢掉
+//! 「结果未带名字」的归属。
+//!
 //! 行为边界：
 //! - 本模块**永不改变回合走向**：`on_hook` 恒返回 [`ModuleOutcome::continue_`]，
 //!   发布失败/零订阅者都不影响调用方；
 //! - `OnError` 文本缺失或空白 → 不发信号（不从缺失数据编造通用错误）；
 //! - 发布是同步调用：订阅者只在当前线程做轻量推进，不得阻塞、不得再进回合。
 
-use apeireth_protocol::canonical::ToolResult;
+use apeireth_protocol::canonical::{ToolCall, ToolResult};
 
 use super::module::{
     BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
@@ -28,17 +32,30 @@ use super::nervous_bus::{NervousBus, NervousSignal};
 pub const NERVOUS_BRIDGE_MODULE_ID: &str = "nervous.bridge";
 
 /// 把一次钩子调用映射为总线信号；`None` = 该钩子不是信号源（ADR-0009 D2）。
+///
+/// `tool_call` 只用于工具名回退：`ToolResult::name` 缺省时取调用名（与迁移前
+/// 机制钩子的解析顺序一致）；其余字段只读结果事实，不从调用侧编造结局。
 pub fn bridge_signal(
     hook: HookPoint,
+    tool_call: Option<&ToolCall>,
     tool_result: Option<&ToolResult>,
     error: Option<&str>,
 ) -> Option<NervousSignal> {
     match hook {
         HookPoint::AfterToolResult => {
             let result = tool_result?;
+            let name = result
+                .name
+                .as_deref()
+                .filter(|name| !name.trim().is_empty())
+                .or_else(|| {
+                    tool_call
+                        .map(|call| call.name.as_str())
+                        .filter(|name| !name.trim().is_empty())
+                });
             Some(NervousSignal::tool_outcome(
                 result.is_ok(),
-                result.name.as_deref(),
+                name,
                 result.outcome.is_retryable(),
             ))
         }
@@ -95,7 +112,7 @@ impl BehaviorModule for NervousBridgeModule {
         hook: HookPoint,
         ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
-        if let Some(signal) = bridge_signal(hook, ctx.tool_result, ctx.error) {
+        if let Some(signal) = bridge_signal(hook, ctx.tool_call, ctx.tool_result, ctx.error) {
             self.bus.publish(&signal);
         }
         Ok(ModuleOutcome::continue_())
@@ -133,7 +150,7 @@ mod tests {
     #[test]
     fn after_tool_result_maps_success_facts_only() {
         let result = ok_result("fs.read");
-        let signal = bridge_signal(HookPoint::AfterToolResult, Some(&result), None)
+        let signal = bridge_signal(HookPoint::AfterToolResult, None, Some(&result), None)
             .expect("AfterToolResult 必须产生信号");
         assert_eq!(
             signal,
@@ -150,6 +167,7 @@ mod tests {
     fn after_tool_result_maps_retryability_verbatim() {
         let signal = bridge_signal(
             HookPoint::AfterToolResult,
+            None,
             Some(&retryable_error("shell.exec")),
             None,
         )
@@ -165,6 +183,7 @@ mod tests {
 
         let signal = bridge_signal(
             HookPoint::AfterToolResult,
+            None,
             Some(&permanent_error("shell.exec")),
             None,
         )
@@ -182,14 +201,14 @@ mod tests {
     #[test]
     fn after_tool_result_without_tool_result_is_not_a_signal() {
         assert_eq!(
-            bridge_signal(HookPoint::AfterToolResult, None, Some("ignored")),
+            bridge_signal(HookPoint::AfterToolResult, None, None, Some("ignored")),
             None
         );
     }
 
     #[test]
     fn on_error_maps_non_blank_text() {
-        let signal = bridge_signal(HookPoint::OnError, None, Some("provider timeout"))
+        let signal = bridge_signal(HookPoint::OnError, None, None, Some("provider timeout"))
             .expect("OnError 有文本必须产生信号");
         assert_eq!(
             signal,
@@ -202,11 +221,77 @@ mod tests {
 
     #[test]
     fn on_error_does_not_fabricate_from_missing_or_blank_text() {
-        assert_eq!(bridge_signal(HookPoint::OnError, None, None), None);
-        assert_eq!(bridge_signal(HookPoint::OnError, None, Some("")), None);
+        assert_eq!(bridge_signal(HookPoint::OnError, None, None, None), None);
         assert_eq!(
-            bridge_signal(HookPoint::OnError, None, Some("   \n\t")),
+            bridge_signal(HookPoint::OnError, None, None, Some("")),
             None
+        );
+        assert_eq!(
+            bridge_signal(HookPoint::OnError, None, None, Some("   \n\t")),
+            None
+        );
+    }
+
+    #[test]
+    fn tool_name_falls_back_to_the_call_name_verbatim() {
+        let call = ToolCall {
+            id: "call_fallback".to_string(),
+            name: "filesystem".to_string(),
+            arguments: Value::Null,
+        };
+        let mut unnamed = ToolResult::ok("call_fallback", Value::Null);
+        unnamed.name = None;
+        let signal = bridge_signal(
+            HookPoint::AfterToolResult,
+            Some(&call),
+            Some(&unnamed),
+            None,
+        )
+        .expect("结果无名仍应产生信号");
+        assert_eq!(
+            signal,
+            NervousSignal::ToolOutcome {
+                ok: true,
+                tool: Some("filesystem".to_string()),
+                retryable: false,
+            }
+        );
+
+        // 结果名是空白 = 缺省 → 回退调用名，不把空白当名字。
+        let mut blank = ToolResult::ok("call_fallback", Value::Null);
+        blank.name = Some("   ".to_string());
+        let signal = bridge_signal(HookPoint::AfterToolResult, Some(&call), Some(&blank), None)
+            .expect("空白结果名同样产生信号");
+        assert_eq!(
+            signal,
+            NervousSignal::ToolOutcome {
+                ok: true,
+                tool: Some("filesystem".to_string()),
+                retryable: false,
+            }
+        );
+
+        // 两边都缺名 = None（下游如实跳过归属，不编名字）。
+        let bare_call = ToolCall {
+            id: "call_none".to_string(),
+            name: String::new(),
+            arguments: Value::Null,
+        };
+        let bare = ToolResult::ok("call_none", Value::Null);
+        let signal = bridge_signal(
+            HookPoint::AfterToolResult,
+            Some(&bare_call),
+            Some(&bare),
+            None,
+        )
+        .expect("仍产生结局信号");
+        assert_eq!(
+            signal,
+            NervousSignal::ToolOutcome {
+                ok: true,
+                tool: None,
+                retryable: false,
+            }
         );
     }
 
@@ -222,7 +307,7 @@ mod tests {
             HookPoint::AfterTurn,
         ] {
             assert_eq!(
-                bridge_signal(hook, Some(&result), Some("boom")),
+                bridge_signal(hook, None, Some(&result), Some("boom")),
                 None,
                 "{hook:?} 不在 D2 冻结的信号源里"
             );
