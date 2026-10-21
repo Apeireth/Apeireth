@@ -10,6 +10,8 @@ pub mod backup;
 pub mod canonical_approval;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
 pub mod care_heartbeat;
+// B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
+pub mod crypto_keys;
 // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
 pub mod exposure;
 pub mod gateway_panels;
@@ -2030,9 +2032,7 @@ async fn build_cognitive_modules_at(
         // 队列); 治理档在治理链 (写面 = write_intent 同族每次人批, failed
         // 只能人判无工具面)。自述任务节与工具面同队同账 (探针随队列注入)。
         task_board: task_board_queue,
-        // 生物机制族 Wave 4 (SG-14): 上下文预算同时交给装配面模块（与组装器
-        // 同一真源解析）——上下文策略开关开时，该预算成为本回合装配预算。
-        context_budget_chars: Some(context_budget_chars_from_env()),
+        context_budget_chars: Some(context_budget_chars_from_env()), // Wave 4 SG-14: 预算同真源交接装配面
         // 受控文件写入旋钮 (`tool.apply_patch`): 注册工具 + 风险档位同源
         // (治理层 grant/approval 用同一 env 解析, 即效一致)。子档依赖主开关。
         file_write: file_write_enabled_from_env(),

@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — B6 密钥出口接线：`apeireth crypto` 三动词（wrap / recovery-export / unlock，2026-10-21）
+
+- **接线（`sec.storage_envelope_crypto` 抬级波 1）**：新 `crates/adapters/cli/src/crypto_keys.rs`（engine 层 `apeireth_storage::crypto` 的人类出口，同内核包装、不另起逻辑）+ `lib.rs` 模块声明 + `main.rs` help 与 `crypto` 分派。三动词：`wrap`（分区 DEK 双槽包裹：口令 KDF + 恢复件，导出恢复件）、`recovery-export`（口令解包后轮换恢复件，旧件即作废）、`unlock`（口令/恢复件解包自检，不落数据）。
+- **0 装口径如实**：口令 stdin 一行且**终端回显**（无回显输入待办）；`KekAnchor` 只有 engine trait（平台 keychain/凭据库未接线）；`tool.*` 模型面未注册（归装配/治理线）；crypto 动词不写审计行（审计归治理面）；密钥丢失 = 显式不可恢复（`KEY_LOSS_BOUNDARY` 原样透出，不降级明文）。
+- **E2E 实测（本机 2026-10-21）**：`cargo build -p apeireth-cli --bin apeireth` 后真跑——`wrap` exit 0（keys.json 709B + recovery.txt 65B）；`unlock`（口令）exit 0；错口令 `unlock` exit 1（`key unwrap refused`）；`recovery-export` exit 0 后**旧恢复件 unlock exit 1、新恢复件 unlock exit 0**（轮换语义钉死）；篡改 keys 文件 `unlock` exit 1（fail-closed）。`cargo test -p apeireth-cli --lib` → **60 passed**（新增 3 单测）；clippy `-D warnings` 0；fmt 0 diff。
+- **claim 状态不变**：本波只做「密钥出口」；会话/记忆列级接线（B6-2）与密封备份并入（B6-3）仍需 owner 拍板（P0/P1 字段、KDF 强度、锚定选型），`claims.yaml` 抬级由效率线按证据裁定（本批不擅改真源）。
+
 ## [Unreleased] — 治理单一入口 R8-B2/B3：装配根切换 + 持久审计 + IM 审批对经链（2026-10-21）
 
 - **R8-B2 装配根切换**：CLI 生产治理收敛 `GovernanceChain::run` 单点（gate = preset 包装层语义不变）；四态行为等价真账（Allow/Deny/RequireApproval/NotConfigured）；唯一行为差异 = verdict 元数据标 `governance_chain`（R8-B1 适配器交付映射）。
