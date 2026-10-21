@@ -215,7 +215,13 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
 - [x] R1b-1：台账漂移更正（**4 行**：SG-18/SG-25 → PRODUCTION WIRED、SG-22 ritual_producer → Wired、
       SG-26 缺口实况）+ 3 条校验单测（env-registry / wiring 装配根且无 pending / NotWired reason +
       parser fail-closed），`6837d9b7`
-- [ ] R1b-2：机制订阅迁移；lifecycle probe 注册；审批面 publish；默认关零变化
+- [x] R1b-2a/2b（**已交付并复核** 2026-10-21）：`bio_tone` 事件源收敛到 `BioToneBusSubscriber`
+      订阅 `ToolOutcome`+`ErrorObserved`（`404919f6`，交付记录 `326e1542`）；`bio_lifecycle` 工具结果面
+      收敛到 `BioLifecycleBusSubscriber`（`AfterTurn` 仍走钩子，回合边界信号归 R1b-3），lifecycle
+      观测格经迟绑定槽注册（8/14 → 9/14，仅开关全开）（`a71639f9`，交付记录 `0f4ef4dc`）；
+      默认关零行为变化；验收记录见 `r1b-2-handoff-2026-10-20.md` §5/§8
+- [ ] R1b-2c：审批面 publish（需新增 `NervousSignalKind::ApprovalSocial`；按 §8 收窄原则
+      「生产者+订阅者同批 additive」办，未开工）
 - [ ] R1b-3：缺失信号源如实补齐或如实 NotWired；台账 14/14 逐行有据
 - [x] R1b-4a：schema v2 additive（**2026-10-20 提前交付**）：`nervous_system.bus` 报
       subscribers/published/delivered 聚合计数，`last_observation` 恒 null；未绑总线时 `bus=null`；
@@ -274,3 +280,16 @@ R1a 已交付神经系统**只读聚合**（`capabilities.nervous_system`，sche
   13 passed（新增 bus 计数/int 测试）；clippy/fmt 绿；`arch_guard --report` VIOLATIONS 0
   （EXC-0002/0003 抑制 NOTE）+ STALE 1（play_tools 1414，收口缩表）。**如实边界**：生产仍无信号订阅者
   （R1b-2 才接），故计数实际为 0；按 kind 明细未落（见 D7 实施期口径）。
+
+### 2026-10-21（R1b-2a/2b 验收复核）
+
+- **复核对象**：`404919f6`（R1b-2a 代码）+`326e1542`（交付记录）、`a71639f9`（R1b-2b 代码）+
+  `0f4ef4dc`（交付记录）。
+- **结论**：符合 ADR-0009 §4 与 `r1b-2-handoff-2026-10-20.md` §3/§5；默认关零行为变化成立
+  （订阅者只在开关开路径构造，桥在全关时不注册）；观测面只有桥一处发布点（两批均未新增
+  `NervousSignalKind`）；台账 SG-18/SG-26 与观测面 9/14 文本同步；3 条台账校验单测仍在。
+- **未做（如实）**：R1b-2c 审批面 publish 未开工（需新增 `ApprovalSocial` 信号，按 §8
+  「生产者+订阅者同批 additive」办）；lifecycle `AfterTurn` 回合收口仍走钩子（总线暂无回合
+  边界信号，归 R1b-3）；全 workspace 全量门禁未在复核时由架构线复跑（归 Wave 4 收口批）。
+- **复核证据**：`arch_guard --report` VIOLATIONS 0（exceptions=2，STALE 1 = play_tools 待缩表）；
+  `docs_truth --verify --check` exit 0；生物线未伪造 `claims.yaml` 的 `verified_at`。
