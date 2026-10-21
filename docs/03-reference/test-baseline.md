@@ -167,6 +167,9 @@
 > 开关开时订阅生效、关时总线零订阅；无双重推进。**未做（如实）**：R1b-2b/2c、R1b-3 未开始；
 > 权威全量仍未出数。**§1 本轮不替换**。
 
+> **复测注记（2026-10-21，R1b-2b 生命周期订阅总线批校验）**：本批 = `bio_lifecycle` 工具结果面从「模块 `on_hook` 扫描 `AfterToolResult`」收敛到「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」，并接通 `BioMechanismKind::Lifecycle` 观测格（`bio_mechanisms` 观测面 8/14 → 9/14；默认关零注册/零订阅/零 fill）。实测：`cargo test -p apeireth-runtime-assembly --locked` 全目标绿（lib **284** passed；集成套件 0 failed；`bio_lifecycle_wiring` **11** passed、`nervous_snapshot` **28** passed）；`cargo clippy -p apeireth-runtime-assembly --all-targets --locked -- -D warnings` 0；`cargo fmt -p apeireth-runtime-assembly --check` 0；`arch_guard --strict` VIOLATIONS 0（STALE 1 = play_tools.rs 可缩表）；`docs_truth --verify --check` OK。
+> **fast-gate（verify_changed.py）未出全链绿，如实登记**：①/② 次 nextest 构建阶段 `link.exe` exit 1102 / 页面文件不足（环境，记 `00-backlog` D28）；③ 次 check 阶段被在途未提交 governance 改动阻断（`error[E0277]` `crates/foundation/governance/src/chain.rs:372` `(dyn ChainClock + 'static)` 未实现 `Debug`）。scoped 门禁在阻断前已跑绿（上列数字）。
+> **口径**：全量工作区测试本批未跑（他线在途并发构建，数字不作基线）；**§1 本轮不替换**；等单线独占全量后再统一刷新 §1 + README 徽章。
 ## 2. 口径定义
 
 | 口径 | 定义 | 用途 |

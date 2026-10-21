@@ -1,5 +1,16 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 神经总线 R1b-2b：生命周期工具结果面收敛到总线订阅 + Lifecycle 观测格（默认关零行为变化，2026-10-21）
+
+- **工具结果面单入口**（`runtime-assembly::canonical::bio_lifecycle`）：`AfterToolResult` 记账由「模块 `on_hook` 扫描」改为「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」。订阅者与注册模块共享同一 `Arc<BioLifecycleState>`；`ToolOutcome` 写账（结果名 → 调用名回退），`ErrorObserved` 不是工具使用事实、明确不写账；模块 `on_hook` 只保留 `AfterTurn` 回合收口评估，同一事件只推进一次。
+- **桥承接名字解析**：`nervous.bridge::bridge_signal` 增 `tool_call` 入参，`AfterToolResult` 工具名 = 结果名优先（空白视为缺失）→ 回退调用名；tone/lifecycle 共用同一解析，无名结果不编归属。无新信号变体、无 schema 变更。
+- **观测格接通**：`BioProbeSlots` 增生命周期账迟绑定槽（第 6 类），`install_bio_self_status_with` 在开关开时注册 `BioMechanismKind::Lifecycle` probe；`capabilities.bio_mechanisms` 观测面 **8/14 → 9/14**（仅开关全开时；默认关零注册零订阅零 fill，槽空 = 单格 `null` + 真因）。
+- **自述文本同步**（`nervous_snapshot` 机制表）：调质 5/9 事件源、生命周期接线 = 总线订阅、仪式端到端归 R1b-3、观测面 9/14。
+- **门禁（scoped）**：assembly 全目标绿（lib 284 passed + 各集成套件 0 failed；`bio_lifecycle_wiring` 11 passed，4 条事件链测试改由桥→总线驱动）；clippy `-D warnings` 0、`fmt -p runtime-assembly` 0 diff、`arch_guard --strict` VIOLATIONS 0、`docs_truth --verify --check` OK。
+- **fast-gate 未通过如实登记（非本批代码）**：`verify_changed.py` 本次三跑均未出全链绿 —— ①/② nextest 构建阶段环境失败（`link.exe` exit 1102 / 页面文件不足，backlog D28）；③ 重试时 check 阶段被在途未提交 governance 改动阻断（`error[E0277]` `crates/foundation/governance/src/chain.rs:372` `(dyn ChainClock + 'static)` 未实现 `Debug`）。scoped 门禁在阻断前已跑绿（上列数字）。
+- **诚实边界**：默认关（非 DEFAULT ENABLED）；无 live E2E；`AfterTurn` 评估仍在钩子（本批只迁工具结果面）；工具名仍来自桥的钩子映射，不是内核级事件总线。
+- **后续**：R1b-2c（`ApprovalSocial` 生产+消费同批）、R1b-3（ritual E2E + 缺失源逐源定性）；单线独占权威全量复跑并刷新 test-baseline §1 + README 徽章。
+
 ## [Unreleased] — 神经总线 R1b-2a：调质事件面收敛到总线订阅（默认关零行为变化，2026-10-21）
 
 - **事件面单入口**（`runtime-assembly::canonical::bio_tone`）：生产事件源由「模块 `on_hook` 旁路扫 `AfterToolResult`/`OnError`」改为「`nervous.bridge` → `NervousBus` → `BioToneBusSubscriber` 订阅」。同一事件只推进一次，无双写；模块 `on_hook` 只保留 `TurnStart` 语气装配，`record_hook_observation` 降为显式测试入口（保留向后兼容语义）。

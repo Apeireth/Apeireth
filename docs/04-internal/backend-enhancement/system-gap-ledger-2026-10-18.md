@@ -108,8 +108,14 @@
 > 测试：assembly 全目标 **62 套件 / 676 passed / 0 failed**（lib 281）；bio_tone 单测 16、
 > `bio_tone_feedback` 10、`bio_tone_wiring` 8；clippy 0、fmt 0 diff、`arch_guard --strict` VIOLATIONS 0、
 > `docs_truth --verify --check` OK。**未做（如实）**：R1b-2b（lifecycle 订阅 ToolOutcome + Lifecycle 探针
-> 9/14）、R1b-2c（`ApprovalSocial` 信号生产+消费同批）、R1b-3（ritual E2E + 3 源 NotWired 定性）；
+> 9/14；已由 `a71639f9` 补齐）、R1b-2c（`ApprovalSocial` 信号生产+消费同批）、R1b-3（ritual E2E + 3 源 NotWired 定性）；
 > 权威全量仍未出数（§1 未替换）。
+
+> **R1b-2b 交付记录（2026-10-21）**：生命周期工具结果面收敛到神经总线订阅 + Lifecycle 观测格接通（默认关零行为变化）。提交：`a71639f9`。
+> `bio_lifecycle` 的 `AfterToolResult` 记账由「模块 `on_hook` 扫描」改为「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」；订阅者与模块共享同一 `Arc<BioLifecycleState>`；`ToolOutcome` 写账（结果名→调用名回退），`ErrorObserved` 明确不写账；模块 `on_hook` 只保留 `AfterTurn` 评估。桥新增 `tool_call` 入参承接名字解析（结果名优先、空白/缺失回退调用名；tone/lifecycle 共用），无新信号变体、无 schema 变更。
+> **观测格**：`BioProbeSlots` 增生命周期迟绑定槽（第 6 类），开关开时注册 `BioMechanismKind::Lifecycle` probe；`bio_mechanisms` 观测面 **8/14 → 9/14**（默认关零注册/零订阅/零 fill；槽空 = 单格 null + 真因）。自述 `nervous_system` 机制表同步：调质 5/9、lifecycle 总线订阅路径、仪式端到端归 R1b-3、观测面 9/14。
+> **测试**：assembly 全目标绿（lib **284** passed；集成套件 0 failed；`bio_lifecycle_wiring` **11** passed，4 条事件链测试改由桥→总线驱动）；`nervous_snapshot` 28；clippy 0、fmt 0 diff、`arch_guard --strict` VIOLATIONS 0。
+> **fast-gate 未通过如实登记（非本批代码）**：三跑均未出全链绿——①/② nextest 构建阶段 `link.exe` exit 1102 / 页面文件不足（D28）；③ check 阶段被在途未提交 governance 改动阻断（`crates/foundation/governance/src/chain.rs:372` E0277 `dyn ChainClock` 无 `Debug`）。scoped 门禁在阻断前已绿。**未做（如实）**：R1b-2c（`ApprovalSocial` 同批）、R1b-3（ritual E2E + 3 源定性）；权威全量仍未出数（§1 未替换）。
 
 > **W3.6 交付记录（2026-10-20，两批）**：观测面与持久化收尾（**+31 新测**）。
 > 提交：probe 迟绑定生产接入 `f7a436a9`｜生命周期账本持久化 `8c4fa5c2`。
@@ -142,8 +148,8 @@
 >
 > **SG-25 生态位观测面 v0 已交付（默认关，观测面）**：`tool_taxonomy` 40 条工具 id/名 → 13 类标签策展表（代码内常量快照真源；未覆盖工具如实计 untagged，覆盖数上报，不从描述推断）+ `tool_ecosystem_probe` 经 `BioProbeSlots` 迟绑定接入既有 `APEIRETH_ENABLE_BIO_SELF_STATUS`（不新增 env）；观测面 **7/14 → 8/14**，槽空/关 = 单格 null + 真因。**W3.5 盘点里的 IMPLEMENTED 1 条（SG-25）据此升为 PRODUCTION WIRED（默认关）**；完整 taxonomy 合同（工具声明携带标签）仍 B 类 ADR 前置，未做。
 >
-> **W3.7 剩余**：①SG-25 v0 观测面已交付（完整 taxonomy 合同/工具声明携带标签仍 B 类 ADR 前置）；②R1b 订阅迁移
-> （`nervous_system.observed` 验收 7/14 → 上升）；③发布收口 + 全量基线统一复跑（当前 §1 口径受其它线
+> **W3.7 剩余**：①SG-25 v0 观测面已交付（完整 taxonomy 合同/工具声明携带标签仍 B 类 ADR 前置）；②R1b 订阅迁移（进行中：R1b-2a `404919f6` 调质 + R1b-2b `a71639f9` 生命周期已收敛到总线，`nervous_system.observed` 8/14 → 9/14；余 R1b-2c + R1b-3）
+> ③发布收口 + 全量基线统一复跑（当前 §1 口径受其它线
 > R4b/R7 归档在途影响，本批只追加证据注记、不替换 §1）。
 >
 > **W3.5 交付记录（2026-10-20，四批并行 + 总装）**：剩余接线收口（**+~100 新测**）。
