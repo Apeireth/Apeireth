@@ -172,6 +172,16 @@
 > **复测注记（2026-10-21，R1b-2b 生命周期订阅总线批校验）**：本批 = `bio_lifecycle` 工具结果面从「模块 `on_hook` 扫描 `AfterToolResult`」收敛到「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」，并接通 `BioMechanismKind::Lifecycle` 观测格（`bio_mechanisms` 观测面 8/14 → 9/14；默认关零注册/零订阅/零 fill）。实测：`cargo test -p apeireth-runtime-assembly --locked` 全目标绿（lib **284** passed；集成套件 0 failed；`bio_lifecycle_wiring` **11** passed、`nervous_snapshot` **28** passed）；`cargo clippy -p apeireth-runtime-assembly --all-targets --locked -- -D warnings` 0；`cargo fmt -p apeireth-runtime-assembly --check` 0；`arch_guard --strict` VIOLATIONS 0（STALE 1 = play_tools.rs 可缩表）；`docs_truth --verify --check` OK。
 > **fast-gate（verify_changed.py）未出全链绿，如实登记**：①/② 次 nextest 构建阶段 `link.exe` exit 1102 / 页面文件不足（环境，记 `00-backlog` D28）；③ 次 check 阶段被在途未提交 governance 改动阻断（`error[E0277]` `crates/foundation/governance/src/chain.rs:372` `(dyn ChainClock + 'static)` 未实现 `Debug`）。scoped 门禁在阻断前已跑绿（上列数字）。
 > **口径**：全量工作区测试本批未跑（他线在途并发构建，数字不作基线）；**§1 本轮不替换**；等单线独占全量后再统一刷新 §1 + README 徽章。
+> **复测注记（2026-10-21，Wave 4 SG-14 homeostasis 行为接线批校验）**：本批 = `context_budget` 单真源
+> （`APEIRETH_CONTEXT_BUDGET_CHARS`，cli 与装配根转调同一函数）+ `install_bio_modules` 注入预算 +
+> `ObservedBioAssemblyModule` TurnStart 回合观测（只记数字/策略，不含用户原文）+ `BioProbeSlots` 第 7 槽 +
+> `BioMechanismKind::Homeostasis` 注册（`bio_mechanisms` 观测面 12/14 → **13/14**，默认关零注册零 fill）。
+> **scoped 全绿证据**：`cargo test -p apeireth-runtime-assembly --locked -j 2` → 63 套件 / **704 passed** / 0 failed
+> （lib 305；`bio_observation_cells` 3 / `nervous_snapshot` 13 / `bio_lifecycle_wiring` 11 等）；`-p apeireth-cli --lib`
+> **57 passed**；两 crate `clippy -D warnings` 0、`cargo fmt --check` 0 diff。
+> **fast-gate 未全绿（如实）**：`arch_guard --strict` 唯一违规 = 他线在途未提交 `crates/adapters/cli/src/lib.rs`
+> 3878→3885（R8-B2 治理链在途，非本批文件；本批 staged cli 段净 -1 行）；全量测试未跑，**§1 不替换**
+> （执行权归效率线 `gate_full.ps1 -FailIfBusy`）。
 > **复测注记（2026-10-21，Wave 4 观测补格 + 环境债去抖批校验）**：本批 = ①`bio_extra_probes` 三格自述读数
 > （调质 / 昼夜 / 仪式）经迟绑定槽接入 `APEIRETH_ENABLE_BIO_SELF_STATUS`（观测面 9/14 → **12/14**，默认关零注册零 fill）；
 > ②`18691532` 环境敏感测试去抖（D25 AppContainer 探针有界重试 + SKIP 显式化、D26 tools crate 10 处 bind 重试 helper、
