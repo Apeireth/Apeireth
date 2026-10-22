@@ -21,6 +21,8 @@ struct MockPanels {
     episodes: Mutex<Vec<EpisodeDto>>,
     /// id -> (protected, tombstoned, rev)
     flags: Mutex<HashMap<String, (bool, bool, u64)>>,
+    /// 纠正调用留痕: (id, 新内容, 谁改的)
+    updates: Mutex<Vec<(String, String, Option<String>)>>,
 }
 
 impl MockPanels {
@@ -37,6 +39,7 @@ impl MockPanels {
             status: Some("active".into()),
         };
         Self {
+            updates: Mutex::new(Vec::new()),
             episodes: Mutex::new(vec![seed]),
             flags: Mutex::new(HashMap::from([("e1".into(), (false, false, 0))])),
         }
@@ -225,6 +228,30 @@ impl PanelData for MockPanels {
         _reason: Option<&str>,
     ) -> Result<EpisodeMutationDto, String> {
         self.mutate(id, expected_rev, |entry| entry.1 = true)
+    }
+
+    async fn update_episode(
+        &self,
+        id: &str,
+        content: &str,
+        updated_by: Option<&str>,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        self.updates.lock().unwrap().push((
+            id.to_string(),
+            content.to_string(),
+            updated_by.map(str::to_string),
+        ));
+        {
+            let mut episodes = self.episodes.lock().unwrap();
+            if let Some(episode) = episodes.iter_mut().find(|episode| episode.id == id) {
+                episode.content = content.to_string();
+            }
+        }
+        let mut mutation = self.mutate(id, expected_rev, |_| {})?;
+        // 纠正返回的 DTO 必须带新内容（`mutate` 的通用 DTO 内容是空的）。
+        mutation.content = content.to_string();
+        Ok(mutation)
     }
 
     async fn memory_graph(&self) -> Result<MemoryGraphDto, String> {
@@ -533,15 +560,26 @@ async fn panel_routes_serve_contract_shapes() {
     assert_eq!(find_group("health")["capabilities"][0]["id"], "health");
     assert_eq!(find_group("sessions")["capabilities"][0]["supported"], true);
     assert_eq!(find_group("memory")["capabilities"][0]["supported"], true);
-    let memory_update = find_group("memory")["capabilities"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|cap| cap["id"] == "memory.update")
-        .expect("memory.update must remain in the universe");
-    assert_eq!(memory_update["supported"], false);
-    assert_eq!(memory_update["available"], false);
-    assert_eq!(memory_update["reason"], "not_implemented");
+    let memory_caps = find_group("memory")["capabilities"].as_array().unwrap();
+    let find_cap = |id: &str| {
+        memory_caps
+            .iter()
+            .find(|cap| cap["id"] == id)
+            .unwrap_or_else(|| panic!("{id} must remain in the universe"))
+    };
+    let memory_update = find_cap("memory.update");
+    let memory_forget = find_cap("memory.forget");
+    // 纠正与治理面同源（2026-10-22 接线）：两者同时可用或同时不可用，
+    // 不再是「永久 not_implemented」这条假口径。
+    assert_eq!(
+        memory_update["supported"], memory_forget["supported"],
+        "memory.update 必须与治理面（memory.forget）同源"
+    );
+    assert_eq!(memory_update["available"], memory_forget["available"]);
+    assert_ne!(
+        memory_update["reason"], "not_implemented",
+        "memory.update 不得再以 not_implemented 冒充"
+    );
     assert_eq!(find_group("memory")["capabilities"][0]["id"], "memory.read");
     let permission_ids: Vec<&str> = find_group("permissions")["capabilities"]
         .as_array()
@@ -741,4 +779,42 @@ async fn panel_routes_degrade_to_501_without_backends() {
     assert_eq!(safety_group["capabilities"][0]["supported"], false);
     let wb_group = groups.iter().find(|g| g["name"] == "workbench").unwrap();
     assert_eq!(wb_group["capabilities"][0]["supported"], false);
+}
+
+/// 纠正路由（`PUT /v1/apeireth/memory/episodes/:id/content`）正向路径：
+/// 走完 route → 治理端口 → 存储语义，返回变更后的内容与递增 rev，
+/// 并留下「谁改的」痕迹（主人自己改 = `updated_by` 缺省 `"user"`）。
+#[tokio::test]
+async fn update_episode_route_rewrites_content_and_records_who_changed_it() {
+    let runtime = Arc::new(Runtime::builder().build().await.unwrap());
+    let panels = Arc::new(MockPanels::new());
+    let router = canonical_router_with_panels(runtime, Some(panels.clone() as Arc<dyn PanelData>));
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/v1/apeireth/memory/episodes/e1/content")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"expected_rev": 0, "content": "主人纠正：他喜欢的是古琴，不是古风"})
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_json(response).await;
+    assert_eq!(body["content"], "主人纠正：他喜欢的是古琴，不是古风");
+    assert_eq!(body["revision"], 1, "纠正后修订号必须递增");
+
+    let updates = panels.updates.lock().unwrap();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].0, "e1");
+    assert_eq!(
+        updates[0].2.as_deref(),
+        Some("user"),
+        "缺省记录为主人自己改"
+    );
 }

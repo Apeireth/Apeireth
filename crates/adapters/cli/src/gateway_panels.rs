@@ -734,6 +734,22 @@ impl PanelData for CliPanelData {
         self.mutate_flag(id, expected_rev, |entry| entry.protected = false)
     }
 
+    async fn update_episode(
+        &self,
+        id: &str,
+        content: &str,
+        updated_by: Option<&str>,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        if let Some(governance) = &self.governance {
+            let episode = governance
+                .update_episode_content(id, content, updated_by, expected_rev as i64)
+                .map_err(errstr)?;
+            return Ok(Self::mutation_dto(episode));
+        }
+        Err("memory.update 需要治理存储（本装配未注入 MemoryGovernanceStore）".to_string())
+    }
+
     async fn forget_episode(
         &self,
         id: &str,
@@ -921,6 +937,16 @@ impl MemoryGovernanceCommand for CliPanelData {
         reason: Option<&str>,
     ) -> Result<EpisodeMutationDto, String> {
         PanelData::forget_episode(self, id, expected_rev, reason).await
+    }
+
+    async fn update_episode(
+        &self,
+        id: &str,
+        content: &str,
+        updated_by: Option<&str>,
+        expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        PanelData::update_episode(self, id, content, updated_by, expected_rev).await
     }
 }
 
