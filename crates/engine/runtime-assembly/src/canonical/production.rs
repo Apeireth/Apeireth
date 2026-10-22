@@ -54,10 +54,11 @@ use super::self_status_source::{
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
-    EducationModule, ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule,
-    ImageOpsModule, McpModule, ProposalModule, RepoModule, SearchModule, SelfStatusModule,
-    SheetOpsModule, ShellModule, SkillDistillModule, SkillSearchModule, TaskBoardModule,
-    TraitReportModule, VoiceSpeakModule, WorktreeApplyModule, WorktreePlanModule,
+    EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule, FilesystemModule,
+    GitWriteModule, ImageOpsModule, McpModule, ProposalModule, ReconModule, RepoModule,
+    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule,
+    SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule,
+    WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
 use crate::startup::{StartupPhase, StartupTimeline};
@@ -221,6 +222,23 @@ pub struct ProductionModulesConfig {
     /// Data directory whose `mcp-servers.json` is the secondary config entry
     /// for the external tool bridge (see [`Self::mcp`]).
     pub mcp_data_dir: Option<PathBuf>,
+    /// Register the nine native recon tools (`tool.recon.*`, 安全/逆向侦察套件).
+    ///
+    /// 侦察面 = 「看」不是「做」: 字符串/熵/魔数、ELF/PE/Mach-O、CLR 元数据、
+    /// JS 词法、YARA 子集、pcap、TLS 握手 —— 全部只读。网络三件
+    /// (`tool.recon.net` / `.web` / `.tls`) 只连 [`apeireth_tools_canonical::recon::Scope`]
+    /// 显式授权的目标; 空 scope = 全拒绝 (fail-closed)。
+    ///
+    /// 注册即闸: 开关 `APEIRETH_ENABLE_RECON=1` 才构造 (默认关), 授权面同源
+    /// (同一开关值在治理层 grant)。工作区根缺省时不注册 (文件类工具无落点)。
+    pub recon: Option<apeireth_tools_canonical::ReconConfig>,
+    /// Register the ten external adapters (`ext.*`: nmap / exiftool / tshark /
+    /// yara / binwalk / radare2 / jadx / apktool / ghidra / openssl).
+    ///
+    /// 外部工具一律**子进程** (argv 数组、无 shell、超时与输出上限、Scope 与
+    /// workspace 限域); 系统二进制缺失时该工具返回永久错误, 不影响其余工具,
+    /// 启动期不探测 (首次调用才 spawn)。默认关 (opt-in, fail-closed)。
+    pub external: Option<apeireth_tools_canonical::ExternalToolsConfig>,
     /// Register deterministic preference learning (AfterTurn, explicit
     /// evidence only). Requires the preference backend when enabled.
     pub preference_learning: bool,
@@ -480,6 +498,8 @@ impl Default for ProductionModulesConfig {
             weather: None,
             device_control: None,
             guard_watch: None,
+            recon: None,
+            external: None,
         }
     }
 }
@@ -667,6 +687,10 @@ pub enum ModuleFamily {
     BioPlay,
     /// 自省通道族 (`self_status`)。
     SelfStatus,
+    /// 安全/逆向侦察族 (`tool.recon.*`, 9 件, 默认关)。
+    Recon,
+    /// 外部适配器族 (`ext.*`, 10 件, 默认关; 子进程封装)。
+    ExternalTools,
     /// 外部工具桥族 (`mcp`)。
     Mcp,
     /// 记忆协调器 (memory_recall / memory_writeback 共用)。
@@ -1357,6 +1381,27 @@ impl ProductionModules {
             capabilities.extend(module.capabilities());
             mcp_bridge = Some(Arc::new(bridge));
             mcp_module = Some(module);
+        }
+
+        // 安全/逆向侦察 (`tool.recon.*`, 9 件, 默认关): 注册即闸 —— 开关
+        // `APEIRETH_ENABLE_RECON=1` 才构造, 且必须有工作区根 (文件类工具的落点;
+        // 缺省 = 不注册, 不静默降级为「只装网络三件」)。网络目标由 scope 把关,
+        // 空 scope 在工具内即拒绝 (fail-closed)。
+        if let Some(recon_config) = &config.recon {
+            if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::Recon);
+                let provider = ReconModule::new(root.clone(), Arc::clone(&recon_config.scope));
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 外部适配器 (`ext.*`, 10 件, 默认关): 注册即闸 —— 开关
+        // `APEIRETH_ENABLE_EXTERNAL=1` 才构造。配置自带工作区根与 scope
+        // (文件类限域 + 网络目标授权), 启动期不探测系统二进制。
+        if let Some(external_config) = &config.external {
+            instrument.constructed(ModuleFamily::ExternalTools);
+            let provider = ExternalToolsModule::new(external_config);
+            capabilities.extend(provider.capabilities());
         }
 
         // SG-25 工具生态健康: 静态能力表装配完毕 → 把剖面填入迟绑定只读槽
