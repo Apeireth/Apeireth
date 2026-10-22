@@ -35,6 +35,7 @@ pub mod regex;
 pub mod scope;
 pub mod tls;
 pub mod web;
+pub mod wiring;
 pub mod yara;
 
 pub use binfmt::{parse as parse_binary, BinFmtError, BinaryReport};

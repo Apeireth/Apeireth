@@ -253,7 +253,10 @@ pub use observed_gate::{
     GateDenial, GatedWriteError, ObservationState, ObservedGate, VersionProbe, WriteIntent,
     WriteKind, WriteRequest,
 };
-pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
+pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin, ReconConfig};
+// 外部适配器与 recon 工具族的根出口（生产接线读这里，不猜模块路径）:
+// `external_tool_set` = 10 个 `ext.*`，`recon_tool_set` = 9 个 `tool.recon.*`。
+pub use external::{external_tool_set, ExternalToolsConfig};
 pub use proposal::{
     next_proposal_id, normalize_detail, proposal_capability, proposal_draft_refusal, proposal_id,
     proposal_pipeline, proposal_review_refusal, proposals_enabled_from_env, ProposalBoundaryGuard,
@@ -269,6 +272,7 @@ pub use proposal_push::{
     ProposalPushLedger, ProposalPushOutcome, ProposalPushRecord, ProposalPushStats,
     PROPOSAL_PUSH_DOC_NAME, PROPOSAL_PUSH_DOC_VERSION, PROPOSAL_PUSH_LEDGER_FILE,
 };
+pub use recon_tool::recon_tool_set;
 pub use redaction_bridge::{
     EgressRedaction, HistoryRescanReport, LedgerEntry, LedgerEvent, RedactionBridge, RedactionHit,
     RedactionSurface, RestoreReport, REDACTION_LEDGER_FILE,
