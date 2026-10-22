@@ -24,14 +24,14 @@
    ```
 4. 发布指南（`docs/beta/*`）标题、安装包文件名、日志路径、服务商清单逐一对照发布物实况。
 
-> **版本一致性门禁现状（2026-10-21 对账）**：`pwsh -NoProfile -File scripts/check-release-version.ps1`
-> 实测 **exit 1**。脚本递归扫 `crates/**/Cargo.toml`，把两个独立 fuzz 子工程
-> （`crates/engine/image/codecs/fuzz/Cargo.toml`、`crates/engine/image/psd/fuzz/Cargo.toml`；
-> 各自声明 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）判为「显式版本 ≠ workspace 2.0.0-rc.4」；
-> 其余 33 个版本源行全 PASS（根 1 + 29 个成员 crate + 桌面三处 3）。该脚本被
-> `.github/workflows/publish-release.yml` 的「Verify tag matches version sources」步以
-> `-ExpectedVersion <tag> -Strict` 调用 ⇒ **当前推 `v*` tag 会在发布 job 第一步失败**。
-> 处置待发布线（本清单不改脚本），见 §5 R-1。
+> **版本一致性门禁现状（2026-10-22 已修）**：2026-10-21 对账曾实测 **exit 1**——脚本递归扫
+> `crates/**/Cargo.toml`，把两个独立 fuzz 子工程（`crates/engine/image/codecs/fuzz/Cargo.toml`、
+> `crates/engine/image/psd/fuzz/Cargo.toml`；各自声明 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）
+> 判为「显式版本 ≠ workspace 2.0.0-rc.4」。**已修**：脚本排除 `*/fuzz/Cargo.toml` 并在报告里显式列
+> `[SKIP]`（不静默），复跑 **exit 0**（`-Json`：passed=true，35 条 = 33 检查 + 2 SKIP，FAIL 0；
+> `-ExpectedVersion 2.0.0-rc.4 -Strict` exit 0；`-ExpectedVersion 9.9.9` 反证仍 exit 1）。
+> `.github/workflows/publish-release.yml` 的「Verify tag matches version sources」首关本地已绿；
+> 远程 CI 首跑仍未验证（无 tag 推送权限动作）。见 §5 R-1（已收敛）。
 
 ## 1. 发布物一致性
 
@@ -156,7 +156,7 @@ _本清单由「落差清账·文本可信度批」创建（2026-10-16）。_
 | E-5 | 清单生成 | `scripts\generate-release-manifest.ps1 -DistDir <temp> -Version 2.0.0-rc.4 -ReleaseTag v2.0.0-rc.4` | exit 0，产出 `SHA256SUMS` + `releaseon` |
 | E-6 | 资产校验正路 | `scripts\verify-release-assets.ps1 -ArtifactPath <exe> -ManifestPath <SHA256SUMS>` | `PASS`，exit 0 |
 | E-7 | 资产校验反路 | 同上，对篡改末字节的 exe 副本 | `FAIL`，exit 1（fail-closed） |
-| E-8 | 版本一致性门禁脚本 | `pwsh -NoProfile -File scripts/check-release-version.ps1` | **exit 1**：PASS 33 行 / FAIL 2 行（见 R-1） |
+| E-8 | 版本一致性门禁脚本 | `pwsh -NoProfile -File scripts/check-release-version.ps1`；`-Json`；`-ExpectedVersion 9.9.9` | **2026-10-22 修复后 exit 0**：PASS 33 行 + `[SKIP]` 2 行（fuzz 子工程），JSON passed=true；反证 9.9.9 → exit 1（见 R-1 已收敛） |
 | E-9 | 文档真源门禁 | `python scripts/docs_truth.py --verify --check` | `OK: STATUS.md matches claims.yaml; README badges match baseline`，exit 0 |
 | E-10 | crate 口径 | `python -c "import tomllib; ... print(len(d['workspace']['members']))"` | `30`（版本 `2.0.0-rc.4`） |
 | E-11 | tag ↔ 版本 | `git tag --list`；`git show v2.0.0-rc.4:Cargo.toml` | tag `v2.0.0-rc.4` 存在（→ commit `2a8b46fe`），version = `2.0.0-rc.4` |
@@ -172,12 +172,12 @@ L57 tag ↔ Release 页互相指向（只有 tag 侧，E-11）。
 
 **残余风险（按阻塞度排序；均不在本文件处置范围，交发布线/owner/他线）**：
 
-- **R-1（阻塞发布 job）** 版本一致性门禁红：`scripts/check-release-version.ps1` 递归扫
-  `crates/**/Cargo.toml`，把 `crates/engine/image/codecs/fuzz/Cargo.toml` 与
-  `crates/engine/image/psd/fuzz/Cargo.toml`（独立 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）判 FAIL
-  ⇒ exit 1（PASS 33 / FAIL 2）。`.github/workflows/publish-release.yml` L49–L57「Verify tag matches
-  version sources」以 `-ExpectedVersion <tag> -Strict` 调同脚本 ⇒ 推 `v*` tag 会在发布 job 第一步失败。
-  处置建议：脚本排除独立 `[workspace]` 的 fuzz 子工程（或显式豁免 0.0.0 惯例），由发布线/脚本 owner 裁定。
+- **R-1（已收敛，2026-10-22）** 版本一致性门禁红：`scripts/check-release-version.ps1` 曾把
+  `crates/engine/image/codecs/fuzz/Cargo.toml` 与 `crates/engine/image/psd/fuzz/Cargo.toml`
+  （独立 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）判 FAIL ⇒ exit 1（PASS 33 / FAIL 2）。
+  **已修**：脚本按 `*/fuzz/Cargo.toml` 排除并登记 `[SKIP]`（0 装：跳过要写出来），复跑 exit 0；
+  `-Json` passed=true（33 检查 + 2 SKIP / FAIL 0）；`-Strict` exit 0；`-ExpectedVersion 9.9.9` 反证 exit 1
+  （判定仍有效）。`.github/workflows/publish-release.yml` 首关本地已绿；**远程 CI 首跑未验证**。
 - **R-2** 发布说明口径滞后：`.github/workflows/publish-release.yml` L120 正文仍
   「18-Crate Kernel + Assembly, 3600+ Verified Tests」（现行 30 members / 8570 passed），
   L124–L128 下载段无「安装包未签名」声明（`CHANGELOG.md:6` 有）⇒ 发布说明修正待发布线。

@@ -1,5 +1,12 @@
 # Changelog — Apeireth
 
+## [Unreleased] — R-1 收敛：版本一致性门禁排除 cargo-fuzz 子工程（2026-10-22）
+
+- **修复**：`scripts/check-release-version.ps1` 递归扫 `crates/**/Cargo.toml` 时把两个 cargo-fuzz 子工程（`crates/engine/image/{codecs,psd}/fuzz/Cargo.toml`；独立 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）判为版本不一致 ⇒ exit 1，而该脚本是 `publish-release.yml` 推 `v*` tag 后的第一道门禁（`-ExpectedVersion <tag> -Strict`）⇒ **修前发版必在第一步失败**。
+- **修法**：按 `*/fuzz/Cargo.toml` 排除并在报告显式列 `[SKIP]` 行（不静默跳过）；顶部说明同步；E-8 对账行更新。**判定逻辑未削弱**。
+- **实测（2026-10-22）**：`pwsh -NoProfile -File scripts/check-release-version.ps1` → **exit 0**（PASS 33 + `[SKIP]` 2）；`-Json` → passed=true（35 条 = 33 检查 + 2 SKIP，FAIL 0）；`-ExpectedVersion 2.0.0-rc.4 -Strict` → exit 0；反证 `-ExpectedVersion 9.9.9` → **exit 1**（判定仍 fail-closed）。
+- 如实：**远程 CI 首跑仍未验证**（未推 tag、无 GitHub Actions 通道）；发布说明未签名声明、资产名 `SHA256SUMS.txt` 漂移、旧口径 31 members/118 edges、徽章证据面等 R-2..R-6 仍在（清单 §5 有归口）。
+
 ## [Unreleased] — B6 密钥出口接线：`apeireth crypto` 三动词（wrap / recovery-export / unlock，2026-10-21）
 
 - **接线（`sec.storage_envelope_crypto` 抬级波 1）**：新 `crates/adapters/cli/src/crypto_keys.rs`（engine 层 `apeireth_storage::crypto` 的人类出口，同内核包装、不另起逻辑）+ `lib.rs` 模块声明 + `main.rs` help 与 `crypto` 分派。三动词：`wrap`（分区 DEK 双槽包裹：口令 KDF + 恢复件，导出恢复件）、`recovery-export`（口令解包后轮换恢复件，旧件即作废）、`unlock`（口令/恢复件解包自检，不落数据）。
