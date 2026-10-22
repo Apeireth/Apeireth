@@ -173,48 +173,52 @@ claims:
     default: null
     switch_env: null
     sources:
-      - crates/engine/storage/src/crypto
-      - crates/engine/storage/tests/crypto_invariants.rs
-      - crates/engine/storage/tests/sealed_backup_restore.rs
+      - crates/engine/storage/src/crypto/mod.rs
+      - crates/adapters/cli/src/crypto_keys.rs
     tests:
       - crates/engine/storage/tests/crypto_invariants.rs
       - crates/engine/storage/tests/sealed_backup_restore.rs
-    verified_at: 73b70178
+    verified_at: 3ca56976
     verify_cmd: "cargo test -p apeireth-storage --test crypto_invariants"
     owner: storage
     next_review: "2026-11-20"
-    notes: "分区 DEK + AES-256-GCM 信封 + KEK 三槽包裹 + 备份恢复不变量测试；会话/记忆读写路径生产接线未在本批（cli/runtime 未见消费）——0 装口径：IMPLEMENTED，不称 PRODUCTION WIRED。；2026-10-22 批次复核：crypto_invariants 7 + sealed_backup_restore 10 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "B6 库级：分区 DEK / AES-256-GCM 密封字段 / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 SqliteFieldSink 接缝已交付并有库内测试。人类出口已交付 apeireth crypto wrap|recovery-export|unlock。未接线：sessions.data 单列封缄仍待 B6-2a 试点（APEIRETH_ENABLE_SESSION_SEAL 尚未实现）；桌面 keychain 锚定只有 trait。故保持 IMPLEMENTED。"
 
   - id: gov.chain_skeleton
-    title: "R8-A 治理链六段顺序执行骨架——库内可跑，生产零调用"
-    level: IMPLEMENTED
-    default: null
+    title: "R8-A 治理链六段骨架 + R8-B2 生产单入口（每次治理评估过 chain.run）"
+    level: PRODUCTION WIRED
+    default: "ON"
     switch_env: null
     sources:
       - crates/foundation/governance/src/chain.rs
       - crates/foundation/governance/src/lib.rs
+      - crates/adapters/cli/src/governance_chain.rs
     tests:
       - crates/foundation/governance/src/chain.rs
-    verified_at: 7153f5db
+      - crates/adapters/cli/tests/governance_chain_equivalence.rs
+    verified_at: 3ca56976
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-A fd74a669：六段顺序执行 + 四注入端口（占位签名 fail-closed）；git grep 生产侧零调用；R8-B2/B3 未落地，治理面仍未进生产调用链。"
+    notes: "R8-A fd74a669 六段骨架 + 四注入端口；R8-B2 已接线：CLI 装配根 governance_chain::production（预设包装层作 gate）→ ChainGovernanceHook 交 runtime with_governance，每次治理评估都过 GovernanceChain::run 单点，未配置仍 DenyUnconfigured fail-closed；四态等价性由 governance_chain_equivalence.rs 钉住。2026-10-22 抬级：R8-B2/B3 落地后原「生产零调用」口径失效，按实改判。"
 
   - id: gov.chain_hook_adapter
-    title: "R8-B1 ChainGovernanceHook 适配器——零生产接线"
-    level: IMPLEMENTED
-    default: null
+    title: "R8-B1 ChainGovernanceHook 适配器 + R8-B2 生产接线"
+    level: PRODUCTION WIRED
+    default: "ON"
     switch_env: null
     sources:
       - crates/foundation/governance/src/chain.rs
+      - crates/adapters/cli/src/governance_chain.rs
+      - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/governance/src/chain.rs
-    verified_at: 7153f5db
+      - crates/adapters/cli/tests/governance_chain_equivalence.rs
+    verified_at: 3ca56976
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-B1 b6d902ce：把 chain 接入 GovernanceHook 面；未接到任何生产装配根（git grep 生产引用为空）；如实 IMPLEMENTED，不冒称 PRODUCTION WIRED。"
+    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。"
 
   - id: gov.reflection_queue
     title: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
@@ -225,11 +229,11 @@ claims:
       - crates/foundation/governance/src/chain.rs
     tests:
       - crates/foundation/governance/src/chain.rs
-    verified_at: 7153f5db
+    verified_at: 3ca56976
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面，默认未装配到任何生产链 → 零行为变化。"
+    notes: "R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面。R8-B2 装配未启用反射调度器（production 只注入 gate + 审计 sink），生产仍零反射、零行为变化 —— 保持 IMPLEMENTED，不冒称接线。"
 
   - id: gov.chain_drill_ci
     title: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，尚未首跑）"
@@ -240,11 +244,11 @@ claims:
       - .github/workflows/rust.yml
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: 7153f5db
+    verified_at: 3ca56976
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤（allow/deny/require-approval 三路径）；本地等价命令 3 passed；远端 CI 尚未首跑（0 次），故仅登记 IMPLEMENTED 证据面。"
+    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。"
 
   - id: sec.governance_chain_drill
     title: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
@@ -280,47 +284,52 @@ claims:
 
   - id: sec.sql_readonly_gate
     title: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
-    level: IMPLEMENTED
-    default: null
+    level: PRODUCTION WIRED
+    default: "ON"
     switch_env: null
     sources:
       - frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs
       - frontend/companion-desktop/src-tauri/src/pg_client.rs
       - frontend/companion-desktop/src-tauri/src/mysql_client.rs
-    tests: []
-    verified_at: 5f52813d
+    tests:
+      - frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs
+      - frontend/companion-desktop/src-tauri/src/pg_client.rs
+      - frontend/companion-desktop/src-tauri/src/mysql_client.rs
+    verified_at: 3ca56976
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked"
     owner: companion-desktop
     next_review: "2026-11-20"
-    notes: "WITH 引导 DML/CTE 内嵌 DML/EXPLAIN ANALYZE/SELECT INTO/FOR UPDATE 全拒（fail-closed）；PG BEGIN READ ONLY / MySQL START TRANSACTION READ ONLY 事务包裹；桌面 crate 151 passed（交付记录，无跨平台 live E2E）。"
+    notes: "词法级写类拒绝（DML / CTE 内嵌 DML / EXPLAIN ANALYZE / SELECT INTO / FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY` / MySQL `START TRANSACTION READ ONLY` 纵深。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：无跨平台 live E2E（如实）。"
 
   - id: sec.provider_proxy_ssrf
     title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
-    level: IMPLEMENTED
-    default: null
+    level: PRODUCTION WIRED
+    default: "ON"
     switch_env: null
     sources:
       - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
-    tests: []
-    verified_at: e19e305a
+    tests:
+      - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
+    verified_at: 3ca56976
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked provider_proxy"
     owner: companion-desktop
     next_review: "2026-11-20"
-    notes: "私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。；2026-10-22 批次复核：桌面 tauri lib 140 passed / 3 ignored（含 provider_proxy 25/25，批内 CI 执行面）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 收尾复核：他线 B2-CFG 改动 provider_proxy.rs 后重跑桌面 tauri lib（140 passed / 3 ignored，含 provider_proxy 25/25）"
+    notes: "私网 / 链路本地 / 组播 / 保留段拒绝 + IP 变体规范化判类 + DNS 钉址 + 重定向逐跳闸 + 头白名单。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（如实）。"
 
   - id: sec.desktop_file_roots
     title: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
-    level: IMPLEMENTED
-    default: null
+    level: PRODUCTION WIRED
+    default: "ON"
     switch_env: null
     sources:
       - frontend/companion-desktop/src-tauri/src/workspace_list.rs
-    tests: []
-    verified_at: 5f52813d
+    tests:
+      - frontend/companion-desktop/src-tauri/src/workspace_list.rs
+    verified_at: 3ca56976
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked workspace_list"
     owner: companion-desktop
     next_review: "2026-11-20"
-    notes: "junction/`..` 逃逸实测拒绝；残余：TOCTOU 窗口未闭（std 无句柄级原子绑定，已缓解为操作规范）、live E2E 未实测（如实）。"
+    notes: "登记根派生 + canonicalize 祖先校验；junction / `..` 逃逸实测拒绝。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：TOCTOU 窗口未闭（std 无句柄级原子绑定，已缓解为操作规范）、live E2E 未实测（如实）。"
 
   - id: sec.terminal_permission_surfaces
     title: "终端权限边界明示 + 三层权限面文档（B4）"
