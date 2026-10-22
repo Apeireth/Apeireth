@@ -1214,3 +1214,80 @@ impl CapabilityProvider for GuardWatchModule {
         vec![Arc::clone(&self.tool)]
     }
 }
+
+/// Module providing the nine native recon tools (`tool.recon.*`).
+///
+/// 侦察面对应「看」而不是「做」：字符串/熵/魔数、二进制格式、CLR 元数据、
+/// JS 词法、YARA 子集、pcap、TLS 握手，全部只读。网络三件
+/// (`tool.recon.net` / `.web` / `.tls`) 只连 [`Scope`] 显式授权的目标；空 scope
+/// 一律拒绝 —— 开关只决定「装不装」，scope 决定「能打谁」。
+///
+/// 治理: **注册即闸** —— 开关 `APEIRETH_ENABLE_RECON=1` 才构造（默认关
+/// fail-closed），授权面同源（同一开关值在治理层 grant）。
+pub struct ReconModule {
+    tools: Vec<Arc<dyn ToolCapability>>,
+}
+
+impl ReconModule {
+    /// Create the recon module rooted at `workspace_root`, with `scope` as the
+    /// network authorization boundary.
+    pub fn new(
+        workspace_root: impl Into<PathBuf>,
+        scope: Arc<apeireth_tools_canonical::recon::Scope>,
+    ) -> Self {
+        Self {
+            tools: apeireth_tools_canonical::recon_tool_set(workspace_root, scope),
+        }
+    }
+
+    /// The underlying capabilities (one per `tool.recon.*`).
+    pub fn tools(&self) -> &[Arc<dyn ToolCapability>] {
+        &self.tools
+    }
+}
+
+impl CapabilityProvider for ReconModule {
+    fn id(&self) -> &str {
+        "module.tool.recon"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        self.tools.clone()
+    }
+}
+
+/// Module providing the ten external adapters (`ext.*`).
+///
+/// 外部工具一律**子进程**（argv 数组、无 shell、超时与输出上限、Scope 与
+/// workspace 限域）；系统二进制缺失时该工具返回永久错误，不影响其余工具，
+/// 也不在启动期探测（首次调用才 spawn）。
+///
+/// 治理: **注册即闸** —— 开关 `APEIRETH_ENABLE_EXTERNAL=1` 才构造（默认关
+/// fail-closed），授权面同源。
+pub struct ExternalToolsModule {
+    tools: Vec<Arc<dyn ToolCapability>>,
+}
+
+impl ExternalToolsModule {
+    /// Create the external-adapter module from operator configuration.
+    pub fn new(config: &apeireth_tools_canonical::ExternalToolsConfig) -> Self {
+        Self {
+            tools: apeireth_tools_canonical::external_tool_set(config),
+        }
+    }
+
+    /// The underlying capabilities (one per `ext.*`).
+    pub fn tools(&self) -> &[Arc<dyn ToolCapability>] {
+        &self.tools
+    }
+}
+
+impl CapabilityProvider for ExternalToolsModule {
+    fn id(&self) -> &str {
+        "module.tool.external"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        self.tools.clone()
+    }
+}
