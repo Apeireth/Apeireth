@@ -33,6 +33,17 @@
 > `.github/workflows/publish-release.yml` 的「Verify tag matches version sources」首关本地已绿；
 > 远程 CI 首跑仍未验证（无 tag 推送权限动作）。见 §5 R-1（已收敛）。
 
+> **发布就绪状态（2026-10-22 收口）**：仓库侧发布门禁已全绿——R-1（版本门禁）exit 0、
+> R-2（发布说明模板口径+未签名声明）、R-3（`SHA256SUMS` 命名）、R-4（30 members / 111 edges）、
+> R-5（测试数字二源指针）、R-6（`cargo run -- --version`）全部收敛或模板侧收敛；
+> `docs_truth.py --verify --check` / `arch_guard.py --strict` / `arch_doc.py --check` 均绿。
+> **剩余只等三件 owner/发布线动作（仓库侧无待办）**：① `push`（本地跨线提交未推；推后远程 CI
+> 首跑才发生，其记录是本清单 L31/§4 的最后一格证据）；② 已发布 `v2.0.0-rc.4` Release 页正文/
+> 资产清单按新模板编辑或重发（本机无 gh / Release 面通道）；③ Authenticode 签名证书（外部持有；
+> 未签名声明已入模板，不阻塞内部测试版）。另：B6-2a 试点设计页
+> [b6-2a-sealed-session-design-2026-10-22.md](backend-enhancement/b6-2a-sealed-session-design-2026-10-22.md)
+> 已出，待 owner 拍板三问（试点范围 `sessions.data` / daemon 密钥供给 / KDF+回滚）。
+
 ## 1. 发布物一致性
 
 - [x] `cargo run --bin apeireth -- --version` 输出 = 新版本号
