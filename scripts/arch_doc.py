@@ -136,6 +136,10 @@ def _pair_allowed(a: str, b: str, rules: list[str]) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
     parser = argparse.ArgumentParser(description="architecture doc generator")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--gen", action="store_true")

@@ -524,7 +524,9 @@ def _render_items(out: list[str], items: list[str], indent: str) -> None:
 def cmd_gen() -> int:
     text = render_wiring()
     WIRING.parent.mkdir(parents=True, exist_ok=True)
-    WIRING.write_text(text, encoding="utf-8")
+    # 生成物固定 LF：Windows 本地默认 CRLF、Linux CI 默认 LF 会让同一内容
+    # 被判 drift（2026-10-22 远程 docs-truth / wiring-ledger 实测）；两平台统一 LF。
+    WIRING.write_text(text, encoding="utf-8", newline="\n")
     claims = load_claims()
     print(f"generated: {WIRING.relative_to(ROOT)}  claims={len(claims)}  bytes={len(text.encode('utf-8'))}")
     return 0
