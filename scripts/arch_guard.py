@@ -54,7 +54,11 @@ def _read_toml(path: Path) -> dict:
 def _run(cmd: list[str]) -> tuple[int, str]:
     proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
                           encoding="utf-8", errors="replace")
-    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+    if proc.returncode != 0:
+        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+    # 成功路径只返回 stdout：子进程 stderr 可能带进度/警告（CI 与本地不同），
+    # 拼进来会污染 json.loads（2026-10-22 远程 CI 实测 Extra data 崩）。
+    return proc.returncode, proc.stdout or ""
 
 
 def _norm(path: str) -> str:
@@ -577,6 +581,10 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
 # --------------------------------------------------------------------- main
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
     parser = argparse.ArgumentParser(description="Apeireth architecture guard")
     parser.add_argument("--contract", default=str(DEFAULT_CONTRACT))
     parser.add_argument("--exceptions", default=None)
