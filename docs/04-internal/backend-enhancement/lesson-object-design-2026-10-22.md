@@ -118,6 +118,6 @@ Lesson {
 | 期 | 内容 | 规模 |
 |---|---|---|
 | L1 | 表 + 四拍状态机 + 五接口 + 硬约束测试 | ✅ **已交付**：`memory/src/lesson.rs` + `V18__lesson_object`，5 个单测钉四条硬约束（来源必填且必须真实存在 / 撤回必填理由 / 验证不得自证 / rev CAS） |
-| L2 | 消费面接线 | 🟡 **部分交付（2026-10-23）**：CLI 只读出口 `apeireth lessons`（四拍状态分列 + 计数 + 空账诚实帧）已接；自述面与面板列表**未接** —— 自述节是冻结合同（21 节），与 `self_status.rs` / `cli/src/lib.rs` 两处尺寸基线冲突，需先做视图层拆分（见台账 W7） |
+| L2 | 消费面接线 | ✅ **已交付（2026-10-23）**：① CLI 只读出口 `apeireth lessons`（四拍分列 + 计数 + 空账诚实帧）；② 自述面 `memory_ledger.verified_lessons / candidate_lessons`（**子字段**——不动冻结的 21 节合同；视图层拆到 `memory_ledger_view.rs`、探针拆到 `self_status_probe.rs` 才腾出尺寸空间）。面板列表仍未做 |
 | L3 | 反思步接入（从纠正/失败中提候选） | 1 批，需与反思调度器同窗口 |
 | L4 | 上下文注入（只 verified、L2 封套、预算） | 1 批，需 owner 拍板注入纪律 |

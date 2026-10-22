@@ -19,7 +19,7 @@
 | W4 | `SelfDisableAudit` | 装配面未见生产消费（drill 三路径只在测试内验证） | 触发：自停用演练进 CI 后随链接线（R8-D 转绿） | 安全线 |
 | W5 | `ActionGuard::evaluate`（V1+V2 AND 门） | 不在执行主链（仅测试/示例调用）；13 键已降级 | 触发：哲学拦截层重新上热路径时一并接（stage123 §C1） | 架构线 |
 | W6 | SDK `quota` | 永远返 `not_implemented`（D-05 阶段 6 stub） | 已知设计取舍，非缺陷；随 SDK v0 发布面补 | SDK |
-| W7 | 教训对象 `Lesson` | L1 库级已交付（`lesson.rs` + `V18` + 5 单测）；**消费面部分接线（2026-10-23）**：CLI 只读出口 `apeireth lessons` 已接（`lessons_command.rs`，四拍分列 + 计数 + 空账诚实帧，3 个单测）。仍缺：自述面节（冻结合同 21 节，需先拆视图层绕开 `self_status.rs` 尺寸基线）、面板列表、反思步（L3）、上下文注入（L4） | 决策：自述面待尺寸拆解后接；反思步与注入等 L3/L4 | 记忆线 |
+| W7 | 教训对象 `Lesson` | L1 + L2 已接线（PRODUCTION WIRED；2026-10-23）：库级 `lesson.rs`/`V18`；CLI 出口 `apeireth lessons`；自述面 `memory_ledger.verified_lessons / candidate_lessons`（子字段，不动 21 节冻结合同）。为腾尺寸空间顺带拆出 `memory_ledger_view.rs`（tools）与 `self_status_probe.rs`（cli）。仍缺：面板列表、反思步（L3）、上下文注入（L4） | 决策：L3 需与反思调度器同窗口；L4 的注入纪律要 owner 拍板预算 | 记忆线 |
 
 ## 二、测试专用但**有意保留**（不是缺陷；四级口径见上）
 
