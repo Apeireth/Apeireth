@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 06064709c732ec247dac7ef8512a86b11c0f7230e4f772fa8e9f763cb05e17c9
+claims_sha256: 825fb587c9366d561b15c3652afa6ff9fcbb8b9cf84b1ed5cc935374f7313d6b
 claims_total: 24
 items:
   - id: "rt.provider_router"
@@ -108,20 +108,27 @@ items:
     gaps:
       []
   - id: "gap.memory_update"
-    capability: "记忆更新/更正（既有事实编辑）——缺口"
+    capability: "记忆更新/更正（既有事实编辑）——已接线（治理面 + 面板路由）"
     implemented:
       sources:
         - "crates/adapters/gateway/src/panels.rs"
+        - "crates/adapters/gateway/src/panel_memory_update.rs"
+        - "crates/adapters/cli/src/gateway_panels.rs"
+        - "crates/engine/memory/src/memory_governance.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/gateway_panels.rs"
+        - "crates/adapters/gateway/src/panel_memory_update.rs"
         - "crates/adapters/gateway/src/panels.rs"
-    default_enabled: "n/a"
+        - "crates/engine/memory/src/memory_governance.rs"
+    default_enabled: true
     validated:
       tests:
         - "crates/adapters/gateway/tests/panel_routes.rs"
+        - "crates/engine/memory/tests/memory_2_tests.rs"
       claims_id: "gap.memory_update"
     gaps:
-      - "未达 PRODUCTION WIRED：capability universe: memory.update supported=false / reason=not_implemented；底层 bitemporal upsert/invalidate 已存在，缺治理面。"
+      []
   - id: "gap.prompt_stabilizer_unwired"
     capability: "PromptCacheStabilizer 已归档（R7-4a，可逆保留）——生产中不存在该能力"
     implemented:

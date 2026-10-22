@@ -41,6 +41,7 @@
 | [0009](0009-r1b-nervous-bus.md) | R1b 神经系统——同步信号总线 / 开关单入口 / 台账可校验 | **Accepted**（2026-10-20，owner 授权 Wave 4） | Wave 4 / 总线·开关表·台账校验 |
 | [0010](0010-r8-governance-pipeline.md) | R8 治理单一管线——六段编排 / 单一入口 / 审计可落地 | **Accepted**（2026-10-20，owner 授权 Wave 4） | Wave 4 / 治理编排·入口收敛·审计落地 |
 | [0011](0011-r6-verification-architecture.md) | R6 验证架构——三层门禁语义 / 单一执行器 / 四层验收载体 | **Accepted**（2026-10-20，owner 授权 Wave 4） | Wave 4 / 门禁语义·数字真源·四层验收 |
+| [0012](0012-central-ai-and-household-companion.md) | 中央 AI 与每户伙伴并存——两类主体、两套数据归属 | **Accepted**（2026-10-22，owner 口述拍板） | 多人阶段前置裁定：数据/成长归属、跨主体流动边界 |
 
 ## 命名
 

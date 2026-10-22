@@ -41,7 +41,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: 029dea0c
+    verified_at: c2c911cf
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -59,7 +59,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: 029dea0c
+    verified_at: c2c911cf
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -97,26 +97,30 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: 029dea0c
+    verified_at: c2c911cf
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
     notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: gap.memory_update
-    title: "记忆更新/更正（既有事实编辑）——缺口"
-    level: NOT IMPLEMENTED
-    default: null
+    title: "记忆更新/更正（既有事实编辑）——已接线（治理面 + 面板路由）"
+    level: PRODUCTION WIRED
+    default: "ON"
     switch_env: null
     sources:
       - crates/adapters/gateway/src/panels.rs
+      - crates/adapters/gateway/src/panel_memory_update.rs
+      - crates/adapters/cli/src/gateway_panels.rs
+      - crates/engine/memory/src/memory_governance.rs
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
-    verified_at: bdd64957
+      - crates/engine/memory/tests/memory_2_tests.rs
+    verified_at: c2c911cf
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
     owner: gateway
     next_review: "2026-11-20"
-    notes: "capability universe: memory.update supported=false / reason=not_implemented；底层 bitemporal upsert/invalidate 已存在，缺治理面。"
+    notes: "2026-10-22 接通：存储层 `MemoryGovernanceStore::update_episode_content` 早已实现（重写治理视图内容、原始 append-only 行不动、乐观 rev CAS、检索走 override），缺口只在面板没接电。现已补 `PUT /v1/apeireth/memory/episodes/:id/content` + 治理端口 `update_episode`（默认实现对未接线 embedder 诚实报错）+ 能力清单 `memory.update` 与治理面同源。未做：桌面 MemoryView 的「纠正」入口（台账 SG-08 记为待补）。"
 
   - id: gap.prompt_stabilizer_unwired
     title: "PromptCacheStabilizer 已归档（R7-4a，可逆保留）——生产中不存在该能力"
@@ -161,7 +165,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 029dea0c
+    verified_at: c2c911cf
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -218,7 +222,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: 3ca56976
+    verified_at: c2c911cf
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -395,7 +399,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: 029dea0c
+    verified_at: c2c911cf
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"

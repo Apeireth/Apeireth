@@ -360,6 +360,21 @@ pub trait PanelData: Send + Sync {
         reason: Option<&str>,
     ) -> Result<EpisodeMutationDto, String>;
 
+    /// 纠正内容（用户说「你理解错了」）。
+    ///
+    /// 语义 = 重写**治理视图**内容（原始 append-only episode 行不动），
+    /// 乐观并发 `expected_rev` CAS；检索走 override content ⇒ 后续召回不再出现旧结论。
+    /// 默认实现诚实报未接线（未注入治理存储的 embedder 不假装支持）。
+    async fn update_episode(
+        &self,
+        _id: &str,
+        _content: &str,
+        _updated_by: Option<&str>,
+        _expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("memory.update 未接线（本 embedder 未提供纠正面）".to_string())
+    }
+
     /// Memory graph (v1 semantics: session nodes + episode nodes with
     /// containment edges derived from real stored data).
     async fn memory_graph(&self) -> Result<MemoryGraphDto, String>;
@@ -438,6 +453,17 @@ pub trait MemoryGovernanceCommand: Send + Sync {
         expected_rev: u64,
         reason: Option<&str>,
     ) -> Result<EpisodeMutationDto, String>;
+
+    /// 纠正内容（见 [`PanelData::update_episode`] 的语义）。
+    async fn update_episode(
+        &self,
+        _id: &str,
+        _content: &str,
+        _updated_by: Option<&str>,
+        _expected_rev: u64,
+    ) -> Result<EpisodeMutationDto, String> {
+        Err("memory.update 未接线（本 embedder 未提供纠正面）".to_string())
+    }
 }
 
 /// Tool catalog read port.
@@ -607,8 +633,8 @@ impl GatewayServices {
     }
 }
 
-struct PanelDataAdapter {
-    inner: Arc<dyn PanelData>,
+pub(crate) struct PanelDataAdapter {
+    pub(crate) inner: Arc<dyn PanelData>,
 }
 
 #[async_trait]
@@ -643,34 +669,6 @@ impl MemoryCommand for PanelDataAdapter {
         content: &str,
     ) -> Result<EpisodeDto, String> {
         self.inner.append_episode(session, role, content).await
-    }
-}
-
-#[async_trait]
-impl MemoryGovernanceCommand for PanelDataAdapter {
-    async fn protect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        self.inner.protect_episode(id, expected_rev).await
-    }
-
-    async fn unprotect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        self.inner.unprotect_episode(id, expected_rev).await
-    }
-
-    async fn forget_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-        reason: Option<&str>,
-    ) -> Result<EpisodeMutationDto, String> {
-        self.inner.forget_episode(id, expected_rev, reason).await
     }
 }
 
@@ -792,6 +790,11 @@ pub fn panel_routes() -> Router<GatewayState> {
         .route(
             "/v1/apeireth/memory/episodes/:id/unprotect",
             axum::routing::post(unprotect_episode),
+        )
+        // 纠正（用户说「你理解错了」）：重写治理视图内容，原始 append-only 行不动。
+        .route(
+            "/v1/apeireth/memory/episodes/:id/content",
+            axum::routing::put(crate::panel_memory_update::update_episode),
         )
         .route("/v1/panel/graph", get(memory_graph))
         .route("/v1/panel/grants", get(list_grants))
@@ -1189,7 +1192,7 @@ fn memory_write_unavailable(state: &GatewayState) -> Option<Response> {
     None
 }
 
-fn memory_governance_unavailable(state: &GatewayState) -> Option<Response> {
+pub(crate) fn memory_governance_unavailable(state: &GatewayState) -> Option<Response> {
     if state.services.memory_governance.is_none() {
         return Some(unsupported("memory.governance"));
     }
@@ -1546,22 +1549,11 @@ async fn capabilities(State(state): State<GatewayState>) -> Response {
             let (supported, available) = match *id {
                 "memory.read" => (memory_supported, memory_supported),
                 "memory.write" => (memory_write_supported, memory_write_supported),
-                "memory.update" => (false, false),
+                // 纠正与治理面同源：注入 MemoryGovernanceStore 即可用
+                // （存储侧 `update_episode_content` 早已实现，此前只是面板没接电）。
                 _ => (memory_governance_supported, memory_governance_supported),
             };
-            if *id == "memory.update" {
-                cap_with_reason(
-                    id,
-                    *read,
-                    *write,
-                    operations,
-                    supported,
-                    available,
-                    Some("not_implemented"),
-                )
-            } else {
-                cap(id, *read, *write, operations, supported, available)
-            }
+            cap(id, *read, *write, operations, supported, available)
         })
         .chain(std::iter::once(cap(
             "memory.graph.read",
