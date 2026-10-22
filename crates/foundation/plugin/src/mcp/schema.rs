@@ -66,10 +66,12 @@ fn rewrite_key(k: &str) -> &str {
     k
 }
 
-/// Kebab-case MCP tool / prompt name (baseline `is_valid_tool_name`).
+/// MCP tool / prompt name (baseline `is_valid_tool_name`).
 ///
-/// Rules: non-empty; ASCII lowercase / digit / `-`; no leading/trailing
-/// `-`; no `--`.
+/// Rules: non-empty; ASCII lowercase / digit / `_` / `-`; no leading or
+/// trailing `-`; no `--`. Underscores are accepted: the MCP ecosystem (and
+/// the spec) permits snake_case tool names, and rejecting them breaks
+/// interop with servers such as REA.
 pub fn is_valid_mcp_name(name: &str) -> bool {
     if name.is_empty() || name.starts_with('-') || name.ends_with('-') {
         return false;
@@ -83,7 +85,7 @@ pub fn is_valid_mcp_name(name: &str) -> bool {
             prev_dash = true;
         } else {
             prev_dash = false;
-            if !(c.is_ascii_lowercase() || c.is_ascii_digit()) {
+            if !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
                 return false;
             }
         }
@@ -245,15 +247,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn is_valid_mcp_name_kebab() {
+    fn is_valid_mcp_name_kebab_and_snake() {
         assert!(is_valid_mcp_name("echo"));
         assert!(is_valid_mcp_name("summarize-text"));
         assert!(is_valid_mcp_name("a-1-b-2"));
+        // MCP 生态常见 snake_case（如 REA 的 inspect_artifact）。
+        assert!(is_valid_mcp_name("under_score"));
+        assert!(is_valid_mcp_name("inspect_artifact"));
+        assert!(is_valid_mcp_name("annotate_native_function"));
         assert!(!is_valid_mcp_name(""));
         assert!(!is_valid_mcp_name("-start"));
         assert!(!is_valid_mcp_name("end-"));
         assert!(!is_valid_mcp_name("CamelCase"));
-        assert!(!is_valid_mcp_name("under_score"));
         assert!(!is_valid_mcp_name("double--dash"));
     }
 
