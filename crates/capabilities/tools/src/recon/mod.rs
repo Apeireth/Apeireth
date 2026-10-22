@@ -23,11 +23,13 @@
 //! 各工具模块只依赖共享基础设施，不互相依赖；注册与治理在工具面完成。
 //! 能力差距一律写进 `Evidence.limitations`，不假装覆盖。
 
+pub mod binfmt;
 pub mod evidence;
 pub mod pack;
 pub mod platform;
 pub mod scope;
 
+pub use binfmt::{parse as parse_binary, BinFmtError, BinaryReport};
 pub use evidence::{rfc3339_utc, Evidence, EvidenceError, EvidenceItem};
 pub use pack::{analyze as analyze_pack, EmbeddedRegion, ExtractedString, PackOptions, PackReport};
 pub use platform::{current_host, HostOs, PlatformError, ToolPlatform};
