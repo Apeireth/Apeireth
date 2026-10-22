@@ -14,7 +14,7 @@
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `d2621788` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `029dea0c` | 2026-11-20 |
-| `sec.storage_envelope_crypto` | IMPLEMENTED | - | - | `3ca56976` | 2026-11-20 |
+| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `61b2127b` | 2026-11-20 |
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
 | `gov.reflection_queue` | IMPLEMENTED | - | - | `3ca56976` | 2026-11-20 |

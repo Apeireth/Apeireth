@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 639dfa275a2267aa8f8bc31749a960fcf0a18fb7b82ef24db62b3a60be5f94c2
+claims_sha256: 150abdab5615c5f0adb1997f3523c5a203a930579dfdf490ce2c850c10d4d44a
 claims_total: 24
 items:
   - id: "rt.provider_router"
@@ -176,23 +176,29 @@ items:
     gaps:
       []
   - id: "sec.storage_envelope_crypto"
-    capability: "会话/记忆静态信封加密 + 备份恢复（B6 库级）"
+    capability: "会话/记忆静态信封加密 + 备份恢复（B6 库级 + B6-2a sessions.data 试点）"
     implemented:
       sources:
         - "crates/engine/storage/src/crypto/mod.rs"
         - "crates/adapters/cli/src/crypto_keys.rs"
+        - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/crypto_keys.rs"
+        - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
         - "crates/engine/storage/src/crypto/mod.rs"
-    default_enabled: "n/a"
+    default_enabled: false
     validated:
       tests:
         - "crates/engine/storage/tests/crypto_invariants.rs"
         - "crates/engine/storage/tests/sealed_backup_restore.rs"
+        - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
       claims_id: "sec.storage_envelope_crypto"
     gaps:
-      - "未达 PRODUCTION WIRED：B6 库级：分区 DEK / AES-256-GCM 密封字段 / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 SqliteFieldSink 接缝已交付并有库内测试。人类出口已交付 apeireth crypto wrap|recovery-export|unlock。未接线：ses…"
+      - "能力矩阵未出现开关 APEIRETH_ENABLE_SESSION_SEAL（待补）"
   - id: "gov.chain_skeleton"
     capability: "R8-A 治理链六段骨架 + R8-B2 生产单入口（每次治理评估过 chain.run）"
     implemented:

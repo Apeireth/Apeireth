@@ -168,21 +168,25 @@ claims:
     notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: sec.storage_envelope_crypto
-    title: "会话/记忆静态信封加密 + 备份恢复（B6 库级）"
-    level: IMPLEMENTED
-    default: null
-    switch_env: null
+    title: "会话/记忆静态信封加密 + 备份恢复（B6 库级 + B6-2a sessions.data 试点）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: "APEIRETH_ENABLE_SESSION_SEAL"
     sources:
       - crates/engine/storage/src/crypto/mod.rs
       - crates/adapters/cli/src/crypto_keys.rs
+      - crates/engine/runtime-assembly/src/canonical/session_seal.rs
+      - crates/engine/runtime-assembly/src/sqlite_session.rs
     tests:
       - crates/engine/storage/tests/crypto_invariants.rs
       - crates/engine/storage/tests/sealed_backup_restore.rs
-    verified_at: 3ca56976
+      - crates/engine/runtime-assembly/src/canonical/session_seal.rs
+      - crates/engine/runtime-assembly/src/sqlite_session.rs
+    verified_at: 61b2127b
     verify_cmd: "cargo test -p apeireth-storage --test crypto_invariants"
     owner: storage
     next_review: "2026-11-20"
-    notes: "B6 库级：分区 DEK / AES-256-GCM 密封字段 / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 SqliteFieldSink 接缝已交付并有库内测试。人类出口已交付 apeireth crypto wrap|recovery-export|unlock。未接线：sessions.data 单列封缄仍待 B6-2a 试点（APEIRETH_ENABLE_SESSION_SEAL 尚未实现）；桌面 keychain 锚定只有 trait。故保持 IMPLEMENTED。"
+    notes: "PRODUCTION WIRED（默认关，仅 sessions.data 试点；其余 P0 列未接）。B6 库级：分区 DEK / AES-256-GCM 密封字段 / KEK 双槽包裹 / 恢复件 / 密钥丢失边界；盲索引与 SqliteFieldSink 接缝有库内测试。B6-2a（2026-10-22）：APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE（0600）→ 会话 JSON 落盘封缄（hex SealedField，与 SqliteFieldSink 同格式），读路径双兼容（密文解封 / 明文旧行照读 / 篡改硬错误），开关关 = 不读密钥且落盘逐字节同旧路径，开关开而密钥缺失 = 启动失败；密钥出口 apeireth crypto unlock --out 已交付。未接线：memory_items / episodes 等其余 P0 列、桌面 keychain 锚定、批量迁移 CLI（惰性迁移已生效）。"
 
   - id: gov.chain_skeleton
     title: "R8-A 治理链六段骨架 + R8-B2 生产单入口（每次治理评估过 chain.run）"
