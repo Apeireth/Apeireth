@@ -29,6 +29,7 @@ pub mod evidence;
 pub mod js;
 pub mod pack;
 pub mod platform;
+pub mod regex;
 pub mod scope;
 
 pub use binfmt::{parse as parse_binary, BinFmtError, BinaryReport};
