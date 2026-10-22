@@ -18,6 +18,8 @@ use apeireth_core::stored_doc::{self, DocCompat, StoredDocError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use apeireth_plugin::mcp::is_valid_mcp_name;
+
 use crate::exec_pipeline::DEFAULT_MAX_TIMEOUT_MS;
 
 /// Environment variable carrying the server list (JSON array).
@@ -81,6 +83,16 @@ pub struct McpServerSpec {
     pub url: Option<String>,
     /// Whether this server is wired at all. Explicit, never defaulted.
     pub enabled: bool,
+    /// Remote tool names the operator explicitly authorizes without human
+    /// approval.
+    ///
+    /// This is an operator-authored allowlist for tools whose read-only
+    /// semantics are known, but whose server declaration is conservative
+    /// (for example REA declares almost none of its inspection tools as
+    /// read-only). Names are matched against the server-side tool name and
+    /// are converted to explicit `PermissionPolicy` grants after discovery.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_authorize_tools: Vec<String>,
 }
 
 impl McpServerSpec {
@@ -93,6 +105,7 @@ impl McpServerSpec {
             args: Vec::new(),
             url: None,
             enabled: true,
+            auto_authorize_tools: Vec::new(),
         }
     }
 
@@ -109,6 +122,7 @@ impl McpServerSpec {
             args: Vec::new(),
             url: Some(url.into()),
             enabled: true,
+            auto_authorize_tools: Vec::new(),
         }
     }
 
@@ -116,6 +130,13 @@ impl McpServerSpec {
     #[must_use]
     pub fn with_arg(mut self, arg: impl Into<String>) -> Self {
         self.args.push(arg.into());
+        self
+    }
+
+    /// Authorize one remote tool without human approval (builder style).
+    #[must_use]
+    pub fn with_auto_authorize(mut self, tool: impl Into<String>) -> Self {
+        self.auto_authorize_tools.push(tool.into());
         self
     }
 
@@ -138,6 +159,16 @@ impl McpServerSpec {
                 name,
                 reason: "server name must match [a-z0-9][a-z0-9_-]*".to_string(),
             });
+        }
+        for tool in &self.auto_authorize_tools {
+            if !is_valid_mcp_name(tool) {
+                return Err(McpConfigError::InvalidSpec {
+                    name,
+                    reason: format!(
+                        "auto_authorize_tools entry {tool:?} violates the MCP name grammar"
+                    ),
+                });
+            }
         }
         match self.transport {
             McpTransportKind::Stdio => {
@@ -544,6 +575,18 @@ mod tests {
         assert_eq!(config.servers[0].name, "demo");
         assert_eq!(config.servers[0].transport, McpTransportKind::Stdio);
         assert!(config.servers[0].enabled);
+    }
+
+    #[test]
+    fn auto_authorize_tools_are_parsed_and_validated() {
+        let raw = r#"[{"name":"rea","transport":"stdio","command":"rea-mcp","enabled":true,
+                       "auto_authorize_tools":["inspect_artifact","list_names"]}]"#;
+        let config = McpServerConfig::from_env_value(raw).unwrap();
+        assert_eq!(config.servers[0].auto_authorize_tools.len(), 2);
+
+        let bad = r#"[{"name":"rea","transport":"stdio","command":"rea-mcp","enabled":true,
+                       "auto_authorize_tools":["not a tool"]}]"#;
+        assert!(McpServerConfig::from_env_value(bad).is_err());
     }
 
     #[test]
