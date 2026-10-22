@@ -26,7 +26,7 @@ use apeireth_storage::crypto::{
 };
 
 /// `apeireth crypto` 用法帧。
-pub const USAGE: &str = "apeireth crypto\n\nUsage:\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>]\n\n  wrap / recovery-export 从 stdin 读一行口令 (终端回显);\n  unlock 缺省读口令, --recovery <FILE> 改用恢复件 (hex)。\n  密钥丢失 = 不可恢复 (无后门): 恢复件导出后请离线保管。";
+pub const USAGE: &str = "apeireth crypto\n\nUsage:\n  apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>] [--out <KEYFILE>]\n\n  wrap / recovery-export 从 stdin 读一行口令 (终端回显);\n  unlock 缺省读口令, --recovery <FILE> 改用恢复件 (hex);\n  --out <KEYFILE> 导出解锁后的分区密钥材料 (0600), 供 B6-2a 会话封缄 daemon 读取\n  (配 APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE)。\n  密钥丢失 = 不可恢复 (无后门): 恢复件导出后请离线保管。";
 
 /// `apeireth crypto` 入口。
 pub fn run_crypto(args: &[String]) -> Result<String, String> {
@@ -138,7 +138,7 @@ fn run_recovery_export(args: &[String]) -> Result<String, String> {
 
 /// 解锁自检 (口令或恢复件可解包; 不落任何数据)。
 fn run_unlock(args: &[String]) -> Result<String, String> {
-    let options = parse_options(args, &["--keys", "--recovery"])?;
+    let options = parse_options(args, &["--keys", "--recovery", "--out"])?;
     let keys_path = PathBuf::from(require_value(&options, "--keys")?);
     let key_wrap = read_key_wrap(&keys_path)?;
 
@@ -154,11 +154,29 @@ fn run_unlock(args: &[String]) -> Result<String, String> {
     let dek = key_wrap
         .unlock(&unlock)
         .map_err(|error| error.to_string())?;
-    Ok(format!(
+    // B6-2a 密钥供给（方案 A）: 显式 --out 才导出解锁后的材料, 0600 落盘。
+    // 不导出 = 只校验（本命令的旧语义, 逐字节不变）; 导出是 opt-in 的第二动作,
+    // 避免「一次 unlock 顺手在盘上留明文密钥」这种隐式副作用。
+    let mut frame = format!(
         "crypto unlock: ok partition={} (密钥材料可用; {})",
         dek.partition(),
         KEY_LOSS_BOUNDARY
-    ))
+    );
+    if let Some(out_path) = options.get("--out") {
+        let out_path = PathBuf::from(out_path);
+        if out_path.exists() {
+            return Err(format!(
+                "crypto unlock refused: --out 目标已存在, 不覆盖: {}",
+                out_path.display()
+            ));
+        }
+        apeireth_runtime_assembly::canonical::session_seal::write_key_file(&out_path, &dek)?;
+        frame.push_str(&format!(
+            "\ncrypto unlock: key material -> {} (0600; 配 APEIRETH_ENABLE_SESSION_SEAL=1 + APEIRETH_SESSION_SEAL_KEY_FILE)",
+            out_path.display()
+        ));
+    }
+    Ok(frame)
 }
 
 fn read_key_wrap(path: &std::path::Path) -> Result<KeyWrapFile, String> {
