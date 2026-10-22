@@ -182,7 +182,7 @@ claims:
       - crates/engine/storage/tests/sealed_backup_restore.rs
       - crates/engine/runtime-assembly/src/canonical/session_seal.rs
       - crates/engine/runtime-assembly/src/sqlite_session.rs
-    verified_at: 61b2127b
+    verified_at: 14878cfd
     verify_cmd: "cargo test -p apeireth-storage --test crypto_invariants"
     owner: storage
     next_review: "2026-11-20"
