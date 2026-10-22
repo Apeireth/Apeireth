@@ -26,6 +26,7 @@
 pub mod binfmt;
 pub mod dotnet;
 pub mod evidence;
+pub mod js;
 pub mod pack;
 pub mod platform;
 pub mod scope;
@@ -33,6 +34,7 @@ pub mod scope;
 pub use binfmt::{parse as parse_binary, BinFmtError, BinaryReport};
 pub use dotnet::{detect as detect_dotnet, DotnetError, DotnetReport};
 pub use evidence::{rfc3339_utc, Evidence, EvidenceError, EvidenceItem};
+pub use js::{analyze_js, JsOptions, JsReport};
 pub use pack::{analyze as analyze_pack, EmbeddedRegion, ExtractedString, PackOptions, PackReport};
 pub use platform::{current_host, HostOs, PlatformError, ToolPlatform};
 pub use scope::{Scope, ScopeError};
