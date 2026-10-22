@@ -179,6 +179,8 @@ fn fetch_plugin() -> BuiltinToolsPlugin {
     BuiltinToolsPlugin::with_options(
         ".",
         BuiltinToolsOptions {
+            recon: None,
+            external: None,
             shell: None,
             fetch: Some(FetchConfig::new(egress)),
         },
