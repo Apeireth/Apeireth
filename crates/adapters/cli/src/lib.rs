@@ -19,6 +19,7 @@ pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;
 pub mod onboarding;
+pub mod panel_governance_port;
 pub mod portable_bundle;
 // 裁定 ④⑤ 性格锁定 + 性格周报 (成长计既有账只读周报 + 四杆锁定/解锁显式动作面)。
 pub mod trait_command;

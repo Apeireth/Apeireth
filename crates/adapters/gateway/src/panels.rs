@@ -633,8 +633,8 @@ impl GatewayServices {
     }
 }
 
-struct PanelDataAdapter {
-    inner: Arc<dyn PanelData>,
+pub(crate) struct PanelDataAdapter {
+    pub(crate) inner: Arc<dyn PanelData>,
 }
 
 #[async_trait]
@@ -669,46 +669,6 @@ impl MemoryCommand for PanelDataAdapter {
         content: &str,
     ) -> Result<EpisodeDto, String> {
         self.inner.append_episode(session, role, content).await
-    }
-}
-
-#[async_trait]
-impl MemoryGovernanceCommand for PanelDataAdapter {
-    async fn protect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        self.inner.protect_episode(id, expected_rev).await
-    }
-
-    async fn unprotect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        self.inner.unprotect_episode(id, expected_rev).await
-    }
-
-    async fn forget_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-        reason: Option<&str>,
-    ) -> Result<EpisodeMutationDto, String> {
-        self.inner.forget_episode(id, expected_rev, reason).await
-    }
-
-    async fn update_episode(
-        &self,
-        id: &str,
-        content: &str,
-        updated_by: Option<&str>,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        self.inner
-            .update_episode(id, content, updated_by, expected_rev)
-            .await
     }
 }
 
@@ -834,7 +794,7 @@ pub fn panel_routes() -> Router<GatewayState> {
         // 纠正（用户说「你理解错了」）：重写治理视图内容，原始 append-only 行不动。
         .route(
             "/v1/apeireth/memory/episodes/:id/content",
-            axum::routing::put(update_episode),
+            axum::routing::put(crate::panel_memory_update::update_episode),
         )
         .route("/v1/panel/graph", get(memory_graph))
         .route("/v1/panel/grants", get(list_grants))
@@ -1232,7 +1192,7 @@ fn memory_write_unavailable(state: &GatewayState) -> Option<Response> {
     None
 }
 
-fn memory_governance_unavailable(state: &GatewayState) -> Option<Response> {
+pub(crate) fn memory_governance_unavailable(state: &GatewayState) -> Option<Response> {
     if state.services.memory_governance.is_none() {
         return Some(unsupported("memory.governance"));
     }
@@ -1356,42 +1316,6 @@ async fn unprotect_episode(
         .as_ref()
         .expect("checked above");
     match memory.unprotect_episode(&id, request.expected_rev).await {
-        Ok(mutation) => (StatusCode::OK, Json(mutation)).into_response(),
-        Err(e) => panel_error(e),
-    }
-}
-
-/// 纠正请求体：新内容 + 期望修订号 + 谁改的（默认 `"user"`，即主人自己改）。
-#[derive(Debug, serde::Deserialize)]
-struct EpisodeContentRequest {
-    expected_rev: u64,
-    content: String,
-    #[serde(default)]
-    updated_by: Option<String>,
-}
-
-async fn update_episode(
-    State(state): State<GatewayState>,
-    axum::extract::Path(id): axum::extract::Path<String>,
-    Json(request): Json<EpisodeContentRequest>,
-) -> Response {
-    if let Some(response) = memory_governance_unavailable(&state) {
-        return response;
-    }
-    let memory = state
-        .services
-        .memory_governance
-        .as_ref()
-        .expect("checked above");
-    match memory
-        .update_episode(
-            &id,
-            &request.content,
-            request.updated_by.as_deref().or(Some("user")),
-            request.expected_rev,
-        )
-        .await
-    {
         Ok(mutation) => (StatusCode::OK, Json(mutation)).into_response(),
         Err(e) => panel_error(e),
     }

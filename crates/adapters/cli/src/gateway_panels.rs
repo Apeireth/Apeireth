@@ -913,44 +913,6 @@ impl MemoryCommand for CliPanelData {
 }
 
 #[async_trait]
-impl MemoryGovernanceCommand for CliPanelData {
-    async fn protect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        PanelData::protect_episode(self, id, expected_rev).await
-    }
-
-    async fn unprotect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        PanelData::unprotect_episode(self, id, expected_rev).await
-    }
-
-    async fn forget_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-        reason: Option<&str>,
-    ) -> Result<EpisodeMutationDto, String> {
-        PanelData::forget_episode(self, id, expected_rev, reason).await
-    }
-
-    async fn update_episode(
-        &self,
-        id: &str,
-        content: &str,
-        updated_by: Option<&str>,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        PanelData::update_episode(self, id, content, updated_by, expected_rev).await
-    }
-}
-
-#[async_trait]
 impl ToolCatalogQuery for CliPanelData {
     async fn list_tools(&self) -> Result<Vec<ToolDto>, String> {
         PanelData::list_tools(self).await

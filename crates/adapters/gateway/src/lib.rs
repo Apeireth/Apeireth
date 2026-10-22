@@ -19,6 +19,7 @@ pub mod admin;
 pub mod canonical_entry;
 
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).
+pub mod panel_memory_update;
 pub mod panels;
 
 /// G-P1 指标端点 (`GET /v1/panel/metrics`): 指标注册表的 HTTP 数据面。
