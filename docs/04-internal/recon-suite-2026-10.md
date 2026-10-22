@@ -30,18 +30,47 @@
 - 只读档：nmap 用 `-sT`，radare2 固定 `aaa; aflj`，不接受任意命令
 - 外部二进制缺失时返回永久错误
 
-## 2. 启用方式（当前）
+## 2. 启用方式（2026-10-22 接线批：**生产装配已接线 · PRODUCTION WIRED**）
 
-库层：`BuiltinToolsOptions { recon: Some(ReconConfig { scope }) }` 或
+三个环境变量，默认全关（fail-closed）：
+
+| 开关 | 作用 | 缺省 |
+|---|---|---|
+| `APEIRETH_ENABLE_RECON=1` | 注册 9 个 `tool.recon.*` 原生侦察工具 | 关 |
+| `APEIRETH_ENABLE_EXTERNAL=1` | 注册 10 个外部适配器（能力 id `tool.external.*`，模型侧名 `ext.*`） | 关 |
+| `APEIRETH_TOOL_SCOPE=/path/scope.json` | 操作员授权范围（路径 / 域名 / CIDR） | 空范围（网络全拒） |
+
+scope 文件格式：
+
+```json
+{ "name": "my-lab", "authorized": true,
+  "paths": ["/home/bai/Projects/targets"],
+  "domains": ["example.com"], "cidrs": ["10.0.0.0/8", "127.0.0.1/32"] }
+```
+
+- 缺省不配 = 空范围：网络类工具（`net.recon` / `web.probe` / `re.tls` /
+  `ext.nmap` / `ext.openssl`）在每个目标上被 `Scope::validate` 拒绝；文件类工具
+  仍受 workspace 根限域。
+- 文件缺失 / JSON 坏 / 未显式 `authorized: true` / CIDR 畸形 = **启动失败并给可读
+  错误**，绝不静默降级为空范围或全放行。
+- 开关语义真源：`crates/capabilities/tools/src/recon/wiring.rs`（装配侧注册与
+  治理侧 grant 读同一函数，不各解一份 env）。
+
+库层仍可用：`BuiltinToolsOptions { recon: Some(ReconConfig { scope }) }` /
 `BuiltinToolsOptions { external: Some(ExternalToolsConfig { ... }) }`。
 
-生产装配计划（待批准）：
-`APEIRETH_ENABLE_RECON=1`、`APEIRETH_ENABLE_EXTERNAL=1`、
-`APEIRETH_TOOL_SCOPE=/path/scope.json`（缺省空 scope = 网络工具全拒绝）。
+装配点：`ProductionModulesConfig.recon` / `.external`
+（`crates/engine/runtime-assembly/src/canonical/production.rs`），
+CLI 组装修：`crates/adapters/cli/src/env_switches.rs`。
 
 ## 3. 治理
 
 - Scope：路径 canonicalize、域名/子域、IPv4/IPv6 CIDR；空 scope 拒绝一切网络目标。
+- 授权档位（**按爆炸半径分档，不按便利**）：
+  - 只读本地分析 6 件（pack/binfmt/yara/dotnet/js/pcap）= **grant 即用零审批**
+    （与 `tool.repo` / `tool.education` 同档：零出网、零执行、workspace 限域）；
+  - 出网 3 件（net/web/tls）+ 外部适配器 10 件 = **grant + require_approval**，
+    每次调用停人工审批（前者对外发报文，后者执行第三方二进制）。
 - 风险声明：文件类 `low`；`net.recon`/`web.probe`/`re.tls`/`nmap`/`ghidra` `medium`。
 - 外部工具不链接 GPL/AGPL，只经进程边界；High 风险默认不提供（如 sqlmap/hydra）。
 

@@ -41,11 +41,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: 73b70178
+    verified_at: 029dea0c
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
-    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: tool.task_board
     title: "任务簿（V6-a 持久任务队列工具面）"
@@ -59,11 +59,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: 73b70178
+    verified_at: 029dea0c
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
-    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: tool.mcp_bridge
     title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
@@ -79,11 +79,11 @@ claims:
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: 73b70178
+    verified_at: 029dea0c
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
-    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
@@ -97,11 +97,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: 73b70178
+    verified_at: 029dea0c
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
-    notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: gap.memory_update
     title: "记忆更新/更正（既有事实编辑）——缺口"
@@ -161,11 +161,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 73b70178
+    verified_at: 029dea0c
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
-    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: sec.storage_envelope_crypto
     title: "会话/记忆静态信封加密 + 备份恢复（B6 库级）"
@@ -382,11 +382,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: 73b70178
+    verified_at: 029dea0c
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
   - id: bio.recovery_protocol
     title: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"

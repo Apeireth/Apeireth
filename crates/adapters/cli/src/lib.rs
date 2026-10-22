@@ -6,6 +6,7 @@
 
 // v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend; 本模块只做 bootstrap 集成.
 pub mod backup;
+pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub mod canonical_approval;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
@@ -1088,7 +1089,7 @@ fn build_production_governance_parts_with_dataset(
         .with(guard_hook.clone());
     // W3 三洋葱 L3-L5 物理执行面 (2026-10-10, 默认关): 末层纵深防御 ——
     // 授权已放行的动作再过一次双洋葱权威判定 (只收紧, 不把未授权变审批)。
-    if onion_layer_enabled_from_env() {
+    if env_switches::onion_layer_enabled_from_env() {
         pipeline = pipeline.with(Arc::new(apeireth_runtime_assembly::OnionLayerHook::new(
             apeireth_core::onion_gate::standard_double_onion_gate(),
         )));
@@ -1105,14 +1106,6 @@ fn build_production_governance_parts_with_dataset(
 /// capabilities remain denied even if a future plugin registers them.
 pub fn build_production_governance_from_env() -> GovernancePipeline {
     build_production_governance_parts_from_env().0
-}
-
-/// **W3 洋葱层旋钮** (2026-10-10, 默认关): `APEIRETH_ENABLE_ONION_LAYER=1` ——
-/// 生产治理管线末层追加双洋葱权威判定 (HA 离线物拒 / L5 E 层兜底)。
-fn onion_layer_enabled_from_env() -> bool {
-    std::env::var("APEIRETH_ENABLE_ONION_LAYER")
-        .ok()
-        .is_some_and(|value| value.trim() == "1")
 }
 
 fn configure_guard_classifier(mut guard: BehaviorChainGuardHook) -> BehaviorChainGuardHook {
@@ -1240,6 +1233,8 @@ fn build_production_governance_parts_from_env() -> (
             .expect("permission policy lock poisoned (0 装诚实)")
             .grant(Permission::ExecuteTool("tool.education".to_string()));
     }
+    // Recon / 外部适配器：开关开 = 注册 + 授权同源（档位与 id 真源见 env_switches）。
+    env_switches::apply_recon_external_grants(&policy);
     // 通用嗓发声 (`tool.voice_speak`, V3-b): **开关开 = 注册 + 授权同源**
     // (同一开关值同时决定装配侧注册与本授权面)。发声面档 = **grant 即发声**
     // (免逐次人批), 与 shell/fetch 的 grant + require_approval 执行档**分立**
@@ -2054,6 +2049,10 @@ async fn build_cognitive_modules_at(
         // 坏配置拒开), 数据目录与面板其余持久档同位。
         mcp: mcp_enabled,
         mcp_data_dir: mcp_enabled.then(default_panel_data_dir),
+        // 安全/逆向侦察 9 件 + 外部适配器 10 件: 双开关默认关 (fail-closed), 注册与授权同源;
+        // 授权范围走 `APEIRETH_TOOL_SCOPE` (缺省 = 空范围 → 网络目标全拒绝; 坏文件 = 启动失败)。
+        recon: env_switches::recon_config_from_env()?,
+        external: env_switches::external_config_from_env(workspace_root.clone())?,
         // 性格周报 (`tool.trait_report`, 裁定 ⑤) + 自述性格节: 成长账 =
         // `tuning-log.jsonl` (与「性格养成」自校准学习日志**同账**, 不新造账),
         // 特质锁定档 `trait-locks.json` 同目录。只读零审批; 生产装配默认注入 =

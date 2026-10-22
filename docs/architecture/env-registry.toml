@@ -573,6 +573,16 @@ status = "current"
 evidence = "direct:crates/adapters/cli/src/lib.rs:119;direct:crates/adapters/cli/src/lib.rs:374"
 
 [[entries]]
+name = "APEIRETH_ENABLE_EXTERNAL"
+default = "off"
+layer = "capabilities"
+owner = "apeireth-tools-canonical"
+purpose = "安全/逆向侦察套件 · 外部适配器开关 (10 件, 模型侧名 ext.*, 能力 id tool.external.*): 开 = 注册 + 治理授权同源; 默认关 (fail-closed)。外部工具一律子进程 (argv 数组/无 shell/超时与输出上限/Scope 与 workspace 限域), 系统二进制缺失只在调用期报永久错误。治理档 = grant + require_approval (执行第三方二进制属执行档, 每次停人工审批)。接线批 2026-10-22。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/capabilities/tools/src/recon/wiring.rs:0;direct:crates/adapters/cli/src/env_switches.rs:0;direct:crates/engine/runtime-assembly/src/canonical/production.rs:0"
+
+[[entries]]
 name = "APEIRETH_ENABLE_FETCH"
 default = "off"
 layer = "adapters"
@@ -781,6 +791,16 @@ purpose = "P-arch (2026-08-28): OrganOrchestrator 类似 `AwakeCompanion` 真实
 level = "UNCLASSIFIED"
 status = "current"
 evidence = "direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:50;direct:crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs:523;direct:crates/engine/runtime-assembly/src/canonical/orchestrator.rs:711"
+
+[[entries]]
+name = "APEIRETH_ENABLE_RECON"
+default = "off"
+layer = "capabilities"
+owner = "apeireth-tools-canonical"
+purpose = "安全/逆向侦察套件 · 原生工具开关 (9 件 tool.recon.*): 开 = 注册 + 治理授权同源; 默认关 (fail-closed)。只读本地分析 6 件 (pack/binfmt/yara/dotnet/js/pcap) grant 即用零审批 (与 tool.repo 同档); 出网 3 件 (net/web/tls) grant + require_approval (对外发报文属执行档)。网络目标另受 APEIRETH_TOOL_SCOPE 授权范围约束。接线批 2026-10-22。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/capabilities/tools/src/recon/wiring.rs:0;direct:crates/adapters/cli/src/env_switches.rs:0;direct:crates/engine/runtime-assembly/src/canonical/production.rs:0"
 
 [[entries]]
 name = "APEIRETH_ENABLE_REFLEXION"
@@ -1493,6 +1513,16 @@ level = "UNCLASSIFIED"
 status = "current"
 kind = "derived"
 evidence = "scan-only:crates/foundation/orchestration/src/self_tuning.rs:1147;scan-only:crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:92"
+
+[[entries]]
+name = "APEIRETH_TOOL_SCOPE"
+default = "n/a"
+layer = "capabilities"
+owner = "apeireth-tools-canonical"
+purpose = "侦察套件的操作员授权范围文件 (JSON): name / authorized / paths / domains / cidrs。缺省 = 空范围 —— Scope::validate 处即失败, 网络类工具 (net.recon/web.probe/re.tls/ext.nmap/ext.openssl) 全部拒绝 (fail-closed); 文件类工具仍受 workspace 根限域。文件缺失 / JSON 坏 / 未显式 authorized:true / CIDR 畸形 = 启动失败并给可读错误, 绝不静默降级为空范围或全放行。接线批 2026-10-22。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/capabilities/tools/src/recon/wiring.rs:0;direct:crates/adapters/cli/src/env_switches.rs:0"
 
 [[entries]]
 name = "APEIRETH_TUNE_CONSOLIDATION_CADENCE"
