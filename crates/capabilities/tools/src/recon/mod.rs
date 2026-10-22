@@ -31,6 +31,7 @@ pub mod pack;
 pub mod platform;
 pub mod regex;
 pub mod scope;
+pub mod yara;
 
 pub use binfmt::{parse as parse_binary, BinFmtError, BinaryReport};
 pub use dotnet::{detect as detect_dotnet, DotnetError, DotnetReport};
@@ -39,3 +40,4 @@ pub use js::{analyze_js, JsOptions, JsReport};
 pub use pack::{analyze as analyze_pack, EmbeddedRegion, ExtractedString, PackOptions, PackReport};
 pub use platform::{current_host, HostOs, PlatformError, ToolPlatform};
 pub use scope::{Scope, ScopeError};
+pub use yara::{RuleMatch, RuleSet, YaraError, YaraReport};
