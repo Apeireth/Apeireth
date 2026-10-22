@@ -230,6 +230,28 @@ impl McpToolBridge {
             McpPermissionMapping::authorize_readonly_declarations(&mut policy, &self.catalog);
         }
 
+        // Operator-authored per-server allowlists become explicit grants,
+        // independent of the read-only preset: they exist for servers that
+        // under-declare read-only semantics.
+        {
+            let mut policy = self
+                .policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            for connection in &self.connections {
+                let spec = connection.spec();
+                if spec.auto_authorize_tools.is_empty() {
+                    continue;
+                }
+                McpPermissionMapping::authorize_listed(
+                    &mut policy,
+                    &self.catalog,
+                    connection.server_name(),
+                    &spec.auto_authorize_tools,
+                );
+            }
+        }
+
         Ok(DiscoveryReport {
             registered,
             removed,
