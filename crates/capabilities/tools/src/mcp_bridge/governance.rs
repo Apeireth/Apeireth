@@ -174,6 +174,30 @@ impl McpPermissionMapping {
         granted
     }
 
+    /// Authorize every tool of `server` whose remote name is listed in
+    /// `names`. Returns how many grants were added.
+    ///
+    /// The list is operator-authored (per-server `auto_authorize_tools`), not
+    /// a server declaration: it exists for servers that under-declare
+    /// read-only semantics.
+    pub fn authorize_listed(
+        policy: &mut PermissionPolicy,
+        catalog: &McpToolCatalog,
+        server: &str,
+        names: &[String],
+    ) -> usize {
+        let mut granted = 0;
+        for entry in catalog.list() {
+            if entry.server == server
+                && names.iter().any(|name| name == &entry.remote_name)
+                && Self::authorize(policy, &entry)
+            {
+                granted += 1;
+            }
+        }
+        granted
+    }
+
     /// Mark one external tool as requiring human approval even when its
     /// permission is granted.
     pub fn require_approval(policy: &mut PermissionPolicy, entry: &McpToolEntry) {
@@ -259,6 +283,46 @@ mod tests {
         let (call, capability) = call_on("tool.mcp.demo.write-item");
         let verdict = hook.pre_verdict(&PreExecuteRequest::new(&call, &capability));
         assert!(matches!(verdict, PreVerdict::Ask { .. }), "{verdict:?}");
+    }
+
+    #[test]
+    fn operator_allowlist_authorizes_only_listed_tools() {
+        let catalog = Arc::new(McpToolCatalog::new());
+        for name in ["inspect_one", "mutate_two"] {
+            let entry = McpToolEntry::new(
+                "demo",
+                &super::super::connection::DiscoveredTool {
+                    name: name.to_string(),
+                    description: None,
+                    input_schema: None,
+                    declared_read_only: false,
+                },
+            )
+            .unwrap();
+            catalog.insert(entry).unwrap();
+        }
+
+        let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
+        let granted = McpPermissionMapping::authorize_listed(
+            &mut policy.lock().unwrap(),
+            &catalog,
+            "demo",
+            &["inspect_one".to_string()],
+        );
+        assert_eq!(granted, 1);
+
+        let hook = McpRiskMappingHook::new(Arc::clone(&policy), Arc::clone(&catalog), false);
+        let (call, capability) = call_on("tool.mcp.demo.inspect_one");
+        assert_eq!(
+            hook.pre_verdict(&PreExecuteRequest::new(&call, &capability)),
+            PreVerdict::Allow
+        );
+
+        let (call, capability) = call_on("tool.mcp.demo.mutate_two");
+        assert!(matches!(
+            hook.pre_verdict(&PreExecuteRequest::new(&call, &capability)),
+            PreVerdict::Ask { .. }
+        ));
     }
 
     #[test]
