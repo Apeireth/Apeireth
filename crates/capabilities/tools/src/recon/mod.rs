@@ -33,6 +33,7 @@ pub mod platform;
 pub mod proto;
 pub mod regex;
 pub mod scope;
+pub mod tls;
 pub mod web;
 pub mod yara;
 
@@ -45,5 +46,6 @@ pub use pack::{analyze as analyze_pack, EmbeddedRegion, ExtractedString, PackOpt
 pub use platform::{current_host, HostOs, PlatformError, ToolPlatform};
 pub use proto::{parse_capture, parse_pcap, Flow, PcapError, PcapReport};
 pub use scope::{Scope, ScopeError};
+pub use tls::{parse_client_hello, parse_server_hello, ClientHello, ServerHello, TlsError};
 pub use web::{probe as probe_web, WebError, WebProbe, WebProbeOptions};
 pub use yara::{RuleMatch, RuleSet, YaraError, YaraReport};
