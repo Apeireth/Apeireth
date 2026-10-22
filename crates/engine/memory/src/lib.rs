@@ -34,6 +34,7 @@ mod append_only;
 pub mod canonical;
 mod episode;
 mod identity;
+pub mod lesson;
 mod migrations;
 // N8: generation 绑定观测缓存 (自包含, 通用记忆运行时模式, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
@@ -977,3 +978,6 @@ pub mod experience_store_sqlite;
 pub mod preference_store;
 pub mod preference_store_sqlite;
 pub mod self_assessment_store_sqlite;
+
+// 教训对象（Lesson）L1：四拍状态机 + 五接口（见 lesson.rs 与设计页）。
+pub use lesson::{Lesson, LessonError, LessonScope, LessonStatus, NewLesson};
