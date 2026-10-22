@@ -980,4 +980,4 @@ pub mod preference_store_sqlite;
 pub mod self_assessment_store_sqlite;
 
 // 教训对象（Lesson）L1：四拍状态机 + 五接口（见 lesson.rs 与设计页）。
-pub use lesson::{Lesson, LessonError, LessonScope, LessonStatus, NewLesson};
+pub use lesson::{Lesson, LessonCounts, LessonError, LessonScope, LessonStatus, NewLesson};

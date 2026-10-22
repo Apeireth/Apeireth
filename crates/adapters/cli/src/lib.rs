@@ -18,6 +18,7 @@ pub mod exposure;
 pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;
+pub mod lessons_command;
 pub mod onboarding;
 pub mod panel_governance_port;
 pub mod portable_bundle;
@@ -1234,15 +1235,14 @@ fn build_production_governance_parts_from_env() -> (
             .expect("permission policy lock poisoned (0 装诚实)")
             .grant(Permission::ExecuteTool("tool.education".to_string()));
     }
-    // Recon / 外部适配器：开关开 = 注册 + 授权同源（档位与 id 真源见 env_switches）。
-    env_switches::apply_recon_external_grants(&policy);
-    // 通用嗓发声 (`tool.voice_speak`, V3-b): **开关开 = 注册 + 授权同源**
-    // (同一开关值同时决定装配侧注册与本授权面)。发声面档 = **grant 即发声**
-    // (免逐次人批), 与 shell/fetch 的 grant + require_approval 执行档**分立**
-    // (不借壳): 声音是输出面 (无任意文件写 —— 唯一落盘是固定路径语句账本的
-    // 追加行; 无网络), 拦截面 = 参数边界拒 + 勿扰窗口 (与 care_rules 同源) +
-    // 独占播放 + 语句账本全责。宿主要逐次人批 = 给本能力挂 require_approval,
-    // 发声面风险钩子会如实映射到同一条人工审批链。
+    env_switches::apply_recon_external_grants(&policy); // Recon/外部：开关开 = 注册 + 授权同源
+                                                        // 通用嗓发声 (`tool.voice_speak`, V3-b): **开关开 = 注册 + 授权同源**
+                                                        // (同一开关值同时决定装配侧注册与本授权面)。发声面档 = **grant 即发声**
+                                                        // (免逐次人批), 与 shell/fetch 的 grant + require_approval 执行档**分立**
+                                                        // (不借壳): 声音是输出面 (无任意文件写 —— 唯一落盘是固定路径语句账本的
+                                                        // 追加行; 无网络), 拦截面 = 参数边界拒 + 勿扰窗口 (与 care_rules 同源) +
+                                                        // 独占播放 + 语句账本全责。宿主要逐次人批 = 给本能力挂 require_approval,
+                                                        // 发声面风险钩子会如实映射到同一条人工审批链。
     if voice_speak_enabled_from_env() {
         policy
             .lock()
