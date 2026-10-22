@@ -301,6 +301,7 @@ CREATE INDEX IF NOT EXISTS idx_dedup_last_seen
         name: "V17__memory_freshness_loop",
         sql: V17_SQL,
     },
+    Migration { version: 18, name: "V18__lesson_object", sql: crate::lesson::LESSON_SCHEMA_SQL },
 ];
 
 const V17_SQL: &str = r#"
@@ -1275,10 +1276,9 @@ mod tests {
         let applied = store.applied_migrations().unwrap();
         assert_eq!(
             applied.iter().filter(|v| **v >= 5).count(),
-            13,
-            "V5..V17 各一条 (V15 = M27 收编 dedup_fingerprints; V16 = V4-a 人格记忆层 \
-             persona_memory_* 分表; V17 = V4-b 记忆保鲜回路 source_hash/ingest_queue/\
-             memory_fold_segments)"
+            14,
+            "V5..V18 各一条 (V15 = dedup_fingerprints; V16 = persona_memory_*; \
+             V17 = 记忆保鲜 source_hash/ingest_queue/memory_fold_segments; V18 = lessons)"
         );
     }
 
