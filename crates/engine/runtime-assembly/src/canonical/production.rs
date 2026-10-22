@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use apeireth_core::kernel::Clock;
+use apeireth_guard::hook::SharedImmuneMemory;
 use apeireth_memory::{
     AccessHistoryActivationSource, ContextWindowManager, EmbeddingProvider, MemoryCoordinator,
     MemoryExtractor, MemoryGovernanceStore, MemoryMaterializer, MemoryMaterializerPort,
@@ -29,7 +30,11 @@ use apeireth_tools_canonical::{
     CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
 };
 
+use super::bio_approval_social::BioApprovalSocialSource;
+use super::bio_extra_probes::CircadianProbeConfig;
 use super::capability::CapabilityProvider;
+use super::care_heartbeat::bio_lifecycle::BioLifecycleState;
+use super::care_heartbeat::bio_tone::ToneState;
 use super::cognitive::{
     CognitiveTelemetry, CouncilModule, JudgeConfig, JudgeModule, JudgeObservations,
     MemoryRecallAccessStore, MemoryRecallModule, MemoryWritebackModule, PreferenceRecallModule,
@@ -38,6 +43,9 @@ use super::cognitive::{
 use super::error::{RuntimeError, RuntimeResult};
 use super::memory_typed_sink::CanonicalMemoryTypedSink;
 use super::module::Module;
+use super::nervous_bridge::NervousBridgeModule;
+use super::nervous_bus::NervousBus;
+use super::nervous_switchboard::{BioSwitch, NervousSwitchboard};
 use super::organ_module::OrganModule;
 use super::preference_learning::PreferenceLearningModule;
 use super::self_status_source::{
@@ -53,6 +61,11 @@ use super::tool_modules::{
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
 use crate::startup::{StartupPhase, StartupTimeline};
+
+// 生物机制族装配块（W3.2/W3.3/W3.5/W3.6）搬至子模块；`production.rs` 只留调用与字段。
+#[path = "bio_production_wiring.rs"]
+mod bio_production_wiring;
+pub use bio_production_wiring::BioProbeSlots;
 
 /// Adapter that exposes memory's context-window implementation through the
 /// runtime-owned projection port. It is kept in assembly so the runtime kernel
@@ -189,6 +202,9 @@ pub struct ProductionModulesConfig {
     /// ([`super::task_board_tool::TaskBoardApprovalHook`]) 唯一承载; **无
     /// failed/retry 工具面** (failed 只能人判)。默认关 (opt-in)。
     pub task_board: Option<Arc<apeireth_orchestration::task_queue::TaskQueue>>,
+    /// 生物机制族 Wave 4 (SG-14): 上下文预算 (字符) 注入装配面模块;
+    /// `None` = 不注入 (默认策略, 行为不变)。与 cli 组装器同一 env 真源。
+    pub context_budget_chars: Option<usize>,
     /// Register the external tool bridge (MCP) module.
     ///
     /// When enabled, the server list is loaded at assembly time from
@@ -429,6 +445,7 @@ impl Default for ProductionModulesConfig {
             voice_speak: None,
             backup: None,
             task_board: None,
+            context_budget_chars: None,
             mcp: false,
             mcp_data_dir: None,
             preference_learning: false,
@@ -571,6 +588,19 @@ pub struct ProductionModules {
     telemetry: Arc<CognitiveTelemetry>,
     mcp_bridge: Option<Arc<McpToolBridge>>,
     mcp_module: Option<Arc<McpModule>>,
+    /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
+    organ_module: Option<Arc<OrganModule>>,
+    /// 生物机制族 W3.3: 调质状态句柄 (开关开才 `Some`, 与注册模块共享同一 `Arc`)。
+    bio_tone_state: Option<Arc<ToneState>>,
+    /// 生物机制族 W3.5 (SG-18): 生命周期状态句柄 (开关开才 `Some`, 与注册模块同一 `Arc`)。
+    bio_lifecycle_state: Option<Arc<BioLifecycleState>>,
+    /// 生物机制族 W3.6: 自述 probe 迟绑定共享槽 (开关关 = 槽不武装, 零读取).
+    bio_probe_slots: BioProbeSlots,
+    /// Wave 4 / ADR-0009 R1b-1a: 神经信号总线句柄 (适配器只 publish; 与注册的桥
+    /// 共享同一 `Arc`)。全关时照常构造, 但没有桥/订阅者 = 零投递。
+    nervous_bus: Arc<NervousBus>,
+    /// Wave 4 / ADR-0009 R1b-1a: 本次装配生效的开关快照 (一次解析, 诊断读).
+    nervous_switchboard: NervousSwitchboard,
 }
 
 /// Compatibility alias for [`ProductionModules`].
@@ -631,6 +661,10 @@ pub enum ModuleFamily {
     DeviceControl,
     /// K 轴 L5 看家骨架族 (`guard_watch`)。
     GuardWatch,
+    /// 生物机制族 W3.3 · 游戏练习场工具族 (`play_*`, 默认关): 四个工具模块各自
+    /// 一个构造点 (propose/start/finish/abort, 共享同一本内存账本);
+    /// env `APEIRETH_ENABLE_BIO_PLAY` 只认 `"1"` 且工作区根注入才构造。
+    BioPlay,
     /// 自省通道族 (`self_status`)。
     SelfStatus,
     /// 外部工具桥族 (`mcp`)。
@@ -782,7 +816,23 @@ impl ProductionModules {
         instrument: &BuildInstrumentation,
     ) -> RuntimeResult<Self> {
         let mut modules: Vec<Arc<dyn Module>> = Vec::new();
+        // Wave 4 / ADR-0009 R1b-1a: 神经信号总线 + 开关表一次解析 (9 开关 + 1
+        // 参数, fail-closed)。全关 = 不注册桥 = 零行为变化; 任一开关开 = 桥在
+        // 模块表首位注册, 这是唯一的 HookPoint→信号映射点。
+        let nervous_bus = Arc::new(NervousBus::new());
+        let nervous_switchboard = NervousSwitchboard::from_env().map_err(|error| {
+            RuntimeError::misconfigured(format!("nervous switchboard refused to load: {error}"))
+        })?;
+        if nervous_switchboard.any_enabled() {
+            modules.push(
+                Arc::new(NervousBridgeModule::new(nervous_bus.as_ref().clone())) as Arc<dyn Module>,
+            );
+        }
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
+        // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
+        let mut organ_module: Option<Arc<OrganModule>> = None;
+        // W3.6: 自述 probe 迟绑定槽 (安装点按开关武装; cli/组合根后续填句柄).
+        let bio_probe_slots = BioProbeSlots::new();
         let observations = Arc::new(JudgeObservations::default());
         let telemetry = Arc::new(CognitiveTelemetry::default());
 
@@ -804,9 +854,8 @@ impl ProductionModules {
         };
 
         // 自省通道: 能力名册在任何字段移动之前投影 —— 名册即**实际用于装配的**
-        // config 生效值 (读真实生效值, 不是配置文本的复述)。注入槽级的注册
-        // 条件 (图谱槽 / 外部工具服务器面) 先折进生效视图, 名册不复述
-        // "配置说开"而注册没成的事实。
+        // config 生效值; 注入槽级的注册条件 (图谱槽 / 外部工具服务器面) 先折进
+        // 生效视图, 名册不复述 "配置说开"而注册没成的事实。
         let mut roster_config = config.clone();
         roster_config.community_triage = config.community_triage && backends.graph.is_some();
         roster_config.mcp = mcp_server_config
@@ -989,6 +1038,9 @@ impl ProductionModules {
         // (增删列, 四类触发器词表)。治理档位在治理链 (`CareScheduleApprovalHook`):
         // RequireApproval 级 —— 改规则 = 写文件 (write_intent 同族), 每次调用
         // 都停人工审批。
+        // W3.6: 关怀数据目录同时作为生命周期账本持久化目录（开关关 = 纯内存，
+        // 不建文件；目录缺省 = 不持久化），故先克隆再按需搬迁。
+        let bio_lifecycle_store_dir = config.care_schedule.clone();
         if let Some(care_dir) = config.care_schedule {
             instrument.constructed(ModuleFamily::CareSchedule);
             let provider = CareScheduleModule::new(care_dir);
@@ -1148,6 +1200,28 @@ impl ProductionModules {
             capabilities.extend(provider.capabilities());
         }
 
+        // W3.3 · 游戏练习场 (`tool.play_*`, 默认关): 装配块在 `install_bio_play`
+        // (开关值来自装配根一次性解析的 `NervousSwitchboard`, 且要求工作区根注入),
+        // 返回共享账本句柄供自述 play probe 只读接入。
+        let bio_play_state = bio_production_wiring::install_bio_play(
+            &mut capabilities,
+            &clock,
+            backends.workspace_root.as_deref(),
+            instrument,
+            nervous_switchboard.switch_enabled(BioSwitch::Play),
+        );
+
+        // W3.7 · 仪式完成面 (`tool.ritual_done` / `tool.ritual_skip`, 默认关):
+        // 复用族总闸 + 关怀数据目录注入; 双工具写同一本 `<care_dir>/ritual_state.json`
+        // (与 care 心跳同一目录), 补「仪式完成」显式事件源。返回的账句柄在自述槽
+        // 武装后（见下方 self_status 块之后）填入 SG-22 观测槽。
+        let bio_ritual_store = bio_production_wiring::install_bio_ritual_tools(
+            &mut capabilities,
+            &clock,
+            bio_lifecycle_store_dir.as_deref(),
+            nervous_switchboard.switch_enabled(BioSwitch::CareCandidates),
+        );
+
         // 自省通道 (与既有 5 内置工具同列): `tool.self_status` 结构化自述面。
         // 只读档、默认可用、零审批; data 系探测口缺位时对应字段显式 null +
         // 原因, 注册与其余字段不受影响。
@@ -1217,11 +1291,19 @@ impl ProductionModules {
             if let Some(counters) = &doc_ops_counters {
                 source = source.with_doc_ops_probe(doc_ops_status_probe(Arc::clone(counters)));
             }
-            // 创作工具面 K3: 自述创作节 (表格操作计数) 与 `tool.sheet_ops` 工具面
-            // 同一计数器 (同源同账); 面没注册 = 创作节显式 null + 原因。
+            // 创作工具面 K3: 自述创作节与 `tool.sheet_ops` 工具面同一计数器 (同源同账)。
             if let Some(counters) = &sheet_ops_counters {
                 source = source.with_sheet_ops_probe(sheet_ops_status_probe(Arc::clone(counters)));
             }
+            // W3.2/W3.5/W3.6: `capabilities.bio_mechanisms` 只读聚合面 (装配块已搬
+            // 至 `bio_production_wiring`; 迟绑定槽由组合根在 build 后填句柄)。
+            source = bio_production_wiring::install_bio_self_status(
+                source,
+                config.task_board.as_ref(),
+                bio_play_state.as_ref(),
+                &bio_probe_slots,
+                nervous_switchboard.switch_enabled(BioSwitch::SelfStatus),
+            );
             // K 轴 L1: 自述在场节 (设备数/白名单数/最近感知) 与 `tool.device_sense`
             // 工具面同一本设备表同一进程内感知计数 (同源同账; 面没注册 = 在场节
             // 显式 null + 原因)。
@@ -1244,9 +1326,16 @@ impl ProductionModules {
                 );
             }
             instrument.constructed(ModuleFamily::SelfStatus);
-            let provider = SelfStatusModule::new(Arc::new(source));
+            // R1b-4a：自述帧 `capabilities.nervous_system.bus` 报总线观测面
+            // （装配根唯一 NervousBus；本帧未绑 = null，不编造计数）。
+            let provider =
+                SelfStatusModule::new_with_bus(Arc::new(source), nervous_bus.as_ref().clone());
             capabilities.extend(provider.capabilities());
         }
+
+        // Wave 4 观测补格: 自述槽此时已按开关武装 → 把仪式账句柄填入 SG-22 观测槽
+        //（开关关 / 缺目录 = `None` = 槽保持空；fill 未知武装时 no-op）。
+        bio_probe_slots.fill_ritual_store(bio_ritual_store.as_ref());
 
         // External tool bridge (MCP): the slot is opt-in, and enabling it
         // loads the server list at assembly time (env primary, data-directory
@@ -1269,6 +1358,11 @@ impl ProductionModules {
             mcp_bridge = Some(Arc::new(bridge));
             mcp_module = Some(module);
         }
+
+        // SG-25 工具生态健康: 静态能力表装配完毕 → 把剖面填入迟绑定只读槽
+        // (开关关 = fill no-op, 槽保持空、probe 未注册, 自述帧逐字节不变)。
+        // 快照 = 装配期的静态注册面; 运行期动态发现的外部工具不在其中 (如实缺口)。
+        bio_probe_slots.fill_ecosystem_profiles(&capabilities);
 
         // Unified Memory 2.0 coordinator wiring
         let mut shared_coordinator: Option<Arc<MemoryCoordinator>> = None;
@@ -1416,7 +1510,9 @@ impl ProductionModules {
 
         if config.organs {
             instrument.constructed(ModuleFamily::Organs);
-            modules.push(Arc::new(OrganModule::new(Arc::clone(&clock))));
+            let module = Arc::new(OrganModule::new(Arc::clone(&clock)));
+            organ_module = Some(Arc::clone(&module));
+            modules.push(module as Arc<dyn Module>);
         }
 
         if config.reflexion {
@@ -1461,6 +1557,40 @@ impl ProductionModules {
                     .with_telemetry(Arc::clone(&telemetry)),
             ));
         }
+
+        // W3.2 / W3.3 / W3.5 / W3.6: 修复指令段 + 调质 tone + 生命周期装配块 (全默认关,
+        // 关 = 不构造不注册), 句柄回传装配根；生命周期账本持久化目录 = 关怀数据目录
+        // （缺省 None = 纯内存，不建文件）。
+        let bio_wiring = bio_production_wiring::install_bio_modules(
+            &mut modules,
+            &clock,
+            &capabilities,
+            bio_lifecycle_store_dir.as_deref(),
+            config.context_budget_chars,
+            &nervous_switchboard,
+        );
+        // R1b-2a: 调质事件源收敛到总线订阅——开关开才有订阅者, 拿到总线后注册
+        // (关 = `None` = 不注册 = 总线零订阅者 = 零变化)。
+        if let Some(subscriber) = &bio_wiring.tone_subscriber {
+            subscriber.subscribe(&nervous_bus);
+        }
+        // Wave 4 (SG-20): 社会修复观测源订阅人工拒绝信号（源 None = 开关关 = 零订阅）。
+        if let Some(source) = bio_wiring.social_repair_source.as_ref() {
+            source.subscribe(&nervous_bus);
+        }
+        // R1b-2b: 生命周期账本在模块安装后才存在 → 迟绑定槽填同一 Arc
+        //（自述开关关时 fill no-op；槽空 = 单格 null + 未接线真因）。
+        bio_probe_slots.fill_lifecycle_state(bio_wiring.lifecycle_state.as_ref());
+        // Wave 4 观测补格: 调质句柄与昼夜节律配置在模块安装后填入迟绑定槽
+        //（自述开关关时 fill no-op；槽空 = 单格 null + 未接线真因）。
+        bio_probe_slots.fill_tone_state(bio_wiring.tone_state.as_ref());
+        bio_probe_slots.fill_circadian_config(CircadianProbeConfig::new(
+            nervous_switchboard.circadian_tz_offset_min(),
+            nervous_switchboard.switch_enabled(BioSwitch::Circadian),
+        ));
+        // Wave 4 homeostasis 行为接线: 装配装饰器的观测源（开关关时 fill no-op）。
+        bio_probe_slots.fill_homeostasis(bio_wiring.homeostasis_source.as_ref());
+        bio_probe_slots.fill_social_repair(bio_wiring.social_repair_source.as_ref());
 
         if config.memory_writeback {
             instrument.constructed(ModuleFamily::MemoryWriteback);
@@ -1508,6 +1638,9 @@ impl ProductionModules {
             modules.push(Arc::new(module.with_telemetry(Arc::clone(&telemetry))));
         }
 
+        // W3.6: 器官模块装配后把审议门账读取口交给自述槽 (未装配 = no-op).
+        bio_probe_slots.fill_from_organ_module(organ_module.as_ref());
+
         let mut seen = std::collections::BTreeSet::new();
         for module in &modules {
             let id = module.manifest().id.clone();
@@ -1524,7 +1657,36 @@ impl ProductionModules {
             telemetry,
             mcp_bridge,
             mcp_module,
+            organ_module,
+            bio_tone_state: bio_wiring.tone_state,
+            bio_lifecycle_state: bio_wiring.lifecycle_state,
+            bio_probe_slots,
+            nervous_bus,
+            nervous_switchboard,
         })
+    }
+
+    /// Wave 4 / ADR-0009 R1b-1a: 神经信号总线句柄 (适配器只 publish, 不直写
+    /// `ToneState`; 与注册的桥共享同一 `Arc`)。
+    pub fn nervous_bus(&self) -> Arc<NervousBus> {
+        Arc::clone(&self.nervous_bus)
+    }
+
+    /// 本次装配生效的开关快照 (`NervousSwitchboard::from_env` 一次解析)。
+    pub fn nervous_switchboard(&self) -> &NervousSwitchboard {
+        &self.nervous_switchboard
+    }
+
+    /// Wave 4 / ADR-0009 R1b-2c: 审批社交信号源句柄。
+    ///
+    /// 只有调质开关开时才交付 (`Some`); 开关关 = `None` = 审批路径不发布、
+    /// 总线零计数, 与未接线逐字节一致。句柄与注册的调质订阅者共享同一条
+    /// [`NervousBus`](super::nervous_bus::NervousBus) (同一 `Arc`)。
+    #[must_use]
+    pub fn bio_approval_social_source(&self) -> Option<Arc<BioApprovalSocialSource>> {
+        self.nervous_switchboard
+            .switch_enabled(BioSwitch::Tone)
+            .then(|| Arc::new(BioApprovalSocialSource::new((*self.nervous_bus).clone())))
     }
 
     /// Attach the context-window projector using its default policy.
@@ -1573,9 +1735,7 @@ impl ProductionModules {
     }
 
     /// The external tool bridge assembled for the MCP slot, when enabled.
-    ///
-    /// Adapters keep this handle to run the asynchronous connect/discovery
-    /// pass and to emit the redacted startup log.
+    /// Adapters keep this handle to run the asynchronous connect/discovery pass.
     pub fn mcp_bridge(&self) -> Option<&Arc<McpToolBridge>> {
         self.mcp_bridge.as_ref()
     }
@@ -1583,6 +1743,23 @@ impl ProductionModules {
     /// The MCP dynamic tool module bag, when the MCP slot is enabled.
     pub fn mcp_module(&self) -> Option<&Arc<McpModule>> {
         self.mcp_module.as_ref()
+    }
+
+    /// W3.3 外部事件源: 把 guard 免疫记忆共享句柄接到器官模块的审议门, 并把
+    /// **同一份**句柄填进 W3.6 自述槽 (开关关 = 槽未武装, fill no-op)。传进来的
+    /// 必须是 hook 正在使用的同一份句柄 (否则观测与门读的不是同一份状态);
+    /// 未启用器官模块或句柄为 `None` 时不做任何事, 返回是否真的挂上审议门。
+    ///
+    /// **默认零行为变化**: 不调用本方法 / 传 `None` = 审议门从未读免疫记忆。
+    pub fn attach_immune_memory(&self, memory: Option<SharedImmuneMemory>) -> bool {
+        self.bio_probe_slots.fill_immune_memory(memory.clone());
+        match (&self.organ_module, memory) {
+            (Some(module), Some(memory)) => {
+                module.attach_immune_memory(memory);
+                true
+            }
+            _ => false,
+        }
     }
 }
 

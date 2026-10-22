@@ -1,6 +1,6 @@
 //! IM 快捷接入: 错误面 (闭合分类词表, 事实错误 + 可重试性)。
 //!
-//! 口径与 [`crate::lark::error`] 一致: 错误只报事实类别, 0 回显共享秘密 /
+//! 口径与 im wire 面一致: 错误只报事实类别, 0 回显共享秘密 /
 //! 0 静默吞错。分类闭合 (6 variant), [`ImError::class`] 一处穷举。
 
 use serde::{Deserialize, Serialize};

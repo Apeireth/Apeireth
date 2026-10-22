@@ -64,7 +64,7 @@ use sha2::{Digest, Sha256};
 
 use super::cognitive::CognitiveTelemetry;
 use super::module::{
-    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
+    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
 };
 
 /// Stable slot id (the ledger's canonical deferred id, now implemented).
@@ -272,7 +272,7 @@ fn cluster_topic_for(topic: &str) -> Option<String> {
 }
 
 #[async_trait]
-impl AgentModule for PreferenceLearningModule {
+impl BehaviorModule for PreferenceLearningModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

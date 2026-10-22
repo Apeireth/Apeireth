@@ -75,6 +75,11 @@ const mailApp = readFileSync(join(here, '../src/lib/starport/apps/mail-app.ts'),
   assert.ok(terminalApp.includes('run_workspace_command'), '终端走真实执行命令');
   assert.ok(terminalApp.includes('truncated'), '截断如实外显');
   assert.ok(terminalApp.includes('智能体驱动走审批族'), '审批族接线缝明示');
+  // 权限边界明示（安全隐患分析 #2：不许让用户以为受审批链/沙箱保护）。
+  assert.ok(terminalApp.includes('以当前 Windows 用户权限执行命令'), '权限边界明示：当前用户权限');
+  assert.ok(terminalApp.includes('不受智能体审批链保护'), '权限边界明示：不走审批链');
+  assert.ok(terminalApp.includes('不是操作系统沙箱'), '权限边界明示：非沙箱');
+  assert.ok(terminalApp.includes('关闭的是智能体工具面'), '权限边界明示：enable_shell 只关智能体工具面');
   assert.ok(portableApp.includes('get_portable_mode'), '便携走真实判定命令');
   assert.ok(memoryFlowApp.includes('appendMemoryEpisode('), '深流沉淀走真实记忆通道');
   assert.ok(memoryFlowApp.includes('fetchMemoryEpisodes('), '深流召回走真实记忆通道');

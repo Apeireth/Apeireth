@@ -13,6 +13,8 @@
 > - `ROADMAP.md` — 顶层路线 (§3/§3.5/§3.6/§4)
 > - `CHANGELOG.md` — 12/12 ledger + 9/10 RC + R12 + 8 spec + A 块真账
 
+> **复核注（2026-10-20，ADR-0006）：键集正式化**——现行为 **14 键** `PhilosophyKey`（PHL-01..08；2026-10-11 PHL-08 主人特批直加，源码 `philosophy.rs:56-61/107-128` 留痕）。本文成文于 2026-08-28，正文中「13 键」均为 PHL-08 之前的历史口径，**保留原文不追溯改写**；LOCKED 现值表述以 [AGENTS.md](../../../AGENTS.md) §1 与 [ROADMAP.md](../../../ROADMAP.md) §13 为准。
+
 ```
 [Document-Meta]
 Document:        docs/04-internal/ENGINEER-MANIFESTO.md
@@ -50,8 +52,8 @@ Author:          主代理 Mavis
 
 | 维度 | 真账 |
 |---|---|
-| **Workspace** | **31 members（30 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + 图像核心家族 11 = 30 crates；2026-10-18 许可搬运线 +11，见 [license-port/](license-port/)）, 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；历史口径：2026-10-18 前 20 members / 此前 18 crates） |
-| **架构收敛** | v1 86-crate → v2 30 crate = **65.1% 收敛**（2026-10-18 口径；79.1% 为 18-crate 历史口径——图像家族是 vendored 内核，不与 v1 业务 crate 同轴比较） |
+| **Workspace** | **30 members（29 crates + bench harness）**（foundation 6 / engine 7 / capabilities 1 / adapters 4 = 18 + 图像核心家族 11（image-core 接口层 + 10 vendored）= 29 crates；2026-10-20 R4b 归档 perception 后 31→30 members / 30→29 crates，见 ADR-0005；2026-10-18 许可搬运线 +11，见 [license-port/](license-port/)）, 单向依赖, 0 循环（2026-09-05 实测 + 2026-10-06 对账新增 `crates/engine/guard`；历史口径：2026-10-18 前 20 members / 此前 18 crates） |
+| **架构收敛** | v1 86-crate → v2 **29 crate = 66.3% 收敛**（2026-10-20 R4b 后口径；2026-10-18 口径为 30 crate / 65.1%；79.1% 为 18-crate 历史口径——图像家族是 vendored 内核，不与 v1 业务 crate 同轴比较） |
 | **哲学锚** | **9 项 LOCKED** (S-1/S-2/S-3 + O-1..O-6, O-6 永远追求最优 2026-08-27 主人授权加) |
 | **测试** | **单一真源 [test-baseline.md](../03-reference/test-baseline.md)**（2026-10-18 全量 `-j 2` 口径，本文不抄写数字）；历史：2026-10-13 实测 5360 passed / 0 failed / 22 ignored（190 suites）、2026-09-05 3120/13、2026-08-28 A 块后 1739 |
 | **clippy** | **0 警告** (`--workspace --all-targets --locked -- -D warnings`) |

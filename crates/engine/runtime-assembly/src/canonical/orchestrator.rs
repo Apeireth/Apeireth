@@ -51,11 +51,55 @@
 //! 每个 organ output 喂下一 organ input (per `OrganInput::context_hints` 链式传递).
 //! E7 emergence 输出 = `Some(Initiative)` → Orchestrator 上层 tick 决策; `None` →
 //! 机制层 8 重 gate 拦下 (`EmergenceGate::last_hold()` 留痕 → Orchestrator 外层统一入口).
+//!
+//! # W3.2 装配面: 群体感应审议门 (默认关, opt-in)
+//!
+//! - **开关**: env `APEIRETH_ENABLE_QUORUM_GATE` 仅 `"1"` 开 (`QUORUM_GATE_ENABLE_ENV`),
+//!   解析纯函数 `quorum_gate_enabled_from_env_value`; 默认关 + fail-closed.
+//! - **装配点**: [`OrganOrchestrator::deliberate`] —— 门关走原 `Council::decide_with_invoker`
+//!   (逐字节同旧行为, 不读不写门状态), 门开走 `Council::decide_with_invoker_gated`.
+//! - **不召开**: `Hold`(未达升议阈值) / `Cooldown`(不应期) → 不调任何 advisor、不伪造结论,
+//!   tick 以 `Held(GateBlock)` 留痕, 精确原因进 `last_quorum_trace()`.
+//! - **召开**: 用原 `CouncilResult` 继续; 升议 `score` / `reasons` 记入门账
+//!   ([`QuorumTrace`], 只有 `kind weight=... source=... at_ms=...`, 不含用户原文).
+//! - **信号源 (0 装诚实)**: 自动源 = 器官链故障 (Anomaly) + 审议后证据回流
+//!   (advisor 失败/超时 Anomaly, Retry Uncertainty, 停议 Conflict); 其它外部事件走显式
+//!   注入口 [`OrganOrchestrator::push_quorum_signal`].
+//!
+//! # W3.3 外部事件源: guard 免疫升级 → Conflict (默认未挂载)
+//!
+//! - **装配**: 组合根在治理 hook 构造后取
+//!   `BehaviorChainGuardHook::shared_immune_memory()` → [`OrganOrchestrator::attach_immune_memory`]
+//!   (迟绑定; 默认 `None` = 不读免疫记忆, 与 W3.2 行为一致). 只有
+//!   `APEIRETH_ENABLE_IMMUNE_MEMORY=1` (hook 真挂载免疫记忆) 时句柄才存在.
+//! - **触发口径**: [`immune_record_is_escalation`] —— 免疫记录 `status=Open` 且
+//!   `tier=Tier3Lockdown`, 等价于该签名最近一次 `ImmuneMemory::observe` 返回
+//!   `escalated=true` (guard hook 的 Deny 出口 = 高严重度). 每条这样的记录注入一条
+//!   `QuorumSignal { kind: Conflict, at_ms: now, source: "guard.immune" }`.
+//! - **节流**: `(record_key, occurrences)` 记账; 同一次 observe 只注入一次, 同签名
+//!   再次升级 (occurrences 前进) 才再注入. 不把审议门打成常开: 单条 Conflict 缺省
+//!   权重 0.4 < 默认阈值 1.0, 阈值/衰减/冷却全用既有 `QuorumConfig`.
+//! - **隐私**: `source` 只有稳定名 [`IMMUNE_QUORUM_SIGNAL_SOURCE`], 不带 record key /
+//!   reason 全文 / 文件路径 / URL / 用户原文.
+//! - **0 装诚实**: 外部事件源只接 guard 免疫这一条; IM / gateway 等源未接, 仍走
+//!   [`OrganOrchestrator::push_quorum_signal`]. 免疫分级不改审批 / 拒绝与审议结论.
 
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use apeireth_core::kernel::{Clock, Episode, SessionId};
+// 生物机制族 W3.2 装配面: 群体感应审议门 (quorum gate) —— 默认关 opt-in.
+use apeireth_orchestration::council::{GatedCouncilResult, QuorumGate};
+use apeireth_orchestration::quorum::{
+    QuorumAccumulator, QuorumDecision, QuorumEscalation, QuorumSignal, QuorumSignalKind,
+};
+// 生物机制族 W3.3 外部事件源: guard 免疫记忆 (默认未挂载; 仅拉取存量升级记录).
+use apeireth_guard::hook::SharedImmuneMemory;
+use apeireth_guard::immune_memory::{
+    ImmuneMemoryStore, IncidentRecord, IncidentStatus, SeverityTier,
+};
 use apeireth_orchestration::{Council, CouncilDecision, CouncilInvoker, CouncilResult, Proposal};
 use apeireth_plugin::organ::{
     InitiativeGate, OrganError, OrganInput, OrganKind, OrganOutput, OrganTrait,
@@ -544,6 +588,34 @@ pub struct OrganOrchestrator<RS: RelationshipState + 'static> {
 
     // 时钟 (per `CouncilModule::clock` 同模式)
     clock: Arc<dyn Clock>,
+
+    // ------------------------------------------------------------
+    // W3.2 装配面: 群体感应审议门 (quorum gate) —— 默认关
+    // ------------------------------------------------------------
+    /// 门本体 (W3.1 `QuorumGate` 原样持有, 装配面不复制阈值/衰减/冷却逻辑).
+    ///
+    /// `tokio::sync::Mutex` 而非 `parking_lot`: `decide_with_invoker_gated` 要在
+    /// 准入期间独占 `&mut QuorumGate` 并跨 `await`, 用异步锁避免跨 await 持同步锁.
+    quorum_gate: tokio::sync::Mutex<QuorumGate>,
+    /// 门是否参与的锁外镜像, 与 `quorum_gate.is_enabled()` 同时设置 (构造 / 注入).
+    ///
+    /// 存在意义: 默认关路径连异步锁都不碰 → 逐字节同 W3.1 前行为.
+    quorum_enabled: bool,
+    /// 最近一次 gated 审议的门账 (只由 gated 调用写; 默认关时保持 `None`).
+    last_quorum_trace: parking_lot::Mutex<Option<QuorumTrace>>,
+    /// W3.3 外部事件源: guard 免疫记忆共享句柄 (默认 `None` = 未挂载).
+    ///
+    /// 迟绑定而非构造参数: 组合根先建治理 hook、再经
+    /// `BehaviorChainGuardHook::shared_immune_memory()` 取回同一份句柄.
+    /// `None` 时 [`Self::record_immune_signals`] 直接返回, 不读任何记忆.
+    immune_memory: parking_lot::Mutex<Option<SharedImmuneMemory>>,
+    /// 已注入的免疫升级账: `record_key` → 已消费的 `occurrences`.
+    ///
+    /// 同一 observe 的升级只注入一次; 同签名再次升级 (occurrences 前进) 才再注入.
+    /// 键只在本进程内做节流, 不对外输出.
+    immune_injected: parking_lot::Mutex<HashMap<String, u64>>,
+    /// 9 organ 串联里 `process()` 返 `Err` 的次数 (一次 tick 消费后清零).
+    organ_failures: AtomicU64,
 }
 
 /// 单条反馈记录 (per v1 `asi_feedback` 简化, runtime 侧)
@@ -626,6 +698,125 @@ pub fn system_time_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+// ============================================
+// W3.2 装配面: 群体感应审议门 (quorum gate) —— 默认关
+// ============================================
+
+/// 群体感应审议门开关 env: 仅 `"1"` 开, 其余 (未设置 / 空 / `"0"` / `"true"` / 任意值) 一律关.
+///
+/// 与既有 `APEIRETH_ENABLE_*` 惯例一致: 默认关 + fail-closed, 解析在
+/// [`quorum_gate_enabled_from_env_value`] 里做纯函数化 (可单测).
+pub const QUORUM_GATE_ENABLE_ENV: &str = "APEIRETH_ENABLE_QUORUM_GATE";
+
+/// 开关解析 (纯函数, 可测试): 仅 `"1"` 开, 其余一律关 (默认关 fail-closed).
+///
+/// 先 `trim`, 因此 `" 1 "` 也算开; `"01"` / `"1.0"` / `"true"` / `""` / `None` 全关.
+pub fn quorum_gate_enabled_from_env_value(value: Option<&str>) -> bool {
+    value.is_some_and(|value| value.trim() == "1")
+}
+
+/// 按 env 值构造门 (纯函数, 可测试): 关 → [`QuorumGate::disabled`], 开 → 默认累加器.
+///
+/// 默认配置 = 阈值 `1.0` / 衰减 `0.05`/s / 冷却 `600_000ms` / 上限 `2.0` (per
+/// `apeireth_orchestration::quorum`), 装配面不另造第二套缺省值.
+pub fn quorum_gate_from_env_value(value: Option<&str>) -> QuorumGate {
+    QuorumGate::new(
+        QuorumAccumulator::default(),
+        quorum_gate_enabled_from_env_value(value),
+    )
+}
+
+/// 从进程 env 构造门 (由 [`OrganOrchestrator::new`] 在装配时读**一次**).
+pub fn quorum_gate_from_env() -> QuorumGate {
+    quorum_gate_from_env_value(std::env::var(QUORUM_GATE_ENABLE_ENV).ok().as_deref())
+}
+
+/// epoch ms (`i64`) → 门用 `u64` 毫秒; 负值按 `0` 处理 (不 panic, 不倒流).
+pub fn quorum_now_ms_from_i64(at_ms: i64) -> u64 {
+    at_ms.max(0) as u64
+}
+
+/// W3.3 外部免疫事件源的唯一稳定名 (写进 `QuorumSignal.source`).
+///
+/// **隐私纪律**: 只此一个字符串, 不带 record key / reason 全文 / 文件路径 / URL /
+/// token / 用户原文; 免疫事件的细节只留在 guard 自己的审计旁路里.
+pub const IMMUNE_QUORUM_SIGNAL_SOURCE: &str = "guard.immune";
+
+/// 一条免疫记录是否代表「该签名最近一次 `observe` 返回 `escalated == true`」.
+///
+/// **0 装诚实**: 生产路径的 `observe` 在 guard hook 内部调用, 响应只进 hook 旁路,
+/// runtime-assembly 拿不到响应对象 (本批不改 guard crate), 因此按
+/// `apeireth_guard::immune_memory` 的分级表从记录判定:
+///
+/// - `escalated=true` 只发生在「新签名 + 高严重度」与「冷却后高严重度复发」两条路径,
+///   两者都把记录 `tier` 置为 `Tier3Lockdown` 且保持 `Open`;
+/// - 已知模式降级 (`hint.lower()`) 永不为 `Tier3Lockdown`; 冷却窗内同签名只静默计数,
+///   记录是 `Resolved`; 低严重度新签名 `tier <= Tier1Note`; self 耐受不写记录.
+///
+/// 因此 `status == Open && tier == Tier3Lockdown` ⇔ 最近一次 observe 升级.
+pub fn immune_record_is_escalation(record: &IncidentRecord) -> bool {
+    record.status == IncidentStatus::Open && record.tier == SeverityTier::Tier3Lockdown
+}
+
+/// 一次 gated 审议的门账 (观测面, 结果字段).
+///
+/// **0 装诚实**:
+/// - 只装门自己的机器可读理由 ([`QuorumEscalation::reasons`]: `kind weight=... source=... at_ms=...`),
+///   不含用户原文 / prompt / payload; 本模块不打印、不做 I/O, 调用方可取
+///   [`Self::summary_line`] 写入自己的 telemetry.
+/// - 默认关时 [`OrganOrchestrator`] 不写本账 (门根本没参与), 见
+///   [`OrganOrchestrator::last_quorum_trace`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuorumTrace {
+    /// 本次准入注入的时刻 (毫秒, 由调用方给).
+    pub at_ms: u64,
+    /// 是否召开: `false` = 门拒绝 (`Hold` 未达阈值 / `Cooldown` 不应期).
+    pub convened: bool,
+    /// 升议快照: 仅本次兑现升议时 `Some`.
+    pub escalation: Option<QuorumEscalation>,
+    /// 拒绝召开的原因 (`Hold` / `Cooldown`, 永不是 `Escalate`); 仅 `!convened` 时 `Some`.
+    pub denial: Option<QuorumDecision>,
+}
+
+impl QuorumTrace {
+    /// 升议理由 (有界、机器可读, 不含用户原文); 未召开 / 未兑现升议时为空.
+    pub fn reasons(&self) -> &[String] {
+        match &self.escalation {
+            Some(escalation) => &escalation.reasons,
+            None => &[],
+        }
+    }
+
+    /// 单行日志摘要 (供调用方写入自身 telemetry; 本模块不打印、不落盘).
+    pub fn summary_line(&self) -> String {
+        match (&self.escalation, &self.denial) {
+            (Some(escalation), _) => format!(
+                "quorum convened at {}ms score={:.3} reasons=[{}]",
+                self.at_ms,
+                escalation.score,
+                escalation.reasons.join("; ")
+            ),
+            (None, Some(denial)) => {
+                format!("quorum not convened at {}ms: {:?}", self.at_ms, denial)
+            }
+            (None, None) => format!("quorum gate disabled at {}ms", self.at_ms),
+        }
+    }
+}
+
+/// 单次审议的装配级结果 (W3.2 内部枚举).
+///
+/// 把「门没放行」与「智囊团否决」分开表达, 避免把未召开的审议写成 `CouncilVeto`:
+/// - [`Self::Convened`] = 门放行 (门关时恒放行), 内值 = 既有 Council 结论 (true 通过);
+/// - [`Self::NotConvened`] = 门拒绝 (未达升议阈值 / 冷却中): **没有**调任何 advisor,
+///   也**没有**伪造审议结论.
+enum DeliberationOutcome {
+    /// 门放行后的既有结论 (true = `Continue`/`Retry`, false = `Stop`/`DeferToHuman`).
+    Convened(bool),
+    /// 门拒绝召开, 本次审议根本没发生.
+    NotConvened,
 }
 
 // ============================================
@@ -728,6 +919,10 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         loop_config: OrchestratorLoopConfig,
         clock: Arc<dyn Clock>,
     ) -> Self {
+        // W3.2: 门开关在装配时读一次 env (默认关 fail-closed); 测试可用
+        // `with_quorum_gate` 显式注入, 不依赖进程 env, 因此可确定性复现.
+        let quorum_gate = quorum_gate_from_env();
+        let quorum_enabled = quorum_gate.is_enabled();
         Self {
             organ_e4,
             organ_f1,
@@ -749,6 +944,12 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
             consecutive_ignores: 0,
             last_decision: None,
             clock,
+            quorum_gate: tokio::sync::Mutex::new(quorum_gate),
+            quorum_enabled,
+            last_quorum_trace: parking_lot::Mutex::new(None),
+            immune_memory: parking_lot::Mutex::new(None),
+            immune_injected: parking_lot::Mutex::new(HashMap::new()),
+            organ_failures: AtomicU64::new(0),
         }
     }
 
@@ -789,6 +990,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match self.organ_e4.process(input.clone()).await {
             Ok(out) => outputs.e4 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.e4 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::E4,
                     note: "chain_9_organs: E4 process failed (0 装诚实)".to_string(),
@@ -799,6 +1001,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match self.organ_f1.process(input.clone()).await {
             Ok(out) => outputs.f1 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.f1 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::F1,
                     note: "chain_9_organs: F1 process failed (0 装诚实)".to_string(),
@@ -809,6 +1012,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match self.organ_f4.process(input.clone()).await {
             Ok(out) => outputs.f4 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.f4 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::F4,
                     note: "chain_9_organs: F4 process failed (0 装诚实)".to_string(),
@@ -819,6 +1023,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match self.organ_f6.process(input.clone()).await {
             Ok(out) => outputs.f6 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.f6 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::F6,
                     note: "chain_9_organs: F6 process failed (0 装诚实)".to_string(),
@@ -829,6 +1034,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match organ_w1.process(input.clone()).await {
             Ok(out) => outputs.w1 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.w1 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::W1,
                     note: "chain_9_organs: W1 process failed (0 装诚实)".to_string(),
@@ -839,6 +1045,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match organ_w2.process(input.clone()).await {
             Ok(out) => outputs.w2 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.w2 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::W2,
                     note: "chain_9_organs: W2 process failed (0 装诚实)".to_string(),
@@ -849,6 +1056,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match self.organ_w3.process(input.clone()).await {
             Ok(out) => outputs.w3 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.w3 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::W3,
                     note: "chain_9_organs: W3 process failed (0 装诚实)".to_string(),
@@ -859,6 +1067,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match self.organ_e7.process(input.clone()).await {
             Ok(out) => outputs.e7 = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.e7 = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::E7,
                     note: "chain_9_organs: E7 process failed (0 装诚实)".to_string(),
@@ -869,6 +1078,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         match self.organ_memory.process(input.clone()).await {
             Ok(out) => outputs.memory = Some(out),
             Err(_e) => {
+                self.organ_failures.fetch_add(1, Ordering::Relaxed);
                 outputs.memory = Some(OrganOutput::NotImplemented {
                     organ: OrganKind::Memory,
                     note: "chain_9_organs: Memory process failed (0 装诚实)".to_string(),
@@ -976,7 +1186,7 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
 
     /// 智囊团审议 (per v1 AwakeCompanion::tick 第 4 步 + RC-6 真接 LLM, Stage 4 完整化).
     ///
-    /// **0 装诚实** (Stage 4 完整化):
+    /// **0 装诚实** (Stage 4 完整化 + W3.2 装配面):
     /// - 真实路径调 `Arc<Council>::decide_with_invoker(proposal, &*self.council_invoker)`
     ///   (per cognitive-module-wiring.md:99 10s/advisor + 60s 总 timeout + 7 advisor 并行).
     /// - 返 `CouncilResult` (typed) 含:
@@ -989,21 +1199,220 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
     /// - 翻译为 Orchestrator gate:
     ///   - `CouncilDecision::Continue` → `Ok(true)` (通过)
     ///   - `CouncilDecision::Retry` → `Ok(true)` (通过, retry feedback 留 trace)
-    ///   - `CouncilDecision::Stop` → `Err(())` (Vetoed, 拦下 → tick 返 Held(CouncilVeto))
-    ///   - `CouncilDecision::DeferToHuman` → `Err(())` (DeferToHuman, 拦下 → tick 返 Held(CouncilVeto))
+    ///   - `CouncilDecision::Stop` → `Ok(false)` (Vetoed, 拦下 → tick 返 Held(CouncilVeto))
+    ///   - `CouncilDecision::DeferToHuman` → `Ok(false)` (同上)
+    /// - **W3.2 群体感应门 (默认关)**: 开关 = env [`QUORUM_GATE_ENABLE_ENV`], 装配时读一次;
+    ///   - **关**: 走**原** `decide_with_invoker` 路径, 不读不写门状态 (逐字节同 W3.1 前行为);
+    ///   - **开**: 改走 `Council::decide_with_invoker_gated(proposal, invoker, &mut gate, now_ms)`,
+    ///     门在**任何 advisor 被调用之前**裁决. `Hold` / `Cooldown` = 不召开: 本函数返
+    ///     `Ok(false)` (含义 = "未获准", 不是"智囊团否决"), 精确原因在
+    ///     [`Self::last_quorum_trace`]; `Escalate` = 用原 `CouncilResult` 继续, 升议的
+    ///     `score` / `reasons` 记入门账 ([`QuorumTrace::reasons`], 不含用户原文).
     /// - 真生产路径: `council_invoker` 由 governance composition root 注入
     ///   `ModuleInvokerCouncilAdapter` (把 runtime `ModuleInvoker` 桥接成 `CouncilInvoker`,
     ///   60s timeout 强制 per cognitive-module-wiring.md:99).
     /// - Stage 5 (L0-L5 cycle) 留口子: typed CouncilResult 用于 telemetry + audit.
     pub async fn council_deliberate(&self, proposal: &Proposal) -> Result<bool, OrganError> {
-        let result: CouncilResult = self
-            .council
-            .decide_with_invoker(proposal, &*self.council_invoker)
-            .await;
-        match result.decision {
-            CouncilDecision::Continue | CouncilDecision::Retry => Ok(true),
-            CouncilDecision::Stop | CouncilDecision::DeferToHuman => Ok(false),
+        // 时钟派生 (真生产用 `Arc<dyn Clock>`; 测试用 VirtualClock / 注入版 at 函数).
+        let now_ms = quorum_now_ms_from_i64(self.clock.now().timestamp_millis());
+        self.council_deliberate_at(proposal, now_ms).await
+    }
+
+    /// [`Self::council_deliberate`] 的**注入时钟**版本: `now_ms` 由调用方给.
+    ///
+    /// 与 [`Self::council_deliberate`] 行为完全一致, 只是把时钟换成入参, 因此门的
+    /// 衰减 / 冷却 / 升议可在测试里逐位复现 (同一个 `now_ms` + 同一串信号 = 同一结论).
+    ///
+    /// 返回语义: `Ok(true)` = 获准; `Ok(false)` = 未获准 (智囊团否决 **或** 门拒绝召开,
+    /// 两者用 [`Self::last_quorum_trace`] 区分); `Err` 保留给既有错误通道.
+    pub async fn council_deliberate_at(
+        &self,
+        proposal: &Proposal,
+        now_ms: u64,
+    ) -> Result<bool, OrganError> {
+        match self.deliberate(proposal, now_ms).await {
+            DeliberationOutcome::Convened(approved) => Ok(approved),
+            DeliberationOutcome::NotConvened => Ok(false),
         }
+    }
+
+    /// 审议装配核心: 门关 → 原路径; 门开 → gated 路径.
+    ///
+    /// **0 装诚实**: 本函数是唯一写 [`Self::last_quorum_trace`] 的地方, 且只在门开时写;
+    /// 门关时既不取异步锁, 也不碰门状态, 保证默认关 = 零行为变化.
+    async fn deliberate(&self, proposal: &Proposal, now_ms: u64) -> DeliberationOutcome {
+        if !self.quorum_enabled {
+            // 默认关: 逐字节同 W3.1 前路径 (同一个 `decide_with_invoker` 调用).
+            let result: CouncilResult = self
+                .council
+                .decide_with_invoker(proposal, &*self.council_invoker)
+                .await;
+            return DeliberationOutcome::Convened(matches!(
+                result.decision,
+                CouncilDecision::Continue | CouncilDecision::Retry
+            ));
+        }
+
+        // 门开: 先准入 (任何 advisor 之前), 再决定是否真审议.
+        // 锁跨 await 持有: 一次审议 = 一次准入, 既避免重复消费同一波升议, 也保证
+        // 门状态不被两个并发审议交错改写 (tokio 异步锁, 不是跨 await 持同步锁).
+        let gated = {
+            let mut gate = self.quorum_gate.lock().await;
+            self.council
+                .decide_with_invoker_gated(proposal, &*self.council_invoker, &mut gate, now_ms)
+                .await
+        };
+
+        match gated {
+            GatedCouncilResult::NotConvened { decision } => {
+                *self.last_quorum_trace.lock() = Some(QuorumTrace {
+                    at_ms: now_ms,
+                    convened: false,
+                    escalation: None,
+                    denial: Some(decision),
+                });
+                DeliberationOutcome::NotConvened
+            }
+            GatedCouncilResult::Convened { result, escalation } => {
+                *self.last_quorum_trace.lock() = Some(QuorumTrace {
+                    at_ms: now_ms,
+                    convened: true,
+                    escalation: escalation.clone(),
+                    denial: None,
+                });
+                // W3.2 生产信号源 ②: 审议后证据回流 (advisor 失败 / 超时 / 否决).
+                self.record_council_evidence(&result, now_ms).await;
+                DeliberationOutcome::Convened(matches!(
+                    result.decision,
+                    CouncilDecision::Continue | CouncilDecision::Retry
+                ))
+            }
+        }
+    }
+
+    /// W3.2 生产信号源 ②: 一次**已召开**的审议结果 → 群体感应信号 (仅门开时记).
+    ///
+    /// - 整体超时 → `Anomaly`;
+    /// - 每个 advisor 失败 → `Anomaly` (来源只写 advisor 稳定名, 不写 reason 文本);
+    /// - `Retry` (要另一版候选) → `Uncertainty`;
+    /// - `Stop` / `DeferToHuman` → `Conflict` (多 advisor 结论冲突 / 无法收敛).
+    ///
+    /// **0 装诚实**: 这些信号在**本次**审议之后才记账, 因此只影响下一次准入 (同波不反复
+    /// 升议); 且不带任何用户原文/提案 payload.
+    async fn record_council_evidence(&self, result: &CouncilResult, now_ms: u64) {
+        let mut signals: Vec<QuorumSignal> = Vec::new();
+        if result.timed_out {
+            signals.push(QuorumSignal::new(
+                QuorumSignalKind::Anomaly,
+                now_ms,
+                "orchestrator.council.timeout",
+            ));
+        }
+        for failure in &result.failures {
+            signals.push(QuorumSignal::new(
+                QuorumSignalKind::Anomaly,
+                now_ms,
+                format!("orchestrator.council.advisor:{}", failure.advisor),
+            ));
+        }
+        if matches!(&result.decision, CouncilDecision::Retry) {
+            signals.push(QuorumSignal::new(
+                QuorumSignalKind::Uncertainty,
+                now_ms,
+                "orchestrator.council.retry",
+            ));
+        }
+        if matches!(
+            &result.decision,
+            CouncilDecision::Stop | CouncilDecision::DeferToHuman
+        ) {
+            signals.push(QuorumSignal::new(
+                QuorumSignalKind::Conflict,
+                now_ms,
+                "orchestrator.council.veto",
+            ));
+        }
+        if signals.is_empty() {
+            return;
+        }
+        let mut gate = self.quorum_gate.lock().await;
+        for signal in signals {
+            gate.add_signal(signal, now_ms);
+        }
+    }
+
+    /// W3.2 生产信号源 ①: 器官链 `process()` 失败次数 → `Anomaly` 信号 (仅门开时记).
+    ///
+    /// 失败计数由 [`Self::chain_9_organs`] 各 error 分支累加, 本函数在 tick 里消费并清零
+    /// (直接直调 `chain_9_organs` 而不走 tick 时, 计数留到下一次 tick 消费).
+    /// 每次 tick 最多记 9 条 (器官链上限), 单条权重 = `Anomaly` 缺省 0.3.
+    async fn record_organ_failure_signals(&self, now_ms: u64) {
+        let failures = self.organ_failures.swap(0, Ordering::Relaxed).min(9);
+        if !self.quorum_enabled || failures == 0 {
+            return;
+        }
+        let mut gate = self.quorum_gate.lock().await;
+        for _ in 0..failures {
+            gate.add_signal(
+                QuorumSignal::new(
+                    QuorumSignalKind::Anomaly,
+                    now_ms,
+                    "orchestrator.organ_chain",
+                ),
+                now_ms,
+            );
+        }
+    }
+
+    /// W3.3 外部事件源: 拉一次「自上次以来新升级」的 guard 免疫记录 → `Conflict`.
+    ///
+    /// - **前置**: 门开 **且** 已挂载免疫句柄才读记忆; 任一不满足立即返回 0
+    ///   (默认关 = 零状态变化, 未挂载 = 零外部信号).
+    /// - **触发**: [`immune_record_is_escalation`] (⇔ 该签名最近一次 observe 返回
+    ///   `escalated == true`). 每条新升级记录一条
+    ///   `QuorumSignal { kind: Conflict, at_ms: now_ms, source: IMMUNE_QUORUM_SIGNAL_SOURCE }`,
+    ///   权重用 `Conflict` 既有缺省 0.4, 阈值 / 衰减 / 冷却全用既有 [`QuorumConfig`].
+    /// - **节流**: `(record_key, occurrences)` 记账, 同一次 observe 只注入一次; 同签名
+    ///   再次升级 (occurrences 前进) 才再注入. 不做轮询常开: 存量记录不会每 tick 重复.
+    /// - **顺序**: `store().list()` 已按 `(kind, normalized_key)` 全序, 注入顺序确定.
+    /// - 返回本次新注入条数 (观测 / 测试用).
+    pub async fn record_immune_signals(&self, now_ms: u64) -> usize {
+        if !self.quorum_enabled {
+            return 0;
+        }
+        let Some(memory) = self.immune_memory.lock().clone() else {
+            return 0;
+        };
+        let mut fresh: Vec<QuorumSignal> = Vec::new();
+        {
+            let mut injected = self.immune_injected.lock();
+            let memory = memory.lock();
+            for (signature, record) in memory.store().list() {
+                if !immune_record_is_escalation(&record) {
+                    continue;
+                }
+                let key = signature.record_key();
+                let already = injected.get(&key).copied().unwrap_or(0);
+                if record.occurrences <= already {
+                    continue;
+                }
+                injected.insert(key, record.occurrences);
+                fresh.push(QuorumSignal::new(
+                    QuorumSignalKind::Conflict,
+                    now_ms,
+                    IMMUNE_QUORUM_SIGNAL_SOURCE,
+                ));
+            }
+        }
+        if fresh.is_empty() {
+            return 0;
+        }
+        let injected_count = fresh.len();
+        let mut gate = self.quorum_gate.lock().await;
+        for signal in fresh {
+            gate.add_signal(signal, now_ms);
+        }
+        injected_count
     }
 
     /// 5 状态机 transition driver (per v1 `AwakeCompanion::ratify_fresh_policy` 1:1).
@@ -1076,7 +1485,9 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
     /// **0 装诚实**:
     /// - 步骤 2 (机制层 8 重 gate) 是 Orchestrator 外层入口, 真实路径走 E7 organ trait.
     /// - 步骤 3 (情绪调制) 简化: Orchestrator 本地 `mood_floor` 校验 (per v1 organs.rs:108-114).
-    /// - 步骤 4 (智囊团审议) 真实路径调 `Arc<Council>::decide(proposal)`.
+    /// - 步骤 4 (智囊团审议) 真实路径调 `Council::decide_with_invoker`; **W3.2 默认关**的
+    ///   群体感应门开出时改走 `decide_with_invoker_gated`, 拒绝召开 (Hold/Cooldown) 以
+    ///   `Held(GateBlock)` 留痕 (不是 `CouncilVeto`).
     /// - 步骤 5 (演化闸) Orchestrator 本地 `policy_stage.is_active()`.
     /// - 步骤 6 (洋葱门) Orchestrator 调 `sovereignty.report_violation` (per v1 organs.rs:153-157).
     pub async fn tick(&mut self, input: OrganTickInput) -> Option<OrganTickOutcome> {
@@ -1099,6 +1510,16 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
                 .unwrap_or_default(),
         );
         let chain = self.chain_9_organs(organ_input).await;
+
+        // W3.2 生产信号源 ①: 器官链故障 → 群体感应异常信号 (门关时零状态变化).
+        // 放这里 (而非 chain 内) 是为了让信号时刻 = 本 tick 注入的 `at_ms`, 可确定性重放.
+        self.record_organ_failure_signals(quorum_now_ms_from_i64(input.at_ms))
+            .await;
+
+        // W3.3 外部事件源: 存量 guard 免疫升级 → Conflict (仅门开 + 已挂载时).
+        // 同样用本 tick 的 `at_ms` 注入, 因此同一串事件可确定性重放.
+        self.record_immune_signals(quorum_now_ms_from_i64(input.at_ms))
+            .await;
 
         // 8 重 gate 外层入口 (per R11 spec §5)
         // **0 装诚实**: initiatives_today 简化 = 0 (per v1 EmergenceLoop 内部维护,
@@ -1154,19 +1575,24 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
             submitted_at: self.clock.now().timestamp(),
             session_id,
         };
-        match self.council_deliberate(&proposal).await {
-            Ok(approved) => {
-                if !approved {
-                    self.last_decision = Some(OrchestratorDecision::Held(
-                        OrganOrchestratorGate::CouncilVeto,
-                    ));
-                    return None;
-                }
-            }
-            Err(_e) => {
+        match self
+            .deliberate(&proposal, quorum_now_ms_from_i64(input.at_ms))
+            .await
+        {
+            DeliberationOutcome::Convened(true) => {}
+            DeliberationOutcome::Convened(false) => {
                 self.last_decision = Some(OrchestratorDecision::Held(
                     OrganOrchestratorGate::CouncilVeto,
                 ));
+                return None;
+            }
+            // W3.2: 门拒绝召开 (未达升议阈值 / 冷却中). 没有 advisor 被调用, 没有审议
+            // 结论被伪造 —— 因此**不**写成 CouncilVeto (那是"智囊团否决"), 用既有 13 门里
+            // 语义最近的 GateBlock 表达"被上层 gate 拦下"; 精确原因在
+            // `last_quorum_trace()` 的 `denial` (Hold / Cooldown) 里.
+            DeliberationOutcome::NotConvened => {
+                self.last_decision =
+                    Some(OrchestratorDecision::Held(OrganOrchestratorGate::GateBlock));
                 return None;
             }
         }
@@ -1349,6 +1775,93 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
     ) -> Option<OrganOrchestratorGate> {
         self.check_8_gates(minutes, initiatives_today, at_ms, last_initiative_ms, chain)
     }
+
+    // ============================================
+    // W3.2 装配面公开 API: 群体感应审议门 (默认关) + 显式信号注入
+    // ============================================
+
+    /// 审议门是否参与准入 (默认 `false`; 由 env 或 [`Self::with_quorum_gate`] 决定).
+    ///
+    /// **0 装诚实**: `false` 时 [`Self::council_deliberate`] 走原 `decide_with_invoker`
+    /// 路径, 输出与 W3.1 前逐字节一致; 本方法不读门、不加锁.
+    pub fn quorum_gate_enabled(&self) -> bool {
+        self.quorum_enabled
+    }
+
+    /// 显式注入门 (装配 / 测试用; 绕过 env, 因此不受进程环境变量并发影响).
+    ///
+    /// 注入同时清空门账, 避免上一段时间线的 `denial` 被误读成这一次的结果.
+    #[must_use]
+    pub fn with_quorum_gate(mut self, gate: QuorumGate) -> Self {
+        self.quorum_enabled = gate.is_enabled();
+        self.quorum_gate = tokio::sync::Mutex::new(gate);
+        *self.last_quorum_trace.lock() = None;
+        self
+    }
+
+    /// W3.3 外部事件源: 挂载 guard 免疫记忆共享句柄 (迟绑定; 默认未挂载).
+    ///
+    /// 组合根在治理 hook 构造后调用
+    /// `BehaviorChainGuardHook::shared_immune_memory()` 取回 hook 正在使用的同一份
+    /// 句柄再传进来 (`None` = hook 未挂载免疫记忆 = 不接线). 挂载本身不改门状态,
+    /// 只有 [`Self::record_immune_signals`] 被调用且门开时才可能注入 Conflict.
+    pub fn attach_immune_memory(&self, memory: Option<SharedImmuneMemory>) {
+        *self.immune_memory.lock() = memory;
+    }
+
+    /// 免疫记忆句柄是否已挂载 (观测 / 测试用; 默认 `false`).
+    pub fn immune_memory_attached(&self) -> bool {
+        self.immune_memory.lock().is_some()
+    }
+
+    /// **显式信号注入入口** (W3.2 装配面公开口).
+    ///
+    /// 用途: 从 orchestrator 外部的异常 / 冲突 / 不确定性事件喂证据, 例如 W3.3 的
+    /// 工具失败面 / 守护告警面 / 用户不信任面. 记录本身与开关无关
+    /// (与 [`QuorumGate::add_signal`] 契约一致): 可以先攒证据再开门, 但只有开门后
+    /// 才参与准入判定; 记录永远不会自己召集审议.
+    ///
+    /// **0 装诚实**: 装配面自带的自动信号源 = 器官链故障
+    /// ([`Self::record_organ_failure_signals`]) + 审议后证据回流
+    /// ([`Self::record_council_evidence`]) + W3.3 guard 免疫升级
+    /// ([`Self::record_immune_signals`], 默认未挂载). IM / gateway 等其它生产事件源
+    /// 仍未接线, 一律经本口显式注入.
+    pub async fn push_quorum_signal(&self, signal: QuorumSignal, now_ms: u64) {
+        self.quorum_gate.lock().await.add_signal(signal, now_ms);
+    }
+
+    /// 最近一次 gated 审议的门账 (默认关 / 从未 gated 过 → `None`).
+    ///
+    /// 这是 `escalation.reasons` 的结果字段面: 调用方可取
+    /// [`QuorumTrace::reasons`] 写日志或取 [`QuorumTrace::summary_line`] 落 telemetry;
+    /// 内容只有机器可读的 `kind weight=... source=... at_ms=...`, 不含用户原文.
+    pub fn last_quorum_trace(&self) -> Option<QuorumTrace> {
+        self.last_quorum_trace.lock().clone()
+    }
+
+    /// 门上待兑信号快照 (观测 / 测试用; 插入顺序).
+    pub async fn quorum_signals(&self) -> Vec<QuorumSignal> {
+        self.quorum_gate
+            .lock()
+            .await
+            .accumulator()
+            .signals()
+            .to_vec()
+    }
+
+    /// 门在 `now_ms` 的当前浓度 (只读, 纯查询; 测试用来核对信号是否真记进账).
+    pub async fn quorum_score(&self, now_ms: u64) -> f32 {
+        self.quorum_gate.lock().await.accumulator().score(now_ms)
+    }
+
+    /// 门最近一次升议的冷却解禁时刻 (毫秒); 从未升议 → `None`.
+    pub async fn quorum_cooldown_until_ms(&self) -> Option<u64> {
+        self.quorum_gate
+            .lock()
+            .await
+            .accumulator()
+            .cooldown_until_ms()
+    }
 }
 
 // ============================================
@@ -1459,6 +1972,7 @@ pub enum CycleStep {
 mod tests {
     use super::*;
     use apeireth_core::clock::VirtualClock;
+    use apeireth_guard::immune_memory::{IncidentKind, IncidentSignature};
     use apeireth_orchestration::Council;
     use apeireth_plugin::organ::OrganKind;
 
@@ -1864,5 +2378,58 @@ mod tests {
         assert!(outputs.all_present());
         assert_eq!(counters[4].load(Ordering::SeqCst), 1, "persistent W1 now");
         assert_eq!(counters[5].load(Ordering::SeqCst), 1, "persistent W2 now");
+    }
+
+    fn immune_record(status: IncidentStatus, tier: SeverityTier) -> IncidentRecord {
+        IncidentRecord {
+            signature: IncidentSignature {
+                kind: IncidentKind::Unknown,
+                normalized_key: "0123456789abcdef".into(),
+            },
+            kind: IncidentKind::Unknown,
+            tier,
+            first_seen_ms: 0,
+            last_seen_ms: 0,
+            occurrences: 1,
+            status,
+            tolerance_level: 0,
+        }
+    }
+
+    /// W3.3: 升级判定与 observe 分级表一致 —— 只有 Open + Tier3Lockdown 算升级.
+    #[test]
+    fn immune_escalation_predicate_matches_observe_outcomes() {
+        assert!(immune_record_is_escalation(&immune_record(
+            IncidentStatus::Open,
+            SeverityTier::Tier3Lockdown
+        )));
+        // 已知模式降级 / 低严重度新签名: Open 但不是 Tier3.
+        for tier in [
+            SeverityTier::Tier0Quiet,
+            SeverityTier::Tier1Note,
+            SeverityTier::Tier2Guard,
+        ] {
+            assert!(
+                !immune_record_is_escalation(&immune_record(IncidentStatus::Open, tier)),
+                "Open + {tier:?} 不是升级"
+            );
+        }
+        // 已收口: 即使 tier 仍是 Tier3Lockdown 也不算本次升级.
+        assert!(!immune_record_is_escalation(&immune_record(
+            IncidentStatus::Resolved,
+            SeverityTier::Tier3Lockdown
+        )));
+    }
+
+    /// W3.3: 外部源稳定名只此一个, 且不可能夹带路径 / URL / token 分隔符.
+    #[test]
+    fn immune_signal_source_is_stable_and_path_free() {
+        assert_eq!(IMMUNE_QUORUM_SIGNAL_SOURCE, "guard.immune");
+        for needle in ["/", "\\", ":", "?", "#", "&", "=", "@", " "] {
+            assert!(
+                !IMMUNE_QUORUM_SIGNAL_SOURCE.contains(needle),
+                "source 不得含 {needle:?}"
+            );
+        }
     }
 }

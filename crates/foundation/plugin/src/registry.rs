@@ -3,9 +3,9 @@
 //! # One truth, split by question
 //!
 //! [`PluginRegistry`] answers *"which plugins exist and what state is each in"*.
-//! [`CapabilityRegistry`] answers *"who owns this capability id"*.
+//! [`CapabilityIndex`] answers *"who owns this capability id"*.
 //!
-//! Crucially, [`CapabilityRegistry`] is an **index, not a copy**. It maps
+//! Crucially, [`CapabilityIndex`] is an **index, not a copy**. It maps
 //! [`CapabilityId`] to the owning [`PluginId`] and stops there; the capability's
 //! declaration continues to live in exactly one place, the owner's manifest. This
 //! is the difference between a derived view and a second source of truth, and it
@@ -119,11 +119,11 @@ impl PluginRegistry {
 ///
 /// An index over the manifests, never a copy of them.
 #[derive(Debug, Default, Clone)]
-pub struct CapabilityRegistry {
+pub(crate) struct CapabilityIndex {
     owners: BTreeMap<CapabilityId, PluginId>,
 }
 
-impl CapabilityRegistry {
+impl CapabilityIndex {
     /// An empty index.
     pub fn new() -> Self {
         Self::default()
@@ -278,7 +278,7 @@ mod tests {
         let a = stub("builtin.a", &[("tool.shell", CapabilityKind::Tool)]);
         let b = stub("builtin.b", &[("tool.shell", CapabilityKind::Tool)]);
 
-        let mut caps = CapabilityRegistry::new();
+        let mut caps = CapabilityIndex::new();
         caps.index(&a.manifest().id, &a.manifest().capabilities)
             .unwrap();
 
@@ -312,7 +312,7 @@ mod tests {
             ],
         );
 
-        let mut caps = CapabilityRegistry::new();
+        let mut caps = CapabilityIndex::new();
         caps.index(&a.manifest().id, &a.manifest().capabilities)
             .unwrap();
         assert!(caps
@@ -332,7 +332,7 @@ mod tests {
                 ("tool.acme_search", CapabilityKind::Tool),
             ],
         );
-        let mut caps = CapabilityRegistry::new();
+        let mut caps = CapabilityIndex::new();
         caps.index(&p.manifest().id, &p.manifest().capabilities)
             .unwrap();
 
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn an_unknown_capability_is_reported_rather_than_defaulted() {
-        let caps = CapabilityRegistry::new();
+        let caps = CapabilityIndex::new();
         let err = caps
             .owner(&CapabilityId::new("tool.absent").unwrap())
             .unwrap_err();

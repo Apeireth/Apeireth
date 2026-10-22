@@ -32,6 +32,7 @@ docs/
 | **[04-internal/kani-verification-playbook.md](04-internal/kani-verification-playbook.md)** | **Kani 形式化验证实战手册（动验证面必读: 14 坑 + 配方检查单 + 本地环境）** |
 | **[04-internal/ops-network-playbook.md](04-internal/ops-network-playbook.md)** | **运维与网络排障手册（代理/大文件下载/WSL 修复/shell 陷阱）** |
 | [02-guides/user-manual.md](02-guides/user-manual.md) | 用户手册（功能详解/FAQ）|
+| [02-guides/permission-surfaces.md](02-guides/permission-surfaces.md) | 权限面边界说明（智能体工具面 / 桌面用户直操面 / 工作目录非沙箱三层区分 + 超时杀进程边界）|
 | [02-guides/deployment.md](02-guides/deployment.md) | 部署（环境变量/持久化/前端接入/故障排查）|
 | [02-guides/development.md](02-guides/development.md) | 开发指南（代码地图/模式/陷阱/提交规范）|
 | [02-guides/first-contribution.md](02-guides/first-contribution.md) | 新人上手指南（good-first-issue → 第一个 PR 动线）|
@@ -46,6 +47,9 @@ docs/
 | [04-internal/backlog.md](04-internal/backlog.md) | 唯一权威台账 |
 | [04-internal/backend-enhancement/00-backlog.md](04-internal/backend-enhancement/00-backlog.md) | 后端增强批次账（D 编号待办/残余/真源索引；每波总装更新）|
 | **[04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md](04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md)** | **系统级能力缺口台账（SG/NT/NF 条目 · 防遗忘 · 拍板后转任务卡；每波复核）** |
+| [04-internal/backend-enhancement/security-hardening-delivery-2026-10-20.md](04-internal/backend-enhancement/security-hardening-delivery-2026-10-20.md) | 安全加固线交付报告（外部审计 8 项隐患 B1-B8 全收口 · 修法/残余/owner 决策位）|
+| [04-internal/governance-chain-drill-2026-10-20.md](04-internal/governance-chain-drill-2026-10-20.md) | 治理链端到端合练记录（M-of-N 逻辑票三路径实测 · 链路图 · 缺口 6 项如实登记）|
+| [packaging/release-asset-verification.md](packaging/release-asset-verification.md) | 发布资产校验与签名流程（哈希三口径校验脚本 · 发布者/用户两侧 · 排期 4 项）|
 | [04-internal/ai-os-landscape-2026-10-18.md](04-internal/ai-os-landscape-2026-10-18.md) | 「AI OS」市场全景对照调研（商业 15 样本 + 学术 8 样本 + 四轨建议；只读宣称级证据）|
 | [04-internal/release-plan.md](04-internal/release-plan.md) | 发布计划 |
 | [design/01-DESIGN-SYSTEM.md](design/01-DESIGN-SYSTEM.md) | 前端设计系统（视觉令牌/层序规范）|
@@ -62,7 +66,7 @@ docs/
 
 ## 当前基线（2026-10-16 文本可信度批对账；2026-10-06 / 2026-08-27 快照保留在下方）
 
-默认分支 `main`（HEAD 以实际提交为准），workspace.version `v2.0.0-rc.4`；**workspace = 31 members（30 crates + bench harness）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = 19 + 图像核心家族 11（`crates/engine/image/*`：接口层 `apeireth-image-core` + 10 vendored crate）= 30 crates） + 独立前端 workspace；测试基线单一真源见 [03-reference/test-baseline.md](03-reference/test-baseline.md)；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。（2026-10-18 文档审计批更新 crate 口径）
+默认分支 `main`（HEAD 以实际提交为准），workspace.version `v2.0.0-rc.4`；**workspace = 30 members（29 crates + bench harness）**（foundation 6 / engine 7 + 图像核心家族 11（`crates/engine/image/*`：接口层 `apeireth-image-core` + 10 vendored crate）/ capabilities 1 / adapters 4 = 29 crates）+ 独立前端 workspace；测试基线单一真源见 [03-reference/test-baseline.md](03-reference/test-baseline.md)，全量门禁走 `scripts/gate_full.ps1`（R6-A 唯一执行器）；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。（2026-10-20 R4b 归档 `apeireth-perception` 后口径；2026-10-18 审计批口径为 31 members）
 
 历史快照（2026-08-27）：`main` @ `d6910cf7`，tag `v2.0.0-alpha.1`，13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）。
 

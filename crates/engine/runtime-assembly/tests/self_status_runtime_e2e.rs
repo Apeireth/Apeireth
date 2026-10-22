@@ -182,8 +182,23 @@ async fn capability_roster_matches_the_effective_assembly_switches() {
     assert_eq!(roster["typed_recall"], false);
     assert_eq!(roster["local_read_tools"], true);
     // 名册全表: 每个开关一行, 值为布尔。
+    // 例外: `bio_mechanisms` = 生物机制族 W3.2 的 `capabilities` 节内只读子对象
+    // (不是能力开关布尔; 21 节冻结合同不变)。默认关时 `mechanisms: null` +
+    // 原因「未启用」, 开关开时才采集已注册 probe。
     assert!(roster.len() >= 25, "roster too small: {roster:?}");
     for (name, value) in roster {
+        if name == "bio_mechanisms" {
+            assert_eq!(value["enabled"], false);
+            assert!(value["mechanisms"].is_null(), "{value:?}");
+            assert!(
+                value["reason"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("未启用"),
+                "{value:?}"
+            );
+            continue;
+        }
         assert!(value.is_boolean(), "{name} must be a boolean: {value}");
     }
 }

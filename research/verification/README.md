@@ -92,13 +92,14 @@ Kani 无法驱动 DB。依任务口径降级为同 crate 纯 API
 | 风险标签单调: 任意 (原始,提案) 标签字节串, 严格降级必被 `check_no_degrade` 触发; Pass 蕴含未降级 | `kani_governance_no_degrade_never_weakens` | 标签任意 ≤4 字节串 (对抗拼写变体是量词域核心), unwind 32 |
 | fail-closed 短路: verify 失败则 prepare/apply 均不执行, prepare 失败则 apply 不执行 ("RequireApproval 不得跳过审批直接放行"的纯判定投影); 全过 ⇔ Ok | `kani_governance_fail_closed_no_bypass` | 三阶段结局 2³ 全量化, 阶段体为探针 |
 
-## 性质族 4 · 配额与调度安全 (`cognitive_quota_scheduler`)
+## 性质族 4 · 配额与调度安全（已归档，ADR-0007）
 
-| 命题 | harness | 边界 |
-|---|---|---|
-| 配额记账单调不减 (各维度不为负、不回绕), 耗尽状态粘滞, `consume_step` 返回值与 `is_exhausted` 一致 | `kani_quota_ledger_monotone_non_negative` | 记账为无符号 saturating 累加, 非负性由构造保证, 证明其非平凡面; 2 次扣减, 数值任意 |
-| 首次出队必为最高紧急度层最早提交者 (紧急度优先 + 平级 FIFO; 高优先级不被低优先级抢先) | `kani_quota_highest_priority_dispatched_first` | 3 任务有界情形; 无限任务流公平性是活性质, 不在安全不变量域, unwind 48 |
-| PIP 防反转: `boost_priority_for_lock` 提升后的持锁者先于请求者出队, effective 继承请求者优先级 | `kani_quota_pip_boost_prevents_inversion` | 2 任务, 请求者 P0..P2 (提升条件恒满足), unwind 48 |
+> 2026-10-20 ADR-0007 裁决归档 `CognitiveQuotaScheduler`（R7-4b-2，commit `d5a4c537`），
+> mirror crate 的 `#[path]` 引入与 3 个 harness（`kani_quota_ledger_monotone_non_negative` /
+> `kani_quota_highest_priority_dispatched_first` / `kani_quota_pip_boost_prevents_inversion`）
+> 随实现**一并归档**（2026-10-22 同步），不再进 kani 矩阵、不在 CI 阻塞。
+> 原命题留档见 git 历史与 ADR-0007；配额记账纯逻辑由 orchestration 既有单测覆盖
+> （ADR-0007 R7-4b-2 记录 436 passed）。
 
 ## 性质族 5 · 路径沙箱不逃逸 (`sensitive_path` / `file_fetcher`)
 

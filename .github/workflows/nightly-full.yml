@@ -1,0 +1,78 @@
+name: Nightly full gate (R6-D 成本分层)
+
+# ============================================================================
+# R6-D 载体（ADR-0011 D7）：把 full 层从「每次 PR 全跑」剥到夜间收口。
+# 现状（2026-10-21 如实登记）：
+#   - 本 workflow 为**载体**：首次运行尚未发生（0 次运行）→「夜间结果可追溯」
+#     的验收项 NOT MET，首次运行后在 §回填 段落补 run URL 与结论。
+#   - PR 层尚未降级：`rust.yml` 仍在每次 push/PR 跑全量 nextest（3 OS）。
+#     降级为「PR fast 子集 + 夜间 full」需与全量门禁执行线排期（ADR-0011 §9
+#     归属：R6-D 归效率线）；本 workflow 先落夜间 full，不动 PR 门禁口径。
+#   - 失败归因：`gate_full.ps1` 输出 FAILURE_CLASS=oom|env|flaky|regression；
+#     失败时本 workflow 红，日志作为 artifact 上传。
+# ============================================================================
+
+on:
+  schedule:
+    # 每日 02:00 Asia/Shanghai（UTC 18:00）；夜间收口，避开白天并行线
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      main_only:
+        description: "只跑主 workspace（跳过图像家族），用于快速夜间复跑"
+        required: false
+        default: "false"
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-full-gate:
+    name: nightly full gate (gate_full.ps1)
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: nightly-full-gate
+
+      - name: Show gate_full.ps1 usage (dry run)
+        shell: pwsh
+        run: ./scripts/gate_full.ps1 -DryRun
+
+      - name: Run full gate (main workspace only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.main_only == 'true' }}
+        shell: pwsh
+        run: ./scripts/gate_full.ps1 -MainOnly -FailIfBusy
+
+      - name: Run full gate (all)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.main_only == 'true') }}
+        shell: pwsh
+        run: ./scripts/gate_full.ps1 -FailIfBusy
+
+      - name: Upload gate log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-full-log-${{ github.run_id }}
+          path: logs/gate-full.log
+          if-no-files-found: warn
+
+      # =====================================================================
+      # §回填（首次运行后果效，不预填）：
+      # - run URL:
+      # - 结果（exit / FAILURE_CLASS / 套件数 / passed / ignored）:
+      # - 与 test-baseline.md 的对应关系（数字真源归全量门禁执行线）:
+      # =====================================================================

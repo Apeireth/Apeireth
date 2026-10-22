@@ -426,8 +426,9 @@ fn context_budget_knob_triggers_truncation_when_small() {
 
     // A small budget truncates the long-tail block while the core survives.
     let core =
-        apeireth_runtime::canonical::ContextBlock::new("identity", "I".repeat(80)).core(true);
-    let mem = apeireth_runtime::canonical::ContextBlock::new("memory", "M".repeat(400));
+        apeireth_orchestration::context_budget::ContextBlock::new("identity", "I".repeat(80))
+            .core(true);
+    let mem = apeireth_orchestration::context_budget::ContextBlock::new("memory", "M".repeat(400));
     let out = apeireth_runtime::canonical::budget_context_blocks(vec![core.clone(), mem], budget);
 
     let out_core = out.iter().find(|b| b.name == "identity").unwrap();

@@ -181,7 +181,7 @@ paths:
 | 0 改 `workspace.version` (1.2.0) | ✅ |
 | 0 改 24 LOCKED crate 入口签名 | ✅ |
 | 0 改 enum/const (除 lib.rs cfg-gated `allow(unsafe_code)` 守门) | ✅ |
-| 0 触碰 3 不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache) | ✅ |
+| 0 触碰 3 不可变脊柱 (Self-Disable / L0 HA / 键集（现行 14 键） verdict cache) | ✅ |
 | 0 触碰 `gh_*.ps1` 5 文件 | ✅ |
 | 0 触碰 `crates/apeireth-environment/tests/` / `crates/apeireth-provider/tests/` | ✅ |
 | 0 引外部依赖 (除 `libkrun-sys = "0.9.7"` [target.cfg] + optional) | ✅ |
@@ -196,7 +196,7 @@ paths:
 |---|---|
 | `176a4003` | Phase 1 stub (sandbox_ffi_libkrun.rs 396 行) |
 | `949f2d2c` | Phase 1 完整 (工厂 3 段 cfg 守门) |
-| `894dd260` | 修 13 键 verdict cache bug (12→13) |
+| `894dd260` | 修 键集（现行 14 键） verdict cache bug (12→13) |
 | `36cdd601` | cfg-gated deny 放宽 + libkrun-sys 0.9.7 dep + FFI 占位 |
 | `13b91f81` | Phase 2 真接 FFI 函数体 (libkrun-sys 0.9.7 真实 API) |
 | `cb22c3da` | B 路线 start_threaded 写真接 + cfg-gated trait (JoinHandle<ExitStatus>) |

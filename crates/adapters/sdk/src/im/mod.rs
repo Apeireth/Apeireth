@@ -5,10 +5,9 @@
 //! 出站传输 (含断线重连预算) + 共享秘密脱敏。网关侧 (渠道配置装配 /
 //! 消息桥 / 审批闭合) 消费本模块, 不重复实现 wire 契约。
 //!
-//! 与 [`crate::lark`] 适配族的关系: **只消费, 不重写**。`im-feishu` 渠道的
-//! 入站信封解析消费 [`crate::lark::webhook::WebhookEvent`], 文本/卡片内容
-//! 形状消费 [`crate::lark::message`] 的内容类型, 消息预算锚
-//! [`crate::lark::MAX_MESSAGE_TEXT_BYTES`]。
+//! wire 原语在本模块自有面 `wire` 内维护 (入站信封解析 / 文本与卡片内容形状 /
+//! 消息预算), 不再跨模块消费适配族: `im-feishu` 渠道的全部 wire 契约由本模块
+//! 自洽闭环, 归档其它适配族不会改变本面的接受/拒绝与出站形状。
 //!
 //! ## 面清单
 //!
@@ -21,6 +20,9 @@
 //! | [`transport`] | [`ImSender`] trait + HTTP 实现 + [`ImReconnectPolicy`] |
 //! | [`secret`] | 共享秘密持有 (Debug 脱敏) + 入站签名校验 |
 //! | [`error`] | 事实错误 + 闭合分类 (可重试性) |
+//!
+//! `wire` (私有) 提供入站信封 `WebhookEvent` / 内容形状 `TextContent` /
+//! `CardContent` / 预算锚 `MAX_MESSAGE_TEXT_BYTES`; 对外只经本模块的公开面消费。
 //!
 //! ## 安全口径
 //!
@@ -35,6 +37,7 @@ pub mod message;
 pub mod secret;
 pub mod segment;
 pub mod transport;
+mod wire;
 
 pub use crate::im::card::{
     is_known_action, render_approval_card, validate_risk_level, ImApprovalCard, ImButtonPayload,

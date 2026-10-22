@@ -1,0 +1,76 @@
+# 架构守卫 CI — 契约体系入口（ADR-0001，2026-10-20）
+# 灰度：continue-on-error: true（report-only）至 2026-11-03；之后去掉并改 --strict。
+name: arch-guard
+
+on:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "docs/architecture/**"
+      - "docs/adr/**"
+      - "scripts/arch_guard.py"
+      - "scripts/arch-baseline.txt"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arch-guard:
+    runs-on: windows-latest
+    continue-on-error: true   # 灰度期 report-only；blocking 时删掉本行并把 --report 改 --strict
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Setup Rust (cargo metadata only)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+
+      - name: Arch guard (report)
+        shell: pwsh
+        run: |
+          python scripts/arch_guard.py --report
+          exit 0
+
+      - name: Arch doc drift check (R0, generated deps)
+        shell: pwsh
+        run: |
+          python scripts/arch_doc.py --check
+
+      - name: Baseline ratchet (report-only)
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          $numstat = git diff --numstat origin/${{ github.base_ref }} -- scripts/arch-baseline.txt
+          if ($numstat) {
+            $parts = $numstat -split "\s+"
+            $added = [int]$parts[0]
+            if ($added -gt 0) {
+              Write-Warning "arch-baseline 新增 $added 行 — 棘轮只允许删行/改小（见 ADR-0001 §2.2 基线更新）"
+            } else {
+              Write-Host "baseline ratchet: OK（新增 $added 行）"
+            }
+          } else {
+            Write-Host "baseline ratchet: no baseline change"
+          }
+
+      - name: Upload guard log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-guard-log
+          path: logs/arch-guard.log
+          if-no-files-found: ignore

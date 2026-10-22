@@ -48,35 +48,44 @@ jobs:
       # 12 项 checklist
       # (在 scripts/release-prep.sh C 跑)
 
-      - name: "守门 #1: 24 LOCKED crate 不触碰 (pure fmt diff 放行)"
+      - name: "守门 #1: 契约 [locked] 源码不触碰 (pure fmt diff 放行)"
         env:
           BASE: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
         run: |
-          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
-          LOCKED_REGEX=$(echo "$LOCKED" | tr ' ' '|')
-          HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' 'crates/*/Cargo.toml' 2>/dev/null | grep -E "^crates/($LOCKED_REGEX)/" || true)
+          # ADR-0011 D5：LOCKED 口径唯一真源 = docs/architecture/contract.toml [locked]；
+          # 禁止在此手抄 crate 清单（历史 24 LOCKED 口径已形式撤销，R148）。
+          LOCKED_FILES=$(python3 - <<'PY'
+          import tomllib
+          with open("docs/architecture/contract.toml", "rb") as f:
+              contract = tomllib.load(f)
+          for _key, path in contract.get("locked", {}).items():
+              if isinstance(path, str) and path.endswith(".rs"):
+                  print(path)
+          PY
+          )
+          if [ -z "$LOCKED_FILES" ]; then
+            echo "::error::无法从 contract.toml [locked] 读取受锁源码"
+            exit 1
+          fi
+          EXISTING=""
+          for f in $LOCKED_FILES; do
+            if [ -f "$f" ]; then
+              EXISTING="$EXISTING $f"
+            else
+              echo "::error::契约登记的受锁文件不存在: $f"
+              exit 1
+            fi
+          done
+          HITS=$(git diff --name-only "$BASE"...HEAD -- $EXISTING 2>/dev/null || true)
           if [ -z "$HITS" ]; then
-            echo "✅ 0 触碰 24 LOCKED crate"
+            echo "✅ 0 触碰契约 [locked] 源码 ($EXISTING)"
             exit 0
           fi
           # 守门宽限: pure fmt diff (去除所有空白后字节相等) 放行
-          # 理由: 8 哲学锚 S-2 实事求是 + O-5 不假装 — fmt 是工具链, 0 改 logic;
-          #       R148 (2026-08-13) 24 LOCKED 已形式撤销, fmt 触碰不应触发 exit 1.
-          # 检测方法: git diff --word-diff=porcelain 输出 ~ (whitespace-only) / + / - line
-          #       - 全 ~ 无 +/- = pure whitespace 重排 (rustfmt default), 放行
-          #       - 任何 + / - line (新增/删除 word) = 真的 logic 改, 人工 review 必要
+          # 理由: 8 哲学锚 S-2 实事求是 + O-5 不假装 — fmt 是工具链, 0 改 logic。
           HARD_HIT=""
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            case "$f" in
-              *.rs) ;;
-              *) echo "  logic 改 (非 .rs): $f"; HARD_HIT="$HARD_HIT$f\n"; continue;;
-            esac
-            # 提取 word-diff 的 +/- 行 (排除 ~ 纯 whitespace)
-            # git diff --word-diff=porcelain 格式:
-            #   ~ 行: 仅空白变化 (rustfmt default 折行)
-            #   + 行: 新增 word
-            #   - 行: 删除 word
             WORD_DIFF=$(git diff --word-diff=porcelain "$BASE"...HEAD -- "$f" 2>/dev/null | grep -E '^[+-][^-+~ ]' || true)
             if [ -z "$WORD_DIFF" ]; then
               echo "  pure fmt: $f (无 +/- word 改, 仅 whitespace 重排, 放行)"
@@ -87,11 +96,11 @@ jobs:
             fi
           done <<< "$HITS"
           if [ -n "$HARD_HIT" ]; then
-            echo "::error::24 LOCKED crate logic 触碰 (非 fmt):"
+            echo "::error::契约 [locked] 源码 logic 触碰 (非 fmt):"
             echo -e "$HARD_HIT" | grep -v '^$'
             exit 1
           fi
-          echo "✅ 24 LOCKED crate 仅纯 fmt 改 (logic 0 触碰)"
+          echo "✅ 契约 [locked] 源码仅纯 fmt 改 (logic 0 触碰)"
 
       - name: "守门 #2: workspace.version matches release authority"
         run: |

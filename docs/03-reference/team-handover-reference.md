@@ -47,7 +47,7 @@ graph TD
     end
 
     subgraph Layer1 [Layer 1: 基石与安全治理层 (Foundation)]
-        CORE[apeireth-core: 9哲学锚/13键原则/三洋葱不可变脊柱]
+        CORE[apeireth-core: 9哲学锚/键集（现行 14 键）原则/三洋葱不可变脊柱]
         GOV[apeireth-governance: OWASP投毒清洗/不可信信封/PII/限流]
         CRED[apeireth-credentials: 内存零化Zeroize/Fail-closed门控]
         ORCH[apeireth-orchestration: 7Advisor辩论/发言仲裁/PromptCache]
@@ -70,8 +70,8 @@ graph TD
 | LOCKED 核心资产 | 源码位置 / 定义 | 保护说明 |
 |---|---|---|
 | **1. 9 项哲学锚本体** | `crates/foundation/core/src/eight_anchors.rs` | S-1~S-3、O-1~O-6 枚举定义严格锁定 |
-| **2. 13 键 LOCKED 判别词汇表** | `crates/foundation/core/src/philosophy.rs` | `ALL_THIRTEEN_KEYS` 13 键原则判定逻辑锁定 |
-| **3. 3 项不可变脊柱** | `crates/foundation/core/src/onion.rs` | Self-Disable (L0) / L0 HA (500ms) / 13 键 Verdict Cache |
+| **2. 键集（现行 14 键） LOCKED 判别词汇表** | `crates/foundation/core/src/philosophy.rs` | `ALL_THIRTEEN_KEYS` 键集（现行 14 键）原则判定逻辑锁定 |
+| **3. 3 项不可变脊柱** | `crates/foundation/core/src/onion.rs` | Self-Disable (L0) / L0 HA (500ms) / 键集（现行 14 键） Verdict Cache |
 | **4. workspace.version** | 根目录 `Cargo.toml` | 随 release 推进（现值 `2.0.0-rc.4`；2026-08-30 RC1 发布起旧 1.2.0 双轴制终结）；仅 release authority 可改 |
 | **5. R11 baseline 3 值** | `0.8682 / 0.8532 / 0.9063` | 历史评测基准常数锁定 |
 

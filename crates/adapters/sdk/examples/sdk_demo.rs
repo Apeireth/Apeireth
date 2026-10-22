@@ -1,17 +1,15 @@
 //! `apeireth-sdk` 客户 SDK demo (mock 模式, 0 真实网络)
 //!
-//! **目标**: 端到端演示 SDK 的两块表面, 全部打到进程内 mock 服务 (环回地址):
-//! 1. `ApeirethClient` 6 工具 method + `invoke_tool` 通用 method + Auth 5 组件 + K-1 4 条;
-//! 2. `lark` 子模块 8 核心 API (真实协议逻辑: 认证头 / 分页 / 重试 / 限流退避 /
-//!    token 缓存 / webhook 解密校验) —— 需 `lark` feature (默认已启用)。
+//! **目标**: 端到端演示 SDK 的客户表面, 全部打到进程内 mock 服务 (环回地址):
+//! `ApeirethClient` 6 工具 method + `invoke_tool` 通用 method + Auth 5 组件 + K-1 4 条。
 //!
 //! **运行**:
 //! ```sh
 //! cargo run -p apeireth-sdk --example sdk_demo
 //! ```
 //!
-//! mock 服务是本文件内的 RecordingServer 风格环回 TCP 服务: 预置 6 工具结果 +
-//! lark 平台端点 (token 颁发 + 各协议面业务信封), 所有流量不出本机。
+//! mock 服务是本文件内的 RecordingServer 风格环回 TCP 服务: 预置 6 工具结果,
+//! 所有流量不出本机。
 
 use apeireth_sdk::client::{
     ApeirethClient, PLATFORM_NAME, SDK_TOOL_WHITELIST, SDK_TOOL_WHITELIST_COUNT, STUB_MODE,
@@ -27,7 +25,7 @@ mod mock {
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    /// 环回 mock 平台: 路由 6 工具端点 + lark 平台端点。
+    /// 环回 mock 平台: 路由 6 工具端点。
     pub struct MockPlatform {
         pub base_url: String,
         pub hits: Arc<Mutex<Vec<String>>>,
@@ -112,42 +110,9 @@ mod mock {
         haystack.windows(needle.len()).position(|w| w == needle)
     }
 
-    /// 预置响应路由 (6 工具 + lark 平台端点)。
+    /// 预置响应路由 (6 工具端点)。
     fn route(target: &str) -> String {
         let path = target.split('?').next().unwrap_or(target);
-        if path.contains("/auth/v3/tenant_access_token/internal") {
-            return r#"{"code":0,"msg":"ok","tenant_access_token":"t-demo-mock","expire":7200}"#
-                .to_string();
-        }
-        if path.ends_with("/im/v1/messages") {
-            return r#"{"code":0,"msg":"ok","data":{"message_id":"om_demo_001","chat_id":"oc_a1b2c3d4e5f6"}}"#.to_string();
-        }
-        if path.contains("/calendar/v4/calendars/") {
-            return r#"{"code":0,"msg":"ok","data":{"items":[
-                {"event_id":"evt_1","summary":"demo 周会","start_time":"2026-08-05T10:00:00Z","end_time":"2026-08-05T10:30:00Z","status":"confirmed"},
-                {"event_id":"evt_2","summary":"demo 评审","start_time":"2026-08-05T14:00:00Z","end_time":"2026-08-05T15:00:00Z","status":"tentative"}
-            ],"has_more":false}}"#.to_string();
-        }
-        if path.contains("/contact/v3/users/") {
-            return r#"{"code":0,"msg":"ok","data":{"user":{"open_id":"ou_user1234567890abcdef","name":"Alice","email":"alice@example.com","is_activated":true}}}"#.to_string();
-        }
-        if path.contains("/contact/v3/departments/") {
-            return r#"{"code":0,"msg":"ok","data":{"department":{"open_department_id":"od_dept123","name":"工程部","member_count":12,"status":"active"}}}"#.to_string();
-        }
-        if path.ends_with("/docx/v1/documents") {
-            return r#"{"code":0,"msg":"ok","data":{"document":{"document_id":"doxcn_demo_001","title":"demo 文档"}}}"#.to_string();
-        }
-        if path.ends_with("/sheets/v3/spreadsheets") {
-            return r#"{"code":0,"msg":"ok","data":{"spreadsheet":{"spreadsheet_token":"shtcn_demo_001","url":"https://docs.example.test/sheets/shtcn_demo_001"}}}"#.to_string();
-        }
-        if path.contains("/approval/v4/instances/") {
-            return r#"{"code":0,"msg":"ok","data":{"instance":{
-                "instance_id":"inst_demo_001","approval_code":"approval_demo","status":"approved",
-                "user_open_id":"ou_user1234567890abcdef",
-                "form":[{"id":"reason","type":"textarea","value":"demo"}],
-                "tasks":[{"task_id":"task_1","instance_id":"inst_demo_001","approver_open_id":"ou_approver1234567890abcdef","status":"approved"}]
-            }}}"#.to_string();
-        }
         // 6 工具端点 (ApeirethClient 契约: /v1/tools/{tool}/invoke)
         if path.contains("/v1/tools/web_search/invoke") {
             return r#"{"results":[{"title":"demo hit","url":"https://example.test/demo","snippet":"mock result"}],"total":1}"#.to_string();
@@ -169,155 +134,6 @@ mod mock {
             return r#"{"id":"om_mock_1","ts_ms":1700000000000}"#.to_string();
         }
         r#"{"code":230001,"msg":"unknown endpoint"}"#.to_string()
-    }
-}
-
-// ============================================================================
-// lark 子模块 demo (8 核心 API, 需 lark feature —— 默认已启用)
-// ============================================================================
-
-#[cfg(feature = "lark")]
-mod lark_demo {
-    use apeireth_sdk::lark::{
-        encrypt_event_payload, CalendarEventQuery, Document, InstanceStatus, LarkClient,
-        LarkClientImpl, Message, ReceiveIdType, RetryPolicy, TransportConfig, UserIdType,
-        UserQuery, WebhookEvent, WebhookToken, WebhookVerifyResult, WEBHOOK_TIMESTAMP_SKEW_SECS,
-    };
-    use std::time::Duration;
-
-    pub async fn run(base_url: &str) -> bool {
-        println!("[INFO] lark 子模块 8 核心 API (mock 模式, 真实协议逻辑):");
-
-        let config = TransportConfig {
-            api_base: base_url.to_string(),
-            attempt_timeout: Duration::from_secs(5),
-            call_deadline: Duration::from_secs(10),
-            retry: RetryPolicy {
-                max_attempts: 2,
-                initial_backoff: Duration::from_millis(1),
-                max_backoff: Duration::from_millis(5),
-                backoff_multiplier: 2,
-            },
-            token_cache_path: None,
-            user_agent: "apeireth-sdk-lark-demo".to_string(),
-        };
-        let mut client = LarkClientImpl::with_config(config).expect("transport config");
-        client
-            .set_app_id("cli_a1b2c3d4e5f6".to_string())
-            .expect("valid app id");
-        client
-            .set_app_secret("abcdef1234567890abcdef1234567890".to_string())
-            .expect("valid app secret");
-
-        let mut ok = true;
-        let mut check = |name: &str, pass: bool| {
-            println!("[INFO]   {name} {}", if pass { "✓" } else { "✗" });
-            ok &= pass;
-        };
-
-        // 1. send_message (认证头 + 信封解析)
-        let msg = Message::text(
-            "oc_a1b2c3d4e5f6".to_string(),
-            ReceiveIdType::ChatId,
-            "hello from sdk demo".to_string(),
-        )
-        .expect("valid message");
-        let id = client.send_message(&msg).await;
-        check(
-            "send_message → om_demo_001",
-            matches!(id.as_deref(), Ok("om_demo_001")),
-        );
-
-        // 2. list_calendar_events (分页合并)
-        let start = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 8, 5, 0, 0, 0).unwrap();
-        let end = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 8, 6, 0, 0, 0).unwrap();
-        let query = CalendarEventQuery {
-            calendar_id: "cal_demo".to_string(),
-            start_time: start,
-            end_time: end,
-            page_size: 50,
-            page_token: None,
-        };
-        let events = client.list_calendar_events(&query).await;
-        check(
-            "list_calendar_events → 2 events",
-            matches!(&events, Ok(list) if list.len() == 2),
-        );
-
-        // 3. get_user (K-1 映射校验)
-        let query = UserQuery::new("ou_user1234567890abcdef".to_string(), UserIdType::OpenId)
-            .expect("valid query");
-        let user = client.get_user(&query).await;
-        check(
-            "get_user → Alice",
-            matches!(&user, Ok(u) if u.name == "Alice"),
-        );
-
-        // 4. get_department
-        let dept = client.get_department("od_dept123").await;
-        check(
-            "get_department → 工程部",
-            matches!(&dept, Ok(d) if d.name == "工程部"),
-        );
-
-        // 5. create_doc
-        let doc = Document::new_docx("demo 文档".to_string(), None).expect("valid doc");
-        let created = client.create_doc(&doc).await;
-        check(
-            "create_doc → doxcn_demo_001",
-            matches!(&created, Ok(d) if d.document_id.as_deref() == Some("doxcn_demo_001")),
-        );
-
-        // 6. create_sheet
-        let sheet = Document::new_sheet("demo 表格".to_string(), None).expect("valid sheet");
-        let created = client.create_sheet(&sheet).await;
-        check(
-            "create_sheet → shtcn_demo_001",
-            matches!(&created, Ok(d) if d.document_id.as_deref() == Some("shtcn_demo_001")),
-        );
-
-        // 7. get_approval_instance
-        let inst = client.get_approval_instance("inst_demo_001").await;
-        check(
-            "get_approval_instance → approved",
-            matches!(&inst, Ok(i) if i.status == InstanceStatus::Approved),
-        );
-
-        // 8. verify_webhook (本地校验 + 加密事件解密)
-        let wh = WebhookToken::new("token_xxx".to_string(), "encrypt_key_xxx".to_string())
-            .expect("valid webhook token");
-        let challenge_event = WebhookEvent::from_raw_json(
-            r#"{"type":"url_verification","challenge":"demo-challenge","token":"token_xxx"}"#,
-        )
-        .expect("parse");
-        let challenge_ok = matches!(
-            client.verify_webhook(&challenge_event, &wh).await,
-            Ok(WebhookVerifyResult::Challenge(ref c)) if c == "demo-challenge"
-        );
-        let inner = r#"{"type":"event_callback","token":"token_xxx","ts":1700000000,"event":{"id":"evt_demo"}}"#;
-        let blob = encrypt_event_payload(inner, "encrypt_key_xxx", [42u8; 16]).expect("encrypt");
-        let encrypted_event =
-            WebhookEvent::from_raw_json(&format!(r#"{{"encrypt":"{blob}"}}"#)).expect("parse");
-        let decrypt_ok = matches!(
-            apeireth_sdk::lark::verify_webhook_event_at(
-                &encrypted_event,
-                &wh,
-                1_700_000_030,
-                WEBHOOK_TIMESTAMP_SKEW_SECS
-            ),
-            Ok(WebhookVerifyResult::Accepted { .. })
-        );
-        check("verify_webhook → challenge 回显", challenge_ok);
-        check("verify_webhook → 加密事件解密 + Accepted", decrypt_ok);
-
-        // token 生命周期: 8 次 API 调用只颁发一次 token (内存缓存命中)
-        let token = client.tenant_token();
-        check(
-            "tenant token 已缓存 (t-demo-mock)",
-            matches!(token.as_ref(), Some(t) if t.token == "t-demo-mock"),
-        );
-
-        ok
     }
 }
 
@@ -476,22 +292,13 @@ async fn main() {
     println!("[INFO] 5 集成点 0 冲突 ✓");
     println!("[INFO]   WS path = {WS_PATH}");
 
-    // 6. lark 子模块 8 核心 API (mock 模式).
-    #[cfg(feature = "lark")]
-    let lark_ok = lark_demo::run(&platform.base_url).await;
-    #[cfg(not(feature = "lark"))]
-    let lark_ok = {
-        println!("[INFO] lark 子模块 demo 跳过 (未启用 lark feature)");
-        true
-    };
-
     println!(
         "[INFO] mock 平台共服务 {} 次请求 (全部本机闭环)",
         platform.hit_count()
     );
 
-    if k1_1 && k1_2 && k1_3 && k1_4 && tool_ok && lark_ok {
-        println!("[INFO] 完成 — 6 工具 + lark 8 API 全部 mock 模式跑通");
+    if k1_1 && k1_2 && k1_3 && k1_4 && tool_ok {
+        println!("[INFO] 完成 — 6 工具全部 mock 模式跑通");
     } else {
         eprintln!("[ERROR] 校验有失败");
         std::process::exit(2);

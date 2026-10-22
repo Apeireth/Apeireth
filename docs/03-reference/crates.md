@@ -1,6 +1,6 @@
 # Apeireth Crate Index
 
-This index lists the 18 members of the root Cargo workspace. The independent
+This index lists the current root Cargo workspace (30 members = 29 product crates + 1 bench harness; historical 18/20 members). `apeireth-perception` and the SDK four-island modules are archived under `legacy/archived/` (2026-10-20, ADR-0005 R4b). The independent
 Tauri shell is documented with the frontend, and `legacy/` is excluded from
 the product workspace.
 
@@ -8,7 +8,7 @@ the product workspace.
 
 | Package | Path | Responsibility |
 | --- | --- | --- |
-| `apeireth-core` | `crates/foundation/core` | 9 哲学锚、13 键判别词汇表、3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 Verdict Cache)、Stable domain primitives, IDs, events, lifecycle, and clock vocabulary |
+| `apeireth-core` | `crates/foundation/core` | 9 哲学锚、键集（现行 14 键）判别词汇表、3 项不可变脊柱 (Self-Disable / L0 HA / 键集（现行 14 键） Verdict Cache)、Stable domain primitives, IDs, events, lifecycle, and clock vocabulary |
 | `apeireth-protocol` | `crates/foundation/protocol` | Canonical normalized requests/results and provider protocol translation |
 | `apeireth-plugin` | `crates/foundation/plugin` | Plugin lifecycle, capability descriptors, registries, and provider/tool contracts |
 | `apeireth-governance` | `crates/foundation/governance` | Allow, deny, approval, OWASP ASI-01 工具描述投毒审计 (`tool_desc_audit`)、外部不可信内容信封包裹与逃逸中和 (`untrusted_mark`)、8 类 PII 检测与 `EnvSecret` 行解析 (`input_security`)、4 阶信任多尺度滑动窗口限流 (`rate_limit`) |
@@ -25,7 +25,7 @@ the product workspace.
 | `apeireth-provider` | `crates/engine/provider` | Anthropic, MiniMax, and OpenAI-compatible provider capabilities |
 | `apeireth-storage` | `crates/engine/storage` | SQLite pool, migrations, storage configuration, and errors |
 | `apeireth-memory` | `crates/engine/memory` | 五维时空记忆与 Browser 导出 (`five_dimensional`)、双时态事实图谱与残差特异性检索 (`bitemporal_graph`)、SHA-256 唯一事实链与 Merkle 仲裁 (`arbitration`)、6 阶段昼夜做梦引擎 (`dreaming`)、元思维递进思考链 (`meta_thinking`)、活维基知识编译与反熵 Lint (`wiki_fs`) |
-| `apeireth-perception` | `crates/engine/perception` | 多模态感知体系: MiniMax LIVE 高保真 TTS 适配器与 3D PAD 情感语气调制 (`minimax_tts`)、Whisper 语音识别与 Xcap 屏幕捕获 |
+| ~~`apeireth-perception`~~ **已归档（2026-10-20）** | `legacy/archived/perception`（原 `crates/engine/perception`） | 原多模态感知体系 MiniMax LIVE 高保真 TTS 适配器与 3D PAD 情感语气调制 (`minimax_tts`)、Whisper 语音识别与 Xcap 屏幕捕获 |
 | `apeireth-organ` | `crates/engine/organ` | 9 cognitive organs (W1..W3 world models, E4 curiosity, F1 emotion, F4 hypothesis, F6 values, E7 emergence, memory merger, persona tone synthesizer) |
 
 ## Capabilities

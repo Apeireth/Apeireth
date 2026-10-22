@@ -6,7 +6,7 @@
 //! provider path:
 //!
 //! ```text
-//! Main Loop → ModuleRegistry → OrganModule → OrganOrchestrator → 9 organs
+//! Main Loop → BehaviorRegistry → OrganModule → OrganOrchestrator → 9 organs
 //! ```
 //!
 //! # Ownership rules enforced here
@@ -37,6 +37,10 @@
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{Clock, Episode};
+// 生物机制族 W3.3: guard 免疫记忆共享句柄 (默认未挂载; 仅门开时才拉 Conflict).
+use apeireth_guard::hook::SharedImmuneMemory;
+use apeireth_orchestration::council::QuorumGate;
+use apeireth_orchestration::quorum::QuorumSignal;
 use apeireth_orchestration::{Advisor, Council, CouncilCallError, CouncilInvoker, Proposal};
 use apeireth_organ::causal_world_model::CausalWorldModelOrgan;
 use apeireth_organ::causal_world_model_edges::EdgeMinerOrgan;
@@ -54,11 +58,11 @@ use apeireth_protocol::canonical::{ContentPart, MessageRole};
 use async_trait::async_trait;
 
 use super::module::{
-    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
+    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest, ModuleOutcome,
 };
 use super::orchestrator::{
-    LocalOrchestratorRelationship, OrchestratorBoundaries, OrchestratorLoopConfig,
-    OrganOrchestrator,
+    quorum_now_ms_from_i64, LocalOrchestratorRelationship, OrchestratorBoundaries,
+    OrchestratorLoopConfig, OrganOrchestrator, QuorumTrace,
 };
 
 /// Stable module id (matches the `cognitive.*` slot family).
@@ -159,6 +163,43 @@ impl OrganModule {
             .clone()
     }
 
+    /// W3.3 外部事件源: 挂载 guard 免疫记忆共享句柄 (默认无 = 不接线).
+    ///
+    /// 组合根在治理 hook 构造后取
+    /// `BehaviorChainGuardHook::shared_immune_memory()` 传进来; 未挂载时 AfterTurn
+    /// 不读免疫记忆, 零行为变化. 只影响审议门的 Conflict 证据, 不改已提交回复、
+    /// 器官链输出与观察环形.
+    pub fn attach_immune_memory(&self, memory: SharedImmuneMemory) {
+        self.orchestrator.attach_immune_memory(Some(memory));
+    }
+
+    /// 免疫记忆句柄是否已挂载 (观测 / 测试用; 默认 `false`).
+    pub fn immune_memory_attached(&self) -> bool {
+        self.orchestrator.immune_memory_attached()
+    }
+
+    /// 显式注入审议门 (测试 / 装配用; 绕过 env, 保证确定性).
+    #[must_use]
+    pub fn with_quorum_gate(mut self, gate: QuorumGate) -> Self {
+        self.orchestrator = self.orchestrator.with_quorum_gate(gate);
+        self
+    }
+
+    /// 审议门是否参与准入 (观测 / 测试用; 默认 `false`).
+    pub fn quorum_gate_enabled(&self) -> bool {
+        self.orchestrator.quorum_gate_enabled()
+    }
+
+    /// 门上待兑信号快照 (观测 / 测试用; 插入顺序).
+    pub async fn quorum_signals(&self) -> Vec<QuorumSignal> {
+        self.orchestrator.quorum_signals().await
+    }
+
+    /// 最近一次 gated 审议的门账 (观测 / 测试用; 默认关 → `None`).
+    pub fn last_quorum_trace(&self) -> Option<QuorumTrace> {
+        self.orchestrator.last_quorum_trace()
+    }
+
     /// Derive the turn's organ input from the canonical context.
     ///
     /// The episode is the committed assistant reply for this session; the last
@@ -193,7 +234,7 @@ impl OrganModule {
 }
 
 #[async_trait]
-impl AgentModule for OrganModule {
+impl BehaviorModule for OrganModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -225,6 +266,13 @@ impl AgentModule for OrganModule {
             .chain_9_organs_with_transient_llm(input, w1, w2)
             .await;
         // w1, w2, factory and the invoker handle drop here.
+
+        // W3.3 外部事件源: 存量 guard 免疫升级 → quorum Conflict (门关 / 未挂载时
+        // 连时钟都不读, 默认零行为变化). 时刻 = 注入时钟, 可确定性重放.
+        if self.orchestrator.quorum_gate_enabled() && self.orchestrator.immune_memory_attached() {
+            let now_ms = quorum_now_ms_from_i64(self.clock.now().timestamp_millis());
+            self.orchestrator.record_immune_signals(now_ms).await;
+        }
 
         {
             // poison 容错 (2026-09-24 修复轮补漏): 锁保护的是可重建的观察环形

@@ -5,7 +5,7 @@
 //! [`ImInboundEvent::Verify`] / 其余 [`ImInboundEvent::Ignored`]),
 //! 未知形状 = [`crate::im::error::ImError::Decode`] (0 静默放行)。
 //!
-//! - `im-feishu` 入站信封**消费** [`crate::lark::webhook::WebhookEvent`] 的
+//! - `im-feishu` 入站信封**消费**本模块自有 wire 原语 `WebhookEvent` 的
 //!   严格解析 (三种信封形状 + 时间戳口径), 本面只做消息/按钮字段提取;
 //! - `im-wecom` / `im-qq` 入站按本适配器契约解析 (形状见各 `parse_*`);
 //! - 出站信封按 kind 组装后 POST 到配置的 webhook / endpoint,
@@ -74,17 +74,17 @@ pub fn parse_inbound_event(kind: ImChannelKind, raw: &str) -> ImResult<ImInbound
 }
 
 // ---------------------------------------------------------------------------
-// im-feishu 入站: 消费 lark webhook 信封解析
+// im-feishu 入站: 消费自有 wire 原语的信封解析
 // ---------------------------------------------------------------------------
 
 fn parse_feishu_inbound(raw: &str) -> ImResult<ImInboundEvent> {
-    let event = crate::lark::webhook::WebhookEvent::from_raw_json(raw).map_err(map_lark_error)?;
+    let event = crate::im::wire::WebhookEvent::from_raw_json(raw).map_err(map_wire_error)?;
     if let Some(challenge) = event.challenge.clone() {
         return Ok(ImInboundEvent::Verify {
             challenge: Some(challenge),
         });
     }
-    if event.event_type == crate::lark::webhook::EventType::Challenge {
+    if event.event_type == crate::im::wire::EventType::Challenge {
         return Ok(ImInboundEvent::Verify { challenge: None });
     }
 
@@ -132,7 +132,7 @@ fn parse_feishu_inbound(raw: &str) -> ImResult<ImInboundEvent> {
     })
 }
 
-fn map_lark_error(error: crate::lark::error::LarkError) -> ImError {
+fn map_wire_error(error: crate::im::wire::WireError) -> ImError {
     ImError::Decode {
         reason: error.to_string(),
     }
@@ -263,7 +263,7 @@ pub struct ImSendReceipt {
     pub message_ref: String,
 }
 
-/// 组装文本出站信封 (kind 方言; `im-feishu` 消费 [`crate::lark::message`] 内容形状)。
+/// 组装文本出站信封 (kind 方言; `im-feishu` 消费自有 wire 原语的内容形状)。
 pub fn build_text_body(
     kind: ImChannelKind,
     message: &ImOutboundText,
@@ -275,8 +275,8 @@ pub fn build_text_body(
     }
     match kind {
         ImChannelKind::ImFeishu => {
-            let content = crate::lark::message::TextContent::new(message.text.clone());
-            content.validate().map_err(map_lark_error)?;
+            let content = crate::im::wire::TextContent::new(message.text.clone());
+            content.validate().map_err(map_wire_error)?;
             let content_json =
                 serde_json::to_string(&content).map_err(|e| ImError::InvalidConfig {
                     reason: format!("text content serialization failed: {e}"),
@@ -485,6 +485,23 @@ mod tests {
             }
             other => panic!("expected a verify event, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn feishu_unknown_envelope_fails_closed_as_decode() {
+        let raw = r#"{"type":"event_callback","event":{"message":{"chat_id":"oc_demo"}}}"#;
+        assert!(matches!(
+            parse_inbound_event(ImChannelKind::ImFeishu, raw),
+            Err(ImError::Decode { .. })
+        ));
+        assert!(matches!(
+            parse_inbound_event(ImChannelKind::ImFeishu, r#"{"foo":"bar"}"#),
+            Err(ImError::Decode { .. })
+        ));
+        assert!(matches!(
+            parse_inbound_event(ImChannelKind::ImFeishu, "not json"),
+            Err(ImError::Decode { .. })
+        ));
     }
 
     #[test]

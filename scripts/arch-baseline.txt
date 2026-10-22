@@ -1,0 +1,355 @@
+# arch-guard baseline v1 — 架构违规棘轮基线（只减不增）
+# 生成: python scripts/arch_guard.py --update-baseline
+# 规则: 新指纹不在本文件 = 违规; 本文件中已消失的指纹 = 可缩表。
+
+# --- edge (111) ---
+edge apeireth-bench-harness -> apeireth-core
+edge apeireth-bench-harness -> apeireth-gateway
+edge apeireth-bench-harness -> apeireth-memory
+edge apeireth-bench-harness -> apeireth-orchestration
+edge apeireth-bench-harness -> apeireth-plugin
+edge apeireth-bench-harness -> apeireth-protocol
+edge apeireth-bench-harness -> apeireth-runtime
+edge apeireth-bench-harness -> apeireth-runtime-assembly
+edge apeireth-bench-harness -> apeireth-tools-canonical
+edge apeireth-cli -> apeireth-core
+edge apeireth-cli -> apeireth-credentials
+edge apeireth-cli -> apeireth-gateway
+edge apeireth-cli -> apeireth-governance
+edge apeireth-cli -> apeireth-guard
+edge apeireth-cli -> apeireth-memory
+edge apeireth-cli -> apeireth-orchestration
+edge apeireth-cli -> apeireth-organ
+edge apeireth-cli -> apeireth-plugin
+edge apeireth-cli -> apeireth-protocol
+edge apeireth-cli -> apeireth-provider
+edge apeireth-cli -> apeireth-runtime
+edge apeireth-cli -> apeireth-runtime-assembly
+edge apeireth-cli -> apeireth-storage
+edge apeireth-cli -> apeireth-tools-canonical
+edge apeireth-credentials -> apeireth-core
+edge apeireth-credentials -> apeireth-governance
+edge apeireth-credentials -> apeireth-plugin
+edge apeireth-gateway -> apeireth-core
+edge apeireth-gateway -> apeireth-governance
+edge apeireth-gateway -> apeireth-guard
+edge apeireth-gateway -> apeireth-plugin
+edge apeireth-gateway -> apeireth-protocol
+edge apeireth-gateway -> apeireth-runtime
+edge apeireth-gateway -> apeireth-sdk
+edge apeireth-gateway -> apeireth-tools-canonical
+edge apeireth-governance -> apeireth-core
+edge apeireth-guard -> apeireth-core
+edge apeireth-guard -> apeireth-governance
+edge apeireth-guard -> apeireth-protocol
+edge apeireth-image-algo -> apeireth-image-color
+edge apeireth-image-algo -> apeireth-image-geom
+edge apeireth-image-algo -> apeireth-image-raster
+edge apeireth-image-color -> apeireth-image-cms
+edge apeireth-image-compose -> apeireth-image-color
+edge apeireth-image-compose -> apeireth-image-doc
+edge apeireth-image-compose -> apeireth-image-geom
+edge apeireth-image-compose -> apeireth-image-raster
+edge apeireth-image-compose -> apeireth-image-vector
+edge apeireth-image-core -> apeireth-image-algo
+edge apeireth-image-core -> apeireth-image-cms
+edge apeireth-image-core -> apeireth-image-codecs
+edge apeireth-image-core -> apeireth-image-color
+edge apeireth-image-core -> apeireth-image-compose
+edge apeireth-image-core -> apeireth-image-doc
+edge apeireth-image-core -> apeireth-image-geom
+edge apeireth-image-core -> apeireth-image-psd
+edge apeireth-image-core -> apeireth-image-raster
+edge apeireth-image-core -> apeireth-image-vector
+edge apeireth-image-doc -> apeireth-image-color
+edge apeireth-image-doc -> apeireth-image-geom
+edge apeireth-image-doc -> apeireth-image-raster
+edge apeireth-image-raster -> apeireth-image-color
+edge apeireth-image-raster -> apeireth-image-geom
+edge apeireth-image-vector -> apeireth-image-color
+edge apeireth-image-vector -> apeireth-image-doc
+edge apeireth-image-vector -> apeireth-image-geom
+edge apeireth-image-vector -> apeireth-image-raster
+edge apeireth-memory -> apeireth-core
+edge apeireth-memory -> apeireth-orchestration
+edge apeireth-memory -> apeireth-plugin
+edge apeireth-memory -> apeireth-protocol
+edge apeireth-memory -> apeireth-storage
+edge apeireth-orchestration -> apeireth-core
+edge apeireth-organ -> apeireth-core
+edge apeireth-organ -> apeireth-governance
+edge apeireth-organ -> apeireth-orchestration
+edge apeireth-organ -> apeireth-plugin
+edge apeireth-organ -> apeireth-protocol
+edge apeireth-plugin -> apeireth-core
+edge apeireth-plugin -> apeireth-orchestration
+edge apeireth-plugin -> apeireth-protocol
+edge apeireth-protocol -> apeireth-core
+edge apeireth-provider -> apeireth-core
+edge apeireth-provider -> apeireth-memory
+edge apeireth-provider -> apeireth-orchestration
+edge apeireth-provider -> apeireth-plugin
+edge apeireth-provider -> apeireth-protocol
+edge apeireth-runtime -> apeireth-core
+edge apeireth-runtime -> apeireth-governance
+edge apeireth-runtime -> apeireth-orchestration
+edge apeireth-runtime -> apeireth-plugin
+edge apeireth-runtime -> apeireth-protocol
+edge apeireth-runtime-assembly -> apeireth-core
+edge apeireth-runtime-assembly -> apeireth-governance
+edge apeireth-runtime-assembly -> apeireth-guard
+edge apeireth-runtime-assembly -> apeireth-memory
+edge apeireth-runtime-assembly -> apeireth-orchestration
+edge apeireth-runtime-assembly -> apeireth-organ
+edge apeireth-runtime-assembly -> apeireth-plugin
+edge apeireth-runtime-assembly -> apeireth-protocol
+edge apeireth-runtime-assembly -> apeireth-runtime
+edge apeireth-runtime-assembly -> apeireth-storage
+edge apeireth-runtime-assembly -> apeireth-tools-canonical
+edge apeireth-sdk -> apeireth-protocol
+edge apeireth-tools-canonical -> apeireth-core
+edge apeireth-tools-canonical -> apeireth-governance
+edge apeireth-tools-canonical -> apeireth-image-core
+edge apeireth-tools-canonical -> apeireth-orchestration
+edge apeireth-tools-canonical -> apeireth-plugin
+edge apeireth-tools-canonical -> apeireth-protocol
+edge apeireth-tui -> apeireth-credentials
+
+# --- devcycle (1) ---
+devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provider
+
+# --- env (153) ---
+env APEIRETH_ANTHROPIC_
+env APEIRETH_ANTHROPIC_KEY
+env APEIRETH_ANTHROPIC_MODELS
+env APEIRETH_ANTHROPIC_URL
+env APEIRETH_API_
+env APEIRETH_API_KEY
+env APEIRETH_API_MODELS
+env APEIRETH_API_URL
+env APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN
+env APEIRETH_CACHE_TRACE
+env APEIRETH_CARE_HEARTBEAT_POLL_INTERVAL_SECS
+env APEIRETH_COGNITIVE_COUNCIL
+env APEIRETH_COGNITIVE_DB
+env APEIRETH_COGNITIVE_JUDGE
+env APEIRETH_CONTEXT_BUDGET_CHARS
+env APEIRETH_CONTINUITY_ID
+env APEIRETH_COST_ROUTING
+env APEIRETH_COST_ROUTING_PREFERRED
+env APEIRETH_COUNCIL_ADVISORS
+env APEIRETH_COUNCIL_TIMEOUT_MS
+env APEIRETH_DATA_DIR
+env APEIRETH_DISABLE_
+env APEIRETH_DISABLE_LOCAL_READ_TOOLS
+env APEIRETH_DISABLE_MEMORY_INJECTION
+env APEIRETH_DISABLE_ONBOARDING
+env APEIRETH_DISABLE_PREFERENCE_LEARNING
+env APEIRETH_DISABLE_PROACTIVE_RECALL
+env APEIRETH_DISABLE_TYPED_RECALL
+env APEIRETH_EMBEDDING_KEY
+env APEIRETH_EMBEDDING_MODEL
+env APEIRETH_EMBEDDING_URL
+env APEIRETH_ENABLE_
+env APEIRETH_ENABLE_ABSORPTION_INSIGHT
+env APEIRETH_ENABLE_BACKUP_EXPORT
+env APEIRETH_ENABLE_BIO_CARE_CANDIDATES
+env APEIRETH_ENABLE_BIO_CIRCADIAN
+env APEIRETH_ENABLE_BIO_CONTEXT_POLICY
+env APEIRETH_ENABLE_BIO_PAIN
+env APEIRETH_ENABLE_BIO_PLAY
+env APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE
+env APEIRETH_ENABLE_BIO_SELF_STATUS
+env APEIRETH_ENABLE_BIO_TONE
+env APEIRETH_ENABLE_CARE
+env APEIRETH_ENABLE_CARE_HEARTBEAT
+env APEIRETH_ENABLE_COMMUNITY_TRIAGE
+env APEIRETH_ENABLE_CONSOLIDATION
+env APEIRETH_ENABLE_CONSOLIDATION_HASH_GATE
+env APEIRETH_ENABLE_CONTENT_FEED
+env APEIRETH_ENABLE_DEVICE_AUTO_PASS_REVERSIBLE
+env APEIRETH_ENABLE_DEVICE_CONTROL
+env APEIRETH_ENABLE_DEVICE_SENSE
+env APEIRETH_ENABLE_DOC_OPS
+env APEIRETH_ENABLE_EDUCATION
+env APEIRETH_ENABLE_EXPOSURE_AUDIT
+env APEIRETH_ENABLE_FETCH
+env APEIRETH_ENABLE_FILE_WRITE
+env APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS
+env APEIRETH_ENABLE_GIT_WRITE
+env APEIRETH_ENABLE_GIT_WRITE_AUTO_PASS_L1
+env APEIRETH_ENABLE_GUARD_WATCH
+env APEIRETH_ENABLE_IMAGE_OPS
+env APEIRETH_ENABLE_IMMUNE_MEMORY
+env APEIRETH_ENABLE_LOCAL_READ_TOOLS
+env APEIRETH_ENABLE_MCP
+env APEIRETH_ENABLE_MEMORY_INJECTION
+env APEIRETH_ENABLE_MORPHOLOGY_RECALL
+env APEIRETH_ENABLE_ONERING_LEDGER
+env APEIRETH_ENABLE_ONION_LAYER
+env APEIRETH_ENABLE_ORGANS
+env APEIRETH_ENABLE_PARTNER_BOND
+env APEIRETH_ENABLE_PERSONA_CONSOLIDATION
+env APEIRETH_ENABLE_PREFERENCE_LEARNING
+env APEIRETH_ENABLE_PROACTIVE_RECALL
+env APEIRETH_ENABLE_PROPOSALS
+env APEIRETH_ENABLE_QUORUM_GATE
+env APEIRETH_ENABLE_REFLEXION
+env APEIRETH_ENABLE_RETRIEVAL_TUNING
+env APEIRETH_ENABLE_SELF_TUNING
+env APEIRETH_ENABLE_SHEET_OPS
+env APEIRETH_ENABLE_SHELL
+env APEIRETH_ENABLE_SKILL_DISTILL
+env APEIRETH_ENABLE_SKILL_SEARCH
+env APEIRETH_ENABLE_TASK_BOARD
+env APEIRETH_ENABLE_VOICE_SPEAK
+env APEIRETH_ENABLE_WORKTREE_APPLY
+env APEIRETH_ENABLE_WORKTREE_PLAN
+env APEIRETH_ENABLE_WORKTREE_SANDBOX
+env APEIRETH_GATEWAY_TOKEN
+env APEIRETH_GATEWAY_TOKENS
+env APEIRETH_GATEWAY_URL
+env APEIRETH_GUARD_DATASET_ENABLED
+env APEIRETH_GUARD_DATASET_PATH
+env APEIRETH_GUARD_ML_MODE
+env APEIRETH_GUARD_ML_MODEL
+env APEIRETH_HOME
+env APEIRETH_IMAGE_FX_NOCACHE
+env APEIRETH_IMAGE_MOTION_CASES
+env APEIRETH_IMAGE_MOTION_CHANNELS
+env APEIRETH_IMAGE_MOTION_HEIGHT
+env APEIRETH_IMAGE_MOTION_MODE
+env APEIRETH_IMAGE_MOTION_RUNS
+env APEIRETH_IMAGE_MOTION_VARIABLE_ALPHA
+env APEIRETH_IMAGE_MOTION_WIDTH
+env APEIRETH_IMAGE_REGEN_PROFILES
+env APEIRETH_IMAGE_UNSHARP_CASES
+env APEIRETH_IMAGE_UNSHARP_CHANNELS
+env APEIRETH_IMAGE_UNSHARP_DEPTH
+env APEIRETH_IMAGE_UNSHARP_HEIGHT
+env APEIRETH_IMAGE_UNSHARP_MODE
+env APEIRETH_IMAGE_UNSHARP_REPS
+env APEIRETH_IMAGE_UNSHARP_WIDTH
+env APEIRETH_IM_CHANNELS
+env APEIRETH_KEYRING_BACKEND
+env APEIRETH_KEYRING_DIR
+env APEIRETH_LISTEN
+env APEIRETH_MASTER_TOKEN
+env APEIRETH_MAX_TOOL_CALLS
+env APEIRETH_MAX_TURN_ROUNDS
+env APEIRETH_MCP_READONLY_PRESET
+env APEIRETH_MCP_SERVERS
+env APEIRETH_MODEL
+env APEIRETH_MODEL_PROFILES
+env APEIRETH_MORPHOLOGY_TEMPERATURE
+env APEIRETH_OPENAI_KEY
+env APEIRETH_OPENAI_MODELS
+env APEIRETH_OPENAI_URL
+env APEIRETH_PERSONA_ID
+env APEIRETH_PORTABLE
+env APEIRETH_QUOTA_MAX_
+env APEIRETH_QUOTA_MAX_COST_MICROS
+env APEIRETH_QUOTA_MAX_TOKENS
+env APEIRETH_QUOTA_MAX_TOOL_STEPS
+env APEIRETH_REASONING_ENABLED
+env APEIRETH_REASONING_MODEL_FILTERS
+env APEIRETH_REASONING_TAG
+env APEIRETH_REFLEXION_DIR
+env APEIRETH_REG_APEIRETH_CORE_A
+env APEIRETH_REG_APEIRETH_CORE_B
+env APEIRETH_SESSION_DB
+env APEIRETH_SHELL_SANDBOX
+env APEIRETH_SUBJECT_ID
+env APEIRETH_TLS_CERT
+env APEIRETH_TLS_KEY
+env APEIRETH_TUI_MOTION
+env APEIRETH_TUNE_
+env APEIRETH_TUNE_CONSOLIDATION_CADENCE
+env APEIRETH_TUNE_CURIOSITY_STRENGTH
+env APEIRETH_TUNE_MEMORY_FADE
+env APEIRETH_TUNE_TONE_SATURATION
+env APEIRETH_UNIQ_SECRET_MARKER_12345
+env APEIRETH_VOICE_INTERRUPT
+env APEIRETH_VOICE_QUIET_HOURS
+env APEIRETH_VOICE_SPEAK_SCOPE
+
+# --- size (65) ---
+size crates/adapters/cli/src/gateway_panels.rs 1542
+size crates/adapters/cli/src/lib.rs 3878
+size crates/adapters/cli/src/onboarding.rs 1353
+size crates/adapters/gateway/src/canonical_entry.rs 2233
+size crates/adapters/gateway/src/events.rs 1623
+size crates/adapters/gateway/src/panels.rs 1641
+size crates/adapters/gateway/src/presence.rs 1299
+size crates/adapters/sdk/src/client.rs 1553
+size crates/adapters/tui/src/state.rs 1585
+size crates/capabilities/tools/src/device/device_control.rs 3144
+size crates/capabilities/tools/src/device/guard_watch.rs 1348
+size crates/capabilities/tools/src/doc_ops.rs 6150
+size crates/capabilities/tools/src/git_write.rs 1330
+size crates/capabilities/tools/src/image_ops.rs 2238
+size crates/capabilities/tools/src/process/windows.rs 1482
+size crates/capabilities/tools/src/self_status.rs 4193
+size crates/capabilities/tools/src/sheet_ops.rs 4261
+size crates/capabilities/tools/src/shell.rs 1375
+size crates/engine/guard/src/hook.rs 1518
+size crates/engine/guard/src/scenario.rs 3853
+size crates/engine/image/algo/src/artistic_fx.rs 1335
+size crates/engine/image/algo/src/inpaint.rs 2501
+size crates/engine/image/algo/src/lib.rs 1322
+size crates/engine/image/algo/src/liquify.rs 1453
+size crates/engine/image/algo/src/panorama.rs 1935
+size crates/engine/image/algo/src/puppet.rs 1597
+size crates/engine/image/algo/src/render2.rs 1542
+size crates/engine/image/algo/src/selection.rs 1567
+size crates/engine/image/codecs/src/codecs/tiff.rs 1268
+size crates/engine/image/compose/src/adjust.rs 2230
+size crates/engine/image/compose/src/effects.rs 3232
+size crates/engine/image/compose/src/lib.rs 1913
+size crates/engine/image/compose/src/tests.rs 3226
+size crates/engine/image/doc/src/lib.rs 1520
+size crates/engine/image/geom/src/warp.rs 1374
+size crates/engine/image/psd/src/tiff.rs 2440
+size crates/engine/image/raster/src/lib.rs 1676
+size crates/engine/memory/src/migrations.rs 1368
+size crates/engine/memory/src/persona_layer.rs 1685
+size crates/engine/memory/src/research_derived_memory.rs 1211
+size crates/engine/organ/src/causal_world_model.rs 1864
+size crates/engine/organ/src/emergence.rs 1227
+size crates/engine/organ/src/goal.rs 1619
+size crates/engine/organ/src/neuromodulation.rs 1608
+size crates/engine/organ/src/prompt_assembly.rs 1492
+size crates/engine/organ/src/world_model.rs 1336
+size crates/engine/runtime-assembly/src/canonical/cognitive.rs 4757
+size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2435
+size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
+size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
+size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1204
+size crates/engine/runtime/src/canonical/bio_pain.rs 1294
+size crates/engine/runtime/src/canonical/execute.rs 4987
+size crates/engine/runtime/src/canonical/runtime.rs 1361
+size crates/engine/runtime/src/canonical/session.rs 1595
+size crates/foundation/core/src/cost_router.rs 1399
+size crates/foundation/core/src/lib.rs 2488
+size crates/foundation/core/src/stored_doc.rs 1304
+size crates/foundation/credentials/src/keyring.rs 1763
+size crates/foundation/governance/src/sandbox_ladder.rs 1220
+size crates/foundation/orchestration/src/durable_schedule.rs 1310
+size crates/foundation/orchestration/src/lib.rs 1427
+size crates/foundation/orchestration/src/lifecycle.rs 1255
+size crates/foundation/orchestration/src/self_tuning.rs 1361
+size crates/foundation/orchestration/src/task_queue.rs 1479
+
+# --- concept (6) ---
+concept CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
+concept ContextAssembler crates/engine/organ/src/context_assembly.rs
+concept ContextAssembler crates/foundation/orchestration/src/context_budget.rs
+concept ContextBlock crates/foundation/orchestration/src/context_budget.rs
+
+# --- ext (7) ---
+ext BehaviorModule crates/engine/runtime/src/canonical/module.rs
+ext BehaviorRegistry crates/engine/runtime/src/canonical/module.rs
+ext CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
+ext Plugin crates/foundation/plugin/src/plugin.rs
+ext PluginManager crates/foundation/plugin/src/manager.rs
+ext SubLoopSpawner crates/engine/runtime/src/canonical/subloop.rs

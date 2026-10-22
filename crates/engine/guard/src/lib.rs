@@ -18,6 +18,8 @@ pub mod features;
 pub mod features_v2;
 pub mod fusion;
 pub mod hook;
+// 生物机制族 W1（2026-10-19）：免疫记忆 + 炎症收口（纯内核，未接线）。
+pub mod immune_memory;
 pub mod intent;
 pub mod introspection;
 pub mod observation;

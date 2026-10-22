@@ -1,6 +1,6 @@
 # Apeireth 用户手册（v2 工程重构线）
 
-> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（写作时点 v2.0.0-alpha.1 / 13-crate；当前 **workspace 31 members（30 crates + bench harness）/ v2.0.0-rc.4**（2026-10-18 文档审计批更新 crate 口径），能力性判断以下方 2026-10-06 对账注与台账为准）。
+> 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（写作时点 v2.0.0-alpha.1 / 13-crate；当前 **workspace 30 members（29 crates + bench harness）/ v2.0.0-rc.4**（2026-10-20 R4b 归档 perception 后更新；2026-10-18 审计批口径为 31 members），能力性判断以下方 2026-10-06 对账注与台账为准）。
 > 快速跑起来见 [quick-start.md](quick-start.md)；部署见 [deployment.md](deployment.md)；架构总览见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)。
 
 ```
@@ -141,7 +141,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | | |
 | **生产 governance 接线** | ✅ 已做（upstream `873d2857`）：`PermissionGovernanceHook` + `CredentialDisclosureHook` + `PromptInjectionHook` 安装到 CLI bootstrap |
 | **敏感 workspace 路径保护**（`.env` / `.ssh` / `.aws` / `.gnupg` / `.secret` 等）| ✅ 已做（upstream `ac5cbf5a`）：`tool.filesystem` + `tool.search` 通过 `crates/capabilities/tools/src/sensitive_path.rs` 屏蔽（普通项目元数据如 `.gitignore` / `.cargo/config.toml` 仍可读）|
-| **13 键 verdict cache 接线** | ✅ 降级完成（2026-08-27）：`crates/foundation/core/src/philosophy.rs::RUNTIME_ENFORCED = false` 显式标注"非 runtime 强制"；`VERDICT_KEYS_BY_PRINCIPLE` 映射到 5 原则洋葱（E 存在 / S 价值 / A 经验 / M 方法论）。13 键 v2 角色 = 哲学标准 / 判别词汇表（hook deny reason 引用 + CapabilityDescriptor risk 分级）。**v2 取代 13 键强制机制 = external hook 闸**（已装 3 个）。 |
+| **键集（现行 14 键） verdict cache 接线** | ✅ 降级完成（2026-08-27）：`crates/foundation/core/src/philosophy.rs::RUNTIME_ENFORCED = false` 显式标注"非 runtime 强制"；`VERDICT_KEYS_BY_PRINCIPLE` 映射到 5 原则洋葱（E 存在 / S 价值 / A 经验 / M 方法论）。键集（现行 14 键） v2 角色 = 哲学标准 / 判别词汇表（hook deny reason 引用 + CapabilityDescriptor risk 分级）。**v2 取代 键集（现行 14 键）强制机制 = external hook 闸**（已装 3 个）。 |
 | **`apeireth-credentials` 接线** | ⚠️ P2：env resolver 在 provider，生产足够；keyring 等后端未挂 |
 | **M1B 记忆全量实现（ACT-R / 完整管线）** | ⏳ P3：当前 memory crate 有 primitive；端到端管线待 P3 |
 | **MCP 动态能力注册** | ⏳ P4 |
@@ -151,7 +151,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | **前端产品化对接（companion-desktop ↔ gateway）** | ⏳ P8 |
 | Docker 多架构构建 | ✅ 已修（commit 4596357, $TARGETARCH, linux/amd64 + linux/arm64）|
 | SDK 真接（HTTP / WS 调 `apeireth-gateway`）| ⏳ R21（stub 守门）|
-| 13 键编译期 hardcode + 13 键测试契约 | ✅ 在 core 跑（`crates/foundation/core/tests/verdict_keys.rs` 等）|
+| 键集（现行 14 键）编译期 hardcode + 键集（现行 14 键）测试契约 | ✅ 在 core 跑（`crates/foundation/core/tests/verdict_keys.rs` 等）|
 
 ## 8.5 2026-10 能力增量补注（文档审计批，2026-10-18）
 
@@ -187,7 +187,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | 工具被拒了？ | 先看开关是否开启（opt-in 工具未开 = 未注册即拒，见 [capability-switch-power-audit.md](capability-switch-power-audit.md)）；再看 governance 决策（`Deny` / `RequireApproval` 四态）；最终以 `tool.self_status` 的 `capabilities` 名册生效值为准。 |
 | 我想接一个 IDE 一样的自定义模型？ | 实现 `ProviderCapability` trait + 注册为 plugin；参考 `crates/engine/provider/src/canonical_minimax.rs` 作为示例。 |
 | Docker？ | `Dockerfile` 多架构已修；本机无 docker 详见 [CI 实测为准](https://github.com/Apeireth/Apeireth/actions)。 |
-| 我看到的"13 键"在哪？ | `crates/foundation/core/src/philosophy.rs` + 测试 `crates/foundation/core/tests/verdict_keys.rs` 等。当前未接 canonical 执行路径（见 §8）。|
+| 我看到的"键集（现行 14 键）"在哪？ | `crates/foundation/core/src/philosophy.rs` + 测试 `crates/foundation/core/tests/verdict_keys.rs` 等。当前未接 canonical 执行路径（见 §8）。|
 
 ## 10. 一句话
 

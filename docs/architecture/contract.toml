@@ -1,0 +1,201 @@
+# ============================================================================
+# Apeireth 架构契约（Architecture Contract）— 唯一可执行真源
+# ============================================================================
+# 状态: v0.1 草案 (2026-10-20, 待 owner 裁决后转 adjudicated)
+# 读取者: scripts/arch_guard.py (CI / fast gate / 本地提交前)
+#
+# 原则:
+#   1. 本文件是可执行契约, 不是叙事文档。叙事由 contract -> README/ARCHITECTURE 生成。
+#   2. accepted-current = 2026-10-20 实测接受现状 (≠ 目标); target = 待 owner 裁决。
+#   3. 棘轮: 允许集合只减不增; 新增依赖边/开关/结构必须 ADR + 本文件变更。
+#   4. 不替代、不修改 LOCKED 5 项; 与 LOCKED 冲突时以 LOCKED 为准。
+#
+# 0 装边界 (2026-10-20 实测来源):
+#   - 依赖边: cargo metadata --no-deps (kind != dev) = 118 条生产边
+#   - 开关名: `rg -o 'APEIRETH_[A-Z0-9_]+' crates --glob '*.rs'` = 158 distinct
+#   - 最大 src 文件: 实测 ~6150 行 (crates/capabilities/tools/src/doc_ops.rs)
+# ============================================================================
+
+[meta]
+version = "1.0"
+updated_at = "2026-10-20"
+status = "adjudicated"            # 规则体系已裁决生效（ADR-0001）
+status_note = "规则/守卫/基线/例外预算自 2026-10-20 生效；目标架构 v1 已裁决（ADR-0002）；Wave 2 单项 ADR-0003/0004/0005 已出并收口；Wave 3 收口 (2026-10-20): ADR-0007 R7 / ADR-0008 R2 Accepted 并交付（R2-2..R2-5 / R7-2..R7-4），R4b 四岛归档完成；R3c 待 2026-11-03 后 review；Wave 4 启动: ADR-0009 R1b Accepted（总线/开关表/台账校验 spec）；ADR-0010 R8 Accepted（治理单一管线 spec）；ADR-0011 R6 Accepted（三层门禁/四层验收载体 spec）；R1b-1a/R1b-1b 已交付（6837d9b7：生物开关读取收敛装配根单入口 + 台账 4 行更正 + 3 条结构校验）；R1b-4a schema v2 additive 已交付（nervous_system.bus 聚合计数，v1 字段不变；EXC-0003 登记 tool_modules 尺寸）；R1b-2/3 待生物线交接、R1b-4b 待收口；Wave 4 收口 (2026-10-21): ADR-0009 R1b（1a/1b/2a/2b/2c/3/4a 交付、4b 收口）/ ADR-0010 R8（A/B1/C 交付、D 部分；B2/B3 待安全线）/ ADR-0011 R6（A/B 交付、C/D 载体；夜间运行与四层签核待效率线/owner）；全量 341 套件 / 8570 passed 见 test-baseline；current_wave=5)"
+adjudication = "owner 授权代裁 2026-10-20（'你了解项目全貌做出判断就行'）；决策记录见 docs/adr/0001-adopt-architecture-contract.md"
+target_architecture = { adr = "docs/adr/0002-target-architecture-v1.md", status = "accepted-2026-10-20", waves = "ADR-0003 R1a / ADR-0004 R3 / ADR-0005 R4a（Wave 2）；ADR-0007 R7 / ADR-0008 R2（Wave 3）；ADR-0009 R1b（Wave 4）；ADR-0010 R8（Wave 4）；ADR-0011 R6（Wave 4）；Wave 4 收口 2026-10-21（current_wave=5）" }
+current_wave = 5                  # 架构波次号; 每波收口 +1 (用于例外预算/到期)
+wave_note = "Wave 4 收口 (2026-10-21): R1b 交付（R1b-1a 总线/桥/开关表、1b 开关读取收敛+台账校验、2a/2b/2c 机制订阅迁移与 ApprovalSocial 发布、3 三缺源如实定性、4a schema v2 additive；4b 收口项随本批）；R8 交付（R8-A GovernanceChain 六段骨架、R8-B1 ChainGovernanceHook、R8-C 延迟反思队列、R8-D 演练入 CI 部分；B2/B3 待安全线）；R6 交付（R6-A/B gate_full 唯一执行器+CI 守卫改读契约、R6-C/D 载体：verification-ledger.yaml / formal-coverage.md / nightly-full.yml；夜间未运行、四层签核 0 条）；Wave 5 = R5 取消可恢复 worker + 收口；R3c 待 2026-11-03 后 review"
+rolling_report_only_until = "2026-11-03"   # 灰度期: 此日期前 CI/commit 仅报告, 之后 blocking
+
+[workspace]
+members = 30
+product_crates = 29
+bench_crates = 1
+version = "2.0.0-rc.4"
+test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
+
+[locked]
+# 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
+nine_anchors = "crates/foundation/core/src/eight_anchors.rs"
+keys_file = "crates/foundation/core/src/philosophy.rs"
+spine_file = "crates/foundation/core/src/onion.rs"
+workspace_version_source = "Cargo.toml"
+r11_baseline = "legacy/ (历史归档, 只引用, 不改)"
+# 0 装注记: 现行为 14 键 (PHL-01..08, philosophy.rs:107-128/159-198);
+# 2026-10-20 经 ADR-0006 正式化; 历史「13 键」为 PHL-07 时代口径。
+
+[layers]
+foundation = [
+  "apeireth-core", "apeireth-protocol", "apeireth-plugin",
+  "apeireth-governance", "apeireth-credentials", "apeireth-orchestration",
+]
+engine = [
+  "apeireth-runtime", "apeireth-runtime-assembly", "apeireth-provider",
+  "apeireth-storage", "apeireth-memory", "apeireth-organ", "apeireth-guard",
+]
+capabilities = ["apeireth-tools-canonical"]
+adapters = ["apeireth-gateway", "apeireth-cli", "apeireth-sdk", "apeireth-tui"]
+image_family = [
+  "apeireth-image-core", "apeireth-image-algo", "apeireth-image-cms",
+  "apeireth-image-codecs", "apeireth-image-color", "apeireth-image-compose",
+  "apeireth-image-doc", "apeireth-image-geom", "apeireth-image-psd",
+  "apeireth-image-raster", "apeireth-image-vector",
+]
+bench = ["apeireth-bench-harness"]
+
+[vendored]
+# vendored 内核家族（ADR-0005 R4a）。现状仍在 workspace；R4a-1 只做主门禁隔离，
+# R4a-2（条件触发）才抽独立 workspace。主门禁 --exclude 清单从本表唯一生成，禁止手抄第二份。
+image_family = [
+  "apeireth-image-core", "apeireth-image-algo", "apeireth-image-cms",
+  "apeireth-image-codecs", "apeireth-image-color", "apeireth-image-compose",
+  "apeireth-image-doc", "apeireth-image-geom", "apeireth-image-psd",
+  "apeireth-image-raster", "apeireth-image-vector",
+]
+note = "R4a-1 (Wave 2): 主门禁 --exclude 本表 11 包 + 独立 image CI; R4a-2: 独立 workspace 抽取（条件）"
+
+[deps]
+# 层方向允许表 (现状接受, 2026-10-20 实测)。新增层边必须先过 ADR 并改本表。
+allowed_layer_edges = [
+  "foundation->foundation",
+  "engine->foundation", "engine->engine", "engine->capabilities",
+  "capabilities->foundation", "capabilities->engine", "capabilities->image_family",
+  "adapters->foundation", "adapters->engine", "adapters->capabilities", "adapters->adapters",
+  "image_family->image_family",
+  "bench->*",
+]
+forbid_production_cycles = true
+forbid_dev_cycles = true
+
+# 现状已知异常边 (实测存在; 不是"允许新增"的许可, 是待裁决债务)。
+[[flagged_edges]]
+from = "apeireth-tools-canonical"
+to = "apeireth-image-core"
+why = "capabilities->engine(image_family): image_ops 直连引擎级创作内核"
+target = "R4a (ADR-0005): Wave 2 主门禁隔离; Wave 4 条件抽取独立 workspace"
+
+[[flagged_edges]]
+from = "apeireth-gateway"
+to = "apeireth-sdk"
+why = "adapter->adapter: gateway 复用 sdk::im 类型"
+target = "R4b (ADR-0005): owner 裁决（建议归档 SDK 四孤岛; IM 类型下沉 protocol/tools）"
+
+[[flagged_edges]]
+from = "apeireth-plugin"
+to = "apeireth-orchestration"
+why = "foundation 内反向依赖: LlmFactory/SubagentRole mirror (llm_orchestration_mirror.rs 自认反向依赖成环)"
+target = "R2 (单项 ADR 待出, Wave 3): 删除 mirror, 契约下沉 plugin 或 protocol"
+
+# 现役装配根 (允许多个但必须登记; 目标收敛到 runtime-assembly + 薄适配器)。
+[[composition_roots]]
+crate = "apeireth-runtime-assembly"
+file = "src/canonical/production.rs"
+role = "目标装配根 (保留)"
+
+[[composition_roots]]
+crate = "apeireth-cli"
+file = "src/lib.rs"
+role = "CLI 引导 (目标: 只做参数/输入输出, 装配迁回 assembly)"
+
+[[composition_roots]]
+crate = "apeireth-gateway"
+file = "src/canonical_entry.rs"
+role = "Gateway 引导 (目标同上)"
+
+[extension_points]
+# 唯一扩展点登记。新增能力必须复用其一; 新增扩展点/注册表 = 结构变更, 必须 ADR。
+# 统一 ABI 家族（R2, ADR-0008 §2.1）: foundation/plugin/src/extension.rs 的
+# ExtensionKind / ExtensionDescriptor / ExtensionCatalog; 注册表对外须实现
+# ExtensionCatalog（现存 PluginManager 与 BehaviorRegistry 两个实现）。
+module_trait = "crates/engine/runtime/src/canonical/module.rs::BehaviorModule"
+plugin_trait = "crates/foundation/plugin/src/plugin.rs::Plugin"
+module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry"
+capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
+plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
+sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
+
+# 已登记技术债: R2 收口（2026-10-20）后清零。新增结构变更须先出 ADR 再登记。
+
+# 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
+[[concepts]]
+name = "ContextAssembler"
+canonical = "crates/foundation/orchestration/src/context_budget.rs"
+known_debt = []
+target = "R7-2.1（ADR-0007 §2.1 Accepted）: 已完成 2026-10-20（cap→fold→greedy cut→spill 单一管线；organ 只留 AssemblyPolicy→hook 策略桥）"
+
+[[concepts]]
+name = "ContextBlock"
+canonical = "crates/foundation/orchestration/src/context_budget.rs"
+known_debt = []
+target = "R7（ADR-0007 Accepted）: 已完成 2026-10-20（R7-2a/b；organ 仅再导出，定义=1）"
+
+[[concepts]]
+name = "CapabilityRegistry"
+canonical = "crates/engine/runtime/src/canonical/capability.rs"
+known_debt = []
+target = "R2（ADR-0008 Accepted）: 公共面 2026-10-20 收敛；plugin 内部 id→owner 索引更名 CapabilityIndex（非同名公共概念）"
+
+[env]
+# 开关登记: 新增 APEIRETH_* 开关必须登记 (owner/默认/层级/用途) 否则守卫红。
+# 扫描口径: workspace 包 src/**/*.rs (guard 实测 154 distinct, 2026-10-20);
+#           `rg` 全 crates 含 tests 为 158 distinct —— 守卫只按 src 计, 两口径不混用。
+# 逐条登记字段迁移见 R3。
+policy = "所有 APEIRETH_* 开关必须登记; 新增必须默认关 + 关时零变化测试"
+max_distinct_names = 160            # 棘轮: 只减不增（按 src 口径）
+baseline_file = "scripts/arch-baseline.txt"
+registry_file = "docs/architecture/env-registry.toml"   # R3a 登记表（ADR-0004）; 登记名无需进基线
+# level 枚举与占位口径（ADR-0004 §7）：UNCLASSIFIED = 登记先行占位，不属四级口径、不得对外宣称
+level_values = ["PRODUCTION WIRED", "IMPLEMENTED", "NOT IMPLEMENTED", "UNCLASSIFIED"]
+placeholder_policy = "UNCLASSIFIED/TODO-OWNER 同记分牌每波只减; arch_guard 不校验 level; 四级口径由 claims/wiring ledger 承担"
+# 目标: env 读取收敛到 config 模块; 现状散在 148 文件 (基线登记, 只减不增)。
+allowed_read_locations = []         # 空 = v0.1 只按名字卡, 不按位置卡
+
+[budgets]
+max_file_loc = 6300                 # 现状最大 src ~6150 (doc_ops.rs); 只减不增
+max_workspace_crates = 30           # 目标: 图像家族移出后 20; 只减不增
+max_production_edges = 118          # 2026-10-20 实测; 只减不增 (新增需 ADR)
+
+[exceptions]
+# 例外预算 — 已裁决 (ADR-0001, owner 授权代裁 2026-10-20)
+status = "accepted (ADR-0001)"
+unit = "weight"                    # 按权重分计量，不按条数（避免小额噪音吃配额）
+weights = { size = 1, doc = 1, edge = 3, duplicate = 3, env = 3, direction = 10, structural = 10 }
+default_budget_weight = 0          # 结构/方向类默认 0
+structural_budget_weight = 0       # W10 结构/方向违规永远不走例外，只能 ADR 改契约
+per_wave_weight_budget = 3         # 每波新增例外权重上限（W3 最多 1 条 / W1 最多 3 条）
+active_exceptions_max = 2          # 全仓同时活跃例外上限
+expiry_waves = 2                   # 例外存活上限（波）
+net_zero = true                    # 加 1 必须同批删 >=1
+net_zero_scope = ["edge", "duplicate"]          # 依赖边 / 重复概念；env/尺寸不适用净零
+env_net_zero_exempt = "新增 env 名需登记（默认关+零变化测试），不要求净零；未登记即 W3 违规"
+release_freeze_budget = 0          # 发版冻结窗口预算 0
+release_freeze_note = "冻结窗口由 release authority 置 release_freeze=true；已有例外须在 tag 前清零"
+override_max_active = 1            # owner 特批同时活跃上限
+override_scope = "仅 P0 安全/修复；不适用结构类；不占每波权重，占活跃上限"
+extend_policy = "不允许自动续期：延期=新开一条+删旧条，占新波预算"
+fingerprint_drift_policy = "违规形态变化视为新例外，重新登记"
+baseline_update_policy = "仅架构波收口评审由 lead 执行；CI 校验 baseline diff 只减不增"
+approval_policy = { structural = "owner", debt = "engineering-lead", size_doc = "arch_guard-auto" }
+strict_requires_adr_above_weight = 10
+register_file = "docs/architecture/exceptions.toml"
+release_freeze = false              # release authority 在冻结窗口置 true

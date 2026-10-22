@@ -25,7 +25,7 @@
 |---|---|
 | **A-Kani/TLA 已证** | 有真实 `#[kani::proof]`（含符号输入或领域不变量断言）或 TLA+ 模型经 TLC 穷举背书。现知仅 `research_approval_sm.rs` 三不变量（InvA/InvB/InvC）+ `research/verification/tla/`。 |
 | **B-单测覆盖** | 有具体单测/集成测试断言行为（给出测试文件与测试名）。 |
-| **C-默认关闭未实证** | 代码已实现（甚至已接线）但默认关 / 未接入 canonical 默认路径，产品效果无验证。 |
+| **C-默认关闭未实证** | 代码 **IMPLEMENTED**（含 **PRODUCTION WIRED** 但 **DEFAULT ENABLED 不成立** / 未接入 canonical 默认路径），产品效果无验证。 |
 | **D-桩/未实现** | 明文 stub / mock / `NotImplemented` / 占位（如 SDK 半边、P2P 加密层、TTS 传输）。 |
 | **E-仅人工** | 只有人工验证途径（如真机截屏 smoke、UI 点击流——挂账 #2，见 `frontend/companion-desktop/docs/first-run-click-through-checklist.md`）。 |
 | **F-纯愿景** | 代码里找不到对应物，或宣称与代码直接矛盾（如 WGSL 暗角着色器、疲劳检测主动关怀、"AGI 操作系统"）。 |
@@ -38,7 +38,7 @@
    （如 `assert_eq!(PROTOCOL_COUNT, 4)`）。按 B 以下处理，不支撑任何性质宣称。
 2. **`kani.yml` 非阻塞**：三个验证步骤全部 `continue-on-error: true`（`.github/workflows/kani.yml:57,61,65`），
    证明失败不阻塞合入；A 级证据附此保留意见。
-3. **C 级含两类**：① 已接线但默认关（env 旋钮）；② 库级已实现但从未接入 canonical 运行时（如 `CognitiveQuotaScheduler`、
+3. **C 级含两类**：① **PRODUCTION WIRED 但 DEFAULT ENABLED 不成立**（env 旋钮）；② 库级 **IMPLEMENTED** 但从未接入 canonical 运行时（如 `CognitiveQuotaScheduler`、
    `CarePotentialField`）。均不计产品级宣称成立。
 4. **基准数字单独定级**：数字若无复现物证（bench target / 脚本 / 原始输出），按 F（找不到对应物）处理，见 §10。
 
@@ -288,7 +288,14 @@
    WGSL 暗角着色器只存在于 README 两行（无 .wgsl 文件）、四态色温表与代码四个温度全部不符。
    这些是"命名/文档强于实现"的成体系模式，而非孤立笔误。
 
-### 11.3 建议的下一步（按杠杆排序）
+### 11.3 复核注记（2026-10-20，第三线；不追溯改写上文历史判定）
+
+1. **基准表处置已执行（§11.4-3 部分销账）**：README 的 P99 表已撤下，改为可复现基准表（`scripts/run-benchmarks.ps1` + `reports/benchmark-reproduction.md`），并公开保留一条红行（microkernel cold start 22.0ms vs <10ms 目标，标 ❌ 2.2× off）；`.github/workflows/publish-release.yml` 的无源数字注记已替换为「re-measured behind a reproducible-script policy」。§10 的旧判定按历史口径保留，不追溯改写。
+2. **未复核项**：§11.4 的 P-DENY / P-ROLLBACK、`kani.yml` continue-on-error、六处文档纠偏、记忆闭环评测等仍维持原判定，等待各自归口批处理。
+3. **外部对比核验**：2026-10-20 第三方对比文证据复核见 `artifacts/vcp-vs-apeireth-source-verification-2026-10-20.md`；本文档仍为「宣称→证据」分级的内部真源之一。
+4. 本注记 0 触碰 LOCKED；0 改上文历史数字。
+
+### 11.4 建议的下一步（按杠杆排序）
 
 1. 先做 §9 的 **P-DENY / P-ROLLBACK**（先决：决定空引擎语义、补丁回滚从 best-effort 升级或宣称降级）。
 2. 把 `kani.yml` 的 `continue-on-error` 撤掉，并让 mirror crate 覆盖生产 `approval.rs/execute.rs`（P-APPROVE 推广）。

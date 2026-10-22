@@ -39,6 +39,8 @@ pub mod device;
 // 注册即闸 `APEIRETH_ENABLE_DOC_OPS`, 写面每次人批, 默认关 fail-closed。
 // 依赖报备: flate2/quick-xml 为锁定文件既有传递依赖的同版本复用 (0 新外部包)。
 pub mod doc_ops;
+// 生物机制族 W2（2026-10-19）：工具生态健康度（多样性/冗余/重叠，纯内核未接线）。
+pub mod ecosystem_health;
 pub mod education;
 pub mod egress;
 // 工具执行五段流水线: pre-execute 瀑布 → 单调 Guard → around(超时/重试) →
@@ -104,6 +106,10 @@ pub mod skill;
 // 缺失字段显式 null + 原因, 不整帧失败。
 pub mod self_status;
 mod sensitive_path;
+// D26 (2026-10-21): 测试共享 bind 重试助手 (仅 Windows WSAEACCES 10013 有界
+// 重试); 集成测试经 `tests/common/mod.rs` 的 `#[path]` 引入同一份源文件。
+#[cfg(test)]
+pub(crate) mod test_support;
 // 创作工具面 K3: 表格操作 (`tool.sheet_ops`, 受控读写族) —— 闭合操作词表
 // (read/summary/filter/sort/aggregate/formula 读 + export_csv/export_xlsx 写,
 // 变换动作带 output 即写) + 工作区限域 + 敏感面拒 + 行列/字节上限 (防炸弹表) +

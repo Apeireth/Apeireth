@@ -273,52 +273,18 @@ const _MODULE_COUNT: usize = {
 
 // =============================================================================
 // R146: 5 SDK -> 1 apeireth-sdk (feature flags)
-// 4 子 SDK 由 feature 门控, 0 装时 0 编译 (per O-5 不假装)
-//
-// 字段级引用 R20 阶段 4 (lark / livekit / sandbox / voice 4 个 stub).
+// 2026-10-20 R4b (ADR-0005 §3): livekit / voice / sandbox 三岛与 lark 适配族
+// 全部迁 `legacy/archived/sdk-islands/`；保留面 = client / wire / im / abi /
+// 跨语言桥, 0 子 SDK feature 岛。
 // =============================================================================
 
-#[cfg(feature = "lark")]
-pub mod lark;
-#[cfg(feature = "livekit")]
-pub mod livekit;
 // IM 快捷接入 wire 面 (渠道 kind / 入站解码 / 出站信封 / 审批卡片 / 分段 / 传输)。
-// `im-feishu` 渠道消费 lark 适配族 (webhook 信封解析 + 消息内容形状 + 消息预算),
-// 因此与 lark 同门控; test 构建恒编译, 保证 wire 面单测进入默认测试面。
-#[cfg(any(feature = "lark", test))]
+// wire 原语 (信封解析 / 内容形状 / 消息预算) 在 `im::wire` 自有面内维护,
+// 0 跨模块消费; 恒编译, 保证网关 (`apeireth_sdk::im`) 与 wire 面单测不受
+// feature 组合影响。
 pub mod im;
-// sandbox 客户端协议层: 下游按 feature `sandbox` 启用; test 构建恒编译,
-// 保证编排面单测 (生命周期/配额/错误分类/并发/超时) 在标准
-// `cargo test --workspace` 验证里真实运行。
-#[cfg(any(feature = "sandbox", test))]
-pub mod sandbox;
-#[cfg(feature = "voice")]
-pub mod voice;
 
-// 编译期 feature 守门 (per [11-baseline.md] R11 baseline)
-#[cfg(any(
-    feature = "lark",
-    feature = "livekit",
-    feature = "sandbox",
-    feature = "voice"
-))]
-pub const SDK_SUBMODULES_ENABLED: usize = {
-    let mut n = 0;
-    if cfg!(feature = "lark") {
-        n += 1;
-    }
-    if cfg!(feature = "livekit") {
-        n += 1;
-    }
-    if cfg!(feature = "sandbox") {
-        n += 1;
-    }
-    if cfg!(feature = "voice") {
-        n += 1;
-    }
-    n
-};
-
-// 4 子 SDK 编译期常量 (per O-5 不假装, 透明可见)
+// 保留的子 SDK 编译期常量 (per O-5 不假装, 透明可见):
+// 0 个（livekit / voice / sandbox / lark 均已归档; 保留面 im 是自有 wire 面）。
 #[allow(dead_code)]
-pub const SDK_SUBMODULE_COUNT: usize = 4;
+pub const SDK_SUBMODULE_COUNT: usize = 0;

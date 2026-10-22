@@ -26,6 +26,8 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
+// W3.3/W3.4 SG-16/17: 痛觉评估 + 再生案例记账 (失败处理链观测, 默认关) 的运行时接线面。
+pub mod bio_pain;
 pub mod cache_trace;
 pub mod capability;
 pub mod context;
@@ -78,6 +80,11 @@ pub use approval::{
     tool_schema_version_digest, ApprovalDecision, ApprovalStatus, FrozenOperationRecord,
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
+pub use bio_pain::{
+    classify_retryability, failure_cause_key, failure_class_for_result, recovery_target_phase,
+    BioPainObservation, BioPainSnapshot, BioRecoveryCaseSnapshot, BioRecoveryPhaseCounts,
+    BioRecoverySnapshot, DEFAULT_BIO_PAIN_OBSERVATIONS,
+};
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
 pub use domain_plane::{DomainRuntimeContext, DomainRuntimePlane, DomainSessionPlane};
@@ -92,8 +99,7 @@ pub use events::{
 };
 pub use execute::{
     budget_context_blocks, budget_context_blocks_with_spill, plan_mode_exit_declaration,
-    ApprovalResolution, ContextBlock, TurnOutcome, TurnRequest, TurnResponse,
-    PLAN_MODE_EXIT_TOOL_NAME,
+    ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse, PLAN_MODE_EXIT_TOOL_NAME,
 };
 pub use heartbeat::{
     FlowLock, HeartbeatDispatch, HeartbeatPoll, HeartbeatPollOutcome, HeartbeatProducer,
@@ -105,10 +111,10 @@ pub use metrics::{
     TurnOutcomeKind, WindowAggregate, DEFAULT_METRICS_WINDOW_TURNS, MAX_TRACKED_SESSIONS,
 };
 pub use module::{
-    AgentModule, BehaviorModule, HookPoint, InvocationContext, InvocationOrigin, Module,
+    BehaviorModule, BehaviorRegistry, HookPoint, InvocationContext, InvocationOrigin, Module,
     ModuleContext, ModuleDirective, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
-    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, ModuleRegistry,
-    PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
+    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay,
+    DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use quota::{

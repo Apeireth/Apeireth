@@ -106,9 +106,10 @@ async fn the_cli_bootstrap_fans_out_guard_dataset_and_trace_audit_observation() 
     let data_dir = data_dir.to_string_lossy().into_owned();
     let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
 
-    let (runtime, observer, _cost_router) = build_canonical_runtime_from_env_with_observability()
-        .await
-        .expect("the production CLI bootstrap builds with all observers");
+    let (runtime, observer, _cost_router, _bio_approval) =
+        build_canonical_runtime_from_env_with_observability()
+            .await
+            .expect("the production CLI bootstrap builds with all observers");
     let CanonicalCliTurn::Completed(outcome) =
         execute_canonical_cli_turn(&runtime, "hello", None, None)
             .await
@@ -156,6 +157,10 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
     ));
     let cognitive_db = cognitive_db.to_string_lossy().into_owned();
     let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
+    // R8-B3: 治理审计账本随数据根走 (temp 根), 测试不写真实 ~/.apeireth。
+    let data_dir = std::env::temp_dir().join(format!("apeireth-cli-data-{}", std::process::id()));
+    let data_dir = data_dir.to_string_lossy().into_owned();
+    let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
     // Anthropic key absent — its provider is still registered (keyless), but
     // would fail explicitly if routed to. Minimax serves this turn.
     let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
@@ -193,7 +198,12 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
         ))
         .await;
     assert!(matches!(governance_verdict.decision, Decision::Deny { .. }));
-    assert_eq!(governance_verdict.hook, "permission_governance");
+    // R8-B2 后治理裁决统一经 GovernanceChain 单入口, verdict 元数据如实标注
+    // `governance_chain` (R8-B1 适配器交付映射, 见
+    // docs/architecture/r8-b-entry-convergence-design.md §7); 裁决行为不变
+    // (tool.shell 仍拒), 四态判定种类与旧入口等价真账见
+    // tests/governance_chain_equivalence.rs。
+    assert_eq!(governance_verdict.hook, "governance_chain");
 
     let CanonicalCliTurn::Completed(outcome) =
         execute_canonical_cli_turn(&runtime, "hi", None, None)
@@ -257,6 +267,13 @@ async fn the_cli_bootstrap_routes_an_anthropic_model_to_provider_anthropic() {
     ));
     let cognitive_db = cognitive_db.to_string_lossy().into_owned();
     let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
+    // R8-B3: 治理审计账本随数据根走 (temp 根), 测试不写真实 ~/.apeireth。
+    let data_dir = std::env::temp_dir().join(format!(
+        "apeireth-cli-data-anthropic-{}",
+        std::process::id()
+    ));
+    let data_dir = data_dir.to_string_lossy().into_owned();
+    let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -303,6 +320,11 @@ async fn the_cli_bootstrap_routes_an_openai_model_to_provider_openai_compatible(
     ));
     let cognitive_db = cognitive_db.to_string_lossy().into_owned();
     let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
+    // R8-B3: 治理审计账本随数据根走 (temp 根), 测试不写真实 ~/.apeireth。
+    let data_dir =
+        std::env::temp_dir().join(format!("apeireth-cli-data-openai-{}", std::process::id()));
+    let data_dir = data_dir.to_string_lossy().into_owned();
+    let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -351,6 +373,11 @@ async fn the_cli_bootstrap_omits_openai_compatible_when_unconfigured() {
     ));
     let cognitive_db = cognitive_db.to_string_lossy().into_owned();
     let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
+    // R8-B3: 治理审计账本随数据根走 (temp 根), 测试不写真实 ~/.apeireth。
+    let data_dir =
+        std::env::temp_dir().join(format!("apeireth-cli-data-omit-{}", std::process::id()));
+    let data_dir = data_dir.to_string_lossy().into_owned();
+    let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
 
     let runtime = build_canonical_runtime_from_env()
         .await
@@ -396,6 +423,11 @@ async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
     ));
     let cognitive_db = cognitive_db.to_string_lossy().into_owned();
     let _g_cognitive_db = EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive_db));
+    // R8-B3: 治理审计账本随数据根走 (temp 根), 测试不写真实 ~/.apeireth。
+    let data_dir =
+        std::env::temp_dir().join(format!("apeireth-cli-data-keyless-{}", std::process::id()));
+    let data_dir = data_dir.to_string_lossy().into_owned();
+    let _g_data_dir = EnvGuard::set("APEIRETH_DATA_DIR", Some(&data_dir));
 
     let runtime = build_canonical_runtime_from_env()
         .await

@@ -1,0 +1,65 @@
+name: Docs truth (P1c blocking)
+
+# 文档事实体系（第三线）：claims.yaml = 唯一状态真源；STATUS.md/README 徽章 = 生成物。
+# P0 期间两步 report-only 观察误报；P1c 起改为阻塞：
+#   - FAIL（证据缺失/开关不存在）= 红；
+#   - STALE（源码动过而 verified_at 未更新）= 红（changed-claim 阻塞）；
+#   - REVIEW_DUE 只提示不阻塞；生成物/徽章 drift = 红。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'docs/status/**'
+      - 'docs/**'
+      - 'frontend/companion-desktop/**'
+      - 'scripts/docs_truth.py'
+      - 'scripts/wiring_report.py'
+      - 'scripts/verify_ledger.py'
+      - 'crates/**'
+  pull_request:
+    paths:
+      - 'docs/status/**'
+      - 'docs/**'
+      - 'frontend/companion-desktop/**'
+      - 'scripts/docs_truth.py'
+      - 'scripts/wiring_report.py'
+      - 'scripts/verify_ledger.py'
+      - 'crates/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs-truth:
+    name: docs truth gate (P1c blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify claims (evidence + staleness)
+        run: |
+          python3 scripts/docs_truth.py --verify --block-stale
+
+      - name: Check generated STATUS.md + README badges drift
+        run: |
+          python3 scripts/docs_truth.py --check
+
+      - name: R3a wiring ledger + env registry (ADR-0004)
+        run: |
+          python3 scripts/wiring_report.py --check-env-registry
+          python3 scripts/wiring_report.py --verify
+
+      - name: Setup Python (R6-C ledger verifier)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verification ledger (R6-C, read-only)
+        run: |
+          python -m pip install --quiet pyyaml
+          python scripts/verify_ledger.py --quiet

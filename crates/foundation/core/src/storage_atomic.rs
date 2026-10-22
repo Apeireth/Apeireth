@@ -73,21 +73,31 @@ fn write_via_tmp(path: &Path, bytes: &[u8], mode: u32, durable: bool) -> io::Res
         }
     }
     let tmp = tmp_sibling(path)?;
+    write_at_tmp(path, &tmp, bytes, mode, durable)
+}
+
+/// 在**已定名**的临时路径上完成「独占创建 → 写入 → 替换 → 失败清理」。
+///
+/// 与 [`write_via_tmp`] 拆开是给测试留缝: 验证「临时名已被占用 → 拒绝写入」需要
+/// 确定性地预置**那一格**临时名, 而进程内序号 [`TMP_SEQ`] 会被同二进制的并行
+/// 测试推进, 无法在测试里预测下一个序号 (D27: 靠预占序号窗口猜必中在并行负载下
+/// 失手, 本函数让测试钉定临时名而不猜)。
+fn write_at_tmp(path: &Path, tmp: &Path, bytes: &[u8], mode: u32, durable: bool) -> io::Result<()> {
     let result = (|| -> io::Result<()> {
         // create_new(true) 独占创建: 同名文件 (含预置 symlink) 已存在时直接失败,
         // 拒绝覆盖/写穿, 而不是静默接管别人的临时文件。
         let mut file =
-            create_exclusive(&tmp, mode).map_err(|e| contextualize(e, "独占创建临时文件", &tmp))?;
+            create_exclusive(tmp, mode).map_err(|e| contextualize(e, "独占创建临时文件", tmp))?;
         file.write_all(bytes)
-            .map_err(|e| contextualize(e, "写入临时文件", &tmp))?;
+            .map_err(|e| contextualize(e, "写入临时文件", tmp))?;
         if durable {
             file.sync_all()
-                .map_err(|e| contextualize(e, "临时文件落盘", &tmp))?;
+                .map_err(|e| contextualize(e, "临时文件落盘", tmp))?;
             note_sync_call();
         }
         // 关闭句柄后再替换 (部分平台不允许替换仍被打开的目标)。
         drop(file);
-        replace_target(&tmp, path).map_err(|e| contextualize(e, "替换目标文件", path))?;
+        replace_target(tmp, path).map_err(|e| contextualize(e, "替换目标文件", path))?;
         if durable {
             // 持久档收尾: unix 保证目录项也落盘; Windows 无父目录 fsync
             // 等价语义, 如实跳过 (平台差异)。
@@ -97,7 +107,7 @@ fn write_via_tmp(path: &Path, bytes: &[u8], mode: u32, durable: bool) -> io::Res
     })();
     if result.is_err() {
         // 失败清理是尽力而为: 半成品临时文件绝不能被读为目标内容。
-        let _ = fs::remove_file(&tmp);
+        let _ = fs::remove_file(tmp);
     }
     result
 }
@@ -598,29 +608,26 @@ mod tests {
     #[test]
     fn write_atomic_refuses_preexisting_tmp_name() {
         // create_new 语义: 预置同名临时文件必须让写入失败, 而不是被静默覆盖
-        // (防同路径预置抢占/写穿)。序号进程内单调, 预占一段远超本测试二进制
-        // 全部写调用数的序号窗口保证必中。
+        // (防同路径预置抢占/写穿)。临时名由测试钉定 —— 进程内序号 TMP_SEQ 会被
+        // 同二进制并行测试推进, 「预占 0..512 序号窗口必中」在并行负载下失手
+        // (D27 失败帧: 实际序号落在窗口外 → 写入成功 → 测试假 Red)。
+        // 预置名带进程+线程唯一后缀, 与任何真实调用不撞名; 被测拒绝语义不变:
+        // 临时名已存在 → 独占创建失败 → 目标不得被改动。
         let dir = test_dir("exclusive");
         let target = dir.join("t.txt");
         fs::write(&target, "old").unwrap();
-        let pid = std::process::id();
-        let mut occupied = Vec::new();
-        // 序号进程内单调; 预占 0..512 已远超本测试二进制的全部写调用数, 必中。
-        for seq in 0..512u64 {
-            let candidate = dir.join(format!("t.txt.tmp-{pid}-{seq}"));
-            if fs::write(&candidate, "occupied").is_ok() {
-                occupied.push(candidate);
-            }
-        }
-        let err = write_atomic(&target, b"new", DEFAULT_FILE_MODE).unwrap_err();
+        let planted = dir.join(format!(
+            "t.txt.tmp-{}-{}",
+            std::process::id(),
+            TEST_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::write(&planted, "occupied").unwrap();
+        let err = write_at_tmp(&target, &planted, b"new", DEFAULT_FILE_MODE, false).unwrap_err();
         assert!(
             matches!(err.kind(), io::ErrorKind::AlreadyExists),
             "预置临时名必须拒绝写入: {err:?}"
         );
         assert_eq!(fs::read(&target).unwrap(), b"old", "目标不得被改动");
-        for candidate in occupied {
-            let _ = fs::remove_file(candidate);
-        }
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -628,20 +635,18 @@ mod tests {
     #[test]
     fn write_atomic_never_writes_through_planted_symlink_tmp() {
         // 同名 symlink 预置: create_new 视其为已存在而失败, 绝不跟随写穿。
+        // 临时名同样由测试钉定 (理由见 write_atomic_refuses_preexisting_tmp_name)。
         let dir = test_dir("symlink");
         let target = dir.join("t.txt");
         let victim = dir.join("victim.txt");
         fs::write(&victim, "untouched").unwrap();
-        let pid = std::process::id();
-        let mut planted = Vec::new();
-        // 预占 0..512 必中 (理由同上)。
-        for seq in 0..512u64 {
-            let candidate = dir.join(format!("t.txt.tmp-{pid}-{seq}"));
-            if std::os::unix::fs::symlink(&victim, &candidate).is_ok() {
-                planted.push(candidate);
-            }
-        }
-        let err = write_atomic(&target, b"new", DEFAULT_FILE_MODE).unwrap_err();
+        let planted = dir.join(format!(
+            "t.txt.tmp-{}-{}",
+            std::process::id(),
+            TEST_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::os::unix::fs::symlink(&victim, &planted).unwrap();
+        let err = write_at_tmp(&target, &planted, b"new", DEFAULT_FILE_MODE, false).unwrap_err();
         assert!(
             matches!(err.kind(), io::ErrorKind::AlreadyExists),
             "预置 symlink 必须拒绝写入: {err:?}"
@@ -652,9 +657,6 @@ mod tests {
             "symlink 目标不得被写穿"
         );
         assert!(!target.exists());
-        for candidate in planted {
-            let _ = fs::remove_file(candidate);
-        }
         let _ = fs::remove_dir_all(&dir);
     }
 

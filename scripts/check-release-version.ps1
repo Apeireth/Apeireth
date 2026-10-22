@@ -4,7 +4,9 @@
 .DESCRIPTION
     Validates version consistency across all authoritative version sources in Apeireth 2.0:
       1. Root Cargo.toml ([workspace.package].version)
-      2. 16 Workspace Crates (crates/*/*/Cargo.toml -> version.workspace = true)
+      2. Workspace member crates (crates/**/Cargo.toml -> version.workspace = true)
+         - cargo-fuzz 子工程（*/fuzz/Cargo.toml，独立 [workspace]、惯例 version = "0.0.0"）
+           不是发布版本源：显式排除并在报告里列出（不静默跳过）
          - CLI (crates/adapters/cli)
          - Gateway (crates/adapters/gateway)
          - SDK (crates/adapters/sdk)
@@ -91,10 +93,20 @@ if (Test-Path $RootCargoPath) {
         -DetectedVersion "FILE_MISSING" -Inheritance "Authority" -Status "FAIL" -Message "Root Cargo.toml not found"
 }
 
-# 2. Workspace Crates (All 16 crates in crates/)
+# 2. Workspace member crates (crates/**/Cargo.toml; fuzz 子工程除外)
 $CratesPath = Join-Path $RepoRoot "crates"
 if (Test-Path $CratesPath) {
-    $CrateTomls = Get-ChildItem -Path $CratesPath -Filter "Cargo.toml" -Recurse | Sort-Object FullName
+    $AllCrateTomls = Get-ChildItem -Path $CratesPath -Filter "Cargo.toml" -Recurse | Sort-Object FullName
+    # R-1（2026-10-21 发布对账实锤）：fuzz 子工程（*/fuzz/Cargo.toml）是 cargo-fuzz 独立 [workspace]，
+    # 版本惯例恒为 0.0.0，不是发布版本源。排除并显式登记 SKIP（0 装：跳过要写出来，不静默）。
+    $FuzzTomls = @($AllCrateTomls | Where-Object { $_.FullName -match '[\\/]fuzz[\\/]' })
+    $CrateTomls = @($AllCrateTomls | Where-Object { $_.FullName -notmatch '[\\/]fuzz[\\/]' })
+    foreach ($toml in $FuzzTomls) {
+        $relPath = $toml.FullName.Substring($RepoRoot.Length + 1).Replace("\", "/")
+        Add-Result -Component "cargo-fuzz 子工程" -Category "Excluded" -FilePath $relPath `
+            -DetectedVersion "0.0.0" -Inheritance "Independent workspace (cargo-fuzz 惯例)" -Status "SKIP" `
+            -Message "cargo-fuzz 独立 [workspace] 的 0.0.0 不是发布版本源；不参与版本一致性判定"
+    }
     foreach ($toml in $CrateTomls) {
         $relPath = $toml.FullName.Substring($RepoRoot.Length + 1).Replace("\", "/")
         $content = Get-Content $toml.FullName -Raw

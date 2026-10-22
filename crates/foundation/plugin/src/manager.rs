@@ -29,14 +29,14 @@ use crate::capability::{CapabilityDescriptor, CapabilityKind};
 use crate::error::{PluginError, PluginResult};
 use crate::plugin::{Plugin, PluginContext};
 use crate::provider::ProviderCapability;
-use crate::registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};
+use crate::registry::{CapabilityIndex, CapabilityRecord, PluginRegistry};
 use crate::tool::ToolCapability;
 
 /// Owns plugin lifecycle and answers capability queries.
 #[derive(Default)]
 pub struct PluginManager {
     plugins: PluginRegistry,
-    capabilities: CapabilityRegistry,
+    capabilities: CapabilityIndex,
     /// Order in which plugins were started, so shutdown can reverse it.
     start_order: Vec<PluginId>,
 }
@@ -280,10 +280,6 @@ impl PluginManager {
     }
 
     /// The canonical capability index.
-    pub fn capabilities(&self) -> &CapabilityRegistry {
-        &self.capabilities
-    }
-
     /// The full record for a capability: declaration, owner, and availability.
     pub fn record(&self, id: &CapabilityId) -> PluginResult<CapabilityRecord<'_>> {
         let owner = self.capabilities.owner(id)?;
@@ -407,9 +403,38 @@ impl PluginManager {
     }
 }
 
+impl crate::extension::ExtensionCatalog for PluginManager {
+    fn extension_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .plugins()
+            .ids()
+            .map(|id| id.as_str().to_string())
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    fn describe(&self, id: &str) -> Option<crate::extension::ExtensionDescriptor> {
+        let plugin_id = apeireth_core::kernel::PluginId::new(id).ok()?;
+        let plugin = self.plugins().get(&plugin_id).ok()?;
+        let manifest = plugin.manifest();
+        let mut descriptor = crate::extension::ExtensionDescriptor::new(
+            manifest.id.as_str().to_string(),
+            crate::extension::ExtensionKind::Plugin,
+            "apeireth-plugin",
+            0,
+        );
+        for capability in &manifest.capabilities {
+            descriptor = descriptor.with_capability(capability.id.as_str().to_string());
+        }
+        Some(descriptor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::extension::ExtensionCatalog;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use apeireth_core::kernel::{system_clock, TraceId};
@@ -780,7 +805,7 @@ mod tests {
             1,
             "the rejected plugin must not be registered"
         );
-        assert_eq!(m.capabilities().len(), 1);
+        assert_eq!(m.records().len(), 1);
     }
 
     #[test]
@@ -814,7 +839,7 @@ mod tests {
                 && challenger.as_str() == "tool.calculator_b"
         ));
         assert_eq!(manager.plugins().len(), 1);
-        assert_eq!(manager.capabilities().len(), 1);
+        assert_eq!(manager.records().len(), 1);
     }
 
     #[test]
@@ -843,7 +868,7 @@ mod tests {
             } if missing == capability
         ));
         assert!(manager.plugins().is_empty());
-        assert!(manager.capabilities().is_empty());
+        assert!(manager.records().is_empty());
     }
 
     #[test]
@@ -869,7 +894,7 @@ mod tests {
             } if missing == capability
         ));
         assert!(manager.plugins().is_empty());
-        assert!(manager.capabilities().is_empty());
+        assert!(manager.records().is_empty());
     }
 
     #[test]
@@ -896,7 +921,7 @@ mod tests {
             } if undeclared == capability
         ));
         assert!(manager.plugins().is_empty());
-        assert!(manager.capabilities().is_empty());
+        assert!(manager.records().is_empty());
     }
 
     #[tokio::test]
@@ -918,5 +943,20 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.render(), r#"{"v":7}"#);
+    }
+    #[test]
+    fn extension_catalog_lists_plugins_and_capabilities() {
+        let log = Arc::new(BootLog::default());
+        let mut m = PluginManager::new();
+        m.register(Builder::new("p.a", &log).build()).unwrap();
+
+        assert_eq!(ExtensionCatalog::extension_ids(&m), vec!["p.a"]);
+        assert!(ExtensionCatalog::contains(&m, "p.a"));
+        assert!(!ExtensionCatalog::contains(&m, "p.missing"));
+
+        let d = ExtensionCatalog::describe(&m, "p.a").unwrap();
+        assert_eq!(d.kind, crate::extension::ExtensionKind::Plugin);
+        assert_eq!(d.owner_crate, "apeireth-plugin");
+        assert_eq!(d.id, "p.a");
     }
 }

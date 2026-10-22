@@ -11,6 +11,11 @@
 
 ---
 
+> **复核注（2026-10-20，第三线；不追溯改写历史正文）**：本文为 2026-08-29 规格口径，两处已与现行代码不符，对外引用以现行真源为准：
+> ① **§4.3 Linux 遏制**——现行 `crates/capabilities/tools/src/process/linux.rs` 明确**不承诺** cgroup/seccomp/namespace，只提供进程组边界 + `setrlimit`（地址空间/CPU/文件大小/进程数）+ `PR_SET_PDEATHSIG` + `PR_SET_NO_NEW_PRIVS`（memory / process-count 为 partial）；macOS 同为 partial。
+> ② **WebSocket 8 帧全双工**——服务端路由未接（README honest gaps「no /v1/ws server route」），协议类型/契约在 `apeireth-protocol`，属库级。
+> 复核卷宗：`artifacts/vcp-vs-apeireth-source-verification-2026-10-20.md`。
+
 ## 目录
 1. [系统能力架构全景](#1-系统能力架构全景)
 2. [基石与安全治理能力域 (Foundation & Governance)](#2-基石与安全治理能力域)
@@ -54,7 +59,7 @@ graph TD
     end
 
     subgraph Foundation [1. 基石与治理层 (Foundation Layer)]
-        CORE[core: 9哲学锚/13键原则/三洋葱不可变脊柱]
+        CORE[core: 9哲学锚/键集（现行 14 键）原则/三洋葱不可变脊柱]
         GOV[governance: OWASP投毒审计/不可信中和/8类PII/限流]
         CRED[credentials: SecretZeroization/Fail-closed门控]
         ORCH[orchestration: 7Advisor辩论/发言仲裁/PromptCache]
@@ -179,7 +184,7 @@ graph TD
 
 ### 4.3 进程安全容器与资源硬隔离 (`process_executor.rs`)
 * **Windows**：绑定至真实内核 `Job Object`，设置进程内存硬上限与活动进程并发数限制，退出时强行连带终止全部子进程树；
-* **Linux**：绑定至 `cgroups` 与命名空间，限制 CPU/内存配额与网络访问。
+* **Linux**：**历史口径已过时（2026-10-20 复核）**——现行实现只提供进程组边界 + `setrlimit`（地址空间/CPU/文件大小/进程数）+ `PR_SET_PDEATHSIG` + `PR_SET_NO_NEW_PRIVS`，**不承诺** cgroup/seccomp/namespace/网络隔离（`crates/capabilities/tools/src/process/linux.rs` 头注；memory/process-count 为 partial，见 `IsolationCapabilities`）。macOS 同为 partial。
 
 ---
 
@@ -209,4 +214,4 @@ graph TD
 1. **Fail-Closed 默认安全原则**：任何解析异常、校验冲突或超时，系统一律按最严格安全策略拒绝，绝不默认放行。
 2. **纯 Safe Rust 编译屏障**：全工作区开启 `#![deny(unsafe_code)]`，核心凭据开启 `#![forbid(unsafe_code)]`，零 C-FFI 外部黑盒。
 3. **零凭据落盘 (Zero-Secret Persistence)**：API Key、Master Token 仅以 `SecretString` / `SecretBuf` 存在于内存中，离开作用域自动物理清零（Zeroize），严禁进入日志、Trace、持久化 DB 或 Prompt。
-4. **不可变核心资产 0 漂移**：9 哲学锚、13 键原则、3 项不可变脊柱（Self-Disable、L0 HA、13 键 Cache）、workspace.version 2.0.0-rc.4（2026-10-18 文档审计批核对；历史：2026-08-30 RC1 起 2.0.0-rc.1） 与 R11 baseline 三值严格保持绝对锁定。
+4. **不可变核心资产 0 漂移**：9 哲学锚、键集（现行 14 键）原则、3 项不可变脊柱（Self-Disable、L0 HA、键集（现行 14 键） Cache）、workspace.version 2.0.0-rc.4（2026-10-18 文档审计批核对；历史：2026-08-30 RC1 起 2.0.0-rc.1） 与 R11 baseline 三值严格保持绝对锁定。

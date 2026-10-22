@@ -21,6 +21,9 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as AutoConnBuilder;
+use hyper_util::service::TowerToHyperService;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tower_http::cors::AllowOrigin;
@@ -1345,12 +1348,34 @@ pub async fn serve_with_shutdown(
 /// Serve over an explicit [`GatewayState`] until the listener closes or a
 /// shutdown fires (see [`serve_with_shutdown`] for the shutdown contract).
 ///
+/// TLS 面 (B5 真接线): `APEIRETH_TLS_CERT` / `APEIRETH_TLS_KEY` 旋钮在场时
+/// **真加载**材料并走 TLS listener; 材料坏 = fail-closed **拒绝启动** ——
+/// 错误在任何端点被服务前帧化返回, 绝不静默降级明文。未设旋钮 = 明文,
+/// 回环缺省语义不变。
+///
 /// Keeping the state explicit lets embedders and tests hold the observation
 /// sink handle across the shutdown boundary — which is exactly what the
 /// closing-bookkeeping assertions pin.
 pub async fn serve_state_with_shutdown(
     listener: tokio::net::TcpListener,
     state: GatewayState,
+    external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> std::io::Result<()> {
+    let tls = crate::remote_access::resolve_tls_material().map_err(|error| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("TLS configuration refused (fail-closed, never plaintext): {error}"),
+        )
+    })?;
+    serve_state_with_tls(listener, state, tls, external_shutdown).await
+}
+
+/// [`serve_state_with_shutdown`] 的显式材料形态: `tls = Some(..)` 走 TLS
+/// listener, `None` 保持明文 —— 组合根/测试可直接给材料, 不经环境旋钮。
+pub async fn serve_state_with_tls(
+    listener: tokio::net::TcpListener,
+    state: GatewayState,
+    tls: Option<crate::remote_access::TlsMaterial>,
     external_shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> std::io::Result<()> {
     let endpoint = listener
@@ -1362,14 +1387,21 @@ pub async fn serve_state_with_shutdown(
         serde_json::json!({ "service": "apeireth-gateway-2.0", "endpoint": endpoint }),
     ));
     let trigger = state.shutdown.clone();
-    let result = axum::serve(listener, canonical_router_with_state(state.clone()))
-        .with_graceful_shutdown(async move {
-            tokio::select! {
-                _ = external_shutdown => {},
-                _ = trigger.fired() => {},
-            }
-        })
-        .await;
+    let shutdown = async move {
+        tokio::select! {
+            _ = external_shutdown => {},
+            _ = trigger.fired() => {},
+        }
+    };
+    let router = canonical_router_with_state(state.clone());
+    let result = match tls {
+        Some(material) => serve_tls_listener(listener, material, router, shutdown).await,
+        None => {
+            axum::serve(listener, router)
+                .with_graceful_shutdown(shutdown)
+                .await
+        }
+    };
 
     // 优雅停机收尾: 最后一桩审计 + 观测攒批全量落盘, 之后进程才真正退出。
     state.events.publish(GatewayEvent::new(
@@ -1382,6 +1414,87 @@ pub async fn serve_state_with_shutdown(
     );
     state.observations.flush().await;
     result
+}
+
+/// TLS 面的服务循环 (真接线): 每条 TCP 连接先过 TLS 握手, 再交同一路由面。
+///
+/// 停机政策与明文面同款: 停止收新连接 → 在途连接收到信号后走 graceful
+/// shutdown → 全部连接落地后返回, 由 [`serve_state_with_tls`] 做收尾账。
+/// 握手失败的连接直接掐掉 —— 没有明文降级口子。
+async fn serve_tls_listener(
+    listener: tokio::net::TcpListener,
+    material: crate::remote_access::TlsMaterial,
+    router: Router,
+    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> std::io::Result<()> {
+    let acceptor = tokio_rustls::TlsAcceptor::from(material.server_config());
+
+    // 停机信号面: 信号任务退出 = 全体连接任务收到通知 (watch closed 语义)。
+    let (signal_tx, signal_rx) = tokio::sync::watch::channel(());
+    let signal_tx = Arc::new(signal_tx);
+    tokio::spawn(async move {
+        shutdown.await;
+        drop(signal_rx);
+    });
+    // 在途连接计数面: 每个连接任务持一把 close_rx, 全落地后 closed() 放行。
+    let (close_tx, close_rx) = tokio::sync::watch::channel(());
+
+    loop {
+        let accepted = tokio::select! {
+            conn = listener.accept() => conn,
+            _ = signal_tx.closed() => break,
+        };
+        let (tcp_stream, _remote_addr) = match accepted {
+            Ok(conn) => conn,
+            Err(error) if is_transient_accept_error(&error) => continue,
+            // 资源类瞬时错误 (如句柄耗尽): 睡一秒再收, 不把风暴当致命错退服务。
+            Err(_) => {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+        };
+
+        let acceptor = acceptor.clone();
+        let service = router.clone();
+        let signal_tx = Arc::clone(&signal_tx);
+        let close_rx = close_rx.clone();
+        tokio::spawn(async move {
+            // 握手失败 = 掐连接 (不降级明文、不重试)。
+            let Ok(tls_stream) = acceptor.accept(tcp_stream).await else {
+                drop(close_rx);
+                return;
+            };
+            let io = TokioIo::new(tls_stream);
+            let hyper_service = TowerToHyperService::new(service);
+            let builder = AutoConnBuilder::new(TokioExecutor::new());
+            let conn = builder.serve_connection_with_upgrades(io, hyper_service);
+            tokio::pin!(conn);
+            loop {
+                tokio::select! {
+                    _result = conn.as_mut() => break,
+                    _ = signal_tx.closed() => {
+                        conn.as_mut().graceful_shutdown();
+                    }
+                }
+            }
+            drop(close_rx);
+        });
+    }
+
+    drop(close_rx);
+    drop(listener);
+    close_tx.closed().await;
+    Ok(())
+}
+
+/// 对端瞬断类 accept 错误不值得退服务; 其余 (句柄耗尽等) 睡后重试。
+fn is_transient_accept_error(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::ConnectionRefused
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::ConnectionReset
+    )
 }
 
 /// W2-① 常驻形态: 优雅停机控制面 (`POST /v1/admin/shutdown`, 令牌门下)。

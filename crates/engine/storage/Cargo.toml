@@ -13,6 +13,19 @@ r2d2 = { workspace = true }
 r2d2_sqlite = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
+# === B6 会话/记忆静态加密面 (crypto): 0 引新外部包, 全部锁内既有 ===
+# aes-gcm: AES-256-GCM 原语 (workspace 加密族, memory 面同款)
+aes-gcm = { workspace = true }
+# rand: OsRng nonce 随机源 (workspace 既有)
+rand = { workspace = true }
+# sha2: HMAC-SHA-256 + PBKDF2 构造 + 备份逐件摘要 (workspace 既有)
+sha2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# zeroize: DEK/KEK/恢复件 Drop 零化 (锁内既有, credentials 层同款)
+zeroize = "1.8"
+# hex: 密文单元/恢复件/摘要编码 (锁内既有, credentials 层同款)
+hex = "0.4"
 
 [lib]
 name = "apeireth_storage"

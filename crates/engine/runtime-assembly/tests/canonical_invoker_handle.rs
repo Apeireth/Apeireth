@@ -29,7 +29,7 @@ use apeireth_protocol::canonical::{
     NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
-    AgentModule, HookPoint, ModuleContext, ModuleError, ModuleInvocationError,
+    BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleInvocationError,
     ModuleInvocationRequest, ModuleManifest, ModuleOutcome, Runtime, TurnOutcome, TurnRequest,
 };
 use apeireth_runtime_assembly::InvokerLlmFactory;
@@ -246,7 +246,7 @@ fn record(
 }
 
 #[async_trait]
-impl AgentModule for ProbeModule {
+impl BehaviorModule for ProbeModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

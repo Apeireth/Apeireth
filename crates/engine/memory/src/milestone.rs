@@ -9,7 +9,7 @@
 //!
 //! **O-6 三阶审查**:
 //! 1. 总体: 为伙伴自主演化与长期关系沉淀提供不可变里程碑标记
-//! 2. 系统: 放置在 `apeireth-memory`, 与 `RelationStream` 和 `SessionStore` 协同
+//! 2. 系统: 放置在 `apeireth-memory`, 与 `RelationStream` 和 `SessionNoteStore` 协同
 //! 3. 架构: 强类型 Payload 与 Trait 契约, 支持内存与 SQLite 存储
 
 use std::collections::BTreeMap;

@@ -1,10 +1,10 @@
 # H. 模型面
 
-> `Status: 📋 想法细节（隶属 00-backlog #H）`
+> `Status: ♻️ 历史+实施记录（隶属 00-backlog #H；2026-10-20 第三线源码对账：P2/P3/P4 已交付，见文末对账节）`
 
 ## 现状
 - 三 provider 真实现（openai-compatible/anthropic 小米系）、凭据热更、reasoning 适配面、usage 计量已接；
-- 缺：多模型路由（按任务选模型）、fallback（主模型挂了换备）、成本分级。
+- 交付状态（2026-10-20 源码对账）：fallback ✅ `ProviderRouter`（`crates/engine/runtime/src/canonical/provider.rs`：候选过滤/fallback 顺序/健康 EMA/retryable 才下抛，2026-09 基线移植）；成本分级与路由 ✅ H-P2 `CostRouter`（`crates/foundation/core/src/cost_router.rs`：四档→候选→选定，默认关 `APEIRETH_COST_ROUTING`，CLI chat 任务选型已接）；余：网关路径任务源路由、显式档 CLI 旗标、缓存经济（`PromptCacheStabilizer` 未接线）。
 
 ## 想法
 1. **多模型路由**：任务分级选模型（杂活便宜模型/深思贵模型）——省钱第一杠杆；
@@ -136,3 +136,10 @@ active_model_id() (回退目标, 同一解析口径) ───┘        │
 - `crates/capabilities/tools/src/self_status.rs`（战场外，验收必经）：路由节入十六节冻结合同（快照 2 字段 + 渲染 + 节表 + fixture + 2 测试 + 工具描述一句），照 care/backup 节同款最小增量；
 - `crates/adapters/cli/src/lib.rs` 网关装配处 + `tests/care_heartbeat_host.rs`/`tests/canonical_cli_bootstrap.rs` 各一处**解包机械补位**（组装出口新增路由器绑定位，编译断点，网关语义零改动）；
 - `docs/03-reference/capabilities-matrix.md` self_status 行节表同步（口径随行）。
+
+## 2026-10-20 状态对账（第三线；不改上文历史记录）
+
+- `00-backlog` H 行「P2 fallback / P3 路由 / P4 成本分级待」为 **2026-10-13 旧状态**，已按源码更新（H 行改写）。
+- ProviderRouter：`crates/engine/runtime/src/canonical/provider.rs`（fallback 顺序 / 健康 EMA / permanent 立即失败；Runtime 持有实例，请求路径消费）。
+- CostRouter：`crates/foundation/core/src/cost_router.rs`（H-P2 四档路由，`APEIRETH_COST_ROUTING` 默认关；CLI `resolve_turn_model` 已接）。
+- 剩余与 §H-P2「本批显式未接线」一致：网关任务源路由、显式档 CLI 旗标、缓存经济（`PromptCacheStabilizer` 生产未接线）。

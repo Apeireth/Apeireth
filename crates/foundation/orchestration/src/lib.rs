@@ -88,7 +88,6 @@ pub mod llm;
 pub mod output_retention;
 // 计划模式（协作状态投影）: 事件流折叠 (init/apply/stateVersion) + 切换延迟落账 + 只改提示词投影。
 pub mod plan_mode;
-pub mod prompt_stabilizer;
 // 循环质感 · 件一: 重复调用提醒 (纯劝告通道, 不拦截执行、不进审计判定)。
 pub mod repetition_advisory;
 // 循环质感 · 件二: 运行时不变量注册表 (离线已证性质的线上守卫, 观察层)。
@@ -110,6 +109,12 @@ pub mod untrusted_envelope;
 // 工作消耗记账 (第三批·裁决件): 事件日志单趟纯折叠 (取消/中断同答案)。
 pub mod work_consumption;
 pub mod worktree_sandbox;
+// 生物机制族 W1（2026-10-19）：痛觉学习 / 再生四期 / 群体感应升级门（纯内核，未接线）。
+pub mod capacity;
+pub mod lifecycle;
+pub mod nociception;
+pub mod quorum;
+pub mod recovery_protocol;
 
 pub use ambient_context::{
     AmbientConfig, AmbientContextMachine, AmbientSnapshot, CompanionStance, UserActivityScene,
@@ -123,7 +128,7 @@ pub use call_scheduler::{
 pub use care_potential_field::{CareAction, CarePotentialField};
 pub use cognitive_quota_scheduler::{
     CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
-    CognitiveQuotaScheduler, CognitiveTaskControlBlock,
+    CognitiveTaskControlBlock,
 };
 pub use compaction_checkpoint::{
     compaction_due, detect_unclosed_compactions, fold_checkpoints, pair_safe_end,
@@ -178,10 +183,6 @@ pub use lineage_spawning::{
 pub use output_retention::{
     omission_note, prefix_within_bytes, prefix_within_chars, retain_fragment_within_bytes,
     retain_within_bytes, suffix_within_chars, OmittedHow, OmittedWhere, RetainedOutput,
-};
-pub use prompt_stabilizer::{
-    assemble_tiered, EphemeralContextSnapshot, PromptCacheStabilizer, StabilizedMessage,
-    StabilizedRole,
 };
 pub use repetition_advisory::{
     append_result_context, canonical_arguments, chain_key, params_preview, AdvisoryLevel,

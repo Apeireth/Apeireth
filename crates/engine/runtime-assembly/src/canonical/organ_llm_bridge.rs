@@ -760,7 +760,7 @@ mod tests {
             "ProviderCapability",
             "GovernanceHook",
             "RuntimeBuilder",
-            "ModuleRegistry",
+            "BehaviorRegistry",
             "SessionStore",
             "ToolCapability",
             "authorize_isolated_completion",

@@ -1,11 +1,67 @@
 //! Governance hook implementation for Two-Stage Behavior-Chain Safety Classifier.
+//!
+//! # 免疫记忆接线（生物机制族 W3.1，默认关）
+//!
+//! [`BehaviorChainGuardHook::with_immune_memory`] 把 [`crate::immune_memory::ImmuneMemory`]
+//! 挂到 hook 判定出口。**未挂载（字段默认 `None`）时判定逐字节不变**：不观察、不写记忆、
+//! 不追加 evidence、不追加 verdict metadata。挂载后只在 `Deny` / `RequireApproval` 出口
+//! 观察一次，并把 [`ImmuneResponse`] 作为**附加分级信号**写入三个旁路输出：
+//!
+//! - `GuardDecision.evidence` 追加一行
+//!   `immune: kind=<kind> tier=<tier> escalated=<bool> record=<key>`；
+//! - `GovernanceVerdict.metadata` 追加 `immune_kind` / `immune_tier` /
+//!   `immune_escalated` / `immune_record_key` / `immune_reason`；
+//! - [`BehaviorChainGuardHook::last_immune_signal`] 可取回本 trace 最近一次的
+//!   [`ImmuneSignal`]（含抗原签名，便于装配层 / 运维执行 `resolve`）。
+//!
+//! **主结论不变**：`allow` / `deny` / `require_approval` 以及 `risk_score`、`stage`、
+//! `reasons` 都不被免疫分级改写；`Tier0Quiet` 不等于 allow，`Tier3Lockdown` 也不会自行
+//! 升级为 deny。免疫 tier 只回答「这是同类事件的第几次、是否值得加重审计」，放行 / 拦截
+//! 仍由既有 fast / chain / intent / fusion 决定。`Allow` 出口不观察（避免正常流量预置记忆，
+//! 使后续真实事件被误判成「已知模式」而降级）；`dry_run` 也不观察（试算不得污染记忆）。
+//!
+//! ## incident kind 映射表（按优先级，首个命中）
+//!
+//! | 优先级 | hook 既有特征 | `IncidentKind` |
+//! | --- | --- | --- |
+//! | 1 | `may_access_credentials`，或 `data_sensitivity ∈ {Credential, Secret}`，或 source 含 `CredentialStore` | `CredentialLeak` |
+//! | 2 | 绑定了 turn intent 且 `alignment.score >= 0.65`（动作与可信意图相悖） | `PromptInjection` |
+//! | 3 | sink 含 `ExternalNetwork`，或 operation 含 `NetworkSend` / `Publish` | `EgressAnomaly` |
+//! | 4 | source 含 `ExternalNetwork` / `ToolOutput` 且 sink 含 `MemoryWrite` / `SystemFile` / `ModelCompletion` / `InternalNetwork` | `UntrustedContentEscape` |
+//! | 5 | `descriptor_source ∈ {FallbackHeuristic, AdapterInferred, Unknown}`（工具语义面不可信） | `ToolPoison` |
+//! | 6 | 其余 | `Unknown` |
+//!
+//! 映射是**粗粒度启发式**：本 hook 没有独立的注入 / 投毒 / 出网检测器，只能从既有
+//! 归一化观察特征近似。装配层若接入更强检测器，应在 W3.2 直接给出 kind，而不是依赖本表。
+//!
+//! ## raw_key（签名输入）
+//!
+//! `capability=<capability_id> effect=<effect_fingerprint> sensitivity=<DataSensitivity>`。
+//! 三项都是 hook 既有稳定特征：能力 id 来自 dispatcher；`effect_fingerprint` 由
+//! `semantics.rs` 从能力描述符生成（与具体文件 / URL 参数无关）；敏感级来自描述符。
+//! 因此签名粒度是「能力族 × 效应形态」，不是单次实例；`normalize` 会再消掉数字、路径、
+//! 零宽字符与大小写噪声。
+//!
+//! ## is_self_origin
+//!
+//! hook 内没有 self 来源信息，生产路径一律传 `false`（self 耐受不生效）。装配层可从本机 /
+//! 自身进程 / 已授权内部路径判定 self 来源并在调用 `observe` 前注入；本 crate 把该参数留在
+//! 内部接缝 [`observe_incident`] 上，供 W3.2 装配时替换。
+//!
+//! ## 装配边界（诚实口径）
+//!
+//! 本改动是 **IMPLEMENTED + crate 内接线**：`apeireth-guard` 内部可构造、可测试、可调用；
+//! 但 `runtime-assembly` 尚未创建 / 注入 `Arc<ImmuneMemory>`（W3.2 装配点），默认开关
+//! 仍是关。对外能力级别是 **IMPLEMENTED（默认关、未装配）**，不是 PRODUCTION WIRED，
+//! 更不是 DEFAULT ENABLED。
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use apeireth_core::kernel::SessionId;
 use apeireth_governance::{
-    Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict, TaskIntentEnvelopeV1,
+    Decision, GovernanceHook, GovernanceRequest, GovernanceVerdict, OperationClass,
+    TaskIntentEnvelopeV1,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -19,12 +75,17 @@ use crate::decision::GuardDecision;
 use crate::fast_guard::FastGuard;
 use crate::features_v2::AgentChainFeatureV2;
 use crate::fusion::DecisionFusion;
+use crate::immune_memory::{
+    normalize, ImmuneMemory, ImmuneResponse, IncidentKind, IncidentSignature, SeverityTier,
+};
 use crate::intent::{AlignmentAssessment, IntentAlignmentGuard};
 use crate::introspection::{
     GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto,
 };
-use crate::observation::SafetyObservation;
-use crate::semantics::{CapabilitySafetyMetadataProvider, CapabilitySafetyRegistry};
+use crate::observation::{DataSensitivity, SafetyObservation, SinkClass, SourceClass};
+use crate::semantics::{
+    CapabilitySafetyMetadataProvider, CapabilitySafetyRegistry, DescriptorSource,
+};
 use crate::session::{SessionBehaviorHistory, TurnBehaviorSummary};
 use crate::snapshot::FeatureSnapshot;
 
@@ -32,6 +93,202 @@ const MAX_RECENT_EVENTS: usize = 200;
 /// 同时驻留的行为链上限 (按 trace 计)。超出后按插入顺序 LRU 驱逐最久
 /// 未命中的链; 正在评估的链由回写阶段重新插回, 不会丢本轮的 action。
 const MAX_ACTIVE_CHAINS: usize = 256;
+
+/// 共享、可内部修改的免疫记忆句柄（hook 与装配层 / 运维共用同一份）。
+pub type SharedImmuneMemory = Arc<Mutex<ImmuneMemory>>;
+
+/// 一次免疫观察的分级信号：挂在 guard hook 出口的附加字段。
+///
+/// 它不参与 [`GuardDecision::decision`] 的构造，只作为分级 / 审计旁路信息存在：
+/// [`Self::tier`] 是免疫记忆给出的响应强度，[`Self::escalated`] 表示本条是否为
+/// 「新签名 + 高严重度」的升级观察，[`Self::signature`] 可用于后续 `resolve`。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImmuneSignal {
+    /// 映射后的事件类别。
+    pub kind: IncidentKind,
+    /// 归一化后的抗原签名（与 `response.record_key` 一致）。
+    pub signature: IncidentSignature,
+    /// 免疫内核返回的原始响应。
+    pub response: ImmuneResponse,
+}
+
+impl ImmuneSignal {
+    /// 建议的响应分级。
+    pub fn tier(&self) -> SeverityTier {
+        self.response.tier
+    }
+
+    /// 是否为「新签名 + 高严重度」的升级观察。
+    pub fn escalated(&self) -> bool {
+        self.response.escalated
+    }
+
+    /// 记录键，形如 `credential_leak:1a2b3c4d5e6f7a8b`。
+    pub fn record_key(&self) -> &str {
+        &self.response.record_key
+    }
+
+    /// 分级理由（中文，直接用于审计 / 可观测）。
+    pub fn reason(&self) -> &str {
+        &self.response.reason
+    }
+
+    /// 追加到 `GuardDecision.evidence` 的稳定单行表示。
+    fn evidence_line(&self) -> String {
+        format!(
+            "immune: kind={} tier={} escalated={} record={}",
+            self.kind.as_str(),
+            tier_label(self.response.tier),
+            self.response.escalated,
+            self.response.record_key
+        )
+    }
+
+    /// 追加到 `GovernanceVerdict.metadata` 的旁路字段。
+    fn annotate_verdict(&self, verdict: &mut GovernanceVerdict) {
+        verdict.metadata.insert("immune_kind", self.kind.as_str());
+        verdict
+            .metadata
+            .insert("immune_tier", tier_label(self.response.tier));
+        verdict
+            .metadata
+            .insert("immune_escalated", self.response.escalated.to_string());
+        verdict
+            .metadata
+            .insert("immune_record_key", self.response.record_key.clone());
+        verdict
+            .metadata
+            .insert("immune_reason", self.response.reason.clone());
+    }
+}
+
+/// 稳定的 tier 字符串标识（用于 evidence / verdict，不随 Debug 表示漂移）。
+const fn tier_label(tier: SeverityTier) -> &'static str {
+    match tier {
+        SeverityTier::Tier0Quiet => "tier0_quiet",
+        SeverityTier::Tier1Note => "tier1_note",
+        SeverityTier::Tier2Guard => "tier2_guard",
+        SeverityTier::Tier3Lockdown => "tier3_lockdown",
+    }
+}
+
+/// hook 既有特征 → 免疫事件类别的映射（实现模块文档中的优先级表）。
+fn classify_incident(
+    obs: &SafetyObservation,
+    alignment: &AlignmentAssessment,
+    has_intent: bool,
+) -> IncidentKind {
+    let credential_origin = obs.may_access_credentials
+        || matches!(
+            obs.data_sensitivity,
+            DataSensitivity::Credential | DataSensitivity::Secret
+        )
+        || obs
+            .source_classes
+            .iter()
+            .any(|source| matches!(source, SourceClass::CredentialStore));
+    if credential_origin {
+        return IncidentKind::CredentialLeak;
+    }
+
+    if has_intent && alignment.score >= 0.65 {
+        return IncidentKind::PromptInjection;
+    }
+
+    let network_sink = obs
+        .sink_classes
+        .iter()
+        .any(|sink| matches!(sink, SinkClass::ExternalNetwork))
+        || obs.operation_classes.iter().any(|operation| {
+            matches!(
+                operation,
+                OperationClass::NetworkSend | OperationClass::Publish
+            )
+        });
+    if network_sink {
+        return IncidentKind::EgressAnomaly;
+    }
+
+    let untrusted_source = obs.source_classes.iter().any(|source| {
+        matches!(
+            source,
+            SourceClass::ExternalNetwork | SourceClass::ToolOutput
+        )
+    });
+    let trusted_sink = obs.sink_classes.iter().any(|sink| {
+        matches!(
+            sink,
+            SinkClass::MemoryWrite
+                | SinkClass::SystemFile
+                | SinkClass::ModelCompletion
+                | SinkClass::InternalNetwork
+        )
+    });
+    if untrusted_source && trusted_sink {
+        return IncidentKind::UntrustedContentEscape;
+    }
+
+    if matches!(
+        obs.descriptor_source,
+        DescriptorSource::FallbackHeuristic
+            | DescriptorSource::AdapterInferred
+            | DescriptorSource::Unknown
+    ) {
+        return IncidentKind::ToolPoison;
+    }
+
+    IncidentKind::Unknown
+}
+
+/// 免疫签名输入：不含参数正文、不含实例噪声的稳定特征三元组。
+fn immune_raw_key(obs: &SafetyObservation) -> String {
+    format!(
+        "capability={} effect={} sensitivity={:?}",
+        obs.capability_id, obs.effect_fingerprint, obs.data_sensitivity
+    )
+}
+
+/// 主结论 → 免疫严重度提示：拒绝 = 高（新签名会再升一级），审批 = 低。
+///
+/// `Allow` 出口不观察，`Tier0Quiet` 只是让函数保持全序、不作为生产观察值。
+fn severity_hint(decision: &Decision) -> SeverityTier {
+    match decision {
+        Decision::Deny { .. } => SeverityTier::Tier2Guard,
+        Decision::RequireApproval { .. } => SeverityTier::Tier1Note,
+        Decision::Allow => SeverityTier::Tier0Quiet,
+    }
+}
+
+/// 判定出口的免疫观察接缝。
+///
+/// 生产路径由 [`BehaviorChainGuardHook::evaluate_internal`] 调用并传
+/// `is_self_origin = false`（hook 内没有 self 来源信息）；装配层将来若能判定
+/// self 来源，可在 W3.2 改为传入 `true`，无需改动免疫内核。
+fn observe_incident(
+    memory: &mut ImmuneMemory,
+    obs: &SafetyObservation,
+    decision: &GuardDecision,
+    alignment: &AlignmentAssessment,
+    has_intent: bool,
+    is_self_origin: bool,
+    now_ms: i64,
+) -> ImmuneSignal {
+    let kind = classify_incident(obs, alignment, has_intent);
+    let raw_key = immune_raw_key(obs);
+    let signature = normalize(kind, &raw_key);
+    let response = memory.observe(
+        kind,
+        &raw_key,
+        severity_hint(&decision.decision),
+        is_self_origin,
+        now_ms,
+    );
+    ImmuneSignal {
+        kind,
+        signature,
+        response,
+    }
+}
 
 fn apply_alignment(mut decision: GuardDecision, alignment: &AlignmentAssessment) -> GuardDecision {
     decision.risk_score = decision.risk_score.max(alignment.score);
@@ -125,6 +382,10 @@ pub struct BehaviorChainGuardHook {
     safety_provider: Arc<dyn CapabilitySafetyMetadataProvider>,
     recent_events: Mutex<VecDeque<GuardEventDto>>,
     counters: Mutex<GuardCounters>,
+    /// 免疫记忆（默认 `None` = 关闭）。挂载后只在风险 / 升级出口观察并追加分级信号。
+    immune_memory: Option<SharedImmuneMemory>,
+    /// 每个 `(session, trace)` 最近一次的免疫信号，供可观测 / 测试取回。
+    last_immune_signals: Mutex<HashMap<(SessionId, String), ImmuneSignal>>,
 }
 
 impl Default for BehaviorChainGuardHook {
@@ -152,7 +413,48 @@ impl BehaviorChainGuardHook {
             safety_provider: Arc::new(CapabilitySafetyRegistry::canonical()),
             recent_events: Mutex::new(VecDeque::with_capacity(MAX_RECENT_EVENTS)),
             counters: Mutex::new(GuardCounters::default()),
+            immune_memory: None,
+            last_immune_signals: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// 挂载免疫记忆（默认关）。
+    ///
+    /// 传入的 [`Arc<ImmuneMemory>`] 在唯一持有时被移入 hook；若调用方仍持有其它
+    /// clone，则移入一份快照（之后的外部变更不影响 hook）。需要在 hook 外执行
+    /// `resolve` / `reopen` 时，用 [`Self::shared_immune_memory`] 取回同一个句柄。
+    ///
+    /// 挂载后行为只增不改：allow/deny 主结论、risk_score、reasons、stage 保持不变，
+    /// 仅在 `Deny` / `RequireApproval` 出口追加 `immune:` evidence 与 verdict 字段。
+    pub fn with_immune_memory(mut self, memory: Arc<ImmuneMemory>) -> Self {
+        let owned = Arc::try_unwrap(memory).unwrap_or_else(|shared| (*shared).clone());
+        self.immune_memory = Some(Arc::new(Mutex::new(owned)));
+        self
+    }
+
+    /// 是否已挂载免疫记忆（默认 `false`）。
+    pub fn immune_memory_enabled(&self) -> bool {
+        self.immune_memory.is_some()
+    }
+
+    /// 取回 hook 正在使用的免疫记忆句柄（未挂载时为 `None`）。
+    ///
+    /// 装配层 / 运维用它执行 [`ImmuneMemory::resolve`] / [`ImmuneMemory::reopen`]，
+    /// 与 hook 内的观察共享同一份状态。
+    pub fn shared_immune_memory(&self) -> Option<SharedImmuneMemory> {
+        self.immune_memory.clone()
+    }
+
+    /// 取回某 session + trace 最近一次的免疫信号（未挂载 / 未观察时为 `None`）。
+    pub fn last_immune_signal(
+        &self,
+        session_id: &SessionId,
+        trace_id: &str,
+    ) -> Option<ImmuneSignal> {
+        self.last_immune_signals
+            .lock()
+            .get(&(*session_id, trace_id.to_string()))
+            .cloned()
     }
 
     /// Set an optional dataset recorder for offline ML dataset collection.
@@ -336,6 +638,9 @@ impl BehaviorChainGuardHook {
         self.session_behavior_summary.lock().remove(session_id);
         self.session_history.lock().remove(session_id);
         self.turn_intents
+            .lock()
+            .retain(|(session, _), _| session != session_id);
+        self.last_immune_signals
             .lock()
             .retain(|(session, _), _| session != session_id);
     }
@@ -535,13 +840,43 @@ impl BehaviorChainGuardHook {
         let features = AgentChainFeatureV2::from_chain_with_cross_turn(&chain, cross_turn);
         let snapshot = FeatureSnapshot::capture(&trace_id, &action_id, features.clone());
         let prediction = self.classifier.classify_v2(&snapshot.features);
-        let guard_decision = DecisionFusion::apply(
+        let mut guard_decision = DecisionFusion::apply(
             self.classifier.enforcement_mode(),
             &guard_decision,
             &fast_res,
             &prediction,
             &snapshot.features,
         );
+
+        // 免疫记忆接缝（默认关）：只在非 Allow 的风险 / 升级结论上观察一次。
+        // 观察结果只写入旁路（evidence / last_immune_signals / verdict metadata），
+        // 不参与 Decision 构造 —— 免疫 tier 不能放行或阻断动作。
+        let immune_signal = match &self.immune_memory {
+            Some(memory) if !guard_decision.decision.is_allowed() => {
+                let signal = {
+                    let mut memory = memory.lock();
+                    // hook 内无 self 来源信息，生产路径固定传 false；
+                    // 装配层将来可在此注入 self 判定（见模块文档）。
+                    observe_incident(
+                        &mut memory,
+                        &obs,
+                        &guard_decision,
+                        &alignment,
+                        chain.intent.is_some(),
+                        false,
+                        chrono::Utc::now().timestamp_millis(),
+                    )
+                };
+                self.last_immune_signals
+                    .lock()
+                    .insert(key.clone(), signal.clone());
+                Some(signal)
+            }
+            _ => None,
+        };
+        if let Some(signal) = &immune_signal {
+            guard_decision.evidence.push(signal.evidence_line());
+        }
 
         // Update action status in chain
         let status = match &guard_decision.decision {
@@ -666,7 +1001,10 @@ impl BehaviorChainGuardHook {
             }
         }
 
-        let verdict = guard_decision.to_verdict(self.name());
+        let mut verdict = guard_decision.to_verdict(self.name());
+        if let Some(signal) = &immune_signal {
+            signal.annotate_verdict(&mut verdict);
+        }
         (guard_decision, verdict)
     }
 }
@@ -685,5 +1023,496 @@ impl GovernanceHook for BehaviorChainGuardHook {
     async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
         let (_, verdict) = self.evaluate_internal(request);
         verdict
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use apeireth_core::kernel::{CapabilityId, TraceId};
+    use apeireth_governance::{Action, Decision};
+
+    use crate::classifier::RiskPrediction;
+    use crate::decision::GuardStage;
+    use crate::intent::AlignmentClass;
+
+    /// 构造一次能力派发请求；参数引用由调用方持有。
+    fn dispatch<'a>(
+        capability: &'a CapabilityId,
+        arguments: &'a serde_json::Value,
+        session: SessionId,
+        trace: TraceId,
+        round: u32,
+        action_id: &'a str,
+    ) -> GovernanceRequest<'a> {
+        GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability,
+                arguments,
+            },
+            session,
+            trace,
+            round,
+        )
+        .with_action_id(action_id)
+    }
+
+    /// 走真实语义描述符生成归一化观察（不手搓 40 个字段）。
+    fn observation_for(capability_id: &str, arguments: &serde_json::Value) -> SafetyObservation {
+        let capability =
+            CapabilityId::new(capability_id).expect("test capability id must be valid");
+        let request = GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability: &capability,
+                arguments,
+            },
+            SessionId::new(),
+            TraceId::new(),
+            1,
+        );
+        let registry = CapabilitySafetyRegistry::canonical();
+        SafetyObservation::from_governance_request_with_provider(
+            &request,
+            0,
+            false,
+            Vec::new(),
+            Some(&registry),
+        )
+    }
+
+    fn credential_arguments() -> serde_json::Value {
+        serde_json::json!({ "path": ".env" })
+    }
+
+    fn credential_request<'a>(
+        capability: &'a CapabilityId,
+        arguments: &'a serde_json::Value,
+        session: SessionId,
+        trace: TraceId,
+        round: u32,
+        action_id: &'a str,
+    ) -> GovernanceRequest<'a> {
+        dispatch(capability, arguments, session, trace, round, action_id)
+    }
+
+    fn mounted_hook() -> BehaviorChainGuardHook {
+        BehaviorChainGuardHook::new().with_immune_memory(Arc::new(ImmuneMemory::with_capacity(32)))
+    }
+
+    fn aligned_assessment() -> AlignmentAssessment {
+        AlignmentAssessment {
+            class: AlignmentClass::Aligned,
+            score: 0.0,
+            reasons: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn default_off_decision_matches_pinned_baseline() {
+        let hook = BehaviorChainGuardHook::new();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+        let request = credential_request(
+            &capability,
+            &arguments,
+            session,
+            trace,
+            1,
+            "baseline-action",
+        );
+
+        let decision = hook.evaluate_detailed(&request);
+        let expected = GuardDecision {
+            decision: Decision::deny("guard chain denied: dotfile_or_hidden_resource_access"),
+            risk_score: 0.85,
+            reasons: vec![
+                "credential_store_access".to_string(),
+                "dotfile_or_hidden_resource_access".to_string(),
+                "turn_intent_unavailable".to_string(),
+            ],
+            evidence: vec!["alignment=ScopeExpansion score=0.75".to_string()],
+            stage: GuardStage::ChainGuard,
+            classifier_prediction: Some(RiskPrediction::unavailable()),
+        };
+        assert_eq!(
+            serde_json::to_string(&decision).expect("decision serializes"),
+            serde_json::to_string(&expected).expect("baseline serializes"),
+            "默认关路径必须与接线前的 pinned 判定逐字节一致"
+        );
+        assert!(
+            decision
+                .evidence
+                .iter()
+                .all(|line| !line.starts_with("immune:")),
+            "默认关不得追加 immune evidence"
+        );
+        assert!(hook
+            .last_immune_signal(&session, &trace.to_string())
+            .is_none());
+        assert!(!hook.immune_memory_enabled());
+    }
+
+    #[test]
+    fn default_off_never_touches_immune_outputs() {
+        let hook = BehaviorChainGuardHook::new();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+        let request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+
+        let (decision, verdict) = hook.evaluate_internal(&request);
+        assert!(matches!(decision.decision, Decision::Deny { .. }));
+        assert!(decision
+            .evidence
+            .iter()
+            .all(|line| !line.starts_with("immune:")));
+        assert!(verdict
+            .metadata
+            .iter()
+            .all(|(key, _)| !key.starts_with("immune_")));
+        assert!(hook.shared_immune_memory().is_none());
+        assert!(hook
+            .last_immune_signal(&session, &trace.to_string())
+            .is_none());
+    }
+
+    #[test]
+    fn mounted_memory_only_appends_immune_signal() {
+        let plain = BehaviorChainGuardHook::new();
+        let immune = mounted_hook();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+        let request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+
+        let (baseline_decision, baseline_verdict) = plain.evaluate_internal(&request);
+        let (observed_decision, observed_verdict) = immune.evaluate_internal(&request);
+
+        assert_eq!(observed_decision.decision, baseline_decision.decision);
+        assert_eq!(observed_decision.risk_score, baseline_decision.risk_score);
+        assert_eq!(observed_decision.reasons, baseline_decision.reasons);
+        assert_eq!(observed_decision.stage, baseline_decision.stage);
+        assert_eq!(
+            observed_decision.classifier_prediction,
+            baseline_decision.classifier_prediction
+        );
+
+        let added: Vec<&String> = observed_decision
+            .evidence
+            .iter()
+            .filter(|line| line.starts_with("immune:"))
+            .collect();
+        assert_eq!(added.len(), 1, "每次风险出口恰好追加一条 immune evidence");
+        assert_eq!(
+            observed_decision.evidence.len(),
+            baseline_decision.evidence.len() + 1
+        );
+
+        let mut stripped_decision = observed_decision.clone();
+        stripped_decision
+            .evidence
+            .retain(|line| !line.starts_with("immune:"));
+        assert_eq!(
+            serde_json::to_string(&stripped_decision).expect("stripped decision serializes"),
+            serde_json::to_string(&baseline_decision).expect("baseline decision serializes"),
+            "挂载后除 immune 旁路外主判定逐字节不变"
+        );
+
+        let mut stripped_verdict = observed_verdict.clone();
+        for key in [
+            "immune_kind",
+            "immune_tier",
+            "immune_escalated",
+            "immune_record_key",
+            "immune_reason",
+        ] {
+            stripped_verdict.metadata.remove(key);
+        }
+        // `guard_evidence` 是 evidence 的拼接结果，需把追加上去的 immune 段一并去掉。
+        if let Some(joined) = stripped_verdict.metadata.remove("guard_evidence") {
+            let cleaned = joined
+                .split("; ")
+                .filter(|part| !part.starts_with("immune:"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            if !cleaned.is_empty() {
+                stripped_verdict.metadata.insert("guard_evidence", cleaned);
+            }
+        }
+        assert_eq!(stripped_verdict, baseline_verdict);
+        assert!(observed_verdict.metadata.contains_key("immune_tier"));
+        assert!(immune
+            .last_immune_signal(&session, &trace.to_string())
+            .is_some());
+        assert!(plain
+            .last_immune_signal(&session, &trace.to_string())
+            .is_none());
+    }
+
+    #[test]
+    fn first_high_severity_incident_escalates_to_lockdown() {
+        let hook = mounted_hook();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+        let request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+
+        let (decision, _) = hook.evaluate_internal(&request);
+        assert!(matches!(decision.decision, Decision::Deny { .. }));
+        let signal = hook
+            .last_immune_signal(&session, &trace.to_string())
+            .expect("mounted hook must record an immune signal");
+        assert_eq!(signal.kind, IncidentKind::CredentialLeak);
+        assert_eq!(signal.tier(), SeverityTier::Tier3Lockdown);
+        assert!(signal.escalated());
+        assert!(signal.evidence_line().contains("tier=tier3_lockdown"));
+
+        let shared = hook
+            .shared_immune_memory()
+            .expect("mounted hook exposes its memory");
+        let record = shared
+            .lock()
+            .record(&signal.signature)
+            .expect("escalated incident must be recorded");
+        assert_eq!(record.occurrences, 1);
+        assert_eq!(record.tolerance_level, 0);
+    }
+
+    #[test]
+    fn second_identical_signature_downgrades_without_releasing_deny() {
+        let hook = mounted_hook();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+
+        let first_request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+        let (first_decision, _) = hook.evaluate_internal(&first_request);
+        let first = hook
+            .last_immune_signal(&session, &trace.to_string())
+            .expect("first observation");
+
+        let second_request = credential_request(&capability, &arguments, session, trace, 2, "a2");
+        let (second_decision, _) = hook.evaluate_internal(&second_request);
+        let second = hook
+            .last_immune_signal(&session, &trace.to_string())
+            .expect("second observation");
+
+        assert_eq!(first.signature, second.signature, "同签名才能命中适应记忆");
+        assert_eq!(first.tier(), SeverityTier::Tier3Lockdown);
+        assert_eq!(second.tier(), SeverityTier::Tier1Note);
+        assert!(second.tier() < first.tier(), "二次暴露必须降级");
+        assert!(!second.escalated(), "已知模式不得再升级");
+        assert!(matches!(first_decision.decision, Decision::Deny { .. }));
+        assert!(
+            matches!(second_decision.decision, Decision::Deny { .. }),
+            "免疫降级不允许把 Deny 改成 Allow（轻 != 允许）"
+        );
+
+        let shared = hook
+            .shared_immune_memory()
+            .expect("mounted hook exposes its memory");
+        let record = shared
+            .lock()
+            .record(&second.signature)
+            .expect("known pattern stays recorded");
+        assert_eq!(record.occurrences, 2);
+        assert_eq!(record.tolerance_level, 1);
+    }
+
+    #[test]
+    fn self_origin_tolerance_is_quiet_and_records_nothing() {
+        let observation = observation_for("credential.read", &credential_arguments());
+        let decision = GuardDecision {
+            decision: Decision::require_approval("human confirmation required"),
+            risk_score: 0.5,
+            reasons: Vec::new(),
+            evidence: Vec::new(),
+            stage: GuardStage::ChainGuard,
+            classifier_prediction: None,
+        };
+        let mut memory = ImmuneMemory::with_capacity(8);
+        let signal = observe_incident(
+            &mut memory,
+            &observation,
+            &decision,
+            &aligned_assessment(),
+            false,
+            true,
+            1_000,
+        );
+
+        assert_eq!(signal.tier(), SeverityTier::Tier0Quiet);
+        assert!(!signal.escalated());
+        assert_eq!(memory.open_count(), 0);
+        assert_eq!(memory.known_patterns(), 0);
+    }
+
+    #[test]
+    fn resolved_incident_is_quiet_inside_cooldown() {
+        let hook = mounted_hook();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+
+        let first_request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+        let (_, _) = hook.evaluate_internal(&first_request);
+        let first = hook
+            .last_immune_signal(&session, &trace.to_string())
+            .expect("first observation");
+        assert_eq!(first.tier(), SeverityTier::Tier3Lockdown);
+
+        let shared = hook
+            .shared_immune_memory()
+            .expect("mounted hook exposes its memory");
+        assert!(shared
+            .lock()
+            .resolve(&first.signature, chrono::Utc::now().timestamp_millis()));
+
+        let second_request = credential_request(&capability, &arguments, session, trace, 2, "a2");
+        let (second_decision, _) = hook.evaluate_internal(&second_request);
+        let second = hook
+            .last_immune_signal(&session, &trace.to_string())
+            .expect("second observation");
+
+        assert_eq!(second.signature, first.signature);
+        assert_eq!(
+            second.tier(),
+            SeverityTier::Tier0Quiet,
+            "冷却窗内只静默计数"
+        );
+        assert!(!second.escalated());
+        assert!(matches!(second_decision.decision, Decision::Deny { .. }));
+        assert_eq!(shared.lock().open_count(), 0);
+    }
+
+    #[test]
+    fn allowed_actions_are_never_observed() {
+        let hook = mounted_hook();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("fs.read").expect("valid id");
+        let arguments = serde_json::json!({ "path": "README.md" });
+        let request = dispatch(&capability, &arguments, session, trace, 1, "a1");
+
+        let (decision, verdict) = hook.evaluate_internal(&request);
+        assert!(decision.is_allowed(), "纯读路径应保持 allow");
+        assert!(
+            hook.last_immune_signal(&session, &trace.to_string())
+                .is_none(),
+            "Allow 出口不得观察，避免正常流量预置记忆"
+        );
+        assert_eq!(
+            hook.shared_immune_memory()
+                .expect("mounted hook exposes its memory")
+                .lock()
+                .known_patterns(),
+            0
+        );
+        assert!(verdict
+            .metadata
+            .iter()
+            .all(|(key, _)| !key.starts_with("immune_")));
+    }
+
+    #[test]
+    fn incident_kind_mapping_matches_documented_table() {
+        let aligned = aligned_assessment();
+        let injection = AlignmentAssessment {
+            class: AlignmentClass::HighRiskMismatch,
+            score: 0.95,
+            reasons: vec!["unrequested_credential_access".to_string()],
+        };
+
+        assert_eq!(
+            classify_incident(
+                &observation_for("credential.read", &credential_arguments()),
+                &aligned,
+                false
+            ),
+            IncidentKind::CredentialLeak
+        );
+        assert_eq!(
+            classify_incident(
+                &observation_for(
+                    "http.send",
+                    &serde_json::json!({ "url": "https://example.com" })
+                ),
+                &aligned,
+                false
+            ),
+            IncidentKind::EgressAnomaly
+        );
+        assert_eq!(
+            classify_incident(
+                &observation_for(
+                    "tool.content_feed",
+                    &serde_json::json!({ "url": "https://example.com" })
+                ),
+                &aligned,
+                false
+            ),
+            IncidentKind::UntrustedContentEscape
+        );
+        assert_eq!(
+            classify_incident(
+                &observation_for("tool.mystery", &serde_json::json!({})),
+                &aligned,
+                false
+            ),
+            IncidentKind::ToolPoison
+        );
+        assert_eq!(
+            classify_incident(
+                &observation_for("fs.read", &serde_json::json!({ "path": "README.md" })),
+                &injection,
+                true
+            ),
+            IncidentKind::PromptInjection
+        );
+        assert_eq!(
+            classify_incident(
+                &observation_for("fs.read", &serde_json::json!({ "path": "README.md" })),
+                &injection,
+                false
+            ),
+            IncidentKind::Unknown,
+            "未绑定 intent 时不得把对齐缺失当成注入"
+        );
+    }
+
+    #[test]
+    fn verdict_metadata_carries_immune_tier_without_changing_decision() {
+        let hook = mounted_hook();
+        let session = SessionId::new();
+        let trace = TraceId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+        let request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+
+        let (decision, verdict) = hook.evaluate_internal(&request);
+        assert!(matches!(decision.decision, Decision::Deny { .. }));
+        assert_eq!(verdict.decision, decision.decision, "主结论不得被免疫改写");
+        assert_eq!(verdict.metadata.get("immune_kind"), Some("credential_leak"));
+        assert_eq!(verdict.metadata.get("immune_tier"), Some("tier3_lockdown"));
+        assert_eq!(verdict.metadata.get("immune_escalated"), Some("true"));
+        assert!(verdict
+            .metadata
+            .get("immune_record_key")
+            .is_some_and(|key| key.starts_with("credential_leak:")));
+        assert!(verdict
+            .metadata
+            .get("immune_reason")
+            .is_some_and(|reason| !reason.is_empty()));
+        assert!(verdict
+            .metadata
+            .get("guard_evidence")
+            .is_some_and(|evidence| evidence.contains("immune:")));
     }
 }

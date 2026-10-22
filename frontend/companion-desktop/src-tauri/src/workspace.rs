@@ -162,10 +162,9 @@ mod tests {
     fn resolve_store_dir_prefers_workspace() {
         let ws = PathBuf::from("C:\\Users\\me\\workspace");
         let app = PathBuf::from("C:\\Users\\me\\AppData\\Local\\Apeireth");
-        assert_eq!(
-            resolve_store_dir(Some(&ws), Some(&app)),
-            Some(PathBuf::from("C:\\Users\\me\\workspace\\.apeireth"))
-        );
+        // 期望值用同一 join 语义构造：Windows 字面量 + join 在 Unix 上会产生混排分隔符
+        //（CI ubuntu 实测 "C:\\...\\workspace/.apeireth"），硬编码会跨平台红。
+        assert_eq!(resolve_store_dir(Some(&ws), Some(&app)), Some(ws.join(".apeireth")));
     }
 
     #[test]

@@ -18,9 +18,9 @@ use apeireth_protocol::canonical::{
     ToolParameters, ToolResult,
 };
 use apeireth_runtime::canonical::{
-    AgentModule, ApprovalDecision, ApprovalResolution, HookPoint, InvocationOrigin, ModuleContext,
-    ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleManifest, ModuleOutcome,
-    Runtime, RuntimeError, SessionEventKind, TurnOutcome, TurnRequest,
+    ApprovalDecision, ApprovalResolution, BehaviorModule, HookPoint, InvocationOrigin,
+    ModuleContext, ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleManifest,
+    ModuleOutcome, Runtime, RuntimeError, SessionEventKind, TurnOutcome, TurnRequest,
 };
 use async_trait::async_trait;
 
@@ -244,7 +244,7 @@ impl ToolCapability for EchoTool {
     }
 }
 
-async fn runtime(provider: Arc<FakeProvider>, modules: Vec<Arc<dyn AgentModule>>) -> Runtime {
+async fn runtime(provider: Arc<FakeProvider>, modules: Vec<Arc<dyn BehaviorModule>>) -> Runtime {
     let mut builder = Runtime::builder()
         .with_default_model(MODEL)
         .with_governance(Arc::new(AllowAll))
@@ -274,7 +274,7 @@ impl RecordingModule {
 }
 
 #[async_trait]
-impl AgentModule for RecordingModule {
+impl BehaviorModule for RecordingModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -306,7 +306,7 @@ impl OverlayModule {
 }
 
 #[async_trait]
-impl AgentModule for OverlayModule {
+impl BehaviorModule for OverlayModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -338,7 +338,7 @@ impl RetryModule {
 }
 
 #[async_trait]
-impl AgentModule for RetryModule {
+impl BehaviorModule for RetryModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -360,7 +360,7 @@ struct StopModule {
 }
 
 #[async_trait]
-impl AgentModule for StopModule {
+impl BehaviorModule for StopModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -383,7 +383,7 @@ struct ApprovedToolStopModule {
 }
 
 #[async_trait]
-impl AgentModule for ApprovedToolStopModule {
+impl BehaviorModule for ApprovedToolStopModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -409,7 +409,7 @@ struct SideCallModule {
 }
 
 #[async_trait]
-impl AgentModule for SideCallModule {
+impl BehaviorModule for SideCallModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -444,7 +444,7 @@ struct FailingModule {
 }
 
 #[async_trait]
-impl AgentModule for FailingModule {
+impl BehaviorModule for FailingModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -468,7 +468,7 @@ struct BudgetModule {
 }
 
 #[async_trait]
-impl AgentModule for BudgetModule {
+impl BehaviorModule for BudgetModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -510,7 +510,7 @@ struct BeforeModelRetryModule {
 }
 
 #[async_trait]
-impl AgentModule for BeforeModelRetryModule {
+impl BehaviorModule for BeforeModelRetryModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -528,7 +528,7 @@ impl AgentModule for BeforeModelRetryModule {
 }
 
 #[async_trait]
-impl AgentModule for RetryOverlayModule {
+impl BehaviorModule for RetryOverlayModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -557,7 +557,7 @@ struct BeforeToolRetryModule {
 }
 
 #[async_trait]
-impl AgentModule for BeforeToolRetryModule {
+impl BehaviorModule for BeforeToolRetryModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -580,7 +580,7 @@ struct AfterToolRetryModule {
 }
 
 #[async_trait]
-impl AgentModule for AfterToolRetryModule {
+impl BehaviorModule for AfterToolRetryModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -604,7 +604,7 @@ struct OutcomeModule {
 }
 
 #[async_trait]
-impl AgentModule for OutcomeModule {
+impl BehaviorModule for OutcomeModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -623,7 +623,7 @@ impl AgentModule for OutcomeModule {
 }
 
 #[async_trait]
-impl AgentModule for ToolHookModule {
+impl BehaviorModule for ToolHookModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -659,8 +659,8 @@ async fn hooks_fire_and_overlays_are_ordered_transient_and_not_persisted() {
     let runtime = runtime(
         Arc::clone(&provider),
         vec![
-            Arc::clone(&a) as Arc<dyn AgentModule>,
-            Arc::clone(&b) as Arc<dyn AgentModule>,
+            Arc::clone(&a) as Arc<dyn BehaviorModule>,
+            Arc::clone(&b) as Arc<dyn BehaviorModule>,
         ],
     )
     .await;
@@ -815,7 +815,7 @@ async fn before_final_commit_stop_rejects_without_committing_the_candidate() {
 async fn directive_precedence_is_strongest_first_and_all_modules_run() {
     let provider = FakeProvider::new(vec![Reply::Text("candidate")]);
     let order = Arc::new(Mutex::new(Vec::new()));
-    let modules: Vec<Arc<dyn AgentModule>> = vec![
+    let modules: Vec<Arc<dyn BehaviorModule>> = vec![
         Arc::new(OutcomeModule {
             manifest: ModuleManifest::new("module.continue", "continue"),
             order: Arc::clone(&order),
@@ -1274,7 +1274,7 @@ struct PropagatingBudgetModule {
 }
 
 #[async_trait]
-impl AgentModule for PropagatingBudgetModule {
+impl BehaviorModule for PropagatingBudgetModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

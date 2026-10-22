@@ -1,0 +1,108 @@
+# 四层验收台账（verification-ledger）
+
+# 载体来源：ADR-0011 D4（founding-design-v2 §7 四层验收制的可执行形态）。
+# **本文件是四层验收的结构化真源**；`docs/04-internal/live-verification-ledger.md`
+# 保留为叙述型历史绿表，只引用本表 id，不再新增条目。
+#
+# 规则（0 装）：
+# - 一条 = 一层。同一 claim 的 `formal` / `bench` / `scenario` / `signoff` 四层各有一条时，
+#   才算**四层齐全**（可宣称「已验收」）；缺任一层 → 不得宣称「已验收」。
+# - 无 `signoff` 层的 claim，`level` 最高 `PRODUCTION WIRED`，不得写 `HARDWARE VALIDATED`。
+# - `signoff` 必须是真实人类批准（owner 或授权人），只记 owner 标识与日期，不入密钥。
+# - 阶段 6 最小闭环 = 清单当关卡（本表有条目）+ 人工签核（signoff 层）+ 反思归档
+#   （`docs/architecture/handbook.md` 每波复盘引用 ledger id）。
+# - 本文件由效率线实现脚本读写（R6-C 后续）；当前为架构线手工落表（2026-10-21），
+#   自动漂移检查（新 unsafe crate / 新形式化目标未登记即红）属效率线 R6-C/D 后续。
+# - 只读校验器已落：`python scripts/verify_ledger.py`（schema / 证据路径存在性 /
+#   signoff 零装下限 / summary 一致性 / id 与同层唯一；退出码 0 通过 1 有错）。
+#   写入脚本仍归效率线 R6-C；docs-truth.yml 门禁步骤已接（2026-10-21 E4）。
+# - 只登记有证据的条目；未运行 = NOT RUN，未覆盖 = NOT COVERED，禁止预填。
+
+version: 1
+updated_at: "2026-10-21"
+
+# 汇总（0 装口径，人工维护；脚本化后由生成器产出）
+summary:
+  entries: 5
+  claims_with_entries: 5
+  four_layer_complete: 0        # 没有任何 claim 同时具备 formal+bench+scenario+signoff
+  signoff_entries: 0            # 尚无 owner 签核条目
+  stage6_drill: NOT RUN         # 清单/签核/反思归档三段的端到端演练未执行
+  bench_layer: NOT IMPLEMENTED  # 无「可重跑脚本」的基准复现条目，按 founding-design §7 不发布数字
+
+entries:
+  # ---------- formal ----------
+  - id: V-formal-001
+    claim: verification.kani_approval_sm
+    layer: formal
+    level: PRODUCTION WIRED
+    evidence:
+      - research/verification/kani/README.md
+      - .github/workflows/kani.yml
+      - crates/engine/runtime/src/canonical/research_approval_sm.rs
+    verify_cmd: "cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_terminal_lock_no_outgoing_transitions"
+    bounded: "Phase 5 三 harness；#[kani::unwind(32)] 有界，超界符号路径不检查；Kani 0.68.0 钉版；Ubuntu runner，Windows 无 Kani"
+    signoff: null
+    verified_at: fd74a669
+    notes: "CI 汇总门 kani-required-gate 阻塞（无 continue-on-error）；本层只登记配置与边界，不登记最近一次绿（以 Actions 历史为准）。"
+
+  - id: V-formal-002
+    claim: verification.kani_property_families
+    layer: formal
+    level: PRODUCTION WIRED
+    evidence:
+      - .github/workflows/kani.yml
+      - docs/status/formal-coverage.md
+      - docs/04-internal/kani-verification-playbook.md
+    verify_cmd: "cargo kani --manifest-path research/verification/kani/Cargo.toml --harness <matrix 中 11 件之一>"
+    bounded: "终局矩阵 11 件（Phase5 3 + panic 2 + governance 4 + quota 1 + sandbox 1）；matrix 外 harness 未入 CI = 未覆盖；有界模型检查，非全系统证明"
+    signoff: null
+    verified_at: fd74a669
+    notes: "workflow 旧注释「22 件」为历史口径，2026-10-21 已订正为 11 件并记入 formal-coverage.md。"
+
+  # ---------- scenario ----------
+  - id: V-scenario-001
+    claim: arch.contract_guard
+    layer: scenario
+    level: PRODUCTION WIRED
+    evidence:
+      - docs/architecture/contract.toml
+      - scripts/arch_guard.py
+      - scripts/arch-baseline.txt
+      - .github/workflows/arch-guard.yml
+    verify_cmd: "python scripts/arch_guard.py --report"
+    bounded: "->（n/a）"
+    signoff: null
+    verified_at: fd74a669
+    notes: "2026-10-21 实测 VIOLATIONS 0 / exceptions=2（EXC-0002/0003，守卫 NOTE 抑制）/ STALE 1（play_tools 1414，收口缩表）；灰度 report-only 至 2026-11-03。"
+
+  - id: V-scenario-002
+    claim: r8.governance_chain
+    layer: scenario
+    level: IMPLEMENTED
+    evidence:
+      - crates/foundation/governance/src/chain.rs
+      - docs/adr/0010-r8-governance-pipeline.md
+    verify_cmd: "cargo test -p apeireth-governance --lib --locked -j 2"
+    bounded: "->（n/a）"
+    signoff: null
+    verified_at: fd74a669
+    notes: "R8-A 库内骨架：204 passed（chain:: 10 passed）；未接 CLI/gateway 入口 = 未接线，故 level = IMPLEMENTED 而非 PRODUCTION WIRED。"
+
+  - id: V-scenario-003
+    claim: governance.chain_drill
+    layer: scenario
+    level: IMPLEMENTED
+    evidence:
+      - docs/04-internal/governance-chain-drill-2026-10-20.md
+      - crates/foundation/governance/tests/governance_chain_drill.rs
+    verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
+    bounded: "->（n/a）"
+    signoff: null
+    verified_at: fd74a669
+    notes: "三路径 3 集成测试走通六步链；演练文档 §5 记录六缺口（库内无单一编排函数等）——R8-A 已补链骨架，入口收敛属 R8-B。"
+
+  # ---------- bench / signoff ----------
+  # 当前无条目：
+  # - bench：无可重跑脚本的基准复现（founding-design-v2 §7：无重跑脚本不发布性能数字）。
+  # - signoff：尚无 owner 对某 claim 的正式签核；不要预填。

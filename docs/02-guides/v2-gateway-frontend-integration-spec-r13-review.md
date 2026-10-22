@@ -113,7 +113,7 @@ R9 spec 主体 (565 行) 其他章节确认 0 装诚实 + 0 错账:
 - §3 9 organ 集成路径 (L0-L5): ✅ 正确
 - §4 Stream 协议 (SSE / WebSocket): ✅ 正确 (proposal schema, 待真实施)
 - §6 错误处理 (LlmError → OrganError 透传): ✅ 正确
-- §7 安全 (3 governance hook + 13 键降级 + 8 守门): ✅ 正确
+- §7 安全 (3 governance hook + 键集（现行 14 键）降级 + 8 守门): ✅ 正确
 - §8 真生产前阻塞 (4 项): ✅ 正确
 - §9 部署 checklist: ✅ 正确
 - §12 附录 (子代理 R9 独立判断): ✅ 正确
@@ -221,7 +221,7 @@ per R9 spec §9.4 (frontend 对接 checklist) + R11 spec §11 (frontend 对接�
   - [ ] `pnpm check` svelte-check 0 错
   - [ ] integration test (mock + 真 LLM, per `frontend/companion-desktop/README.md:62-76`)
   - [ ] legacy compat path < 100 引用
-  - [ ] 13 键 LOCKED + 9 哲学锚本体 + workspace.version 0 触碰
+  - [ ] 键集（现行 14 键） LOCKED + 9 哲学锚本体 + workspace.version 0 触碰
   - [ ] R11 baseline 3 值 0 触碰
 
 ### 3.6 第 6 周: 部署 + release
@@ -296,7 +296,7 @@ per R11 spec §9 + R10 spec §11 + 主代理整合文档 §1.3, 子代理 R13 �
 |---|---|---|
 | **5 项 LOCKED** | ✅ 0 触碰 | per `10-locked.md` + `philosophy.md` (9 锚) |
 | **9 哲学锚本体** (`eight_anchors.rs:58-79`) | ✅ 0 触碰 | per `philosophy.md` + O-6 子代理 K |
-| **13 键** (`philosophy.rs:142 RUNTIME_ENFORCED = false`) | ✅ 0 触碰 | per `governance` 13 键 verdict cache |
+| **键集（现行 14 键）** (`philosophy.rs:142 RUNTIME_ENFORCED = false`) | ✅ 0 触碰 | per `governance` 键集（现行 14 键） verdict cache |
 | **workspace.version = "2.0.0-rc.1"**（2026-08-30 RC1 发布起, per 6b81c210）(`Cargo.toml:46`) | ✅ 0 触碰 | per `Cargo.toml:46` 0 改 |
 | **R11 baseline** (`cognitive.rs` 12 slot + Cargo.lock) | ✅ 0 触碰 | per `cargo test --locked` 1713 passed 0 FAILED（2026-09-05 对账：当前 3120 passed） |
 

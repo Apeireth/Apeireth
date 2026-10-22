@@ -17,6 +17,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 
+// D26 (2026-10-21): 回环 bind 走共享重试助手 (仅 Windows WSAEACCES 10013 有界
+// 重试), 见 `tests/common/mod.rs` 与 `src/test_support.rs`。
+mod common;
+
 /// Bind a loopback listener and spawn a server that accepts one connection and
 /// hands it to `handler`. Returns the port and the spawned task.
 async fn serve_once<F, Fut>(handler: F) -> (u16, JoinHandle<()>)
@@ -24,7 +28,9 @@ where
     F: FnOnce(TcpStream) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,
 {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = common::bind_loopback_ephemeral()
+        .await
+        .expect("bind loopback listener");
     let port = listener.local_addr().unwrap().port();
     let handle = tokio::spawn(async move {
         let (socket, _) = listener.accept().await.unwrap();
@@ -36,7 +42,9 @@ where
 /// Bind a loopback listener and return it without accepting. Used to prove a
 /// fetch was denied before any TCP connection was made.
 async fn bind_listener() -> (TcpListener, u16) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = common::bind_loopback_ephemeral()
+        .await
+        .expect("bind loopback listener");
     let port = listener.local_addr().unwrap().port();
     (listener, port)
 }
@@ -351,7 +359,9 @@ async fn redirect_to_denied_target_is_rejected_before_contact() {
 
 #[tokio::test]
 async fn redirect_loop_is_bounded_by_the_transport() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = common::bind_loopback_ephemeral()
+        .await
+        .expect("bind loopback listener");
     let port = listener.local_addr().unwrap().port();
     let server = tokio::spawn(async move {
         for _ in 0..10 {

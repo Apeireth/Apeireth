@@ -77,6 +77,10 @@ jobs:
       - name: Canonical process isolation integration tests
         run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
 
+      # R8-D: 治理链六段串联 + 三路径演练必须进 CI（ADR-0010 §4）
+      - name: Governance chain drill (R8-D)
+        run: cargo test -p apeireth-governance --test governance_chain_drill --locked -- --nocapture
+
       - name: Upload JUnit report
         if: always()
         uses: actions/upload-artifact@v7
@@ -88,7 +92,7 @@ jobs:
   # === 8 硬墙守门 (per CONTRIBUTING.md §0 触碰实查) ===
   # 跟 companion-desktop-ci.yml 平行, 但只盯根 workspace
   hard-walls:
-    name: 8 硬墙守门 (LOCKED / version / baseline / 13 键 / V1136)
+    name: 8 硬墙守门 (LOCKED / version / baseline / 14 键 / V1136)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -111,7 +115,7 @@ jobs:
             echo "base_sha=$BASE" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: "守门 1: 0 触碰 24 LOCKED crate (pure fmt diff 放行)"
+      - name: "守门 1: 0 触碰契约 [locked] 源码 (pure fmt diff 放行)"
         env:
           BASE: ${{ steps.base.outputs.base_sha }}
         run: |
@@ -119,49 +123,57 @@ jobs:
             echo "::warning::base_sha 空, 跳过守门 1"
             exit 0
           fi
-          # 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
-          # 注: 之前 hard-walls job 漏了 apeireth-graph (commit 71984e03 CODEOWNERS sync 发现)
-          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
-          LOCKED_REGEX=$(echo "$LOCKED" | tr ' ' '|')
-          HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' 'crates/*/Cargo.toml' 2>/dev/null | grep -E "^crates/($LOCKED_REGEX)/" || true)
+          # ADR-0011 D5：24 LOCKED crate 口径已形式撤销（R148），改为契约唯一真源
+          # docs/architecture/contract.toml [locked] 的源码文件（9 锚 / 键集 / 脊柱）。
+          # workspace.version 由守门 2 治理、R11 baseline 由守门 3 治理（同一契约的三项）；
+          # 禁止在本 workflow 手抄路径清单（D5：禁硬编码）。
+          LOCKED_FILES=$(python3 - <<'PY'
+          import tomllib
+          with open("docs/architecture/contract.toml", "rb") as f:
+              contract = tomllib.load(f)
+          for _key, path in contract.get("locked", {}).items():
+              if isinstance(path, str) and path.endswith(".rs"):
+                  print(path)
+          PY
+          )
+          if [ -z "$LOCKED_FILES" ]; then
+            echo "::error::无法从 contract.toml [locked] 读到受锁源码文件"
+            exit 1
+          fi
+          EXISTING=""
+          for f in $LOCKED_FILES; do
+            if [ -f "$f" ]; then
+              EXISTING="$EXISTING $f"
+            else
+              echo "::error::契约登记的受锁文件不存在: $f"
+              exit 1
+            fi
+          done
+          HITS=$(git diff --name-only "$BASE"...HEAD -- $EXISTING 2>/dev/null || true)
           if [ -z "$HITS" ]; then
-            echo "✅ 0 触碰 24 LOCKED crate"
+            echo "✅ 0 触碰契约 [locked] 源码 ($EXISTING)"
             exit 0
           fi
-          # 守门宽限: pure fmt diff (whitespace-only 重排) 放行
-          # 理由: 8 哲学锚 S-2 实事求是 + O-5 不假装 — fmt 是工具链, 0 改 logic;
-          #       R148 (2026-08-13) 24 LOCKED 已形式撤销, fmt 触碰不应触发 exit 1.
-          # 检测方法: git diff --word-diff=porcelain 输出 ~ (whitespace-only) / + / - line
-          #       - 全 ~ 无 +/- = pure whitespace 重排 (rustfmt default), 放行
-          #       - 任何 + / - line (新增/删除 word) = 真的 logic 改, 人工 review 必要
+          # 守门宽限: pure fmt diff (whitespace-only 重排) 放行 —— S-2 实事求是 + O-5 不假装。
+          # 检测: git diff --word-diff=porcelain 的 +/- word 行；全 ~ = 纯空白重排。
           HARD_HIT=""
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            # 仅 .rs 文件做内容比较; .toml 文件 (Cargo.toml) 不进 fmt 检查
-            case "$f" in
-              *.rs) ;;
-              *) echo "  logic 改 (非 .rs): $f"; HARD_HIT="$HARD_HIT$f\n"; continue;;
-            esac
-            # 提取 word-diff 的 +/- 行 (排除 ~ 纯 whitespace)
-            # git diff --word-diff=porcelain 格式:
-            #   ~ 行: 仅空白变化 (rustfmt default 折行)
-            #   + 行: 新增 word
-            #   - 行: 删除 word
             WORD_DIFF=$(git diff --word-diff=porcelain "$BASE"...HEAD -- "$f" 2>/dev/null | grep -E '^[+-][^-+~ ]' || true)
             if [ -z "$WORD_DIFF" ]; then
-              echo "  pure fmt: $f (无 +/- word 改, 仅 whitespace 重排, 放行)"
+              echo "  pure fmt: $f (无 word-level 增删, 放行)"
             else
-              echo "  logic 改: $f (有 word-level 增删, 必须人工 review):"
+              echo "  logic 改: $f (word-level 增删, 必须人工 review):"
               echo "$WORD_DIFF" | head -5
               HARD_HIT="$HARD_HIT$f\n"
             fi
           done <<< "$HITS"
           if [ -n "$HARD_HIT" ]; then
-            echo "::error::24 LOCKED crate logic 触碰 (非 fmt):"
+            echo "::error::契约 [locked] 源码 logic 触碰 (非 fmt):"
             echo -e "$HARD_HIT" | grep -v '^$'
             exit 1
           fi
-          echo "✅ 24 LOCKED crate 仅纯 fmt 改 (logic 0 触碰)"
+          echo "✅ 契约 [locked] 源码仅纯 fmt 改 (logic 0 触碰)"
 
       - name: "守门 2: workspace.version matches release authority"
         env:
@@ -206,16 +218,17 @@ jobs:
             echo "✅ workspace.version $CUR 不变"
           fi
 
-      - name: "守门 3: R11 baseline 3 值 0.8682/0.8532/0.9063 不变"
+      - name: "守门 3: LOCKED R11 baseline 3 值 0.8682/0.8532/0.9063 不变"
         env:
           BASE: ${{ steps.base.outputs.base_sha }}
         run: |
           if [ -z "$BASE" ]; then exit 0; fi
-          # R11 baseline 编译期 hardcode 在 integration test (非 src/)
+          # LOCKED 5 项之一（ADR-0001）：R11 三值为 0 装诚实锚，任何改动都必须 owner 批准。
+          # 值本身是受保护常量（允许硬编码）；路径缺失按违规处理，不静默跳过。
           TARGET="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"
           if [ ! -f "$TARGET" ]; then
-            echo "::warning::$TARGET 不存在, 跳过"
-            exit 0
+            echo "::error::LOCKED R11 baseline 目标文件不存在: $TARGET"
+            exit 1
           fi
           for VAL in 0.8682 0.8532 0.9063; do
             if ! grep -q "$VAL" "$TARGET"; then
@@ -225,32 +238,38 @@ jobs:
           done
           echo "✅ R11 baseline 3 值在 $TARGET 完整"
 
-      - name: "守门 4: 13 键 守门 (verdict cache)"
+      - name: "守门 4: 14 键 守门 (verdict cache)"
         run: |
-          # R128 后: 13 键实际在 crates/foundation/core/src/philosophy.rs (per R125-12 + 13c25025 升级)
-          # 13 键 = PHL-01..PHL-06 (V3 9) + V4.1 3 + R125-12 NotUnoptimizable 1
-          # 检测:
-          #   1. 优先 grep 4 hash prefix (per 原 R14 V0.5 守门, 后向兼容)
-          #   2. fallback: 检查 ALL_THIRTEEN_KEYS 数组 (新 V3 13 键定义) + 数字 13
-          TARGETS=("legacy/donor/apeireth-asi/src/lib.rs" "crates/foundation/core/src/philosophy.rs")
-          for TARGET in "${TARGETS[@]}"; do
-            if [ ! -f "$TARGET" ]; then continue; fi
-            for HASH_PREFIX in "9f86d081" "e3b0c442" "d4735e3a" "4e074085"; do
-              if grep -q "$HASH_PREFIX" "$TARGET"; then
-                echo "✅ 13 键 verdict 守门: 找到 $HASH_PREFIX in $TARGET"
-                exit 0
-              fi
-            done
-            # fallback: ALL_THIRTEEN_KEYS + 数字 13 (post-R128 13 键定义)
-            if grep -q "ALL_THIRTEEN_KEYS\|ALL_TWELVE_KEYS\|NotUnoptimizable" "$TARGET"; then
-              if grep -qE "13\b" "$TARGET"; then
-                echo "✅ 13 键 verdict cache 守门 (fallback: ALL_THIRTEEN_KEYS + 13 in $TARGET)"
-                exit 0
-              fi
-            fi
-          done
-          echo "::error::13 键 verdict cache 守门失败 (扫了 ${TARGETS[@]}, 4 hash + ALL_THIRTEEN_KEYS/13 fallback 都 miss)"
-          exit 1
+          # ADR-0006 正式化：现行键集 = 14 键（PHL-01..08；历史「13 键」为 PHL-07 时代口径）。
+          # ADR-0011 D5：键集真源 = 契约 [locked].keys_file 指向的源码，禁在本 workflow 手抄键清单。
+          TARGET=$(python3 - <<'PY'
+          import tomllib
+          with open("docs/architecture/contract.toml", "rb") as f:
+              contract = tomllib.load(f)
+          print(contract.get("locked", {}).get("keys_file", ""))
+          PY
+          )
+          if [ -z "$TARGET" ] || [ ! -f "$TARGET" ]; then
+            echo "::error::契约 [locked].keys_file 缺失或文件不存在: '$TARGET'"
+            exit 1
+          fi
+          # 1) 编译期 hardcode 数组长度必须为 14（增删键会编译失败，是真实锁）
+          LEN=$(grep -oE 'ALL_THIRTEEN_KEYS: \[PhilosophyKey; [0-9]+\]' "$TARGET" | head -1 | grep -oE '[0-9]+' | head -1)
+          if [ "$LEN" != "14" ]; then
+            echo "::error::键集数组长度不是 14 (实际='$LEN') in $TARGET"
+            exit 1
+          fi
+          # 2) 编译期断言常量仍在
+          if ! grep -q 'THIRTEEN_KEYS_HARDCODE' "$TARGET"; then
+            echo "::error::THIRTEEN_KEYS_HARDCODE 编译期断言缺失 in $TARGET"
+            exit 1
+          fi
+          # 3) PHL-08 键（2026-10-11 新增第 14 键）必须在场
+          if ! grep -q 'PHL-08' "$TARGET"; then
+            echo "::error::PHL-08 (第 14 键) 不在 $TARGET"
+            exit 1
+          fi
+          echo "✅ 14 键 verdict 守门: 数组长度 14 + 编译期断言 + PHL-08 in $TARGET"
 
       - name: "守门 5: 0 触碰 V0.5 V1136 哲学守门"
         env:

@@ -69,6 +69,15 @@ jobs:
         working-directory: frontend/companion-desktop/src-tauri
         run: cargo check --workspace --all-targets
 
+      # 测试资产进入执行面：B1 sql_readonly_gate / B2 provider_proxy_ssrf /
+      # B3 desktop_file_roots 的单元断言此前只有 cargo check 编译、从不执行。
+      # src-tauri 是独立 [workspace], 必须在自身目录跑, 不能落到根 workspace。
+      # 注: tests/supervisor_lifecycle.rs 需要根 workspace 的 apeireth 可执行件,
+      # 本 job 不构建它, 故该集成测试在 CI 走 SKIP 分支 (显式 eprintln, 不静默通过)。
+      - name: cargo test (Tauri shell)
+        working-directory: frontend/companion-desktop/src-tauri
+        run: cargo test --workspace --all-targets
+
   # =========================================================================
   # 2. Svelte 5 UI 类型/语法检查 (pnpm + svelte-check)
   # =========================================================================
@@ -87,7 +96,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 20 不能跑 tests/run-all.mjs: runner 对 66/82 个套件用
+          # `node --experimental-strip-types` 直跑 .mjs 引 .ts, 该 flag 自
+          # v22.6.0 才有。故 pnpm test 步骤要求 >=22 (本仓实测 v22.23.3)。
+          node-version: 22
           cache: 'pnpm'
           cache-dependency-path: 'frontend/companion-desktop/pnpm-lock.yaml'
 
@@ -105,6 +117,14 @@ jobs:
       - name: pnpm check:assets (素材许可门禁)
         working-directory: frontend/companion-desktop
         run: pnpm check:assets
+
+      # 测试资产进入执行面：tests/run-all.mjs 的 82 个套件此前 CI 从不执行
+      # (含 B1 只读 SQL 闸 / B2 provider transport 等前端源码镜像断言；
+      #  B3 的 workspace_list 断言在 cargo test 步骤)。runner 已把需要
+      # live 后端/Playwright 的用例显式排除。
+      - name: pnpm test (82 suites)
+        working-directory: frontend/companion-desktop
+        run: pnpm test
 
   # =========================================================================
   # 3. 8 硬墙守门 — 确认 companion-desktop 没有偷偷碰 LOCKED crate
@@ -129,22 +149,43 @@ jobs:
             echo "base_sha=$BASE" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: "守门: 0 触碰 24 LOCKED crate + R11 baseline"
+      - name: "守门: 契约 [locked] 源码 0 触碰 + R11 baseline"
         run: |
           BASE="${{ steps.base.outputs.base_sha }}"
           if [ -z "$BASE" ]; then
             echo "::warning::base_sha 空, 跳过守门"
             exit 0
           fi
-          # 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
-          # 注: 之前漏 apeireth-graph (commit 71984e03 CODEOWNERS sync 发现)
-          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
-          HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' | grep -E "crates/($(echo $LOCKED | tr ' ' '|'))/" || true)
-          if [ -n "$HITS" ]; then
-            echo "::error::LOCKED crate 被触碰: $HITS"
+          # ADR-0011 D5：LOCKED 口径唯一真源 = docs/architecture/contract.toml [locked]；
+          # 禁止手抄 crate 清单（历史 24 LOCKED 口径已形式撤销，R148）。
+          LOCKED_FILES=$(python3 - <<'PY'
+          import tomllib
+          with open("docs/architecture/contract.toml", "rb") as f:
+              contract = tomllib.load(f)
+          for _key, path in contract.get("locked", {}).items():
+              if isinstance(path, str) and path.endswith(".rs"):
+                  print(path)
+          PY
+          )
+          if [ -z "$LOCKED_FILES" ]; then
+            echo "::error::无法从 contract.toml [locked] 读取受锁源码"
             exit 1
           fi
-          echo "✅ 0 触碰 24 LOCKED crate"
+          EXISTING=""
+          for f in $LOCKED_FILES; do
+            if [ -f "$f" ]; then
+              EXISTING="$EXISTING $f"
+            else
+              echo "::error::契约登记的受锁文件不存在: $f"
+              exit 1
+            fi
+          done
+          HITS=$(git diff --name-only "$BASE"...HEAD -- $EXISTING 2>/dev/null || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::契约 [locked] 源码被触碰: $HITS"
+            exit 1
+          fi
+          echo "✅ 0 触碰契约 [locked] 源码 ($EXISTING)"
 
           # R11 baseline 3 值 (per APEIRETH-CONVENTIONS §11)
           R11_FILE="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"

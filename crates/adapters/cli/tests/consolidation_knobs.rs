@@ -22,6 +22,7 @@ static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 const GUARDED_KEYS: &[&str] = &[
     "APEIRETH_SESSION_DB",
+    "APEIRETH_DATA_DIR",
     "APEIRETH_COGNITIVE_DB",
     "APEIRETH_REFLEXION_DIR",
     "APEIRETH_ENABLE_CONSOLIDATION",
@@ -82,6 +83,8 @@ fn temp_path(label: &str, name: &str) -> String {
 
 async fn build_runtime(label: &str) -> Runtime {
     std::env::set_var("APEIRETH_SESSION_DB", temp_path(label, "session.sqlite3"));
+    // R8-B3: 治理审计账本随数据根走 (temp 根), 测试不写真实 ~/.apeireth。
+    std::env::set_var("APEIRETH_DATA_DIR", temp_path(label, "data"));
     std::env::set_var(
         "APEIRETH_COGNITIVE_DB",
         temp_path(label, "cognitive.sqlite3"),

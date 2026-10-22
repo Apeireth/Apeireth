@@ -17,7 +17,7 @@ use apeireth_core::{
 use apeireth_memory::{
     ActionStream, ContinuitySnapshotStore, EpisodeQuery, EpisodeStore, EvolutionStream, GoalStream,
     HistoryEntry, HistoryStream, IdentityCardStore, MigrationStream, NoteQuery, NoteStore,
-    ProposalStream, ReflectionStream, RelationStream, SessionStore, SqliteMemoryStore,
+    ProposalStream, ReflectionStream, RelationStream, SessionNoteStore, SqliteMemoryStore,
     StanceStream, StreamKind, ThoughtStream,
 };
 use serde_json::json;
@@ -240,13 +240,13 @@ fn end_to_end_session_lifecycle() {
         started_at: 100,
         last_active_at: 100,
     };
-    <SqliteMemoryStore as SessionStore>::upsert_session(&store, &s).unwrap();
-    <SqliteMemoryStore as SessionStore>::close_session(&store, "s-lifecycle", 500).unwrap();
-    let got = <SqliteMemoryStore as SessionStore>::get_session(&store, "s-lifecycle")
+    <SqliteMemoryStore as SessionNoteStore>::upsert_session(&store, &s).unwrap();
+    <SqliteMemoryStore as SessionNoteStore>::close_session(&store, "s-lifecycle", 500).unwrap();
+    let got = <SqliteMemoryStore as SessionNoteStore>::get_session(&store, "s-lifecycle")
         .unwrap()
         .unwrap();
     assert_eq!(got.closed_at, Some(500));
-    let open = <SqliteMemoryStore as SessionStore>::list_open_sessions(&store).unwrap();
+    let open = <SqliteMemoryStore as SessionNoteStore>::list_open_sessions(&store).unwrap();
     assert!(open.is_empty());
 }
 

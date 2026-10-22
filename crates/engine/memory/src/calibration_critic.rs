@@ -13,7 +13,7 @@
 //! themselves.
 //!
 //! Default-off: this is a library helper. Production wiring (a `cognitive.*`
-//! AgentModule slot, if ever wanted) is a coordinator concern.
+//! BehaviorModule slot, if ever wanted) is a coordinator concern.
 
 #![deny(unsafe_code)]
 

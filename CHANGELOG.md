@@ -1,5 +1,215 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 安全线重启批 S1-S3：治理单一入口 + 持久审计 + TLS/加密/SSRF 收口（2026-10-21/22）
+
+- **S1·R8-B2 装配根单点**（4e380a69）：CLI 生产治理收敛 GovernanceChain::run 单入口，四态行为等价真账。
+- **S2·R8-B3 持久审计**（e812fda9）：jsonl 哈希链账本（拒篡改/重启 verify/savepoint 回滚）+ IM 审批对经链落账；账本开不出响亮降级（D4 默认内存口径）。
+- **S3·B5 TLS 补测**（d6b6420b）：协议矩阵 1.2/1.3 真握手、ECDSA 真链、冷启动轮换；生产证书留清单。
+- **S3·B6 加密定级**（f72a6f13）：字段六档分类真源（指纹哈希列改判加密、向量列保明）+ KDF 600k + 列级封缄示范 5 测。
+- **S3·B2 SSRF 二段**（e4b09767）：本地端点注册制 + 公网提供方 allowlist + 重定向逐跳钉址（33 测含 3 对抗用例）。
+- **S3·B6-BLIND 查重盲索引**（12e77138）：索引面与内容面分离——分区 DEK 派生 HMAC 键（域分隔 + 绑分区 id、Drop 零化）、索引面自建表、查询不触密文；残余（持钥者离线枚举/条目无行级认证/键随分区密钥/原值口径）如实登记。
+- **S3·B2-CFG 用户白名单配置面**（44082dea）：用户自定义服务器白名单持久面（既有信封惯例、坏档拒开、同锁原子）+ 策略合并单入口 + `gate_resolved_addrs` 解析层补洞 + 设置页「工具与安全」管理面。
+- **真账**：gateway 312/0 · storage 210/0 · 桌面 165/0 · 前端 pnpm test 82/82（各 scoped 实测）；0 新外部 dep；全量数只认效率线 gate_full。收口报告 security-restart-closeout-2026-10-22.md。
+
+## [Unreleased] — 发布口径残留清零：30 members / 111 edges / SHA256SUMS / 未签名声明（2026-10-22）
+
+- **R-4 收敛（crate 口径）**：`README.md:13` Workspace 徽章 `31 members` → **30 members**；`README.zh-CN.md:13` 徽章与正文「31 成员工作区」→ **30 成员工作区**；`ARCHITECTURE.md:56`「2026-10-20 实测：31 members / 118 production edges」→ **「2026-10-22 实测：30 members / 111 production edges」**（与生成物 `docs/architecture/ARCHITECTURE.generated.md:7` 同值）。历史带日期标注（SECURITY/user-manual/team-handover/CHANGELOG 历史）按「历史不追改」保留，全仓现值文档 grep 零命中。
+- **R-3 收敛（资产名）**：`docs/beta/rc2-beta-guide.md:8` 由 `SHA256SUMS.txt` → **`SHA256SUMS`**（= 流水线产物名），仓库侧零漂移；Release 页侧待发布线核对。
+- **R-2 模板侧收敛（发布说明）**：`.github/workflows/publish-release.yml` 发布正文「18-Crate Kernel + Assembly, 3600+ Verified Tests」→ **「30-Member Workspace (29 crates + 1 bench harness), 8570+ Verified Tests (2026-10-21)」**；下载段**新增 Unsigned build notice**（`NotSigned` + 建议先核对 SHA-256 或从源码构建）。已发布的 rc.4 Release 页正文仍为旧文案（无 Release 面通道）⇒ 待发布线编辑/重发。
+- **R-5 收敛（测试数字二源）**：`capabilities-matrix.md` §0.1 历史实测行保留并**加现行指针**「现行 §1 = 341 套件 / 8570 passed / 0 failed / 51 ignored（2026-10-21）」；README 注记日期改 2026-10-21；真源 test-baseline §1 未动，`docs_truth --verify --check` exit 0。
+- **R-6 收敛（cargo 直跑）**：安全线 R8-B2/B3 收口后复跑 `cargo run -p apeireth-cli --bin apeireth --locked -j 2 -- --version` → 编译成功、输出 **`apeireth 2.0.0-rc.4`**、exit 0（此前被在途 cli 编译红阻断）。
+- **checklist 更新**：§1 L29 → `[x]`（cargo 直跑闭环）；§2 crate 口径 / 徽章对齐 → `[x]`；L30/L33 保留 `[ ]` 并如实注明「模板/仓库侧已收敛，已发布 Release 页待发布线」。**远程 CI 首跑仍未验证**。
+
+## [Unreleased] — R-1 收敛：版本一致性门禁排除 cargo-fuzz 子工程（2026-10-22）
+
+- **修复**：`scripts/check-release-version.ps1` 递归扫 `crates/**/Cargo.toml` 时把两个 cargo-fuzz 子工程（`crates/engine/image/{codecs,psd}/fuzz/Cargo.toml`；独立 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）判为版本不一致 ⇒ exit 1，而该脚本是 `publish-release.yml` 推 `v*` tag 后的第一道门禁（`-ExpectedVersion <tag> -Strict`）⇒ **修前发版必在第一步失败**。
+- **修法**：按 `*/fuzz/Cargo.toml` 排除并在报告显式列 `[SKIP]` 行（不静默跳过）；顶部说明同步；E-8 对账行更新。**判定逻辑未削弱**。
+- **实测（2026-10-22）**：`pwsh -NoProfile -File scripts/check-release-version.ps1` → **exit 0**（PASS 33 + `[SKIP]` 2）；`-Json` → passed=true（35 条 = 33 检查 + 2 SKIP，FAIL 0）；`-ExpectedVersion 2.0.0-rc.4 -Strict` → exit 0；反证 `-ExpectedVersion 9.9.9` → **exit 1**（判定仍 fail-closed）。
+- 如实：**远程 CI 首跑仍未验证**（未推 tag、无 GitHub Actions 通道）；发布说明未签名声明、资产名 `SHA256SUMS.txt` 漂移、旧口径 31 members/118 edges、徽章证据面等 R-2..R-6 仍在（清单 §5 有归口）。
+
+## [Unreleased] — B6 密钥出口接线：`apeireth crypto` 三动词（wrap / recovery-export / unlock，2026-10-21）
+
+- **接线（`sec.storage_envelope_crypto` 抬级波 1）**：新 `crates/adapters/cli/src/crypto_keys.rs`（engine 层 `apeireth_storage::crypto` 的人类出口，同内核包装、不另起逻辑）+ `lib.rs` 模块声明 + `main.rs` help 与 `crypto` 分派。三动词：`wrap`（分区 DEK 双槽包裹：口令 KDF + 恢复件，导出恢复件）、`recovery-export`（口令解包后轮换恢复件，旧件即作废）、`unlock`（口令/恢复件解包自检，不落数据）。
+- **0 装口径如实**：口令 stdin 一行且**终端回显**（无回显输入待办）；`KekAnchor` 只有 engine trait（平台 keychain/凭据库未接线）；`tool.*` 模型面未注册（归装配/治理线）；crypto 动词不写审计行（审计归治理面）；密钥丢失 = 显式不可恢复（`KEY_LOSS_BOUNDARY` 原样透出，不降级明文）。
+- **E2E 实测（本机 2026-10-21）**：`cargo build -p apeireth-cli --bin apeireth` 后真跑——`wrap` exit 0（keys.json 709B + recovery.txt 65B）；`unlock`（口令）exit 0；错口令 `unlock` exit 1（`key unwrap refused`）；`recovery-export` exit 0 后**旧恢复件 unlock exit 1、新恢复件 unlock exit 0**（轮换语义钉死）；篡改 keys 文件 `unlock` exit 1（fail-closed）。`cargo test -p apeireth-cli --lib` → **60 passed**（新增 3 单测）；clippy `-D warnings` 0；fmt 0 diff。
+- **claim 状态不变**：本波只做「密钥出口」；会话/记忆列级接线（B6-2）与密封备份并入（B6-3）仍需 owner 拍板（P0/P1 字段、KDF 强度、锚定选型），`claims.yaml` 抬级由效率线按证据裁定（本批不擅改真源）。
+
+## [Unreleased] — 治理单一入口 R8-B2/B3：装配根切换 + 持久审计 + IM 审批对经链（2026-10-21）
+
+- **R8-B2 装配根切换**：CLI 生产治理收敛 `GovernanceChain::run` 单点（gate = preset 包装层语义不变）；四态行为等价真账（Allow/Deny/RequireApproval/NotConfigured）；唯一行为差异 = verdict 元数据标 `governance_chain`（R8-B1 适配器交付映射）。
+- **R8-B3 持久审计**：`FileChainAuditSink` jsonl 落盘哈希链（重放重建 + 拒篡改 + 重启 `verify()` 收口 + savepoint 回滚）；IM 审批对经链落账（`approval.asked`/`approval.decision` 同一账本）；账本开不出响亮降级内存账（D4 口径）；追加失败 fail-closed 不变。
+- **真账**：gateway 309 passed / 0 failed；CLI 233 passed + 1 环境红（service dry-run 的计划任务 cmdlet 在受限子进程上下文被拒访问，同命令人工执行 exit 0，非代码面）；0 新外部 dep。
+
+## [Unreleased] — Wave 4 收尾：生物观测面 14/14 + 桌面 CI 执行面 + 发布收口对账（2026-10-21）
+
+- **SG-20 社会修复观测面**（`14b4a5c2`，默认关）：事件源 = 人工审批被拒（`ApprovalSocial=Rejected`，真实人工介入信号）→ 经 `NervousBus` 订阅折算内核 `plan_repair`（固定映射 `UserCorrection` → 承认不确定 + 复述理解；不含问句、不含用户原话/拒绝理由）→ 自述 `bio_mechanisms.social_repair` 只读读数。`bio_mechanisms` 观测面 **13/14 → 14/14**；行为面（写 prompt 修复指令/据此提问）仍未接线，矩阵与文档如实标注。装配：`install_bio_modules` 开关开构造观测源、装配根总线订阅、`BioProbeSlots` 第 8 槽、`BioMechanismKind::SocialRepair` 注册；关 = 零订阅零计数。assembly 63 套件 / **708 passed** / 0 failed（lib 309；新增 4 单测 + 集成测试真实 publish 一次拒绝后断言计划）。
+- **桌面 CI 执行面**（`343d5963`）：`companion-desktop-ci.yml` 的 tauri-shell 增 `cargo test --workspace --all-targets`（本地 140 passed / 3 ignored / 0 failed + integration 11；B1/B2/B3 相关 50/50），svelte-ui 增 `pnpm test`（本地 **82/82 suites**），`node-version: 20 → 22`（runner 66/82 套件依赖 `--experimental-strip-types`，Node 20 反证 16 PASS/66 FAIL）。本地实测已登记；**CI 远端 ubuntu 首跑未验证**（本地 Windows），`supervisor_lifecycle` 在 CI 走显式 SKIP（根 workspace 未构建）。
+- **发布收口对账**（`3769c57d`，只改 release-checklist）：4 勾（`--version`=`apeireth 2.0.0-rc.4`、基线§1 复核、未接线标注、历史不追改）/ 6 未勾（均带实证与归口）。**阻塞级发现 R-1**：`scripts/check-release-version.ps1` 实测 exit 1（`crates/engine/image/{codecs,psd}/fuzz` 独立 [workspace] 的 fuzz `0.0.0` 被递归扫入），而发布工作流首关以 `-Strict` 调用它 ⇒ **当前推 `v*` tag 必在第一步失败**，交发布线裁定（排除 fuzz 子工程或豁免）。
+- **环境注记（如实）**：本机 `%TEMP%` 对本仓新编译测试进程自 2026-10-21 17:40 前后出现 `os error 5`（cmd/python 可写、Rust 测试 exe 拒绝；同日 17:00 前同批测试可正常写）；本批测试以 `TEMP/TMP=<repo>\target\tmp-test` 覆盖运行（等价 CI 临时目录语义），已登记 `00-backlog` D30，不掩盖。
+
+## [Unreleased] — 发布流水线资产校验接线：SHA256SUMS 生成 + 逐件校验随发布执行（2026-10-21）
+
+- **接线**：`.github/workflows/publish-release.yml` 的 Windows 构建 job 在 NSIS 构建后新增两步——`generate-release-manifest.ps1` 生成 `SHA256SUMS`/`releaseon`，`verify-release-assets.ps1` 逐件比对哈希，exit 0 才上传制品；`SHA256SUMS`/`releaseon` 随 Release 发布（`files:` 增两项），发布说明改为「流水线内已校验」。
+- **口径**：校验脚本 B8 已交付并实测（2026-10-20 正反 7 用例）；本批只做流水线接线，不改校验逻辑，不改签名状态（发布物仍未签名，如实）。
+- **诚实边界**：远程 CI 首跑未实测（需 tag 触发，本批不造 tag、不推远端）；本地 smoke 用假产物验证正路 PASS / 篡改 FAIL 两路；claim `rel.release_asset_verify` 抬级由效率线按 claims 口径裁定。
+- **验证**：workflow YAML 解析通过（PyYAML）；两个脚本本地 smoke 正反两路 exit 0/1 符合预期。
+
+## [Unreleased] — Wave 4 观测补格：调质/昼夜/仪式/上下文装配四格自述读数 + 环境敏感测试去抖（默认关零行为变化，2026-10-21）
+
+- **观测面 9/14 → 13/14**（`capabilities.bio_mechanisms`）：新增 `runtime-assembly::canonical::bio_extra_probes` 三个只读 probe —— 调质（`ToneState` 真实向量/基线/行为参数/语气档；与 R1b-2a 订阅者共享同一状态）、昼夜（按 `APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN` 时区偏移 + 注入时钟纯算相位/振幅/局部时刻/窗口/主动门；睡眠压力如实 `null` + 原因「累加器由 CLI care 心跳持有，装配根无读取面」）、仪式（`<care_dir>/ritual_state.json` 只读 `RitualStateStore`：状态数/日程数/计划决策/可行动数）。
+- **接线方式**：三格各走 `BioProbeSlots` 迟绑定槽（`tone`/`circadian`/`ritual`），装配根在能力表 / 关怀目录 / 调质句柄就绪后 fill；开关关 = 槽不武装 = 零 fill = 单格 `null` + 未接线真因（不编读数）；仅在 `APEIRETH_ENABLE_BIO_SELF_STATUS=1` 时注册，不新增 env。
+- **口径如实**：调质/昼夜 = 真实内存状态（`wired`）；仪式 = 本地状态文件只读快照（`wired`，无跨进程事件，写者仍是 W3.7 工具面）；睡眠压力 = 父格 `wired` 下的 `not_wired` 子字段。
+- **SG-14 行为接线**（`0bbd1d4a`）：`runtime-assembly::canonical::context_budget` 把 `APEIRETH_CONTEXT_BUDGET_CHARS` 解析收成单一真源（cli 与装配根转调同一函数）；`install_bio_modules` 收到 `context_budget_chars` 后注入 `BioAssemblyModule`，`ObservedBioAssemblyModule` 在 TurnStart 记录每回合已用/预算/压力/策略/调节到 `HomeostasisObservationSource`，自述 `homeostasis` 格只读该源（策略开关关 = 单格 `null` + 真因；默认关零注册、零 fill）。
+- **环境敏感测试去抖**（`18691532`）：D27 `storage_atomic` 两测试改进程唯一后缀（pid + 测试序号），不再赌全局序号窗口；D25 AppContainer 探针有界重试 3 次（50/100ms）且测试侧环境拒绝显式 SKIP（不假绿、能力判定不被瞬时抖动永久缓存）；D26 新增 `tools::test_support` 单源 helper（仅 Windows `WSAEACCES 10013` 有界重试 ≤8×5ms）并迁移 tools crate 10 处 `TcpListener::bind`；D18 取证 = `962f30a8` 已落地（JWT + GenericBearer 扫描器），本批 0 改动。
+- **门禁（scoped）**：`cargo test -p apeireth-runtime-assembly --locked -j 2` 全目标 0 failed（lib 300；新增集成 `bio_observation_cells` 3 绿）；`cargo test -p apeireth-core --lib` 199、`-p apeireth-tools-canonical --lib` 595、`fetch_execution` 22、`content_feed` 13、`content_feed_lifecycle` 11 全绿；两 crate clippy `-D warnings` 0 / fmt 0 diff。`verify_changed --arch-strict --no-test` 唯一未过项 = 他线在途未提交的 `crates/adapters/cli/src/lib.rs` 尺寸（3878→3886，非本批文件，本批 0 触碰 cli）。**SG-14 批复测**：`cargo test -p apeireth-runtime-assembly --locked -j 2` → 63 套件 / **704 passed** / 0 failed（lib 305）；`-p apeireth-cli --lib` **57 passed**；`arch_guard --strict` 仍为他线 cli 在途（3878→3885），本批 cli staged 段净 -1 行。
+- **诚实边界**：默认关（非 DEFAULT ENABLED）；四格读数只读、0 写动作；无 live E2E；观测面 13/14，缺 social_repair 事件源；D28（页文件耗尽）属环境侧，登记不改代码。
+- **后续**：social_repair 事件源 → 观测面 14/14；claims 抬级首批 4 条（`docs/04-internal/backend-enhancement/implemented-to-wired-plan-2026-10-21.md`）；发布收口。
+
+## [Unreleased] — 神经总线 R1b-2c：审批社交信号经总线发布（默认关零行为变化，2026-10-21）
+
+- **新信号类别**（`runtime-assembly::canonical::nervous_bus`）：`NervousSignalKind::ApprovalSocial`（`ALL` 2→3）+ `ApprovalSocialOutcome { Approved, Rejected, Cancelled }` + `NervousSignal::approval_social(outcome, source)`；三态显式、**取消不编事件**、拒绝理由文本不进信号（防 PII 进总线）。
+- **发布唯一真源**（`runtime-assembly::canonical::bio_approval_social`）：新模块只做「`ApprovalDecision` → 信号」纯映射 + 发布句柄 `BioApprovalSocialSource`；`production.rs` 按调质开关交付 `Option<Arc<BioApprovalSocialSource>>`（开关关 = `None` = 零发布）；CLI 审批路径在 `resolve` 成功后经句柄发布（取消不发布）；**删除** `bio_tone` 的 `approval_social_feedback` / `apply_approval_social_feedback` 直写助手（不留第二真源）。
+- **消费收敛**：调质订阅者扩到三类信号（`ToolOutcome` / `ErrorObserved` / `ApprovalSocial`）；`Approved` → `SocialPositive`、`Rejected` → `SocialNegative`；同一事件只推进一次。
+- **门禁（scoped）**：assembly 62 套件 / 0 failed（lib 291）；CLI lib 56 + 集成套件全绿（全量跑一次跳过一条**他线在途** R1b-3 端到端测试，该测试随后由他线 `0b71cd6f` 提交并复跑绿）；clippy `-D warnings` 0、`fmt --check` 0、`arch_guard --strict` VIOLATIONS 0、`verify_changed --arch-strict --no-test` FAST GATE PASSED；cli lib 3886→3878 行守住既有尺寸棘轮 3879。
+- **诚实边界**：默认关（非 DEFAULT ENABLED）；无 live E2E（审批命令 → 调质状态为进程内集成测试，跨进程 / 真实 turn 未测）；审批路径外无生产发布方；四档（RewardPrediction / Threat / Quiet / UserCorrection）仍只有显式注入口。
+- **后续**：R1b-3 已由架构线 `0b71cd6f` 收口（ritual 文件通道端到端 + 三源如实 `NotWired`）；权威全量单线独占复跑并刷新 test-baseline §1 + README 徽章；发布收口。
+
+## [Unreleased] — 神经总线 R1b-2b：生命周期工具结果面收敛到总线订阅 + Lifecycle 观测格（默认关零行为变化，2026-10-21）
+
+- **工具结果面单入口**（`runtime-assembly::canonical::bio_lifecycle`）：`AfterToolResult` 记账由「模块 `on_hook` 扫描」改为「`nervous.bridge` → `NervousBus` → `BioLifecycleBusSubscriber` 订阅」。订阅者与注册模块共享同一 `Arc<BioLifecycleState>`；`ToolOutcome` 写账（结果名 → 调用名回退），`ErrorObserved` 不是工具使用事实、明确不写账；模块 `on_hook` 只保留 `AfterTurn` 回合收口评估，同一事件只推进一次。
+- **桥承接名字解析**：`nervous.bridge::bridge_signal` 增 `tool_call` 入参，`AfterToolResult` 工具名 = 结果名优先（空白视为缺失）→ 回退调用名；tone/lifecycle 共用同一解析，无名结果不编归属。无新信号变体、无 schema 变更。
+- **观测格接通**：`BioProbeSlots` 增生命周期账迟绑定槽（第 6 类），`install_bio_self_status_with` 在开关开时注册 `BioMechanismKind::Lifecycle` probe；`capabilities.bio_mechanisms` 观测面 **8/14 → 9/14**（仅开关全开时；默认关零注册零订阅零 fill，槽空 = 单格 `null` + 真因）。
+- **自述文本同步**（`nervous_snapshot` 机制表）：调质 5/9 事件源、生命周期接线 = 总线订阅、仪式端到端归 R1b-3、观测面 9/14。
+- **门禁（scoped）**：assembly 全目标绿（lib 284 passed + 各集成套件 0 failed；`bio_lifecycle_wiring` 11 passed，4 条事件链测试改由桥→总线驱动）；clippy `-D warnings` 0、`fmt -p runtime-assembly` 0 diff、`arch_guard --strict` VIOLATIONS 0、`docs_truth --verify --check` OK。
+- **fast-gate 未通过如实登记（非本批代码）**：`verify_changed.py` 本次三跑均未出全链绿 —— ①/② nextest 构建阶段环境失败（`link.exe` exit 1102 / 页面文件不足，backlog D28）；③ 重试时 check 阶段被在途未提交 governance 改动阻断（`error[E0277]` `crates/foundation/governance/src/chain.rs:372` `(dyn ChainClock + 'static)` 未实现 `Debug`）。scoped 门禁在阻断前已跑绿（上列数字）。
+- **诚实边界**：默认关（非 DEFAULT ENABLED）；无 live E2E；`AfterTurn` 评估仍在钩子（本批只迁工具结果面）；工具名仍来自桥的钩子映射，不是内核级事件总线。
+- **后续**：R1b-2c（`ApprovalSocial` 生产+消费同批）、R1b-3（ritual E2E + 缺失源逐源定性）；单线独占权威全量复跑并刷新 test-baseline §1 + README 徽章。
+
+## [Unreleased] — 神经总线 R1b-2a：调质事件面收敛到总线订阅（默认关零行为变化，2026-10-21）
+
+- **事件面单入口**（`runtime-assembly::canonical::bio_tone`）：生产事件源由「模块 `on_hook` 旁路扫 `AfterToolResult`/`OnError`」改为「`nervous.bridge` → `NervousBus` → `BioToneBusSubscriber` 订阅」。同一事件只推进一次，无双写；模块 `on_hook` 只保留 `TurnStart` 语气装配，`record_hook_observation` 降为显式测试入口（保留向后兼容语义）。
+- **共享状态与首见集**：订阅者与模块共享同一 `Arc<ToneState>` 与同一 `ToneSeenTools` 首见集合，Novelty「工具名进程内首见」语义不变；订阅者 `handle` 纯函数映射 `NervousSignal` → 既有 `ToneFeedbackKind`（`ToolOutcome` → TaskSuccess/TaskFailure、`ErrorObserved` → TaskFailure、首见工具名 → Novelty）。
+- **默认关零变化**：开关关 = 不构造订阅者 = 总线零订阅零发布；语气状态与尾部叠加逐字节不变（既有零变化测试保持绿）。
+- **门禁（scoped）**：assembly 全目标 62 套件 / 676 passed / 0 failed（lib 281；bio_tone 单测 16、`bio_tone_feedback` 10、`bio_tone_wiring` 8）；clippy `-D warnings` 0、`fmt --check` 0 diff、`arch_guard --strict` VIOLATIONS 0、`docs_truth --verify --check` OK。
+- **后续**：R1b-2b（lifecycle 订阅 `ToolOutcome` + Lifecycle 探针，观测面 9/14）、R1b-2c（`ApprovalSocial` 信号生产+消费同批）、R1b-3（ritual E2E + 3 源 NotWired 定性）。权威全量仍未出数，§1 未替换。
+
+## [Unreleased] — 安全加固批：8 项外部审计隐患修复（B1-B8，2026-10-19/20）
+
+外部安全审计《Apeireth-安全隐患分析》8 项风险全部收口（8 commits：`8f71d0c0`/`06246661`/`a786b733`/`2aab3add`/`1574335f`/`333c3471`/`1f65852b`/`1213fbdd`）：
+- **B1 SQL 只读闸加固**（#1 高危）：`ensure_readonly_sql` 从字符串前缀升级为词法级保守核对（WITH 引导 DML/CTE 内嵌 DML/EXPLAIN ANALYZE 写类/SELECT INTO/FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY`/MySQL `START TRANSACTION READ ONLY` 服务端只读事务双保险（失败 ROLLBACK 收尾）；桌面 crate +16 测试。
+- **B2 Provider 中继 SSRF 收紧**（#3）：目标类闸（私网/链路本地/组播/保留段拒，IP 变体规范化判类 + 修 IPv6 括号误送 DNS 真 bug）+ DNS 钉址（首跳 rebinding 窗关闭）+ 重定向逐跳闸（5 跳）+ 请求头白名单；+11 测试。残余如实：回环类级口子待「本地端点注册面」、公网 allowlist 待续。
+- **B3 文件操作收口登记根**（#4）：canonicalize 分量级祖先校验（junction 逃逸实测拒、`..` 逃逸小债顺手清）、fail-closed、IPC 契约不破；+9 测试。残余：TOCTOU 窗口未闭（已缓解）。
+- **B4 终端权限边界明示**（#2）：面板文案明示「以当前 Windows 用户权限执行/不受审批链保护/非沙箱」+ 新文档 `docs/02-guides/permission-surfaces.md` 三层权限面 + 4 条文案测试钉子。
+- **B5 Gateway TLS 真接线**（#5）：接口桩退役——PEM 真加载（证书链 + 三种私钥编码 + 配对校验）fail-closed 拒启动、tokio-rustls listener、TlsSurface 真实三态；**live TLS 握手 E2E 真测**；0 新外部包（+4 依赖边，三包已在 lock 树）；`.gitignore` 加测试夹具例外。能力级 PRODUCTION WIRED（默认不启用）。
+- **B6 静态信封加密 + 备份恢复**（#6）：分区级 DEK + AES-256-GCM SealedField（AAD 绑分区 id 防跨分区挪用）+ KeyWrapFile 三槽 KEK 包裹（口令 KDF/恢复件/KekAnchor）+ SealedBackup（恢复先全量校验才原子落盘 = 宁拒不损；密钥丢失显式不可恢复无后门）；184 测试（三不变量钉死）；0 新外部 dep。残余：列级改造未接线、P1 字段定级待拍板。
+- **B7 治理链端到端合练**（#7）：现役 M-of-N 逻辑票链三路径（通过/拒绝/超时）+ 防凑票对抗用例 + 审计落盘断言，演练记录落 `docs/04-internal/governance-chain-drill-2026-10-20.md`（缺口 6 项如实登记：编排未接线/物理多签留 v2.1 等）。**逻辑票 ≠ 密码学多签**（严守口径）。
+- **B8 发布资产校验**（#8）：`scripts/verify-release-assets.ps1`（哈希三口径 + Authenticode 如实报 + 缺项不装过）+ 流程文档 + 排期 4 项（签名证书/可复现构建等 owner 决策）。
+
+## [Unreleased] — 生物机制族 W3.7：调质/仪式完成事件源 + 生态位观测面 v0（全部默认关；2026-10-20）
+
+三批（**+~30 新测**，默认关、关时逐字节零变化；架构准入 A 类）：
+- **Novelty 事件源**（`runtime-assembly::canonical::bio_tone`）：`HookPoint::AfterToolResult` + `ToolCall`，工具名**本进程内首见**注入一次 `ToneFeedbackKind::Novelty`（模块持首见集 `BTreeSet`，重复 / 空名不注入；不读用户文本、不做内容 / 意图推断）；首见集无 TTL / 无淘汰、重启归零（如实）。+2 单测，bio_tone lib 12 passed。
+- **装配面社会反馈源**：CLI 审批落账（`apeireth approve` / `apeireth reject`）在 `resolve` **成功后**经 `ProductionModules::bio_tone_state` 共享句柄旁路注入——人批 → `SocialPositive`、人拒 → `SocialNegative`、取消 = 不注入（收回请求，不构成社会结论）；**不改审批结论、不参与权限判定**；开关关 = 装配根不交付句柄 = 零回调零变化。纯函数面 `approval_social_feedback` / `apply_approval_social_feedback` 沉在装配面，集成测试 `bio_tone_feedback` 10 passed。
+- **SG-22 仪式完成事件源**（`runtime-assembly::canonical::ritual_tools`）：`tool.ritual_done` / `tool.ritual_skip` 两模型面工具注册于 production 装配——复用 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` 总闸（只认精确 `"1"`）**且**需关怀数据目录（缺目录 = 拒绝注册）；调用即写 `<care_dir>/ritual_state.json`（StoredDoc v1 + 原子写 + 坏档 fail-closed 不覆盖），只写统计（done 时刻/连续数、skip 计数），**不改既有判定 / 审批 / 权限链**。**事件语义 = 模型在用户明确确认后调用，非自动推定、非打卡**（SG-22「可静默、不可打卡」底线保持）。消费侧 = care 心跳宿主 `ritual_inputs` 读同一文件；纯 CLI chat 无心跳 = 写入暂无候选消费（如实）。单写者设计，显式 `record_ritual_done/skip` 注入口保留（与工具面并用无跨实例锁 = 具名缺口）。5 单测 + 5 集成测试。
+- **SG-25 生态位观测面 v0**（`runtime-assembly::canonical::tool_taxonomy` + `tool_ecosystem_probe`）：仓内策展表 40 条工具 id/名 → 13 类标签（代码内常量、随代码审阅演进；未覆盖工具如实计 `untagged` 并上报覆盖数，不从描述文本推断）；`BioMechanismKind::EcosystemHealth` 经既有迟绑定槽族接入 `APEIRETH_ENABLE_BIO_SELF_STATUS`（不新增 env），观测面 **7/14 → 8/14**（容量 + 练习场 + 6 迟绑定）；槽空 / 关 = 单格 `null` + 真因，帧逐字节零变化。+16 测试（taxonomy 5 / probe 6 / 集成 3 / 旧断言 2 更新）。
+- **事件源进度（tone 9 档）**：已接 **5/9** = TaskSuccess / TaskFailure（W3.5 工具结局 + 运行时错误）、Novelty（W3.7 首见）、SocialPositive / SocialNegative（W3.7 审批面）；**其余 4 档**（RewardPrediction / Threat / Quiet / UserCorrection）仍仅显式注入口（四处用户反馈接口无生产调用方），如实未接。
+- **装配根尺寸**：审批分派拆到 `crates/adapters/cli/src/canonical_approval.rs`（公开路径 re-export 不变），cli lib 3887 → 3870（架构线已把尺寸基线收到 3879，`arch_guard --strict` 当前 0 违规）。
+- **门禁（scoped）**：assembly 全目标 0 failed（lib 252 + 集成全绿；含 SG-25 taxonomy 5 / probe 6 / 集成 3）、cli lib 56、bio_tone lib 12、`bio_tone_feedback` 10、`canonical_cli_bootstrap` 6、`canonical_cli_architecture` 2；clippy 0、fmt 0 diff。**全量复核如实**：首跑（20:46 启动）出现 1 失败 = cli 架构守卫仍引用已移走的文档注释（本次 `35c4b24a` 修正，非生产缺陷）；该跑已中止、数字不可作基线，重跑待他线 R2-4/R7 收敛 + D28 页文件缓解后登记，§1 不替换。
+- **诚实边界**：全部默认关、非 DEFAULT ENABLED / HARDWARE VALIDATED；无 live E2E；审批社会源只在 CLI 两条命令路径（网关审批面板未接）；仪式工具无心跳宿主时无消费侧；tone 其余 4 档无真实源；SG-25 策展表为静态快照，MCP 动态工具以单条静态行存在、不逐工具展开，覆盖 = 已覆盖集合而非运行期全集。
+
+## [Unreleased] — 生物机制族 W3.6：观测面 7/14 + 生命周期持久化（全部默认关；2026-10-20）
+
+两批收尾（**+31 新测**，全部默认关、关时逐字节零变化；架构准入 A 类）：
+- **self_status probe 迟绑定生产接入**（`BioProbeSlots`）：免疫账/心跳状态/审议门账/痛觉/再生 5 条 probe 经"共享槽 + reader"接进装配根——来源构造早、句柄出现晚的时序矛盾用迟绑定解决；槽空 = 单格 `null` + 真因、整帧仍成功；CLI chat/approve 与常驻网关两条已 `Arc` 化路径绑定 pain/再生 reader（`Weak<Runtime>` 无环）。**观测面 `bio_mechanisms` 已接 7/14 格**（容量 + 练习场 + 5 迟绑定），`nervous_system.observed` 随渲染帧自动上升。+12 单测。
+- **生命周期账本持久化**（`lifecycle_state_store`）：`<care_dir>/lifecycle_state.json`（StoredDoc v1 + 原子写 + 坏档拒开不覆盖），启动重放、`AfterTurn` evaluate 后按变更写一次（无 WAL，回合中崩溃丢该回合记账如实）；关/目录缺省 = **纯内存**零文件零读取。+19 测试。
+- **门禁**：scoped 全绿——assembly lib 235、`bio_mechanisms_self_status` 22、`nervous_snapshot` 11、`self_status_runtime_e2e` 12、`bio_lifecycle_persistence` 10、`bio_lifecycle_production`/`wiring` 4/11、cli lib 56、`care_heartbeat_host` 4；clippy 0、fmt 0 diff、`arch_guard --strict` VIOLATIONS 0。
+- **诚实边界**：全部默认关、非 DEFAULT ENABLED；pain/再生读取口只在两条 `Arc` 化路径绑定（session/域伙伴运行时=未接线，如实）；immune 需 `IMMUNE_MEMORY=1`、quorum 需 `ORGANS=1` 才有真句柄；care 恒填（未启动=真值 0/null）；生命周期持久化单写者无跨进程锁、无 schema 迁移；无 live E2E。
+- **剩余（W3.7）**：tone 其余 7 档事件源、仪式完成事件源、SG-25 工具能力 taxonomy（B 类 ADR 前置）、R1b 订阅迁移（以 `nervous_system.observed` 为验收指标 7/14→r）、发布收口 + 全量基线统一复跑。
+
+## [Unreleased] — 生物机制族 W3.5：剩余接线 + ADR-0003 神经系统只读聚合（全部默认关；2026-10-20）
+
+收尾批（**+~100 新测**，全部默认关、关时逐字节零变化；架构准入 A 类）：
+- **SG-22 仪式状态存储**（`runtime-assembly::canonical::ritual_state_store`）：`<care_dir>/ritual_state.json`（StoredDoc v1 信封 + 原子写 + 坏档 fail-closed 不覆盖），cli care 供给从 store 读、`record_ritual_done/skip` 显式注入口（完成事件源待接，如实）；复用 `APEIRETH_ENABLE_BIO_CARE_CANDIDATES`，关 = 零读写。15 测试。
+- **SG-18 生命周期接线 + 生产注册**（`bio_lifecycle` + `bio_production_wiring`）：真实工具结果（`AfterToolResult`）驱动 5 态账本，`APEIRETH_ENABLE_BIO_LIFECYCLE` 只认 "1"、关 = 不构造不注册不读时钟；开时以装配根真实工具名播种 `Newborn`。19 测试。
+- **SG-13 tone 真实事件源**（`bio_tone`）：复用既有模块钩子面——工具成功 → `TaskSuccess`、工具/运行时失败 → `TaskFailure`（其余 7 档仍仅显式注入，如实）；production 持共享 `Arc<ToneState>` + `attach_tone_feedback_sink`。10 测试。
+- **self_status 生物机制观测扩展**（`bio_mechanism_probes`）：6 条只读 probe（免疫账/审议门账/心跳状态/play 账/痛觉/再生，全部脱敏、失败单格 null+真因）；`self_status_source.rs` 2587 → 2064 行（低于基线，arch_guard size-grow 修复）。22 测试。
+- **ADR-0003 交付（R1a）**：新增 `nervous_snapshot.rs` + `capabilities.nervous_system` 只读子对象（schema v1：version + summary + 14 条 mechanism 的 level/enabled_env/signal_sources/gaps；`last_observation` 恒 null 不伪造）。**顶层 21 节冻结合同不变**（ADR「21→22 节」措辞按子对象口径落地，差异已记录）。11 测试。
+- **装配瘦身**：`production.rs` 1723 → 1663 行（arch_guard 基线 1686），biology 装配块抽到 `bio_production_wiring.rs`；`arch_guard --strict` **VIOLATIONS 0**（STALE 2 = 可缩表基线，归效率线）。
+- **接线盘点（14 条）**：**PRODUCTION WIRED（默认关）13 条**（W3.5 补齐 SG-18 生命周期、SG-22 仪式）；**IMPLEMENTED 1 条** = SG-25 生态健康（**无真实信号源**：`ToolProfile.capabilities` 所需能力标签在运行时不存在，拼标签=伪接线；需工具能力 taxonomy，B 类 ADR 前置）。观测面已接 **2/14 格**（容量 + 练习场；其余 probe 实现就绪、待迟绑定，下一批）。
+- **诚实边界**：全部默认关、非 DEFAULT ENABLED / HARDWARE VALIDATED；无 live E2E；`nervous_system` 为 capabilities 内第二个只读子对象；仪式完成事件源/生命周期持久化/tone 其余 7 档事件源仍未接（如实）。
+- **门禁**：见 test-baseline 本批；scoped 全绿（assembly lib 214 / cli lib 56 / 各新老装配测试）、clippy 0、fmt 0 diff、arch_guard 0 违规。
+
+## [Unreleased] — 生物机制族 W3.4：收口接线（recovery + 节律门生产装配，全部默认关；2026-10-20）
+
+两批并行 + 矩阵收口（**+~130 新测**，全部默认关、关时逐字节零变化）：
+- **再生协议接失败链**（`apeireth-runtime::canonical::bio_pain`）：`recovery_protocol` 状态机挂到 W3.3 唯一失败收口——`Backoff→Hemostasis`/`Diagnose→Inflammation`/`Abandon→Proliferation` 开案，同因升级每次推进一步（Remodeling 再失败按 `Relapse` 回 Inflammation），成功沿合法前向事件补到 `Resolved` 后移出活跃账；`Runtime::bio_recovery_snapshot()` 观测；同 `APEIRETH_ENABLE_BIO_PAIN` 开关，**只观测记账、不改错误/重试决策**；`ScarLedger::learn` 未接。+11 模块测试 + 2 真实链路 E2E。
+- **节律门生产装配**（cli `care_heartbeat` + runtime-assembly `care_heartbeat`）：`CareHeartbeatPoll::with_circadian_gate` 接到 `poll()` 最前，`Suppressed → Quiet` 整拍零读取；producer 新增两个非破坏性入口（`start_care_with_feeds_and_circadian` / `start_care_with_feeds_bio_and_circadian`）；cli `APEIRETH_ENABLE_BIO_CIRCADIAN` + `APEIRETH_BIO_CIRCADIAN_TZ_OFFSET_MIN`（缺省 0=UTC，**显式不推断本地时区**，坏值/越界拒绝即帧）；+8 装配测试 + 5 cli 单测。
+- **接线盘点（14 条）**：**PRODUCTION WIRED 11**（新增 SG-17 再生、SG-23 节律门）+ **半程 1**（SG-22 仪式缺状态存储）+ **未接线 2**（SG-18 生命周期、SG-25 生态健康）；**14/14 内核 + 11 条生产装配（全部默认关）**。
+- **门禁**：全量 `cargo test --workspace --all-targets --locked --no-fail-fast -j 1`（`RUST_TEST_THREADS=4`，规避 D26 端口 flake）= **336 套件 / 9075 passed / 1 环境敏感 flake（D27：`storage_atomic::write_atomic_refuses_preexisting_tmp_name`，该套件整跑复测 199 passed/0 failed）/ 0 产品失败**；clippy `--workspace --all-targets -D warnings` 0；`cargo fmt --check` 0 diff；数字以 test-baseline 单一真源为准（本批已刷新）。
+
+## [Unreleased] — 生物机制族 W3.3：收尾接线（6 批，全部默认关；2026-10-20）
+
+六条并行批 + 装配根总装，把剩余内核接进生产（默认关、开关只认显式 `"1"`、关时逐字节零变化）：
+- **care 真实数据供给**：cli 组合根注入 `CareBioSupply`——`PresenceService` Turn 帧 → `last_seen`、`SessionStore` → 可续线索；仪式状态存储未接 ⇒ 仪式 0 候选（如实）；+10 测试。
+- **play 端到端**：`tool.play_propose/start/finish/abort` 四工具面 + opt-in 显式门 + 沙箱路径纪律（复用既有 guardrail，目录不创建、拒绝逃逸）；`APEIRETH_ENABLE_BIO_PLAY` 懒注册；+25 测试。
+- **痛觉→失败链**：`record_call_completed`（串行/并行/取消三调用点）收口 → `PainLedger` 评估（Runtime 级账本、跨会话慢性化、cause_key 无敏感信息、成功分支按能力脱敏）；**只观测记账、不改错误/重试决策**；`RuntimeBuilder::with_bio_pain` + cli `APEIRETH_ENABLE_BIO_PAIN` 默认关；+21 测试。
+- **quorum 外部源**：guard 免疫升级（Open+Tier3Lockdown ⇔ escalated）→ `QuorumSignal{kind:Conflict, source:"guard.immune"}` 进审议门；按 `(record_key, occurrences)` 节流防常开；cli 组合根共享同一份 `Arc<ImmuneMemory>` 迟绑定；双开关默认关；+12 测试。
+- **调质→tone**：`ToneState`（显式反馈事件注入）+ `BioToneModule`（TurnStart 尾部独立 overlay，防破缓存前缀）；`APEIRETH_ENABLE_BIO_TONE` 懒注册进 production；真实反馈事件源未接 ⇒ 半程；+16 单测 + 8 装配测试。
+- **节律门→心跳**：`BioCircadianGate` + `CareHeartbeatPoll::with_circadian_gate`，`poll()` 最前 `decide()`，Suppressed → Quiet 整拍零读取；`APEIRETH_ENABLE_BIO_CIRCADIAN`；生产装配（时区/睡眠压力配置源）留下一批 ⇒ 半程；+9 装配测试。
+- **接线盘点（14 条）**：**PRODUCTION WIRED 9**（SG-13 调质→tone 模块｜SG-14 稳态→策略｜SG-15 免疫→hook｜SG-16 痛觉→失败链｜SG-19 依恋→care｜SG-20 修复→prompt｜SG-21 play｜SG-24 审议门｜SG-26 容量→自述）+ **半程 2**（SG-22 仪式→care 缺状态存储｜SG-23 节律门缺生产装配）+ **未接线 3**（SG-17 再生、SG-18 生命周期、SG-25 生态健康）。
+- **门禁**：scoped 全绿：assembly lib 194、cli lib 48、runtime lib 163/tests 322、既有 startup/懒加载断言全绿；clippy `-D warnings` 0；fmt 0 diff。**全量工作区复验未完成**（跑到 24 套件 / 186 passed / 0 failed 时收工中止，下一批补全量 + test-baseline 刷新）。
+
+## [Unreleased] — 生物机制族 W3.2：装配面接线（5 条 PRODUCTION WIRED，默认关；2026-10-19）
+
+五线并行 + 装配根总装：把 W3.1 的内接线接进生产装配（**+68 新测**；全部默认关、开关只认显式 "1"、关时逐字节零变化）：
+- **SG-15 免疫→guard hook（生产入口）**（peireth-cli）：APEIRETH_ENABLE_IMMUNE_MEMORY；BehaviorChainGuardHook 创建后按 env 挂 Arc<ImmuneMemory>（只认 "1"）；默认关句柄为 None。7 测试。
+- **SG-19+SG-22 依恋/仪式→care（心跳装配）**（
+untime-assembly::care_reminder/care_heartbeat）：APEIRETH_ENABLE_BIO_CARE_CANDIDATES、BioCareInputs 供给口 + 缺省空供给；心跳 poll 末位逐条喂 poll_bio_candidate（勿扰/频率/预算全走内核）。**生产数据供给（presence/memory/仪式状态）未接 ⇒ 开关开也 0 候选**（如实）。19 测试。
+- **SG-14+SG-23 稳态/节律→cognitive 装配**（cognitive.rs + BioAssemblyModule 生产注册）：APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE / APEIRETH_ENABLE_BIO_CONTEXT_POLICY；修复指令进 system 独立 core 块、上下文策略按显式注入的预算/块生效；无数据=默认策略，不编趋势/预算/信号。11 测试。
+- **SG-24 quorum→orchestrator 装配**：APEIRETH_ENABLE_QUORUM_GATE；deliberate() 门开走 decide_with_invoker_gated（Hold/Cooldown 不召开、tick Held(GateBlock)、不伪造否决），信号自动源接器官链失败与审议回流。10 测试。
+- **SG-26 容量→自述 io_mechanisms**（self_status_source.rs + production.rs）：APEIRETH_ENABLE_BIO_SELF_STATUS；capabilities.bio_mechanisms 子对象（**21 节合同不变**），14 机制格，默认关 mechanisms:null+原因；承载力 probe 读与 	ool.task_board 同一任务队列；其余 13 条 wired:false。10 测试 + 合同测试。
+- **装配根总装（Lead）**：production.rs 注册 BioAssemblyModule + 自述源挂观测面 + 矩阵 §0.2 新开关行 + 既有「名册全为布尔」断言豁免 io_mechanisms（子对象非开关）。
+- **接线盘点**：14 条 = **PRODUCTION WIRED 5**（免疫/审议门/修复 prompt/上下文策略/容量自述）+ **半程 4**（调质→tone、依恋+仪式→care 数据供给、节律门）+ **未接线 5**（痛觉/再生/生命周期/练习场/生态健康内核已入库）。W3.3 = 数据供给 + 事件源 + 端到端。
+- **门禁**：全量工作区实测见 test-baseline（本批）；scoped：assembly lib 169、e2e 12、4 个新装配测试 37、cli 38、tools 592 全绿；clippy -D warnings 0；fmt 0 diff。
+
+## [Unreleased] — 生物机制族 W3.1：六条「内接线」入库（默认关，2026-10-19）
+
+六线并行施工批：把已交付的内核接进 crate 内既有缝（**+77 新单测**，全部**默认关 + 可回退**）：
+- **SG-15 免疫→guard hook**（peireth-guard::hook）：with_immune_memory(Arc<ImmuneMemory>)，仅在 Deny/RequireApproval 出口 observe；证据/verdict 只追加 immune 字段，主结论不变；10 测试。
+- **SG-20 修复→prompt 组装**（peireth-organ::prompt_assembly）：RepairDirectiveSource + PromptAssembler::with_repair_plan，修复指令段模板固定、原文不回灌、≤2 动作/≤1 问句；9 测试。
+- **SG-24 quorum→审议触发**（peireth-orchestration::council）：QuorumGate + decide_gated/decide_with_invoker_gated；Escalate 放行并携带 reasons、Hold/Cooldown 不召开且不伪造结论；10 测试。
+- **SG-19+SG-22 依恋/仪式→care**（peireth-organ::care）：新增 
+itual_candidate/
+eunion 两候选源（Due/DueSoft→候选；重聚仅非 Brief；无内疚词黑名单测试）+ CareConfig.bio_candidates_enabled（默认 false）+ 既有勿扰/频率/预算全管道裁决；24 测试。
+- **SG-14+SG-23 稳态/节律→上下文组装**（peireth-organ::context_assembly/circadian）：AssemblyPolicy::from_plan（整编前置/降检索深度/预算调整/调用方标志）+ proactive_gate（睡窗 > urgency > 超日 Rest）；14 测试。
+- **SG-13 调质→语气**（peireth-organ::tone）：ehavior_tone_style/	one_hint_with_params，基线参数下与既有语气逐字一致；10 测试。
+- **诚实边界**：六条均为 **crate 内接线（IMPLEMENTED / DEFAULT DISABLED）**，**非 PRODUCTION WIRED**——runtime-assembly / cli / production.rs 的装配与开关登记属 W3.2；接线点已在各提交正文列出。
+- **门禁**：scoped 测试 organ 377 / guard 61 / orchestration 447 全绿；clippy -D warnings 0；cargo fmt --check 0 diff；中性/secret 扫描干净。
+
+## [Unreleased] — 生物机制族 W2：剩余五条内核 v0（14/14 内核齐，2026-10-19）
+
+五线并行施工批：生物机制族**剩余 5 条内核 v0** 全部入库（**+91 新单测**），至此 **14/14 内核全部交付**（W1 137 + W2 91 = **228 个新机制单测**）；**全部 IMPLEMENTED 未接线**（生产 0 调用点，W3 分批接线）：
+- **SG-18 资产生命周期**（peireth-orchestration::lifecycle）：Newborn→Trial→Mature→Retiring→Retired（可 revive），退役必留墓碑、evaluate 幂等、冷静期、失败超限退役、容量淘汰带墓碑交还，21 测试。
+- **SG-21 游戏/练习场**（peireth-organ::play）：低风险练习会话（默认 20k tokens / 15min / 强制 opt-in / 记忆隔离），状态机严格、产出只进 PlayOutcome（无主体记忆写 API），18 测试。
+- **SG-22 仪式**（peireth-organ::ritual）：早/晚/周/纪念日/共同项目五类仪式，规则表含 muted/重复守卫/宽限降级；**streak/skip 完全不参与判定**（无断签内疚语义），15 测试。
+- **SG-25 工具生态健康度**（peireth-tools-canonical::ecosystem_health）：多样性/冗余/重叠三轴 + dysbiosis 加权 + 确定性排序，纯只读、只给建议不剪枝，18 测试。
+- **SG-26 承载力/演替/关键种**（peireth-orchestration::capacity）：承载力四档判定（80%/soft/hard、u128 防溢出）+ 演替状态机（含回滚超时标记）+ 关键种风险清单，19 测试。
+- **诚实边界**：W2 五条与 W1 九条一样**全部 IMPLEMENTED 库级、未接线**——无 self_status 节、未接工具注册表/上下文预算/清理链/care 调度；生物是灵感源非保真模拟。**W3 = 14 条全部接线**（接线点已由各内核交付记录列明）。
+
+## [Unreleased] — 生物机制族 W1：九个机制内核 v0（2026-10-19）
+
+七线并行施工批总装（2h 窗口）：生物机制族 W1 九条内核 v0 全部入库，**+137 个新单测**（organ +79 / guard +18 / orchestration +40），**全部 IMPLEMENTED 未接线**（生产 0 调用点，0 装分级如实标注）：
+- **SG-13 神经调质**（peireth-organ::neuromodulation）：六种调质慢变量（多巴胺 RPE / 血清素 / 催产素 / 皮质醇 / 去甲 / 乙酰胆碱）+ 文档化 6×6 耦合 + ehavior_params() 六项映射（warmth/patience/initiative/curiosity/caution/verbosity），21 测试。
+- **SG-14 异稳态 + SG-23 节律/睡眠压力**（peireth-organ::homeostasis / circadian）：生命体征五项 + 三档阈值 + 文档化优先级表 + 趋势外推预测调节；昼夜相位 / 超日节律 / 腺苷式睡眠压力与整编紧迫度（0.35/0.70），25 测试。
+- **SG-15 免疫记忆 + 炎症收口**（peireth-guard::immune_memory）：事件签名归一化（SHA-256 前 16 hex）+ 分级响应 + 耐受/冷却收口 + self 容忍 + 固定容量 store，18 测试。
+- **SG-16 痛觉学习 + SG-17 再生四期**（peireth-orchestration::nociception / 
+ecovery_protocol）：失败分类 → 习惯化 → 慢性化（10min 窗 ≥4 次）→ 修复脱敏/放弃；止血→炎症→增生→重塑→Resolved 状态机 + 瘢痕账（risk=1-1/(1+hits)），26 测试。
+- **SG-19 依恋 / 分离-重聚**（peireth-organ::attachment）：分离时长四类 + 重聚强度上限 + **内疚/指责黑名单 10 条**（216 组组合全断言干净）+ 线索选点确定性排序，19 测试。
+- **SG-20 交互修复**（peireth-organ::social_repair）：六类不确定性信号 → 六种修复动作（≤2 动作、≤1 问句、rationale 不回灌原文）+ 共同注意，14 测试。
+- **SG-24 群体感应升级门**（peireth-orchestration::quorum）：信号权重 / 衰减 / 阈值 / 冷却 / 消费一次（同一波只升议一次），14 测试。
+- **全量实测（2026-10-19 总装批亲跑，`-j 2`）**：322 套件 / **8652 passed / 0 failed / 52 ignored**（exit 0；上口径 8515 → +137）；三 crate scoped clippy 0 警告、`cargo fmt --check` 0 diff、中性扫描新增行 0 命中、secret-scan 干净。数字真源 docs/03-reference/test-baseline.md（§1 已刷新，旧 8515 移入历史口径）；日志 rtifacts/wave-bio-w1-workspace-test.log。
+- **诚实边界**：九条全部 **IMPLEMENTED 库级、未接线**——无 self_status 节、未接治理链 / care / dreaming / council / 失败处理链；生物是灵感源非保真模拟。W2 = 剩余 5 条内核（SG-18 生命周期 / SG-21 练习场 / SG-22 仪式 / SG-25 生态健康 / SG-26 承载力）+ 14 条全部接线。
+
 ## [Unreleased] — 小批总装：DOCX 列表外观 / xlsx 写出 / 前端依赖清账 / 矩阵真源补齐 (2026-10-18)
 
 四批并行小批（1.5h 窗口）总装，另含总装批真源刷新：

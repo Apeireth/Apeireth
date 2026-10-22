@@ -439,8 +439,6 @@ pub trait BehaviorModule: Send + Sync {
 
 /// Compatibility alias for the renamed behavior trait.
 pub use BehaviorModule as Module;
-/// Compatibility alias retained for existing embedders.
-pub use BehaviorModule as AgentModule;
 
 /// Canonical registry for all runtime modules.
 ///
@@ -491,9 +489,6 @@ impl From<Vec<Arc<dyn BehaviorModule>>> for BehaviorRegistry {
         Self { modules }
     }
 }
-
-/// Compatibility name for the old registry.
-pub use BehaviorRegistry as ModuleRegistry;
 
 /// Reject duplicate capability ids or model-facing names between two tool sets.
 pub fn reject_tool_identity_collisions(
@@ -736,5 +731,31 @@ impl ModuleInvoker for RuntimeModuleInvoker {
             response: routed.response,
             served_by: routed.served_by,
         })
+    }
+}
+
+impl apeireth_plugin::ExtensionCatalog for BehaviorRegistry {
+    fn extension_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .modules()
+            .iter()
+            .map(|module| module.manifest().id.clone())
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    fn describe(&self, id: &str) -> Option<apeireth_plugin::ExtensionDescriptor> {
+        let module = self
+            .modules()
+            .iter()
+            .find(|module| module.manifest().id == id)?;
+        let manifest = module.manifest();
+        Some(apeireth_plugin::ExtensionDescriptor::new(
+            manifest.id.clone(),
+            apeireth_plugin::ExtensionKind::BehaviorModule,
+            "apeireth-runtime",
+            0,
+        ))
     }
 }

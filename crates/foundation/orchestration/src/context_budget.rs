@@ -325,16 +325,47 @@ struct SpillBinding {
     scope: String,
 }
 
+/// Optional assembly policy hook (ADR-0007 §2.1 — single assembler pipeline).
+///
+/// The foundation owns the pipeline (per-block cap → optional non-core fold →
+/// greedy total-budget cut → optional spill); callers with their own policy
+/// vocabulary (organ's regulation policy) supply a hook instead of
+/// re-implementing the pipeline. The default (no hook) keeps the historical
+/// output byte-for-byte.
+pub trait AssemblyPolicyHook: std::fmt::Debug + Send + Sync {
+    /// Effective total char budget after policy tightening.
+    fn effective_budget_chars(&self, configured_budget_chars: usize) -> usize {
+        configured_budget_chars
+    }
+
+    /// Keep at most this many non-core blocks (core blocks always stay).
+    fn max_non_core_layers(&self) -> Option<usize> {
+        None
+    }
+
+    /// Fold each non-core block to half its capped length before the overflow
+    /// cut. Core blocks are never folded.
+    fn fold_non_core(&self) -> bool {
+        false
+    }
+}
+
+/// Non-core fold divisor used when [`AssemblyPolicyHook::fold_non_core`] is on.
+const NON_CORE_FOLD_DIVISOR: usize = 2;
+
 /// Ordered injection pipeline: per-block cap, then greedy total-budget cut.
 ///
 /// Cuts are prefix cuts by default. Binding a spill sink with
 /// [`ContextAssembler::with_spill`] upgrades every cut to a head/tail preview
 /// with a retrieval guide ([`truncate_with_spill`]); a failed spill keeps the
-/// full original inline.
+/// full original inline. Binding a policy hook with
+/// [`ContextAssembler::with_policy_hook`] tightens the budget and/or folds
+/// non-core blocks without changing the pipeline itself.
 pub struct ContextAssembler {
     blocks: Vec<ContextBlock>,
     total_budget_chars: usize,
     spill: Option<SpillBinding>,
+    policy: Option<Arc<dyn AssemblyPolicyHook>>,
 }
 
 impl ContextAssembler {
@@ -345,6 +376,7 @@ impl ContextAssembler {
             blocks: Vec::new(),
             total_budget_chars: total_budget_chars.max(100),
             spill: None,
+            policy: None,
         }
     }
 
@@ -363,6 +395,47 @@ impl ContextAssembler {
     /// Configured total budget (after the 100-char floor).
     pub fn total_budget_chars(&self) -> usize {
         self.total_budget_chars
+    }
+
+    /// Bind an assembly policy hook (tightens the budget and/or folds
+    /// non-core blocks without replacing the pipeline).
+    #[must_use]
+    pub fn with_policy_hook(mut self, hook: Arc<dyn AssemblyPolicyHook>) -> Self {
+        self.policy = Some(hook);
+        self
+    }
+
+    /// Effective total budget after the bound policy hook (if any).
+    pub fn effective_total_budget_chars(&self) -> usize {
+        match &self.policy {
+            Some(hook) => hook.effective_budget_chars(self.total_budget_chars),
+            None => self.total_budget_chars,
+        }
+    }
+
+    /// Blocks after the hook's layer policy (core kept, non-core maybe capped).
+    fn policy_blocks(&self) -> Vec<ContextBlock> {
+        match self.policy.as_ref().and_then(|p| p.max_non_core_layers()) {
+            Some(limit) => {
+                let mut non_core = 0usize;
+                self.blocks
+                    .iter()
+                    .filter(|b| {
+                        if b.core {
+                            return true;
+                        }
+                        if non_core < limit {
+                            non_core += 1;
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .cloned()
+                    .collect()
+            }
+            None => self.blocks.clone(),
+        }
     }
 
     /// Register a block (order preserved; core blocks are safer first).
@@ -390,47 +463,60 @@ impl ContextAssembler {
 
     /// Budgeted assembly keeping names / core / cap metadata.
     ///
-    /// Algorithm:
-    /// 1. Plan each block's retained length: per-block `cap_chars` first.
-    /// 2. If the total still exceeds the budget, sort non-core blocks by
-    ///    descending length and cut from the largest first (greedy).
-    /// 3. Materialize every block at its planned length in one cut, then drop
+    /// Algorithm (one pipeline; a bound [`AssemblyPolicyHook`] may tighten the
+    /// inputs without changing the steps):
+    /// 1. Policy layer pass: core blocks always kept; non-core may be capped.
+    /// 2. Plan each block's retained length: per-block `cap_chars` first, then
+    ///    optional non-core folding to half its capped length.
+    /// 3. If the total still exceeds the effective budget, sort non-core
+    ///    blocks by descending length and cut from the largest first (greedy).
+    /// 4. Materialize every block at its planned length in one cut, then drop
     ///    blocks whose remaining content is empty/whitespace. With a bound
     ///    spill sink the cut is a head/tail preview whose full original is
     ///    spilled ([`truncate_with_spill`]); the marker and guide lines are
     ///    bounded overhead on top of the planned width.
     pub fn assemble_budgeted_blocks(&self) -> Vec<ContextBlock> {
-        let mut planned: Vec<usize> = self
-            .blocks
+        let blocks = self.policy_blocks();
+        let fold_non_core = self
+            .policy
+            .as_ref()
+            .map(|p| p.fold_non_core())
+            .unwrap_or(false);
+        let budget = self.effective_total_budget_chars();
+        let mut planned: Vec<usize> = blocks
             .iter()
             .map(|b| {
-                b.content
+                let capped = b
+                    .content
                     .chars()
                     .count()
-                    .min(b.cap_chars.unwrap_or(usize::MAX))
+                    .min(b.cap_chars.unwrap_or(usize::MAX));
+                if fold_non_core && !b.core {
+                    capped / NON_CORE_FOLD_DIVISOR
+                } else {
+                    capped
+                }
             })
             .collect();
         let mut total: usize = planned.iter().sum();
-        if total > self.total_budget_chars {
-            let mut order: Vec<usize> = (0..self.blocks.len())
-                .filter(|&i| !self.blocks[i].core)
-                .collect();
+        if total > budget {
+            let mut order: Vec<usize> = (0..blocks.len()).filter(|&i| !blocks[i].core).collect();
             order.sort_by_key(|&i| std::cmp::Reverse(planned[i]));
             for i in order {
-                if total <= self.total_budget_chars {
+                if total <= budget {
                     break;
                 }
                 let len = planned[i];
                 if len == 0 {
                     continue;
                 }
-                let over = total - self.total_budget_chars;
+                let over = total - budget;
                 let cut = len.min(over);
                 planned[i] = len - cut;
                 total -= cut;
             }
         }
-        self.blocks
+        blocks
             .iter()
             .zip(planned)
             .filter_map(|(b, keep)| {
@@ -941,5 +1027,108 @@ mod tests {
             .collect();
         assert_eq!(spilled.len(), 1);
         assert_eq!(std::fs::read_to_string(&spilled[0]).unwrap(), mem_full);
+    }
+
+    /// A caller-supplied policy hook folds non-core blocks and caps layers
+    /// without touching the pipeline itself (core blocks stay whole).
+    #[derive(Debug)]
+    struct TestPolicy {
+        budget_cap: usize,
+        max_non_core: Option<usize>,
+        fold: bool,
+    }
+
+    impl AssemblyPolicyHook for TestPolicy {
+        fn effective_budget_chars(&self, configured: usize) -> usize {
+            configured.min(self.budget_cap)
+        }
+
+        fn max_non_core_layers(&self) -> Option<usize> {
+            self.max_non_core
+        }
+
+        fn fold_non_core(&self) -> bool {
+            self.fold
+        }
+    }
+
+    #[test]
+    fn assembler_policy_hook_folds_and_protects_core() {
+        let assembler = ContextAssembler::new(1000)
+            .with_policy_hook(Arc::new(TestPolicy {
+                budget_cap: 1000,
+                max_non_core: None,
+                fold: true,
+            }))
+            .push(ContextBlock::new("core", "柯".repeat(100)).core(true))
+            .push(ContextBlock::new("a", "甲".repeat(100)))
+            .push(ContextBlock::new("b", "乙".repeat(100)));
+
+        let out = assembler.assemble_budgeted_blocks();
+        let core = out.iter().find(|b| b.name == "core").unwrap();
+        assert_eq!(core.content.chars().count(), 100, "核心块不折半");
+        let a = out.iter().find(|b| b.name == "a").unwrap();
+        assert_eq!(a.content.chars().count(), 50, "非核心折半");
+        let b = out.iter().find(|b| b.name == "b").unwrap();
+        assert_eq!(b.content.chars().count(), 50, "非核心折半");
+    }
+
+    #[test]
+    fn assembler_policy_hook_limits_non_core_layers() {
+        let assembler = ContextAssembler::new(1000)
+            .with_policy_hook(Arc::new(TestPolicy {
+                budget_cap: 1000,
+                max_non_core: Some(1),
+                fold: false,
+            }))
+            .push(ContextBlock::new("core", "柯".repeat(10)).core(true))
+            .push(ContextBlock::new("a", "甲".repeat(10)))
+            .push(ContextBlock::new("b", "乙".repeat(10)));
+
+        let out = assembler.assemble_budgeted_blocks();
+        let names: Vec<&str> = out.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, vec!["core", "a"], "保留第一个非核心层: {names:?}");
+    }
+
+    #[test]
+    fn assembler_policy_hook_budget_cap_keeps_greedy_cut() {
+        let assembler = ContextAssembler::new(1000)
+            .with_policy_hook(Arc::new(TestPolicy {
+                budget_cap: 120,
+                max_non_core: None,
+                fold: false,
+            }))
+            .push(ContextBlock::new("core", "柯".repeat(100)).core(true))
+            .push(ContextBlock::new("a", "甲".repeat(100)))
+            .push(ContextBlock::new("b", "乙".repeat(100)));
+
+        assert_eq!(assembler.total_budget_chars(), 1000, "配置值不变");
+        assert_eq!(
+            assembler.effective_total_budget_chars(),
+            120,
+            "生效预算收紧"
+        );
+        let out = assembler.assemble_budgeted_blocks();
+        let names: Vec<&str> = out.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["core", "b"],
+            "贪心从最大的非核心先切: {names:?}"
+        );
+        assert_eq!(out[0].content.chars().count(), 100, "核心块保留");
+        assert_eq!(out[1].content.chars().count(), 20, "剩余预算落给最后一块");
+    }
+
+    #[test]
+    fn assembler_without_hook_keeps_plain_pipeline() {
+        let assembler = ContextAssembler::new(150)
+            .push(ContextBlock::new("a", "甲".repeat(100)))
+            .push(ContextBlock::new("b", "乙".repeat(100)));
+
+        assert!(assembler.effective_total_budget_chars() == 150);
+        let out = assembler.assemble_budgeted_blocks();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].content.chars().count(), 50, "无钩子=旧行为");
+        assert_eq!(out[1].content.chars().count(), 100);
     }
 }

@@ -19,7 +19,10 @@ use apeireth_tools_canonical::{
 };
 
 use super::capability::CapabilityProvider;
-
+use super::nervous_bus::NervousBus;
+use super::self_status_source::nervous_snapshot::{
+    nervous_self_status_tool, nervous_self_status_tool_with_bus,
+};
 /// Module providing filesystem capabilities (`tool.filesystem`).
 pub struct FilesystemModule {
     tool: Arc<FilesystemTool>,
@@ -446,7 +449,16 @@ pub struct SelfStatusModule {
 impl SelfStatusModule {
     /// Create the self-status module bound to a self-report source.
     pub fn new(source: Arc<dyn SelfStatusSource>) -> Self {
-        let inner: Arc<dyn ToolCapability> = Arc::new(SelfStatusTool::new(source));
+        Self::with_tool(nervous_self_status_tool(source))
+    }
+
+    /// Create the self-status module with the nervous bus observation face
+    /// (R1b-4a: `capabilities.nervous_system.bus`, schema v2 additive).
+    pub fn new_with_bus(source: Arc<dyn SelfStatusSource>, bus: NervousBus) -> Self {
+        Self::with_tool(nervous_self_status_tool_with_bus(source, bus))
+    }
+
+    fn with_tool(inner: Arc<dyn ToolCapability>) -> Self {
         let pipeline = Arc::new(
             ToolExecutionPipeline::new()
                 .with_around(

@@ -17,7 +17,7 @@
 //! contradicted the others.
 //!
 //! This crate replaces that with two registries and a rule: [`PluginRegistry`]
-//! owns plugins, [`CapabilityRegistry`] owns the id-to-owner index, and nothing
+//! owns plugins, [`CapabilityIndex`] owns the id-to-owner index, and nothing
 //! else stores a second copy of either fact. The index is an index, not a copy —
 //! a capability's declaration continues to live only in its owner's manifest.
 //! Typed views over the registries are encouraged, and [`PluginManager`] provides
@@ -39,7 +39,7 @@
 //! ```text
 //!   PluginManifest  declares  ->  CapabilityDescriptor (id + kind)
 //!         |                              |
-//!    PluginRegistry                CapabilityRegistry (id -> owner)
+//!    PluginRegistry                CapabilityIndex (id -> owner)
 //!         \                              /
 //!          `------  PluginManager  ------'
 //!                  lifecycle + typed views
@@ -56,11 +56,13 @@ pub mod capability;
 pub mod credentials;
 pub mod error;
 pub mod experience;
+pub mod extension;
 pub mod llm_factory;
 // O-6 归位 (2026-09-08): plugin LlmFactory → orchestration 镜像 trait 桥.
 // 桥归 plugin (依赖 orchestration 且拥有 plugin 侧 trait), 单一事实源,
 // CLI/gateway/测试共用 (拒绝 composition root 各写一份的复制漂移).
 pub mod llm_orchestration_mirror;
+pub use extension::{ExtensionCatalog, ExtensionDescriptor, ExtensionKind};
 pub use llm_orchestration_mirror::MirrorLlmFactory;
 pub mod manager;
 pub mod manifest;
@@ -110,5 +112,5 @@ pub use perception_backend::{
 };
 pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError, ProviderHotConfig};
-pub use registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};
+pub use registry::{CapabilityRecord, PluginRegistry};
 pub use tool::{FrozenInvocation, ToolCapability};

@@ -9,15 +9,15 @@
 
 **它记得你随口说的话、在你忙时闭嘴、有自己不肯丢的底线。**
 
-[![Tests](https://img.shields.io/badge/tests-8509%20passed%20%7C%200%20failed%20(2026--10--18)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
-[![Workspace](https://img.shields.io/badge/workspace-31%20members-blue.svg?logo=rust)](Cargo.toml)
+[![Tests](https://img.shields.io/badge/tests-8570%20passed%20%7C%200%20failed%20(2026--10--21)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
+[![Workspace](https://img.shields.io/badge/workspace-30%20members-blue.svg?logo=rust)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%2B%20Linux-lightgrey.svg)](INSTALL.md)
 [![Status](https://img.shields.io/badge/status-rc%20%E5%86%85%E6%B5%8B-orange.svg)](ROADMAP.md)
 [![Unsafe code](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 [![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
 
-> 口径注记：**workspace = 31 members（30 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）。
+> 口径注记：**workspace = 30 members（29 个产品 crate + 1 个 bench harness，含图像核心 vendored 族 11）**（foundation 6 / engine 7 / capabilities 1 / adapters 4 = cli/gateway/sdk/tui）；`apeireth-perception` 已归档（2026-10-20，ADR-0005 R4b）。
 > Tests 徽章数字取单一真源 [test-baseline.md](docs/03-reference/test-baseline.md) §1（2026-10-18 口径）；证据面见 [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md)。
 > `honest gaps` 徽章 = 静态快照——手维护、不做动态计数（残余增删时手工改数）。数字取[诚实边界](#boundaries)「已定义、未接线」点名的接线残余：`/v1/ws` 服务端路由未接 · 无 Noise 握手 · 无洋葱路由 · SDK WS 传输层是桩 = 4 处。
 
@@ -189,7 +189,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ## 五、掀开引擎盖
 
-"被记得"听起来是件柔软的事，做成它需要非常硬的工程。31 成员工作区（30 个产品 crate + 1 个 bench harness）的认知微内核，纯 Safe Rust、零 unsafe——不是为了炫技，是因为**要被托付一生的东西，不能有未定义行为**。
+"被记得"听起来是件柔软的事，做成它需要非常硬的工程。30 成员工作区（29 个产品 crate + 1 个 bench harness）的认知微内核，纯 Safe Rust、零 unsafe——不是为了炫技，是因为**要被托付一生的东西，不能有未定义行为**。
 
 ### 星群
 

@@ -7,7 +7,7 @@
 //!
 //! **O-6 三阶审查**:
 //! 1. 总体: 为陪伴型智能与长期共生提供伙伴身份与羁绊状态核心载体
-//! 2. 系统: 放置在 `apeireth-memory`, 与 `Milestone` 和 `SessionStore` 协同
+//! 2. 系统: 放置在 `apeireth-memory`, 与 `Milestone` 和 `SessionNoteStore` 协同
 //! 3. 架构: 强类型数据模型与 `PartnerStore` Trait 契约，支持内存与持久化存储
 
 use std::collections::{BTreeMap, HashMap};

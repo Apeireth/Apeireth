@@ -9,17 +9,17 @@
 
 **It remembers what you say in passing, stays quiet when you are busy, and never gives up the lines it refuses to cross.**
 
-[![Tests](https://img.shields.io/badge/tests-8509%20passed%20%7C%200%20failed%20(2026--10--18)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
-[![Workspace](https://img.shields.io/badge/workspace-31%20members-blue.svg?logo=rust)](Cargo.toml)
+[![Tests](https://img.shields.io/badge/tests-8570%20passed%20%7C%200%20failed%20(2026--10--21)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
+[![Workspace](https://img.shields.io/badge/workspace-30%20members-blue.svg?logo=rust)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%2B%20Linux-lightgrey.svg)](INSTALL.md)
 [![Status](https://img.shields.io/badge/status-rc%20internal%20test-orange.svg)](ROADMAP.md)
 [![Unsafe code](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
 [![License](https://img.shields.io/badge/license-Apache--2.0--OR--MIT-blue.svg)](LICENSE)
 [![Honest gaps](https://img.shields.io/badge/honest%20gaps-4-orange.svg?logo=shield)](#boundaries)
 
-> Taxonomy note: **workspace = 31 members (30 product crates + 1 bench-only harness `benches`)**
+> Taxonomy note: **workspace = 30 members (29 product crates + 1 bench-only harness `benches`)** — `apeireth-perception` and the SDK four-island modules are archived under `legacy/archived/` (2026-10-20, ADR-0005 R4b); historical 31-member figure kept in CHANGELOG
 > (foundation 6 / engine 8 / capabilities 1 / adapters 4 = cli, gateway, sdk, tui).
-> Tests badge = the single source of truth [test-baseline.md](docs/03-reference/test-baseline.md) §1 (2026-10-18); the evidence side lives in [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md).
+> Tests badge = the single source of truth [test-baseline.md](docs/03-reference/test-baseline.md) §1 (2026-10-21); the evidence side lives in [capabilities-matrix §0.1](docs/03-reference/capabilities-matrix.md).
 > `honest gaps` badge = a static snapshot — hand-maintained, never auto-counted (change the number by hand when the residuals change). It counts the wiring residuals named under [Honest boundaries](#boundaries) "Defined, not wired": no `/v1/ws` server route · no Noise handshake · no onion routing · SDK WS transport stub = 4.
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**

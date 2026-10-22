@@ -51,25 +51,35 @@ pub use apeireth_plugin::organ::{
     OrganOutput, OrganTrait, ValueVerdict,
 };
 
+pub mod attachment;
 pub mod care;
 pub mod causal_world_model;
 pub mod causal_world_model_edges;
+pub mod circadian;
 pub mod context_assembly;
 pub mod curiosity;
 pub mod emergence;
 pub mod emotion_memory;
 pub mod experience_growth;
 pub mod goal;
+pub mod homeostasis;
 pub mod hypothesis;
 pub mod memory;
 pub mod morphology;
 pub mod motivation;
+pub mod neuromodulation;
+pub mod play;
 pub mod prompt_assembly;
+pub mod ritual;
+pub mod social_repair;
 pub mod tone;
 pub mod value_cases;
 pub mod world_model;
 
-pub use context_assembly::{assemble_tiered, ContextAssembler, ContextBlock};
+pub use context_assembly::{
+    assemble_tiered, AssemblyPolicyHook, ContextAssembler, ContextAssemblerPolicyExt, ContextBlock,
+    OrganAssemblyPolicy,
+};
 pub use experience_growth::{
     build_promotion_hint, list_latest, mark_proposed, ready_for_capability, verify_experience,
     PracticeExperience, EMA_ALPHA, PROMOTE_MIN_SCORE, PROMOTE_MIN_VERIFIES,

@@ -1,0 +1,58 @@
+# ============================================================================
+# 架构例外登记簿 (Exception Register)
+# ============================================================================
+# 用途: 为"必须暂时违反契约、但已登记且有到期日"的改动留痕。
+# 规则 (推荐值, 待 owner 裁决; 契约 [exceptions] 段为准):
+#   - 结构/方向类 (weight>=10) 不允许走例外, 只能走 ADR 改契约;
+#   - 每波新增例外权重合计 <= per_wave_weight_budget (默认 3);
+#   - 全仓同时活跃例外 <= active_exceptions_max (默认 2);
+#   - 例外最多存活 expiry_waves 波 (默认 2), 到期未清 -> 守卫 strict 直接红;
+#   - 净零: 依赖边/重复概念类"加 1 必须同批删 >=1";
+#   - 发版冻结窗口 (release_freeze) 预算 0。
+# 每条必填: id / fingerprint / weight / owner / reason / created_wave / expires_wave / removal_task。
+# 守卫读取: scripts/arch_guard.py (tomllib), 缺字段/到期/超预算 -> 违规。
+# ============================================================================
+
+version = 1
+updated_at = "2026-10-20"
+
+# 示例 (取消注释并填实后生效):
+# [[exceptions]]
+# id = "EXC-0001"
+# fingerprint = "edge apeireth-cli -> apeireth-orchestration"
+# weight = 3
+# owner = "cli-line"
+# reason = "临时: 装配迁移期需要直接读取 orchestrator 类型"
+# created_wave = 1
+# expires_wave = 3
+# removal_task = "00-backlog#D27 / ADR-0003 §迁移步骤 4"
+# adr = ""                      # weight>=10 时必填 docs/adr/000X-*.md 路径
+
+# --- 生效例外 ---
+[[exceptions]]
+id = "EXC-0002"
+fingerprint = "size-grow crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+weight = 1
+owner = "architecture-line"
+reason = "R7-2.1 引入 ContextAssemblerPolicyExt 导入（+2 行）+ R1b-1b 把 BioAssemblySwitches/BioAssemblyModule 的 from_env 换成显式 from_flags（+4 行）；两批均已交付，短期压缩只能靠删注释/空行（装样），故按 size 类（weight=1）登记债务，到期前用真实拆分清偿"
+created_wave = 4
+expires_wave = 6
+removal_task = "wave4-close: 评估把 BioAssemblySwitches/BioAssemblyModule 构造迁到独立子模块（cognitive.rs 只保留 impl 挂载）；未清偿则到期 wave 6 strict 红"
+adr = ""                       # weight>=10 时必填 docs/adr/000X-*.md 路径
+
+[[exceptions]]
+id = "EXC-0003"
+fingerprint = "size-grow crates/engine/runtime-assembly/src/canonical/tool_modules.rs"
+weight = 1
+owner = "architecture-line"
+reason = "R1b-4a 给 SelfStatusModule 增加 new_with_bus 构造（自述帧 capabilities.nervous_system.bus schema v2 additive）并把原构造体抽成私有 with_tool：+12 行均为真实接线与既有逻辑搬迁，非注释/空行；短期压缩只能拆构造或删文档（装样）。择机把总线观测面构造移出 tool_modules（回到模块表装配）后清偿"
+created_wave = 4
+expires_wave = 6
+removal_task = "wave4-close 复盘：评估把 SelfStatusModule 的总线观测面绑定迁到装配根（production.rs 侧 wrap）或独立构造函数模块；未清偿则到期 wave 6 strict 红"
+adr = ""                       # weight>=10 时必填 docs/adr/000X-*.md 路径
+
+# --- 已退休例外（保留索引，不参与预算）---
+# EXC-0001: env APEIRETH_ENABLE_BIO_LIFECYCLE 未登记（W3, weight=3, owner=bio-line, created_wave=2）。
+#   退休原因（2026-10-20 效率线 R3a 同步）: 该开关已进 env-registry.toml（owner=TODO-OWNER,
+#   level=UNCLASSIFIED, 登记先行），W3 违规消失 → 例外按 ADR-0001「到期/解决即删」退休；
+#   零变化测试仍由生物线收口批提供，若登记表条目被删则 W3 回归、再开新例外。

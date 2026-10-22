@@ -1,0 +1,405 @@
+# 文档状态声明唯一真源（Docs Truth System · P0 试点）
+#
+# 规则：
+# - 每条 claim = 一个"可核验的状态声明"；id 全局唯一、永不复用。
+# - level 取四级口径：IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED；
+#   缺口用 NOT IMPLEMENTED。
+# - sources 是证据文件；`scripts/docs_truth.py --verify` 会核对存在性，并用
+#   `git diff <verified_at> -- <sources>` 计算 STALE（源码动过而 verified_at 未更新 = 过期）。
+# - switch_env 非空时 verify 会核对 env 常量在 crates/ 中存在。
+# - verified_at 必须是 commit hash；**改完对应源码后必须更新它并跑 verify**。
+# - 生成物 docs/status/STATUS.md 由 `--gen` 产出，禁止手改。
+#
+# 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
+version: 1
+updated_at: "2026-10-22"
+
+claims:
+  - id: rt.provider_router
+    title: "跨 provider fallback + 健康态（运行时路由）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/engine/runtime/src/canonical/provider.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
+    tests:
+      - crates/engine/runtime/tests/canonical_multi_provider.rs
+    verified_at: d2621788
+    verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。"
+
+  - id: core.cost_router
+    title: "成本分级路由（H-P2，四档选模）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_COST_ROUTING
+    sources:
+      - crates/foundation/core/src/cost_router.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/foundation/core/src/cost_router.rs
+    verified_at: 73b70178
+    verify_cmd: "cargo test -p apeireth-core cost_router"
+    owner: core
+    next_review: "2026-11-20"
+    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: tool.task_board
+    title: "任务簿（V6-a 持久任务队列工具面）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_TASK_BOARD
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/task_board_tool.rs
+      - crates/foundation/orchestration/src/task_queue.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/task_board_tool.rs
+      - crates/adapters/cli/tests/task_board_knob.rs
+    verified_at: 73b70178
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
+    owner: runtime-assembly
+    next_review: "2026-11-20"
+    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: tool.mcp_bridge
+    title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_MCP
+    sources:
+      - crates/capabilities/tools/src/mcp_bridge/bridge.rs
+      - crates/capabilities/tools/src/mcp_bridge/catalog.rs
+      - crates/capabilities/tools/src/mcp_bridge/config.rs
+      - crates/capabilities/tools/src/mcp_bridge/governance.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+    tests:
+      - crates/capabilities/tools/src/mcp_bridge/config.rs
+      - crates/capabilities/tools/src/mcp_bridge/catalog.rs
+    verified_at: 73b70178
+    verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: tool.voice_speak
+    title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_VOICE_SPEAK
+    sources:
+      - crates/capabilities/tools/src/voice/speak.rs
+      - crates/capabilities/tools/src/voice/playback.rs
+      - crates/capabilities/tools/src/voice/ledger.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/capabilities/tools/tests/voice_speak.rs
+    verified_at: 73b70178
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: gap.memory_update
+    title: "记忆更新/更正（既有事实编辑）——缺口"
+    level: NOT IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/adapters/gateway/src/panels.rs
+    tests:
+      - crates/adapters/gateway/tests/panel_routes.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
+    owner: gateway
+    next_review: "2026-11-20"
+    notes: "capability universe: memory.update supported=false / reason=not_implemented；底层 bitemporal upsert/invalidate 已存在，缺治理面。"
+
+  - id: gap.prompt_stabilizer_unwired
+    title: "PromptCacheStabilizer 已归档（R7-4a，可逆保留）——生产中不存在该能力"
+    level: NOT IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
+    tests:
+      - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
+    verified_at: d2621788
+    verify_cmd: "Test-Path legacy/archived/prompt-stabilizer/prompt_stabilizer.rs; git grep -n PromptCacheStabilizer -- crates"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "2026-10-21 复核：R7-4a（51bb6cfa，ADR-0007 Accepted）将 prompt-cache 孤岛归档至 legacy/archived/prompt-stabilizer（含 MANIFEST，可逆）；workspace crates 仅剩注释引用、无生产消费点，故由 IMPLEMENTED 改为 NOT IMPLEMENTED。"
+
+  - id: sec.linux_containment
+    title: "Linux 进程遏制边界（partial，如实）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/capabilities/tools/src/process/linux.rs
+      - crates/capabilities/tools/src/process/platform.rs
+    tests:
+      - crates/capabilities/tools/tests/process_executor.rs
+    verified_at: bdd64957
+    verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。"
+
+  - id: sec.gateway_tls
+    title: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_TLS_CERT
+    sources:
+      - crates/adapters/gateway/src/remote_access.rs
+      - crates/adapters/gateway/src/canonical_entry.rs
+      - crates/adapters/gateway/src/lib.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/adapters/gateway/tests/tls_serve.rs
+    verified_at: 73b70178
+    verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
+    owner: gateway
+    next_review: "2026-11-20"
+    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: sec.storage_envelope_crypto
+    title: "会话/记忆静态信封加密 + 备份恢复（B6 库级）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/engine/storage/src/crypto
+      - crates/engine/storage/tests/crypto_invariants.rs
+      - crates/engine/storage/tests/sealed_backup_restore.rs
+    tests:
+      - crates/engine/storage/tests/crypto_invariants.rs
+      - crates/engine/storage/tests/sealed_backup_restore.rs
+    verified_at: 73b70178
+    verify_cmd: "cargo test -p apeireth-storage --test crypto_invariants"
+    owner: storage
+    next_review: "2026-11-20"
+    notes: "分区 DEK + AES-256-GCM 信封 + KEK 三槽包裹 + 备份恢复不变量测试；会话/记忆读写路径生产接线未在本批（cli/runtime 未见消费）——0 装口径：IMPLEMENTED，不称 PRODUCTION WIRED。；2026-10-22 批次复核：crypto_invariants 7 + sealed_backup_restore 10 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: gov.chain_skeleton
+    title: "R8-A 治理链六段顺序执行骨架——库内可跑，生产零调用"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/foundation/governance/src/chain.rs
+      - crates/foundation/governance/src/lib.rs
+    tests:
+      - crates/foundation/governance/src/chain.rs
+    verified_at: 7153f5db
+    verify_cmd: "cargo test -p apeireth-governance --lib"
+    owner: governance
+    next_review: "2026-11-20"
+    notes: "R8-A fd74a669：六段顺序执行 + 四注入端口（占位签名 fail-closed）；git grep 生产侧零调用；R8-B2/B3 未落地，治理面仍未进生产调用链。"
+
+  - id: gov.chain_hook_adapter
+    title: "R8-B1 ChainGovernanceHook 适配器——零生产接线"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/foundation/governance/src/chain.rs
+    tests:
+      - crates/foundation/governance/src/chain.rs
+    verified_at: 7153f5db
+    verify_cmd: "cargo test -p apeireth-governance --lib"
+    owner: governance
+    next_review: "2026-11-20"
+    notes: "R8-B1 b6d902ce：把 chain 接入 GovernanceHook 面；未接到任何生产装配根（git grep 生产引用为空）；如实 IMPLEMENTED，不冒称 PRODUCTION WIRED。"
+
+  - id: gov.reflection_queue
+    title: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/foundation/governance/src/chain.rs
+    tests:
+      - crates/foundation/governance/src/chain.rs
+    verified_at: 7153f5db
+    verify_cmd: "cargo test -p apeireth-governance --lib"
+    owner: governance
+    next_review: "2026-11-20"
+    notes: "R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面，默认未装配到任何生产链 → 零行为变化。"
+
+  - id: gov.chain_drill_ci
+    title: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，尚未首跑）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - .github/workflows/rust.yml
+    tests:
+      - crates/foundation/governance/tests/governance_chain_drill.rs
+    verified_at: 7153f5db
+    verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
+    owner: governance
+    next_review: "2026-11-20"
+    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤（allow/deny/require-approval 三路径）；本地等价命令 3 passed；远端 CI 尚未首跑（0 次），故仅登记 IMPLEMENTED 证据面。"
+
+  - id: sec.governance_chain_drill
+    title: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/foundation/governance/tests/governance_chain_drill.rs
+      - docs/04-internal/governance-chain-drill-2026-10-20.md
+    tests:
+      - crates/foundation/governance/tests/governance_chain_drill.rs
+    verified_at: 68fa5643b7de94eeb174ffbd1876ff0f6181d5bd
+    verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
+    owner: governance
+    next_review: "2026-11-20"
+    notes: "通过/拒绝/超时三路径演练证据；验证面资产，不是新能力。M-of-N ≠ 密码学多签（口径见演练记录）。"
+
+  - id: rel.release_asset_verify
+    title: "发布资产校验脚本（SHA-256 + 签名状态如实报，B8）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - scripts/verify-release-assets.ps1
+      - docs/packaging/release-asset-verification.md
+      - docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md
+    tests: []
+    verified_at: 73b70178
+    verify_cmd: "pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>"
+    owner: release
+    next_review: "2026-11-20"
+    notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 smoke）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: sec.sql_readonly_gate
+    title: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs
+      - frontend/companion-desktop/src-tauri/src/pg_client.rs
+      - frontend/companion-desktop/src-tauri/src/mysql_client.rs
+    tests: []
+    verified_at: 5f52813d
+    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "WITH 引导 DML/CTE 内嵌 DML/EXPLAIN ANALYZE/SELECT INTO/FOR UPDATE 全拒（fail-closed）；PG BEGIN READ ONLY / MySQL START TRANSACTION READ ONLY 事务包裹；桌面 crate 151 passed（交付记录，无跨平台 live E2E）。"
+
+  - id: sec.provider_proxy_ssrf
+    title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
+    tests: []
+    verified_at: e19e305a
+    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked provider_proxy"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。；2026-10-22 批次复核：桌面 tauri lib 140 passed / 3 ignored（含 provider_proxy 25/25，批内 CI 执行面）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 收尾复核：他线 B2-CFG 改动 provider_proxy.rs 后重跑桌面 tauri lib（140 passed / 3 ignored，含 provider_proxy 25/25）"
+
+  - id: sec.desktop_file_roots
+    title: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src-tauri/src/workspace_list.rs
+    tests: []
+    verified_at: 5f52813d
+    verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked workspace_list"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "junction/`..` 逃逸实测拒绝；残余：TOCTOU 窗口未闭（std 无句柄级原子绑定，已缓解为操作规范）、live E2E 未实测（如实）。"
+
+  - id: sec.terminal_permission_surfaces
+    title: "终端权限边界明示 + 三层权限面文档（B4）"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - frontend/companion-desktop/src/lib/starport/apps/terminal-app.ts
+      - docs/02-guides/permission-surfaces.md
+    tests:
+      - frontend/companion-desktop/tests/starport-face-apps.mjs
+    verified_at: 5f52813d
+    verify_cmd: "cd frontend/companion-desktop && pnpm test"
+    owner: companion-desktop
+    next_review: "2026-11-20"
+    notes: "4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。"
+
+  - id: bio.tone
+    title: "神经调质→语气（W3.4 生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_TONE
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/bio_tone.rs
+      - crates/engine/organ/src/tone.rs
+    tests:
+      - crates/engine/runtime-assembly/src/canonical/bio_tone.rs
+    verified_at: d2621788
+    verify_cmd: "cargo test -p apeireth-runtime-assembly bio_tone"
+    owner: runtime-assembly
+    next_review: "2026-11-20"
+    notes: "TurnStart 尾部独立 overlay；真实反馈事件源未接（半程，如实）；env 只认 \"1\"，默认关。"
+
+  - id: bio.circadian
+    title: "节律门→心跳主动消息闸（W3.4 生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CIRCADIAN
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/bio_circadian.rs
+      - crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs
+      - crates/adapters/cli/src/care_heartbeat.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_circadian_production.rs
+    verified_at: d2621788
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_circadian_production"
+    owner: cli
+    next_review: "2026-11-20"
+    notes: "心跳最前 decide()；显式 UTC 缺省 tz offset；睡眠压力生产源未接（门内压力恒 0，如实）。"
+
+  - id: bio.nociception_pain
+    title: "痛觉→失败链（W3.4 接失败链，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_PAIN
+    sources:
+      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/foundation/orchestration/src/nociception.rs
+      - crates/adapters/cli/src/lib.rs
+    tests:
+      - crates/engine/runtime/tests/bio_pain_wiring.rs
+    verified_at: 73b70178
+    verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+
+  - id: bio.recovery_protocol
+    title: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_PAIN
+    sources:
+      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/foundation/orchestration/src/recovery_protocol.rs
+    tests:
+      - crates/engine/runtime/tests/bio_pain_wiring.rs
+    verified_at: 83933edd
+    verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "RecoveryCase 状态机已接失败链；ScarLedger::learn 未接（如实）。"

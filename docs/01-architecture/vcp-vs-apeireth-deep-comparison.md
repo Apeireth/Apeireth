@@ -8,6 +8,8 @@
 > **审计日期**: 2026-08-29  
 > **分析维度**: 架构底座、安全沙箱、记忆动力学、自驱生命体验、生态与前端交互
 
+> **外部对比核验批注（2026-10-20，第三线）**：本文为 2026-08-29 内部对比存档，**非事实真源**。已核出两处与现行代码不符：①「Linux cgroups 资源限额」——现行 Linux 后端只做进程组 + rlimits + PDEATHSIG + NO_NEW_PRIVS，**不承诺** cgroup/seccomp/namespace（`crates/capabilities/tools/src/process/linux.rs`）；②「8 帧全双工 WebSocket」——服务端路由未接（README honest gaps「no /v1/ws server route」）。另文中「100% 纯 Safe Rust」「代际碾压」等属当时自评口径：unsafe 收在 FFI/OS 边界（SDK FFI + process 四后端共 8 文件），Linux 遏制为 partial。对外引用请以现行 README / `capabilities-matrix` / `claims-evidence-matrix` 为准；第三方对比文核验卷宗见 `artifacts/vcp-vs-apeireth-source-verification-2026-10-20.md`。
+
 ---
 
 ## 一、 总览：两大前沿 AGI OS 路线图对比
@@ -52,7 +54,7 @@
   * **OWASP ASI-01 工具投毒审计**：字符级物理剥离零宽/Bidi/控制符，拦截中英文越权指令，更新差分防静默投毒；
   * **外部不可信内容边界包裹与逃逸中和**：`<<<[UNTRUSTED_CONTENT]>>>` 信封封装，强制替换 `<<<[`，彻底粉碎边界逃逸；
   * **Pre-Call 路径/命令拦截 + Post-Call 凭据绊线**：硬性拦截 `/etc/shadow`、`rm -rf`，出站自动扫描并擦除 API Key 与私钥；
-  * **内核级进程硬隔离**：Windows 真实 Job Object 绑定（连带终止子进程树）与 Linux cgroups 资源限额。
+  * **进程边界（2026-10-20 复核修正）**：Windows = Job Object + AppContainer（连带终止子进程树，enforced）；Linux/macOS = 进程组 + rlimits（**partial**，不承诺 cgroup/seccomp/namespace）。
 
 ### 3. 密码学事实链与事务级代码演化
 * **对比工程现状**：
@@ -65,7 +67,7 @@
 ### 4. 现代大模型基础设施与成本优化
 * **Apeireth 2.0 优势**：
   * **Prompt Cache 字节稳定器（同类工程做法）**：System Prompt + Persona + 历史消息前缀字节严格锁定，动态环境单点注入最新 User 消息，将主流大模型（Anthropic/OpenAI/DeepSeek）Prompt Cache 命中率拉升至 **80%+**，推理成本降低 60%~80%；
-  * **8 帧全双工 WebSocket 协议与标点分句推流**：`SentenceDivider` 实时分词切片，首包音频延迟（TTFAB）压至 **< 300ms**。
+  * **8 帧 WebSocket 协议与标点分句推流**（2026-10-20 复核修正）：协议类型与 `SentenceDivider` 为库级；**HTTP 服务端路由未接**（README honest gaps「no /v1/ws server route」），TTFAB <300ms 为设计目标非实测。
 
 ---
 

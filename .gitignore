@@ -86,6 +86,10 @@ reports/.tmp-cosign-keygen/
 # 台账 #28 加固 (A4 SEC2): 密钥/证书/密钥库类文件通配忽略
 # (此前仅针对性忽略 **/cosign.key, 实测 secret.pem 不被忽略)
 *.pem
+# B5 TLS 测试夹具例外 (2026-10-20): 自签测试链, 仅测试用途, 零真实信任价值,
+# 生成口径见 crates/adapters/gateway/tests/fixtures/tls/README.md。不加例外 =
+# *.pem 通配吞掉夹具, clone 后重跑测试即断。secret-scan 按夹具放行。
+!crates/adapters/gateway/tests/fixtures/tls/*.pem
 *.key
 *.p12
 *.pfx
@@ -204,6 +208,18 @@ crates/apeireth-integration-e2e/.*.log
 .r[0-9][0-9][0-9]-*-*
 *.py
 !scripts/guard_ml/*.py
+# DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
+!scripts/docs_truth.py
+# 变更影响面验证（fast feedback gate）：仓库常驻工具（2026-10-20 第三线）
+!scripts/verify_changed.py
+# 架构守卫（architecture contract / arch_guard）：仓库常驻工具（2026-10-20 架构契约草案批）
+!scripts/arch_guard.py
+# 架构文档生成器（R0 / arch_doc）：仓库常驻工具（2026-10-20 架构线）
+!scripts/arch_doc.py
+# R3a env 登记表 + wiring ledger 生成/校验器（ADR-0004；2026-10-20 第三线）
+!scripts/wiring_report.py
+# 四层验收台账只读校验器（ADR-0011 D4；2026-10-21 架构线 R6-C 载体批）
+!scripts/verify_ledger.py
 
 # TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
 # 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),
@@ -312,3 +328,7 @@ research/praisonai-git/
 
 # 装配校验脚本的瞬态日志目录（scripts/check-assembly-matrix.ps1 输出），不入库
 /logs/
+
+# Python 缓存（scripts/ 运行副产物，不入库；2026-10-20 效率线）
+__pycache__/
+*.pyc

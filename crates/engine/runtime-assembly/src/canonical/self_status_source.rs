@@ -8,6 +8,22 @@
 //! 预算一节读回合轮数/单轮工具上限: 组装根把**生效中的**可配置预算旋钮
 //! 取值注入时按 `configured` 口径报告 (与运行时装配同一条解析路径); 未注入
 //! 的组合回退编译期常量并注明 `constant` 口径 (见 [`BudgetStatus::source`])。
+//!
+//! W3.2 生物机制族只读聚合: [`BioMechanismRegistry`] 把 14 条机制 (SG-13…
+//! SG-26) 的只读探测口收成 `capabilities.bio_mechanisms` 子对象 (不新增顶层
+//! 节)。开关 `APEIRETH_ENABLE_BIO_SELF_STATUS` 只认 `"1"`, 默认关; 关时整节
+//! `mechanisms: null` + 原因「未启用」, 一格也不采。默认不注册任何 probe =
+//! 全部 `wired: false` + 原因「未接线」, 绝不编数值。本批 (W3.5) 提供 6 条
+//! **已有运行时数据源**的只读 probe 实现 (免疫记忆 SG-15 / 审议门 SG-24 /
+//! 关怀心跳 SG-19 / 练习账 SG-21 / 痛觉 SG-16 / 再生 SG-17) + 承载力 SG-26
+//! ([`capacity_bio_probe`]); **probe 实现 ≠ 装配根已注册**: 生产装配根当前只
+//! 注册承载力一格, 其余 6 格要 Lead 在装配根按可用句柄注册 (默认关, 关时零
+//! 采集)。注册但读失败 = 单格 `null` + 真因, 整帧仍成功。
+//!
+//! ADR-0003 R1a 神经系统只读聚合: [`nervous_snapshot`] 以
+//! `capabilities.nervous_system` 子对象挂载 (与 `bio_mechanisms` 并列, **仍非
+//! 顶层节**); 开关与 `APEIRETH_ENABLE_BIO_SELF_STATUS` 共用, 关时不读 env、
+//! 不构造快照且旧帧逐字节不变。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,6 +32,10 @@ use apeireth_core::cost_router::{CostRouter, CostRoutingStatus};
 use apeireth_core::kernel::SessionId;
 use apeireth_core::model_profile::ModelProfile;
 use apeireth_orchestration::self_tuning::TunableParam;
+use apeireth_tools_canonical::self_status::{
+    BioMechanismKind, BioMechanismProbe, BioMechanismReading, BIO_MECHANISM_NOT_WIRED_REASON,
+    BIO_SELF_STATUS_ENABLE_ENV, BIO_STAGE_WIRED,
+};
 use apeireth_tools_canonical::{
     derive_tuning_preset, BackupStatus, BudgetStatus, CapabilitySwitch, CareStatus,
     ContentFeedStatus, DomainCounts, DomainStatus, ImageOpsStatus, MemoryLedgerStats,
@@ -29,6 +49,14 @@ use super::care_heartbeat::CareHeartbeatStatus;
 use super::production::ProductionModulesConfig;
 use super::session::Session;
 use super::{execute::MAX_TOOL_CALLS_PER_ROUND, runtime::DEFAULT_MAX_ROUNDS};
+
+/// ADR-0003 R1a 神经系统只读聚合（`capabilities.nervous_system` 子对象）。
+///
+/// 位置按 ADR-0003 落 `canonical/nervous_snapshot.rs`；因 `canonical.rs` 本批
+/// 禁改，模块以 `#[path]` 挂在 `self_status_source` 下（公开路径
+/// `canonical::self_status_source::nervous_snapshot`，见模块文档的差异说明）。
+#[path = "nervous_snapshot.rs"]
+pub mod nervous_snapshot;
 
 /// 预算取值口径: 读编译期常量 (可配置口径未接线的回退)。
 pub const BUDGET_SOURCE_CONSTANT: &str = "constant";
@@ -375,6 +403,17 @@ pub fn persona_status_probe(
     })
 }
 
+/// 生物机制族观测实现面（W3.2 注册表 + W3.5 六条 probe）拆在
+/// [`bio_mechanism_probes`] 子模块, 此处重导出保持既有公开路径不变。
+#[path = "bio_mechanism_probes.rs"]
+pub mod bio_mechanism_probes;
+
+pub use bio_mechanism_probes::{
+    capacity_bio_probe, care_heartbeat_probe, immune_quorum_probe, pain_probe, play_probe,
+    quorum_gate_probe, quorum_trace_probe, recovery_probe, BioMechanismRegistry,
+    PainSnapshotReader,
+};
+
 /// 生产自述来源: 装配期收集生效值, 调用期现探测 data 系。
 pub struct ProductionSelfStatusSource {
     identity: SelfStatusIdentity,
@@ -411,6 +450,10 @@ pub struct ProductionSelfStatusSource {
     /// 执行核心同一状态账)。
     device_control:
         Option<StatusProbe<apeireth_tools_canonical::device::device_control::DeviceControlStatus>>,
+    /// 生物机制族只读聚合观测面 (W3.2): `None` = 本组装面未挂该观测面,
+    /// 渲染面省略 `capabilities.bio_mechanisms` 子对象 (旧帧形状不变);
+    /// 挂上后按开关采集已注册 probe 的只读值 (默认关, 关时 `mechanisms: null`)。
+    bio_mechanisms: Option<BioMechanismRegistry>,
 }
 
 impl ProductionSelfStatusSource {
@@ -445,6 +488,7 @@ impl ProductionSelfStatusSource {
             device_presence: None,
             sheet_ops: None,
             device_control: None,
+            bio_mechanisms: None,
         }
     }
 
@@ -620,6 +664,49 @@ impl ProductionSelfStatusSource {
     ) -> Self {
         self.device_control = Some(probe);
         self
+    }
+
+    /// 挂上生物机制族只读观测面 (W3.2 装配入口): 开关 + 时钟 + 空注册表。
+    ///
+    /// 未调用 = 本组装面不观测生物机制, 自述帧省略 `capabilities.bio_mechanisms`
+    /// 子对象 (旧帧形状不变); 调用后子对象恒在场, 关时 `mechanisms: null` +
+    /// 原因「未启用」。
+    #[must_use]
+    pub fn with_bio_mechanisms(mut self, registry: BioMechanismRegistry) -> Self {
+        self.bio_mechanisms = Some(registry);
+        self
+    }
+
+    /// 按进程 env 现值挂上生物机制观测面 (`APEIRETH_ENABLE_BIO_SELF_STATUS`;
+    /// 只认 `"1"`, 默认关 fail-closed)。
+    ///
+    /// 这是装配根的总装入口: 关时整节 `mechanisms: null` + 原因「未启用」,
+    /// 一格也不采; 开时才采集已注册 probe 的值。
+    #[must_use]
+    pub fn with_bio_self_status_from_env(mut self) -> Self {
+        self.bio_mechanisms = Some(BioMechanismRegistry::from_env());
+        self
+    }
+
+    /// 显式开关值挂上生物机制观测面 (装配根/测试注入; 不读进程 env)。
+    #[must_use]
+    pub fn with_bio_self_status(mut self, enabled: bool) -> Self {
+        self.bio_mechanisms = Some(BioMechanismRegistry::new(enabled));
+        self
+    }
+
+    /// 注册一格生物机制只读探测口 (W3.2 装配入口)。
+    ///
+    /// 观测面未挂时按进程 env 现值自动挂上 (默认关: 注册了也不采值, 子对象
+    /// 显式「未启用」); 开关关时不调用任何 probe。注册 ≠ 启用。
+    pub fn register_bio_probe(
+        &mut self,
+        kind: BioMechanismKind,
+        probe: Arc<dyn BioMechanismProbe>,
+    ) {
+        self.bio_mechanisms
+            .get_or_insert_with(BioMechanismRegistry::from_env)
+            .register_bio_probe(kind, probe);
     }
 
     /// 自述身份 (产品名 / workspace 版本 / 运行时角色)。
@@ -955,6 +1042,12 @@ impl ProductionSelfStatusSource {
             // 同源同账), 控制计数/最近动作真值自述化。
             device_control,
             device_control_reason,
+            // W3.2 生物机制族只读聚合: 观测面未挂 = None (省略子对象, 旧帧
+            // 形状不变); 挂上后按开关聚合 (关 = mechanisms null + 原因「未启用」)。
+            bio_mechanisms: self
+                .bio_mechanisms
+                .as_ref()
+                .map(BioMechanismRegistry::snapshot),
         }
     }
 }
@@ -1758,5 +1851,214 @@ mod tests {
             .map(|switch| (switch.name.as_str(), switch.enabled))
             .collect();
         assert_eq!(by_name["retrieval_tuning"], false, "未接线 = 照实 false");
+    }
+
+    /// 开关关 (默认) = 整节 `mechanisms: null` + 原因「未启用」, 一个 probe
+    /// 都不调用 (只认显式 `"1"`, fail-closed)。
+    #[test]
+    fn bio_registry_is_off_by_default_and_never_calls_probes() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CountingProbe(Arc<AtomicUsize>);
+        impl BioMechanismProbe for CountingProbe {
+            fn snapshot(&self, _now_ms: i64) -> Result<BioMechanismReading, String> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Ok(BioMechanismReading::wired(
+                    Some(serde_json::json!(1)),
+                    None,
+                    None,
+                ))
+            }
+        }
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut registry = BioMechanismRegistry::from_env_value(None);
+        assert!(!registry.enabled(), "未设 env = 关");
+        registry.register_bio_probe(
+            BioMechanismKind::Capacity,
+            Arc::new(CountingProbe(Arc::clone(&calls))),
+        );
+        let status = registry.snapshot();
+        assert!(!status.enabled);
+        assert!(status.mechanisms.is_none(), "关时一格也不采");
+        assert!(status
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains(BIO_SELF_STATUS_ENABLE_ENV));
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "关时不许调用 probe");
+
+        // 只认 "1": 其余取值一律关。
+        for raw in [Some("0"), Some("true"), Some("on"), Some("")] {
+            assert!(
+                !BioMechanismRegistry::from_env_value(raw).enabled(),
+                "{raw:?}"
+            );
+        }
+        assert!(BioMechanismRegistry::from_env_value(Some("1")).enabled());
+    }
+
+    /// 开关开但未注册 probe: 14 条机制全部 `wired: false` + 原因「未接线」,
+    /// 值/阈值/动作全 null (不编数值)。
+    #[test]
+    fn bio_registry_enabled_without_probes_reports_fourteen_not_wired() {
+        let registry = BioMechanismRegistry::new(true);
+        let status = registry.snapshot();
+        assert!(status.enabled);
+        let rows = status.mechanisms.as_ref().expect("14 格必须在场");
+        assert_eq!(rows.len(), BioMechanismKind::ALL.len());
+        for kind in BioMechanismKind::ALL {
+            let row = rows.get(&kind).expect("逐格在场");
+            assert!(!row.wired, "{kind:?}");
+            assert_eq!(
+                row.stage,
+                apeireth_tools_canonical::self_status::BIO_STAGE_NOT_WIRED
+            );
+            assert!(row.value.is_none());
+            assert!(row.threshold.is_none());
+            assert!(row.last_action.is_none());
+            assert_eq!(row.reason.as_deref(), Some(BIO_MECHANISM_NOT_WIRED_REASON));
+        }
+    }
+
+    /// 开关开: 注册的 probe 按词表序采集 (时钟注入 → 确定性); 单格失败 =
+    /// 该格 null + 真因, 其余格不受牵连。
+    #[test]
+    fn bio_registry_collects_probe_truth_and_failures_without_failing_the_frame() {
+        struct FixedProbe;
+        impl BioMechanismProbe for FixedProbe {
+            fn snapshot(&self, now_ms: i64) -> Result<BioMechanismReading, String> {
+                Ok(BioMechanismReading::wired(
+                    Some(serde_json::json!({ "now": now_ms })),
+                    Some(8.0),
+                    Some("一档".to_string()),
+                ))
+            }
+        }
+
+        struct BrokenProbe;
+        impl BioMechanismProbe for BrokenProbe {
+            fn snapshot(&self, _now_ms: i64) -> Result<BioMechanismReading, String> {
+                Err("queue read failed: boom".to_string())
+            }
+        }
+
+        let mut registry =
+            BioMechanismRegistry::new(true).with_now_ms(Arc::new(|| 1_728_000_000_123));
+        registry.register_bio_probe(BioMechanismKind::Capacity, Arc::new(FixedProbe));
+        registry.register_bio_probe(BioMechanismKind::Nociception, Arc::new(BrokenProbe));
+        let status = registry.snapshot();
+
+        let capacity = status
+            .reading(BioMechanismKind::Capacity)
+            .expect("capacity");
+        assert!(capacity.wired);
+        assert_eq!(capacity.stage, BIO_STAGE_WIRED);
+        assert_eq!(
+            capacity.value,
+            Some(serde_json::json!({ "now": 1_728_000_000_123i64 }))
+        );
+        assert_eq!(capacity.threshold, Some(8.0));
+        assert_eq!(capacity.last_action.as_deref(), Some("一档"));
+        assert!(capacity.reason.is_none());
+
+        let broken = status
+            .reading(BioMechanismKind::Nociception)
+            .expect("nociception");
+        assert!(broken.wired, "已注册 = 接线事实成立 (即使读失败)");
+        assert!(broken.value.is_none());
+        assert!(broken
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("queue read failed: boom"));
+
+        // 其余 12 格如实未接线。
+        let rows = status.mechanisms.as_ref().expect("rows");
+        assert_eq!(rows.len(), 14);
+        let unwired = rows.values().filter(|row| !row.wired).count();
+        assert_eq!(unwired, 12);
+    }
+
+    struct FixedCapacityProbe;
+
+    impl BioMechanismProbe for FixedCapacityProbe {
+        fn snapshot(&self, _now_ms: i64) -> Result<BioMechanismReading, String> {
+            Ok(BioMechanismReading::wired(
+                Some(serde_json::json!({ "active_tasks": 1 })),
+                Some(4.0),
+                None,
+            ))
+        }
+    }
+
+    /// 生产来源的面挂载语义: 不调用 = 子对象缺省 (旧帧不变); 挂上 = 恒在场;
+    /// 注册 probe 不自动开启 (默认关)。
+    #[test]
+    fn production_source_bio_face_is_opt_in_and_off_by_default() {
+        let bare = ProductionSelfStatusSource::new(Vec::new(), false, None);
+        assert!(
+            bare.snapshot().bio_mechanisms.is_none(),
+            "未挂观测面 = 子对象缺省"
+        );
+
+        let off =
+            ProductionSelfStatusSource::new(Vec::new(), false, None).with_bio_self_status(false);
+        let status = off.snapshot().bio_mechanisms.expect("face attached");
+        assert!(!status.enabled);
+        assert!(status.mechanisms.is_none());
+
+        let mut on =
+            ProductionSelfStatusSource::new(Vec::new(), false, None).with_bio_self_status(true);
+        on.register_bio_probe(BioMechanismKind::Capacity, Arc::new(FixedCapacityProbe));
+        let status = on.snapshot().bio_mechanisms.expect("face attached");
+        assert!(status.enabled);
+        assert!(status.reading(BioMechanismKind::Capacity).unwrap().wired);
+        assert_eq!(
+            status.mechanisms.as_ref().unwrap().len(),
+            BioMechanismKind::ALL.len()
+        );
+    }
+
+    /// 承载力探测口读运行时同一个任务队列的真值 (assigned + running = 已用
+    /// 承载; pending 照实); 注入的上限进 threshold, 读失败回真因。
+    #[test]
+    fn capacity_bio_probe_reads_the_live_task_queue_counts() {
+        use apeireth_orchestration::task_queue::{
+            EnqueueOutcome, TaskCaller, TaskQueue, TaskQueueConfig, TaskSpec, TaskStore,
+        };
+
+        let store: Arc<dyn TaskStore> =
+            Arc::new(crate::sqlite_task_queue::SqliteTaskStore::in_memory().expect("store"));
+        let queue = Arc::new(TaskQueue::open(store, TaskQueueConfig::default()).expect("queue"));
+        let assigned = match queue
+            .enqueue(TaskSpec::new("在跑的一件", serde_json::json!({})).with_assignee("worker-a"))
+            .expect("enqueue")
+        {
+            EnqueueOutcome::Enqueued { task, .. } => task,
+            other => panic!("unexpected enqueue outcome: {other:?}"),
+        };
+        queue
+            .begin_execution(&assigned.id, &TaskCaller::agent("worker-a"))
+            .expect("begin");
+        queue
+            .enqueue(TaskSpec::new("待派的一件", serde_json::json!({})))
+            .expect("enqueue");
+
+        let probe = capacity_bio_probe(Arc::clone(&queue), Some(8));
+        let reading = probe.snapshot(1_728_000_000_000).expect("live reading");
+        assert!(reading.wired);
+        assert_eq!(reading.threshold, Some(8.0));
+        let value = reading.value.expect("value");
+        assert_eq!(value["active_tasks"], 1);
+        assert_eq!(value["running"], 1);
+        assert_eq!(value["pending"], 1);
+        assert_eq!(value["observed_at_ms"], 1_728_000_000_000i64);
+
+        // 未配置上限 = 阈值显式 null (不编阈值)。
+        let no_limit = capacity_bio_probe(queue, None)
+            .snapshot(1)
+            .expect("live reading");
+        assert!(no_limit.threshold.is_none());
     }
 }
