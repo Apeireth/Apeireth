@@ -19,6 +19,9 @@ pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
+mod self_status_probe;
+
+use self_status_probe::self_status_ledger_probe;
 pub mod onboarding;
 pub mod panel_governance_port;
 pub mod portable_bundle;
@@ -2550,65 +2553,6 @@ fn voice_status_probe(
 /// V4-c 记忆节扩: 进化次数 / 最近调权真值取自检索自进化账
 /// (`retrieval_tuning.jsonl`, 与调权同一本账只读读回); 尚未调权 = 显式
 /// null (不编移动)。
-fn self_status_ledger_probe(
-    cognitive_db: PathBuf,
-    lessons_root: PathBuf,
-    retrieval_tuning_log: PathBuf,
-) -> apeireth_tools_canonical::StatusProbe<apeireth_tools_canonical::MemoryLedgerStats> {
-    use apeireth_memory::reflexion::ReflexionStore as _;
-    Arc::new(move || {
-        let store = apeireth_memory::SqliteMemoryStore::open(&cognitive_db)
-            .map_err(|error| format!("memory store open failed: {error}"))?;
-        let counts = store
-            .ledger_counts()
-            .map_err(|error| format!("memory ledger query failed: {error}"))?;
-        let reflexion = apeireth_memory::reflexion::FileReflexionStore::new(lessons_root.clone());
-        let (lessons, reason) = match reflexion.list_reflections() {
-            Ok(reflections) => (Some(reflections.len() as u64), None),
-            Err(error) => (None, Some(format!("lesson store read failed: {error}"))),
-        };
-        // V4-b 保鲜回路三真值 (缺源显式 null + 原因, 不编数)。
-        let (pending_ingest, last_fold_at_ms, dedup_skipped, freshness_reason) =
-            match store.freshness_status() {
-                Ok(status) => (
-                    Some(status.pending_ingest),
-                    status.last_fold_at_ms,
-                    Some(status.dedup_skipped),
-                    None,
-                ),
-                Err(error) => (
-                    None,
-                    None,
-                    None,
-                    Some(format!("freshness status query failed: {error}")),
-                ),
-            };
-        // V4-c 检索调权两真值 (缺档 = 有账零调权如实 0; 读失败 = 显式 null +
-        // 原因, 不编移动)。
-        let (retrieval_tuning_count, last_retrieval_tuning, tuning_reason) =
-            match apeireth_runtime_assembly::read_retrieval_tuning_log(&retrieval_tuning_log) {
-                Ok(summary) => {
-                    let (count, last) =
-                        apeireth_runtime_assembly::memory_ledger_tuning_fields(&summary);
-                    (count, last, None)
-                }
-                Err(error) => (None, None, Some(error)),
-            };
-        Ok(apeireth_tools_canonical::MemoryLedgerStats {
-            sessions: Some(counts.sessions),
-            memories: Some(counts.memories),
-            protected: Some(counts.protected),
-            lessons,
-            pending_ingest,
-            last_fold_at_ms,
-            dedup_skipped,
-            retrieval_tuning_count,
-            last_retrieval_tuning,
-            reason: reason.or(freshness_reason).or(tuning_reason),
-        })
-    })
-}
-
 /// 自省通道: 凭据存在性探测口 —— **只回布尔, 不回显凭据本体**。
 ///
 /// 判定口径: provider 凭据 env 启动值非空 / 运行时凭据库非空 / 数据目录存在
