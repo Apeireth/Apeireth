@@ -17,7 +17,7 @@
 | 版本钉 | Kani 0.68.0（最后一次全绿 run 2026-09-25 实测版本） |
 | 本机限制 | Windows 无 Kani 支持（只在 ubuntu/macOS 跑；本机只能 `cargo kani setup` 后跑 Linux runner/容器） |
 
-### 1.1 终局矩阵（11 件，2026-10-13 K18 定稿）
+### 1.1 终局矩阵（10 件；2026-10-13 K18 定稿 11 件，2026-10-22 族 4 归档后 11→10）
 
 | # | harness | 被测面 | 性质 |
 |---|---|---|---|
@@ -30,8 +30,7 @@
 | 7 | `kani_governance_default_deny_unrequested_ops` | 同上 | 治理单调性 |
 | 8 | `kani_governance_no_degrade_never_weakens` | 同上 | 治理单调性 |
 | 9 | `kani_governance_fail_closed_no_bypass` | 同上 | 治理单调性 |
-| 10 | `kani_quota_ledger_monotone_non_negative` | `crates/foundation/orchestration/src/cognitive_quota_scheduler.rs` 相关配额账本 | 配额可证子集 |
-| 11 | `kani_sandbox_validate_rejects_traversal_and_nul` | `crates/capabilities/tools/src/sensitive_path.rs` | 路径沙箱子集 |
+| 10 | `kani_sandbox_validate_rejects_traversal_and_nul` | `crates/capabilities/tools/src/sensitive_path.rs` | 路径沙箱子集 |
 
 - **有界口径**：Phase 5 三 harness 位于 canonical 源内、带 `#[kani::unwind(32)]`
   （仅 `cfg(kani)` 生效）：String 字节缓冲按符号长度建模，Kani 把 `HashMap` SipHash
@@ -43,14 +42,17 @@
   退出分组为 fold×3 / 数值×4 / memory×3 / quota×2 / saga×2 / sandbox×4 / cache_key。
   退出理由 = 带全部刀法（分支定长/值域表/零 `format!`/静态切片）仍 900s+ 超时，
   按协议退出；panic-freedom 由单测覆盖，属**未覆盖**而非已证明。
-  **实测校准（2026-10-21）**：mirror crate `src/` 现有 28 个 `#[kani::proof]`
-  （governance 4 / panic-freedom 11 / saga 2 / sandbox 5 / memory 3 / quota 3），
-  canonical 文件内另有 3 个（README 记录）；其中只有矩阵里的 11 件进 CI。
+  **实测校准（2026-10-22）**：mirror crate `src/` 现有 25 个 `#[kani::proof]`
+  （governance 4 / panic-freedom 11 / saga 2 / sandbox 5 / memory 3；原 quota 3 件随
+  ADR-0007 归档于 2026-10-22 移除），
+  canonical 文件内另有 3 个（README 记录）；其中只有矩阵里的 10 件进 CI。
   workflow 注释的退出分组与当前源码分组**不逐一对应**（历史口径未同步）——
   本表按「未入矩阵 = 未覆盖、不阻塞」登记，不逐件断言是否可证。
 - **旧口径订正**：`.github/workflows/kani.yml` 头部与汇总门旧注释写「22 件」
   （2026-10-10 并行化改造时口径），与 2026-10-13 K18 终局矩阵 11 件不符；
-  2026-10-21 已把 workflow 注释与汇总门文案改为 11 件并注明历史口径。
+  2026-10-21 已把 workflow 注释与汇总门文案改为 11 件并注明历史口径；
+  **2026-10-22 再订正为 10 件**（族 4 配额调度随 ADR-0007/R7-4b-2 `d5a4c537` 归档，mirror 与
+  harness 同步移除；本表与 kani.yml 已一致）。
   `research/verification/kani/README.md` 的「3 个 `#[kani::proof]` / 3/3」
   是 2026-09-05 Phase 5 单点实证的历史口径，当前矩阵以本表与 `kani.yml` 为准。
 
@@ -60,7 +62,7 @@
 |---|---|---|
 | `research/verification/tla/ApprovalSM.tla` + `.cfg`、`ApprovalSM3.*` | 审批状态机模型（与 Kani 同源命题） | 本机 TLC 验证，历史记录在 `research/verification/tla/README.md`；**不入 CI**（NOT IN CI） |
 | `research/verification/tla/ProtectForget.tla` + `.cfg`、`ProtectForget3.*` | 保护/遗忘状态机 | 同上 |
-| `research/verification/tla/QuotaSchedule.tla` + `.cfg`、`QuotaSchedule3.*` | 配额调度模型 | 同上 |
+| `research/verification/tla/QuotaSchedule.tla` + `.cfg`、`QuotaSchedule3.*` | 配额调度模型（实现 `CognitiveQuotaScheduler` 已按 ADR-0007 归档，模型留档） | 同上 |
 
 - 与 Kani 的关系：互补——TLC 对有限状态模型做穷举探索，Kani 对有界实现做符号执行；
   两者都**不是**「对本仓库全部代码的形式化证明」。

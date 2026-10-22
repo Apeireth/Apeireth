@@ -6,7 +6,6 @@
 //!   - crates/engine/runtime-assembly/src/canonical/causal_world_model.rs
 //!   - crates/foundation/orchestration/src/context_fold/fold_block.rs
 //!   - crates/foundation/orchestration/src/async_context.rs
-//!   - crates/foundation/orchestration/src/cognitive_quota_scheduler.rs
 //!   - crates/engine/memory/src/{residual_pyramid,semantic_axis,river_topology,bitemporal_graph}.rs
 //!   - crates/adapters/gateway/src/file_fetcher.rs
 //!   - crates/capabilities/tools/src/sensitive_path.rs
@@ -19,11 +18,11 @@
 //!
 //! 验证目标 = 两处 `#[cfg(kani)]` 门控 harness:
 //!   1. research_approval_sm.rs 内 `mod kani_proofs` (3 个 #[kani::proof], 既有);
-//!   2. 本 crate `src/harness_*.rs` 六个性质族 harness (assertion 即命题):
+//!   2. 本 crate `src/harness_*.rs` 五个性质族 harness (assertion 即命题；族 4 配额调度随
+//!      ADR-0007 归档 `CognitiveQuotaScheduler` 一并归档):
 //!      - harness_panic_freedom.rs       性质族 1  panic-freedom (零未捕获异常)
 //!      - harness_memory_conservation.rs 性质族 2  记忆守恒 (protect/forget 语义纯模型)
 //!      - harness_governance.rs          性质族 3  治理单调性 (默认拒绝 / fail-closed)
-//!      - harness_quota_scheduler.rs     性质族 4  配额非负与调度安全 (含 PIP)
 //!      - harness_path_sandbox.rs        性质族 5  路径沙箱不逃逸
 //!      - harness_saga_rollback.rs       性质族 6  SAGA/CoW 回滚精确性
 //!   另: file_fetcher.rs 内 `mod kani_base64_proofs` 覆盖模块私有 base64_decode。
@@ -52,9 +51,6 @@ pub mod fold_block;
 
 #[path = "../../../../crates/foundation/orchestration/src/async_context.rs"]
 pub mod async_context;
-
-#[path = "../../../../crates/foundation/orchestration/src/cognitive_quota_scheduler.rs"]
-pub mod cognitive_quota_scheduler;
 
 #[path = "../../../../crates/engine/memory/src/residual_pyramid.rs"]
 pub mod residual_pyramid;
@@ -447,10 +443,6 @@ mod harness_memory_conservation;
 #[cfg(kani)]
 #[path = "harness_governance.rs"]
 mod harness_governance;
-
-#[cfg(kani)]
-#[path = "harness_quota_scheduler.rs"]
-mod harness_quota_scheduler;
 
 #[cfg(kani)]
 #[path = "harness_path_sandbox.rs"]
