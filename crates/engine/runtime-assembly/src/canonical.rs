@@ -143,6 +143,7 @@ pub mod ritual_tools;
 pub mod self_status_source;
 #[path = "canonical/self_tuning_wire.rs"]
 pub mod self_tuning_wire;
+pub mod session_seal;
 /// 任务簿工具面 (`tool.task_board`, V6-a): 增/列/改派/完成 + 治理档钩子
 /// (写面 = write_intent 同族, failed 只能人判无工具面)。
 #[path = "canonical/task_board_tool.rs"]

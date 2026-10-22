@@ -88,6 +88,10 @@ skip = [
     { name = "syn", reason = "1.x/2.x/3.x — proc macro crate 决定" },
     { name = "tower-http", reason = "跟随 tower 版本" },
 
+    # ---- 2026-10-22 重新登记（D5 对账时曾作 unnecessary-skip 删除，今又出现双版本）----
+    { name = "convert_case", reason = "0.6 (napi-derive / Tauri 侧) vs 0.10 (derive_more-impl) — 跨生态各自钉版本, 无收敛路径" },
+    { name = "winnow", reason = "0.7 (toml 0.9) vs 1.0 (toml_edit / toml_parser) — 等 toml 家族自行统一" },
+
     # ---- 待 R19 T10 收敛的 crate (有理由收敛) ----
     { name = "thiserror", reason = "thiserror 1.0 vs 2.0 双版本 — 待 R19 T10 全量升 2.0 或 1.0" },
     { name = "thiserror-impl", reason = "跟随 thiserror 版本" },

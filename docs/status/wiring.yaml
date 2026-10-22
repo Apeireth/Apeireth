@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: a851739ce6e7197e54230848e6c6be38f543b3df319244eca2bc2731e8e838c6
+claims_sha256: 06064709c732ec247dac7ef8512a86b11c0f7230e4f772fa8e9f763cb05e17c9
 claims_total: 24
 items:
   - id: "rt.provider_router"
@@ -176,55 +176,69 @@ items:
     gaps:
       []
   - id: "sec.storage_envelope_crypto"
-    capability: "会话/记忆静态信封加密 + 备份恢复（B6 库级）"
+    capability: "会话/记忆静态信封加密 + 备份恢复（B6 库级 + B6-2a sessions.data 试点）"
     implemented:
       sources:
-        - "crates/engine/storage/src/crypto"
-        - "crates/engine/storage/tests/crypto_invariants.rs"
-        - "crates/engine/storage/tests/sealed_backup_restore.rs"
+        - "crates/engine/storage/src/crypto/mod.rs"
+        - "crates/adapters/cli/src/crypto_keys.rs"
+        - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
     wired:
       production_refs:
-        - "crates/engine/storage/src/crypto"
-    default_enabled: "n/a"
+        - "crates/adapters/cli/src/crypto_keys.rs"
+        - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
+        - "crates/engine/storage/src/crypto/mod.rs"
+    default_enabled: false
     validated:
       tests:
         - "crates/engine/storage/tests/crypto_invariants.rs"
         - "crates/engine/storage/tests/sealed_backup_restore.rs"
+        - "crates/engine/runtime-assembly/src/canonical/session_seal.rs"
+        - "crates/engine/runtime-assembly/src/sqlite_session.rs"
       claims_id: "sec.storage_envelope_crypto"
     gaps:
-      - "未达 PRODUCTION WIRED：分区 DEK + AES-256-GCM 信封 + KEK 三槽包裹 + 备份恢复不变量测试；会话/记忆读写路径生产接线未在本批（cli/runtime 未见消费）——0 装口径：IMPLEMENTED，不称 PRODUCTION WIRED。；2026-10-22 批次复核：crypto_inva…"
+      - "能力矩阵未出现开关 APEIRETH_ENABLE_SESSION_SEAL（待补）"
   - id: "gov.chain_skeleton"
-    capability: "R8-A 治理链六段顺序执行骨架——库内可跑，生产零调用"
+    capability: "R8-A 治理链六段骨架 + R8-B2 生产单入口（每次治理评估过 chain.run）"
     implemented:
       sources:
         - "crates/foundation/governance/src/chain.rs"
         - "crates/foundation/governance/src/lib.rs"
+        - "crates/adapters/cli/src/governance_chain.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/governance_chain.rs"
         - "crates/foundation/governance/src/chain.rs"
         - "crates/foundation/governance/src/lib.rs"
-    default_enabled: "n/a"
+    default_enabled: true
     validated:
       tests:
         - "crates/foundation/governance/src/chain.rs"
+        - "crates/adapters/cli/tests/governance_chain_equivalence.rs"
       claims_id: "gov.chain_skeleton"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-A fd74a669：六段顺序执行 + 四注入端口（占位签名 fail-closed）；git grep 生产侧零调用；R8-B2/B3 未落地，治理面仍未进生产调用链。"
+      []
   - id: "gov.chain_hook_adapter"
-    capability: "R8-B1 ChainGovernanceHook 适配器——零生产接线"
+    capability: "R8-B1 ChainGovernanceHook 适配器 + R8-B2 生产接线"
     implemented:
       sources:
         - "crates/foundation/governance/src/chain.rs"
+        - "crates/adapters/cli/src/governance_chain.rs"
+        - "crates/adapters/cli/src/lib.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/governance_chain.rs"
+        - "crates/adapters/cli/src/lib.rs"
         - "crates/foundation/governance/src/chain.rs"
-    default_enabled: "n/a"
+    default_enabled: true
     validated:
       tests:
         - "crates/foundation/governance/src/chain.rs"
+        - "crates/adapters/cli/tests/governance_chain_equivalence.rs"
       claims_id: "gov.chain_hook_adapter"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-B1 b6d902ce：把 chain 接入 GovernanceHook 面；未接到任何生产装配根（git grep 生产引用为空）；如实 IMPLEMENTED，不冒称 PRODUCTION WIRED。"
+      []
   - id: "gov.reflection_queue"
     capability: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
     implemented:
@@ -239,7 +253,7 @@ items:
         - "crates/foundation/governance/src/chain.rs"
       claims_id: "gov.reflection_queue"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面，默认未装配到任何生产链 → 零行为变化。"
+      - "未达 PRODUCTION WIRED：R8-C da7e224f：Immediate/Delayed ReflectionScheduler + 到期审计；仅库内注入面。R8-B2 装配未启用反射调度器（production 只注入 gate + 审计 sink），生产仍零反射、零行为变化 —— 保持 IMPLEMENTED，不冒称接线…"
   - id: "gov.chain_drill_ci"
     capability: "R8-D 治理链六段演练入 CI（rust-tests 显式步骤，尚未首跑）"
     implemented:
@@ -254,7 +268,7 @@ items:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "gov.chain_drill_ci"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤（allow/deny/require-approval 三路径）；本地等价命令 3 passed；远端 CI 尚未首跑（0 次），故仅登记 IMPLEMENTED 证据面。"
+      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest …"
   - id: "sec.governance_chain_drill"
     capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
     implemented:
@@ -300,13 +314,15 @@ items:
         - "frontend/companion-desktop/src-tauri/src/mysql_client.rs"
         - "frontend/companion-desktop/src-tauri/src/pg_client.rs"
         - "frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs"
-    default_enabled: "n/a"
+    default_enabled: true
     validated:
       tests:
-        []
+        - "frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs"
+        - "frontend/companion-desktop/src-tauri/src/pg_client.rs"
+        - "frontend/companion-desktop/src-tauri/src/mysql_client.rs"
       claims_id: "sec.sql_readonly_gate"
     gaps:
-      - "未达 PRODUCTION WIRED：WITH 引导 DML/CTE 内嵌 DML/EXPLAIN ANALYZE/SELECT INTO/FOR UPDATE 全拒（fail-closed）；PG BEGIN READ ONLY / MySQL START TRANSACTION READ ONLY 事务包裹；桌面 crate 151…"
+      []
   - id: "sec.provider_proxy_ssrf"
     capability: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
     implemented:
@@ -315,13 +331,13 @@ items:
     wired:
       production_refs:
         - "frontend/companion-desktop/src-tauri/src/provider_proxy.rs"
-    default_enabled: "n/a"
+    default_enabled: true
     validated:
       tests:
-        []
+        - "frontend/companion-desktop/src-tauri/src/provider_proxy.rs"
       claims_id: "sec.provider_proxy_ssrf"
     gaps:
-      - "未达 PRODUCTION WIRED：私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。；2026-10-22 批次复核：桌面 tauri lib 140 passed / 3 ignored（含 …"
+      []
   - id: "sec.desktop_file_roots"
     capability: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
     implemented:
@@ -330,13 +346,13 @@ items:
     wired:
       production_refs:
         - "frontend/companion-desktop/src-tauri/src/workspace_list.rs"
-    default_enabled: "n/a"
+    default_enabled: true
     validated:
       tests:
-        []
+        - "frontend/companion-desktop/src-tauri/src/workspace_list.rs"
       claims_id: "sec.desktop_file_roots"
     gaps:
-      - "未达 PRODUCTION WIRED：junction/`..` 逃逸实测拒绝；残余：TOCTOU 窗口未闭（std 无句柄级原子绑定，已缓解为操作规范）、live E2E 未实测（如实）。"
+      []
   - id: "sec.terminal_permission_surfaces"
     capability: "终端权限边界明示 + 三层权限面文档（B4）"
     implemented:

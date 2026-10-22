@@ -14,16 +14,16 @@
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `d2621788` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `029dea0c` | 2026-11-20 |
-| `sec.storage_envelope_crypto` | IMPLEMENTED | - | - | `73b70178` | 2026-11-20 |
-| `gov.chain_skeleton` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
-| `gov.chain_hook_adapter` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
-| `gov.reflection_queue` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
-| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
+| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `14878cfd` | 2026-11-20 |
+| `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
+| `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
+| `gov.reflection_queue` | IMPLEMENTED | - | - | `3ca56976` | 2026-11-20 |
+| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `3ca56976` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `73b70178` | 2026-11-20 |
-| `sec.sql_readonly_gate` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
-| `sec.provider_proxy_ssrf` | IMPLEMENTED | - | - | `e19e305a` | 2026-11-20 |
-| `sec.desktop_file_roots` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
+| `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
+| `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
+| `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
 | `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `d2621788` | 2026-11-20 |
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `d2621788` | 2026-11-20 |
