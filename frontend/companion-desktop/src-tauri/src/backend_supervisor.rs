@@ -1377,6 +1377,14 @@ impl BackendSupervisor {
         self.info.read().await.clone()
     }
 
+    /// Snapshot of the provider env applied to the sidecar. Read-only face for
+    /// the desktop relay's provider-host allowlist (`provider_proxy` reads the
+    /// `*_URL` base URLs out of `env_pairs()`); key fields stay in memory and
+    /// never reach the relay policy.
+    pub async fn provider_env_snapshot(&self) -> BackendProviderEnv {
+        self.provider_env.read().await.clone()
+    }
+
     /// Append one lifecycle transition (drives the ordered evidence face).
     fn record_event(&self, event: LifecycleEvent) {
         if let Ok(mut events) = self.lifecycle.lock() {

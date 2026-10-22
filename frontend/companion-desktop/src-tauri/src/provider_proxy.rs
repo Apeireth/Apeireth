@@ -4,20 +4,29 @@
 //! `connect-src` to loopback, and every provider call is relayed through the
 //! `provider_request` command so the request leaves from the Rust side.
 //!
-//! Security boundaries enforced here:
+//! Security boundaries enforced here (each one fails closed):
 //! - only http/https URLs are forwarded (any other scheme is rejected)
-//! - the relay target is gated by address class (`gate_target`): the loopback
-//!   face (local gateway / local model runtimes — deliberate carve-out, see
-//!   `gate_target`) and public unicast only; private, link-local, shared,
+//! - target approval (`RelayPolicy`): a relay target must be an **approved
+//!   endpoint** — either a registered local endpoint
+//!   (`LocalEndpointRegistry`: the default gateway base, the first-run
+//!   wizard's local-runtime base, and the live gateway endpoint) or a
+//!   configured provider host (`ProviderAllowlist`, built from the provider
+//!   base URLs the desktop pushes to the sidecar). Unregistered loopback
+//!   targets are refused; with no configured provider host, remote targets are
+//!   refused outright.
+//! - address-class gate (`gate_address`): every address the relay connects to
+//!   must be the loopback face or public unicast — private, link-local, shared,
 //!   multicast, unspecified, documentation, benchmarking and reserved ranges
 //!   are refused, for IP literals (including decimal/hex/short spellings and
 //!   IPv4-mapped IPv6, which the URL parser normalizes) and for **every**
 //!   address a host name resolves to
-//! - DNS pinning: the connection uses exactly the addresses the gate checked
-//!   (`resolve_to_addrs`), never a second resolution, which closes the
-//!   first-hop DNS-rebinding window
-//! - redirects are bounded by [`MAX_REDIRECT_HOPS`] and every hop re-passes the
-//!   target gate at the reqwest redirect-policy layer
+//! - DNS pinning (`GatedResolver`): each connection attempt resolves its host
+//!   exactly once, gates every resolved address, and connects to exactly those
+//!   addresses — never a second resolution. The resolver is client-wide, so
+//!   this holds for the first hop and for **every redirect hop** alike.
+//! - redirects are bounded by [`MAX_REDIRECT_HOPS`] and every hop re-passes
+//!   scheme + address-class + target-approval checks at the reqwest
+//!   redirect-policy layer
 //! - only whitelisted request headers are forwarded (`filter_headers`):
 //!   routing (`Host`), session (`Cookie`) and framing (`Content-Length`, ...)
 //!   headers never leave the process
@@ -27,19 +36,18 @@
 //!   ([`sanitize_error`], layered on the [`DesktopLogger`] redaction passes)
 //!
 //! Residual risks (documented, not solved in this module):
-//! - the loopback carve-out is a **class** carve-out: any local HTTP service,
-//!   not only the gateway/model-runtime faces, stays reachable through the
-//!   relay under IPC abuse. Narrowing it to registered local endpoints needs a
-//!   cross-file endpoint-registration face (out of this file's scope).
-//! - redirect hops to *other* hosts are gated per hop (scheme + address
-//!   classes + resolver pre-check) but that hop connection re-resolves DNS, so
-//!   a rebinding window remains on those hops; the first hop (and same-host
-//!   hops) are pinned to the checked addresses.
+//! - approval is endpoint-scoped, not user-intent-scoped: anything reachable
+//!   at an approved (host, port) is relayable, and the Settings "test" button
+//!   for a *not yet saved* remote provider host is refused until the config is
+//!   saved (the allowlist is built from the applied provider config).
+//! - the local registry carries two built-in faces (the default gateway base
+//!   and the wizard's local-runtime base) plus the live gateway endpoint;
+//!   another local service squatting one of those ports is indistinguishable
+//!   from the registered face at the relay level.
 
 use crate::logging::DesktopLogger;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::net::ToSocketAddrs;
 use std::time::Duration;
 
 /// Cap on a relayed response body (5 MiB). Model lists and provider error
@@ -97,9 +105,9 @@ pub struct ProviderResponse {
 /// Validate the relay target and return it parsed.
 ///
 /// Only `http`/`https` URLs with a host are forwarded; every other scheme
-/// (`file:`, `ftp:`, `javascript:`, `data:`, ...) is refused. The address-class
-/// gate (`gate_target`) runs on top of this in `relay_via`; this function only
-/// pins scheme and host presence.
+/// (`file:`, `ftp:`, `javascript:`, `data:`, ...) is refused. The URL-level
+/// target gate (`gate_target_url`) runs on top of this in `relay_via`; this
+/// function only pins scheme and host presence.
 pub fn validate_url(url: &str) -> Result<reqwest::Url, String> {
     let parsed =
         reqwest::Url::parse(url.trim()).map_err(|_| "provider_request: invalid URL".to_string())?;
@@ -182,7 +190,8 @@ fn gate_address(ip: std::net::IpAddr) -> Result<(), &'static str> {
 
 /// Address-class gate for one IPv4 address.
 fn gate_ipv4(ip: std::net::Ipv4Addr) -> Result<(), &'static str> {
-    // 127.0.0.0/8 is the deliberate loopback-face carve-out (see `gate_target`).
+    // 127.0.0.0/8 is the loopback *class*: necessary but not sufficient —
+    // target approval (`RelayPolicy`) is what actually opens a local endpoint.
     if ip.is_loopback() {
         return Ok(());
     }
@@ -209,7 +218,8 @@ fn gate_ipv4(ip: std::net::Ipv4Addr) -> Result<(), &'static str> {
 
 /// Address-class gate for one IPv6 address.
 fn gate_ipv6(ip: std::net::Ipv6Addr) -> Result<(), &'static str> {
-    // ::1 is the deliberate loopback-face carve-out (see `gate_target`).
+    // ::1 is the loopback *class*: necessary but not sufficient — target
+    // approval (`RelayPolicy`) is what actually opens a local endpoint.
     if ip.is_loopback() {
         return Ok(());
     }
@@ -282,35 +292,174 @@ fn gate_host_str(target: &reqwest::Url) -> Option<String> {
     })
 }
 
-/// Resolve (when needed) and gate the relay target; returns the addresses the
-/// connection must use.
+// ---------------------------------------------------------------------------
+// Target approval: which endpoints the relay may talk to at all.
+//
+// Two explicit faces feed one approval set, matched on (host, port):
+// - `LocalEndpointRegistry` — the product's local endpoints (default gateway
+//   base, first-run wizard's local-runtime base, live gateway endpoint).
+// - `ProviderAllowlist` — provider base URLs from the applied provider config.
+// Nothing else is approved; with an empty allowlist, remote targets are
+// refused outright (fail closed).
+// ---------------------------------------------------------------------------
+
+/// One approved endpoint: host (lowercase, IPv6 brackets removed) + port.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ApprovedEndpoint {
+    host: String,
+    port: u16,
+}
+
+/// Whether `host` names the loopback face ("localhost" or a loopback IP).
+fn is_loopback_face_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
+/// Endpoint match: exact (host, port), with loopback aliases accepted on the
+/// same port — a registered `localhost:8080` face also serves `127.0.0.1:8080`
+/// and `[::1]:8080`. Non-loopback entries match on exact host.
+fn endpoint_matches(entry: &ApprovedEndpoint, host: &str, port: u16) -> bool {
+    if entry.port != port {
+        return false;
+    }
+    entry.host == host || (is_loopback_face_host(&entry.host) && is_loopback_face_host(host))
+}
+
+/// Whether any approved endpoint covers the (host, port) target.
+fn approved_endpoints_contain(entries: &[ApprovedEndpoint], host: &str, port: u16) -> bool {
+    entries
+        .iter()
+        .any(|entry| endpoint_matches(entry, host, port))
+}
+
+/// (host, port) of a configured base URL: normalized host + effective port.
+fn approved_endpoint_from_base_url(base_url: &str) -> Option<ApprovedEndpoint> {
+    let parsed = reqwest::Url::parse(base_url.trim()).ok()?;
+    let host = gate_host_str(&parsed)?;
+    let port = parsed.port_or_known_default()?;
+    Some(ApprovedEndpoint {
+        host: host.to_ascii_lowercase(),
+        port,
+    })
+}
+
+/// Default gateway base (the frontend's initial gateway URL): the gateway face
+/// before the supervisor reports a live endpoint, and the legacy fixed-port
+/// face the frontend heuristics recognize.
+pub const DEFAULT_GATEWAY_BASE: &str = "http://127.0.0.1:8080";
+
+/// First-run wizard's local-runtime base (the local provider preset in the
+/// wizard and in Settings).
+pub const WIZARD_LOCAL_RUNTIME_BASE: &str = "http://localhost:11434/v1";
+
+/// Explicit registration face for the relay's local (loopback) endpoints.
 ///
-/// **Loopback carve-out (product design, deliberate):** loopback targets are
-/// the local face — the local gateway and local model runtimes are first-class
-/// relay targets (their base URLs are loopback), so 127.0.0.0/8 and ::1 pass.
-/// Everything else non-public is refused. The returned addresses are the ones
-/// the transport pins the connection to, so the checked addresses are the
-/// connected addresses (no second resolution at connect time).
-async fn gate_target(target: &reqwest::Url) -> Result<Vec<std::net::SocketAddr>, String> {
+/// The relay's product-local targets are exactly: the default gateway base,
+/// the wizard's local-runtime base, and the live gateway endpoint the
+/// supervisor reports. Any other loopback target is refused — this registry is
+/// what replaced the old "any loopback target passes" carve-out.
+#[derive(Debug, Clone, Default)]
+pub struct LocalEndpointRegistry {
+    entries: Vec<ApprovedEndpoint>,
+}
+
+impl LocalEndpointRegistry {
+    /// The built-in local faces: default gateway base + wizard local-runtime
+    /// base.
+    pub fn builtin() -> Self {
+        let mut registry = Self::default();
+        registry.register_base_url(DEFAULT_GATEWAY_BASE);
+        registry.register_base_url(WIZARD_LOCAL_RUNTIME_BASE);
+        registry
+    }
+
+    /// Register the local endpoint behind a base URL (host + effective port).
+    /// Unparseable URLs and non-loopback bases are ignored here: remote
+    /// approval belongs to [`ProviderAllowlist`].
+    pub fn register_base_url(&mut self, base_url: &str) {
+        if let Some(entry) = approved_endpoint_from_base_url(base_url) {
+            if is_loopback_face_host(&entry.host) && !self.entries.contains(&entry) {
+                self.entries.push(entry);
+            }
+        }
+    }
+
+    fn allows(&self, host: &str, port: u16) -> bool {
+        approved_endpoints_contain(&self.entries, host, port)
+    }
+}
+
+/// Provider-host allowlist: (host, port) pairs taken from the applied provider
+/// base URLs. Empty = no remote target is approved (fail closed); a configured
+/// local provider base (e.g. a loopback model runtime on its own port) lands
+/// here too and is approved like any other configured provider.
+#[derive(Debug, Clone, Default)]
+pub struct ProviderAllowlist {
+    entries: Vec<ApprovedEndpoint>,
+}
+
+impl ProviderAllowlist {
+    /// Add one configured provider base URL (host + effective port).
+    pub fn add_base_url(&mut self, base_url: &str) {
+        if let Some(entry) = approved_endpoint_from_base_url(base_url) {
+            if !self.entries.contains(&entry) {
+                self.entries.push(entry);
+            }
+        }
+    }
+
+    fn allows(&self, host: &str, port: u16) -> bool {
+        approved_endpoints_contain(&self.entries, host, port)
+    }
+}
+
+/// The relay's target-approval policy: registered local endpoints plus the
+/// configured provider hosts. Built per `provider_request` call from the
+/// supervisor's live gateway endpoint and applied provider env; cloned into
+/// the transport so redirect hops re-check against the same policy.
+#[derive(Debug, Clone, Default)]
+pub struct RelayPolicy {
+    /// Registered local endpoints (gateway + wizard faces).
+    pub local: LocalEndpointRegistry,
+    /// Configured provider hosts (empty = no remote target approved).
+    pub providers: ProviderAllowlist,
+}
+
+impl RelayPolicy {
+    /// Approve one target: a covering (host, port) in either face passes;
+    /// everything else is refused (fail closed) with the face named, so the
+    /// webview can tell "save your provider config first" from "wrong port".
+    pub fn approve_target(&self, host: &str, port: u16) -> Result<(), String> {
+        if self.local.allows(host, port) || self.providers.allows(host, port) {
+            return Ok(());
+        }
+        if is_loopback_face_host(host) {
+            Err(format!(
+                "provider_request: local endpoint '{host}:{port}' is not registered"
+            ))
+        } else {
+            Err(format!(
+                "provider_request: target host '{host}:{port}' is not in the provider allowlist"
+            ))
+        }
+    }
+}
+
+/// URL-level target gate: address classes for IP literals, then target
+/// approval for every target. Host names are resolved (gated + pinned) at
+/// connect time by `GatedResolver`, once per connection attempt.
+fn gate_target_url(target: &reqwest::Url, policy: &RelayPolicy) -> Result<(), String> {
     let host =
         gate_host_str(target).ok_or_else(|| "provider_request: URL has no host".to_string())?;
     if let Ok(ip) = host.parse::<std::net::IpAddr>() {
         gate_address(ip)
             .map_err(|reason| format!("provider_request: target address refused ({reason})"))?;
-        return Ok(Vec::new());
     }
     let port = target.port_or_known_default().unwrap_or(0);
-    let addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host((host.as_str(), port))
-        .await
-        .map_err(|_| format!("provider_request: target host '{host}' did not resolve"))?
-        .collect();
-    if addrs.is_empty() {
-        return Err(format!(
-            "provider_request: target host '{host}' did not resolve"
-        ));
-    }
-    gate_resolved_addrs(&host, &addrs).map_err(|detail| format!("provider_request: {detail}"))?;
-    Ok(addrs)
+    policy.approve_target(&host.to_ascii_lowercase(), port)
 }
 
 /// Message prefix for a refused redirect hop (pin-able by tests and visible to
@@ -320,28 +469,12 @@ fn redirect_refused(detail: String) -> String {
 }
 
 /// Per-hop gate for a redirect target (synchronous face: the redirect policy
-/// cannot await). Same address classes as `gate_target`, including a blocking
-/// resolver pre-check for host names; see the module docs for the residual
-/// (cross-host hops are checked here but connected via fresh DNS).
-fn gate_redirect_target(target: &reqwest::Url) -> Result<(), String> {
+/// cannot await). Scheme + literal address classes + the same target approval
+/// as the entry gate. Name hops are gated **and pinned** at connect time by
+/// `GatedResolver`, so no blocking resolve happens here.
+fn gate_redirect_target(target: &reqwest::Url, policy: &RelayPolicy) -> Result<(), String> {
     check_scheme_and_host(target).map_err(redirect_refused)?;
-    let host =
-        gate_host_str(target).ok_or_else(|| redirect_refused("URL has no host".to_string()))?;
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        return gate_address(ip)
-            .map_err(|reason| redirect_refused(format!("target address refused ({reason})")));
-    }
-    let port = target.port_or_known_default().unwrap_or(0);
-    let addrs: Vec<std::net::SocketAddr> = (host.as_str(), port)
-        .to_socket_addrs()
-        .map_err(|_| redirect_refused(format!("target host '{host}' did not resolve")))?
-        .collect();
-    if addrs.is_empty() {
-        return Err(redirect_refused(format!(
-            "target host '{host}' did not resolve"
-        )));
-    }
-    gate_resolved_addrs(&host, &addrs).map_err(redirect_refused)
+    gate_target_url(target, policy).map_err(redirect_refused)
 }
 
 /// Values of credential-bearing headers, collected so they can be scrubbed
@@ -492,7 +625,7 @@ fn unconfigured_suppression(
 /// never lets those reach a log line or error string.
 #[derive(Clone)]
 pub struct RelayRequest {
-    /// Validated relay target (scheme/host + address-class gated).
+    /// Validated relay target (scheme/host + address-class gated + approved).
     pub url: reqwest::Url,
     /// Validated relay verb.
     pub method: reqwest::Method,
@@ -501,10 +634,9 @@ pub struct RelayRequest {
     pub headers: HashMap<String, String>,
     /// Optional request body.
     pub body: Option<String>,
-    /// Addresses the target gate validated for this target: the transport
-    /// pins the connection to them (empty for IP-literal hosts, which need no
-    /// resolution).
-    pub connect_addrs: Vec<std::net::SocketAddr>,
+    /// Approval policy the transport re-applies to every redirect hop (and
+    /// whose address-class face backs the gated resolver).
+    pub policy: RelayPolicy,
 }
 
 /// The transport's answer for one relayed call, before IPC framing.
@@ -531,17 +663,69 @@ pub trait RelayTransport: Send + Sync {
     ) -> impl std::future::Future<Output = Result<RelayResponse, String>> + Send;
 }
 
+/// Connect-time DNS face: resolve one host **once**, gate every resolved
+/// address, and hand back exactly those addresses — the connector uses them
+/// as-is, so the checked addresses are the connected addresses (no second
+/// resolution). Installed client-wide, so this holds for the first hop and for
+/// **every redirect hop** alike (per-hop DNS pinning).
+///
+/// IP-literal hosts never reach the resolver; they are gated at the URL level
+/// (`gate_target_url` / the redirect policy).
+#[derive(Debug)]
+struct GatedResolver;
+
+impl reqwest::dns::Resolve for GatedResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_string();
+        Box::pin(resolve_and_gate(host))
+    }
+}
+
+/// Resolve `host` once, gate every resolved address (fail closed), and return
+/// exactly the gated addresses as the only connection candidates. Ports are
+/// returned as 0: the connector fills in the URL's port (URL ports always
+/// win); only the addresses are pinned.
+async fn resolve_and_gate(
+    host: String,
+) -> Result<reqwest::dns::Addrs, Box<dyn std::error::Error + Send + Sync>> {
+    let addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host((host.as_str(), 0))
+        .await
+        .map_err(|error| {
+            Box::new(std::io::Error::other(format!(
+                "provider_request: target host '{host}' did not resolve: {error}"
+            ))) as Box<dyn std::error::Error + Send + Sync>
+        })?
+        .collect();
+    if addrs.is_empty() {
+        return Err(Box::new(std::io::Error::other(format!(
+            "provider_request: target host '{host}' did not resolve"
+        ))));
+    }
+    gate_resolved_addrs(&host, &addrs).map_err(|detail| {
+        Box::new(std::io::Error::other(format!("provider_request: {detail}")))
+            as Box<dyn std::error::Error + Send + Sync>
+    })?;
+    Ok(Box::new(
+        addrs
+            .into_iter()
+            .map(|addr| std::net::SocketAddr::new(addr.ip(), 0)),
+    ) as reqwest::dns::Addrs)
+}
+
 /// Redirect policy for the relay: bounded hops, and every hop re-passes the
-/// target gate (scheme + address classes, with a blocking resolver pre-check
-/// for host names). Gate verdicts travel as the error cause chain.
-fn redirect_policy() -> reqwest::redirect::Policy {
-    reqwest::redirect::Policy::custom(|attempt| {
+/// URL-level gate (scheme + literal address classes + target approval). Name
+/// hops are gated and pinned at connect time by [`GatedResolver`], so no
+/// blocking resolve happens in this synchronous face. Gate verdicts travel as
+/// the error cause chain.
+fn redirect_policy(policy: &RelayPolicy) -> reqwest::redirect::Policy {
+    let policy = policy.clone();
+    reqwest::redirect::Policy::custom(move |attempt| {
         if attempt.previous().len() > MAX_REDIRECT_HOPS {
             return attempt.error(std::io::Error::other(redirect_refused(
                 "too many redirects".to_string(),
             )));
         }
-        match gate_redirect_target(attempt.url()) {
+        match gate_redirect_target(attempt.url(), &policy) {
             Ok(()) => attempt.follow(),
             Err(detail) => attempt.error(std::io::Error::other(detail)),
         }
@@ -575,19 +759,14 @@ impl RelayTransport for ReqwestTransport {
         request: RelayRequest,
     ) -> impl std::future::Future<Output = Result<RelayResponse, String>> + Send {
         async move {
-            let pinned_host = request.url.host_str().map(str::to_string);
-            let mut builder = reqwest::Client::builder()
+            let policy = request.policy.clone();
+            let client = reqwest::Client::builder()
                 .timeout(REQUEST_TIMEOUT)
-                .redirect(redirect_policy());
-            // DNS pinning: connect to exactly the addresses the target gate
-            // checked, instead of re-resolving at connect time. (URL-embedded
-            // ports always win over the pinned ports; only the IPs are pinned.)
-            if !request.connect_addrs.is_empty() {
-                if let Some(host) = pinned_host.as_deref() {
-                    builder = builder.resolve_to_addrs(host, &request.connect_addrs);
-                }
-            }
-            let client = builder
+                .redirect(redirect_policy(&policy))
+                // Per-hop DNS pinning: every connection attempt (first hop and
+                // each redirect hop) resolves once through the gated resolver
+                // and connects to exactly the gated addresses.
+                .dns_resolver(std::sync::Arc::new(GatedResolver))
                 .build()
                 .map_err(|error| format!("provider_request: HTTP client build failed: {error}"))?;
 
@@ -657,26 +836,29 @@ impl RelayTransport for ReqwestTransport {
 /// cannot surface to the webview or the desktop log. The request URL is never
 /// echoed in errors (`without_url`), keeping URL-carried credentials out too.
 pub async fn send_provider_request(
+    policy: &RelayPolicy,
     url: &str,
     method: &str,
     headers: &HashMap<String, String>,
     body: Option<&str>,
 ) -> Result<ProviderResponse, String> {
     let secrets = collect_secret_values(headers);
-    relay_via(&ReqwestTransport, url, method, headers, body)
+    relay_via(&ReqwestTransport, policy, url, method, headers, body)
         .await
         .map_err(|message| sanitize_error(&message, &secrets))
 }
 
 /// Relay one call over `transport`, applying validation and gates in order:
 /// scheme/host → method → header whitelist → not-configured gate →
-/// target address gate (DNS + classes) → transport. The whitelist runs before
-/// the credential gate so "configured" is judged on the headers that can
-/// actually reach the far side, and the not-configured gate runs before the
-/// target gate so a credential-less outbound probe performs no network
-/// activity at all — not even a DNS query.
+/// URL-level target gate (literal address classes + target approval) →
+/// transport (name targets are gated + pinned at connect time by
+/// `GatedResolver`). The whitelist runs before the credential gate so
+/// "configured" is judged on the headers that can actually reach the far side,
+/// and the not-configured gate runs before the target gate so a credential-less
+/// outbound probe performs no network activity at all — not even a DNS query.
 async fn relay_via<T: RelayTransport>(
     transport: &T,
+    policy: &RelayPolicy,
     url: &str,
     method: &str,
     headers: &HashMap<String, String>,
@@ -688,14 +870,14 @@ async fn relay_via<T: RelayTransport>(
     if let Some(frame) = unconfigured_suppression(&target, &headers) {
         return Ok(frame);
     }
-    let connect_addrs = gate_target(&target).await?;
+    gate_target_url(&target, policy)?;
     let response = transport
         .send(RelayRequest {
             url: target,
             method: verb,
             headers,
             body: body.map(str::to_string),
-            connect_addrs,
+            policy: policy.clone(),
         })
         .await?;
     Ok(ProviderResponse {
@@ -703,6 +885,28 @@ async fn relay_via<T: RelayTransport>(
         body_text: response.body_text,
         content_type: response.content_type,
     })
+}
+
+/// Build the per-call approval policy from the supervisor's live faces: the
+/// gateway endpoint (registered local endpoint) and the applied provider
+/// env's `*_URL` base URLs (provider allowlist). Key material never enters the
+/// policy: only endpoint URLs do.
+async fn relay_policy_from_sidecar(
+    supervisor: &crate::backend_supervisor::BackendSupervisor,
+) -> RelayPolicy {
+    let mut local = LocalEndpointRegistry::builtin();
+    let info = supervisor.info().await;
+    if let Some(endpoint) = info.endpoint.as_deref() {
+        local.register_base_url(endpoint);
+    }
+    let env = supervisor.provider_env_snapshot().await;
+    let mut providers = ProviderAllowlist::default();
+    for (name, value) in env.env_pairs() {
+        if name.ends_with("_URL") {
+            providers.add_base_url(value);
+        }
+    }
+    RelayPolicy { local, providers }
 }
 
 /// Relay a provider HTTP request on behalf of the webview.
@@ -713,13 +917,15 @@ async fn relay_via<T: RelayTransport>(
 #[tauri::command]
 pub async fn provider_request(
     logger: tauri::State<'_, std::sync::Arc<DesktopLogger>>,
+    supervisor: tauri::State<'_, std::sync::Arc<crate::backend_supervisor::BackendSupervisor>>,
     url: String,
     method: String,
     headers: Option<HashMap<String, String>>,
     body: Option<String>,
 ) -> Result<ProviderResponse, String> {
     let headers = headers.unwrap_or_default();
-    let outcome = send_provider_request(&url, &method, &headers, body.as_deref()).await;
+    let policy = relay_policy_from_sidecar(&supervisor).await;
+    let outcome = send_provider_request(&policy, &url, &method, &headers, body.as_deref()).await;
 
     let verb = method.trim().to_ascii_uppercase();
     let host = reqwest::Url::parse(url.trim())
@@ -911,6 +1117,7 @@ mod tests {
         let transport = FakeTransport::new();
         let response = relay_via(
             &transport,
+            &test_policy(),
             "https://api.example.com/v1/models",
             "GET",
             &HashMap::new(),
@@ -946,6 +1153,7 @@ mod tests {
         ]);
         let response = relay_via(
             &transport,
+            &test_policy(),
             "https://api.example.com/v1/models",
             "GET",
             &headers,
@@ -969,8 +1177,12 @@ mod tests {
         // 演进断言（B2 目标闸，理由）：relay_via 现在在出网前做地址/DNS 闸，
         // 假域名离线不可解析必然被闸下；改钉公网 IP 字面量（不出网，假传输面），
         // 被钉不变量「已配置呼叫原样过境」本身一字未改。
+        // 演进断言（B2-REG，理由）：目标还须命中 provider allowlist，故测试策略
+        // 把该固定公网地址注册为「已配置提供方基址」（等价于已应用的提供方配置）。
+        let policy = policy_with_providers(&["https://93.184.216.34/v1"]);
         let response = relay_via(
             &transport,
+            &policy,
             "https://93.184.216.34/v1/models",
             "GET",
             &headers,
@@ -1002,15 +1214,24 @@ mod tests {
 
     #[tokio::test]
     async fn loopback_targets_relay_without_credentials() {
+        // 语义未变（产品断言：本地面无凭据也放行）；B2-REG 后「本地面」= 注册的
+        // 本地端点——默认网关基址 8080 就是内置注册面之一，故断言原样保留。
         for url in [
             "http://127.0.0.1:8080/v1/models",
             "http://[::1]:8080/v1/models",
             "http://localhost:8080/health",
         ] {
             let transport = FakeTransport::new();
-            let response = relay_via(&transport, url, "GET", &HashMap::new(), None)
-                .await
-                .expect("local face relays");
+            let response = relay_via(
+                &transport,
+                &test_policy(),
+                url,
+                "GET",
+                &HashMap::new(),
+                None,
+            )
+            .await
+            .expect("local face relays");
             assert_eq!(
                 transport.call_count(),
                 1,
@@ -1045,6 +1266,193 @@ mod tests {
     /// target gate in these assertions.
     fn configured_headers() -> HashMap<String, String> {
         HashMap::from([("Authorization".to_string(), "Bearer sk-test-1".to_string())])
+    }
+
+    // -----------------------------------------------------------------------
+    // B2-REG: 本地端点注册面 + 提供方 allowlist (+ 逐跳钉址的 resolver 面)。
+    // -----------------------------------------------------------------------
+
+    /// Approval policy for tests: built-in local faces, no provider hosts.
+    fn test_policy() -> RelayPolicy {
+        RelayPolicy {
+            local: LocalEndpointRegistry::builtin(),
+            providers: ProviderAllowlist::default(),
+        }
+    }
+
+    /// Policy with the given provider base URLs approved (exactly what the
+    /// applied provider config contributes).
+    fn policy_with_providers(bases: &[&str]) -> RelayPolicy {
+        let mut policy = test_policy();
+        for base in bases {
+            policy.providers.add_base_url(base);
+        }
+        policy
+    }
+
+    /// Policy with one extra registered local endpoint: test responders play
+    /// the registered local face on their ephemeral ports.
+    fn policy_with_local(port: u16) -> RelayPolicy {
+        let mut policy = test_policy();
+        policy
+            .local
+            .register_base_url(&format!("http://127.0.0.1:{port}"));
+        policy
+    }
+
+    #[test]
+    fn provider_allowlist_is_scoped_to_configured_base_urls() {
+        let policy =
+            policy_with_providers(&["https://api.example.test/v1", "http://127.0.0.1:8000/v1"]);
+        assert!(policy.approve_target("api.example.test", 443).is_ok());
+        assert!(
+            policy.approve_target("api.example.test", 8443).is_err(),
+            "an unconfigured port on a known host is not approved"
+        );
+        assert!(policy.approve_target("other.test", 443).is_err());
+        assert!(
+            policy.approve_target("127.0.0.1", 8000).is_ok(),
+            "a configured local provider base is approved like any other provider"
+        );
+        assert!(
+            policy.approve_target("127.0.0.1", 8001).is_err(),
+            "only the configured port is approved"
+        );
+    }
+
+    #[tokio::test]
+    async fn unregistered_local_endpoints_are_refused() {
+        // 对抗用例①：伪装回环未注册端点（本机任意服务端口）一律拒。
+        for url in [
+            "http://127.0.0.1:9999/",
+            "http://localhost:6379/",
+            "http://[::1]:22/",
+            "http://127.0.0.1:11435/",
+            "http://localhost:8081/",
+        ] {
+            let transport = FakeTransport::new();
+            let outcome = relay_via(
+                &transport,
+                &test_policy(),
+                url,
+                "GET",
+                &configured_headers(),
+                None,
+            )
+            .await;
+            let Err(message) = outcome else {
+                panic!("{url} must be refused as an unregistered local endpoint");
+            };
+            assert!(
+                message.contains("not registered"),
+                "{url} must hit the registration gate: {message}"
+            );
+            assert_eq!(
+                transport.call_count(),
+                0,
+                "{url} must never reach the transport"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn public_host_outside_allowlist_is_refused() {
+        // 对抗用例②：allowlist 外公网主机一律拒；空 allowlist 时 fail-closed
+        // （未配置提供方 = 远程目标全拒，只留注册的本地面）。
+        for policy in [
+            test_policy(),
+            policy_with_providers(&["https://api.allowed.test/v1"]),
+        ] {
+            let transport = FakeTransport::new();
+            let outcome = relay_via(
+                &transport,
+                &policy,
+                "https://93.184.216.34/v1/models",
+                "GET",
+                &configured_headers(),
+                None,
+            )
+            .await;
+            let Err(message) = outcome else {
+                panic!("a public host outside the allowlist must be refused");
+            };
+            assert!(
+                message.contains("not in the provider allowlist"),
+                "the allowlist verdict must surface: {message}"
+            );
+            assert_eq!(
+                transport.call_count(),
+                0,
+                "an allowlist miss must never reach the transport"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn registered_gateway_endpoint_relays() {
+        // 活网关端点（动态端点）注册后放行；同端口的回环别名同义；相邻端口仍拒。
+        let mut policy = test_policy();
+        policy.local.register_base_url("http://127.0.0.1:52719");
+        for url in [
+            "http://127.0.0.1:52719/v1/models",
+            "http://localhost:52719/health",
+            "http://[::1]:52719/v1/models",
+        ] {
+            let transport = FakeTransport::new();
+            let response = relay_via(&transport, &policy, url, "GET", &HashMap::new(), None)
+                .await
+                .expect("the registered gateway face relays");
+            assert_eq!(transport.call_count(), 1, "{url} is registered");
+            assert_eq!(response.status, 200);
+        }
+        let transport = FakeTransport::new();
+        let outcome = relay_via(
+            &transport,
+            &policy,
+            "http://127.0.0.1:52720/v1/models",
+            "GET",
+            &HashMap::new(),
+            None,
+        )
+        .await;
+        assert!(
+            outcome.is_err(),
+            "a neighbouring unregistered port must be refused"
+        );
+        assert_eq!(transport.call_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn configured_local_provider_base_relays() {
+        // 已配置本地提供方（自定端口）经 allowlist 放行——注册面之外的合法本地
+        // 用法只能来自已应用的提供方配置，且按端口收口。
+        let policy = policy_with_providers(&["http://127.0.0.1:8000/v1"]);
+        let transport = FakeTransport::new();
+        let response = relay_via(
+            &transport,
+            &policy,
+            "http://127.0.0.1:8000/v1/models",
+            "GET",
+            &configured_headers(),
+            None,
+        )
+        .await
+        .expect("the configured local provider base relays");
+        assert_eq!(transport.call_count(), 1);
+        assert_eq!(response.status, 200);
+
+        let transport = FakeTransport::new();
+        let outcome = relay_via(
+            &transport,
+            &policy,
+            "http://127.0.0.1:8001/v1/models",
+            "GET",
+            &configured_headers(),
+            None,
+        )
+        .await;
+        assert!(outcome.is_err(), "the next port is not the configured base");
+        assert_eq!(transport.call_count(), 0);
     }
 
     /// The address the gate classifies for a URL's host (IPv6 brackets and
@@ -1126,7 +1534,15 @@ mod tests {
             "http://[2001::1]/",
         ] {
             let transport = FakeTransport::new();
-            let outcome = relay_via(&transport, url, "GET", &configured_headers(), None).await;
+            let outcome = relay_via(
+                &transport,
+                &test_policy(),
+                url,
+                "GET",
+                &configured_headers(),
+                None,
+            )
+            .await;
             let Err(message) = outcome else {
                 panic!("{url} must be refused by the target gate");
             };
@@ -1143,16 +1559,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn public_target_literals_relay() {
+    async fn allowlisted_public_target_literals_relay() {
+        // 演进断言（B2-REG，理由）：公网目标从「类闸放行」收窄为「allowlist 命中才
+        // 转发」，故本测试给两个固定公网地址登记提供方基址后钉「公网目标放行」；
+        // 反向断言见 `public_host_outside_allowlist_is_refused`。
+        let policy = policy_with_providers(&[
+            "https://93.184.216.34/v1",
+            "http://[2001:4860:4860::8888]/v1",
+        ]);
         for url in [
             "https://93.184.216.34/v1/models",
             "http://[2001:4860:4860::8888]/v1/models",
         ] {
             let transport = FakeTransport::new();
-            let response = relay_via(&transport, url, "GET", &configured_headers(), None)
+            let response = relay_via(&transport, &policy, url, "GET", &configured_headers(), None)
                 .await
-                .expect("public unicast targets relay");
-            assert_eq!(transport.call_count(), 1, "{url} is public and must relay");
+                .expect("allowlisted public unicast targets relay");
+            assert_eq!(
+                transport.call_count(),
+                1,
+                "{url} is public and allowlisted and must relay"
+            );
             assert_eq!(response.status, 200);
         }
     }
@@ -1175,41 +1602,61 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn localhost_name_is_the_local_face() {
-        // DNS path pin: a name (not a literal) that resolves loopback passes
-        // the gate as the local face. Offline-safe: resolved from the hosts
-        // file, no network traffic.
-        let target = validate_url("http://localhost:8080/v1/models").expect("valid URL");
-        let addrs = gate_target(&target).await.expect("localhost resolves");
+    async fn resolver_gates_and_pins_resolved_addresses() {
+        // 演进断言（B2-REG，理由）：名字目标的解析从出网前预检移到连接期的
+        // `resolve_and_gate`（逐跳钉址的机制面），故「名字解析到本地面」改钉在
+        // resolver 层。离线安全：localhost 走 hosts 文件，不出网。
+        let addrs = resolve_and_gate("localhost".to_string())
+            .await
+            .expect("localhost resolves from the hosts file")
+            .collect::<Vec<_>>();
         assert!(!addrs.is_empty(), "resolution must yield addresses");
         assert!(
             addrs.iter().all(|addr| gate_address(addr.ip()).is_ok()),
             "every resolved address must be the local face"
         );
+        assert!(
+            addrs.iter().all(|addr| addr.port() == 0),
+            "ports come from the URL; only addresses are pinned"
+        );
+    }
+
+    #[tokio::test]
+    async fn resolver_fails_closed_on_unresolvable_names() {
+        let outcome = resolve_and_gate("host.invalid".to_string()).await;
+        assert!(
+            outcome.is_err(),
+            "a name that does not resolve must be refused, not defaulted"
+        );
     }
 
     #[test]
     fn redirect_targets_re_pass_the_gate() {
+        // 演进断言（B2-REG，理由）：每一跳除类闸外还过目标审批，故放行集收窄为
+        // 「已注册本地面 + allowlist 命中」；未注册回环跳的反向断言新增于此。
+        let policy = policy_with_providers(&["https://93.184.216.34/v1"]);
         for url in [
             "http://10.0.0.1/secret",
             "http://169.254.169.254/latest/meta-data",
             "http://[::ffff:192.168.0.1]/x",
             "file:///etc/passwd",
             "http://[fd00::1]/x",
+            "http://127.0.0.1:9000/health",
+            "https://93.184.216.35/v1/models",
         ] {
             let target = reqwest::Url::parse(url).expect("parseable");
             assert!(
-                gate_redirect_target(&target).is_err(),
+                gate_redirect_target(&target, &policy).is_err(),
                 "{url} must be refused as a redirect hop"
             );
         }
         for url in [
-            "http://127.0.0.1:9000/health",
+            "http://127.0.0.1:8080/health",
             "https://93.184.216.34/v1/models",
         ] {
             let target = reqwest::Url::parse(url).expect("parseable");
             assert!(
-                gate_redirect_target(&target).is_ok(),
+                gate_redirect_target(&target, &policy).is_ok(),
                 "{url} must pass as a redirect hop"
             );
         }
@@ -1233,6 +1680,7 @@ mod tests {
 
         relay_via(
             &transport,
+            &policy_with_providers(&["https://93.184.216.34/v1"]),
             "https://93.184.216.34/v1/models",
             "GET",
             &headers,
@@ -1273,6 +1721,7 @@ mod tests {
         let headers = HashMap::from([("Cookie".to_string(), "session=1".to_string())]);
         let response = relay_via(
             &transport,
+            &policy_with_providers(&["https://93.184.216.34/v1"]),
             "https://93.184.216.34/v1/models",
             "GET",
             &headers,
@@ -1308,7 +1757,9 @@ mod tests {
             "HTTP/1.1 302 Found\r\nLocation: http://10.0.0.1/secret\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                 .to_string(),
         );
+        // The responder plays the registered local face on its ephemeral port.
         let outcome = send_provider_request(
+            &policy_with_local(port),
             &format!("http://127.0.0.1:{port}/start"),
             "GET",
             &HashMap::new(),
@@ -1324,6 +1775,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn redirect_to_unregistered_local_endpoint_is_refused() {
+        // 对抗用例③：重定向跳到未注册回环端点（伪装本机服务）必须被拒。
+        let (target_port, _target_listener) = {
+            let listener =
+                std::net::TcpListener::bind("127.0.0.1:0").expect("bind unregistered endpoint");
+            (listener.local_addr().expect("addr").port(), listener)
+        };
+        let (port, handle) = spawn_responder(format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{target_port}/secret\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        ));
+        let outcome = send_provider_request(
+            &policy_with_local(port),
+            &format!("http://127.0.0.1:{port}/start"),
+            "GET",
+            &HashMap::new(),
+            None,
+        )
+        .await;
+        let _ = handle.join();
+        let message = outcome.expect_err("the hop must be refused");
+        assert!(
+            message.contains("redirect refused") && message.contains("not registered"),
+            "the registration verdict must surface: {message}"
+        );
+    }
+
+    #[tokio::test]
     async fn redirect_to_a_permitted_target_is_followed() {
         let (target_port, target_handle) = spawn_responder(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nConnection: close\r\n\r\nsecond-hop-ok"
@@ -1332,7 +1810,14 @@ mod tests {
         let (entry_port, entry_handle) = spawn_responder(format!(
             "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{target_port}/models\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         ));
+        // Both responders are registered local faces (the hop must be approved
+        // as well as class-clean).
+        let mut policy = policy_with_local(entry_port);
+        policy
+            .local
+            .register_base_url(&format!("http://127.0.0.1:{target_port}"));
         let response = send_provider_request(
+            &policy,
             &format!("http://127.0.0.1:{entry_port}/start"),
             "GET",
             &HashMap::new(),
@@ -1366,6 +1851,7 @@ mod tests {
             }
         });
         let outcome = send_provider_request(
+            &policy_with_local(port),
             &format!("http://127.0.0.1:{port}/loop"),
             "GET",
             &HashMap::new(),
@@ -1377,5 +1863,27 @@ mod tests {
             message.contains("too many redirects"),
             "the hop cap must surface: {message}"
         );
+    }
+
+    #[tokio::test]
+    async fn name_target_relays_through_gated_resolver() {
+        // 端到端钉 resolver 接线：名字目标经 `resolve_and_gate` 解析+过闸+钉址后
+        // 连接（首跳路径即逐跳路径的同一机制）。localhost 走 hosts 文件，不出网。
+        let (port, handle) = spawn_responder(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nname-hop-ok"
+                .to_string(),
+        );
+        let response = send_provider_request(
+            &policy_with_local(port),
+            &format!("http://localhost:{port}/models"),
+            "GET",
+            &HashMap::new(),
+            None,
+        )
+        .await
+        .expect("a registered local name target relays");
+        let _ = handle.join();
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body_text, "name-hop-ok");
     }
 }
