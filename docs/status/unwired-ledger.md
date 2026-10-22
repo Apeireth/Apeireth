@@ -19,6 +19,7 @@
 | W4 | `SelfDisableAudit` | 装配面未见生产消费（drill 三路径只在测试内验证） | 触发：自停用演练进 CI 后随链接线（R8-D 转绿） | 安全线 |
 | W5 | `ActionGuard::evaluate`（V1+V2 AND 门） | 不在执行主链（仅测试/示例调用）；13 键已降级 | 触发：哲学拦截层重新上热路径时一并接（stage123 §C1） | 架构线 |
 | W6 | SDK `quota` | 永远返 `not_implemented`（D-05 阶段 6 stub） | 已知设计取舍，非缺陷；随 SDK v0 发布面补 | SDK |
+| W7 | 教训对象 `Lesson`（L1 库级） | `memory/src/lesson.rs` + `V18` 迁移已交付，5 个单测钉四条硬约束；但**消费面未接**（自述节 / 反思步 / 上下文注入） | 决策：**L2 自述节下一批接线**（`SELF_STATUS_SECTIONS` 是冻结合同，21→22 节需同步 render/schema/fixture）；L3/L4 随后 | 记忆线 |
 
 ## 二、测试专用但**有意保留**（不是缺陷；四级口径见上）
 
