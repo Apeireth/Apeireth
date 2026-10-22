@@ -419,6 +419,13 @@ fn safe_relative(value: &str) -> Result<PathBuf, BackupError> {
     if value.is_empty() {
         return Err(BackupError::ManifestCorrupt("empty relative path".into()));
     }
+    // manifest 持久形状是 POSIX 相对路径；反斜杠只可能来自 Windows 绝对/UNC 输入，
+    // 在 Linux 上会被当成普通字符，必须显式拒绝（跨平台一致）。
+    if value.contains('\\') {
+        return Err(BackupError::ManifestCorrupt(format!(
+            "unsafe relative path in manifest: {value}"
+        )));
+    }
     let path = Path::new(value);
     let mut normalized = PathBuf::new();
     for component in path.components() {
