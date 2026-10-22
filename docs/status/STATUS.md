@@ -22,7 +22,7 @@
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `73b70178` | 2026-11-20 |
 | `sec.sql_readonly_gate` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
-| `sec.provider_proxy_ssrf` | IMPLEMENTED | - | - | `73b70178` | 2026-11-20 |
+| `sec.provider_proxy_ssrf` | IMPLEMENTED | - | - | `e19e305a` | 2026-11-20 |
 | `sec.desktop_file_roots` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `d2621788` | 2026-11-20 |

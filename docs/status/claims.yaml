@@ -302,11 +302,11 @@ claims:
     sources:
       - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
     tests: []
-    verified_at: 73b70178
+    verified_at: e19e305a
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked provider_proxy"
     owner: companion-desktop
     next_review: "2026-11-20"
-    notes: "私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。；2026-10-22 批次复核：桌面 tauri lib 140 passed / 3 ignored（含 provider_proxy 25/25，批内 CI 执行面）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。；2026-10-22 批次复核：桌面 tauri lib 140 passed / 3 ignored（含 provider_proxy 25/25，批内 CI 执行面）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 收尾复核：他线 B2-CFG 改动 provider_proxy.rs 后重跑桌面 tauri lib（140 passed / 3 ignored，含 provider_proxy 25/25）"
 
   - id: sec.desktop_file_roots
     title: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
