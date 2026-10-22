@@ -46,7 +46,8 @@
 //! 定级表 + 理由 + 残余见 [`classification`] (代码 + 测试逐行钉):
 //! 内容列与**内容指纹哈希列**进 P0 加密; 向量/聚合元数据/检索键保明;
 //! 未勘列 fail-closed 显式待定。列级接缝 (真实表上的封缄读写示范) 见
-//! [`sqlite_sink`]。
+//! [`sqlite_sink`]。指纹列的查重/溯源检索走**盲索引** ([`blind_index`]):
+//! 索引面与内容面分离, 检索键单向、查询不触原文。
 //!
 //! ## 0 装诚实边界
 //!
@@ -59,6 +60,7 @@
 
 pub mod anchor;
 pub mod backup;
+pub mod blind_index;
 pub mod classification;
 pub mod error;
 pub mod kdf;
@@ -73,6 +75,7 @@ pub use backup::{
     export_sealed_backup, restore_sealed_backup, verify_sealed_backup, BackupEntry,
     SealedBackupManifest, SealedRestoreReport, KEY_LOSS_BOUNDARY,
 };
+pub use blind_index::{BlindIndex, BlindIndexKey, BlindIndexSink, IndexTarget};
 pub use classification::{classify_column, FieldClass};
 pub use error::CryptoError;
 pub use kdf::{

@@ -40,7 +40,8 @@ use serde::{Deserialize, Serialize};
 pub enum FieldClass {
     /// P0 内容列: 分区 DEK 封缄 ([`crate::crypto::SealingLayer`])。
     SealedContent,
-    /// P0 内容指纹哈希列: 分区 DEK 封缄 (防字典反推)。
+    /// P0 内容指纹哈希列: 分区 DEK 封缄 (防字典反推); 查重/溯源检索走
+    /// 盲索引 [`crate::crypto::blind_index`] (索引面与内容面分离)。
     SealedFingerprint,
     /// 检索基元 (向量): 保明。
     PlaintextVector,
