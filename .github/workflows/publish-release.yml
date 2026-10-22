@@ -117,7 +117,7 @@ jobs:
           body: |
             ## 🌟 Apeireth 2.0+ Cognitive Microkernel & AGI Operating System
 
-            > **Pure Safe Rust (`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`), 18-Crate Kernel + Assembly, 3600+ Verified Tests.**
+            > **Pure Safe Rust (`#![deny(unsafe_code)]` / `#![forbid(unsafe_code)]`), 30-Member Workspace (29 crates + 1 bench harness), 8570+ Verified Tests (2026-10-21).**
 
             ---
 
@@ -125,6 +125,7 @@ jobs:
 
             - **Windows 10/11 (x64)**: download `Apeireth Companion_<version>_x64-setup.exe` (version = this tag without the leading `v`), double-click to install. The installer bundles the complete backend (sidecar) — no Rust toolchain or compilation required.
             - Integrity: `SHA256SUMS` lists the SHA-256 of every published asset and is verified in the build pipeline before publishing; each installer also ships its own `.sha256` sidecar.
+            - **Unsigned build notice**: installers are not Authenticode-signed yet (`Get-AuthenticodeSignature` = `NotSigned` on the rc build); Windows may show a SmartScreen prompt. Verify the SHA-256 against `SHA256SUMS` before running, or build from source per [INSTALL.md](INSTALL.md).
             - macOS / Linux: no prebuilt installer yet — build from source per [INSTALL.md](INSTALL.md).
 
             ---

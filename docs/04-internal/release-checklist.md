@@ -37,20 +37,17 @@
 
 - [x] `cargo run --bin apeireth -- --version` 输出 = 新版本号
   - 实证（2026-10-21）：原文 `cargo run --bin apeireth --version` 会被 cargo 自身参数解析拒绝
-    （`cargo run --bin definitely-no-such-bin --version` 实测
-    `error: unexpected argument '--version' found`
-    + 提示 `to pass '--version' as a value, use '-- --version'`，exit 1）——已改命令。
-    `target\debug\apeireth.exe --version`（2026-10-21 16:48:11 构建）实测 **`apeireth 2.0.0-rc.4`**，
-    exit 0 = 根 `Cargo.toml` `[workspace.package] version`。cargo 直跑路径本轮未实测：
-    他线在途改 `crates/adapters/cli/src/lib.rs`（mtime 17:43:44 晚于二进制）触发重编译后编译红
-    （E0308，`crates/adapters/cli/src/lib.rs:1560`），详见 §5 R-6。
+    （实测 `error: unexpected argument '--version' found` + 提示改用 `-- --version`）——已改命令。
+    **2026-10-22 补证（cargo 直跑闭环）**：`cargo run -p apeireth-cli --bin apeireth --locked -j 2 -- --version`
+    → 编译成功并输出 **`apeireth 2.0.0-rc.4`**，exit 0（此前被在途 cli 编译红阻断，R-6 已收敛）。
 - [ ] 安装包文件名内嵌版本 = 新版本号；`Get-AuthenticodeSignature` 状态如实记录（未签名则发布说明写明）
   - 部分实证（2026-10-21）：本地 NSIS 产物 `target/desktop-nsis/Apeireth Companion_2.0.0-rc.4_x64-setup.exe`
     （13,472,128 B，2026-10-17 21:01:50 构建）文件名内嵌 **2.0.0-rc.4** = 当前版本 ✓；
     `Get-AuthenticodeSignature` 实测 **`NotSigned`**（平台原话：文件未进行数字签名）。
-    但「未签名则发布说明写明」未闭环：发布说明正文（`.github/workflows/publish-release.yml`
-    L120–L128）无「未签名」声明，仅 `CHANGELOG.md:6` 写「发布物仍未签名，如实」
-    ⇒ 待发布线补发布说明后勾（见 §5 R-2）。
+    「未签名则发布说明写明」：**2026-10-22 已补进发布说明模板**
+    （`.github/workflows/publish-release.yml` 下载段新增 Unsigned build notice：`Get-AuthenticodeSignature`
+    = `NotSigned`，提示先核对 SHA-256 或从源码构建）。**未闭环**：已发布的 `v2.0.0-rc.4` Release 页
+    正文仍是旧文案（未重发/未编辑）⇒ 该页待发布线处理（见 §5 R-2，模板侧已收敛）。
 - [ ] **`SHA256SUMS` 与各资产 `.sha256` 一致**（E-01 前科：两文件互相矛盾——重生成覆盖全部资产，
       保留 per-asset `.sha256`；CI 增下载自校验一步。历史文件名 `SHA256SUMS.txt`，现行流水线产物为
       无后缀 `SHA256SUMS`）
@@ -65,11 +62,10 @@
     未实测：Release 页 `SHA256SUMS` 与各资产逐件一致（远程 CI 首跑未发生、本机无 Release 面访问通道）；
     「CI 增下载自校验一步」流水线未见（现为上传前校验，`publish-release.yml` L62–L83）⇒ 待发布线。
 - [ ] Release 页资产清单与发布指南引用的文件名逐字一致
-  - **未通过（漂移实证，2026-10-21）**：`docs/beta/rc2-beta-guide.md:8` 引用 `SHA256SUMS.txt`；
-    流水线发布资产名为 `SHA256SUMS`（`.github/workflows/publish-release.yml` L115
-    `release-assets/SHA256SUMS`，L62–L83 生成/校验同名）⇒ 逐字不一致。安装包文件名两面一致：
-    指南 L7 `Apeireth Companion_2.0.0-rc.4_x64-setup.exe` = 本地产物名。处置：改指南或统一产物名
-    （owner 一字），本清单不改 `docs/beta`（见 §5 R-3）。
+  - **指南侧已统一（2026-10-22）**：`docs/beta/rc2-beta-guide.md:8` 由 `SHA256SUMS.txt` 改为
+    `SHA256SUMS`（= 流水线产物名，`publish-release.yml` L115 / L62–L83 生成与校验同名）；
+    安装包文件名两面一致（指南 L7 = 本地产物名）。**仍待核**：已发布 Release 页资产清单逐字核对
+    （无 Release 面访问通道）⇒ Release 页侧待发布线（见 §5 R-3，仓库侧已收敛）。
 
 ## 2. 文档口径
 
@@ -81,18 +77,17 @@
     现行行与 2026-10-20 旧行（336 套件 / 9075 passed / 1 failed）；`logs/gate-full.log` 尾部
     `GATE FULL PASSED (2026-10-21 15:52:59)`，`artifacts/wave4-close-full-2026-10-21.log`
     尾部 `GATE FULL PASSED`。全量执行权 2026-10-21 起在效率线；本轮未重跑（见 §3.1）。
-- [ ] crate 口径核对：`workspace = 30 members（29 crates + bench harness）`（2026-10-20 R4b 归档
+- [x] crate 口径核对：`workspace = 30 members（29 crates + bench harness）`（2026-10-20 R4b 归档
       `apeireth-perception` 后；历史 31 members）；成员有变时先改 ARCHITECTURE.md / INSTALL.md /
       README 本体，再全仓 grep 旧口径
-  - 真源实证（2026-10-21）：`python -c "import tomllib; d=tomllib.load(open('Cargo.toml','rb'));
-    print(len(d['workspace']['members']))"` → **30**；版本 → `2.0.0-rc.4`。但**全仓旧口径 grep
-    未清零**（现值文档、无历史标注的命中）：`README.md:13` Workspace 徽章仍 `workspace-31 members`
-    （正文 L20 已写 30 members）；`ARCHITECTURE.md:56`「2026-10-20 实测：31 members / 118 production
-    edges」vs 生成物权威 `docs/architecture/ARCHITECTURE.generated.md:7`「30 members / 111 edges」
-    ⇒ 待 owner/架构线。带日期历史标注的 31 members 命中（`SECURITY.md:75` 的 2026-10-18 更新行、
-    user-manual 注记、team-handover 2026-10-18 口径、CHANGELOG 历史）按「历史不追改」保留，
-    不计违规（见 §5 R-4）。
-- [ ] 徽章数字与链接目标对齐（Tests 徽章 → capabilities-matrix §0.1 有据）
+  - 真源实证（2026-10-21）：`python -c "import tomllib; ..."` → **30 members**；版本 → `2.0.0-rc.4`。
+    **2026-10-22 旧口径清零（现值文档）**：`README.md:13` Workspace 徽章 31 → **30 members**；
+    `README.zh-CN.md:13` 徽章同步、正文「31 成员工作区」→ **30 成员工作区**；
+    `ARCHITECTURE.md:56`「2026-10-20：31 members / 118 production edges」→ **「2026-10-22：30 members /
+    111 production edges」**（生成物 `ARCHITECTURE.generated.md:7` 同值）；全仓 grep 现值文档零命中。
+    带日期历史标注的命中（`SECURITY.md` 2026-10-18 行、user-manual 注记、team-handover 2026-10-18 口径、
+    CHANGELOG 历史）按「历史不追改」保留（见 §5 R-4，已收敛）。
+- [x] 徽章数字与链接目标对齐（Tests 徽章 → capabilities-matrix §0.1 有据）
   - 半实证（2026-10-21）：`python scripts/docs_truth.py --verify --check` →
     `OK: STATUS.md matches claims.yaml; README badges match baseline`，exit 0；`README.md:12` /
     `README.zh-CN.md:12` Tests 徽章 = `tests-8570 passed | 0 failed (2026-10-21)`，与
@@ -100,6 +95,9 @@
     称证据面在 capabilities-matrix §0.1，该表仍 **336 套件 / 9075 passed / 52 ignored
     （2026-10-20 行）**，未跟 2026-10-21 基线（§0.1 属他线真源，本清单不改）；
     ② Workspace 徽章 31 members ≠ 30（见上条）⇒ 待他线同步后勾（见 §5 R-5）。
+    **2026-10-22 已闭环**：① README 注记日期改为 2026-10-21，matrix §0.1 行加现行指针
+    （「历史口径；现行 §1 = 341/8570/0/51（2026-10-21）」）；② Workspace 徽章已改 30
+    ⇒ 两项闭环，`docs_truth --verify --check` 仍 exit 0（R-5 已收敛）。
 - [x] 未接线能力的标注仍在（WebSocket 服务端 / DSL 洋葱 / SDK STUB_MODE 等，见
       [capabilities-matrix.md](../03-reference/capabilities-matrix.md) §0.2）
   - 实证（2026-10-21）：capabilities-matrix §0.2「未接线（不是默认开关问题）」行（L76）列
@@ -178,19 +176,22 @@ L57 tag ↔ Release 页互相指向（只有 tag 侧，E-11）。
   **已修**：脚本按 `*/fuzz/Cargo.toml` 排除并登记 `[SKIP]`（0 装：跳过要写出来），复跑 exit 0；
   `-Json` passed=true（33 检查 + 2 SKIP / FAIL 0）；`-Strict` exit 0；`-ExpectedVersion 9.9.9` 反证 exit 1
   （判定仍有效）。`.github/workflows/publish-release.yml` 首关本地已绿；**远程 CI 首跑未验证**。
-- **R-2** 发布说明口径滞后：`.github/workflows/publish-release.yml` L120 正文仍
-  「18-Crate Kernel + Assembly, 3600+ Verified Tests」（现行 30 members / 8570 passed），
-  L124–L128 下载段无「安装包未签名」声明（`CHANGELOG.md:6` 有）⇒ 发布说明修正待发布线。
-- **R-3** 资产名漂移：指南 `docs/beta/rc2-beta-guide.md:8` 引 `SHA256SUMS.txt`，流水线产物为
-  `SHA256SUMS`（`publish-release.yml` L115）⇒ 两处统一待 owner 一字。
-- **R-4** crate 口径残留：`README.md:13` Workspace 徽章 `workspace-31 members`（正文 L20 = 30）；
-  `ARCHITECTURE.md:56`「31 members / 118 production edges」vs 生成物
-  `docs/architecture/ARCHITECTURE.generated.md:7`「30 members / 111 edges」⇒ 待 owner/架构线。
-- **R-5** 测试数字二源漂移：`docs/03-reference/capabilities-matrix.md` §0.1 仍
-  336 套件 / 9075 passed / 52 ignored（2026-10-20 行），与 test-baseline §1（341 / 8570 / 51，
-  2026-10-21）不同步；README 注记仍写「2026-10-18 口径」⇒ 待效率线/他线同步（两处均为他线真源）。
-- **R-6** L29 的 `cargo run` 直跑路径未实测：`crates/adapters/cli/src/lib.rs` 于 2026-10-21 17:43:44
-  被他线改动（晚于 `target\debug\apeireth.exe` 16:48:11），`cargo run -j 2 --bin apeireth -- --version`
-  触发重编译后编译红（E0308：`GovernanceChain::new` 期望 `Arc<GovernanceChain>`，传入
-  `GovernanceChain`，`crates/adapters/cli/src/lib.rs:1560`），exit 101；按纪律跳过并如实标注，
-  该路径待他线收口后复跑（版本输出来自 E-1 已构建二进制，未改他线文件）。
+- **R-2（模板侧已收敛，2026-10-22）** 发布说明口径滞后：`.github/workflows/publish-release.yml`
+  正文曾写「18-Crate Kernel + Assembly, 3600+ Verified Tests」（旧口径）——**已改**为
+  「30-Member Workspace (29 crates + 1 bench harness), 8570+ Verified Tests (2026-10-21)」；
+  下载段**新增 Unsigned build notice**（NotSigned + 先核对 SHA-256/从源码构建提示）。
+  残留：已发布的 `v2.0.0-rc.4` Release 页正文仍是旧文案（本机无 gh/Release 面通道）⇒ 待发布线编辑/重发。
+- **R-3（已收敛，2026-10-22）** 资产名漂移：指南 `docs/beta/rc2-beta-guide.md:8` 引
+  `SHA256SUMS.txt` —— **已统一**为 `SHA256SUMS`（= 流水线产物名）；仓库侧零漂移。
+  残留：已发布 Release 页资产清单需发布线核对（无 Release 面通道）。
+- **R-4（已收敛，2026-10-22）** crate 口径残留：`README.md:13` Workspace 徽章、`README.zh-CN.md:13`
+  徽章与正文、`ARCHITECTURE.md:56`（31 members / 118 edges）**已全部清零**为
+  **30 members / 111 production edges**（与 `ARCHITECTURE.generated.md:7` 一致）；历史带日期标注按
+  「历史不追改」保留。
+- **R-5（已收敛，2026-10-22）** 测试数字二源漂移：`capabilities-matrix.md` §0.1 保留 336/9075/52
+  的历史实测行（带日期），**已加现行指针**「现行 §1 = 341 套件 / 8570 passed / 0 failed / 51 ignored
+  （2026-10-21）」；README 注记日期改为 2026-10-21。真源（test-baseline §1）未动，`docs_truth` exit 0。
+- **R-6（已收敛，2026-10-22）** L29 的 `cargo run` 直跑路径曾被他线在途编译红阻断（E0308，
+  `GovernanceChain::new` 期望 `Arc<GovernanceChain>`）；安全线 R8-B2/B3 收口（`4e380a69`/`e812fda9`）
+  后 **已复跑**：`cargo run -p apeireth-cli --bin apeireth --locked -j 2 -- --version` →
+  编译成功、输出 `apeireth 2.0.0-rc.4`、exit 0。

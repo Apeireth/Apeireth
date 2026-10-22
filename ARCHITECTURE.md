@@ -53,7 +53,7 @@ pre-freeze cleanup.
 Dependencies flow inward toward stable contracts and downward through the runtime layers.
 The **authoritative** production edge list and layer-direction verdict are generated in
 [`ARCHITECTURE.generated.md`](docs/architecture/ARCHITECTURE.generated.md)
-(2026-10-20 实测：31 members / 118 production edges)。手改该生成物或在此手写第二份依赖表
+(2026-10-22 实测：30 members / 111 production edges)。手改该生成物或在此手写第二份依赖表
 均视为契约违规：增删依赖边的唯一方式是改代码 + `Cargo.toml`，然后由 `arch_guard` 与
 `arch_doc --gen` 反映。
 

@@ -1,5 +1,14 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 发布口径残留清零：30 members / 111 edges / SHA256SUMS / 未签名声明（2026-10-22）
+
+- **R-4 收敛（crate 口径）**：`README.md:13` Workspace 徽章 `31 members` → **30 members**；`README.zh-CN.md:13` 徽章与正文「31 成员工作区」→ **30 成员工作区**；`ARCHITECTURE.md:56`「2026-10-20 实测：31 members / 118 production edges」→ **「2026-10-22 实测：30 members / 111 production edges」**（与生成物 `docs/architecture/ARCHITECTURE.generated.md:7` 同值）。历史带日期标注（SECURITY/user-manual/team-handover/CHANGELOG 历史）按「历史不追改」保留，全仓现值文档 grep 零命中。
+- **R-3 收敛（资产名）**：`docs/beta/rc2-beta-guide.md:8` 由 `SHA256SUMS.txt` → **`SHA256SUMS`**（= 流水线产物名），仓库侧零漂移；Release 页侧待发布线核对。
+- **R-2 模板侧收敛（发布说明）**：`.github/workflows/publish-release.yml` 发布正文「18-Crate Kernel + Assembly, 3600+ Verified Tests」→ **「30-Member Workspace (29 crates + 1 bench harness), 8570+ Verified Tests (2026-10-21)」**；下载段**新增 Unsigned build notice**（`NotSigned` + 建议先核对 SHA-256 或从源码构建）。已发布的 rc.4 Release 页正文仍为旧文案（无 Release 面通道）⇒ 待发布线编辑/重发。
+- **R-5 收敛（测试数字二源）**：`capabilities-matrix.md` §0.1 历史实测行保留并**加现行指针**「现行 §1 = 341 套件 / 8570 passed / 0 failed / 51 ignored（2026-10-21）」；README 注记日期改 2026-10-21；真源 test-baseline §1 未动，`docs_truth --verify --check` exit 0。
+- **R-6 收敛（cargo 直跑）**：安全线 R8-B2/B3 收口后复跑 `cargo run -p apeireth-cli --bin apeireth --locked -j 2 -- --version` → 编译成功、输出 **`apeireth 2.0.0-rc.4`**、exit 0（此前被在途 cli 编译红阻断）。
+- **checklist 更新**：§1 L29 → `[x]`（cargo 直跑闭环）；§2 crate 口径 / 徽章对齐 → `[x]`；L30/L33 保留 `[ ]` 并如实注明「模板/仓库侧已收敛，已发布 Release 页待发布线」。**远程 CI 首跑仍未验证**。
+
 ## [Unreleased] — R-1 收敛：版本一致性门禁排除 cargo-fuzz 子工程（2026-10-22）
 
 - **修复**：`scripts/check-release-version.ps1` 递归扫 `crates/**/Cargo.toml` 时把两个 cargo-fuzz 子工程（`crates/engine/image/{codecs,psd}/fuzz/Cargo.toml`；独立 `[workspace]`、fuzz 惯例 `version = "0.0.0"`）判为版本不一致 ⇒ exit 1，而该脚本是 `publish-release.yml` 推 `v*` tag 后的第一道门禁（`-ExpectedVersion <tag> -Strict`）⇒ **修前发版必在第一步失败**。

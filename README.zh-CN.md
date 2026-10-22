@@ -10,7 +10,7 @@
 **它记得你随口说的话、在你忙时闭嘴、有自己不肯丢的底线。**
 
 [![Tests](https://img.shields.io/badge/tests-8570%20passed%20%7C%200%20failed%20(2026--10--21)-success.svg?logo=checkmarx)](docs/03-reference/test-baseline.md)
-[![Workspace](https://img.shields.io/badge/workspace-31%20members-blue.svg?logo=rust)](Cargo.toml)
+[![Workspace](https://img.shields.io/badge/workspace-30%20members-blue.svg?logo=rust)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%2B%20Linux-lightgrey.svg)](INSTALL.md)
 [![Status](https://img.shields.io/badge/status-rc%20%E5%86%85%E6%B5%8B-orange.svg)](ROADMAP.md)
 [![Unsafe code](https://img.shields.io/badge/unsafe_code-FORBIDDEN-brightgreen.svg?logo=shield)](crates/foundation/core)
@@ -189,7 +189,7 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ## 五、掀开引擎盖
 
-"被记得"听起来是件柔软的事，做成它需要非常硬的工程。31 成员工作区（30 个产品 crate + 1 个 bench harness）的认知微内核，纯 Safe Rust、零 unsafe——不是为了炫技，是因为**要被托付一生的东西，不能有未定义行为**。
+"被记得"听起来是件柔软的事，做成它需要非常硬的工程。30 成员工作区（29 个产品 crate + 1 个 bench harness）的认知微内核，纯 Safe Rust、零 unsafe——不是为了炫技，是因为**要被托付一生的东西，不能有未定义行为**。
 
 ### 星群
 
