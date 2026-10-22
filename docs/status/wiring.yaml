@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 1912958e52a5b422da5a0c066cb07963d251147b2eb07f23717f8f215b7ef758
+claims_sha256: d0e7c13aafed82b99c0fab9a784121d719a37a59ba0b1e619f6ec1b4e583de32
 claims_total: 24
 items:
   - id: "rt.provider_router"
@@ -192,7 +192,7 @@ items:
         - "crates/engine/storage/tests/sealed_backup_restore.rs"
       claims_id: "sec.storage_envelope_crypto"
     gaps:
-      - "未达 PRODUCTION WIRED：分区 DEK + AES-256-GCM 信封 + KEK 三槽包裹 + 备份恢复不变量测试；会话/记忆读写路径生产接线未在本批（cli/runtime 未见消费）——0 装口径：IMPLEMENTED，不称 PRODUCTION WIRED。"
+      - "未达 PRODUCTION WIRED：分区 DEK + AES-256-GCM 信封 + KEK 三槽包裹 + 备份恢复不变量测试；会话/记忆读写路径生产接线未在本批（cli/runtime 未见消费）——0 装口径：IMPLEMENTED，不称 PRODUCTION WIRED。；2026-10-22 批次复核：crypto_inva…"
   - id: "gov.chain_skeleton"
     capability: "R8-A 治理链六段顺序执行骨架——库内可跑，生产零调用"
     implemented:
@@ -287,7 +287,7 @@ items:
         []
       claims_id: "rel.release_asset_verify"
     gaps:
-      - "未达 PRODUCTION WIRED：7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。"
+      - "未达 PRODUCTION WIRED：7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 s…"
   - id: "sec.sql_readonly_gate"
     capability: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
     implemented:
@@ -321,7 +321,7 @@ items:
         []
       claims_id: "sec.provider_proxy_ssrf"
     gaps:
-      - "未达 PRODUCTION WIRED：私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。"
+      - "未达 PRODUCTION WIRED：私网/链路本地/组播/保留段拒绝 + IP 变体规范化判类；provider_proxy 25/25；残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（交付记录如实）。；2026-10-22 批次复核：桌面 tauri lib 140 passed / 3 ignored（含 …"
   - id: "sec.desktop_file_roots"
     capability: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
     implemented:
