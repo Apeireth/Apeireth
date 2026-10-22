@@ -43,6 +43,11 @@
 > 未签名声明已入模板，不阻塞内部测试版）。另：B6-2a 试点设计页
 > [b6-2a-sealed-session-design-2026-10-22.md](backend-enhancement/b6-2a-sealed-session-design-2026-10-22.md)
 > 已出，待 owner 拍板三问（试点范围 `sessions.data` / daemon 密钥供给 / KDF+回滚）。
+> **push 实测（2026-10-22 09:2x）**：`git push origin main` 被远端**分支保护拒绝**
+> （`main` 为 locked branch，required status check `kani` 未满足）⇒ 已把全量提交推到
+> 侧分支 **`batch-2026-10-22`**（221 commits；远端已建，fetch 后 `main...HEAD` = 0 behind / 221 ahead）。
+> 待 owner 动作：开 PR 合并（一键：`https://github.com/Apeireth/Apeireth/pull/new/batch-2026-10-22`）
+> 或临时解锁/绕过 `main` 保护；PR 一开即触发远端 CI（其首跑记录即本清单最后一格证据）。
 
 ## 1. 发布物一致性
 
