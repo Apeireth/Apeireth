@@ -1,6 +1,6 @@
 # B6-2a 试点设计：`sessions.data` 列级封缄接入（决策页）
 
-> 日期：2026-10-22 · 状态：**设计/待拍板（未动生产代码）** · 归属线：安全线（storage）+ 装配线（runtime-assembly）
+> 日期：2026-10-22 · 状态：**B6-2a 已按方案 A 施工（默认关；仅 `sessions.data` 试点）** · 归属线：安全线（storage）+ 装配线（runtime-assembly）
 > 依据：`implemented-to-wired-plan-2026-10-21.md` §2（B6 抬级波 2）、隐患 #6、`f72a6f13`（S3·B6 定级+接缝交付）、`crypto_keys.rs`（波 1 密钥出口，`41e451ca`）
 
 ## 0. 结论（TL;DR，建议按此拍板）
@@ -76,6 +76,38 @@ apeireth crypto session-seal rewrite-plaintext --db <path> --keys <keyfile> --ye
 
 - 迁移前自动备份 `<db>.bak.<ts>`（storage `sealed_backup` 已具备）；
 - 幂等：已是密文形态的行跳过；迁移只写 `data` 列，不重建表。
+
+## 2.5 施工落地（2026-10-22，方案 A）
+
+| 决策项 | 拍板结果 | 落地位置 |
+|---|---|---|
+| 试点范围 | 只 `sessions.data` 一列 | `crates/engine/runtime-assembly/src/sqlite_session.rs` |
+| daemon 密钥供给 | 方案 A：`crypto unlock --out` 0600 密钥文件 | `crates/adapters/cli/src/crypto_keys.rs`（`--out`）+ `session_seal.rs` |
+| KDF / 回滚 | 维持 600k；回滚 = 关开关（混合态可读），不提供自动批量解密 | 惰性迁移（写时升级）+ 双兼容读 |
+
+### 运维口径（开关默认关）
+
+```bash
+# 1) 生成包裹密钥（口令 + 恢复件）—— 恢复件请离线保管
+apeireth crypto wrap --partition sessions --keys ~/.apeireth/sessions.keys.json \
+    --recovery-out ~/.apeireth/sessions.recovery.txt
+
+# 2) 导出解锁后的密钥材料（0600；daemon 无终端，故不走交互口令）
+apeireth crypto unlock --keys ~/.apeireth/sessions.keys.json \
+    --out /run/apeireth/session-seal.key
+
+# 3) 打开封缄（daemon 环境）
+export APEIRETH_ENABLE_SESSION_SEAL=1
+export APEIRETH_SESSION_SEAL_KEY_FILE=/run/apeireth/session-seal.key
+```
+
+- **密钥丢失 = 会话永久不可解**（无后门）：`keys.json` + 恢复件必须离线保管，
+  备份集必须同时备份密钥材料 —— 只备份库文件等于制造一堆永远解不开的密文。
+- 开关开而密钥文件缺失/坏 = **启动失败**，不降级明文。
+- 关开关回滚：新写回明文，旧的密文行仍可读（密钥文件保留即可），**不提供**
+  自动全量解密命令。
+- 已知残余：明文旧带留在历史备份/`.bak` 中（加密不追溯已备份文件）；
+  `sessions.id` 与时间列仍明文（定级表已拍板）；未做性能基准，不宣称数字。
 
 ## 3. 风险与残余（如实登记，不假装没有）
 

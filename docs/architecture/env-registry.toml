@@ -833,6 +833,16 @@ status = "current"
 evidence = "direct:crates/engine/runtime-assembly/src/canonical.rs:213;direct:crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:55;direct:crates/engine/runtime-assembly/src/canonical/self_tuning_wire.rs:94"
 
 [[entries]]
+name = "APEIRETH_ENABLE_SESSION_SEAL"
+default = "off"
+layer = "engine"
+owner = "apeireth-runtime-assembly"
+purpose = "B6-2a 试点: sessions.data 列级封缄开关。开 = 会话 JSON 落盘走 AES-256-GCM 封缄 (分区 DEK + AAD 绑分区), 读路径双兼容 (密文解封 / 明文旧行照读); 关 = 不读密钥文件、不构造封缄层, 落盘逐字节同旧路径。只认字面 \"1\"。开关开而密钥文件缺失/坏 = 启动失败 (绝不降级明文)。仅 sessions 一列试点, memory_items/episodes 等其余 P0 列未接。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical/session_seal.rs:0;direct:crates/engine/runtime-assembly/src/sqlite_session.rs:0"
+
+[[entries]]
 name = "APEIRETH_ENABLE_SHEET_OPS"
 default = "off"
 layer = "engine"
@@ -1442,6 +1452,16 @@ level = "UNCLASSIFIED"
 status = "current"
 kind = "test-only"
 evidence = "scan-only:crates/foundation/core/src/lib.rs:2273"
+
+[[entries]]
+name = "APEIRETH_SESSION_SEAL_KEY_FILE"
+default = "n/a"
+layer = "engine"
+owner = "apeireth-runtime-assembly"
+purpose = "B6-2a 密钥供给 (方案 A): 解锁后的分区密钥材料文件路径 (JSON, 0600, 由 apeireth crypto unlock --out 产出)。daemon 无终端, 故不走交互口令; 密钥文件在盘上 (0600) 是本方案的已知残余, 文档明示。密钥丢失 = 会话永久不可解 (KEY_LOSS_BOUNDARY, 无后门)。"
+level = "PRODUCTION WIRED"
+status = "current"
+evidence = "direct:crates/engine/runtime-assembly/src/canonical/session_seal.rs:0;direct:crates/adapters/cli/src/crypto_keys.rs:0"
 
 [[entries]]
 name = "APEIRETH_SESSION_DB"
