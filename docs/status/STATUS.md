@@ -6,14 +6,14 @@
 | id | level | default | switch_env | verified_at | next_review |
 |---|---|---|---|---|---|
 | `rt.provider_router` | PRODUCTION WIRED | ON | - | `d2621788` | 2026-11-20 |
-| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `73b70178` | 2026-11-20 |
-| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `73b70178` | 2026-11-20 |
-| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `73b70178` | 2026-11-20 |
-| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `73b70178` | 2026-11-20 |
+| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `029dea0c` | 2026-11-20 |
+| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `029dea0c` | 2026-11-20 |
+| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `029dea0c` | 2026-11-20 |
+| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `029dea0c` | 2026-11-20 |
 | `gap.memory_update` | NOT IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `d2621788` | 2026-11-20 |
 | `sec.linux_containment` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
-| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `73b70178` | 2026-11-20 |
+| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `029dea0c` | 2026-11-20 |
 | `sec.storage_envelope_crypto` | IMPLEMENTED | - | - | `73b70178` | 2026-11-20 |
 | `gov.chain_skeleton` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
 | `gov.chain_hook_adapter` | IMPLEMENTED | - | - | `7153f5db` | 2026-11-20 |
@@ -27,7 +27,7 @@
 | `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
 | `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `d2621788` | 2026-11-20 |
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `d2621788` | 2026-11-20 |
-| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `73b70178` | 2026-11-20 |
+| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `029dea0c` | 2026-11-20 |
 | `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `83933edd` | 2026-11-20 |
 
 ## 使用
