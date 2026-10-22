@@ -1,5 +1,14 @@
 # Changelog — Apeireth
 
+## [Unreleased] — 安全线重启批 S1-S3：治理单一入口 + 持久审计 + TLS/加密/SSRF 收口（2026-10-21/22）
+
+- **S1·R8-B2 装配根单点**（4e380a69）：CLI 生产治理收敛 GovernanceChain::run 单入口，四态行为等价真账。
+- **S2·R8-B3 持久审计**（e812fda9）：jsonl 哈希链账本（拒篡改/重启 verify/savepoint 回滚）+ IM 审批对经链落账；账本开不出响亮降级（D4 默认内存口径）。
+- **S3·B5 TLS 补测**（d6b6420b）：协议矩阵 1.2/1.3 真握手、ECDSA 真链、冷启动轮换；生产证书留清单。
+- **S3·B6 加密定级**（f72a6f13）：字段六档分类真源（指纹哈希列改判加密、向量列保明）+ KDF 600k + 列级封缄示范 5 测。
+- **S3·B2 SSRF 二段**（e4b09767）：本地端点注册制 + 公网提供方 allowlist + 重定向逐跳钉址（33 测含 3 对抗用例）。
+- **真账**：gateway 312/0 · storage 198/0 · 桌面 159/0（各 scoped 实测）；0 新外部 dep；全量数只认效率线 gate_full。收口报告 security-restart-closeout-2026-10-22.md。
+
 ## [Unreleased] — 发布口径残留清零：30 members / 111 edges / SHA256SUMS / 未签名声明（2026-10-22）
 
 - **R-4 收敛（crate 口径）**：`README.md:13` Workspace 徽章 `31 members` → **30 members**；`README.zh-CN.md:13` 徽章与正文「31 成员工作区」→ **30 成员工作区**；`ARCHITECTURE.md:56`「2026-10-20 实测：31 members / 118 production edges」→ **「2026-10-22 实测：30 members / 111 production edges」**（与生成物 `docs/architecture/ARCHITECTURE.generated.md:7` 同值）。历史带日期标注（SECURITY/user-manual/team-handover/CHANGELOG 历史）按「历史不追改」保留，全仓现值文档 grep 零命中。
