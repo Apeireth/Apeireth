@@ -327,6 +327,34 @@ export async function applyBackendConfigOrThrow(
   return info?.endpoint ?? null;
 }
 
+/**
+ * 用户白名单：允许桌面端连接的自建服务器基址（中继目标审批的用户显式面）。
+ * 只收远程服务器基址（http(s) 基址或 主机:端口）；本机服务归本地端点注册面管。
+ */
+
+/** The allowed-server bases currently stored, or null in web mode. */
+export function listAllowedServers(): Promise<string[] | null> {
+  return invokeOptional<string[]>('list_allowed_servers');
+}
+
+/**
+ * Add one allowed-server base. Rejects with the Rust-side reason when the base
+ * is invalid (bad scheme / no host / local endpoint / refused address class).
+ * Web mode rejects: there is no relay to configure.
+ */
+export async function addAllowedServer(base: string): Promise<string[]> {
+  if (!isDesktop()) throw new Error('仅桌面版支持管理允许的服务器');
+  const {invoke} = await import('@tauri-apps/api/core');
+  return invoke<string[]>('add_allowed_server', {base});
+}
+
+/** Remove one allowed-server base (exact match). Same failure contract as {@link addAllowedServer}. */
+export async function removeAllowedServer(base: string): Promise<string[]> {
+  if (!isDesktop()) throw new Error('仅桌面版支持管理允许的服务器');
+  const {invoke} = await import('@tauri-apps/api/core');
+  return invoke<string[]>('remove_allowed_server', {base});
+}
+
 /** Absolute path of the log directory. */
 export function getLogDirectory(): Promise<string | null> {
   return invokeOptional<string>('get_log_directory');

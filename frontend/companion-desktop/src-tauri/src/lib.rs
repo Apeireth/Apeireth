@@ -530,6 +530,20 @@ pub fn run() {
         }
     };
 
+    // 中继允许服务器（用户白名单）持久面：与其它桌面配置面同口径——坏档拒开，
+    // 绝不回退默认（refuse to start with a typed error that names the file）。
+    let allowed_servers = match provider_proxy::AllowedServersStore::load_from_logger(&logger) {
+        Ok(store) => Arc::new(store),
+        Err(error) => {
+            logger.log_desktop(
+                LogLevel::Error,
+                &format!("desktop.config rejected, refusing to start: {error}"),
+            );
+            eprintln!("Persisted config rejected: {error}");
+            std::process::exit(1);
+        }
+    };
+
     tauri::Builder::default()
         // 单实例: 二次启动聚焦已有主窗而不是再开一个 (尽量靠前注册).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -548,6 +562,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(supervisor.clone())
         .manage(logger.clone())
+        .manage(allowed_servers.clone())
         .invoke_handler(tauri::generate_handler![
             ping,
             close_quick_window,
@@ -571,6 +586,9 @@ pub fn run() {
             open_log_directory,
             read_tuning_log,
             provider_proxy::provider_request,
+            provider_proxy::list_allowed_servers,
+            provider_proxy::add_allowed_server,
+            provider_proxy::remove_allowed_server,
             terminal_exec::run_workspace_command,
             portable_mode::get_portable_mode,
             sqlite_workbench::query_sqlite_file,

@@ -128,7 +128,15 @@
     listWorkspaceSuggestions,
   } from '../tauri-bridge';
   import type {BackendStatus, ResidentProbeReport, TuningLogEntry} from '../desktop-bridge';
-  import {getBackendStatus, getResidentProbe, isDesktop, readTuningLog} from '../desktop-bridge';
+  import {
+    addAllowedServer,
+    getBackendStatus,
+    getResidentProbe,
+    isDesktop,
+    listAllowedServers,
+    readTuningLog,
+    removeAllowedServer,
+  } from '../desktop-bridge';
   import {configWithCapabilities, toggledCapability} from '../capability-apply';
   import type {CapabilityToggleKey} from '../capability-apply';
   import {
@@ -832,6 +840,54 @@
       models: [],
     },
   ];
+
+  // ---- 允许的自建服务器（中继目标审批的用户显式面）----
+  // 只收远程服务器基址（http(s) 基址或 主机:端口）；本机服务归本地端点注册面管，
+  // 因此回环基址在 Rust 面拒收（如实报错，不做假旋钮）。
+  let allowedServers = $state<string[]>([]);
+  let allowedServerInput = $state('');
+  let allowedServerError = $state('');
+  let allowedServersLoaded = $state(false);
+  let allowedServersBusy = $state(false);
+
+  async function refreshAllowedServers(): Promise<void> {
+    allowedServers = (await listAllowedServers()) ?? [];
+  }
+
+  $effect(() => {
+    if (activeSection === 'tools' && !allowedServersLoaded) {
+      allowedServersLoaded = true;
+      void refreshAllowedServers();
+    }
+  });
+
+  async function handleAddAllowedServer(): Promise<void> {
+    const base = allowedServerInput.trim();
+    if (!base || allowedServersBusy) return;
+    allowedServersBusy = true;
+    allowedServerError = '';
+    try {
+      allowedServers = await addAllowedServer(base);
+      allowedServerInput = '';
+    } catch (err) {
+      allowedServerError = err instanceof Error ? err.message : String(err);
+    } finally {
+      allowedServersBusy = false;
+    }
+  }
+
+  async function handleRemoveAllowedServer(base: string): Promise<void> {
+    if (allowedServersBusy) return;
+    allowedServersBusy = true;
+    allowedServerError = '';
+    try {
+      allowedServers = await removeAllowedServer(base);
+    } catch (err) {
+      allowedServerError = err instanceof Error ? err.message : String(err);
+    } finally {
+      allowedServersBusy = false;
+    }
+  }
 
   let activeProtocol = $state<ProviderProtocol>('openai');
   let activePreset = $state<string>('openai');
@@ -2970,6 +3026,47 @@
           <p class="block-desc">
             工具权限授予 + 沙箱边界。开启工具 ≠ 无审批执行——shell 每次调用仍走审批卡。
           </p>
+
+          <div class="form-group">
+            <span class="group-label">允许连接的自建服务器</span>
+            <small class="field-hint">允许桌面端连接这些服务器；只加你信任的地址（http(s) 基址或 主机:端口）。本机服务不由这里管理，归本地端点注册面。</small>
+            {#each allowedServers as base (base)}
+              <div class="allowed-server-row">
+                <code class="allowed-server-base">{base}</code>
+                <button
+                  type="button"
+                  class="allowed-server-remove"
+                  onclick={() => void handleRemoveAllowedServer(base)}
+                  disabled={allowedServersBusy}
+                >
+                  移除
+                </button>
+              </div>
+            {/each}
+            <div class="allowed-server-add">
+              <input
+                id="allowed-server-input"
+                type="text"
+                placeholder="https://relay.example.com:8443 或 relay.example.com:8443"
+                bind:value={allowedServerInput}
+                disabled={allowedServersBusy}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') void handleAddAllowedServer();
+                }}
+              />
+              <button
+                type="button"
+                class="allowed-server-add-btn"
+                onclick={() => void handleAddAllowedServer()}
+                disabled={allowedServersBusy || !allowedServerInput.trim()}
+              >
+                添加
+              </button>
+            </div>
+            {#if allowedServerError}
+              <small class="field-hint allowed-server-error">{allowedServerError}</small>
+            {/if}
+          </div>
 
           <div class="cap-summary">
             <Wrench size={14} />
@@ -5133,6 +5230,45 @@
   .subnav-chevron { display: flex; color: var(--faint, var(--muted)); transition: transform .15s ease; }
   .subnav-chevron.open { transform: rotate(180deg); }
   .subnav-group-pages { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 2px; padding-left: 8px; }
+
+  /* ---- 允许的自建服务器（用户白名单管理列表）---- */
+  .allowed-server-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .allowed-server-base {
+    flex: 1;
+    font-size: 12px;
+    word-break: break-all;
+  }
+  .allowed-server-remove,
+  .allowed-server-add-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--amber-line, rgba(0, 0, 0, 0.15));
+    border-radius: 6px;
+    background: var(--surface-2, rgba(0, 0, 0, 0.04));
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .allowed-server-remove:disabled,
+  .allowed-server-add-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .allowed-server-add {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .allowed-server-add input {
+    flex: 1;
+  }
+  .allowed-server-error {
+    color: var(--danger, #b42318);
+  }
   /* 描述词落位：大类说明常驻内容列页顶（类别分级下的页面）。 */
   .category-context {
     margin: 0 0 18px;

@@ -10,16 +10,17 @@
 //!   endpoint** — either a registered local endpoint
 //!   (`LocalEndpointRegistry`: the default gateway base, the first-run
 //!   wizard's local-runtime base, and the live gateway endpoint) or a
-//!   configured provider host (`ProviderAllowlist`, built from the provider
-//!   base URLs the desktop pushes to the sidecar). Unregistered loopback
-//!   targets are refused; with no configured provider host, remote targets are
-//!   refused outright.
+//!   configured remote server (`ProviderAllowlist`: the provider base URLs the
+//!   desktop pushes to the sidecar **plus** the user-managed allowed-server
+//!   bases, `AllowedServersStore`). Unregistered loopback targets are refused;
+//!   with no configured server, remote targets are refused outright.
 //! - address-class gate (`gate_address`): every address the relay connects to
 //!   must be the loopback face or public unicast — private, link-local, shared,
 //!   multicast, unspecified, documentation, benchmarking and reserved ranges
 //!   are refused, for IP literals (including decimal/hex/short spellings and
 //!   IPv4-mapped IPv6, which the URL parser normalizes) and for **every**
-//!   address a host name resolves to
+//!   address a host name resolves to. A non-local-face name that resolves into
+//!   the loopback class is refused too: loopback exposure is registry-only.
 //! - DNS pinning (`GatedResolver`): each connection attempt resolves its host
 //!   exactly once, gates every resolved address, and connects to exactly those
 //!   addresses — never a second resolution. The resolver is client-wide, so
@@ -39,15 +40,19 @@
 //! - approval is endpoint-scoped, not user-intent-scoped: anything reachable
 //!   at an approved (host, port) is relayable, and the Settings "test" button
 //!   for a *not yet saved* remote provider host is refused until the config is
-//!   saved (the allowlist is built from the applied provider config).
+//!   saved (the allowlist is built from the applied provider config; the user
+//!   allowed-server face is the explicit way to add more).
 //! - the local registry carries two built-in faces (the default gateway base
-//!   and the wizard's local-runtime base) plus the live gateway endpoint;
-//!   another local service squatting one of those ports is indistinguishable
-//!   from the registered face at the relay level.
+//!   and the wizard's local-runtime base) plus the live gateway endpoint and
+//!   configured local provider bases; another local service squatting one of
+//!   those ports is indistinguishable from the registered face at the relay
+//!   level.
 
 use crate::logging::DesktopLogger;
-use serde::Serialize;
+use apeireth_core::stored_doc::DocCompat;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Cap on a relayed response body (5 MiB). Model lists and provider error
@@ -269,12 +274,21 @@ fn embedded_ipv4(ip: &std::net::Ipv6Addr) -> Option<std::net::Ipv4Addr> {
 }
 
 /// Every resolved address of a host must pass `gate_address` (fail closed:
-/// one refused address refuses the whole target).
+/// one refused address refuses the whole target). Additional registration
+/// rule: a non-loopback-face name must not resolve **into** the loopback class
+/// — loopback exposure goes through [`LocalEndpointRegistry`] only, so a name
+/// that points at the local face is refused unless the name itself is the
+/// local face ("localhost" / loopback literal).
 fn gate_resolved_addrs(host: &str, addrs: &[std::net::SocketAddr]) -> Result<(), String> {
     for addr in addrs {
         if let Err(reason) = gate_address(addr.ip()) {
             return Err(format!(
                 "target host '{host}' resolves to a refused address ({reason})"
+            ));
+        }
+        if addr.ip().is_loopback() && !is_loopback_face_host(host) {
+            return Err(format!(
+                "target host '{host}' resolves to the local face without a registered local endpoint"
             ));
         }
     }
@@ -335,11 +349,34 @@ fn approved_endpoints_contain(entries: &[ApprovedEndpoint], host: &str, port: u1
         .any(|entry| endpoint_matches(entry, host, port))
 }
 
-/// (host, port) of a configured base URL: normalized host + effective port.
+/// (host, port) of a configured base: normalized host + effective port.
+///
+/// Accepts a full `http(s)://host[:port][/…]` base URL (the configured provider
+/// faces) and the bare `host:port` form (the user allowlist face). Approval is
+/// (host, port) scoped; the path and the scheme beyond http/https play no part.
 fn approved_endpoint_from_base_url(base_url: &str) -> Option<ApprovedEndpoint> {
-    let parsed = reqwest::Url::parse(base_url.trim()).ok()?;
-    let host = gate_host_str(&parsed)?;
-    let port = parsed.port_or_known_default()?;
+    let trimmed = base_url.trim();
+    if let Ok(parsed) = reqwest::Url::parse(trimmed) {
+        if matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some() {
+            let host = gate_host_str(&parsed)?;
+            let port = parsed.port_or_known_default()?;
+            return Some(ApprovedEndpoint {
+                host: host.to_ascii_lowercase(),
+                port,
+            });
+        }
+    }
+    // Bare `host:port` form: no scheme and no path — host + port only. (Any
+    // scheme-bearing URL that is not http/https was already excluded above.)
+    if trimmed.contains("://") || trimmed.contains('/') {
+        return None;
+    }
+    let (host, port) = trimmed.rsplit_once(':')?;
+    let host = host.trim().trim_start_matches('[').trim_end_matches(']');
+    if host.is_empty() {
+        return None;
+    }
+    let port = port.trim().parse::<u16>().ok()?;
     Some(ApprovedEndpoint {
         host: host.to_ascii_lowercase(),
         port,
@@ -392,19 +429,26 @@ impl LocalEndpointRegistry {
     }
 }
 
-/// Provider-host allowlist: (host, port) pairs taken from the applied provider
-/// base URLs. Empty = no remote target is approved (fail closed); a configured
-/// local provider base (e.g. a loopback model runtime on its own port) lands
-/// here too and is approved like any other configured provider.
+/// Provider-host allowlist: (host, port) pairs of **remote** configured
+/// servers — the applied provider base URLs plus the user-configured allowed
+/// servers (the explicit user face). Empty = no remote target is approved
+/// (fail closed). Loopback bases never land here: local endpoints belong to
+/// [`LocalEndpointRegistry`] alone (the user allowlist governs remote servers
+/// only), and entries are skipped here as defense in depth.
 #[derive(Debug, Clone, Default)]
 pub struct ProviderAllowlist {
     entries: Vec<ApprovedEndpoint>,
 }
 
 impl ProviderAllowlist {
-    /// Add one configured provider base URL (host + effective port).
+    /// Add one configured base (host + effective port). Loopback bases are
+    /// skipped: they could only ever approve a local endpoint, and that is the
+    /// registry's job (see [`LocalEndpointRegistry`]).
     pub fn add_base_url(&mut self, base_url: &str) {
         if let Some(entry) = approved_endpoint_from_base_url(base_url) {
+            if is_loopback_face_host(&entry.host) {
+                return;
+            }
             if !self.entries.contains(&entry) {
                 self.entries.push(entry);
             }
@@ -429,6 +473,21 @@ pub struct RelayPolicy {
 }
 
 impl RelayPolicy {
+    /// Fold one configured provider base into the policy: a loopback base
+    /// registers the local endpoint (the registry is the sole authority for
+    /// loopback), a remote base extends the provider allowlist. Unparseable
+    /// bases approve nothing (fail closed).
+    pub fn add_configured_base(&mut self, base_url: &str) {
+        let Some(entry) = approved_endpoint_from_base_url(base_url) else {
+            return;
+        };
+        if is_loopback_face_host(&entry.host) {
+            self.local.register_base_url(base_url);
+        } else {
+            self.providers.add_base_url(base_url);
+        }
+    }
+
     /// Approve one target: a covering (host, port) in either face passes;
     /// everything else is refused (fail closed) with the face named, so the
     /// webview can tell "save your provider config first" from "wrong port".
@@ -445,6 +504,143 @@ impl RelayPolicy {
                 "provider_request: target host '{host}:{port}' is not in the provider allowlist"
             ))
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// User allowlist face: the allowed-server bases the user manages explicitly
+// (advanced setups with their own relay / service). Persisted through the
+// standard stored-doc envelope; the entries feed `ProviderAllowlist` only —
+// remote servers, never the local endpoint registry.
+// ---------------------------------------------------------------------------
+
+/// Stored-doc identity: the relay's user-configured allowed servers.
+pub const ALLOWED_SERVERS_DOC_NAME: &str = "companion-relay-allowed-servers";
+/// Allowed-servers stored format version.
+pub const ALLOWED_SERVERS_DOC_VERSION: u32 = 1;
+
+fn allowed_servers_doc_compat() -> DocCompat {
+    DocCompat::exact(ALLOWED_SERVERS_DOC_NAME, ALLOWED_SERVERS_DOC_VERSION)
+}
+
+/// Persisted body of the user allowlist: one entry per allowed server base,
+/// exactly as validated on add (see [`validate_allowed_server_base`]).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AllowedServersDoc {
+    /// Allowed server bases (`http(s)://…` or `host:port`), in add order.
+    pub servers: Vec<String>,
+}
+
+/// Validate one user-configured allowed-server base. Accepted: an `http(s)`
+/// base URL with a host, or bare `host:port`. Refused (with the reason):
+/// empty/malformed input; other schemes; loopback bases (local endpoints belong
+/// to [`LocalEndpointRegistry`] — the user allowlist governs remote servers
+/// only); and IP literals in a refused address class (private / link-local /
+/// …) — those could never relay, so accepting them would be a fake knob.
+pub fn validate_allowed_server_base(base: &str) -> Result<String, String> {
+    let trimmed = base.trim();
+    if trimmed.is_empty() {
+        return Err("allowed server base is empty".to_string());
+    }
+    let Some(entry) = approved_endpoint_from_base_url(trimmed) else {
+        return Err(format!(
+            "allowed server base '{trimmed}' is not an http(s) base URL or host:port"
+        ));
+    };
+    if is_loopback_face_host(&entry.host) {
+        return Err(format!(
+            "allowed server base '{trimmed}' is a local endpoint; local endpoints belong to the local endpoint registry, the allowlist governs remote servers only"
+        ));
+    }
+    if let Ok(ip) = entry.host.parse::<std::net::IpAddr>() {
+        gate_address(ip).map_err(|reason| {
+            format!("allowed server base '{trimmed}' is a refused address class ({reason})")
+        })?;
+    }
+    Ok(trimmed.to_string())
+}
+
+/// The user allowlist's storage face: add / remove / list with strict-open
+/// persistence. A malformed / foreign / version-mismatched stored file is
+/// **refused** on load (never read-as-default); a missing file is an empty
+/// list.
+pub struct AllowedServersStore {
+    path: PathBuf,
+    servers: std::sync::RwLock<Vec<String>>,
+}
+
+impl AllowedServersStore {
+    /// App-data file for the user allowlist (same directory as the other
+    /// desktop config envelopes).
+    pub fn allowed_servers_path(logger: &DesktopLogger) -> PathBuf {
+        logger
+            .log_directory()
+            .parent()
+            .map(|dir| dir.join("relay-allowed-servers.json"))
+            .unwrap_or_else(|| logger.log_directory().join("relay-allowed-servers.json"))
+    }
+
+    /// Open (and strictly validate) the store at `path`.
+    pub fn load(path: PathBuf) -> Result<Self, String> {
+        let loaded: Option<AllowedServersDoc> =
+            crate::stored_config::load_config(&path, &allowed_servers_doc_compat())?;
+        Ok(Self {
+            path,
+            servers: std::sync::RwLock::new(loaded.unwrap_or_default().servers),
+        })
+    }
+
+    /// Open the store at the app-data location.
+    pub fn load_from_logger(logger: &DesktopLogger) -> Result<Self, String> {
+        Self::load(Self::allowed_servers_path(logger))
+    }
+
+    /// The allowed bases, in add order.
+    pub fn list(&self) -> Vec<String> {
+        self.servers
+            .read()
+            .map(|servers| servers.clone())
+            .unwrap_or_else(|poisoned| poisoned.into_inner().clone())
+    }
+
+    /// Validate, add (idempotent) and persist one base; returns the new list.
+    /// Mutation and persistence happen under one write lock, so concurrent
+    /// add/remove calls cannot interleave into a stale file.
+    pub fn add(&self, base: &str) -> Result<Vec<String>, String> {
+        let validated = validate_allowed_server_base(base)?;
+        let mut servers = self
+            .servers
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !servers.iter().any(|entry| entry == &validated) {
+            servers.push(validated);
+        }
+        self.persist_list(&servers)?;
+        Ok(servers.clone())
+    }
+
+    /// Remove one base (exact match) and persist; returns the new list.
+    /// Removing an absent base is a no-op (idempotent).
+    pub fn remove(&self, base: &str) -> Result<Vec<String>, String> {
+        let mut servers = self
+            .servers
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        servers.retain(|entry| entry != base.trim());
+        self.persist_list(&servers)?;
+        Ok(servers.clone())
+    }
+
+    /// Persist one list through the stored-doc envelope (atomic write).
+    fn persist_list(&self, servers: &[String]) -> Result<(), String> {
+        if let Some(parent) = self.path.parent() {
+            fs_err::create_dir_all(parent)
+                .map_err(|error| format!("allowed servers persist failed: {error}"))?;
+        }
+        let doc = AllowedServersDoc {
+            servers: servers.to_vec(),
+        };
+        crate::stored_config::save_config(&self.path, &allowed_servers_doc_compat(), &doc)
     }
 }
 
@@ -887,26 +1083,37 @@ async fn relay_via<T: RelayTransport>(
     })
 }
 
-/// Build the per-call approval policy from the supervisor's live faces: the
-/// gateway endpoint (registered local endpoint) and the applied provider
-/// env's `*_URL` base URLs (provider allowlist). Key material never enters the
-/// policy: only endpoint URLs do.
+/// Build the per-call approval policy from the live faces: the supervisor's
+/// gateway endpoint (registered local endpoint) and applied provider env
+/// `*_URL` base URLs (classified into registry / allowlist by
+/// [`RelayPolicy::add_configured_base`]), plus the user-managed allowed-server
+/// bases (remote only). Key material never enters the policy: only endpoint
+/// URLs do.
 async fn relay_policy_from_sidecar(
     supervisor: &crate::backend_supervisor::BackendSupervisor,
+    user_allowlist: &AllowedServersStore,
 ) -> RelayPolicy {
-    let mut local = LocalEndpointRegistry::builtin();
+    let mut policy = RelayPolicy {
+        local: LocalEndpointRegistry::builtin(),
+        providers: ProviderAllowlist::default(),
+    };
     let info = supervisor.info().await;
     if let Some(endpoint) = info.endpoint.as_deref() {
-        local.register_base_url(endpoint);
+        policy.local.register_base_url(endpoint);
     }
     let env = supervisor.provider_env_snapshot().await;
-    let mut providers = ProviderAllowlist::default();
     for (name, value) in env.env_pairs() {
         if name.ends_with("_URL") {
-            providers.add_base_url(value);
+            policy.add_configured_base(value);
         }
     }
-    RelayPolicy { local, providers }
+    // User allowlist: remote servers only. Loopback entries cannot land here —
+    // `validate_allowed_server_base` refuses them at the config face and
+    // `ProviderAllowlist::add_base_url` skips them as defense in depth.
+    for base in user_allowlist.list() {
+        policy.providers.add_base_url(&base);
+    }
+    policy
 }
 
 /// Relay a provider HTTP request on behalf of the webview.
@@ -918,13 +1125,14 @@ async fn relay_policy_from_sidecar(
 pub async fn provider_request(
     logger: tauri::State<'_, std::sync::Arc<DesktopLogger>>,
     supervisor: tauri::State<'_, std::sync::Arc<crate::backend_supervisor::BackendSupervisor>>,
+    allowed_servers: tauri::State<'_, std::sync::Arc<AllowedServersStore>>,
     url: String,
     method: String,
     headers: Option<HashMap<String, String>>,
     body: Option<String>,
 ) -> Result<ProviderResponse, String> {
     let headers = headers.unwrap_or_default();
-    let policy = relay_policy_from_sidecar(&supervisor).await;
+    let policy = relay_policy_from_sidecar(&supervisor, &allowed_servers).await;
     let outcome = send_provider_request(&policy, &url, &method, &headers, body.as_deref()).await;
 
     let verb = method.trim().to_ascii_uppercase();
@@ -953,6 +1161,34 @@ pub async fn provider_request(
         ),
     }
     outcome
+}
+
+/// The user-managed allowed-server bases (UI face: manage list).
+#[tauri::command]
+pub fn list_allowed_servers(
+    store: tauri::State<'_, std::sync::Arc<AllowedServersStore>>,
+) -> Vec<String> {
+    store.list()
+}
+
+/// Add one allowed-server base (validated by [`validate_allowed_server_base`];
+/// an invalid base is refused with the reason). Returns the new list.
+#[tauri::command]
+pub fn add_allowed_server(
+    store: tauri::State<'_, std::sync::Arc<AllowedServersStore>>,
+    base: String,
+) -> Result<Vec<String>, String> {
+    store.add(&base)
+}
+
+/// Remove one allowed-server base (exact match; idempotent). Returns the new
+/// list.
+#[tauri::command]
+pub fn remove_allowed_server(
+    store: tauri::State<'_, std::sync::Arc<AllowedServersStore>>,
+    base: String,
+) -> Result<Vec<String>, String> {
+    store.remove(&base)
 }
 
 #[cfg(test)]
@@ -1280,14 +1516,20 @@ mod tests {
         }
     }
 
-    /// Policy with the given provider base URLs approved (exactly what the
-    /// applied provider config contributes).
+    /// Policy with the given configured bases folded in exactly like the
+    /// production merge (`add_configured_base`: loopback → registry, remote →
+    /// allowlist).
     fn policy_with_providers(bases: &[&str]) -> RelayPolicy {
         let mut policy = test_policy();
         for base in bases {
-            policy.providers.add_base_url(base);
+            policy.add_configured_base(base);
         }
         policy
+    }
+
+    /// Unique per-test config file path under the redirected temp dir.
+    fn test_config_path(stem: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("provider-proxy-{stem}-{}.json", std::process::id()))
     }
 
     /// Policy with one extra registered local endpoint: test responders play
@@ -1885,5 +2127,191 @@ mod tests {
         let _ = handle.join();
         assert_eq!(response.status, 200);
         assert_eq!(response.body_text, "name-hop-ok");
+    }
+
+    // -----------------------------------------------------------------------
+    // B2-CFG: 用户可配置的允许服务器面（持久 + 策略合并 + 对抗）。
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn allowed_servers_persist_round_trip() {
+        let path = test_config_path("round-trip");
+        let _ = fs_err::remove_file(&path);
+        {
+            let store =
+                AllowedServersStore::load(path.clone()).expect("missing file = empty store");
+            assert!(store.list().is_empty(), "no file yet means no entries");
+            let added = store
+                .add("https://relay.example.test:8443/base")
+                .expect("valid base accepted");
+            assert_eq!(
+                added,
+                vec!["https://relay.example.test:8443/base".to_string()]
+            );
+            store
+                .add("relay2.example.test:9000")
+                .expect("bare host:port accepted");
+            store
+                .add("https://relay.example.test:8443/base")
+                .expect("adding twice is idempotent");
+            assert_eq!(store.list().len(), 2, "idempotent add keeps one entry");
+        }
+        let reopened = AllowedServersStore::load(path.clone()).expect("stored file reopens");
+        assert_eq!(
+            reopened.list(),
+            vec![
+                "https://relay.example.test:8443/base".to_string(),
+                "relay2.example.test:9000".to_string()
+            ]
+        );
+        let updated = reopened
+            .remove("relay2.example.test:9000")
+            .expect("remove persists");
+        assert_eq!(
+            updated,
+            vec!["https://relay.example.test:8443/base".to_string()]
+        );
+        let final_read = AllowedServersStore::load(path.clone()).expect("reopens after remove");
+        assert_eq!(
+            final_read.list(),
+            vec!["https://relay.example.test:8443/base".to_string()]
+        );
+        let _ = fs_err::remove_file(&path);
+    }
+
+    #[test]
+    fn corrupt_allowed_servers_file_is_refused() {
+        // 坏档拒开（fail closed）：不回退默认、不读坏就用。
+        let path = test_config_path("corrupt");
+        fs_err::write(&path, b"{ this is not json").expect("write corrupt file");
+        assert!(
+            AllowedServersStore::load(path.clone()).is_err(),
+            "a malformed stored file must be refused, never read-as-default"
+        );
+        let _ = fs_err::remove_file(&path);
+    }
+
+    #[test]
+    fn invalid_allowed_server_bases_are_refused() {
+        for base in [
+            "",
+            "   ",
+            "not a url",
+            "ftp://relay.example.test:21",
+            "file:///etc/passwd",
+            "http:///",
+            // 回环基址：本地端点归注册面管，用户白名单只收远程
+            "localhost:11434",
+            "http://127.0.0.1:7890",
+            "http://[::1]:7890/",
+            "127.0.0.1:7890",
+            // 拒绝类地址（私网 / 链路本地）：收了也永远不通 = 假旋钮
+            "http://10.0.0.5:8000",
+            "http://169.254.169.254/",
+            "192.168.0.10:8000",
+            // 裸 host（无端口）不成基址
+            "relay.example.test",
+        ] {
+            assert!(
+                validate_allowed_server_base(base).is_err(),
+                "{base:?} must be refused"
+            );
+        }
+        for base in [
+            "https://relay.example.test:8443/base",
+            "relay.example.test:8443",
+        ] {
+            assert!(
+                validate_allowed_server_base(base).is_ok(),
+                "{base:?} must be accepted"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn user_allowlist_entries_extend_the_provider_allowlist() {
+        // 策略合并：自动推导的提供方基址 + 用户显式加的基址，命中才转发。
+        let path = test_config_path("merge");
+        let _ = fs_err::remove_file(&path);
+        let store = AllowedServersStore::load(path.clone()).expect("store");
+        store
+            .add("https://relay.example.test:8443/base")
+            .expect("valid user base");
+
+        let mut policy = policy_with_providers(&["https://api.example.test/v1"]);
+        for base in store.list() {
+            policy.providers.add_base_url(&base);
+        }
+        for url in [
+            "https://api.example.test/v1/models",
+            "https://relay.example.test:8443/v1/chat",
+        ] {
+            let transport = FakeTransport::new();
+            let response = relay_via(&transport, &policy, url, "GET", &configured_headers(), None)
+                .await
+                .expect("an approved base relays");
+            assert_eq!(transport.call_count(), 1, "{url} is approved");
+            assert_eq!(response.status, 200);
+        }
+        let transport = FakeTransport::new();
+        let outcome = relay_via(
+            &transport,
+            &policy,
+            "https://other.example.test/v1",
+            "GET",
+            &configured_headers(),
+            None,
+        )
+        .await;
+        assert!(outcome.is_err(), "an unlisted base must be refused");
+        assert_eq!(transport.call_count(), 0);
+        let _ = fs_err::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn user_loopback_bases_cannot_bypass_local_endpoint_registration() {
+        // 对抗用例：用户白名单出现回环基址（配置面已拒收；这里模拟绕过配置面直接
+        // 写入策略层）也不得放行未注册回环目标——回环只归 LocalEndpointRegistry 管。
+        let mut policy = test_policy();
+        policy.providers.add_base_url("http://127.0.0.1:7890");
+        policy.providers.add_base_url("localhost:7890");
+        assert!(
+            !policy.providers.allows("127.0.0.1", 7890),
+            "the allowlist must never approve a loopback endpoint"
+        );
+        for url in [
+            "http://127.0.0.1:7890/v1/models",
+            "http://localhost:7890/v1/models",
+        ] {
+            let transport = FakeTransport::new();
+            let outcome =
+                relay_via(&transport, &policy, url, "GET", &configured_headers(), None).await;
+            let Err(message) = outcome else {
+                panic!("{url} must stay refused without local registration");
+            };
+            assert!(message.contains("not registered"), "{message}");
+            assert_eq!(transport.call_count(), 0, "{url} must never relay");
+        }
+    }
+
+    #[test]
+    fn non_loopback_names_must_not_resolve_into_the_local_face() {
+        // 对抗用例（解析层）：非本地面名字解析到回环 = 未注册本地目标，必须拒；
+        // 否则「加一个指向本机的名字」就能绕过注册面。
+        let loopback = ["127.0.0.1:8000"
+            .parse::<std::net::SocketAddr>()
+            .expect("addr")];
+        assert!(
+            gate_resolved_addrs("relay.example.test", &loopback).is_err(),
+            "a remote-looking name must not resolve into the local face"
+        );
+        assert!(
+            gate_resolved_addrs("localhost", &loopback).is_ok(),
+            "the local-face name resolving loopback is the product's local face"
+        );
+        let public = ["1.2.3.4:8000"
+            .parse::<std::net::SocketAddr>()
+            .expect("addr")];
+        assert!(gate_resolved_addrs("relay.example.test", &public).is_ok());
     }
 }
