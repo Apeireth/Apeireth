@@ -1435,6 +1435,8 @@ mod tests {
     fn probes_feed_real_counts_and_credentials_presence() {
         let ledger_probe: StatusProbe<MemoryLedgerStats> = Arc::new(|| {
             Ok(MemoryLedgerStats {
+                verified_lessons: Some(3),
+                candidate_lessons: Some(1),
                 sessions: Some(2),
                 memories: Some(5),
                 protected: Some(1),
