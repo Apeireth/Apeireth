@@ -1371,7 +1371,7 @@ for f in fm.getFunctions(True):
         name = f.getName().replace('\\', '\\\\').replace('"', '\\"')
         entry = str(f.getEntryPoint()).replace('\\', '\\\\').replace('"', '\\"')
         items.append('{"name": "%s", "entry": "%s"}' % (name, entry))
-print("APEIRETH_GHIDRA_JSON={\\"functions\\": %d, \\"sample\\": [%s]}" % (count, ",".join(items)))
+print("RE_GHIDRA_JSON={\\"functions\\": %d, \\"sample\\": [%s]}" % (count, ",".join(items)))
 "#;
 
 /// `ext.ghidra`：Ghidra headless 函数清单（重，显式调用）。
@@ -1492,7 +1492,7 @@ impl ToolCapability for GhidraTool {
                 .with_name("ext.ghidra");
         }
         let stdout = String::from_utf8_lossy(&result.stdout);
-        let marker = "APEIRETH_GHIDRA_JSON=";
+        let marker = "RE_GHIDRA_JSON=";
         let Some(start) = stdout.find(marker) else {
             return ToolResult::permanent_error(
                 &call.id,
@@ -2246,7 +2246,7 @@ mod ghidra_adapter_tests {
         let binary = workspace.join("fake-ghidra");
         let mut file = std::fs::File::create(&binary).expect("create");
         file.write_all(
-            b"#!/bin/sh\nprintf 'APEIRETH_GHIDRA_JSON={\"functions\": 2, \"sample\": [{\"name\": \"main\", \"entry\": \"0x1000\"}]}\\n'\n",
+            b"#!/bin/sh\nprintf 'RE_GHIDRA_JSON={\"functions\": 2, \"sample\": [{\"name\": \"main\", \"entry\": \"0x1000\"}]}\\n'\n",
         )
         .expect("write");
         drop(file);
