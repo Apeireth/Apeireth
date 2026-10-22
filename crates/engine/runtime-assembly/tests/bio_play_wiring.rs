@@ -623,8 +623,12 @@ async fn start_refuses_a_sandbox_whose_existing_ancestor_escapes_via_symlink() {
             start_args(&proposal, "s-link", sandbox, Some(true)),
         )
         .await;
+        // 拒绝可能发生在两层：play 自身校验（英文 outside the workspace root），
+        // 或更早的 pre-call 通用守卫（guardrail::OutsideWorkspace，中文「超出工作区边界」）。
+        // 断言只钉「必须被拒绝」，不钉具体层与措辞 —— 否则 Windows 上因无符号链接权限
+        // 被静默跳过，Linux/CI 才暴露（2026-10-22 并线发现：基座既有红）。
         assert!(
-            message.contains("outside the workspace root"),
+            message.contains("outside the workspace root") || message.contains("超出工作区边界"),
             "symlink 逃逸必须拒绝: {message}"
         );
     }
