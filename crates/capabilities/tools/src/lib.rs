@@ -75,6 +75,9 @@ pub mod mcp;
 pub mod mcp_bridge;
 // Recon Suite 骨架：Evidence 信封 + 授权 Scope + 平台元数据（原生工具共享底座）。
 pub mod recon;
+// 外部适配器：nmap / exiftool / tshark / yara / binwalk / radare2 / jadx / apktool /
+// ghidra / openssl —— 统一 ProcessExecutor 子进程封装：无 shell、超时与输出上限、Scope 限域。
+pub mod external;
 // 对象级访问判定 (E-P3 · 威胁模型 G3): 按"对象"而非"API 形态"判定文件操作权力 ——
 // 执行前后对象状态对比 (事实判定, 与形态无关) + 越界即帧 + `sandbox.object_violation`
 // 审计 + `ObjectAccessPolicy` 挂载点 (星港线深望智能体接此契约)。
