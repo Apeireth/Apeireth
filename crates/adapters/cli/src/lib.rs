@@ -1561,8 +1561,15 @@ async fn build_canonical_runtime_with_parts(
         );
     builder = builder.with_governance(governance_chain::production(preset_governance));
     // 出网闸 (ADR-0014 §1.2: 把上下文发给模型就是行动): 默认关
-    // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配), 关时请求逐字节不变。
-    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env() {
+    // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配; 值也可以直接是授权策略 JSON),
+    // 关时请求逐字节不变。
+    //
+    // 账本落盘到数据根 (`egress-ledger.jsonl`) —— 生产上必须落盘,
+    // 否则「记录已知流向」只在内存里, 进程一退就没了。
+    let egress_ledger_path = crate::default_panel_data_dir().join("egress-ledger.jsonl");
+    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env_with_ledger(
+        Some(egress_ledger_path),
+    ) {
         builder = builder.with_egress_gate(gate);
     }
     // 生物机制族 W3.3: 痛觉评估（默认关；`APEIRETH_ENABLE_BIO_PAIN=1` 才开

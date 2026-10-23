@@ -228,12 +228,23 @@ impl EgressGate for RedactionEgressGate {
 ///
 /// 授权写坏了 = 不猜：**fail-closed**（不装配闸）+ stderr 如实报错（不静默）。
 pub fn egress_gate_from_env() -> Option<std::sync::Arc<dyn EgressGate>> {
+    egress_gate_from_env_with_ledger(None)
+}
+
+/// 同上，但指定出域账本落盘路径。
+///
+/// **生产接线必须传路径** —— 否则账本只在内存里，进程一退就没了，
+/// 「记录已知流向」那句话就落空（这是承诺与实现的差距，不是细节）。
+pub fn egress_gate_from_env_with_ledger(
+    ledger_path: Option<std::path::PathBuf>,
+) -> Option<std::sync::Arc<dyn EgressGate>> {
     let raw = std::env::var(EGRESS_GATE_ENV).ok()?;
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false") {
         return None;
     }
-    let mut gate = RedactionEgressGate::new();
+    let ledger = Arc::new(EgressLedger::new(ledger_path));
+    let mut gate = RedactionEgressGate::with_ledger(ledger);
     if trimmed != "1" {
         match AuthorizationPolicy::from_carryable(trimmed) {
             Ok(policy) => {
