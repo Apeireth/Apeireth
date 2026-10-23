@@ -91,7 +91,14 @@ def in_archive(rel: Path) -> bool:
     return any(part == "archive" for part in rel.parts)
 
 
-def check(check_anchors: bool) -> tuple[list[str], list[str]]:
+def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str]]:
+    """scope='live'：只检查活文档内部的链接（archive 内的历史链接不算断链）。
+
+    理由：``docs/archive/`` 是 L5 卷宗，按仓内纪律**只引用不改写**。
+    它的链接指向的是**当时**的路径（例如 v1.0 时期的 ``ROADMAP.md``、``NOTICE``），
+    这些目标今天不存在是**历史事实**，不是断链缺陷；去"修"它们等于改写历史。
+    但**从活文档指向 archive 的链接必须可达**——那条在下面照常检查。
+    """
     redirects = load_redirects()
     broken: list[str] = []
     anchor_warn: list[str] = []
@@ -100,6 +107,8 @@ def check(check_anchors: bool) -> tuple[list[str], list[str]]:
 
     for md in md_files:
         rel_md = md.relative_to(ROOT)
+        if scope == "live" and in_archive(rel_md):
+            continue
         try:
             text = md.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -136,17 +145,24 @@ def check(check_anchors: bool) -> tuple[list[str], list[str]]:
 
             exists = resolved.exists()
 
+            if not exists and not path_part.startswith("/"):
+                # 回退一：**仓根相对**约定。仓内大量文档写 `docs/xxx` / `reports/xxx`
+                # 表示"从仓库根起"，而按"相对本文件目录"解析会落到不存在的子路径。
+                alt = (ROOT / path_part).resolve()
+                if alt.exists() and str(alt).startswith(str(ROOT)):
+                    resolved = alt
+                    try:
+                        resolved_rel = resolved.relative_to(ROOT)
+                    except ValueError:
+                        continue
+                    exists = True
+
             if not exists:
                 # 查重定向表：旧路径（仓库相对）-> 新路径
-                candidates = {
-                    str(resolved_rel),
-                    str(resolved_rel).replace("\\", "/"),
-                }
-                # 也试试按绝对路径末尾匹配登记键
                 new_rel = None
                 for key in redirects:
                     k = key.replace("\\", "/")
-                    if k in candidates or resolved_rel.as_posix() == k:
+                    if k == resolved_rel.as_posix():
                         new_rel = redirects[key]
                         break
                 if new_rel:
@@ -160,6 +176,10 @@ def check(check_anchors: bool) -> tuple[list[str], list[str]]:
                         continue
                     broken.append(f"{rel_md} -> {raw}  (重定向目标不存在: {new_rel})")
                     continue
+                # ⚠️ 落穿分支（2026-10-23 修）：未命中重定向表的断链必须报出，
+                #    否则门禁对"真断链"完全失明（曾漏检 403 处）。
+                broken.append(f"{rel_md} -> {raw}  (目标不存在)")
+                continue
 
             # 目标存在，检查锚点
             if anchor and check_anchors and resolved.suffix == ".md":
@@ -174,11 +194,13 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="有断链则 exit 1")
     ap.add_argument("--report", action="store_true", help="打印报告")
     ap.add_argument("--anchors", action="store_true", help="额外校验锚点")
+    ap.add_argument("--scope", choices=["live", "all"], default="live",
+                    help="live=只看活文档（archive 内部历史链接不算断链）；all=全查")
     args = ap.parse_args()
 
-    broken, anchor_warn = check(args.anchors)
+    broken, anchor_warn = check(args.anchors, args.scope)
 
-    print(f"[docs_links] 扫描 {len(iter_md_files())} 个 markdown 文件")
+    print(f"[docs_links] 扫描 {len(iter_md_files())} 个 markdown 文件（作用域 {args.scope}）")
     print(f"[docs_links] 断链: {len(broken)}")
     if anchor_warn:
         print(f"[docs_links] 锚点警告: {len(anchor_warn)}")
