@@ -134,7 +134,7 @@
   `cargo fmt --all -- --check` 的收卷状态见 §6 (施工中途两线在途红已由归口线
   自检收敛, 归属与快照如实登记)。
 - `scripts/check-neutral-terms.ps1` = OK 零命中 (34 个变更文件全中性)。
-- 测试基线真源见 [docs/03-reference/test-baseline.md](../../03-reference/test-baseline.md),
+- 测试基线真源见 [../../03-reference/test-baseline.md](../../03-reference/test-baseline.md),
   本批不代改真源, 只报实测值。
 
 ## 6. 跨范围补位与他人在途（如实报备）

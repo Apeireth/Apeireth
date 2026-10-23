@@ -31,6 +31,13 @@ ROOT = Path(__file__).resolve().parent.parent
 # 扫描时跳过的目录（相对 ROOT）
 SKIP_DIRS = {".git", "target", "legacy", "node_modules", "dist", ".venv"}
 
+# GitHub 仓库 UI 的伪路径（README 里的 `../../issues` 之类，渲染为网页而非仓内文件）
+GITHUB_UI_PATHS = {
+    "issues", "releases", "stargazers", "watchers", "network", "pulse",
+    "graphs", "blame", "commits", "compare", "tags", "trees", "actions",
+    "projects", "wiki", "security", "insights", "pulls", "discussions",
+}
+
 # 这些目录的**内部**互相引用不检查（archive 只引用不改）
 NO_INTERNAL_LINK_CHECK = {Path("docs/archive")}
 
@@ -125,6 +132,10 @@ def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str
 
         for raw in targets:
             if not raw or raw.startswith(("http://", "https://", "mailto:", "tel:", "#", "data:")):
+                continue
+            # GitHub UI 伪路径：README 里的 `../../issues`、`../../releases` 等，
+            # 在 GitHub 上渲染为仓库的 issues/releases 页，不是仓内文件路径。
+            if raw.split("/")[-1] in GITHUB_UI_PATHS:
                 continue
             raw = raw.strip()
             path_part, _, anchor = raw.partition("#")

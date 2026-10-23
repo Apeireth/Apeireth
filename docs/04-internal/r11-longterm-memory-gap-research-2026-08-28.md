@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md
+Document:        r11-longterm-memory-gap-research-2026-08-28.md
 Version:         1.0 (sub-agent R11-LongTermMemory 写于 2026-08-28)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (R11 真调研, 给主代理决策参考)

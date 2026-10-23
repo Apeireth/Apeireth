@@ -4,7 +4,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/maintenance-guide.md
+Document:        maintenance-guide.md
 Version:         Manual-Rev-N (v2 重写)
 Last-Modified:   2026-09-12
 Status:          🟢 活跃 (v2 18-crate)
@@ -305,4 +305,4 @@ _本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、20
 | `node_modules` | 0.14GB | 可删可 `pnpm install` 恢复 |
 | `dist` / `src-tauri/binaries` | 0.03GB | 构建产物，随打包循环 |
 
-（验收报告 reports/disk-build-cache-advisory-acceptance-2026-10-16.md 的 R1/R2 复验对象：R1=sweep v2 增 pdb 档（回收 113.9GB+4.8GB、cargo check 冒烟 exit 0 零重编）；R2=本表+脚本纳管。）
+（验收报告 ../../reports/disk-build-cache-advisory-acceptance-2026-10-16.md 的 R1/R2 复验对象：R1=sweep v2 增 pdb 档（回收 113.9GB+4.8GB、cargo check 冒烟 exit 0 零重编）；R2=本表+脚本纳管。）

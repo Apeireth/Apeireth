@@ -107,4 +107,4 @@ $alive = $pool | ForEach-Object -Parallel {
 
 ## 五、批派发口径
 
-派调研/搬运批时提示语带一句：**「取材按 docs/04-internal/github-fetch-guide.md：先测活、raw 优先、API 省着用、失败快退」**。
+派调研/搬运批时提示语带一句：**「取材按 github-fetch-guide.md：先测活、raw 优先、API 省着用、失败快退」**。

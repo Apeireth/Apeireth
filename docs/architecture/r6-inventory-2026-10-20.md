@@ -151,9 +151,9 @@ Select-String -Path .github/workflows/*.yml -Pattern '^\s*schedule:'       # car
 Select-String -Path .github/workflows/rust.yml -Pattern '24 LOCKED|13 键'
 
 # 四层验收与台账
-Select-String -Path docs/01-architecture/founding-design-v2.md -Pattern '四层验收|阻塞合入|主人签核'
+Select-String -Path ../01-architecture/founding-design-v2.md -Pattern '四层验收|阻塞合入|主人签核'
 python -c "import yaml;d=yaml.safe_load(open('docs/status/claims.yaml',encoding='utf-8'));print(len(d['claims']))"  # 20
-git ls-files docs/04-internal/live-verification-ledger.md docs/status/claims.yaml
+git ls-files ../04-internal/live-verification-ledger.md docs/status/claims.yaml
 
 # full 层并发实证（Wave 3 收口）
 Select-String -Path artifacts/wave3-close-full-test2.log -Pattern 'memory allocation|Blocking waiting|test failed'

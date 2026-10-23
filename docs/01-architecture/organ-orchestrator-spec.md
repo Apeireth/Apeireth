@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/01-architecture/organ-orchestrator-spec.md
+Document:        organ-orchestrator-spec.md
 Version:         Spec-0.1 (v2.0.0-rc.1+ 待实施)
 Last-Modified:   2026-08-28
 Status:          🟡 待实施 (不假装 "已完成")
@@ -466,7 +466,7 @@ $ cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tail -3
 [子代理 R11 待跑 — 本批 0 改 Rust 代码, 应维持 0 warnings]
 
 $ git diff HEAD~1..HEAD --stat 2>$null | head -10
-[本批新增 1 文档: docs/01-architecture/organ-orchestrator-spec.md, 0 改 Rust 代码]
+[本批新增 1 文档: organ-orchestrator-spec.md, 0 改 Rust 代码]
 ```
 
 ---

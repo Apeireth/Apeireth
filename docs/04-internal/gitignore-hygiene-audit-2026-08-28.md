@@ -10,7 +10,7 @@
 
 ```
 [Document-Meta]
-Document:      docs/04-internal/gitignore-hygiene-audit-2026-08-28.md
+Document:      gitignore-hygiene-audit-2026-08-28.md
 Version:       Audit-0.1
 Last-Modified: 2026-08-28
 Status:        🟡 调研账
@@ -210,7 +210,7 @@ R15 audit 阶段 0 改 `.gitignore`, 0 git rm, 0 git add. **仅 flag + 建议**,
 | **本 audit 0 触碰 git** | ✅ |
 
 ```
-Document:      docs/04-internal/gitignore-hygiene-audit-2026-08-28.md
+Document:      gitignore-hygiene-audit-2026-08-28.md
 Version:       Audit-0.1
 Last-Modified: 2026-08-28
 Status:        🟡 调研账 (0 改 .gitignore, 0 git add/commit/push)

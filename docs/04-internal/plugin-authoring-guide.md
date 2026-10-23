@@ -4,7 +4,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/plugin-authoring-guide.md
+Document:        plugin-authoring-guide.md
 Version:         Manual-Rev-N (v2 重写)
 Last-Modified:   2026-08-27
 Status:          🟢 活跃 (v2 插件契约)

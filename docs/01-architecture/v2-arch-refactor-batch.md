@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/v2-arch-refactor-batch.md
+Document:        v2-arch-refactor-batch.md
 Version:         Design-1.0
 Last-Modified:   2026-08-27
 Status:          🟡 实施中 (O-6 重构批次, v2.0.0-rc.1 之前必完)

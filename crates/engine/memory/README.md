@@ -6,5 +6,5 @@ Apeireth 1.0 工作区 crate。**src 模块 21 个** (实际 ls crates/apeireth-
 
 ## 文档
 
-- 架构: [docs/01-architecture/architecture.md](../../../docs/01-architecture/architecture.md)
-- 索引: [docs/03-reference/crates.md](../../../docs/03-reference/crates.md)
+- 架构: [../../../docs/01-architecture/architecture.md](../../../docs/01-architecture/architecture.md)
+- 索引: [../../../docs/03-reference/crates.md](../../../docs/03-reference/crates.md)

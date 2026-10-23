@@ -10,7 +10,7 @@
 
 ```
 [Document-Meta]
-Document:      docs/01-architecture/rc7-perception-research-2026-08-28.md
+Document:      rc7-perception-research-2026-08-28.md
 Version:       Research-0.1 (R14 spec 续)
 Last-Modified: 2026-08-28
 Status:        🟡 调研账, 真实施待
@@ -193,7 +193,7 @@ feat(perception): RC-7 真接 Whisper + xcap backend impl + mock test (R15)
    Cargo.lock +{N} 行 (xcap 新外部 dep, 主代理拍板)
 3. 测试: cargo test -p apeireth-plugin --lib perception_backend 估 0 破,
    +{N} 新 mock test (whisper_http_backend_*, xcap_vision_backend_*)
-4. 文档: docs/01-architecture/rc7-perception-research-2026-08-28.md (本调研账)
+4. 文档: rc7-perception-research-2026-08-28.md (本调研账)
    + R14 spec (rc-7-perception-true-modality-spec.md) 续实施记录
 ```
 
@@ -218,7 +218,7 @@ feat(perception): RC-7 真接 Whisper + xcap backend impl + mock test (R15)
 - **xcap 真接代码示例 (§3)**: 是 spec 阶段骨架, 不假装"已编译通过", R15+ 真实施时需跑 cargo check
 
 ```
-Document:      docs/01-architecture/rc7-perception-research-2026-08-28.md
+Document:      rc7-perception-research-2026-08-28.md
 Version:       Research-0.1
 Last-Modified: 2026-08-28
 Status:        🟡 调研账, 真实施待

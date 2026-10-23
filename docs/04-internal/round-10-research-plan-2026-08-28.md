@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/round-10-research-plan-2026-08-28.md
+Document:        round-10-research-plan-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 10 启动)
 Last-Modified:   2026-08-28
 Status:          🟡 调研中 (sub-agent 调研跑中, 真账待 sub-agent 报告后 fill)

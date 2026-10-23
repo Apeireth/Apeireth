@@ -222,7 +222,7 @@ IMPLEMENTED（库内可跑、测试过）≠ PRODUCTION WIRED（生产装配有�
 <type>(<scope>): <一句话>
 
 - 0 装诚实真账:
-  - 测试: <本批实测数字>（口径见 docs/03-reference/test-baseline.md）
+  - 测试: <本批实测数字>（口径见 test-baseline.md）
   - clippy: cargo clippy --workspace --all-targets --locked -- -D warnings = 0 警告
   - 0 触碰 LOCKED 5 项
   - 0 引新外部 dep（Cargo.lock 0 行 diff，或写清新增理由）

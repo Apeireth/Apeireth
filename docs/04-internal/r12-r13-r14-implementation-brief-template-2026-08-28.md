@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md
+Document:        r12-r13-r14-implementation-brief-template-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 15, 立即派单 brief 模板)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (R12-R13-R14 真实施派单 brief 模板, 主代理亲做 + 派 sub-agent 真实施统一模板)
@@ -55,23 +55,23 @@ Author:          主代理 Mavis
 Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 份):
 
 1. 文档元数据 (必含):
-   - docs/04-internal/round-14-v2-completion-plan-2026-08-28.md (v2 完成计划, 9 哲学锚 + 401 行)
-   - docs/04-internal/apeireth-true-understanding-2026-08-28.md (物种化真理解, 229 行)
-   - docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md (1.0 vs 2.0 真账, 361 行)
+   - round-14-v2-completion-plan-2026-08-28.md (v2 完成计划, 9 哲学锚 + 401 行)
+   - ../01-architecture/apeireth-true-understanding-2026-08-28.md (物种化真理解, 229 行)
+   - apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md (1.0 vs 2.0 真账, 361 行)
 
 2. 工程规范 (必含):
-   - docs/04-internal/v2-reference-handbook-2026-08-28.md (§3.1 brief 模板 + §4 改前必跑 + §5 commit msg 模板 + §7 工程规范 + §8.5 hook, 613 行)
-   - docs/04-internal/ENGINEER-MANIFESTO.md (§13 12 真实陷阱 + §10 LOCKED 5 项)
+   - v2-reference-handbook-2026-08-28.md (§3.1 brief 模板 + §4 改前必跑 + §5 commit msg 模板 + §7 工程规范 + §8.5 hook, 613 行)
+   - ENGINEER-MANIFESTO.md (§13 12 真实陷阱 + §10 LOCKED 5 项)
 
 3. 物种化参考 (Round 10 5 真调研):
-   - docs/01-architecture/r7-neko-species-research-2026-08-28.md (五维记忆)
-   - docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md (4 段 pipeline + ASR/TTS)
-   - docs/01-architecture/r7-firefly-species-research-2026-08-28.md (GPT-SoVITS 原声 TTS)
-   - docs/01-architecture/r7-mio-species-research-2026-08-28.md (Windows 本地优先 + 日记)
-   - docs/01-architecture/r7-airi-species-research-2026-08-28.md (永远不下播)
+   - ../01-architecture/r7-neko-species-research-2026-08-28.md (五维记忆)
+   - ../01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md (4 段 pipeline + ASR/TTS)
+   - ../01-architecture/r7-firefly-species-research-2026-08-28.md (GPT-SoVITS 原声 TTS)
+   - ../01-architecture/r7-mio-species-research-2026-08-28.md (Windows 本地优先 + 日记)
+   - ../01-architecture/r7-airi-species-research-2026-08-28.md (永远不下播)
 
 4. 1.0 真账 maturity 补查 (Round 13):
-   - docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md (8 个核心 .rs 实测 + 修订真实施估时)
+   - round-13-1-0-maturity-audit-2026-08-28.md (8 个核心 .rs 实测 + 修订真实施估时)
 
 5. v2 真账 (本地 working tree):
    - crates/ (17 crates workspace, 0 git clone 必要)
@@ -83,7 +83,7 @@ Apeireth v2.0 真实施必读 (主代理 + 接手工程师 + sub-agent 必读 7 
    - crates/[具体 2.0 真账 path] (物种化参考边界真账)
 
 7. 真账 brief 模板 (本文件):
-   - docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件, 派单统一模板)
+   - r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件, 派单统一模板)
 ```
 
 ### 1.3 必输出 (Brief)
@@ -283,10 +283,10 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 任务: onering + oracle / context+context_rot rot_score 融合 + 部分 hello 主题确认
 
 必读:
-- docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件)
-- docs/04-internal/apeireth-true-understanding-2026-08-28.md (物种化真理解, §1.1 协调+上下文)
-- docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md (9 项调研真账, 283 行)
-- docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md (1.0 真账 maturity 补查, 8 .rs 实测)
+- r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件)
+- ../01-architecture/apeireth-true-understanding-2026-08-28.md (物种化真理解, §1.1 协调+上下文)
+- r11-coordination-context-gap-research-2026-08-28.md (9 项调研真账, 283 行)
+- round-13-1-0-maturity-audit-2026-08-28.md (1.0 真账 maturity 补查, 8 .rs 实测)
 - legacy/donor/apeireth-companion/src/{onering.rs,oracle.rs,oracle_adapters.rs,context.rs,context_rot.rs,continuation.rs,continuity.rs,spill.rs,assemble.rs,hello.rs,milestone.rs,experiment_field.rs,proactive.rs,progressive.rs,pentest.rs,bridge_kani_proofs.rs,organ_kani_proofs.rs} (~1500+ 行 1.0 真账, REAL/PARTIAL)
 - crates/engine/memory/src/canonical/{vector.rs,graph.rs} (v2 Storage 抽象层, VectorIndex + MemoryGraph 已 语义对齐)
 - crates/engine/runtime/src/canonical/{orchestrator.rs,organ_kani_proofs.rs} (A 块 Stage 5 L0-L5 UpgradeCycle + organ_kani_proofs 已 语义对齐)
@@ -325,7 +325,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 任务: continuation + continuity + spill + milestone + experiment_field 真账对接 + 真实施
 
 必读:
-- docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件)
+- r12-r13-r14-implementation-brief-template-2026-08-28.md (本文件)
 - legacy/donor/apeireth-companion/src/{continuation.rs,continuity.rs,spill.rs,milestone.rs,experiment_field.rs} (~300+ 行 1.0 真账)
 - crates/engine/runtime/src/canonical/orchestrator.rs (A 块 Stage 5 L0-L5 UpgradeCycle 已 语义对齐)
 - crates/foundation/core/src/onion.rs (3 项不可变脊柱 LOCKED, 真实施走扩展 trait 接口)
@@ -372,7 +372,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 必读:
 - legacy/donor/apeireth-companion/src/{principles.rs (478 行), partner.rs (141 行), value_cases.rs, bond.rs} (1.0 真账)
 - crates/engine/organ/src/value_cases.rs (F6 value_cases organ ✅ 语义对齐)
-- docs/01-architecture/apeireth-true-understanding-2026-08-28.md (物种化真理解, §2 vision.md L49 跨墙的信任)
+- ../01-architecture/apeireth-true-understanding-2026-08-28.md (物种化真理解, §2 vision.md L49 跨墙的信任)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-species-core-1-implementation-2026-08-28.md (≤ 300 行)
@@ -397,7 +397,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必读:
 - legacy/donor/apeireth-companion/src/{community.rs (360 行), education.rs (402 行)}
-- docs/01-architecture/apeireth-true-understanding-2026-08-28.md (物种化真理解, vision L47 物种化社区 + L48 教育升级)
+- ../01-architecture/apeireth-true-understanding-2026-08-28.md (物种化真理解, vision L47 物种化社区 + L48 教育升级)
 - 1.0 education 0 装诚实 L7-10 "v1 是字符串级规则表, 不是真实符号计算 (无 CAS 引擎)"
 
 必输出:
@@ -420,8 +420,8 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 必读:
 - legacy/donor/apeireth-companion/src/{daily_summary.rs (99 行 REAL), diary.rs (442 行 REAL + ⚠️ trait 口), cross_diary.rs (301 行 REAL + ⚠️ trait 口), memory_injection.rs (66 行 REAL), reflexion.rs (497 行 REAL + ⚠️ 3 trait 口待主代理亲做), reflection.rs (329 行 REAL), memory_extractor.rs, memory_graph.rs} (1.0 真账, ~2000 行 6 .rs)
 - crates/engine/memory/src/{lightmemo/search.rs, dailynote/search.rs} (v2 BM25-lite 子模块, 不是 storage 主线)
-- docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md (6 项调研真账, 311 行)
-- docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md (8 个核心 .rs maturity 实测, reflexion 3 trait 口主代理亲做 spec)
+- r11-longterm-memory-gap-research-2026-08-28.md (6 项调研真账, 311 行)
+- round-13-1-0-maturity-audit-2026-08-28.md (8 个核心 .rs maturity 实测, reflexion 3 trait 口主代理亲做 spec)
 
 必输出:
 - 写真账 to: docs/04-internal/r12-longterm-memory-implementation-2026-08-28.md (≤ 300 行)
@@ -450,7 +450,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - crates/engine/memory/src/canonical/{vector.rs,graph.rs} (v2 VectorIndex + MemoryGraph 已 语义对齐 cosine)
 - _research_mem/apeireth-rust-fork/crates/apeireth-vector/ (1.0 真账 sqlite-vec + Qdrant + traits, ~400+ 行)
 - _research_mem/apeireth-rust-fork/crates/apeireth-graph-primitive/ (1.0 真账 BFS + predicate query, ~500+ 行)
-- docs/04-internal/r11-storage-gap-research-2026-08-28.md (303 行, R11-Storage 真账)
+- r11-storage-gap-research-2026-08-28.md (303 行, R11-Storage 真账)
 - crates/engine/memory/src/{lightmemo,search.rs,dailynote/search.rs} (v2 BM25-lite 子模块, 不是 storage 主线)
 
 必输出:
@@ -477,8 +477,8 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必读:
 - legacy/donor/apeireth-companion/src/{timeline.rs (79 行 REAL), tone.rs (374 行 REAL), morphology.rs (284 行 REAL)}
-- docs/01-architecture/r7-mio-species-research-2026-08-28.md (物种化塑形维度参考边界, r7 调研 §2 timeline 真账)
-- docs/01-architecture/r7-firefly-species-research-2026-08-28.md (物种化塑形语言维度, r7 调研 §2 tone 真账)
+- ../01-architecture/r7-mio-species-research-2026-08-28.md (物种化塑形维度参考边界, r7 调研 §2 timeline 真账)
+- ../01-architecture/r7-firefly-species-research-2026-08-28.md (物种化塑形语言维度, r7 调研 §2 tone 真账)
 
 必输出:
 - 写真账 to: docs/04-internal/r13-species-form-implementation-2026-08-28.md (≤ 300 行)
@@ -503,7 +503,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 必读:
 - legacy/donor/apeireth-companion/src/{meta_thinking.rs (643 行 REAL), thought_cluster.rs (522 行 REAL), intent_brier.rs (817 行 REAL, 31 单测全绿), confidence.rs (177 行 REAL, BetaBinomial trait), hybrid.rs (master PARTIAL rule-based fast path)}
 - crates/engine/organ/src/world_model.rs (v2 organ::world_model::CalibrationStrength 本地简化版 in-place, 差 BetaBinomial trait)
-- docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md (1.0 maturity 补查, 8 .rs 实测)
+- round-13-1-0-maturity-audit-2026-08-28.md (1.0 maturity 补查, 8 .rs 实测)
 
 必输出:
 - 写真账 to: docs/04-internal/r13-meta-cognition-implementation-2026-08-28.md (≤ 300 行)
@@ -532,7 +532,7 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 - legacy/donor/apeireth-companion/src/{synthesis.rs (PARTIAL, sandbox unused security risk), builtin/{shell.rs, filesystem.rs, fetch.rs, browser.rs (PARTIAL, HTML stripping only), search.rs, repo_tools.rs, invest.rs (PARTIAL), learning.rs (PARTIAL), system_monitor.rs (PARTIAL)}, vision/{screen.rs (REAL Windows), omni_parser.rs (REAL Windows), desktop_action.rs (PARTIAL)}, voice/{vad.rs (REAL), tts.rs (STUB), lipsync.rs (PARTIAL)}, mcp/* (REAL)}
 - crates/apeireth-tools/src/{lib.rs,builtin/{shell,filesystem,fetch,browser,search,repo_tools,invest,learning,system_monitor}, vision/{screen,omni_parser,desktop_action}, sandbox.rs, worktree.rs, synthesis.rs, mcp/*} (v2 真账)
 - crates/engine/perception/src/{perception_backend.rs} (R6 trait + 5 modality 抽象, 真 backend 待 R14)
-- docs/04-internal/rc7-perception-research-2026-08-28.md (RC-7 真账, 228 行)
+- ../01-architecture/rc7-perception-research-2026-08-28.md (RC-7 真账, 228 行)
 
 必输出:
 - 写真账 to: docs/04-internal/r13-tools-security-implementation-2026-08-28.md (≤ 300 行)
@@ -559,9 +559,9 @@ Phase 3: release 流程 (Week 18-20, 1-2 周)
 
 必读:
 - legacy/donor/apeireth-companion/src/proactive_memory.rs (919 行 REAL, TopicPredictor + PreloadChannel, 0 LLM)
-- docs/01-architecture/deferred-slot-activation-preference_learning-spec.md (R15 spec, 617 行, 语义对齐 v1)
-- docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md (R20 真账 ready, 318 行)
-- docs/01-architecture/r20-preference_learning-research-2026-08-28.md (R20 真调研 257 行)
+- ../01-architecture/deferred-slot-activation-preference_learning-spec.md (R15 spec, 617 行, 语义对齐 v1)
+- ../01-architecture/c-block-preference_learning-readiness-2026-08-28.md (R20 真账 ready, 318 行)
+- ../01-architecture/r20-preference_learning-research-2026-08-28.md (R20 真调研 257 行)
 - cognitive-module-wiring.md L30 DEFERRED → WIRED 状态标 (主代理亲做 spec, 真实施时改 1 行)
 
 必输出:

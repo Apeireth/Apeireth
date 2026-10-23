@@ -59,7 +59,7 @@ Supermemory（ASMR 记忆系统）→ 记忆分层假说；agent-governance-tool
 
 ## 三之半、落地追踪（2026-10-15）
 
-TOP5 机制已全部入 V1-V6 施工序（V3=双引擎关怀/TTS、V4=人格层/保鲜/保真、V5=安全守望、V6=任务编排/动作绑定、V1=上屏面）——见 [V-forward-direction.md](../backend-enhancement/V-forward-direction.md)。
+TOP5 机制已全部入 V1-V6 施工序（V3=双引擎关怀/TTS、V4=人格层/保鲜/保真、V5=安全守望、V6=任务编排/动作绑定、V1=上屏面）——见 [V-forward-direction.md](backend-enhancement/V-forward-direction.md)。
 
 ## 四、登记
 

@@ -308,9 +308,9 @@ AfterTurn hook 调 PreferenceStore::record) 不在本 commit, 不假装 organ �
 **clippy**: 0 warnings, 0 errors (per `cargo clippy -p apeireth-preference-learning --all-targets -- -D warnings`).
 **workspace 副作用**: 0 (per `cargo check --workspace --all-targets` 14 crate 全 clean).
 
-Refs: docs/01-architecture/c-block-preference_learning-readiness-2026-08-28.md
-Refs: docs/01-architecture/r20-preference_learning-research-2026-08-28.md
-Refs: docs/01-architecture/deferred-slot-activation-preference_learning-spec.md
+Refs: c-block-preference_learning-readiness-2026-08-28.md
+Refs: r20-preference_learning-research-2026-08-28.md
+Refs: deferred-slot-activation-preference_learning-spec.md
 ```
 
 ## 5. cognitive module 集成 spec (留 R21+ 衔接, DEFERRED)

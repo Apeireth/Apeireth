@@ -9,7 +9,7 @@
 
 ## 0. 口径与取证前提
 
-### 0.1 四级口径（docs/01-architecture/system-capabilities.md 头部）
+### 0.1 四级口径（../../01-architecture/system-capabilities.md 头部）
 
 `IMPLEMENTED`（代码存在）→ `PRODUCTION WIRED`（接入 canonical 运行时主路径）→ `DEFAULT ENABLED`（无需 opt-in 即开启）→ `HARDWARE VALIDATED`（真机验证）。四级不等价；**不得跨级宣称**（AGENTS.md §1 双向诚实）。
 

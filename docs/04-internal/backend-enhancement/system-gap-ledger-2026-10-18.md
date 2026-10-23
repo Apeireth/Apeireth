@@ -1,7 +1,7 @@
 # 系统级能力缺口台账（2026-10-18 立）
 
 > `[Document-Meta]`
-> Document:        docs/04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md
+> Document:        system-gap-ledger-2026-10-18.md
 > Status:          🟢 活跃（**缺陷/建议的唯一业务台账**，与 `00-backlog.md` 的批次账互补）
 > 来源:            `docs/04-internal/ai-os-landscape-2026-10-18.md`（全景对照）+
 >                  `artifacts/ai-os-market-scan-2026-10-18.md`（商业 15 样本）+
@@ -67,7 +67,7 @@
 
 ### 生物机制族（SG-13…SG-26，2026-10-19 owner 拍板「全都要」→ 🟢 已拍板排期）
 
-> 来源：[06-biosphere-inspiration-2026-10-18.md](../../philosophy-study/06-biosphere-inspiration-2026-10-18.md)（14 条，全部采纳）。
+> 来源：[06-biosphere-inspiration-2026-10-18.md](../philosophy-study/06-biosphere-inspiration-2026-10-18.md)（14 条，全部采纳）。
 > **纪律**：生物是灵感源不是保真模拟；每条落地必须先在代码里有可测试结构，再谈接线（0 装分级如实标注）。
 > 波次：**W1（2026-10-19 2h 并行批）= 机制内核 v0**（纯模块 + 类型 + 测试，不做跨 crate 接线）；
 > **W2** = 其余 5 条 + 全部接线（self_status 节/治理链/care 调度/矩阵行）。

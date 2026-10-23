@@ -1,7 +1,7 @@
 # K 轴 L5 守护流 · 时序图 + 测试证据（K2/L5 批产出）
 
 > `[Document-Meta]`
-> Document:        docs/04-internal/backend-enhancement/K-guard-watch-flow.md
+> Document:        K-guard-watch-flow.md
 > Version:         1.1（K2/L5 批：提醒闭环 + L5 守护骨架；2026-10-18 总装批：卷宗从 artifacts/ 归档入 docs/）
 > Last-Modified:   2026-10-18
 > Status:          🟢 活跃

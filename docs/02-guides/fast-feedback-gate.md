@@ -56,7 +56,7 @@ pwsh scripts/commit.ps1 -MessageFile msg.txt -AuthorName Mavis -AuthorEmail Mavi
 | full | `cargo test --workspace --all-targets --locked --no-fail-fast -j 2` 等三件套 | wave 收口 / 夜间 / 发布前 |
 | 文档 | `check-neutral-terms` / `secret-scan` / `check_doc_caliber` / `docs_truth.py --verify --check` | 改文档的批 |
 
-全量数字仍是单一真源 [test-baseline.md](../../03-reference/test-baseline.md)；fast gate 不产生对外数字。
+全量数字仍是单一真源 [test-baseline.md](../03-reference/test-baseline.md)；fast gate 不产生对外数字。
 
 ## 4. 已知边界（0 装）
 

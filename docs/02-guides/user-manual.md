@@ -5,7 +5,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/02-guides/user-manual.md
+Document:        user-manual.md
 Version:         Manual-Rev-M + R131-D6 (v2 重写)
 Last-Modified:   2026-08-27
 Status:          🟢 活跃

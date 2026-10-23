@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md
+Document:        r12-coordination-context-1-merge-spec-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 15, v1 context.rs + context_rot.rs rot_score 融合 spec 决策冻结)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (R12-CoordinationContext-1 真实施 brief, 主代理亲做 spec, 派 sub-agent 真实施)
@@ -66,16 +66,16 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
    - 1.0 真账 self-flag (context_rot.rs L104): "ASCII 小写词 + CJK char-bigram (确定性, 无分词器依赖)"
 
 2. 工程规范 (必含):
-   - docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md (派单 brief 模板)
-   - docs/04-internal/v2-reference-handbook-2026-08-28.md (§3.1 brief 模板 + §4 改前必跑 + §5 commit msg 模板 + §7 工程规范 + §8.5 hook)
-   - docs/04-internal/ENGINEER-MANIFESTO.md (§13 12 真实陷阱 + §10 LOCKED 5 项)
+   - r12-r13-r14-implementation-brief-template-2026-08-28.md (派单 brief 模板)
+   - v2-reference-handbook-2026-08-28.md (§3.1 brief 模板 + §4 改前必跑 + §5 commit msg 模板 + §7 工程规范 + §8.5 hook)
+   - ENGINEER-MANIFESTO.md (§13 12 真实陷阱 + §10 LOCKED 5 项)
 
 3. 物种化参考 (Round 10 5 真调研 + Round 11 6 gap 真调研):
-   - docs/01-architecture/r7-mio-species-research-2026-08-28.md (Windows 本地优先 + 日记反思+写回耦合, 物种化参考边界)
-   - docs/01-architecture/apeireth-true-understanding-2026-08-28.md (三面一体 + 五原型 + 物种化)
-   - docs/01-architecture/vision.md (L29-49, 物种而非个体 + 五原型)
-   - docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md (9 项 v2 现状, 1语义对齐 v1)
-   - docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md (8 个核心 .rs 实测, 修订真实施估时)
+   - ../01-architecture/r7-mio-species-research-2026-08-28.md (Windows 本地优先 + 日记反思+写回耦合, 物种化参考边界)
+   - ../01-architecture/apeireth-true-understanding-2026-08-28.md (三面一体 + 五原型 + 物种化)
+   - ../01-architecture/vision.md (L29-49, 物种而非个体 + 五原型)
+   - r11-coordination-context-gap-research-2026-08-28.md (9 项 v2 现状, 1语义对齐 v1)
+   - round-13-1-0-maturity-audit-2026-08-28.md (8 个核心 .rs 实测, 修订真实施估时)
 
 4. v2 真账 (本地 working tree, 0 git clone 必要):
    - crates/engine/memory/src/canonical/{vector.rs, graph.rs} (v2 Storage 抽象层, VectorIndex + MemoryGraph 已 语义对齐)
@@ -86,7 +86,7 @@ Apeireth v2.0 真实施必读 (主代理亲做 spec + 派 sub-agent 真实施 �
    - legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44 (R11_V1141/1131/1136_BASELINE = 0.8682/0.8532/0.9063, R11 baseline LOCKED, 0 触碰)
 
 5. 真账 brief 模板 (Round 15):
-   - docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md (§1 真账 brief 模板 + §3.1 R12-CoordinationContext-1 派单 brief + §4 0 装诚实标)
+   - r12-r13-r14-implementation-brief-template-2026-08-28.md (§1 真账 brief 模板 + §3.1 R12-CoordinationContext-1 派单 brief + §4 0 装诚实标)
 
 6. 子代理 brief (本派单项):
    - legacy/donor/apeireth-companion/src/context.rs (~770 行, 语义对齐 source)

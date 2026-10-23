@@ -9,7 +9,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/youyou-list-research-2026-08-28.md
+Document:        youyou-list-research-2026-08-28.md
 Version:         1.0 (sub-agent 写于 2026-08-28, 主代理派单 4h 内)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (调研真账, 主代理决策参考)

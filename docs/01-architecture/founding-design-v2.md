@@ -5,8 +5,8 @@
 性质:    阶段 1/2/3 创世设计的 v2 修订版。与 stage1-3 冻结档案并存；
          条目冲突时以本文件为准，档案保持原样作为初心记录。
 基线:    2026-09-26，与主人六轮问答逐条定稿。
-证据:    docs/04-internal/stage123-gap-matrix.md（27 条标尺逐条读码取证）
-         docs/04-internal/claims-evidence-matrix.md（77 条宣称证据分级）
+证据:    ../04-internal/stage123-gap-matrix.md（27 条标尺逐条读码取证）
+         ../04-internal/claims-evidence-matrix.md（77 条宣称证据分级）
 状态:    主体定稿；§8 修订表带「裁决位」，逐项在实现启动时由主人拍板。
 ```
 

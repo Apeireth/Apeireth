@@ -1,6 +1,6 @@
 ```yaml
 [Document-Meta]
-Document:        docs/04-internal/backend-enhancement/V5-a-redaction-bridge-delivery.md
+Document:        V5-a-redaction-bridge-delivery.md
 Version:         1.0 (V5-a 出境脱敏双向闸交付说明: 占位格式规格 + 双闸时序图 + 测试证据)
 Last-Modified:   2026-10-17
 Status:          🟢 活跃 (交付随行文档)

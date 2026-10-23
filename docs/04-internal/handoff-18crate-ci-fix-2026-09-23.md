@@ -2,7 +2,7 @@
 
 ```yaml
 [Document-Meta]
-Document:        docs/04-internal/handoff-18crate-ci-fix-2026-09-23.md
+Document:        handoff-18crate-ci-fix-2026-09-23.md
 Version:         Handoff-Rev-1.0
 Last-Modified:   2026-09-23
 Status:          🟢 活跃 (待接手 AI 审核)

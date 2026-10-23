@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/round-14-v2-completion-plan-2026-08-28.md
+Document:        round-14-v2-completion-plan-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 14, 用户原话 '怎么完成 2.0' 触发)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (v2.0 release 完成计划真账)

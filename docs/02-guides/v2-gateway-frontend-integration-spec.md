@@ -7,7 +7,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/02-guides/v2-gateway-frontend-integration-spec.md
+Document:        v2-gateway-frontend-integration-spec.md
 Version:         Spec-1.0
 Last-Modified:   2026-08-28
 Status:          🟡 Spec 完成 (真实施 4-6 周, 2027-Q1 启动)

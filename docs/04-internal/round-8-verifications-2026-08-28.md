@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/round-8-verifications-2026-08-28.md
+Document:        round-8-verifications-2026-08-28.md
 Version:         1.0
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (Round 8 verify 真账)
@@ -43,7 +43,7 @@ Round 7 batch fix (commit `155a9450`) 修了 L4 + L506 共 2 处, 漏修 L258/44
 | 4 | L561 | "HEAD 拍板: `b9026186`" | "HEAD 拍板: `7d990297` (Round 6 完; 历史 v2.0.0-rc.1 release tag @ `b9026186`)" |
 
 ### 1.2 验收
-- `grep b9026186 docs/02-guides/v2-gateway-frontend-integration-spec.md` → **0 命中** (除了 §6 "历史 v2.0.0-rc.1 tag" 标注)
+- `grep b9026186 ../02-guides/v2-gateway-frontend-integration-spec.md` → **0 命中** (除了 §6 "历史 v2.0.0-rc.1 tag" 标注)
 - 接手工程师 git status HEAD vs doc 一致 ✓
 
 ### 1.3 O-5 0 装诚实标

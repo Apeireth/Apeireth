@@ -202,7 +202,7 @@ paths:
 | `cb22c3da` | B 路线 start_threaded 写真接 + cfg-gated trait (JoinHandle<ExitStatus>) |
 | `7fd32d39` | E2E 测 feature_libkrun_e2e.rs (5 测 cfg-gated, 0 装 PASS 兜底) |
 | `59be8019` | CI matrix .github/workflows/smol-vm-ci.yml (3 OS × 2 features) |
-| **本 commit** | **文档 docs/02-guides/smol-vm-config.md** (10 章节 + 9 平台覆盖矩阵) |
+| **本 commit** | **文档 smol-vm-config.md** (10 章节 + 9 平台覆盖矩阵) |
 
 ---
 

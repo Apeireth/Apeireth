@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/v2-reference-handbook-2026-08-28.md
+Document:        v2-reference-handbook-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 v2.0.0-rc.1 收盘 + Round 1-9 真账 + 6 sub-agent 调研 + B-A 失守撤 + token 紧现实)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (一站式 reference, 接手工程师必读)

@@ -2,7 +2,7 @@
 
 > `Status: 📋 想法细节（隶属 00-backlog #B）`
 
-## 现状（实测基线见 reports/benchmark-reproduction.md）
+## 现状（实测基线见 ../../../reports/benchmark-reproduction.md）
 - 微内核冷启动 **22ms（目标 10ms，红行 2.2×）**——剩余大头=真冷口径的库文件创建/DDL 系统开销；
 - 待机内存 17.5MB ✅、检索 3.65ms ✅、配额调度 0.81µs ✅、沙箱 spawn 12.8ms ✅；
 - 已有工具：基准脚本（一键复跑）、cache_trace 诊断钩子、-j 2 链接口径。

@@ -7,7 +7,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/01-architecture/r7-neko-species-research-2026-08-28.md
+Document:        r7-neko-species-research-2026-08-28.md
 Version:         1.0 (sub-agent R7-N.E.K.O 写于 2026-08-28)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (调研真账, 主代理决策参考)

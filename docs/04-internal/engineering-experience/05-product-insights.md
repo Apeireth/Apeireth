@@ -91,7 +91,7 @@
 3. 新读者能顺着"读法注 → 上位文件"三跳找到真源吗？
 三问都"是"仍有重复感 → 才考虑合并内容；否则补分层声明即可。
 
-> 出处：★[04-methodology.md](04-methodology.md) 读法注（"重叠处互相链接不重抄"）+ §四（口径纪律细则）；★[AGENTS.md](../../../AGENTS.md) §3（测试数字单一真源——只引用不抄写；历史不追溯改写）；★[docs/README.md](../../README.md)（分层导航树：01-architecture / 02-guides / 03-reference / 04-internal 分层目录）；★[02-guides/multi-ai-construction-guide.md](../../02-guides/multi-ai-construction-guide.md)（本批对外指南"独立可读 + 指向宪章与 MANIFESTO"收口实形）；☆判词与现场（"用户觉得重复"，本会话，未落仓）。
+> 出处：★[04-methodology.md](04-methodology.md) 读法注（"重叠处互相链接不重抄"）+ §四（口径纪律细则）；★[AGENTS.md](../../../AGENTS.md) §3（测试数字单一真源——只引用不抄写；历史不追溯改写）；★[../../README.md](../../README.md)（分层导航树：01-architecture / 02-guides / 03-reference / 04-internal 分层目录）；★[02-guides/multi-ai-construction-guide.md](../../02-guides/multi-ai-construction-guide.md)（本批对外指南"独立可读 + 指向宪章与 MANIFESTO"收口实形）；☆判词与现场（"用户觉得重复"，本会话，未落仓）。
 
 ## 洞察 6 · 分诊与吸收的方法论：随记 60 项 → 真金提炼案
 

@@ -5,7 +5,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/migration-v1-to-v2.md
+Document:        migration-v1-to-v2.md
 Version:         Manual-Rev-1.0
 Last-Modified:   2026-08-27
 Status:          🟢 活跃 (v1 → v2 迁移指南)

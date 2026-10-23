@@ -50,7 +50,7 @@
 |---|---|---|---|---|---|
 | "An AGI Operating System & Cognitive Microkernel" / "AGI 操作系统与认知微内核" | README.md:3 / README.zh-CN.md:3 | 存在 AGI 级通用能力的评测或行为证据 | F | — | 18-crate 工作区 + 网关 + 记忆系统属实（ARCHITECTURE.md:26-34），但无任何 AGI/通用智能评测（research/runners 的 LoCoMo/LongMemEval/GAIA 均为"目标数据集"未接入）；"AGI"是愿景词不是工程事实 |
 | "a permanent, self-evolving, and cryptographically verified sanctuary"（永久、可自进化、受密码学严格核验） | README.md:83 | 自进化闭环 + 密码学验证覆盖核心不变量 | F | — | "cryptographically verified" 仅指 memory 哈希链（B 级，见 1.10）；Ed25519 多签/签名全部是 v2.1 占位（core/src/onion_gate.rs:16 "真 Ed25519 多签仍留 v2.1（verify_multisig 0 装占位不动）"）；"self-evolving" 闭环（harness_patch）只合成建议不落盘执行 |
-| "see reports/benchmark-baseline.md for full reproduction steps"（完整复现步骤） | README.md:75 | 存在可复现 P99 的脚本/靶子 | D | reports/benchmark-baseline.md:37-52 | 该"复现"只是 `cargo test -- --nocapture`（单元测试，不产出 P99）；workspace 无任何 `[[bench]]` target（criterion 仅是 dev-dep，`crates/engine/memory/Cargo.toml:33` + `bench = false`）；详见 §10 |
+| "see ../../reports/benchmark-baseline.md for full reproduction steps"（完整复现步骤） | README.md:75 | 存在可复现 P99 的脚本/靶子 | D | ../../reports/benchmark-baseline.md:37-52 | 该"复现"只是 `cargo test -- --nocapture`（单元测试，不产出 P99）；workspace 无任何 `[[bench]]` target（criterion 仅是 dev-dep，`crates/engine/memory/Cargo.toml:33` + `bench = false`）；详见 §10 |
 
 ---
 
@@ -234,7 +234,7 @@
 
 | # | README 行（README.md:62-73） | 声称 P99 | 实测出处 | 判定 |
 |---|---|---|---|---|
-| 1 | Hybrid Memory Search（BM25+Cosine+RRF，10,000 节点） | **1.82 ms**（"VERIFIED"） | reports/benchmark-baseline.md:13 同名行（手填自述，无原始数据）；独立实测 reports/v2-memory-vector-perf-2026-08-05.md:62 为 **10K P99=21.24ms**（纯向量），且其 bench 源文件已删除 | **未见复现脚本 + 与唯一独立实测矛盾（>10×）** |
+| 1 | Hybrid Memory Search（BM25+Cosine+RRF，10,000 节点） | **1.82 ms**（"VERIFIED"） | ../../reports/benchmark-baseline.md:13 同名行（手填自述，无原始数据）；独立实测 reports/v2-memory-vector-perf-2026-08-05.md:62 为 **10K P99=21.24ms**（纯向量），且其 bench 源文件已删除 | **未见复现脚本 + 与唯一独立实测矛盾（>10×）** |
 | 2 | Cognitive Quota Preemption（PIP 上下文切换） | **8.40 µs** | benchmark-baseline.md **无此行**；publish-release.yml:136-148 发布注记里复读 | **未见复现脚本**；数字全仓无第二处来源 |
 | 3 | Causal World Model CoW（分支 fork + 100 文件快照 diff） | **0.035 ms** | 无 | **未见复现脚本**；且"100 文件快照 diff"与实现（内存快照 id 树）不符 |
 | 4 | SAGA Compensating Rollback（LIFO 内存执行） | **0.012 ms** | 无（README 场景 03 另称 "<35µs"，口径不一） | **未见复现脚本** |

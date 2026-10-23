@@ -16,7 +16,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md
+Document:        apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 11)
 Last-Modified:   2026-08-28
 Status:          🟠 历史记录 (2026-10-06 复核批降级; 🔴/🟢 结论大面积过时, 见文首批注; 保留作 v1 功能全集清单)

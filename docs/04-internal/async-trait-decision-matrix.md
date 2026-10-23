@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/async-trait-decision-matrix.md
+Document:        async-trait-decision-matrix.md
 Version:         Decision-1.0
 Last-Modified:   2026-08-27
 Status:          🟡 待 v2.0.0-rc 阶段拍板

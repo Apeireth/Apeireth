@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/02-guides/v2-gateway-frontend-integration-spec-r13-review.md
+Document:        v2-gateway-frontend-integration-spec-r13-review.md
 Version:         Review-1.0
 Last-Modified:   2026-09-XX
 Status:          🟡 接力审 (R13, 不真做 4-6 周 frontend 对接, 等主代理审)
@@ -272,11 +272,11 @@ Changes not staged for commit:
 
 Untracked files:
   crates/engine/runtime/src/canonical/orchestrator.rs  ← R12 working tree
-  docs/01-architecture/deferred-slot-activation-preference_learning-spec.md  ← R15 untracked
-  docs/01-architecture/organ-orchestrator-spec.md  ← R11 untracked
-  docs/02-guides/v2-frontend-quickstart.md  ← R9 untracked
-  docs/02-guides/v2-gateway-frontend-integration-spec.md  ← R9 untracked
-  docs/02-guides/v2-gateway-frontend-integration-spec-r13-review.md  ← R13 (本文, untracked)
+  ../01-architecture/deferred-slot-activation-preference_learning-spec.md  ← R15 untracked
+  ../01-architecture/organ-orchestrator-spec.md  ← R11 untracked
+  v2-frontend-quickstart.md  ← R9 untracked
+  v2-gateway-frontend-integration-spec.md  ← R9 untracked
+  v2-gateway-frontend-integration-spec-r13-review.md  ← R13 (本文, untracked)
 ```
 
 ### 4.3 0 装诱导 prevention 标 (子代理 R13 独立判断)

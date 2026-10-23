@@ -9,7 +9,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/v2-rc-1-progress-report.md
+Document:        v2-rc-1-progress-report.md
 Version:         Snapshot-1.1 (historical + current-main overlay)
 Last-Modified:   2026-08-28
 Status:          📊 历史进展快照；当前状态见覆盖说明

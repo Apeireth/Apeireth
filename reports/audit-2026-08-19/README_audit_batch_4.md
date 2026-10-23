@@ -18,7 +18,7 @@
 
 **审计结论**: **无 stale claim** (high confidence).
 
-**README**: 5 行 facade README, 无任何具体数字/版本/feature 声称. 只指 docs/README.md.
+**README**: 5 行 facade README, 无任何具体数字/版本/feature 声称. 只指 ../../docs/README.md.
 **Cargo.toml**: version.workspace = true (正确).
 **lib.rs**: `pub mod scan / analyzer / register` + private `organ_kani_proofs`, 一致.
 **git log**: 最近 commit `9f3c20c4` (CI 修复), README 同步 commit `1306c61a`, 与 v1.0 release 对齐.
@@ -53,7 +53,7 @@
   ];
   ```
 - **实际**: baseline = **8 哲学锚** (S-1 / S-2 / S-3 / **O-1 安全优先 NEW** / O-2 / O-3 / O-4 / O-5).
-- **证据**: docs/archive/pages-source/architecture.md line 16 "## 1. 8 哲学锚 (B5)" + line 36 "**S-3 流程自化 + O-1 安全优先** 是 R126 era 从 6 哲学锚升级到 8 哲学锚的新增"; docs/archive/conventions/10-locked.md line 78 "8 哲学锚定义 (S-1 / S-2 / S-3 / O-1 / O-2 / O-3 / O-4 / O-5)"; docs/archive/roadmap/roadmap-r127-2-2026-08-10.md line 280 "6→8 哲学锚 (... + S-3 NEW + O-1 NEW)".
+- **证据**: ../../docs/archive/pages-source/architecture.md line 16 "## 1. 8 哲学锚 (B5)" + line 36 "**S-3 流程自化 + O-1 安全优先** 是 R126 era 从 6 哲学锚升级到 8 哲学锚的新增"; ../../docs/archive/conventions/10-locked.md line 78 "8 哲学锚定义 (S-1 / S-2 / S-3 / O-1 / O-2 / O-3 / O-4 / O-5)"; ../../docs/archive/roadmap/roadmap-r127-2-2026-08-10.md line 280 "6→8 哲学锚 (... + S-3 NEW + O-1 NEW)".
 - **confidence**: high
 - **修复**: 改 `_SIX_PHILOSOPHY_ANCHORS` 为 8 元素, 含 S-3 + O-1; 全文 "6 哲学锚" → "8 哲学锚".
 

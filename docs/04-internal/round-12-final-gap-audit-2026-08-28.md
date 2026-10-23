@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/round-12-final-gap-audit-2026-08-28.md
+Document:        round-12-final-gap-audit-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 12 终极审计)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (终极审计真账, v2 release 必补清单 + 调研完成度)

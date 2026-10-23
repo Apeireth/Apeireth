@@ -22,7 +22,7 @@
 # 后端（:8090，先起）
 cargo build --example companion_serve -p apeireth-companion
 # 运行需 env：APEIRETH_API_KEY（LLM key，主人在 C:\Users\31683\apikey-ultra.txt）、
-# APEIRETH_MASTER_TOKEN（授权主令牌）。详见 docs/02-guides/quick-start.md。
+# APEIRETH_MASTER_TOKEN（授权主令牌）。详见 ../02-guides/quick-start.md。
 
 # 前端（dev，:5199 是集群施工约定端口）
 cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort

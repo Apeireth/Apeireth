@@ -2,7 +2,7 @@
 
 ```
 [Document-Meta]
-Document: reports/V25-cargo-workspace-acceptance.md
+Document: V25-cargo-workspace-acceptance.md
 Task: V25 cargo workspace 真实集成验证 (b266eddf-8ea6-4200-aae7-c3b2f39848ed)
 Role: backend_engineer2
 Status: 🟡 部分达成 — 主分支真实集成验证完成，但工作区处于并发重构中

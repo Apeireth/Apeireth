@@ -1,7 +1,7 @@
 # 同类 Agent Harness 工程前端参考研究（2026-09，供 companion-desktop 参考）
 
 > 素材：本机同类 Agent Harness 工程 web 实装 0.1.0-rc.8（pnpm 库内全部包）+ 其开源仓库
-> 文档（README / architecture.md / docs/user/guide/index.md + providers.md / packages/web README）。
+> 文档（README / architecture.md / ../archive/pages-source/index.md + providers.md / packages/web README）。
 > 三个子代理并行解剖 UI 交互层 / 会话编排层 / 安全治理工具层，本文件汇总其报告并映射到
 > Apeireth 桌面前端的采纳建议。
 

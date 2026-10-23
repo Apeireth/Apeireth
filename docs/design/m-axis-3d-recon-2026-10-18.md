@@ -346,7 +346,7 @@ fn memory_budget(available: Option<u64>) -> u64 {
 %TEMP%\m-axis-recon\part.json        # /stats/participation
 ```
 
-本批对 Apeireth-rust 工作区的唯一写入是**新增本报告**（`git status --porcelain` 中本批对应项仅 `?? docs/design/m-axis-3d-recon-2026-10-18.md`）；同一快照里的其他 `M`/`??` 项（`crates/**`、`artifacts/**`、`docs/04-internal/**`）属并行施工线，非本批产出，本批未触碰。
+本批对 Apeireth-rust 工作区的唯一写入是**新增本报告**（`git status --porcelain` 中本批对应项仅 `?? m-axis-3d-recon-2026-10-18.md`）；同一快照里的其他 `M`/`??` 项（`crates/**`、`artifacts/**`、`docs/04-internal/**`）属并行施工线，非本批产出，本批未触碰。
 
 ### D. 材料受限（如实标注）
 

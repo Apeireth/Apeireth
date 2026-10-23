@@ -1,6 +1,6 @@
 # round8-02: docs/stage6/ 22 trait 互锁 + V-Measure 24 维设计深化 (architect2)
 
-> **任务**: 基于用户指令"无限逼近" + round7-06 进展：1) 完善 docs/stage6/22-trait-interlock.md (22 个 trait 真实 enum + assertion macro 设计) + docs/stage6/V-measure-design.md (V0.5 v2 24 维 + V1136 v2 9 子测度真实测量函数设计 + DimensionTrace 结构 + MeasurementHook trait)；2) 至少 3 个 stage6 核心 trait 的 Rust trait sketch (non-LOCKED 范围)；3) docs/stage6/verification-protocol.md (M1/M2/M3 里程碑 + 沙盒 5 重守门)；4) 不修改任何 LOCKED 阶段 1-5；5) 守 7 项不修改承诺；6) 产出 reports/round8-02-stage6-trait-interlock-v-measure-design-architect2.md。
+> **任务**: 基于用户指令"无限逼近" + round7-06 进展：1) 完善 ../docs/archive/stage6/22-trait-interlock.md (22 个 trait 真实 enum + assertion macro 设计) + ../docs/archive/stage6/V-measure-design.md (V0.5 v2 24 维 + V1136 v2 9 子测度真实测量函数设计 + DimensionTrace 结构 + MeasurementHook trait)；2) 至少 3 个 stage6 核心 trait 的 Rust trait sketch (non-LOCKED 范围)；3) ../docs/archive/stage6/verification-protocol.md (M1/M2/M3 里程碑 + 沙盒 5 重守门)；4) 不修改任何 LOCKED 阶段 1-5；5) 守 7 项不修改承诺；6) 产出 round8-02-stage6-trait-interlock-v-measure-design-architect2.md。
 > **作者**: architect2 (Ponytail: full)
 > **时间**: 2026-08-02
 

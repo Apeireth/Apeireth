@@ -2,7 +2,7 @@
 
 ```text
 [Document-Meta]
-Document:        docs/04-internal/engineering-experience/00-construction-handbook.md
+Document:        00-construction-handbook.md
 Version:         1.0（经验总装批：五矿 + 宪章 + 手册族 → 工序卡 + 环境事实卡 + 模板库导航）
 Last-Modified:   2026-10-20
 Status:          🟢 活跃（任何施工会话开工前花 5 分钟过一遍 §1 + §3）
@@ -50,7 +50,7 @@ Author:          经验总装批施工者
 | **第一次进场** | 两份宪章 + [multi-ai-construction-guide](../../02-guides/multi-ai-construction-guide.md) §一 | `preflight-checklist.md` | `git log --oneline -5` 对 HEAD 口径 |
 | **改 src（任何）** | MANIFESTO §8/§10（LOCKED 5 项 + 工序） | `commit-message.md` | 三件套（见 §3 命令卡） |
 | **派子代理** | MANIFESTO §6（workflow + 3 问 + 亲验义务） | `subagent-brief.md` | 派前自己先跑一遍基线 |
-| **判某能力到底做没做** | [engineering-review-handoff-2026-10-06.md](../engineering-review-handoff-2026-10-06.md) §2.3（三关）+ [system-capabilities.md](../../03-reference/system-capabilities.md) 四级口径 | — | 三关命令见本册 §4 |
+| **判某能力到底做没做** | [engineering-review-handoff-2026-10-06.md](../engineering-review-handoff-2026-10-06.md) §2.3（三关）+ [system-capabilities.md](../../01-architecture/system-capabilities.md) 四级口径 | — | 三关命令见本册 §4 |
 | **写交付文档** | 任一份 *-delivery.md 卷宗抬头（接缝注先例） | `delivery-doc-skeleton.md` | `python scripts/check_doc_caliber.py <doc>` |
 | **跨会话接续** | [handoff-w1-w5-closure](../handoff-w1-w5-closure-2026-10-10.md) §7（接手第一步） | `handoff-report-skeleton.md` | 交付方 §3 验证清单 |
 | **写"已验证/已实测"** | [live-verification-ledger.md](../live-verification-ledger.md)（唯一权威，先查再写） | — | 台账行的复现命令 |

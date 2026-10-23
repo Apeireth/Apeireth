@@ -14,18 +14,18 @@
 > (sync/async/static/service/messagePreprocessor/hybrid) async trait 完整实现 +
 > 审核后注册 + extension.toml 严格 schema 解析 + 权限/输入大小沙盒 + 调用审计;
 > ≥30 unit + ≥10 integration test; 不修改 LOCKED; 守 7 项不修改承诺; 产出
-> reports/round5-03-extension-fullstack-engineer.md
+> round5-03-extension-fullstack-engineer.md
 
 **约束**:
-- ❌ 不修改 docs/stage1/inspiration-stage1-2026-07-30.md (LOCKED)
+- ❌ 不修改 ../docs/archive/stage1/inspiration-stage1-2026-07-30.md (LOCKED)
 - ❌ 不修改 docs/stage2/stage2-decisions-*.md ×18 (LOCKED)
 - ❌ 不修改 docs/stage3-blueprints/*.md ×14 (LOCKED)
 - ❌ 不修改 docs/stage4/architecture-*.md (LOCKED)
-- ❌ 不修改 docs/stage5/stage5-construction-document.md (LOCKED)
+- ❌ 不修改 ../docs/archive/stage5/stage5-construction-document.md (LOCKED)
 - ❌ 不修改 reports/d8437877-locked-stage5-gap-matrix.md
 - ❌ 不修改 reports/a2557c25-round5-engineering-decisions-tasks.md (本任务的派活源)
 
-✅ 仅修改 crates/*/src/ + crates/*/tests/ + crates/*/examples/ + Cargo.toml (workspace) + reports/round5-03-extension-fullstack-engineer.md (本文件)
+✅ 仅修改 crates/*/src/ + crates/*/tests/ + crates/*/examples/ + Cargo.toml (workspace) + round5-03-extension-fullstack-engineer.md (本文件)
 
 ---
 
@@ -292,7 +292,7 @@ apeireth-extension
 - [x] 调用审计
 - [x] ≥30 unit + ≥10 integration test (实际 58 unit + 19 integration = 77)
 - [x] 不修改 LOCKED (7 项全守)
-- [x] 产出 reports/round5-03-extension-fullstack-engineer.md (本文件)
+- [x] 产出 round5-03-extension-fullstack-engineer.md (本文件)
 - [x] cargo build -p apeireth-extension 0 error
 - [x] cargo test -p apeireth-extension 0 failed
 - [x] cargo build --workspace 0 error

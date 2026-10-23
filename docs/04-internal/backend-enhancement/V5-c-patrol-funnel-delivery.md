@@ -2,7 +2,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/backend-enhancement/V5-c-patrol-funnel-delivery.md
+Document:        V5-c-patrol-funnel-delivery.md
 Version:         1.0（V5-c 批交付实录）
 Last-Modified:   2026-10-17
 Status:          🟢 活跃

@@ -86,7 +86,7 @@
 ## 2. 文档口径
 
 - [x] 测试基线刷新：跑 `pwsh scripts/gate_full.ps1 -FailIfBusy`（R6-A 唯一全量执行器：进程锁 +
-      失败归因；等价于全 workspace 口径），更新 [docs/03-reference/test-baseline.md](../03-reference/test-baseline.md)
+      失败归因；等价于全 workspace 口径），更新 [../03-reference/test-baseline.md](../03-reference/test-baseline.md)
       （单一真源）§1 与「历史口径」表；**其余文档只引用不抄写**
   - 实证（2026-10-21，复核记录，未重跑）：test-baseline §1 = **341 套件 / 8570 passed / 0 failed /
     51 ignored**（日期 2026-10-21；工具链 rustc/cargo 1.97.1）；§3「历史口径」表已含 2026-10-21

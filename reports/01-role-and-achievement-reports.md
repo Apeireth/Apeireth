@@ -31,7 +31,7 @@
 - 覆盖矩阵 8 项：6 状态机 🟡 部分（`cognition/src/lib.rs`+`reflection.rs`）；5 Module 🟡 4/5（PerceptionAdapter 由 `apeireth-asi` 提供）；7 席 council 🟡 守门层已位、语义映射未实装；失败路径收敛 ✅；测试 **29/29 全绿但未达 ≥60 阈值（漂移诚实登记）**；demo 仅 3 场景（Normal→Allow / ModifyL0HA→Reject / Mixed→Reject）；LOCKED 0 触碰 ✅；7 项不修改承诺 ✅。
 - 漂移登记 3 条：角色专长错位、未擅自补全 60 测试与 6 状态演示、承诺守住。**验收判据**：报告 + `team_complete_task` + `team_report_idle` 三件套。
 **现状复核（2026-10-23）**：**已过时**——`crates/apeireth-cognition/` 已迁 [legacy/donor/apeireth-cognition](../legacy/donor/apeireth-cognition)（[legacy/README.md](../legacy/README.md)：不作新开发、不注册能力）；29/29 为 crate 级旧口径，现行真源 341 套件 / 8570 passed / 0 failed / 51 ignored（2026-10-21）。**未核实**：6 状态机是否在别处补完——现行 `crates/` 树未检索到等价实现，不作断言。**部分成立**：「范围已被覆盖」的登记行为与现行宪章一致。
-**归属链接**：../Cargo.toml、../legacy/README.md、../docs/03-reference/test-baseline.md、../docs/04-internal/backend-enhancement/00-backlog.md；历史 `crates/apeireth-cognition/**`；同册相关 reports/round15-01-asi-ml-calibration-acceptance.md、reports/round15-02-bus-5-layer-acceptance.md（册 04）
+**归属链接**：../Cargo.toml、../legacy/README.md、../docs/03-reference/test-baseline.md、../docs/04-internal/backend-enhancement/00-backlog.md；历史 `crates/apeireth-cognition/**`；同册相关 round15-01-asi-ml-calibration-acceptance.md、round15-02-bus-5-layer-acceptance.md（册 04）
 
 ### P22 architect2 — apeireth-council 补交证据 (原篇未标日期)
 
@@ -101,7 +101,7 @@
 - 每 advisor 5 测试覆盖：Domain 验证 / ID 稳定性（v1 命名不可随意改）/ 关键词强反对→`StrongDisapprove` / 正常 query→`Approve` / **中文 keyword 反对**（P22 reviewer 关切的国际化场景）。
 - **Ponytail 备忘**：9 处 `unused import`（`AdvisorOpinion`/`init_context`）**故意保留**，避免 commit diff 噪声盖过真实改动，下轮可一并 `cargo fix`；`verdict.report.weighted_score` 改断言逻辑记入 §3.5。
 **现状复核（2026-10-23）**：**已过时**——crate 现位于 [legacy/donor/apeireth-council](../legacy/donor/apeireth-council)、「64 passed」为其历史口径（现行真源 341 套件 / 8570 passed / 0 failed / 51 ignored）。**仍成立**：「Ponytail 明示（故意保留的警告 / 待办项）」与 [AGENTS.md](../AGENTS.md) §1 诚实纪律一致；「每 advisor 必测中文关键词」是可复用的国际化用例设计要求。**未核实**：9 处 `unused import` 是否仍在 `legacy/donor/apeireth-council` 快照中。
-**归属链接**：../legacy/donor/apeireth-council、../docs/03-reference/test-baseline.md、../AGENTS.md；历史 `crates/apeireth-council/src/advisors/*.rs`、`crates/apeireth-council/tests/council_tests.rs`；同册相关 reports/P22-architect2-council-evidence.md（本册 §2）
+**归属链接**：../legacy/donor/apeireth-council、../docs/03-reference/test-baseline.md、../AGENTS.md；历史 `crates/apeireth-council/src/advisors/*.rs`、`crates/apeireth-council/tests/council_tests.rs`；同册相关 P22-architect2-council-evidence.md（本册 §2）
 
 ### A1-W3 设置页持久化 (2026-08-04)
 
@@ -110,7 +110,7 @@
 - DoD 8 项全 ✅：theme/mode/language/splash/breath 改后重启保留（`persistence::load()` + `App::with_loaded_settings()` 启动还原）；Win 走 `APPDATA\apeireth\`（比原计划 `bin/` 更标准鲁棒）；跨平台 APPDATA / XDG 双 `#[cfg]`；不存在 → 默认值（`load_from` / `Settings::defaults()`）；解析失败 → 默认值（任何反序列化错误 fall back）；退出时 save（`main()` 中 `run_app` 后兜底）；改设置时即时 save（`handle_settings_key` 检测 `before != after`）；**unit tests 7/7 pass**。
 - 漂移检查守 8 项不假装 + O-2 不漂移；**关键发现**：原计划新建 `settings_io.rs` 走 enum serde + `~/bin/`，改为**复用既有完整 `persistence.rs`**（不重造）。主哲学 6 锚逐条穿透（S-1/S-2/O-5/O-2/O-3/O-4）。
 **现状复核（2026-10-23）**：**已过时**——`apeireth-tui` 现位于 [legacy/donor/apeireth-tui](../legacy/donor/apeireth-tui)；现行桌面面是 [frontend/companion-desktop](../frontend/companion-desktop)，其设置持久化另有实现（册 10「设置实时应用合同」）；「19/19」为该 crate 历史口径。**仍成立**：「原计划新建模块 → 复用既有 persistence.rs」的 O-2 不漂移判定，与现行 [CONSTRUCTION-DISCIPLINE.md](../docs/04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md)「叠加不覆盖」纪律一致。**未核实**：R19-TUI 在 [crates/adapters/tui](../crates/adapters/tui) 是否有继任实现——本轮未逐文件核对。
-**归属链接**：../crates/adapters/tui、../frontend/companion-desktop、../legacy/donor/apeireth-tui、../docs/04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md；历史 `crates/apeireth-tui/src/{persistence.rs,main.rs}`；同册相关 reports/achievement-A2-W3-tui-session-episode.md（本册 §21）
+**归属链接**：../crates/adapters/tui、../frontend/companion-desktop、../legacy/donor/apeireth-tui、../docs/04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md；历史 `crates/apeireth-tui/src/{persistence.rs,main.rs}`；同册相关 achievement-A2-W3-tui-session-episode.md（本册 §21）
 
 ### A1.4 ADR 成就报告 — CLI 接入 core Session API (2026-08-01)
 
@@ -121,7 +121,7 @@
 - 备选 4 项逐一否决并给理由：A 直接调 core（耦合）/ B 不暴露 lib / C 抽 `apeireth-binding` crate（过度工程）/ D 暴露高层命令字符串（抽象太粗）。
 - **不修改承诺核查**：7 项 LOCKED × 三列（是否触动/证据）= **7/7 0 触动**。**Self-Disable 边界**：❌ 禁止 API 7 项（`is_l0_ha_required`/`disable_self`/`reorganize_onion`/`modify_l0_layer`/`bypass_guard`/`exit_silent_mode`/`fake_human_approval`）+ ✅ 允许 API 4 项 + 边界守护机制 3 条。
 - 升级触发：阶段 7+ 前端复用 ≥2 个 → 抽 binding crate；core 暴露 `Action` enum → cli 用 type alias 桥接。**签字位**：架构师起草 / backend_engineer 落地 / code_reviewer 审查 / 守护责任在主人。
-**现状复核（2026-10-23）**：**已过时（ADR 编号与文件名已变）**——原 ADR 文件名在现行树**已不存在**，现行 [docs/adr/0002-target-architecture-v1.md](../docs/adr/0002-target-architecture-v1.md)；ADR 目录现存 0001–0014，编号已整体重排（历史不追溯改写）。**部分成立**：「CLI 只经 lib 公开面、不直接引用 core 内部类型」在现行树仍可核（[crates/adapters/cli](../crates/adapters/cli) 与 [crates/foundation/core](../crates/foundation/core) 分离存在），但「main.rs 不直接 use core」是否逐字仍生效——**未核实**（未做全量引用检索）。**仍成立**：Self-Disable 判定仍是现行 **3 不可变脊柱**之一（[ROADMAP.md](../ROADMAP.md) §13），原 7 项禁止 API 是其早期形态清单。
+**现状复核（2026-10-23）**：**已过时（ADR 编号与文件名已变）**——原 ADR 文件名在现行树**已不存在**，现行 [../docs/adr/0002-target-architecture-v1.md](../docs/adr/0002-target-architecture-v1.md)；ADR 目录现存 0001–0014，编号已整体重排（历史不追溯改写）。**部分成立**：「CLI 只经 lib 公开面、不直接引用 core 内部类型」在现行树仍可核（[crates/adapters/cli](../crates/adapters/cli) 与 [crates/foundation/core](../crates/foundation/core) 分离存在），但「main.rs 不直接 use core」是否逐字仍生效——**未核实**（未做全量引用检索）。**仍成立**：Self-Disable 判定仍是现行 **3 不可变脊柱**之一（[ROADMAP.md](../ROADMAP.md) §13），原 7 项禁止 API 是其早期形态清单。
 **归属链接**：../docs/adr、../docs/adr/0002-target-architecture-v1.md、../crates/adapters/cli、../crates/foundation/core、../ROADMAP.md、../docs/01-architecture/system-capabilities.md；历史 `docs/adr/0002-cli-session-api-binding.md`、`crates/apeireth-cli/src/*`
 
 ### A1.1 成就报告 — apeireth-cli session 接 core Session API (2026-08-01)
@@ -134,7 +134,7 @@
 - **验收判据**：`cargo test --workspace` → **33 passed / 0 failed**；`cargo clippy -p apeireth-cli --all-targets` → **0 warning**（其它 crate 121 warnings 预存于 core/philosophy，按 7 项承诺不在 DoD 范围）；`cargo run -p apeireth-cli -- session` 实测 `Session ID: sess-1785583953-1`、`started_at: 2026-08-01T11:32:33+00:00`（动态生成）；改动仅 `crates/apeireth-cli/src/{main.rs,lib.rs}` + 本报告。
 - **Ponytail 取舍 5 条**：Session ID 用 `timestamp + AtomicU64 counter` 而非 uuid（升级：跨进程分布式时 uuid v7）；`classify_risk` 关键词启发式（升级：接真分类器）；stdin 用 stdlib `BufRead::read_line`（升级：阶段 7 换真 TUI 客户端）；保留 `placeholder()` + 兼容测试；不重写其余 dispatch 分支。
 **现状复核（2026-10-23）**：**已过时**——33 passed 为 2026-08 workspace 级旧数字，现行真源 341 套件 / 8570 passed / 0 failed / 51 ignored（2026-10-21）；CLI 现为 [crates/adapters/cli](../crates/adapters/cli)、core 现为 [crates/foundation/core](../crates/foundation/core)。**部分成立**：集成测试中的 `PHL-02b`/`PHL-04`/`PHL-06` 是 v4.1 时代 **12 键**编号，现行键集 = **14 键 PHL-01..08**（[ADR-0006](../docs/adr/0006-formalize-14-keys.md)，2026-10-20 正式化），12 键为历史口径（[ROADMAP.md](../ROADMAP.md) §13）。**仍成立**：「本 crate clippy 0 warning、其它 crate 预存 warning 如实标注且不在本 DoD 范围」与 [AGENTS.md](../AGENTS.md) §5 同向。**未核实**：原 9 个 pub fn 在现行 CLI 中的存续情况——未逐符号核对。
-**归属链接**：../crates/adapters/cli、../crates/foundation/core、../docs/03-reference/test-baseline.md、../docs/adr/0006-formalize-14-keys.md、../ROADMAP.md、../AGENTS.md；历史 `crates/apeireth-cli/src/*`、`crates/apeireth-core/src/lib.rs`；同册相关 reports/achievement-A1-architect-adr.md（本册 §10）
+**归属链接**：../crates/adapters/cli、../crates/foundation/core、../docs/03-reference/test-baseline.md、../docs/adr/0006-formalize-14-keys.md、../ROADMAP.md、../AGENTS.md；历史 `crates/apeireth-cli/src/*`、`crates/apeireth-core/src/lib.rs`；同册相关 achievement-A1-architect-adr.md（本册 §10）
 
 ### A1 代码审查报告 (2026-08-01)
 
@@ -144,7 +144,7 @@
 - **7 维评分**：① 正确性 ⚠️ 部分（Session **未真构造**、ActionGuard **未调用**）；② 测试覆盖 ❌ 严重不足（**仅 1 个 test，覆盖率约 12.5%（1/8 路径）**）；③ 错误处理 ⚠️ 部分（解析错误已处理，stdin EOF 与 clippy 边界未触发）；④ 不修改承诺 7 项 ✅ 100% 守住；⑤ Self-Disable 边界 ✅ 守住（无违规 API）；⑥ **V1+V2+V3 AND 门真接入 ❌ 未接入**（仅 `println!` 标签，无 `ActionGuard::check_action` 调用）；⑦ commit 规范 ⚠️ 待 commit。
 - **Overall Risk Level: 🟡 MEDIUM；Verdict：完成度约 40%** —— 协议层与参数解析层完整，Session API 真接入与守门真接入两块核心均未实现，仅以 placeholder 字符串冒充。建议 **commit 前先补 P0 + P1**（构造 Session、接 ActionGuard、补测试），否则 risk level 维持 MEDIUM。边界清单：不触碰 7 项承诺；不加「询问是否需要 L0 HA」类元问题 API；不新增依赖；不实现 V3 Multi-AI consensus（属 A5）。
 **现状复核（2026-10-23）**：**已过时（被同批后续交付取代）**——本篇是 A1.1 落地**之前**的快照；同批 [achievement-A1-backend-engineer-apeireth-cli-session.md](achievement-A1-backend-engineer-apeireth-cli-session.md) 随后给出 18 条测试全绿 + 实测 stdin 对话循环（本册 §11），故「40% 完成度」是**历史时点结论，不是现状**。**仍成立**：审查与实现分角色并行、按维度打分并给 Risk Level、明确列「不建议做的事」边界——与现行 [CONSTRUCTION-DISCIPLINE.md](../docs/04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md) 审查纪律一致。**未核实**：A1 之后 CLI 是否再出现「占位冒充已接入」——未做等价检索。
-**归属链接**：../crates/adapters/cli、../crates/foundation/core、../docs/04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md、../docs/03-reference/test-baseline.md；历史 `crates/apeireth-cli/src/*`；同册相关 reports/achievement-A1-backend-engineer-apeireth-cli-session.md（本册 §11）、reports/achievement-A1-leader-summary.md（本册 §13）
+**归属链接**：../crates/adapters/cli、../crates/foundation/core、../docs/04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md、../docs/03-reference/test-baseline.md；历史 `crates/apeireth-cli/src/*`；同册相关 achievement-A1-backend-engineer-apeireth-cli-session.md（本册 §11）、achievement-A1-leader-summary.md（本册 §13）
 
 ### A1 成就达成总结 — 施工团队 Leader (2026-08-01)
 
@@ -215,7 +215,7 @@
 - 交付 `apeireth-bus`（~40 pub fn，**35 unit tests 全绿**，example `bus_demo` 跑通）+ `apeireth-extension`（~30 pub fn，**23 unit tests 全绿**，example `extension_demo` 跑通）。
 - **落盘位置的诚实说明**：两 crate 落在隔离目录 `.apeireth-a16-build/{bus,extension}/`，用空 `[workspace]` 表阻断 workspace 上扫——因主 worktree 存在 17 crate 物理并行冲突（其他 agent merge 多次破坏源文件 + Cargo.toml merge marker）；物理 commit 与 crates 落地由 integration agent 在 A20 阶段合并。
 - **5 层通信总线**：L0 InprocBus（同进程 tokio mpsc）**完全实现**；L1 UnixSocketBus / L2 PipeBus / L3 GrpcBus / L4 WebSocketBus 均 **schema-only**（P15 物理接入）；显式声明 `BusLayer::is_fully_implemented() == true` **仅对 L0**，防误把 schema 当物理实现。OpenClaw 6 事件流完全实现。范围依据 `docs/stage2/stage2-decisions-communication-bus.md` §2/§4/§5/§6/§7 + `docs/stage1/inspiration-stage1-2026-07-30.md` §15。**剩余**：L1–L4 物理接入（P15）、真实执行 stub 替换（P13+P15）、0 mock 框架。
-**现状复核（2026-10-23）**：**已过时（crate 已移出 + 现行总线面已换代）**——[legacy/donor/apeireth-bus](../legacy/donor/apeireth-bus) 与 [legacy/donor/apeireth-extension](../legacy/donor/apeireth-extension)；现行 bus 面由 R1b 事件总线与 ADR-0008/0009 接管（[docs/adr/0009-r1b-nervous-bus.md](../docs/adr/0009-r1b-nervous-bus.md)、[claims.yaml](../docs/status/claims.yaml)），「5 层总线」分层表述在现行真源中未见对应登记面。**已过时**：「17 crate 并行冲突」语境 → 现行 **30 members**（[AGENTS.md](../AGENTS.md) §3）。**仍成立**：「schema-only 与物理实现必须显式区分」是本篇最有价值的方法论遗产，与 [AGENTS.md](../AGENTS.md) §1 四级口径、[capabilities-matrix.md](../docs/03-reference/capabilities-matrix.md) §0 的 `supported/available/reason` 三元表达同向。**未核实**：L1–L4 在 `legacy/donor/apeireth-bus` 快照中是否仍为 schema-only。
+**现状复核（2026-10-23）**：**已过时（crate 已移出 + 现行总线面已换代）**——[legacy/donor/apeireth-bus](../legacy/donor/apeireth-bus) 与 [legacy/donor/apeireth-extension](../legacy/donor/apeireth-extension)；现行 bus 面由 R1b 事件总线与 ADR-0008/0009 接管（[../docs/adr/0009-r1b-nervous-bus.md](../docs/adr/0009-r1b-nervous-bus.md)、[claims.yaml](../docs/status/claims.yaml)），「5 层总线」分层表述在现行真源中未见对应登记面。**已过时**：「17 crate 并行冲突」语境 → 现行 **30 members**（[AGENTS.md](../AGENTS.md) §3）。**仍成立**：「schema-only 与物理实现必须显式区分」是本篇最有价值的方法论遗产，与 [AGENTS.md](../AGENTS.md) §1 四级口径、[capabilities-matrix.md](../docs/03-reference/capabilities-matrix.md) §0 的 `supported/available/reason` 三元表达同向。**未核实**：L1–L4 在 `legacy/donor/apeireth-bus` 快照中是否仍为 schema-only。
 **归属链接**：../legacy/donor/apeireth-bus、../legacy/donor/apeireth-extension、../docs/adr/0009-r1b-nervous-bus.md、../docs/status/claims.yaml、../docs/03-reference/capabilities-matrix.md、../AGENTS.md；历史 `crates/apeireth-bus/**`、`crates/apeireth-extension/**`、`docs/stage2/stage2-decisions-communication-bus.md`
 
 ### A16.3 成就报告 — apeireth-pybridge 完整落地 (2026-08-01)
@@ -226,7 +226,7 @@
 - **公共 API 11 pub fn**（Rust 侧 7 + R11 兼容层 4）+ Python 侧 10 `#[pyfunction]`；R11 模块数 = **1103（1100 + 3 baseline）**，`r11_compat_version()` → `0.14.0-R14`。
 - **已知限制 / ponytail 3 条**：① `missing_docs` warnings 6 处（`BridgeHealth`/`R11ModuleInfo` pub field 无 doc，升级 = 加 `///`）；② `python-ext` feature 只验证 rlib 路径，实际 `maturin develop` 部署需 Python 3.13 venv，**Phase 3 再做**；③ R11 模块名是「已知清单」非「实际可导入」——`is_known_r11_module` 是设计层 LOCKED 的 1100+ 元数据，`is_module_available` 才是运行时真实查询，两者配合语义正确。
 **现状复核（2026-10-23）**：**已过时**——crate 现位于 [legacy/donor/apeireth-pybridge](../legacy/donor/apeireth-pybridge)，现行 [Cargo.toml](../Cargo.toml) members 无 pybridge、依赖面不含 PyO3。**已过时（R11 baseline 口径）**：「1100 + 3 = 1103」是 R11 时代口径；现行 R11 baseline 三值按 [ROADMAP.md](../ROADMAP.md) §13 与 [00-backlog.md](../docs/04-internal/backend-enhancement/00-backlog.md) D16 标注为「**无公开复现入口，仅供内部对照**」——即 1103 在现行口径下**不可复核**。**仍成立**：③ 的「设计层已知清单 ≠ 运行时可导入」是极好的 0 装边界写法，与 [AGENTS.md](../AGENTS.md) §1「不许把已实现未接线说成 0 装」同向。**未核实**：`python-ext` feature 在 `legacy/donor/apeireth-pybridge` 快照中是否仍可编译。
-**归属链接**：../legacy/donor/apeireth-pybridge、../Cargo.toml、../ROADMAP.md、../docs/04-internal/backend-enhancement/00-backlog.md、../AGENTS.md；历史 `crates/apeireth-pybridge/src/*`；同册相关 reports/P29-pybridge-restoration.md（本册 §5）
+**归属链接**：../legacy/donor/apeireth-pybridge、../Cargo.toml、../ROADMAP.md、../docs/04-internal/backend-enhancement/00-backlog.md、../AGENTS.md；历史 `crates/apeireth-pybridge/src/*`；同册相关 P29-pybridge-restoration.md（本册 §5）
 
 ### A2-W3 tui-session episode 写入 (2026-08-04)
 
@@ -235,7 +235,7 @@
 - DoD 7 项全 ✅：每次 chat 进 `SqliteMemoryStore`（`chat()` 调 `record_chat_episodes(&store, input, &reply.text)`）；**session_id = `"tui-session"`**（`pub const TUI_SESSION_ID`）；1 user + 1 assistant episode（2 个 `Episode { session_id: TUI_SESSION_ID }`）；continuity_id 经 session_id 间接表达（沿用 `DEFAULT_CONTINUITY_ID="apeireth-tui-default"` 语义，memory episode 表 hardcode "default" 是 R14 已定）；timestamp = `now_ts()`（user）/ `ts+1`（assistant 保证顺序）；history 页 6 流中 `tui-session` 有数据（`history_stream_counts()` → `EpisodeStore::count_by_session` >0）；**unit tests 6/6 pass**。
 - 漂移检查守 8 项不假装 + O-2 不漂移；主哲学 6 锚逐条穿透（S-1 / S-2 / O-5 / O-2 / O-3 / O-4）。
 **现状复核（2026-10-23）**：**已过时**——`apeireth-tui` 现位于 [legacy/donor/apeireth-tui](../legacy/donor/apeireth-tui)；现行桌面会话/记忆面在 [frontend/companion-desktop](../frontend/companion-desktop) + [crates/engine/memory](../crates/engine/memory)；「19/19」为其历史口径。**部分成立**：现行记忆面仍以 `Episode` / session 维度落库（见 [crates/engine/memory](../crates/engine/memory) 与 [claims.yaml](../docs/status/claims.yaml) `mem.lesson_object` / `gap.memory_update` 的 sources），「chat 真写 episode、不假装已记忆」语义仍在；但具体常量 `TUI_SESSION_ID = "tui-session"` 与固定 session_id 写法在现行树无对应面（**未核实**）。**仍成立**：「user/assistant 双 episode + 时间戳顺序保证」「失败 eprintln 不静默吞」两条纪律可直接复用。
-**归属链接**：../legacy/donor/apeireth-tui、../crates/engine/memory、../crates/adapters/tui、../frontend/companion-desktop、../docs/status/claims.yaml；历史 `crates/apeireth-tui/src/**`；同册相关 reports/achievement-A1-W3-tui-settings-persist.md（本册 §9）
+**归属链接**：../legacy/donor/apeireth-tui、../crates/engine/memory、../crates/adapters/tui、../frontend/companion-desktop、../docs/status/claims.yaml；历史 `crates/apeireth-tui/src/**`；同册相关 achievement-A1-W3-tui-settings-persist.md（本册 §9）
 
 ### A20 后端 17 crate 集成最终报告 (2026-08-01)
 

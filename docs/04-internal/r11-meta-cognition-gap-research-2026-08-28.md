@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md
+Document:        r11-meta-cognition-gap-research-2026-08-28.md
 Version:         1.0 (sub-agent R11-MetaCognition 写于 Round 11)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (反思+元认知 gap 真调研, 6 模块 语义对齐 vs v2 release critical path)

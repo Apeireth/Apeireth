@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/r11-storage-gap-research-2026-08-28.md
+Document:        r11-storage-gap-research-2026-08-28.md
 Version:         1.0
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (sub-agent 真调研, 给主代理决策参考)

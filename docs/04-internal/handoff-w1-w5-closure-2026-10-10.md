@@ -55,7 +55,7 @@ cargo test -p apeireth-tools-canonical -p apeireth-memory -p apeireth-core \
 # 本 Span 终点实测: 上述全绿（tools 229 / memory 830+ / assembly / cli 68 / sdk 61 等，
 # 累计数千测 0 failed; clippy --all-targets -D warnings 0 警告）
 cd frontend/companion-desktop && pnpm check && pnpm test   # svelte-check 0 错 + 15/15 套件
-python scripts/check_doc_caliber.py docs/04-internal/live-verification-ledger.md <新文档路径>
+python scripts/check_doc_caliber.py live-verification-ledger.md <新文档路径>
 ```
 
 **git 状态**: origin/main = HEAD（0/0）；唯一未提交区 = `research/`（主人的 leak-probe

@@ -1,7 +1,7 @@
 # 三线协作契约（架构线 × 效率线 × 生物线）
 
 > `Status: ✅ 生效（2026-10-20；owner 转告三线）`
-> 依据：[CONSTRUCTION-DISCIPLINE §二/§三](../../04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md)（叠加不覆盖 / 战场不重叠 / 口径唯一）、[ADR-0001](../adr/0001-adopt-architecture-contract.md)、[contract.toml](contract.toml)。
+> 依据：[CONSTRUCTION-DISCIPLINE §二/§三](../04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md)（叠加不覆盖 / 战场不重叠 / 口径唯一）、[ADR-0001](../adr/0001-adopt-architecture-contract.md)、[contract.toml](contract.toml)。
 > 一句话：三线共享一个工作树和一个 git index——**目标不冲突，冲突只在资源与文件接口**；本页把接口写死，机器能管的部分交给 `arch_guard`，机器管不了的（提交窗口/人读约定）写在这里。
 
 ## 1. 线分工
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | **架构线** | 契约/守卫/ADR/波次复盘/结构变更否决 | `docs/architecture/**`、`docs/adr/**`、`scripts/arch_guard.py`、`scripts/arch-baseline.txt`、`.github/workflows/arch-guard.yml` | 不改 `crates/**` 生产源码；不碰 LOCKED 5 项 |
 | **效率线** | fast gate / 文档事实体系（DTS）/ claims / 验证架构 | `scripts/verify_changed.py`、`scripts/commit.ps1`、`scripts/docs_truth.py`、`docs/status/**`、`.github/workflows/docs-truth.yml` | 不改契约/守卫规则本身；不碰 LOCKED 5 项 |
-| **生物线** | 机制实施 / R1 神经系统 / 全量门禁收口 | `crates/engine/organ/**`、`runtime-assembly/canonical` 生物接线、`docs/04-internal/backend-enhancement/**`（W 线卷宗）、[00-backlog](../../04-internal/backend-enhancement/00-backlog.md) 相关行 | 不改契约/脚本；不碰 LOCKED 5 项 |
+| **生物线** | 机制实施 / R1 神经系统 / 全量门禁收口 | `crates/engine/organ/**`、`runtime-assembly/canonical` 生物接线、`docs/04-internal/backend-enhancement/**`（W 线卷宗）、[00-backlog](../04-internal/backend-enhancement/00-backlog.md) 相关行 | 不改契约/脚本；不碰 LOCKED 5 项 |
 | 其它线（安全/总装等） | 各自交付 | 各自卷宗与源码域 | 同左纪律，尤其 §3/§5 |
 
 ## 2. 文件所有权矩阵（改前查表）

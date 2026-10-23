@@ -19,7 +19,7 @@
 
 ## Motivation & Context
 
-<!-- 为什么需要这个改动? 引用 6 哲学 anchor (per docs/conventions/09-anchor.md) 哪一项?
+<!-- 为什么需要这个改动? 引用 6 哲学 anchor (per ../docs/archive/conventions/09-anchor.md) 哪一项?
      - S-1 北极星导向
      - S-2 实事求是
      - O-2 走在前人肩上

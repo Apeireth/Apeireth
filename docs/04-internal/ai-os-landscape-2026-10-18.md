@@ -1,7 +1,7 @@
 # Apeireth 与「AI OS」市场全景对照 · 2026-10-18
 
 > `[Document-Meta]`
-> Document:        docs/04-internal/ai-os-landscape-2026-10-18.md
+> Document:        ai-os-landscape-2026-10-18.md
 > Status:          🟢 活跃（调研卷宗；第三方产品名仅作事实引注，见 `scripts/check-neutral-terms.ps1` 研究引注豁免）
 > 作者:            总装主线（阶段 1/2/3 卷宗 + 两份外部调研 + 现行系统实况）
 > 外部调研底座:    `artifacts/ai-os-market-scan-2026-10-18.md`（15 个商业样本，宣称级证据）+

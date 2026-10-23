@@ -22,7 +22,7 @@
 - **随手记（Quick Capture）**：全局快捷入口一键记一条→未整理原料入记忆流（分级呼应教训/里程碑）；
 - **历史即记忆**：操作痕迹自动入记忆流供回取；
 - **终身记忆结构**（SimpleMem 论文假说）：夜间整编算法参照。
-详见 docs/04-internal/absorption-candidates-2026-10.md。
+详见 ../absorption-candidates-2026-10.md。
 
 ## 分期
 P1 效果评估集 → P2 夜间整编 → P3 教训回路 → P4 图谱向量生产。

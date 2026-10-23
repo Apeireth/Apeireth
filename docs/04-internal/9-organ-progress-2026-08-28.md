@@ -12,7 +12,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/9-organ-progress-2026-08-28.md
+Document:        9-organ-progress-2026-08-28.md
 Version:         Progress-1.0
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (9 organ 真实现实时)

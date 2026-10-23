@@ -105,7 +105,7 @@ bbbfb75b docs: A 块 5 commit O-6 三阶审查 复盘 + 后续 commit 标准 (�
 
 | 项 | 实测 | 来源 |
 |---|---|---|
-| ENGINEER-MANIFESTO.md 行数 | 596 | `wc -l docs/04-internal/ENGINEER-MANIFESTO.md` |
+| ENGINEER-MANIFESTO.md 行数 | 596 | `wc -l ENGINEER-MANIFESTO.md` |
 | 哲学锚 LOCKED 数量 | 9 | per `eight_anchors.rs` enum (LOCKED 0 改, 2026-08-27 升 8→9 加 O-6) |
 | 13 键 RUNTIME_ENFORCED | false | `philosophy.rs:142` |
 | 测试基线 | 1739 passed / 0 failed / 12 ignored | `cargo test --workspace --locked` (.harness-step4-test.log) |

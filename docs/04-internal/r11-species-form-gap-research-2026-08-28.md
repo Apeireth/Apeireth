@@ -9,7 +9,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/r11-species-form-gap-research-2026-08-28.md
+Document:        r11-species-form-gap-research-2026-08-28.md
 Version:         1.0 (Sub-Agent R11-SpeciesForm 写于 2026-08-28)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (调研真账, 主代理决策参考)

@@ -1,6 +1,6 @@
 # round8-04: apeireth-central 9 阶段生命周期 + IdentityCard 跨载体迁移深度实装 (architect2)
 
-> **任务**: 基于用户指令"无限逼近" + docs/stage4/architecture-stage4-engineering-landing.md §4 LOCKED + 阶段 5 §3: 1) apeireth-central 9 阶段生命周期（孕育→诞生→...→重生）真实状态机实现 + 合法转换矩阵编译期 hardcode; 2) IdentityCard 跨载体迁移（UNIQUE 约束 + migration_history）; 3) Maturity 17 链接闸门; 4) Supervisor 子树（Core/Cognition/Council/Upgrade/Plugin）真实调度; 5) ≥30 unit + ≥10 integration; 6) 不修改任何 LOCKED; 7) 守 7 项不修改承诺; 8) 产出 reports/round8-04-central-9-stage-deep-implementation-architect2.md
+> **任务**: 基于用户指令"无限逼近" + ../docs/archive/stage4/architecture-stage4-engineering-landing.md §4 LOCKED + 阶段 5 §3: 1) apeireth-central 9 阶段生命周期（孕育→诞生→...→重生）真实状态机实现 + 合法转换矩阵编译期 hardcode; 2) IdentityCard 跨载体迁移（UNIQUE 约束 + migration_history）; 3) Maturity 17 链接闸门; 4) Supervisor 子树（Core/Cognition/Council/Upgrade/Plugin）真实调度; 5) ≥30 unit + ≥10 integration; 6) 不修改任何 LOCKED; 7) 守 7 项不修改承诺; 8) 产出 round8-04-central-9-stage-deep-implementation-architect2.md
 > **作者**: architect2 (Ponytail: full)
 > **时间**: 2026-08-02
 

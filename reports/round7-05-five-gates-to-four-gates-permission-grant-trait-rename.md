@@ -6,7 +6,7 @@
 |---|---|
 | 任务 ID | 13a6abb5-c0f3-48c7-83c0-5684fbf7b566 |
 | 任务标题 | round7-05 FiveGates→FourGates+PermissionGrant trait 重命名实装 |
-| 派活来源 | docs/stage4/stage4-correction-v15-four-gates-permission-grant.md（commit 5e368862）|
+| 派活来源 | ../docs/archive/stage4/_history/corrections/stage4-correction-v15-four-gates-permission-grant.md（commit 5e368862）|
 | 提交 commit | 1b8e360e3787bc1e987b28f4d32c44410c965f18 |
 | 推送状态 | ✅ 已 push 到 integration-worktree/team/e8de47ae-.../integration |
 | 执行人 | backend_engineer2 |
@@ -171,7 +171,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 | ❌ 不修改阶段 3（14 个 stage3-*.md） | ✅ 未触碰 | 同上 |
 | ❌ 不修改阶段 4 LOCKED（architecture-stage4-engineering-landing.md 1492 行 / frontend-design / inspiration-supplements / patches） | ✅ 未触碰 | 同上 |
 | ❌ 不修改 stage4-correction-v1 ~ v14（含 v5 LOCKED）| ✅ 未触碰 | 同上 |
-| ❌ 不修改 v15 修正文档本身 | ✅ 未触碰 | docs/stage4/stage4-correction-v15-four-gates-permission-grant.md 仅创建时一次性提交，本任务不修改 |
+| ❌ 不修改 v15 修正文档本身 | ✅ 未触碰 | ../docs/archive/stage4/_history/corrections/stage4-correction-v15-four-gates-permission-grant.md 仅创建时一次性提交，本任务不修改 |
 | ❌ 不修改任何测试期望（已存在的 20 unit + 10 integration tests）| ✅ 0 退化 | 所有 v14 测试仍 pass（仅迁移到 FourGates/PermissionGrant trait 形式）|
 
 ---

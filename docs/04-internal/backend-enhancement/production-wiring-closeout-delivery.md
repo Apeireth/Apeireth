@@ -2,7 +2,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/backend-enhancement/production-wiring-closeout-delivery.md
+Document:        production-wiring-closeout-delivery.md
 Version:         1.0 (生产接线收口批四缝交付)
 Last-Modified:   2026-10-17
 Status:          ✅ 已交付（2026-10-17，生产接线收口批）

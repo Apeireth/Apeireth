@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/sub-agent-audit-round-4-2026-08-28.md
+Document:        sub-agent-audit-round-4-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 4 收盘)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (sub-agent workflow 工序留痕)

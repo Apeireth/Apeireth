@@ -12,7 +12,7 @@
 
 **24 LOCKED 入口签名 V1.1 release Mavis 自决改 调研 范围** (per 决策 #74 B1 拍板):
 - 24 LOCKED crate 入口签名 0 改 verify 24/24 全 PASS (per R131-5 整合 #5.1 拍板 跟 24 LOCKED 入口 优化 62.1KB + 决策 #89 R154-3 8/8 PASS 实地 verify 24/24 全 PASS)
-- 24 LOCKED 入口签名 跟 整合 #6 commit 拍板 关系 (拍板 commit 时 24 LOCKED 入口签名 应该 hardcode 在 docs/conventions/10-locked.md, V1.0 release 0 改 严守 + V1.1 release Mavis 自决改 前提:更好的架构)
+- 24 LOCKED 入口签名 跟 整合 #6 commit 拍板 关系 (拍板 commit 时 24 LOCKED 入口签名 应该 hardcode 在 ../docs/archive/conventions/10-locked.md, V1.0 release 0 改 严守 + V1.1 release Mavis 自决改 前提:更好的架构)
 - 整合 #6 commit 拍板 跟 24 LOCKED 入口签名 V1.0 release 0 改 严守 100% 关系 (per 决策 #74 B1)
 - 整合 #6 commit 拍板 跟 24 LOCKED 入口签名 V1.1 release Mavis 自决改 关系 (per 决策 #74 B1 + 决策 #73 §2.3 主人 01:14 拍板 3 件套 §1 "工程类+技术类 locked 全早解锁" + 前提:更好的架构)
 - 24 LOCKED 入口签名 跟 V0.5 30 维 关系 (per 决策 #74 B3)

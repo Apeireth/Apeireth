@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/r11-species-core-gap-research-2026-08-28.md
+Document:        r11-species-core-gap-research-2026-08-28.md
 Version:         1.0 (R11-SpeciesCore 写于 2026-08-28)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (R11 真调研真账, 物种化核心 4 gap 派单基础)

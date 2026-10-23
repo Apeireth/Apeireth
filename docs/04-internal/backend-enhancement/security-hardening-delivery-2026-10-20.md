@@ -2,7 +2,7 @@
 
 ```text
 [Document-Meta]
-Document:        docs/04-internal/backend-enhancement/security-hardening-delivery-2026-10-20.md
+Document:        security-hardening-delivery-2026-10-20.md
 Version:         1.0（B1-B8 全收口）
 Last-Modified:   2026-10-20
 Status:          🟢 交付记录
@@ -13,7 +13,7 @@ Author:          安全加固线 lead（本线主代理）
 > 处置：8 项全部修复入库（B1-B4 于 2026-10-19，B5-B8 于 2026-10-20）。
 > 与生物机制线（W3.3）并行施工，同文件 hunk 级分账，零裹挟。
 > **全 commit 链（10）**：8 修复（`8f71d0c0`/`06246661`/`a786b733`/`2aab3add`/`1574335f`/`333c3471`/`1f65852b`/`1213fbdd`）+ 交付记录（`e3c3a463`）+ 索引收工（`5f52813d`）。
-> 索引入口：[docs/README.md](../../README.md) Index 表（交付报告/治理演练/发布校验三行）。
+> 索引入口：[../../README.md](../../README.md) Index 表（交付报告/治理演练/发布校验三行）。
 
 ## 一、8 项修复对照表
 

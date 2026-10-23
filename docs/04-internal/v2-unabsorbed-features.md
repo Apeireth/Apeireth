@@ -4,7 +4,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/v2-unabsorbed-features.md
+Document:        v2-unabsorbed-features.md
 Version:         Design-1.0 (v2 首发)
 Last-Modified:   2026-08-27
 Status:          🟢 活跃 (v1→v2 未吸收功能盘查)

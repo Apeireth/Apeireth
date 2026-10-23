@@ -2,7 +2,7 @@
 
 ```text
 [Document-Meta]
-Document:        docs/04-internal/backend-enhancement/security-restart-closeout-2026-10-22.md
+Document:        security-restart-closeout-2026-10-22.md
 Version:         1.1
 Last-Modified:   2026-10-22
 Status:          🟢 交付记录

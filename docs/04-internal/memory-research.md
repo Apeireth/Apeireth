@@ -110,7 +110,7 @@
 
 ## 五、Backlog 补齐记录（2026-08-16）
 
-当初调研标注未落地 (docs/research/mempalace-vs-apeireth-memory.md 时序三元组对齐/R179 P2/R186),
+当初调研标注未落地 (../archive/research/mempalace-vs-apeireth-memory.md 时序三元组对齐/R179 P2/R186),
 今日全部补齐:
 
 - **Zep 时序知识图谱** (memory_graph.rs): 提炼器输出 graph 三元组 (LLM 抽取) →

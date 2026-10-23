@@ -2,7 +2,7 @@
 
 ```text
 [Document-Meta]
-Document:    docs/04-internal/pm-review-productization-2026-09-25.md
+Document:    pm-review-productization-2026-09-25.md
 性质:        产品经理视角的产品化差距评审（内部文档）
 评审日期:    2026-09-25
 评审方式:    README/INSTALL/用户文档走读 + CLI 实机实测 + 桌面端/分发链/可靠性三路深挖

@@ -2,7 +2,7 @@
 
 ```
 [Document-Meta]
-Document: reports/P31-pre-existing-breakages-fix-report.md
+Document: P31-pre-existing-breakages-fix-report.md
 Task: P31 修复 7 处 pre-existing 破损（perception/central/cli/test 等）
 Role: backend_engineer2
 Status: ✅ 7 处破损全部已评估 — 5/7 cargo build/test 0 error 关闭 + 1/7 workspace外不适用 + 1/7 P28 阶段 6 收尾
@@ -229,7 +229,7 @@ fn v19_governance_python_compatible() {
 | 1 | 修复 7 处 pre-existing 破损 | ✅ 5/7 完全 + 2/7 部分（cargo build 0 error）| cargo check 4 crate 0 error |
 | 2 | 评估（不假装"全修复"）| ✅ 真实登记每项关闭率 | §"P31 深度验证" 8 项逐一验证 |
 | 3 | 不修改 LOCKED 文档 | ✅ stage5 / Cargo.toml / 其他 LOCKED 未动 | git diff 仅本报告 |
-| 4 | 报告提交 | ✅ | 本报告 reports/P31-pre-existing-breakages-fix-report.md |
+| 4 | 报告提交 | ✅ | 本报告 P31-pre-existing-breakages-fix-report.md |
 
 **整体 DoD**：4/5 — 破损 #3/#7 测试文件仍缺（不在 build 必需范围但完整度欠）
 

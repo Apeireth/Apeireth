@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md
+Document:        round-10-youyou-list-mainagent-verify-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 10 sub-agent 报告后)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (主代理亲验修订决策)

@@ -116,7 +116,31 @@
 
 ---
 
-## 六、链接自查
+## 六、本批复核统计（2026-10-23）
+
+| 册 | 来源份数 | 复核标「已过时」条数 | 标「仍成立」条数 | 标「未核实」条数 |
+|---|---|---|---|---|
+| 01 架构与能力 | 7 | 17 | 15 | 7 |
+| 02 安全与治理 | 9 | 16 | 28 | 13 |
+| 03 口径与文本可信度 | 4 | 13 | 13 | 5 |
+| **合计** | **20** | **46** | **56** | **25** |
+
+> 说明：①「已过时」条数按册内**逐条结论**计（含表格单元格内的逐条判定）；同一结论在摘要与分节各出现一次时只计一次。
+> ②「未核实」一律指**本批没有查到证据**的项（如远端 CI 运行记录、live E2E、owner 决策的最终裁决），
+> **不是**「结论为否」；这些条目一律以原文口径保留，等待归口线补证。
+> ③数量最大的一组是 02 §1 的 12 条 claim 抬级表 —— 今日已有 **6 条**被抬到 `PRODUCTION WIRED`
+> （以 [claims.yaml](../../status/claims.yaml) 逐条 `level` 与 `verified_at` 为准）。
+
+**复核时用到的仓内事实（可复算）**：根 `Cargo.toml` 的 workspace members 与 `version`；
+`docs/status/claims.yaml` 的逐条 `level` / `verified_at`；`crates/engine/runtime-assembly/src/canonical/production.rs`
+的默认开关；`crates/adapters/cli/src/lib.rs` 的治理装配根；`.gitignore` 的规则现状；
+`crates/foundation/core/src/philosophy.rs` 的键集常量；`docs/01-architecture/philosophy.md` 的锚数；
+`.github/workflows/companion-desktop-ci.yml` 的执行步骤；`reports/` / `previews/` / `artifacts/`
+的体积与跟踪件数。
+
+---
+
+## 七、链接自查
 
 本目录内所有相对链接均以 `docs/04-internal/audits/` 为起点，逐条核对目标文件存在（2026-10-23）：
 

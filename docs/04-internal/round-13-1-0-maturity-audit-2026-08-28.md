@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md
+Document:        round-13-1-0-maturity-audit-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 13, 用户 catch 触发)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (1.0 maturity 补查, 修订主代理真账 §2 真实施成熟度)

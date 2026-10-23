@@ -7,7 +7,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/handoff-k3-frontend-2026-09-23.md
+Document:        handoff-k3-frontend-2026-09-23.md
 Version:         1.0
 Last-Modified:   2026-09-23
 Status:          🟢 活跃（K3 → 下一批次的接手入口）

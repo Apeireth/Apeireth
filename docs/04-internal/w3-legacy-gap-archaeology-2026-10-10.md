@@ -2,7 +2,7 @@
 
 ```yaml
 [Document-Meta]
-Document:        docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md
+Document:        w3-legacy-gap-archaeology-2026-10-10.md
 Version:         Rev-1.0
 Last-Modified:   2026-10-10
 Status:          🟢 活跃 (W3 排期拍板依据)
