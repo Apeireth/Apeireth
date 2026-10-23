@@ -2,7 +2,10 @@
 #
 # 规则：
 # - 每条 claim = 一个"可核验的状态声明"；id 全局唯一、永不复用。
-# - level 取四级口径：IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED；
+# - level 取**口径阶梯**（2026-10-23 修正）：
+#       NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED
+#   `DEFAULT ENABLED` **不是一级**，是横切属性 —— 由下面的 `default: "ON" | "OFF" | null`
+#   表达。"接线了"与"默认开"是两件事：可以 PRODUCTION WIRED 而默认关。
 #   缺口用 NOT IMPLEMENTED。
 # - sources 是证据文件；`scripts/docs_truth.py --verify` 会核对存在性，并用
 #   `git diff <verified_at> -- <sources>` 计算 STALE（源码动过而 verified_at 未更新 = 过期）。

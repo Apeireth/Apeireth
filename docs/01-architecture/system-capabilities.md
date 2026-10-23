@@ -6,7 +6,8 @@
 > **哲学约束**: 严守 9 哲学锚 (S-1~S-3, O-1~O-6) 与 5 项 LOCKED 核心资产
 
 > **状态标注 (0 装 PASS, 基线 candidate `8b7e3111`)**: 本手册描述各能力域的**库级实现契约 (IMPLEMENTED)**。四个状态层级不可混淆：
-> **IMPLEMENTED（代码存在）** ≠ **PRODUCTION WIRED（接入 canonical 运行时主路径）** ≠ **DEFAULT ENABLED（无需 opt-in 即开启）** ≠ **HARDWARE VALIDATED（真机验证）**。
+> **IMPLEMENTED（代码存在）** ≠ **PRODUCTION WIRED（接入 canonical 运行时主路径）** ≠ **HARDWARE VALIDATED（真机验证）**；
+> **DEFAULT ENABLED 不是一级而是横切属性**（默认开/关），与上面的阶梯正交 —— 2026-10-23 定义修正。
 > 除特别标注外，模块均为显式 opt-in，**未**接入 canonical 运行时默认路径，**未**默认启用。当前已验证基线见测试基线单一真源 [test-baseline.md](../03-reference/test-baseline.md)（2026-10-18 全量 `-j 2` 口径在该文件；2026-10-16 历史口径 199 套件 / 5360 passed / 22 ignored；命令与历史口径同文件，本文不再抄写）。库级已验证但未接线的 P2 能力（turn-scoped `ModuleInvoker`、`OrganModule`、`PreferenceLearning` 闭环、principle approvals、`topic_predictor`、continuation/reflexion/spill/检索确定性加固）状态详见 `CHANGELOG.md` Unreleased 段。
 
 ---
