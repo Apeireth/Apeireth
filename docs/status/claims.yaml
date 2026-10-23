@@ -176,7 +176,7 @@ claims:
       - crates/engine/runtime-assembly/src/egress_gate.rs
       - crates/engine/runtime-assembly/src/egress_ledger.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: ed268f8fb
+    verified_at: da2e60bcc5
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"

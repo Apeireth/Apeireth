@@ -13,7 +13,7 @@
 | `sec.egress_control` | PRODUCTION WIRED | ON | - | `33236756` | 2026-12-01 |
 | `sec.object_access` | PRODUCTION WIRED | ON | - | `33236756` | 2026-12-01 |
 | `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `33236756` | 2026-12-01 |
-| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `ed268f8fb` | 2026-12-01 |
+| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `da2e60bcc5` | 2026-12-01 |
 | `mem.lesson_object` | PRODUCTION WIRED | ON | - | `ed268f8fb` | 2026-12-01 |
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `c2c911cf` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `d2621788` | 2026-11-20 |
