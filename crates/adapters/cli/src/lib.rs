@@ -1566,9 +1566,13 @@ async fn build_canonical_runtime_with_parts(
     //
     // 账本落盘到数据根 (`egress-ledger.jsonl`) —— 生产上必须落盘,
     // 否则「记录已知流向」只在内存里, 进程一退就没了。
-    let egress_ledger_path = crate::default_panel_data_dir().join("egress-ledger.jsonl");
-    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env_with_ledger(
+    let egress_data_root = crate::default_panel_data_dir();
+    let egress_ledger_path = egress_data_root.join("egress-ledger.jsonl");
+    // 问责账本（影响声明 + 事实→行动索引）——「发现影响时通知你」的前提。
+    let accountability_ledger_path = egress_data_root.join("impact-ledger.jsonl");
+    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env_with_ledgers(
         Some(egress_ledger_path),
+        Some(accountability_ledger_path),
     ) {
         builder = builder.with_egress_gate(gate);
     }
