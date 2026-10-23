@@ -61,7 +61,7 @@ Canonical references read:
 
 ```text
 ARCHITECTURE.md
-canonical-skeleton-freeze-audit.md
+docs/01-architecture/canonical-skeleton-freeze-audit.md
 crates/apeireth-runtime/src/canonical/*
 crates/apeireth-plugin/src/*
 crates/apeireth-governance/src/*

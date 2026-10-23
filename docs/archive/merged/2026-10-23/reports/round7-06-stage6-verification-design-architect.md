@@ -32,7 +32,7 @@
 | 4. 现有 crate 代码未触碰 | `git diff crates/` 仅历史 reviewer 修改，无新触碰 | ✅ |
 | 5. ≥3 个 trait assertion sketch | `trait-sketches.rs` 内含 `interlock_assert!` + `bundle_assert!` + `v05_measurement_assert!` = 3 个 | ✅ |
 | 6. trait sketch 不编译 | `trait-sketches.rs` 第 5 行 `#![allow(dead_code...)]` + 不在 `[members]` | ✅ |
-| 7. round7-06-stage6-verification-design-architect.md 产出 | 本文件 | ✅ |
+| 7. reports/round7-06-stage6-verification-design-architect.md 产出 | 本文件 | ✅ |
 
 ---
 

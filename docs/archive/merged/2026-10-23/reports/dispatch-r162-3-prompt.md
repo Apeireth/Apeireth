@@ -26,16 +26,16 @@
 - 整合 #6 拍板 = 🟡 拍板中 (R162-1 8:10 11 维度 拍板 done 28.8 KB, R162-2~9 9:05 续 8 维度 严守 解读)
 
 **8 哲学锚 调研 范围** (per 决策 #74 B5 8 哲学锚 严守 哲学 + 决策 #73 §4 哲学锚是思想哲学 + 决策 #73 §3 不要怕复杂度是工程哲学 = 9 件套 总哲学):
-- 8 哲学锚 是 哪些 (per ../docs/archive/conventions/09-anchor.md, e.g. 长程 AI 成长 / 不要衰老病死 / 三洋葱架构 / 9 organ 拟人化 / 借鉴 12 源 fork-then-borrow / 形式化 F1-F10 / 复杂不恐惧 / 主仆关系)
-- 8 哲学锚 跟整合 #6 commit 拍板 关系 (拍板 commit 时 8 哲学锚 应该 hardcode 在 ../docs/archive/conventions/09-anchor.md 跟 4+ 文档引用, 0 改 严守)
+- 8 哲学锚 是 哪些 (per docs/conventions/09-anchor.md, e.g. 长程 AI 成长 / 不要衰老病死 / 三洋葱架构 / 9 organ 拟人化 / 借鉴 12 源 fork-then-borrow / 形式化 F1-F10 / 复杂不恐惧 / 主仆关系)
+- 8 哲学锚 跟整合 #6 commit 拍板 关系 (拍板 commit 时 8 哲学锚 应该 hardcode 在 docs/conventions/09-anchor.md 跟 4+ 文档引用, 0 改 严守)
 - 整合 #6 commit 拍板 跟 8 哲学锚 0 改 严守 100% 关系 (per 决策 #74 B5)
-- 整合 #6 commit 拍板 跟 不要怕复杂度 (新加哲学锚 9) 关系 (per 决策 #73 §3 + 主人 01:14 拍板 3 件套 §3, 新文档 ../docs/archive/conventions/15-no-fear-complexity.md 14.4 KB 整合 #5.2 commit 包含)
+- 整合 #6 commit 拍板 跟 不要怕复杂度 (新加哲学锚 9) 关系 (per 决策 #73 §3 + 主人 01:14 拍板 3 件套 §3, 新文档 docs/conventions/15-no-fear-complexity.md 14.4 KB 整合 #5.2 commit 包含)
 - 8 哲学锚 跟 V1.0 release / V1.1 release / V2.0 release 边界 关系 (per R155-7 整合 #5/6/7 拍板 跟 1.0/V1.1/V2.0 release boundary)
 
 **报告章节建议** (8-15 章节):
 0. TL;DR (8 哲学锚 是 哪些 + 整合 #6 commit 拍板 跟 8 哲学锚 关系 1 段)
 1. 元信息 & 任务
-2. 8 哲学锚 是 哪些 (per ../docs/archive/conventions/09-anchor.md 调研)
+2. 8 哲学锚 是 哪些 (per docs/conventions/09-anchor.md 调研)
 3. 8 哲学锚 跟整合 #6 commit 拍板 关系
 4. 整合 #6 commit 拍板 跟 8 哲学锚 0 改 严守 100% 关系
 5. 整合 #6 commit 拍板 跟 不要怕复杂度 (哲学锚 9) 关系

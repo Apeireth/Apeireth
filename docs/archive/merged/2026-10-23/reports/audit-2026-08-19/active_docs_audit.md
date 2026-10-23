@@ -215,7 +215,7 @@
 | Line | 原文片段 | 实际状态 | 修复建议 | Confidence |
 |------|----------|----------|----------|------------|
 | 18 | `\| 能力按需/可选装配（80%→完全体） \| **81 crates** 天然模块化，**无 feature/suite 装配层** \| ❌ 发布形态缺装配器 \|` | 85 crates + 装配层已实装 (suites.rs + check-assembly-matrix.ps1) | 改 "81 crates" → "85 crates"; 改 "❌ 发布形态缺装配器" → "✅ 装配层已实装 (suites.rs SuiteCatalog::install_with_plugins)" | **HIGH** |
-| 80 | `- [x] 文档（用户手册/快速开始/能力包说明）（../../docs/02-guides/user-manual.md + ../../docs/archive/top-level/quick-start.md + ../../docs/archive/top-level/capability-packs.md：全部从真实代码/env 清单/suites.toml 提取，未接项如实标注）` | `docs/capability-packs.md` 不存在 — 但实际维护的 docs 目录无此文件 (实测 grep 0 hit) | 改 "../../docs/archive/top-level/capability-packs.md" → "../../docs/04-internal/release-plan.md + ../../docs/02-guides/user-manual.md" | **HIGH** |
+| 80 | `- [x] 文档（用户手册/快速开始/能力包说明）（docs/user-manual.md + docs/quick-start.md + docs/capability-packs.md：全部从真实代码/env 清单/suites.toml 提取，未接项如实标注）` | `docs/capability-packs.md` 不存在 — 但实际维护的 docs 目录无此文件 (实测 grep 0 hit) | 改 "docs/capability-packs.md" → "docs/release-plan.md + docs/02-guides/user-manual.md" | **HIGH** |
 
 **修 1 个要多久**: ~5 min。
 
@@ -411,9 +411,9 @@ f73bf735 docs(1.0-final): ROADMAP/CHANGELOG 归档路径引用修复 (断链 9 �
 
 | Line | 原文 | 实际状态 | 修 |
 |------|------|----------|------|
-| 3 | `> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[../../docs/01-architecture/philosophy.md]（**6 锚** / 双洋葱 / 0 装 PASS）。` | 8 锚 | **HIGH** |
-| 7 | `- [../../docs/01-architecture/philosophy.md](...) — 哲学（**6 锚** / 双洋葱 / 0 装 PASS）` | 8 锚 | **HIGH** |
-| 8 | `- [../../docs/01-architecture/architecture.md](...) — 架构总览（**85 crates** 分组）` | 85 crates 已对 | 保留 OK |
+| 3 | `> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md]（**6 锚** / 双洋葱 / 0 装 PASS）。` | 8 锚 | **HIGH** |
+| 7 | `- [docs/01-architecture/philosophy.md](...) — 哲学（**6 锚** / 双洋葱 / 0 装 PASS）` | 8 锚 | **HIGH** |
+| 8 | `- [docs/01-architecture/architecture.md](...) — 架构总览（**85 crates** 分组）` | 85 crates 已对 | 保留 OK |
 | 18 | `cargo test --workspace                  # 全量 **368 组** 0 失败` | post-v1.0.0 后 23,874 套 | **HIGH** |
 | 19 | `cargo fmt --all --check                 # 格式` | per ci-fix-log + backlog #25 ✅ fmt 全转 CLEAN | 保留 OK |
 
@@ -461,7 +461,7 @@ f73bf735 docs(1.0-final): ROADMAP/CHANGELOG 归档路径引用修复 (断链 9 �
 1. **Cargo.toml line 228** `version = "1.2.0"` — 主人表述 "workspace.version = 1.0.0" 与 Cargo.toml 实际值不一致. **产品轴 (git tag v1.0.0) ≠ Cargo workspace semver (1.2.0)** — 这是 backlog #26 拍板的双轴制, 主人给的事实 baseline 应明确区分两轴.
 2. **crates.md L63/64/67 三个 R21 段落** 都有 "0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺" 字样 — anchor 数错重复 3 次.
 3. **S4 出站策略** 跨 6 个 active 文档 (security / deployment / development / api / glossary / RELEASE_NOTES / vision) 都标 "已实装/verified", 但 backlog 显式 ⬜ P1 — 这是最大的 **安全谎言**, 必须优先修.
-4. **philosophy.md 6 → 8 锚** 跨 INSTALL.md / CONTRIBUTING.md / ../../docs/README.md (未实测但 README.md 链接到 6 锚) / crates.md 表格内嵌 — 主人说 8 锚 = S-1/S-2/**S-3 质量工程化 NEW**/**O-1 安全优先 NEW**/O-2/O-3/O-4/O-5.
+4. **philosophy.md 6 → 8 锚** 跨 INSTALL.md / CONTRIBUTING.md / docs/README.md (未实测但 README.md 链接到 6 锚) / crates.md 表格内嵌 — 主人说 8 锚 = S-1/S-2/**S-3 质量工程化 NEW**/**O-1 安全优先 NEW**/O-2/O-3/O-4/O-5.
 
 ---
 

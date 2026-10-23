@@ -55,7 +55,7 @@ pub const INTERLOCKED_TRAITS: [InterlockedTraitKind; 22] = [...];
 pub const INTERLOCK_RELATIONSHIP_COUNT: usize = 33;
 
 pub const fn interlock_matrix(a: InterlockedTraitKind, b: InterlockedTraitKind) -> bool {
-    // 33 个非对称互锁关系 (per ../docs/archive/stage6/22-trait-interlock.md §3)
+    // 33 个非对称互锁关系 (per docs/stage6/22-trait-interlock.md §3)
 }
 ```
 
@@ -112,14 +112,14 @@ apeireth-asi = { path = "../apeireth-asi" }  # V-Measure re-export 依赖
 | 9 | integration_09_trait_name_uniqueness | 22 名称互不重复 |
 | 10 | integration_10_relationship_count_exact_33 | 关系计数精确 = 33 |
 
-### 2.4 ../docs/archive/adr/archive/r14/0003-trait-interlock-22-enum.md (新文件, 2,723 bytes)
+### 2.4 docs/adr/0003-trait-interlock-22-enum.md (新文件, 2,723 bytes)
 
 22 trait 互锁 enum 编译期 hardcode 决策:
 - 状态: ✅ Accepted
 - 取舍: 编译期穷尽 + 0 运行时分配 vs enum 变更需更新 match
 - 守门: 不修改 LOCKED, 仅 verify crate 内新增
 
-### 2.5 ../docs/archive/adr/archive/r14/0004-permission-onion-versioning.md (新文件, 2,157 bytes)
+### 2.5 docs/adr/0004-permission-onion-versioning.md (新文件, 2,157 bytes)
 
 权限洋葱 3 段版本号 `<major>.<round>.<patch>`:
 - major 触发 LOCKED 重新审批
@@ -127,7 +127,7 @@ apeireth-asi = { path = "../apeireth-asi" }  # V-Measure re-export 依赖
 - patch 缺陷修复
 - 当前 PermissionOnion v2.7.0
 
-### 2.6 ../docs/archive/adr/archive/r14/0005-risk-grade-m1-m12-thresholds.md (新文件, 2,837 bytes)
+### 2.6 docs/adr/0005-risk-grade-m1-m12-thresholds.md (新文件, 2,837 bytes)
 
 12 个风险等级 M1-M12 阈值表:
 - M1: 纯读取 (FourGates 1+2 pass, 0 HA)
@@ -135,7 +135,7 @@ apeireth-asi = { path = "../apeireth-asi" }  # V-Measure re-export 依赖
 - M12: OTA 升级 (FourGates 1+2+3+4 pass, M-of-N HA)
 - HA 审批人数公式: M7=1, M8=2, M9=3, M10=4, M11=4, M12=M-of-N
 
-### 2.7 ../docs/archive/adr/archive/r14/0006-integration-rebase-skip-policy.md (新文件, 3,172 bytes)
+### 2.7 docs/adr/0006-integration-rebase-skip-policy.md (新文件, 3,172 bytes)
 
 V23 fail-forward 实施细节:
 - 单一 worktree 单一本地分支

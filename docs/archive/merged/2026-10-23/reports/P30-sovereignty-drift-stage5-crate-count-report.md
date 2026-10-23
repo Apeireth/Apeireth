@@ -2,7 +2,7 @@
 
 ```
 [Document-Meta]
-Document: P30-sovereignty-drift-stage5-crate-count-report.md
+Document: reports/P30-sovereignty-drift-stage5-crate-count-report.md
 Task: P30 提交 sovereignty 漂移报告（stage5 §2 17 → 18 crate 修订）
 Role: backend_engineer2
 Status: 🟡 报告完成 — stage5 §2 + sovereignty 漂移登记完整，未修改 LOCKED 文档
@@ -149,7 +149,7 @@ HEAD: 2e20deb1 V26.1 独立旁路 cargo workspace 验证
 
 | # | DoD | 达成 | 证据 |
 |---|-----|------|------|
-| 1 | 提交 sovereignty 漂移报告 | ✅ | 本文档 P30-sovereignty-drift-stage5-crate-count-report.md |
+| 1 | 提交 sovereignty 漂移报告 | ✅ | 本文档 reports/P30-sovereignty-drift-stage5-crate-count-report.md |
 | 2 | stage5 §2 17 → 18 crate 修订登记 | ✅ | §"漂移全景矩阵" 完整 11 处计数 |
 | 3 | 漂移根因分析（commit 链） | ✅ | §"漂移根因分析" 三层因果链 |
 | 4 | sovereignty 专项漂移分析 | ✅ | §"sovereignty 漂移专项" 7 处未登记位置 |

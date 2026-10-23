@@ -18,7 +18,7 @@
 - ❌ 不修改 LOCKED 阶段 1–5 文档
 - ❌ 守 7 项不修改承诺（apeireth-core / R11 baseline / 主手册 / V0.5 / V1136 / V3 / 1100 空壳）
 - ✅ ≥40 unit + ≥6 integration tests
-- ✅ 产出 round5-01-evolution-backend-engineer2.md
+- ✅ 产出 reports/round5-01-evolution-backend-engineer2.md
 
 ---
 
@@ -242,11 +242,11 @@ cargo build --workspace                                        # 0 error (25 cra
 
 | 边界项 | 守约情况 |
 |---|---|
-| ../docs/archive/stage1/inspiration-stage1-2026-07-30.md | ❌ 未触碰 |
+| docs/stage1/inspiration-stage1-2026-07-30.md | ❌ 未触碰 |
 | docs/stage2/stage2-decisions-*.md (18 个) | ❌ 未触碰 |
 | docs/stage3-blueprints/*.md (14 个) | ❌ 未触碰 |
 | docs/stage4/architecture-*.md | ❌ 未触碰 |
-| ../docs/archive/stage5/stage5-construction-document.md | ❌ 未触碰 |
+| docs/stage5/stage5-construction-document.md | ❌ 未触碰 |
 | R11 V0.5 / V1136 / V3 baseline | ❌ 未触碰（编译时 hardcode 兜底） |
 | 1100 空壳 | ❌ 未触碰 |
 | 主手册 6546 行 | ❌ 未触碰 |

@@ -24,7 +24,7 @@
 | 7 | integration test ≥ 15 | ✅ | tests/integration.rs 387 行：16 tests 全绿（15 集成 + 1 doc） |
 | 8 | 不允许 PyO3 / 外部语言桥接 | ✅ | 0 PyO3 / 0 Python / 0 cffi；纯 Rust |
 | 9 | cargo build --workspace 0 error / test 全绿 | ✅ | workspace cargo build 通过（仅 prost 自动生成警告），apeireth-bus 15 lib tests 全绿 |
-| 10 | round15-02-bus-5-layer-acceptance.md（1500+ 字节） | ✅ | 本文档 |
+| 10 | reports/round15-02-bus-5-layer-acceptance.md（1500+ 字节） | ✅ | 本文档 |
 
 ---
 

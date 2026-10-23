@@ -2,7 +2,7 @@
 
 ```
 [Document-Meta]
-Document: round12-09-v28-0-final-sign-off-validation-qa-engineer.md
+Document: reports/round12-09-v28-0-final-sign-off-validation-qa-engineer.md
 Task: round12-09 V28.0 终极 cargo + tests + clippy 全栈真实集成验证 (9bb73e58-d20d-4142-b4b2-e4716def4754)
 Role: qa_engineer
 Status: ✅ 全栈签收 — 1563 PASS / 0 FAIL / 0 ERROR（默认 + python-ext + examples + clippy）

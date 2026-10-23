@@ -18,15 +18,15 @@
 > 5. 产出 `reports/round10-01-upgrade-7-stage-complete-implementation-architect2.md`
 
 **约束 (守 7 项不修改承诺)**:
-- ❌ 不修改 ../docs/archive/stage1/inspiration-stage1-2026-07-30.md (LOCKED)
+- ❌ 不修改 docs/stage1/inspiration-stage1-2026-07-30.md (LOCKED)
 - ❌ 不修改 docs/stage2/stage2-decisions-*.md ×18 (LOCKED)
 - ❌ 不修改 docs/stage3-blueprints/*.md ×14 (LOCKED)
 - ❌ 不修改 docs/stage4/architecture-*.md (LOCKED)
-- ❌ 不修改 ../docs/archive/stage5/stage5-construction-document.md (LOCKED)
+- ❌ 不修改 docs/stage5/stage5-construction-document.md (LOCKED)
 - ❌ 不修改 reports/d8437877-locked-stage5-gap-matrix.md
 - ❌ 不修改 reports/a2557c25-round5-engineering-decisions-tasks.md (派活源)
 
-✅ 仅修改 crates/apeireth-upgrade/src/ + crates/apeireth-upgrade/tests/ + crates/apeireth-upgrade/examples/ + round10-01-upgrade-7-stage-complete-implementation-architect2.md (本文件)
+✅ 仅修改 crates/apeireth-upgrade/src/ + crates/apeireth-upgrade/tests/ + crates/apeireth-upgrade/examples/ + reports/round10-01-upgrade-7-stage-complete-implementation-architect2.md (本文件)
 
 ---
 
@@ -309,13 +309,13 @@ git status
 #   modified:   crates/apeireth-upgrade/examples/upgrade_demo.rs
 #   modified:   crates/apeireth-upgrade/tests/integration_7_stages.rs
 # Untracked files:
-#   round10-01-upgrade-7-stage-complete-implementation-architect2.md
+#   reports/round10-01-upgrade-7-stage-complete-implementation-architect2.md
 #   crates/apeireth-upgrade/tests/integration_round10_sandbox_rollback.rs
 ```
 
 ### 9.2 提交建议
 ```bash
-git add crates/apeireth-upgrade/ round10-01-upgrade-7-stage-complete-implementation-architect2.md
+git add crates/apeireth-upgrade/ reports/round10-01-upgrade-7-stage-complete-implementation-architect2.md
 git commit -m "round10-01: apeireth-upgrade 7 阶段 Sandbox 升级 + 反向状态机 (architect2)"
 ```
 

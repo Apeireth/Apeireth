@@ -38,7 +38,7 @@ Date:   Sun Aug 2 20:42:56 2026 +0800
 
 $ git ls-tree -r 690f7bb0 | grep -E "deep_impl|round8-05"
 100644 blob 322415796f... crates/apeireth-constraint/src/deep_impl.rs
-100644 blob f1f35e64d8... round8-05-constraint-4-gates-permission-grant-deep-implementation-security-reviewer.md
+100644 blob f1f35e64d8... reports/round8-05-constraint-4-gates-permission-grant-deep-implementation-security-reviewer.md
 ```
 
 **文件大小** (与 Leader 撤回 true-ghost 时引用的数据一致):

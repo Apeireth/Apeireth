@@ -2,7 +2,7 @@
 
 ```
 [Document-Meta]
-Document: round10-12-asi-24-dim-9-sub-real-measurement-qa-engineer.md
+Document: reports/round10-12-asi-24-dim-9-sub-real-measurement-qa-engineer.md
 Task: round10-12 apeireth-asi V0.5 24 维 + V1136 9 子测度真实测量函数实装 (eb83a4c0-0af2-473c-8103-2ddba5ec03c4)
 Role: qa_engineer
 Status: ✅ 全栈交付 — 24+9 真实测量 + DimensionTrace + MeasurementHook + RegressionAssertion + 3 CLI 命令
@@ -35,7 +35,7 @@ HEAD: (untracked + modified — 本任务产出待 push)
 | 11 | ≥20 unit + ≥5 integration | ✅ | apeireth-asi: 41 lib unit + 9 integration = **50** (≥20+5); apeireth-cli: 19 lib unit (含 7 个新增 asi_dispatch) + 6 integration = 25 |
 | 12 | 不修改 LOCKED | ✅ | `git status` 仅显示 apeireth-asi/* + apeireth-cli/* 修改 + 工作树新增文件; LOCKED 文档 (docs/, examples, OMNIBUS, CONVENTIONS, reflection, governance, .github, README) 全部未触碰 |
 | 13 | 守 7 项不修改承诺 | ✅ | 见 §5 |
-| 14 | 产出 round10-12-asi-24-dim-9-sub-real-measurement-qa-engineer.md | ✅ | 本文件 |
+| 14 | 产出 reports/round10-12-asi-24-dim-9-sub-real-measurement-qa-engineer.md | ✅ | 本文件 |
 
 ---
 
@@ -409,6 +409,6 @@ Suggestions:
    - 未来把 `TraceRepository` 后端从内存替换为 SQLite,接口不变
 7. 💡 **后续 round 建议**:
    - 修复 apeireth-upgrade `OtaStage::Download` + `OtaPipeline::enter_download` (DEF-UPGRADE-001)
-   - 若 V0.5 24 维在 ../docs/archive/stage1/architecture-v4-1-living-intelligence-update.md §13 有精确枚举, 需 round10-13 对齐
+   - 若 V0.5 24 维在 docs/architecture-v4-1-living-intelligence-update.md §13 有精确枚举, 需 round10-13 对齐
    - 考虑把 `apeireth-asi::TraceRepository` 接入 `apeireth-memory::ReflectionStream` 持久化
    - 在 CI 加 `cargo test -p apeireth-asi -p apeireth-cli --features apispec-check` 矩阵

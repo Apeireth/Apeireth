@@ -5,7 +5,7 @@
 **执行时间**: 2026-08-03
 **目标**:
 1. force-push 推进 integration-worktree (ff788b63 → ff6add0b)
-2. 在 ../docs/archive/stage5/stage5-construction-document.md 顶部追加 V26.5 → V28.0 状态头
+2. 在 docs/stage5/stage5-construction-document.md 顶部追加 V26.5 → V28.0 状态头
 3. 守 7 项不修改承诺
 
 ---
@@ -50,7 +50,7 @@ total: 1563 passed / 0 failed
 
 ✅ **1563 tests passed** — 与任务描述期望值完全吻合。
 
-### Step 2: 在 ../docs/archive/stage5/stage5-construction-document.md 顶部追加 V28.0 状态头
+### Step 2: 在 docs/stage5/stage5-construction-document.md 顶部追加 V28.0 状态头
 
 补充式修正原则：仅在文档顶部追加 V28.0 状态头，**未修改**下方任何 LOCKED 内容（V26.5 状态头 + §0–§N 仍为 2026-07-31 LOCKED 版本）。
 
@@ -125,8 +125,8 @@ b03411d3 round10-06 V26.5 状态头盖章
 
 ## 5. 产出
 
-- **../docs/archive/stage5/stage5-construction-document.md**: 顶部追加 V28.0 状态头（+22 行，LOCKED 内容未修改）
-- **round12-08-force-push-v28-0-stage5-status-architect2.md**: 本报告
+- **docs/stage5/stage5-construction-document.md**: 顶部追加 V28.0 状态头（+22 行，LOCKED 内容未修改）
+- **reports/round12-08-force-push-v28-0-stage5-status-architect2.md**: 本报告
 
 ## 6. 测试结果
 

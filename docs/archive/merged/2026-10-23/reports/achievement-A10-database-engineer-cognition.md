@@ -42,7 +42,7 @@
 | 4 | 5+ pub fn | ✅ **16 个 pub fn** | 远超 DoD，详见 §1 |
 | 5 | 调用 V0.5/V1136 + 12 键 | ✅ **已实装** | `AsiV05Scores` / `V1136Submeasures` 来自 apeireth-asi；`verdict_for_target` 来自 apeireth-core（12 键编译时 hardcode） |
 | 6 | workspace Cargo.toml members 加 apeireth-cognition | ✅ **已加入** | Cargo.toml line 14 |
-| 7 | 写 reports/achievement-A10-...-cognition.md | ✅ **本文件** | achievement-A10-database-engineer-cognition.md |
+| 7 | 写 reports/achievement-A10-...-cognition.md | ✅ **本文件** | reports/achievement-A10-database-engineer-cognition.md |
 | 8 | 不修改承诺 7 项守住 | ✅ **守住** | 见 §6 |
 
 **Overall Status: 🟢 A10 DoD 8/8 全达成（minimum-viable scaffold 级别）**

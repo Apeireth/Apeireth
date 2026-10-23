@@ -30,7 +30,7 @@ New-HEAD: 46a27773 (docs: A1 成就报告 5 份)
 | 3 | commit 后 git status --porcelain 无 A1 相关残留 | ✅ A1 文件 0 残留 |
 | 4 | cargo test --workspace 仍 33 passed / 0 failed | ✅ 33 passed / 0 failed（保留 A1 baseline）|
 | 5 | 不修改承诺 7 项 100% 守住 | ✅ 只 commit A1 期间真实修改的文件 |
-| 6 | 报告路径 achievement-A1.5-devops-engineer-commit-landing.md | ✅ 本文件 |
+| 6 | 报告路径 reports/achievement-A1.5-devops-engineer-commit-landing.md | ✅ 本文件 |
 
 ---
 
@@ -231,7 +231,7 @@ A1 4 件套齐全：
 | 3 | 无 A1 相关残留 | ✅ | grep "A1\|apeireth-cli\|adr/0002\|achievement-A1" → 0 命中 |
 | 4 | cargo test 33 passed | ✅ | 重新跑 cargo test --workspace = 33/0 |
 | 5 | 不修改承诺 7 项 | ✅ | 见上方 7 项核查表 |
-| 6 | 报告路径正确 | ✅ | 本文件路径 = achievement-A1.5-devops-engineer-commit-landing.md |
+| 6 | 报告路径正确 | ✅ | 本文件路径 = reports/achievement-A1.5-devops-engineer-commit-landing.md |
 
 **A1.5 整体达成度：100%**（6/6 DoD 全部通过）
 
