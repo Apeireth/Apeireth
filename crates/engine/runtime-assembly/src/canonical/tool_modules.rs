@@ -1219,7 +1219,7 @@ impl CapabilityProvider for GuardWatchModule {
 ///
 /// 侦察面对应「看」而不是「做」：字符串/熵/魔数、二进制格式、CLR 元数据、
 /// JS 词法、YARA 子集、pcap、TLS 握手，全部只读。网络三件
-/// (`tool.recon.net` / `.web` / `.tls`) 只连 [`Scope`] 显式授权的目标；空 scope
+/// (`tool.recon.net` / `.web` / `.tls`) 只连 `Scope` 显式授权的目标；空 scope
 /// 一律拒绝 —— 开关只决定「装不装」，scope 决定「能打谁」。
 ///
 /// 治理: **注册即闸** —— 开关 `APEIRETH_ENABLE_RECON=1` 才构造（默认关

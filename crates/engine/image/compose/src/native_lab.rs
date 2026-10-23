@@ -101,7 +101,7 @@ pub struct LabStack<'a> {
 impl<'a> LabStack<'a> {
     /// `None` unless `doc` is Lab and every visible layer is a plain Lab raster layer, an
     /// adjustment layer [`adjust::lab_stored_op`] evaluates, or a group that can be inlined (see
-    /// the module docs and [`collect`]).
+    /// the module docs and `collect`).
     pub fn new(doc: &'a Document) -> Option<Self> {
         if doc.mode != ColorMode::Lab {
             return None;

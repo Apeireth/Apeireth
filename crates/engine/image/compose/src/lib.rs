@@ -952,7 +952,7 @@ fn render_content(layer: &Layer, rect: Rect, cx: &Ctx) -> Option<Buffer> {
 /// compositor): its content's alpha (masks applied), joined with the [`effect_outline`] of a
 /// filled shape. Zero for adjustment layers.
 ///
-/// See also [`stroke_frame`].
+/// See also `stroke_frame`.
 pub fn layer_shape(doc: &Document, layer: &Layer, rect: Rect) -> Vec<f32> {
     let patterns = pattern::PreparedPatterns::new(&doc.patterns, pattern::PREPARED_PATTERN_BYTES).in_mode(doc.pixel_format().mode);
     let cx = Ctx::for_doc(doc, &patterns);

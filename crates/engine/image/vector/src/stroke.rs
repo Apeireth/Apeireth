@@ -122,7 +122,7 @@ const OUTLINE_POINT_BUDGET: usize = 1 << 20;
 /// Stroke outline pieces for `lines`. Fill them with the non-zero rule.
 ///
 /// The outline is bounded: when full-resolution round caps and joins would exceed
-/// [`OUTLINE_POINT_BUDGET`] points, every round cap and join gets the same, smaller number of
+/// `OUTLINE_POINT_BUDGET` points, every round cap and join gets the same, smaller number of
 /// segments (down to 4 per circle and 1 per join; areas stay exact). Strokes under the budget
 /// are unchanged and no piece is dropped, so the total is at most the larger of the budget and
 /// that minimal tessellation, which is linear in the (budgeted) flattened points and dashes.
@@ -151,7 +151,7 @@ pub fn stroke_polygons(lines: &[Polyline], style: &StrokeStyle, tol: f64) -> Vec
 }
 
 /// Points per full circle allowed for round caps and joins so the outline of `pieces` stays
-/// within [`OUTLINE_POINT_BUDGET`]; `usize::MAX` when full resolution fits.
+/// within `OUTLINE_POINT_BUDGET`; `usize::MAX` when full resolution fits.
 fn round_arc_cap(pieces: &[Cow<Polyline>], style: &StrokeStyle, tol: f64) -> usize {
     let (round_cap, round_join) = (style.cap == LineCap::Round, style.join == LineJoin::Round);
     if !round_cap && !round_join {

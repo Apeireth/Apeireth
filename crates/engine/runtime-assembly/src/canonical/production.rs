@@ -1726,7 +1726,7 @@ impl ProductionModules {
     ///
     /// 只有调质开关开时才交付 (`Some`); 开关关 = `None` = 审批路径不发布、
     /// 总线零计数, 与未接线逐字节一致。句柄与注册的调质订阅者共享同一条
-    /// [`NervousBus`](super::nervous_bus::NervousBus) (同一 `Arc`)。
+    /// [`NervousBus`] (同一 `Arc`)。
     #[must_use]
     pub fn bio_approval_social_source(&self) -> Option<Arc<BioApprovalSocialSource>> {
         self.nervous_switchboard

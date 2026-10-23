@@ -5,7 +5,7 @@
 // See docs/04-internal/license-port/gate1-license.md.
 //! X11 color-name database (X.Org rgb.txt) normalized to lowercase without
 //! spaces, underscores, or hyphens. RGB values are *X11* values, not CSS values.
-//! Source: https://cgit.freedesktop.org/xorg/app/rgb/tree/rgb.txt
+//! Source: <https://cgit.freedesktop.org/xorg/app/rgb/tree/rgb.txt>
 //! License: MIT (X.Org Foundation), see the upstream app/rgb COPYING file.
 //! Aliases differing only in case or spaces have been collapsed.
 //! Keep sorted: decoder uses binary search without allocation per candidate.

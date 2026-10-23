@@ -14,7 +14,7 @@
 //!
 //! # W3.1 组装策略（默认关，crate 内接线）
 //!
-//! [`AssemblyPolicy`] 把异稳态 [`RegulationPlan`](crate::homeostasis::RegulationPlan)
+//! [`AssemblyPolicy`] 把异稳态 [`RegulationPlan`]
 //! 映射到 orchestration 的单一组装管线（本模块只保留策略桥）。默认策略 =
 //! [`AssemblyPolicy::default`]（全 `false`），既有输出逐字节不变；只有显式
 //! [`ContextAssemblerPolicyExt::with_policy`] 才启用。

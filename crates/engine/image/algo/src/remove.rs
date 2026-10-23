@@ -9,7 +9,7 @@
 //!
 //! * [`close_loops`]: a stroke drawn around an object also removes what it encloses (every pixel
 //!   that can't reach the grid's border without crossing the stroke).
-//! * [`dilate`]: the hole grows by a few pixels so an object's soft edge and halo go with it.
+//! * `dilate`: the hole grows by a few pixels so an object's soft edge and halo go with it.
 //! * [`remove_with`]: the hole is completed by [`crate::nonlocal::complete_with`] (patch-based,
 //!   with texture features so the fill keeps the grain of its surroundings, thin wires included).
 //! * [`hole_radius`]: how thick a hole is, which sets how many scales the completion uses.
@@ -152,7 +152,7 @@ const MIN_TILE: usize = 256;
 /// hole); a buffer or mask of the wrong size comes back unchanged. When nothing around the hole is
 /// fully known (a hole about as big as `img`), it is diffused from its edges instead.
 ///
-/// A sparse hole is filled in tiles eight times its thickness (at least [`MIN_TILE`] pixels), row
+/// A sparse hole is filled in tiles eight times its thickness (at least `MIN_TILE` pixels), row
 /// by row, each with a margin of six times its thickness (at least 48 pixels): each tile sees the
 /// ones before it as filled, so the fill runs on across tile edges.
 pub fn remove_with(w: usize, h: usize, ch: usize, img: &[f32], hole: &[bool], seed: u64, ctl: &Interrupt) -> Result<Vec<f32>, Cancelled> {

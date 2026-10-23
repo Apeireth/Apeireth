@@ -419,7 +419,7 @@ pub fn stored_channel_adjustment(adj: &Adjustment) -> bool {
 }
 
 /// Invert, Posterize or Threshold on one pixel's own channels in a Lab or CMYK document of
-/// `depth` (`None`: unknown, treated as 8-bit): `ch` holds L, a, b normalised as [`lab_norm`]
+/// `depth` (`None`: unknown, treated as 8-bit): `ch` holds L, a, b normalised as `lab_norm`
 /// gives them, or the C, M, Y, K inks (0: none). Lab Invert turns 8-bit bytes `v` into `255 - v`
 /// (a becomes -1 - a) and mirrors a and b around neutral at 16 bits (photoshop corpus lab16
 /// invert.psd: neutral stays neutral). CMYK Threshold compares [`ink_luma`].
@@ -468,7 +468,7 @@ fn lab_norm(c: [f32; 3]) -> [f32; 3] {
     [l[0] / 100.0, (l[1] + 128.0) / 255.0, (l[2] + 128.0) / 255.0]
 }
 
-/// The inverse of [`lab_norm`].
+/// The inverse of `lab_norm`.
 fn lab_denorm(n: [f32; 3]) -> [f32; 3] {
     lab_to_srgb([n[0] * 100.0, n[1] * 255.0 - 128.0, n[2] * 255.0 - 128.0])
 }
@@ -788,7 +788,7 @@ pub fn lut3d_sample(lut: &[f32], n: usize, c: [f32; 3], tetrahedral: bool) -> [f
 /// - Preserve Luminosity on: each channel's black point is (max − own) shadows levels, its white
 ///   point 255 − (own − min) highlights levels, and m = own − (max + min) / 2 midtones.
 ///
-/// A gamma > 1 starts with slope 2^gamma at black ([`balance_gamma`]: up to 18 of 255 brighter
+/// A gamma > 1 starts with slope 2^gamma at black (`balance_gamma`: up to 18 of 255 brighter
 /// near black without it). When the black point reaches the white point, input
 /// at or above the white point is white and the rest black.
 pub fn color_balance_channel(tones: [[f32; 3]; 3], preserve_luminosity: bool, ch: usize, v: f32) -> f32 {
@@ -1196,7 +1196,7 @@ const LEVELS_TOE_POWER: f32 = 2.2;
 
 /// Levels' midtone gamma `g` on `u` in 0..1: `u^(1/g)`, except that above 1, where that power
 /// curve is infinitely steep at black, Photoshop starts along a toe `a·u − b·u^q` of slope
-/// `a = 2^g` that joins the curve with the same value and slope. `q` = [`LEVELS_TOE_POWER`] is
+/// `a = 2^g` that joins the curve with the same value and slope. `q` = `LEVELS_TOE_POWER` is
 /// fitted on whole-level oracles at gamma 1.16, 1.22, 1.3, 1.78 and 2.0 (psd-tools levels_rgb
 /// and levels_grayscale, the photoshop corpus's rgb8 and gray8 levels.psd, a measured 0..255
 /// ramp): all but 2 of their 1118 levels exact, the others within one. Below 1 the power curve is

@@ -11,7 +11,7 @@
 //! - **Styles** ([`WarpStyle`], Photoshop's fifteen presets plus bend and horizontal/vertical
 //!   distortion, the PSD `warp` descriptor's `warpStyle`/`warpValue`/`warpPerspective*`). Each
 //!   is a single bicubic Bezier patch whose control grid follows the bend: measured from
-//!   Photoshop's renders (see [`preset_grid`]), not taken from Adobe's code. Every style is the
+//!   Photoshop's renders (see `preset_grid`), not taken from Adobe's code. Every style is the
 //!   identity at bend 0 and continuous in the bend.
 //! - **Custom meshes** ([`BezierMesh`]): a grid of bicubic Bezier patches. The default is one
 //!   patch (a 4×4 control grid); split warps add patch rows/columns by exact de Casteljau

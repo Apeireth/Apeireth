@@ -1259,7 +1259,7 @@ fn paint_fx(
     }
 }
 
-/// The opacity gain of a gradient glow: it is opaque from strength `range²` on (see [`paint_glow`]).
+/// The opacity gain of a gradient glow: it is opaque from strength `range²` on (see `paint_glow`).
 pub fn glow_gradient_gain(range: f32) -> f32 {
     let r = if range.is_finite() { range.clamp(0.01, 1.0) } else { 1.0 };
     1.0 / (r * r)
@@ -1693,12 +1693,12 @@ pub struct FxMaps {
     vdout_exact: Option<Vec<f32>>,
     /// `shape` joins the alpha with a filled shape's outline (`crate::effect_outline`).
     outline: bool,
-    /// Frames of gradient strokes by outside width (bits): see [`stroke_frame`].
+    /// Frames of gradient strokes by outside width (bits): see `stroke_frame`.
     frames: Vec<(u32, Rect)>,
 }
 
 impl FxMaps {
-    /// The frame of a gradient stroke `st` of this layer (see [`stroke_frame`]), if built.
+    /// The frame of a gradient stroke `st` of this layer (see `stroke_frame`), if built.
     pub fn stroke_frame(&self, st: &apeireth_image_doc::StrokeFx) -> Option<Rect> {
         self.frames.iter().find(|f| f.0 == stroke_widths(st).1.to_bits()).map(|f| f.1)
     }
@@ -2262,7 +2262,7 @@ pub enum FieldKind {
     BevelInside,
     /// Chamfer distance outside the shape: a narrow raster stroke's outer edge (see
     /// [`stroke_outside_exact`]), and the spread of drop shadows and softer outer glows
-    /// ([`dilate`]); their metric is fitted to Photoshop (#224) and keeps the sub-pixel seeding.
+    /// (`dilate`); their metric is fitted to Photoshop (#224) and keeps the sub-pixel seeding.
     StrokeOutside,
     /// Chamfer distance outside `1 - alpha`: the choke of inner shadows and softer inner glows.
     ChokeInside,
