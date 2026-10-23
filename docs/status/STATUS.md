@@ -5,35 +5,35 @@
 
 | id | level | default | switch_env | verified_at | next_review |
 |---|---|---|---|---|---|
-| `rt.provider_router` | PRODUCTION WIRED | ON | - | `ed268f8fb` | 2026-11-20 |
-| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `ed268f8fb` | 2026-11-20 |
-| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `ed268f8fb` | 2026-11-20 |
-| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `ed268f8fb` | 2026-11-20 |
-| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `ed268f8fb` | 2026-11-20 |
-| `sec.egress_control` | PRODUCTION WIRED | ON | - | `33236756` | 2026-12-01 |
-| `sec.object_access` | PRODUCTION WIRED | ON | - | `33236756` | 2026-12-01 |
-| `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `33236756` | 2026-12-01 |
+| `rt.provider_router` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-11-20 |
+| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `da2e60bcc5` | 2026-11-20 |
+| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `da2e60bcc5` | 2026-11-20 |
+| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `da2e60bcc5` | 2026-11-20 |
+| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `da2e60bcc5` | 2026-11-20 |
+| `sec.egress_control` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-12-01 |
+| `sec.object_access` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-12-01 |
+| `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `da2e60bcc5` | 2026-12-01 |
 | `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `da2e60bcc5` | 2026-12-01 |
-| `mem.lesson_object` | PRODUCTION WIRED | ON | - | `ed268f8fb` | 2026-12-01 |
-| `gap.memory_update` | PRODUCTION WIRED | ON | - | `c2c911cf` | 2026-11-20 |
-| `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `d2621788` | 2026-11-20 |
-| `sec.linux_containment` | IMPLEMENTED | - | - | `bdd64957` | 2026-11-20 |
-| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `ed268f8fb` | 2026-11-20 |
-| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `14878cfd` | 2026-11-20 |
-| `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
-| `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `ed268f8fb` | 2026-11-20 |
-| `gov.reflection_queue` | IMPLEMENTED | - | - | `3ca56976` | 2026-11-20 |
-| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `3ca56976` | 2026-11-20 |
-| `sec.governance_chain_drill` | IMPLEMENTED | - | - | `68fa5643b7de` | 2026-11-20 |
-| `rel.release_asset_verify` | IMPLEMENTED | - | - | `73b70178` | 2026-11-20 |
-| `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
-| `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
-| `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `3ca56976` | 2026-11-20 |
-| `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `5f52813d` | 2026-11-20 |
-| `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `d2621788` | 2026-11-20 |
-| `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `d2621788` | 2026-11-20 |
-| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `ed268f8fb` | 2026-11-20 |
-| `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `83933edd` | 2026-11-20 |
+| `mem.lesson_object` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-12-01 |
+| `gap.memory_update` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-11-20 |
+| `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `da2e60bcc5` | 2026-11-20 |
+| `sec.linux_containment` | IMPLEMENTED | - | - | `da2e60bcc5` | 2026-11-20 |
+| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `da2e60bcc5` | 2026-11-20 |
+| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `da2e60bcc5` | 2026-11-20 |
+| `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-11-20 |
+| `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-11-20 |
+| `gov.reflection_queue` | IMPLEMENTED | - | - | `da2e60bcc5` | 2026-11-20 |
+| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `da2e60bcc5` | 2026-11-20 |
+| `sec.governance_chain_drill` | IMPLEMENTED | - | - | `da2e60bcc5` | 2026-11-20 |
+| `rel.release_asset_verify` | IMPLEMENTED | - | - | `da2e60bcc5` | 2026-11-20 |
+| `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-11-20 |
+| `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-11-20 |
+| `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `da2e60bcc5` | 2026-11-20 |
+| `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `da2e60bcc5` | 2026-11-20 |
+| `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `da2e60bcc5` | 2026-11-20 |
+| `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `da2e60bcc5` | 2026-11-20 |
+| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `da2e60bcc5` | 2026-11-20 |
+| `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `da2e60bcc5` | 2026-11-20 |
 
 ## 使用
 
