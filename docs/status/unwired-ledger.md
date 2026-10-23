@@ -13,7 +13,7 @@
 
 | # | 符号 / 能力 | 现状（实证） | 决策 / 触发 | owner |
 |---|---|---|---|---|
-| W1 | `ImBridge::with_device_approval_face` / `push_device_approval_cards` / `retry_device_approval_pushes` | 全仓仅 `gateway/tests/im_device_cards.rs` 调用；生产装配无 `ImBridge` 构造点 ⇒ **money 档「必须 IM 卡」在生产实际发不出卡** | **需 owner 决策**：接哪个渠道（本地桥/IM 服务）、凭据来源、失败重试节律。定了就接 | 产品 owner |
+| W1 | `ImBridge` 生产构造 + 设备审批面注入 | 全仓仅 `gateway/tests/im_device_cards.rs` 调用；生产装配无构造点 ⇒ **money 档「必须 IM 卡」在生产发不出卡**。渠道/发送器/配置解析/四态闭合均已就绪，缺的是装配那一根线 | **owner 2026-10-23 裁定：暂不接**，作为「Apeireth 在社交软件里和人自由聊天」的**产品面模块**专项做（设计输入见 [im-channel-module-2026-10-23.md](../04-internal/backend-enhancement/im-channel-module-2026-10-23.md)）。在此之前 money 档维持**缺卡即拒**（该档动作当前不可用，有意为之，不是故障） | 产品 owner |
 | W2 | `verify_multisig` / `multi_sign` | 全库 `multi_sign = None`，零生产调用；高风险动作人审实际只有「字符串票」占位 | 触发：v2.1 真多签（`docs/architecture/r8-inventory-2026-10-20.md` G2） | 安全线 |
 | W3 | `ScarLedger::learn` | 生产调用 0（仅测试）；无干净生产者、无订阅方 | **保留 NotWired**（`r1b-3-handoff` 结论）：裸 publish 属装，等真实消费方 | 安全线 |
 | W4 | `SelfDisableAudit` | 装配面未见生产消费（drill 三路径只在测试内验证） | 触发：自停用演练进 CI 后随链接线（R8-D 转绿） | 安全线 |
