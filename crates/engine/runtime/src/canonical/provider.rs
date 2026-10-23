@@ -44,6 +44,7 @@ use apeireth_protocol::canonical::{
 };
 use parking_lot::RwLock;
 
+use super::egress_gate::{AllowAllEgress, EgressGate, EgressVerdict};
 use super::error::{RuntimeError, RuntimeResult};
 
 /// Observed health of one provider.
@@ -96,6 +97,10 @@ pub struct ProviderRouter {
     fallback_order: Vec<CapabilityId>,
     health: RwLock<BTreeMap<CapabilityId, ProviderHealth>>,
     clock: Arc<dyn Clock>,
+    /// 出网闸（ADR-0014 §1.2：把上下文发给模型就是行动）。
+    ///
+    /// 默认 [`AllowAllEgress`] —— 未接线时**逐字节零行为变化**。
+    egress: Arc<dyn EgressGate>,
 }
 
 impl ProviderRouter {
@@ -107,7 +112,18 @@ impl ProviderRouter {
             fallback_order,
             health: RwLock::new(BTreeMap::new()),
             clock,
+            egress: Arc::new(AllowAllEgress),
         }
+    }
+
+    /// 装配出网闸（默认未接线 = 一律放行）。
+    ///
+    /// 闸的实现在 assembly 层（脱敏闸 + 对象级判定 + 授权策略）；
+    /// runtime 只持有端口，不认识具体策略。
+    #[must_use]
+    pub fn with_egress_gate(mut self, gate: Arc<dyn EgressGate>) -> Self {
+        self.egress = gate;
+        self
     }
 
     /// Override the order candidates are tried in.
@@ -245,6 +261,22 @@ impl ProviderRouter {
         tool_declarations: Option<&[NormalizedTool]>,
         on_delta: Option<&Arc<dyn Fn(String) + Send + Sync>>,
     ) -> RuntimeResult<RoutedCompletion> {
+        // 出网闸：请求发出前判定一次（ADR-0014 §1.2 —— 上下文出境即行动）。
+        // 默认 AllowAll 时这一支恒为 Pass，零行为变化。
+        let redacted_request: Option<NormalizedRequest>;
+        let request: &NormalizedRequest = match self.egress.vet(request) {
+            EgressVerdict::Pass => request,
+            EgressVerdict::Redacted(next) => {
+                redacted_request = Some(next);
+                redacted_request.as_ref().expect("刚赋值")
+            }
+            EgressVerdict::Deny { reason } => {
+                return Err(RuntimeError::Denied {
+                    hook: "egress_gate".into(),
+                    reason,
+                });
+            }
+        };
         let supporting: Vec<&Arc<dyn ProviderCapability>> = self
             .providers
             .iter()
@@ -503,6 +535,63 @@ mod tests {
         assert!(routed.failed_attempts.is_empty());
         assert_eq!(a.calls(), 1);
         assert_eq!(b.calls(), 0, "the second provider must not be consulted");
+    }
+
+    /// 出网闸判 Deny 时：**请求不发**（provider 零调用），错误可读。
+    #[tokio::test]
+    async fn egress_deny_never_reaches_a_provider() {
+        use super::super::egress_gate::{EgressGate, EgressVerdict};
+
+        struct DenyEverything;
+        impl EgressGate for DenyEverything {
+            fn vet(&self, _request: &NormalizedRequest) -> EgressVerdict {
+                EgressVerdict::Deny {
+                    reason: "该对象禁止出境".to_string(),
+                }
+            }
+        }
+
+        let provider = Scripted::ok("only", "m1");
+        let router = ProviderRouter::new(
+            vec![provider.clone() as Arc<dyn ProviderCapability>],
+            clock(),
+        )
+        .with_egress_gate(Arc::new(DenyEverything));
+        let error = router.complete(&request("m1")).await.expect_err("应被拒");
+        assert!(matches!(error, RuntimeError::Denied { .. }), "{error}");
+        assert_eq!(provider.calls(), 0, "拒绝时不得调用 provider");
+    }
+
+    /// 出网闸每个请求只判一次；Redacted 分支能把替换后的请求送到 provider。
+    #[tokio::test]
+    async fn egress_gate_is_consulted_once_and_redaction_still_sends() {
+        use super::super::egress_gate::{EgressGate, EgressVerdict};
+
+        struct CountingRedact {
+            calls: AtomicUsize,
+        }
+        impl EgressGate for CountingRedact {
+            fn vet(&self, request: &NormalizedRequest) -> EgressVerdict {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                // 只改温度（provider 能力集不变），验证替换后的请求真的被发出。
+                let mut replaced = request.clone();
+                replaced.temperature = Some(0.0);
+                EgressVerdict::Redacted(replaced)
+            }
+        }
+
+        let gate = Arc::new(CountingRedact {
+            calls: AtomicUsize::new(0),
+        });
+        let provider = Scripted::ok("only", "m1");
+        let router = ProviderRouter::new(
+            vec![provider.clone() as Arc<dyn ProviderCapability>],
+            clock(),
+        )
+        .with_egress_gate(gate.clone());
+        router.complete(&request("m1")).await.expect("脱敏后应发出");
+        assert_eq!(gate.calls.load(Ordering::SeqCst), 1, "每个请求只判一次");
+        assert_eq!(provider.calls(), 1, "放行后 provider 应被调用一次");
     }
 
     #[tokio::test]
