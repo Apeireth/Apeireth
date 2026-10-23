@@ -17,10 +17,15 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 
 [profile.ci]
 inherits = "default"
-# Fail fast on first error
-fail-fast = true
+# 2026-10-23: 首错即停 → 改为跑完全貌 (fail-fast=false)。首错即停会隐藏后面
+# 成千上万用例的真实状态, 让「全量绿」结论不可信; 代价只是失败时多花几分钟。
+fail-fast = false
+# 重试仍留 2 次, 但统计层必须自记 n (retries 会把偶发失败洗成绿, 见统计口径)。
 retries = 2
-slow-timeout = { period = "90s", terminate-after = 2 }
+# 超时放宽 90s → 180s: GitHub 2 核 runner 上, 本地 37 秒的图像算法等价性测试
+# 可能翻 2-3 倍; 5 分钟级的病态测试已在本批拆成抽样 + #[ignore] 穷举,
+# 这里放宽只为止损正常抖动, 不掩护病态测试。
+slow-timeout = { period = "180s", terminate-after = 2 }
 # Output to JUnit for GitHub Actions
 # (qdrant: junit = "nextest junit --output-path=$dest")
 # Apeireth: 直接 nextest run 自带 junit 输出
