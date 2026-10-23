@@ -106,6 +106,58 @@ claims:
     next_review: "2026-11-20"
     notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
 
+  - id: sec.egress_control
+    title: "受控出网（域名/地址许可 + 策略档；fetch 工具走同一闸）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/capabilities/tools/src/egress.rs
+      - crates/capabilities/tools/src/fetch.rs
+    tests:
+      - crates/capabilities/tools/src/egress.rs
+      - crates/capabilities/tools/src/fetch.rs
+    verified_at: 33236756
+    verify_cmd: "cargo test -p apeireth-tools-canonical --lib egress"
+    owner: capabilities
+    next_review: "2026-12-01"
+    notes: "出网控制（36KB）：`EgressPolicy` 三档（PublicInternetOnly / ExplicitAllowList / DenyAll）+ `ControlledEgress`。**接在线上**：`fetch` 工具默认 `PublicInternetOnly`，改策略即改出口。管的是「工具出网」，不覆盖「模型上下文出境」—— 后者见 `sec.egress_gate`（第 5 条边界）。"
+
+  - id: sec.object_access
+    title: "对象级访问判定（按对象域/主体判越界，越界即帧 + 审计）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: null
+    sources:
+      - crates/capabilities/tools/src/object_access.rs
+      - crates/capabilities/tools/src/shell.rs
+      - crates/capabilities/tools/src/observed_gate.rs
+    tests:
+      - crates/capabilities/tools/src/object_access.rs
+    verified_at: 33236756
+    verify_cmd: "cargo test -p apeireth-tools-canonical --lib object_access"
+    owner: capabilities
+    next_review: "2026-12-01"
+    notes: "对象级判定（32KB）：`ObjectAccessJudge` 按「对象域 × 主体」判是否越界，shell 工具面注入（`object_judgment`），越界即帧 + `sandbox.object_violation` 审计。这是顾问所说「比连接器开关更接近真实人类边界」的那一层。"
+
+  - id: sec.exposure_audit
+    title: "暴露面体检（五个暴露面只读扫描 + 同一内核两出口）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_EXPOSURE_AUDIT
+    sources:
+      - crates/capabilities/tools/src/exposure_audit/mod.rs
+      - crates/capabilities/tools/src/exposure_audit/report.rs
+      - crates/adapters/cli/src/exposure.rs
+      - crates/engine/runtime-assembly/src/canonical/self_status_source.rs
+    tests:
+      - crates/capabilities/tools/src/exposure_audit/mod.rs
+    verified_at: 33236756
+    verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
+    owner: capabilities
+    next_review: "2026-12-01"
+    notes: "五个暴露面（credential / binding / backup / listener / funnel）只读体检：工具面 `tool.exposure_audit` 与 CLI `apeireth exposure report` **同一内核两出口**；自述面也读它（暴露面计数）。默认关（按 grant 开启）。体检只读，不写被测面任何字节，报告是唯一产出。"
+
   - id: sec.egress_gate
     title: "模型出网闸（上下文→provider 边界；出境脱敏 + fail-closed 拒绝）"
     level: PRODUCTION WIRED
