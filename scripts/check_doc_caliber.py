@@ -4,7 +4,9 @@
 规则: **活跃文档**中若含触发词 (已实现 / 已接线), 同段必须出现四级口径之一
 (IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED) 或 "四级口径"
 字样。四级口径定义见 docs/01-architecture/system-capabilities.md 头部:
-    IMPLEMENTED ≠ PRODUCTION WIRED ≠ DEFAULT ENABLED ≠ HARDWARE VALIDATED
+    IMPLEMENTED ≠ PRODUCTION WIRED ≠ HARDWARE VALIDATED   （阶梯）
+    DEFAULT ENABLED 是横切属性（2026-10-23 定义修正；仍接受它作为标注词，因为它是有效概念，
+    只是不是"级"）
 目的: 把 0 装纪律 (O-5 锚) 变成机器可检查信号 —— 文档声称"已实现/已接线"时必须
 同时声明它落在哪一级, 防止"库级已实现"被读者误读为"生产可用/真机验证"。
 

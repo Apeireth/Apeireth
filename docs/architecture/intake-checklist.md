@@ -19,7 +19,7 @@
 3. **开关**：需要新 `APEIRETH_*` 开关吗？默认必须关；开关名、owner、默认值、层级、用途写进登记表；**关时逐字节零变化**怎么证（golden/zero-change 测试）。
 4. **接线点**：信号从哪来（事件源）？状态所有者是谁？写路径/读路径在哪？拒绝"机制入库、信号源待接"的静默半成品。
 5. **观测与审计**：`tool.self_status` 哪一节？审计/账本落在哪？没有观测口 = 没有交付。
-6. **四级口径**：IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED 标到哪级？证据（源码路径 + 测试路径 + 提交号）是什么？
+6. **口径阶梯**：IMPLEMENTED / PRODUCTION WIRED / HARDWARE VALIDATED 标到哪级？默认是否开启（DEFAULT ENABLED 是属性不是级）？证据（源码路径 + 测试路径 + 提交号）是什么？
 7. **零变化与回滚**：功能关掉时行为与开关前逐字节一致吗？回滚路径是什么（删文件/关开关/回退 commit）？
 8. **删除路径**：如果它失败，怎么删干净？（新结构必须给出"删除计划"，且新结构净额 ≤ 0）
 

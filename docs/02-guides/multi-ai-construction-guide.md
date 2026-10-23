@@ -19,7 +19,7 @@
 
 1. **读两份宪章**：[ENGINEER-MANIFESTO.md](../04-internal/ENGINEER-MANIFESTO.md)（哲学锚与工程规范）+ [CONSTRUCTION-DISCIPLINE.md](../04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md)（施工纪律）。冲突时以它们为准；
 2. **记住设计第一律：AI 先用、人后用**（宪章 §〇）：一切工具性能力的第一用户是 agent 自己——能力先做成**工具**（模型可调用、过治理、入名册），人类界面是同内核的**包装出口**（不另起炉灶、不两套逻辑）。硬判据：**删掉人类界面后，该能力对 agent 仍然完整可用**；
-3. **0 装 PASS（诚实纪律）**：未接线写「未接线」，桩要显式断言，未实测写「未实测」；双向——也不许把"已实现未接线"说成没做（四级口径：IMPLEMENTED / PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED，标注落在哪一级）。默认关闭的能力不得写成系统现状；
+3. **0 装 PASS（诚实纪律）**：未接线写「未接线」，桩要显式断言，未实测写「未实测」；双向——也不许把"已实现未接线"说成没做（口径阶梯：IMPLEMENTED / PRODUCTION WIRED / HARDWARE VALIDATED；DEFAULT ENABLED 是横切属性不是级）。默认关闭的能力不得写成系统现状；
 4. **中性表述**：代码/注释/提交零第三方产品名、零来源沿革类措辞；交付前跑 `scripts/check-neutral-terms.ps1` 必须零命中（豁免表只收真实路径这类结构性豁免，**命中先改表述，不先改豁免表**）；
 5. **LOCKED 5 项 0 触碰**：9 哲学锚本体 / 键集（现行 14 键） / 3 不可变脊柱 / workspace 版本轴 / R11 baseline——版本轴仅 release authority 可改；
 6. **声明你的战场**：写明本批的 `write_scope`（动哪些文件），见 §二；
@@ -79,7 +79,7 @@ N. **<接棒项名>**（<落点文件>，<并发注意事项>）：<注册条件
 2. **无脚本不发布数字**：每个数字可复核 = 命令 + 日期 + 工具链；无脚本的推算数（"应该有 N 个"）不写；未实测就写「未实测」；
 3. **实测/推断/未验三分标注**：结论出门前打标签——实测（附命令）、推断（明写推断，不得升级为事实）、未验（明写未验）。发现推断错误立即纠正并留档，不悄悄改口；
 4. **命名即承诺**：符号/开关/字段的名 = 它的全部权力。新增开关/旋钮三问：名称承诺 == 实际权力（含依赖主开关、fail-closed 子依赖）？生效时机（即效/重启）声明一致？名册按**实际注册条件**取值？（先例：[capability-switch-power-audit.md](capability-switch-power-audit.md) 开关权力审计表）；
-5. **报能力先报级别**：`IMPLEMENTED（代码存在）≠ PRODUCTION WIRED（接生产主路径）≠ DEFAULT ENABLED（默认开）≠ HARDWARE VALIDATED（真机验证）`——写"可用/已实现"前先答在哪一级，✅ 必须能指回证据（测试名/台账行/真机记录）；
+5. **报能力先报级别**：`IMPLEMENTED（代码存在）≠ PRODUCTION WIRED（接生产主路径）≠ HARDWARE VALIDATED（真机验证）`，且「默认开（DEFAULT ENABLED）」是横切属性、与阶梯正交——写"可用/已实现"前先答在哪一级，✅ 必须能指回证据（测试名/台账行/真机记录）；
 6. **历史不追溯改写**：带日期的历史记录保留原值，需要时加「历史口径（日期）」标注；
 7. **错误即帧**：失败走正式通道报真因，不静默降级、不谎帧；对外文案只写已交付能力，未交付进路线图并标阶段。
 
