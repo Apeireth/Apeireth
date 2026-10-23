@@ -68,6 +68,7 @@ pub mod provider;
 pub mod quota;
 pub mod runtime;
 pub mod session;
+pub mod session_locks;
 pub mod subloop;
 pub mod trace;
 // L0-L5 自升级 cycle driver (Stage 5 完整化, per R11 §7 + v2-architecture-reflection.md §6).
@@ -135,6 +136,7 @@ pub use session::{
     SessionManager, SessionSettings, SessionStore, SessionWriteAdmission, SessionWriteGate,
     SessionWritePermit,
 };
+pub use session_locks::SessionLocks;
 pub use subloop::{
     RuntimeSubLoopSpawner, SubLoopError, SubLoopResult, SubLoopSpawner, SubLoopSpec,
 };

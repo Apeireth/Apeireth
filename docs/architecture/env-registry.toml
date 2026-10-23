@@ -14,9 +14,19 @@
 
 
 version = 1
-updated_at = "2026-10-20"
+updated_at = "2026-10-23"
 
 # R4b perception 整包归档（ADR-0005 §3）后清理孤儿登记：APEIRETH_ENABLE_PERCEPTION 的源码读取点随 crate 迁入 legacy/archived，登记表删除；entries 与 arch_guard env 口径对齐
+
+[[entries]]
+name = "APEIRETH_ENABLE_EGRESS_GATE"
+default = "off"
+layer = "engine"
+owner = "apeireth-runtime-assembly"
+purpose = "出网闸装配开关（默认关，fail-closed）。 开启后，送给 provider 的请求先过出境脱敏闸 [`RedactionEgressGate`]：检出 PII 即替换为不可逆占位（占位对出境面不可逆，回程还原在受控回程面）；闸自身不可用（登记簿锁被 poison）则拒绝本次出网。 依据 ADR-0014 §1.2 —— 「把上下文发给模型就是行动」。 关时逐字节零行为变化。"
+level = "IMPLEMENTED"
+status = "current"
+evidence = "direct:crates/engine/runtime-assembly/src/egress_gate.rs:20;direct:crates/engine/runtime-assembly/src/egress_gate.rs:31;direct:crates/engine/runtime-assembly/src/egress_gate.rs:112"
 
 [[entries]]
 name = "APEIRETH_ANTHROPIC_"

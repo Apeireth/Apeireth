@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: c2359f099adf5cc15e9b1c678a3b50263549b3edeb979d59b93dafa6b3ed1859
-claims_total: 24
+claims_sha256: 6d57d363956f3bf348f1f43655de15cde8ea078fb75d314d91dc41d6feec18da
+claims_total: 26
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -105,6 +105,50 @@ items:
       tests:
         - "crates/capabilities/tools/tests/voice_speak.rs"
       claims_id: "tool.voice_speak"
+    gaps:
+      []
+  - id: "sec.egress_gate"
+    capability: "模型出网闸（上下文→provider 边界；出境脱敏 + fail-closed 拒绝）"
+    implemented:
+      sources:
+        - "crates/engine/runtime/src/canonical/egress_gate.rs"
+        - "crates/engine/runtime/src/canonical/provider.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime-assembly/src/egress_gate.rs"
+        - "crates/adapters/cli/src/lib.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/egress_gate.rs"
+        - "crates/engine/runtime/src/canonical/egress_gate.rs"
+        - "crates/engine/runtime/src/canonical/provider.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime/src/canonical/provider.rs"
+        - "crates/engine/runtime-assembly/src/egress_gate.rs"
+      claims_id: "sec.egress_gate"
+    gaps:
+      - "能力矩阵未出现开关 APEIRETH_ENABLE_EGRESS_GATE（待补）"
+  - id: "mem.lesson_object"
+    capability: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
+    implemented:
+      sources:
+        - "crates/engine/memory/src/lesson.rs"
+        - "crates/engine/memory/src/migrations.rs"
+        - "crates/adapters/cli/src/lessons_command.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/lessons_command.rs"
+        - "crates/engine/memory/src/lesson.rs"
+        - "crates/engine/memory/src/migrations.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/memory/src/lesson.rs"
+        - "crates/adapters/cli/src/lessons_command.rs"
+      claims_id: "mem.lesson_object"
     gaps:
       []
   - id: "gap.memory_update"

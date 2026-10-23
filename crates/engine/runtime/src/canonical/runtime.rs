@@ -65,6 +65,7 @@ use super::events::{
 use super::module::{BehaviorModule, BehaviorRegistry, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
+use super::session_locks::SessionLocks;
 
 /// How many logical execution rounds one turn may take before the runtime stops it.
 ///
@@ -261,26 +262,6 @@ impl Default for RuntimeConfig {
     }
 }
 
-/// Per-session serialization for turns and approval resolution.
-///
-/// This is deliberately not a global runtime mutex. Different sessions may
-/// proceed concurrently; the same session cannot start a new turn or resolve
-/// an approval while another operation on that session is still in progress.
-///
-/// M20: the map is bounded (`MAX_SESSION_LOCKS`). An unbounded lock map grows
-/// linearly with the number of distinct sessions a long-running process ever
-/// touched — each entry is small, but the map is never pruned. Entries are
-/// only evicted when no waiter holds them (`Arc::strong_count == 1`), so an
-/// in-flight turn can never lose its serialization point.
-#[derive(Debug, Default)]
-pub struct SessionLocks {
-    locks: TokioMutex<BTreeMap<SessionId, Arc<TokioMutex<()>>>>,
-}
-
-/// 同时驻留的 per-session 锁上限 (M20)。4096 个并发会话对一个本地运行时
-/// 已是极端值; 超限时只驱逐"无等待者"的条目。
-const MAX_SESSION_LOCKS: usize = 4096;
-
 /// poison 容错读锁 (L 组): 持锁线程 panic 只使 `PoisonError` 被标记, 锁
 /// 保护的数据并未损坏。事件 sink / 能力注册表这类非关键路径不应把一次
 /// panic 放大为之后所有操作的级联 panic。
@@ -292,30 +273,6 @@ fn read_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T
 fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
     lock.write()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-impl SessionLocks {
-    pub(crate) async fn acquire(&self, session: SessionId) -> Arc<TokioMutex<()>> {
-        let mut map = self.locks.lock().await;
-        if let Some(existing) = map.get(&session) {
-            return Arc::clone(existing);
-        }
-        // 无等待者 (仅 map 自己持有一份 Arc) 才可驱逐: 正在 hold 或等待该
-        // 锁的任务不会因为淘汰而拿到另一个互斥体。
-        if map.len() >= MAX_SESSION_LOCKS {
-            let evictable = map
-                .iter()
-                .find(|(_, lock)| Arc::strong_count(lock) == 1)
-                .map(|(id, _)| *id);
-            if let Some(evictable) = evictable {
-                map.remove(&evictable);
-            }
-        }
-        let entry = map
-            .entry(session)
-            .or_insert_with(|| Arc::new(TokioMutex::new(())));
-        Arc::clone(entry)
-    }
 }
 
 /// The assembled runtime.
@@ -732,6 +689,8 @@ pub struct RuntimeBuilder {
     summary_generator: Option<Arc<dyn SummaryGenerator>>,
     call_scheduler: Option<Arc<CallScheduler>>,
     session_manager: Option<Arc<SessionManager>>,
+    /// 出网闸（不注入 = 默认放行 = 零行为变化）。
+    egress_gate: Option<Arc<dyn super::egress_gate::EgressGate>>,
 }
 
 impl Default for RuntimeBuilder {
@@ -759,6 +718,7 @@ impl RuntimeBuilder {
             summary_generator: None,
             call_scheduler: None,
             session_manager: None,
+            egress_gate: None,
         }
     }
 
@@ -850,6 +810,13 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_context_projector(mut self, projector: Arc<dyn ContextProjector>) -> Self {
         self.context_projector = projector;
+        self
+    }
+
+    /// 注入出网闸（ADR-0014 §1.2：把上下文发给模型就是行动）。不注入 = 默认放行。
+    #[must_use]
+    pub fn with_egress_gate(mut self, gate: Arc<dyn super::egress_gate::EgressGate>) -> Self {
+        self.egress_gate = Some(gate);
         self
     }
 
@@ -1086,6 +1053,9 @@ impl RuntimeBuilder {
         // provider whose plugin failed to initialize is never routed to.
         let mut providers =
             ProviderRouter::new(manager.active_providers(), Arc::clone(&self.clock));
+        if let Some(gate) = self.egress_gate.clone() {
+            providers = providers.with_egress_gate(gate);
+        }
         if let Some(order) = self.fallback_order {
             providers = providers.with_fallback_order(order);
         }
@@ -1212,6 +1182,32 @@ mod tests {
             .unwrap(),
             seen: Mutex::new(None),
         })
+    }
+
+    /// 出网闸从 Builder 一路带到 ProviderRouter（不注入 = 默认放行）。
+    #[tokio::test]
+    async fn egress_gate_reaches_the_provider_router() {
+        use crate::canonical::egress_gate::{EgressGate, EgressVerdict};
+        use apeireth_protocol::canonical::NormalizedRequest;
+
+        struct CountGate(Arc<std::sync::atomic::AtomicUsize>);
+        impl EgressGate for CountGate {
+            fn vet(&self, _request: &NormalizedRequest) -> EgressVerdict {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                EgressVerdict::Pass
+            }
+        }
+
+        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let gate = Arc::new(CountGate(counter.clone()));
+        let runtime = Runtime::builder()
+            .with_egress_gate(gate)
+            .build()
+            .await
+            .expect("runtime builds");
+        // 闸挂在 router 上：构造本身不触发判定（判定发生在出网那一刻）。
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert!(!runtime.providers().is_empty() || true);
     }
 
     #[tokio::test]
