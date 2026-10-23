@@ -11,7 +11,7 @@
 
 ## 1. 背景（2026-10-20 实测，不沿用 2026-10-18 审计数字）
 
-> 逐项清单（scheduler 接线点 / SessionStore trait 实现 / ContextBlock 使用面 / 待 owner 问题）见 [r7-inventory-2026-10-20.md]../architecture/r7-inventory-2026-10-20.md)。
+> 逐项清单（scheduler 接线点 / SessionStore trait 实现 / ContextBlock 使用面 / 待 owner 问题）见 [docs/architecture/r7-inventory-2026-10-20.md](../architecture/r7-inventory-2026-10-20.md)。
 
 ADR-0002 R7 目标："`ContextAssembler`/`ContextBlock`/`assemble_tiered` 各收敛为一份；`SessionStore` 3 份收敛；调度器 4 份→1-2 条活路径；`PromptCacheStabilizer` 要么接线要么删"。
 

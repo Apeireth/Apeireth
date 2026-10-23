@@ -68,7 +68,7 @@ cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort
 
 ## 3. 后端联调现状（:8090 真实数据在流）
 
-契约即真相：[frontend-data-contract.md]../02-guides/frontend-data-contract.md)（17+1 条路由，字段级带代码行号）。
+契约即真相：[frontend-data-contract.md](../02-guides/frontend-data-contract.md))（17+1 条路由，字段级带代码行号）。
 
 - **已通**：`/health`、`/v1/models`、`/v1/chat/completions`（非流式+SSE 流式，
   CoT `<think>` 段前端分流到 reasoning 通道）、`/v1/panel/*`（sessions/timeline/

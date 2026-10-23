@@ -3,8 +3,8 @@
 > `Status: ✅ 已交付（2026-10-13，后端批 · 零前端触碰）`
 > 一事：用户模型 + 角色词表冻结 + 治理层 role 权限矩阵 + 令牌→用户→角色链 + CLI 用户管理命令 +
 > `gateway.user_action` 审计 + G1 对抗用例转绿。
-> 范围口径：星群·治理层（W3 多户多端波的治理/身份面）；架构定案 = 星群为骨（[F-server-form.md]../F-server-form.md)）；
-> 纪律：[CONSTRUCTION-DISCIPLINE.md]../CONSTRUCTION-DISCIPLINE.md)；威胁模型销账随行：[E-threat-model.md]../E-threat-model.md) §2/§4/§5/§6。
+> 范围口径：星群·治理层（W3 多户多端波的治理/身份面）；架构定案 = 星群为骨（[F-server-form.md](../F-server-form.md))）；
+> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))；威胁模型销账随行：[E-threat-model.md](../E-threat-model.md)) §2/§4/§5/§6。
 > 接缝（W3-① 并行线）：`UserDomain.role` 由域面建立、本面消费（宽接口 `UserIdentity::from_wide(user_id, role: Option<&str>, client_names)`，
 > 未配置/未知角色都 fail-closed 拒）；其域面角色词面 `DomainRole::{owner,member}` 是冻结词表的**兼容子集**
 > （`as_str()` 字面值一致，`guest` 为治理层词表项、域面未发）；用户表独立文件 `users.json` + `domain` 域引用（只携引用不判域）。
@@ -109,7 +109,7 @@ W3-① 并行线在途面零触碰。唯一结构演进注记：`ClientTokenSpec
 `client-tokens.json` 兼容可读，既有测试只补 `user_id: None` 字面量）；`ErrorCode` 增 `permission_denied`
 （403 角色门专用码，契约同步 §1/§6）。
 
-## 5. 威胁模型销账记录（详表随行 [E-threat-model.md]../E-threat-model.md)）
+## 5. 威胁模型销账记录（详表随行 [E-threat-model.md](../E-threat-model.md))）
 
 | 账目 | 处置 | 证据 |
 |---|---|---|

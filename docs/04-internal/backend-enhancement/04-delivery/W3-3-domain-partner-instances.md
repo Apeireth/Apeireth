@@ -4,8 +4,8 @@
 > 一事：每户伙伴运行时实例（`DomainRuntimePlane`）+ 域级模型/性格人设覆盖（`users/<id>/domain.json`
 > 兼容加字段）+ 域 chat 面开放（`/v1/chat`、`/v1/chat/completions` 走该域实例）+ 域事件订阅
 > （`?domain=` 自称 + 按域过滤）。
-> 范围口径：星群架构定案（**星群为骨、共享为翼**，[F-server-form.md]../F-server-form.md)）的运行时实例层；
-> 纪律：[CONSTRUCTION-DISCIPLINE.md]../CONSTRUCTION-DISCIPLINE.md)；战场：`crates/engine/runtime/src/canonical/{domain_plane.rs,session.rs,mod.rs}`（运行时实例面）+
+> 范围口径：星群架构定案（**星群为骨、共享为翼**，[F-server-form.md](../F-server-form.md))）的运行时实例层；
+> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))；战场：`crates/engine/runtime/src/canonical/{domain_plane.rs,session.rs,mod.rs}`（运行时实例面）+
 > `crates/engine/runtime-assembly/src/{domain_plane.rs,sqlite_session.rs}` + `crates/foundation/core/src/user_domain.rs`（域文档字段）+
 > `crates/adapters/gateway/src/{domain_context.rs,canonical_entry.rs,events.rs,panels.rs}`（域路由/chat 开放/事件过滤）+
 > `crates/adapters/cli/src/lib.rs`（组合根接线）。
@@ -159,8 +159,8 @@ DomainRuntimePlane { 会话平面 + 默认域现 Runtime + BTreeMap<域, 伙伴�
 
 | 残余 | 现状 | 归口 |
 |---|---|---|
-| 面板/审批/管理面按域路由 | 仍 403 `domain_forbidden` 面闸（逐面开放随批；chat/事件两面本批已开）——**✅ 已收（V2-c 批，2026-10-16）**：面板读面/审批面/管理面逐面开放，见 [V2-c-domain-faces-progressive-open.md]../V2-c-domain-faces-progressive-open.md) | 星群后续批 |
-| 域级审批归属 | 审批仍按 W3-② 会话→用户归属判定；逐域审批面（域内审批归域伙伴）未做——**✅ 已收（V2-c 批，2026-10-16）**：归属域校验上线（跨域同帧 404），见 [V2-c-domain-faces-progressive-open.md]../V2-c-domain-faces-progressive-open.md) | 星群后续批 |
+| 面板/审批/管理面按域路由 | 仍 403 `domain_forbidden` 面闸（逐面开放随批；chat/事件两面本批已开）——**✅ 已收（V2-c 批，2026-10-16）**：面板读面/审批面/管理面逐面开放，见 [V2-c-domain-faces-progressive-open.md](../V2-c-domain-faces-progressive-open.md)) | 星群后续批 |
+| 域级审批归属 | 审批仍按 W3-② 会话→用户归属判定；逐域审批面（域内审批归域伙伴）未做——**✅ 已收（V2-c 批，2026-10-16）**：归属域校验上线（跨域同帧 404），见 [V2-c-domain-faces-progressive-open.md](../V2-c-domain-faces-progressive-open.md)) | 星群后续批 |
 | 域开通/伙伴实例即时生效 | 平面与实例在启动期组装：新开域随下次启动生效（W3-① 惰性开库残余不变） | 后续（惰性开库/实例） |
 | 归档面（traces/审计/凭据库）逐域分库 | 仍共享数据根（W3-① 残余不变） | 后续批 |
 | 域覆盖管理 UI | 「暂无接口」（`DomainRegistry::set_runtime_overrides` API 已备；D10 口径不变） | 管理面批 |

@@ -4,8 +4,8 @@
 > 一事：受控子进程的文件操作判定从「命令词扫描」补强为**对象级判定** —— 执行前后
 > 对象状态对比（事实判定，与 API 形态无关）+ 越界即帧 + `sandbox.object_violation`
 > 审计 + `ObjectAccessPolicy` 挂载点（星港线深望智能体接此契约放行）。
-> 纪律：[CONSTRUCTION-DISCIPLINE.md]../CONSTRUCTION-DISCIPLINE.md)（进场第一课）；
-> 上游：[E-threat-model.md]../E-threat-model.md) G3 / [E-security-depth.md](E-security-depth.md) 想法 1；
+> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))（进场第一课）；
+> 上游：[E-threat-model.md](../E-threat-model.md)) G3 / [E-security-depth.md](E-security-depth.md) 想法 1；
 > 战场：`crates/capabilities/tools/src/object_access.rs`（新建判定件）+ 旁侧判定面
 > （`observed_gate.rs` 路径归一复用）+ 沙箱执行面最小接线（`shell.rs`，见 §6 报备）。
 
@@ -181,7 +181,7 @@ let tool = ShellTool::new(TrustedShellConfig::new(root).with_object_judgment(Arc
 
 ## 7. 威胁模型 G3 处置注
 
-见 [E-threat-model.md]../E-threat-model.md) §5 G3 处置注（本文件即其落地契约）。
+见 [E-threat-model.md](../E-threat-model.md)) §5 G3 处置注（本文件即其落地契约）。
 一句话：**本仓面已闭环**（对象级判定 = 形态无关的事实判定 + 请求判定 + 越界即帧
 + 审计 + 挂载点），仓外拦截层的形态不对称如实留残余（本仓改不了，由对象级判定
 对冲其权力差）。
