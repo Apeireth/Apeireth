@@ -26,7 +26,7 @@
 //! rejected as unsupported.
 //!
 //! [`parse`] never panics: every count is bounds-checked against the bytes left, descriptor
-//! nesting is bounded, and allocations are capped. [`write`] produces the same layout, so
+//! nesting is bounded, and allocations are capped. [`write()`] produces the same layout, so
 //! `parse(write(f)) == f`, and `write(parse(b)) == b` for files Photoshop wrote.
 
 use crate::descriptor::{Descriptor, UnicodeString};

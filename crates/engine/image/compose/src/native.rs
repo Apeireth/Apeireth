@@ -163,7 +163,7 @@ pub struct InkStack<'a> {
 impl<'a> InkStack<'a> {
     /// `None` unless `doc` is CMYK and every visible layer is a plain raster layer, a plain
     /// adjustment layer the inks carry exactly, or a group that can be inlined (see the module
-    /// docs and [`collect`]).
+    /// docs and `collect`).
     pub fn new(doc: &'a Document) -> Option<Self> {
         if doc.mode != ColorMode::Cmyk {
             return None;

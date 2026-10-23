@@ -248,7 +248,7 @@ pub enum Paint {
         /// Opacity stops `(location, opacity)` sorted by location; empty = each stop's alpha.
         opacity_stops: Vec<(f32, f32)>,
         style: GradientStyle,
-        /// Effective `(angle, scale, offset)` after whole-pixel snapping ([`gradient_layout`]).
+        /// Effective `(angle, scale, offset)` after whole-pixel snapping (`gradient_layout`).
         layout: (f32, f32, (f32, f32)),
         reverse: bool,
         dither: bool,

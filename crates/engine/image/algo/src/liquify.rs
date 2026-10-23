@@ -350,7 +350,7 @@ impl LiquifyField {
         if s.tool.is_stationary() && !s.tool.is_global() { self.dab(s, [p[0], p[1]], [0.0, 0.0], p[2].clamp(0.0, 1.0), 1.0) } else { Rect::EMPTY }
     }
 
-    /// Continues a stroke from `a` to `b`. Dabs fall every [`dab_spacing`] of distance travelled
+    /// Continues a stroke from `a` to `b`. Dabs fall every `dab_spacing` of distance travelled
     /// along the whole stroke, carried from one segment to the next, so the result is the same
     /// however finely the pointer path was sampled (a fast and a slow mouse give one warp). A
     /// stationary tool held still dabs once at `b`. When `a` is not where the previous segment

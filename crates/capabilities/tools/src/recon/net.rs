@@ -1,7 +1,7 @@
 //! `net.recon`：TCP connect 扫描 + 被动服务指纹。
 //!
 //! 边界：只做 connect（不碰 raw socket / 不发畸形包）；目标地址必须落在
-//! [`Scope`] 授权网段内；端口数受预算上限约束；每个连接有超时。
+//! `Scope` 授权网段内；端口数受预算上限约束；每个连接有超时。
 //! 只读取对端主动发送的 banner，不构造协议请求——未覆盖的探测写进 limitations。
 
 use std::io::Read;

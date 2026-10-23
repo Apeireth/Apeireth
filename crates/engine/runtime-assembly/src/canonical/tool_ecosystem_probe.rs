@@ -3,8 +3,8 @@
 //! ## 数据流 (只读、零副作用)
 //!
 //! 装配根把「能力表装配完毕后的静态工具集合」填入 [`ToolEcosystemSlot`]；
-//! 自述开关开时 [`install_bio_self_status`](super::bio_production_wiring::install_bio_self_status)
-//! 注册本 probe。读取时：槽快照 → [`project_capabilities`](super::tool_taxonomy::project_capabilities)
+//! 自述开关开时 [`install_bio_self_status`]
+//! 注册本 probe。读取时：槽快照 → [`project_capabilities`]
 //! 的已投影画像 → 内核 [`analyze`] 公式 → 一格读数（值 = 纯观测 JSON）。
 //!
 //! ## 口径 (0 装诚实)

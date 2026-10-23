@@ -409,7 +409,7 @@ fn exif_without_thumbnail(exif: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// The EXIF to write next to upright pixels at resolution `ppi`: Orientation 1 (see
-/// [`upright_exif`]), no thumbnail of the source image (see [`exif_without_thumbnail`]) and,
+/// [`upright_exif`]), no thumbnail of the source image (see `exif_without_thumbnail`) and,
 /// when `ppi` is known, the resolution (see [`exif_with_resolution`]).
 pub fn export_exif(exif: &[u8], ppi: Option<(f32, f32)>) -> Cow<'_, [u8]> {
     let up = upright_exif(exif);

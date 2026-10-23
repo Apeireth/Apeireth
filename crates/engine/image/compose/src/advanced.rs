@@ -13,7 +13,7 @@
 //!   pass-through one) or of the clipping group (the base layer's content); for Deep, and for
 //!   Shallow at the top level, the Background layer (transparency without one). Isolated groups
 //!   and grouped clipping layers stop a deep knockout at their bottom, as Photoshop renders it
-//!   (see [`Scope`]); pass-through groups let it through. Fill opacity sets how much of the layer
+//!   (see `Scope`); pass-through groups let it through. Fill opacity sets how much of the layer
 //!   shows over the knocked-out area, layer opacity how strong the whole knockout is.
 //! - **Blend Clipped Layers as Group off.** The base composites alone; each clipped layer then
 //!   composites onto the result in its own mode, kept inside the base's shape (its alpha with

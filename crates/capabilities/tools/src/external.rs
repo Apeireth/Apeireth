@@ -3,7 +3,7 @@
 //! 设计约束：
 //! * 只走 [`ProcessExecutor`]，argv 数组、无 shell 插值；
 //! * 工具能力固定（不把任意参数透传给外部命令）；
-//! * 网络目标过 [`Scope`]，文件目标限域到 workspace；
+//! * 网络目标过 `Scope`，文件目标限域到 workspace；
 //! * 输出有上限，失败保留 stderr 片段，不假装成功。
 //!
 //! 首批适配：`nmap`（只读侦察）、`tshark`（pcap 深度解析）、`exiftool`（元数据）。

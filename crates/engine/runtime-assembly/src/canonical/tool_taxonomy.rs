@@ -4,7 +4,7 @@
 //!
 //! [`apeireth_tools_canonical::ecosystem_health`] 的 `analyze` 只看
 //! [`ToolProfile::capabilities`]；但生产注册面的
-//! [`ToolCapability`](apeireth_plugin::ToolCapability) 只有 `id` / `declaration`
+//! [`ToolCapability`] 只有 `id` / `declaration`
 //! / `invoke` —— **声明里没有能力标签**。从描述文本反推标签属于伪接线（把
 //! 「读过描述」当「知道能力」），因此 v0 选择**策展**：由本表显式登记每个工具
 //! 的能力标签与来源族；表未收录的工具**不猜测**，一律计为 `untagged`，其读数
