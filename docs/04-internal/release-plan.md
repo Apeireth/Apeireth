@@ -14,7 +14,7 @@ Status:          🟢 活跃 (v2 发布路线)
 
 ## 一、设计层真实原意（保留 v1 内核）
 
-> 来源 [design-intent.md](design-intent.md) §2 + [../01-architecture/philosophy.md](../01-architecture/philosophy.md)。**v2 不改设计内核**，只改工程形态。
+> 来源 [design-intent.md](design-intent.md) §2 + [philosophy.md]../01-architecture/philosophy.md)。**v2 不改设计内核**，只改工程形态。
 
 - **基地 = 给 LLM 的「操作系统」**：提供(工具+记忆) / 约束(governance+self-disable) / 记录(session+trace) / 接入(provider 插件)
 - **涌现优先于预定义**：`Plugin::tools()` + `Plugin::providers()` 暴露**可声明**能力 + runtime 拼装；不靠硬编码 capability

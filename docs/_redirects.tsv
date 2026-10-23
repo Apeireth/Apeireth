@@ -1,5 +1,3 @@
-# 文档重定向表：旧路径 -> 新路径（文档治理批自动维护）
-# 格式：旧路径<TAB>新路径（均仓库相对）
 docs/01-architecture/m1a-canonical-storage-foundation.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
 docs/01-architecture/m1b1-memory-foundation.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
 docs/01-architecture/m1b2-memory-retrieval.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
@@ -16,6 +14,39 @@ docs/01-architecture/m3a-canonical-fetch.md	docs/04-internal/history/01-reconstr
 docs/01-architecture/master-functionality-port-audit.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
 docs/04-internal/HANDOFF-NOTES.md	docs/03-reference/team-handover-reference.md
 docs/04-internal/TO-NEW-TEAM.md	docs/03-reference/team-handover-reference.md
+docs/04-internal/backend-enhancement/A-quota-real-interface.md	docs/04-internal/backend-enhancement/02-axes/A-quota-real-interface.md
+docs/04-internal/backend-enhancement/B-performance.md	docs/04-internal/backend-enhancement/02-axes/B-performance.md
+docs/04-internal/backend-enhancement/C-memory-deepening.md	docs/04-internal/backend-enhancement/02-axes/C-memory-deepening.md
+docs/04-internal/backend-enhancement/D-doing-work.md	docs/04-internal/backend-enhancement/02-axes/D-doing-work.md
+docs/04-internal/backend-enhancement/E-object-level-contract.md	docs/04-internal/backend-enhancement/02-axes/E-object-level-contract.md
+docs/04-internal/backend-enhancement/E-security-depth.md	docs/04-internal/backend-enhancement/02-axes/E-security-depth.md
+docs/04-internal/backend-enhancement/F-server-form.md	docs/04-internal/backend-enhancement/02-axes/F-server-form.md
+docs/04-internal/backend-enhancement/H-model-plane.md	docs/04-internal/backend-enhancement/02-axes/H-model-plane.md
+docs/04-internal/backend-enhancement/I-absorption-automation.md	docs/04-internal/backend-enhancement/02-axes/I-absorption-automation.md
+docs/04-internal/backend-enhancement/I-starport-builtins.md	docs/04-internal/backend-enhancement/02-axes/I-starport-builtins.md
+docs/04-internal/backend-enhancement/J-life-integration.md	docs/04-internal/backend-enhancement/02-axes/J-life-integration.md
+docs/04-internal/backend-enhancement/J-tradewind.md	docs/04-internal/backend-enhancement/02-axes/J-tradewind.md
+docs/04-internal/backend-enhancement/K-device-control-three-beat.md	docs/04-internal/backend-enhancement/02-axes/K-device-control-three-beat.md
+docs/04-internal/backend-enhancement/K-guard-watch-flow.md	docs/04-internal/backend-enhancement/02-axes/K-guard-watch-flow.md
+docs/04-internal/backend-enhancement/K-starraft.md	docs/04-internal/backend-enhancement/02-axes/K-starraft.md
+docs/04-internal/backend-enhancement/L-experience-distillation.md	docs/archive/backend-enhancement/L-experience-distillation-2026-10-15.md
+docs/04-internal/backend-enhancement/V-forward-direction.md	docs/04-internal/backend-enhancement/00-governance/V-forward-direction.md
+docs/04-internal/backend-enhancement/V2-c-domain-faces-progressive-open.md	docs/04-internal/backend-enhancement/02-axes/V2-c-domain-faces-progressive-open.md
+docs/04-internal/backend-enhancement/V4-b-memory-freshness-delivery.md	docs/04-internal/backend-enhancement/04-delivery/V4-b-memory-freshness-delivery.md
+docs/04-internal/backend-enhancement/V5-a-redaction-bridge-delivery.md	docs/04-internal/backend-enhancement/04-delivery/V5-a-redaction-bridge-delivery.md
+docs/04-internal/backend-enhancement/V5-c-patrol-funnel-delivery.md	docs/04-internal/backend-enhancement/04-delivery/V5-c-patrol-funnel-delivery.md
+docs/04-internal/backend-enhancement/W2-3-multi-client-session-reuse.md	docs/04-internal/backend-enhancement/04-delivery/W2-3-multi-client-session-reuse.md
+docs/04-internal/backend-enhancement/W3-1-multi-user-data-isolation.md	docs/04-internal/backend-enhancement/04-delivery/W3-1-multi-user-data-isolation.md
+docs/04-internal/backend-enhancement/W3-2-user-identity-roles.md	docs/04-internal/backend-enhancement/04-delivery/W3-2-user-identity-roles.md
+docs/04-internal/backend-enhancement/W3-3-domain-partner-instances.md	docs/04-internal/backend-enhancement/04-delivery/W3-3-domain-partner-instances.md
+docs/04-internal/backend-enhancement/accountability-loop-design-2026-10-23.md	docs/04-internal/backend-enhancement/03-designs/accountability-loop-design-2026-10-23.md
+docs/04-internal/backend-enhancement/care-heartbeat-producer.md	docs/04-internal/backend-enhancement/04-delivery/care-heartbeat-producer.md
+docs/04-internal/backend-enhancement/f-02-asset-outbound-execution-2026-10-18.md	docs/04-internal/backend-enhancement/04-delivery/f-02-asset-outbound-execution-2026-10-18.md
+docs/04-internal/backend-enhancement/im-channel-module-2026-10-23.md	docs/04-internal/backend-enhancement/03-designs/im-channel-module-2026-10-23.md
+docs/04-internal/backend-enhancement/production-wiring-closeout-delivery.md	docs/04-internal/backend-enhancement/04-delivery/production-wiring-closeout-delivery.md
+docs/04-internal/backend-enhancement/size-ratchet-policy-2026-10-23.md	docs/04-internal/backend-enhancement/00-governance/size-ratchet-policy-2026-10-23.md
+docs/04-internal/backend-enhancement/trait-lock-and-trait-report-delivery.md	docs/04-internal/backend-enhancement/04-delivery/trait-lock-and-trait-report-delivery.md
+docs/04-internal/backend-enhancement/zero-debt-opening-clearance-2026-10-12.md	docs/04-internal/backend-enhancement/04-delivery/zero-debt-opening-clearance-2026-10-12.md
 docs/04-internal/backlog.md	docs/04-internal/backend-enhancement/00-backlog.md
 docs/04-internal/next-team-handbook.md	docs/04-internal/backend-enhancement/00-backlog.md
 reports/.r125-12-oh-my-opencode-4-role-spec.md	reports/11-milestone-and-decision-records.md
@@ -139,3 +170,5 @@ reports/v2-rc1-backend-security-audit-2026-09-24.md	reports/03-audit-and-verific
 reports/v2-rc1-backend-security-closeout-2026-09-24.md	reports/06-security-and-sandbox.md
 reports/w2-1-daemon-service-management.md	reports/12-misc-delivery-notes.md
 reports/yanshu-memory-donor-mapping.md	reports/07-research-assessments.md
+# 文档重定向表：旧路径 -> 新路径（文档治理批自动维护）
+# 格式：旧路径<TAB>新路径（均仓库相对）

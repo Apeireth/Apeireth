@@ -26,8 +26,8 @@
 | 2026-10-06 | [engineering-review-handoff-2026-10-06.md](engineering-review-handoff-2026-10-06.md) | 工程独立审核包（结论矩阵 + 可复制命令 + 工作包） | "怎么把一批活交给独立审核方复核"的模板 | **模板仍有效**；被复核的具体结论多为**历史口径** |
 | 2026-10-10 | [handoff-w1-w5-closure-2026-10-10.md](handoff-w1-w5-closure-2026-10-10.md) | W1 沙箱 → W2 全线 → 子代理运行时 → W3 真缺口 → 守夜人 → W5 SDK 全 Span 收官 | 多线并发时"一条 Span 收官"的交付总账与四级口径终局写法 | **写法仍有效**；交付数字为**历史口径（2026-10-10）** |
 | 2026-10-11 | [handoff-pet-avatar-line-2026-10-11.md](handoff-pet-avatar-line-2026-10-11.md) | 桌宠常驻投影 + 角色形象线封账（含主人形象重做令） | **主人对形象线的裁定**与许可红线（渠道三分） | **裁定仍有效**（最高优先级）；交付清单为**历史口径** |
-| 2026-10-21 | [../architecture/restart-brief-efficiency-2026-10-21.md](../architecture/restart-brief-efficiency-2026-10-21.md) | 效率线（第三线）重启简报：基线、资产、任务、复核命令、接口 | "某条线重启时该拿到什么" | **已过期**（Wave 5 之后），仅作**重启简报范式**参考 |
-| 2026-10-21 | [../architecture/restart-brief-security-2026-10-21.md](../architecture/restart-brief-security-2026-10-21.md) | 安全线重启简报：基线、任务、复核命令、接口 | "某条线重启时该拿到什么" | **已过期**，仅作**重启简报范式**参考 |
+| 2026-10-21 | [restart-brief-efficiency-2026-10-21.md]../architecture/restart-brief-efficiency-2026-10-21.md) | 效率线（第三线）重启简报：基线、资产、任务、复核命令、接口 | "某条线重启时该拿到什么" | **已过期**（Wave 5 之后），仅作**重启简报范式**参考 |
+| 2026-10-21 | [restart-brief-security-2026-10-21.md]../architecture/restart-brief-security-2026-10-21.md) | 安全线重启简报：基线、任务、复核命令、接口 | "某条线重启时该拿到什么" | **已过期**，仅作**重启简报范式**参考 |
 
 ## 读这些文档时必须记住的一件事
 

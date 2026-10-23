@@ -16,7 +16,7 @@
 | **查现在的债/待办** | [04-internal/backend-enhancement/00-backlog.md](04-internal/backend-enhancement/00-backlog.md)（D 编号唯一真源） | 不要翻历史 backlog |
 | **查某次决策为什么** | [adr/](adr/README.md) | ADR 正文**只增不改** |
 | **查机器可执行的契约** | [architecture/contract.toml](architecture/contract.toml) | 散文里的"约束"不是契约 |
-| **查某批交付了什么** | [../reports/](../reports/README.md)（12 册） | 不要在 `reports/` 里翻 121 篇散篇 |
+| **查某批交付了什么** | [reports]../reports/README.md)（12 册） | 不要在 `reports/` 里翻 121 篇散篇 |
 | **查我们审过什么** | [04-internal/audits/](04-internal/audits/README.md) | — |
 | **查历史考古** | [04-internal/history/](04-internal/history/) + [archive/](archive/README.md) | — |
 | **查未接线能力** | [status/unwired-ledger.md](status/unwired-ledger.md)（W1–W7） | — |
