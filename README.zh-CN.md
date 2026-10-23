@@ -158,6 +158,13 @@ cd frontend/companion-desktop && pnpm install && pnpm tauri build   # 它的"脸
 
 ### 诚实的边线
 
+- **数据与隐私的承诺边界**：我们不承诺「完全不外流」（用了云模型就不成立），我们承诺
+  **「你不想外露的数据不能外流」**——按对象、按用途、可撤销。**保证 R1（停止未来外流）
+  与 R3（撤回本系统内派生结论）；不保证 R2（撤回已导出副本）与 R4（抹除模型侧残留）**
+  ——不承诺不是偷懒，是因为**兑现不了的承诺比不承诺更坏**。不承诺的部分我们仍负三项义务：
+  记录已知流向 / 提供请求路径 / 发现影响时通知。→ [数据与隐私](docs/02-guides/data-and-privacy.md)
+
+
 - **凭据**：系统钥匙串可用就用，不可用退环境变量 / 内存后端；文件后端是明文，`SecretString` 不做 zeroize——实现之前我们不宣称。
 - **服务商**：**真实三家：OpenAI 兼容 / MiniMax / Anthropic。** Gemini 与 OpenAI-Responses 只是协议归一器（`protocol::adapters`）——没接成 provider。
 - **进程隔离**：**Windows = Job Object + AppContainer**；**Linux/macOS = 只有进程组 + rlimits（无文件/网络隔离）**——所以 shell 工具在 Windows 之外默认拒开。
