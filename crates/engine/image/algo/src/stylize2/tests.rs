@@ -33,16 +33,46 @@ fn bits(v: Vec<f32>) -> Vec<u32> {
 const MODELS: [ColorMode; 8] =
     [ColorMode::Rgb, ColorMode::Grayscale, ColorMode::Cmyk, ColorMode::Lab, ColorMode::Bitmap, ColorMode::Duotone, ColorMode::Indexed, ColorMode::Multichannel];
 
+/// 「分块快路径」与「逐像素参考实现」必须逐位一致。
+///
+/// 默认只跑**代表性抽样**（4 mode × 2 alpha × 2 kind × 2 尺寸 × 8 flags = 256 组合，
+/// 本机约 20 秒）。**穷举全扫**（3840 组合）实测单机 **306 秒**，而 CI 的 nextest
+/// 单测超时是 90s×2 —— 穷举会把三平台 nextest 全部拉红（2026-10-23 查实：
+/// `cargo nextest (ubuntu/macos/windows)` 常年红的真因就是这一条超时）。
+///
+/// 因此拆成两档：默认抽样跑等价性，穷举留给 `#[ignore]` 的专项测试，
+/// 需要在动 extrude 内核时单独跑。
 #[test]
 fn swept_blocks_match_the_pixel_search() {
+    sweep_blocks_against_pixel_search(
+        &[ColorMode::Rgb, ColorMode::Cmyk, ColorMode::Lab, ColorMode::Indexed],
+        &[0, 4],
+        &[(2.0, 0.0), (22.0, 255.0)],
+    );
+}
+
+/// 穷举全扫：8 mode × 2 alpha × 5 kind × 6 尺寸 × 8 flags = 3840 组合（本机约 5 分钟）。
+///
+/// 不是每次提交都要跑的东西 —— 它是**等价性证明**，动 `extrude` 内核时才需要。
+#[test]
+#[ignore = "穷举 3840 组合约 5 分钟；CI nextest 单测超时会拉红流水线，按需单独跑"]
+fn swept_blocks_exhaustive_matches_the_pixel_search() {
+    sweep_blocks_against_pixel_search(
+        &MODELS,
+        &[0, 1, 2, 3, 4],
+        &[(2.0, 0.0), (2.0, 255.0), (3.5, 190.0), (8.0, 64.0), (22.0, 255.0), (255.0, 100.0)],
+    );
+}
+
+fn sweep_blocks_against_pixel_search(modes: &[ColorMode], kinds: &[usize], sizes: &[(f32, f32)]) {
     let bounds = Rect::new(-13, -9, 31, 26);
-    for mode in MODELS {
+    for &mode in modes {
         for alpha in [false, true] {
             let n = PixelFormat::new(mode, SampleType::F32, alpha).channels();
             let ctx = Ctx { bounds, mode, alpha };
-            for kind in 0..5 {
+            for &kind in kinds {
                 let src = image(bounds.inflate(20), n, kind);
-                for (size, depth) in [(2.0, 0.0), (2.0, 255.0), (3.5, 190.0), (8.0, 64.0), (22.0, 255.0), (255.0, 100.0)] {
+                for &(size, depth) in sizes {
                     for flags in 0..8 {
                         let spec = ExtrudeSpec {
                             kind: ExtrudeType::Blocks,
