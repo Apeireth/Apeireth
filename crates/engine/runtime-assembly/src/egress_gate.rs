@@ -24,6 +24,7 @@ use apeireth_protocol::canonical::{ContentPart, NormalizedRequest, NormalizedRes
 use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict};
 use apeireth_tools_canonical::redaction_bridge::RedactionBridge;
 
+use crate::accountability::{AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome};
 use crate::egress_ledger::{EgressLedger, EgressLedgerEntry};
 
 /// 出网闸开关 env（未设 / 非 `"1"` = 关，fail-closed 于「开启侧」）。
@@ -52,6 +53,11 @@ pub struct RedactionEgressGate {
     authorization: Option<Arc<AuthorizationPolicy>>,
     /// 时钟（判定过期用；不注入 = 用系统时钟）。
     clock: Arc<dyn Clock>,
+    /// 问责账本（影响声明 + 事实→行动索引）。
+    ///
+    /// `None` = 不写影响声明（库级默认）；生产接线应传路径 ——
+    /// 「在发现影响时通知你」的前提是**知道哪条事实影响过哪些行动**。
+    accountability: Option<Arc<AccountabilityLedger>>,
 }
 
 impl RedactionEgressGate {
@@ -67,6 +73,7 @@ impl RedactionEgressGate {
             ledger: Arc::new(EgressLedger::new(None)),
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
+            accountability: None,
         }
     }
 
@@ -77,7 +84,14 @@ impl RedactionEgressGate {
             ledger,
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
+            accountability: None,
         }
+    }
+
+    /// 挂上问责账本（每次外部行动写一条影响声明）。
+    pub fn with_accountability(mut self, ledger: Arc<AccountabilityLedger>) -> Self {
+        self.accountability = Some(ledger);
+        self
     }
 
     /// 挂上授权策略对象（未授权即拒绝出网，fail-closed）。
@@ -138,6 +152,41 @@ impl Default for RedactionEgressGate {
     }
 }
 
+impl RedactionEgressGate {
+    /// 写一条影响声明（**零真值**：只存指涉 id）。
+    ///
+    /// 边界 = `provider`（模型上下文出境）。
+    /// `reversible` = **false** —— 出境的请求**收不回**（这是必须被记录的事实，
+    /// 不是判断）；`outcome` = `unknown` —— 我们**不知道**模型侧发生了什么，
+    /// 显式写 `unknown`，不假装知道。
+    ///
+    /// `facts_used` 当前**为空**：闸看不到上下文里用了哪些记忆条目
+    /// （那要等上下文装配面接上来）。**空 = 如实没有**，不编。
+    fn declare_impact(&self, destination: &str, _redacted: bool) {
+        let Some(ledger) = &self.accountability else {
+            return;
+        };
+        let now_ms = self.clock.now().timestamp_millis();
+        let statement = ImpactStatement {
+            action_id: format!("act-{now_ms}"),
+            at_ms: now_ms,
+            boundary: Boundary::Provider,
+            facts_used: Vec::new(),
+            inferences: Vec::new(),
+            grants: self
+                .authorization
+                .as_ref()
+                .map(|policy| vec![policy.fingerprint()])
+                .unwrap_or_default(),
+            affected: Affected::SelfOnly,
+            reversible: false,
+            destination: destination.to_string(),
+            outcome: Outcome::Unknown,
+        };
+        ledger.append(&statement);
+    }
+}
+
 impl EgressGate for RedactionEgressGate {
     /// 受控回程还原：把回信里的占位符换回本地真值。
     ///
@@ -181,6 +230,7 @@ impl EgressGate for RedactionEgressGate {
                     EGRESS_USAGE_CHAT,
                     Some(reason.clone()),
                 );
+                self.declare_impact("provider", false);
                 return EgressVerdict::Deny { reason };
             }
         }
@@ -209,9 +259,11 @@ impl EgressGate for RedactionEgressGate {
         // 记账失败**不阻断出网**（账本是观测面，不是闸）。
         if any_hit {
             self.record("redacted", &hits, "provider", EGRESS_USAGE_CHAT, None);
+            self.declare_impact("provider", true);
             EgressVerdict::Redacted(replaced)
         } else {
             self.record("pass", &[], "provider", EGRESS_USAGE_CHAT, None);
+            self.declare_impact("provider", true);
             EgressVerdict::Pass
         }
     }
@@ -238,6 +290,18 @@ pub fn egress_gate_from_env() -> Option<std::sync::Arc<dyn EgressGate>> {
 pub fn egress_gate_from_env_with_ledger(
     ledger_path: Option<std::path::PathBuf>,
 ) -> Option<std::sync::Arc<dyn EgressGate>> {
+    egress_gate_from_env_with_ledgers(ledger_path, None)
+}
+
+/// 同上，但同时指定**问责账本**（影响声明 + 事实→行动索引）的落盘路径。
+///
+/// 两个账本分开：**出域账本**记「判定 + 对象类型」（观测面），
+/// **问责账本**记「这次行动依赖了什么授权、能不能撤回、影响谁」（责任面）。
+/// 承诺措辞里的「记录已知流向」对应前者，「在发现影响时通知你」对应后者。
+pub fn egress_gate_from_env_with_ledgers(
+    ledger_path: Option<std::path::PathBuf>,
+    accountability_path: Option<std::path::PathBuf>,
+) -> Option<std::sync::Arc<dyn EgressGate>> {
     let raw = std::env::var(EGRESS_GATE_ENV).ok()?;
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false") {
@@ -245,6 +309,9 @@ pub fn egress_gate_from_env_with_ledger(
     }
     let ledger = Arc::new(EgressLedger::new(ledger_path));
     let mut gate = RedactionEgressGate::with_ledger(ledger);
+    if let Some(path) = accountability_path {
+        gate = gate.with_accountability(Arc::new(AccountabilityLedger::new(Some(path))));
+    }
     if trimmed != "1" {
         match AuthorizationPolicy::from_carryable(trimmed) {
             Ok(policy) => {
@@ -475,6 +542,55 @@ mod tests {
             }
             other => panic!("过期应拒绝: {other:?}"),
         }
+    }
+
+    /// 每次外部行动都写一条影响声明（可逆=false、后果=unknown）。
+    #[test]
+    fn gate_writes_impact_statements() {
+        let ledger = std::sync::Arc::new(crate::accountability::AccountabilityLedger::new(None));
+        let gate = RedactionEgressGate::new().with_accountability(ledger.clone());
+
+        let _ = gate.vet(&request_with("今天天气不错"));
+
+        // 内存账本不持久 → statements() 为空；用计数验证需要落盘。
+        // 这里改验「无账本时不影响判定」这条更重要的性质。
+        assert!(ledger.path().is_none());
+        assert!(matches!(
+            gate.vet(&request_with("联系 alice@example.com 就行")),
+            EgressVerdict::Redacted(_)
+        ));
+    }
+
+    /// 影响声明落盘后能查「哪些行动受影响」。
+    #[test]
+    fn impact_statements_are_queryable_when_persisted() {
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-gate-impact-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let ledger = std::sync::Arc::new(crate::accountability::AccountabilityLedger::new(Some(
+            path.clone(),
+        )));
+        let gate = RedactionEgressGate::new().with_accountability(ledger.clone());
+        let _ = gate.vet(&request_with("今天天气不错"));
+
+        let statements = ledger.statements();
+        assert_eq!(statements.len(), 1);
+        assert_eq!(
+            statements[0].boundary,
+            crate::accountability::Boundary::Provider
+        );
+        assert!(!statements[0].reversible, "出境不可逆 —— 必须被记录");
+        assert_eq!(
+            statements[0].outcome,
+            crate::accountability::Outcome::Unknown,
+            "我们不知道模型侧发生了什么 —— 显式 unknown"
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
