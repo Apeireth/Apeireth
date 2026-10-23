@@ -863,17 +863,44 @@ mod tests {
         std::fs::read(std::env::current_exe().expect("current exe")).expect("read current exe")
     }
 
+    /// 自身二进制在**本平台**的期望容器格式；本平台不在覆盖范围内返回 `None`
+    /// （不假装测过）。
+    fn host_binary_format() -> Option<&'static str> {
+        if cfg!(target_os = "linux") {
+            Some("elf")
+        } else if cfg!(target_os = "macos") {
+            Some("macho")
+        } else if cfg!(target_os = "windows") {
+            Some("pe")
+        } else {
+            None
+        }
+    }
+
     #[test]
-    fn parses_the_running_elf() {
-        let bytes = current_exe_bytes();
-        let report = parse(&bytes).expect("parse self");
-        assert_eq!(report.format, "elf");
+    fn parses_the_running_binary_on_this_platform() {
+        let Some(expected) = host_binary_format() else {
+            return;
+        };
+        let report = parse(&current_exe_bytes()).expect("parse self");
+        // 断言「解析器认出了本平台自己的可执行文件」—— 这条以前写死 "elf"，
+        // 在 macOS/Windows 上必挂（自身的进程镜像是 Mach-O / PE）。
+        assert_eq!(report.format, expected);
         assert!(matches!(report.bits, 32 | 64));
-        assert!(!report.sections.is_empty());
-        // 导入/导出至少能读出一部分（测试二进制通常有）。
-        assert!(
-            report.limitations.iter().any(|l| l.contains("section")) || !report.sections.is_empty()
-        );
+        // 容器细节按格式各自断言：Mach-O 解析器覆盖段表、不覆盖 section 表，
+        // 把 ELF 的期望硬套过来就是「测试在演，不是在测」。
+        match expected {
+            "elf" => {
+                assert!(!report.sections.is_empty());
+            }
+            "macho" => {
+                assert!(!report.segments.is_empty(), "macho segments 应可读");
+            }
+            "pe" => {
+                assert!(report.is_pie.is_some(), "pe 头应已解析");
+            }
+            _ => {}
+        }
     }
 
     #[test]
