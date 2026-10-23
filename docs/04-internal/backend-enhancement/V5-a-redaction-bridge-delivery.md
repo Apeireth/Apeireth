@@ -1,5 +1,5 @@
-<!-- 已移位（2026-10-23）：本文内容已已移至。 -->
-> ⚠️ 本文档已移位（原件见 `docs/archive/merged/2026-10-23/`）**；新址为 [V5-a-redaction-bridge-delivery](04-delivery/V5-a-redaction-bridge-delivery.md)**（2026-10-23）。
-> 本文件保留仅为维持既有链接可达；内容以 **V5-a-redaction-bridge-delivery** 为准。
+<!-- 已移位（2026-10-23）：本文内容已移至新址，原址留桩。 -->
+> ⚠️ 本文档已移位至 **[V5-a 出境脱敏双向闸 — 交付说明](04-delivery/V5-a-redaction-bridge-delivery.md)**（2026-10-23）。
+> 本文件保留仅为维持既有链接可达；内容以 **V5-a 出境脱敏双向闸 — 交付说明** 为准。
 
 <!-- 本文件由文档治理批自动重定向生成，请勿在此写正文。 -->
