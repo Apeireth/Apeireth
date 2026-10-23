@@ -222,6 +222,8 @@ crates/apeireth-integration-e2e/.*.log
 !scripts/verify_ledger.py
 # 未接线审计（2026-10-22 接线治理批）：仓库常驻工具，必须入库
 !scripts/audit_unwired.py
+# 自述词表纪律检查器（2026-10-23 ADR-0014 §6 落地）：仓库常驻工具（CI 报告项）
+!scripts/check_self_status_vocab.py
 
 # TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
 # 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),
