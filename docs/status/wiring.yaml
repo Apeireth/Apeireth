@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 6d57d363956f3bf348f1f43655de15cde8ea078fb75d314d91dc41d6feec18da
-claims_total: 26
+claims_sha256: 6f10132566194fa880c5fbe48babefa32c22c7123209c6b28032c2cdf1980f87
+claims_total: 29
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -105,6 +105,65 @@ items:
       tests:
         - "crates/capabilities/tools/tests/voice_speak.rs"
       claims_id: "tool.voice_speak"
+    gaps:
+      []
+  - id: "sec.egress_control"
+    capability: "受控出网（域名/地址许可 + 策略档；fetch 工具走同一闸）"
+    implemented:
+      sources:
+        - "crates/capabilities/tools/src/egress.rs"
+        - "crates/capabilities/tools/src/fetch.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/egress.rs"
+        - "crates/capabilities/tools/src/fetch.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/capabilities/tools/src/egress.rs"
+        - "crates/capabilities/tools/src/fetch.rs"
+      claims_id: "sec.egress_control"
+    gaps:
+      []
+  - id: "sec.object_access"
+    capability: "对象级访问判定（按对象域/主体判越界，越界即帧 + 审计）"
+    implemented:
+      sources:
+        - "crates/capabilities/tools/src/object_access.rs"
+        - "crates/capabilities/tools/src/shell.rs"
+        - "crates/capabilities/tools/src/observed_gate.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/object_access.rs"
+        - "crates/capabilities/tools/src/observed_gate.rs"
+        - "crates/capabilities/tools/src/shell.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/capabilities/tools/src/object_access.rs"
+      claims_id: "sec.object_access"
+    gaps:
+      []
+  - id: "sec.exposure_audit"
+    capability: "暴露面体检（五个暴露面只读扫描 + 同一内核两出口）"
+    implemented:
+      sources:
+        - "crates/capabilities/tools/src/exposure_audit/mod.rs"
+        - "crates/capabilities/tools/src/exposure_audit/report.rs"
+        - "crates/adapters/cli/src/exposure.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/exposure.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/capabilities/tools/src/exposure_audit/mod.rs"
+        - "crates/capabilities/tools/src/exposure_audit/report.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/capabilities/tools/src/exposure_audit/mod.rs"
+      claims_id: "sec.exposure_audit"
     gaps:
       []
   - id: "sec.egress_gate"
