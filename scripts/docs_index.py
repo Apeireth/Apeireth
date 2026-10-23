@@ -211,8 +211,19 @@ def gen_index() -> int:
     doc_files = iter_md(DOCS)
     report_files = iter_md(REPORTS)
     counts = build_ref_counts(doc_files, report_files)
+    # 保留人工标注过的 disposition / target（--gen 不得重置这两列）
+    prev = load_index()
     for p in doc_files + report_files:
         rel = p.relative_to(ROOT)
+        old_row = prev.get(rel.as_posix(), {})
+        disp = old_row.get("disposition") or "保留"
+        tgt = old_row.get("target") or ""
+        if disp == "保留" and not tgt:
+            if "archive" in rel.parts:
+                disp = "归档"
+            elif p.name == "README.md":
+                disp = "索引"
+        disp_final, tgt_final = disp, tgt
         rows.append(
             [
                 rel.as_posix(),
@@ -222,8 +233,8 @@ def gen_index() -> int:
                 date_of(p),
                 "现行" if layer_of(rel) in {"L1", "L2", "L3"} else ("在飞" if layer_of(rel) == "L4" else "归档"),
                 str(counts.get(rel.as_posix(), 0)),
-                "保留",
-                "",
+                disp_final,
+                tgt_final,
             ]
         )
     out = ROOT / INDEX_CSV

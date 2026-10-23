@@ -199,7 +199,7 @@ IMPLEMENTED（库内可跑、测试过）≠ PRODUCTION WIRED（生产装配有�
 |---|---|---|---|
 | W1 | IM 桥生产构造 + 设备审批面注入 | 全仓仅测试调用，生产装配无构造点 ⇒ 高风险动作档「必须 IM 审批卡」在生产发不出卡 | owner 2026-10-23 裁定**暂不接**，按产品面专项做（[设计输入](../04-internal/backend-enhancement/im-channel-module-2026-10-23.md)）；在此之前该档维持「缺卡即拒」（有意为之，不是故障） |
 | W2 | `verify_multisig` / `multi_sign` | 全库多签调用点为零；高风险动作的人审只有占位 | 触发：v2.1 真多签（安全线） |
-| W7 | 教训对象 `Lesson` | L1 + L2 已接线（生产）；L3 反思步、L4 上下文注入仍缺 | 记忆线；L4 注入纪律需 owner 拍板预算 |
+| W7 | 教训对象 `Lesson` | L1 + L2 **PRODUCTION WIRED**；L3 反思步、L4 上下文注入仍缺 | 记忆线；L4 注入纪律需 owner 拍板预算 |
 
 > 另有一条承重墙（出境脱敏闸等未接电，见 §5.1），以及系统级缺口（可取消 worker、上下文分页、插件隔离、技能包、记忆对象级共享等）——清单在 [SG 台账](../04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md)，拍板权在 owner。
 
@@ -289,7 +289,7 @@ type ∈ feat / fix / refactor / docs / test / chore / perf / ci / build / rever
 4. [contract.toml](../architecture/contract.toml) — 可执行架构契约：允许层边、棘轮预算、扩展点登记、例外规则。
 5. [test-baseline.md](test-baseline.md) — **测试数字唯一真源**（其余文档只引用不抄）。
 6. [claims.yaml](../status/claims.yaml) — 能力声明唯一真源（level / default / 证据 / 复核时点）。
-7. [unwired-ledger.md](../status/unwired-ledger.md) — 「已实现但没接电」的唯一清单。
+7. [unwired-ledger.md](../status/unwired-ledger.md) — 库级完成但未接入生产的唯一清单（差集 = IMPLEMENTED 与 PRODUCTION WIRED 之间）。
 8. [capabilities-matrix.md](capabilities-matrix.md) — 能力矩阵与默认开关现值（§0.2）。
 
 **按需**
@@ -299,7 +299,7 @@ type ∈ feat / fix / refactor / docs / test / chore / perf / ci / build / rever
 11. [00-backlog.md](../04-internal/backend-enhancement/00-backlog.md) — 批次级想法清单与债栏（唯一债栏）。
 12. [system-gap-ledger-2026-10-18.md](../04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md) — 系统级能力缺口台账（SG 条目，拍板权在 owner）。
 13. [live-verification-ledger.md](../04-internal/live-verification-ledger.md) — 「什么真机验过」的唯一记录；写文档前先查，别重测已绿的。
-14. [implemented-to-wired-plan-2026-10-21.md](../04-internal/backend-enhancement/implemented-to-wired-plan-2026-10-21.md) — 「已实现 → 已接线」的推进计划与判据。
+14. [implemented-to-wired-plan-2026-10-21.md](../04-internal/backend-enhancement/implemented-to-wired-plan-2026-10-21.md) — IMPLEMENTED → PRODUCTION WIRED 的抬级推进计划与判据。
 15. [ADR-0013](../adr/0013-open-source-personal-utility-assistant.md) — 定位与动态红线裁定（现行）。
 16. [architecture/handbook.md](../architecture/handbook.md) — 架构线续作手册 + 一分钟健康检查。
 17. [fast-feedback-gate.md](../02-guides/fast-feedback-gate.md) — 快反馈门禁怎么用。

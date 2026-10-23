@@ -12,7 +12,7 @@
 | **接手干活** | [03-reference/team-handover-reference.md](03-reference/team-handover-reference.md)《接手一站式手册》 | 不要逐篇读 `04-internal/` |
 | **搞懂系统是什么** | [01-architecture/](01-architecture/README.md) | 不要从 `reports/` 倒推 |
 | **查测试数字** | [03-reference/test-baseline.md](03-reference/test-baseline.md) | 任何别的文档都只**引用**它，不抄写 |
-| **查能力/默认开关** | [status/claims.yaml](status/claims.yaml) + [03-reference/capabilities-matrix.md](03-reference/capabilities-matrix.md) | 不要相信散文的"已实现" |
+| **查能力/默认开关** | [status/claims.yaml](status/claims.yaml) + [03-reference/capabilities-matrix.md](03-reference/capabilities-matrix.md) | 别拿散文当能力声明（口径只认 claims.yaml 的四级标注） |
 | **查现在的债/待办** | [04-internal/backend-enhancement/00-backlog.md](04-internal/backend-enhancement/00-backlog.md)（D 编号唯一真源） | 不要翻历史 backlog |
 | **查某次决策为什么** | [adr/](adr/README.md) | ADR 正文**只增不改** |
 | **查机器可执行的契约** | [architecture/contract.toml](architecture/contract.toml) | 散文里的"约束"不是契约 |

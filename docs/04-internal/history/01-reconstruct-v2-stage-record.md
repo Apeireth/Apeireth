@@ -449,7 +449,7 @@
 | Timeout | Connect + read + total | 204 / 304 / 空 body | 空文本，**不是错误** |
 
 - **凭据（冻结契约）**：Authorization **NONE**；Cookie **NONE**；Proxy-Authorization **NONE**；**环境凭据不发送**；**URL userinfo 在 transport 前被拒，绝不记录**。
-- **冻结调用（冻结契约）**：**已实现** —— 理由：`tool.fetch` 可被普通治理配置置于 `RequireApproval` 之下，**被批准的 fetch 不得在审批挂起期间因受信任配置变化而悄悄放宽**。冻结字段：`version`、`method`、`url`、`timeout_ms`、`max_response_bytes`、`max_redirects`、`egress_policy`、`user_agent`。**配置漂移行为**：执行时**从冻结的 `egress_policy` 与冻结上界重建 `ControlledEgress`**，**不使用当前配置**。**DNS 行为**：DNS **有意不冻结** —— 实际连接在执行时由受控 transport 解析并重校验；安全属性是「解析出的地址必须满足被批准的政策」，**不是**「与过期预览一致」。**先认领后生效**：不变 —— 通用 M2C 审批生命周期在派发前持久化认领，故 HTTP 接触只发生在批准之后。
+- **冻结调用（冻结契约）**：**已实现** —— 理由：`tool.fetch` 可被普通治理配置置于 `RequireApproval` 之下，**被批准的 fetch 不得在审批挂起期间因受信任配置变化而悄悄放宽**。冻结字段：`version`、`method`、`url`、`timeout_ms`、`max_response_bytes`、`max_redirects`、`egress_policy`、`user_agent`。**配置漂移行为**：执行时**从冻结的 `egress_policy` 与冻结上界重建 `ControlledEgress`**，**不使用当前配置**。**DNS 行为**：DNS **有意不冻结** —— 实际连接在执行时由受控 transport 解析并重校验；安全属性是「解析出的地址必须满足被批准的政策」，**不是**「与过期预览一致」。**先认领后生效**：不变 —— 通用 M2C 审批生命周期在派发前持久化认领，故 HTTP 接触只发生在批准之后。 〔四级口径：原篇表述，归属见本节现状复核〕
 - **信任标记（原文）**：抓取到的远端内容是**不可信的外部内容**。目的地策略控制 *Apeireth 连到哪里*，**不控制远端服务器说什么**。prompt-injection 治理仍是**独立的上下文/输入安全层**。
 - **不在范围 / 推迟（原文）**：浏览器、DOM、JavaScript、cookie、POST/body、带认证的 HTTP、二进制下载、PDF 解析、HTML 提取、Markdown 转换、爬虫、robots、持久 HTTP 会话、MCP HTTP、文件落盘、内容溯源。
 - **安全措辞（原文，冻结）**：本能力提供的是**策略强制的目的地校验 + DNS 钉扎的受控 transport + 重定向目标重校验**；**它不被宣传为「SSRF-proof」**。

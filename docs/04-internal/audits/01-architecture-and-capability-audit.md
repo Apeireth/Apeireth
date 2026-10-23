@@ -35,7 +35,7 @@
 ### 结论（原文要点保留）
 
 - **规模与形态**：v1 = 105 crate 的「伙伴器官」聚合（donor 77 / archived 15 / frozen 13）；v2 = 18 crate 的微内核 + 显式装配（PluginRegistry + CapabilityRegistry + Runtime）；治理由 v1 的 5 重守门 + PermissionPack 变为 GovernanceHook 三态 + 3 hook 生产常挂 + 会话级权限预设三态。
-- **按域对账**（定性：✅已实现 / 🟡部分 / ⛔明确延期 / 🔴0 装 / 🔒LOCKED / 🖥️待硬件）：
+- **按域对账**（定性：✅已实现 / 🟡部分 / ⛔明确延期 / 🔴0 装 / 🔒LOCKED / 🖥️待硬件）： 〔四级口径：原篇表述，归属见本节现状复核〕
 
 | 域 | 要点（定性） |
 |---|---|
@@ -54,7 +54,7 @@
 - **§7 源码级复核（四审 / 五审 / 六审）**：
   - **§7.1 库级已实现未接生产**（原 14 项 + 二次 / 三次复核）：partner、principles、diary/daily_summary/cross_diary、consolidation/dreaming、memory_injection、meta_thinking、intent_brier/confidence/calibration、reflexion、topic_predictor/proactive_recall、morphology、education、worktree_sandbox、BM25 混合检索、吸收批 4 件 —— **接线状态实测**：绝大多数在 runtime-assembly / cli 中引用数为 0 ⇒ IMPLEMENTED ✅ / PRODUCTION WIRED ❌；`context_rot` = 3 处引用（WIRED + DEFAULT ENABLED）；`proactive_recall` = 13 处（WIRED 但 DEFAULT 关闭，且**全仓无 `APEIRETH_*` 旋钮可开**）。**W2 线终局（2026-10-10）**：接线 6 项（dreaming/diary、partner、morphology、education、吸收批 4 件）均 WIRED + DEFAULT OFF + 带逃生门；`principles` **有意不接**（P2 生产接线禁令自证）；`worktree_sandbox` 接好线等主角；`topic_predictor`、`intent_brier/confidence/calibration` 维持未接（归守夜人批）。
   - **§7.2 仍为真缺口（legacy 源码级核验后的修正）**：community（v1 真有社群检测 + 确定性摘要 + 测试，真缺口成立）、experiment_field（v1 机制真、真 VM 执行后端 0 装）、真文件/网络沙箱（v1 只有骨架 + 冻结区整 crate 真接 Docker daemon 的混合结论）、SDK 真 HTTP·WS、三洋葱 L3-L5（v1 整 crate 真 + 形式化证明，v2 只有数据模型 + hex 占位）。**反例两条**：`HybridCognitiveRouter`、`ToolSynthesizer` —— **v1 亦无，全树零命中 = 纯愿景项**；`thought_cluster` —— v1 真有，v2 `cluster_store.rs` 是完整改名实现，**从缺口清单移出**。
-  - **§7.3 对结论的修正**：§3.1「0 真实施」应分两级读（真缺口 vs 库级已实现未接线）；主账不仅缺历史批注，其 🔴 清单还**低估 v2**；**0 装纪律双向性**（审计必须源码实证）。**六审收官（2026-10-10）**：W1/W2/W3/W5 四线闭环（16 批，台账 #45–#64），**剩余真缺口 = 0**；剩余工作均为需外部条件或专门批次的中件。
+  - **§7.3 对结论的修正**：§3.1「0 真实施」应分两级读（真缺口 vs 库级已实现未接线）；主账不仅缺历史批注，其 🔴 清单还**低估 v2**；**0 装纪律双向性**（审计必须源码实证）。**六审收官（2026-10-10）**：W1/W2/W3/W5 四线闭环（16 批，台账 #45–#64），**剩余真缺口 = 0**；剩余工作均为需外部条件或专门批次的中件。 〔四级口径：原篇表述，归属见本节现状复核〕
 - **附录 A（v2 逐 crate 源码清单，2026-10-06 复核）**：18 crate 职责与公开入口、逐域能力状态（真实现 / 部分 / stub）、测试形态（92 个 `tests/*.rs` 文件；`#[ignore]` 47 处全集中于需真 key / 真硬件的 E2E）、源码内部不一致（`plugin/src/organ.rs` 的 9-organ 状态表是陈旧遗留，engine 侧为权威）。
 - **§8.5 自我限制**：只覆盖 `crates/` 现役 crate；「真实现」= 库级代码路径存在且自洽，真机点击流验证以 [live-verification-ledger.md](../live-verification-ledger.md) 为准；行号取自 2026-10-06 工作树，检索以符号名为准。
 
@@ -80,10 +80,10 @@
 
 | # | 缺口 | v1 真的做成了吗 | v2 现状（2026-10-10） | 工作量 | 建议序 |
 |---|---|---|---|---|---|
-| 5 | `thought_cluster` 思维簇 | ✅ 真，且 **v2 已实现**（`cluster_store.rs` 改名件） | 库级缺口闭合，欠生产接线 | S | 1 |
-| 1 | `community` 社群识别与分诊 | ✅ 真（检测算法 + 确定性摘要 + 测试） | ✅ 已实现（`memory/community.rs` 三件 + 9 测，台账 #57）+ ✅ 生产消费已接线（all_facts 契约扩展 + 检索前置，台账 #64） | M | 2 |
+| 5 | `thought_cluster` 思维簇 | ✅ 真，且 **v2 已实现**（`cluster_store.rs` 改名件） | 库级缺口闭合，欠生产接线 | S | 1 〔四级口径：原篇表述，归属见本节现状复核〕 |
+| 1 | `community` 社群识别与分诊 | ✅ 真（检测算法 + 确定性摘要 + 测试） | ✅ 已实现（`memory/community.rs` 三件 + 9 测，台账 #57）+ ✅ 生产消费已接线（all_facts 契约扩展 + 检索前置，台账 #64） | M | 2 〔四级口径：原篇表述，归属见本节现状复核〕 |
 | 6 | `onering` 账本 | ✅ 真（318 行 + 8 测试） | ✅ 本体早已在 v2（`context_ledger.rs` = companion ledger 打捞，API 同构）+ 补生产消费（台账 #58） | M | 3 |
-| 2 | `experiment_field` 隔离实验场 | 🟡 机制真、真 VM 执行后端 0 装 | ✅ 机制已实现（状态机 + VMRunner 口 + Noop 诚实 Err + 回滚学习 sink，台账 #59） | M | 4 |
+| 2 | `experiment_field` 隔离实验场 | 🟡 机制真、真 VM 执行后端 0 装 | ✅ 机制已实现（状态机 + VMRunner 口 + Noop 诚实 Err + 回滚学习 sink，台账 #59） | M | 4 〔四级口径：原篇表述，归属见本节现状复核〕 |
 | 7 | 真文件/网络沙箱 | ❌ v1 也只有骨架（seccomp / JobObject / netns / WFP 全是 TODO / Noop） | v2 进程树遏制已反超 v1 | L | 5 |
 | 9 | 三洋葱 L3-L5 | 🟡 层模型 + 判定真、无物理执行面 | v2 有数据模型 + hex 占位签名 | L | 6 |
 | 3 | `HybridCognitiveRouter` | ❌ 不存在 | 无 | XL | 8 |
@@ -186,11 +186,11 @@
 | `tool.fetch` | 旋钮开 → 注册 + grant + 每次审批；受控 egress 默认 PublicInternetOnly | 关 | ✅ enable_fetch | ✅ 一致 |
 | `cognitive.organs` | `APEIRETH_ENABLE_ORGANS=1` → OrganModule（fail-open） | 关 | ✅ enable_organs | ✅ 一致 |
 | `cognitive.judge` / `cognitive.council` | 各自 `APEIRETH_COGNITIVE_*=1`（council ≤7 advisor，10s/60s） | 关 | ✅ 各一 | ✅ 一致 |
-| `cognitive.preference_learning` | `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`（2026-09-08 已接线） | 关 | ✅ preferenceLearning | ✅ 一致 |
+| `cognitive.preference_learning` | `APEIRETH_ENABLE_PREFERENCE_LEARNING=1`（2026-09-08 已接线） | 关 | ✅ preferenceLearning | ✅ 一致 〔四级口径：原篇表述，归属见本节现状复核〕 |
 | memory_recall / memory_writeback / self_assessment / Experience 提炼 | 恒开（backends 恒 Some，无旋钮） | ✅ 开 | 无需 | ✅ 一致 |
 | 3 治理 hook（权限 / 凭据披露 / 提示注入） | 生产恒挂 | ✅ | 无需 | ✅ 一致 |
 | 敏感路径保护（.env/.ssh/.aws/.gnupg/.secret 屏蔽） | 恒开 | ✅ | 无需 | ✅ 一致 |
-| 会话级权限预设 read_only/standard/full | 已实现（PermissionPresetGovernanceHook 接生产管线） | standard | ✅ 会话内选择器 | ✅ 一致 |
+| 会话级权限预设 read_only/standard/full | 已实现（PermissionPresetGovernanceHook 接生产管线） | standard | ✅ 会话内选择器 | ✅ 一致 〔四级口径：原篇表述，归属见本节现状复核〕 |
 | 设置页「全局默认预设」 | **未接会话创建**（仅 localStorage） | — | ✅ 下拉（无实效） | ⚠️ UI 有旋钮后端不生效 |
 | trust tier 信任分级 | **缺失** | — | ❌ | ⚠️ 文档设计了未实现 |
 | 审批频率限制 / 免审批黑名单 | **缺失** | — | ❌ | ⚠️ 同上 |
@@ -198,7 +198,7 @@
 | 会话创建时快照冻结旋钮 | **无**（旋钮全局即时生效） | — | ❌ | ⚠️ 同上 |
 
 - **组合根事实（5 条）**：工具层（filesystem/search/repo 恒注册；shell/fetch 需显式 options）；治理层（恒 grant `tool.repo`；`APEIRETH_ENABLE_LOCAL_READ_TOOLS=1` 才 grant filesystem/search；shell/fetch = grant + 每次审批；未知 capability default-deny）；认知模块（四旋钮默认关，记忆 / 自评 / 经验提炼恒开且默认无额外模型成本）；Council 用独立 LLM factory（多厂商回退 → Noop 兜底）；审批生命周期 TTL 5 分钟、at-most-once、Deny ≠ RequireApproval（三态）。
-- **关键文档矛盾（7 条）**：①只读工具口径漂移（文档说「默认注册 3 个只读工具」，实际永远 Deny）；②某 provider 的 key 变量名两套；③crate 数 13/16/17 并存（同一文件内两值）；④canonical 网关路由口径相反（「仅 5 路由」vs「全部已实现」）；⑤`cognitive.self_assessment` 默认态（「OFF by default」vs「WIRED Judge-backed」）；⑥L0 是否已硬实现；⑦其余 20+ 处（v1 遗留 / 时间演进）。
+- **关键文档矛盾（7 条）**：①只读工具口径漂移（文档说「默认注册 3 个只读工具」，实际永远 Deny）；②某 provider 的 key 变量名两套；③crate 数 13/16/17 并存（同一文件内两值）；④canonical 网关路由口径相反（「仅 5 路由」vs「全部已实现」）；⑤`cognitive.self_assessment` 默认态（「OFF by default」vs「WIRED Judge-backed」）；⑥L0 是否已硬实现；⑦其余 20+ 处（v1 遗留 / 时间演进）。 〔四级口径：原篇表述，归属见本节现状复核〕
 - **整改批状态（2026-09-12，同批已落地 5 项）**：①只读工具默认可用（默认 grant 与 repo 同待遇，`APEIRETH_DISABLE_LOCAL_READ_TOOLS=1` 为隐私逃生门，旧 ENABLE 兼容且 DISABLE 赢 fail-closed，4 个新测试覆盖语义矩阵）；②全局权限预设接入会话创建（新建会话 / 分支时读 localStorage 默认预设，send() 后静默 PATCH，404 静默重试）；③审批策略预设档（`SessionSettings.approval_remember` + `GovernanceHook::approval_resolved` 回调 + 进程内记忆；standard+remember 把同（会话,工具）的 RequireApproval 改 Allow，**Deny 永不绕过**；桌面会话头 4 档选择器）；④认知深度预设档（轻量/平衡/深度/自定义 映射 judge/council，文案注明延迟与 token 成本）；⑤文档对账修复（key 名统一、crate 数 13→17、canonical 路由口径、self_assessment 默认开、L0 诚实口径）。
 
 ### 现状复核（2026-10-23）

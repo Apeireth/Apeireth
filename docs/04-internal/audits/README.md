@@ -109,7 +109,7 @@
 
 ## 五、本目录的读者路径
 
-- 要判断「某能力今天算不算已接线」→ 01 §1/§6 + 02 §1（抬级取证）+ [claims.yaml](../../status/claims.yaml)。
+- 要判断「某能力今天算不算已接线」→ 01 §1/§6 + 02 §1（抬级取证）+ [claims.yaml](../../status/claims.yaml)。 〔四级口径：原篇表述，归属见本节现状复核〕
 - 要判断「某个安全/治理结论是否还成立」→ 02 §1–§9。
 - 要判断「文档里哪些数字/口径是陈的」→ 03 §1–§4 + [test-baseline.md](../../03-reference/test-baseline.md)。
 - 要查「某模块当前接线在哪」→ [cognitive-module-wiring.md](../cognitive-module-wiring.md)（活账本，不在本目录）。
