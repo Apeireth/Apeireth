@@ -55,6 +55,7 @@ pub mod approval_family;
 pub mod approval_policy;
 pub mod audit;
 // R8 治理单一管线（ADR-0010）：六段治理顺序执行 + 注入端口（多签/审计/反思/时钟）。
+pub mod authorization;
 pub mod chain;
 pub mod colang;
 pub mod eval;
