@@ -211,24 +211,26 @@ def gen_index() -> int:
     doc_files = iter_md(DOCS)
     report_files = iter_md(REPORTS)
     counts = build_ref_counts(doc_files, report_files)
-    # 保留人工标注过的 disposition / target（--gen 不得重置这两列）
+    # 保留人工标注过的列（--gen 不得重置）。
+    # ⚠️ 关键：topic / layer 也要保留 —— 题材分类是人（或代理）判定的，
+    #    启发式 `topic_of()` 只能给初值。若 --gen 覆盖它们，
+    #    每跑一次生成器就擦掉一次人工分类，12 类题材体系会自己烂掉。
     prev = load_index()
     for p in doc_files + report_files:
         rel = p.relative_to(ROOT)
         old_row = prev.get(rel.as_posix(), {})
-        disp = old_row.get("disposition") or "保留"
+        disp = old_row.get("disposition") or ""
         tgt = old_row.get("target") or ""
-        if disp == "保留" and not tgt:
-            if "archive" in rel.parts:
-                disp = "归档"
-            elif p.name == "README.md":
-                disp = "索引"
+        if not disp:
+            disp = "归档" if "archive" in rel.parts else ("索引" if p.name == "README.md" else "保留")
         disp_final, tgt_final = disp, tgt
+        layer_final = old_row.get("layer") or layer_of(rel)
+        topic_final = old_row.get("topic") or topic_of(rel)
         rows.append(
             [
                 rel.as_posix(),
-                layer_of(rel),
-                topic_of(rel),
+                layer_final,
+                topic_final,
                 title_of(p),
                 date_of(p),
                 "现行" if layer_of(rel) in {"L1", "L2", "L3"} else ("在飞" if layer_of(rel) == "L4" else "归档"),
@@ -333,11 +335,58 @@ def report() -> None:
         print(f"    {k:>2} {TOPIC_NAMES.get(k, '?'):8} {by_topic[k]:5}")
 
 
+def health() -> None:
+    """体系自检：让分类体系的失衡**自己浮出来**（而非等人发现）。
+
+    这不是"自我进化"——没人会让文档自己重写自己。能做的是**让漂移可见**：
+    题材空缺（分类体系需要增删）、目录密度失衡（哪里还乱）、
+    豁免表规模（腐化风险面）。有了信号，演进才是有人/有代理在**有依据**地做。
+    """
+    index = load_index()
+    by_topic: dict[str, int] = {}
+    by_layer: dict[str, int] = {}
+    for row in index.values():
+        by_topic[row.get("topic", "?")] = by_topic.get(row.get("topic", "?"), 0) + 1
+        by_layer[row.get("layer", "?")] = by_layer.get(row.get("layer", "?"), 0) + 1
+
+    print("[health] 题材分布（0 篇 = 该题材已空，可考虑并入他类）")
+    for k in sorted(TOPIC_NAMES, key=lambda x: int(x)):
+        n = by_topic.get(k, 0)
+        mark = "  ← 空" if n == 0 else ""
+        print(f"    {k:>2} {TOPIC_NAMES[k]:<10} {n:5}{mark}")
+    extra = sorted(set(by_topic) - set(TOPIC_NAMES) - {"?"})
+    if extra:
+        print(f"    ⚠️ 索引里有表外题材: {extra}（应归入 1-12 之一）")
+
+    print("[health] 层分布")
+    for k in sorted(LAYER_NAMES):
+        print(f"    {k} {LAYER_NAMES[k]:<6} {by_layer.get(k, 0):5}")
+
+    print("[health] 目录密度 TOP 12（.md 数量；密度高 = 导航成本高）")
+    dirs: dict[str, int] = {}
+    for p in (ROOT / DOCS).rglob("*.md"):
+        rel = p.relative_to(ROOT)
+        if "archive" in rel.parts:
+            continue
+        dirs[str(rel.parent)] = dirs.get(str(rel.parent), 0) + 1
+    for k, v in sorted(dirs.items(), key=lambda kv: -kv[1])[:12]:
+        flag = "  ← 偏密" if v > 15 else ""
+        print(f"    {v:5}  {k}{flag}")
+
+    km = ROOT / "docs/_known-missing.tsv"
+    rd = ROOT / "docs/_redirects.tsv"
+    n_km = sum(1 for ln in km.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")) if km.exists() else 0
+    n_rd = sum(1 for ln in rd.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")) if rd.exists() else 0
+    print(f"[health] 豁免表 {n_km} 条（腐化风险面：每条都是门禁放过的一处）")
+    print(f"[health] 重定向表 {n_rd} 条（旧路径 → 新位置的可达性保证）")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="文档索引与分层一致性检查")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--gen", action="store_true")
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--health", action="store_true", help="体系自检：题材/层/目录密度/豁免表规模")
     args = ap.parse_args()
 
     if args.gen:
@@ -345,6 +394,9 @@ def main() -> int:
 
     if args.report:
         report()
+
+    if args.health:
+        health()
 
     if args.check:
         problems = check()

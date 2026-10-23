@@ -47,4 +47,38 @@ if [ $WARN -eq 1 ]; then
   echo "  git commit --no-verify ..."
 fi
 
+# 检查 3: 文档治理门禁（2026-10-23 文档治理批）
+# 目的: 断链 / 链接语法断裂 / 目录缺索引 / 豁免表腐化 —— 在**提交那一刻**就挡住，
+#       而不是等 CI。CI 也会跑同一对脚本（.github/workflows/docs-governance.yml），
+#       两处是同一判据，互为冗余。
+# 判据:
+#   docs_links.py  -> 断链=0、语法断裂=0、豁免表只减不增
+#   docs_index.py  -> 每目录有 README、INDEX 全覆盖、层(L1-L5)与题材(1-12)合法、重定向表自洽
+# 成本: 全树扫描约 2 秒。
+if [ "${APEIRETH_SKIP_DOC_GATES:-0}" != "1" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    echo ""
+    echo "── 文档治理门禁 ──"
+    if ! python3 scripts/docs_links.py --check; then
+      echo ""
+      echo "❌ PRE-COMMIT HOOK BLOCK: 链接门禁未过"
+      echo "   修法: 修好上面列出的断链 / 语法断裂 / 豁免表条目。"
+      echo "   若确认是政策保留的历史引用, 登记到 docs/_known-missing.tsv（5 字段, 含复查日期）。"
+      echo "   临时跳过: APEIRETH_SKIP_DOC_GATES=1 git commit ..."
+      exit 1
+    fi
+    if ! python3 scripts/docs_index.py --check; then
+      echo ""
+      echo "❌ PRE-COMMIT HOOK BLOCK: 索引门禁未过"
+      echo "   常见原因: 目录缺 README.md / INDEX.csv 未覆盖 / 层或题材非法 / 重定向表目标不存在。"
+      echo "   索引生成: python3 scripts/docs_index.py --gen （保留人工标注的 topic/layer/disposition/target）"
+      echo "   临时跳过: APEIRETH_SKIP_DOC_GATES=1 git commit ..."
+      exit 1
+    fi
+    echo "✅ 文档治理门禁通过"
+  else
+    echo "⚠️ WARNING: 无 python3, 跳过文档治理门禁"
+  fi
+fi
+
 exit 0

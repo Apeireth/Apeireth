@@ -57,6 +57,11 @@ def slugify_heading(text: str) -> str:
     return re.sub(r"\s+", "-", text)
 
 
+KNOWN_MISSING_CATEGORIES = {
+    "f02-out", "never-tracked", "v1-moved", "planned", "template", "abbrev", "legacy",
+}
+
+
 def load_known_missing() -> dict[str, str]:
     """已知缺失清单：按仓内政策**故意保留**的历史引用（不计断链）。"""
     path = ROOT / KNOWN_MISSING
@@ -72,6 +77,52 @@ def load_known_missing() -> dict[str, str]:
             if len(parts) >= 2:
                 out[parts[0].strip()] = parts[1].strip()
     return out
+
+
+def audit_known_missing() -> list[str]:
+    """豁免表的**只减不增**棘轮（防自我腐化）。
+
+    豁免表是唯一能让门禁"放过"一处失效链接的机制——若它可以无限增长，
+    迟早会变成"全场豁免"，门禁随之失明。故设三条硬规则：
+
+    1. **准入**：每条必须有 5 个字段（写法/分类/理由/解析路径/**复查日期**），
+       分类必须在白名单内；缺字段 → 门禁红。
+    2. **可清理**：若条目的目标**现在存在了**（已不需要豁免）→ 门禁红，强制摘掉。
+    3. **复查到期**：复查日期早于今天 → 门禁红（豁免不得永久存在）。
+
+    与仓内既有的 `scripts/doc-caliber-baseline.txt` 同一范式：**基线只减不增**。
+    """
+    problems: list[str] = []
+    path = ROOT / KNOWN_MISSING
+    if not path.exists():
+        return problems
+    import datetime
+
+    today = datetime.date.today()
+    with path.open(encoding="utf-8") as fh:
+        for i, line in enumerate(fh, 1):
+            line = line.rstrip("\n")
+            if not line.strip() or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 5:
+                problems.append(
+                    f"豁免表行 {i} 字段不足 5（写法/分类/理由/解析路径/复查日期）: {parts[0]}"
+                )
+                continue
+            target, cat, _reason, resolved, review = parts[0].strip(), parts[1].strip(), parts[2].strip(), parts[3].strip(), parts[4].strip()
+            if cat not in KNOWN_MISSING_CATEGORIES:
+                problems.append(f"豁免表行 {i} 分类非法: {cat}（白名单: {sorted(KNOWN_MISSING_CATEGORIES)}）")
+            if resolved and (ROOT / resolved).exists():
+                problems.append(f"豁免表行 {i} 目标已存在、豁免可清理，请摘掉: {target}")
+            try:
+                rb = datetime.date.fromisoformat(review)
+            except ValueError:
+                problems.append(f"豁免表行 {i} 复查日期格式非法（应 YYYY-MM-DD）: {review!r}")
+                continue
+            if rb < today:
+                problems.append(f"豁免表行 {i} 复查日期已过（{review}），豁免不得永久存在，请复查并更新: {target}")
+    return problems
 
 
 def load_redirects() -> dict[str, str]:
@@ -141,6 +192,10 @@ def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str
     broken: list[str] = []
     known_hits: list[str] = []
     anchor_warn: list[str] = []
+
+    # 豁免表自身的棘轮（先查，豁免表腐化比断链更危险）
+    for ap in audit_known_missing():
+        broken.append(ap)
 
     md_files = iter_md_files()
 

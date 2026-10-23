@@ -1,0 +1,52 @@
+name: Docs governance (链接/索引/豁免棘轮)
+
+# 文档治理门禁（2026-10-23 文档治理批）。
+#
+# 为什么单独一条：docs-truth 管的是"**内容真源**"（claims/STATUS/徽章是否与源码一致），
+# 本条管的是"**文档体系自身**"——链接是否可达、目录是否有索引、层与题材是否合法、
+# 豁免表有没有腐化。两者不可互相替代。
+#
+# 阻塞范围：
+#   - 链接断链（live 口径；archive 内部的历史链接不算，那是"历史事实"不是缺陷）
+#   - 链接语法断裂（`[x]target` 缺括号）——这类损坏不是链接，普通链接检查看不见
+#   - 目录缺 README 索引 / INDEX.csv 未覆盖 / 层与题材非法
+#   - 豁免表腐化：字段不全、分类非法、目标已恢复（可清理）、复查日期过期
+#
+# 豁免表棘轮：**只减不增**。豁免是唯一能让门禁放过失效链接的机制，
+# 若它能无限增长，门禁迟早变成"全场豁免"。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'docs/**'
+      - 'reports/**'
+      - 'scripts/docs_links.py'
+      - 'scripts/docs_index.py'
+      - '.github/workflows/docs-governance.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'reports/**'
+      - 'scripts/docs_links.py'
+      - 'scripts/docs_index.py'
+      - '.github/workflows/docs-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 链接完整性（含语法断裂 + 豁免表棘轮）
+        run: python3 scripts/docs_links.py --check
+
+      - name: 索引分层一致性（目录索引 / 覆盖 / 层 / 题材 / 重定向表）
+        run: python3 scripts/docs_index.py --check
+
+      - name: 题材与层的分布（供人工看体系是否失衡；不阻塞）
+        if: always()
+        run: python3 scripts/docs_index.py --report
