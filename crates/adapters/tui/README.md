@@ -193,7 +193,7 @@ LINK OK http://127.0.0.1:8080 │ MODEL demo │ CTX ▰▰▰▱▱▱▱▱ 12
 ## 测试
 
 `cargo test -p apeireth-tui` —— 测试数以
-[test-baseline.md]../../../docs/03-reference/test-baseline.md)
+[docs/03-reference/test-baseline.md](../../../docs/03-reference/test-baseline.md)
 为单一真源 (此处不抄写), 覆盖:
 面板状态渲染、命令解析与补全、会话管理命令链路 (mock 后端全程证据链)、
 快捷键表、两段式退出、连接失败即帧、reduced-motion 档、驾驶舱氛围 tokens

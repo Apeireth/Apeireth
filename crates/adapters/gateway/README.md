@@ -6,5 +6,5 @@ Apeireth 1.0 工作区 crate。src 模块 10 个: auth / gateway / guard_bridge 
 
 ## 文档
 
-- 架构: [architecture.md]../../../docs/01-architecture/architecture.md)
-- 索引: [crates.md]../../../docs/03-reference/crates.md)
+- 架构: [docs/01-architecture/architecture.md](../../../docs/01-architecture/architecture.md)
+- 索引: [docs/03-reference/crates.md](../../../docs/03-reference/crates.md)

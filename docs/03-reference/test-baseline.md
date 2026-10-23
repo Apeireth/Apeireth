@@ -250,7 +250,7 @@
 
 ## 4. 引用方式
 
-- 其他文档写「测试基线见 [docs/03-reference/test-baseline.md](test-baseline.md)」，
+- 其他文档写「测试基线见 [test-baseline.md](test-baseline.md)」，
   需要具体数字时写「（2026-10-18 口径，详见 test-baseline.md）」并注明日期。
 - 徽章等必须内联数字的场合：数字取本文件 §1，并保持与本文件同步刷新。
 

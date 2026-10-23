@@ -1,7 +1,7 @@
 # ADR — 架构决策记录（Architecture Decision Records）
 
 > `Status: 📝 v0.1 草案（2026-10-20）`
-> 依据：架构契约体系（[docs/architecture/README.md](../architecture/README.md)）。
+> 依据：架构契约体系（[../architecture/README.md](../architecture/README.md)）。
 > 本目录**只增不改**：新决策取代旧决策时，新 ADR 的 `Supersedes` 指旧 ADR，旧 ADR 保留原样。
 
 ## 什么时候必须写 ADR

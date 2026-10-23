@@ -59,6 +59,6 @@ packaging/
 .\packaging\test-packaging.ps1
 ```
 
-For complete lifecycle details (install, upgrade, repair, uninstall), see [windows-packaging-lifecycle.md]../docs/packaging/windows-packaging-lifecycle.md).
+For complete lifecycle details (install, upgrade, repair, uninstall), see [docs/packaging/windows-packaging-lifecycle.md](../docs/packaging/windows-packaging-lifecycle.md).
 
-Release asset verification & signing (SHA-256 manifest check + honest signature status; publisher & user flows): see [release-asset-verification.md]../docs/packaging/release-asset-verification.md) and `scripts/verify-release-assets.ps1`.
+Release asset verification & signing (SHA-256 manifest check + honest signature status; publisher & user flows): see [docs/packaging/release-asset-verification.md](../docs/packaging/release-asset-verification.md) and `scripts/verify-release-assets.ps1`.

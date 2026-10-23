@@ -116,6 +116,18 @@ def in_archive(rel: Path) -> bool:
     return any(part == "archive" for part in rel.parts)
 
 
+# 断裂的 markdown 链接语法：`[label]target` —— 缺 `(` 与 `)`。
+# 这类损坏**根本不是链接**，普通链接检查看不见它（2026-10-23 因此漏检 48 处 / 26 个文件）。
+#
+# 排除规则：目标**不得以 `-` 开头**。真链接目标不会以 `-` 起；而模板占位符
+# （如 `r12-[项名]-implementation-2026-08-28.md`）恰以 `-` 起，据此区分，避免误报。
+BROKEN_SYNTAX_RE = re.compile(
+    r"\[([^\]\n]{1,140}?)\]"                        # 标签
+    r"([\w./][\w./\-]*\.(?:md|rs|ts|tsx|py|yml|yaml|toml|ps1|sh))"  # 紧跟其后的路径
+    r"(?![\w/])"                                    # 后面不能再接路径字符
+)
+
+
 def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str]]:
     """scope='live'：只检查活文档内部的链接（archive 内的历史链接不算断链）。
 
@@ -143,6 +155,13 @@ def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str
         # 去掉代码块，避免把示例里的路径当真链接
         text = re.sub(r"```.*?```", "", text, flags=re.S)
         text = re.sub(r"`[^`\n]*`", "", text)
+
+        # 断裂的链接语法（`[label]target`）——必须在剥离反引号**之后**查：
+        # 这类损坏恰恰常发生在原本被反引号包裹的路径上。
+        for bm in BROKEN_SYNTAX_RE.finditer(text):
+            broken.append(
+                f"{rel_md} -> [{bm.group(1)}]{bm.group(2)}  (链接语法断裂：缺 `(` 与 `)`)"
+            )
 
         targets: list[str] = []
         for m in LINK_RE.finditer(text):
