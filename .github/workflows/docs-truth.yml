@@ -6,26 +6,20 @@ name: Docs truth (P1c blocking)
 #   - STALE（源码动过而 verified_at 未更新）= 红（changed-claim 阻塞）；
 #   - REVIEW_DUE 只提示不阻塞；生成物/徽章 drift = 红。
 
+# **无 paths filter —— 每次 push/PR 都跑**。
+#
+# 原因（2026-10-23 修）：本 workflow 是 **required check**，而 GitHub 的规则是
+# 「required check 必须永远有结论」。带 paths filter 时，改动落在 filter 之外
+# （例如只改 `scripts/*.sh`）的 PR 上，这个 check **根本不会触发**，
+# PR 会永远停在 "Expected — Waiting for status to be reported"，无法合并。
+#
+# 代价很小：脚本体是 `python3 scripts/docs_truth.py --verify --block-stale`
+# （git diff + 文件检查，秒级），远小于其它 required check。
+# 语义也更对：claims 是唯一真源，**任何**改动都该验一次它与现实是否一致。
 on:
   push:
     branches: [master, main]
-    paths:
-      - 'docs/status/**'
-      - 'docs/**'
-      - 'frontend/companion-desktop/**'
-      - 'scripts/docs_truth.py'
-      - 'scripts/wiring_report.py'
-      - 'scripts/verify_ledger.py'
-      - 'crates/**'
   pull_request:
-    paths:
-      - 'docs/status/**'
-      - 'docs/**'
-      - 'frontend/companion-desktop/**'
-      - 'scripts/docs_truth.py'
-      - 'scripts/wiring_report.py'
-      - 'scripts/verify_ledger.py'
-      - 'crates/**'
   workflow_dispatch:
 
 permissions:
