@@ -924,6 +924,17 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        // 教训对象（Lesson）只读出口：四拍状态分列（L2 首口，防 L1 变成孤儿 API）。
+        "lessons" => match apeireth_cli::lessons_command::run_lessons(&args[1..]) {
+            Ok(summary) => {
+                println!("{summary}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("lessons operation refused: {error}");
+                ExitCode::FAILURE
+            }
+        },
         // B6 会话/记忆静态加密（隐患 #6）密钥面：wrap / recovery-export / unlock
         // 三动词（分区 DEK 包裹 + 恢复件导出 + 解锁自检；密钥丢失 = 显式不可恢复）。
         "crypto" => match apeireth_cli::crypto_keys::run_crypto(&args[1..]) {

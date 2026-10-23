@@ -254,6 +254,8 @@ async fn memory_ledger_counts_match_the_real_stores_without_echoing_content() {
                 .freshness_status()
                 .map_err(|error| format!("freshness status query failed: {error}"))?;
             Ok(MemoryLedgerStats {
+                verified_lessons: Some(0),
+                candidate_lessons: Some(0),
                 sessions: Some(counts.sessions),
                 memories: Some(counts.memories),
                 protected: Some(counts.protected),

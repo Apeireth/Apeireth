@@ -73,6 +73,7 @@ pub mod mcp;
 // 每服务器一连接 (生命周期 + 断线重连后重发现) + 动态工具 (mcp:<server>:<tool>,
 // 调用穿五段流水线) + 外部工具治理映射 (默认审批级, 只读预设可放行)。
 pub mod mcp_bridge;
+pub mod memory_ledger_view;
 // Recon Suite 骨架：Evidence 信封 + 授权 Scope + 平台元数据（原生工具共享底座）。
 pub mod recon;
 // 外部适配器：nmap / exiftool / tshark / yara / binwalk / radare2 / jadx / apktool /

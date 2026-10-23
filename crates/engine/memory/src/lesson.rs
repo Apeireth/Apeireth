@@ -145,6 +145,17 @@ pub struct Lesson {
     pub updated_at: i64,
 }
 
+/// 各状态教训计数（自述面只读）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LessonCounts {
+    /// 已验证（可被召回）。
+    pub verified: u64,
+    /// 候选（未验证，不注入上下文）。
+    pub candidate: u64,
+    /// 已撤回（留痕，不注入）。
+    pub retracted: u64,
+}
+
 /// 新建候选教训的入参。
 #[derive(Debug, Clone)]
 pub struct NewLesson {
@@ -420,6 +431,30 @@ impl SqliteMemoryStore {
             )
             .map_err(storage)?;
         rows.map(|row| row.map_err(storage)).collect()
+    }
+
+    /// 各状态教训计数（自述面用：verified / candidate / retracted 分列）。
+    pub fn count_lessons_by_status(&self) -> Result<LessonCounts, LessonError> {
+        let conn = self.conn().map_err(storage)?;
+        let mut counts = LessonCounts::default();
+        let mut statement = conn
+            .prepare("SELECT status, COUNT(*) FROM lessons GROUP BY status")
+            .map_err(storage)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .map_err(storage)?;
+        for row in rows {
+            let (status, count) = row.map_err(storage)?;
+            let count = count.max(0) as u64;
+            match LessonStatus::parse(&status)? {
+                LessonStatus::Verified => counts.verified = count,
+                LessonStatus::Candidate => counts.candidate = count,
+                LessonStatus::Retracted => counts.retracted = count,
+            }
+        }
+        Ok(counts)
     }
 
     /// 上下文注入面：**只取已验证**（候选不注入，撤回的不再注入）。
