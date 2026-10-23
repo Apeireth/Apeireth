@@ -1,5 +1,19 @@
 # 文档重定向表：旧路径 -> 新路径（文档治理批自动维护）
 # 格式：旧路径<TAB>新路径（均仓库相对）
+docs/01-architecture/m1a-canonical-storage-foundation.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m1b1-memory-foundation.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m1b2-memory-retrieval.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m1b3-vector-graph.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m1c-governance-donor-primitives.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m2a-simple-tool-ports.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m2b-process-containment.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m2b-x-cross-platform-isolation.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m2c-approval-resume-lifecycle.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m2c-shell-readiness-review.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m2c-trusted-shell.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m2d-network-egress-enforcement.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/m3a-canonical-fetch.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
+docs/01-architecture/master-functionality-port-audit.md	docs/04-internal/history/01-reconstruct-v2-stage-record.md
 docs/04-internal/HANDOFF-NOTES.md	docs/03-reference/team-handover-reference.md
 docs/04-internal/TO-NEW-TEAM.md	docs/03-reference/team-handover-reference.md
 docs/04-internal/backlog.md	docs/04-internal/backend-enhancement/00-backlog.md
