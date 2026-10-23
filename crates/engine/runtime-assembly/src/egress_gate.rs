@@ -16,11 +16,13 @@
 //! 脱敏会改写请求内容 —— 那是**行为变化**，不是「更安全的默认值」。
 //! 因此闸由 env 显式开启（`APEIRETH_ENABLE_EGRESS_GATE`），关时逐字节零变化。
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use apeireth_protocol::canonical::{ContentPart, NormalizedRequest, NormalizedResponse};
 use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict};
 use apeireth_tools_canonical::redaction_bridge::RedactionBridge;
+
+use crate::egress_ledger::{EgressLedger, EgressLedgerEntry};
 
 /// 出网闸开关 env（未设 / 非 `"1"` = 关，fail-closed 于「开启侧」）。
 pub const EGRESS_GATE_ENV: &str = "APEIRETH_ENABLE_EGRESS_GATE";
@@ -30,21 +32,35 @@ pub const EGRESS_GATE_ENV: &str = "APEIRETH_ENABLE_EGRESS_GATE";
 /// 线程安全：`RedactionBridge` 内部有本会话登记簿（真值驻留处），用互斥量串行化。
 pub struct RedactionEgressGate {
     bridge: Mutex<RedactionBridge>,
+    /// 出域账本（承诺措辞里「记录已知流向」的载体；零真值、append-only）。
+    ledger: Arc<EgressLedger>,
 }
 
 impl RedactionEgressGate {
-    /// 新建闸（新会话键 = 新登记簿）。
+    /// 新建闸（新会话键 = 新登记簿），账本走内存（不持久）。
     pub fn new() -> Self {
-        Self {
-            bridge: Mutex::new(RedactionBridge::new_session()),
-        }
+        Self::with_ledger(Arc::new(EgressLedger::new(None)))
     }
 
     /// 用指定会话键新建（同一会话的占位恒同、跨会话换别名）。
     pub fn with_session_key(session_key: [u8; 32]) -> Self {
         Self {
             bridge: Mutex::new(RedactionBridge::with_session_key(session_key)),
+            ledger: Arc::new(EgressLedger::new(None)),
         }
+    }
+
+    /// 用指定账本新建（生产接线：账本落盘）。
+    pub fn with_ledger(ledger: Arc<EgressLedger>) -> Self {
+        Self {
+            bridge: Mutex::new(RedactionBridge::new_session()),
+            ledger,
+        }
+    }
+
+    /// 出域账本（只读引用）。
+    pub fn ledger(&self) -> &Arc<EgressLedger> {
+        &self.ledger
     }
 
     /// 本次判定是否改写了内容。
@@ -53,6 +69,33 @@ impl RedactionEgressGate {
             .lock()
             .map(|bridge| bridge.registered_values() > 0)
             .unwrap_or(false)
+    }
+}
+
+impl RedactionEgressGate {
+    /// 记一行出域账本。
+    fn record(
+        &self,
+        verdict: &str,
+        hits: &[apeireth_tools_canonical::redaction_bridge::RedactionHit],
+        destination: &str,
+        usage: &str,
+        reason: Option<String>,
+    ) {
+        let entry = EgressLedgerEntry {
+            ts_unix_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0),
+            session: None,
+            verdict: verdict.to_string(),
+            objects: hits.iter().map(|hit| format!("{:?}", hit.kind)).collect(),
+            fingerprints: hits.iter().map(|hit| hit.fingerprint.clone()).collect(),
+            destination: destination.to_string(),
+            usage: usage.to_string(),
+            reason,
+        };
+        self.ledger.append(entry);
     }
 }
 
@@ -86,20 +129,26 @@ impl EgressGate for RedactionEgressGate {
         };
         let mut replaced = request.clone();
         let mut any_hit = false;
+        let mut hits = Vec::new();
         for message in &mut replaced.messages {
             for part in &mut message.content {
                 if let ContentPart::Text { text } = part {
                     let redaction = bridge.redact_for_egress(text);
                     if !redaction.hits.is_empty() {
                         any_hit = true;
+                        hits.extend(redaction.hits);
                         *text = redaction.text;
                     }
                 }
             }
         }
+        // 出域账本：每次判定记一行（**零真值**：只记对象类型与指纹）。
+        // 记账失败**不阻断出网**（账本是观测面，不是闸）。
         if any_hit {
+            self.record("redacted", &hits, "provider", "chat", None);
             EgressVerdict::Redacted(replaced)
         } else {
+            self.record("pass", &[], "provider", "chat", None);
             EgressVerdict::Pass
         }
     }
@@ -225,6 +274,27 @@ mod tests {
             "未登记占位应原样留痕: {}",
             response.content
         );
+    }
+
+    /// 出网闸每次判定都记一行（零真值：只有对象类型与指纹）。
+    #[test]
+    fn gate_records_every_verdict_into_the_ledger() {
+        let ledger = std::sync::Arc::new(crate::egress_ledger::EgressLedger::new(None));
+        let gate = RedactionEgressGate::with_ledger(ledger.clone());
+
+        // 一次无命中的判定。
+        let _ = gate.vet(&request_with("今天天气不错"));
+        // 一次有命中的判定。
+        let _ = gate.vet(&request_with("联系 alice@example.com 就行"));
+
+        let entries = ledger.entries();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].verdict, "pass");
+        assert_eq!(entries[1].verdict, "redacted");
+        assert!(!entries[1].objects.is_empty(), "应有对象类型");
+        // 零真值：账本里没有原文。
+        let raw = format!("{:?}", entries);
+        assert!(!raw.contains("alice@example.com"), "账本不得含真值: {raw}");
     }
 
     #[test]
