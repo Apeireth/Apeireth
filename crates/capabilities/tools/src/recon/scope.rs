@@ -197,11 +197,27 @@ mod tests {
         let inside = root.join("sample.bin");
         std::fs::write(&inside, b"demo").expect("write sample");
 
+        // 跨平台：目录外路径必须**真实存在**。
+        // 原来写死 Unix 的 `/etc/hostname`：Windows 上它不是绝对路径、macOS 上该文件
+        // 也不保证存在 → `canonicalize` 失败会返回 `Unresolvable` 而不是 `Outside`，
+        // 于是三平台里只有 Linux 过（2026-10-23 CI 抓到）。
+        let outside_root = std::env::temp_dir().join(format!(
+            "apeireth-scope-outside-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&outside_root).expect("outside dir");
+        let outside = outside_root.join("outside.bin");
+        std::fs::write(&outside, b"demo").expect("write outside");
+
         let scope = demo_scope(&root);
         scope.validate().expect("valid scope");
         assert!(scope.check_path(&inside).is_ok());
         assert!(matches!(
-            scope.check_path(Path::new("/etc/hostname")),
+            scope.check_path(&outside),
             Err(ScopeError::Outside(_))
         ));
 
@@ -225,6 +241,7 @@ mod tests {
             .is_ok());
 
         std::fs::remove_dir_all(&root).ok();
+        std::fs::remove_dir_all(&outside_root).ok();
     }
 
     #[test]
