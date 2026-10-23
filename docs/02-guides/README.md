@@ -34,6 +34,7 @@
 | 文件 | 读它做什么 |
 |---|---|
 | `user-manual.md` | 用户手册（功能详解 / FAQ） |
+| `data-and-privacy.md` | **数据与隐私**（数据流向 / 留存 / 出网边界 / 你的权利）|
 | `self-insight-channel.md` | 自述通道（系统如何向你报告自己） |
 | `permission-surfaces.md` | 权限面边界（三层区分 + 超时杀进程） |
 | `core-mechanisms-explained.md` | 核心机制讲解 |
