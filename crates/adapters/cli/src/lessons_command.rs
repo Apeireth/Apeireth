@@ -85,7 +85,10 @@ mod tests {
     #[test]
     fn usage_is_reported_without_a_database() {
         let error = run_lessons(&[]).expect_err("缺 db 必须报用法");
-        assert!(error.contains("--db") && error.contains("apeireth lessons"), "{error}");
+        assert!(
+            error.contains("--db") && error.contains("apeireth lessons"),
+            "{error}"
+        );
     }
 
     #[test]
