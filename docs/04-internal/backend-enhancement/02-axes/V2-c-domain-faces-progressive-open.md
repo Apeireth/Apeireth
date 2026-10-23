@@ -6,9 +6,9 @@
 > 管理面保持全局而审计带域标注。
 > 战场：`crates/adapters/gateway`（panels.rs / task_panel.rs / canonical_entry.rs /
 > domain_context.rs / events.rs / client_tokens.rs / user_admin.rs / domain_admin.rs）。
-> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))；
-> 前置卷：[W3-3-domain-partner-instances.md](../W3-3-domain-partner-instances.md))（残余表 §7）
-> 与 [W3-1-multi-user-data-isolation.md](../W3-1-multi-user-data-isolation.md))（W3-① 同帧契约）。
+> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md)；
+> 前置卷：[W3-3-domain-partner-instances.md](../W3-3-domain-partner-instances.md)（残余表 §7）
+> 与 [W3-1-multi-user-data-isolation.md](../W3-1-multi-user-data-isolation.md)（W3-① 同帧契约）。
 > 诚实条款：本批只开**只读**面板面 + 审批归属域 + 管理面审计标注；面板族写面与其余面
 > 仍按域闸 fail-closed（见 §1 矩阵"仍拒"行）；域开通即时生效 / 归档面逐域分库 /
 > 任务与授权行的域归属标注为如实残余（§6）。本批为**接棒批**：前任施工中道猝死于

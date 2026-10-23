@@ -135,7 +135,7 @@
   202 套件 / 5589 passed / 0 failed / exit 0，套件差为并行线新增测试目标）。
   含本批新增 `organ/tests/care.rs` + `runtime-assembly/tests/care_output_face.rs`
   两套件。测试基线真源见
-  [test-baseline.md](../../03-reference/test-baseline.md))，
+  [test-baseline.md](../../03-reference/test-baseline.md)，
   本批不代改真源，只报实测值。
 - `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` = **0 警告，
   exit 0**；`cargo fmt --all -- --check` = **0 diff，exit 0**（并行线在途期间的

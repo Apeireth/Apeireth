@@ -4,7 +4,7 @@
 > 一事：桌面/TUI/IM/web 多端同时在线同一个后端 —— 并发会话路由（事件扇出）、
 > 同会话并发写语义（串行化回合）、会话归属面（`gateway.session_client`）、面板读快照一致性。
 > 范围口径：F 轴 P2/P3 会话复用面（F-server-form.md「多客户端复用 + 会话并发安全」缺口）；
-> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))；战场：`crates/adapters/gateway/**` +
+> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md)；战场：`crates/adapters/gateway/**` +
 > `crates/engine/runtime/src/canonical/session.rs`（禁区零触碰，见 §7）。
 
 ## 1. 并发语义决策：同会话并发回合 = **排队 + 审计**（钉死，不用 busy 帧）

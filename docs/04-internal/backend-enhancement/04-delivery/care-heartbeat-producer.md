@@ -1,7 +1,7 @@
 # V3-a 收尾 · 常驻心跳关怀生产者 — 交付说明（生产者时序图 + 测试证据）
 
 > `Status: ✅ 本批交付（2026-10-17 施工收卷）`
-> 承接 [V3a-dual-engine-care.md](../V3a-dual-engine-care.md)) §7 0 装诚实点名的最后一针:
+> 承接 [V3a-dual-engine-care.md](../V3a-dual-engine-care.md) §7 0 装诚实点名的最后一针:
 > 关怀内核已备、缺定时生产者 —— 本批把常驻心跳生产者接到
 > `canonical::heartbeat` 调度缝 + runtime-assembly 装配上, 让「它会想起你」的
 > 生产者面真的自动发生 (开关 `APEIRETH_ENABLE_CARE_HEARTBEAT` 注册即闸)。
@@ -134,7 +134,7 @@
   `cargo fmt --all -- --check` 的收卷状态见 §6 (施工中途两线在途红已由归口线
   自检收敛, 归属与快照如实登记)。
 - `scripts/check-neutral-terms.ps1` = OK 零命中 (34 个变更文件全中性)。
-- 测试基线真源见 [test-baseline.md](../../../03-reference/test-baseline.md)),
+- 测试基线真源见 [test-baseline.md](../../../03-reference/test-baseline.md),
   本批不代改真源, 只报实测值。
 
 ## 6. 跨范围补位与他人在途（如实报备）

@@ -4,8 +4,8 @@
 > 一事：用户域模型 + 单户兼容采用（零迁移）+ 三面（会话/记忆/配额）按域分库 +
 > 跨域拒绝即帧（404/403 语义）+ 域上下文传递（请求→身份→user_id 域解析→按域路由）+
 > 自述域节。
-> 范围口径：星群架构的地基（星群为骨、共享为翼，[F-server-form.md](../F-server-form.md)) 架构定案）；
-> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))；战场：`crates/foundation/core/src/user_domain.rs`（新增）+
+> 范围口径：星群架构的地基（星群为骨、共享为翼，[F-server-form.md](../F-server-form.md) 架构定案）；
+> 纪律：[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md)；战场：`crates/foundation/core/src/user_domain.rs`（新增）+
 > `crates/engine/runtime/src/canonical/domain_plane.rs`（新增）+ `crates/engine/runtime-assembly/src/{domain_plane.rs（新增）,canonical/self_status_source.rs,canonical/production.rs}` +
 > `crates/capabilities/tools/src/self_status.rs` + `crates/adapters/gateway/src/{domain_context.rs（新增）,session_settings.rs}` +
 > `crates/adapters/cli/src/lib.rs`（禁区零触碰，见 §7）。
@@ -170,7 +170,7 @@ DomainContext 随请求扩展下行 → 会话面按域取写闸 (每域恰一�
 并行批接缝互保（同 W3-② 对本批的报备口径）：`self_status_source.rs` 曾为 J1 内容流节落
 `None` 占位（J1 真接线随后无缝覆盖）、`cli/lib.rs` 装配字面量补 `self_status_content_feed: None`
 占位（J1 探测接线归口）、`tools/src/lib.rs` 自述导出表补本批 `DomainCounts`/`DomainStatus`。
-文档：本文 + [F-server-form.md](../F-server-form.md)) 进度注 + `docs/gateway-api-contract.md` 错误码表。
+文档：本文 + [F-server-form.md](../F-server-form.md) 进度注 + `docs/gateway-api-contract.md` 错误码表。
 
 **残余（如实，不装完成）**：
 

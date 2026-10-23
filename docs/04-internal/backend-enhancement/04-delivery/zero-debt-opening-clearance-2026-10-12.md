@@ -1,6 +1,6 @@
 # 零债开场清偿批（2026-10-12）— 清偿对照表 + 新债登记
 
-> `Status: ✅ 收官（2026-10-12，W1 开工前"零债开场白"，纪律见 [CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))）`
+> `Status: ✅ 收官（2026-10-12，W1 开工前"零债开场白"，纪律见 [CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md)）`
 > 范围：纯清债（登记债逐件清），产品语义零变化、驾驶舱/前端观感零变化。
 > 顺手重构超范围念头一律登记不实施（见 §5）。本文件即 §一.2 "见债必还" 的落账面。
 

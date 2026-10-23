@@ -1,7 +1,7 @@
 # F-02 大资产出库执行批交付报告（2026-10-18）
 
 > `Status: ✅ #1 reports/ 批量日志 878 件已迁出 / ✅ #2 previews/ 34 PNG 走 git-lfs / ✅ #3 guard_ml 4 大 jsonl 已外置 / 🟡 #4 artifacts/ 仅登记（owner 拍板另批，D17 留账）`
-> 执行依据：[audit-gap-caliber-hygiene-2026-10-16.md](../audit-gap-caliber-hygiene-2026-10-16.md)) §4.3 F-02 方案表（**照方案执行，不重议**）。
+> 执行依据：[audit-gap-caliber-hygiene-2026-10-16.md](../audit-gap-caliber-hygiene-2026-10-16.md) §4.3 F-02 方案表（**照方案执行，不重议**）。
 > 实测口径：2026-10-18，工具链 rustc/cargo 1.97.1（MSVC）、git-lfs 3.7.1、bsdtar 3.8.9、pwsh 7；
 > 体积 = `git ls-files` tracked 面 + `Get-Item` 字节数，sha256 = `Get-FileHash -Algorithm SHA256`。
 > 迁移清单（逐件 916 行）：[f-02-migration-manifest-2026-10-18.tsv]../f-02-migration-manifest-2026-10-18.tsv)。
