@@ -63,6 +63,7 @@ pub mod module;
 // The ONE canonical organ-ownership module (AfterTurn post-turn cognition).
 // Long-lived: 7 deterministic organs + OrganOrchestrator backend; transient
 // per invocation: W1/W2 built from ctx.invoker_handle() and dropped.
+pub mod egress_gate;
 pub mod provider;
 pub mod quota;
 pub mod runtime;
@@ -88,6 +89,7 @@ pub use bio_pain::{
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
 pub use domain_plane::{DomainRuntimeContext, DomainRuntimePlane, DomainSessionPlane};
+pub use egress_gate::{AllowAllEgress, EgressGate, EgressVerdict};
 pub use error::{RuntimeError, RuntimeResult};
 pub use event_log::{
     compaction_entries, fold_surface, fork_placeholder, open_tool_calls, ForkRecord, LogEntry,
