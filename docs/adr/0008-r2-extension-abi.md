@@ -11,7 +11,7 @@
 
 ## 1. 背景（2026-10-20 实测，不沿用 2026-10-18 审计数字）
 
-> 逐项清单（alias 矩阵 / 注册表构造点 / 批次 file-level 范围 / 待 owner 问题）见 [../architecture/r2-inventory-2026-10-20.md](../architecture/r2-inventory-2026-10-20.md)。
+> 逐项清单（alias 矩阵 / 注册表构造点 / 批次 file-level 范围 / 待 owner 问题）见 [docs/architecture/r2-inventory-2026-10-20.md](../architecture/r2-inventory-2026-10-20.md)。
 
 `contract.toml [extension_points]` 已登记 6 个扩展点面，`[[extension_debt]]` 记录三条债务（证据见下）：
 
