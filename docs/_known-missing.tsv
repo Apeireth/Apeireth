@@ -8,7 +8,7 @@
 #       template=原文里的模板占位符，不是可点击链接
 #       removed=确已不存在且无归档对应物（需人工确认）
 ../../../artifacts/docs-audit-2026-10-18.md	f02-out	F-02 出库：证据件随 release 资产迁出，git 历史可取回	artifacts/docs-audit-2026-10-18.md
-../legacy/donor/apeireth-protocol	legacy	legacy 目录不入 git 跟踪面（工作区可能不存在）	legacy/donor/apeireth-protocol
+../legacy/donor/apeireth-protocol	legacy	该路径在当前仓与主仓均不存在（legacy/ 不入 git 跟踪面，且该子目录已不在树上）	legacy/donor/apeireth-protocol
 docs/02-guides/llm-provider-config.md	planned	计划中的文件（checklist 第 6 项，配套既有 custom-llm.md），尚未产出——不是坏链	docs/02-guides/docs/02-guides/llm-provider-config.md
 docs/04-internal/borrowed-from-X-2026-08-28.md	template	原文写作里的模板占位符（borrowed-from-X = 任意来源名），不是可点击链接	docs/04-internal/docs/04-internal/borrowed-from-X-2026-08-28.md
 docs/conventions/06-guard-v7.md	v1-moved	v1.0 时代路径，已归档或改址，历史引用名按政策保留	reports/docs/conventions/06-guard-v7.md
