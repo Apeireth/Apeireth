@@ -44,11 +44,7 @@ const MODELS: [ColorMode; 8] =
 /// 需要在动 extrude 内核时单独跑。
 #[test]
 fn swept_blocks_match_the_pixel_search() {
-    sweep_blocks_against_pixel_search(
-        &[ColorMode::Rgb, ColorMode::Cmyk, ColorMode::Lab, ColorMode::Indexed],
-        &[0, 4],
-        &[(2.0, 0.0), (22.0, 255.0)],
-    );
+    sweep_blocks_against_pixel_search(&[ColorMode::Rgb, ColorMode::Cmyk, ColorMode::Lab, ColorMode::Indexed], &[0, 4], &[(2.0, 0.0), (22.0, 255.0)]);
 }
 
 /// 穷举全扫：8 mode × 2 alpha × 5 kind × 6 尺寸 × 8 flags = 3840 组合（本机约 5 分钟）。
@@ -57,11 +53,7 @@ fn swept_blocks_match_the_pixel_search() {
 #[test]
 #[ignore = "穷举 3840 组合约 5 分钟；CI nextest 单测超时会拉红流水线，按需单独跑"]
 fn swept_blocks_exhaustive_matches_the_pixel_search() {
-    sweep_blocks_against_pixel_search(
-        &MODELS,
-        &[0, 1, 2, 3, 4],
-        &[(2.0, 0.0), (2.0, 255.0), (3.5, 190.0), (8.0, 64.0), (22.0, 255.0), (255.0, 100.0)],
-    );
+    sweep_blocks_against_pixel_search(&MODELS, &[0, 1, 2, 3, 4], &[(2.0, 0.0), (2.0, 255.0), (3.5, 190.0), (8.0, 64.0), (22.0, 255.0), (255.0, 100.0)]);
 }
 
 fn sweep_blocks_against_pixel_search(modes: &[ColorMode], kinds: &[usize], sizes: &[(f32, f32)]) {
