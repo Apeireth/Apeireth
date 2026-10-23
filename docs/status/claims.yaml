@@ -168,15 +168,19 @@ claims:
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime/src/canonical/runtime.rs
       - crates/engine/runtime-assembly/src/egress_gate.rs
+      - crates/engine/runtime-assembly/src/egress_ledger.rs
+      - crates/adapters/cli/src/egress_command.rs
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime-assembly/src/egress_gate.rs
+      - crates/engine/runtime-assembly/src/egress_ledger.rs
+      - crates/adapters/cli/src/egress_command.rs
     verified_at: ed268f8fb
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
-    notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**已知未接**：回程还原（restore_for_local）未接 —— 回信占位保持占位（安全侧保守降级，不泄漏）。"
+    notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**回程还原已接**（双闸的闸二）：只还原本会话登记簿登记过的指纹，未登记占位照实留痕；还原只在受控回程面，对出境面不可逆。**出域账本已接**（零真值 append-only JSONL：对象类型/不可逆指纹/目的地/用途）+ CLI 出口 `apeireth egress ledger`（只读；账本若无人可查，「记录已知流向」就是空的）。**仍未接**：对象级用途判定接出网闸、授权策略对象（可携带/可委托/可过期/可追溯）、影响声明与决策回执。"
 
   - id: mem.lesson_object
     title: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
