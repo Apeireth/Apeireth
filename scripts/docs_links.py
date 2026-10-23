@@ -42,6 +42,7 @@ GITHUB_UI_PATHS = {
 NO_INTERNAL_LINK_CHECK = {Path("docs/archive")}
 
 REDIRECTS = Path("docs/_redirects.tsv")
+KNOWN_MISSING = Path("docs/_known-missing.tsv")
 
 # 行内链接：[text](target) —— 允许 <> 包裹与嵌套一层括号
 LINK_RE = re.compile(r"\[(?:[^\]\\]|\\.)*\]\(\s*<?([^)\s>]+)>?(?:\s+[\"'][^)]*[\"'])?\s*\)")
@@ -54,6 +55,23 @@ def slugify_heading(text: str) -> str:
     text = text.strip().lower()
     text = re.sub(r"[^\w\- ]", "", text)
     return re.sub(r"\s+", "-", text)
+
+
+def load_known_missing() -> dict[str, str]:
+    """已知缺失清单：按仓内政策**故意保留**的历史引用（不计断链）。"""
+    path = ROOT / KNOWN_MISSING
+    if not path.exists():
+        return {}
+    out: dict[str, str] = {}
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                out[parts[0].strip()] = parts[1].strip()
+    return out
 
 
 def load_redirects() -> dict[str, str]:
@@ -107,7 +125,9 @@ def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str
     但**从活文档指向 archive 的链接必须可达**——那条在下面照常检查。
     """
     redirects = load_redirects()
+    known = load_known_missing()
     broken: list[str] = []
+    known_hits: list[str] = []
     anchor_warn: list[str] = []
 
     md_files = iter_md_files()
@@ -187,6 +207,10 @@ def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str
                         continue
                     broken.append(f"{rel_md} -> {raw}  (重定向目标不存在: {new_rel})")
                     continue
+                # 已知缺失（按仓内政策故意保留的历史引用）——不计断链，但登记
+                if raw in known or path_part in known:
+                    known_hits.append(f"{rel_md} -> {raw}  (已知缺失: {known.get(raw, known.get(path_part, ''))})")
+                    continue
                 # ⚠️ 落穿分支（2026-10-23 修）：未命中重定向表的断链必须报出，
                 #    否则门禁对"真断链"完全失明（曾漏检 403 处）。
                 broken.append(f"{rel_md} -> {raw}  (目标不存在)")
@@ -197,7 +221,7 @@ def check(check_anchors: bool, scope: str = "live") -> tuple[list[str], list[str
                 if anchor not in anchors_of(resolved):
                     anchor_warn.append(f"{rel_md} -> {raw}  (锚点未找到)")
 
-    return broken, anchor_warn
+    return broken, anchor_warn, known_hits
 
 
 def main() -> int:
@@ -209,10 +233,12 @@ def main() -> int:
                     help="live=只看活文档（archive 内部历史链接不算断链）；all=全查")
     args = ap.parse_args()
 
-    broken, anchor_warn = check(args.anchors, args.scope)
+    broken, anchor_warn, known_hits = check(args.anchors, args.scope)
 
     print(f"[docs_links] 扫描 {len(iter_md_files())} 个 markdown 文件（作用域 {args.scope}）")
     print(f"[docs_links] 断链: {len(broken)}")
+    if known_hits:
+        print(f"[docs_links] 已知缺失（政策保留，不计断链）: {len(known_hits)}")
     if anchor_warn:
         print(f"[docs_links] 锚点警告: {len(anchor_warn)}")
 

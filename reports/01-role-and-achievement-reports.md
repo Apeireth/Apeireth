@@ -7,20 +7,32 @@
 
 ## 目录
 
-| # | 原标题 | 原日期 | # | 原标题 | 原日期 |
-|---|---|---|---|---|---|
-| 1 | A10-deep cognition 范围覆盖确认 | 08-03 | 13 | A1 Leader 总结 | 08-01 |
-| 2 | P22 architect2 council 补交证据 | 未标 | 14 | A1.2 QA 集成测试报告 | 08-01 |
-| 3 | P22 architect3 sovereignty 补交证据 | 未标 | 15 | A1.5 DevOps commit 落地 | 08-01 |
-| 4 | P27 抽象 trait 工程化验收 | 未标 | 16 | A10 cognition 最小落地 | 08-01 |
-| 5 | P29 恢复 pybridge | 未标 | 17 | A11.1 action 器官 | 08-01 |
-| 6 | P30 sovereignty 漂移报告 | 08-02 | 18 | A11.3 value 器官 | 08-01 |
-| 7 | P31 7 处 pre-existing 破损修复 | 08-02 | 19 | A16 mcp_integration_expert | 08-01 |
-| 8 | P32 council 测试补齐 | 未标 | 20 | A16.3 pybridge 完整落地 | 08-01 |
-| 9 | A1-W3 设置页持久化 | 08-04 | 21 | A2-W3 tui-session episode | 08-04 |
-| 10 | A1.4 ADR：CLI 接 core Session API | 08-01 | 22 | A20 后端 17 crate 集成最终报告 | 08-01 |
-| 11 | A1.1 apeireth-cli session 接 core | 08-01 | 23 | P12 constraint（12 键 + 5 重守门） | 08-01 |
-| 12 | A1 代码审查报告 | 08-01 | 24 | P16 onion 双洋葱 trait 抽象层 | 08-01 |
+| # | 原标题 | 原日期 |
+|---|---|---|
+| 1 | A10-deep cognition 范围覆盖确认（database_engineer） | 2026-08-03 |
+| 2 | P22 architect2 — apeireth-council 补交证据 | 原篇未标日期 |
+| 3 | P22 architect3 — apeireth-sovereignty 补交证据 | 原篇未标日期 |
+| 4 | P27 阶段 4 抽象 trait 工程化验收 | 原篇未标日期 |
+| 5 | P29 恢复 apeireth-pybridge（按 stage5 §2「保留扩展」） | 原篇未标日期 |
+| 6 | P30 — Sovereignty 漂移报告（stage5 §2 17 → 18 crate 修订） | 2026-08-02 |
+| 7 | P31 — 7 处 Pre-Existing 破损修复报告 | 2026-08-02 |
+| 8 | P32 apeireth-council — 测试实装补齐 | 原篇未标日期 |
+| 9 | A1-W3 设置页持久化 | 2026-08-04 |
+| 10 | A1.4 ADR 成就报告 — CLI 接入 core Session API | 2026-08-01 |
+| 11 | A1.1 成就报告 — apeireth-cli session 接 core Session API | 2026-08-01 |
+| 12 | A1 代码审查报告 | 2026-08-01 |
+| 13 | A1 成就达成总结 — 施工团队 Leader | 2026-08-01 |
+| 14 | A1.2 集成测试报告 — QA 工程师 | 2026-08-01 |
+| 15 | A1.5 成就达成总结 — DevOps 工程师 | 2026-08-01 |
+| 16 | A10 成就: apeireth-cognition 认知器官最小落地 — 数据库工程师 | 2026-08-01 |
+| 17 | A11.1 成就报告 — apeireth-action 行动器官 | 2026-08-01 |
+| 18 | A11.3 成就报告 — apeireth-value 价值器官 | 2026-08-01 |
+| 19 | A16 落盘报告 — mcp_integration_expert | 2026-08-01 |
+| 20 | A16.3 成就报告 — apeireth-pybridge 完整落地 | 2026-08-01 |
+| 21 | A2-W3 tui-session episode 写入 | 2026-08-04 |
+| 22 | A20 后端 17 crate 集成最终报告 | 2026-08-01 |
+| 23 | P12 成就: apeireth-constraint 约束器官（12 键 + 5 重守门） — 安全审查 | 2026-08-01 |
+| 24 | P16 成就报告 — apeireth-onion 双洋葱统一体 trait 抽象层 | 2026-08-01 |
 
 ---
 
