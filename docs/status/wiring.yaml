@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 6f10132566194fa880c5fbe48babefa32c22c7123209c6b28032c2cdf1980f87
+claims_sha256: 1a75eb17191687454c019f2cb92d6b3361e80e8450b6a440d658868e2b8bdb76
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -174,11 +174,15 @@ items:
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
+        - "crates/engine/runtime-assembly/src/egress_ledger.rs"
+        - "crates/adapters/cli/src/egress_command.rs"
         - "crates/adapters/cli/src/lib.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/egress_command.rs"
         - "crates/adapters/cli/src/lib.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
+        - "crates/engine/runtime-assembly/src/egress_ledger.rs"
         - "crates/engine/runtime/src/canonical/egress_gate.rs"
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
@@ -187,6 +191,8 @@ items:
       tests:
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
+        - "crates/engine/runtime-assembly/src/egress_ledger.rs"
+        - "crates/adapters/cli/src/egress_command.rs"
       claims_id: "sec.egress_gate"
     gaps:
       - "能力矩阵未出现开关 APEIRETH_ENABLE_EGRESS_GATE（待补）"
