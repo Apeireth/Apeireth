@@ -1,0 +1,43 @@
+name: Self-status vocabulary (报告项，不阻塞)
+
+# ADR-0014 §6「最小诚实自述集」的机器化落点（副总指挥 2026-10-23 建议的第一步）。
+#
+# 外部顾问的硬判据：「每一句自述都必须能对应到一个当前可验证的观察、
+# 一个明确的测量程序，或一个可追责的承诺」；以及「拿不到真值时直接缺席
+# 通常比 null + 原因更诚实」。
+#
+# 本 workflow **只报告、不阻塞**：
+# - 21 节自述是冻结合同（SELF_STATUS_SECTIONS），改它要同步 render / schema / fixture 三侧；
+# - 直接删改冻结合同会同时破坏「历史不追溯改写」与「冻结合同」两条纪律；
+# - 正确顺序是**先让违反显形，再还债**（债栏逐波还，每波 ≤3 权重分）。
+#
+# 转为 blocking 的前置条件：债栏里该批命中已清零 + owner 批准改冻结合同。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/capabilities/tools/src/self_status.rs'
+      - 'crates/engine/runtime-assembly/src/canonical/self_status_source.rs'
+      - 'scripts/check_self_status_vocab.py'
+  pull_request:
+    paths:
+      - 'crates/capabilities/tools/src/self_status.rs'
+      - 'crates/engine/runtime-assembly/src/canonical/self_status_source.rs'
+      - 'scripts/check_self_status_vocab.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  self-status-vocab:
+    name: 自述词表纪律（report-only）
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report vocabulary hits
+        continue-on-error: true
+        run: python3 scripts/check_self_status_vocab.py
