@@ -1,0 +1,120 @@
+# 下一团队开工手册（Team Handbook: Next Batch）
+
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当时基线（2026-08-27）：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本文任务包（TP21-TP34）是 v1.0/v1.5 收尾批次，挂接点（companion_serve/apeireth-api 等）已进 `legacy/donor/`；v2 下一步见 ROADMAP §4（旧 TP34 流式重映射为 P8）。
+
+> **定位**: 当前团队收尾后的下一批任务包 + 主线程调研吸收（60+ 项目扫描, 2026-08-18）。
+> **读法**: 先读 design-intent.md（三哲学 + 拍板历史 + 层级归属原则）→ 本手册任务包 → 台账对应条目 → 开工。
+> **纪律**: 每包按 team-work-doc §9 模板拆细; 层级归属 = 合并上级/能力下放; 0 装 PASS; 验收按 team-work-doc §7。
+
+---
+
+## 0. 调研结论速览（主线程, 60+ 项目扫描）
+
+**核心吸收（进核心模块）**：
+1. **渐进式披露**（同类记忆工具, 39k stars）——记忆目录 ~800 token + 按需详情 ~120/条（35k→920, -97%）；"注意力预算经济学, 全量注入仅 6% 相关"——**M1 上下文编辑 + W4 主动推销的下游形态**（两级注入: 目录先行→按需展开）
+2. **Observer Agent**（同类记忆工具）——"LLM 观察 LLM"自动捕获工具调用+会话 → 提取 → 压缩 → 注入——**E1 强化**（工具结果→经验直通 W5 的成熟形态）
+3. **HMS 全息记忆**（ShadowWeave 00 后团队）——provenance + 时间元数据随记忆存储; Retain（parse→extract→resolve→store）+ Recall（analyze→语义/词法/图/时序多路→融合重排→grounded）流程与我们的提炼/注入同构——**M5 时间有效性 + 来源链（N25 对接）**; 自带 LongMemEval 复现 = **M4 评测闭环直接参考**
+4. **纪律技能**（mattpocock/skills, 44k stars）——技能 = 能力 + **纪律**两类（工程规范/流程约束,"拒绝 Vibe Coding"）——**E5 技能闭环扩展**: 纪律技能 = 可执行的原则（动态原则层的技能形态）
+
+**套件吸收（能力下放）**：
+5. **TimesFM/Kronos**（Google/Amazon 时序基础模型）——zero-shot 时间序列预测——**E3 增强**: oracle 的数字信号预测器（本地小模型可选, 与 LLM 文本预测互补）
+6. **vnpy 事件驱动**——事件引擎（行情/信号/下单分离）——**投资套件架构参考**（挂 bus 事件流）
+7. **FinanceDatabase**（JerBouma）——30 万条标的元数据（股票/ETF/指数/币种 CSV）——**N3 金融源的数据资产**（标的清单层直接可用）
+8. **知识编译 wiki**——Markdown 文件树知识库——**知识管道新形态**（套件: 主动维护的知识库, 与记忆互补）
+
+**生态参考**：
+9. **工具声明式配置范式**——integration YAML 声明 + 认证处理（"认证是 agent 工具集成头号问题"）——**插件规范对齐**（N21 credentials 的价值佐证）
+10. **grok-build**（xAI 开源 TUI 编码代理）——功能面与我们的 tool 套件+CLI+ACP 重合——**形态确认**, 无新机制（长任务断点续传=A3 已计划）
+
+**明确不做**：视频世界模型全线（第三层墙）/ 自研时序模型（用现成 TimesFM）/ 完整 TradingAgents 部署（无仓位/不可校准概率）
+
+---
+
+## 1. 任务包（按层级归属）
+
+### ⭐ 世界模型前置批（发布前置, 2026-08-18 主人拍板: 发布前完成, 优先级最高）
+
+> **定位**: release-plan §六。推理链的外挂模拟器, 她独有的训练集 = 主人的生活轨迹（基地哲学: 世界模型服务主人, 不是全人类）。
+> **第三层**（连续世界模型, Genie 3 式）= 墙, 跟踪不趟。**0 装 PASS**: 推演结果永远不当作事实注入记忆（防幻觉固化）。
+
+| 包 | 名称 | 挂接 | 边界要点 | 验收 |
+|---|---|---|---|---|
+| TP31 | **世界模型第一层: 文本模拟器**（W1） | companion 新 `world_model.rs`（或 scenario 升级）+ E3 校准诊断 | LLM 按时间线展开反事实推演链（起点状态→假设动作→沿时间线推演→终点预测）+ **oracle Brier 终点校准**（防编故事: 校准差的推演链标记/拒绝）; 零件全有（LLM/oracle/反思）, 只差"按时间线展开推演"编排器; 与 E3 校准诊断衔接 | 推演链生成 / Brier 终点校准 / 校准差拒绝 测试 |
+| TP32 | **世界模型第二层: 因果结构图推演**（W2 + W3 同批） | memory_graph.rs 扩展 + cognition | 沿因果链推演（起点→沿边展开"如果那么"路径）+ **MCTS 在因果图上跑, LLM 只在分支点判断**（与 E2 MCTS/LATS 同构复用）; **W3 先行**: 从记忆时间线挖掘因果边（统计验证: 熬夜→次日效率低出现 7 次即统计边, 机制化可对账）, EvoCause 式 LLM 提议边当补充 | 因果链展开 / 分支判断 / 推演结果与事实对账 测试 |
+
+### ⭐ 发布工程门槛批（发布前置, release-plan §六门槛清单剩余项）
+
+> **定位**: 门槛清单 (release-plan §六) 已核: ①cosign.pub ✅ (TP13) ②cargo fmt 全仓 ✅ (TP13 逐 crate check OK) ③.gitignore 密钥加固 ✅ (#28) ④Dockerfile COPY 修复已落地但**未实测构建** (#46: 本机无 docker) ⑤compose 密码外部化 ❌ (#47, docker-compose.yml 7 处敏感字段仍硬编码)。**④⑤ 是本批任务**。
+
+| 包 | 名称 | 挂接 | 边界要点 | 验收 |
+|---|---|---|---|---|
+| TP33 | **发布工程门槛收尾**（#46 验证 + #47 外部化） | Dockerfile + docker-compose*.yml | ①Dockerfile 修复验证: 有 docker 环境实测 build（逐成员 COPY 后 dummy 依赖缓存构建必须成功）; 0 装: 无环境则如实标注"待实测", 不假装 ②compose 密码外部化: 全部敏感字段改 `${VAR:?err}` 环境变量 + .env.example 占位; 禁止把真实密码写进任何 yml | 构建实测日志 / compose 无明文敏感字段 grep 验证 |
+
+### 核心模块批（合并上级）
+
+| 包 | 名称 | 挂接 | 边界要点 | 验收 |
+|---|---|---|---|---|
+| TP21 | **渐进式披露注入**（M1+W4） | context.rs/ContextAssembler | 两级注入: 记忆目录块（~800 token 常驻）+ 按需详情（查询/预载触发展开）; 与 L0/L1 常驻共存; 禁止推翻现有预算机制 | 目录/展开/预算测试 |
+| TP22 | **Observer 捕获强化**（E1+W5） | tool-bridge hook + 提炼调度 | 工具执行结果（成功/失败/产物）→ 即时沉淀候选（不等反思周期）; 与对账管线衔接 | hook 触发/沉淀/去重测试 |
+| TP23 | **纪律技能**（E5 扩展） | apeireth-skills | 技能分两类: 能力技能 + 纪律技能（可执行原则, 如"提交前跑测试"）; 纪律技能挂执行检查 | 两类注册/执行/卸载测试 |
+| TP24 | **记忆来源链 + 时间元数据**（M5+N25） | memory_extractor + 记忆条目 | 每条记忆带 provenance（来源: 对话/工具/提炼轮）+ 时间元数据（valid_from/until）; 检索按时间过滤 | 来源链/时间过滤测试 |
+
+### 套件批（能力下放）
+
+| 包 | 名称 | 挂接 | 边界要点 | 验收 |
+|---|---|---|---|---|
+| TP25 | **时序预测器**（E3 增强） | oracle_adapters | TimesFM/Kronos 适配器（trait 口, 本地小模型可选）: 数字信号预测 → 与 LLM 文本预测融合（集合预报）; 0 装: 模型未接如实标注 | 适配器/融合/降级测试 |
+| TP26 | **投资套件事件架构** | bus + 套件 | vnpy 式事件驱动（行情事件→信号→决策）; 挂 bus 事件流 + PerceptionGate 门控; 与 oracle 决策链衔接 | 事件流/门控测试 |
+| TP27 | **标的元数据资产** | N3 金融源 | FinanceDatabase 30 万标的 CSV 入库（标的清单/行业/交易所）; 数据可信度 T0 标记 | 入库/查询/分级测试 |
+| TP28 | **Markdown 知识库**（知识编译模式） | 新套件 | 主动维护的知识库（文件树 + 索引 + 检索）; 与记忆互补（记忆=对话提炼, 知识库=主动沉淀）; 0 装: 不假装自动策展 | 建库/检索/更新测试 |
+
+### 生态批（下放社区/规范）
+
+| 包 | 名称 | 说明 |
+|---|---|---|
+| TP29 | **工具声明式配置**（对齐同类声明式配置设计） | 插件规范升级: 工具 = YAML 声明（名称/参数/权限声明）+ 实现; 认证走 N21 credentials |
+| TP30 | **待评估清单**（~40 项） | 剩余项目（OpenSquilla/exo/project-nomad/OCR 类/Scrapling/maigret/airllm/taipy/GitNexus/Agent-S/OpenStock/Vibe-Trading/OpenAlice/FinSight-AI/Lean 等）按价值下放给团队分批调研, 每批输出"机制+对照+吸收建议"（0 装 PASS: 未调研不写结论） |
+
+### v1.5 中期 (post-v1.0.0)
+
+| 包 | 名称 | 挂接 | 边界要点 | 验收 |
+|---|---|---|---|---|
+| TP34 | **companion_serve 真接流式**（CoT + tool_call + tool_result SSE） | `apeireth-companion/examples/companion_serve.rs` | 当前 `stream: false` 写死在 10 处 (line 130/214/426/477/527/584/643/711/768/1002), `next_after` line 1002 真发非流式。前端 `frontend/companion-desktop/src/lib/runtime.ts` 收的 `reasoning-delta` / `tool-call` / `tool-result` / `reasoning_content` 等 RuntimeEvent 0 触发, UI `ExecutionTimeline.svelte` 拿不到真 SSE 流。<br><br>**设计点**: (1) CoT tag 怎么拆 delta? `<think>...</think>` 在流里分段 emit; (2) tool_call 怎么在流里 emit? OpenAI tool_calls 数组 vs 单 event 顺序; (3) chunked vs full — 每次 mini-batch emit; (4) backpressure / cancellation token.<br><br>**估计**: 1-2 周 (后端 + 前端解析 + 测试 + e2e). 跟 0.5 mock SSE 走端到端验证. | 6 种 RuntimeEvent 都能 e2e 触发; real LLM (有 API key) E2E; mock SSE 回归; 前端 UI timeline 显示工具流. |
+
+> **TP34 进展 (2026-08-19)**: 后端 50% 落地 —
+> 1. `stream_forward` 已在 `apeireth-api/protocol_handlers.rs:1379` 透传 SSE 字节, `stream_forward` 真接 MiniMax 流
+> 2. companion_serve `chat_completions` 新增 streaming 分支: 检测 `req.stream = true` 后调 `stream_forward`, **跳过 tool loop (0 装严守, v1.5 后续补)**
+> 3. MiniMax M3 **没有** OpenAI 风格 `delta.reasoning_content` 字段, CoT 嵌入 `delta.content` 内的 `<!-- ... -->` 边界标记 (验证报告 `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md`)
+> 4. 加 `extract_minimax_cot(content) -> (reasoning, visible)` helper: 服务端拼成完整 text 后切分 (方案 B 兜底, per 验证 §6)
+> 5. 非流式响应 `x_apeireth.reasoning_content` 字段挂 reasoning (0 装严守: 无 CoT 时空字符串)
+> 6. 8 个单元测试 (`cot_extraction_tests` mod): happy / no_markers / empty / multiple / at_end / unterminated / realistic / nested
+>
+> **待续 (v1.5 后续)**:
+> 1. streaming + tool loop 整合 (per 验证 §6 方案 A 提及, 需要消费 SSE + 工具循环 + 重启流)
+> 2. 前端 `<!-- ... -->` 状态机切分, 触发 `reasoning-delta` / `content-delta` RuntimeEvent
+> 3. 前端 e2e: 真实 LLM + companion-desktop UI 显示工具流
+> 4. mock SSE 回归 (per 验证 §7 字段探测双轨)
+
+> **TP34 来源**: 2026-08-19 PR #1 (companion-desktop 合并) 后的真生产洞. PR 作者的 e2e 是 mock SSE, 已知 real LLM streaming 是 follow-up. 留集成层 0 装 PASS.
+
+---
+
+## 2. 执行顺序建议
+
+1. **TP31+TP32 最先**（发布前置, 世界模型前两层; TP18 校准诊断已就绪, 文本层正当时）
+2. **TP33 并行**（发布工程门槛: 无需 LLM 依赖, 1 人即可; 有 docker 环境者优先）
+2. **TP21+TP22 并行**（核心, 上下文/记忆直链）→ TP23+TP24（记忆完备）
+3. **TP25→TP26**（投资场景主链: 时序预测器 → 事件架构）
+4. TP27（数据资产, 1 人）TP28（知识库, 1 人）并行
+5. TP29（规范, 随 N17 装配批收尾）; TP30（持续下放调研, 2 人轮值）
+6. **TP34 v1.5 中期排期**（companion_serve 流式; 1-2 周; 跟 TP31+TP32 不冲突, 可独立排期）
+
+## 3. 明确不做（防重复调研）
+
+| 不做 | 理由 |
+|---|---|
+| 自研时序基础模型 | 用现成 TimesFM/Kronos（trait 口） |
+| 视频世界模型 | 第三层墙, 跟踪不趟 |
+| TradingAgents 整体部署 | 无仓位管理/输出不可校准概率, 抄架构不抄产物 |
+| 同类记忆工具整体引入 | 渐进式披露形态可参考, 但其绑定单一商业生态 |
+| 完整 HMS 部署 | 流程同构已覆盖, 吸收 provenance/评测两件 |

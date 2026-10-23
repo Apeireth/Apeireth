@@ -1,0 +1,5 @@
+# 文档重定向表：旧路径 -> 新路径（文档治理批自动维护）
+# 格式：旧路径<TAB>新路径（均仓库相对）
+docs/04-internal/HANDOFF-NOTES.md	docs/03-reference/team-handover-reference.md
+docs/04-internal/TO-NEW-TEAM.md	docs/03-reference/team-handover-reference.md
+docs/04-internal/next-team-handbook.md	docs/04-internal/backend-enhancement/00-backlog.md
