@@ -1,0 +1,111 @@
+{
+  "face": "theme（主题外观面板）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "reference_page": "/web/reference/theme/index.html",
+  "engine_page": "/web/engine/theme/index.html",
+  "reference_selector": ".setting-block",
+  "engine_selector": ".sp-theme .setting-block",
+  "section": "appearance",
+  "alignment": {
+    "why": "两侧内容必须落在同一个设备像素格 ⇒ 渐变 / 圆角抗锯齿 / 字形栅格化才可比",
+    "reference_origin": {
+      "x": 236,
+      "y": 219.765625
+    },
+    "engine_origin_before": {
+      "x": 0,
+      "y": 0
+    },
+    "delta_x": 236,
+    "delta_y": 219.765625,
+    "applied": true,
+    "engine_origin_after": {
+      "x": 236,
+      "y": 219.765625
+    },
+    "pixel_ratio_unaligned": 0.017318689748197565,
+    "pixel_different_unaligned": 16075
+  },
+  "t3_width": {
+    "reference": {
+      "x": 236,
+      "y": 219.765625,
+      "w": 828,
+      "h": 1121.6875
+    },
+    "engine": {
+      "x": 236,
+      "y": 219.765625,
+      "w": 828,
+      "h": 1121.6875
+    },
+    "equal": true
+  },
+  "t1_pixels": {
+    "size_mismatch": false,
+    "different": 0,
+    "total": 928188,
+    "ratio": 0.0
+  },
+  "t2_dom": {
+    "equal": true,
+    "diffs": []
+  },
+  "t4_inline_styles": {
+    "equal": true,
+    "reference": [
+      "background: radial-gradient(circle at 78% 22%, rgba(77, 107, 254, 0.9) 0%, rgba(77, 107, 254, 0) 34%), linear-gradient(rgb(255, 255, 255) 0%, rgb(242, 243, 245) 100%);",
+      "background: radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 55%), rgb(0, 0, 0);",
+      "background: url(\"/assets/themes/heritage-void-bg.png\") center center / cover;",
+      "background: linear-gradient(rgba(247, 245, 241, 0.45), rgba(247, 245, 241, 0.45)), url(\"/assets/themes/essence-bg.png\") center center / cover;",
+      "background: radial-gradient(circle at 62% 55%, rgba(255, 210, 122, 0.85) 0%, rgba(255, 210, 122, 0.25) 7%, rgba(255, 210, 122, 0) 13%), radial-gradient(circle at 62% 55%, rgb(0, 0, 0) 0%, rgb(0, 0, 0) 10%, rgba(0, 0, 0, 0) 11%), radial-gradient(at 50% 30%, rgb(26, 21, 32) 0%, rgb(7, 7, 12) 70%);",
+      "background: radial-gradient(90% 60% at 50% 118%, rgba(24, 84, 128, 0.5) 0%, rgba(4, 7, 13, 0) 62%), repeating-linear-gradient(0deg, rgba(87, 214, 255, 0.12) 0px, rgba(87, 214, 255, 0.12) 1px, transparent 1px, transparent 14px), repeating-linear-gradient(90deg, rgba(87, 214, 255, 0.12) 0px, rgba(87, 214, 255, 0.12) 1px, transparent 1px, transparent 14px), linear-gradient(rgb(6, 13, 24) 0%, rgb(2, 6, 12) 100%);",
+      "background: radial-gradient(circle at 78% 16%, rgba(255, 236, 200, 0.95) 0%, rgba(255, 236, 200, 0) 34%), linear-gradient(rgb(249, 247, 242) 0%, rgb(237, 232, 220) 100%);",
+      "background: repeating-linear-gradient(rgba(20, 19, 22, 0.05) 0px, rgba(20, 19, 22, 0.05) 1px, transparent 1px, transparent 9px), linear-gradient(rgb(239, 237, 232) 0%, rgb(226, 224, 219) 100%);",
+      "background: linear-gradient(205deg, rgba(110, 160, 195, 0.4) 0%, rgba(110, 160, 195, 0) 42%), linear-gradient(rgb(29, 42, 51) 0%, rgb(5, 10, 15) 100%);",
+      "background: radial-gradient(circle at 30% 0%, rgba(127, 184, 148, 0.35) 0%, rgba(127, 184, 148, 0) 46%), linear-gradient(rgb(26, 36, 32) 0%, rgb(10, 16, 14) 100%);",
+      "--ap-accent-ui: #ffd27a; --ap-accent-ui-ink: #1b1409;",
+      "--ap-accent-ui: #7d9cc0; --ap-accent-ui-ink: #0b0d12;",
+      "--ap-accent-ui: #7fb894; --ap-accent-ui-ink: #0b0d12;",
+      "--ap-accent-ui: #e6e2da; --ap-accent-ui-ink: #1c1b1f;"
+    ],
+    "engine": [
+      "background: radial-gradient(circle at 78% 22%, rgba(77, 107, 254, 0.9) 0%, rgba(77, 107, 254, 0) 34%), linear-gradient(rgb(255, 255, 255) 0%, rgb(242, 243, 245) 100%);",
+      "background: radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 55%), rgb(0, 0, 0);",
+      "background: url(\"/assets/themes/heritage-void-bg.png\") center center / cover;",
+      "background: linear-gradient(rgba(247, 245, 241, 0.45), rgba(247, 245, 241, 0.45)), url(\"/assets/themes/essence-bg.png\") center center / cover;",
+      "background: radial-gradient(circle at 62% 55%, rgba(255, 210, 122, 0.85) 0%, rgba(255, 210, 122, 0.25) 7%, rgba(255, 210, 122, 0) 13%), radial-gradient(circle at 62% 55%, rgb(0, 0, 0) 0%, rgb(0, 0, 0) 10%, rgba(0, 0, 0, 0) 11%), radial-gradient(at 50% 30%, rgb(26, 21, 32) 0%, rgb(7, 7, 12) 70%);",
+      "background: radial-gradient(90% 60% at 50% 118%, rgba(24, 84, 128, 0.5) 0%, rgba(4, 7, 13, 0) 62%), repeating-linear-gradient(0deg, rgba(87, 214, 255, 0.12) 0px, rgba(87, 214, 255, 0.12) 1px, transparent 1px, transparent 14px), repeating-linear-gradient(90deg, rgba(87, 214, 255, 0.12) 0px, rgba(87, 214, 255, 0.12) 1px, transparent 1px, transparent 14px), linear-gradient(rgb(6, 13, 24) 0%, rgb(2, 6, 12) 100%);",
+      "background: radial-gradient(circle at 78% 16%, rgba(255, 236, 200, 0.95) 0%, rgba(255, 236, 200, 0) 34%), linear-gradient(rgb(249, 247, 242) 0%, rgb(237, 232, 220) 100%);",
+      "background: repeating-linear-gradient(rgba(20, 19, 22, 0.05) 0px, rgba(20, 19, 22, 0.05) 1px, transparent 1px, transparent 9px), linear-gradient(rgb(239, 237, 232) 0%, rgb(226, 224, 219) 100%);",
+      "background: linear-gradient(205deg, rgba(110, 160, 195, 0.4) 0%, rgba(110, 160, 195, 0) 42%), linear-gradient(rgb(29, 42, 51) 0%, rgb(5, 10, 15) 100%);",
+      "background: radial-gradient(circle at 30% 0%, rgba(127, 184, 148, 0.35) 0%, rgba(127, 184, 148, 0) 46%), linear-gradient(rgb(26, 36, 32) 0%, rgb(10, 16, 14) 100%);",
+      "--ap-accent-ui: #ffd27a; --ap-accent-ui-ink: #1b1409;",
+      "--ap-accent-ui: #7d9cc0; --ap-accent-ui-ink: #0b0d12;",
+      "--ap-accent-ui: #7fb894; --ap-accent-ui-ink: #0b0d12;",
+      "--ap-accent-ui: #e6e2da; --ap-accent-ui-ink: #1c1b1f;"
+    ]
+  },
+  "notes": [
+    "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与引擎侧的 `sp-*` 作用域锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3 是**宽度同源**：参考侧靠生产自己的布局得到 828px，引擎侧靠对照专用样式表的 `.settings-stage` 钉成 828px ⇒ 不等即判失败。",
+    "T4 是**逐字**比对 `style` 属性串（浏览器 CSSOM 的序列化口径）。",
+    "**装置对齐**：参考侧是生产整页（内容块在文档里的位置带小数），引擎侧是独立挂载（位置 0）⇒ 两侧的设备像素格错开 ⇒ 渐变条纹 / 圆角抗锯齿 / 字形栅格化必然不同 ⇒ 那是**装置伪差**。本驱动把引擎侧的舞台**对齐**到参考侧的文档位置后再比 ⇒ 差异只反映渲染本身。**对齐前 / 对齐后两个数字都在报告里**（`alignment` 段）⇒ 不隐藏。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。"
+  ],
+  "checks": {
+    "t1_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_same_width": true,
+    "t4_inline_styles_identical": true
+  },
+  "passed": true
+}

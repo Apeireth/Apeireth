@@ -63,15 +63,14 @@ pub mod status_bar;
 // ⚠️ 预置这些声明是为了让**多个子面并行施工而互不碰本文件** ⇒ 共享点归零。
 // ⇒ 新模块**不**加扁平 re-export ⇒ 消费方用路径形式
 // （`ui_kit::settings_wizard::…`）。
-pub mod settings_wizard;
-pub mod settings_theme;
-pub mod settings_frame;
 pub mod settings_budget;
-pub mod settings_data;
-pub mod settings_character;
 pub mod settings_capability;
+pub mod settings_character;
+pub mod settings_data;
+pub mod settings_frame;
 pub mod settings_provider;
-
+pub mod settings_theme;
+pub mod settings_wizard;
 
 pub use badge::{Badge, BadgeProps};
 pub use button::{Button, ButtonProps};

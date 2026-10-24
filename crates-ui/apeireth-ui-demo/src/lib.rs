@@ -313,6 +313,20 @@ mod tests {
 // ── 设置页三页的**子面**宿主挂载模块（并行迁移面 · 预置声明）──
 // ⚠️ 预置声明 ⇒ 各子面施工线**只填自己的模块文件** ⇒ 共享点归零。
 #[cfg(not(target_arch = "wasm32"))]
+pub mod settings_budget;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_capability;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_character;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_data;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_frame;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_provider;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_theme;
+#[cfg(not(target_arch = "wasm32"))]
 // ⚠️ **必须是 `not(wasm32)`**：本 crate 的 `lib` 与 `bin` 是**两个编译单元**，
 // 但会打进**同一个 wasm 产物** ⇒ 同一份模块文件若被两边都编译，
 // 任何 `#[wasm_bindgen]` 记号都会产生**同名外部符号** ⇒ wasm 链接阶段失败
@@ -320,17 +334,3 @@ mod tests {
 // wasm 侧归 `main.rs` 那份声明。
 #[cfg(not(target_arch = "wasm32"))]
 pub mod settings_wizard;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod settings_theme;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod settings_frame;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod settings_budget;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod settings_data;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod settings_character;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod settings_capability;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod settings_provider;

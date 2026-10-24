@@ -52,14 +52,18 @@ echo "── 4/7 构建 wasm 产物 ──"
 echo "── 5/7 wasm-bindgen ──"
 rm -rf "${HERE}/public/engine/pkg"
 mkdir -p "${HERE}/public/engine/pkg"
+# ⚠️ wasm 产物的位置**取决于 cargo 的 target 目录**：
+# 默认 = **工作区** target（`${CRATES_UI}/target`）；若外部设了 `CARGO_TARGET_DIR`
+# （并行施工时为了不抢别的线的 target 目录）⇒ 产物在那里 ⇒ 路径必须跟着走。
+TARGET_DIR="${CARGO_TARGET_DIR:-${CRATES_UI}/target}"
 "${WASM_BINDGEN}" --target web --no-typescript \
   --out-dir "${HERE}/public/engine/pkg" \
-  "${CRATES_UI}/target/wasm32-unknown-unknown/release/apeireth-ui-demo.wasm"
+  "${TARGET_DIR}/wasm32-unknown-unknown/release/apeireth-ui-demo.wasm"
 
 echo "── 6/7 vite build ──"
 if [ ! -d "${HERE}/node_modules" ]; then
   echo "   （无 node_modules ⇒ 复用生产前端的只读依赖目录）"
-  ln -s "${REPO}/frontend/companion-desktop/node_modules" "${HERE}/node_modules"
+  ln -sfn  "${REPO}/frontend/companion-desktop/node_modules" "${HERE}/node_modules"
 fi
 (cd "${HERE}" && npx --no-install vite build)
 

@@ -104,23 +104,23 @@ pub mod toolgrid_app;
 // ⚠️ 这些模块是**预置声明** ⇒ 各子面施工线**只填自己的模块文件**
 // ⇒ 共享的 `main.rs` 一行都不用改（并行期的写域纪律）。
 #[cfg(target_arch = "wasm32")]
-pub mod settings_dispatch;
-#[cfg(target_arch = "wasm32")]
-pub mod settings_wizard;
-#[cfg(target_arch = "wasm32")]
-pub mod settings_theme;
-#[cfg(target_arch = "wasm32")]
-pub mod settings_frame;
-#[cfg(target_arch = "wasm32")]
 pub mod settings_budget;
-#[cfg(target_arch = "wasm32")]
-pub mod settings_data;
-#[cfg(target_arch = "wasm32")]
-pub mod settings_character;
 #[cfg(target_arch = "wasm32")]
 pub mod settings_capability;
 #[cfg(target_arch = "wasm32")]
+pub mod settings_character;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_data;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_dispatch;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_frame;
+#[cfg(target_arch = "wasm32")]
 pub mod settings_provider;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_theme;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_wizard;
 
 #[cfg(target_arch = "wasm32")]
 fn main() {

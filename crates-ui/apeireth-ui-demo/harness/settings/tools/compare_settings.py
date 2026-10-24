@@ -262,7 +262,17 @@ def find_driver(panel_id: str):
         spec.loader.exec_module(module)
         if hasattr(module, "collect_pair"):
             return module
+        # ── **CLI 驱动形态**（并行面 M2 用的）：独立脚本 + `main()` 返回退出码 ──
+        # ⚠️ 两种形态都要支持：各面施工线的实现习惯不同（有的按模块协议导出
+        # `collect_pair`，有的写成可独立运行的脚本）⇒ **共享入口不能只认一种**，
+        # 否则「驱动明明在、却报未迁移」⇒ 红灯失去信号。
+        if hasattr(module, "main") and callable(module.main):
+            return module
     return None
+
+
+# CLI 驱动的结果**按面缓存**（一个 CLI 驱动一次跑完整个面 ⇒ 不必每个分区重跑）。
+_CLI_CACHE: dict[str, dict] = {}
 
 
 def collect_pair(panel: dict, section: str, port: int) -> dict:
@@ -294,7 +304,19 @@ def collect_pair(panel: dict, section: str, port: int) -> dict:
             f"（约定：驱动放在 drivers/{panel_id}_compare.py 或"
             f" tools/compare_{panel_id}.py 等面自己的目录里）"
         )
-    return driver.collect_pair(panel, section, port)
+    if hasattr(driver, "collect_pair"):
+        return driver.collect_pair(panel, section, port)
+    # ── CLI 驱动：跑它的 `main()`，用**退出码**判成败 ──
+    if panel_id in _CLI_CACHE:
+        return _CLI_CACHE[panel_id]
+    exit_code = driver.main()
+    record = {
+        "passed": exit_code == 0,
+        "driver": "cli",
+        "exit_code": exit_code,
+    }
+    _CLI_CACHE[panel_id] = record
+    return record
 
 
 def main() -> int:
