@@ -39,9 +39,8 @@ pub mod summary;
 pub mod tool;
 
 pub use ingest::{
-    ingest_port, item_content_hash, item_identity, item_source, stable_ingest_content,
-    AttentionLimits, IngestOutcome, IngestPort, IngestRequest, DEFAULT_DAILY_INGESTS,
-    DEFAULT_PER_PULL_ITEMS,
+    ingest_port, item_identity, item_source, stable_ingest_content, AttentionLimits, IngestOutcome,
+    IngestPort, IngestRequest, DEFAULT_DAILY_INGESTS, DEFAULT_PER_PULL_ITEMS,
 };
 pub use lifecycle::{
     FeedHealth, FeedLifecycleBody, FeedLifecycleStore, LifecyclePolicy, LifecycleStats,

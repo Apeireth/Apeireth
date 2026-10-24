@@ -151,13 +151,6 @@ impl ThreeLayerMemory {
         self.working.lock().map(|w| w.len()).unwrap_or(0)
     }
 
-    /// R30 U9: 清空 working (force reset, debug 用)
-    pub fn clear_working(&self) {
-        if let Ok(mut w) = self.working.lock() {
-            w.clear();
-        }
-    }
-
     /// R33-2: promote working → long-term notes (自动 fact extraction)
     ///
     /// **同类长期记忆工程做法** (开源 long-term memory, Apache 2.0):

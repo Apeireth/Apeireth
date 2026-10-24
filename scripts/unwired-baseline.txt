@@ -1,189 +1,230 @@
 # 孤儿 API 基线（scripts/audit_unwired.py --update 生成；**只减不增**）
 #
-# 每行: <test-only|orphan> <symbol>
+# 每行: orphan <symbol>  # <分组>
 #
 # ============================================================================
-# 这份基线的性质（别误读）
+# 覆盖面与语义（2026-10-24 第三轮修正）
 # ============================================================================
-# 它记录的是**截至 2026-10-24 已知的「生产代码零引用的 pub 符号」**，不是
-# 「这些都可以不管」。基线的作用是**棘轮**：新增一条就必须先接线或写理由，
-# 防止「能力齐全但没接电」继续增长。
+# **覆盖全仓 30 个 crate**（`crates/*/*/src` + `crates/*/*/tests`）。
+# 旧基线只扫 3 个目录 ⇒ `apeireth-memory` 等 crate 完全没进视野，
+# 「教训对象三个写入 API 全仓零调用」因此一直没被发现。
 #
-# 判据为 `code=0`（生产代码零引用）；已剔除注释 / 字符串 / `use` 导入，
-# 保留「作为值传递」形态（`get(f)` / `map(f)`）。
-# `test-only` 与 `orphan` 的区分**不可靠**（不扫 tests/ 目录），两类都表示 code=0。
+# **只记 `orphan`（真零引用）**，不记 `test-only`（库 API 被集成测试覆盖 = 正常状态）。
 #
 # ============================================================================
-# 缩表纪律（这是它存在的意义）
+# 判据可靠度
+# ============================================================================
+#   「生产零引用」        —— 高（已剔注释/字符串/`use` 导入，保留「作为值传递」形态）
+#   「是否被 tests/ 覆盖」 —— 高（本版已扫 tests/）
+# 已知盲区（都导致假阳性，方向安全）：宏展开、按名字字符串动态查找、
+# 跨 crate 的 `pub use` 重导出链。
+#
+# **判据 v4（2026-10-24 第四轮）**：`use` 剔除从「逐行」改成「**整块**」——
+# 多行 `pub use foo::{ A, B, C };` 以前只剔掉第一行，花括号里的每个类型名
+# 都被漏成「被引用」⇒ **掩盖真孤儿**（实测：`JobBoard` 这类整块未接线的模块
+# 因此看不出来）。整块剔除后**新增检出 15 条真孤儿**，条数上升是判据变准，
+# 不是债变多。
+#
+# **另有一个会造成假阴性的盲区（2026-10-24 第四轮发现）**：
+# 判据 v3 是**裸 token 计数**，所以**同名方法在不同类型上会互相遮蔽** ——
+# `SnapshotStore::clear_session` 被调用，会让 `BehaviorChainGuardHook::clear_session`
+# 也被判成「已接电」（其实它零调用）。
+# ⇒ **新增同类方法时避开同名**（当时把 `SnapshotStore::clear_session` 改名成
+# `remove_session`）。凡基线里有同名定义的条目，都值得人工再核一眼。
+#
+# ============================================================================
+# 缩表纪律
 # ============================================================================
 # 1. **只减不增**：新增符号必须先进 main 并被生产调用，或在此写明理由；
-# 2. **每还一条债就缩一行**：接线一个就 `--update` 一次，让数字真实下降；
-# 3. **不要靠改判据缩表**（那是 cosmetic 抵扣）—— 判据改严必须同时说明
-#    为什么旧判据是错的。
-#
-# 本批（2026-10-24）已还的债（作为样例）：
-#   - `accountability_status_probe` / `with_accountability_probe` → 接进
-#     `ProductionBackends.self_status_accountability` + CLI 装配根；
-#   - `DecisionReceipt::from_statement` → 接进 `apeireth egress impact` 渲染；
-#   - `assess_correction` → 接进 `apeireth egress notify`（纠正影响检查）。
-#   这三条正是本工具抓出来的「自己写的功能没接电」，说明它有效。
+# 2. **每还一条债就缩一行**：接线/删除后 `--update` 一次，让数字真实下降；
+# 3. **不靠改判据缩表**（那是 cosmetic 抵扣）—— 判据改严必须说明「旧判据错在哪」；
+# 4. **`--update` 保留人工资产**：头部说明与行内分组标记是人写的判断依据，工具不许冲掉；
+# 5. **分组由 `scripts/group_unwired_baseline.py` 按规则生成**，规则集中维护、自动自校验。
 #
 # ============================================================================
+# 已还的债（证明缩表在发生）
+# ============================================================================
+#   - `replaced_any`（egress_gate）→ 删（名字说「本次」实读全局计数，名不符实）；
+#   - `loop_config_mut_for_test`（orchestrator）→ 删（零调用，连集成测试都不用）；
+#   - 第四轮：13 条逐条确认的真死代码 → 删（清单见 `unwired-debt-audit-2026-10-24.md`）；
+#   - 第四轮：`ToolDescAuditor::audit` / `audit_diff` 接入 MCP 目录 ⇒
+#     **OWASP ASI-01 描述投毒防线从「文档宣称」变成「真在拦」**。
+#
+# ============================================================================
+# 分组（每组条数写在组标题里）
+# ============================================================================
 
-orphan accumulate_pressure
-orphan active_profile
-orphan adapt_gate
-orphan all_ok
-orphan all_passed
-orphan as_session_store
-orphan attach_tone_feedback_sink
-orphan bio_care_assembly_from_env
-orphan bio_care_config_from_env
-orphan bio_circadian_wiring_from_env
-orphan bio_lifecycle_module_from_env_value
-orphan bio_tone_module_from_env_value
-orphan boundaries_mut_for_test
-orphan build_production_governance
-orphan build_production_governance_from_env
-orphan check_8_gates_for_test
-orphan circadian_decision
-orphan closure_of
-orphan conversation_for
-orphan cost_routing_enabled_from_env
-orphan current_snapshot
-orphan dispatch_errors
-orphan dispatch_gateway_serve
-orphan enforced_token
-orphan engine_mut
-orphan family_enforced
-orphan from_episode
-orphan from_values
-orphan generate_portable_config
-orphan lock_param
-orphan loop_config_mut_for_test
-orphan nervous_system_from_frame
-orphan no_bio_care_inputs
-orphan notify_approval
-orphan observe_interaction
-orphan persistence_enabled
-orphan persistence_last_save_error
-orphan persistence_path
-orphan persistence_save_failures
-orphan push_device_approval_cards
-orphan push_quorum_signal
-orphan quorum_cooldown_until_ms
-orphan quorum_score
-orphan record_tool_result
-orphan record_turn_usage_at
-orphan relationship_mut_for_test
-orphan replaced_any
-orphan retry_device_approval_pushes
-orphan run_full_cycle
-orphan session_connections
-orphan session_entries
-orphan session_snapshot
-orphan set_ns
-orphan should_suppress
-orphan snapshot_from_env
-orphan sovereignty_mut_for_test
-orphan start_care
-orphan state_for
-orphan state_mut
-orphan stop_all
-orphan summary_line
-orphan system_time_ms
-orphan unlock_param
-orphan voice_speak_config_from_env
-orphan with_access_recorder
-orphan with_bio_mechanisms
-orphan with_bio_self_status_from_env
-orphan with_care_heartbeat_probe
-orphan with_context_block
-orphan with_context_blocks
-orphan with_context_policy
-orphan with_context_usage
-orphan with_depth_increment
-orphan with_device_approval_face
-orphan with_env
-orphan with_episodes
-orphan with_immune_probe
-orphan with_limits
-orphan with_pain_probe
-orphan with_play_probe
-orphan with_probe
-orphan with_profile
-orphan with_proposal_face
-orphan with_quorum_gate_probe
-orphan with_recovery_probe
-orphan with_repair_guidance
-orphan with_role
-orphan with_segment_policy
-orphan with_system_clock
-orphan with_task_type
-orphan with_timeline
-test-only active_sessions_count
-test-only advance_by
-test-only allow_all
-test-only approve_for_deploy
-test-only bio_lifecycle_wiring_from_env_value
-test-only cleanup
-test-only commit_branch
-test-only delivered_total
-test-only delivery_lifecycle_counts
-test-only effective_ranking
-test-only egress_gate_from_env
-test-only enabled_switches
-test-only events_for
-test-only fetch_file
-test-only fork_branch
-test-only freeze
-test-only generate_posix_launcher
-test-only generate_windows_launcher
-test-only get_active_patches
-test-only has_ritual_state_store
-test-only initiative_used_in_window
-test-only interrupt
-test-only interrupt_snapshot
-test-only interrupt_stream_lifecycle_counts
-test-only is_delivery_open
-test-only is_flush_loop_running
-test-only is_idle
-test-only is_interrupt_stream_open
-test-only is_sealed
-test-only learn_from_failure
-test-only max_severity_rank
-test-only neuromodulator_state
-test-only next_text_frame
-test-only open_interrupt_stream
-test-only organ_handles
-test-only parse_code
-test-only pending_receipts
-test-only preset_by_id
-test-only published_count
-test-only push_chunk
-test-only push_saga_compensation
-test-only record_hook_feedback
-test-only record_ritual_done
-test-only record_ritual_skip
-test-only record_speculative_write
-test-only record_turn_cost
-test-only register_stream
-test-only relieve_pressure
-test-only ritual_state_error
-test-only rollback_branch
-test-only sealing_enabled
-test-only set_bond_snapshot
-test-only set_inputs
-test-only shutdown_delivery
-test-only shutdown_interrupt_stream
-test-only signal_surface
-test-only start_speaking
-test-only subscribe_flush
-test-only synthesize_manifest
-test-only synthesize_patches
-test-only synthesize_uniforms
-test-only total_ns
-test-only trigger_barge_in
-test-only wait_for_interrupt
-test-only with_now_ms
-test-only with_sealer
+# --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
+
+
+# --- G3（31 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+
+orphan bio_care_assembly_from_env  # G3
+orphan bio_circadian_wiring_from_env  # G3
+orphan bio_lifecycle_module_from_env_value  # G3
+orphan deviation  # G3
+orphan disarm  # G3
+orphan engine_mut  # G3
+orphan entity_mut  # G3
+orphan from_episode  # G3
+orphan graph_snapshot  # G3
+orphan load_graph  # G3
+orphan mcts_search  # G3
+orphan mine_and_load  # G3
+orphan mood_trend  # G3
+orphan no_bio_care_inputs  # G3
+orphan recall_by_mood  # G3
+orphan record_tool_result  # G3
+orphan set_last_hold  # G3
+orphan should_suppress  # G3
+orphan state_mut  # G3
+orphan stop_all  # G3
+orphan to_prompt  # G3
+orphan with_access_recorder  # G3
+orphan with_attrs  # G3
+orphan with_deadline  # G3
+orphan with_depth_increment  # G3
+orphan with_llm_proposer  # G3
+orphan with_material_source  # G3
+orphan with_miner  # G3
+orphan with_quorum_gate_probe  # G3
+orphan with_system_markers  # G3
+orphan with_task_type  # G3
+
+# --- G4（38 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+
+orphan with_age  # G4
+orphan with_allowed_capability  # G4
+orphan with_as_of  # G4
+orphan with_backend  # G4
+orphan with_behavior  # G4
+orphan with_bio_self_status_from_env  # G4
+orphan with_busy_timeout  # G4
+orphan with_capabilities  # G4
+orphan with_clear_env  # G4
+orphan with_data  # G4
+orphan with_date  # G4
+orphan with_deep_risk_floor  # G4
+orphan with_envelope_budget  # G4
+orphan with_foreign_keys  # G4
+orphan with_importance_weight  # G4
+orphan with_journal_mode  # G4
+orphan with_len  # G4
+orphan with_max_episodes  # G4
+orphan with_metrics_window  # G4
+orphan with_min_candidate_score  # G4
+orphan with_output_bounds  # G4
+orphan with_port  # G4
+orphan with_preview_chars  # G4
+orphan with_proactive_budget  # G4
+orphan with_ranking_config  # G4
+orphan with_rate_limiting  # G4
+orphan with_reader  # G4
+orphan with_runtime_overrides  # G4
+orphan with_safety_provider  # G4
+orphan with_session_label  # G4
+orphan with_shell_executable  # G4
+orphan with_synchronous  # G4
+orphan with_system_clock  # G4
+orphan with_system_prompt  # G4
+orphan with_task_scope  # G4
+orphan with_used  # G4
+orphan with_user_agent  # G4
+orphan with_voices_error  # G4
+
+# --- G5（4 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+
+orphan begin_wait  # G5
+orphan end_wait  # G5
+orphan idle_elapsed  # G5
+orphan is_tripped  # G5
+
+# --- G6（81 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+
+orphan constrain_to_trusted  # G6
+orphan decompose_default  # G6
+orphan doc_ops_capability  # G6
+orphan extract_experience_from_episode  # G6
+orphan save_to_cluster  # G6
+orphan serve_canonical  # G6
+orphan sheet_ops_capability  # G6
+orphan trait_locks_path  # G6
+orphan validate_schedule  # G6
+orphan recall_with_policy  # G6
+orphan retract_relation  # G6
+orphan select_candidates  # G6
+orphan accumulator_mut  # G6
+orphan active_profile  # G6
+orphan adapt_gate  # G6
+orphan add_action  # G6
+orphan allow_capability  # G6
+orphan apeireth_sdk_py  # G6
+orphan beside_feeds  # G6
+orphan bio_care_config_from_env  # G6
+orphan claim_count  # G6
+orphan consolidate_governed  # G6
+orphan default_min_count  # G6
+orphan dispatch_gateway_serve  # G6
+orphan ensure_governance  # G6
+orphan events_with_ids  # G6
+orphan execute_streaming  # G6
+orphan explicit_allow_list  # G6
+orphan extract_features  # G6
+orphan extract_features_v2  # G6
+orphan family_enforced  # G6
+orphan fetch_governed  # G6
+orphan generate_portable_config  # G6
+orphan get_for_subject  # G6
+orphan get_history  # G6
+orphan get_page  # G6
+orphan get_persona  # G6
+orphan governance_cas_failure  # G6
+orphan has_signal  # G6
+orphan held_for  # G6
+orphan is_compatible  # G6
+orphan is_episode_forgotten  # G6
+orphan is_satisfied_by  # G6
+orphan last_watch  # G6
+orphan library_root  # G6
+orphan links_for_diary  # G6
+orphan list_active  # G6
+orphan matches_word  # G6
+orphan materialize_to_sink  # G6
+orphan minimax_default  # G6
+orphan nervous_system_from_frame  # G6
+orphan not_wired_reason  # G6
+orphan outbound_budget  # G6
+orphan put_default  # G6
+orphan put_episode_full  # G6
+orphan query_as_of  # G6
+orphan query_facts  # G6
+orphan query_recent  # G6
+orphan query_with_time_range  # G6
+orphan rebind  # G6
+orphan recent_actions  # G6
+orphan reconnect_attempts  # G6
+orphan register_provider  # G6
+orphan remove_job  # G6
+orphan repetition_policy  # G6
+orphan retrieve_with_reranker  # G6
+orphan rule_count  # G6
+orphan scalar  # G6
+orphan sdk_method_names  # G6
+orphan session_state  # G6
+orphan set_quiet_threshold  # G6
+orphan shard_count  # G6
+orphan snapshot_from_env  # G6
+orphan strategy_kind  # G6
+orphan streaks  # G6
+orphan stream_len  # G6
+orphan tool_paths  # G6
+orphan total_subscriptions  # G6
+orphan traverse_from  # G6
+orphan upsert_hallway  # G6
+orphan without_as_of  # G6
+
+# --- G7（3 条）：**owner 裁定不接**（有意保留，不是遗漏）：W1 IM 通道（2026-10-23 裁定暂缓）、W5 哲学拦截层（2026-10-24 裁定不接）。保留代码是有意的 —— 解冻条件写在 `docs/status/unwired-ledger.md`。
+
+orphan im_router  # G7
+orphan closure_of  # G7
+orphan verdict_keys_for_principle  # G7

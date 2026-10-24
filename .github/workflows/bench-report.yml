@@ -1,0 +1,60 @@
+name: Bench report (report-only, 不判红)
+
+# 为什么**只报告不判红**：
+# 共享 runner 上墙钟基准噪声很大（同代码两次跑差异可达数十 %）。把噪声做成门禁，
+# 会得到"会红但不该红"的红灯 —— 那比没有门禁更糟（和「绿灯骗人」对称的另一种病）。
+#
+# 所以本 job 的产出是**数据**：结果落 artifact + job summary，供人工定期比对趋势。
+# 若将来要升级为门禁，正确做法是换成**确定性指标**（分配次数 / 指令数），
+# 而不是收紧墙钟阈值。
+
+on:
+  schedule:
+    - cron: '30 18 * * 0'   # 每周日 18:30 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: cargo bench（结果只记录，不判红）
+        run: |
+          cargo bench --workspace --locked 2>&1 | tee bench-output.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        shell: bash
+        id: bench
+
+      - name: 摘要（人工看趋势用）
+        if: always()
+        run: |
+          {
+            echo "## Bench 报告（report-only）"
+            echo ""
+            echo "⚠️ 本 job **不判红**：共享 runner 墙钟噪声大，做成门禁会产生假红灯。"
+            echo "要升级为门禁，请改用确定性指标（分配次数 / 指令数）。"
+            echo ""
+            echo '```'
+            grep -E "time:|thrpt:" bench-output.txt | head -80 || echo "(未采到 time:/thrpt: 行，见 artifact)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bench output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-output
+          path: bench-output.txt
+          retention-days: 30

@@ -81,17 +81,6 @@ impl TaskBoardWriteFace {
     }
 }
 
-/// 动作的写面归类 (未知动作无写面)。
-pub fn task_board_write_face_for_action(action: &str) -> Option<TaskBoardWriteFace> {
-    match action {
-        ACTION_TASK_ADD | ACTION_TASK_REASSIGN | ACTION_TASK_COMPLETE => {
-            Some(TaskBoardWriteFace::TaskBookWrite)
-        }
-        ACTION_TASK_LIST => Some(TaskBoardWriteFace::ReadOnly),
-        _ => None,
-    }
-}
-
 /// 审批档位理由 (审批卡载荷同文)。按动作如实标注写面: 改任务簿 = 写文件
 /// (write_intent 同族) / 只读列自家任务态。
 pub fn task_board_approval_reason(action: Option<&str>) -> String {
