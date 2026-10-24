@@ -24,6 +24,7 @@ pub mod keyring_bootstrap;
 pub mod lessons_command;
 pub mod principal_forget_port;
 pub mod rate_limit_wire;
+pub mod read_only_grants;
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
@@ -896,19 +897,10 @@ fn build_production_governance_parts_with_dataset(
     Arc<std::sync::Mutex<PermissionPolicy>>,
     Arc<BehaviorChainGuardHook>,
 ) {
-    let mut policy = PermissionPolicy::new();
-    policy.grant(Permission::ExecuteTool("tool.repo".to_string()));
-    // 自省通道: `tool.self_status` 只读档 —— 默认可用、零审批 (无
-    // require_approval)。模型可实测自身状态再发言, 不靠翻文件撞见自己。
-    policy.grant(Permission::ExecuteTool("tool.self_status".to_string()));
-    // 性格周报 (`tool.trait_report`, 裁定 ⑤): 只读档 —— 默认可用、零审批
-    // (与 `tool.self_status` 同档: 只读成长计既有账的数字与调整原因, 不写
-    // 不执行不外联)。
-    policy.grant(Permission::ExecuteTool("tool.trait_report".to_string()));
-    if enable_local_read_tools {
-        policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
-        policy.grant(Permission::ExecuteTool("tool.search".to_string()));
-    }
+    // 默认可用的**只读**工具授予 (自省 / 代码概览 / 性格周报) —— 清单与理由见
+    // `read_only_grants` 模块 (尺寸棘轮: 装配根只留一次调用)。
+    let mut policy =
+        read_only_grants::grant_read_only_tools(PermissionPolicy::new(), enable_local_read_tools);
     // 件一风险映射: 受控文件写入 (`tool.apply_patch`) 的三档授权。
     // 默认档 grant + require_approval 标记 = 每次写入都停在人工审批 (本地
     // 审批面板 + IM 审批卡同链); 自动放行档只 grant, 放行规则交给写入风险
@@ -2039,6 +2031,7 @@ async fn build_cognitive_modules_at(
         morphology_recall: morphology_recall_enabled_from_env(),
         community_triage: community_triage_enabled_from_env(),
         education: education_enabled_from_env(),
+        repo_map: true,
         absorption_insight: absorption_insight_enabled_from_env(),
         // shell/fetch 旋钮: 只注册工具; 执行许可由治理层 grant+approval 决定.
         // W1 §2.4 (2026-10-10): shell 沙箱全局旋钮, 默认**开** (设计拍板

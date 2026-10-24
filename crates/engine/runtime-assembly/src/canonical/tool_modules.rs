@@ -9,6 +9,7 @@ use std::sync::Arc;
 use apeireth_plugin::ToolCapability;
 use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::exposure_audit::ExposureAuditTool;
+use apeireth_tools_canonical::repo_map_tool::{RepoMapConfig, RepoMapTool};
 use apeireth_tools_canonical::{
     apply_patch_capability, authorized_file_write_policy, authorized_git_write_policy,
     authorized_worktree_apply_policy, content_feed_capability, git_write_capability,
@@ -427,6 +428,42 @@ impl Default for EducationModule {
 impl CapabilityProvider for EducationModule {
     fn id(&self) -> &str {
         "module.tool.education"
+    }
+
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![self.tool.clone()]
+    }
+}
+
+/// Module providing the code-map tool (`tool.repo_map`, 代码骨架概览).
+///
+/// 2026-10-24: 包装 `RepoMapTool` —— 跨语言符号提取 + 跨文件依赖图 +
+/// Personalized PageRank 排序, 在 token 预算内输出紧凑大纲。
+/// 只读、工作区限域、三重预算封顶（文件数 / 单文件字节 / token）。
+///
+/// **注册即闸**: 配置缺省时 `tool.repo_map` 不注册, 自述名册照实 false ——
+/// 与 `tool.doc_ops` 同一口径（工作区根由组装根注入, 不给默认根）。
+pub struct RepoMapModule {
+    tool: Arc<RepoMapTool>,
+}
+
+impl RepoMapModule {
+    /// 绑定工作区根（扫描限域）。
+    pub fn new(workspace_root: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            tool: Arc::new(RepoMapTool::new(RepoMapConfig::new(workspace_root))),
+        }
+    }
+
+    /// Access the underlying code-map tool.
+    pub fn tool(&self) -> &Arc<RepoMapTool> {
+        &self.tool
+    }
+}
+
+impl CapabilityProvider for RepoMapModule {
+    fn id(&self) -> &str {
+        "module.tool.repo_map"
     }
 
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {

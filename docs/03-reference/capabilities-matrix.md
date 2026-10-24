@@ -108,7 +108,7 @@
 | **运行时 (Runtime)** | `rt.heartbeat` | `apeireth-runtime::canonical::heartbeat`| `schedule_task()`, `acquire_flow_lock()` | 5 触发源 + 二叉最大堆 + FlowLock 心流锁 |
 | **运行时 Assembly** | `rt.causal_world_model` | `apeireth-runtime-assembly::canonical::causal_world_model`| `CausalWorldModel::fork_branch()`, `commit_branch()` | CoW 假说分支推演 + SAGA 逆向补偿 LIFO 回滚 |
 | **运行时 Assembly** | `rt.harness_patch` | `apeireth-runtime-assembly::canonical::harness_patch`| `record_failure()`, `synthesize_patches()`| 失败轨迹自动演绎策略补丁 |
-| **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` + runtime-assembly registration | `RepoMapGenerator::generate_map()` | 跨语言 AST 符号提取 + PageRank 代码地图 |
+| **工具 (Capabilities)** | `tool.repo_map` | `apeireth-tools-canonical::repo_map` + `repo_map_tool` + `RepoMapModule`（production 注册，与 `tool.repo` 同源工作区根） | `SymbolParser::parse_file()` → `RepoDependencyGraph::build()` → `compute_personalized_pagerank()` → `RepoMapGenerator::generate_map()` | 跨语言**符号签名**提取（正则行扫描，**非** Tree-sitter AST）+ Personalized PageRank 排序 + token 预算内紧凑大纲；只读、工作区限域、三重预算封顶。**PRODUCTION WIRED（只读、默认可用）** |
 | **工具 (Capabilities)** | `tool.apply_patch` | `apeireth-tools-canonical::apply_patch` | `apply_patch(patch_str)` | 两阶段提交 + 100% 自动原子回滚 |
 | **工具 (Capabilities)** | `tool.git_write` | `apeireth-tools-canonical::git_write` | `git_write(command_str)` | 写意图三级词表（L1 可逆默认人批 / L2 出网永远人批 / L3 毁灭无工具面）+ 命令白名单词法分级（变形防护/组合取最严）+ 受控通道执行 |
 | **工具 (Capabilities)** | `tool.guardrail` | `apeireth-tools-canonical::guardrail` | `pre_call_guard()`, `post_call_guard()` | 路径/命令拦截 + API Key/私钥出站绊线 |

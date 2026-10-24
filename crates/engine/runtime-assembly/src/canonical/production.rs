@@ -55,8 +55,8 @@ use super::self_status_source::{
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
     EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule, FilesystemModule,
-    GitWriteModule, ImageOpsModule, McpModule, ProposalModule, ReconModule, RepoModule,
-    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule,
+    GitWriteModule, ImageOpsModule, McpModule, ProposalModule, ReconModule, RepoMapModule,
+    RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule,
     SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule,
     WorktreePlanModule,
 };
@@ -283,6 +283,15 @@ pub struct ProductionModulesConfig {
     pub community_triage: bool,
     /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
     pub education: bool,
+    /// 代码地图工具注册 (`tool.repo_map`, 代码骨架概览)。
+    ///
+    /// 2026-10-24: 跨语言符号提取 + 跨文件依赖图 + Personalized PageRank
+    /// 排序, 在 token 预算内输出紧凑大纲。**只读**、工作区限域、三重预算封顶。
+    ///
+    /// 扫描根与 `tool.repo` **同源**（[`Self::repo`] 用同一个
+    /// `backends.workspace_root`）—— 同一份工作区只有一把尺。
+    /// 工作区根缺席时不注册（名册按实际注册条件取值）。
+    pub repo_map: bool,
     /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
     pub absorption_insight: bool,
     /// Register the structured self-report tool (`tool.self_status`, 自省通道).
@@ -447,6 +456,7 @@ impl Default for ProductionModulesConfig {
     fn default() -> Self {
         Self {
             memory_recall: true,
+            repo_map: true,
             proactive_recall: None,
             memory_writeback: true,
             preference_recall: true,
@@ -956,6 +966,18 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::Repo);
                 let provider = RepoModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 代码地图 (`tool.repo_map`, 2026-10-24): 跨语言符号提取 + 跨文件
+        // 依赖图 + Personalized PageRank, token 预算内输出紧凑大纲。
+        // **只读**、工作区限域、三重预算封顶 (文件数 / 单文件字节 / token)。
+        // 扫描根与 `tool.repo` 同源 (同一个 `backends.workspace_root`)。
+        if config.repo_map {
+            if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::Repo);
+                let provider = RepoMapModule::new(root.clone());
                 capabilities.extend(provider.capabilities());
             }
         }
