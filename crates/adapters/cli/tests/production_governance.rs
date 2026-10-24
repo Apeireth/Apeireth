@@ -86,10 +86,19 @@ async fn assert_decision(governance: &GovernancePipeline, capability: &str, expe
 #[tokio::test]
 async fn explicit_false_policy_grants_repo_only_and_denies_read_tools() {
     let governance = build_production_governance(false);
+    // 生产治理链**组成契约**（顺序即语义：授权 → 限流 → 内容风险 → 行为链）。
+    //
+    // 2026-10-25 增 `rate_limit`：失控的死循环/高频外部调用会耗尽 API 配额或
+    // 造成 DoS —— 权限许可**不等于**可以无限调。它挂在授权之后、内容风险之前。
+    // **默认挂载**（而非「默认关 + env 开关」）的理由：
+    // ① env 棘轮只减不增已满额；② 「默认关 + 开关」等于这闸依然没接电。
+    // 行为影响可控：配额内**完全放行**，只在同一 (能力, 会话) 超 30/分钟或
+    // 300/小时时才拒（阈值宽松到正常路径碰不到）。
     assert_eq!(
         governance.hook_names(),
         [
             "permission_governance",
+            "rate_limit",
             "input_security.credential_disclosure",
             "input_security.prompt_injection",
             "behavior_chain_guard",
