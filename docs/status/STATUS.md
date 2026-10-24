@@ -5,35 +5,35 @@
 
 | id | level | default | switch_env | verified_at | next_review |
 |---|---|---|---|---|---|
-| `rt.provider_router` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-11-20 |
-| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `fdfe4b4c` | 2026-11-20 |
-| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `fdfe4b4c` | 2026-11-20 |
-| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `fdfe4b4c` | 2026-11-20 |
-| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `fdfe4b4c` | 2026-11-20 |
-| `sec.egress_control` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-12-01 |
-| `sec.object_access` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-12-01 |
-| `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `fdfe4b4c` | 2026-12-01 |
-| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `fdfe4b4c` | 2026-12-01 |
-| `mem.lesson_object` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-12-01 |
-| `gap.memory_update` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-11-20 |
-| `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `fdfe4b4c` | 2026-11-20 |
-| `sec.linux_containment` | IMPLEMENTED | - | - | `fdfe4b4c` | 2026-11-20 |
-| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `fdfe4b4c` | 2026-11-20 |
-| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `fdfe4b4c` | 2026-11-20 |
-| `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-11-20 |
-| `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-11-20 |
-| `gov.reflection_queue` | IMPLEMENTED | - | - | `fdfe4b4c` | 2026-11-20 |
-| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `fdfe4b4c` | 2026-11-20 |
-| `sec.governance_chain_drill` | IMPLEMENTED | - | - | `fdfe4b4c` | 2026-11-20 |
-| `rel.release_asset_verify` | IMPLEMENTED | - | - | `fdfe4b4c` | 2026-11-20 |
-| `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-11-20 |
-| `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-11-20 |
-| `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `fdfe4b4c` | 2026-11-20 |
-| `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `fdfe4b4c` | 2026-11-20 |
-| `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `fdfe4b4c` | 2026-11-20 |
-| `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `fdfe4b4c` | 2026-11-20 |
-| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `fdfe4b4c` | 2026-11-20 |
-| `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `fdfe4b4c` | 2026-11-20 |
+| `rt.provider_router` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-11-20 |
+| `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `71e68b08` | 2026-11-20 |
+| `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `71e68b08` | 2026-11-20 |
+| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `71e68b08` | 2026-11-20 |
+| `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `71e68b08` | 2026-11-20 |
+| `sec.egress_control` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-12-01 |
+| `sec.object_access` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-12-01 |
+| `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `71e68b08` | 2026-12-01 |
+| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `71e68b08` | 2026-12-01 |
+| `mem.lesson_object` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-12-01 |
+| `gap.memory_update` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-11-20 |
+| `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `71e68b08` | 2026-11-20 |
+| `sec.linux_containment` | IMPLEMENTED | - | - | `71e68b08` | 2026-11-20 |
+| `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `71e68b08` | 2026-11-20 |
+| `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `71e68b08` | 2026-11-20 |
+| `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-11-20 |
+| `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-11-20 |
+| `gov.reflection_queue` | IMPLEMENTED | - | - | `71e68b08` | 2026-11-20 |
+| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `71e68b08` | 2026-11-20 |
+| `sec.governance_chain_drill` | IMPLEMENTED | - | - | `71e68b08` | 2026-11-20 |
+| `rel.release_asset_verify` | IMPLEMENTED | - | - | `71e68b08` | 2026-11-20 |
+| `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-11-20 |
+| `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-11-20 |
+| `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `71e68b08` | 2026-11-20 |
+| `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `71e68b08` | 2026-11-20 |
+| `bio.tone` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_TONE` | `71e68b08` | 2026-11-20 |
+| `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `71e68b08` | 2026-11-20 |
+| `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `71e68b08` | 2026-11-20 |
+| `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `71e68b08` | 2026-11-20 |
 
 ## 使用
 
