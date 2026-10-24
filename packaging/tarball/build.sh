@@ -15,7 +15,9 @@
 set -uo pipefail  # -e removed: 0 触碰, 1.0 release engineer 后续实装 musl 包装
 cd "$(dirname "$0")/../.."
 
-VERSION="${APEIRETH_VERSION:-2.0.0-rc.4}"
+# 版本唯一真源: workspace Cargo.toml（APEIRETH_VERSION 可覆盖；不再硬编码，避免各脚本版本漂移）
+VERSION="${APEIRETH_VERSION:-$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version[[:space:]]*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+[[ -n "${VERSION}" ]] || { echo "❌ 无法从 Cargo.toml 读取 workspace.version（可显式设 APEIRETH_VERSION）" >&2; exit 1; }
 TARGET="${APEIRETH_TARGET:-x86_64-unknown-linux-musl}"
 
 echo "=== apeireth tarball build v${VERSION} (target=${TARGET}) ==="

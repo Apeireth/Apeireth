@@ -6,7 +6,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+# 版本唯一真源: workspace Cargo.toml（APEIRETH_VERSION 可覆盖；不再硬编码，避免各脚本版本漂移）
+VERSION="${APEIRETH_VERSION:-$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version[[:space:]]*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+[[ -n "${VERSION}" ]] || { echo "❌ 无法从 Cargo.toml 读取 workspace.version（可显式设 APEIRETH_VERSION）" >&2; exit 1; }
 TAP_REPO="${APEIRETH_TAP_REPO:-apeireth/homebrew-tap}"
 
 echo "=== apeireth brew formula build v${VERSION} ==="

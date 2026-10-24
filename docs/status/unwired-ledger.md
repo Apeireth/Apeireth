@@ -138,6 +138,42 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5f 打包/安装脚本的版本系统性漂移 —— 已统一从 Cargo.toml 派生（2026-10-25）
+
+**缺陷**：15 个打包/安装脚本各自硬编码版本默认值，其中多数**已过期**：
+
+| 脚本 | 修前默认 | 实际产品版本 |
+|---|---|---|
+| `scripts/install/install-brew.sh` | `1.0.0` | 2.0.0-rc.4 |
+| `scripts/install/install-deb.sh` | `2.0.0~rc1` | 2.0.0-rc.4 |
+| `scripts/install/install-rpm.sh` | `2.0.0` | 2.0.0-rc.4 |
+| `scripts/install/install-tarball.sh` | `2.0.0-rc.4` ✓ | 2.0.0-rc.4 |
+| `scripts/install/install-scoop.ps1` | `1.0.0` | 2.0.0-rc.4 |
+| `packaging/deb/build.sh` / `packaging/deb/install-deb.sh` | `2.0.0~rc1` | 2.0.0-rc.4 |
+| `packaging/rpm/{build,install-rpm}.sh` | `2.0.0` | 2.0.0-rc.4 |
+| `packaging/brew/{build,install-brew}.sh` | `1.0.0`（安装面 `1.0.0`） | 2.0.0-rc.4 |
+
+⇒ 照文档跑 `sudo ./scripts/install/install-deb.sh` 会**找错版本号的包**（找不到即报错），
+且注释里还写着「编译期 hardcode VERSION=1.0.0」（**注释与代码也不一致**）。
+
+**修法（系统性，非逐个改数字）**：15 个脚本统一改为**从 workspace `Cargo.toml` 派生**
+（`APEIRETH_VERSION` 仍可覆盖），并补上「先 `cd` 到仓库根」保证与调用处 cwd 无关
+（`packaging/rpm/install-rpm.sh` 的 `cd` 原本在版本行之后、`packaging/tarball/install.sh`
+与 `packaging/brew/install-brew.sh` 原本**没有** `cd` —— 从别处调用会解析不到 `Cargo.toml`）。
+PowerShell 版（`install-scoop.ps1`）用等价的正则解析。注释里的「hardcode VERSION=1.0.0」
+一并改成派生口径。
+
+**实测**：
+- 15 个 bash 脚本 `bash -n` 全过；
+- 从 `/tmp`（非仓库目录）调用 `packaging/tarball/install.sh` 与
+  `packaging/brew/install-brew.sh` → **都正确解析到 `2.0.0-rc.4`** 并进入各自的下游检查
+  （分别报「未找到二进制」「brew 未装」，均为如实失败、无副作用）；
+- `grep 'APEIRETH_VERSION:-[0-9]' scripts/install/ packaging/` → **零残留**。
+
+**有意保留未改**：`scripts/release/cosign-sign-all.sh` 与
+`scripts/release-1.0-checklist.sh` 仍用 `1.0.0` —— 那是**产品轴 tag**（1.0.0），
+与 workspace 轴（2.0.0-rc.4）本就不同轴；贸然统一反而错。已在台账标注待 owner/发布线确认。
+
 ### 5.5e 两个 release 脚本的安全缺陷：`rollback.sh` 静默忽略 `--dry-run`、upgrade dry-run 缺密钥即死（2026-10-25）
 
 跑 CI release-prep 里的三个 dry-run 脚本时发现：
