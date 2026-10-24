@@ -540,10 +540,21 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_baseline_check(args.log)
     if args.matrix_check:
         return cmd_matrix_check(args.strict)
+    # --check 与 --verify 可组合：两者都是独立门禁，都要跑完再汇总退出码。
+    # 2026-10-24 修正：本处原为 `if args.check: return cmd_check()` 早于 --verify 分支，
+    #   导致 AGENTS.md §5.1 记载的 `--verify --check` 组合只跑 drift 检查、--verify 永不执行
+    #   （假绿洞：STALE / FAIL 的 claim 能从这道门溜过去）。现在两者顺序无关，且可同时跑。
+    exit_code = 0
     if args.check:
-        return cmd_check()
+        check_code = cmd_check()
+        if check_code != 0:
+            exit_code = check_code
     if args.verify:
-        return cmd_verify(claims_path, args.strict, args.block_stale)
+        verify_code = cmd_verify(claims_path, args.strict, args.block_stale)
+        if verify_code != 0:
+            exit_code = verify_code
+    if args.check or args.verify:
+        return exit_code
     parser.print_help()
     return 0
 
