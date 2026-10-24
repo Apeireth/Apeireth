@@ -24,6 +24,7 @@ pub mod governance_chain;
 pub mod guard_decision_wiring;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
+pub(crate) mod llm_factory_env;
 pub mod parallel_dispatch_wiring;
 pub mod principal_forget_port;
 pub mod rate_limit_wire;
@@ -59,6 +60,7 @@ use apeireth_guard::{
     JointRiskClassifier, RuleIntentInterpreter,
 };
 use apeireth_plugin::memory_backend::MemoryBackend;
+
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, PendingApprovalView, Runtime, SessionStore, TurnOutcome,
     TurnRequest, TurnResponse,
@@ -66,6 +68,7 @@ use apeireth_runtime::canonical::{
 use apeireth_runtime_assembly::canonical::BioApprovalSocialSource;
 use apeireth_runtime_assembly::{canonical::production::BioProbeSlots, SqliteSessionStore};
 use apeireth_tools_canonical::{FetchConfig, TrustedShellConfig, APPLY_PATCH_CAPABILITY_ID};
+pub(crate) use llm_factory_env::{council_config_from_env, llm_factory_from_env};
 
 /// One persistent SQLite database is shared by the cognitive backends.
 /// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
@@ -2994,75 +2997,6 @@ pub async fn dispatch_dream(
         diary_root.display(),
         report.to_markdown()
     ))
-}
-
-/// 从 env 找真 LLM 工厂 (openai-compatible 优先, MiniMax 回退) + 首个模型 id。
-/// 都未配 → Err (0 装: 不造"调用时才失败"的假可用)。
-fn llm_factory_from_env(
-) -> Result<(Arc<dyn apeireth_plugin::llm_factory::LlmFactory>, String), String> {
-    if std::env::var("APEIRETH_OPENAI_MODELS")
-        .ok()
-        .is_some_and(|v| !v.trim().is_empty())
-    {
-        if let Ok(factory) = apeireth_provider::openai_compatible_llm_factory::OpenAiCompatibleLlmFactory::from_env_with_resolver(
-            llm_credential_resolver(),
-        ) {
-            let model = factory
-                .model_ids()
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| "deepseek-v4-flash".to_string());
-            return Ok((
-                Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
-                model,
-            ));
-        }
-    }
-    if std::env::var("APEIRETH_API_KEY")
-        .ok()
-        .is_some_and(|v| !v.trim().is_empty())
-    {
-        if let Ok(factory) =
-            apeireth_provider::minimax_llm_factory::MinimaxLlmFactory::from_env_with_resolver(
-                llm_credential_resolver(),
-            )
-        {
-            let model = factory
-                .model_ids()
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| "MiniMax-M3".to_string());
-            return Ok((
-                Arc::new(factory) as Arc<dyn apeireth_plugin::llm_factory::LlmFactory>,
-                model,
-            ));
-        }
-    }
-    Err("no llm factory configured".to_string())
-}
-
-/// **council 旋钮** (2026-10-10 拍板, 默认 3): `APEIRETH_COUNCIL_ADVISORS=N` (1-7) =
-/// 裁决顾问数 (规范序取前 N: Safety/Performance/Philosophy/History/Strategy/
-/// Ethics/Legal, Safety 恒首位); `APEIRETH_COUNCIL_TIMEOUT_MS` = 单顾问超时
-/// (默认 30000, 台账 #46 实测: 思考型模型 reasoning 余量下 10s 不够)。
-fn council_config_from_env() -> apeireth_orchestration::CouncilConfig {
-    use apeireth_orchestration::CouncilConfig;
-    use std::time::Duration;
-    let max_advisors = std::env::var("APEIRETH_COUNCIL_ADVISORS")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .map(|n| n.clamp(1, 7))
-        .unwrap_or(3);
-    let per_advisor_timeout = std::env::var("APEIRETH_COUNCIL_TIMEOUT_MS")
-        .ok()
-        .and_then(|v| v.trim().parse::<u64>().ok())
-        .map(Duration::from_millis)
-        .unwrap_or(Duration::from_millis(30_000));
-    CouncilConfig {
-        max_advisors,
-        per_advisor_timeout,
-        ..CouncilConfig::default()
-    }
 }
 
 /// **council 决策环节 D —— 显式咨询** (2026-10-10 拍板): `apeireth council "<议题>"`。

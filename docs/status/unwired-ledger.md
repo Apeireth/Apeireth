@@ -116,6 +116,20 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4m `council` 缺 LLM 工厂时只回一行英文 —— 已修（2026-10-25）
+
+**缺陷**：`apeireth council <主题>` 在未配 LLM 时回 `no llm factory configured`
+—— 英文、无行动指引，用户不知道要设哪个 env。对比 `subagent` 同一处境给出的是
+「请设 `APEIRETH_OPENAI_MODELS` (+URL/KEY) 或 `APEIRETH_API_KEY`」**同一口径的
+可行动提示**（真机对照发现的质量不一致）。
+
+**修法**：提示抽成常量 `LLM_FACTORY_MISSING_HINT`（点名两个 env），
+并加守卫测试 `missing_factory_hint_names_the_envs_to_set`
+（脱 env 直接钉住「提示必须点名要配的 env」）。
+
+**顺带真拆分**：工厂/旋钮的 env 解析整块搬到 `cli/src/llm_factory_env.rs`
+（`lib.rs` 有尺寸棘轮：3885 → **3812**，基线 3878 内）。
+
 ### 5.4l 认证/权限错误的「建议」指向错误的东西 —— 已修（2026-10-25）
 
 **缺陷（真机 HTTP 抓到的两处，同一个病根：一个错误码被多种原因共用）**：
