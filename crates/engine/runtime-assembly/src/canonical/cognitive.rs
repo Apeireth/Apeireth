@@ -428,10 +428,25 @@ impl PartnerBondModule {
     }
 }
 
-/// 羁绊注入文本 (纯函数, 供 TurnStart overlay 与测试)。
+/// 互动连续性注入文本 (纯函数, 供 TurnStart overlay 与测试)。
+///
+/// **ADR-0014 §1.1 改名**（2026-10-24）：注入给模型的措辞从「羁绊阶段」改为
+/// 「互动连续性阶段」。理由（外部顾问原判）：
+///
+/// > 它把系统内部的交互统计，翻译成了**关系发展的事实**。用户看到的不是连续性本身，
+/// > 而是产品对连续性的解释。
+///
+/// 「羁绊」是一个**关系断言**（暗示双方已形成某种羁绊），而系统实际拥有的只是
+/// 「我们交互了多少次、演化到第几档」这一串**可验证的统计**。改成「互动连续性」
+/// 之后，措辞与它真正掌握的事实对齐 —— 这是 ADR-0014 §6「最小诚实自述集」
+/// （每句自述须对应可验证观察）在**注入面**的落实。
+///
+/// 注：**内部类型名不改**（`Bond` / `BondStage` / `bond_overlay_text`）——
+/// 那是代码标识符，不是对用户或模型的表述；改它要动 schema 与迁移，
+/// 收益为零。诚实纪律管的是**表述面**，不是标识符。
 fn bond_overlay_text(partner: &apeireth_memory::partner::Partner) -> String {
     format!(
-        "【关系状态】羁绊阶段: {}, 羁绊深度: {:.2}, 演化次数: {} (工程化关系状态, 供语气与信任校准参考)",
+        "【互动连续性】阶段: {}, 深度: {:.2}, 演化次数: {} (工程化的交互统计, 供语气与信任校准参考; 不代表关系性质)",
         bond_stage_cn(&partner.bond.stage),
         partner.bond.depth.value(),
         partner.bond.evolution_count
@@ -728,8 +743,10 @@ mod partner_bond_tests {
         );
         partner.bond = Bond::new(1000);
         let text = bond_overlay_text(&partner);
-        assert!(text.contains("羁绊阶段: 初识"), "{text}");
-        assert!(text.contains("羁绊深度: 0.00"), "{text}");
+        assert!(text.contains("互动连续性】阶段: 初识"), "{text}");
+        assert!(text.contains("深度: 0.00"), "{text}");
+        // ADR-0014 §1.1: 注入面不得再出现关系断言词「羁绊」
+        assert!(!text.contains("羁绊"), "注入文本不得再断言关系: {text}");
     }
 
     #[test]
