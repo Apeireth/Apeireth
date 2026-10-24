@@ -134,3 +134,10 @@ path = "fuzz_targets/approval_risk.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "recon_scope"
+path = "fuzz_targets/recon_scope.rs"
+test = false
+doc = false
+bench = false
