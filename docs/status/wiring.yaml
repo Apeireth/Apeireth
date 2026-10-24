@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 0c40163d90eb79026c3180058da862d58f0d904b04aa94de3581e6e90b676401
+claims_sha256: c0710be78ee21399d48f9c346efad9940d0418219c2720bffdf0f5522b5dac4c
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -175,23 +175,40 @@ items:
         - "crates/engine/runtime/src/canonical/runtime.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
+        - "crates/engine/runtime-assembly/src/accountability.rs"
+        - "crates/engine/runtime-assembly/src/notification_duty.rs"
+        - "crates/engine/runtime-assembly/src/consequence.rs"
+        - "crates/engine/runtime-assembly/src/accountability_probe.rs"
+        - "crates/capabilities/tools/src/accountability_view.rs"
+        - "crates/foundation/governance/src/authorization.rs"
         - "crates/adapters/cli/src/egress_command.rs"
         - "crates/adapters/cli/src/lib.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/egress_command.rs"
         - "crates/adapters/cli/src/lib.rs"
+        - "crates/capabilities/tools/src/accountability_view.rs"
+        - "crates/engine/runtime-assembly/src/accountability.rs"
+        - "crates/engine/runtime-assembly/src/accountability_probe.rs"
+        - "crates/engine/runtime-assembly/src/consequence.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
+        - "crates/engine/runtime-assembly/src/notification_duty.rs"
         - "crates/engine/runtime/src/canonical/egress_gate.rs"
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/foundation/governance/src/authorization.rs"
     default_enabled: false
     validated:
       tests:
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
+        - "crates/engine/runtime-assembly/src/accountability.rs"
+        - "crates/engine/runtime-assembly/src/notification_duty.rs"
+        - "crates/engine/runtime-assembly/src/consequence.rs"
+        - "crates/capabilities/tools/src/accountability_view.rs"
+        - "crates/foundation/governance/src/authorization.rs"
         - "crates/adapters/cli/src/egress_command.rs"
       claims_id: "sec.egress_gate"
     gaps:
