@@ -27,15 +27,13 @@
 //! - ❌ 0 引 NewAPI (per 主人 R17 决策)
 //! - ❌ 0 重复造轮子 (复用 `apeireth-protocol` 5 集成点 + workspace deps)
 //! - ✅ 编译期 hardcode K-1 强校验 4 条
-//! - ✅ STUB MODE 守门 (阶段 6 不实接 HTTP, 编译期断言, 显式 `unimplemented!()`)
+//! - ✅ K-1 强校验 4 条 + `STUB_MODE` 守门标志
 //!
-//! **阶段 6 stub 边界**:
-//! - ✅ type / struct / enum / const 全部就位
-//! - ✅ 6 工具 method 签名 + TOOL_WHITELIST 8 + validate_tool_call
-//! - ✅ Auth 5 组件 stub (Bearer verify / keyring lookup / token bucket / audit append / quota unimplemented)
-//! - ✅ K-1 强校验 4 条 (PLATFORM_NAME / TOOL_WHITELIST 计数 / method enum / "must-do" 标记)
-//! - ❌ 真实 HTTP 调 `apeireth-api` (留 R21 真接, 阶段 6 走编译期 `unimplemented!()` 守门)
-//! - ❌ 真实 WebSocket (留 R21 真接, 阶段 6 走 stub return)
+//! **实接状态（2026-10-25 对账：原文写「不实接 HTTP、走 `unimplemented!()`」，已过期）**:
+//! - ✅ **6 工具 HTTP 真传输**（W5，2026-10-10）：`invoke_tool` → reqwest POST
+//!   `/v1/tools/{tool}/invoke`（Bearer + 有界超时 + audit）；type/const/签名全就位；
+//! - ⛔ 仍为桩两处：`invoke_stream`（WS）与 `check_quota`（D-05）—— 都返**显式错误码**；
+//! - ⇒ 口径：**HTTP 半场 = PRODUCTION WIRED**；**WS + quota = IMPLEMENTED（未接）**。
 //!
 //! **客户使用示例** (per `examples/sdk_demo.rs`):
 //! ```ignore
@@ -107,8 +105,10 @@ pub const PLATFORM_NAME: &str = "apeireth";
 
 /// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
 ///
-/// R21 真接 `apeireth-api` HTTP/WS 时, **必须经 8 哲学锚 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5, baseline 2026-08-19)
-/// + 主人审才能改 `false`**.
+/// **只守 WS 流层**（`invoke_stream`）：HTTP 工具传输自 W5（2026-10-10）已真接，
+/// 6 个工具方法可真调；仍为桩的只有 `invoke_stream` 与 `check_quota`，
+/// 两者都返**显式错误码**（不 panic、不假装支持）。
+/// 要把 WS 也真接（R21）时须经 8 哲学锚 + 主人审才能改 `false`。
 pub const STUB_MODE: bool = true;
 
 /// "must-do" 标记 (K-1 强校验 #5): 编译期 hardcode, 任务稿要求 5 K-1 字样必含.
@@ -467,7 +467,8 @@ impl Default for QuotaStub {
 
 /// **Auth 5 组件容器** (语义对齐 `apeireth-api::auth::AuthPipeline`).
 ///
-/// 阶段 6 stub: 5 组件全就位, 但 HTTP 真实调 `apeireth-api` 走 `unimplemented!()` 守门.
+/// 5 组件就位（Bearer/keyring 占位/token bucket/进程内 audit/quota 桩）；
+/// HTTP 传输在 client 的 `invoke_tool`，不在这里。
 ///
 /// **M5 修复**: ① `api_key` 改私有 + 访问器 (pub 字段让任意 `{:?}`/字段读取泄秘);
 /// ② Debug 手写脱敏 — 一次 `dbg!` / `{:?}` 0 再把 API key 落日志. Serialise 保持 (wire 兼容).
@@ -622,7 +623,7 @@ impl ApeirethClient {
     /// **L 组修复**: base_url scheme 校验 — http/https 之外拒绝 (修复前 `ftp://` /
     /// `file://` 等任意 scheme 可入, Bearer 密钥可能被发往非预期协议终点).
     ///
-    /// **阶段 6 stub**: 走 `AuthPipeline::new()` 5 组件 stub, 真 HTTP 留 R21.
+    /// 构造后即可发起**真实 HTTP** 工具调用（W5）；WS 流与 quota 仍为桩。
     pub fn new(base_url: &str, token: &str) -> Result<Self, SdkClientError> {
         validate_base_url_scheme(base_url)?;
         let auth = AuthPipeline::new(token)?;
@@ -652,9 +653,7 @@ impl ApeirethClient {
     // 6 工具 client method (接口接口契约 鉴权子路径)
     // ========================================================================
 
-    /// **工具 1: web_search** (HTTP `POST /v1/tools/web_search/invoke`).
-    ///
-    /// **阶段 6 stub**: 返 `unimplemented!()` 守门, R21 真接 `apeireth-api`.
+    /// **工具 1: web_search** (HTTP `POST /v1/tools/web_search/invoke`)；真传输（W5）。
     pub async fn web_search(&self, query: &str) -> Result<SearchResult, SdkClientError> {
         let result = self
             .invoke_tool(

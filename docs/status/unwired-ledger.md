@@ -110,6 +110,42 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4d 并行工具派发：生产永不并行（2026-10-25 修）
+
+运行时**完整支持**并行派发（`plan_parallel_window` 找窗口 / `dispatch_parallel_window`
+滚动池 + 模型顺序提交），但整条链挂在 `RuntimeBuilder::with_call_scheduler` 上，
+而**生产装配从不构造 `CallScheduler`** ⇒ 窗口恒为 1 ⇒ 并行派发形同不存在。
+
+**修法（不拍脑袋列白名单）**：从**守卫的能力安全注册表**派生「可证明只读」白名单
+（`is_provably_read_only`：known + 无持久化效果 + 无破坏性 + 无外部副作用 + 不联网 +
+运行类只含 Read/Compute；**未知一律不放行**）。为此先给守卫注册表补登记了 5 个
+真实在生产的只读工具（`tool.repo` / `tool.repo_map` / `tool.self_status` /
+`tool.trait_report` / `tool.search`）—— 它们此前在安全注册表里是 `unknown`。
+
+**过程中抓到并修掉一个真缺陷（我自己的）**：给 `tool.trait_report` /
+`tool.self_status` 写的 `SourceClass::PrivateMemory` 被 `FastGuard` 折算成
+风险 0.40 ⇒ 判定升为 `RequireApproval`，直接让既有契约测试
+`trait_report_is_granted_by_default_with_zero_approval` 变红。
+两工具读的是**派生聚合计数**（不是私密原文），改为 `SourceClass::ToolOutput` 后恢复。
+⇒ 教训：**安全描述符不是文档，是会改判定的输入**；登记一个字段前要看它在
+`FastGuard` 里折算多少风险分。
+
+**装配级端到端验证**：`cli/tests/parallel_dispatch_production.rs` 从
+`build_canonical_runtime_from_env()` 出发断言生产运行时**真的装上了**调度器
+（为此给运行时加了只读访问器 `Runtime::call_scheduler()`），且白名单只放行只读、
+一律不放行写/执行/联网/未登记能力。
+
+### 5.4e SDK 文档对账：HTTP 早已真接，文档还在说 stub（2026-10-25 修）
+
+`adapters/sdk/src/client.rs` 模块头写着「不实接 HTTP，走 `unimplemented!()` 守门」，
+但 `invoke_tool` 自 **W5（2026-10-10）**起就是 reqwest POST + Bearer + 有界超时 + audit；
+全文件也没有任何 `unimplemented!()` / `todo!()`。**文档在低估实现**（对外发布说
+「SDK 不能用」），同样违反 0 装。
+
+已按事实改写：HTTP 半场 = **PRODUCTION WIRED**；WS 流（`invoke_stream`）与
+quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、不假装支持）
+⇒ 口径 **IMPLEMENTED（未接）**。`STUB_MODE` 常量语义也写清：它**只守 WS 层**。
+
 ### 5.4c 编译器本来能抓到、但被全局 `allow(dead_code)` 挡住的缺陷
 
 `Cargo.toml` 的 `[workspace.lints.rust]` 里 `dead_code = 'allow'`，
