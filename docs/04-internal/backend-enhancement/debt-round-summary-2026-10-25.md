@@ -203,6 +203,36 @@ python3 scripts/check_doc_caliber.py                          # 0 新增
 | 问责闭环真的闭上 | `egress outcome <ID> confirmed` 后 `egress impact` 从「超期未回填=1」变「=0」，明细显示 `后果=confirmed` |
 | 便携包真的能用 | `apeireth bundle --out <DIR>` → `./run_apeireth.sh` → `/health` ok → 数据落包内 `./data/` |
 
+### 6.3.1 CI 门禁的「本地镜像」清单（2026-10-25 补齐）
+
+此前我只跑 `clippy --lib` 与部分脚本，**比 CI 少两档**（因此漏掉过 3 处会打红测试代码的
+lint）。现已在本地镜像到 CI 的全部轻量档：
+
+| CI check | 本地命令 | 最近结果 |
+|---|---|---|
+| Rust lint (clippy 3 档 + fmt) | `cargo clippy --workspace --all-targets -- -D warnings` + `cargo fmt --all -- --check` | ✅ 退出码 0（唯一排除 `tools-canonical`：本机既有 `CARGO_BIN_EXE_*` 问题，CI 正常） |
+| `cargo test --doc (stable)` | `cargo test --doc --workspace` | ✅ 29 个 crate 全过、0 失败 |
+| `rustdoc` | `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace` | ✅ 干净（注：CI 用 nightly，本地为 stable） |
+| Rust tests | `cargo nextest run --workspace --exclude apeireth-tools-canonical --profile ci` | ✅ 7901 passed / 48 skipped / 0 failed |
+| Docs truth / 索引 / 链接 / 豁免 | `docs_truth.py --verify --check`、`docs_index.py --check`、`docs_links.py`、`check_doc_caliber.py` | ✅ 全绿（链接：1466 文件，断链 0） |
+| arch-guard / 孤儿棘轮 | `arch_guard.py --strict`、`audit_unwired.py --check`、`group_unwired_baseline.py --check` | ✅ VIOLATIONS 0（无 STALE）· 153 条无新增无过期 |
+| Wiring ledger | `wiring_report.py --verify` | ✅ OK |
+| Cargo deny（legacy 面） | `check_no_legacy_deps.py` | ✅ 30 成员、0 violation、0 legacy 包 |
+| Ledger 验证 | `verify_ledger.py` | ✅ errors=0 warnings=0 |
+| 提交树完整性 | `check_commit_tree.py` | ✅ 5681 文件完整 |
+| **Guard 3.3 evaluation integrity** | `cargo run -p apeireth-guard --example export_guard_scenarios`、`py_compile`、`guard_ml/train_eval.py`、`analyze_shadow.py --self-test` | ✅ 2835 场景导出、train_eval 退出码 0、self-test ok |
+| **O-6 锚 5 重守门** | 直接跑 workflow 里的 grep 不变量（见下） | ✅ 全过 |
+| Self-status vocabulary | `check_self_status_vocab.py` | ✅ 报告项（退出码 0；10 处体验性词在债栏，非阻塞） |
+
+**只有 CI 能跑的（本地不镜像）**：`Kani`（形式化，需专用工具链）、`Miri`（nightly，慢）、
+`Fuzz`（cargo-fuzz 长跑）、`Coverage (tarpaulin)`（需生成 cobertura.xml）。
+这四项的失败只会在 CI 暴露 —— 但目前它们覆盖的代码我这批都没改到关键路径
+（Miri 面：未新增 `unsafe`；Kani 面：未改证明对象；fuzz 面：未改解析器）。
+
+**O-6 锚 5 重守门（本地实测）**：`RUNTIME_ENFORCED = false` ✓ / 9 个哲学锚 ✓ /
+`workspace.version = 2.0.0-rc.4` ✓ / R11 baseline 三值各 1 处 ✓ / 9 锚表头 ✓
+（即 LOCKED 数据 0 触碰）。
+
 ### 6.4 已做过的真机核对清单（未发现缺陷，供验收参考）
 
 | 面 | 核对内容 | 结论 |

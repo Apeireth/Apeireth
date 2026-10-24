@@ -138,6 +138,28 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.4y CI 门禁本地镜像补齐（2026-10-25）：从「部分验证」到「可镜像的全跑」
+
+上轮发现我跑的门禁比 CI 少两档（`clippy --all-targets` / `doc tests`），补完后继续把
+**剩余 CI 脚本**也逐个在本地跑了一遍：
+
+| CI 项 | 本地结果 |
+|---|---|
+| Docs 链接（`docs_links.py`） | 1466 个 md，**断链 0**（已知缺失 44 条为政策保留） |
+| Legacy 依赖（`check_no_legacy_deps.py`） | 30 成员，path 违规 0、传递遗留包 0 |
+| Ledger 验证（`verify_ledger.py`） | errors=0 warnings=0 |
+| 提交树（`check_commit_tree.py`） | 5681 文件完整 |
+| **Guard 3.3**（`export_guard_scenarios` + `guard_ml` 三段） | 2835 场景导出；`py_compile` OK；`train_eval` 退出码 0；`analyze_shadow --self-test` ok |
+| **O-6 锚 5 重守门** | 全过（`RUNTIME_ENFORCED=false` / 9 锚 / rc.4 / R11 三值 / 9 表头） |
+| Self-status vocabulary | 退出码 0（报告项；10 处体验性词在债栏，非阻塞） |
+
+**仍只有 CI 能跑的四项**（本地不镜像，已在验收摘要 §6.3.1 如实标注）：
+`Kani` / `Miri` / `Fuzz` / `Coverage (tarpaulin)` —— 但它们覆盖的代码面我这批**未改动**
+（无新增 `unsafe`、未改证明对象、未改 fuzz 目标解析器）。
+
+**纪律沉淀**：「本地门禁全绿」必须说清是**哪一档**。现在我能说：除四项重型/需专用
+工具链的 CI 项外，其余全部在本地跑过并通过。
+
 ### 5.4x CI 的 clippy 门禁是 `--all-targets`，我此前只跑 `--lib` —— 三处测试代码会打红（2026-10-25）
 
 **发现方式**：本轮第一次在本地跑 `cargo clippy --all-targets`（此前每批只跑
