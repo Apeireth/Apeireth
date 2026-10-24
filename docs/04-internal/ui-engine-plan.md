@@ -271,7 +271,10 @@ Rust 源码  ──►  wasm32-unknown-unknown  ──►  Tauri WebView（现�
   **约束**：`ui-core` 的 `Cargo.toml` **0 依赖 `web-sys` / `wasm-bindgen`**（保证能 native 单测）。
 - **验收门**：
   - ≥20 例**真测试**，`cargo test -p apeireth-ui-core` 在 **native 目标**直接跑（不需要 headless 浏览器）；
-  - 依赖面机械判据：`grep -E 'web-sys|wasm-bindgen' crates-ui/apeireth-ui-core/Cargo.toml` **0 命中**；
+  - 依赖面机械判据：**只查 `[dependencies]` 段**（不看整文件——Cargo.toml 顶部的说明注释里会出现
+    "0 依赖 web-sys" 这类字样，整文件 grep 会误判）。判据：解析 `crates-ui/apeireth-ui-core/Cargo.toml`
+    的 `[dependencies]` 段，`web-sys` / `wasm-bindgen` **0 条**（2026-10-24 实测：整文件 grep 命中 1 处
+    为注释文字，`[dependencies]` 段真依赖 0）；
   - `cargo clippy --workspace --all-targets --locked -- -D warnings` → 0 警告；`cargo fmt --check` → 0 diff；
   - 环检测 / 重复订阅 / 未清理订阅 三类边界各有断言（钉行为不钉字面）。
 - **估时**：5–9 人日。
