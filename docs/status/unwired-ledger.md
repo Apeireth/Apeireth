@@ -116,6 +116,29 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4l 认证/权限错误的「建议」指向错误的东西 —— 已修（2026-10-25）
+
+**缺陷（真机 HTTP 抓到的两处，同一个病根：一个错误码被多种原因共用）**：
+
+1. `auth_missing_key`（网关 401，message 明写 `gateway token required for this endpoint`）
+   的 `solution` 却是「在「设置 → 模型」中保存 **API 密钥**」—— 把**网关访问令牌**
+   说成了**模型密钥**，照做也解决不了；
+2. `permission_denied`（网关 403，message 明写 `the calling client is not bound to
+   any user`）的 `solution` 只讲「角色不足去找 owner 提权」—— 真正该做的是
+   **把令牌绑定到用户**（`apeireth user add --clients <令牌名>`）。
+
+**根因**：`ErrorCode` 是**码 → 固定建议**的单射表，但同一码实际覆盖两种原因：
+- `auth_*`：模型 provider 密钥 **或** 网关访问令牌；
+- `permission_denied`：角色不足 **或** 客户端未绑定用户。
+
+**修法**：把两条建议改成**覆盖两种原因**（都说清怎么做），不动码表结构、
+不破坏 wire 契约（码不变，只有提示文本更准确）。
+
+**顺带验证（未发现缺陷）**：令牌→用户→角色整条链真机跑通 ——
+`APEIRETH_GATEWAY_TOKENS` + `user add --clients tui` 后，带令牌访问
+`/v1/panel/users` = **200 + owner 视图**；伪令牌 = 401 `auth_invalid_key`；
+无令牌 = 401；逃生阀与令牌表互斥（配置即拒启动，符合设计）。
+
 ### 5.4k CLI 帮助漏掉 8 个可用命令 —— 已修（2026-10-25）
 
 **缺陷**：`apeireth --help` 是 `main.rs` 里手写的一段（32 行），**漏掉**了
