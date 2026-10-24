@@ -194,7 +194,7 @@ claims:
     notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**回程还原已接**（双闸的闸二）：只还原本会话登记簿登记过的指纹，未登记占位照实留痕；还原只在受控回程面，对出境面不可逆。**出域账本已接**（零真值 append-only JSONL：对象类型/不可逆指纹/目的地/用途）+ CLI 出口 `apeireth egress ledger`（只读；账本若无人可查，「记录已知流向」就是空的）。**授权策略对象已接**（`apeireth_governance::authorization`：可携带/可委托/可过期/可追溯；委托只能收窄、过期即失效、内容指纹可追溯）：按用途授权（资源 `egress`，scope 装用途名如 `chat`），未授权即拒绝出网（fail-closed），授权写坏不装配闸并 stderr 报错。
 **问责闭环五步已落地**（ADR-0014 §5）：①影响声明 + 事实→行动索引（零真值）②决策回执（面向被影响的人一行话）③后果追踪（`unknown` 是一等公民，append-only 不改写历史）④通知义务（**不自动外发**、不被引用就不打扰）⑤自述面 `capabilities.accountability` 只读计数。
 **读出端已接**：出域账本 `apeireth egress ledger`（观测面）+ 问责账本 `apeireth egress impact`（责任面：授权/可逆性/影响谁/后果）。
-**仍未接**：后果状态的**回填**通道（Outcome 目前只有 unknown 一档被写入，confirmed/failed 要靠回执渠道或用户确认回填 —— 那条通道还没建）。"
+**后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。"
 
   - id: mem.lesson_object
     title: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
