@@ -192,7 +192,8 @@ claims:
     owner: runtime
     next_review: "2026-12-01"
     notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**回程还原已接**（双闸的闸二）：只还原本会话登记簿登记过的指纹，未登记占位照实留痕；还原只在受控回程面，对出境面不可逆。**出域账本已接**（零真值 append-only JSONL：对象类型/不可逆指纹/目的地/用途）+ CLI 出口 `apeireth egress ledger`（只读；账本若无人可查，「记录已知流向」就是空的）。**授权策略对象已接**（`apeireth_governance::authorization`：可携带/可委托/可过期/可追溯；委托只能收窄、过期即失效、内容指纹可追溯）：按用途授权（资源 `egress`，scope 装用途名如 `chat`），未授权即拒绝出网（fail-closed），授权写坏不装配闸并 stderr 报错。
-**问责闭环五步已落地**（ADR-0014 §5）：①影响声明 + 事实→行动索引（零真值）②决策回执（面向被影响的人一行话）③后果追踪（`unknown` 是一等公民，append-only 不改写历史）④通知义务（**不自动外发**、不被引用就不打扰）⑤自述面 `capabilities.accountability` 只读计数。
+**问责闭环五步构件已落地，但按四级口径只有 2/5 生产已接**（ADR-0014 §5；2026-10-24 实测复核）：①影响声明 + 事实→行动索引（零真值）——**PRODUCTION WIRED**（`egress_gate.rs` 三条出网路径各写一条 + CLI `egress impact` 读出端）；②决策回执（面向被影响的人一行话）——**IMPLEMENTED 未接线**（`notification_duty.rs` 的 `DecisionReceipt` 有类型 + 单测，**全仓零生产调用点**，回执从不生成）；③后果追踪（`unknown` 是一等公民，append-only 不改写历史）——**PRODUCTION WIRED**（`egress_gate.rs` 挂 tracker + 写账本）；④通知义务（**不自动外发**、不被引用就不打扰）——**IMPLEMENTED 未接线**（`assess_correction` 是纯函数且**只被测试调用**，记忆纠正事件到通知义务无挂钩）；⑤自述面 `capabilities.accountability` 只读计数——**IMPLEMENTED 未接线**（`accountability_probe` 的装配函数 `with_accountability_probe` **零调用点**，且 `self_status_source.rs:462` 的 `accountability` 字段默认 `None` ⇒ `capabilities.accountability` 键**永不渲染**）。
+**更深的缺口**：④要触发需先有「事实→行动索引」里有记录，而 `egress_gate.rs:204` 的 `facts_used` 当前**恒为空数组**（闸看不到上下文用了哪些记忆条目）⇒ 索引在生产里结构性为空 ⇒ 即使把④接上也永远不会触发。**「发现影响时通知你」目前没有可兑现的输入来源。**
 **读出端已接**：出域账本 `apeireth egress ledger`（观测面）+ 问责账本 `apeireth egress impact`（责任面：授权/可逆性/影响谁/后果）。
 **后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。"
 

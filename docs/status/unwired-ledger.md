@@ -20,6 +20,7 @@
 | W5 | `ActionGuard::evaluate`（V1+V2 AND 门） | 不在执行主链（仅测试/示例调用）；13 键已降级 | 触发：哲学拦截层重新上热路径时一并接（stage123 §C1） | 架构线 |
 | W6 | SDK `quota` | 永远返 `not_implemented`（D-05 阶段 6 stub） | 已知设计取舍，非缺陷；随 SDK v0 发布面补 | SDK |
 | W7 | 教训对象 `Lesson` | L1 + L2 已接线（PRODUCTION WIRED；2026-10-23）：库级 `lesson.rs`/`V18`；CLI 出口 `apeireth lessons`；自述面 `memory_ledger.verified_lessons / candidate_lessons`（子字段，不动 21 节冻结合同）。为腾尺寸空间顺带拆出 `memory_ledger_view.rs`（tools）与 `self_status_probe.rs`（cli）。仍缺：面板列表、反思步（L3）、上下文注入（L4） | 决策：L3 需与反思调度器同窗口；L4 的注入纪律要 owner 拍板预算 | 记忆线 |
+| W8 | **问责闭环第 2/4/5 步（决策回执 / 通知义务 / 自述面只读计数）** | 2026-10-24 实测复核：**三处生产调用点均为 0** —— `DecisionReceipt::from_statement`（`notification_duty.rs`）全仓只被自身单测调用；`assess_correction`（`notification_duty.rs`）同；`accountability_probe::with_accountability_probe`（`accountability_probe.rs:85`）零调用点，且 `self_status_source.rs:462` 的 `accountability` 字段默认 `None` ⇒ `capabilities.accountability` 键**永不渲染**。**更深的缺口**：`egress_gate.rs:204` 的 `facts_used` 恒为空数组 ⇒ 事实→行动索引在生产里结构性为空 ⇒ 即使把第 4 步接上也永远不会触发 | **决策**：先补输入源（`facts_used` 从上下文装配面取），再接第 4 步，最后接第 2/5 步 —— 顺序倒过来会做出永远不触发的接线。触发：ADR-0014 §5 问责闭环从「构件落地」推进到「2/5 → 5/5 生产已接」。**claim `sec.egress_gate` 已按四级口径如实改写**（不再写「五步已落地」） | 运行时线 |
 
 ## 二、测试专用但**有意保留**（不是缺陷；四级口径见上）
 
