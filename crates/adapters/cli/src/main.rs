@@ -19,7 +19,7 @@ apeireth — 本地优先的个人 AI 运行时（单二进制，多入口）
 
 Usage:
   [会话]
-    apeireth session
+    apeireth session      就绪自检：构建运行时、打印就绪与 provider 后退出（非交互）
     apeireth chat <PROMPT> [--model MODEL] [--session SESSION]
     apeireth onboard [--tier casual|pro] [--show | --reset]
   [审批]
