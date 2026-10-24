@@ -25,6 +25,7 @@ use apeireth_runtime::canonical::egress_gate::{EgressGate, EgressVerdict};
 use apeireth_tools_canonical::redaction_bridge::RedactionBridge;
 
 use crate::accountability::{AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome};
+use crate::consequence::{ConsequenceTracker, OutcomeSource};
 use crate::egress_ledger::{EgressLedger, EgressLedgerEntry};
 
 /// 出网闸开关 env（未设 / 非 `"1"` = 关，fail-closed 于「开启侧」）。
@@ -58,6 +59,10 @@ pub struct RedactionEgressGate {
     /// `None` = 不写影响声明（库级默认）；生产接线应传路径 ——
     /// 「在发现影响时通知你」的前提是**知道哪条事实影响过哪些行动**。
     accountability: Option<Arc<AccountabilityLedger>>,
+    /// 后果状态机（追加事件，不改写历史）。
+    ///
+    /// `None` = 不记后果事件（库级默认）。
+    consequences: Option<Arc<tokio::sync::Mutex<ConsequenceTracker>>>,
 }
 
 impl RedactionEgressGate {
@@ -74,6 +79,7 @@ impl RedactionEgressGate {
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
             accountability: None,
+            consequences: None,
         }
     }
 
@@ -85,12 +91,22 @@ impl RedactionEgressGate {
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
             accountability: None,
+            consequences: None,
         }
     }
 
     /// 挂上问责账本（每次外部行动写一条影响声明）。
     pub fn with_accountability(mut self, ledger: Arc<AccountabilityLedger>) -> Self {
         self.accountability = Some(ledger);
+        self
+    }
+
+    /// 挂上后果状态机（记录行动后果的变化）。
+    pub fn with_consequences(
+        mut self,
+        tracker: Arc<tokio::sync::Mutex<ConsequenceTracker>>,
+    ) -> Self {
+        self.consequences = Some(tracker);
         self
     }
 
@@ -163,12 +179,26 @@ impl RedactionEgressGate {
     /// `facts_used` 当前**为空**：闸看不到上下文里用了哪些记忆条目
     /// （那要等上下文装配面接上来）。**空 = 如实没有**，不编。
     fn declare_impact(&self, destination: &str, _redacted: bool) {
+        let now_ms = self.clock.now().timestamp_millis();
+        let action_id = format!("act-{now_ms}");
+        // 后果初始状态 = `unknown`（**显式**，不假装知道）。
+        // 模型侧发生了什么我们观测不到 —— 设计文档 §2.3 的最小实现就是这一档。
+        // **独立于影响声明**：没挂问责账本时也要记后果。
+        if let Some(tracker) = &self.consequences {
+            if let Ok(mut guard) = tracker.try_lock() {
+                guard.record(
+                    &action_id,
+                    crate::accountability::Outcome::Unknown,
+                    OutcomeSource::NoReply,
+                    now_ms,
+                );
+            }
+        }
         let Some(ledger) = &self.accountability else {
             return;
         };
-        let now_ms = self.clock.now().timestamp_millis();
         let statement = ImpactStatement {
-            action_id: format!("act-{now_ms}"),
+            action_id,
             at_ms: now_ms,
             boundary: Boundary::Provider,
             facts_used: Vec::new(),
@@ -591,6 +621,21 @@ mod tests {
             "我们不知道模型侧发生了什么 —— 显式 unknown"
         );
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// 后果初始状态是 `unknown`（显式，不假装知道）。
+    #[test]
+    fn gate_records_unknown_outcome_for_each_action() {
+        let tracker = std::sync::Arc::new(tokio::sync::Mutex::new(
+            crate::consequence::ConsequenceTracker::new(),
+        ));
+        let gate = RedactionEgressGate::new().with_consequences(tracker.clone());
+
+        let _ = gate.vet(&request_with("今天天气不错"));
+
+        let guard = tracker.blocking_lock();
+        assert_eq!(guard.counts().tracked_actions, 1);
+        assert_eq!(guard.counts().unknown, 1, "我们不知道结果 —— 显式 unknown");
     }
 
     #[test]

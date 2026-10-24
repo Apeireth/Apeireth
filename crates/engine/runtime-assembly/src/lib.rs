@@ -7,6 +7,7 @@
 
 pub mod accountability;
 pub mod canonical;
+pub mod consequence;
 // W3-① 多户数据隔离 (星群数据层): 用户域数据平面 (三面按域分库 + 跨域拒绝即帧)。
 pub mod domain_plane;
 pub mod egress_gate;
