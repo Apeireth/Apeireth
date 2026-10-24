@@ -138,6 +138,21 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.4s 并行派发在**网关形态**同样生效（2026-10-25 补证）
+
+CLI 对话路径与 `gateway serve` 是**两条装配入口**（前者
+`build_canonical_runtime_from_env`，后者 `build_canonical_runtime_assembly_from_env`）。
+分开的装配根最容易出现「CLI 有 X、网关没有 X」这类隐性缺口，
+所以并行派发接线后必须**两条都钉**：
+
+- `production_runtime_installs_a_conservative_parallel_scheduler`（CLI 路径）；
+- `gateway_assembly_shares_the_same_composition_root`（**网关路径**）：
+  断言网关入口装出的运行时同样有调度器、且白名单仍从守卫注册表派生。
+
+两条入口现在都**公开**（`build_canonical_runtime_assembly_from_env` 加 `pub`，
+理由是它本身就是网关形态的装配根、测试要从同一入口验证），
+`lib.rs` 尺寸仍精确等于基线（注释压缩，非行数位移）。
+
 ### 5.4r `continuation` 安全子集接线（PRODUCTION WIRED：回合级中断检测，2026-10-25）
 
 **做了什么**（`cli::continuation_guard` + `run_chat` 接线）：

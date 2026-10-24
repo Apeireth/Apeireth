@@ -1435,8 +1435,8 @@ pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env(
     Ok(parts)
 }
 
-/// 装配本体: 额外回传 W3.6 probe 槽与 R1b-2c 审批社交源句柄 (开关关 = None)。
-async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String> {
+/// 装配本体 (回传 W3.6 probe 槽与 R1b-2c 审批社交源句柄, 开关关 = None)。**网关形态的装配根**（`gateway serve` 走这条）; 公开以便测试钉住两条根共用部件。
+pub async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String> {
     // B-P1 并行构造独立模块: 会话存储打开与认知侧组装互不依赖 (不同库/不同表),
     // 双任务并行推进 —— 启动到 ready 的等待 ≈ max(两侧) 而非两者之和。
     // 拆任务后各自持票进运行时工作线程; 顺序语义不变 (运行时组装仍等两侧齐备)。

@@ -55,3 +55,26 @@ async fn production_runtime_installs_a_conservative_parallel_scheduler() {
         );
     }
 }
+
+/// **网关形态同样装上**（装配根共用，不是只有 CLI 对话路径）。
+///
+/// `apeireth gateway serve` 走的是 `build_canonical_runtime_assembly_from_env`，
+/// 而不是对话用的 `build_canonical_runtime_from_env`。两者若分叉，就会出现
+/// 「CLI 有并行、网关没有」这种最坏情况。本测试从**网关入口**出发断言调度器仍在，
+/// 把「装配根共用」这句话钉成机检。
+#[tokio::test]
+async fn gateway_assembly_shares_the_same_composition_root() {
+    let parts = apeireth_cli::build_canonical_runtime_assembly_from_env()
+        .await
+        .expect("keyless gateway-side assembly builds without network");
+    // BioParts = (CanonicalRuntimeParts, BioProbeSlots, BioHandle)；Runtime 是
+    // CanonicalRuntimeParts 的第一个元素。
+    let runtime = &(parts.0).0;
+    let scheduler = runtime
+        .call_scheduler()
+        .expect("网关装配路径必须同样装上并发调度器（装配根共用）");
+    assert!(
+        scheduler.is_concurrency_safe("tool.repo", &serde_json::json!({})),
+        "网关形态的白名单也应从守卫注册表派生（tool.repo 可证明只读）"
+    );
+}
