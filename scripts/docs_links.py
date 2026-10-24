@@ -31,6 +31,28 @@ ROOT = Path(__file__).resolve().parent.parent
 # 扫描时跳过的目录（相对 ROOT）
 SKIP_DIRS = {".git", "target", "legacy", "node_modules", "dist", ".venv"}
 
+
+def nested_worktree_dirs(root: Path) -> set[str]:
+    """仓内**嵌套**的其他 git 工作树根（相对 root 的第一层目录名）。
+
+    判据：该目录下有 `.git` **文件**（主仓的 `.git` 是目录；`git worktree add`
+    出来的副本是 `.git` 文件，内容 `gitdir: ...`）。
+
+    为什么必须剪：嵌套工作树里带着**本仓的完整副本**。不剪的话，副本中的文档会被
+    当成本仓文档**重复扫描** —— 路径前缀判断随之失准（副本里的
+    `xxx/docs/archive/foo.md` 相对主仓不以 `docs/archive/` 开头，历史卷宗被当成活跃文档）。
+    口径门禁实测：仓内建一个 worktree 后，活跃文档数从 415 涨到 1190、
+    凭空多出 24 处「新增违规」，全是副本造成的假阳性。
+    """
+    out: set[str] = set()
+    try:
+        for child in root.iterdir():
+            if child.is_dir() and (child / ".git").is_file():
+                out.add(child.name)
+    except OSError:
+        pass
+    return out
+
 # GitHub 仓库 UI 的伪路径（README 里的 `../../issues` 之类，渲染为网页而非仓内文件）
 GITHUB_UI_PATHS = {
     "issues", "releases", "stargazers", "watchers", "network", "pulse",
@@ -140,11 +162,16 @@ def load_redirects() -> dict[str, str]:
     return out
 
 
+_NESTED_WT = nested_worktree_dirs(ROOT)
+
+
 def iter_md_files() -> list[Path]:
     out: list[Path] = []
     for p in ROOT.rglob("*.md"):
         rel = p.relative_to(ROOT)
         if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        if rel.parts and rel.parts[0] in _NESTED_WT:
             continue
         out.append(p)
     return sorted(out)
