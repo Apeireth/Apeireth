@@ -45,7 +45,8 @@ use apeireth_ui_kit::settings_frame::FieldFlagState;
 type Json = crate::settings_theme::Json;
 
 /// 人格与记忆的固定数据（**编译期内嵌** ⇒ 与参考侧同一份文件）。
-pub const CHARACTER_FIXTURE_JSON: &str = include_str!("../harness/settings/fixtures/character.json");
+pub const CHARACTER_FIXTURE_JSON: &str =
+    include_str!("../harness/settings/fixtures/character.json");
 
 /// 能力开关的固定数据（**编译期内嵌** ⇒ 与参考侧同一份文件）。
 pub const CAPABILITIES_FIXTURE_JSON: &str =
@@ -361,9 +362,7 @@ fn read_tuning_log(value: &Json) -> Result<Option<Vec<TuningLogEntry>>, String> 
 }
 
 /// 读字段旗标（**键 → 状态**；`true` ⇒ 未保存）。
-fn read_text_flags(
-    value: &Json,
-) -> Result<Vec<(String, FieldFlagState)>, String> {
+fn read_text_flags(value: &Json) -> Result<Vec<(String, FieldFlagState)>, String> {
     let entries: Vec<(String, Json)> = value
         .get("textFlags")
         .map(|item| json_object(item).to_vec())
@@ -387,9 +386,7 @@ fn read_text_flags(
 }
 
 /// 读能力表（键 → 取值）。
-fn read_capability_table(
-    value: &Json,
-) -> Result<CapabilityTable, String> {
+fn read_capability_table(value: &Json) -> Result<CapabilityTable, String> {
     let entries: Vec<(String, Json)> = value
         .get("capabilities")
         .map(|item| json_object(item).to_vec())
@@ -409,10 +406,7 @@ fn read_capability_table(
 }
 
 /// 读一组能力定义（**表的一行 ⇒ 数据**）。
-fn read_cap_defs(
-    value: &Json,
-    group: &str,
-) -> Result<Vec<CapabilityDef>, String> {
+fn read_cap_defs(value: &Json, group: &str) -> Result<Vec<CapabilityDef>, String> {
     let items = value
         .get("capDefs")
         .and_then(|item| item.get(group))
@@ -422,7 +416,9 @@ fn read_cap_defs(
     for item in items {
         let icon_name = read_string(item, "icon")?;
         let icon = icons::icon_by_import_name(&icon_name).ok_or_else(|| {
-            format!("能力定义引用了未知图标：{icon_name}（生产 import 名 ⇒ 真实 class 见 SPLIT.md §3）")
+            format!(
+                "能力定义引用了未知图标：{icon_name}（生产 import 名 ⇒ 真实 class 见 SPLIT.md §3）"
+            )
         })?;
         let mut def = CapabilityDef::new(
             read_string(item, "key")?,
@@ -704,9 +700,7 @@ impl CharacterHost {
                         String::from("false")
                     }
                 }
-                CapabilityValue::Number(number) => {
-                    apeireth_ui_kit::num::number_to_string(number)
-                }
+                CapabilityValue::Number(number) => apeireth_ui_kit::num::number_to_string(number),
             };
             state.insert(key, text);
         }
@@ -747,10 +741,9 @@ pub mod wasm {
 
     impl HostScheduler for MicrotaskScheduler {
         fn schedule_flush(&self, flush: Box<dyn FnOnce()>) {
-            let queue =
-                Reflect::get(&js_sys::global(), &JsValue::from_str("queueMicrotask"))
-                    .ok()
-                    .and_then(|value| value.dyn_into::<js_sys::Function>().ok());
+            let queue = Reflect::get(&js_sys::global(), &JsValue::from_str("queueMicrotask"))
+                .ok()
+                .and_then(|value| value.dyn_into::<js_sys::Function>().ok());
             match queue {
                 Some(queue) => {
                     let callback = Closure::once_into_js(move || {
@@ -902,7 +895,8 @@ pub mod wasm {
             }
         }
         let host = CharacterHost::new(fixture);
-        host.runtime().set_host_scheduler(Rc::new(MicrotaskScheduler));
+        host.runtime()
+            .set_host_scheduler(Rc::new(MicrotaskScheduler));
 
         renderer
             .mount(render_tree(&host))
@@ -1146,11 +1140,7 @@ pub mod wasm {
                 &persona.persona,
             )?;
         }
-        set_value(
-            container,
-            "#impression-text",
-            &host.impression_draft.get(),
-        )?;
+        set_value(container, "#impression-text", &host.impression_draft.get())?;
         sync_knob_values(host, container)?;
         Ok(())
     }
@@ -1189,7 +1179,8 @@ pub mod wasm {
             &super::DISPOSITION_KNOBS[3],
         ];
         for spec in specs {
-            let value = apeireth_ui_kit::settings_character::capability_number(&table, spec.value_key);
+            let value =
+                apeireth_ui_kit::settings_character::capability_number(&table, spec.value_key);
             set_value(
                 container,
                 &format!("[aria-label=\"{}\"]", spec.label),
@@ -1290,12 +1281,12 @@ mod tests {
             .iter()
             .find(|def| def.key == "typedRecall")
             .expect("有类型化召回");
-        assert!(!is_cap_on(typed, &fixture.capabilities), "反向旋钮：值 true ⇒ 关");
-        let mut table = fixture.capabilities.clone();
-        table.insert(
-            String::from("typedRecall"),
-            CapabilityValue::Bool(false),
+        assert!(
+            !is_cap_on(typed, &fixture.capabilities),
+            "反向旋钮：值 true ⇒ 关"
         );
+        let mut table = fixture.capabilities.clone();
+        table.insert(String::from("typedRecall"), CapabilityValue::Bool(false));
         assert!(is_cap_on(typed, &table), "反向旋钮：值 false ⇒ 开");
     }
 

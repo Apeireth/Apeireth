@@ -78,7 +78,7 @@ use std::rc::Rc;
 use crate::icon::{Icon, IconData, IconProps};
 use crate::settings_frame::{FieldFlag, FieldFlagProps, FieldFlagState};
 use apeireth_ui_core::{Signal, UiComponent};
-use apeireth_ui_dom::{DomEvent, EventKind, ElementHandler, VNode};
+use apeireth_ui_dom::{DomEvent, ElementHandler, EventKind, VNode};
 use apeireth_ui_macro::view;
 
 /// 本面用到的图标数据（**自动生成** —— 勿手改）。
@@ -106,7 +106,7 @@ use apeireth_ui_macro::view;
 pub mod icons {
     use crate::icon::{IconData, IconNode};
 
-/// 图标 `layers`。
+    /// 图标 `layers`。
 #[rustfmt::skip]
 pub const ICON_LAYERS: IconData = IconData {
     name: "layers",
@@ -118,7 +118,7 @@ pub const ICON_LAYERS: IconData = IconData {
     ],
 };
 
-/// 图标 `trash-2`。
+    /// 图标 `trash-2`。
 #[rustfmt::skip]
 pub const ICON_TRASH_2: IconData = IconData {
     name: "trash-2",
@@ -132,7 +132,7 @@ pub const ICON_TRASH_2: IconData = IconData {
     ],
 };
 
-/// 图标 `rotate-ccw`。
+    /// 图标 `rotate-ccw`。
 #[rustfmt::skip]
 pub const ICON_ROTATE_CCW: IconData = IconData {
     name: "rotate-ccw",
@@ -143,7 +143,7 @@ pub const ICON_ROTATE_CCW: IconData = IconData {
     ],
 };
 
-/// 图标 `sparkles`。
+    /// 图标 `sparkles`。
 #[rustfmt::skip]
 pub const ICON_SPARKLES: IconData = IconData {
     name: "sparkles",
@@ -157,7 +157,7 @@ pub const ICON_SPARKLES: IconData = IconData {
     ],
 };
 
-/// 图标 `circle-check`。
+    /// 图标 `circle-check`。
 #[rustfmt::skip]
 pub const ICON_CIRCLE_CHECK: IconData = IconData {
     name: "circle-check",
@@ -168,7 +168,7 @@ pub const ICON_CIRCLE_CHECK: IconData = IconData {
     ],
 };
 
-/// 图标 `info`。
+    /// 图标 `info`。
 #[rustfmt::skip]
 pub const ICON_INFO: IconData = IconData {
     name: "info",
@@ -180,7 +180,7 @@ pub const ICON_INFO: IconData = IconData {
     ],
 };
 
-/// 图标 `plus`。
+    /// 图标 `plus`。
 #[rustfmt::skip]
 pub const ICON_PLUS: IconData = IconData {
     name: "plus",
@@ -191,7 +191,7 @@ pub const ICON_PLUS: IconData = IconData {
     ],
 };
 
-/// 图标 `brain`。
+    /// 图标 `brain`。
 #[rustfmt::skip]
 pub const ICON_BRAIN: IconData = IconData {
     name: "brain",
@@ -209,7 +209,7 @@ pub const ICON_BRAIN: IconData = IconData {
     ],
 };
 
-/// 图标 `heart-handshake`。
+    /// 图标 `heart-handshake`。
 #[rustfmt::skip]
 pub const ICON_HEART_HANDSHAKE: IconData = IconData {
     name: "heart-handshake",
@@ -222,7 +222,7 @@ pub const ICON_HEART_HANDSHAKE: IconData = IconData {
     ],
 };
 
-/// 图标 `git-branch`。
+    /// 图标 `git-branch`。
 #[rustfmt::skip]
 pub const ICON_GIT_BRANCH: IconData = IconData {
     name: "git-branch",
@@ -235,7 +235,7 @@ pub const ICON_GIT_BRANCH: IconData = IconData {
     ],
 };
 
-/// 图标 `sliders-horizontal`。
+    /// 图标 `sliders-horizontal`。
 #[rustfmt::skip]
 pub const ICON_SLIDERS_HORIZONTAL: IconData = IconData {
     name: "sliders-horizontal",
@@ -253,7 +253,7 @@ pub const ICON_SLIDERS_HORIZONTAL: IconData = IconData {
     ],
 };
 
-/// 图标 `refresh-ccw`。
+    /// 图标 `refresh-ccw`。
 #[rustfmt::skip]
 pub const ICON_REFRESH_CCW: IconData = IconData {
     name: "refresh-ccw",
@@ -266,7 +266,7 @@ pub const ICON_REFRESH_CCW: IconData = IconData {
     ],
 };
 
-/// 图标 `radar`。
+    /// 图标 `radar`。
 #[rustfmt::skip]
 pub const ICON_RADAR: IconData = IconData {
     name: "radar",
@@ -283,7 +283,7 @@ pub const ICON_RADAR: IconData = IconData {
     ],
 };
 
-/// 图标 `timer`。
+    /// 图标 `timer`。
 #[rustfmt::skip]
 pub const ICON_TIMER: IconData = IconData {
     name: "timer",
@@ -295,7 +295,7 @@ pub const ICON_TIMER: IconData = IconData {
     ],
 };
 
-/// 图标 `archive`。
+    /// 图标 `archive`。
 #[rustfmt::skip]
 pub const ICON_ARCHIVE: IconData = IconData {
     name: "archive",
@@ -307,7 +307,7 @@ pub const ICON_ARCHIVE: IconData = IconData {
     ],
 };
 
-/// 图标 `message-square-plus`。
+    /// 图标 `message-square-plus`。
 #[rustfmt::skip]
 pub const ICON_MESSAGE_SQUARE_PLUS: IconData = IconData {
     name: "message-square-plus",
@@ -319,7 +319,7 @@ pub const ICON_MESSAGE_SQUARE_PLUS: IconData = IconData {
     ],
 };
 
-/// 图标 `network`。
+    /// 图标 `network`。
 #[rustfmt::skip]
 pub const ICON_NETWORK: IconData = IconData {
     name: "network",
@@ -333,7 +333,7 @@ pub const ICON_NETWORK: IconData = IconData {
     ],
 };
 
-/// 图标 `users`。
+    /// 图标 `users`。
 #[rustfmt::skip]
 pub const ICON_USERS: IconData = IconData {
     name: "users",
@@ -346,7 +346,7 @@ pub const ICON_USERS: IconData = IconData {
     ],
 };
 
-/// 图标 `book-open`。
+    /// 图标 `book-open`。
 #[rustfmt::skip]
 pub const ICON_BOOK_OPEN: IconData = IconData {
     name: "book-open",
@@ -357,7 +357,7 @@ pub const ICON_BOOK_OPEN: IconData = IconData {
     ],
 };
 
-/// 图标 `dumbbell`。
+    /// 图标 `dumbbell`。
 #[rustfmt::skip]
 pub const ICON_DUMBBELL: IconData = IconData {
     name: "dumbbell",
@@ -371,7 +371,7 @@ pub const ICON_DUMBBELL: IconData = IconData {
     ],
 };
 
-/// 图标 `landmark`。
+    /// 图标 `landmark`。
 #[rustfmt::skip]
 pub const ICON_LANDMARK: IconData = IconData {
     name: "landmark",
@@ -386,7 +386,7 @@ pub const ICON_LANDMARK: IconData = IconData {
     ],
 };
 
-/// 图标 `file-check-2`。
+    /// 图标 `file-check-2`。
 #[rustfmt::skip]
 pub const ICON_FILE_CHECK_2: IconData = IconData {
     name: "file-check-2",
@@ -534,7 +534,8 @@ pub const IMPRESSION_AUTO_ON: &str = "开";
 pub const IMPRESSION_AUTO_OFF: &str = "关";
 
 /// 「自动总结」按钮的悬浮提示。
-pub const IMPRESSION_AUTO_TITLE: &str = "开启后它会在对话后自动更新印象（每攒够几条新消息追一次，成本可控）";
+pub const IMPRESSION_AUTO_TITLE: &str =
+    "开启后它会在对话后自动更新印象（每攒够几条新消息追一次，成本可控）";
 
 /// 「清空印象」按钮文案。
 pub const IMPRESSION_CLEAR_LABEL: &str = "清空印象";
@@ -562,7 +563,8 @@ pub const IMPRESSION_SOURCE_AUTO: &str = "对话中自动总结";
 pub const IMPRESSION_SOURCE_MANUAL: &str = "手动总结或手写";
 
 /// 印象区提示的尾部（**首字符是空格**：紧跟前面的分支之后**）。
-pub const IMPRESSION_HINT_TAIL: &str = " 只落这台机器的应用存储（与会话本地账同一口径），不上传；总结只带对话正文，不带密钥与配置。";
+pub const IMPRESSION_HINT_TAIL: &str =
+    " 只落这台机器的应用存储（与会话本地账同一口径），不上传；总结只带对话正文，不带密钥与配置。";
 
 /// 认知区的标题。
 pub const COGNITION_TITLE: &str = "记忆与认知";
@@ -583,13 +585,15 @@ pub const COGNITION_PRESET_LABEL: &str = "应用推荐配置";
 pub const COGNITION_PRESET_HINT: &str = "一键开启记忆核心族 + 记忆固化/反思沉淀/器官链，不含 shell/fetch；点击即生效（失败回填 + 横幅）。";
 
 /// 认知区提示条的第一段（**尾随空格**：紧跟 `<strong>` 之前**）。
-pub const COGNITION_NOTICE_HEAD: &str = "将开启 6 项：前瞻召回、偏好学习、记忆注入、记忆固化、反思沉淀、器官链。 ";
+pub const COGNITION_NOTICE_HEAD: &str =
+    "将开启 6 项：前瞻召回、偏好学习、记忆注入、记忆固化、反思沉淀、器官链。 ";
 
 /// 认知区提示条里的加粗段。
 pub const COGNITION_NOTICE_STRONG: &str = "不包含";
 
 /// 认知区提示条的尾段（**首字符是空格**）。
-pub const COGNITION_NOTICE_TAIL: &str = " Shell / 网络读取等危险工具（它们保持现状、仍需逐项开启与审批），其余开关不动。";
+pub const COGNITION_NOTICE_TAIL: &str =
+    " Shell / 网络读取等危险工具（它们保持现状、仍需逐项开启与审批），其余开关不动。";
 
 /// 记忆流卡的标题（**首字符是空格**：紧跟图标之后**）。
 pub const MEMORY_FLOW_CARD_TITLE: &str = " 记忆流";
@@ -655,7 +659,8 @@ pub const TUNING_LOG_UNREADABLE: &str = "学习日志仅桌面版可读（接口
 pub const TUNING_LOG_EMPTY: &str = "暂无自动调整记录。";
 
 /// 学习日志行尾的说明。
-pub const TUNING_LOG_UNDO_NOTE: &str = "「撤销」= 把该参数拨回记录原值并立即生效（写回值走同一条 apply 路径，不做独立撤销请求）。";
+pub const TUNING_LOG_UNDO_NOTE: &str =
+    "「撤销」= 把该参数拨回记录原值并立即生效（写回值走同一条 apply 路径，不做独立撤销请求）。";
 
 /// 性情区的脚注。
 pub const DISPOSITION_FOOTNOTE: &str = "自动调整记录由后端写入数据目录的 tuning-log.jsonl，此处只读；未接的信号不会产生记录（0 装诚实）。";
@@ -769,7 +774,6 @@ pub struct KnobSpec {
     /// 取值展示的后缀（如「 回合」）。
     pub suffix: &'static str,
 }
-
 
 /// 能力取值（布尔 / 数值）。
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -898,10 +902,7 @@ pub fn cap_disabled(def: &CapabilityDef, table: &CapabilityTable) -> bool {
     let Some(required) = def.requires.as_ref() else {
         return false;
     };
-    !matches!(
-        table.get(required),
-        Some(CapabilityValue::Bool(true))
-    )
+    !matches!(table.get(required), Some(CapabilityValue::Bool(true)))
 }
 
 /// 已启用的行数（**已开且未禁用** ⇒ 生产的 `enabledCount`）。
@@ -913,10 +914,7 @@ pub fn enabled_count(defs: &[CapabilityDef], table: &CapabilityTable) -> usize {
 
 /// 读一个布尔能力（**缺省 ⇒ `false`**）。
 pub fn capability_bool(table: &CapabilityTable, key: &str) -> bool {
-    matches!(
-        table.get(key),
-        Some(CapabilityValue::Bool(true))
-    )
+    matches!(table.get(key), Some(CapabilityValue::Bool(true)))
 }
 
 /// 读一个数值能力（**缺省 ⇒ `0.0`**）。
@@ -1121,18 +1119,9 @@ fn render_persona_card(
     let model_id = format!("persona-model-{}", persona.id);
     let text_id = format!("persona-text-{}", persona.id);
 
-    let name_flag = FieldFlagProps::new(flag_of(
-        flags,
-        &format!("persona.name:{}", persona.id),
-    ));
-    let model_flag = FieldFlagProps::new(flag_of(
-        flags,
-        &format!("persona.model:{}", persona.id),
-    ));
-    let text_flag = FieldFlagProps::new(flag_of(
-        flags,
-        &format!("persona.text:{}", persona.id),
-    ));
+    let name_flag = FieldFlagProps::new(flag_of(flags, &format!("persona.name:{}", persona.id)));
+    let model_flag = FieldFlagProps::new(flag_of(flags, &format!("persona.model:{}", persona.id)));
+    let text_flag = FieldFlagProps::new(flag_of(flags, &format!("persona.text:{}", persona.id)));
 
     let name_key = format!("persona.name:{}", persona.id);
     let model_key = format!("persona.model:{}", persona.id);
@@ -1149,19 +1138,19 @@ fn render_persona_card(
     // 生产：`disabled={personas.length <= 1}` ⇒ 只剩一个伙伴时不可删。
     let remove_disabled = props.personas.get().len() <= 1;
 
-    let mut select_button = VNode::element("button")
-        .attr("title", select_title)
-        .attr(
-            "class",
-            if is_active {
-                "quiet-button selected"
-            } else {
-                "quiet-button"
-            },
-        );
+    let mut select_button = VNode::element("button").attr("title", select_title).attr(
+        "class",
+        if is_active {
+            "quiet-button selected"
+        } else {
+            "quiet-button"
+        },
+    );
     select_button = select_button.handler(
         EventKind::Click,
-        ElementHandler::new(move |_event: &mut DomEvent| { (select)(&select_id); }),
+        ElementHandler::new(move |_event: &mut DomEvent| {
+            (select)(&select_id);
+        }),
     );
     let select_node = select_button.child(VNode::text(current_label)).build();
 
@@ -1173,7 +1162,9 @@ fn render_persona_card(
     }
     remove_button = remove_button.handler(
         EventKind::Click,
-        ElementHandler::new(move |_event: &mut DomEvent| { (remove)(&remove_id); }),
+        ElementHandler::new(move |_event: &mut DomEvent| {
+            (remove)(&remove_id);
+        }),
     );
     let remove_node = remove_button
         .child(Icon::render(&IconProps::new(&icons::ICON_TRASH_2, 13)))
@@ -1316,12 +1307,17 @@ fn render_impression(props: &CharacterPanelsProps) -> VNode {
     }
     summarize_button = summarize_button.handler(
         EventKind::Click,
-        ElementHandler::new(move |_event: &mut DomEvent| { (summarize)("summarize"); }),
+        ElementHandler::new(move |_event: &mut DomEvent| {
+            (summarize)("summarize");
+        }),
     );
     let summarize_node = summarize_button
         .child(Icon::render(
-            &IconProps::new(&icons::ICON_REFRESH_CCW, 13)
-                .extra_class(if busy { "spin" } else { "" }),
+            &IconProps::new(&icons::ICON_REFRESH_CCW, 13).extra_class(if busy {
+                "spin"
+            } else {
+                ""
+            }),
         ))
         .child(VNode::text(" "))
         .child(view! { span { summarize_label } })
@@ -1339,7 +1335,9 @@ fn render_impression(props: &CharacterPanelsProps) -> VNode {
         )
         .handler(
             EventKind::Click,
-            ElementHandler::new(move |_event: &mut DomEvent| { (toggle_auto)("toggle-auto"); }),
+            ElementHandler::new(move |_event: &mut DomEvent| {
+                (toggle_auto)("toggle-auto");
+            }),
         )
         .child(VNode::text(auto_label))
         .build();
@@ -1349,7 +1347,9 @@ fn render_impression(props: &CharacterPanelsProps) -> VNode {
         .attr("title", clear_title)
         .handler(
             EventKind::Click,
-            ElementHandler::new(move |_event: &mut DomEvent| { (clear)("clear"); }),
+            ElementHandler::new(move |_event: &mut DomEvent| {
+                (clear)("clear");
+            }),
         )
         .child(Icon::render(&IconProps::new(&icons::ICON_TRASH_2, 13)))
         .child(VNode::text(" "))
@@ -1600,7 +1600,9 @@ fn render_disposition(props: &CharacterPanelsProps) -> VNode {
     }
     refresh_button = refresh_button.handler(
         EventKind::Click,
-        ElementHandler::new(move |_event: &mut DomEvent| { (refresh)("refresh-log"); }),
+        ElementHandler::new(move |_event: &mut DomEvent| {
+            (refresh)("refresh-log");
+        }),
     );
     let refresh_node = refresh_button
         .child(Icon::render(&IconProps::new(&icons::ICON_REFRESH_CCW, 13)))
@@ -1789,7 +1791,9 @@ fn render_capability_row(
     }
     button = button.handler(
         EventKind::Click,
-        ElementHandler::new(move |_event: &mut DomEvent| { (toggle)(&key); }),
+        ElementHandler::new(move |_event: &mut DomEvent| {
+            (toggle)(&key);
+        }),
     );
 
     let icon = Icon::render(&IconProps::new(def.icon, 15));
@@ -1820,12 +1824,7 @@ fn render_capability_row(
 }
 
 /// 渲染一张能力卡的**壳**（标题 + 计数 + 行）。
-fn render_card(
-    title_icon: &'static IconData,
-    title: &str,
-    count: &str,
-    rows: Vec<VNode>,
-) -> VNode {
+fn render_card(title_icon: &'static IconData, title: &str, count: &str, rows: Vec<VNode>) -> VNode {
     let head = view! {
         div(class = "cap-card-head") {
             span(class = "cap-card-title") {
@@ -1870,11 +1869,7 @@ fn render_card_shell(head: VNode, rows: Vec<VNode>) -> VNode {
 }
 
 /// 渲染一行旋钮（**原生 `input[type=range]`** ⇒ 值是 **property** ⇒ 不写属性）。
-fn render_knob_row(
-    spec: &KnobSpec,
-    table: &CapabilityTable,
-    on_set_knob: &KnobIntent,
-) -> VNode {
+fn render_knob_row(spec: &KnobSpec, table: &CapabilityTable, on_set_knob: &KnobIntent) -> VNode {
     let value = capability_number(table, spec.value_key);
     let shown = format!(
         "{}{}{}",
@@ -1904,7 +1899,9 @@ fn render_knob_row(
             .attr("aria-label", aria_label)
             .handler(
                 EventKind::Input,
-                ElementHandler::new(move |_event: &mut DomEvent| { (knob_intent)(&knob_key); }),
+                ElementHandler::new(move |_event: &mut DomEvent| {
+                    (knob_intent)(&knob_key);
+                }),
             )
             .build(),
     );
@@ -1960,9 +1957,7 @@ fn render_tuning_row(entry: &TuningLogEntry, on_undo: &ActionIntent) -> VNode {
     //   ③ **内部**、且**不与元素相邻**的空白 ⇒ **逐字保留**（含换行 + 缩进）。
     // ⇒ 所以 `·` 之后的那个换行 + 22 个空格**必须保留**（`·` 后面接的是**表达式**不是元素）。
     // ⇒ 那 22 个空格 = 生产源文件该行的**前导缩进**（`views/SettingsView.svelte:2845`）。
-    let detail = format!(
-        "{previous} → {next} ·\n{TUNING_LOG_DETAIL_INDENT}{reason} · {at_text}"
-    );
+    let detail = format!("{previous} → {next} ·\n{TUNING_LOG_DETAIL_INDENT}{reason} · {at_text}");
     // ⚠️ `{label}` 与 `<code>` 之间是**元素边界** ⇒ 折叠成**一个空格**（不是零个）。
     let head = format!("#{} {param_label} ", entry.seq);
     let undo_key = entry.seq.to_string();
@@ -1990,4 +1985,3 @@ fn render_tuning_row(entry: &TuningLogEntry, on_undo: &ActionIntent) -> VNode {
         }
     }
 }
-

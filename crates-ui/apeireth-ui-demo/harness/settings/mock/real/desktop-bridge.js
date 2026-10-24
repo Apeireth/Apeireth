@@ -16,6 +16,11 @@
 
 import data from "../../fixtures/data.json";
 import character from "../../fixtures/character.json";
+// ⚠️ 本文件用 `capability.allowedServers`（允许服务器增删查）⇒ **必须** import，
+// 否则 `listAllowedServers` / `addAllowedServer` / `removeAllowedServer` 全部
+// `ReferenceError: capability is not defined` ⇒ 参考侧「允许服务器」路径必然失败、
+// 该列表分支**无法对照**（并行面 M7 实测发现，2026-10-24）。
+import capability from "../../fixtures/capabilities.json";
 
 /** 是否桌面宿主（替身返回 true ⇒ 学习日志分支可达）。 */
 export function isDesktop() {
