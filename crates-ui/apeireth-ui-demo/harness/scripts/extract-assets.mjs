@@ -194,8 +194,8 @@ function emitRust(path, content, label) {
  *
  * CSS 资产逐字来自生产组件，不复制、不手抄、不改。
  */
-function readStyleBlock(component) {
-  const path = join(COMPONENT_DIR, component.file);
+function readStyleBlock(component, baseDir = COMPONENT_DIR) {
+  const path = join(baseDir, component.file);
   const source = readOrFail(path, `生产组件 ${component.file}`);
   const open = source.indexOf("<style>");
   const close = source.indexOf("</style>");
@@ -624,8 +624,106 @@ function jsonExpression(value) {
   return `JsonValue::Object(vec![${entries.join(", ")}])`;
 }
 
+// ── 按面抽取模式（供**并行迁移**用） ─────────────────────────────────────────
+/**
+ * `--manifest <path>`：按**一个面**抽取资产，输出**全部落在该面自己的目录**。
+ *
+ * ## 为什么要有这个模式
+ *
+ * 扩面要**并行**（owner 2026-10-24 裁定「四面一口气推到底」⇒ 后续面内也要并行）。
+ * 并行的前提是**写域不重叠** ⇒ 抽取器必须能**按面**输出，否则几个面会同时写
+ * `public/<slug>.css` 与**同一个** `icon_data.rs` ⇒ 互相覆盖。
+ *
+ * ## manifest 的形状
+ *
+ * ```json
+ * {
+ *   "out": "crates-ui/apeireth-ui-demo/harness/<face>/public",
+ *   "icons_out": "crates-ui/apeireth-ui-kit/src/icons_<face>.rs",
+ *   "components": [
+ *     { "slug": "status-bar", "path": "frontend/.../StatusBar.svelte",
+ *       "css": "status-bar.css", "scope": ".status-bar" }
+ *   ],
+ *   "icons": ["clock", "x"]
+ * }
+ * ```
+ *
+ * - `components[].path` = **仓内相对路径**（生产组件在 `lib/components/` 与
+ *   `lib/views/governance/` 等不同子目录 ⇒ 不能只给文件名）；
+ * - `scope` = 作用域根 class（与组件编译器同构：前缀根 class，`:global(…)` 保持全局，
+ *   `@` 规则原样）—— **必填**：两个组件的同名 class 会冲突（批一实测：
+ *   `.tool-body` 的 `gap` 一个 8px 一个 10px ⇒ 整卡位移 2px）；
+ * - `icons_out` = 该面的图标 Rust 生成物（**每面一个文件** ⇒ 不共享）。
+ */
+function runManifestMode(manifestPath) {
+  const manifestPathAbs = resolve(process.cwd(), manifestPath);
+  const raw = readOrFail(manifestPathAbs, "面 manifest");
+  const face = JSON.parse(raw);
+  const outDir = resolve(dirname(manifestPathAbs), face.out);
+  const iconsOut = resolve(dirname(manifestPathAbs), face.icons_out);
+  console.log(`面 manifest：${manifestPathAbs}`);
+  console.log(`  输出目录：${outDir}`);
+  console.log(`  图标 Rust：${iconsOut}`);
+
+  const summary = [];
+  for (const component of face.components || []) {
+    // `component.path` 是**仓内相对路径** ⇒ baseDir = REPO。
+    const raw_css = readStyleBlock({ file: component.path }, REPO);
+    const css = component.scope ? scopeCss(raw_css, component.scope) : raw_css;
+    emit(join(outDir, component.css), css, `${component.slug} scoped CSS`);
+    summary.push({
+      path: component.path,
+      slug: component.slug,
+      scoped_css_sha256_16: digest(css),
+    });
+  }
+
+  let iconSummary = [];
+  if ((face.icons || []).length > 0) {
+    const license = readOrFail(ICON_LICENSE, "上游许可文件");
+    const entries = face.icons.map((alias) => parseIcon(alias));
+    emitRust(iconsOut, renderIconRs(entries, license), `${face.slug || "面"} 图标数据（Rust 生成物）`);
+    iconSummary = entries.map((e) => ({
+      alias: e.alias,
+      path: `frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/${e.file.split("/").pop()}`,
+      name: e.name,
+    }));
+  }
+
+  emit(
+    join(outDir, "provenance.json"),
+    JSON.stringify(
+      {
+        note: "该面对照资产的来源指纹（单一真源的可复核证据）",
+        components: summary,
+        icons: iconSummary,
+        design_css: readdirSync(DESIGN_DIR)
+          .filter((name) => name.endsWith(".css"))
+          .sort()
+          .map((name) => ({
+            path: `frontend/companion-desktop/src/lib/design/${name}`,
+            sha256_16: digest(readOrFail(join(DESIGN_DIR, name), "设计令牌 CSS")),
+          })),
+      },
+      null,
+      2,
+    ) + "\n",
+    "面 manifest 溯源记录",
+  );
+  console.log("  ✅ 该面资产抽取完成");
+}
+
 // ── 主流程 ────────────────────────────────────────────────────────────────────
 function main() {
+  const manifestIndex = process.argv.indexOf("--manifest");
+  if (manifestIndex >= 0) {
+    const manifestPath = process.argv[manifestIndex + 1];
+    if (!manifestPath) {
+      throw new Error("--manifest 需要一个 manifest 路径");
+    }
+    runManifestMode(manifestPath);
+    return;
+  }
   console.log(`仓库根：${REPO}`);
   console.log(`生产前端（只读）：${FRONTEND}`);
   const components = extractComponentCss();
