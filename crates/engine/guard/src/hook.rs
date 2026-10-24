@@ -93,6 +93,15 @@ const MAX_RECENT_EVENTS: usize = 200;
 /// 同时驻留的行为链上限 (按 trace 计)。超出后按插入顺序 LRU 驱逐最久
 /// 未命中的链; 正在评估的链由回写阶段重新插回, 不会丢本轮的 action。
 const MAX_ACTIVE_CHAINS: usize = 256;
+/// 同时驻留的**特征快照**上限 (按 (会话, 动作) 计)。
+///
+/// 快照每次评估都写一份完整的 `FeatureSnapshot`，而 guard hook 是
+/// **长生命周期单例** ⇒ 没有上限就按「动作数」无界增长（一次长会话就能吃掉
+/// 大量内存）。这里给一个有界上限：写新快照时若超量，按**插入顺序**淘汰最旧的。
+///
+/// 注：`clear_session` 也会清这份表（见其实现），但**会话永不结束**时
+/// 仍要有上限兜底 —— 两者缺一不可。
+const MAX_LAST_SNAPSHOTS: usize = 1024;
 
 /// 共享、可内部修改的免疫记忆句柄（hook 与装配层 / 运维共用同一份）。
 pub type SharedImmuneMemory = Arc<Mutex<ImmuneMemory>>;
@@ -372,6 +381,11 @@ pub struct BehaviorChainGuardHook {
     session_history: Mutex<HashMap<SessionId, SessionBehaviorHistory>>,
     turn_intents: Mutex<HashMap<(SessionId, String), TaskIntentEnvelopeV1>>,
     last_snapshots: Mutex<HashMap<(SessionId, String), FeatureSnapshot>>,
+    /// `last_snapshots` 的**插入序**队列（先进先出）。
+    ///
+    /// 快照本身没有时间戳字段，所以「最旧」记在这里 —— 与 `chain_order`
+    /// 同一套路。队列长度与 map 同步，超量时从队首淘汰。
+    last_snapshot_order: Mutex<std::collections::VecDeque<(SessionId, String)>>,
     /// 插入顺序 LRU 队列, 与 `chains` 同源维护: 每次命中把 key 移到队尾,
     /// 超限时从队首驱逐, 使驱逐语义 (最久未使用) 与注释一致 —— 旧实现
     /// 直接 `chains.keys().next()` (`HashMap` 任意键序), 注释说的顺序驱逐
@@ -407,6 +421,7 @@ impl BehaviorChainGuardHook {
             session_history: Mutex::new(HashMap::new()),
             turn_intents: Mutex::new(HashMap::new()),
             last_snapshots: Mutex::new(HashMap::new()),
+            last_snapshot_order: Mutex::new(std::collections::VecDeque::new()),
             chain_order: Mutex::new(VecDeque::new()),
             dataset_recorder: None,
             classifier: Arc::new(NoClassifier),
@@ -643,6 +658,14 @@ impl BehaviorChainGuardHook {
         self.last_immune_signals
             .lock()
             .retain(|(session, _), _| session != session_id);
+        // 特征快照同样按会话持有 —— 不清的话，会话结束后它的快照仍然驻留
+        // （而 `last_snapshots` 的键是 (会话, 动作)，容量上限只是兜底）。
+        self.last_snapshots
+            .lock()
+            .retain(|(session, _), _| session != session_id);
+        self.last_snapshot_order
+            .lock()
+            .retain(|(session, _)| session != session_id);
     }
 
     /// Dry-run evaluate an action without permanently recording it in the chain.
@@ -983,9 +1006,21 @@ impl BehaviorChainGuardHook {
                 &snapshot,
             );
         }
-        self.last_snapshots
-            .lock()
-            .insert((request.session, action_id.clone()), snapshot);
+        {
+            let key = (request.session, action_id.clone());
+            let mut snapshots = self.last_snapshots.lock();
+            snapshots.insert(key.clone(), snapshot);
+            let mut order = self.last_snapshot_order.lock();
+            order.push_back(key);
+            // 有界：超量时按**插入顺序**淘汰最旧的。
+            // 队首可能是同一 key 的旧记录（覆盖写），跳过它继续找。
+            while order.len() > MAX_LAST_SNAPSHOTS {
+                let Some(oldest) = order.pop_front() else {
+                    break;
+                };
+                snapshots.remove(&oldest);
+            }
+        }
 
         // 回写阶段 (持锁): 把评估后的链快照写回表。评估期间该 trace 若被
         // 并发驱逐 (> MAX_ACTIVE_CHAINS 个 trace 同时活跃时可能发生), 重新
@@ -1105,6 +1140,63 @@ mod tests {
             score: 0.0,
             reasons: Vec::new(),
         }
+    }
+
+    /// 特征快照表**有界**：连续评估超过上限后，最旧的被淘汰
+    /// （guard hook 是长生命周期单例 ⇒ 没有上限就按「动作数」无界增长）。
+    #[test]
+    fn feature_snapshot_store_is_bounded() {
+        let hook = BehaviorChainGuardHook::new();
+        let session = SessionId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+        let trace = TraceId::new();
+
+        // 超过上限 + 余量：上限是 1024，跑 1100 次足够触发淘汰。
+        for index in 0..(MAX_LAST_SNAPSHOTS + 76) {
+            let action_id = format!("action-{index}");
+            let request =
+                credential_request(&capability, &arguments, session, trace, 1, &action_id);
+            let _ = hook.evaluate_detailed(&request);
+        }
+
+        let stored = hook.last_snapshots.lock();
+        assert!(
+            stored.len() <= MAX_LAST_SNAPSHOTS,
+            "快照表必须有界，实际 {} 条（上限 {MAX_LAST_SNAPSHOTS}）",
+            stored.len()
+        );
+        // 最早的应该已被淘汰，最新的还在。
+        assert!(
+            !stored.contains_key(&(session, "action-0".to_string())),
+            "最旧的快照应被淘汰"
+        );
+        assert!(
+            stored.contains_key(&(session, format!("action-{}", MAX_LAST_SNAPSHOTS + 75))),
+            "最新的快照应保留"
+        );
+    }
+
+    /// `clear_session` 也要清特征快照 —— 否则会话结束后它的快照仍然驻留。
+    #[test]
+    fn clear_session_drops_feature_snapshots() {
+        let hook = BehaviorChainGuardHook::new();
+        let session = SessionId::new();
+        let capability = CapabilityId::new("credential.read").expect("valid id");
+        let arguments = credential_arguments();
+        let trace = TraceId::new();
+        let request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+        let _ = hook.evaluate_detailed(&request);
+        assert!(
+            hook.last_feature_snapshot(&session, "a1").is_some(),
+            "评估后应留下快照"
+        );
+
+        hook.clear_session(&session);
+        assert!(
+            hook.last_feature_snapshot(&session, "a1").is_none(),
+            "会话结束后快照必须清掉"
+        );
     }
 
     #[test]
