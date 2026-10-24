@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {dirname, join} from 'node:path';
 
 const OUT = dirname(fileURLToPath(import.meta.url));
-const FRONTEND = 'C:\\Users\\31683\\Apeireth-rust\\frontend\\companion-desktop';
+const FRONTEND = 'C:\\Users\\USER_A\\Apeireth-rust\\frontend\\companion-desktop';
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const DEBUG_PORT = 9337;
 const VITE_PORT = 1420;

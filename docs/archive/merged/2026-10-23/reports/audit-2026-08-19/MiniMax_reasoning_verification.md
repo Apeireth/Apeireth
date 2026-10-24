@@ -5,7 +5,7 @@
 - **Endpoint**: `https://api.minimaxi.com/v1/chat/completions`
 - **Model**: `MiniMax-M3`
 - **API key 处理**: 仅读取进 `$env:APEIRETH_API_KEY`, 不输出内容; 报告只记 path / 长度 / 前 5 字符.
-  - 路径: `C:\Users\31683\.openclaw\apikey.txt`
+  - 路径: `C:\Users\USER_A\.openclaw\apikey.txt`
   - 长度: 125 字符
   - 前 5 字符: `sk-cp`
   - 验证结束已 `Remove-Item Env:APEIRETH_API_KEY`.
@@ -153,5 +153,5 @@ MiniMax 当前**唯一**的 CoT 暴露方式是 `<!-- ... -->` 嵌入 `delta.con
 - 0 触碰源文件 ✓
 - 0 commit ✓
 - 0 修改 working tree ✓
-- 报告落地唯一文件: `C:\Users\31683\Apeireth-rust\_research_mem\sub_agent_reports\2026-08-19\MiniMax_reasoning_verification.md` ✓
+- 报告落地唯一文件: `C:\Users\USER_A\Apeireth-rust\_research_mem\sub_agent_reports\2026-08-19\MiniMax_reasoning_verification.md` ✓
 - API key 内容未进报告 ✓ (仅 path / len / 5-char prefix)

@@ -207,7 +207,7 @@ curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profil
 cargo install kani-verifier --version 0.68.0 --locked
 cargo kani setup --local-bundle <tar.gz>   # ★ 绕过 GitHub 下载 (网络差时必用)
 # 源码进 WSL 原生盘 (9p 跨盘编译慢十倍):
-tar -C /mnt/c/Users/31683/Apeireth-rust --exclude=./target --exclude=./frontend -cf - . | tar -C /root/apeireth -xf -
+tar -C /mnt/c/Users/USER_A/Apeireth-rust --exclude=./target --exclude=./frontend -cf - . | tar -C /root/apeireth -xf -
 cd /root/apeireth/research/verification/kani
 cargo kani --harness <name> > /tmp/x.log 2>&1; grep -E "^VERIFICATION" /tmp/x.log
 ```

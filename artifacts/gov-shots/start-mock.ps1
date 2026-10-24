@@ -1,4 +1,4 @@
-$root = 'C:\Users\31683\Apeireth-rust'
+$root = 'C:\Users\USER_A\Apeireth-rust'
 $m = Start-Process node -ArgumentList "`"$root\artifacts\gov-shots\mock-gateway.mjs`"" -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 1
 try {

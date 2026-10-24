@@ -19,7 +19,7 @@
 | #72 | 视觉打磨（六截图四问题） | 台账引用：`cap7-composer`、`cap7-scrolled-bottom`、`cap7-workbench`；同批过程迭代：`cap4/4b/4c`、`cap5/6` | 台宽于列、AI 字号 14.5px、对话收进框架、工具轨迹归位 |
 | #73 | 窗框融合实底条 + 工具状态三面翻面 | 台账引用：`cap8-head-frame`、`cap8-head-mid`、`cap9-workbench-fixed` | 全出血暗带实底 rgb(11,13,18)、22 工具「已结束」诚实标注 |
 | #74 | 会话分组（项目/联系人）+ 行内菜单 | `cap10-groups/menu/collapsed`（dev 注入全排列）、`cap11-real-groups`（真机兜底组 + 菜单四件） | 折叠区收起持久化、置顶/重命名/归档/删除、双区菜单去重 |
-| #75 | 主页窗框融合 + 工作区默认回退 | dev：`dev75-home-{full,top,scrolled}`、`dev75-seeded(-scrolled)`；真机：`cap75-real-{full,top,scrolled}` | 栏顶无黑框、sticky 实底头、旧会话归当前项目组（组头「31683」= 侧车根路径末段） |
+| #75 | 主页窗框融合 + 工作区默认回退 | dev：`dev75-home-{full,top,scrolled}`、`dev75-seeded(-scrolled)`；真机：`cap75-real-{full,top,scrolled}` | 栏顶无黑框、sticky 实底头、旧会话归当前项目组（组头「USER_A」= 侧车根路径末段） |
 
 ## 更早批次速查（台账 #45–#65 时代）
 

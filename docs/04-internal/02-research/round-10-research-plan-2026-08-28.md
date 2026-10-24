@@ -17,7 +17,7 @@ Author:          主代理 Mavis
 
 ## 0. Round 10 派活真账
 
-**用户原话** (Round 10 启动): "调研区域啥情况，说人话" + "测试的垃圾删了，然后调研的记录和有价值的都留下来，同时，去把 `C:\Users\31683\Desktop\Youyou\重要参考项目，产品方向前辈同行，想法随记.txt` 这里的项目都调研一下，看看对我们的项目有什么用"
+**用户原话** (Round 10 启动): "调研区域啥情况，说人话" + "测试的垃圾删了，然后调研的记录和有价值的都留下来，同时，去把 `C:\Users\USER_A\Desktop\Youyou\重要参考项目，产品方向前辈同行，想法随记.txt` 这里的项目都调研一下，看看对我们的项目有什么用"
 
 **主代理行动顺序**:
 1. ✅ **删 .db 垃圾** (research/08-rust-substrate-current/data/*.db, 180 KB, R8 临时数据) — gitignore L21 `*.db` 隐含 ignore, 0 commit
@@ -272,7 +272,7 @@ Author:          主代理 Mavis
 ### 5.1 Brief
 
 - 任务: 逐类分析 170 项目对我们项目 (Apeireth v2) 的实际作用 + 可参考度
-- 必读: `C:\Users\31683\Desktop\Youyou\重要参考项目，产品方向前辈同行，想法随记.txt` (284 行) + `docs/04-internal/v2-reference-handbook-2026-08-28.md` (613 行) + Round 9 调研 6 真账 doc
+- 必读: `C:\Users\USER_A\Desktop\Youyou\重要参考项目，产品方向前辈同行，想法随记.txt` (284 行) + `docs/04-internal/v2-reference-handbook-2026-08-28.md` (613 行) + Round 9 调研 6 真账 doc
 - 输出: `docs/04-internal/youyou-list-research-2026-08-28.md` (≤ 250 行)
 
 ### 5.2 sub-agent 调研 6 段结构

@@ -337,7 +337,7 @@
 
 ## 报告路径
 
-- **本报告**: `C:\Users\31683\Apeireth-rust\_research_mem\sub_agent_reports\2026-08-19\README_audit_batch_2.md`
+- **本报告**: `C:\Users\USER_A\Apeireth-rust\_research_mem\sub_agent_reports\2026-08-19\README_audit_batch_2.md`
 - **审计对象**: 17 crate
 - **高 confidence stale claims 总数**: ~22 项 (含 baseline 直接冲突的 5 项 + 模块列表遗漏 6 项 + 数字陈旧 5 项 + 测试数陈旧 6 项)
 

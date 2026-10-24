@@ -66,7 +66,7 @@ C 盘 952.9GB 曾仅剩 71.8GB。已做应急清理（约 145GB），现余 **14
    [profile.dev.package."*"]
    debug = 0
 
-   # 方案 B：落 C:\Users\31683\.cargo\config.toml（仅本机生效）
+   # 方案 B：落 C:\Users\USER_A\.cargo\config.toml（仅本机生效）
    ```
 
    效果：断点/变量/单步在自有代码中完全不受影响；只有调试进依赖库内部时看不到依赖的变量（少见场景）。target 体积预计大幅下降，编译写盘量也减少。
@@ -110,10 +110,10 @@ is not applicable to the 'nightly-x86_64-pc-windows-msvc' toolchain
 
 ### P1-2 apeireth-debt worktree 生命周期管理
 
-**问题**：`C:\Users\31683\apeireth-debt` 是主仓库的 **git worktree**（`.git` 指向 `Apeireth-rust/.git/worktrees/apeireth-debt`），检出 `fix/historical-debt` 分支。实测 `origin/main...origin/fix/historical-debt` = **4 / 11**（该分支 11 个提交未合并进 main，已推远端）。其 `target/` 53.3GB 已删，源码 ~200MB 必须保留。仓库曾有 worktree 困扰先例（`round12-14-push-v28-1-stage6-22-trait-interlock-stuck-in-worktree-architect2.md`）。
+**问题**：`C:\Users\USER_A\apeireth-debt` 是主仓库的 **git worktree**（`.git` 指向 `Apeireth-rust/.git/worktrees/apeireth-debt`），检出 `fix/historical-debt` 分支。实测 `origin/main...origin/fix/historical-debt` = **4 / 11**（该分支 11 个提交未合并进 main，已推远端）。其 `target/` 53.3GB 已删，源码 ~200MB 必须保留。仓库曾有 worktree 困扰先例（`round12-14-push-v28-1-stage6-22-trait-interlock-stuck-in-worktree-architect2.md`）。
 
 **建议**：
-1. PR 合并进 main 后执行 `git worktree remove C:\Users\31683\apeireth-debt`（勿直接删目录，会留悬挂 worktree 元数据）
+1. PR 合并进 main 后执行 `git worktree remove C:\Users\USER_A\apeireth-debt`（勿直接删目录，会留悬挂 worktree 元数据）
 2. 在维护文档登记 worktree 台账（分支/用途/回收条件）
 **验收标准**：
 - `git worktree list` 与台账一致；合并后列表无残留
@@ -144,7 +144,7 @@ is not applicable to the 'nightly-x86_64-pc-windows-msvc' toolchain
 Get-PSDrive C | Select-Object @{n='Free(GB)';e={[math]::Round($_.Free/1GB,1)}}
 
 # target 体积
-Get-ChildItem C:\Users\31683\Apeireth-rust\target -Recurse -File -Force -EA SilentlyContinue |
+Get-ChildItem C:\Users\USER_A\Apeireth-rust\target -Recurse -File -Force -EA SilentlyContinue |
   Measure-Object -Sum Length
 
 # 调试信息实测（对照实验）
@@ -156,8 +156,8 @@ Get-ChildItem C:\Users\31683\Apeireth-rust\target -Recurse -File -Force -EA Sile
 rustup toolchain list; rustc -vV   # 项目外执行
 
 # worktree
-git -C C:\Users\31683\Apeireth-rust worktree list
-git -C C:\Users\31683\Apeireth-rust rev-list --left-right --count origin/main...origin/fix/historical-debt
+git -C C:\Users\USER_A\Apeireth-rust worktree list
+git -C C:\Users\USER_A\Apeireth-rust rev-list --left-right --count origin/main...origin/fix/historical-debt
 ```
 
 ---

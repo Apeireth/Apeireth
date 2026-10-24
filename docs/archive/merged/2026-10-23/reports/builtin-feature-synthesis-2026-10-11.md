@@ -159,7 +159,7 @@ U 盘随身携带：单文件绿色执行 + 免安装免运行库 + 数据目录
 
 | 项 | 事实 |
 |---|---|
-| 链接清单 | `C:\Users\31683\Desktop\Youyou\重要参考项目，产品方向前辈同行，想法随记.txt`（196 条唯一链接） |
+| 链接清单 | `C:\Users\USER_A\Desktop\Youyou\重要参考项目，产品方向前辈同行，想法随记.txt`（196 条唯一链接） |
 | 普查明细 | `_research_mem/link-survey/part-01..14.md`、`part-official-sites.md`（README 素材同目录 `readmes/`） |
 | 取数通道 | GitHub REST API（配额尽时走徽章/元数据代理通道，口径已在各批注明） |
 | 源码级参考 | 见 [embedded-app-suite-research-2026-10-11.md](embedded-app-suite-research-2026-10-11.md) 引注豁免表 |

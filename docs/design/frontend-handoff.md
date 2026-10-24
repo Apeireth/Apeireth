@@ -21,7 +21,7 @@
 ```bash
 # 后端（:8090，先起）
 cargo build --example companion_serve -p apeireth-companion
-# 运行需 env：APEIRETH_API_KEY（LLM key，主人在 C:\Users\31683\apikey-ultra.txt）、
+# 运行需 env：APEIRETH_API_KEY（LLM key，主人在 C:\Users\USER_A\apikey-ultra.txt）、
 # APEIRETH_MASTER_TOKEN（授权主令牌）。详见 ../02-guides/quick-start.md。
 
 # 前端（dev，:5199 是集群施工约定端口）
@@ -115,7 +115,7 @@ cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort
   WebView2 透明**实机正常**（圆角可透视，无白底）。
 - 启动器环境坑（`_research_mem/tauri-dev-launch.cmd` 已固化）：本机 cargo 与 npm 全局
   目录**都不在系统 PATH**——tauri CLI 靠 `CARGO` 环境变量定位 cargo；
-  `beforeDevCommand pnpm dev` 需要 `C:\Users\31683\AppData\Roaming\npm` 在 PATH；
+  `beforeDevCommand pnpm dev` 需要 `C:\Users\USER_A\AppData\Roaming\npm` 在 PATH；
   `CARGO_NET_OFFLINE=true` 可离线解析（插件 2.4.3 本地缓存命中）。
 
 **施工日志**（最新在上）：
@@ -140,7 +140,7 @@ cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort
 
 - 2026-08-22 13:34 骨架建立。盘点结论：端口 8090 在听（PID 45228，不动它）、1420 空闲；
   vite.config.ts 已锁 1420 strictPort；`target/debug/examples/companion_serve.exe` 存在；
-  cargo 在 `C:\Users\31683\.cargo\bin\`（不在 bash PATH，用全路径调用）；
+  cargo 在 `C:\Users\USER_A\.cargo\bin\`（不在 bash PATH，用全路径调用）；
   Cargo.toml 已有 autostart/notification（版本风格 `= "2"`，照抄）。
 
 ## 5. 接手者必读的坑与纪律（全是血换来的）

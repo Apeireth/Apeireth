@@ -5,7 +5,7 @@ import {writeFileSync} from 'node:fs';
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const DEBUG_PORT = 9399;
 const BASE = 'http://127.0.0.1:1420/';
-const OUT = 'C:\\Users\\31683\\Apeireth-rust\\artifacts\\';
+const OUT = 'C:\\Users\\USER_A\\Apeireth-rust\\artifacts\\';
 
 const SHOTS = [
   {name: 'fix1-night-hour2', url: BASE + '?theme=night&hour=2', wait: 5000},
