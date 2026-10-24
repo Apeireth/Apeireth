@@ -26,12 +26,30 @@ impl Tier {
 /// GPU 桥错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GpuError {
-    /// **未接线**：P0 阶段 wgpu 后端尚未接入（等 P0 探测结论）。
+    /// **未接线**：该通路在本批尚未接线（例如把 P0 的 `SceneUniforms`
+    /// 映射到着色器 uniform 属 P5-b 的场景语义）。
     NotImplemented,
     /// 设备丢失（需重建上下文）。
     DeviceLost,
     /// 不支持的能力。
     Unsupported(String),
+    /// 建表面失败（典型原因：画布已被另一种 context 占用）。
+    SurfaceCreationFailed(String),
+    /// 拿不到适配器（宿主没有满足条件的 GPU 适配器）。
+    AdapterUnavailable(String),
+    /// 拿不到设备（限额不满足等）。
+    DeviceRequestFailed(String),
+    /// 着色器编译 / 校验失败。
+    ShaderCompilationFailed(String),
+    /// 管线 / 绑定组创建失败。
+    PipelineCreationFailed(String),
+    /// 拿不到表面纹理（表面已被配置为别的设备等）。
+    SurfaceTextureUnavailable(String),
+    /// uniform 绑定失败（名字未知 / 分量数不符 / 缺值）。
+    BindingFailed(String),
+    /// 设备侧错误（校验 / 内部错误）—— 由引擎自己的错误处理器收集，
+    /// **不 panic**（wgpu 的默认处理器在浏览器里会 panic）。
+    DeviceError(String),
 }
 
 impl std::fmt::Display for GpuError {
@@ -40,11 +58,31 @@ impl std::fmt::Display for GpuError {
             GpuError::NotImplemented => {
                 write!(
                     f,
-                    "NotImplemented: wgpu 后端未接线（P0 阶段按探测结论接入）"
+                    "NotImplemented: 该通路未接线（P0 桩按探测结论接入，见 crate 文档的 🔵 段）"
                 )
             }
             GpuError::DeviceLost => write!(f, "DeviceLost: GPU 设备丢失"),
             GpuError::Unsupported(detail) => write!(f, "Unsupported: {detail}"),
+            GpuError::SurfaceCreationFailed(detail) => {
+                write!(f, "SurfaceCreationFailed: {detail}")
+            }
+            GpuError::AdapterUnavailable(detail) => {
+                write!(f, "AdapterUnavailable: {detail}")
+            }
+            GpuError::DeviceRequestFailed(detail) => {
+                write!(f, "DeviceRequestFailed: {detail}")
+            }
+            GpuError::ShaderCompilationFailed(detail) => {
+                write!(f, "ShaderCompilationFailed: {detail}")
+            }
+            GpuError::PipelineCreationFailed(detail) => {
+                write!(f, "PipelineCreationFailed: {detail}")
+            }
+            GpuError::SurfaceTextureUnavailable(detail) => {
+                write!(f, "SurfaceTextureUnavailable: {detail}")
+            }
+            GpuError::BindingFailed(detail) => write!(f, "BindingFailed: {detail}"),
+            GpuError::DeviceError(detail) => write!(f, "DeviceError: {detail}"),
         }
     }
 }

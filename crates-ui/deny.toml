@@ -12,14 +12,25 @@
 #   结构同源（抄 wasmtime 模式），但**口径独立**：许可白名单按本 workspace 的
 #   **实际依赖树**裁剪（不是照抄主仓的 14 条），多版本 skip 按实测登记。
 #
-# 【实测基线（2026-10-24，P2 批亲跑）】
+# 【实测基线（2026-10-24，P5 批亲跑）】
 #   命令：cd crates-ui && cargo tree --target all --duplicates
-#   结果：warning: nothing to print ⇒ **0 多版本** ⇒ [bans].skip **0 条**。
-#   （wasm-bindgen 0.2.129 的宏链只带 syn 3.0.9 单版本；主仓那条「syn 1/2/3
-#   多版本」的 skip 属于主仓自己的依赖树，与本 workspace 无关。）
+#   结果：**1 个多版本包**（P5 引入 wgpu 链后新增）：
+#     - syn 2.0.119（zerocopy-derive 链 / windows-* 链）+ syn 3.0.9
+#       （wasm-bindgen-macro-support 0.2.129 链）
+#   ⇒ [bans].skip 登记 1 条（带理由），见下。
+#   注：`cargo tree --target all` 另可见 jni-sys 0.3.1 + 0.4.1，但那只出现在
+#   **android 目标**（wgpu-hal 的 ndk-sys 链）⇒ 不在本 deny.toml 的两个目标
+#   （x86_64-linux / wasm32）依赖图里 ⇒ **不登记 skip**（登记了会被判
+#   `unmatched-skip` 警告）。
 #
-#   命令：cd crates-ui && cargo deny check
-#   结果：见 P2 交付报告（4 类检查全绿）。
+#   命令：cd crates-ui && cargo deny --offline check
+#   结果：4 类（advisories / bans / licenses / sources）全绿。
+#   ⚠️ `--offline` 是必需项：本机到 github.com 的链路不稳，advisory-db 的
+#      自动更新会失败（实测 2026-10-24：`failed to fetch advisory database`）。
+#      本地已有 advisory-db 副本（~/.cargo/advisory-db/），`--offline` 直接用它。
+#
+#   ⚠️ P5 批首次引入外部依赖（wgpu / naga / web-sys / js-sys /
+#      wasm-bindgen-futures），许可白名单随之扩到 6 条（见下）。
 # ============================================================================
 
 [graph]
@@ -35,19 +46,28 @@ targets = [
 # ----------------------------------------------------------------------------
 # Licenses — 允许列表
 # ----------------------------------------------------------------------------
-# 实测用到的许可（按 crates-ui/Cargo.lock 的 19 个外部包逐个核对）：
+# 实测用到的许可（按 crates-ui/Cargo.lock 的 114 个包逐个核对）：
 #   MIT OR Apache-2.0 ：bumpalo / cfg-if / futures-core / futures-task /
 #                       futures-util / js-sys / once_cell / pin-project-lite /
 #                       proc-macro2 / quote / rustversion / syn /
-#                       wasm-bindgen(-macro / -macro-support / -shared) / web-sys
-#   MIT                ：slab
+#                       wasm-bindgen(-macro / -macro-support / -shared) / web-sys /
+#                       wgpu(-core / -hal / -naga-bridge / -types) / naga(-types) /
+#                       bytemuck(-derive) / half / log / ...
+#   MIT                ：slab / arrayvec / bitflags / bit-set / crunchy / ...
 #   Unicode-3.0        ：unicode-ident（MIT OR Apache-2.0 AND Unicode-3.0）
-# ⇒ 三个许可即覆盖全部依赖（与主仓白名单同源，但本 workspace 只登记实际用到的）。
+#   BSD-3-Clause       ：pp-rs 0.2.1（naga 的 GLSL 前端解析器依赖）
+#   ISC                ：libloading 0.8.9（wgpu-hal 的动态库加载）
+#   Zlib               ：foldhash 0.2.0 / slotmap 1.1.1
+# ⇒ 6 个许可即覆盖全部依赖。
 [licenses]
 allow = [
     "Apache-2.0",
     "MIT",
     "Unicode-3.0",
+    # ── P5 批新增（wgpu / naga 链带进来的 3 条）────────────────────────────
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
 ]
 
 # ----------------------------------------------------------------------------
@@ -57,9 +77,13 @@ allow = [
 multiple-versions = "deny"   # ← 与主仓同口径（业界顶尖标准策略）
 wildcards = "allow"
 deny = []
-# 实测 0 多版本 ⇒ **0 skip**（过期 skip 会掩盖未来真实的多版本问题 ⇒ 真出现
-# 多版本时再带理由登记，见主仓 deny.toml 的同一原则）。
-skip = []
+# P5 批实测到 2 个多版本包，逐条登记理由（不做整类豁免）：
+skip = [
+    # syn：两条互不相干的宏链各自锁了主版本 —— 2.0.119 来自 zerocopy-derive
+    # / windows-* 链，3.0.9 来自 wasm-bindgen-macro-support 0.2.129 链。
+    # 两条链都锁死自己的主版本，本 workspace 无法统一（上游各自指定）。
+    { name = "syn", versions = ["=2.0.119", "=3.0.9"], reason = "两条互不相干的宏链各自锁死主版本（zerocopy-derive / windows-* 链 vs wasm-bindgen-macro-support 0.2.129 链），上游各自指定，本 workspace 无法统一" },
+]
 
 # ----------------------------------------------------------------------------
 # Sources — 限制 crate 来源

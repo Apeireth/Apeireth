@@ -46,7 +46,12 @@ pub use apeireth_ui_dom::{
     KeyedSlot, ListDiffMode, MountedElement, MountedFragment, MountedNode, MountedText, Patch,
     RecordedOp, Renderer, TextVNode, ThisBinding, ThisRef, UnavailableDom, UnavailableNode, VNode,
 };
-pub use apeireth_ui_gpu::{BlackHoleParams, GpuContext, GpuError, SceneUniforms, Tier};
+pub use apeireth_ui_gpu::{
+    BackendPreference, BindingError, BlackHoleParams, ColorProfile, Engine, EngineOptions,
+    EngineReport, FrameReport, GlslError, GpuContext, GpuError, OutputEncoding, SceneDescriptor,
+    SceneError, ScenePipeline, SceneUniforms, Tier, UnavailableGpuContext, UniformBufferLayout,
+    UniformSlot, UniformValues, SHADER_UNIFORM_NAMES,
+};
 pub use apeireth_ui_kit::{
     Badge, BadgeProps, Button, ButtonProps, CardShell, CardShellProps, ComponentRegistry, Icon,
     IconData, IconNode, IconProps, RegistryError,
@@ -65,7 +70,7 @@ mod tests {
     use crate::core::HostScheduler as _;
     use crate::core::Runtime;
     use crate::dom::{Patch, VNode};
-    use crate::gpu::Tier;
+    use crate::gpu::{GpuContext as _, Tier};
     use crate::kit::ComponentRegistry;
     use crate::Dom as _;
 
@@ -150,5 +155,28 @@ mod tests {
 
         let reference: crate::ThisRef = crate::ThisBinding::<crate::InMemoryDom>::new().erased();
         assert_eq!(reference, reference.clone(), "同一槽位 = 同一身份");
+    }
+
+    /// P5 新增类型（GLSL 前置变换 / uniform 绑定表 / 双后端引擎入口）必须能
+    /// 从门面取到。
+    #[test]
+    fn p5_gpu_types_are_reachable_from_the_facade() {
+        // 映射表：顺序 ⇒ binding 号。
+        assert_eq!(crate::gpu::binding_of("uRes"), Some(0));
+        assert_eq!(crate::gpu::binding_of("uTlGold"), Some(15));
+        assert_eq!(crate::gpu::name_of(15), Some("uTlGold"));
+        assert_eq!(crate::SHADER_UNIFORM_NAMES.len(), 16);
+
+        // 引擎创建参数的中性默认值。
+        let options = crate::EngineOptions::default();
+        assert_eq!(options.backend, crate::BackendPreference::Auto);
+        assert!(options.width > 0 && options.height > 0);
+
+        // 未接线后端仍然诚实报未接线。
+        let unavailable = crate::UnavailableGpuContext;
+        assert_eq!(
+            unavailable.submit_frame(&crate::SceneUniforms::default()),
+            Err(crate::GpuError::NotImplemented)
+        );
     }
 }

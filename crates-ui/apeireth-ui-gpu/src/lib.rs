@@ -7,31 +7,81 @@
 //! 职责边界（设计文档 §3.3.4）：只回答「**状态 → 像素**」，**不改着色器数学**
 //! —— 电影感载体（GLSL / WGSL / CSS 合成）全在引擎之外，引擎一行都不碰。
 //!
-//! ## 本批（P0 骨架）交付口径
-//! - ✅ **已实现**：GPU 后端抽象（[`GpuContext`]）、能力档位与降级梯队
-//!   （[`Tier`]）、uniform 合成（状态 → 缓冲布局）、黑洞场景的纯计算
-//!   （史瓦西半径 / 光子球 / 吸积盘内外半径 / 圆轨道速度）、显式未接线桩
-//!   （[`UnavailableGpuContext`] 恒返回 [`GpuError::NotImplemented`]）。
-//! - 🔵 **未接线**：wgpu 后端 —— 等 P0 探测结论（探测子线实测：wgpu 30.0.1，
-//!   feature 必须成组开 `["webgl", "glsl", "wgsl", "naga-ir"]`；`glsl` 单独开
-//!   会因上游 naga `front/mod.rs:5` 的 gate 条件导致编译失败）。
+//! ## 本批（P5 · GPU 桥能力层）交付口径
 //!
-//! ## 纪律
-//! 本 crate 不写着色器、不写 CSS、不碰排版与主题（设计文档 §1.3）。
+//! ### ✅ 已实现
+//!
+//! - **GLSL ES 3.0 → naga IR 前置变换器**（[`glsl`]）：三步机械变换
+//!   （删 `#version 300 es` 行 + 把 N 个 plain uniform **合并进一个 std140
+//!   uniform 块** + 必要时补一个 16 字节对齐的 padding 成员），纯文本变换
+//!   ⇒ **native 可单测**，不需 GPU；**不触碰着色器数学**。
+//!   - 为什么必须合并成一块：naga 给每个 uniform 一个独立 binding ⇒ 16 个
+//!     uniform = 16 个 uniform buffer，而 **WebGL2 后端每个着色阶段只有
+//!     12–14 个**（实测本机 14，GLES3 规范下限 12）⇒「逐个注入 binding」
+//!     在 WebGL 后端**必然失败**（实测报错原文见 `crates-ui/evidence/p5-gpu/`）。
+//! - **uniform 名 → 索引映射**（[`bindings`]）：naga 会抹掉 uniform 名 ⇒
+//!   引擎自维护映射表，按 **索引**（= 声明序 = 块内成员序）绑定；表由单测
+//!   钉住「顺序 ⇒ 索引」与「表长度 = 着色器 uniform 声明数」。
+//! - **双后端引擎入口**（[`engine`]）：`Engine::create(canvas)` 严格走 5 步
+//!   （探测 → 建 Instance → 建表面 → 带 `compatible_surface` 申请 adapter →
+//!   `required_limits = adapter.limits()` 申请设备），后端在碰画布之前定死。
+//! - **显式色彩契约**（[`engine::select_surface_format`]）：wgpu 默认把 sRGB
+//!   表面格式排在 `formats[0]` ⇒ 直接取会让 WebGL 与 WebGPU 两个后端
+//!   **画出不同像素**（实测同一片元值 0.35 → 字节 160 vs 89）；引擎**显式
+//!   改选非 sRGB 格式**并把实际口径记进 [`engine::ColorProfile`]。
+//! - **设备错误不 panic**（[`engine::Engine::take_device_errors`]）：wgpu 的
+//!   默认未捕获错误处理器在浏览器里会 panic ⇒ 引擎改装自己的处理器，把
+//!   校验错误**收进队列**并以 [`GpuError`] 返回。
+//! - **着色器资产入库**（[`shaders`]）：生产版 GLSL 的去注释副本（光学数值
+//!   逐字未改），供上面的变换器与管线消费。
+//!
+//! ### 🔵 未接线 / 未做
+//!
+//! - **P5-b 未做**：黑洞场景的**完整复刻**（uniform 取值来源、场景参数语义、
+//!   与生产画面**逐帧一致**）属下一批。本 crate 只提供**能力层**：变换器 +
+//!   映射表 + 双后端渲染入口 + 着色器资产。
+//! - **顶点阶段的 uniform 未接线**：[`engine::Engine::create_scene_pipeline`]
+//!   对「顶点阶段有 uniform」的着色器**显式报错**（不静默忽略：静默忽略会让
+//!   顶点阶段的 uniform 永远拿到 0 值，画出错位的画面）。
+//! - **P0 桩仍在**（[`UnavailableGpuContext`]）：显式返回
+//!   [`GpuError::NotImplemented`]，不假装「场景已经在跑」。
+//! - [`GpuContext::submit_frame`] 对真实引擎**未接线**：把 P0 的
+//!   `SceneUniforms`（4 个几何量）映射到 16 个着色器 uniform 属场景语义
+//!   （P5-b）⇒ 显式报未接线。真实通路是
+//!   [`engine::Engine::draw_frame`]。
+//! - **宿主覆盖未实测**：本批只在本机 Linux 无头 Chromium 上实测过双后端；
+//!   macOS WKWebView / Windows WebView2 / Linux WebKitGTK **均未实测**。
+//! - **native 侧不是画面验证**：native 单测只覆盖**纯逻辑**（变换 / 映射 /
+//!   布局 / 策略）；画面级验证只在真实浏览器里做（证据见
+//!   `crates-ui/evidence/p5-gpu/`）。
 
 #![forbid(unsafe_code)]
 
+pub mod bindings;
 pub mod context;
+pub mod engine;
+pub mod glsl;
 pub mod scene;
+pub mod shaders;
 
+pub use bindings::{
+    binding_of, binding_table, name_of, BindingError, UniformBufferLayout, UniformSlot,
+    UniformValues, SHADER_UNIFORM_NAMES,
+};
 pub use context::{GpuContext, GpuError, Tier, UnavailableGpuContext};
+pub use engine::{
+    select_surface_format, BackendPreference, ColorProfile, Engine, EngineOptions, EngineReport,
+    FrameReport, OutputEncoding, SceneDescriptor, ScenePipeline, SurfaceTargetInput,
+};
+pub use glsl::{GlslError, UniformDecl};
 pub use scene::{
     BlackHoleParams, SceneError, SceneUniforms, GRAVITATIONAL_CONSTANT, SOLAR_MASS, SPEED_OF_LIGHT,
 };
+pub use shaders::{SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL};
 
 #[cfg(test)]
 mod tests {
-    //! crate 级断言：跨模块组合行为（场景参数 → uniform → 后端提交）。
+    //! crate 级断言：跨模块组合行为（着色器源 → 变换 → 映射表 → uniform 布局）。
 
     use super::*;
 
@@ -48,5 +98,63 @@ mod tests {
             "未接线的后端必须显式报未接线，不得静默成功"
         );
         assert!(uniforms.disk_outer_radius_km > uniforms.disk_inner_radius_km);
+    }
+
+    #[test]
+    fn shader_assets_drive_the_binding_table_end_to_end() {
+        // 着色器源 → uniform 声明 → 映射表 → 缓冲布局：一条链打通。
+        let decls = glsl::uniform_declarations(SCENE_FRAGMENT_GLSL);
+        assert_eq!(decls.len(), SHADER_UNIFORM_NAMES.len());
+
+        let members = glsl::uniform_block_members(&decls);
+        let layout = UniformBufferLayout::from_members(&members, 0).expect("布局可建");
+        assert_eq!(layout.len(), 17, "16 个 uniform + 1 个 padding 成员");
+        for (index, slot) in layout
+            .slots()
+            .iter()
+            .take(SHADER_UNIFORM_NAMES.len())
+            .enumerate()
+        {
+            assert_eq!(slot.index, index);
+            assert_eq!(slot.name, SHADER_UNIFORM_NAMES[index]);
+            assert_eq!(binding_of(&slot.name), Some(index as u32));
+        }
+    }
+
+    #[test]
+    fn uniform_values_round_trip_through_the_layout() {
+        let members = glsl::uniform_block_members(&glsl::uniform_declarations(SCENE_FRAGMENT_GLSL));
+        let layout = UniformBufferLayout::from_members(&members, 0).expect("布局可建");
+
+        let mut values = UniformValues::new();
+        values.set(0, &[320.0, 240.0]); // uRes
+        values.set(1, &[0.0, 0.0]); // uCenter
+        for binding in 2..16 {
+            values.set(binding, &[0.5]);
+        }
+
+        let mut bytes = vec![0u8; layout.total_size() as usize];
+        values.write_into(&layout, &mut bytes).expect("写入成功");
+        assert!(bytes.iter().any(|byte| *byte != 0), "缓冲里必须真有数据");
+    }
+
+    #[test]
+    fn color_policy_prefers_raw_formats_for_backend_parity() {
+        // 两个后端要画出同一张图，表面格式的编码方式必须一致 ⇒ 策略固定。
+        let webgl_like = [
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureFormat::Rgba8Unorm,
+        ];
+        let webgpu_like = [
+            wgpu::TextureFormat::Rgba8Unorm,
+            wgpu::TextureFormat::Bgra8Unorm,
+        ];
+        let (_, left) = select_surface_format(&webgl_like).expect("可选");
+        let (_, right) = select_surface_format(&webgpu_like).expect("可选");
+        assert_eq!(
+            left, right,
+            "两个后端必须落到同一种编码方式，否则画面不一致"
+        );
+        assert_eq!(left, OutputEncoding::RawBytes);
     }
 }
