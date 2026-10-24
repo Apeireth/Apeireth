@@ -123,10 +123,9 @@ pub use file_fetcher::{
     FetchedFile, FileFetchError, InternalFileRequest, InternalFileResponse, TransparentFileFetcher,
 };
 pub use presence::{
-    presence_snapshot_handler, spawn_presence_heartbeat, InitiativeBudget, PresenceBreath,
-    PresencePad, PresenceService, PresenceSignificance, PresenceSnapshotBody, PresenceSource,
-    PresenceState, PresenceSubscription, PresenceSynthesizer, HEARTBEAT_INTERVAL_SECS,
-    INITIATIVE_DAILY_CAP,
+    presence_snapshot_handler, InitiativeBudget, PresenceBreath, PresencePad, PresenceService,
+    PresenceSignificance, PresenceSnapshotBody, PresenceSource, PresenceState,
+    PresenceSubscription, PresenceSynthesizer, HEARTBEAT_INTERVAL_SECS, INITIATIVE_DAILY_CAP,
 };
 
 pub use canonical_entry::{

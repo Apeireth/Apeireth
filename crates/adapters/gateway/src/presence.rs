@@ -729,27 +729,6 @@ pub async fn presence_snapshot_handler(
     .into_response()
 }
 
-/// Spawn the 60 s heartbeat task. It holds the service weakly: once the
-/// gateway state (and with it the runtime's sink fan-out) is dropped, the task
-/// exits instead of leaking. Outside a tokio runtime it degrades honestly to
-/// turn-level frames only — no executor, no heartbeat, no panic.
-pub fn spawn_presence_heartbeat(service: &Arc<PresenceService>) {
-    let Ok(handle) = tokio::runtime::Handle::try_current() else {
-        return;
-    };
-    let weak = Arc::downgrade(service);
-    handle.spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        interval.tick().await; // the first tick is immediate; skip it
-        loop {
-            interval.tick().await;
-            let Some(service) = weak.upgrade() else { break };
-            service.emit_heartbeat();
-        }
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

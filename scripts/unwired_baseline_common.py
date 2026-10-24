@@ -37,9 +37,13 @@ BASELINE = ROOT / "scripts" / "unwired-baseline.txt"
 # 为什么必须扫 `tests/`：不扫的话，「集成测试专用的公开 API」会被判成 `orphan`
 # （生产零引用 + 测试零引用），而它其实是 `test-only`。两类都表示生产零引用，
 # 但**分类错了会误导还债方向**（把测试辅助当死代码删掉 ⇒ 集成测试编译失败）。
+# `examples/` **必须扫**：它是 crate 的公开示例入口，CI 里常被
+# `cargo run --example` 拉起（如 `scripts/guard_ml/train_shadow.py` 跑
+# `stamp_guard_artifact`）。不扫的话，这些「被 example 调用的公开 API」
+# 会被误报成孤儿 —— 2026-10-24 实测：`stamp_artifact_file` 因此假阳性。
 SCAN_ROOTS = sorted(
     str(path.relative_to(ROOT))
-    for pattern in ("crates/*/*/src", "crates/*/*/tests")
+    for pattern in ("crates/*/*/src", "crates/*/*/tests", "crates/*/*/examples")
     for path in ROOT.glob(pattern)
     if path.is_dir()
 )
@@ -211,6 +215,16 @@ VERIFIED_REDUNDANT_OR_HOST = {
     "not_wired_reason",  # 主路径 DATA_PROBE_NOT_WIRED 常量
     "reconnect_attempts",  # 重连退避主路径在用
     "session_state",  # 生命周期状态主路径在用
+    # --- 2026-10-24 第四轮：判据 v4（use 整块剔除）后新揭出的 9 条 ---
+    "constrain_to_trusted",  # 公开扩展点 IntentInterpreter 的宿主侧策略原语
+    "decompose_default",  # 主路径 decompose（calibration_critic.rs:111 生产在用）
+    "doc_ops_capability",  # 主路径 doc_ops_capability_shared（tool_modules.rs:955）
+    "extract_experience_from_episode",  # 主路径 extract_experience（cognitive.rs:1738）
+    "save_to_cluster",  # 一行包装（to_markdown + create_file）；落盘主路径在 dreaming.rs:300
+    "serve_canonical",  # 3 参便利包装；生产入口是 serve_state_with_shutdown（cli/lib.rs:3463）
+    "sheet_ops_capability",  # 主路径 sheet_ops_capability_shared（tool_modules.rs:1005）
+    "trait_locks_path",  # 主路径 trait_locks_path_for（self_tuning_wire.rs:78）
+    "validate_schedule",  # 一行别名；主路径 Schedule::validate（cron.rs:87）
 }
 
 # 按文件名归组（路径特征）
@@ -258,6 +272,7 @@ def find_file(symbol: str) -> str:
 # 这些代码**有意保留**，解冻条件写在 docs/status/unwired-ledger.md。
 OWNER_DECLINED = {
     "verdict_keys_for_principle",  # W5 哲学拦截层
+    "im_router",  # W1 IM 通道（owner 2026-10-23 裁定暂缓）
 }
 
 

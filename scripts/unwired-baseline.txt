@@ -139,8 +139,17 @@ orphan end_wait  # G5
 orphan idle_elapsed  # G5
 orphan is_tripped  # G5
 
-# --- G6（72 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（81 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
+orphan constrain_to_trusted  # G6
+orphan decompose_default  # G6
+orphan doc_ops_capability  # G6
+orphan extract_experience_from_episode  # G6
+orphan save_to_cluster  # G6
+orphan serve_canonical  # G6
+orphan sheet_ops_capability  # G6
+orphan trait_locks_path  # G6
+orphan validate_schedule  # G6
 orphan recall_with_policy  # G6
 orphan retract_relation  # G6
 orphan select_candidates  # G6
@@ -214,7 +223,8 @@ orphan traverse_from  # G6
 orphan upsert_hallway  # G6
 orphan without_as_of  # G6
 
-# --- G7（2 条）：**owner 裁定不接**（有意保留，不是遗漏）：W1 IM 通道（2026-10-23 裁定暂缓）、W5 哲学拦截层（2026-10-24 裁定不接）。保留代码是有意的 —— 解冻条件写在 `docs/status/unwired-ledger.md`。
+# --- G7（3 条）：**owner 裁定不接**（有意保留，不是遗漏）：W1 IM 通道（2026-10-23 裁定暂缓）、W5 哲学拦截层（2026-10-24 裁定不接）。保留代码是有意的 —— 解冻条件写在 `docs/status/unwired-ledger.md`。
 
+orphan im_router  # G7
 orphan closure_of  # G7
 orphan verdict_keys_for_principle  # G7
