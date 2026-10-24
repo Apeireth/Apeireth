@@ -66,13 +66,54 @@ fn shared_audit_sink(path: std::path::PathBuf) -> Arc<dyn AuditSink> {
     sink
 }
 
+/// 本进程已取的审计锁路径（模块级单一真源）。
+///
+/// ⚠️ 不能写成两个函数各自的 `static`：函数内 `static` 是**不同的变量**，
+/// 记录与释放会看到不同容器（我第一版就这么错了，实测锁仍残留）。
+static HELD_AUDIT_LOCKS: std::sync::OnceLock<std::sync::Mutex<Vec<std::path::PathBuf>>> =
+    std::sync::OnceLock::new();
+
+fn held_audit_locks() -> &'static std::sync::Mutex<Vec<std::path::PathBuf>> {
+    HELD_AUDIT_LOCKS.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+/// 释放本进程持有的持久审计锁（在 `main` 正常返回路径上调用）。
+///
+/// 为什么需要显式释放：sink 存在**进程级注册表**（按路径单例）里，不随栈析构；
+/// 进程正常返回时 `Drop` 不会跑 ⇒ `governance-audit.lock` 会永久残留
+/// （实测 2026-10-25：正常退出后仍留 1 个）。陈旧锁接管虽能兜住，但那是垃圾文件。
+///
+/// 只删**自己持有的**那些锁；进程被强杀（SIGKILL）时本函数不跑，仍靠陈旧锁接管。
+pub fn release_audit_lock() {
+    let mut guard = held_audit_locks()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for path in guard.drain(..) {
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+/// 记录本进程已取的锁路径（供 [`release_audit_lock`] 清理）。
+fn remember_audit_lock(path: &std::path::Path) {
+    let mut guard = held_audit_locks()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let lock_path = path.with_extension("lock");
+    if !guard.contains(&lock_path) {
+        guard.push(lock_path);
+    }
+}
+
 /// 打开持久 sink；**坏链（历史分叉）隔离后重建**，其余错误如实降级内存账。
 ///
 /// 隔离而非删除：坏链是证据（谁在何时把链写分叉），改名保留在原地旁边。
 /// 隔离后重建空链 = 审计恢复持久；不隔离就只能永久降级（当前的行为）。
 fn open_persistent_sink(path: std::path::PathBuf) -> Arc<dyn AuditSink> {
     match apeireth_gateway::FileChainAuditSink::open(path.clone()) {
-        Ok(sink) => Arc::new(sink),
+        Ok(sink) => {
+            remember_audit_lock(&path);
+            Arc::new(sink)
+        }
         Err(error) if error.contains("hash mismatch") => {
             let stamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -186,5 +227,35 @@ mod audit_sink_sharing_tests {
             sink.append("c", "s", Timestamp::now()).is_ok(),
             "重建后的新链必须可追加（审计恢复持久化）"
         );
+    }
+}
+
+#[cfg(test)]
+mod audit_lock_release_tests {
+    use super::*;
+
+    /// 正常退出路径必须把锁文件清掉（否则用户数据目录里永久残留垃圾文件）。
+    ///
+    /// 真机事故：进程级注册表让 sink 活到进程结束 ⇒ `Drop` 不跑 ⇒
+    /// `governance-audit.lock` 每次运行都留一个（实测 2026-10-25）。
+    #[test]
+    fn release_removes_the_lock_file_recorded_by_the_sink() {
+        let dir = std::env::temp_dir().join(format!(
+            "apeireth-audit-lock-release-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let ledger = dir.join("governance-audit.jsonl");
+        let sink = apeireth_gateway::FileChainAuditSink::open(ledger.clone()).expect("open");
+        remember_audit_lock(&ledger);
+        let lock_path = ledger.with_extension("lock");
+        assert!(lock_path.exists(), "打开 sink 后应有锁文件");
+        release_audit_lock();
+        assert!(!lock_path.exists(), "释放后锁文件应被删除");
+        drop(sink);
     }
 }

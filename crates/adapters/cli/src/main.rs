@@ -923,6 +923,16 @@ mod onboard_parse_tests {
 }
 
 fn main() -> ExitCode {
+    // 退出时清理持久审计锁（见 [`apeireth_cli::governance_chain::release_audit_lock`]）：
+    // 审计 sink 存在**进程级注册表**里（按路径单例），不会随栈析构 ⇒ 正常返回也不会
+    // drop ⇒ 若不显式清理，`governance-audit.lock` 会永远残留在用户数据目录
+    // （实测 2026-10-25：正常退出后仍留 1 个）。陈旧锁接管能兜住，但那是垃圾文件。
+    let code = run_cli();
+    apeireth_cli::governance_chain::release_audit_lock();
+    code
+}
+
+fn run_cli() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
         return run_session();
@@ -1269,7 +1279,10 @@ mod help_drift_tests {
     #[test]
     fn help_covers_every_dispatched_command() {
         let source = include_str!("main.rs");
-        let start = source.find("fn main() -> ExitCode").expect("main 入口");
+        // 分发块在 `run_cli` 里（`main` 只做「跑 + 清理审计锁」两件事）。
+        let start = source
+            .find("fn run_cli() -> ExitCode")
+            .expect("run_cli 入口（分发块所在）");
         let rest = &source[start..];
         // main 函数体结束于下一个行首 `fn ` 或文件尾
         let end = rest
