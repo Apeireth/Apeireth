@@ -367,6 +367,10 @@ pub struct PartnerBondModule {
     clock: Arc<dyn Clock>,
     depth_increment: f64,
     metrics: ModuleMetrics,
+    /// 关系里程碑记录面（初见 / 阶段跃迁 —— 两件**确定性**事件）。
+    ///
+    /// 缺省 `None` = 不记（未注入里程碑存储时零行为变化）。
+    milestones: Option<std::sync::Arc<apeireth_memory::milestone::MilestoneRecorder>>,
 }
 
 impl PartnerBondModule {
@@ -383,7 +387,21 @@ impl PartnerBondModule {
             clock,
             depth_increment: BOND_DEPTH_INCREMENT_PER_TURN,
             metrics: ModuleMetrics::default(),
+            milestones: None,
         }
+    }
+
+    /// 注入关系里程碑记录面（初见 / 阶段跃迁）。
+    ///
+    /// 不注入 = 不记里程碑（零行为变化）；注入后只在**确定性**事件上落一条：
+    /// 主体第一次建立伙伴记录（初见）、羁绊阶段真的变了（跃迁）。
+    #[must_use]
+    pub fn with_milestones(
+        mut self,
+        recorder: std::sync::Arc<apeireth_memory::milestone::MilestoneRecorder>,
+    ) -> Self {
+        self.milestones = Some(recorder);
+        self
     }
 
     /// 覆盖每回合深度增量 (测试/调参用)。
@@ -479,11 +497,20 @@ impl BehaviorModule for PartnerBondModule {
     async fn on_hook(
         &self,
         hook: HookPoint,
-        _ctx: &ModuleContext<'_>,
+        ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
         let result = match hook {
             HookPoint::TurnStart => match self.get_or_create_partner() {
                 Some(partner) => {
+                    // 初见：本会话第一次跑羁绊模块就是「第一次相遇」。
+                    // 记录面自带幂等闸（`has_milestone` 直查 EXISTS），
+                    // 所以每回合都调也不会写重复条目。
+                    if let Some(recorder) = &self.milestones {
+                        let now = self.clock.now().timestamp_millis();
+                        if recorder.record_first_meeting(ctx.session_id, now).is_err() {
+                            self.metrics.warning();
+                        }
+                    }
                     let text = bond_overlay_text(&partner);
                     ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
                 }
@@ -494,9 +521,31 @@ impl BehaviorModule for PartnerBondModule {
                 if let Some(mut partner) = self.get_or_create_partner() {
                     let now = self.clock.now().timestamp_millis();
                     partner.touch(now);
+                    // 演化前后比阶段：**只有真的跃迁了**才落里程碑
+                    // （`Bond::evolve` 的阶段推进是纯确定性阈值，没有歧义）。
+                    let stage_before = partner.bond.stage;
                     partner.bond.evolve(self.depth_increment.max(0.0), now);
+                    let stage_after = partner.bond.stage;
                     if self.partner_store.save_partner(&partner).is_err() {
                         self.metrics.warning();
+                    }
+                    if let Some(recorder) = &self.milestones {
+                        if stage_before != stage_after {
+                            // 记在**跃迁发生的这一次会话**下（羁绊本身跨会话，
+                            // 但「哪次会话里发生的」是有意义的真值；
+                            // `SessionId` 是随机生成 id，无法从伙伴 id 派生稳定键）。
+                            if recorder
+                                .record_stage_transition(
+                                    ctx.session_id,
+                                    &format!("{stage_before:?}"),
+                                    &format!("{stage_after:?}"),
+                                    now,
+                                )
+                                .is_err()
+                            {
+                                self.metrics.warning();
+                            }
+                        }
                     }
                 }
                 ModuleOutcome::continue_()

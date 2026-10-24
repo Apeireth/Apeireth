@@ -541,6 +541,11 @@ pub struct ProductionBackends {
     /// Council service, supplied only when the adapter explicitly enables it.
     pub council: Option<Arc<Council>>,
     /// Workspace root directory for local file tools.
+    /// 关系里程碑存储（初见 / 阶段跃迁）。
+    ///
+    /// 缺席 = 不记里程碑（零行为变化）。生产装配走
+    /// `SqliteMilestoneStore`（与认知库同一份库，关系史跨重启存活）。
+    pub milestone_store: Option<Arc<dyn apeireth_memory::milestone::MilestoneStore>>,
     pub workspace_root: Option<PathBuf>,
     /// Scoped memory backend for cross-session storage queries.
     pub scoped_memory: Option<Arc<dyn ScopedMemoryBackend>>,
@@ -1620,10 +1625,17 @@ impl ProductionModules {
                 .as_ref()
                 .map(|identity| identity.subject_id.clone())
                 .unwrap_or_else(|| "local-user".to_string());
-            modules.push(Arc::new(
+            let mut bond_module =
                 super::cognitive::PartnerBondModule::new(store, subject_id, Arc::clone(&clock))
-                    .with_telemetry(Arc::clone(&telemetry)),
-            ));
+                    .with_telemetry(Arc::clone(&telemetry));
+            // 关系里程碑（初见 / 阶段跃迁）：只在注入了存储时挂 —— 缺存储 =
+            // 不记 = 零行为变化。记录面本身带幂等闸，装配层不必自己判重。
+            if let Some(milestones) = backends.milestone_store {
+                bond_module = bond_module.with_milestones(Arc::new(
+                    apeireth_memory::milestone::MilestoneRecorder::new(milestones),
+                ));
+            }
+            modules.push(Arc::new(bond_module));
         }
 
         // V4-a 恒定小注入 (人格记忆层回取面 ①) 的 TurnStart overlay 装配点:

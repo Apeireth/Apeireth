@@ -79,6 +79,7 @@ pub mod kuramoto_resonance;
 pub mod meta_thinking;
 pub mod metadata_filter;
 pub mod milestone;
+pub mod milestone_store_sqlite;
 pub mod online_calibration;
 pub mod partner;
 pub mod persistent_vector;
@@ -223,6 +224,7 @@ pub use metadata_filter::{MetadataFilter, PropertyPredicate};
 pub use milestone::{
     InMemoryMilestoneStore, Milestone, MilestoneKind, MilestonePayload, MilestoneStore,
 };
+pub use milestone_store_sqlite::SqliteMilestoneStore;
 pub use partner::{
     Bond, BondCharacter, BondDepth, BondStage, InMemoryPartnerStore, Partner, PartnerId,
     PartnerPreferences, PartnerStore, PrivacyBoundary,

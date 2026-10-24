@@ -26,6 +26,7 @@ pub mod lessons_command;
 pub mod principal_forget_port;
 pub mod rate_limit_wire;
 pub mod read_only_grants;
+pub mod relationship_stores;
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
@@ -2207,16 +2208,12 @@ async fn build_cognitive_modules_at(
         // 默认关) 与自述记忆节的去重计数真值同源。
         ingest_gate: Some(persona_store.clone()),
         reflexion_store,
-        // W2 §4.2: partner 羁绊存储 (InMemory —— 进程内, 重启即散; 持久后端为
-        // 后续 sqlite 实现, trait 落点已备)。
-        // W2 §4.2: partner 羁绊存储 —— **SQLite 持久版**（2026-10-24 换掉内存版）。
-        // 此前用 `InMemoryPartnerStore`（进程内，重启即散）⇒ 生产自述的「0 假装边界」：
-        // 羁绊是**跨会话**的东西，进程重启就没了。`SqlitePartnerStore` 自带幂等建表
-        // （`partner_records`），与认知库同一份 `cognitive.sqlite3` ⇒ 羁绊与记忆同生共死。
-        partner_store: partner_bond_enabled_from_env().then(
-            || -> Arc<dyn apeireth_memory::partner::PartnerStore> {
-                Arc::new(apeireth_memory::SqlitePartnerStore::from_arc(pool.clone()))
-            },
+        // 关系面两个存储（羁绊 + 里程碑）：同开关、同认知库、都必须跨重启存活。
+        // 构造与理由见 `relationship_stores` 模块（尺寸棘轮：装配根只留调用）。
+        partner_store: relationship_stores::partner_store(partner_bond_enabled_from_env(), &pool),
+        milestone_store: relationship_stores::milestone_store(
+            partner_bond_enabled_from_env(),
+            &pool,
         ),
         // 「性格养成」第一铲: 「从使用中学习」默认关; `APEIRETH_ENABLE_SELF_TUNING=1`
         // 才接自校准接线层 (真接检索命中/未命中信号, 调整可见/可撤销/记录透明,
