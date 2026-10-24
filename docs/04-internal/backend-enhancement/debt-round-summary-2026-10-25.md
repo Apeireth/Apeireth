@@ -71,6 +71,20 @@
 > 这几项的共同点：**都是「文档或计数与实测不符」**，方向既有夸大也有低估。
 > 我按「可复核命令 + 实测输出」为准逐条对账，不以注释或旧台账为准。
 
+## 二·六、证据补强（0 装：接线必须有集成/端到端证据，不能只有单测）
+
+本轮把两处「只有单测」的接线补成了端到端证明：
+
+| 接线 | 之前的证据 | 补上的证据 |
+|---|---|---|
+| 限流守门 | hook 级单测 + 组成契约（`hook_names` 含它） | `production_chain_rate_limit_denies_after_the_minute_quota`：从**生产构造器**出发连续派发 31 次 —— 前 30 次全放行、**第 31 次被拒**，且「超限后不得回到放行」 |
+| 推理字段归一化 | `parse_response_with_reasoning` 级单测 | `reasoning_adapter_is_wired_through_the_real_complete_path`：TCP mock 厂商 + **真实 `ProviderCapability::complete()`** —— 适配关=纯结论、适配开=`<think>` 前置 |
+
+**近全仓回归**（推前保险）：`cargo nextest run --workspace --exclude apeireth-tools-canonical
+--profile ci` → **7874 tests passed / 48 skipped / 0 failed**（293 binaries）。
+（唯一排除的 `tools-canonical` 因本机既有 `CARGO_BIN_EXE_sandbox-test-child` 问题跑不了，
+已在干净 main 上验证是本机环境差异、非本批引入；该 crate 的 lib 735 例已单独验绿。）
+
 ## 三、需要拍板的事（owner 不在，我按纪律没自作主张）
 
 | # | 事项 | 为什么我不做 | 建议 |
@@ -80,6 +94,7 @@
 | 3 | `care_potential_field` 的 distress/fatigue 信号源 | 全仓 `grep` 无任何 fatigue/distress 生产者。造信号 = 发明产品语义（什么算疲劳？深夜？连续失败？） | 要么定信号定义（可作为下一批独立任务），要么承认该能力需要前置研究 |
 | 4 | `three_tier_vault` / `cross_diary` | 前者缺 markdown 知识库语料面，后者需要日记进入检索路径 —— 都是产品形态决策 | 若日记/知识库要成为产品能力，先定语料来源与召回语义 |
 | 5 | `speech_arbiter` 的发言权仲裁 | 全双工语音未装配（`voice.duplex = not_assembled`）⇒ 无输入可仲裁 | 等语音面立项 |
+| 6 | **问责闭环「后果追踪」缺自动回填** | 现状只有手动 `apeireth egress outcome`。**不能硬接**：`confirmed` 需外部证据（本地成功 ≠ 影响已确认，自动填=替外部背书）；且影响声明的 `action_id` 与 `ToolCall.id` **id 空间不对齐**，没有既有映射 | 需定「一次工具调用如何归属到一个已声明的影响」（1:1？1:N？跨会话？），才能只自动填确定的 `failed` |
 
 ---
 
