@@ -394,8 +394,27 @@ pub fn run_correction_impact(
         Some(raw) => PathBuf::from(raw),
         None => data_root.join("impact-ledger.jsonl"),
     };
+    // 后果账路径要在 `path` 被移进 ledger 之前算好。
+    let consequence_ledger_path = path.with_file_name("consequence-ledger.jsonl");
     let ledger = AccountabilityLedger::new(Some(path));
-    let Some(notice) = assess_correction(&ledger, fact_id, severity) else {
+    // **先叠加后果账、再评估补救**：否则建议会基于过期状态给错指引
+    // （实测：已回填 `failed` 仍建议「先确认这些行动的结果」）。
+    let mut referenced = ledger.actions_referencing(fact_id);
+    let overlay = apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(
+        consequence_ledger_path.clone(),
+    );
+    for statement in &mut referenced {
+        // 只升级、不降级（与 `run_impact` 同一口径）
+        let tracked = overlay.current_outcome(&statement.action_id);
+        if tracked != apeireth_runtime_assembly::accountability::Outcome::Unknown {
+            statement.outcome = tracked;
+        }
+    }
+    let Some(notice) = apeireth_runtime_assembly::notification_duty::assess_correction_from(
+        &referenced,
+        fact_id,
+        severity,
+    ) else {
         return Ok(format!(
             "这条事实（{fact_id}）没有被任何外部行动引用过 ⇒ **无需通知**。\n\
              （无差别通知一切纠正是另一种噪声 —— 所以「不打扰」是设计，不是遗漏。）"
@@ -408,13 +427,14 @@ pub fn run_correction_impact(
         notice.affected_actions.len()
     );
     for action in &notice.affected_actions {
+        let outcome = action.outcome;
         out.push_str(&format!(
-            "  - {action_id}  时间={at}  去向={destination}  可逆={reversible}  后果={outcome}\n",
+            "  - {action_id}  时间={at}  去向={destination}  可逆={reversible}  后果={}\n",
+            outcome.label(),
             action_id = action.action_id,
             at = action.at_ms,
             destination = action.destination,
             reversible = action.reversible,
-            outcome = action.outcome.label(),
         ));
     }
     out.push_str("建议补救：\n");
@@ -922,6 +942,83 @@ mod consequence_join_tests {
         assert!(
             after.contains("后果=confirmed"),
             "明细应显示回填后的后果: {after}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod notify_consequence_join_tests {
+    use super::*;
+    use apeireth_runtime_assembly::accountability::{
+        AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome,
+    };
+    use apeireth_runtime_assembly::consequence::{ConsequenceTracker, OutcomeSource};
+
+    fn statement(action_id: &str, fact: &str) -> ImpactStatement {
+        ImpactStatement {
+            action_id: action_id.to_string(),
+            at_ms: 1_700_000_000_000,
+            boundary: Boundary::UserToOrg,
+            facts_used: vec![fact.to_string()],
+            inferences: Vec::new(),
+            grants: Vec::new(),
+            affected: Affected::NamedParty,
+            reversible: false,
+            destination: "smtp:hr@example.com".to_string(),
+            outcome: Outcome::Unknown,
+        }
+    }
+
+    /// **`egress notify` 必须按回填后的后果给建议**。
+    ///
+    /// 修前实测：回填 `failed` 后仍显示「后果=unknown」，并据此给出
+    /// **错误建议**「先确认这些行动的结果（当前状态未知）」—— 而结果其实已知。
+    #[test]
+    fn remedies_follow_the_backfilled_outcome() {
+        let root = std::env::temp_dir().join(format!(
+            "apeireth-notify-join-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&root).expect("mkdir");
+        let impact_path = root.join("impact-ledger.jsonl");
+        let ledger = AccountabilityLedger::new(Some(impact_path.clone()));
+        assert!(ledger.append(&statement("act-1", "fact-a")), "append");
+
+        let args = vec![
+            "fact-a".to_string(),
+            "refuted".to_string(),
+            "--path".to_string(),
+            impact_path.display().to_string(),
+        ];
+
+        // ① 未回填：应提示「先确认结果」
+        let before = run_correction_impact(std::path::Path::new("/nonexistent-root"), &args)
+            .expect("notify");
+        assert!(before.contains("后果=unknown"), "{before}");
+        assert!(before.contains("先确认这些行动的结果"), "{before}");
+
+        // ② 回填 failed 后：逐条显示 failed，且**不再**建议「先确认结果」
+        let mut tracker = ConsequenceTracker::with_ledger(root.join("consequence-ledger.jsonl"));
+        assert!(
+            tracker.record(
+                "act-1",
+                Outcome::Failed,
+                OutcomeSource::UserConfirmed,
+                chrono::Utc::now().timestamp_millis(),
+            ),
+            "record"
+        );
+        let after = run_correction_impact(std::path::Path::new("/nonexistent-root"), &args)
+            .expect("notify");
+        assert!(after.contains("后果=failed"), "{after}");
+        assert!(
+            !after.contains("当前状态未知"),
+            "已知 failed 后不该再建议「先确认结果」: {after}"
         );
         let _ = std::fs::remove_dir_all(&root);
     }
