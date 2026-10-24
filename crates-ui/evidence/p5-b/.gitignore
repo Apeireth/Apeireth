@@ -1,7 +1,11 @@
 # 生成物（构建期产出，不入库）
 out/
 web/dist/
-web/node_modules/
+web/node_modules
+# ⚠️ `node_modules` **不带尾斜杠**：带斜杠只匹配目录、**匹配不到符号链接**
+# ⇒ 本地「harness/node_modules → 生产前端/node_modules」这个链接会被提交进仓
+# （2026-10-24 实测踩到：提交了指向本机绝对路径的死链）。
+node_modules
 harness/target/
 harness/web/public/engine/
 
