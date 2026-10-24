@@ -106,6 +106,11 @@ pub struct OpenAiCompatibleProviderCapability {
     timeout_ms: u64,
     credential_key: String,
     resolver: ResolverSlot,
+    /// 推理字段归一化配置（12 别名 → 前置 think 块；出向剥离别名字段）。
+    ///
+    /// 默认由 `reasoning_adapter` 的 `from_env` 读取（`APEIRETH_REASONING_ENABLED`
+    /// 等三个变量）且**默认关** ⇒ 关时响应解析与接线前逐字节一致（零行为变化）。
+    reasoning: crate::reasoning_adapter::ReasoningAdapterConfig,
 }
 
 impl OpenAiCompatibleProviderCapability {
@@ -128,6 +133,7 @@ impl OpenAiCompatibleProviderCapability {
             timeout_ms,
             credential_key: OPENAI_COMPATIBLE_API_KEY.to_string(),
             resolver,
+            reasoning: crate::reasoning_adapter::ReasoningAdapterConfig::from_env(),
         })
     }
 
@@ -212,7 +218,12 @@ impl OpenAiCompatibleProviderCapability {
         body: serde_json::Value,
         request_model: &str,
     ) -> Result<apeireth_protocol::canonical::NormalizedResponse, ProviderError> {
-        openai_chat::parse_response(body, request_model, self.id.as_str())
+        openai_chat::parse_response_with_reasoning(
+            body,
+            request_model,
+            self.id.as_str(),
+            &self.reasoning,
+        )
     }
 }
 
