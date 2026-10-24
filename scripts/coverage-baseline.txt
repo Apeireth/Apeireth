@@ -1,11 +1,3 @@
-# 覆盖率棘轮基线（尚未记录）
-#
-# 本文件为空基线时，scripts/check_coverage_ratchet.py 会明确打印
-#   "baseline not recorded — ratchet INACTIVE"
-# 而不是假装绿灯。记录方法：
-#   1) cargo tarpaulin -p apeireth-core -p apeireth-runtime -p apeireth-tools-canonical \
-#        -p apeireth-gateway -p apeireth-cli --out Xml --engine llvm
-#   2) python3 scripts/check_coverage_ratchet.py --update
-#   3) 提交 cobertura 值所在的 scripts/coverage-baseline.txt
-#
-# 规则：只减不增；下降超过 0.5pp 判红（测量噪声容差）。
+# 覆盖率棘轮基线（scripts/check_coverage_ratchet.py --update 生成）
+# 规则：只减不增；下降超过 0.5pp 才判红（测量噪声容差）。
+line_coverage_pp = 34.38
