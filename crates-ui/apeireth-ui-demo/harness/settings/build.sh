@@ -20,8 +20,13 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CRATES_UI="$(cd "${HERE}/../.." && pwd)"
-REPO="$(cd "${CRATES_UI}/.." && pwd)"
+# ⚠️ **层数**（并行面 M4 实测发现，2026-10-24）：本目录是 `harness/settings/`
+# ⇒ `..`=harness/ ⇒ `../..`=apeireth-ui-demo/ ⇒ `../../..`=**crates-ui/**
+# ⇒ `../../../..`=**仓库根**。
+# 原先少一级 ⇒ `REPO` 落到 `crates-ui/` ⇒ `frontend/companion-desktop/node_modules`
+# 指向**不存在的路径** ⇒ vite 找不到 ⇒ 构建失败。
+CRATES_UI="$(cd "${HERE}/../../.." && pwd)"
+REPO="$(cd "${HERE}/../../../.." && pwd)"
 
 #: node（默认取 PATH 上的；⚠️ 必须是 22）。
 NODE_BIN="${NODE_BIN:-node}"
@@ -61,7 +66,9 @@ TARGET_DIR="${CARGO_TARGET_DIR:-${CRATES_UI}/target}"
   "${TARGET_DIR}/wasm32-unknown-unknown/release/apeireth-ui-demo.wasm"
 
 echo "── 6/7 vite build ──"
-if [ ! -d "${HERE}/node_modules" ]; then
+# ⚠️ 用 `-e`（存在性）而不是 `-d`（是目录）⇒ **坏链接**也能被识别并重建
+# ⇒ 链接目标不存在时 `-d` 为假但 `-e` 为真 ⇒ `-d` 的写法会把坏链接一直留着。
+if [ ! -e "${HERE}/node_modules" ] || [ ! -d "${HERE}/node_modules" ]; then
   echo "   （无 node_modules ⇒ 复用生产前端的只读依赖目录）"
   ln -sfn  "${REPO}/frontend/companion-desktop/node_modules" "${HERE}/node_modules"
 fi

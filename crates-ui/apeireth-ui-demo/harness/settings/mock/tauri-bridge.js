@@ -51,16 +51,26 @@ export {
 } from "./real/tauri-bridge.js";
 
 // ── 未接线（显式报错桩） ───────────────────────────────────────────────
-export async function hasProviderKey() {,  throw new Error("tauri-bridge 替身：导出「hasProviderKey」未接线（对照 harness 只喂固定 fixture）");,}
+export async function hasProviderKey() {
+  throw new Error("tauri-bridge 替身：导出「hasProviderKey」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function getGatewayEffectiveConfig() {,  throw new Error("tauri-bridge 替身：导出「getGatewayEffectiveConfig」未接线（对照 harness 只喂固定 fixture）");,}
+export function getGatewayEffectiveConfig() {
+  throw new Error("tauri-bridge 替身：导出「getGatewayEffectiveConfig」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function getGatewayToken() {,  throw new Error("tauri-bridge 替身：导出「getGatewayToken」未接线（对照 harness 只喂固定 fixture）");,}
+export function getGatewayToken() {
+  throw new Error("tauri-bridge 替身：导出「getGatewayToken」未接线（对照 harness 只喂固定 fixture）");
+}
 
 export const UNPROTECTED_TOKEN_SENTINEL = notWiredValue("UNPROTECTED_TOKEN_SENTINEL", "tauri-bridge 替身：导出「UNPROTECTED_TOKEN_SENTINEL」未接线（对照 harness 只喂固定 fixture）");
 
-export function pickGatewayTokenFace() {,  throw new Error("tauri-bridge 替身：导出「pickGatewayTokenFace」未接线（对照 harness 只喂固定 fixture）");,}
+export function pickGatewayTokenFace() {
+  throw new Error("tauri-bridge 替身：导出「pickGatewayTokenFace」未接线（对照 harness 只喂固定 fixture）");
+}
 
 export const defaultGatewayTokenSources = notWiredValue("defaultGatewayTokenSources", "tauri-bridge 替身：导出「defaultGatewayTokenSources」未接线（对照 harness 只喂固定 fixture）");
 
-export async function resolveGatewayToken() {,  throw new Error("tauri-bridge 替身：导出「resolveGatewayToken」未接线（对照 harness 只喂固定 fixture）");,}
+export async function resolveGatewayToken() {
+  throw new Error("tauri-bridge 替身：导出「resolveGatewayToken」未接线（对照 harness 只喂固定 fixture）");
+}

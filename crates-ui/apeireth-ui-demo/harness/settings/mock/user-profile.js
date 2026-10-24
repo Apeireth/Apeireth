@@ -53,6 +53,10 @@ export const USER_PROFILE_STORAGE_KEY = notWiredValue("USER_PROFILE_STORAGE_KEY"
 
 export const EMPTY_USER_PROFILE = notWiredValue("EMPTY_USER_PROFILE", "user-profile 替身：导出「EMPTY_USER_PROFILE」未接线（对照 harness 只喂固定 fixture）");
 
-export function normalizeUserProfile() {,  throw new Error("user-profile 替身：导出「normalizeUserProfile」未接线（对照 harness 只喂固定 fixture）");,}
+export function normalizeUserProfile() {
+  throw new Error("user-profile 替身：导出「normalizeUserProfile」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function subscribeUserProfile() {,  throw new Error("user-profile 替身：导出「subscribeUserProfile」未接线（对照 harness 只喂固定 fixture）");,}
+export function subscribeUserProfile() {
+  throw new Error("user-profile 替身：导出「subscribeUserProfile」未接线（对照 harness 只喂固定 fixture）");
+}

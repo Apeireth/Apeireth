@@ -18,10 +18,7 @@
 
 /// 挂载某个子面。返回 `None` ⇒ **该面 id 未接线**（调用方不挂载）。
 #[cfg(target_arch = "wasm32")]
-pub fn mount(
-    id: &str,
-    container: &web_sys::Element,
-) -> Option<Result<(), String>> {
+pub fn mount(id: &str, container: &web_sys::Element) -> Option<Result<(), String>> {
     match id {
         "wizard" => Some(crate::settings_wizard::wasm::mount(container)),
         "theme" => Some(crate::settings_theme::wasm::mount(container)),

@@ -58,20 +58,38 @@ export const AUTO_REFRESH_USER_MESSAGES = notWiredValue("AUTO_REFRESH_USER_MESSA
 
 export const MIN_USER_MESSAGES_FOR_FIRST_IMPRESSION = notWiredValue("MIN_USER_MESSAGES_FOR_FIRST_IMPRESSION", "user-impression 替身：导出「MIN_USER_MESSAGES_FOR_FIRST_IMPRESSION」未接线（对照 harness 只喂固定 fixture）");
 
-export function emptyUserImpression() {,  throw new Error("user-impression 替身：导出「emptyUserImpression」未接线（对照 harness 只喂固定 fixture）");,}
+export function emptyUserImpression() {
+  throw new Error("user-impression 替身：导出「emptyUserImpression」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function normalizeUserImpression() {,  throw new Error("user-impression 替身：导出「normalizeUserImpression」未接线（对照 harness 只喂固定 fixture）");,}
+export function normalizeUserImpression() {
+  throw new Error("user-impression 替身：导出「normalizeUserImpression」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function subscribeUserImpression() {,  throw new Error("user-impression 替身：导出「subscribeUserImpression」未接线（对照 harness 只喂固定 fixture）");,}
+export function subscribeUserImpression() {
+  throw new Error("user-impression 替身：导出「subscribeUserImpression」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function loadUserImpressionLedger() {,  throw new Error("user-impression 替身：导出「loadUserImpressionLedger」未接线（对照 harness 只喂固定 fixture）");,}
+export function loadUserImpressionLedger() {
+  throw new Error("user-impression 替身：导出「loadUserImpressionLedger」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function transcriptForSummary() {,  throw new Error("user-impression 替身：导出「transcriptForSummary」未接线（对照 harness 只喂固定 fixture）");,}
+export function transcriptForSummary() {
+  throw new Error("user-impression 替身：导出「transcriptForSummary」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function buildImpressionPrompt() {,  throw new Error("user-impression 替身：导出「buildImpressionPrompt」未接线（对照 harness 只喂固定 fixture）");,}
+export function buildImpressionPrompt() {
+  throw new Error("user-impression 替身：导出「buildImpressionPrompt」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function parseImpressionReply() {,  throw new Error("user-impression 替身：导出「parseImpressionReply」未接线（对照 harness 只喂固定 fixture）");,}
+export function parseImpressionReply() {
+  throw new Error("user-impression 替身：导出「parseImpressionReply」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function impressionSystemBlock() {,  throw new Error("user-impression 替身：导出「impressionSystemBlock」未接线（对照 harness 只喂固定 fixture）");,}
+export function impressionSystemBlock() {
+  throw new Error("user-impression 替身：导出「impressionSystemBlock」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function shouldRefreshImpression() {,  throw new Error("user-impression 替身：导出「shouldRefreshImpression」未接线（对照 harness 只喂固定 fixture）");,}
+export function shouldRefreshImpression() {
+  throw new Error("user-impression 替身：导出「shouldRefreshImpression」未接线（对照 harness 只喂固定 fixture）");
+}

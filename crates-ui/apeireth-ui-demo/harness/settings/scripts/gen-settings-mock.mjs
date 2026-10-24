@@ -129,7 +129,12 @@ function renderStub(moduleName, name, kind) {
       `}`,
     ];
   }
-  return `export const ${name} = notWiredValue(${JSON.stringify(name)}, ${text});`;
+  // ⚠️ **必须返回数组**（并行面 M5 实测发现，2026-10-24）：本函数原本**前三条分支返回数组、
+  // 末条返回字符串** ⇒ 调用方**无法用同一种 push 方式**接住两者：
+  // · `push(数组)` ⇒ 数组被当**一个元素** ⇒ join 出 `export function x() {, …,}` ⇒ 语法错误
+  // · `push(...字符串)` ⇒ 字符串被**逐字符展开** ⇒ 每个字符一行 ⇒ 同样是语法错误
+  // ⇒ 统一：**永远返回行数组**。
+  return [`export const ${name} = notWiredValue(${JSON.stringify(name)}, ${text});`];
 }
 
 /** 渲染替身模块。 */
@@ -186,7 +191,11 @@ function renderMock(moduleName, surface, wired) {
   lines.push("");
   lines.push("// ── 未接线（显式报错桩） ───────────────────────────────────────────────");
   for (const name of stubs) {
-    lines.push(renderStub(moduleName, name, surface.kinds.get(name)));
+    // ⚠️ `renderStub` 返回**行数组** ⇒ 必须**展开** push（并行面 M5 实测发现，2026-10-24）：
+    // 直接 `push(数组)` 会把数组当**一个元素** ⇒ `join("\n")` 产出
+    // `export function x() {,  throw new Error(…);,}` ⇒ **语法错误**
+    // ⇒ 替身**一旦被真正解析**，vite 构建直接失败 ⇒ 这条路径**从未跑通过**。
+    lines.push(...renderStub(moduleName, name, surface.kinds.get(name)));
     lines.push("");
   }
   return `${lines.join("\n").replace(/\n+$/, "")}\n`;

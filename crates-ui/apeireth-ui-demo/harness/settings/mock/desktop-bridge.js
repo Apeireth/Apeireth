@@ -51,20 +51,38 @@ export {
 } from "./real/desktop-bridge.js";
 
 // ── 未接线（显式报错桩） ───────────────────────────────────────────────
-export function restartBackend() {,  throw new Error("desktop-bridge 替身：导出「restartBackend」未接线（对照 harness 只喂固定 fixture）");,}
+export function restartBackend() {
+  throw new Error("desktop-bridge 替身：导出「restartBackend」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function backendProviderEnvFromConfig() {,  throw new Error("desktop-bridge 替身：导出「backendProviderEnvFromConfig」未接线（对照 harness 只喂固定 fixture）");,}
+export function backendProviderEnvFromConfig() {
+  throw new Error("desktop-bridge 替身：导出「backendProviderEnvFromConfig」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export async function applyBackendProviderEnv() {,  throw new Error("desktop-bridge 替身：导出「applyBackendProviderEnv」未接线（对照 harness 只喂固定 fixture）");,}
+export async function applyBackendProviderEnv() {
+  throw new Error("desktop-bridge 替身：导出「applyBackendProviderEnv」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function capabilityEnvFromConfig() {,  throw new Error("desktop-bridge 替身：导出「capabilityEnvFromConfig」未接线（对照 harness 只喂固定 fixture）");,}
+export function capabilityEnvFromConfig() {
+  throw new Error("desktop-bridge 替身：导出「capabilityEnvFromConfig」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export async function applyBackendConfig() {,  throw new Error("desktop-bridge 替身：导出「applyBackendConfig」未接线（对照 harness 只喂固定 fixture）");,}
+export async function applyBackendConfig() {
+  throw new Error("desktop-bridge 替身：导出「applyBackendConfig」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export async function applyBackendConfigOrThrow() {,  throw new Error("desktop-bridge 替身：导出「applyBackendConfigOrThrow」未接线（对照 harness 只喂固定 fixture）");,}
+export async function applyBackendConfigOrThrow() {
+  throw new Error("desktop-bridge 替身：导出「applyBackendConfigOrThrow」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export function getLogDirectory() {,  throw new Error("desktop-bridge 替身：导出「getLogDirectory」未接线（对照 harness 只喂固定 fixture）");,}
+export function getLogDirectory() {
+  throw new Error("desktop-bridge 替身：导出「getLogDirectory」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export async function openLogDirectory() {,  throw new Error("desktop-bridge 替身：导出「openLogDirectory」未接线（对照 harness 只喂固定 fixture）");,}
+export async function openLogDirectory() {
+  throw new Error("desktop-bridge 替身：导出「openLogDirectory」未接线（对照 harness 只喂固定 fixture）");
+}
 
-export async function resolveBackendEndpoint() {,  throw new Error("desktop-bridge 替身：导出「resolveBackendEndpoint」未接线（对照 harness 只喂固定 fixture）");,}
+export async function resolveBackendEndpoint() {
+  throw new Error("desktop-bridge 替身：导出「resolveBackendEndpoint」未接线（对照 harness 只喂固定 fixture）");
+}
