@@ -94,6 +94,28 @@ const MAX_RECENT_EVENTS: usize = 200;
 /// 未命中的链; 正在评估的链由回写阶段重新插回, 不会丢本轮的 action。
 const MAX_ACTIVE_CHAINS: usize = 256;
 
+/// 算本次判定的收容义务；没有义务时返回 `None`（不给事件流塞噪音）。
+///
+/// [`crate::enforcement::EnforcementDirective::from_decision`] 会把
+/// 「本次动作要不要拦」也算进去，而那部分 runtime 已经 enforce 过了
+/// （重复）；这里只保留**额外**的收容义务：整会话撤销授权、标记高风险 trace、
+/// 事后补偿线索 —— 这三项此前**算了没人看**。
+fn containment_obligations(
+    decision: &GuardDecision,
+) -> Option<crate::enforcement::EnforcementDirective> {
+    use crate::enforcement::EnforcementDirective;
+
+    let directive = EnforcementDirective::from_decision(decision);
+    if directive.revoke_session_grant
+        || directive.mark_trace_high_risk
+        || directive.compensation_hint.is_some()
+    {
+        Some(directive)
+    } else {
+        None
+    }
+}
+
 /// 共享、可内部修改的免疫记忆句柄（hook 与装配层 / 运维共用同一份）。
 pub type SharedImmuneMemory = Arc<Mutex<ImmuneMemory>>;
 
@@ -964,6 +986,9 @@ impl BehaviorChainGuardHook {
                 risk_score: guard_decision.risk_score,
                 reasons: guard_decision.reasons.clone(),
                 evidence: guard_decision.evidence.clone(),
+                // 收容义务**进事件流**（此前算完没去处，零生产消费）。
+                // 只在真的触发义务时挂上，避免给每个事件都塞一份噪音。
+                containment: containment_obligations(&guard_decision),
             };
 
             let mut events = self.recent_events.lock();

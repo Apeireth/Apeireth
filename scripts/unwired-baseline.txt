@@ -51,10 +51,6 @@
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G2（1 条）：W1 IM 通道（owner 裁定**暂缓**）。**有意不接，不是遗漏。**
-
-orphan closure_of  # G2
-
 # --- G3（31 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
 orphan bio_care_assembly_from_env  # G3
@@ -130,14 +126,12 @@ orphan with_used  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（6 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（4 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
 orphan begin_wait  # G5
 orphan end_wait  # G5
-orphan from_decision  # G5
 orphan idle_elapsed  # G5
 orphan is_tripped  # G5
-orphan verdict_keys_for_principle  # G5
 
 # --- G6（72 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
@@ -213,3 +207,8 @@ orphan total_subscriptions  # G6
 orphan traverse_from  # G6
 orphan upsert_hallway  # G6
 orphan without_as_of  # G6
+
+# --- G7（2 条）：**owner 裁定不接**（有意保留，不是遗漏）：W1 IM 通道（2026-10-23 裁定暂缓）、W5 哲学拦截层（2026-10-24 裁定不接）。保留代码是有意的 —— 解冻条件写在 `docs/status/unwired-ledger.md`。
+
+orphan closure_of  # G7
+orphan verdict_keys_for_principle  # G7

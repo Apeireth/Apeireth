@@ -207,6 +207,37 @@ Astra 那句「平台第四职责 = 影响与补救」要有前提，得先知�
 | **尺寸棘轮违规**（`hook.rs` 1518 → 1576） | `arch_guard --strict` | **真拆分**：抽出 `snapshot_store.rs` + 测试移出到 `src/hook/tests.rs` ⇒ `hook.rs` 降到 **1030 行** |
 | **同名方法跨类型遮蔽**（假阴性） | `clear_session` 莫名从基线消失 | 判据是裸 token 计数，`SnapshotStore::clear_session` 的调用让 `hook.clear_session` 被误判成「已接电」⇒ 改名 `remove_session`，并把盲区写进基线头部 |
 
+### 5.5.4 收容义务：从「算了没人看」到**可观测**
+
+`EnforcementDirective::from_decision` 算出了三项义务：
+`revoke_session_grant`（整会话撤销授权）、`mark_trace_high_risk`（标记高风险 trace）、
+`compensation_hint`（事后补偿线索）—— **全部无人消费**。
+
+更根本的是：生产路径走 `GovernanceHook::evaluate`，它只返回 `Decision`
+（**丢掉 risk_score 与 reasons**）⇒ 收容义务的输入在生产上根本不存在。
+
+**已修（只做可观测，不改行为）**：
+
+1. `GuardEventDto` 加 `containment: Option<EnforcementDirective>` ——
+   义务**进事件流**（面板/审计可读）；
+2. 生产判定路径上计算它（`containment_obligations()`），只在真触发义务时挂上，
+   不给每个事件塞噪音。
+
+**为什么不自动执行 `revoke_session_grant`**：整会话 fail-closed 是**行为变更**
+（高危后整个会话都不能用），影响面大到该由 owner 拍板 —— 已在 PR #80 提出。
+本批只让义务**能被看见**，不擅自改判定语义。
+
+> 顺带发现：guard 的判定链（`fast_guard → chain_guard → fusion`）主路径是完整的，
+> 护栏真正的盲区从来不是「单次判定」，而是「**会话级收容**」与「**会话结束/内存**」。
+
+### 5.5.5 分组演进：G2（IM 通道）并入 G7（owner 裁定不接）
+
+哲学键那条（`verdict_keys_for_principle`）与 IM 通道是**同一性质**：
+owner 已裁定**不接/暂缓**，代码**有意保留** ⇒ 合并成一组 **G7「owner 裁定不接」**，
+与 G5「待判」区分开。空组 G2 随之移除。
+
+（G5 剩余 4 条全是空闲看门狗 —— 属**待决策**，见 §4。）
+
 ## 6. 下一批
 
 1. G5 剩 7 条：按 §5 决策后处置（接线 / 文档对齐 / 删）；

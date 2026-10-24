@@ -25,11 +25,17 @@ on:
       - 'crates/**'
       - 'scripts/audit_unwired.py'
       - 'scripts/unwired-baseline.txt'
+      - 'scripts/group_unwired_baseline.py'
+      - 'scripts/unwired_baseline_common.py'
+      - '.github/workflows/unwired-ratchet.yml'
   pull_request:
     paths:
       - 'crates/**'
       - 'scripts/audit_unwired.py'
       - 'scripts/unwired-baseline.txt'
+      - 'scripts/group_unwired_baseline.py'
+      - 'scripts/unwired_baseline_common.py'
+      - '.github/workflows/unwired-ratchet.yml'
   workflow_dispatch:
 
 permissions:
@@ -43,5 +49,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 检查新增孤儿 API
+      - name: 检查新增孤儿 API（基线只减不增）
         run: python3 scripts/audit_unwired.py --check
+
+      - name: 检查分组与规则一致（每条恰好落进一个组）
+        # 分组是**人写的判断依据**（「哪些是公开 API 表面 / 哪些是待判的真债」）。
+        # 规则集中在 scripts/unwired_baseline_common.py，`group_unwired_baseline.py`
+        # 会按规则重排并自校验；这条检查保证「基线文件」与「规则」不脱节 ——
+        # 否则改了规则忘了重排，下次 `--update` 就会把判断依据冲掉。
+        run: python3 scripts/group_unwired_baseline.py --check

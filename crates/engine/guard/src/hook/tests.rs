@@ -4,7 +4,6 @@
 //! 之内 —— 棘轮只减不增，测试代码长大不该把主文件顶破。
 
 use super::*;
-use super::*;
 use apeireth_core::kernel::{CapabilityId, TraceId};
 use apeireth_governance::{Action, Decision};
 
@@ -136,6 +135,33 @@ fn clear_session_drops_feature_snapshots() {
     assert!(
         hook.last_feature_snapshot(&session, "a1").is_none(),
         "会话结束后快照必须清掉"
+    );
+}
+
+/// 收容义务必须**能被看见**：算出来却只存在于内存临时值 ⇒ 等于没有。
+#[test]
+fn containment_obligations_reach_the_event_stream() {
+    let hook = BehaviorChainGuardHook::new();
+    let session = SessionId::new();
+    let trace = TraceId::new();
+    let capability = CapabilityId::new("credential.read").expect("valid id");
+    let arguments = credential_arguments();
+    let request = credential_request(&capability, &arguments, session, trace, 1, "a1");
+    let _ = hook.evaluate_detailed(&request);
+
+    let events = hook.recent_events.lock();
+    let event = events.back().expect("应有事件");
+    let obligation = event
+        .containment
+        .as_ref()
+        .expect("高危判定必须带收容义务（此前算了没人看）");
+    assert!(
+        obligation.mark_trace_high_risk,
+        "高危判定应标记 trace 高风险"
+    );
+    assert!(
+        obligation.compensation_hint.is_some(),
+        "拒绝后应给出补偿线索"
     );
 }
 
