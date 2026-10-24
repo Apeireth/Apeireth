@@ -72,6 +72,7 @@ pub mod mcp;
 // MCP 工具桥 (最后一公里接线): 服务器配置面 (env / 数据目录 StoredDoc 拒开语义) +
 // 每服务器一连接 (生命周期 + 断线重连后重发现) + 动态工具 (mcp:<server>:<tool>,
 // 调用穿五段流水线) + 外部工具治理映射 (默认审批级, 只读预设可放行)。
+pub mod accountability_view;
 pub mod mcp_bridge;
 pub mod memory_ledger_view;
 // Recon Suite 骨架：Evidence 信封 + 授权 Scope + 平台元数据（原生工具共享底座）。
@@ -257,6 +258,7 @@ pub use observed_gate::{
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin, ReconConfig};
 // 外部适配器与 recon 工具族的根出口（生产接线读这里，不猜模块路径）:
 // `external_tool_set` = 10 个 `ext.*`，`recon_tool_set` = 9 个 `tool.recon.*`。
+pub use accountability_view::AccountabilityStats;
 pub use external::{external_tool_set, ExternalToolsConfig};
 pub use proposal::{
     next_proposal_id, normalize_detail, proposal_capability, proposal_draft_refusal, proposal_id,

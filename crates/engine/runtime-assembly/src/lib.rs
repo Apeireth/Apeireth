@@ -6,7 +6,10 @@
 #![deny(unsafe_code)]
 
 pub mod accountability;
+pub mod accountability_probe;
 pub mod canonical;
+pub mod consequence;
+pub mod weather_probe;
 // W3-① 多户数据隔离 (星群数据层): 用户域数据平面 (三面按域分库 + 跨域拒绝即帧)。
 pub mod domain_plane;
 pub mod egress_gate;
@@ -86,7 +89,7 @@ pub use canonical::care_reminder::{
     guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
     WeatherSignalFeed,
 };
-pub use canonical::self_status_source::weather_reminder_count;
+pub use weather_probe::weather_reminder_count;
 // V6-a 任务编排持久队列: sqlite 任务表 (会话账本同库) + `tool.task_board` 工具面
 // (含治理档钩子) + 自述任务节探测口。
 pub use canonical::self_status_source::task_board_status_probe;

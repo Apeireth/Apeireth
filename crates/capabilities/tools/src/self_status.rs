@@ -890,6 +890,10 @@ pub struct SelfStatusSnapshot {
     pub capabilities: Vec<CapabilitySwitch>,
     /// 记忆账本计数; `None` = 来源不可用 (帧内显式 null + 原因)。
     pub memory_ledger: Option<MemoryLedgerStats>,
+    /// 问责计数（只读子对象数据；**不新增顶层节**）。
+    pub accountability: Option<crate::accountability_view::AccountabilityStats>,
+    /// 问责计数缺失原因。
+    pub accountability_reason: Option<String>,
     /// 记忆账本不可用的原因; 可用时为 `None`。
     pub memory_ledger_reason: Option<String>,
     /// 调参状态 (含性格节真值: 四杆锁定态 + 最近移动)。
@@ -983,6 +987,8 @@ impl SelfStatusSnapshot {
             identity,
             capabilities,
             memory_ledger: None,
+            accountability: None,
+            accountability_reason: None,
             memory_ledger_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
             tuning: None,
             tuning_reason: Some(DATA_PROBE_NOT_WIRED.to_string()),
@@ -1115,6 +1121,9 @@ pub const SELF_STATUS_SECTIONS: &[&str] = &[
 /// **不是顶层节**: 21 节冻结合同不变, 14 条机制统一挂在既有 `capabilities`
 /// 节内（台账 W3 计划「观测聚合」策略）。
 pub const CAPABILITIES_BIO_MECHANISMS: &str = "bio_mechanisms";
+
+/// 问责计数子对象（`capabilities` 节内；**不新增顶层节**，顶层仍 21 节）。
+pub const CAPABILITIES_ACCOUNTABILITY: &str = "accountability";
 
 /// 生物机制自述开关的 env 名: 只认显式 `"1"`，其余任何取值 = 关 (fail-closed)。
 pub const BIO_SELF_STATUS_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_SELF_STATUS";
@@ -1382,6 +1391,13 @@ pub fn render_snapshot(snapshot: &SelfStatusSnapshot) -> Value {
         capabilities.insert(
             CAPABILITIES_BIO_MECHANISMS.to_string(),
             render_bio_mechanisms(bio),
+        );
+    }
+    // 问责计数（只读子对象；未挂载 = 省略该键，旧帧形状不变）。
+    if let Some((stats, reason)) = crate::accountability_view::snapshot_accountability(snapshot) {
+        capabilities.insert(
+            CAPABILITIES_ACCOUNTABILITY.to_string(),
+            crate::accountability_view::render_accountability(&stats, reason),
         );
     }
 
@@ -2174,6 +2190,8 @@ mod tests {
         SelfStatusSnapshot {
             identity: SelfStatusIdentity::default(),
             capabilities: capability_roster([("shell", false), ("search", true)]),
+            accountability: None,
+            accountability_reason: None,
             memory_ledger: Some(MemoryLedgerStats {
                 verified_lessons: Some(2),
                 candidate_lessons: Some(1),
