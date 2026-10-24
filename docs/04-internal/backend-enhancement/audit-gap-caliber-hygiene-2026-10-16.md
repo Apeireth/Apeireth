@@ -163,7 +163,7 @@
 
 | 扫描 | 命令（可复核） | 结果 |
 |---|---|---|
-| ① 现值面守门级数旧口径未标注命中 | `git grep -nE '5 重守门\|6 重守门\|6 重 v[0-9]\|7 重 v[0-9]\|8 重 v[0-9]\|9 重守门\|9 重 v[0-9]\|重守门 v[0-9]' -- ROADMAP.md OSS_NOTICE.md Cargo.toml docs/04-internal/backend-enhancement/00-backlog.md docs/03-reference/ docs/02-guides/ \| grep -v '历史口径\|历史沿革\|现值\|口径注'` | **0 命中** ✅ |
+| ① 现值面守门级数旧口径未标注命中 | `git grep -nE '5 重守门\|6 重守门\|6 重 v[0-9]\|7 重 v[0-9]\|8 重 v[0-9]\|9 重守门\|9 重 v[0-9]\|重守门 v[0-9]' -- ROADMAP.md OSS_NOTICE.md Cargo.toml 00-backlog.md docs/03-reference/ docs/02-guides/ \| grep -v '历史口径\|历史沿革\|现值\|口径注'` | **0 命中** ✅ |
 | ② 吸收自动化旧名（I 轴 / I1-I4）未标注命中 | `git grep -nE 'I 轴\|I[1-4] 调用面\|I[1-4] 书\|I[1-4] 线\|I 轴吸收\|I 轴分期' -- . \| grep -v '原 I\|历史口径\|星港\|I 批\|I-starport\|命名注记'` | **0 命中** ✅（git 跟踪面口径；本报告自身是改名映射登记面，旧名以对照表形式存在，不计违规） |
 | ③ 中性表述 | `pwsh -File scripts/check-neutral-terms.ps1`（新增行零第三方产品名/来源措辞） | ✅ 零命中（见 §5.3 复核） |
 | ④ 测试口径行不被触碰 | `git diff --name-only HEAD`（test-baseline.md 不在改动面）+ 行级核对：改动行中仅 `absorption-ledger.md` 1 行含测试数字文本（「六套件 47 例」验收仪格**原样保留**，改的是同行机制名注记）；`I1-skill-distill-delivery.md` §5/§7 门禁数字、`quick-capture-delivery.md` 门禁表、ROADMAP §3 测试行全部原样 | ✅ 0 触碰 |

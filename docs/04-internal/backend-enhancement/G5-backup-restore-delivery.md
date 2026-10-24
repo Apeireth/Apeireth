@@ -2,7 +2,7 @@
 
 ```yaml
 [Document-Meta]
-Document:        docs/04-internal/backend-enhancement/G5-backup-restore-delivery.md
+Document:        G5-backup-restore-delivery.md
 Version:         1.0 (G5 备份恢复交付: 引擎 + 双出口 + 治理 + 自述节)
 Last-Modified:   2026-10-17
 Status:          🟢 活跃 (备份格式的单一真源; 改格式必改本规格 + 同步测试)

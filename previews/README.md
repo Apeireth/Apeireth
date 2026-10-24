@@ -7,4 +7,4 @@
   `docs/design/intro-animation.md` 等实拍验收引用不受影响。
 - 克隆后若工作树图片为空/为指针文本，请执行 `git lfs pull` 取回对象。
 - 34 件逐项 sha256（= LFS oid）见
-  [../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv](../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv)。
+  [f-02-migration-manifest-2026-10-18.tsv]../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv)。

@@ -4,7 +4,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/scene-d-v2-plan.md
+Document:        scene-d-v2-plan.md
 Version:         Design-1.0 (v2 首发)
 Last-Modified:   2026-08-27
 Status:          🟢 活跃 (v2 场景 D 架构方案)

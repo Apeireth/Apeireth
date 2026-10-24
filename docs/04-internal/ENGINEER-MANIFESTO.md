@@ -17,7 +17,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/ENGINEER-MANIFESTO.md
+Document:        ENGINEER-MANIFESTO.md
 Version:         1.0 (主代理 Mavis 写于 v2.0.0-rc.1 收盘 + A 块完整化 + O-6 复盘后)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (工程师团队 reference 手册, 改 src 前必读)
@@ -132,7 +132,7 @@ Author:          主代理 Mavis
 ```bash
 cd C:\Users\31683\Apeireth-rust
 git log --oneline -5                                    # 期望 HEAD = f6831c95 (2026-10-18; 历史 2026-09-05 对账基线 7647d2c9)
-cargo test --workspace --locked                          # 期望: 0 failed（现行口径见 docs/03-reference/test-baseline.md；2026-10-13 历史口径 5360 passed / 22 ignored）
+cargo test --workspace --locked                          # 期望: 0 failed（现行口径见 ../03-reference/test-baseline.md；2026-10-13 历史口径 5360 passed / 22 ignored）
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望: 0 警告
 cargo test --workspace --doc --locked                   # 期望: 0 FAILED
 git status                                             # 期望: clean 或仅 .harness-* untracked
@@ -202,8 +202,8 @@ git status                                             # 期望: clean 或仅 .h
 
 ```
 任务: <明确产出, 不是模糊方向, 例: "派子代理调研 A 块 5 缺口真生产路径, 写报告 docs/04-internal/A-block-5-gaps-research.md">
-必读: <文档 file:line, 例: docs/04-internal/cognitive-module-wiring.md:20-35>
-必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 0 failed（现行口径见 docs/03-reference/test-baseline.md）>
+必读: <文档 file:line, 例: cognitive-module-wiring.md:20-35>
+必跑: <命令 + 期望输出, 例: cargo test --workspace --locked 期望 0 failed（现行口径见 ../03-reference/test-baseline.md）>
 必写: <报告结构, 含 0 装诚实真账 + 0 触碰 LOCKED 声明>
 不 commit: <等主代理审 (Q1 C1 policy)>
 ```
@@ -256,37 +256,37 @@ Author:          <主代理 / 子代理 ID>
 
 ```
 [入口]
-docs/04-internal/TO-NEW-TEAM.md              ← 接手入口 (3 句实话 + 文件地图 + 工作流)
-docs/04-internal/ENGINEER-MANIFESTO.md      ← 本册 (reference 手册)
-docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md  ← 最终接手报告 (意图 + 进度 + 真账)
-docs/04-internal/HANDOFF-NOTES.md           ← 子代理 D 接手人手册 11 节 (逐项检查清单)
+TO-NEW-TEAM.md              ← 接手入口 (3 句实话 + 文件地图 + 工作流)
+ENGINEER-MANIFESTO.md      ← 本册 (reference 手册)
+FINAL-HANDOFF-V2.0.0-RC.1.md  ← 最终接手报告 (意图 + 进度 + 真账)
+HANDOFF-NOTES.md           ← 子代理 D 接手人手册 11 节 (逐项检查清单)
 
 [哲学 + 架构]
-docs/01-architecture/philosophy.md          ← 9 哲学锚 + 13 键 + 三洋葱 + O-6 8 重守门
-docs/01-architecture/v2-architecture-reflection.md  ← 新架构反思 + 自升级 cycle
-docs/01-architecture/v2-arch-refactor-batch.md  ← 5 Refactor + 守门
-docs/01-architecture/v2-microkernel-convergence.md  ← 微内核收敛设计
-docs/01-architecture/cognitive-9-organ-integration-spec.md  ← R10 cognitive × 9 organ
-docs/01-architecture/organ-orchestrator-spec.md  ← R11 OrganOrchestrator spec
-docs/01-architecture/rc-7-perception-true-modality-spec.md  ← R14 RC-7 真 modality
-docs/01-architecture/deferred-slot-activation-preference_learning-spec.md  ← R15 6 DEFERRED 激活
+../01-architecture/philosophy.md          ← 9 哲学锚 + 13 键 + 三洋葱 + O-6 8 重守门
+../01-architecture/v2-architecture-reflection.md  ← 新架构反思 + 自升级 cycle
+../01-architecture/v2-arch-refactor-batch.md  ← 5 Refactor + 守门
+../01-architecture/v2-microkernel-convergence.md  ← 微内核收敛设计
+../01-architecture/cognitive-9-organ-integration-spec.md  ← R10 cognitive × 9 organ
+../01-architecture/organ-orchestrator-spec.md  ← R11 OrganOrchestrator spec
+../01-architecture/rc-7-perception-true-modality-spec.md  ← R14 RC-7 真 modality
+../01-architecture/deferred-slot-activation-preference_learning-spec.md  ← R15 6 DEFERRED 激活
 
 [A 块真账]
-docs/01-architecture/organ-orchestrator-completion-plan.md  ← A 块 5 stage 计划 + O-6 复盘 §7
-docs/04-internal/A-block-o6-true-account.md  ← A 块 O-6 0 装诚实复盘 + 后续 commit 标准
+../01-architecture/organ-orchestrator-completion-plan.md  ← A 块 5 stage 计划 + O-6 复盘 §7
+A-block-o6-true-account.md  ← A 块 O-6 0 装诚实复盘 + 后续 commit 标准
 
 [Guide]
-docs/02-guides/v2-gateway-frontend-integration-spec.md  ← R9 frontend 对接 (B 块起点)
-docs/02-guides/v2-frontend-quickstart.md
-docs/02-guides/v2-gateway-frontend-integration-spec-r13-review.md  ← R13 接力审
+../02-guides/v2-gateway-frontend-integration-spec.md  ← R9 frontend 对接 (B 块起点)
+../02-guides/v2-frontend-quickstart.md
+../02-guides/v2-gateway-frontend-integration-spec-r13-review.md  ← R13 接力审
 
 [Roadmap + Progress]
 ROADMAP.md                                   ← 顶层路线 (§3/§3.5/§3.6/§4)
 CHANGELOG.md                                 ← [Unreleased] 段
-docs/04-internal/v2.0.0-rc-roadmap.md       ← 10 RC + 验收
-docs/04-internal/v2.0.0-release-path-integration.md  ← 3 spec 协作 + 4 块真实施依赖链
-docs/04-internal/v2.0.0-release-path-7-spec-4-block.md  ← 7 spec 4 块 0 装诚实真账
-docs/04-internal/9-organ-progress-2026-08-28.md  ← 9 organ 实时进度
+v2.0.0-rc-roadmap.md       ← 10 RC + 验收
+v2.0.0-release-path-integration.md  ← 3 spec 协作 + 4 块真实施依赖链
+v2.0.0-release-path-7-spec-4-block.md  ← 7 spec 4 块 0 装诚实真账
+9-organ-progress-2026-08-28.md  ← 9 organ 实时进度
 ```
 
 ### 7.4 文档写作的 5 不
@@ -458,7 +458,7 @@ git commit --no-verify -m "..."   # 跳过所有 hook
 ```bash
 cd C:\Users\31683\Apeireth-rust
 git log --oneline -5                                            # 确认 HEAD 与文档一致
-cargo test --workspace --locked                                  # 期望 0 failed（现行口径见 docs/03-reference/test-baseline.md；2026-10-13 历史 5360 passed / 22 ignored）
+cargo test --workspace --locked                                  # 期望 0 failed（现行口径见 ../03-reference/test-baseline.md；2026-10-13 历史 5360 passed / 22 ignored）
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望 0 警告
 cargo test --workspace --doc --locked                           # 期望 0 FAILED
 rustfmt crates/<your_file>.rs                                   # 单文件 fmt (不要 cargo fmt -- file)
@@ -493,9 +493,9 @@ cargo test --workspace --locked  # 真账你跑过
 
 ```bash
 # 1. 必读相关现状 (5 份主交付):
-docs/04-internal/TO-NEW-TEAM.md
-docs/04-internal/FINAL-HANDOFF-V2.0.0-RC.1.md
-docs/04-internal/HANDOFF-NOTES.md
+TO-NEW-TEAM.md
+FINAL-HANDOFF-V2.0.0-RC.1.md
+HANDOFF-NOTES.md
 ROADMAP.md (顶层)
 CHANGELOG.md ([Unreleased] 段)
 
@@ -555,7 +555,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 
 ```
 任务: 派子代理调研 A 块 5 缺口真生产路径, 写报告 docs/04-internal/A-block-5-gaps-research.md
-必读: docs/01-architecture/organ-orchestrator-spec.md + crates/engine/runtime/src/canonical/orchestrator.rs + 9 organ lib + E7 emergence + cognitive ledger
+必读: ../01-architecture/organ-orchestrator-spec.md + crates/engine/runtime/src/canonical/orchestrator.rs + 9 organ lib + E7 emergence + cognitive ledger
 必跑: cargo check --workspace --all-targets + cargo test -p apeireth-runtime --test orchestrator 期望 6 passed
 必写: 报告 5 缺口 (接口现状 + 现有用法 + 接入候选 + 边界 + 建议主代理选)
 不 commit: 等主代理审 (Q1 C1 policy)
@@ -570,15 +570,15 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 ```
 1. 读 ROADMAP.md §3 当前状态 + §3.5 阶段表 + §3.6 A 块真账
 2. 读 CHANGELOG.md [Unreleased] 段 (12/12 ledger + 9/10 RC + R12 + 8 spec + A 块 5 stage + O-6 复盘 amend)
-3. 读 docs/01-architecture/philosophy.md (9 哲学锚 + O-6 不做借口)
-4. 读 docs/01-architecture/v2-arch-refactor-batch.md (5 Refactor + 守门)
-5. 读 docs/01-architecture/organ-orchestrator-completion-plan.md (A 块 5 stage 计划 + O-6 复盘 §7)
-6. 读 docs/04-internal/A-block-o6-true-account.md (A 块 O-6 0 装诚实复盘 + 修订版 + 后续 commit 标准)
-7. 读 docs/04-internal/v2.0.0-rc-roadmap.md (10 RC + 验收)
-8. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
-9. 读 docs/04-internal/TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
-10. 读 docs/01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
-11. 跑 cargo test --workspace --locked (期望 0 failed；现行口径见 docs/03-reference/test-baseline.md，2026-10-13 历史 5360 passed / 22 ignored)
+3. 读 ../01-architecture/philosophy.md (9 哲学锚 + O-6 不做借口)
+4. 读 ../01-architecture/v2-arch-refactor-batch.md (5 Refactor + 守门)
+5. 读 ../01-architecture/organ-orchestrator-completion-plan.md (A 块 5 stage 计划 + O-6 复盘 §7)
+6. 读 A-block-o6-true-account.md (A 块 O-6 0 装诚实复盘 + 修订版 + 后续 commit 标准)
+7. 读 v2.0.0-rc-roadmap.md (10 RC + 验收)
+8. 读 HANDOFF-NOTES.md (子代理 D 接手人手册)
+9. 读 TO-NEW-TEAM.md (给新团队的话 + 3 块真实施清单)
+10. 读 ../01-architecture/v2-architecture-reflection.md (新架构反思 + 自升级 cycle)
+11. 跑 cargo test --workspace --locked (期望 0 failed；现行口径见 ../03-reference/test-baseline.md，2026-10-13 历史 5360 passed / 22 ignored)
 12. 跑 cargo clippy --workspace --all-targets --locked -- -D warnings (期望 0 警告)
 ```
 
@@ -629,7 +629,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 
 **0 装诚实标 (A 块 O-6 复盘)**: 主代理第一次**自己**用 "Windows 非交互环境复杂" 当借口拒绝 amend 5 commits. 用户提醒 "不要怕麻烦, 就按正确做法做啊". 主代理**立即**用 `git plumbing` (commit-tree + update-ref) 完成 amend, **不找借口**. O-6 doctrine 真兑现: "工作量与麻烦不是拒绝重做的理由".
 
-**0 装诚实标 (Round 1-3 工序教训续, per §13 #9 #10 #11)**: 主代理 Round 1 amend 5e18e65b 时, 凭 `git diff --stat` 看到 6 行 diff 就以为修了 doc 本体 (实际只修了 msg, tree 还是 HEAD 老 doc). Round 2 通过 `git show 5e18e65b:docs/04-internal/ENGINEER-MANIFESTO.md | grep "8 哲学锚"` 自验, 才发现 "8 哲学锚" 3 处仍在. **没 hide**, 没"删 5e18e65b amend 第 3 次", 而是用 followup commit `e3300347` 真修 doc 本体 + flag 错账 (commit message + handoff log + step log 三处). O-5 doctrine 真兑现: 失守 flag 即改, 不"等以后修". Round 3 force push 完美执行 §8 `--force-with-lease=main:cef36c48`, 覆盖 origin 原版 (含漂移) 为 amend + followup 版本 (无漂移).
+**0 装诚实标 (Round 1-3 工序教训续, per §13 #9 #10 #11)**: 主代理 Round 1 amend 5e18e65b 时, 凭 `git diff --stat` 看到 6 行 diff 就以为修了 doc 本体 (实际只修了 msg, tree 还是 HEAD 老 doc). Round 2 通过 `git show 5e18e65b:ENGINEER-MANIFESTO.md | grep "8 哲学锚"` 自验, 才发现 "8 哲学锚" 3 处仍在. **没 hide**, 没"删 5e18e65b amend 第 3 次", 而是用 followup commit `e3300347` 真修 doc 本体 + flag 错账 (commit message + handoff log + step log 三处). O-5 doctrine 真兑现: 失守 flag 即改, 不"等以后修". Round 3 force push 完美执行 §8 `--force-with-lease=main:cef36c48`, 覆盖 origin 原版 (含漂移) 为 amend + followup 版本 (无漂移).
 
 ---
 
@@ -648,9 +648,9 @@ Apeireth v2.0 = 9 organ 真实现 ✅ + OrganOrchestrator 串联层 ✅ + A 块 
 4. 9 哲学锚 + 13 键 + 5 重守门 = 信任地基, LOCKED 0 改 (除非主代理拍板)
 5. O-6 三阶审查 = 每 commit 必真答案 + 拒 alternatives + 拒理由 (per §5, 不找借口)
 6. v2.0 release 估 **2027-Q3** (修订 per Round 12-13 真调研, 因 ~23 项 1.0 缺口 + 1.0 maturity 补查, 估时从 4-6 月 上调到 6-9 月, 真实施 critical path 12-14 周)
-7. 完整版给新团队的话: docs/04-internal/TO-NEW-TEAM.md
-8. A 块 O-6 复盘: docs/04-internal/A-block-o6-true-account.md
-9. 本 reference 手册: docs/04-internal/ENGINEER-MANIFESTO.md (你正在读)
+7. 完整版给新团队的话: TO-NEW-TEAM.md
+8. A 块 O-6 复盘: A-block-o6-true-account.md
+9. 本 reference 手册: ENGINEER-MANIFESTO.md (你正在读)
 
 主代理 Mavis 收盘 rc.1 + 8 spec + A 块完整化 + O-6 复盘 阶段, 你来接.
 有疑问看 docs/04-internal/ + docs/01-architecture/ + docs/02-guides/ + 跑 5 重守门 baseline (期望 5243 tests / 0 clippy 警告).

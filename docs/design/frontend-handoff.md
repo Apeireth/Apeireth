@@ -22,7 +22,7 @@
 # 后端（:8090，先起）
 cargo build --example companion_serve -p apeireth-companion
 # 运行需 env：APEIRETH_API_KEY（LLM key，主人在 C:\Users\31683\apikey-ultra.txt）、
-# APEIRETH_MASTER_TOKEN（授权主令牌）。详见 docs/02-guides/quick-start.md。
+# APEIRETH_MASTER_TOKEN（授权主令牌）。详见 ../02-guides/quick-start.md。
 
 # 前端（dev，:5199 是集群施工约定端口）
 cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort
@@ -68,7 +68,7 @@ cd frontend/companion-desktop && pnpm dev --port 5199 --strictPort
 
 ## 3. 后端联调现状（:8090 真实数据在流）
 
-契约即真相：[../02-guides/frontend-data-contract.md](../02-guides/frontend-data-contract.md)（17+1 条路由，字段级带代码行号）。
+契约即真相：[frontend-data-contract.md](../02-guides/frontend-data-contract.md)（17+1 条路由，字段级带代码行号）。
 
 - **已通**：`/health`、`/v1/models`、`/v1/chat/completions`（非流式+SSE 流式，
   CoT `<think>` 段前端分流到 reasoning 通道）、`/v1/panel/*`（sessions/timeline/

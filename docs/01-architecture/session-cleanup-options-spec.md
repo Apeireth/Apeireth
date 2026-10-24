@@ -8,7 +8,7 @@
          frontend/companion-desktop/src/lib/chat-shell/session-delete.ts:1-6（"复活"病灶记录）
          frontend/companion-desktop/src/lib/types.ts:460-486（近期记忆/长期记忆既有术语）
          crates/adapters/gateway/src/session_settings.rs:183-200（DELETE /v1/sessions/{id}）
-         docs/01-architecture/forget-three-phase-production-spec.md（记忆遗忘协议）
+         forget-three-phase-production-spec.md（记忆遗忘协议）
 状态:    C1-C4 裁决位已拍板（按拟定值）；P0 已实施——测试层验收完成
          （pnpm test 41/41 套件含新增 tests/session-cleanup.mjs 七组断言、
          pnpm check 0/0）；场景实测走查与主人签核待办；P1（批量端点）/P2（③ 接线）未动工。

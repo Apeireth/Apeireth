@@ -1,7 +1,7 @@
 # scripts/guard_ml/ — Guard ML 评估数据与脚本
 
 > Status: 在库 9 件（脚本 + 场景夹具 + 配对/影子夹具）；4 大可再生导出件已外置（F-02 执行批，2026-10-18）。
-> 迁移清单见 [../../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv](../../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv)。
+> 迁移清单见 [f-02-migration-manifest-2026-10-18.tsv]../../docs/04-internal/backend-enhancement/f-02-migration-manifest-2026-10-18.tsv)。
 
 ## 在库文件（勿迁）
 

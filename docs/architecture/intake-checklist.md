@@ -2,7 +2,7 @@
 
 > `Status: 📝 v0.1 草案（2026-10-20）`
 > 用途：任何新能力/机制/结构进入仓库前，逐条回答；答案写进 commit 正文或 ADR。
-> 依据：[架构契约](../architecture/contract.toml) · [ENGINEER-MANIFESTO §5 O-6](../../04-internal/ENGINEER-MANIFESTO.md) · [施工纪律 §一/§六](../../04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md)
+> 依据：[架构契约](../architecture/contract.toml) · [ENGINEER-MANIFESTO §5 O-6](../04-internal/ENGINEER-MANIFESTO.md) · [施工纪律 §一/§六](../04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md)
 
 ## 0. 先分类：你加的是哪一类？
 

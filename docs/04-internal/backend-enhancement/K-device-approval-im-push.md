@@ -164,9 +164,15 @@ runtime-assembly `device_control_status_probe` 套件 2 例；既有
 
 ## 七、0 装诚实（本批现状）
 
-- **已接线**：设备审批卡→IM 推送链（同链同信封 + plan_id 幂等 + 失败留账重试）、
-  按钮批准即执行/拒绝关账（两本账落盘）、money 档 IM 卡证据闭环、回调路由分家、
-  `self_status` `device_control` 节 + `device_control_status_probe` 装配接线。
+- **库级已实现、生产装配未接线〔四级口径：IMPLEMENTED〕**：设备审批卡→IM 推送链（同链同信封 + plan_id 幂等 +
+  失败留账重试）、按钮批准即执行/拒绝关账（两本账落盘）、money 档 IM 卡证据闭环、回调路由分家 ——
+  `with_device_approval_face` / `push_device_approval_cards` / `retry_device_approval_pushes`
+  全仓**仅测试调用、生产装配无注入点**，桥内 face 缺位照实回「未接线」，故 money 档 IM 卡出卡来源在生产装配下**未闭合**
+  （与[能力矩阵 §0.2](../../03-reference/capabilities-matrix.md) 同口径）。
+  > 口径校注（2026-10-24 文档治理批）：本条原标 `PRODUCTION WIRED` 属**划错边界**（把"库级有实现+有测试"当成"已接生产装配"），
+  > 已按真源改为 `IMPLEMENTED`。这正是口径纪律要防的过度声称。
+- **已接线〔四级口径：PRODUCTION WIRED〕**：`self_status` `device_control` 节 + `device_control_status_probe` 装配接线
+  （`runtime-assembly/src/canonical/production.rs:1349` 实证，生产装配根确有调用）。
 - **未接线**（如实）：真实 IM 端点的 live 往返（本批 0 真实网络，端点全 mock，
   **未实测** live）；运行时侧「预览拍产卡 → 自动提交推送」的触发器——本批交付
   `ImBridge::push_device_approval_cards` 显式提交口（谁看见卡谁提交），随 IM

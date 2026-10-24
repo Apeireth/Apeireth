@@ -2,7 +2,7 @@
 
 ```yaml
 [Document-Meta]
-Document:        docs/04-internal/license-port/gate4-integration.md
+Document:        gate4-integration.md
 Version:         1.0（许可搬运线第一批：图像核心 vendored 家族）
 Last-Modified:   2026-10-18
 Status:          🟢 活跃（四关质检报告，逐关一报）

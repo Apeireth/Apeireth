@@ -17,7 +17,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/01-architecture/deferred-slot-activation-preference_learning-spec.md
+Document:        deferred-slot-activation-preference_learning-spec.md
 Version:         Spec-1.0
 Last-Modified:   2026-08-28
 Status:          🟢 spec 阶段 (R15 写完, 真实施待主代理后续派 R20+)

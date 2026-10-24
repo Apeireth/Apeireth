@@ -224,6 +224,9 @@ crates/apeireth-integration-e2e/.*.log
 !scripts/audit_unwired.py
 # 自述词表纪律检查器（2026-10-23 ADR-0014 §6 落地）：仓库常驻工具（CI 报告项）
 !scripts/check_self_status_vocab.py
+# 文档治理门禁（2026-10-23 文档治理批）：链接完整性 + 索引分层校验器，必须入库
+!scripts/docs_links.py
+!scripts/docs_index.py
 
 # TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
 # 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),

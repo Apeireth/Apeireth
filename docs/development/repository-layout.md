@@ -31,7 +31,7 @@ frontend/
 scripts/              # maintenance, audit, release, and packaging tools
 deploy/               # deployment manifests and service-specific images
 packaging/            # platform package recipes
-reports/              # committed validation and audit evidence (batch work logs moved to release assets 2026-10-18, see reports/README.md)
+reports/              # committed validation and audit evidence (batch work logs moved to release assets 2026-10-18, see ../../reports/README.md)
 previews/             # committed visual preview assets (git-lfs backed since 2026-10-18, paths unchanged)
 library/              # committed reference/library content
 legacy/

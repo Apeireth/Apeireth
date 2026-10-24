@@ -2,7 +2,7 @@
 
 ```yaml
 [Document-Meta]
-Document:        docs/04-internal/license-port/README.md
+Document:        README.md
 Version:         1.0（第一批：图像核心 vendored 家族）
 Last-Modified:   2026-10-18
 Status:          🟢 活跃（逐批卷宗，第一批收卷）

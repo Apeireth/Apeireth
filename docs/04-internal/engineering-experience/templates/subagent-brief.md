@@ -2,7 +2,7 @@
 
 ```text
 [Document-Meta]
-Document:        docs/04-internal/engineering-experience/templates/subagent-brief.md
+Document:        subagent-brief.md
 Version:         1.0（可复制形态）
 Last-Modified:   2026-10-20
 Status:          🟢 活跃

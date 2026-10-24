@@ -32,11 +32,11 @@
 
 【制度化落点】四级口径阶梯 + 证据链三件：
 1. **四级口径**（[system-capabilities.md](../../01-architecture/system-capabilities.md) 头注）：`IMPLEMENTED（代码存在）≠ PRODUCTION WIRED（接入生产主路径）≠ DEFAULT ENABLED（无需 opt-in）≠ HARDWARE VALIDATED（真机验证）`——一切能力自述先报自己在哪一级；
-2. **证据链**：[claims-evidence-matrix.md](../claims-evidence-matrix.md)（每条对外声明 → 证据 → 等级）、[live-verification-ledger.md](../live-verification-ledger.md)（"什么测过、什么没测"唯一权威，写"已验证"前先查）、差距审计两级化（"库级已实现但未接生产装配"与"真缺口"分开记账）；
+2. **证据链**：[claims-evidence-matrix.md](../claims-evidence-matrix.md)（每条对外声明 → 证据 → 等级）、[live-verification-ledger.md](../live-verification-ledger.md)（"什么测过、什么没测"唯一权威，写"已验证"前先查）、差距审计两级化（"库级已实现但未接生产装配"〔四级口径术语引用〕与"真缺口"分开记账）；
 3. **抓假账先例**：接线假账靠**生产调用点实证**抓出（某输出脱敏函数全仓只有定义+导出、零生产调用——IMPLEMENTED ≠ PRODUCTION WIRED 当场现形，随后真接线）。
 
 【可复用判据】
-1. 写"可用/已实现"之前先答**哪一级**，答不出就不写；
+1. 写"可用/已实现"〔四级口径术语引用〕之前先答**哪一级**，答不出就不写；
 2. "在清单"的真值看**名册按实际注册条件取值**（洞察 1 判据 3），"能产出结果"的真值看**调用链实证**——注意双向陷阱：名字扫描"0 引用"也会误判（crate 内部互调也是生产路径，已有三审推翻旧结论的先例），判据是调用链走到生产主路径，不是名字计数；
 3. 每个"✅"能指回证据（测试名/台账行/真机记录），指不回的降级为"未实测"。
 
@@ -47,7 +47,7 @@
 【洞察】"模型的实测精神"是本战役被 owner 点名的工程气质：模型（与任何施工者）最强的可信度来源不是推理流畅，而是**实测**。本仓为此摔过两跤：一次是调研线六个子代理写"真账"全程零实测、纯凭账面推断，被 owner 当场抓出（定性为 O-5 失守）；一次是安全告警归因靠推断、把不在名单里的条目推断进去，API 实取后推翻——自己都标注了"推断"，仍被定性为"**叙事先于实测**"。结论：推断不是罪，**推断冒充实测**才是罪；文化靠"实测/推断/未验"三分标注落地。
 
 【制度化落点】
-1. **0 装 PASS**（[AGENTS.md](../../../AGENTS.md) §1）：未接线写「未接线」，未实测写「未实测」，双向性（不许把"已实现未接线"说成 0 装，也不许反向）；
+1. **0 装 PASS**（[AGENTS.md](../../../AGENTS.md) §1）：未接线写「未接线」，未实测写「未实测」，双向性（不许把"已实现未接线"〔四级口径术语引用〕说成 0 装，也不许反向）；
 2. **验收权威**：[live-verification-ledger.md](../live-verification-ledger.md) 是"什么测过、什么没测"唯一权威——写文档/注释/提交前先查它，别把挂账的当已验的；
 3. **数字纪律**：无脚本不发布数字（每个数字可复核 = 命令 + 日期 + 工具链）；
 4. **实测文格式**：结论三分标注（实测过 / 推断 / 未验），所有结论附可复现命令（既有交接文的抬头口径先例）。
@@ -91,7 +91,7 @@
 3. 新读者能顺着"读法注 → 上位文件"三跳找到真源吗？
 三问都"是"仍有重复感 → 才考虑合并内容；否则补分层声明即可。
 
-> 出处：★[04-methodology.md](04-methodology.md) 读法注（"重叠处互相链接不重抄"）+ §四（口径纪律细则）；★[AGENTS.md](../../../AGENTS.md) §3（测试数字单一真源——只引用不抄写；历史不追溯改写）；★[docs/README.md](../../README.md)（分层导航树：01-architecture / 02-guides / 03-reference / 04-internal 分层目录）；★[02-guides/multi-ai-construction-guide.md](../../02-guides/multi-ai-construction-guide.md)（本批对外指南"独立可读 + 指向宪章与 MANIFESTO"收口实形）；☆判词与现场（"用户觉得重复"，本会话，未落仓）。
+> 出处：★[04-methodology.md](04-methodology.md) 读法注（"重叠处互相链接不重抄"）+ §四（口径纪律细则）；★[AGENTS.md](../../../AGENTS.md) §3（测试数字单一真源——只引用不抄写；历史不追溯改写）；★[README.md](../../README.md)（分层导航树：01-architecture / 02-guides / 03-reference / 04-internal 分层目录）；★[02-guides/multi-ai-construction-guide.md](../../02-guides/multi-ai-construction-guide.md)（本批对外指南"独立可读 + 指向宪章与 MANIFESTO"收口实形）；☆判词与现场（"用户觉得重复"，本会话，未落仓）。
 
 ## 洞察 6 · 分诊与吸收的方法论：随记 60 项 → 真金提炼案
 

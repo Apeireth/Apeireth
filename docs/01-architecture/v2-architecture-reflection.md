@@ -402,12 +402,12 @@ v2.0 release 后, **主代理不再每件手写**. Apeireth 自我升级, 主人
 ```
 1. 读 ROADMAP.md §3 当前状态 + §3.5 阶段表
 2. 读 CHANGELOG.md [Unreleased] 段 (O-6 12 项兑现 ledger)
-3. 读 docs/01-architecture/philosophy.md (9 哲学锚 + O-6 不做借口清单)
-4. 读 docs/01-architecture/v2-arch-refactor-batch.md (5 Refactor + 守门)
-5. 读 docs/04-internal/v2.0.0-rc-roadmap.md (10 RC + 验收)
-6. 读 docs/04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
-7. 读 docs/04-internal/v2-rc-1-progress-report.md (本会话进展快照)
-8. 读 docs/01-architecture/v2-architecture-reflection.md (本文 — 自升级 cycle)
+3. 读 philosophy.md (9 哲学锚 + O-6 不做借口清单)
+4. 读 v2-arch-refactor-batch.md (5 Refactor + 守门)
+5. 读 ../04-internal/v2.0.0-rc-roadmap.md (10 RC + 验收)
+6. 读 ../04-internal/HANDOFF-NOTES.md (子代理 D 接手人手册)
+7. 读 ../04-internal/v2-rc-1-progress-report.md (本会话进展快照)
+8. 读 v2-architecture-reflection.md (本文 — 自升级 cycle)
 9. 跑 cargo test --workspace --locked (验证 0 FAILED)
 10. 跑 cargo clippy --workspace --all-targets --locked -- -D warnings (验证 0 警告)
 ```

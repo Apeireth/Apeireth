@@ -7,7 +7,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/02-guides/v2-frontend-quickstart.md
+Document:        v2-frontend-quickstart.md
 Version:         Quickstart-1.0
 Last-Modified:   2026-08-28
 Status:          🟡 Spec 完成 (真实施 4-6 周, 2027-Q1 启动)

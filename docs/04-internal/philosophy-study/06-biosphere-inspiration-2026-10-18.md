@@ -1,7 +1,7 @@
 # 生物界灵感清单（2026-10-18）
 
 > `[Document-Meta]`
-> Document:        docs/04-internal/philosophy-study/06-biosphere-inspiration-2026-10-18.md
+> Document:        06-biosphere-inspiration-2026-10-18.md
 > Status:          🟡 灵感候选（**不是排期**；经 owner 拍板后转 `system-gap-ledger` 的 SG 条目）
 > 作者:            总装主线（应 owner「从生物学生物界找灵感」）
 > 与既有研究的关系: 阶段 1 §2.B 已有 **13 项生物特征**（新陈代谢 / 自创生 / 催化集 / 可塑性(Waddington) /

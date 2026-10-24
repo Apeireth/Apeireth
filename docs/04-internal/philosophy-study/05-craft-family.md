@@ -1,5 +1,5 @@
 [Document-Meta]
-Document:        docs/04-internal/philosophy-study/05-craft-family.md
+Document:        05-craft-family.md
 Version:         0.x · craft 族机制研究 + 许可核查（吸收前侦察）
 Last-Modified:   2026-10-18
 Status:          🟢 活跃（2026-10-18 纯调研批收盘：§0 许可矩阵 + 15 机制卡 + 吸收路线图，校验真账见文末）
@@ -265,7 +265,7 @@ Author:          子代理（craft 族侦察批，父代理 session-f4905e61）
 ## 本批校验真账（2026-10-18，可复核）
 
 - `pwsh -File scripts/check-neutral-terms.ps1` → OK（50 个改动文件新增行全中性，0 命中）。
-- `python scripts/check_doc_caliber.py docs/04-internal/philosophy-study/05-craft-family.md` → 0 新增违规。
+- `python scripts/check_doc_caliber.py 05-craft-family.md` → 0 新增违规。
 - 旧版本号/旧口径词扫描：本文件无版本号残留、无 workspace 数字口径（grep 复核 0 命中）。
 - `cargo fmt --check` → 0 diff；`cargo clippy --workspace --all-targets --locked -- -D warnings` → 0 警告（exit 0）。
 - `cargo test --workspace --all-targets --locked --no-fail-fast -j 2`：首轮 1 target 报失败（`-p apeireth-tools-canonical --lib`，与并行 clippy 抢包缓存锁同时运行）；**单跑该 target 459 passed / 0 failed**，**复跑全量 0 failed / exit 0**——未复现，判为并发下环境性抖动（该 crate 含临时目录/配额竞态类测试）；本批零 src 触碰。

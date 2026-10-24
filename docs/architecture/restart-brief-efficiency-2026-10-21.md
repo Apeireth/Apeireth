@@ -71,7 +71,7 @@ git log --oneline -3
 python scripts/arch_guard.py --report
 python scripts/docs_truth.py --verify --check
 python scripts/wiring_report.py --verify
-Get-Content docs/03-reference/test-baseline.md -TotalCount 20
+Get-Content ../03-reference/test-baseline.md -TotalCount 20
 ```
 
 ## 4. 与架构线的接口

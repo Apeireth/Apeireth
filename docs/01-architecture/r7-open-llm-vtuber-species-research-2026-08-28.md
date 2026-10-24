@@ -5,7 +5,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/01-architecture/r7-open-llm-vtuber-species-research-2026-08-28.md
+Document:        r7-open-llm-vtuber-species-research-2026-08-28.md
 Version:         1.0 (Sub-Agent R7 写于 2026-08-28)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (物种化设计参考调研真账, 主代理决策参考)

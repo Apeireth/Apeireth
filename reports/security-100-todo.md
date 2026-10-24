@@ -1,15 +1,5 @@
-# 1.0 release #12 security 100% 收尾 todo
+<!-- 已归档（2026-10-23）：本文内容已归入历史卷宗。 -->
+> ⚠️ 本文档已归档（原件见 `docs/archive/merged/2026-10-23/reports`）；继任文档为 **[册 06 — 安全与沙箱（11 篇合册）](06-security-and-sandbox.md)**（2026-10-23）。
+> 本文件保留仅为维持既有链接可达；内容以 **册 06 — 安全与沙箱（11 篇合册）** 为准。
 
-## 验证项
-- [x] 1. cargo audit 0 vuln (实测 1 vuln, RUSTSEC-2024-0437 新增, 0 实际风险)
-- [x] 2. cargo deny check 0 issue (实测 advisories FAILED + bans FAILED)
-- [x] 3. 4 RUSTSEC 漏洞 fix 状态 (4/4 0 命中, bg_25226949 修的完整保留)
-- [x] 4. 8 包 cosign 签名验证 (manual 0 CI 守门, cosign.pub placeholder, dist/ 0 产物)
-- [x] 5. 列出 #12 security 100% 状态 + 续补时间表 (R21 估 8-12h)
-- [x] 6. 0 LOCKED 触碰验证 + 0 改 workspace version 验证 (0 触碰 24+ LOCKED crate + 0 改 Cargo.toml)
-- [x] 7. 写报告 `reports/1.0-release-security-100-2026-08-06.md` (41KB, 13 章, 0 commit)
-
-## 严禁 (守门)
-- ✅ 0 改任何 LOCKED 文件 (per §7 验证)
-- ✅ 0 改 workspace version 1.0.0 (per §8 验证)
-- ✅ 0 主动 commit (per §11 声明)
+<!-- 本文件由文档治理批自动重定向生成，请勿在此写正文。 -->

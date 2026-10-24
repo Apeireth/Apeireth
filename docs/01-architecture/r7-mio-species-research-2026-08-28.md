@@ -9,7 +9,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/01-architecture/r7-mio-species-research-2026-08-28.md
+Document:        r7-mio-species-research-2026-08-28.md
 Version:         1.0 (sub-agent R7-Mio 写于 2026-08-28)
 Status:          🟢 活跃 (调研真账)
 Author:          sub-agent R7-Mio (主代理 Mavis 派)

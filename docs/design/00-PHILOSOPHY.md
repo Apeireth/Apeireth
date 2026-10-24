@@ -111,7 +111,7 @@
 - **消费映射**：T0 余烬点（强度/周期）→ T1 光晕（+姿态色温）→ T2 光环全参数（PAD 映射表沿用 `01-DESIGN-SYSTEM.md` §4.1）→ 桌宠姿态动画；`significance: ritual` 时全投影同步一次（四投影同频共振是仪式感的来源）。
 - **频率纪律**：回合级事件 + 低频心跳（≤ 每 60s），无高频推送。
 - **后端落点**：`crates/adapters/gateway/src/events.rs` 新增事件类型 + 一个状态合成模块（种子 = `ember_hud_driver.rs`）；前端 `presence.ts` 改订本契约，legacy 四事件读取路径退役。
-- **落地状态（2026-09-23 核实）**：✅ 已实现——gateway `presence.rs`（状态合成 + 60s 心跳 + 无交互衰减 baseline + initiative 预算 ≤3 次/天，12 单测；commits `20cf3d1b`/`487b7141`/`fa011d07`），事件经 SSE 总线实收验证（台账 #29）；前端 `presence.ts` 已改订（具名帧订阅 + 显影分级 + T0 余烬/T1 光晕/T2 PAD 映射，commit `7026a3a7`，台账 #30）。诚实边界：`empathetic_care`/`ritual` 暂无生产者（契约空间保留），initiative 只有预算器无生产者。
+- **落地状态（2026-09-23 核实）**：✅ 已实现〔四级口径：PRODUCTION WIRED〕——gateway `presence.rs`（状态合成 + 60s 心跳 + 无交互衰减 baseline + initiative 预算 ≤3 次/天，12 单测；commits `20cf3d1b`/`487b7141`/`fa011d07`），事件经 SSE 总线实收验证（台账 #29）；前端 `presence.ts` 已改订（具名帧订阅 + 显影分级 + T0 余烬/T1 光晕/T2 PAD 映射，commit `7026a3a7`，台账 #30）。诚实边界：`empathetic_care`/`ritual` 暂无生产者（契约空间保留），initiative 只有预算器无生产者。
 
 ## 11. 文档关系
 

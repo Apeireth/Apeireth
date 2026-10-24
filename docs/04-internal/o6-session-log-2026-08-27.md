@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/04-internal/o6-session-log-2026-08-27.md
+Document:        o6-session-log-2026-08-27.md
 Version:         Reflective-1.0
 Last-Modified:   2026-08-27
 Status:          📝 工作日志 (Reflective, not authoritative)

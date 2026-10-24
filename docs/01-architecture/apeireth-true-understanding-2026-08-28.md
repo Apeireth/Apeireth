@@ -8,7 +8,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/01-architecture/apeireth-true-understanding-2026-08-28.md
+Document:        apeireth-true-understanding-2026-08-28.md
 Version:         1.0 (主代理 Mavis 写于 Round 10, 物种视角修订)
 Last-Modified:   2026-08-28
 Status:          🟢 活跃 (主代理真理解, 修订参考边界)

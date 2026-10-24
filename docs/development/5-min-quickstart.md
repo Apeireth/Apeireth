@@ -9,7 +9,7 @@ Welcome to **Apeireth**! This guide gets you up and running with the entire syst
 Ensure you have the following installed:
 - **Rust toolchain** (1.97.1 or newer): `rustc --version`
 - **Node.js** (v20+) & **pnpm** (v9+): `node -v && pnpm -v`
-- *(Optional for desktop bundle)*: **Tauri prerequisites** for your OS ([Tauri Setup Guide](https://v2.tauri.app/start/prerequisites/))
+- *(Optional for desktop bundle)*: **Tauri prerequisites** for your OS ([Tauri Setup Guide](https://v2.tauri.app/start/prerequisites/)
 
 ---
 

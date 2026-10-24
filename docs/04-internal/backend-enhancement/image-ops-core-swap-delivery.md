@@ -2,7 +2,7 @@
 
 ```yaml
 [Document-Meta]
-Document:        docs/04-internal/backend-enhancement/image-ops-core-swap-delivery.md
+Document:        image-ops-core-swap-delivery.md
 Version:         1.0
 Last-Modified:   2026-10-18
 Status:          🟢 交付（换核 + 能力扩展 + 依赖处置 + 能力矩阵随行）

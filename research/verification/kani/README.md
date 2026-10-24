@@ -1,7 +1,7 @@
 # Kani mirror crate —— Phase 5 审批状态机机器证明
 
 > ⚠️ **动本目录 / 任何 #[kani::proof] 之前必读**:
-> [docs/04-internal/kani-verification-playbook.md](../../docs/04-internal/kani-verification-playbook.md)
+> [docs/04-internal/kani-verification-playbook.md](../../../docs/04-internal/kani-verification-playbook.md)
 > —— 14 个坑的实录与配方检查单（生成器/容器/format!/unwind/资源学, 全是实测学费）。
 > 新增 harness 先过一遍 §3 检查单, 可免 45 分钟级的冤枉路。
 

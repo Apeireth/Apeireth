@@ -9,7 +9,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/01-architecture/rc-7-perception-true-modality-spec.md
+Document:        rc-7-perception-true-modality-spec.md
 Version:         Spec-0.1 (v2.0.0-rc.1+ 待实施)
 Last-Modified:   2026-08-28
 Status:          🟡 待实施 (不假装 "已完成")
@@ -723,7 +723,7 @@ R14 spec done (估 30-45 分钟). 真实施估 2-3 周 (Whisper 1-2 周 + xcap 1
 ## §11. 文档元数据
 
 ```
-Document:        docs/01-architecture/rc-7-perception-true-modality-spec.md
+Document:        rc-7-perception-true-modality-spec.md
 Version:         Spec-0.1 (v2.0.0-rc.1+ 待实施)
 Last-Modified:   2026-08-28
 Status:          🟡 待实施 (不假装 "已完成")

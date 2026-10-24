@@ -6,7 +6,7 @@
 
 ```
 [Document-Meta]
-Document:        docs/02-guides/self-insight-channel.md
+Document:        self-insight-channel.md
 Version:         Self-Insight-Rev-A（自省通道批）
 Last-Modified:   2026-10-18（补注二十一节口径）
 Status:          🟢 活跃
