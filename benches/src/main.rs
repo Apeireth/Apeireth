@@ -59,6 +59,11 @@ fn main() {
         "all" => {
             run_all(&cfg);
         }
+        // 内部探针: 由 `idle-footprint` 以子进程方式拉起, 回传一行机器可读读数。
+        // 不对外暴露 (不进 `list` 输出)。
+        idle_footprint::PROBE_ARG => {
+            idle_footprint::run_probe();
+        }
         name => match run_one(name, &cfg) {
             Some(outcomes) => {
                 for outcome in &outcomes {
