@@ -33,7 +33,7 @@
 //! - ✅ **6 工具 HTTP 真传输**（W5，2026-10-10）：`invoke_tool` → reqwest POST
 //!   `/v1/tools/{tool}/invoke`（Bearer + 有界超时 + audit）；type/const/签名全就位；
 //! - ⛔ 仍为桩两处：`invoke_stream`（WS）与 `check_quota`（D-05）—— 都返**显式错误码**；
-//! - ⇒ 口径：**HTTP 半场 = PRODUCTION WIRED**；**WS + quota = IMPLEMENTED（未接）**。
+//! - ⇒ 口径：**HTTP 半场 = PRODUCTION WIRED（仅客户端传输层）**；WS + quota = IMPLEMENTED（未接）；⚠️ 对端是**平台 API**（`/v1/tools/{tool}/invoke`），本仓 gateway **不提供**该路由（实测 404，只有 `/v1/tools/list`）⇒ 自托管直连需接线 = **产品决策 D-7**。
 //!
 //! **客户使用示例** (per `examples/sdk_demo.rs`):
 //! ```ignore

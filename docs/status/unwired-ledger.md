@@ -138,6 +138,27 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5c SDK 与本地网关端点不对齐（2026-10-25 实测，登记为产品决策）
+
+**实测**（真机起 `apeireth gateway serve`）：
+
+```
+POST /v1/tools/web_search/invoke  → 404     ← SDK 的 6 个工具方法走这里
+GET  /v1/tools/list               → 200     ← 网关实际提供的工具面
+```
+
+**结论**：SDK（`ApeirethClient`）的「HTTP 真传输」是**客户端实现真实**，
+其对端是**平台 API**（`/v1/tools/{tool}/invoke`）；本仓 `apeireth gateway`（本地运行时）
+**没有这条路由**。⇒ **自托管用户直连本仓网关时，SDK 的 6 个工具方法无处可调**。
+
+**为什么登记成决策而不是直接补**：给本地网关加「任意工具 HTTP 执行」是**产品面扩展** ——
+必须回答：走不走治理链/审批？是否受 `file_write`/`egress` 等总闸约束？
+面板已有 `safety.guard.evaluate`、`workbench.turn` 等受控面，工具执行是否也开一个？
+这些是产品语义与安全边界决策（object ⑥），不擅自动手。
+
+**已做**：SDK 模块头补一句**对端边界**说明（说清「客户端真接 ≠ 本仓网关有该端点」），
+并把选项写进 owner 决策请求书 D-7。
+
 ### 5.5b `apeireth-tui` 在非 TTY 环境只回裸 OS 错误 —— 已修（2026-10-25）
 
 **缺陷**：在脚本/管道/CI 里跑 `apeireth-tui`：
