@@ -116,6 +116,34 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4i 网关输入错误被报成 500 + 误导性建议 —— 已修（2026-10-25）
+
+**缺陷（真机 HTTP 冒烟发现）**：`POST /v1/memory/append` 传 `session: "s1"` 返回
+
+```json
+{"error":{"code":"runtime_error","message":"invalid SessionId \"s1\": ...",
+ "solution":"重启 Companion 后重试, 若复现请提交日志"}}
+```
+
+这是**客户端输入错误**（`SessionId` 只接受 UUID），却被 `panel_error` 全兜底映射成
+**500 + 「重启 Companion 后重试」** —— 重启治不了格式错误，那是误导。
+
+**修法**：在边界**快速失败**（与 `session_settings.rs::invalid_request` 同口径）：
+
+```
+HTTP 400
+{"error":{"code":"invalid_session_id",
+          "message":"session 必须是 UUID 形式，收到 \"s1\"",
+          "solution":"用 GET /v1/panel/sessions 查看现有会话 id；新建会话后再追加"}}
+```
+
+合法 UUID 仍 `201 CREATED`（真机两态都验过）。同步更新 `panel_routes.rs`
+（原测试用 `"s1"` 断言 201 —— 那是因为 mock 适配器宽松，掩盖了生产上的 500）。
+
+**遗留（未改，记录在案）**：`panel_error` 仍是全兜底（任何错误 → 500 + 重启建议）。
+彻底修需要给端口加类型化错误（`MemoryCommand` 等 trait 现在只回 `String`），
+那是跨 crate 的接口改造 —— 记为后续项，不在本批硬做。
+
 ### 5.4g 问责闭环「回填只写不读」—— 已修（2026-10-25）
 
 **缺陷**：`apeireth egress impact` 只读 `impact-ledger.jsonl`，

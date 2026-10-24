@@ -432,11 +432,31 @@ async fn panel_routes_serve_contract_shapes() {
     .await;
     assert_eq!(not_found["episodes"].as_array().unwrap().len(), 0);
 
-    let appended = router
+    // **会话 id 必须是 UUID**（`SessionId` 只接受 UUID）。此前非法 id 会以
+    // 500 `runtime_error` + 「重启 Companion 后重试」返回 —— 重启治不了格式错误。
+    // 2026-10-25 起在边界快速失败：400 + 可行动提示（与 `session_settings` 同口径）。
+    const SESSION: &str = "3f2b6a1e-9c4d-4a7b-8e15-2d6c9a0b7f31";
+    let rejected = router
         .clone()
         .oneshot(post(
             "/v1/memory/append",
             json!({ "session": "s1", "role": "user", "content": "新记忆" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        rejected.status(),
+        StatusCode::BAD_REQUEST,
+        "非法会话 id 必须是 400 而不是 500"
+    );
+    let rejected = body_json(rejected).await;
+    assert_eq!(rejected["error"]["code"], "invalid_session_id");
+
+    let appended = router
+        .clone()
+        .oneshot(post(
+            "/v1/memory/append",
+            json!({ "session": SESSION, "role": "user", "content": "新记忆" }),
         ))
         .await
         .unwrap();

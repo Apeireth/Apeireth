@@ -1250,6 +1250,21 @@ async fn append_episode(
         )
             .into_response();
     }
+    // **会话 id 校验**：`SessionId` 只接受 UUID。此前这里把原样字符串直接透传给
+    // 命令端口，非法 id 会以 500 `runtime_error` + 「重启 Companion 后重试」返回 ——
+    // 而重启治不了格式错误，那是**误导性建议**（实测：`session: "s1"`）。
+    // 与 `session_settings.rs::invalid_request` 同口径：客户端输入问题 = 400。
+    if request.session.parse::<SessionId>().is_err() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": {
+                "code": "invalid_session_id",
+                "message": format!("session 必须是 UUID 形式，收到 {:?}", request.session),
+                "solution": "用 GET /v1/panel/sessions 查看现有会话 id；新建会话后再追加"
+            } })),
+        )
+            .into_response();
+    }
     let memory = state
         .services
         .memory_commands
