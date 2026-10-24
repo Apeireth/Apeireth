@@ -60,3 +60,17 @@ path = "fuzz_targets/tool_schema.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "im_config"
+path = "fuzz_targets/im_config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_config"
+path = "fuzz_targets/mcp_config.rs"
+test = false
+doc = false
+bench = false
