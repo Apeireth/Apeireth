@@ -22,7 +22,13 @@ name = "apeireth-ui-demo"
 version = "2.0.0-rc.4"
 dependencies = [
  "apeireth-ui",
+ "apeireth-ui-core",
+ "apeireth-ui-dom",
  "apeireth-ui-kit",
+ "apeireth-ui-macro",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -54,7 +60,8 @@ dependencies = [
 name = "apeireth-ui-macro"
 version = "2.0.0-rc.4"
 dependencies = [
- "apeireth-ui",
+ "apeireth-ui-core",
+ "apeireth-ui-dom",
 ]
 
 [[package]]

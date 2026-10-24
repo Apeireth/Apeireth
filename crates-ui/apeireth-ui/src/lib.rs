@@ -10,12 +10,17 @@
 //! | DOM 绑定（虚拟节点 / 差分 / 委托 / 绑定 / 渲染器） | 2 | [`dom`] |
 //! | GPU 桥（状态 → 像素） | 2 | [`gpu`] |
 //! | 组件库（共享组件 + 注册表） | 3 | [`kit`] |
-//! | 过程宏（`#[component]`） | 0 | [`component`] |
+//! | 过程宏（`#[component]` / `view!`） | 0 | [`component`] / [`view`] |
 //!
 //! 常用类型同时在门面根部具名导出（`Signal` / `VNode` / `UiComponent` …），
 //! 试点应用通常只需要 `use apeireth_ui::…;`。
 //!
 //! ## 口径说明
+//!
+//! - **宏的运行时路径约定**：`#[component]` 与 `view!` 的展开物引用
+//!   `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**）⇒
+//!   使用这两个宏的 crate 须把 `apeireth-ui-core` / `apeireth-ui-dom` 列为
+//!   **直接依赖**（门面本身不参与展开物的路径解析）。
 //!
 //! - 真实 DOM 后端（`WebDom`）只在 **wasm32 目标**存在 ⇒ 门面的具名导出也
 //!   同样按目标条件化（native 编译时**没有**这个名字，不是「导出了但不能用」）。
@@ -28,21 +33,24 @@ pub use apeireth_ui_core as core;
 pub use apeireth_ui_dom as dom;
 pub use apeireth_ui_gpu as gpu;
 pub use apeireth_ui_kit as kit;
-pub use apeireth_ui_macro::component;
+pub use apeireth_ui_macro::{component, view};
 
 pub use apeireth_ui_core::{
-    Derived, EffectHandle, FlushReport, HostScheduler, InstanceRef, NodeId, QueuedScheduler,
-    ReactiveError, ReadSignal, Runtime, Scope, Signal, SyncScheduler, UiComponent,
+    Callback, Derived, EffectHandle, FlushReport, HostScheduler, InstanceRef, NodeId,
+    QueuedScheduler, ReactiveError, ReadSignal, Runtime, Scope, Signal, SyncScheduler, UiComponent,
 };
 pub use apeireth_ui_dom::{
-    diff, diff_keyed, list_diff_mode, AttrValue, Binding, BindingSlot, Dom, DomError, DomEvent,
-    DomOp, ElementBuilder, ElementVNode, EventHandler, EventKind, EventRegistry, HandlerId,
-    InMemoryDom, InMemoryNodeId, Key, KeyedDiff, KeyedDiffError, KeyedSlot, ListDiffMode,
-    MountedElement, MountedFragment, MountedNode, MountedText, Patch, RecordedOp, Renderer,
-    TextVNode, ThisBinding, ThisRef, UnavailableDom, UnavailableNode, VNode,
+    diff, diff_keyed, list_diff_mode, AttrValue, Binding, BindingSlot, Children, Dom, DomError,
+    DomEvent, DomOp, ElementBuilder, ElementHandler, ElementVNode, EventHandler, EventKind,
+    EventRegistry, HandlerId, InMemoryDom, InMemoryNodeId, Key, KeyedDiff, KeyedDiffError,
+    KeyedSlot, ListDiffMode, MountedElement, MountedFragment, MountedNode, MountedText, Patch,
+    RecordedOp, Renderer, TextVNode, ThisBinding, ThisRef, UnavailableDom, UnavailableNode, VNode,
 };
 pub use apeireth_ui_gpu::{BlackHoleParams, GpuContext, GpuError, SceneUniforms, Tier};
-pub use apeireth_ui_kit::{Button, ButtonProps, ComponentRegistry, RegistryError};
+pub use apeireth_ui_kit::{
+    Badge, BadgeProps, Button, ButtonProps, CardShell, CardShellProps, ComponentRegistry, Icon,
+    IconData, IconNode, IconProps, RegistryError,
+};
 
 /// 真实 DOM 后端（web-sys）—— **仅 wasm32 目标**。
 ///
