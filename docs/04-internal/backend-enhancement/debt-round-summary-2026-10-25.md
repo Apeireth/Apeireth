@@ -262,3 +262,5 @@ lint）。现已在本地镜像到 CI 的全部轻量档：
 | 网关长连接 | SSE `/v1/apeireth/events` = 200 + `text/event-stream` + 首帧；presence / runtime snapshot 正常 | 正常 |
 | 守护形态 | `gateway serve --pid-file` 的 slot 文件（key=value，端口可达性判活）**正常关闭即释放** | 不双开、不残留 |
 | `dream` 日记 | 按日 JSON 落盘（source/body/timestamp），0 素材时如实写「0 项轨迹」 | 输出可用 |
+| **TUI 端到端** | 用 `script` 分配伪终端（`stty rows 40 cols 120`）真跑 `apeireth-tui` 连真实网关：渲染出「会话/对话/记忆账本/上下文波形/用量」等面板，**「后端已连接: http://…」**，空数据处如实标「未探到 / 不猜数」；两次 Ctrl-C 干净退出（exit 0） | 渲染 + 连接均正常 |
+| TUI 非 TTY | `stdin`/`stdout` 非终端时**前置拒绝**并给可行动提示（exit 2），不再是裸 `os error 6` | 已修（§5.5b） |

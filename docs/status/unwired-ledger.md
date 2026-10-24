@@ -188,6 +188,13 @@ apeireth-tui 需要真实终端（stdin/stdout 必须是 TTY）。
 判定抽成纯函数 `should_refuse_non_tty(stdin, stdout)` + 单测
 （三条「任一非 TTY」+ 一条「都是 TTY 则正常」），`--help` 不受影响（先于检查返回）。
 
+**端到端补证（同一轮）**：用 `script -qec "stty rows 40 cols 120; apeireth-tui ..."` 分配
+伪终端真跑 TUI 连真实网关 —— 渲染出「会话/对话/记忆账本/上下文波形/用量」等面板、
+显示「**后端已连接: http://127.0.0.1:…**」、空数据处如实标「未探到 / 不猜数」，
+两次 Ctrl-C **干净退出（exit 0）**。
+（注：不设窗口尺寸时 PTY 为 0×0，TUI 只进备用屏不画字 —— 那是 PTY 特性，不是缺陷；
+    一开始差点误判为「TUI 不渲染」，设 `stty rows/cols` 后正常。）
+
 **顺带核对（无缺陷）**：README/INSTALL 里出现的 9 条命令全部被 CLI 识别；
 `egress impact --json` 的后果叠加生效（`unknown` → `confirmed`）；
 claims.yaml 的 `sources`/`tests` 路径 **0 条不存在**。
