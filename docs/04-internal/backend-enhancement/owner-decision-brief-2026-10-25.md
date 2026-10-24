@@ -199,8 +199,11 @@ GET  /v1/tools/list               → 200     ← 网关实际提供的工具面
 ```
 
 SDK 的「HTTP 真传输」指**客户端实现真实**（reqwest + Bearer + 有界超时 + audit），
-对端是**平台 API**（文档示例 `https://api.apeireth.io`）；本仓 `apeireth gateway`
-（本地运行时）**没有该路由** ⇒ **自托管用户直连本仓网关时，SDK 的 6 个工具方法无处可调**。
+但对端是 **R18/R20 规划中的平台 API**：6 个工具名（`web_search`/`calendar`/`code_exec`/
+`file_ops`/`git_ops`/`message`）与 `/v1/tools/{tool}/invoke` 路由，在本仓**只作为协议契约**
+存在于 `crates/foundation/protocol/src/ws_v1.rs` 的文档/测试里 —— 工具面没有这些工具、
+网关没有这条路由（实测 404）。⇒ **不是「少一条端点」，而是两边契约还没交汇**：
+自托管用户拿 SDK 连本仓网关，6 个工具方法全都无处可调。
 
 **选项**
 

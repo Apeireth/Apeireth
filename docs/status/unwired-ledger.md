@@ -147,9 +147,13 @@ POST /v1/tools/web_search/invoke  → 404     ← SDK 的 6 个工具方法走�
 GET  /v1/tools/list               → 200     ← 网关实际提供的工具面
 ```
 
-**结论**：SDK（`ApeirethClient`）的「HTTP 真传输」是**客户端实现真实**，
-其对端是**平台 API**（`/v1/tools/{tool}/invoke`）；本仓 `apeireth gateway`（本地运行时）
-**没有这条路由**。⇒ **自托管用户直连本仓网关时，SDK 的 6 个工具方法无处可调**。
+**结论（比「缺一条路由」更彻底）**：SDK（`ApeirethClient`）的「HTTP 真传输」是
+**客户端实现真实**，但其对端是 **R18/R20 规划中的平台 API**：6 个工具名
+（`web_search` / `calendar` / `code_exec` / `file_ops` / `git_ops` / `message`）
+与 `/v1/tools/{tool}/invoke` 路由，在本仓**只作为协议契约**出现在
+`crates/foundation/protocol/src/ws_v1.rs` 的文档/测试里 ——
+**工具面没有这些工具、网关没有这条路由**（实测 404）。⇒ **SDK 对本仓产品无可对接面**，
+不是「少一个端点」，而是「两边的契约还没交汇」。
 
 **为什么登记成决策而不是直接补**：给本地网关加「任意工具 HTTP 执行」是**产品面扩展** ——
 必须回答：走不走治理链/审批？是否受 `file_write`/`egress` 等总闸约束？
