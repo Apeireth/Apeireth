@@ -284,7 +284,7 @@ docs/04-internal/backend-enhancement/audit-gap-behavior-fixes-2026-10-16.md,L4,7
 docs/04-internal/backend-enhancement/audit-gap-caliber-hygiene-2026-10-16.md,L4,7,audit-gap-caliber-hygiene-2026-10-16,2026-10-16,在飞,4,保留,
 docs/04-internal/backend-enhancement/b6-2a-sealed-session-design-2026-10-22.md,L4,4,B6-2a 试点设计：`sessions.data` 列级封缄接入（决策页）,2026-10-22,在飞,3,保留,
 docs/04-internal/backend-enhancement/care-heartbeat-producer.md,L4,4,care-heartbeat-producer,2026-10-23,在飞,0,保留,
-docs/04-internal/backend-enhancement/debt-round-summary-2026-10-25.md,L4,4,清债轮验收摘要（2026-10-25）,2026-10-25,在飞,0,保留,
+docs/04-internal/backend-enhancement/debt-round-summary-2026-10-25.md,L4,4,清债轮验收摘要（2026-10-25）,2026-10-25,在飞,1,保留,
 docs/04-internal/backend-enhancement/egress-gate-wiring-design-2026-10-23.md,L4,4,模型出网闸（Egress Gate）接线设计 —— 让治理管住「嘴」,2026-10-23,在飞,8,保留,
 docs/04-internal/backend-enhancement/f-02-asset-outbound-execution-2026-10-18.md,L4,4,f-02-asset-outbound-execution-2026-10-18,2026-10-18,在飞,0,保留,
 docs/04-internal/backend-enhancement/git-write-tiering-delivery.md,L4,9,git-write-tiering-delivery,2026-10-24,在飞,5,保留,
