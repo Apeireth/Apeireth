@@ -33,10 +33,13 @@ pub mod fixture;
 mod fixture_generated;
 pub mod toolcard_fixture;
 mod toolcard_fixture_generated;
+pub mod toolgrid_fixture;
+mod toolgrid_fixture_generated;
 
 pub use approval_card::{format_clock_utc, ApprovalCard, ApprovalCardProps, ApprovalItem};
 pub use fixture::pilot_item;
 pub use toolcard_fixture::{tool_card_cases, ToolCardCase};
+pub use toolgrid_fixture::{toolgrid_cases, toolgrid_tools, ToolGridCase};
 
 use std::rc::Rc;
 

@@ -52,13 +52,54 @@
 `@` 规则原样）⇒ 规则写在 `scripts/extract-assets.mjs` 的 `scopeCss()` 里
 （确定性、可复核）。试点组件的样式**原文注入**（页面上没有同名 class 冲突）。
 
+## 工具卡面批二（工具栏 + 工具网格）
+
+本批对照的是生产 `ToolsView.svelte` 里的**工具卡面**（工具栏 + 工具网格）；
+那个文件**混了三个面**（工具卡面 / 治理卷宗面 / 状态条面）⇒ 本批只对照本面，
+参考侧**不隐藏**别的面 ⇒ 改为**按区块取盒**对照（`.tools-toolbar` / `.tools-grid`）。
+
+### 参考侧怎么喂固定数据（`runtime` 替身）
+
+生产的视图在 `onMount` 里拉数据并做**能力门控** ⇒ 参考侧要喂固定数据，就得把
+`../runtime` 换成替身：
+
+| 环节 | 做法 |
+|---|---|
+| 替身生成 | `scripts/gen-runtime-mock.mjs` 读生产 `runtime.ts` 的**导出面** ⇒ 自动产出 `mock/runtime-mock.js`（**不手抄** 91 条导出语句） |
+| 替身内容 | 用到的 **6** 个给**真实现**（喂固定 fixture）；其余 **61** 个运行期导出给**显式报错桩**（函数调用即抛错 / 常量读取即抛错）⇒ **不会静默给假数据** |
+| 拦截 | vite 插件 `scripts/runtime-mock-plugin.mjs` 在 `resolveId` 阶段按 **importer 路径**拦截（只拦生产 `src/lib/**` 指向 `runtime` 的导入）⇒ **生产文件零改动** |
+| 漂移复核 | `node scripts/gen-runtime-mock.mjs --check` |
+
+### 区块级 CSS 抽取
+
+生产视图里混了三个面 ⇒ 整份 `<style>` 抽进来会把**别的面**的样式带走 ⇒
+`scripts/extract-toolgrid.mjs` 按**选择器白名单**只取本面的 **21** 条规则
+（工具栏 8 条 + 容器 1 条 + 网格与卡片 12 条），并**列出未取走的 55 条**
+⇒ 别的面的样式不会悄悄跟进来。
+
+| 资产 | 来源（**只读**） | 去向 |
+|---|---|---|
+| 网格 scoped CSS | 生产视图 `<style>` 块**本面规则** | `public/toolgrid/tool-grid.css` |
+| 状态徽标 scoped CSS | 生产 `StatusBadge.svelte` 的 `<style>` 块 | `public/toolgrid/status-badge.css` |
+| 本面图标 | 上游图标包（`faces/toolgrid.json` 清单） | `crates-ui/apeireth-ui-kit/src/icons_tool_grid.rs`（生成物） |
+| 固定数据 | `fixtures/toolgrid-cases.json` | `crates-ui/apeireth-ui-demo/src/toolgrid_fixture_generated.rs`（生成物） |
+
+### 对照项（`tools/compare_toolgrid.py`）
+
+| # | 对照项 | 判据 |
+|---|---|---|
+| T1 | **静态像素对照**（逐用例 × 逐区块） | 差异像素 / 总像素 **≤ 1%**（任一通道绝对差 > 2/255 即记「不同」） |
+| T2 | **DOM 全等**（逐区块）+ **状态快照** | 归一化后**完全相等**（文本节点逐字）；状态快照**逐字段相等** |
+| T3 | **逐帧对照**（搜索词变化期间） | 每帧差异占比 **≤ 1%**；且**不许空跑**（两侧首末帧必须不同 ⇒ 变化真被采到） |
+
 ## 一键复跑
 
 ```bash
 bash build.sh
 ```
 
-五步：抽取资产 ⇒ 构建 wasm ⇒ wasm-bindgen ⇒ vite build ⇒ 跑对照（试点 + 工具卡面）。
+五步：抽取资产 ⇒ 构建 wasm ⇒ wasm-bindgen ⇒ vite build ⇒ 跑对照（试点 + 工具卡面 +
+工具卡面批二）。
 
 依赖：cargo（wasm32 target）、`wasm-bindgen-cli 0.2.129`、node + vite、
 python3（`websocket-client` + `Pillow`）、系统 Chromium。

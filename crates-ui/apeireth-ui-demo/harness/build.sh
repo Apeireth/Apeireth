@@ -27,6 +27,10 @@ WASM_BINDGEN="$(command -v wasm-bindgen || echo "${WASM_BINDGEN}")"
 
 echo "── 1/5 抽取单一真源资产 ──"
 node "${HERE}/scripts/extract-assets.mjs"
+# 工具卡面批二（工具栏 + 工具网格）：`runtime` 替身 + 本面资产（区块级 CSS + 图标 + 固定数据）。
+node "${HERE}/scripts/gen-runtime-mock.mjs"
+node "${HERE}/scripts/extract-assets.mjs" --manifest "${HERE}/faces/toolgrid.json"
+node "${HERE}/scripts/extract-toolgrid.mjs"
 
 echo "── 2/5 构建 wasm 产物 ──"
 (cd "${CRATES_UI}" && cargo build -p apeireth-ui-demo --bin apeireth-ui-demo --target wasm32-unknown-unknown --release --locked)
@@ -50,3 +54,5 @@ echo "── 5/5 对照（像素 + 逐帧） ──"
 python3 "${HERE}/tools/compare.py"
 # 工具卡面对照（两张卡 + JSON 差分）。
 python3 "${HERE}/tools/compare_toolcard.py"
+# 工具卡面批二对照（工具栏 + 工具网格）。
+python3 "${HERE}/tools/compare_toolgrid.py"

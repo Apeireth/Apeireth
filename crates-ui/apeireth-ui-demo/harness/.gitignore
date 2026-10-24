@@ -6,6 +6,8 @@ public/pilot-card.css
 public/tool-card.css
 public/lifecycle-card.css
 public/provenance.json
+# 工具卡面批二的抽取产物（区块级 CSS + 溯源）⇒ 同样是生成物
+public/toolgrid/
 public/engine/
 out/
 

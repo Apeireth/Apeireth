@@ -96,6 +96,10 @@ fn main() {
     print!("{}", run_demo());
 }
 
+/// 工具卡面批二（工具栏 + 工具网格）的 wasm 装配（**native 编译不参与**）。
+#[cfg(target_arch = "wasm32")]
+pub mod toolgrid_app;
+
 #[cfg(target_arch = "wasm32")]
 fn main() {
     wasm_app::start();
@@ -329,6 +333,10 @@ pub mod wasm_app {
             let _ = mount_toolcards(&container);
             return;
         }
+        if current_mode().as_deref() == Some(TOOLGRID_MODE) {
+            let _ = crate::toolgrid_app::wasm::mount(&container);
+            return;
+        }
         let _ = mount_into(&container);
     }
 
@@ -337,6 +345,9 @@ pub mod wasm_app {
 
     /// 工具卡面形态的取值。
     const TOOLCARD_MODE: &str = "toolcard";
+
+    /// 工具卡面批二形态（工具栏 + 工具网格）的取值。
+    const TOOLGRID_MODE: &str = "toolgrid";
 
     /// 读当前应用形态（`None` ⇒ 默认形态）。
     fn current_mode() -> Option<String> {

@@ -32,9 +32,9 @@
     {
       "phase_ms": 150,
       "size_mismatch": false,
-      "different": 4,
+      "different": 0,
       "total": 176160,
-      "ratio": 2.270663033605813e-05
+      "ratio": 0.0
     },
     {
       "phase_ms": 300,
@@ -46,9 +46,9 @@
     {
       "phase_ms": 450,
       "size_mismatch": false,
-      "different": 8,
+      "different": 0,
       "total": 176160,
-      "ratio": 4.541326067211626e-05
+      "ratio": 0.0
     },
     {
       "phase_ms": 600,
@@ -64,7 +64,7 @@
     "window_ms": 1200,
     "target_frame_count": 20,
     "align_tolerance_ms": 25.0,
-    "reference_mean_interval_ms": 54.098,
+    "reference_mean_interval_ms": 55.215,
     "frames": [
       {
         "index": 0,
@@ -85,9 +85,9 @@
       },
       {
         "index": 1,
-        "reference_relative_ms": 60.398,
-        "engine_relative_ms": 40.462,
-        "phase_delta_ms": -19.937,
+        "reference_relative_ms": 60.479,
+        "engine_relative_ms": 40.486,
+        "phase_delta_ms": -19.994,
         "unpaired": false,
         "size_mismatch": false,
         "different": 3749,
@@ -102,9 +102,9 @@
       },
       {
         "index": 2,
-        "reference_relative_ms": 120.75,
-        "engine_relative_ms": 80.859,
-        "phase_delta_ms": -39.891,
+        "reference_relative_ms": 120.966,
+        "engine_relative_ms": 80.941,
+        "phase_delta_ms": -40.026,
         "unpaired": false,
         "size_mismatch": false,
         "different": 3749,
@@ -119,9 +119,9 @@
       },
       {
         "index": 3,
-        "reference_relative_ms": 181.193,
-        "engine_relative_ms": 141.498,
-        "phase_delta_ms": -39.695,
+        "reference_relative_ms": 181.469,
+        "engine_relative_ms": 141.516,
+        "phase_delta_ms": -39.953,
         "unpaired": false,
         "size_mismatch": false,
         "different": 3747,
@@ -136,14 +136,14 @@
       },
       {
         "index": 4,
-        "reference_relative_ms": 261.639,
-        "engine_relative_ms": 182.037,
-        "phase_delta_ms": -79.602,
+        "reference_relative_ms": 242.004,
+        "engine_relative_ms": 181.929,
+        "phase_delta_ms": -60.076,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3739,
+        "different": 3747,
         "total": 1296000,
-        "ratio": 0.002885030864197531,
+        "ratio": 0.0028912037037037036,
         "bbox": [
           307,
           24,
@@ -153,9 +153,9 @@
       },
       {
         "index": 5,
-        "reference_relative_ms": 322.032,
-        "engine_relative_ms": 222.633,
-        "phase_delta_ms": -99.399,
+        "reference_relative_ms": 302.503,
+        "engine_relative_ms": 242.468,
+        "phase_delta_ms": -60.035,
         "unpaired": false,
         "size_mismatch": false,
         "different": 3713,
@@ -170,14 +170,14 @@
       },
       {
         "index": 6,
-        "reference_relative_ms": 382.406,
-        "engine_relative_ms": 262.951,
-        "phase_delta_ms": -119.455,
+        "reference_relative_ms": 362.993,
+        "engine_relative_ms": 282.894,
+        "phase_delta_ms": -80.099,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3570,
+        "different": 3586,
         "total": 1296000,
-        "ratio": 0.0027546296296296294,
+        "ratio": 0.0027669753086419753,
         "bbox": [
           307,
           24,
@@ -187,14 +187,14 @@
       },
       {
         "index": 7,
-        "reference_relative_ms": 442.802,
-        "engine_relative_ms": 323.474,
-        "phase_delta_ms": -119.328,
+        "reference_relative_ms": 423.511,
+        "engine_relative_ms": 343.436,
+        "phase_delta_ms": -80.075,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3493,
+        "different": 3521,
         "total": 1296000,
-        "ratio": 0.002695216049382716,
+        "ratio": 0.002716820987654321,
         "bbox": [
           307,
           24,
@@ -204,9 +204,9 @@
       },
       {
         "index": 8,
-        "reference_relative_ms": 503.192,
-        "engine_relative_ms": 343.774,
-        "phase_delta_ms": -159.418,
+        "reference_relative_ms": 484.041,
+        "engine_relative_ms": 383.988,
+        "phase_delta_ms": -100.052,
         "unpaired": false,
         "size_mismatch": false,
         "different": 3148,
@@ -221,9 +221,9 @@
       },
       {
         "index": 9,
-        "reference_relative_ms": 543.498,
-        "engine_relative_ms": 404.269,
-        "phase_delta_ms": -139.229,
+        "reference_relative_ms": 544.535,
+        "engine_relative_ms": 444.609,
+        "phase_delta_ms": -99.926,
         "unpaired": false,
         "size_mismatch": false,
         "different": 1,
@@ -238,9 +238,9 @@
       },
       {
         "index": 10,
-        "reference_relative_ms": 603.891,
-        "engine_relative_ms": 444.673,
-        "phase_delta_ms": -159.218,
+        "reference_relative_ms": 605.023,
+        "engine_relative_ms": 485.012,
+        "phase_delta_ms": -120.011,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -250,9 +250,9 @@
       },
       {
         "index": 11,
-        "reference_relative_ms": 644.216,
-        "engine_relative_ms": 505.289,
-        "phase_delta_ms": -138.927,
+        "reference_relative_ms": 645.359,
+        "engine_relative_ms": 545.589,
+        "phase_delta_ms": -99.769,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -262,9 +262,9 @@
       },
       {
         "index": 12,
-        "reference_relative_ms": 684.72,
-        "engine_relative_ms": 545.757,
-        "phase_delta_ms": -138.963,
+        "reference_relative_ms": 705.856,
+        "engine_relative_ms": 586.093,
+        "phase_delta_ms": -119.763,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -274,9 +274,9 @@
       },
       {
         "index": 13,
-        "reference_relative_ms": 725.411,
-        "engine_relative_ms": 606.289,
-        "phase_delta_ms": -119.122,
+        "reference_relative_ms": 746.352,
+        "engine_relative_ms": 626.599,
+        "phase_delta_ms": -119.753,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -286,9 +286,9 @@
       },
       {
         "index": 14,
-        "reference_relative_ms": 765.725,
-        "engine_relative_ms": 646.848,
-        "phase_delta_ms": -118.877,
+        "reference_relative_ms": 806.869,
+        "engine_relative_ms": 687.093,
+        "phase_delta_ms": -119.775,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -298,9 +298,9 @@
       },
       {
         "index": 15,
-        "reference_relative_ms": 826.134,
-        "engine_relative_ms": 707.366,
-        "phase_delta_ms": -118.768,
+        "reference_relative_ms": 847.245,
+        "engine_relative_ms": 728.184,
+        "phase_delta_ms": -119.061,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -310,9 +310,9 @@
       },
       {
         "index": 16,
-        "reference_relative_ms": 866.519,
-        "engine_relative_ms": 747.769,
-        "phase_delta_ms": -118.75,
+        "reference_relative_ms": 907.712,
+        "engine_relative_ms": 788.651,
+        "phase_delta_ms": -119.062,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -322,9 +322,9 @@
       },
       {
         "index": 17,
-        "reference_relative_ms": 927.052,
-        "engine_relative_ms": 808.303,
-        "phase_delta_ms": -118.749,
+        "reference_relative_ms": 948.118,
+        "engine_relative_ms": 828.915,
+        "phase_delta_ms": -119.203,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -334,9 +334,9 @@
       },
       {
         "index": 18,
-        "reference_relative_ms": 967.432,
-        "engine_relative_ms": 848.713,
-        "phase_delta_ms": -118.719,
+        "reference_relative_ms": 1008.626,
+        "engine_relative_ms": 889.432,
+        "phase_delta_ms": -119.194,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -346,9 +346,9 @@
       },
       {
         "index": 19,
-        "reference_relative_ms": 1027.87,
-        "engine_relative_ms": 889.252,
-        "phase_delta_ms": -138.618,
+        "reference_relative_ms": 1049.078,
+        "engine_relative_ms": 909.653,
+        "phase_delta_ms": -139.425,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -372,14 +372,14 @@
       "timeline": [
         {
           "name": "animationstart",
-          "at": 637,
-          "target": "approval-card svelte-a7zma4",
+          "at": 655.7,
+          "target": "approval-card svelte-hxxcjz",
           "property": null
         },
         {
           "name": "animationend",
-          "at": 1219.7,
-          "target": "approval-card svelte-a7zma4",
+          "at": 1238.6,
+          "target": "approval-card svelte-hxxcjz",
           "property": null
         }
       ],
@@ -397,13 +397,13 @@
       "timeline": [
         {
           "name": "animationstart",
-          "at": 610.4,
+          "at": 653.7,
           "target": "approval-card",
           "property": null
         },
         {
           "name": "animationend",
-          "at": 1193.3,
+          "at": 1253.9,
           "target": "approval-card",
           "property": null
         }
@@ -416,8 +416,8 @@
     "started_delta": 0
   },
   "t6_unmount": {
-    "reference_dismiss_delay_ms": 1.5,
-    "engine_dismiss_delay_ms": 1,
+    "reference_dismiss_delay_ms": 0.8000000007450581,
+    "engine_dismiss_delay_ms": 0.8000000007450581,
     "reference_decision_after_dismiss": null,
     "engine_decision_after_dismiss": null
   },
