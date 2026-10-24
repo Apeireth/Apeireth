@@ -57,7 +57,7 @@
 //! | 能力行 | `<button role="switch" class="cap-row">` + `aria-checked` + `aria-label` + 条件 class `dim` / `pending` |
 //! | 静态 `disabled` | DOM 上是 **`disabled=""`**（**不是**属性缺失，**也不是** `disabled="true"`）⇒ 用 `.attr("disabled", "")` |
 //! | 开关的「开」 | `aria-checked="true"` / `"false"`（**文本**）⇒ 不是布尔属性 |
-//! | 原生控件 | `input[type=range]` **必须**是原生元素 ⇒ **不写** `value` 属性（生产用 **property**）⇒ 由宿主在渲染后回写 |
+//! | 原生控件 | `input[type=range]` **必须**是原生元素 ⇒ **不写** `value` 属性（生产用 **property**）⇒ 由组件用 `bind:value` / `prop("value", …)` **声明**，引擎写入 |
 //! | 徽标 | `StatusBadge` 是**外部组件** ⇒ 本面只产出它的**结构与 class**（`.status-badge green small`）⇒ 样式由外部组件的样式表提供 |
 //!
 //! ## 状态归属（**引擎不迁**的部分）
@@ -1123,6 +1123,12 @@ fn render_persona_card(
     let model_flag = FieldFlagProps::new(flag_of(flags, &format!("persona.model:{}", persona.id)));
     let text_flag = FieldFlagProps::new(flag_of(flags, &format!("persona.text:{}", persona.id)));
 
+    // ⚠️ **取值由组件声明**（`bind:value` ⇒ **property**，不是属性）：
+    // 生产 `bind:value={p.name}` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+    // ⇒ 组件自己带值 ⇒ 宿主不必再按选择器回写（写 attribute 对 `input.value` 无效）。
+    let name_value = persona.name.clone();
+    let model_value = persona.model.clone();
+    let text_value = persona.persona.clone();
     let name_key = format!("persona.name:{}", persona.id);
     let model_key = format!("persona.model:{}", persona.id);
     let text_key = format!("persona.text:{}", persona.id);
@@ -1203,21 +1209,21 @@ fn render_persona_card(
             div(class = "form-group") {
                 { name_label_node }
                 " "
-                input(id = name_id.clone(), type = "text", placeholder = name_placeholder, oninput = move |_| { (name_input)(&name_key); })
+                input(id = name_id.clone(), type = "text", placeholder = name_placeholder, bind:value = name_value, oninput = move |_| { (name_input)(&name_key); })
                 " "
             }
             " "
             div(class = "form-group") {
                 { model_label_node }
                 " "
-                input(id = model_id.clone(), type = "text", placeholder = model_placeholder, oninput = move |_| { (model_input)(&model_key); })
+                input(id = model_id.clone(), type = "text", placeholder = model_placeholder, bind:value = model_value, oninput = move |_| { (model_input)(&model_key); })
                 " "
             }
             " "
             div(class = "form-group") {
                 { text_label_node }
                 " "
-                textarea(id = text_id.clone(), rows = "5", placeholder = text_placeholder, oninput = move |_| { (text_input)(&text_key); })
+                textarea(id = text_id.clone(), rows = "5", placeholder = text_placeholder, bind:value = text_value, oninput = move |_| { (text_input)(&text_key); })
                 " "
             }
         }
@@ -1276,6 +1282,8 @@ fn render_impression(props: &CharacterPanelsProps) -> VNode {
     let clear_title = IMPRESSION_CLEAR_TITLE;
     let text_label = IMPRESSION_TEXT_LABEL;
     let text_placeholder = IMPRESSION_TEXT_PLACEHOLDER;
+    // 同上：取值由组件声明（`bind:value` ⇒ property）⇒ 宿主不再回写。
+    let impression_value = props.impression_draft.get();
     let hint_tail = IMPRESSION_HINT_TAIL;
     let impression_flag = FieldFlagProps::new(flag_of(&flags, "user.impression"));
 
@@ -1397,7 +1405,7 @@ fn render_impression(props: &CharacterPanelsProps) -> VNode {
                 div(class = "form-group") {
                     { impression_label_node }
                     " "
-                    textarea(id = "impression-text", rows = "8", maxlength = "2000", placeholder = text_placeholder, oninput = move |_| { (impression_input)("user.impression"); })
+                    textarea(id = "impression-text", rows = "8", maxlength = "2000", placeholder = text_placeholder, bind:value = impression_value, oninput = move |_| { (impression_input)("user.impression"); })
                     " "
                 }
             }
@@ -1871,6 +1879,12 @@ fn render_card_shell(head: VNode, rows: Vec<VNode>) -> VNode {
 /// 渲染一行旋钮（**原生 `input[type=range]`** ⇒ 值是 **property** ⇒ 不写属性）。
 fn render_knob_row(spec: &KnobSpec, table: &CapabilityTable, on_set_knob: &KnobIntent) -> VNode {
     let value = capability_number(table, spec.value_key);
+    // ⚠️ **取值由组件声明**（`prop("value", …)` ⇒ **property**，不写属性）：
+    // 生产 `value={capabilities.memoryFade}` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+    // ⇒ 组件自己带值 ⇒ 宿主不必再按 `aria-label` 回写。
+    // ⇒ 不回写时浏览器按**默认区间中点**渲染（M6 实测差 2,463 px = 0.396%）。
+    // 写**原始数值**（不是带 `×` 前缀的展示串）⇒ 浏览器按 `min`/`step` 净化后与生产同值。
+    let raw_value = crate::num::to_fixed(value, spec.digits);
     let shown = format!(
         "{}{}{}",
         spec.prefix,
@@ -1897,6 +1911,7 @@ fn render_knob_row(spec: &KnobSpec, table: &CapabilityTable, on_set_knob: &KnobI
             .attr("max", max)
             .attr("step", step)
             .attr("aria-label", aria_label)
+            .prop("value", raw_value)
             .handler(
                 EventKind::Input,
                 ElementHandler::new(move |_event: &mut DomEvent| {

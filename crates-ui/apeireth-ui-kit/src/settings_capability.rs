@@ -34,7 +34,7 @@
 //!
 //! | 事项 | 口径 |
 //! |---|---|
-//! | `select` / `option` | **原生元素**；`option` 的 `value` 是**静态属性**；`select` 的取值是 **property**（生产 `bind:value`）⇒ 引擎**不写** `value` 属性（宿主挂载后回写） |
+//! | `select` / `option` | **原生元素**；`option` 的 `value` 是**静态属性**；`select` 的取值是 **property**（生产 `bind:value`）⇒ 引擎**不写** `value` 属性，由组件用 `prop("value", …)` **声明**、引擎写入 |
 //! | `input[type=range]` / `[type=number]` | 取值是 **property** ⇒ 不写 `value` 属性；`number` 行**没有 `max`**（生产 `max={… ?? undefined}` ⇒ **属性不出现**，不是 `max=""`） |
 //! | `input[type=text]` | 取值是 **property**；`placeholder` 是静态属性（第二个文本旋钮**没有** placeholder） |
 //! | 静态 `disabled` | DOM 上是 **`disabled=""`**（不是属性缺失、也不是 `disabled="true"`） |
@@ -1025,8 +1025,13 @@ fn render_depth_row(props: &CapabilityPanelsProps) -> VNode {
             view! { option(value = value) { option_text } }
         })
         .collect();
+    // ⚠️ **取值由组件声明**（`prop("value", …)` ⇒ **property**，不写属性）：
+    // 生产是 `bind:value` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+    // ⇒ 组件自己带值 ⇒ 宿主不必再按选择器回写。
+    let depth_value = props.cognitive_depth.get();
     let mut select = VNode::element("select")
         .attr("id", DEPTH_SELECT_ID)
+        .prop("value", depth_value)
         .handler(
             EventKind::Change,
             ElementHandler::new(move |_event: &mut DomEvent| {
@@ -1057,8 +1062,12 @@ fn render_advisors_row(props: &CapabilityPanelsProps, table: &CapabilityTable) -
     let input_key = ADVISORS_VALUE_KEY;
     let submit = props.on_submit_group.clone();
     let submit_key = ADVISORS_VALUE_KEY;
+    // ⚠️ **取值由组件声明**（`prop("value", …)` ⇒ **property**，不写属性）：
+    // 生产是 `bind:value` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+    // ⇒ 组件自己带值 ⇒ 宿主不必再按选择器回写。
     let mut slider = VNode::element("input")
         .attr("type", "range")
+        .prop("value", crate::num::number_to_string(advisors))
         .attr("min", "1")
         .attr("max", "7")
         .attr("step", "1")
@@ -1100,8 +1109,13 @@ fn render_timeout_row(props: &CapabilityPanelsProps, flag: FieldFlagState) -> VN
     let focus_key = FLAG_COUNCIL_TIMEOUT;
     let keydown = props.on_submit_group.clone();
     let keydown_key = FLAG_COUNCIL_TIMEOUT;
+    // ⚠️ **取值由组件声明**（`prop("value", …)` ⇒ **property**，不写属性）：
+    // 生产是 `bind:value` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+    // ⇒ 组件自己带值 ⇒ 宿主不必再按选择器回写。
+    let timeout_value = capability_number(&props.capabilities.get(), TIMEOUT_VALUE_KEY);
     let mut number = VNode::element("input")
         .attr("type", "number")
+        .prop("value", crate::num::number_to_string(timeout_value))
         .attr("min", "1000")
         .attr("step", "5000")
         .attr("aria-label", TIMEOUT_ARIA_LABEL)
@@ -1200,8 +1214,13 @@ fn render_tools(props: &CapabilityPanelsProps) -> VNode {
         .collect();
     let preset_intent = props.on_select_preset.clone();
     let preset_key = PRESET_CONTROL_KEY;
+    // ⚠️ **取值由组件声明**（`prop("value", …)` ⇒ **property**，不写属性）：
+    // 生产是 `bind:value` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+    // ⇒ 组件自己带值 ⇒ 宿主不必再按选择器回写。
+    let preset_value = props.permission_preset.get();
     let mut preset_select = VNode::element("select")
         .attr("id", PRESET_SELECT_ID)
+        .prop("value", preset_value)
         .handler(
             EventKind::Change,
             ElementHandler::new(move |_event: &mut DomEvent| {
@@ -1307,8 +1326,12 @@ fn render_server_add_row(props: &CapabilityPanelsProps, busy: bool) -> VNode {
     let input_text = props.allowed_server_input.get();
     let field_input = props.on_field_input.clone();
     let field_key = SERVER_INPUT_KEY;
+    // ⚠️ **取值由组件声明**（`prop("value", …)` ⇒ **property**，不写属性）：
+    // 生产是 `bind:value` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+    // ⇒ 组件自己带值 ⇒ 宿主不必再按选择器回写。
     let mut input = VNode::element("input")
         .attr("id", SERVER_INPUT_ID)
+        .prop("value", props.allowed_server_input.get())
         .attr("type", "text")
         .attr("placeholder", SERVER_INPUT_PLACEHOLDER);
     if busy {

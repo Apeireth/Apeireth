@@ -901,7 +901,6 @@ pub mod wasm {
         renderer
             .mount(render_tree(&host))
             .map_err(|error| error.to_string())?;
-        sync_properties(&host, container)?;
 
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
@@ -912,7 +911,6 @@ pub mod wasm {
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
             drop(guard);
-            let _ = sync_properties(&effect_host, &effect_container);
             publish_state(&effect_host);
         });
 
@@ -1108,106 +1106,6 @@ pub mod wasm {
             slot.push(mount_probe);
             slot.push(get_state);
         });
-    }
-
-    /// 回写 DOM property（**输入框 / 文本域 / 滑杆的取值**）。
-    ///
-    /// ## 为什么必须回写
-    ///
-    /// 生产用 `bind:value` / `bind:checked` ⇒ 取值是 **property**（DOM 上
-    /// **没有** `value` 属性）⇒ 引擎侧若只写属性，画面上就是**空输入框** ⇒
-    /// 像素必然不一致。
-    ///
-    /// ## 为什么**只**在值不等时写
-    ///
-    /// 避免打断输入法组合态与光标位置（与向导面同口径）。
-    fn sync_properties(host: &CharacterHost, container: &Element) -> Result<(), String> {
-        let personas = host.personas.get();
-        for persona in personas {
-            set_value(
-                container,
-                &format!("#persona-name-{}", persona.id),
-                &persona.name,
-            )?;
-            set_value(
-                container,
-                &format!("#persona-model-{}", persona.id),
-                &persona.model,
-            )?;
-            set_value(
-                container,
-                &format!("#persona-text-{}", persona.id),
-                &persona.persona,
-            )?;
-        }
-        set_value(container, "#impression-text", &host.impression_draft.get())?;
-        sync_knob_values(host, container)?;
-        Ok(())
-    }
-
-    /// 把**旋钮（原生 `input[type=range]`）**的取值**回写**到 **property**。
-    ///
-    /// ## 为什么必须回写（否则画面与生产不一致）
-    ///
-    /// 生产用 `value={capabilities.memoryFade}` ⇒ Svelte 对 `<input>` 的 `value`
-    /// **编译成 property 赋值** ⇒ DOM 上**没有** `value` 属性（只有 property）
-    /// ⇒ 引擎侧也**不写属性**（属性对照要能区分「缺失」与「空串」）。
-    ///
-    /// ⚠️ **不回写的后果**：`ui-dom` 的渲染器**只有属性通道、没有 property 通道**
-    /// ⇒ 刚挂载的 `<input type=range>` **没有 value** ⇒ 浏览器按**默认区间中点**渲染
-    /// ⇒ 生产显示基线（如 `memoryFade = 1.0` ⇒ 拇指在 20% 处），
-    /// 引擎显示中点（如 `[0.25, 4]` 的中点 ≈ `2.125` ⇒ 拇指在 50% 处）
-    /// ⇒ **像素不一致**（实测 `disposition` 分区差 2,463 px = 0.396%）。
-    ///
-    /// ## 为什么按 `aria-label` 定位
-    ///
-    /// 生产的旋钮 `<input>` **没有 id**（只有 `aria-label`）
-    /// ⇒ 而 `aria-label` 是**逐字照抄**的生产文案 ⇒ 定位稳定且可复核。
-    ///
-    /// ## 写什么值
-    ///
-    /// **与组件显示的同一个数**（`ui_kit::settings_character::capability_number`）
-    /// ⇒ 浏览器会按 `min` / `step` 做**取值净化**（对齐到步进）
-    /// ⇒ 写 `"1.0"` 与写 `"1"` 净化后**同值** ⇒ 与生产一致。
-    fn sync_knob_values(host: &CharacterHost, container: &Element) -> Result<(), String> {
-        let table = host.capabilities.get();
-        let specs: [&super::KnobSpec; 5] = [
-            &super::MORPHOLOGY_TEMPERATURE_KNOB,
-            &super::DISPOSITION_KNOBS[0],
-            &super::DISPOSITION_KNOBS[1],
-            &super::DISPOSITION_KNOBS[2],
-            &super::DISPOSITION_KNOBS[3],
-        ];
-        for spec in specs {
-            let value =
-                apeireth_ui_kit::settings_character::capability_number(&table, spec.value_key);
-            set_value(
-                container,
-                &format!("[aria-label=\"{}\"]", spec.label),
-                &format!("{value}"),
-            )?;
-        }
-        Ok(())
-    }
-
-    /// 写一个字符串 property。
-    fn set_value(container: &Element, selector: &str, value: &str) -> Result<(), String> {
-        let Some(element) = query(container, selector) else {
-            return Ok(());
-        };
-        let current = Reflect::get(element.as_ref(), &JsValue::from_str("value"))
-            .map(|value| value.as_string().unwrap_or_default())
-            .unwrap_or_default();
-        if current == value {
-            return Ok(());
-        }
-        Reflect::set(
-            element.as_ref(),
-            &JsValue::from_str("value"),
-            &JsValue::from_str(value),
-        )
-        .map(|_| ())
-        .map_err(|error| format!("写 {selector} 的 value 失败：{error:?}"))
     }
 
     /// 按选择器取一个元素。

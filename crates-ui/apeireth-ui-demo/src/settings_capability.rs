@@ -953,7 +953,6 @@ pub mod wasm {
         renderer
             .mount(render_tree(&host))
             .map_err(|error| error.to_string())?;
-        sync_properties(&host, container)?;
 
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
@@ -964,7 +963,6 @@ pub mod wasm {
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
             drop(guard);
-            let _ = sync_properties(&effect_host, &effect_container);
             publish_state(&effect_host);
         });
 
@@ -1297,70 +1295,6 @@ pub mod wasm {
     /// 没有取值 ⇒ 浏览器按**第一个 option** 渲染 ⇒ 与生产不一致；`<input>` 同理
     /// （空框）。M6 已实测过这条（滑杆差 2,463 px）。
     ///
-    /// ## 为什么按 `aria-label` / `id` 定位
-    ///
-    /// 生产的控件要么有 `id`（`cognitive-depth` / `permission-preset` /
-    /// `allowed-server-input`），要么只有 `aria-label`（三个滑杆 / 数值 / 文本旋钮）
-    /// ⇒ 两者都是**逐字照抄**的生产属性 ⇒ 定位稳定且可复核。
-    fn sync_properties(host: &CapabilityHost, container: &Element) -> Result<(), String> {
-        set_value(
-            container,
-            &format!("#{DEPTH_SELECT_ID}"),
-            &host.display_depth(),
-        )?;
-        set_value(
-            container,
-            &format!("#{PRESET_SELECT_ID}"),
-            &host.display_preset(),
-        )?;
-        set_value(
-            container,
-            &format!("#{SERVER_INPUT_ID}"),
-            &host.display_allowed_server_input(),
-        )?;
-        set_value(
-            container,
-            &format!("[aria-label=\"{ADVISORS_ARIA_LABEL}\"]"),
-            &host.display_council_advisors(),
-        )?;
-        set_value(
-            container,
-            &format!("[aria-label=\"{TIMEOUT_ARIA_LABEL}\"]"),
-            &host.display_council_timeout(),
-        )?;
-        set_value(
-            container,
-            &format!("[aria-label=\"{REASONING_FILTERS_ARIA_LABEL}\"]"),
-            &host.display_reasoning_filters(),
-        )?;
-        set_value(
-            container,
-            &format!("[aria-label=\"{REASONING_TAG_ARIA_LABEL}\"]"),
-            &host.display_reasoning_tag(),
-        )?;
-        Ok(())
-    }
-
-    /// 写一个字符串 property（**只在当前值≠目标值时写** ⇒ 不打断输入法）。
-    fn set_value(container: &Element, selector: &str, value: &str) -> Result<(), String> {
-        let Some(element) = query(container, selector) else {
-            return Ok(());
-        };
-        let current = Reflect::get(element.as_ref(), &JsValue::from_str("value"))
-            .map(|value| value.as_string().unwrap_or_default())
-            .unwrap_or_default();
-        if current == value {
-            return Ok(());
-        }
-        Reflect::set(
-            element.as_ref(),
-            &JsValue::from_str("value"),
-            &JsValue::from_str(value),
-        )
-        .map(|_| ())
-        .map_err(|error| format!("写 {selector} 的 value 失败：{error:?}"))
-    }
-
     /// 按选择器取一个元素。
     fn query(container: &Element, selector: &str) -> Option<Element> {
         let found = Reflect::get(container.as_ref(), &JsValue::from_str("querySelector"))
