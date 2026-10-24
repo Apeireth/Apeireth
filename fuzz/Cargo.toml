@@ -1,0 +1,54 @@
+# 核心输入面 fuzz（2026-10-24）
+#
+# 为什么单独一个 workspace：cargo-fuzz 要 nightly + sanitizer flags，
+# 主 workspace 的 lint/glob 不适用（与 crates/engine/image/codecs/fuzz 同一范式）。
+#
+# 面的选择依据：**吃外部输入的解析/判据函数**，不是"随便找个函数 fuzz"。
+[package]
+name = "apeireth-input-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+apeireth-protocol = { path = "../crates/foundation/protocol" }
+apeireth-gateway = { path = "../crates/adapters/gateway" }
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "protocol_decode"
+path = "fuzz_targets/protocol_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gateway_guards"
+path = "fuzz_targets/gateway_guards.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "resident_parse"
+path = "fuzz_targets/resident_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sentence_split"
+path = "fuzz_targets/sentence_split.rs"
+test = false
+doc = false
+bench = false

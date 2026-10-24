@@ -1,0 +1,108 @@
+name: Fuzz (输入面 + 图像编解码)
+
+# 为什么单列一条：仓里**早就有** 6 个图像解码 fuzz target
+# (`crates/engine/image/codecs/fuzz/`)，但**从未有任何 workflow 跑过它们** ——
+# 工具闲着等于没有。本条把「已有 target」和「新增核心输入面 target」一起纳入定时巡检。
+#
+# 成本分层（与仓内 nightly-full 同思路）：
+#   - `schedule` / `workflow_dispatch` → 每个 target 跑满 max_total_time（默认 120s）；
+#   - `pull_request` → 只做 smoke（每个 target 跑 3000 次输入），保证 harness 不退化成坏的。
+#
+# 失败处理：**不吞错误**。fuzz 报出的 crash 会落到 `fuzz/artifacts/` 并作为 artifact 上传，
+# 同时 job 失败。修完把最小化用例加进 `fuzz/corpus/<target>/` 作为回归。
+
+on:
+  schedule:
+    - cron: '0 19 * * *'   # 每日 19:00 UTC（本地 03:00）
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: '每个 target 跑多少秒'
+        required: false
+        default: '120'
+  pull_request:
+    paths:
+      - 'fuzz/**'
+      - 'crates/engine/image/codecs/fuzz/**'
+      - 'crates/foundation/protocol/src/**'
+      - 'crates/adapters/gateway/src/**'
+      - '.github/workflows/fuzz.yml'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── 核心输入面（新增，工作区根 fuzz/）
+  inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [protocol_decode, gateway_guards, resident_parse, sentence_split]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Choose run budget
+        id: budget
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "args=-runs=3000" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=-max_total_time=${{ github.event.inputs.seconds || 120 }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: fuzz ${{ matrix.target }}
+        working-directory: fuzz
+        run: cargo fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-inputs-${{ matrix.target }}
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ── 图像编解码（**已有但从未运行**的 6 个 target）
+  image-codecs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [decode_any, decode_png, decode_jpeg, decode_tiff, decode_exr, decode_gif]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/engine/image/codecs/fuzz
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Choose run budget
+        id: budget
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "args=-runs=3000" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=-max_total_time=${{ github.event.inputs.seconds || 120 }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: fuzz ${{ matrix.target }}
+        working-directory: crates/engine/image/codecs/fuzz
+        run: cargo fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-image-${{ matrix.target }}
+          path: crates/engine/image/codecs/fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
