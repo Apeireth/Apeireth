@@ -1,5 +1,4 @@
-<!-- 已移位（2026-10-23）：本文内容已已移至。 -->
-> ⚠️ 本文档已移位（原件见 `docs/04-internal/01-handoffs/FINAL-HANDOFF-V2.0.0-RC.1.md`）**[FINAL-HANDOFF-V2.0.0-RC.1](01-handoffs/FINAL-HANDOFF-V2.0.0-RC.1.md)**（2026-10-23）。
-> 本文件保留仅为维持既有链接可达；内容以 **FINAL-HANDOFF-V2.0.0-RC.1** 为准。
+<!-- 重定向桩（2026-10-23）：本文件已移位，请勿在此写正文。 -->
+> ⚠️ 本文档已移位至 **[Apeireth v2.0.0-rc.1 最终接手报告 (2026-08-28 收盘, 主代理 Mavis 写, Final-2.1 更新: A 块 OrganOrchestrator 完整化 + O-6 三阶审查 amend)](01-handoffs/FINAL-HANDOFF-V2.0.0-RC.1.md)**（2026-10-23）。
+> 本文件保留仅为维持既有链接可达；内容以新位置为准。
 
-<!-- 本文件由文档治理批自动重定向生成，请勿在此写正文。 -->

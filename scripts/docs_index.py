@@ -266,12 +266,22 @@ def load_index() -> dict[str, dict[str, str]]:
 def check() -> list[str]:
     problems: list[str] = []
 
-    # 1. 每目录有 README
-    for d in sorted((ROOT / DOCS).iterdir()):
-        if not d.is_dir() or d.name in SKIP_DIRS:
+    # 1. 每目录有 README（**递归**）
+    #
+    # 2026-10-24 修盲区：本规则原先只遍历 `(ROOT/DOCS).iterdir()` 一层，
+    # 于是新增的**二级子目录**（如 `docs/04-internal/04-logs/`）完全不在检查面内 ——
+    # 删掉它们的 README 门禁照过（对抗性复核的变异测试 C2 实证）。
+    # 改为递归：凡是 `docs/` 下**含 .md 的目录**都必须有 README.md。
+    for d in sorted(p for p in (ROOT / DOCS).rglob("*") if p.is_dir()):
+        rel = d.relative_to(ROOT)
+        if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        if "archive" in rel.parts:  # 历史卷宗不要求索引（L5 只读）
+            continue
+        if not any(d.glob("*.md")):
             continue
         if not (d / "README.md").exists():
-            problems.append(f"目录缺索引 README.md: {d.relative_to(ROOT).as_posix()}/")
+            problems.append(f"目录缺索引 README.md: {rel.as_posix()}/")
 
     # 2. INDEX 覆盖
     index = load_index()

@@ -1,5 +1,4 @@
-<!-- 已移位（2026-10-23）：本文内容已已移至。 -->
-> ⚠️ 本文档已移位（原件见 `docs/04-internal/00-governance/claims-evidence-matrix.md`）**[claims-evidence-matrix](00-governance/claims-evidence-matrix.md)**（2026-10-23）。
-> 本文件保留仅为维持既有链接可达；内容以 **claims-evidence-matrix** 为准。
+<!-- 重定向桩（2026-10-23）：本文件已移位，请勿在此写正文。 -->
+> ⚠️ 本文档已移位至 **[愿景 → 性质 → 证据对照矩阵（Claims–Evidence Matrix）](00-governance/claims-evidence-matrix.md)**（2026-10-23）。
+> 本文件保留仅为维持既有链接可达；内容以新位置为准。
 
-<!-- 本文件由文档治理批自动重定向生成，请勿在此写正文。 -->

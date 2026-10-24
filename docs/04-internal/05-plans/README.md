@@ -2,14 +2,13 @@
 
 > 计划、路线图、迁移方案、进度报告 —— **打算做什么**。读这里回答「下一步做什么」。
 
-**18 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
+**17 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
 
 | 篇 | 是什么 |
 |---|---|
 | [`9-organ-progress-2026-08-28.md`](9-organ-progress-2026-08-28.md) | 9 organ 真实现进度 + 哲学锚 9 项 LOCKED 核验 (2026-08-28, 主代理 Mavis 写) |
 | [`A-block-o6-true-account.md`](A-block-o6-true-account.md) | A 块 5 commit O-6 三阶审查 0 装诚实复盘 (主代理自检, 2026-08-28) |
 | [`b-block-frontend-readiness-2026-08-28.md`](b-block-frontend-readiness-2026-08-28.md) | B 块 frontend 对接 真实施 readiness (2026-08-28) |
-| [`backlog.md`](backlog.md) | backlog |
 | [`design-intent.md`](design-intent.md) | Apeireth 设计意图记录（Design Intent） |
 | [`design-task-lease-2026-08-21.md`](design-task-lease-2026-08-21.md) | Task DAG Lease Mechanism — 设计文档 (B 项) — 2026-08-21 |
 | [`design-three-way-conflict-2026-08-21.md`](design-three-way-conflict-2026-08-21.md) | 三路冲突检测机制 (Three-Way Conflict Detection) — 设计 |
