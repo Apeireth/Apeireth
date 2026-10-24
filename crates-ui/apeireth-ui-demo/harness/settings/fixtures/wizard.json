@@ -16,7 +16,7 @@
   "presets": [
     {"id": "deepseek", "name": "DeepSeek", "baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-v4-flash", "hint": "推荐 · 本项目实测路径"},
     {"id": "openai", "name": "OpenAI", "baseUrl": "https://api.openai.com/v1", "model": "gpt-4o", "hint": ""},
-    {"id": "minimax", "name": "minimax", "baseUrl": "https://api.minimax.chat/v1", "model": "minimax-M3", "hint": ""},
+    {"id": "minimax", "name": "MiniMax", "baseUrl": "https://api.minimax.chat/v1", "model": "MiniMax-M3", "hint": ""},
     {"id": "ollama", "name": "Ollama 本地", "baseUrl": "http://localhost:11434/v1", "model": "llama3.3", "hint": "无需 key"},
     {"id": "custom", "name": "自定义端点", "baseUrl": "", "model": "", "hint": "任意 OpenAI 兼容服务"}
   ],

@@ -346,6 +346,17 @@ async function main() {
         continue;
       }
       const owners = PANELS.filter((panel) => {
+        // ⚠️ **该面必须「拥有」这条规则的源文件**（并行面 M1 实测发现的缺陷）：
+        // 只按 class 名判归属，会让**别的组件**里的同名 class 规则漏进来
+        // （实测：`SettingsView.svelte` 的 `.preset-chip` 规则漏进向导分片
+        //  ⇒ 两条规则特异度相同 ⇒ 后写的**琥珀色**赢 ⇒ 引擎侧芯片变琥珀、
+        //  参考侧是**蓝色** ⇒ 像素差 4.89%）。
+        // ⇒ 判据加一条「源文件必须是本面的源文件」。
+        // ⚠️ 不影响「公共片段按使用面复制」的设计：`SettingsView` 系的几个面
+        // **共享同一个源文件** ⇒ 它们在 `source.panels` 里都在 ⇒ 照旧各得一份。
+        if (!source.panels.includes(panel)) {
+          return false;
+        }
         const set = perPanel.get(panel.id).classes;
         return classes.every((name) => set.has(name));
       });
