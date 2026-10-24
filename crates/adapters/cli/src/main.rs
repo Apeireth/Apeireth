@@ -8,10 +8,71 @@ use apeireth_cli::{
 };
 use apeireth_runtime::ApprovalDecision;
 
+/// 帮助文本（单一真源；`print_help` 与防漂移测试共用）。
+///
+/// 纪律：**分发里有的命令，帮助里必须出现**（`help_covers_every_dispatched_command`
+/// 机检）。此前这里是手写的一小撮命令，实测漏掉了 `dream` / `nightwatch` /
+/// `lessons` / `egress` / `bundle` / `bio` / `council` / `subagent` —— 用户从
+/// `--help` 根本发现不了这些能力（帮助低估产品，同样是 0 装问题）。
+const HELP_TEXT: &str = "\
+apeireth — 本地优先的个人 AI 运行时（单二进制，多入口）
+
+Usage:
+  [会话]
+    apeireth session
+    apeireth chat <PROMPT> [--model MODEL] [--session SESSION]
+    apeireth onboard [--tier casual|pro] [--show | --reset]
+  [审批]
+    apeireth approve --session SESSION --approval APPROVAL
+    apeireth reject  --session SESSION --approval APPROVAL [--reason REASON]
+    apeireth cancel  --session SESSION --approval APPROVAL [--reason REASON]
+  [服务]
+    apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]
+  [身份与访问]
+    apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]
+    apeireth user list [--token TOKEN]
+    apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]
+    apeireth user remove --user-id ID [--token TOKEN]
+  [记忆与认知]
+    apeireth dream
+    apeireth nightwatch [--session SESSION] [--limit N] [--watch] [--interval S [--cooldown S [--idle S]]]
+    apeireth lessons [--db DB] [--scope problem|file|interaction|tool] [--status candidate|verified|retracted] [--limit N]
+    apeireth lessons add --statement 一句话教训 --scope SCOPE --episode 经历ID [--episode ...] --evidence 证据摘要
+    apeireth council <主题...>
+    apeireth subagent <标题...> [--payload JSON]
+  [治理与安全]
+    apeireth trait report
+    apeireth trait lock <SLIDER>
+    apeireth trait unlock <SLIDER>
+    apeireth bio list
+    apeireth bio enable <mechanism>
+    apeireth bio disable <mechanism>
+    apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>
+    apeireth crypto recovery-export --keys <FILE> --out <FILE>
+    apeireth crypto unlock --keys <FILE> [--recovery <FILE>] [--out <KEYFILE>]
+    apeireth egress ledger [--path LEDGER_JSONL] [--limit N] [--json]
+    apeireth egress impact [--path IMPACT_JSONL] [--limit N] [--json]
+    apeireth egress outcome <ACTION_ID> <confirmed|failed>
+    apeireth egress notify <FACT_ID> <wording|partial|refuted>
+    apeireth exposure report [--json] [--out PATH] [--bundle BUNDLE]
+  [数据与迁移]
+    apeireth backup export <DIR>
+    apeireth backup restore <BUNDLE> [--to ROOT]
+    apeireth backup verify <BUNDLE>
+    apeireth bundle --out DIR [--now EPOCH_S]
+
+Options:
+  -h, --help       Show this help
+  -V, --version    Show the version
+
+Environment:
+  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)
+  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)
+  APEIRETH_DATA_DIR  数据根 (缺省 ~/.apeireth)
+";
+
 fn print_help() {
-    println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]\n  apeireth backup export <DIR>\n  apeireth backup restore <BUNDLE> [--to <ROOT>]\n  apeireth backup verify <BUNDLE>\n    apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>]\napeireth exposure report [--json] [--out <PATH>] [--bundle <BUNDLE>]\n  apeireth trait report\n  apeireth trait lock <SLIDER>\n  apeireth trait unlock <SLIDER>\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version\n\nEnvironment:\n  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)\n  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)"
-    );
+    println!("{HELP_TEXT}");
 }
 
 fn run_session() -> ExitCode {
@@ -1167,5 +1228,75 @@ mod tests {
         assert!(parse_approval("approve", &["--session".into(), "s1".into()]).is_err());
         assert!(parse_approval("approve", &["--approval".into(), "a1".into()]).is_err());
         assert!(parse_approval("approve", &["--unknown".into(), "val".into()]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod help_drift_tests {
+    use super::HELP_TEXT;
+
+    /// **防漂移**：`fn main` 分发块里出现的每个顶层命令，帮助文本必须覆盖。
+    ///
+    /// 这条守卫存在的理由：帮助此前是手写的，漏了 8 个命令（用户发现不了能力）。
+    /// 机检而不是人盯 —— 新增命令却忘了写帮助 = 测试红。
+    #[test]
+    fn help_covers_every_dispatched_command() {
+        let source = include_str!("main.rs");
+        let start = source.find("fn main() -> ExitCode").expect("main 入口");
+        let rest = &source[start..];
+        // main 函数体结束于下一个行首 `fn ` 或文件尾
+        let end = rest
+            .find("\nfn ")
+            .map(|offset| start + offset)
+            .unwrap_or(source.len());
+        let body = &source[start..end];
+
+        let mut commands: Vec<String> = Vec::new();
+        for line in body.lines() {
+            let trimmed = line.trim_start();
+            let indent = line.len() - trimmed.len();
+            // 只认「有缩进 + 一个或多个字符串字面量 + =>」的 match 臂
+            if indent == 0 {
+                continue;
+            }
+            if !trimmed.contains("=>") {
+                continue;
+            }
+            let head = trimmed.split("=>").next().unwrap_or("");
+            let mut in_arm = true;
+            let mut found_any = false;
+            for token in head.split('"').skip(1).step_by(2) {
+                // 形如 "a" | "b" 的臂；带参数的臂（含 `if`）不计入命令名
+                if token.is_empty() || !token.chars().all(|c| c.is_ascii_lowercase() || c == '-') {
+                    in_arm = false;
+                    break;
+                }
+                found_any = true;
+                commands.push(token.to_string());
+            }
+            if !found_any {
+                in_arm = false;
+            }
+            let _ = in_arm;
+        }
+        commands.sort();
+        commands.dedup();
+        assert!(
+            commands.len() >= 15,
+            "命令提取疑似失效（只有 {} 个）: {commands:?}",
+            commands.len()
+        );
+
+        let mut missing: Vec<&String> = Vec::new();
+        for command in &commands {
+            // `serve` 是 gateway 的子命令，出现在 gateway 行里即算覆盖
+            if !HELP_TEXT.contains(command) {
+                missing.push(command);
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "帮助文本漏了分发里的命令 {missing:?} —— 加命令时别忘了写帮助（或去掉命令）"
+        );
     }
 }
