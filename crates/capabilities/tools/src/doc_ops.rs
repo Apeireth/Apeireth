@@ -4863,9 +4863,9 @@ mod tests {
 
     /// 每测试独立临时工作区。
     fn workspace(tag: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("apeireth-doc-ops-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let p = std::env::temp_dir().join(format!("apeireth-doc-ops-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        let dir = p.join("ws");
         std::fs::create_dir_all(&dir).expect("创建测试工作区");
         dir
     }
@@ -5260,23 +5260,7 @@ mod tests {
     #[test]
     fn sensitive_and_out_of_workspace_paths_are_refused() {
         let bytes = fixture_pdf(&[&["alpha"]]);
-        // 本测试需要「工作区**外**」的文件与「相对穿越 ../outside.pdf」，
-        // 因此 `outside.pdf` 必须**恰好落在 root 的父目录**。
-        //
-        // `workspace()` 把 root 直接建在 **共享 temp_dir 根**下 → 父目录就是共享的 /tmp，
-        // 固定名 `outside.pdf` 会与**上一轮遗留物**撞车（实测：本机 /tmp/outside.pdf
-        // 由前一次运行留下、属主与权限不同 → 写入 PermissionDenied，测试必红）。
-        //
-        // 修法：给本测试一个**独有**的父目录，root 与 outside.pdf 都落其中。
-        // 这比原来更严谨：不再依赖「共享 temp 目录恰好是干净的」这一外部状态。
-        let parent = std::env::temp_dir().join(format!(
-            "apeireth-doc-ops-boundary-outside-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&parent);
-        std::fs::create_dir_all(&parent).expect("创建测试外层目录");
-        let root = parent.join("workspace");
-        std::fs::create_dir_all(&root).expect("创建测试工作区");
+        let root = workspace("boundary");
         std::fs::write(root.join("id_rsa.pdf"), &bytes).unwrap();
         std::fs::write(root.parent().unwrap().join("outside.pdf"), &bytes).unwrap();
         let config = DocOpsConfig::new(&root);
