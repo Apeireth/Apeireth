@@ -138,7 +138,7 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
-### 5.4r `continuation` 的安全子集已接线：回合级中断检测（2026-10-25）
+### 5.4r `continuation` 安全子集接线（PRODUCTION WIRED：回合级中断检测，2026-10-25）
 
 **做了什么**（`cli::continuation_guard` + `run_chat` 接线）：
 
