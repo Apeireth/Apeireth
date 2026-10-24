@@ -23,6 +23,7 @@ apeireth-protocol = { path = "../crates/foundation/protocol" }
 apeireth-gateway = { path = "../crates/adapters/gateway" }
 apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
 apeireth-plugin = { path = "../crates/foundation/plugin" }
+apeireth-governance = { path = "../crates/foundation/governance" }
 
 [profile.release]
 debug = 1
@@ -100,6 +101,13 @@ bench = false
 [[bin]]
 name = "device_actions"
 path = "fuzz_targets/device_actions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "untrusted_envelope"
+path = "fuzz_targets/untrusted_envelope.rs"
 test = false
 doc = false
 bench = false
