@@ -67,6 +67,41 @@ pub struct MemoryCoordinator {
     audit_events: Option<AuditEventSink>,
 }
 
+/// 合并两批检索候选：按 `id` 并集去重，同 id 保留**更高分**那份。
+///
+/// 用于查询扩展的召回增强：并集只会**增加**候选，绝不压低任何已有候选的分数
+/// （这正是它不能写成「用扩展查询替换原查询」的原因）。
+///
+/// 排序口径与 [`HybridRetrievalPipeline::retrieve_with_status`] 一致：
+/// 分数降序、同分按 id 升序 —— 确定性输出，便于对账与测试。
+fn merge_candidates_by_id(
+    primary: Vec<MemoryCandidate>,
+    extra: Vec<MemoryCandidate>,
+) -> Vec<MemoryCandidate> {
+    let mut by_id: std::collections::HashMap<String, MemoryCandidate> =
+        std::collections::HashMap::with_capacity(primary.len() + extra.len());
+    for candidate in primary.into_iter().chain(extra) {
+        match by_id.get_mut(&candidate.id) {
+            Some(existing) if candidate.score > existing.score => {
+                *existing = candidate;
+            }
+            Some(_) => {}
+            None => {
+                by_id.insert(candidate.id.clone(), candidate);
+            }
+        }
+    }
+    let mut merged: Vec<MemoryCandidate> = by_id.into_values().collect();
+    merged.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    merged
+}
+
 impl MemoryCoordinator {
     /// Create a new memory coordinator with core backend and governance store.
     pub fn new(
@@ -670,13 +705,51 @@ impl MemoryCoordinator {
         let pipeline = HybridRetrievalPipeline::new(crate::retrieval_tuning::effective_ranking_or(
             self.ranking,
         ));
-        let (ranked_candidates, mut status) = pipeline.retrieve_with_status(
+        let (primary_candidates, mut status) = pipeline.retrieve_with_status(
             &query.query_text,
             &query.visible_scopes,
             &sources,
             query.limit,
             query.max_chars,
         )?;
+
+        // 查询扩展（`query_expand`）：**召回增强**，不是替换查询。
+        //
+        // # 为什么不是「直接用 rewritten 查询」
+        //
+        // 检索打分是**各项之和**（BM25 逐词累加，无查询长度归一化）——
+        // 若把扩展后的查询整句送进去，「匹配到的同义/聚类词多」的文档会累出
+        // 更高分，反而压过精确匹配那一篇。加词本意是提召回，不该降精度。
+        //
+        // # 所以
+        //
+        // 只在**主查询召回不足 `limit`** 时补跑一遍扩展查询，再把两批候选按
+        // id **并集去重**（同 id 保留更高分）。于是：
+        // - 主查询够用 ⇒ 完全走原路径，**零行为变化**；
+        // - 主查询稀疏（用户短查询、生僻词）⇒ 扩展补召回，精确匹配那篇的分数
+        //   不会被任何东西压低（并集只增不减）。
+        let (ranked_candidates, mut status) = if primary_candidates.len() >= query.limit {
+            (primary_candidates, status)
+        } else {
+            let expanded = crate::query_expand::expand_query(&query.query_text);
+            if expanded.extra_terms.is_empty() {
+                (primary_candidates, status)
+            } else {
+                let (extra_candidates, extra_status) = pipeline.retrieve_with_status(
+                    &expanded.rewritten,
+                    &query.visible_scopes,
+                    &sources,
+                    query.limit,
+                    query.max_chars,
+                )?;
+                status.lexical_candidates += extra_status.lexical_candidates;
+                status.vector_candidates += extra_status.vector_candidates;
+                (
+                    merge_candidates_by_id(primary_candidates, extra_candidates),
+                    status,
+                )
+            }
+        };
 
         if self.embedding_provider.is_none() {
             status.used_lexical_fallback = true;
