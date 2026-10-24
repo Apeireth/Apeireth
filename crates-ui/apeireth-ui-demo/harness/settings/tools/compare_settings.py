@@ -55,6 +55,8 @@ python3 tools/compare_settings.py --all
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
+import importlib.util
 import json
 import pathlib
 import sys
@@ -214,30 +216,85 @@ def compare_toolcard_normalize_script(selector: str) -> str:
     return patched
 
 
+class PanelNotMigrated(RuntimeError):
+    """该面**尚未迁移** ⇒ 无对照对象（**不是失败，是还没做**）。
+
+    ⚠️ 与「对照失败」必须**严格区分**：前者是「没做」，后者是「做了但不对」。
+    ⇒ 混为一谈会让「0 差异」的报告**失真**。
+    """
+
+
+def find_driver(panel_id: str):
+    """找某个面的**面级对照驱动**（返回模块对象；找不到 ⇒ `None`）。
+
+    ## 为什么驱动是「每面一个」
+
+    8 个面**并行**施工 ⇒ 若驱动写在共享文件里 ⇒ 必然撞车。
+    ⇒ 约定：**每个面把驱动放在自己的独占目录**，本模块只做**发现 + 转发**。
+
+    ## 搜索顺序（先精确后模糊）
+
+    1. `drivers/<面 id>_compare.py`
+    2. `tools/compare_<面 id>.py`
+    3. `web/engine/<面 id>/compare*.py`
+    4. 递归扫 `**/compare_<面 id>*.py`（排除本文件自身）
+
+    ⇒ 驱动只需暴露 `collect_pair(panel, section, port) -> dict`，
+    且返回值里要有 `passed`（布尔）与判据明细。
+    """
+    candidates = [
+        SETTINGS / "drivers" / f"{panel_id}_compare.py",
+        SETTINGS / "tools" / f"compare_{panel_id}.py",
+    ]
+    engine_dir = SETTINGS / "web" / "engine" / panel_id
+    if engine_dir.is_dir():
+        candidates.extend(sorted(engine_dir.glob("compare*.py")))
+    for path in sorted(SETTINGS.rglob(f"compare_{panel_id}*.py")):
+        if path.resolve() != Path(__file__).resolve():
+            candidates.append(path)
+    for path in candidates:
+        if not path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location(f"settings_driver_{panel_id}", path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if hasattr(module, "collect_pair"):
+            return module
+    return None
+
+
 def collect_pair(panel: dict, section: str, port: int) -> dict:
     """跑一对（面 × 分区）的对照，产出对照记录。
 
-    ## 骨架说明
-
-    批一的 `compare.py` 已经封装了「起服务 → 开 Chromium → 连 CDP → 导航 →
-    等就绪 → 截图 → 像素差分」。本函数只做设置页特有的编排：
+    ## 编排（与骨架说明一致）
 
     1. 导航到参考侧 ⇒ 等 `window.__SETTINGS__.ready()`；
     2. `selectSection(section)` ⇒ 等一帧；
     3. 取裁剪框（按**该分区在参考侧的选择器** `sections[].ref`）；
     4. 导航到引擎侧 ⇒ 等就绪 ⇒ `selectSection(section)`；
     5. 取裁剪框（按**该分区在引擎侧的选择器** `sections[].engine`）⇒ **断言宽度相等**；
-    6. 截图两�� ⇒ 像素差分 + DOM 归一化差分。
+    6. 截图两侧 ⇒ 像素差分 + DOM 归一化差分。
 
     ⚠️ 「等一帧」的**具体实现**沿用批一的 `time.sleep(0.4)` 口径
     （批一已实测该口径可用）⇒ 迁移线若要更严，改这里。
+
+    ## 本函数的职责边界
+
+    本函数**只做发现与转发** ⇒ 具体编排由**各面的驱动**承担
+    （各面并行施工 ⇒ 编排也各不相同：裁剪方式、控件交互、分区数都不同）。
+    ⇒ 驱动不存在 ⇒ 显式抛 `PanelNotMigrated`（**「没做」**，不是「做错了」）。
     """
-    raise NotImplementedError(
-        f"[{panel['id']} / {section}] 对照流程尚未接线："
-        "需要在本目录的 build.sh 里先把 dist/ 构建出来，"
-        "并把批一 compare.py 的 serve/launch/open_page/navigate/screenshot/pixel_diff "
-        "按本文件的编排接上。**本批没有迁移 ⇒ 没有引擎侧产物 ⇒ 无对照对象。**"
-    )
+    panel_id = panel["id"]
+    driver = find_driver(panel_id)
+    if driver is None:
+        raise PanelNotMigrated(
+            f"[{panel_id} / {section}] 该面**尚未迁移** ⇒ 无对照对象。"
+            f"（约定：驱动放在 drivers/{panel_id}_compare.py 或"
+            f" tools/compare_{panel_id}.py 等面自己的目录里）"
+        )
+    return driver.collect_pair(panel, section, port)
 
 
 def main() -> int:
@@ -245,10 +302,17 @@ def main() -> int:
     parser.add_argument("--panel", help="面 id（见 web/shared/panels.js）")
     parser.add_argument("--section", help="生产分区 id")
     parser.add_argument("--all", action="store_true", help="跑全部「面 × 分区」")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8787,
+        help="驱动起服务用的端口（页面地址是**相对**的 ⇒ 端口由起服务方决定）",
+    )
     args = parser.parse_args()
 
     panels = load_panels()
     print(f"子面注册表：{len(panels)} 个面")
+    port = args.port
 
     if args.all:
         matrix = [
@@ -276,10 +340,50 @@ def main() -> int:
               f"（裁剪 参考侧={(row or {}).get('ref')} / 引擎侧={(row or {}).get('engine')}，"
               f"{'整视口' if crop == 'viewport' else '元素框'}）")
 
+    # ── 跑对照：按面分发到**各面的驱动**（共享文件只做发现与转发）──
+    passed = 0
+    failed = 0
+    not_migrated: dict[str, int] = {}
+    failures: list[str] = []
+    for panel, section in matrix:
+        try:
+            record = collect_pair(panel, section, port)
+        except PanelNotMigrated:
+            not_migrated[panel["id"]] = not_migrated.get(panel["id"], 0) + 1
+            print(f"  ⏭ {panel['id']} / {section}：该面**尚未迁移** ⇒ 无对照对象")
+            continue
+        except Exception as exc:  # noqa: BLE001 —— 对照失败要**显式报出来**
+            failed += 1
+            failures.append(f"{panel['id']} / {section}：{exc}")
+            print(f"  ❌ {panel['id']} / {section}：{exc}")
+            continue
+        ok = bool(record.get("passed"))
+        if ok:
+            passed += 1
+            print(f"  ✅ {panel['id']} / {section}")
+        else:
+            failed += 1
+            failures.append(f"{panel['id']} / {section}：判据未过")
+            print(f"  ❌ {panel['id']} / {section}：判据未过")
+            for key, value in sorted(record.items()):
+                if key == "passed":
+                    continue
+                print(f"       · {key}: {value}")
+
     print()
-    print("⚠️ 本批**没有迁移** ⇒ 没有引擎侧产物 ⇒ 对照无对象。")
-    print("   本脚本是骨架：跑起来会在第一组就显式报「未接线」。")
-    return 1
+    print(f"对照结果：通过 {passed} / 失败 {failed}")
+    if not_migrated:
+        detail = "、".join(f"{k}（{v} 组）" for k, v in sorted(not_migrated.items()))
+        print(f"⚠️ **尚未迁移**（无对照对象，**不是失败**）：{detail}")
+    if failures:
+        print("❌ 失败明细：")
+        for line in failures:
+            print(f"   · {line}")
+        return 1
+    if passed == 0:
+        print("⚠️ 本次**没有可对照的面**（全部尚未迁移）⇒ 退出码 1")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
