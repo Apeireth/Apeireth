@@ -238,3 +238,61 @@ async fn authorized_tools_still_pass_through_security_hooks() {
     ));
     assert_eq!(injection.hook, "input_security.prompt_injection");
 }
+
+/// **限流守门的端到端证明**（2026-10-25 接线，此前只有 hook 级单测）。
+///
+/// 生产治理链**默认挂载** `RateLimitGovernanceHook`（配额内完全放行、超限才拒）。
+/// 本测试从生产构造器 `build_production_governance(false)` 出发，对同一
+/// (能力, 会话) 连续派发，断言：
+///
+/// 1. 配额内（前 30 次）**全部放行** —— 证明默认挂载不改正常路径；
+/// 2. 超限后（第 31 次起）**拒绝** —— 证明这道闸真的在生产链上生效，
+///    而不是"挂了一个永远放行的摆设"。
+///
+/// 阈值口径见 `RateLimitConfig::default()`（30/分钟、300/小时）；本测试只跑
+/// 前 31 次，落在分钟窗内，不依赖小时窗。
+#[tokio::test]
+async fn production_chain_rate_limit_denies_after_the_minute_quota() {
+    use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
+    use apeireth_governance::{Action, GovernancePipeline, GovernanceRequest};
+
+    let governance: GovernancePipeline = build_production_governance(false);
+    let capability = CapabilityId::new("tool.repo").expect("valid capability");
+    let session = SessionId::new();
+    let arguments = serde_json::json!({});
+
+    let mut allowed = 0usize;
+    let mut denied_at: Option<usize> = None;
+    for round in 1..=31u32 {
+        let request = GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability: &capability,
+                arguments: &arguments,
+            },
+            session,
+            TraceId::new(),
+            round,
+        );
+        let decision = governance.evaluate_verbose(&request).await.decision;
+        if decision.is_allowed() {
+            assert!(
+                denied_at.is_none(),
+                "第 {round} 次又被放行 —— 超限后不该回到放行（限流不是概率性的）"
+            );
+            allowed += 1;
+        } else {
+            assert!(
+                matches!(decision, Decision::Deny { .. }),
+                "超限应是拒绝而不是要求审批: {decision}"
+            );
+            denied_at.get_or_insert(round as usize);
+        }
+    }
+
+    assert_eq!(allowed, 30, "分钟配额 30 次应全部放行: allowed={allowed}");
+    assert_eq!(
+        denied_at,
+        Some(31),
+        "第 31 次必须被限流拒绝（证明限流 hook 真在生产链上生效）"
+    );
+}
