@@ -33,6 +33,16 @@ product_crates = 29
 bench_crates = 1
 version = "2.0.0-rc.4"
 test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
+# 独立 workspace（ADR-0015，全栈纯 Rust UI 引擎）：不进主 members，主依赖图 0 影响。
+# 独立门禁见 .github/workflows/ui-engine-ci.yml；设计见 docs/design/ui-engine-architecture.md。
+# 注：TOML 内联表不可跨行，故用数组表语法。
+[[workspace.independent_workspaces]]
+id = "ui_engine"
+path = "crates-ui"
+adr = "docs/adr/0015-pure-rust-ui-engine.md"
+crates = 7
+ci = ".github/workflows/ui-engine-ci.yml"
+note = "自研响应式 + DOM 绑定引擎（Rust → wasm32 → Tauri WebView）；不进主 members / 不进主依赖图 / 主 arch_guard 不扫（故配独立 CI 门禁）"
 
 [locked]
 # 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
@@ -73,6 +83,15 @@ image_family = [
   "apeireth-image-raster", "apeireth-image-vector",
 ]
 note = "R4a-1 (Wave 2): 主门禁 --exclude 本表 11 包 + 独立 image CI; R4a-2: 独立 workspace 抽取（条件）"
+
+# 自研 UI 引擎家族（ADR-0015）。与 image_family 的区别：image_family 是**已交付的静态内核**
+# （129,828 行，已冻结），ui_engine 是**持续迭代中的活代码**（引擎永久自维护，owner 2026-10-24 接受）。
+# 故 ui_engine **从一开始就在独立 workspace**（crates-ui/），不进主 members，不进主依赖图。
+ui_engine = [
+  "apeireth-ui", "apeireth-ui-core", "apeireth-ui-dom", "apeireth-ui-macro",
+  "apeireth-ui-gpu", "apeireth-ui-kit", "apeireth-ui-demo",
+]
+note_ui_engine = "ADR-0015: 独立 workspace crates-ui/（7 crate）+ 独立 CI 门禁 ui-engine-ci.yml；主 arch_guard 不扫，独立门禁承担 check/clippy/fmt/test 四关"
 
 [deps]
 # 层方向允许表 (现状接受, 2026-10-20 实测)。新增层边必须先过 ADR 并改本表。
@@ -133,6 +152,14 @@ module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegist
 capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
 plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
 sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
+# UI 组件扩展点（ADR-0015）：自研 UI 引擎的组件注册面。
+# 与 plugin_trait 的关系：plugin 是**运行时能力**扩展（注册进 CapabilityRegistry / BehaviorRegistry）；
+# ui_component 是**前端呈现**扩展（注册进 UI 组件表）。两者不合并、不互为替代。
+# 命名约束（arch_guard 扩展点唯一性检查，2026-10-24 实测）：扩展点 trait 名须全仓唯一。
+#   本名不用 "Component" —— 该名已被图像家族两处占用（image/vector/src/raster.rs:54、
+#   image/algo/src/segment/gmm.rs:17），登记 "Component" 会被守卫判为结构变更违规（W10）。
+ui_component = "crates-ui/apeireth-ui-kit/src/registry.rs::ComponentRegistry"
+ui_component_trait = "crates-ui/apeireth-ui-core/src/component.rs::UiComponent"
 
 # 已登记技术债: R2 收口（2026-10-20）后清零。新增结构变更须先出 ADR 再登记。
 
