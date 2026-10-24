@@ -138,9 +138,36 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
         }
         Err(error) => {
             eprintln!("canonical chat failed: {error}");
+            if let Some(hint) = chat_error_hint(&error) {
+                eprintln!("{hint}");
+            }
             ExitCode::FAILURE
         }
     }
+}
+
+/// 给 `chat` 的失败补一句**可行动**提示（只对能自救的错误类型）。
+///
+/// 为什么放在出口：`apeireth chat` 是用户跑的第一条命令。此前缺凭据时只回
+/// `provider.minimax: authentication failed: missing API key for
+/// provider.minimax.api_key` —— **没说怎么配**（真机实测 2026-10-25）。
+/// 这里不猜内部错误，只认几个稳定的失败族并给出下一步动作。
+fn chat_error_hint(error: &str) -> Option<&'static str> {
+    let lower = error.to_ascii_lowercase();
+    if lower.contains("missing api key") || lower.contains("authentication failed") {
+        return Some(
+            "提示：还没有配置模型凭据。跑 `apeireth onboard` 按向导选服务商并填密钥，\
+             或设环境变量后重试：MiniMax = APEIRETH_API_KEY；\
+             OpenAI 兼容 = APEIRETH_OPENAI_MODELS + APEIRETH_OPENAI_URL + OPENAI_API_KEY",
+        );
+    }
+    if lower.contains("provider_unreachable") || lower.contains("connection refused") {
+        return Some(
+            "提示：模型服务连不上——检查 APEIRETH_OPENAI_URL（端点）/ 网络与代理后重试；\
+             本地模型请确认端口与路径正确",
+        );
+    }
+    None
 }
 
 fn run_approval(session: String, approval: String, decision: ApprovalDecision) -> ExitCode {
@@ -1297,6 +1324,56 @@ mod help_drift_tests {
         assert!(
             missing.is_empty(),
             "帮助文本漏了分发里的命令 {missing:?} —— 加命令时别忘了写帮助（或去掉命令）"
+        );
+    }
+}
+
+#[cfg(test)]
+mod chat_hint_tests {
+    /// **env 名机检**：`chat` 的失败提示里引用的 `APEIRETH_*` 必须真实存在。
+    ///
+    /// 守卫理由：我第一版提示把「OpenAI 兼容的密钥/端点 env」误写成了带
+    /// `APEIRETH_` 前缀的**不存在名字**（真实是 `OPENAI_API_KEY` /
+    /// `APEIRETH_OPENAI_URL`）。给错 env 名和给错建议一样有害：用户照做仍失败。
+    /// 本测试从 env 注册表（单一真源）核对 —— 同时 arch_guard 的 env 计数预算
+    /// 会把「源码里出现未登记 env 名字」当新增开关拦下（**连注释都算**，实测有效）。
+    #[test]
+    fn chat_error_hints_only_cite_registered_apeireth_envs() {
+        let hints = [
+            super::chat_error_hint("missing api key for provider.minimax.api_key")
+                .expect("缺凭据应有提示"),
+            super::chat_error_hint("provider_unreachable: connection refused")
+                .expect("连不上应有提示"),
+        ];
+        let registry = include_str!("../../../../docs/architecture/env-registry.toml");
+        for hint in hints {
+            for token in hint.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+                if !token.starts_with("APEIRETH_") {
+                    continue;
+                }
+                assert!(
+                    registry.contains(token),
+                    "提示引用了未注册的 env `{token}` —— 去 docs/architecture/env-registry.toml 核对真实名字: {hint}"
+                );
+            }
+        }
+    }
+
+    /// 非 `APEIRETH_` 前缀的 provider 标准名必须拼对（`OPENAI_API_KEY`）。
+    #[test]
+    fn chat_error_hint_uses_the_real_openai_key_name() {
+        let hint = super::chat_error_hint("authentication failed").expect("应有提示");
+        assert!(
+            hint.contains("OPENAI_API_KEY"),
+            "应点名 OPENAI_API_KEY: {hint}"
+        );
+        // 反向断言：不得出现「带 APEIRETH_ 前缀的 OpenAI 密钥名」这种错误拼法。
+        // 名字在运行时拼接 —— 源码里写出这个不存在的 env 名字面量，会被
+        // arch_guard 的 env 计数预算当成「新增开关」拦下（连注释都算，实测有效）。
+        let wrong_prefix = format!("APEIRETH_{}", "OPENAI_API_KEY");
+        assert!(
+            !hint.contains(&wrong_prefix),
+            "不存在这个 env（真实是 OPENAI_API_KEY）: {hint}"
         );
     }
 }

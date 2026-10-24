@@ -116,6 +116,35 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4n 主入口 `chat` 缺凭据时不告诉用户怎么配 —— 已修（2026-10-25）
+
+**缺陷**：用户跑的第一条命令 `apeireth chat "你好"`，在未配模型时只回：
+
+```
+canonical chat failed: provider.minimax: authentication failed: missing API key for provider.minimax.api_key
+```
+
+—— **没说怎么配**。对比 `council` / `subagent` 同一处境都有可行动提示，主入口反而最差。
+
+**修法**：在 CLI 出口给**可自救错误族**补一句下一步动作（不猜内部错误，只认
+`missing api key` / `authentication failed` 与连不上两族），提示里点名真实 env。
+
+**过程中的两个自我纠错（都值得记）**：
+
+1. 我第一版提示写了 `APEIRETH_OPENAI_API_KEY` / `APEIRETH_OPENAI_BASE_URL` ——
+   **两个 env 都不存在**（真实是 `OPENAI_API_KEY` / `APEIRETH_OPENAI_URL`）。
+   给错 env 名与给错建议同样有害（用户照做仍失败）。现已按实现核对改正。
+2. 改正后 `arch_guard` 仍报 3 条违规：**我在注释里写下了那两个不存在的 env 名**，
+   env 计数守卫把它当作「新增未登记开关」（162 > 160 预算）—— 连注释都算。
+   ⇒ 提示里不得出现伪造 env 名字面量，反向断言改用运行时拼接。
+
+**新增两条机检守卫**：
+
+- `chat_error_hints_only_cite_registered_apeireth_envs`：提示里每个
+  `APEIRETH_*` 名字必须在 `docs/architecture/env-registry.toml`（单一真源）里存在；
+- `chat_error_hint_uses_the_real_openai_key_name`：必须点名 `OPENAI_API_KEY`，
+  且不得出现带前缀的错误拼法。
+
 ### 5.4m `council` 缺 LLM 工厂时只回一行英文 —— 已修（2026-10-25）
 
 **缺陷**：`apeireth council <主题>` 在未配 LLM 时回 `no llm factory configured`
