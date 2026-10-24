@@ -176,3 +176,45 @@ jobs:
               sys.exit(1)
           print("✅ apeireth-ui-core 依赖面 0 web-sys/wasm-bindgen（可 native 单测）")
           PY
+
+  # =========================================================================
+  # 5. wasm 构建门禁 — 引擎真正运行的目标
+  # =========================================================================
+  wasm:
+    name: cargo build --target wasm32-unknown-unknown (crates-ui)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ⚠️ 必须显式加 wasm32 target：runner 的默认 toolchain 不含它，
+      # 而 dtolnay/rust-toolchain@stable 只装 default host target。
+      - name: Install Rust stable + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+
+      # 引擎的**真实运行目标**是 wasm32（Tauri WebView 里跑）。native 的四道门禁
+      # 只证明纯逻辑层正确 —— wasm 目标下的编译（web-sys 后端、wasm-bindgen 胶水
+      # 绑定、cfg(target_arch = "wasm32") 分支）**只在这里被验证**。
+      #
+      # 诚实边界: 本门禁只证明「wasm 目标编译通过」，**不证明画面正确**
+      # （浏览器 job 待建，见 ADR-0015 §2.6 与计划书 §5 R9）。
+      - name: cargo build --target wasm32-unknown-unknown
+        run: cargo build --workspace --target wasm32-unknown-unknown --release --locked
+
+      # 产物体积登记（不阻塞，只打印）：wasm 体积是发版口径的一部分，
+      # 超出预算时须回头看依赖面（与 ui-core 依赖面守门同一思路）。
+      - name: 产物体积（报告用）
+        run: |
+          echo "wasm 产物体积："
+          find target/wasm32-unknown-unknown/release -maxdepth 1 -name '*.wasm' \
+            -printf '  %f  %s bytes\n' 2>/dev/null || echo "  （本批无 .wasm 产物）"
