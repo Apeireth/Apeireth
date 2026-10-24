@@ -138,6 +138,22 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5d 主 CLI `--help` 不提同 workspace 的其它二进制 —— 已修（2026-10-25）
+
+**缺陷**：README 把 `apeireth-tui` 列为产品前端面（「faces / Adapters」），
+但 `apeireth --help` **一个字都不提** —— 用户从 CLI 帮助看不到终端驾驶舱的存在
+（发现性缺口；与第 6 轮「help 漏 8 个命令」同一类，只是跨二进制）。
+
+**修法**：`HELP_TEXT` 加一节「其它二进制」：
+
+```
+其它二进制（同一 workspace 的其它入口，不属 `apeireth` 子命令）:
+  apeireth-tui [--endpoint URL] [--token TOKEN]   终端驾驶舱（全屏 TUI 客户端）
+  apeireth-gateway 形态由 `apeireth gateway serve` 提供；SDK 见 crates/adapters/sdk
+```
+
+帮助防漂移守卫仍绿（它只校验「分发块里的命令都在帮助里」，新增条目不影响）。
+
 ### 5.5c SDK 与本地网关端点不对齐（2026-10-25 实测，登记为产品决策）
 
 **实测**（真机起 `apeireth gateway serve`）：

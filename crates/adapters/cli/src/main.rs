@@ -63,6 +63,10 @@ Usage:
     apeireth backup verify <BUNDLE>
     apeireth bundle --out DIR [--now EPOCH_S]
 
+其它二进制（同一 workspace 的其它入口，不属 `apeireth` 子命令）:
+  apeireth-tui [--endpoint URL] [--token TOKEN]   终端驾驶舱（全屏 TUI 客户端）
+  apeireth-gateway 形态由 `apeireth gateway serve` 提供；SDK 见 crates/adapters/sdk
+
 Options:
   -h, --help       Show this help
   -V, --version    Show the version
