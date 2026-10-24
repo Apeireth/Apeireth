@@ -285,7 +285,7 @@ coverage/
 **/coverage/
 
 # Frontend (companion-desktop)
-**/node_modules/
+**/node_modules
 frontend/companion-desktop/dist/
 # Tauri build artifacts (Round 8 hygiene: target/ + node_modules/ 应 ignore, 不污染 git)
 frontend/companion-desktop/target/
