@@ -657,8 +657,8 @@ DOM 决定论。⚠️ 唯一风险：`navGroups` 的构造依赖 `SETTINGS_NAV_
 
 | 事实 | 出处 |
 |---|---|
-| CSS 在 Rust 侧是 **0 行** ⇒ 生产 `<style>` 块**原文抽取**注入引擎页 | 批一已实现 |
-| 批一已实现「**按组件作用域化**」：前缀根 class，`:global(…)` 保持全局，`@` 规则原样 | 批一 `scripts/extract-assets.mjs` 的 `scopeCss()` |
+| CSS 在 Rust 侧是 **0 行** ⇒ 生产 `<style>` 块**原文抽取**注入引擎页 | 批一**已实现**（IMPLEMENTED） |
+| 批一**已实现**（IMPLEMENTED）「**按组件作用域化**」：前缀根 class，`:global(…)` 保持全局，`@` 规则原样 | 批一 `scripts/extract-assets.mjs` 的 `scopeCss()` |
 | 批一已证明**同名 class 会冲突**：`.tool-body` 的 `gap` 一个 8px、一个 10px ⇒ 2px 整卡位移 | 批一实测 |
 | 抽取器现版只支持**单组件单根 class**（`COMPONENTS` 表：`{slug, file, css, scope}`） | `harness/scripts/extract-assets.mjs:69-83` |
 
@@ -673,7 +673,7 @@ DOM 决定论。⚠️ 唯一风险：`navGroups` 的构造依赖 `SETTINGS_NAV_
    不冲突）。
 4. **框架片段只进 S1**：`.settings-view` / `.settings-layout` / `.settings-subnav` /
    `.settings-content` / `.subnav-*` / `.category-context*` / `.apply-status`。
-5. **`@` 规则原样**、**`:global(…)` 去括号保持全局**（批一 `scopeCss()` 已实现 ⇒
+5. **`@` 规则原样**、**`:global(…)` 去括号保持全局**（批一 `scopeCss()` **已实现**（IMPLEMENTED）⇒
    复用即可）。
 
 ### 7.3 每个子面的根 class（**作用域化前缀**）

@@ -234,7 +234,7 @@ upload, user, user-round, users, workflow, wrench, x-circle
 | `FileCheck2` | `file-check-2` | `file-check-2.svelte` | `lucide-file-check-2` |
 | `Trash2` | `trash-2` | `trash-2.svelte` | `lucide-trash-2` |
 
-⇒ **class 后缀取真实文件名**（批一已实现的跟随再导出逻辑）⇒ 上表右列就是
+⇒ **class 后缀取真实文件名**（批一**已实现**（IMPLEMENTED）的跟随再导出逻辑）⇒ 上表右列就是
 `icon_data.rs` 里 `ICON_*` 常量名与 `class` 字段的取值。
 
 ---
