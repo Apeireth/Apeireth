@@ -1,36 +1,52 @@
-# 清债轮验收摘要（2026-10-25 凌晨）
+# 清债轮验收摘要（2026-10-25）
 
 > 给 owner 的一页纸：**做了什么、还差什么、为什么差、需要谁拍板**。
-> 本轮全部在本地提交（网络不稳，按协作看板 §七「本地推进为主，不推不等待」）。
+>
+> **当前状态（最新）**：全部改动**已推送到 PR #94**（分支 `debt-round8`），
+> 本地验证全绿；**CI 停在平台侧**（见 §四）。
+> 需要你做的事只要两件：①处理 GitHub Actions 额度；②对 §五 的 6 项拍板。
 
 ---
 
-## 一、本轮交付（本地已提交，未推）
+## 一、本轮交付（全部已在 PR #94）
 
-分支 `debt-round8`（worktree `/tmp/apeireth-r3`）。
+### A 类缺口接线（9 条修完）
 
-### 已推部分（PR #94，`state=open`，6 项 required check 中 5 绿）
-
-| 设备 | 内容 |
+| 缺口 | 内容 |
 |---|---|
-| 限流守门 | `RateLimitGovernanceHook` 挂进生产治理链（授权之后、内容风险之前） |
-| partner 持久化 | `InMemoryPartnerStore` → `SqlitePartnerStore`，顺带修 `ensure_schema` 从不被调用 |
-| 代码地图 | `tool.repo_map` 工具面 + 生产注册；修掉两处平方级热点（152 文件 9.5s→0.26s、全仓 1319 文件 10.8s→2.1s） |
-| 查询扩展 | 接进检索主路径，做成**召回增强**而非替换查询 |
-| 被遗忘权 | 已在 #90 合入 main |
+| **被遗忘权**（`universal_forget`） | 删用户 ⇒ 连记忆一起删（一个事务清 5 账）。**生产入口此前不可达**（只有 pool 版，而生产用 `Mutex<Connection>`） |
+| **限流守门**（`rate_limit`） | 挂进生产治理链（授权之后、内容风险之前）。**默认挂载**：配额内完全放行、超限才拒 |
+| **partner 持久化** | `InMemoryPartnerStore`（重启即散）→ `SqlitePartnerStore`；**顺带修 `ensure_schema()` 从不被调用**（生产会直接报 `no such table`） |
+| **代码地图**（`repo_map`） | `tool.repo_map` 工具面 + 生产注册；**顺带修两处平方级热点**（152 文件 9.5s → 0.26s、全仓 1319 文件 10.8s → 2.1s） |
+| **查询扩展** | 接进检索主路径，做成**召回增强**而非替换查询（打分是各项之和，替换会让同义词多的文档压过精确匹配） |
+| **推理字段归一化** | 12 别名 → 前置 `<think>` 块接进 provider；**关键顺序「先归一化后判空」**，否则推理模型烧光预算会被误判成空壳响应 |
+| **便携包 CLI** | 从「README 自认没发货」到**真机跑通**：`./run_apeireth.sh` 起网关 → `/health` ok → 数据落包内 `./data/`。接线时修三处硬伤（启动脚本调不存在的命令、设无人读的变量、配置默认开**明文 P2P 桩**） |
+| **错误闭合词表** | `ClassifyError` 此前**零实现**；现覆盖 SDK 三族 + 跨语言 `ErrorFrame` |
+| **关系里程碑** | 新增 `SqliteMilestoneStore`（关系史跨重启）+ 幂等记录面 + 接进羁绊模块（初见 / 阶段跃迁） |
 
-### 本地未推（8 个 commit）
+### 自行发现并修掉的缺陷（不在原清单内，全部真机/集成证据）
 
-| 内容 | 价值 |
+| 缺陷 | 关键证据 |
 |---|---|
-| 推理字段归一化 | 12 别名 → 前置 `<think>` 块接进 provider；关键顺序「先归一化后判空」，否则推理模型烧光预算会被误判成空壳响应 |
-| `apeireth bundle` 便携包 | 从「README 自认没发货」到**真机跑通**：`./run_apeireth.sh` 起网关 → `/health` ok → 数据落在包内 `./data/`。接线时修三处硬伤（启动脚本调不存在的命令、设无人读的变量、配置默认开**明文 P2P 桩**） |
-| 错误闭合词表 | `ClassifyError` 此前**零实现**；现覆盖 SDK 三族 + 跨语言 `ErrorFrame` |
-| 关系里程碑 | 新增 `SqliteMilestoneStore`（关系史跨重启）+ 幂等记录面 + 接进羁绊模块（初见 / 阶段跃迁） |
-| **守卫判定落盘** | 消掉 `nightwatch` 自报缺口：守卫判定此前只在内存、重启即散。真机验证：`0 audit` + 缺口 → `2 audit` + 报出 `[medium] NoDegrade: critical → info` |
-| file_fetcher 磁盘缓存 | `cache_dir` 原是**死字段**（文档宣称的磁盘缓存不存在）⇒ 真做出来（两级内容寻址 + 每次命中校验 + 原子写） |
-| 五维记忆 Recent 维度 | 宣称 5 维实际只产出 4 维（`Recent` 从不产出、后备字段从不写入）⇒ 补齐 24h 滑动窗口 |
-| async_context 更正 | 从 A 类改为 B 类（重复覆盖）：原判据「`ContextProjector` 是 `NoContextProjector`」前提不成立——生产无条件注入 `MemoryContextProjector` |
+| **治理审计哈希链在多写者下分叉 ⇒ 审计永久降级内存** | 现场：记录 180/181/182 的 `previous_hash` 全是同一个值 ⇒ 下次启动校验失败、审计不再持久。修法三层：强制单写者锁 + 进程内按路径单例 + 坏链隔离恢复（保留证据）。**真机验证**：坏链被隔离后审计恢复持久；并发场景第二进程如实说「已被另一个进程持有」而不污染链 |
+| **守卫判定没有落盘面**（只在内存，重启即散） | `apeireth nightwatch` 自报缺口；修后真机：无账 → `0 audit`+缺口，有账 → `2 audit` + `[medium] NoDegrade: critical → info` |
+| **五维记忆宣称 5 维实际只产出 4 维** | `MemoryDimension` 5 变体 vs `export_browser_entries` 4 个；已补 24h 滑动窗口 + 「维度必须可导出」守卫测试 |
+| **并行工具派发生产永不发生** | 运行时支持完整但生产从不构造 `CallScheduler` ⇒ 窗口恒 1；已从**守卫能力安全注册表派生**只读白名单 + 装配级 E2E 断言 |
+| **问责闭环两处断裂** | ①`egress impact` 从不读 consequence 账 ⇒ 回填后报告仍「后果未知」（闭环断在读取侧）；②`egress notify` 的补救建议基于**过期后果**（已知 `failed` 还建议「先确认结果」）。两处改为叠加同一 `ConsequenceTracker`（只升级不降级）+ 新增「超期未回填」显式缺口（24h 阈值 + 逐条 ⏰ 标记） |
+| **两处错误被报成 500 + 误导建议** | 非法会话 id（应 400 `invalid_session_id`）、乐观并发冲突（应 409 `revision_conflict` + 「重读最新 revision」，不是「重启 Companion」） |
+| **两条真死 API** | `StreamHandle` / `query_recent`（全仓零引用）已删；台账 §三 对账 |
+| **认证/权限错误建议指向错的东西** | `auth_missing_key` 让人去配**模型密钥**（实际缺的是网关令牌）；`permission_denied` 只讲角色不足（实际可能是令牌未绑定用户）。已覆盖两种原因 |
+| **主入口 `chat` 缺凭据时不给下一步** | 只回 `missing API key for provider.minimax.api_key`；现补「跑 `apeireth onboard` 或设哪些 env」。**过程中我自己第一版还写错了两个不存在的 env 名**，被 arch_guard 的 env 计数预算抓出（连注释都算） |
+| **`council` 缺 LLM 时只回一行英文** | 与 `subagent` 对齐为可行动中文提示，并加守卫测试 |
+| **`--help` 漏 8 个可用命令** | 帮助集中成单一真源 + **防漂移机检测试**（分发块里每个命令都必须在帮助里） |
+| **备份包缺失误报「清单损坏」/ crypto 错误无路径** | 加 `NotABundle` 变体区分；crypto 错误带路径 + 下一步动作 |
+| **审计锁文件退出后残留**（我自己上一批修法的副作用） | `main` 退出时显式释放（并抓到自己「两个函数各自 static」的 bug） |
+
+### 机检守卫（目标②）
+
+- 孤儿 API 棘轮 **双向**：新增孤儿 exit 1 + **基线条目过期也 exit 1**（此前只打印提示）；
+- 尺寸基线收紧 **14 条、回收 660 行虚假余量**（最大一条 `guard/hook.rs` 1518→1093）；
+- 帮助防漂移、hint 里的 env 名核对注册表、复杂度回归守卫（repo_map）、env 计数预算（本轮零新增）。
 
 ---
 
@@ -38,9 +54,8 @@
 
 | 状态 | 数量 | 明细 |
 |---|---|---|
-| ✅ 已修并合入 main | 1 | 被遗忘权（#90） |
-| ✅ 已修（本地，待推） | 4 | 限流、partner 持久化、代码地图、查询扩展（在 #94 未合） |
-| ✅ 已修（本地新增） | 4 | 推理适配、便携包、错误词表、关系里程碑 |
+| ✅ 已修（#90 已合 main） | 1 | 被遗忘权 |
+| ✅ 已修（在 #94，待 CI） | 8 | 限流、partner 持久化、代码地图、查询扩展、推理适配、便携包、错误词表、关系里程碑 |
 | 🔶 半修（实现补全，消费点待定） | 1 | file_fetcher（消费点在副总指挥 crate；磁盘缓存已真实现） |
 | 🔁 更正为重复实现 | 1 | async_context（原判据「`ContextProjector` 是 `NoContextProjector`」前提不成立） |
 | ⛔ 受上游能力阻塞 | 4 | `cross_diary`（日记不在检索路径）、`three_tier_vault`（缺 markdown 语料面）、`care_potential_field`（全仓**无** distress/fatigue 信号源）、`speech_arbiter`（全双工未装配） |
@@ -143,3 +158,47 @@ git log --oneline origin/main..HEAD
 原 16 条 A 类里 9 条修完、2 条半修（消费点在别人区）、1 条更正为重复、
 4 条被上游能力阻塞、1 条主动延后。
 剩下 5 件**都需要 owner 或跨团队拍板**（见 §三），我没有自作主张去编信号或改共享策略。
+
+---
+
+## 六、当前状态与验证命令（2026-10-25 03:0x 更新）
+
+### 6.1 仓库与 PR
+
+```
+分支 debt-round8（worktree /tmp/apeireth-r3）
+PR #94（state=open，head 每次提交自动更新）
+本地 == 远端（全部推送完成；代理关时用直连 + 逐 commit 推送绕过 TLS 中断）
+```
+
+### 6.2 本地验证（可复跑）
+
+```bash
+# 近全仓回归（唯一排除的 tools-canonical 因本机既有 CARGO_BIN_EXE 问题跑不了，CI 上正常）
+cargo nextest run --workspace --exclude apeireth-tools-canonical --profile ci
+# → 7893 tests passed / 48 skipped / 0 failed（293 binaries）
+
+# 全量门禁
+cargo fmt --all -- --check                                   # clean
+cargo clippy --workspace --lib --locked -- -D warnings        # clean
+python3 scripts/arch_guard.py --strict                        # VIOLATIONS: 0（无 STALE）
+python3 scripts/audit_unwired.py --check                      # 153 条，无新增、无过期
+python3 scripts/group_unwired_baseline.py --check             # 一致
+python3 scripts/docs_truth.py --verify --check                # OK
+python3 scripts/docs_index.py --check                        # 0 问题
+python3 scripts/arch_doc.py --check                          # OK
+python3 scripts/wiring_report.py --verify                     # OK
+python3 scripts/check_doc_caliber.py                          # 0 新增
+```
+
+### 6.3 真机/端到端证据（各一条命令即可复现）
+
+| 证据 | 复现 |
+|---|---|
+| 限流真的在生产链上 | `production_chain_rate_limit_denies_after_the_minute_quota`：前 30 次放行、第 31 次 `Deny` |
+| 推理适配真的在 provider 路径上 | `reasoning_adapter_is_wired_through_the_real_complete_path`：mock 厂商 + 真实 `complete()` |
+| 并行派发真的装上了 | `parallel_dispatch_production`（装配级）+ `Runtime::call_scheduler()` |
+| 守卫判定真的落盘 | 跑一次带治理的回合后 `apeireth nightwatch` 报出 `N audit` 与真实降级事件 |
+| 审计链真的抗多写者 | 同数据根先起 `gateway serve` 再跑 `apeireth session`：第二进程如实降级、**不污染链**；坏链自动隔离后审计恢复持久 |
+| 问责闭环真的闭上 | `egress outcome <ID> confirmed` 后 `egress impact` 从「超期未回填=1」变「=0」，明细显示 `后果=confirmed` |
+| 便携包真的能用 | `apeireth bundle --out <DIR>` → `./run_apeireth.sh` → `/health` ok → 数据落包内 `./data/` |
