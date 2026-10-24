@@ -61,7 +61,15 @@ jobs:
           fi
       - name: fuzz ${{ matrix.target }}
         working-directory: fuzz
-        run: cargo fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
+        # ⚠️ 必须写 `cargo +nightly fuzz`（不能只写 `cargo fuzz`）：
+        # 仓根 `rust-toolchain.toml` 钉了 `channel = "1.97.1"`（stable），
+        # 而 **rust-toolchain.toml 的优先级高于 `dtolnay/rust-toolchain@nightly` 设的 default**
+        # → cargo 实际拿到的是 stable → fuzz 的 sanitizer flag（`-Zsanitizer` 等）
+        #    要求 nightly → 构建直接失败：
+        #      error: the option `Z` is only accepted on the nightly compiler
+        #      Error: failed to build fuzz script: ASAN_OPTIONS=... RUSTFLAGS=" -Cpasses=sancov-module ..."
+        # 命令行 `+nightly` 优先级最高，能压过该 pin（2026-10-24 实测修正）。
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
       - name: Upload crash artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,7 +105,8 @@ jobs:
           fi
       - name: fuzz ${{ matrix.target }}
         working-directory: crates/engine/image/codecs/fuzz
-        run: cargo fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
+        # 同上：必须 `+nightly` 压过仓根 rust-toolchain.toml 的 stable pin。
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
       - name: Upload crash artifacts
         if: always()
         uses: actions/upload-artifact@v4
