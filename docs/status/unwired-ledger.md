@@ -138,6 +138,40 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5e 两个 release 脚本的安全缺陷：`rollback.sh` 静默忽略 `--dry-run`、upgrade dry-run 缺密钥即死（2026-10-25）
+
+跑 CI release-prep 里的三个 dry-run 脚本时发现：
+
+**① `scripts/upgrade/rollback.sh`（31 行破坏性脚本）零参数解析**
+
+- 传 `--dry-run` → **被静默忽略并真执行**（`systemctl stop/start` + 覆盖二进制/配置）；
+- 非 root 跑 → 部分命令失败后仍打印 **「Rollback done」**（误导成功）；
+- 无备份完整性校验。
+
+⇒ 这是**破坏性脚本的失败模式**：任何自动化传了 `--dry-run` 期望模拟，实际会回滚生产。
+
+**修法**：加参数解析（`--dry-run` / `--help` / 位置参数备份目录 / **未知参数 exit 2**）、
+非 dry-run 强制 root、`run()` 包装所有变更命令、dry-run 输出逐条 `[DRY-RUN] would` 并以
+「**未执行任何变更**」收尾。四态实测：dry-run=0（零变更）/ 未知参数=2 / 非 root=1（清晰拒绝）/ --help 正常。
+
+**② `scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run` 直接 exit 1**
+
+配置期用 `${POSTGRES_PASSWORD:?...}` 展开 ⇒ **dry-run 在跑到 dry-run 分支之前就死了**：
+
+```
+scripts/upgrade/...: 行 74: POSTGRES_PASSWORD: set POSTGRES_PASSWORD (no weak default)
+退出码 1
+```
+
+而 release 清单第 5 项声称「upgrade dry-run 0 错」，CI 又用 `|| true` 吞掉错误
+⇒ **这一项一直是假绿**。（CI 的 `|| true` 属 `.github/workflows/**`，不在我改动范围，只记录。）
+
+**修法**：凭据改**惰性**（dry-run 不需要密钥，仅非 dry-run 要求），并把校验块移到
+工具函数之后（第一版放在 `log_info` 定义前，实测 `command not found`——顺序错也是 bug）。
+两态实测：dry-run=0（日志明确「模式: DRY-RUN」）/ 非 dry-run 无密钥=1（清晰提示）。
+
+**顺带**：`uninstall.sh --dry-run` 原本就正常（5 步、诚实跳过项）。
+
 ### 5.5d 主 CLI `--help` 不提同 workspace 的其它二进制 —— 已修（2026-10-25）
 
 **缺陷**：README 把 `apeireth-tui` 列为产品前端面（「faces / Adapters」），
