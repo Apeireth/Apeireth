@@ -26,6 +26,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::weather_probe::weather_reminder_count;
 use apeireth_core::cost_router::{CostRouter, CostRoutingStatus};
 use apeireth_core::kernel::SessionId;
 use apeireth_core::model_profile::ModelProfile;
@@ -269,15 +270,6 @@ pub fn care_status_probe_with_heartbeat(
 /// 逐记录计数 (与提醒侧消费面同一本信号账)。
 ///
 /// 缺账 = `0` 条 (合法空态, 如实); 账在但读失败 = `Err(真因)` (拒开, 不编数)。
-pub fn weather_reminder_count(data_dir: &std::path::Path) -> Result<u64, String> {
-    let ledger = apeireth_tools_canonical::device::weather::SignalLedger::under_data_dir(data_dir);
-    if !ledger.path().exists() {
-        return Ok(0);
-    }
-    let scan = ledger.scan()?;
-    Ok(scan.records.len() as u64)
-}
-
 /// 自省通道: 任务节探测口 (V6-a) —— 读持久任务队列的分态计数真值
 /// (pending/assigned/running/done/failed/blocked), 只回计数不回任务正文。
 ///
@@ -417,6 +409,8 @@ pub struct ProductionSelfStatusSource {
     identity: SelfStatusIdentity,
     capabilities: Vec<CapabilitySwitch>,
     ledger: Option<StatusProbe<MemoryLedgerStats>>,
+    /// 问责计数探测口（影响声明 / 后果 / 待补救）。
+    pub(crate) accountability: Option<StatusProbe<apeireth_tools_canonical::AccountabilityStats>>,
     credentials: Option<StatusProbe<bool>>,
     workspace_root: Option<PathBuf>,
     self_learning: bool,
@@ -465,6 +459,7 @@ impl ProductionSelfStatusSource {
             identity: SelfStatusIdentity::default(),
             capabilities,
             ledger: None,
+            accountability: None,
             credentials: None,
             workspace_root,
             self_learning,
@@ -987,11 +982,16 @@ impl ProductionSelfStatusSource {
             None => (None, Some(DATA_PROBE_NOT_WIRED.to_string())),
         };
 
+        let (accountability, accountability_reason) =
+            crate::accountability_probe::probe_accountability(&self.accountability);
+
         SelfStatusSnapshot {
             identity: self.identity.clone(),
             capabilities: self.capabilities.clone(),
             memory_ledger,
             memory_ledger_reason,
+            accountability,
+            accountability_reason,
             tuning: Some(tuning),
             tuning_reason: trait_reason,
             budget: Some(self.budget_with_quota_reading(session)),
