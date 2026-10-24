@@ -31,6 +31,7 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
     match verb {
         "ledger" => {}
         "impact" => return run_impact(data_root, rest),
+        "outcome" => return run_outcome(data_root, rest),
         _ => return Err(format!("unknown egress command: {verb}\n{USAGE}")),
     }
     // 路径：--path 显式优先；否则走数据根（`APEIRETH_DATA_DIR` 或默认目录）。
@@ -172,6 +173,78 @@ pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String
     Ok(frame)
 }
 
+/// `apeireth egress outcome <ACTION_ID> <confirmed|failed>` —— **后果回填**。
+///
+/// 这是问责闭环第 3 步缺的那条通道：系统自己**不知道**外部行动的结果
+/// （邮件发没发出、申请提没提交），只能由**回执渠道或用户**告诉它。
+///
+/// 三条纪律：
+/// 1. **显式回填** —— 系统不猜、不自动探测外部世界；
+/// 2. **状态机把关** —— 已确认的事实不能被退回 `unknown`（`record` 会拒绝）；
+/// 3. **append-only** —— 每次回填追加一条事件，历史不被改写。
+pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<String, String> {
+    let path = match parse_arg(rest, "--path") {
+        Some(raw) => PathBuf::from(raw),
+        None => data_root.join("consequence-ledger.jsonl"),
+    };
+    // 位置参数：<ACTION_ID> <confirmed|failed>
+    //
+    // ⚠️ 不能只按「不以 -- 开头」过滤：`--path <value>` 的**值**也不以 -- 开头，
+    // 会被误当位置参数（我第一版就是这么错的，测试抓到）。
+    // 正确做法：遇到 `--xxx` 就跳过它和它的值。
+    let mut positional: Vec<&String> = Vec::new();
+    let mut index = 0;
+    while index < rest.len() {
+        if rest[index].starts_with("--") {
+            index += 2; // 跳过旗标名 + 它的值
+            continue;
+        }
+        positional.push(&rest[index]);
+        index += 1;
+    }
+    let (action_id, outcome_label) = match positional.as_slice() {
+        [action_id, outcome] => (action_id.as_str(), outcome.as_str()),
+        _ => {
+            return Err(format!(
+                "outcome 需要两个位置参数：<ACTION_ID> <confirmed|failed>\n{USAGE}"
+            ))
+        }
+    };
+    let outcome = match outcome_label {
+        "confirmed" => apeireth_runtime_assembly::accountability::Outcome::Confirmed,
+        "failed" => apeireth_runtime_assembly::accountability::Outcome::Failed,
+        other => {
+            return Err(format!(
+                "未知后果状态 `{other}`（只接受 confirmed / failed ——                  系统不替用户猜「大概成功了」）"
+            ))
+        }
+    };
+    let mut tracker =
+        apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(path.clone());
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    if !tracker.record(
+        action_id,
+        outcome,
+        apeireth_runtime_assembly::consequence::OutcomeSource::UserConfirmed,
+        now_ms,
+    ) {
+        return Err(format!(
+            "回填被拒：行动 `{action_id}` 的当前后果是 `{}`，不能改成 `{}` \
+             （已确认的事实不能被抹掉）",
+            tracker.current_outcome(action_id).label(),
+            outcome.label()
+        ));
+    }
+    Ok(format!(
+        "已回填：行动 {action_id} 的后果 = {}（来源：用户确认）\n账本：{}",
+        outcome.label(),
+        path.display()
+    ))
+}
+
 /// 取 `--<name>` 后的值（最后一个出现者生效）。
 fn parse_arg(args: &[String], name: &str) -> Option<String> {
     let mut found = None;
@@ -307,6 +380,83 @@ mod tests {
         assert!(out.contains("不可逆"));
         assert!(out.contains("unknown"), "后果未知要如实显示");
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// 后果回填：unknown → confirmed，且落盘可查。
+    #[test]
+    fn outcome_backfill_records_and_persists() {
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-egress-outcome-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let args: Vec<String> = vec![
+            "outcome".into(),
+            "act-1".into(),
+            "confirmed".into(),
+            "--path".into(),
+            path.display().to_string(),
+        ];
+        let out = run_egress_at(std::path::Path::new("/nonexistent-root"), &args).expect("应成功");
+        assert!(out.contains("已回填"));
+        assert!(out.contains("confirmed"));
+
+        // 落盘可查：新实例读回同一条。
+        let tracker =
+            apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(path.clone());
+        assert_eq!(
+            tracker.current_outcome("act-1"),
+            apeireth_runtime_assembly::accountability::Outcome::Confirmed
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 已确认的事实不能被退回 —— 状态机把关。
+    #[test]
+    fn outcome_backfill_refuses_regression() {
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-egress-regress-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let mut first: Vec<String> = vec![
+            "outcome".into(),
+            "act-1".into(),
+            "confirmed".into(),
+            "--path".into(),
+            path.display().to_string(),
+        ];
+        run_egress_at(std::path::Path::new("/nonexistent-root"), &first).expect("首次应成功");
+        first[2] = "failed".into();
+        let err = run_egress_at(std::path::Path::new("/nonexistent-root"), &first)
+            .expect_err("已确认的不能改成 failed");
+        assert!(err.contains("回填被拒"), "理由应可读: {err}");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 未知后果状态被拒（系统不替用户猜「大概成功了」）。
+    #[test]
+    fn outcome_backfill_rejects_guessing() {
+        let path = std::env::temp_dir().join("apeireth-egress-guess-unused");
+        let args: Vec<String> = vec![
+            "outcome".into(),
+            "act-1".into(),
+            "probably-ok".into(),
+            "--path".into(),
+            path.display().to_string(),
+        ];
+        let err =
+            run_egress_at(std::path::Path::new("/nonexistent-root"), &args).expect_err("应拒绝");
+        assert!(
+            err.contains("只接受 confirmed / failed"),
+            "理由应可读: {err}"
+        );
     }
 
     #[test]
