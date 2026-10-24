@@ -1,0 +1,13 @@
+[package]
+name = "apeireth-ui-scene"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎 · 场景层语义（uniform 取值链 + 生命周期）"
+
+# 依赖方向：**场景 → 引擎**（单向）。引擎（ui-gpu）**不**依赖本 crate
+# ⇒ 引擎的「uniform → 着色器」管道边界保持不变（ADR-0015 §2.6）。
+[dependencies]
+apeireth-ui-gpu = { path = "../apeireth-ui-gpu" }

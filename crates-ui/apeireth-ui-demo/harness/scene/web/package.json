@@ -1,0 +1,10 @@
+{
+  "name": "@apeireth/ui-engine-scene-harness",
+  "private": true,
+  "version": "2.0.0-rc.4",
+  "type": "module",
+  "description": "场景层语义对照 harness：Rust 场景取值链 vs 生产场景（逐值 + 逐像素）",
+  "scripts": {
+    "build": "vite build"
+  }
+}
