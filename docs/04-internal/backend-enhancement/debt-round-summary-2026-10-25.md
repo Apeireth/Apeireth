@@ -41,12 +41,21 @@
 | ✅ 已修并合入 main | 1 | 被遗忘权（#90） |
 | ✅ 已修（本地，待推） | 4 | 限流、partner 持久化、代码地图、查询扩展（在 #94 未合） |
 | ✅ 已修（本地新增） | 4 | 推理适配、便携包、错误词表、关系里程碑 |
-| 🔶 半修（实现补全，消费点待定） | 2 | file_fetcher（消费点在副总指挥 crate）、五维记忆（面板未用） |
-| 🔁 更正为重复实现 | 1 | async_context |
+| 🔶 半修（实现补全，消费点待定） | 1 | file_fetcher（消费点在副总指挥 crate；磁盘缓存已真实现） |
+| 🔁 更正为重复实现 | 1 | async_context（原判据「`ContextProjector` 是 `NoContextProjector`」前提不成立） |
 | ⛔ 受上游能力阻塞 | 4 | `cross_diary`（日记不在检索路径）、`three_tier_vault`（缺 markdown 语料面）、`care_potential_field`（全仓**无** distress/fatigue 信号源）、`speech_arbiter`（全双工未装配） |
 | ⏸ 主动延后 | 1 | `continuation`（会话与审批历史**都已持久化**，剩余缺口要动 `execute.rs` 4987 行关键路径，风险/收益比差） |
+| **合计** | **16** | 9 修完 + 1 半修 + 1 更正 + 4 阻塞 + 1 延后 |
 
-**外加**：本轮自行发现并修掉的**非清单**缺陷 1 条（守卫判定无落盘面 → 已修）。
+**外加（不在原 16 条清单内、本轮自行发现并修掉的）**：
+
+| 缺陷 | 证据 |
+|---|---|
+| 守卫判定**没有落盘面**（只在内存 `VecDeque`，重启即散） | `apeireth nightwatch` 自报「audit chain 未持久化」；真机验证：无账 → 有账后报出 `[medium] NoDegrade: critical → info` |
+| 五维记忆**宣称 5 维实际只产出 4 维**（`Recent` 从不产出） | `MemoryDimension` 5 变体 vs `export_browser_entries` 4 个；已补 24h 滑动窗口 + 「维度必须可导出」守卫 |
+| **并行工具派发生产永不发生**（从不构造 `CallScheduler`） | 运行时支持完整但窗口恒 1；已从守卫注册表派生白名单 + 装配级 E2E 断言 |
+| 两条真死 API（`StreamHandle` / `query_recent`） | 全仓零引用；已删 + 台账 §三 对账 |
+| 三处**文档低估实现**（SDK HTTP 早已真接 / 生物机制实为 12-14 格 / 便携包能力） | 逐条按实测断言改写 |
 
 ---
 
