@@ -103,6 +103,20 @@ pub trait Dom: 'static {
     /// 建一个元素节点。
     fn create_element(&self, tag: &str) -> Result<Self::Node, DomError>;
 
+    /// 建一个**命名空间**内的元素节点（SVG 等）。
+    ///
+    /// 默认实现 = [`Dom::create_element`]：内存后端不渲染，命名空间对它没有
+    /// 意义（它只记录标签名）⇒ 默认实现不是「假装支持」，而是「本后端确实
+    /// 不需要」。
+    ///
+    /// 真实 DOM 后端**必须**覆写：HTML 命名空间里的 `<svg>` **不是** SVG 元素
+    /// （浏览器不会把它当矢量图渲染，`viewBox` 这类驼峰属性名还会被小写化）
+    /// ⇒ SVG 元素必须走 `createElementNS`。
+    fn create_element_ns(&self, namespace: &str, tag: &str) -> Result<Self::Node, DomError> {
+        let _ = namespace;
+        self.create_element(tag)
+    }
+
     /// 建一个文本节点。
     fn create_text(&self, data: &str) -> Result<Self::Node, DomError>;
 
@@ -157,6 +171,21 @@ pub trait Dom: 'static {
 
     /// 读子节点列表（按文档顺序）。
     fn children(&self, parent: &Self::Node) -> Result<Vec<Self::Node>, DomError>;
+
+    /// 挂事件处理器（**元素直挂**：浏览器负责冒泡；`currentTarget` 语义 =
+    /// 「处理器注册在哪个元素上」，与设计文档 §5.3.3 的确定解一致）。
+    ///
+    /// 同一节点同一事件类型挂两次 ⇒ 后者覆盖前者（与虚拟树
+    /// [`crate::vnode::ElementVNode::handler`] 的覆盖语义一致）。
+    fn add_listener(
+        &self,
+        node: &Self::Node,
+        kind: EventKind,
+        handler: crate::events::ElementHandler,
+    ) -> Result<(), DomError>;
+
+    /// 摘掉某节点上的**全部**事件处理器（卸载时必做；差分时重挂前也做）。
+    fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError>;
 }
 
 /// 内存 DOM 的节点句柄（编号）。
@@ -179,6 +208,8 @@ struct InMemoryNode {
     children: Vec<InMemoryNodeId>,
     /// 当前父节点（`None` = 尚未挂到任何树上）。
     parent: Option<InMemoryNodeId>,
+    /// 事件处理器（挂在**本元素**上；冒泡由 [`InMemoryDom::dispatch`] 模拟）。
+    listeners: Vec<(EventKind, crate::events::ElementHandler)>,
     /// 是否已被从树上摘除（摘除后禁止再写入 —— 设计文档 §5.5.2 规则 T6）。
     detached: bool,
 }
@@ -252,6 +283,13 @@ pub enum DomOp {
         /// 父节点。
         parent: InMemoryNodeId,
     },
+    /// 挂事件处理器。
+    AddListener {
+        /// 事件类型。
+        kind: EventKind,
+    },
+    /// 摘掉某节点上的全部事件处理器。
+    RemoveListeners,
 }
 
 /// 一次操作 + 它作用的节点。
@@ -336,6 +374,65 @@ impl InMemoryDom {
         self.nodes.borrow().len()
     }
 
+    /// 派发事件：自目标节点起，沿祖先链**自下而上**调用处理器。
+    ///
+    /// 冒泡语义与真实浏览器一致（设计文档 §5.3.3）：目标先执行，祖先后执行；
+    /// 任一处理器调用 `stop_propagation()` ⇒ 停止向上传播。
+    ///
+    /// 返回实际调用次数。
+    pub fn dispatch(&self, node: InMemoryNodeId, kind: EventKind) -> usize {
+        // 目标路径（从根到目标的子节点下标序列）。
+        let mut indices: Vec<usize> = Vec::new();
+        let mut current = node;
+        while let Some(parent) = self.parent(current) {
+            let siblings = self
+                .nodes
+                .borrow()
+                .get(parent.0)
+                .map(|entry| entry.children.clone())
+                .unwrap_or_default();
+            let index = siblings
+                .iter()
+                .position(|child| *child == current)
+                .unwrap_or_default();
+            indices.push(index);
+            current = parent;
+        }
+        indices.reverse();
+
+        // 祖先链（目标在前）。
+        let mut chain: Vec<InMemoryNodeId> = vec![node];
+        while let Some(parent) = self.parent(*chain.last().expect("链非空")) {
+            chain.push(parent);
+        }
+
+        let mut event = crate::events::DomEvent::new(kind, indices);
+        let mut called = 0;
+        for current in chain {
+            let handlers: Vec<crate::events::ElementHandler> = self
+                .nodes
+                .borrow()
+                .get(current.0)
+                .map(|entry| {
+                    entry
+                        .listeners
+                        .iter()
+                        .filter(|(key, _)| *key == kind)
+                        .map(|(_, handler)| handler.clone())
+                        .collect()
+                })
+                .unwrap_or_default();
+            for handler in handlers {
+                handler.call(&mut event);
+                called += 1;
+                if event.is_propagation_stopped() {
+                    return called;
+                }
+            }
+        }
+        called
+    }
+
     /// 节点是否已被摘除（设计文档 §5.5.2 规则 T6 的可判定性）。
     pub fn is_detached(&self, node: InMemoryNodeId) -> bool {
         self.nodes
@@ -372,6 +469,7 @@ impl InMemoryDom {
             props: Vec::new(),
             children: Vec::new(),
             parent: None,
+            listeners: Vec::new(),
             detached: false,
         });
         InMemoryNodeId(nodes.len() - 1)
@@ -705,6 +803,39 @@ impl Dom for InMemoryDom {
         };
         Ok(entry.children.clone())
     }
+
+    fn add_listener(
+        &self,
+        node: &Self::Node,
+        kind: EventKind,
+        handler: crate::events::ElementHandler,
+    ) -> Result<(), DomError> {
+        let mut nodes = self.nodes.borrow_mut();
+        let Some(entry) = nodes.get_mut(node.0) else {
+            return Err(DomError::NodeNotFound);
+        };
+        if entry.detached {
+            return Err(DomError::NodeDetached);
+        }
+        match entry.listeners.iter_mut().find(|(key, _)| *key == kind) {
+            Some(slot) => slot.1 = handler,
+            None => entry.listeners.push((kind, handler)),
+        }
+        drop(nodes);
+        self.record(DomOp::AddListener { kind }, *node);
+        Ok(())
+    }
+
+    fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError> {
+        let mut nodes = self.nodes.borrow_mut();
+        let Some(entry) = nodes.get_mut(node.0) else {
+            return Err(DomError::NodeNotFound);
+        };
+        entry.listeners.clear();
+        drop(nodes);
+        self.record(DomOp::RemoveListeners, *node);
+        Ok(())
+    }
 }
 
 /// **未接线**的 DOM 后端节点句柄（占位；没有任何实例能被造出来）。
@@ -780,11 +911,149 @@ impl Dom for UnavailableDom {
     fn children(&self, _parent: &Self::Node) -> Result<Vec<Self::Node>, DomError> {
         Err(DomError::NotImplemented)
     }
+
+    fn add_listener(
+        &self,
+        _node: &Self::Node,
+        _kind: EventKind,
+        _handler: crate::events::ElementHandler,
+    ) -> Result<(), DomError> {
+        Err(DomError::NotImplemented)
+    }
+
+    fn remove_listeners(&self, _node: &Self::Node) -> Result<(), DomError> {
+        Err(DomError::NotImplemented)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+
+    // ── 事件派发（内存后端的冒泡语义） ──────────────────────────────────
+
+    /// 建一个带处理器的按钮节点（挂在 `parent` 下）。
+    fn button_with_handler(
+        dom: &InMemoryDom,
+        parent: InMemoryNodeId,
+        kind: EventKind,
+        handler: crate::events::ElementHandler,
+    ) -> InMemoryNodeId {
+        let node = dom.create_element("button").expect("建节点必须成功");
+        dom.add_listener(&node, kind, handler)
+            .expect("挂处理器必须成功");
+        dom.append_child(&parent, &node).expect("挂载必须成功");
+        node
+    }
+
+    #[test]
+    fn dispatch_calls_handlers_from_the_target_up_to_the_ancestors() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let middle = dom.create_element("div").expect("建节点必须成功");
+        dom.append_child(&root, &middle).expect("挂载必须成功");
+
+        let order = Rc::new(RefCell::new(Vec::<&'static str>::new()));
+        let root_order = order.clone();
+        dom.add_listener(
+            &root,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |_event| {
+                root_order.borrow_mut().push("root");
+            }),
+        )
+        .expect("挂处理器必须成功");
+        let target_order = order.clone();
+        let target = button_with_handler(
+            &dom,
+            middle,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |_event| {
+                target_order.borrow_mut().push("target");
+            }),
+        );
+
+        assert_eq!(dom.dispatch(target, EventKind::Click), 2);
+        assert_eq!(&*order.borrow(), &["target", "root"], "目标先、祖先后");
+    }
+
+    /// **反例**：处理器调用 `stop_propagation()` ⇒ 祖先后不再被调用。
+    #[test]
+    fn dispatch_stops_at_the_handler_that_asks_for_it() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let middle = dom.create_element("div").expect("建节点必须成功");
+        dom.append_child(&root, &middle).expect("挂载必须成功");
+
+        let order = Rc::new(RefCell::new(Vec::<&'static str>::new()));
+        let root_order = order.clone();
+        dom.add_listener(
+            &root,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |_event| {
+                root_order.borrow_mut().push("root");
+            }),
+        )
+        .expect("挂处理器必须成功");
+        let target_order = order.clone();
+        let target = button_with_handler(
+            &dom,
+            middle,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |event| {
+                target_order.borrow_mut().push("target");
+                event.stop_propagation();
+            }),
+        );
+
+        assert_eq!(dom.dispatch(target, EventKind::Click), 1);
+        assert_eq!(&*order.borrow(), &["target"]);
+    }
+
+    /// **不误报**：另一类事件不会被同类处理器捕获。
+    #[test]
+    fn dispatch_only_calls_handlers_of_the_same_event_kind() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let clicked = Rc::new(Cell::new(0u32));
+        let counter = clicked.clone();
+        let node = button_with_handler(
+            &dom,
+            root,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |_event| {
+                counter.set(counter.get() + 1);
+            }),
+        );
+
+        assert_eq!(dom.dispatch(node, EventKind::KeyDown), 0);
+        assert_eq!(clicked.get(), 0);
+        assert_eq!(dom.dispatch(node, EventKind::Click), 1);
+        assert_eq!(clicked.get(), 1);
+    }
+
+    #[test]
+    fn remove_listeners_clears_the_handlers_of_that_node() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let hits = Rc::new(Cell::new(0u32));
+        let counter = hits.clone();
+        let node = button_with_handler(
+            &dom,
+            root,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |_event| {
+                counter.set(counter.get() + 1);
+            }),
+        );
+
+        assert_eq!(dom.dispatch(node, EventKind::Click), 1);
+        dom.remove_listeners(&node).expect("摘处理器必须成功");
+        assert_eq!(dom.dispatch(node, EventKind::Click), 0);
+        assert_eq!(hits.get(), 1, "摘掉之后不再触发");
+    }
 
     #[test]
     fn memory_backend_builds_a_readable_tree() {

@@ -11,7 +11,7 @@
 //! 本 crate 的公开类型里没有会话 / 审批 / presence 之类的概念。一旦出现，
 //! 引擎就退化成「带业务的项目」，可复用性与可测试性同时崩掉。
 //!
-//! ## 本批（P1）交付口径
+//! ## 交付口径（P1 建核，P3 补回调）
 //!
 //! ### ✅ 已实现
 //! - **信号**：读登记依赖 / 写主动失效 / 版本号 / 只读视图 / 等值不触发；
@@ -25,7 +25,9 @@
 //! - **批次**：多次写合并为一次 flush（可嵌套）；
 //! - **实例引用槽位**：[`InstanceRef`]（`bind:this` 的语义内核：挂载写引用、
 //!   卸载前清空）；
-//! - **组件 trait 边界**：[`UiComponent`]。
+//! - **组件 trait 边界**：[`UiComponent`]；
+//! - **组件回调**：[`Callback`]（类型擦除的 `Fn()`；`Clone` + `Debug` + 按指针
+//!   身份比较 ⇒ 能当 props 字段放进宏生成的结构体）。
 //!
 //! ### 🔵 未接线（等什么）
 //! - **wasm 侧微任务调度器**：`HostScheduler` 的 trait 边界已就位，但「把 flush
@@ -46,6 +48,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod callback;
 pub mod component;
 pub mod derived;
 pub mod effect;
@@ -57,6 +60,7 @@ pub mod runtime;
 pub mod scheduler;
 pub mod signal;
 
+pub use callback::Callback;
 pub use component::UiComponent;
 pub use derived::Derived;
 pub use effect::{EffectHandle, Scope};

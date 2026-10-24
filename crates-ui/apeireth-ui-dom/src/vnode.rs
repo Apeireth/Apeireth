@@ -14,6 +14,8 @@
 //! | `bindings` | [`ElementVNode::this_ref`]（`bind:this`） | 键级差分（槽位换了才重新接线） |
 
 use crate::binding::ThisRef;
+use crate::dom::EventKind;
+use crate::events::ElementHandler;
 
 /// 列表项身份（key）：不透明的可比较值（设计文档 §5.2.3）。
 ///
@@ -179,6 +181,22 @@ impl VNode {
             _ => None,
         }
     }
+
+    /// 本节点的属性值（非元素节点 ⇒ `None`）。
+    pub fn attr_value(&self, name: &str) -> Option<&AttrValue> {
+        match self {
+            VNode::Element(element) => element.attr_value(name),
+            _ => None,
+        }
+    }
+
+    /// 本节点的 class token 集合（保序；非元素节点 ⇒ 空）。
+    pub fn class_tokens(&self) -> Vec<String> {
+        match self.attr_value("class") {
+            Some(AttrValue::Text(text)) => text.split_whitespace().map(str::to_owned).collect(),
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// 元素节点。
@@ -194,6 +212,11 @@ pub struct ElementVNode {
     ///
     /// `None` ⇒ 该元素没有元素引用绑定。
     pub this_ref: Option<ThisRef>,
+    /// 事件处理器（按事件类型索引）。
+    ///
+    /// 处理器**按指针身份**比较（见 [`ElementHandler`]）⇒ 差分能判断
+    /// 「处理器换了没有」（换了 ⇒ 重挂监听器）。
+    pub handlers: Vec<(EventKind, ElementHandler)>,
     /// 子节点。
     pub children: Vec<VNode>,
 }
@@ -206,6 +229,7 @@ impl ElementVNode {
             key: None,
             attrs: Vec::new(),
             this_ref: None,
+            handlers: Vec::new(),
             children: Vec::new(),
         }
     }
@@ -279,12 +303,20 @@ impl ElementVNode {
         }
     }
 
+    /// 挂一个事件处理器（同一事件类型挂第二个 ⇒ 覆盖第一个）。
+    pub fn handler(mut self, kind: EventKind, handler: ElementHandler) -> Self {
+        match self.handlers.iter_mut().find(|(key, _)| *key == kind) {
+            Some(slot) => slot.1 = handler,
+            None => self.handlers.push((kind, handler)),
+        }
+        self
+    }
+
     /// 追加子节点。
     pub fn child(mut self, child: VNode) -> Self {
         self.children.push(child);
         self
     }
-
     /// 追加多个子节点。
     pub fn children(mut self, children: impl IntoIterator<Item = VNode>) -> Self {
         self.children.extend(children);
@@ -350,6 +382,12 @@ impl ElementBuilder {
         self
     }
 
+    /// 挂一个事件处理器。
+    pub fn handler(mut self, kind: EventKind, handler: ElementHandler) -> Self {
+        self.node = self.node.handler(kind, handler);
+        self
+    }
+
     /// 追加子节点。
     pub fn child(mut self, child: VNode) -> Self {
         self.node = self.node.child(child);
@@ -402,6 +440,24 @@ mod tests {
             AttrValue::Text(String::from("x")).to_attr_string(),
             Some(String::from("x"))
         );
+    }
+
+    #[test]
+    fn element_handlers_compare_by_pointer_identity() {
+        let handler = ElementHandler::new(|_event| {});
+        let same = handler.clone();
+        let other = ElementHandler::new(|_event| {});
+
+        assert_eq!(handler, same, "同一个闭包 ⇒ 同一个处理器");
+        assert_ne!(handler, other, "不同闭包 ⇒ 不同处理器");
+    }
+
+    #[test]
+    fn a_second_handler_of_the_same_kind_replaces_the_first() {
+        let node = ElementVNode::new("button")
+            .handler(EventKind::Click, ElementHandler::new(|_event| {}))
+            .handler(EventKind::Click, ElementHandler::new(|_event| {}));
+        assert_eq!(node.handlers.len(), 1, "同一事件类型只留一个处理器");
     }
 
     #[test]

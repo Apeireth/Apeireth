@@ -314,9 +314,14 @@ impl<D: Dom> Renderer<D> {
     ) -> Result<MountedNode<D>, DomError> {
         match vnode {
             VNode::Element(element) => {
-                let dom = self.dom.create_element(&element.tag)?;
+                let dom = match svg_namespace(&element.tag) {
+                    Some(namespace) => self.dom.create_element_ns(namespace, &element.tag)?,
+                    None => self.dom.create_element(&element.tag)?,
+                };
                 // T3：属性先写 —— 节点进文档树时看到的已经是最终态。
                 self.write_attributes(&dom, element)?;
+                // 事件处理器：节点进文档树前挂好（与属性同一批准备完）。
+                self.write_handlers(&dom, element)?;
                 let mut children = Vec::with_capacity(element.children.len());
                 for child in &element.children {
                     children.push(self.mount_node(child, &dom, None)?);
@@ -369,6 +374,7 @@ impl<D: Dom> Renderer<D> {
                 }
                 // T1：同标签 ⇒ 复用同一个真实 DOM 节点，只改属性与子节点。
                 self.patch_attributes(&old_element.dom, &old_element.vnode, new_element)?;
+                self.patch_handlers(&old_element.dom, &old_element.vnode, new_element)?;
                 self.rebind_this(&old_element.vnode, new_element, &old_element.dom)?;
                 let children = self.patch_children(
                     &old_element.dom,
@@ -569,8 +575,34 @@ impl<D: Dom> Renderer<D> {
         Ok(())
     }
 
-    // ── `bind:this` 接线 ──────────────────────────────────────────────────
+    // ── 事件处理器 ────────────────────────────────────────────────────────
 
+    /// 新建节点：挂上全部事件处理器。
+    fn write_handlers(&self, dom: &D::Node, element: &ElementVNode) -> Result<(), DomError> {
+        for (kind, handler) in &element.handlers {
+            self.dom.add_listener(dom, *kind, handler.clone())?;
+        }
+        Ok(())
+    }
+
+    /// 已有节点：处理器变了才重挂（没变 ⇒ 不动监听器）。
+    ///
+    /// 处理器**按指针身份**比较（见 [`crate::events::ElementHandler`]）：
+    /// 同一闭包实例 ⇒ 视为同一个处理器（不重挂）；换了闭包 ⇒ 重挂。
+    fn patch_handlers(
+        &self,
+        dom: &D::Node,
+        old: &ElementVNode,
+        new: &ElementVNode,
+    ) -> Result<(), DomError> {
+        if old.handlers == new.handlers {
+            return Ok(());
+        }
+        self.dom.remove_listeners(dom)?;
+        self.write_handlers(dom, new)
+    }
+
+    // ── `bind:this` 接线 ──────────────────────────────────────────────────
     /// `bind:this` 槽位变了 ⇒ 先解绑旧的，再接新的。
     fn rebind_this(
         &mut self,
@@ -598,7 +630,9 @@ impl<D: Dom> Renderer<D> {
     fn unmount_node(&mut self, node: &MountedNode<D>, parent: &D::Node) -> Result<(), DomError> {
         match node {
             MountedNode::Element(element) => {
-                // 先解绑 `bind:this`（清引用）—— 槽位里不留已销毁的句柄。
+                // 先摘监听器（节点离树之前，处理器不再能被触发）。
+                self.dom.remove_listeners(&element.dom)?;
+                // 再解绑 `bind:this`（清引用）—— 槽位里不留已销毁的句柄。
                 if let Some(this_ref) = &element.vnode.this_ref {
                     this_ref.unbind();
                     self.bound_slots = self.bound_slots.saturating_sub(1);
@@ -645,6 +679,49 @@ impl<D: Dom> Renderer<D> {
     }
 }
 
+/// SVG 命名空间（`createElementNS` 用的那个）。
+pub const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
+
+/// SVG 标签表（这些标签必须建在 SVG 命名空间里）。
+///
+/// 理由：HTML 命名空间里的 `<svg>` **不是** SVG 元素 —— 浏览器不把它当矢量图
+/// 渲染，且 `viewBox` 这类驼峰属性名会被小写化 ⇒ 与参考实现的 DOM 逐字不一致
+/// （画面也会不同）。
+const SVG_TAGS: &[&str] = &[
+    "circle",
+    "clipPath",
+    "defs",
+    "ellipse",
+    "foreignObject",
+    "g",
+    "image",
+    "line",
+    "linearGradient",
+    "marker",
+    "mask",
+    "path",
+    "pattern",
+    "polygon",
+    "polyline",
+    "radialGradient",
+    "rect",
+    "stop",
+    "svg",
+    "symbol",
+    "text",
+    "tspan",
+    "use",
+];
+
+/// 标签是否属于 SVG 命名空间（是 ⇒ 返回命名空间）。
+pub fn svg_namespace(tag: &str) -> Option<&'static str> {
+    if SVG_TAGS.contains(&tag) {
+        Some(SVG_NAMESPACE)
+    } else {
+        None
+    }
+}
+
 /// 子树里**最后一个**带宿主节点的句柄（分组节点自己没有宿主节点 ⇒ 往里找）。
 ///
 /// 用于「替换子树」时定位插入锚点：分组节点的锚点是它最后一个子节点的锚点。
@@ -674,6 +751,8 @@ mod tests {
     use super::*;
     use crate::binding::ThisBinding;
     use crate::dom::{DomOp, InMemoryDom, InMemoryNodeId, RecordedOp};
+    use std::cell::Cell;
+    use std::rc::Rc;
 
     // ── 测试脚手架 ────────────────────────────────────────────────────────
 
@@ -1137,6 +1216,106 @@ mod tests {
         assert!(!first.is_bound(), "旧槽位必须清引用");
         assert_eq!(second.get(), Some(node), "新槽位必须拿到节点");
         assert_eq!(renderer.bound_slots(), 1, "绑定数必须配平");
+    }
+
+    // ── 事件处理器：挂载 / 差分 / 卸载的成对契约 ─────────────────────────
+
+    /// 建一个带点击处理器的按钮（处理器把计数器加一）。
+    fn clickable_button(counter: Rc<Cell<u32>>) -> VNode {
+        VNode::element("button")
+            .handler(
+                crate::dom::EventKind::Click,
+                crate::events::ElementHandler::new(move |_event| {
+                    counter.set(counter.get() + 1);
+                }),
+            )
+            .build()
+    }
+
+    #[test]
+    fn handlers_are_attached_on_mount_and_removed_on_unmount() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let counter = Rc::new(Cell::new(0u32));
+        renderer
+            .mount(clickable_button(counter.clone()))
+            .expect("挂载必须成功");
+
+        let node = child_order(&renderer)[0];
+        assert_eq!(
+            renderer.dom().dispatch(node, crate::dom::EventKind::Click),
+            1
+        );
+        assert_eq!(counter.get(), 1, "挂载后处理器必须能触发");
+
+        renderer.unmount().expect("卸载必须成功");
+        // 卸载后节点已摘除 ⇒ 派发不到任何处理器（成对契约）。
+        assert!(renderer.dom().is_detached(node));
+    }
+
+    /// **反例**：换了处理器 ⇒ 重挂监听器（新的处理器生效、旧的失效）。
+    #[test]
+    fn patching_with_another_handler_rebinds_the_listener() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let first = Rc::new(Cell::new(0u32));
+        let second = Rc::new(Cell::new(0u32));
+
+        renderer
+            .mount(clickable_button(first.clone()))
+            .expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+
+        let second_counter = second.clone();
+        renderer
+            .patch(
+                VNode::element("button")
+                    .handler(
+                        crate::dom::EventKind::Click,
+                        crate::events::ElementHandler::new(move |_event| {
+                            second_counter.set(second_counter.get() + 1);
+                        }),
+                    )
+                    .build(),
+            )
+            .expect("打补丁必须成功");
+
+        assert_eq!(
+            renderer.dom().dispatch(node, crate::dom::EventKind::Click),
+            1
+        );
+        assert_eq!(first.get(), 0, "旧处理器必须已被换掉");
+        assert_eq!(second.get(), 1, "新处理器必须已挂上");
+    }
+
+    /// **不误报**：处理器没换 ⇒ 不重挂（监听器不被反复拆装）。
+    #[test]
+    fn patching_with_the_same_handler_keeps_the_listener() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let counter = Rc::new(Cell::new(0u32));
+
+        // 同一个闭包 ⇒ 同一个处理器（按指针身份）。
+        let handler = crate::events::ElementHandler::new(move |_event| {
+            counter.set(counter.get() + 1);
+        });
+        let view = VNode::element("button")
+            .handler(crate::dom::EventKind::Click, handler.clone())
+            .build();
+
+        renderer.mount(view.clone()).expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+        renderer.dom().clear_ops();
+
+        renderer.patch(view).expect("打补丁必须成功");
+        let removals = renderer
+            .dom()
+            .ops()
+            .iter()
+            .filter(|recorded| matches!(recorded.op, DomOp::RemoveListeners))
+            .count();
+        assert_eq!(removals, 0, "处理器没换 ⇒ 不该重挂监听器");
+        assert_eq!(
+            renderer.dom().dispatch(node, crate::dom::EventKind::Click),
+            1
+        );
     }
 
     // ── T1：同标签 ⇒ 原地打补丁，绝不重建元素 ──────────────────────────

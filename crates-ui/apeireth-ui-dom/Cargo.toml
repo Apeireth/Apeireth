@@ -44,6 +44,10 @@ web-sys = { version = "=0.3.106", features = [
     "Document",       # 建节点：create_element / create_text_node
     "DomTokenList",   # class token 差分：class_list().add / .remove
     "Element",        # 属性读写：set_attribute / remove_attribute / class_list
+    "Event",          # 事件对象：prevent_default / stop_propagation
+    "EventTarget",    # 事件目标：add_event_listener_with_callback
+    "KeyboardEvent",  # 键盘事件：key
+    "MouseEvent",     # 鼠标事件：修饰键
     "Node",           # 树操作：append_child / insert_before / remove_child / child_nodes
     "Text",           # 文本节点：create_text_node 的返回类型 + 文本节点判定
     "CharacterData",  # 文本内容：set_data（就地改文本，不重建节点）

@@ -11,7 +11,7 @@ fn button_component_registers_and_renders_by_name() {
         .register_named::<Button>("button")
         .expect("首次注册成功");
 
-    let props = ButtonProps::new("批准");
+    let props = ButtonProps::new("ap-button").label("批准");
     let node = registry
         .render::<Button>("button", &props)
         .expect("渲染成功");
@@ -31,7 +31,7 @@ fn duplicate_and_missing_registrations_are_reported() {
         Err(RegistryError::Duplicate(String::from("button")))
     );
 
-    let props = ButtonProps::new("批准");
+    let props = ButtonProps::new("ap-button").label("批准");
     assert_eq!(
         registry.render::<Button>("nope", &props),
         Err(RegistryError::NotFound(String::from("nope")))

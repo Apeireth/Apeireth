@@ -21,8 +21,13 @@
 //! - **`bind:this`**（[`ThisBinding`]）：挂载写引用 / 卸载前清引用；
 //! - **内存 DOM 后端**（[`InMemoryDom`]，native 永远可用）+ **操作序列记录**
 //!   （[`DomOp`]：T1–T6 的机械判据）；
-//! - **真实 DOM 后端**（`WebDom`，web-sys）—— wasm32 目标专用，
-//!   **未经任何运行时验证**（见下）；
+//! - **真实 DOM 后端**（`WebDom`，web-sys）—— wasm32 目标专用；
+//! - **事件处理器接线**（P3）：虚拟树带处理器槽位（[`ElementHandler`]），
+//!   `Dom` trait 有 `add_listener` / `remove_listeners`，渲染器在**挂载时挂**、
+//!   **差分时按指针身份决定重挂**、**卸载时摘**（T6 的成对契约）；
+//! - **命名空间建节点**（P3）：`Dom::create_element_ns` ⇒ SVG 元素建在 SVG
+//!   命名空间里（HTML 命名空间里的 `<svg>` **不是** SVG 元素：浏览器不把它
+//!   当矢量图渲染，且 `viewBox` 这类驼峰属性名会被小写化）；
 //! - **渲染器**（[`Renderer`]）：把 P1 的 keyed 差分计划落成实际 DOM 操作序列，
 //!   挂载 / 卸载**成对执行**，`bind:this` **已接线**（挂载写引用 / 卸载清引用）；
 //! - **CSS 过渡触发时机的六条保护规则**（设计文档 §5.5.2 的 T1–T6）逐条
@@ -42,10 +47,14 @@
 //! `Undecidable`（差分不可判定，与「后端做不了」的 `Unsupported` 分开）。
 //!
 //! ### 🔵 未接线（等什么）
+//! - **事件委托的单监听器形态**（设计文档 §5.3.2）：本批按**元素直挂**
+//!   （每个带处理器的元素一个监听器，冒泡交给浏览器）。`currentTarget` 语义
+//!   与设计 §5.3.3 的确定解**一致**（= 处理器注册在哪个元素上），差别只在
+//!   监听器数量。
 //! - **真实 DOM 后端的运行时验证**——`WebDom` 被 `#[cfg(target_arch = "wasm32")]`
-//!   隔离 ⇒ **native 编译不参与** ⇒ 它的行为**未经任何运行时验证**。
-//!   「wasm 构建通过」只证明**能编译**，**不证明**画面正确。浏览器内的验证
-//!   （真实 DOM 行为 / 像素对照 / 逐帧对照）属 **P5 的浏览器 job（待建）**。
+//!   隔离 ⇒ **native 编译不参与**。浏览器内的验证（真实 DOM 行为 / 像素对照 /
+//!   逐帧对照）由 **P3 的试点对照 harness** 承担（`apeireth-ui-demo/harness/`：
+//!   Rust 引擎版 vs 生产 Svelte 版的逐像素 + 逐帧对照）。
 //! - **事件委托接到真实 DOM**——`Dom` trait 目前**没有**监听器接口 ⇒ 委托表
 //!   （[`EventRegistry`]）与真实 DOM 之间**没有连线**；事件语义仍只在
 //!   native 的委托表层面可测。
@@ -65,6 +74,7 @@
 #![forbid(unsafe_code)]
 
 pub mod binding;
+pub mod children;
 pub mod diff;
 pub mod dom;
 pub mod events;
@@ -79,12 +89,13 @@ pub mod vnode;
 pub mod web;
 
 pub use binding::{Binding, BindingSlot, ThisBinding, ThisRef};
+pub use children::Children;
 pub use diff::{diff, Patch};
 pub use dom::{
     Dom, DomError, DomOp, EventKind, InMemoryDom, InMemoryNodeId, RecordedOp, UnavailableDom,
     UnavailableNode,
 };
-pub use events::{DomEvent, EventHandler, EventRegistry, HandlerId};
+pub use events::{DomEvent, ElementHandler, EventHandler, EventRegistry, HandlerId};
 pub use keyed::{diff_keyed, list_diff_mode, KeyedDiff, KeyedDiffError, KeyedSlot, ListDiffMode};
 pub use renderer::{MountedElement, MountedFragment, MountedNode, MountedText, Renderer};
 pub use vnode::{AttrValue, ElementBuilder, ElementVNode, Key, TextVNode, VNode};

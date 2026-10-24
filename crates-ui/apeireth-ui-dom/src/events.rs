@@ -16,6 +16,47 @@ use crate::dom::EventKind;
 /// 事件处理器（接收可变引用以便 `stop_propagation` / `prevent_default`）。
 pub type EventHandler = Rc<dyn Fn(&mut DomEvent)>;
 
+/// 元素上的事件处理器（可放进虚拟树的那一份）。
+///
+/// 与 [`EventHandler`] 的差别：它**自带 `Debug` / `PartialEq` 实现**，因而能
+/// 放进 `ElementVNode`（虚拟树要可 `PartialEq`、可 `Debug`，设计文档 §6.4）。
+///
+/// **相等性按指针身份**（`Rc::ptr_eq`）：闭包没有结构相等可言 ⇒ 「同一个
+/// 处理器」= 「同一个闭包实例」。这条语义让差分能判断「处理器换了没有」
+/// （换了 ⇒ 重挂监听器）。
+#[derive(Clone)]
+pub struct ElementHandler {
+    inner: EventHandler,
+}
+
+impl ElementHandler {
+    /// 包装一个处理器闭包。
+    pub fn new(handler: impl Fn(&mut DomEvent) + 'static) -> Self {
+        Self {
+            inner: Rc::new(handler),
+        }
+    }
+
+    /// 调用处理器。
+    pub fn call(&self, event: &mut DomEvent) {
+        (self.inner)(event);
+    }
+}
+
+impl std::fmt::Debug for ElementHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ElementHandler(..)")
+    }
+}
+
+impl PartialEq for ElementHandler {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for ElementHandler {}
+
 /// 处理器编号（注销用）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HandlerId(pub usize);

@@ -5,10 +5,12 @@
 //! - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译时
 //!   不参与** ⇒ 它的行为**未经任何运行时验证**（wasm 构建通过只证明
 //!   「能编译」，**不证明**画面正确）。
-//! - 浏览器内验证（真实 DOM 行为 / 像素对照 / 逐帧对照）属 P5 的浏览器 job
-//!   —— **待建**。
-//! - 本后端**不实现事件委托**：`Dom` trait 目前没有监听器接口 ⇒ 事件由
-//!   [`crate::events`] 的委托表独立承担，尚未接到真实 DOM。
+//! - 浏览器内验证（真实 DOM 行为 / 像素对照 / 逐帧对照）属 P3 的浏览器内
+//!   对照测试（试点 harness，见 `crates-ui/apeireth-ui-demo/harness/`）。
+//! - **事件挂载形态**：本批按**元素直挂**（每个带处理器的元素一个监听器，
+//!   冒泡交给浏览器）。设计文档 §5.3.2 写的是「委托根单监听器」形态；
+//!   两者的 `currentTarget` 语义**完全一致**（§5.3.3 的确定解：= 处理器
+//!   注册在哪个元素上），差别只在监听器数量 ⇒ 委托形态列为 🔵 未接线。
 //!
 //! ## 「已摘除」的判定
 //!
@@ -21,11 +23,21 @@
 use std::cell::RefCell;
 
 use js_sys::{Reflect, WeakSet};
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
-use web_sys::{Document, Element, Node, Text};
+use web_sys::{Document, Element, Event, KeyboardEvent, MouseEvent, Node, Text};
 
-use crate::dom::{Dom, DomError};
+use crate::dom::{Dom, DomError, EventKind};
+use crate::events::{DomEvent, ElementHandler};
+
+/// 真实 DOM 后端上的一个监听器（闭包必须留在后端里，否则 JS 侧的回调悬空）。
+#[derive(Debug)]
+struct WebListener {
+    node: Node,
+    kind: EventKind,
+    closure: Closure<dyn FnMut(Event)>,
+}
 
 /// 真实 DOM 后端（web-sys）。
 #[derive(Debug)]
@@ -33,6 +45,8 @@ pub struct WebDom {
     document: Document,
     /// 已被引擎摘除的节点（弱引用集合 ⇒ 判据见模块文档）。
     detached: RefCell<WeakSet<JsValue>>,
+    /// 已挂的监听器（闭包住在这里 ⇒ 生命周期与后端一致）。
+    listeners: RefCell<Vec<WebListener>>,
 }
 
 impl WebDom {
@@ -54,6 +68,7 @@ impl WebDom {
         Self {
             document,
             detached: RefCell::new(WeakSet::<JsValue>::new_typed()),
+            listeners: RefCell::new(Vec::new()),
         }
     }
 
@@ -99,6 +114,17 @@ impl Dom for WebDom {
             .map(Element::into)
             .map_err(|error| {
                 DomError::Unsupported(format!("create_element({tag}) 失败：{error:?}"))
+            })
+    }
+
+    fn create_element_ns(&self, namespace: &str, tag: &str) -> Result<Self::Node, DomError> {
+        self.document
+            .create_element_ns(Some(namespace), tag)
+            .map(Element::into)
+            .map_err(|error| {
+                DomError::Unsupported(format!(
+                    "create_element_ns({namespace}, {tag}) 失败：{error:?}"
+                ))
             })
     }
 
@@ -232,4 +258,94 @@ impl Dom for WebDom {
         }
         Ok(children)
     }
+
+    fn add_listener(
+        &self,
+        node: &Self::Node,
+        kind: EventKind,
+        handler: ElementHandler,
+    ) -> Result<(), DomError> {
+        self.ensure_writable(node)?;
+        // 同一节点同一事件类型只留一个监听器（覆盖语义）。
+        self.remove_listeners(node)?;
+        let closure = Closure::wrap(Box::new(move |event: Event| {
+            let target = event
+                .target()
+                .and_then(|value| value.dyn_ref::<Node>().cloned());
+            let mut dom_event = DomEvent::new(kind, target_path(target.as_ref()));
+            if let Some(keyboard) = event.dyn_ref::<KeyboardEvent>() {
+                dom_event = dom_event.with_key(keyboard.key());
+            }
+            if let Some(mouse) = event.dyn_ref::<MouseEvent>() {
+                dom_event =
+                    dom_event.with_modifiers(mouse.ctrl_key(), mouse.shift_key(), mouse.meta_key());
+            }
+            handler.call(&mut dom_event);
+            if dom_event.is_default_prevented() {
+                event.prevent_default();
+            }
+            if dom_event.is_propagation_stopped() {
+                event.stop_propagation();
+            }
+        }) as Box<dyn FnMut(Event)>);
+        node.add_event_listener_with_callback(kind.as_str(), closure.as_ref().unchecked_ref())
+            .map_err(|error| {
+                DomError::Unsupported(format!(
+                    "add_event_listener({}) 失败：{error:?}",
+                    kind.as_str()
+                ))
+            })?;
+        self.listeners.borrow_mut().push(WebListener {
+            node: node.clone(),
+            kind,
+            closure,
+        });
+        Ok(())
+    }
+
+    fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError> {
+        let mut listeners = self.listeners.borrow_mut();
+        let mut kept = Vec::with_capacity(listeners.len());
+        for listener in listeners.drain(..) {
+            if &listener.node == node {
+                let _ = node.remove_event_listener_with_callback(
+                    listener.kind.as_str(),
+                    listener.closure.as_ref().unchecked_ref(),
+                );
+            } else {
+                kept.push(listener);
+            }
+        }
+        *listeners = kept;
+        Ok(())
+    }
+}
+
+/// 目标节点在文档里的**子节点下标路径**（从根到目标）。
+///
+/// 与内存后端的路径口径一致（`DomEvent::target_path`：从根到目标的子节点
+/// 下标序列）⇒ 两端的事件对象形状可比。
+fn target_path(target: Option<&Node>) -> Vec<usize> {
+    let Some(target) = target else {
+        return Vec::new();
+    };
+    let mut indices: Vec<usize> = Vec::new();
+    let mut current = target.clone();
+    while let Some(parent) = current.parent_node() {
+        let list = parent.child_nodes();
+        let mut index = 0usize;
+        for candidate in 0..list.length() {
+            let Some(child) = list.get(candidate) else {
+                continue;
+            };
+            if child == current {
+                index = candidate as usize;
+                break;
+            }
+        }
+        indices.push(index);
+        current = parent;
+    }
+    indices.reverse();
+    indices
 }
