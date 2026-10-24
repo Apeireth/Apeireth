@@ -101,6 +101,7 @@
 | 缺口 | PR | 内容 |
 |---|---|---|
 | **被遗忘权**（`universal_forget`） | #90 | 删用户 ⇒ 连记忆一起删。先清记忆再落用户表（反了会留下「用户已删、记忆还在」的中间态）；记忆面拒绝 ⇒ 硬失败 409；未注入 ⇒ 响应如实说清。生产入口 `UniversalForgetFacade::forget_principal`（此前只有 pool 版，生产不可达） |
+| **便携包 CLI**（`portable_bundle`） | 本批 | 新增 `apeireth bundle --out <目录>`。接线时发现三处硬伤并修：启动脚本调不存在的 `serve --data-dir`、设两个无人读取的变量、配置默认打开明文 P2P 桩。清单改为按盘上真实文件生成。**真机验证**：脚本启动网关 → `/health` ok → 数据落在包内 `./data/` |
 | **推理字段归一化**（`reasoning_adapter`） | 本批 | 12 别名 → 前置 `<think>` 块，接进 OpenAI 兼容 provider 响应解析。默认关（模块自带既有 env 开关，不新增）。关键顺序：先归一化后判空 —— 否则推理模型烧光预算（content 空 + `finish_reason=length`）会被误判成空壳响应 |
 | **查询扩展**（`query_expand`） | 本批 | 接在检索主路径，做成**召回增强**：只在主查询召回不足 `limit` 时补跑扩展查询，按 id 并集去重（同 id 取更高分）。不直接替换查询的原因：打分是各项之和（BM25 无查询长度归一化），换掉原查询会让同义词匹配多的文档压过精确匹配 |
 | **代码地图**（`repo_map`） | 本批 | `tool.repo_map` 工具面 + 生产注册（只读、默认可用、工作区限域、三重预算）。**顺带修掉既有实现的两处平方级热点**：建图是「每个定义 × 全文件子串搜索」、PageRank 每轮遍历整张邻接表 ⇒ 152 文件 9.5s、全仓 1319 文件 10.8s（卡十秒=不可用）；改 token 索引建边 + 推式 PageRank 后 **0.26s / 2.1s**，并加复杂度回归守卫测试 |
@@ -113,7 +114,7 @@
 
 | 模块 | 缺的能力 | 接线点 |
 |---|---|---|
-| `crates/adapters/cli/src/portable_bundle.rs` | 一键生成 U 盘便携包 | CLI 无 `bundle` 命令（能力矩阵已宣称 `cli.portable_bundle`） |
+| `crates/adapters/cli/src/portable_bundle.rs` | 一键生成 U 盘便携包 | ✅ **已修**：新增 `apeireth bundle --out <目录>`（复制当前可执行文件 + 两平台启动脚本 + 便携配置 + 清单）。**接线时发现三处硬伤**：①启动脚本调不存在的 `serve --data-dir`（真实是 `gateway serve` + `APEIRETH_DATA_DIR`）②设两个全仓无人读取的变量 ③配置把**明文 P2P 桩**标成 `allow_p2p_mesh: true`。清单 `included_files` 改为按**盘上真实文件**生成（原来硬编码了三个不存在的条目）。**已真机验证**：用生成的脚本启动，`/health` 返回 ok，数据落在包内 `./data/` |
 | `crates/adapters/gateway/src/file_fetcher.rs` | `file://` 拦截 + SHA-256 内容寻址缓存 + 完整性校验 + 分布式回退 | 网关出站面（能力矩阵已宣称 `gw.file_fetcher`） |
 | `crates/adapters/sdk/src/error_taxonomy.rs` | 错误族 → 闭合词表映射 + 跨语言分类/可重试暴露 | SDK 三个错误族（`SdkClientError`/`CodecError`/`ImError`）都不映射 |
 | `crates/capabilities/tools/src/repo_map.rs` | `tool.repo_map` 工具面（符号地图 + PageRank + token 预算裁剪） | ✅ **已修**：`RepoMapTool` 工具面（`repo_map_tool.rs`）+ `RepoMapModule` 生产注册（与 `tool.repo` 同源工作区根），只读、限域、三重预算；**顺带修掉两处平方级热点**（152 文件 9.5s→0.26s、全仓 1319 文件 10.8s→2.1s）+ 复杂度回归守卫测试 |

@@ -139,7 +139,7 @@ orphan end_wait  # G5
 orphan idle_elapsed  # G5
 orphan is_tripped  # G5
 
-# --- G6（81 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（80 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
 orphan constrain_to_trusted  # G6
 orphan decompose_default  # G6
@@ -173,7 +173,6 @@ orphan extract_features  # G6
 orphan extract_features_v2  # G6
 orphan family_enforced  # G6
 orphan fetch_governed  # G6
-orphan generate_portable_config  # G6
 orphan get_for_subject  # G6
 orphan get_history  # G6
 orphan get_page  # G6

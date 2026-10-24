@@ -924,6 +924,18 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        // 随身 U 盘便携包：复制可执行文件 + 两平台启动脚本 + 便携配置 + 清单。
+        // 数据落在包内 ./data/（相对路径，换盘符/挂载点不受影响）。
+        "bundle" => match apeireth_cli::bundle_command::run_bundle(&args[1..]) {
+            Ok(summary) => {
+                println!("{summary}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("bundle operation refused: {error}");
+                ExitCode::FAILURE
+            }
+        },
         // 教训对象（Lesson）只读出口：四拍状态分列（L2 首口，防 L1 变成孤儿 API）。
         "lessons" => match apeireth_cli::lessons_command::run_lessons(&args[1..]) {
             Ok(summary) => {

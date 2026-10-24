@@ -12,6 +12,7 @@ pub mod canonical_approval;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
 pub mod bio_command;
 pub mod bio_switches;
+pub mod bundle_command;
 pub mod care_heartbeat;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;

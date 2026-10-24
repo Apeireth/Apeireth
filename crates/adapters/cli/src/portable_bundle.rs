@@ -51,14 +51,20 @@ impl PortableBundleSynthesizer {
 
     /// Generates Windows batch script for plug-and-play USB execution.
     pub fn generate_windows_launcher(&self) -> String {
+        // 2026-10-24 修：原脚本调 `apeireth.exe serve --data-dir "./data"` ——
+        // **两个都不存在**：CLI 没有 `serve` 子命令（是 `gateway serve`），
+        // 也没有 `--data-dir` 旗标（数据目录走 `APEIRETH_DATA_DIR` 环境变量）。
+        // 还顺手设了两个全仓无人读取的变量（`APEIRETH_HOME` / `APEIRETH_PORTABLE`）——
+        // 设了没人读的变量等于骗人：用户会以为它在起作用。
+        //
+        // 现在只设**真实存在**的 `APEIRETH_DATA_DIR`，并调**真实存在**的命令。
         r#"@echo off
 setlocal
 cd /d "%~dp0"
 echo [Apeireth] Starting Portable USB Agent...
-set APEIRETH_HOME=%~dp0data
-set APEIRETH_PORTABLE=1
 if not exist "data" mkdir "data"
-apeireth.exe serve --data-dir "./data"
+set APEIRETH_DATA_DIR=%~dp0data
+apeireth.exe gateway serve
 pause
 "#
         .to_string()
@@ -66,35 +72,49 @@ pause
 
     /// Generates POSIX shell script for USB execution.
     pub fn generate_posix_launcher(&self) -> String {
+        // 同 Windows 版：修为真实命令（`gateway serve`）+ 真实变量
+        // （`APEIRETH_DATA_DIR`），不再设无人读取的 `APEIRETH_HOME`/`APEIRETH_PORTABLE`。
         r#"#!/usr/bin/env bash
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cd "$DIR"
 echo "[Apeireth] Starting Portable USB Agent..."
-export APEIRETH_HOME="$DIR/data"
-export APEIRETH_PORTABLE=1
 mkdir -p "$DIR/data"
-chmod +x ./apeireth
-./apeireth serve --data-dir "./data"
+export APEIRETH_DATA_DIR="$DIR/data"
+chmod +x ./apeireth 2>/dev/null || true
+./apeireth gateway serve
 "#
         .to_string()
     }
 
     /// Generates default portable configuration JSON.
     pub fn generate_portable_config(&self) -> String {
+        // 2026-10-24 修两处「说不实」：
+        // 1. `database_path` 原写 `./data/apeireth.db` —— 真实文件名是
+        //    `cognitive.sqlite3`（见 cli `default_panel_data_dir` + 认知库命名）；
+        // 2. 本文件**不被程序读取**：真实数据目录由启动脚本设的
+        //    `APEIRETH_DATA_DIR` 决定。所以加 `_note` 如实说明它是
+        //    **便携布局的说明性配置**，改了不会改变程序行为 ——
+        //    否则用户改这里发现没效果，只会以为是 bug。
         serde_json::json!({
+            "_note": "说明性配置（仅供参考）: 实际数据目录由启动脚本设置的 APEIRETH_DATA_DIR 决定, 修改本文件不改变程序行为。",
             "agent_name": self.agent_name,
             "version": self.version,
             "storage": {
                 "mode": "portable_relative",
-                "database_path": "./data/apeireth.db",
-                "memory_streams_dir": "./data/streams",
+                "data_dir": "./data",
+                "database_path": "./data/cognitive.sqlite3",
+                "storage_dir": "./data",
                 "vault_dir": "./data/vault"
             },
             "network": {
                 "bind_host": "127.0.0.1",
                 "bind_port": 8787,
-                "allow_p2p_mesh": true
+                // 2026-10-24 修：原来是 `true`，但 `p2p_mesh` 是**明文桩**
+                // （无 Noise 握手、无洋葱封装，加密在 v2.1 路线图）——
+                // 把它在便携包里默认打开，等于让「U 盘一插就能用」的用户
+                // 在不知情下跑明文点对点。默认 false，要开自己显式改。
+                "allow_p2p_mesh": false
             }
         })
         .to_string()
@@ -111,14 +131,17 @@ chmod +x ./apeireth
             ),
             created_at_secs,
             relative_data_dir: "./data".into(),
-            relative_db_path: "./data/apeireth.db".into(),
+            // 2026-10-24 修: 真实认知库文件名是 `cognitive.sqlite3`（此前后缀写错）。
+            relative_db_path: "./data/cognitive.sqlite3".into(),
+            // 2026-10-24 修：原来这里是**硬编码的假清单** ——
+            // 列了 `apeireth.exe`（Linux 上没有）、`apeireth.json`（本项目里
+            // 根本没有这个文件名，实际是 `portable-config.json`）、
+            // `data/apeireth.db`（既不叫这个名也还没被创建）。
+            // 现在由落盘方按**真实写到盘上的文件**填充（见 `bundle_command`）。
             included_files: vec![
-                "apeireth.exe".into(),
-                "apeireth".into(),
                 "run_apeireth.bat".into(),
                 "run_apeireth.sh".into(),
-                "apeireth.json".into(),
-                "data/apeireth.db".into(),
+                "portable-config.json".into(),
             ],
         }
     }
@@ -128,16 +151,41 @@ chmod +x ./apeireth
 mod tests {
     use super::*;
 
+    /// 启动脚本必须**真能用**：调真实存在的子命令、设真实存在的变量。
+    ///
+    /// 2026-10-24 重写：原测试断言的是 `APEIRETH_PORTABLE=1` ——
+    /// 而那是个**全仓无人读取的变量**（旧脚本还调了不存在的
+    /// `serve --data-dir`）。测试把缺陷钉住了，所以接线时必须连测试一起改：
+    /// 现在断言「真实命令 + 真实变量」，并且**反向断言**那两个假变量不再出现。
     #[test]
     fn test_portable_bundle_launcher_scripts() {
         let synth = PortableBundleSynthesizer::default();
         let bat = synth.generate_windows_launcher();
         let sh = synth.generate_posix_launcher();
 
-        assert!(bat.contains("APEIRETH_PORTABLE=1"));
-        assert!(bat.contains("%~dp0data"));
-        assert!(sh.contains("APEIRETH_PORTABLE=1"));
-        assert!(sh.contains("chmod +x ./apeireth"));
+        for script in [&bat, &sh] {
+            assert!(
+                script.contains("gateway serve"),
+                "必须调真实子命令 `gateway serve`:\n{script}"
+            );
+            assert!(
+                script.contains("APEIRETH_DATA_DIR"),
+                "数据目录靠真实变量 `APEIRETH_DATA_DIR`:\n{script}"
+            );
+            assert!(
+                !script.contains(" serve --data-dir"),
+                "`serve --data-dir` 不存在（旧脚本硬伤）:\n{script}"
+            );
+            assert!(
+                !script.contains("APEIRETH_PORTABLE") && !script.contains("APEIRETH_HOME"),
+                "不得设无人读取的变量:\n{script}"
+            );
+        }
+        // 平台专有部分
+        assert!(bat.contains("%~dp0data"), "Windows 数据目录相对包内");
+        assert!(bat.contains("apeireth.exe gateway serve"), "{bat}");
+        assert!(sh.contains("chmod +x ./apeireth"), "{sh}");
+        assert!(sh.contains("$DIR/data"), "POSIX 数据目录相对包内: {sh}");
     }
 
     #[test]
