@@ -155,6 +155,7 @@ mod tests {
             &apeireth_runtime_assembly::canonical::nightwatch::NightwatchInputs {
                 episodes: Vec::new(),
                 audit: snapshots,
+                audit_source_wired: true,
                 council_ballots: Vec::new(),
                 colang_sources: Vec::new(),
             },

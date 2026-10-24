@@ -2720,11 +2720,8 @@ pub async fn dispatch_canonical_chat(
     result
 }
 
-/// **守夜人 Nightwatch** (2026-10-10, 主人批准设计): 显式命令即授权 ——
-/// 离线闲时审计 (report-only)。读近 N 条 episodes 为被动快照 → 五件组合审计
-/// (risk 核词扫描 / eval 行为质量 / no-degrade 复盘 / evidence 断言缺口 /
-/// rubric 平衡 / colang 健康) → 报告落 `<data>/nightwatch/`。
-/// **不阻塞不批准**: approval_policy 留热路径; 审计链/ballot 未持久化 = 具名缺口。
+/// **守夜人 Nightwatch** (2026-10-10, 主人批准): 显式命令即授权 — 离线闲时审计
+/// (report-only)。五件组合审计 → 报告落 `<data>/nightwatch/`。**不阻塞不批准**。
 pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Result<String, String> {
     use apeireth_memory::backend::sqlite::SqliteBackend;
     use apeireth_plugin::memory_backend::MemoryBackend;
@@ -2758,11 +2755,13 @@ pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Resul
 
     let inputs = NightwatchInputs {
         episodes: snapshots,
-        // 守卫判定账（append-only）：此前恒空 ⇒ no-degrade 复盘段空转。
-        // 映射口径见 `guard_decision_wiring`（含 score→档 的显式定义）。
+        // 守卫判定账（append-only）：映射口径见 `guard_decision_wiring`（含 score→档 定义）。
         audit: guard_decision_wiring::nightwatch_audit_snapshots(
             guard_decision_wiring::NIGHTWATCH_AUDIT_READ_LIMIT,
         ),
+        // 装配根无条件接上判定落盘（`attach_decision_log` 恒被调用）⇒ 恒 true；
+        // 文件不存在只说明「还没有判定记录」（按存在性判断会误报）。
+        audit_source_wired: true,
         ..Default::default()
     };
     let report = apeireth_runtime_assembly::canonical::nightwatch_audit(&inputs);

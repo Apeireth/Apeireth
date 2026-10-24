@@ -138,6 +138,41 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.4t 守夜人把「接线后无数据」误报成「没接线」—— 已修（2026-10-25）
+
+**缺陷**：判定落盘接线完成后（§5.4 那批），守夜人仍在报
+
+```
+- [gap] audit chain 未持久化供闲时读取 —— no-degrade 复盘段空转 (接线项)
+```
+
+—— 让人以为接线没做。真实情况：这个数据根**还没有守卫判定记录**（日志文件要等
+第一条判定才出现）。「接好了但没数据」与「根本没接线」共用一句文案是误报。
+
+**修法**：`NightwatchInputs` 加 `audit_source_wired: bool`（默认 `false` 保持旧语义）：
+
+- `false` + 空 ⇒ 旧文案（具名接线缺口，仍如实）；
+- `true` + 空 ⇒ **「审计链为空：本数据根还没有守卫判定记录 —— no-degrade 复盘段本轮
+  无料可查（不是接线缺口）」**。
+
+生产侧恒传 `true`（装配根 `attach_decision_log` **无条件**调用）；按「日志文件是否存在」
+判断会误报 —— 实测跑过带治理的回合后 `guard-decisions.jsonl` 仍不存在（它记的是**守卫
+判定**，不是治理链审计）。
+
+**真机验证（两态）**：
+
+```
+① 已接线但无数据 → 「审计链为空：…（不是接线缺口）」
+② 注入 2 条正确 schema 的判定（deny 0.9 → allow 0.1）后：
+   守夜复盘 0 episodes / 2 audit: 1 findings
+   - [medium] NoDegrade: 审计链风险静默降级: `critical` → `info`
+   （「未持久化」缺口消失，只剩 council ballot 那条真缺口）
+```
+
+**测试**：`not_wired_and_empty_reports_the_wiring_gap` /
+`wired_but_empty_does_not_claim_the_wiring_is_missing`（断言收窄到「审计链」那条，
+不误伤 `council ballot 未持久化`）。
+
 ### 5.4s 并行派发在**网关形态**同样生效（2026-10-25 补证）
 
 CLI 对话路径与 `gateway serve` 是**两条装配入口**（前者

@@ -55,6 +55,13 @@ pub struct NightwatchInputs {
     pub episodes: Vec<EpisodeSnapshot>,
     /// 审计链快照
     pub audit: Vec<AuditSnapshot>,
+    /// 审计源**是否已接线**（`false` = 没有任何持久审计来源）。
+    ///
+    /// 区分两种情况，别把「接好了但本轮没数据」说成「没接线」：
+    /// - `false` + `audit` 空 ⇒ 具名接线缺口（旧文案）；
+    /// - `true` + `audit` 空 ⇒ 只是这个数据根还没有守卫判定记录（不是缺口）。
+    /// 误报会让读者以为接线没做（我修完落盘后它仍在报「未持久化」——实测 2026-10-25）。
+    pub audit_source_wired: bool,
     /// council ballot (未持久化时空)
     pub council_ballots: Vec<rubric::Ballot>,
     /// .co 源 ((filename, source))
@@ -191,10 +198,18 @@ pub fn audit(inputs: &NightwatchInputs) -> NightwatchReport {
         }
     }
 
-    // ③ risk no-degrade 复盘 (审计链空 = 具名缺口)。
+    // ③ risk no-degrade 复盘 (审计链空 = 具名缺口；但「接线后无数据」不算缺口)。
     if inputs.audit.is_empty() {
-        advisory_gaps
-            .push("audit chain 未持久化供闲时读取 —— no-degrade 复盘段空转 (接线项)".to_string());
+        if inputs.audit_source_wired {
+            advisory_gaps.push(
+                "审计链为空：本数据根还没有守卫判定记录 —— no-degrade 复盘段本轮无料可查（不是接线缺口）"
+                    .to_string(),
+            );
+        } else {
+            advisory_gaps.push(
+                "audit chain 未持久化供闲时读取 —— no-degrade 复盘段空转 (接线项)".to_string(),
+            );
+        }
     } else {
         for window in inputs.audit.windows(2) {
             if risk::is_degrade(&window[0].risk, &window[1].risk) {
@@ -576,5 +591,59 @@ mod nightwatch_tests {
             IdleGate::ActiveSoon { .. }
         ));
         assert_eq!(scheduler.should_run(1_000 + 1_000), IdleGate::IdleOk);
+    }
+}
+
+#[cfg(test)]
+mod audit_source_wired_tests {
+    use super::*;
+
+    /// **没接线** + 无数据 ⇒ 旧文案（具名接线缺口），保持原语义。
+    #[test]
+    fn not_wired_and_empty_reports_the_wiring_gap() {
+        let inputs = NightwatchInputs {
+            audit_source_wired: false,
+            ..Default::default()
+        };
+        let report = audit(&inputs);
+        assert!(
+            report
+                .advisory_gaps
+                .iter()
+                .any(|gap| gap.contains("audit chain 未持久化")),
+            "没接线必须仍报接线缺口: {:?}",
+            report.advisory_gaps
+        );
+    }
+
+    /// **已接线** + 本轮无数据 ⇒ 不得再说「未持久化」（那是误报）。
+    ///
+    /// 真机事故（2026-10-25）：判定落盘接线完成后，守夜人仍在报
+    /// 「audit chain 未持久化」—— 让人以为接线没做，其实只是这个数据根还没有判定记录。
+    #[test]
+    fn wired_but_empty_does_not_claim_the_wiring_is_missing() {
+        let inputs = NightwatchInputs {
+            audit_source_wired: true,
+            ..Default::default()
+        };
+        let report = audit(&inputs);
+        // 只针对**审计链**这一条：council ballot 的「未持久化」是另一件事（仍成立）。
+        assert!(
+            report
+                .advisory_gaps
+                .iter()
+                .filter(|gap| gap.contains("审计链"))
+                .all(|gap| !gap.contains("未持久化")),
+            "已接线时审计链不得报「未持久化」: {:?}",
+            report.advisory_gaps
+        );
+        assert!(
+            report
+                .advisory_gaps
+                .iter()
+                .any(|gap| gap.contains("还不是接线缺口") || gap.contains("不是接线缺口")),
+            "应如实说明「只是没数据」: {:?}",
+            report.advisory_gaps
+        );
     }
 }

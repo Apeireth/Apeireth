@@ -122,7 +122,7 @@ devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provide
 
 # --- size (65) ---
 size crates/adapters/cli/src/gateway_panels.rs 1540
-size crates/adapters/cli/src/lib.rs 3812
+size crates/adapters/cli/src/lib.rs 3811
 size crates/adapters/cli/src/onboarding.rs 1338
 size crates/adapters/gateway/src/canonical_entry.rs 2233
 size crates/adapters/gateway/src/events.rs 1623
