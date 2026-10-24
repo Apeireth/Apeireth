@@ -116,9 +116,33 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4g 问责闭环「回填只写不读」—— 已修（2026-10-25）
+
+**缺陷**：`apeireth egress impact` 只读 `impact-ledger.jsonl`，
+**从不读 `consequence-ledger.jsonl`** ⇒ `apeireth egress outcome ...` 的回填
+**在 CLI 上完全看不出效果**（报告仍显示「后果未知」）。自述面用的是
+`ConsequenceTracker`（读得到真值），CLI 报告用的是原始声明 —— 两者分叉。
+
+**修法（两处）**：
+
+1. `run_impact` 叠加后果账（与自述面**同一个** `ConsequenceTracker`，文件即共享真源），
+   且**只升级不降级** —— 后果账无该行动记录时保留声明自带 outcome，
+   否则会把已知后果降级成未知（把真信息变假信息，比不叠加更糟）；
+2. **计数按叠加后重算**：`ledger.counts()` 读原始账，会与叠加结果打架
+   （实测回填后「超期未回填=0」却仍写「后果未知=1」）。
+
+**真机闭环验证**：
+
+```
+① 回填前            → 不可逆=1 影响他人=1 后果未知=1 超期未回填=1 ⚠
+② egress outcome a1 confirmed
+③ 回填后            → 不可逆=1 影响他人=1 后果未知=0 超期未回填=0（0 个超期标记）
+```
+
 ### 5.4f 问责闭环「后果追踪」缺自动回填面（2026-10-25 查证，判定为**设计项**）
 
-ADR-0014 §5 的问责五步里，第 ③ 步「后果追踪（`unknown` 一等公民）」目前**只有手动入口**：
+ADR-0014 §5 的问责五步里，第 ③ 步「后果追踪（`unknown` 一等公民）」目前**只有手动入口**
+（回填读取侧的断裂已在 §5.4g 修好；本节的「自动回填」是另一件事）：
 
 ```
 apeireth egress outcome <ACTION_ID> <confirmed|failed>
