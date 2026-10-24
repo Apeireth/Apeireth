@@ -5,7 +5,7 @@ import {writeFileSync} from 'node:fs';
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const DEBUG_PORT = 9381;
 const APP = 'http://127.0.0.1:5199/';
-const OUT = 'C:\\Users\\31683\\Apeireth-rust\\artifacts\\';
+const OUT = 'C:\\Users\\USER_A\\Apeireth-rust\\artifacts\\';
 
 const seedConversations = [
   {id: 'demo-1', title: '打断验收会话', createdAt: Date.now() - 3600000, updatedAt: Date.now() - 60000, scope: 'global',

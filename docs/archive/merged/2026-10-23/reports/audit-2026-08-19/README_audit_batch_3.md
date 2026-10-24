@@ -508,4 +508,4 @@
 
 ## 报告路径
 
-**绝对路径**: `C:\Users\31683\Apeireth-rust\_research_mem\sub_agent_reports\2026-08-19\README_audit_batch_3.md`
+**绝对路径**: `C:\Users\USER_A\Apeireth-rust\_research_mem\sub_agent_reports\2026-08-19\README_audit_batch_3.md`

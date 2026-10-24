@@ -4,7 +4,7 @@
 # 用法（提权运行；先停掉旧实例，否则运行中的 exe 被文件锁挡住）：
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\deploy-companion-hotswap.ps1
 param(
-  [string]$Src = 'C:\Users\31683\Apeireth-rust\frontend\companion-desktop\src-tauri\target\release\companion-desktop.exe',
+  [string]$Src = 'C:\Users\USER_A\Apeireth-rust\frontend\companion-desktop\src-tauri\target\release\companion-desktop.exe',
   [string]$DstDir = 'C:\Program Files\Apeireth Companion'
 )
 $ErrorActionPreference = 'Stop'

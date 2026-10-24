@@ -92,7 +92,7 @@ fn is_sensitive_file_name(name: &str) -> bool {
     // Git/curl 凭据存储与 apikey 文件 — 2026-10-06 真机: 工作区根=用户主目录
     // 时, 模型亲眼见到 .git-credentials/_netrc/apikey-ultra.txt/GeminiApiKey.txt
     // 躺在工作区里. "apikey" 用 contains 而非前缀, 覆盖 GeminiApiKey.txt 这类
-    // 品牌前缀变体; .git-credentials 用后缀匹配覆盖 Users31683.git-credentials.
+    // 品牌前缀变体; .git-credentials 用后缀匹配覆盖 UsersExample.git-credentials.
     if name.ends_with(".git-credentials")
         || name == ".netrc"
         || name == "_netrc"
@@ -302,7 +302,7 @@ mod tests {
             "_netrc",
             ".npmrc",
             "token.txt",
-            "Users31683.git-credentials",
+            "UsersExample.git-credentials",
             "GeminiApiKey.txt",
             "apikey-ultra.txt",
             "apikey.txt",

@@ -158,7 +158,7 @@ Reuse opportunity
 | Runtime root | `apeireth-runtime::canonical::Runtime` + `Runtime::execute` | `UnifiedRuntimeHost::handle_chat_turn` | Canonical | Decompose host functions; do not import object |
 | Provider abstraction | `ProviderCapability` + `CredentialResolver` + `Secret` | `ProtocolAdapter::execute(api_key, request)` | Canonical | Reuse adapter DTO/serializer/parser only |
 | Model routing | `ProviderRouter` + `ModelDescriptor` in runtime canonical | `ModelRouter` with `exact:` / `prefix:` / fallback | Canonical | Drop master architecture; small route-matching utility at most |
-| Credentials | `CredentialResolver` -> `Secret`, logical names | raw `api_key: String`, fixed path `C:\Users\31683\apikey-ultra.txt` | Canonical | None |
+| Credentials | `CredentialResolver` -> `Secret`, logical names | raw `api_key: String`, fixed path `C:\Users\USER_A\apikey-ultra.txt` | Canonical | None |
 | Protocol | `apeireth-protocol::canonical` DTOs; stateless adapters | `normalized` DTOs + adapters that own reqwest | Canonical | Reuse DTO/parser/serializer codecs |
 | Tool registry | `apeireth-plugin` `PluginRegistry` + `CapabilityRegistry` | `apeireth-tools::ToolRegistry` + runtime `CapabilityRegistry` | Canonical | Reuse concrete tool implementations behind `ToolCapability` |
 | Capability registry | `apeireth-plugin::CapabilityRegistry` (index over manifests) | master `apeireth-runtime::capability_registry` wraps `ToolRegistry` | Canonical | None |
@@ -260,7 +260,7 @@ Maturity labels: `REAL`, `PARTIAL`, `STUB`, `MOCK`, `PLACEHOLDER`, `DOC-ONLY`.
 | PyBridge | `crates/apeireth-pybridge/src/lib.rs` | PARTIAL | SDK/bindings | DEFER | P3 | pyo3/ureq | pybridge tests | real HTTP to gateway; application-layer |
 | CLI/TUI | `crates/apeireth-cli/src/*` | PARTIAL | CLI adapter | ADAPT | P2 | clap/ratatui | CLI parse tests | CLI is an adapter; TUI state lives in CLI |
 | Public raw CoT | `crates/apeireth-runtime/src/host.rs` `ChatTurnOutput.reasoning_cot`; `crates/apeireth-gateway/src/server.rs` `reasoning_content` | REAL | DROP | DROP | P0 | - | host/gateway tests reference it | canonical violation |
-| Hardcoded key path | `crates/apeireth-gateway/src/main.rs`, `crates/apeireth-cli/src/lib.rs` | REAL | DROP | DROP | P0 | - | - | `C:\Users\31683\apikey-ultra.txt` fixed path |
+| Hardcoded key path | `crates/apeireth-gateway/src/main.rs`, `crates/apeireth-cli/src/lib.rs` | REAL | DROP | DROP | P0 | - | - | `C:\Users\USER_A\apikey-ultra.txt` fixed path |
 
 ---
 
@@ -514,7 +514,7 @@ call canonical `Runtime::execute`, not `host.handle_chat_turn`.
 | # | Finding | Severity | Evidence |
 | --- | --- | --- | --- |
 | 1 | Raw API key as `pub api_key: String` on `UnifiedRuntimeHost`; passed into `ModelRouter.execute` and gateway `agent_turn` | HIGH | `runtime/src/host.rs:44`, `gateway/src/server.rs:867` |
-| 2 | Fixed machine-specific key path `C:\Users\31683\apikey-ultra.txt` | HIGH | `gateway/src/main.rs:5`, `cli/src/lib.rs:59` |
+| 2 | Fixed machine-specific key path `C:\Users\USER_A\apikey-ultra.txt` | HIGH | `gateway/src/main.rs:5`, `cli/src/lib.rs:59` |
 | 3 | Raw CoT exposed as `ChatTurnOutput.reasoning_cot` and gateway `reasoning_content` | HIGH | `runtime/src/host.rs:52`, `gateway/src/server.rs:215` |
 | 4 | `ShellTool` executes arbitrary commands with blacklist sanitizer; sandbox not attached | HIGH | `tools/src/builtin/shell.rs` |
 | 5 | `PlatformSandbox` created/applied to host process, but child processes not assigned on Windows | HIGH | `tools/src/sandbox.rs`, `host.rs` tool loop |

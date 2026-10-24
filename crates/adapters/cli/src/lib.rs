@@ -1570,9 +1570,12 @@ async fn build_canonical_runtime_with_parts(
     let egress_ledger_path = egress_data_root.join("egress-ledger.jsonl");
     // 问责账本（影响声明 + 事实→行动索引）——「发现影响时通知你」的前提。
     let accountability_ledger_path = egress_data_root.join("impact-ledger.jsonl");
-    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env_with_ledgers(
+    // 后果账本（后果状态持久化 —— 不落盘的话重启就丢，「后果追踪」等于没追）。
+    let consequence_ledger_path = egress_data_root.join("consequence-ledger.jsonl");
+    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env_with_all(
         Some(egress_ledger_path),
         Some(accountability_ledger_path),
+        Some(consequence_ledger_path),
     ) {
         builder = builder.with_egress_gate(gate);
     }

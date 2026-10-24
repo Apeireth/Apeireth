@@ -5,7 +5,7 @@ import {writeFileSync} from 'node:fs';
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const DEBUG_PORT = 9414;
 const BASE = 'http://127.0.0.1:1420/';
-const OUT = 'C:\\Users\\31683\\Apeireth-rust\\artifacts\\';
+const OUT = 'C:\\Users\\USER_A\\Apeireth-rust\\artifacts\\';
 function connect(ws) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(ws);

@@ -332,6 +332,15 @@ pub fn egress_gate_from_env_with_ledgers(
     ledger_path: Option<std::path::PathBuf>,
     accountability_path: Option<std::path::PathBuf>,
 ) -> Option<std::sync::Arc<dyn EgressGate>> {
+    egress_gate_from_env_with_all(ledger_path, accountability_path, None)
+}
+
+/// 同上，并指定**后果账本**路径（后果状态持久化 + 重启后仍可查）。
+pub fn egress_gate_from_env_with_all(
+    ledger_path: Option<std::path::PathBuf>,
+    accountability_path: Option<std::path::PathBuf>,
+    consequence_path: Option<std::path::PathBuf>,
+) -> Option<std::sync::Arc<dyn EgressGate>> {
     let raw = std::env::var(EGRESS_GATE_ENV).ok()?;
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false") {
@@ -341,6 +350,11 @@ pub fn egress_gate_from_env_with_ledgers(
     let mut gate = RedactionEgressGate::with_ledger(ledger);
     if let Some(path) = accountability_path {
         gate = gate.with_accountability(Arc::new(AccountabilityLedger::new(Some(path))));
+    }
+    if let Some(path) = consequence_path {
+        gate = gate.with_consequences(Arc::new(tokio::sync::Mutex::new(
+            ConsequenceTracker::with_ledger(path),
+        )));
     }
     if trimmed != "1" {
         match AuthorizationPolicy::from_carryable(trimmed) {

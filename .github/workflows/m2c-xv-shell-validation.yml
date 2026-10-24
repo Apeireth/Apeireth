@@ -43,7 +43,7 @@ jobs:
         run: cargo test -p apeireth-runtime --test canonical_approval_lifecycle --locked
 
       - name: Runtime shell approval E2E tests
-        run: cargo test -p apeireth-runtime --test canonical_shell_approval_e2e --locked
+        run: cargo test -p apeireth-runtime-assembly --test canonical_shell_approval_e2e --locked
 
       - name: Runtime architecture invariants
         run: cargo test -p apeireth-runtime --test canonical_architecture_invariants --locked

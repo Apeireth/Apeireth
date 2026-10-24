@@ -130,7 +130,7 @@ Author:          主代理 Mavis
 
 **手动验证真账** (接手人首件事):
 ```bash
-cd C:\Users\31683\Apeireth-rust
+cd C:\Users\USER_A\Apeireth-rust
 git log --oneline -5                                    # 期望 HEAD = f6831c95 (2026-10-18; 历史 2026-09-05 对账基线 7647d2c9)
 cargo test --workspace --locked                          # 期望: 0 failed（现行口径见 ../03-reference/test-baseline.md；2026-10-13 历史口径 5360 passed / 22 ignored）
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望: 0 警告
@@ -456,7 +456,7 @@ git commit --no-verify -m "..."   # 跳过所有 hook
 ### 9.1 改 src 前必跑 (基线)
 
 ```bash
-cd C:\Users\31683\Apeireth-rust
+cd C:\Users\USER_A\Apeireth-rust
 git log --oneline -5                                            # 确认 HEAD 与文档一致
 cargo test --workspace --locked                                  # 期望 0 failed（现行口径见 ../03-reference/test-baseline.md；2026-10-13 历史 5360 passed / 22 ignored）
 cargo clippy --workspace --all-targets --locked -- -D warnings  # 期望 0 警告
@@ -510,7 +510,7 @@ cargo test --workspace --locked  # 真账
 
 ```bash
 # 设 env (不 commit key):
-$env:APEIRETH_API_KEY = "sk-..."   # MiniMax Coding Plan key (C:\Users\31683\apikey-ultra.txt)
+$env:APEIRETH_API_KEY = "sk-..."   # MiniMax Coding Plan key (C:\Users\USER_A\apikey-ultra.txt)
 
 # 真 LLM 跑:
 cargo test -p apeireth-provider --test minimax_llm_factory real_llm_call_smoke -- --ignored --nocapture

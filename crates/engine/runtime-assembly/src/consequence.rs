@@ -81,12 +81,33 @@ impl OutcomeSource {
 #[derive(Debug, Clone, Default)]
 pub struct ConsequenceTracker {
     events: Vec<ConsequenceEvent>,
+    /// 持久化路径（`None` = 纯内存，进程一退就丢）。
+    ///
+    /// **生产装配必须给路径** —— 否则「后果追踪」只是进程内的一块内存，
+    /// 重启后全丢，等于没追。
+    path: Option<std::path::PathBuf>,
 }
 
 impl ConsequenceTracker {
-    /// 新建（空状态机）。
+    /// 新建（空状态机，不持久）。
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// 新建并从账本**加载历史事件**（append-only 真源）。
+    ///
+    /// 坏行读作不存在（与仓内其它账本同纪律）。
+    pub fn with_ledger(path: std::path::PathBuf) -> Self {
+        let events = read_events(&path);
+        Self {
+            events,
+            path: Some(path),
+        }
+    }
+
+    /// 持久化路径（`None` = 不持久）。
+    pub fn path(&self) -> Option<&std::path::Path> {
+        self.path.as_deref()
     }
 
     /// 记录一次后果变化。
@@ -104,12 +125,20 @@ impl ConsequenceTracker {
         if !is_transition_allowed(current, outcome) {
             return false;
         }
-        self.events.push(ConsequenceEvent {
+        let event = ConsequenceEvent {
             action_id: action_id.to_string(),
             at_ms,
             outcome,
             evidence: source.label().to_string(),
-        });
+        };
+        // 先落盘再进内存：落盘失败 = 这次变化**不算数**（否则内存与账本会分叉，
+        // 而分叉后的「后果状态」是不可信的）。
+        if let Some(path) = &self.path {
+            if append_event(path, &event).is_err() {
+                return false;
+            }
+        }
+        self.events.push(event);
         true
     }
 
@@ -169,6 +198,33 @@ impl ConsequenceTracker {
         }
         counts
     }
+}
+
+/// 追加一行（带换行）。父目录不存在时先建。
+fn append_event(path: &std::path::Path, event: &ConsequenceEvent) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    use std::io::Write;
+    let line = serde_json::to_string(event)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    file.write_all(line.as_bytes())?;
+    file.write_all(b"\n")?;
+    Ok(())
+}
+
+/// 读回事件（坏行读作不存在）。
+fn read_events(path: &std::path::Path) -> Vec<ConsequenceEvent> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter_map(|line| serde_json::from_str::<ConsequenceEvent>(line).ok())
+        .collect()
 }
 
 /// 允许的状态迁移。

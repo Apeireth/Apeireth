@@ -2,7 +2,7 @@
 
 **审计员**: code_quality_auditor sub-agent
 **日期**: 2026-08-19
-**项目**: C:\Users\31683\Apeireth-rust (v1.0.0, tag 993e9107, HEAD 9bf36b1e)
+**项目**: C:\Users\USER_A\Apeireth-rust (v1.0.0, tag 993e9107, HEAD 9bf36b1e)
 **活跃 crate 数**: 84 (实测, baseline 说 85; `release-tools/` 是工具子目录, 不算 active crate; `_archived/` / `_frozen/` 不计入)
 
 ---
@@ -309,7 +309,7 @@ f69154e5 fix(rate-limiter): available_tokens_reflects_refill 改语义断言 (ma
 |---|---|
 | `_research_mem/sub_agent_reports/2026-08-19/test_coverage.csv` | 84 crate 测试覆盖矩阵 |
 | `_research_mem/sub_agent_reports/2026-08-19/clippy.log` | cargo clippy 全量输出 (876 行) |
-| `C:\Users\31683\Apeireth-rust\fmt_per_crate.log` | 84 crate rustfmt per-crate 结果 |
-| `C:\Users\31683\Apeireth-rust\fmt_apeireth-{api,core,cron,integration-e2e,supervisor,tui}.log` | 6 个 drift crate 的 rustfmt diff 详情 |
-| `C:\Users\31683\Apeireth-rust\fix_pipeline_retry_suppression.diff` | flaky fix #1 (4406207f) 完整 diff |
-| `C:\Users\31683\Apeireth-rust\fix_rate_limiter_token_bucket.diff` | flaky fix #2 (f69154e5) 完整 diff |
+| `C:\Users\USER_A\Apeireth-rust\fmt_per_crate.log` | 84 crate rustfmt per-crate 结果 |
+| `C:\Users\USER_A\Apeireth-rust\fmt_apeireth-{api,core,cron,integration-e2e,supervisor,tui}.log` | 6 个 drift crate 的 rustfmt diff 详情 |
+| `C:\Users\USER_A\Apeireth-rust\fix_pipeline_retry_suppression.diff` | flaky fix #1 (4406207f) 完整 diff |
+| `C:\Users\USER_A\Apeireth-rust\fix_rate_limiter_token_bucket.diff` | flaky fix #2 (f69154e5) 完整 diff |

@@ -26,7 +26,7 @@
 | 7 | `date` 输出乱码 | 中文 Windows cmd 输出 GBK, 硬解 UTF-8 | UTF-8 失败回退 GBK 解码 (encoding_rs) | `d20df3bb` |
 | 8 | judge Stop ("AI Judge rejected the candidate") 挂"重启 Companion" | 模块停靠归码 internal | 新错误码 **`review_rejected`** (方案: 重新生成/调低认知深度) | `09ceb8d2` |
 | 9 | "turn did not converge within 8 rounds" 挂"重启 Companion" | 轮数上限归码 internal | 新错误码 **`turn_not_converged`** (方案: 拆小问题/重新生成) | `05a5d118` |
-| 10 | 全套边界测试发现敏感名单漏网: `GeminiApiKey.txt`/`Users31683.git-credentials`/`apeireth_gateway.db` 可被只读工具看见 | 屏蔽名单只认精确名/前缀 | `contains("apikey")` + `.git-credentials` 后缀 + 产品 DB 精确名 | `b41be6c1` |
+| 10 | 全套边界测试发现敏感名单漏网: `GeminiApiKey.txt`/`UsersExample.git-credentials`/`apeireth_gateway.db` 可被只读工具看见 | 屏蔽名单只认精确名/前缀 | `contains("apikey")` + `.git-credentials` 后缀 + 产品 DB 精确名 | `b41be6c1` |
 | 11 | 引号被吃: `powershell -Command "..."` 只回显不执行 | cmd `/S` 引号规则 × Rust argv 转义叠加 | 命令改走 **`raw_arg` 直传** (`/D /S /C "<cmd>"` 原样进命令行), 双引号全保真 + 真实执行回归测试 | `b41be6c1` |
 
 **元层原则 (本日确立, 写进代码注释)**: judge/council 等评审机制只能降级

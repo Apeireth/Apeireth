@@ -1,4 +1,4 @@
-   Compiling companion-desktop v2.0.0-rc.1 (C:\Users\31683\Apeireth-rust\frontend\companion-desktop\src-tauri)
+   Compiling companion-desktop v2.0.0-rc.1 (C:\Users\USER_A\Apeireth-rust\frontend\companion-desktop\src-tauri)
 warning: use of a disallowed method `std::fs::metadata`
    --> src\backend_supervisor.rs:528:11
     |

@@ -320,7 +320,7 @@ git status
 
 ```bash
 # 1. set env (NOT commit key, 0 装诚实)
-export APEIRETH_API_KEY=$(cat C:\Users\31683\apikey-ultra.txt)
+export APEIRETH_API_KEY=$(cat C:\Users\USER_A\apikey-ultra.txt)
 # 注: 实际是 sk-cp-ku...RsUg (125 chars, MiniMax Coding Plan)
 
 # 2. 真 LLM call test

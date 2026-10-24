@@ -156,7 +156,7 @@ _本清单由「落差清账·文本可信度批」创建（2026-10-16）。_
 
 ## 5. 本轮实证记录（2026-10-21）
 
-> 对账环境：仓库 `C:\Users\31683\Apeireth-rust`，`main` HEAD `2ce83d45`，日期 2026-10-21
+> 对账环境：仓库 `C:\Users\USER_A\Apeireth-rust`，`main` HEAD `2ce83d45`，日期 2026-10-21
 > （Asia/Shanghai）。工作树含他线在途改动（`crates/adapters/cli/src/lib.rs` 等，非本线）；
 > 本轮只改本文件。工具链：rustc 1.97.1 (8bab26f4f 2026-07-14) / cargo 1.97.1 (c980f4866 2026-06-30)
 > （同 test-baseline §1）。**勾选结果：4 勾 / 6 未勾**（未勾项均有实证与归口，无 vibe 勾选）。

@@ -62,7 +62,7 @@ Author:          K3 施工集群主会话（团队负责人/验收人）
 ## 3. 环境与工具链（血换来的事实，照抄别再踩）
 
 - **cargo/rustc 1.97.1 在 `~/.cargo/bin`**——Git Bash 默认不在 PATH，每个 Bash 调用开头 `export PATH="$HOME/.cargo/bin:$PATH"`。
-- node v24.15.0 / npm 11 在 PATH；pnpm 在 `C:\Users\31683\AppData\Roaming\npm\pnpm.cmd`（本仓库前端用 npm scripts 即可）。
+- node v24.15.0 / npm 11 在 PATH；pnpm 在 `C:\Users\USER_A\AppData\Roaming\npm\pnpm.cmd`（本仓库前端用 npm scripts 即可）。
 - **质量门**：前端 `npm run check` / `npm run test`（cwd `frontend/companion-desktop`）；后端 `cargo test -p apeireth-gateway`、`cargo clippy -p apeireth-gateway --all-targets -- -D warnings`；全量 `cargo test --workspace`。
 - **手动起 gateway**：`./target/debug/apeireth.exe gateway serve --port 8080`，约 4s 就绪，`/health` 返回 `{"status":"ok","execution_owner":"apeireth-runtime::canonical"}`。
 - **前端存储键**：配置 `apeireth-config`、会话 `apeireth-conversations`、首启 `apeireth-first-run-done`（验收脚本常需预置/清理 localStorage）。
