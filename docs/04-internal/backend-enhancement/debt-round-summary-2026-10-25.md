@@ -262,6 +262,7 @@ lint）。现已在本地镜像到 CI 的全部轻量档：
 | 网关长连接 | SSE `/v1/apeireth/events` = 200 + `text/event-stream` + 首帧；presence / runtime snapshot 正常 | 正常 |
 | 守护形态 | `gateway serve --pid-file` 的 slot 文件（key=value，端口可达性判活）**正常关闭即释放** | 不双开、不残留 |
 | `dream` 日记 | 按日 JSON 落盘（source/body/timestamp），0 素材时如实写「0 项轨迹」 | 输出可用 |
+| **`tool.repo_map` 生产注册（HTTP 级）** | 起网关查 `GET /v1/tools/list` → `['filesystem','search','repo','repo_map','trait_report','self_status']`，**`repo_map` 在列**；且它同时是并行派发白名单成员（只读、可并发） | 工具面 + 注册 + HTTP 可见 + 并发白名单 四层证据齐 |
 | **跟踪文件凭据扫描** | 对全部 5686 个跟踪文件扫 5 类模式（GitHub token / OpenAI key / AWS key / 私钥头 / Slack token）：75 处命中**逐条核实全部为假** —— AWS 官方示例键 `AKIAIOSFODNN7EXAMPLE`、`sk-1234567890abc…`、`ghp_abcdefghijklmnopqrstuvwxyz`、测试 TLS 私钥夹具、以及 `governance/input_security.rs` 里**凭据检测器自身的模式定义**；`legacy/{donor,frozen}/` 为捐赠代码示例 | **0 真实凭据** |
 | **管理面 HTTP** | `POST /v1/admin/users`→201 · `POST /v1/admin/domains`→201 · `PATCH /v1/admin/users/:id`→200（非法角色→400 冻结词表、不存在→404）· `DELETE`→200 且响应含 **`memory_forgotten:true`**（**被遗忘权级联经 HTTP 面生效**）· 重复创建→409 · 删末 owner→409 · `POST /v1/admin/shutdown`→200 且进程**优雅退出** · 无令牌→401 | 全链正确 |
 | **TUI 端到端** | 用 `script` 分配伪终端（`stty rows 40 cols 120`）真跑 `apeireth-tui` 连真实网关：渲染出「会话/对话/记忆账本/上下文波形/用量」等面板，**「后端已连接: http://…」**，空数据处如实标「未探到 / 不猜数」；两次 Ctrl-C 干净退出（exit 0） | 渲染 + 连接均正常 |

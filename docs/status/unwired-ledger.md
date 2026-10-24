@@ -138,6 +138,26 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5m `tool.repo_map` 的 HTTP 级注册证据（2026-10-25，四层证据齐）
+
+代码地图这条线此前有「工具面测试 + 装配级注册条件测试」，但**缺 HTTP 级证据**
+（生产运行时它的名字到底出不出现）。本轮真机补上：
+
+```
+GET /v1/tools/list →
+  ["filesystem","search","repo","repo_map","trait_report","self_status"]
+```
+
+⇒ `repo_map` **确实被生产注册**。注意：**HTTP 工具面用裸名**（`repo_map`），
+而守卫/能力注册表用 `tool.repo_map`；我第一次按 `tool.*` 全名查所以误判「缺失」——
+**同一批工具在两个面上用两套命名**，查证据时要按面选口径。
+
+至此 `tool.repo_map` 的证据链四层齐：
+① 工具面实现与单测（`repo_map.rs` / `repo_map_tool.rs`）；
+② 装配级注册条件（`startup_instrumentation.rs::repo_map_registers_only_when_the_workspace_root_is_provided`）；
+③ **HTTP 可见（本轮）**；
+④ 并行派发白名单成员（`is_provably_read_only` 派生）。
+
 ### 5.5l 自审我自己的并行派发白名单：安全假设成立（2026-10-25）
 
 并行派发的白名单是**从守卫安全注册表派生**的「可证明只读」工具
