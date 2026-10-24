@@ -51,6 +51,9 @@ pub use intent::{
     constrain_to_trusted, AlignmentAssessment, AlignmentClass, IntentAlignmentGuard, IntentInput,
     IntentInterpreter, NegationAwareOperationExtractor, OperationPolarity, RuleIntentInterpreter,
 };
+pub mod decision_log;
+pub use decision_log::{risk_label_for_score, GuardDecisionLog, GUARD_DECISION_LOG_FILE};
+
 pub use introspection::{GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto};
 pub use observation::{DataSensitivity, ResourceClass, SafetyObservation, SinkClass, SourceClass};
 pub use oracle::{ActionOracleLabel, ScenarioOracle, SecurityScenarioOracle};

@@ -21,6 +21,7 @@ pub mod egress_command;
 pub mod exposure;
 pub mod gateway_panels;
 pub mod governance_chain;
+pub mod guard_decision_wiring;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
 pub mod principal_forget_port;
@@ -1011,7 +1012,9 @@ fn build_production_governance_parts_with_dataset(
         policy.require_approval_for(apeireth_tools_canonical::IMAGE_OPS_CAPABILITY_ID);
     }
     let policy = Arc::new(std::sync::Mutex::new(policy));
-    let mut guard = BehaviorChainGuardHook::new();
+    // 判定落盘面（append-only）：守卫判定此前只在内存、重启即散。
+    // 纪律与原因见 `guard_decision_wiring` 模块（尺寸棘轮：装配根只留一行）。
+    let mut guard = guard_decision_wiring::attach_decision_log(BehaviorChainGuardHook::new());
     if let Some(dataset) = dataset {
         guard = guard.with_dataset_recorder(dataset);
     }
@@ -2750,6 +2753,11 @@ pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Resul
 
     let inputs = NightwatchInputs {
         episodes: snapshots,
+        // 守卫判定账（append-only）：此前恒空 ⇒ no-degrade 复盘段空转。
+        // 映射口径见 `guard_decision_wiring`（含 score→档 的显式定义）。
+        audit: guard_decision_wiring::nightwatch_audit_snapshots(
+            guard_decision_wiring::NIGHTWATCH_AUDIT_READ_LIMIT,
+        ),
         ..Default::default()
     };
     let report = apeireth_runtime_assembly::canonical::nightwatch_audit(&inputs);

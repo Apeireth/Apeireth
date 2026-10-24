@@ -344,6 +344,8 @@ struct GuardCounters {
     total_allowed: u64,
     total_denied: u64,
     total_approval_required: u64,
+    /// 判定落盘写失败次数（写完要能被看见 —— 审计面坏了不能静默）。
+    decision_log_write_failures: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -409,6 +411,11 @@ pub struct BehaviorChainGuardHook {
     immune_memory: Option<SharedImmuneMemory>,
     /// 每个 `(session, trace)` 最近一次的免疫信号，供可观测 / 测试取回。
     last_immune_signals: Mutex<HashMap<(SessionId, String), ImmuneSignal>>,
+    /// 判定 append-only 落盘面（默认 `None` = 不落盘，零行为变化）。
+    ///
+    /// **只记录、不决策**：写盘失败绝不改变本次判定（计入
+    /// `decision_log_write_failures`，可通过自述面看见）。
+    decision_log: Option<Arc<crate::decision_log::GuardDecisionLog>>,
 }
 
 impl Default for BehaviorChainGuardHook {
@@ -438,7 +445,30 @@ impl BehaviorChainGuardHook {
             counters: Mutex::new(GuardCounters::default()),
             immune_memory: None,
             last_immune_signals: Mutex::new(HashMap::new()),
+            decision_log: None,
         }
+    }
+
+    /// 挂载判定落盘面（append-only JSONL）。
+    ///
+    /// 不挂 = 不落盘（零行为变化，与接线前逐字节一致）。
+    /// 挂上后每次判定额外追加一行 `GuardEventDto` —— **写盘失败只计数，不改变判定**。
+    #[must_use]
+    pub fn with_decision_log(mut self, log: Arc<crate::decision_log::GuardDecisionLog>) -> Self {
+        self.decision_log = Some(log);
+        self
+    }
+
+    /// 判定落盘面是否已挂载。
+    pub fn decision_log_enabled(&self) -> bool {
+        self.decision_log.is_some()
+    }
+
+    /// 判定落盘写失败次数（未挂载时恒 0）。
+    ///
+    /// 单独暴露：审计面坏了要能被告状，而不是让「账是空的」看起来像「没判定发生过」。
+    pub fn decision_log_write_failures(&self) -> u64 {
+        self.counters.lock().decision_log_write_failures
     }
 
     /// 挂载免疫记忆（默认关）。
@@ -990,6 +1020,14 @@ impl BehaviorChainGuardHook {
                 // 只在真的触发义务时挂上，避免给每个事件都塞一份噪音。
                 containment: containment_obligations(&guard_decision),
             };
+
+            // 判定落盘（append-only）。**只记录、不决策**：
+            // 写盘失败只计数，判定照常返回 —— 审计面不该成为可用性风险。
+            if let Some(log) = &self.decision_log {
+                if log.append(&event).is_err() {
+                    self.counters.lock().decision_log_write_failures += 1;
+                }
+            }
 
             let mut events = self.recent_events.lock();
             if events.len() >= MAX_RECENT_EVENTS {

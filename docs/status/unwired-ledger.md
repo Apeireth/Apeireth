@@ -110,6 +110,16 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4b 守夜人自报缺口（系统自己报告的未接线项）
+
+`apeireth nightwatch` 会在数据不足时**如实报缺口**（这是它的设计优点 ——
+不用人工审计就能发现「分析段空转」）。本批处理了两条中的一条：
+
+| 缺口 | 状态 |
+|---|---|
+| `audit chain 未持久化供闲时读取 —— no-degrade 复盘段空转` | ✅ **已修**：守卫判定（decision/risk_score/reasons）此前只在内存 `Mutex<VecDeque>`，重启即散 ⇒ 新增 append-only `guard-decisions.jsonl`（`GuardDecisionLog`）+ nightwatch 读取映射。**真机验证**：无账时报缺口 → 有账时 `2 audit` 且报出 `[medium] NoDegrade: critical → info`。风险档映射是本仓**首个** score→档定义（此前不存在），已用 `governance::risk` 闭合词表交叉校验 + 单调性/6 档全覆盖测试钉死 |
+| `council ballot 未持久化 —— 立场平衡复盘段空转` | ⏳ **待办（新登记）**：council 投票结果没有落盘面。需查 `rubric::Ballot` 的产出点是否可持久化；若 council 本身未在生产装配（需确认），则这条与「council 未接线」是同一个缺口，应合并处理 |
+
 ### 5.5 待判 31 条 —— 人工过筛结论
 
 **A 类（真缺口）16 条** —— 每个都缺一个**具体接线点**，不是「整块没写」：
