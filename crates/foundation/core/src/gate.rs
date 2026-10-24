@@ -123,6 +123,27 @@ pub enum ActionVerdict {
 }
 
 /// V1+V2+V3 AND 门 (阶段 1 §20.2 主人原话 + D2 §7 原则×权限统一体嵌入)
+///
+/// # 为什么不在执行主链上（2026-10-24 查证结论）
+///
+/// 这道门**本身是完整的**（V1 十三键 + V2 风险→层 + V3 人类批准），但接不回热路径的
+/// 原因不是「缺一根线」，而是**没有可供判定的动作描述**：
+///
+/// - [`ActionTarget`] 的 13 个变体里 **10 个是 `Pretend*` 测试夹具**（源码注释自述
+///   「故意违反（12 键 hardcode 测试用）」），真实生产目标只有 3 个
+///   （[`ActionTarget::ModifyL0HA`] / [`ActionTarget::ReorganizeOnion`] /
+///   [`ActionTarget::ModifyEvolutionL0`]）；
+/// - 而**当前系统没有任何工具能表达这三件事** ⇒ 这道门**没有防守对象**；
+/// - 把工具调用映射成 [`ActionTarget::NormalAction`] 的话，V1 对 `NormalAction`
+///   不触发任何哲学键 ⇒ 永远 `Allow` ⇒ **门形同虚设**。
+///
+/// ⇒ 接上去是**装饰**，不是安全。判定与触发条件见
+/// `docs/04-internal/backend-enhancement/w5-philosophy-gate-decision-2026-10-24.md`。
+/// 台账 `W5` 已按此改判（阻塞于产品设计，不是阻塞于接线）。
+///
+/// 在两个条件同时成立前保持**库级完整 + 零生产调用**：
+/// ①出现能改 L0 / 重组洋葱 / 改 Evolution L0 的真实能力；
+/// ②有经产品确认的 `governance::Action → Action` 语义映射（风险等级 + target 规则）。
 pub struct ActionGuard;
 
 impl ActionGuard {
