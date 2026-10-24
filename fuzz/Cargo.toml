@@ -18,12 +18,14 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 apeireth-protocol = { path = "../crates/foundation/protocol" }
 apeireth-gateway = { path = "../crates/adapters/gateway" }
 apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
 apeireth-plugin = { path = "../crates/foundation/plugin" }
 apeireth-governance = { path = "../crates/foundation/governance" }
+apeireth-core = { path = "../crates/foundation/core" }
 
 [profile.release]
 debug = 1
@@ -115,6 +117,13 @@ bench = false
 [[bin]]
 name = "client_tokens"
 path = "fuzz_targets/client_tokens.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stored_doc"
+path = "fuzz_targets/stored_doc.rs"
 test = false
 doc = false
 bench = false
