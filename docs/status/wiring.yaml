@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 6d9ddd0a68fde131949d22d7e376ac3490ee3c623f99940257688fc697a19470
+claims_sha256: 3e6d53cd2c212e38bbd8e6187fd6d92c588b1c0a25ff3361071ab331372a9f3c
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -510,6 +510,7 @@ items:
         - "crates/engine/organ/src/tone.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
         - "crates/engine/organ/src/tone.rs"
         - "crates/engine/runtime-assembly/src/canonical/bio_tone.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
@@ -530,6 +531,7 @@ items:
         - "crates/adapters/cli/src/care_heartbeat.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
         - "crates/adapters/cli/src/care_heartbeat.rs"
         - "crates/engine/runtime-assembly/src/canonical/bio_circadian.rs"
         - "crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs"
@@ -551,6 +553,7 @@ items:
         - "crates/adapters/cli/src/lib.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
         - "crates/adapters/cli/src/lib.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
@@ -571,7 +574,7 @@ items:
         - "crates/foundation/orchestration/src/recovery_protocol.rs"
     wired:
       production_refs:
-        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/bio_switches.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
         - "crates/engine/runtime/src/canonical/bio_pain.rs"
