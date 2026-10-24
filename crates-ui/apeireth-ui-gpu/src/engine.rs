@@ -863,11 +863,17 @@ impl GpuContext for Engine {
         Tier::Full
     }
 
-    fn submit_frame(&self, _uniforms: &crate::scene::SceneUniforms) -> Result<(), GpuError> {
-        // **未接线**：把 P0 的 `SceneUniforms`（几何量）映射到 16 个着色器
-        // uniform 属场景语义（P5-b）。本批的真实通路是
-        // `Engine::draw_frame(pipeline, uniforms)`。
-        Err(GpuError::NotImplemented)
+    fn submit_frame(
+        &self,
+        pipeline: &mut ScenePipeline,
+        uniforms: &UniformValues,
+    ) -> Result<FrameReport, GpuError> {
+        // **真实现**（2026-10-24 接线）：P0 的 trait 签名表达不了真实操作（见
+        // `context.rs` 的「签名修订」表）⇒ 实现曾是恒 `Err(NotImplemented)` 的死路，
+        // 而真实通路是**另一条并行 API**（`Engine::draw_frame`）。
+        // ⇒ 现在 trait 签名与现实一致 ⇒ **声明的抽象就是实际在用的那条**：
+        // 本方法就是 `draw_frame` 的委托，**不留两套 API**。
+        self.draw_frame(pipeline, uniforms)
     }
 }
 

@@ -172,11 +172,9 @@ mod tests {
         assert_eq!(options.backend, crate::BackendPreference::Auto);
         assert!(options.width > 0 && options.height > 0);
 
-        // 未接线后端仍然诚实报未接线。
+        // 未接线后端仍然诚实：档位是 Software（其**运行时**报错断言在浏览器侧 ——
+        // native 造不出 `ScenePipeline`，见 ui-gpu 的 `context.rs` 说明）。
         let unavailable = crate::UnavailableGpuContext;
-        assert_eq!(
-            unavailable.submit_frame(&crate::SceneUniforms::default()),
-            Err(crate::GpuError::NotImplemented)
-        );
+        assert_eq!(unavailable.tier(), Tier::Software);
     }
 }

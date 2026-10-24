@@ -68,6 +68,25 @@ pub async fn run(
         .map_err(|e| JsValue::from_str(&format!("pipeline: {e}")))?;
     trace("pipeline created");
 
+    // ── 桩的运行时断言放在**这里**（浏览器侧），而不是 native 单测 ──────────
+    // 理由：native 侧造不出 `ScenePipeline`（它内含 `wgpu::RenderPipeline` /
+    // `wgpu::BindGroup` 等**非 Option** 类型 ⇒ 没有设备就造不出来）⇒
+    // native 只能做**类型层**的钉子。而这里有**真管线** ⇒ 桩的
+    // 「显式报未接线、不静默成功」可以在**真实 GPU 上下文**里断言 ⇒ 覆盖更强。
+    {
+        use apeireth_ui_gpu::{GpuContext, UnavailableGpuContext};
+        let stub = UnavailableGpuContext;
+        let err = stub
+            .submit_frame(&mut pipeline, &UniformValues::new())
+            .expect_err("未接线的后端必须显式报错，不得静默成功");
+        let text = err.to_string();
+        assert!(
+            text.contains("未接线") || text.contains("not implemented"),
+            "桩的报错文案必须自明：{text}"
+        );
+        trace("stub reported not-implemented");
+    }
+
     // 一组固定、可复现的 uniform 取值（binding 索引寻址）。
     let mut values = UniformValues::new();
     values.set(0, &[width as f32, height as f32]); // uRes

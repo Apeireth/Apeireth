@@ -18,7 +18,16 @@ pub const SOLAR_MASS: f64 = 1.989e30;
 /// 光速（km/s）。
 pub const SPEED_OF_LIGHT: f64 = 299_792.458;
 
-/// 场景 uniform 缓冲（状态 → 像素的唯一通道）。
+/// 场景**物理量**（P0 留下的场景描述值）。
+///
+/// ⚠️ **口径更正（2026-10-24）**：本类型**不是**着色器的 uniform 输入。
+/// 着色器实际吃的是 **16 个 uniform**（[`crate::bindings::UniformValues`]，
+/// 按名字写）。本类型描述的是**场景的物理状态**（相机距离 / 盘半径 / 场景时间），
+/// 而「物理量 → 16 个着色器 uniform」这一步**依赖相机 / 主题 / 存在态等宿主侧语义**
+/// ⇒ **引擎按设计不碰它**（引擎里不出现业务名词）⇒ 该映射由**宿主**完成。
+///
+/// ⇒ 本类型保留为**场景描述值**（可被宿主用来算那 16 个 uniform），
+/// **不是** [`crate::context::GpuContext`] 的参数。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SceneUniforms {
     /// 相机到场景中心的距离（km）。

@@ -61,10 +61,15 @@
 //!   顶点阶段的 uniform 永远拿到 0 值，画出错位的画面）。
 //! - **P0 桩仍在**（[`UnavailableGpuContext`]）：显式返回
 //!   [`GpuError::NotImplemented`]，不假装「场景已经在跑」。
-//! - [`GpuContext::submit_frame`] 对真实引擎**未接线**：把 P0 的
-//!   `SceneUniforms`（4 个几何量）映射到 16 个着色器 uniform 属**宿主侧的
-//!   场景语义**（引擎按设计不碰）⇒ 显式报未接线。真实通路是
-//!   [`engine::Engine::draw_frame`]。
+//! - ✅ **[`GpuContext::submit_frame`] 已接线**（2026-10-24）：P0 的 trait 签名
+//!   （`&SceneUniforms` / `&self` / `Result<(), _>`）**表达不了真实操作** ⇒ 实现曾是
+//!   恒 `Err(NotImplemented)` 的死路，而真实通路是**另一条并行 API**
+//!   （[`engine::Engine::draw_frame`]）⇒ 现已把签名改成与现实一致
+//!   （`&mut ScenePipeline` + [`bindings::UniformValues`] + 返回
+//!   [`engine::FrameReport`]），**声明的抽象就是实际在用的那条**。
+//! - 🔵 **「物理量 → 16 个着色器 uniform」的映射属宿主侧**（引擎按设计不碰：
+//!   那一步依赖相机 / 主题 / 存在态等语义，引擎里不出现业务名词）⇒ 引擎只提供
+//!   **管道**（[`bindings::UniformValues`] 按名字写），取值由宿主喂。
 //! - **native 侧不是画面验证**：native 单测只覆盖**纯逻辑**（变换 / 映射 /
 //!   布局 / 策略 / 坐标语义）；画面级验证只在真实浏览器里做（证据见
 //!   `crates-ui/evidence/p5-gpu/` 与 `crates-ui/evidence/p5-b/`）。
@@ -104,13 +109,9 @@ mod tests {
         let params = BlackHoleParams::new(1.0, 0.0).expect("参数合法");
         let uniforms = params.to_uniforms(2.0e7, 1.25);
 
+        // 桩的档位（其**运行时**报错断言在浏览器侧，见 `context.rs` 的说明）。
         let context = UnavailableGpuContext;
         assert_eq!(context.tier(), Tier::Software);
-        assert_eq!(
-            context.submit_frame(&uniforms),
-            Err(GpuError::NotImplemented),
-            "未接线的后端必须显式报未接线，不得静默成功"
-        );
         assert!(uniforms.disk_outer_radius_km > uniforms.disk_inner_radius_km);
     }
 

@@ -1,6 +1,7 @@
 # 生成物（构建期产出，不入库）
 out/
 dist/
+pkg/
 harness/target/
 harness/web/dist/
 harness/web/public/engine/
@@ -8,8 +9,15 @@ harness/web/public/design/
 harness/web/public/pilot-card.css
 harness/web/public/provenance.json
 
+# wasm-bindgen 产物（`index.html` 按同目录引用 `./p5_gpu_harness.js` 加载它）
+# ⚠️ **不入库**：5 MB 的 wasm 二进制不是仓内资产，**由 `build.sh` 现场生成**
+# （wasm-bindgen CLI 0.2.129 必须与 crates-ui 的 wasm-bindgen 依赖精确一致）。
+p5_gpu_harness.js
+p5_gpu_harness_bg.wasm
+*.d.ts
+
 # 主仓根 .gitignore 全局忽略 `*.py` ⇒ 本目录的对照驱动（**唯一的复现装置**）
-# 必须**显名放行**，否则 P5 的画面级证据无法入库、无法复核。
+# 必须**具名放行**，否则 P5 的画面级证据无法入库、无法复核。
 # （本目录的规则比根目录更深 ⇒ 优先级更高。与
 #   crates-ui/apeireth-ui-demo/harness/.gitignore 的 `!tools/*.py` 同一先例。）
 !drive.py

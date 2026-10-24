@@ -71,6 +71,19 @@ GLSL 着色器**跑出真画面（surface → pipeline → draw → present，�
 
 ## 复现
 
+**一键**（推荐）：
+
+```bash
+cd crates-ui/evidence/p5-gpu && ./build.sh
+```
+
+⚠️ **产物必须落在本目录**：`index.html` 按**同目录相对路径**引用 `./p5_gpu_harness.js`，
+而 `drive.py` 服务的正是本目录 ⇒ 把 wasm-bindgen 产物放到别处（如 `pkg/`）会得到 **404**，
+且**画面判据会静默变 `null`** —— 看起来像「渲染失败」，实际是「文件没被找到」。
+（2026-10-24 实测踩到；`build.sh` 已把这个约束固化。）
+
+手动步骤（与 `build.sh` 等价）：
+
 ```bash
 # 1) 构建验证宿主（wasm32，独立 workspace）
 cd crates-ui/evidence/p5-gpu/harness
