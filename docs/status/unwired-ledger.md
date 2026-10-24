@@ -138,7 +138,36 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
-### 5.4v 面板能力清单的 `not_assembled` 易被读成「能力不存在」—— 已加口径（2026-10-25）
+### 5.4w 能力矩阵把已可用的 `memory.update` 写成「未实现未接线」—— 已修（2026-10-25）
+
+**缺陷（保护路径文档，产品能力宣称过期）**：`docs/03-reference/capabilities-matrix.md`
+§0（自称「唯一事实源」的 `/v1/apeireth/capabilities` 镜像）写着：
+
+```
+| `memory.update` | false | false (`reason=not_implemented`) | Declared in the universe, not wired |
+```
+
+且「未接线（不是默认开关问题）」清单里也列了它。**真机事实**：
+
+```
+$ GET /v1/apeireth/capabilities
+{"id":"memory.update","operations":["update"],"read":false,"supported":true,"write":true,"available":true}
+$ PUT /v1/apeireth/memory/episodes/<id>/content
+→ 200（内容已更新）；过期 expected_rev → 409 revision_conflict
+```
+
+即 `memory.update` 早已 **IMPLEMENTED + PRODUCTION WIRED**。矩阵说它「不存在」，
+会让集成方**不去用**这个能力（与「文档低估实现」同一类，且这条在保护路径上）。
+
+**修法（只动两处 + 一条对账注记）**：
+
+1. §0 表该行 → `取决于 governed memory ports / 同 supported / GovernedMemoryService（纠正内容；乐观并发 expected_rev，过期提交 = 409）`；
+2. 「未接线」清单**删掉** `memory.update` 一项（同行 `DslOnionLayer` / `Ws` 等已核对**仍成立**）；
+3. 表格下方补「对账注记（2026-10-25）」写明原值与真机值 —— 保留改前事实，可审计。
+
+按协作纪律，**改保护路径前已在看板 §二十二 登记**（单行范围、不碰表格结构）。
+
+### 5.4v 面板能力清单的 `not_assembled` 易被读成「能力不存在»—— 已加口径（2026-10-25）
 
 `GET /v1/panel/capabilities` 里两条 `not_assembled`：
 

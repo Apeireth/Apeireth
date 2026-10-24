@@ -18,12 +18,18 @@
 | `models.list`, `providers.list`, `chat.completions` | true | 取决于已注册 Provider | ProviderRouter / Settings、Conversations |
 | `sessions.read` | 取决于 SessionQuery port | 同 supported | SessionQuery / Conversations |
 | `memory.read`, `memory.write`, `memory.forget`, `memory.protect`, `memory.unprotect`, `memory.graph.read` | 取决于 governed memory ports | 同 supported | GovernedMemoryService / Memory |
-| `memory.update` | false | false (`reason=not_implemented`) | Declared in the universe, not wired |
+| `memory.update` | 取决于 governed memory ports | 同 supported | GovernedMemoryService / Memory（纠正内容；乐观并发 `expected_rev`，过期提交 = 409 `revision_conflict`） |
 | `tools.list` | 取决于 CapabilityQuery port | 同 supported | CapabilityRegistry / Tools |
 | `permissions.approval.read`, `permissions.approval.resolve` | true | true | Runtime approval protocol / Tools (`approvals.read` / `approvals.resolve` are explicit `alias_of` compatibility ids) |
 | `permissions.grants.read`, `permissions.revoke` | 取决于 grant ports | 同 supported | Grant ports / Tools |
 | `trace.read`, `audit.read`, `activity.sse` | 取决于 observability ports；SSE 由 Event Spine 提供 | 同 supported | RuntimeEventSink / Activity |
 | `organs.list`, `modules.list` | 取决于 BehaviorRegistry projection | 同 supported | BehaviorRegistry / RuntimeModal |
+
+> **对账注记（2026-10-25）**：`memory.update` 此前记为
+> `false (reason=not_implemented)` / 「Declared, not wired」—— **已过期**。
+> 真机查 `/v1/apeireth/capabilities` 现返回
+> `{"id":"memory.update","operations":["update"],"supported":true,"available":true,"write":true}`；
+> 实测 `PUT /v1/apeireth/memory/episodes/<id>/content` 可用（200，过期 `expected_rev` = 409）。
 
 `supported=true, available=false` 表示实现存在但当前 Provider/凭据/装配不可用；
 客户端必须显示后端 `reason`。未知能力与缺失 manifest 不得推测为已支持。
@@ -73,7 +79,7 @@
 | **默认 OFF（需 env 显式开启，W3.5 生物收尾族）** | `APEIRETH_ENABLE_BIO_LIFECYCLE`（工具资产 5 态账本，装配根注册） | 只认显式 `1`，默认关 fail-closed；关 = 不构造/不注册/不读时钟（零变化测试 `bio_lifecycle_production` 4 例）；开 = 真实工具名播种 `Newborn` + `AfterToolResult` 记账；观测 probe 已接（迟绑定槽，R1b-2b）；持久化目录 = 关怀数据目录（缺省=纯内存）。自述聚合面 `capabilities.nervous_system`（ADR-0003 R1a 只读聚合：version/summary/14 条 level+enabled_env+signal_sources+gaps，`last_observation` 恒 null）随 `APEIRETH_ENABLE_BIO_SELF_STATUS` 出现，**顶层 21 节冻结合同不变**。 |
 | **默认 OFF（装配默认 false）** | `partner_bond` / `morphology_recall` / `community_triage` / `education` / `absorption_insight` | 库级在场，装配默认不接 |
 | **默认 OFF（需 env 显式开启，H-P2 成本分级路由）** | 成本分级路由 `cost_routing`（`APEIRETH_COST_ROUTING=1`；档位映射 `APEIRETH_COST_ROUTING_PREFERRED`） | 默认关 fail-closed（只认精确 `"1"`）。任务按成本/能力四档（`frugal`/`standard`/`capable`/`premium`）选模：画像表为唯一价格事实（**缺价不编价**，无价行不参与价格比较）；决策可解释（`selection_reason`/`fallback_reason`/候选逐行 `price_display`）；消费面 = CLI chat 任务选型（显式 `--model` > 路由选定 > 默认模型）+ 自述 `cost_routing` 节真值。**未接线（如实）**：网关路径任务源路由、显式档 CLI 旗标。H-P2 交付记录见 [H-model-plane.md](../04-internal/backend-enhancement/02-axes/H-model-plane.md) §H-P2 |
-| **未接线（不是默认开关问题）** | 第三洋葱 DSL 层（`DslOnionLayer`，无生产接线）；双洋葱执行钩子需 `APEIRETH_ENABLE_ONION_LAYER=1`；`memory.update`（`reason=not_implemented`）；WebSocket 服务端（见 §1 `gw.duplex_ws` 行） | 如实标注，勿当系统现状 |
+| **未接线（不是默认开关问题）** | 第三洋葱 DSL 层（`DslOnionLayer`，无生产接线）；双洋葱执行钩子需 `APEIRETH_ENABLE_ONION_LAYER=1`；WebSocket 服务端（见 §1 `gw.duplex_ws` 行） | 如实标注，勿当系统现状 |
 
 ---
 
