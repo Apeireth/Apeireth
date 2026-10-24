@@ -127,3 +127,10 @@ path = "fuzz_targets/stored_doc.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "approval_risk"
+path = "fuzz_targets/approval_risk.rs"
+test = false
+doc = false
+bench = false
