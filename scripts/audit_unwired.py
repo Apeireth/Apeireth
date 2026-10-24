@@ -40,21 +40,20 @@ import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from unwired_baseline_common import (  # noqa: E402
+    GROUP_DESC,
+    SCAN_ROOTS,
+    render,
+    split_entry,
+    usage_counts,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "scripts" / "unwired-baseline.txt"
-# 扫描面 = 全部 crate 的 `src/` **和** `tests/`（集成测试）。
-#
-# 为什么必须扫 `tests/`：不扫的话，「集成测试专用的公开 API」会被判成 `orphan`
-# （生产零引用 + 测试零引用），而它其实是 `test-only`。两类都表示生产零引用，
-# 但**分类错了会误导还债方向**（把测试辅助当死代码删掉 ⇒ 集成测试编译失败）。
-SCAN_ROOTS = sorted(
-    str(path.relative_to(ROOT))
-    for pattern in ("crates/*/*/src", "crates/*/*/tests")
-    for path in ROOT.glob(pattern)
-    if path.is_dir()
-)
-
 DECL = re.compile(r"^\s*pub(?:\([^)]*\))?\s+(?:async\s+)?(?:unsafe\s+)?(fn|struct|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)")
 CFG_TEST = re.compile(r"^\s*#\[cfg\(test\)\]")
 
@@ -157,33 +156,8 @@ def main() -> int:
     # - 宏展开生成的调用（`impl_trait!` 之类）看不到；
     # - 反射 / 动态注册按名字字符串查找的，会漏；
     # - 这些盲区都会表现为**假阳性**（报成未接线），不会漏报 —— 方向安全。
-    ident = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-    use_line = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b.*$", re.M)
-    line_comment = re.compile(r"//[^\n]*")
-    block_comment = re.compile(r"/\*.*?\*/", re.S)
-    # ⚠️ **不跨行**（不带 re.S）：Rust 普通字符串字面量不跨行。
-    # 我第一版带了 re.S，遇到 `'"'` 这类**字符字面量**时会把其中那个 `"`
-    # 当成字符串起点，一路吞到文件很后面的下一个 `"` —— 把整段代码当字符串删掉，
-    # 造成大片假阳性（`admin_config_get` 就是这么被吞的）。测试抓到。
-    char_lit = re.compile(r"'(?:\\.|[^'\\])'")
-    string_lit = re.compile(r'"(?:\\.|[^"\\\n])*"')
-
-    def strip_noise(raw: str) -> str:
-        # 顺序要紧：先剔**字符字面量**（防止 `'"'` 干扰字符串匹配），
-        # 再剔字符串、行注释、块注释，最后剔 use 导入行。
-        text = char_lit.sub("''", raw)
-        text = string_lit.sub('""', text)
-        text = line_comment.sub("", text)
-        text = block_comment.sub("", text)
-        text = use_line.sub("", text)
-        return text
-
-    def usage_counts(texts) -> Counter[str]:
-        counts: Counter[str] = Counter()
-        for raw in texts:
-            counts.update(ident.findall(strip_noise(raw)))
-        return counts
-
+    # 判据 v3 的实现**已提取到共享模块**（`unwired_baseline_common.py`），
+    # 与 `audit_unwired_modules.py` 用**同一份** —— 两处各写一遍必然漂移。
     code_counts = usage_counts(code_text.values())
     test_counts = usage_counts(test_text.values())
 
@@ -208,7 +182,11 @@ def main() -> int:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            baseline.add(line)
+            # 剥掉行尾的分组标记（`# G3` / `# G3 理由`）——
+            # 基线的**条目身份**是 `kind symbol`，标记只是注释。
+            entry = line.split("#", 1)[0].strip()
+            if entry:
+                baseline.add(entry)
 
     # **基线只记 `orphan`（真零引用）**。
     #
@@ -218,15 +196,41 @@ def main() -> int:
     current = {f"{kind} {name}": f"{rel}" for kind, name, rel, _, _ in rows if kind == "orphan"}
 
     if args.update:
-        lines = [
-            "# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；只减不增）",
-            "# 每行: <test-only|orphan> <symbol>    # 理由（人工复核时补）",
-            "",
-        ]
+        # **保留人工资产**：头部说明与每行的**分组标记**都是人写的判断依据。
+        # 工具把它们冲掉，等于让每次还债都从零重建分类 —— 而且很可能悄悄丢掉判断依据。
+        #
+        # 分组信息放**行内**（`# <GROUP>`）而不是靠行序 ⇒ 「谁属于哪组」是数据而非
+        # 排版，两个工具（`--update` 与 `group_unwired_baseline.py`）才能输出**逐字一致**，
+        # 从而互相验证。
+        entries: dict[str, str] = {}
+        old_group_of: dict[str, str] = {}
+        if BASELINE.exists():
+            for raw_line in BASELINE.read_text(encoding="utf-8").splitlines():
+                stripped = raw_line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                _, symbol, group, reason = split_entry(stripped)
+                if not symbol:
+                    continue
+                entries[symbol] = reason
+                old_group_of[symbol] = group or "G5"
+
+        # 组内顺序：旧文件里的原序在前，新出现的按字母序追加在后
+        groups: dict[str, list[str]] = {group: [] for group in GROUP_DESC}
+        for symbol, group in old_group_of.items():
+            if f"orphan {symbol}" in current:
+                groups.setdefault(group, []).append(symbol)
+        placed = {symbol for items in groups.values() for symbol in items}
         for key in sorted(current):
-            lines.append(key)
-        BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"基线已重写: {BASELINE.relative_to(ROOT)}（{len(current)} 条）")
+            symbol = key.split(None, 1)[1].strip() if len(key.split(None, 1)) > 1 else key.strip()
+            if symbol not in placed:
+                groups.setdefault("G5", []).append(symbol)  # 新孤儿先进待判组
+
+        BASELINE.write_text(render(entries, groups), encoding="utf-8")
+        print(
+            f"基线已重写: {BASELINE.relative_to(ROOT)}"
+            f"（{len(current)} 条；保留分组标记与人工注释）"
+        )
         return 0
 
     if args.check:

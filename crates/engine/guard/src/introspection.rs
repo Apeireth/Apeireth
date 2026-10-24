@@ -51,6 +51,18 @@ pub struct GuardEventDto {
     pub risk_score: f64,
     pub reasons: Vec<String>,
     pub evidence: Vec<String>,
+    /// 本次判定触发的**收容义务**（OWASP 契约：算出来就要能被看见）。
+    ///
+    /// `None` = 没有额外收容义务（普通放行 / 普通拒绝）。
+    ///
+    /// 此前 [`crate::enforcement::EnforcementDirective::from_decision`]
+    /// **生产零调用** —— 收容义务算得出来，却没有任何地方能看到：
+    /// 「这个 trace 被判高风险」「建议检查此前的副作用」都只存在于内存里的
+    /// 临时值。本字段让它们**进事件流**（面板/审计可读）。
+    ///
+    /// **注意**：这里只做**可观测**，**不自动执行** `revoke_session_grant`
+    /// （整会话 fail-closed 是行为变更，影响面大，需要产品侧拍板）。
+    pub containment: Option<crate::enforcement::EnforcementDirective>,
 }
 
 /// Request payload for a dry-run evaluation.
