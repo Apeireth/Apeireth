@@ -45,3 +45,57 @@
 | `ChainGovernanceHook`（R8-B1 适配器） | 2026-10-22（R8-B2） | `governance_chain::production` 进 CLI 装配根；claim `gov.chain_hook_adapter` 改判 |
 | Recon 9 原生工具 + 10 外部适配器 | 2026-10-22 | `ProductionModulesConfig.recon/.external` + knob/face 测试 |
 | 会话封缄（B6-2a） | 2026-10-22 | `SessionSealer` 进 `SqliteSessionStore`；11 个新单测 |
+
+## 五、模块级「整块未接线」清单（2026-10-24 第四轮）
+
+> 工具：`scripts/audit_unwired_modules.py`（三层判据：独特标识符零引用 + 限定路径未用 + 无私有 `use`）。
+> **它是线索工具，不是判决** —— 产出必须人工过筛（已知局限见脚本 docstring）。
+>
+> 候选 92 → 人工判为整块未接线 50 → 按性质分类：
+
+| 类别 | 数量 | 含义 |
+|---|---|---|
+| 重复实现 | 4 | 同能力另有主实现 ⇒ **不是债** |
+| 有意不接 | 9 | 模块自述 default-off / 研究原型 / W5 哲学层 ⇒ **不是债** |
+| 整族未接线 | 6 | `layered_memo` 整族（6 个模块同因） |
+| 待判 | 31 | 逐条人工过筛中 |
+
+### 5.1 重复实现（4 条，不是债）
+
+| 模块 | 已被谁承担 |
+|---|---|
+| `memory_rank.rs` | 排序由 `retrieval_pipeline.rs` + `scope::MemoryRankingConfig` 承担 |
+| `preference_store.rs` | 偏好已走 `SQLitePreferenceStore`（`cli/src/lib.rs:1858`） |
+| `three_layer.rs` | 分层由 `layers.rs` + coordinator 承担（`production.rs:1435`） |
+| `vector_distance.rs` | 向量数学归 `canonical::vector`（`coordinator.rs:613`） |
+
+### 5.2 有意不接（9 条，不是债）
+
+- `crates/engine/memory/src/dream_consolidation.rs`
+- `crates/engine/memory/src/persistent_vector.rs`
+- `crates/engine/memory/src/principles.rs`
+- `crates/engine/memory/src/research_non_interference.rs`
+- `crates/engine/memory/src/research_roaming_memory.rs`
+- `crates/engine/organ/src/experience_growth.rs`
+- `crates/engine/organ/src/goal.rs`
+- `crates/engine/organ/src/motivation.rs`
+- `crates/foundation/orchestration/src/research_vault_ftrl.rs`
+
+### 5.3 整族未接线：`layered_memo`（6 个模块同因）
+
+整个 `layered_memo` 在生产代码零消费（外部仅 `dream_consolidation.rs` 的 doc 链接），
+所以是**一个缺口，不是六个**：记忆分层（L1→L4 晋级/降级、多路检索融合、分类树归置、
+双轨合并去重、睡眠巩固周期）整族没有生产入口。
+
+| 模块 | 缺的能力 |
+|---|---|
+| `crates/engine/memory/src/layered_memo/dual_track.rs` | — |
+| `crates/engine/memory/src/layered_memo/enhanced.rs` | — |
+| `crates/engine/memory/src/layered_memo/librarian.rs` | — |
+| `crates/engine/memory/src/layered_memo/pipe.rs` | — |
+| `crates/engine/memory/src/layered_memo/progression.rs` | — |
+| `crates/engine/memory/src/layered_memo/sleep_cycle.rs` | — |
+
+### 5.4 待判（31 条）
+
+逐条人工过筛中，结论待补。
