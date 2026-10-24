@@ -43,11 +43,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "scripts" / "unwired-baseline.txt"
-SCAN_ROOTS = [
-    "crates/adapters/gateway/src",
-    "crates/adapters/cli/src",
-    "crates/engine/runtime-assembly/src",
-]
+# 扫描面 = 全部 crate 的 `src/` **和** `tests/`（集成测试）。
+#
+# 为什么必须扫 `tests/`：不扫的话，「集成测试专用的公开 API」会被判成 `orphan`
+# （生产零引用 + 测试零引用），而它其实是 `test-only`。两类都表示生产零引用，
+# 但**分类错了会误导还债方向**（把测试辅助当死代码删掉 ⇒ 集成测试编译失败）。
+SCAN_ROOTS = sorted(
+    str(path.relative_to(ROOT))
+    for pattern in ("crates/*/*/src", "crates/*/*/tests")
+    for path in ROOT.glob(pattern)
+    if path.is_dir()
+)
 
 DECL = re.compile(r"^\s*pub(?:\([^)]*\))?\s+(?:async\s+)?(?:unsafe\s+)?(fn|struct|trait|enum)\s+([A-Za-z_][A-Za-z0-9_]*)")
 CFG_TEST = re.compile(r"^\s*#\[cfg\(test\)\]")
@@ -204,7 +210,12 @@ def main() -> int:
                 continue
             baseline.add(line)
 
-    current = {f"{kind} {name}": f"{rel}" for kind, name, rel, _, _ in rows}
+    # **基线只记 `orphan`（真零引用）**。
+    #
+    # `test-only`（生产零引用 + 测试有引用）**不是问题** —— 那是「库的公开 API
+    # 被集成测试覆盖」，属正常状态。把它也塞进基线会让数字失真、掩盖真孤儿
+    # （2026-10-24 实测：混着记时 892 条，只记 orphan 是 164 条）。
+    current = {f"{kind} {name}": f"{rel}" for kind, name, rel, _, _ in rows if kind == "orphan"}
 
     if args.update:
         lines = [
@@ -231,8 +242,13 @@ def main() -> int:
         print(f"孤儿 API 基线一致（{len(current)} 条，无新增）")
         return 0
 
-    print(f"孤儿 API 报告：test-only / orphan 共 {len(rows)} 条")
-    for kind, name, rel, _, _ in rows:
+    orphans = [r for r in rows if r[0] == "orphan"]
+    test_only = [r for r in rows if r[0] == "test-only"]
+    print(
+        f"孤儿 API 报告：orphan（真零引用）{len(orphans)} 条；"
+        f"test-only（被集成测试覆盖，正常）{len(test_only)} 条"
+    )
+    for kind, name, rel, _, _ in orphans:
         print(f"  [{kind:9}] {name:44} {rel}")
     return 0
 
