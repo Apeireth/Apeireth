@@ -209,7 +209,8 @@ impl Scope {
 #[cfg(test)]
 mod tests {
     use crate::runtime::Runtime;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
     use std::rc::Rc;
 
     #[test]
@@ -309,5 +310,128 @@ mod tests {
         scope.dispose();
         assert_eq!(&*log.borrow(), &["cleaned"]);
         assert_eq!(scope.effect_count(), 0);
+    }
+
+    // ── 判别测试（钉行为不钉字面）──────────────────────────────────────────
+
+    /// 作用域销毁时，effect 必须按**创建逆序**销毁（LIFO）。
+    #[test]
+    fn scope_disposes_its_effects_in_reverse_creation_order() {
+        let runtime = Runtime::new();
+        let log = Rc::new(RefCell::new(Vec::<u32>::new()));
+        let scope = runtime.scope();
+
+        for index in 0..3u32 {
+            scope.effect(|| {}).on_cleanup({
+                let l = log.clone();
+                move || l.borrow_mut().push(index)
+            });
+        }
+
+        scope.dispose();
+        assert_eq!(&*log.borrow(), &[2, 1, 0], "清理必须按创建逆序（子先于父）");
+    }
+
+    /// 作用域销毁**幂等**：第二次销毁不得重复跑清理回调。
+    #[test]
+    fn scope_dispose_is_idempotent() {
+        let runtime = Runtime::new();
+        let count = Rc::new(Cell::new(0));
+        let scope = runtime.scope();
+
+        scope.effect(|| {}).on_cleanup({
+            let c = count.clone();
+            move || c.set(c.get() + 1)
+        });
+
+        scope.dispose();
+        scope.dispose();
+        scope.dispose();
+        assert_eq!(count.get(), 1, "销毁幂等 ⇒ 清理只跑一次");
+        assert!(scope.is_disposed());
+    }
+
+    /// 销毁后的 effect 不得再被标脏、不得再执行。
+    #[test]
+    fn disposed_effect_is_neither_dirty_nor_rerun() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(0u32);
+        let runs = Rc::new(Cell::new(0));
+
+        let v = value.clone();
+        let r = runs.clone();
+        let handle = runtime.effect(move || {
+            r.set(r.get() + 1);
+            let _ = v.get();
+        });
+
+        runtime.flush();
+        assert_eq!(runs.get(), 1);
+        handle.dispose();
+        assert!(!handle.is_dirty(), "销毁后不得被标脏");
+
+        value.set(1);
+        runtime.flush();
+        assert_eq!(runs.get(), 1, "销毁后不得再执行");
+        assert_eq!(handle.runs(), 1, "执行次数记录在销毁后仍可读");
+    }
+
+    /// 销毁必须**解除依赖订阅**：销毁后依赖图里不得残留该节点的边。
+    #[test]
+    fn dispose_removes_the_dependency_edges() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(0u32);
+
+        let v = value.clone();
+        let handle = runtime.effect(move || {
+            let _ = v.get();
+        });
+        runtime.flush();
+        assert!(!runtime.graph().dependencies_of(handle.id()).is_empty());
+
+        handle.dispose();
+        assert!(
+            runtime.graph().dependencies_of(handle.id()).is_empty(),
+            "销毁后不得残留依赖边"
+        );
+        assert!(
+            runtime.graph().dependents_of(value.id()).is_empty(),
+            "反向边也必须解除"
+        );
+    }
+
+    /// 子作用域的 effect 随父作用域一并销毁（且子先于父）。
+    #[test]
+    fn child_scope_effects_die_with_the_parent() {
+        let runtime = Runtime::new();
+        let log = Rc::new(RefCell::new(Vec::<&'static str>::new()));
+        let parent = runtime.scope();
+        let child = parent.child();
+
+        parent.effect(|| {}).on_cleanup({
+            let l = log.clone();
+            move || l.borrow_mut().push("parent")
+        });
+        child.effect(|| {}).on_cleanup({
+            let l = log.clone();
+            move || l.borrow_mut().push("child")
+        });
+
+        parent.dispose();
+        assert_eq!(&*log.borrow(), &["child", "parent"]);
+        assert!(child.is_disposed());
+    }
+
+    /// 已销毁的作用域不得再创建 effect（显式报错，不静默降级）。
+    #[test]
+    fn disposed_scope_refuses_to_create_effects() {
+        let runtime = Runtime::new();
+        let scope = runtime.scope();
+        scope.dispose();
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            scope.effect(|| {});
+        }));
+        assert!(result.is_err(), "已销毁作用域必须显式报错");
     }
 }

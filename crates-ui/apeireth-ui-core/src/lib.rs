@@ -11,14 +11,33 @@
 //! 本 crate 的公开类型里没有会话 / 审批 / presence 之类的概念。一旦出现，
 //! 引擎就退化成「带业务的项目」，可复用性与可测试性同时崩掉。
 //!
-//! ## 本批（P0 骨架）交付口径
-//! - ✅ **已实现**：信号（读登记依赖 / 写主动失效 / 版本号 / 只读视图）、
-//!   派生（惰性求值 + 主动失效 + 求值环检测）、依赖图（双向边 + 节点标签）、
-//!   调度器（pre/post 双队列 + 去重 + 延迟队列）、effect（生命周期 + 清理
-//!   回调 + 幂等销毁）、作用域（LIFO 逆序销毁）、批次（合并写入）、
-//!   组件 trait 边界（[`UiComponent`]）。
-//! - 🔵 **未接线**：宿主调度器注入（wasm 侧微任务 / 帧级）——P0 不引外部依赖，
-//!   native 侧用同步 flush；`ui-dom` 的 DOM 写入批次挂载点 —— 待 P2。
+//! ## 本批（P1）交付口径
+//!
+//! ### ✅ 已实现
+//! - **信号**：读登记依赖 / 写主动失效 / 版本号 / 只读视图 / 等值不触发；
+//! - **派生**：惰性求值 + 主动失效 + 求值环检测（带人名路径）；
+//! - **依赖图**：双向边 + 节点标签 + 条件依赖重收集；
+//! - **调度**：内部待办双队列（pre / post）+ 去重 + 延迟队列；
+//! - **宿主调度器注入**：[`HostScheduler`] trait + 同步默认实现
+//!   ([`SyncScheduler`]) + 手动队列实现 ([`QueuedScheduler`])；**注入是 trait
+//!   边界，不是依赖** ⇒ 本 crate 的 `[dependencies]` 段仍为 0 条；
+//! - **effect**：生命周期 + 清理回调（逆序）+ 幂等销毁 + 作用域 LIFO 销毁；
+//! - **批次**：多次写合并为一次 flush（可嵌套）；
+//! - **实例引用槽位**：[`InstanceRef`]（`bind:this` 的语义内核：挂载写引用、
+//!   卸载前清空）；
+//! - **组件 trait 边界**：[`UiComponent`]。
+//!
+//! ### 🔵 未接线（等什么）
+//! - **wasm 侧微任务调度器**：`HostScheduler` 的 trait 边界已就位，但「把 flush
+//!   排进浏览器微任务队列」的那一实现落在 **wasm 宿主侧**（`ui-dom` 的
+//!   `web-sys` 后端 / 试点宿主）⇒ **本 crate 不含该实现**，等 P2 的真实 DOM
+//!   后端一起接；在此之前 native 侧用同步默认实现。
+//! - **DOM 写入批次挂载点**：flush 的「渲染前」队列（`effect_pre` 所在的那一
+//!   段）就是 DOM 写入批次的落点，但**真正的 DOM 写入在 `ui-dom`** ⇒ 本 crate
+//!   只提供队列与顺序保证，不含写入动作。
+//! - **派生闭包的自引用环**：派生闭包若捕获**自身所在运行时的信号**，会形成
+//!   `Rc` 引用环 ⇒ 运行时不被释放（P0 遗留的内存账，**已登记、未修**；修法是
+//!   把信号对运行时的持有改成弱引用，属独立批次）。
 //!
 //! ## 契约登记
 //! `docs/architecture/contract.toml` `[extension_points]`：
@@ -32,6 +51,8 @@ pub mod derived;
 pub mod effect;
 pub mod error;
 pub mod graph;
+pub mod host_scheduler;
+pub mod instance;
 pub mod runtime;
 pub mod scheduler;
 pub mod signal;
@@ -41,6 +62,8 @@ pub use derived::Derived;
 pub use effect::{EffectHandle, Scope};
 pub use error::ReactiveError;
 pub use graph::{DependencyGraph, NodeId};
+pub use host_scheduler::{HostScheduler, QueuedScheduler, SyncScheduler};
+pub use instance::InstanceRef;
 pub use runtime::{FlushReport, Runtime, MAX_NODE_RUNS_PER_FLUSH};
 pub use scheduler::Scheduler;
 pub use signal::{ReadSignal, Signal};
@@ -145,5 +168,26 @@ mod tests {
         assert_eq!(handle.runs(), 0);
         assert!(!scope.is_disposed());
         assert_eq!(err, ReactiveError::DisposedScope);
+    }
+
+    #[test]
+    fn host_scheduler_types_are_reachable_from_the_crate_root() {
+        // 宿主调度器是**跨 crate 契约面**（wasm 侧注入）⇒ 必须从 crate 根部可达。
+        let runtime = Runtime::new();
+        let host = Rc::new(QueuedScheduler::new());
+        runtime.set_host_scheduler(host.clone());
+
+        let value = runtime.signal(0u32);
+        value.set(1);
+        assert_eq!(host.queued(), 1, "写入 ⇒ 向宿主请求一次 flush");
+        assert_eq!(host.drain(), 1);
+    }
+
+    #[test]
+    fn instance_ref_is_reachable_from_the_crate_root() {
+        let slot: InstanceRef<u32> = InstanceRef::new();
+        assert!(!slot.is_bound());
+        slot.bind(5);
+        assert_eq!(slot.get(), Some(5));
     }
 }

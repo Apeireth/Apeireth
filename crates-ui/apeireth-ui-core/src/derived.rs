@@ -121,6 +121,11 @@ impl<T: Clone + 'static> Derived<T> {
     pub fn id(&self) -> NodeId {
         self.node.id
     }
+
+    /// 本派生当前是否被标脏（缓存已失效、待重算）。
+    pub fn is_dirty(&self) -> bool {
+        self.node.dirty.get()
+    }
 }
 
 #[cfg(test)]
@@ -195,5 +200,186 @@ mod tests {
             slot_a.borrow().as_ref().expect("a 已装入").get()
         }));
         assert!(result.is_err(), "求值环必须被检出");
+    }
+
+    // ── 判别测试（钉行为不钉字面）──────────────────────────────────────────
+
+    /// 跨派生的环：错误必须**带路径**（首尾同节点 + 覆盖环上全部节点）。
+    #[test]
+    fn cross_derived_cycle_reports_the_full_path() {
+        let runtime = Runtime::new();
+        let slot_a: Rc<RefCell<Option<Derived<u32>>>> = Rc::new(RefCell::new(None));
+        let slot_b: Rc<RefCell<Option<Derived<u32>>>> = Rc::new(RefCell::new(None));
+        let captured: Rc<RefCell<Option<crate::ReactiveError>>> = Rc::new(RefCell::new(None));
+
+        let read_b = slot_b.clone();
+        let sink = captured.clone();
+        let a =
+            runtime.derived(
+                move || match read_b.borrow().as_ref().expect("b 已装入").try_get() {
+                    Ok(value) => value + 1,
+                    Err(err) => {
+                        *sink.borrow_mut() = Some(err);
+                        0
+                    }
+                },
+            );
+        let read_a = slot_a.clone();
+        let sink = captured.clone();
+        let b =
+            runtime.derived(
+                move || match read_a.borrow().as_ref().expect("a 已装入").try_get() {
+                    Ok(value) => value * 2,
+                    Err(err) => {
+                        *sink.borrow_mut() = Some(err);
+                        0
+                    }
+                },
+            );
+
+        *slot_a.borrow_mut() = Some(a);
+        *slot_b.borrow_mut() = Some(b);
+
+        let a_id = slot_a.borrow().as_ref().expect("a 已装入").id();
+        let b_id = slot_b.borrow().as_ref().expect("b 已装入").id();
+        let _ = slot_a.borrow().as_ref().expect("a 已装入").try_get();
+
+        let err = captured
+            .borrow()
+            .clone()
+            .expect("跨派生求值环必须被检出并报出路径");
+        match err {
+            crate::ReactiveError::CycleDetected { path } => {
+                assert_eq!(path.len(), 3, "路径 = a -> b -> a，实测：{path:?}");
+                assert_eq!(path[0], path[2], "首尾必须是同一节点");
+                assert!(path.contains(&a_id), "路径必须含 a");
+                assert!(path.contains(&b_id), "路径必须含 b");
+            }
+            other => panic!("实测错误类型：{other:?}"),
+        }
+    }
+
+    /// 环路径必须能渲染成**人可读**的一行（设计文档 §4.4 的硬要求）。
+    #[test]
+    fn cycle_path_renders_labels_when_available() {
+        let runtime = Runtime::new();
+        let slot_a: Rc<RefCell<Option<Derived<u32>>>> = Rc::new(RefCell::new(None));
+        let slot_b: Rc<RefCell<Option<Derived<u32>>>> = Rc::new(RefCell::new(None));
+
+        let read_b = slot_b.clone();
+        let a = runtime.derived(move || read_b.borrow().as_ref().expect("b 已装入").get() + 1);
+        let read_a = slot_a.clone();
+        let b = runtime.derived(move || read_a.borrow().as_ref().expect("a 已装入").get() * 2);
+        *slot_a.borrow_mut() = Some(a);
+        *slot_b.borrow_mut() = Some(b);
+
+        let a_id = slot_a.borrow().as_ref().expect("a 已装入").id();
+        let b_id = slot_b.borrow().as_ref().expect("b 已装入").id();
+        runtime.set_label(a_id, "视图::计数");
+        runtime.set_label(b_id, "视图::翻倍");
+
+        let described = runtime.describe_cycle_path(&[a_id, b_id, a_id]);
+        assert!(described.contains("视图::计数"), "实测：{described}");
+        assert!(described.contains("视图::翻倍"), "实测：{described}");
+        assert!(
+            described.contains("->"),
+            "路径必须可读地串起来：{described}"
+        );
+    }
+
+    /// **不误报**合法图：菱形依赖（A 读 B、C；B、C 都读 D）不是环。
+    #[test]
+    fn diamond_dependency_is_not_mistaken_for_a_cycle() {
+        let runtime = Runtime::new();
+        let base = runtime.signal(2u32);
+
+        let d = {
+            let base = base.clone();
+            runtime.derived(move || base.get() + 1)
+        };
+        let b = {
+            let d = d.clone();
+            runtime.derived(move || d.get() * 10)
+        };
+        let c = {
+            let d = d.clone();
+            runtime.derived(move || d.get() * 100)
+        };
+        let a = {
+            let b = b.clone();
+            let c = c.clone();
+            runtime.derived(move || b.get() + c.get())
+        };
+
+        assert_eq!(a.get(), 330, "菱形图必须正常求值");
+        base.set(3);
+        assert_eq!(a.get(), 440, "菱形图必须正常重算");
+    }
+
+    /// 派生缓存**只**被自己的依赖失效（无关写入不得让缓存失效）。
+    #[test]
+    fn unrelated_write_does_not_invalidate_the_derived_cache() {
+        let runtime = Runtime::new();
+        let base = runtime.signal(1u32);
+        let unrelated = runtime.signal(0u32);
+        let calls = Rc::new(Cell::new(0));
+
+        let b = base.clone();
+        let counter = calls.clone();
+        let doubled = runtime.derived(move || {
+            counter.set(counter.get() + 1);
+            b.get() * 2
+        });
+
+        assert_eq!(doubled.get(), 2);
+        assert_eq!(calls.get(), 1);
+
+        unrelated.set(1);
+        assert!(!doubled.is_dirty(), "无关写入不得让派生缓存失效");
+        assert_eq!(doubled.get(), 2);
+        assert_eq!(calls.get(), 1, "无关写入后不得重算");
+
+        base.set(5);
+        assert!(doubled.is_dirty(), "自己的依赖变了 ⇒ 缓存失效");
+        assert_eq!(doubled.get(), 10);
+        assert_eq!(calls.get(), 2);
+    }
+
+    /// 一次失效只重算一次（多次读命中同一份缓存）。
+    #[test]
+    fn derived_recomputes_at_most_once_per_invalidation() {
+        let runtime = Runtime::new();
+        let base = runtime.signal(1u32);
+        let calls = Rc::new(Cell::new(0));
+
+        let b = base.clone();
+        let counter = calls.clone();
+        let derived = runtime.derived(move || {
+            counter.set(counter.get() + 1);
+            b.get()
+        });
+
+        derived.get();
+        derived.get();
+        derived.get();
+        assert_eq!(calls.get(), 1, "缓存命中不得重复求值");
+
+        base.set(2);
+        derived.get();
+        derived.get();
+        assert_eq!(calls.get(), 2, "一次失效只重算一次");
+    }
+
+    /// read-after-write 可见性：写完立刻读派生，必须拿到**新值**（不是旧缓存）。
+    #[test]
+    fn derived_reflects_the_value_written_just_now() {
+        let runtime = Runtime::new();
+        let base = runtime.signal(1u32);
+        let b = base.clone();
+        let derived = runtime.derived(move || b.get() * 3);
+
+        assert_eq!(derived.get(), 3);
+        base.set(4);
+        assert_eq!(derived.get(), 12, "写后读派生必须立刻是新值");
     }
 }

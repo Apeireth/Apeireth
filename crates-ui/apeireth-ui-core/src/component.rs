@@ -53,9 +53,9 @@ mod tests {
     #[test]
     fn ui_component_renders_purely_from_props() {
         let props = DemoProps {
-            title: "审批".to_owned(),
+            title: "示例".to_owned(),
         };
-        assert_eq!(Demo::render(&props), "demo:审批");
+        assert_eq!(Demo::render(&props), "demo:示例");
         // 纯函数：同样的 props 产出同样的结果。
         assert_eq!(Demo::render(&props), Demo::render(&props));
     }

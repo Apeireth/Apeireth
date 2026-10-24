@@ -6,10 +6,14 @@
 //! - **DOM → 信号** 的写回发生在事件处理器里（即写回路径），随后由调度器统一
 //!   触发一次渲染 ⇒ 输入框内容不会被「回写再被信号覆盖」地抖动。
 //!
-//! P0 骨架阶段：`bind:this`（元素引用绑定）未实现 —— 真实元素引用要等 DOM 后端
-//! 接入后才有意义（设计 §5.4.1）。
+//! `bind:this`（元素 / 实例引用绑定）见 [`ThisBinding`]：它**不是**双向数据
+//! 绑定，而是「挂载 ⇒ 写引用 / 卸载前 ⇒ 清引用」的生命周期通道。
 
-use apeireth_ui_core::Signal;
+use std::rc::Rc;
+
+use apeireth_ui_core::{InstanceRef, Signal};
+
+use crate::dom::Dom;
 
 /// 双向绑定的槽位。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -18,14 +22,19 @@ pub enum BindingSlot {
     Value,
     /// `bind:checked`（勾选框）。
     Checked,
+    /// `bind:this`（元素 / 实例引用；**不是** property 绑定）。
+    This,
 }
 
 impl BindingSlot {
     /// 槽位对应的 DOM property 名。
-    pub fn property_name(&self) -> &'static str {
+    ///
+    /// `bind:this` 不是 property ⇒ 返回 `None`。
+    pub fn property_name(&self) -> Option<&'static str> {
         match self {
-            BindingSlot::Value => "value",
-            BindingSlot::Checked => "checked",
+            BindingSlot::Value => Some("value"),
+            BindingSlot::Checked => Some("checked"),
+            BindingSlot::This => None,
         }
     }
 }
@@ -103,9 +112,80 @@ impl Binding {
     }
 }
 
+/// `bind:this` 绑定：元素 / 组件实例的**引用**通道（设计文档 §5.4.1）。
+///
+/// **不是双向数据绑定** —— 它只承载一条生命周期通道：
+///
+/// | 时机 | 动作 |
+/// |---|---|
+/// | [`ThisBinding::mount`] | 把元素句柄**写入**引用槽位 |
+/// | [`ThisBinding::unmount`] | 把引用槽位**清空** |
+///
+/// 「卸载前清空」是硬要求：槽位里若留着已销毁的节点句柄，调用方会在
+/// 「看起来还在」的节点上读出过期状态。
+///
+/// 槽位本体是 [`apeireth_ui_core::InstanceRef`]（响应式核心里的通用形态），
+/// 本类型只是它对 DOM 后端的特化。
+#[derive(Debug)]
+pub struct ThisBinding<D: Dom> {
+    slot: Rc<InstanceRef<D::Node>>,
+}
+
+impl<D: Dom> Clone for ThisBinding<D> {
+    fn clone(&self) -> Self {
+        Self {
+            slot: self.slot.clone(),
+        }
+    }
+}
+
+impl<D: Dom> ThisBinding<D> {
+    /// 建一个未绑定的 `bind:this`。
+    pub fn new() -> Self {
+        Self {
+            slot: Rc::new(InstanceRef::new()),
+        }
+    }
+
+    /// 读取引用的元素句柄（未挂载 ⇒ `None`）。
+    pub fn get(&self) -> Option<D::Node>
+    where
+        D::Node: Clone,
+    {
+        self.slot.get()
+    }
+
+    /// 当前是否已绑定。
+    pub fn is_bound(&self) -> bool {
+        self.slot.is_bound()
+    }
+
+    /// 挂载：写入元素句柄。
+    pub fn mount(&self, node: D::Node) {
+        self.slot.bind(node);
+    }
+
+    /// 卸载：**清空**引用（幂等）。
+    pub fn unmount(&self) {
+        self.slot.unbind();
+    }
+
+    /// 取出底层的通用引用槽位（供上层组合用）。
+    pub fn slot(&self) -> Rc<InstanceRef<D::Node>> {
+        self.slot.clone()
+    }
+}
+
+impl<D: Dom> Default for ThisBinding<D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dom::InMemoryDom;
     use apeireth_ui_core::Runtime;
 
     #[test]
@@ -143,6 +223,85 @@ mod tests {
         assert!(signal.get());
         assert_eq!(binding.value(), "true");
         assert_eq!(binding.slot(), BindingSlot::Checked);
-        assert_eq!(binding.slot().property_name(), "checked");
+        assert_eq!(binding.slot().property_name(), Some("checked"));
+    }
+
+    #[test]
+    fn value_binding_slot_reports_its_property_name() {
+        assert_eq!(BindingSlot::Value.property_name(), Some("value"));
+        assert_eq!(
+            BindingSlot::This.property_name(),
+            None,
+            "bind:this 不是 property 绑定"
+        );
+    }
+
+    // ── bind:this ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn this_binding_is_empty_before_mount() {
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+        assert!(!binding.is_bound());
+        assert_eq!(binding.get(), None);
+    }
+
+    #[test]
+    fn this_binding_writes_the_node_on_mount() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("canvas").expect("建节点必须成功");
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+
+        binding.mount(node);
+        assert!(binding.is_bound());
+        assert_eq!(binding.get(), Some(node));
+    }
+
+    #[test]
+    fn this_binding_clears_the_reference_before_unmount() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("canvas").expect("建节点必须成功");
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+
+        binding.mount(node);
+        binding.unmount();
+        assert!(!binding.is_bound(), "卸载前必须清空引用");
+        assert_eq!(binding.get(), None);
+    }
+
+    #[test]
+    fn this_binding_unmount_is_idempotent() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("canvas").expect("建节点必须成功");
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+
+        binding.mount(node);
+        binding.unmount();
+        binding.unmount();
+        assert!(!binding.is_bound());
+    }
+
+    #[test]
+    fn this_binding_clones_share_one_reference() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("canvas").expect("建节点必须成功");
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+        let clone = binding.clone();
+
+        binding.mount(node);
+        assert_eq!(clone.get(), Some(node), "克隆共享同一引用槽位");
+        clone.unmount();
+        assert!(!binding.is_bound());
+    }
+
+    #[test]
+    fn this_binding_remount_replaces_the_reference() {
+        let dom = InMemoryDom::new();
+        let first = dom.create_element("canvas").expect("建节点必须成功");
+        let second = dom.create_element("canvas").expect("建节点必须成功");
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+
+        binding.mount(first);
+        binding.mount(second);
+        assert_eq!(binding.get(), Some(second), "后挂载者拥有该引用");
     }
 }

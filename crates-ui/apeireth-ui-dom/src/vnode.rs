@@ -4,6 +4,76 @@
 //! 写成 `assert_eq!(vnode, expected)`，而不是「读源码文本断言」——这是消灭 38 处
 //! 源码镜像测试的结构性前提。
 
+/// 列表项身份（key）：不透明的可比较值（设计文档 §5.2.3）。
+///
+/// 由 `view!` 宏从 `key = expr` 推出（字符串 / 整数）。
+/// **不支持复合 key**（本仓 0 处需要）。
+///
+/// > **与设计文档的一处刻意差异**：设计文档写的是 `Key::Str(&'static str)`；
+/// > 本实现用**拥有所有权**的 `String`。理由：key 是**运行期**值（列表项的
+/// > 标识），不可能是 `'static`；`'static str` 只够描述「编译期字面量 key」
+/// > 这一种用法。`String` 是 `&'static str` 的严格超集 ⇒ 不丢能力。
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Key {
+    /// 字符串 key。
+    Str(String),
+    /// 有符号整数 key。
+    Int(i64),
+    /// 无符号整数 key。
+    Uint(u64),
+}
+
+impl Key {
+    /// 从字符串构造 key。
+    pub fn str(value: impl Into<String>) -> Self {
+        Key::Str(value.into())
+    }
+
+    /// 从有符号整数构造 key。
+    pub fn int(value: i64) -> Self {
+        Key::Int(value)
+    }
+
+    /// 从无符号整数构造 key。
+    pub fn uint(value: u64) -> Self {
+        Key::Uint(value)
+    }
+}
+
+impl std::fmt::Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Key::Str(text) => write!(f, "{text}"),
+            Key::Int(value) => write!(f, "{value}"),
+            Key::Uint(value) => write!(f, "{value}"),
+        }
+    }
+}
+
+impl From<&str> for Key {
+    fn from(value: &str) -> Self {
+        Key::Str(value.to_owned())
+    }
+}
+
+impl From<String> for Key {
+    fn from(value: String) -> Self {
+        Key::Str(value)
+    }
+}
+
+impl From<i64> for Key {
+    fn from(value: i64) -> Self {
+        Key::Int(value)
+    }
+}
+
+impl From<u64> for Key {
+    fn from(value: u64) -> Self {
+        Key::Uint(value)
+    }
+}
+
 /// 属性值。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttrValue {
@@ -90,6 +160,14 @@ impl VNode {
             _ => &[],
         }
     }
+
+    /// 本节点的 key（只有带 key 的元素节点有）。
+    pub fn key(&self) -> Option<&Key> {
+        match self {
+            VNode::Element(element) => element.key.as_ref(),
+            _ => None,
+        }
+    }
 }
 
 /// 元素节点。
@@ -97,6 +175,8 @@ impl VNode {
 pub struct ElementVNode {
     /// 标签名。
     pub tag: String,
+    /// 列表项身份（keyed 差分用；`None` ⇒ 身份由位置决定）。
+    pub key: Option<Key>,
     /// 属性（保持写入顺序 ⇒ 差分可逐字对比）。
     pub attrs: Vec<(String, AttrValue)>,
     /// 子节点。
@@ -108,9 +188,21 @@ impl ElementVNode {
     pub fn new(tag: impl Into<String>) -> Self {
         Self {
             tag: tag.into(),
+            key: None,
             attrs: Vec::new(),
             children: Vec::new(),
         }
+    }
+
+    /// 设置列表项身份（keyed 差分用）。
+    pub fn key(mut self, key: impl Into<Key>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    /// 读 key。
+    pub fn key_value(&self) -> Option<&Key> {
+        self.key.as_ref()
     }
 
     /// 追加一个属性（同名属性覆盖，保持原位置）。
@@ -208,6 +300,12 @@ impl ElementBuilder {
         Self {
             node: ElementVNode::new(tag),
         }
+    }
+
+    /// 设置列表项身份（keyed 差分用）。
+    pub fn key(mut self, key: impl Into<Key>) -> Self {
+        self.node = self.node.key(key);
+        self
     }
 
     /// 追加属性。

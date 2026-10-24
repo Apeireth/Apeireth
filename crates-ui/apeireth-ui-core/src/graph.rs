@@ -166,11 +166,71 @@ mod tests {
     fn labels_are_readable() {
         let mut graph = DependencyGraph::new();
         let node = NodeId(9);
-        graph.set_label(node, "ApprovalRequestCard::visible_items");
-        assert_eq!(
-            graph.label(node),
-            Some("ApprovalRequestCard::visible_items")
-        );
+        graph.set_label(node, "视图::可见条目");
+        assert_eq!(graph.label(node), Some("视图::可见条目"));
         assert_eq!(graph.label(NodeId(10)), None);
+    }
+
+    // ── 判别测试（钉行为不钉字面）──────────────────────────────────────────
+
+    /// 解除订阅必须**两个方向**都清掉（否则失效传播会打到已解除的节点）。
+    #[test]
+    fn unsubscribe_clears_both_directions() {
+        let mut graph = DependencyGraph::new();
+        let reader = NodeId(1);
+        let source = NodeId(2);
+        graph.subscribe(reader, source);
+
+        graph.unsubscribe(reader, source);
+        assert!(graph.dependencies_of(reader).is_empty());
+        assert!(graph.dependents_of(source).is_empty());
+        assert_eq!(graph.edge_count(), 0);
+    }
+
+    /// 解除不存在的边是**幂等**空操作（不得误删别的边）。
+    #[test]
+    fn unsubscribing_an_absent_edge_is_a_noop() {
+        let mut graph = DependencyGraph::new();
+        let reader = NodeId(1);
+        let kept = NodeId(2);
+        let other = NodeId(3);
+        graph.subscribe(reader, kept);
+
+        graph.unsubscribe(reader, other);
+        assert_eq!(
+            graph.dependencies_of(reader),
+            vec![kept],
+            "解除无关边不得误删已有边"
+        );
+        assert_eq!(graph.edge_count(), 1);
+    }
+
+    /// 一个节点读多个来源时，边数按**来源**计（不是按读取次数）。
+    #[test]
+    fn edge_count_is_per_source_not_per_read() {
+        let mut graph = DependencyGraph::new();
+        let reader = NodeId(1);
+        let left = NodeId(2);
+        let right = NodeId(3);
+        for _ in 0..5 {
+            graph.subscribe(reader, left);
+        }
+        graph.subscribe(reader, right);
+
+        assert_eq!(graph.edge_count(), 2, "重复登记只算一条边");
+        assert_eq!(graph.dependencies_of(reader), vec![left, right]);
+    }
+
+    /// 清空出边后，反向表里不得残留**空集合**条目（避免节点数虚高）。
+    #[test]
+    fn clearing_dependencies_prunes_empty_reverse_entries() {
+        let mut graph = DependencyGraph::new();
+        let reader = NodeId(1);
+        let source = NodeId(2);
+        graph.subscribe(reader, source);
+        assert_eq!(graph.node_count(), 2);
+
+        graph.clear_dependencies(reader);
+        assert_eq!(graph.node_count(), 0, "空集合条目必须被剪掉");
     }
 }

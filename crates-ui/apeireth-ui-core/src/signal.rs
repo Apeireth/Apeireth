@@ -66,12 +66,19 @@ impl<T> Signal<T> {
     }
 
     /// 写信号；派生求值期间写入会返回错误。
+    ///
+    /// 写入成功后向**宿主调度器**请求一次 flush（设计文档 §4.2 规则 1）；
+    /// 若该次 flush 失败（如自激循环），错误在此返回（**不许静默降级**）。
     pub fn try_set(&self, value: T) -> Result<(), ReactiveError> {
         self.check_writable()?;
         *self.cell.value.borrow_mut() = value;
         self.bump_version();
         self.inner.propagate_dirty(self.id);
-        Ok(())
+        self.inner.request_flush();
+        match self.inner.take_flush_error() {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 
     /// 写信号（派生求值期间写入会 panic —— 派生必须是纯函数）。
@@ -94,7 +101,11 @@ impl<T> Signal<T> {
         }
         self.bump_version();
         self.inner.propagate_dirty(self.id);
-        Ok(())
+        self.inner.request_flush();
+        match self.inner.take_flush_error() {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 
     /// 读改写（派生求值期间会 panic）。
@@ -312,5 +323,82 @@ mod tests {
         value.set(6);
         assert_eq!(view.get(), 6);
         assert_eq!(view.version(), 1);
+    }
+
+    // ── 判别测试（钉行为不钉字面）──────────────────────────────────────────
+
+    /// read-after-write 可见性：写完**立刻**读，必须是新值（不等 flush）。
+    #[test]
+    fn read_after_write_returns_the_new_value_without_a_flush() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(1u32);
+        value.set(2);
+        assert_eq!(value.get(), 2, "写后读必须立刻可见");
+        assert_eq!(value.version(), 1);
+    }
+
+    /// 同一追踪域内**重复读**同一个信号 ⇒ 只登记一条依赖边（订阅去重）。
+    #[test]
+    fn repeated_reads_in_one_effect_register_one_dependency() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(1u32);
+
+        let v = value.clone();
+        let handle = runtime.effect(move || {
+            let _ = v.get();
+            let _ = v.get();
+            let _ = v.get();
+        });
+        runtime.flush();
+
+        assert_eq!(
+            runtime.graph().dependencies_of(handle.id()),
+            vec![value.id()],
+            "重复读只登记一条边"
+        );
+        assert_eq!(
+            runtime.graph().dependents_of(value.id()),
+            vec![handle.id()],
+            "反向表同样去重"
+        );
+    }
+
+    /// 多次重跑不得让依赖边**累积**（每次重跑先清旧边）。
+    #[test]
+    fn repeated_runs_do_not_accumulate_dependency_edges() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(1u32);
+        let other = runtime.signal(2u32);
+
+        let v = value.clone();
+        let o = other.clone();
+        let handle = runtime.effect(move || {
+            let _ = v.get();
+            let _ = o.get();
+        });
+
+        for _ in 0..5 {
+            runtime.flush();
+            value.set(value.get() + 1);
+        }
+        runtime.flush();
+
+        assert_eq!(
+            runtime.graph().dependencies_of(handle.id()).len(),
+            2,
+            "依赖边数必须恒定（不得累积）"
+        );
+        assert_eq!(runtime.graph().edge_count(), 2);
+    }
+
+    /// 只读视图与可写信号共享**同一份**状态（不是快照）。
+    #[test]
+    fn read_only_view_tracks_later_writes() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(1u32);
+        let view = value.read_only();
+        value.set(2);
+        assert_eq!(view.get(), 2);
+        assert_eq!(view.version(), value.version());
     }
 }
