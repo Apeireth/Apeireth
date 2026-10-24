@@ -59,13 +59,13 @@
 
 1. **被改的标注**
    ```
-   $ sed -n '167p' docs/04-internal/backend-enhancement/K-device-approval-im-push.md | cut -c1-120
+   $ sed -n '167p' ../backend-enhancement/K-device-approval-im-push.md | cut -c1-120
    - **已接线〔四级口径：PRODUCTION WIRED〕**：设备审批卡→IM 推送链（同链同信封 + plan_id 幂等 + 失败留账重试）、
    ```
 
 2. **真源对同一条链的判定**（`docs/03-reference/capabilities-matrix.md:70`，本批未改该行）
    ```
-   $ sed -n '70p' docs/03-reference/capabilities-matrix.md | grep -o "设备动作计划卡 → IM 推送链.\{0,260\}"
+   $ sed -n '70p' ../../03-reference/capabilities-matrix.md | grep -o "设备动作计划卡 → IM 推送链.\{0,260\}"
    设备动作计划卡 → IM 推送链（subject `tool.device_control.plan`，…）**IMPLEMENTED 但未接线**：
    `ImBridge::with_device_approval_face` / `push_device_approval_cards` / `retry_device_approval_pushes`
    全仓仅测试调用、生产装配无注入点，桥内 face 缺位照实回「未接线」——故 money 档的 IM 卡出卡来源在生产装配下未闭合
@@ -82,7 +82,7 @@
 
 4. **同一文档自相矛盾**
    ```
-   $ sed -n '5p' docs/04-internal/backend-enhancement/K-device-approval-im-push.md
+   $ sed -n '5p' ../backend-enhancement/K-device-approval-im-push.md
    > 报备的两条未接线缝：**IM 审批卡推送面**（本批由 gateway 消费 …
    $ sed -n '170,173p' …
    - **未接线**（如实）：… 运行时侧「预览拍产卡 → 自动提交推送」的触发器——本批交付
@@ -99,7 +99,7 @@
 | # | 注入内容 | 命令 | 期望 | 实测退出码 | 判定 |
 |---|---|---|---|---|---|
 | C1 | 向 `docs/gateway-api-contract.md` 追加 `[断链探针](no-such-file-c1-probe.md)` | `python3 scripts/docs_links.py --check` | 1 | **1**（`断链: 1`，`BROKEN … no-such-file-c1-probe.md (目标不存在)`） | PASS |
-| C2 | `rm docs/04-internal/04-logs/README.md` | `python3 scripts/docs_index.py --check` | 1 | **0**（`问题数: 0`） | **FAIL** |
+| C2 | `rm ../04-logs/README.md` | `python3 scripts/docs_index.py --check` | 1 | **0**（`问题数: 0`） | **FAIL** |
 | C3 | 向 `docs/03-reference/capabilities-matrix.md` 追加独立段 `本模块已实现。` | `python3 scripts/check_doc_caliber.py` | 1 | **1**（`capabilities-matrix.md:231 … 新增违规 1 处`） | PASS |
 | C4 | 向 `docs/_known-missing.tsv` 追加三字段行 `docs/foo/bar-probe.md\tv1-moved\tprobe with only three fields` | `python3 scripts/docs_links.py --check` | 1 | **1**（`豁免表行 49 字段不足 5 …`） | PASS |
 
@@ -125,7 +125,7 @@
 2. **backlog.md 的桩指向另一个桩，且与重定向表互相矛盾**：
    - 桩：`docs/04-internal/backlog.md` → `docs/04-internal/05-plans/backlog.md`
    - 但 `05-plans/backlog.md` 本身是基点遗留的「已归档」4 行桩（内含 `自动重定向生成` 1 处），正文指向 `backend-enhancement/00-backlog.md`
-   - 重定向表：`docs/04-internal/backlog.md → docs/04-internal/backend-enhancement/00-backlog.md`（直达终址，与桩不一致）
+   - 重定向表：`docs/04-internal/backlog.md → ../backend-enhancement/00-backlog.md`（直达终址，与桩不一致）
    - 后果：点桩落到第二个桩（2 跳），且该桩写「内容以 **backlog** 为准」，而内容其实不在那里。
    - 连带：`05-plans/` 的「18 篇」里含这 1 个桩，不是 18 篇正文。
 
@@ -169,8 +169,8 @@ EXIT=0
 
 ### A3 —— PASS
 ```
-$ git diff --numstat b6225d57 315bcff1 -- docs/adr/0010-r8-governance-pipeline.md
-4	0	docs/adr/0010-r8-governance-pipeline.md
+$ git diff --numstat b6225d57 315bcff1 -- ../../adr/0010-r8-governance-pipeline.md
+4	0	../../adr/0010-r8-governance-pipeline.md
 ```
 0 删除行；hunk 头 `@@ -239,6 +239,10 @@`，新增 4 行在段末，原句逐字未动。补注内容自称「上句 = IMPLEMENTED」「接生产装配是另一层事实（见 claims `gov.chain_hook_adapter` = PRODUCTION WIRED）」——claims 实值为 PRODUCTION WIRED，引用正确。
 
@@ -234,8 +234,8 @@ link-only: absorption-candidates-2026-10.md, backlog.md, handover-ledger.md,
 6/20 无机器引用；3/20 基点即桩（`git show b6225d57:<path>` 与 tip 逐字节相同，均为「已合并/已归档」模板）。另：
 ```
 $ grep -rn "engineering-review-handoff" scripts/ .github/ crates/
-scripts/check_doc_caliber.py:2:"""文档四级口径守门 (W8③, per docs/04-internal/engineering-review-handoff-2026-10-06.md §5 W8).
-.github/workflows/doc-caliber.yml:3:# W8③ (docs/04-internal/engineering-review-handoff-2026-10-06.md §5 W8):
+scripts/check_doc_caliber.py:2:"""文档四级口径守门 (W8③, per ../engineering-review-handoff-2026-10-06.md §5 W8).
+.github/workflows/doc-caliber.yml:3:# W8③ (../engineering-review-handoff-2026-10-06.md §5 W8):
 crates/adapters/cli/tests/production_knobs.rs:141:// ---- 2026-10-06 W2 接线批旋钮 …
 crates/adapters/cli/src/lib.rs:190:// 2026-10-06 W2 接线批 …
 ```
@@ -276,7 +276,7 @@ data rows 238；两字段不全行 0；目标不存在 0；源重复 0
 
 ### B7 —— FAIL
 ```
-$ grep -n "88 个条目" docs/04-internal/README.md
+$ grep -n "88 个条目" ../README.md
 32:顶层共 **88 个条目** = **1 篇目录索引（本文件）+ 20 篇留原位的真文件**（下表）+ **67 个 4 行重定向桩**
 实测：88 = 1 README + 17 真文件 + 70 桩（67 新 + 3 遗留）
 真文件 17 个 = ENGINEER-MANIFESTO, ai-os-landscape, async-trait-decision-matrix, ci-fix-log,
@@ -321,7 +321,7 @@ ALL-SAME
 
 ### D3 —— PASS
 ```
-SAME docs/03-reference/test-baseline.md
+SAME ../../03-reference/test-baseline.md
 SAME docs/status/claims.yaml / wiring.yaml / verification-ledger.yaml
 SAME docs/architecture/contract.toml / env-registry.toml / exceptions.toml
 ```

@@ -2,9 +2,9 @@
 
 > `Status: ✅ 批 L1 交付（2026-10-15，纯文档批 · 未 commit）`
 > 一事：解剖本战役会话记录里出现过的各类**死法**（会话/批猝死、误伤、自炸），每死法 =【症状→死因→药方→防复发断言】四段。
-> 矿脉图：[L-experience-distillation.md](../backend-enhancement/L-experience-distillation.md) §二.2（死亡名单登记面）。
+> 矿脉图：[L-experience-distillation.md](../../archive/backend-enhancement/L-experience-distillation-2026-10-15.md) §二.2（死亡名单登记面）。
 > 出处标注：**★** = 仓内锚点（可链接复核）；**☆** = 会话记录侧（案例批注在本战役会话记录，未落仓，仓内仅存登记名目）。
-> 纪律：[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md)；姊妹速查行已入 [ops-network-playbook.md](../ops-network-playbook.md) §7。
+> 纪律：[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md)；姊妹速查行已入 [ops-network-playbook.md](../00-governance/ops-network-playbook.md) §7。
 
 ## 死法 1 · 启动猝死（上下文/额度类）
 
@@ -16,7 +16,7 @@
 
 【防复发断言】任何"批开工"动作先产出骨架文件再展开内容；交付文档必须能指回「已完成/未完清单」（中道死亡可续作的构造性证据）；预算耗尽路径有降级出口且留痕 `module_budget_degraded` 一类事件。
 
-> 出处：采矿图 [L-experience-distillation.md](../backend-enhancement/L-experience-distillation.md) §二.2（启动猝死×N 名目）；★预算炸毁同族机制实证 [engineering-log-2026-10-06.md](../engineering-log-2026-10-06.md) §1 #1（预算 8→24 + `BudgetExceeded` 优雅降级）；☆会话记录（启动猝死案例群）。
+> 出处：采矿图 [L-experience-distillation.md](../../archive/backend-enhancement/L-experience-distillation-2026-10-15.md) §二.2（启动猝死×N 名目）；★预算炸毁同族机制实证 [engineering-log-2026-10-06.md](../04-logs/engineering-log-2026-10-06.md) §1 #1（预算 8→24 + `BudgetExceeded` 优雅降级）；☆会话记录（启动猝死案例群）。
 
 ## 死法 2 · 内容过滤误伤（安全词/擦边词；伴侣族四连猝）
 
@@ -43,7 +43,7 @@
 
 【防复发断言】取材文档带限读口径注；产出按小文件族组织、每单元完成即落盘（断点可续）；巨物读取前先声明预算上限。
 
-> 出处：★[philosophy-study/02-memory-family.md](../philosophy-study/02-memory-family.md) 抬头「产出纪律（渐进式落盘）/ 限读口径（剥装饰 + 有界等价窗口 + ~160 行）」；★[philosophy-study/01-companion-family.md](../philosophy-study/01-companion-family.md) 抬头（剥徽章/横幅）；★[next-team-handbook.md](../next-team-handbook.md) §1 渐进式披露条（35k→920 token 对照）；采矿图 §二.2（上下文读爆名目）。
+> 出处：★[philosophy-study/02-memory-family.md](../philosophy-study/02-memory-family.md) 抬头「产出纪律（渐进式落盘）/ 限读口径（剥装饰 + 有界等价窗口 + ~160 行）」；★[philosophy-study/01-companion-family.md](../philosophy-study/01-companion-family.md) 抬头（剥徽章/横幅）；★[next-team-handbook.md](../backend-enhancement/00-backlog.md) §1 渐进式披露条（35k→920 token 对照）；采矿图 §二.2（上下文读爆名目）。
 
 ## 死法 4 · 工具链陷阱族
 
@@ -57,7 +57,7 @@
 
 【防复发断言】路径归一函数全仓唯一（复用面 `pub(crate)`）；测试含平台语义的断言一律 cfg 守卫；三轮理论不破即转示踪，一轮示踪定案。
 
-> 出处：★[E-object-level-contract.md](../backend-enhancement/E-object-level-contract.md) §6（`path_key` 复用报备）；★[live-verification-ledger.md](../live-verification-ledger.md) #49 ④（`\\?\` 扩展前缀 cwd 掉 `%WINDIR%` → 剥前缀）；★[handoff-w1-w5-closure-2026-10-10.md](../handoff-w1-w5-closure-2026-10-10.md) §89 行；★[ops-network-playbook.md](../ops-network-playbook.md) §6.2 键规范化面 + 示踪三选一（含 git log `faad54d7` 破案提交主题）。
+> 出处：★[E-object-level-contract.md](../backend-enhancement/02-axes/E-object-level-contract.md) §6（`path_key` 复用报备）；★[live-verification-ledger.md](../live-verification-ledger.md) #49 ④（`\\?\` 扩展前缀 cwd 掉 `%WINDIR%` → 剥前缀）；★[handoff-w1-w5-closure-2026-10-10.md](../01-handoffs/handoff-w1-w5-closure-2026-10-10.md) §89 行；★[ops-network-playbook.md](../00-governance/ops-network-playbook.md) §6.2 键规范化面 + 示踪三选一（含 git log `faad54d7` 破案提交主题）。
 
 ### 4b. CRLF 吃替换
 
@@ -81,7 +81,7 @@
 
 【防复发断言】shell 面回归测试必须含**真实执行**断言（非 dry-run）；命令文本进文档/测试前在目标 shell 实跑一次。
 
-> 出处：★[engineering-log-2026-10-06.md](../engineering-log-2026-10-06.md) §1 #11（引号被吃 → `raw_arg` 直传 + 真实执行回归测试）；★[ops-network-playbook.md](../ops-network-playbook.md) §5（bash 嵌套引号/here-doc 一日三踩）；采矿图 §二.2（`@{u}`/引号/`-i` 歧义名目）；☆会话记录（`@{u}`、`-i`、Regex 第四参案例）。
+> 出处：★[engineering-log-2026-10-06.md](../04-logs/engineering-log-2026-10-06.md) §1 #11（引号被吃 → `raw_arg` 直传 + 真实执行回归测试）；★[ops-network-playbook.md](../00-governance/ops-network-playbook.md) §5（bash 嵌套引号/here-doc 一日三踩）；采矿图 §二.2（`@{u}`/引号/`-i` 歧义名目）；☆会话记录（`@{u}`、`-i`、Regex 第四参案例）。
 
 ## 死法 5 · 多帧 zstd 解包
 
@@ -93,7 +93,7 @@
 
 【防复发断言】解包产物带完整性校验（尺寸/条目数/哈希之一），校验不过不算交付；下载分块拼接必过尺寸校验关。
 
-> 出处：采矿图 §二.2（多帧 zstd 解包名目）；★[ops-network-playbook.md](../ops-network-playbook.md) §2（分块下载的尺寸校验纪律：逐块尺寸 == 区间长度、总尺寸 == Content-Length）；☆会话记录（案例）。
+> 出处：采矿图 §二.2（多帧 zstd 解包名目）；★[ops-network-playbook.md](../00-governance/ops-network-playbook.md) §2（分块下载的尺寸校验纪律：逐块尺寸 == 区间长度、总尺寸 == Content-Length）；☆会话记录（案例）。
 
 ## 死法 6 · 扫描器豁免表滥用边界
 
@@ -105,7 +105,7 @@
 
 【防复发断言】门禁报告里豁免计数可见；豁免表新增行必须带"真实字符串"理由；"扫描零命中"语义 = 0 命中 **且** 豁免仅限结构性（新增豁免行 = 评审事件）。
 
-> 出处：★[scripts/check-neutral-terms.ps1](../../../scripts/check-neutral-terms.ps1) 头注与 `$exemptRe`/`$exemptFiles`（结构性豁免口径 + 豁免计数输出）；★[W3-2-user-identity-roles.md](../backend-enhancement/W3-2-user-identity-roles.md) §6 中性表述行（外部暂存命中 → 归置后复扫全绿）；★git log `2c701d0a`（外部源码出库——抽取暂存与嵌入仓库移出索引）、`1593a0d4`（扫描器补盲区——未跟踪新文件全文扫描 + 单行文件标量索引修复）。
+> 出处：★[scripts/check-neutral-terms.ps1](../../../scripts/check-neutral-terms.ps1) 头注与 `$exemptRe`/`$exemptFiles`（结构性豁免口径 + 豁免计数输出）；★[W3-2-user-identity-roles.md](../backend-enhancement/04-delivery/home-W-axis-delivery.md) §6 中性表述行（外部暂存命中 → 归置后复扫全绿）；★git log `2c701d0a`（外部源码出库——抽取暂存与嵌入仓库移出索引）、`1593a0d4`（扫描器补盲区——未跟踪新文件全文扫描 + 单行文件标量索引修复）。
 
 ## 死法 7 · 管道截断假绿（三次假绿事故的根源）
 
@@ -117,7 +117,7 @@
 
 【防复发断言】门禁命令的判定输入是落盘输出文件；发现"管道直判"写法即整改。
 
-> 出处：★[ops-network-playbook.md](../ops-network-playbook.md) §5 管道截断条（明记"三次假绿事故的根源"）；★[kani-verification-playbook.md](../kani-verification-playbook.md) K9。
+> 出处：★[ops-network-playbook.md](../00-governance/ops-network-playbook.md) §5 管道截断条（明记"三次假绿事故的根源"）；★[kani-verification-playbook.md](../kani-verification-playbook.md) K9。
 
 ## 附：死法 ↔ 药方速查（一行版）
 

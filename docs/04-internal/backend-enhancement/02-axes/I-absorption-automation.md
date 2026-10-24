@@ -5,8 +5,8 @@
 > **文件名 `I-absorption-automation.md` 保留旧名避免断链**（文内链接路径不改，旧名只在带日期历史记录里保留）。
 > `Status: 🚧 分期在建（2026-10-13 立；P1 已交付）`
 > 使命：把「吸收优秀实践」从战役变成产品本能——书→技能、随手记、历史即记忆。
-> 上游分诊见 [吸收候选池](../../absorption-candidates-2026-10.md)（book-to-skill 假说立轴，立轴时名 I 轴——历史口径（2026-10））；
-> 落地回写 [质感吸收台账](../../absorption-ledger.md)。战场纪律见
+> 上游分诊见 [吸收候选池](../../03-audits/absorption-candidates-2026-10.md)（book-to-skill 假说立轴，立轴时名 I 轴——历史口径（2026-10））；
+> 落地回写 [质感吸收台账](../../03-audits/absorption-ledger.md)。战场纪律见
 > [CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md)。
 
 ## 一句话

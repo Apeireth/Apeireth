@@ -8,29 +8,29 @@
 
 | # | 原件路径 | 轮次 | 性质 |
 |---|---|---|---|
-| 1 | [`docs/04-internal/round-8-verifications-2026-08-28.md`](../round-8-verifications-2026-08-28.md) | Round 8 | 历史（带 2026-09-05 对账批注） |
-| 2 | [`docs/04-internal/v2-reference-handbook-2026-08-28.md`](../v2-reference-handbook-2026-08-28.md) | Round 9 | 历史（带 2026-09-05 对账批注） |
-| 3 | [`docs/04-internal/r9-r10-spec-drift-audit-2026-08-28.md`](../r9-r10-spec-drift-audit-2026-08-28.md) | R9 + R10 | 历史 |
-| 4 | [`docs/04-internal/round-10-research-plan-2026-08-28.md`](../round-10-research-plan-2026-08-28.md) | Round 10 | 历史 |
-| 5 | [`docs/04-internal/youyou-list-research-2026-08-28.md`](../youyou-list-research-2026-08-28.md) | Round 10 | 历史（带 2026-09-05 对账批注） |
-| 6 | [`docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md`](../round-10-youyou-list-mainagent-verify-2026-08-28.md) | Round 10 | 历史（带 2026-09-05 对账批注） |
-| 7 | [`docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md`](../apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md) | Round 11 | 历史（2026-10-06 复核批已降级为历史记录） |
-| 8 | [`docs/04-internal/r11-storage-gap-research-2026-08-28.md`](../r11-storage-gap-research-2026-08-28.md) | Round 11 | 历史（2026-10-06 复核批补横幅） |
-| 9 | [`docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md`](../r11-longterm-memory-gap-research-2026-08-28.md) | Round 11 | 历史 |
-| 10 | [`docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md`](../r11-coordination-context-gap-research-2026-08-28.md) | Round 11 | 历史（带 2026-09-05 对账批注） |
-| 11 | [`docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md`](../r11-meta-cognition-gap-research-2026-08-28.md) | Round 11 | 历史 |
-| 12 | [`docs/04-internal/r11-species-core-gap-research-2026-08-28.md`](../r11-species-core-gap-research-2026-08-28.md) | Round 11 | 历史 |
-| 13 | [`docs/04-internal/r11-species-form-gap-research-2026-08-28.md`](../r11-species-form-gap-research-2026-08-28.md) | Round 11 | 历史 |
-| 14 | [`docs/04-internal/round-12-final-gap-audit-2026-08-28.md`](../round-12-final-gap-audit-2026-08-28.md) | Round 12 | 历史 |
-| 15 | [`docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md`](../round-13-1-0-maturity-audit-2026-08-28.md) | Round 13 | 历史 |
-| 16 | [`docs/04-internal/round-14-v2-completion-plan-2026-08-28.md`](../round-14-v2-completion-plan-2026-08-28.md) | Round 14 | 历史 |
-| 17 | [`docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md`](../r12-r13-r14-implementation-brief-template-2026-08-28.md) | Round 12-14 | 历史 |
+| 1 | [`docs/04-internal/round-8-verifications-2026-08-28.md`](../03-audits/round-8-verifications-2026-08-28.md) | Round 8 | 历史（带 2026-09-05 对账批注） |
+| 2 | [`docs/04-internal/v2-reference-handbook-2026-08-28.md`](../02-research/v2-reference-handbook-2026-08-28.md) | Round 9 | 历史（带 2026-09-05 对账批注） |
+| 3 | [`docs/04-internal/r9-r10-spec-drift-audit-2026-08-28.md`](../03-audits/r9-r10-spec-drift-audit-2026-08-28.md) | R9 + R10 | 历史 |
+| 4 | [`docs/04-internal/round-10-research-plan-2026-08-28.md`](../02-research/round-10-research-plan-2026-08-28.md) | Round 10 | 历史 |
+| 5 | [`docs/04-internal/youyou-list-research-2026-08-28.md`](../02-research/youyou-list-research-2026-08-28.md) | Round 10 | 历史（带 2026-09-05 对账批注） |
+| 6 | [`docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md`](../05-plans/round-10-youyou-list-mainagent-verify-2026-08-28.md) | Round 10 | 历史（带 2026-09-05 对账批注） |
+| 7 | [`docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md`](../03-audits/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md) | Round 11 | 历史（2026-10-06 复核批已降级为历史记录） |
+| 8 | [`docs/04-internal/r11-storage-gap-research-2026-08-28.md`](../02-research/r11-storage-gap-research-2026-08-28.md) | Round 11 | 历史（2026-10-06 复核批补横幅） |
+| 9 | [`docs/04-internal/r11-longterm-memory-gap-research-2026-08-28.md`](../02-research/r11-longterm-memory-gap-research-2026-08-28.md) | Round 11 | 历史 |
+| 10 | [`docs/04-internal/r11-coordination-context-gap-research-2026-08-28.md`](../02-research/r11-coordination-context-gap-research-2026-08-28.md) | Round 11 | 历史（带 2026-09-05 对账批注） |
+| 11 | [`docs/04-internal/r11-meta-cognition-gap-research-2026-08-28.md`](../02-research/r11-meta-cognition-gap-research-2026-08-28.md) | Round 11 | 历史 |
+| 12 | [`docs/04-internal/r11-species-core-gap-research-2026-08-28.md`](../02-research/r11-species-core-gap-research-2026-08-28.md) | Round 11 | 历史 |
+| 13 | [`docs/04-internal/r11-species-form-gap-research-2026-08-28.md`](../02-research/r11-species-form-gap-research-2026-08-28.md) | Round 11 | 历史 |
+| 14 | [`docs/04-internal/round-12-final-gap-audit-2026-08-28.md`](../03-audits/round-12-final-gap-audit-2026-08-28.md) | Round 12 | 历史 |
+| 15 | [`docs/04-internal/round-13-1-0-maturity-audit-2026-08-28.md`](../03-audits/round-13-1-0-maturity-audit-2026-08-28.md) | Round 13 | 历史 |
+| 16 | [`docs/04-internal/round-14-v2-completion-plan-2026-08-28.md`](../05-plans/round-14-v2-completion-plan-2026-08-28.md) | Round 14 | 历史 |
+| 17 | [`docs/04-internal/r12-r13-r14-implementation-brief-template-2026-08-28.md`](../00-governance/r12-r13-r14-implementation-brief-template-2026-08-28.md) | Round 12-14 | 历史 |
 | 18 | [`docs/04-internal/v2-unabsorbed-features.md`](../v2-unabsorbed-features.md) | 2026-08-27 | 历史 |
-| 19 | [`docs/04-internal/stage123-gap-matrix.md`](../stage123-gap-matrix.md) | 阶段 1/2/3 标尺审计 | 历史 |
-| 20 | [`docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md`](../w3-legacy-gap-archaeology-2026-10-10.md) | W3 / 2026-10-10 | 历史 |
-| 21 | [`docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md`](../r12-coordination-context-1-merge-spec-2026-08-28.md) | Round 12 / R12 | 历史（主代理亲做的 spec 决策冻结） |
+| 19 | [`docs/04-internal/stage123-gap-matrix.md`](../03-audits/stage123-gap-matrix.md) | 阶段 1/2/3 标尺审计 | 历史 |
+| 20 | [`docs/04-internal/w3-legacy-gap-archaeology-2026-10-10.md`](../02-research/w3-legacy-gap-archaeology-2026-10-10.md) | W3 / 2026-10-10 | 历史 |
+| 21 | [`docs/04-internal/r12-coordination-context-1-merge-spec-2026-08-28.md`](../05-plans/r12-coordination-context-1-merge-spec-2026-08-28.md) | Round 12 / R12 | 历史（主代理亲做的 spec 决策冻结） |
 
-**未合并（保留原位）**：[`docs/04-internal/absorption-ledger.md`](../absorption-ledger.md)、[`docs/04-internal/absorption-candidates-2026-10.md`](../absorption-candidates-2026-10.md)——它们是**现行**吸收台账（不是轮次考古稿），由现行真源管理；[`docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md`](../v1-vs-v2-capability-gap-audit-2026-10-06.md)——它是 **2026-10-06 的复核审计**，是本册多处旧结论的**现行判定依据**，保留原位并在 §11 指向。
+**未合并（保留原位）**：[`docs/04-internal/absorption-ledger.md`](../03-audits/absorption-ledger.md)、[`docs/04-internal/absorption-candidates-2026-10.md`](../03-audits/absorption-candidates-2026-10.md)——它们是**现行**吸收台账（不是轮次考古稿），由现行真源管理；[`docs/04-internal/v1-vs-v2-capability-gap-audit-2026-10-06.md`](../v1-vs-v2-capability-gap-audit-2026-10-06.md)——它是 **2026-10-06 的复核审计**，是本册多处旧结论的**现行判定依据**，保留原位并在 §11 指向。
 
 ## 时间跨度
 
@@ -336,7 +336,7 @@
 | 能力状态声明 | [`../../status/claims.yaml`](../../status/claims.yaml) | 口径阶梯 NOT IMPLEMENTED < IMPLEMENTED < PRODUCTION WIRED < HARDWARE VALIDATED；`DEFAULT ENABLED` 是横切属性 |
 | **v1↔v2 能力差距的现行判定** | [`../v1-vs-v2-capability-gap-audit-2026-10-06.md`](../v1-vs-v2-capability-gap-audit-2026-10-06.md) | **2026-10-06 复核审计**：§7 两级化 / §8 附录 A 是本册 §2.1 旧 🔴/🟢 结论的**现行判定依据**（原件 7 已被降级为历史记录） |
 | 现行待办 | [`../backend-enhancement/00-backlog.md`](../backend-enhancement/00-backlog.md) | 现行想法级索引；本册 §10 的历史残余清单**不**等于现行 backlog |
-| 吸收台账（现行） | [`../absorption-ledger.md`](../absorption-ledger.md)、[`../absorption-candidates-2026-10.md`](../absorption-candidates-2026-10.md) | 保留原位未合并；本册 §8 的 170+ 清单调研是它们的前史 |
+| 吸收台账（现行） | [`../absorption-ledger.md`](../03-audits/absorption-ledger.md)、[`../absorption-candidates-2026-10.md`](../03-audits/absorption-candidates-2026-10.md) | 保留原位未合并；本册 §8 的 170+ 清单调研是它们的前史 |
 | 工程总纲 / 施工纪律 | [`../ENGINEER-MANIFESTO.md`](../ENGINEER-MANIFESTO.md)、[`../backend-enhancement/CONSTRUCTION-DISCIPLINE.md`](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) | 改 src / 改 doc / 派子代理前必读 |
 | 仓库级路线 | [`../../../ROADMAP.md`](../../../ROADMAP.md) | §3「当前状态」是本册 release 估时的现行索引 |
 | 默认开关实况 | [`../../03-reference/capabilities-matrix.md`](../../03-reference/capabilities-matrix.md) §0.2 | 与 `crates/engine/runtime-assembly/src/canonical/production.rs` 实况对应；对应本册 §2.5 漂移条目⑦ |

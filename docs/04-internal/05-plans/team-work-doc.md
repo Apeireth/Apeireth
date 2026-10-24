@@ -128,7 +128,7 @@
 
 ## 5. 插件生态矩阵（官方整合版）
 
-> **现状 (2026-08-27) — v1 时代插件生态**：本节描述 v1 三层交付模型（模块/套件/插件）下的官方整合版。v2 工程重构**已弃用三层模型**——单一 plugin 层 + `PluginManager` 唯一事实源（见 [plugin-authoring-guide.md](../plugin-authoring-guide.md)）。§5.6 描述的社区插件规范在 v2 由 [plugin-authoring-guide.md](../plugin-authoring-guide.md) 取代，**R在新插件开发时遵循 v2 指南**。
+> **现状 (2026-08-27) — v1 时代插件生态**：本节描述 v1 三层交付模型（模块/套件/插件）下的官方整合版。v2 工程重构**已弃用三层模型**——单一 plugin 层 + `PluginManager` 唯一事实源（见 [plugin-authoring-guide.md](../00-governance/plugin-authoring-guide.md)）。§5.6 描述的社区插件规范在 v2 由 [plugin-authoring-guide.md](../00-governance/plugin-authoring-guide.md) 取代，**R在新插件开发时遵循 v2 指南**。
 
 > 分层原则见 §1.3。**官方 5 个整件**；社区按 §5.6 规范开发细件。
 
@@ -203,7 +203,7 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 
 ## 7. 验收总纲（任何交付）
 
-> **现状 (2026-08-27) — 7 哲学锚穿透的验收总纲仍有效**：本文的"7 项硬性（每 5 成就穿透检查）" + "5 项强制（每交付穿透）" 验收清单本质是 8 哲学锚（per [philosophy.md](../../01-architecture/philosophy.md) + [09-anchor.md](../../archive/conventions/09-anchor.md)）的展开，v2 同样适用。具体 §7 内 PR 检查清单（构建/测试/文档/集成守门员路径）v2 改走 [plugin-authoring-guide.md](../plugin-authoring-guide.md) §6 + [maintenance-guide.md](../maintenance-guide.md) §3。
+> **现状 (2026-08-27) — 7 哲学锚穿透的验收总纲仍有效**：本文的"7 项硬性（每 5 成就穿透检查）" + "5 项强制（每交付穿透）" 验收清单本质是 8 哲学锚（per [philosophy.md](../../01-architecture/philosophy.md) + [09-anchor.md](../../archive/conventions/09-anchor.md)）的展开，v2 同样适用。具体 §7 内 PR 检查清单（构建/测试/文档/集成守门员路径）v2 改走 [plugin-authoring-guide.md](../00-governance/plugin-authoring-guide.md) §6 + [maintenance-guide.md](../maintenance-guide.md) §3。
 
 1. `cargo test -p <crate> -j 4` 全绿（含失败路径测试）
 2. 0 装 PASS：诚实标注做了什么/没做什么
@@ -215,7 +215,7 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 
 ## 8. 附：同类工具箱新版调研（2026-08-16）
 
-> **现状 (2026-08-27) — v1 时代调研快照**：本附是 v1 era 的同类工具箱调研吸收记录（89 插件扫描 + Rust 记忆层 + 核心 modules 深读 + 可吸收清单）。v2 工程重构**已收敛 14-crate 为 13-crate**，且 SDK 走 normalized protocol 抽象（v1 的 vendor-wire 翻译散落问题已治），故本附的"建议吸收清单"（§8.4）**大部分已被 v2 架构选择覆盖**。**R**把同类工具箱调研结论当 v1 历史证据，新调研需求见 [next-team-handbook.md](../next-team-handbook.md)（已冻结）。
+> **现状 (2026-08-27) — v1 时代调研快照**：本附是 v1 era 的同类工具箱调研吸收记录（89 插件扫描 + Rust 记忆层 + 核心 modules 深读 + 可吸收清单）。v2 工程重构**已收敛 14-crate 为 13-crate**，且 SDK 走 normalized protocol 抽象（v1 的 vendor-wire 翻译散落问题已治），故本附的"建议吸收清单"（§8.4）**大部分已被 v2 架构选择覆盖**。**R**把同类工具箱调研结论当 v1 历史证据，新调研需求见 [next-team-handbook.md](../backend-enhancement/00-backlog.md)（已冻结）。
 
 > 新版同类工具箱（源码 research/source/vcptoolbox，从 Downloads 迁入工作区供团队只读，git 排除）：
 > Node.js 核心（server.js/Plugin.js/WebSocketServer.js/KnowledgeBaseManager.js + 20+ modules）+ **Rust N-API 记忆层（rust-vexus-lite：RiverMemo Topology V3）** + **84 插件**。

@@ -36,7 +36,7 @@
 命令与实测：
 
 ```
-$ grep -n "四级口径" docs/04-internal/backend-enhancement/K-device-approval-im-push.md
+$ grep -n "四级口径" ../backend-enhancement/K-device-approval-im-push.md
 167:- **库级已实现、生产装配未接线〔四级口径：IMPLEMENTED〕**：设备审批卡→IM 推送链（同链同信封 + plan_id 幂等 +
 172:  > 口径校注（2026-10-24 文档治理批）：本条原标 `PRODUCTION WIRED` 属**划错边界**（把"库级有实现+有测试"当成"已接生产装配"），
 173:  > 已按真源改为 `IMPLEMENTED`。这正是口径纪律要防的过度声称。
@@ -46,7 +46,7 @@ $ grep -n "四级口径" docs/04-internal/backend-enhancement/K-device-approval-
 真源同口径：
 
 ```
-$ grep -n "IMPLEMENTED 但未接线" docs/03-reference/capabilities-matrix.md   # 命中 :70
+$ grep -n "IMPLEMENTED 但未接线" ../../03-reference/capabilities-matrix.md   # 命中 :70
 :70 ... 计划卡 → IM 推送链与两本账 = **IMPLEMENTED 未接线**（生产无注入点/无调用点，见上）
 ```
 
@@ -150,7 +150,7 @@ $ ls -1 docs/04-internal/*.md | wc -l
 假说法核查：
 
 ```
-$ grep -n "口径门禁脚本\|直接读" docs/04-internal/README.md
+$ grep -n "口径门禁脚本\|直接读" ../README.md
 46:| engineering-review-handoff... | ...**注释/出处**引用（不是脚本读取该文件） |
 84:  `engineering-review-handoff` 的留位理由由「脚本直接读它」改为准确的「注释/出处引用」；
 85:  「口径门禁脚本直接读它」等 3 处不成立的说法已删。
@@ -179,11 +179,11 @@ reachable = 70 / 70
 #### V9：2 跳链已直达，子目录冗余桩已删，重定向表一致 —— **PASS**
 
 ```
-$ cat docs/04-internal/backlog.md          → 链接直指 backend-enhancement/00-backlog.md
-$ ls docs/04-internal/05-plans/backlog.md  → No such file or directory（已删）
+$ cat ../backlog.md          → 链接直指 backend-enhancement/00-backlog.md
+$ ls ../../archive/merged/2026-10-23/docs/04-internal/backlog.md  → No such file or directory（已删）
 $ grep -n "04-internal/backlog.md" docs/_redirects.tsv
-61:docs/04-internal/backlog.md	docs/04-internal/backend-enhancement/00-backlog.md
-$ ls -l docs/04-internal/backend-enhancement/00-backlog.md → 45592 bytes，存在
+61:../backlog.md	../backend-enhancement/00-backlog.md
+$ ls -l ../backend-enhancement/00-backlog.md → 45592 bytes，存在
 $ grep -rn "05-plans/backlog" .（md/py/tsv/rs/yml/ps1/toml）→ 0 命中
 $ grep -n "05-plans/backlog" docs/INDEX.csv → 0 命中（无陈旧行）
 ```
@@ -241,7 +241,7 @@ $ git diff 315bcff1 eadcc841 --name-only -- crates/ →（空）
 ### [1] control: no deletion
 [docs_index] 问题数: 0
 exit=0
-### [2] mutation: rm docs/04-internal/04-logs/README.md
+### [2] mutation: rm ../04-logs/README.md
 [docs_index] 问题数: 1
   目录缺索引 README.md: docs/04-internal/04-logs/
 exit=1

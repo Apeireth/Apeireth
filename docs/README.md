@@ -90,7 +90,7 @@ docs/
 | [04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md](04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md) | **并发施工宪章**（多 AI 同仓纪律） |
 | [04-internal/backend-enhancement/00-backlog.md](04-internal/backend-enhancement/00-backlog.md) | **债栏唯一真源**（D 编号） |
 | [04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md](04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md) | 系统级缺口台账（SG/NT/NF） |
-| [04-internal/handover-ledger.md](04-internal/handover-ledger.md) | 批次交接台账（10 篇按批次交接稿的索引） |
+| [04-internal/handover-ledger.md](04-internal/01-handoffs/handover-ledger.md) | 批次交接台账（10 篇按批次交接稿的索引） |
 | [02-guides/quick-start.md](02-guides/quick-start.md) | 快速开始 |
 | [02-guides/user-manual.md](02-guides/user-manual.md) | 用户手册 |
 | [02-guides/permission-surfaces.md](02-guides/permission-surfaces.md) | 权限面边界 |
