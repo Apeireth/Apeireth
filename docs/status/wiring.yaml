@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 0c40163d90eb79026c3180058da862d58f0d904b04aa94de3581e6e90b676401
+claims_sha256: c776b51b842acc874a00378f58b5ea288db0454323885ba8679b8e7940861149
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -177,15 +177,23 @@ items:
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
         - "crates/adapters/cli/src/egress_command.rs"
         - "crates/adapters/cli/src/lib.rs"
+        - "crates/foundation/governance/src/authorization.rs"
+        - "crates/engine/runtime-assembly/src/accountability.rs"
+        - "crates/engine/runtime-assembly/src/notification_duty.rs"
+        - "crates/engine/runtime-assembly/src/consequence.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/egress_command.rs"
         - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/accountability.rs"
+        - "crates/engine/runtime-assembly/src/consequence.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
+        - "crates/engine/runtime-assembly/src/notification_duty.rs"
         - "crates/engine/runtime/src/canonical/egress_gate.rs"
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/foundation/governance/src/authorization.rs"
     default_enabled: false
     validated:
       tests:
@@ -193,6 +201,10 @@ items:
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
         - "crates/adapters/cli/src/egress_command.rs"
+        - "crates/foundation/governance/src/authorization.rs"
+        - "crates/engine/runtime-assembly/src/accountability.rs"
+        - "crates/engine/runtime-assembly/src/notification_duty.rs"
+        - "crates/engine/runtime-assembly/src/consequence.rs"
       claims_id: "sec.egress_gate"
     gaps:
       - "能力矩阵未出现开关 APEIRETH_ENABLE_EGRESS_GATE（待补）"
