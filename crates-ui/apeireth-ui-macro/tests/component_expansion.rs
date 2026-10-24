@@ -4,8 +4,8 @@
 //! 构造器与 `UiComponent::render` 的行为（设计文档 §6.4：组件 = 纯函数，
 //! native 直接调 ⇒ 不需要浏览器）。
 
-use apeireth_ui::core::UiComponent;
-use apeireth_ui::dom::VNode;
+use apeireth_ui_core::UiComponent;
+use apeireth_ui_dom::{Children, VNode};
 use apeireth_ui_macro::component;
 
 /// 一个用宏声明的组件。
@@ -21,6 +21,26 @@ fn Greeting(name: String, times: usize) -> VNode {
 #[component]
 fn Separator() -> VNode {
     VNode::element("hr").build()
+}
+
+/// 带可选参数与子内容插槽的组件。
+#[component]
+fn Panel(
+    title: String,
+    /// 紧凑排版（可选，缺省 `false`）。
+    #[prop(default = false)]
+    compact: bool,
+    /// 子内容插槽（永远可选，缺省为空子树）。
+    children: Children,
+) -> VNode {
+    let mut panel = VNode::element("div")
+        .class("ap-panel")
+        .child(VNode::text(title))
+        .child(children.render());
+    if compact {
+        panel = panel.class("ap-panel--compact");
+    }
+    panel.build()
 }
 
 #[test]
@@ -52,4 +72,46 @@ fn macro_supports_zero_parameter_components() {
     assert_eq!(node.tag(), Some("hr"));
     let instance = Separator::new();
     assert_eq!(Separator::render(&instance.props), node);
+}
+
+#[test]
+fn optional_props_fall_back_to_their_default() {
+    let instance = Panel::new(String::from("标题"));
+    assert!(
+        !instance.props.compact,
+        "缺省值来自 `#[prop(default = ...)]`"
+    );
+    assert!(instance.props.children.render().children().is_empty());
+}
+
+#[test]
+fn optional_props_can_be_overridden_by_the_builder() {
+    let instance = Panel::builder()
+        .title(String::from("标题"))
+        .compact(true)
+        .build();
+    assert!(instance.props.compact);
+    assert_eq!(
+        Panel::render(&instance.props).tag(),
+        Some("div"),
+        "紧凑态只加 class，不改结构"
+    );
+}
+
+#[test]
+fn children_slot_content_is_rendered_inside_the_component() {
+    let instance = Panel::builder()
+        .title(String::from("标题"))
+        .children(Children::new(|| VNode::text("插槽内容")))
+        .build();
+    let node = Panel::render(&instance.props);
+    let text: String = node
+        .children()
+        .iter()
+        .filter_map(|child| match child {
+            VNode::Text(text) => Some(text.data.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(text.contains("插槽内容"), "实测文本：{text}");
 }

@@ -14,6 +14,15 @@ pub(crate) struct Param {
     pub(crate) ty: String,
     /// 参数上的文档注释（`doc = "..."` 的内层文本），无则由宏生成默认文档。
     pub(crate) doc: Option<String>,
+    /// 默认值表达式（`#[prop(default = ...)]`）。
+    ///
+    /// `None` ⇒ 该参数**必填**（构造器 `new` 要求传）。
+    pub(crate) default: Option<String>,
+    /// 该参数是不是子内容插槽（参数名固定为 `children`）。
+    ///
+    /// 插槽**永远可选**（缺省为空子树），且带 `.children(v)` 设置器
+    /// （设计文档 §6.2）。
+    pub(crate) is_children: bool,
 }
 
 /// 顶层切分：按**顶层逗号**切分（尖括号与箭头内的逗号不切）。
@@ -73,27 +82,59 @@ pub(crate) fn parse_param(chunk: &str) -> Result<Param, String> {
     let chunk = chunk.trim();
     let mut rest = chunk;
     let mut doc: Option<String> = None;
+    let mut default: Option<String> = None;
 
-    // 前置属性：P0 只接受 `#[doc = "..."]`。
-    if rest.starts_with("#[") {
-        let end = rest
-            .find(']')
-            .ok_or_else(|| "#[component] 参数属性缺少右方括号".to_owned())?;
-        let attr = rest[..=end].trim();
-        if !attr.starts_with("#[doc") {
-            return Err(
-                "#[component] P0 只接受 `#[doc = \"...\"]` 参数属性（`#[prop(default = ...)]` 待 P3）"
-                    .to_owned(),
-            );
+    // 前置属性：`#[doc = "..."]` / `/// 文档` 与 `#[prop(default = ...)]`（顺序不限）。
+    //
+    // 注：记号流的**美化打印**会把 `#[doc = "..."]` 还原成 `/// 文档` ⇒ 两种
+    // 形态都要认（文档注释在参数位置被宏吃掉后，rustc 看不到它 ⇒ 合法）。
+    loop {
+        if rest.starts_with("#[") {
+            let end = find_attr_end(rest)?;
+            let attr = rest[..=end].trim();
+            let inner = attr
+                .trim_start_matches('#')
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .trim()
+                .to_owned();
+            if inner.starts_with("doc") {
+                doc = Some(inner);
+            } else if inner.starts_with("prop") {
+                let body = inner
+                    .trim_start_matches("prop")
+                    .trim()
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .trim()
+                    .to_owned();
+                let (key, value) = body.split_once('=').ok_or_else(|| {
+                    "#[component] `#[prop(...)]` 只支持 `default = 表达式`".to_owned()
+                })?;
+                if key.trim() != "default" {
+                    return Err(format!(
+                        "#[component] `#[prop(...)]` 只支持 `default = 表达式`（读到 `{}`）",
+                        key.trim()
+                    ));
+                }
+                default = Some(value.trim().to_owned());
+            } else {
+                return Err(format!(
+                    "#[component] 不支持的参数属性 `{inner}`（支持 `#[doc = \"...\"]` 与 \
+                     `#[prop(default = ...)]`）"
+                ));
+            }
+            rest = rest[end + 1..].trim();
+            continue;
         }
-        let inner = attr
-            .trim_start_matches('#')
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .trim()
-            .to_owned();
-        doc = Some(inner);
-        rest = rest[end + 1..].trim();
+        if rest.starts_with("///") {
+            let end = rest.find('\n').unwrap_or(rest.len());
+            let line = rest[3..end].trim();
+            doc = Some(format!("doc = {}", string_literal(line)));
+            rest = rest[end..].trim_start();
+            continue;
+        }
+        break;
     }
 
     let (name, ty) = rest
@@ -110,15 +151,62 @@ pub(crate) fn parse_param(chunk: &str) -> Result<Param, String> {
     }
     if ty.contains('\'') && !ty.contains("'static") {
         return Err(format!(
-            "#[component] 参数 `{name}` 的类型含生命周期；P0 只支持 owned 类型或 'static"
+            "#[component] 参数 `{name}` 的类型含生命周期；只支持 owned 类型或 'static"
         ));
+    }
+
+    // 插槽参数（`children`）：永远可选，缺省为空子树。
+    let is_children = name == "children";
+    if is_children && default.is_none() {
+        default = Some(String::from("::std::default::Default::default()"));
     }
 
     Ok(Param {
         name: name.to_owned(),
         ty: ty.to_owned(),
         doc,
+        default,
+        is_children,
     })
+}
+
+/// 把一段文本变成 Rust 字符串字面量（含引号）。
+fn string_literal(text: &str) -> String {
+    let mut out = String::from("\"");
+    for ch in text.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            other => out.push(other),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// 找属性 `#[...]` 的右方括号位置（**括号深度感知**：默认值里可能有 `]`）。
+///
+/// 返回**字节**下标（切分用的是字节下标 ⇒ 非 ASCII 内容也不会切坏）。
+fn find_attr_end(text: &str) -> Result<usize, String> {
+    let bytes = text.as_bytes();
+    let mut depth = 0i32;
+    for (index, byte) in bytes.iter().enumerate() {
+        match byte {
+            b'[' | b'(' | b'{' => depth += 1,
+            b']' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Ok(index);
+                }
+            }
+            b')' | b'}' => depth -= 1,
+            _ => {}
+        }
+    }
+    Err("#[component] 参数属性缺少右方括号".to_owned())
 }
 
 #[cfg(test)]
@@ -157,12 +245,59 @@ mod tests {
         let param = parse_param("#[doc = \"标题\"] title: String").expect("解析成功");
         assert_eq!(param.doc.as_deref(), Some("doc = \"标题\""));
         assert_eq!(param.name, "title");
+        assert!(param.default.is_none(), "无 `#[prop]` ⇒ 必填");
+    }
+
+    #[test]
+    fn doc_comment_form_is_captured() {
+        // 记号流的美化打印会把 `#[doc = "..."]` 还原成 `/// ...` ⇒ 两种形态都要认。
+        let param = parse_param("/// 标题\ntitle: String").expect("解析成功");
+        assert_eq!(param.doc.as_deref(), Some("doc = \"标题\""));
+        assert_eq!(param.name, "title");
+    }
+
+    #[test]
+    fn doc_comment_and_prop_default_can_appear_together() {
+        let param =
+            parse_param("/// 紧凑\n#[prop(default = false)]\ncompact: bool").expect("解析成功");
+        assert_eq!(param.doc.as_deref(), Some("doc = \"紧凑\""));
+        assert_eq!(param.default.as_deref(), Some("false"));
+        assert_eq!(param.name, "compact");
+    }
+
+    #[test]
+    fn prop_default_makes_a_parameter_optional() {
+        let param = parse_param("#[prop(default = false)] flag: bool").expect("解析成功");
+        assert_eq!(param.default.as_deref(), Some("false"));
+        assert_eq!(param.name, "flag");
+    }
+
+    #[test]
+    fn prop_default_with_brackets_inside_is_parsed() {
+        let param = parse_param("#[prop(default = vec![1, 2])] items: Vec<u8>").expect("解析成功");
+        assert_eq!(param.default.as_deref(), Some("vec![1, 2]"));
+    }
+
+    #[test]
+    fn children_slot_is_always_optional() {
+        let param = parse_param("children: Children").expect("解析成功");
+        assert!(param.is_children);
+        assert_eq!(
+            param.default.as_deref(),
+            Some("::std::default::Default::default()")
+        );
     }
 
     #[test]
     fn unsupported_helper_attribute_is_rejected() {
-        let err = parse_param("#[prop(default = false)] flag: bool").expect_err("必须报错");
-        assert!(err.contains("待 P3"), "实测错误文案：{err}");
+        let err = parse_param("#[whatever(1)] flag: bool").expect_err("必须报错");
+        assert!(err.contains("不支持的参数属性"), "实测错误文案：{err}");
+    }
+
+    #[test]
+    fn prop_attribute_with_unknown_key_is_rejected() {
+        let err = parse_param("#[prop(required = true)] flag: bool").expect_err("必须报错");
+        assert!(err.contains("只支持 `default"), "实测错误文案：{err}");
     }
 
     #[test]

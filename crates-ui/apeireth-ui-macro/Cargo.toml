@@ -28,9 +28,12 @@ proc-macro = true
 # 零内部依赖、零外部依赖（架构拓扑秩 0，ADR-0015 §3.3）。
 
 [dev-dependencies]
-# 宏展开的端到端测试需要门面 crate 提供 `::apeireth_ui::core::UiComponent` 路径。
-# cargo 允许 dev-dependency 成环（门面依赖本 crate 的 lib 目标 ⇒ 不构成构建环）。
-apeireth-ui = { path = "../apeireth-ui" }
+# 宏展开的端到端测试：展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`
+# （**绝对路径**，见 crate 文档头的「运行时路径约定」）⇒ 这两个 crate 必须是
+# 使用方的**直接依赖**。cargo 允许 dev-dependency 成环（这两个 crate 都不依赖
+# 本 crate ⇒ 不构成构建环）。
+apeireth-ui-core = { path = "../apeireth-ui-core" }
+apeireth-ui-dom = { path = "../apeireth-ui-dom" }
 
 [lints]
 workspace = true
