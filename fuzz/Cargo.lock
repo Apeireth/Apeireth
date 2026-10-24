@@ -229,6 +229,7 @@ version = "0.0.0"
 dependencies = [
  "apeireth-gateway",
  "apeireth-protocol",
+ "apeireth-tools-canonical",
  "libfuzzer-sys",
  "serde_json",
 ]
