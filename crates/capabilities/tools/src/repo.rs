@@ -341,10 +341,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let result = invoke(&RepoTool::new(dir.path()), "status").await;
         assert!(!result.is_ok());
+        // 判据必须**与 locale 无关**：git 的报错文案跟随系统 locale 本地化
+        // （en_US: "not a git repository"；zh_CN: 「致命错误：不是 Git 仓库」）。
+        // 断言英文原文会让本测试在**所有非英文机器上必然失败**（实测：正是如此）。
+        //
+        // 判定改为「错误确实来自 git」：中英文两种文案都含 "git"（大小写归一后），
+        // 这既保留了原判据的意图（错误来自 git 而非别的环节），又不依赖语言。
+        let rendered = result.render().to_lowercase();
         assert!(
-            result.render().contains("not a git repository")
-                || result.render().contains("failed to execute git"),
-            "{}",
+            rendered.contains("git"),
+            "错误必须来自 git: {}",
             result.render()
         );
     }
