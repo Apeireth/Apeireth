@@ -5,15 +5,17 @@
 [console.log] [harness] create engine: backend=webgl
 [console.log] [harness] engine created
 [console.log] [harness] pipeline created
+[console.log] [harness] stub reported not-implemented
 [console.log] [harness] frame 0 drawn
 [console.log] [harness] frame 1 drawn
 [console.log] [harness] frame 2 drawn
 [console.log] [P5GPU] webgl | {"backend_requested":"webgl","backend_actual":"Gl","webgpu_supported":true,"adapter_name":"ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)","adapter_vendor":0,"device_type":"Cpu","surface_format":"Rgba8Unorm","encoding":"raw_bytes","available_formats":["Rgba8UnormSrgb","Rgba8Unorm","Rgba16Float"],"width":640,"height":480,"frames_drawn":3,"vertex_count":3,"uniform_members":17}
 [console.log] [harness] create engine: backend=webgpu
-[log.warning] [.WebGL-0x323c001bbe00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
-[log.warning] [.WebGL-0x323c001bbe00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[log.warning] [.WebGL-0x52c001b9600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[log.warning] [.WebGL-0x52c001b9600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
 [console.log] [harness] engine created
 [console.log] [harness] pipeline created
+[console.log] [harness] stub reported not-implemented
 [console.log] [harness] frame 0 drawn
 [console.log] [harness] frame 1 drawn
 [console.log] [harness] frame 2 drawn

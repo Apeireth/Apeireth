@@ -49,4 +49,8 @@ rm -rf "${HERE}/pkg"
   "${HERE}/harness/target/wasm32-unknown-unknown/release/p5_gpu_harness.wasm"
 
 echo "── 3/3 GPU 对照（两个后端 → 逐像素差分） ──"
-python3 "${HERE}/drive.py" --out "${HERE}/evidence"
+# ⚠️ `--out` **必须显式指到本目录**：`drive.py` 的默认是 `${HERE}/evidence`（子目录），
+# 而本批证据的**跟踪布局**在**本目录根部**（`report.json` / `*.canvas.png` …）——
+# 两者不一致会让重跑产物落到**另一个目录** ⇒ 出现「跟踪的旧证据 + 未跟踪的新证据」两份。
+# （P5-b 用的是 `evidence/` 子目录布局；两批布局不同，此处以**已跟踪的布局**为准。）
+python3 "${HERE}/drive.py" --out "${HERE}"
