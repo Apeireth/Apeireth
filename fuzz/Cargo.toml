@@ -111,3 +111,10 @@ path = "fuzz_targets/untrusted_envelope.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "client_tokens"
+path = "fuzz_targets/client_tokens.rs"
+test = false
+doc = false
+bench = false

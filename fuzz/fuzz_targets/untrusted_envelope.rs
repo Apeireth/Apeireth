@@ -33,10 +33,12 @@ fuzz_target!(|data: &[u8]| {
 
         // 刻意构造「首尾像信封」的文本（伪造信封），覆盖 unwrap 的边界计算。
         for body in [text, ""] {
-            let fake = format!("{UNTRUSTED_TAG_OPEN} source=\"fuzz\"]>>>\n{body}{UNTRUSTED_TAG_CLOSE}");
+            let fake =
+                format!("{UNTRUSTED_TAG_OPEN} source=\"fuzz\"]>>>\n{body}{UNTRUSTED_TAG_CLOSE}");
             let _ = UntrustedContentWrapper::unwrap_content(&fake);
             // 不带 "\n" 分隔的伪造形态（最可能踩到字符边界）
-            let fake_no_nl = format!("{UNTRUSTED_TAG_OPEN} source=\"fuzz\"]>>>{body}{UNTRUSTED_TAG_CLOSE}");
+            let fake_no_nl =
+                format!("{UNTRUSTED_TAG_OPEN} source=\"fuzz\"]>>>{body}{UNTRUSTED_TAG_CLOSE}");
             let _ = UntrustedContentWrapper::unwrap_content(&fake_no_nl);
         }
     }
@@ -66,10 +68,7 @@ fuzz_target!(|data: &[u8]| {
 
     // 能解包时，解包出来的内容必须等于中和后的内容（往返一致）。
     if let Some(payload) = UntrustedContentWrapper::unwrap_content(&wrapped) {
-        assert_eq!(
-            payload.source, "fuzz_source",
-            "解包出的来源不符"
-        );
+        assert_eq!(payload.source, "fuzz_source", "解包出的来源不符");
         assert_eq!(
             payload.content, neutralized,
             "往返不一致: wrap→unwrap 的内容与中和后的原文不同"
