@@ -355,3 +355,9 @@ __pycache__/
 # 本地跑 scripts/audit/run-cargo-audit-deny.sh 生成的审计报告（CI 上作为 artifact 上传，不提交）
 reports/r20-cargo-audit-stdout-*.txt
 reports/r20-cargo-deny-stdout-*.txt
+# Guard ML 4 大可再生导出件（F-02 执行批已外置，见 scripts/guard_ml/README.md）；
+# 本地跑 export_guard_scenarios 会再生成，**不应入库**（曾因 git add -A 误提交 22MB）
+scripts/guard_ml/action_samples.jsonl
+scripts/guard_ml/generated_features.jsonl
+scripts/guard_ml/trace_samples.jsonl
+scripts/guard_ml/pair_samples.jsonl
