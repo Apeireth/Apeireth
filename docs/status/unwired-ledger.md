@@ -138,6 +138,24 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5i 跟踪文件凭据扫描（2026-10-25，未发现泄漏）
+
+对 `git ls-files` 的 **5686 个跟踪文件**扫 5 类模式（GitHub token `gh[pousr]_` /
+OpenAI `sk-` / AWS `AKIA` / PEM 私钥头 / Slack `xox[baprs]-`）：
+
+- 原始命中 **75 处**；
+- **逐条核实全部为假**：
+  - AWS 官方文档示例键 `AKIAIOSFODNN7EXAMPLE`；
+  - `sk-1234567890abcdef…` / `sk-xxxxxxxx…`（明显占位）；
+  - `ghp_abcdefghijklmnopqrstuvwxyz`（字母序示例）；
+  - `crates/adapters/gateway/tests/fixtures/tls/*.pem`（**测试专用**自签 TLS 私钥）；
+  - `crates/foundation/governance/src/input_security.rs` / `tools/src/{guardrail,redaction_bridge}.rs`
+    里的命中是**凭据检测/脱敏器自身的模式定义**（它们就该长得像凭据）；
+  - `legacy/{donor,frozen}/` 为捐赠代码的示例常量。
+
+⇒ **跟踪文件里 0 真实凭据泄漏**。（CI 另有 `pii-leak-detection.yml` + `.gitleaks.toml`
+门禁；本批是全量人工复核，不是替代门禁。）
+
 ### 5.5h 管理面 HTTP 全链真机核对（2026-10-25，未发现缺陷）
 
 把此前未测的 `/v1/admin/*` 面逐操作跑了一遍（token 门 + 面板族列表交叉核对）：
