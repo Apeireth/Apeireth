@@ -89,3 +89,10 @@ path = "fuzz_targets/content_sanitize.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "guardrail_security"
+path = "fuzz_targets/guardrail_security.rs"
+test = false
+doc = false
+bench = false
