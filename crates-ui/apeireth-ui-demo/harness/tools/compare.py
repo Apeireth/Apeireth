@@ -321,6 +321,49 @@ OBSERVER_SCRIPT = r"""
 """
 
 
+#: 页内观察者：记录 **CSS 动画起播事件**（G2「动画是否起播」的事件级判据）。
+#:
+#: 为什么不能只靠 `getAnimations()`：`document.getAnimations()` 会返回**尚未起播**的
+#: pending 动画 ⇒ 「动画结构相等」**不足以**证明「动画真的起播了」。事件计数才是
+#: 起播的直接证据（`transitionrun` / `animationstart` 在动画真正开始播放时才触发）。
+EVENTS_SCRIPT = r"""
+(() => {
+  window.__PILOT_EVENTS__ = { counts: {}, timeline: [] };
+  const names = ['transitionrun', 'transitionstart', 'transitionend',
+                 'animationstart', 'animationend', 'animationcancel'];
+  for (const name of names) {
+    window.__PILOT_EVENTS__.counts[name] = 0;
+    // 捕获阶段：事件从目标向外冒泡，捕获阶段先于目标自身的监听器 ⇒ 不会漏。
+    document.addEventListener(name, (event) => {
+      window.__PILOT_EVENTS__.counts[name] += 1;
+      const target = event.target;
+      const raw = target && (target.className || target.tagName);
+      window.__PILOT_EVENTS__.timeline.push({
+        name: name,
+        at: Math.round(performance.now() * 1000) / 1000,
+        target: String(raw || '').split(/\s+/).filter(Boolean).sort().join(' '),
+        property: event.propertyName || null,
+      });
+    }, true);
+  }
+  return true;
+})()
+"""
+
+
+#: 读取事件计数（结构化 ⇒ 可直接进 report.json）。
+EVENTS_READ_SCRIPT = r"""
+(() => {
+  const state = window.__PILOT_EVENTS__ || { counts: {}, timeline: [] };
+  return JSON.stringify({
+    counts: state.counts,
+    timeline: state.timeline,
+    started: (state.counts['transitionrun'] || 0) + (state.counts['animationstart'] || 0),
+  });
+})()
+"""
+
+
 @dataclass
 class Side:
     """一侧的对照材料。"""
@@ -329,6 +372,7 @@ class Side:
     dom: str | None = None
     card_box: dict | None = None
     animations: str | None = None
+    events: str | None = None
     screenshots: dict[str, bytes] = field(default_factory=dict)
     frames: list[tuple[float, bytes]] = field(default_factory=list)
     dismiss_delay_ms: float | None = None
@@ -466,10 +510,16 @@ def collect_side(cdp: Cdp, name: str, url: str) -> Side:
     side.screenshots["viewport"] = screenshot(cdp, None)
 
     # ── T5：动画结构（打开测试动画后读取） ─────────────────────────────
+    # ── T2'：动画起播事件计数（G2 的事件级判据）——
+    #    观察者必须**先于**触发安装，否则会漏掉起播事件。
+    cdp.evaluate(EVENTS_SCRIPT)
     cdp.evaluate("document.documentElement.dataset.pilotMotion = 'on'; true")
     cdp.evaluate("document.documentElement.dataset.pilotFreeze = '0'; true")
     time.sleep(0.2)
     side.animations = cdp.evaluate(ANIMATIONS_SCRIPT)
+    # 等动画走完（600 ms 过渡）再读计数 ⇒ 拿到完整的 start / end 配对。
+    time.sleep(0.9)
+    side.events = cdp.evaluate(EVENTS_READ_SCRIPT)
     cdp.evaluate("document.documentElement.dataset.pilotMotion = '0'; true")
 
     # ── T4：逐帧（更新时机） ───────────────────────────────────────────
@@ -654,6 +704,42 @@ def main() -> int:
         (OUT / "engine-animations.json").write_text(engine.animations or "[]", encoding="utf-8")
         log(f"T5 动画结构：{'一致' if animations_equal else '不一致'}")
 
+        # ── T2'：动画起播事件计数（G2 的事件级判据）────────────────────
+        # 「动画结构相等」**不足以**证明「动画真的起播了」—— getAnimations() 会返回
+        # 尚未起播的 pending 动画。事件计数（transitionrun / animationstart）才是
+        # 起播的直接证据；G2 要求「CSS 动画起播帧数差异 = 0」⇒ 两侧计数须逐项相等。
+        ref_events = json.loads(reference.events or "null") or {
+            "counts": {},
+            "timeline": [],
+            "started": 0,
+        }
+        eng_events = json.loads(engine.events or "null") or {
+            "counts": {},
+            "timeline": [],
+            "started": 0,
+        }
+        event_counts_equal = ref_events["counts"] == eng_events["counts"]
+        events_started = ref_events["started"]
+        report["t2b_animation_events"] = {
+            "reference": ref_events,
+            "engine": eng_events,
+            "counts_equal": event_counts_equal,
+            "started_reference": events_started,
+            "started_engine": eng_events["started"],
+            "started_delta": events_started - eng_events["started"],
+        }
+        (OUT / "reference-events.json").write_text(
+            json.dumps(ref_events, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (OUT / "engine-events.json").write_text(
+            json.dumps(eng_events, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        log(
+            f"T2' 起播事件：参考 {events_started} 次 / 引擎 "
+            f"{eng_events['started']} 次（起播帧数差异 "
+            f"{events_started - eng_events['started']}）"
+        )
+
         # ── T6：卸载时机 ────────────────────────────────────────────────
         report["t6_unmount"] = {
             "reference_dismiss_delay_ms": reference.dismiss_delay_ms,
@@ -686,6 +772,12 @@ def main() -> int:
                 for item in frame_results
             ),
             "t5_animations_identical": animations_equal,
+            # G2：动画起播事件计数逐项相等（起播帧数差异 = 0）且**两侧都真的起播了**
+            # （计数 > 0 —— 两侧都没起播时「相等」是空真，必须排除）。
+            "t2b_animation_events_equal": event_counts_equal,
+            "t2b_animation_started_on_both_sides": (
+                events_started > 0 and eng_events["started"] > 0
+            ),
             "t6_unmount_same_timing": (
                 reference.dismiss_delay_ms is not None
                 and engine.dismiss_delay_ms is not None
@@ -704,6 +796,9 @@ def main() -> int:
             "过渡结束后的帧差异为 0。",
             "T2 的归一化：剔除 Svelte 作用域 class、class token 排序、属性键排序、"
             "纯空白文本节点折叠。",
+            "T2' 是**动画起播的事件级证据**（transitionrun / animationstart 等计数）："
+            "getAnimations() 会返回尚未起播的 pending 动画 ⇒ 结构相等**不足以**证明起播；"
+            "事件计数才是起播的直接证据。",
             "环境：视口 1440×900、DPR 1、时区 UTC、prefers-reduced-motion: no-preference。",
         ]
         report["checks"] = checks
