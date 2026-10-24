@@ -1,0 +1,147 @@
+name: ui-engine CI
+
+# crates-ui/ 是**独立 cargo workspace**（自有 [workspace] 表），不在根 cargo workspace，
+# 故 rust.yml / release-1.0.0.yml 不覆盖它。
+# 此 workflow 是 crates-ui/ 唯一 CI gate，防自研响应式 + DOM 绑定引擎退化。
+#
+# 决策真源：docs/adr/0015-pure-rust-ui-engine.md（Accepted, 2026-10-24）
+#           + docs/architecture/contract.toml [[workspace.independent_workspaces]]
+#             id = "ui_engine"（ci = ".github/workflows/ui-engine-ci.yml"）
+#
+# 独立门禁的代价（诚实登记）：引擎不进主 workspace ⇒ 主 arch_guard 不扫它
+# ⇒ 失去主门禁保护 ⇒ 这里必须自带四关（check / clippy / fmt / test）。
+# 先例：.github/workflows/companion-desktop-ci.yml（独立 workspace 独立门禁）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates-ui/**'
+      - '.github/workflows/ui-engine-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates-ui/**'
+      - '.github/workflows/ui-engine-ci.yml'
+  workflow_dispatch:
+
+# 复用 rust.yml 的 cache group, 避免 cargo 缓存碎片化
+concurrency:
+  group: ui-engine-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+jobs:
+  # =========================================================================
+  # 1. 编译门禁 — crates-ui/ 全 workspace 全 target
+  # =========================================================================
+  check:
+    name: cargo check (crates-ui)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # crates-ui/ 是独立 workspace：所有 cargo 命令必须在它自己的目录里跑,
+        # 不能落到根 workspace（根 members 不含 crates-ui）.
+        working-directory: crates-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+
+      # 守门: crates-ui 必须是独立 workspace（顶层有 [workspace] 表），
+      # 且根 Cargo.toml 的 members 不得含 crates-ui —— 否则会污染主依赖图,
+      # 主 arch_guard 的层规则 / 尺寸棘轮会立刻对「活代码」生效（ADR-0015 §3.2）。
+      - name: "守门: crates-ui 是独立 workspace"
+        run: |
+          if ! head -80 crates-ui/Cargo.toml | grep -q '^\[workspace\]'; then
+            echo "::error::crates-ui/Cargo.toml 缺顶层 [workspace] (会污染 root)"
+            exit 1
+          fi
+          if grep -q 'crates-ui' Cargo.toml; then
+            echo "::error::root Cargo.toml 提及 crates-ui (污染主 workspace)"
+            exit 1
+          fi
+          echo "✅ crates-ui 是独立 workspace"
+
+      - name: cargo check (crates-ui)
+        run: cargo check --workspace --all-targets --locked
+
+  # =========================================================================
+  # 2. Clippy 门禁 — 零警告（-D warnings）
+  # =========================================================================
+  clippy:
+    name: cargo clippy -D warnings (crates-ui)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+
+      - name: cargo clippy (crates-ui)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  # =========================================================================
+  # 3. 格式门禁 — rustfmt 零 diff
+  # =========================================================================
+  fmt:
+    name: cargo fmt --check (crates-ui)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo fmt --check (crates-ui)
+        run: cargo fmt --all -- --check
+
+  # =========================================================================
+  # 4. 测试门禁 — 全 workspace 测试绿（native 跑, 不需浏览器 / wasm target）
+  # =========================================================================
+  test:
+    name: cargo test (crates-ui)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+
+      # ui-core 是纯逻辑层（0 依赖 web-sys）⇒ native 直接跑;
+      # ui-dom 自带内存 DOM 后端 ⇒ 差分 / 委托 / 绑定逻辑同样 native 可测
+      # （这是「组件 = Rust 函数 ⇒ 断言钉行为而非源码文本」的结构性前提）。
+      - name: cargo test (crates-ui)
+        run: cargo test --workspace --locked

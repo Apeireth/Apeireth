@@ -1,0 +1,36 @@
+# ============================================================================
+# apeireth-ui-macro — 过程宏（`#[component]`）
+# ----------------------------------------------------------------------------
+# 引擎的最底层 crate：**零内部依赖、零外部依赖**（只用 std 的 proc-macro）。
+# 职责边界（设计文档 §3.3.3）：只做「语法 → 语法」的翻译，不产生运行时逻辑；
+# 宏展开后需要的运行时辅助代码一律住在 ui-core / ui-dom。
+#
+# P0 骨架阶段：手写 token 解析（0 引 syn / quote），语法面窄但错误可读。
+# syn / quote 的引入时机与版本待 P0 探测结论（会带入 proc-macro2 / unicode-ident
+# 传递依赖，与 deny.toml 的 multiple-versions = "deny" 策略相关）。
+# ============================================================================
+[package]
+name = "apeireth-ui-macro"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎过程宏：#[component] 组件声明宏"
+
+[lib]
+name = "apeireth_ui_macro"
+path = "src/lib.rs"
+# 过程宏 crate：只导出过程宏，不得导出其它运行时项。
+proc-macro = true
+
+[dependencies]
+# 零内部依赖、零外部依赖（架构拓扑秩 0，ADR-0015 §3.3）。
+
+[dev-dependencies]
+# 宏展开的端到端测试需要门面 crate 提供 `::apeireth_ui::core::UiComponent` 路径。
+# cargo 允许 dev-dependency 成环（门面依赖本 crate 的 lib 目标 ⇒ 不构成构建环）。
+apeireth-ui = { path = "../apeireth-ui" }
+
+[lints]
+workspace = true

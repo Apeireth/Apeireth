@@ -1,0 +1,30 @@
+# ============================================================================
+# apeireth-ui-dom — DOM 绑定层（虚拟节点 / 后端抽象 / 差分 / 委托 / 双向绑定）
+# ----------------------------------------------------------------------------
+# 引擎里**唯一**接触 DOM 的一层。职责边界（设计文档 §3.3.2）：只回答
+# 「状态变成 DOM」，不回答状态从哪来。
+#
+# P0 骨架阶段：0 外部依赖 ⇒ 后端抽象用 `Dom` trait 表达，真实后端
+# （web-sys / wasm-bindgen）等 P0 探测结论回来后再接（探测子线实测：
+# wasm-bindgen 0.2.129 ⟷ js-sys 0.3.106 ⟷ web-sys 0.3.106，三者精确硬钉 1:1）。
+# ============================================================================
+[package]
+name = "apeireth-ui-dom"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎 DOM 绑定层：虚拟节点 / 后端抽象 / 差分 / 事件委托 / 双向绑定"
+
+[lib]
+name = "apeireth_ui_dom"
+path = "src/lib.rs"
+
+[dependencies]
+# 内部依赖：响应式核心（状态 → DOM 的唯一数据来源）。
+apeireth-ui-core = { path = "../apeireth-ui-core" }
+# P0 阶段纪律：0 外部依赖（web-sys / wasm-bindgen 待 P0 探测结论）。
+
+[lints]
+workspace = true

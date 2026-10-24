@@ -1,0 +1,95 @@
+# ============================================================================
+# crates-ui/ — 全栈纯 Rust 前端引擎（独立 cargo workspace）
+# ----------------------------------------------------------------------------
+# 【决策真源】docs/adr/0015-pure-rust-ui-engine.md（Accepted, 2026-10-24）
+#             + docs/design/ui-engine-architecture.md（技术展开）
+#             + docs/architecture/contract.toml [[workspace.independent_workspaces]]
+#               id = "ui_engine"（契约登记：path=crates-ui / crates=7 /
+#               ci=.github/workflows/ui-engine-ci.yml）
+#
+# 【为什么独立 workspace】
+#   本引擎是**持续迭代中的活代码**（owner 2026-10-24 明示：渲染引擎永远自己
+#   维护），与主仓「已交付即冻结」的静态内核家族（image_family，129,828 行）
+#   性质不同。独立 workspace 让引擎拥有自己的迭代节奏与门禁口径，同时对主仓
+#   生产依赖图保持 **0 影响**。
+#
+# 【与主 workspace 的边界】
+#   - crates-ui/ **不进** 根 Cargo.toml 的 [workspace].members；
+#   - crates-ui/ 与主仓之间 **0 条 path 依赖边**（引擎不依赖主仓任何 crate，
+#     主仓也不依赖引擎：数据面走既有 HTTP/SSE 契约，见 frontend-data-contract）；
+#   - 主仓 `cargo metadata` 不含本 workspace ⇒ `scripts/arch_guard.py` 只扫根
+#     workspace 的 metadata ⇒ 主门禁对本 workspace **0 扫描**；
+#   - 版本轴**独立声明**但与主仓口径对齐（2.0.0-rc.4），发版时两处同改；
+#     本文件不动主仓 [workspace.package].version（LOCKED 项，仅 release
+#     authority 可改）。
+#
+# 【为何不进主 members】（ADR-0015 §3.2 三条理由）
+#   1) 依赖树：引擎的 wgpu / naga / wasm-bindgen 树会带入多版本包，与主仓
+#      deny.toml 的 multiple-versions = "deny" 直接撞红；
+#   2) 契约：进主 members 即进 contract.toml 的 [deps] 层规则与
+#      [extension_points]，成为主架构的长期负债（契约棘轮：允许集合只减不增）；
+#   3) 门禁：主 arch_guard 的尺寸棘轮与层方向规则会立刻对「活代码」生效，与
+#      引擎自由生长的节奏冲突。
+#   ⇒ 代价（诚实登记）：引擎**失去主门禁保护**，因此本 workspace **自带独立
+#     四关门禁**：.github/workflows/ui-engine-ci.yml（check / clippy / fmt / test）。
+#   先例：frontend/companion-desktop/src-tauri/Cargo.toml（独立 [workspace] 隔离）。
+#
+# 【P0 阶段依赖纪律】
+#   各 crate 的 [dependencies] 只允许 workspace 内部 path 依赖；外部依赖
+#   （wgpu / wasm-bindgen / web-sys 等）的引入时机与版本由 P0 探测结论决定，
+#   未定前 **0 引外部依赖**（ADR-0015 §6.2 已登记纪律豁免，本批仍 0 引）。
+#
+# 【内部依赖方向】（ADR-0015 §3.3，单向下行无环）
+#   ui-macro(0) ← ui-core(1) ← {ui-dom(2), ui-gpu(2)} ← ui-kit(3)
+#   ← ui(4, 门面) ← ui-demo(5)
+# ============================================================================
+[workspace]
+resolver = "2"
+members = [
+    "apeireth-ui",
+    "apeireth-ui-core",
+    "apeireth-ui-dom",
+    "apeireth-ui-macro",
+    "apeireth-ui-gpu",
+    "apeireth-ui-kit",
+    "apeireth-ui-demo",
+]
+
+# ---------------------------------------------------------------------------
+# Workspace 包元数据（版本轴与主仓口径对齐：2.0.0-rc.4）
+# ---------------------------------------------------------------------------
+[workspace.package]
+version = "2.0.0-rc.4"
+edition = "2021"
+rust-version = "1.97"
+authors = ["Apeireth Team"]
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/Apeireth/Apeireth"
+homepage = "https://github.com/Apeireth/Apeireth"
+description = "Apeireth 全栈纯 Rust 前端引擎（响应式 + DOM 绑定，独立 workspace）"
+keywords = ["gui", "reactive", "wasm", "renderer"]
+categories = ["gui"]
+
+# ---------------------------------------------------------------------------
+# Workspace lints
+# ---------------------------------------------------------------------------
+# 本 workspace 不继承主仓的 [workspace.lints]（独立 workspace = 独立门禁口径）。
+# 这里只开「高信噪比 + 零历史包袱」的一小撮：主仓那套为了不阻塞 PR 而大范围
+# allow 的历史项，在全新骨架上没有继承必要。
+[workspace.lints.rust]
+missing_docs = "warn"
+unused_imports = "warn"
+unused_must_use = "warn"
+unused_qualifications = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+# 与主仓同源的两条精选（wasmtime / qdrant 口径），均为零历史包袱项。
+redundant_field_names = "warn"
+multiple_bound_locations = "warn"
+
+# ---------------------------------------------------------------------------
+# 构建缓存治理（与主仓同口径：第三方依赖不生成调试信息）
+# ---------------------------------------------------------------------------
+[profile.dev.package."*"]
+debug = 0

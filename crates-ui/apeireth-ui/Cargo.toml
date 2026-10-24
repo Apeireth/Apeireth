@@ -1,0 +1,33 @@
+# ============================================================================
+# apeireth-ui — 门面（re-export 各层）
+# ----------------------------------------------------------------------------
+# 职责边界（设计文档 §3.3.6）：**零逻辑**。门面里出现任何一行非 `pub use` 的
+# 实现代码即违规 —— 门面只是「让试点应用不必写 5 条 use」。
+#
+# 依赖方向（ADR-0015 §3.3）：门面位于拓扑秩 4，依赖 core / dom / gpu / kit /
+# macro 全部下层。
+# ============================================================================
+[package]
+name = "apeireth-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎门面：re-export 响应式核心 / DOM 绑定 / GPU 桥 / 组件库"
+
+[lib]
+name = "apeireth_ui"
+path = "src/lib.rs"
+
+[dependencies]
+# 内部依赖：各层（拓扑秩 4 ⇒ 全部下层皆可依赖）。
+apeireth-ui-core = { path = "../apeireth-ui-core" }
+apeireth-ui-dom = { path = "../apeireth-ui-dom" }
+apeireth-ui-gpu = { path = "../apeireth-ui-gpu" }
+apeireth-ui-kit = { path = "../apeireth-ui-kit" }
+apeireth-ui-macro = { path = "../apeireth-ui-macro" }
+# P0 阶段纪律：0 外部依赖。
+
+[lints]
+workspace = true

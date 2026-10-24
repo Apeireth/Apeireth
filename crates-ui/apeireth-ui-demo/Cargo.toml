@@ -1,0 +1,33 @@
+# ============================================================================
+# apeireth-ui-demo — 试点应用（审批卡）
+# ----------------------------------------------------------------------------
+# P3 试点载体兼装配级冒烟（ADR-0015 §4）：组件 = Rust 函数 ⇒ 整条渲染链在
+# native `cargo test` 里直接跑（这是 D3 债「38 处源码镜像测试」的根解法）。
+#
+# 依赖方向（拓扑秩 5）：依赖门面 + 组件库；不依赖任何主仓 crate。
+# ============================================================================
+[package]
+name = "apeireth-ui-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎试点应用：审批卡（装配级冒烟）"
+
+[lib]
+name = "apeireth_ui_demo"
+path = "src/lib.rs"
+
+[[bin]]
+name = "apeireth-ui-demo"
+path = "src/main.rs"
+
+[dependencies]
+# 内部依赖：门面（各层 re-export）+ 组件库（共享组件）。
+apeireth-ui = { path = "../apeireth-ui" }
+apeireth-ui-kit = { path = "../apeireth-ui-kit" }
+# P0 阶段纪律：0 外部依赖。
+
+[lints]
+workspace = true

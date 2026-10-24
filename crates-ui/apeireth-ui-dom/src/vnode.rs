@@ -1,0 +1,297 @@
+//! 虚拟节点（VNode）：DOM 的**纯数据结构**表示。
+//!
+//! 设计文档 §5.1.1：VNode 是普通 Rust 类型（可 `PartialEq`、可 `Debug`）⇒ 断言
+//! 写成 `assert_eq!(vnode, expected)`，而不是「读源码文本断言」——这是消灭 38 处
+//! 源码镜像测试的结构性前提。
+
+/// 属性值。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttrValue {
+    /// 文本值。
+    Text(String),
+    /// 布尔值（`false` ⇒ **不写该属性**，而非写 `false`）。
+    Bool(bool),
+}
+
+impl AttrValue {
+    /// 转成「要写入 DOM 的属性值」；布尔 `false` 返回 `None`（表示不写）。
+    pub fn to_attr_string(&self) -> Option<String> {
+        match self {
+            AttrValue::Text(text) => Some(text.clone()),
+            AttrValue::Bool(flag) => {
+                if *flag {
+                    Some(String::from("true"))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+impl From<&str> for AttrValue {
+    fn from(value: &str) -> Self {
+        AttrValue::Text(value.to_owned())
+    }
+}
+
+impl From<String> for AttrValue {
+    fn from(value: String) -> Self {
+        AttrValue::Text(value)
+    }
+}
+
+impl From<bool> for AttrValue {
+    fn from(value: bool) -> Self {
+        AttrValue::Bool(value)
+    }
+}
+
+/// 虚拟节点。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VNode {
+    /// 元素节点。
+    Element(ElementVNode),
+    /// 文本节点。
+    Text(TextVNode),
+    /// 分组节点（无宿主节点，对应列表 / 条件块容器）。
+    Fragment(Vec<VNode>),
+}
+
+impl VNode {
+    /// 建一个元素节点（返回构造器）。
+    pub fn element(tag: impl Into<String>) -> ElementBuilder {
+        ElementBuilder::new(tag)
+    }
+
+    /// 建一个文本节点。
+    pub fn text(data: impl Into<String>) -> Self {
+        VNode::Text(TextVNode { data: data.into() })
+    }
+
+    /// 建一个分组节点。
+    pub fn fragment(children: impl IntoIterator<Item = VNode>) -> Self {
+        VNode::Fragment(children.into_iter().collect())
+    }
+
+    /// 本节点的标签（元素节点才有）。
+    pub fn tag(&self) -> Option<&str> {
+        match self {
+            VNode::Element(element) => Some(element.tag.as_str()),
+            _ => None,
+        }
+    }
+
+    /// 本节点的子节点（元素节点才有）。
+    pub fn children(&self) -> &[VNode] {
+        match self {
+            VNode::Element(element) => element.children.as_slice(),
+            VNode::Fragment(children) => children.as_slice(),
+            _ => &[],
+        }
+    }
+}
+
+/// 元素节点。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElementVNode {
+    /// 标签名。
+    pub tag: String,
+    /// 属性（保持写入顺序 ⇒ 差分可逐字对比）。
+    pub attrs: Vec<(String, AttrValue)>,
+    /// 子节点。
+    pub children: Vec<VNode>,
+}
+
+impl ElementVNode {
+    /// 建一个元素节点。
+    pub fn new(tag: impl Into<String>) -> Self {
+        Self {
+            tag: tag.into(),
+            attrs: Vec::new(),
+            children: Vec::new(),
+        }
+    }
+
+    /// 追加一个属性（同名属性覆盖，保持原位置）。
+    pub fn attr(mut self, name: impl Into<String>, value: impl Into<AttrValue>) -> Self {
+        let name = name.into();
+        let value = value.into();
+        match self.attrs.iter_mut().find(|(key, _)| *key == name) {
+            Some(slot) => slot.1 = value,
+            None => self.attrs.push((name, value)),
+        }
+        self
+    }
+
+    /// 追加一个 class token（保序去重；class 必须**按 token** 差分，见设计 §5.2.1）。
+    pub fn class(mut self, token: impl Into<String>) -> Self {
+        let token = token.into();
+        let existing = self
+            .attrs
+            .iter()
+            .find(|(key, _)| key == "class")
+            .map(|(_, value)| value.clone());
+        match existing {
+            Some(AttrValue::Text(mut text)) => {
+                if text.split_whitespace().any(|item| item == token) {
+                    return self;
+                }
+                if !text.is_empty() {
+                    text.push(' ');
+                }
+                text.push_str(&token);
+                let attrs = std::mem::take(&mut self.attrs);
+                self.attrs = attrs
+                    .into_iter()
+                    .map(|(key, value)| {
+                        if key == "class" {
+                            (key, AttrValue::Text(text.clone()))
+                        } else {
+                            (key, value)
+                        }
+                    })
+                    .collect();
+                self
+            }
+            Some(_) => self,
+            None => {
+                self.attrs
+                    .push((String::from("class"), AttrValue::Text(token)));
+                self
+            }
+        }
+    }
+
+    /// 追加子节点。
+    pub fn child(mut self, child: VNode) -> Self {
+        self.children.push(child);
+        self
+    }
+
+    /// 追加多个子节点。
+    pub fn children(mut self, children: impl IntoIterator<Item = VNode>) -> Self {
+        self.children.extend(children);
+        self
+    }
+
+    /// 读属性值。
+    pub fn attr_value(&self, name: &str) -> Option<&AttrValue> {
+        self.attrs
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value)
+    }
+
+    /// 产出虚拟节点。
+    pub fn build(self) -> VNode {
+        VNode::Element(self)
+    }
+}
+
+/// 文本节点。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextVNode {
+    /// 文本内容。
+    pub data: String,
+}
+
+/// 元素节点构造器。
+#[derive(Debug, Clone)]
+pub struct ElementBuilder {
+    node: ElementVNode,
+}
+
+impl ElementBuilder {
+    /// 建一个元素节点构造器。
+    pub fn new(tag: impl Into<String>) -> Self {
+        Self {
+            node: ElementVNode::new(tag),
+        }
+    }
+
+    /// 追加属性。
+    pub fn attr(mut self, name: impl Into<String>, value: impl Into<AttrValue>) -> Self {
+        self.node = self.node.attr(name, value);
+        self
+    }
+
+    /// 追加 class token。
+    pub fn class(mut self, token: impl Into<String>) -> Self {
+        self.node = self.node.class(token);
+        self
+    }
+
+    /// 追加子节点。
+    pub fn child(mut self, child: VNode) -> Self {
+        self.node = self.node.child(child);
+        self
+    }
+
+    /// 追加多个子节点。
+    pub fn children(mut self, children: impl IntoIterator<Item = VNode>) -> Self {
+        self.node = self.node.children(children);
+        self
+    }
+
+    /// 产出虚拟节点。
+    pub fn build(self) -> VNode {
+        VNode::Element(self.node)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn class_tokens_are_merged_and_deduplicated() {
+        let node = ElementVNode::new("div")
+            .class("a")
+            .class("b")
+            .class("a")
+            .build();
+
+        match node {
+            VNode::Element(element) => {
+                assert_eq!(
+                    element.attr_value("class"),
+                    Some(&AttrValue::Text(String::from("a b")))
+                );
+            }
+            other => panic!("实测节点形态：{other:?}"),
+        }
+    }
+
+    #[test]
+    fn bool_false_attribute_is_not_written() {
+        assert_eq!(AttrValue::Bool(false).to_attr_string(), None);
+        assert_eq!(
+            AttrValue::Bool(true).to_attr_string(),
+            Some(String::from("true"))
+        );
+        assert_eq!(
+            AttrValue::Text(String::from("x")).to_attr_string(),
+            Some(String::from("x"))
+        );
+    }
+
+    #[test]
+    fn same_name_attribute_is_overwritten_in_place() {
+        let element = ElementVNode::new("input")
+            .attr("type", "text")
+            .attr("value", "a")
+            .attr("type", "email")
+            .build();
+        match element {
+            VNode::Element(element) => {
+                assert_eq!(element.attrs.len(), 2);
+                assert_eq!(
+                    element.attr_value("type"),
+                    Some(&AttrValue::Text(String::from("email")))
+                );
+            }
+            other => panic!("实测节点形态：{other:?}"),
+        }
+    }
+}

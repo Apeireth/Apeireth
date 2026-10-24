@@ -1,0 +1,33 @@
+# ============================================================================
+# apeireth-ui-gpu — GPU 桥（状态 → 像素）
+# ----------------------------------------------------------------------------
+# 与 ui-dom **平级**的第二个投影（不是父子）：DOM 显影与 GPU 显影是同一份状态
+# 的两条正交出路（ADR-0015 §3.3）。
+#
+# 职责边界（设计文档 §3.3.4）：只回答「状态 → 像素」，**不改着色器数学**。
+#
+# P0 骨架阶段：0 外部依赖 ⇒ 只落「桥的 trait 边界 + 纯计算的场景参数」；
+# wgpu 等 P0 探测结论回来后再接（探测子线实测：wgpu 30.0.1，feature 必须成组开
+# ["webgl", "glsl", "wgsl", "naga-ir"]；glsl 单独开会因上游 naga front/mod.rs:5
+# 的 gate 条件导致编译失败）。
+# ============================================================================
+[package]
+name = "apeireth-ui-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎 GPU 桥：状态 → uniform → 绘制（wgpu 后端待探测结论接入）"
+
+[lib]
+name = "apeireth_ui_gpu"
+path = "src/lib.rs"
+
+[dependencies]
+# 内部依赖：响应式核心（GPU 场景与 DOM 共享同一份状态）。
+apeireth-ui-core = { path = "../apeireth-ui-core" }
+# P0 阶段纪律：0 外部依赖（wgpu 待 P0 探测结论）。
+
+[lints]
+workspace = true
