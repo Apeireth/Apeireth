@@ -138,6 +138,20 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5a 必需检查「cargo deny / 8 硬墙」也补进本地镜像（2026-10-25）
+
+继续把 CI 的**必需检查**逐条对到本地命令：
+
+| 必需检查 | 本地命令 | 结果 |
+|---|---|---|
+| `cargo deny check` | `cargo deny check` | ✅ `advisories ok, bans ok, licenses ok, sources ok`（仅 deny.toml 里 3 条 ignore 的「advisory-not-detected」提示，非失败） |
+| `8 硬墙守门` | 直接跑 workflow 不变量 | ✅ ① LOCKED 源码 logic 0 触碰（3 个 `[locked]` 文件 word-diff 无逻辑变更）② `workspace.version` 未变 ③ R11 三值各 1 处 ④ `ALL_THIRTEEN_KEYS: [PhilosophyKey; 14]` |
+| `cargo kani` | — | ❌ 需专用工具链（CI only） |
+| `cargo audit` | 尝试后放弃 | ⚠️ 需克隆 RustSec 库（网络/本地库状态）；**advisories 面已由 `cargo deny check` 覆盖并全绿** |
+
+**结论**：必需检查 6 项里，除 `Kani` 外全部**本地可镜像且全绿**；
+`Kani` 覆盖的证明对象我这批未改动。
+
 ### 5.4z `docs_truth --block-stale` 会红：15 条 claim 的 `verified_at` 过期 —— 已修（2026-10-25）
 
 **发现方式**：补跑 CI 门禁时发现 CI 的 docs-truth 用的是

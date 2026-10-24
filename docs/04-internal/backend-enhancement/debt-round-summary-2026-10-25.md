@@ -224,8 +224,20 @@ lint）。现已在本地镜像到 CI 的全部轻量档：
 | **O-6 锚 5 重守门** | 直接跑 workflow 里的 grep 不变量（见下） | ✅ 全过 |
 | Self-status vocabulary | `check_self_status_vocab.py` | ✅ 报告项（退出码 0；10 处体验性词在债栏，非阻塞） |
 
+| **cargo deny check**（必需检查） | `cargo deny check` | ✅ `advisories ok, bans ok, licenses ok, sources ok` |
+| **8 硬墙守门**（必需检查） | 直接跑 workflow 的不变量（见下） | ✅ 5 项全过 |
+| Guard 3.3 evaluation integrity | `export_guard_scenarios` + `guard_ml` 三段 | ✅ 2835 场景、train_eval 0、self-test ok |
+
+**8 硬墙守门（本地实测）**：
+① LOCKED 源码 logic 0 触碰（contract.toml 3 个 `[locked]` 源码，word-diff 无逻辑变更）✓
+② `workspace.version` 未变（2.0.0-rc.4，无需 release 证据）✓
+③ R11 baseline 三值（0.8682/0.8532/0.9063）各 1 处 ✓
+④ 14 键数组 `ALL_THIRTEEN_KEYS: [PhilosophyKey; 14]` ✓
+⑤ O-6 锚 5 重（另见 §6.3.1 上部）✓
+
 **只有 CI 能跑的（本地不镜像）**：`Kani`（形式化，需专用工具链）、`Miri`（nightly，慢）、
-`Fuzz`（cargo-fuzz 长跑）、`Coverage (tarpaulin)`（需生成 cobertura.xml）。
+`Fuzz`（cargo-fuzz 长跑）、`Coverage (tarpaulin)`（需生成 cobertura.xml）、
+`cargo audit`（需克隆 RustSec 库；**其 advisories 面已由 `cargo deny check` 覆盖并全绿**）。
 这四项的失败只会在 CI 暴露 —— 但目前它们覆盖的代码我这批都没改到关键路径
 （Miri 面：未新增 `unsafe`；Kani 面：未改证明对象；fuzz 面：未改解析器）。
 
