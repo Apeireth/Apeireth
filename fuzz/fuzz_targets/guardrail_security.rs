@@ -46,7 +46,9 @@ fuzz_target!(|data: &[u8]| {
 
     let hits_forbidden = SPACE_SENSITIVE.iter().any(|pat| normalized.contains(pat));
     let hits_netsh_write = normalized.contains("netsh")
-        && NETSH_WRITE_VERBS.iter().any(|verb| normalized.contains(verb));
+        && NETSH_WRITE_VERBS
+            .iter()
+            .any(|verb| normalized.contains(verb));
 
     if hits_forbidden || hits_netsh_write {
         assert!(

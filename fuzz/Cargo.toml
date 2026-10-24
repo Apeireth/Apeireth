@@ -96,3 +96,10 @@ path = "fuzz_targets/guardrail_security.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "device_actions"
+path = "fuzz_targets/device_actions.rs"
+test = false
+doc = false
+bench = false

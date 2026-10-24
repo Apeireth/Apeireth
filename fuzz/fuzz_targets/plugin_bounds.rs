@@ -31,7 +31,11 @@ fuzz_target!(|data: &[u8]| {
     let _ = validate_version(s);
 
     // 2) 权限判定 + 契约断言：Ok ⇒ 每项所需权限都在调用方授权里
-    let perms: Vec<String> = s.split(',').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect();
+    let perms: Vec<String> = s
+        .split(',')
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+        .collect();
     let _ = validate_permissions(&perms);
 
     let mut caller: BTreeSet<String> = BTreeSet::new();
@@ -57,10 +61,18 @@ fuzz_target!(|data: &[u8]| {
     };
     let n = (s.len() % 128) as usize;
     if check_input_size("p", n, &bounds).is_ok() {
-        assert!(n <= bounds.max_input_bytes, "check_input_size 放行了超限输入: {n} > {}", bounds.max_input_bytes);
+        assert!(
+            n <= bounds.max_input_bytes,
+            "check_input_size 放行了超限输入: {n} > {}",
+            bounds.max_input_bytes
+        );
     }
     if check_output_size("p", n, &bounds).is_ok() {
-        assert!(n <= bounds.max_output_bytes, "check_output_size 放行了超限输出: {n} > {}", bounds.max_output_bytes);
+        assert!(
+            n <= bounds.max_output_bytes,
+            "check_output_size 放行了超限输出: {n} > {}",
+            bounds.max_output_bytes
+        );
     }
 
     // 4) 组合判定
