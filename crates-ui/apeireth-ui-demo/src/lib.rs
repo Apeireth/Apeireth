@@ -310,3 +310,13 @@ mod tests {
         assert_eq!(reject_state.decision().get(), Some(false));
     }
 }
+// ── 设置页三页的**子面**宿主挂载模块（并行迁移面 · 预置声明）──
+// ⚠️ 预置声明 ⇒ 各子面施工线**只填自己的模块文件** ⇒ 共享点归零。
+pub mod settings_wizard;
+pub mod settings_theme;
+pub mod settings_frame;
+pub mod settings_budget;
+pub mod settings_data;
+pub mod settings_character;
+pub mod settings_capability;
+pub mod settings_provider;

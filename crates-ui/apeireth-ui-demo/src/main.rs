@@ -100,6 +100,26 @@ fn main() {
 #[cfg(target_arch = "wasm32")]
 pub mod toolgrid_app;
 
+// ── 设置页三页的**子面** wasm 装配（**native 编译不参与**）──
+// ⚠️ 这些模块是**预置声明** ⇒ 各子面施工线**只填自己的模块文件**
+// ⇒ 共享的 `main.rs` 一行都不用改（并行期的写域纪律）。
+#[cfg(target_arch = "wasm32")]
+pub mod settings_wizard;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_theme;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_frame;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_budget;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_data;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_character;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_capability;
+#[cfg(target_arch = "wasm32")]
+pub mod settings_provider;
+
 #[cfg(target_arch = "wasm32")]
 fn main() {
     wasm_app::start();
@@ -337,6 +357,17 @@ pub mod wasm_app {
             let _ = crate::toolgrid_app::wasm::mount(&container);
             return;
         }
+        // ── 设置页三页的子面：`__APP_MODE__ = "settings:<面 id>"` ──
+        // ⚠️ 各子面的挂载实现在**各自的模块**里 ⇒ 本文件只做**分发**
+        // ⇒ 并行期各子面施工线**互不碰本文件**（共享点归零）。
+        if let Some(mode) = current_mode().as_deref() {
+            if let Some(id) = mode.strip_prefix(SETTINGS_MODE_PREFIX) {
+                if let Some(result) = crate::settings_dispatch::mount(id, &container) {
+                    let _ = result;
+                    return;
+                }
+            }
+        }
         let _ = mount_into(&container);
     }
 
@@ -348,6 +379,9 @@ pub mod wasm_app {
 
     /// 工具卡面批二形态（工具栏 + 工具网格）的取值。
     const TOOLGRID_MODE: &str = "toolgrid";
+
+    /// 设置页三页子面形态的**前缀**（取值 = `settings:<面 id>`）。
+    const SETTINGS_MODE_PREFIX: &str = "settings:";
 
     /// 读当前应用形态（`None` ⇒ 默认形态）。
     fn current_mode() -> Option<String> {

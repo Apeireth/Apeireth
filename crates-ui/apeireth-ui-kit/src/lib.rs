@@ -59,6 +59,19 @@ pub mod governance_tab;
 pub mod icons_governance;
 pub mod icons_status_bar;
 pub mod status_bar;
+// ── 设置页三页的**子面**（并行迁移面 · 预置声明）──
+// ⚠️ 预置这些声明是为了让**多个子面并行施工而互不碰本文件** ⇒ 共享点归零。
+// ⇒ 新模块**不**加扁平 re-export ⇒ 消费方用路径形式
+// （`ui_kit::settings_wizard::…`）。
+pub mod settings_wizard;
+pub mod settings_theme;
+pub mod settings_frame;
+pub mod settings_budget;
+pub mod settings_data;
+pub mod settings_character;
+pub mod settings_capability;
+pub mod settings_provider;
+
 
 pub use badge::{Badge, BadgeProps};
 pub use button::{Button, ButtonProps};

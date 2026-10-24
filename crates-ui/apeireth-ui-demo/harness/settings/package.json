@@ -1,0 +1,15 @@
+{
+  "name": "apeireth-ui-settings-harness",
+  "private": true,
+  "type": "module",
+  "description": "设置页三页对照 harness（自含子工程：依赖复用上级 harness 的 node_modules）",
+  "scripts": {
+    "build": "bash build.sh",
+    "extract": "node scripts/extract-settings-assets.mjs",
+    "extract:check": "node scripts/extract-settings-assets.mjs --check",
+    "mocks": "node scripts/gen-settings-mock.mjs",
+    "mocks:check": "node scripts/gen-settings-mock.mjs --check",
+    "pages": "node scripts/gen-entry-pages.mjs",
+    "pages:check": "node scripts/gen-entry-pages.mjs --check"
+  }
+}
