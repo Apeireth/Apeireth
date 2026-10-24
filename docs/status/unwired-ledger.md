@@ -138,6 +138,37 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5g `8-promise-audit.sh` 两项判据是坏的（反转 + 路径过期）—— 已修（2026-10-25）
+
+跑 `scripts/audit/8-promise-audit.sh` 得到 **2/8 未严守、exit 1**。逐条查证后确认：
+**两项都是脚本判据坏了，仓库没问题**（所以不能「调阈值凑绿」，要修判据语义）。
+
+**① [1/8] 不假装已实现：判据反转**
+
+原逻辑：`TODO|unimplemented!()|skeleton` 命中数 **> 50 才 PASS**。
+⇒ **代码越干净，审计越 FAIL**（当前 32 处 → FAIL）。这是**反向激励**。
+
+真实语义应是「**生产代码里没有伪实现**」。改为：统计**非注释行**的
+`unimplemented!()/todo!()`，必须为 0；诚实标记数量只作信息报告。
+（顺带修掉一个 `pipefail` + `|| echo 0` 交互 bug：值会变成 `0\n0` 导致判据恒假。）
+
+**② [7/8] 不重复造轮子：排除路径过期 + 误算字样**
+
+原逻辑 grep 所有 `wmic|ioreg|dmesg` **字样**，排除目录名 `apeireth-machine-id`。
+但该实现**早已迁到** `crates/engine/storage/src/machine_id.rs`（且改为**纯解析**、不再起子进程）
+⇒ 注释/测试夹具/**安全黑名单**（`approval_family.rs` 里把 `wmic` 列为进程族词）里的字样
+全被误算成违规（25 处）。
+
+真实语义是「**不为平台信息去 spawn 系统命令**」。改为统计真正的
+`Command::new("wmic"|"ioreg"|"dmesg")` 子进程调用（允许 machine-id 实现文件例外）——
+实测 **0 处**，承诺其实守得比 1.0 时代更严（纯解析替代了 shell 调用）。
+
+**修后**：`8/8 严守`、`exit 0`。
+
+**顺带**：`run-cargo-audit-deny.sh` 本地跑会在 `reports/` 留两份未跟踪报告
+（`reports/r20-cargo-{audit,deny}-stdout-*.txt`，CI 上是 artifact）⇒ 已加 `.gitignore` 模式，
+本地跑不再弄脏工作区（`audit-report.json` 本就在 gitignore）。
+
 ### 5.5f 打包/安装脚本的版本系统性漂移 —— 已统一从 Cargo.toml 派生（2026-10-25）
 
 **缺陷**：15 个打包/安装脚本各自硬编码版本默认值，其中多数**已过期**：

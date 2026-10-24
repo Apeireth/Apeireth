@@ -352,3 +352,6 @@ research/praisonai-git/
 # Python 缓存（scripts/ 运行副产物，不入库；2026-10-20 效率线）
 __pycache__/
 *.pyc
+# 本地跑 scripts/audit/run-cargo-audit-deny.sh 生成的审计报告（CI 上作为 artifact 上传，不提交）
+reports/r20-cargo-audit-stdout-*.txt
+reports/r20-cargo-deny-stdout-*.txt
