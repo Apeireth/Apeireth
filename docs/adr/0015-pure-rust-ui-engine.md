@@ -299,6 +299,51 @@ uniform 取值**画出的画面」逐像素对照 ⇒ **两个后端各 0 / 576,
 
 ---
 
+### 2.6.5 第 5 轮探测：**`fire.ts` 的 4 条 GLSL 也全部能被 naga 吃下**（2026-10-24）
+
+§2.6 只验了 `blackhole.ts` 的 **2 条** GLSL，而场景层还剩
+`intro/fire.ts`（**1,275 行 / 4 条 GLSL 程序**：`BG_VERT` / `BG_FRAG` / `FIRE_VERT` / `FIRE_FRAG`）
+⇒ **那 4 条是否覆盖，此前一直记为「未实测」**。本轮实测：**4/4 全部通过**。
+
+#### 探针口径（**与 P5 同一条 `glsl::parse`**）
+
+用 `apeireth-ui-gpu` 的 `glsl::parse`（= P5 用的同一条 naga 前端），逐条：
+① 按生产口径替换模板插值 → ② 补 varying location → ③ `parse` + `emit_glsl_es_300` 回吐复验。
+
+| 程序 | 行数 | naga 解析 | 回吐 GLSL ES 300 |
+|---|--:|---|---|
+| `BG_VERT` | 3 | ✅ | ✅ |
+| `BG_FRAG` | 216 | ✅ | ✅ |
+| `FIRE_VERT` | 139 | ✅ | ✅ |
+| `FIRE_FRAG` | 26 | ✅ | ✅ |
+| **合计** | **384** | **4/4** | **4/4** |
+
+#### ⚠️ 由此定案：还需要**两条**声明外壳的机械变换（**都不是重写着色器**）
+
+前两轮踩的两个「第一眼像 naga 不支持」的坑，实测**都是声明外壳层面的**：
+
+1. **模板插值**：`fire.ts` 的着色器是**模板字符串**，含 **5 处** `${…}` 插值
+   （全是对设计令牌的 `RgbTriple.join(',')`）。⇒ 直接拿原文喂 naga 会得到
+   `PreprocessorError(UnexpectedCharacter)` + `UnknownVariable("OLOR_VOID")`
+   —— **不是 naga 的限制，是源文件本来就不是最终 GLSL**。
+   ⇒ 迁移时必须**按生产同一口径先替换**（值取自 `scene/tokens.ts`），
+   且**替换后的文本才是「与生产同源」的判定对象**。
+2. **varying location**：`FIRE_VERT`/`FIRE_FRAG` 的 `in`/`out` varying **没有显式 `location`**
+   （GLSL ES 3.00 由**声明顺序**自动分配），而 naga 的 GLSL 前端**无 ES profile**
+   ⇒ 把未声明 location 的 varying 全当 `location 0` ⇒ `BindingCollision { location: 0 }`。
+   ⇒ 按声明顺序补 `layout(location=0,1,2,…)`
+   —— **与 ES 的自动分配同义**，顶点/片元两侧分别按各自声明顺序编号（生产本来就是这么配对的）。
+
+⇒ ⇒ **两条都是「声明外壳」的机械变换**，与本 ADR 已定的「删 `#version` 行 + 合并 std140 uniform 块」
+同一性质 ⇒ **不违反「着色器主体不得重写」这条硬约束**。
+
+#### ⚠️ 这批探测**没有**证明什么（0 装）
+
+- 只证明 **naga 能吃下这 4 条并被回吐**（**编译层**），**没有**证明火效的画面与生产一致
+  ⇒ 画面级证据要等 `fire.ts` 真正迁移时按 P5-b 的机制重做（逐像素 + 逐帧）。
+- 探针**不入仓**（它读生产侧源文件、且 4 条 GLSL 尚未进引擎资产）
+  ⇒ 本节的数字可用同一条 `glsl::parse` + 上述两条变换复现，但**目前没有仓内脚本**。
+
 ## 3. O-6 三阶审查
 
 ### 3.1 总体最优
