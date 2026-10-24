@@ -2234,6 +2234,22 @@ async fn build_cognitive_modules_at(
             reflexion_store_root_from_env(),
             apeireth_runtime_assembly::retrieval_tuning_log_path(),
         )),
+        // 自省通道: 问责计数探测口（影响声明 / 后果三态 / 待补救）。
+        //
+        // **不与出网闸共用同一个实例**是有意的：出网闸在另一个装配函数里。
+        // 两者读**同一个 append-only 账本文件**（`impact-ledger.jsonl` /
+        // `consequence-ledger.jsonl`）—— 而闸写事件时**先落盘再进内存**，
+        // 所以从文件读能拿到最新真值。**文件就是共享真源**，不需要跨函数传状态。
+        self_status_accountability: Some(
+            apeireth_runtime_assembly::accountability_probe::accountability_status_probe(
+                default_panel_data_dir(),
+                Arc::new(tokio::sync::Mutex::new(
+                    apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(
+                        default_panel_data_dir().join("consequence-ledger.jsonl"),
+                    ),
+                )),
+            ),
+        ),
         self_status_credentials: Some(self_status_credentials_probe(default_panel_data_dir())),
         self_status_extras: vec![apeireth_tools_canonical::CapabilitySwitch::new(
             "local_read_tools",

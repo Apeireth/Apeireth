@@ -1,0 +1,47 @@
+name: Unwired API ratchet (孤儿 API 棘轮)
+
+# 「能力齐全但没接电」的**机检守卫**。
+#
+# 背景：这个仓库反复出现一类问题 —— 库级 API 写得完整、测试也绿，
+# 但**生产代码里零调用**（没接电）。人肉台账（docs/status/unwired-ledger.md）
+# 能记已知的，但挡不住新长出来的。
+#
+# 已经有 `scripts/audit_unwired.py`，但它**自己就是没接电的**（2026-10-24 查出）：
+#   1. `scripts/unwired-baseline.txt` **不存在** ⇒ `--check` 必然报「新增 157 条」；
+#   2. `--update` 写 `kind symbol`、`--check` 却拿 `symbol` 当 key ⇒ 两边永远不匹配；
+#   3. 判据是裸 token 计数 ⇒ `pub use`、注释、字符串里的提及全算「已使用」；
+#   4. `#[cfg(test)]` 切分按「首个」切 ⇒ 中间有测试模块的文件，其后全部代码被当测试；
+#   5. 字符串正则带 `re.S` + 不认字符字面量 ⇒ `'"'` 会把大段代码当字符串吞掉。
+#
+# 本 workflow 在那些修好之后接上闸：**基线只减不增**。
+# 新增一个「生产零引用的 pub 符号」→ 红，要求先接线或写进基线并给理由。
+#
+# 判据的可靠度与盲区写在 `scripts/audit_unwired.py` 的模块 docstring 里（读它再用）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'scripts/audit_unwired.py'
+      - 'scripts/unwired-baseline.txt'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'scripts/audit_unwired.py'
+      - 'scripts/unwired-baseline.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unwired-ratchet:
+    name: 孤儿 API 棘轮（基线只减不增）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 检查新增孤儿 API
+        run: python3 scripts/audit_unwired.py --check

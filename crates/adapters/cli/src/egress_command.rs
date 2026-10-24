@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 
 /// 用法帧。
-pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
+pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome <ACTION_ID> <confirmed|failed>\napeireth egress notify <FACT_ID> <wording|partial|refuted>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
 
 /// 命令入口（数据根 = 默认数据目录）。
 pub fn run_egress(args: &[String]) -> Result<String, String> {
@@ -32,6 +32,7 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
         "ledger" => {}
         "impact" => return run_impact(data_root, rest),
         "outcome" => return run_outcome(data_root, rest),
+        "notify" => return run_correction_impact(data_root, rest),
         _ => return Err(format!("unknown egress command: {verb}\n{USAGE}")),
     }
     // 路径：--path 显式优先；否则走数据根（`APEIRETH_DATA_DIR` 或默认目录）。
@@ -149,8 +150,18 @@ pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String
         return Ok(frame);
     }
     for statement in statements {
+        // **决策回执**（问责闭环第 2 步）：面向被影响的人**一行话**，不是日志。
+        // 这就是 `DecisionReceipt::from_statement` 的生产调用方 —— 之前它只有测试调用，
+        // `audit_unwired.py` 抓出来的真问题（能力齐全但没接电）。
+        let receipt = apeireth_runtime_assembly::notification_duty::DecisionReceipt::from_statement(
+            &statement,
+        );
+        frame.push_str(&format!("- {}\n", receipt.headline));
+        for basis in &receipt.basis {
+            frame.push_str(&format!("    {basis}\n"));
+        }
         frame.push_str(&format!(
-            "- [{ts}] {boundary} → {destination}  行动={action_id} 可逆={reversible} 后果={outcome}\n\
+            "    [详细] {ts} {boundary} → {destination} 行动={action_id} 可逆={reversible} 后果={outcome}\n\
              用了哪些事实: {facts}\n  依据的授权: {grants}\n",
             ts = statement.at_ms,
             boundary = statement.boundary.label(),
@@ -243,6 +254,96 @@ pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<Strin
         outcome.label(),
         path.display()
     ))
+}
+
+/// `apeireth egress notify <FACT_ID> <wording|partial|refuted>` —— **纠正影响检查**。
+///
+/// 问责闭环第 4 步「通知义务」的生产调用方（之前 `assess_correction` 只有测试调用，
+/// 被 `audit_unwired.py` 抓出来 —— 又一个「能力齐全但没接电」）。
+///
+/// 用户纠正一条事实后跑它，回答四个问题：
+/// 1. **受影响事项**（哪几次行动、何时、去了哪）；
+/// 2. **影响程度**（措辞 / 部分 / 推翻）；
+/// 3. **建议补救动作**；
+/// 4. **是否需要授权**（系统不擅自"到处发信"）。
+///
+/// **它不发任何东西** —— 只出待办。通知义务 ≠ 自动外发。
+pub fn run_correction_impact(
+    data_root: &std::path::Path,
+    rest: &[String],
+) -> Result<String, String> {
+    use apeireth_runtime_assembly::accountability::AccountabilityLedger;
+    use apeireth_runtime_assembly::notification_duty::{assess_correction, CorrectionSeverity};
+
+    let mut positional: Vec<&String> = Vec::new();
+    let mut index = 0;
+    while index < rest.len() {
+        if rest[index].starts_with("--") {
+            index += 2;
+            continue;
+        }
+        positional.push(&rest[index]);
+        index += 1;
+    }
+    let (fact_id, severity_label) = match positional.as_slice() {
+        [fact, severity] => (fact.as_str(), severity.as_str()),
+        _ => {
+            return Err(format!(
+                "notify 需要两个位置参数：<FACT_ID> <wording|partial|refuted>\n{USAGE}"
+            ))
+        }
+    };
+    let severity = match severity_label {
+        "wording" => CorrectionSeverity::Wording,
+        "partial" => CorrectionSeverity::Partial,
+        "refuted" => CorrectionSeverity::Refuted,
+        other => {
+            return Err(format!(
+                "未知纠正程度 `{other}`（只接受 wording / partial / refuted ——                  程度决定补救力度，系统不替用户判重）"
+            ))
+        }
+    };
+    let path = match parse_arg(rest, "--path") {
+        Some(raw) => PathBuf::from(raw),
+        None => data_root.join("impact-ledger.jsonl"),
+    };
+    let ledger = AccountabilityLedger::new(Some(path));
+    let Some(notice) = assess_correction(&ledger, fact_id, severity) else {
+        return Ok(format!(
+            "这条事实（{fact_id}）没有被任何外部行动引用过 ⇒ **无需通知**。\n\
+             （无差别通知一切纠正是另一种噪声 —— 所以「不打扰」是设计，不是遗漏。）"
+        ));
+    };
+    let mut out = format!(
+        "纠正影响检查：事实 {fact_id}（程度 {}）\n\
+         受影响事项 {} 次：\n",
+        notice.severity.label(),
+        notice.affected_actions.len()
+    );
+    for action in &notice.affected_actions {
+        out.push_str(&format!(
+            "  - {action_id}  时间={at}  去向={destination}  可逆={reversible}  后果={outcome}\n",
+            action_id = action.action_id,
+            at = action.at_ms,
+            destination = action.destination,
+            reversible = action.reversible,
+            outcome = action.outcome.label(),
+        ));
+    }
+    out.push_str("建议补救：\n");
+    for remedy in &notice.suggested_remedies {
+        out.push_str(&format!("  - {remedy}\n"));
+    }
+    out.push_str(&format!(
+        "\n需要你授权才能执行补救：{}\n\
+         **本命令不发送任何东西** —— 通知义务 ≠ 自动外发；要不要发、发给谁由你定。\n",
+        if notice.needs_authorization {
+            "是"
+        } else {
+            "否（改措辞是我们该做的）"
+        }
+    ));
+    Ok(out)
 }
 
 /// 取 `--<name>` 后的值（最后一个出现者生效）。
@@ -457,6 +558,78 @@ mod tests {
             err.contains("只接受 confirmed / failed"),
             "理由应可读: {err}"
         );
+    }
+
+    /// 纠正影响检查：**不被引用的事实 → 明确说「无需通知」**（不打扰是设计）。
+    #[test]
+    fn correction_impact_says_no_notification_for_unreferenced_fact() {
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-notify-cli-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let out = run_egress_at(
+            std::path::Path::new("/nonexistent-root"),
+            &[
+                "notify".into(),
+                "ep-404".into(),
+                "refuted".into(),
+                "--path".into(),
+                path.display().to_string(),
+            ],
+        )
+        .expect("应成功");
+        assert!(out.contains("无需通知"), "应明确说无需通知: {out}");
+        assert!(out.contains("不打扰"), "应解释这是设计: {out}");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 被引用的事实 → 列出受影响行动 + 建议补救 + **不自动外发**。
+    #[test]
+    fn correction_impact_lists_actions_and_never_auto_sends() {
+        use apeireth_runtime_assembly::accountability::{
+            AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome,
+        };
+
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-notify2-cli-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let ledger = AccountabilityLedger::new(Some(path.clone()));
+        ledger.append(&ImpactStatement {
+            action_id: "act-1".into(),
+            at_ms: 1_700_000_000_000,
+            boundary: Boundary::Provider,
+            facts_used: vec!["ep-1".into()],
+            inferences: Vec::new(),
+            grants: vec!["grant-1".into()],
+            affected: Affected::SelfOnly,
+            reversible: false,
+            destination: "provider:anthropic".into(),
+            outcome: Outcome::Unknown,
+        });
+        let out = run_egress_at(
+            std::path::Path::new("/nonexistent-root"),
+            &[
+                "notify".into(),
+                "ep-1".into(),
+                "refuted".into(),
+                "--path".into(),
+                path.display().to_string(),
+            ],
+        )
+        .expect("应成功");
+        assert!(out.contains("act-1"), "应列出受影响行动: {out}");
+        assert!(out.contains("建议补救"), "应给补救建议: {out}");
+        assert!(out.contains("不发送任何东西"), "必须声明不自动外发: {out}");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
