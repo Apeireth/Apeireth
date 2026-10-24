@@ -18,7 +18,7 @@
 //!
 //! fail-closed 由实现方保证：判定失败 / 策略读不到 / 闸内部错误，一律返回 `Deny`。
 
-use apeireth_protocol::canonical::NormalizedRequest;
+use apeireth_protocol::canonical::{NormalizedRequest, NormalizedResponse};
 
 /// 出网闸的判定结果。
 #[derive(Debug, Clone)]
@@ -41,6 +41,16 @@ pub enum EgressVerdict {
 pub trait EgressGate: Send + Sync {
     /// 判定一次出网请求。
     fn vet(&self, request: &NormalizedRequest) -> EgressVerdict;
+
+    /// **受控回程还原**（双闸的闸二）：把模型回信里的占位符换回本地真值。
+    ///
+    /// 默认实现 = 不动（未接线时逐字节零行为变化）。
+    ///
+    /// 语义边界（与 `RedactionBridge::restore_for_local` 一致）：
+    /// - 只还原本会话登记簿登记过的指纹，未登记的占位**不还原、照实留痕**；
+    /// - 还原只发生在**受控回程面**（本地落盘前），不是出境面；
+    /// - 对出境面不可逆 —— 出去的请求里只有占位，没有真值。
+    fn restore(&self, _response: &mut NormalizedResponse) {}
 }
 
 /// 默认闸：一律放行（未接线时的零行为变化实现）。

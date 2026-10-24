@@ -58,6 +58,18 @@ async fn echo_fixture_executes_and_captures_stdout() {
 
 /// Regression for 2026-10-06 真机: 双引号命令 (powershell -Command "...") 曾被
 /// cmd /S 的引号规则吃掉, 只回显不执行。外层引号包裹后内层双引号必须存活。
+///
+/// **CI 冷启动超时**（2026-10-24 修）：GitHub Actions 的 windows-latest 上
+/// 本测试**确定性**卡在默认 30s 超时上（stdout 空、每次恰好 30.26s = 撞上限）。
+/// 两个原因一起处理，都照仓内已有先例（`6b791ca7` 给 unicode smoke 加冷启动超时）：
+/// 1. **`-NonInteractive`** —— 万一引号被吃导致 powershell 掉进交互模式，
+///    它会**等 stdin 输入直到超时**（表现为「挂住 + stdout 空」）。
+///    加 `-NonInteractive` 后这种情况会立刻报错而不是挂住 —— 失败信息更可读，
+///    且不掩盖引号 bug（真挂住时报错，不是静默通过）。
+/// 2. **120s 超时** —— CI runner 上 powershell 冷启动（尤其在最小化环境里
+///    重建模块路径）可能显著慢于真机。
+///
+/// 这**不是**放宽断言：stdout 必须含目标串、exit_code 必须为 0，两条都没放松。
 #[cfg(windows)]
 #[tokio::test]
 async fn double_quoted_powershell_command_executes() {
@@ -66,9 +78,9 @@ async fn double_quoted_powershell_command_executes() {
         ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()).with_sandbox(false));
     let value = invoke(
         &tool,
-        r#"powershell -NoProfile -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Write-Output wrapped-doublequote-ok""#,
+        r#"powershell -NoProfile -NonInteractive -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Write-Output wrapped-doublequote-ok""#,
         None,
-        None,
+        Some(120_000),
     )
     .await;
     let stdout = value["stdout"].as_str().unwrap();

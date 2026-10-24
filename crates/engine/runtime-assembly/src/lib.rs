@@ -5,10 +5,13 @@
 
 #![deny(unsafe_code)]
 
+pub mod accountability;
 pub mod canonical;
 // W3-① 多户数据隔离 (星群数据层): 用户域数据平面 (三面按域分库 + 跨域拒绝即帧)。
 pub mod domain_plane;
 pub mod egress_gate;
+pub mod egress_ledger;
+pub mod notification_duty;
 // B-P1 冷启动冲刺: 启动路径分段计时 (计时器注入) —— 会话/认知库打开、迁移、
 // 模块构造、运行时组装各段可测可断言。
 pub mod startup;

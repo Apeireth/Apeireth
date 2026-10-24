@@ -345,12 +345,15 @@ impl ProviderRouter {
             };
 
             match attempt {
-                Ok(response) => {
+                Ok(mut response) => {
                     let elapsed = Timestamp::from_clock(self.clock.as_ref())
                         .epoch_millis()
                         .saturating_sub(started.epoch_millis())
                         .unsigned_abs();
                     self.record_success(&id, elapsed);
+                    // 受控回程还原（ADR-0014 §1.2 双闸的闸二）：把回信里的占位符
+                    // 换回本地真值。默认闸不做任何事 = 零行为变化。
+                    self.egress.restore(&mut response);
                     return Ok(RoutedCompletion {
                         served_by: id,
                         response,

@@ -28,7 +28,7 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -44,7 +44,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -62,7 +62,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -82,7 +82,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -100,7 +100,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -117,7 +117,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/egress.rs
       - crates/capabilities/tools/src/fetch.rs
-    verified_at: 33236756
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib egress"
     owner: capabilities
     next_review: "2026-12-01"
@@ -134,7 +134,7 @@ claims:
       - crates/capabilities/tools/src/observed_gate.rs
     tests:
       - crates/capabilities/tools/src/object_access.rs
-    verified_at: 33236756
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib object_access"
     owner: capabilities
     next_review: "2026-12-01"
@@ -152,7 +152,7 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/self_status_source.rs
     tests:
       - crates/capabilities/tools/src/exposure_audit/mod.rs
-    verified_at: 33236756
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
     owner: capabilities
     next_review: "2026-12-01"
@@ -168,15 +168,19 @@ claims:
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime/src/canonical/runtime.rs
       - crates/engine/runtime-assembly/src/egress_gate.rs
+      - crates/engine/runtime-assembly/src/egress_ledger.rs
+      - crates/adapters/cli/src/egress_command.rs
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime-assembly/src/egress_gate.rs
-    verified_at: ed268f8fb
+      - crates/engine/runtime-assembly/src/egress_ledger.rs
+      - crates/adapters/cli/src/egress_command.rs
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
-    notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**已知未接**：回程还原（restore_for_local）未接 —— 回信占位保持占位（安全侧保守降级，不泄漏）。"
+    notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**回程还原已接**（双闸的闸二）：只还原本会话登记簿登记过的指纹，未登记占位照实留痕；还原只在受控回程面，对出境面不可逆。**出域账本已接**（零真值 append-only JSONL：对象类型/不可逆指纹/目的地/用途）+ CLI 出口 `apeireth egress ledger`（只读；账本若无人可查，「记录已知流向」就是空的）。**仍未接**：对象级用途判定接出网闸、授权策略对象（可携带/可委托/可过期/可追溯）、影响声明与决策回执。"
 
   - id: mem.lesson_object
     title: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
@@ -190,7 +194,7 @@ claims:
     tests:
       - crates/engine/memory/src/lesson.rs
       - crates/adapters/cli/src/lessons_command.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-memory --lib lesson && cargo test -p apeireth-cli --lib lessons_command"
     owner: memory
     next_review: "2026-12-01"
@@ -209,7 +213,7 @@ claims:
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
       - crates/engine/memory/tests/memory_2_tests.rs
-    verified_at: c2c911cf
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
     owner: gateway
     next_review: "2026-11-20"
@@ -224,7 +228,7 @@ claims:
       - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
     tests:
       - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
-    verified_at: d2621788
+    verified_at: 0bb43a10
     verify_cmd: "Test-Path legacy/archived/prompt-stabilizer/prompt_stabilizer.rs; git grep -n PromptCacheStabilizer -- crates"
     owner: orchestration
     next_review: "2026-11-20"
@@ -240,7 +244,7 @@ claims:
       - crates/capabilities/tools/src/process/platform.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
-    verified_at: bdd64957
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
@@ -258,7 +262,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -279,7 +283,7 @@ claims:
       - crates/engine/storage/tests/sealed_backup_restore.rs
       - crates/engine/runtime-assembly/src/canonical/session_seal.rs
       - crates/engine/runtime-assembly/src/sqlite_session.rs
-    verified_at: 14878cfd
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-storage --test crypto_invariants"
     owner: storage
     next_review: "2026-11-20"
@@ -297,7 +301,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: 3ca56976
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -315,7 +319,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -330,7 +334,7 @@ claims:
       - crates/foundation/governance/src/chain.rs
     tests:
       - crates/foundation/governance/src/chain.rs
-    verified_at: 3ca56976
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -345,7 +349,7 @@ claims:
       - .github/workflows/rust.yml
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: 3ca56976
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
@@ -361,7 +365,7 @@ claims:
       - docs/04-internal/governance-chain-drill-2026-10-20.md
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: 68fa5643b7de94eeb174ffbd1876ff0f6181d5bd
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
     owner: governance
     next_review: "2026-11-20"
@@ -377,7 +381,7 @@ claims:
       - docs/packaging/release-asset-verification.md
       - docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md
     tests: []
-    verified_at: 73b70178
+    verified_at: 0bb43a10
     verify_cmd: "pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>"
     owner: release
     next_review: "2026-11-20"
@@ -396,7 +400,7 @@ claims:
       - frontend/companion-desktop/src-tauri/src/sqlite_workbench.rs
       - frontend/companion-desktop/src-tauri/src/pg_client.rs
       - frontend/companion-desktop/src-tauri/src/mysql_client.rs
-    verified_at: 3ca56976
+    verified_at: 0bb43a10
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked"
     owner: companion-desktop
     next_review: "2026-11-20"
@@ -411,7 +415,7 @@ claims:
       - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
     tests:
       - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
-    verified_at: 3ca56976
+    verified_at: 0bb43a10
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked provider_proxy"
     owner: companion-desktop
     next_review: "2026-11-20"
@@ -426,7 +430,7 @@ claims:
       - frontend/companion-desktop/src-tauri/src/workspace_list.rs
     tests:
       - frontend/companion-desktop/src-tauri/src/workspace_list.rs
-    verified_at: 3ca56976
+    verified_at: 0bb43a10
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked workspace_list"
     owner: companion-desktop
     next_review: "2026-11-20"
@@ -442,7 +446,7 @@ claims:
       - docs/02-guides/permission-surfaces.md
     tests:
       - frontend/companion-desktop/tests/starport-face-apps.mjs
-    verified_at: 5f52813d
+    verified_at: 0bb43a10
     verify_cmd: "cd frontend/companion-desktop && pnpm test"
     owner: companion-desktop
     next_review: "2026-11-20"
@@ -458,7 +462,7 @@ claims:
       - crates/engine/organ/src/tone.rs
     tests:
       - crates/engine/runtime-assembly/src/canonical/bio_tone.rs
-    verified_at: d2621788
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-runtime-assembly bio_tone"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -475,7 +479,7 @@ claims:
       - crates/adapters/cli/src/care_heartbeat.rs
     tests:
       - crates/engine/runtime-assembly/tests/bio_circadian_production.rs
-    verified_at: d2621788
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_circadian_production"
     owner: cli
     next_review: "2026-11-20"
@@ -492,7 +496,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: ed268f8fb
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"
@@ -508,7 +512,7 @@ claims:
       - crates/foundation/orchestration/src/recovery_protocol.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: 83933edd
+    verified_at: 0bb43a10
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: orchestration
     next_review: "2026-11-20"

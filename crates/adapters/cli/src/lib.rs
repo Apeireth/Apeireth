@@ -14,6 +14,7 @@ pub mod care_heartbeat;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
 // V5-b 暴露面体检 CLI 面 (只读零写; 与 `tool.exposure_audit` 同一内核两出口)。
+pub mod egress_command;
 pub mod exposure;
 pub mod gateway_panels;
 pub mod governance_chain;
@@ -1560,8 +1561,19 @@ async fn build_canonical_runtime_with_parts(
         );
     builder = builder.with_governance(governance_chain::production(preset_governance));
     // 出网闸 (ADR-0014 §1.2: 把上下文发给模型就是行动): 默认关
-    // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配), 关时请求逐字节不变。
-    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env() {
+    // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配; 值也可以直接是授权策略 JSON),
+    // 关时请求逐字节不变。
+    //
+    // 账本落盘到数据根 (`egress-ledger.jsonl`) —— 生产上必须落盘,
+    // 否则「记录已知流向」只在内存里, 进程一退就没了。
+    let egress_data_root = crate::default_panel_data_dir();
+    let egress_ledger_path = egress_data_root.join("egress-ledger.jsonl");
+    // 问责账本（影响声明 + 事实→行动索引）——「发现影响时通知你」的前提。
+    let accountability_ledger_path = egress_data_root.join("impact-ledger.jsonl");
+    if let Some(gate) = apeireth_runtime_assembly::egress_gate::egress_gate_from_env_with_ledgers(
+        Some(egress_ledger_path),
+        Some(accountability_ledger_path),
+    ) {
         builder = builder.with_egress_gate(gate);
     }
     // 生物机制族 W3.3: 痛觉评估（默认关；`APEIRETH_ENABLE_BIO_PAIN=1` 才开
