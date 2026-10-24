@@ -48,8 +48,11 @@ pub mod json;
 pub mod num;
 pub mod registry;
 pub mod tool_card;
-// ── 并行迁移面（模块声明**预置**，由各面的施工线独占填写对应文件）──
-// ⚠️ 预置这些声明是为了让**多个面并行施工而互不碰本文件**（`lib.rs` 是共享点）。
+pub mod tool_grid;
+// 本面（工具卡面批二）的图标数据**生成物**（由 harness 的抽取脚本产出）。
+pub mod icons_tool_grid;
+// ── 并行迁移面（模块声明**预置**，各面施工线**只填自己的模块文件**）──
+// ⚠️ 预置这些声明是为了让**多个面并行施工而互不碰本文件** ⇒ 共享点归零。
 // ⇒ 新模块**不**加扁平 re-export（那会要求各面同时改本文件）⇒ 消费方用路径形式
 // （`ui_kit::status_bar::StatusBar`）。
 pub mod governance_tab;
