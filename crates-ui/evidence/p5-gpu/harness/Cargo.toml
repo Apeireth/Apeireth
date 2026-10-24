@@ -1,0 +1,30 @@
+# P5 GPU 桥 —— 真浏览器验证宿主（证据用；**不是** workspace 成员）
+#
+# 作用：把引擎（`apeireth-ui-gpu`）驱动到真实浏览器里，各画一个真画面，
+# 并把实测口径（后端 / 表面格式 / 编码方式 / 帧数）回报给 CDP 驱动。
+#
+# 构建（**在 crates-ui/ 之外**执行，避免被主 workspace 扫到）：
+#   cargo build --release --target wasm32-unknown-unknown
+#   wasm-bindgen --target web --out-dir <dir> \
+#       target/wasm32-unknown-unknown/release/p5_gpu_harness.wasm
+#
+# ⚠️ 本 crate 自带 `[workspace]` 段 ⇒ 独立 workspace ⇒ 不进 crates-ui 的
+#    依赖图、不进 cargo deny 的图、不进 CI 门禁。
+[package]
+name = "p5-gpu-harness"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# 被验证对象：引擎本体（仓库内路径依赖，0 拷贝 0 改写）。
+apeireth-ui-gpu = { path = "../../../apeireth-ui-gpu" }
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "=0.4.79"
+js-sys = "=0.3.106"
+web-sys = { version = "=0.3.106", features = ["HtmlCanvasElement", "Window", "console"] }
+
+[workspace]
