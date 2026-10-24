@@ -1448,7 +1448,7 @@ async fn list_modules(State(state): State<GatewayState>) -> Response {
 }
 
 // ---------------------------------------------------------------------------
-// Capability manifest
+// Capability manifest（口径：只描述**网关/面板面**；`not_assembled` = 该 HTTP 面未装配，不等于能力不存在——`subagents.orchestration` 网关无端点但 CLI `apeireth subagent` 可用）
 // ---------------------------------------------------------------------------
 
 fn cap(
