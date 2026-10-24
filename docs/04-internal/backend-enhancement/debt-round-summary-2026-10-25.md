@@ -202,3 +202,21 @@ python3 scripts/check_doc_caliber.py                          # 0 新增
 | 审计链真的抗多写者 | 同数据根先起 `gateway serve` 再跑 `apeireth session`：第二进程如实降级、**不污染链**；坏链自动隔离后审计恢复持久 |
 | 问责闭环真的闭上 | `egress outcome <ID> confirmed` 后 `egress impact` 从「超期未回填=1」变「=0」，明细显示 `后果=confirmed` |
 | 便携包真的能用 | `apeireth bundle --out <DIR>` → `./run_apeireth.sh` → `/health` ok → 数据落包内 `./data/` |
+
+### 6.4 已做过的真机核对清单（未发现缺陷，供验收参考）
+
+| 面 | 核对内容 | 结论 |
+|---|---|---|
+| 备份恢复语义 | 导出后**改成员 + 加非成员**再恢复：成员文件回到包内**字节态**（sha256 一致）、非成员**原样保留** | 与文档契约一致 |
+| 备份排除项 | 数据根放 `.env`/`creds.json`/`id_ed25519`/`client-tokens.json` → 包内**零敏感串**（`excluded=0` 是正确语义：清单式备份只收七类数据面） | 凭据不随行 |
+| 体检第 4/5 节 | `backup_exclusions` 核对包内文件名；`token_bindings` 对**故意写坏的 JSON** 正确报「畸形、风险高」（fail-closed） | 非空转 |
+| 密钥创建安全 | `crypto wrap` 重复执行到同一 `--keys` **拒绝覆盖**（「密钥文件已存在, 不覆盖」），原口令仍可解 | 不会毁掉已有密钥 |
+| 用户管理全链 | owner 令牌增/删/改/查可用；**member 令牌被拒**（owner only）；**末 owner 不可降级**；删除后列表即时更新 | 权限门正确 |
+| 鉴权链 | `APEIRETH_GATEWAY_TOKENS` + `user add --clients` → 带令牌 `/v1/panel/users` = 200 + owner 视图；伪令牌 401；无令牌 401；逃生阀与令牌表**互斥拒启动** | 三态正确 |
+| 非回环绑定 | `--bind 0.0.0.0` 无令牌 ⇒ **拒启动**（并给三条出路）；有令牌 ⇒ 启动并**告警暴露面** | fail-closed |
+| `lessons` 证据约束 | 经网关真造 episode 后 `lessons add --episode <id>` 成功（候选态，如实说「还不是学到」）；**不存在的出处直接拒** | 硬约束生效 |
+| `trait` 锁定 | `lock/unlock` 幂等、落盘 `trait-locks.json`、周报同步显示锁定态 | 一致 |
+| 首次引导 | `--tier casual` 交互走完落盘 `onboarding.json`、`--show` 读数准确；`--tier pro` **有意不写档案**；`--reset` 正常；EOF 中断如实报且不写半份 | 三档语义正确 |
+| 网关长连接 | SSE `/v1/apeireth/events` = 200 + `text/event-stream` + 首帧；presence / runtime snapshot 正常 | 正常 |
+| 守护形态 | `gateway serve --pid-file` 的 slot 文件（key=value，端口可达性判活）**正常关闭即释放** | 不双开、不残留 |
+| `dream` 日记 | 按日 JSON 落盘（source/body/timestamp），0 素材时如实写「0 项轨迹」 | 输出可用 |
