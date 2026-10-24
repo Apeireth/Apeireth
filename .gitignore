@@ -361,3 +361,5 @@ scripts/guard_ml/action_samples.jsonl
 scripts/guard_ml/generated_features.jsonl
 scripts/guard_ml/trace_samples.jsonl
 scripts/guard_ml/pair_samples.jsonl
+# guard 数据集清单（export_guard_scenarios 再生；CI 每次导出后读取，库内不存放）
+artifacts/guard-dataseton
