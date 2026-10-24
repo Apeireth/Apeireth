@@ -319,3 +319,85 @@ jobs:
           path: |
             crates-ui/apeireth-ui-demo/harness/out/
             crates-ui/apeireth-ui-demo/harness/evidence/
+
+  # =========================================================================
+  # 7. 生产对照门禁 —— 引擎画面 vs 生产版场景画面（逐像素）
+  # =========================================================================
+  # 判据：生产版场景类（**只读引入**）在真实浏览器里跑出的画面，与 Rust 引擎用
+  # **同一批 uniform 取值**画出的画面逐像素一致（差分阈值：任一通道绝对差
+  # > 2/255 记「不同」；本地实测两个后端各 **0 / 576,000** 像素不同）。
+  #
+  # **本门禁是阻塞的**（2026-10-24 主代理裁决，修订了初稿的
+  # `continue-on-error: true`）。理由：初稿那样写，本 job 就成了**装饰性门禁**
+  # —— 一个从不失败的 job 等于没有门禁，而后来者会误以为「CI 在查这件事」。
+  # ⇒ 改为：**WebGL 腿必过**（它只需 WebGL2，不需任何特殊能力；同仓
+  # pilot-compare job 已证该栈在 runner 上可用）；**WebGPU 腿按宿主能力**：
+  # runner 提供了软件 WebGPU 适配器 ⇒ 该腿**也必过**；没提供 ⇒ 该腿
+  # **不可验证**（报告里显式标注 `webgpu_comparison_verifiable: false`
+  # + 一句说明，**不是**「通过」也不是「失败」），判定退到 WebGL 腿。
+  # ⇒ 门禁在**它能验的范围内**是真门禁，在**验不了的范围内**是显式声明。
+  #
+  # ⚠️ 本 job **未在 CI runner 上实测过**（首次执行可能暴露 runner 镜像差异）。
+  # 那时它会**红**，而红是真信号（要么环境缺能力、要么真有差异）——
+  # 与其让它默默常绿，不如让它说话。**证据本体**是
+  # `crates-ui/evidence/p5-b/evidence/` 里已入库的那次本地实测
+  # （Chromium 154 + SwiftShader 软件适配器，2026-10-24，两腿全验 0 差异）。
+  production-compare:
+    name: 生产对照（生产侧 vs 引擎侧，逐像素）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates-ui/evidence/p5-b
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+
+      - name: Setup Node + pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 生产前端的依赖：**只读引用**（参考页要 import 生产场景源 ⇒ 需要它的
+      # vite）。装在它自己的目录里，不改它的任何文件。
+      - name: 安装生产前端依赖（只读引用）
+        working-directory: frontend/companion-desktop
+        run: pnpm install --frozen-lockfile
+
+      # wasm-bindgen CLI（版本与 crates-ui 的 wasm-bindgen **精确一致**）。
+      - name: 安装 wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+
+      - name: 安装 Python 依赖（CDP 驱动 + 像素差分）
+        run: python3 -m pip install --quiet websocket-client pillow
+
+      # 完整流水线：构建 wasm ⇒ wasm-bindgen ⇒ vite build ⇒ 抓生产侧取值 ⇒
+      # 引擎侧渲染 ⇒ 逐像素差分 ⇒ report.json。
+      # ⚠️ CHROME 可覆盖（runner 上的浏览器路径与本机不同）。
+      - name: 跑生产对照（逐像素）
+        env:
+          CHROME_PATH: ${{ env.CHROME_PATH }}
+        run: |
+          export CHROME_PATH="${CHROME_PATH:-$(command -v google-chrome-stable || command -v chromium || command -v chromium-browser)}"
+          bash build.sh
+
+      - name: 上传生产对照证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p5b-production-compare-evidence
+          path: crates-ui/evidence/p5-b/evidence/
