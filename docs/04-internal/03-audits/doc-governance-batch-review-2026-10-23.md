@@ -100,7 +100,7 @@ git ls-files legacy/ | wc -l          # 1929
 ls -d legacy/donor                    # 存在
 # legacy 引用是否本批新写
 git grep -l 'legacy/donor/apeireth-protocol' dfce42bf -- '*.md'   # 空
-grep -c 'legacy/donor/apeireth-protocol' reports/03-audit-and-verification.md  # 2
+grep -c 'legacy/donor/apeireth-protocol' ../../../reports/03-audit-and-verification.md  # 2
 ```
 **实际输出**
 ```
@@ -111,7 +111,7 @@ docs-audit-2026-10-18              -> manifest_hits=0
 legacy/ tracked files: 1929
 legacy/donor exists: yes
 git grep at dfce42bf: (空)
-本批新写入: reports/03-audit-and-verification.md ×2, reports/06-security-and-sandbox.md ×2
+本批新写入: ../../../reports/03-audit-and-verification.md ×2, ../../../reports/06-security-and-sandbox.md ×2
 ```
 
 **问题分解**
@@ -145,11 +145,11 @@ pre-batch (dfce42bf): 新增违规 25 处   ✅ 声称成立
 HEAD:                 新增违规 24 处   ✅ 声称成立
 
 24 条违规文件 ∩ 本批改动文件（dfce42bf..HEAD）= 5 个：
-  docs/04-internal/backend-enhancement/02-axes/A-quota-real-interface.md
-  docs/04-internal/backend-enhancement/02-axes/K-device-control-three-beat.md
-  docs/04-internal/backend-enhancement/04-delivery/care-heartbeat-producer.md
-  docs/04-internal/backend-enhancement/04-delivery/V5-a-redaction-bridge-delivery.md
-  docs/04-internal/engineering-experience/05-product-insights.md
+  ../backend-enhancement/02-axes/A-quota-real-interface.md
+  ../backend-enhancement/02-axes/K-device-control-three-beat.md
+  ../backend-enhancement/04-delivery/care-heartbeat-producer.md
+  ../backend-enhancement/04-delivery/V5-a-redaction-bridge-delivery.md
+  ../engineering-experience/05-product-insights.md
 ```
 其中前 4 个是 `git mv` 移位（文件名变了，违规随文件搬家，**并非本批引入**）；但第 5 个 `05-product-insights.md` 是 **M（实质修改）**：
 
@@ -195,10 +195,10 @@ EOF
 **差异性质**：全部是**链接重写**，且重写结果有两种错误形态：
 ```diff
 # 形态 1：把合法链接改成了畸形链接（丢左括号）—— 门禁看不见
--> 纪律：[CONSTRUCTION-DISCIPLINE.md](CONSTRUCTION-DISCIPLINE.md)（进场第一课）；
+-> 纪律：[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md)（进场第一课）；
 +> 纪律：[CONSTRUCTION-DISCIPLINE.md]../CONSTRUCTION-DISCIPLINE.md)（进场第一课）；
 # 形态 2：改对了路径，但目标其实不存在（移位后没同步被引文件）
--> ## 现状（实测基线见 reports/benchmark-reproduction.md）
+-> ## 现状（实测基线见 ../../../reports/benchmark-reproduction.md）
 +## 现状（实测基线见 ../../../reports/benchmark-reproduction.md）
 ```
 形态 2 更严重：**`reports/benchmark-reproduction.md` 在本批被归档成了 `docs/archive/merged/2026-10-23/reports/benchmark-reproduction.md`**，所以从 `02-axes/B-performance.md` 出发无论怎么写相对路径都到不了 —— 移位重写没有跟随归档移动。
@@ -208,22 +208,22 @@ EOF
 **(b) 保护清单 4 个文件被本批 commit 改过**（**已由 `4142eddf` 还原内容**）
 
 ```bash
-git log --oneline dfce42bf..HEAD -- docs/03-reference/test-baseline.md docs/adr/
+git log --oneline dfce42bf..HEAD -- ../../03-reference/test-baseline.md docs/adr/
 ```
 **实际输出**
 ```
-docs/03-reference/test-baseline.md                  : commits_touched=1
-docs/adr/0007-r7-context-session-unification.md     : commits_touched=2
-docs/adr/0008-r2-extension-abi.md                   : commits_touched=2
-docs/adr/README.md                                 : commits_touched=2
+../../03-reference/test-baseline.md                  : commits_touched=1
+../../adr/0007-r7-context-session-unification.md     : commits_touched=2
+../../adr/0008-r2-extension-abi.md                   : commits_touched=2
+../../adr/README.md                                 : commits_touched=2
 ```
 三处 ADR/test-baseline 的改动**全部是"把合法链接改成畸形链接"**（与 FAIL-4a 形态 1 同源）：
 ```diff
--> 见 [docs/architecture/r7-inventory-2026-10-20.md](../architecture/r7-inventory-2026-10-20.md)。
+-> 见 [docs/architecture/r7-inventory-2026-10-20.md](../../architecture/r7-inventory-2026-10-20.md)。
 +> 见 [r7-inventory-2026-10-20.md]../architecture/r7-inventory-2026-10-20.md)。
 ```
 - `docs/adr/` 下其余所有 .md 正文 **0 触碰**（成立）。
-- **修复后状态**（`4142eddf` "受保护文件还原基线 + 修复器永久跳过受保护路径"）：`git diff --stat dfce42bf HEAD -- docs/architecture/*.toml docs/status/*.yaml docs/03-reference/test-baseline.md docs/03-reference/capabilities-matrix.md docs/01-architecture/philosophy.md docs/adr/` → **空**。**内容已与 pre-batch 逐字一致**。但 `git log dfce42bf..HEAD -- <path>` 仍非空（test-baseline 4 次、adr 3 文件各 5 次），**按任务判据（"被审方的 commit 是否修改过"）仍判 FAIL**。
+- **修复后状态**（`4142eddf` "受保护文件还原基线 + 修复器永久跳过受保护路径"）：`git diff --stat dfce42bf HEAD -- docs/architecture/*.toml docs/status/*.yaml ../../03-reference/test-baseline.md ../../03-reference/capabilities-matrix.md ../../01-architecture/philosophy.md docs/adr/` → **空**。**内容已与 pre-batch 逐字一致**。但 `git log dfce42bf..HEAD -- <path>` 仍非空（test-baseline 4 次、adr 3 文件各 5 次），**按任务判据（"被审方的 commit 是否修改过"）仍判 FAIL**。
 - `docs/architecture/*.toml`、`docs/status/*.yaml`、`capabilities-matrix.md`、`philosophy.md` **全部 0 触碰**（成立，且 `git diff` 为空）。
 - 但 `test-baseline.md` 属任务给的保护清单，其正文被改 —— **FAIL**。
 - 注：这 3 个 ADR 的改动与 §FAIL-4a 的 23 个畸形链接是**同一个修复器**造成的批量回归。
@@ -295,7 +295,7 @@ UNRESOLVED: 396
 
 **修复的残留问题**：把丢掉的左括号补回来了，但留下了**多余右括号**：
 ```markdown
-[CONSTRUCTION-DISCIPLINE.md](../CONSTRUCTION-DISCIPLINE.md))   ← 多一个 ')'
+[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md))   ← 多一个 ')'
 ```
 实测：**83 处**（pre-batch 38 → 现 83，新增 45），跨 47 个文件。链接**能点开了**，但正文渲染多一个 `)`。**严重度低一档，但仍是修复不彻底的残留，需清理。**
 
@@ -340,11 +340,11 @@ UNRESOLVED: 396
 交接文档 §3.2 引用 `reports/README.md` 作为"仓内自己的政策"依据（"711 处 docs 引用不改"）。实测：
 
 ```bash
-cat reports/README.md
+cat ../../../reports/README.md
 ```
 ```
 <!-- 已归档（2026-10-23）：本文内容已归入历史卷宗。 -->
-> ⚠️ 本文档已归档（原件见 `docs/archive/merged/2026-10-23/reports`）；继任文档为 **[册 12 — 杂项交付记事（2 篇合册）](12-misc-delivery-notes.md)**（2026-10-23）。
+> ⚠️ 本文档已归档（原件见 `docs/archive/merged/2026-10-23/reports`）；继任文档为 **[册 12 — 杂项交付记事（2 篇合册）](../../../reports/12-misc-delivery-notes.md)**（2026-10-23）。
 ```
 **`reports/README.md` 现在是 5 行桩**（原本 79 行政策原文）。政策原文只存在于 `docs/archive/merged/2026-10-23/reports/README.md`。这意味着 `_known-missing.tsv` 整个豁免机制的**政策锚点，在活文档面上已经不可读**。
 
@@ -378,10 +378,10 @@ TOTAL                                       121      121     121
 
 | 变异 | 期望 | 实测 |
 |---|---|---|
-| (a) `docs/README.md` 注入 `[injected broken link](this-file-does-not-exist-xyz.md)` | docs_links 变红 | `断链: 1` + `BROKEN docs/README.md -> this-file-does-not-exist-xyz.md (目标不存在)`，**exit=1** ✓ |
+| (a) `docs/README.md` 注入 `[injected broken link](this-file-does-not-exist-xyz.md)` | docs_links 变红 | `断链: 1` + `BROKEN ../../README.md -> this-file-does-not-exist-xyz.md (目标不存在)`，**exit=1** ✓ |
 | (b) 删 `docs/03-reference/README.md` | docs_index 变红 | `目录缺索引 README.md: docs/03-reference/`，**exit=1** ✓（docs_links 仍 0，符合职责分离） |
 | (c) `docs/INDEX.csv` 改 layer=L9 / topic=99 | docs_index 变红 | `层非法: ... -> L9` + `题材非法: ... -> 99`，**exit=1** ✓ |
-| (d) 注入**未登记**的失效链接 | 必须报 BROKEN | `BROKEN docs/02-guides/README.md -> no-such-target-qq.md (目标不存在)`，**exit=1** ✓ |
+| (d) 注入**未登记**的失效链接 | 必须报 BROKEN | `BROKEN ../../02-guides/README.md -> no-such-target-qq.md (目标不存在)`，**exit=1** ✓ |
 | (e) 注入指向**已登记重定向**的链接 | 必须放行 | `断链: 0`，exit=0 ✓ |
 | (f) `--gen` 保留人工标注 | disposition/target 保留 | `MANUAL-DISPOSITION-XYZ` / `MANUAL-TARGET-ABC` 原样保留 ✓ |
 | (g) scope live vs all | live=0，差=archive 内部 | live **0** / all **668** / 差 **668** ✓ |
