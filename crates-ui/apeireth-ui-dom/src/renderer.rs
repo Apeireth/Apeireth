@@ -32,7 +32,7 @@ use std::fmt;
 
 use crate::dom::{Dom, DomError};
 use crate::keyed::diff_keyed;
-use crate::vnode::{AttrValue, ElementVNode, TextVNode, VNode};
+use crate::vnode::{AttrValue, ElementVNode, PropValue, TextVNode, VNode};
 
 /// 已挂载的元素节点。
 pub struct MountedElement<D: Dom> {
@@ -326,6 +326,9 @@ impl<D: Dom> Renderer<D> {
                 for child in &element.children {
                     children.push(self.mount_node(child, &dom, None)?);
                 }
+                // property 在**子节点之后**写（`select.value` 依赖 `option` 已存在），
+                // 且**入树之前**（用户看不到默认值 → 目标值的中间态）。
+                self.write_props(&dom, element)?;
                 self.insert_into(parent, &dom, anchor)?;
                 if let Some(this_ref) = &element.this_ref {
                     this_ref.bind_node(Box::new(dom.clone()))?;
@@ -381,6 +384,8 @@ impl<D: Dom> Renderer<D> {
                     &old_element.children,
                     &new_element.children,
                 )?;
+                // property 在**子节点之后**打（同挂载时的理由）。
+                self.patch_props(&old_element.dom, &old_element.vnode, new_element)?;
                 Ok(MountedNode::Element(MountedElement {
                     vnode: new_element.clone(),
                     dom: old_element.dom.clone(),
@@ -521,6 +526,75 @@ impl<D: Dom> Renderer<D> {
         }
         if !class_tokens.is_empty() {
             self.dom.set_class_tokens(dom, &class_tokens, &[])?;
+        }
+        Ok(())
+    }
+
+    /// 新建节点：写完**全部 property**。
+    ///
+    /// ## 时机（不可挪）
+    ///
+    /// 在**子节点挂完之后**、**节点进文档树之前**调用：
+    /// - 子节点之后 ⇒ `<select>` 的 `value` 依赖 `<option>` 已存在（否则静默无效）；
+    /// - 入树之前 ⇒ 用户看不到「默认值 → 目标值」的中间态（`range` 会看到拇指跳一下）。
+    fn write_props(&self, dom: &D::Node, element: &ElementVNode) -> Result<(), DomError> {
+        for (name, value) in &element.props {
+            match value {
+                PropValue::Text(text) => self.dom.set_property(dom, name, text)?,
+                PropValue::Bool(flag) => self.dom.set_property_bool(dom, name, *flag)?,
+            }
+        }
+        Ok(())
+    }
+
+    /// 已有节点：property **变了才写**。
+    ///
+    /// ## 为什么必须「变了才写」
+    ///
+    /// 每次重渲染都无条件写 `value` ⇒ **打断输入法组合态**（拼音未上屏时被清空）
+    /// 且会把光标推到末尾。这与各面宿主侧回写用的是同一条口径
+    /// （「只在当前值 ≠ 目标值时写」）。
+    ///
+    /// ⚠️ 读回比较用 [`Dom::get_property`]；后端读不出（返回空串）时
+    /// **不写**——宁可不动，也不要在读不到当前值时反复覆盖用户的输入。
+    fn patch_props(
+        &self,
+        dom: &D::Node,
+        old: &ElementVNode,
+        new: &ElementVNode,
+    ) -> Result<(), DomError> {
+        let mut names: Vec<String> = old.props.iter().map(|(name, _)| name.clone()).collect();
+        for (name, _) in &new.props {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+        for name in names {
+            let old_value = old.prop_value(&name);
+            let new_value = new.prop_value(&name);
+            if old_value == new_value {
+                continue;
+            }
+            match new_value {
+                Some(PropValue::Text(text)) => {
+                    // 当前值已是目标值 ⇒ 不写（保护输入法组合态）。
+                    match self.dom.get_property(dom, &name) {
+                        Ok(current) if current == *text => continue,
+                        _ => {}
+                    }
+                    self.dom.set_property(dom, &name, text)?;
+                }
+                Some(PropValue::Bool(flag)) => {
+                    self.dom.set_property_bool(dom, &name, *flag)?;
+                }
+                None => {
+                    // property 被移除：**没有**「移除 property」的通用操作
+                    // ⇒ 不静默清空（那会破坏受控输入）；登记为未支持。
+                    return Err(DomError::Unsupported(format!(
+                        "移除 property `{name}` 未支持（property 无通用删除操作）"
+                    )));
+                }
+            }
         }
         Ok(())
     }
@@ -1790,5 +1864,106 @@ mod tests {
         for child in node.children() {
             collect_attr_values(child, out);
         }
+    }
+    // ── property 通道（`value` / `checked` 等 —— 与属性两条独立通道） ──────────
+
+    /// **T-p1**：新建节点时 property 被写进去（`input` 的 `value` 不再依赖宿主回写）。
+    #[test]
+    fn a_new_nodes_properties_are_written() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let tree = VNode::element("input")
+            .attr("type", "text")
+            .prop("value", "hello")
+            .build();
+        let mounted = renderer.mount(tree).expect("挂载必须成功");
+        let element = *mounted.dom_node().expect("元素节点");
+        let dom = renderer.dom();
+        assert_eq!(dom.property(element, "value").as_deref(), Some("hello"));
+        // ⚠️ **属性通道仍然没有 `value`** —— property 不等于属性（否则属性对照会多一项）。
+        assert!(
+            renderer.dom().attribute(element, "value").is_none(),
+            "property 不应变成属性"
+        );
+    }
+
+    /// **T-p2**：属性先写、property 后写 —— `<select>` 的 `value` 依赖 `option` 已存在。
+    ///
+    /// 判据落在**可观测的操作序列**上（不读源码文本）：
+    /// 目标 `option` 的出现必须**早于** `select` 的 property 写入。
+    #[test]
+    fn properties_are_written_after_the_children_exist() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let tree = VNode::element("select")
+            .prop("value", "b")
+            .child(VNode::element("option").attr("value", "a").build())
+            .child(VNode::element("option").attr("value", "b").build())
+            .build();
+        renderer.mount(tree).expect("挂载必须成功");
+        let ops = renderer.dom().ops();
+        let select_value_at = ops
+            .iter()
+            .position(|op| matches!(op.op, DomOp::SetProperty { ref name, .. } if name == "value"))
+            .expect("必须写 select 的 value");
+        let last_option_at = ops
+            .iter()
+            .rposition(|op| matches!(op.op, DomOp::CreateElement { .. }))
+            .expect("必须建 option");
+        assert!(
+            last_option_at < select_value_at,
+            "property 必须在子节点之后写（select.value 依赖 option 已存在）"
+        );
+    }
+
+    /// **T-p3**：property 变化 ⇒ 重写；未变化 ⇒ **不写**（保护输入法组合态与光标）。
+    #[test]
+    fn an_unchanged_property_is_not_rewritten() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let first = VNode::element("input").prop("value", "same").build();
+        renderer.mount(first.clone()).expect("挂载必须成功");
+        renderer.dom().clear_ops();
+        // 重渲染同一取值 ⇒ 不应产生 SetProperty。
+        renderer.patch(first.clone()).expect("重渲染必须成功");
+        let ops = renderer.dom().ops();
+        assert!(
+            !ops.iter()
+                .any(|op| matches!(op.op, DomOp::SetProperty { .. })),
+            "取值未变 ⇒ 不得重写 property（否则打断输入法组合态）"
+        );
+        // 取值变了 ⇒ 必须写。
+        let second = VNode::element("input").prop("value", "changed").build();
+        renderer.patch(second).expect("重渲染必须成功");
+        let ops = renderer.dom().ops();
+        assert!(
+            ops.iter()
+                .any(|op| matches!(op.op, DomOp::SetProperty { .. })),
+            "取值变了 ⇒ 必须写 property"
+        );
+    }
+
+    /// **T-p4**：布尔 property 走**布尔**通道（不是写字符串 `"true"` / `"false"`）。
+    ///
+    /// ⚠️ 这是本批最容易静默写错的一条：`Reflect::set(el, "checked", "false")`
+    /// 写进去是**非空字符串** ⇒ 真值判断为真 ⇒ 语义反了。
+    #[test]
+    fn a_boolean_property_uses_the_boolean_channel() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let tree = VNode::element("input")
+            .attr("type", "checkbox")
+            .prop("checked", true)
+            .build();
+        renderer.mount(tree).expect("挂载必须成功");
+        let ops = renderer.dom().ops();
+        assert!(
+            ops.iter().any(|op| matches!(
+                op.op,
+                DomOp::SetPropertyBool { ref name, value } if name == "checked" && value
+            )),
+            "布尔 property 必须走 SetPropertyBool"
+        );
+        assert!(
+            !ops.iter()
+                .any(|op| matches!(op.op, DomOp::SetProperty { .. })),
+            "布尔 property **不得**走字符串通道"
+        );
     }
 }

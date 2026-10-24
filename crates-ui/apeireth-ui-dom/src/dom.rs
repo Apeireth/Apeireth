@@ -145,6 +145,26 @@ pub trait Dom: 'static {
     /// 对 `input.value` 无效，且会破坏浏览器的受控输入语义。
     fn set_property(&self, node: &Self::Node, name: &str, value: &str) -> Result<(), DomError>;
 
+    /// 写**布尔** property（`checked` / `selected` / …）。
+    ///
+    /// ⚠️ **不能**用 [`Self::set_property`] 传 `"false"` 写布尔 property ——
+    /// `Reflect::set(el, "checked", "false")` 写进去是**非空字符串** ⇒ 真值判断为**真**
+    /// ⇒ 语义**反了**。
+    ///
+    /// 默认实现 ⇒ **显式失败**（`Unsupported`）而不是静默写错：
+    /// 没实现该通道的后端**不该假装支持**（0 装）。
+    fn set_property_bool(
+        &self,
+        node: &Self::Node,
+        name: &str,
+        value: bool,
+    ) -> Result<(), DomError> {
+        let _ = (node, name, value);
+        Err(DomError::Unsupported(format!(
+            "set_property_bool({name}) 该后端未实现"
+        )))
+    }
+
     /// 读 property。
     fn get_property(&self, node: &Self::Node, name: &str) -> Result<String, DomError>;
 
@@ -248,6 +268,16 @@ pub enum DomOp {
         name: String,
         /// property 值。
         value: String,
+    },
+    /// 写**布尔** property（`checked` / `selected` / …）。
+    ///
+    /// 与 [`Self::SetProperty`] **分开记** ⇒ 「布尔走布尔通道」这件事
+    /// 是**可观测的**（否则写错成字符串在记录里看不出来）。
+    SetPropertyBool {
+        /// property 名。
+        name: String,
+        /// property 值。
+        value: bool,
     },
     /// 读 property（不改树；记录它是为了让「读」在序列里可见）。
     GetProperty {
@@ -643,6 +673,43 @@ impl Dom for InMemoryDom {
             DomOp::SetProperty {
                 name: name.to_owned(),
                 value: value.to_owned(),
+            },
+            *node,
+        );
+        Ok(())
+    }
+
+    fn set_property_bool(
+        &self,
+        node: &Self::Node,
+        name: &str,
+        value: bool,
+    ) -> Result<(), DomError> {
+        // 存成 "true"/"false" 只是为了 `get_property`（它返回 `String`）能读回；
+        // **记录**用独立的 `SetPropertyBool` ⇒ 通道选择本身可观测。
+        let text = if value { "true" } else { "false" };
+        {
+            let mut nodes = self.nodes.borrow_mut();
+            let Some(entry) = nodes.get_mut(node.0) else {
+                return Err(DomError::NodeNotFound);
+            };
+            if entry.detached {
+                return Err(DomError::NodeDetached);
+            }
+            if matches!(entry.kind, InMemoryNodeKind::Text(_)) {
+                return Err(DomError::Unsupported(String::from(
+                    "property 只能设在元素节点上",
+                )));
+            }
+            match entry.props.iter_mut().find(|(key, _)| key == name) {
+                Some(slot) => slot.1 = text.to_owned(),
+                None => entry.props.push((name.to_owned(), text.to_owned())),
+            }
+        }
+        self.record(
+            DomOp::SetPropertyBool {
+                name: name.to_owned(),
+                value,
             },
             *node,
         );

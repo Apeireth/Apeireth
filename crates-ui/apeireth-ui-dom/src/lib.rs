@@ -98,7 +98,7 @@ pub use dom::{
 pub use events::{DomEvent, ElementHandler, EventHandler, EventRegistry, HandlerId};
 pub use keyed::{diff_keyed, list_diff_mode, KeyedDiff, KeyedDiffError, KeyedSlot, ListDiffMode};
 pub use renderer::{MountedElement, MountedFragment, MountedNode, MountedText, Renderer};
-pub use vnode::{AttrValue, ElementBuilder, ElementVNode, Key, TextVNode, VNode};
+pub use vnode::{AttrValue, ElementBuilder, ElementVNode, Key, PropValue, TextVNode, VNode};
 
 #[cfg(target_arch = "wasm32")]
 pub use web::WebDom;

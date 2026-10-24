@@ -200,6 +200,27 @@ impl Dom for WebDom {
             .map_err(|error| DomError::Unsupported(format!("set_property({name}) 失败：{error:?}")))
     }
 
+    fn set_property_bool(
+        &self,
+        node: &Self::Node,
+        name: &str,
+        value: bool,
+    ) -> Result<(), DomError> {
+        self.ensure_writable(node)?;
+        let element = self.as_element(node)?;
+        let target: JsValue = element.into();
+        // ⚠️ 必须写**真布尔**（不是 `"true"` / `"false"` 字符串）—— 见 trait 上的说明。
+        Reflect::set(
+            &target,
+            &JsValue::from_str(name),
+            &JsValue::from_bool(value),
+        )
+        .map(|_| ())
+        .map_err(|error| {
+            DomError::Unsupported(format!("set_property_bool({name}) 失败：{error:?}"))
+        })
+    }
+
     fn get_property(&self, node: &Self::Node, name: &str) -> Result<String, DomError> {
         self.ensure_writable(node)?;
         let element = self.as_element(node)?;

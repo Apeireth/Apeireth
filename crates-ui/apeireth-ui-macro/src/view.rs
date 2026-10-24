@@ -319,6 +319,15 @@ pub(crate) enum Attr {
         /// 值表达式原文。
         value: String,
     },
+    /// **property** 赋值（`prop:<名>` / `bind:value` / `bind:checked`）。
+    ///
+    /// ⚠️ property 与属性是**两条独立通道**：写 attribute 对 `input.value` 无效。
+    Prop {
+        /// property 名。
+        name: String,
+        /// 值表达式原文。
+        value: String,
+    },
 }
 
 /// HTML 标签白名单（判定「裸标识符是元素还是表达式」用）。
@@ -863,9 +872,27 @@ fn parse_attr(tokens: &[Tok], source: &str) -> Result<Attr, String> {
             let value = value.ok_or_else(|| "属性 `bind:this` 缺值".to_owned())?;
             Ok(Attr::This { value })
         }
+        // `bind:value` / `bind:checked` ⇒ **property 赋值**（Svelte 的同口径：
+        // 对原生控件写 property，不写 attribute）。
+        ("bind", Some(name @ ("value" | "checked"))) => {
+            let value = value.ok_or_else(|| format!("属性 `bind:{name}` 缺值"))?;
+            Ok(Attr::Prop {
+                name: name.to_owned(),
+                value,
+            })
+        }
+        // 任意 property：`prop:value = expr` / `prop:checked = expr`。
+        ("prop", Some(name)) => {
+            let value = value.ok_or_else(|| format!("属性 `prop:{name}` 缺值"))?;
+            Ok(Attr::Prop {
+                name: name.to_owned(),
+                value,
+            })
+        }
         ("bind", Some(other)) => Err(format!(
-            "双向绑定 `bind:{other}` **尚未接线**（渲染阶段的 property 回写未实现）——\
-             本批只支持 `bind:this`"
+            "双向绑定 `bind:{other}` **尚未接线** —— 本批支持 `bind:this` / \
+             `bind:value` / `bind:checked`（后两者写 property）；\
+             其它 property 用 `prop:{other} = <表达式>`"
         )),
         (name, None) if name.starts_with("on") => {
             let value = value.ok_or_else(|| format!("事件属性 `{name}` 缺值"))?;
@@ -997,6 +1024,9 @@ fn generate_element(tag: &str, attrs: &[Attr], children: &[Node]) -> Result<Stri
             Attr::Plain { name, value } => {
                 let _ = write!(code, " __n = __n.attr({name:?}, {value});");
             }
+            Attr::Prop { name, value } => {
+                let _ = write!(code, " __n = __n.prop({name:?}, {value});");
+            }
             Attr::Key { value } => {
                 let _ = write!(code, " __n = __n.key({value});");
             }
@@ -1033,6 +1063,10 @@ fn generate_component(
         match arg {
             Attr::Plain { name: field, value } => {
                 let _ = write!(setters, ".{field}({value})");
+            }
+            Attr::Prop { name: field, value } => {
+                // property 不是属性 ⇒ props 结构体里用 `prop_<名>` 方法（不占属性名）。
+                let _ = write!(setters, ".prop_{field}({value})");
             }
             Attr::Key { value } => {
                 let _ = write!(setters, ".key({value})");
@@ -1116,8 +1150,33 @@ mod tests {
     }
 
     #[test]
-    fn bind_value_is_reported_as_not_wired() {
-        let err = parse("input(bind:value = name)").expect_err("必须报错");
+    fn bind_value_now_parses_as_a_property() {
+        // ⚠️ 本测试原先断言「`bind:value` **必须报错**（property 回写未实现）」。
+        // 渲染器的 property 通道接通后该约束**不再成立** ⇒ 反转成正向断言：
+        // `bind:value` ⇒ **property**（不是属性）。
+        let code = gen("input(bind:value = name)");
+        assert!(
+            code.contains(".prop(\"value\", name)"),
+            "bind:value 必须生成 property 写入，实测：{code}"
+        );
+        assert!(
+            !code.contains(".attr(\"value\""),
+            "bind:value **不得**生成属性写入（写 attribute 对 input.value 无效）：{code}"
+        );
+        // `bind:checked` ⇒ 同样走 property（布尔由 `From<bool>` 转 PropValue）。
+        let checked = gen("input(bind:checked = flag)");
+        assert!(
+            checked.contains(".prop(\"checked\", flag)"),
+            "bind:checked 必须生成 property 写入，实测：{checked}"
+        );
+        // 任意 property：`prop:<名>`。
+        let other = gen("input(prop:indeterminate = half)");
+        assert!(
+            other.contains(".prop(\"indeterminate\", half)"),
+            "prop:<名> 必须生成 property 写入，实测：{other}"
+        );
+        // 不认识的 `bind:` 仍然报错（不静默放过）。
+        let err = parse("input(bind:group = g)").expect_err("未知 bind 必须报错");
         assert!(err.contains("尚未接线"), "实测错误文案：{err}");
     }
 

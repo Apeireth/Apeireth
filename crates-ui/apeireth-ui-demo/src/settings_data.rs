@@ -921,7 +921,6 @@ pub mod wasm {
         renderer
             .mount(render_tree(&state, &fixture))
             .map_err(|error| error.to_string())?;
-        sync_properties(&state, container)?;
 
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
@@ -933,7 +932,6 @@ pub mod wasm {
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
             // 补丁会把属性写回**原文** ⇒ property 回写必须**跟着补丁**跑。
-            let _ = sync_properties(&effect_state, &effect_container);
             publish_state();
         });
 
@@ -945,56 +943,6 @@ pub mod wasm {
         publish_state();
         set_ready();
         Ok(())
-    }
-
-    /// 把**输入框的值**回写成 DOM **property**。
-    ///
-    /// ## 为什么必须写 property
-    ///
-    /// 生产用 `bind:value` ⇒ 值是 **property**（DOM 上**没有** `value` 属性）
-    /// ⇒ 引擎侧若写属性 ⇒ DOM 对照会多出属性 ⇒ 不等。
-    ///
-    /// ## 为什么在这里写（而不是组件里）
-    ///
-    /// 虚拟树层**只写属性**（`ui-dom` 的渲染器没有 property 通道）⇒ 与向导面
-    /// 同一口径：**宿主在挂载后把值写回 property**（且**只在当前值 ≠ 目标值**
-    /// 时写 ⇒ 不打断输入法组合态与光标位置）。
-    fn sync_properties(state: &DataHostState, container: &Element) -> Result<(), String> {
-        set_property(
-            container,
-            ".workspace-input",
-            "value",
-            &state.workspace_dir.get(),
-        )?;
-        let profile = state.user_profile.get();
-        set_property(container, "#user-nickname", "value", &profile.nickname)?;
-        set_property(container, "#user-bio", "value", &profile.bio)?;
-        Ok(())
-    }
-
-    /// 写一个字符串 property。
-    fn set_property(
-        container: &Element,
-        selector: &str,
-        name: &str,
-        value: &str,
-    ) -> Result<(), String> {
-        let Some(element) = container.query_selector(selector).ok().flatten() else {
-            return Ok(());
-        };
-        let current = Reflect::get(element.as_ref(), &JsValue::from_str(name))
-            .map(|value| value.as_string().unwrap_or_default())
-            .unwrap_or_default();
-        if current == value {
-            return Ok(());
-        }
-        Reflect::set(
-            element.as_ref(),
-            &JsValue::from_str(name),
-            &JsValue::from_str(value),
-        )
-        .map(|_| ())
-        .map_err(|error| format!("写 {selector} 的 {name} 失败：{error:?}"))
     }
 
     /// 标记「画面已渲染完毕」（对照脚本的 `ready()` 判据；两侧同名同义）。

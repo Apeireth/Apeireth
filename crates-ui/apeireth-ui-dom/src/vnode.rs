@@ -190,12 +190,84 @@ impl VNode {
         }
     }
 
+    /// 本节点的 **property** 取值（非元素节点 ⇒ `None`）。
+    pub fn prop_value(&self, name: &str) -> Option<&PropValue> {
+        match self {
+            VNode::Element(element) => element.prop_value(name),
+            _ => None,
+        }
+    }
+
     /// 本节点的 class token 集合（保序；非元素节点 ⇒ 空）。
     pub fn class_tokens(&self) -> Vec<String> {
         match self.attr_value("class") {
             Some(AttrValue::Text(text)) => text.split_whitespace().map(str::to_owned).collect(),
             _ => Vec::new(),
         }
+    }
+}
+
+/// 要写进 DOM 的 **property**（**不是属性**）。
+///
+/// ## 为什么必须有这一层
+///
+/// `bind:value` / `value={expr}` 在宿主模板里编译成 **property 赋值**
+/// ⇒ DOM 上**没有** `value` 属性；而写 attribute 对 `input.value` **无效**，
+/// 且会破坏浏览器的受控输入语义（设计 §5.4.1）。
+///
+/// ⇒ 元素的取值有**两条独立通道**：属性和 property。缺后者 ⇒ 原生控件
+/// （`input` / `select` / `textarea` / `input[type=range]`）会按**浏览器默认值**渲染
+/// （`range` 是区间中点、文本框是空、`select` 是第一个 option）
+/// ⇒ 画面与宿主模板不一致，而**属性对照看不出来**（它只比属性）。
+///
+/// ## 为什么两种变体
+///
+/// - [`PropValue::Text`] ⇒ 按字符串写（`value` / `title` / …）；
+/// - [`PropValue::Bool`] ⇒ 按**布尔**写（`checked` / `selected` / …）。
+///
+/// ⚠️ **布尔 property 不能用字符串写**：`Reflect::set(el, "checked", "false")`
+/// 写进去是**非空字符串** ⇒ 真值判断为**真** ⇒ 语义**反了**。
+/// 所以布尔单独一个变体，后端走 `set_property_bool`。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PropValue {
+    /// 字符串 property（`value` 等）。
+    Text(String),
+    /// 布尔 property（`checked` 等）。
+    Bool(bool),
+}
+
+impl PropValue {
+    /// 文本 property。
+    pub fn text(value: impl Into<String>) -> Self {
+        PropValue::Text(value.into())
+    }
+
+    /// 布尔 property。
+    pub fn bool(value: bool) -> Self {
+        PropValue::Bool(value)
+    }
+
+    /// 是否与另一个取值相等（差分用；变体不同 ⇒ 不相等）。
+    pub fn same_as(&self, other: &PropValue) -> bool {
+        self == other
+    }
+}
+
+impl From<String> for PropValue {
+    fn from(value: String) -> Self {
+        PropValue::Text(value)
+    }
+}
+
+impl From<&str> for PropValue {
+    fn from(value: &str) -> Self {
+        PropValue::Text(value.to_owned())
+    }
+}
+
+impl From<bool> for PropValue {
+    fn from(value: bool) -> Self {
+        PropValue::Bool(value)
     }
 }
 
@@ -208,6 +280,11 @@ pub struct ElementVNode {
     pub key: Option<Key>,
     /// 属性（保持写入顺序 ⇒ 差分可逐字对比）。
     pub attrs: Vec<(String, AttrValue)>,
+    /// **property**（与属性是两条独立通道；见 [`PropValue`]）。
+    ///
+    /// 写入时机：**子节点挂完之后**（`select` 的 `value` 依赖 `option` 已存在）、
+    /// **节点进文档树之前** ⇒ 用户看不到中间态。
+    pub props: Vec<(String, PropValue)>,
     /// `bind:this` 槽位（类型擦除；见 [`ThisRef`]）。
     ///
     /// `None` ⇒ 该元素没有元素引用绑定。
@@ -228,6 +305,7 @@ impl ElementVNode {
             tag: tag.into(),
             key: None,
             attrs: Vec::new(),
+            props: Vec::new(),
             this_ref: None,
             handlers: Vec::new(),
             children: Vec::new(),
@@ -260,6 +338,20 @@ impl ElementVNode {
         match self.attrs.iter_mut().find(|(key, _)| *key == name) {
             Some(slot) => slot.1 = value,
             None => self.attrs.push((name, value)),
+        }
+        self
+    }
+
+    /// 追加一个 **property**（同名覆盖，保原位置）。
+    ///
+    /// 与 [`Self::attr`] 是**两条独立通道**：`attr` 写 attribute，`prop` 写 property。
+    /// 原生控件的取值（`value` / `checked`）必须走本方法 —— 见 [`PropValue`]。
+    pub fn prop(mut self, name: impl Into<String>, value: impl Into<PropValue>) -> Self {
+        let name = name.into();
+        let value = value.into();
+        match self.props.iter_mut().find(|(key, _)| *key == name) {
+            Some(slot) => slot.1 = value,
+            None => self.props.push((name, value)),
         }
         self
     }
@@ -331,6 +423,14 @@ impl ElementVNode {
             .map(|(_, value)| value)
     }
 
+    /// 读 **property** 取值。
+    pub fn prop_value(&self, name: &str) -> Option<&PropValue> {
+        self.props
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value)
+    }
+
     /// 产出虚拟节点。
     pub fn build(self) -> VNode {
         VNode::Element(self)
@@ -373,6 +473,15 @@ impl ElementBuilder {
     /// 追加属性。
     pub fn attr(mut self, name: impl Into<String>, value: impl Into<AttrValue>) -> Self {
         self.node = self.node.attr(name, value);
+        self
+    }
+
+    /// 追加 **property**（与属性两条独立通道；见 [`PropValue`]）。
+    ///
+    /// 原生控件的取值（`value` / `checked`）必须走本方法 —— 写 attribute 对
+    /// `input.value` **无效**（设计 §5.4.1）。
+    pub fn prop(mut self, name: impl Into<String>, value: impl Into<PropValue>) -> Self {
+        self.node = self.node.prop(name, value);
         self
     }
 

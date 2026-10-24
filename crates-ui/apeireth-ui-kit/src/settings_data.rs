@@ -690,6 +690,8 @@ fn render_workspace_card(props: &DataPanelsProps) -> VNode {
     let folder_icon = Icon::render(&IconProps::new(&icons::ICON_FOLDER, 13));
     let on_pick = props.on_pick_workspace.clone();
     let on_input = props.on_workspace_input.clone();
+    // 同上：取值由组件声明（`bind:value` ⇒ property）⇒ 宿主不再回写。
+    let workspace_value = props.workspace_dir.clone();
 
     view! {
         div(class = "info-card") {
@@ -701,6 +703,7 @@ fn render_workspace_card(props: &DataPanelsProps) -> VNode {
                     type = "text",
                     placeholder = placeholder,
                     aria-label = label,
+                    bind:value = workspace_value,
                     oninput = {
                         move |_| {
                             if let Some(callback) = on_input.as_ref() {
@@ -924,6 +927,11 @@ fn render_user_group(props: &DataPanelsProps) -> VNode {
     let bio_placeholder = BIO_PLACEHOLDER;
     let on_nickname = props.on_nickname_input.clone();
     let on_bio = props.on_bio_input.clone();
+    // ⚠️ **取值由组件声明**（`bind:value` ⇒ **property**，不是属性）：
+    // 生产 `bind:value={userProfile.nickname}` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性。
+    // ⇒ 组件自己带值 ⇒ **宿主不必再按选择器回写**（写 attribute 对 `input.value` 无效）。
+    let nickname_value = props.user_profile.nickname.clone();
+    let bio_value = props.user_profile.bio.clone();
 
     view! {
         div(class = "text-group", role = "group", aria-label = USER_GROUP_LABEL) {
@@ -935,6 +943,7 @@ fn render_user_group(props: &DataPanelsProps) -> VNode {
                     type = "text",
                     maxlength = NICKNAME_MAX_LENGTH,
                     placeholder = nickname_placeholder,
+                    bind:value = nickname_value,
                     oninput = {
                         move |_| {
                             if let Some(callback) = on_nickname.as_ref() {
@@ -953,6 +962,7 @@ fn render_user_group(props: &DataPanelsProps) -> VNode {
                     type = "text",
                     maxlength = BIO_MAX_LENGTH,
                     placeholder = bio_placeholder,
+                    bind:value = bio_value,
                     oninput = {
                         move |_| {
                             if let Some(callback) = on_bio.as_ref() {
