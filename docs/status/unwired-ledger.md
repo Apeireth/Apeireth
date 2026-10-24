@@ -96,7 +96,13 @@
 | `crates/engine/memory/src/layered_memo/progression.rs` | — |
 | `crates/engine/memory/src/layered_memo/sleep_cycle.rs` | — |
 
-### 5.4 待判 31 条 —— 人工过筛结论
+### 5.4 已修（A 类逐步清零中）
+
+| 缺口 | PR | 内容 |
+|---|---|---|
+| **被遗忘权**（`universal_forget`） | #90 | 删用户 ⇒ 连记忆一起删。先清记忆再落用户表（反了会留下「用户已删、记忆还在」的中间态）；记忆面拒绝 ⇒ 硬失败 409；未注入 ⇒ 响应如实说清。生产入口 `UniversalForgetFacade::forget_principal`（此前只有 pool 版，生产不可达） |
+
+### 5.5 待判 31 条 —— 人工过筛结论
 
 **A 类（真缺口）16 条** —— 每个都缺一个**具体接线点**，不是「整块没写」：
 
@@ -111,7 +117,7 @@
 | `crates/engine/memory/src/partner_store_sqlite.rs` | 伙伴/羁绊记录**跨重启持久化** | 生产自述「0 假装边界：现在用 InMemoryPartnerStore，重启即散」 |
 | `crates/engine/memory/src/query_expand.rs` | 混合检索前的同义/关键词簇查询扩展 | `coordinator.rs:673`（检索主路径） |
 | `crates/engine/memory/src/three_tier_vault.rs` | 无向量 TOC 树索引 + 逐层树路由 | README 已当已交付能力宣称 |
-| `crates/engine/memory/src/universal_forget.rs` | **被遗忘权**：按 principal 全库遗忘事务 | 网关删用户只改用户表，记忆没清 |
+| `crates/engine/memory/src/universal_forget.rs` | **被遗忘权**：按 principal 全库遗忘事务 | ✅ **已修**（PR #90）：网关删用户现在**连记忆一起删**（先清记忆再落用户表；记忆面拒绝 ⇒ 硬失败 409） |
 | `crates/engine/provider/src/reasoning_adapter.rs` | 推理字段归一化下发 + 转发前剥离 reasoning | provider 响应解析处（现只取可见正文） |
 | `crates/foundation/governance/src/rate_limit.rs` | 按 (capability,session) 分/时滑窗 + 四阶信任 + 黑名单 | 生产治理链没挂限流 hook |
 | `crates/foundation/orchestration/src/async_context.rs` | 四层异步上下文隔离（工具海量输出/后台通知分层） | `ContextProjector` 现为 `NoContextProjector` |

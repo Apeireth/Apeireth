@@ -23,6 +23,7 @@ pub mod governance_chain;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
 pub mod principal_forget_port;
+pub mod rate_limit_wire;
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
@@ -1092,6 +1093,9 @@ fn build_production_governance_parts_with_dataset(
             apeireth_runtime_assembly::TaskBoardApprovalHook::new(),
         ));
     }
+    // 限流守门 (授权之后、内容风险之前, 同一审批链)。默认挂载, 见
+    // `rate_limit_wire` 模块的说明 (为什么默认挂载、阈值从哪来)。
+    pipeline = rate_limit_wire::attach_rate_limit(pipeline);
     let mut pipeline = pipeline
         .with(Arc::new(CredentialDisclosureHook::new()))
         .with(Arc::new(PromptInjectionHook::new()))
