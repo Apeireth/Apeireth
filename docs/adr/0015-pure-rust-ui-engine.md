@@ -149,12 +149,47 @@ P0 探测子线在 `target/ui-probe-scratch/`（独立 scratch，0 写主仓）�
 
 **正面结论**：WebGL 路线**全程留在 GLSL ES，不经过 WGSL** ⇒ **着色器主体的光学数值零改动风险**，P5 的 GPU 阶段成本远低于初估。
 
+### 2.6.2 第 2 轮探测：双后端共存 + 运行时选后端（2026-10-24，**首次画面级实测**）
+
+第 1 轮只测到「编译期与解析期」。第 2 轮（scratch `target/ui-probe2-scratch/`，`README.md` 完整报告 + `run-all.sh` 一键复现）**在本机 Chromium 154 无头浏览器里真跑出画面**，并回答了「双后端能否共存 + 运行时能否按能力自动选」。
+
+| # | 项 | 实测结论 |
+|---|---|---|
+| 7 | **双后端编译期共存** | ✅ **可行**。同一份 `src/lib.rs`（三配置逐字节相同），`features = ["webgl","webgpu","glsl","wgsl","naga-ir"]` → **exit 0 / 零 warning / 无 feature 冲突 / 无符号冲突**。共存成立的原因：`wgpu-30.0.1/build.rs:38-46` 的 `wgpu_core` cfg alias 含 `webgl`，`webgpu` 与 `wgpu_core` 两个 `#[cfg]` 块在 wasm 上同时在场 |
+| 8 | **产物体积（同一份源码三配置，release wasm32）** | `webgpu-only` **3,017,454 B** / `webgl-only` **5,611,114 B** / **`both` 6,311,484 B**；共存相对 webgl-only **+700,370 B 裸 / +153,595 B gzip**；唯一多版本包仍只有 `syn`（2.0.119 + 3.0.9）。⚠️ 与第 1 轮数字（webgl 4,534,454 / webgpu 2,860,060 B）**不同工程**（本轮 naga 开了 `glsl-out`），量级一致，不构成矛盾 |
+| 9 | **运行时自动回落** | ❌ **wgpu 不会自动回落**。后端在 **`Instance::new` 那一刻一次定死**（`wgpu-30.0.1/src/api/instance.rs:63-99`）；`request_adapter` 阶段**没有任何 WebGPU→WebGL 回落**（`backend/webgpu.rs:1661-1709`，null adapter → `backend/webgpu.rs:1001-1029` → `NotFound` 即终止） |
+| 10 | **宿主能力判据** | ⚠️ **`navigator.gpu` 存在性是弱判据，不够**。实测本机 Chromium 154：`navigator.gpu` 存在（`[object GPU]`）但 `requestAdapter()` 返回 **null** ⇒ `is_browser_webgpu_supported() = false`。正确判据是 **`requestAdapter()` resolve 出非 null adapter**，即 wgpu 自己的实现（`wgpu-30.0.1/src/util/init.rs:79-99`） |
+| 11 | **wgpu 官方推荐写法** | ✅ 用 **`wgpu::util::new_instance_with_webgpu_detection`**（`wgpu-30.0.1/src/util/init.rs:116-128`）—— 探测不通过时**由它**把 `Backends::BROWSER_WEBGPU` 从 `InstanceDescriptor` 里摘掉。wgpu-types 文档自己写明弱判据不够（`wgpu-types-30.0.1/src/instance.rs:30-42`：「the browser may define the `navigator.gpu` object, but be unable to create any WebGPU adapters」） |
+| 12 | **真实浏览器画面** | ✅ **两个后端都渲染出画面**（真 surface → pipeline → draw → present，各 3 帧）。WebGL 路径 `backend=Gl`（ANGLE/SwiftShader，format `Rgba8UnormSrgb`）、WebGPU 路径 `backend=BrowserWebGpu`（format `Rgba8Unorm`），两张 canvas 截图**肉眼一致**（洋红三角形 + 深蓝 clear 色）。驱动方式：**系统 Chromium + 自写 CDP 驱动**（无需 Playwright / 无需下载浏览器 / 无 npm 安装） |
+
+**由此新增的四条硬约束（写入 P5 GPU 阶段的实现规范）**：
+
+4. **禁止直接 `Instance::new(Backends::all())`** —— 那正是实测会走进 `NotFound` 死路的写法（宿主有 `navigator.gpu` 但拿不到 adapter 时）。统一走 `wgpu::util::new_instance_with_webgpu_detection`。
+5. **WebGL 后端没有 `compatible_surface` 就产不出 adapter**（`wgpu-hal-30.0.1/src/gles/web.rs:123-144` 在 `surface_hint == None` 时返回空）⇒ 必须**先建 surface，再带 `compatible_surface` 申请 adapter**。实测 `no_adapter_backends: Backends(GL)`。
+6. **一个 canvas 只能绑一种 context 类型** ⇒ **后端必须在碰 canvas 之前定死**（先用 WebGPU 后端 `create_surface` 再用 WebGL 后端会报 `canvas already in use`）。
+7. **`required_limits` 必须取 `adapter.limits()`** —— WebGL2 无 compute，`Limits::default()` 要 `max_compute_workgroups_per_dimension = 65535`，实测被拒（`LimitsExceeded`）。
+
+**第 2 轮追加的 GLSL 链路实测（7 个测试全绿）**：本仓真实 2 条 shader（`blackhole.{vert,frag}` 逐字抽出）→ FRAG **16 uniform / 6 function** → naga IR **globals=18 / fns=6** → `naga::back::glsl::Writer`（`Version::Embedded{300, is_webgl:true}`）吐出 **17,099 字节 `#version 300 es`** → 再解析**成功 + 校验成功**。三点如实标注：
+
+- ⚠️ **naga 自己吐出的 `#version 300 es`，naga 自己的 GLSL frontend 解析不了**（`front/glsl/parser.rs:267` + `:290` → `InvalidVersion(300)` / `InvalidProfile("es")`）⇒ **回环校验必须再剥一次 version 行**（第 1 轮报告说「能 re-parse」，那次也是先剥了 version —— 结论成立但条件此前未写明）。
+- ⚠️ **回环不是等形变换**：re-parse 后是 globals=20 / fns=7（不是 18/6）—— naga GLSL backend 把每个 plain uniform 降级成独立匿名 std140 块、`hash21` → `hash21_`、`main` 拆成 `main_1` + `main` 并把中间量提升为全局。
+- ⚠️ **uniform 名字必丢**（变 `_group_0_binding_<N>_fs`）⇒ **JS/Rust 侧必须按 binding index 绑定，不能按名字**。
+
+**口径更正（lead 与 owner 讨论中的一句话，落到本 ADR）**：此前口头表述「WebGPU 在 Linux 没有」**不准确**。准确表述是：**宿主 WebView 的 WebGPU 支持度随引擎而异**（Chromium 系完整支持 / WebKit 系部分支持），且 **wgpu 的 WebGPU 后端在「有 `navigator.gpu` 但拿不到 adapter」的宿主上会直接失败而非回落**。这与 wgpu 自身的跨平台能力无关（wgpu native 端在 Linux 走 Vulkan 是一等公民）—— 受限的是「wasm 里跑 wgpu 时宿主 WebView 给不给 WebGPU」这一层。
+
+**本轮的诚实边界**：
+
+- ✅ **已升级**：从「编译期与解析期实测」升级到「**画面级实测**」（真实浏览器 + 真实 surface + 真实 draw + 截图）。
+- ❌ **仍未实测**：**macOS WKWebView / Windows WebView2 / Linux WebKitGTK 上均未实测**（环境只有 Linux Chromium）。Safari 无 WebGPU，WKWebView 路径大概率只能落 WebGL2，**需在真机复验**。
+- ❌ **色彩管线未对齐**：WebGPU 后端 `format=Rgba8Unorm` 与 WebGL 的 `Rgba8UnormSrgb` 不同，linear↔sRGB 转换需在 P5 显式处理。
+- ❌ **未跑本仓真实黑洞场景**：第 2 轮渲染的是探针三角形，**不是** `blackhole.{vert,frag}` 的画面（那两条 shader 只做了 naga 解析/回环层面的验证）。
+
 **措辞校正（lead 亲验后改写，0 装诚实）**：`blackhole.ts` 的 **1,037 行是 TS 文件总行数**，其中绝大部分是 JS 胶水，**真正的 GLSL 是 2 条程序**（vertex `:131` / fragment `:256`，合计约 200 行 GLSL）。因此准确表述是：
 
 - ✅ **「着色器主体不需要重写」成立且已实测**（2 条 GLSL 程序经 naga 往返后全部保住）
 - ❌ **「1,037 行 GLSL 原样复用」不成立**（该数字是 TS 文件行数，不是 GLSL 行数）
 
-**诚实边界**：上述为**编译期与解析期**实测，**未在真实浏览器 WebView 中跑过画面**（P5 的浏览器 job 待建）。
+**诚实边界**：第 1 轮为**编译期与解析期**实测。⚠️ **该边界已被第 2 轮部分推翻**（见 §2.6.2）：双后端共存、运行时选后端、以及**画面渲染**均已在真实无头 Chromium 里实测通过；但**其余宿主（WKWebView / WebView2 / WebKitGTK）仍未实测**，且**未跑本仓真实黑洞场景**。
 
 ---
 

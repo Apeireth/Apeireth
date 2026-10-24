@@ -886,9 +886,13 @@ view! {
   ```
 
 - **画布目标**：`wgpu::Surface` 的 `SurfaceTarget::Canvas`，画布来自 `web-sys` 的 `HtmlCanvasElement` / `OffscreenCanvas`。
-- **后端选择（已定）**：**T2 梯队默认走 `webgl` 后端**（WebGL2 在所有 WebView 都有），**WebGPU 作为可选加速**。依据：宿主 WebView 是否提供 WebGPU **本机未测（无浏览器环境）**，而 `webgl` / `webgpu` 两后端均已实测编译通过 ⇒ 选**覆盖面确定**的那个做默认。
-  - 产物尺寸实测（release `.wasm`，含真实导出非空壳）：`webgl` **4,534,454 B** / `webgpu` **2,860,060 B**（[ADR-0015 §2.6](../adr/0015-pure-rust-ui-engine.md) 表 5）。
-  - **诚实边界**：后端**选型**已定；**画面**未在真实浏览器 WebView 里跑过（§7.6 P0-c）。
+- **后端选择（已定 · 2026-10-24 第 2 轮探测后修订）**：**双后端共存 + 运行时按宿主能力选**。
+  `apeireth-ui-gpu` 单 crate，`features = ["webgl", "webgpu"]` + `["glsl", "wgsl", "naga-ir"]`（`glsl` 与 `wgsl` **必须同开**，见 [ADR-0015 §2.6](../adr/0015-pure-rust-ui-engine.md) 硬约束 2）。
+  - **选定流程（5 步，顺序不可换）**：`is_browser_webgpu_supported()` 探测 → `new_instance_with_webgpu_detection` 建 Instance → `create_surface(canvas)` → **带 `compatible_surface`** 申请 adapter → `request_device(required_limits = adapter.limits())`。
+  - **禁止**直接 `Instance::new(Backends::all())`：宿主有 `navigator.gpu` 但拿不到 adapter 时会走进 `NotFound` 死路（实测）。
+  - **禁止**用 `navigator.gpu` 存在性当判据：实测本机 Chromium 154 有 `navigator.gpu` 但 `requestAdapter()` 返回 null。判据必须是 `requestAdapter()` resolve 出非 null adapter（wgpu 自己的实现，`wgpu-30.0.1/src/util/init.rs:79-99`）。
+  - 产物尺寸实测（release `.wasm`，**同一份源码三配置**）：`webgpu-only` **3,017,454 B** / `webgl-only` **5,611,114 B** / **`both` 6,311,484 B**（共存相对 webgl-only **+700,370 B 裸 / +153,595 B gzip**）。⚠️ 第 1 轮的 `webgl` 4,534,454 B / `webgpu` 2,860,060 B 来自**不同工程**（naga 未开 `glsl-out`），量级一致不构成矛盾。
+  - **诚实边界（修订）**：✅ 后端**选型与画面**已定 —— 两个后端均已在**真实无头 Chromium 154** 里渲染出画面（真 surface → pipeline → draw → present，各 3 帧，截图肉眼一致）；❌ 但**其余宿主（macOS WKWebView / Windows WebView2 / Linux WebKitGTK）均未实测**，且**未跑本仓真实黑洞场景**（探针渲染的是三角形，`blackhole.{vert,frag}` 只做到 naga 解析/回环层验证）；❌ 色彩管线未对齐（WebGPU `Rgba8Unorm` vs WebGL `Rgba8UnormSrgb`，linear↔sRGB 需显式处理）。
 - **着色器语言**：见 §7.2。
 - **`ui-gpu` 的职责边界**：只做「**把 `ui-core` 的状态翻译成 uniform，并驱动绘制**」。它**不改着色器数学**（光学数值禁改，见 `blackhole.ts:122` 的源码注释「光学数值禁止改动」）。
 
@@ -946,7 +950,7 @@ view! {
 
 **正面结论（光学数值零改动风险的论证）**：**WebGL 路线全程留在 GLSL ES，不经过 WGSL** ⇒ 手写 GLSL 的**光学数值零改动风险**成立。
 
-**诚实边界（不得过度声称）**：以上全部是**编译期与解析期**实测（P0 探测在独立 scratch 工程 `target/ui-probe-scratch/` 内完成，0 写主仓），**未在真实浏览器 WebView 中跑过画面**。凡涉及「画面一致」的表述一律以 **§9 的浏览器内对照测试（P3 试点门 / P5 GPU 阶段）** 为准。
+**诚实边界（不得过度声称）**：以上（第 1 轮）全部是**编译期与解析期**实测（P0 探测在独立 scratch 工程 `target/ui-probe-scratch/` 内完成，0 写主仓）。⚠️ **第 2 轮探测（2026-10-24）已在真实无头 Chromium 154 里把「双后端共存 + 运行时选后端 + 画面渲染」实测通过**（见 §7.1 与 ADR-0015 §2.6.2），但渲染的是**探针三角形**，**不是本仓黑洞场景**。凡涉及「**本仓画面一致**」的表述，一律仍以 **§9 的浏览器内对照测试（P3 试点门 / P5 GPU 阶段）** 为准。
 
 ### 7.3 与 `ui-core` 的接口：presence 状态 → GPU uniform
 
@@ -1003,7 +1007,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 |---|---|---|---|---|
 | **T0 节能** | 纯聊天壳（CSS 余烬点 + 输入状态字） | 4s 呼吸余烬 | 任意能开浏览器的机器 | `ui-dom` only；`ui-gpu` **完全不启动** |
 | **T1 氛围** | 壳 + Canvas2D 星野 / 微光 | +光晕、姿态变色 | 老集显 | `ui-gpu` 走 **Canvas2D 降级路径**（对应 `blackhole.ts:461,467` 的既有 2D 分支） |
-| **T2 沉浸** | 完整黑洞场景 | 吸积盘转速 / 呼吸 / 湍流全参数 | 有像样 GPU | `ui-gpu` 走 **wgpu 路径**；**默认后端 = `webgl`**（§7.1），WebGPU 作可选加速 |
+| **T2 沉浸** | 完整黑洞场景 | 吸积盘转速 / 呼吸 / 湍流全参数 | 有像样 GPU | `ui-gpu` 走 **wgpu 路径**；**双后端共存 + 运行时按宿主能力选**（§7.1） |
 
 **梯队探测**（`00-PHILOSOPHY.md` §8）：WebGL2 支持 + 首帧帧率探针 + `session_settings` 手动覆盖；默认档位由首启向导确认。**探测与档位决策在应用层，`ui-gpu` 只接受一个 `Tier` 输入并按它选路径。**
 
@@ -1320,7 +1324,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 | 25 | **GLSL ES 3.0 → naga IR 的两步机械变换**（X1 删 `#version` 行 / X2 注入 `layout(binding=N)`），约 30 行前置编译器，纯文本函数可单测 | §7.2.1 |
 | 26 | **`glsl` feature 必须与 `wgsl` 同开**（上游缺陷，naga 30.0.1 未修） | §7.2.1 约束 C2 |
 | 27 | **uniform 名 → binding 索引映射表**（来源 `blackhole.ts:337` 的 `UNIFORM_NAMES`）；naga 往返会抹掉 uniform 名 | §7.2.1 约束 C3 / §7.3 |
-| 28 | **T2 梯队默认后端 = `webgl`**（WebGPU 作可选加速）；`web-sys` / `wasm-bindgen` 版本硬钉 1:1 | §7.1 |
+| 28 | **T2 梯队双后端共存 + 运行时按宿主能力选后端**（禁直接 `Instance::new(Backends::all())`；判据用 `requestAdapter()` 非 null，不用 `navigator.gpu` 存在性）；`web-sys` / `wasm-bindgen` 版本硬钉 1:1 | §7.1 |
 | 29 | **WebGL 路线全程留在 GLSL ES、不经过 WGSL ⇒ 光学数值零改动风险**（naga 往返实测保住 5 个 helper 函数与输出变量） | §7.2.1 / §7.2.2 |
 
 ### 11.2 P0 探测项的定案状态（2026-10-24 实测回填）
@@ -1336,7 +1340,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 | **P0-a″** | `glsl` feature 能否单独开 | ❌ **不能**。上游缺陷：`front/mod.rs:5` 把 `interpolator` gate 在 `spv-in`/`wgsl-in` 后，而 `front/glsl/variables.rs:467` 无条件调用 ⇒ **只开 `glsl-in` 编译不过**。**naga 30.0.1 未修** ⇒ **`glsl` 必须与 `wgsl` 同开** | §7.2.1 约束 C2 |
 | **P0-a‴** | naga 的 uniform 名会不会被抹掉 | ✅ **会**。naga 的 IR 把每个 GLSL uniform 变成独立 binding（`layout(std140) uniform` 块，binding 0..15），**再吐出时 uniform 名被抹成 `_group_0_binding_N_fs`** ⇒ 引擎须自行维护「**uniform 名 → binding 索引**」映射表（`blackhole.ts:337` 的 `UNIFORM_NAMES` 正好可用） | §7.2.1 约束 C3 / §7.3 binding 索引表 |
 | **P0-b** | wgpu 依赖树规模与多版本 | ✅ **极干净**：wgpu-webgl **108 条目 / 68 crate**，**唯一多版本包只有 `syn`**（2.0.119 来自 zerocopy-derive 链 / 3.0.9 来自 wasm-bindgen-macro-support 0.2.129）；`hashbrown` / `bitflags` / `itertools` / `miniz_oxide` / `ahash` / `crossbeam-*` 实测**未进树**；`jni-sys` 双版本仅出现于 native 目标产物，**wasm 侧 0 多版本** | §7.1 / §7.2.1 |
-| **P0-c（部分）** | wgpu 在 wasm32 的可用性 | ✅ `webgl` 与 `webgpu` **两个后端均编译通过**（`wasm32-unknown-unknown`）。产物体积实测（release `.wasm`，含真实导出非空壳）：`webgl` **4,534,454 B** / `webgpu` **2,860,060 B** ⇒ **T2 梯队默认走 `webgl`，WebGPU 作可选加速** | §7.1 / §7.5 |
+| **P0-c（部分）** | wgpu 在 wasm32 的可用性 | ✅ `webgl` 与 `webgpu` **两个后端均编译通过**（`wasm32-unknown-unknown`）；第 2 轮探测实测**双后端可在同一二进制共存**（exit 0 / 零 warning），产物体积（同一份源码三配置）`webgpu-only` 3,017,454 B / `webgl-only` 5,611,114 B / **`both` 6,311,484 B**（共存 +153,595 B gzip vs webgl-only）⇒ **双后端共存 + 运行时选** | §7.1 / §7.5 |
 | **P0-d（部分）** | `syn` / `quote` 版本 | ✅ 多版本情况已查清（**只有 `syn` 一处**）。**proc-macro 三件套的具体版本待 P1 引入时定**（依赖白名单口径随 P1 一并落） | §3.3.3 / §6.6 |
 | **P0-e** | `wasm-bindgen` / `web-sys` 版本配对 | ✅ **精确硬钉 1:1**：`wasm-bindgen 0.2.129 ⟷ js-sys 0.3.106 ⟷ web-sys 0.3.106`；**错配在依赖解析期就失败**（0.2.129 + 0.3.104 实测失败）。另：`wasm-bindgen-cli` 0.2.129 实测 44.68 s 装上，wasm→js 转换 + node 加载实测通过 | §5.1.2 `WebDom` 实现的版本锁定 |
 
@@ -1344,7 +1348,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 
 | # | 项 | 状态 | 影响面 | 何时测 |
 |---|---|---|---|---|
-| **P0-c（余项）** | **宿主 WebView 的画面一致性**（WebGPU 是否真在 WebView 里可用、T2 画面是否与既有 WebGL2 版一致） | ❌ **未实测** —— P0 探测环境**无浏览器**；已测的只是**编译期与解析期** | §7.1 / §7.5 / §9 | P5 GPU 阶段 + §9.4 逐帧对照 |
+| **P0-c（余项）** | **宿主 WebView 的画面一致性**（WebGPU 是否真在 WebView 里可用、T2 画面是否与既有 WebGL2 版一致） | ◐ **部分实测**（第 2 轮探测，2026-10-24）：✅ 双后端共存 + 运行时选后端 + **探针三角形画面**均已在**真实无头 Chromium 154** 里通过（system Chromium + 自写 CDP 驱动，无需 Playwright / 无需下载浏览器）；❌ **本仓黑洞场景未渲染**（`blackhole.{vert,frag}` 只到 naga 解析/回环层）；❌ **其余宿主未实测**（macOS WKWebView / Windows WebView2 / Linux WebKitGTK） | §7.1 / §7.5 / §9 | P5 GPU 阶段 + §9.4 逐帧对照 |
 | **P0-f** | **Canvas2D 降级路径（`blackhole.ts` 的 2D 分支）移植到 `ui-gpu` 的成本** | ❌ **未实测**（需读该 2D 分支，与 `ui-gpu` 设计强相关） | §7.5 的 T1 梯队 | P5 GPU 阶段开工前；**未测前 T1 不得开工** |
 | **P0-g** | **浏览器 job 的运行环境**（固定版本浏览器 + 驱动的可用性与可复现性） | ❌ **未实测**（本机无浏览器） | §10.3 / §10.4 的浏览器 job | P1 搭 CI 时固化镜像 |
 
@@ -1385,7 +1389,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 | `glsl` feature 能否单独开 | 未涉及 | **不能**，必须与 `wgsl` 同开（上游缺陷） |
 | uniform 名在 naga 往返后是否保留 | 未涉及 | **不保留**（被抹成 `_group_0_binding_N_fs`）⇒ 引擎须自维护映射表 |
 | wgpu 依赖树多版本风险 | 「极可能引入多版本，直接撞红」（ADR §3.2 拒理由 A 的推测） | **实测极干净**：唯一双版本包是 `syn`；`hashbrown` / `bitflags` / `itertools` / `miniz_oxide` / `ahash` / `crossbeam-*` 未进树；wasm 侧 0 多版本 |
-| T2 梯队后端 | 「WebGPU 可用性待测」 | **默认 `webgl`**，WebGPU 作可选加速 |
+| T2 梯队后端 | 「WebGPU 可用性待测」 | ✅ **已测**：双后端共存可行；两个后端均在真实无头 Chromium 154 渲染出画面（探针三角形，非本仓黑洞场景）。**运行时选后端**，禁直接 `Instance::new(all)` |
 
 ### 11.5 复算清单（本文所有统计数字的复跑命令）
 
