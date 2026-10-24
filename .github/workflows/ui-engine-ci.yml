@@ -63,11 +63,21 @@ jobs:
       # 主 arch_guard 的层规则 / 尺寸棘轮会立刻对「活代码」生效（ADR-0015 §3.2）。
       - name: "守门: crates-ui 是独立 workspace"
         run: |
-          if ! head -80 crates-ui/Cargo.toml | grep -q '^\[workspace\]'; then
+          # ⚠️ 本 job 的 `working-directory` **已经是 `crates-ui`** ⇒ 这里的路径
+          # 必须相对 crates-ui 写（初版写成 `crates-ui/Cargo.toml` ⇒ 在 runner 上
+          # 路径不存在 ⇒ 守门误报失败。2026-10-24 PR #78 首次运行实测）。
+          if ! head -80 Cargo.toml | grep -q '^\[workspace\]'; then
             echo "::error::crates-ui/Cargo.toml 缺顶层 [workspace] (会污染 root)"
             exit 1
           fi
-          if grep -q 'crates-ui' Cargo.toml; then
+          # ⚠️ 根 Cargo.toml 在 crates-ui 的**上一级**（`../Cargo.toml`）。
+          # 初版写成 `../../Cargo.toml` ⇒ 文件不存在 ⇒ grep 退出非 0 ⇒
+          # **守门静默通过（假绿）** —— 比误报更坏。⇒ 先断言文件存在再查。
+          if [ ! -f ../Cargo.toml ]; then
+            echo "::error::找不到根 Cargo.toml（守门路径写错 ⇒ 会假绿）"
+            exit 1
+          fi
+          if grep -q 'crates-ui' ../Cargo.toml; then
             echo "::error::root Cargo.toml 提及 crates-ui (污染主 workspace)"
             exit 1
           fi
@@ -197,6 +207,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      # ⚠️ **不信任 action 的 `targets:`**：2026-10-24 PR #78 首次运行实测 ——
+      # 该 action 报 `outcome=success`、rustc 1.99.1 就位，但 **wasm32 target
+      # 实际没装上** ⇒ 随后的构建报 `error[E0463]: can't find crate for core`
+      # （note 明写「the wasm32-unknown-unknown target may not be installed」）。
+      # ⇒ 这里**显式安装 + 机械断言**：装不上就当场红，而不是让后面的构建报一个
+      # 与真因无关的错（E0463 看着像编译问题，实为环境问题）。
+      - name: 确保 wasm32 target 就位（显式安装 + 断言）
+        run: |
+          rustup target add wasm32-unknown-unknown
+          if ! rustup target list --installed | grep -q '^wasm32-unknown-unknown'; then
+            echo "::error::wasm32-unknown-unknown target 未装上（构建会报 E0463）"
+            exit 1
+          fi
+
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
         with:
@@ -242,7 +266,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo (crates-ui)
-        uses: Swatinem/cargo-cache@v1
+        # ⚠️ 初版写 `Swatinem/cargo-cache@v1` ⇒ **该 action 仓库不存在**
+        # （实测报错「Unable to resolve action swatinem/cargo-cache, repository not found」）。
+        # 正确名是 `rust-cache`（与本 workflow 其余 job 一致）。
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: 'crates-ui -> target'
 
@@ -270,6 +297,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      # ⚠️ **不信任 action 的 `targets:`**：2026-10-24 PR #78 首次运行实测 ——
+      # 该 action 报 `outcome=success`、rustc 1.99.1 就位，但 **wasm32 target
+      # 实际没装上** ⇒ 随后的构建报 `error[E0463]: can't find crate for core`
+      # （note 明写「the wasm32-unknown-unknown target may not be installed」）。
+      # ⇒ 这里**显式安装 + 机械断言**：装不上就当场红，而不是让后面的构建报一个
+      # 与真因无关的错（E0463 看着像编译问题，实为环境问题）。
+      - name: 确保 wasm32 target 就位（显式安装 + 断言）
+        run: |
+          rustup target add wasm32-unknown-unknown
+          if ! rustup target list --installed | grep -q '^wasm32-unknown-unknown'; then
+            echo "::error::wasm32-unknown-unknown target 未装上（构建会报 E0463）"
+            exit 1
+          fi
+
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
         with:
@@ -291,8 +332,19 @@ jobs:
         working-directory: frontend/companion-desktop
         run: pnpm install --frozen-lockfile
 
-      - name: 安装试点 harness 依赖
-        run: pnpm install --no-frozen-lockfile
+      # ⚠️ harness **不单独装依赖**：它没有 lockfile（仓内纪律：harness 自带
+      # `[workspace]`，不进依赖图），而且生产组件的源码导入（`svelte` /
+      # `lucide-svelte`）解析自**生产前端的** node_modules ⇒ 这里**符号链接**过去
+      # （与本地形态一致）。初版在这里 `pnpm install --no-frozen-lockfile` ⇒
+      # 2026-10-24 PR #78 首次运行实测报 `ERR_PNPM_IGNORED_BUILDS` 退 1
+      # （pnpm 12 对「被忽略的构建脚本」直接失败）⇒ 依赖压根没装上。
+      - name: 试点 harness 复用生产前端依赖（符号链接）
+        run: |
+          ln -sfn "$PWD/../../../frontend/companion-desktop/node_modules" node_modules
+          if [ ! -e node_modules/vite ]; then
+            echo "::error::harness 的 node_modules 链接未生效（vite 不可见）"
+            exit 1
+          fi
 
       # wasm-bindgen CLI（版本与 crates-ui 的 wasm-bindgen **精确一致**）。
       - name: 安装 wasm-bindgen-cli
@@ -357,6 +409,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      # ⚠️ **不信任 action 的 `targets:`**：2026-10-24 PR #78 首次运行实测 ——
+      # 该 action 报 `outcome=success`、rustc 1.99.1 就位，但 **wasm32 target
+      # 实际没装上** ⇒ 随后的构建报 `error[E0463]: can't find crate for core`
+      # （note 明写「the wasm32-unknown-unknown target may not be installed」）。
+      # ⇒ 这里**显式安装 + 机械断言**：装不上就当场红，而不是让后面的构建报一个
+      # 与真因无关的错（E0463 看着像编译问题，实为环境问题）。
+      - name: 确保 wasm32 target 就位（显式安装 + 断言）
+        run: |
+          rustup target add wasm32-unknown-unknown
+          if ! rustup target list --installed | grep -q '^wasm32-unknown-unknown'; then
+            echo "::error::wasm32-unknown-unknown target 未装上（构建会报 E0463）"
+            exit 1
+          fi
+
       - name: Cache cargo (crates-ui)
         uses: Swatinem/rust-cache@v2
         with:
@@ -377,6 +443,16 @@ jobs:
       - name: 安装生产前端依赖（只读引用）
         working-directory: frontend/companion-desktop
         run: pnpm install --frozen-lockfile
+
+      # harness **不单独装依赖**（无 lockfile + 生产源码导入解析自前端 node_modules）
+      # ⇒ 符号链接过去（与 pilot-compare 同一理由，见该 job 的注释）。
+      - name: 生产对照 harness 复用生产前端依赖（符号链接）
+        run: |
+          ln -sfn "$PWD/../../../../frontend/companion-desktop/node_modules" node_modules
+          if [ ! -e node_modules/vite ]; then
+            echo "::error::harness 的 node_modules 链接未生效（vite 不可见）"
+            exit 1
+          fi
 
       # wasm-bindgen CLI（版本与 crates-ui 的 wasm-bindgen **精确一致**）。
       - name: 安装 wasm-bindgen-cli
