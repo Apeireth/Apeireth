@@ -116,6 +116,44 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4o 两处「报错说错事/没有下文」—— 已修（2026-10-25）
+
+**① `backup verify/restore` 路径打错 ⇒ 报「备份清单损坏」**
+
+```
+$ apeireth backup verify /tmp/nope
+backup operation refused: backup manifest is corrupt: /tmp/nope/manifest.json unreadable: No such file or directory
+```
+
+路径打错是**客户端输入问题**，说成「清单损坏」会让人以为自己的备份坏了。
+已加独立变体 `BackupError::NotABundle`（与 `ManifestCorrupt` 分开），并区分
+「包不存在」与「目录在但不是包」：
+
+```
+backup operation refused: 备份包不存在: /tmp/nope （路径打错？先用 `apeireth backup export <DIR>` 导出）
+backup operation refused: 目录 /tmp/b 里没有清单 manifest.json —— 这不是一个备份包；用 `apeireth backup export <DIR>` 导出
+```
+
+**② `crypto unlock` 缺文件 / 坏件 ⇒ 只回裸 `os error 2` / 无路径**
+
+```
+$ apeireth crypto unlock --keys /tmp/nokeys.json
+crypto operation refused: No such file or directory (os error 2)     ← 哪个文件？下一步做什么？
+```
+
+已带**路径 + 下一步动作**：
+
+```
+crypto operation refused: 密钥文件不存在: /tmp/nokeys.json （先用 `apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>` 创建）
+crypto operation refused: 密钥文件解析失败 /tmp/bad.json: crypto json error: expected ident at line 1 column 2
+```
+
+`--recovery` 恢复件读取同样补上路径（此前也只有裸 io 错误）。
+
+**顺带核对（无缺陷）**：`bundle --out` 对已存在目录**不覆盖**（文本产物跳过并逐一
+报出，有测试钉死）；`bio enable` 拼错会**列出全部 14 个合法机制名**；
+`user add` 坏角色、`egress outcome` 坏标签都给出词表与用法。
+
 ### 5.4n 主入口 `chat` 缺凭据时不告诉用户怎么配 —— 已修（2026-10-25）
 
 **缺陷**：用户跑的第一条命令 `apeireth chat "你好"`，在未配模型时只回：

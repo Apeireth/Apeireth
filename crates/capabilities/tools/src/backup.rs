@@ -272,6 +272,12 @@ pub enum BackupError {
     /// 清单不可解析/结构非法 (损坏可检出 → 拒)。
     #[error("backup manifest is corrupt: {0}")]
     ManifestCorrupt(String),
+    /// 目标目录**不是一个备份包**（不存在 / 没有清单）。
+    ///
+    /// 与 [`Self::ManifestCorrupt`] **分开**：路径打错是客户端输入问题，
+    /// 说成「清单损坏」会让人以为自己的备份坏了（真机实测 2026-10-25）。
+    #[error("{0}")]
+    NotABundle(String),
     /// 备份格式版本不匹配 (版本兼容语义 = 显式拒, 宁拒不损)。
     #[error(
         "backup format version mismatch: bundle={found}, supported={expected} (版本不兼容: 显式拒, 宁拒不损)"
@@ -767,7 +773,23 @@ fn export_into_staging(
 /// 载入并结构校验清单 (解析 + 版本 + 路径安全 + 唯一性)。
 fn load_manifest(bundle_dir: &Path) -> Result<BackupManifest, BackupError> {
     let manifest_path = bundle_dir.join(MANIFEST_FILE_NAME);
+    // **先区分「包不存在」与「清单损坏」**：此前二者共用 `ManifestCorrupt`，
+    // 路径打错时用户会看到「备份清单损坏」——以为自己的备份坏了，其实是没这个包
+    // （真机实测 2026-10-25）。「没有包」是可自救的输入问题，必须说清。
+    if !bundle_dir.exists() {
+        return Err(BackupError::NotABundle(format!(
+            "备份包不存在: {} （路径打错？先用 `apeireth backup export <DIR>` 导出）",
+            bundle_dir.display()
+        )));
+    }
     let bytes = fs::read(&manifest_path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            return BackupError::NotABundle(format!(
+                "目录 {} 里没有清单 {} —— 这不是一个备份包；用 `apeireth backup export <DIR>` 导出",
+                bundle_dir.display(),
+                MANIFEST_FILE_NAME
+            ));
+        }
         BackupError::ManifestCorrupt(format!("{} unreadable: {error}", manifest_path.display()))
     })?;
     let manifest: BackupManifest = serde_json::from_slice(&bytes)
