@@ -145,3 +145,34 @@ jobs:
       # （这是「组件 = Rust 函数 ⇒ 断言钉行为而非源码文本」的结构性前提）。
       - name: cargo test (crates-ui)
         run: cargo test --workspace --locked
+
+      # P1 验收门「依赖面」机械判据：ui-core 的 [dependencies] 段不得含
+      # web-sys / wasm-bindgen —— 这是 ui-core「永远能 native 单测」的**唯一**保证
+      # （ADR-0015 §4 P1 验收门 / 计划书 §3.2）。
+      #
+      # ⚠️ 判据必须精确到 [dependencies] 段，**不能整文件 grep**：Cargo.toml 顶部的
+      # 说明注释里会出现「0 依赖 web-sys」这类字样，整文件 grep 会误判（实测：整文件
+      # 命中 1 处为注释文字，[dependencies] 段真依赖 0）。故用 cargo metadata 取
+      # **真实依赖图**判定，而不是文本匹配。
+      - name: "守门: ui-core 依赖面 0 web-sys/wasm-bindgen"
+        run: |
+          cargo metadata --no-deps --format-version 1 > /tmp/ui-metadata.json
+          python3 - <<'PY'
+          import json, sys
+          meta = json.load(open("/tmp/ui-metadata.json"))
+          bad = []
+          for pkg in meta["packages"]:
+              if pkg["name"] != "apeireth-ui-core":
+                  continue
+              for dep in pkg.get("dependencies", []):
+                  if dep.get("path"):
+                      continue  # workspace 内部 path 依赖，不算外部
+                  name = dep.get("name", "")
+                  if name in ("web-sys", "wasm-bindgen", "wasm-bindgen-futures", "js-sys"):
+                      bad.append(name)
+          if bad:
+              print(f"::error::apeireth-ui-core 不得依赖 {sorted(set(bad))} —— "
+                    "它必须保持 0 外部依赖才能 native 单测（ADR-0015 §4 P1 验收门）")
+              sys.exit(1)
+          print("✅ apeireth-ui-core 依赖面 0 web-sys/wasm-bindgen（可 native 单测）")
+          PY
