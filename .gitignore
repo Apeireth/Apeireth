@@ -352,3 +352,6 @@ research/praisonai-git/
 # Python 缓存（scripts/ 运行副产物，不入库；2026-10-20 效率线）
 __pycache__/
 *.pyc
+
+# 覆盖率测量产物（tarpaulin 输出，非源码）
+cobertura.xml

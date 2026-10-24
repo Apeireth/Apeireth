@@ -28,15 +28,39 @@ COBERTURA = ROOT / "cobertura.xml"
 BASELINE = ROOT / "scripts" / "coverage-baseline.txt"
 TOLERANCE_PP = 0.5  # 百分点噪声容差：覆盖率测量本身有抖动，不容差的门禁会假红
 
+# 计入分母的路径前缀。
+#
+# `legacy/` 与 `research/` 在 Cargo workspace 里是 **exclude** 的（`exclude = ["legacy", "research"]`），
+# 不属于 30 members，因此**没有任何 workspace 测试能覆盖它们** —— 它们在报告里恒为 0%。
+# 若把它们算进分母：
+#   ① 覆盖率数字被稀释（本机实测：136791 行里 8837 行是这两个目录 → 32.10% 被压到）；
+#   ② **legacy 一有增删，分母就变，棘轮会假红** —— 而那不是任何人改代码造成的。
+# 所以基线与检查**两侧同口径**：都按本表过滤，legacy 的变动不参与棘轮判定。
+COUNTED_PREFIXES = ("crates/", "src/", "benches/")
+
 
 def read_cobertura(path: Path) -> tuple[float, int, int]:
-    """返回 (line_rate 百分比, covered, valid)。"""
+    """返回 (行覆盖率百分比, 命中行数, 计入分母的行数)。
+
+    **按 `<line hits=...>` 逐行统计**（不直接用 `<coverage>` 根节点的 line-rate）：
+    根节点的聚合值包含了我们要排除的 legacy/research，必须自己按同一口径重算，
+    否则「基线」与「检查」两侧口径不一致。
+    """
     tree = ET.parse(path)
     root = tree.getroot()
-    rate = float(root.get("line-rate", "0"))
-    covered = int(root.get("lines-covered", "0"))
-    valid = int(root.get("lines-valid", "0"))
-    return rate * 100.0, covered, valid
+    covered = 0
+    valid = 0
+    for cls in root.iter("class"):
+        filename = cls.get("filename", "")
+        if not filename.startswith(COUNTED_PREFIXES):
+            continue
+        for line in cls.iter("line"):
+            valid += 1
+            if int(line.get("hits", "0")) > 0:
+                covered += 1
+    if valid == 0:
+        return 0.0, 0, 0
+    return covered * 100.0 / valid, covered, valid
 
 
 def read_baseline() -> float | None:
