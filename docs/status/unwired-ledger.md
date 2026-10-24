@@ -118,7 +118,7 @@
 | 缺口 | 状态 |
 |---|---|
 | `audit chain 未持久化供闲时读取 —— no-degrade 复盘段空转` | ✅ **已修**：守卫判定（decision/risk_score/reasons）此前只在内存 `Mutex<VecDeque>`，重启即散 ⇒ 新增 append-only `guard-decisions.jsonl`（`GuardDecisionLog`）+ nightwatch 读取映射。**真机验证**：无账时报缺口 → 有账时 `2 audit` 且报出 `[medium] NoDegrade: critical → info`。风险档映射是本仓**首个** score→档定义（此前不存在），已用 `governance::risk` 闭合词表交叉校验 + 单调性/6 档全覆盖测试钉死 |
-| `council ballot 未持久化 —— 立场平衡复盘段空转` | ⏳ **待办（新登记）**：council 投票结果没有落盘面。需查 `rubric::Ballot` 的产出点是否可持久化；若 council 本身未在生产装配（需确认），则这条与「council 未接线」是同一个缺口，应合并处理 |
+| `council ballot 未持久化 —— 立场平衡复盘段空转` | 🔶 **E 类待裁定（深查后确认不能硬接）**：`council` **已在生产装配**（`config.council` + env 开关 + 后端注入），所以不是「council 没接」。真缺口是：`rubric::Ballot` 需要 `{advisor_id, stance: StanceKind, confidence, weight, domain}`，而 council 只产出 `AdvisorEvaluation { advisor, kind, verdict: AdvisorVerdict }` —— **没有 confidence / weight**，且 `Ballot::new` **全仓从未被构造过**（只有它自己的测试）。硬接必须**编造** confidence 与 weight ⇒ 按「不编造信号」纪律**停下**。待裁定：一个顾问评价如何折算成一张票（stance 从 verdict 怎么来、confidence/weight 谁给、或干脆改 nightwatch 的输入类型）—— 这是评分口径决策 |
 
 ### 5.5 待判 31 条 —— 人工过筛结论
 
@@ -127,7 +127,7 @@
 | 模块 | 缺的能力 | 接线点 |
 |---|---|---|
 | `crates/adapters/cli/src/portable_bundle.rs` | 一键生成 U 盘便携包 | ✅ **已修**：新增 `apeireth bundle --out <目录>`（复制当前可执行文件 + 两平台启动脚本 + 便携配置 + 清单）。**接线时发现三处硬伤**：①启动脚本调不存在的 `serve --data-dir`（真实是 `gateway serve` + `APEIRETH_DATA_DIR`）②设两个全仓无人读取的变量 ③配置把**明文 P2P 桩**标成 `allow_p2p_mesh: true`。清单 `included_files` 改为按**盘上真实文件**生成（原来硬编码了三个不存在的条目）。**已真机验证**：用生成的脚本启动，`/health` 返回 ok，数据落在包内 `./data/` |
-| `crates/adapters/gateway/src/file_fetcher.rs` | `file://` 拦截 + SHA-256 内容寻址缓存 + 完整性校验 + 分布式回退 | 网关出站面（能力矩阵已宣称 `gw.file_fetcher`） |
+| `crates/adapters/gateway/src/file_fetcher.rs` | `file://` 拦截 + SHA-256 内容寻址缓存 + 完整性校验 + 分布式回退 | 🔶 **半修（实现补全，消费点待协调）**：查证发现 `cache_dir` 是**死字段** —— 文档宣称的「原子入库 / 磁盘内容寻址缓存」**根本不存在**（缓存只在内存、重启即散）。已真正实现：两级内容寻址（`<url_key>.meta.json` 记 URL→内容哈希、`<sha256>.bin` 存不可变字节，同内容只落一份）+ **每次命中重算哈希校验**（篡改/截断的坏条目自动清理并回源）+ 原子写（tmp+rename，先内容后元数据）+ 写失败计数可见。测试 7 条（跨重启命中/篡改拒绝/缺 blob 回退/内容去重/远端回填离线可用）。**剩余**：`TransparentFileFetcher` 仍零生产消费；消费点（MCP 资源 `file://` URI 读取、IM 附件）在副总指挥的 crate 内 ⇒ 已上看板 §四 请他指定可动文件或由他接 |
 | `crates/adapters/sdk/src/error_taxonomy.rs` | 错误族 → 闭合词表映射 + 跨语言分类/可重试暴露 | ✅ **已修**：`ClassifyError` 此前**零实现**（词表有测试但没任何真实错误走进去）。现为 `SdkClientError` / `SdkError`+`SdkErrorCode` / `CodecError`+`CodecErrorKind` 全部实现映射，并新增跨语言 `ErrorFrame`（`category`/`retryable` 恒在场）。**如实标注**：语言绑定（node/python）目前只暴露 `count_tokens`/`hash_request`，还没有错误面 ⇒ `ErrorFrame` 暂无可用的跨语言出口，待绑定补错误 API |
 | `crates/capabilities/tools/src/repo_map.rs` | `tool.repo_map` 工具面（符号地图 + PageRank + token 预算裁剪） | ✅ **已修**：`RepoMapTool` 工具面（`repo_map_tool.rs`）+ `RepoMapModule` 生产注册（与 `tool.repo` 同源工作区根），只读、限域、三重预算；**顺带修掉两处平方级热点**（152 文件 9.5s→0.26s、全仓 1319 文件 10.8s→2.1s）+ 复杂度回归守卫测试 |
 | `crates/engine/memory/src/cross_diary.rs` | 检索命中事实时注入关联日记片段 | 记忆检索装配点 |

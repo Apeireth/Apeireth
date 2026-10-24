@@ -2,8 +2,10 @@
 //!
 //! 本模块为独立实现，属通用工程模式（URL 解析 → 本地/远端解析 → 内容寻址缓存
 //! → 完整性校验 → 路径沙箱），不含任何来源措辞：
-//! 1. 拦截 `file://` 协议 URL，以 SHA-256(URL) 作为平台无关缓存键（内容寻址缓存）；
-//! 2. 缓存命中即读；本地存在则直读并计哈希；
+//! 1. 拦截 `file://` 协议 URL，以 SHA-256(URL) 作为平台无关缓存键；
+//! 2. 三级命中：内存缓存 → **磁盘缓存**（`cache_dir`，两级内容寻址：
+//!    `<url_key>.meta.json` 记 URL→内容哈希，`<sha256>.bin` 存不可变字节）
+//!    → 本地文件直读；
 //! 3. 本地缺失时经分布式内部请求通道获取 Base64 负载，
 //!    做 SHA-256 完整性自检后原子入库；
 //! 4. 路径沙箱防御：拒绝 `..` / NUL 穿越，可选白名单根目录约束。
@@ -80,6 +82,8 @@ pub struct TransparentFileFetcher {
     cache_dir: PathBuf,
     memory_cache: HashMap<String, FetchedFile>,
     allowed_roots: Vec<PathBuf>,
+    /// 磁盘缓存写失败累计（缓存是优化，失败不影响正确性，但要能看见）。
+    cache_write_failures: u64,
 }
 
 impl TransparentFileFetcher {
@@ -88,6 +92,7 @@ impl TransparentFileFetcher {
             cache_dir: cache_dir.as_ref().to_path_buf(),
             memory_cache: HashMap::new(),
             allowed_roots,
+            cache_write_failures: 0,
         }
     }
 
@@ -139,13 +144,105 @@ impl TransparentFileFetcher {
             return Ok(file.clone());
         }
 
+        // 磁盘缓存命中（跨进程重启仍有效）。**每次命中都重算内容哈希并与
+        // 元数据比对** —— 缓存是磁盘上的字节，可能被截断/篡改/写一半。
+        // 校验不过 = 当作未命中并顺手删掉坏条目（不静默返回坏数据）。
+        if let Some(file) = self.read_disk_cache(file_url, &cache_key)? {
+            self.memory_cache.insert(cache_key, file.clone());
+            return Ok(file);
+        }
+
         let fetched = match self.read_local(path_part, file_url, &cache_key)? {
             Some(file) => file,
             None => Self::fetch_remote(file_url, &cache_key, remote_provider)?,
         };
 
+        // 回填磁盘缓存。**写盘失败不影响本次获取**（缓存是优化不是正确性），
+        // 但要能被看见：`cache_write_failures` 计数（自述面可读）。
+        if self.write_disk_cache(&fetched).is_err() {
+            self.cache_write_failures = self.cache_write_failures.saturating_add(1);
+        }
+
         self.memory_cache.insert(cache_key, fetched.clone());
         Ok(fetched)
+    }
+
+    /// 磁盘缓存写失败累计次数（缓存坏了要能被告状，不静默）。
+    pub fn cache_write_failures(&self) -> u64 {
+        self.cache_write_failures
+    }
+
+    /// 磁盘缓存目录（自述面 / 测试用）。
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
+    /// 元数据文件名：`<url_cache_key>.meta.json`。
+    fn meta_path(&self, cache_key: &str) -> PathBuf {
+        self.cache_dir.join(format!("{cache_key}.meta.json"))
+    }
+
+    /// 内容文件名：`<sha256>.bin`（**按内容寻址**，同一份字节只存一份）。
+    fn blob_path(&self, sha256_hash: &str) -> PathBuf {
+        self.cache_dir.join(format!("{sha256_hash}.bin"))
+    }
+
+    /// 读磁盘缓存：元数据 → 内容 → **重算哈希校验** → 命中。
+    ///
+    /// 任何一步失败都当作未命中（`Ok(None)`），并尽力清理坏条目：
+    /// 缓存层的错误不该冒泡成用户可见失败，但也绝不返回未校验的数据。
+    fn read_disk_cache(
+        &self,
+        file_url: &str,
+        cache_key: &str,
+    ) -> Result<Option<FetchedFile>, FileFetchError> {
+        let meta_path = self.meta_path(cache_key);
+        let Ok(meta_text) = std::fs::read_to_string(&meta_path) else {
+            return Ok(None);
+        };
+        let Ok(meta) = serde_json::from_str::<CacheMeta>(&meta_text) else {
+            let _ = std::fs::remove_file(&meta_path);
+            return Ok(None);
+        };
+        let Ok(data) = std::fs::read(self.blob_path(&meta.sha256_hash)) else {
+            // 元数据在但内容丢了 = 坏条目，清掉元数据重取
+            let _ = std::fs::remove_file(&meta_path);
+            return Ok(None);
+        };
+        // **完整性校验**：内容哈希必须与元数据一致
+        if sha256_hex(&data) != meta.sha256_hash {
+            let _ = std::fs::remove_file(&meta_path);
+            return Ok(None);
+        }
+        Ok(Some(FetchedFile {
+            cache_key: cache_key.to_string(),
+            original_url: file_url.to_string(),
+            mime_type: meta.mime_type,
+            data,
+            sha256_hash: meta.sha256_hash,
+        }))
+    }
+
+    /// 写磁盘缓存（先写内容、再原子落元数据）。
+    ///
+    /// 顺序刻意如此：**先内容后元数据** —— 元数据是「这份内容可用」的承诺，
+    /// 内容没落盘就写元数据会造出「元数据在、内容缺」的坏条目。
+    /// 两步都走 `tmp + rename` 原子替换。
+    fn write_disk_cache(&self, file: &FetchedFile) -> Result<(), FileFetchError> {
+        std::fs::create_dir_all(&self.cache_dir)?;
+        let blob_path = self.blob_path(&file.sha256_hash);
+        if !blob_path.is_file() {
+            atomic_write(&blob_path, &file.data)?;
+        }
+        let meta = CacheMeta {
+            original_url: file.original_url.clone(),
+            mime_type: file.mime_type.clone(),
+            sha256_hash: file.sha256_hash.clone(),
+        };
+        let meta_bytes = serde_json::to_vec(&meta)
+            .map_err(|error| FileFetchError::Decode(format!("meta 序列化失败: {error}")))?;
+        atomic_write(&self.meta_path(&file.cache_key), &meta_bytes)?;
+        Ok(())
     }
 
     /// 本地直读：存在即读、计哈希、推断 MIME；不存在返回 `None`，读失败报错。
@@ -208,6 +305,39 @@ impl TransparentFileFetcher {
             .map(|(_, mime)| (*mime).to_string())
             .unwrap_or_else(|| DEFAULT_MIME.to_string())
     }
+}
+
+/// 磁盘缓存元数据（`<url_key>.meta.json`）。
+///
+/// 只记「这份 URL 对应哪份内容」，内容本身按 `<sha256>.bin` 存 ——
+/// 同一份字节被多个 URL 命中时只落一份盘。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct CacheMeta {
+    original_url: String,
+    mime_type: String,
+    sha256_hash: String,
+}
+
+/// 原子写文件（同目录 `tmp` + rename）。
+///
+/// 缓存文件必须「要么是旧版本、要么是完整新版本」——
+/// 直接覆写会留下写一半的条目，下次命中即坏数据。
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), FileFetchError> {
+    let Some(parent) = path.parent() else {
+        return Err(FileFetchError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "缓存路径没有父目录",
+        )));
+    };
+    std::fs::create_dir_all(parent)?;
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "cache".to_string());
+    let tmp = parent.join(format!(".{file_name}.tmp"));
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
 }
 
 /// SHA-256 十六进制摘要（小写）。
@@ -309,6 +439,184 @@ mod kani_base64_proofs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ===== 磁盘缓存（2026-10-25 接电：此前 `cache_dir` 是死字段）=====
+
+    /// 进程内唯一的临时目录（本 crate 无 `tempfile` 依赖，不为此新增依赖）。
+    ///
+    /// 用「进程 id + 原子计数 + 纳秒」命名：并行测试不会撞同一目录。
+    fn scratch_dir(label: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-file-fetcher-{label}-{}-{seq}-{nanos}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).expect("create scratch dir");
+        path
+    }
+
+    /// 写一个本地文件，返回它的 `file://` URL。
+    fn local_file_url(dir: &Path, name: &str, content: &[u8]) -> String {
+        let path = dir.join(name);
+        std::fs::write(&path, content).expect("write fixture");
+        format!("file://{}", path.display())
+    }
+
+    fn no_remote(_url: &str) -> Result<InternalFileResponse, FileFetchError> {
+        panic!("本用例不该走远端回退")
+    }
+
+    /// **跨进程重启仍命中**：新实例（内存缓存空）应直接吃磁盘缓存，
+    /// 既不再读原文件、也不走远端。
+    #[test]
+    fn disk_cache_survives_a_new_fetcher_instance() {
+        let dir = scratch_dir("src");
+        let cache = scratch_dir("cache");
+        let url = local_file_url(dir.as_path(), "a.txt", b"hello cache");
+
+        {
+            let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+            let fetched = fetcher.fetch_file(&url, no_remote).expect("first fetch");
+            assert_eq!(fetched.data, b"hello cache");
+            assert_eq!(fetcher.cache_write_failures(), 0);
+        }
+
+        // 把原文件删掉：若还命中，只可能来自磁盘缓存
+        std::fs::remove_file(dir.as_path().join("a.txt")).expect("remove source");
+
+        let mut reopened = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+        let fetched = reopened.fetch_file(&url, no_remote).expect("cached fetch");
+        assert_eq!(fetched.data, b"hello cache", "必须从磁盘缓存命中");
+    }
+
+    /// 缓存内容被篡改 ⇒ **不得返回坏数据**，应视为未命中并回源。
+    #[test]
+    fn corrupted_cache_blob_is_rejected_not_served() {
+        let dir = scratch_dir("src");
+        let cache = scratch_dir("cache");
+        let url = local_file_url(dir.as_path(), "b.txt", b"original bytes");
+
+        let hash = {
+            let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+            let fetched = fetcher.fetch_file(&url, no_remote).expect("fetch");
+            fetched.sha256_hash
+        };
+
+        // 篡改内容 blob（哈希不再匹配）
+        let blob = cache.as_path().join(format!("{hash}.bin"));
+        std::fs::write(&blob, b"TAMPERED").expect("tamper");
+
+        // 原文件还在 ⇒ 回源拿到正确内容（而不是返回被篡改的字节）
+        let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+        let fetched = fetcher.fetch_file(&url, no_remote).expect("refetch");
+        assert_eq!(fetched.data, b"original bytes", "绝不能返回被篡改的缓存");
+    }
+
+    /// 元数据在但内容 blob 缺失（坏条目）⇒ 视为未命中，不报错。
+    #[test]
+    fn missing_blob_with_present_meta_falls_back_to_source() {
+        let dir = scratch_dir("src");
+        let cache = scratch_dir("cache");
+        let url = local_file_url(dir.as_path(), "c.txt", b"payload");
+
+        let hash = {
+            let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+            fetcher
+                .fetch_file(&url, no_remote)
+                .expect("fetch")
+                .sha256_hash
+        };
+        std::fs::remove_file(cache.as_path().join(format!("{hash}.bin"))).expect("drop blob");
+
+        let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+        let fetched = fetcher.fetch_file(&url, no_remote).expect("refetch");
+        assert_eq!(fetched.data, b"payload");
+    }
+
+    /// 同一份内容被两个 URL 引用时，内容 blob **只落一份**（按内容寻址去重）。
+    #[test]
+    fn identical_content_is_stored_once() {
+        let dir = scratch_dir("src");
+        let cache = scratch_dir("cache");
+        let one = local_file_url(dir.as_path(), "d1.txt", b"same bytes");
+        let two = local_file_url(dir.as_path(), "d2.txt", b"same bytes");
+
+        let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+        fetcher.fetch_file(&one, no_remote).expect("fetch one");
+        fetcher.fetch_file(&two, no_remote).expect("fetch two");
+
+        let blobs = std::fs::read_dir(cache.as_path())
+            .expect("read cache")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".bin"))
+            .count();
+        assert_eq!(blobs, 1, "同内容只应有一个 blob（内容寻址去重）");
+    }
+
+    /// 远端回退的内容同样**入库**，下次重启可离线命中。
+    #[test]
+    fn remote_fetch_is_cached_for_offline_reuse() {
+        let cache = scratch_dir("cache");
+        let url = "file:///definitely/not/present/remote.png";
+        let payload = b"PNGDATA";
+        let expected_hash = sha256_hex(payload);
+        let response = InternalFileResponse {
+            request_id: "r1".into(),
+            status: "success".into(),
+            base64_data: {
+                // 简易 base64 编码（只为本用例构造负载）
+                const ALPHABET: &[u8; 64] =
+                    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+                let mut out = String::new();
+                for chunk in payload.chunks(3) {
+                    let b = [
+                        chunk[0],
+                        *chunk.get(1).unwrap_or(&0),
+                        *chunk.get(2).unwrap_or(&0),
+                    ];
+                    let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+                    // 按 RFC 4648 处理尾部：1 字节 → 2 字符 + "=="，2 字节 → 3 字符 + "="
+                    let emit = match chunk.len() {
+                        1 => 2,
+                        2 => 3,
+                        _ => 4,
+                    };
+                    for (index, shift) in [18, 12, 6, 0].into_iter().enumerate() {
+                        if index < emit {
+                            out.push(ALPHABET[((n >> shift) & 0x3F) as usize] as char);
+                        }
+                    }
+                    for _ in emit..4 {
+                        out.push('=');
+                    }
+                }
+                out
+            },
+            mime_type: "image/png".into(),
+            sha256_hash: expected_hash.clone(),
+        };
+        {
+            let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+            let fetched = fetcher
+                .fetch_file(url, move |_| Ok(response))
+                .expect("remote fetch");
+            assert_eq!(fetched.data, payload);
+        }
+        // 重启后离线命中（远端 provider 会 panic，证明没走远端）
+        let mut reopened = TransparentFileFetcher::new(cache.as_path(), Vec::new());
+        let fetched = reopened
+            .fetch_file(url, no_remote)
+            .expect("offline cache hit");
+        assert_eq!(fetched.data, payload);
+        assert_eq!(fetched.mime_type, "image/png");
+    }
 
     #[test]
     fn test_path_traversal_detection() {
