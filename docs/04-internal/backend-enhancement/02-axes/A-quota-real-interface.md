@@ -29,7 +29,7 @@ P1 token/步数两维（计量已有）→ P2 花费（单价表）→ P3 深度
 
 **新符号**（四级口径: 下列 `已接线`=PRODUCTION WIRED、`显式未接线`=NOT WIRED 如实标注）
 - `apeireth-orchestration`：`CognitiveQuota` 增量生产接口 `Default`/`unlimited`/`consume_tokens`/`consume_tool_step`（saturating 记账，生产账本即此类型，随会话持久化）；
-- `apeireth-runtime::canonical::quota`：`QuotaDimension`（`tokens`/`tool_steps`）、`SessionQuotaLimits`（`None`=不设限，opt-in）、`QuotaExceeded`（维度名/上限/已耗）、`QuotaExhaustedAction`（`CircuitBreak`=已接线；`AskForBudgetExtension`=询问档接口桩，显式未接线）、`CostRateMicros`+`CostRateTable`（花费单价表骨架，显式未接线）、`parse_quota_max_tokens`/`parse_quota_max_tool_steps`（正整数直通、越界钳制 `MAX_QUOTA_TOKENS`/`MAX_QUOTA_TOOL_STEPS`、0/非法回 `None`=不设限）；
+- `apeireth-runtime::canonical::quota`：`QuotaDimension`（`tokens`/`tool_steps`）、`SessionQuotaLimits`（`None`=不设限，opt-in）、`QuotaExceeded`（维度名/上限/已耗）、`QuotaExhaustedAction`（`CircuitBreak`=已接线〔四级口径：PRODUCTION WIRED〕；`AskForBudgetExtension`=询问档接口桩，显式未接线）、`CostRateMicros`+`CostRateTable`（花费单价表骨架，显式未接线）、`parse_quota_max_tokens`/`parse_quota_max_tool_steps`（正整数直通、越界钳制 `MAX_QUOTA_TOKENS`/`MAX_QUOTA_TOOL_STEPS`、0/非法回 `None`=不设限）；
 - `RuntimeError::BudgetExhausted { dimension, limit, consumed }`（预算耗尽错误帧）；
 - `apeireth-tools-canonical`：`QuotaStatus`/`QuotaDimensionStatus`/`QuotaMeterReading`/`SessionQuotaProbe` + `QUOTA_COST_NOT_WIRED`/`QUOTA_DEPTH_NOT_WIRED`/`QUOTA_METER_SCOPE_REQUIRED`；
 - `apeireth-runtime-assembly::session_quota_probe`（会话账本只读探测口）；

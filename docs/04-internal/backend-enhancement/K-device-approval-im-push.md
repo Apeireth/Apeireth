@@ -164,7 +164,7 @@ runtime-assembly `device_control_status_probe` 套件 2 例；既有
 
 ## 七、0 装诚实（本批现状）
 
-- **已接线**：设备审批卡→IM 推送链（同链同信封 + plan_id 幂等 + 失败留账重试）、
+- **已接线〔四级口径：PRODUCTION WIRED〕**：设备审批卡→IM 推送链（同链同信封 + plan_id 幂等 + 失败留账重试）、
   按钮批准即执行/拒绝关账（两本账落盘）、money 档 IM 卡证据闭环、回调路由分家、
   `self_status` `device_control` 节 + `device_control_status_probe` 装配接线。
 - **未接线**（如实）：真实 IM 端点的 live 往返（本批 0 真实网络，端点全 mock，

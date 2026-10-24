@@ -174,11 +174,11 @@
 
 ## 7. 0 装诚实（接线点清单）
 
-- **已接线 (本批交付)**: 常驻心跳生产者内核 (`HeartbeatProducer`, 调度缝 +
+- **已接线〔四级口径：PRODUCTION WIRED；默认 OFF〕(本批交付)**: 常驻心跳生产者内核 (`HeartbeatProducer`, 调度缝 +
   线程生命周期) + 装配面 (`CareHeartbeatProducer` / `CareHeartbeatConfig` /
   `CareHeartbeatPoll`) + 开关 (注册即闸 fail-closed) + 计费诚实 + 停机清理 +
   自述关怀节心跳两列 + 发起闸同源端口 (organ) + 17 例测试证据。
-- **未接线 → 已接线 (2026-10-17 常驻宿主接线微批随行, 归口常驻宿主线)**: 常驻
+- **未接线 → 已接线〔四级口径：PRODUCTION WIRED〕(2026-10-17 常驻宿主接线微批随行, 归口常驻宿主线)**: 常驻
   宿主的**启动注入点**已按本清单接齐 —— (a) gateway `presence.rs` 给
   `PresenceService::try_take_initiative` 装配级读取口 (presence 本体只加不改,
   同一份防唠叨预算同源闸); (b) 宿主 (cli 组合根 `care_heartbeat` 模块 +

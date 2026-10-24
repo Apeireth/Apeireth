@@ -239,6 +239,10 @@ R8-B 触 CLI/gateway 时按 line-coordination 契约与全量线协调（CLI 是
   CLI `build_production_governance_parts_from_env`（`cli/src/lib.rs:1188`）→
   `PermissionPresetGovernanceHook`（`runtime-assembly/src/canonical/permission_preset.rs:129`）
   → `Runtime::with_governance`（`runtime/src/canonical/runtime.rs:801`）。
+  口径补注（2026-10-24 文档治理批）：上句「已实现」指**库级实现**——`governance` crate 内
+  `GovernancePipeline` 实现了 `GovernanceHook` trait（`governance/src/lib.rs:563-604`）；
+  **接生产装配**是另一层事实（见 claims `gov.chain_hook_adapter` = PRODUCTION WIRED）。
+  按四级口径，上句 = **IMPLEMENTED**。本补注只增不改，原句逐字保留。
 - **候选方案**：A 入口链 + 保留动作级 pipeline（不推荐，重复评估）；B 新增
   `GovernanceHook` 适配器把 chain 变成 runtime 唯一治理面（推荐，runtime 零改动、
   回滚=换回 `Arc<GovernancePipeline>`）；C 先落持久审计、收敛延后。

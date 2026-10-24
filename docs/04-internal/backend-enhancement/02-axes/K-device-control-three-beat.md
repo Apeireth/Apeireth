@@ -140,7 +140,7 @@ cargo test -p apeireth-image-algo --lib --locked -j 2
 
 ## 七、0 装诚实（本批现状）
 
-- **已接线**：三拍执行、三档分级、白名单（内存 + `devices.json` 只读消费桥）、
+- **已接线〔四级口径：PRODUCTION WIRED〕**：三拍执行、三档分级、白名单（内存 + `devices.json` 只读消费桥）、
   mock 适配器（灯/空调/微波炉）、状态账、审批卡载荷、双闸开关、生产装配
   （注册即闸 + 授权面 + 治理钩子）。
 - **未接线**（如实）：真实家居协议族 / 购买渠道族（`DeviceAdapter` trait 留插槽）。
