@@ -110,6 +110,25 @@
 | **partner 持久化**（`partner_store_sqlite`） | 本批 | 装配从 `InMemoryPartnerStore`（重启即散）换成 `SqlitePartnerStore`（与认知库同一份库）。顺带修一个「能编译但用不了」：`ensure_schema()` 从不被调用 ⇒ `save_partner` 直接报 `no such table: partner_records`（原有测试全覆盖不到，只有真用起来的测试才抓得到） |
 | **限流守门**（`rate_limit`） | 本批 | 挂进生产治理链（授权之后、内容风险之前）。默认挂载：配额内完全放行（零行为变化），同一 (能力,会话) 超 30/分钟或 300/小时才拒。默认挂载而非「默认关 + env 开关」—— env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 
+### 5.4c 编译器本来能抓到、但被全局 `allow(dead_code)` 挡住的缺陷
+
+`Cargo.toml` 的 `[workspace.lints.rust]` 里 `dead_code = 'allow'`，
+注释写明原因是「当时只有 1 处 dead_code 警告，在别的 AI 正在改的文件里」——
+于是**整个 workspace 的这道 lint 被关掉**。代价是「私有字段/函数存了不用」
+这类缺陷对编译器隐身。本批临时打开 lint 拿到 60 条线索清单，逐条核查后：
+
+| 线索 | 结论 | 处理 |
+|---|---|---|
+| `crates/engine/memory/src/five_dimensional.rs` `recent_memories` 从不读写 | **真缺陷**：`MemoryDimension` 有 5 个变体，但 `export_browser_entries` 只产出 4 个 —— 「Recent（24h 滑动情境窗口）」**从未产出**，矩阵宣称的「5 维时空记忆」对 Memory Browser 实际只有 4 维 | ✅ 已修：字段改为带时间戳的 `RecentMemory` + `push_recent`/`prune_recent`/`get_recent`（24h 滑动窗，边界含等号、时钟回拨不误剪）+ 导出补 `Recent` 段 + 「每个维度都必须可导出」守卫测试 |
+| `crates/engine/organ/src/emergence.rs` `initial_depth` 从不读 | 非缺陷但是**冗余副本**（同值已在 `LocalRelationship` 里） | ✅ 已删 |
+| `crates/foundation/plugin/src/llm_factory.rs` `role`/`model` 从不读 | 待人（副总指挥 crate） | 已在看板同步 |
+| `crates/capabilities/tools/src/doc_ops.rs` `obj_ref` 从不读 | 待人（副总指挥 crate） | 已在看板同步 |
+| 其余 ~55 条 | 多为测试夹具字段 / `_` 前缀保留字段 / v2.1 占位（`_llm_factory` 等已用下划线表意） | 不动 |
+
+> **建议（不擅自执行）**：`dead_code = 'warn'` + 基线棘轮能把这类缺陷长期挡住。
+> 但它会改动 workspace 共享 lint 策略并让 CI 立刻红 60 处，
+> 且 CI workflow 属副总指挥范围 ⇒ 记在这里等 owner 拍板，本批不动策略。
+
 ### 5.4b 守夜人自报缺口（系统自己报告的未接线项）
 
 `apeireth nightwatch` 会在数据不足时**如实报缺口**（这是它的设计优点 ——
