@@ -237,7 +237,7 @@ function readStyleBlock(component, baseDir = COMPONENT_DIR) {
  * @param {string} rootSelector 根元素的选择器（`.tool-card` 等）。
  * @returns {string} 作用域化后的 CSS。
  */
-function scopeCss(css, rootSelector) {
+function scopeCss(css, rootSelector, rootVariants = []) {
   let out = "";
   let index = 0;
   while (index < css.length) {
@@ -249,10 +249,33 @@ function scopeCss(css, rootSelector) {
     const selectorText = css.slice(index, open);
     const close = matchBrace(css, open);
     const body = css.slice(open, close + 1);
-    out += rewriteSelector(selectorText, rootSelector) + body;
+    // ⚠️ **必须先摘注释**（并行面 A 实测发现，2026-10-24）：否则「根规则前的注释」
+    // 会让「选择器是否以根 class 开头」的判定失效 ⇒ 根选择器被改写成 `.根 .根`
+    // （后代）⇒ **根样式整条丢失**。
+    // （批一/批二的组件样式块里**恰好没有注释** ⇒ 这条缺陷一直潜伏未爆；
+    //  状态条面有 3 条注释 ⇒ 触发。）
+    // 注释在 CSS 里只是分隔器 ⇒ 摘出来前置**不改变**渲染结果。
+    const { comments, selector } = extractComments(selectorText);
+    const head = comments.length > 0 ? `\n${comments.join("\n")}\n` : "";
+    out += head + rewriteSelector(selector, rootSelector, rootVariants) + body;
     index = close + 1;
   }
   return out;
+}
+
+/**
+ * 把一段「注释 + 选择器」文本里的**注释摘出来**（原文保留）。
+ *
+ * 注释在 CSS 里只是分隔器 ⇒ 摘出来前置**不改变**渲染结果；但它会让「选择器
+ * 以根 class 开头」的判定失效 ⇒ 必须先摘。
+ */
+function extractComments(raw) {
+  const comments = [];
+  const selector = raw.replace(/\/\*[\s\S]*?\*\//g, (match) => {
+    comments.push(match);
+    return " ";
+  });
+  return { comments, selector };
 }
 
 /** 找与 `open` 处 `{` 配对的 `}`（按嵌套深度）。 */
@@ -272,7 +295,7 @@ function matchBrace(css, open) {
 }
 
 /** 改写一条规则的选择器（保留两侧空白）。 */
-function rewriteSelector(selectorText, rootSelector) {
+function rewriteSelector(selectorText, rootSelector, rootVariants = []) {
   const leading = selectorText.match(/^\s*/)[0];
   const trailing = selectorText.match(/\s*$/)[0];
   const body = selectorText.slice(leading.length, selectorText.length - trailing.length);
@@ -285,6 +308,20 @@ function rewriteSelector(selectorText, rootSelector) {
     if (trimmed.includes(":global(")) {
       // 全局规则 ⇒ 去掉 `:global(…)` 的括号，其余原样。
       return part.replace(/:global\(([^)]*)\)/g, "$1");
+    }
+    // ── **变体作用在根元素自身** ⇒ 复合选择器（`.根.变体`），**不是**后代 ──
+    // ⚠️ 并行面 A 实测发现（2026-10-24）：`StatusBadge` 的变体 class
+    // （`.amber` / `.green` / …）作用在**根元素自身**
+    // （`class="status-badge amber normal"`）⇒ 前缀法会改写成后代选择器
+    // （`.status-badge .amber`）⇒ **样式全丢**。
+    // ⇒ 这类变体由 manifest 的 `scope_variants` 声明 ⇒ 改写成 `.根.变体`。
+    for (const variant of rootVariants) {
+      if (trimmed === variant || trimmed.startsWith(`${variant} `)) {
+        const vLeading = part.match(/^\s*/)[0];
+        const vTrailing = part.match(/\s*$/)[0];
+        const vCore = part.slice(vLeading.length, part.length - vTrailing.length);
+        return `${vLeading}${rootSelector}${vCore}${vTrailing}`;
+      }
     }
     if (trimmed.startsWith(rootSelector)) {
       const next = trimmed[rootSelector.length];
@@ -306,7 +343,9 @@ function extractComponentCss() {
   const summary = [];
   for (const component of COMPONENTS) {
     const raw = readStyleBlock(component);
-    const css = component.scope ? scopeCss(raw, component.scope) : raw;
+    const css = component.scope
+      ? scopeCss(raw, component.scope, component.scope_variants || [])
+      : raw;
     emit(join(PUBLIC_DIR, component.css), css, `${component.slug} scoped CSS`);
     summary.push({ component, raw, css });
   }
@@ -630,35 +669,35 @@ function jsonExpression(value) {
  *
  * ## 为什么要有这个模式
  *
- * 扩面要**并行**（owner 2026-10-24 裁定「四面一口气推到底」⇒ 后续面内也要并行）。
+ * 扩面要**并行**（owner 2026-10-24 裁定「四面一口气推到底」⇒ 面内也要并行）。
  * 并行的前提是**写域不重叠** ⇒ 抽取器必须能**按面**输出，否则几个面会同时写
- * `public/<slug>.css` 与**同一个** `icon_data.rs` ⇒ 互相覆盖。
+ * `public/<slug>.css` 与**同一个** `icon_data.rs` ⇒ 互相覆盖 ⇒ 判据悄悄失真。
  *
  * ## manifest 的形状
  *
  * ```json
- * {
- *   "out": "crates-ui/apeireth-ui-demo/harness/<face>/public",
- *   "icons_out": "crates-ui/apeireth-ui-kit/src/icons_<face>.rs",
- *   "components": [
- *     { "slug": "status-bar", "path": "frontend/.../StatusBar.svelte",
- *       "css": "status-bar.css", "scope": ".status-bar" }
- *   ],
- *   "icons": ["clock", "x"]
- * }
+ * { "out": "public",
+ *   "icons_out": "../../../apeireth-ui-kit/src/icons_<面>.rs",
+ *   "components": [ { "slug": "status-bar",
+ *                     "path": "frontend/.../StatusBar.svelte",
+ *                     "css": "status-bar.css", "scope": ".status-bar" } ],
+ *   "icons": [] }
  * ```
  *
- * - `components[].path` = **仓内相对路径**（生产组件在 `lib/components/` 与
- *   `lib/views/governance/` 等不同子目录 ⇒ 不能只给文件名）；
- * - `scope` = 作用域根 class（与组件编译器同构：前缀根 class，`:global(…)` 保持全局，
- *   `@` 规则原样）—— **必填**：两个组件的同名 class 会冲突（批一实测：
- *   `.tool-body` 的 `gap` 一个 8px 一个 10px ⇒ 整卡位移 2px）；
- * - `icons_out` = 该面的图标 Rust 生成物（**每面一个文件** ⇒ 不共享）。
+ * - `out` / `icons_out` = **相对 manifest 所在目录**的路径
+ * - `components[].path` = **仓内相对路径**（生产组件分散在 `lib/components/` 与
+ *   `lib/views/governance/` 等不同子目录 ⇒ 不能只给文件名）
+ * - `components[].scope` = 作用域根 class（与组件编译器同构：前缀根 class，
+ *   `:global(…)` 保持全局，`@` 规则原样）—— **必填**：批一实测两个组件的同名 class
+ *   会冲突（`.tool-body` 的 `gap` 一个 8px 一个 10px ⇒ 整卡位移 2px）
+ * - `icons` = 生产 import 的图标别名；抽取器会跟随上游包的 `.js` 再导出找到真实
+ *   `.svelte` ⇒ **class 后缀取真实文件名**（`Loader2` ⇒ `lucide-loader-circle`）
+ * - `icons` 为**空数组**是合法输入（有的面零图标）⇒ 产物是「本面 0 图标」的生成物
+ *   （可当**漂移哨兵**：日后生产组件一旦引入图标，抽取器会列出并让 `--check` 报漂移）
  */
 function runManifestMode(manifestPath) {
   const manifestPathAbs = resolve(process.cwd(), manifestPath);
-  const raw = readOrFail(manifestPathAbs, "面 manifest");
-  const face = JSON.parse(raw);
+  const face = JSON.parse(readOrFail(manifestPathAbs, "面 manifest"));
   const outDir = resolve(dirname(manifestPathAbs), face.out);
   const iconsOut = resolve(dirname(manifestPathAbs), face.icons_out);
   console.log(`面 manifest：${manifestPathAbs}`);
@@ -667,9 +706,10 @@ function runManifestMode(manifestPath) {
 
   const summary = [];
   for (const component of face.components || []) {
-    // `component.path` 是**仓内相对路径** ⇒ baseDir = REPO。
     const raw_css = readStyleBlock({ file: component.path }, REPO);
-    const css = component.scope ? scopeCss(raw_css, component.scope) : raw_css;
+    const css = component.scope
+      ? scopeCss(raw_css, component.scope, component.scope_variants || [])
+      : raw_css;
     emit(join(outDir, component.css), css, `${component.slug} scoped CSS`);
     summary.push({
       path: component.path,
@@ -682,7 +722,7 @@ function runManifestMode(manifestPath) {
   if ((face.icons || []).length > 0) {
     const license = readOrFail(ICON_LICENSE, "上游许可文件");
     const entries = face.icons.map((alias) => parseIcon(alias));
-    emitRust(iconsOut, renderIconRs(entries, license), `${face.slug || "面"} 图标数据（Rust 生成物）`);
+    emitRust(iconsOut, renderIconRs(entries, license), "面图标数据（Rust 生成物）");
     iconSummary = entries.map((e) => ({
       alias: e.alias,
       path: `frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/${e.file.split("/").pop()}`,
