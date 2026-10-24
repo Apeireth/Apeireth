@@ -1,0 +1,76 @@
+{
+  "_note": "S2 服务商组的固定数据。预设表逐字取自生产（SettingsView.svelte:782-842）。",
+  "_source": "frontend/companion-desktop/src/lib/views/SettingsView.svelte:781-948",
+  "presets": {
+    "openai": [
+      {"id": "openai", "name": "OpenAI 官方", "baseUrl": "https://api.openai.com/v1", "defaultModel": "gpt-4o", "models": ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1"]},
+      {"id": "deepseek", "name": "DeepSeek", "baseUrl": "https://api.deepseek.com/v1", "defaultModel": "deepseek-v4-flash", "models": ["deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"]},
+      {"id": "minimax", "name": "MiniMax", "baseUrl": "https://api.minimax.chat/v1", "defaultModel": "minimax-M3", "models": ["minimax-M3", "minimax-Text-01"]},
+      {"id": "ollama", "name": "Ollama 本地", "baseUrl": "http://localhost:11434/v1", "defaultModel": "llama3.3", "models": ["llama3.3", "qwen2.5-coder", "deepseek-r1"]},
+      {"id": "custom", "name": "自定义 OpenAI 端点", "baseUrl": "", "defaultModel": "", "models": []}
+    ],
+    "anthropic": [
+      {"id": "anthropic", "name": "Anthropic 官方", "baseUrl": "https://api.anthropic.com", "defaultModel": "claude-3-7-sonnet-20250219", "models": ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"]},
+      {"id": "minimax_anthropic", "name": "minimax (Anthropic 网关)", "baseUrl": "https://api.minimaxi.com/anthropic", "defaultModel": "minimax-M3", "models": ["minimax-M3"]},
+      {"id": "custom", "name": "自定义 Anthropic 端点", "baseUrl": "", "defaultModel": "", "models": []}
+    ]
+  },
+  "defaultModelId": "deepseek-v4-flash",
+  "state": {
+    "activeProtocol": "openai",
+    "activePreset": "openai",
+    "providerBaseUrl": "https://api.openai.com/v1",
+    "providerApiKey": "",
+    "providerModel": "gpt-4o",
+    "anthropicVersion": "2023-06-01",
+    "showApiKey": false,
+    "modelSearchQuery": "",
+    "modelsLoading": false,
+    "modelsError": "",
+    "editBaseUrl": "http://127.0.0.1:8080",
+    "showAdvancedGateway": false,
+    "hasApiKey": false
+  },
+  "discoveredModels": [
+    {"id": "gpt-4o", "ownedBy": "openai"},
+    {"id": "gpt-4o-mini", "ownedBy": "openai"},
+    {"id": "o3-mini", "ownedBy": "openai"}
+  ],
+  "testResult": {
+    "_note": "连接测试的**结果**（宿主填；引擎不发起测连接）。字段：ok / message / latencyMs / models。",
+    "ok": true,
+    "message": "连接成功，已拉取 3 个模型。",
+    "latencyMs": 128,
+    "models": ["gpt-4o", "gpt-4o-mini", "o3-mini"]
+  },
+  "applyResult": {
+    "_note": "网关热应用的回执（宿主填）。warnings 非空 ⇒ 渲染 .warnings-box。",
+    "ok": true,
+    "warnings": []
+  },
+  "effectiveConfig": {
+    "_note": "网关生效配置回显（宿主填）。缺字段 ⇒ 该 span 显示 '—'。",
+    "provider": "openai",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-****abc",
+    "model": "gpt-4o"
+  },
+  "keychain": {
+    "_note": "钥匙串回显位（宿主填）。只存打码值，永不回显完整密钥。",
+    "storedKeyMasked": "sk-****abc",
+    "storedKeyExists": true,
+    "keychainLoading": false,
+    "keychainSaving": false,
+    "keychainDeleting": false,
+    "keychainActionError": "",
+    "tempApiKey": ""
+  },
+  "textFlags": {
+    "_note": "S2 的 textDirty 键。",
+    "provider.baseUrl": false,
+    "provider.model": false,
+    "provider.apiKey": false,
+    "provider.anthropicVersion": false,
+    "gateway.baseUrl": false
+  }
+}

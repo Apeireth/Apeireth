@@ -1,0 +1,445 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "phases_ms": [
+    0,
+    150,
+    300,
+    450,
+    600
+  ],
+  "t1_static_pixels": {
+    "size_mismatch": false,
+    "different": 0,
+    "total": 176160,
+    "ratio": 0.0
+  },
+  "t2_dom_equal": true,
+  "t3_phase_pixels": [
+    {
+      "phase_ms": 0,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    },
+    {
+      "phase_ms": 150,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    },
+    {
+      "phase_ms": 300,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    },
+    {
+      "phase_ms": 450,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    },
+    {
+      "phase_ms": 600,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    }
+  ],
+  "t4_frames": {
+    "reference_frame_count": 20,
+    "engine_frame_count": 20,
+    "window_ms": 1200,
+    "target_frame_count": 20,
+    "align_tolerance_ms": 25.0,
+    "reference_mean_interval_ms": 55.215,
+    "frames": [
+      {
+        "index": 0,
+        "reference_relative_ms": 0.0,
+        "engine_relative_ms": 0.0,
+        "phase_delta_ms": 0.0,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3749,
+        "total": 1296000,
+        "ratio": 0.002892746913580247,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 1,
+        "reference_relative_ms": 60.479,
+        "engine_relative_ms": 40.486,
+        "phase_delta_ms": -19.994,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3749,
+        "total": 1296000,
+        "ratio": 0.002892746913580247,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 2,
+        "reference_relative_ms": 120.966,
+        "engine_relative_ms": 80.941,
+        "phase_delta_ms": -40.026,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3749,
+        "total": 1296000,
+        "ratio": 0.002892746913580247,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 3,
+        "reference_relative_ms": 181.469,
+        "engine_relative_ms": 141.516,
+        "phase_delta_ms": -39.953,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3747,
+        "total": 1296000,
+        "ratio": 0.0028912037037037036,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 4,
+        "reference_relative_ms": 242.004,
+        "engine_relative_ms": 181.929,
+        "phase_delta_ms": -60.076,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3747,
+        "total": 1296000,
+        "ratio": 0.0028912037037037036,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 5,
+        "reference_relative_ms": 302.503,
+        "engine_relative_ms": 242.468,
+        "phase_delta_ms": -60.035,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3713,
+        "total": 1296000,
+        "ratio": 0.0028649691358024693,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 6,
+        "reference_relative_ms": 362.993,
+        "engine_relative_ms": 282.894,
+        "phase_delta_ms": -80.099,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3586,
+        "total": 1296000,
+        "ratio": 0.0027669753086419753,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 7,
+        "reference_relative_ms": 423.511,
+        "engine_relative_ms": 343.436,
+        "phase_delta_ms": -80.075,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3521,
+        "total": 1296000,
+        "ratio": 0.002716820987654321,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 8,
+        "reference_relative_ms": 484.041,
+        "engine_relative_ms": 383.988,
+        "phase_delta_ms": -100.052,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3148,
+        "total": 1296000,
+        "ratio": 0.0024290123456790122,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 9,
+        "reference_relative_ms": 544.535,
+        "engine_relative_ms": 444.609,
+        "phase_delta_ms": -99.926,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 1,
+        "total": 1296000,
+        "ratio": 7.716049382716049e-07,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 10,
+        "reference_relative_ms": 605.023,
+        "engine_relative_ms": 485.012,
+        "phase_delta_ms": -120.011,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 11,
+        "reference_relative_ms": 645.359,
+        "engine_relative_ms": 545.589,
+        "phase_delta_ms": -99.769,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 12,
+        "reference_relative_ms": 705.856,
+        "engine_relative_ms": 586.093,
+        "phase_delta_ms": -119.763,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 13,
+        "reference_relative_ms": 746.352,
+        "engine_relative_ms": 626.599,
+        "phase_delta_ms": -119.753,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 14,
+        "reference_relative_ms": 806.869,
+        "engine_relative_ms": 687.093,
+        "phase_delta_ms": -119.775,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 15,
+        "reference_relative_ms": 847.245,
+        "engine_relative_ms": 728.184,
+        "phase_delta_ms": -119.061,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 16,
+        "reference_relative_ms": 907.712,
+        "engine_relative_ms": 788.651,
+        "phase_delta_ms": -119.062,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 17,
+        "reference_relative_ms": 948.118,
+        "engine_relative_ms": 828.915,
+        "phase_delta_ms": -119.203,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 18,
+        "reference_relative_ms": 1008.626,
+        "engine_relative_ms": 889.432,
+        "phase_delta_ms": -119.194,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 19,
+        "reference_relative_ms": 1049.078,
+        "engine_relative_ms": 909.653,
+        "phase_delta_ms": -139.425,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      }
+    ]
+  },
+  "t5_animations_equal": true,
+  "t2b_animation_events": {
+    "reference": {
+      "counts": {
+        "transitionrun": 0,
+        "transitionstart": 0,
+        "transitionend": 0,
+        "animationstart": 1,
+        "animationend": 1,
+        "animationcancel": 0
+      },
+      "timeline": [
+        {
+          "name": "animationstart",
+          "at": 655.7,
+          "target": "approval-card svelte-hxxcjz",
+          "property": null
+        },
+        {
+          "name": "animationend",
+          "at": 1238.6,
+          "target": "approval-card svelte-hxxcjz",
+          "property": null
+        }
+      ],
+      "started": 1
+    },
+    "engine": {
+      "counts": {
+        "transitionrun": 0,
+        "transitionstart": 0,
+        "transitionend": 0,
+        "animationstart": 1,
+        "animationend": 1,
+        "animationcancel": 0
+      },
+      "timeline": [
+        {
+          "name": "animationstart",
+          "at": 653.7,
+          "target": "approval-card",
+          "property": null
+        },
+        {
+          "name": "animationend",
+          "at": 1253.9,
+          "target": "approval-card",
+          "property": null
+        }
+      ],
+      "started": 1
+    },
+    "counts_equal": true,
+    "started_reference": 1,
+    "started_engine": 1,
+    "started_delta": 0
+  },
+  "t6_unmount": {
+    "reference_dismiss_delay_ms": 0.8000000007450581,
+    "engine_dismiss_delay_ms": 0.8000000007450581,
+    "reference_decision_after_dismiss": null,
+    "engine_decision_after_dismiss": null
+  },
+  "notes": [
+    "T1/T3 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T3 是**同相位**对照（动画被冻结在指定相位）⇒ 最严格的画面判据。",
+    "T4 是**实时**对照：两帧的采集耗时不同 ⇒ 相位会有偏移（报告里的 phase_delta_ms 即采集侧的偏移，不是渲染差异）；过渡结束后的帧差异为 0。",
+    "T2 的归一化：剔除 Svelte 作用域 class、class token 排序、属性键排序、纯空白文本节点折叠。",
+    "T2' 是**动画起播的事件级证据**（transitionrun / animationstart 等计数）：getAnimations() 会返回尚未起播的 pending 动画 ⇒ 结构相等**不足以**证明起播；事件计数才是起播的直接证据。",
+    "环境：视口 1440×900、DPR 1、时区 UTC、prefers-reduced-motion: no-preference。"
+  ],
+  "checks": {
+    "t1_static_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_all_phases_within_budget": true,
+    "t4_enough_frames": true,
+    "t4_all_frames_within_budget": true,
+    "t5_animations_identical": true,
+    "t2b_animation_events_equal": true,
+    "t2b_animation_started_on_both_sides": true,
+    "t6_unmount_same_timing": true,
+    "t6_dismiss_makes_no_decision": true
+  },
+  "passed": true
+}

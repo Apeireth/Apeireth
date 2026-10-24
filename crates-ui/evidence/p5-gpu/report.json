@@ -1,0 +1,127 @@
+{
+  "schema": "apeireth.ui-engine.p5-gpu.browser-report/1",
+  "generated_at": "2026-10-24T15:45:33+0800",
+  "environment": {
+    "chromium": "Chromium 154.0.8037.92 built on Debian GNU/Linux forky/sid",
+    "host_target": "x86_64-unknown-linux-gnu",
+    "wasm_target": "wasm32-unknown-unknown",
+    "driver": "cdp (websocket-client) — no playwright / no browser download"
+  },
+  "runs": {
+    "webgl": {
+      "backend_requested": "webgl",
+      "backend_actual": "Gl",
+      "webgpu_supported": true,
+      "adapter_name": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "adapter_vendor": 0,
+      "device_type": "Cpu",
+      "surface_format": "Rgba8Unorm",
+      "encoding": "raw_bytes",
+      "available_formats": [
+        "Rgba8UnormSrgb",
+        "Rgba8Unorm",
+        "Rgba16Float"
+      ],
+      "width": 640,
+      "height": 480,
+      "frames_drawn": 3,
+      "vertex_count": 3,
+      "uniform_members": 17,
+      "error": null,
+      "canvas_png": "webgl.canvas.png",
+      "canvas_bytes": 69249,
+      "pixels": {
+        "width": 482,
+        "height": 362,
+        "mean_rgb": [
+          72.207,
+          79.539,
+          101.017
+        ],
+        "non_black_ratio": 0.979104,
+        "distinct_colors_capped": 4096
+      }
+    },
+    "webgpu": {
+      "backend_requested": "webgpu",
+      "backend_actual": "BrowserWebGpu",
+      "webgpu_supported": true,
+      "adapter_name": "",
+      "adapter_vendor": 0,
+      "device_type": "Cpu",
+      "surface_format": "Rgba8Unorm",
+      "encoding": "raw_bytes",
+      "available_formats": [
+        "Rgba8Unorm",
+        "Bgra8Unorm",
+        "Rgba16Float"
+      ],
+      "width": 640,
+      "height": 480,
+      "frames_drawn": 3,
+      "vertex_count": 3,
+      "uniform_members": 17,
+      "error": null,
+      "canvas_png": "webgpu.canvas.png",
+      "canvas_bytes": 69249,
+      "pixels": {
+        "width": 482,
+        "height": 362,
+        "mean_rgb": [
+          72.207,
+          79.539,
+          101.017
+        ],
+        "non_black_ratio": 0.979104,
+        "distinct_colors_capped": 4096
+      }
+    }
+  },
+  "criteria": {
+    "both_backends_created": true,
+    "webgl_no_error": true,
+    "webgpu_no_error": true,
+    "webgl_frames_drawn": 3,
+    "webgpu_frames_drawn": 3,
+    "webgl_canvas_not_blank": true,
+    "webgpu_canvas_not_blank": true,
+    "webgl_encoding": "raw_bytes",
+    "webgpu_encoding": "raw_bytes",
+    "encoding_parity": true,
+    "backend_pixel_parity": {
+      "pixels_compared": 174484,
+      "differing_pixels": 0,
+      "max_channel_delta": 0,
+      "identical": true
+    },
+    "verdict": "pass"
+  },
+  "page_screenshot_bytes": 134599,
+  "browser_console": [
+    "[console.log] [P5GPU] navigator.gpu present = true",
+    "[console.log] [P5GPU] WebGL2 available     = true",
+    "[log.error] Failed to load resource: the server responded with a status of 404 (File not found)",
+    "[console.log] [P5GPU] wasm module init: OK",
+    "[console.log] [harness] create engine: backend=webgl",
+    "[console.log] [harness] engine created",
+    "[console.log] [harness] pipeline created",
+    "[console.log] [harness] stub reported not-implemented",
+    "[console.log] [harness] frame 0 drawn",
+    "[console.log] [harness] frame 1 drawn",
+    "[console.log] [harness] frame 2 drawn",
+    "[console.log] [P5GPU] webgl | {\"backend_requested\":\"webgl\",\"backend_actual\":\"Gl\",\"webgpu_supported\":true,\"adapter_name\":\"ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)\",\"adapter_vendor\":0,\"device_type\":\"Cpu\",\"surface_format\":\"Rgba8Unorm\",\"encoding\":\"raw_bytes\",\"available_formats\":[\"Rgba8UnormSrgb\",\"Rgba8Unorm\",\"Rgba16Float\"],\"width\":640,\"height\":480,\"frames_drawn\":3,\"vertex_count\":3,\"uniform_members\":17}",
+    "[console.log] [harness] create engine: backend=webgpu",
+    "[log.warning] [.WebGL-0x52c001b9600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[log.warning] [.WebGL-0x52c001b9600]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[console.log] [harness] engine created",
+    "[console.log] [harness] pipeline created",
+    "[console.log] [harness] stub reported not-implemented",
+    "[console.log] [harness] frame 0 drawn",
+    "[console.log] [harness] frame 1 drawn",
+    "[console.log] [harness] frame 2 drawn",
+    "[console.log] [P5GPU] webgpu | {\"backend_requested\":\"webgpu\",\"backend_actual\":\"BrowserWebGpu\",\"webgpu_supported\":true,\"adapter_name\":\"\",\"adapter_vendor\":0,\"device_type\":\"Cpu\",\"surface_format\":\"Rgba8Unorm\",\"encoding\":\"raw_bytes\",\"available_formats\":[\"Rgba8Unorm\",\"Bgra8Unorm\",\"Rgba16Float\"],\"width\":640,\"height\":480,\"frames_drawn\":3,\"vertex_count\":3,\"uniform_members\":17}",
+    "[console.log] [P5GPU] DONE",
+    "=== reports ===",
+    "{\n  \"webgl\": {\n    \"backend_requested\": \"webgl\",\n    \"backend_actual\": \"Gl\",\n    \"webgpu_supported\": true,\n    \"adapter_name\": \"ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)\",\n    \"adapter_vendor\": 0,\n    \"device_type\": \"Cpu\",\n    \"surface_format\": \"Rgba8Unorm\",\n    \"encoding\": \"raw_bytes\",\n    \"available_formats\": [\n      \"Rgba8UnormSrgb\",\n      \"Rgba8Unorm\",\n      \"Rgba16Float\"\n    ],\n    \"width\": 640,\n    \"height\": 480,\n    \"frames_drawn\": 3,\n    \"vertex_count\": 3,\n    \"uniform_members\": 17\n  },\n  \"webgpu\": {\n    \"backend_requested\": \"webgpu\",\n    \"backend_actual\": \"BrowserWebGpu\",\n    \"webgpu_supported\": true,\n    \"adapter_name\": \"\",\n    \"adapter_vendor\": 0,\n    \"device_type\": \"Cpu\",\n    \"surface_format\": \"Rgba8Unorm\",\n    \"encoding\": \"raw_bytes\",\n    \"available_formats\": [\n      \"Rgba8Unorm\",\n      \"Bgra8Unorm\",\n      \"Rgba16Float\"\n    ],\n    \"width\": 640,\n    \"height\": 480,\n    \"frames_drawn\": 3,\n    \"vertex_count\": 3,\n    \"uniform_members\": 17\n  }\n}"
+  ]
+}

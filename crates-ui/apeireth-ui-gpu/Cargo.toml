@@ -1,0 +1,78 @@
+# ============================================================================
+# apeireth-ui-gpu — GPU 桥（状态 → 像素）
+# ----------------------------------------------------------------------------
+# 与 ui-dom **平级**的第二个投影（不是父子）：DOM 显影与 GPU 显影是同一份状态
+# 的两条正交出路（ADR-0015 §3.3）。
+#
+# 职责边界（设计文档 §3.3.4）：只回答「状态 → 像素」，**不改着色器数学**。
+#
+# 【P5 依赖面（首次引入外部依赖）】
+#   wgpu 30.0.1 —— 双后端（webgl / webgpu）宿主后端
+#   naga  30.0.1 —— GLSL 前端（glsl-in）+ GLSL ES 300 后端（glsl-out）
+#   web-sys / js-sys / wasm-bindgen-futures —— 画布与异步桥
+#
+# 【feature 形态（ADR-0015 §2.6.2 已定案，勿改形态）】
+#   features = ["webgl", "webgpu"] + ["glsl", "wgsl", "naga-ir"]
+#
+#   ⚠️ `glsl` 与 `wgsl` **必须同开**：上游 naga 30.0.1 的 GLSL 前端无 ES profile
+#      （front/glsl/parser.rs:267 只收 #version 440|450|460 + core），且
+#      front/mod.rs:5 把 `interpolator` 模块 gate 在 spv-in / wgsl-in 之后，
+#      而 front/glsl/variables.rs:467 **无条件**调用它 ⇒ 只开 `glsl-in`
+#      编译不过。**这是上游缺陷，naga 30.0.1 未修。**
+#      ⇒ 本 crate 的 `naga` 直接依赖**恒开 `wgsl-in`**，从依赖图层面把该
+#        缺陷消掉（而不是靠调用方记得同时开两个 feature）。
+#
+#   ⚠️ 后端（webgl / webgpu）是**编译期共存、运行期二选一**：wgpu 的
+#      `Instance::new` 在构造那一刻一次定死上下文（api/instance.rs:63-99），
+#      宿主有 `navigator.gpu` 但拿不到 adapter 时不会回落 ⇒ 引擎必须走
+#      `wgpu::util::new_instance_with_webgpu_detection`，禁 `Backends::all()`。
+# ============================================================================
+[package]
+name = "apeireth-ui-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎 GPU 桥：GLSL 前置变换 + uniform 绑定表 + 双后端渲染入口"
+
+[lib]
+name = "apeireth_ui_gpu"
+path = "src/lib.rs"
+
+[dependencies]
+# 内部依赖：响应式核心（GPU 场景与 DOM 共享同一份状态）。
+apeireth-ui-core = { path = "../apeireth-ui-core" }
+
+# wgpu：宿主 GPU 后端。default-features = false ⇒ 不带任何原生后端
+# （本引擎的宿主是浏览器 WebView，原生窗口路径属 ADR-0015 §2.5 的第二阶段）。
+wgpu = { version = "=30.0.1", default-features = false }
+
+# naga：GLSL 前端 + GLSL ES 300 后端。
+# ⚠️ `wgsl-in` 恒开 —— 上游 naga 30.0.1 的 glsl-in 单独开编译不过（见上）。
+naga = { version = "=30.0.1", default-features = false, features = [
+    "glsl-in",
+    "wgsl-in",
+    "glsl-out",
+] }
+
+# 画布类型（仅 wasm32 宿主用得上；native 侧只跑纯逻辑单测）。
+# ⚠️ 0 装：js-sys / wasm-bindgen-futures **不引** —— 本 crate 用不到
+#    （wgpu 自己处理内部的异步），不引就不用（依赖面最小）。
+web-sys = { version = "=0.3.106", features = ["HtmlCanvasElement"] }
+
+[features]
+# 双后端共存 + GLSL/WGSL 前端 + naga IR 直通（ADR-0015 §2.6.2 定案形态）。
+default = ["webgl", "webgpu", "glsl", "wgsl", "naga-ir"]
+
+# 后端（二者编译期共存，运行期由宿主能力探测选一个）。
+webgl = ["wgpu/webgl"]
+webgpu = ["wgpu/webgpu"]
+
+# 着色器前端。
+glsl = ["wgpu/glsl"]
+wgsl = ["wgpu/wgsl"]
+naga-ir = ["wgpu/naga-ir"]
+
+[lints]
+workspace = true

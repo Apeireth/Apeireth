@@ -1,0 +1,107 @@
+{
+  "_note": "S3 + S4 共用的「能力开关卡」固定数据。**8 个注册表逐字取自生产**（SettingsView.svelte:442-502）⇒ 迁移时这张表就是 Rust 侧的 props 数据源。",
+  "_source": "frontend/companion-desktop/src/lib/views/SettingsView.svelte:429-553",
+  "_fields": {
+    "key": "能力键（CapabilityToggles 的键）",
+    "icon": "生产 import 的图标名（真实 class 后缀见 SPLIT.md §3）",
+    "label": "行标题（中文）",
+    "env": "后端 env 名（等宽芯片里显示）",
+    "desc": "行副文案",
+    "invert": "反向旋钮：开启 = 不注入（如 APEIRETH_DISABLE_TYPED_RECALL，默认开）",
+    "requires": "前置能力：未开启时本行不可用"
+  },
+  "capDefs": {
+    "memoryFlow": [
+      {"key": "memoryInjection", "icon": "MessageSquarePlus", "label": "记忆注入", "env": "APEIRETH_ENABLE_MEMORY_INJECTION", "desc": "把召回的相关记忆注进每轮上下文，越聊越懂你。"},
+      {"key": "consolidation", "icon": "Archive", "label": "记忆固化", "env": "APEIRETH_ENABLE_CONSOLIDATION", "desc": "后台把散碎对话提炼成长期记忆（consolidation）。挂在记忆写入模块上：记忆写入关闭时此项不生效（自报照实）。"},
+      {"key": "reflexion", "icon": "RefreshCcw", "label": "反思沉淀", "env": "APEIRETH_ENABLE_REFLEXION", "desc": "reflexion 文件回流：从错误与复盘里沉淀经验。"},
+      {"key": "proactiveRecall", "icon": "Radar", "label": "前瞻召回", "env": "APEIRETH_ENABLE_PROACTIVE_RECALL", "desc": "闲置时主动浮现可能相关的记忆，不打断但在场。"},
+      {"key": "typedRecall", "icon": "Layers3", "label": "类型化召回", "env": "APEIRETH_DISABLE_TYPED_RECALL", "invert": true, "desc": "按事件/偏好/事实等类型分别召回（默认开）。"}
+    ],
+    "cognition": [
+      {"key": "organs", "icon": "Network", "label": "器官链（9 organs）", "env": "APEIRETH_ENABLE_ORGANS", "desc": "回合后跑反事实推演/好奇心/情绪记忆等（AfterTurn，不阻塞回复）。"},
+      {"key": "preferenceLearning", "icon": "HeartHandshake", "label": "偏好学习", "env": "APEIRETH_ENABLE_PREFERENCE_LEARNING", "desc": "把主人偏好写成双索引记忆，后续召回按主题展开。"},
+      {"key": "partnerBond", "icon": "Users", "label": "伙伴羁绊", "env": "APEIRETH_ENABLE_PARTNER_BOND", "desc": "关系阶段/深度注入语气校准，回合后确定性演化（W2 §4.2）。"},
+      {"key": "morphologyRecall", "icon": "SlidersHorizontal", "label": "检索深度自适应", "env": "APEIRETH_ENABLE_MORPHOLOGY_RECALL", "desc": "按形态学读数收紧检索条数——只收紧不放大（W2 §4.3）。挂在记忆召回模块上：记忆召回关闭时此项不生效（自报照实）。"},
+      {"key": "education", "icon": "BookOpen", "label": "Dx-Check 教育工具", "env": "APEIRETH_ENABLE_EDUCATION", "desc": "模型可调用自查式教学工具，回答前先自检（W2 §4.3）。"},
+      {"key": "absorptionInsight", "icon": "Dumbbell", "label": "认知体操", "env": "APEIRETH_ENABLE_ABSORPTION_INSIGHT", "desc": "四算法洞察注入（betti/残差金字塔/river/kuramoto，实验性，W2 §4.4）。"}
+    ],
+    "community": [
+      {"key": "communityTriage", "icon": "GitBranch", "label": "图社区分诊", "env": "APEIRETH_ENABLE_COMMUNITY_TRIAGE", "desc": "检索前置双路路由：命中实体走实体链，否则给社区摘要（W3 §1）。需记忆召回模块与图谱后端同时在场才生效（自报照实）。"},
+      {"key": "oneringLedger", "icon": "Landmark", "label": "onering 账本", "env": "APEIRETH_ENABLE_ONERING_LEDGER", "desc": "每回合 user/assistant 留痕入 context_ledger，全程可溯源（W3）。"}
+    ],
+    "decision": [
+      {"key": "judge", "icon": "Scale", "label": "评审 (Judge)", "env": "APEIRETH_COGNITIVE_JUDGE", "desc": "模型回复后由评审模块判一次（每次评审最多一次 side-call）。"},
+      {"key": "council", "icon": "Users", "label": "议会 (Council)", "env": "APEIRETH_COGNITIVE_COUNCIL", "desc": "决策环节多顾问并行裁决；一般运行时不常开，只在重要决策用。"}
+    ],
+    "guard": [
+      {"key": "onionLayer", "icon": "ShieldCheck", "label": "三洋葱治理层", "env": "APEIRETH_ENABLE_ONION_LAYER", "desc": "L3-L5 三段门：HA 离线 = 物理隔离拒绝；只收紧已放行的（W3 工作项 6）。"},
+      {"key": "worktreeSandbox", "icon": "Workflow", "label": "子代理 worktree 隔离", "env": "APEIRETH_ENABLE_WORKTREE_SANDBOX", "desc": "子代理在独立 git worktree 里干活，物理目录级隔离，收束后清理。"}
+    ],
+    "tool": [
+      {"key": "shell", "icon": "Terminal", "label": "Shell 命令工具", "env": "APEIRETH_ENABLE_SHELL", "desc": "模型可提议本地命令——每次执行前仍需你在审批卡点头；写命令（重定向/删除类）另受文件写入总闸管辖。"},
+      {"key": "fetch", "icon": "Globe", "label": "网络读取工具", "env": "APEIRETH_ENABLE_FETCH", "desc": "公网 GET 只读请求，无凭据转发。"},
+      {"key": "localReadTools", "icon": "FolderSearch", "label": "本地只读工具", "env": "APEIRETH_ENABLE_LOCAL_READ_TOOLS", "desc": "文件/搜索读侧工具随开关（file / search）；仓库只读探查（repo）恒授、无开关（名实相符对齐，见开关权力审计表）。"},
+      {"key": "fileWrite", "icon": "FilePenLine", "label": "文件写入（apply_patch · shell 写命令）", "env": "APEIRETH_ENABLE_FILE_WRITE", "desc": "文件写入总闸：apply_patch 与 shell 重定向/删除类写命令同受此闸——补丁式受控写文件（创建/修改/删除须在补丁里声明）+ shell 重定向/删除类写命令（关闸即拒绝即帧），每次写入默认要人工审批；工作区外路径与凭据/密钥面拒绝；git 提交等写操作不提供工具（设计边界）。"}
+    ],
+    "toolSub": [
+      {"key": "fileWriteAutoPass", "icon": "FileCheck2", "label": "自动放行已读文件修改", "env": "APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS", "requires": "fileWrite", "desc": "仅修改类补丁免审批；未读文件仍被读前门禁拒绝（先读后写）；删除/新建永不自动放行（仍走人工审批）。"}
+    ],
+    "beta": [
+      {"key": "reasoningEnabled", "icon": "Brain", "label": "思考模式 (Reasoning)", "env": "APEIRETH_REASONING_ENABLED", "desc": "把模型的 reasoning_content 分流展示——思考过程单独渲染，不占正文。"}
+    ]
+  },
+  "capabilities": {
+    "_note": "开关初值。**`typedRecall` 默认 true 而它的 env 是 DISABLE_* ⇒ invert 语义下「开」= false**（见 SPLIT.md §2.7 注意点①）。",
+    "memoryInjection": true,
+    "consolidation": false,
+    "reflexion": false,
+    "proactiveRecall": true,
+    "typedRecall": true,
+    "organs": false,
+    "preferenceLearning": true,
+    "partnerBond": false,
+    "morphologyRecall": false,
+    "education": false,
+    "absorptionInsight": false,
+    "communityTriage": false,
+    "oneringLedger": false,
+    "judge": false,
+    "council": false,
+    "councilAdvisors": 3,
+    "councilTimeoutMs": 30000,
+    "onionLayer": false,
+    "worktreeSandbox": false,
+    "shell": false,
+    "shellSandbox": true,
+    "fetch": false,
+    "localReadTools": true,
+    "fileWrite": false,
+    "fileWriteAutoPass": false,
+    "reasoningEnabled": false,
+    "reasoningModelFilters": "",
+    "reasoningTag": "think",
+    "memoryFade": 1.0,
+    "curiosityStrength": 1.0,
+    "toneSaturation": 1.0,
+    "consolidationCadence": 1,
+    "selfTuning": false,
+    "maxTurnRounds": 8,
+    "maxToolCalls": 16,
+    "contextBudgetChars": 24000
+  },
+  "cognitiveDepth": {
+    "_note": "由 judge/council 派生（生产 deriveCognitiveDepth）：light = 两者都关；balanced = 只 judge；deep = 都开；custom = 手动改过。",
+    "value": "light"
+  },
+  "permissionPreset": "standard",
+  "allowedServers": [],
+  "allowedServerInput": "",
+  "allowedServerError": "",
+  "textFlags": {
+    "_note": "S4 的 textDirty 键（未保存旗标）。只列 S4 拥有的键。",
+    "council.timeoutMs": false,
+    "reasoning.filters": false,
+    "reasoning.tag": false
+  }
+}

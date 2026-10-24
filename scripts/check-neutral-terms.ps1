@@ -38,7 +38,11 @@ $licensed = 0
 
 # 结构性豁免：命中若仅来自这些**真实字符串**（真实路径/真实文件名/本表自身）
 # 则按"路径保持准确"规则保留、不计违规；豁免计数随输出给出便于审计。
-$exemptRe = 'legacy/donor/|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
+# ⚠️ `legacy/donor` 后面跟 `(/|\b)` 而不是只跟 `/`：真实路径**整目录提及**时
+# 常不带尾斜杠（如 `ls -d legacy/donor`、`legacy/donor exists: yes`）⇒ 旧式只匹配
+# `legacy/donor/` 会把这些**真实路径**误报为违规（2026-10-24 合并 main 时实测）。
+# `\b` 不会匹配 `legacy/donorXYZ`（`r` 与 `X` 之间无词边界）⇒ 豁免仍然精确。
+$exemptRe = 'legacy/donor(/|\b)|donor/apeireth-|donor/\.\.\.|governance-donor-primitives\.md'
 # 文件级豁免 = 事实引注特权（研究的天职是引注，同真实路径豁免原则）：
 #   - 扫描器与搬运工具自身：替换规则必须含源标识字面量；
 #   - 设计调研文档：事实引注；

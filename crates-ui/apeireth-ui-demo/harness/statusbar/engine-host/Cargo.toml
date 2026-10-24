@@ -1,0 +1,51 @@
+# ============================================================================
+# statusbar-harness — 状态条面对照的 wasm 宿主（**独立 crate**；不是 workspace 成员）
+# ----------------------------------------------------------------------------
+# 为什么另起一个 crate：
+#   - 共享的 `apeireth-ui-demo` 用 `window.__APP_MODE__` 挂多种应用形态 ⇒ 它的
+#     `src/main.rs` 是**共享点**（别的面正在施工）⇒ 本面**不改**它；
+#   - 本 crate 自带 `[workspace]` 段 ⇒ 独立 workspace ⇒ **不进** crates-ui 的
+#     依赖图、**不进** cargo deny 的图、**不进** CI 门禁（形状照
+#     `crates-ui/evidence/p5-b/harness/`）。
+#
+# 构建（在 **crates-ui/ 之外**执行，避免被主 workspace 扫到）：
+#   cargo build --release --target wasm32-unknown-unknown
+#   wasm-bindgen --target web --no-typescript \
+#       --out-dir ../public/engine/pkg \
+#       target/wasm32-unknown-unknown/release/statusbar_harness.wasm
+# ============================================================================
+[package]
+name = "statusbar-harness"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# 被验证对象：组件库（仓库内路径依赖，0 拷贝 0 改写）。
+apeireth-ui-kit = { path = "../../../../apeireth-ui-kit" }
+# 响应式核心（信号 / 组件 trait 边界）。
+apeireth-ui-core = { path = "../../../../apeireth-ui-core" }
+# DOM 绑定层（虚拟节点 → 真实 DOM）。
+apeireth-ui-dom = { path = "../../../../apeireth-ui-dom" }
+# 过程宏（`view!`）—— 宿主侧的容器结构由宏构造。
+# ⚠️ 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**）
+# ⇒ 这两个 crate 必须是使用方的**直接依赖**（上面已列）。
+apeireth-ui-macro = { path = "../../../../apeireth-ui-macro" }
+
+# wasm32 宿主侧依赖（仅 wasm32 目标参与编译；native 侧永远 0 外部依赖）。
+# 许可：三者均为 MIT OR Apache-2.0。版本与 apeireth-ui-dom **精确一致**
+# （wasm-bindgen 对 web-sys 是 1:1 硬钉）。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+js-sys = "=0.3.106"
+web-sys = { version = "=0.3.106", features = [
+    "Document",       # 取挂载点：get_element_by_id
+    "Element",        # 挂载点的元素视图
+    "Node",           # 挂载点转成节点句柄
+    "Window",         # 取 document
+] }
+
+[workspace]

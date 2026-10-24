@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="night">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>参考侧 · 设置页三页（总览）</title>
+    <link rel="stylesheet" href="/design/tokens.css" />
+    <link rel="stylesheet" href="/design/base.css" />
+    <link rel="stylesheet" href="/design/essence.css" />
+    <link rel="stylesheet" href="/design/hud.css" />
+    <link rel="stylesheet" href="/design/motion.css" />
+    <link rel="stylesheet" href="/design/prose.css" />
+    <link rel="stylesheet" href="/design/shell.css" />
+    <style>
+      /* 总览页样式（**仅本页**，不进产品资产）。 */
+      #app { padding: 24px 32px; font-size: 13px; }
+      #app li { margin-bottom: 10px; }
+      #app a { color: var(--text); font-weight: 600; text-decoration: none; }
+      #app small { display: block; color: var(--muted); margin-top: 2px; }
+    </style>
+  </head>
+  <body>
+    <!--
+      参考侧总览：列出全部子面（每面一个入口页）。
+
+      - 参考侧 = 生产组件**只读引入**（构建期由 vite 编译 ⇒ 生产文件零改动）；
+      - 生产的数据面模块由 vite 插件拦到对照用替身（喂 `fixtures/*.json`）。
+    -->
+    <div id="app"></div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>P5-b engine — Rust engine on captured uniforms</title>
+<style>
+  /* 两个画布的 CSS 尺寸 = 设备像素尺寸（dpr 由 CDP 固定为 1）⇒ 截图 1:1 无缩放。 */
+  html, body { margin: 0; padding: 0; background: #000; }
+  canvas { display: block; width: 960px; height: 600px; }
+</style>
+</head>
+<body>
+<canvas id="webgl" width="960" height="600"></canvas>
+<canvas id="webgpu" width="960" height="600"></canvas>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

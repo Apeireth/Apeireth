@@ -1,0 +1,579 @@
+{
+  "batch": "工具卡面批二（工具栏 + 工具网格）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "reference_page": "/reference/toolgrid/index.html",
+  "engine_page": "/engine/toolgrid/index.html",
+  "regions": {
+    "toolbar": ".tools-toolbar",
+    "grid": ".tools-grid"
+  },
+  "case_count": 4,
+  "t1_pixels": [
+    {
+      "case": 0,
+      "region": "toolbar",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 66080,
+      "ratio": 0.0
+    },
+    {
+      "case": 0,
+      "region": "grid",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 247104,
+      "ratio": 0.0
+    },
+    {
+      "case": 1,
+      "region": "toolbar",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 66080,
+      "ratio": 0.0
+    },
+    {
+      "case": 1,
+      "region": "grid",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 116160,
+      "ratio": 0.0
+    },
+    {
+      "case": 2,
+      "region": "toolbar",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 66080,
+      "ratio": 0.0
+    },
+    {
+      "case": 2,
+      "region": "grid",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 116160,
+      "ratio": 0.0
+    },
+    {
+      "case": 3,
+      "region": "toolbar",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 66080,
+      "ratio": 0.0
+    },
+    {
+      "case": 3,
+      "region": "grid",
+      "absent_both": true,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 0,
+      "ratio": 0.0
+    }
+  ],
+  "t2_dom": [
+    {
+      "case": 0,
+      "region": "toolbar",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 0,
+      "region": "grid",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 1,
+      "region": "toolbar",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 1,
+      "region": "grid",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 2,
+      "region": "toolbar",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 2,
+      "region": "grid",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 3,
+      "region": "toolbar",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 3,
+      "region": "grid",
+      "equal": true,
+      "diffs": []
+    }
+  ],
+  "t2_state": [
+    {
+      "case": 0,
+      "equal": true,
+      "reference": {
+        "gridPresent": true,
+        "cardCount": 6,
+        "cardTitles": [
+          "fs.read",
+          "fs.write",
+          "shell.exec",
+          "memory.search",
+          "audit.read",
+          "web.fetch"
+        ],
+        "cardBadges": [
+          "可用",
+          "可用",
+          "可用",
+          "不可用",
+          "不可用",
+          "可用"
+        ],
+        "cardDescs": [
+          "读取工作区内的文件内容，按路径返回文本。",
+          "把内容写入工作区内的指定路径。",
+          "在工作区内执行受控的 shell 命令，输出按行返回。",
+          "在长期记忆里检索与查询相关的片段。",
+          "读取审计日志的最近记录。",
+          "抓取远端页面并转成纯文本。"
+        ],
+        "cardSources": [
+          "内置能力",
+          "内置能力",
+          "内置能力",
+          "内置能力",
+          "内置能力",
+          "内置能力"
+        ],
+        "cardDetails": [
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 "
+        ],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "",
+        "clearButton": false
+      },
+      "engine": {
+        "gridPresent": true,
+        "cardCount": 6,
+        "cardTitles": [
+          "fs.read",
+          "fs.write",
+          "shell.exec",
+          "memory.search",
+          "audit.read",
+          "web.fetch"
+        ],
+        "cardBadges": [
+          "可用",
+          "可用",
+          "可用",
+          "不可用",
+          "不可用",
+          "可用"
+        ],
+        "cardDescs": [
+          "读取工作区内的文件内容，按路径返回文本。",
+          "把内容写入工作区内的指定路径。",
+          "在工作区内执行受控的 shell 命令，输出按行返回。",
+          "在长期记忆里检索与查询相关的片段。",
+          "读取审计日志的最近记录。",
+          "抓取远端页面并转成纯文本。"
+        ],
+        "cardSources": [
+          "内置能力",
+          "内置能力",
+          "内置能力",
+          "内置能力",
+          "内置能力",
+          "内置能力"
+        ],
+        "cardDetails": [
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 ",
+          "参数规范 "
+        ],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "",
+        "clearButton": false
+      }
+    },
+    {
+      "case": 1,
+      "equal": true,
+      "reference": {
+        "gridPresent": true,
+        "cardCount": 2,
+        "cardTitles": [
+          "fs.read",
+          "fs.write"
+        ],
+        "cardBadges": [
+          "可用",
+          "可用"
+        ],
+        "cardDescs": [
+          "读取工作区内的文件内容，按路径返回文本。",
+          "把内容写入工作区内的指定路径。"
+        ],
+        "cardSources": [
+          "内置能力",
+          "内置能力"
+        ],
+        "cardDetails": [
+          "参数规范 ",
+          "参数规范 "
+        ],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "fs",
+        "clearButton": true
+      },
+      "engine": {
+        "gridPresent": true,
+        "cardCount": 2,
+        "cardTitles": [
+          "fs.read",
+          "fs.write"
+        ],
+        "cardBadges": [
+          "可用",
+          "可用"
+        ],
+        "cardDescs": [
+          "读取工作区内的文件内容，按路径返回文本。",
+          "把内容写入工作区内的指定路径。"
+        ],
+        "cardSources": [
+          "内置能力",
+          "内置能力"
+        ],
+        "cardDetails": [
+          "参数规范 ",
+          "参数规范 "
+        ],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "fs",
+        "clearButton": true
+      }
+    },
+    {
+      "case": 2,
+      "equal": true,
+      "reference": {
+        "gridPresent": true,
+        "cardCount": 2,
+        "cardTitles": [
+          "fs.read",
+          "audit.read"
+        ],
+        "cardBadges": [
+          "可用",
+          "不可用"
+        ],
+        "cardDescs": [
+          "读取工作区内的文件内容，按路径返回文本。",
+          "读取审计日志的最近记录。"
+        ],
+        "cardSources": [
+          "内置能力",
+          "内置能力"
+        ],
+        "cardDetails": [
+          "参数规范 ",
+          "参数规范 "
+        ],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "读取",
+        "clearButton": true
+      },
+      "engine": {
+        "gridPresent": true,
+        "cardCount": 2,
+        "cardTitles": [
+          "fs.read",
+          "audit.read"
+        ],
+        "cardBadges": [
+          "可用",
+          "不可用"
+        ],
+        "cardDescs": [
+          "读取工作区内的文件内容，按路径返回文本。",
+          "读取审计日志的最近记录。"
+        ],
+        "cardSources": [
+          "内置能力",
+          "内置能力"
+        ],
+        "cardDetails": [
+          "参数规范 ",
+          "参数规范 "
+        ],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "读取",
+        "clearButton": true
+      }
+    },
+    {
+      "case": 3,
+      "equal": true,
+      "reference": {
+        "gridPresent": false,
+        "cardCount": 0,
+        "cardTitles": [],
+        "cardBadges": [],
+        "cardDescs": [],
+        "cardSources": [],
+        "cardDetails": [],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "无此工具",
+        "clearButton": true
+      },
+      "engine": {
+        "gridPresent": false,
+        "cardCount": 0,
+        "cardTitles": [],
+        "cardBadges": [],
+        "cardDescs": [],
+        "cardSources": [],
+        "cardDetails": [],
+        "summary": "已装配工具: 6 个",
+        "inputValue": "无此工具",
+        "clearButton": true
+      }
+    }
+  ],
+  "t3_frames": {
+    "reference_frame_count": 19,
+    "engine_frame_count": 18,
+    "target_frame_count": 16,
+    "frame_shift": -1,
+    "frames": [
+      {
+        "index": 1,
+        "engine_index": 0,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 2,
+        "engine_index": 1,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 3,
+        "engine_index": 2,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 4,
+        "engine_index": 3,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 5,
+        "engine_index": 4,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 6,
+        "engine_index": 5,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 7,
+        "engine_index": 6,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 8,
+        "engine_index": 7,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 9,
+        "engine_index": 8,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 10,
+        "engine_index": 9,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 11,
+        "engine_index": 10,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 12,
+        "engine_index": 11,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 13,
+        "engine_index": 12,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 14,
+        "engine_index": 13,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 15,
+        "engine_index": 14,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 16,
+        "engine_index": 15,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      },
+      {
+        "index": 17,
+        "engine_index": 16,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 395360,
+        "ratio": 0.0
+      }
+    ],
+    "sides": [
+      {
+        "side": "reference/toolgrid",
+        "frames": 19,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 1120,
+          "h": 353.96875
+        },
+        "transition": {
+          "size_mismatch": false,
+          "different": 151361,
+          "total": 395360,
+          "ratio": 0.38284348441926347
+        },
+        "transition_index": 3,
+        "transition_latency_ms": 141.4504051208496
+      },
+      {
+        "side": "engine/toolgrid",
+        "frames": 18,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 1120,
+          "h": 353.96875
+        },
+        "transition": {
+          "size_mismatch": false,
+          "different": 151361,
+          "total": 395360,
+          "ratio": 0.38284348441926347
+        },
+        "transition_index": 2,
+        "transition_latency_ms": 100.9531021118164
+      }
+    ]
+  },
+  "notes": [
+    "T1/T3 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T1 按**区块**取盒（工具栏 / 工具网格）⇒ 参考侧**不隐藏**别的面（不耦合别的面的 class 名）⇒ 只对照本面的两块。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与注释锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3 是**实时**对照：两侧在**下一帧**里同时切搜索词 ⇒ 变化落在同一帧；采集存在抖动 ⇒ 允许**整体帧位移** ±2（取总差异最小者）。",
+    "T3 另设**不许空跑**判据：两侧的首帧与末帧必须不同（变化真被采到）⇒ 否则「差异为 0」没有意义。",
+    "T3 的 `transition_latency_ms` = **首帧**出现变化的时刻（**帧粒度**）⇒ 它是采集分辨率下的「变化可见时刻」，**不是**引擎的重算耗时（引擎侧是同步 flush）。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。"
+  ],
+  "checks": {
+    "t1_all_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t2_state_identical": true,
+    "t3_enough_frames": true,
+    "t3_all_frames_within_budget": true,
+    "t3_transition_captured": true
+  },
+  "passed": true
+}
