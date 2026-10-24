@@ -1,0 +1,14 @@
+# 生成物（构建期产出，不入库）
+node_modules
+dist/
+public/design/
+public/status-bar.css
+public/status-badge.css
+public/engine/
+out/
+
+# 主仓根 .gitignore 全局忽略 `*.py` ⇒ 本 harness 的对照驱动（唯一的对照装置）
+# 必须**显式放行**，否则本面的像素 / DOM / 逐帧证据无法入库、无法复核。
+# （本目录的规则比根目录更深 ⇒ 优先级更高。）
+!tools/
+!tools/*.py
