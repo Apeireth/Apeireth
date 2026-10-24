@@ -140,7 +140,15 @@ HTTP 400
 合法 UUID 仍 `201 CREATED`（真机两态都验过）。同步更新 `panel_routes.rs`
 （原测试用 `"s1"` 断言 201 —— 那是因为 mock 适配器宽松，掩盖了生产上的 500）。
 
-**遗留（未改，记录在案）**：`panel_error` 仍是全兜底（任何错误 → 500 + 重启建议）。
+**同一族的第二处（已修）**：乐观并发冲突（过期 `expected_rev`）此前也返回
+`500 runtime_error` + 「重启 Companion 后重试」—— 而重启治不了 rev 冲突。
+现 `panel_error` 按**窄而稳定的标记**分类：认出 `revision conflict`
+（`memory_governance` / `session_lifecycle` / persona 三处同族文案）⇒ **409
+`revision_conflict`** + 「重新读取最新 revision 后再提交（不是故障，不需重启）」；
+**认不出的一律仍 500（宁严不宽：把真故障报成 4xx 更危险）**。
+分类器连同测试真拆到 `gateway/src/panel_errors.rs`（尺寸棘轮不给 panels.rs 余量）。
+
+**遗留（未改，记录在案）**：`panel_error` 的其余分支仍是全兜底（认不出 → 500）。
 彻底修需要给端口加类型化错误（`MemoryCommand` 等 trait 现在只回 `String`），
 那是跨 crate 的接口改造 —— 记为后续项，不在本批硬做。
 

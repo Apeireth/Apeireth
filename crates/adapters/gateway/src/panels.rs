@@ -829,14 +829,7 @@ pub(crate) fn admin_error(
         .into_response()
 }
 
-/// 面板族运行期错误帧 (`500 runtime_error`); 技能库等旁路面板模块同用。
-pub(crate) fn panel_error(message: String) -> Response {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(serde_json::json!({ "error": { "code": "runtime_error", "message": message, "solution": "重启 Companion 后重试, 若复现请提交日志" } })),
-    )
-        .into_response()
-}
+pub(crate) use crate::panel_errors::panel_error;
 
 // ---------------------------------------------------------------------------
 // V2-c 面板按域过滤 (非默认域 = 按域过滤返回; 默认域/域面未接线 = 零回归)

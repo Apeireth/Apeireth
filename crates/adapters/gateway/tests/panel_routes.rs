@@ -487,7 +487,16 @@ async fn panel_routes_serve_contract_shapes() {
         ))
         .await
         .unwrap();
-    assert_eq!(conflict.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    // **409 而非 500**（2026-10-25 改）：乐观并发冲突是客户端可修复问题
+    // （重读最新 rev 再提交），不是运行期故障。本断言此前钉的是
+    // `500 runtime_error` + 「重启 Companion 后重试」—— 那是**误导**。
+    assert_eq!(
+        conflict.status(),
+        StatusCode::CONFLICT,
+        "过期 expected_rev 必须是 409 并发冲突"
+    );
+    let conflict = body_json(conflict).await;
+    assert_eq!(conflict["error"]["code"], "revision_conflict");
 
     let forgotten = body_json(
         router
