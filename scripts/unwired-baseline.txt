@@ -19,6 +19,13 @@
 # 已知盲区（都导致假阳性，方向安全）：宏展开、按名字字符串动态查找、
 # 跨 crate 的 `pub use` 重导出链。
 #
+# **另有一个会造成假阴性的盲区（2026-10-24 第四轮发现）**：
+# 判据 v3 是**裸 token 计数**，所以**同名方法在不同类型上会互相遮蔽** ——
+# `SnapshotStore::clear_session` 被调用，会让 `BehaviorChainGuardHook::clear_session`
+# 也被判成「已接电」（其实它零调用）。
+# ⇒ **新增同类方法时避开同名**（当时把 `SnapshotStore::clear_session` 改名成
+# `remove_session`）。凡基线里有同名定义的条目，都值得人工再核一眼。
+#
 # ============================================================================
 # 缩表纪律
 # ============================================================================
@@ -123,10 +130,9 @@ orphan with_used  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（7 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（6 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
 orphan begin_wait  # G5
-orphan clear_session  # G5
 orphan end_wait  # G5
 orphan from_decision  # G5
 orphan idle_elapsed  # G5

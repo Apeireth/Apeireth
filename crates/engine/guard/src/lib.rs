@@ -28,6 +28,7 @@ pub mod scenario;
 pub mod semantics;
 pub mod session;
 pub mod snapshot;
+pub mod snapshot_store;
 
 pub use chain::{ActionNode, ActionStatus, BehaviorChain, BehaviorEdge, BehaviorNode, EdgeType};
 pub use chain_guard::ChainGuard;

@@ -162,6 +162,51 @@
 `clear_session` 的**内存无界增长**是独立的、无论上面怎么选都该修的问题：
 建议在 gateway/CLI 的**会话结束点**接上（即使空闲预算不做，清理也该做）。
 
+## 5.5 第四轮续：两处「有能力没接电」的接线
+
+### 5.5.1 记忆来源：生产写入路径以前**不记来源**
+
+子代理发现 `EpisodeMeta` **全仓无构造者** ⇒ V4 迁移新增的 4 列
+（`valid_from_ms` / `valid_until_ms` / `created_ms` / `provenance`）在生产上**全是 NULL**，
+读侧 `normalize_meta` 一律兜底成 `Provenance::Manual`（"手动注入"）。
+
+⇒ **一条工具产物和一条用户手写的记忆，在库里长得一模一样**。
+
+这直接断了「记录 ≠ 负责」最关键的一环：**可追溯性没有数据支撑** ——
+Astra 那句「平台第四职责 = 影响与补救」要有前提，得先知道**是谁造成的**。
+
+**已修**：`put_episode` 现在一并写全 V4 四列，`provenance` **按 role 保守推导**：
+
+| role | provenance |
+|---|---|
+| `tool` / `tool_result` / `tool_use` | `Tool` |
+| `user` / `assistant` | `Dialog` |
+| `system` | `Observation` |
+| 其它 / 认不出来 | `Manual`（**不假装**） |
+
+这是**近似**而非精确追踪（真正的来源要由调用点告诉存储层，而 trait 签名锁定），
+但它至少让「对话来的 / 工具来的 / 系统注入的」可区分。
+
+### 5.5.2 特征快照表：无界增长 ⇒ 有界
+
+`last_snapshots` 每次评估写一份完整 `FeatureSnapshot`，而 guard hook 是
+**长生命周期单例** ⇒ 按「动作数」**无界增长**。而 `clear_session` **连它都不清**。
+
+**已修**：
+1. 新增 `snapshot_store.rs`：独立的有界存储（`HashMap` + 插入序队列），
+   上限 `MAX_LAST_SNAPSHOTS = 1024`，超量按插入序淘汰最旧的；
+2. `clear_session` 现在也清快照。
+
+> per-session 的 6 张表（`session_risk_history` 等）**没有**加上限 ——
+> 它们参与判定，淘汰活跃会话的风险历史会**放宽**护栏。那需要 owner 拍板。
+
+### 5.5.3 顺带修掉的两个「工具自己造成的问题」
+
+| 问题 | 怎么发现的 | 怎么修 |
+|---|---|---|
+| **尺寸棘轮违规**（`hook.rs` 1518 → 1576） | `arch_guard --strict` | **真拆分**：抽出 `snapshot_store.rs` + 测试移出到 `src/hook/tests.rs` ⇒ `hook.rs` 降到 **1030 行** |
+| **同名方法跨类型遮蔽**（假阴性） | `clear_session` 莫名从基线消失 | 判据是裸 token 计数，`SnapshotStore::clear_session` 的调用让 `hook.clear_session` 被误判成「已接电」⇒ 改名 `remove_session`，并把盲区写进基线头部 |
+
 ## 6. 下一批
 
 1. G5 剩 7 条：按 §5 决策后处置（接线 / 文档对齐 / 删）；
