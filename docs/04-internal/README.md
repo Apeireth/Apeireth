@@ -27,12 +27,12 @@
 | [`04-logs/`](04-logs/README.md) | 流水不是结论：工程日志与工作记录 | 2 |
 | [`05-plans/`](05-plans/README.md) | 打算做什么：计划、路线图、迁移方案、进度报告 | 17 |
 
-## 顶层构成：88 个条目 = 1 篇索引 + 17 篇真文件 + 70 个重定向桩
+## 顶层构成：88 个条目 = 1 篇索引 + 17 篇真文件 + 70 个桩
 
 **移位不减少文件数** —— 减少的是「要读几篇」和「能不能按题材找」。桩是「旧链接仍可达」的代价。
 
-- **70 个桩**：67 个由本批移位生成 + 3 个是更早批次的遗留桩（`HANDOFF-NOTES.md` / `TO-NEW-TEAM.md` / `next-team-handbook.md`）。
-  每个桩 3 行，点进去即到新址。
+- **70 个桩**：67 个由本批**移位**生成（每个 4 行 = 3 行正文 + 末尾空行）+ 3 个是更早批次的**合并/归档**遗留桩
+  （`HANDOFF-NOTES.md` / `TO-NEW-TEAM.md` / `next-team-handbook.md`，5 行）。点进去即到新址。
 - **17 篇真文件**：见下表。
 
 ### 为什么这 17 篇留原位
@@ -64,7 +64,7 @@
 
 - **只增不改**：带日期的历史记录保留原值，需要时加「历史口径（日期）」标注。
 - **受保护资产**：`docs/adr/` 正文、契约与真源（`claims.yaml` / `test-baseline.md` / `wiring.yaml` / `verification-ledger.yaml` / `contract.toml`）**不由本目录流程改写**。
-- **移位留桩**：本批移位 67 篇，原路径留 3 行重定向桩 + 登记 [`../_redirects.tsv`](../_redirects.tsv)（172 → **238 条**），既有链接零破坏。
+- **移位留桩**：本批移位 67 篇，原路径留 4 行重定向桩（3 行正文 + 末尾空行）+ 登记 [`../_redirects.tsv`](../_redirects.tsv)（172 → **238 条**），既有链接零破坏。
 - **四级口径**：本目录文档声称「已实现 / 已接线」时必须标四级级别（IMPLEMENTED / PRODUCTION WIRED / HARDWARE VALIDATED），口径门禁 `scripts/check_doc_caliber.py` 会拦。
 
 ## 门禁
