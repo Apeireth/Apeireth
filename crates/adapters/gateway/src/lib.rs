@@ -217,12 +217,16 @@ pub use resident::{
 };
 pub use shutdown::ShutdownTrigger;
 
+pub mod principal_forget;
+
+pub use principal_forget::{MemoryGovernanceCommand, PrincipalForgetDto};
+
 pub use panels::{
     AuditCommand, AuditDto, AuditQuery, EpisodeDto, EpisodeMutationDto, GatewayServices,
     GatewayState, GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto, GraphNodeDto,
     GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto, MemoryCommand,
-    MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto, PanelData,
-    SafetyGuardQuery, SessionQuery, SessionSummaryDto, ToolCatalogQuery, ToolDto, TraceCommand,
-    TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto, WorkbenchMemoryProvenanceDto,
-    WorkbenchQuery, WorkbenchToolExecutionDto, WorkbenchTurnDto,
+    MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto, PanelData, SafetyGuardQuery, SessionQuery,
+    SessionSummaryDto, ToolCatalogQuery, ToolDto, TraceCommand, TraceDetailDto, TraceQuery,
+    TraceSpanDto, TraceSummaryDto, WorkbenchMemoryProvenanceDto, WorkbenchQuery,
+    WorkbenchToolExecutionDto, WorkbenchTurnDto,
 };

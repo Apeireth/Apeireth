@@ -15,7 +15,8 @@ use axum::Json;
 
 use super::panels::PanelDataAdapter;
 use super::panels::{memory_governance_unavailable, panel_error};
-use super::{EpisodeMutationDto, GatewayState, MemoryGovernanceCommand};
+use super::panels::{EpisodeMutationDto, GatewayState};
+use super::principal_forget::{MemoryGovernanceCommand, PrincipalForgetDto};
 
 /// 纠正请求体：新内容 + 期望修订号 + 谁改的（缺省 `"user"` = 主人自己改）。
 #[derive(Debug, serde::Deserialize)]
@@ -92,5 +93,13 @@ impl MemoryGovernanceCommand for PanelDataAdapter {
         self.inner
             .update_episode(id, content, updated_by, expected_rev)
             .await
+    }
+
+    async fn forget_principal(
+        &self,
+        principal_id: &str,
+        reason: Option<&str>,
+    ) -> Result<PrincipalForgetDto, String> {
+        self.inner.forget_principal(principal_id, reason).await
     }
 }
