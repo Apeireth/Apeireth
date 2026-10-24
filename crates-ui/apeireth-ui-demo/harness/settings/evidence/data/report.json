@@ -1,0 +1,203 @@
+{
+  "face": "data（数据与用户 · 设置页数据子面）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "crop": "element（.setting-block / .sp-data .setting-block）",
+  "reference_page": "/web/reference/data/index.html",
+  "engine_page": "/web/engine/data/index.html",
+  "sections": [
+    "data",
+    "user"
+  ],
+  "states": [
+    "readings",
+    "no-readings"
+  ],
+  "notes": [
+    "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与注释锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3：两侧裁剪框宽度必须相等（参考侧 828px = 生产内容盒；引擎侧由对照专用样式表钉成 828px）。",
+    "两态：**有读数**（固定数据的读数）与**读不到**（替身/宿主都判定读不到 ⇒ 4 行 `—` + 「仅桌面版可读」）。",
+    "读数开关：参考侧在装载前注入 `globalThis.__DATA_READINGS__`；引擎侧调 `window.__DATA__.setReadings(...)` ⇒ **两侧读同一份固定数据**。"
+  ],
+  "pairs": [
+    {
+      "passed": true,
+      "section": "data",
+      "states": {
+        "readings": {
+          "alignment": {
+            "why": "两侧内容必须落在同一个设备像素格 ⇒ 抗锯齿 / 字形栅格化才可比",
+            "reference_origin": {
+              "x": 236,
+              "y": 219.765625
+            },
+            "engine_origin_before": {
+              "x": 0,
+              "y": 0
+            },
+            "delta_x": 236.0,
+            "delta_y": 219.765625,
+            "applied": true,
+            "engine_origin_after": {
+              "x": 236,
+              "y": 219.765625
+            }
+          },
+          "t1_pixel_ratio_unaligned": 0.01999701739401581,
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 885132,
+          "t1_size_mismatch": false,
+          "t2_dom_equal": true,
+          "t2_dom_diffs": [],
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "t3_reference_height": 1069.265625,
+          "t3_engine_height": 1069.265625
+        },
+        "no-readings": {
+          "alignment": {
+            "why": "两侧内容必须落在同一个设备像素格 ⇒ 抗锯齿 / 字形栅格化才可比",
+            "reference_origin": {
+              "x": 236,
+              "y": 219.765625
+            },
+            "engine_origin_before": {
+              "x": 0,
+              "y": 0
+            },
+            "delta_x": 236.0,
+            "delta_y": 219.765625,
+            "applied": true,
+            "engine_origin_after": {
+              "x": 236,
+              "y": 219.765625
+            }
+          },
+          "t1_pixel_ratio_unaligned": 0.020453446491596732,
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 885132,
+          "t1_size_mismatch": false,
+          "t2_dom_equal": true,
+          "t2_dom_diffs": [],
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "t3_reference_height": 1069.265625,
+          "t3_engine_height": 1069.265625
+        }
+      },
+      "t1_pixel_ratio": 0.0,
+      "t2_dom_equal": true,
+      "t3_same_width": true
+    },
+    {
+      "passed": true,
+      "section": "user",
+      "states": {
+        "readings": {
+          "alignment": {
+            "why": "两侧内容必须落在同一个设备像素格 ⇒ 抗锯齿 / 字形栅格化才可比",
+            "reference_origin": {
+              "x": 236,
+              "y": 219.765625
+            },
+            "engine_origin_before": {
+              "x": 0,
+              "y": 0
+            },
+            "delta_x": 236.0,
+            "delta_y": 219.765625,
+            "applied": true,
+            "engine_origin_after": {
+              "x": 236,
+              "y": 219.765625
+            }
+          },
+          "t1_pixel_ratio_unaligned": 0.02563539520061259,
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 355212,
+          "t1_size_mismatch": false,
+          "t2_dom_equal": true,
+          "t2_dom_diffs": [],
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "t3_reference_height": 429.9375,
+          "t3_engine_height": 429.9375
+        },
+        "no-readings": {
+          "alignment": {
+            "why": "两侧内容必须落在同一个设备像素格 ⇒ 抗锯齿 / 字形栅格化才可比",
+            "reference_origin": {
+              "x": 236,
+              "y": 219.765625
+            },
+            "engine_origin_before": {
+              "x": 0,
+              "y": 0
+            },
+            "delta_x": 236.0,
+            "delta_y": 219.765625,
+            "applied": true,
+            "engine_origin_after": {
+              "x": 236,
+              "y": 219.765625
+            }
+          },
+          "t1_pixel_ratio_unaligned": 0.02563539520061259,
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 355212,
+          "t1_size_mismatch": false,
+          "t2_dom_equal": true,
+          "t2_dom_diffs": [],
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "t3_reference_height": 429.9375,
+          "t3_engine_height": 429.9375
+        }
+      },
+      "t1_pixel_ratio": 0.0,
+      "t2_dom_equal": true,
+      "t3_same_width": true
+    }
+  ],
+  "danger_intent": {
+    "engine_intents": [
+      "danger:clearRecentConversations",
+      "danger:clearAllSessionData"
+    ],
+    "engine_dom_unchanged": true,
+    "reference_confirm_opened": true,
+    "passed": true
+  },
+  "checks": {
+    "t1_all_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_same_width": true,
+    "t4_danger_only_emits_intent": true
+  },
+  "passed": true,
+  "console": [
+    {
+      "side": "reference",
+      "messages": []
+    },
+    {
+      "side": "engine",
+      "messages": []
+    }
+  ]
+}
