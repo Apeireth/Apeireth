@@ -155,7 +155,6 @@ jobs:
 
       - name: Upload audit report (artifact)
         if: always()
-        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-audit-report
@@ -164,7 +163,6 @@ jobs:
             audit-report.sarif
 
       - name: Upload SARIF to Code Scanning (R66)
-        if: always()
         if: always()
         # 2026-10-03: v3 已 EOL (GitHub 强制退役旧主版), 升 v4 —— 否则本步必败
         uses: github/codeql-action/upload-sarif@v4
