@@ -788,6 +788,7 @@ R4 预警「审批卡这种输入输出明确的组件通过了，但 62 个组�
 | 破 0-dep 纪律的**例外登记状态** | ✅ **已定案：不登记 `exceptions.toml`**。实测 `scripts/arch_guard.py` 违规类别全集为 `direction/structural/size/caliber/duplicate/edge/env/exception`，**不含外部依赖类别** ⇒ 该纪律是 commit 正文诚实声明而非架构契约约束，登记不存在的架构违规是伪造账。落点改为 ADR-0015 §6.2 如实登记 + 本文 R5 专项 + 每批 commit 正文声明例外明细 |
 | 主仓 `arch_guard --strict` 现行基线（30 crates / 111 边） | ✅ **已实测**（P0 收口时亲跑，`crates-ui/` 不进主图 ⇒ 基线 0 变化）：30 crates / 111 边 / 160 env / VIOLATIONS 0 |
 | naga 能否覆盖本仓 2 条 GLSL 程序 | ✅ **已实测**（P0 探测子线）：**能，着色器本体不用重写**；需**机械变换**（删 `#version 300 es` 行 + **合并成一个 std140 uniform 块 + 补 padding** —— ⚠️ 2026-10-24 P5 实测修订，原记的「逐个注入 `layout(binding=N)`」在 WebGL2 后端必然超限）。⇒ **R1 概率由「中」下调为「低」**（详见 ADR-0015 §2.6 与 §8.2） |
+| PR #78 的 CI 结论 | ⚠️ **未取得**（2026-10-24 22:4x 实测）：该分支 20+ 个 run **仍在 `queued`**（仓库 runner 整体积压，`main` 上的 run 同样 `queued`）⇒ **「runner 上全绿」这句话尚无证据**。<br>另：`.github/workflows/cargo-audit.yml` 报 `failure` —— ⚠️ **是主干既有红，不是本分支引入**（实测签名：`jobs.total_count = 0`、GitHub 侧注册名 = **文件路径**而非其 `name:` 字段 ⇒ 该工作流**从未被正确解析**；且 `main` 分支同一工作流**同样 failure**）。该文件**不属 UI 引擎线的写域** ⇒ **只登记、不修**。 |
 | 全仓测试 / clippy 数字 | **不在本文范围**——以 [docs/03-reference/test-baseline.md](../../../docs/03-reference/test-baseline.md) 为准，本文不抄写 |
 
 ### 7.3 本文的「提案」部分（尚无人拍板，属待决）
