@@ -1,55 +1,178 @@
-# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；**只减不增**）
-#
-# 每行: orphan <symbol>
-#
-# ============================================================================
-# 2026-10-24 第三轮：基线语义与覆盖面双双修正
-# ============================================================================
-# **修正一：覆盖全仓。** 旧基线只扫 3 个目录（gateway/cli/runtime-assembly 的 src），
-# 漏掉 foundation / engine 其余全部 crate —— 例如 `apeireth-memory` 不在扫描范围，
-# 导致「教训对象三个写入 API 全仓零调用」这种问题**一直没被发现**（PR #76 才修）。
-# 现在扫 `crates/*/*/src` **和** `crates/*/*/tests`（30 个 crate）。
-#
-# **修正二：只记 `orphan`，不记 `test-only`。** `test-only`（生产零引用 + 集成测试
-# 有引用）= 「库的公开 API 被集成测试覆盖」，**属正常状态**，不是债。混着记会让数字
-# 失真、掩盖真孤儿：实测混记 892 条，只记 orphan 是 **164** 条。
-#
-# 结果：覆盖面从 3 个目录 → 全仓，条数从「155（混两类、漏 27 个 crate）」→
-# **「164（只有真孤儿、覆盖全仓）」**。数字略增，但含义变准了。
-#
-# ============================================================================
-# 判据可靠度
-# ============================================================================
-#   「生产零引用」         —— 高（已剔注释/字符串/`use` 导入，保留「作为值传递」形态）
-#   「是否被 tests/ 覆盖」  —— 高（本版已扫 tests/）
-# 已知盲区（都导致假阳性，方向安全）：宏展开、按名字字符串动态查找、跨 crate 的
-# `pub use` 重导出链。
-#
-# ============================================================================
-# 缩表纪律
-# ============================================================================
-# 1. **只减不增**：新增符号必须先进 main 并被生产调用，或在此写明理由；
-# 2. **每还一条债就缩一行**：接线/删除后 `--update` 一次，让数字真实下降；
-# 3. **不靠改判据缩表**（那是 cosmetic 抵扣）—— 判据改严必须说明「旧判据错在哪」
-#    （本仓 2026-10-24 有过两次正当改严：脚本五个 bug 修复、本轮覆盖面修正）。
-#
-# 已还的债（样例，证明缩表在发生）：
-#   - `replaced_any`（egress_gate）→ 删（上一轮自己加的死代码，名字名不符实）；
-#   - `loop_config_mut_for_test`（orchestrator）→ 删（零调用，连集成测试都不用）。
-#
-# ============================================================================
-# 分组（每组条数写在组标题里）
-# ============================================================================
-#
+# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；只减不增）
+# 每行: <test-only|orphan> <symbol>    # 理由（人工复核时补）
 
-# --- G1（0 条）：集成测试辅助 API（`tests/` 直接调用）。保留合理，但**不应增长**。
+orphan __register_all_asserts
+orphan accumulator_mut
+orphan active_profile
+orphan adapt_gate
+orphan add_action
+orphan allow_capability
+orphan apeireth_sdk_py
+orphan approval_event_fields
+orphan as_session_store
+orphan audit_diff
+orphan begin_wait
+orphan beside_feeds
+orphan bio_care_assembly_from_env
+orphan bio_care_config_from_env
+orphan bio_circadian_wiring_from_env
+orphan bio_lifecycle_module_from_env_value
+orphan bottom
+orphan claim_count
+orphan clear_session
+orphan clear_working
+orphan closure_of
+orphan consolidate_governed
+orphan default_min_count
+orphan deviation
+orphan disarm
+orphan dispatch_gateway_serve
+orphan end_wait
+orphan engine_mut
+orphan ensure_governance
+orphan entity_mut
+orphan events_with_ids
+orphan evict_one
+orphan execute_streaming
+orphan explicit_allow_list
+orphan extract_features
+orphan extract_features_v2
+orphan family_enforced
+orphan fetch_governed
+orphan from_decision
+orphan from_episode
+orphan generate_portable_config
+orphan get_for_subject
+orphan get_history
+orphan get_page
+orphan get_persona
+orphan governance_cas_failure
+orphan graph_snapshot
+orphan has_signal
+orphan held_for
+orphan idle_elapsed
+orphan is_compatible
+orphan is_episode_forgotten
+orphan is_satisfied_by
+orphan is_tripped
+orphan is_verbatim_zone
+orphan last_watch
+orphan library_root
+orphan links_for_diary
+orphan list_active
+orphan load_graph
+orphan matches_word
+orphan materialize_to_sink
+orphan mcts_search
+orphan mine_and_load
+orphan minimax_default
+orphan mood_trend
+orphan nervous_system_from_frame
+orphan next_occurrence_after
+orphan no_bio_care_inputs
+orphan not_wired_reason
+orphan outbound_budget
+orphan put_default
+orphan put_episode_full
+orphan query_as_of
+orphan query_facts
+orphan query_recent
+orphan query_with_time_range
+orphan rebind
+orphan recall_by_mood
+orphan recall_with_policy
+orphan recent_actions
+orphan reconnect_attempts
+orphan record_tool_result
+orphan record_turn_usage_at
+orphan register_provider
+orphan remove_job
+orphan repetition_policy
+orphan retract_relation
+orphan retrieve_with_reranker
+orphan rule_count
+orphan scalar
+orphan sdk_method_names
+orphan select_candidates
+orphan session_state
+orphan set_event_sink
+orphan set_last_hold
+orphan set_potential
+orphan set_quiet_threshold
+orphan shard_count
+orphan should_suppress
+orphan snapshot_from_env
+orphan state_for
+orphan state_mut
+orphan stats_ref
+orphan stop_all
+orphan strategy_kind
+orphan streaks
+orphan stream_len
+orphan to_prompt
+orphan tool_paths
+orphan total_subscriptions
+orphan traverse_from
+orphan upsert_hallway
+orphan verdict_keys_for_principle
+orphan with_access_recorder
+orphan with_age
+orphan with_allowed_capability
+orphan with_as_of
+orphan with_attrs
+orphan with_backend
+orphan with_behavior
+orphan with_bio_self_status_from_env
+orphan with_busy_timeout
+orphan with_capabilities
+orphan with_clear_env
+orphan with_data
+orphan with_date
+orphan with_deadline
+orphan with_deep_risk_floor
+orphan with_depth_increment
+orphan with_envelope_budget
+orphan with_foreign_keys
+orphan with_importance_weight
+orphan with_journal_mode
+orphan with_len
+orphan with_llm_proposer
+orphan with_material_source
+orphan with_max_episodes
+orphan with_metrics_window
+orphan with_min_candidate_score
+orphan with_miner
+orphan with_output_bounds
+orphan with_port
+orphan with_preview_chars
+orphan with_proactive_budget
+orphan with_quorum_gate_probe
+orphan with_ranking_config
+orphan with_rate_limiting
+orphan with_reader
+orphan with_runtime_overrides
+orphan with_safety_provider
+orphan with_session_label
+orphan with_shell_executable
+orphan with_synchronous
+orphan with_system_clock
+orphan with_system_markers
+orphan with_system_prompt
+orphan with_task_scope
+orphan with_task_type
+orphan with_used
+orphan with_user_agent
+orphan with_voices_error
+orphan without_as_of
+
+# --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G2（1 条）：W1 IM 通道（owner 2026-10-23 裁定**暂缓**）。**有意不接，不是遗漏。**
+# --- G2（1 条）：W1 IM 通道（owner 裁定**暂缓**）。**有意不接，不是遗漏。**
 
 orphan closure_of
 
-# --- G3（31 条）：生物机制 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+# --- G3（31 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
 orphan bio_care_assembly_from_env
 orphan bio_circadian_wiring_from_env
@@ -83,7 +206,7 @@ orphan with_quorum_gate_probe
 orphan with_system_markers
 orphan with_task_type
 
-# --- G4（38 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`，这些多为集成测试注入点或宿主 API。
+# --- G4（38 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age
 orphan with_allowed_capability
@@ -124,7 +247,7 @@ orphan with_used
 orphan with_user_agent
 orphan with_voices_error
 
-# --- G5（90 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（77 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
 orphan __register_all_asserts
 orphan accumulator_mut
@@ -133,7 +256,6 @@ orphan adapt_gate
 orphan add_action
 orphan allow_capability
 orphan apeireth_sdk_py
-orphan append_fact
 orphan approval_event_fields
 orphan as_session_store
 orphan audit_diff
@@ -143,11 +265,9 @@ orphan bottom
 orphan claim_count
 orphan clear_session
 orphan clear_working
-orphan consolidate_governed
 orphan default_min_count
 orphan end_wait
 orphan ensure_governance
-orphan events_with_ids
 orphan evict_one
 orphan execute_streaming
 orphan explicit_allow_list
@@ -156,10 +276,6 @@ orphan extract_features_v2
 orphan family_enforced
 orphan fetch_governed
 orphan from_decision
-orphan get_for_subject
-orphan get_history
-orphan get_page
-orphan get_persona
 orphan governance_cas_failure
 orphan has_signal
 orphan held_for
@@ -172,7 +288,6 @@ orphan is_verbatim_zone
 orphan last_watch
 orphan library_root
 orphan links_for_diary
-orphan list_active
 orphan matches_word
 orphan materialize_to_sink
 orphan minimax_default
@@ -182,12 +297,8 @@ orphan not_wired_reason
 orphan outbound_budget
 orphan put_default
 orphan put_episode_full
-orphan query_as_of
-orphan query_facts
-orphan query_recent
 orphan query_with_time_range
 orphan rebind
-orphan recall_with_policy
 orphan recent_actions
 orphan reconnect_attempts
 orphan record_turn_usage_at
@@ -199,7 +310,6 @@ orphan retrieve_with_reranker
 orphan rule_count
 orphan scalar
 orphan sdk_method_names
-orphan select_candidates
 orphan session_state
 orphan set_event_sink
 orphan set_potential
@@ -217,10 +327,22 @@ orphan upsert_hallway
 orphan verdict_keys_for_principle
 orphan without_as_of
 
-# --- G6（4 条）：**公开 API 表面**（装配入口 / 文件生成 / 合成器）。供宿主或外部调用，属预期库表面。
+# --- G6（16 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装。已逐条核查过（见 `unwired-memory-audit-2026-10-24.md`）。
 
 orphan bio_care_config_from_env
+orphan consolidate_governed
 orphan dispatch_gateway_serve
+orphan events_with_ids
 orphan generate_portable_config
+orphan get_for_subject
+orphan get_history
+orphan get_page
+orphan get_persona
+orphan list_active
+orphan query_as_of
+orphan query_facts
+orphan query_recent
+orphan recall_with_policy
+orphan select_candidates
 orphan snapshot_from_env
 
