@@ -138,6 +138,24 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5h 管理面 HTTP 全链真机核对（2026-10-25，未发现缺陷）
+
+把此前未测的 `/v1/admin/*` 面逐操作跑了一遍（token 门 + 面板族列表交叉核对）：
+
+| 操作 | 结果 |
+|---|---|
+| `POST /v1/admin/users`（bob/member） | **201** + 正确 DTO |
+| `POST /v1/admin/domains`（bob 域） | **201** + `user_count:1` |
+| `PATCH /v1/admin/users/bob`（→ guest） | **200**；非法角色 → **400**（列冻结词表 owner\|member\|guest）；不存在 → **404** |
+| `DELETE /v1/admin/users/bob` | **200**，响应含 **`memory_forgotten:true`** + 逐面 `memory_note`（episode/preference/commitment/temporal/persona…）⇒ **「被遗忘权」级联经 HTTP 面确实生效**（此前只有代码级证据） |
+| 重复创建同一 user | **409 conflict** |
+| 删除最后一个 owner | **409 conflict**（「must keep at least one owner」） |
+| `POST /v1/admin/shutdown` | **200** `{"status":"shutting_down","trigger":"first"}`，进程**优雅退出**（日志 `server stopped`） |
+| `GET /v1/admin/{users,domains}` | **405** —— 正确：这两个是 POST-only 创建面，列表在面板族（代码注释同口径） |
+| 无令牌访问 | **401**（三态门） |
+
+⇒ 管理面实现与宣称一致，**无缺陷**；顺带把「被遗忘权 = PRODUCTION WIRED」补上 HTTP 级证据。
+
 ### 5.5g `8-promise-audit.sh` 两项判据是坏的（反转 + 路径过期）—— 已修（2026-10-25）
 
 跑 `scripts/audit/8-promise-audit.sh` 得到 **2/8 未严守、exit 1**。逐条查证后确认：
