@@ -236,14 +236,30 @@ def main() -> int:
     if args.check:
         added = [key for key in current if key not in baseline]
         removed = [key for key in baseline if key not in current]
-        if removed:
-            print("基线里已消失（可缩表）: " + ", ".join(sorted(removed)[:10]))
         if added:
             print(f"新增孤儿 API {len(added)} 条（必须先接线或写进基线并给理由）:")
             for key in sorted(added):
                 print(f"  {key}  ({current[key]})")
             return 1
-        print(f"孤儿 API 基线一致（{len(current)} 条，无新增）")
+        # **棘轮只减不增的「减」这一半也要机检**：基线里的条目若已经不再孤儿
+        # （被接线了），必须从基线删掉 —— 否则基线会永久虚高（把已还的债还记在
+        # 账上），而「只减不增」就退化成「不增也不减」。此前这里只打印提示、
+        # 仍 exit 0，靠人自觉（我这几轮就手工补删过好几次）。
+        if removed:
+            print(
+                f"基线里有 {len(removed)} 条**已不再孤儿**（应删掉；棘轮只减不增）:"
+            )
+            for key in sorted(removed):
+                print(f"  {key}")
+            print(
+                "修法：从 scripts/unwired-baseline.txt 删掉这些行"
+                "（或 `python3 scripts/audit_unwired.py --update` 重写基线），"
+                "然后重跑 `scripts/group_unwired_baseline.py` 保持分组一致。"
+            )
+            return 1
+        print(
+            f"孤儿 API 基线一致（{len(current)} 条，无新增、无过期）"
+        )
         return 0
 
     orphans = [r for r in rows if r[0] == "orphan"]
