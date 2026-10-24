@@ -356,9 +356,11 @@ __pycache__/
 # 覆盖率测量产物（tarpaulin 输出，非源码）
 cobertura.xml
 
-# 覆盖率插桩产物（tarpaulin/pprof 的 .profraw）—— 构建产物, 0 必进 git
-# 仓里曾有 2 个被误提交（crates/capabilities/tools/default_*.profraw）:
+# 覆盖率插桩产物（tarpaulin 的 .profraw）—— 构建产物, 0 必进 git。
 # 它们会被 tarpaulin 当作覆盖率数据 merge 进去, 污染测量。
-# 已被跟踪的那 2 个暂不删（删除可能改变 CI 的覆盖率数字 → 需同步刷新基线）,
-# 本规则只阻止**新增**误提交。
+#
+# 订正（2026-10-24）: 本批早段我曾在提交正文里写「仓里曾有 2 个被误提交」——
+# **那是错的**。`origin/main` 上 .profraw 数量为 0; 那 2 个
+# （crates/capabilities/tools/default_*.profraw）是**我自己**在执行 tarpaulin 后
+# 用 `git add -A` 卷进提交的。已从本分支删除, 本条规则防止再次发生。
 *.profraw
