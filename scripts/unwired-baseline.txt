@@ -1,0 +1,189 @@
+# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；**只减不增**）
+#
+# 每行: <test-only|orphan> <symbol>
+#
+# ============================================================================
+# 这份基线的性质（别误读）
+# ============================================================================
+# 它记录的是**截至 2026-10-24 已知的「生产代码零引用的 pub 符号」**，不是
+# 「这些都可以不管」。基线的作用是**棘轮**：新增一条就必须先接线或写理由，
+# 防止「能力齐全但没接电」继续增长。
+#
+# 判据为 `code=0`（生产代码零引用）；已剔除注释 / 字符串 / `use` 导入，
+# 保留「作为值传递」形态（`get(f)` / `map(f)`）。
+# `test-only` 与 `orphan` 的区分**不可靠**（不扫 tests/ 目录），两类都表示 code=0。
+#
+# ============================================================================
+# 缩表纪律（这是它存在的意义）
+# ============================================================================
+# 1. **只减不增**：新增符号必须先进 main 并被生产调用，或在此写明理由；
+# 2. **每还一条债就缩一行**：接线一个就 `--update` 一次，让数字真实下降；
+# 3. **不要靠改判据缩表**（那是 cosmetic 抵扣）—— 判据改严必须同时说明
+#    为什么旧判据是错的。
+#
+# 本批（2026-10-24）已还的债（作为样例）：
+#   - `accountability_status_probe` / `with_accountability_probe` → 接进
+#     `ProductionBackends.self_status_accountability` + CLI 装配根；
+#   - `DecisionReceipt::from_statement` → 接进 `apeireth egress impact` 渲染；
+#   - `assess_correction` → 接进 `apeireth egress notify`（纠正影响检查）。
+#   这三条正是本工具抓出来的「自己写的功能没接电」，说明它有效。
+#
+# ============================================================================
+
+orphan accumulate_pressure
+orphan active_profile
+orphan adapt_gate
+orphan all_ok
+orphan all_passed
+orphan as_session_store
+orphan attach_tone_feedback_sink
+orphan bio_care_assembly_from_env
+orphan bio_care_config_from_env
+orphan bio_circadian_wiring_from_env
+orphan bio_lifecycle_module_from_env_value
+orphan bio_tone_module_from_env_value
+orphan boundaries_mut_for_test
+orphan build_production_governance
+orphan build_production_governance_from_env
+orphan check_8_gates_for_test
+orphan circadian_decision
+orphan closure_of
+orphan conversation_for
+orphan cost_routing_enabled_from_env
+orphan current_snapshot
+orphan dispatch_errors
+orphan dispatch_gateway_serve
+orphan enforced_token
+orphan engine_mut
+orphan family_enforced
+orphan from_episode
+orphan from_values
+orphan generate_portable_config
+orphan lock_param
+orphan loop_config_mut_for_test
+orphan nervous_system_from_frame
+orphan no_bio_care_inputs
+orphan notify_approval
+orphan observe_interaction
+orphan persistence_enabled
+orphan persistence_last_save_error
+orphan persistence_path
+orphan persistence_save_failures
+orphan push_device_approval_cards
+orphan push_quorum_signal
+orphan quorum_cooldown_until_ms
+orphan quorum_score
+orphan record_tool_result
+orphan record_turn_usage_at
+orphan relationship_mut_for_test
+orphan replaced_any
+orphan retry_device_approval_pushes
+orphan run_full_cycle
+orphan session_connections
+orphan session_entries
+orphan session_snapshot
+orphan set_ns
+orphan should_suppress
+orphan snapshot_from_env
+orphan sovereignty_mut_for_test
+orphan start_care
+orphan state_for
+orphan state_mut
+orphan stop_all
+orphan summary_line
+orphan system_time_ms
+orphan unlock_param
+orphan voice_speak_config_from_env
+orphan with_access_recorder
+orphan with_bio_mechanisms
+orphan with_bio_self_status_from_env
+orphan with_care_heartbeat_probe
+orphan with_context_block
+orphan with_context_blocks
+orphan with_context_policy
+orphan with_context_usage
+orphan with_depth_increment
+orphan with_device_approval_face
+orphan with_env
+orphan with_episodes
+orphan with_immune_probe
+orphan with_limits
+orphan with_pain_probe
+orphan with_play_probe
+orphan with_probe
+orphan with_profile
+orphan with_proposal_face
+orphan with_quorum_gate_probe
+orphan with_recovery_probe
+orphan with_repair_guidance
+orphan with_role
+orphan with_segment_policy
+orphan with_system_clock
+orphan with_task_type
+orphan with_timeline
+test-only active_sessions_count
+test-only advance_by
+test-only allow_all
+test-only approve_for_deploy
+test-only bio_lifecycle_wiring_from_env_value
+test-only cleanup
+test-only commit_branch
+test-only delivered_total
+test-only delivery_lifecycle_counts
+test-only effective_ranking
+test-only egress_gate_from_env
+test-only enabled_switches
+test-only events_for
+test-only fetch_file
+test-only fork_branch
+test-only freeze
+test-only generate_posix_launcher
+test-only generate_windows_launcher
+test-only get_active_patches
+test-only has_ritual_state_store
+test-only initiative_used_in_window
+test-only interrupt
+test-only interrupt_snapshot
+test-only interrupt_stream_lifecycle_counts
+test-only is_delivery_open
+test-only is_flush_loop_running
+test-only is_idle
+test-only is_interrupt_stream_open
+test-only is_sealed
+test-only learn_from_failure
+test-only max_severity_rank
+test-only neuromodulator_state
+test-only next_text_frame
+test-only open_interrupt_stream
+test-only organ_handles
+test-only parse_code
+test-only pending_receipts
+test-only preset_by_id
+test-only published_count
+test-only push_chunk
+test-only push_saga_compensation
+test-only record_hook_feedback
+test-only record_ritual_done
+test-only record_ritual_skip
+test-only record_speculative_write
+test-only record_turn_cost
+test-only register_stream
+test-only relieve_pressure
+test-only ritual_state_error
+test-only rollback_branch
+test-only sealing_enabled
+test-only set_bond_snapshot
+test-only set_inputs
+test-only shutdown_delivery
+test-only shutdown_interrupt_stream
+test-only signal_surface
+test-only start_speaking
+test-only subscribe_flush
+test-only synthesize_manifest
+test-only synthesize_patches
+test-only synthesize_uniforms
+test-only total_ns
+test-only trigger_barge_in
+test-only wait_for_interrupt
+test-only with_now_ms
+test-only with_sealer

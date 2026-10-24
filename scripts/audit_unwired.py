@@ -5,9 +5,24 @@
 - **code 引用数**：在非测试源码里出现的次数（去掉定义行本身）；
 - **test 引用数**：在测试代码里出现的次数（`#[cfg(test)]` 之后 + `tests/` 目录 + `*_test.rs`）。
 
-分类：
-- `test-only`：code=0 且 test>0 —— 「只在测试里活着的 API」= 大概率没接电；
-- `orphan`   ：code=0 且 test=0 —— 死 API（或被宏/反射使用，需人工判）。
+分类（**注意可靠性差异**）：
+- `test-only`：code=0 且 test>0 —— 「只在测试里活着的 API」；
+- `orphan`   ：code=0 且 test=0。
+
+⚠️ **可靠性分级（别把这个工具当法官）**：
+
+| 判据 | 可靠度 | 说明 |
+|---|---|---|
+| **code=0**（生产代码零引用） | **高** | 核心判据。已剔除注释/字符串/`use` 导入，保留「作为值传递」（`get(f)`）形态 |
+| `test-only` vs `orphan` 的区分 | **低** | `SCAN_ROOTS` 只含 `src/`，**不扫 `tests/`** ⇒ tests 目录里的调用看不见 ⇒ 会把 test-only 报成 orphan。两者都表示 code=0，这是要点；具体哪一类需人工看 |
+
+**已知盲区**（都表现为假阳性，不会漏报 —— 方向安全）：
+- 宏展开生成的调用；
+- 按名字字符串动态查找（反射式注册）；
+- `tests/` 目录与跨 crate 集成测试里的调用。
+
+**使用纪律**：本工具是**发现器**，不是判据。报告出来的每一条都要人核
+「它是真的没人调，还是我的判据看不见」。基线里每条必须带理由。
 
 用法：
   python scripts/audit_unwired.py            # 报告（人类可读）
@@ -49,12 +64,43 @@ def source_files() -> list[Path]:
 
 
 def split_code_test(text: str) -> tuple[str, str]:
-    """按首个顶层 `#[cfg(test)]` 切成 (生产代码, 测试代码)。"""
+    """剔除 `#[cfg(test)]` 修饰的 item，其余都算生产代码。
+
+    **判据 v2 修的第二处缺陷**（2026-10-24）：旧实现「按**首个** `#[cfg(test)]`
+    切成两半」是错的 —— 一个文件里 `#[cfg(test)] mod tests { … }` 可能出现在
+    **中间**（例如 `production.rs:104`，那个测试模块只占 19 行，
+    但旧实现把它之后的 **1709 行全当测试代码**）⇒ 该文件所有生产调用
+    都被判为「测试内引用」⇒ **大量假阳性**（已接线的被判成没接电）。
+
+    新实现：按**花括号配对**精确剔除 `#[cfg(test)]` 修饰的整个 item，
+    其余原样保留为生产代码。
+    """
     lines = text.splitlines()
-    for index, line in enumerate(lines):
-        if CFG_TEST.match(line):
-            return "\n".join(lines[:index]), "\n".join(lines[index:])
-    return text, ""
+    code: list[str] = []
+    test: list[str] = []
+    index = 0
+    while index < len(lines):
+        if not CFG_TEST.match(lines[index]):
+            code.append(lines[index])
+            index += 1
+            continue
+        # 命中 `#[cfg(test)]`：跳过它 + 后续属性行 + 整个 item（花括号配对）
+        start = index
+        index += 1
+        while index < len(lines) and lines[index].lstrip().startswith("#["):
+            index += 1
+        depth = 0
+        started = False
+        while index < len(lines):
+            line = lines[index]
+            depth += line.count("{") - line.count("}")
+            if "{" in line:
+                started = True
+            index += 1
+            if started and depth <= 0:
+                break
+        test.extend(lines[start:index])
+    return "\n".join(code), "\n".join(test)
 
 
 def is_test_file(path: Path) -> bool:
@@ -90,14 +136,50 @@ def main() -> int:
                 if match and match.group(1) == "fn":
                     declarations.append((match.group(1), match.group(2), rel))
 
-    # 单遍分词计数（O(N)）：标识符 → 出现次数。
-    token = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-    code_counts: Counter[str] = Counter()
-    for text in code_text.values():
-        code_counts.update(token.findall(text))
-    test_counts: Counter[str] = Counter()
-    for text in test_text.values():
-        test_counts.update(token.findall(text))
+    # 判据 v3（2026-10-24 定稿）。
+    #
+    # 演进过程（写清楚为什么最后是这个判据，避免以后又改回去）：
+    # - **v1（原始）**：裸 token 计数。缺陷：`pub use`/私有 `use`、注释、字符串里的
+    #   提及全算「使用」⇒ 把「导出了但没人调」误判成「已接电」；
+    # - **v2（本批中间态）**：只认 `name(` / `name::` / `::name` 三种形态。
+    #   缺陷：**函数作为值传递**（`get(admin_config_get)`、`map(fn_name)`、
+    #   `Arc::new(ctor)`）不算 —— 而路由注册、回调注册大量是这种形态 ⇒ 假阳性；
+    # - **v3（现在）**：先**剔除注释 / 字符串 / 全部 `use` 导入行**，
+    #   再做裸 token 计数。既排除「只提到名字」，又保留「作为值传递」。
+    #
+    # 仍有的已知盲区（写下来，不假装完备）：
+    # - 宏展开生成的调用（`impl_trait!` 之类）看不到；
+    # - 反射 / 动态注册按名字字符串查找的，会漏；
+    # - 这些盲区都会表现为**假阳性**（报成未接线），不会漏报 —— 方向安全。
+    ident = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+    use_line = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\b.*$", re.M)
+    line_comment = re.compile(r"//[^\n]*")
+    block_comment = re.compile(r"/\*.*?\*/", re.S)
+    # ⚠️ **不跨行**（不带 re.S）：Rust 普通字符串字面量不跨行。
+    # 我第一版带了 re.S，遇到 `'"'` 这类**字符字面量**时会把其中那个 `"`
+    # 当成字符串起点，一路吞到文件很后面的下一个 `"` —— 把整段代码当字符串删掉，
+    # 造成大片假阳性（`admin_config_get` 就是这么被吞的）。测试抓到。
+    char_lit = re.compile(r"'(?:\\.|[^'\\])'")
+    string_lit = re.compile(r'"(?:\\.|[^"\\\n])*"')
+
+    def strip_noise(raw: str) -> str:
+        # 顺序要紧：先剔**字符字面量**（防止 `'"'` 干扰字符串匹配），
+        # 再剔字符串、行注释、块注释，最后剔 use 导入行。
+        text = char_lit.sub("''", raw)
+        text = string_lit.sub('""', text)
+        text = line_comment.sub("", text)
+        text = block_comment.sub("", text)
+        text = use_line.sub("", text)
+        return text
+
+    def usage_counts(texts) -> Counter[str]:
+        counts: Counter[str] = Counter()
+        for raw in texts:
+            counts.update(ident.findall(strip_noise(raw)))
+        return counts
+
+    code_counts = usage_counts(code_text.values())
+    test_counts = usage_counts(test_text.values())
 
     rows: list[tuple[str, str, str, int, int]] = []  # (kind, symbol, file, code, test)
     for kind, name, rel in declarations:
@@ -109,15 +191,18 @@ def main() -> int:
 
     rows.sort(key=lambda r: (r[0], r[1]))
 
-    baseline: dict[str, str] = {}
+    # ⚠️ key 必须与 `--update` 写出的格式**完全一致**（`<kind> <symbol>` 整行）。
+    # 原实现这里是 `baseline[parts[1]] = parts[0]`（只用 symbol 作 key），
+    # 而 update 写的是 `kind symbol` ⇒ 两边 key 永远不匹配 ⇒ `--check`
+    # **永远报「新增 157 条」** ⇒ 这个闸从来没可能通过 ⇒ 也就从来没接进 CI。
+    # 「检测未接线的工具自己没接线」，本批一并修。
+    baseline: set[str] = set()
     if BASELINE.exists():
         for line in BASELINE.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            parts = line.split(None, 1)
-            if len(parts) == 2:
-                baseline[parts[1]] = parts[0]
+            baseline.add(line)
 
     current = {f"{kind} {name}": f"{rel}" for kind, name, rel, _, _ in rows}
 

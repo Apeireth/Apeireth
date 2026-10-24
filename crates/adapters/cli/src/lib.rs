@@ -10,6 +10,8 @@ pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub mod canonical_approval;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
+pub mod bio_command;
+pub mod bio_switches;
 pub mod care_heartbeat;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
 pub mod crypto_keys;
@@ -1579,10 +1581,18 @@ async fn build_canonical_runtime_with_parts(
     ) {
         builder = builder.with_egress_gate(gate);
     }
-    // 生物机制族 W3.3: 痛觉评估（默认关；`APEIRETH_ENABLE_BIO_PAIN=1` 才开
-    // 观测记账；只观测不改变错误/重试/错误处理决策，真账见 runtime 侧测试）。
-    if std::env::var("APEIRETH_ENABLE_BIO_PAIN")
-        .ok()
+    // 生物机制族 W3.3: 痛觉评估（默认关）。开关三层优先级（ADR-0015）：
+    // env `APEIRETH_ENABLE_BIO_PAIN`（最高，含 =0 显式覆盖）→ 用户配置
+    // `bio-mechanisms.json`（`apeireth bio enable nociception`）→ 默认关。
+    // 只观测记账，不改变错误/重试/错误处理决策，真账见 runtime 侧测试。
+    let bio_switches = crate::bio_switches::BioMechanismSwitches::load(&egress_data_root)
+        .unwrap_or_else(|error| {
+            // 配置坏了 = 不猜：全关 + stderr 如实报错（不静默、不假装已开）。
+            eprintln!("[bio] 生物机制配置读取失败（{error}）—— 全部按关闭处理");
+            crate::bio_switches::BioMechanismSwitches::default()
+        });
+    if bio_switches
+        .raw_for("nociception")
         .is_some_and(|value| value.trim() == "1")
     {
         builder = builder.with_bio_pain(true);
@@ -2224,6 +2234,22 @@ async fn build_cognitive_modules_at(
             reflexion_store_root_from_env(),
             apeireth_runtime_assembly::retrieval_tuning_log_path(),
         )),
+        // 自省通道: 问责计数探测口（影响声明 / 后果三态 / 待补救）。
+        //
+        // **不与出网闸共用同一个实例**是有意的：出网闸在另一个装配函数里。
+        // 两者读**同一个 append-only 账本文件**（`impact-ledger.jsonl` /
+        // `consequence-ledger.jsonl`）—— 而闸写事件时**先落盘再进内存**，
+        // 所以从文件读能拿到最新真值。**文件就是共享真源**，不需要跨函数传状态。
+        self_status_accountability: Some(
+            apeireth_runtime_assembly::accountability_probe::accountability_status_probe(
+                default_panel_data_dir(),
+                Arc::new(tokio::sync::Mutex::new(
+                    apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(
+                        default_panel_data_dir().join("consequence-ledger.jsonl"),
+                    ),
+                )),
+            ),
+        ),
         self_status_credentials: Some(self_status_credentials_probe(default_panel_data_dir())),
         self_status_extras: vec![apeireth_tools_canonical::CapabilitySwitch::new(
             "local_read_tools",
