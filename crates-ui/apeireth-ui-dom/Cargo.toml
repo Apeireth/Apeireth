@@ -4,9 +4,17 @@
 # 引擎里**唯一**接触 DOM 的一层。职责边界（设计文档 §3.3.2）：只回答
 # 「状态变成 DOM」，不回答状态从哪来。
 #
-# P0 骨架阶段：0 外部依赖 ⇒ 后端抽象用 `Dom` trait 表达，真实后端
-# （web-sys / wasm-bindgen）等 P0 探测结论回来后再接（探测子线实测：
-# wasm-bindgen 0.2.129 ⟷ js-sys 0.3.106 ⟷ web-sys 0.3.106，三者精确硬钉 1:1）。
+# 【P2：首次引入外部依赖】
+#   owner 已豁免「crates-ui 内引外部依赖」（ADR-0015 §6.2）—— 主 workspace 仍然
+#   0 引（crates-ui 是独立 workspace，不进主依赖图，主 Cargo.lock 0 行 diff）。
+#
+#   版本**精确硬钉**（ADR-0015 §2.6 P0 探测实测：web-sys 对 wasm-bindgen 是
+#   1:1 硬钉，错配在依赖解析期直接失败）：
+#       wasm-bindgen 0.2.129 ⟷ js-sys 0.3.106 ⟷ web-sys 0.3.106
+#   ⇒ 三个版本号全部用 `=` 精确要求（不带 caret），任何漂移在解析期即失败。
+#
+#   依赖挂在 `cfg(target_arch = "wasm32")` 下 ⇒ **native 目标不参与编译**
+#   （native 侧只有内存后端，永远可 `cargo test`，不需浏览器、不需 wasm target）。
 # ============================================================================
 [package]
 name = "apeireth-ui-dom"
@@ -24,7 +32,24 @@ path = "src/lib.rs"
 [dependencies]
 # 内部依赖：响应式核心（状态 → DOM 的唯一数据来源）。
 apeireth-ui-core = { path = "../apeireth-ui-core" }
-# P0 阶段纪律：0 外部依赖（web-sys / wasm-bindgen 待 P0 探测结论）。
+
+# 真实 DOM 后端（web-sys）—— 仅 wasm32 目标参与编译。
+# 许可：三者均为 MIT OR Apache-2.0（实测，见 crates-ui/deny.toml 白名单）。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# 精确硬钉 1:1（ADR-0015 §2.6）：web-sys 0.3.106 要求 wasm-bindgen =0.2.129。
+wasm-bindgen = "=0.2.129"
+js-sys = "=0.3.106"
+# feature 集**最小化**：只开真实用到的 DOM API（逐个对应下面的用途）。
+web-sys = { version = "=0.3.106", features = [
+    "Document",       # 建节点：create_element / create_text_node
+    "DomTokenList",   # class token 差分：class_list().add / .remove
+    "Element",        # 属性读写：set_attribute / remove_attribute / class_list
+    "Node",           # 树操作：append_child / insert_before / remove_child / child_nodes
+    "Text",           # 文本节点：create_text_node 的返回类型 + 文本节点判定
+    "CharacterData",  # 文本内容：set_data（就地改文本，不重建节点）
+    "NodeList",       # 读子节点列表：child_nodes 的返回类型
+    "Window",         # 取 document：window().document()
+] }
 
 [lints]
 workspace = true

@@ -9,11 +9,12 @@
 //! `bind:this`（元素 / 实例引用绑定）见 [`ThisBinding`]：它**不是**双向数据
 //! 绑定，而是「挂载 ⇒ 写引用 / 卸载前 ⇒ 清引用」的生命周期通道。
 
+use std::any::Any;
 use std::rc::Rc;
 
 use apeireth_ui_core::{InstanceRef, Signal};
 
-use crate::dom::Dom;
+use crate::dom::{Dom, DomError};
 
 /// 双向绑定的槽位。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -129,12 +130,15 @@ impl Binding {
 #[derive(Debug)]
 pub struct ThisBinding<D: Dom> {
     slot: Rc<InstanceRef<D::Node>>,
+    /// 同一槽位的**类型擦除视图**（虚拟树侧持有；见 [`ThisRef`]）。
+    erased: ThisRef,
 }
 
 impl<D: Dom> Clone for ThisBinding<D> {
     fn clone(&self) -> Self {
         Self {
             slot: self.slot.clone(),
+            erased: self.erased.clone(),
         }
     }
 }
@@ -142,9 +146,13 @@ impl<D: Dom> Clone for ThisBinding<D> {
 impl<D: Dom> ThisBinding<D> {
     /// 建一个未绑定的 `bind:this`。
     pub fn new() -> Self {
-        Self {
-            slot: Rc::new(InstanceRef::new()),
-        }
+        let slot = Rc::new(InstanceRef::new());
+        let erased = ThisRef {
+            // 类型参数必须显式标注：擦除视图的 `D` 只出现在 trait object 里，
+            // 编译器无法从 `Rc<dyn ErasedInstance>` 反推（wasm 目标下报错 E0283）。
+            inner: Rc::new(TypedInstance::<D> { slot: slot.clone() }),
+        };
+        Self { slot, erased }
     }
 
     /// 读取引用的元素句柄（未挂载 ⇒ `None`）。
@@ -174,6 +182,90 @@ impl<D: Dom> ThisBinding<D> {
     pub fn slot(&self) -> Rc<InstanceRef<D::Node>> {
         self.slot.clone()
     }
+
+    /// 导出**类型擦除**的引用句柄（放进 `VNode` 用）。
+    ///
+    /// 与本绑定**共享同一个槽位** ⇒ 渲染器写入虚拟树侧的句柄时，
+    /// [`ThisBinding::get`] 立刻能读到节点。
+    pub fn erased(&self) -> ThisRef {
+        self.erased.clone()
+    }
+}
+
+/// `bind:this` 的**类型擦除**引用句柄（虚拟树侧持有）。
+///
+/// ## 为什么需要擦除
+///
+/// [`crate::vnode::VNode`] 不是 `D: Dom` 的泛型（它是**纯数据结构**，设计文档
+/// §5.1.1），而节点句柄的类型是 `D::Node` ⇒ 在虚拟树边界必须把节点类型
+/// 擦除。擦除后 `VNode` 仍是 `Clone + PartialEq + Eq`（身份按**槽位**比较：
+/// 同一个槽位 = 同一个身份）。
+///
+/// ## 擦除不是降级
+///
+/// 类型不符（槽位与后端节点类型不一致）⇒ 显式报 [`DomError::Unsupported`]，
+/// **不静默丢弃**（0 装纪律）。
+#[derive(Clone)]
+pub struct ThisRef {
+    inner: Rc<dyn ErasedInstance>,
+}
+
+impl std::fmt::Debug for ThisRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ThisRef").finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for ThisRef {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for ThisRef {}
+
+impl ThisRef {
+    /// 挂载：写入节点句柄（类型擦除）。
+    ///
+    /// 由渲染器调用（crate 内部）—— 类型不符 ⇒ 显式报错。
+    pub(crate) fn bind_node(&self, node: Box<dyn Any>) -> Result<(), DomError> {
+        self.inner.bind_any(node)
+    }
+
+    /// 卸载：清空引用（幂等）。
+    pub(crate) fn unbind(&self) {
+        self.inner.unbind_any();
+    }
+}
+
+/// 类型擦除的引用槽（内部契约）。
+trait ErasedInstance {
+    /// 挂载：写入节点句柄（类型擦除）。类型不符 ⇒ 显式报错。
+    fn bind_any(&self, node: Box<dyn Any>) -> Result<(), DomError>;
+
+    /// 卸载：清空引用。
+    fn unbind_any(&self);
+}
+
+/// 类型化的引用槽视图：把 `InstanceRef<D::Node>` 擦除后暴露给虚拟树。
+struct TypedInstance<D: Dom> {
+    slot: Rc<InstanceRef<D::Node>>,
+}
+
+impl<D: Dom> ErasedInstance for TypedInstance<D> {
+    fn bind_any(&self, node: Box<dyn Any>) -> Result<(), DomError> {
+        let handle = node.downcast::<D::Node>().map_err(|_| {
+            DomError::Unsupported(String::from(
+                "bind:this 槽位与后端节点类型不符（擦除后无法还原）",
+            ))
+        })?;
+        self.slot.bind(*handle);
+        Ok(())
+    }
+
+    fn unbind_any(&self) {
+        self.slot.unbind();
+    }
 }
 
 impl<D: Dom> Default for ThisBinding<D> {
@@ -185,7 +277,7 @@ impl<D: Dom> Default for ThisBinding<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dom::InMemoryDom;
+    use crate::dom::{DomError, InMemoryDom};
     use apeireth_ui_core::Runtime;
 
     #[test]
@@ -291,6 +383,63 @@ mod tests {
         assert_eq!(clone.get(), Some(node), "克隆共享同一引用槽位");
         clone.unmount();
         assert!(!binding.is_bound());
+    }
+
+    // ── P2：类型擦除的引用句柄 ────────────────────────────────────────────
+
+    #[test]
+    fn this_ref_identity_follows_the_slot_not_the_content() {
+        let first: ThisBinding<InMemoryDom> = ThisBinding::new();
+        let second: ThisBinding<InMemoryDom> = ThisBinding::new();
+
+        assert_eq!(first.erased(), first.erased(), "同一槽位 = 同一身份");
+        assert_ne!(first.erased(), second.erased(), "不同槽位 = 不同身份");
+    }
+
+    #[test]
+    fn the_erased_view_and_the_typed_binding_share_one_slot() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("canvas").expect("建节点必须成功");
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+        let erased = binding.erased();
+
+        erased
+            .bind_node(Box::new(node))
+            .expect("擦除视图接线必须成功");
+
+        assert_eq!(
+            binding.get(),
+            Some(node),
+            "擦除视图写进去的节点，类型化绑定立刻能读到"
+        );
+        assert!(binding.is_bound());
+    }
+
+    #[test]
+    fn binding_a_node_of_the_wrong_type_is_refused_outright() {
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+        let erased = binding.erased();
+
+        let err = erased
+            .bind_node(Box::new(42usize))
+            .expect_err("类型不符必须显式报错");
+        assert!(matches!(err, DomError::Unsupported(_)), "实测：{err:?}");
+        assert!(!binding.is_bound(), "被拒绝的写不得留下痕迹");
+    }
+
+    #[test]
+    fn unbinding_the_erased_view_clears_the_typed_binding() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("canvas").expect("建节点必须成功");
+        let binding: ThisBinding<InMemoryDom> = ThisBinding::new();
+        let erased = binding.erased();
+
+        erased.bind_node(Box::new(node)).expect("接线必须成功");
+        assert!(binding.is_bound());
+
+        erased.unbind();
+        assert!(!binding.is_bound(), "擦除视图清引用 ⇒ 类型化绑定同步清空");
+        assert_eq!(binding.get(), None);
     }
 
     #[test]

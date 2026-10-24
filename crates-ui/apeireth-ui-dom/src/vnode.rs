@@ -3,6 +3,17 @@
 //! 设计文档 §5.1.1：VNode 是普通 Rust 类型（可 `PartialEq`、可 `Debug`）⇒ 断言
 //! 写成 `assert_eq!(vnode, expected)`，而不是「读源码文本断言」——这是消灭 38 处
 //! 源码镜像测试的结构性前提。
+//!
+//! ## 四个分区（设计文档 §5.1.1）
+//!
+//! | 分区 | 载体 | 差分策略 |
+//! |---|---|---|
+//! | `class` | `attrs` 里名为 `class` 的项 | **按 token 差分**（增删单个 class） |
+//! | `style` | `attrs` 里名为 `style` 的项 | 整体字符串比对，不同才写 |
+//! | `attrs` | 其余属性 | 键级差分（新增 / 改值 / 消失） |
+//! | `bindings` | [`ElementVNode::this_ref`]（`bind:this`） | 键级差分（槽位换了才重新接线） |
+
+use crate::binding::ThisRef;
 
 /// 列表项身份（key）：不透明的可比较值（设计文档 §5.2.3）。
 ///
@@ -179,6 +190,10 @@ pub struct ElementVNode {
     pub key: Option<Key>,
     /// 属性（保持写入顺序 ⇒ 差分可逐字对比）。
     pub attrs: Vec<(String, AttrValue)>,
+    /// `bind:this` 槽位（类型擦除；见 [`ThisRef`]）。
+    ///
+    /// `None` ⇒ 该元素没有元素引用绑定。
+    pub this_ref: Option<ThisRef>,
     /// 子节点。
     pub children: Vec<VNode>,
 }
@@ -190,6 +205,7 @@ impl ElementVNode {
             tag: tag.into(),
             key: None,
             attrs: Vec::new(),
+            this_ref: None,
             children: Vec::new(),
         }
     }
@@ -197,6 +213,14 @@ impl ElementVNode {
     /// 设置列表项身份（keyed 差分用）。
     pub fn key(mut self, key: impl Into<Key>) -> Self {
         self.key = Some(key.into());
+        self
+    }
+
+    /// 挂上 `bind:this` 槽位（元素引用绑定）。
+    ///
+    /// 槽位是**类型擦除**的（[`ThisRef`]）⇒ 虚拟树不必知道后端的节点类型。
+    pub fn this(mut self, this_ref: ThisRef) -> Self {
+        self.this_ref = Some(this_ref);
         self
     }
 
@@ -305,6 +329,12 @@ impl ElementBuilder {
     /// 设置列表项身份（keyed 差分用）。
     pub fn key(mut self, key: impl Into<Key>) -> Self {
         self.node = self.node.key(key);
+        self
+    }
+
+    /// 挂上 `bind:this` 槽位（元素引用绑定）。
+    pub fn this(mut self, this_ref: ThisRef) -> Self {
+        self.node = self.node.this(this_ref);
         self
     }
 

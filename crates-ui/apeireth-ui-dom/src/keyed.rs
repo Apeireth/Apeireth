@@ -41,9 +41,9 @@ pub enum KeyedDiffError {
     DuplicateKey {
         /// 重复的 key。
         key: Key,
-        /// 首次出现的位置（旧列表下标）。
+        /// 首次出现的位置（重复所在列表的下标）。
         first: usize,
-        /// 再次出现的位置（旧列表下标）。
+        /// 再次出现的位置（重复所在列表的下标）。
         second: usize,
     },
 }
@@ -222,8 +222,12 @@ pub fn list_diff_mode(old: &[VNode], new: &[VNode]) -> ListDiffMode {
 
 /// keyed 列表差分：按 key 配对 + LIS 最小移动。
 ///
-/// 返回 [`KeyedDiffError::DuplicateKey`] 的唯一情形是**同一侧出现重复 key**
+/// 返回 [`KeyedDiffError::DuplicateKey`] 的情形是**任一侧出现重复 key**
 /// （身份不唯一 ⇒ 差分不可判定）⇒ 显式报错，不静默取其一。
+///
+/// > **两侧都要查**（P2 补齐）：新列表里的重复 key 会让两个新槽位指向**同一个**
+/// > 旧节点 ⇒ 差分结果不可判定（渲染器会把同一个节点挂两次）。旧列表的重复
+/// > key 同理。
 pub fn diff_keyed(old: &[VNode], new: &[VNode]) -> Result<KeyedDiff, KeyedDiffError> {
     match list_diff_mode(old, new) {
         ListDiffMode::Unkeyed => Ok(diff_unkeyed(old, new)),
@@ -266,6 +270,21 @@ fn diff_by_key(old: &[VNode], new: &[VNode]) -> Result<KeyedDiff, KeyedDiffError
             continue;
         };
         if let Some(first) = old_index_by_key.insert(key, index) {
+            return Err(KeyedDiffError::DuplicateKey {
+                key: key.clone(),
+                first,
+                second: index,
+            });
+        }
+    }
+
+    // 新列表同样要查重复 key：两个新槽位指向同一个旧节点 ⇒ 差分不可判定。
+    let mut new_index_by_key: BTreeMap<&Key, usize> = BTreeMap::new();
+    for (index, child) in new.iter().enumerate() {
+        let Some(key) = child.key() else {
+            continue;
+        };
+        if let Some(first) = new_index_by_key.insert(key, index) {
             return Err(KeyedDiffError::DuplicateKey {
                 key: key.clone(),
                 first,
@@ -520,6 +539,31 @@ mod tests {
                 assert_eq!(second, 1);
             }
         }
+    }
+
+    /// **P2 补齐**：新列表里的重复 key 同样必须报错（身份不唯一 ⇒ 不可判定）。
+    #[test]
+    fn keyed_diff_rejects_duplicate_keys_in_the_new_list() {
+        let old = vec![keyed("a", "1")];
+        let new = vec![keyed("x", "1"), keyed("x", "2")];
+        let err = diff_keyed(&old, &new).expect_err("新列表重复 key 必须显式报错");
+        match err {
+            KeyedDiffError::DuplicateKey { key, first, second } => {
+                assert_eq!(key, Key::Str(String::from("x")));
+                assert_eq!(first, 0);
+                assert_eq!(second, 1);
+            }
+        }
+    }
+
+    /// **P2 补齐的反例**：两个不同 key 的新列表不受影响（不误报）。
+    #[test]
+    fn keyed_diff_accepts_distinct_keys_in_the_new_list() {
+        let old = vec![keyed("a", "1")];
+        let new = vec![keyed("x", "1"), keyed("y", "2")];
+        let diff = diff_keyed(&old, &new).expect("不同 key 必须成功");
+        assert_eq!(diff.matched(), &[None, None]);
+        assert_eq!(diff.inserted().len(), 2);
     }
 
     #[test]
