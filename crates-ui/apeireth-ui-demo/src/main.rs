@@ -18,10 +18,15 @@
 use apeireth_ui_core::UiComponent;
 #[cfg(not(target_arch = "wasm32"))]
 use apeireth_ui_demo::{
-    pilot_callbacks, pilot_item, tree_to_text, ApprovalCard, ApprovalCardProps, PilotState,
+    pilot_callbacks, pilot_item, tool_card_cases, tree_to_text, ApprovalCard, ApprovalCardProps,
+    PilotState,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use apeireth_ui_dom::Children;
+#[cfg(not(target_arch = "wasm32"))]
+use apeireth_ui_kit::tool_card::{
+    ToolCallCard, ToolCallCardProps, ToolCallLifecycleCard, ToolCallLifecycleCardProps,
+};
 
 /// 跑一遍试点流程，返回打印文本（入口与测试共用同一路径）。
 #[cfg(not(target_arch = "wasm32"))]
@@ -55,6 +60,34 @@ fn run_demo() -> String {
     state.allow();
     state.flush();
     out.push_str(&format!("决策：{:?}\n", state.decision().get()));
+
+    out.push_str(&tool_card_demo());
+    out
+}
+
+/// 跑一遍工具卡面流程，返回打印文本（**两张卡**各渲染一次）。
+#[cfg(not(target_arch = "wasm32"))]
+fn tool_card_demo() -> String {
+    let runtime = apeireth_ui_core::Runtime::new();
+    let mut out = String::new();
+    out.push_str("\n== 工具卡面（固定数据的第一组用例） ==\n");
+    let Some(case) = tool_card_cases().into_iter().next() else {
+        return out;
+    };
+    let tool = ToolCallCard::render(&ToolCallCardProps::new(
+        case.tool_call.clone(),
+        runtime.signal(true),
+        runtime.signal(true),
+    ));
+    out.push_str(&format!("--- {} ---\n", case.id));
+    out.push_str(&tree_to_text(&tool));
+    out.push('\n');
+    let lifecycle = ToolCallLifecycleCard::render(&ToolCallLifecycleCardProps::new(
+        case.lifecycle_call.clone(),
+        runtime.signal(true),
+    ));
+    out.push_str(&tree_to_text(&lifecycle));
+    out.push('\n');
     out
 }
 
@@ -86,11 +119,15 @@ pub mod wasm_app {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, Signal, UiComponent};
     use apeireth_ui_demo::{
-        pilot_callbacks, pilot_item, ApprovalCard, ApprovalCardProps, PilotState,
+        pilot_callbacks, pilot_item, tool_card_cases, ApprovalCard, ApprovalCardProps, PilotState,
     };
     use apeireth_ui_dom::{Children, Renderer, VNode, WebDom};
+    use apeireth_ui_kit::tool_card::{
+        ToolCallCard, ToolCallCardProps, ToolCallLifecycleCard, ToolCallLifecycleCardProps,
+    };
+    use apeireth_ui_macro::view;
     use wasm_bindgen::prelude::*;
     use web_sys::Element;
 
@@ -272,6 +309,12 @@ pub mod wasm_app {
     }
 
     /// 启动（模块装载时跑一次）。
+    ///
+    /// ## 两种应用形态
+    ///
+    /// 同一个 wasm 产物挂两种应用（试点审批卡 / 工具卡面）⇒ 由
+    /// `window.__APP_MODE__` 决定（**必须在 wasm 初始化之前**设定 ⇒ 初始化
+    /// 即挂载）。取值未知 ⇒ 挂**试点审批卡**（默认形态）。
     pub fn start() {
         let Some(window) = web_sys::window() else {
             return;
@@ -282,7 +325,217 @@ pub mod wasm_app {
         let Some(container) = document.get_element_by_id("app") else {
             return;
         };
+        if current_mode().as_deref() == Some(TOOLCARD_MODE) {
+            let _ = mount_toolcards(&container);
+            return;
+        }
         let _ = mount_into(&container);
+    }
+
+    /// 应用形态的全局键名（**在 wasm 初始化之前**由页面设定）。
+    const MODE_KEY: &str = "__APP_MODE__";
+
+    /// 工具卡面形态的取值。
+    const TOOLCARD_MODE: &str = "toolcard";
+
+    /// 读当前应用形态（`None` ⇒ 默认形态）。
+    fn current_mode() -> Option<String> {
+        let window = web_sys::window()?;
+        let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str(MODE_KEY)).ok()?;
+        if value.is_null() || value.is_undefined() {
+            return None;
+        }
+        Some(value.as_string()?)
+    }
+
+    // ── 工具卡面应用 ──────────────────────────────────────────────────────
+
+    /// 一组用例的交互信号（展开态 / 原始 JSON 态；**可共享**）。
+    #[derive(Clone)]
+    struct CaseSignals {
+        /// 工具卡的展开态。
+        tool_expanded: Signal<bool>,
+        /// 工具卡的原始 JSON 态。
+        tool_raw: Signal<bool>,
+        /// 生命周期卡的展开态。
+        lifecycle_expanded: Signal<bool>,
+    }
+
+    /// 工具卡面应用的状态（响应式部分；**可共享** ⇒ effect 闭包能捕获它）。
+    #[derive(Clone)]
+    struct ToolCardState {
+        /// 运行时（信号宿主；`Runtime` 本身可共享）。
+        runtime: Runtime,
+        /// 当前用例下标。
+        case_index: Signal<usize>,
+        /// 每组用例的交互信号。
+        cases: Vec<CaseSignals>,
+    }
+
+    impl ToolCardState {
+        /// 运行时（信号宿主）。
+        fn runtime(&self) -> &Runtime {
+            &self.runtime
+        }
+
+        /// 建一份状态（每组用例一套信号）。
+        fn new() -> Self {
+            let runtime = Runtime::new();
+            let count = tool_card_cases().len();
+            let cases = (0..count)
+                .map(|_| CaseSignals {
+                    tool_expanded: runtime.signal(false),
+                    tool_raw: runtime.signal(false),
+                    lifecycle_expanded: runtime.signal(false),
+                })
+                .collect();
+            Self {
+                case_index: runtime.signal(0),
+                cases,
+                runtime,
+            }
+        }
+    }
+
+    /// 工具卡面应用（wasm 侧的运行时状态）。
+    ///
+    /// 渲染器由 **effect 闭包**持有（`Rc` 共享 ⇒ 渲染器随闭包存活）⇒ 本结构
+    /// 只留状态。
+    struct ToolCardApp {
+        /// 应用状态。
+        state: ToolCardState,
+    }
+
+    thread_local! {
+        /// wasm 侧的单例应用（工具卡面形态）。
+        static TOOLCARD_APP: RefCell<Option<ToolCardApp>> = const { RefCell::new(None) };
+    }
+
+    /// 挂载工具卡面（两张卡 + 对照容器）。
+    fn mount_toolcards(container: &Element) -> Result<(), String> {
+        let dom = WebDom::new().map_err(|error| error.to_string())?;
+        let root: web_sys::Node = container.clone().into();
+        let mut renderer = Renderer::new(dom, root);
+
+        let state = ToolCardState::new();
+        let scheduler_state = state.clone();
+        scheduler_state
+            .runtime()
+            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+
+        renderer
+            .mount(render_toolcards(&state))
+            .map_err(|error| error.to_string())?;
+
+        let renderer = Rc::new(RefCell::new(renderer));
+        let effect_renderer = renderer.clone();
+        let effect_state = state.clone();
+        state.runtime().effect(move || {
+            let tree = render_toolcards(&effect_state);
+            let mut guard = effect_renderer.borrow_mut();
+            let _ = guard.patch(tree);
+        });
+
+        TOOLCARD_APP.with(|slot| {
+            *slot.borrow_mut() = Some(ToolCardApp { state });
+        });
+        Ok(())
+    }
+
+    /// 渲染工具卡面（对照容器 + 两张卡）。
+    fn render_toolcards(state: &ToolCardState) -> VNode {
+        let index = state.case_index.get();
+        let cases = tool_card_cases();
+        let Some(case) = cases.get(index) else {
+            return VNode::fragment(Vec::new());
+        };
+        let Some(signals) = state.cases.get(index) else {
+            return VNode::fragment(Vec::new());
+        };
+        let tool = ToolCallCard::render(&ToolCallCardProps::new(
+            case.tool_call.clone(),
+            signals.tool_expanded.clone(),
+            signals.tool_raw.clone(),
+        ));
+        let lifecycle = ToolCallLifecycleCard::render(&ToolCallLifecycleCardProps::new(
+            case.lifecycle_call.clone(),
+            signals.lifecycle_expanded.clone(),
+        ));
+        view! {
+            div(class = "toolcard-stage") {
+                { tool }
+                " "
+                { lifecycle }
+            }
+        }
+    }
+
+    /// 固定数据的用例数。
+    #[wasm_bindgen]
+    pub fn case_count() -> u32 {
+        tool_card_cases().len() as u32
+    }
+
+    /// 固定数据里全部 JSON 值的序列化结果（**浏览器差分测试**用）。
+    ///
+    /// 每项给出：紧凑序列化、缩进序列化（2 空格）、超长截断文本 ⇒ 浏览器侧用
+    /// 同一批值跑脚本侧的序列化 ⇒ **逐字节**比对。
+    #[wasm_bindgen]
+    pub fn json_probe() -> String {
+        use apeireth_ui_kit::json::JsonValue;
+        use apeireth_ui_kit::tool_card::stringify_value;
+
+        let mut values: Vec<(String, JsonValue)> = Vec::new();
+        for case in tool_card_cases() {
+            if let Some(args) = &case.tool_call.args {
+                values.push((format!("{}:tool-args", case.id), args.clone()));
+            }
+            if let Some(result) = &case.tool_call.result_full {
+                values.push((format!("{}:tool-result", case.id), result.clone()));
+            }
+            if let Some(args) = &case.lifecycle_call.arguments {
+                values.push((format!("{}:lifecycle-args", case.id), args.clone()));
+            }
+            if let Some(result) = &case.lifecycle_call.result {
+                values.push((format!("{}:lifecycle-result", case.id), result.clone()));
+            }
+        }
+        let items: Vec<JsonValue> = values
+            .iter()
+            .map(|(id, value)| {
+                JsonValue::Object(vec![
+                    (String::from("id"), JsonValue::String(id.clone())),
+                    (
+                        String::from("compact"),
+                        JsonValue::String(value.to_string_compact()),
+                    ),
+                    (
+                        String::from("pretty"),
+                        JsonValue::String(value.to_string_pretty()),
+                    ),
+                    (
+                        String::from("truncated"),
+                        JsonValue::String(stringify_value(value, 4000)),
+                    ),
+                ])
+            })
+            .collect();
+        JsonValue::Array(items).to_string_compact()
+    }
+
+    /// 切到第 `index` 组用例（越界 ⇒ 不切）。
+    #[wasm_bindgen]
+    pub fn select_case(index: u32) {
+        TOOLCARD_APP.with(|slot| {
+            let slot = slot.borrow();
+            let Some(app) = slot.as_ref() else {
+                return;
+            };
+            let count = tool_card_cases().len();
+            if (index as usize) < count {
+                app.state.case_index.set(index as usize);
+            }
+        });
     }
 }
 
@@ -295,5 +548,15 @@ mod tests {
         assert!(text.contains("批准"), "实测输出：{text}");
         assert!(text.contains("决策：None"), "实测输出：{text}");
         assert!(text.contains("决策：Some(true)"), "实测输出：{text}");
+    }
+
+    #[test]
+    fn demo_output_shows_the_tool_cards() {
+        let text = super::run_demo();
+        // 两张卡的根 class 都要出现（native 侧证明「组件 = Rust 函数」这条链跑得通）。
+        assert!(text.contains("tool-card"), "实测输出：{text}");
+        assert!(text.contains("tool-lifecycle-card"), "实测输出：{text}");
+        // 展开态 ⇒ 展开体出现。
+        assert!(text.contains("tool-body"), "实测输出：{text}");
     }
 }

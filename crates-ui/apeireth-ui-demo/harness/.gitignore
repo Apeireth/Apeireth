@@ -3,6 +3,8 @@ node_modules
 dist/
 public/design/
 public/pilot-card.css
+public/tool-card.css
+public/lifecycle-card.css
 public/provenance.json
 public/engine/
 out/

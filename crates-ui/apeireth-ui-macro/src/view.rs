@@ -682,6 +682,7 @@ impl<'a> Cursor<'a> {
     ///
     /// 支持的形态（够用且可判定）：
     /// - 标识符：`text`
+    /// - 括号组：`(key, value)`（**元组模式** / 括号表达式）⇒ 原文透传
     /// - 方法链 / 字段链：`a.b.c`、`a.b()`、`a.b()?.c()`
     /// - 直接调用：`format!("…")`
     /// - 前置 `!` / `-`：`!flag`
@@ -697,10 +698,17 @@ impl<'a> Cursor<'a> {
                 _ => break,
             }
         }
-        // 主体：标识符。
+        // 主体：**括号组**（元组模式 / 括号表达式）或标识符。
+        if let Some(TokKind::Group { open, .. }) = self.tokens.get(self.pos).map(|t| &t.kind) {
+            if *open == '(' {
+                // 整组透传（`(key, value)` ⇒ 模式原文；`(expr)` ⇒ 表达式原文）。
+                self.pos += 1;
+                return Ok(self.slice(start, self.pos));
+            }
+        }
         match self.peek().map(|token| token.ident()) {
             Some(Some(_)) => self.pos += 1,
-            _ => return Err("表达式缺失（期望一个标识符）".to_owned()),
+            _ => return Err("表达式缺失（期望一个标识符或括号组）".to_owned()),
         }
         // 直接调用：`name(...)`。
         if let Some(TokKind::Group { open, .. }) = self.tokens.get(self.pos).map(|t| &t.kind) {
@@ -782,12 +790,28 @@ fn parse_attr(tokens: &[Tok], source: &str) -> Result<Attr, String> {
     let Some(first) = tokens.first() else {
         return Err("属性为空".to_owned());
     };
-    let name = match &first.kind {
+    let mut name = match &first.kind {
         TokKind::Ident(text) => text.clone(),
         TokKind::Literal(text) => text.trim_matches('"').to_owned(),
         other => return Err(format!("属性名非法：{other:?}")),
     };
     let mut index = 1usize;
+    // 连字符属性名（`aria-label` / `aria-expanded` / `data-*`）⇒ 逐段拼回。
+    while let (
+        Some(Tok {
+            kind: TokKind::Punct('-'),
+            ..
+        }),
+        Some(Tok {
+            kind: TokKind::Ident(text),
+            ..
+        }),
+    ) = (tokens.get(index), tokens.get(index + 1))
+    {
+        name.push('-');
+        name.push_str(text);
+        index += 2;
+    }
     let mut sub: Option<String> = None;
     if let Some(Tok {
         kind: TokKind::Punct(':'),
@@ -1151,6 +1175,28 @@ mod tests {
         );
         assert!(
             code.contains("collect::<::std::vec::Vec<_>>()"),
+            "实测：{code}"
+        );
+    }
+
+    #[test]
+    fn tuple_patterns_are_passed_through_verbatim() {
+        let code = gen("ul { for (key, value) in entries { li { key } } }");
+        assert!(
+            code.contains("entries).into_iter().map(|(key, value)|"),
+            "实测：{code}"
+        );
+    }
+
+    #[test]
+    fn hyphenated_attribute_names_are_joined_back() {
+        let code = gen("div(aria-expanded = flag, aria-label = \"收起详情\") { \"x\" }");
+        assert!(
+            code.contains("__n.attr(\"aria-expanded\", flag)"),
+            "实测：{code}"
+        );
+        assert!(
+            code.contains("__n.attr(\"aria-label\", \"收起详情\")"),
             "实测：{code}"
         );
     }

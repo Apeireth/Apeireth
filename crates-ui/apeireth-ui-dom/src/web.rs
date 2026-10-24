@@ -97,6 +97,27 @@ impl WebDom {
         Ok(())
     }
 
+    /// 摘掉某节点上**指定事件类型**的监听器（其余类型的**保留**）。
+    ///
+    /// 用途：挂第二个事件类型的监听器前，只摘**同类型**的 ⇒ 先挂的那个不被
+    /// 误摘（真实 DOM 后端曾因此让「同时挂点击与键盘」的元素点不动）。
+    fn remove_listeners_of_kind(&self, node: &Node, kind: EventKind) -> Result<(), DomError> {
+        let mut listeners = self.listeners.borrow_mut();
+        let mut kept = Vec::with_capacity(listeners.len());
+        for listener in listeners.drain(..) {
+            if &listener.node == node && listener.kind == kind {
+                let _ = node.remove_event_listener_with_callback(
+                    listener.kind.as_str(),
+                    listener.closure.as_ref().unchecked_ref(),
+                );
+            } else {
+                kept.push(listener);
+            }
+        }
+        *listeners = kept;
+        Ok(())
+    }
+
     /// 取节点上的元素视图（非元素 ⇒ [`DomError::Unsupported`]）。
     fn as_element<'a>(&self, node: &'a Node) -> Result<&'a Element, DomError> {
         node.dyn_ref::<Element>().ok_or_else(|| {
@@ -266,8 +287,12 @@ impl Dom for WebDom {
         handler: ElementHandler,
     ) -> Result<(), DomError> {
         self.ensure_writable(node)?;
-        // 同一节点同一事件类型只留一个监听器（覆盖语义）。
-        self.remove_listeners(node)?;
+        // 同一节点同一事件类型只留一个监听器（覆盖语义）⇒ 只摘**同事件类型**的。
+        //
+        // ⚠️ 不能摘「全部」：一个元素上挂**多个事件类型**的处理器时（例：标题
+        // 同时挂 `click` 与 `keydown`），摘全部会把先挂的那个一起带走 ⇒ 先挂的
+        // 处理器**静默失效**（点击不再触发）。
+        self.remove_listeners_of_kind(node, kind)?;
         let closure = Closure::wrap(Box::new(move |event: Event| {
             let target = event
                 .target()

@@ -26,6 +26,9 @@ export default defineConfig({
       input: {
         engine: 'engine/index.html',
         reference: 'reference/index.html',
+        // 工具卡面对照（参考侧 / 引擎侧各一页）。
+        engineTool: 'engine/tool/index.html',
+        referenceTool: 'reference/tool/index.html',
       },
       // wasm 胶水是**构建期产物**，放在 public/engine/pkg/ ⇒ 运行时按绝对
       // 路径装载（不进打包图 ⇒ wasm 二进制原样送达）。

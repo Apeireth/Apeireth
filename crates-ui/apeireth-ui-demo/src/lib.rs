@@ -31,9 +31,12 @@
 pub mod approval_card;
 pub mod fixture;
 mod fixture_generated;
+pub mod toolcard_fixture;
+mod toolcard_fixture_generated;
 
 pub use approval_card::{format_clock_utc, ApprovalCard, ApprovalCardProps, ApprovalItem};
 pub use fixture::pilot_item;
+pub use toolcard_fixture::{tool_card_cases, ToolCardCase};
 
 use std::rc::Rc;
 

@@ -7,7 +7,7 @@
 #   2. 构建 wasm 产物（release）
 #   3. wasm-bindgen ⇒ JS 胶水 + wasm（放进 harness 的 public/engine/pkg/）
 #   4. vite build ⇒ 两个页面（参考侧 / 引擎侧）+ 静态资产
-#   5. 跑对照（像素 + 逐帧）
+#   5. 跑对照（像素 + 逐帧 + DOM 全等 + JSON 差分）
 #
 # 依赖：cargo（wasm32 target）、wasm-bindgen-cli 0.2.129、node + vite、python3
 # （websocket-client + Pillow）、系统 Chromium。
@@ -46,4 +46,7 @@ fi
 (cd "${HERE}" && npx --no-install vite build)
 
 echo "── 5/5 对照（像素 + 逐帧） ──"
+# 试点（审批卡）对照。
 python3 "${HERE}/tools/compare.py"
+# 工具卡面对照（两张卡 + JSON 差分）。
+python3 "${HERE}/tools/compare_toolcard.py"

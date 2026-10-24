@@ -16,6 +16,15 @@
 //! - 组件注册表（[`ComponentRegistry`]，契约登记的 UI 组件扩展点）、类型擦除
 //!   的组件索引与按名渲染、props 类型不匹配的显式报错。
 //!
+//! ## ✅ 已实现（工具卡面批）
+//!
+//! - **工具卡**（[`ToolCallCard`]）与**工具调用生命周期卡**
+//!   （[`ToolCallLifecycleCard`]）：结构 / class 名 / 文本节点逐条对齐生产组件。
+//! - **JSON 值类型与序列化器**（[`json`]）：对象**保插入序**，序列化结果与脚本侧
+//!   的序列化**逐字节相同**（浏览器差分测试钉住）。
+//! - **脚本侧数值 / 文本语义**（[`num`]）：数值转文本、固定小数位、取整、
+//!   UTF-16 长度与切片。
+//!
 //! ## 🔵 未接线
 //!
 //! - 其余共享组件（列表 / 输入 / 对话框 / 开关 / 标签页等）：P5 迁移批逐面
@@ -35,13 +44,21 @@ pub mod button;
 pub mod card;
 pub mod icon;
 pub mod icon_data;
+pub mod json;
+pub mod num;
 pub mod registry;
+pub mod tool_card;
 
 pub use badge::{Badge, BadgeProps};
 pub use button::{Button, ButtonProps};
 pub use card::{CardShell, CardShellProps};
 pub use icon::{Icon, IconData, IconNode, IconProps};
+pub use json::JsonValue;
 pub use registry::{ComponentRegistry, RegisteredComponent, RegistryError};
+pub use tool_card::{
+    ToolCallCard, ToolCallCardProps, ToolCallDetails, ToolCallLifecycleCall, ToolCallLifecycleCard,
+    ToolCallLifecycleCardProps, ToolCallLifecycleStatus, ToolCallStatus,
+};
 
 #[cfg(test)]
 mod tests {

@@ -26,6 +26,11 @@ path = "src/lib.rs"
 # 内部依赖：DOM 绑定层（组件产出虚拟节点）+ 响应式核心（组件 trait 边界）。
 apeireth-ui-dom = { path = "../apeireth-ui-dom" }
 apeireth-ui-core = { path = "../apeireth-ui-core" }
+# 过程宏（`view!`）—— 卡面组件的内部结构由宏构造。
+# ⚠️ 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**，
+# 见 apeireth-ui-macro 的 crate 文档头「运行时路径约定」）⇒ 这两个 crate 必须是
+# 使用方的**直接依赖**（上面已列）。
+apeireth-ui-macro = { path = "../apeireth-ui-macro" }
 # P0 阶段纪律：0 外部依赖。
 
 [lints]

@@ -1252,6 +1252,52 @@ mod tests {
         assert!(renderer.dom().is_detached(node));
     }
 
+    /// 一个元素上**多个事件类型**的处理器 ⇒ 都要挂上、都要能触发。
+    ///
+    /// 契约：挂载时每个事件类型各挂一个监听器；挂第二个**不得**把先挂的带走
+    /// （真实 DOM 后端曾因此让「同时挂点击与键盘」的标题**点不动**）。
+    #[test]
+    fn several_event_kinds_on_one_element_all_fire() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let clicks = Rc::new(Cell::new(0u32));
+        let keys = Rc::new(Cell::new(0u32));
+
+        let click_counter = clicks.clone();
+        let key_counter = keys.clone();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .handler(
+                        crate::dom::EventKind::Click,
+                        crate::events::ElementHandler::new(move |_event| {
+                            click_counter.set(click_counter.get() + 1);
+                        }),
+                    )
+                    .handler(
+                        crate::dom::EventKind::KeyDown,
+                        crate::events::ElementHandler::new(move |_event| {
+                            key_counter.set(key_counter.get() + 1);
+                        }),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+
+        let node = child_order(&renderer)[0];
+        assert_eq!(
+            renderer.dom().dispatch(node, crate::dom::EventKind::Click),
+            1
+        );
+        assert_eq!(
+            renderer
+                .dom()
+                .dispatch(node, crate::dom::EventKind::KeyDown),
+            1
+        );
+        assert_eq!(clicks.get(), 1, "点击处理器必须仍能触发");
+        assert_eq!(keys.get(), 1, "键盘处理器必须能触发");
+    }
+
     /// **反例**：换了处理器 ⇒ 重挂监听器（新的处理器生效、旧的失效）。
     #[test]
     fn patching_with_another_handler_rebinds_the_listener() {

@@ -280,10 +280,11 @@ jobs:
           arguments: --all-features
 
   # =========================================================================
-  # 6. 试点对照门禁 — 浏览器内像素对照 + 逐帧对照（P3 验收门）
+  # 6. 对照门禁 — 浏览器内像素对照 + 逐帧对照 + DOM 全等 + JSON 差分
+  #    （P3 试点验收门 + 工具卡面批验收门）
   # =========================================================================
   pilot-compare:
-    name: 试点对照（像素 ≤1% + 逐帧）
+    name: 对照（试点 + 工具卡面：像素 ≤1% + 逐帧 + DOM 全等 + JSON 差分）
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -356,7 +357,7 @@ jobs:
       # 对照 harness 的完整流水线：抽取单一真源资产 ⇒ 构建 wasm ⇒ wasm-bindgen
       # ⇒ vite build ⇒ 像素 / 逐帧对照。
       # ⚠️ CHROME 可覆盖（runner 上的浏览器路径与本机不同）。
-      - name: 跑对照（像素 + 逐帧）
+      - name: 跑对照（试点 + 工具卡面：像素 + 逐帧 + DOM 全等 + JSON 差分）
         env:
           CHROME: ${{ env.CHROME_PATH }}
         run: |
@@ -367,7 +368,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pilot-compare-evidence
+          name: ui-engine-compare-evidence
           path: |
             crates-ui/apeireth-ui-demo/harness/out/
             crates-ui/apeireth-ui-demo/harness/evidence/
