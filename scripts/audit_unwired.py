@@ -40,6 +40,15 @@ import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from unwired_baseline_common import (  # noqa: E402
+    GROUP_DESC,
+    render,
+    split_entry,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "scripts" / "unwired-baseline.txt"
@@ -208,7 +217,11 @@ def main() -> int:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            baseline.add(line)
+            # 剥掉行尾的分组标记（`# G3` / `# G3 理由`）——
+            # 基线的**条目身份**是 `kind symbol`，标记只是注释。
+            entry = line.split("#", 1)[0].strip()
+            if entry:
+                baseline.add(entry)
 
     # **基线只记 `orphan`（真零引用）**。
     #
@@ -218,15 +231,41 @@ def main() -> int:
     current = {f"{kind} {name}": f"{rel}" for kind, name, rel, _, _ in rows if kind == "orphan"}
 
     if args.update:
-        lines = [
-            "# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；只减不增）",
-            "# 每行: <test-only|orphan> <symbol>    # 理由（人工复核时补）",
-            "",
-        ]
+        # **保留人工资产**：头部说明与每行的**分组标记**都是人写的判断依据。
+        # 工具把它们冲掉，等于让每次还债都从零重建分类 —— 而且很可能悄悄丢掉判断依据。
+        #
+        # 分组信息放**行内**（`# <GROUP>`）而不是靠行序 ⇒ 「谁属于哪组」是数据而非
+        # 排版，两个工具（`--update` 与 `group_unwired_baseline.py`）才能输出**逐字一致**，
+        # 从而互相验证。
+        entries: dict[str, str] = {}
+        old_group_of: dict[str, str] = {}
+        if BASELINE.exists():
+            for raw_line in BASELINE.read_text(encoding="utf-8").splitlines():
+                stripped = raw_line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                _, symbol, group, reason = split_entry(stripped)
+                if not symbol:
+                    continue
+                entries[symbol] = reason
+                old_group_of[symbol] = group or "G5"
+
+        # 组内顺序：旧文件里的原序在前，新出现的按字母序追加在后
+        groups: dict[str, list[str]] = {group: [] for group in GROUP_DESC}
+        for symbol, group in old_group_of.items():
+            if f"orphan {symbol}" in current:
+                groups.setdefault(group, []).append(symbol)
+        placed = {symbol for items in groups.values() for symbol in items}
         for key in sorted(current):
-            lines.append(key)
-        BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"基线已重写: {BASELINE.relative_to(ROOT)}（{len(current)} 条）")
+            symbol = key.split(None, 1)[1].strip() if len(key.split(None, 1)) > 1 else key.strip()
+            if symbol not in placed:
+                groups.setdefault("G5", []).append(symbol)  # 新孤儿先进待判组
+
+        BASELINE.write_text(render(entries, groups), encoding="utf-8")
+        print(
+            f"基线已重写: {BASELINE.relative_to(ROOT)}"
+            f"（{len(current)} 条；保留分组标记与人工注释）"
+        )
         return 0
 
     if args.check:

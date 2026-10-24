@@ -1,348 +1,209 @@
-# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；只减不增）
-# 每行: <test-only|orphan> <symbol>    # 理由（人工复核时补）
-
-orphan __register_all_asserts
-orphan accumulator_mut
-orphan active_profile
-orphan adapt_gate
-orphan add_action
-orphan allow_capability
-orphan apeireth_sdk_py
-orphan approval_event_fields
-orphan as_session_store
-orphan audit_diff
-orphan begin_wait
-orphan beside_feeds
-orphan bio_care_assembly_from_env
-orphan bio_care_config_from_env
-orphan bio_circadian_wiring_from_env
-orphan bio_lifecycle_module_from_env_value
-orphan bottom
-orphan claim_count
-orphan clear_session
-orphan clear_working
-orphan closure_of
-orphan consolidate_governed
-orphan default_min_count
-orphan deviation
-orphan disarm
-orphan dispatch_gateway_serve
-orphan end_wait
-orphan engine_mut
-orphan ensure_governance
-orphan entity_mut
-orphan events_with_ids
-orphan evict_one
-orphan execute_streaming
-orphan explicit_allow_list
-orphan extract_features
-orphan extract_features_v2
-orphan family_enforced
-orphan fetch_governed
-orphan from_decision
-orphan from_episode
-orphan generate_portable_config
-orphan get_for_subject
-orphan get_history
-orphan get_page
-orphan get_persona
-orphan governance_cas_failure
-orphan graph_snapshot
-orphan has_signal
-orphan held_for
-orphan idle_elapsed
-orphan is_compatible
-orphan is_episode_forgotten
-orphan is_satisfied_by
-orphan is_tripped
-orphan is_verbatim_zone
-orphan last_watch
-orphan library_root
-orphan links_for_diary
-orphan list_active
-orphan load_graph
-orphan matches_word
-orphan materialize_to_sink
-orphan mcts_search
-orphan mine_and_load
-orphan minimax_default
-orphan mood_trend
-orphan nervous_system_from_frame
-orphan next_occurrence_after
-orphan no_bio_care_inputs
-orphan not_wired_reason
-orphan outbound_budget
-orphan put_default
-orphan put_episode_full
-orphan query_as_of
-orphan query_facts
-orphan query_recent
-orphan query_with_time_range
-orphan rebind
-orphan recall_by_mood
-orphan recall_with_policy
-orphan recent_actions
-orphan reconnect_attempts
-orphan record_tool_result
-orphan record_turn_usage_at
-orphan register_provider
-orphan remove_job
-orphan repetition_policy
-orphan retract_relation
-orphan retrieve_with_reranker
-orphan rule_count
-orphan scalar
-orphan sdk_method_names
-orphan select_candidates
-orphan session_state
-orphan set_event_sink
-orphan set_last_hold
-orphan set_potential
-orphan set_quiet_threshold
-orphan shard_count
-orphan should_suppress
-orphan snapshot_from_env
-orphan state_for
-orphan state_mut
-orphan stats_ref
-orphan stop_all
-orphan strategy_kind
-orphan streaks
-orphan stream_len
-orphan to_prompt
-orphan tool_paths
-orphan total_subscriptions
-orphan traverse_from
-orphan upsert_hallway
-orphan verdict_keys_for_principle
-orphan with_access_recorder
-orphan with_age
-orphan with_allowed_capability
-orphan with_as_of
-orphan with_attrs
-orphan with_backend
-orphan with_behavior
-orphan with_bio_self_status_from_env
-orphan with_busy_timeout
-orphan with_capabilities
-orphan with_clear_env
-orphan with_data
-orphan with_date
-orphan with_deadline
-orphan with_deep_risk_floor
-orphan with_depth_increment
-orphan with_envelope_budget
-orphan with_foreign_keys
-orphan with_importance_weight
-orphan with_journal_mode
-orphan with_len
-orphan with_llm_proposer
-orphan with_material_source
-orphan with_max_episodes
-orphan with_metrics_window
-orphan with_min_candidate_score
-orphan with_miner
-orphan with_output_bounds
-orphan with_port
-orphan with_preview_chars
-orphan with_proactive_budget
-orphan with_quorum_gate_probe
-orphan with_ranking_config
-orphan with_rate_limiting
-orphan with_reader
-orphan with_runtime_overrides
-orphan with_safety_provider
-orphan with_session_label
-orphan with_shell_executable
-orphan with_synchronous
-orphan with_system_clock
-orphan with_system_markers
-orphan with_system_prompt
-orphan with_task_scope
-orphan with_task_type
-orphan with_used
-orphan with_user_agent
-orphan with_voices_error
-orphan without_as_of
+# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；**只减不增**）
+#
+# 每行: orphan <symbol>  # <分组>
+#
+# ============================================================================
+# 覆盖面与语义（2026-10-24 第三轮修正）
+# ============================================================================
+# **覆盖全仓 30 个 crate**（`crates/*/*/src` + `crates/*/*/tests`）。
+# 旧基线只扫 3 个目录 ⇒ `apeireth-memory` 等 crate 完全没进视野，
+# 「教训对象三个写入 API 全仓零调用」因此一直没被发现。
+#
+# **只记 `orphan`（真零引用）**，不记 `test-only`（库 API 被集成测试覆盖 = 正常状态）。
+#
+# ============================================================================
+# 判据可靠度
+# ============================================================================
+#   「生产零引用」        —— 高（已剔注释/字符串/`use` 导入，保留「作为值传递」形态）
+#   「是否被 tests/ 覆盖」 —— 高（本版已扫 tests/）
+# 已知盲区（都导致假阳性，方向安全）：宏展开、按名字字符串动态查找、
+# 跨 crate 的 `pub use` 重导出链。
+#
+# ============================================================================
+# 缩表纪律
+# ============================================================================
+# 1. **只减不增**：新增符号必须先进 main 并被生产调用，或在此写明理由；
+# 2. **每还一条债就缩一行**：接线/删除后 `--update` 一次，让数字真实下降；
+# 3. **不靠改判据缩表**（那是 cosmetic 抵扣）—— 判据改严必须说明「旧判据错在哪」；
+# 4. **`--update` 保留人工资产**：头部说明与行内分组标记是人写的判断依据，工具不许冲掉；
+# 5. **分组由 `scripts/group_unwired_baseline.py` 按规则生成**，规则集中维护、自动自校验。
+#
+# ============================================================================
+# 已还的债（证明缩表在发生）
+# ============================================================================
+#   - `replaced_any`（egress_gate）→ 删（名字说「本次」实读全局计数，名不符实）；
+#   - `loop_config_mut_for_test`（orchestrator）→ 删（零调用，连集成测试都不用）；
+#   - 第四轮：13 条逐条确认的真死代码 → 删（清单见 `unwired-debt-audit-2026-10-24.md`）；
+#   - 第四轮：`ToolDescAuditor::audit` / `audit_diff` 接入 MCP 目录 ⇒
+#     **OWASP ASI-01 描述投毒防线从「文档宣称」变成「真在拦」**。
+#
+# ============================================================================
+# 分组（每组条数写在组标题里）
+# ============================================================================
 
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
 # --- G2（1 条）：W1 IM 通道（owner 裁定**暂缓**）。**有意不接，不是遗漏。**
 
-orphan closure_of
+orphan closure_of  # G2
 
 # --- G3（31 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
-orphan bio_care_assembly_from_env
-orphan bio_circadian_wiring_from_env
-orphan bio_lifecycle_module_from_env_value
-orphan deviation
-orphan disarm
-orphan engine_mut
-orphan entity_mut
-orphan from_episode
-orphan graph_snapshot
-orphan load_graph
-orphan mcts_search
-orphan mine_and_load
-orphan mood_trend
-orphan no_bio_care_inputs
-orphan recall_by_mood
-orphan record_tool_result
-orphan set_last_hold
-orphan should_suppress
-orphan state_mut
-orphan stop_all
-orphan to_prompt
-orphan with_access_recorder
-orphan with_attrs
-orphan with_deadline
-orphan with_depth_increment
-orphan with_llm_proposer
-orphan with_material_source
-orphan with_miner
-orphan with_quorum_gate_probe
-orphan with_system_markers
-orphan with_task_type
+orphan bio_care_assembly_from_env  # G3
+orphan bio_circadian_wiring_from_env  # G3
+orphan bio_lifecycle_module_from_env_value  # G3
+orphan deviation  # G3
+orphan disarm  # G3
+orphan engine_mut  # G3
+orphan entity_mut  # G3
+orphan from_episode  # G3
+orphan graph_snapshot  # G3
+orphan load_graph  # G3
+orphan mcts_search  # G3
+orphan mine_and_load  # G3
+orphan mood_trend  # G3
+orphan no_bio_care_inputs  # G3
+orphan recall_by_mood  # G3
+orphan record_tool_result  # G3
+orphan set_last_hold  # G3
+orphan should_suppress  # G3
+orphan state_mut  # G3
+orphan stop_all  # G3
+orphan to_prompt  # G3
+orphan with_access_recorder  # G3
+orphan with_attrs  # G3
+orphan with_deadline  # G3
+orphan with_depth_increment  # G3
+orphan with_llm_proposer  # G3
+orphan with_material_source  # G3
+orphan with_miner  # G3
+orphan with_quorum_gate_probe  # G3
+orphan with_system_markers  # G3
+orphan with_task_type  # G3
 
 # --- G4（38 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
-orphan with_age
-orphan with_allowed_capability
-orphan with_as_of
-orphan with_backend
-orphan with_behavior
-orphan with_bio_self_status_from_env
-orphan with_busy_timeout
-orphan with_capabilities
-orphan with_clear_env
-orphan with_data
-orphan with_date
-orphan with_deep_risk_floor
-orphan with_envelope_budget
-orphan with_foreign_keys
-orphan with_importance_weight
-orphan with_journal_mode
-orphan with_len
-orphan with_max_episodes
-orphan with_metrics_window
-orphan with_min_candidate_score
-orphan with_output_bounds
-orphan with_port
-orphan with_preview_chars
-orphan with_proactive_budget
-orphan with_ranking_config
-orphan with_rate_limiting
-orphan with_reader
-orphan with_runtime_overrides
-orphan with_safety_provider
-orphan with_session_label
-orphan with_shell_executable
-orphan with_synchronous
-orphan with_system_clock
-orphan with_system_prompt
-orphan with_task_scope
-orphan with_used
-orphan with_user_agent
-orphan with_voices_error
+orphan with_age  # G4
+orphan with_allowed_capability  # G4
+orphan with_as_of  # G4
+orphan with_backend  # G4
+orphan with_behavior  # G4
+orphan with_bio_self_status_from_env  # G4
+orphan with_busy_timeout  # G4
+orphan with_capabilities  # G4
+orphan with_clear_env  # G4
+orphan with_data  # G4
+orphan with_date  # G4
+orphan with_deep_risk_floor  # G4
+orphan with_envelope_budget  # G4
+orphan with_foreign_keys  # G4
+orphan with_importance_weight  # G4
+orphan with_journal_mode  # G4
+orphan with_len  # G4
+orphan with_max_episodes  # G4
+orphan with_metrics_window  # G4
+orphan with_min_candidate_score  # G4
+orphan with_output_bounds  # G4
+orphan with_port  # G4
+orphan with_preview_chars  # G4
+orphan with_proactive_budget  # G4
+orphan with_ranking_config  # G4
+orphan with_rate_limiting  # G4
+orphan with_reader  # G4
+orphan with_runtime_overrides  # G4
+orphan with_safety_provider  # G4
+orphan with_session_label  # G4
+orphan with_shell_executable  # G4
+orphan with_synchronous  # G4
+orphan with_system_clock  # G4
+orphan with_system_prompt  # G4
+orphan with_task_scope  # G4
+orphan with_used  # G4
+orphan with_user_agent  # G4
+orphan with_voices_error  # G4
 
-# --- G5（77 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（7 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
-orphan __register_all_asserts
-orphan accumulator_mut
-orphan active_profile
-orphan adapt_gate
-orphan add_action
-orphan allow_capability
-orphan apeireth_sdk_py
-orphan approval_event_fields
-orphan as_session_store
-orphan audit_diff
-orphan begin_wait
-orphan beside_feeds
-orphan bottom
-orphan claim_count
-orphan clear_session
-orphan clear_working
-orphan default_min_count
-orphan end_wait
-orphan ensure_governance
-orphan evict_one
-orphan execute_streaming
-orphan explicit_allow_list
-orphan extract_features
-orphan extract_features_v2
-orphan family_enforced
-orphan fetch_governed
-orphan from_decision
-orphan governance_cas_failure
-orphan has_signal
-orphan held_for
-orphan idle_elapsed
-orphan is_compatible
-orphan is_episode_forgotten
-orphan is_satisfied_by
-orphan is_tripped
-orphan is_verbatim_zone
-orphan last_watch
-orphan library_root
-orphan links_for_diary
-orphan matches_word
-orphan materialize_to_sink
-orphan minimax_default
-orphan nervous_system_from_frame
-orphan next_occurrence_after
-orphan not_wired_reason
-orphan outbound_budget
-orphan put_default
-orphan put_episode_full
-orphan query_with_time_range
-orphan rebind
-orphan recent_actions
-orphan reconnect_attempts
-orphan record_turn_usage_at
-orphan register_provider
-orphan remove_job
-orphan repetition_policy
-orphan retract_relation
-orphan retrieve_with_reranker
-orphan rule_count
-orphan scalar
-orphan sdk_method_names
-orphan session_state
-orphan set_event_sink
-orphan set_potential
-orphan set_quiet_threshold
-orphan shard_count
-orphan state_for
-orphan stats_ref
-orphan strategy_kind
-orphan streaks
-orphan stream_len
-orphan tool_paths
-orphan total_subscriptions
-orphan traverse_from
-orphan upsert_hallway
-orphan verdict_keys_for_principle
-orphan without_as_of
+orphan begin_wait  # G5
+orphan clear_session  # G5
+orphan end_wait  # G5
+orphan from_decision  # G5
+orphan idle_elapsed  # G5
+orphan is_tripped  # G5
+orphan verdict_keys_for_principle  # G5
 
-# --- G6（16 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装。已逐条核查过（见 `unwired-memory-audit-2026-10-24.md`）。
+# --- G6（72 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
-orphan bio_care_config_from_env
-orphan consolidate_governed
-orphan dispatch_gateway_serve
-orphan events_with_ids
-orphan generate_portable_config
-orphan get_for_subject
-orphan get_history
-orphan get_page
-orphan get_persona
-orphan list_active
-orphan query_as_of
-orphan query_facts
-orphan query_recent
-orphan recall_with_policy
-orphan select_candidates
-orphan snapshot_from_env
-
+orphan recall_with_policy  # G6
+orphan retract_relation  # G6
+orphan select_candidates  # G6
+orphan accumulator_mut  # G6
+orphan active_profile  # G6
+orphan adapt_gate  # G6
+orphan add_action  # G6
+orphan allow_capability  # G6
+orphan apeireth_sdk_py  # G6
+orphan beside_feeds  # G6
+orphan bio_care_config_from_env  # G6
+orphan claim_count  # G6
+orphan consolidate_governed  # G6
+orphan default_min_count  # G6
+orphan dispatch_gateway_serve  # G6
+orphan ensure_governance  # G6
+orphan events_with_ids  # G6
+orphan execute_streaming  # G6
+orphan explicit_allow_list  # G6
+orphan extract_features  # G6
+orphan extract_features_v2  # G6
+orphan family_enforced  # G6
+orphan fetch_governed  # G6
+orphan generate_portable_config  # G6
+orphan get_for_subject  # G6
+orphan get_history  # G6
+orphan get_page  # G6
+orphan get_persona  # G6
+orphan governance_cas_failure  # G6
+orphan has_signal  # G6
+orphan held_for  # G6
+orphan is_compatible  # G6
+orphan is_episode_forgotten  # G6
+orphan is_satisfied_by  # G6
+orphan last_watch  # G6
+orphan library_root  # G6
+orphan links_for_diary  # G6
+orphan list_active  # G6
+orphan matches_word  # G6
+orphan materialize_to_sink  # G6
+orphan minimax_default  # G6
+orphan nervous_system_from_frame  # G6
+orphan not_wired_reason  # G6
+orphan outbound_budget  # G6
+orphan put_default  # G6
+orphan put_episode_full  # G6
+orphan query_as_of  # G6
+orphan query_facts  # G6
+orphan query_recent  # G6
+orphan query_with_time_range  # G6
+orphan rebind  # G6
+orphan recent_actions  # G6
+orphan reconnect_attempts  # G6
+orphan register_provider  # G6
+orphan remove_job  # G6
+orphan repetition_policy  # G6
+orphan retrieve_with_reranker  # G6
+orphan rule_count  # G6
+orphan scalar  # G6
+orphan sdk_method_names  # G6
+orphan session_state  # G6
+orphan set_quiet_threshold  # G6
+orphan shard_count  # G6
+orphan snapshot_from_env  # G6
+orphan strategy_kind  # G6
+orphan streaks  # G6
+orphan stream_len  # G6
+orphan tool_paths  # G6
+orphan total_subscriptions  # G6
+orphan traverse_from  # G6
+orphan upsert_hallway  # G6
+orphan without_as_of  # G6

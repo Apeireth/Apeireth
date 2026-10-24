@@ -474,21 +474,6 @@ pub fn record_turn_usage(
     );
 }
 
-/// [`record_turn_usage`] 的路径可注入版本（测试用）。
-pub fn record_turn_usage_at(
-    paths: &OnboardingPaths,
-    prompt_chars: usize,
-    response: &apeireth_runtime::canonical::TurnResponse,
-) {
-    record_usage_at(
-        paths,
-        prompt_chars,
-        response.rounds,
-        response.text.chars().count(),
-        u64::from(response.usage.completion_tokens),
-    );
-}
-
 /// 用量回写内核（纯标量，[`record_turn_usage`] / [`record_turn_usage_at`] 共用）。
 ///
 /// 无档案 / 非普通用户 / 自动调参关 → no-op；写失败静默（调参状态是优化信号
