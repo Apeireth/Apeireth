@@ -218,3 +218,71 @@ jobs:
           echo "wasm 产物体积："
           find target/wasm32-unknown-unknown/release -maxdepth 1 -name '*.wasm' \
             -printf '  %f  %s bytes\n' 2>/dev/null || echo "  （本批无 .wasm 产物）"
+
+  # =========================================================================
+  # 6. 试点对照门禁 — 浏览器内像素对照 + 逐帧对照（P3 验收门）
+  # =========================================================================
+  pilot-compare:
+    name: 试点对照（像素 ≤1% + 逐帧）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates-ui/apeireth-ui-demo/harness
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+
+      - name: Setup Node + pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 生产前端的依赖：**只读引用**（参考侧要编译生产组件 ⇒ 需要它的
+      # svelte / lucide-svelte）。装在它自己的目录里，不改它的任何文件。
+      - name: 安装生产前端依赖（只读引用）
+        working-directory: frontend/companion-desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: 安装试点 harness 依赖
+        run: pnpm install --no-frozen-lockfile
+
+      # wasm-bindgen CLI（版本与 crates-ui 的 wasm-bindgen **精确一致**）。
+      - name: 安装 wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+
+      - name: 安装 Python 依赖（CDP 驱动 + 像素差分）
+        run: python3 -m pip install --quiet websocket-client pillow
+
+      # 对照 harness 的完整流水线：抽取单一真源资产 ⇒ 构建 wasm ⇒ wasm-bindgen
+      # ⇒ vite build ⇒ 像素 / 逐帧对照。
+      # ⚠️ CHROME 可覆盖（runner 上的浏览器路径与本机不同）。
+      - name: 跑对照（像素 + 逐帧）
+        env:
+          CHROME: ${{ env.CHROME_PATH }}
+        run: |
+          export CHROME="${CHROME_PATH:-$(command -v google-chrome-stable || command -v chromium || command -v chromium-browser)}"
+          bash build.sh
+
+      - name: 上传对照证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-compare-evidence
+          path: |
+            crates-ui/apeireth-ui-demo/harness/out/
+            crates-ui/apeireth-ui-demo/harness/evidence/

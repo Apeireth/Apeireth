@@ -1,0 +1,376 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "phases_ms": [
+    0,
+    150,
+    300,
+    450,
+    600
+  ],
+  "t1_static_pixels": {
+    "size_mismatch": false,
+    "different": 0,
+    "total": 176160,
+    "ratio": 0.0
+  },
+  "t2_dom_equal": true,
+  "t3_phase_pixels": [
+    {
+      "phase_ms": 0,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    },
+    {
+      "phase_ms": 150,
+      "size_mismatch": false,
+      "different": 4,
+      "total": 176160,
+      "ratio": 2.270663033605813e-05
+    },
+    {
+      "phase_ms": 300,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    },
+    {
+      "phase_ms": 450,
+      "size_mismatch": false,
+      "different": 6,
+      "total": 176160,
+      "ratio": 3.4059945504087195e-05
+    },
+    {
+      "phase_ms": 600,
+      "size_mismatch": false,
+      "different": 0,
+      "total": 176160,
+      "ratio": 0.0
+    }
+  ],
+  "t4_frames": {
+    "reference_frame_count": 20,
+    "engine_frame_count": 20,
+    "window_ms": 1200,
+    "target_frame_count": 20,
+    "align_tolerance_ms": 25.0,
+    "reference_mean_interval_ms": 57.291,
+    "frames": [
+      {
+        "index": 0,
+        "reference_relative_ms": 0.0,
+        "engine_relative_ms": 0.0,
+        "phase_delta_ms": 0.0,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3749,
+        "total": 1296000,
+        "ratio": 0.002892746913580247,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 1,
+        "reference_relative_ms": 60.467,
+        "engine_relative_ms": 40.379,
+        "phase_delta_ms": -20.088,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3749,
+        "total": 1296000,
+        "ratio": 0.002892746913580247,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 2,
+        "reference_relative_ms": 120.912,
+        "engine_relative_ms": 80.7,
+        "phase_delta_ms": -40.212,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3748,
+        "total": 1296000,
+        "ratio": 0.0028919753086419754,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 3,
+        "reference_relative_ms": 201.378,
+        "engine_relative_ms": 121.036,
+        "phase_delta_ms": -80.342,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3747,
+        "total": 1296000,
+        "ratio": 0.0028912037037037036,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 4,
+        "reference_relative_ms": 261.879,
+        "engine_relative_ms": 181.605,
+        "phase_delta_ms": -80.274,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3726,
+        "total": 1296000,
+        "ratio": 0.002875,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 5,
+        "reference_relative_ms": 322.386,
+        "engine_relative_ms": 222.088,
+        "phase_delta_ms": -100.298,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3594,
+        "total": 1296000,
+        "ratio": 0.0027731481481481483,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 6,
+        "reference_relative_ms": 402.976,
+        "engine_relative_ms": 282.562,
+        "phase_delta_ms": -120.414,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3521,
+        "total": 1296000,
+        "ratio": 0.002716820987654321,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 7,
+        "reference_relative_ms": 483.415,
+        "engine_relative_ms": 322.877,
+        "phase_delta_ms": -160.538,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 3148,
+        "total": 1296000,
+        "ratio": 0.0024290123456790122,
+        "bbox": [
+          307,
+          24,
+          463,
+          350
+        ]
+      },
+      {
+        "index": 8,
+        "reference_relative_ms": 543.817,
+        "engine_relative_ms": 383.271,
+        "phase_delta_ms": -160.546,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 9,
+        "reference_relative_ms": 604.21,
+        "engine_relative_ms": 423.6,
+        "phase_delta_ms": -180.61,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 10,
+        "reference_relative_ms": 664.644,
+        "engine_relative_ms": 484.05,
+        "phase_delta_ms": -180.595,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 11,
+        "reference_relative_ms": 704.983,
+        "engine_relative_ms": 524.454,
+        "phase_delta_ms": -180.529,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 12,
+        "reference_relative_ms": 765.315,
+        "engine_relative_ms": 584.944,
+        "phase_delta_ms": -180.372,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 13,
+        "reference_relative_ms": 785.531,
+        "engine_relative_ms": 625.273,
+        "phase_delta_ms": -160.258,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 14,
+        "reference_relative_ms": 845.951,
+        "engine_relative_ms": 685.703,
+        "phase_delta_ms": -160.248,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 15,
+        "reference_relative_ms": 906.462,
+        "engine_relative_ms": 726.075,
+        "phase_delta_ms": -180.387,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 16,
+        "reference_relative_ms": 946.946,
+        "engine_relative_ms": 786.547,
+        "phase_delta_ms": -160.399,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 17,
+        "reference_relative_ms": 987.407,
+        "engine_relative_ms": 827.021,
+        "phase_delta_ms": -160.386,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 18,
+        "reference_relative_ms": 1048.018,
+        "engine_relative_ms": 887.64,
+        "phase_delta_ms": -160.378,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      },
+      {
+        "index": 19,
+        "reference_relative_ms": 1088.525,
+        "engine_relative_ms": 928.146,
+        "phase_delta_ms": -160.38,
+        "unpaired": false,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0,
+        "bbox": null
+      }
+    ]
+  },
+  "t5_animations_equal": true,
+  "t6_unmount": {
+    "reference_dismiss_delay_ms": 1.2000000029802322,
+    "engine_dismiss_delay_ms": 1.0999999977648258,
+    "reference_decision_after_dismiss": null,
+    "engine_decision_after_dismiss": null
+  },
+  "notes": [
+    "T1/T3 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T3 是**同相位**对照（动画被冻结在指定相位）⇒ 最严格的画面判据。",
+    "T4 是**实时**对照：两帧的采集耗时不同 ⇒ 相位会有偏移（报告里的 phase_delta_ms 即采集侧的偏移，不是渲染差异）；过渡结束后的帧差异为 0。",
+    "T2 的归一化：剔除 Svelte 作用域 class、class token 排序、属性键排序、纯空白文本节点折叠。",
+    "环境：视口 1440×900、DPR 1、时区 UTC、prefers-reduced-motion: no-preference。"
+  ],
+  "checks": {
+    "t1_static_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_all_phases_within_budget": true,
+    "t4_enough_frames": true,
+    "t4_all_frames_within_budget": true,
+    "t5_animations_identical": true,
+    "t6_unmount_same_timing": true,
+    "t6_dismiss_makes_no_decision": true
+  },
+  "passed": true
+}
