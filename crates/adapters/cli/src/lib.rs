@@ -22,6 +22,7 @@ pub mod gateway_panels;
 pub mod governance_chain;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
+pub mod principal_forget_port;
 mod self_status_probe;
 
 use self_status_probe::self_status_ledger_probe;
