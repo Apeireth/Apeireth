@@ -138,6 +138,39 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.4r `continuation` 的安全子集已接线：回合级中断检测（2026-10-25）
+
+**做了什么**（`cli::continuation_guard` + `run_chat` 接线）：
+
+- 回合开始前落快照（`ContinuationSnapshot`，`pending_tool_call: None` = 常规轮次断点，
+  这正是该字段设计里写明的用法）；**正常收尾即删**（成功 / 业务错误 / 待审批挂起都算
+  「没崩」）；
+- 下次同会话启动时快照还在 ⇒ **上次回合没跑完**（崩溃 / 强杀 / 断电）⇒ 打印
+  「上次回合未正常结束（第 N 轮，约 M 秒前）…本次是新回合，**不会自动重放**上次的工具调用」；
+- **报一次即清**（同一中断不反复打扰）。
+
+**三条纪律（写进模块头）**：
+
+1. **不存正文**：快照 `messages` 恒为空 —— 检测中断不需要用户说了什么（少落一份正文 =
+   少一份泄漏面），有测试钉死；
+2. **不自动重放**：只报，重试由用户决定（自动续跑会重放副作用，属产品语义决策）；
+3. **不用 `consume`**：`consume` 会留「已消费声明」，而本轮快照 id 按会话固定
+   （`turn-<session>`）⇒ 声明会把后续回合的 `save` 永久挡成 `AlreadyConsumed`。
+   故用 `load` + `delete`（读后清，不写声明）。
+
+**真机验证**：
+
+```
+① 正常（缺凭据）回合后：快照文件数 = 0（不误报）
+② 手工造一个「上次未收尾」快照（turn=7）再跑 chat：
+   [续行] 上次回合未正常结束（第 7 轮，约 887 秒前）—— 可能崩溃或被中断；
+          本次是新回合，不会自动重放上次的工具调用
+   报完后快照文件数 = 0（报一次即清）
+```
+
+**剩余（明确是决策项）**：**自动续跑**（读快照后重放未决工具调用）。技术上要动
+`execute.rs` 的 turn-loop，语义上要定「重放副作用」的产品规则 ⇒ 保留在待拍板清单。
+
 ### 5.4q 阻塞理由复核（2026-10-25）：一条前提已过期，四条仍成立
 
 **为什么要复核**：停滞理由会随代码演进过期，而过期的理由会让「不接线」显得
@@ -520,7 +553,7 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | `crates/foundation/governance/src/rate_limit.rs` | 按 (capability,session) 分/时滑窗 + 四阶信任 + 黑名单 | ✅ **已修**：限流 hook 挂进生产治理链（授权之后、内容风险之前），**默认挂载**（配额内完全放行、零行为变化；超限才拒）。默认挂载而非「默认关 + env 开关」：env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 | `crates/foundation/orchestration/src/async_context.rs` | 四层异步上下文隔离（工具海量输出/后台通知分层） | 🔁 **A→B 更正（重复覆盖，非缺口）**：原判据是「`ContextProjector` 现为 `NoContextProjector`」——**前提不成立**。生产 `cli/src/lib.rs:1609` **无条件**调 `cognitive.register_context_projection(builder)`，注入的是 `MemoryContextProjector`（`ContextWindowManager::default()`，production.rs:1790/111），它做的正是「按预算压缩投影 + 工具海量输出用 `continuity_summary` 桩替代」（有测试 `compaction_only_changes_provider_projection`）。⇒ 生产不存在「扁平无界 transcript 直送 provider」这回事。`async_context` 的独特部分（HUD 通知层 / summary-status 微记录）在**生产也无产出方与消费方** ⇒ 归重复实现 |
 | `crates/foundation/orchestration/src/care_potential_field.rs` | 疲劳/深夜挫败 → 三阶克制关怀 | **先补信号源**（distress/fatigue/流保护阻力全仓无源） |
-| `crates/foundation/orchestration/src/continuation.rs` | 断点续行快照（进程重启后带未决工具调用续跑） | runtime 会话存储只有内存实现 |
+| `crates/foundation/orchestration/src/continuation.rs` | 断点续行快照（进程重启后带未决工具调用续跑） | ~~runtime 会话存储只有内存实现~~（**前提已过期**，见 §5.4q）；**部分接线（2026-10-25，见 §5.4r）**：回合级中断检测已接进 `apeireth chat`；剩余 = 自动续跑语义属产品决策 |
 | `crates/foundation/orchestration/src/speech_arbiter.rs` | 多主体同台发言权仲裁（排队/TTL/抢占打断/时长平衡） | 全双工未装配（`voice.duplex = not_assembled`） |
 
 **B 类（重复实现）6 条** —— 不是债：同能力另有主实现。

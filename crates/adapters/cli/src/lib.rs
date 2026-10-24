@@ -3440,7 +3440,7 @@ async fn graceful_shutdown_signal() {
 
 /// Data directory for panel archives. `APEIRETH_DATA_DIR` overrides; the
 /// default is `~/.apeireth` (same place as the keyring and session dbs).
-pub(crate) fn default_panel_data_dir() -> PathBuf {
+pub fn default_panel_data_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
         if !dir.trim().is_empty() {
             return PathBuf::from(dir);

@@ -1,6 +1,8 @@
 use std::env;
 use std::process::ExitCode;
 
+mod continuation_guard;
+
 use apeireth_cli::onboarding::UserTier;
 use apeireth_cli::{
     build_canonical_runtime_from_env, dispatch_canonical_approval, dispatch_canonical_chat,
@@ -103,6 +105,24 @@ fn run_session() -> ExitCode {
 }
 
 fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> ExitCode {
+    // **续行中断检测**（`orchestration::continuation` 的安全子集）：
+    // 回合开始前落快照、正常收尾即删；下次同会话启动时快照还在 ⇒ 上次没跑完。
+    // 只报不重放（自动续跑会重放副作用，属产品语义决策）；快照**不存正文**。
+    let store = continuation_guard::default_store();
+    let session_key = session.clone().unwrap_or_else(|| "default".to_string());
+    let now_ms = apeireth_runtime_assembly::now_epoch_ms();
+    if let Some(notice) = continuation_guard::take_interrupted_notice(&store, &session_key, now_ms)
+    {
+        eprintln!("{notice}");
+    }
+    let open_turn = match continuation_guard::begin_turn(&store, &session_key, now_ms, 1) {
+        Ok(open) => Some(open),
+        Err(error) => {
+            // 快照落不了盘不该阻止对话本身（检测能力缺失 ≠ 功能不可用），如实说明。
+            eprintln!("[续行] {error}（本轮不记录续行快照）");
+            None
+        }
+    };
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -110,7 +130,13 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(dispatch_canonical_chat(prompt, model, session)) {
+    let outcome = runtime.block_on(dispatch_canonical_chat(prompt, model, session));
+    // 正常收尾（含业务错误 / 待审批挂起）= 「没崩」⇒ 删快照。
+    // 只有进程真的在回合中途消失（崩溃/强杀），快照才会留到下次启动被报出来。
+    if let Some(open) = open_turn {
+        continuation_guard::finish_turn(&store, &open);
+    }
+    match outcome {
         Ok(CanonicalCliTurn::Completed(response)) => {
             println!("{}", response.text);
             eprintln!(
