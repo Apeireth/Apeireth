@@ -15,7 +15,7 @@
 #
 # 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
 version: 1
-updated_at: "2026-10-22"
+updated_at: "2026-10-25"
 
 claims:
   - id: rt.provider_router
@@ -28,7 +28,7 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -44,7 +44,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -62,7 +62,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -82,7 +82,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -100,7 +100,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -152,7 +152,7 @@ claims:
       - crates/engine/runtime-assembly/src/canonical/self_status_source.rs
     tests:
       - crates/capabilities/tools/src/exposure_audit/mod.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib exposure_audit"
     owner: capabilities
     next_review: "2026-12-01"
@@ -187,7 +187,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -233,7 +233,7 @@ claims:
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
       - crates/engine/memory/tests/memory_2_tests.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
     owner: gateway
     next_review: "2026-11-20"
@@ -282,7 +282,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -303,7 +303,7 @@ claims:
       - crates/engine/storage/tests/sealed_backup_restore.rs
       - crates/engine/runtime-assembly/src/canonical/session_seal.rs
       - crates/engine/runtime-assembly/src/sqlite_session.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-storage --test crypto_invariants"
     owner: storage
     next_review: "2026-11-20"
@@ -321,7 +321,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -339,7 +339,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -354,7 +354,7 @@ claims:
       - crates/foundation/governance/src/chain.rs
     tests:
       - crates/foundation/governance/src/chain.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -516,7 +516,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: runtime
     next_review: "2026-11-20"
@@ -532,7 +532,7 @@ claims:
       - crates/foundation/orchestration/src/recovery_protocol.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
-    verified_at: af0c3852
+    verified_at: a4903b92
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: orchestration
     next_review: "2026-11-20"

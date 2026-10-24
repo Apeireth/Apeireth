@@ -138,6 +138,33 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.4z `docs_truth --block-stale` 会红：15 条 claim 的 `verified_at` 过期 —— 已修（2026-10-25）
+
+**发现方式**：补跑 CI 门禁时发现 CI 的 docs-truth 用的是
+`python3 scripts/docs_truth.py --verify --block-stale`（**STALE 即 exit 1**），
+而我此前只跑 `--verify --check`（不阻塞 STALE）。本地照 CI 口径一跑：
+
+```
+claims=29 fail=0 stale=15 review_due=0   → 退出码 1
+```
+
+**根因**：我这一轮改了大量源码（`cli/lib.rs`、`runtime.rs`、`panels.rs`、
+`chain.rs`、`nociception.rs` …），而 claims 的 `verified_at` 停在 `af0c3852`。
+claims 的纪律是：**源码动过而 `verified_at` 未更新 = STALE = 过期**。
+
+**处置**：逐条核对 15 条 claim 的 `level` / `default` / `switch_env` **是否仍准确**
+（多数改动是注释/测试；行为面变化只有 egress 报告读取侧与审计链单写者，
+都不改这些 claim 的等级）—— 确认无误后把 `verified_at` 统一更新到当前 HEAD
+`a4903b92`（含全部改动、已在远端可达），`updated_at` 同步 2026-10-25。
+
+**连带修**：`docs/status/STATUS.md`（`--gen` 重生成）与
+**`docs/status/wiring.yaml`**（`wiring_report.py --gen`）—— 后者的
+`claims_sha256` 随 claims.yaml 变化必须重生成，否则 `wiring-ledger` 那条 CI 也会红
+（**生成物禁手改**）。复核后 `--verify` 退出码 0。
+
+**纪律沉淀**：跑文档门禁要跑**CI 那一档**
+（`--verify --block-stale`，不是 `--check`）；生成物改动必须走 `--gen`/`--gen` 再 verify。
+
 ### 5.4y CI 门禁本地镜像补齐（2026-10-25）：从「部分验证」到「可镜像的全跑」
 
 上轮发现我跑的门禁比 CI 少两档（`clippy --all-targets` / `doc tests`），补完后继续把
