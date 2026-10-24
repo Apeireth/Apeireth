@@ -138,6 +138,35 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5b `apeireth-tui` 在非 TTY 环境只回裸 OS 错误 —— 已修（2026-10-25）
+
+**缺陷**：在脚本/管道/CI 里跑 `apeireth-tui`：
+
+```
+终端驾驶舱异常退出: No such device or address (os error 6)
+```
+
+exit code 正确（1），但**提示不可行动** —— 用户看不出「因为不是终端」，
+更不知道该怎么替代。根因：`enable_raw_mode()` 在非 TTY 下直接失败，
+错误只被原样打印。
+
+**修法**：入口**前置 TTY 检查**（`stdin`/`stdout` 任一不是终端即拒启动），
+并给出可行动提示 + exit code 2：
+
+```
+apeireth-tui 需要真实终端（stdin/stdout 必须是 TTY）。
+当前 stdin/stdout 不是终端 —— 脚本、管道、CI 里请改用：
+ · apeireth gateway serve        （起服务，走 HTTP API / 桌面端）
+ · apeireth chat "你的问题"    （单轮对话，无需全屏界面）
+```
+
+判定抽成纯函数 `should_refuse_non_tty(stdin, stdout)` + 单测
+（三条「任一非 TTY」+ 一条「都是 TTY 则正常」），`--help` 不受影响（先于检查返回）。
+
+**顺带核对（无缺陷）**：README/INSTALL 里出现的 9 条命令全部被 CLI 识别；
+`egress impact --json` 的后果叠加生效（`unknown` → `confirmed`）；
+claims.yaml 的 `sources`/`tests` 路径 **0 条不存在**。
+
 ### 5.5a 必需检查「cargo deny / 8 硬墙」也补进本地镜像（2026-10-25）
 
 继续把 CI 的**必需检查**逐条对到本地命令：
