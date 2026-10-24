@@ -44,6 +44,7 @@
 | [0012](0012-central-ai-and-household-companion.md) | 中央 AI 与每户伙伴并存——两类主体、两套数据归属 | **Accepted**（2026-10-22，owner 口述拍板） | 多人阶段前置裁定：数据/成长归属、跨主体流动边界 |
 | [0013](0013-open-source-personal-utility-assistant.md) | 定位重裁定：开源免费的个人工具型助手，动态红线取代完全本地 | **Accepted**（2026-10-23，owner 口述拍板）；**取代 0012** | 主战场/红线/开源免费定位；承重墙=出境脱敏闸接电 |
 | [0014](0014-astra-derived-contract.md) | 外部顾问判据落地：四条共识改写、平台第四职责、最小诚实自述集 | **Proposed**（2026-10-23 起草，待 owner 裁定） | 存在理由、义务分级、授权策略对象、问责四构件 |
+| [0015](0015-pure-rust-ui-engine.md) | 全栈纯 Rust 前端引擎——自研响应式 + DOM 绑定层，独立 workspace 立项 | **Accepted**（2026-10-24，owner 口述拍板） | 引擎边界硬约束 / 视觉层零改写 / crates-ui 独立 workspace / 契约登记 |
 
 ## 命名
 
