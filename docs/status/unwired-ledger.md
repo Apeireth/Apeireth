@@ -138,6 +138,33 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.4x CI 的 clippy 门禁是 `--all-targets`，我此前只跑 `--lib` —— 三处测试代码会打红（2026-10-25）
+
+**发现方式**：本轮第一次在本地跑 `cargo clippy --all-targets`（此前每批只跑
+`cargo clippy --lib` + CLI bin 档）。**测试代码（`#[cfg(test)]`）在 `--lib` 下根本
+不编译**，所以我的测试里三类 lint 一直没被看到：
+
+| 位置 | lint | 修法 |
+|---|---|---|
+| `guard/src/decision_log.rs`（我本轮新写的测试） | `cast_lossless`：`index as f64` / `step as f64`（i32→f64 可 infallible） | 改 `f64::from(index)` |
+| `memory/src/milestone_store_sqlite.rs`（我本轮新写的测试） | `clone_on_copy`：`SessionId` 是 `Copy` 却 `.clone()` | 直接传值 |
+| `gateway/src/chain_audit.rs`（我本轮新写的测试） | `single_match_else` → 建议 `let...else` | 改 `let Err(error) = ... else { panic!() }` |
+
+这三处**都会让 CI 的 clippy 门禁变红**（CI 那档是 `--all-targets`），而我此前的
+本地门禁看不见它们。修完后 `cargo clippy --workspace --all-targets -- -D warnings`
+退出码 **0**（唯一排除 `apeireth-tools-canonical`：本机既有
+`CARGO_BIN_EXE_sandbox-test-child` 编译期问题，干净 main 上同样存在、CI 上正常）。
+
+**顺带验证两个此前从未本地跑过的 CI 门禁**（都绿）：
+
+```
+cargo test --doc --workspace        → 29 个 crate doc 测试全过，0 失败
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace → 干净
+```
+
+**流程修正（写进我的批处理纪律）**：每批本地门禁从
+`clippy --lib` → **`clippy --all-targets`**。测试代码也是代码。
+
 ### 5.4w 能力矩阵把已可用的 `memory.update` 写成「未实现未接线」—— 已修（2026-10-25）
 
 **缺陷（保护路径文档，产品能力宣称过期）**：`docs/03-reference/capabilities-matrix.md`

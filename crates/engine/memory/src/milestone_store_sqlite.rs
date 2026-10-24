@@ -312,7 +312,7 @@ mod tests {
         for (index, (kind, payload)) in cases.into_iter().enumerate() {
             // 逆序时间戳写入（后面的反而更早），验证查询按时间排序
             let at = 1_000 + (cases_len() - index as i64);
-            let milestone = Milestone::new(session.clone(), kind, payload, at);
+            let milestone = Milestone::new(session, kind, payload, at);
             store.record(&milestone).expect("record");
         }
         let all = store.query(&session, None).expect("query");
@@ -349,7 +349,7 @@ mod tests {
             let store = SqliteMilestoneStore::new(pool);
             store
                 .record(&Milestone::new(
-                    session.clone(),
+                    session,
                     MilestoneKind::FirstMeeting,
                     MilestonePayload::Text("初见".into()),
                     1_000,

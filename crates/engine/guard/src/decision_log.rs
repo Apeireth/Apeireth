@@ -210,7 +210,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let log = GuardDecisionLog::open(dir.path().join("d.jsonl")).expect("open");
         for index in 0..10 {
-            log.append(&event(0.1 * index as f64, "allow"))
+            log.append(&event(0.1 * f64::from(index), "allow"))
                 .expect("append");
         }
         let tail = log.read_recent(3).expect("read");
@@ -290,7 +290,7 @@ mod tests {
         let mut seen: Vec<&'static str> = Vec::new();
         let mut last_rank = -1;
         for step in 0..=100 {
-            let score = step as f64 / 100.0;
+            let score = f64::from(step) / 100.0;
             let label = risk_label_for_score(score);
             let rank = apeireth_governance::risk::risk_rank(label);
             assert!(rank >= last_rank, "score={score} 出现降档: {label}");

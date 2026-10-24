@@ -625,9 +625,8 @@ mod single_writer_tests {
     fn second_sink_on_the_same_ledger_is_rejected() {
         let path = scratch("reject");
         let _first = FileChainAuditSink::open(path.clone()).expect("第一个写者应成功");
-        let error = match FileChainAuditSink::open(path.clone()) {
-            Ok(_) => panic!("第二个写者必须被拒"),
-            Err(error) => error,
+        let Err(error) = FileChainAuditSink::open(path.clone()) else {
+            panic!("第二个写者必须被拒");
         };
         assert!(
             error.contains("另一个进程持有"),
