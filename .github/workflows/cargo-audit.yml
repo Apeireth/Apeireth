@@ -93,6 +93,11 @@ jobs:
         # run 35835024572 步骤 "Convert JSON report to SARIF" 失败)。
         # 守门机制必须能在"发现漏洞"这一时刻工作, 故改为迭代 list; severity 缺省/为
         # null 时按 1 (warning) 处理, 不因缺字段崩。
+        # 2026-10-24 修「证据链断裂」: 审计失败时本步原本被 skip, 于是 upload-sarif 步
+        # 报 `Path does not exist: audit-report.sarif` 二次失败 (PR #64 run 40058519140 实测),
+        # 与 workflow 注释里「报告已先落盘, 上传步骤用 if: always() 保证失败时也留证据」相悖。
+        # audit-report.json 在审计失败时同样已落盘, 故本步必须 always 跑, 让 SARIF 照常产出并上传。
+        if: always()
         run: |
           python3 - <<'PYEOF'
           import json, sys, datetime, hashlib
