@@ -2215,9 +2215,13 @@ async fn build_cognitive_modules_at(
         reflexion_store,
         // W2 §4.2: partner 羁绊存储 (InMemory —— 进程内, 重启即散; 持久后端为
         // 后续 sqlite 实现, trait 落点已备)。
+        // W2 §4.2: partner 羁绊存储 —— **SQLite 持久版**（2026-10-24 换掉内存版）。
+        // 此前用 `InMemoryPartnerStore`（进程内，重启即散）⇒ 生产自述的「0 假装边界」：
+        // 羁绊是**跨会话**的东西，进程重启就没了。`SqlitePartnerStore` 自带幂等建表
+        // （`partner_records`），与认知库同一份 `cognitive.sqlite3` ⇒ 羁绊与记忆同生共死。
         partner_store: partner_bond_enabled_from_env().then(
             || -> Arc<dyn apeireth_memory::partner::PartnerStore> {
-                Arc::new(apeireth_memory::partner::InMemoryPartnerStore::new())
+                Arc::new(apeireth_memory::SqlitePartnerStore::from_arc(pool.clone()))
             },
         ),
         // 「性格养成」第一铲: 「从使用中学习」默认关; `APEIRETH_ENABLE_SELF_TUNING=1`

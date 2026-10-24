@@ -354,8 +354,12 @@ pub const BOND_DEPTH_INCREMENT_PER_TURN: f64 = 0.02;
 /// **身份口径**: partner id = `subject_id` (`APEIRETH_SUBJECT_ID`, W2 首批身份
 /// 旋钮) —— 跨会话稳定, 与 typed 身份体系同源 (羁绊本义即跨 Session 连续)。
 ///
-/// **0 假装边界**: 存储现为 `InMemoryPartnerStore` (进程内, 重启即散) —— 持久
-/// partner 后端落点 = `PartnerStore` trait, 后续接 sqlite 实现即可, 本模块不动。
+/// **存储**: 默认生产装配走 `SqlitePartnerStore`（2026-10-24 接上，
+/// 此前是 `InMemoryPartnerStore` = 进程内、重启即散 —— 羁绊本义是**跨会话**的，
+/// 那种存法等于每次重启都要重新「认识」一遍）。
+/// `SqlitePartnerStore` 自带幂等建表（`partner_records`），与认知库同一份
+/// `cognitive.sqlite3` ⇒ 羁绊与记忆同生共死。
+/// 本模块只依赖 `PartnerStore` trait，具体后端由装配层决定。
 pub struct PartnerBondModule {
     manifest: ModuleManifest,
     partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,

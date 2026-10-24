@@ -556,7 +556,8 @@ pub struct ProductionBackends {
     pub ingest_gate: Option<Arc<dyn apeireth_memory::IngestGate>>,
     /// Reflexion failure-feedback store (2026-10-06 W2 记忆闭环批).
     pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
-    /// W2 §4.2: partner 羁绊存储 (InMemoryPartnerStore 或未来 sqlite 实现)。
+    /// W2 §4.2: partner 羁绊存储（默认生产装配走 `SqlitePartnerStore`，
+    /// 2026-10-24 接上；trait 落点不绑后端）。
     pub partner_store: Option<Arc<dyn apeireth_memory::partner::PartnerStore>>,
     /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层, 接上后
     /// MemoryRecallModule 的召回结果作为真接信号喂给引擎。
