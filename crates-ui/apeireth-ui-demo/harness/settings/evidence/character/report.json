@@ -1,0 +1,193 @@
+{
+  "face": "character（人格与记忆 · 设置页 S3 面）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "crop": "元素框（`.setting-block` / `.sp-character .setting-block`）",
+  "reference_page": "/web/reference/character/index.html",
+  "engine_page": "/web/engine/character/index.html",
+  "sections": [
+    "personality",
+    "impression",
+    "cognition",
+    "disposition"
+  ],
+  "pairs": [
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 798192,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "section": "personality"
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 400752,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "section": "impression"
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1163340,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "section": "cognition"
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 724500,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "section": "disposition"
+    }
+  ],
+  "invert_two_states": {
+    "name": "invert 两态（类型化召回 · 反向旋钮）",
+    "rows": [
+      {
+        "passed": true,
+        "t1_pixel_ratio": 0.0,
+        "t1_pixel_different": 0,
+        "t1_pixel_total": 1163340,
+        "t2_dom_equal": true,
+        "t2_dom_diffs": [],
+        "t3_same_width": true,
+        "t3b_same_height": true,
+        "t3_reference_width": 828,
+        "t3_engine_width": 828,
+        "case": "invert-off",
+        "typedRecall_value": "true",
+        "knob_on": false
+      },
+      {
+        "passed": true,
+        "t1_pixel_ratio": 0.0,
+        "t1_pixel_different": 0,
+        "t1_pixel_total": 1163340,
+        "t2_dom_equal": true,
+        "t2_dom_diffs": [],
+        "t3_same_width": true,
+        "t3b_same_height": true,
+        "t3_reference_width": 828,
+        "t3_engine_width": 828,
+        "case": "invert-on",
+        "typedRecall_value": "false",
+        "knob_on": true
+      }
+    ],
+    "passed": true
+  },
+  "requires_two_states": {
+    "name": "requires 两态（依赖子行 ← 父行）",
+    "rows": [
+      {
+        "passed": false,
+        "t1_pixel_ratio": 1.0,
+        "t1_pixel_different": -1,
+        "t1_pixel_total": 0,
+        "t2_dom_equal": true,
+        "t2_dom_diffs": [],
+        "t3_same_width": true,
+        "t3b_same_height": false,
+        "t3_reference_width": 826,
+        "t3_engine_width": 826,
+        "case": "requires-parent-off",
+        "fileWrite_value": "false"
+      },
+      {
+        "passed": false,
+        "t1_pixel_ratio": 1.0,
+        "t1_pixel_different": -1,
+        "t1_pixel_total": 0,
+        "t2_dom_equal": true,
+        "t2_dom_diffs": [],
+        "t3_same_width": true,
+        "t3b_same_height": false,
+        "t3_reference_width": 826,
+        "t3_engine_width": 826,
+        "case": "requires-parent-on",
+        "fileWrite_value": "true"
+      }
+    ],
+    "passed": false
+  },
+  "nested_row_assertion": {
+    "name": "嵌套行插入点（同层兄弟）",
+    "passed": true,
+    "reference": {
+      "slider_present": true,
+      "slider_is_sibling": true,
+      "slider_is_not_child": true,
+      "slider_parent_class": "cap-card",
+      "parent_parent_class": "cap-card"
+    },
+    "engine": {
+      "slider_present": true,
+      "slider_is_sibling": true,
+      "slider_is_not_child": true,
+      "slider_parent_class": "cap-card",
+      "parent_parent_class": "cap-card"
+    }
+  },
+  "checks": {
+    "t1_all_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_same_width": true,
+    "t3b_same_height": true,
+    "t4_invert_two_states": true,
+    "t5_requires_two_states": null,
+    "t5_requires_two_states_scope": "out_of_scope → 移交 M7（S4 能力治理面）",
+    "t6_nested_row_sibling": true
+  },
+  "notes": [
+    "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与 `sp-*` 作用域锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3：两侧裁剪框宽度必须相等（不等 ⇒ 直接判失败）。",
+    "T4/T5 的两态靠**服务层的固定数据补丁**驱动参考侧（只改固定数据的取值 ⇒ **生产代码与生产逻辑一字未改**）。",
+    "「用户印象」按固定数据写入**本地存储** ⇒ 两侧读到同一份账本。",
+    "学习日志的「有记录」那一支**在浏览器里不可对照**（生产的读面是 Tauri IPC ⇒ 浏览器里恒为「仅桌面版可读」）⇒ 两侧都渲染那一支。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。",
+    "⚠️ **范围声明**：`requires` 依赖行（`fileWriteAutoPass` ← `fileWrite`）属 **S4（能力治理面）**，不属本面 ⇒ 本面**不迁**它 ⇒ 该判据**移交 M7**。（本面固定数据的 13 条 `capDefs` 里**一条 `requires` 都没有** ⇒ 范围内**不存在**该形态。）"
+  ],
+  "passed": true,
+  "console": [
+    {
+      "side": "reference",
+      "messages": []
+    },
+    {
+      "side": "engine",
+      "messages": []
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "note": "该面对照资产的来源指纹（单一真源的可复核证据）",
+  "components": [
+    {
+      "path": "frontend/companion-desktop/src/lib/components/StatusBadge.svelte",
+      "slug": "status-badge",
+      "scoped_css_sha256_16": "e8b1bf6739a67967"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/views/SettingsView.svelte",
+      "slug": "settings-character-full",
+      "scoped_css_sha256_16": "2a0b64edb3d6dbe6"
+    }
+  ],
+  "icons": [
+    {
+      "alias": "layers-3",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/layers.svelte",
+      "name": "layers"
+    },
+    {
+      "alias": "trash-2",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/trash-2.svelte",
+      "name": "trash-2"
+    },
+    {
+      "alias": "rotate-ccw",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/rotate-ccw.svelte",
+      "name": "rotate-ccw"
+    },
+    {
+      "alias": "sparkles",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/sparkles.svelte",
+      "name": "sparkles"
+    },
+    {
+      "alias": "check-circle-2",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/circle-check.svelte",
+      "name": "circle-check"
+    },
+    {
+      "alias": "info",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/info.svelte",
+      "name": "info"
+    },
+    {
+      "alias": "plus",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/plus.svelte",
+      "name": "plus"
+    },
+    {
+      "alias": "brain",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/brain.svelte",
+      "name": "brain"
+    },
+    {
+      "alias": "heart-handshake",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/heart-handshake.svelte",
+      "name": "heart-handshake"
+    },
+    {
+      "alias": "git-branch",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/git-branch.svelte",
+      "name": "git-branch"
+    },
+    {
+      "alias": "sliders-horizontal",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/sliders-horizontal.svelte",
+      "name": "sliders-horizontal"
+    },
+    {
+      "alias": "refresh-ccw",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/refresh-ccw.svelte",
+      "name": "refresh-ccw"
+    },
+    {
+      "alias": "radar",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/radar.svelte",
+      "name": "radar"
+    },
+    {
+      "alias": "timer",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/timer.svelte",
+      "name": "timer"
+    },
+    {
+      "alias": "archive",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/archive.svelte",
+      "name": "archive"
+    },
+    {
+      "alias": "message-square-plus",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/message-square-plus.svelte",
+      "name": "message-square-plus"
+    },
+    {
+      "alias": "network",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/network.svelte",
+      "name": "network"
+    },
+    {
+      "alias": "users",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/users.svelte",
+      "name": "users"
+    },
+    {
+      "alias": "book-open",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/book-open.svelte",
+      "name": "book-open"
+    },
+    {
+      "alias": "dumbbell",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/dumbbell.svelte",
+      "name": "dumbbell"
+    },
+    {
+      "alias": "landmark",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/landmark.svelte",
+      "name": "landmark"
+    },
+    {
+      "alias": "file-check-2",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/file-check-2.svelte",
+      "name": "file-check-2"
+    }
+  ],
+  "design_css": [
+    {
+      "path": "frontend/companion-desktop/src/lib/design/base.css",
+      "sha256_16": "97498c495765332f"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/essence.css",
+      "sha256_16": "e96dd8efc9a61ecb"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/hud.css",
+      "sha256_16": "482d7ca607fc8b02"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/motion.css",
+      "sha256_16": "755013aff035b60e"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/prose.css",
+      "sha256_16": "cc3cf6501b68fa1e"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/shell.css",
+      "sha256_16": "0175375a1eecdfa6"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/tokens.css",
+      "sha256_16": "80584b228c87ce40"
+    }
+  ]
+}

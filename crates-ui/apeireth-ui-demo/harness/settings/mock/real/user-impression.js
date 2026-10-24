@@ -6,8 +6,15 @@
 
 import character from "../../fixtures/character.json";
 
-/** 印象正文的字数上限（与生产同口径）。 */
-export const IMPRESSION_MAX_CHARS = 4000;
+/** 印象正文的字数上限（与生产同口径）。
+ *
+ * ⚠️ **实测纠正**（2026-10-24 主代理）：原值写成 4000 ⇒ 与生产**不一致**
+ * ⇒ 参考侧渲染 `maxlength="4000"`、引擎侧渲染 `maxlength="2000"`
+ * ⇒ 共享入口的 DOM 全等判据因此报差异（character / impression）。
+ * ⇒ 生产真值 = `frontend/companion-desktop/src/lib/user-impression.ts:23`
+ *   的 `export const IMPRESSION_MAX_CHARS = 2000;` ⇒ **以生产为准**。
+ */
+export const IMPRESSION_MAX_CHARS = 2000;
 
 /** 读印象。 */
 export function loadUserImpression() {
