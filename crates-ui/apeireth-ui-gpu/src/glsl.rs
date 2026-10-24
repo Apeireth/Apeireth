@@ -7,8 +7,9 @@
 //! | X1 | naga 的 GLSL 前端**没有 ES profile**：`#version 300 es` 是硬解析错误 | `naga-30.0.1/src/front/glsl/parser.rs:267`（只收 `#version 440｜450｜460`）、`:290`（只收 `core` profile） | [`strip_version_directive`]：删掉 `#version` 行 |
 //! | X2 | naga 的 GLSL 前端要求 uniform **显式带 `layout(binding=N)`** | `naga-30.0.1/src/front/glsl/variables.rs:618` | [`inject_layout_bindings`]（逐个注入）/ [`pack_uniforms_into_block`]（合并成一块） |
 //! | **X3** | **WebGL2 后端的 `max_uniform_buffers_per_shader_stage` 装不下 16 个独立 uniform buffer** | **实测**（本机 Chromium 154 + 软件 WebGL）：限额 **14**，`create_bind_group_layout` 直接报 `Too many bindings of type UniformBuffers in Stage ShaderStages(FRAGMENT), limit is 14, count was 16`（GLES3 规范下限是 12） | [`pack_uniforms_into_block`]：把 N 个 plain uniform **合并进一个 std140 uniform 块** ⇒ **1 个 binding** |
+//! | **X4** | **本引擎的两个后端都把片元坐标的 y 轴变成「向下」，而 GLSL ES 规定「向上」** | GLSL ES 3.0 规范（`gl_FragCoord` 原点在**左下角**）；WebGPU 的 `@builtin(position)` 原点在**左上角**；`wgpu-hal-30.0.1/src/gles/web.rs:301-312`（GL 路径把主渲染上下翻转：「GL's presentation is not flipped, but main rendering is. Therefore, we Y-flip the output positions in the shader, and also this blit.」） | [`fix_frag_coord_semantics`]：源级把 `gl_FragCoord` 换成 `vec4(x, height - y, z, w)` |
 //!
-//! 三步都是**方言外壳**层面的机械变换，**不触碰着色器数学**（光学数值零改写）。
+//! 四步都是**方言外壳**层面的机械变换，**不触碰着色器数学**（光学数值零改写）。
 //!
 //! ## X3 为什么必须做
 //!
@@ -23,6 +24,17 @@
 //!   —— 映射表语义不变（见 [`crate::bindings`]）；
 //! - 布局是 **std140**（GLSL 后端）与 **WGSL uniform 地址空间** 共有的一套规则
 //!   ⇒ 两个后端的字节布局一致。
+//!
+//! ## X4 为什么必须做
+//!
+//! GLSL ES 3.0 规定 `gl_FragCoord` 的原点在**左下角**、y 轴**向上**。而本引擎
+//! 的两个后端都把它变成**向下**（WebGPU 的 `@builtin(position)` 原点在左上角；
+//! GL 路径把主渲染上下翻转）⇒ 不修正的话，**同一份 GLSL 源**在引擎里画出来的
+//! 画面是**上下颠倒**的：实测生产侧画面与引擎侧画面**逐像素互为上下镜像**
+//! （翻转后 0 差异 ⇒ 证明差异**只有**这一个成因；证据见
+//! `crates-ui/evidence/p5-b/`）。
+//!
+//! 修正只改**坐标的取法**（`y → height - y`），不改任何表达式与数值。
 //!
 //! ## 为什么要先把注释剥掉
 //!
@@ -702,6 +714,94 @@ pub fn transform_with_block_binding(src: &str, block_binding: u32) -> Result<Str
     pack_uniforms_into_block(&no_version, block_binding)
 }
 
+/// **片元阶段**的变换链：在 [`transform_with_block_binding`] 之外，额外做
+/// `gl_FragCoord` 的**坐标语义修正**（见 [`fix_frag_coord_semantics`]）。
+///
+/// 顶点阶段**不做**这件事（GLSL 里 `gl_FragCoord` 只存在于片元阶段）。
+///
+/// # Errors
+///
+/// 声明形态不受支持 → [`GlslError::UnsupportedDeclaration`]。
+pub fn transform_fragment_with_block_binding(
+    src: &str,
+    block_binding: u32,
+    framebuffer_height: u32,
+) -> Result<String, GlslError> {
+    let transformed = transform_with_block_binding(src, block_binding)?;
+    Ok(fix_frag_coord_semantics(&transformed, framebuffer_height))
+}
+
+// ---------------------------------------------------------------------------
+// 变换 4（X4）：`gl_FragCoord` 的坐标语义修正
+// ---------------------------------------------------------------------------
+
+/// 把源码里的 `gl_FragCoord` 换成**GLSL ES 规范语义**的等价写法。
+///
+/// ## 为什么必须做（方言外壳层，**不碰数学**）
+///
+/// GLSL ES 3.0 规定 `gl_FragCoord` 的原点在**左下角**、y 轴**向上**
+/// （`gl_FragCoord.xy ∈ [0.5, width-0.5] × [0.5, height-0.5]`）。
+///
+/// 而本引擎的两个后端都把**帧缓冲坐标的 y 轴朝下**（实测，证据见
+/// `crates-ui/evidence/p5-b/`）：
+///
+/// - **WebGPU 后端**：`@builtin(position)` 的 y=0 是**顶行**（WebGPU 规范）；
+/// - **WebGL 后端**：wgpu-hal 的 GL 路径把主渲染**上下翻转**存进交换链纹理
+///   （`wgpu-hal-30.0.1/src/gles/web.rs:301-312`：「GL's presentation is not
+///   flipped, but main rendering is. Therefore, we Y-flip the output
+///   positions in the shader, and also this blit.」）⇒ 片元里读到的
+///   `gl_FragCoord.y` 与**画布上从上到下的行号**同向。
+///
+/// ⇒ 同一份 GLSL 源在引擎里画出来的画面是**上下颠倒**的：实测生产侧画面与
+/// 引擎侧画面**逐像素互为上下镜像**（翻转后 0 差异）。
+///
+/// 本函数在**源级**把 `gl_FragCoord` 换成 `vec4(x, height - y, z, w)`
+/// ⇒ 引擎里的片元坐标与 GLSL ES 规范**逐点一致** ⇒ 同一份着色器源在引擎与
+/// 生产路径上画出的画面一致。
+///
+/// ## 行为细节
+///
+/// - **单趟扫描**：替换文本里的 `gl_FragCoord` **不再被二次替换**；
+/// - **词边界**感知：`myGl_FragCoord` / `gl_FragCoordExtra` 等**不受影响**；
+/// - **不插行** ⇒ 变换前后**行号一一对应**（错误信息仍指回原始行）；
+/// - 源码里没有 `gl_FragCoord` ⇒ **原样返回**。
+pub fn fix_frag_coord_semantics(src: &str, framebuffer_height: u32) -> String {
+    let expansion = format!(
+        "vec4(gl_FragCoord.x, {framebuffer_height}.0 - gl_FragCoord.y, gl_FragCoord.z, gl_FragCoord.w)"
+    );
+    replace_identifier(src, "gl_FragCoord", &expansion)
+}
+
+/// 把源码里的**标识符** `token` 换成 `replacement`（词边界感知，单趟扫描）。
+///
+/// 替换文本本身**不再被扫描** ⇒ 替换文本里含 `token` 时不会递归。
+fn replace_identifier(src: &str, token: &str, replacement: &str) -> String {
+    let bytes = src.as_bytes();
+    let mut out = String::with_capacity(src.len());
+    let mut index = 0usize;
+    while index < src.len() {
+        if src[index..].starts_with(token) {
+            let starts_clean = index == 0 || !is_identifier_byte(bytes[index - 1]);
+            let after = index + token.len();
+            let ends_clean = after >= src.len() || !is_identifier_byte(bytes[after]);
+            if starts_clean && ends_clean {
+                out.push_str(replacement);
+                index = after;
+                continue;
+            }
+        }
+        let ch = src[index..].chars().next().expect("非空切片");
+        out.push(ch);
+        index += ch.len_utf8();
+    }
+    out
+}
+
+/// 该字节是不是标识符字符（ASCII 字母 / 数字 / 下划线）。
+fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
 /// GLSL 源 → naga IR（经完整变换链）。
 ///
 /// # Errors
@@ -1219,5 +1319,122 @@ mod tests {
         };
         let parsed = naga::front::glsl::Frontend::default().parse(&options, &emitted);
         assert!(parsed.is_err(), "naga 吐出的 ES 头不得被自己的前端接受");
+    }
+
+    // -----------------------------------------------------------------------
+    // 变换 4（X4）：`gl_FragCoord` 的坐标语义修正
+    // -----------------------------------------------------------------------
+
+    const FRAG_COORD_SAMPLE: &str = "#version 300 es\nprecision highp float;\nuniform vec2 uRes;\nout vec4 fragColor;\nvoid main(){ vec2 p = gl_FragCoord.xy / uRes; fragColor = vec4(p, 0.0, 1.0); }\n";
+
+    #[test]
+    fn frag_coord_correction_flips_the_y_axis() {
+        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE, 600);
+        assert!(
+            out.contains("600.0 - gl_FragCoord.y"),
+            "片元坐标的 y 必须翻成 GLSL 规范（向上）：{out}"
+        );
+        assert!(
+            out.contains(
+                "vec4(gl_FragCoord.x, 600.0 - gl_FragCoord.y, gl_FragCoord.z, gl_FragCoord.w)"
+            ),
+            "展开式必须逐分量保留其余分量：{out}"
+        );
+    }
+
+    #[test]
+    fn frag_coord_correction_keeps_line_numbers() {
+        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE, 600);
+        assert_eq!(
+            out.lines().count(),
+            FRAG_COORD_SAMPLE.lines().count(),
+            "变换不得增删行（错误信息仍要指回原始行）"
+        );
+    }
+
+    #[test]
+    fn frag_coord_correction_is_a_no_op_without_the_builtin() {
+        let source = "#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(1.0); }\n";
+        assert_eq!(
+            fix_frag_coord_semantics(source, 600),
+            source,
+            "源码里没有 gl_FragCoord 时必须原样返回"
+        );
+    }
+
+    #[test]
+    fn frag_coord_correction_respects_identifier_boundaries() {
+        let source = "float myGl_FragCoord = 1.0;\nfloat gl_FragCoordExtra = 2.0;\n";
+        let out = fix_frag_coord_semantics(source, 600);
+        assert_eq!(out, source, "相似标识符不得被误改（词边界必须生效）");
+    }
+
+    #[test]
+    fn frag_coord_correction_does_not_recurse() {
+        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE, 600);
+        assert_eq!(
+            out.matches("600.0 - gl_FragCoord.y").count(),
+            1,
+            "替换文本里的 gl_FragCoord 不得被二次替换：{out}"
+        );
+        assert!(!out.contains("600.0 - 600.0"), "不得出现递归替换：{out}");
+    }
+
+    #[test]
+    fn fragment_transform_applies_the_correction_with_the_framebuffer_height() {
+        let out =
+            transform_fragment_with_block_binding(FRAG_COORD_SAMPLE, 0, 480).expect("片元变换成功");
+        assert!(
+            out.contains("480.0 - gl_FragCoord.y"),
+            "片元变换必须带上**表面高度**：{out}"
+        );
+        assert!(
+            out.contains("layout(std140, binding=0) uniform EngineUniforms {"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn vertex_transform_leaves_the_builtin_alone() {
+        // 顶点阶段没有 gl_FragCoord ⇒ 顶点变换链不得碰它。
+        let out = transform_with_block_binding(FRAG_COORD_SAMPLE, 1).expect("顶点变换成功");
+        assert!(
+            !out.contains("600.0 - gl_FragCoord.y"),
+            "顶点阶段不得做坐标语义修正：{out}"
+        );
+        assert!(out.contains("gl_FragCoord.xy"), "{out}");
+    }
+
+    #[test]
+    fn corrected_source_still_parses_into_naga_ir() {
+        let out =
+            transform_fragment_with_block_binding(FRAG_COORD_SAMPLE, 0, 600).expect("片元变换成功");
+        let options = naga::front::glsl::Options {
+            stage: ShaderStage::Fragment,
+            defines: Default::default(),
+        };
+        let parsed = naga::front::glsl::Frontend::default().parse(&options, &out);
+        assert!(parsed.is_ok(), "修正后的源码必须仍能被 naga 解析：{out}");
+    }
+
+    #[test]
+    fn production_asset_parses_after_the_correction() {
+        // 真实资产（生产版 GLSL 的去注释副本）走完整片元变换链 ⇒ 必须能解析。
+        let out = transform_fragment_with_block_binding(
+            crate::shaders::SCENE_FRAGMENT_GLSL,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+            600,
+        )
+        .expect("生产资产的片元变换必须成功");
+        assert!(
+            out.contains("600.0 - gl_FragCoord.y"),
+            "生产资产确实用到 gl_FragCoord ⇒ 修正必须生效"
+        );
+        let options = naga::front::glsl::Options {
+            stage: ShaderStage::Fragment,
+            defines: Default::default(),
+        };
+        let parsed = naga::front::glsl::Frontend::default().parse(&options, &out);
+        assert!(parsed.is_ok(), "修正后的生产资产必须能被 naga 解析");
     }
 }

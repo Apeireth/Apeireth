@@ -462,6 +462,11 @@ impl Engine {
     /// 顶点 = [`glsl::VERTEX_UNIFORM_BLOCK_BINDING`]），否则两侧的
     /// `binding=0` 会互相撞车。
     ///
+    /// 片元阶段还会做 `gl_FragCoord` 的**坐标语义修正**
+    /// （[`glsl::fix_frag_coord_semantics`]）：GLSL ES 规定片元坐标的 y 轴
+    /// **向上**，而本引擎的两个后端都把它变成**向下** ⇒ 不修正的话画面是
+    /// 上下颠倒的（实测证据见 `crates-ui/evidence/p5-b/`）。
+    ///
     /// # Errors
     ///
     /// - GLSL 解析 / 校验失败 → [`GpuError::ShaderCompilationFailed`]；
@@ -481,9 +486,15 @@ impl Engine {
             .map_err(|e| GpuError::ShaderCompilationFailed(format!("vertex: {e}")))?;
 
         // 片元阶段：变换 + 解析。
-        let fragment_source = glsl::transform_with_block_binding(
+        //
+        // ⚠️ 片元阶段额外做 `gl_FragCoord` 的**坐标语义修正**
+        // （glsl::fix_frag_coord_semantics）：GLSL ES 规定片元坐标的 y 轴
+        // **向上**，而本引擎的两个后端都把它变成**向下** ⇒ 不修正的话同一份
+        // GLSL 源画出来的画面是上下颠倒的（实测证据见 crates-ui/evidence/p5-b/）。
+        let fragment_source = glsl::transform_fragment_with_block_binding(
             &scene.fragment_glsl,
             glsl::FRAGMENT_UNIFORM_BLOCK_BINDING,
+            self.config.height,
         )
         .map_err(|e| GpuError::ShaderCompilationFailed(format!("fragment: {e}")))?;
         let fragment_module_ir = glsl::parse(&fragment_source, naga::ShaderStage::Fragment)

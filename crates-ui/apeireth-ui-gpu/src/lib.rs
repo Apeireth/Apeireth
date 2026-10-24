@@ -34,26 +34,40 @@
 //!   校验错误**收进队列**并以 [`GpuError`] 返回。
 //! - **着色器资产入库**（[`shaders`]）：生产版 GLSL 的去注释副本（光学数值
 //!   逐字未改），供上面的变换器与管线消费。
+//! - **片元坐标语义修正**（[`glsl::fix_frag_coord_semantics`]）：GLSL ES 规定
+//!   `gl_FragCoord` 的 y 轴**向上**，而本引擎的两个后端都把它变成**向下**
+//!   ⇒ 不修正的话同一份 GLSL 源画出来的画面是**上下颠倒**的。变换器在**源级**
+//!   把 `gl_FragCoord` 换成 `vec4(x, height - y, z, w)` ⇒ 引擎里的片元坐标与
+//!   GLSL ES 规范逐点一致（**不改任何表达式与数值**，只改坐标的取法）。
+//!
+//! ### ✅ 与生产画面一致（P5-b 实测）
+//!
+//! - 生产版的场景类（**宿主侧**）在真实浏览器里跑出来的画面，与本引擎用
+//!   **同一批 uniform 取值**画出来的画面**逐像素完全一致**：两个后端各
+//!   **0 / 576,000** 像素不同（差分阈值：任一通道绝对差 > 2/255）。
+//!   证据见 `crates-ui/evidence/p5-b/`（含抓到的 16 个 uniform 原值、
+//!   三张画布、逐像素判据与控制台日志）。
 //!
 //! ### 🔵 未接线 / 未做
 //!
-//! - **P5-b 未做**：黑洞场景的**完整复刻**（uniform 取值来源、场景参数语义、
-//!   与生产画面**逐帧一致**）属下一批。本 crate 只提供**能力层**：变换器 +
-//!   映射表 + 双后端渲染入口 + 着色器资产。
+//! - **uniform 取值来源仍未接线（按设计如此）**：引擎**不知道**场景语义
+//!   （构图比例、机位、presence 档位、时间线照明 …）⇒ 取值必须由**宿主**喂。
+//!   本批证明的是「**同一批取值 ⇒ 同一张画面**」这条管道，而不是「引擎自己
+//!   算得出取值」。
+//! - **未在 Tauri WebView 内验证**：本批只在 Linux 无头 Chromium 154 上实测；
+//!   macOS WKWebView / Windows WebView2 / Linux WebKitGTK **均未实测**。
 //! - **顶点阶段的 uniform 未接线**：[`engine::Engine::create_scene_pipeline`]
 //!   对「顶点阶段有 uniform」的着色器**显式报错**（不静默忽略：静默忽略会让
 //!   顶点阶段的 uniform 永远拿到 0 值，画出错位的画面）。
 //! - **P0 桩仍在**（[`UnavailableGpuContext`]）：显式返回
 //!   [`GpuError::NotImplemented`]，不假装「场景已经在跑」。
 //! - [`GpuContext::submit_frame`] 对真实引擎**未接线**：把 P0 的
-//!   `SceneUniforms`（4 个几何量）映射到 16 个着色器 uniform 属场景语义
-//!   （P5-b）⇒ 显式报未接线。真实通路是
+//!   `SceneUniforms`（4 个几何量）映射到 16 个着色器 uniform 属**宿主侧的
+//!   场景语义**（引擎按设计不碰）⇒ 显式报未接线。真实通路是
 //!   [`engine::Engine::draw_frame`]。
-//! - **宿主覆盖未实测**：本批只在本机 Linux 无头 Chromium 上实测过双后端；
-//!   macOS WKWebView / Windows WebView2 / Linux WebKitGTK **均未实测**。
 //! - **native 侧不是画面验证**：native 单测只覆盖**纯逻辑**（变换 / 映射 /
-//!   布局 / 策略）；画面级验证只在真实浏览器里做（证据见
-//!   `crates-ui/evidence/p5-gpu/`）。
+//!   布局 / 策略 / 坐标语义）；画面级验证只在真实浏览器里做（证据见
+//!   `crates-ui/evidence/p5-gpu/` 与 `crates-ui/evidence/p5-b/`）。
 
 #![forbid(unsafe_code)]
 
