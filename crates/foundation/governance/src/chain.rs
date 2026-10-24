@@ -843,7 +843,10 @@ enum HumanAuthorityStep {
 /// `Arc<dyn GovernanceHook>` interface, which is why R8-B2 needs no runtime
 /// change (design candidate §3, 方案 B).
 ///
-/// NOT WIRED: no production assembly constructs this type yet (R8-B2).
+/// **PRODUCTION WIRED**（2026-10-25 核对）：生产治理入口就是它 ——
+/// `cli::governance_chain::production()` 构造本类型并交给 runtime 的
+/// `with_governance`（`cli/lib.rs` 装配根调用）。原文曾写「no production
+/// assembly constructs this type yet」，已过期。
 pub struct ChainGovernanceHook {
     chain: Arc<GovernanceChain>,
 }

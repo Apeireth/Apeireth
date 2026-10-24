@@ -138,6 +138,29 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.4u 一批「IMPLEMENTED（未接线）」自述已过期 —— 已修（2026-10-25）
+
+上一轮修的教训是「功能接上了、叙述没跟上」。顺着这条线全仓搜「未接线/未接电/
+NOT WIRED」，把**已经不成立**的逐处改成准确状态：
+
+| 位置 | 原文 | 事实（2026-10-25 核对） |
+|---|---|---|
+| `governance/src/chain.rs` `ChainGovernanceHook` | **NOT WIRED: no production assembly constructs this type yet (R8-B2)** | ❌ **直接错误**：它就是生产治理入口 —— `cli::governance_chain::production()` 构造它并交给 `with_governance`（`cli/lib.rs:1570` 调用） |
+| `orchestration/src/quorum.rs` | IMPLEMENTED，未接线 | 装配面已接：生产经 `OrganModule`（`APEIRETH_ENABLE_ORGANS` 开启时）调用，`last_quorum_trace()` 供自述 SG-24 格 |
+| `orchestration/src/nociception.rs` | IMPLEMENTED（未接线） | 装配面已接：`RuntimeBuilder::with_bio_pain`（`APEIRETH_ENABLE_BIO_PAIN` / `bio-mechanisms.json`，默认关） |
+| `orchestration/src/recovery_protocol.rs` | IMPLEMENTED（未接线） | 装配面已接：与痛觉同一 `PainSnapshotReader` → 自述 SG-17 格 |
+| `orchestration/src/lifecycle.rs` | IMPLEMENTED（未接线） | 装配面已接：`NervousSwitchboard::BioSwitch::Lifecycle`（9 开关默认全关） |
+| `orchestration/src/capacity.rs` | IMPLEMENTED（未接线） | 装配面已接：`capacity_bio_probe` 注册进自述 SG-26 格（需自述开关 + 任务板） |
+| `orchestration/src/durable/{replay,mod}.rs` | 存储路径已证明但未接线 | 存储路径**已接**（`cli::continuation_guard` 回合级中断检测）；未接的是**重放**（产品语义待定） |
+
+**统一的准确表述**：「装配面已接，**默认关**（开关名）」——既不夸大成「已生效」，
+也不贬低成「没人用」。原文的「未接线」会让读者以为**根本没有装配面**，
+从而误判为「要新建」而不是「打开开关」。
+
+**纪律**：`IMPLEMENTED` / `PRODUCTION WIRED` / 「未接线」这些词必须与**装配事实**
+一致；只读内核 = 「纯内核」，有 env 开关 = 「装配面已接，默认关」，
+恒被装配 = 「PRODUCTION WIRED」。
+
 ### 5.4t 守夜人把「接线后无数据」误报成「没接线」—— 已修（2026-10-25）
 
 **缺陷**：判定落盘接线完成后（§5.4 那批），守夜人仍在报
