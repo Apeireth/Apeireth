@@ -1,0 +1,52 @@
+# ============================================================================
+# governance-harness — 治理卷宗面对照的 wasm 宿主（证据用；**不是** workspace 成员）
+# ----------------------------------------------------------------------------
+# 作用：把 `apeireth-ui-kit` 的四个治理卷宗 Tab 组件挂进**真实 DOM**，供浏览器
+# 里的逐像素 / DOM 全等 / 逐帧对照（参考侧 = 生产 Svelte 版）。
+#
+# 构建（**在 crates-ui/ 之外**执行，避免被主 workspace 扫到）：
+#   cargo build --release --target wasm32-unknown-unknown --locked
+#   wasm-bindgen --target web --out-dir ../public/engine/pkg \
+#       target/wasm32-unknown-unknown/release/governance_harness.wasm
+#
+# ⚠️ 本 crate 自带 `[workspace]` 段 ⇒ 独立 workspace ⇒ 不进 crates-ui 的
+#    依赖图、不进 cargo deny 的图、不进 CI 门禁。
+#
+# ⚠️ 为什么**另起**一个宿主 crate：`apeireth-ui-demo` 的 wasm 入口
+#    （`src/main.rs`）是**共享点**（批一 / 批二都在用它）⇒ 本面**不碰**它，
+#    自带一个宿主 ⇒ 四个面可以并行施工而互不撞车。
+# ============================================================================
+[package]
+name = "governance-harness"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+# 被验证对象：组件库（仓库内路径依赖，0 拷贝 0 改写）。
+apeireth-ui-kit = { path = "../../../../apeireth-ui-kit" }
+# 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**，
+# 见 apeireth-ui-macro 的 crate 文档头「运行时路径约定」）⇒ 这两个 crate 必须是
+# 使用方的**直接依赖**。
+apeireth-ui-core = { path = "../../../../apeireth-ui-core" }
+apeireth-ui-dom = { path = "../../../../apeireth-ui-dom" }
+
+# wasm32 宿主侧依赖（仅 wasm32 目标参与编译；native 侧永远 0 外部依赖）。
+# 许可：三者均为 MIT OR Apache-2.0（实测，见 crates-ui/deny.toml 白名单）。
+# 版本与 apeireth-ui-dom **精确一致**（wasm-bindgen 对 web-sys 是 1:1 硬钉）。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+js-sys = "=0.3.106"
+web-sys = { version = "=0.3.106", features = [
+    "Document",       # 取挂载点：get_element_by_id
+    "Element",        # 挂载点的元素视图
+    "Node",           # 挂载点转成节点句柄
+    "Window",         # 取 document
+    "HtmlTextAreaElement", # 试算表单的初值（`bind:value` 的 property 写回）
+] }
+
+[workspace]
