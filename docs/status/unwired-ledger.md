@@ -96,6 +96,45 @@
 | `crates/engine/memory/src/layered_memo/progression.rs` | — |
 | `crates/engine/memory/src/layered_memo/sleep_cycle.rs` | — |
 
-### 5.4 待判（31 条）
+### 5.4 待判 31 条 —— 人工过筛结论
 
-逐条人工过筛中，结论待补。
+**A 类（真缺口）16 条** —— 每个都缺一个**具体接线点**，不是「整块没写」：
+
+| 模块 | 缺的能力 | 接线点 |
+|---|---|---|
+| `crates/adapters/cli/src/portable_bundle.rs` | 一键生成 U 盘便携包 | CLI 无 `bundle` 命令（能力矩阵已宣称 `cli.portable_bundle`） |
+| `crates/adapters/gateway/src/file_fetcher.rs` | `file://` 拦截 + SHA-256 内容寻址缓存 + 完整性校验 + 分布式回退 | 网关出站面（能力矩阵已宣称 `gw.file_fetcher`） |
+| `crates/adapters/sdk/src/error_taxonomy.rs` | 错误族 → 闭合词表映射 + 跨语言分类/可重试暴露 | SDK 三个错误族（`SdkClientError`/`CodecError`/`ImError`）都不映射 |
+| `crates/capabilities/tools/src/repo_map.rs` | `tool.repo_map` 工具面（符号地图 + PageRank + token 预算裁剪） | 能力矩阵指定落点 + runtime-assembly 注册 |
+| `crates/engine/memory/src/cross_diary.rs` | 检索命中事实时注入关联日记片段 | 记忆检索装配点 |
+| `crates/engine/memory/src/milestone.rs` | 关系里程碑写入/查询（v1 REAL、v2 库级 0 接线） | 协同方 partner 已接，里程碑面没接 |
+| `crates/engine/memory/src/partner_store_sqlite.rs` | 伙伴/羁绊记录**跨重启持久化** | 生产自述「0 假装边界：现在用 InMemoryPartnerStore，重启即散」 |
+| `crates/engine/memory/src/query_expand.rs` | 混合检索前的同义/关键词簇查询扩展 | `coordinator.rs:673`（检索主路径） |
+| `crates/engine/memory/src/three_tier_vault.rs` | 无向量 TOC 树索引 + 逐层树路由 | README 已当已交付能力宣称 |
+| `crates/engine/memory/src/universal_forget.rs` | **被遗忘权**：按 principal 全库遗忘事务 | 网关删用户只改用户表，记忆没清 |
+| `crates/engine/provider/src/reasoning_adapter.rs` | 推理字段归一化下发 + 转发前剥离 reasoning | provider 响应解析处（现只取可见正文） |
+| `crates/foundation/governance/src/rate_limit.rs` | 按 (capability,session) 分/时滑窗 + 四阶信任 + 黑名单 | 生产治理链没挂限流 hook |
+| `crates/foundation/orchestration/src/async_context.rs` | 四层异步上下文隔离（工具海量输出/后台通知分层） | `ContextProjector` 现为 `NoContextProjector` |
+| `crates/foundation/orchestration/src/care_potential_field.rs` | 疲劳/深夜挫败 → 三阶克制关怀 | **先补信号源**（distress/fatigue/流保护阻力全仓无源） |
+| `crates/foundation/orchestration/src/continuation.rs` | 断点续行快照（进程重启后带未决工具调用续跑） | runtime 会话存储只有内存实现 |
+| `crates/foundation/orchestration/src/speech_arbiter.rs` | 多主体同台发言权仲裁（排队/TTL/抢占打断/时长平衡） | 全双工未装配（`voice.duplex = not_assembled`） |
+
+**B 类（重复实现）6 条** —— 不是债：同能力另有主实现。
+`std_sub_supervisor`（桌面侧车真监督器承担）、`stealth_crawler`（web_fetch 工具族承担且信封治理更强）、
+`chronicle_crystallizer`（consolidation + dreaming 承担）、`hallways`（`AssociationStore` 已生产接线）、
+`history_streams`（`append_only` + `SqliteMemoryStore` 承担）、`wiki_fs`（`WikiEntryStore` 已有生产实现）。
+
+**C 类（有意不接）7 条** —— 模块自述 default-off / 研究原型 / roadmap 档期。
+`admission_gate`、`backend/in_memory`、`intent_brier`、`online_calibration`（终局台账裁定「维持未接」）、
+`context_fold/fold_block`（家族自述 DEFAULT OFF）、`lineage_spawning`（roadmap 2027-01-15）、
+`p2p_mesh`（明文桩，接线即泄密）。
+
+**E 类（待 owner 裁定）2 条**：
+
+| 模块 | 缺什么裁定 |
+|---|---|
+| `crates/engine/memory/src/semantic_axis.rs` | 归属哪个消费点（并入 absorption_insight 补第 5 段，还是删） |
+| `crates/foundation/core/src/eight_anchors.rs` | 9 锚要不要有执行面（接进 council 提示词/哲学门禁，还是删登记册） |
+
+> **D 类（真死代码）0 条** —— 没有任何模块同时满足「无重复实现 + 无设计意图 + 零引用」。
+> 这本身是个结论：**模块级债的主体是「接线缺口」与「有意不接」，不是死代码。**
