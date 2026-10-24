@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 
 /// 用法帧。
-pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\n\n  只读列出出域账本（每次模型出网判定的记录：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  账本**零真值**：只有对象类型与不可逆指纹，没有内容原文。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl。";
+pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
 
 /// 命令入口（数据根 = 默认数据目录）。
 pub fn run_egress(args: &[String]) -> Result<String, String> {
@@ -28,8 +28,10 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
         Some((verb, rest)) => (verb.as_str(), rest),
         None => return Err(USAGE.to_string()),
     };
-    if verb != "ledger" {
-        return Err(format!("unknown egress command: {verb}\n{USAGE}"));
+    match verb {
+        "ledger" => {}
+        "impact" => return run_impact(data_root, rest),
+        _ => return Err(format!("unknown egress command: {verb}\n{USAGE}")),
     }
     // 路径：--path 显式优先；否则走数据根（`APEIRETH_DATA_DIR` 或默认目录）。
     // **不新增独立 env** —— env 名数有棘轮（160 上限，只减不增），
@@ -90,6 +92,81 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
             usage = entry.usage,
             objects = objects,
             fingerprints = fingerprints
+        ));
+    }
+    Ok(frame)
+}
+
+/// `apeireth egress impact` —— **问责账本**只读出口。
+///
+/// 与 `ledger`（出域账本）的分工：
+/// - `ledger` = 观测面：「这次出网有没有检出敏感对象、去了哪」；
+/// - `impact` = 责任面：「这次行动依赖了什么授权、能不能撤回、影响谁、后果如何」。
+///
+/// **只读零写**，**零真值**（只指涉 id，不带内容）。
+pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String, String> {
+    let path = match parse_arg(rest, "--path") {
+        Some(raw) => PathBuf::from(raw),
+        None => data_root.join("impact-ledger.jsonl"),
+    };
+    let limit = match parse_arg(rest, "--limit") {
+        Some(raw) => raw
+            .parse::<usize>()
+            .map_err(|_| format!("--limit 需要一个非负整数: {raw}"))?,
+        None => 50,
+    };
+    let json = rest.iter().any(|arg| arg == "--json");
+
+    let ledger =
+        apeireth_runtime_assembly::accountability::AccountabilityLedger::new(Some(path.clone()));
+    let mut statements = ledger.statements();
+    let total = statements.len();
+    if statements.len() > limit {
+        statements.drain(..statements.len() - limit);
+    }
+    statements.reverse();
+
+    if json {
+        return serde_json::to_string_pretty(&statements)
+            .map_err(|error| format!("问责账本序列化失败: {error}"));
+    }
+
+    let counts = ledger.counts();
+    let mut frame = format!(
+        "impact ledger: {total} 条在册（显示最近 {} 条）\n\
+         不可逆={} 影响他人={} 后果未知={}\n",
+        statements.len(),
+        counts.irreversible,
+        counts.affecting_others,
+        counts.unknown_outcome
+    );
+    if statements.is_empty() {
+        frame.push_str(
+            "（账本为空 —— 可能还没开过出网闸，或这些行动还没被记录。\n\
+             空账本不等于「没外流过」，只等于「没有记录」。）\n",
+        );
+        return Ok(frame);
+    }
+    for statement in statements {
+        frame.push_str(&format!(
+            "- [{ts}] {boundary} → {destination}  行动={action_id} 可逆={reversible} 后果={outcome}\n\
+             用了哪些事实: {facts}\n  依据的授权: {grants}\n",
+            ts = statement.at_ms,
+            boundary = statement.boundary.label(),
+            destination = statement.destination,
+            action_id = statement.action_id,
+            reversible = statement.reversible,
+            outcome = statement.outcome.label(),
+            facts = if statement.facts_used.is_empty() {
+                "（未记录）".to_string()
+            } else {
+                statement.facts_used.join(", ")
+            },
+            grants = if statement.grants.is_empty() {
+                "（无授权记录）".to_string()
+            } else {
+                statement.grants.join(", ")
+            },
         ));
     }
     Ok(frame)
@@ -190,6 +267,45 @@ mod tests {
         .expect("应成功");
         let parsed: serde_json::Value = serde_json::from_str(&out).expect("应为合法 JSON");
         assert_eq!(parsed.as_array().map(|a| a.len()), Some(1));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// `impact` 子命令：责任面（授权 / 可逆性 / 后果）。
+    #[test]
+    fn impact_subcommand_lists_statements() {
+        use apeireth_runtime_assembly::accountability::{
+            AccountabilityLedger, Affected, Boundary, ImpactStatement,
+        };
+
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-egress-impact-cli-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let ledger = AccountabilityLedger::new(Some(path.clone()));
+        ledger.append(&ImpactStatement {
+            action_id: "act-1".into(),
+            at_ms: 1_700_000_000_000,
+            boundary: Boundary::Provider,
+            facts_used: vec!["ep-1".into()],
+            inferences: Vec::new(),
+            grants: vec!["grant-1".into()],
+            affected: Affected::SelfOnly,
+            reversible: false,
+            destination: "provider:anthropic".into(),
+            outcome: apeireth_runtime_assembly::accountability::Outcome::Unknown,
+        });
+        let out = run_egress_at(
+            std::path::Path::new("/nonexistent-root"),
+            &["impact".into(), "--path".into(), path.display().to_string()],
+        )
+        .expect("应成功");
+        assert!(out.contains("act-1"));
+        assert!(out.contains("不可逆"));
+        assert!(out.contains("unknown"), "后果未知要如实显示");
         let _ = std::fs::remove_file(&path);
     }
 

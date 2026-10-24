@@ -193,8 +193,10 @@ claims:
 未授权即拒绝出网（fail-closed）。**问责闭环已接**（ADR-0014 §5 五步全部落地）：
 影响声明 + 事实→行动索引 / 决策回执 / 后果追踪（`unknown` 是一等公民）/ 通知义务
 （不自动外发、被引用才打扰）/ 自述面 `capabilities.accountability` 只读计数。
-**仍未接**：出域账本与影响声明的**读出端**已有 CLI（`apeireth egress ledger`），
-但**问责账本**还没有对应 CLI 出口。"
+**读出端已接**：出域账本 `apeireth egress ledger`（观测面）+
+问责账本 `apeireth egress impact`（责任面：授权 / 可逆性 / 影响谁 / 后果）。
+**仍未接**：后果状态的**回填**通道（Outcome 只有 unknown 一档被写入，
+确认/失败要靠回执渠道或用户确认回填 —— 那条通道还没建）。"
 
   - id: mem.lesson_object
     title: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
