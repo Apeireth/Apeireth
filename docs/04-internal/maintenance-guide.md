@@ -293,7 +293,7 @@ _本指南 v2 重写 (2026-08-27)，2026-09-12 对账更新 crate 数为 17、20
 
 | worktree | 分支 | 用途 | 回收条件 |
 |---|---|---|---|
-| `C:\Users\31683\apeireth-debt` | fix/historical-debt | 历史债偿还（11 提交未合 main） | **合并进 main 后** `git worktree remove`（勿直删目录=悬挂元数据） |
+| `C:\Users\USER_A\apeireth-debt` | fix/historical-debt | 历史债偿还（11 提交未合 main） | **合并进 main 后** `git worktree remove`（勿直删目录=悬挂元数据） |
 
 **磁盘纪律**：worktree 的 `target/` 随用随清（`scripts/target-sweep.ps1`）；`target/` >50GB 手术式清扫（删 incremental/doc/**stale pdb** 与 `frontend/companion-desktop/src-tauri/target` 同档，保留 deps/build/.fingerprint——先例 reports/target-cleanup-2026-08-20.md + 台账 #40「pdb 可再生、零重编」实证）。
 

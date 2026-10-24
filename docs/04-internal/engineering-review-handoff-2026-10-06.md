@@ -14,7 +14,7 @@
 
 ```powershell
 # 仓库: https://github.com/Apeireth/Apeireth  (main)
-# 本地: C:\Users\31683\Apeireth-rust   workspace.version = 2.0.0-rc.1
+# 本地: C:\Users\USER_A\Apeireth-rust   workspace.version = 2.0.0-rc.1
 cargo test --workspace                 # 基线: 全绿 (见 §3.1 复核步骤)
 cargo clippy --workspace --all-targets -- -D warnings
 ```
@@ -161,7 +161,7 @@ frozen 13), v2 是 18 个 crate 的重构形态。**"v1 有真实现、v2 有没
 ### 3.1 基线三连 (先跑, 拿到自己的基线数字)
 
 ```powershell
-cd C:\Users\31683\Apeireth-rust
+cd C:\Users\USER_A\Apeireth-rust
 cargo test --workspace 2>&1 | Select-String 'test result:'      # 记录 passed/failed 总数
 cargo clippy --workspace --all-targets -- -D warnings            # 期望: 0 警告
 cd frontend\companion-desktop; npm run check; npm run test        # 期望: 0 errors / 15 passed
@@ -183,7 +183,7 @@ cd frontend\companion-desktop; npm run check; npm run test        # 期望: 0 er
 ### 3.2 生产接线计数脚本 (C1/C2 的完整版)
 
 ```powershell
-cd C:\Users\31683\Apeireth-rust
+cd C:\Users\USER_A\Apeireth-rust
 $targets = Get-ChildItem crates\engine\runtime-assembly\src, crates\adapters\cli\src -Recurse -Filter *.rs
 $mods = @('partner','principles','consolidation','dreaming','memory_injection','meta_thinking',
           'intent_brier','reflexion','topic_predictor','proactive_recall','morphology','education',

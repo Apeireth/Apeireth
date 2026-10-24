@@ -66,7 +66,7 @@
 ## 3. 立即复核命令
 
 ```powershell
-cd C:\Users\31683\Apeireth-rust
+cd C:\Users\USER_A\Apeireth-rust
 git log --oneline -3
 python scripts/arch_guard.py --report
 python scripts/docs_truth.py --verify --check

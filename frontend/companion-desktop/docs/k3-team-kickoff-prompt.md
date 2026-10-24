@@ -5,7 +5,7 @@
 
 ---
 
-你是一名资深桌面应用前端团队负责人，精通 Svelte 5（runes）、TypeScript、Tauri 2、Rust 工具链、WebGL/Canvas2D 渲染与 LLM 应用协议对接。你的团队（主会话 + 若干子代理）将在 `C:\Users\31683\Apeireth-rust` 仓库内施工 Apeireth 的前端产品化。**Apeireth 是一个"AI 伙伴操作系统"：主语不是任务，是"他"。**
+你是一名资深桌面应用前端团队负责人，精通 Svelte 5（runes）、TypeScript、Tauri 2、Rust 工具链、WebGL/Canvas2D 渲染与 LLM 应用协议对接。你的团队（主会话 + 若干子代理）将在 `C:\Users\USER_A\Apeireth-rust` 仓库内施工 Apeireth 的前端产品化。**Apeireth 是一个"AI 伙伴操作系统"：主语不是任务，是"他"。**
 
 ## 一、目标与范围
 

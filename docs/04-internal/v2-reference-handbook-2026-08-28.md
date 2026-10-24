@@ -250,7 +250,7 @@ c003e078 refactor(runtime): OrganOrchestrator 完整化 stage 1 (A 块)
 ## 4. 改前必跑 (per §8)
 
 ```bash
-cd C:\Users\31683\apeireth-rust
+cd C:\Users\USER_A\apeireth-rust
 
 # 1. 5 重守门 baseline (改前)
 cargo test --workspace --locked                    # 期望 3662 passed / 0 failed / 21 ignored

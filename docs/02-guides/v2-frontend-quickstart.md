@@ -31,7 +31,7 @@ Author:          子代理 R9
 
 ```bash
 # 根 workspace 启动 v2 gateway
-cd C:\Users\31683\Apeireth-rust
+cd C:\Users\USER_A\Apeireth-rust
 cargo run --locked --bin apeireth -- gateway serve --port 8080
 # 期望: HTTP 服务监听 :8080, 路由 /health + /v1/chat + /v1/chat/completions
 

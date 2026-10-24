@@ -17,7 +17,7 @@ Author:          主代理 Mavis
 
 ## 0. 派活真账 (per O-5 + Round 4 教训)
 
-**用户原话** (Round 10 启动): "调研都要落文档你知道吧" + 之前 "调研区域啥情况" + "去把 `C:\Users\31683\Desktop\Youyou\重要参考项目...` 这里的项目都调研一下，看看对我们的项目有什么用".
+**用户原话** (Round 10 启动): "调研都要落文档你知道吧" + 之前 "调研区域啥情况" + "去把 `C:\Users\USER_A\Desktop\Youyou\重要参考项目...` 这里的项目都调研一下，看看对我们的项目有什么用".
 
 **主代理行动顺序**:
 1. ✅ **删 .db 垃圾** (research/08-rust-substrate-current/data/*.db, 180 KB, R8 临时数据)
