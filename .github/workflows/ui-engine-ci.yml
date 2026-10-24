@@ -220,6 +220,39 @@ jobs:
             -printf '  %f  %s bytes\n' 2>/dev/null || echo "  （本批无 .wasm 产物）"
 
   # =========================================================================
+  # 6. 依赖治理门禁 — 4 类 check 全绿（bans / licenses / sources / advisories）
+  # =========================================================================
+  # crates-ui 是独立 workspace ⇒ 主仓的 cargo-deny.yml **只扫主 workspace**
+  # ⇒ 本 workspace 的依赖树在本 job 里被覆盖。
+  #
+  # P5 批首次引入外部依赖（wgpu / naga / web-sys / js-sys / wasm-bindgen-futures）
+  # ⇒ 许可白名单与多版本 skip 随之扩到 6 条许可 + 1 条 skip（见 crates-ui/deny.toml）。
+  cargo_deny:
+    name: cargo deny check (crates-ui)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: crates-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (crates-ui)
+        uses: Swatinem/cargo-cache@v1
+        with:
+          workspaces: 'crates-ui -> target'
+
+      # 与主仓 cargo-deny.yml 同源（wasmtime 模式）：4 类 check 全跑。
+      - name: Run cargo deny check (全部 4 类)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --all-features
+
+  # =========================================================================
   # 6. 试点对照门禁 — 浏览器内像素对照 + 逐帧对照（P3 验收门）
   # =========================================================================
   pilot-compare:

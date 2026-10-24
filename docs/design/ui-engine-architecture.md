@@ -919,7 +919,7 @@ view! {
 | # | 变换 | 理由（上游事实） |
 |---|---|---|
 | **X1** | **删掉 `#version 300 es` 行** | naga 的 GLSL 前端**没有 ES profile**：`naga-30.0.1/src/front/glsl/parser.rs:267` 只收 `#version 440 \| 450 \| 460` + `core` |
-| **X2** | **每个 uniform 注入 `layout(binding=N)`** | naga 要求 uniform 显式绑定：`naga-30.0.1/src/front/glsl/variables.rs:618` |
+| **X2** | ~~每个 uniform 注入 `layout(binding=N)`~~ **（2026-10-24 P5 实测推翻）** | ❌ 在 **WebGL2 后端必然失败**：16 个 uniform = 16 个 uniform buffer，而 WebGL2 每阶段只有 **14** 个（本机实测；GLES3 下限 12）。实测报错：`Too many bindings of type UniformBuffers in Stage ShaderStages(FRAGMENT), limit is 14, count was 16`。**保留为可测基准，生产路径不用** |
 
 **三条硬约束（写入 `ui-gpu` 的前置设计）**：
 
@@ -938,7 +938,7 @@ view! {
 | 层 | 能否原样复用 | 说明 |
 |---|---|---|
 | **着色器数学主体**（片元着色器里的 smoothstep 混合曲线、双多普勒增亮、色温梯度、星野三层视差） | **能** | 它是纯算术，只依赖 uniform 与 `gl_FragCoord`。**光学数值一个字都不改**（这既是视觉纪律，也是「电影感零改写」的物理保证）。**P0 往返实测已证明：naga 往返后 5 个 helper 函数与输出变量全部保住** |
-| **GLSL 源文本** | **能，但要两步机械变换** | X1（删版本行）+ X2（注入 `layout(binding=N)`）。改的是**方言外壳**，**不是数学**；变换规则是确定性的，可写成纯函数 + 单测 |
+| **GLSL 源文本** | **能，但要机械变换** | X1（删版本行）+ **X3（合并成一个 std140 uniform 块）**（原记的 X2 已被 P5 实测推翻，见 §7.2.1 的 X2 行）。改的是**声明外壳**，**不是数学**；变换规则是确定性的，可写成纯函数 + 单测。⚠️ **另需补 padding**：WebGL2 要求 uniform 块大小是 16 的倍数（实测 72 字节被拒） |
 | **WebGL2 胶水层**（`createShader` / `uniform*` 上传 / VAO / `drawArrays`） | **不能，必须重写** | WebGL2 的 API 面与 wgpu 无对应关系。替换为 wgpu 的 pipeline / bind group / queue 写入 |
 
 **因此本节的确定结论是**：
@@ -1321,7 +1321,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 | 22 | 视觉零改写：class 逐字一致、C1–C5、像素对照法（阈值 ≤1%）、逐帧对照法、CSS 抽取规则 | §9 |
 | 23 | 测试三层 + 源码镜像禁令的判据与三类例外 + 替代写法表 | §10 |
 | 24 | 门禁 job 清单 | §10.4 |
-| 25 | **GLSL ES 3.0 → naga IR 的两步机械变换**（X1 删 `#version` 行 / X2 注入 `layout(binding=N)`），约 30 行前置编译器，纯文本函数可单测 | §7.2.1 |
+| 25 | **GLSL ES 3.0 → naga IR 的机械变换**（X1 删 `#version` 行 / **X3 合并成一个 std140 uniform 块 + 补 16 字节对齐的 padding 成员** —— 原记的 X2「逐个注入 binding」已被 P5 实测推翻：WebGL2 每阶段只 14 个 uniform buffer，16 个必然超限），前置编译器是纯文本函数可单测；**两后端须显式选同一种表面格式**（本仓取 `Rgba8Unorm` + `raw_bytes`），否则同一片元值落到不同字节 | §7.2.1 |
 | 26 | **`glsl` feature 必须与 `wgsl` 同开**（上游缺陷，naga 30.0.1 未修） | §7.2.1 约束 C2 |
 | 27 | **uniform 名 → binding 索引映射表**（来源 `blackhole.ts:337` 的 `UNIFORM_NAMES`）；naga 往返会抹掉 uniform 名 | §7.2.1 约束 C3 / §7.3 |
 | 28 | **T2 梯队双后端共存 + 运行时按宿主能力选后端**（禁直接 `Instance::new(Backends::all())`；判据用 `requestAdapter()` 非 null，不用 `navigator.gpu` 存在性）；`web-sys` / `wasm-bindgen` 版本硬钉 1:1 | §7.1 |
@@ -1335,7 +1335,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 
 | # | 项 | 实测结论 | 落到本文哪里 |
 |---|---|---|---|
-| **P0-a** | naga 能否吃下本仓的 GLSL ES 3.00 | ✅ **能，着色器本体不用重写**（「1,037 行」是 TS 文件总行数，绝大部分是 JS 胶水，非着色器 —— §7.2.2）。需 **2 步机械变换**：①删 `#version 300 es` 行 ②每个 uniform 注入 `layout(binding=N)`；约 **30 行前置编译器**。上游事实：naga 的 GLSL 前端**无 ES profile**（`naga-30.0.1/src/front/glsl/parser.rs:267` 只收 `#version 440\|450\|460` + `core`）；uniform 必须显式绑定（`front/glsl/variables.rs:618`） | §7.2.1（约束 C1、X1/X2） |
+| **P0-a** | naga 能否吃下本仓的 GLSL ES 3.00 | ✅ **能，着色器本体不用重写**（「1,037 行」是 TS 文件总行数，绝大部分是 JS 胶水，非着色器 —— §7.2.2）。需**机械变换**：①删 `#version 300 es` 行 ②**把 16 个 uniform 合并进一个 std140 块 + 补 16 字节对齐的 padding 成员**（⚠️ **2026-10-24 P5 实测修订**：原记的「②每个 uniform 注入 `layout(binding=N)`」在 **WebGL2 后端必然超限** —— 每阶段只 14 个 uniform buffer）；前置编译器是纯文本函数。上游事实：naga 的 GLSL 前端**无 ES profile**（`naga-30.0.1/src/front/glsl/parser.rs:267` 只收 `#version 440\|450\|460` + `core`）；uniform 必须显式绑定（`front/glsl/variables.rs:618`） | §7.2.1（约束 C1、X1/X2） |
 | **P0-a′** | naga 往返是否保住着色器 | ✅ **保住**。`naga` 解析 → 校验 → `naga::back::glsl::Writer` 吐出 **17,099 字节 `#version 300 es`**：16 个 `layout(std140) uniform` 块（binding 0..15）、`fragColor` 与 `layout(location = 0) out vec4` 保住、5 个 helper 函数（`hash21` / `vnoise` / `fbm` / `diskRadiance` / `starLayer`）全在；**吐出的 GLSL ES 3.00 能被 naga 自己重新解析并重新校验通过**；同一份代码编成 wasm32 在 node 里跑，**结果与 native 完全一致** | §7.2.1 / §7.2.2 |
 | **P0-a″** | `glsl` feature 能否单独开 | ❌ **不能**。上游缺陷：`front/mod.rs:5` 把 `interpolator` gate 在 `spv-in`/`wgsl-in` 后，而 `front/glsl/variables.rs:467` 无条件调用 ⇒ **只开 `glsl-in` 编译不过**。**naga 30.0.1 未修** ⇒ **`glsl` 必须与 `wgsl` 同开** | §7.2.1 约束 C2 |
 | **P0-a‴** | naga 的 uniform 名会不会被抹掉 | ✅ **会**。naga 的 IR 把每个 GLSL uniform 变成独立 binding（`layout(std140) uniform` 块，binding 0..15），**再吐出时 uniform 名被抹成 `_group_0_binding_N_fs`** ⇒ 引擎须自行维护「**uniform 名 → binding 索引**」映射表（`blackhole.ts:337` 的 `UNIFORM_NAMES` 正好可用） | §7.2.1 约束 C3 / §7.3 binding 索引表 |
@@ -1385,7 +1385,7 @@ presence_state 帧 ──▶ (ui-demo / ui-kit 层做语义映射) ──▶ ui-
 
 | 项 | 回填前口径 | 回填后口径 |
 |---|---|---|
-| GLSL 源文本能否原样复用 | 「待 P0 探测确认」（三种分支） | **能，但需两步机械变换**（删 `#version` 行 + 注入 `layout(binding=N)`） |
+| GLSL 源文本能否原样复用 | 「待 P0 探测确认」（三种分支） | **能，但需机械变换**（删 `#version` 行 + **合并成一个 std140 uniform 块 + 补 padding**；原记的「注入 `layout(binding=N)`」已被 P5 实测推翻） |
 | `glsl` feature 能否单独开 | 未涉及 | **不能**，必须与 `wgsl` 同开（上游缺陷） |
 | uniform 名在 naga 往返后是否保留 | 未涉及 | **不保留**（被抹成 `_group_0_binding_N_fs`）⇒ 引擎须自维护映射表 |
 | wgpu 依赖树多版本风险 | 「极可能引入多版本，直接撞红」（ADR §3.2 拒理由 A 的推测） | **实测极干净**：唯一双版本包是 `syn`；`hashbrown` / `bitflags` / `itertools` / `miniz_oxide` / `ahash` / `crossbeam-*` 未进树；wasm 侧 0 多版本 |

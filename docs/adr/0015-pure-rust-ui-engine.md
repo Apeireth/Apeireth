@@ -136,7 +136,7 @@ P0 探测子线在 `target/ui-probe-scratch/`（独立 scratch，0 写主仓）�
 |---|---|---|
 | 1 | `wasm-bindgen` / `web-sys` 版本配对 | **`web-sys` 对 `wasm-bindgen` 是精确硬钉 1:1**：`0.2.129 ⟷ js-sys 0.3.106 ⟷ web-sys 0.3.106`。错配（0.2.129 + 0.3.104）在**依赖解析期**直接失败 |
 | 2 | `wgpu 30.0.1` 在 wasm32 | ✅ `webgl` 与 `webgpu` 两个后端**均编译通过** |
-| 3 | **naga 能否保住现有 GLSL** | ✅ **能，着色器主体不需要重写**。但需 **2 步机械变换**（删 `#version 300 es` 行 + 每个 uniform 注入 `layout(binding=N)`），约 30 行前置编译器 |
+| 3 | **naga 能否保住现有 GLSL** | ✅ **能，着色器主体不需要重写**。但需 **机械变换**（删 `#version 300 es` 行 + uniform 绑定声明改造）—— ⚠️ **2026-10-24 P5 实测修订：原记的「2 步」不足，见 §2.6.3** |
 | 4 | 依赖树 | ✅ **极其干净**：wgpu-webgl 68 crate，**唯一多版本包只有 `syn`（2.0.119 + 3.0.9）**；`hashbrown`/`bitflags`/`itertools`/`miniz_oxide`/`ahash`/`crossbeam-*` 实测**未进树** |
 | 5 | 产物体积 | wgpu-webgl **4,534,454 B** / wgpu-webgpu **2,860,060 B**（release .wasm，含真实导出非空壳） |
 | 6 | `wasm-bindgen-cli` | ✅ 44.68 s 装上 0.2.129，wasm→js 转换 + node 加载实测通过 |
@@ -183,6 +183,34 @@ P0 探测子线在 `target/ui-probe-scratch/`（独立 scratch，0 写主仓）�
 - ❌ **仍未实测**：**macOS WKWebView / Windows WebView2 / Linux WebKitGTK 上均未实测**（环境只有 Linux Chromium）。Safari 无 WebGPU，WKWebView 路径大概率只能落 WebGL2，**需在真机复验**。
 - ❌ **色彩管线未对齐**：WebGPU 后端 `format=Rgba8Unorm` 与 WebGL 的 `Rgba8UnormSrgb` 不同，linear↔sRGB 转换需在 P5 显式处理。
 - ❌ **未跑本仓真实黑洞场景**：第 2 轮渲染的是探针三角形，**不是** `blackhole.{vert,frag}` 的画面（那两条 shader 只做了 naga 解析/回环层面的验证）。
+
+---
+
+### 2.6.3 第 3 轮实测（P5 GPU 桥落地）：**X2 被实测推翻，改为 X3**
+
+P5 把 GPU 桥真正实现出来时，**实测推翻了第 1/2 轮写下的「X1 + X2 两步机械变换」**中的 X2。
+
+| # | 项 | 实测结论 |
+|---|---|---|
+| 13 | **X2（每个 uniform 逐个注入 `layout(binding=N)`）** | ❌ **在 WebGL2 后端必然失败**。本仓 16 个 uniform ⇒ 16 个 uniform buffer，而 **WebGL2 后端每阶段只有 14 个**（本机实测 14；GLES3 规范下限 12）。实测报错原文：`Too many bindings of type UniformBuffers in Stage ShaderStages(FRAGMENT), limit is 14, count was 16` |
+| 14 | **X3（合并成一个 std140 uniform 块）** | ✅ **可行**。把 N 个 plain uniform **合并进一个** `layout(std140, binding=0) uniform EngineUniforms { … };` ⇒ 只需 1 个 binding。**成员名 / 表达式 / 数值逐字不动**（GLSL 允许块成员不带实例名直接访问，已用单测钉住 naga 前端确实支持）⇒ **着色器正文里的 `uRes` 等标识符不用改** |
+| 15 | **块大小须为 16 的倍数** | ⚠️ WebGL2 要求 uniform 块大小是 16 的倍数，否则设备报 `BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`。实测 72 字节被拒 ⇒ 引擎须按需补一个 `vec4` **padding 成员** |
+| 16 | **两后端的表面格式不同 ⇒ 画面会不同** | ⚠️ wgpu 把 sRGB 格式排在 `formats[0]`（`wgpu-core-30.0.1/src/device/global.rs:56`）⇒ 直接取会让**同一片元值 0.35 在两后端变成字节 160 vs 89**。⇒ 引擎**显式改选非 sRGB 格式**（`Rgba8Unorm` + `raw_bytes`），并把该口径记进 `ColorProfile`。实测修正后：**两后端逐像素完全一致** |
+| 17 | **画面级实测（生产版着色器）** | ✅ WebGL 后端（`backend=Gl`）与 WebGPU 后端（`backend=BrowserWebGpu`）**各自用生产版的 2 条 GLSL 跑出真画面**（黑洞 + 吸积盘 + 星野 + 环境蓝光），各 3 帧；两张画布**逐像素零差异**（**174,484 像素比较 / 0 个不同 / 最大通道差 0**）—— 主代理用 PIL **独立重算**复核（`getbbox()` = None，各通道极值 (0,0)） |
+
+**由此产生的三条实现约束**：
+
+5. **着色器变换链是 X1 + X3，不是 X1 + X2**（X2 保留为可测基准，但生产路径不用）。前置编译器仍只改**声明外壳**，**光学数值与表达式逐字不动**。
+6. **uniform 块大小须补齐到 16 的倍数**（补 `vec4` padding 成员）—— 否则 WebGL2 后端直接拒绝。
+7. **两后端必须显式选定同一种表面格式**（本仓取 `Rgba8Unorm` + `raw_bytes`）—— 否则同一片元值在两后端落到不同字节 ⇒ 逐帧对照会出现**假差异**。
+
+**第 3 轮的诚实边界**：
+
+- ✅ **已实测**：两个后端各自用**生产版 GLSL** 跑出真画面，且**逐像素完全一致**。
+- ❌ **未实测**：macOS WKWebView / Windows WebView2 / Linux WebKitGTK **均未实测**（环境只有 Linux Chromium）。
+- ❌ **P5-b 未做**：黑洞场景的**完整复刻**（uniform 取值来源 = 生产版的实时取值链、场景参数语义、**与生产画面逐帧一致**）属下一批 ⇒ **本轮不主张「与生产画面一致」**（证据里的 uniform 取值是一组固定可复现的取值）。
+- ❌ **顶点阶段 uniform 未接线**（显式报错，不静默忽略）。
+
 
 **措辞校正（lead 亲验后改写，0 装诚实）**：`blackhole.ts` 的 **1,037 行是 TS 文件总行数**，其中绝大部分是 JS 胶水，**真正的 GLSL 是 2 条程序**（vertex `:131` / fragment `:256`，合计约 200 行 GLSL）。因此准确表述是：
 
