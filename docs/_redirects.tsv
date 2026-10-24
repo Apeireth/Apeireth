@@ -25,6 +25,15 @@ docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md	docs/04-intern
 docs/04-internal/b-block-decision-points-research-2026-08-28.md	docs/04-internal/02-research/b-block-decision-points-research-2026-08-28.md
 docs/04-internal/b-block-frontend-readiness-2026-08-28.md	docs/04-internal/05-plans/b-block-frontend-readiness-2026-08-28.md
 docs/04-internal/b-block-gateway-sse-research-2026-08-28.md	docs/04-internal/02-research/b-block-gateway-sse-research-2026-08-28.md
+docs/04-internal/backend-enhancement/04-delivery/V4-b-memory-freshness-delivery.md	docs/04-internal/backend-enhancement/04-delivery/home-V-axis-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/V5-a-redaction-bridge-delivery.md	docs/04-internal/backend-enhancement/04-delivery/home-V-axis-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/V5-c-patrol-funnel-delivery.md	docs/04-internal/backend-enhancement/04-delivery/home-V-axis-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/W2-3-multi-client-session-reuse.md	docs/04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/W3-1-multi-user-data-isolation.md	docs/04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/W3-2-user-identity-roles.md	docs/04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/W3-3-domain-partner-instances.md	docs/04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/production-wiring-closeout-delivery.md	docs/04-internal/backend-enhancement/04-delivery/home-assembly-closeout-delivery.md
+docs/04-internal/backend-enhancement/04-delivery/trait-lock-and-trait-report-delivery.md	docs/04-internal/backend-enhancement/04-delivery/home-assembly-closeout-delivery.md
 docs/04-internal/backend-enhancement/A-quota-real-interface.md	docs/04-internal/backend-enhancement/02-axes/A-quota-real-interface.md
 docs/04-internal/backend-enhancement/B-performance.md	docs/04-internal/backend-enhancement/02-axes/B-performance.md
 docs/04-internal/backend-enhancement/C-memory-deepening.md	docs/04-internal/backend-enhancement/02-axes/C-memory-deepening.md
