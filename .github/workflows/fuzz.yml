@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [protocol_decode, gateway_guards, resident_parse, sentence_split, tool_schema, im_config, mcp_config, plugin_bounds]
+        target: [protocol_decode, gateway_guards, resident_parse, sentence_split, tool_schema, im_config, mcp_config, plugin_bounds, content_sanitize]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

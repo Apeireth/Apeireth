@@ -82,3 +82,10 @@ path = "fuzz_targets/plugin_bounds.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "content_sanitize"
+path = "fuzz_targets/content_sanitize.rs"
+test = false
+doc = false
+bench = false
