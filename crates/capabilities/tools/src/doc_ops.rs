@@ -5269,8 +5269,10 @@ mod tests {
         //
         // 修法：给本测试一个**独有**的父目录，root 与 outside.pdf 都落其中。
         // 这比原来更严谨：不再依赖「共享 temp 目录恰好是干净的」这一外部状态。
-        let parent = std::env::temp_dir()
-            .join(format!("apeireth-doc-ops-boundary-outside-{}", std::process::id()));
+        let parent = std::env::temp_dir().join(format!(
+            "apeireth-doc-ops-boundary-outside-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&parent);
         std::fs::create_dir_all(&parent).expect("创建测试外层目录");
         let root = parent.join("workspace");
