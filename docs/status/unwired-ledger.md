@@ -35,7 +35,13 @@
 
 | 符号 | 处置 |
 |---|---|
-| `as_session_store`（`runtime-assembly/src/sqlite_session.rs`） | 无引用；属遗留便捷函数，清理批次里删（低风险） |
+| ~~`as_session_store`~~（`runtime-assembly/src/sqlite_session.rs`） | ✅ 已删（早期批次；本行原为过期残留，2026-10-25 对账时发现该符号已不存在） |
+| ~~`query_recent`~~（`memory/src/episode.rs`） | ✅ **已删**（2026-10-25）：`mvp/memory/store.py` 兼容层遗留，全仓零引用 |
+| ~~`StreamHandle`~~（`memory/src/streams.rs`，含 `new`/`HistoryStream` 实现与专属测试） | ✅ **已删**（2026-10-25）：通用流句柄，`KIND` 还是 `Thought` 占位（自己都说「调用方应直接用具体流类型」），全仓零构造 |
+| `append_only::kind_from_str` | 保留：`organ_kani_proofs` 在 `cfg(kani)` 下使用；stable 构建看不到使用但**不是死代码** |
+
+**本节结论（2026-10-25）**：死 API 清理已收口 —— 现存零引用的公开 API 均为
+`cfg(kani)` 证明面使用或测试专用（见 §二），不再有「无任何引用」的符号。
 
 ## 四、已接线（PRODUCTION WIRED；保留原行供审计）
 

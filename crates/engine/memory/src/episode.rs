@@ -306,30 +306,6 @@ impl EpisodeStore for crate::SqliteMemoryStore {
     }
 }
 
-/// 公共 helper: 按角色/时间窗组合查询 (供 `mvp/memory/store.py` 兼容层使用).
-pub fn query_recent(conn: &Connection, session_id: &str, n: usize) -> MemoryResult<Vec<Episode>> {
-    if n == 0 {
-        return Ok(Vec::new());
-    }
-    let mut stmt = conn.prepare(
-        "SELECT id, timestamp, role, content, session_id
-         FROM episodes WHERE session_id = ?1
-         ORDER BY timestamp DESC, id DESC LIMIT ?2",
-    )?;
-    let rows = stmt.query_map(params![session_id, n as i64], |row| {
-        Ok(Episode {
-            id: row.get(0)?,
-            timestamp: row.get(1)?,
-            role: row.get(2)?,
-            content: row.get(3)?,
-            session_id: row.get(4)?,
-        })
-    })?;
-    let mut out: Vec<Episode> = rows.collect::<rusqlite::Result<Vec<_>>>()?;
-    out.reverse();
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
