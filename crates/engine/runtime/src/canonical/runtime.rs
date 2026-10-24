@@ -590,6 +590,17 @@ impl Runtime {
         &self.context_projector
     }
 
+    /// 已安装的并发调度器（`None` = 未安装 ⇒ 并行工具派发不会发生）。
+    ///
+    /// 暴露给装配级测试与自述面：并行窗口的可用性取决于**是否装上了**
+    /// [`apeireth_orchestration::call_scheduler::CallScheduler`]，
+    /// 「装上了」这件事应当可被外部验证，而不是只能读装配代码。
+    pub fn call_scheduler(
+        &self,
+    ) -> Option<&Arc<apeireth_orchestration::call_scheduler::CallScheduler>> {
+        self.call_scheduler.as_ref()
+    }
+
     /// The router over every provider that can currently serve a completion.
     ///
     /// Its members come from the capability registry, which is why the runtime

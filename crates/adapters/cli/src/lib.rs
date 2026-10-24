@@ -24,6 +24,7 @@ pub mod governance_chain;
 pub mod guard_decision_wiring;
 pub mod keyring_bootstrap;
 pub mod lessons_command;
+pub mod parallel_dispatch_wiring;
 pub mod principal_forget_port;
 pub mod rate_limit_wire;
 pub mod read_only_grants;
@@ -1607,6 +1608,7 @@ async fn build_canonical_runtime_with_parts(
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
     builder = cognitive.register_context_projection(builder);
+    builder = parallel_dispatch_wiring::attach(builder);
     builder = cognitive.register_into(builder);
 
     let mut fallback_order: Vec<CapabilityId> = Vec::new();

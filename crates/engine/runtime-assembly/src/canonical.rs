@@ -117,6 +117,7 @@ pub mod orchestrator;
 pub mod organ_llm_bridge;
 #[path = "canonical/organ_module.rs"]
 pub mod organ_module;
+pub mod parallel_dispatch;
 #[path = "canonical/permission_preset.rs"]
 pub mod permission_preset;
 /// 生物机制族 W3.3 · 游戏练习场工具面 (`tool.play_propose` / `tool.play_start` /
