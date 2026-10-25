@@ -86,6 +86,9 @@ $AllowlistPaths = @(
     'crates/adapters/cli/tests/*',
     'crates/adapters/sdk/examples/*',
     'crates/capabilities/tools/src/guardrail.rs',
+    # fuzz target 里的 PEM 形态假键 (测私钥体脱敏覆盖用——假键非真凭据;
+    # 与上面 guardrail.rs 同类：脱敏面测试必须写得出 PEM 的真形状)
+    'fuzz/fuzz_targets/guard_supervisor.rs',
     'crates/adapters/sdk/src/livekit/auth.rs',
     'crates/engine/perception/tests/*',
     'crates/foundation/governance/src/input_security.rs',
