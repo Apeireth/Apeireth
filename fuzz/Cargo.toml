@@ -220,3 +220,10 @@ path = "fuzz_targets/chain_audit.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "mcp_governance"
+path = "fuzz_targets/mcp_governance.rs"
+test = false
+doc = false
+bench = false
