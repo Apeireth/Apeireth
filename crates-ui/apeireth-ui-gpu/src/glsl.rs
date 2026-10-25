@@ -4,12 +4,26 @@
 //!
 //! | # | 限制 | 出处 | 本 crate 的对策 |
 //! |---|---|---|---|
-//! | X1 | naga 的 GLSL 前端**没有 ES profile**：`#version 300 es` 是硬解析错误 | `naga-30.0.1/src/front/glsl/parser.rs:267`（只收 `#version 440｜450｜460`）、`:290`（只收 `core` profile） | [`strip_version_directive`]：删掉 `#version` 行 |
+//! | X1 | naga 的 GLSL 前端**没有 ES profile**：`#version 300 es` 是硬解析错误 | `naga-30.0.1/src/front/glsl/parser.rs:267`（只收 `#version 440｜450｜460`）、`:290`（只收 `core` profile） | [`strip_version_directive`]：把 `#version` 行**替换成空行**（不删行 ⇒ 行号不变） |
 //! | X2 | naga 的 GLSL 前端要求 uniform **显式带 `layout(binding=N)`** | `naga-30.0.1/src/front/glsl/variables.rs:618` | [`inject_layout_bindings`]（逐个注入）/ [`pack_uniforms_into_block`]（合并成一块） |
 //! | **X3** | **WebGL2 后端的 `max_uniform_buffers_per_shader_stage` 装不下 16 个独立 uniform buffer** | **实测**（本机 Chromium 154 + 软件 WebGL）：限额 **14**，`create_bind_group_layout` 直接报 `Too many bindings of type UniformBuffers in Stage ShaderStages(FRAGMENT), limit is 14, count was 16`（GLES3 规范下限是 12） | [`pack_uniforms_into_block`]：把 N 个 plain uniform **合并进一个 std140 uniform 块** ⇒ **1 个 binding** |
-//! | **X4** | **本引擎的两个后端都把片元坐标的 y 轴变成「向下」，而 GLSL ES 规定「向上」** | GLSL ES 3.0 规范（`gl_FragCoord` 原点在**左下角**）；WebGPU 的 `@builtin(position)` 原点在**左上角**；`wgpu-hal-30.0.1/src/gles/web.rs:301-312`（GL 路径把主渲染上下翻转：「GL's presentation is not flipped, but main rendering is. Therefore, we Y-flip the output positions in the shader, and also this blit.」） | [`fix_frag_coord_semantics`]：源级把 `gl_FragCoord` 换成 `vec4(x, height - y, z, w)` |
+//! | **X4** | **本引擎的两个后端都把片元坐标的 y 轴变成「向下」，而 GLSL ES 规定「向上」** | GLSL ES 3.0 规范（`gl_FragCoord` 原点在**左下角**）；WebGPU 的 `@builtin(position)` 原点在**左上角**；`wgpu-hal-30.0.1/src/gles/web.rs:301-312`（GL 路径把主渲染上下翻转：「GL's presentation is not flipped, but main rendering is. Therefore, we Y-flip the output positions in the shader, and also this blit.」） | [`fix_frag_coord_semantics`]：源级把 `gl_FragCoord` 换成 `vec4(x, 帧缓冲高 - y, z, w)`，**帧缓冲高来自 uniform**（[`FRAMEBUFFER_HEIGHT_MEMBER`]）⇒ 改尺寸**不必重编译着色器** |
 //!
 //! 四步都是**方言外壳**层面的机械变换，**不触碰着色器数学**（光学数值零改写）。
+//!
+//! ## ⭐ 行号必须一一对应（ADR §2.6.4 的承诺）
+//!
+//! naga 报错时给的是**行号** ⇒ 宿主按行号回查源码 ⇒ **变换链的每一步都必须
+//! 保持行数不变**（不是「尽量」，是**硬约束**）：
+//!
+//! - [`strip_comments`]：保留换行（已满足）；
+//! - [`strip_version_directive`]：`#version` 行**替换成空行**（不是删行）；
+//! - [`pack_uniforms_into_block`]：uniform 块**整体写在一行**里，放在**首条声明
+//!   所在行**；该声明原占的其余行**留空** ⇒ 净行数不变；
+//! - [`fix_frag_coord_semantics`：**不插行**（已满足）。
+//!
+//! ⇒ 整链（`transform_fragment_with_block_binding`）的行数 == 输入的行数。
+//! 本模块的单测 `transform_chain_preserves_line_count` 钉住这条不变量。
 //!
 //! ## X3 为什么必须做
 //!
@@ -34,7 +48,25 @@
 //! （翻转后 0 差异 ⇒ 证明差异**只有**这一个成因；证据见
 //! `crates-ui/evidence/p5-b/`）。
 //!
-//! 修正只改**坐标的取法**（`y → height - y`），不改任何表达式与数值。
+//! 修正只改**坐标的取法**（`y → 帧缓冲高 - y`），不改任何表达式与数值。
+//!
+//! ## X4 的帧缓冲高为什么是 **uniform** 而不是字面量
+//!
+//! 早期实现把表面高度**烘焙成字面量**写进片元着色器（`600.0 - gl_FragCoord.y`）
+//! ⇒ ① 尺寸一变，字面量就陈旧 ⇒ 画面竖直错位；② 着色器与**表面尺寸**耦死
+//! ⇒ resize 必须重编译着色器。
+//!
+//! 现在翻转高度来自 uniform [`FRAMEBUFFER_HEIGHT_MEMBER`]（引擎注入到
+//! uniform 块末尾的一个 `float` 成员）⇒
+//!
+//! - **改尺寸不必重编译着色器**（只改 uniform 缓冲里的一个 f32）；
+//! - 生产 uniform 的**偏移与取值逐字节不变**（引擎成员**追加在末尾**）⇒
+//!   既有逐像素证据（0 / 576,000）不受影响；
+//! - 字面量形态与 uniform 形态的**算术完全等价**：`600.0`（GLSL float 字面量）
+//!   与 uniform 里的 f32 `600.0` 是**同一个 f32 值**，`highp - highp` 的
+//!   IEEE 减法逐位相同 ⇒ 像素不变。
+//!
+//! ⇒ 逐像素等价性的论证见 [`fix_frag_coord_semantics`] 的文档。
 //!
 //! ## 为什么要先把注释剥掉
 //!
@@ -75,6 +107,20 @@ pub const UNIFORM_BLOCK_NAME: &str = "EngineUniforms";
 /// padding 成员**不被着色器引用** ⇒ 对画面零影响。
 pub const UNIFORM_BLOCK_PADDING_MEMBER: &str = "_engine_pad0";
 
+/// 引擎注入的「帧缓冲高度」uniform 成员名（片元阶段用）。
+///
+/// **为什么需要**：`gl_FragCoord` 的 y 轴修正要用**当前表面高度**
+/// （`帧缓冲高 - gl_FragCoord.y`）。把高度**烘焙成字面量**会让着色器与表面
+/// 尺寸耦死 ⇒ 尺寸一变就得重编译着色器（而重编译管线极重，见
+/// `crates-ui/evidence/p5-b/harness/src/lib.rs` 的实测注释）。
+///
+/// ⇒ 高度改成**一个 uniform 成员**（引擎注入到块末尾）：改尺寸只改 uniform
+/// 缓冲里的一个 f32 ⇒ **不必重编译着色器**。
+///
+/// **为什么追加在末尾**：生产 uniform 的**偏移与取值逐字节不变** ⇒ 既有逐像素
+/// 证据（生产对照 0 / 576,000）不受影响。
+pub const FRAMEBUFFER_HEIGHT_MEMBER: &str = "_engine_fb_height";
+
 /// uniform 块里的一个成员声明。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UniformBlockMember {
@@ -84,6 +130,14 @@ pub struct UniformBlockMember {
     pub type_name: String,
     /// 该成员是不是引擎补齐用的 **padding 成员**（不被着色器引用）。
     pub is_padding: bool,
+    /// 该成员是不是**引擎自填**成员（宿主不必提供值）。
+    ///
+    /// - padding 成员：引擎补齐对齐用 ⇒ 宿主不提供；
+    /// - [`FRAMEBUFFER_HEIGHT_MEMBER`]：引擎每帧写入当前表面高度 ⇒ 宿主不提供。
+    ///
+    /// ⚠ 与 `is_padding` 是**两件事**：padding 成员**不被着色器引用**，
+    /// 而 `FRAMEBUFFER_HEIGHT_MEMBER` **被着色器引用**（片元坐标修正）。
+    pub is_engine_filled: bool,
 }
 
 /// 一条 uniform 声明（名字 + 类型 + 声明序）。
@@ -185,13 +239,24 @@ pub fn strip_comments(src: &str) -> String {
 // 变换 1（X1）：删 `#version` 行
 // ---------------------------------------------------------------------------
 
-/// 删掉 `#version` 指令行（naga 的 GLSL 前端没有 ES profile）。
+/// 把 `#version` 指令行**替换成空行**（naga 的 GLSL 前端没有 ES profile）。
 ///
 /// 其余预处理行（`#extension` / `#define` / `#ifdef` …）**原样保留**。
+///
+/// ## 为什么是「替换成空行」而不是「删掉整行」
+///
+/// naga 的报错信息带**行号** ⇒ 宿主按行号回查**原始源码** ⇒ 变换链必须
+/// **保持行数不变**。删行会让其后所有源码的行号**整体前移一位** ⇒ 按行号
+/// 回查会**查错地方**（实测：6 行源经变换后变 9 行 ⇒ naga 报错指向错位的行）。
+///
+/// ⇒ `#version` 行换成**空行**：语义上「这一行没有指令」，行号上「这一行
+/// 仍然是原来那一行」。
 pub fn strip_version_directive(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
     for line in src.split_inclusive('\n') {
         if line.trim_start().starts_with("#version") {
+            // 换成空行（**保留一个换行符**）⇒ 行数不变。
+            out.push('\n');
             continue;
         }
         out.push_str(line);
@@ -206,36 +271,43 @@ pub fn strip_version_directive(src: &str) -> String {
 /// 一条顶层 plain uniform 声明的位置与原文。
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UniformSite {
-    /// 行号（0 起）。
+    /// **首行**行号（0 起）。
     line: usize,
-    /// 声明原文（不含缩进与换行）。
+    /// **末行**行号（0 起，含）—— 跨行声明时 > `line`。
+    ///
+    /// ⚠ 必须记**行区间**而不是只记首行：跨行声明（`uniform vec2\n    uRes;`）
+    /// 的**续行**也要被整体替换掉 ⇒ 否则会留下**孤立的 `uRes;`** ⇒ naga 解析
+    /// 失败（实测：生产路径没有跨行单测 ⇒ 这是下一轮 shader 迁移的硬阻断）。
+    end_line: usize,
+    /// 声明原文（不含缩进与换行；跨行时按空格拼接）。
     text: String,
 }
 
 /// 扫描源码里的**顶层** plain uniform 声明（位置 + 原文）。
 ///
 /// - 只认**顶层**（花括号深度 0）的 `uniform` 声明；
-/// - 跨行声明按**整体**处理（拼成一条）；
+/// - 跨行声明按**整体**处理（拼成一条）并记录**行区间**；
 /// - 已带 `layout(...)` 的 uniform **块**不在此列（那是另一种形态）。
 fn scan_uniform_sites(src: &str) -> Vec<UniformSite> {
     let mut sites = Vec::new();
     let mut depth = 0i32;
-    let mut pending: Option<(usize, String)> = None;
+    let mut pending: Option<(usize, usize, String)> = None;
 
     for (index, line) in src.split_inclusive('\n').enumerate() {
         let bare = line.trim_end_matches(['\n', '\r']);
         let trimmed = bare.trim_start();
 
-        if let Some((start, body)) = pending.take() {
+        if let Some((start, _end, body)) = pending.take() {
             let body = format!("{body} {bare}");
             depth += brace_delta(bare);
             if bare.contains(';') {
                 sites.push(UniformSite {
                     line: start,
+                    end_line: index,
                     text: body.trim().to_string(),
                 });
             } else {
-                pending = Some((start, body));
+                pending = Some((start, index, body));
             }
             continue;
         }
@@ -249,10 +321,11 @@ fn scan_uniform_sites(src: &str) -> Vec<UniformSite> {
             if bare.contains(';') {
                 sites.push(UniformSite {
                     line: index,
+                    end_line: index,
                     text: trimmed.to_string(),
                 });
             } else {
-                pending = Some((index, trimmed.to_string()));
+                pending = Some((index, index, trimmed.to_string()));
             }
             continue;
         }
@@ -260,16 +333,17 @@ fn scan_uniform_sites(src: &str) -> Vec<UniformSite> {
         depth += brace_delta(bare);
     }
 
-    if let Some((start, body)) = pending {
+    if let Some((start, end, body)) = pending {
         sites.push(UniformSite {
             line: start,
+            end_line: end,
             text: body.trim().to_string(),
         });
     }
     sites
 }
 
-/// uniform 块的成员清单（含引擎补齐用的 padding 成员）。
+/// uniform 块的成员清单（**只含**着色器声明的成员 + 引擎补齐的 padding 成员）。
 ///
 /// 规则：
 /// 1. 成员按**声明序**排列（⇒ 成员序 = 映射表下标）；
@@ -277,14 +351,27 @@ fn scan_uniform_sites(src: &str) -> Vec<UniformSite> {
 ///    padding 成员（WebGL2 后端的硬要求，见
 ///    [`UNIFORM_BLOCK_PADDING_MEMBER`]）。
 pub fn uniform_block_members(decls: &[UniformDecl]) -> Vec<UniformBlockMember> {
+    uniform_block_members_with(decls, &[])
+}
+
+/// uniform 块的成员清单（可追加**引擎注入成员**）。
+///
+/// `engine_members` 追加在**着色器成员之后、padding 之前** ⇒ 生产 uniform 的
+/// **偏移逐字节不变**（既有逐像素证据不受影响）。
+pub fn uniform_block_members_with(
+    decls: &[UniformDecl],
+    engine_members: &[UniformBlockMember],
+) -> Vec<UniformBlockMember> {
     let mut members: Vec<UniformBlockMember> = decls
         .iter()
         .map(|decl| UniformBlockMember {
             name: decl.name.clone(),
             type_name: decl.type_name.clone(),
             is_padding: false,
+            is_engine_filled: false,
         })
         .collect();
+    members.extend(engine_members.iter().cloned());
     if members.is_empty() {
         return members;
     }
@@ -296,8 +383,14 @@ pub fn uniform_block_members(decls: &[UniformDecl]) -> Vec<UniformBlockMember> {
             supported = false;
             break;
         }
-        let alignment = float_std140_alignment(&member.type_name);
-        let size = float_std140_size(&member.type_name);
+        let Some(alignment) = float_std140_alignment(&member.type_name) else {
+            supported = false;
+            break;
+        };
+        let Some(size) = float_std140_size(&member.type_name) else {
+            supported = false;
+            break;
+        };
         cursor = cursor.div_ceil(alignment) * alignment;
         cursor += size;
     }
@@ -306,9 +399,74 @@ pub fn uniform_block_members(decls: &[UniformDecl]) -> Vec<UniformBlockMember> {
             name: UNIFORM_BLOCK_PADDING_MEMBER.to_string(),
             type_name: "vec4".to_string(),
             is_padding: true,
+            is_engine_filled: true,
         });
     }
     members
+}
+
+/// 引擎注入的「帧缓冲高度」成员（片元阶段的 `gl_FragCoord` 修正用）。
+pub fn framebuffer_height_member() -> UniformBlockMember {
+    UniformBlockMember {
+        name: FRAMEBUFFER_HEIGHT_MEMBER.to_string(),
+        type_name: "float".to_string(),
+        is_padding: false,
+        is_engine_filled: true,
+    }
+}
+
+/// **片元阶段**的 uniform 块成员清单：生产 uniform + 引擎注入的帧缓冲高度成员。
+///
+/// ⚠ 与 [`uniform_block_members`] 的差别只有**末尾追加**一个引擎成员 ⇒ 生产
+/// uniform 的偏移不变 ⇒ 逐像素证据不受影响。
+///
+/// ## ⭐ 这是**唯一真源**
+///
+/// 引擎的布局层与变换器**必须**给出**同一份**成员清单（名字 / 类型 / 顺序）
+/// ⇒ 否则 naga IR 与引擎布局对不上（要么画错位、要么绑定组声明了着色器
+/// 没有的 binding ⇒ wgpu 校验报错）。
+///
+/// ⇒ 变换器（[`transform_fragment_with_block_binding`]）与引擎
+/// （`create_scene_pipeline`）**都调本函数** ⇒ 两侧不可能不一致。
+///
+/// ## 帧缓冲高度成员**只在被用到时**才追加
+///
+/// 引擎注入的高度成员只服务于 `gl_FragCoord` 的修正 ⇒ 源码**没用到**
+/// `gl_FragCoord` 时追加它就是**死成员**（白占一个槽位）。
+///
+/// ⇒ 本函数按「源码是否用到 `gl_FragCoord`」决定是否追加。
+pub fn fragment_uniform_block_members(src: &str) -> Vec<UniformBlockMember> {
+    let decls = uniform_declarations(src);
+    let engine_members = if uses_frag_coord(&strip_comments(src)) {
+        vec![framebuffer_height_member()]
+    } else {
+        Vec::new()
+    };
+    uniform_block_members_with(&decls, &engine_members)
+}
+
+/// 源码里是否用到 `gl_FragCoord`（**词边界**感知）。
+///
+/// `myGl_FragCoord` / `gl_FragCoordExtra` **不算**用到。
+pub fn uses_frag_coord(src: &str) -> bool {
+    let bytes = src.as_bytes();
+    let token = "gl_FragCoord";
+    let mut index = 0usize;
+    while index < src.len() {
+        if src[index..].starts_with(token) {
+            let starts_clean = index == 0 || !is_identifier_byte(bytes[index - 1]);
+            let after = index + token.len();
+            let ends_clean = after >= src.len() || !is_identifier_byte(bytes[after]);
+            if starts_clean && ends_clean {
+                return true;
+            }
+            index = after;
+            continue;
+        }
+        let ch = src[index..].chars().next().expect("非空切片");
+        index += ch.len_utf8();
+    }
+    false
 }
 
 /// 把源码里的**顶层 plain uniform 声明合并进一个 std140 uniform 块**（X3）。
@@ -319,13 +477,9 @@ pub fn uniform_block_members(decls: &[UniformDecl]) -> Vec<UniformBlockMember> {
 /// uniform vec2  uCenter;
 /// uniform float uScale;
 /// ```
-/// 输出：
+/// 输出（块**整体写在一行**里，放在**首条声明所在行**）：
 /// ```text
-/// layout(std140, binding=0) uniform EngineUniforms {
-///     vec2 uRes;
-///     vec2 uCenter;
-///     float uScale;
-/// };
+/// layout(std140, binding=0) uniform EngineUniforms { vec2 uRes; vec2 uCenter; float uScale; };
 /// ```
 ///
 /// - 成员**按声明序**排列 ⇒ 成员序 = 声明序 = 映射表下标；
@@ -334,11 +488,35 @@ pub fn uniform_block_members(decls: &[UniformDecl]) -> Vec<UniformBlockMember> {
 /// - **不改任何表达式与数值** —— 只改声明外壳；
 /// - 源码里没有 uniform 时**原样返回**（不造空块）。
 ///
+/// ## ⭐ 行号必须不变
+///
+/// 块的**每个成员各占一行**会让源码凭空多出 N 行 ⇒ 其后所有源码的行号
+/// 整体后移 ⇒ naga 的报错指向**错位**的行 ⇒ 按行号回查会查错地方。
+///
+/// ⇒ 块**整体写在一行**；该声明原占的其余行**留空**（不是删行）⇒ 净行数不变。
+///
+/// ## ⭐ 跨行声明必须**整段**替换
+///
+/// `uniform vec2\n    uRes;` 这种形态：只替换首行会留下**孤立的 `uRes;`**
+/// ⇒ naga 解析失败（实测）。⇒ site 记录**行区间**（首行..末行）⇒ 整段替换。
+///
 /// # Errors
 ///
 /// 声明里出现数组形态（`uniform float w[4];`）→
 /// [`GlslError::UnsupportedDeclaration`]（本引擎只支持标量 / 向量）。
 pub fn pack_uniforms_into_block(src: &str, block_binding: u32) -> Result<String, GlslError> {
+    pack_uniforms_into_block_with_members(src, block_binding, &[])
+}
+
+/// [`pack_uniforms_into_block`] 的带**引擎注入成员**版本。
+///
+/// `engine_members` 追加在**着色器成员之后、padding 之前**（⇒ 生产 uniform 的
+/// 偏移逐字节不变）⇒ 片元阶段的帧缓冲高度成员走这条。
+pub fn pack_uniforms_into_block_with_members(
+    src: &str,
+    block_binding: u32,
+    engine_members: &[UniformBlockMember],
+) -> Result<String, GlslError> {
     let clean = strip_comments(src);
     let sites = scan_uniform_sites(&clean);
     if sites.is_empty() {
@@ -358,35 +536,42 @@ pub fn pack_uniforms_into_block(src: &str, block_binding: u32) -> Result<String,
         }
     }
 
-    // 块文本（成员清单含引擎补齐的 padding 成员）。
+    // 块文本：**整体写在一行**（行数必须不变 ⇒ 见上面的「行号必须不变」）。
+    let members = uniform_block_members_with(&decls, engine_members);
     let mut block =
-        format!("layout(std140, binding={block_binding}) uniform {UNIFORM_BLOCK_NAME} {{\n");
-    for member in uniform_block_members(&decls) {
-        block.push_str(&format!("    {} {};\n", member.type_name, member.name));
+        format!("layout(std140, binding={block_binding}) uniform {UNIFORM_BLOCK_NAME} {{");
+    for member in &members {
+        block.push_str(&format!(" {} {};", member.type_name, member.name));
     }
-    block.push_str("};");
+    block.push_str(" };");
 
-    // 重建源码：声明所在行留空（保持行号），第一处声明的位置放块。
-    let lines: Vec<&str> = clean.split_inclusive('\n').collect();
-    let mut out = String::with_capacity(clean.len() + block.len() + 64);
-    let mut inserted = false;
+    // 重建源码：首条声明所在行放块；该声明原占的其余行留空 ⇒ 行数不变。
+    let lines: Vec<&str> = clean.lines().collect();
+    let mut out_lines: Vec<String> = Vec::with_capacity(lines.len());
+    let mut block_written = false;
     for (index, line) in lines.iter().enumerate() {
-        let is_site = sites.iter().any(|site| site.line == index);
-        if is_site {
-            if !inserted {
-                out.push_str(&block);
-                inserted = true;
-            }
-            // 保留换行 ⇒ 行号不变。
-            if line.ends_with('\n') {
-                out.push('\n');
-            }
+        let covered = sites
+            .iter()
+            .any(|site| index >= site.line && index <= site.end_line);
+        if !covered {
+            out_lines.push((*line).to_string());
             continue;
         }
-        out.push_str(line);
+        if !block_written {
+            out_lines.push(block.clone());
+            block_written = true;
+        } else {
+            // 声明区间的其余行 → **留空**（不是删行 ⇒ 行号不变）。
+            out_lines.push(String::new());
+        }
     }
-    if !inserted {
-        out.push_str(&block);
+    if !block_written {
+        // 声明行不存在（理论上不可达：`sites` 非空 ⇒ 必有命中）⇒ 显式兜底。
+        out_lines.push(block);
+    }
+    // 用 `\n` 连接 ⇒ 行数与输入**逐行对应**（末尾统一补一个换行）。
+    let mut out = out_lines.join("\n");
+    if !out.is_empty() {
         out.push('\n');
     }
     Ok(out)
@@ -655,39 +840,34 @@ pub fn is_supported_float_type(type_name: &str) -> bool {
 
 /// 该浮点类型的分量数（`float`=1 / `vec2`=2 / `vec3`=3 / `vec4`=4）。
 ///
-/// # Panics
-///
-/// 类型不受支持时 panic —— 调用方须先用 [`is_supported_float_type`] 判定。
-pub fn float_component_count(type_name: &str) -> usize {
+/// 类型不受支持 ⇒ `None`（**不 panic**：这三个函数是对外 API，panic 会把
+/// 调用方的 bug 变成**进程崩溃**；显式返回 `None` 让调用方自己决定怎么报）。
+pub fn float_component_count(type_name: &str) -> Option<usize> {
     match type_name {
-        "float" => 1,
-        "vec2" => 2,
-        "vec3" => 3,
-        "vec4" => 4,
-        other => panic!("unsupported float type: {other}"),
+        "float" => Some(1),
+        "vec2" => Some(2),
+        "vec3" => Some(3),
+        "vec4" => Some(4),
+        _ => None,
     }
 }
 
 /// 该浮点类型的 **std140 字节大小**（`vec3` 占 12）。
 ///
-/// # Panics
-///
-/// 类型不受支持时 panic（见 [`float_component_count`]）。
-pub fn float_std140_size(type_name: &str) -> u64 {
-    (float_component_count(type_name) as u64) * 4
+/// 类型不受支持 ⇒ `None`（见 [`float_component_count`]）。
+pub fn float_std140_size(type_name: &str) -> Option<u64> {
+    float_component_count(type_name).map(|components| (components as u64) * 4)
 }
 
 /// 该浮点类型的 **std140 基对齐**（`float`=4 / `vec2`=8 / `vec3`/`vec4`=16）。
 ///
-/// # Panics
-///
-/// 类型不受支持时 panic（见 [`float_component_count`]）。
-pub fn float_std140_alignment(type_name: &str) -> u64 {
+/// 类型不受支持 ⇒ `None`（见 [`float_component_count`]）。
+pub fn float_std140_alignment(type_name: &str) -> Option<u64> {
     match type_name {
-        "float" => 4,
-        "vec2" => 8,
-        "vec3" | "vec4" => 16,
-        other => panic!("unsupported float type: {other}"),
+        "float" => Some(4),
+        "vec2" => Some(8),
+        "vec3" | "vec4" => Some(16),
+        _ => None,
     }
 }
 
@@ -697,8 +877,10 @@ pub fn float_std140_alignment(type_name: &str) -> u64 {
 
 /// 完整的 GLSL ES 3.0 → naga 可解析文本 的变换链。
 ///
-/// 依次执行：剥注释 → 删 `#version` → 把 plain uniform 合并进一个
+/// 依次执行：剥注释 → `#version` 换成空行 → 把 plain uniform 合并进一个
 /// std140 uniform 块（X3）。
+///
+/// ⭐ **行数不变**（见模块文档的「行号必须一一对应」）。
 ///
 /// # Errors
 ///
@@ -719,16 +901,43 @@ pub fn transform_with_block_binding(src: &str, block_binding: u32) -> Result<Str
 ///
 /// 顶点阶段**不做**这件事（GLSL 里 `gl_FragCoord` 只存在于片元阶段）。
 ///
+/// ## 片元阶段多出来的两件事
+///
+/// 1. **注入帧缓冲高度成员**（[`FRAMEBUFFER_HEIGHT_MEMBER`]）：修正要用当前
+///    表面高度 ⇒ 高度必须是 **uniform**（不是字面量）⇒ 改尺寸不必重编译着色器；
+/// 2. **改写 `gl_FragCoord`**：把它换成 GLSL ES 规范语义（y 轴向上）。
+///
+/// ⚠ 这两件事**必须成对**：只改写不注入 ⇒ naga 报「未知标识符」。
+///
 /// # Errors
 ///
 /// 声明形态不受支持 → [`GlslError::UnsupportedDeclaration`]。
 pub fn transform_fragment_with_block_binding(
     src: &str,
     block_binding: u32,
-    framebuffer_height: u32,
 ) -> Result<String, GlslError> {
-    let transformed = transform_with_block_binding(src, block_binding)?;
-    Ok(fix_frag_coord_semantics(&transformed, framebuffer_height))
+    let stripped = strip_comments(src);
+    let no_version = strip_version_directive(&stripped);
+    // 成员清单与引擎的布局层**共用同一个函数** ⇒ 两侧必然一致。
+    let members = fragment_uniform_block_members(src);
+    let engine_members: Vec<UniformBlockMember> = members
+        .iter()
+        .filter(|member| member.is_engine_filled && !member.is_padding)
+        .cloned()
+        .collect();
+    let packed =
+        pack_uniforms_into_block_with_members(&no_version, block_binding, &engine_members)?;
+    if !engine_members.is_empty()
+        && !packed.contains(&format!("float {};", FRAMEBUFFER_HEIGHT_MEMBER))
+    {
+        // 源码用了 `gl_FragCoord`（⇒ 需要帧缓冲高度成员）但**没有 uniform
+        // 声明** ⇒ 成员无处安放（块建不出来）⇒ **显式拒绝**（不静默画错）。
+        return Err(GlslError::UnsupportedDeclaration(
+            "片元着色器用到 `gl_FragCoord`，但源码里没有 uniform 声明 ⇒ 引擎的帧缓冲高度成员无处安放（请补一个 uniform 声明）"
+                .to_string(),
+        ));
+    }
+    Ok(fix_frag_coord_semantics(&packed))
 }
 
 // ---------------------------------------------------------------------------
@@ -739,8 +948,7 @@ pub fn transform_fragment_with_block_binding(
 ///
 /// ## 为什么必须做（方言外壳层，**不碰数学**）
 ///
-/// GLSL ES 3.0 规定 `gl_FragCoord` 的原点在**左下角**、y 轴**向上**
-/// （`gl_FragCoord.xy ∈ [0.5, width-0.5] × [0.5, height-0.5]`）。
+/// GLSL ES 3.0 规定 `gl_FragCoord` 的原点在**左下角**、y 轴**向上**。
 ///
 /// 而本引擎的两个后端都把**帧缓冲坐标的 y 轴朝下**（实测，证据见
 /// `crates-ui/evidence/p5-b/`）：
@@ -755,9 +963,31 @@ pub fn transform_fragment_with_block_binding(
 /// ⇒ 同一份 GLSL 源在引擎里画出来的画面是**上下颠倒**的：实测生产侧画面与
 /// 引擎侧画面**逐像素互为上下镜像**（翻转后 0 差异）。
 ///
-/// 本函数在**源级**把 `gl_FragCoord` 换成 `vec4(x, height - y, z, w)`
-/// ⇒ 引擎里的片元坐标与 GLSL ES 规范**逐点一致** ⇒ 同一份着色器源在引擎与
-/// 生产路径上画出的画面一致。
+/// 本函数在**源级**把 `gl_FragCoord` 换成
+/// `vec4(x, _engine_fb_height - y, z, w)` ⇒ 引擎里的片元坐标与 GLSL ES 规范
+/// **逐点一致** ⇒ 同一份着色器源在引擎与生产路径上画出的画面一致。
+///
+/// ## ⭐ 翻转高度为什么是 uniform 而不是字面量
+///
+/// 早期形态把表面高度**烘焙成字面量**（`600.0 - gl_FragCoord.y`）⇒ 尺寸一变
+/// 字面量就陈旧 ⇒ 画面竖直错位；且着色器与表面尺寸**耦死** ⇒ resize 必须重编译
+/// 着色器（重编译管线极重：实测 `Page.captureScreenshot` **超时**，见
+/// `crates-ui/evidence/p5-b/harness/src/lib.rs`）。
+///
+/// ⇒ 高度改成 uniform [`FRAMEBUFFER_HEIGHT_MEMBER`]（引擎注入到 uniform 块
+/// 末尾）⇒ 改尺寸只改 uniform 缓冲里的一个 f32 ⇒ **不必重编译着色器**。
+///
+/// ## ⭐ 逐像素等价性（既有 0 / 576,000 证据不受影响）
+///
+/// 字面量形态 `600.0 - gl_FragCoord.y` 与 uniform 形态
+/// `_engine_fb_height - gl_FragCoord.y` 的**算术逐位相同**：
+///
+/// - `600.0` 是 GLSL 的 **float 字面量** ⇒ f32 值 `600.0`（精确可表示）；
+/// - uniform 里放的是同一个 f32 `600.0`（引擎写入 `height as f32`）；
+/// - 两侧的 `highp float` 精度**相同**（着色器里的 `precision highp float;`）；
+/// - `a - b` 是同一条 IEEE 减法 ⇒ 结果逐位相同。
+///
+/// 且 uniform 成员**追加在块末尾** ⇒ 生产 uniform 的**偏移与取值逐字节不变**。
 ///
 /// ## 行为细节
 ///
@@ -765,7 +995,19 @@ pub fn transform_fragment_with_block_binding(
 /// - **词边界**感知：`myGl_FragCoord` / `gl_FragCoordExtra` 等**不受影响**；
 /// - **不插行** ⇒ 变换前后**行号一一对应**（错误信息仍指回原始行）；
 /// - 源码里没有 `gl_FragCoord` ⇒ **原样返回**。
-pub fn fix_frag_coord_semantics(src: &str, framebuffer_height: u32) -> String {
+pub fn fix_frag_coord_semantics(src: &str) -> String {
+    let expansion = format!(
+        "vec4(gl_FragCoord.x, {FRAMEBUFFER_HEIGHT_MEMBER} - gl_FragCoord.y, gl_FragCoord.z, gl_FragCoord.w)"
+    );
+    replace_identifier(src, "gl_FragCoord", &expansion)
+}
+
+/// [`fix_frag_coord_semantics`] 的**字面量形态**（对照用）。
+///
+/// ⚠ **生产路径不用它**：字面量把表面高度烘焙进着色器 ⇒ 尺寸一变就陈旧。
+/// 保留它是为了让「字面量形态 ≡ uniform 形态」的等价性**可测**（见单测
+/// `baked_and_uniform_flips_have_the_same_shape`）。
+pub fn fix_frag_coord_semantics_baked(src: &str, framebuffer_height: u32) -> String {
     let expansion = format!(
         "vec4(gl_FragCoord.x, {framebuffer_height}.0 - gl_FragCoord.y, gl_FragCoord.z, gl_FragCoord.w)"
     );
@@ -1218,20 +1460,34 @@ mod tests {
 
     #[test]
     fn float_component_counts_and_sizes_match_std140() {
-        assert_eq!(float_component_count("float"), 1);
-        assert_eq!(float_component_count("vec3"), 3);
-        assert_eq!(float_std140_size("float"), 4);
-        assert_eq!(float_std140_size("vec2"), 8);
-        assert_eq!(float_std140_size("vec3"), 12);
-        assert_eq!(float_std140_size("vec4"), 16);
+        assert_eq!(float_component_count("float"), Some(1));
+        assert_eq!(float_component_count("vec3"), Some(3));
+        assert_eq!(float_std140_size("float"), Some(4));
+        assert_eq!(float_std140_size("vec2"), Some(8));
+        assert_eq!(float_std140_size("vec3"), Some(12));
+        assert_eq!(float_std140_size("vec4"), Some(16));
     }
 
     #[test]
     fn float_std140_alignments_match_the_spec() {
-        assert_eq!(float_std140_alignment("float"), 4);
-        assert_eq!(float_std140_alignment("vec2"), 8);
-        assert_eq!(float_std140_alignment("vec3"), 16);
-        assert_eq!(float_std140_alignment("vec4"), 16);
+        assert_eq!(float_std140_alignment("float"), Some(4));
+        assert_eq!(float_std140_alignment("vec2"), Some(8));
+        assert_eq!(float_std140_alignment("vec3"), Some(16));
+        assert_eq!(float_std140_alignment("vec4"), Some(16));
+    }
+
+    #[test]
+    fn float_helpers_return_none_instead_of_panicking() {
+        // ⭐ 这三个函数是**对外 API** ⇒ 非法类型必须**显式**返回 `None`，
+        // 而不是 panic（panic 会把调用方的 bug 变成进程崩溃）。
+        assert_eq!(float_component_count("int"), None);
+        assert_eq!(float_component_count("mat4"), None);
+        assert_eq!(float_component_count("sampler2D"), None);
+        assert_eq!(float_component_count(""), None);
+        assert_eq!(float_std140_size("int"), None);
+        assert_eq!(float_std140_size("vec5"), None);
+        assert_eq!(float_std140_alignment("int"), None);
+        assert_eq!(float_std140_alignment("bool"), None);
     }
 
     // -----------------------------------------------------------------------
@@ -1329,22 +1585,56 @@ mod tests {
 
     #[test]
     fn frag_coord_correction_flips_the_y_axis() {
-        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE, 600);
+        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE);
         assert!(
-            out.contains("600.0 - gl_FragCoord.y"),
+            out.contains(&format!("{FRAMEBUFFER_HEIGHT_MEMBER} - gl_FragCoord.y")),
             "片元坐标的 y 必须翻成 GLSL 规范（向上）：{out}"
         );
         assert!(
-            out.contains(
-                "vec4(gl_FragCoord.x, 600.0 - gl_FragCoord.y, gl_FragCoord.z, gl_FragCoord.w)"
-            ),
+            out.contains(&format!(
+                "vec4(gl_FragCoord.x, {FRAMEBUFFER_HEIGHT_MEMBER} - gl_FragCoord.y, gl_FragCoord.z, gl_FragCoord.w)"
+            )),
             "展开式必须逐分量保留其余分量：{out}"
         );
     }
 
     #[test]
+    fn frag_coord_flip_height_is_a_uniform_not_a_baked_literal() {
+        // ⭐ 反例钉住「翻转高度不得再被烘焙成字面量」：
+        // 字面量把表面尺寸**耦死**进着色器 ⇒ 改尺寸就得重编译着色器。
+        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE);
+        assert!(
+            !out.contains("600.0"),
+            "片元变换里不得再出现烘焙的表面高度：{out}"
+        );
+        assert!(
+            !out.contains("- gl_FragCoord.y, gl_FragCoord.z")
+                || out.contains(FRAMEBUFFER_HEIGHT_MEMBER),
+            "翻转高度必须来自 uniform 成员：{out}"
+        );
+    }
+
+    #[test]
+    fn baked_and_uniform_flips_have_the_same_shape() {
+        // ⭐ 逐像素等价性的**结构**对照：字面量形态与 uniform 形态除了
+        // 「高度来源」之外**逐字同形** ⇒ 算术逐位相同 ⇒ 既有 0 / 576,000
+        // 的像素证据不受影响（详见 `fix_frag_coord_semantics` 的文档）。
+        let baked = fix_frag_coord_semantics_baked(FRAG_COORD_SAMPLE, 600);
+        let uniform = fix_frag_coord_semantics(FRAG_COORD_SAMPLE);
+        let normalize = |text: &str| {
+            text.replace("600.0", "H")
+                .replace(FRAMEBUFFER_HEIGHT_MEMBER, "H")
+        };
+        assert_eq!(
+            normalize(&baked),
+            normalize(&uniform),
+            "字面量形态与 uniform 形态必须同形（只差高度来源）"
+        );
+    }
+
+    #[test]
     fn frag_coord_correction_keeps_line_numbers() {
-        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE, 600);
+        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE);
         assert_eq!(
             out.lines().count(),
             FRAG_COORD_SAMPLE.lines().count(),
@@ -1356,7 +1646,7 @@ mod tests {
     fn frag_coord_correction_is_a_no_op_without_the_builtin() {
         let source = "#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(1.0); }\n";
         assert_eq!(
-            fix_frag_coord_semantics(source, 600),
+            fix_frag_coord_semantics(source),
             source,
             "源码里没有 gl_FragCoord 时必须原样返回"
         );
@@ -1365,28 +1655,38 @@ mod tests {
     #[test]
     fn frag_coord_correction_respects_identifier_boundaries() {
         let source = "float myGl_FragCoord = 1.0;\nfloat gl_FragCoordExtra = 2.0;\n";
-        let out = fix_frag_coord_semantics(source, 600);
+        let out = fix_frag_coord_semantics(source);
         assert_eq!(out, source, "相似标识符不得被误改（词边界必须生效）");
     }
 
     #[test]
     fn frag_coord_correction_does_not_recurse() {
-        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE, 600);
+        let out = fix_frag_coord_semantics(FRAG_COORD_SAMPLE);
         assert_eq!(
-            out.matches("600.0 - gl_FragCoord.y").count(),
+            out.matches(&format!("{FRAMEBUFFER_HEIGHT_MEMBER} - gl_FragCoord.y"))
+                .count(),
             1,
             "替换文本里的 gl_FragCoord 不得被二次替换：{out}"
         );
-        assert!(!out.contains("600.0 - 600.0"), "不得出现递归替换：{out}");
+        assert!(
+            !out.contains(&format!(
+                "{FRAMEBUFFER_HEIGHT_MEMBER} - {FRAMEBUFFER_HEIGHT_MEMBER}"
+            )),
+            "不得出现递归替换：{out}"
+        );
     }
 
     #[test]
-    fn fragment_transform_applies_the_correction_with_the_framebuffer_height() {
+    fn fragment_transform_injects_the_framebuffer_height_member() {
         let out =
-            transform_fragment_with_block_binding(FRAG_COORD_SAMPLE, 0, 480).expect("片元变换成功");
+            transform_fragment_with_block_binding(FRAG_COORD_SAMPLE, 0).expect("片元变换成功");
         assert!(
-            out.contains("480.0 - gl_FragCoord.y"),
-            "片元变换必须带上**表面高度**：{out}"
+            out.contains(&format!("float {FRAMEBUFFER_HEIGHT_MEMBER};")),
+            "片元块必须含引擎注入的帧缓冲高度成员：{out}"
+        );
+        assert!(
+            out.contains(&format!("{FRAMEBUFFER_HEIGHT_MEMBER} - gl_FragCoord.y")),
+            "片元变换必须用**帧缓冲高度**：{out}"
         );
         assert!(
             out.contains("layout(std140, binding=0) uniform EngineUniforms {"),
@@ -1399,7 +1699,7 @@ mod tests {
         // 顶点阶段没有 gl_FragCoord ⇒ 顶点变换链不得碰它。
         let out = transform_with_block_binding(FRAG_COORD_SAMPLE, 1).expect("顶点变换成功");
         assert!(
-            !out.contains("600.0 - gl_FragCoord.y"),
+            !out.contains(FRAMEBUFFER_HEIGHT_MEMBER),
             "顶点阶段不得做坐标语义修正：{out}"
         );
         assert!(out.contains("gl_FragCoord.xy"), "{out}");
@@ -1408,7 +1708,7 @@ mod tests {
     #[test]
     fn corrected_source_still_parses_into_naga_ir() {
         let out =
-            transform_fragment_with_block_binding(FRAG_COORD_SAMPLE, 0, 600).expect("片元变换成功");
+            transform_fragment_with_block_binding(FRAG_COORD_SAMPLE, 0).expect("片元变换成功");
         let options = naga::front::glsl::Options {
             stage: ShaderStage::Fragment,
             defines: Default::default(),
@@ -1423,11 +1723,10 @@ mod tests {
         let out = transform_fragment_with_block_binding(
             crate::shaders::SCENE_FRAGMENT_GLSL,
             FRAGMENT_UNIFORM_BLOCK_BINDING,
-            600,
         )
         .expect("生产资产的片元变换必须成功");
         assert!(
-            out.contains("600.0 - gl_FragCoord.y"),
+            out.contains(&format!("{FRAMEBUFFER_HEIGHT_MEMBER} - gl_FragCoord.y")),
             "生产资产确实用到 gl_FragCoord ⇒ 修正必须生效"
         );
         let options = naga::front::glsl::Options {
@@ -1436,5 +1735,296 @@ mod tests {
         };
         let parsed = naga::front::glsl::Frontend::default().parse(&options, &out);
         assert!(parsed.is_ok(), "修正后的生产资产必须能被 naga 解析");
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ 行号必须一一对应（ADR §2.6.4 的承诺）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn strip_version_keeps_the_line_count() {
+        let src = "#version 300 es\nprecision highp float;\nvoid main(){}\n";
+        let out = strip_version_directive(src);
+        assert_eq!(
+            out.lines().count(),
+            src.lines().count(),
+            "`#version` 行必须被**替换成空行**，不是删行（否则其后所有行号前移一位）"
+        );
+        assert!(!out.contains("#version"), "{out}");
+        assert!(
+            out.lines()
+                .next()
+                .is_some_and(|line| line.trim().is_empty()),
+            "第一行必须是空行：{out}"
+        );
+    }
+
+    #[test]
+    fn packing_keeps_the_line_count() {
+        let src =
+            "precision highp float;\nuniform vec2 uRes;\nuniform float uScale;\nvoid main(){}\n";
+        let out = pack_uniforms_into_block(src, 0).expect("打包成功");
+        assert_eq!(
+            out.lines().count(),
+            src.lines().count(),
+            "打包不得增删行（uniform 块必须整体写在一行里）"
+        );
+    }
+
+    #[test]
+    fn transform_chain_preserves_line_count() {
+        // ⭐ 整链（剥注释 → #version 换空行 → 打包 → 坐标修正）行数不变。
+        let out = transform_fragment_with_block_binding(
+            crate::shaders::SCENE_FRAGMENT_GLSL,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+        )
+        .expect("片元变换成功");
+        assert_eq!(
+            out.lines().count(),
+            crate::shaders::SCENE_FRAGMENT_GLSL.lines().count(),
+            "整条变换链不得改变行数（naga 报错按行号回查源码 ⇒ 行号必须一一对应）"
+        );
+    }
+
+    #[test]
+    fn transform_chain_preserves_line_count_for_a_multi_line_declaration() {
+        let src = "#version 300 es\nprecision highp float;\nuniform vec2\n    uRes;\nuniform float uScale;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(uRes, uScale, 1.0); }\n";
+        let out = transform_fragment_with_block_binding(src, 0).expect("片元变换成功");
+        assert_eq!(
+            out.lines().count(),
+            src.lines().count(),
+            "跨行声明也不得改变行数：{out}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ 跨行 uniform 声明（下一轮 shader 迁移的硬阻断）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn packing_handles_a_multi_line_declaration() {
+        // ⭐ 生产路径（X3）此前**没有**跨行单测 ⇒ 只替换首行会留下孤立的
+        // `uRes;` ⇒ naga 解析失败。
+        let src = "precision highp float;\nuniform vec2\n    uRes;\nuniform float uScale;\n";
+        let out = pack_uniforms_into_block(src, 0).expect("打包成功");
+        assert!(
+            out.contains("vec2 uRes;"),
+            "跨行声明必须被**整体**搬进块里：{out}"
+        );
+        assert!(
+            !out.contains("\n    uRes;"),
+            "跨行声明的续行不得留下孤立的声明：{out}"
+        );
+        assert!(
+            !out.lines().any(|line| line.trim() == "uRes;"),
+            "不得留下孤立的 `uRes;`：{out}"
+        );
+    }
+
+    #[test]
+    fn a_multi_line_declaration_still_parses_into_naga_ir() {
+        let src = "precision highp float;\nuniform vec2\n    uRes;\nuniform float uScale;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(uRes, uScale, 1.0); }\n";
+        let out = transform_fragment_with_block_binding(src, 0).expect("片元变换成功");
+        let options = naga::front::glsl::Options {
+            stage: ShaderStage::Fragment,
+            defines: Default::default(),
+        };
+        let parsed = naga::front::glsl::Frontend::default().parse(&options, &out);
+        assert!(parsed.is_ok(), "跨行声明变换后必须仍能被 naga 解析：{out}");
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ 引擎注入的帧缓冲高度成员（生产 uniform 的偏移必须不变）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn engine_member_is_appended_after_the_production_members() {
+        let decls = uniform_declarations(crate::shaders::SCENE_FRAGMENT_GLSL);
+        let production = uniform_block_members(&decls);
+        let fragment = fragment_uniform_block_members(crate::shaders::SCENE_FRAGMENT_GLSL);
+
+        // padding 成员是对齐产物（位置随块大小变）⇒ 只比**非 padding** 成员。
+        let production_members: Vec<&UniformBlockMember> = production
+            .iter()
+            .filter(|member| !member.is_padding)
+            .collect();
+        let fragment_members: Vec<&UniformBlockMember> = fragment
+            .iter()
+            .filter(|member| !member.is_padding)
+            .collect();
+
+        assert_eq!(
+            fragment_members.len(),
+            production_members.len() + 1,
+            "片元块 = 生产成员 + 一个引擎成员"
+        );
+        for (index, member) in production_members.iter().enumerate() {
+            assert_eq!(
+                fragment_members[index], *member,
+                "生产成员必须**原样在前**（偏移不变 ⇒ 逐像素证据不受影响）"
+            );
+        }
+        let engine_member = fragment_members[production_members.len()];
+        assert_eq!(engine_member.name, FRAMEBUFFER_HEIGHT_MEMBER);
+        assert_eq!(engine_member.type_name, "float");
+        assert!(
+            engine_member.is_engine_filled,
+            "引擎成员必须标成「引擎自填」（宿主不必提供值）"
+        );
+    }
+
+    #[test]
+    fn engine_member_does_not_move_the_production_offsets() {
+        // ⭐ 关键不变量：引擎成员**追加在末尾** ⇒ 生产 uniform 的 std140
+        // 偏移**逐字节不变** ⇒ 既有逐像素证据（0 / 576,000）不受影响。
+        let decls = uniform_declarations(crate::shaders::SCENE_FRAGMENT_GLSL);
+        let production = uniform_block_members(&decls);
+        let fragment = fragment_uniform_block_members(crate::shaders::SCENE_FRAGMENT_GLSL);
+
+        let offsets = |members: &[UniformBlockMember]| {
+            let mut cursor = 0u64;
+            let mut out = Vec::with_capacity(members.len());
+            for member in members {
+                let alignment = float_std140_alignment(&member.type_name).expect("受支持的类型");
+                let size = float_std140_size(&member.type_name).expect("受支持的类型");
+                cursor = cursor.div_ceil(alignment) * alignment;
+                out.push((member.name.clone(), cursor));
+                cursor += size;
+            }
+            out
+        };
+
+        let production_offsets = offsets(&production);
+        let fragment_offsets = offsets(&fragment);
+        // 只比**生产 uniform**（padding 成员是对齐产物，位置本就会变）。
+        let production_uniforms: Vec<&(String, u64)> = production_offsets
+            .iter()
+            .filter(|(name, _)| name != UNIFORM_BLOCK_PADDING_MEMBER)
+            .collect();
+        let fragment_uniforms: Vec<&(String, u64)> = fragment_offsets
+            .iter()
+            .filter(|(name, _)| name != UNIFORM_BLOCK_PADDING_MEMBER)
+            .collect();
+        assert_eq!(
+            fragment_uniforms.len(),
+            production_uniforms.len() + 1,
+            "片元块 = 生产 uniform + 一个引擎成员"
+        );
+        for (index, (name, offset)) in production_uniforms.iter().enumerate() {
+            assert_eq!(
+                (
+                    fragment_uniforms[index].0.as_str(),
+                    fragment_uniforms[index].1
+                ),
+                (name.as_str(), *offset),
+                "生产成员 `{name}` 的偏移不得被引擎成员挪动"
+            );
+        }
+    }
+
+    #[test]
+    fn engine_member_does_not_change_the_block_size() {
+        // ⭐ 块大小也不变（96 字节）⇒ uniform 缓冲的尺寸、WebGL2 后端的
+        //   16 字节对齐要求、生产 uniform 的字节布局**全部不变**。
+        let decls = uniform_declarations(crate::shaders::SCENE_FRAGMENT_GLSL);
+        let production = uniform_block_members(&decls);
+        let fragment = fragment_uniform_block_members(crate::shaders::SCENE_FRAGMENT_GLSL);
+        let size = |members: &[UniformBlockMember]| {
+            let mut cursor = 0u64;
+            for member in members {
+                let alignment = float_std140_alignment(&member.type_name).expect("受支持的类型");
+                let size = float_std140_size(&member.type_name).expect("受支持的类型");
+                cursor = cursor.div_ceil(alignment) * alignment;
+                cursor += size;
+            }
+            cursor.div_ceil(16) * 16
+        };
+        assert_eq!(size(&fragment), size(&production), "块大小不得变");
+        assert_eq!(size(&production), 96, "生产块的 std140 大小（既有事实）");
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ 「没有 uniform 的片元着色器」（绑定组不得声明着色器没有的 binding）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn a_fragment_shader_without_uniforms_gets_no_block() {
+        // ⚠ 若布局层无条件带上「帧缓冲高度」成员 ⇒ 绑定组会声明一个着色器
+        //   **没有**的 binding ⇒ wgpu 校验报错（且错误信息难懂）。
+        let src =
+            "precision highp float;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(1.0); }\n";
+        let members = fragment_uniform_block_members(src);
+        assert!(
+            members.is_empty(),
+            "没有 uniform、也没用到 gl_FragCoord ⇒ 不得有任何成员：{members:?}"
+        );
+        let out = transform_fragment_with_block_binding(src, 0).expect("片元变换成功");
+        assert!(
+            !out.contains(FRAMEBUFFER_HEIGHT_MEMBER),
+            "不得注入帧缓冲高度成员：{out}"
+        );
+    }
+
+    #[test]
+    fn a_fragment_shader_using_frag_coord_without_uniforms_is_rejected() {
+        // ⚠ 用到 `gl_FragCoord` ⇒ 需要帧缓冲高度成员 ⇒ 但没有 uniform 声明
+        //   ⇒ 成员无处安放 ⇒ **显式拒绝**（不静默画错）。
+        let src = "precision highp float;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(gl_FragCoord.x); }\n";
+        let err = transform_fragment_with_block_binding(src, 0)
+            .expect_err("没有 uniform 声明时必须显式拒绝");
+        assert!(
+            matches!(err, GlslError::UnsupportedDeclaration(_)),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn uses_frag_coord_respects_identifier_boundaries() {
+        assert!(uses_frag_coord("void main(){ f = gl_FragCoord.x; }"));
+        assert!(!uses_frag_coord("float myGl_FragCoord;"));
+        assert!(!uses_frag_coord("float gl_FragCoordExtra;"));
+        assert!(!uses_frag_coord("void main(){ f = 1.0; }"));
+    }
+
+    #[test]
+    fn the_engine_member_is_only_injected_when_the_builtin_is_used() {
+        // ⭐ 成员清单与变换器**共用同一个函数** ⇒ 两侧必然一致。
+        let with_builtin = fragment_uniform_block_members(FRAG_COORD_SAMPLE);
+        assert!(
+            with_builtin
+                .iter()
+                .any(|member| member.name == FRAMEBUFFER_HEIGHT_MEMBER),
+            "用到 gl_FragCoord ⇒ 必须有帧缓冲高度成员"
+        );
+        let without_builtin = fragment_uniform_block_members(
+            "precision highp float;\nuniform float uScale;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(uScale); }\n",
+        );
+        assert!(
+            !without_builtin
+                .iter()
+                .any(|member| member.name == FRAMEBUFFER_HEIGHT_MEMBER),
+            "没用到 gl_FragCoord ⇒ 不得有帧缓冲高度成员（死成员）"
+        );
+    }
+
+    #[test]
+    fn fragment_block_and_layout_agree_on_the_member_list() {
+        // ⭐ 着色器里的块成员清单必须与布局层的清单**逐个一致**
+        // （名字 / 类型 / 顺序）⇒ 否则 naga IR 与引擎布局对不上。
+        let members = fragment_uniform_block_members(crate::shaders::SCENE_FRAGMENT_GLSL);
+        let packed = pack_uniforms_into_block_with_members(
+            crate::shaders::SCENE_FRAGMENT_GLSL,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+            &[framebuffer_height_member()],
+        )
+        .expect("打包成功");
+        for member in &members {
+            assert!(
+                packed.contains(&format!("{} {};", member.type_name, member.name)),
+                "着色器里必须有成员 `{} {}`：{packed}",
+                member.type_name,
+                member.name
+            );
+        }
     }
 }

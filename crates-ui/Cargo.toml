@@ -52,7 +52,19 @@ members = [
     "apeireth-ui-macro",
     "apeireth-ui-gpu",
     "apeireth-ui-kit",
+    # ⭐ 宿主侧「时刻文本」能力（浏览器 `Intl` 口径 ⇒ 与生产逐字同源）。
+    "apeireth-ui-time",
     "apeireth-ui-demo",
+    # 场景层语义（uniform 取值链 + 生命周期）。
+    # ⚠ 2026-10-25 补登：此前**漏登** ⇒ 该 crate 虽有源码与单测，却**不在
+    #   本 workspace 的依赖图里** ⇒ ① CI 的 test 门禁
+    #   （`cargo test --workspace --locked`）**跑不到它的任何单测**；
+    #   ② 它自己的 manifest 用 `version.workspace = true` ⇒ 单独
+    #   `cargo test` 会报「current package believes it's in a workspace when
+    #   it's not」⇒ **该 crate 根本无法单独构建**。
+    # ⇒ 补登后：CI 的 test 门禁**覆盖**它，且
+    #   `cargo test -p apeireth-ui-gpu -p apeireth-ui-scene --locked` 可用。
+    "apeireth-ui-scene",
 ]
 
 # ---------------------------------------------------------------------------

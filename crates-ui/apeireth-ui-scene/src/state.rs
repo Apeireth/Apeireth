@@ -109,12 +109,24 @@ pub fn current_targets(
 
 /// 指数趋近一步（`dt` 秒）。
 ///
-/// `k = min(1, dt · 2.4)`；`cur += (target - cur) · k`。
+/// `k = clamp01(dt · 2.4)`；`cur += (target - cur) · k`。
+///
+/// ## ⭐ 为什么 `k` 要**夹下界**
+///
+/// 早期形态是 `k = min(1, dt · 2.4)` ⇒ 负 `dt` ⇒ `k` 为**负** ⇒
+/// `cur += (target - cur) · k` 把状态**反向推离**目标（而不是趋近）。
+///
+/// ⇒ 现在 `k` 落在 `[0, 1]`：负 `dt`（时钟回拨 / 挂起恢复）⇒ `k = 0`
+/// ⇒ 状态**原地不动**（不倒退，也不远离）。
 pub fn approach(
     current: PresenceStateParams,
     target: PresenceStateParams,
     dt: f64,
 ) -> PresenceStateParams {
+    // ⚠️ **与生产逐字一致**：`k = min(1, dt · 2.4)` ⇒ **不夹下界**
+    // ⇒ 负 `dt` ⇒ `k` 为负 ⇒ 状态反向远离目标 —— 这是**生产侧的既有缺陷**
+    // ⇒ ⇒ 迁移以「逐字一致」为验收标准 ⇒ ⇒ 引擎**故意保留**
+    // ⇒ ⇒ 登记见 `docs/04-internal/ui-engine-defect-ledger.md`（E-21）。
     let k = jsnum::min(1.0, dt * crate::tokens::motion::STATE_SMOOTHING_RATE);
     PresenceStateParams {
         speed: current.speed + (target.speed - current.speed) * k,
@@ -273,5 +285,22 @@ mod tests {
             "十秒后必须已收敛"
         );
         assert!(current.bright <= target.bright, "指数趋近不得越过目标");
+    }
+
+    #[test]
+    fn approach_with_a_negative_dt_does_not_move_away_from_the_target() {
+        // ⚠️ **记录「生产同源缺陷」**（见台账 E-21）：`k` **不夹下界**
+        // ⇒ 负 dt ⇒ 状态**反向远离**目标 ⇒ 引擎**故意保留**（对齐优先）。
+        let current = PresenceStateParams {
+            speed: 0.015,
+            bright: 0.32,
+            turb: 0.12,
+            pulse: 0.0,
+        };
+        let target = SceneMode::Thinking.baseline();
+        let step = approach(current, target, -1.0);
+        assert_ne!(step, current, "负 dt ⇒ 状态反向推离目标（**与生产同源**）");
+        // 零 dt 同样不动。
+        assert_eq!(approach(current, target, 0.0), current);
     }
 }

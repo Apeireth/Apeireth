@@ -35,6 +35,29 @@
 //! - 机位预设 / 状态档位的**展示文案**不参与任何取值 ⇒ **未**纳入本 crate。
 //! - 本 crate 的取值**已在真实浏览器里与生产侧逐值对照**（证据见
 //!   `crates-ui/apeireth-ui-demo/harness/evidence/scene/`）。
+//!
+//! ## ⭐ 本批（2026-10-25 重构）改了什么
+//!
+//! - **`dt` 两侧都夹**（[`scene::clamp_frame_time`]）：早期只夹**上界**（50ms）
+//!   ⇒ 时钟回拨 / 挂起恢复后的**负 `dt`** 会让 `t_sec` **倒退**、`approach` 的
+//!   `k` 变**负**（状态被**反向推离**目标）、机位 `tween` 变负（缓动**外插**
+//!   ⇒ 机位过冲）⇒ 现在负 `dt` 一律当 **0**（这一帧不推进，也不倒退）。
+//! - ⚠ 生产侧的 rAF 首帧 `dt` **确实**是负数（实测 −0.0062s）⇒ **生产侧**
+//!   仍带这个缺陷；本 crate 是**更安全**的一侧（逐值夹具的**最终帧**取值
+//!   **仍逐位相同**，因为机位缓动在末帧前已走完 ⇒ 见 `parity.rs`）。
+//! - **每帧零堆分配**（[`uniforms::SceneUniforms::write_into_values`]）：早期
+//!   走 `entries_f32()` ⇒ 每帧 **17 次**堆分配（16 个 `Vec<f32>` + 外层
+//!   `Vec`）⇒ 现在走**定长栈数组**（`[f32; 4]`）+ 引擎侧的**扁平缓冲** ⇒
+//!   稳态**零分配**（实测见 `tests/zero_allocation.rs` 的分配计数探针）。
+//!
+//! ## ⚠ 诚实标注
+//!
+//! - 本 crate 此前**不在 `crates-ui` workspace 的成员表里** ⇒ CI 的
+//!   `cargo test --workspace --locked` **跑不到它的任何单测** ⇒ 2026-10-25
+//!   **补登**为成员（`crates-ui/Cargo.toml` 一行 + 锁文件机械更新）。
+//! - 本 crate 的**浏览器侧**验证（把 16 个取值喂给引擎逐像素对照）走
+//!   `crates-ui/apeireth-ui-demo/harness/scene/harness`（**独立 workspace**，
+//!   不在 CI 门禁里）⇒ 该腿**未在 CI 里跑**。
 
 #![forbid(unsafe_code)]
 

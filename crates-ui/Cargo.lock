@@ -26,6 +26,7 @@ dependencies = [
  "apeireth-ui-dom",
  "apeireth-ui-kit",
  "apeireth-ui-macro",
+ "apeireth-ui-time",
  "js-sys",
  "wasm-bindgen",
  "web-sys",
@@ -66,6 +67,22 @@ version = "2.0.0-rc.4"
 dependencies = [
  "apeireth-ui-core",
  "apeireth-ui-dom",
+]
+
+[[package]]
+name = "apeireth-ui-scene"
+version = "2.0.0-rc.4"
+dependencies = [
+ "apeireth-ui-gpu",
+]
+
+[[package]]
+name = "apeireth-ui-time"
+version = "0.0.0"
+dependencies = [
+ "apeireth-ui-kit",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]

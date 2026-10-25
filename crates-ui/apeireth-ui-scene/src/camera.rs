@@ -197,6 +197,12 @@ impl CameraRig {
         css_h: f64,
     ) -> EffectiveCamera {
         if self.tween < 1.0 {
+            // ⭐ `tween` 夹在 `[0, 1]`：负 `dt`（时钟回拨）会让它变负 ⇒
+            // `ease_in_out_cubic` **外插** ⇒ 机位过冲。
+            // ⚠️ **与生产逐字一致**：`tween = min(1, tween + dt / …)` ⇒ **不夹下界**
+            // ⇒ 负 `dt` ⇒ 进度变负 ⇒ 缓动外插 ⇒ **生产侧的既有缺陷**
+            // ⇒ ⇒ 迁移以「逐字一致」为验收标准 ⇒ ⇒ 引擎**故意保留**
+            // ⇒ ⇒ 登记见 `docs/04-internal/ui-engine-defect-ledger.md`（E-21）。
             self.tween = jsnum::min(1.0, self.tween + dt / tokens::motion::CAMERA_TWEEN_SEC);
             let e = ease_in_out_cubic(self.tween);
             let target = &CAMERA_PRESETS[self.index];
@@ -226,7 +232,10 @@ impl CameraRig {
                     * ((t * tokens::TAU) / tokens::drift::ZOOM.period_sec
                         + tokens::drift::ZOOM.phase)
                         .sin();
-            let k = jsnum::min(1.0, dt * tokens::motion::MOUSE_SMOOTHING_RATE);
+            let k = jsnum::min(
+                1.0,
+                jsnum::max(0.0, dt * tokens::motion::MOUSE_SMOOTHING_RATE),
+            );
             self.mouse_x += (self.mouse_target_x - self.mouse_x) * k;
             self.mouse_y += (self.mouse_target_y - self.mouse_y) * k;
             par_az = -self.mouse_x * tokens::parallax::AZIMUTH_RANGE;
@@ -398,5 +407,37 @@ mod tests {
         rig.set_interactive(false);
         assert_eq!(rig.mouse_target_x, 0.0);
         assert_eq!(rig.mouse_target_y, 0.0);
+    }
+
+    #[test]
+    fn a_negative_dt_reproduces_the_production_tween_behavior() {
+        // ⚠️ **记录「生产同源缺陷」**（不是断言「安全行为」）。
+        //
+        // 生产（`companion-desktop` 的场景层）用的是 `min(1, tween + dt / …)`
+        // ⇒ **不夹下界** ⇒ 负 `dt` ⇒ `tween` 变**负** ⇒ `ease_in_out_cubic`
+        // **外插** ⇒ 机位过冲。
+        //
+        // ⇒ ⇒ 引擎**故意保留**该行为（迁移的验收标准是**与生产逐字一致**）
+        // ⇒ ⇒ 本测试钉住「与生产一致」⇒ ⇒ 哪天生产修了这个，本测试会红
+        // ⇒ ⇒ 那时**同步**改引擎与本测试（见台账 E-21）。
+        let mut rig = CameraRig::new();
+        assert!(rig.set_index(1));
+        assert_eq!(rig.tween, 0.0);
+        rig.effective(-1.0, 0.0, &compute_layout(1440.0, 900.0), 1440.0, 900.0);
+        assert!(
+            rig.tween < 0.0,
+            "负 dt ⇒ tween 变负（**与生产同源**）：{}",
+            rig.tween
+        );
+        // 正 dt 仍按原速率推进（**另起一个 rig** ⇒ 不受上面的负 dt 影响
+        // ⇒ 否则 `−1.0` 与 `+1.0` 恰好抵消回 0 ⇒ 断言失真）。
+        let mut forward = CameraRig::new();
+        assert!(forward.set_index(1));
+        forward.effective(1.0, 0.0, &compute_layout(1440.0, 900.0), 1440.0, 900.0);
+        assert!(
+            forward.tween > 0.0 && forward.tween < 1.0,
+            "正 dt 仍按缓动推进：{}",
+            forward.tween
+        );
     }
 }

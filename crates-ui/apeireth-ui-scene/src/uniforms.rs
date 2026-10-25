@@ -67,6 +67,9 @@ pub struct SceneUniforms {
 
 impl SceneUniforms {
     /// 全部取值的（名字, 分量）视图 —— 名字序与引擎的 uniform 映射表一致。
+    ///
+    /// ⚠ **诊断视图**（每次调用会分配 17 个 `Vec`）⇒ **不要**放在每帧的
+    /// 热路径上；热路径用 [`SceneUniforms::write_into_values`]。
     pub fn entries(&self) -> Vec<(&'static str, Vec<f64>)> {
         vec![
             ("uRes", self.res.to_vec()),
@@ -89,6 +92,8 @@ impl SceneUniforms {
     }
 
     /// 单精度视图（写进着色器前的口径）。
+    ///
+    /// ⚠ **诊断视图**（每次调用会分配 17 个 `Vec`）⇒ 见 [`SceneUniforms::entries`]。
     pub fn entries_f32(&self) -> Vec<(&'static str, Vec<f32>)> {
         self.entries()
             .into_iter()
@@ -101,15 +106,65 @@ impl SceneUniforms {
             .collect()
     }
 
-    /// 按名字写进引擎的 uniform 值集合。
+    /// ⭐ 按名字写进引擎的 uniform 值集合（**每帧的热路径**）。
+    ///
+    /// ## ⭐ 零堆分配
+    ///
+    /// 早期形态走 [`SceneUniforms::entries_f32`] ⇒ 每帧分配 **16 个 `Vec<f32>`**
+    /// + **1 个外层 `Vec`** ⇒ **每帧 17 次堆分配**（60fps ⇒ 每秒上千次）。
+    ///
+    /// ⇒ 现在：每个取值用**定长栈数组**（`[f64; 4]` / `[f32; 4]`）⇒ **不分配**；
+    /// 引擎侧的值集合是**扁平缓冲**（[`apeireth_ui_gpu::UniformValues`]）⇒
+    /// 同索引覆盖是**原地**改写 ⇒ 稳态下**每帧零堆分配**。
+    ///
+    /// # Errors
+    ///
+    /// 名字不在引擎的映射表里 → [`BindingError::UnknownUniform`]。
+    pub fn write_into_values(&self, values: &mut UniformValues) -> Result<(), BindingError> {
+        Self::put(values, "uRes", &[self.res[0], self.res[1]])?;
+        Self::put(values, "uCenter", &[self.center[0], self.center[1]])?;
+        Self::put(values, "uScale", &[self.scale])?;
+        Self::put(values, "uTime", &[self.time])?;
+        Self::put(values, "uRot", &[self.rot])?;
+        Self::put(values, "uBright", &[self.bright])?;
+        Self::put(values, "uTurb", &[self.turb])?;
+        Self::put(values, "uPulse", &[self.pulse])?;
+        Self::put(values, "uIncl", &[self.incl])?;
+        Self::put(values, "uAzim", &[self.azim])?;
+        Self::put(values, "uDiskAzim", &[self.disk_azim])?;
+        Self::put(values, "uDiskIncl", &[self.disk_incl])?;
+        Self::put(values, "uAmbStr", &[self.amb_str])?;
+        Self::put(values, "uEclipse", &[self.eclipse])?;
+        Self::put(values, "uTlBright", &[self.tl_bright])?;
+        Self::put(values, "uTlGold", &[self.tl_gold])?;
+        Ok(())
+    }
+
+    /// 按名字写进引擎的 uniform 值集合（**兼容入口**）。
+    ///
+    /// ⚠ 等价于 [`SceneUniforms::write_into_values`]（零堆分配）。
     ///
     /// # Errors
     ///
     /// 名字不在引擎的映射表里 → [`BindingError::UnknownUniform`]。
     pub fn write_into(&self, values: &mut UniformValues) -> Result<(), BindingError> {
-        for (name, components) in self.entries_f32() {
-            values.set_by_name(name, &components)?;
+        self.write_into_values(values)
+    }
+
+    /// 把一个取值写进引擎的 uniform 集合（**定长栈数组** ⇒ 零堆分配）。
+    ///
+    /// `components` 是**栈上**的临时数组（长度 ≤ 2）⇒ 不分配；`[f32; 4]`
+    /// 同样是栈上的定长数组 ⇒ 引擎侧拿到的切片不指向堆。
+    fn put(
+        values: &mut UniformValues,
+        name: &'static str,
+        components: &[f64],
+    ) -> Result<(), BindingError> {
+        let mut buffer = [0.0f32; 4];
+        for (index, value) in components.iter().enumerate() {
+            buffer[index] = *value as f32;
         }
+        values.set_by_name(name, &buffer[..components.len()])?;
         Ok(())
     }
 }
@@ -191,5 +246,26 @@ mod tests {
             scale as f64, 59.83743867835388_f64,
             "f32 口径与 f64 口径必然不同"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ 零堆分配（每帧的热路径）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn write_into_values_matches_the_diagnostic_entries() {
+        // 两条路径（热路径 / 诊断视图）必须给出**同一批取值**。
+        let uniforms = sample();
+        let mut hot = UniformValues::new();
+        uniforms.write_into_values(&mut hot).expect("写入成功");
+
+        for (index, (name, components)) in uniforms.entries().iter().enumerate() {
+            let expected: Vec<f32> = components.iter().map(|value| *value as f32).collect();
+            assert_eq!(
+                hot.get(index as u32),
+                Some(expected.as_slice()),
+                "`{name}` 的取值两条路径必须一致"
+            );
+        }
     }
 }

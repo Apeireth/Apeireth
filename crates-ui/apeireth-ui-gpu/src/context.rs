@@ -30,8 +30,14 @@ pub enum GpuError {
     /// **未接线**：该通路在本批尚未接线（例如把 P0 的 `SceneUniforms`
     /// 映射到着色器 uniform 属 P5-b 的场景语义）。
     NotImplemented,
-    /// 设备丢失（需重建上下文）。
-    DeviceLost,
+    /// **设备丢失**（需重建上下文）。
+    ///
+    /// ⚠ 带**原因文本**（wgpu 的 `DeviceLostReason` + 后端说明 + 帧号）：
+    /// 宿主据此决定「重建整个上下文」还是「偶发错误」。
+    ///
+    /// 来源：引擎注册的 `Device::set_device_lost_callback`
+    /// （`wgpu-30.0.1/src/api/device.rs:681`）⇒ 设备丢失**可检测**。
+    DeviceLost(String),
     /// 不支持的能力。
     Unsupported(String),
     /// 建表面失败（典型原因：画布已被另一种 context 占用）。
@@ -44,8 +50,31 @@ pub enum GpuError {
     ShaderCompilationFailed(String),
     /// 管线 / 绑定组创建失败。
     PipelineCreationFailed(String),
-    /// 拿不到表面纹理（表面已被配置为别的设备等）。
+    /// ⭐ **管线已过期**（表面格式变了 ⇒ color target 格式不再匹配）。
+    ///
+    /// 处置：宿主调 [`crate::engine::Engine::recreate_pipeline`] 重建。
+    ///
+    /// ⚠ **尺寸**变化**不会**触发本错误（管线依赖的是表面**格式**，不是尺寸；
+    /// 且 `gl_FragCoord` 的翻转高度已是 uniform ⇒ 改尺寸不必重编译着色器）。
+    PipelineStale(String),
+    /// 拿不到表面纹理（**配置非法**等）。
+    ///
+    /// ⚠ `Lost` / `Outdated` / `Timeout` / `Occluded` **各有专属变体**
+    /// （语义完全不同 ⇒ 处置方式也完全不同）⇒ 宿主不必猜。
     SurfaceTextureUnavailable(String),
+    /// 表面纹理**丢失**（交换链作废）—— **需重建表面**。
+    ///
+    /// 典型触发：WebGPU 后端在 `canvas.width/height` 变化时作废交换链。
+    /// 引擎会**自动**重新配置表面并重试一次；仍失败 ⇒ 报本错误 ⇒ 宿主
+    /// 应调 [`crate::engine::Engine::resize`] 或重建引擎。
+    SurfaceTextureLost(String),
+    /// 表面纹理**过期**（画布尺寸变了）—— 宿主需调
+    /// [`crate::engine::Engine::resize`]。
+    SurfaceTextureOutdated(String),
+    /// 本帧没拿到表面纹理（**瞬时**）—— **跳过本帧**即可。
+    SurfaceTextureTimeout(String),
+    /// 画布当前不可见（**瞬时**）—— **跳过本帧**即可。
+    SurfaceTextureOccluded(String),
     /// uniform 绑定失败（名字未知 / 分量数不符 / 缺值）。
     BindingFailed(String),
     /// 设备侧错误（校验 / 内部错误）—— 由引擎自己的错误处理器收集，
@@ -62,7 +91,7 @@ impl std::fmt::Display for GpuError {
                     "NotImplemented: 该通路未接线（P0 桩按探测结论接入，见 crate 文档的 🔵 段）"
                 )
             }
-            GpuError::DeviceLost => write!(f, "DeviceLost: GPU 设备丢失"),
+            GpuError::DeviceLost(detail) => write!(f, "DeviceLost: GPU 设备丢失（{detail}）"),
             GpuError::Unsupported(detail) => write!(f, "Unsupported: {detail}"),
             GpuError::SurfaceCreationFailed(detail) => {
                 write!(f, "SurfaceCreationFailed: {detail}")
@@ -79,8 +108,23 @@ impl std::fmt::Display for GpuError {
             GpuError::PipelineCreationFailed(detail) => {
                 write!(f, "PipelineCreationFailed: {detail}")
             }
+            GpuError::PipelineStale(detail) => {
+                write!(f, "PipelineStale: {detail}（需重建管线）")
+            }
             GpuError::SurfaceTextureUnavailable(detail) => {
                 write!(f, "SurfaceTextureUnavailable: {detail}")
+            }
+            GpuError::SurfaceTextureLost(detail) => {
+                write!(f, "SurfaceTextureLost: {detail}（需重建表面）")
+            }
+            GpuError::SurfaceTextureOutdated(detail) => {
+                write!(f, "SurfaceTextureOutdated: {detail}（需 resize）")
+            }
+            GpuError::SurfaceTextureTimeout(detail) => {
+                write!(f, "SurfaceTextureTimeout: {detail}（瞬时，可跳过本帧）")
+            }
+            GpuError::SurfaceTextureOccluded(detail) => {
+                write!(f, "SurfaceTextureOccluded: {detail}（瞬时，可跳过本帧）")
             }
             GpuError::BindingFailed(detail) => write!(f, "BindingFailed: {detail}"),
             GpuError::DeviceError(detail) => write!(f, "DeviceError: {detail}"),

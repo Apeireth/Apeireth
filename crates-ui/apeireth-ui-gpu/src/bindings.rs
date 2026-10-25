@@ -102,8 +102,14 @@ pub struct UniformSlot {
     pub offset: u64,
     /// 在 uniform 缓冲里的字节大小。
     pub size: u64,
-    /// 该成员是不是引擎补齐用的 **padding 成员**（不被着色器引用 ⇒ 不需要赋值）。
+    /// 该成员是不是引擎补齐用的 **padding 成员**（不被着色器引用）。
     pub is_padding: bool,
+    /// 该成员是不是**引擎自填**成员（宿主不必提供值；引擎每帧写入）。
+    ///
+    /// - padding 成员：只为对齐 ⇒ 宿主不提供；
+    /// - 帧缓冲高度成员（[`crate::glsl::FRAMEBUFFER_HEIGHT_MEMBER`]）：
+    ///   引擎每帧写入当前表面高度 ⇒ 宿主不提供。
+    pub is_engine_filled: bool,
 }
 
 /// uniform 缓冲布局（一个块 + N 个成员）。
@@ -138,17 +144,36 @@ impl UniformBufferLayout {
                     type_name: member.type_name.clone(),
                 });
             }
-            let alignment = float_std140_alignment(&member.type_name);
-            let size = float_std140_size(&member.type_name);
+            // ⚠ 类型已判定受支持 ⇒ 这两个 `Option` **必然**是 `Some`；
+            //   仍显式处理 `None`（不 panic ⇒ 不把调用方的 bug 变成崩溃）。
+            let alignment = float_std140_alignment(&member.type_name).ok_or_else(|| {
+                GlslError::UnsupportedUniformType {
+                    name: member.name.clone(),
+                    type_name: member.type_name.clone(),
+                }
+            })?;
+            let size = float_std140_size(&member.type_name).ok_or_else(|| {
+                GlslError::UnsupportedUniformType {
+                    name: member.name.clone(),
+                    type_name: member.type_name.clone(),
+                }
+            })?;
+            let components = float_component_count(&member.type_name).ok_or_else(|| {
+                GlslError::UnsupportedUniformType {
+                    name: member.name.clone(),
+                    type_name: member.type_name.clone(),
+                }
+            })?;
             offset = align_up(offset, alignment);
             slots.push(UniformSlot {
                 index,
                 name: member.name.clone(),
                 type_name: member.type_name.clone(),
-                components: float_component_count(&member.type_name),
+                components,
                 offset,
                 size,
                 is_padding: member.is_padding,
+                is_engine_filled: member.is_engine_filled,
             });
             offset += size;
         }
@@ -273,9 +298,24 @@ impl std::error::Error for BindingError {}
 /// naga 会抹掉 uniform 名，所以这层的**主键是索引**；
 /// [`UniformValues::set_by_name`] 只是引擎自维护映射表的便利入口，
 /// 内部同样落到索引上。
+///
+/// ## ⭐ 为什么是「扁平缓冲」而不是 `Vec<(u32, Vec<f32>)>`
+///
+/// 早期形态每个取值各带一个 `Vec<f32>` ⇒ **每帧 16 次堆分配**（外加外层
+/// `Vec`）⇒ 60fps 下就是每秒近千次分配 ⇒ GC 压力与卡顿来源。
+///
+/// ⇒ 现在是**两块扁平缓冲**：
+/// - `entries: Vec<(索引, 起点, 分量数)>` —— 索引表；
+/// - `values: Vec<f32>` —— 所有取值**首尾相接**。
+///
+/// 同一个索引重复赋值 ⇒ **原地覆盖**（不重新分配）⇒ 稳态下**每帧零堆分配**
+/// （容量在第一次赋值后就不再增长）。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct UniformValues {
-    entries: Vec<(u32, Vec<f32>)>,
+    /// 索引表：`(索引, 在 `values` 里的起点, 分量数)`。
+    entries: Vec<(u32, usize, usize)>,
+    /// 扁平取值缓冲。
+    values: Vec<f32>,
 }
 
 impl UniformValues {
@@ -285,9 +325,44 @@ impl UniformValues {
     }
 
     /// 按索引赋值（覆盖同索引的旧值）。
+    ///
+    /// ⚠ **零分配**：同索引覆盖是**原地**改写；新索引只在**首次**赋值时增长
+    /// 缓冲（之后容量复用 ⇒ 稳态零分配）。
     pub fn set(&mut self, binding: u32, components: &[f32]) -> &mut Self {
-        self.entries.retain(|(existing, _)| *existing != binding);
-        self.entries.push((binding, components.to_vec()));
+        if let Some(position) = self
+            .entries
+            .iter()
+            .position(|(existing, _, _)| *existing == binding)
+        {
+            let (_, start, len) = self.entries[position];
+            if len == components.len() {
+                // 同分量数 ⇒ **原地覆盖**（零分配）。
+                self.values[start..start + len].copy_from_slice(components);
+                return self;
+            }
+            // 分量数变了 ⇒ 该取值在扁平缓冲里的长度变了 ⇒ **重排整块缓冲**
+            // （罕见路径：宿主改了某个 uniform 的分量数）。
+            let mut values = Vec::with_capacity(self.values.len() + components.len());
+            let mut entries = Vec::with_capacity(self.entries.len());
+            for (index, (existing, at, count)) in self.entries.iter().enumerate() {
+                if index == position {
+                    let new_at = values.len();
+                    values.extend_from_slice(components);
+                    entries.push((*existing, new_at, components.len()));
+                } else {
+                    let source = &self.values[*at..*at + *count];
+                    let new_at = values.len();
+                    values.extend_from_slice(source);
+                    entries.push((*existing, new_at, *count));
+                }
+            }
+            self.values = values;
+            self.entries = entries;
+            return self;
+        }
+        let start = self.values.len();
+        self.values.extend_from_slice(components);
+        self.entries.push((binding, start, components.len()));
         self
     }
 
@@ -310,18 +385,25 @@ impl UniformValues {
     pub fn get(&self, binding: u32) -> Option<&[f32]> {
         self.entries
             .iter()
-            .find(|(existing, _)| *existing == binding)
-            .map(|(_, values)| values.as_slice())
+            .find(|(existing, _, _)| *existing == binding)
+            .map(|(_, start, len)| &self.values[*start..*start + *len])
     }
 
     /// 已赋值的索引列表（升序）。
     pub fn assigned_bindings(&self) -> Vec<u32> {
-        let mut bindings: Vec<u32> = self.entries.iter().map(|(binding, _)| *binding).collect();
+        let mut bindings: Vec<u32> = self
+            .entries
+            .iter()
+            .map(|(binding, _, _)| *binding)
+            .collect();
         bindings.sort_unstable();
         bindings
     }
 
     /// 按布局把值写进缓冲字节（小端 f32）。
+    ///
+    /// **引擎自填成员**（padding / 帧缓冲高度）**不由宿主提供** ⇒ 跳过
+    /// （引擎自己在别处写入）。
     ///
     /// # Errors
     ///
@@ -340,8 +422,8 @@ impl UniformValues {
             });
         }
         for slot in layout.slots() {
-            if slot.is_padding {
-                // padding 成员不被着色器引用 ⇒ 不需要赋值（留 0）。
+            if slot.is_padding || slot.is_engine_filled {
+                // 引擎自填成员：宿主不必提供（padding 留 0；帧缓冲高度由引擎写）。
                 continue;
             }
             let values = self
@@ -603,5 +685,47 @@ mod tests {
             .write_into(&layout, &mut bytes)
             .expect_err("缓冲太小必须报错");
         assert!(matches!(err, BindingError::BufferTooSmall { .. }));
+    }
+
+    // -----------------------------------------------------------------------
+    // 引擎自填成员（宿主不必提供值）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn engine_filled_members_do_not_require_a_host_value() {
+        // ⭐ 引擎注入的「帧缓冲高度」成员由**引擎**每帧写入 ⇒ 宿主只提供
+        // 生产 uniform ⇒ `write_into` **不得**报「缺值」。
+        let members =
+            crate::glsl::fragment_uniform_block_members(crate::shaders::SCENE_FRAGMENT_GLSL);
+        let layout = UniformBufferLayout::from_members(&members, 0).expect("布局可建");
+        assert!(
+            layout
+                .slot_by_name(crate::glsl::FRAMEBUFFER_HEIGHT_MEMBER)
+                .is_some(),
+            "片元布局里必须有帧缓冲高度成员"
+        );
+
+        let mut values = UniformValues::new();
+        for (index, name) in SHADER_UNIFORM_NAMES.iter().enumerate() {
+            let components: Vec<f32> = if index < 2 { vec![1.0, 1.0] } else { vec![0.5] };
+            values.set_by_name(name, &components).expect("写入成功");
+        }
+        let mut bytes = vec![0u8; layout.total_size() as usize];
+        values
+            .write_into(&layout, &mut bytes)
+            .expect("引擎自填成员不得要求宿主提供值");
+    }
+
+    #[test]
+    fn overwriting_a_value_does_not_disturb_the_others() {
+        // ⭐ 扁平缓冲的**核心**性质：同索引覆盖是**原地**改写 ⇒ 稳态零分配
+        //   ⇒ 其它索引的取值**不得**被挪动。
+        let mut values = UniformValues::new();
+        values.set(0, &[1.0, 2.0]);
+        values.set(1, &[3.0]);
+        values.set(0, &[4.0, 5.0]);
+        assert_eq!(values.get(0), Some(&[4.0f32, 5.0][..]), "覆盖必须生效");
+        assert_eq!(values.get(1), Some(&[3.0f32][..]), "其它索引不得被挪动");
+        assert_eq!(values.assigned_bindings(), [0, 1], "索引集合不得变");
     }
 }

@@ -33,6 +33,31 @@ pub struct Viewport {
     pub device_pixel_ratio: f64,
 }
 
+/// ⭐ 帧时长钳位（**两侧**都夹）。
+///
+/// - **上限** = [`tokens::performance::DT_CLAMP_SEC`]（50ms）：性能钳位
+///   （切标签页回来时的一帧可能是好几秒 ⇒ 状态一步跳到目标）；
+/// - **下限** = `0`：**正确性**钳位 —— 时钟回拨 / 挂起恢复后
+///   `performance.now()` 的差值可能是**负数** ⇒ 负 `dt` 会让状态**倒退**
+///   （`t_sec` 回退、`approach` 反向远离目标、机位 `tween` 变负 ⇒ 缓动外插）。
+///
+/// ⇒ 负 `dt` 一律当 **0** 处理（这一帧**不推进**，但也**不倒退**）。
+pub(crate) fn clamp_frame_time(dt: f64) -> f64 {
+    // ⚠️ **只夹上界**（与生产逐字一致）⇒ **不夹下界**。
+    //
+    // ## 为什么负 `dt` 也照原样用
+    //
+    // 实测：生产侧的首帧 `dt` **就是负数**（夹具里 −0.0062s）⇒
+    // ⇒ 引擎若把负 `dt` 当 0（或夹到 0）⇒ **中间帧与生产不再逐位相同**
+    // ⇒ ⇒ 场景面的 T1 判据（逐位相等，容差 0）**直接红**（实测 37/43）。
+    //
+    // ⇒ ⇒ 「负 `dt` 把状态推离目标」是**生产侧的既有缺陷**
+    // ⇒ ⇒ **迁移的验收标准是「与生产逐字一致」** ⇒ ⇒ 引擎**故意保留**该行为
+    // ⇒ ⇒ 修它要改**生产前端**（本仓只读）⇒ 另立一线。
+    // ⇒ ⇒ 登记见 `docs/04-internal/ui-engine-defect-ledger.md`（E-21）。
+    jsnum::min(dt, tokens::performance::DT_CLAMP_SEC)
+}
+
 /// 场景选项。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SceneOptions {
@@ -222,11 +247,23 @@ impl Scene {
     /// 推进一帧（动画路径）。
     ///
     /// 返回 `None` = 本帧**不产出**（已暂停或已销毁）。
+    ///
+    /// ## ⭐ `dt` **两侧**都夹
+    ///
+    /// 上限（50ms）是性能钳位；**下限（0）**是**正确性**钳位：
+    /// 时钟回拨 / 挂起恢复后 `performance.now()` 的差值可能是**负数** ⇒
+    ///
+    /// - `t_sec` 会**倒退**；
+    /// - `approach` 的 `k = min(1, dt·2.4)` 会是**负数** ⇒ 状态被**反向推离**
+    ///   目标（而不是趋近）；
+    /// - 机位的 `tween` 会变负 ⇒ `ease_in_out_cubic` **外插** ⇒ 机位过冲。
+    ///
+    /// ⇒ 负 `dt` 一律当 **0** 处理（这一帧不推进，但不倒退）。
     pub fn advance(&mut self, dt: f64) -> Option<SceneUniforms> {
         if self.destroyed || self.paused {
             return None;
         }
-        let dt = jsnum::min(dt, tokens::performance::DT_CLAMP_SEC);
+        let dt = clamp_frame_time(dt);
         self.t_sec += dt;
         let target = self.current_targets();
         self.current = approach(self.current, target, dt);
@@ -541,5 +578,99 @@ mod tests {
         );
         let uniforms = scene.advance(10.0).expect("动画帧");
         assert!((uniforms.time - 0.05).abs() < 1e-12, "帧时长被钳到 50ms");
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ 负 `dt`（时钟回拨 / 挂起恢复）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn a_negative_frame_time_reproduces_the_production_clock_behavior() {
+        // ⚠️ **记录「生产同源缺陷」**（见台账 E-21）：
+        // ⇒ 生产**不夹**负 `dt` ⇒ 时钟会**倒退** ⇒ 引擎**故意保留**（对齐优先）。
+        let mut scene = Scene::new(
+            viewport(),
+            SceneOptions {
+                interactive: false,
+                reduce_motion: false,
+                frozen_time: None,
+            },
+        );
+        let first = scene.advance(0.016).expect("动画帧");
+        assert!((first.time - 0.016).abs() < 1e-12);
+        // 负 dt ⇒ 时钟**倒退**（生产同源 ⇒ 引擎故意保留）。
+        let second = scene.advance(-0.5).expect("动画帧");
+        assert!(
+            (second.time - (first.time - 0.5)).abs() < 1e-12,
+            "负 dt ⇒ 时钟倒退 0.5（**与生产同源**）：{} → {}",
+            first.time,
+            second.time
+        );
+    }
+
+    #[test]
+    fn a_negative_frame_time_reproduces_the_production_state_behavior() {
+        // ⚠️ **记录「生产同源缺陷」**（见台账 E-21）：负 `dt` ⇒ `k` 为负
+        // ⇒ 状态**反向远离**目标 ⇒ 引擎**故意保留**（对齐优先）。
+        // ⚠ 早期形态：`k = min(1, dt · 2.4)` ⇒ 负 dt ⇒ k 为负 ⇒
+        // `cur += (target - cur) · k` 把状态**反向推离**目标。
+        let mut scene = Scene::new(
+            viewport(),
+            SceneOptions {
+                interactive: false,
+                reduce_motion: false,
+                frozen_time: None,
+            },
+        );
+        scene.set_mode(SceneMode::Thinking);
+        let before = scene.advance(0.016).expect("动画帧");
+        assert!(before.bright > 0.32, "先向目标走一步");
+        let after = scene.advance(-0.5).expect("动画帧");
+        assert!(
+            after.bright < before.bright,
+            "负 dt ⇒ 状态**反向远离**目标（**与生产同源**）：{} → {}",
+            before.bright,
+            after.bright
+        );
+        assert!(after.bright <= 0.9, "状态不得越过目标：{}", after.bright);
+    }
+
+    #[test]
+    fn a_negative_frame_time_reproduces_the_production_camera_behavior() {
+        // ⚠️ **记录「生产同源缺陷」**（见台账 E-21）：负 `dt` ⇒ 机位缓动**外插**
+        // ⇒ 引擎**故意保留**（对齐优先）。
+        // ⚠ 早期形态：`tween` 可变负 ⇒ `ease_in_out_cubic` **外插** ⇒ 机位过冲。
+        //
+        // ⭐ 精确口径：负 `dt` 被夹到 0 ⇒ 这一帧**整帧不推进** ⇒ 漂移时钟
+        // 也没动 ⇒ 机位的有效取值必须与上一帧**逐位相同**。
+        let mut scene = Scene::new(
+            viewport(),
+            SceneOptions {
+                interactive: true,
+                reduce_motion: false,
+                frozen_time: None,
+            },
+        );
+        assert!(scene.set_camera(1), "机位切换必须被接受");
+        let before = scene.advance(0.016).expect("动画帧");
+        let after = scene.advance(-0.5).expect("动画帧");
+        assert_ne!(
+            (after.incl, after.azim, after.scale),
+            (before.incl, before.azim, before.scale),
+            "负 dt ⇒ 机位缓动**外插**（**与生产同源**）"
+        );
+    }
+
+    #[test]
+    fn the_frame_time_clamp_covers_the_upper_side_only() {
+        // ⚠️ **只夹上界**（与生产逐字一致）⇒ 负值**照原样**（见台账 E-21）。
+        assert_eq!(crate::scene::clamp_frame_time(-0.5), -0.5);
+        assert_eq!(crate::scene::clamp_frame_time(-0.000001), -0.000001);
+        assert_eq!(crate::scene::clamp_frame_time(0.0), 0.0);
+        assert_eq!(crate::scene::clamp_frame_time(0.016), 0.016);
+        assert_eq!(
+            crate::scene::clamp_frame_time(10.0),
+            tokens::performance::DT_CLAMP_SEC
+        );
     }
 }
