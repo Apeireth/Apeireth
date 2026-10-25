@@ -485,6 +485,11 @@ pub struct ProviderHost {
     submit_count: Signal<u32>,
     /// 最近一次整组提交的**打码快照**（`apiKey` 已打码 ⇒ 不泄明文）。
     last_submit: Signal<String>,
+    /// 最近一次**成功提交**的整组草稿（**未打码** ⇒ 只在宿主内存里，用于
+    /// 「**空提交**」判定 ⇒ 与生产 `providerCommitted` 同口径）。
+    ///
+    /// ⚠️ **不渲染**（不进任何发布面）⇒ 不泄明文。
+    committed_draft: Signal<Option<ProviderGroupDraft>>,
     /// 字段回读钩子（wasm 层注入）。
     field_reader: Rc<RefCell<Option<FieldReader>>>,
     /// 协议双缓冲（生产 `openaiBuffer` / `anthropicBuffer`）。
@@ -533,6 +538,20 @@ impl ProviderHost {
         let intent = runtime.signal(String::new());
         let submit_count = runtime.signal(0u32);
         let last_submit = runtime.signal(String::new());
+        // ⭐ 「已提交快照」⇒ 「空提交」判定（生产 `providerCommitted`）。
+        //
+        // ⚠️ 生产在**加载时**就把当前值当作**已提交值**
+        // （`providerCommitted = {...draft}`）⇒ ⇒ 首次失焦时**值没变**
+        // ⇒ ⇒ 生产走「**空提交**」⇒ ⇒ **不闪 ✓**（实测：参考侧 `.field-ack` = 0）。
+        // ⇒ ⇒ 引擎侧必须**同样**以初值作基线 ⇒ 否则首次失焦就会提交 ⇒ ⇒ 多闪 ✓。
+        let committed_draft = runtime.signal(Some(ProviderGroupDraft {
+            protocol: state.protocol.clone(),
+            preset: state.preset.clone(),
+            base_url: state.base_url.clone(),
+            api_key: state.api_key.clone(),
+            model: state.model.clone(),
+            anthropic_version: state.anthropic_version.clone(),
+        }));
         let presets = fixture.presets.clone();
         Self {
             runtime,
@@ -567,6 +586,7 @@ impl ProviderHost {
             intent,
             submit_count,
             last_submit,
+            committed_draft,
             field_reader: Rc::new(RefCell::new(None)),
             buffers: Rc::new(RefCell::new(initial_buffers(&presets))),
             presets,
@@ -899,6 +919,17 @@ impl ProviderHost {
         if group != "provider-group" {
             return;
         }
+        // ⭐ **空提交**（生产 `SettingsView.svelte:1030` 同口径）：
+        // 生产的 `providerGroupDirty()` 是**值比较**
+        // （`providerCommitted === null` ⇒ dirty；否则比快照）
+        // ⇒ 若**值没变** ⇒ 生产只 `clearTextDirty(PROVIDER_TEXT_KEYS)`
+        // ⇒ ⇒ **不**提交、**不**闪 ✓、**不**打扰运行时。
+        // ⚠️ 此前引擎侧**无条件提交** ⇒ 值没变时也闪 ✓
+        // ⇒ ⇒ 引擎侧比生产**多 3 个 `span.field-ack`**（实测）⇒ ⇒ DOM 不全等。
+        if !self.provider_group_dirty(draft) {
+            self.set_flags(PROVIDER_TEXT_KEYS, FieldFlagState::None);
+            return;
+        }
         // 整组落位（生产 `providerGroupDraft()` 的六个字段）。
         self.protocol.set(draft.protocol.clone());
         self.preset.set(draft.preset.clone());
@@ -913,9 +944,24 @@ impl ProviderHost {
         self.apply_result.set(self.fixture.apply_result.clone());
         self.effective_config
             .set(self.fixture.effective_config.clone());
+        // 记录「已提交快照」⇒ 下次可判定**空提交**（生产 `providerCommitted`）。
+        self.committed_draft.set(Some(draft.clone()));
         // 生产 `ackTextKeys(PROVIDER_TEXT_KEYS)`：闪 ✓（1.6s 后收起）。
         self.set_flags(PROVIDER_TEXT_KEYS, FieldFlagState::Ack);
         self.schedule_ack_clear();
+    }
+
+    /// **整组是否与已提交快照不同**（生产 `providerGroupDirty()` 同口径）。
+    ///
+    /// - 生产：没提交过（`providerCommitted === null`）⇒ **dirty**；
+    /// - 否则比**快照**（生产 `providerGroupSnapshot`：6 个字段 + `trim()`）。
+    fn provider_group_dirty(&self, draft: &ProviderGroupDraft) -> bool {
+        match self.committed_draft.get() {
+            None => true,
+            Some(committed) => {
+                provider_group_snapshot(draft) != provider_group_snapshot(&committed)
+            }
+        }
     }
 
     /// 闪 ✓ 之后 **1.6s** 收起（生产用 `setTimeout`；wasm 层用浏览器计时器）。
@@ -1177,6 +1223,23 @@ fn bool_text(value: bool) -> String {
 }
 
 /// 整组草稿 ⇒ **打码后**的一行快照（T5 用；**不泄明文**）。
+/// 整组快照（**生产 `providerGroupSnapshot` 的逐字同口径**：
+/// `settings-live-apply.ts:64` ⇒ 6 个字段 + `trim()`）。
+///
+/// ⚠️ 与 [`masked_snapshot`] 的区别：**这里不���码** ⇒ 它**只在宿主内存**里用于
+/// 「值有没有变」的比较 ⇒ **不进任何发布面**。
+fn provider_group_snapshot(draft: &ProviderGroupDraft) -> String {
+    format!(
+        "{{\"protocol\":{},\"preset\":{},\"baseUrl\":{},\"apiKey\":{},\"model\":{},\"anthropicVersion\":{}}}",
+        draft.protocol,
+        draft.preset,
+        draft.base_url.trim(),
+        draft.api_key.trim(),
+        draft.model.trim(),
+        draft.anthropic_version.trim(),
+    )
+}
+
 fn masked_snapshot(draft: &ProviderGroupDraft) -> String {
     format!(
         "protocol={};preset={};baseUrl={};apiKey={};model={};anthropicVersion={}",
@@ -1755,13 +1818,49 @@ mod tests {
         assert!(!host.show_api_key.get(), "回密文");
     }
 
+    /// ⭐ **空提交**（生产 `SettingsView.svelte:1030` 同口径）：**值没变** ⇒
+    /// ⇒ 只清「未保存」标记 ⇒ ⇒ **不**计数、**不**闪 ✓、**不**灌回执。
+    ///
+    /// ## 为什么需要这条断言
+    ///
+    /// 引擎侧此前**无条件提交** ⇒ 值没变时也闪 ✓（`span.field-ack`）
+    /// ⇒ ⇒ 引擎侧比生产**多 3 个** ✓ 旗标（实测）
+    /// ⇒ ⇒ **DOM 不全等** + 像素有差 ⇒ ⇒ 对照判据红。
+    #[test]
+    fn an_unchanged_group_is_an_empty_submit_and_does_not_flash_the_ack() {
+        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let props = host.props();
+        assert_eq!(host.submit_count(), 0);
+        // ⭐ **值与已提交快照相同** ⇒ 空提交。
+        (props.on_submit_group)("provider-group", &props.draft());
+        assert_eq!(host.submit_count(), 0, "空提交**不**计数");
+        assert!(
+            host.apply_result.get().is_none(),
+            "空提交**不**灌回执（生产：只清「未保存」标记）"
+        );
+        // 也不该闪 ✓（生产：空提交不走 `ackTextKeys`）。
+        assert!(
+            !host
+                .text_flags
+                .get()
+                .iter()
+                .any(|(_, state)| *state == FieldFlagState::Ack),
+            "空提交**不**闪 ✓"
+        );
+    }
+
     #[test]
     fn the_submit_intent_records_one_whole_group_and_fills_the_receipts() {
         // ## 判据 T5（**整组提交原子性**）的宿主侧断言
         let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
         let props = host.props();
         assert_eq!(host.submit_count(), 0);
-        (props.on_submit_group)("provider-group", &props.draft());
+        // ⚠️ **值必须真的变了** ⇒ 否则走生产的「**空提交**」分支
+        // （生产 `SettingsView.svelte:1030`：`providerGroupDirty()` 为假 ⇒
+        // ⇒ 只清「未保存」标记 ⇒ **不**计数、**不**闪 ✓、**不**打扰运行时）。
+        let mut draft = props.draft();
+        draft.model = String::from("gpt-4o-mini");
+        (props.on_submit_group)("provider-group", &draft);
         assert_eq!(host.submit_count(), 1, "一次提交");
         let snapshot = host.last_submit();
         for field in SUBMIT_FIELDS {
