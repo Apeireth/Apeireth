@@ -255,3 +255,17 @@ path = "fuzz_targets/canonical_binding.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "mcp_schema"
+path = "fuzz_targets/mcp_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "post_execute"
+path = "fuzz_targets/post_execute.rs"
+test = false
+doc = false
+bench = false

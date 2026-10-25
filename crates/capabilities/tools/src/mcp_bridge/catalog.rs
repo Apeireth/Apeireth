@@ -82,10 +82,13 @@ impl McpToolEntry {
         use apeireth_governance::tool_desc_audit::ToolDescAuditError;
 
         let auditor = ToolDescAuditor::new();
-        // ⚠️ 审计器的错误语义**不是**统一的：它用 `Err` 表达两种完全不同的结果 ——
-        //   `EmptyDescription`  = 服务器给了空描述 ⇒ 常态，按「无描述」放行；
-        //   `InjectionKeywordDetected` / `DangerousDiffDetected` / `InvisibleCharDetected`
-        //                       = **审计判定拒绝** ⇒ 必须 fail-closed。
+        // ⚠️ 审计器的错误语义**不是**统一的：它用 `Err` 表达两种完全不同的结果：
+        //   `EmptyDescription` = 服务器给了空描述 ⇒ 常态，按「无描述」放行；
+        //   `InjectionKeywordDetected` = **审计判定拒绝** ⇒ 必须 fail-closed。
+        // （`ToolDescAuditError` 里另有 `InvisibleCharDetected` / `DangerousDiffDetected`
+        //   两个变体，但**审计器当前从不返回它们** —— 隐形字符走 `Ok(Warning)`、
+        //   体量暴增走 `Ok(Warning)`。下面那个 `Err(error) =>` 兜底分支仍会 fail-closed
+        //   接住**将来**新增的拒绝变体 ⇒ 语义不变，只是别把死变体当成活路。）
         // 我第一版把**任何** `Err` 都当「无描述」放行，导致注入被放过 ——
         // 是测试（`injection_keywords_reject_the_tool`）抓到的。别再把 Err 一律当放行。
         let result = match auditor.audit(model_name, raw) {
