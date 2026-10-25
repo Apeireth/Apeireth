@@ -123,6 +123,7 @@ pub(crate) struct CapabilityIndex {
     owners: BTreeMap<CapabilityId, PluginId>,
 }
 
+#[allow(dead_code)]
 impl CapabilityIndex {
     /// An empty index.
     pub fn new() -> Self {
@@ -189,6 +190,7 @@ impl CapabilityIndex {
     }
 
     /// Whether nothing is indexed.
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.owners.is_empty()
     }

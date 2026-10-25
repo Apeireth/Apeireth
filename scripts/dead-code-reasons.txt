@@ -1,0 +1,42 @@
+# D-1 死代码豁免理由登记（人工维护；`scripts/check_dead_code.py` 读它）
+#
+# 每行: <文件路径>  <理由>
+#
+# 为什么理由放这里而不是 .rs 里：rustfmt 会把属性后的行尾注释挪进函数体
+#（位置不对），而 doc 注释方案会多占一行文件体积（尺寸棘轮零余量）。
+# 本仓既有惯例（孤儿棘轮：unwired-baseline.txt + 分组标记）也是**理由进登记文件**。
+#
+# 覆盖文件数: 28
+
+crates/adapters/gateway/src/presence.rs  心跳驱动器句柄：仅测试读（断言开流即起心跳产出）
+crates/adapters/gateway/tests/common/mod.rs  测试夹具共享 helper（供多个用例构造完整对象）
+crates/adapters/sdk/src/abi.rs  FFI 链接锚（保证符号被链入，仓内无 Rust 侧读点）
+crates/adapters/sdk/src/lib.rs  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/capabilities/tools/src/doc_ops.rs  文档面/PDF 页对象保留字段：解析结果保留，导出路径未用
+crates/capabilities/tools/src/process/mod.rs  进程 trait 方法：实现方在本仓之外（宿主 crate 提供）
+crates/capabilities/tools/src/recon/yara.rs  字节查找 helper：0 引用私有函数
+crates/capabilities/tools/src/std_sub_supervisor.rs  子进程退出分类 / 回收 helper：守护面预留，仓内暂无调用方
+crates/capabilities/tools/src/test_support.rs  测试支持模块（夹具与共享 helper）
+crates/capabilities/tools/tests/common/mod.rs  测试夹具共享 helper（供多个用例构造完整对象）
+crates/engine/image/codecs/tests/common/mod.rs  测试夹具共享 helper（供多个用例构造完整对象）
+crates/engine/memory/src/append_only.rs  cfg(kani) 证明集专用（仅 kani 构建编译）
+crates/engine/memory/src/backend/file_encrypted.rs  v2 直开入口：仅测试直调（生产走 decrypt 路径）
+crates/engine/memory/src/backend/in_memory.rs  已废弃兼容桩：返回明确错误引导改用 typed enum
+crates/engine/memory/src/lib.rs  内存库测试夹具（cfg(test) 辅助）
+crates/engine/memory/src/memory_materializer.rs  固定时刻 helper（测试注入时钟用）
+crates/engine/memory/src/organ_kani_proofs.rs  cfg(kani) 证明集专用（仅 kani 构建编译）
+crates/engine/memory/src/provenance.rs  连接锚（显式占位，防未使用告警；无行为）
+crates/engine/organ/src/care/engine.rs  care 规则测试夹具：当前无用例调用
+crates/engine/organ/src/causal_world_model.rs  因果世界模型面保留字段/转换（模型面演进中，仓内暂无读点）
+crates/engine/organ/src/causal_world_model_edges.rs  因果世界模型边类型（模型面演进中，仓内暂无读点）
+crates/engine/organ/src/hypothesis.rs  hypothesis 测试夹具：当前无用例调用
+crates/engine/runtime/src/canonical/module.rs  0 引用 crate 内构造器（模块统计面预留）
+crates/engine/storage/src/cache/evictor.rs  evictor trait 方法：实现方在本仓之外（宿主 crate 提供）
+crates/engine/storage/src/rate_limit/mod.rs  限流 trait 默认方法：实现方在本仓之外（宿主 crate 提供）
+crates/foundation/orchestration/src/durable_schedule.rs  排程时刻计算 helper：0 引用私有函数
+crates/foundation/plugin/src/llm_factory.rs  Noop 实例的角色/模型字段：供宿主查询实例身份，仓内暂无读点
+crates/foundation/plugin/src/registry.rs  注册表查询面（new/contains/len/is_empty）：公开 API 表面，仓内暂无读点
+crates/engine/runtime-assembly/tests/canonical_builtin_tools.rs  测试声明烟测锚（显式保留，无行为）
+crates/engine/runtime-assembly/tests/upgrade_cycle.rs  升级循环测试的占位锚（显式保留，无行为）
+crates/adapters/gateway/tests/round_limit_frame.rs  测试夹具枚举变体（供用例构造完整帧）
+crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs  测试夹具结构（供用例构造完整工具）

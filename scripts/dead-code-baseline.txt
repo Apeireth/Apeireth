@@ -1,0 +1,53 @@
+# D-1 死代码豁免基线（只减不增）
+#
+# 由 `dead_code = 'warn'`（workspace lint）+ 本清单共同构成机检守卫：
+# ① 任何**新增**的死代码（没有局部 allow）⇒ clippy 报 warning ⇒ CI 的
+#    `-D warnings` 直接失败（这是真正的守卫）；
+# ② 本清单里的既有豁免**只减不增** —— 新增豁免必须写清理由并登记；
+# ③ 理由在 `scripts/dead-code-reasons.txt`（按文件登记）。
+#
+# 合计: 41 处 · 指纹: fc686e405369ea02
+#
+# 格式: <站点标识>  <理由>
+
+crates/adapters/gateway/src/presence.rs:heartbeat: Arc<HeartbeatDriver>, // D-1（owner 裁定  心跳驱动器句柄：仅测试读（断言开流即起心跳产出）
+crates/adapters/gateway/tests/round_limit_frame.rs#file  测试夹具枚举变体（供用例构造完整帧）
+crates/adapters/sdk/src/abi.rs:fn _ensure_error_linked() -> Result<(), SdkError  FFI 链接锚（保证符号被链入，仓内无 Rust 侧读点）
+crates/adapters/sdk/src/lib.rs:const _EIGHT_COMMITMENTS: [&str; 8] = [  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/adapters/sdk/src/lib.rs:const _EIGHT_PHILOSOPHY_ANCHORS: [&str; 8] = [  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/adapters/sdk/src/lib.rs:const _K1_LIB_PLATFORM_APEIRETH: &str = "apeiret  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/adapters/sdk/src/lib.rs:const _K1_LIB_VERSION_LOCKED: (u16, u16, u16) =  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/adapters/sdk/src/lib.rs:const _MAINTENANCE_CHECKLIST: [&str; 4] = [  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/adapters/sdk/src/lib.rs:const _MODULE_COUNT: usize = {  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/adapters/sdk/src/lib.rs:pub const SDK_SUBMODULE_COUNT: usize = 0;  K-1 编译期锁/自述常量（版本与承诺字面量，编译期强校验的一部分）
+crates/capabilities/tools/src/doc_ops.rs:Stored,  文档面/PDF 页对象保留字段：解析结果保留，导出路径未用
+crates/capabilities/tools/src/doc_ops.rs:struct PdfPage {  文档面/PDF 页对象保留字段：解析结果保留，导出路径未用
+crates/capabilities/tools/src/process/mod.rs:fn wait(&mut self) -> Result<ChildStatus, Proces  进程 trait 方法：实现方在本仓之外（宿主 crate 提供）
+crates/capabilities/tools/src/process/mod.rs:pub(crate) fn apply_request_to_command(  进程 trait 方法：实现方在本仓之外（宿主 crate 提供）
+crates/capabilities/tools/src/recon/yara.rs:fn find_bytes(haystack: &[u8], needle: &[u8]) ->  字节查找 helper：0 引用私有函数
+crates/capabilities/tools/src/std_sub_supervisor.rs:fn classify_exit(status: std::process::ExitStatu  子进程退出分类 / 回收 helper：守护面预留，仓内暂无调用方
+crates/capabilities/tools/src/std_sub_supervisor.rs:fn try_reap(&self, _child_id: &str, child: &mut  子进程退出分类 / 回收 helper：守护面预留，仓内暂无调用方
+crates/engine/memory/src/append_only.rs:pub fn kind_from_str(s: &str) -> MemoryResult<St  cfg(kani) 证明集专用（仅 kani 构建编译）
+crates/engine/memory/src/backend/file_encrypted.rs:impl EncryptedFileBackend {  v2 直开入口：仅测试直调（生产走 decrypt 路径）
+crates/engine/memory/src/backend/in_memory.rs:fn stream_name_to_kind(_name: &str) -> MemoryRes  已废弃兼容桩：返回明确错误引导改用 typed enum
+crates/engine/memory/src/lib.rs:pub(crate) fn fresh_store() -> SqliteMemoryStore  内存库测试夹具（cfg(test) 辅助）
+crates/engine/memory/src/memory_materializer.rs:fn _now_secs() -> i64 {  固定时刻 helper（测试注入时钟用）
+crates/engine/memory/src/organ_kani_proofs.rs:fn make_episode(id: &str, session_id: &str, role  cfg(kani) 证明集专用（仅 kani 构建编译）
+crates/engine/memory/src/provenance.rs:fn _ensure_conn(_c: &Connection) {} // anchor fo  连接锚（显式占位，防未使用告警；无行为）
+crates/engine/organ/src/care/engine.rs:fn daily_rule(minutes_of_day: u32) -> CareRule {  care 规则测试夹具：当前无用例调用
+crates/engine/organ/src/causal_world_model.rs:fn llm_error_to_organ(e: LlmError) -> OrganError  因果世界模型面保留字段/转换（模型面演进中，仓内暂无读点）
+crates/engine/organ/src/causal_world_model.rs:incoming: HashMap<String, Vec<usize>>,  因果世界模型面保留字段/转换（模型面演进中，仓内暂无读点）
+crates/engine/organ/src/causal_world_model_edges.rs:Hybrid,  因果世界模型边类型（模型面演进中，仓内暂无读点）
+crates/engine/organ/src/causal_world_model_edges.rs:LlmProposed,  因果世界模型边类型（模型面演进中，仓内暂无读点）
+crates/engine/organ/src/hypothesis.rs:fn _placeholder(&self) {} // D-1（owner 裁定 2026-1  hypothesis 测试夹具：当前无用例调用
+crates/engine/organ/src/hypothesis.rs:fn empty_input() -> OrganInput {  hypothesis 测试夹具：当前无用例调用
+crates/engine/runtime-assembly/tests/canonical_builtin_tools.rs:fn _declaration_smoke() -> (NormalizedTool, Tool  测试声明烟测锚（显式保留，无行为）
+crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs#file  测试夹具结构（供用例构造完整工具）
+crates/engine/runtime-assembly/tests/upgrade_cycle.rs:fn _unused_episode_marker() {}  升级循环测试的占位锚（显式保留，无行为）
+crates/engine/runtime/src/canonical/module.rs:pub(crate) fn with_used(max: usize, used: usize)  0 引用 crate 内构造器（模块统计面预留）
+crates/engine/storage/src/cache/evictor.rs:fn policy(&self) -> EvictionPolicy; // D-1（owner  evictor trait 方法：实现方在本仓之外（宿主 crate 提供）
+crates/engine/storage/src/cache/evictor.rs:impl std::str::FromStr for EvictionPolicy {  evictor trait 方法：实现方在本仓之外（宿主 crate 提供）
+crates/engine/storage/src/rate_limit/mod.rs:fn reset(&mut self, now: Instant) {  限流 trait 默认方法：实现方在本仓之外（宿主 crate 提供）
+crates/foundation/plugin/src/llm_factory.rs:pub struct NoopLlmInstance {  Noop 实例的角色/模型字段：供宿主查询实例身份，仓内暂无读点
+crates/foundation/plugin/src/registry.rs:impl CapabilityIndex {  注册表查询面（new/contains/len/is_empty）：公开 API 表面，仓内暂无读点
+crates/foundation/plugin/src/registry.rs:pub fn is_empty(&self) -> bool {  注册表查询面（new/contains/len/is_empty）：公开 API 表面，仓内暂无读点

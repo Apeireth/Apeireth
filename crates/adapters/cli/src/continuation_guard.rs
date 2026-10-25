@@ -46,7 +46,17 @@ fn snapshot_id(session: &str) -> String {
 pub struct OpenTurn {
     /// 快照 id（收尾时按它删）。
     pub id: String,
-    /// 本轮序号（1 起）。
+}
+
+/// 一次「上次中断」的告知（**已消费**该快照）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterruptedNotice {
+    /// 可直接打印的提示行。
+    pub text: String,
+    /// **被中断那轮**的序号（≥1）。调用方据此推下一轮序号（`turn + 1`）。
+    ///
+    /// 真值来自被删快照的 `turn` 字段（不重算、不猜测）⇒ 提示语里的
+    /// 「第 N 轮」是**真值**，不是恒 1。
     pub turn: u64,
 }
 
@@ -57,22 +67,27 @@ pub fn take_interrupted_notice(
     store: &FileContinuationStore,
     session: &str,
     now_ms: i64,
-) -> Option<String> {
+) -> Option<InterruptedNotice> {
     let id = snapshot_id(session);
     match store.load(&id) {
         Ok(snapshot) => {
             let _ = store.delete(&id);
             let age_secs = now_ms.saturating_sub(snapshot.saved_at_epoch_ms) / 1_000;
-            Some(format!(
-                "[续行] 上次回合未正常结束（第 {} 轮，约 {} 秒前）—— 可能崩溃或被中断；\
-                 本次是新回合，不会自动重放上次的工具调用",
-                snapshot.turn, age_secs
-            ))
+            Some(InterruptedNotice {
+                text: format!(
+                    "[续行] 上次回合未正常结束（第 {} 轮，约 {} 秒前）—— 可能崩溃或被中断；\
+                     本次是新回合，不会自动重放上次的工具调用",
+                    snapshot.turn, age_secs
+                ),
+                turn: snapshot.turn,
+            })
         }
         Err(ContinuationStoreError::NotFound { .. }) => None,
-        Err(error) => Some(format!(
-            "[续行] 快照读取异常（如实报告，不影响本轮）: {error}"
-        )),
+        Err(error) => Some(InterruptedNotice {
+            text: format!("[续行] 快照读取异常（如实报告，不影响本轮）: {error}"),
+            // 读取异常 ⇒ 拿不到真轮号 ⇒ 0（调用方据此回落到第 1 轮，不猜）。
+            turn: 0,
+        }),
     }
 }
 
@@ -96,7 +111,7 @@ pub fn begin_turn(
     store
         .save(&snapshot)
         .map_err(|error| format!("续行快照落盘失败: {error}"))?;
-    Ok(OpenTurn { id, turn })
+    Ok(OpenTurn { id })
 }
 
 /// 回合正常收尾（成功 / 业务错误 / 挂起待审批都算「没崩」）：删快照。
@@ -136,8 +151,8 @@ mod tests {
         let _open = begin_turn(&store, "s-2", 1_000, 3).expect("落快照");
         // 不调用 finish_turn ⇒ 相当于进程在回合中途消失
         let notice = take_interrupted_notice(&store, "s-2", 61_000).expect("应报中断");
-        assert!(notice.contains("第 3 轮"), "{notice}");
-        assert!(notice.contains("不会自动重放"), "{notice}");
+        assert!(notice.text.contains("第 3 轮"), "{notice:?}");
+        assert!(notice.text.contains("不会自动重放"), "{notice:?}");
         // 报过一次即清（同一中断不反复打扰）
         assert!(take_interrupted_notice(&store, "s-2", 62_000).is_none());
     }

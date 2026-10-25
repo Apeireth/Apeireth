@@ -18,6 +18,7 @@
 //! - 子代理 D actionable #1 真兑现 (Experience 保守版是真接 LLM, Curiosity trait 边界预留)
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入), Curiosity 共享同 trait
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::SessionId;
 use apeireth_organ::curiosity::{CuriosityOrgan, Echo, EchoSource};

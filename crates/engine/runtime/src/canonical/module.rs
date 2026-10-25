@@ -591,6 +591,7 @@ impl ModuleTurnState {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn with_used(max: usize, used: usize) -> Self {
         Self {
             used: AtomicUsize::new(used),

@@ -11,6 +11,7 @@
 //!   仍待 v2.0.0 release 后启动 (per R11 spec §8.4 + 子代理 R12 估 1-3 周).
 //! - 0 引新外部 dep (Cargo.lock 0 行 diff), 0 触碰 LOCKED 5 项.
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use apeireth_runtime_assembly as apeireth_runtime;
 
 use std::sync::Arc;

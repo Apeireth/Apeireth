@@ -583,11 +583,6 @@ fn sha256_file(path: &Path) -> Result<(u64, String), BackupError> {
     Ok((total, hex(&hasher.finalize())))
 }
 
-/// 字节摘要 (hex)。
-fn sha256_bytes(bytes: &[u8]) -> String {
-    hex(&Sha256::digest(bytes))
-}
-
 /// 摘要字节 → hex 词面。
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()

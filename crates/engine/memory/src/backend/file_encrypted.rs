@@ -96,6 +96,7 @@ pub struct EncryptedFileBackend {
     write_lock: Mutex<()>,
 }
 
+#[allow(dead_code)]
 impl EncryptedFileBackend {
     /// 32 bytes master key (256-bit AES-GCM)
     pub const KEY_LEN: usize = 32;

@@ -841,6 +841,7 @@ impl crate::scope::ScopedMemoryBackend for SqliteMemoryStore {
 pub use apeireth_core;
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) fn fresh_store() -> SqliteMemoryStore {
     SqliteMemoryStore::open_in_memory().expect("open in-memory store")
 }

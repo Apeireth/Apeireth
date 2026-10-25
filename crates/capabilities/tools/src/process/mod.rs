@@ -890,6 +890,7 @@ fn capabilities_for_execution(
     actual
 }
 
+#[allow(dead_code)]
 pub(crate) fn apply_request_to_command(
     command: &mut std::process::Command,
     request: &ProcessRequest,
@@ -924,7 +925,8 @@ pub(crate) struct ChildStatus {
 
 pub(crate) trait ManagedChild {
     fn try_wait(&mut self) -> Result<Option<ChildStatus>, ProcessError>;
-    fn wait(&mut self) -> Result<ChildStatus, ProcessError>;
+    #[allow(dead_code)]
+    fn wait(&mut self) -> Result<ChildStatus, ProcessError>; // D-1（owner 裁定 2026-10-25）：进程 trait 方法：实现方在本仓之外（宿主 crate 提供）
     fn terminate(&mut self) -> Result<(), ProcessError>;
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>>;
     fn take_stderr(&mut self) -> Option<Box<dyn Read + Send>>;

@@ -55,6 +55,7 @@ impl std::fmt::Display for EvictionPolicy {
     }
 }
 
+#[allow(dead_code)]
 impl std::str::FromStr for EvictionPolicy {
     type Err = String;
 
@@ -79,7 +80,8 @@ where
     fn on_insert(&mut self, key: K);
     fn pick_victim(&mut self) -> Option<K>;
     fn on_remove(&mut self, key: &K);
-    fn policy(&self) -> EvictionPolicy;
+    #[allow(dead_code)]
+    fn policy(&self) -> EvictionPolicy; // D-1（owner 裁定 2026-10-25）：evictor trait 方法：实现方在本仓之外（宿主 crate 提供）
 }
 
 fn rebuild_index<K: Hash + Eq + Clone>(order: &VecDeque<K>) -> HashMap<K, usize> {

@@ -2,6 +2,7 @@
 //! 审计配对原子 / 超时语义 / 一次性执行 / 未配置零回归。
 //! 外部端点一律本地 mock, 0 真实网络。
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 mod common;
 
 use std::sync::atomic::{AtomicUsize, Ordering};

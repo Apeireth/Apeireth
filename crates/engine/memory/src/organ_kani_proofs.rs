@@ -9,6 +9,7 @@ use crate::{
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::StreamKindExt;
 
+#[allow(dead_code)]
 fn make_episode(id: &str, session_id: &str, role: &str, content: &str) -> Episode {
     Episode {
         id: id.to_string(),

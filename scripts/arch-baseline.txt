@@ -127,7 +127,9 @@ size crates/adapters/cli/src/onboarding.rs 1338
 size crates/adapters/gateway/src/canonical_entry.rs 2233
 size crates/adapters/gateway/src/events.rs 1623
 size crates/adapters/gateway/src/panels.rs 1623
-size crates/adapters/gateway/src/presence.rs 1278
+# D-1（2026-10-25）：下列 +1 = 守门属性 `#[allow(dead_code)]`（心跳驱动器句柄**仅测试读**）
+# 而非逻辑增长；同批其余被钉的 size 项全是**净减少**（删真死代码）。
+size crates/adapters/gateway/src/presence.rs 1279
 size crates/adapters/sdk/src/client.rs 1552
 size crates/adapters/tui/src/state.rs 1585
 size crates/capabilities/tools/src/device/device_control.rs 3144

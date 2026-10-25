@@ -116,11 +116,14 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
     let store = continuation_guard::default_store();
     let session_key = session.clone().unwrap_or_else(|| "default".to_string());
     let now_ms = apeireth_runtime_assembly::now_epoch_ms();
-    if let Some(notice) = continuation_guard::take_interrupted_notice(&store, &session_key, now_ms)
-    {
-        eprintln!("{notice}");
+    // 轮号真值链: 上次中断的快照带着**被中断那轮**的序号 ⇒ 下一轮 = 它 + 1；
+    // 无中断记录 ⇒ 第 1 轮。（此前恒传 1 ⇒ 提示语永远说「第 1 轮」。）
+    let interrupted = continuation_guard::take_interrupted_notice(&store, &session_key, now_ms);
+    if let Some(notice) = interrupted.as_ref() {
+        eprintln!("{}", notice.text);
     }
-    let open_turn = match continuation_guard::begin_turn(&store, &session_key, now_ms, 1) {
+    let next_turn = interrupted.map_or(1, |notice| notice.turn.saturating_add(1));
+    let open_turn = match continuation_guard::begin_turn(&store, &session_key, now_ms, next_turn) {
         Ok(open) => Some(open),
         Err(error) => {
             // 快照落不了盘不该阻止对话本身（检测能力缺失 ≠ 功能不可用），如实说明。

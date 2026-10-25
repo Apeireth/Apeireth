@@ -20,6 +20,7 @@
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入). W2 与 E4/F4/F6 共享
 //!   `LlmFactory` trait 边界; **W2 真接** (`llm_factory()` 返 Some).
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use apeireth_core::kernel::memory::Episode;
 use apeireth_core::kernel::SessionId;
 use apeireth_orchestration::SubagentRole;
