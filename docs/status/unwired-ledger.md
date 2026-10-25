@@ -1180,6 +1180,13 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | `crates/foundation/orchestration/src/continuation.rs` | 断点续行快照（进程重启后带未决工具调用续跑） | ~~runtime 会话存储只有内存实现~~（**前提已过期**，见 §5.4q）；**部分接线（2026-10-25，见 §5.4r）**：回合级中断检测已接进 `apeireth chat`（append-only 续行快照，崩溃留下痕迹、下次启动如实告知，**只报不重放**）；剩余 = 「自动续跑」语义属产品决策（重放有副作用）⇒ **待 owner 裁** |
 | `crates/foundation/orchestration/src/speech_arbiter.rs` | 多主体同台发言权仲裁（排队/TTL/抢占打断/时长平衡） | 全双工未装配（`voice.duplex = not_assembled`） |
 
+**补录（2026-10-25，全仓 `todo!()`/`unimplemented!()` 扫描后补进 A 类 —— 原表漏收）**：
+
+| 模块 | 缺的能力 | 接线点 / 状态 |
+|---|---|---|
+| `crates/adapters/sdk/src/client.rs` 的 `QuotaStub::check` | 客户端配额预检 | 🔶 **已修错误类，能力仍缺**：原先返 `QuotaExceeded` ⇒ 宿主分类为 `RateLimited` ⇒ **「能力没实现」被报成「配额用完了」**（宿主可能提示升级套餐）⇒ 已改 `NotImplemented`（分类 `Internal`、明确不可重试），**报错与真相一致**。**能力本身仍缺**：网关**没有** quota 端点（canonical 路由表里无 `/v1/quota`）⇒ 真接需要「加端点 + 定额度语义」⇒ **待 owner 裁**（且若要精确表达「能力不支持」，需给 `ErrorCategory` 加 `Unsupported` 成员 ⇒ 公开错误面变更 ⇒ 属产品决策） |
+| `crates/adapters/sdk/src/client.rs` 的 `invoke_stream` | 通用 WS 流式工具调用 | 🔶 **诚实桩**：返 `NotImplemented`（不假装）⇒ 缺的是 **SDK 侧 WS 传输**（SDK 依赖里**没有** `tokio-tungstenite`，只有 HTTP 面已实接）+ 网关 canonical 路由**未暴露** WS 入口 ⇒ 真接 = 「SDK 加 WS 依赖 + 网关暴露 WS 路由 + 按 `ws_v1` 帧协议实现」⇒ **架构级接线，待 owner 裁**（新增依赖 + 公开面变更） |
+
 **B 类（重复实现）6 条** —— 不是债：同能力另有主实现。
 `std_sub_supervisor`（桌面侧车真监督器承担）、`stealth_crawler`（web_fetch 工具族承担且信封治理更强）、
 `chronicle_crystallizer`（consolidation + dreaming 承担）、`hallways`（`AssociationStore` 已生产接线）、
