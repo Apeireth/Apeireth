@@ -1,0 +1,25 @@
+# 文档源文件路径悬空基线（scripts/check_doc_paths.py 生成/校验；**只减不增**）
+#
+# 每行: <相对路径>  # <理由>
+#
+# ============================================================================
+# 口径
+# ============================================================================
+# **只判「crate 存在、文件没了」**这一种悬空 —— 即「文档说这个文件在这里，
+# 但它已经不在了」⇒ 多半是 **crate 重组后路径变了**（2026-10-25 一次实测：
+# 26 处真悬空，19 处是 `engine/runtime/src/canonical/*` → `engine/runtime-assembly/...`
+# 的整 crate 搬迁，文档没跟上）。
+#
+# **不判**以下两类（它们不是「说谎」，是「还没建」或「已经归档」）：
+#   ① **整 crate 都不存在** ⇒ 那是**规划中/待建**的 crate
+#      （如 `crates/engine/preference_learning/...`、蓝图里的「目标路径」）；
+#   ② 文档本身就是**历史记录/归档卷宗**（按 `check_doc_caliber.py` 的
+#      历史文档判据剔除：`docs/archive/` 等目录 + 历史横幅 + 日期/round 命名）。
+#
+# ============================================================================
+# 已知例外（6 条，逐条有理由；**新增例外必须写理由**）
+# ============================================================================
+
+docs/01-architecture/v2-line-by-line-verification-and-upgrade-blueprint.md  # 蓝图里的「目标路径」= **待建**文件（3 条：digital_life_roamer / portable_vault / p2p_mesh_sync）⇒ 判据按「整 crate 存在但文件未建」不适用；等蓝图落地后应改为现址，届时本行可删
+docs/04-internal/05-plans/stored-doc-consumer-migration.md  # 迁移**计划**里写的「未来落点」（sandbox/quota.rs + lark/auth.rs）⇒ 计划文档描述的是**将要**写的文件，不是现状断言
+docs/04-internal/backend-enhancement/00-backlog.md  # 历史台账条目 D29 记录「claims.yaml 曾指向**已归档**文件」⇒ 引用的是**过去的事实**（原文件已移到 `legacy/archived/prompt-stabilizer/`）
