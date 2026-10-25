@@ -227,10 +227,14 @@ dependencies = [
 name = "apeireth-input-fuzz"
 version = "0.0.0"
 dependencies = [
+ "apeireth-core",
  "apeireth-gateway",
+ "apeireth-governance",
+ "apeireth-plugin",
  "apeireth-protocol",
  "apeireth-tools-canonical",
  "libfuzzer-sys",
+ "serde",
  "serde_json",
 ]
 

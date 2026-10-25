@@ -52,16 +52,69 @@ impl UniversalForgetFacade {
         at_ms: i64,
         reason: Option<&str>,
     ) -> Result<UniversalForgetOutcome, String> {
-        if principal_id.trim().is_empty() {
+        let principal = principal_id.trim().to_owned();
+        let reason = reason.unwrap_or("universal forget").to_owned();
+        if principal.is_empty() {
             return Err("principal_id is empty".into());
         }
-        let principal = principal_id.to_owned();
+        pool.write_sync(move |conn| forget_principal_on_conn(conn, &principal, at_ms, &reason))
+            .map_err(|error| error.to_string())
+    }
+}
+
+impl UniversalForgetFacade {
+    /// 按 principal **全量**遗忘（**生产入口**：store 持有 `Mutex<Connection>`，
+    /// 不走 pool）。
+    ///
+    /// 见 [`forget_principal_on_conn`] 的语义说明（一个事务清 5 账、
+    /// protected persona 整体拒绝）。
+    pub fn forget_principal(
+        store: &crate::SqliteMemoryStore,
+        principal_id: &str,
+        at_ms: i64,
+        reason: Option<&str>,
+    ) -> Result<UniversalForgetOutcome, String> {
+        let principal = principal_id.trim().to_owned();
         let reason = reason.unwrap_or("universal forget").to_owned();
-        pool.write_sync(move |conn| {
+        if principal.is_empty() {
+            return Err("principal_id is empty".into());
+        }
+        let mut conn = store.conn().map_err(|error| error.to_string())?;
+        forget_principal_on_conn(&mut conn, &principal, at_ms, &reason)
+            .map_err(|error| error.to_string())
+    }
+}
+
+/// 按 principal **全量**遗忘：跨 5 账（episode / preference / commitment /
+/// temporal / persona）一个事务清完。
+///
+/// # 为什么是「一个事务」
+///
+/// 被遗忘权（GDPR 式的「删除主体」请求）要求**要么全清、要么不清**。
+/// 分多次删会出现「删了一半」的中间态 —— 那种状态比没删更糟：
+/// 用户以为已删除，实际还留着。所以五张账的清理必须原子。
+///
+/// # 为什么 protected persona 会拒绝
+///
+/// `persona_profile_governance` 里 `protected=1` 的行是**用户明确要求保留**的
+/// （例如「记住我喜欢深色主题」这类主动声明）。全量遗忘撞上它 ⇒ 整体拒绝，
+/// 而不是**静默跳过** —— 静默跳过会让用户以为「全删了」而实际留了一部分。
+///
+/// 处置由调用方决定：要么先解除保护再删，要么告知用户「有 N 条受保护的记录保留」。
+fn forget_principal_on_conn(
+    conn: &mut rusqlite::Connection,
+    principal: &str,
+    at_ms: i64,
+    reason: &str,
+) -> Result<UniversalForgetOutcome, apeireth_storage::StorageError> {
+    {
+        {
             let tx = conn.transaction()?;
             let protected_personas: i64 = tx.query_row("SELECT COUNT(*) FROM persona_profile_governance WHERE subject_id=?1 AND protected=1 AND tombstoned_at_ms IS NULL", rusqlite::params![principal], |row| row.get(0))?;
             if protected_personas > 0 {
-                return Err(apeireth_storage::StorageError::InvalidConfiguration("principal has protected persona memory".into()));
+                return Err(apeireth_storage::StorageError::InvalidConfiguration(
+                    "principal has protected persona memory".into(),
+                ));
             }
             if table_exists(&tx, "user_preferences")? {
                 tx.execute("DELETE FROM user_preferences WHERE session_id IN (SELECT session_id FROM memory_principal_sessions WHERE principal_id=?1)", rusqlite::params![principal])?;
@@ -69,7 +122,7 @@ impl UniversalForgetFacade {
             tx.execute("INSERT OR IGNORE INTO episode_governance (episode_id,status,revision,reason,forgotten_at) SELECT e.id,'forgotten',0,?1,?2 FROM episodes e JOIN memory_principal_sessions ps ON ps.session_id=e.session_id WHERE ps.principal_id=?3", rusqlite::params![reason, at_ms, principal])?;
             tx.execute("UPDATE commitments SET status='cancelled', retracted_at_ms=?1, updated_at_ms=?1, revision=revision+1 WHERE subject_id=?2 AND status='open' AND retracted_at_ms IS NULL", rusqlite::params![at_ms, principal])?;
             tx.execute("INSERT INTO commitment_events (id,commitment_id,event_type,event_at_ms,payload_json,created_at_ms) SELECT printf('universal-forget:%s:%d',id,?1),id,'universal_forget',?1,json_object('reason',?2),?1 FROM commitments WHERE subject_id=?3 AND retracted_at_ms=?1", rusqlite::params![at_ms, reason, principal])?;
-            let relation_rows: Vec<(String,String,String,String)> = {
+            let relation_rows: Vec<(String, String, String, String)> = {
                 let mut stmt = tx.prepare("SELECT relation_key, subject_id, predicate, object_id FROM temporal_graph_facts WHERE subject_id=?1 AND retracted_at_ms IS NULL GROUP BY relation_key")?;
                 let rows = stmt
                     .query_map(rusqlite::params![principal], |row| {
@@ -81,12 +134,18 @@ impl UniversalForgetFacade {
             for (relation_key, subject, predicate, object) in relation_rows {
                 let id = format!("universal-forget:{relation_key}:{at_ms}");
                 tx.execute("INSERT OR IGNORE INTO temporal_graph_facts (id,relation_key,subject_id,predicate,object_id,valid_from_ms,valid_until_ms,believed_at_ms,scope_json,provenance_json,confidence,revision,retracted_at_ms,created_at_ms) SELECT ?1,relation_key,subject_id,predicate,object_id,?2,?2,?2,scope_json,json_object('reason',?3),confidence,COALESCE(MAX(revision)+1,0),?2,?2 FROM temporal_graph_facts WHERE relation_key=?4", rusqlite::params![id,at_ms,reason,relation_key])?;
-                let _ = (subject,predicate,object);
+                let _ = (subject, predicate, object);
             }
             tx.execute("UPDATE persona_profile_governance SET tombstoned_at_ms=?1,revision=revision+1,updated_at_ms=?1,reason=?2 WHERE subject_id=?3 AND protected=0 AND tombstoned_at_ms IS NULL", rusqlite::params![at_ms,reason,principal])?;
             tx.commit()?;
-            Ok(UniversalForgetOutcome { episode:true, commitment:true, temporal:true, persona:true, preference:false })
-        }).map_err(|error| error.to_string())
+            Ok(UniversalForgetOutcome {
+                episode: true,
+                commitment: true,
+                temporal: true,
+                persona: true,
+                preference: false,
+            })
+        }
     }
 }
 

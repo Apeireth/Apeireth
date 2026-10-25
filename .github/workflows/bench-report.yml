@@ -1,17 +1,38 @@
-name: Bench report (report-only, 不判红)
+name: Bench report (report-only, 默认不判红)
 
-# 为什么**只报告不判红**：
-# 共享 runner 上墙钟基准噪声很大（同代码两次跑差异可达数十 %）。把噪声做成门禁，
-# 会得到"会红但不该红"的红灯 —— 那比没有门禁更糟（和「绿灯骗人」对称的另一种病）。
+# ─────────────────────────────────────────────────────────────────────────────
+# 这个仓库的「基准」**不是 criterion bench**，而是自写的基准 harness 二进制
+# `apeireth-bench-harness`（`benches/`，手写 `Instant` 计时，零第三方依赖）。
+# 所以正确跑法是：
+#     cargo run --release -p apeireth-bench-harness -- all
+# 而不是 `cargo bench --workspace`（仓里没有 `[[bench]]` 目标，那条命令只会
+# 跑一遍「测试的 bench 模式」，产不出任何数据）。
 #
-# 所以本 job 的产出是**数据**：结果落 artifact + job summary，供人工定期比对趋势。
-# 若将来要升级为门禁，正确做法是换成**确定性指标**（分配次数 / 指令数），
+# ⚠️ 修正记录：本文件初版（PR #81）写的是 `cargo bench --workspace --locked`，
+# 那是**错的** —— 实测产不出数据。2026-10-24 改正。
+#
+# ─── 为什么默认**只报告不判红** ───────────────────────────────────────────────
+# 共享 runner 上墙钟噪声很大（同代码两次跑差异可达数十 %），把噪声做成门禁会得到
+# 「会红但不该红」的红灯 —— 那比没有门禁更糟（与「绿灯骗人」对称的另一种病）。
+#
+# 但仓里**已经有**一套现成的判定机制：harness 每次输出都带
+#   判定: ✅ 达标 (P50 x ms ≤ 目标)  /  ❌ 未达标 (P50 x ms, 差距 N 倍 vs 目标)
+# 以及机器可读的 `ROW|...` 结构化行。**本 job 直接用这套既有判定**，不另造阈值：
+#   - 默认：只把 ❌ 行**高亮**进 job summary，人工看；
+#   - `workflow_dispatch` 传 `strict=true`：任一 ❌ 即 job 失败（供 owner 临时收紧）。
+# 将来若要常态化为门禁，正确做法是换**确定性指标**（分配次数 / 指令数），
 # 而不是收紧墙钟阈值。
+# ─────────────────────────────────────────────────────────────────────────────
 
 on:
   schedule:
     - cron: '30 18 * * 0'   # 每周日 18:30 UTC
   workflow_dispatch:
+    inputs:
+      strict:
+        description: '严格模式：任一基准未达标即 job 失败'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -30,26 +51,55 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
-      - name: cargo bench（结果只记录，不判红）
+      - name: 跑基准 harness（正确跑法，不是 cargo bench）
         run: |
-          cargo bench --workspace --locked 2>&1 | tee bench-output.txt
+          set -o pipefail
+          cargo run --release -p apeireth-bench-harness -- all 2>&1 | tee bench-output.txt
           echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         shell: bash
         id: bench
 
-      - name: 摘要（人工看趋势用）
+      - name: 摘要（用 harness 既有判定，不另造阈值）
         if: always()
         run: |
           {
-            echo "## Bench 报告（report-only）"
+            echo "## 基准报告"
             echo ""
-            echo "⚠️ 本 job **不判红**：共享 runner 墙钟噪声大，做成门禁会产生假红灯。"
-            echo "要升级为门禁，请改用确定性指标（分配次数 / 指令数）。"
+            echo "⚠️ 默认**只报告不判红**：共享 runner 墙钟噪声大，做成常态门禁会产生假红灯。"
+            echo "要临时收紧：手动触发本 workflow 并传 \`strict=true\`。"
             echo ""
-            echo '```'
-            grep -E "time:|thrpt:" bench-output.txt | head -80 || echo "(未采到 time:/thrpt: 行，见 artifact)"
-            echo '```'
+            if [ -f bench-output.txt ]; then
+              echo "### ❌ 未达标（harness 既有判定：P50 vs 目标）"
+              echo ""
+              echo '```'
+              grep -E "^ROW\|" bench-output.txt | awk -F'|' '$14 ~ /未达标/ {print "  " $2 " — " $14}' | head -20
+              echo '```'
+              echo ""
+              echo "### ✅ 已达标"
+              echo ""
+              echo '```'
+              grep -E "^ROW\|" bench-output.txt | awk -F'|' '$14 ~ /达标/ {print "  " $2 " — P50 " $10 " " $6}' | head -20
+              echo '```'
+              echo ""
+              echo "### 仅记录（无目标行）"
+              echo ""
+              echo '```'
+              grep -E "^ROW\|" bench-output.txt | awk -F'|' '$14 ~ /无目标行/ {print "  " $2}' | head -20
+              echo '```'
+            else
+              echo "（未采到 bench 输出，见 artifact）"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 严格模式：任一未达标即失败
+        if: always() && (github.event.inputs.strict == 'true')
+        run: |
+          if grep -E "^ROW\|" bench-output.txt | awk -F'|' '$14 ~ /未达标/ {found=1} END {exit !found}'; then
+            echo "严格模式：存在未达标基准 → job 失败"
+            grep -E "^ROW\|" bench-output.txt | awk -F'|' '$14 ~ /未达标/ {print "  " $2 " — " $14}' | head -20
+            exit 1
+          fi
+          echo "严格模式：全部达标"
 
       - name: Upload bench output
         if: always()

@@ -442,6 +442,56 @@ pub async fn delete_user(
     let endpoint = format!("/v1/admin/users/{user_id}");
     match service.remove(&user_id) {
         Ok(removed) => {
+            // **被遗忘权**：删用户 ⇒ 连记忆一起删。
+            //
+            // 此前这里只删用户表，**用户的记忆还留着** —— 而「删除主体」在隐私
+            // 语义上是「连记忆一起删」。单条 episode 遗忘不够（那是用户手动点某条）。
+            //
+            // 顺序很重要：**先清记忆，再落用户表**。反过来会在清记忆失败时留下
+            // 「用户已删、记忆还在」的中间态 —— 那比没删更糟（用户以为已删，
+            // 实际还留着）。
+            //
+            // 记忆面**未注入**时不阻断删户（网关可能本就没接记忆），但要在
+            // 响应里**如实说清**（`memory_forgotten: false` + 原因），
+            // 不让调用方以为「记忆也清了」。
+            let mut memory_forgotten = false;
+            let memory_note: Option<String>;
+            match state.services.memory_governance.as_ref() {
+                Some(governance) => {
+                    match governance
+                        .forget_principal(&removed.user_id, Some("user removed"))
+                        .await
+                    {
+                        Ok(outcome) => {
+                            memory_forgotten = true;
+                            memory_note = Some(format!(
+                                "episode={} preference={} commitment={} temporal={} persona={}",
+                                outcome.episode,
+                                outcome.preference,
+                                outcome.commitment,
+                                outcome.temporal,
+                                outcome.persona
+                            ));
+                        }
+                        Err(error) => {
+                            // 记忆面**拒绝**（例如有 protected 人格记录）——
+                            // 硬失败：不能「用户已删、记忆还在」却返回 200。
+                            return (
+                                StatusCode::CONFLICT,
+                                Json(serde_json::json!({
+                                    "error": "memory.forget_refused",
+                                    "user_id": removed.user_id,
+                                    "detail": error,
+                                })),
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+                None => {
+                    memory_note = Some("记忆面未注入（memory.governance 未装配）".to_string());
+                }
+            }
             // V2-c 域标注: 管理动作 = 目标域 (被删用户的实际域引用)。
             let domain_label = target_domain_label(removed.domain.as_deref(), &removed.user_id);
             record_user_action(
@@ -455,7 +505,12 @@ pub async fn delete_user(
             );
             (
                 StatusCode::OK,
-                Json(serde_json::json!({ "deleted": true, "user_id": removed.user_id })),
+                Json(serde_json::json!({
+                    "deleted": true,
+                    "user_id": removed.user_id,
+                    "memory_forgotten": memory_forgotten,
+                    "memory_note": memory_note,
+                })),
             )
                 .into_response()
         }

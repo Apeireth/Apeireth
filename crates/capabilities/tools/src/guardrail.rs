@@ -135,7 +135,13 @@ fn find_bearer_span(text: &str) -> Option<(usize, usize)> {
         let kw_start = from + rel;
         let after_kw = kw_start + "bearer".len();
         // 回看窗口: 头部语法上下文 (`Authorization` 与之相隔通常 < 32 字节)。
-        let window_start = kw_start.saturating_sub(64);
+        let mut window_start = kw_start.saturating_sub(64);
+        // `kw_start - 64` 可能落在**多字节字符中间** → 切片直接 panic
+        // (fuzz 实测: 含多字节字符的输入报 `byte index ... is not a char boundary`)。
+        // 向后推进到字符边界: 窗口最多缩短 1..=3 字节, 回看窗口语义不受影响。
+        while window_start < kw_start && !text.is_char_boundary(window_start) {
+            window_start += 1;
+        }
         let context_ok = find_ascii_ci(&text[window_start..kw_start], "authorization").is_some();
         // 关键字前不得紧贴字母数字 (避免词内命中)。
         let boundary_ok = kw_start == 0 || !hay[kw_start - 1].is_ascii_alphanumeric();
@@ -236,6 +242,23 @@ impl ToolGuardrail {
     pub fn verify_shell_command(command_line: &str) -> Result<(), PreCallGuardError> {
         let trimmed = command_line.trim();
         let lower = trimmed.to_lowercase();
+        // 空白归一化后再做禁词匹配: **多空白折叠成单空格**。
+        //
+        // 为什么必须归一化 (2026-10-24 fuzz 发现的**真实绕过通道**):
+        // shell 的参数分隔符可以是任意空白 —— 空格 / TAB / 换行 / 连续空格。
+        // 下面两张禁词表里的项都是**用单空格书写**的 (`rm -rf /`、`netsh` + `" set"`),
+        // 若按原样做子串匹配, 那么 `netsh<TAB>set advfirewall ...` 是一条**合法命令**
+        // 却匹配不到 `" set"` (前导是 TAB 不是空格) → 直接绕过「高危系统配置修改」拦截。
+        //
+        // 实测(本机, 修复前):
+        //   "netsh set advfirewall x"   → 拦截 ✅
+        //   "netsh\tset advfirewall x"  → **放行** ❌   ← 绕过
+        //   "netsh\nset advfirewall x"  → **放行** ❌   ← 绕过
+        //
+        // 归一化只会让判定**更严格**(禁词本身是单空格形态), 不会放宽任何原有拦截。
+        // 诚实边界: 本函数仍是**子串启发式**, 不是沙箱 —— `net"sh" set`、变量拼接、
+        // 绝对路径前缀等仍不在其覆盖范围; 真正的兜底是沙箱 + 审批 (见本函数上文)。
+        let lower = lower.split_whitespace().collect::<Vec<_>>().join(" ");
 
         // 高危不可逆破坏性命令
         let forbidden_commands = [
@@ -290,141 +313,252 @@ impl ToolGuardrail {
         Ok(())
     }
 
+    /// 反复脱敏同族**全部**匹配, 而不只是第一处。
+    ///
+    /// 2026-10-24 fuzz 发现的**真实泄密路径**: 改动前每族只处理第一处匹配 ——
+    /// 一份工具输出里若出现两个同类凭证, 第二个会**原样出境**。实测修复前:
+    /// ```text
+    /// 输入  "xoxb-AAA... and xoxb-BBB..."
+    /// 输出  "[REDACTED_SLACK_TOKEN] and xoxb-BBB..."   ← 第二个明文留下
+    /// ```
+    /// 三族（OpenAI / AWS / Slack）实测同样如此。
+    /// 绊线的职责是「不让凭据出境」, 只脱敏一处等于这道门形同虚设。
+    ///
+    /// 返回是否命中过（供调用方登记 `leaked_kinds`）。
+    #[allow(clippy::needless_pass_by_value)]
+    fn redact_all(
+        buf: &mut String,
+        prefix: &str,
+        is_delim: impl Fn(char) -> bool,
+        accept: impl Fn(&str) -> bool,
+        label: &str,
+    ) -> bool {
+        let mut hit = false;
+        let mut cursor = 0usize;
+        // `cursor` 始终落在 char 边界上: prefix 全为 ASCII, `start + prefix.len()` 仍是边界。
+        while cursor < buf.len() {
+            let Some(rel) = buf[cursor..].find(prefix) else {
+                break;
+            };
+            let start = cursor + rel;
+            let tail = &buf[start..];
+            let end = tail.find(|c: char| is_delim(c)).unwrap_or(tail.len());
+            let token = &tail[..end];
+            if accept(token) {
+                hit = true;
+                let replaced = buf.replace(token, label);
+                debug_assert!(
+                    !label.contains(prefix),
+                    "替换标签不得含本族 prefix, 否则会死循环"
+                );
+                *buf = replaced;
+                cursor = 0;
+            } else {
+                // 这个 prefix 后面不是合法凭证: 跳过它继续找, 不能就此收手
+                // (否则「先出现一个短 sk- 垃圾 + 后面一个真 key」就漏了)。
+                cursor = start + prefix.len();
+            }
+        }
+        hit
+    }
+
     /// 后置出站凭据绊线扫描与脱敏.
     pub fn scan_and_sanitize_output(raw_output: &str) -> TripwireScanResult {
         let mut sanitized = raw_output.to_string();
         let mut leaked_kinds = Vec::new();
 
-        // 1. OpenAI Key 扫描 (sk-...)
-        if let Some(pos) = sanitized.find("sk-") {
-            let candidate = &sanitized[pos..];
-            let end = candidate
-                .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
-                .unwrap_or(candidate.len());
-            let token = &candidate[..end];
-            if token.len() >= 20 {
+        // ── 跑到**定点**: 反复跑整条族序列, 直到文本不再变化 (最多 MAX_PASSES 轮) ──
+        //
+        // 为什么必须定点 (2026-10-24 fuzz 发现的真实缺陷):
+        // 各族**顺序相关** —— 前面某族判「不合格」的候选, 可能被**后面**某族的替换
+        // 改成「合格」。实测:
+        //   输入 `...sk-aPRIVATE KEY-----\t`
+        //   ① OpenAI 族 (先跑): 候选 `sk-aPRIVATE` 长度 11 < 20 → **放行**
+        //   ④ PEM 族: 把 `PRIVATE KEY-----` 换成 `REDACTED_PEM_MARKER]`
+        //   ⇒ 同一处变成 `sk-aREDACTED_PEM_MARKER]` 长度 24 ≥ 20 → 二次扫描才报
+        //   ⇒ 绊线**不幂等**: 报告与脱敏两次结果不一致
+        //
+        // 跑到定点同时解决两件事: ①幂等 (脱敏结果再扫一遍必然干净);
+        // ②「该带走的一枚都不留」(不会因为族序漏掉任何一枚)。
+        const MAX_PASSES: usize = 8;
+        for _pass in 0..MAX_PASSES {
+            let before = sanitized.clone();
+
+            // 1. OpenAI Key 扫描 (sk-...) —— **脱敏全部匹配**, 不只第一处。
+            if Self::redact_all(
+                &mut sanitized,
+                "sk-",
+                |c| c.is_whitespace() || c == '"' || c == '\'',
+                |token| token.len() >= 20,
+                "[REDACTED_OPENAI_KEY]",
+            ) {
                 leaked_kinds.push(LeakedCredentialKind::OpenAiKey);
-                sanitized = sanitized.replace(token, "[REDACTED_OPENAI_KEY]");
             }
-        }
 
-        // 2. AWS Key 扫描 (AKIA...)
-        if let Some(pos) = sanitized.find("AKIA") {
-            let candidate = &sanitized[pos..];
-            let end = candidate
-                .find(|c: char| !c.is_ascii_alphanumeric())
-                .unwrap_or(candidate.len());
-            let token = &candidate[..end];
-            if token.len() >= 16 && token.len() <= 32 {
+            // 2. AWS Key 扫描 (AKIA...) —— **脱敏全部匹配**。
+            if Self::redact_all(
+                &mut sanitized,
+                "AKIA",
+                |c| !c.is_ascii_alphanumeric(),
+                |token| token.len() >= 16 && token.len() <= 32,
+                "[REDACTED_AWS_KEY]",
+            ) {
                 leaked_kinds.push(LeakedCredentialKind::AwsAccessKey);
-                sanitized = sanitized.replace(token, "[REDACTED_AWS_KEY]");
             }
-        }
 
-        // 3. GitHub PAT 扫描 (ghp_... 或 github_pat_...)
-        if let Some(pos) = sanitized.find("ghp_") {
-            let candidate = &sanitized[pos..];
-            let end = candidate
-                .find(|c: char| !c.is_ascii_alphanumeric())
-                .unwrap_or(candidate.len());
-            let token = &candidate[..end];
-            if token.len() >= 36 {
+            // 3. GitHub PAT 扫描 (ghp_...) —— **脱敏全部匹配**。
+            if Self::redact_all(
+                &mut sanitized,
+                "ghp_",
+                |c| !c.is_ascii_alphanumeric(),
+                |token| token.len() >= 36,
+                "[REDACTED_GITHUB_PAT]",
+            ) {
                 leaked_kinds.push(LeakedCredentialKind::GitHubPat);
-                sanitized = sanitized.replace(token, "[REDACTED_GITHUB_PAT]");
             }
-        }
 
-        // 4. PEM 私钥块扫描 (头部 → END 行整块换标签)。只换头部会把 base64
-        //    私钥体留在输出里 —— 确证级泄漏债, 整块收口; 无 END 行的截断块
-        //    退化为头部替换 (0 装: 不声称截断块全扫)。
-        if sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----") {
-            leaked_kinds.push(LeakedCredentialKind::PemPrivateKey);
-            if let Some(start) = sanitized.find("-----BEGIN") {
-                let end_marker = sanitized[start..]
-                    .find("-----END")
-                    .map(|offset| start + offset);
-                let block_end = end_marker.and_then(|end_marker| {
-                    sanitized[end_marker..]
+            // 4. PEM 私钥块扫描 (头部 → END 行整块换标签)。只换头部会把 base64
+            //    私钥体留在输出里 —— 确证级泄漏债, 整块收口; 无 END 行的截断块
+            //    退化为头部替换 (0 装: 不声称截断块全扫)。
+            // **脱敏全部块**: 一份输出里可能有多块私钥, 只换第一块会让其余明文出境
+            // (2026-10-24 fuzz 发现: 两块 PEM 只脱敏了第一块)。
+            let mut pem_hit = false;
+            while sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----") {
+                pem_hit = true;
+                if let Some(start) = sanitized.find("-----BEGIN") {
+                    let end_marker = sanitized[start..]
+                        .find("-----END")
+                        .map(|offset| start + offset);
+                    let block_end = end_marker.and_then(|end_marker| {
+                        sanitized[end_marker..]
+                            .find("KEY-----")
+                            .map(|offset| end_marker + offset + "KEY-----".len())
+                    });
+                    let fallback_end = sanitized[start..]
                         .find("KEY-----")
-                        .map(|offset| end_marker + offset + "KEY-----".len())
-                });
-                let fallback_end = sanitized[start..]
-                    .find("KEY-----")
-                    .map(|offset| start + offset + "KEY-----".len());
-                if let Some(full_end) = block_end.or(fallback_end) {
-                    let block = &sanitized[start..full_end];
-                    sanitized = sanitized.replace(block, "[REDACTED_PEM_PRIVATE_KEY]");
+                        .map(|offset| start + offset + "KEY-----".len());
+                    if let Some(full_end) = block_end.or(fallback_end) {
+                        let block = &sanitized[start..full_end];
+                        sanitized = sanitized.replace(block, "[REDACTED_PEM_PRIVATE_KEY]");
+                        continue;
+                    }
+                }
+                // 走到这里说明本块不可定位 (畸形), 再循环也无进展 —— 退出避免死循环。
+                break;
+            }
+            // 残留的**裸标记**: 输出里出现 `PRIVATE KEY-----` 却没有可整块红掉的块
+            // (缺 END 行 / BEGIN 在标记之后 —— fuzz 实测的形态)。
+            // 改动前此处只「报告泄露」不「脱敏」: 二次扫描仍报同一泄露 → **绊线不幂等**,
+            // 而且明文碎片其实一直留在输出里。这里把裸标记一并替换掉,
+            // 保证**脱敏后的输出不再含 `PRIVATE KEY-----`** 这条硬不变量。
+            if sanitized.contains("PRIVATE KEY-----") {
+                pem_hit = true;
+                sanitized = sanitized.replace("PRIVATE KEY-----", "REDACTED_PEM_MARKER]");
+            }
+            if pem_hit {
+                leaked_kinds.push(LeakedCredentialKind::PemPrivateKey);
+            }
+
+            // 5. Slack Token 扫描 (xox[baprs]-...)
+            let slack_prefixes = ["xoxb-", "xoxp-", "xoxa-", "xoxr-", "xoxs-"];
+            let mut slack_hit = false;
+            for prefix in &slack_prefixes {
+                // **脱敏全部匹配**（每个前缀各自循环）。
+                if Self::redact_all(
+                    &mut sanitized,
+                    prefix,
+                    |c| c.is_whitespace() || c == '"' || c == '\'',
+                    |token| token.len() >= 20,
+                    "[REDACTED_SLACK_TOKEN]",
+                ) {
+                    slack_hit = true;
                 }
             }
-        }
-
-        // 5. Slack Token 扫描 (xox[baprs]-...)
-        let slack_prefixes = ["xoxb-", "xoxp-", "xoxa-", "xoxr-", "xoxs-"];
-        for prefix in &slack_prefixes {
-            if let Some(pos) = sanitized.find(prefix) {
-                let candidate = &sanitized[pos..];
-                let end = candidate
-                    .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
-                    .unwrap_or(candidate.len());
-                let token = &candidate[..end];
-                if token.len() >= 20 {
-                    leaked_kinds.push(LeakedCredentialKind::SlackToken);
-                    sanitized = sanitized.replace(token, "[REDACTED_SLACK_TOKEN]");
-                }
+            if slack_hit {
+                leaked_kinds.push(LeakedCredentialKind::SlackToken);
             }
-        }
 
-        // 6. JWT 扫描 (header.payload.signature). 此前 `JwtToken` 变体只有声明、
-        //    没有检测面 —— 命名即承诺的空槽, 本批补齐 (D18).
-        if let Some((start, end)) = find_jwt_span(&sanitized) {
-            leaked_kinds.push(LeakedCredentialKind::JwtToken);
-            sanitized.replace_range(start..end, "[REDACTED_JWT]");
-        }
+            // 6. JWT 扫描 (header.payload.signature). 此前 `JwtToken` 变体只有声明、
+            //    没有检测面 —— 命名即承诺的空槽, 本批补齐 (D18).
+            // **脱敏全部匹配**: 一份输出里可能有多枚 JWT, 只换第一枚会让其余明文出境。
+            let mut jwt_hit = false;
+            while let Some((start, end)) = find_jwt_span(&sanitized) {
+                jwt_hit = true;
+                sanitized.replace_range(start..end, "[REDACTED_JWT]");
+            }
+            if jwt_hit {
+                leaked_kinds.push(LeakedCredentialKind::JwtToken);
+            }
 
-        // 7. 通用 Bearer 令牌扫描 (`Bearer <opaque>`). 与 6 同属「声明了类别但没接
-        //    检测」的空槽; 6 先收口后本步只会看到 `[REDACTED_JWT]` 标签 (含 `[`,
-        //    不在 opaque 字母表内), 两族互不吞并。
-        if let Some((start, end)) = find_bearer_span(&sanitized) {
-            leaked_kinds.push(LeakedCredentialKind::GenericBearer);
-            sanitized.replace_range(start..end, "[REDACTED_BEARER]");
-        }
+            // 7. 通用 Bearer 令牌扫描 (`Bearer <opaque>`). 与 6 同属「声明了类别但没接
+            //    检测」的空槽; 6 先收口后本步只会看到 `[REDACTED_JWT]` 标签 (含 `[`,
+            //    不在 opaque 字母表内), 两族互不吞并。
+            // **脱敏全部匹配**（同上：多枚 Bearer 令牌须逐一带走）。
+            let mut bearer_hit = false;
+            while let Some((start, end)) = find_bearer_span(&sanitized) {
+                bearer_hit = true;
+                sanitized.replace_range(start..end, "[REDACTED_BEARER]");
+            }
+            if bearer_hit {
+                leaked_kinds.push(LeakedCredentialKind::GenericBearer);
+            }
 
-        // 8. 明文口令赋值扫描 (W1 §2.2 设计点名: `password\s*[:=]\s*\S+`; 手写等价,
-        //    不引 regex 依赖)。值截断到行尾 (截断而非放行), key 名保留可读。
-        //    匹配用 ASCII 快速比较 —— 不走 to_lowercase 的字节偏移 (中文输出下
-        //    大小写折叠可能移位, 切片会错位)。
-        {
-            let mut search_from = 0usize;
-            while let Some(rel) = find_ascii_ci(&sanitized[search_from..], "password") {
-                let key_start = search_from + rel;
-                let after_key = key_start + "password".len();
-                let rest = &sanitized[after_key..];
-                let trimmed_start = after_key + (rest.len() - rest.trim_start().len());
-                if sanitized[trimmed_start..].starts_with(':')
-                    || sanitized[trimmed_start..].starts_with('=')
-                {
-                    let value_start_raw = &sanitized[trimmed_start + 1..];
-                    let lead = value_start_raw.len() - value_start_raw.trim_start().len();
-                    let value_start = trimmed_start + 1 + lead;
-                    let value_end = sanitized[value_start..]
-                        .find('\n')
-                        .map(|i| value_start + i)
-                        .unwrap_or(sanitized.len());
-                    let value = &sanitized[value_start..value_end];
-                    // 占位符族豁免: 受控占位符不是明文口令 —— 单向截断会毁掉
-                    // 受控回程的还原锚点。替换面只认占位符族, 其余值一律照旧截断。
-                    if value.len() >= 4 && RedactionPlaceholder::parse(value.trim()).is_none() {
-                        leaked_kinds.push(LeakedCredentialKind::PlaintextPassword);
-                        sanitized.replace_range(value_start..value_end, "[REDACTED_PASSWORD]");
-                        // 文本已变, 从头再扫会错位; 多处口令以首处命中为准
-                        // (0 装: 不声称全扫, 单次调用一个命中段)。
+            // 8. 明文口令赋值扫描 (W1 §2.2 设计点名: `password\s*[:=]\s*\S+`; 手写等价,
+            //    不引 regex 依赖)。值截断到行尾 (截断而非放行), key 名保留可读。
+            //    匹配用 ASCII 快速比较 —— 不走 to_lowercase 的字节偏移 (中文输出下
+            //    大小写折叠可能移位, 切片会错位)。
+            {
+                let mut search_from = 0usize;
+                while let Some(rel) = find_ascii_ci(&sanitized[search_from..], "password") {
+                    let key_start = search_from + rel;
+                    let after_key = key_start + "password".len();
+                    let rest = &sanitized[after_key..];
+                    let trimmed_start = after_key + (rest.len() - rest.trim_start().len());
+                    if sanitized[trimmed_start..].starts_with(':')
+                        || sanitized[trimmed_start..].starts_with('=')
+                    {
+                        let value_start_raw = &sanitized[trimmed_start + 1..];
+                        let lead = value_start_raw.len() - value_start_raw.trim_start().len();
+                        let value_start = trimmed_start + 1 + lead;
+                        let value_end = sanitized[value_start..]
+                            .find('\n')
+                            .map(|i| value_start + i)
+                            .unwrap_or(sanitized.len());
+                        let value = &sanitized[value_start..value_end];
+                        // 占位符族豁免: 受控占位符不是明文口令 —— 单向截断会毁掉
+                        // 受控回程的还原锚点。替换面只认占位符族, 其余值一律照旧截断。
+                        // 排除**本函数自己的脱敏标签**: `password=[REDACTED_PASSWORD]` 再扫一遍时
+                        // 标签会被当成长度 >= 4 的明文口令 → 再次截断 → 绊线**不幂等**
+                        // (二次扫描仍报 PlaintextPassword)。标签不是凭据, 必须豁免。
+                        let is_own_label = value.trim().starts_with("[REDACTED_");
+                        if value.len() >= 4
+                            && !is_own_label
+                            && RedactionPlaceholder::parse(value.trim()).is_none()
+                        {
+                            leaked_kinds.push(LeakedCredentialKind::PlaintextPassword);
+                            sanitized.replace_range(value_start..value_end, "[REDACTED_PASSWORD]");
+                            // **脱敏全部匹配**: 改动前此处 `break`, 只处理第一处口令,
+                            // 于是 `password=a\npassword=b` 的第二个值**原样出境**
+                            // (2026-10-24 fuzz 发现)。
+                            // 不能从 0 重扫: 替换后仍是 `password=[REDACTED_PASSWORD]` 形态,
+                            // 重扫会再次命中同一处 → 死循环。故把游标推到替换文本之后。
+                            const LABEL: &str = "[REDACTED_PASSWORD]";
+                            search_from = value_start + LABEL.len();
+                            if search_from >= sanitized.len() {
+                                break;
+                            }
+                            continue;
+                        }
+                    }
+                    search_from = after_key;
+                    if search_from >= sanitized.len() {
                         break;
                     }
                 }
-                search_from = after_key;
-                if search_from >= sanitized.len() {
-                    break;
-                }
+            }
+
+            if sanitized == before {
+                break;
             }
         }
 
@@ -478,6 +612,121 @@ mod tests {
         assert!(ToolGuardrail::verify_shell_command("rm -rf / --no-preserve-root").is_err());
         assert!(ToolGuardrail::verify_shell_command("dd if=/dev/zero of=/dev/sda").is_err());
         assert!(ToolGuardrail::verify_shell_command("cargo test --workspace").is_ok());
+    }
+
+    /// 多字节字符不得让绊线 panic (2026-10-24 fuzz 发现的真实崩溃)。
+    ///
+    /// `find_bearer_span` 的回看窗口起点是 `kw_start - 64`, 该字节偏移可能落在
+    /// 多字节字符**中间** → `&text[window_start..kw_start]` 触发
+    /// `byte index ... is not a char boundary` panic。
+    #[test]
+    fn multibyte_text_never_panics_the_tripwire() {
+        // 构造: 前面若干三字节字符, 使其后 64 字节偏移正好切在字符中间
+        let cases = [
+            format!(
+                "{}Authorization: Bearer {}",
+                "字".repeat(21),
+                "a".repeat(20)
+            ),
+            format!("{}Bearer {}", "汉".repeat(22), "b".repeat(24)),
+            format!("{}bearer {}", "🙂".repeat(17), "c".repeat(18)),
+            "字字字Bearer ddddddddddddddddddddd".to_string(),
+        ];
+        for raw in cases {
+            // 不 panic 即通过; 是否命中凭据由形状决定, 这里不强制。
+            let res = ToolGuardrail::scan_and_sanitize_output(&raw);
+            let _ = ToolGuardrail::scan_and_sanitize_output(&res.sanitized_output);
+        }
+    }
+
+    /// **同类凭据出现多处时必须全部脱敏** (2026-10-24 fuzz 发现的真实泄密路径)。
+    ///
+    /// 修复前每族只处理**第一处**匹配 —— 一份工具输出里若有两个同类凭证,
+    /// 第二个**原样出境**。绊线的职责是「不让凭据出境」, 只脱敏一处等于没有这道门。
+    #[test]
+    fn multiple_credentials_of_same_kind_are_all_redacted() {
+        let cases: [(&str, &str, &str); 5] = [
+            (
+                "两个 Slack token",
+                "xoxb-1234567890abcdefghij and xoxb-9876543210zyxwvutsrq",
+                "xoxb-",
+            ),
+            (
+                "两个 OpenAI key",
+                "sk-proj-aaaaaaaaaaaaaaaaaaaa and sk-proj-bbbbbbbbbbbbbbbbbbbb",
+                "sk-proj-",
+            ),
+            (
+                "两个 AWS key",
+                "AKIAIOSFODNN7EXAMPLE12 and AKIAIOSFODNN7EXAMPLE34",
+                "AKIA",
+            ),
+            (
+                "两个 PEM 私钥块",
+                "-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----\n\
+                 -----BEGIN RSA PRIVATE KEY-----\nBBBB\n-----END RSA PRIVATE KEY-----",
+                "AAAA",
+            ),
+            (
+                "两处明文口令赋值",
+                "password=firstpass\npassword=secondpass",
+                "firstpass",
+            ),
+        ];
+        for (label, raw, secret_fragment) in cases {
+            let res = ToolGuardrail::scan_and_sanitize_output(raw);
+            assert!(
+                !res.sanitized_output.contains(secret_fragment),
+                "{label}: 第二处凭据仍明文留在输出里: {:?}",
+                res.sanitized_output
+            );
+            // 绊线必须**幂等**: 脱敏过的输出再扫一遍应当干净。
+            let again = ToolGuardrail::scan_and_sanitize_output(&res.sanitized_output);
+            assert!(
+                again.is_clean,
+                "{label}: 绊线不幂等, 二次扫描仍检出 {:?}: {:?}",
+                again.leaked_kinds, res.sanitized_output
+            );
+        }
+    }
+
+    /// 空白不得成为绕过通道 (2026-10-24 fuzz 发现的真实绕过)。
+    ///
+    /// shell 的参数分隔符可以是任意空白; 修复前守门按原样匹配单空格书写的禁词,
+    /// 于是 `netsh<TAB>set ...` 这条**合法命令**拦不住。下列三例修复前均放行。
+    #[test]
+    fn whitespace_variants_cannot_bypass_command_guard() {
+        // 高危不可逆命令: 多空白形态
+        for cmd in [
+            "rm  -rf /",
+            "rm\t-rf /",
+            "rm\n-rf /",
+            "dd  if=/dev/zero of=/dev/sda",
+            "dd\tif=/dev/zero of=/dev/sda",
+            "format  c:",
+        ] {
+            assert!(
+                ToolGuardrail::verify_shell_command(cmd).is_err(),
+                "多空白形态必须仍被拦: {cmd:?}"
+            );
+        }
+        // netsh 写入类: 动词前的分隔符为 TAB / 换行 / 多空格
+        for cmd in [
+            "netsh set advfirewall x",
+            "netsh  set advfirewall x",
+            "netsh\tset advfirewall x",
+            "netsh\nset advfirewall x",
+            "netsh\t\tadd rule x",
+            "netsh\nreset logfile",
+        ] {
+            assert!(
+                ToolGuardrail::verify_shell_command(cmd).is_err(),
+                "netsh 写入类多空白形态必须仍被拦: {cmd:?}"
+            );
+        }
+        // 只读形态仍放行 (否定式保守不得扩大成误伤)
+        assert!(ToolGuardrail::verify_shell_command("netsh show rule name=all").is_ok());
+        assert!(ToolGuardrail::verify_shell_command("netsh  display  config").is_ok());
     }
 
     #[test]
