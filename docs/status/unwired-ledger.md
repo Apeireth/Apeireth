@@ -1271,6 +1271,29 @@ owner 裁定 D-7 = C：**只做文档边界说明**，不改 SDK 代码（`crate
 `nightwatch` 的 `min_idle_secs` 是「等空闲」的**活动闸**，方向相反。
 ⇒ 所以「补真实生产者」这条路在当前产品面里**没有落点** ⇒ 保留为预留词是正确的。
 
+### 5.5w CI 平台差异暴露的两个**既有**缺陷（2026-10-25 18:00，win/mac 红了才发现）
+
+本轮 CI 在 **windows-latest / macos-latest** 上红了两条，而 **Linux 本地全绿**
+⇒ ⇒ **平台差异被本地环境掩盖**（这正是「本地门禁 ≠ CI 门禁」的另一面：
+不只命令不同，**平台也不同**）。两条都**不是**本轮改动引起的（是既有缺陷）：
+
+1. **`chain_audit::stale_lock_from_dead_process_is_taken_over`**（win + mac 都红）
+   —— 根因：网关的 `process_alive` **只在 Linux 用 `/proc` 判活**，
+   **其它平台一律返回「存活」** ⇒ 「持有进程已死 ⇒ 陈旧锁可被接管」
+   在 macOS/Windows 上**永远不成立** ⇒ 一次崩溃就把审计链**永久锁死**。
+   ⇒ **修法**：改用仓内已有的**跨平台**实现
+   `apeireth_core::storage_atomic::pid_alive`（unix 走 `kill(pid,0)`、
+   Windows 走 `OpenProcess`、其它平台保守视为存活）⇒ 一处口径、全平台一致。
+2. **`the_cli_bootstrap_routes_an_openai_model_to_provider_openai_compatible`**（win 独有）
+   —— 根因：测试的本地 mock 服务**只 `read` 一次就回响应**。若那次只读到
+   **请求头**（body 还没到），客户端仍在写 body 时服务端已关闭 ⇒
+   Windows 上收到 RST ⇒ 客户端把请求判成「error sending request」。
+   ⇒ **修法**：mock 改为**读完整请求**（按 `content-length`）**再回**，
+   且**循环 accept**（旧实现接完一次就结束 ⇒ listener 被丢 ⇒ 后续重连直接被拒）。
+
+**教训留档**：**「本地绿」不等于「跨平台绿」** ⇒ 只跑 Linux 的本地门禁会漏掉
+平台专属缺陷（这两条在 Linux 上永远绿）。CI 矩阵里的 win/mac **不是冗余**。
+
 ### 5.5v `three_tier_vault` 接成**用户知识库**（owner 裁定 2026-10-25，PRODUCTION WIRED）
 
 **裁定**：把三阶金库的「无向量 TOC 树索引 + 树路由」接成**用户知识库**（Markdown 语料）

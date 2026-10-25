@@ -103,17 +103,20 @@ impl Drop for SingleWriterLock {
     }
 }
 
-/// 进程是否存活（Linux 用 `/proc`；其他平台按存活处理 —— 宁保守不误接管）。
+/// 进程是否存活。
+///
+/// **复用 [`apeireth_core::storage_atomic::pid_alive`]**（跨平台：unix 走
+/// `kill(pid, 0)`、Windows 走 `OpenProcess`、其它平台保守视为存活）。
+///
+/// **为什么换掉原来那个 Linux-only 的 `/proc` 判定**（2026-10-25）：
+/// 原来的实现只在 Linux 上判活，**其它平台一律返回「存活」** ⇒
+/// 「持有进程已死 ⇒ 陈旧锁可被接管」在 **macOS / Windows 上永远不成立**
+/// ⇒ 一次崩溃会把审计链**永久锁死**（在该平台上的真实故障面），
+/// 而且与之配套的测试 `stale_lock_from_dead_process_is_taken_over`
+/// 在 **win + mac 两个平台都红**（本地 Linux 绿 ⇒ 平台差异被掩盖）。
+/// ⇒ 改用仓内已有的跨平台实现，一处口径、全平台一致。
 fn process_alive(pid: u32) -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        std::path::Path::new("/proc").join(pid.to_string()).exists()
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = pid;
-        true
-    }
+    apeireth_core::storage_atomic::pid_alive(pid)
 }
 
 struct ChainState {
