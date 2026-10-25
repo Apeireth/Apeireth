@@ -60,7 +60,7 @@ fn scope_disposal_stops_effect_reruns() {
 }
 
 #[test]
-fn self_triggering_effect_is_reported_as_flush_cycle() {
+fn self_triggering_effect_is_reported_as_a_cycle_with_a_path() {
     let runtime = Runtime::new();
     let value = runtime.signal(0u32);
     {
@@ -71,11 +71,19 @@ fn self_triggering_effect_is_reported_as_flush_cycle() {
         });
     }
 
+    // 自激循环**早判**（不靠跑满次数上限）⇒ 报 `CycleDetected`（带环路径）。
     let err = runtime.try_flush().expect_err("自激循环必须报错");
-    assert!(
-        matches!(err, ReactiveError::FlushCycle { .. }),
-        "实测：{err:?}"
-    );
+    match err {
+        ReactiveError::CycleDetected { path } => {
+            assert!(path.len() >= 2, "环路径必须可读：{path:?}");
+            assert_eq!(
+                path[0],
+                path[path.len() - 1],
+                "首尾必须是同一节点（环路径约定）"
+            );
+        }
+        other => panic!("实测：{other:?}"),
+    }
 }
 
 // ── 跨模块组合：宿主调度器注入 × 依赖传播 × 批次 ─────────────────────────
