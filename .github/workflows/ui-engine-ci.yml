@@ -449,9 +449,19 @@ jobs:
       # ⇒ 符号链接过去（与 pilot-compare 同一理由，见该 job 的注释）。
       - name: 生产对照 harness 复用生产前端依赖（符号链接）
         run: |
-          ln -sfn "$PWD/../../../../frontend/companion-desktop/node_modules" node_modules
+          # ⚠️ **本 job 的 working-directory 是 `crates-ui/evidence/p5-b`（3 级）**
+          # ⇒ 上跳到仓库根是 **`../../../`**，不是 `../../../../`。
+          # 初版写成 4 级 ⇒ 链接指向**仓库外** ⇒ `node_modules/vite` 不可见
+          # ⇒ 该 job 在 runner 上红（2026-10-25 实测，run 40107215483 第 9 步）。
+          # ⇒ 教训：**相对路径的层数必须对着 working-directory 数**，
+          #   同一份工作流里 `pilot-compare`（4 级目录）用 `../../../` 是对的，本 job 不同。
+          ln -sfn "$PWD/../../../frontend/companion-desktop/node_modules" node_modules
           if [ ! -e node_modules/vite ]; then
             echo "::error::harness 的 node_modules 链接未生效（vite 不可见）"
+            echo "  工作目录: $PWD"
+            echo "  链接目标: $(readlink node_modules || echo '<无链接>')"
+            echo "  目标是否存在: $([ -d "$(readlink node_modules)" ] && echo 是 || echo 否)"
+            echo "  目录内容: $(ls -1 | tr '\n' ' ')"
             exit 1
           fi
 
