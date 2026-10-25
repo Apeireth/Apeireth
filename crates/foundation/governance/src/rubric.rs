@@ -4,7 +4,9 @@
 //! module does not run advisors, does not own a loop, and is not wired into
 //! the canonical pipeline. It scores already-collected stances:
 //!
-//! * weighted synthesis (`score × confidence × weight`, clamped to [-1, 1])
+//! * weighted synthesis (`Σ(score × weight × confidence) / Σ(weight × confidence)`,
+//!   clamped to [-1, 1]) —— **影响力口径**（owner 裁定 D-8）：票的总权重 =
+//!   域权重 × 置信度，分子分母同权 ⇒ 标准加权平均
 //! * stance mapping at ±0.6 / ±0.2
 //! * hold triggers: ≥30% strong-disapprove, unanimous non-abstain disapprove,
 //!   optional 60s timeout
@@ -225,8 +227,18 @@ pub fn synthesize(ballots: &[Ballot]) -> SynthesisReport {
         if ballot.stance.is_abstain() {
             continue;
         }
-        let weight = ballot.effective_weight();
-        sum_weighted_score += ballot.stance.score() * ballot.confidence * weight;
+        // **影响力口径**（owner 裁定 D-8，2026-10-25）：票的总权重 = 域权重 × 置信度，
+        // 分子分母都用它 ⇒ 这是标准加权平均 `Σ(x·w) / Σ(w)`，分母真的是**权重和**。
+        //
+        // 旧口径（分子乘 confidence、分母不乘）有两个缺陷：
+        // ① `confidence = 0` 的票对结果**零发言权**，却把分母**全额占住**
+        //    ⇒ 等价于「负权重」（任何加权平均里都没有这种语义）；
+        // ② 分母不是权重和 ⇒ 公式自相矛盾，且低置信度的票会**单方面**把
+        //    别人的加权分往下压（把「我很没底」变成「把大家拉到中立」）。
+        // 想让整体更保守的正确旋钮是**域权重**（`AdvisorDomain::default_weight()`），
+        // 不是让 confidence 在公式里暗中做手脚。
+        let weight = ballot.effective_weight() * ballot.confidence;
+        sum_weighted_score += ballot.stance.score() * weight;
         sum_weight += weight;
         weighted.push(ballot);
     }
@@ -676,42 +688,64 @@ mod tests {
     }
 
     #[test]
-    fn weighted_score_denominator_excludes_confidence() {
-        // 现有口径：weighted_score = Σ(stance.score() × confidence × weight) / Σ(weight)
-        // ⇒ **分母不含 confidence**。
-        // 这是**当前**口径；改口径属产品决策（D-8），不要顺手改。
+    fn weighted_score_uses_influence_weighting() {
+        // **影响力口径**（owner 裁定 D-8，2026-10-25）：
+        // weighted_score = Σ(stance.score() × weight × confidence) / Σ(weight × confidence)
+        // ⇒ 票的总权重 = 域权重 × 置信度，**分子分母同权**（标准加权平均）。
+        //
+        // 旧口径（分子乘 confidence、分母不乘）已废：它让 `confidence = 0` 的票
+        // 「零发言权却全额占分母」= 负权重语义，并把别人的加权分往下压。
         let ballots = vec![
             Ballot::new("zero", StanceKind::StrongApprove, 0.0, 1.0),
             Ballot::new("one", StanceKind::StrongApprove, 1.0, 1.0),
         ];
         let report = synthesize(&ballots);
-        // 分子 = 1.00×0 + 1.00×1 = 1.00；分母 = 1 + 1 = 2 ⇒ 0.5
+        // 总权重 = 1×0 + 1×1 = 1；分子 = 1.00×1 = 1.00 ⇒ 1.00
+        // （旧口径会给 0.5：零置信度票把整组拉到中立）
         assert!(
-            (report.weighted_score - 0.5).abs() < 1e-9,
-            "分母不含 confidence ⇒ 一张 confidence=0 + 一张 confidence=1 的赞成票得到 0.5，而不是 1.0"
+            (report.weighted_score - 1.0).abs() < 1e-9,
+            "confidence=0 的票等价于弃权，不该把别人的加权分压到 0.5: {}",
+            report.weighted_score
         );
-        // 等权同立场：分子 = 0.60×0.25 + 0.60×0.75 = 0.60；分母 = 2 ⇒ 0.30
-        // （= stance.score() × 平均 confidence 0.50；若分母含 confidence 则会是 0.60）
+        assert_eq!(report.aggregated_stance, StanceKind::StrongApprove);
+
+        // 等权同立场：总权重 = 0.25 + 0.75 = 1；分子 = 0.60×1 ⇒ 0.60
+        // （= stance.score()，置信度只影响**相对权重**，不改变同向同权时的结果）
         let equal = vec![
             Ballot::new("a", StanceKind::Approve, 0.25, 1.0),
             Ballot::new("b", StanceKind::Approve, 0.75, 1.0),
         ];
         let equal_report = synthesize(&equal);
         assert!(
-            (equal_report.weighted_score - 0.30).abs() < 1e-9,
-            "分母是纯 Σ(weight)，不是 Σ(weight × confidence)"
+            (equal_report.weighted_score - 0.60).abs() < 1e-9,
+            "同向票的加权分应等于立场分（旧口径给 0.30）: {}",
+            equal_report.weighted_score
         );
 
-        // 不等权：分子 = 0.60×1.00×3 + 0.60×0.00×1 = 1.80；分母 = 3 + 1 = 4 ⇒ 0.45
-        // （若分母含 confidence 则是 1.80/3 = 0.60）
+        // 不等权 + 零置信度：总权重 = 3×1 + 1×0 = 3；分子 = 0.60×3 ⇒ 0.60
+        // （旧口径给 0.45：零置信度票仍全额占分母）
         let uneven = vec![
             Ballot::new("heavy", StanceKind::Approve, 1.0, 3.0),
             Ballot::new("light", StanceKind::Approve, 0.0, 1.0),
         ];
         let uneven_report = synthesize(&uneven);
         assert!(
-            (uneven_report.weighted_score - 0.45).abs() < 1e-9,
-            "分母不含 confidence：低置信度票仍然全额占权重"
+            (uneven_report.weighted_score - 0.60).abs() < 1e-9,
+            "零置信度票不应占分母（旧口径给 0.45）: {}",
+            uneven_report.weighted_score
+        );
+
+        // 反向票：低置信度的反对票**少说话**（不再把结果往中立拉）
+        let opposed = vec![
+            Ballot::new("yes", StanceKind::StrongApprove, 1.0, 1.0),
+            Ballot::new("no", StanceKind::StrongDisapprove, 0.2, 1.0),
+        ];
+        let opposed_report = synthesize(&opposed);
+        // 总权重 = 1 + 0.2 = 1.2；分子 = 1.00×1 + (-1.00)×0.2 = 0.80 ⇒ 0.667
+        assert!(
+            (opposed_report.weighted_score - (0.8 / 1.2)).abs() < 1e-9,
+            "低置信度的反对票按 0.2 的权重参与: {}",
+            opposed_report.weighted_score
         );
     }
 }

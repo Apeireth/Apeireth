@@ -1211,12 +1211,16 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | **`with_*` 的分组** | 名字以 `with_` 开头 ⇒ G4（注入点/探测口） | 按**源码签名**分：吃 `mut self`（builder 设置）或注入依赖（`Arc<dyn…>`/`Box<dyn…>`）⇒ G4；**两者都不是**（独立便利构造器）⇒ **G6** | `with_len`（`DriftDetector` 默认构造器）、`with_used`（0 引用构造器）从 G4 挪到 G6（G4 38→36，G6 72→74，总数 143 不变） |
 | **数据根路径真源** | `runtime_assembly::consequence_backfill::default_data_root()` 与 `cli::default_panel_data_dir()` 是**两份逐字相同**的实现 | 抽到 `apeireth_runtime_assembly::paths::default_data_root()`，两边都委派 | 消除「改一处忘另一处 ⇒ 生产写账与 CLI 读账指向不同文件」的风险（本批正好用于 council ballot 账） |
 
-**新增的 D-8（产品决策，等 owner 裁定，不擅自执行）**：
-`rubric::synthesize` 的加权平均**分子含 `confidence`、分母不含** ⇒ 一张 `confidence = 0` 的票
-对结果零发言权，却把分母全额占住、把所有人的加权分往下压。
-D-2 引入**真置信度**后该不一致变得可见可测。已加测试把**现状**钉死（改口径会红），
-但**公式本身属治理判定数学 = 产品决策** ⇒ 简报见
-`docs/04-internal/backend-enhancement/owner-decision-brief-2026-10-25.md` 的 D-8 节。
+**D-8（已由 owner 裁定并落地，2026-10-25）**：`rubric::synthesize` 的加权平均原为
+**分子含 `confidence`、分母不含** ⇒ 一张 `confidence = 0` 的票对结果零发言权，
+却把分母全额占住、把所有人的加权分往下压（= 「负权重」语义）。
+D-2 引入**真置信度**后该不一致变得可见可测 ⇒ 立 D-8 请 owner 裁定。
+**owner 裁定：影响力口径** ⇒ 票的总权重 = **域权重 × 置信度**，分子分母同权
+（`Σ(score × w × c) / Σ(w × c)`，即标准加权平均）。
+**理由**：加权平均的定义里分母就是权重和；旧口径让 `confidence = 0` 的票成为负权重；
+想更保守的正确旋钮是**域权重**（`AdvisorDomain::default_weight()`），不是让 confidence 暗中做手脚。
+测试已改为**钉新口径**（含零置信度票、同向不同置信度、反向低置信度四类）。
+（决策简报：`docs/04-internal/backend-enhancement/owner-decision-brief-2026-10-25.md` D-8 节。）
 
 **另记一条工具链陷阱**（本批实测，浪费了不少时间）：
 并行 agent 在**构建进行中**写源文件时，`sccache` 可能返回**按旧内容**编译的产物，
