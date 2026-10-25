@@ -1091,6 +1091,18 @@ pub struct ProviderGroupProps {
     pub on_action: ProviderIntent,
     /// 「字段改动」意图出口（入参 = 字段键；**宿主回读 DOM** 后标「未保存」）。
     pub on_field_input: ProviderIntent,
+    /// 「**只更新取值、不标未保存**」意图出口（入参 = 字段键；宿主回读 DOM 后写值）。
+    ///
+    /// ## 为什么需要这一条
+    ///
+    /// 生产的**模型搜索框**是 `bind:value={modelSearchQuery}` ⇒ 输入即过滤
+    /// ⇒ **不调** `markTextDirty` ⇒ ⇒ **不出现**「未保存」旗标
+    /// ⇒ ⇒ 引擎侧若走 [`Self::on_field_input`]（它会**标未保存**）
+    /// ⇒ ⇒ 引擎侧多渲染一个 `span.field-ack.field-flag`
+    /// ⇒ ⇒ **DOM 不全等** + **像素有差**（实测：根节点子节点数 5 / 6）。
+    ///
+    /// ⇒ ⇒ 这条通道让**「取值推进」与「未保存标记」解耦**。
+    pub on_field_value: ProviderIntent,
     /// 「只标未保存」意图出口（入参 = 字段键表）。
     ///
     /// ## 为什么要与 [`Self::on_field_input`] 分开
@@ -1960,7 +1972,12 @@ fn render_discovered_models(props: &ProviderGroupProps, result: &TestResult) -> 
         // ⇒ 否则列表**不会被过滤**（实测：键入后引擎侧仍显示 3 个模型、
         // 参考侧只剩 2 个 ⇒ 裁剪高度差 158 px ⇒ 像素对照无法进行）。
         // ⇒ 动作通道（`on_action`）**不**用于此处：它**不携带取值**。
-        let field = props.on_field_input.clone();
+        // ⚠️ 走「**只更新取值**」通道（**不**标未保存）：
+        // 生产的搜索框是 `bind:value={modelSearchQuery}` ⇒ 输入即过滤
+        // ⇒ **不调** `markTextDirty` ⇒ ⇒ 生产**不出现**「未保存」旗标
+        // ⇒ ⇒ 引擎侧若标未保存 ⇒ 多一个 `span.field-ack.field-flag`
+        // ⇒ ⇒ **DOM 不全等** + 像素有差（实测：根子节点数 5 / 6）。
+        let field = props.on_field_value.clone();
         VNode::element("input")
             .attr("type", "search")
             .attr("placeholder", placeholder)
@@ -2436,6 +2453,7 @@ mod tests {
             text_flags: runtime.signal(Vec::new()),
             presets: test_presets(),
             on_action: Rc::new(|_action: &str| {}),
+            on_field_value: Rc::new(|_keys: &str| {}),
             on_field_input: Rc::new(|_key: &str| {}),
             on_mark_dirty: Rc::new(|_keys: &str| {}),
             on_submit_group: Rc::new(|_group: &str, _draft: &ProviderGroupDraft| {}),

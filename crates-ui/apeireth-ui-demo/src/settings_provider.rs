@@ -658,6 +658,9 @@ impl ProviderHost {
     pub fn props(&self) -> ProviderGroupProps {
         let action = self.clone();
         let field = self.clone();
+        // ⚠️ 两个闭包各自捕获一份（`move` 闭包会**移走**捕获值 ⇒ 不能共用一份）。
+        let field_input = field.clone();
+        let field_value = field.clone();
         let dirty = self.clone();
         let submit = self.clone();
         ProviderGroupProps {
@@ -694,8 +697,17 @@ impl ProviderHost {
                 action.handle_action(name);
             }),
             on_field_input: Rc::new(move |keys: &str| {
-                field.record_intent(&format!("field:{keys}"));
-                field.mark_dirty(keys);
+                field_input.record_intent(&format!("field:{keys}"));
+                field_input.mark_dirty(keys);
+            }),
+            // ⚠️ 「只更新取值、**不**标未保存」：
+            // 生产的模型搜索框是 `bind:value={modelSearchQuery}` ⇒ 输入即过滤
+            // ⇒ **不调** `markTextDirty` ⇒ ⇒ 生产**不出现**「未保存」旗标
+            // ⇒ ⇒ 引擎侧若标未保存 ⇒ 多一个 `span.field-ack.field-flag`
+            // ⇒ ⇒ **DOM 不全等** + 像素有差（实测：根子节点数 5 / 6）。
+            on_field_value: Rc::new(move |keys: &str| {
+                field_value.record_intent(&format!("value:{keys}"));
+                field_value.update_field_values(keys);
             }),
             on_mark_dirty: Rc::new(move |keys: &str| {
                 dirty.record_intent(&format!("dirty:{keys}"));
@@ -804,6 +816,26 @@ impl ProviderHost {
                 self.set_field(key, &value);
             }
             self.set_flag(key, FieldFlagState::Dirty);
+        }
+    }
+
+    /// **只更新取值**（回读 DOM → 写信号），**不**标「未保存」。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 生产的模型搜索框是 `bind:value={modelSearchQuery}` ⇒ 输入即过滤
+    /// ⇒ **不调** `markTextDirty` ⇒ ⇒ 生产**不出现**「未保存」旗标。
+    /// ⇒ ⇒ 引擎侧若用「回读 + 标未保存」那条路 ⇒ 多渲染一个旗标
+    /// ⇒ ⇒ **DOM 不全等** + 像素有差。
+    fn update_field_values(&self, keys: &str) {
+        for key in keys.split(',') {
+            let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
+            if let Some(value) = self.read_field(key) {
+                self.set_field(key, &value);
+            }
         }
     }
 
