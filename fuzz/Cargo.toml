@@ -284,3 +284,24 @@ path = "fuzz_targets/tool_params.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "proposal"
+path = "fuzz_targets/proposal.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "spill_access"
+path = "fuzz_targets/spill_access.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stealth_crawler"
+path = "fuzz_targets/spill_access.rs"
+test = false
+doc = false
+bench = false

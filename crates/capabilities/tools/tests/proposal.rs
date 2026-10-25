@@ -12,9 +12,13 @@ use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
 use apeireth_tools_canonical::proposal::{
     proposals_enabled_from_env, ProposalBoundaryGuard, ProposalConfig, ProposalDecision,
-    ProposalLedger, ProposalLedgerEntry, ProposalState, ProposalTool, PROPOSALS_ENABLE_ENV,
-    PROPOSAL_ACTIONS, PROPOSAL_CAPABILITY_ID, PROPOSAL_EVIDENCE_HIGHLIGHT,
-    PROPOSAL_NO_EXECUTION_NOTE, PROPOSAL_PERSONAL_CONFIRM_MARKER, PROPOSAL_REVIEW_TONE,
+    ProposalDraft, ProposalLedger, ProposalLedgerEntry, ProposalReview, ProposalState,
+    ProposalTool, PROPOSALS_ENABLE_ENV, PROPOSAL_ACTIONS, PROPOSAL_CAPABILITY_ID,
+    PROPOSAL_EVIDENCE_HIGHLIGHT, PROPOSAL_NO_EXECUTION_NOTE, PROPOSAL_PERSONAL_CONFIRM_MARKER,
+    PROPOSAL_REVIEW_TONE,
+};
+use apeireth_tools_canonical::proposal_push::{
+    ProposalPushLedger, ProposalPushOutcome, ProposalPushRecord,
 };
 use apeireth_tools_canonical::{capability_roster, render_snapshot, SelfStatusSnapshot};
 use serde_json::{json, Value};
@@ -491,4 +495,265 @@ fn the_boundary_guard_refuses_the_same_shapes_monotonically() {
 #[test]
 fn the_action_vocabulary_is_closed_and_named_honestly() {
     assert_eq!(PROPOSAL_ACTIONS, ["draft", "accept", "reject", "list"]);
+}
+
+// ---------------------------------------------------------------------------
+// 回归 (提案面 fuzz 实测, 2026-10-25): 账本追加的**行完整性**与**一提案一决定**
+// ---------------------------------------------------------------------------
+
+/// 极简执行器 (工具面 `invoke` 的体是同步的, 一次 poll 即完成; 不引新依赖)。
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(value) => return value,
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+/// 账本上的行 (提案 id 列表)。
+fn ledger_draft_ids(ledger: &ProposalLedger) -> Vec<String> {
+    ledger
+        .scan()
+        .expect("账可读")
+        .records
+        .iter()
+        .filter_map(|record| match &record.body {
+            ProposalLedgerEntry::Draft(draft) => Some(draft.id.clone()),
+            ProposalLedgerEntry::Review(_) => None,
+        })
+        .collect()
+}
+
+/// 账本上的决定行。
+fn ledger_review_rows(ledger: &ProposalLedger) -> Vec<ProposalReview> {
+    ledger
+        .scan()
+        .expect("账可读")
+        .records
+        .iter()
+        .filter_map(|record| match &record.body {
+            ProposalLedgerEntry::Review(review) => Some(review.clone()),
+            ProposalLedgerEntry::Draft(_) => None,
+        })
+        .collect()
+}
+
+/// 回归 ①: 撕裂写 (末行缺换行) 之后追加 ⇒ **追加不许把两行挤成一行**。
+///
+/// 契约: `proposal.rs` 账本头「**append-only**: 逐行一个 [`StoredDoc`] 信封,
+/// 追加写 + 落盘, 不重写、不删行」。
+///
+/// 缺陷原文 (修复前): 行体与行尾换行是**两次写** ⇒ ① 上个进程死在两次写之间
+/// (末行缺换行) 时, 下一次追加会把新行**粘在旧行尾** ⇒ 旧行被毁 + 新行被吞
+/// (两行都读作不存在 ⇒ 等于删行); ② 两个并发写者会把两行挤成一行 (同样丢行)。
+/// 修法: 行体与换行**同在一次写** (O_APPEND 追加是原子的) + 末行缺换行时先补
+/// 一个换行 (只追加字节, append-only 不变)。
+#[test]
+fn appending_after_a_torn_line_keeps_every_row_readable() {
+    let root = temp_root("torn-append");
+    let data_dir = root.join("data");
+    std::fs::create_dir_all(&data_dir).expect("创建数据目录");
+    let ledger = ProposalLedger::under_data_dir(&data_dir);
+    let tool = ProposalTool::new(ProposalLedger::under_data_dir(&data_dir));
+
+    let first = block_on(tool.invoke(&call(draft_arguments("tidy", "待整理甲"))));
+    let first_id = serde_json::from_str::<Value>(&first.render()).expect("帧可解析")["proposal"]
+        ["id"]
+        .as_str()
+        .expect("id 在场")
+        .to_string();
+    let second = block_on(tool.invoke(&call(draft_arguments("tidy", "待整理乙"))));
+    let second_id = serde_json::from_str::<Value>(&second.render()).expect("帧可解析")["proposal"]
+        ["id"]
+        .as_str()
+        .expect("id 在场")
+        .to_string();
+
+    // 模拟撕裂写: 去掉末行换行 (上个进程死在「写行体」与「写换行」之间)。
+    // 行体本身完整 ⇒ 那一行仍是一条完整记录 (只是行尾换行没落)。
+    let path = ledger.path().to_path_buf();
+    let mut bytes = std::fs::read(&path).expect("读账");
+    assert!(bytes.ends_with(b"\n"), "正常追加末字节必是换行");
+    bytes.pop();
+    std::fs::write(&path, &bytes).expect("写撕裂账");
+
+    let third = block_on(tool.invoke(&call(draft_arguments("tidy", "待整理丙"))));
+    let third_id = serde_json::from_str::<Value>(&third.render()).expect("帧可解析")["proposal"]
+        ["id"]
+        .as_str()
+        .expect("id 在场")
+        .to_string();
+
+    let scan = ledger.scan().expect("账可读");
+    let ids = ledger_draft_ids(&ledger);
+    assert!(
+        ids.contains(&first_id),
+        "撕裂写不许毁掉前面那条好行: {ids:?}"
+    );
+    assert!(
+        ids.contains(&second_id),
+        "撕裂那行本身是完整记录, 不许被下一行吞掉: {ids:?}"
+    );
+    assert!(
+        ids.contains(&third_id),
+        "撕裂写后追加的新行必须是自己那一行: {ids:?}"
+    );
+    assert_eq!(scan.skipped, 0, "三行都是完整记录, 不该有坏行: {ids:?}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 回归 ②: 并发追加不许丢行 (append-only 的「不删行」在并发下也成立)。
+///
+/// 契约: 同上 (「逐行一个 [`StoredDoc`] 信封 ... 不重写、不删行」)。
+///
+/// 缺陷原文 (修复前, 实测 32 行只读到 12 行): 行体与换行分两次写 ⇒ 两个写者
+/// 的「行体」与「换行」交错 ⇒ 两行挤成一行 ⇒ 那两行都读作不存在。
+#[test]
+fn concurrent_appends_keep_every_row() {
+    let root = temp_root("concurrent-append");
+    let data_dir = root.join("data");
+    std::fs::create_dir_all(&data_dir).expect("创建数据目录");
+    let ledger = std::sync::Arc::new(ProposalLedger::under_data_dir(&data_dir));
+    let threads = 4usize;
+    let per_thread = 8usize;
+    let mut handles = Vec::new();
+    for thread in 0..threads {
+        let ledger = ledger.clone();
+        handles.push(std::thread::spawn(move || {
+            for index in 0..per_thread {
+                let draft = ProposalDraft {
+                    id: format!("prop-t{thread}-{index}"),
+                    kind: apeireth_tools_canonical::proposal::ProposalKind::Tidy,
+                    title: "并发追加".to_string(),
+                    detail: "并发追加的详情".to_string(),
+                    evidence: vec![format!("src/{thread}-{index}.rs:1")],
+                    draft_payload: json!({}),
+                    created_at_ms: 1_700_000_000_000 + index as i64,
+                };
+                ledger.append_draft(&draft).expect("并发追加");
+            }
+        }));
+    }
+    for handle in handles {
+        handle.join().expect("线程回收");
+    }
+    let scan = ledger.scan().expect("账可读");
+    assert_eq!(
+        scan.records.len(),
+        threads * per_thread,
+        "并发追加不许丢行: records={} skipped={}",
+        scan.records.len(),
+        scan.skipped
+    );
+    assert_eq!(scan.skipped, 0, "并发追加不许产生坏行");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 回归 ③: 并发「点头」同一提案 ⇒ 账上只有一条决定行 (一提案一决定不许被并发破掉)。
+///
+/// 契约: `proposal.rs` 工具描述「one proposal gets exactly one decision」+
+/// 状态机注释「一提案一决定, 决定只追加不改史」。
+///
+/// 缺陷原文 (修复前, 实测 4 个并发点头 ⇒ 4 个「点头了」帧 + 账上 2 条决定行):
+/// `decide` 是「读状态 → 落决定」两步且两步之间没有互斥 ⇒ 并发点头都能读到
+/// `Pending` ⇒ 同一提案落两条决定行, 且其中一条被行合并吞掉 (帧说点头了而账上没有)。
+/// 修法: 「查状态 → 落决定」放进进程级互斥 (进程内口径)。
+#[test]
+fn concurrent_decisions_keep_one_proposal_one_decision() {
+    let root = temp_root("concurrent-decide");
+    let data_dir = root.join("data");
+    std::fs::create_dir_all(&data_dir).expect("创建数据目录");
+    let ledger = ProposalLedger::under_data_dir(&data_dir);
+    let tool = std::sync::Arc::new(ProposalTool::new(ProposalLedger::under_data_dir(&data_dir)));
+    let drafted = block_on(tool.invoke(&call(draft_arguments("tidy", "待整理"))));
+    let id = serde_json::from_str::<Value>(&drafted.render()).expect("帧可解析")["proposal"]["id"]
+        .as_str()
+        .expect("id 在场")
+        .to_string();
+
+    let threads = 4usize;
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(threads));
+    let mut handles = Vec::new();
+    for index in 0..threads {
+        let tool = tool.clone();
+        let barrier = barrier.clone();
+        let id = id.clone();
+        handles.push(std::thread::spawn(move || {
+            barrier.wait();
+            block_on(tool.invoke(&call(json!({
+                "action": "accept",
+                "proposal_id": id,
+                "decided_by": "owner",
+                "note": format!("并发点头 {index}"),
+            }))))
+        }));
+    }
+    let mut accepted = 0usize;
+    for handle in handles {
+        let result = handle.join().expect("线程回收");
+        if result.is_ok() {
+            accepted += 1;
+        } else {
+            let frame = result.render();
+            assert!(
+                frame.contains("一提案一决定"),
+                "第二个决定必被拒且真因如实: {frame}"
+            );
+        }
+    }
+    assert_eq!(
+        ledger_review_rows(&ledger).len(),
+        1,
+        "一提案一决定: 并发点头也只能落一条决定行"
+    );
+    assert_eq!(accepted, 1, "并发点头只许一个成功帧 (其余必被拒)");
+    assert_eq!(
+        ledger.state_of(&id).expect("状态可读"),
+        Some(ProposalState::Accepted),
+        "状态 = 落账的决定"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 回归 ④: 推送账同姿势 —— 撕裂写之后追加不许把两行挤成一行。
+///
+/// 契约: `proposal_push.rs` 账本头「**append-only**: 逐行一个 [`StoredDoc`] 信封,
+/// 追加写 + 落盘, 不重写、不删行 ... 坏行读作不存在 (跳过并计入 `skipped`),
+/// 不砖化整本」+ 推送账与提案账「同一姿势」。
+#[test]
+fn appending_to_the_push_ledger_after_a_torn_line_keeps_every_row_readable() {
+    let root = temp_root("torn-push");
+    let data_dir = root.join("data");
+    std::fs::create_dir_all(&data_dir).expect("创建数据目录");
+    let push = ProposalPushLedger::under_data_dir(&data_dir);
+    let record = |id: &str| ProposalPushRecord {
+        proposal_id: id.to_string(),
+        channel_id: "primary".to_string(),
+        conversation_id: "oc_demo".to_string(),
+        outcome: ProposalPushOutcome::Pushed,
+        message_ref: Some("m-out".to_string()),
+        reason: None,
+        at_ms: 1_700_000_000_000,
+    };
+    push.append(&record("prop-1")).expect("推送 1");
+    // 模拟撕裂写: 去掉末行换行。
+    let path = push.path().to_path_buf();
+    let mut bytes = std::fs::read(&path).expect("读推送账");
+    bytes.pop();
+    std::fs::write(&path, &bytes).expect("写撕裂推送账");
+    push.append(&record("prop-2")).expect("推送 2");
+
+    let scan = push.scan().expect("推送账可读");
+    assert_eq!(scan.records.len(), 2, "撕裂写后追加不许丢行: {scan:?}");
+    assert_eq!(scan.skipped, 0, "不许产生坏行: {scan:?}");
+    let ids = push.pushed_ids().expect("幂等集可读");
+    assert!(
+        ids.contains("prop-1") && ids.contains("prop-2"),
+        "两行都在: {ids:?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
