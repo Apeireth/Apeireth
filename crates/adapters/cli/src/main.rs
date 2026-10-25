@@ -55,6 +55,7 @@ Usage:
     apeireth egress ledger [--path LEDGER_JSONL] [--limit N] [--json]
     apeireth egress impact [--path IMPACT_JSONL] [--limit N] [--json]
     apeireth egress outcome <ACTION_ID> <confirmed|failed>
+    apeireth egress bind <ACTION_ID> <TOOL_CALL_ID>
     apeireth egress notify <FACT_ID> <wording|partial|refuted>
     apeireth exposure report [--json] [--out PATH] [--bundle BUNDLE]
   [数据与迁移]

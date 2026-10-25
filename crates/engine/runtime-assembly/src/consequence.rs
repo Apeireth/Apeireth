@@ -142,6 +142,22 @@ impl ConsequenceTracker {
         true
     }
 
+    /// 重新从账本读回事件（**多进程共享真源**时用）。
+    ///
+    /// 为什么要它：账本是 append-only 的**文件**，运行时与 CLI 可能各持一个
+    /// 状态机实例；不读回就会拿**过期状态**做判断（例如把已经回填成 `failed`
+    /// 的行动再记一次）。`record` 永远**先落盘再进内存**，所以文件里的内容
+    /// 不少于内存里的内容 —— 读回不会丢事件。
+    ///
+    /// 返回读回的事件条数（无持久化路径 = 纯内存，reload 是 no-op）。
+    pub fn reload(&mut self) -> usize {
+        let Some(path) = self.path.clone() else {
+            return self.events.len();
+        };
+        self.events = read_events(&path);
+        self.events.len()
+    }
+
     /// 某行动**当前**的后果状态（无记录 = `unknown`）。
     pub fn current_outcome(&self, action_id: &str) -> Outcome {
         self.events

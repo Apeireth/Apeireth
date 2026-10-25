@@ -61,6 +61,7 @@ use super::tool_modules::{
     WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
+use crate::consequence_backfill::{default_data_root, ConsequenceBackfillModule};
 use crate::startup::{StartupPhase, StartupTimeline};
 
 // 生物机制族装配块（W3.2/W3.3/W3.5/W3.6）搬至子模块；`production.rs` 只留调用与字段。
@@ -553,6 +554,11 @@ pub struct ProductionBackends {
     pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
     /// Optional durable selected-context access history.
     pub access_history: Option<Arc<SqliteAccessHistoryStore>>,
+    /// Optional **read-only** diary store (cross-diary retrieval wiring).
+    ///
+    /// 缺席 = 检索路径不碰日记 (零行为变化); 在场 = 命中事实可附**关联日记片段**
+    /// (「你上周写过…」). 只读面: 检索路径只 `list_days` / `read_day`, 绝不写日记.
+    pub diary: Option<Arc<dyn apeireth_memory::diary::DiaryStore>>,
     /// Optional unified materializer for bounded AfterTurn memory writeback.
     pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
     /// Optional unified extractor used to build a default materializer.
@@ -873,6 +879,19 @@ impl ProductionModules {
             modules.push(
                 Arc::new(NervousBridgeModule::new(nervous_bus.as_ref().clone())) as Arc<dyn Module>,
             );
+        }
+        // 问责闭环第 ③ 步 · 自动回填面（ADR-0014 §5）：工具调用失败 ⇒ 把**对应的那条**
+        // 已声明影响回填 `failed`。归属（action_id ↔ tool_call_id）**由调用方显式登记**
+        // （`apeireth egress bind`），登记不到 ⇒ 不动 —— 系统不推断归属。
+        //
+        // **默认关**：与问责面共用同一个开关（`APEIRETH_ENABLE_EGRESS_GATE`）——
+        // 开闸才装（闸 = 影响声明 + 后果账 + 自动回填这一整套）；关时**零注册**、
+        // 零行为变化（未启用 = 不注册）。
+        // `confirmed` **绝不**自动填（本地成功 ≠ 影响已确认 = 替外部背书）。
+        if crate::egress_gate::egress_gate_enabled_from_env() {
+            modules.push(Arc::new(ConsequenceBackfillModule::from_data_root(
+                &default_data_root(),
+            )) as Arc<dyn Module>);
         }
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
@@ -1481,6 +1500,11 @@ impl ProductionModules {
                 coordinator = coordinator.with_activation_source(Arc::new(
                     AccessHistoryActivationSource::new(Arc::clone(history), 0.5, 0.0),
                 ));
+            }
+            // 跨日记检索接线 (只读): 日记面在场 ⇒ 命中事实可附关联日记片段.
+            // 缺席 = 检索路径不碰日记 ⇒ 逐字节零行为变化.
+            if let Some(diary) = &backends.diary {
+                coordinator = coordinator.with_diary_store(Arc::clone(diary));
             }
             if let (Some(source), Some(identity)) =
                 (&backends.typed_recall, &backends.typed_recall_identity)

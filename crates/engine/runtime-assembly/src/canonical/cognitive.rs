@@ -4547,19 +4547,22 @@ mod tests {
         let modules =
             super::super::production::ProductionCognitiveModules::build(config, backends, clock)
                 .unwrap();
-        assert_eq!(
-            modules.ids(),
-            vec![
-                MEMORY_RECALL_MODULE_ID,
-                PREFERENCE_RECALL_MODULE_ID,
-                SELF_ASSESSMENT_MODULE_ID,
-                // 生物机制族 W3.2: BioAssemblyModule 为懒注册（两个 env 全关 =
-                // 不构造 = 不注册，见 startup_instrumentation 的懒加载语义）；
-                // 因此默认配置下不占槽位，开关开时注册在 self_assessment 与
-                // memory_writeback 之间（顺序由 production 注册点固定）。
-                MEMORY_WRITEBACK_MODULE_ID,
-            ]
-        );
+        let mut expected = vec![
+            MEMORY_RECALL_MODULE_ID,
+            PREFERENCE_RECALL_MODULE_ID,
+            SELF_ASSESSMENT_MODULE_ID,
+            // 生物机制族 W3.2: BioAssemblyModule 为懒注册（两个 env 全关 =
+            // 不构造 = 不注册，见 startup_instrumentation 的懒加载语义）；
+            // 因此默认配置下不占槽位，开关开时注册在 self_assessment 与
+            // memory_writeback 之间（顺序由 production 注册点固定）。
+            MEMORY_WRITEBACK_MODULE_ID,
+        ];
+        // 问责闭环第 ③ 步 · 自动回填面：**默认关**（与问责面同一个开关）——
+        // 开关开时它在模块表**首位**。
+        if crate::egress_gate::egress_gate_enabled_from_env() {
+            expected.insert(0, "accountability.backfill");
+        }
+        assert_eq!(modules.ids(), expected);
         let telemetry = modules.telemetry();
         let _runtime = modules
             .register_into(Runtime::builder())

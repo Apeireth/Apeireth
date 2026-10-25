@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 
 /// 用法帧。
-pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome <ACTION_ID> <confirmed|failed>\napeireth egress notify <FACT_ID> <wording|partial|refuted>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
+pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome <ACTION_ID> <confirmed|failed>\napeireth egress bind <ACTION_ID> <TOOL_CALL_ID>\napeireth egress notify <FACT_ID> <wording|partial|refuted>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  bind = 显式登记「行动 ↔ 工具调用」的 1:1 归属（工具失败 ⇒ 自动回填 failed）。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
 
 /// 命令入口（数据根 = 默认数据目录）。
 pub fn run_egress(args: &[String]) -> Result<String, String> {
@@ -32,6 +32,7 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
         "ledger" => {}
         "impact" => return run_impact(data_root, rest),
         "outcome" => return run_outcome(data_root, rest),
+        "bind" => return run_bind(data_root, rest),
         "notify" => return run_correction_impact(data_root, rest),
         _ => return Err(format!("unknown egress command: {verb}\n{USAGE}")),
     }
@@ -341,6 +342,101 @@ pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<Strin
         outcome.label(),
         path.display()
     ))
+}
+
+/// `apeireth egress bind <ACTION_ID> <TOOL_CALL_ID>` —— **显式登记「行动 ↔ 工具调用」归属**。
+///
+/// 这是问责闭环第 ③ 步「后果追踪」**自动回填入口的另一半**。
+///
+/// 为什么要显式登记（2026-10-25 查证）：影响声明的 `action_id` 由出网闸按**墙钟**
+/// 生成（`act-{ms}`），工具调用带的是 **provider 赋的不透明 id**（`ToolCall.id`）——
+/// 两者**不同源、不可推导**，仓库里也不存在既有映射。所以系统**不推断**归属：
+/// 由**同时知道两边的调用方**在这里登记。
+///
+/// 登记之后：这次工具调用**失败** ⇒ 对应影响的后果自动回填 `failed`
+/// （运行时面 `ConsequenceBackfillModule`，来源 `locally_observed`）。
+/// 工具调用**成功** ⇒ **不动**（`confirmed` 只走人工/外部：本地成功 ≠ 影响已确认）。
+///
+/// 纪律：
+/// 1. **只指向已声明的影响** —— 行动 id 在影响账里查不到 ⇒ 拒（不编造归属）；
+/// 2. **1:1** —— 一次工具调用只对应一条影响，一条影响只对应一次工具调用；
+/// 3. **零真值** —— 只存两个 id。
+pub fn run_bind(data_root: &std::path::Path, rest: &[String]) -> Result<String, String> {
+    use apeireth_runtime_assembly::accountability::AccountabilityLedger;
+    use apeireth_runtime_assembly::consequence_backfill::{
+        ActionToolBindingLedger, BindOutcome, ACTION_TOOL_BINDINGS_FILE,
+    };
+
+    let path = match parse_arg(rest, "--path") {
+        Some(raw) => PathBuf::from(raw),
+        None => data_root.join("impact-ledger.jsonl"),
+    };
+    // 位置参数：<ACTION_ID> <TOOL_CALL_ID>（`--path` 的值不当位置参数）。
+    let mut positional: Vec<&String> = Vec::new();
+    let mut index = 0;
+    while index < rest.len() {
+        if rest[index].starts_with("--") {
+            index += 2;
+            continue;
+        }
+        positional.push(&rest[index]);
+        index += 1;
+    }
+    let (action_id, tool_call_id) = match positional.as_slice() {
+        [action_id, call_id] => (action_id.as_str(), call_id.as_str()),
+        _ => {
+            return Err(format!(
+                "bind 需要两个位置参数：<ACTION_ID> <TOOL_CALL_ID>\n{USAGE}"
+            ))
+        }
+    };
+    // 归属只能指向**已声明**的影响：查不到 ⇒ 拒（不编造归属）。
+    let ledger = AccountabilityLedger::new(Some(path.clone()));
+    if !ledger
+        .statements()
+        .iter()
+        .any(|statement| statement.action_id == action_id)
+    {
+        return Err(format!(
+            "行动 `{action_id}` 在影响账里**没有已声明的影响** —— 不登记归属\n\
+             （归属只能指向已声明的影响；不编造归属）\n影响账：{}",
+            path.display()
+        ));
+    }
+    let bindings_path = path.with_file_name(ACTION_TOOL_BINDINGS_FILE);
+    let bindings = ActionToolBindingLedger::new(Some(bindings_path.clone()));
+    match bindings.bind(action_id, tool_call_id) {
+        BindOutcome::Recorded | BindOutcome::AlreadyRecorded => Ok(format!(
+            "已登记归属：行动 {action_id} ↔ 工具调用 {tool_call_id}\n\
+             绑定账：{}\n\
+             之后这次工具调用**失败** ⇒ 该行动的后果自动回填 `failed`（来源：本地可验证）；\n\
+             **成功不自动填 confirmed**（本地成功 ≠ 影响已确认 —— 仍需人工/外部确认）。",
+            bindings_path.display()
+        )),
+        BindOutcome::Conflict => {
+            let detail = match (
+                bindings.action_for(tool_call_id),
+                bindings.tool_call_for(action_id),
+            ) {
+                (Some(bound_action), _) => {
+                    format!("工具调用 `{tool_call_id}` 已绑到行动 `{bound_action}`")
+                }
+                (_, Some(bound_call)) => {
+                    format!("行动 `{action_id}` 已绑到工具调用 `{bound_call}`")
+                }
+                _ => "归属两侧已被占用".to_string(),
+            };
+            Err(format!(
+                "归属登记被拒（1:1）：{detail}\n\
+                 （系统不推断归属：破坏 1:1 的登记一律拒）"
+            ))
+        }
+        BindOutcome::Failed => Err(format!(
+            "归属登记失败：绑定账不可写（{}）\n\
+             （不持久 = 不留「只在内存里」的影子归属）",
+            bindings_path.display()
+        )),
+    }
 }
 
 /// `apeireth egress notify <FACT_ID> <wording|partial|refuted>` —— **纠正影响检查**。
