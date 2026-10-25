@@ -452,16 +452,7 @@ impl QuotaStub {
 
     /// 查 quota (阶段 6 stub: 永远返 "not_implemented" per D-05).
     pub fn check(&self) -> Result<(), SdkClientError> {
-        // D-05: 阶段 6 stub 永远返 501 (显式 unimplemented, 不假装支持)。
-        //
-        // 2026-10-25 修正**错误类说谎**：原来这里返 `QuotaExceeded` ⇒ 宿主侧
-        // `ErrorCategory::RateLimited` ⇒ 宿主/用户会读成「**配额用完了**」
-        // （可能提示升级套餐），而真相是「**这个能力根本没实现**」⇒
-        // **能力缺口被报成额度问题**。改用 `NotImplemented`（分类 `Internal`、
-        // 明确不可重试）⇒ 报错与真相一致。
-        // （若要让分类本身也精确表达「能力不支持」，需给 `ErrorCategory`
-        //  加一个 `Unsupported` 成员 —— 那是**公开错误面变更**，属产品决策，
-        //  已记台账待裁，暂不自造。）
+        // D-05 阶段 6 stub: 返 501; 2026-10-25 起报 `NotImplemented`（见台账 A 类表）。
         Err(SdkClientError::NotImplemented(
             "D-05 quota check unimplemented (R21)".into(),
         ))
@@ -1235,8 +1226,6 @@ mod client_tests {
         let err = q.check();
         assert!(err.is_err());
         match err.unwrap_err() {
-            // 2026-10-25: 能力缺口报 `NotImplemented`（不再报 `QuotaExceeded`
-            // —— 后者会把「没实现」说成「配额用完」）。
             SdkClientError::NotImplemented(msg) => {
                 assert!(msg.contains("D-05") || msg.contains("unimplemented"));
             }

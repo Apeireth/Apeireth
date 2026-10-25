@@ -40,13 +40,23 @@ pub enum ErrorCategory {
     Backpressure,
     /// 生命周期状态不允许该操作.
     State,
+    /// **能力不支持**（该能力尚未实现 / 本客户端不提供）。
+    ///
+    /// 2026-10-25（owner 裁定）：此前这类情形只有两个去处 ——
+    /// `Internal`（读成「服务端内部错误」，会让人去查服务端）或
+    /// `RateLimited`（读成「配额用完」，会让人去升级套餐）。
+    /// **两者都不是真相** ⇒ 新增本成员，让宿主能准确区分
+    /// 「这个能力根本不存在」/「额度不够」/「对方在限流」。
+    ///
+    /// **不可重试**：重试同一个未实现的能力，结果永远是同一个。
+    Unsupported,
     /// 内部错误 / 兜底.
     Internal,
 }
 
 impl ErrorCategory {
     /// 分类数量 (闭合词表规模, 测试钉死).
-    pub const COUNT: usize = 9;
+    pub const COUNT: usize = 10;
 
     /// 全部分类 (枚举序稳定).
     pub const ALL: [ErrorCategory; Self::COUNT] = [
@@ -58,6 +68,7 @@ impl ErrorCategory {
         ErrorCategory::Timeout,
         ErrorCategory::Backpressure,
         ErrorCategory::State,
+        ErrorCategory::Unsupported,
         ErrorCategory::Internal,
     ];
 
@@ -72,6 +83,7 @@ impl ErrorCategory {
             ErrorCategory::Timeout => "timeout",
             ErrorCategory::Backpressure => "backpressure",
             ErrorCategory::State => "state",
+            ErrorCategory::Unsupported => "unsupported",
             ErrorCategory::Internal => "internal",
         }
     }
@@ -123,9 +135,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn category_table_is_closed_at_9() {
-        assert_eq!(ErrorCategory::COUNT, 9);
-        assert_eq!(ErrorCategory::ALL.len(), 9);
+    fn category_table_is_closed_at_10() {
+        // 2026-10-25（owner 裁定）：加了 `Unsupported`（能力不支持）⇒ 9 → 10。
+        assert_eq!(ErrorCategory::COUNT, 10);
+        assert_eq!(ErrorCategory::ALL.len(), 10);
     }
 
     #[test]
@@ -196,7 +209,9 @@ impl ClassifyError for SdkClientError {
             // 退避后重试是标准做法（与「内部不变量破坏」不同）。
             Self::ServerInternal(_) => ErrorCategory::Internal,
             // STUB MODE 是**能力缺口**不是瞬时故障：重试永远还是 501。
-            Self::NotImplemented(_) => ErrorCategory::Internal,
+            // 2026-10-25（owner 裁定）：改用新增的 `Unsupported` 分类 ⇒
+            // 宿主能把它与「服务端内部错误」区分开（前者不该去查服务端）。
+            Self::NotImplemented(_) => ErrorCategory::Unsupported,
             Self::Other(_) => ErrorCategory::Internal,
         }
     }
@@ -429,9 +444,15 @@ mod wiring_tests {
             SdkClientError::ServerInternal("s".into()).category(),
             ErrorCategory::Internal
         );
+        // 2026-10-25（owner 裁定）：能力缺口归 `Unsupported`，
+        // 不再混进 `Internal`（后者读成「服务端内部错误」，会让人去查服务端）。
         assert_eq!(
             SdkClientError::NotImplemented("n".into()).category(),
-            ErrorCategory::Internal
+            ErrorCategory::Unsupported
+        );
+        assert!(
+            !SdkClientError::NotImplemented("n".into()).is_retryable(),
+            "未实现的能力重试永远还是同一个结果 ⇒ 不可重试"
         );
         assert_eq!(
             SdkClientError::Other("o".into()).category(),

@@ -1184,7 +1184,7 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 
 | 模块 | 缺的能力 | 接线点 / 状态 |
 |---|---|---|
-| `crates/adapters/sdk/src/client.rs` 的 `QuotaStub::check` | 客户端配额预检 | 🔶 **已修错误类，能力仍缺**：原先返 `QuotaExceeded` ⇒ 宿主分类为 `RateLimited` ⇒ **「能力没实现」被报成「配额用完了」**（宿主可能提示升级套餐）⇒ 已改 `NotImplemented`（分类 `Internal`、明确不可重试），**报错与真相一致**。**能力本身仍缺**：网关**没有** quota 端点（canonical 路由表里无 `/v1/quota`）⇒ 真接需要「加端点 + 定额度语义」⇒ **待 owner 裁**（且若要精确表达「能力不支持」，需给 `ErrorCategory` 加 `Unsupported` 成员 ⇒ 公开错误面变更 ⇒ 属产品决策） |
+| `crates/adapters/sdk/src/client.rs` 的 `QuotaStub::check` | 客户端配额预检 | 🔶 **错误类已修（owner 裁定 2026-10-25），能力仍缺**：原先返 `QuotaExceeded` ⇒ 宿主分类为 `RateLimited` ⇒ **「能力没实现」被报成「配额用完了」**（宿主可能提示升级套餐）⇒ 已改 `NotImplemented`（**分类 `Unsupported`**、明确不可重试），**报错与真相一致**。**能力本身仍缺**：网关**没有** quota 端点（canonical 路由表里无 `/v1/quota`）⇒ 真接需要「加端点 + 定额度语义」⇒ **待 owner 裁** |
 | `crates/adapters/sdk/src/client.rs` 的 `invoke_stream` | 通用 WS 流式工具调用 | 🔶 **诚实桩**：返 `NotImplemented`（不假装）⇒ 缺的是 **SDK 侧 WS 传输**（SDK 依赖里**没有** `tokio-tungstenite`，只有 HTTP 面已实接）+ 网关 canonical 路由**未暴露** WS 入口 ⇒ 真接 = 「SDK 加 WS 依赖 + 网关暴露 WS 路由 + 按 `ws_v1` 帧协议实现」⇒ **架构级接线，待 owner 裁**（新增依赖 + 公开面变更） |
 
 **B 类（重复实现）6 条** —— 不是债：同能力另有主实现。
@@ -1259,8 +1259,40 @@ owner 裁定 D-7 = C：**只做文档边界说明**，不改 SDK 代码（`crate
 **为什么不擅自删这个变体**：错误码表是**公开闭合词表**，删成员 = 改对外契约
 （下游可能按 `"timeout.idle_exceeded"` 匹配）；而**留着**一个不可能发生的码，
 危害也只是「词表里有一个永不出现的成员」（不会误导运行时行为，因为压根没人造它）。
-⇒ **记录在此，等 owner 裁**：① 保留（预留未来的空闲看门狗）② 删成员 + 改词表 ③ 补一个真实生产者
-（若产品确实要「空闲超时」语义）。**本轮不动**（③ 是产品语义，①② 是契约决策）。
+⇒ **owner 已裁（2026-10-25）：① 保留为预留词**（不删成员、不造伪生产者）。
+**理由**：错误码表是**公开闭合契约**，删成员 = 改对外契约；留一个永不出现的码
+危害仅止于「词表里有个预留成员」（没有任何代码会造它 ⇒ 不会误导运行时行为）。
+⇒ 记为**预留词**（reserved），解冻条件：产品若真的引入「空闲超时」语义
+（真实的生产者），直接启用即可，无需再动词表。
+**本轮我另做了核实**（免得裁错）：所谓「等产出超预算」的场景在本仓**不存在** ——
+`job_board::wait_for_completion` 的 `CompletionWaiter` 是**无预算**的 Future
+（`poll` 只看有没有结算，没有超时分支）；`ambient_context` 的 `idle_timeout_ms`
+是**场景判定**（`UserActivityScene::Idle` ⇒ 决定伴随姿态），**不产生错误**；
+`nightwatch` 的 `min_idle_secs` 是「等空闲」的**活动闸**，方向相反。
+⇒ 所以「补真实生产者」这条路在当前产品面里**没有落点** ⇒ 保留为预留词是正确的。
+
+### 5.5u SDK 错误词表新增 `Unsupported` 成员（owner 裁定 2026-10-25，公开错误面变更）
+
+**问题**：SDK 的「能力没实现」只有两个去处 —— `Internal`（读成「服务端内部错误」，
+让人去查服务端）或 `RateLimited`（读成「配额用完」，让人去升级套餐）。
+**两者都不是真相** ⇒ 宿主无法区分「这个能力根本不存在」/「额度不够」/「对方在限流」。
+
+**裁定与落地**：
+* `ErrorCategory` 新增 **`Unsupported`**（`as_str() == "unsupported"`，**不可重试**：
+  重试同一个未实现的能力，结果永远是同一个）⇒ 闭合词表 9 → 10（`COUNT` 与 `ALL` 同步）；
+* `SdkClientError::NotImplemented` 的分类从 `Internal` 改为 `Unsupported`；
+* `QuotaStub::check` 的错误类从 `QuotaExceeded` 改为 `NotImplemented`（连带 5 处断言）；
+* 测试：词表闭合断言改名 `category_table_is_closed_at_10`（含 `ALL.len()` 与 `COUNT` 一致）、
+  新增「`NotImplemented` 归 `Unsupported` 且不可重试」断言。
+
+**为什么不是 `QuotaExceeded`**：`QuotaExceeded` 的分类是 `RateLimited`，
+宿主会读成「**你的额度用完了**」⇒ 对着一个**永远 501** 的接口提示升级套餐，
+是**误导**；`Internal` 则会把排查方向指到服务端。
+
+**尺寸棘轮联动**：`crates/adapters/sdk/src/client.rs` 是**尺寸棘轮**对象
+（基线 1552 行）⇒ 本批的注释一度把它推到 1563 行（arch_guard 报 size-grow）⇒
+按棘轮本意**收缩代码里的注释**（长理由搬进本节台账，代码里只留一行指针）⇒ 回到 1552 行，
+**未动棘轮基线**（不动基线 = 不把自己的债藏进表里）。
 
 ### 5.5t 孤儿判据的**同名遮蔽**盲区（已定位具体例；判据本身不改）
 
