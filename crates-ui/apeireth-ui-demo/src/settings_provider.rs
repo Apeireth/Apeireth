@@ -1313,7 +1313,6 @@ pub mod wasm {
         renderer
             .mount(render_tree(&host))
             .map_err(|error| error.to_string())?;
-        sync_properties(&host, container)?;
 
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
@@ -1324,7 +1323,6 @@ pub mod wasm {
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
             drop(guard);
-            let _ = sync_properties(&effect_host, &effect_container);
             publish_state(&effect_host);
         });
 
@@ -1560,76 +1558,6 @@ pub mod wasm {
             }
         });
     }
-
-    /// 把宿主状态里的字段值**回写**到 DOM **property**。
-    ///
-    /// ## 为什么必须回写
-    ///
-    /// 生产用 `bind:value` ⇒ 取值是 **property**（DOM 上**没有** `value` 属性）
-    /// ⇒ 引擎侧若只写属性 ⇒ 画面是**空输入框** ⇒ 像素必然不一致。
-    ///
-    /// ## 为什么**只**在值不等时写
-    ///
-    /// 避免打断输入法组合态与光标位置（与向导面 / 人格面同口径）。
-    fn sync_properties(host: &ProviderHost, _container: &Element) -> Result<(), String> {
-        let _ = host;
-        // 值从**宿主的信号**取（发布面与渲染面同源）。
-        let state = host.state();
-        set_value("#provider-url-input", &state["baseUrl"])?;
-        set_value("#provider-model-input", &state["model"])?;
-        set_value(
-            "#provider-key-input",
-            &host.field_value("provider.apiKey").unwrap_or_default(),
-        )?;
-        set_value("#anthropic-ver-input", &state["anthropicVersion"])?;
-        set_value(
-            "#endpoint-input",
-            &host.field_value("gateway.baseUrl").unwrap_or_default(),
-        )?;
-        set_value(
-            ".disc-search input",
-            &host.field_value("model.searchQuery").unwrap_or_default(),
-        )?;
-        set_value(
-            ".modal-body .form-group input",
-            &host.field_value("modal.tempApiKey").unwrap_or_default(),
-        )?;
-        Ok(())
-    }
-
-    /// 写一个字符串 property（**按选择器定位**；缺失 ⇒ 跳过）。
-    fn set_value(selector: &str, value: &str) -> Result<(), String> {
-        let Some(window) = web_sys::window() else {
-            return Ok(());
-        };
-        let Some(document) = window.document() else {
-            return Ok(());
-        };
-        let Some(element) = document.query_selector(selector).ok().flatten() else {
-            return Ok(());
-        };
-        let current = Reflect::get(element.as_ref(), &JsValue::from_str("value"))
-            .map(|value| value.as_string().unwrap_or_default())
-            .unwrap_or_default();
-        if current == value {
-            return Ok(());
-        }
-        Reflect::set(
-            element.as_ref(),
-            &JsValue::from_str("value"),
-            &JsValue::from_str(value),
-        )
-        .map(|_| ())
-        .map_err(|error| format!("写 {selector} 的 value 失败：{error:?}"))
-    }
-
-    /// **从 DOM 读回**一个字段的当前值（生产 `bind:value` 的等价物）。
-    ///
-    /// ## 选择器从哪来
-    ///
-    /// 生产每个输入框都有**逐字照抄的 `id`**（`provider-url-input` 等）
-    /// ⇒ 定位稳定、可复核。模态里的新密钥输入框**没有 id**（生产也没有）
-    /// ⇒ 用结构选择器 `.modal-body .form-group input`。
     fn read_dom_value(selector: &str) -> Option<String> {
         let window = web_sys::window()?;
         let document = window.document()?;

@@ -75,7 +75,7 @@
 //! | 打码 | **展示口径**可迁（[`mask_api_key`]）；**明文密钥不迁** |
 //! | `SessionModelPicker` | **不迁**（闭合态占位；下拉未迁移） |
 //! | 「未保存 / ✓」字段旗标 | 复用 S1 的 [`FieldFlag`]（状态归宿主） |
-//! | 原生控件的**取值** | 生产用 **property**（`bind:value`）⇒ 组件**不写** `value` 属性 ⇒ 宿主挂载后回写 property |
+//! | 原生控件的**取值** | 生产用 **property**（`bind:value`）⇒ 组件**不写** `value` 属性，由组件用 `prop("value", …)` **声明**、引擎写入 |
 //!
 //! ## 图标数据
 //!
@@ -1216,12 +1216,17 @@ fn render_text_input(
     id: &str,
     input_type: &str,
     placeholder: &str,
+    value: &str,
     on_input: impl Fn(&mut DomEvent) + 'static,
 ) -> VNode {
     VNode::element("input")
         .attr("id", id)
         .attr("type", input_type)
         .attr("placeholder", placeholder)
+        // ⚠️ **取值由组件声明**（`prop("value", …)` ⇒ **property**，不写属性）：
+        // 生产是 `bind:value` ⇒ Svelte 写 property、DOM 上**没有** `value` 属性
+        // ⇒ 组件自己带值 ⇒ 宿主不必再按选择器回写（写 attribute 对 `input.value` 无效）。
+        .prop("value", value)
         .handler(EventKind::Input, ElementHandler::new(on_input))
         .build()
 }
@@ -1654,6 +1659,7 @@ fn render_fields_step(props: &ProviderGroupProps, protocol: &str) -> VNode {
             "provider-url-input",
             "text",
             url_placeholder(protocol),
+            &props.base_url.get(),
             move |_event| (field)("provider.baseUrl"),
         )
     };
@@ -1663,6 +1669,7 @@ fn render_fields_step(props: &ProviderGroupProps, protocol: &str) -> VNode {
             "provider-model-input",
             "text",
             model_placeholder(protocol),
+            &props.model.get(),
             move |_event| (field)("provider.model"),
         )
     };
@@ -1675,6 +1682,8 @@ fn render_fields_step(props: &ProviderGroupProps, protocol: &str) -> VNode {
             // ⚠️ `type` 是**属性分支**（T4：`password` ⇔ `text`）。
             .attr("type", input_type)
             .attr("placeholder", key_placeholder(protocol))
+            // 取值由组件声明（property）；密钥**明文不进属性**。
+            .prop("value", props.api_key.get())
             .handler(
                 EventKind::Input,
                 ElementHandler::new(move |_event: &mut DomEvent| {
@@ -1689,6 +1698,7 @@ fn render_fields_step(props: &ProviderGroupProps, protocol: &str) -> VNode {
             "anthropic-ver-input",
             "text",
             ANTHROPIC_VERSION_PLACEHOLDER,
+            &props.anthropic_version.get(),
             move |_event| (field)("provider.anthropicVersion"),
         )
     };
@@ -1947,6 +1957,8 @@ fn render_discovered_models(props: &ProviderGroupProps, result: &TestResult) -> 
         VNode::element("input")
             .attr("type", "search")
             .attr("placeholder", placeholder)
+            // 取值由组件声明（property）⇒ 宿主不再回写。
+            .prop("value", props.model_search_query.get())
             .handler(
                 EventKind::Input,
                 ElementHandler::new(move |_event: &mut DomEvent| {
@@ -2083,6 +2095,8 @@ fn render_advanced_body(props: &ProviderGroupProps) -> VNode {
         .attr("id", "endpoint-input")
         .attr("type", "text")
         .attr("placeholder", placeholder)
+        // 取值由组件声明（property）⇒ 宿主不再回写。
+        .prop("value", props.edit_base_url.get())
         .handler(
             EventKind::Input,
             ElementHandler::new(move |_event| (field)("gateway.baseUrl")),
@@ -2214,6 +2228,8 @@ fn render_api_key_modal(props: &ProviderGroupProps) -> VNode {
         .attr("type", "password")
         .attr("placeholder", placeholder)
         .attr("autocomplete", "off")
+        // 取值由组件声明（property）；临时密钥**同样只走 property**。
+        .prop("value", props.temp_api_key.get())
         .handler(
             EventKind::Input,
             ElementHandler::new(move |_event: &mut DomEvent| {
