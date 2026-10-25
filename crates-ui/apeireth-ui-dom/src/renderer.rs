@@ -415,19 +415,60 @@ impl<D: Dom> Renderer<D> {
     }
 
     /// 子节点对位：keyed ⇒ 按身份（key）配对；否则 ⇒ 按位置。
+    ///
+    /// ## ⭐ **两侧都先「摊平」Fragment**（2026-10-25 修）
+    ///
+    /// ### 为什么
+    ///
+    /// `view!` 宏把「内插一个变量」编译成 **Fragment** ⇒ 组件树里到处都有。
+    /// 而 Fragment **没有宿主节点** ⇒ 它在 DOM 上是**摊平**的一组兄弟。
+    /// ⇒ ⇒ **配对的单位必须是「真实 DOM 节点」**，不能是「VNode 节点」。
+    ///
+    /// ### 摊平前的三个后果（**全部实测过**）
+    ///
+    /// 1. **每次重渲染都把整棵 Fragment 子树重建** ⇒ `patch_node` 没有
+    ///    `(Fragment, Fragment)` 分支 ⇒ Fragment 落到「类型不匹配 ⇒ 替换子树」
+    ///    ⇒ ⇒ **输入框元素被换掉** ⇒ 用户输入与焦点一起丢
+    ///    ⇒ ⇒ **受控输入在引擎侧不可用**（实测：键入 1 个字符 ⇒ 取值 `''`）。
+    /// 2. **keyed 差分被废掉**：`MountedNode::to_vnode()` 对 Fragment 返回 `None`
+    ///    ⇒ `patch_children` 的 keyed 判定 `old_vnodes.len() == old.len()`
+    ///    ⇒ **含 Fragment 的列表永远走不到 keyed** ⇒ 顺序变化只能靠重建。
+    /// 3. **配对错位**：old 侧一个 Fragment 对 new 侧一个 Fragment ⇒ 但两者的
+    ///    children 数量/顺序可能不同 ⇒ 按索引配对会把 `old[i]` 复用给语义不同的
+    ///    `new[i]` ⇒ **内容出现在错误的位置**（实测：审批项的「会话行」跑到
+    ///    「输入框」的位置 ⇒ 逐像素差 27.4%）。
+    ///
+    /// ### 摊平后
+    ///
+    /// - 两侧序列都是「真实 DOM 节点」⇒ 配对单位正确 ⇒ **元素被复用**
+    ///   ⇒ ⇒ **受控输入可用**；
+    /// - `to_vnode()` 不再返回 `None` ⇒ ⇒ **keyed 差分可用**
+    ///   ⇒ 顺序变化按**身份**配对 + 移动 ⇒ 不再错位；
+    /// - Fragment 从 `MountedNode` 树里**消失** ⇒ 树里不再有两种「节点单位」。
+    ///
+    /// ⚠️ **首次挂载**仍会建出 Fragment 节点（`mount_node` 未改）
+    /// ⇒ 但**第一次 patch 就会摊平掉它** ⇒ 之后树上恒为摊平结构 ⇒ 一致。
     fn patch_children(
         &mut self,
         parent: &D::Node,
         old: &[MountedNode<D>],
         new: &[VNode],
     ) -> Result<Vec<MountedNode<D>>, DomError> {
-        let old_vnodes: Vec<VNode> = old.iter().filter_map(|child| child.to_vnode()).collect();
-        let keyed = old_vnodes.len() == old.len()
-            && crate::keyed::list_diff_mode(&old_vnodes, new) == crate::keyed::ListDiffMode::Keyed;
+        // ① 两侧摊平（Fragment 就地展开成它的 children）。
+        let old_flat = flatten_mounted(old);
+        let new_flat = flatten_vnode(new);
+        // ② 差分：keyed（按身份 + 移动）⇒ 否则按位置。
+        let old_vnodes: Vec<VNode> = old_flat
+            .iter()
+            .filter_map(|child| child.to_vnode())
+            .collect();
+        let keyed = old_vnodes.len() == old_flat.len()
+            && crate::keyed::list_diff_mode(&old_vnodes, &new_flat)
+                == crate::keyed::ListDiffMode::Keyed;
         if keyed {
-            self.patch_keyed_children(parent, old, new, &old_vnodes)
+            self.patch_keyed_children(parent, &old_flat, &new_flat, &old_vnodes)
         } else {
-            self.patch_unkeyed_children(parent, old, new)
+            self.patch_unkeyed_children(parent, &old_flat, &new_flat)
         }
     }
 
@@ -805,6 +846,38 @@ fn last_dom_node<D: Dom>(node: &MountedNode<D>) -> Option<&D::Node> {
         MountedNode::Text(text) => Some(&text.dom),
         MountedNode::Fragment(fragment) => fragment.children.last().and_then(last_dom_node),
     }
+}
+
+/// 把一组**已挂载**子节点里的 **Fragment 就地摊平**（Fragment 无宿主节点
+/// ⇒ 它在 DOM 上就是它 children 的一组兄弟）。
+///
+/// ⇒ 摊平后序列里的每一项都**有**宿主节点 ⇒
+/// ⇒ 差分的配对单位与 DOM 的实际结构**一致**。
+fn flatten_mounted<D: Dom>(nodes: &[MountedNode<D>]) -> Vec<MountedNode<D>> {
+    let mut out = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        match node {
+            MountedNode::Fragment(fragment) => {
+                out.extend(flatten_mounted(&fragment.children));
+            }
+            other => out.push(other.clone()),
+        }
+    }
+    out
+}
+
+/// 把一组**虚拟**子节点里的 **Fragment 就地摊平**（与 [`flatten_mounted`] 同口径）。
+fn flatten_vnode(nodes: &[VNode]) -> Vec<VNode> {
+    let mut out = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        match node {
+            VNode::Fragment(children) => {
+                out.extend(flatten_vnode(children));
+            }
+            other => out.push(other.clone()),
+        }
+    }
+    out
 }
 
 /// 读元素的 class token 集合（保序）。
@@ -1884,6 +1957,148 @@ mod tests {
             renderer.dom().attribute(element, "value").is_none(),
             "property 不应变成属性"
         );
+    }
+
+    /// ⭐ **Fragment 里的元素在重渲染后**不重建**（2026-10-25 修的核心缺陷）。
+    ///
+    /// ## 缺陷现象（实测，浏览器里）
+    ///
+    /// `view!` 把「内插一个变量」编译成 **Fragment** ⇒ 几乎每棵组件树里都有。
+    /// 修前 `patch_children` **按「VNode 节点」配对** ⇒ old 侧一个 Fragment 对
+    /// new 侧一个 Fragment ⇒ 而 `patch_node` 没有 `(Fragment, Fragment)` 分支
+    /// ⇒ Fragment 落到「类型不匹配 ⇒ 替换子树」
+    /// ⇒ ⇒ **每次重渲染都把整棵 Fragment 子树重建**
+    /// ⇒ ⇒ **输入框元素被换掉** ⇒ 用户输入与焦点一起丢
+    /// ⇒ ⇒ 实测：键入 1 个字符 ⇒ 取值 `''`、`activeElement` 掉到 `body`
+    /// ⇒ ⇒ **受控输入在引擎侧不可用**（而像素对照看不出来 ⇒ 绿）。
+    ///
+    /// ## 判据（**可观测的节点身份**，不读源码文本）
+    ///
+    /// 同一个 Fragment 里的 `input` 节点，在第二次渲染后**必须是同一个节点**
+    /// ⇒ 节点身份不变 ⇒ **没有重建**。
+    #[test]
+    fn a_fragment_subtree_is_not_rebuilt_on_rerender() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let tree = VNode::element("div")
+            .child(
+                VNode::element("section")
+                    .child(VNode::Fragment(vec![VNode::element("input")
+                        .attr("type", "text")
+                        .build()]))
+                    .build(),
+            )
+            .build();
+        let mounted = renderer.mount(tree).expect("挂载必须成功");
+        let first = mounted.children().first().and_then(find_input);
+        assert!(first.is_some(), "片段里应有 input");
+
+        // 第二次渲染：结构相同 ⇒ **必须复用**同一个 input 节点。
+        let tree2 = VNode::element("div")
+            .child(
+                VNode::element("section")
+                    .child(VNode::Fragment(vec![VNode::element("input")
+                        .attr("type", "text")
+                        .build()]))
+                    .build(),
+            )
+            .build();
+        let mounted2 = renderer.patch(tree2).expect("重渲染必须成功");
+        let second = mounted2.children().first().and_then(find_input);
+        assert!(second.is_some(), "重渲染后仍应有 input");
+        assert_eq!(
+            first, second,
+            "Fragment 里的节点在重渲染后**被重建了** ⇒ 输入框元素会被换掉 ⇒ 受控输入不可用"
+        );
+    }
+
+    /// ⭐ **Fragment 里的顺序变化按位置对齐**（摊平后的既有语义）。
+    ///
+    /// 摊平后两侧序列都是「真实 DOM 节点」⇒ 位置配对才正确
+    /// ⇒ 断言：第二个 Fragment 里的节点**不会**跑到第一个的位置。
+    #[test]
+    fn a_fragment_keeps_the_positions_of_its_children() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let tree = VNode::element("div")
+            .child(
+                VNode::element("section")
+                    .child(VNode::Fragment(vec![
+                        VNode::element("span").attr("class", "a").build(),
+                        VNode::element("span").attr("class", "b").build(),
+                    ]))
+                    .build(),
+            )
+            .build();
+        let mounted = renderer.mount(tree).expect("挂载必须成功");
+        let classes = mounted
+            .children()
+            .first()
+            .map(collect_classes)
+            .unwrap_or_default();
+        assert_eq!(classes, vec!["a".to_string(), "b".to_string()]);
+
+        // 第二次渲染：顺序**颠倒** ⇒ 位置配对 ⇒ 第一个位置仍是 `a`。
+        let tree2 = VNode::element("div")
+            .child(
+                VNode::element("section")
+                    .child(VNode::Fragment(vec![
+                        VNode::element("span").attr("class", "b").build(),
+                        VNode::element("span").attr("class", "a").build(),
+                    ]))
+                    .build(),
+            )
+            .build();
+        let mounted2 = renderer.patch(tree2).expect("重渲染必须成功");
+        let classes2 = mounted2
+            .children()
+            .first()
+            .map(collect_classes)
+            .unwrap_or_default();
+        assert_eq!(
+            classes2,
+            vec!["b".to_string(), "a".to_string()],
+            "Fragment 摊平后应按**位置**对齐 ⇒ 顺序变化要如实反映（**身份配对要靠 key**）"
+        );
+    }
+
+    /// 在已挂载的子树里找第一个 `input` 节点（深度优先）。
+    fn find_input(node: &MountedNode<InMemoryDom>) -> Option<InMemoryNodeId> {
+        match node {
+            MountedNode::Element(element) => {
+                if element.vnode.tag == "input" {
+                    return Some(element.dom);
+                }
+                element.children.iter().find_map(find_input)
+            }
+            MountedNode::Fragment(fragment) => fragment.children.iter().find_map(find_input),
+            MountedNode::Text(_) => None,
+        }
+    }
+
+    /// 收集子树里所有元素的 class（深度优先，保序）。
+    fn collect_classes(node: &MountedNode<InMemoryDom>) -> Vec<String> {
+        let mut out = Vec::new();
+        fn walk(node: &MountedNode<InMemoryDom>, out: &mut Vec<String>) {
+            match node {
+                MountedNode::Element(element) => {
+                    if let Some(class) = element.vnode.attr_value("class") {
+                        if let Some(text) = class.to_attr_string() {
+                            out.push(text);
+                        }
+                    }
+                    for child in &element.children {
+                        walk(child, out);
+                    }
+                }
+                MountedNode::Fragment(fragment) => {
+                    for child in &fragment.children {
+                        walk(child, out);
+                    }
+                }
+                MountedNode::Text(_) => {}
+            }
+        }
+        walk(node, &mut out);
+        out
     }
 
     /// **T-p2**：属性先写、property 后写 —— `<select>` 的 `value` 依赖 `option` 已存在。
