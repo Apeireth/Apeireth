@@ -42,6 +42,7 @@ Usage:
     apeireth lessons add --statement 一句话教训 --scope SCOPE --episode 经历ID [--episode ...] --evidence 证据摘要
     apeireth council <主题...>
     apeireth subagent <标题...> [--payload JSON]
+    apeireth memory verify [--db DB] [--subject SUBJECT]
   [治理与安全]
     apeireth trait report
     apeireth trait lock <SLIDER>
@@ -1021,6 +1022,27 @@ fn run_cli() -> ExitCode {
             Err(error) => {
                 eprintln!("{error}");
                 print_help();
+                ExitCode::FAILURE
+            }
+        },
+        // 记忆库体检（只读）：校验哈希链完整性并定位坏记录。
+        "memory" => match args.get(1).map(String::as_str) {
+            Some("verify") => match apeireth_cli::memory_verify_command::run_verify(&args[2..]) {
+                Ok(report) => {
+                    println!("{}", apeireth_cli::memory_verify_command::render(&report));
+                    if report.broken_subjects == 0 {
+                        ExitCode::SUCCESS
+                    } else {
+                        ExitCode::FAILURE
+                    }
+                }
+                Err(error) => {
+                    eprintln!("memory verify failed: {error}");
+                    ExitCode::from(2)
+                }
+            },
+            _ => {
+                eprintln!("{}", apeireth_cli::memory_verify_command::USAGE);
                 ExitCode::FAILURE
             }
         },
