@@ -77,8 +77,8 @@ pub mod model_profile;
 /// 模型), 依据数据面是 [`model_profile`] 画像表; 无价模型不参与价格比较,
 /// **绝不编价**。
 pub mod cost_router;
-// 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 空闲看门狗 + 超时类独立 code。
-/// 统一超时熔合小库 (`Deadline` / `clamp_timeout` / `IdleWatchdog`)。
+// 统一超时熔合 (第三批·裁决件): 到期只通知 + 取值过闸 + 超时类独立 code。
+/// 统一超时熔合小库 (`Deadline` / `clamp_timeout`)。
 pub mod deadline;
 // 资源租约 + 失败即帧 (第三批·裁决件): 引用计数租约 / pin 保活 / 快照即读 / 失败即帧。
 /// 资源租约注册表 (`ResourceRegistry`): 首持有者开流、末持有者关停。

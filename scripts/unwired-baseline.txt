@@ -131,14 +131,10 @@ orphan with_used  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（4 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（0 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
-orphan begin_wait  # G5
-orphan end_wait  # G5
-orphan idle_elapsed  # G5
-orphan is_tripped  # G5
 
-# --- G6（78 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（72 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
 orphan constrain_to_trusted  # G6
 orphan decompose_default  # G6
@@ -150,8 +146,6 @@ orphan sheet_ops_capability  # G6
 orphan trait_locks_path  # G6
 orphan validate_schedule  # G6
 orphan recall_with_policy  # G6
-orphan retract_relation  # G6
-orphan select_candidates  # G6
 orphan accumulator_mut  # G6
 orphan active_profile  # G6
 orphan adapt_gate  # G6
@@ -165,7 +159,6 @@ orphan consolidate_governed  # G6
 orphan default_min_count  # G6
 orphan dispatch_gateway_serve  # G6
 orphan ensure_governance  # G6
-orphan events_with_ids  # G6
 orphan execute_streaming  # G6
 orphan explicit_allow_list  # G6
 orphan extract_features  # G6
@@ -173,7 +166,6 @@ orphan extract_features_v2  # G6
 orphan family_enforced  # G6
 orphan fetch_governed  # G6
 orphan get_for_subject  # G6
-orphan get_history  # G6
 orphan get_page  # G6
 orphan get_persona  # G6
 orphan governance_cas_failure  # G6
@@ -195,7 +187,6 @@ orphan outbound_budget  # G6
 orphan put_default  # G6
 orphan put_episode_full  # G6
 orphan query_as_of  # G6
-orphan query_facts  # G6
 orphan query_with_time_range  # G6
 orphan rebind  # G6
 orphan recent_actions  # G6
@@ -215,7 +206,6 @@ orphan streaks  # G6
 orphan stream_len  # G6
 orphan tool_paths  # G6
 orphan total_subscriptions  # G6
-orphan traverse_from  # G6
 orphan upsert_hallway  # G6
 orphan without_as_of  # G6
 
