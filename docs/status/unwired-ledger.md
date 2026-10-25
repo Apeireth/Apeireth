@@ -1167,7 +1167,7 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | `crates/adapters/gateway/src/file_fetcher.rs` | `file://` 拦截 + SHA-256 内容寻址缓存 + 完整性校验 + 分布式回退 | 🔶 **半修（实现补全，消费点待协调）**：查证发现 `cache_dir` 是**死字段** —— 文档宣称的「原子入库 / 磁盘内容寻址缓存」**根本不存在**（缓存只在内存、重启即散）。已真正实现：两级内容寻址（`<url_key>.meta.json` 记 URL→内容哈希、`<sha256>.bin` 存不可变字节，同内容只落一份）+ **每次命中重算哈希校验**（篡改/截断的坏条目自动清理并回源）+ 原子写（tmp+rename，先内容后元数据）+ 写失败计数可见。测试 7 条（跨重启命中/篡改拒绝/缺 blob 回退/内容去重/远端回填离线可用）。**剩余**：`TransparentFileFetcher` 仍零生产消费；消费点（MCP 资源 `file://` URI 读取、IM 附件）在副总指挥的 crate 内 ⇒ 已上看板 §四 请他指定可动文件或由他接 |
 | `crates/adapters/sdk/src/error_taxonomy.rs` | 错误族 → 闭合词表映射 + 跨语言分类/可重试暴露 | ✅ **已修**：`ClassifyError` 此前**零实现**（词表有测试但没任何真实错误走进去）。现为 `SdkClientError` / `SdkError`+`SdkErrorCode` / `CodecError`+`CodecErrorKind` 全部实现映射，并新增跨语言 `ErrorFrame`（`category`/`retryable` 恒在场）。**如实标注**：语言绑定（node/python）目前只暴露 `count_tokens`/`hash_request`，还没有错误面 ⇒ `ErrorFrame` 暂无可用的跨语言出口，待绑定补错误 API |
 | `crates/capabilities/tools/src/repo_map.rs` | `tool.repo_map` 工具面（符号地图 + PageRank + token 预算裁剪） | ✅ **已修**：`RepoMapTool` 工具面（`repo_map_tool.rs`）+ `RepoMapModule` 生产注册（与 `tool.repo` 同源工作区根），只读、限域、三重预算；**顺带修掉两处平方级热点**（152 文件 9.5s→0.26s、全仓 1319 文件 10.8s→2.1s）+ 复杂度回归守卫测试 |
-| `crates/engine/memory/src/cross_diary.rs` | 检索命中事实时注入关联日记片段 | 记忆检索装配点 |
+| `crates/engine/memory/src/cross_diary.rs` | 检索命中事实时注入关联日记片段 | ✅ **已修**（D-4，2026-10-25）：接在 `execute_hybrid_retrieval`（recall / recall_async 共用尾段），命中片段进**反幻觉编号证据清单**（生产默认）；只读、有界、确定性（≤3 片段/事实、≤120 字、≤14 天扫描窗、≥2 共有词才命中）；**不新增 env** ⇒ **存在性即开关**（`<data>/diary` 存在才挂） |
 | `crates/engine/memory/src/milestone.rs` | 关系里程碑写入/查询（v1 REAL、v2 库级 0 接线） | ✅ **已修**：新增 `SqliteMilestoneStore`（关系史跨重启存活，此前只有内存版）+ `MilestoneRecorder`（**幂等**记录面）+ 接进 `PartnerBondModule`：`TurnStart` 记**初见**（幂等）、`AfterTurn` 阶段**真跃迁**时记一条（`Bond::evolve` 的阈值推进是确定性的）。未注入存储 ⇒ 零记录（零行为变化）。其余类型（首次分享/情绪共鸣/决策/冲突/修复）需语义判定，本批**不猜** |
 | `crates/engine/memory/src/partner_store_sqlite.rs` | 伙伴/羁绊记录**跨重启持久化** | ✅ **已修**：装配换成 `SqlitePartnerStore`（与认知库同一份库）；顺带修 `ensure_schema` 从不被调用导致「能编译但用不了」（`no such table: partner_records`） |
 | `crates/engine/memory/src/query_expand.rs` | 混合检索前的同义/关键词簇查询扩展 | ✅ **已修**：接在检索主路径（`coordinator.rs`），做成**召回增强**而非替换查询 —— 只在主查询召回不足 `limit` 时补跑扩展并按 id 并集去重（同 id 取更高分）。原因：打分是各项之和（BM25 无查询长度归一化），直接替换查询会让「同义词匹配多」的文档压过精确匹配 ⇒ 加词提召回不该降精度 |
@@ -1176,8 +1176,8 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | `crates/engine/provider/src/reasoning_adapter.rs` | 推理字段归一化下发 + 转发前剥离 reasoning | ✅ **已修**：`openai_chat::parse_response_with_reasoning` 接进 OpenAI 兼容 provider 的 `adapt_response`（12 别名 → 前置 `<think>` 块）。**默认关**（`APEIRETH_REASONING_ENABLED`，模块自带既有开关，不新增 env 名）⇒ 关时逐字节零变化。关键顺序：**先归一化、后判空** —— 否则「推理模型烧光预算、content 空 + finish_reason=length」会误判成空壳响应（其实手上有内容）。Anthropic 的 `type:thinking` 块结构不同，未接（如实标注） |
 | `crates/foundation/governance/src/rate_limit.rs` | 按 (capability,session) 分/时滑窗 + 四阶信任 + 黑名单 | ✅ **已修**：限流 hook 挂进生产治理链（授权之后、内容风险之前），**默认挂载**（配额内完全放行、零行为变化；超限才拒）。默认挂载而非「默认关 + env 开关」：env 棘轮只减不增已满额，且「默认关」等于这闸依然没接电 |
 | `crates/foundation/orchestration/src/async_context.rs` | 四层异步上下文隔离（工具海量输出/后台通知分层） | 🔁 **A→B 更正（重复覆盖，非缺口）**：原判据是「`ContextProjector` 现为 `NoContextProjector`」——**前提不成立**。生产 `cli/src/lib.rs:1609` **无条件**调 `cognitive.register_context_projection(builder)`，注入的是 `MemoryContextProjector`（`ContextWindowManager::default()`，production.rs:1790/111），它做的正是「按预算压缩投影 + 工具海量输出用 `continuity_summary` 桩替代」（有测试 `compaction_only_changes_provider_projection`）。⇒ 生产不存在「扁平无界 transcript 直送 provider」这回事。`async_context` 的独特部分（HUD 通知层 / summary-status 微记录）在**生产也无产出方与消费方** ⇒ 归重复实现 |
-| `crates/foundation/orchestration/src/care_potential_field.rs` | 疲劳/深夜挫败 → 三阶克制关怀 | **先补信号源**（distress/fatigue/流保护阻力全仓无源） |
-| `crates/foundation/orchestration/src/continuation.rs` | 断点续行快照（进程重启后带未决工具调用续跑） | ~~runtime 会话存储只有内存实现~~（**前提已过期**，见 §5.4q）；**部分接线（2026-10-25，见 §5.4r）**：回合级中断检测已接进 `apeireth chat`；剩余 = 自动续跑语义属产品决策 |
+| `crates/foundation/orchestration/src/care_potential_field.rs` | 疲劳/深夜挫败 → 三阶克制关怀 | ✅ **已修**（D-3，2026-10-25）：新增 `canonical/care_signals.rs`（`CareSignals`：连续工具失败 ⇒ 挫败、距上次成功 ⇒ 疲劳，时钟回拨安全）+ `CarePotentialDriver`（势能突破**只产一条提醒信号**，走既有提醒管道不绕闸）；**不新增 env**（复用 `APEIRETH_ENABLE_BIO_LIFECYCLE`）；真机已验 |
+| `crates/foundation/orchestration/src/continuation.rs` | 断点续行快照（进程重启后带未决工具调用续跑） | ~~runtime 会话存储只有内存实现~~（**前提已过期**，见 §5.4q）；**部分接线（2026-10-25，见 §5.4r）**：回合级中断检测已接进 `apeireth chat`（append-only 续行快照，崩溃留下痕迹、下次启动如实告知，**只报不重放**）；剩余 = 「自动续跑」语义属产品决策（重放有副作用）⇒ **待 owner 裁** |
 | `crates/foundation/orchestration/src/speech_arbiter.rs` | 多主体同台发言权仲裁（排队/TTL/抢占打断/时长平衡） | 全双工未装配（`voice.duplex = not_assembled`） |
 
 **B 类（重复实现）6 条** —— 不是债：同能力另有主实现。
@@ -1190,12 +1190,12 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 `context_fold/fold_block`（家族自述 DEFAULT OFF）、`lineage_spawning`（roadmap 2027-01-15）、
 `p2p_mesh`（明文桩，接线即泄密）。
 
-**E 类（待 owner 裁定）2 条**：
+**E 类（待 owner 裁定）2 条 —— owner 已裁定（2026-10-25）**：
 
-| 模块 | 缺什么裁定 |
-|---|---|
-| `crates/engine/memory/src/semantic_axis.rs` | 归属哪个消费点（并入 absorption_insight 补第 5 段，还是删） |
-| `crates/foundation/core/src/eight_anchors.rs` | 9 锚要不要有执行面（接进 council 提示词/哲学门禁，还是删登记册） |
+| 模块 | owner 裁定 | 落地 |
+|---|---|---|
+| `crates/engine/memory/src/semantic_axis.rs` | **并入 absorption_insight 补第 5 段** | ✅ **已落地**：`absorption_insight_text` 增加第 5 段「语义主轴」——加权中心化 PCA 抽正交主轴（成分数 = min(消息数, 3)）、把末条消息投影上去，输出**主轴数 / 逻辑深度 / 跨域共振强度 / 主导主轴**。纯确定性（0 LLM / 0 IO），与前四段同口径（研究吸收批的实验性洞察，不参与生产召回与决策）。测试：四段→五段断言 + 专项测试（确定性、主轴数受样本数约束、数值在 [0,1]） |
+| `crates/foundation/core/src/eight_anchors.rs` | **只作登记册**（不接执行面） | ✅ **不动本体**（9 哲学锚属 LOCKED 面，0 触碰）：保持「枚举 + 编译期 hardcode 锁 + 与 6 锚互转」的登记册形态，**不接 council 提示词、不接哲学门禁**。解冻条件：哲学门禁真正接线时（那是另一个产品决策） |
 
 > **D 类（真死代码）0 条** —— 没有任何模块同时满足「无重复实现 + 无设计意图 + 零引用」。
 > 这本身是个结论：**模块级债的主体是「接线缺口」与「有意不接」，不是死代码。**

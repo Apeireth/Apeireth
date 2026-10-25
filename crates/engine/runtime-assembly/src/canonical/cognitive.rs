@@ -636,6 +636,41 @@ mod absorption_insight_tests {
     use super::*;
 
     #[test]
+    fn semantic_axis_section_is_deterministic_and_reports_real_quantities() {
+        // 第 5 段（semantic_axis）专项：确定性 + 数值在 [0,1] + 主轴数受样本数约束。
+        let messages = vec![
+            "记忆系统的检索层有 ACT-R 激活与混合检索。".to_string(),
+            "治理层的取舍我们还没聊过。".to_string(),
+            "检索层与治理层都需要可回放的审计链。".to_string(),
+        ];
+        let first = absorption_insight_text(&messages);
+        let second = absorption_insight_text(&messages);
+        assert_eq!(first, second, "同输入恒同输出");
+        assert!(first.contains("语义主轴"), "{first}");
+
+        // 主轴数 = min(消息数, SEMANTIC_AXIS_COMPONENTS) ⇒ 3 条消息 ⇒ 最多 3 维。
+        let expected = SEMANTIC_AXIS_COMPONENTS.min(messages.len());
+        assert!(
+            first.contains(&format!("主轴 {expected} 维")),
+            "主轴数应受样本数约束: {first}"
+        );
+
+        // 逻辑深度与跨域共振都在 [0,1]（不是 NaN / 不是负数）。
+        for label in ["逻辑深度", "跨域共振"] {
+            let value = first
+                .split(label)
+                .nth(1)
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|token| token.parse::<f32>().ok())
+                .unwrap_or_else(|| panic!("{label} 段应带可解析的数值: {first}"));
+            assert!(
+                (0.0..=1.0).contains(&value),
+                "{label} 应在 [0,1]，实得 {value}: {first}"
+            );
+        }
+    }
+
+    #[test]
     fn config_defaults_to_absorption_insight_off() {
         // W2 五件验收门②: 默认关 = 行为不变。
         let config = crate::canonical::production::CognitiveModuleConfig::default();
@@ -643,8 +678,9 @@ mod absorption_insight_tests {
     }
 
     #[test]
-    fn absorption_insight_reports_four_algorithm_sections_and_is_deterministic() {
-        // W2 五件验收门③: 效果可见 = 四算法各出一节 + 同输入恒同输出 (可重放)。
+    fn absorption_insight_reports_algorithm_sections_and_is_deterministic() {
+        // W2 五件验收门③: 效果可见 = 各算法各出一节 + 同输入恒同输出 (可重放)。
+        // （2026-10-25 owner 裁定：semantic_axis 并入 ⇒ 段数 4 → 5。）
         let messages = vec![
             "帮我梳理一下记忆系统的架构，特别是检索那一层。".to_string(),
             "检索层有 ACT-R 激活与混合检索；但治理层的取舍我们还没聊过。".to_string(),
@@ -657,6 +693,10 @@ mod absorption_insight_tests {
         assert!(first.contains("语义新颖度"), "{first}");
         assert!(first.contains("关联传导"), "{first}");
         assert!(first.contains("顿悟涌现"), "{first}");
+        // 第 5 段（owner 裁定 2026-10-25：semantic_axis 并入 absorption_insight）。
+        assert!(first.contains("语义主轴"), "{first}");
+        assert!(first.contains("逻辑深度"), "{first}");
+        assert!(first.contains("跨域共振"), "{first}");
         // 空输入 = 空报告 (0 装: 不凭空造洞察)。
         assert_eq!(absorption_insight_text(&[]), "");
     }
@@ -836,6 +876,12 @@ pub const ABSORPTION_INSIGHT_MODULE_ID: &str = "cognitive.absorption_insight";
 /// 吸收批特征维度 (确定性字节直方图, 与 OrthogonalResidualPyramid 对齐)。
 pub const ABSORPTION_FEATURE_DIM: usize = 32;
 
+/// 语义主轴的成分数（加权中心化 PCA 抽几个正交方向）。
+///
+/// 口径：主轴数 = min(消息数, 该上限) ⇒ 消息少时不硬凑维度
+/// （样本数少于成分数时 Gram 空间没有那么多正交方向）。
+pub const SEMANTIC_AXIS_COMPONENTS: usize = 3;
+
 /// 确定性文本特征 (字节直方图归一化)。
 ///
 /// **0 假装**: 这是浅层确定性特征 (与 morphology 手调启发式同口径), **不是**语义
@@ -861,6 +907,7 @@ fn absorption_insight_text(messages: &[String]) -> String {
     use apeireth_memory::kuramoto_resonance::{KuramotoOscillator, KuramotoResonanceEngine};
     use apeireth_memory::residual_pyramid::{FieldActivationGate, OrthogonalResidualPyramid};
     use apeireth_memory::river_topology::{RiverDynamicsEngine, TagNode};
+    use apeireth_memory::semantic_axis::SemanticAxisBridge;
 
     if messages.is_empty() {
         return String::new();
@@ -921,12 +968,40 @@ fn absorption_insight_text(messages: &[String]) -> String {
         .collect();
     let epiphanies = KuramotoResonanceEngine::new(1.0, 0.65).step(&mut oscillators, 1.0);
 
+    // ⑤ semantic_axis: 加权中心化 PCA 语义主轴 + 逻辑深度 + 跨域共振桥
+    // （owner 裁定 2026-10-25：semantic_axis 并入 absorption_insight 补第 5 段）。
+    //
+    // **口径**：把每条消息的浅特征向量当作一个**带权样本**（权重 = 该消息的
+    // 激活能量），拟合正交主轴，再把**末条消息**（本轮输入）投影上去：
+    // * 主轴能量分布 ⇒ 这一轮输入落在「已沉淀结构的哪一维」；
+    // * 逻辑深度（1 − 归一化熵）⇒ 聚焦还是发散；
+    // * 跨域共振桥 ⇒ 哪两个主轴被同时激活（跨域联结的证据）。
+    // 纯确定性（0 LLM / 0 IO），与前四段同口径：研究吸收批的**实验性洞察**，
+    // 不参与生产语义召回与决策。
+    let axis_samples: Vec<(Vec<f32>, f32)> = nodes
+        .iter()
+        .map(|node| (node.embedding.clone(), node.activation_energy.max(0.0)))
+        .collect();
+    let mut axis_bridge = SemanticAxisBridge::new(ABSORPTION_FEATURE_DIM);
+    axis_bridge.fit(
+        &axis_samples,
+        SEMANTIC_AXIS_COMPONENTS.min(axis_samples.len()),
+    );
+    let axis_projection = axis_bridge.project(&query_vec);
+    let dominant_axis = axis_projection
+        .probabilities
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(index, _)| index);
+
     format!(
         "【认知体操】(研究吸收批实验性洞察, 非生产语义)\n\
          - 认知空洞: β0 岛屿 {} 个 / β1 空洞 {} 处 / 内聚 {:.2}{}\n\
          - 语义新颖度: {:.2} (激活门控 {:.2})\n\
          - 关联传导: {} 个节点受激\n\
-         - 顿悟涌现: {} 起",
+         - 顿悟涌现: {} 起\n\
+         - 语义主轴: 主轴 {} 维 / 逻辑深度 {:.2} / 跨域共振 {:.2}{}",
         betti.betti_0_islands,
         betti.betti_1_voids.len(),
         betti.cohesion_score,
@@ -939,6 +1014,13 @@ fn absorption_insight_text(messages: &[String]) -> String {
         activation,
         spread.len(),
         epiphanies.len(),
+        axis_projection.probabilities.len(),
+        axis_projection.logic_depth,
+        axis_projection.resonance_score,
+        match dominant_axis {
+            Some(index) => format!(" (主导主轴 A{index})"),
+            None => String::new(),
+        },
     )
 }
 
