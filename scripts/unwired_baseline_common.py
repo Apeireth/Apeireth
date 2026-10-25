@@ -138,10 +138,8 @@ VERIFIED_REDUNDANT_OR_HOST = {
     "consolidate_governed",  # 主路径 consolidate
     "default_min_count",  # 公开 API 的默认值常量，宿主面
     "ensure_governance",  # 主路径 ensure_governance_on_conn
-    "events_with_ids",  # 主路径 events
     "fetch_governed",  # 主路径 fetch_governed_on_conn
     "get_for_subject",  # 承诺查询的其他入口
-    "get_history",  # 主路径 history
     "get_page",  # 主路径 compile_page
     "get_persona",  # persona 的 sweep/compress/consolidate
     "governance_cas_failure",  # 主路径 cas_failure_on_conn
@@ -149,20 +147,16 @@ VERIFIED_REDUNDANT_OR_HOST = {
     "is_verbatim_zone",  # 逐字区由 PersonaMemory 字段分离保证
     "links_for_diary",  # 主路径 links_for_fact
     "recall_with_policy",  # 主路径 ProactiveRecallService::recall（coordinator.rs:854）
-    "retract_relation",  # 主路径 retract
-    "select_candidates",  # 主路径 recall（select_candidates 是别名）
     "list_active",  # 承诺查询的其他入口
     "materialize_to_sink",  # 主路径 materialize_to_typed_sink
     "put_episode_full",  # 主路径 EpisodeStore::put_episode
     "query_as_of",  # 主路径 typed_recall.rs 的 store.query
-    "query_facts",  # 主路径 search_facts/query
     "query_recent",  # 主路径 recall_recent
     "query_with_time_range",  # 主路径 EpisodeQuery::in_range + query
     "retrieve_with_reranker",  # 主路径 retrieve_with_status
     "scalar",  # 主路径 AdaptiveBaseline::new
     "set_quiet_threshold",  # 宿主/daemon 配置入口（doc 自述）
     "streaks",  # observe 已返回 DriftAlarm.streak
-    "traverse_from",  # 主路径 traverse
     "upsert_hallway",  # 主路径 upsert_hallway_raw
     "without_as_of",  # 主路径 with_as_of(None)
     # --- foundation/orchestration ---

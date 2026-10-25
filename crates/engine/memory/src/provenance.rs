@@ -120,8 +120,14 @@ pub fn normalize_meta(
 impl crate::SqliteMemoryStore {
     /// 写入 Episode + 元数据 (V4 10 列, 一次 INSERT)。
     ///
-    /// 与 `EpisodeStore::put_episode(ep)` 不同: 一次性写完 4 个新加列。
+    /// 与 `EpisodeStore::put_episode(ep)` 的**实际**差别（2026-10-25 复核后更正）：
+    /// `put_episode` 自 2026-10-24 起**也已一并写全 V4 4 列**（来源按 role 保守推导），
+    /// 所以差别只剩「元数据由调用方显式给定」——本方法可写非空 `valid_until_ms`
+    /// （时序有效性窗口）与显式 `provenance`，`put_episode` 写不了。
     /// append-only trigger 对 INSERT 不拒绝 (仅 BEFORE UPDATE/DELETE), 所以一次 INSERT 安全。
+    ///
+    /// **未接线**：全仓零生产调用点（`EpisodeMeta` 的构造器 `EpisodeMeta::now` 也只被
+    /// 测试调用）⇒ 保留作显式元数据写入口，不假装它已接线。
     pub fn put_episode_full(&self, ep: &Episode, meta: &EpisodeMeta) -> MemoryResult<()> {
         // 复用 EpisodeStore 的字段校验 (id/session_id/role 非空)
         if ep.id.trim().is_empty() {
