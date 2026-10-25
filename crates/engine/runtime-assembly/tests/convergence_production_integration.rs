@@ -166,6 +166,7 @@ fn test_closed_world_memory_contract() {
         governance_filtered: 0,
         total_chars: 100,
         retrieval_status: None,
+        wiki_sections: Vec::new(),
     };
     let compiled = compiler
         .compile(&recalled, "session-1", 4000)

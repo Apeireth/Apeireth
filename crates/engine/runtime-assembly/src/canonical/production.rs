@@ -1506,6 +1506,10 @@ impl ProductionModules {
             if let Some(diary) = &backends.diary {
                 coordinator = coordinator.with_diary_store(Arc::clone(diary));
             }
+            // 用户知识库接线 (只读): 语料根 = <data>/wiki。
+            // 目录不存在 ⇒ 检索路径整段跳过 ⇒ 逐字节零行为变化。
+            coordinator =
+                coordinator.with_wiki_root(crate::paths::default_data_root().join("wiki"));
             if let (Some(source), Some(identity)) =
                 (&backends.typed_recall, &backends.typed_recall_identity)
             {

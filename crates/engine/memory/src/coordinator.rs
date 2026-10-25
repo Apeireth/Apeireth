@@ -69,6 +69,12 @@ pub struct MemoryCoordinator {
     /// Absent = the recall path never touches the diary ⇒ byte-for-byte the
     /// pre-wiring behavior. Present = hits may carry related diary excerpts.
     diary_store: Option<Arc<dyn DiaryStore>>,
+    /// Optional read-only user knowledge-base corpus root (`<data>/wiki`).
+    ///
+    /// Absent = the recall path never touches the corpus ⇒ byte-for-byte the
+    /// pre-wiring behavior. Present = matching corpus sections may ride along
+    /// as **additional** evidence (items / scores / ordering untouched).
+    wiki_root: Option<std::path::PathBuf>,
     /// Optional observation-layer feed for memory-governance audit events.
     /// Emission is after-the-fact and never changes an operation's outcome.
     audit_events: Option<AuditEventSink>,
@@ -133,6 +139,7 @@ impl MemoryCoordinator {
             typed_identity: None,
             injection_format: false,
             diary_store: None,
+            wiki_root: None,
             audit_events: None,
         }
     }
@@ -223,6 +230,21 @@ impl MemoryCoordinator {
     /// Reference to the optional read-only diary store.
     pub fn diary_store(&self) -> Option<&dyn DiaryStore> {
         self.diary_store.as_deref()
+    }
+
+    /// 注入用户知识库语料根（`<data>/wiki`）。**存在性即开关**：
+    /// 目录不存在 ⇒ 检索路径整段跳过 ⇒ 逐字节零行为变化。
+    ///
+    /// 语料面**只读**：检索路径只扫描 `.md` 语料，绝不写回知识库。
+    #[must_use]
+    pub fn with_wiki_root(mut self, root: std::path::PathBuf) -> Self {
+        self.wiki_root = Some(root);
+        self
+    }
+
+    /// 用户知识库语料根（未注入 ⇒ `None`）。
+    pub fn wiki_root(&self) -> Option<&std::path::Path> {
+        self.wiki_root.as_deref()
     }
 
     /// values remain unchanged for backwards-compatible ranking.
@@ -599,6 +621,7 @@ impl MemoryCoordinator {
                         used_lexical_fallback: true,
                         reranked: false,
                     }),
+                    wiki_sections: Vec::new(),
                 });
             }
             self.execute_hybrid_retrieval(
@@ -639,6 +662,7 @@ impl MemoryCoordinator {
                     used_lexical_fallback: self.embedding_provider.is_none(),
                     reranked: false,
                 }),
+                wiki_sections: Vec::new(),
             });
         }
 
@@ -823,13 +847,31 @@ impl MemoryCoordinator {
             );
         }
 
-        Ok(MemoryRecallResult {
+        let mut result = MemoryRecallResult {
             items: final_items,
             total_candidates,
             governance_filtered,
             total_chars,
             retrieval_status: Some(status),
-        })
+            wiki_sections: Vec::new(),
+        };
+
+        // 用户知识库接线 (只读): 语料在场 ⇒ 命中节作为**附加**证据附在结果上。
+        //
+        // 缺省 (无 wiki_root / 目录不存在 / 无 .md) ⇒ 这段整段跳过, 结果与接线前一致。
+        //
+        // **只附加**: 不改 items、不改分数、不改排序、不改 total_candidates ——
+        // 命中节是结果级的旁证, 不是召回候选。
+        if let Some(root) = &self.wiki_root {
+            let ctx = crate::wiki_corpus::WikiContext::build(
+                root,
+                &query.query_text,
+                crate::wiki_corpus::WikiLimits::default(),
+            );
+            result.wiki_sections = ctx.sections;
+        }
+
+        Ok(result)
     }
 
     /// Persist turn writeback entry into Working and Episodic layers.
@@ -1199,5 +1241,147 @@ where
             .build()
             .expect("local runtime")
             .block_on(f),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layers::MemoryLayerKind;
+
+    /// 检索会话 (固定 ⇒ 时间探针固定 ⇒ 结果可复现).
+    const SESSION: &str = "wiki-wiring-session";
+    /// 语料命中标记 (纯 ASCII ⇒ 任何分词口径下都是**整词**命中).
+    const MARKER: &str = "wikimarker";
+
+    /// 建一个**进程内**检索器 (零磁盘依赖 ⇒ 便于断言「结果不变」).
+    fn coordinator() -> MemoryCoordinator {
+        let store = Arc::new(crate::fresh_store());
+        let backend = store.clone();
+        let governance: Arc<dyn MemoryGovernanceStore> = store;
+        MemoryCoordinator::new(backend, governance)
+    }
+
+    /// 写一条**可被召回**的记忆 (id 与时间戳固定 ⇒ 两次召回逐字节可比).
+    fn seed_memory(coordinator: &MemoryCoordinator) {
+        coordinator
+            .writeback_episode(&Episode {
+                id: "ep-wiki-wiring-fixed".to_string(),
+                timestamp: 1_800_000_000,
+                role: "user".to_string(),
+                content: format!("用户知识库检索标记 {MARKER}"),
+                session_id: SESSION.to_string(),
+            })
+            .expect("writeback episode");
+    }
+
+    /// 已写好记忆的检索器.
+    fn seeded_coordinator() -> MemoryCoordinator {
+        let coordinator = coordinator();
+        seed_memory(&coordinator);
+        coordinator
+    }
+
+    fn recall(coordinator: &MemoryCoordinator) -> MemoryRecallResult {
+        let mut request = MemoryRecallQuery::new(SESSION, MARKER)
+            .with_layers(vec![MemoryLayerKind::Episodic])
+            .with_limit(5)
+            .with_as_of_ms(1_800_000_000_000);
+        // 下限归零: 本组用例关心的是**附加证据**, 不是打分阈值。
+        request.min_score = 0.0;
+        coordinator.recall(&request).expect("recall should succeed")
+    }
+
+    /// 临时语料根 (进程 id + 用例名 ⇒ 同进程内不撞名; 用完清掉).
+    fn temp_wiki_root(tag: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("apeireth-wiki-{tag}-{}", std::process::id()))
+    }
+
+    /// **不注入**语料根 ⇒ 结果里没有命中节 (缺省零变化的第一层)。
+    #[test]
+    fn recall_without_wiki_root_carries_no_wiki_section() {
+        let coordinator = coordinator();
+        seed_memory(&coordinator);
+        assert!(
+            coordinator.wiki_root().is_none(),
+            "缺省 = 检索路径没有语料根"
+        );
+
+        let recalled = recall(&coordinator);
+
+        assert!(
+            recalled.wiki_sections.is_empty(),
+            "未注入语料根 ⇒ 不得凭空长出命中节: {:?}",
+            recalled.wiki_sections
+        );
+        assert!(
+            !recalled.items.is_empty(),
+            "召回本身必须照常命中 (否则这条用例是空转)"
+        );
+    }
+
+    /// 注入**不存在的**目录 ⇒ 优雅降级: 结果与未注入**逐字节一致**，且不 panic。
+    #[test]
+    fn missing_wiki_directory_degrades_to_the_unchanged_recall() {
+        let plain = recall(&seeded_coordinator());
+
+        let missing = temp_wiki_root("missing").join("no-such-dir");
+        let degraded = recall(&seeded_coordinator().with_wiki_root(missing));
+
+        assert!(
+            degraded.wiki_sections.is_empty(),
+            "目录不存在 ⇒ 命中节为空: {:?}",
+            degraded.wiki_sections
+        );
+        assert_eq!(
+            serde_json::to_string(&plain).expect("serialize plain"),
+            serde_json::to_string(&degraded).expect("serialize degraded"),
+            "语料根读不到东西 ⇒ 召回结果逐字节不变"
+        );
+    }
+
+    /// 注入**在场**的语料根 ⇒ 命中节作为**附加**证据附在结果上 (不改条目)。
+    #[test]
+    fn wiki_corpus_sections_ride_along_as_additional_evidence() {
+        let root = temp_wiki_root("hit");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create wiki root");
+        std::fs::write(
+            root.join("knowledge.md"),
+            format!("# 项目背景 {MARKER}\n\n这是用户知识库语料的检索标记段落。\n"),
+        )
+        .expect("write wiki markdown");
+
+        let plain = recall(&seeded_coordinator());
+        let wired = recall(&seeded_coordinator().with_wiki_root(root.clone()));
+
+        assert!(!wired.wiki_sections.is_empty(), "语料在场 ⇒ 结果应带命中节");
+        let section = wired
+            .wiki_sections
+            .iter()
+            .find(|section| section.heading.contains("项目背景"))
+            .expect("应命中含中文标题的节");
+        assert!(
+            section.source_path.ends_with("knowledge.md"),
+            "出处应指向语料文件: {:?}",
+            section.source_path
+        );
+        assert!(
+            section.heading.contains(MARKER),
+            "标题应保留原文: {:?}",
+            section.heading
+        );
+        assert!(
+            section.text.contains(MARKER),
+            "正文应带该节内容: {:?}",
+            section.text
+        );
+        assert_eq!(
+            serde_json::to_string(&plain.items).expect("serialize plain items"),
+            serde_json::to_string(&wired.items).expect("serialize wired items"),
+            "命中节是附加证据 ⇒ 不得改动召回条目"
+        );
+
+        std::fs::remove_dir_all(&root).expect("cleanup wiki root");
     }
 }

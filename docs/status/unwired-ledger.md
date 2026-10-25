@@ -1271,6 +1271,43 @@ owner 裁定 D-7 = C：**只做文档边界说明**，不改 SDK 代码（`crate
 `nightwatch` 的 `min_idle_secs` 是「等空闲」的**活动闸**，方向相反。
 ⇒ 所以「补真实生产者」这条路在当前产品面里**没有落点** ⇒ 保留为预留词是正确的。
 
+### 5.5v `three_tier_vault` 接成**用户知识库**（owner 裁定 2026-10-25，PRODUCTION WIRED）
+
+**裁定**：把三阶金库的「无向量 TOC 树索引 + 树路由」接成**用户知识库**（Markdown 语料）
+—— 语料 = `<data>/wiki/**/*.md`；提问时先建目录树 → 沿树路由到相关节 → **按字节区间取整节**
+⇒ 作为**只读证据段**注入上下文（带出处路径）；**零新增 env**（存在性即开关）。
+
+**为什么原本接不上**（本轮之前的状态）：
+`three_tier_vault` 的两个能力都有**两处硬伤** ⇒ 直接用会失真：
+1. `TocTreeIndexer` 的节点 `byte_range` **只覆盖标题行**，不覆盖正文
+   ⇒ 「取整节」必须自己按「下一个同级或更高级标题」推区间；
+2. `TreeReasoningRouter::route_query` 按**空白**分词 ⇒ **中文查询整句变成一个 token**
+   ⇒ 中文几乎命中不了（中文是本仓的主要使用语言）。
+⇒ 故**不改 `three_tier_vault`**（它是「借鉴自公开项目」的原始实现，自带测试），
+而在**语料层**另做一套：自己的分词（空白词 + CJK 相邻 bigram）与区间推导。
+
+**落地（三层）**：
+
+| 层 | 位置 | 做什么 |
+|---|---|---|
+| 语料核心 | `crates/engine/memory/src/wiki_corpus.rs`（新） | 扫 `<root>/**/*.md`（有界 `max_files`）→ 每文件建 TOC 树 → 算每节区间（标题行起点 → 下一个同级/更高级标题起点，**O(6n) 逆序前瞻**）→ 按 token 命中打分（标题 +3 / 标题行 +1）→ 取前 `max_sections` 节，按 `max_section_chars` / `max_total_chars` 截断（**UTF-8 字符边界**） |
+| 检索接线 | `crates/engine/memory/src/coordinator.rs` + `layers.rs` | `MemoryCoordinator::with_wiki_root(PathBuf)`（**镜像既有 `with_diary_store` 模式**）；检索尾段**只读附加**命中节到 `MemoryRecallResult.wiki_sections`（不改 items / 分数 / 排序 / 候选数） |
+| 上下文 | `crates/engine/memory/src/context_compiler.rs` + `production.rs` | 命中节渲染成 `[wiki:<相对路径>] <标题> <正文>` 行，排在**所有记忆条目之后**（结果级附加证据）；**预算装不下就跳过该行，绝不挤掉记忆正文**；正文过 `sanitize_text` 脱敏（用户自己写的 markdown 也可能粘进凭据）+ 单行化 |
+
+**零行为变化的三重保证**：
+① **存在性即开关**（无 `<data>/wiki` ⇒ 语料根不存在 ⇒ 整段跳过，**不新增 env**）；
+② 命中节为空 ⇒ **一行都不加** ⇒ overlay 与接线前**逐字节一致**；
+③ 语料检索是**只读附加** ⇒ 不改召回内容/分数/排序。
+
+**确定性**：排序键 = 得分降序 → 文档顺序 → 路径字典序；分词去重保序；同输入**逐字可重放**。
+
+**口径**：**PRODUCTION WIRED**（生产路径已接线并有测试）；**不是 DEFAULT ENABLED**
+（默认无语料 ⇒ 无任何行为变化）。
+
+**未验证**：**真实用户语料**（本机只做了合成语料的机器验证）——
+真机验证需要用户在 `<data>/wiki` 放真实 markdown 后看注入效果；
+Kani / Miri / Fuzz / Coverage 仍是 CI-only。
+
 ### 5.5u SDK 错误词表新增 `Unsupported` 成员（owner 裁定 2026-10-25，公开错误面变更）
 
 **问题**：SDK 的「能力没实现」只有两个去处 —— `Internal`（读成「服务端内部错误」，

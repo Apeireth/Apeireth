@@ -153,6 +153,14 @@ pub struct MemoryRecallResult {
     pub total_chars: usize,
     #[serde(default)]
     pub retrieval_status: Option<crate::RetrievalStatus>,
+    /// 用户知识库命中节（只读附加；无语料 ⇒ 空 vec）。
+    ///
+    /// 只有检索路径**注入**了语料根（`<data>/wiki`）且该目录在场时才有内容；
+    /// 未注入 / 目录不存在 / 无 `.md` ⇒ 恒为空 ⇒ 结果与接线前逐字节一致。
+    ///
+    /// 与日记片段同级：**附加证据**，不参与打分、不参与排序、不改 `total_candidates`。
+    #[serde(default)]
+    pub wiki_sections: Vec<crate::wiki_corpus::WikiSection>,
 }
 
 /// Structured writeback entry to persist after turn completion.

@@ -95,6 +95,7 @@ pub mod semantic_axis;
 pub mod three_tier_vault;
 pub mod topic_predictor;
 pub mod vector_distance;
+pub mod wiki_corpus;
 pub mod wiki_fs;
 // Salvage-03 (memory-advanced): closed-world injection + A-MEM residual CRAWL.
 // Default-off; not production-wired.

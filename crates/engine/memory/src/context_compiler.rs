@@ -12,6 +12,12 @@ use crate::retrieval_tuning::{RetrievalDimension, SelectedAttribution};
 /// 日记片段是**附加证据**：记忆正文优先，预算不足时先裁日记行.
 const DIARY_LINES_MAX: usize = 3;
 
+/// 单次 overlay 最多渲染多少条**用户知识库命中节**行 (全局上限).
+///
+/// 与日记片段同级：都是**附加证据**（记忆正文优先，预算不足时先裁这些行），
+/// 但命中节是**结果级**的（不像日记片段挂在单条命中事实上）⇒ 排在所有记忆条目之后.
+const WIKI_LINES_MAX: usize = 4;
+
 /// 渲染一条关联日记片段行 (日期 + 正文摘要, 过凭据脱敏 + 单行化).
 ///
 /// 日记正文是**用户写下的内容** ⇒ 与召回正文同等对待：先过
@@ -24,6 +30,20 @@ fn render_diary_line(snippet: &crate::cross_diary_wiring::DiarySnippet) -> Strin
         "[diary:{}] {}",
         snippet.diary_date,
         single_line(&sanitize_text(&snippet.snippet))
+    )
+}
+
+/// 渲染一条用户知识库命中节行 (来源文件 + 小节标题 + 正文摘要).
+///
+/// 语料正文是**用户自己写下的 markdown** ⇒ 与召回正文同等对待：先过
+/// [`sanitize_text`] 脱敏（语料里也可能粘进凭据），再单行化（markdown 折行
+/// 会破坏「一行一条证据」的行结构）.
+fn render_wiki_line(section: &crate::wiki_corpus::WikiSection) -> String {
+    format!(
+        "[wiki:{}] {} {}",
+        section.source_path,
+        section.heading,
+        single_line(&sanitize_text(&section.text))
     )
 }
 
@@ -169,6 +189,25 @@ impl ClosedWorldContextCompiler {
                 lines.push(diary_line);
                 diary_lines += 1;
             }
+        }
+
+        // 用户知识库命中节 (结果级附加证据): 排在**所有**记忆条目之后。
+        //
+        // 预算纪律与日记片段同口径：装不下就**跳过这一行**（continue），
+        // **绝不挤掉记忆正文** (记忆正文优先)。命中节为空 ⇒ 一行都不加
+        // ⇒ overlay 与接线前逐字节一致。
+        let mut wiki_lines = 0usize;
+        for section in recalled.wiki_sections.iter() {
+            if wiki_lines >= WIKI_LINES_MAX {
+                break;
+            }
+            let wiki_line = render_wiki_line(section);
+            if current_chars + wiki_line.len() + 25 > max_chars {
+                continue;
+            }
+            current_chars += wiki_line.len() + 1;
+            lines.push(wiki_line);
+            wiki_lines += 1;
         }
 
         lines.push("</governed_memory>".to_string());
@@ -510,5 +549,91 @@ mod tests {
 
         assert!(result.is_none());
         assert!(!observed);
+    }
+
+    /// 构造一条命中节 (来源文件 + 标题 + 正文).
+    fn wiki_section(
+        source_path: &str,
+        heading: &str,
+        text: &str,
+    ) -> crate::wiki_corpus::WikiSection {
+        crate::wiki_corpus::WikiSection {
+            source_path: source_path.to_string(),
+            heading: heading.to_string(),
+            text: text.to_string(),
+        }
+    }
+
+    /// 用户知识库命中节渲染成 `[wiki:...]` 行, 且排在**所有**记忆条目之后。
+    #[test]
+    fn wiki_sections_render_as_wiki_lines_after_the_memory_entries() {
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section("knowledge.md", "项目背景", "语料正文")];
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, "session-wiki", 4_000)
+            .expect("overlay");
+
+        assert!(
+            overlay.contains("[wiki:knowledge.md] 项目背景 语料正文"),
+            "{}",
+            overlay
+        );
+        let mem_pos = overlay.find("[mem:first").expect("记忆条目行");
+        let wiki_pos = overlay.find("[wiki:").expect("命中节行");
+        assert!(
+            mem_pos < wiki_pos,
+            "命中节是结果级附加证据 ⇒ 排在记忆条目之后: {}",
+            overlay
+        );
+    }
+
+    /// 没有命中节 ⇒ overlay 不加任何 wiki 行 (逐字节零变化)。
+    #[test]
+    fn no_wiki_sections_adds_no_wiki_line() {
+        let recalled = recalled(vec![("first", "记忆正文")]);
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, "session-wiki-none", 4_000)
+            .expect("overlay");
+
+        assert!(!overlay.contains("[wiki:"), "{}", overlay);
+    }
+
+    /// 预算装不下 ⇒ **跳过**命中节行, 绝不挤掉记忆正文 (记忆正文优先)。
+    #[test]
+    fn tight_budget_skips_the_wiki_line_and_keeps_the_memory_entry() {
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section("knowledge.md", "项目背景", "语料正文")];
+        let session_id = "session-wiki-tight";
+        let max_chars = max_chars_for_first_candidate(&recalled, session_id);
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, session_id, max_chars)
+            .expect("overlay");
+
+        assert!(overlay.contains("[mem:first"), "{}", overlay);
+        assert!(!overlay.contains("[wiki:"), "{}", overlay);
+    }
+
+    /// 命中节里的凭据同样要脱敏 (语料是用户写下的内容, 可能粘进密钥)。
+    #[test]
+    fn wiki_sections_are_sanitized() {
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section(
+            "knowledge.md",
+            "项目背景",
+            "token=super_secret wikimarker",
+        )];
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, "session-wiki-secret", 4_000)
+            .expect("overlay");
+
+        assert!(!overlay.contains("super_secret"), "{}", overlay);
     }
 }
