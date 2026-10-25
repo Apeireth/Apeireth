@@ -54,11 +54,7 @@ const FIXED_NEEDLES: &[&str] = &["beta", "dup", "gamma", "alpha", "keep"];
 
 /// 本次运行独有的临时根（pid + 原子计数）。
 fn unique_base(seq: u64) -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "apeireth-apf-fuzz-{}-{}",
-        std::process::id(),
-        seq
-    ))
+    std::env::temp_dir().join(format!("apeireth-apf-fuzz-{}-{}", std::process::id(), seq))
 }
 
 /// 夹具：`<base>/root` 是工作区根，`<base>/outside` 是「工作区外」受害者目录。
@@ -291,7 +287,12 @@ struct PathVec {
 
 fn path_vectors(fx: &Fixture) -> Vec<PathVec> {
     let secret_abs = fx.outside.join("secret.txt").to_string_lossy().to_string();
-    let tree = fx.base.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let tree = fx
+        .base
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
     let mut vectors: Vec<PathVec> = Vec::new();
     let mut push = |text: String, kind: VecKind| {
         vectors.push(PathVec { text, kind });
@@ -338,7 +339,10 @@ fn path_vectors(fx: &Fixture) -> Vec<PathVec> {
     push("..%2foutside/secret.txt".into(), VecKind::Fresh);
     // ── Unicode 归一化形（全角点 U+FF0E 等）：同样只是怪文件名 ──
     push("\u{FF0E}\u{FF0E}/outside/secret.txt".into(), VecKind::Fresh);
-    push("\u{FF0E}\u{FF0E}\u{FF0E}\u{FF0E}/outside/secret.txt".into(), VecKind::Fresh);
+    push(
+        "\u{FF0E}\u{FF0E}\u{FF0E}\u{FF0E}/outside/secret.txt".into(),
+        VecKind::Fresh,
+    );
     push("a\u{FF0E}\u{FF0E}/b".into(), VecKind::Fresh);
     push("\u{202E}gnp.exe".into(), VecKind::Fresh);
     // ── `..` 变体：不是 `..` 的合法名（不得误拒）──
@@ -564,8 +568,14 @@ fn check_success(
 
     // C10：报告路径逐项 == 解析出的动作路径。
     assert_eq!(report.files_added, added, "{ctx}: files_added 与动作集不符");
-    assert_eq!(report.files_updated, updated, "{ctx}: files_updated 与动作集不符");
-    assert_eq!(report.files_deleted, deleted, "{ctx}: files_deleted 与动作集不符");
+    assert_eq!(
+        report.files_updated, updated,
+        "{ctx}: files_updated 与动作集不符"
+    );
+    assert_eq!(
+        report.files_deleted, deleted,
+        "{ctx}: files_deleted 与动作集不符"
+    );
 
     // C9 + C10：每个 hunk 恰好唯一命中；落盘内容 == 动作按序合成结果。
     for (path, hunks) in &groups {
@@ -641,12 +651,12 @@ fn apply_and_check(fx: &Fixture, patch: &str, expect: Expect, ctx: &str) {
                 .clone();
             check_success(fx, &actions, &report, &root_before, ctx);
             match expect {
-                Expect::PathViolation => panic!(
-                    "{ctx}: 越界路径竟被接受（期望 PathViolation）\npatch: {patch:?}"
-                ),
-                Expect::FileNotFound => panic!(
-                    "{ctx}: 期望 FileNotFound 却成功\npatch: {patch:?}\nreport: {report:?}"
-                ),
+                Expect::PathViolation => {
+                    panic!("{ctx}: 越界路径竟被接受（期望 PathViolation）\npatch: {patch:?}")
+                }
+                Expect::FileNotFound => {
+                    panic!("{ctx}: 期望 FileNotFound 却成功\npatch: {patch:?}\nreport: {report:?}")
+                }
                 Expect::FileAlreadyExists => panic!(
                     "{ctx}: 期望 FileAlreadyExists 却成功\npatch: {patch:?}\nreport: {report:?}"
                 ),
@@ -697,9 +707,7 @@ fn apply_and_check(fx: &Fixture, patch: &str, expect: Expect, ctx: &str) {
                     matches!(error, ApplyPatchError::FileAlreadyExists(_)),
                     "{ctx}: 期望 FileAlreadyExists，实得 {error:?}\npatch: {patch:?}"
                 ),
-                Expect::Success => panic!(
-                    "{ctx}: 期望成功却失败: {error:?}\npatch: {patch:?}"
-                ),
+                Expect::Success => panic!("{ctx}: 期望成功却失败: {error:?}\npatch: {patch:?}"),
                 Expect::Any => {}
             }
         }

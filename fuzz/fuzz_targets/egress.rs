@@ -101,7 +101,13 @@ fn text(bytes: &[u8]) -> String {
 fn host_text(bytes: &[u8]) -> String {
     text(bytes)
         .chars()
-        .map(|c| if c.is_whitespace() || c.is_control() { 'x' } else { c })
+        .map(|c| {
+            if c.is_whitespace() || c.is_control() {
+                'x'
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -170,7 +176,12 @@ fn destination_of(host: &str, port: u16) -> EgressDestination {
 /// 由此得到充要条件：命中 ⟺ 同主机（大小写不敏感）∧ 端口合取。
 /// 「子域 / 通配 / 后缀」类绕过（`evil-example.com`、`a.example.com`、
 /// `*.example.com`、`example.com.evil.net`）在这条充要条件下**必须不命中**。
-fn expected_match(entry_host: &str, entry_port: Option<u16>, probe_host: &str, probe_port: u16) -> bool {
+fn expected_match(
+    entry_host: &str,
+    entry_port: Option<u16>,
+    probe_host: &str,
+    probe_port: u16,
+) -> bool {
     let same_host = entry_host.to_ascii_lowercase() == probe_host.to_ascii_lowercase();
     let port_ok = entry_port.map(|port| port == probe_port).unwrap_or(true);
     same_host && port_ok
@@ -304,7 +315,9 @@ fn section_resolved_addresses(fields: &[&[u8]]) {
     }
 
     // ── ExplicitAllowList（M12 口径）──
-    let allow = EgressPolicy::ExplicitAllowList(EgressAllowList::new().allow(destination.host.clone(), None));
+    let allow = EgressPolicy::ExplicitAllowList(
+        EgressAllowList::new().allow(destination.host.clone(), None),
+    );
     let result = allow.validate_resolved(&destination, &addresses);
     let denied_class = |ip: IpAddr| {
         matches!(
@@ -319,9 +332,7 @@ fn section_resolved_addresses(fields: &[&[u8]]) {
     // 契约：只有「主机名目的地 + 解析出上述五类地址之一」才拒；IP 字面量目的地
     // 「显式入表即信任」，不查解析地址。
     let expected = destination.address.is_some()
-        || !addresses
-            .iter()
-            .any(|address| denied_class(address.ip()));
+        || !addresses.iter().any(|address| denied_class(address.ip()));
     assert_eq!(
         result.is_ok(),
         expected,
@@ -492,7 +503,8 @@ fn section_url_parse(fields: &[&[u8]]) {
             );
         }
         let mut with_password = base.clone();
-        if with_password.set_username("user").is_ok() && with_password.set_password(Some("pass")).is_ok()
+        if with_password.set_username("user").is_ok()
+            && with_password.set_password(Some("pass")).is_ok()
         {
             assert!(
                 matches!(
@@ -729,8 +741,7 @@ fn section_egress_redaction_residue(fields: &[&[u8]]) {
 // ───────────────────── 变体形态编码（公开标准，独立实现） ─────────────────────
 
 fn base64_standard(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
     for chunk in bytes.chunks(3) {
         let b0 = u32::from(chunk[0]);

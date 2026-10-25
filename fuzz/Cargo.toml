@@ -213,3 +213,10 @@ path = "fuzz_targets/input_security.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "chain_audit"
+path = "fuzz_targets/chain_audit.rs"
+test = false
+doc = false
+bench = false

@@ -40,8 +40,8 @@
 //!   (不是库缺陷), 捕获后放弃断言, 不当成 crash。
 
 use std::future::Future;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::pin::Pin;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -49,8 +49,8 @@ use std::task::{Context, Poll, Wake, Waker};
 
 use apeireth_core::kernel::{ApprovalId, SessionId};
 use apeireth_gateway::canonical_entry::{
-    CanonicalApprovalRequest, CanonicalChatRequest, CanonicalEntryError, GatewayTokenGate,
-    GateVerdict,
+    CanonicalApprovalRequest, CanonicalChatRequest, CanonicalEntryError, GateVerdict,
+    GatewayTokenGate,
 };
 use apeireth_gateway::client_tokens::{ClientTokenConfig, ClientTokenSpec, ClientTokenTable};
 use apeireth_runtime::canonical::Runtime;
@@ -96,7 +96,9 @@ fn shared_runtime() -> Option<Arc<Runtime>> {
     RUNTIME
         .get_or_init(|| {
             let mut future = Box::pin(Runtime::builder().build());
-            poll_bounded(future.as_mut(), POLL_BUDGET)?.ok().map(Arc::new)
+            poll_bounded(future.as_mut(), POLL_BUDGET)?
+                .ok()
+                .map(Arc::new)
         })
         .clone()
 }
@@ -286,7 +288,9 @@ fn chat_entry_face(payload: &[u8], flags: u8) {
         runtime.as_ref(),
         request,
     ));
-    let polled = catch_unwind(AssertUnwindSafe(|| poll_bounded(future.as_mut(), POLL_BUDGET)));
+    let polled = catch_unwind(AssertUnwindSafe(|| {
+        poll_bounded(future.as_mut(), POLL_BUDGET)
+    }));
     let Ok(Some(result)) = polled else {
         // 没跑完 / harness 环境 panic (无 tokio 运行时): 放弃断言。
         return;
@@ -305,10 +309,7 @@ fn chat_entry_face(payload: &[u8], flags: u8) {
             );
         }
         Err(CanonicalEntryError::Runtime(_)) => {
-            assert!(
-                !blank,
-                "空输入竟跑进了运行时 (空请求会落一个空会话)"
-            );
+            assert!(!blank, "空输入竟跑进了运行时 (空请求会落一个空会话)");
         }
         Ok(_) => {
             assert!(!blank, "空输入竟成了回合 (空输入不成回合)");
@@ -348,7 +349,9 @@ fn approval_entry_face(payload: &[u8], flags: u8) {
         runtime.as_ref(),
         request,
     ));
-    let polled = catch_unwind(AssertUnwindSafe(|| poll_bounded(future.as_mut(), POLL_BUDGET)));
+    let polled = catch_unwind(AssertUnwindSafe(|| {
+        poll_bounded(future.as_mut(), POLL_BUDGET)
+    }));
     let Ok(Some(result)) = polled else {
         return;
     };
@@ -459,7 +462,8 @@ fn token_gate_face(payload: &[u8], flags: u8) {
                 &gate,
                 GatewayTokenGate::Enforced(token) if Some(token.as_str()) == bearer.as_deref()
             );
-            let table_hit = table.authenticate(bearer.as_deref().unwrap_or("")) == Some(client.as_str());
+            let table_hit =
+                table.authenticate(bearer.as_deref().unwrap_or("")) == Some(client.as_str());
             assert!(
                 env_hit || table_hit,
                 "过门放行却没有凭证命中 (client={client}, bearer={:?})",

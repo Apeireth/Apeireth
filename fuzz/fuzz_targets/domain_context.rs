@@ -50,11 +50,11 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use apeireth_core::user_domain::{DomainRole, DomainUserId, UserDomain, DEFAULT_DOMAIN_ID};
+use apeireth_core::user_domain::{DEFAULT_DOMAIN_ID, DomainRole, DomainUserId, UserDomain};
 use apeireth_gateway::domain_context::{
-    check_domain_claim, domain_forbidden_frame, DomainContext, DOMAIN_FORBIDDEN_CLAIM_MESSAGE,
+    DOMAIN_FORBIDDEN_CLAIM_MESSAGE, DomainContext, check_domain_claim, domain_forbidden_frame,
 };
-use apeireth_gateway::{build_gateway_state_with_services, GatewayServices, GatewayState};
+use apeireth_gateway::{GatewayServices, GatewayState, build_gateway_state_with_services};
 use libfuzzer_sys::fuzz_target;
 
 /// 真实调用点的端点 (自称域校验的两个调用面: 头面 = 请求路径, 查询面 = 事件面)。
@@ -116,8 +116,7 @@ fn gateway_state() -> &'static GatewayState {
     static STATE: OnceLock<GatewayState> = OnceLock::new();
     STATE.get_or_init(|| {
         let runtime = Arc::new(
-            block_on(apeireth_runtime::canonical::Runtime::builder().build())
-                .expect("运行时装配"),
+            block_on(apeireth_runtime::canonical::Runtime::builder().build()).expect("运行时装配"),
         );
         build_gateway_state_with_services(runtime, GatewayServices::default())
     })
@@ -143,11 +142,16 @@ fn registered_contexts() -> Vec<(DomainContext, Option<String>)> {
     ids.push("9".repeat(64));
     ids.into_iter()
         .map(|id| {
-            let user_id = DomainUserId::new(id.clone())
-                .expect("登记域 id 必须过目录安全校验 (C4 的词面)");
+            let user_id =
+                DomainUserId::new(id.clone()).expect("登记域 id 必须过目录安全校验 (C4 的词面)");
             let domain = UserDomain::new(user_id, "Fuzz Domain", 0, DomainRole::Owner)
                 .expect("域文档字段必须合法");
-            (DomainContext { domain: Some(domain) }, Some(id))
+            (
+                DomainContext {
+                    domain: Some(domain),
+                },
+                Some(id),
+            )
         })
         .collect()
 }
@@ -204,8 +208,7 @@ fn assert_verdict(
             );
             // C2: 恒定拒帧 —— 状态码 403, 形态与常量帧同形。
             let shape = frame_shape!(&response);
-            let reference =
-                frame_shape!(&domain_forbidden_frame(DOMAIN_FORBIDDEN_CLAIM_MESSAGE));
+            let reference = frame_shape!(&domain_forbidden_frame(DOMAIN_FORBIDDEN_CLAIM_MESSAGE));
             assert_eq!(
                 shape, reference,
                 "拒帧形态必须是恒定的 domain_forbidden 帧 (不随自称值变化)"
@@ -399,8 +402,22 @@ fn mutate(bound: &str, instruction: &[u8]) -> String {
         }
         10 => {
             const SUFFIXES: &[&str] = &[
-                ".evil.com", "/", "?", "#", ":443", "@evil.com", ".", " ", "\n", "\0", "%0a", "\u{3002}",
-                "..", "-", "\u{202e}", "\u{7f}",
+                ".evil.com",
+                "/",
+                "?",
+                "#",
+                ":443",
+                "@evil.com",
+                ".",
+                " ",
+                "\n",
+                "\0",
+                "%0a",
+                "\u{3002}",
+                "..",
+                "-",
+                "\u{202e}",
+                "\u{7f}",
             ];
             bytes.extend_from_slice(SUFFIXES[arg as usize % SUFFIXES.len()].as_bytes());
         }
