@@ -6,7 +6,8 @@
 //! 的活** ([`distill_into`] 三拍):
 //!
 //! 1. **来源采集** (内容输入, 二选一): 正文 (`text`) 或文件路径 (`path`,
-//!    **只读通道**: 词法限域 + 敏感面拒 + 超限拒, 只读不写);
+//!    **只读通道**: 词法限域 + 现实层限域 (符号链接不出工作区) + 敏感面拒
+//!    + 超限拒, 只读不写);
 //! 2. **结构化**: 坏卡拒 + 触发词归一 + 派生稳定身份与沉淀时刻
 //!    ([`crate::skill::card::structure_card`]);
 //! 3. **入技能库**: 创建**重复名拒绝**; 版本演进 (`update`) = 同名更新,
@@ -146,6 +147,13 @@ pub fn distill_request_refusal(params: &SkillDistillParams) -> Option<String> {
 }
 
 /// 只读通道采集内容输入: 内联正文直取; 文件路径过敏感面判定后**只读**。
+///
+/// 限域**两层** (与 `doc_ops` / `sheet_ops` 的 `resolve_contained` 同一把尺):
+/// ① 词法层 —— 拼写层面的绝对路径 / `..` 组件由
+/// [`source_request_refusal`] 拒; ② **现实层** —— 本函数把路径 canonicalize
+/// 后证明**解析后的目标仍在工作区内**: 工作区内指向外部的 symlink 不能把
+/// 只读通道带出工作区 (否则一次 `path` 取参就能把工作区外的文件内容读进
+/// 技能卡, 敏感面判定也只落在拼写上、看不见真实目标)。
 pub fn read_source(root: &Path, params: &SkillDistillParams) -> Result<SkillSourceInput, String> {
     if let Some(text) = params
         .text
@@ -168,7 +176,21 @@ pub fn read_source(root: &Path, params: &SkillDistillParams) -> Result<SkillSour
     if is_sensitive_path(root, &joined) {
         return Err(credential_surface_refusal());
     }
-    let bytes = std::fs::read(&joined)
+    // 现实层: 解析后的真实目标必须仍在工作区内 (symlink 越界拒即帧)。
+    let canonical_root = std::fs::canonicalize(root)
+        .map_err(|error| format!("拒绝沉淀: 工作区根 {} 不可访问: {error}", root.display()))?;
+    let resolved = std::fs::canonicalize(&joined)
+        .map_err(|error| format!("拒绝沉淀: 来源文件读取失败 {path}: {error}"))?;
+    if !resolved.starts_with(&canonical_root) {
+        return Err(format!(
+            "拒绝沉淀 {path}: 路径解析到工作区之外 (符号链接越界, 只读通道不出工作区)"
+        ));
+    }
+    // 真实目标也要过敏感面 (词面层看不见 symlink 指向的凭据文件)。
+    if is_sensitive_path(&canonical_root, &resolved) {
+        return Err(credential_surface_refusal());
+    }
+    let bytes = std::fs::read(&resolved)
         .map_err(|error| format!("拒绝沉淀: 来源文件读取失败 {path}: {error}"))?;
     if bytes.len() > SKILL_SOURCE_MAX_BYTES {
         return Err(format!(
