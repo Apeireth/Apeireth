@@ -49,6 +49,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: fuzz
+      # ⚠️ **系统依赖：`libdbus-1-dev`（2026-10-25 实测修）**
+      #
+      # `apeireth-credentials` → `keyring` → `secret-service` → `libdbus-sys`，
+      # 而 `libdbus-sys-0.2.7/build.rs` 用 **pkg-config 找 `dbus-1`**：
+      # 找不到就 `panic!()`（它自己的报错就写着
+      # 「sudo apt install libdbus-1-dev pkg-config」）。
+      #
+      # **为什么以前没炸**：CI 一直有 `rust-cache` 命中 ⇒ `libdbus-sys` 是**预编译产物**
+      # 直接用，根本不跑它的 build.rs。
+      # **2026-10-25 炸的原因**：fuzz 工作区新增了仓内 path 依赖（`apeireth-credentials`）
+      # ⇒ `fuzz/Cargo.lock` 变 ⇒ **rust-cache 的 key 变** ⇒ **冷编译**
+      # ⇒ `libdbus-sys` 必须从头编 ⇒ runner 上没有 libdbus 开发包 ⇒
+      # **构建期 panic ⇒ 39 个 target 全灭**（每个 job 都报
+      # 「failed to build fuzz script: ASAN_OPTIONS=… RUSTFLAGS=…」，但真因在上面的 panic）。
+      #
+      # ⇒ 装上系统依赖 ⇒ 冷构建也能过（**不依赖缓存是否命中**）。
+      - name: Install system deps (libdbus-1-dev for keyring/secret-service)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Choose run budget
