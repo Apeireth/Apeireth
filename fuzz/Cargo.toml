@@ -24,6 +24,7 @@ apeireth-protocol = { path = "../crates/foundation/protocol" }
 apeireth-gateway = { path = "../crates/adapters/gateway" }
 apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
 apeireth-runtime = { path = "../crates/engine/runtime" }
+apeireth-sdk = { path = "../crates/adapters/sdk" }
 apeireth-plugin = { path = "../crates/foundation/plugin" }
 apeireth-governance = { path = "../crates/foundation/governance" }
 apeireth-core = { path = "../crates/foundation/core" }
@@ -181,6 +182,34 @@ bench = false
 [[bin]]
 name = "apply_patch"
 path = "fuzz_targets/apply_patch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "egress"
+path = "fuzz_targets/egress.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "git_write"
+path = "fuzz_targets/git_write.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_entry"
+path = "fuzz_targets/canonical_entry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "input_security"
+path = "fuzz_targets/input_security.rs"
 test = false
 doc = false
 bench = false
