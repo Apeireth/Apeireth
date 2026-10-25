@@ -156,6 +156,31 @@ jobs:
       - name: cargo test (crates-ui)
         run: cargo test --workspace --locked
 
+      # ── 规则层差分装置的**真源校验** ─────────────────────────────────
+      # `cargo test` 会比对「Rust 实现 ↔ cases.json 的 expected」⇒ 但若有人
+      # **同时**改 Rust 与 expected ⇒ 测试会绿 ⇒ ⇒ 真源是否仍等于**生产 TS 的
+      # 实算结果**只有 `--check` 知道 ⇒ ⇒ 这一步才是「漂移不会被静默吞掉」的
+      # 完整闭环（2026-10-25 补）。
+      #
+      # ⚠️ 需要 Node ≥ 22（`--experimental-strip-types` 才能直接 import 生产的 `.ts`）。
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 规则装置真源校验（expected == 生产 TS 实算）
+        working-directory: crates-ui
+        run: |
+          node --experimental-strip-types \
+            apeireth-ui-demo/harness/rules/gen_expected.mjs --check
+
+      # ── 架构断言：状态对象不得自建 `Runtime` ───────────────────────────
+      # 自建 ⇒ 状态与渲染**分属两个 runtime** ⇒ effect 不依赖它的信号
+      # ⇒ ⇒ 改状态不重渲染 ⇒ ⇒ 实测表现为「幽灵输入」（用户输入进不了引擎状态）。
+      # 该缺陷在类型层面完全合法 ⇒ ⇒ 编译器不可能发现 ⇒ ⇒ 只能靠显式断言。
+      - name: 架构断言（状态对象不得自建 Runtime）
+        run: python3 crates-ui/apeireth-ui-demo/harness/scripts/check_runtime_ownership.py
+
       # P1 验收门「依赖面」机械判据：ui-core 的 [dependencies] 段不得含
       # web-sys / wasm-bindgen —— 这是 ui-core「永远能 native 单测」的**唯一**保证
       # （ADR-0015 §4 P1 验收门 / 计划书 §3.2）。

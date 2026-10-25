@@ -218,6 +218,12 @@ crates/apeireth-integration-e2e/.*.log
 # 静默忽略比报错更危险 —— 所以这里改成整目录放行，
 # 让「忘了加例外」这类事故**不可能发生**（新增脚本会正常出现在 git status 里）。
 !scripts/*.py
+
+# crates-ui 的**门禁脚本**入库（2026-10-25 补）：架构断言
+# （「状态对象不得自建 `Runtime`」）与规则差分装置的真源校验都靠它。
+# ⚠️ `*.py` 是全局忽略 ⇒ 上面这些 `!` 例外只放行了**仓库根** `scripts/` 一级
+# ⇒ crates-ui 内的脚本**必须**在这里逐层放行，否则「写了门禁但没进仓 ⇒ CI 不会跑」。
+!crates-ui/apeireth-ui-demo/harness/scripts/*.py
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py
