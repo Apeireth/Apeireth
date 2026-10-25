@@ -474,13 +474,29 @@ def main():
         time.sleep(1.5)
 
         crops = {}
+        # ⚠️ **刻意等一拍**（2026-10-25 加）：给浏览器时间发生一次合成
+        # ⇒ 如果引擎侧是「画完就停」，那次合成会把 drawing buffer 清空
+        # ⇒ 之后的截图可能全白。
+        # ⇒ 引擎页已改为**持续重绘**（画面恒定）⇒ 这一等**不改变结果**。
+        # ⚠️ **诚实边界**：⚠️ **本机检不出**（实测：把重绘关掉，本机仍 0 差异
+        # ⇒ 本机 Chrome 与 runner 的版本/时序不同）⇒ ⇒ 这一等只是
+        # **降低**时序敏感出现的概率，**不是**回归保护；真正的保证是
+        # **持续重绘**本身（drawing buffer 永远有内容 ⇒ 与时序无关）。
+        time.sleep(2.0)
         for backend in ("webgl", "webgpu"):
             box = element_box(engine, backend)
             if not box:
                 continue
+            # ⭐ 截图前**开启该后端的持续重绘** ⇒ drawing buffer 永远有内容
+            # ⇒ ⇒ 截图**对时序不敏感**（否则「画完就停」⇒ 合成清空 buffer ⇒ 截图全白
+            # ⇒ ⇒ 被误判为「引擎画错」；2026-10-25 CI 实测 99.94% 差异）。
+            engine.evaluate(f"window.__P5B_REDRAW__.start({json.dumps(backend)}); true")
+            time.sleep(0.4)
             crops[backend] = capture(
                 engine, out_dir / f"{backend}.canvas.png", clip=clip_of(box)
             )
+            # 截完立即停 ⇒ 两个后端**不会**同时占着 context（runner 上资源紧）。
+            engine.evaluate(f"window.__P5B_REDRAW__.stop({json.dumps(backend)}); true")
         capture(engine, out_dir / "engine.page.png")
 
         # ── 阶段 3：逐像素对照 ───────────────────────────────────────────

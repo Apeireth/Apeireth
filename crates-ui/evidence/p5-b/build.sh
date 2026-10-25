@@ -45,8 +45,13 @@ mkdir -p "${HERE}/web/public/engine/pkg"
   "${HERE}/harness/target/wasm32-unknown-unknown/release/p5b_harness.wasm"
 
 echo "── 3/4 vite build ──"
-if [ ! -d "${HERE}/web/node_modules" ]; then
+# ⚠️ 用 `-e`（存在性）**加上** `-d`（是目录）两个条件 ⇒ **坏链接**也能被识别并重建。
+# ⇒ 只判 `-d` 时：坏链接 ⇒ `-d` 为假但 `-e` 为真 ⇒ 链接**永远不会被重建**
+# ⇒ ⇒ `npx vite` 找不到本地 vite ⇒ 想联网装 ⇒ 离线/受限环境里失败
+# ⇒ （设置页 harness 的 build.sh 已按此口径修过；此处是同一处坑的另一份拷贝。）
+if [ ! -e "${HERE}/web/node_modules" ] || [ ! -d "${HERE}/web/node_modules" ]; then
   echo "   （无 node_modules ⇒ 复用生产前端的只读依赖目录）"
+  rm -f "${HERE}/web/node_modules"
   ln -s "${REPO}/frontend/companion-desktop/node_modules" "${HERE}/web/node_modules"
 fi
 (cd "${HERE}/web" && npx --no-install vite build)

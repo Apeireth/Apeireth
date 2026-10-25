@@ -12,11 +12,32 @@
 //! - 顶点数据与生产版逐值一致（全屏三角形 `[-1,-1, 3,-1, -1,3]`）。
 
 use apeireth_ui_gpu::{
-    BackendPreference, Engine, EngineOptions, SceneDescriptor, SurfaceTargetInput, UniformValues,
-    SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL, SHADER_UNIFORM_NAMES,
+    BackendPreference, Engine, EngineOptions, SceneDescriptor, ScenePipeline, SurfaceTargetInput,
+    UniformValues, SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL, SHADER_UNIFORM_NAMES,
 };
+use std::cell::RefCell;
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
+
+/// ⭐ **已建的引擎与管线**（供 [`redraw`] **复用**）。
+///
+/// ## 为什么需要它
+///
+/// 浏览器的 WebGL **drawing buffer 默认不保留**（`preserveDrawingBuffer: false`）：
+/// **每次合成之后** buffer 被清空 ⇒ 下一次截图触发的合成拿到的就是**空**。
+/// ⇒ 「画完 3 帧就停」⇒ 停后浏览器发生一次合成 ⇒ buffer 被清 ⇒ 之后截图**全白**
+/// ⇒ 逐像素差 99.94% ⇒ **被误判为「引擎画错」**（2026-10-25 CI 实测，run 40170312024）。
+///
+/// ⇒ 修法是**持续重绘** ⇒ 而持续重绘**不能**每次都重建 engine + pipeline
+/// （重建极重 ⇒ 实测 `Page.captureScreenshot` **超时**）⇒ ⇒ **建一次、复用多次**。
+///
+/// ⚠️ wasm 是**单线程**的 ⇒ 用 [`thread_local!`] 存放即可（无需 `Send`/`Sync`）。
+type EngineSlot = RefCell<HashMap<String, (Engine, ScenePipeline, UniformValues)>>;
+
+thread_local! {
+    static ENGINE: EngineSlot = RefCell::new(HashMap::new());
+}
 
 /// 调试用日志（scratch 宿主专用）。
 fn trace(message: &str) {
@@ -25,6 +46,44 @@ fn trace(message: &str) {
 
 /// 全屏三角形（与生产版一致：`[-1,-1, 3,-1, -1,3]`）。
 const FULLSCREEN_TRIANGLE: [f32; 6] = [-1.0, -1.0, 3.0, -1.0, -1.0, 3.0];
+
+/// ⭐ **复用已建的引擎与管线**再画 N 帧（**不重建** GPU 资源）。
+///
+/// ## 为什么需要
+///
+/// 浏览器的 WebGL **drawing buffer 默认不保留** ⇒ 合成后被清空
+/// ⇒ 「画完就停」⇒ 之后截图**全白**（2026-10-25 CI 实测，99.94% 差异）。
+/// ⇒ 驱动需要「**截图前重画**」⇒ 而重画**不能**每次重建 engine + pipeline
+/// （重建极重 ⇒ 实测 `Page.captureScreenshot` **超时**）⇒ ⇒ **复用**。
+///
+/// ## 口径
+///
+/// uniform **不重新读取** ⇒ 用**首次**注入的那一批（原样）⇒ 画面**恒定**
+/// ⇒ ⇒ 截图拿到什么与「画了几帧」无关 ⇒ **对时序不敏感**。
+#[wasm_bindgen]
+pub async fn redraw(backend: &str, frames: u32) -> Result<String, JsValue> {
+    let mut drawn = 0u32;
+    ENGINE.with(|slot| {
+        let mut guard = slot.borrow_mut();
+        let Some((engine, pipeline, values)) = guard.get_mut(backend) else {
+            return Err(JsValue::from_str(&format!(
+                "redraw: 后端 `{backend}` 的引擎尚未建立（先调 run）"
+            )));
+        };
+        for _ in 0..frames.max(1) {
+            engine
+                .draw_frame(pipeline, values)
+                .map_err(|e| JsValue::from_str(&format!("draw: {e}")))?;
+            drawn += 1;
+        }
+        Ok(())
+    })?;
+    for _ in 0..drawn {
+        // 让出到浏览器任务队列 ⇒ 合成器有机会把这帧贴到画布上。
+        yield_to_browser().await;
+    }
+    Ok(format!("{{\"frames_drawn\":{drawn}}}"))
+}
 
 /// 在浏览器宿主里建引擎 → 建管线 → 用宿主给的 uniform 画 N 帧 → 回报实测口径。
 ///
@@ -98,6 +157,12 @@ pub async fn run(
 
     let frame = last.ok_or_else(|| JsValue::from_str("no frame drawn"))?;
     let color = report.color;
+
+    // ⭐ 留存**引擎与管线** ⇒ [`redraw`] 可复用（不必每次重建 GPU 资源）。
+    ENGINE.with(|slot| {
+        slot.borrow_mut()
+            .insert(String::from(backend), (engine, pipeline, values));
+    });
 
     Ok(format!(
         concat!(
