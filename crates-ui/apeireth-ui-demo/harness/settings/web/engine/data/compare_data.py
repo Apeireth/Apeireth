@@ -246,7 +246,13 @@ def collect_pair(panel: str, section: str, port: int) -> dict:
     ⇒ 「读不到」那一态由本驱动的 `main()` 单独覆盖（4 组用例的完整集合在
     `evidence/data/report.json`）。
     """
-    base = f"http://127.0.0.1:{port}"
+    # ⚠️ **自己起服务**（与其它面同口径）：共享入口**不起服务**，只把 `--port`
+    # 参数传下来 ⇒ 驱动必须自己 serve `dist/` ⇒ 否则访问到的是**前面某个面
+    # 留下 / 已关闭的服务** ⇒ 页面 404 ⇒ `window.__SETTINGS__` 为 `undefined`
+    # ⇒ 报「页面求值异常」（2026-10-25 实测）。
+    # ⇒ 用 `compare.serve`（端口 0 ⇒ 系统分配 ⇒ **不会撞端口**）。
+    httpd, actual = compare.serve(DIST)
+    base = f"http://127.0.0.1:{actual}"
     chrome, devtools_port = compare.launch_chrome()
     try:
         cdp = compare.open_page(devtools_port)
@@ -334,6 +340,7 @@ def collect_pair(panel: str, section: str, port: int) -> dict:
             os.killpg(os.getpgid(chrome.pid), signal.SIGKILL)
         except Exception:
             chrome.kill()
+        httpd.shutdown()
 
 
 def main() -> int:

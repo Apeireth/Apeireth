@@ -455,13 +455,16 @@ jobs:
           # ⇒ 该 job 在 runner 上红（2026-10-25 实测，run 40107215483 第 9 步）。
           # ⇒ 教训：**相对路径的层数必须对着 working-directory 数**，
           #   同一份工作流里 `pilot-compare`（4 级目录）用 `../../../` 是对的，本 job 不同。
-          ln -sfn "$PWD/../../../frontend/companion-desktop/node_modules" node_modules
-          if [ ! -e node_modules/vite ]; then
+          # ⚠️ **链接要建在 `web/node_modules`**（`build.sh` 第 3 步要的就是它）
+          # ⇒ 早前版本建在 `p5-b/node_modules` ⇒ **vite 根本不看那个**
+          # ⇒ 断言「vite 不可见」查的是**另一个**目录 ⇒ 保护错了地方。
+          ln -sfn "$PWD/../../../frontend/companion-desktop/node_modules" web/node_modules
+          if [ ! -e web/node_modules/vite ]; then
             echo "::error::harness 的 node_modules 链接未生效（vite 不可见）"
             echo "  工作目录: $PWD"
-            echo "  链接目标: $(readlink node_modules || echo '<无链接>')"
-            echo "  目标是否存在: $([ -d "$(readlink node_modules)" ] && echo 是 || echo 否)"
-            echo "  目录内容: $(ls -1 | tr '\n' ' ')"
+            echo "  链接目标: $(readlink web/node_modules || echo '<无链接>')"
+            echo "  目标是否存在: $([ -d "$(readlink web/node_modules)" ] && echo 是 || echo 否)"
+            echo "  目录内容: $(ls -1 web | tr '\n' ' ')"
             exit 1
           fi
 
