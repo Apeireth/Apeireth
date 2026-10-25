@@ -241,3 +241,17 @@ path = "fuzz_targets/im_payload.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exec_pipeline"
+path = "fuzz_targets/exec_pipeline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_binding"
+path = "fuzz_targets/canonical_binding.rs"
+test = false
+doc = false
+bench = false
