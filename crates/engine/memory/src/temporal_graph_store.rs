@@ -502,13 +502,6 @@ impl SqliteTemporalGraphStore {
         self.query(&TemporalGraphQuery::new(as_of_ms))
     }
 
-    pub fn facts_as_of(
-        &self,
-        query: &TemporalGraphQuery,
-    ) -> Result<Vec<TemporalGraphFact>, TemporalGraphError> {
-        self.query(query)
-    }
-
     /// Returns all immutable revisions for one stable relation key.
     pub fn history(
         &self,
