@@ -363,3 +363,13 @@ scripts/guard_ml/trace_samples.jsonl
 scripts/guard_ml/pair_samples.jsonl
 # guard 数据集清单（export_guard_scenarios 再生；CI 每次导出后读取，库内不存放）
 artifacts/guard-dataseton
+# 覆盖率测量产物（tarpaulin 输出，非源码）
+cobertura.xml
+# 覆盖率插桩产物（tarpaulin 的 .profraw）—— 构建产物, 0 必进 git。
+# 它们会被 tarpaulin 当作覆盖率数据 merge 进去, 污染测量。
+#
+# 订正（2026-10-24）: 本批早段我曾在提交正文里写「仓里曾有 2 个被误提交」——
+# **那是错的**。`origin/main` 上 .profraw 数量为 0; 那 2 个
+# （crates/capabilities/tools/default_*.profraw）是**我自己**在执行 tarpaulin 后
+# 用 `git add -A` 卷进提交的。已从本分支删除, 本条规则防止再次发生。
+*.profraw

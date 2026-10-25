@@ -14,6 +14,26 @@ fn readelf_available() -> bool {
         .unwrap_or(false)
 }
 
+/// 用 **C locale** 跑 readelf。
+///
+/// 为什么必须固定 locale：本测试用英文字段名（`Class:` / `Entry point address:`）
+/// 去解析 readelf 的输出，而 **readelf 会跟随 locale 本地化**——
+/// 在 `LANG=zh_CN.UTF-8` 的机器上它输出「类别:」「入口点地址:」，
+/// 字段名匹配不到 → `unwrap_or_default()` 得到空串 → 把 ELF64 误判成 32 位，
+/// 于是**在所有中文 locale 的机器上必然失败**（实测本机：
+/// `readelf` 报 64 位、自研 parser 报 64 位，但测试因字段名找不到而期待 32 位）。
+///
+/// 固定 `LC_ALL=C` 让本测试在任何 locale 下行为一致，不把环境差异误报成产品缺陷。
+fn readelf_head(path: &std::path::Path) -> Option<std::process::Output> {
+    Command::new("readelf")
+        .arg("-h")
+        .arg(path)
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .output()
+        .ok()
+}
+
 fn field<'a>(text: &'a str, label: &str) -> Option<&'a str> {
     text.lines()
         .find_map(|line| line.trim().strip_prefix(label))
@@ -27,11 +47,7 @@ fn elf_header_matches_readelf() {
         return;
     }
     let exe = std::env::current_exe().expect("current exe");
-    let output = Command::new("readelf")
-        .arg("-h")
-        .arg(&exe)
-        .output()
-        .expect("run readelf");
+    let output = readelf_head(&exe).expect("run readelf");
     assert!(output.status.success(), "readelf failed");
     let text = String::from_utf8_lossy(&output.stdout);
 

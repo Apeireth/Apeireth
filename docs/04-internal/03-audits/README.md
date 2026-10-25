@@ -11,6 +11,7 @@
 | 1 | [`doc-governance-batch-review-2026-10-23.md`](doc-governance-batch-review-2026-10-23.md) | 文档治理批（PR #59） | 22 条断言 / PASS 11 / **FAIL 6** |
 | 2 | [`doc-governance-followup-review-2026-10-24.md`](doc-governance-followup-review-2026-10-24.md) | 后续批（口径清零 + 04-internal 重排） | 22 条 / PASS 18 / **FAIL 4** |
 | 3 | [`doc-governance-fix-verification-2026-10-24.md`](doc-governance-fix-verification-2026-10-24.md) | 第 2 份指出的 4 项是否真修好 | 10 条 / **PASS 10 / FAIL 0** |
+| 4 | [`debt-ledger-status-2026-10-25.md`](debt-ledger-status-2026-10-25.md) | 债栏 D1–D32 全部 33 行逐条核对 | 18 行已结清 / 5 行本轮新增结论（D4·D8·D21·D27·D28）/ 10 行仍需外部条件；**明确不判 D4、D27 已消** |
 
 > 读法：**不要把 PASS 10 当成「这批没问题」** —— 它是「上一轮指出的 4 个问题确实修好了」的验证。
 > 真正的证据在第 1、2 份里：它们一共证伪了 10 类缺陷，包括一次**反向污染真源**（把库级实现标成已接生产装配）。
