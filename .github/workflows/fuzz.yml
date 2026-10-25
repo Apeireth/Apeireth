@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-                                                                        target: [protocol_decode, gateway_guards, resident_parse, sentence_split, tool_schema, im_config, mcp_config, plugin_bounds, content_sanitize, guardrail_security, device_actions, untrusted_envelope, client_tokens, stored_doc, approval_risk, recon_scope, sensitive_path, write_intent, domain_context, filesystem, external, apply_patch, egress, canonical_entry, input_security, chain_audit, mcp_governance]
+                                                                                target: [protocol_decode, gateway_guards, resident_parse, sentence_split, tool_schema, im_config, mcp_config, plugin_bounds, content_sanitize, guardrail_security, device_actions, untrusted_envelope, client_tokens, stored_doc, approval_risk, recon_scope, sensitive_path, write_intent, domain_context, filesystem, external, apply_patch, egress, canonical_entry, input_security, chain_audit, mcp_governance, approval_policy, im_payload]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

@@ -227,3 +227,17 @@ path = "fuzz_targets/mcp_governance.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "approval_policy"
+path = "fuzz_targets/approval_policy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "im_payload"
+path = "fuzz_targets/im_payload.rs"
+test = false
+doc = false
+bench = false
