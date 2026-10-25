@@ -197,6 +197,12 @@ fn off_list_subcommands_have_no_tool_surface() {
         "git some-alias",
         "git commit",
         "git commit -a",
+        // 编辑器面 (承诺「本工具不开编辑器面」): 短形 `-e` 与长形 `--edit` 都要拒。
+        // 此前 `e` 漏在拒绝表外 ⇒ 这四种形态被**静默放过**。
+        "git commit -m x -e",
+        "git commit -em x",
+        "git commit -m x --edit",
+        "git commit --edit -m x",
         "git branch",
         "git branch --list",
         "git tag",

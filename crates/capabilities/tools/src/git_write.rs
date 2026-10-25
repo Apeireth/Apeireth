@@ -37,6 +37,14 @@
 //! - 会话预设 (`read_only` 拒 / `standard` 审批 / `full` L1 放行·L2 照审批)
 //!   由组装根的 [`apeireth_governance`] 预设钩子承载, L2 永不因预设放行。
 
+// ── **词法面**（段切分 / 提词）外置 —— 纯搬移, 不改逻辑。
+//
+// 存在理由: 本文件在 size 棘轮基线上（`arch-baseline.txt`, 0 容差）⇒ 任何净增都会让
+// `arch_guard` 变红。棘轮文件**不归我改** ⇒ 正路是**让本文件净减**。
+// `src/git_write.rs` + `src/git_write/parse.rs` 是 Rust 2018 标准模块布局
+// ⇒ `mod parse;` **自动解析**, **不需要**改 `lib.rs`（别人的文件）。
+mod parse;
+use parse::{split_command_segments, tokenize_segment};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -241,100 +249,6 @@ pub fn git_write_human_approval_floor(arguments: &serde_json::Value) -> bool {
 // 词法面: 段切分 / 提词
 // ---------------------------------------------------------------------------
 
-/// 段切分: 只认 `&&` / `;` / 换行为段分隔; shell 面 (管道/重定向/插值/分组)
-/// 拒绝即帧 (本工具不经 shell, 不给"看起来像 shell"的幻觉空间)。
-fn split_command_segments(command: &str) -> Result<Vec<String>, String> {
-    let mut segments = Vec::new();
-    let mut current = String::new();
-    let mut chars = command.chars().peekable();
-    let mut quote: Option<char> = None;
-    while let Some(ch) = chars.next() {
-        match quote {
-            Some(open) => {
-                current.push(ch);
-                if ch == open {
-                    quote = None;
-                }
-            }
-            None => match ch {
-                '\'' | '"' => {
-                    quote = Some(ch);
-                    current.push(ch);
-                }
-                ';' | '\n' | '\r' => segments.push(std::mem::take(&mut current)),
-                '&' => {
-                    if chars.peek() == Some(&'&') {
-                        chars.next();
-                        segments.push(std::mem::take(&mut current));
-                    } else {
-                        return Err(refuse_morph(
-                            "单个 & (后台/句柄面) 不入本工具: 段分隔只认 && 与 ;",
-                        ));
-                    }
-                }
-                '|' | '<' | '>' => {
-                    return Err(refuse_morph(
-                        "管道/重定向面不入本工具: 命令按结构化参数执行 git, 不经 shell",
-                    ))
-                }
-                '`' | '$' | '(' | ')' | '{' | '}' => {
-                    return Err(refuse_morph(format!(
-                        "shell 元字符 {ch:?} 不入本工具: 不做插值/分组/展开 (引号内按字面参数)"
-                    )))
-                }
-                _ => current.push(ch),
-            },
-        }
-    }
-    if quote.is_some() {
-        return Err(refuse_morph("引号未闭合: 命令文本无法按参数面解析"));
-    }
-    segments.push(current);
-    Ok(segments)
-}
-
-/// 段内提词: 引号成组去壳; 引号内字面保留 (无转义/无插值); 空引号仍是词。
-fn tokenize_segment(segment: &str) -> Result<Vec<String>, String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut started = false;
-    let mut quote: Option<char> = None;
-    for ch in segment.chars() {
-        match quote {
-            Some(open) => {
-                if ch == open {
-                    quote = None;
-                } else {
-                    current.push(ch);
-                }
-            }
-            None => match ch {
-                '\'' | '"' => {
-                    quote = Some(ch);
-                    started = true;
-                }
-                whitespace if whitespace.is_whitespace() => {
-                    if started || !current.is_empty() {
-                        tokens.push(std::mem::take(&mut current));
-                        started = false;
-                    }
-                }
-                _ => {
-                    current.push(ch);
-                    started = true;
-                }
-            },
-        }
-    }
-    if quote.is_some() {
-        return Err(refuse_morph("引号未闭合: 命令文本无法按参数面解析"));
-    }
-    if started || !current.is_empty() {
-        tokens.push(current);
-    }
-    Ok(tokens)
-}
-
 // ---------------------------------------------------------------------------
 // 词法面: 逐段分级 (词表 + 变形防护)
 // ---------------------------------------------------------------------------
@@ -441,8 +355,12 @@ fn grade_subcommand(subcommand: &str, args: &[String]) -> Result<GitWriteTier, S
 const COMMIT_VALUE_SHORTS: &[char] = &['m', 'F', 'C', 't'];
 
 /// commit 短选项束的拒绝字符: `n`(--no-verify 绕钩子) / `s`·`S`(签名密钥面) /
-/// `c`(开编辑器) / `p`(交互补丁面)。
-const COMMIT_DENIED_SHORTS: &[char] = &['n', 's', 'S', 'c', 'p'];
+/// `c`·**`e`**(**编辑器面**) / `p`(交互补丁面)。
+///
+/// ⚠️ `e`（`--edit` 的短形）此前**漏在表外** ⇒ `git commit -m x -e` / `-em x`
+/// 被**静默放过**（`e` 既不在拒绝表、也不在值参数表 ⇒ 短选项束扫描时**被忽略**）
+/// ⇒ 违反本文件写死的承诺「**本工具不开编辑器面**」。
+const COMMIT_DENIED_SHORTS: &[char] = &['n', 's', 'S', 'c', 'e', 'p'];
 
 fn grade_commit(args: &[String]) -> Result<GitWriteTier, String> {
     let mut message_source = false;
@@ -462,6 +380,11 @@ fn grade_commit(args: &[String]) -> Result<GitWriteTier, String> {
                 }
                 if long_option_overlaps(base, "--no-verify") {
                     return Err(refuse_morph("commit --no-verify 绕过仓库钩子 = 变形绕过面"));
+                }
+                if long_option_overlaps(base, "--edit") {
+                    // `--edit` = 在编辑器里改提交消息 ⇒ **编辑器面**（长选项形）。
+                    // 与短选项 `-e` 同一族（此前长选项分支**根本没检查**它 ⇒ 放行）。
+                    return Err(refuse_offlist("commit --edit 开编辑器: 本工具不开编辑器面"));
                 }
                 if long_option_overlaps(base, "--sign") || long_option_overlaps(base, "--gpg-sign")
                 {
@@ -484,7 +407,7 @@ fn grade_commit(args: &[String]) -> Result<GitWriteTier, String> {
                 if COMMIT_DENIED_SHORTS.contains(&ch) {
                     return Err(match ch {
                         'n' => refuse_morph("commit -n/--no-verify 绕过仓库钩子 = 变形绕过面"),
-                        'c' => refuse_offlist("commit -c 开编辑器: 本工具不开编辑器面"),
+                        'c' | 'e' => refuse_offlist("commit -c/-e 开编辑器: 本工具不开编辑器面"),
                         _ => refuse_offlist("签名/密钥面不入本工具"),
                     });
                 }
