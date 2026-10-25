@@ -23,6 +23,7 @@ serde_json = "1"
 apeireth-protocol = { path = "../crates/foundation/protocol" }
 apeireth-gateway = { path = "../crates/adapters/gateway" }
 apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
+apeireth-runtime = { path = "../crates/engine/runtime" }
 apeireth-plugin = { path = "../crates/foundation/plugin" }
 apeireth-governance = { path = "../crates/foundation/governance" }
 apeireth-core = { path = "../crates/foundation/core" }
@@ -138,6 +139,34 @@ bench = false
 [[bin]]
 name = "recon_scope"
 path = "fuzz_targets/recon_scope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sensitive_path"
+path = "fuzz_targets/sensitive_path.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "write_intent"
+path = "fuzz_targets/write_intent.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "domain_context"
+path = "fuzz_targets/domain_context.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filesystem"
+path = "fuzz_targets/filesystem.rs"
 test = false
 doc = false
 bench = false

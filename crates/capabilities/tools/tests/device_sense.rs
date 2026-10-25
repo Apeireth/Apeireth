@@ -79,6 +79,9 @@ fn mock_device(id: &str, kind: DeviceKind, enabled: bool) -> Device {
 
 /// 落一张设备表 (直接走注册表写面)。
 fn write_table(data_dir: &PathBuf, devices: Vec<Device>) {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     DeviceRegistry::under_data_dir(data_dir)
         .save(&DevicesBody { devices })
         .expect("设备表落盘");

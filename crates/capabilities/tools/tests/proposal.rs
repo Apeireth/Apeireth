@@ -327,6 +327,9 @@ async fn the_proposal_ledger_is_append_only() {
 /// 全关), 且 `ProposalConfig::from_env` 同口径。
 #[test]
 fn the_enable_switch_is_fail_closed_except_the_exact_one() {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     // 串行护住 env 读写 (进程级全局量, 同二进制内其它用例不读这把开关)。
     assert!(ProposalConfig::from_env(".").is_none());
     for value in ["0", "2", "true", "yes", ""] {

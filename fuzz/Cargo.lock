@@ -232,6 +232,7 @@ dependencies = [
  "apeireth-governance",
  "apeireth-plugin",
  "apeireth-protocol",
+ "apeireth-runtime",
  "apeireth-tools-canonical",
  "libfuzzer-sys",
  "serde",
