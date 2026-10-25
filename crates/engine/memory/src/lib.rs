@@ -80,6 +80,7 @@ pub mod graph_algo;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod kuramoto_resonance;
+pub mod memory_chain;
 pub mod meta_thinking;
 pub mod metadata_filter;
 pub mod milestone;

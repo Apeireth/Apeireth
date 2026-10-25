@@ -57,7 +57,7 @@
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G3（30 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+# --- G3（29 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
 orphan bio_care_assembly_from_env  # G3
 orphan bio_circadian_wiring_from_env  # G3
@@ -66,7 +66,6 @@ orphan deviation  # G3
 orphan disarm  # G3
 orphan engine_mut  # G3
 orphan entity_mut  # G3
-orphan from_episode  # G3
 orphan graph_snapshot  # G3
 orphan load_graph  # G3
 orphan mcts_search  # G3
