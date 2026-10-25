@@ -941,6 +941,16 @@ impl ProviderHost {
         self.submit_count.set(self.submit_count.get() + 1);
         self.last_submit.set(masked_snapshot(draft));
         // 固定回执（**HTTP 未接线** ⇒ 只推进画面）。
+        //
+        // ⚠️ 曾经的错误尝试（2026-10-25，**已回退**）：为了让
+        // `models-search-typed` 的高度与生产一致，试过「提交时**不**灌回执」
+        // ⇒ ⇒ 那让 `models-submitted` 的引擎侧比参考侧**矮 121 px**
+        // （897 vs 776）⇒ ⇒ 从「可比较的差异」变成「**不可比较**」
+        // ⇒ ⇒ **明显更糟** ⇒ ⇒ 回退。
+        // ⇒ ⇒ 真正的差异是「**生产在失焦时走了空提交（不提交、无回执）**」
+        // ⇒ ⇒ 见 `provider_group_dirty` 的「空提交」判定。
+        // ⇒ ⇒ ⚠️ 实测佐证：加上「空提交」判定后，两侧**高度一致**
+        // （`models-search-typed` 995 / 995；`models-submitted` 897 / 897）。
         self.apply_result.set(self.fixture.apply_result.clone());
         self.effective_config
             .set(self.fixture.effective_config.clone());
