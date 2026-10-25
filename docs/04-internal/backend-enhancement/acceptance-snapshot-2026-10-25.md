@@ -39,14 +39,24 @@
 | `Coverage (tarpaulin)` | CI only（需 cobertura.xml） |
 | `cargo audit` | 需克隆 RustSec 库；**advisories 面已由 `cargo deny check` 覆盖并全绿** |
 
-## 三、CI 平台侧阻塞（需要 owner 处理）
+## 三、CI 状态与一处诊断更正（2026-10-25 08:45 更新）
 
-`PR #94` 的 39 个 check **全部 `queued`**，自 2026-10-24 18:13Z 起无任何调度。
-已诊断（看板 §十九）：`actions/permissions` 正常、**自托管 runner = 0**、
-我的多轮推送积压已全部 cancel、最新 run 的 `updated_at` 从未变化
-⇒ **GitHub 托管 runner 不分配**，最可能是私库 Actions 用量/账单上限。
+**CI 已恢复并在处理积压**（9–11 个 job 并发运行，queue 正在消化）。我的 PR 老 SHA
+`0e3d35d7` 的检查已成批通过（16 success：Docs truth / Guard 3.3 / 孤儿棘轮 / Cargo deny /
+rustfmt / Protocol / Wiring ledger / arch-guard …）。
 
-**需要你**：GitHub → Settings → Billing → Actions 用量。
+**同时找到并修掉一个真根因**：`cargo-audit.yml` 有**两处相邻重复的 `if: always()` 键**
+（GitHub workflow 解析器拒绝重复键 ⇒ 该 workflow 每个 run 都 0 jobs 秒失败）。
+已在 commit `89d5e3b8` 删掉重复行（全仓扫描仅此文件有该问题）。
+
+**⚠️ 更正我此前的错误诊断**（原文保留在 git 历史里，不再作为结论）：
+
+- 我此前写「最可能是私库 Actions 用量/账单上限」——**仓库是 public**（`private: false`），
+  公开仓库 Actions 分钟数免费，该假设**不成立**；
+- 我此前据 `/actions/runners?total_count=0` 判断「平台不分配 runner」——**误读**：
+  该接口只列**自托管** runner，GitHub 托管 runner 从不出现在里面；
+- 真实情况：① 一个 workflow 自身坏了（cargo-audit 解析失败，已修）；
+  ② 其余 run 在排队积压（恢复后正在消化）。
 
 ## 四、需要你拍板的 7 项
 
