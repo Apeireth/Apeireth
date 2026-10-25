@@ -18,10 +18,14 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 apeireth-protocol = { path = "../crates/foundation/protocol" }
 apeireth-gateway = { path = "../crates/adapters/gateway" }
 apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
+apeireth-plugin = { path = "../crates/foundation/plugin" }
+apeireth-governance = { path = "../crates/foundation/governance" }
+apeireth-core = { path = "../crates/foundation/core" }
 
 [profile.release]
 debug = 1
@@ -71,6 +75,69 @@ bench = false
 [[bin]]
 name = "mcp_config"
 path = "fuzz_targets/mcp_config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "plugin_bounds"
+path = "fuzz_targets/plugin_bounds.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "content_sanitize"
+path = "fuzz_targets/content_sanitize.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "guardrail_security"
+path = "fuzz_targets/guardrail_security.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_actions"
+path = "fuzz_targets/device_actions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "untrusted_envelope"
+path = "fuzz_targets/untrusted_envelope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "client_tokens"
+path = "fuzz_targets/client_tokens.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stored_doc"
+path = "fuzz_targets/stored_doc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "approval_risk"
+path = "fuzz_targets/approval_risk.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "recon_scope"
+path = "fuzz_targets/recon_scope.rs"
 test = false
 doc = false
 bench = false

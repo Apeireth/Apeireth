@@ -45,9 +45,18 @@ fuzz_target!(|data: &[u8]| {
         .require("c", SchemaKind::Array);
     if multi.validate(&value).is_ok() {
         let obj = value.as_object().expect("Ok 时必须是结构化对象");
-        for (name, kind) in [("a", SchemaKind::String), ("b", SchemaKind::Number), ("c", SchemaKind::Array)] {
-            let got = obj.get(name).unwrap_or_else(|| panic!("Ok 时 required 字段 {name} 必须存在"));
-            assert!(kind.matches(got), "validate 放行了 {name} 的类型不匹配: value={got:?}");
+        for (name, kind) in [
+            ("a", SchemaKind::String),
+            ("b", SchemaKind::Number),
+            ("c", SchemaKind::Array),
+        ] {
+            let got = obj
+                .get(name)
+                .unwrap_or_else(|| panic!("Ok 时 required 字段 {name} 必须存在"));
+            assert!(
+                kind.matches(got),
+                "validate 放行了 {name} 的类型不匹配: value={got:?}"
+            );
         }
     }
 });
