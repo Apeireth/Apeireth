@@ -1953,7 +1953,14 @@ fn render_discovered_models(props: &ProviderGroupProps, result: &TestResult) -> 
     let placeholder = MODEL_SEARCH_PLACEHOLDER;
 
     let search_input = {
-        let action = props.on_action.clone();
+        // ⚠️ **走「字段输入」通道**，不是「动作」通道：
+        // 生产是 `bind:value={modelSearchQuery}` ⇒ 输入即过滤
+        // （`filteredDiscoveredModels` 是 `$derived.by` ⇒ 依赖 `modelSearchQuery`）
+        // ⇒ 引擎侧必须让**宿主回读 DOM** 并更新 `model.searchQuery` 信号
+        // ⇒ 否则列表**不会被过滤**（实测：键入后引擎侧仍显示 3 个模型、
+        // 参考侧只剩 2 个 ⇒ 裁剪高度差 158 px ⇒ 像素对照无法进行）。
+        // ⇒ 动作通道（`on_action`）**不**用于此处：它**不携带取值**。
+        let field = props.on_field_input.clone();
         VNode::element("input")
             .attr("type", "search")
             .attr("placeholder", placeholder)
@@ -1962,7 +1969,7 @@ fn render_discovered_models(props: &ProviderGroupProps, result: &TestResult) -> 
             .handler(
                 EventKind::Input,
                 ElementHandler::new(move |_event: &mut DomEvent| {
-                    (action)("search-models");
+                    (field)("model.searchQuery");
                 }),
             )
             .build()

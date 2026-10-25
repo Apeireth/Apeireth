@@ -27,13 +27,32 @@ export function isDesktop() {
   return true;
 }
 
+/** 运维读数是否可读（默认 **true**）。
+ *
+ * ⚠️ **页面全局开关**（2026-10-25 主代理加）：对照脚本在**装载页面之前**
+ * 用 CDP 注入 `globalThis.__DATA_READINGS__ = false` ⇒ 替身返回空读数
+ * ⇒ 生产落「仅桌面版可读（web 构建无监督面）」那一支 ⇒ **「读不到」态可对照**。
+ *
+ * ⇒ 读数**取值**仍来自共享固定数据（`fixtures/data.json`）⇒ **不另造数据**
+ * ⇒ 参考侧与引擎侧**读的是同一份**（只是「能不能读到」不同）。
+ *
+ * ⚠️ 此前**只有面内替身**（`web/engine/data/mock/`）有这个开关 ⇒ 参考侧
+ * 用的是**共享替身** ⇒ 开关不生效 ⇒ 「读不到」那一态**对照不了**
+ * （2026-10-25 主代理重建 `data` 面驱动时实测发现）。
+ */
+function readingsAvailable() {
+  return globalThis.__DATA_READINGS__ !== false;
+}
+
 /** 侧车状态读数。 */
 export async function getBackendStatus() {
+  if (!readingsAvailable()) return null;
   return data.daemonStatus ? {...data.daemonStatus} : null;
 }
 
 /** 常驻服务探针读数。 */
 export async function getResidentProbe() {
+  if (!readingsAvailable()) return null;
   return data.residentProbe ? {...data.residentProbe} : null;
 }
 

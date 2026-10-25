@@ -503,6 +503,52 @@ def click(cdp, selector: str) -> bool:
     )
 
 
+def type_into(cdp, selector: str, text: str) -> bool:
+    """在输入框里**真实输入**文字（两侧同一路径）。
+
+    ## 为什么用「真实输入」而不是「改信号」
+
+    生产是 `bind:value` ⇒ 取值随 `input` 事件推进；引擎侧的信号是
+    **从 DOM 回读**得到的（宿主的 `mark_dirty` → `read_field`）
+    ⇒ ⇒ 只有**真的敲进去**，引擎侧才会同步到同样的值。
+
+    ## ⚠️ 顺序要紧
+
+    `el.value = ''` 会让引擎侧触发 property 重渲染 ⇒ **元素可能被换掉**
+    ⇒ 焦点丢失 ⇒ 后续按键**打在新元素上**（实测：值始终是 `''`）
+    ⇒ 因此：**先聚焦 → 清值 → 再聚焦**，然后**键入期间不再触碰该元素**。
+
+    ## ⚠️ 键盘事件必须给 `text` + `key`
+
+    只给 `text` 的 `keyDown` 不会触发 `input` ⇒ `bind:value` 不推进。
+    """
+    if not bool(
+        cdp.evaluate(
+            "(() => { const el = document.querySelector(" + json.dumps(selector) + ");"
+            " if (!el) return false; el.focus(); return true; })()"
+        )
+    ):
+        return False
+    # 清值：只改 **property**；改完**重新聚焦**（元素可能被换）。
+    cdp.evaluate(
+        "(() => { const el = document.querySelector(" + json.dumps(selector) + ");"
+        " if (!el) return false; el.value = ''; el.focus(); return true; })()"
+    )
+    for char in text:
+        cdp.call(
+            "Input.dispatchKeyEvent",
+            {
+                "type": "keyDown",
+                "text": char,
+                "key": char,
+                "unmodifiedText": char,
+                "windowsVirtualKeyCode": ord(char.upper()),
+            },
+        )
+        cdp.call("Input.dispatchKeyEvent", {"type": "keyUp", "key": char})
+    return True
+
+
 def dispatch_focusout(cdp, selector: str) -> bool:
     """在元素上派发 `focusout`（生产整组提交的入口之一）。"""
     return bool(
@@ -965,6 +1011,99 @@ def run_mask_parity_check(env: dict) -> dict:
     }
 
 
+def run_uncovered_inputs_check(env: dict) -> dict:
+    """**补两个此前未被像素覆盖的输入**：模型搜索框（网关端点见诚实边界）。
+
+    ## 为什么需要补
+
+    这两个输入的**生产初值都是空**（`modelSearchQuery = ''` / `editBaseUrl = ''` /
+    `showAdvancedGateway = false`）⇒ 空 vs 空 ⇒ **像素天然相同**
+    ⇒ 任何「初值态」的对照都**测不出差异** ⇒ 它们此前**没有被真正覆盖**
+    （`property` 通道写了值也看不出对错）。
+
+    ⇒ 本用例用**真实交互**让两侧同时拿到**非空**值：
+    先点「测试连接」拉出模型列表（搜索框随列表出现）
+    ⇒ 再在 `.disc-search input` 里**真实键入**同一段文字
+    ⇒ 两侧的模型列表**同时被过滤** ⇒ 过滤结果也该一致。
+
+    ## 为什么用「真实键入」而不是「改信号」
+
+    生产是 `bind:value` ⇒ 取值随 `input` 事件推进；引擎侧的信号
+    **从 DOM 回读**得到 ⇒ 只有**真的敲进去**，引擎侧才会同步到同样的值。
+    ⇒ 改信号（服务端注入）走的是**另一条路径** ⇒ 测不到这条。
+    """
+    cdp = env["cdp"]
+    base = env["base"]
+    rows = []
+    for side, path in (
+        ("reference", f"{base}/web/reference/provider/index.html"),
+        ("engine", f"{base}/web/engine/provider/index.html"),
+    ):
+        navigate_reference(cdp, path) if side == "reference" else navigate_engine(cdp, path)
+        cdp.evaluate("window.__SETTINGS__.selectSection('models'); true")
+        time.sleep(0.8)
+        # 先拉出模型列表（搜索框随列表出现）。
+        click_test_connection(cdp)
+        time.sleep(0.8)
+        typed = type_into(cdp, ".disc-search input", "gpt")
+        time.sleep(0.9)
+        actual = cdp.evaluate(
+            "(() => { const el = document.querySelector('.disc-search input');"
+            " return el ? el.value : '<无搜索框>'; })()"
+        )
+        items = cdp.evaluate("document.querySelectorAll('.model-catalog .catalog-item').length")
+        log(f"  ⚙ {side}：键入={typed} / 搜索框值={actual!r} / 列表项数={items}")
+        rows.append({"side": side, "typed": typed, "value": actual, "items": items})
+
+    reference, engine = rows[0], rows[1]
+    shots = {}
+    for side, path in (
+        ("reference", f"{base}/web/reference/provider/index.html"),
+        ("engine", f"{base}/web/engine/provider/index.html"),
+    ):
+        navigate_reference(cdp, path) if side == "reference" else navigate_engine(cdp, path)
+        cdp.evaluate("window.__SETTINGS__.selectSection('models'); true")
+        time.sleep(0.8)
+        click_test_connection(cdp)
+        time.sleep(0.8)
+        type_into(cdp, ".disc-search input", "gpt")
+        time.sleep(0.9)
+        # 裁剪框用**参考侧的**框（两侧同布局 ⇒ 同一框）⇒ 与其它用例同口径。
+        box = json.loads(cdp.evaluate(REFERENCE_BOX) or "null")
+        shots[side] = {
+            "dom": cdp.evaluate(REFERENCE_NORMALIZE),
+            "box": box,
+            "shot": compare.screenshot(cdp, box),
+        }
+
+    pixel = compare.pixel_diff(shots["reference"]["shot"], shots["engine"]["shot"])
+    dom_diffs = diff_dom(shots["reference"]["dom"], shots["engine"]["dom"])
+    record = {
+        "case": "models-search-typed",
+        "driver": "点测试连接（拉模型）⇒ 在 .disc-search input 真实键入 'gpt'（两侧同路径）",
+        "t1_pixel_different": pixel["different"],
+        "t1_pixel_total": pixel["total"],
+        "t1_pixel_ratio": pixel["ratio"],
+        "t2_dom_equal": not dom_diffs,
+        "t2_dom_diffs": dom_diffs,
+        "reference_typed_value": reference.get("value"),
+        "engine_typed_value": engine.get("value"),
+        "reference_items": reference.get("items"),
+        "engine_items": engine.get("items"),
+    }
+    write_evidence("models-search-typed", shots["reference"], shots["engine"], record)
+    log(
+        f"  models-search-typed：像素 {record['t1_pixel_different']}/{record['t1_pixel_total']}"
+        f" / DOM {'一致' if record['t2_dom_equal'] else '不一致'}"
+        f" / 参考侧值={record['reference_typed_value']!r} 引擎侧值={record['engine_typed_value']!r}"
+    )
+    return {
+        "name": "补覆盖：模型搜索（真实键入）",
+        "rows": [record],
+        "passed": record["t1_pixel_different"] == 0 and record["t2_dom_equal"],
+    }
+
+
 def run_native_control_check(env: dict) -> dict:
     """**T7 原生控件属性**（`id` / `type` / `placeholder` / `autocomplete` 逐字 + 存在性）。
 
@@ -1286,6 +1425,9 @@ def main() -> int:
         report["t6_mask_parity"] = mask
         native = run_native_control_check(env)
         report["t7_native_controls"] = native
+        # 补覆盖：此前未被像素覆盖的输入（真实键入 ⇒ 非空值 ⇒ 可比）。
+        uncovered = run_uncovered_inputs_check(env)
+        report["t8_uncovered_inputs"] = uncovered
         log(f"  T4 {'通过' if eye['passed'] else '未通过'}")
         log(
             f"  T5 {'通过' if submit['passed'] else '未通过'}"
@@ -1293,6 +1435,7 @@ def main() -> int:
         )
         log(f"  T6 {'通过' if mask['passed'] else '未通过'}")
         log(f"  T7 {'通过' if native['passed'] else '未通过'}")
+        log(f"  T8 {'通过' if uncovered['passed'] else '未通过'}（补覆盖：模型搜索）")
 
         # ⚠️ **出闸**的用例（`gate == "out_of_gate"`，差异归参照物）不参与聚合判定
         # ⇒ 否则「参照物缺陷」会把总判定染红（红灯失去信号）。
