@@ -305,3 +305,10 @@ path = "fuzz_targets/spill_access.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "guard_supervisor"
+path = "fuzz_targets/guard_supervisor.rs"
+test = false
+doc = false
+bench = false
