@@ -170,3 +170,17 @@ path = "fuzz_targets/filesystem.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "external"
+path = "fuzz_targets/external.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "apply_patch"
+path = "fuzz_targets/apply_patch.rs"
+test = false
+doc = false
+bench = false

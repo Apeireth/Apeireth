@@ -250,36 +250,36 @@ mod tests {
     }
 
     /// 守卫：crate 级锁**真的互斥**（第二个线程必须等第一个释放）。
+    ///
+    /// **主线程必须先拿到锁再 spawn 观察线程** —— 否则观察线程可能**先**拿到锁，
+    /// 断言就成了竞态（本测试初版就这样，2026-10-25 在机器负载下被 fuzz 子代理
+    /// 用 `cargo test --workspace` 抓到 flake，已改成确定性写法）。
     #[test]
     fn crate_env_lock_actually_excludes() {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
 
-        let holding = Arc::new(AtomicBool::new(false));
-        let saw_holding = Arc::new(AtomicBool::new(false));
-        let holder_flag = holding.clone();
-        let observer_flag = saw_holding.clone();
+        let acquired = Arc::new(AtomicBool::new(false));
+        let observer_flag = acquired.clone();
 
+        // 先持锁，再 spawn ⇒ 观察线程**一定**被挡住。
+        let guard = lock_env();
         let observer = std::thread::spawn(move || {
             let guard = lock_env();
-            // 拿到锁时，另一个线程应当**不在**持锁中。
-            observer_flag.store(!holder_flag.load(Ordering::SeqCst), Ordering::SeqCst);
+            observer_flag.store(true, Ordering::SeqCst);
             drop(guard);
         });
 
-        let guard = lock_env();
-        holding.store(true, Ordering::SeqCst);
-        // 观察者此时必须被挡住。
+        // 观察者此时必须拿不到锁。
         std::thread::sleep(std::time::Duration::from_millis(20));
         assert!(
-            !saw_holding.load(Ordering::SeqCst),
+            !acquired.load(Ordering::SeqCst),
             "第二个线程在第一个持锁期间拿到了锁 ⇒ 锁无效"
         );
         drop(guard);
-        holding.store(false, Ordering::SeqCst);
         observer.join().expect("观察线程 join");
         assert!(
-            saw_holding.load(Ordering::SeqCst),
+            acquired.load(Ordering::SeqCst),
             "第一个释放后第二个线程应能拿到锁"
         );
     }
