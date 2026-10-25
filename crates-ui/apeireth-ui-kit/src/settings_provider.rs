@@ -2010,7 +2010,11 @@ fn render_discovered_models(props: &ProviderGroupProps, result: &TestResult) -> 
                 nothing()
             };
             items.push(view! {
-                button(class = class, onclick = move |_| {
+                // ⭐ `key = id`（列表身份）：模型列表会随**搜索词过滤**而变长变短
+                // ⇒ 无 key 时按位置配对 ⇒ 列表长度一变，**后面的兄弟就错位**
+                // ⇒ ⇒ 搜索框（列表的兄弟）被换掉 ⇒ **用户输入与焦点一起丢**
+                // ⇒ ⇒ 有 key 时走 keyed 差分（按身份配对 + 移动）⇒ 兄弟位置不变。
+                button(class = class, key = id.clone(), onclick = move |_| {
                     (action)(&action_name);
                     (dirty)("provider.model");
                 }) {
@@ -2021,9 +2025,16 @@ fn render_discovered_models(props: &ProviderGroupProps, result: &TestResult) -> 
             });
         }
     }
+    // ⚠️ **不插空格文本节点**（2026-10-25 改）：
+    // - 生产的 `.model-catalog` 是 `display: flex; flex-direction: column; gap: 2px`
+    //   ⇒ **空白文本节点在 flex 容器里不生成 flex item** ⇒ 插空格**无视觉影响**；
+    // - 生产用 `{#each}` ⇒ **Svelte 也不产生**元素间空白 ⇒ 引擎侧插空格反而**不像生产**；
+    // - ⚠️ 更关键：空格文本节点**没有 key** ⇒ `list_diff_mode` 的「全部有 key」
+    //   ⇒ **keyed 差分永远不成立** ⇒ 列表长度一变，**后面的兄弟就错位**
+    //   ⇒ ⇒ 搜索框（列表的兄弟）被换掉 ⇒ **用户输入与焦点一起丢**。
     let catalog = VNode::element("div")
         .attr("class", "model-catalog")
-        .children(spaced(items))
+        .children(items)
         .build();
 
     let more = if truncated {

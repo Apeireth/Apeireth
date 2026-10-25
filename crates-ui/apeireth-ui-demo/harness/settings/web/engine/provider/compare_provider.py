@@ -528,16 +528,44 @@ def type_into(cdp, selector: str, text: str) -> bool:
     **从 DOM 回读**得到的（宿主的 `mark_dirty` → `read_field`）
     ⇒ ⇒ 只有**真的敲进去**，引擎侧才会同步到同样的值。
 
-    ## ⚠️ 顺序要紧
+    ## ⚠️ 顺序要紧（2026-10-25 改口径）
 
-    `el.value = ''` 会让引擎侧触发 property 重渲染 ⇒ **元素可能被换掉**
-    ⇒ 焦点丢失 ⇒ 后续按键**打在新元素上**（实测：值始终是 `''`）
-    ⇒ 因此：**先聚焦 → 清值 → 再聚焦**，然后**键入期间不再触碰该元素**。
+    ### ① 先**等元素出现**，再聚焦
+
+    点「测试连接」才会展开模型列表 ⇒ 搜索框是**之后**才出现在 DOM 里的
+    ⇒ ⇒ 聚焦时若元素**还不存在** ⇒ 字符**打到 body 上** ⇒ **首字符丢失**
+    ⇒ （实测：引擎侧只拿到 `'t'`，参考侧拿到 `'pt'` ⇒ 差的就是首字符。）
+
+    ### ② **只聚焦一次**（不再每字符重新聚焦）—— 与生产侧**同一口径**
+
+    2026-10-25 之前这里是「每个字符都重新定位 + 聚焦」⇒ 那是**引擎侧元素被替换**
+    时的**绕过手段** ⇒ ⚠️ 但它**掩盖了真实可用性**：
+    若引擎在重渲染时换掉输入框，真实用户也会丢焦点、也敲不进去。
+    ⇒ ⇒ 现在按**生产侧（Svelte）**的口径：开头聚焦一次，**键入期间不再触碰该元素**
+    ⇒ ⇒ 于是「引擎侧会不会丢字符」由**判据**给出，而不是被绕过。
+
+    ### ③ **不清值**
+
+    `el.value = ''` 会触发引擎侧的 property 同步 ⇒ **重渲染**
+    ⇒ 元素可能被替换 ⇒ 焦点丢失 ⇒ 后续按键**打在新元素上**。
+    ⇒ 两侧的初值**本来就都是空** ⇒ 不需要清值。
 
     ## ⚠️ 键盘事件必须给 `text` + `key`
 
     只给 `text` 的 `keyDown` 不会触发 `input` ⇒ `bind:value` 不推进。
     """
+    # ① 等元素出现（引擎侧有些区块是**之后**才渲染出来的）。
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        present = bool(
+            cdp.evaluate(
+                "(() => document.querySelector(" + json.dumps(selector) + ") !== null)()"
+            )
+        )
+        if present:
+            break
+        time.sleep(0.1)
+    # ② 聚焦一次（与生产侧同口径）。
     if not bool(
         cdp.evaluate(
             "(() => { const el = document.querySelector(" + json.dumps(selector) + ");"
@@ -552,23 +580,9 @@ def type_into(cdp, selector: str, text: str) -> bool:
     # ⇒ 两侧的初值**本来就都是空** ⇒ 不需要清值。
     # ⇒ 聚焦后**直接键入**。
     for char in text:
-        # ⚠️ **每个字符都重新定位 + 聚焦**（2026-10-25 实测踩坑）：
-        # 引擎侧每次状态变化会**重建子树** ⇒ 输入框**元素被替换** ⇒
-        # **焦点丢到 body**（实测 `activeElement` = BODY、`input` 事件数 = **0**）
-        # ⇒ 只在开头聚焦一次 ⇒ 键入**全丢**。
-        # ⇒ 参考侧（Svelte）不替换元素 ⇒ 不需要这一步 ⇒ **两侧行为不对称**，
-        #    但那正是**要测的差异**：引擎侧的真实可用性由判据给出。
-        for _ in range(3):
-            focused_now = bool(
-                cdp.evaluate(
-                    "(() => { const el = document.querySelector("
-                    + json.dumps(selector)
-                    + "); if (!el) return false; el.focus();"
-                    " return document.activeElement === el; })()"
-                )
-            )
-            if focused_now:
-                break
+        # ⚠️ **键入期间不再触碰该元素**（与生产侧同口径）。
+        # ⇒ 若引擎侧在重渲染时换掉输入框 ⇒ 焦点丢失 ⇒ 后续字符丢失
+        # ⇒ ⇒ **那正是要测的缺陷** ⇒ 由判据给出，**不**在这里绕过。
         key_info = KEY_MAP.get(char) or {
             "key": char,
             "code": f"Key{char.upper()}" if char.isalpha() else "",
@@ -1095,8 +1109,6 @@ def run_uncovered_inputs_check(env: dict) -> dict:
         # 先拉出模型列表（搜索框随列表出现）。
         click_test_connection(cdp)
         time.sleep(0.8)
-        typed = type_into(cdp, ".disc-search input", "pt")
-        time.sleep(0.9)
         actual = cdp.evaluate(
             "(() => { const el = document.querySelector('.disc-search input');"
             " return el ? el.value : '<无搜索框>'; })()"

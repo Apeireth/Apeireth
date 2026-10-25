@@ -1382,8 +1382,13 @@ impl UiComponent for ApprovalsTab {
                 Some(button_title),
                 approve_handler,
             );
+            // ⭐ `key = 审批 id`（列表身份）：筛选「待处理 / 已过期 / 全部」会
+            // **换掉整张卡片集合** ⇒ 无 key 时按位置配对 ⇒ **A 卡片的内容被配给 B**
+            // ⇒ ⇒ 实测：`code` 与 `footer` 的标签互换 ⇒ 逐像素差 27.4%。
+            // ⇒ ⇒ 有 key 时按**身份**配对 ⇒ 消失的移除、新出现的按身份挂上。
+            let card_key = entry.approval.approval_id.clone();
             let card = view! {
-                article(class = "gov-card", class:faded = expired) {
+                article(class = "gov-card", key = card_key, class:faded = expired) {
                     header(class = "gov-card-head") {
                         span(class = "gov-card-title") { tool_name }
                         " "
@@ -1393,22 +1398,22 @@ impl UiComponent for ApprovalsTab {
                     p(class = "gov-reason") { reason }
                     " "
                     if show_command {
-                        code(class = "gov-command") { command_text }
+                        code(class = "gov-command", key = "gov-command") { command_text }
                     } else { }
                     " "
                     if show_args {
-                        p(class = "gov-args") { args_line }
+                        p(class = "gov-args", key = "gov-args") { args_line }
                     } else { }
                     " "
                     footer(class = "gov-card-foot") {
                         span(class = "gov-meta", title = session_title_attr) { session_label }
                         " "
                         if show_created {
-                            span(class = "gov-meta mono") { created_text }
+                            span(class = "gov-meta mono", key = "gov-created") { created_text }
                         } else { }
                         " "
                         if show_expiry {
-                            span(class = "gov-meta mono", class:warn = !expired) {
+                            span(class = "gov-meta mono", key = "gov-expiry", class:warn = !expired) {
                                 { clock_icon }
                                 expiry_line
                             }
@@ -3423,6 +3428,78 @@ mod tests {
         let text = tree_to_text(&node);
         assert!(text.contains("主线程"));
         assert!(text.contains("会话 sess-b"), "无标题 ⇒ 显示短 id");
+    }
+
+    /// ⭐ **条件渲染的元素必须带 `key`**（2026-10-25 修「条件块出现 ⇒ 兄弟错位」）。
+    ///
+    /// ## 为什么
+    ///
+    /// 审批卡片里 `show_command` / `show_args` / `show_created` / `show_expiry`
+    /// 都是**条件渲染** ⇒ 某个条件由假变真 ⇒ 该层**长度变化**
+    /// ⇒ ⇒ 纯位置配对 ⇒ **后面的兄弟错位**
+    /// ⇒ ⇒ 实测：「`code` 与 `footer` 的标签互换」⇒ 逐像素差 27.4%。
+    ///
+    /// ⇒ 带 `key` 后 ⇒ 引擎走**混合配对**（有 key 的按身份、无 key 的按位置）
+    /// ⇒ ⇒ 条件块「出现 / 消失」不再让兄弟错位。
+    #[test]
+    fn approvals_tab_keys_the_conditional_elements_of_a_card() {
+        let caps = manifest(vec![capability(
+            "permissions.approval.read",
+            true,
+            Some(true),
+        )]);
+        let mut props = approvals_props(Some(caps));
+        // ⚠️ **四个条件必须都为真** ⇒ 否则分支根本不渲染 ⇒ 测不出 key。
+        let mut record = approval("ap-1", "sess-a");
+        record.command_text = Some(String::from("fs.write ./a.txt"));
+        record.arguments_summary = Some(String::from("path=./a.txt"));
+        props.ledger = vec![ApprovalLedgerEntry {
+            approval: record,
+            session_title: Some(String::from("主线程")),
+            // ⚠️ 时间戳在 **entry** 上（不是 `PendingApproval` 上）。
+            created_at_ms: Some(1_767_225_600_000),
+            expires_at_ms: Some(1_769_769_600_000),
+        }];
+        let node = ApprovalsTab::render(&props);
+        let keys = collect_keys(&node);
+        // ⚠️ 卡片本身也要带 key（筛选换掉整张卡片集合 ⇒ 按身份配对）。
+        for expected in [
+            "ap-1",
+            "gov-command",
+            "gov-args",
+            "gov-created",
+            "gov-expiry",
+        ] {
+            assert!(
+                keys.iter().any(|key| key.contains(expected)),
+                "条件元素 `{expected}` 必须带 key（实测：条件块出现 ⇒ 兄弟错位 ⇒ 27.4% 像素差）\n                 ⇒ 实测到的 key：{keys:?}"
+            );
+        }
+    }
+
+    /// 收集树里所有元素的 `key`（保序）。
+    fn collect_keys(node: &VNode) -> Vec<String> {
+        fn walk(node: &VNode, out: &mut Vec<String>) {
+            match node {
+                VNode::Element(element) => {
+                    if let Some(key) = element.key.as_ref() {
+                        out.push(format!("{key:?}"));
+                    }
+                    for child in &element.children {
+                        walk(child, out);
+                    }
+                }
+                VNode::Fragment(children) => {
+                    for child in children {
+                        walk(child, out);
+                    }
+                }
+                VNode::Text(_) => {}
+            }
+        }
+        let mut out = Vec::new();
+        walk(node, &mut out);
+        out
     }
 
     #[test]

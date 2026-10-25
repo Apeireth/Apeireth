@@ -402,6 +402,37 @@ impl<D: Dom> Renderer<D> {
                     dom: old_text.dom.clone(),
                 }))
             }
+            (MountedNode::Fragment(old_fragment), VNode::Fragment(new_children)) => {
+                // ⭐ **块内摊平配对**（2026-10-25 修）：
+                // Fragment **没有宿主节点** ⇒ 它在 DOM 上就是它 children 的一组兄弟
+                // ⇒ ⇒ 块内按**真实 DOM 节点**配对 ⇒ **元素被复用**
+                // ⇒ ⇒ **受控输入可用**（修前：每次重渲染都重建整棵 Fragment 子树
+                // ⇒ ⇒ 输入框被换掉 ⇒ 用户输入与焦点一起丢）。
+                //
+                // ⚠️ **块级**由 `patch_children` 负责（按位置 ⇒ 兄弟块不错位）；
+                // 这里只管**块内**。
+                let old_flat = flatten_mounted(&old_fragment.children);
+                let new_flat = flatten_vnode(new_children);
+                let old_vnodes: Vec<VNode> = old_flat
+                    .iter()
+                    .filter_map(|child| child.to_vnode())
+                    .collect();
+                let keyed = old_vnodes.len() == old_flat.len()
+                    && crate::keyed::list_diff_mode(&old_vnodes, &new_flat)
+                        == crate::keyed::ListDiffMode::Keyed;
+                // ⭐ 混合配对：**有 key 的**按身份，**无 key 的**按位置
+                // ⇒ ⇒ 条件渲染导致的「长度变化」不再让兄弟错位。
+                let has_key = old_vnodes.iter().any(|vnode| vnode.key().is_some())
+                    || new_flat.iter().any(|vnode| vnode.key().is_some());
+                let children = if keyed {
+                    self.patch_keyed_children(parent, &old_flat, &new_flat, &old_vnodes)?
+                } else if has_key {
+                    self.patch_mixed_children(parent, &old_flat, &new_flat)?
+                } else {
+                    self.patch_unkeyed_children(parent, &old_flat, &new_flat)?
+                };
+                Ok(MountedNode::Fragment(MountedFragment { children }))
+            }
             _ => {
                 // 类型不匹配 ⇒ 替换子树。
                 let anchor = match last_dom_node(old) {
@@ -438,37 +469,47 @@ impl<D: Dom> Renderer<D> {
     ///    `new[i]` ⇒ **内容出现在错误的位置**（实测：审批项的「会话行」跑到
     ///    「输入框」的位置 ⇒ 逐像素差 27.4%）。
     ///
-    /// ### 摊平后
+    /// ### 现在的做法：**块级按位置 + 块内摊平配对**（2026-10-25 定案）
     ///
-    /// - 两侧序列都是「真实 DOM 节点」⇒ 配对单位正确 ⇒ **元素被复用**
-    ///   ⇒ ⇒ **受控输入可用**；
-    /// - `to_vnode()` 不再返回 `None` ⇒ ⇒ **keyed 差分可用**
-    ///   ⇒ 顺序变化按**身份**配对 + 移动 ⇒ 不再错位；
-    /// - Fragment 从 `MountedNode` 树里**消失** ⇒ 树里不再有两种「节点单位」。
+    /// - **块级**（本函数）：old / new 的每一项都是**块** ⇒ 按**位置**配对
+    ///   ⇒ 块与块**一一对应**（`{ expr }` 这种插值恒占一个位置）
+    ///   ⇒ ⇒ **兄弟块不会因为某个块「出现 / 消失」而错位**
+    ///   ⇒ 这与生产侧 **Svelte 的 `{#if}` 块锚点**语义一致
+    ///   （Svelte 给每个块一个独立锚点 ⇒ 块增删**不**影响其它块）。
+    /// - **块内**（`patch_node` 的 `(Fragment, Fragment)` 分支）：摊平后配对
+    ///   ⇒ 块内元素**被复用** ⇒ ⇒ **受控输入可用**；
+    ///   ⇒ 块内若全部有 `key` ⇒ 按**身份**配对（可处理块内换序）。
     ///
-    /// ⚠️ **首次挂载**仍会建出 Fragment 节点（`mount_node` 未改）
-    /// ⇒ 但**第一次 patch 就会摊平掉它** ⇒ 之后树上恒为摊平结构 ⇒ 一致。
+    /// ### ⚠️ **为什么不是「整层摊平」**（2026-10-25 实测否掉的中间方案）
+    ///
+    /// 曾试过「把**整层**的 Fragment 摊平后再配对」⇒ **实测引入新的错位**：
+    /// 摊平后，条件渲染的「生效配置」卡片**出现** ⇒ 该层长度 5→6
+    /// ⇒ 位置配对 ⇒ **后面全部错位** ⇒ 搜索框仍被换掉（实测：元素标记丢失）。
+    /// ⇒ 根因：摊平把**块级身份**融进了兄弟序列 ⇒ 块增删 ⇒ 兄弟错位。
+    /// ⇒ ⇒ 正确做法：**块级保留身份**（按位置）＋ **块内摊平**（按真实节点）。
     fn patch_children(
         &mut self,
         parent: &D::Node,
         old: &[MountedNode<D>],
         new: &[VNode],
     ) -> Result<Vec<MountedNode<D>>, DomError> {
-        // ① 两侧摊平（Fragment 就地展开成它的 children）。
-        let old_flat = flatten_mounted(old);
-        let new_flat = flatten_vnode(new);
-        // ② 差分：keyed（按身份 + 移动）⇒ 否则按位置。
-        let old_vnodes: Vec<VNode> = old_flat
-            .iter()
-            .filter_map(|child| child.to_vnode())
-            .collect();
-        let keyed = old_vnodes.len() == old_flat.len()
-            && crate::keyed::list_diff_mode(&old_vnodes, &new_flat)
-                == crate::keyed::ListDiffMode::Keyed;
+        // ① **块级**按位置配对（old / new 的每一项都是「块」）
+        //    ⇒ `{ expr }` 这种插值**恒占一个位置** ⇒ 某个块「出现 / 消失」
+        //    ⇒ **不会**让后面的兄弟错位
+        //    （这与生产侧 Svelte 的 `{#if}` 块锚点语义一致）。
+        let old_vnodes: Vec<VNode> = old.iter().filter_map(|child| child.to_vnode()).collect();
+        let keyed = old_vnodes.len() == old.len()
+            && crate::keyed::list_diff_mode(&old_vnodes, new) == crate::keyed::ListDiffMode::Keyed;
+        // ⭐ 混合配对（见 `patch_mixed_children` 的说明）⇒ 条件渲染的块
+        // 「出现 / 消失」时，**兄弟不再错位**。
+        let has_key = old_vnodes.iter().any(|vnode| vnode.key().is_some())
+            || new.iter().any(|vnode| vnode.key().is_some());
         if keyed {
-            self.patch_keyed_children(parent, &old_flat, &new_flat, &old_vnodes)
+            self.patch_keyed_children(parent, old, new, &old_vnodes)
+        } else if has_key {
+            self.patch_mixed_children(parent, old, new)
         } else {
-            self.patch_unkeyed_children(parent, &old_flat, &new_flat)
+            self.patch_unkeyed_children(parent, old, new)
         }
     }
 
@@ -516,6 +557,137 @@ impl<D: Dom> Renderer<D> {
                 }
                 None => {
                     // 新建：属性先写、节点后进文档树（T3）。
+                    let mounted = self.mount_node(&new[new_index], parent, anchor.as_ref())?;
+                    anchor = mounted.dom_node().cloned();
+                    slots[new_index] = Some(mounted);
+                }
+            }
+        }
+        Ok(slots.into_iter().flatten().collect())
+    }
+
+    /// ⭐ **混合配对**（2026-10-25）：**有 `key` 的按身份**，**无 `key` 的按位置**。
+    ///
+    /// ## 为什么需要（实测出来的）
+    ///
+    /// 组件树里**条件渲染**很常见（`{#if}`）：某个子块「出现 / 消失」
+    /// ⇒ 该层**长度变化** ⇒ 纯位置配对 ⇒ **后面的兄弟全部错位**
+    /// ⇒ ⇒ 实测：provider 面的「生效配置」卡片一出现 ⇒ 搜索框被换掉
+    /// ⇒ ⇒ 治理面的 `show_created` 一变 ⇒ 「会话行」与按钮错位
+    /// ⇒ ⇒ 逐像素差 27.4%。
+    ///
+    /// ## 为什么不能直接用 keyed 差分
+    ///
+    /// `list_diff_mode` 要求**整层全部有 `key`** ⇒ 而生产模板里元素之间有
+    /// **空格文本节点**（Svelte 编译产物）⇒ 空格**没有 key** ⇒
+    /// ⇒ **keyed 永远不成立** ⇒ ⇒ 「给列表项加 key」这条路在有空格时**无效**。
+    ///
+    /// ## 本函数的口径
+    ///
+    /// - new 侧**有 `key`** 且 old 侧**有同 key** ⇒ **按身份复用**（不按位置）；
+    /// - 其余（无 key / key 对不上）⇒ **按位置兜底**（取下一个未使用的 old 下标）；
+    /// - 复用后**按 new 顺序重排**（`insert_before` 会移动已有节点）
+    ///   ⇒ ⇒ DOM 顺序恒等于 new 顺序。
+    ///
+    /// ⚠️ **只在「这一层存在 key」时启用** ⇒ ⇒ 绝大多数层仍走
+    /// [`Self::patch_unkeyed_children`]（**既有契约完全不变**）。
+    fn patch_mixed_children(
+        &mut self,
+        parent: &D::Node,
+        old: &[MountedNode<D>],
+        new: &[VNode],
+    ) -> Result<Vec<MountedNode<D>>, DomError> {
+        // ① old 侧的 key → 下标（**重复 key 取第一个**；重复 key 的可判定性
+        //    由 keyed 差分负责报「不可判定」⇒ 这里不重复报错）。
+        let mut by_key: std::collections::HashMap<crate::vnode::Key, usize> =
+            std::collections::HashMap::new();
+        for (index, child) in old.iter().enumerate() {
+            if let Some(key) = child.to_vnode().and_then(|vnode| vnode.key().cloned()) {
+                by_key.entry(key).or_insert(index);
+            }
+        }
+        // ② **两阶段**配对（2026-10-25 修正）：
+        //
+        // ⚠️ **必须先做完全部 key 配对，再让「无 key 的」按位置兜底**。
+        // ⇒ 否则「位置兜底」会**抢走**后面 key 匹配项 ⇒ 错位。
+        // ⇒ 实测：old = [A, B, C]、new = [A, X, B, C]（X 是条件渲染出现的新块）
+        // ⇒ 若边走边兜底 ⇒ X 抢走 B ⇒ B 抢走 C ⇒ **三个全错位**
+        // ⇒ ⇒ 实测表现为「`code` 与 `footer` 的标签互换」⇒ 逐像素差 27.4%。
+        //
+        // 规则：
+        // - new **有 key** 且 old **有同 key** ⇒ **按身份复用**；
+        // - new **有 key** 但 old **没有** ⇒ **新建**（**不**参与位置兜底
+        //   ⇒ 否则它会抢掉后面的位置）；
+        // - new **无 key** ⇒ 按位置兜底（取下一个未使用的 old 下标）。
+        let mut used = vec![false; old.len()];
+        let mut plan: Vec<Option<usize>> = vec![None; new.len()];
+        // 阶段 ①：key 配对。
+        for (new_index, child) in new.iter().enumerate() {
+            let Some(key) = child.key() else {
+                continue;
+            };
+            let Some(&old_index) = by_key.get(key) else {
+                continue;
+            };
+            if used[old_index] {
+                continue;
+            }
+            used[old_index] = true;
+            plan[new_index] = Some(old_index);
+        }
+        // 阶段 ②：无 key 的按位置兜底。
+        let mut cursor = 0usize;
+        for new_index in 0..new.len() {
+            if plan[new_index].is_some() || new[new_index].key().is_some() {
+                continue;
+            }
+            let mut found = None;
+            for (probe, is_used) in used.iter().enumerate().skip(cursor) {
+                if !is_used {
+                    found = Some(probe);
+                    cursor = probe + 1;
+                    break;
+                }
+            }
+            if let Some(index) = found {
+                used[index] = true;
+                plan[new_index] = Some(index);
+            }
+        }
+        // ③ 没被认领的旧子节点：移除（自后向前 ⇒ 保持前面的下标有效）。
+        for index in (0..old.len()).rev() {
+            if !used[index] {
+                self.unmount_node(&old[index], parent)?;
+            }
+        }
+        // ④ 复用节点的**相对顺序**是否已经与 new 一致？
+        //    ⇒ 若一致 ⇒ **不需要移动** ⇒ ⚠️ **移动会重启动 CSS 动画**
+        //    ⇒ ⇒ 实测：每次渲染都重排 ⇒ 顶层 harness 的**动画相位**对照
+        //    ⇒ ⇒ 在 150ms 相位差 3.38% ⇒ ⇒ 只在**真的换序**时才移动。
+        let reused: Vec<usize> = plan.iter().filter_map(|slot| *slot).collect();
+        let order_preserved = reused.windows(2).all(|pair| pair[0] < pair[1]);
+        // ⑤ 按 new 顺序落位：复用（必要时重排）+ 新建。
+        let mut slots: Vec<Option<MountedNode<D>>> = vec![None; new.len()];
+        let mut anchor: Option<D::Node> = None;
+        for new_index in (0..new.len()).rev() {
+            match plan[new_index] {
+                Some(old_index) => {
+                    let Some(old_child) = old.get(old_index) else {
+                        continue;
+                    };
+                    let patched = self.patch_node(old_child, &new[new_index], parent)?;
+                    let dom = patched.dom_node().cloned();
+                    if !order_preserved {
+                        // `insert_before` 对**已在文档里**的节点 ⇒ **移动**它
+                        // ⇒ ⇒ DOM 顺序恒等于 new 顺序。
+                        if let Some(node) = dom.as_ref() {
+                            self.dom.insert_before(parent, node, anchor.as_ref())?;
+                        }
+                    }
+                    anchor = dom;
+                    slots[new_index] = Some(patched);
+                }
+                None => {
                     let mounted = self.mount_node(&new[new_index], parent, anchor.as_ref())?;
                     anchor = mounted.dom_node().cloned();
                     slots[new_index] = Some(mounted);
