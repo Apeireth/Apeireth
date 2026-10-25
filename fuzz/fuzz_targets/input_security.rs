@@ -408,37 +408,49 @@ fuzz_target!(|data: &[u8]| {
         brief(text)
     );
 
-    // ── ③ 脱敏：检测到的片段不得在脱敏输出里存活（多实例：每一处都要脱）────
+    // ── ③ 脱敏：脱敏后再扫一遍，不应再有**可脱的 PII** ──────────────────────
+    //
+    // **本条 oracle 换过一次写法**（我自己撞出来的教训，如实记）：
+    // 原来写的是「`!redacted.contains(token)` —— 检测到的片段不得在脱敏输出里存活」。
+    // **那是弱 oracle ⇒ 假阳性**：同一 token 文本**可能出现在非 PII 上下文里**
+    // （如 `5.5.55.5C` —— 后跟词字符 ⇒ 按边界文法**本就不是独立 IP 记号**、
+    // `findings` 也不报它 ⇒ `redact` 不脱它是**正确的**）；
+    // 但 `redacted.contains("5.5.55.5")` 为真 ⇒ 被误判成「漏脱」⇒ **假阳性崩溃**。
+    // （实测样本：`5.5.55.5` 两次 / `17777777770` 两次，后者第一处后跟 `C`。）
+    //
+    // 改用的口径是**自洽且更强**的：**「脱敏后再扫，不应再有可脱的 PII」** ——
+    // 这正是「脱敏」这件事本身的语义（幂等到无可脱为止），且**不依赖 token 文本**。
+    // 已实测：所有占位符（`[REDACTED_EMAIL]` / `[REDACTED_PHONE]` / `[REDACTED_IP]` /
+    // `[REDACTED_CREDENTIAL]` / `[REDACTED_URL_CREDENTIAL]` / `KEY=[REDACTED_ENV_SECRET]`）
+    // **都不自匹配** ⇒ 二次扫描为空是稳定判据。
     let redacted = PiiDetector::redact(text);
     let secret_redacted = redact_secret_surfaces(text);
-    for finding in &findings {
-        if finding.start == finding.end {
-            continue;
-        }
-        let token = &text[finding.start..finding.end];
-        assert!(
-            !redacted.contains(token),
-            "PiiDetector::redact 漏脱 {:?} (kind={:?}): {} -> {}",
-            token,
-            finding.kind,
-            brief(text),
-            brief(&redacted)
-        );
-    }
-    for finding in &findings {
-        if finding.start == finding.end || !is_secret_surface(finding.kind) {
-            continue;
-        }
-        let token = &text[finding.start..finding.end];
-        assert!(
-            !secret_redacted.contains(token),
-            "redact_secret_surfaces 漏脱 {:?} (kind={:?}): {} -> {}",
-            token,
-            finding.kind,
-            brief(text),
-            brief(&secret_redacted)
-        );
-    }
+    let residual = PiiDetector::findings(&redacted);
+    assert!(
+        residual.is_empty(),
+        "PiiDetector::redact 后仍有可脱的 PII {:?}: {} -> {}",
+        residual
+            .iter()
+            .map(|f| (f.kind, redacted[f.start..f.end].to_string()))
+            .collect::<Vec<_>>(),
+        brief(text),
+        brief(&redacted)
+    );
+    // 秘密面脱敏（只动 3 类秘密面）⇒ 只允许**非秘密类**残留。
+    let secret_residual = PiiDetector::findings(&secret_redacted)
+        .into_iter()
+        .filter(|f| is_secret_surface(f.kind))
+        .collect::<Vec<_>>();
+    assert!(
+        secret_residual.is_empty(),
+        "redact_secret_surfaces 后仍有可脱的秘密面 {:?}: {} -> {}",
+        secret_residual
+            .iter()
+            .map(|f| (f.kind, secret_redacted[f.start..f.end].to_string()))
+            .collect::<Vec<_>>(),
+        brief(text),
+        brief(&secret_redacted)
+    );
 
     // 无命中 ⇒ 脱敏是恒等变换；无秘密面 ⇒ 秘密面脱敏不动可读信息。
     if findings.is_empty() {
