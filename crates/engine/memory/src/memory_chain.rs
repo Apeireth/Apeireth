@@ -732,7 +732,11 @@ fn load_subject_rows(
         let content: String = row.get(1)?;
         let timestamp: i64 = row.get(2)?;
         let role: String = row.get(3)?;
-        let session_id: String = row.get(4)?;
+        // `session_id` 在真实 schema 里**可空**（老记录没有会话）⇒ 读成
+        // `Option<String>` 再归一为空串（与 `provenance` 的处理一致）⇒
+        // 否则 `row.get::<_, String>` 遇到 NULL 会直接报
+        // 「Invalid column type Null」⇒ **体检命令在真实库上会失败**。
+        let session_id: Option<String> = row.get(4)?;
         let chain_hash: Option<String> = row.get(5)?;
         let chain_prev_hash: Option<String> = row.get(6)?;
         let mut cursor = 7usize;
@@ -762,7 +766,7 @@ fn load_subject_rows(
                 content,
                 timestamp,
                 role,
-                session_id,
+                session_id: session_id.unwrap_or_default(),
                 valid_from_ms,
                 valid_until_ms,
                 created_ms,

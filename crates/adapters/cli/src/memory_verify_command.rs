@@ -55,6 +55,10 @@ pub struct SubjectReport {
     pub first_bad_id: Option<String>,
     /// 第一处出问题的位置（0 基）。
     pub first_bad_index: Option<usize>,
+    /// 该主体的未纳管记录数。
+    pub unmanaged_entries: usize,
+    /// 该主体被检出异常的链上条目数。
+    pub broken_entries: usize,
 }
 
 /// 渲染成人类可读的文本（**如实**列出问题，不吞）。
@@ -156,15 +160,18 @@ fn default_cognitive_db_path() -> PathBuf {
 
 /// 对库做体检（**只读**）。
 ///
-/// **连接怎么来**：`rusqlite` 在 CLI 只是 **dev-dependency** ⇒ 生产代码不能直接用它
-/// ⇒ 走 `apeireth_storage::pool::SqliteConnectionPool` 的 `read`（**只读连接**）。
-/// 这条路径同时保证「体检不会写库」。
+/// **校验规则来自记忆层**（[`apeireth_memory::memory_chain`]）⇒ **单一真源**：
+/// 链规则、摘要编码、链头账实核对全在那儿；本命令只负责**取连接 + 渲染**。
+/// 连接走 `SqliteConnectionPool::read`（**只读连接**）⇒ 体检不会写库。
 ///
-/// **口径边界（如实说明）**：这里校验的是**链的结构完整性**（首尾相连）。
-/// 摘要**重算**需要完整内容与全部参与字段的编码规则 ⇒ 那是**记忆层链实现**的责任
-/// （**单一真源**）⇒ 等记忆层接线后，本命令改调它的 API；在此之前**不假装覆盖**。
+/// ⚠️ **曾经的教训（已修）**：本命令第一版**自己**写了一份体检 SQL
+/// （按 `subject_id` / `created_at` 分组），而真实记忆 schema 用的是
+/// `continuity_id` / `timestamp` ⇒ 对真实库**直接报错**
+/// （`no such column: subject_id`）。教训：**校验规则不要在调用方复写**。
 fn verify_database(db_path: &Path, subject: Option<&str>) -> Result<VerifyReport, String> {
+    use apeireth_memory::memory_chain;
     use apeireth_storage::pool::SqliteConnectionPool;
+
     let pool =
         runtime_block_on(async move { SqliteConnectionPool::open(db_path.to_path_buf()).await })
             .map_err(|error| format!("打不开认知库（只读）：{error}"))?;
@@ -199,253 +206,153 @@ fn verify_with_connection(
     db_path: &Path,
     subject: Option<&str>,
 ) -> Result<VerifyReport, String> {
-    // 链列可能不存在（老库）⇒ 此时所有记录都是「未纳管」，**不算坏链**。
-    let has_chain_columns = table_has_column(conn, "episodes", "chain_hash")
-        .map_err(|error| format!("读取表结构失败：{error}"))?;
-    let mut subjects: Vec<String> = Vec::new();
-    if has_chain_columns {
-        let sql = match subject {
-            Some(_) => "SELECT DISTINCT subject_id FROM episodes ORDER BY subject_id",
-            None => "SELECT DISTINCT subject_id FROM episodes ORDER BY subject_id",
-        };
-        let mut statement = conn
-            .prepare(sql)
-            .map_err(|error| format!("准备语句失败：{error}"))?;
-        let rows = statement
-            .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|error| format!("查询主体失败：{error}"))?;
-        for row in rows {
-            subjects.push(row.map_err(|error| format!("读取主体失败：{error}"))?);
-        }
-        if let Some(wanted) = subject {
-            subjects.retain(|candidate| candidate == wanted);
-        }
-    }
+    use apeireth_memory::memory_chain;
 
-    let mut details = Vec::new();
-    let mut entries = 0usize;
-    let mut broken_subjects = 0usize;
-    for subject_id in &subjects {
-        let rows = load_chain_rows(conn, subject_id)?;
-        let managed = rows.iter().filter(|row| row.chain_hash.is_some()).count();
-        let total = rows.len();
-        entries += managed;
-        let report = verify_rows(&rows);
-        if !report.ok {
-            broken_subjects += 1;
+    let verifications = match subject {
+        Some(one) => {
+            let result = memory_chain::verify_subject_chain(conn, one)
+                .map_err(|error| format!("校验主体 {one} 失败：{error}"))?;
+            vec![result]
         }
-        details.push(SubjectReport {
-            subject_id: subject_id.clone(),
-            ok: report.ok,
-            entry_count: managed,
-            first_bad_id: report.first_bad_id,
-            first_bad_index: report.first_bad_index,
-        });
-        let _ = total;
-    }
-
-    // 未纳管记录数（没有链字段的）。
-    let unmanaged_entries = if has_chain_columns {
-        count_unmanaged(conn, subject).map_err(|error| format!("统计未纳管记录失败：{error}"))?
-    } else {
-        count_all(conn, subject).map_err(|error| format!("统计记录失败：{error}"))?
+        None => memory_chain::verify_all_chains(conn)
+            .map_err(|error| format!("校验全部主体失败：{error}"))?,
     };
+    let summary = memory_chain::summarize(conn).map_err(|error| format!("汇总失败：{error}"))?;
+
+    let details = verifications
+        .iter()
+        .map(|item| SubjectReport {
+            subject_id: item.subject_id.clone(),
+            ok: item.ok,
+            entry_count: item.entry_count,
+            first_bad_id: item.first_bad_id.clone(),
+            first_bad_index: item.first_bad_index,
+            unmanaged_entries: item.unmanaged_entries,
+            broken_entries: item.broken_entries,
+        })
+        .collect();
 
     Ok(VerifyReport {
         db_path: db_path.to_path_buf(),
-        subjects: details.len(),
-        entries,
-        unmanaged_entries,
-        broken_subjects,
+        subjects: summary.subjects,
+        entries: summary.entries,
+        unmanaged_entries: summary.unmanaged_entries,
+        broken_subjects: summary.broken_subjects,
         details,
     })
-}
-
-/// 链上的一行（链字段 + 顺序键）。
-struct ChainRow {
-    id: String,
-    chain_hash: Option<String>,
-    chain_prev_hash: Option<String>,
-}
-
-/// 按**记录顺序**（时间、再 id）读某主体的行。
-fn load_chain_rows(conn: &rusqlite::Connection, subject_id: &str) -> Result<Vec<ChainRow>, String> {
-    let mut statement = conn
-        .prepare(
-            "SELECT id, chain_hash, chain_prev_hash FROM episodes \
-             WHERE subject_id = ? ORDER BY created_at ASC, id ASC",
-        )
-        .map_err(|error| format!("准备语句失败：{error}"))?;
-    let rows = statement
-        .query_map([subject_id], |row| {
-            Ok(ChainRow {
-                id: row.get(0)?,
-                chain_hash: row.get(1)?,
-                chain_prev_hash: row.get(2)?,
-            })
-        })
-        .map_err(|error| format!("查询链记录失败：{error}"))?;
-    let mut out = Vec::new();
-    for row in rows {
-        out.push(row.map_err(|error| format!("读取链记录失败：{error}"))?);
-    }
-    Ok(out)
-}
-
-/// 校验一串链行：首尾相连。
-///
-/// ⚠️ **摘要重算不在这里做**：重算需要完整内容与全部参与字段的编码规则，
-/// 那是记忆层链实现的责任（**单一真源**）⇒ 本命令在记忆层接线前**只查链的结构完整性**，
-/// 并在报告里**如实说明覆盖范围**（不假装覆盖了摘要重算）。
-fn verify_rows(rows: &[ChainRow]) -> RowVerification {
-    let mut previous: Option<&str> = None;
-    let mut managed_index = 0usize;
-    for row in rows {
-        let (Some(hash), Some(prev)) = (&row.chain_hash, &row.chain_prev_hash) else {
-            // 未纳管 ⇒ 跳过（不计为坏）。
-            continue;
-        };
-        if let Some(expected) = previous {
-            if prev != expected {
-                return RowVerification {
-                    ok: false,
-                    first_bad_id: Some(row.id.clone()),
-                    first_bad_index: Some(managed_index),
-                };
-            }
-        }
-        previous = Some(hash.as_str());
-        managed_index += 1;
-    }
-    RowVerification {
-        ok: true,
-        first_bad_id: None,
-        first_bad_index: None,
-    }
-}
-
-struct RowVerification {
-    ok: bool,
-    first_bad_id: Option<String>,
-    first_bad_index: Option<usize>,
-}
-
-/// 表是否有某列。
-fn table_has_column(
-    conn: &rusqlite::Connection,
-    table: &str,
-    column: &str,
-) -> Result<bool, rusqlite::Error> {
-    let mut statement = conn.prepare(&format!("PRAGMA table_info({table})"))?;
-    let mut columns = statement.query([])?;
-    while let Some(row) = columns.next()? {
-        let name: String = row.get(1)?;
-        if name == column {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-/// 统计未纳管记录（没有链字段的）。
-fn count_unmanaged(
-    conn: &rusqlite::Connection,
-    subject: Option<&str>,
-) -> Result<usize, rusqlite::Error> {
-    let sql = match subject {
-        Some(_) => "SELECT COUNT(*) FROM episodes WHERE subject_id = ? AND (chain_hash IS NULL OR chain_prev_hash IS NULL)",
-        None => "SELECT COUNT(*) FROM episodes WHERE chain_hash IS NULL OR chain_prev_hash IS NULL",
-    };
-    let mut statement = conn.prepare(sql)?;
-    let count: i64 = match subject {
-        Some(value) => statement.query_row([value], |row| row.get(0))?,
-        None => statement.query_row([], |row| row.get(0))?,
-    };
-    Ok(count as usize)
-}
-
-/// 统计全部记录（老库没有链列时用）。
-fn count_all(conn: &rusqlite::Connection, subject: Option<&str>) -> Result<usize, rusqlite::Error> {
-    let sql = match subject {
-        Some(_) => "SELECT COUNT(*) FROM episodes WHERE subject_id = ?",
-        None => "SELECT COUNT(*) FROM episodes",
-    };
-    let mut statement = conn.prepare(sql)?;
-    let count: i64 = match subject {
-        Some(value) => statement.query_row([value], |row| row.get(0))?,
-        None => statement.query_row([], |row| row.get(0))?,
-    };
-    Ok(count as usize)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// 建一个**真实 schema** 的记忆库（含链列）。
+    ///
+    /// ⚠️ **刻意用真实列名**（`continuity_id` / `timestamp`，**没有** `subject_id`
+    /// 或 `created_at`）⇒ 测试能抓住「体检 SQL 假设了不存在的列」这类缺陷
+    /// （本命令的第一版就是这么坏的：查 `episodes.subject_id` ⇒ 真实库直接报错）。
     fn memory_db() -> rusqlite::Connection {
         let conn = rusqlite::Connection::open_in_memory().expect("in-memory db");
         conn.execute_batch(
             "CREATE TABLE episodes (
                  id TEXT PRIMARY KEY,
-                 subject_id TEXT NOT NULL,
+                 continuity_id TEXT NOT NULL,
+                 session_id TEXT,
+                 timestamp INTEGER NOT NULL,
+                 role TEXT NOT NULL,
                  content TEXT NOT NULL,
-                 created_at INTEGER NOT NULL,
+                 valid_from_ms INTEGER,
+                 valid_until_ms INTEGER,
+                 created_ms INTEGER NOT NULL,
+                 provenance TEXT NOT NULL,
                  chain_hash TEXT,
                  chain_prev_hash TEXT
+             );
+             CREATE TABLE memory_chain_heads (
+                 subject_id TEXT PRIMARY KEY,
+                 last_hash TEXT NOT NULL,
+                 entry_count INTEGER NOT NULL DEFAULT 0,
+                 updated_at_ms INTEGER NOT NULL
              );",
         )
         .expect("create episodes");
         conn
     }
 
+    /// 插入一条链上记录（摘要值由测试直接给出 ⇒ 只测**结构**判据；
+    /// 摘要重算的正确性由记忆层自己的测试负责）。
+    fn insert_chained(
+        conn: &rusqlite::Connection,
+        id: &str,
+        continuity_id: &str,
+        content: &str,
+        timestamp: i64,
+    ) {
+        // **用记忆层的链写入路径造真链** ⇒ 摘要由它算。
+        // ⚠️ 不能用假摘要：体检会**重算摘要**并比对 ⇒ 假摘要一律判成「篡改」
+        // （那正是摘要重算在起作用）⇒ 测试必须用真链，否则测的是错的东西。
+        use apeireth_memory::memory_chain::{put_chained_episode, ChainEntry};
+        let entry = ChainEntry {
+            id: id.to_string(),
+            content: content.to_string(),
+            timestamp,
+            role: "user".to_string(),
+            session_id: "sess-1".to_string(),
+            valid_from_ms: None,
+            valid_until_ms: None,
+            created_ms: Some(timestamp),
+            provenance: Some("manual".to_string()),
+        };
+        put_chained_episode(conn, continuity_id, &entry).expect("写入链上记录");
+    }
+
     #[test]
     fn reports_all_good_when_chain_is_intact() {
         let conn = memory_db();
-        conn.execute(
-            "INSERT INTO episodes (id, subject_id, content, created_at, chain_hash, chain_prev_hash)
-             VALUES ('e1', 's1', 'a', 1, 'h1', 'g'), ('e2', 's1', 'b', 2, 'h2', 'h1')",
-            [],
-        )
-        .expect("insert");
+        insert_chained(&conn, "e1", "c1", "第一条", 1);
+        insert_chained(&conn, "e2", "c1", "第二条", 2);
         let report =
             verify_with_connection(&conn, Path::new("/tmp/x.sqlite3"), None).expect("verify");
-        assert!(report.broken_subjects == 0);
-        assert_eq!(report.subjects, 1);
+        assert_eq!(report.broken_subjects, 0, "{report:?}");
         assert_eq!(report.entries, 2);
-        assert_eq!(report.details[0].ok, true);
+        assert_eq!(report.subjects, 1);
+        assert!(report.details[0].ok, "{report:?}");
     }
 
     #[test]
     fn locates_the_first_broken_link() {
         let conn = memory_db();
+        insert_chained(&conn, "e1", "c1", "第一条", 1);
+        insert_chained(&conn, "e2", "c1", "第二条", 2);
+        // 改**内容**（不动链字段）⇒ 摘要重算对不上 ⇒ 定位到那一条。
         conn.execute(
-            "INSERT INTO episodes (id, subject_id, content, created_at, chain_hash, chain_prev_hash)
-             VALUES ('e1', 's1', 'a', 1, 'h1', 'g'), ('e2', 's1', 'b', 2, 'h2', 'WRONG')",
+            "UPDATE episodes SET content = '被改过的内容' WHERE id = 'e2'",
             [],
         )
-        .expect("insert");
+        .expect("tamper content");
         let report =
             verify_with_connection(&conn, Path::new("/tmp/x.sqlite3"), None).expect("verify");
-        assert_eq!(report.broken_subjects, 1);
+        assert_eq!(report.broken_subjects, 1, "{report:?}");
         let detail = &report.details[0];
         assert!(!detail.ok);
-        assert_eq!(detail.first_bad_id.as_deref(), Some("e2"));
-        assert_eq!(detail.first_bad_index, Some(1));
+        assert_eq!(detail.first_bad_id.as_deref(), Some("e2"), "{report:?}");
+        assert_eq!(detail.first_bad_index, Some(1), "{report:?}");
     }
 
     #[test]
     fn counts_unmanaged_records_honestly() {
         let conn = memory_db();
+        insert_chained(&conn, "e1", "c1", "第一条", 1);
         conn.execute(
-            "INSERT INTO episodes (id, subject_id, content, created_at, chain_hash, chain_prev_hash)
-             VALUES ('e1', 's1', 'a', 1, 'h1', 'g'), ('e2', 's1', 'b', 2, NULL, NULL)",
+            "INSERT INTO episodes (id, continuity_id, session_id, timestamp, role, content,
+                valid_from_ms, valid_until_ms, created_ms, provenance, chain_hash, chain_prev_hash)
+             VALUES ('e2', 'c1', NULL, 2, 'user', '未纳管', NULL, NULL, 2, 'manual', NULL, NULL)",
             [],
         )
-        .expect("insert");
+        .expect("insert unmanaged");
         let report =
             verify_with_connection(&conn, Path::new("/tmp/x.sqlite3"), None).expect("verify");
         assert_eq!(report.unmanaged_entries, 1, "未纳管记录要如实计数");
-        assert_eq!(report.entries, 1, "未纳管记录不进链上条目数");
     }
 
     #[test]
@@ -454,17 +361,34 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE episodes (
                  id TEXT PRIMARY KEY,
-                 subject_id TEXT NOT NULL,
+                 continuity_id TEXT NOT NULL,
+                 session_id TEXT,
+                 timestamp INTEGER NOT NULL,
+                 role TEXT NOT NULL,
                  content TEXT NOT NULL,
-                 created_at INTEGER NOT NULL
+                 valid_from_ms INTEGER,
+                 valid_until_ms INTEGER,
+                 created_ms INTEGER NOT NULL,
+                 provenance TEXT NOT NULL
              );
-             INSERT INTO episodes VALUES ('e1', 's1', 'a', 1);",
+             INSERT INTO episodes VALUES ('e1', 'c1', NULL, 1, 'user', 'a', NULL, NULL, 1, 'manual');",
         )
         .expect("create old schema");
         let report =
             verify_with_connection(&conn, Path::new("/tmp/x.sqlite3"), None).expect("verify");
         assert_eq!(report.broken_subjects, 0, "老库不算坏链");
         assert_eq!(report.unmanaged_entries, 1, "老库记录如实记为未纳管");
+    }
+
+    #[test]
+    fn subject_filter_narrows_the_report() {
+        let conn = memory_db();
+        insert_chained(&conn, "e1", "c1", "甲", 1);
+        insert_chained(&conn, "e2", "c2", "乙", 1);
+        let report =
+            verify_with_connection(&conn, Path::new("/tmp/x.sqlite3"), Some("c2")).expect("verify");
+        assert_eq!(report.details.len(), 1);
+        assert_eq!(report.details[0].subject_id, "c2");
     }
 
     #[test]
@@ -481,6 +405,8 @@ mod tests {
                 entry_count: 2,
                 first_bad_id: Some("e2".to_string()),
                 first_bad_index: Some(1),
+                unmanaged_entries: 0,
+                broken_entries: 1,
             }],
         };
         let text = render(&report);
