@@ -200,11 +200,19 @@ impl<D: Dom> Eq for MountedNode<D> {}
 /// 兄弟顺序算。依据：设计文档 §5.3.2「委托根 = 引擎的挂载容器（所有引擎产出
 /// 的 DOM 的唯一公共祖先）」。宿主若在容器里塞自己的节点，两侧下标会错位。
 ///
+/// ## 失败之后：**显式劈叉**，不装作没事（2026-10-25 修）
+///
+/// 一次 patch 失败 ⇒ DOM 可能已经改了一半 ⇒ 渲染器的内存树与 DOM **劈叉**
+/// ⇒ ⇒ 修前会把**过期**的旧树继续当差分基准 ⇒ ⇒ 每帧都失败 ⇒
+/// ⇒ **界面永久冻结，且没有任何日志**。
+///
+/// ⇒ 现在：失败 ⇒ 标记 [`Renderer::is_desynced`] ⇒ **下一次 patch 走整树重建**
+/// ⇒ ⇒ 宿主能查 [`Renderer::last_error`] ⇒ 能 log、能决定重建。
+///
 /// ## 诚实边界
 ///
-/// - **事件委托未接线**：`Dom` trait 目前**没有**监听器接口 ⇒ 渲染器不负责
-///   挂 / 摘事件监听（委托表在 [`crate::events`] 里独立存在，尚未接到真实
-///   DOM 后端）。
+/// - **事件委托的单监听器形态**：本 crate 按**元素直挂**（每个带处理器的元素
+///   一个监听器，冒泡交给浏览器）；委托表在 [`crate::events`] 里独立存在。
 /// - **effect 作用域未接线**：设计文档 §5.1.4 的「挂载 ⇒ 建作用域 / 卸载 ⇒
 ///   逆序销毁作用域」由 `ui-core` 的作用域机制承担，渲染器**不**直接操作它。
 #[derive(Debug)]
@@ -214,6 +222,14 @@ pub struct Renderer<D: Dom> {
     tree: Option<MountedNode<D>>,
     /// 当前**已绑定**的 `bind:this` 槽位数（挂载 +1 / 卸载 −1）。
     bound_slots: usize,
+    /// 渲染器与 DOM 是否**劈叉**（一次失败的 patch 之后为 `true`）。
+    ///
+    /// 劈叉 ⇒ 内存树**不可信** ⇒ 下一次 patch **整树重建**（不再拿旧树差分）。
+    desynced: bool,
+    /// 最近一次失败的原因（**成功后不清** ⇒ 宿主可随时取走写日志）。
+    last_error: Option<DomError>,
+    /// 降级告警（例如「后端不支持移除 property ⇒ 已写回默认值」）。
+    warnings: Vec<String>,
 }
 
 impl<D: Dom> Renderer<D> {
@@ -224,6 +240,9 @@ impl<D: Dom> Renderer<D> {
             root,
             tree: None,
             bound_slots: 0,
+            desynced: false,
+            last_error: None,
+            warnings: Vec::new(),
         }
     }
 
@@ -247,6 +266,37 @@ impl<D: Dom> Renderer<D> {
         self.tree.is_some()
     }
 
+    /// 渲染器与 DOM 是否**劈叉**（一次失败的 patch 之后为 `true`）。
+    ///
+    /// ## 为什么宿主必须知道
+    ///
+    /// 劈叉意味着「内存里的树**不再代表**真实的 DOM」⇒ ⇒ 此时的任何差分都
+    /// 不可信 ⇒ ⇒ 渲染器会在下一次 patch 时**整树重建**⇒ 但宿主也**应当**
+    /// 知道（要 log、要决定是否重建界面）。
+    pub fn is_desynced(&self) -> bool {
+        self.desynced
+    }
+
+    /// 最近一次失败的原因（**成功后不清** ⇒ 宿主可随时取走写日志）。
+    pub fn last_error(&self) -> Option<&DomError> {
+        self.last_error.as_ref()
+    }
+
+    /// **取走**最近一次失败的原因（取走后清空 ⇒ 适合「日志队列」式消费）。
+    pub fn take_last_error(&mut self) -> Option<DomError> {
+        self.last_error.take()
+    }
+
+    /// 降级告警（例：「后端不支持移除 property ⇒ 已写回默认值」）。
+    pub fn warnings(&self) -> &[String] {
+        &self.warnings
+    }
+
+    /// **取走**全部降级告警。
+    pub fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
+    }
+
     /// 当前**已绑定**的 `bind:this` 槽位数。
     ///
     /// 挂载后 − 卸载后 = 0 ⇒ 「mount / unmount 成对」的机械判据。
@@ -257,39 +307,107 @@ impl<D: Dom> Renderer<D> {
     /// 挂载一棵虚拟树（追加到挂载容器末尾）。
     ///
     /// 幂等前提：同一渲染器**只挂一次**；重复挂载会报错（见 [`DomError`]）。
+    ///
+    /// ⚠️ 若渲染器已**劈叉**（上一次 patch 失败）⇒ 本次挂载走**整树重建**
+    /// ⇒ ⇒ 宿主不必自己清理 DOM。
     pub fn mount(&mut self, vnode: VNode) -> Result<MountedNode<D>, DomError> {
         if self.tree.is_some() {
-            return Err(DomError::Undecidable(String::from(
-                "渲染器已挂载：挂载 / 卸载必须成对（先卸载再挂载）",
-            )));
+            if !self.desynced {
+                return Err(DomError::Undecidable(String::from(
+                    "渲染器已挂载：挂载 / 卸载必须成对（先卸载再挂载）",
+                )));
+            }
+            // 已劈叉 ⇒ 旧树不可信 ⇒ 整树重建。
+            return self.rebuild(vnode);
         }
         let root = self.root.clone();
-        let mounted = self.mount_node(&vnode, &root, None)?;
-        self.tree = Some(mounted.clone());
-        Ok(mounted)
+        match self.mount_node(&vnode, &root, None) {
+            Ok(mounted) => {
+                self.tree = Some(mounted.clone());
+                Ok(mounted)
+            }
+            Err(error) => {
+                // 挂载失败也可能留下半截 DOM ⇒ 同样标记劈叉（下次整树重建）。
+                self.desynced = true;
+                self.last_error = Some(error.clone());
+                Err(error)
+            }
+        }
     }
 
     /// 打补丁：用新虚拟树替换当前已挂载的树。
     ///
-    /// 失败时**保留旧树**（不留下半吊子状态）：DOM 已可能被部分改动，
-    /// 但已挂载树的引用仍在调用方手里，便于继续排查。
+    /// ## 失败之后会发生什么（2026-10-25 修）
+    ///
+    /// DOM 可能已经改了一半 ⇒ 内存树与 DOM **劈叉** ⇒ 此时**绝不能**再拿过期
+    /// 的旧树继续差分（那会让每一帧都失败 ⇒ 界面永久冻结）⇒ ⇒
+    /// 失败 ⇒ 标记 [`Self::is_desynced`] ⇒ **下一次 patch 整树重建**。
+    ///
+    /// 失败**照样返回 `Err`**（不吞掉）⇒ 宿主能 log、能决定重建。
     pub fn patch(&mut self, vnode: VNode) -> Result<MountedNode<D>, DomError> {
+        if self.desynced {
+            // 已劈叉 ⇒ 不拿过期旧树差分 ⇒ 整树重建。
+            return self.rebuild(vnode);
+        }
         let Some(old) = self.tree.take() else {
             return Err(DomError::Undecidable(String::from(
                 "渲染器未挂载：先 mount 再 patch",
             )));
         };
         let root = self.root.clone();
-        match self.patch_node(&old, &vnode, &root) {
+        match self.patch_node(&old, &vnode, &root, None) {
             Ok(mounted) => {
                 self.tree = Some(mounted.clone());
                 Ok(mounted)
             }
             Err(error) => {
+                // 旧树**只**留作「卸载时的清理清单」⇒ **不再**作为差分基准。
                 self.tree = Some(old);
+                // ⚠️ **只有「可能已经改了 DOM」的错误才标记劈叉**：
+                // `Undecidable`（差分不可判定 / 挂载状态不对）发生在**触碰 DOM
+                // 之前** ⇒ 内存树仍可信 ⇒ 不标记（否则一次重复 key 就会让
+                // 渲染器误判成劈叉）。
+                if !matches!(error, DomError::Undecidable(_)) {
+                    self.desynced = true;
+                }
+                self.last_error = Some(error.clone());
                 Err(error)
             }
         }
+    }
+
+    /// **整树重建**：清掉旧产物，重新挂载。
+    ///
+    /// ## 为什么必须「连旧产物一起清掉」
+    ///
+    /// 失败的 patch 可能已经建了**新节点**（它们不在旧树里 ⇒ 旧树卸载时
+    /// 摘不掉）⇒ ⇒ 只卸载旧树会留下**孤儿节点**⇒ ⇒ DOM 里出现重复内容。
+    ///
+    /// ⇒ ⇒ 重建 = ① 尽力卸载旧树 → ② 清空容器（容器**归引擎独占**，
+    /// 见本类型文档）→ ③ 重新挂载。
+    fn rebuild(&mut self, vnode: VNode) -> Result<MountedNode<D>, DomError> {
+        let root = self.root.clone();
+        // ① 尽力卸载旧树（可能与 DOM 已经不一致 ⇒ 失败**不致命**）。
+        if let Some(old) = self.tree.take() {
+            let _ = self.unmount_node(&old, &root);
+        }
+        // ② 清空容器里的残留（劈叉留下的孤儿节点）。
+        self.clear_children(&root)?;
+        // ③ 重新挂载。
+        let mounted = self.mount_node(&vnode, &root, None)?;
+        self.tree = Some(mounted.clone());
+        self.desynced = false;
+        Ok(mounted)
+    }
+
+    /// 清空挂载容器的子节点（**重建**时用；容器归引擎独占）。
+    fn clear_children(&self, parent: &D::Node) -> Result<(), DomError> {
+        let children = self.dom.children(parent)?;
+        for child in children {
+            // 一个节点摘不掉不该让整次重建失败 ⇒ 尽力而为。
+            let _ = self.dom.remove_child(parent, &child);
+        }
+        Ok(())
     }
 
     /// 卸载整棵树（解绑 `bind:this` ⇒ 摘除 DOM 节点）。
@@ -300,7 +418,9 @@ impl<D: Dom> Renderer<D> {
             return Ok(());
         };
         let root = self.root.clone();
-        self.unmount_node(&old, &root)
+        let result = self.unmount_node(&old, &root);
+        self.desynced = false;
+        result
     }
 
     // ── 挂载 ──────────────────────────────────────────────────────────────
@@ -361,28 +481,47 @@ impl<D: Dom> Renderer<D> {
     // ── 打补丁 ────────────────────────────────────────────────────────────
 
     /// 打补丁：旧已挂载节点 ↔ 新虚拟节点。
+    ///
+    /// ## ⭐ `after` = **块锚点**（2026-10-25 修）
+    ///
+    /// `after` 是「本块之后**紧邻**的那个 DOM 节点」（`None` = 本块是最后一块）。
+    /// 它由**块级**配对算出来（不是由 DOM 反查）⇒ ⇒
+    /// - 本块**变大**（条件块从空变非空）⇒ 新内容插在 `after` **之前**
+    ///   ⇒ **位置不丢**（修前是追加到父节点末尾 ⇒ 条件卡跑到容器底部）；
+    /// - 本块被**替换**（类型 / 标签变了）⇒ 新节点插在 `after` **之前**
+    ///   ⇒ 落回原位。
+    ///
+    /// ## 块 = 一个「虚拟节点 ↔ DOM 节点集合」的对应关系
+    ///
+    /// - 元素块 / 文本块 ⇒ 对应**一个** DOM 节点；
+    /// - 分组块（Fragment）⇒ 对应**一组**兄弟 DOM 节点（它在 DOM 上被摊平）。
+    ///
+    /// ⇒ 块级配对（谁对谁）⇒ 块内配对（块里的内容怎么变）⇒ **两层分开**。
     fn patch_node(
         &mut self,
         old: &MountedNode<D>,
         new: &VNode,
         parent: &D::Node,
+        after: Option<&D::Node>,
     ) -> Result<MountedNode<D>, DomError> {
         match (old, new) {
             (MountedNode::Element(old_element), VNode::Element(new_element)) => {
                 if old_element.vnode.tag != new_element.tag {
                     // 标签变了 ⇒ 必须重建（T1 只保护「同标签」的情形）。
-                    let anchor = self.anchor_after(parent, &old_element.dom)?;
                     self.unmount_node(old, parent)?;
-                    return self.mount_node(new, parent, anchor.as_ref());
+                    return self.mount_node(new, parent, after);
                 }
                 // T1：同标签 ⇒ 复用同一个真实 DOM 节点，只改属性与子节点。
                 self.patch_attributes(&old_element.dom, &old_element.vnode, new_element)?;
                 self.patch_handlers(&old_element.dom, &old_element.vnode, new_element)?;
                 self.rebind_this(&old_element.vnode, new_element, &old_element.dom)?;
+                // 元素的子节点 = **该元素的全部**子节点 ⇒ 尾部锚点 = `None`
+                // （子节点都挂在元素内部）。
                 let children = self.patch_children(
                     &old_element.dom,
                     &old_element.children,
                     &new_element.children,
+                    None,
                 )?;
                 // property 在**子节点之后**打（同挂载时的理由）。
                 self.patch_props(&old_element.dom, &old_element.vnode, new_element)?;
@@ -403,95 +542,67 @@ impl<D: Dom> Renderer<D> {
                 }))
             }
             (MountedNode::Fragment(old_fragment), VNode::Fragment(new_children)) => {
-                // ⭐ **块内摊平配对**（2026-10-25 修）：
-                // Fragment **没有宿主节点** ⇒ 它在 DOM 上就是它 children 的一组兄弟
-                // ⇒ ⇒ 块内按**真实 DOM 节点**配对 ⇒ **元素被复用**
-                // ⇒ ⇒ **受控输入可用**（修前：每次重渲染都重建整棵 Fragment 子树
-                // ⇒ ⇒ 输入框被换掉 ⇒ 用户输入与焦点一起丢）。
+                // ⭐ **块内按「块」配对，摊平只做一层**（2026-10-25 修）。
                 //
-                // ⚠️ **块级**由 `patch_children` 负责（按位置 ⇒ 兄弟块不错位）；
-                // 这里只管**块内**。
-                let old_flat = flatten_mounted(&old_fragment.children);
-                let new_flat = flatten_vnode(new_children);
-                let old_vnodes: Vec<VNode> = old_flat
-                    .iter()
-                    .filter_map(|child| child.to_vnode())
-                    .collect();
-                let keyed = old_vnodes.len() == old_flat.len()
-                    && crate::keyed::list_diff_mode(&old_vnodes, &new_flat)
-                        == crate::keyed::ListDiffMode::Keyed;
-                // ⭐ 混合配对：**有 key 的**按身份，**无 key 的**按位置
-                // ⇒ ⇒ 条件渲染导致的「长度变化」不再让兄弟错位。
-                let has_key = old_vnodes.iter().any(|vnode| vnode.key().is_some())
-                    || new_flat.iter().any(|vnode| vnode.key().is_some());
-                let children = if keyed {
-                    self.patch_keyed_children(parent, &old_flat, &new_flat, &old_vnodes)?
-                } else if has_key {
-                    self.patch_mixed_children(parent, &old_flat, &new_flat)?
-                } else {
-                    self.patch_unkeyed_children(parent, &old_flat, &new_flat)?
-                };
+                // ## 为什么**不能**再摊平（修前的缺陷，实测）
+                //
+                // 修前 `flatten_mounted` / `flatten_vnode` **递归**摊平所有嵌套
+                // Fragment ⇒ 嵌套块的身份被**融进兄弟序列** ⇒
+                // ⇒ 实测：`div > Fragment[span(x), Fragment([]), span(z)]`，
+                // 条件块由假变真 ⇒ 摊平后 old = [x, z]、new = [x, y, z]
+                // ⇒ ⇒ 按位置配对 ⇒ **id4 那颗节点从「z」变成了「y」**
+                // ⇒ ⇒ 「z」被**重建**成新节点（id6）⇒
+                // ⇒ ⇒ `<input>` 的值 / 焦点跟错逻辑项、CSS 过渡在错节点上重启、
+                // `bind:this` 指向错元素。
+                //
+                // ## 现在的做法（**语义正确**的那一套）
+                //
+                // - **摊平只做一层**：嵌套 Fragment 保持为**子块** ⇒
+                //   ⇒ 它的身份**独立**于兄弟序列 ⇒ ⇒ 兄弟不会错位；
+                // - 嵌套块**自己**按块级规则配对（位置 / key）⇒
+                //   ⇒ 条件块从「空」变「非空」时，它的内容插在**自己的后继**
+                //   （块锚点）之前 ⇒ ⇒ **位置不丢**。
+                //
+                // ## 为什么这是**语义正确**的方案（而不是「让摊平后的配对带身份」）
+                //
+                // 「摊平 + 带身份」需要给**每个**嵌套块发明一个身份（key 或序号）
+                // ⇒ ⇒ 身份得**跨帧稳定** ⇒ ⇒ 而嵌套块在虚拟树里**没有**稳定
+                // 身份（`view!` 每次生成的 Fragment 都没有 key）⇒ ⇒ 只能靠
+                // 「位置」⇒ ⇒ 位置一变，身份就变 ⇒ ⇒ **还是**会错位。
+                // ⇒ ⇒ 保留「嵌套块」这个**层级**才是唯一能保住身份的办法。
+                let children =
+                    self.patch_children(parent, &old_fragment.children, new_children, after)?;
                 Ok(MountedNode::Fragment(MountedFragment { children }))
             }
             _ => {
-                // 类型不匹配 ⇒ 替换子树。
-                let anchor = match last_dom_node(old) {
-                    Some(dom) => self.anchor_after(parent, dom)?,
-                    None => None,
-                };
+                // 类型不匹配 ⇒ 替换子树（落在**原位**：锚点 = 本块的后继）。
                 self.unmount_node(old, parent)?;
-                self.mount_node(new, parent, anchor.as_ref())
+                self.mount_node(new, parent, after)
             }
         }
     }
 
-    /// 子节点对位：keyed ⇒ 按身份（key）配对；否则 ⇒ 按位置。
+    /// **块级**配对：old 的每一项与 new 的每一项都是**块**。
     ///
-    /// ## ⭐ **两侧都先「摊平」Fragment**（2026-10-25 修）
+    /// ## ⭐ 两条规则（合起来才是「块语义」）
     ///
-    /// ### 为什么
+    /// 1. **块的身份按位置 / key 配对**（`{ expr }` 这种插值恒占一个位置）
+    ///    ⇒ ⇒ 某个块「出现 / 消失」**不会**让后面的兄弟错位
+    ///    （这与生产侧 Svelte 的 `{#if}` 块锚点语义一致）。
+    /// 2. **块内的增删按块锚点落位**（见 [`Self::patch_node`] 的 `after`）
+    ///    ⇒ ⇒ 条件块从空变非空时，内容**留在原位**（不追加到父节点末尾）。
     ///
-    /// `view!` 宏把「内插一个变量」编译成 **Fragment** ⇒ 组件树里到处都有。
-    /// 而 Fragment **没有宿主节点** ⇒ 它在 DOM 上是**摊平**的一组兄弟。
-    /// ⇒ ⇒ **配对的单位必须是「真实 DOM 节点」**，不能是「VNode 节点」。
+    /// ## `after` = 块列表**之后**的锚点
     ///
-    /// ### 摊平前的三个后果（**全部实测过**）
-    ///
-    /// 1. **每次重渲染都把整棵 Fragment 子树重建** ⇒ `patch_node` 没有
-    ///    `(Fragment, Fragment)` 分支 ⇒ Fragment 落到「类型不匹配 ⇒ 替换子树」
-    ///    ⇒ ⇒ **输入框元素被换掉** ⇒ 用户输入与焦点一起丢
-    ///    ⇒ ⇒ **受控输入在引擎侧不可用**（实测：键入 1 个字符 ⇒ 取值 `''`）。
-    /// 2. **keyed 差分被废掉**：`MountedNode::to_vnode()` 对 Fragment 返回 `None`
-    ///    ⇒ `patch_children` 的 keyed 判定 `old_vnodes.len() == old.len()`
-    ///    ⇒ **含 Fragment 的列表永远走不到 keyed** ⇒ 顺序变化只能靠重建。
-    /// 3. **配对错位**：old 侧一个 Fragment 对 new 侧一个 Fragment ⇒ 但两者的
-    ///    children 数量/顺序可能不同 ⇒ 按索引配对会把 `old[i]` 复用给语义不同的
-    ///    `new[i]` ⇒ **内容出现在错误的位置**（实测：审批项的「会话行」跑到
-    ///    「输入框」的位置 ⇒ 逐像素差 27.4%）。
-    ///
-    /// ### 现在的做法：**块级按位置 + 块内摊平配对**（2026-10-25 定案）
-    ///
-    /// - **块级**（本函数）：old / new 的每一项都是**块** ⇒ 按**位置**配对
-    ///   ⇒ 块与块**一一对应**（`{ expr }` 这种插值恒占一个位置）
-    ///   ⇒ ⇒ **兄弟块不会因为某个块「出现 / 消失」而错位**
-    ///   ⇒ 这与生产侧 **Svelte 的 `{#if}` 块锚点**语义一致
-    ///   （Svelte 给每个块一个独立锚点 ⇒ 块增删**不**影响其它块）。
-    /// - **块内**（`patch_node` 的 `(Fragment, Fragment)` 分支）：摊平后配对
-    ///   ⇒ 块内元素**被复用** ⇒ ⇒ **受控输入可用**；
-    ///   ⇒ 块内若全部有 `key` ⇒ 按**身份**配对（可处理块内换序）。
-    ///
-    /// ### ⚠️ **为什么不是「整层摊平」**（2026-10-25 实测否掉的中间方案）
-    ///
-    /// 曾试过「把**整层**的 Fragment 摊平后再配对」⇒ **实测引入新的错位**：
-    /// 摊平后，条件渲染的「生效配置」卡片**出现** ⇒ 该层长度 5→6
-    /// ⇒ 位置配对 ⇒ **后面全部错位** ⇒ 搜索框仍被换掉（实测：元素标记丢失）。
-    /// ⇒ 根因：摊平把**块级身份**融进了兄弟序列 ⇒ 块增删 ⇒ 兄弟错位。
-    /// ⇒ ⇒ 正确做法：**块级保留身份**（按位置）＋ **块内摊平**（按真实节点）。
+    /// - 元素的子节点列表 = 该元素的**全部**子节点 ⇒ `after = None`；
+    /// - 分组的子节点列表 = 父节点子列表的**一段** ⇒ `after` = 该分组的后继
+    ///   ⇒ ⇒ 分组里新增的内容插在**分组原来的位置**（而不是父节点末尾）。
     fn patch_children(
         &mut self,
         parent: &D::Node,
         old: &[MountedNode<D>],
         new: &[VNode],
+        after: Option<&D::Node>,
     ) -> Result<Vec<MountedNode<D>>, DomError> {
         // ① **块级**按位置配对（old / new 的每一项都是「块」）
         //    ⇒ `{ expr }` 这种插值**恒占一个位置** ⇒ 某个块「出现 / 消失」
@@ -505,12 +616,57 @@ impl<D: Dom> Renderer<D> {
         let has_key = old_vnodes.iter().any(|vnode| vnode.key().is_some())
             || new.iter().any(|vnode| vnode.key().is_some());
         if keyed {
-            self.patch_keyed_children(parent, old, new, &old_vnodes)
+            self.patch_keyed_children(parent, old, new, &old_vnodes, after)
         } else if has_key {
-            self.patch_mixed_children(parent, old, new)
+            self.patch_mixed_children(parent, old, new, after)
         } else {
-            self.patch_unkeyed_children(parent, old, new)
+            self.patch_positional_children(parent, old, new, after)
         }
+    }
+
+    /// **位置配对**（unkeyed）：old[i] ↔ new[i]。
+    ///
+    /// ## ⭐ 块锚点的落位算法（2026-10-25 修）
+    ///
+    /// **自后向前**处理 ⇒ 维护一个「后继块的**首** DOM 节点」作为锚点 ⇒
+    /// ⇒ 新增的块 / 块内新增的内容**插在该锚点之前** ⇒ ⇒ **位置不丢**。
+    ///
+    /// ⚠️ **为什么是「首」节点而不是「尾」节点**：块 i 的后继是块 i+1 ⇒
+    /// ⇒ 块 i 的内容必须排在块 i+1 的**第一个** DOM 节点**之前** ⇒
+    /// ⇒ 锚点 = 后继块的首节点。
+    ///
+    /// ⚠️ **空块怎么办**：空 Fragment 没有 DOM 节点 ⇒ ⇒ 锚点**继续往回找**
+    /// （不更新）⇒ ⇒ 后面的块仍然排在正确的位置。
+    fn patch_positional_children(
+        &mut self,
+        parent: &D::Node,
+        old: &[MountedNode<D>],
+        new: &[VNode],
+        after: Option<&D::Node>,
+    ) -> Result<Vec<MountedNode<D>>, DomError> {
+        let common = old.len().min(new.len());
+        // ① 多余的旧块：移除（自后向前 ⇒ 保持前面的下标有效）。
+        //    移除的都是**尾部**的块 ⇒ 不会影响前面块的锚点。
+        for index in (common..old.len()).rev() {
+            self.unmount_node(&old[index], parent)?;
+        }
+        // ② 按新顺序落位（自后向前 ⇒ 锚点 = 已就位的后继块的首节点）。
+        let mut slots: Vec<Option<MountedNode<D>>> = vec![None; new.len()];
+        let mut anchor: Option<D::Node> = after.cloned();
+        for index in (0..new.len()).rev() {
+            let mounted = match old.get(index) {
+                Some(old_child) => {
+                    self.patch_node(old_child, &new[index], parent, anchor.as_ref())?
+                }
+                None => self.mount_node(&new[index], parent, anchor.as_ref())?,
+            };
+            // 空块（空 Fragment）没有 DOM 节点 ⇒ 锚点**不变**。
+            if let Some(first) = first_dom_node(&mounted) {
+                anchor = Some(first.clone());
+            }
+            slots[index] = Some(mounted);
+        }
+        Ok(slots.into_iter().flatten().collect())
     }
 
     /// keyed 子节点对位：按 key 配对 + LIS 最小移动（设计文档 §5.2.3）。
@@ -520,6 +676,7 @@ impl<D: Dom> Renderer<D> {
         old: &[MountedNode<D>],
         new: &[VNode],
         old_vnodes: &[VNode],
+        after: Option<&D::Node>,
     ) -> Result<Vec<MountedNode<D>>, DomError> {
         // 差分计划**先**算出来（重复 key ⇒ 直接报错，此时 DOM 一个字节都没动）。
         let plan = diff_keyed(old_vnodes, new)
@@ -536,29 +693,33 @@ impl<D: Dom> Renderer<D> {
 
         // ② 按新顺序重建子节点序列（自后向前；锚点 = 已就位的后继）。
         let mut slots: Vec<Option<MountedNode<D>>> = vec![None; new.len()];
-        let mut anchor: Option<D::Node> = None;
+        let mut anchor: Option<D::Node> = after.cloned();
         for new_index in (0..new.len()).rev() {
             match plan.matched()[new_index] {
                 Some(old_index) => {
                     let Some(old_child) = old.get(old_index) else {
                         continue;
                     };
-                    let patched = self.patch_node(old_child, &new[new_index], parent)?;
+                    let patched =
+                        self.patch_node(old_child, &new[new_index], parent, anchor.as_ref())?;
                     let dom = patched.dom_node().cloned();
                     // 不在 LIS 里的子节点要换位置（LIS 之外的必须移动 ⇒ 移动次数
                     // = 配对数 − LIS 长度 = 下界）。
-                    if !plan.retained().contains(&old_index) {
+                    //
+                    // ⚠️ `is_retained` 是 **O(1)**（集合查表）⇒ 不是 O(N²)。
+                    if !plan.is_retained(old_index) {
                         if let Some(node) = dom.as_ref() {
                             self.dom.insert_before(parent, node, anchor.as_ref())?;
                         }
                     }
-                    anchor = dom;
+                    // 锚点 = 该块的**首** DOM 节点（分组块 ⇒ 它的第一个子节点）。
+                    anchor = first_dom_node(&patched).cloned();
                     slots[new_index] = Some(patched);
                 }
                 None => {
                     // 新建：属性先写、节点后进文档树（T3）。
                     let mounted = self.mount_node(&new[new_index], parent, anchor.as_ref())?;
-                    anchor = mounted.dom_node().cloned();
+                    anchor = first_dom_node(&mounted).cloned();
                     slots[new_index] = Some(mounted);
                 }
             }
@@ -590,12 +751,13 @@ impl<D: Dom> Renderer<D> {
     ///   ⇒ ⇒ DOM 顺序恒等于 new 顺序。
     ///
     /// ⚠️ **只在「这一层存在 key」时启用** ⇒ ⇒ 绝大多数层仍走
-    /// [`Self::patch_unkeyed_children`]（**既有契约完全不变**）。
+    /// [`Self::patch_positional_children`]（**既有契约完全不变**）。
     fn patch_mixed_children(
         &mut self,
         parent: &D::Node,
         old: &[MountedNode<D>],
         new: &[VNode],
+        after: Option<&D::Node>,
     ) -> Result<Vec<MountedNode<D>>, DomError> {
         // ① old 侧的 key → 下标（**重复 key 取第一个**；重复 key 的可判定性
         //    由 keyed 差分负责报「不可判定」⇒ 这里不重复报错）。
@@ -668,28 +830,33 @@ impl<D: Dom> Renderer<D> {
         let order_preserved = reused.windows(2).all(|pair| pair[0] < pair[1]);
         // ⑤ 按 new 顺序落位：复用（必要时重排）+ 新建。
         let mut slots: Vec<Option<MountedNode<D>>> = vec![None; new.len()];
-        let mut anchor: Option<D::Node> = None;
+        let mut anchor: Option<D::Node> = after.cloned();
         for new_index in (0..new.len()).rev() {
             match plan[new_index] {
                 Some(old_index) => {
                     let Some(old_child) = old.get(old_index) else {
                         continue;
                     };
-                    let patched = self.patch_node(old_child, &new[new_index], parent)?;
-                    let dom = patched.dom_node().cloned();
+                    let patched =
+                        self.patch_node(old_child, &new[new_index], parent, anchor.as_ref())?;
                     if !order_preserved {
                         // `insert_before` 对**已在文档里**的节点 ⇒ **移动**它
                         // ⇒ ⇒ DOM 顺序恒等于 new 顺序。
-                        if let Some(node) = dom.as_ref() {
-                            self.dom.insert_before(parent, node, anchor.as_ref())?;
-                        }
+                        //
+                        // ⚠️ 分组块（Fragment）没有**单个** DOM 节点 ⇒
+                        // ⇒ 要整块移动（逐个插到锚点之前 ⇒ 块内顺序不变）。
+                        self.move_block(parent, &patched, anchor.as_ref())?;
                     }
-                    anchor = dom;
+                    if let Some(first) = first_dom_node(&patched) {
+                        anchor = Some(first.clone());
+                    }
                     slots[new_index] = Some(patched);
                 }
                 None => {
                     let mounted = self.mount_node(&new[new_index], parent, anchor.as_ref())?;
-                    anchor = mounted.dom_node().cloned();
+                    if let Some(first) = first_dom_node(&mounted) {
+                        anchor = Some(first.clone());
+                    }
                     slots[new_index] = Some(mounted);
                 }
             }
@@ -697,27 +864,21 @@ impl<D: Dom> Renderer<D> {
         Ok(slots.into_iter().flatten().collect())
     }
 
-    /// unkeyed 子节点对位：按位置对齐（设计文档 §5.2.2）。
-    fn patch_unkeyed_children(
+    /// 把一个**块**整体移动到锚点之前（块内顺序保持）。
+    ///
+    /// 为什么需要：分组块（Fragment）在 DOM 上是**一组**兄弟节点 ⇒
+    /// ⇒ 「移动一个块」= 「把它的每个 DOM 节点都插到锚点之前」⇒
+    /// ⇒ 逐个插入 ⇒ 块内的相对顺序不变 ✓。
+    fn move_block(
         &mut self,
         parent: &D::Node,
-        old: &[MountedNode<D>],
-        new: &[VNode],
-    ) -> Result<Vec<MountedNode<D>>, DomError> {
-        let common = old.len().min(new.len());
-        let mut mounted = Vec::with_capacity(new.len());
-        for index in 0..common {
-            mounted.push(self.patch_node(&old[index], &new[index], parent)?);
+        block: &MountedNode<D>,
+        anchor: Option<&D::Node>,
+    ) -> Result<(), DomError> {
+        for node in dom_nodes_of(block) {
+            self.dom.insert_before(parent, &node, anchor)?;
         }
-        // 多余的旧子节点：自后向前移除（保持前面的下标有效）。
-        for index in (common..old.len()).rev() {
-            self.unmount_node(&old[index], parent)?;
-        }
-        // 新增的子节点：追加到末尾。
-        for child in new.iter().skip(common) {
-            mounted.push(self.mount_node(child, parent, None)?);
-        }
-        Ok(mounted)
+        Ok(())
     }
 
     // ── 属性 ──────────────────────────────────────────────────────────────
@@ -768,10 +929,21 @@ impl<D: Dom> Renderer<D> {
     /// 且会把光标推到末尾。这与各面宿主侧回写用的是同一条口径
     /// （「只在当前值 ≠ 目标值时写」）。
     ///
-    /// ⚠️ 读回比较用 [`Dom::get_property`]；后端读不出（返回空串）时
-    /// **不写**——宁可不动，也不要在读不到当前值时反复覆盖用户的输入。
+    /// ## ⭐ 跳过条件（2026-10-25 重新审视，实时语义下）
+    ///
+    /// 后端的 [`Dom::get_property`] 是**实时**语义（浏览器读的是真实的
+    /// `input.value` ⇒ 可能是**用户刚敲进去**的值）⇒ ⇒
+    /// ⇒ **绝不能**拿「实时值」当「上一帧的目标值」来比 ⇒
+    /// ⇒ 否则用户刚敲的字符会被引擎覆盖回去。
+    ///
+    /// ⇒ 跳过条件分两层：
+    ///
+    /// 1. **目标值没变**（`old` 与 `new` 的取值相同）⇒ **不写**
+    ///    ⇒ 这一条**保护**用户的输入与输入法组合态（**不看**实时值）；
+    /// 2. 目标值变了、但**实时值已经等于目标值** ⇒ 不写
+    ///    ⇒ 避免一次**无谓**的重写（重写会推光标）。
     fn patch_props(
-        &self,
+        &mut self,
         dom: &D::Node,
         old: &ElementVNode,
         new: &ElementVNode,
@@ -790,7 +962,7 @@ impl<D: Dom> Renderer<D> {
             }
             match new_value {
                 Some(PropValue::Text(text)) => {
-                    // 当前值已是目标值 ⇒ 不写（保护输入法组合态）。
+                    // 当前值已是目标值 ⇒ 不写（避免无谓重写 / 光标跳动）。
                     match self.dom.get_property(dom, &name) {
                         Ok(current) if current == *text => continue,
                         _ => {}
@@ -801,15 +973,48 @@ impl<D: Dom> Renderer<D> {
                     self.dom.set_property_bool(dom, &name, *flag)?;
                 }
                 None => {
-                    // property 被移除：**没有**「移除 property」的通用操作
-                    // ⇒ 不静默清空（那会破坏受控输入）；登记为未支持。
-                    return Err(DomError::Unsupported(format!(
-                        "移除 property `{name}` 未支持（property 无通用删除操作）"
-                    )));
+                    // ⭐ property **从虚拟树上消失**（2026-10-25 修）。
+                    //
+                    // ## 修前的缺陷
+                    //
+                    // 修前直接 `Err(Unsupported)` ⇒ ⇒ **整帧中止** ⇒
+                    // ⇒ DOM 已经改了一半 ⇒ 界面冻结（且宿主常常把错误吞掉）。
+                    //
+                    // ## 现在的口径
+                    //
+                    // 1. **首选真正移除**（[`Dom::remove_property`]）
+                    //    ⇒ 之后读回来是**默认值** ⇒ 与浏览器一致；
+                    // 2. 后端**做不了** ⇒ **降级**：写回**默认值** + **记警告**
+                    //    ⇒ ⇒ **绝不中止整帧**（0 装：降级必须**看得见**）。
+                    self.remove_property_or_default(dom, &name, old_value)?;
                 }
             }
         }
         Ok(())
+    }
+
+    /// property 消失的处理：**优先真正移除**，后端做不了 ⇒ 写回默认值 + 记警告。
+    fn remove_property_or_default(
+        &mut self,
+        dom: &D::Node,
+        name: &str,
+        old_value: Option<&PropValue>,
+    ) -> Result<(), DomError> {
+        match self.dom.remove_property(dom, name) {
+            Ok(()) => Ok(()),
+            Err(DomError::Unsupported(_)) => {
+                // 后端做不了 ⇒ 写回**默认值**（字符串 ⇒ 空串；布尔 ⇒ false）。
+                match old_value {
+                    Some(PropValue::Bool(_)) => self.dom.set_property_bool(dom, name, false)?,
+                    _ => self.dom.set_property(dom, name, "")?,
+                }
+                self.warnings.push(format!(
+                    "property `{name}` 已从虚拟树消失，但后端不支持移除 ⇒ 已写回默认值（未真正移除）"
+                ));
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// 已有节点的属性差分（class 按 token；其余按键）。
@@ -876,8 +1081,21 @@ impl<D: Dom> Renderer<D> {
     ///
     /// 处理器**按指针身份**比较（见 [`crate::events::ElementHandler`]）：
     /// 同一闭包实例 ⇒ 视为同一个处理器（不重挂）；换了闭包 ⇒ 重挂。
+    ///
+    /// ## ⭐ **按事件类型增量替换**（2026-10-25 修）
+    ///
+    /// 修前：只要处理器集合变了 ⇒ `remove_listeners`（摘**全部**）⇒
+    /// ⇒ 再把**全部**处理器重挂 ⇒ ⇒ 每次重渲染、每个元素都**全量拆装**
+    /// ⇒ ⇒ 真实 DOM 后端侧是 **O(N²)**（每个元素都 drain 整个监听器表）。
+    ///
+    /// 现在：**逐个事件类型**比较 ⇒ 只换**变了的那一个** ⇒
+    /// ⇒ 其它事件类型的监听器**原地不动**（既有契约：同元素多 kind 互不误伤）
+    /// ⇒ ⇒ 真实 DOM 后端侧是 **O(变化的那个 kind)**。
+    ///
+    /// ⚠️ **该 kind 从有变无**（新虚拟树里这个事件类型没了）⇒
+    /// ⇒ 必须把旧的那个摘掉 ⇒ ⇒ 走 [`Dom::remove_listener`]（**按 kind**）。
     fn patch_handlers(
-        &self,
+        &mut self,
         dom: &D::Node,
         old: &ElementVNode,
         new: &ElementVNode,
@@ -885,8 +1103,27 @@ impl<D: Dom> Renderer<D> {
         if old.handlers == new.handlers {
             return Ok(());
         }
-        self.dom.remove_listeners(dom)?;
-        self.write_handlers(dom, new)
+        // ① 逐 kind 比较：变了 ⇒ 先摘旧的那个（**只摘这个 kind**），再挂新的。
+        for (kind, handler) in &new.handlers {
+            let unchanged = old
+                .handlers
+                .iter()
+                .find(|(old_kind, _)| old_kind == kind)
+                .is_some_and(|(_, old_handler)| old_handler == handler);
+            if unchanged {
+                continue;
+            }
+            self.dom.remove_listener(dom, *kind)?;
+            self.dom.add_listener(dom, *kind, handler.clone())?;
+        }
+        // ② 新虚拟树里**没有**的事件类型 ⇒ 把旧的那个摘掉。
+        for (kind, _) in &old.handlers {
+            if new.handlers.iter().any(|(new_kind, _)| new_kind == kind) {
+                continue;
+            }
+            self.dom.remove_listener(dom, *kind)?;
+        }
+        Ok(())
     }
 
     // ── `bind:this` 接线 ──────────────────────────────────────────────────
@@ -955,15 +1192,6 @@ impl<D: Dom> Renderer<D> {
             Some(anchor) => self.dom.insert_before(parent, child, Some(anchor)),
         }
     }
-
-    /// 某个节点**之后**的那个兄弟（替换子树时用它当锚点）。
-    fn anchor_after(&self, parent: &D::Node, node: &D::Node) -> Result<Option<D::Node>, DomError> {
-        let children = self.dom.children(parent)?;
-        Ok(children
-            .iter()
-            .position(|child| child == node)
-            .and_then(|index| children.get(index + 1).cloned()))
-    }
 }
 
 /// SVG 命名空间（`createElementNS` 用的那个）。
@@ -1009,47 +1237,31 @@ pub fn svg_namespace(tag: &str) -> Option<&'static str> {
     }
 }
 
-/// 子树里**最后一个**带宿主节点的句柄（分组节点自己没有宿主节点 ⇒ 往里找）。
+/// 一个**块**的**首**个 DOM 节点（空分组块 ⇒ `None`）。
 ///
-/// 用于「替换子树」时定位插入锚点：分组节点的锚点是它最后一个子节点的锚点。
-fn last_dom_node<D: Dom>(node: &MountedNode<D>) -> Option<&D::Node> {
+/// ## 为什么需要「首」而不是「尾」
+///
+/// 块 i 的后继是块 i+1 ⇒ ⇒ 块 i 的内容必须排在块 i+1 的**第一个** DOM 节点
+/// **之前** ⇒ ⇒ 块锚点 = 后继块的**首**节点。
+fn first_dom_node<D: Dom>(node: &MountedNode<D>) -> Option<&D::Node> {
     match node {
         MountedNode::Element(element) => Some(&element.dom),
         MountedNode::Text(text) => Some(&text.dom),
-        MountedNode::Fragment(fragment) => fragment.children.last().and_then(last_dom_node),
+        MountedNode::Fragment(fragment) => fragment.children.first().and_then(first_dom_node),
     }
 }
 
-/// 把一组**已挂载**子节点里的 **Fragment 就地摊平**（Fragment 无宿主节点
-/// ⇒ 它在 DOM 上就是它 children 的一组兄弟）。
+/// 一个**块**的**全部** DOM 节点（按文档顺序；分组块摊平后的那一段）。
 ///
-/// ⇒ 摊平后序列里的每一项都**有**宿主节点 ⇒
-/// ⇒ 差分的配对单位与 DOM 的实际结构**一致**。
-fn flatten_mounted<D: Dom>(nodes: &[MountedNode<D>]) -> Vec<MountedNode<D>> {
-    let mut out = Vec::with_capacity(nodes.len());
-    for node in nodes {
-        match node {
-            MountedNode::Fragment(fragment) => {
-                out.extend(flatten_mounted(&fragment.children));
-            }
-            other => out.push(other.clone()),
+/// 用于「整块移动」：分组块没有**单个** DOM 节点 ⇒ ⇒ 逐个插到锚点之前。
+fn dom_nodes_of<D: Dom>(node: &MountedNode<D>) -> Vec<D::Node> {
+    match node {
+        MountedNode::Element(element) => vec![element.dom.clone()],
+        MountedNode::Text(text) => vec![text.dom.clone()],
+        MountedNode::Fragment(fragment) => {
+            fragment.children.iter().flat_map(dom_nodes_of).collect()
         }
     }
-    out
-}
-
-/// 把一组**虚拟**子节点里的 **Fragment 就地摊平**（与 [`flatten_mounted`] 同口径）。
-fn flatten_vnode(nodes: &[VNode]) -> Vec<VNode> {
-    let mut out = Vec::with_capacity(nodes.len());
-    for node in nodes {
-        match node {
-            VNode::Fragment(children) => {
-                out.extend(flatten_vnode(children));
-            }
-            other => out.push(other.clone()),
-        }
-    }
-    out
 }
 
 /// 读元素的 class token 集合（保序）。
@@ -2351,6 +2563,749 @@ mod tests {
             !ops.iter()
                 .any(|op| matches!(op.op, DomOp::SetProperty { .. })),
             "布尔 property **不得**走字符串通道"
+        );
+    }
+
+    // ── 块锚点：条件块的出现 / 消失**不许**让兄弟错位（2026-10-25 修） ──────
+
+    /// ⭐ **条件块从「空」变「非空」⇒ 内容留在原位**（2026-10-25 修）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// `div > [Fragment([Fragment([])]), footer]`，条件由假变真 ⇒
+    /// ⇒ 修前 `before: [footer]` ⇒ `after: [footer, span("条件")]` ⇒
+    /// ⇒ **条件卡出现在容器底部**（而不是它自己的位置）。
+    ///
+    /// ## 根因
+    ///
+    /// 修前「新增的子项」一律走 `mount_node(child, parent, None)` ⇒
+    /// ⇒ **锚点 = None ⇒ 追加到父节点末尾** ⇒ 位置丢失。
+    ///
+    /// ## 判据
+    ///
+    /// 条件块的内容必须落在 **footer 之前**（块锚点 = 该块后继块的首节点）。
+    #[test]
+    fn a_conditional_block_that_appears_lands_in_its_own_slot() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let before = VNode::element("div")
+            .child(VNode::fragment(vec![VNode::fragment(Vec::new())]))
+            .child(VNode::element("footer").build())
+            .build();
+        renderer.mount(before).expect("挂载必须成功");
+        let div = child_order(&renderer)[0];
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        assert_eq!(children.len(), 1, "条件块为空 ⇒ 容器里只有 footer");
+        let footer = children[0];
+
+        // 条件由假变真。
+        let after = VNode::element("div")
+            .child(VNode::fragment(vec![VNode::fragment(vec![
+                VNode::element("span").child(VNode::text("条件")).build(),
+            ])]))
+            .child(VNode::element("footer").build())
+            .build();
+        renderer.patch(after).expect("打补丁必须成功");
+
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        assert_eq!(children.len(), 2, "条件块出现了 ⇒ 容器里两个节点");
+        assert_eq!(
+            renderer.dom().tag(children[0]),
+            Some(String::from("span")),
+            "条件块必须落在 footer **之前**（位置不许丢）"
+        );
+        assert_eq!(children[1], footer, "footer 必须还在原位");
+        assert_eq!(renderer.dom().text_content(children[0]), "条件");
+    }
+
+    /// ⭐ **块锚点：条件块在兄弟**之间**出现时，位置也不丢**。
+    ///
+    /// 判据：条件块的内容必须落在它的**后继兄弟**之前（而不是父节点末尾）。
+    #[test]
+    fn a_conditional_block_between_two_siblings_stays_between_them() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let before = VNode::element("div")
+            .child(VNode::element("header").build())
+            .child(VNode::fragment(vec![VNode::fragment(Vec::new())]))
+            .child(VNode::element("footer").build())
+            .build();
+        renderer.mount(before).expect("挂载必须成功");
+        let div = child_order(&renderer)[0];
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        assert_eq!(children.len(), 2);
+        let header = children[0];
+        let footer = children[1];
+
+        let after = VNode::element("div")
+            .child(VNode::element("header").build())
+            .child(VNode::fragment(vec![VNode::fragment(vec![
+                VNode::element("span").attr("id", "cond").build(),
+            ])]))
+            .child(VNode::element("footer").build())
+            .build();
+        renderer.patch(after).expect("打补丁必须成功");
+
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        assert_eq!(children.len(), 3);
+        assert_eq!(children[0], header, "header 不动");
+        assert_eq!(children[2], footer, "footer 不动");
+        assert_eq!(
+            renderer.dom().attribute(children[1], "id"),
+            Some(String::from("cond")),
+            "条件块必须落在 header 与 footer **之间**"
+        );
+    }
+
+    /// ⭐ **嵌套条件块不许顶替兄弟的身份**（2026-10-25 修）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// `div > Fragment[span(x), Fragment([]), span(z)]`，条件由假变真 ⇒
+    /// ⇒ 修前 `before: [id2="x", id4="z"]` ⇒ `after: [id2="x", id4="y", id6="z"]`
+    /// ⇒ ⇒ **id4 那颗节点从「z」变成了「y」**（身份转移），「z」被重建为 id6。
+    ///
+    /// ## 根因
+    ///
+    /// 修前摊平**递归**摊平所有嵌套 Fragment ⇒ 嵌套块的身份被融进兄弟序列。
+    ///
+    /// ## 判据
+    ///
+    /// 「z」那颗节点**必须还是同一颗**（身份不变 ⇒ 输入值 / 焦点 / 过渡不错位）。
+    #[test]
+    fn a_nested_conditional_block_does_not_take_over_its_sibling_identity() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let before = VNode::element("div")
+            .child(VNode::fragment(vec![
+                VNode::element("span").attr("id", "x").build(),
+                VNode::fragment(Vec::new()),
+                VNode::element("span").attr("id", "z").build(),
+            ]))
+            .build();
+        renderer.mount(before).expect("挂载必须成功");
+        let div = child_order(&renderer)[0];
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        assert_eq!(children.len(), 2, "条件块为空 ⇒ 两个节点");
+        let x = children[0];
+        let z = children[1];
+        assert_eq!(renderer.dom().attribute(x, "id"), Some(String::from("x")));
+        assert_eq!(renderer.dom().attribute(z, "id"), Some(String::from("z")));
+
+        // 条件由假变真。
+        let after = VNode::element("div")
+            .child(VNode::fragment(vec![
+                VNode::element("span").attr("id", "x").build(),
+                VNode::fragment(vec![VNode::element("span").attr("id", "y").build()]),
+                VNode::element("span").attr("id", "z").build(),
+            ]))
+            .build();
+        renderer.patch(after).expect("打补丁必须成功");
+
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        assert_eq!(children.len(), 3);
+        assert_eq!(children[0], x, "x 必须还是同一颗节点");
+        assert_eq!(
+            children[2], z,
+            "z 必须还是同一颗节点（**不许**被条件块顶替 ⇒ 身份转移会让输入值 / 焦点跟错逻辑项）"
+        );
+        assert_eq!(
+            renderer.dom().attribute(children[1], "id"),
+            Some(String::from("y"))
+        );
+    }
+
+    /// **嵌套条件块变空** ⇒ 它的内容被摘掉，兄弟身份**不变**。
+    #[test]
+    fn a_nested_conditional_block_that_empties_leaves_its_siblings_alone() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let before = VNode::element("div")
+            .child(VNode::fragment(vec![
+                VNode::element("span").attr("id", "x").build(),
+                VNode::fragment(vec![VNode::element("span").attr("id", "y").build()]),
+                VNode::element("span").attr("id", "z").build(),
+            ]))
+            .build();
+        renderer.mount(before).expect("挂载必须成功");
+        let div = child_order(&renderer)[0];
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        let x = children[0];
+        let z = children[2];
+
+        let after = VNode::element("div")
+            .child(VNode::fragment(vec![
+                VNode::element("span").attr("id", "x").build(),
+                VNode::fragment(Vec::new()),
+                VNode::element("span").attr("id", "z").build(),
+            ]))
+            .build();
+        renderer.patch(after).expect("打补丁必须成功");
+
+        let children = renderer.dom().children(&div).expect("读子节点必须成功");
+        assert_eq!(children.len(), 2, "条件块空了 ⇒ 它的内容被摘掉");
+        assert_eq!(children[0], x, "x 身份不变");
+        assert_eq!(children[1], z, "z 身份不变");
+    }
+
+    // ── 失败之后：**显式劈叉**，不许拿过期旧树继续 diff（2026-10-25 修） ─────
+
+    /// 一个「写 property 时故意失败」的内存后端（制造**半途失败**的 patch）。
+    #[derive(Debug)]
+    struct FragileDom {
+        inner: InMemoryDom,
+        /// 写 property 时是否失败。
+        fail_property: Cell<bool>,
+        /// 移除 property 时是否**不支持**（制造「后端做不了」的降级）。
+        fail_remove_property: Cell<bool>,
+    }
+
+    impl FragileDom {
+        fn new() -> Self {
+            Self {
+                inner: InMemoryDom::new(),
+                fail_property: Cell::new(false),
+                fail_remove_property: Cell::new(false),
+            }
+        }
+
+        /// 让「写 property」开始（或停止）失败。
+        fn set_fail_property(&self, flag: bool) {
+            self.fail_property.set(flag);
+        }
+
+        /// 让「移除 property」开始（或停止）报「后端不支持」。
+        fn set_fail_remove_property(&self, flag: bool) {
+            self.fail_remove_property.set(flag);
+        }
+    }
+
+    impl Dom for FragileDom {
+        type Node = InMemoryNodeId;
+
+        fn create_element(&self, tag: &str) -> Result<Self::Node, DomError> {
+            self.inner.create_element(tag)
+        }
+
+        fn create_text(&self, data: &str) -> Result<Self::Node, DomError> {
+            self.inner.create_text(data)
+        }
+
+        fn set_attribute(
+            &self,
+            node: &Self::Node,
+            name: &str,
+            value: &str,
+        ) -> Result<(), DomError> {
+            self.inner.set_attribute(node, name, value)
+        }
+
+        fn remove_attribute(&self, node: &Self::Node, name: &str) -> Result<(), DomError> {
+            self.inner.remove_attribute(node, name)
+        }
+
+        fn set_class_tokens(
+            &self,
+            node: &Self::Node,
+            added: &[String],
+            removed: &[String],
+        ) -> Result<(), DomError> {
+            self.inner.set_class_tokens(node, added, removed)
+        }
+
+        fn set_property(&self, node: &Self::Node, name: &str, value: &str) -> Result<(), DomError> {
+            if self.fail_property.get() {
+                return Err(DomError::Unsupported(String::from(
+                    "测试替身：写 property 失败",
+                )));
+            }
+            self.inner.set_property(node, name, value)
+        }
+
+        fn set_property_bool(
+            &self,
+            node: &Self::Node,
+            name: &str,
+            value: bool,
+        ) -> Result<(), DomError> {
+            if self.fail_property.get() {
+                return Err(DomError::Unsupported(String::from(
+                    "测试替身：写 property 失败",
+                )));
+            }
+            self.inner.set_property_bool(node, name, value)
+        }
+
+        fn get_property(&self, node: &Self::Node, name: &str) -> Result<String, DomError> {
+            self.inner.get_property(node, name)
+        }
+
+        fn remove_property(&self, node: &Self::Node, name: &str) -> Result<(), DomError> {
+            if self.fail_remove_property.get() {
+                return Err(DomError::Unsupported(String::from(
+                    "测试替身：后端不支持移除 property",
+                )));
+            }
+            self.inner.remove_property(node, name)
+        }
+
+        fn set_text(&self, node: &Self::Node, data: &str) -> Result<(), DomError> {
+            self.inner.set_text(node, data)
+        }
+
+        fn append_child(&self, parent: &Self::Node, child: &Self::Node) -> Result<(), DomError> {
+            self.inner.append_child(parent, child)
+        }
+
+        fn insert_before(
+            &self,
+            parent: &Self::Node,
+            child: &Self::Node,
+            anchor: Option<&Self::Node>,
+        ) -> Result<(), DomError> {
+            self.inner.insert_before(parent, child, anchor)
+        }
+
+        fn remove_child(&self, parent: &Self::Node, child: &Self::Node) -> Result<(), DomError> {
+            self.inner.remove_child(parent, child)
+        }
+
+        fn children(&self, parent: &Self::Node) -> Result<Vec<Self::Node>, DomError> {
+            self.inner.children(parent)
+        }
+
+        fn add_listener(
+            &self,
+            node: &Self::Node,
+            kind: crate::dom::EventKind,
+            handler: crate::events::ElementHandler,
+        ) -> Result<(), DomError> {
+            self.inner.add_listener(node, kind, handler)
+        }
+
+        fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError> {
+            self.inner.remove_listeners(node)
+        }
+
+        fn remove_listener(
+            &self,
+            node: &Self::Node,
+            kind: crate::dom::EventKind,
+        ) -> Result<(), DomError> {
+            self.inner.remove_listener(node, kind)
+        }
+
+        fn target_path(&self, node: &Self::Node) -> Result<Vec<usize>, DomError> {
+            self.inner.target_path(node)
+        }
+    }
+
+    /// ⭐ **一次失败的 patch 之后，渲染器必须**显式劈叉**（不许悄悄吞掉）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// 修前：出错 ⇒ `self.tree = Some(old)`（**过期**的旧树）⇒ DOM 已改了一半
+    /// ⇒ ⇒ 之后每次 patch 都拿过期旧树做基准 ⇒ ⇒ 可能每帧都失败 ⇒
+    /// ⇒ **界面永久停在旧状态，且无任何日志**。
+    ///
+    /// ## 判据
+    ///
+    /// ① 失败**照样返回 `Err`**（不吞）；
+    /// ② 失败之后 [`Renderer::is_desynced`] 为 `true`（宿主能查、能 log）；
+    /// ③ [`Renderer::last_error`] 有内容（宿主能决定重建）；
+    /// ④ **下一次** patch 走**整树重建** ⇒ DOM 与新树一致 ⇒ 界面恢复。
+    #[test]
+    fn a_failed_patch_marks_the_renderer_desynced_and_the_next_patch_rebuilds() {
+        let dom = FragileDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let mut renderer = Renderer::new(dom, root);
+        renderer
+            .mount(VNode::element("div").prop("value", "旧").build())
+            .expect("挂载必须成功");
+        // 让下一次 patch 在写 property 时失败（此时属性已经改了一半）。
+        renderer.dom().set_fail_property(true);
+
+        let err = renderer
+            .patch(VNode::element("div").prop("value", "新").build())
+            .expect_err("写 property 失败必须显式报错");
+        assert!(matches!(err, DomError::Unsupported(_)), "实测：{err:?}");
+        assert!(
+            renderer.is_desynced(),
+            "失败之后必须标记劈叉（宿主要能 log、要能决定重建）"
+        );
+        assert!(
+            renderer.last_error().is_some(),
+            "失败原因必须能被宿主读到（不许悄悄吞掉）"
+        );
+
+        // 后端恢复正常 ⇒ 下一次 patch 必须**整树重建**（不许拿过期旧树差分）。
+        renderer.dom().set_fail_property(false);
+        renderer
+            .patch(VNode::element("section").child(VNode::text("重建")).build())
+            .expect("重建后的 patch 必须成功（界面不许永久冻结）");
+        assert!(!renderer.is_desynced(), "重建成功 ⇒ 不再劈叉");
+        let children = renderer.dom().children(&root).expect("读子节点必须成功");
+        assert_eq!(
+            children.len(),
+            1,
+            "重建后容器里**只**剩新树（不许有孤儿节点）"
+        );
+        assert_eq!(
+            renderer.dom().inner.tag(children[0]),
+            Some(String::from("section"))
+        );
+    }
+
+    /// **失败不许被吞掉**：错误必须**原样**回到调用方。
+    #[test]
+    fn a_failed_patch_returns_the_error_to_the_caller() {
+        let dom = FragileDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let mut renderer = Renderer::new(dom, root);
+        renderer
+            .mount(VNode::element("div").prop("value", "旧").build())
+            .expect("挂载必须成功");
+        renderer.dom().set_fail_property(true);
+
+        let err = renderer
+            .patch(VNode::element("div").prop("value", "新").build())
+            .expect_err("失败必须回到调用方");
+        assert!(matches!(err, DomError::Unsupported(_)), "实测：{err:?}");
+        // 错误**可取走**（宿主写日志用）。
+        assert!(renderer.take_last_error().is_some());
+    }
+
+    /// **差分不可判定**（重复 key）⇒ DOM 一个字节都没动 ⇒ **不算**劈叉。
+    ///
+    /// （判据落在「错误发生在触碰 DOM 之前」⇒ 内存树仍可信。）
+    #[test]
+    fn an_undecidable_diff_does_not_desync_the_renderer() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("ul").child(keyed_item("a", "1")).build())
+            .expect("挂载必须成功");
+        let err = renderer
+            .patch(
+                VNode::element("ul")
+                    .child(keyed_item("x", "1"))
+                    .child(keyed_item("x", "2"))
+                    .build(),
+            )
+            .expect_err("重复 key 必须显式报错");
+        assert!(matches!(err, DomError::Undecidable(_)), "实测：{err:?}");
+        assert!(
+            !renderer.is_desynced(),
+            "差分不可判定发生在触碰 DOM 之前 ⇒ 内存树仍可信 ⇒ 不算劈叉"
+        );
+    }
+
+    // ── property 消失：**不许中止整帧**（2026-10-25 修） ─────────────────────
+
+    /// ⭐ **property 从虚拟树上消失 ⇒ 真正移除，不中止整帧**（2026-10-25 修）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// 同一个元素这帧有 `prop("value", …)`、下帧没有 ⇒
+    /// ⇒ 修前 `Err(Unsupported("移除 property `value` 未支持"))` ⇒ **整帧中止**。
+    ///
+    /// ## 判据
+    ///
+    /// ① patch **成功**；
+    /// ② 移除之后读回来的值是**默认值**（空串）⇒ 与浏览器一致；
+    /// ③ 操作序列里有 `RemoveProperty`（**真的**移除了，不是悄悄跳过）。
+    #[test]
+    fn a_property_that_disappears_is_removed_instead_of_aborting_the_frame() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("input").prop("value", "旧").build())
+            .expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+        renderer.dom().clear_ops();
+
+        renderer
+            .patch(VNode::element("input").build())
+            .expect("property 消失**不许**中止整帧");
+
+        assert_eq!(
+            renderer
+                .dom()
+                .get_property(&node, "value")
+                .expect("读 property 必须成功"),
+            String::new(),
+            "移除之后回到默认值（与浏览器一致）"
+        );
+        assert!(
+            renderer
+                .dom()
+                .ops()
+                .iter()
+                .any(|recorded| matches!(recorded.op, DomOp::RemoveProperty { .. })),
+            "必须真的移除（不是悄悄跳过）"
+        );
+    }
+
+    /// **后端做不了移除** ⇒ **降级**（写回默认值 + 记警告），**不许**中止整帧。
+    #[test]
+    fn a_backend_without_property_removal_degrades_instead_of_aborting() {
+        let dom = FragileDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let mut renderer = Renderer::new(dom, root);
+        renderer
+            .mount(VNode::element("input").prop("value", "旧").build())
+            .expect("挂载必须成功");
+        let node = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        renderer.dom().set_fail_remove_property(true);
+
+        renderer
+            .patch(VNode::element("input").build())
+            .expect("后端做不了移除 ⇒ 降级，**不许**中止整帧");
+        assert_eq!(
+            renderer
+                .dom()
+                .get_property(&node, "value")
+                .expect("读 property 必须成功"),
+            String::new(),
+            "降级 ⇒ 写回默认值"
+        );
+        let warnings = renderer.warnings().to_vec();
+        assert!(
+            !warnings.is_empty(),
+            "降级必须**看得见**（记警告，宿主才道）：{warnings:?}"
+        );
+    }
+
+    // ── 事件处理器：**按 kind 增量替换**（2026-10-25 修） ───────────────────
+
+    /// ⭐ **换掉一种事件处理器，不许牵连另一种**（2026-10-25 修）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// 修前：`patch_handlers` 一律 `remove_listeners`（摘**全部**）⇒
+    /// ⇒ 再全量重挂 ⇒ ⇒ 每次重渲染、每个元素都**全量拆装**（真实 DOM 侧 O(N²)）。
+    ///
+    /// ## 判据
+    ///
+    /// ① 只换 `click` ⇒ 操作序列里**只有** `click` 的摘挂；
+    /// ② **不许**出现 `RemoveListeners`（全量摘挂的痕迹）；
+    /// ③ `keydown` 的处理器**仍然**能触发（没被误伤）。
+    #[test]
+    fn replacing_one_event_kind_leaves_the_other_kinds_alone() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let clicks = Rc::new(Cell::new(0u32));
+        let keys = Rc::new(Cell::new(0u32));
+        let click_counter = clicks.clone();
+        let key_counter = keys.clone();
+        // `keydown` 的处理器**两次都是同一个闭包实例**（处理器按指针身份比较）
+        // ⇒ ⇒ 它**没变** ⇒ ⇒ 不该被重挂。
+        let key_handler = crate::events::ElementHandler::new(move |_event| {
+            key_counter.set(key_counter.get() + 1);
+        });
+        renderer
+            .mount(
+                VNode::element("div")
+                    .handler(
+                        crate::dom::EventKind::Click,
+                        crate::events::ElementHandler::new(move |_event| {
+                            click_counter.set(click_counter.get() + 1);
+                        }),
+                    )
+                    .handler(crate::dom::EventKind::KeyDown, key_handler.clone())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+        renderer.dom().clear_ops();
+
+        // 只换 `click` 的处理器。
+        let second = Rc::new(Cell::new(0u32));
+        let second_counter = second.clone();
+        renderer
+            .patch(
+                VNode::element("div")
+                    .handler(
+                        crate::dom::EventKind::Click,
+                        crate::events::ElementHandler::new(move |_event| {
+                            second_counter.set(second_counter.get() + 1);
+                        }),
+                    )
+                    .handler(crate::dom::EventKind::KeyDown, key_handler.clone())
+                    .build(),
+            )
+            .expect("打补丁必须成功");
+
+        let ops = renderer.dom().ops();
+        assert!(
+            !ops.iter()
+                .any(|recorded| matches!(recorded.op, DomOp::RemoveListeners)),
+            "不许全量摘挂（那是 O(N²) 的根源）"
+        );
+        assert_eq!(
+            ops.iter()
+                .filter(|recorded| matches!(
+                    recorded.op,
+                    DomOp::RemoveListener {
+                        kind: crate::dom::EventKind::Click
+                    }
+                ))
+                .count(),
+            1,
+            "只摘 `click` 那个"
+        );
+        assert_eq!(
+            ops.iter()
+                .filter(|recorded| matches!(
+                    recorded.op,
+                    DomOp::RemoveListener {
+                        kind: crate::dom::EventKind::KeyDown
+                    }
+                ))
+                .count(),
+            0,
+            "`keydown` **不许**被牵连"
+        );
+        // `keydown` 处理器仍然活着（没被误伤）。
+        assert_eq!(
+            renderer
+                .dom()
+                .dispatch(node, crate::dom::EventKind::KeyDown),
+            1
+        );
+    }
+
+    /// **该 kind 从有变无** ⇒ 旧的那个必须被摘掉。
+    #[test]
+    fn a_handler_kind_that_disappears_is_unhooked() {
+        let (mut renderer, _root) = renderer_with_dom();
+        let counter = Rc::new(Cell::new(0u32));
+        let handler_counter = counter.clone();
+        renderer
+            .mount(
+                VNode::element("button")
+                    .handler(
+                        crate::dom::EventKind::Click,
+                        crate::events::ElementHandler::new(move |_event| {
+                            handler_counter.set(handler_counter.get() + 1);
+                        }),
+                    )
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+        assert_eq!(
+            renderer.dom().dispatch(node, crate::dom::EventKind::Click),
+            1
+        );
+
+        renderer
+            .patch(VNode::element("button").build())
+            .expect("打补丁必须成功");
+        assert_eq!(
+            renderer.dom().dispatch(node, crate::dom::EventKind::Click),
+            0,
+            "事件类型没了 ⇒ 旧处理器必须被摘掉"
+        );
+    }
+
+    // ── 与浏览器**同语义**：class / property（2026-10-25 修） ──────────────
+
+    /// ⭐ **class token 全删之后留 `class=""`**（与浏览器一致）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// 内存后端把 class 属性**整个删掉** ⇒ 浏览器侧 `classList` 删完是
+    /// `class=""` ⇒ ⇒ 两侧属性对照**差一项** ⇒ native 绿 ≠ 浏览器对。
+    #[test]
+    fn removing_every_class_token_leaves_an_empty_class_attribute() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("div").class("ap-a").build())
+            .expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+
+        renderer
+            .patch(VNode::element("div").build())
+            .expect("打补丁必须成功");
+        assert_eq!(
+            renderer.dom().attribute(node, "class"),
+            Some(String::new()),
+            "与浏览器一致：留 `class=\"\"`（属性**仍在**）"
+        );
+    }
+
+    /// ⭐ **用户敲进去的值不许被覆盖**（实时语义下的跳过条件）。
+    ///
+    /// ## 为什么这条重要
+    ///
+    /// 后端读 property 是**实时**语义（浏览器读的是真实的 `input.value`
+    /// ⇒ 可能是**用户刚敲进去**的值）⇒ ⇒ 若把「实时值」当「上一帧的目标值」
+    /// 来比 ⇒ ⇒ 用户刚敲的字符会被引擎**覆盖回去**（幽灵输入的另一半）。
+    ///
+    /// ## 判据
+    ///
+    /// 目标值**没变** ⇒ 引擎**不许**写 property（用户的输入必须活着）。
+    #[test]
+    fn a_user_typed_value_is_not_overwritten_when_the_target_did_not_change() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("input").prop("value", "a").build())
+            .expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+        // 模拟用户敲入（宿主直接写后端 ⇒ 引擎**没有**写它）。
+        renderer
+            .dom()
+            .set_property(&node, "value", "ab")
+            .expect("模拟用户输入必须成功");
+        renderer.dom().clear_ops();
+
+        renderer
+            .patch(VNode::element("input").prop("value", "a").build())
+            .expect("重渲染必须成功");
+
+        assert!(
+            !renderer
+                .dom()
+                .ops()
+                .iter()
+                .any(|recorded| matches!(recorded.op, DomOp::SetProperty { .. })),
+            "目标值没变 ⇒ **不许**写 property（否则覆盖用户输入）"
+        );
+        assert_eq!(
+            renderer
+                .dom()
+                .get_property(&node, "value")
+                .expect("读 property 必须成功"),
+            String::from("ab"),
+            "用户敲进去的值必须活着"
+        );
+    }
+
+    /// **目标值变了** ⇒ 引擎**必须**写（受控输入的语义：状态说了算）。
+    #[test]
+    fn a_changed_target_value_is_written_back() {
+        let (mut renderer, _root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("input").prop("value", "a").build())
+            .expect("挂载必须成功");
+        let node = child_order(&renderer)[0];
+        renderer
+            .dom()
+            .set_property(&node, "value", "ab")
+            .expect("模拟用户输入必须成功");
+        renderer.dom().clear_ops();
+
+        renderer
+            .patch(VNode::element("input").prop("value", "c").build())
+            .expect("重渲染必须成功");
+        assert!(
+            renderer
+                .dom()
+                .ops()
+                .iter()
+                .any(|recorded| matches!(recorded.op, DomOp::SetProperty { .. })),
+            "目标变了 ⇒ 必须写（受控输入语义）"
+        );
+        assert_eq!(
+            renderer
+                .dom()
+                .get_property(&node, "value")
+                .expect("读 property 必须成功"),
+            String::from("c")
         );
     }
 }

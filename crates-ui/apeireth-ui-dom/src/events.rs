@@ -57,7 +57,39 @@ impl PartialEq for ElementHandler {
 
 impl Eq for ElementHandler {}
 
-/// 处理器编号（注销用）。
+/// 目标在「**可见**子节点」序列里的下标（不可见的节点**跳过**）。
+///
+/// ## 为什么要有这个函数（2026-10-25 修）
+///
+/// 浏览器的子节点里有**注释节点** ⇒ 若把它们算进下标 ⇒ ⇒ 内存后端
+/// （只有元素与文本）的下标空间与浏览器**不一致** ⇒ ⇒ 两端的
+/// [`DomEvent::target_path`] **不可比** ⇒ ⇒ 委托路由（按路径定位）会错。
+///
+/// ⇒ ⇒ 统一：**只数元素与文本**（注释节点跳过）。
+///
+/// ## 参数
+///
+/// - `visible[i]` = 第 i 个**原始**子节点是否可见（元素 / 文本）；
+/// - `target` = 目标是第几个**原始**子节点。
+///
+/// 返回目标在**可见**序列里的下标。
+///
+/// ⚠️ 若目标**本身不可见**（理论上不会发生：事件目标总是元素 / 文本）⇒
+/// ⇒ 返回它**前面**可见子节点的个数（= 它「本该在」的下标）。
+pub fn visible_child_index(visible: &[bool], target: usize) -> usize {
+    let mut index = 0usize;
+    for (position, is_visible) in visible.iter().enumerate() {
+        if position == target {
+            return index;
+        }
+        if *is_visible {
+            index += 1;
+        }
+    }
+    index
+}
+
+/// 事件处理器编号（注销用）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HandlerId(pub usize);
 
@@ -66,6 +98,18 @@ pub struct HandlerId(pub usize);
 pub struct DomEvent {
     kind: EventKind,
     target_path: Vec<usize>,
+    /// 失焦事件的**落点**路径（`relatedTarget`；`None` = 没有落点 / 不是失焦）。
+    ///
+    /// ## 为什么需要（2026-10-25 加）
+    ///
+    /// `focusout` 在浏览器里**也会**在「焦点从 A 移到 B（同一个组件内部）」
+    /// 时冒泡 ⇒ ⇒ 只看 `focusout` **分不清**「真失焦」与「内部挪焦点」⇒
+    /// ⇒ 表单的「离开字段 ⇒ 提交草稿」逻辑会在**内部挪焦点**时误触发。
+    ///
+    /// ⇒ 浏览器的 `FocusEvent.relatedTarget` 就是「焦点落到哪去了」⇒
+    /// ⇒ 引擎把它折成**路径**（与 `target_path` 同一口径）⇒
+    /// ⇒ 处理器可以判断「落点是不是还在自己内部」。
+    related_target_path: Option<Vec<usize>>,
     key: Option<String>,
     target_value: Option<String>,
     ctrl_key: bool,
@@ -81,6 +125,7 @@ impl DomEvent {
         Self {
             kind,
             target_path,
+            related_target_path: None,
             key: None,
             target_value: None,
             ctrl_key: false,
@@ -104,6 +149,15 @@ impl DomEvent {
     /// 目标深度（根 = 0）。
     pub fn target_depth(&self) -> usize {
         self.target_path.len().saturating_sub(1)
+    }
+
+    /// 失焦事件的**落点**路径（`relatedTarget`）。
+    ///
+    /// `None` = 没有落点（不是失焦事件 / 焦点落到了**文档之外**）。
+    ///
+    /// 判「真失焦」的口径：落点**不在**本元素内部 ⇒ 真失焦。
+    pub fn related_target_path(&self) -> Option<&[usize]> {
+        self.related_target_path.as_deref()
     }
 
     /// 键盘事件的按键名。
@@ -160,6 +214,12 @@ impl DomEvent {
     /// 带上目标取值（构造器）。
     pub fn with_target_value(mut self, value: impl Into<String>) -> Self {
         self.target_value = Some(value.into());
+        self
+    }
+
+    /// 带上失焦落点的路径（构造器）。
+    pub fn with_related_target_path(mut self, path: Vec<usize>) -> Self {
+        self.related_target_path = Some(path);
         self
     }
 
@@ -327,5 +387,50 @@ mod tests {
         assert!(event.ctrl_key());
         assert!(!event.shift_key());
         assert_eq!(event.target_depth(), 0);
+    }
+
+    /// **失焦落点**（`relatedTarget`）⇒ 判「真失焦」用。
+    #[test]
+    fn event_carries_the_related_target_path() {
+        let event =
+            DomEvent::new(EventKind::FocusOut, vec![0, 1]).with_related_target_path(vec![0, 2]);
+        assert_eq!(event.related_target_path(), Some(&[0, 2][..]));
+        assert_eq!(event.target_depth(), 1);
+
+        let without = DomEvent::new(EventKind::FocusOut, vec![0]);
+        assert_eq!(
+            without.related_target_path(),
+            None,
+            "没有落点 ⇒ `None`（分不清真失焦 / 内部挪焦点）"
+        );
+    }
+
+    // ── 目标路径：只数**可见**子节点（元素 / 文本） ─────────────────────────
+
+    /// **注释节点跳过** ⇒ 与内存后端同一口径。
+    #[test]
+    fn the_visible_child_index_skips_invisible_children() {
+        // 原始子节点：div（可见）、注释（不可见）、span（可见）。
+        let visible = [true, false, true];
+        assert_eq!(visible_child_index(&visible, 0), 0, "第一个可见子节点");
+        assert_eq!(
+            visible_child_index(&visible, 2),
+            1,
+            "注释**跳过** ⇒ span 的下标是 1（不是 2）"
+        );
+        assert_eq!(
+            visible_child_index(&visible, 1),
+            1,
+            "目标本身不可见 ⇒ 返回它前面可见子节点的个数"
+        );
+    }
+
+    /// **没有注释时**下标与原始下标一致（不误伤）。
+    #[test]
+    fn the_visible_child_index_matches_the_raw_index_without_comments() {
+        let visible = [true, true, true];
+        assert_eq!(visible_child_index(&visible, 0), 0);
+        assert_eq!(visible_child_index(&visible, 1), 1);
+        assert_eq!(visible_child_index(&visible, 2), 2);
     }
 }

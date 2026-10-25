@@ -85,6 +85,14 @@ pub struct KeyedDiff {
     removed: Vec<usize>,
     moved: Vec<(usize, usize)>,
     retained: Vec<usize>,
+    /// 「原地保留」旧下标的**集合**（供 O(1) 判定）。
+    ///
+    /// ## 为什么要有它（2026-10-25 修）
+    ///
+    /// 渲染器逐个判定「这个配对要不要移动」⇒ 若用 `retained().contains(&index)`
+    /// （`Vec` 线性查）⇒ 每个子节点 O(N) ⇒ **整体 O(N²)**。
+    /// ⇒ ⇒ 集合查表 **O(1)** ⇒ 整体 O(N)。
+    retained_set: BTreeSet<usize>,
     inserted: Vec<(usize, VNode)>,
     updated: Vec<(usize, usize)>,
 }
@@ -113,6 +121,18 @@ impl KeyedDiff {
     /// 原地保留的子节点旧下标（升序）—— 构成 LIS。
     pub fn retained(&self) -> &[usize] {
         &self.retained
+    }
+
+    /// 某个旧下标是否**原地保留**（在 LIS 里 ⇒ 不需要移动）。
+    ///
+    /// **O(1)**（集合查表）⇒ 渲染器逐个判定时**不是** O(N²)。
+    pub fn is_retained(&self, old_index: usize) -> bool {
+        self.retained_set.contains(&old_index)
+    }
+
+    /// 某个旧下标是否**需要移动**（不在 LIS 里）。
+    pub fn is_moved(&self, old_index: usize) -> bool {
+        !self.is_retained(old_index)
     }
 
     /// 需要新建的子节点：(新下标, 节点)，按新下标升序。
@@ -246,6 +266,7 @@ fn diff_unkeyed(old: &[VNode], new: &[VNode]) -> KeyedDiff {
         .map(|index| (index, new[index].clone()))
         .collect();
     let retained: Vec<usize> = (0..common).collect();
+    let retained_set: BTreeSet<usize> = retained.iter().copied().collect();
     let moved: Vec<(usize, usize)> = Vec::new();
     let updated: Vec<(usize, usize)> = (0..common)
         .filter(|index| old[*index] != new[*index])
@@ -257,6 +278,7 @@ fn diff_unkeyed(old: &[VNode], new: &[VNode]) -> KeyedDiff {
         removed,
         moved,
         retained,
+        retained_set,
         inserted,
         updated,
     }
@@ -328,7 +350,6 @@ fn diff_by_key(old: &[VNode], new: &[VNode]) -> Result<KeyedDiff, KeyedDiffError
         .map(|position| sequence[*position])
         .collect();
     let retained_set: BTreeSet<usize> = retained.iter().copied().collect();
-
     let mut moved: Vec<(usize, usize)> = Vec::new();
     for (new_index, slot) in matched.iter().enumerate() {
         let Some(old_index) = slot else {
@@ -355,6 +376,7 @@ fn diff_by_key(old: &[VNode], new: &[VNode]) -> Result<KeyedDiff, KeyedDiffError
         removed,
         moved,
         retained,
+        retained_set,
         inserted,
         updated,
     })
@@ -624,6 +646,42 @@ mod tests {
             unkeyed_diff.matched(),
             &[Some(0), Some(1)],
             "unkeyed 按位置复用"
+        );
+    }
+
+    // ── 「是否移动」的判定：**O(1)**（2026-10-25 修） ───────────────────────
+
+    /// ⭐ **`is_retained` 与 `retained()` 逐项一致**（O(1) 判定的正确性）。
+    ///
+    /// ## 为什么要有这条
+    ///
+    /// 渲染器逐个判定「这个配对要不要移动」⇒ 若判定是 O(N)（`Vec` 线性查）
+    /// ⇒ 整个列表差分是 **O(N²)** ⇒ ⇒ 长列表每次重渲染都慢。
+    /// ⇒ ⇒ 改成集合查表（O(1)）⇒ ⇒ 语义必须**逐项相同**（不许漂移）。
+    #[test]
+    fn the_retained_membership_matches_the_retained_list() {
+        let old: Vec<VNode> = ["a", "b", "c", "d", "e"]
+            .iter()
+            .map(|key| keyed(key, key))
+            .collect();
+        let new: Vec<VNode> = ["e", "c", "a", "d", "b"]
+            .iter()
+            .map(|key| keyed(key, key))
+            .collect();
+        let diff = diff_keyed(&old, &new).expect("差分必须成功");
+
+        for index in 0..old.len() {
+            assert_eq!(
+                diff.is_retained(index),
+                diff.retained().contains(&index),
+                "旧下标 {index} 的「原地保留」判定必须一致"
+            );
+            assert_eq!(diff.is_moved(index), !diff.is_retained(index));
+        }
+        assert_eq!(diff.retained_count(), diff.retained().len());
+        assert_eq!(
+            diff.move_count(),
+            diff.matched_count() - diff.retained_count()
         );
     }
 }

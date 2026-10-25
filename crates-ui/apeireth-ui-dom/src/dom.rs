@@ -22,7 +22,10 @@
 //! | `WebDom`（web-sys） | wasm32 only | ✅ 已实现；**未经任何运行时验证**（见 crate 文档头） |
 //! | [`UnavailableDom`] | —— | 🔵 未接线桩：每个操作都报 [`DomError::NotImplemented`] |
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
+
+use crate::listeners::ListenerTable;
 
 /// DOM 事件类型（按仓库实测使用面裁剪，不照抄浏览器 API 全集）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -168,6 +171,33 @@ pub trait Dom: 'static {
     /// 读 property。
     fn get_property(&self, node: &Self::Node, name: &str) -> Result<String, DomError>;
 
+    /// **移除** property（`value` / `checked` 等）。
+    ///
+    /// ## 为什么必须有这一条（2026-10-25 修）
+    ///
+    /// 修前渲染器遇到「property 从虚拟树上消失」只能报 [`DomError::Unsupported`]
+    /// ⇒ ⇒ **整帧中止** ⇒ ⇒ DOM 已经改了一半 ⇒ 界面冻结。
+    ///
+    /// ⇒ 「property 消失」是**正常**的差分结果（条件渲染会让 property 时有时无）
+    /// ⇒ ⇒ 必须有一条**能真正移除**的通道。
+    ///
+    /// ## 语义（后端必须遵守）
+    ///
+    /// 移除之后 [`Dom::get_property`] 读到的必须是该 property 的**默认值**
+    /// （字符串 property ⇒ 空串；布尔 property ⇒ `false`）⇒
+    /// ⇒ 与浏览器的「回落到默认值」一致。
+    ///
+    /// ## 默认实现 = **显式失败**（0 装）
+    ///
+    /// 没实现该通道的后端**不该假装支持** ⇒ 报 [`DomError::Unsupported`] ⇒
+    /// 渲染器据此**降级**（写回默认值 + 记警告），**不中止整帧**。
+    fn remove_property(&self, node: &Self::Node, name: &str) -> Result<(), DomError> {
+        let _ = (node, name);
+        Err(DomError::Unsupported(String::from(
+            "remove_property 该后端未实现（property 无通用删除操作）",
+        )))
+    }
+
     /// 写文本内容（就地改，不重建文本节点，见设计 §5.2.4）。
     fn set_text(&self, node: &Self::Node, data: &str) -> Result<(), DomError>;
 
@@ -206,6 +236,46 @@ pub trait Dom: 'static {
 
     /// 摘掉某节点上的**全部**事件处理器（卸载时必做；差分时重挂前也做）。
     fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError>;
+
+    /// 摘掉某节点上**指定事件类型**的处理器（其余类型的**保留**）。
+    ///
+    /// ## 为什么必须有这一条（2026-10-25 修）
+    ///
+    /// 差分时「换了处理器 ⇒ 重挂」如果走 [`Dom::remove_listeners`]（摘**全部**）
+    /// ⇒ ⇒ 一个元素上挂多个事件类型时（例：标题同时挂 `click` 与 `keydown`）
+    /// ⇒ ⇒ 摘 `click` 会把 `keydown` 一起带走 ⇒ ⇒ **先挂的处理器静默失效**。
+    ///
+    /// ⇒ ⇒ 必须有**按 kind** 的增量摘挂。
+    ///
+    /// ## 默认实现 = 摘**全部**（⚠️ 会误伤其它 kind）
+    ///
+    /// 没实现按 kind 摘挂的后端**会**误伤同元素的其它事件类型 ⇒
+    /// ⇒ **后端应当覆写**本方法（内存后端与真实后端都已覆写）。
+    fn remove_listener(&self, node: &Self::Node, kind: EventKind) -> Result<(), DomError> {
+        let _ = kind;
+        self.remove_listeners(node)
+    }
+
+    /// 目标节点在树里的**子节点下标路径**（从根到目标；空 = 目标就是根）。
+    ///
+    /// ## 口径（两个后端必须一致 ⇒ 事件负载才可比）
+    ///
+    /// - 只数**元素与文本**子节点（注释节点**跳过**）⇒ 与 [`Dom::children`]
+    ///   的口径一致 ⇒ 下标空间两侧相同；
+    /// - 从**最顶层的祖先**算起（浏览器侧 = 文档根；内存侧 = 树的根）。
+    ///
+    /// ## 为什么要有这一条
+    ///
+    /// 事件负载里的 `target_path` 是**委托路由**的依据 ⇒ 两个后端算出来的
+    /// 路径必须**逐项可比** ⇒ ⇒ 口径必须写在 trait 上（而不是各后端各写一套）。
+    ///
+    /// 默认实现 = **显式失败**（0 装）：后端算不出来就报不支持，不许瞎编。
+    fn target_path(&self, node: &Self::Node) -> Result<Vec<usize>, DomError> {
+        let _ = node;
+        Err(DomError::Unsupported(String::from(
+            "target_path 该后端未实现（事件路径不可判定）",
+        )))
+    }
 }
 
 /// 内存 DOM 的节点句柄（编号）。
@@ -224,14 +294,37 @@ enum InMemoryNodeKind {
 struct InMemoryNode {
     kind: InMemoryNodeKind,
     attrs: Vec<(String, String)>,
-    props: Vec<(String, String)>,
+    props: Vec<(String, MemoryProp)>,
     children: Vec<InMemoryNodeId>,
     /// 当前父节点（`None` = 尚未挂到任何树上）。
     parent: Option<InMemoryNodeId>,
-    /// 事件处理器（挂在**本元素**上；冒泡由 [`InMemoryDom::dispatch`] 模拟）。
-    listeners: Vec<(EventKind, crate::events::ElementHandler)>,
     /// 是否已被从树上摘除（摘除后禁止再写入 —— 设计文档 §5.5.2 规则 T6）。
     detached: bool,
+}
+
+/// 内存后端里的一个 property 值。
+///
+/// ## 为什么带**类型**
+///
+/// 布尔 property 的**默认值**是 `false`（不是空串）⇒ ⇒ 移除 property 时
+/// 要写回**对应类型**的默认值 ⇒ ⇒ 必须记得它当初是**布尔**还是**字符串**。
+#[derive(Debug, Clone)]
+struct MemoryProp {
+    /// 当前值（字符串形式）。
+    value: String,
+    /// 是否是**布尔** property（`set_property_bool` 写的那些）。
+    is_bool: bool,
+}
+
+impl MemoryProp {
+    /// 该 property 的**默认值**（浏览器语义：没有该属性时的取值）。
+    fn default_value(is_bool: bool) -> String {
+        if is_bool {
+            String::from("false")
+        } else {
+            String::new()
+        }
+    }
 }
 
 /// 内存 DOM 记录的一次操作。
@@ -289,6 +382,11 @@ pub enum DomOp {
         /// 新文本。
         data: String,
     },
+    /// **移除** property。
+    RemoveProperty {
+        /// property 名。
+        name: String,
+    },
     /// 增删 class token（token 级差分）。
     SetClassTokens {
         /// 要加的 token。
@@ -318,6 +416,11 @@ pub enum DomOp {
         /// 事件类型。
         kind: EventKind,
     },
+    /// 摘掉某节点上**指定事件类型**的处理器（其余类型保留 ⇒ 增量替换）。
+    RemoveListener {
+        /// 事件类型。
+        kind: EventKind,
+    },
     /// 摘掉某节点上的全部事件处理器。
     RemoveListeners,
 }
@@ -340,10 +443,39 @@ pub struct RecordedOp {
 ///
 /// 后端**始终**记录自己执行过的操作（[`InMemoryDom::ops`]）⇒ T1–T6 可以被
 /// 机械判定（而不必读源码文本 —— 设计文档 §10.2 明令禁止源码镜像断言）。
-#[derive(Debug, Default)]
+///
+/// ## 两道「不许无界增长」的闸（2026-10-25 修）
+///
+/// 1. **节点**：摘除时**立即释放载荷**（属性 / property / 子节点 / **监听器**）
+///    ⇒ 监听器闭包（它捕获着应用状态）**不再随摘除的节点一起泄漏**。
+///    ⇒ 节点**槽位**只增不复用（句柄一旦发出就必须仍能判定为「已摘除」）。
+/// 2. **操作日志**：有**上界**（[`InMemoryDom::set_op_capacity`]）⇒ 超出后
+///    **丢弃最旧**的记录 ⇒ 长时间运行不会把内存吃光。
+#[derive(Debug)]
 pub struct InMemoryDom {
     nodes: RefCell<Vec<InMemoryNode>>,
-    ops: RefCell<Vec<RecordedOp>>,
+    /// 事件监听器登记表（按 **(节点, 事件类型)** 索引 ⇒ 增量替换）。
+    listeners: RefCell<ListenerTable<InMemoryNodeId, crate::events::ElementHandler>>,
+    ops: RefCell<VecDeque<RecordedOp>>,
+    /// 操作日志的上界（超出后丢弃最旧的记录）。
+    op_capacity: Cell<usize>,
+}
+
+/// 操作日志的**默认**上界。
+///
+/// 为什么要有上界：日志是**判据**用的（长跑场景下没人看得完几十万条）⇒
+/// ⇒ 留一个足够宽的窗口（够看完一批渲染）⇒ 超出后丢最旧的。
+pub const DEFAULT_OP_CAPACITY: usize = 8192;
+
+impl Default for InMemoryDom {
+    fn default() -> Self {
+        Self {
+            nodes: RefCell::new(Vec::new()),
+            listeners: RefCell::new(ListenerTable::new()),
+            ops: RefCell::new(VecDeque::new()),
+            op_capacity: Cell::new(DEFAULT_OP_CAPACITY),
+        }
+    }
 }
 
 impl InMemoryDom {
@@ -371,7 +503,7 @@ impl InMemoryDom {
             .map(|(_, value)| value.clone())
     }
 
-    /// 读 property 值。
+    /// 读 property 值（**实时**语义：读的是当前值）。
     pub fn property(&self, node: InMemoryNodeId, name: &str) -> Option<String> {
         let nodes = self.nodes.borrow();
         let entry = nodes.get(node.0)?;
@@ -379,7 +511,7 @@ impl InMemoryDom {
             .props
             .iter()
             .find(|(key, _)| key == name)
-            .map(|(_, value)| value.clone())
+            .map(|(_, value)| value.value.clone())
     }
 
     /// 读文本内容（文本节点自身或子树拼接）。
@@ -399,9 +531,64 @@ impl InMemoryDom {
         }
     }
 
-    /// 节点总数（用于断言「没有多余节点产生」）。
+    /// 节点总数（**活着的**节点数 —— 已摘除的不算）。
+    ///
+    /// 用途：断言「没有多余节点产生」⇒ 摘除的节点**不算**在里面
+    /// （它们已经是垃圾，见 [`InMemoryDom::slot_count`]）。
     pub fn node_count(&self) -> usize {
+        self.nodes
+            .borrow()
+            .iter()
+            .filter(|entry| !entry.detached)
+            .count()
+    }
+
+    /// **槽位**总数（含已摘除的墓碑）。
+    ///
+    /// ## 为什么槽位只增不复用
+    ///
+    /// 节点句柄（[`InMemoryNodeId`]）一旦发出就可能被外部长期持有 ⇒
+    /// ⇒ 复用槽位会让**过期句柄打到新节点上**（比泄漏更危险）⇒
+    /// ⇒ 槽位不复用；但摘除时**载荷**（含监听器闭包）**立即释放** ⇒
+    /// ⇒ 真正会泄漏的闭包**不会**泄漏。
+    pub fn slot_count(&self) -> usize {
         self.nodes.borrow().len()
+    }
+
+    /// 回收**尾部**的墓碑槽位（已摘除且载荷已空的槽位）⇒ 返回回收的个数。
+    ///
+    /// ## 为什么只回收「尾部」
+    ///
+    /// 槽位编号 = 下标 ⇒ 回收中间的槽位会让后面所有编号**平移** ⇒
+    /// ⇒ 外面持有的句柄全部失效 ⇒ ⇒ 只回收**尾部**那段（编号连续、无外部
+    /// 活句柄依赖）⇒ 中间的墓碑保留（它们只是一条 `detached` 标记）。
+    ///
+    /// ⚠️ 回收之后，**被回收的那些编号**不再可判定（`is_detached` 返回 `false`）。
+    pub fn compact(&self) -> usize {
+        let mut nodes = self.nodes.borrow_mut();
+        let mut reclaimed = 0usize;
+        while let Some(last) = nodes.last() {
+            if !last.detached {
+                break;
+            }
+            nodes.pop();
+            reclaimed += 1;
+        }
+        reclaimed
+    }
+
+    /// 操作日志的上界。
+    pub fn op_capacity(&self) -> usize {
+        self.op_capacity.get()
+    }
+
+    /// 设操作日志的上界（`0` = 不记录）。
+    pub fn set_op_capacity(&self, capacity: usize) {
+        self.op_capacity.set(capacity);
+        let mut ops = self.ops.borrow_mut();
+        while ops.len() > capacity {
+            ops.pop_front();
+        }
     }
 
     /// 派发事件：自目标节点起，沿祖先链**自下而上**调用处理器。
@@ -412,23 +599,7 @@ impl InMemoryDom {
     /// 返回实际调用次数。
     pub fn dispatch(&self, node: InMemoryNodeId, kind: EventKind) -> usize {
         // 目标路径（从根到目标的子节点下标序列）。
-        let mut indices: Vec<usize> = Vec::new();
-        let mut current = node;
-        while let Some(parent) = self.parent(current) {
-            let siblings = self
-                .nodes
-                .borrow()
-                .get(parent.0)
-                .map(|entry| entry.children.clone())
-                .unwrap_or_default();
-            let index = siblings
-                .iter()
-                .position(|child| *child == current)
-                .unwrap_or_default();
-            indices.push(index);
-            current = parent;
-        }
-        indices.reverse();
+        let indices = self.target_path(&node).unwrap_or_default();
 
         // 祖先链（目标在前）。
         let mut chain: Vec<InMemoryNodeId> = vec![node];
@@ -439,20 +610,8 @@ impl InMemoryDom {
         let mut event = crate::events::DomEvent::new(kind, indices);
         let mut called = 0;
         for current in chain {
-            let handlers: Vec<crate::events::ElementHandler> = self
-                .nodes
-                .borrow()
-                .get(current.0)
-                .map(|entry| {
-                    entry
-                        .listeners
-                        .iter()
-                        .filter(|(key, _)| *key == kind)
-                        .map(|(_, handler)| handler.clone())
-                        .collect()
-                })
-                .unwrap_or_default();
-            for handler in handlers {
+            let handler = self.listeners.borrow().get(&current, kind).cloned();
+            if let Some(handler) = handler {
                 handler.call(&mut event);
                 called += 1;
                 if event.is_propagation_stopped() {
@@ -481,8 +640,12 @@ impl InMemoryDom {
     }
 
     /// 已执行的操作序列（按发生顺序）。
+    ///
+    /// ⚠️ 日志有**上界**（[`InMemoryDom::set_op_capacity`]）⇒ 超出后**丢弃最旧**
+    /// 的记录 ⇒ 机械判据只对**最近一批**有效 ⇒ 断言前先
+    /// [`InMemoryDom::clear_ops`]。
     pub fn ops(&self) -> Vec<RecordedOp> {
-        self.ops.borrow().clone()
+        self.ops.borrow().iter().cloned().collect()
     }
 
     /// 清空操作序列（让下一次断言只看「这一批」的操作）。
@@ -499,28 +662,56 @@ impl InMemoryDom {
             props: Vec::new(),
             children: Vec::new(),
             parent: None,
-            listeners: Vec::new(),
             detached: false,
         });
         InMemoryNodeId(nodes.len() - 1)
     }
 
-    /// 记一次操作。
+    /// 记一次操作（**受上界约束**：超出后丢弃最旧的）。
     fn record(&self, op: DomOp, node: InMemoryNodeId) {
-        self.ops.borrow_mut().push(RecordedOp { op, node });
+        let capacity = self.op_capacity.get();
+        if capacity == 0 {
+            return;
+        }
+        let mut ops = self.ops.borrow_mut();
+        ops.push_back(RecordedOp { op, node });
+        while ops.len() > capacity {
+            ops.pop_front();
+        }
     }
 
-    /// 把子树整体标记为已摘除（T6：被移除的节点不参与本批次的写入）。
+    /// 把子树整体标记为已摘除（T6：被移除的节点不参与本批次的写入），
+    /// 并**立即释放载荷**（含监听器闭包 ⇒ 闭包捕获的应用状态一起释放）。
+    ///
+    /// ## 为什么载荷必须**立即**释放（2026-10-25 修）
+    ///
+    /// 修前摘除只打标记 ⇒ 节点连同 `listeners` 一直留在后端里 ⇒
+    /// ⇒ 监听器闭包（捕获着应用状态）**跟着一起泄漏** ⇒
+    /// ⇒ 5 轮挂载 / 卸载就把整棵树的闭包留在内存里。
     fn mark_subtree_detached(&self, node: InMemoryNodeId) {
-        let mut nodes = self.nodes.borrow_mut();
-        let mut pending = vec![node];
-        while let Some(current) = pending.pop() {
-            let Some(entry) = nodes.get_mut(current.0) else {
-                continue;
-            };
-            entry.detached = true;
-            entry.parent = None;
-            pending.extend(entry.children.iter().copied());
+        let mut detached: Vec<InMemoryNodeId> = Vec::new();
+        {
+            let mut nodes = self.nodes.borrow_mut();
+            let mut pending = vec![node];
+            while let Some(current) = pending.pop() {
+                let Some(entry) = nodes.get_mut(current.0) else {
+                    continue;
+                };
+                entry.detached = true;
+                entry.parent = None;
+                // 先收孩子，再清孩子（否则递归就断了）。
+                pending.extend(entry.children.iter().copied());
+                entry.children.clear();
+                // 载荷释放：属性 / property 都不再需要。
+                entry.attrs.clear();
+                entry.props.clear();
+                detached.push(current);
+            }
+        }
+        // 监听器在**表**里 ⇒ 逐个摘掉（闭包 ⇒ 释放）。
+        let mut listeners = self.listeners.borrow_mut();
+        for id in detached {
+            listeners.remove_node(&id);
         }
     }
 }
@@ -630,15 +821,14 @@ impl Dom for InMemoryDom {
                 next.push(token.clone());
             }
         }
-        // token 集合为空 ⇒ 整个 class 属性不保留（不留 `class=""` 残渣）。
-        if next.is_empty() {
-            entry.attrs.retain(|(key, _)| key != "class");
-        } else {
-            let value = next.join(" ");
-            match entry.attrs.iter_mut().find(|(key, _)| key == "class") {
-                Some(slot) => slot.1 = value,
-                None => entry.attrs.push((String::from("class"), value)),
-            }
+        // ⭐ **语义对齐浏览器**（2026-10-25 修）：token 全删之后**保留**
+        // `class=""`（浏览器的 `classList` 删完就是空串）⇒
+        // ⇒ 修前内存后端把 class 属性**整个删掉** ⇒ 与浏览器不一致
+        // ⇒ ⇒ 两侧的属性对照会差一项。
+        let value = next.join(" ");
+        match entry.attrs.iter_mut().find(|(key, _)| key == "class") {
+            Some(slot) => slot.1 = value,
+            None => entry.attrs.push((String::from("class"), value)),
         }
         drop(nodes);
         self.record(
@@ -664,9 +854,13 @@ impl Dom for InMemoryDom {
                 "property 只能设在元素节点上",
             )));
         }
+        let prop = MemoryProp {
+            value: value.to_owned(),
+            is_bool: false,
+        };
         match entry.props.iter_mut().find(|(key, _)| key == name) {
-            Some(slot) => slot.1 = value.to_owned(),
-            None => entry.props.push((name.to_owned(), value.to_owned())),
+            Some(slot) => slot.1 = prop,
+            None => entry.props.push((name.to_owned(), prop)),
         }
         drop(nodes);
         self.record(
@@ -701,9 +895,13 @@ impl Dom for InMemoryDom {
                     "property 只能设在元素节点上",
                 )));
             }
+            let prop = MemoryProp {
+                value: text.to_owned(),
+                is_bool: true,
+            };
             match entry.props.iter_mut().find(|(key, _)| key == name) {
-                Some(slot) => slot.1 = text.to_owned(),
-                None => entry.props.push((name.to_owned(), text.to_owned())),
+                Some(slot) => slot.1 = prop,
+                None => entry.props.push((name.to_owned(), prop)),
             }
         }
         self.record(
@@ -724,11 +922,17 @@ impl Dom for InMemoryDom {
         if entry.detached {
             return Err(DomError::NodeDetached);
         }
+        // ⭐ **实时语义**（2026-10-25 修）：读的是「**当前**的 property 值」
+        // （不是「上一帧虚拟树写的值」）⇒ 与浏览器一致
+        // ⇒ ⇒ 用户改过的值会被读到（浏览器的 `input.value` 就是实时的）。
+        //
+        // ⚠️ 渲染器的跳过条件因此必须以「**目标值是否变化**」为准
+        // （见 `renderer::patch_props`），否则会把用户的输入覆盖掉。
         let value = entry
             .props
             .iter()
             .find(|(key, _)| key == name)
-            .map(|(_, value)| value.clone())
+            .map(|(_, value)| value.value.clone())
             .unwrap_or_default();
         drop(nodes);
         self.record(
@@ -738,6 +942,49 @@ impl Dom for InMemoryDom {
             *node,
         );
         Ok(value)
+    }
+
+    fn remove_property(&self, node: &Self::Node, name: &str) -> Result<(), DomError> {
+        let mut nodes = self.nodes.borrow_mut();
+        let Some(entry) = nodes.get_mut(node.0) else {
+            return Err(DomError::NodeNotFound);
+        };
+        if entry.detached {
+            return Err(DomError::NodeDetached);
+        }
+        if matches!(entry.kind, InMemoryNodeKind::Text(_)) {
+            return Err(DomError::Unsupported(String::from(
+                "property 只能设在元素节点上",
+            )));
+        }
+        // ⭐ **回落到默认值**（浏览器语义）：字符串 ⇒ 空串；布尔 ⇒ `false`。
+        //
+        // 为什么不是「删掉这条记录」：删掉之后读回来是空串 ⇒ ⇒ 布尔 property
+        // 就与浏览器（`false`）**不一致** ⇒ ⇒ 两侧语义必须一致（0 装）。
+        match entry.props.iter_mut().find(|(key, _)| key == name) {
+            Some(slot) => {
+                let is_bool = slot.1.is_bool;
+                slot.1.value = MemoryProp::default_value(is_bool);
+            }
+            None => {
+                // 从没写过 ⇒ 回落成默认值（字符串语义）。
+                entry.props.push((
+                    name.to_owned(),
+                    MemoryProp {
+                        value: MemoryProp::default_value(false),
+                        is_bool: false,
+                    },
+                ));
+            }
+        }
+        drop(nodes);
+        self.record(
+            DomOp::RemoveProperty {
+                name: name.to_owned(),
+            },
+            *node,
+        );
+        Ok(())
     }
 
     fn set_text(&self, node: &Self::Node, data: &str) -> Result<(), DomError> {
@@ -877,31 +1124,72 @@ impl Dom for InMemoryDom {
         kind: EventKind,
         handler: crate::events::ElementHandler,
     ) -> Result<(), DomError> {
-        let mut nodes = self.nodes.borrow_mut();
-        let Some(entry) = nodes.get_mut(node.0) else {
-            return Err(DomError::NodeNotFound);
-        };
-        if entry.detached {
-            return Err(DomError::NodeDetached);
+        {
+            let nodes = self.nodes.borrow();
+            let Some(entry) = nodes.get(node.0) else {
+                return Err(DomError::NodeNotFound);
+            };
+            if entry.detached {
+                return Err(DomError::NodeDetached);
+            }
         }
-        match entry.listeners.iter_mut().find(|(key, _)| *key == kind) {
-            Some(slot) => slot.1 = handler,
-            None => entry.listeners.push((kind, handler)),
-        }
-        drop(nodes);
+        // 覆盖语义：同 (节点, kind) 至多一条。
+        self.listeners.borrow_mut().insert(*node, kind, handler);
         self.record(DomOp::AddListener { kind }, *node);
         Ok(())
     }
 
     fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError> {
-        let mut nodes = self.nodes.borrow_mut();
-        let Some(entry) = nodes.get_mut(node.0) else {
-            return Err(DomError::NodeNotFound);
-        };
-        entry.listeners.clear();
-        drop(nodes);
+        {
+            let nodes = self.nodes.borrow();
+            if nodes.get(node.0).is_none() {
+                return Err(DomError::NodeNotFound);
+            }
+        }
+        // 摘掉该节点的**全部** kind（闭包 ⇒ 释放）。
+        self.listeners.borrow_mut().remove_node(node);
         self.record(DomOp::RemoveListeners, *node);
         Ok(())
+    }
+
+    fn remove_listener(&self, node: &Self::Node, kind: EventKind) -> Result<(), DomError> {
+        {
+            let nodes = self.nodes.borrow();
+            if nodes.get(node.0).is_none() {
+                return Err(DomError::NodeNotFound);
+            }
+        }
+        // ⭐ **只摘这一个 kind** ⇒ 同元素的其它 kind **不受影响**（既有契约）。
+        self.listeners.borrow_mut().remove_kind(node, kind);
+        self.record(DomOp::RemoveListener { kind }, *node);
+        Ok(())
+    }
+
+    fn target_path(&self, node: &Self::Node) -> Result<Vec<usize>, DomError> {
+        let nodes = self.nodes.borrow();
+        if nodes.get(node.0).is_none() {
+            return Err(DomError::NodeNotFound);
+        }
+        drop(nodes);
+        // 从根到目标的子节点下标序列（只数元素 / 文本 ⇒ 与浏览器口径一致）。
+        let mut indices: Vec<usize> = Vec::new();
+        let mut current = *node;
+        while let Some(parent) = self.parent(current) {
+            let siblings = self
+                .nodes
+                .borrow()
+                .get(parent.0)
+                .map(|entry| entry.children.clone())
+                .unwrap_or_default();
+            let index = siblings
+                .iter()
+                .position(|child| *child == current)
+                .unwrap_or_default();
+            indices.push(index);
+            current = parent;
+        }
+        indices.reverse();
+        Ok(indices)
     }
 }
 
@@ -989,6 +1277,18 @@ impl Dom for UnavailableDom {
     }
 
     fn remove_listeners(&self, _node: &Self::Node) -> Result<(), DomError> {
+        Err(DomError::NotImplemented)
+    }
+
+    fn remove_property(&self, _node: &Self::Node, _name: &str) -> Result<(), DomError> {
+        Err(DomError::NotImplemented)
+    }
+
+    fn remove_listener(&self, _node: &Self::Node, _kind: EventKind) -> Result<(), DomError> {
+        Err(DomError::NotImplemented)
+    }
+
+    fn target_path(&self, _node: &Self::Node) -> Result<Vec<usize>, DomError> {
         Err(DomError::NotImplemented)
     }
 }
@@ -1472,6 +1772,299 @@ mod tests {
         assert_eq!(
             DomError::Unsupported(String::from("x")).to_string(),
             "Unsupported: x"
+        );
+    }
+
+    // ── 摘除 ⇒ **立即释放载荷**（2026-10-25 修） ───────────────────────────
+
+    /// ⭐ **摘除子树 ⇒ 监听器闭包一起释放**（闭包捕获的应用状态不再泄漏）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// 修前：节点只打「已摘除」标记 ⇒ 记录（含 `listeners`）一直留着 ⇒
+    /// ⇒ 5 轮挂载 / 卸载后节点全留着 ⇒ ⇒ 闭包捕获的应用状态**一起泄漏**。
+    ///
+    /// ## 判据
+    ///
+    /// 处理器捕获的 `Rc` 的**强引用计数**在摘除后**回落** ⇒ 闭包被释放 ✓。
+    #[test]
+    fn detaching_a_subtree_releases_its_listeners() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let captured = Rc::new(Cell::new(0u32));
+        let node = dom.create_element("button").expect("建节点必须成功");
+        let handler = crate::events::ElementHandler::new({
+            let captured = captured.clone();
+            move |_event| {
+                captured.set(captured.get() + 1);
+            }
+        });
+        dom.add_listener(&node, EventKind::Click, handler)
+            .expect("挂处理器必须成功");
+        dom.append_child(&root, &node).expect("挂载必须成功");
+        assert_eq!(
+            Rc::strong_count(&captured),
+            2,
+            "处理器捕获着它（测试自己一份 + 闭包一份）"
+        );
+
+        dom.remove_child(&root, &node).expect("摘除必须成功");
+        assert_eq!(
+            Rc::strong_count(&captured),
+            1,
+            "摘除 ⇒ 监听器闭包**必须**被释放（不许泄漏应用状态）"
+        );
+    }
+
+    /// **摘除子树 ⇒ 子孙的监听器也一起释放**（不只是顶层）。
+    #[test]
+    fn detaching_a_subtree_releases_the_listeners_of_its_descendants() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let branch = dom.create_element("div").expect("建节点必须成功");
+        let leaf = dom.create_element("button").expect("建节点必须成功");
+        let captured = Rc::new(Cell::new(0u32));
+        let handler = crate::events::ElementHandler::new({
+            let captured = captured.clone();
+            move |_event| {
+                captured.set(captured.get() + 1);
+            }
+        });
+        dom.add_listener(&leaf, EventKind::Click, handler)
+            .expect("挂处理器必须成功");
+        dom.append_child(&root, &branch).expect("挂载必须成功");
+        dom.append_child(&branch, &leaf).expect("挂载必须成功");
+        assert_eq!(Rc::strong_count(&captured), 2);
+
+        dom.remove_child(&root, &branch).expect("摘除必须成功");
+        assert_eq!(Rc::strong_count(&captured), 1, "子孙的监听器也必须被释放");
+    }
+
+    /// **摘除 ⇒ 整棵子树都被标记为已摘除**（T6 的可判定性 ⇒ 与浏览器同口径）。
+    ///
+    /// ## 为什么
+    ///
+    /// 真实 DOM 后端修前**只标记顶层节点** ⇒ 子节点仍可被写入 ⇒
+    /// ⇒ 规则 T6 在浏览器里是**假的** ⇒ ⇒ 两侧口径必须一致。
+    #[test]
+    fn detaching_a_node_marks_its_whole_subtree_as_detached() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let branch = dom.create_element("div").expect("建节点必须成功");
+        let leaf = dom.create_element("span").expect("建节点必须成功");
+        dom.append_child(&root, &branch).expect("挂载必须成功");
+        dom.append_child(&branch, &leaf).expect("挂载必须成功");
+
+        dom.remove_child(&root, &branch).expect("摘除必须成功");
+        assert!(dom.is_detached(branch));
+        assert!(
+            dom.is_detached(leaf),
+            "子孙也必须被标记（**不许**只标记顶层 ⇒ T6 在浏览器里会形同虚设）"
+        );
+        assert_eq!(
+            dom.set_attribute(&leaf, "class", "x")
+                .expect_err("写入已摘除节点必须报错"),
+            DomError::NodeDetached
+        );
+    }
+
+    /// **摘除 ⇒ 载荷立即释放**（属性 / property 都不再留着）。
+    ///
+    /// ## 为什么
+    ///
+    /// 摘除的节点**再也不会被读**（引擎的树里已经没有它）⇒ ⇒ 留着属性 /
+    /// property 只是**白占内存**⇒ ⇒ 与监听器一样**立即释放**。
+    #[test]
+    fn detaching_a_subtree_releases_its_payload() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let item = dom.create_element("li").expect("建节点必须成功");
+        dom.set_attribute(&item, "class", "ap-row")
+            .expect("写属性必须成功");
+        dom.set_property(&item, "value", "x")
+            .expect("写 property 必须成功");
+        dom.append_child(&root, &item).expect("挂载必须成功");
+
+        dom.remove_child(&root, &item).expect("摘除必须成功");
+        assert_eq!(
+            dom.attribute(item, "class"),
+            None,
+            "摘除 ⇒ 载荷释放（属性不留）"
+        );
+        assert_eq!(
+            dom.property(item, "value"),
+            None,
+            "摘除 ⇒ 载荷释放（property 不留）"
+        );
+        assert!(dom.is_detached(item), "摘除的**判定**必须仍在");
+    }
+
+    /// **摘除 ⇒ 节点不再算「活着的」**（`node_count` 反映真实树的大小）。
+    #[test]
+    fn detached_nodes_do_not_count_as_live_nodes() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let item = dom.create_element("li").expect("建节点必须成功");
+        dom.append_child(&root, &item).expect("挂载必须成功");
+        assert_eq!(dom.node_count(), 2);
+
+        dom.remove_child(&root, &item).expect("摘除必须成功");
+        assert_eq!(dom.node_count(), 1, "摘除 ⇒ 不再算活着的节点");
+        assert_eq!(dom.slot_count(), 2, "槽位保留（句柄必须仍能判定为已摘除）");
+        assert!(dom.is_detached(item), "摘除的节点仍可判定");
+    }
+
+    /// **槽位只增不复用** ⇒ 但可以显式**压缩**尾部的墓碑。
+    #[test]
+    fn the_tail_slots_can_be_compacted_away() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let item = dom.create_element("li").expect("建节点必须成功");
+        dom.append_child(&root, &item).expect("挂载必须成功");
+        dom.remove_child(&root, &item).expect("摘除必须成功");
+        assert_eq!(dom.slot_count(), 2);
+
+        assert_eq!(dom.compact(), 1, "尾部墓碑可回收");
+        assert_eq!(dom.slot_count(), 1, "只回收了尾部");
+        assert_eq!(dom.node_count(), 1, "活着的节点不受影响");
+    }
+
+    /// **操作日志有上界** ⇒ 长时间运行不会把内存吃光。
+    #[test]
+    fn the_operation_log_has_an_upper_bound() {
+        let dom = InMemoryDom::new();
+        dom.set_op_capacity(8);
+        for _ in 0..50 {
+            dom.create_element("div").expect("建节点必须成功");
+        }
+        assert!(
+            dom.ops().len() <= 8,
+            "日志不许无界增长：实测 {} 条",
+            dom.ops().len()
+        );
+        // 最新的记录**必须**还在（丢的是最旧的）。
+        assert!(matches!(
+            dom.ops().last().map(|recorded| &recorded.op),
+            Some(DomOp::CreateElement { .. })
+        ));
+    }
+
+    // ── 与浏览器**同语义**（2026-10-25 修） ────────────────────────────────
+
+    /// ⭐ **class token 全删之后留 `class=""`**（浏览器的 `classList` 语义）。
+    #[test]
+    fn removing_every_class_token_keeps_an_empty_class_attribute() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("div").expect("建节点必须成功");
+        dom.set_class_tokens(&node, &[String::from("ap-a")], &[])
+            .expect("加 token 必须成功");
+        assert_eq!(dom.attribute(node, "class"), Some(String::from("ap-a")));
+
+        dom.set_class_tokens(&node, &[], &[String::from("ap-a")])
+            .expect("删 token 必须成功");
+        assert_eq!(
+            dom.attribute(node, "class"),
+            Some(String::new()),
+            "与浏览器一致：留 `class=\"\"`（属性**仍在**）"
+        );
+    }
+
+    /// ⭐ **移除 property ⇒ 回到默认值**（浏览器语义）。
+    #[test]
+    fn removing_a_property_falls_back_to_its_default_value() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("input").expect("建节点必须成功");
+        dom.set_property(&node, "value", "abc")
+            .expect("写 property 必须成功");
+        dom.remove_property(&node, "value")
+            .expect("移除 property 必须成功");
+        assert_eq!(
+            dom.get_property(&node, "value")
+                .expect("读 property 必须成功"),
+            String::new(),
+            "字符串 property 的默认值是空串"
+        );
+    }
+
+    /// **布尔 property 的默认值是 `false`**（不是空串）⇒ 与浏览器一致。
+    #[test]
+    fn removing_a_boolean_property_falls_back_to_false() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("input").expect("建节点必须成功");
+        dom.set_property_bool(&node, "checked", true)
+            .expect("写 property 必须成功");
+        assert_eq!(
+            dom.get_property(&node, "checked")
+                .expect("读 property 必须成功"),
+            String::from("true")
+        );
+
+        dom.remove_property(&node, "checked")
+            .expect("移除 property 必须成功");
+        assert_eq!(
+            dom.get_property(&node, "checked")
+                .expect("读 property 必须成功"),
+            String::from("false"),
+            "布尔 property 的默认值是 `false`（与浏览器一致）"
+        );
+    }
+
+    /// **按 kind 摘监听器** ⇒ 同元素的其它 kind **不受影响**。
+    #[test]
+    fn removing_one_listener_kind_keeps_the_other_kinds() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let node = dom.create_element("div").expect("建节点必须成功");
+        let clicks = Rc::new(Cell::new(0u32));
+        let keys = Rc::new(Cell::new(0u32));
+        let click_counter = clicks.clone();
+        let key_counter = keys.clone();
+        dom.add_listener(
+            &node,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |_event| {
+                click_counter.set(click_counter.get() + 1);
+            }),
+        )
+        .expect("挂处理器必须成功");
+        dom.add_listener(
+            &node,
+            EventKind::KeyDown,
+            crate::events::ElementHandler::new(move |_event| {
+                key_counter.set(key_counter.get() + 1);
+            }),
+        )
+        .expect("挂处理器必须成功");
+        dom.append_child(&root, &node).expect("挂载必须成功");
+
+        dom.remove_listener(&node, EventKind::Click)
+            .expect("摘监听器必须成功");
+        assert_eq!(dom.dispatch(node, EventKind::Click), 0, "click 被摘掉了");
+        assert_eq!(
+            dom.dispatch(node, EventKind::KeyDown),
+            1,
+            "keydown **不许**被牵连（既有契约）"
+        );
+    }
+
+    /// **目标路径**只数元素 / 文本（与浏览器同口径 ⇒ 两侧可比）。
+    #[test]
+    fn the_target_path_counts_only_elements_and_texts() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let first = dom.create_element("div").expect("建节点必须成功");
+        let second = dom.create_element("span").expect("建节点必须成功");
+        let text = dom.create_text("x").expect("建节点必须成功");
+        dom.append_child(&root, &first).expect("挂载必须成功");
+        dom.append_child(&root, &second).expect("挂载必须成功");
+        dom.append_child(&root, &text).expect("挂载必须成功");
+
+        assert_eq!(dom.target_path(&first).expect("读路径必须成功"), vec![0]);
+        assert_eq!(dom.target_path(&second).expect("读路径必须成功"), vec![1]);
+        assert_eq!(
+            dom.target_path(&text).expect("读路径必须成功"),
+            vec![2],
+            "文本节点也占下标（与浏览器的可见子节点一致）"
         );
     }
 }
