@@ -54,8 +54,8 @@ pub struct WikiSection {
     pub heading: String,
     /// 该节正文（可能按 `max_section_chars` 截断）。
     ///
-    /// 正文区间从**标题行起点**开始，因此 `text` 开头就是该标题行本身
-    /// （形如 `## 标题`），其后是本节的正文，直到下一个同级或更高级标题之前。
+    /// **不含标题行** —— 标题另有 `heading` 字段, 含进来会让渲染出的证据行
+    /// 把标题说两遍。
     pub text: String,
 }
 
@@ -121,8 +121,16 @@ impl WikiContext {
             };
             let tree = build_toc_tree(&abs_path, &content);
             let mut file_hits: Vec<ScoredSection> = Vec::new();
-            for (node, range) in section_ranges(&tree) {
-                let score = score_node(&node, &tokens);
+            for (node, range, own_range) in section_ranges_with_own_body(&tree) {
+                // 标题信号（主）+ **正文信号（弱）**。
+                // 正文信号的存在理由：**纯目录树路由只认标题** ⇒ 用户问
+                // 「哲学门禁」而标题是「治理层的取舍」时**命中不了**
+                // （2026-10-25 真机验证实测：0 命中）⇒ 加一条弱信号，
+                // 让「知识库里正文提到过」也能被找到。仍**无向量、仍确定性**。
+                // 正文信号只看**本节自有正文**（不含子节）⇒ 命中的是最具体的那节
+                // （否则祖先节会因为正文更长而压过子节）。
+                let score = score_node(&node, &tokens)
+                    + body_score(&section_body(&content, own_range), &tokens);
                 // 文档序号按**所有**节递增 (命中与否都占位), 这样并列时的
                 // 「文档顺序升序」才是全文口径。
                 let current_index = doc_index;
@@ -169,7 +177,9 @@ impl WikiContext {
         let mut total_chars = 0usize;
         for hit in hits.iter().take(limits.max_sections) {
             let content = &contents[hit.file_index];
-            let raw = slice_range(content, hit.range);
+            // 正文**不含标题行** —— 标题另有 `heading` 字段，
+            // 含进来会让渲染出的证据行把标题说两遍。
+            let raw = section_body(content, hit.range);
             let text = truncate_chars(&raw, limits.max_section_chars);
             let text_chars = text.chars().count();
             // 累计超预算就停: 语料注入的上下文总量必须有硬上限。
@@ -231,13 +241,9 @@ pub fn tokenize_query(query: &str) -> Vec<String> {
     tokens
 }
 
-/// 每个标题节点 + 其**整节**的字节区间（从该标题行起点，到**下一个同级或更高级标题**的行起点；没有则到文件末尾）。
-///
-/// 确定性：文档顺序（先父后子，兄弟按出现顺序）。
-///
-/// 传入的根节点是合成容器（标题取文件名、`summary` 是固定串），不对应任何
-/// Markdown 标题行，因此**不产出节**；只有它的后代标题节点产出节。
-pub fn section_ranges(root: &TocTreeNode) -> Vec<(TocTreeNode, (usize, usize))> {
+fn section_ranges_with_own_body(
+    root: &TocTreeNode,
+) -> Vec<(TocTreeNode, (usize, usize), (usize, usize))> {
     let nodes = flatten_headings(root);
     let file_end = root.byte_range.1;
 
@@ -245,15 +251,33 @@ pub fn section_ranges(root: &TocTreeNode) -> Vec<(TocTreeNode, (usize, usize))> 
     // 标题只有 1..=6 级, 用定长数组就能把 O(n²) 的前瞻压成 O(6n)。
     let mut next_at_or_above = [file_end; 8];
     let mut ends: Vec<usize> = vec![file_end; nodes.len()];
+    // 「往后第一个**更深**标题（level ≥ 2）」的字节起点。
+    //
+    // **为什么单独维护**：一级标题（`# 文档标题`）按「到下一个同级或更高级标题」
+    // 算的话 = **到文件末尾** ⇒ 整篇文档变成一节 ⇒ 注入上下文时会把
+    // **整篇**灌进去（2026-10-25 真机验证实测到的真问题）。
+    // ⇒ 一级标题只拥有**它的前言**：到第一个更深标题（`##`）为止。
+    //   没有更深标题时，仍按「下一个同级标题」收尾（纯 `#` 平铺文档照常工作）。
+    let mut next_deeper_start = file_end;
+    // 「本节自有正文」的结束位置：本节之后**第一个更深标题**的起点。
+    let mut own_ends: Vec<usize> = vec![file_end; nodes.len()];
     for index in (0..nodes.len()).rev() {
         let node = &nodes[index];
         let level = node.level.clamp(1, 7);
-        ends[index] = next_at_or_above[level];
         let start = node.byte_range.0;
+        ends[index] = if level == 1 {
+            next_at_or_above[1].min(next_deeper_start)
+        } else {
+            next_at_or_above[level]
+        };
+        own_ends[index] = next_deeper_start.min(ends[index]);
         for slot in level..=7 {
             if start < next_at_or_above[slot] {
                 next_at_or_above[slot] = start;
             }
+        }
+        if level >= 2 {
+            next_deeper_start = start;
         }
     }
 
@@ -263,7 +287,8 @@ pub fn section_ranges(root: &TocTreeNode) -> Vec<(TocTreeNode, (usize, usize))> 
         .map(|(index, node)| {
             let start = node.byte_range.0;
             let end = ends[index].max(start);
-            ((*node).clone(), (start, end))
+            let own_end = own_ends[index].max(start).min(end);
+            ((*node).clone(), (start, end), (start, own_end))
         })
         .collect()
 }
@@ -298,6 +323,31 @@ fn score_node(node: &TocTreeNode, tokens: &[String]) -> usize {
         }
     }
     score
+}
+
+/// 正文命中分（**弱信号**，封顶 3）。
+///
+/// 每个查询词在正文里出现 ⇒ +1，**总贡献封顶 3** ⇒
+/// 目录结构（标题 +3 / 标题行 +1）始终是主排序依据，正文只是「兜底可找」。
+fn body_score(body: &str, tokens: &[String]) -> usize {
+    let body = body.to_lowercase();
+    let mut score = 0usize;
+    for token in tokens {
+        if body.contains(token.as_str()) {
+            score += 1;
+        }
+    }
+    score.min(3)
+}
+
+/// 取一节的**正文**（**不含标题行** —— 标题另有 `heading` 字段，
+/// 且标题已在 `score_node` 里算过，不重复计分）。
+fn section_body(content: &str, range: (usize, usize)) -> String {
+    let raw = slice_range(content, range);
+    match raw.split_once('\n') {
+        Some((_heading, rest)) => rest.trim_start_matches('\n').to_string(),
+        None => String::new(),
+    }
 }
 
 /// 建 TOC 树, 并把标题行的字节起点修正成原文里的**真实**起点。
@@ -496,6 +546,15 @@ fn flush_ascii_word(word: &mut String, tokens: &mut Vec<String>, seen: &mut Hash
 
 /// 结算 CJK 连续段：相邻两字组成 bigram。
 fn flush_cjk_run(run: &mut Vec<char>, tokens: &mut Vec<String>, seen: &mut HashSet<String>) {
+    // **单字查询也要能用**：CJK bigram 对「只有一个字」的查询（"猫"）分不出任何
+    // token ⇒ 查不到任何节（2026-10-25 真机验证时想到的边界）⇒
+    // 单字成段时补一个 unigram；≥2 字仍只出 bigram（避免 token 爆炸）。
+    if run.len() == 1 {
+        let unigram: String = run.iter().collect();
+        if seen.insert(unigram.clone()) {
+            tokens.push(unigram);
+        }
+    }
     for window in run.windows(2) {
         let bigram: String = window.iter().collect();
         if seen.insert(bigram.clone()) {

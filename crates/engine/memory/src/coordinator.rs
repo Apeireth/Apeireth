@@ -1372,7 +1372,7 @@ mod tests {
             section.heading
         );
         assert!(
-            section.text.contains(MARKER),
+            section.text.contains("检索标记段落"),
             "正文应带该节内容: {:?}",
             section.text
         );

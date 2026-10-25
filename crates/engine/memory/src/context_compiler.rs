@@ -273,6 +273,23 @@ impl ClosedWorldContextCompiler {
                 diary_lines += 1;
             }
         }
+        // 用户知识库命中节 (附加证据行): 排在日记片段之后 ⇒ 预算不足时**先被裁掉**
+        // (尾部裁剪从最后一行开始 ⇒ 记忆正文永远优先)。
+        // 纪律与 `compile()` 那条渲染路径一致：**装不下就跳过这一行**。
+        let mut wiki_lines = 0usize;
+        for section in &recalled.wiki_sections {
+            if wiki_lines >= WIKI_LINES_MAX {
+                break;
+            }
+            let line = render_wiki_line(section);
+            let cost = line.chars().count() + 8;
+            if current_chars + cost > max_chars {
+                continue;
+            }
+            current_chars += cost;
+            entries.push(line);
+            wiki_lines += 1;
+        }
         loop {
             let rendered = build_memory_injection(&entries);
             if rendered.chars().count() <= max_chars {
@@ -565,6 +582,34 @@ mod tests {
     }
 
     /// 用户知识库命中节渲染成 `[wiki:...]` 行, 且排在**所有**记忆条目之后。
+    #[test]
+    fn wiki_sections_also_render_in_the_injection_format() {
+        // **两条渲染路径都要出命中节** —— 否则「接了」只在一半路径成立
+        // （注入格式是反幻觉编号证据清单那一条，与 `compile()` 的
+        //  `<governed_memory>` 块是**两个不同的渲染器**）。
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section("knowledge.md", "项目背景", "语料正文")];
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let access = compiler
+            .compile_injection_with_selected_access(&recalled, "session-wiki", 4_000)
+            .expect("injection");
+        assert!(
+            access
+                .overlay
+                .contains("[wiki:knowledge.md] 项目背景 语料正文"),
+            "{}",
+            access.overlay
+        );
+        let mem_pos = access.overlay.find("记忆正文").expect("记忆正文");
+        let wiki_pos = access.overlay.find("[wiki:").expect("命中节行");
+        assert!(
+            mem_pos < wiki_pos,
+            "命中节排在记忆正文之后: {}",
+            access.overlay
+        );
+    }
+
     #[test]
     fn wiki_sections_render_as_wiki_lines_after_the_memory_entries() {
         let mut recalled = recalled(vec![("first", "记忆正文")]);

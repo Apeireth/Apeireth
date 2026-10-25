@@ -95,8 +95,13 @@ fn section_text_stops_before_next_sibling_heading() {
     );
 
     let ctx = WikiContext::build(corpus.root(), "甲节", WikiLimits::default());
-    assert_eq!(ctx.sections.len(), 1, "只应命中甲节一节");
-    let section = &ctx.sections[0];
+    // 父节的正文**包含**子节 ⇒ 正文信号下父节也可能命中；这里断言的是
+    // 「甲节这一节」的正文边界本身, 与命中总数无关。
+    let section = ctx
+        .sections
+        .iter()
+        .find(|section| section.heading == "甲节")
+        .expect("应命中甲节");
     assert_eq!(section.heading, "甲节", "标题应去掉 # 与空白");
     assert_eq!(section.source_path, "doc.md");
     assert!(
@@ -118,24 +123,58 @@ fn section_text_stops_before_next_sibling_heading() {
 
 #[test]
 fn parent_section_covers_its_children_until_next_sibling() {
+    // **二级标题**的整节 = 到下一个**同级或更高级**标题为止 ⇒ 含子节正文。
     let corpus = TempCorpus::new("parent-span");
     corpus.write(
         "doc.md",
         "# 甲章\n甲章正文。\n\
+         ## 甲节\n甲节正文。\n\
+         ### 甲孙节\n甲孙节正文。\n\
+         ## 乙节\n乙节正文。\n",
+    );
+
+    let ctx = WikiContext::build(corpus.root(), "甲节", WikiLimits::default());
+    let text = &ctx
+        .sections
+        .iter()
+        .find(|section| section.heading == "甲节")
+        .expect("应命中甲节")
+        .text
+        .clone();
+    assert!(text.contains("甲节正文"), "本节正文应在: {text:?}");
+    assert!(text.contains("甲孙节正文"), "父节应包含子节正文: {text:?}");
+    assert!(
+        !text.contains("乙节正文"),
+        "父节应在下一个同级标题处收尾: {text:?}"
+    );
+}
+
+#[test]
+fn top_level_heading_owns_only_its_preamble() {
+    // **一级标题（`#`）只拥有它的前言** —— 否则「整节」= 整篇文档，
+    // 注入上下文时会把**整篇**灌进去（2026-10-25 真机验证实测到的真问题）。
+    let corpus = TempCorpus::new("h1-preamble");
+    corpus.write(
+        "doc.md",
+        "# 甲章\n甲章前言。\n\
          ## 甲节一\n甲节一正文。\n\
-         ## 甲节二\n甲节二正文。\n\
-         # 乙章\n乙章正文。\n",
+         # 乙章\n乙章前言。\n",
     );
 
     let ctx = WikiContext::build(corpus.root(), "甲章", WikiLimits::default());
-    assert_eq!(ctx.sections.len(), 1);
-    let text = &ctx.sections[0].text;
-    assert!(text.contains("甲章正文"));
-    assert!(text.contains("甲节一正文"), "父节应包含子节正文: {text:?}");
+    let text = &ctx
+        .sections
+        .iter()
+        .find(|section| section.heading == "甲章")
+        .expect("应命中甲章")
+        .text
+        .clone();
+    assert!(text.contains("甲章前言"), "前言应属于一级标题: {text:?}");
     assert!(
-        !text.contains("乙章"),
-        "父节应在下一个同级标题处收尾: {text:?}"
+        !text.contains("甲节一正文"),
+        "一级标题不得吞掉子节正文: {text:?}"
     );
+    assert!(!text.contains("乙章"), "不得越过下一个同级标题: {text:?}");
 }
 
 #[test]
@@ -157,6 +196,22 @@ fn chinese_query_matches_chinese_heading() {
     assert_eq!(ctx.sections[0].heading, "记忆引擎");
     assert_eq!(ctx.sections[0].source_path, "engine.md");
     assert!(ctx.sections[0].text.contains("短期记忆"));
+}
+
+#[test]
+fn body_mention_makes_a_section_findable_even_without_title_match() {
+    let corpus = TempCorpus::new("body-signal");
+    corpus.write(
+        "doc.md",
+        "# 治理层的取舍\n本节讨论哲学门禁的落地方式。\n\
+         # 无关章节\n这里什么也不提。\n",
+    );
+
+    // 标题里没有「哲学门禁」, 但正文提到过 ⇒ 仍应能找到那一节。
+    let ctx = WikiContext::build(corpus.root(), "哲学门禁", WikiLimits::default());
+    assert_eq!(ctx.sections.len(), 1, "正文提到过的节应可被找到");
+    assert_eq!(ctx.sections[0].heading, "治理层的取舍");
+    assert!(ctx.sections[0].text.contains("哲学门禁"));
 }
 
 #[test]
@@ -202,13 +257,84 @@ fn section_text_is_truncated_on_char_boundary() {
         text.ends_with(TRUNCATION_MARKER),
         "截断后应标注省略: {text:?}"
     );
+    // 正文**不含标题行**（标题另有 `heading` 字段）⇒ 前缀应是正文本体。
     assert!(
-        text.starts_with("# 记忆引擎\n"),
+        text.starts_with("记忆引擎记忆引擎"),
         "截断应发生在字符边界上, 不得切坏 UTF-8: {text:?}"
     );
-    // 省略标记之前的字符必须与原文前缀逐字相同 (没有半个汉字)。
+    // 省略标记之前的字符必须与**正文**前缀逐字相同 (没有半个汉字)。
     let kept: String = text.chars().take(limits.max_section_chars).collect();
-    assert!(original.starts_with(&kept), "截断前缀必须是原文的逐字前缀");
+    let body = "记忆引擎".repeat(40);
+    assert!(
+        body.starts_with(&kept),
+        "截断前缀必须是正文的逐字前缀: {kept:?}"
+    );
+    let _ = &original;
+}
+
+#[test]
+fn single_cjk_character_query_still_matches() {
+    // CJK bigram 对**单字**查询分不出 token ⇒ 「查不到任何节」。
+    // ⇒ 单字成段时补 unigram（2026-10-25 真机验证时补的边界）。
+    let corpus = TempCorpus::new("cjk-unigram");
+    corpus.write("doc.md", "# 小猫\n小猫很可爱。\n");
+    corpus.write("doc2.md", "# 机器\n机器很重。\n");
+
+    let ctx = WikiContext::build(corpus.root(), "猫", WikiLimits::default());
+    assert_eq!(ctx.sections.len(), 1, "单字查询应命中: {ctx:?}");
+    assert_eq!(ctx.sections[0].heading, "小猫");
+    assert!(
+        ctx.sections[0].text.contains("小猫很可爱"),
+        "应取到该节正文: {:?}",
+        ctx.sections[0].text
+    );
+}
+
+#[test]
+fn section_text_excludes_the_heading_line() {
+    // 正文**不含标题行**（标题另有 `heading` 字段）
+    // ⇒ 渲染出的证据行不会把标题说两遍。
+    let corpus = TempCorpus::new("no-heading-dup");
+    corpus.write("doc.md", "# 标题\n正文第一行。\n");
+
+    let ctx = WikiContext::build(corpus.root(), "标题", WikiLimits::default());
+    assert_eq!(ctx.sections.len(), 1);
+    let section = &ctx.sections[0];
+    assert_eq!(section.heading, "标题");
+    assert!(
+        !section.text.contains("# 标题"),
+        "正文不应含标题行: {:?}",
+        section.text
+    );
+    assert!(
+        section.text.contains("正文第一行"),
+        "正文应保留本节内容: {:?}",
+        section.text
+    );
+}
+
+#[test]
+fn the_most_specific_section_ranks_first() {
+    // **祖先节不得压过子节**：祖先正文含子节 ⇒ 若按整节算正文分，祖先更长 ⇒ 分更高
+    // ⇒ 会排在子节前面（真机验证时发现的问题）⇒ 正文分只用**本节自有正文**。
+    let corpus = TempCorpus::new("specific-first");
+    corpus.write(
+        "doc.md",
+        "# 检索\n检索层前言。\n\
+         ## 检索层实现\n检索层由 ACT-R 激活与混合检索组成。\n\
+         ### 检索层细节\n检索层细节内容。\n",
+    );
+
+    let ctx = WikiContext::build(corpus.root(), "检索层实现", WikiLimits::default());
+    let headings: Vec<&str> = ctx
+        .sections
+        .iter()
+        .map(|section| section.heading.as_str())
+        .collect();
+    assert!(
+        headings.first() == Some(&"检索层实现"),
+        "最具体的节应排第一: {headings:?}"
+    );
 }
 
 #[test]
@@ -280,11 +406,13 @@ fn max_files_budget_is_enforced() {
 #[test]
 fn max_total_chars_budget_is_enforced() {
     let corpus = TempCorpus::new("max-total");
+    // 三节各 20 字 ⇒ 总预算 30 字只装得下 1 节 ⇒ 断言「超预算后停止取节」成立。
+    // （一级标题只拥有前言 ⇒ 每节正文就是自己那段 ⇒ 长度可控。）
     corpus.write(
         "doc.md",
-        "# 记忆一\n记忆一正文内容。\n\
-         # 记忆二\n记忆二正文内容。\n\
-         # 记忆三\n记忆三正文内容。\n",
+        "# 记忆一\n记忆一正文内容一二三四五六七八。\n\
+         # 记忆二\n记忆二正文内容一二三四五六七八。\n\
+         # 记忆三\n记忆三正文内容一二三四五六七八。\n",
     );
 
     let limits = WikiLimits {
@@ -363,7 +491,7 @@ fn crlf_document_sections_start_at_real_line_boundaries() {
     assert_eq!(ctx.sections.len(), 1);
     let text = &ctx.sections[0].text;
     assert!(
-        text.starts_with("# 记忆引擎\r\n记忆引擎正文。"),
+        text.starts_with("记忆引擎正文。"),
         "CRLF 文件的节起点必须落在真实行边界: {text:?}"
     );
     assert!(!text.contains("其它"), "不得越过下一个同级标题: {text:?}");
