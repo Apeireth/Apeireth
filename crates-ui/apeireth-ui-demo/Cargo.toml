@@ -27,6 +27,8 @@ path = "src/main.rs"
 # 内部依赖：门面（各层 re-export）+ 组件库（共享组件）。
 apeireth-ui = { path = "../apeireth-ui" }
 apeireth-ui-kit = { path = "../apeireth-ui-kit" }
+# ⭐ 宿主侧「时刻文本」能力（浏览器 `Intl` ⇒ 与生产逐字同源）。
+apeireth-ui-time = { path = "../apeireth-ui-time" }
 # 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**，
 # 见 apeireth-ui-macro 的 crate 文档头「运行时路径约定」）⇒ 这两个 crate 必须是
 # 使用方的**直接依赖**。

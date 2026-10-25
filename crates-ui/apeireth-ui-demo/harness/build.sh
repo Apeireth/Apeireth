@@ -19,7 +19,17 @@ CRATES_UI="$(cd "${HERE}/../.." && pwd)"
 REPO="$(cd "${CRATES_UI}/.." && pwd)"
 
 WASM_BINDGEN="${WASM_BINDGEN:-${REPO}/target/ui-probe-scratch/bin/bin/wasm-bindgen}"
-if ! command -v wasm-bindgen >/dev/null 2>&1 && [ ! -x "${WASM_BINDGEN}" ]; then
+if ! command -v wasm-bindgen >/dev/null 2>&1 && [ ! -x # ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
+# 否则外部设了 `CARGO_TARGET_DIR` 时 cargo 把产物写到别处，
+# 而本脚本仍去读硬编码的 `…/target/…` ⇒ ⇒ **拿到旧 wasm**
+# ⇒ ⇒ 实测踩过：注入的修复**没进浏览器** ⇒ ⇒ **假绿/假红**。
+TARGET_DIR="${CARGO_TARGET_DIR:-${CRATES_UI}/target}"
+WASM_ARTIFACT="${TARGET_DIR}/wasm32-unknown-unknown/release/apeireth-ui-demo.wasm"
+if [ ! -f "${WASM_ARTIFACT}" ]; then
+  echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
+  exit 1
+fi
+"${WASM_BINDGEN}" ]; then
   echo "找不到 wasm-bindgen（可用 WASM_BINDGEN=<路径> 指定）" >&2
   exit 1
 fi
@@ -40,7 +50,7 @@ rm -rf "${HERE}/public/engine/pkg"
 mkdir -p "${HERE}/public/engine/pkg"
 "${WASM_BINDGEN}" --target web --no-typescript \
   --out-dir "${HERE}/public/engine/pkg" \
-  "${CRATES_UI}/target/wasm32-unknown-unknown/release/apeireth-ui-demo.wasm"
+  "${WASM_ARTIFACT}"
 
 echo "── 4/5 vite build ──"
 if [ ! -d "${HERE}/node_modules" ]; then

@@ -34,12 +34,22 @@ echo "── 3/6 构建 wasm 产物（独立 workspace） ──"
 (cd "${HOST}" && cargo build --release --target wasm32-unknown-unknown --locked)
 
 echo "── 4/6 wasm-bindgen ──"
+# ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
+# 否则外部设了 `CARGO_TARGET_DIR` 时，cargo 把产物写到别处，
+# 而本脚本仍去读 `${HOST}/target/...` ⇒ ⇒ **拿到旧 wasm** ⇒
+# ⇒ ⇒ 实测踩过：注入的修复**没进浏览器**（页面仍显 UTC）⇒ **假绿/假红**。
+TARGET_DIR="${CARGO_TARGET_DIR:-${HOST}/target}"
+WASM_ARTIFACT="${TARGET_DIR}/wasm32-unknown-unknown/release/governance_harness.wasm"
+if [ ! -f "${WASM_ARTIFACT}" ]; then
+  echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
+  exit 1
+fi
 rm -rf "${HERE}/public/engine/pkg"
 mkdir -p "${HERE}/public/engine/pkg"
 "${WASM_BINDGEN}" --target web --no-typescript \
   --out-name governance-harness \
   --out-dir "${HERE}/public/engine/pkg" \
-  "${HOST}/target/wasm32-unknown-unknown/release/governance_harness.wasm"
+  "${WASM_ARTIFACT}"
 
 echo "── 5/6 vite build ──"
 if [ ! -d "${HERE}/node_modules" ]; then

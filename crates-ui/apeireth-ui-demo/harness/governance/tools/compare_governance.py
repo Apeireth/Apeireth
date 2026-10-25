@@ -256,7 +256,7 @@ def main() -> int:
         "batch": "治理卷宗面（ApprovalsTab + GrantsTab + AuditTab + GuardTab）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "reference_pages": {tab: f"/reference/{tab}/index.html" for tab in TABS},

@@ -511,6 +511,10 @@ fn render_guard(state: &GovState, case: &FixtureCase) -> VNode {
 
 /// 挂载当前卷宗面。
 fn mount(container: &Element, tab: String, case_index: usize, base_ms: i64) -> Result<(), String> {
+    // ⭐ **装上「浏览器时刻文本」**（宿主能力 ⇒ 与生产**逐字同源**）：
+    // ⇒ 生产的时刻显示走浏览器 `Intl`（本地时区 + ICU）⇒
+    // ⇒ 不装 ⇒ 引擎用**固定 UTC** ⇒ ⇒ 非 UTC 时区下**差几小时**。
+    apeireth_ui_time::install();
     let dom = WebDom::new().map_err(|error| error.to_string())?;
     // 对照容器（**两侧同盒** ⇒ 逐像素对照的取景框一致；参考侧的容器在 Svelte
     // 包装里，class 名逐字相同）。

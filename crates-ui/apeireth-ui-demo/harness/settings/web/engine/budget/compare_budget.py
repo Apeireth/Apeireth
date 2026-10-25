@@ -378,6 +378,123 @@ def describe_dom_diff(left, right, path: str) -> list[str]:
     return []
 
 
+def run_knob_input_check(env: dict) -> dict:
+    """⭐ **旋钮数字输入的对照**（**键入** ⇒ 断言取值与反馈**逐字相同**）。
+
+    ## 为什么要有这个用例
+
+    2026-10-25 实测到一个**架构级缺陷**：预算面的状态对象**自建了一个独立的
+    `Runtime`** ⇒ ⇒ effect **不依赖**草稿信号 ⇒ ⇒ 改草稿**不重渲染**
+    ⇒ ⇒ **「幽灵输入」**：用户敲进去的值**引擎不知道**
+    （DOM 上显示的是浏览器自己画的值，引擎草稿仍是 `""`）。
+
+    ⚠️ 而**本面此前的对照全是静态像素** ⇒ ⇒ **这类缺陷永远测不到**
+    ⇒ ⇒ 这就是「**对照覆盖面要与引擎能力面匹配**」的缺口。
+
+    ⇒ ⇒ 本用例用**真实键入**（两侧同路径）⇒ ⇒ 断言三样：
+    ① 键入后 `input.value` 两侧**逐字相同**；
+    ② 失焦（提交）后 `input.value` 两侧**逐字相同**（⇒ 引擎**接管**了取值）；
+    ③ 反馈文案（`.budget-feedback`）两侧**逐字相同**（⇒ 引擎**算出了同样的归一化**）。
+
+    ## 口径
+
+    - 键入 `'7'`（原值 `8`）⇒ 越界（`max = 64`）⇒ 失焦后应被**钳制**；
+    - 失焦用 `blur()` ⇒ 触发生产的「整组失焦提交」；
+    - 反馈文案取 `.budget-feedback` 的文本（**生产与引擎同 class**）。
+    """
+    cdp = env["cdp"]
+    base = env["base"]
+    rows = []
+    for side in ("reference", "engine"):
+        navigate(cdp, f"{base}/web/{side}/budget/index.html")
+        select_section(cdp, "budget")
+        # 聚焦第一个数字步进器 ⇒ 键入一个字符 ⇒ 失焦（提交）。
+        cdp.evaluate(
+            "(() => { const el = document.querySelector('input[type=number]');"
+            " if (el) el.focus(); return !!el; })()"
+        )
+        cdp.call(
+            "Input.dispatchKeyEvent",
+            {
+                "type": "keyDown",
+                "text": "7",
+                "unmodifiedText": "7",
+                "key": "7",
+                "code": "Digit7",
+                "windowsVirtualKeyCode": 55,
+                "nativeVirtualKeyCode": 55,
+            },
+        )
+        cdp.call(
+            "Input.dispatchKeyEvent",
+            {
+                "type": "keyUp",
+                "key": "7",
+                "code": "Digit7",
+                "windowsVirtualKeyCode": 55,
+            },
+        )
+        time.sleep(0.4)
+        typed = cdp.evaluate(
+            "(() => { const el = document.querySelector('input[type=number]');"
+            " return el ? el.value : '<无输入框>'; })()"
+        )
+        cdp.evaluate(
+            "(() => { const el = document.querySelector('input[type=number]');"
+            " if (el) el.blur(); return true; })()"
+        )
+        time.sleep(0.8)
+        committed = cdp.evaluate(
+            "(() => { const el = document.querySelector('input[type=number]');"
+            " return el ? el.value : '<无输入框>'; })()"
+        )
+        feedback = cdp.evaluate(
+            "(() => { const el = document.querySelector('.budget-feedback');"
+            " return el ? (el.textContent || '').trim() : ''; })()"
+        )
+        log(
+            f"  knob-input {side}：键入后={typed!r} / 失焦后={committed!r}"
+            f" / 反馈={feedback!r}"
+        )
+        rows.append(
+            {"side": side, "typed": typed, "committed": committed, "feedback": feedback}
+        )
+
+    reference, engine = rows[0], rows[1]
+    record = {
+        "case": "knob-input-typed",
+        "driver": (
+            "聚焦第一个数字步进器 ⇒ 键入 '7' ⇒ blur（提交）"
+            "（两侧同路径）"
+        ),
+        "reference_typed_value": reference.get("typed"),
+        "engine_typed_value": engine.get("typed"),
+        "reference_committed_value": reference.get("committed"),
+        "engine_committed_value": engine.get("committed"),
+        "reference_feedback": reference.get("feedback"),
+        "engine_feedback": engine.get("feedback"),
+        "typed_value_equal": reference.get("typed") == engine.get("typed"),
+        "committed_value_equal": reference.get("committed") == engine.get("committed"),
+        "feedback_equal": reference.get("feedback") == engine.get("feedback"),
+    }
+    record["passed"] = bool(
+        record["typed_value_equal"]
+        and record["committed_value_equal"]
+        and record["feedback_equal"]
+    )
+    OUT.mkdir(parents=True, exist_ok=True)
+    EVIDENCE.mkdir(parents=True, exist_ok=True)
+    (EVIDENCE / "knob-input-typed.record.json").write_text(
+        json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    log(
+        f"  knob-input-typed：键入值一致={record['typed_value_equal']}"
+        f" / 提交值一致={record['committed_value_equal']}"
+        f" / 反馈一致={record['feedback_equal']}"
+    )
+    return record
+
+
 def collect_pair(panel: dict, section: str, port: int) -> dict:
     """跑一对（面 × 分区）的对照（**共享脚本的约定入口**）。
 
@@ -487,7 +604,7 @@ def main() -> int:
         "face": "budget（预算与配额 · 设置页 S5 面）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "crop": "element（按**本面自己拥有的区块**裁剪；参考侧夹着的 `MetricsPanel` 是外部组件 ⇒ 未迁 ⇒ 不对照）",
@@ -517,6 +634,10 @@ def main() -> int:
                 f" / 余量条取整 {'一致' if record['t4_fill_styles_equal'] else '不一致'}"
             )
         report["pairs"] = pairs
+        # ⭐ **键入对照**（2026-10-25 加）：静态像素**测不到**「用户输入进不进
+        # 引擎状态」⇒ ⇒ 补一条**真实键入**的用例（见 `run_knob_input_check`）。
+        knob_input = run_knob_input_check(env)
+        report["knob_input"] = knob_input
         report["checks"] = {
             "t1_all_pixels_within_budget": all(
                 row["t1_pixel_ratio"] <= PIXEL_BUDGET
@@ -534,6 +655,8 @@ def main() -> int:
             "t4_fill_styles_identical": all(
                 pair["t4_fill_styles_equal"] for pair in pairs
             ),
+            # ⭐ 键入后取值 / 提交后取值 / 反馈文案 ⇒ 三者**逐字相同**。
+            "t5_knob_input_identical": bool(knob_input.get("passed")),
         }
         report["notes"] = [
             "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
@@ -551,7 +674,12 @@ def main() -> int:
             "运行时分区的**诊断结果区**（`.diag-results`）用外部组件 `StatusBadge`"
             "（带自己的 scoped CSS）⇒ **未迁** ⇒ 参考侧的默认态亦无报告 ⇒ "
             "该分支**未覆盖**（诚实边界）。",
-            "环境：视口 1440×900、DPR 1、时区 UTC。",
+            "T5 是**真实键入**的对照（聚焦数字步进器 ⇒ 键入 '7' ⇒ blur 提交）"
+            "⇒ 断言**键入值 / 提交值 / 反馈文案**三者两侧**逐字相同**"
+            "⇒ ⇒ 覆盖「用户输入进不进引擎状态」这类**静态像素测不到**的缺陷。",
+            f"环境：视口 1440×900、DPR 1、时区 {compare.TIMEZONE}"
+            "（⚠️ **刻意用非 UTC**：生产时刻显示走浏览器 `Intl`（本地时区）⇒"
+            "若装置也用 UTC ⇒ **两边一起错 ⇒ 掩盖时区缺陷**）。",
         ]
         report["passed"] = all(report["checks"].values())
 

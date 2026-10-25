@@ -1424,7 +1424,7 @@ def main() -> int:
         "face": "provider（服务商与连接 · 设置页 S2 面）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": "0（本面 T1 要求逐像素 0；骨架的 1% 预算只作参考）",
         "crop": {

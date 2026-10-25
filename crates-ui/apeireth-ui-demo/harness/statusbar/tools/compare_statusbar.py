@@ -284,7 +284,7 @@ def main() -> int:
         "batch": "状态条面（StatusBar + StatusBadge）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "reference_page": "/reference/statusbar/index.html",

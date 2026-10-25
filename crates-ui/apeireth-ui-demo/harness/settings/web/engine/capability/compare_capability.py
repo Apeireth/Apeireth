@@ -886,7 +886,7 @@ def main() -> int:
         "face": "capability（能力与治理 · 设置页 S4 面）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "crop": "元素框（`.setting-block` / `.sp-capability .setting-block`）",

@@ -29,6 +29,10 @@ path = "src/lib.rs"
 [dependencies]
 # 被验证对象：组件库（仓库内路径依赖，0 拷贝 0 改写）。
 apeireth-ui-kit = { path = "../../../../apeireth-ui-kit" }
+# ⭐ 宿主侧「时刻文本」能力（浏览器 `Intl` ⇒ 与生产逐字同源）。
+# ⇒ ⚠️ 不装 ⇒ 引擎用**固定 UTC** ⇒ 而生产用**本地时区**
+# ⇒ ⇒ 非 UTC 时区下两侧差**时差**（实测 8 小时）⇒ ⇒ 对照会红。
+apeireth-ui-time = { path = "../../../../apeireth-ui-time" }
 # 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**，
 # 见 apeireth-ui-macro 的 crate 文档头「运行时路径约定」）⇒ 这两个 crate 必须是
 # 使用方的**直接依赖**。

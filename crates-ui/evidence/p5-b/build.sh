@@ -18,7 +18,17 @@ REPO="$(cd "${HERE}/../../.." && pwd)"
 
 # wasm-bindgen CLI 的版本必须与 crates-ui 的 wasm-bindgen 依赖**精确一致**（0.2.129）。
 WASM_BINDGEN="${WASM_BINDGEN:-}"
-if [ -z "${WASM_BINDGEN}" ]; then
+if [ -z # ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
+# 否则外部设了 `CARGO_TARGET_DIR` 时 cargo 把产物写到别处，
+# 而本脚本仍去读硬编码的 `…/target/…` ⇒ ⇒ **拿到旧 wasm**
+# ⇒ ⇒ 实测踩过：注入的修复**没进浏览器** ⇒ ⇒ **假绿/假红**。
+TARGET_DIR="${CARGO_TARGET_DIR:-${HERE}/harness/target}"
+WASM_ARTIFACT="${TARGET_DIR}/wasm32-unknown-unknown/release/p5b_harness.wasm"
+if [ ! -f "${WASM_ARTIFACT}" ]; then
+  echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
+  exit 1
+fi
+"${WASM_BINDGEN}" ]; then
   for candidate in \
     "$(command -v wasm-bindgen || true)" \
     "${REPO}/target/ui-probe-scratch/bin/bin/wasm-bindgen"; do
@@ -42,7 +52,7 @@ rm -rf "${HERE}/web/public/engine/pkg"
 mkdir -p "${HERE}/web/public/engine/pkg"
 "${WASM_BINDGEN}" --target web --no-typescript \
   --out-dir "${HERE}/web/public/engine/pkg" \
-  "${HERE}/harness/target/wasm32-unknown-unknown/release/p5b_harness.wasm"
+  "${WASM_ARTIFACT}"
 
 echo "── 3/4 vite build ──"
 # ⚠️ 用 `-e`（存在性）**加上** `-d`（是目录）两个条件 ⇒ **坏链接**也能被识别并重建。

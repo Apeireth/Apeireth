@@ -437,7 +437,7 @@ def main() -> int:
         "face": "wizard（首次运行向导 · 设置页 W1 面）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "crop": "viewport（遮罩是 position: fixed ⇒ 整视口，不裁剪）",

@@ -42,6 +42,7 @@
 //! 生产模板里相邻元素之间的换行会折叠成**一个空格**（文本节点）⇒ 本模块
 //! **逐个复现**这些空白文本节点（否则 DOM 逐字比对会出现差异）。
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::badge::{Badge, BadgeProps};
@@ -129,14 +130,87 @@ fn same_utc_day(left_ms: i64, right_ms: i64) -> bool {
     left.year == right.year && left.month == right.month && left.day == right.day
 }
 
+/// ⭐ **时刻文本的格式化器**（**宿主能力**）。
+///
+/// ## 为什么它是「宿主能力」而不是引擎的纯逻辑
+///
+/// 生产的时刻显示走**浏览器**的 `Intl`：
+/// `new Date(ts).toLocaleTimeString('zh-CN', {hour:'2-digit', …})`
+/// ⇒ ⇒ 产出同时依赖三样东西：
+/// ① **本地时区**（`Date` 按浏览器时区解释 epoch）；
+/// ② **ICU 版本**（`zh-CN` 的数字与分隔符形态由浏览器的 ICU 决定）；
+/// ③ **`Intl` 的补零规则**（`hour:'2-digit'` ⇒ `06` 还是 `6`）。
+///
+/// ⇒ ⇒ 引擎侧**手写**这三样 ⇒ **必然**在「非 UTC 时区」或「不同浏览器」上偏差
+/// ⇒ ⇒ 实测：同一时刻，生产在 `Asia/Shanghai` 给 `14:30:15`，
+/// 而引擎的固定 UTC 版给 `06:30:15` ⇒ **差 8 小时**。
+///
+/// ⇒ ⇒ **根治**：宿主**直接调生产同一个浏览器 API** ⇒ ⇒ 连 ICU 差异都一致。
+///
+/// ## 默认实现（[`UtcTimeText`]）
+///
+/// native（无浏览器）用**固定 UTC** ⇒ 可测、可复现 ⇒ 但**不是生产口径**。
+pub trait TimeTextFormatter: 'static {
+    /// `HH:MM:SS` 时刻（生产 `formatClockMs` 的口径）。
+    fn clock(&self, ts_ms: i64) -> String;
+    /// 短日期时刻（生产 `formatDateTimeMs` 的口径）。
+    fn date_time(&self, ts_ms: i64, now_ms: i64) -> String;
+}
+
+/// 默认实现：**固定 UTC**（native / 测试基准）。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UtcTimeText;
+
+impl TimeTextFormatter for UtcTimeText {
+    fn clock(&self, ts_ms: i64) -> String {
+        let parts = utc_parts(ts_ms);
+        format!("{:02}:{:02}:{:02}", parts.hour, parts.minute, parts.second)
+    }
+
+    fn date_time(&self, ts_ms: i64, now_ms: i64) -> String {
+        let parts = utc_parts(ts_ms);
+        let clock = format!("{:02}:{:02}", parts.hour, parts.minute);
+        if same_utc_day(ts_ms, now_ms) {
+            return clock;
+        }
+        format!("{:02}/{:02} {}", parts.month, parts.day, clock)
+    }
+}
+
+thread_local! {
+    /// **进程级**时间文本器（`None` ⇒ 用默认的固定 UTC 实现）。
+    ///
+    /// ## 为什么是「进程级」
+    ///
+    /// **时区是进程级的环境量**（整个浏览器共享一个本地时区）⇒
+    /// ⇒ 用进程级槽**符合语义**，不是权宜。
+    static TIME_TEXT: RefCell<Option<Rc<dyn TimeTextFormatter>>> = const { RefCell::new(None) };
+}
+
+/// 装上**进程级**时间文本器（宿主在启动时调用一次）。
+///
+/// ⚠️ 传入 `None` ⇒ 回到默认的**固定 UTC** 实现（native 默认）。
+pub fn set_time_text_formatter(formatter: Option<Rc<dyn TimeTextFormatter>>) {
+    TIME_TEXT.with(|slot| {
+        *slot.borrow_mut() = formatter;
+    });
+}
+
+/// 取当前的**进程级**时间文本器（未装 ⇒ 默认固定 UTC）。
+pub fn time_text() -> Rc<dyn TimeTextFormatter> {
+    TIME_TEXT.with(|slot| {
+        slot.borrow()
+            .clone()
+            .unwrap_or_else(|| Rc::new(UtcTimeText))
+    })
+}
+
 /// `HH:MM:SS` 时刻（生产 `formatClockMs` 的口径）。
 ///
-/// ⚠️ **时区边界**：生产走 `toLocaleTimeString('zh-CN')`（本地时区）；本实现
-/// 固定 **UTC**（对照 harness 的时区口径，实测 Chrome 的 zh-CN 输出为
-/// `06:30:15` 形态）。
+/// ⚠️ **时区**：本函数走**进程级**时间文本器 ⇒ wasm 宿主装的是**浏览器 `Intl`**
+/// ⇒ ⇒ 与生产**逐字一致**；native（未装）⇒ **固定 UTC**。
 pub fn format_clock_ms(ts_ms: i64) -> String {
-    let parts = utc_parts(ts_ms);
-    format!("{:02}:{:02}:{:02}", parts.hour, parts.minute, parts.second)
+    time_text().clock(ts_ms)
 }
 
 /// `MM/DD HH:MM` 短日期时刻（同日 ⇒ 只给 `HH:MM`）。
@@ -145,14 +219,9 @@ pub fn format_clock_ms(ts_ms: i64) -> String {
 /// `toLocaleDateString` + 空格 + 时刻。实测 Chrome 的 zh-CN 输出为
 /// `10/20 06:30`（日期分隔符是 `/`）。
 ///
-/// ⚠️ **时区边界**：同 [`format_clock_ms`]（固定 UTC）。
+/// ⚠️ **时区**：同 [`format_clock_ms`]（进程级时间文本器；wasm ⇒ 浏览器 `Intl`）。
 pub fn format_date_time_ms(ts_ms: i64, now_ms: i64) -> String {
-    let parts = utc_parts(ts_ms);
-    let clock = format!("{:02}:{:02}", parts.hour, parts.minute);
-    if same_utc_day(ts_ms, now_ms) {
-        return clock;
-    }
-    format!("{:02}/{:02} {}", parts.month, parts.day, clock)
+    time_text().date_time(ts_ms, now_ms)
 }
 
 /// 相对时间：刚刚 / N 秒前 / N 分钟前 / N 小时前 / N 天前。

@@ -857,7 +857,7 @@ def main() -> int:
         "face": "character（人格与记忆 · 设置页 S3 面）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "crop": "元素框（`.setting-block` / `.sp-character .setting-block`）",

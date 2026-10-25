@@ -342,6 +342,11 @@ pub mod wasm_app {
     /// `window.__APP_MODE__` 决定（**必须在 wasm 初始化之前**设定 ⇒ 初始化
     /// 即挂载）。取值未知 ⇒ 挂**试点审批卡**（默认形态）。
     pub fn start() {
+        // ⭐ **先装「浏览器时刻文本」**（宿主能力 ⇒ 与生产**逐字同源**）：
+        // ⇒ 生产的时刻显示走浏览器 `Intl`（本地时区 + ICU）⇒
+        // ⇒ 引擎若用固定 UTC ⇒ **用户在非 UTC 时区就看到差几小时的时刻**
+        // ⇒ ⇒ 这里在**任何**挂载之前装上 ⇒ 所有面都受益。
+        apeireth_ui_time::install();
         let Some(window) = web_sys::window() else {
             return;
         };

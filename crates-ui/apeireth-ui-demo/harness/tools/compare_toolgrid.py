@@ -280,7 +280,7 @@ def main() -> int:
         "batch": "工具卡面批二（工具栏 + 工具网格）",
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": compare.TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "reference_page": "/reference/toolgrid/index.html",

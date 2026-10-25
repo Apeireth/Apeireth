@@ -24,6 +24,11 @@ import http.server
 import json
 import os
 import pathlib
+
+#: 浏览器时区（与 `tools/compare.py` 的 `TIMEZONE` 同口径 ⇒ 非 UTC ⇒
+#: **让「引擎固定 UTC」的缺陷显形**，而不是被装置一起掩盖）。
+TIMEZONE = os.environ.get("APEIRETH_COMPARE_TZ", "Asia/Shanghai")
+
 import re
 import shutil
 import signal
@@ -734,7 +739,7 @@ def main():
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "environment": {
                 "chromium": chromium_version,
-                "timezone": "UTC",
+                "timezone": TIMEZONE,
                 "device_pixel_ratio": 1,
                 "canvas_css_px": [CANVAS_WIDTH, CANVAS_HEIGHT],
                 "driver": "cdp (websocket-client) — no playwright / no browser download",

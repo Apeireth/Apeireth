@@ -30,6 +30,15 @@ name = "apeireth-ui-macro"
 version = "2.0.0-rc.4"
 
 [[package]]
+name = "apeireth-ui-time"
+version = "0.0.0"
+dependencies = [
+ "apeireth-ui-kit",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -72,6 +81,7 @@ dependencies = [
  "apeireth-ui-core",
  "apeireth-ui-dom",
  "apeireth-ui-kit",
+ "apeireth-ui-time",
  "js-sys",
  "wasm-bindgen",
  "web-sys",

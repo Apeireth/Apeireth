@@ -62,6 +62,24 @@ OUT = HARNESS / "out"
 CHROME = os.environ.get("CHROME") or "/usr/bin/chromium"
 
 # 对照口径（设计文档 §9.3）。
+#: 对照时**浏览器时区**（`Emulation.setTimezoneOverride` 的取值）。
+#:
+#: ## 为什么要显式设成**非 UTC**
+#:
+#: 生产的时刻显示走 `toLocaleTimeString('zh-CN', …)` ⇒ **依赖浏览器本地时区**；
+#: 而引擎侧此前**固定 UTC** ⇒ ⇒ 只要用户不在 UTC，两侧就差**时差**。
+#:
+#: ⇒ ⇒ 装置若也固定 UTC ⇒ **两边一致 ⇒ 缺陷被完全掩盖** ⇒ ⇒ 这是
+#: 「**对照装置与被测对象一起错**」的典型 ⇒ ⇒ 判据**测不到真实场景**。
+#:
+#: ⇒ ⇒ 这里显式设成**非 UTC**（默认 `Asia/Shanghai`）⇒ ⇒
+#: - 本地：**立刻暴露**引擎的固定 UTC；
+#: - CI：**可复现**（不依赖 runner 的系统时区）。
+#:
+#: ⚠️ 两侧（参考 / 引擎）在**同一个浏览器** ⇒ **同一时区** ⇒ ⇒
+#: ⇒ 判据比的是「引擎有没有按本地时区显示」，而不是「两边时区是否相同」。
+TIMEZONE = os.environ.get("APEIRETH_COMPARE_TZ", "Asia/Shanghai")
+
 VIEWPORT_WIDTH = 1440
 VIEWPORT_HEIGHT = 900
 CHANNEL_THRESHOLD = 2  # 任一通道绝对差 > 2/255 即记「不同」
@@ -245,7 +263,7 @@ def open_page(port: int) -> Cdp:
         "deviceScaleFactor": 1,
         "mobile": False,
     })
-    cdp.call("Emulation.setTimezoneOverride", {"timezoneId": "UTC"})
+    cdp.call("Emulation.setTimezoneOverride", {"timezoneId": TIMEZONE})
     cdp.call("Emulation.setEmulatedMedia", {
         "features": [{"name": "prefers-reduced-motion", "value": "no-preference"}]
     })
@@ -580,7 +598,7 @@ def main() -> int:
     report: dict = {
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "phases_ms": PHASES_MS,
