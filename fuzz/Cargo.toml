@@ -277,3 +277,10 @@ path = "fuzz_targets/credentials.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "tool_params"
+path = "fuzz_targets/tool_params.rs"
+test = false
+doc = false
+bench = false

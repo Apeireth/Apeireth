@@ -8,7 +8,7 @@
 | `rt.provider_router` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `c9251271` | 2026-11-20 |
 | `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `c9251271` | 2026-11-20 |
-| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `da85caf59114` | 2026-11-20 |
+| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `97d93439f95f` | 2026-11-20 |
 | `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `c9251271` | 2026-11-20 |
 | `sec.egress_control` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `sec.object_access` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
