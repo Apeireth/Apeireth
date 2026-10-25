@@ -1109,6 +1109,8 @@ def run_uncovered_inputs_check(env: dict) -> dict:
         # 先拉出模型列表（搜索框随列表出现）。
         click_test_connection(cdp)
         time.sleep(0.8)
+        typed = type_into(cdp, ".disc-search input", "pt")
+        time.sleep(0.9)
         actual = cdp.evaluate(
             "(() => { const el = document.querySelector('.disc-search input');"
             " return el ? el.value : '<无搜索框>'; })()"
