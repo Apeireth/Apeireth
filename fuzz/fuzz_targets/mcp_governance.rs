@@ -219,7 +219,12 @@ fn sample_call() -> ToolCall {
 /// **契约 C1**（`governance.rs:26-36`）的三条规则与 `match decision` 的三个分支
 /// 一一对应：规则 1 → `Decision::Allow`、规则 2 → `Decision::RequireApproval`、
 /// 规则 3 → `Decision::Deny`（只读预置只在这一支里生效）。
-fn expected_label(granted: bool, marked: bool, preset: bool, declared_read_only: bool) -> &'static str {
+fn expected_label(
+    granted: bool,
+    marked: bool,
+    preset: bool,
+    declared_read_only: bool,
+) -> &'static str {
     // 规则 1：显式授权且未被标审批 ⇒ 放行。
     if granted && !marked {
         return "allow";
@@ -361,7 +366,8 @@ fn check_decision(scenario: &Scenario, capability: &CapabilityId, preset: bool) 
     // C2：无显式授权 ⇒ 停在问人档（fail-closed），不得放行。
     if !granted && !(preset && declared_read_only) {
         assert_ne!(
-            verdict, "allow",
+            verdict,
+            "allow",
             "C2：无显式授权却放行了外部工具: capability={}",
             capability.as_str()
         );
@@ -369,7 +375,8 @@ fn check_decision(scenario: &Scenario, capability: &CapabilityId, preset: bool) 
     // C1 规则 2：被标审批 ⇒ 问人。
     if granted && marked {
         assert_eq!(
-            verdict, "ask",
+            verdict,
+            "ask",
             "C1 规则 2：被标审批的工具必须停在问人档: capability={}",
             capability.as_str()
         );
@@ -506,7 +513,10 @@ fn check_authorize_readonly(scenario: &Scenario) {
 fn check_deny_guard(capability: &str) {
     let guard = Arc::new(McpToolDenyGuard::new());
     assert!(!guard.is_blocked(capability), "空名单不该有任何能力被拒");
-    assert!(guard.deny_capability(capability), "C6：首次列入必须返回「新拒」");
+    assert!(
+        guard.deny_capability(capability),
+        "C6：首次列入必须返回「新拒」"
+    );
     assert!(
         !guard.deny_capability(capability),
         "C6：重复列入必须返回「不是新拒」"
@@ -517,7 +527,10 @@ fn check_deny_guard(capability: &str) {
         Ok(capability) => capability,
         // 非法能力 id 构造不出请求 ⇒ 只验名单状态本身。
         Err(_) => {
-            assert!(guard.allow_capability(capability), "C6：解除必须返回「原本被拒」");
+            assert!(
+                guard.allow_capability(capability),
+                "C6：解除必须返回「原本被拒」"
+            );
             assert!(!guard.is_blocked(capability));
             return;
         }
@@ -541,9 +554,18 @@ fn check_deny_guard(capability: &str) {
     );
 
     // 解除后不再被拒（C6 / C7）。
-    assert!(guard.allow_capability(capability), "C6：解除必须返回「原本被拒」");
-    assert!(!guard.allow_capability(capability), "C6：重复解除必须返回「没被拒」");
-    assert!(!guard.is_blocked(capability), "C7：解除后不得仍处于被拒状态");
+    assert!(
+        guard.allow_capability(capability),
+        "C6：解除必须返回「原本被拒」"
+    );
+    assert!(
+        !guard.allow_capability(capability),
+        "C6：重复解除必须返回「没被拒」"
+    );
+    assert!(
+        !guard.is_blocked(capability),
+        "C7：解除后不得仍处于被拒状态"
+    );
     assert!(
         guard.deny(&request).is_none(),
         "C8：解除后 guard 不再拒绝（None 不是放行，只是没有异议）"
@@ -555,7 +577,10 @@ fn check_deny_guard(capability: &str) {
 /// 描述投毒面契约（C4 / C18）。
 fn check_description_face(description: &str, read_only: bool, preset: bool) {
     let hostile = McpToolEntry::new(SERVER, &discovered(TOOL, Some(description), read_only));
-    let benign = McpToolEntry::new(SERVER, &discovered(TOOL, Some(BENIGN_DESCRIPTION), read_only));
+    let benign = McpToolEntry::new(
+        SERVER,
+        &discovered(TOOL, Some(BENIGN_DESCRIPTION), read_only),
+    );
     let Ok(benign_entry) = benign else {
         return;
     };
@@ -578,8 +603,7 @@ fn check_description_face(description: &str, read_only: bool, preset: bool) {
                 assert_stored_description_is_not_a_rejection(&entry.model_name, stored);
             }
             // C4：描述不是治理输入 —— 同样的身份，只换描述，判定必须一致。
-            let hostile_verdict =
-                verdict_label(&hostile_catalog, &policy, preset, &capability);
+            let hostile_verdict = verdict_label(&hostile_catalog, &policy, preset, &capability);
             let benign_verdict = verdict_label(&benign_catalog, &policy, preset, &capability);
             assert_eq!(
                 hostile_verdict, benign_verdict,
@@ -675,8 +699,12 @@ fn check_schema_face(schema: &Value, read_only: bool, preset: bool) {
     let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
     let hostile_catalog = Arc::new(McpToolCatalog::new());
     let benign_catalog = Arc::new(McpToolCatalog::new());
-    hostile_catalog.insert(hostile).expect("刚登记成功的条目必须能入目录");
-    benign_catalog.insert(benign).expect("刚登记成功的条目必须能入目录");
+    hostile_catalog
+        .insert(hostile)
+        .expect("刚登记成功的条目必须能入目录");
+    benign_catalog
+        .insert(benign)
+        .expect("刚登记成功的条目必须能入目录");
 
     // C4：入参声明不是治理输入 ⇒ 判定必须与良性对照一致。
     assert_eq!(
@@ -694,7 +722,9 @@ fn check_duplicate_registration() {
     let first = entry_of(SERVER, TOOL, Some(BENIGN_DESCRIPTION), false).expect("固定夹具");
     catalog.insert(first.clone()).expect("首次登记");
     let second = entry_of(SERVER, TOOL, Some("A different description."), true).expect("固定夹具");
-    let error = catalog.insert(second.clone()).expect_err("同名重复登记必须被拒");
+    let error = catalog
+        .insert(second.clone())
+        .expect_err("同名重复登记必须被拒");
     assert!(
         matches!(error, McpCatalogError::DuplicateToolName { .. }),
         "C16：同名重复登记的拒绝理由必须是 DuplicateToolName: {error:?}"
@@ -887,9 +917,11 @@ fuzz_target!(|data: &[u8]| {
             for capability in &capabilities {
                 match stream.byte() % 4 {
                     0 => {
-                        scenario.policy.lock().unwrap().grant(Permission::ExecuteTool(
-                            capability.clone(),
-                        ));
+                        scenario
+                            .policy
+                            .lock()
+                            .unwrap()
+                            .grant(Permission::ExecuteTool(capability.clone()));
                     }
                     1 => {
                         scenario
@@ -899,9 +931,11 @@ fuzz_target!(|data: &[u8]| {
                             .require_approval_for(capability.clone());
                     }
                     2 => {
-                        scenario.policy.lock().unwrap().grant(Permission::ExecuteTool(
-                            capability.clone(),
-                        ));
+                        scenario
+                            .policy
+                            .lock()
+                            .unwrap()
+                            .grant(Permission::ExecuteTool(capability.clone()));
                         scenario
                             .policy
                             .lock()
@@ -913,7 +947,8 @@ fuzz_target!(|data: &[u8]| {
             }
             let preset = stream.flag();
             for capability in &capabilities {
-                let capability_id = CapabilityId::new(capability).expect("目录条目能力 id 必然合法");
+                let capability_id =
+                    CapabilityId::new(capability).expect("目录条目能力 id 必然合法");
                 check_decision(&scenario, &capability_id, preset);
             }
         }
@@ -939,7 +974,11 @@ fuzz_target!(|data: &[u8]| {
                 0 => vec!["lookup".to_string()],
                 1 => vec!["lookup".to_string(), "write-item".to_string()],
                 2 => vec!["lookup-backup".to_string()],
-                _ => vec!["LOOKUP".to_string(), "lookup ".to_string(), "lookup".to_string()],
+                _ => vec![
+                    "LOOKUP".to_string(),
+                    "lookup ".to_string(),
+                    "lookup".to_string(),
+                ],
             };
             check_authorize_listed(&scenario, server, &names);
         }

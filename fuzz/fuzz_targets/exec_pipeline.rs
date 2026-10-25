@@ -86,24 +86,24 @@ use std::task::{Context, Poll, Wake, Waker};
 
 use apeireth_core::kernel::CapabilityId;
 use apeireth_governance::{
-    extract_commands, ApprovalPolicyEngine, CallRecord, Decision, GuardRefusal, MonotonicGuards,
-    Permission, PermissionPolicy, ToolGuard, ToolGuardRequest,
+    ApprovalPolicyEngine, CallRecord, Decision, GuardRefusal, MonotonicGuards, Permission,
+    PermissionPolicy, ToolGuard, ToolGuardRequest, extract_commands,
 };
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use apeireth_tools_canonical::device::device_control::{
-    DeviceControlRiskMappingHook, DEVICE_CONTROL_CAPABILITY_ID,
+    DEVICE_CONTROL_CAPABILITY_ID, DeviceControlRiskMappingHook,
 };
 use apeireth_tools_canonical::exec_pipeline::{
     CommandFamilyGateHook, ExecutionStage, PipelineFailure, PreExecuteHook, PreExecuteRequest,
     PreExecuteWaterfall, PreVerdict, RiskLevelGateHook, ToolExecutionPipeline,
 };
 use apeireth_tools_canonical::{
-    ApplyPatchRiskMappingHook, DocOpsRiskMappingHook, GitWriteRiskMappingHook, QuietClock,
-    QuietHours, SheetOpsRiskMappingHook, SkillDistillRiskMappingHook, ToolGuardrail,
-    VoiceSpeakRiskMappingHook, WorktreeApplyRiskMappingHook, APPLY_PATCH_CAPABILITY_ID,
-    DOC_OPS_CAPABILITY_ID, GIT_WRITE_CAPABILITY_ID, SHEET_OPS_CAPABILITY_ID,
-    SKILL_DISTILL_CAPABILITY_ID, VOICE_SPEAK_CAPABILITY_ID, WORKTREE_APPLY_CAPABILITY_ID,
+    APPLY_PATCH_CAPABILITY_ID, ApplyPatchRiskMappingHook, DOC_OPS_CAPABILITY_ID,
+    DocOpsRiskMappingHook, GIT_WRITE_CAPABILITY_ID, GitWriteRiskMappingHook, QuietClock,
+    QuietHours, SHEET_OPS_CAPABILITY_ID, SKILL_DISTILL_CAPABILITY_ID, SheetOpsRiskMappingHook,
+    SkillDistillRiskMappingHook, ToolGuardrail, VOICE_SPEAK_CAPABILITY_ID,
+    VoiceSpeakRiskMappingHook, WORKTREE_APPLY_CAPABILITY_ID, WorktreeApplyRiskMappingHook,
 };
 use libfuzzer_sys::fuzz_target;
 use serde_json::{Value, json};
@@ -114,7 +114,14 @@ use serde_json::{Value, json};
 const FALLBACK_CAPABILITY: &str = "tool.demo";
 
 /// 管线第 2 段的 guard 名字池。
-const GUARD_NAMES: [&str; 6] = ["g_alpha", "g_beta", "g_gamma", "g_delta", "g_epsilon", "g_zeta"];
+const GUARD_NAMES: [&str; 6] = [
+    "g_alpha",
+    "g_beta",
+    "g_gamma",
+    "g_delta",
+    "g_epsilon",
+    "g_zeta",
+];
 
 /// hook 名字池（覆盖空名 / 重名 / 怪字符）。
 const HOOK_NAMES: [&str; 8] = [
@@ -276,7 +283,8 @@ fn check_merge(scenario: &Scenario) {
 
     // C1：首个非 allow 判定即决断。
     assert_eq!(
-        decision.verdict, want_verdict,
+        decision.verdict,
+        want_verdict,
         "C1：合并判定与「首个非 allow 判定即决断」不符: hooks={:?}",
         scenario
             .hooks
@@ -299,27 +307,13 @@ fn check_merge(scenario: &Scenario) {
             decision.verdict.is_allowed(),
             "C2：空管线却给出了非放行判定"
         );
-        assert_eq!(
-            decision.decided_by, None,
-            "C2：空管线的决断者必须缺席"
-        );
-        assert!(
-            decision.consulted.is_empty(),
-            "C2：空管线不得咨询任何 hook"
-        );
-        assert_eq!(
-            decision.failure(),
-            None,
-            "C2/C5：空管线不得产出失败帧"
-        );
+        assert_eq!(decision.decided_by, None, "C2：空管线的决断者必须缺席");
+        assert!(decision.consulted.is_empty(), "C2：空管线不得咨询任何 hook");
+        assert_eq!(decision.failure(), None, "C2/C5：空管线不得产出失败帧");
     }
 
     // C1（单调性）：**任一** hook 拒绝 ⇒ 合并结果**必拒**（不得被放行覆盖）。
-    if scenario
-        .hooks
-        .iter()
-        .any(|hook| !hook.verdict.is_allowed())
-    {
+    if scenario.hooks.iter().any(|hook| !hook.verdict.is_allowed()) {
         assert!(
             !decision.verdict.is_allowed(),
             "C1：存在拒绝的 hook，合并结果却被放行了（拒绝被覆盖）"
@@ -337,10 +331,7 @@ fn check_merge(scenario: &Scenario) {
     // C4：`decided_by` 与 `consulted` 的最后一项必须一致；两者同现同灭。
     match &decision.decided_by {
         Some(hook) => {
-            assert!(
-                !decision.verdict.is_allowed(),
-                "C4：全部放行时不得有决断者"
-            );
+            assert!(!decision.verdict.is_allowed(), "C4：全部放行时不得有决断者");
             assert_eq!(
                 decision.consulted.last().map(String::as_str),
                 Some(hook.as_str()),
@@ -382,10 +373,7 @@ fn check_merge(scenario: &Scenario) {
     );
 
     // C6：判定标签。
-    assert!(
-        !decision.verdict.label().is_empty(),
-        "C6：判定标签不得为空"
-    );
+    assert!(!decision.verdict.label().is_empty(), "C6：判定标签不得为空");
     assert!(
         decision.summary().contains(decision.verdict.label()),
         "C6：决策摘要必须含判定标签: summary={:?}",
@@ -444,10 +432,7 @@ fn check_order_faces(scenario: &Scenario) {
         return;
     }
     let request = PreExecuteRequest::new(&scenario.call, &scenario.capability);
-    let has_refusal = scenario
-        .hooks
-        .iter()
-        .any(|hook| !hook.verdict.is_allowed());
+    let has_refusal = scenario.hooks.iter().any(|hook| !hook.verdict.is_allowed());
 
     for permutation in permutations(scenario.hooks.len().min(6)) {
         let hooks: Vec<HookSpec> = permutation
@@ -629,11 +614,7 @@ fn check_guards(scenario: &Scenario, refusal_count: usize) {
     // C10：每个 guard 每次都被咨询（顺序固定）；报出的是**第一个**拒绝。
     let base_order: Vec<usize> = (0..count).collect();
     let (guards, log) = build(&base_order);
-    assert_eq!(
-        guards.len(),
-        count,
-        "C10：guard 计数与登记数不符"
-    );
+    assert_eq!(guards.len(), count, "C10：guard 计数与登记数不符");
     assert_eq!(
         guards.is_empty(),
         count == 0,
@@ -694,10 +675,7 @@ fn check_guards(scenario: &Scenario, refusal_count: usize) {
             .collect();
         want_names.sort_unstable();
         got_names.sort_unstable();
-        assert_eq!(
-            got_names, want_names,
-            "C11：换一个监听顺序，拒绝集合就变了"
-        );
+        assert_eq!(got_names, want_names, "C11：换一个监听顺序，拒绝集合就变了");
         assert_eq!(
             *permuted_log.lock().unwrap(),
             permutation,
@@ -833,15 +811,8 @@ fn check_pipeline(scenario: &Scenario) {
 
     if want_verdict.is_allowed() {
         // 放行 ⇒ 工具执行一次，五段全走。
-        assert_eq!(
-            tool.runs(),
-            1,
-            "C12：放行的调用必须执行且只执行一次"
-        );
-        assert_eq!(
-            executed.failure, None,
-            "C5：放行的调用不得产出失败帧"
-        );
+        assert_eq!(tool.runs(), 1, "C12：放行的调用必须执行且只执行一次");
+        assert_eq!(executed.failure, None, "C5：放行的调用不得产出失败帧");
         assert_eq!(
             executed.record.stages(),
             ExecutionStage::ALL.to_vec(),
@@ -849,14 +820,9 @@ fn check_pipeline(scenario: &Scenario) {
         );
     } else {
         // C12：拒绝 ⇒ 什么都不执行。
+        assert_eq!(tool.runs(), 0, "C12：被拒绝的调用仍然执行了工具");
         assert_eq!(
-            tool.runs(),
-            0,
-            "C12：被拒绝的调用仍然执行了工具"
-        );
-        assert_eq!(
-            executed.failure,
-            want_failure,
+            executed.failure, want_failure,
             "C5：管线产出的失败帧与判定不符"
         );
         assert!(
@@ -875,10 +841,7 @@ fn check_pipeline(scenario: &Scenario) {
             executed.result.tool_call_id, scenario.call.id,
             "C14b：失败帧没有与调用 id 相关联"
         );
-        assert!(
-            !executed.outcome.ok,
-            "C14b：失败帧的归一形状必须标为失败"
-        );
+        assert!(!executed.outcome.ok, "C14b：失败帧的归一形状必须标为失败");
     }
 
     // C13：阶段序列必须是固定顺序的一个前缀。
@@ -953,22 +916,13 @@ fn check_pipeline_with_guard(scenario: &Scenario, refusal_count: usize) {
 
     if refusal_count > 0 {
         // C12：guard 拒绝 ⇒ 什么都不执行。
-        assert_eq!(
-            tool.runs(),
-            0,
-            "C12：guard 拒绝了却仍然执行了工具"
-        );
+        assert_eq!(tool.runs(), 0, "C12：guard 拒绝了却仍然执行了工具");
         let Some(PipelineFailure::GuardDenied { guard, reason }) = &executed.failure else {
             panic!("C12/C14：guard 拒绝必须产出 GuardDenied 失败帧: {executed:?}");
         };
+        assert_eq!(reason, "guard 0 refuses", "C10：报出的拒绝必须是第一个拒绝");
         assert_eq!(
-            reason,
-            "guard 0 refuses",
-            "C10：报出的拒绝必须是第一个拒绝"
-        );
-        assert_eq!(
-            guard,
-            &GUARD_NAMES[0],
+            guard, &GUARD_NAMES[0],
             "C10：报出的拒绝者必须是第一个拒绝的 guard"
         );
         assert_eq!(
@@ -977,11 +931,7 @@ fn check_pipeline_with_guard(scenario: &Scenario, refusal_count: usize) {
             "C12/C13：guard 拒绝必须停在 guard 段"
         );
     } else {
-        assert_eq!(
-            tool.runs(),
-            1,
-            "C12：无拒绝时必须执行工具"
-        );
+        assert_eq!(tool.runs(), 1, "C12：无拒绝时必须执行工具");
         assert_eq!(executed.failure, None, "C10：无拒绝时不得产出失败帧");
     }
 }
@@ -1005,7 +955,11 @@ fn check_pipeline_with_guard(scenario: &Scenario, refusal_count: usize) {
 /// * **C15b**：hook 的判定**永不放宽**引擎在空历史下的判定：引擎说拒 ⇒ hook
 ///   必须说拒；引擎说要人批 ⇒ hook 必须说「拒」或「问人」，**不得**说放行。
 ///   （引擎里唯一随历史变松的规则是频率规则，而历史只会让它**更严**。）
-fn check_risk_level_gate(capability: &CapabilityId, call: &ToolCall, engine: &ApprovalPolicyEngine) {
+fn check_risk_level_gate(
+    capability: &CapabilityId,
+    call: &ToolCall,
+    engine: &ApprovalPolicyEngine,
+) {
     let now = 1_700_000_000_000i64;
     CLOCK.store(now, Ordering::SeqCst);
     let request = PreExecuteRequest::new(call, capability);
@@ -1068,12 +1022,7 @@ fn check_frequency_face(capability: &CapabilityId, call: &ToolCall) {
     let mut history: Vec<CallRecord> = Vec::new();
     for index in 0..3 {
         let now = now + index as i64;
-        let (decision, _) = engine.evaluate(
-            capability.as_str(),
-            &call.arguments,
-            &history,
-            now,
-        );
+        let (decision, _) = engine.evaluate(capability.as_str(), &call.arguments, &history, now);
         expected.push(PreVerdict::from(decision));
         history.push(CallRecord::new(capability.as_str().to_string(), now));
     }
@@ -1229,11 +1178,8 @@ fn check_voice_risk_mapping() {
         ));
         guard.require_approval_for(VOICE_SPEAK_CAPABILITY_ID.to_string());
     }
-    let hook = VoiceSpeakRiskMappingHook::new(
-        Arc::clone(&policy),
-        QuietHours::off(),
-        Arc::clone(&clock),
-    );
+    let hook =
+        VoiceSpeakRiskMappingHook::new(Arc::clone(&policy), QuietHours::off(), Arc::clone(&clock));
     assert_eq!(
         hook.pre_verdict(&request).label(),
         "ask",
@@ -1242,15 +1188,11 @@ fn check_voice_risk_mapping() {
 
     // R2v：显式授权（未标审批）⇒ **不得**停在问人档（参数 / 勿扰仍可拒）。
     let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
-    policy
-        .lock()
-        .unwrap()
-        .grant(Permission::ExecuteTool(VOICE_SPEAK_CAPABILITY_ID.to_string()));
-    let hook = VoiceSpeakRiskMappingHook::new(
-        Arc::clone(&policy),
-        QuietHours::off(),
-        Arc::clone(&clock),
-    );
+    policy.lock().unwrap().grant(Permission::ExecuteTool(
+        VOICE_SPEAK_CAPABILITY_ID.to_string(),
+    ));
+    let hook =
+        VoiceSpeakRiskMappingHook::new(Arc::clone(&policy), QuietHours::off(), Arc::clone(&clock));
     assert_ne!(
         hook.pre_verdict(&request).label(),
         "ask",
@@ -1309,11 +1251,7 @@ fn battery(scenario: &Scenario) {
 
     // 阶段顺序的静态口径（C13）。
     for (index, stage) in ExecutionStage::ALL.iter().enumerate() {
-        assert_eq!(
-            stage.order(),
-            index,
-            "C13：阶段的规范序号与固定顺序不符"
-        );
+        assert_eq!(stage.order(), index, "C13：阶段的规范序号与固定顺序不符");
     }
 
     // 单 hook × 四种判定（C1 / C5）。

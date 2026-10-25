@@ -65,18 +65,18 @@
 //! * **`command0` / 超大序号键**：`extract_commands` 的实现口径是「`command` + ASCII 数字且能解析为 u64」
 //!   （`approval_policy.rs:135-138`），超出 u64 的键被静默跳过 —— 文档未写清该边界，**不断言**。
 
+use apeireth_governance::Decision;
 use apeireth_governance::approval_family::{
+    CommandFamily, MEMBER_PREFIX_FAMILIES, MIN_ABBREVIATION_CHARS, MemberCallForm,
     command_families, command_words, family_ids_for_arguments, interpret_recorded_command,
     member_calls, member_family, strip_executable_suffix, touched_families, word_families,
-    CommandFamily, MemberCallForm, MEMBER_PREFIX_FAMILIES, MIN_ABBREVIATION_CHARS,
 };
 use apeireth_governance::approval_policy::{
+    APPROVAL_TIMEOUT_MS, ApprovalPolicyEngine, CallRecord, ParsedApprovalEntry,
     best_approval_match, extract_commands, frequency_count, is_high_risk, parse_approval_entry,
-    ApprovalPolicyEngine, CallRecord, ParsedApprovalEntry, APPROVAL_TIMEOUT_MS,
 };
-use apeireth_governance::Decision;
 use libfuzzer_sys::fuzz_target;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::OnceLock;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -320,7 +320,10 @@ fn sort_families(families: &mut [CommandFamily]) {
 }
 
 fn family_ids(families: &[CommandFamily]) -> Vec<String> {
-    families.iter().map(|family| family.id().to_string()).collect()
+    families
+        .iter()
+        .map(|family| family.id().to_string())
+        .collect()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -400,112 +403,113 @@ fn solo_command(family: CommandFamily) -> Option<String> {
 /// 同族的不同形态必须落到**同一档**（别名与主形同权），且族级条目对所有形态生效。
 fn same_family_matrix() -> &'static [(CommandFamily, &'static [&'static str])] {
     static MATRIX: OnceLock<Vec<(CommandFamily, &'static [&'static str])>> = OnceLock::new();
-    MATRIX.get_or_init(|| {
-        vec![
-            (
-                CommandFamily::Delete,
-                &[
-                    "rm x.txt",
-                    "rm.exe x.txt",
-                    "del x.txt",
-                    "del.cmd x.txt",
-                    "rd x_dir",
-                    "ri x.txt",
-                    "Remove-Item x.txt",
-                    "Remove-I x.txt",
-                    "REMOVE-ITEM.EXE x.txt",
-                    "remove-item.cmd x.txt",
-                    "REMOVE-ITEM x.txt",
-                    "[System.IO.File]::Delete('x.txt')",
-                    "[system.io.file]::delete('x.txt')",
-                    "([System.IO.FileInfo]'x.txt').Delete()",
-                    "$fs.DeleteFile('x.txt')",
-                ],
-            ),
-            (
-                CommandFamily::MoveCopy,
-                &[
-                    "Move-Item a b",
-                    "mv a b",
-                    "ren a b",
-                    "Rename-Item a b",
-                    "cpi a b",
-                    "cp a b",
-                    "copy a b",
-                    "move a b",
-                    "MOVE-ITEM.EXE a b",
-                    "$obj.CopyTo('x')",
-                ],
-            ),
-            (
-                CommandFamily::Create,
-                &[
-                    "mkdir d",
-                    "md d",
-                    "touch f",
-                    "New-Item f",
-                    "New-TemporaryFile f",
-                    "install f",
-                    "ni f",
-                    "[System.IO.Directory]::Create('d')",
-                    "$obj.Create('x')",
-                ],
-            ),
-            (
-                CommandFamily::WriteContent,
-                &[
-                    "Set-Content x.txt hello",
-                    "Add-Content x.txt hello",
-                    "Out-File x.txt",
-                    "Clear-Content x.txt",
-                    "Set-Item x.txt hello",
-                    "Export-Csv x.csv",
-                    "tee x.txt",
-                    "dd if=a of=b",
-                    "truncate x.txt",
-                    "[System.IO.File]::WriteAllText('x','y')",
-                    "[System.IO.File]::AppendAllText('x','y')",
-                    "$obj.Append('x')",
-                ],
-            ),
-            (
-                CommandFamily::Network,
-                &[
-                    "curl http://example.invalid",
-                    "wget http://example.invalid",
-                    "Invoke-WebRequest http://example.invalid",
-                    "Invoke-RestMethod http://example.invalid",
-                    "Start-BitsTransfer http://example.invalid",
-                    "bitsadmin /transfer x",
-                    "ftp h",
-                    "sftp h",
-                    "scp a b",
-                    "ssh h",
-                    "rsync a b",
-                    "nc h 1",
-                    "ncat h 1",
-                    "telnet h",
-                    "iwr http://example.invalid",
-                ],
-            ),
-            (
-                CommandFamily::Process,
-                &[
-                    "start notepad",
-                    "stop proc",
-                    "kill 1",
-                    "taskkill /PID 1",
-                    "wmic x",
-                    "nssm install x",
-                    "Start-Process notepad",
-                    "Stop-Process x",
-                    "Invoke-Expression cmd",
-                    "iex cmd",
-                ],
-            ),
-        ]
-    })
-    .as_slice()
+    MATRIX
+        .get_or_init(|| {
+            vec![
+                (
+                    CommandFamily::Delete,
+                    &[
+                        "rm x.txt",
+                        "rm.exe x.txt",
+                        "del x.txt",
+                        "del.cmd x.txt",
+                        "rd x_dir",
+                        "ri x.txt",
+                        "Remove-Item x.txt",
+                        "Remove-I x.txt",
+                        "REMOVE-ITEM.EXE x.txt",
+                        "remove-item.cmd x.txt",
+                        "REMOVE-ITEM x.txt",
+                        "[System.IO.File]::Delete('x.txt')",
+                        "[system.io.file]::delete('x.txt')",
+                        "([System.IO.FileInfo]'x.txt').Delete()",
+                        "$fs.DeleteFile('x.txt')",
+                    ],
+                ),
+                (
+                    CommandFamily::MoveCopy,
+                    &[
+                        "Move-Item a b",
+                        "mv a b",
+                        "ren a b",
+                        "Rename-Item a b",
+                        "cpi a b",
+                        "cp a b",
+                        "copy a b",
+                        "move a b",
+                        "MOVE-ITEM.EXE a b",
+                        "$obj.CopyTo('x')",
+                    ],
+                ),
+                (
+                    CommandFamily::Create,
+                    &[
+                        "mkdir d",
+                        "md d",
+                        "touch f",
+                        "New-Item f",
+                        "New-TemporaryFile f",
+                        "install f",
+                        "ni f",
+                        "[System.IO.Directory]::Create('d')",
+                        "$obj.Create('x')",
+                    ],
+                ),
+                (
+                    CommandFamily::WriteContent,
+                    &[
+                        "Set-Content x.txt hello",
+                        "Add-Content x.txt hello",
+                        "Out-File x.txt",
+                        "Clear-Content x.txt",
+                        "Set-Item x.txt hello",
+                        "Export-Csv x.csv",
+                        "tee x.txt",
+                        "dd if=a of=b",
+                        "truncate x.txt",
+                        "[System.IO.File]::WriteAllText('x','y')",
+                        "[System.IO.File]::AppendAllText('x','y')",
+                        "$obj.Append('x')",
+                    ],
+                ),
+                (
+                    CommandFamily::Network,
+                    &[
+                        "curl http://example.invalid",
+                        "wget http://example.invalid",
+                        "Invoke-WebRequest http://example.invalid",
+                        "Invoke-RestMethod http://example.invalid",
+                        "Start-BitsTransfer http://example.invalid",
+                        "bitsadmin /transfer x",
+                        "ftp h",
+                        "sftp h",
+                        "scp a b",
+                        "ssh h",
+                        "rsync a b",
+                        "nc h 1",
+                        "ncat h 1",
+                        "telnet h",
+                        "iwr http://example.invalid",
+                    ],
+                ),
+                (
+                    CommandFamily::Process,
+                    &[
+                        "start notepad",
+                        "stop proc",
+                        "kill 1",
+                        "taskkill /PID 1",
+                        "wmic x",
+                        "nssm install x",
+                        "Start-Process notepad",
+                        "Stop-Process x",
+                        "Invoke-Expression cmd",
+                        "iex cmd",
+                    ],
+                ),
+            ]
+        })
+        .as_slice()
 }
 
 /// 一次性自检：族词变体矩阵 + 同族形态矩阵 + 跨族隔离。
@@ -521,13 +525,11 @@ fn run_once_matrix() {
     );
     for (index, (family, prefix)) in MEMBER_PREFIX_FAMILIES.iter().enumerate() {
         assert_eq!(
-            *family,
-            MEMBER_PREFIX_TABLE[index].0,
+            *family, MEMBER_PREFIX_TABLE[index].0,
             "成员词头表族漂移（冻结面）: {prefix}"
         );
         assert_eq!(
-            *prefix,
-            MEMBER_PREFIX_TABLE[index].1,
+            *prefix, MEMBER_PREFIX_TABLE[index].1,
             "成员词头表词头漂移（冻结面）: {prefix}"
         );
     }
@@ -596,7 +598,8 @@ fn run_once_matrix() {
                     } else {
                         // C2：精确命中优先于缩写命中。
                         assert_eq!(
-                            hit, exact,
+                            hit,
+                            exact,
                             "精确命中必须优先于缩写命中: 形态={form:?} 精确族={:?}",
                             family_ids(&exact)
                         );
@@ -609,11 +612,9 @@ fn run_once_matrix() {
     // C10 / C6 / C7：族级条目对同族所有形态生效（同族不同形态同档）。
     for (family, forms) in same_family_matrix() {
         let mut engine = ApprovalPolicyEngine::new();
-        engine.approval_list.push(ParsedApprovalEntry::family_entry(
-            CAP,
-            *family,
-            false,
-        ));
+        engine
+            .approval_list
+            .push(ParsedApprovalEntry::family_entry(CAP, *family, false));
         for &form in forms.iter() {
             let args = json!({ "command": form });
             let (decision, detail) = engine.evaluate(CAP, &args, &[], 0);
@@ -639,11 +640,9 @@ fn run_once_matrix() {
         };
         for other in CommandFamily::ALL.iter().copied().filter(|f| *f != family) {
             let mut engine = ApprovalPolicyEngine::new();
-            engine.approval_list.push(ParsedApprovalEntry::family_entry(
-                CAP,
-                other,
-                false,
-            ));
+            engine
+                .approval_list
+                .push(ParsedApprovalEntry::family_entry(CAP, other, false));
             let args = json!({ "command": solo });
             let (decision, detail) = engine.evaluate(CAP, &args, &[], 0);
             assert!(
@@ -760,11 +759,9 @@ fn check_command_surface(command: &str) {
 /// 族级条目 × 命令形态：命中 ⟺ 触达面相交（C10）。
 fn check_family_entry_gate(family: CommandFamily, command: &str) {
     let mut engine = ApprovalPolicyEngine::new();
-    engine.approval_list.push(ParsedApprovalEntry::family_entry(
-        CAP,
-        family,
-        false,
-    ));
+    engine
+        .approval_list
+        .push(ParsedApprovalEntry::family_entry(CAP, family, false));
     let args = json!({ "command": command });
     let (decision, detail) = engine.evaluate(CAP, &args, &[], 0);
     let touched = touched_families(command);
@@ -820,11 +817,9 @@ fn check_family_entry_gate(family: CommandFamily, command: &str) {
 fn check_all_family_entries(command: &str) {
     let mut engine = ApprovalPolicyEngine::new();
     for family in CommandFamily::ALL {
-        engine.approval_list.push(ParsedApprovalEntry::family_entry(
-            CAP,
-            family,
-            false,
-        ));
+        engine
+            .approval_list
+            .push(ParsedApprovalEntry::family_entry(CAP, family, false));
     }
     let args = json!({ "command": command });
     let (decision, detail) = engine.evaluate(CAP, &args, &[], 0);
@@ -848,9 +843,7 @@ fn check_all_family_entries(command: &str) {
         );
         for id in &detail.matched_family {
             assert!(
-                touched
-                    .iter()
-                    .any(|family| family.id() == id),
+                touched.iter().any(|family| family.id() == id),
                 "回传的族必须在触达面内: 命令={command:?} 回传={id} 触达={:?}",
                 family_ids(&touched)
             );
@@ -882,34 +875,29 @@ fn check_entry_surface(raw_entry: &str, capability: &str, command: &str) {
     let model_target = model_target_for(&parsed.base, capability);
     match (&target, &model_target) {
         (None, None) => {}
-        (Some(target), Some(model_target)) => {
-            match (target, model_target) {
-                (
-                    apeireth_governance::approval_family::ApprovalTarget::Capability,
-                    ModelTarget::Capability,
-                ) => {}
-                (
-                    apeireth_governance::approval_family::ApprovalTarget::Families(families),
-                    ModelTarget::Families(model_families),
-                ) => {
-                    assert_eq!(
-                        family_ids(families),
-                        family_ids(model_families),
-                        "族级条目对象口径不一致: {raw_entry:?}"
-                    );
-                }
-                (
-                    apeireth_governance::approval_family::ApprovalTarget::Command(text),
-                    ModelTarget::Command(model_text),
-                ) => {
-                    assert_eq!(
-                        text, model_text,
-                        "逐字条目对象口径不一致: {raw_entry:?}"
-                    );
-                }
-                _ => panic!("条目对象口径不一致: {raw_entry:?} impl={target:?} model={model_target:?}"),
+        (Some(target), Some(model_target)) => match (target, model_target) {
+            (
+                apeireth_governance::approval_family::ApprovalTarget::Capability,
+                ModelTarget::Capability,
+            ) => {}
+            (
+                apeireth_governance::approval_family::ApprovalTarget::Families(families),
+                ModelTarget::Families(model_families),
+            ) => {
+                assert_eq!(
+                    family_ids(families),
+                    family_ids(model_families),
+                    "族级条目对象口径不一致: {raw_entry:?}"
+                );
             }
-        }
+            (
+                apeireth_governance::approval_family::ApprovalTarget::Command(text),
+                ModelTarget::Command(model_text),
+            ) => {
+                assert_eq!(text, model_text, "逐字条目对象口径不一致: {raw_entry:?}");
+            }
+            _ => panic!("条目对象口径不一致: {raw_entry:?} impl={target:?} model={model_target:?}"),
+        },
         _ => panic!("条目对象口径不一致: {raw_entry:?} impl={target:?} model={model_target:?}"),
     }
 
@@ -922,9 +910,8 @@ fn check_entry_surface(raw_entry: &str, capability: &str, command: &str) {
             "条目不适用于该能力时不得命中: {raw_entry:?} 能力={capability}"
         ),
         Some(ModelTarget::Capability) => {
-            let (entry, matched_command) = matched.unwrap_or_else(|| {
-                panic!("能力级条目必须命中: {raw_entry:?} 能力={capability}")
-            });
+            let (entry, matched_command) = matched
+                .unwrap_or_else(|| panic!("能力级条目必须命中: {raw_entry:?} 能力={capability}"));
             assert_eq!(entry.base, parsed.base);
             assert!(matched_command.is_none(), "能力级命中不得回传命令");
         }
@@ -946,9 +933,8 @@ fn check_entry_surface(raw_entry: &str, capability: &str, command: &str) {
         }
         Some(ModelTarget::Command(text)) => {
             if command == text {
-                let (entry, matched_command) = matched.unwrap_or_else(|| {
-                    panic!("逐字条目必须命中逐字相同的命令: {raw_entry:?}")
-                });
+                let (entry, matched_command) = matched
+                    .unwrap_or_else(|| panic!("逐字条目必须命中逐字相同的命令: {raw_entry:?}"));
                 assert_eq!(entry.base, parsed.base);
                 assert_eq!(matched_command.as_deref(), Some(command));
             } else {
@@ -1033,9 +1019,11 @@ fn check_rule_order(capability: &str, args: &Value, history: &[CallRecord], now_
     engine.blacklist.insert("tool.blocked".into());
     engine.trusted.insert("tool.trusted".into());
     engine.whitelist.insert("tool.safe".into());
-    engine
-        .approval_list
-        .push(ParsedApprovalEntry::family_entry(CAP, CommandFamily::Delete, false));
+    engine.approval_list.push(ParsedApprovalEntry::family_entry(
+        CAP,
+        CommandFamily::Delete,
+        false,
+    ));
 
     let (decision, detail) = engine.evaluate(capability, args, history, now_ms);
     let expected = expected_rule(&engine, capability, args, history, now_ms);
@@ -1101,7 +1089,11 @@ fn expected_rule(
     if engine.frequency_max_calls > 0 && count + 1 >= engine.frequency_max_calls {
         return Some("frequency");
     }
-    let prefixes: Vec<&str> = engine.high_risk_prefixes.iter().map(String::as_str).collect();
+    let prefixes: Vec<&str> = engine
+        .high_risk_prefixes
+        .iter()
+        .map(String::as_str)
+        .collect();
     if is_high_risk(capability, &prefixes) {
         return Some("risk");
     }
@@ -1146,10 +1138,7 @@ fn check_args_surface(args: &Value) {
             .iter()
             .position(|candidate| *candidate == family)
             .unwrap();
-        assert!(
-            index >= last_index,
-            "族 id 必须按词表序输出: {ids:?}"
-        );
+        assert!(index >= last_index, "族 id 必须按词表序输出: {ids:?}");
         last_index = index;
     }
     // C8：逐条命令取**归属面**族并合并 —— 结果必须等于归属面并集。
@@ -1246,7 +1235,10 @@ fn check_frequency_surface(capability: &str, now_ms: i64, window_ms: u64, offset
     // 窗口内（严格内部，避开左端点归属争议）+ 同能力 ⇒ 计入。
     let inside = offsets
         .iter()
-        .filter(|offset| **offset <= 0 && now_ms.saturating_add(**offset) > now_ms.saturating_sub(window_ms as i64))
+        .filter(|offset| {
+            **offset <= 0
+                && now_ms.saturating_add(**offset) > now_ms.saturating_sub(window_ms as i64)
+        })
         .count() as u32;
     assert_eq!(
         count, inside,
@@ -1294,10 +1286,7 @@ fn check_risk_surface(capability: &str) {
             .to_lowercase()
             .starts_with(&prefix.to_lowercase())
     });
-    assert_eq!(
-        hit, expected,
-        "风险前缀判定口径不一致: {capability:?}"
-    );
+    assert_eq!(hit, expected, "风险前缀判定口径不一致: {capability:?}");
     // ASCII 能力名的大小写不敏感（C16）。
     if capability.is_ascii() {
         assert_eq!(

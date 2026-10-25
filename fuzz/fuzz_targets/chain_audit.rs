@@ -199,7 +199,9 @@ fn payload_of(data: &[u8]) -> String {
 /// 契约：`audit.rs` "An empty chain verifies successfully."（`src: audit.rs:168`）
 /// 以及 `chain_audit.rs` "打开时全量重放重建 [`AuditHashChain`]"（`src: chain_audit.rs:6-7`）
 fn f01_empty_ledger_opens_and_verifies() {
-    let Some(path) = ledger_path("f01") else { return };
+    let Some(path) = ledger_path("f01") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open empty ledger");
     assert_eq!(sink.len(), 0, "新账本必须是空链");
     assert!(sink.records().is_empty(), "空账本读面必须为空");
@@ -213,7 +215,9 @@ fn f01_empty_ledger_opens_and_verifies() {
 /// 全量重放重建"（`src: chain_audit.rs:5-7`）+ `audit.rs` "avoids hash instability
 /// from ... separator characters in free-text fields"（`src: audit.rs:20-22`）
 fn f02_content_round_trip_is_exact() {
-    let Some(path) = ledger_path("f02") else { return };
+    let Some(path) = ledger_path("f02") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open");
     let mut expected: Vec<(String, String, i64)> = Vec::new();
     for index in 0..SHAPES {
@@ -230,8 +234,14 @@ fn f02_content_round_trip_is_exact() {
     assert_eq!(records.len(), expected.len(), "读回记录数必须等于追加数");
     for (index, record) in records.iter().enumerate() {
         let (kind, subject, millis) = &expected[index];
-        assert_eq!(&record.event_kind, kind, "第 {index} 条 event_kind 必须逐字读回");
-        assert_eq!(&record.subject, subject, "第 {index} 条 subject 必须逐字读回");
+        assert_eq!(
+            &record.event_kind, kind,
+            "第 {index} 条 event_kind 必须逐字读回"
+        );
+        assert_eq!(
+            &record.subject, subject,
+            "第 {index} 条 subject 必须逐字读回"
+        );
         assert_eq!(
             record.timestamp.epoch_millis(),
             *millis,
@@ -256,23 +266,39 @@ fn f02_content_round_trip_is_exact() {
 /// ⚠️ 时间戳只断言**毫秒及以上**的改写（哈希口径就是 `timestamp_epoch_millis`，
 /// 纳秒位不在信封内 —— 那是口径边界，见文件头"刻意不造的期望"第 2 条）。
 fn f03_tamper_is_refused() {
-    let Some(path) = ledger_path("f03") else { return };
+    let Some(path) = ledger_path("f03") else {
+        return;
+    };
     let seed = |path: &Path| {
         let sink = FileChainAuditSink::open(path.to_path_buf()).expect("open");
-        sink.append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
-            .expect("append 0");
-        sink.append("governance.denied.gate", "tool.shell", safe_ms(1_700_000_000_001))
-            .expect("append 1");
+        sink.append(
+            "governance.allowed",
+            "tool.repo",
+            safe_ms(1_700_000_000_000),
+        )
+        .expect("append 0");
+        sink.append(
+            "governance.denied.gate",
+            "tool.shell",
+            safe_ms(1_700_000_000_001),
+        )
+        .expect("append 1");
     };
     seed(&path);
     let original = read_lines(&path);
     assert_eq!(original.len(), 2, "两条记录各占一行");
 
     // 五个被哈希覆盖的字段各改一次（改第 1 条）。
-    for field in ["event_kind", "subject", "sequence", "previous_hash", "current_hash", "timestamp"] {
+    for field in [
+        "event_kind",
+        "subject",
+        "sequence",
+        "previous_hash",
+        "current_hash",
+        "timestamp",
+    ] {
         let mut lines = original.clone();
-        let mut record: AuditRecord =
-            serde_json::from_str(&lines[1]).expect("record parses");
+        let mut record: AuditRecord = serde_json::from_str(&lines[1]).expect("record parses");
         match field {
             "event_kind" => record.event_kind.push_str("-tampered"),
             "subject" => record.subject.push_str("-tampered"),
@@ -313,11 +339,17 @@ fn f03_tamper_is_refused() {
 /// 契约：`audit.rs` "Checks sequence continuity, genesis linkage, previous-hash
 /// pointers, and each record's current hash."（`src: audit.rs:167-168`）
 fn f04_middle_deletion_is_refused() {
-    let Some(path) = ledger_path("f04") else { return };
+    let Some(path) = ledger_path("f04") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open");
     for index in 0..3 {
-        sink.append("governance.allowed", &format!("tool.{index}"), safe_ms(1_700_000_000_000 + index))
-            .expect("append");
+        sink.append(
+            "governance.allowed",
+            &format!("tool.{index}"),
+            safe_ms(1_700_000_000_000 + index),
+        )
+        .expect("append");
     }
     drop(sink);
     let lines = read_lines(&path);
@@ -336,11 +368,17 @@ fn f04_middle_deletion_is_refused() {
 /// 契约：`audit.rs` 同上四查（`src: audit.rs:167-168`）；链序是问责的语义
 /// （`chain_audit.rs` "记录读面 (测试/自述; 顺序即链序)"，`src: chain_audit.rs:130`）
 fn f05_reorder_is_refused() {
-    let Some(path) = ledger_path("f05") else { return };
+    let Some(path) = ledger_path("f05") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open");
     for index in 0..3 {
-        sink.append("governance.allowed", &format!("tool.{index}"), safe_ms(1_700_000_000_000 + index))
-            .expect("append");
+        sink.append(
+            "governance.allowed",
+            &format!("tool.{index}"),
+            safe_ms(1_700_000_000_000 + index),
+        )
+        .expect("append");
     }
     drop(sink);
     let lines = read_lines(&path);
@@ -358,12 +396,22 @@ fn f05_reorder_is_refused() {
 ///
 /// 契约：`chain_audit.rs` "逐行严格解析 [`AuditRecord`]"（`src: chain_audit.rs:49`）
 fn f06_partial_record_is_refused() {
-    let Some(path) = ledger_path("f06") else { return };
+    let Some(path) = ledger_path("f06") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open");
-    sink.append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
-        .expect("append 0");
-    sink.append("governance.denied.gate", "tool.shell", safe_ms(1_700_000_000_001))
-        .expect("append 1");
+    sink.append(
+        "governance.allowed",
+        "tool.repo",
+        safe_ms(1_700_000_000_000),
+    )
+    .expect("append 0");
+    sink.append(
+        "governance.denied.gate",
+        "tool.shell",
+        safe_ms(1_700_000_000_001),
+    )
+    .expect("append 1");
     drop(sink);
     let text = fs::read_to_string(&path).expect("read");
     let cut = &text[..text.len() / 2];
@@ -380,19 +428,36 @@ fn f06_partial_record_is_refused() {
 /// 契约：`audit.rs` "`append` takes a canonical [`Timestamp`]; it never reads the
 /// wall clock."（`src: audit.rs:26-27`）⇒ 链不依赖时钟，**不**要求时间单调。
 fn f07_same_timestamp_and_clock_rollback_still_verify() {
-    let Some(path) = ledger_path("f07") else { return };
+    let Some(path) = ledger_path("f07") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open");
-    sink.append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
-        .expect("append 0");
-    sink.append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
-        .expect("append 1 (same payload, same instant)");
-    sink.append("governance.allowed", "tool.repo", safe_ms(1_699_999_999_999))
-        .expect("append 2 (clock rollback)");
+    sink.append(
+        "governance.allowed",
+        "tool.repo",
+        safe_ms(1_700_000_000_000),
+    )
+    .expect("append 0");
+    sink.append(
+        "governance.allowed",
+        "tool.repo",
+        safe_ms(1_700_000_000_000),
+    )
+    .expect("append 1 (same payload, same instant)");
+    sink.append(
+        "governance.allowed",
+        "tool.repo",
+        safe_ms(1_699_999_999_999),
+    )
+    .expect("append 2 (clock rollback)");
     sink.verify().expect("同刻/重复/回拨都不许让链失效");
     drop(sink);
     let reopened = FileChainAuditSink::open(path.clone()).expect("reopen");
     assert_eq!(reopened.len(), 3);
-    assert_eq!(reopened.records()[1].timestamp, reopened.records()[0].timestamp);
+    assert_eq!(
+        reopened.records()[1].timestamp,
+        reopened.records()[0].timestamp
+    );
     cleanup(&path);
 }
 
@@ -402,7 +467,9 @@ fn f07_same_timestamp_and_clock_rollback_still_verify() {
 /// {subject}` (asked) / `{pair_id}#{round}:{subject}:{outcome}` (decision)"
 /// 以及 "解析严格, 遇未知形状即错 (不猜、不冒充)"（`src: chain_audit.rs:221-225`）
 fn f08_approval_pair_round_trip() {
-    let Some(path) = ledger_path("f08") else { return };
+    let Some(path) = ledger_path("f08") else {
+        return;
+    };
     let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("open"));
     let audit = ChainApprovalAudit::open(
         sink.clone(),
@@ -410,23 +477,16 @@ fn f08_approval_pair_round_trip() {
     )
     .expect("open pair ledger");
     // 契约内的 id/capability（不含 '#' 与 ':'）。
-    let pair = ApprovalAuditPair::new(
-        "pair-1",
-        7,
-        "tool.shell",
-        ApprovalOutcome::AllowedOnce,
-    );
+    let pair = ApprovalAuditPair::new("pair-1", 7, "tool.shell", ApprovalOutcome::AllowedOnce);
     audit.commit(&pair).expect("pair commit");
     assert_eq!(sink.len(), 2, "审批对两半都进链");
     sink.verify().expect("审批对落链后链完整");
     drop(audit);
     drop(sink);
     let reopened = Arc::new(FileChainAuditSink::open(path.clone()).expect("reopen"));
-    let rebuilt = ChainApprovalAudit::open(
-        reopened,
-        Arc::new(FixedChainClock::new(1_700_000_000_001)),
-    )
-    .expect("rebuild pair ledger");
+    let rebuilt =
+        ChainApprovalAudit::open(reopened, Arc::new(FixedChainClock::new(1_700_000_000_001)))
+            .expect("rebuild pair ledger");
     assert_eq!(
         rebuilt.committed(),
         vec![pair.asked().clone(), pair.decision().clone()],
@@ -441,7 +501,9 @@ fn f08_approval_pair_round_trip() {
 /// （`src: chain_audit.rs:224-225`）+ "从链上已有 approval.* 事件重建读面
 /// (解析失败 = 拒开)"（`src: chain_audit.rs:346-347`）
 fn f09_approval_parse_is_strict() {
-    let Some(path) = ledger_path("f09") else { return };
+    let Some(path) = ledger_path("f09") else {
+        return;
+    };
     // 直接往链里塞 approval.* 事件的畸形 subject（跳过编码面，测解析面）。
     // ⚠️ 每个形状必须配**对应**的事件种类：decision 的形状（多一段 outcome）
     // 塞给 asked 是合法的（asked 取第一个 ':' 之后的全部当 subject）⇒ 那是
@@ -449,12 +511,12 @@ fn f09_approval_parse_is_strict() {
     // "pair#1:tool:unknown" 塞给 approval.asked，库正确地解析成
     // subject="tool:unknown" —— 是我的期望值配错了事件种类）。
     for (event_kind, subject) in [
-        ("approval.asked", "no-hash-no-colon"),     // 缺 '#'
-        ("approval.asked", "pair#notanumber:tool"), // round 非数字
-        ("approval.asked", "pair#1"),                // 缺 ':'
-        ("approval.decision", "pair#1:tool"),        // 缺 outcome 段
-        ("approval.decision", "pair#1:tool:unknown"), // outcome 未知
-        ("approval.decision", "pair#x:tool:allowed_once"), // round 非数字
+        ("approval.asked", "no-hash-no-colon"),             // 缺 '#'
+        ("approval.asked", "pair#notanumber:tool"),         // round 非数字
+        ("approval.asked", "pair#1"),                       // 缺 ':'
+        ("approval.decision", "pair#1:tool"),               // 缺 outcome 段
+        ("approval.decision", "pair#1:tool:unknown"),       // outcome 未知
+        ("approval.decision", "pair#x:tool:allowed_once"),  // round 非数字
         ("approval.asked", "pair#1:to#ol"),                 // subject 段带 '#' (串位形状)
         ("approval.decision", "pair#1:to#ol:allowed_once"), // subject 段带 '#' (串位形状)
     ] {
@@ -463,10 +525,8 @@ fn f09_approval_parse_is_strict() {
             .expect("append");
         drop(sink);
         let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("reopen chain"));
-        let parsed = ChainApprovalAudit::open(
-            sink,
-            Arc::new(FixedChainClock::new(1_700_000_000_000)),
-        );
+        let parsed =
+            ChainApprovalAudit::open(sink, Arc::new(FixedChainClock::new(1_700_000_000_000)));
         assert!(
             parsed.is_err(),
             "畸形 approval subject 必须拒开 (不猜、不冒充): {event_kind} {subject:?}"
@@ -482,7 +542,9 @@ fn f09_approval_parse_is_strict() {
 /// one tamper-evident audit record."（`src: crates/foundation/governance/src/chain.rs:227-231`）
 /// 以及 `chain_audit.rs` "append-only"（`src: chain_audit.rs:5`）⇒ 追加不许丢。
 fn f10_concurrent_appends_keep_every_record() {
-    let Some(path) = ledger_path("f10") else { return };
+    let Some(path) = ledger_path("f10") else {
+        return;
+    };
     let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("open"));
     let threads = 4usize;
     let per_thread = 8usize;
@@ -526,14 +588,24 @@ fn f10_concurrent_appends_keep_every_record() {
 /// "任何篡改/断链 = 拒开"（`src: chain_audit.rs:49-50`）⇒ 分叉账本必须拒开
 /// （fail-closed），不许默默当好账本收下。
 fn f11_multi_writer_fork_is_refused_at_open() {
-    let Some(path) = ledger_path("f11") else { return };
+    let Some(path) = ledger_path("f11") else {
+        return;
+    };
     let first = FileChainAuditSink::open(path.clone()).expect("open first writer");
     let second = FileChainAuditSink::open(path.clone()).expect("open second writer");
     first
-        .append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
+        .append(
+            "governance.allowed",
+            "tool.repo",
+            safe_ms(1_700_000_000_000),
+        )
         .expect("first writer append");
     second
-        .append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
+        .append(
+            "governance.allowed",
+            "tool.repo",
+            safe_ms(1_700_000_000_000),
+        )
         .expect("second writer append");
     assert!(
         FileChainAuditSink::open(path.clone()).is_err(),
@@ -548,14 +620,28 @@ fn f11_multi_writer_fork_is_refused_at_open() {
 /// 以及链按保留记录重建 (哈希重算确定性, 重建链与原链逐字节同哈希)"
 /// （`src: chain_audit.rs:138-139`）
 fn f12_rollback_keeps_the_ledger_openable() {
-    let Some(path) = ledger_path("f12") else { return };
+    let Some(path) = ledger_path("f12") else {
+        return;
+    };
     let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("open"));
-    sink.append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
-        .expect("r0");
-    sink.append("governance.denied.gate", "tool.shell", safe_ms(1_700_000_000_001))
-        .expect("r1");
-    sink.append("governance.allowed", "tool.filesystem", safe_ms(1_700_000_000_002))
-        .expect("r2");
+    sink.append(
+        "governance.allowed",
+        "tool.repo",
+        safe_ms(1_700_000_000_000),
+    )
+    .expect("r0");
+    sink.append(
+        "governance.denied.gate",
+        "tool.shell",
+        safe_ms(1_700_000_000_001),
+    )
+    .expect("r1");
+    sink.append(
+        "governance.allowed",
+        "tool.filesystem",
+        safe_ms(1_700_000_000_002),
+    )
+    .expect("r2");
     let mut audit = ChainApprovalAudit::open(
         sink.clone(),
         Arc::new(FixedChainClock::new(1_700_000_000_000)),
@@ -569,7 +655,11 @@ fn f12_rollback_keeps_the_ledger_openable() {
     let reopened = FileChainAuditSink::open(path.clone()).expect("回滚后账本必须仍开得出");
     assert_eq!(reopened.len(), 2);
     reopened
-        .append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_003))
+        .append(
+            "governance.allowed",
+            "tool.repo",
+            safe_ms(1_700_000_000_003),
+        )
         .expect("回滚后追加");
     drop(reopened);
     let after = FileChainAuditSink::open(path.clone()).expect("回滚+追加后必须仍开得出");
@@ -584,10 +674,16 @@ fn f12_rollback_keeps_the_ledger_openable() {
 /// （`src: chain_audit.rs:5-6`）⇒ 追加不许把两条记录挤成一行（那会让账本从此
 /// 开不出 ⇒ 审计永久降级到内存）。
 fn f13_append_after_a_torn_line_keeps_the_ledger_openable() {
-    let Some(path) = ledger_path("f13") else { return };
+    let Some(path) = ledger_path("f13") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open");
-    sink.append("governance.allowed", "tool.repo", safe_ms(1_700_000_000_000))
-        .expect("append");
+    sink.append(
+        "governance.allowed",
+        "tool.repo",
+        safe_ms(1_700_000_000_000),
+    )
+    .expect("append");
     drop(sink);
     let mut bytes = fs::read(&path).expect("read");
     bytes.pop();
@@ -595,7 +691,11 @@ fn f13_append_after_a_torn_line_keeps_the_ledger_openable() {
     let reopened = FileChainAuditSink::open(path.clone()).expect("撕裂写末行仍开得出");
     assert_eq!(reopened.len(), 1);
     reopened
-        .append("governance.denied.gate", "tool.shell", safe_ms(1_700_000_000_001))
+        .append(
+            "governance.denied.gate",
+            "tool.shell",
+            safe_ms(1_700_000_000_001),
+        )
         .expect("撕裂写后追加");
     drop(reopened);
     let after = FileChainAuditSink::open(path.clone()).expect("撕裂写+追加后必须仍开得出");
@@ -608,7 +708,9 @@ fn f13_append_after_a_torn_line_keeps_the_ledger_openable() {
 ///
 /// 契约：`chain_audit.rs` "逐行严格解析 [`AuditRecord`]"（`src: chain_audit.rs:49`）
 fn f14_non_utf8_ledger_is_refused() {
-    let Some(path) = ledger_path("f14") else { return };
+    let Some(path) = ledger_path("f14") else {
+        return;
+    };
     for bytes in [
         vec![0xFFu8, 0xFE, 0x00, 0x01],
         b"{\"sequence\":0,\"timestamp\":".to_vec(),
@@ -616,10 +718,7 @@ fn f14_non_utf8_ledger_is_refused() {
     ] {
         fs::write(&path, &bytes).expect("write raw");
         let opened = FileChainAuditSink::open(path.clone());
-        assert!(
-            opened.is_err(),
-            "非 UTF-8 / 畸形账本必须拒开: {bytes:?}"
-        );
+        assert!(opened.is_err(), "非 UTF-8 / 畸形账本必须拒开: {bytes:?}");
     }
     cleanup(&path);
 }
@@ -629,11 +728,17 @@ fn f14_non_utf8_ledger_is_refused() {
 /// 契约：`chain_audit.rs` "逐行严格解析 [`AuditRecord`]、重放重建哈希链"
 /// （`src: chain_audit.rs:49-50`）—— 解析不了就拒开，不许"读坏用默认"地跳过。
 fn f15_no_record_is_silently_dropped() {
-    let Some(path) = ledger_path("f15") else { return };
+    let Some(path) = ledger_path("f15") else {
+        return;
+    };
     let sink = FileChainAuditSink::open(path.clone()).expect("open");
     for index in 0..3 {
-        sink.append("governance.allowed", &format!("tool.{index}"), safe_ms(1_700_000_000_000 + index))
-            .expect("append");
+        sink.append(
+            "governance.allowed",
+            &format!("tool.{index}"),
+            safe_ms(1_700_000_000_000 + index),
+        )
+        .expect("append");
     }
     drop(sink);
     let reopened = FileChainAuditSink::open(path.clone()).expect("reopen");
@@ -678,7 +783,8 @@ fn f16_in_memory_chain_contract() {
     );
     for index in 1..records.len() {
         assert_eq!(
-            records[index].previous_hash, records[index - 1].current_hash,
+            records[index].previous_hash,
+            records[index - 1].current_hash,
             "第 {index} 条必须指向前一条的 current_hash"
         );
         assert_eq!(records[index].sequence, index as u64, "序号必须连续");
@@ -688,7 +794,10 @@ fn f16_in_memory_chain_contract() {
             "SHA-256 十六进制必须是 64 字符"
         );
         assert!(
-            records[index].current_hash.chars().all(|c| c.is_ascii_hexdigit()),
+            records[index]
+                .current_hash
+                .chars()
+                .all(|c| c.is_ascii_hexdigit()),
             "哈希必须是十六进制"
         );
     }
@@ -714,7 +823,9 @@ fn f16_in_memory_chain_contract() {
 /// 契约：`chain_audit.rs` "解析严格, 遇未知形状即错 (不猜、不冒充)"
 /// （`src: chain_audit.rs:224-225`）
 fn f17_approval_read_face_matches_the_chain() {
-    let Some(path) = ledger_path("f17") else { return };
+    let Some(path) = ledger_path("f17") else {
+        return;
+    };
     let sink = Arc::new(FileChainAuditSink::open(path.clone()).expect("open"));
     let audit = ChainApprovalAudit::open(
         sink.clone(),
@@ -735,11 +846,9 @@ fn f17_approval_read_face_matches_the_chain() {
     drop(audit);
     drop(sink);
     let reopened = Arc::new(FileChainAuditSink::open(path.clone()).expect("reopen"));
-    let rebuilt = ChainApprovalAudit::open(
-        reopened,
-        Arc::new(FixedChainClock::new(1_700_000_000_000)),
-    )
-    .expect("rebuild");
+    let rebuilt =
+        ChainApprovalAudit::open(reopened, Arc::new(FixedChainClock::new(1_700_000_000_000)))
+            .expect("rebuild");
     let expected: Vec<ApprovalAuditRecord> = pairs
         .iter()
         .flat_map(|pair| [pair.asked().clone(), pair.decision().clone()])
@@ -818,7 +927,14 @@ fn mode_tamper(path: &Path, payload: &str) {
     }
     drop(sink);
     let lines = read_lines(path);
-    let fields = ["event_kind", "subject", "sequence", "previous_hash", "current_hash", "timestamp"];
+    let fields = [
+        "event_kind",
+        "subject",
+        "sequence",
+        "previous_hash",
+        "current_hash",
+        "timestamp",
+    ];
     let field = fields[payload.len() % fields.len()];
     let target = 1 + (payload.len() % 2);
     let mut mutated = lines.clone();
@@ -934,10 +1050,8 @@ fn mode_approval(path: &Path, payload: &str) {
     drop(audit);
     drop(sink);
     let reopened = Arc::new(FileChainAuditSink::open(path.to_path_buf()).expect("reopen"));
-    let rebuilt = ChainApprovalAudit::open(
-        reopened,
-        Arc::new(FixedChainClock::new(1_700_000_000_000)),
-    );
+    let rebuilt =
+        ChainApprovalAudit::open(reopened, Arc::new(FixedChainClock::new(1_700_000_000_000)));
     match (written, rebuilt) {
         // 写进去了 + 解析出来了 ⇒ 必须与写进去的**逐字**相同（不猜、不冒充）。
         (true, Ok(ledger)) => {

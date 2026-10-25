@@ -27,6 +27,7 @@ apeireth-runtime = { path = "../crates/engine/runtime" }
 apeireth-sdk = { path = "../crates/adapters/sdk" }
 apeireth-plugin = { path = "../crates/foundation/plugin" }
 apeireth-governance = { path = "../crates/foundation/governance" }
+apeireth-credentials = { path = "../crates/foundation/credentials" }
 apeireth-core = { path = "../crates/foundation/core" }
 
 [profile.release]
@@ -266,6 +267,13 @@ bench = false
 [[bin]]
 name = "post_execute"
 path = "fuzz_targets/post_execute.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "credentials"
+path = "fuzz_targets/credentials.rs"
 test = false
 doc = false
 bench = false

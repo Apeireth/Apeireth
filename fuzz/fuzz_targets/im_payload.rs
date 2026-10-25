@@ -35,31 +35,30 @@
 //! 当作有 shell 语义（本面不经 shell）；不把「幂等性」当判据。
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use apeireth_core::kernel::CapabilityId;
 use apeireth_gateway::im_proposal::{
-    im_decided_by, is_proposal_payload, pending_push_drafts, proposal_card_envelope,
-    ImProposalClosureResult, ImProposalDecider, PROPOSAL_CARD_NO_DEADLINE_MS,
+    ImProposalClosureResult, ImProposalDecider, PROPOSAL_CARD_NO_DEADLINE_MS, im_decided_by,
+    is_proposal_payload, pending_push_drafts, proposal_card_envelope,
 };
 use apeireth_governance::action_binding::canonical_json_bytes;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolOutcome, ToolResult};
-use apeireth_sdk::im::{ImButtonPayload, IM_BUTTON_APPROVE, IM_BUTTON_REJECT};
+use apeireth_sdk::im::{IM_BUTTON_APPROVE, IM_BUTTON_REJECT, ImButtonPayload};
 use apeireth_tools_canonical::proposal::{
-    normalize_detail, ProposalDecision, ProposalDraft, ProposalKind, ProposalLedger,
-    ProposalLedgerEntry, ProposalReview, ProposalState, ProposalTool, PROPOSAL_CAPABILITY_ID,
-    PROPOSAL_DOC_NAME, PROPOSAL_DOC_VERSION, PROPOSAL_EVIDENCE_HIGHLIGHT,
+    PROPOSAL_CAPABILITY_ID, PROPOSAL_DOC_NAME, PROPOSAL_DOC_VERSION, PROPOSAL_EVIDENCE_HIGHLIGHT,
     PROPOSAL_NO_EXECUTION_NOTE, PROPOSAL_PERSONAL_CONFIRM_MARKER, PROPOSAL_REVIEW_TONE,
-    PROPOSAL_TOOL_NAME,
+    PROPOSAL_TOOL_NAME, ProposalDecision, ProposalDraft, ProposalKind, ProposalLedger,
+    ProposalLedgerEntry, ProposalReview, ProposalState, ProposalTool, normalize_detail,
 };
 use apeireth_tools_canonical::proposal_push::{
-    ProposalPushLedger, ProposalPushOutcome, ProposalPushRecord, PROPOSAL_PUSH_DOC_NAME,
-    PROPOSAL_PUSH_DOC_VERSION,
+    PROPOSAL_PUSH_DOC_NAME, PROPOSAL_PUSH_DOC_VERSION, ProposalPushLedger, ProposalPushOutcome,
+    ProposalPushRecord,
 };
 use libfuzzer_sys::fuzz_target;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // ---------------------------------------------------------------------------
 // 输入解释: 字节 → 定长字段槽 (NUL 分隔; 缺失槽 = 空串)
@@ -261,7 +260,10 @@ fn sha256(data: &[u8]) -> [u8; 32] {
 }
 
 fn sha256_hex(data: &[u8]) -> String {
-    sha256(data).iter().map(|byte| format!("{byte:02x}")).collect()
+    sha256(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// SHA-256 实现自检 (NIST 向量; 自检不过 = harness 自己的错, 立即炸)。
@@ -342,9 +344,7 @@ impl ToolCapability for ScriptedFace {
             self.calls.fetch_add(1, Ordering::SeqCst);
             match self.frame.clone() {
                 Frame::Ok(value) => ToolResult::ok(call.id.clone(), value),
-                Frame::Error(message) => {
-                    ToolResult::permanent_error(call.id.clone(), message)
-                }
+                Frame::Error(message) => ToolResult::permanent_error(call.id.clone(), message),
             }
         })
     }
@@ -389,11 +389,13 @@ fn card_surface(segments: &Segments) {
         "subject = tool.proposal_draft (回调路由标记)"
     );
     assert_eq!(
-        envelope.command_text, card.render(),
+        envelope.command_text,
+        card.render(),
         "command_text = 人审卡全文"
     );
     assert_eq!(
-        envelope.arguments_summary, draft.summary(),
+        envelope.arguments_summary,
+        draft.summary(),
         "arguments_summary = 提案摘要 (与工具面同一份口径)"
     );
     assert!(
@@ -420,11 +422,7 @@ fn card_surface(segments: &Segments) {
         envelope.action_binding_digest, expected_digest,
         "action_binding_digest 必须是卡载荷规范字节的 SHA-256"
     );
-    assert_eq!(
-        envelope.action_binding_digest.len(),
-        64,
-        "摘要 = 64 位 hex"
-    );
+    assert_eq!(envelope.action_binding_digest.len(), 64, "摘要 = 64 位 hex");
     assert!(
         envelope
             .action_binding_digest
@@ -445,7 +443,9 @@ fn card_surface(segments: &Segments) {
 
     // ── 契约 4: 卡面温柔行 (proposal.rs `ProposalReviewCard` 的结构承诺) ──────
     assert!(
-        envelope.command_text.contains(PROPOSAL_PERSONAL_CONFIRM_MARKER),
+        envelope
+            .command_text
+            .contains(PROPOSAL_PERSONAL_CONFIRM_MARKER),
         "卡面必含「建议你亲自确认」行"
     );
     assert!(
@@ -456,10 +456,7 @@ fn card_surface(segments: &Segments) {
         envelope.command_text.contains(PROPOSAL_REVIEW_TONE),
         "卡面必含温柔语气行"
     );
-    assert!(
-        envelope.command_text.contains(&draft.id),
-        "卡面带提案 id"
-    );
+    assert!(envelope.command_text.contains(&draft.id), "卡面带提案 id");
 
     // ── 契约 5: 确定性 + 「载荷被改 → 摘要不符」 ───────────────────────────
     let again = proposal_card_envelope(&draft);
@@ -499,7 +496,8 @@ fn card_surface(segments: &Segments) {
             "变体信封形状只取决于提案 id 是否非空 (which={which})"
         );
         assert_eq!(
-            mutated_envelope.command_text, mutated_card.render(),
+            mutated_envelope.command_text,
+            mutated_card.render(),
             "变体 command_text 仍是人审卡全文 (which={which})"
         );
         assert!(
@@ -595,8 +593,7 @@ fn payload_surface(segments: &Segments) {
 
     // ── 契约 B: 载荷结构校验口径 (SDK `ImButtonPayload::validate`: 身份非空 +
     //    action 在词表内) ───────────────────────────────────────────────────
-    let identity_ok = !payload.approval_ref.trim().is_empty()
-        && !payload.pair_id.trim().is_empty();
+    let identity_ok = !payload.approval_ref.trim().is_empty() && !payload.pair_id.trim().is_empty();
     let action_ok = matches!(payload.action.as_str(), "approve" | "reject" | "cancel");
     assert_eq!(
         payload.validate().is_ok(),
@@ -606,8 +603,7 @@ fn payload_surface(segments: &Segments) {
 
     // ── 契约 C: 载荷往返不变 (serde 形状) ──────────────────────────────────
     let encoded = serde_json::to_value(&payload).expect("按钮载荷可序列化");
-    let decoded: ImButtonPayload =
-        serde_json::from_value(encoded).expect("按钮载荷可反序列化");
+    let decoded: ImButtonPayload = serde_json::from_value(encoded).expect("按钮载荷可反序列化");
     assert_eq!(decoded, payload, "按钮载荷往返不变");
 
     // ── 契约 D: 决定器 (im_proposal.rs `decide_from_click` 的拒绝即帧词表) ───
@@ -620,7 +616,10 @@ fn payload_surface(segments: &Segments) {
 
     let subject_ok = payload.subject == PROPOSAL_CAPABILITY_ID;
     let identity_ok = payload.approval_ref == payload.pair_id;
-    let action_ok = matches!(payload.action.as_str(), IM_BUTTON_APPROVE | IM_BUTTON_REJECT);
+    let action_ok = matches!(
+        payload.action.as_str(),
+        IM_BUTTON_APPROVE | IM_BUTTON_REJECT
+    );
     let operator_ok = !operator.trim().is_empty();
 
     if !(subject_ok && identity_ok && action_ok && operator_ok) {
@@ -655,40 +654,35 @@ fn payload_surface(segments: &Segments) {
                 panic!("工具面报错却落了账: {closure:?}")
             }
         },
-        Frame::Ok(value) => {
-            match value.get("status").and_then(|status| status.as_str()) {
-                None => assert!(
+        Frame::Ok(value) => match value.get("status").and_then(|status| status.as_str()) {
+            None => assert!(
+                matches!(result, ImProposalClosureResult::Refused { .. }),
+                "落账帧缺状态标签 → 拒绝即帧: value={value}"
+            ),
+            Some(status) if !matches!(status, "accepted" | "rejected") => {
+                assert!(
                     matches!(result, ImProposalClosureResult::Refused { .. }),
-                    "落账帧缺状态标签 → 拒绝即帧: value={value}"
-                ),
-                Some(status) if !matches!(status, "accepted" | "rejected") => {
-                    assert!(
-                        matches!(result, ImProposalClosureResult::Refused { .. }),
-                        "落账帧状态标签词表外 → 拒绝即帧: status={status:?}"
-                    )
-                }
-                Some(status) => match result {
-                    ImProposalClosureResult::Decided(closure) => {
-                        assert!(
-                            !closure.executed,
-                            "点头也不执行 (是否执行恒 false): closure={closure:?}"
-                        );
-                        let expected = if status == "accepted" {
-                            ProposalDecision::Accepted
-                        } else {
-                            ProposalDecision::Rejected
-                        };
-                        assert_eq!(
-                            closure.decision, expected,
-                            "落账帧的状态标签即账面决定"
-                        );
-                    }
-                    ImProposalClosureResult::Refused { reason } => {
-                        panic!("状态合法的落账帧却被拒: {reason}")
-                    }
-                },
+                    "落账帧状态标签词表外 → 拒绝即帧: status={status:?}"
+                )
             }
-        }
+            Some(status) => match result {
+                ImProposalClosureResult::Decided(closure) => {
+                    assert!(
+                        !closure.executed,
+                        "点头也不执行 (是否执行恒 false): closure={closure:?}"
+                    );
+                    let expected = if status == "accepted" {
+                        ProposalDecision::Accepted
+                    } else {
+                        ProposalDecision::Rejected
+                    };
+                    assert_eq!(closure.decision, expected, "落账帧的状态标签即账面决定");
+                }
+                ImProposalClosureResult::Refused { reason } => {
+                    panic!("状态合法的落账帧却被拒: {reason}")
+                }
+            },
+        },
     }
     trace("payload-decided", &payload);
 }
@@ -775,7 +769,10 @@ fn real_tool_surface(segments: &Segments) {
     let decider = ImProposalDecider::new(tool.clone());
     let first = block_on(decider.decide_from_click(channel, operator, &payload));
 
-    let action_ok = matches!(payload.action.as_str(), IM_BUTTON_APPROVE | IM_BUTTON_REJECT);
+    let action_ok = matches!(
+        payload.action.as_str(),
+        IM_BUTTON_APPROVE | IM_BUTTON_REJECT
+    );
     let operator_ok = !operator.trim().is_empty();
 
     if !(action_ok && operator_ok) {
@@ -788,10 +785,7 @@ fn real_tool_surface(segments: &Segments) {
                 panic!("词表外按钮/缺署名却落了账: {closure:?}")
             }
         }
-        assert!(
-            review_rows(&proposals).is_empty(),
-            "拒绝即帧 = 账面零写"
-        );
+        assert!(review_rows(&proposals).is_empty(), "拒绝即帧 = 账面零写");
         trace("tool-refused", &payload);
         return;
     }
@@ -845,10 +839,7 @@ fn real_tool_surface(segments: &Segments) {
     let again = block_on(decider.decide_from_click(channel, operator, &payload));
     match again {
         ImProposalClosureResult::Refused { reason } => {
-            assert!(
-                !reason.trim().is_empty(),
-                "重复点击必须给真因 (拒绝即帧)"
-            )
+            assert!(!reason.trim().is_empty(), "重复点击必须给真因 (拒绝即帧)")
         }
         ImProposalClosureResult::Decided(closure) => {
             panic!("重复点击又落了一次账: {closure:?}")
@@ -1090,7 +1081,9 @@ fuzz_target!(|data: &[u8]| {
     let mode = data.first().copied().unwrap_or(0);
     let body = data.get(1..).unwrap_or(&[]);
     let segments = Segments::new(body);
-    let forced = std::env::var("DSH_FUZZ_MODE").ok().and_then(|v| v.parse::<u8>().ok());
+    let forced = std::env::var("DSH_FUZZ_MODE")
+        .ok()
+        .and_then(|v| v.parse::<u8>().ok());
     match forced.unwrap_or(mode % 4) {
         0 => card_surface(&segments),
         1 => payload_surface(&segments),

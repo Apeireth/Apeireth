@@ -72,8 +72,8 @@
 use std::str::FromStr;
 
 use apeireth_governance::action_binding::{
-    ActionBinding, BindingDrift, SHORT_DIGEST_CHARS, canonical_json_bytes,
-    classify_binding_drift, verify_action_binding,
+    ActionBinding, BindingDrift, SHORT_DIGEST_CHARS, canonical_json_bytes, classify_binding_drift,
+    verify_action_binding,
 };
 use apeireth_protocol::ProtocolAdapter;
 use apeireth_protocol::adapters::{OpenAiChatAdapter, OpenAiResponsesAdapter};
@@ -190,9 +190,9 @@ fn serde_number_parse_is_inexact(number: &serde_json::Number) -> bool {
     let text = number.to_string();
     match f64::from_str(&text) {
         // std 正确舍入 ⇒ 回到原值（最短表示的自反性）；不等说明文本不可信。
-        Ok(std_parsed) if std_parsed == float => {
-            serde_json::from_str::<f64>(&text).ok().is_some_and(|parsed| parsed != float)
-        }
+        Ok(std_parsed) if std_parsed == float => serde_json::from_str::<f64>(&text)
+            .ok()
+            .is_some_and(|parsed| parsed != float),
         _ => true,
     }
 }
@@ -425,10 +425,7 @@ fn blind_spot_mutations(parameters: &Value) -> Vec<(&'static str, Value)> {
     out.push(("字符串里嵌 JSON", json!({ "payload": embedded })));
 
     // ④ 数组里塞对象。
-    out.push((
-        "数组里塞对象",
-        json!({ "payload": [parameters.clone()] }),
-    ));
+    out.push(("数组里塞对象", json!({ "payload": [parameters.clone()] })));
 
     // ⑤ 字符串叶子内容变化。
     if let Some(mutated) = mutate_first_string(parameters) {
@@ -436,10 +433,7 @@ fn blind_spot_mutations(parameters: &Value) -> Vec<(&'static str, Value)> {
     }
 
     // ⑥ 值类型变化（对象 → 数组）。
-    out.push((
-        "值类型变化",
-        json!({ "payload": [parameters.clone()] }),
-    ));
+    out.push(("值类型变化", json!({ "payload": [parameters.clone()] })));
 
     out
 }
@@ -520,8 +514,8 @@ fn binding_face(mode: u8, payload: &[u8]) {
             digest,
             "载荷改动后摘要未变（C2/C4 绑定不可绕过）: {label} parameters={parameters}"
         );
-        let mismatch = verify_action_binding(&binding, &other)
-            .expect_err("载荷改动后必须拒绝即帧（C4）");
+        let mismatch =
+            verify_action_binding(&binding, &other).expect_err("载荷改动后必须拒绝即帧（C4）");
         assert_eq!(mismatch.expected_digest, digest, "拒绝帧的批准摘要不对");
         assert_eq!(mismatch.actual_digest, other.digest(), "拒绝帧的活摘要不对");
     }
@@ -662,8 +656,8 @@ fn protocol_type_face(mode: u8, payload: &[u8]) {
         arguments: value.clone(),
     };
     let encoded = serde_json::to_string(&call).expect("ToolCall 可序列化");
-    let restored: ToolCall =
-        serde_json::from_str(&encoded).unwrap_or_else(|error| panic!("ToolCall 可反序列化: {error}"));
+    let restored: ToolCall = serde_json::from_str(&encoded)
+        .unwrap_or_else(|error| panic!("ToolCall 可反序列化: {error}"));
     if !has_inexact_serde_float(&value) {
         assert_eq!(restored, call, "ToolCall 序列化往返失真");
     } else {
@@ -824,7 +818,10 @@ fn decode_face(mode: u8, payload: &[u8]) {
                 .adapt_response(&openai_chat_raw(&wire))
                 .expect("OpenAI Chat 回程可解码");
             (
-                response.tool_calls.first().map(|call| call.arguments.clone()),
+                response
+                    .tool_calls
+                    .first()
+                    .map(|call| call.arguments.clone()),
                 response.raw_metadata,
             )
         }
@@ -833,7 +830,10 @@ fn decode_face(mode: u8, payload: &[u8]) {
                 .adapt_response(&openai_responses_raw(&wire))
                 .expect("OpenAI Responses 回程可解码");
             (
-                response.tool_calls.first().map(|call| call.arguments.clone()),
+                response
+                    .tool_calls
+                    .first()
+                    .map(|call| call.arguments.clone()),
                 response.raw_metadata,
             )
         }
@@ -868,7 +868,9 @@ fn decode_face(mode: u8, payload: &[u8]) {
                         )
                     });
                 assert!(
-                    recorded.iter().any(|item| item.as_str() == Some(text.as_str())),
+                    recorded
+                        .iter()
+                        .any(|item| item.as_str() == Some(text.as_str())),
                     "畸形 arguments 原文未记入排障面（C12）: recorded={recorded:?}"
                 );
             }
@@ -881,7 +883,9 @@ fn decode_face(mode: u8, payload: &[u8]) {
         // 消失、调用方无从得知」的静默吞并。
         Value::Object(map) if !map.is_empty() => {
             assert!(
-                !arguments.as_object().is_some_and(|decoded| decoded.is_empty()),
+                !arguments
+                    .as_object()
+                    .is_some_and(|decoded| decoded.is_empty()),
                 "非空对象形态的 arguments 被静默吞成空对象（C12/C13）: wire={wire} decoded={arguments}"
             );
             assert!(
