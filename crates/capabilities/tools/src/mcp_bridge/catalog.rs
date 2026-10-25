@@ -199,6 +199,15 @@ impl McpToolCatalog {
             // （授权档 / deny 名单 / 只读声明全按能力身份判定）⇒ 撞身份必须拒。
             // 此前这条登记路径只查模型名，于是两个模型名不同的工具可以共用一个
             // 能力身份 ⇒ 授权其中一个就把另一个一起授权了。
+            //
+            // **可达性（据实口径，勿高估）**：生产接线上**不可达** ——
+            // 服务器名文法 `[a-z0-9][a-z0-9_-]*`（`config.rs:160`）与
+            // MCP 工具名文法（`is_valid_mcp_name`：ASCII 小写/数字/`_`/`-`，
+            // 见 `apeireth_plugin::mcp::schema`）**都不含点**，且发现路径
+            // `connection.rs:340` 对非法名**硬报错** ⇒ `(server, tool) → capability_id`
+            // 在生产是**单射**。故这是**登记层的纵深防御缺口**
+            // （`McpToolEntry::new` 不校验这两个名字的文法，公开 API 可构造），
+            // **不是「现网可利用」**。
             let capability_id = entry.capability_id.as_str();
             if let Some(other_model) = seen_capabilities.get(capability_id) {
                 if *other_model != entry.model_name.as_str() {
