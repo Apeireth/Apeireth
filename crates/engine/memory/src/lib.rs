@@ -73,6 +73,9 @@ pub mod dream_wiring;
 pub mod dreaming;
 pub mod ensemble;
 pub mod five_dimensional;
+// 内部卷「挖题」工序 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
+pub mod golden_mining;
+pub mod golden_set;
 pub mod graph_algo;
 pub mod hybrid_search;
 pub mod intent_brier;
@@ -83,6 +86,7 @@ pub mod milestone;
 pub mod milestone_store_sqlite;
 pub mod online_calibration;
 pub mod partner;
+pub mod perltqa_adapter;
 pub mod persistent_vector;
 pub mod principles;
 pub mod proactive_recall;
