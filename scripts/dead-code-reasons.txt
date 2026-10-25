@@ -42,3 +42,4 @@ crates/adapters/gateway/tests/round_limit_frame.rs  测试夹具枚举变体（�
 crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs  测试夹具结构（供用例构造完整工具）
 benches/src/assembly.rs  基准夹具 helper（供各基准构造完整装配，部分 helper 本文件内未被调用）
 benches/src/support.rs  基准支撑 helper（采样/计时共用，部分 helper 本文件内未被调用）
+crates/capabilities/tools/tests/object_access_judgment.rs  测试夹具 helper（供对象判定用例构造工具调用，当前无用例调用）

@@ -6,7 +6,7 @@
 # ② 本清单里的既有豁免**只减不增** —— 新增豁免必须写清理由并登记；
 # ③ 理由在 `scripts/dead-code-reasons.txt`（按文件登记）。
 #
-# 合计: 43 处 · 指纹: 2aa04aef9b1b0b40
+# 合计: 44 处 · 指纹: 640b9e0ef93dc869
 #
 # 格式: <站点标识>  <理由>
 
@@ -29,6 +29,7 @@ crates/capabilities/tools/src/process/mod.rs:pub(crate) fn apply_request_to_comm
 crates/capabilities/tools/src/recon/yara.rs:fn find_bytes(haystack: &[u8], needle: &[u8]) ->  字节查找 helper：0 引用私有函数
 crates/capabilities/tools/src/std_sub_supervisor.rs:fn classify_exit(status: std::process::ExitStatu  子进程退出分类 / 回收 helper：守护面预留，仓内暂无调用方
 crates/capabilities/tools/src/std_sub_supervisor.rs:fn try_reap(&self, _child_id: &str, child: &mut  子进程退出分类 / 回收 helper：守护面预留，仓内暂无调用方
+crates/capabilities/tools/tests/object_access_judgment.rs#file  测试夹具 helper（供对象判定用例构造工具调用，当前无用例调用）
 crates/engine/memory/src/append_only.rs:pub fn kind_from_str(s: &str) -> MemoryResult<St  cfg(kani) 证明集专用（仅 kani 构建编译）
 crates/engine/memory/src/backend/file_encrypted.rs:impl EncryptedFileBackend {  v2 直开入口：仅测试直调（生产走 decrypt 路径）
 crates/engine/memory/src/backend/in_memory.rs:fn stream_name_to_kind(_name: &str) -> MemoryRes  已废弃兼容桩：返回明确错误引导改用 typed enum

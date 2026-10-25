@@ -190,6 +190,28 @@ fn corrupt_manifest_is_refused_and_nothing_touches_the_data_plane() {
     ));
 }
 
+/// 「清单缺失」要分两种情况（2026-10-25 补）：
+/// * **空目录** ⇒ 这不是备份包（路径打错/还没导出）⇒ `NotABundle`（可自救的输入问题）；
+/// * **目录里有数据、只是清单没了** ⇒ 包被破坏 ⇒ `ManifestCorrupt`（宁拒不损）。
+#[test]
+fn a_missing_manifest_is_not_a_bundle_only_when_the_directory_is_empty() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let empty = dir.path().join("empty");
+    std::fs::create_dir_all(&empty).expect("mkdir");
+    assert!(
+        matches!(verify_backup(&empty), Err(BackupError::NotABundle(_))),
+        "空目录 = 不是备份包（可自救的输入问题）"
+    );
+
+    let bundle = dir.path().join("bundle");
+    std::fs::create_dir_all(&bundle).expect("mkdir");
+    std::fs::write(bundle.join("sessions.sqlite3"), b"payload").expect("write payload");
+    assert!(
+        matches!(verify_backup(&bundle), Err(BackupError::ManifestCorrupt(_))),
+        "有数据却没清单 = 包被破坏（宁拒不损）"
+    );
+}
+
 /// 逐文件摘要不符 (字节翻转) = 拒恢复: 一个字节都不落盘 (宁拒不损)。
 #[test]
 fn a_single_flipped_byte_refuses_the_whole_restore() {

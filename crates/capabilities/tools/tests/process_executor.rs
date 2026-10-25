@@ -13,8 +13,32 @@ use apeireth_tools_canonical::process::{
     ProcessResult,
 };
 
-fn helper() -> &'static str {
-    env!("CARGO_BIN_EXE_sandbox-test-child")
+/// 子进程测试用的 helper 可执行文件路径。
+///
+/// **为什么不用 `env!("CARGO_BIN_EXE_sandbox-test-child")`**：那个编译期变量只在
+/// cargo 为集成测试**构建了同名 bin** 时才注入。本仓的 `[[bin]] sandbox-test-child`
+/// 标了 `test = false / bench = false / doc = false` ⇒ 在**部分 cargo 版本**
+/// （本地钉的 1.97.1 实测：变量不存在 ⇒ `env!` 直接编译失败，整个
+/// `cargo build --workspace --tests` 步骤红）里不注入 ⇒ 用 `env!` 会让
+/// **整个 workspace 的测试编译**挂掉（CI 跑的是 `--workspace --tests`）。
+///
+/// 改用「`option_env!` + 运行时同目录回退」：两种 cargo 版本都能编过，
+/// 且路径指向同一个真身（cargo 把 bin 与测试可执行文件放在同一个 target 目录）。
+fn helper() -> std::path::PathBuf {
+    if let Some(path) = option_env!("CARGO_BIN_EXE_sandbox-test-child") {
+        return std::path::PathBuf::from(path);
+    }
+    // cargo 的布局：测试可执行文件在 `<target>/<profile>/deps/`，bin 在
+    // `<target>/<profile>/` ⇒ 从 current_exe 往上退**一级**再放 bin 名。
+    let mut dir = std::env::current_exe().expect("current_exe");
+    dir.pop(); // deps/
+    dir.pop(); // <profile>/
+    dir.push(if cfg!(windows) {
+        "sandbox-test-child.exe"
+    } else {
+        "sandbox-test-child"
+    });
+    dir
 }
 
 fn execute(request: &ProcessRequest) -> Result<ProcessResult, ProcessError> {
