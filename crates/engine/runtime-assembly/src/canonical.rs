@@ -73,6 +73,7 @@ pub mod care_heartbeat;
 /// 关怀候选 (同源打扰纪律; 守护例外档)。
 #[path = "canonical/care_reminder.rs"]
 pub mod care_reminder;
+mod care_signals;
 #[path = "canonical/causal_world_model.rs"]
 pub mod causal_world_model;
 #[path = "canonical/cognitive.rs"]
@@ -195,6 +196,9 @@ pub use care_heartbeat::{
 pub use care_reminder::{
     guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
     WeatherSignalFeed,
+};
+pub use care_signals::{
+    CarePotentialDriver, CarePotentialFeed, CareSignals, DISTRESS_FULL_FAILURES, FATIGUE_FULL_HOURS,
 };
 pub use context_budget::{
     context_budget_chars_from_env, context_budget_chars_from_env_value, CONTEXT_BUDGET_ENV,

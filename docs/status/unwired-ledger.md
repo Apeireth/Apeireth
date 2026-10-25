@@ -138,6 +138,113 @@
 ② 再跑一次：无「已被另一个进程持有」告警、无链校验失败
 ```
 
+### 5.5p D-4 裁定落地：`cross_diary` 从「零消费方」变**有生产消费方**（2026-10-25）
+
+**裁定**：owner 选 D-4 **A**（`cross_diary` 先做；`three_tier_vault` 按 B 后置）。
+
+**接线点**：`MemoryCoordinator::execute_hybrid_retrieval`（`recall()` / `recall_async()`
+**共用**的检索执行尾段）—— 命中事实挂日记片段；片段进两种 overlay
+（XML 封闭世界 / **生产默认**的反幻觉编号证据清单）。
+
+**读取面**（新模块 `cross_diary_wiring.rs`）：**只读**、有界（≥2 共享词才算关联、
+每事实 ≤3 段、单段 ≤120 字、最多扫最近 14 天、overlay 内 ≤3 行且记忆正文优先）、
+确定性排序、坏文件优雅降级。`CrossDiaryIndex::build_recent` 让 `cross_diary`
+模块**第一次有了生产消费方**（此前零引用 ⇒ A 类缺口）。
+
+**开关口径**：**不新增 env**（预算 160/160 满）⇒ **存在性即开关**
+（`<data>/diary` 目录存在才挂只读日记面；不存在 ⇒ 检索路径压根不碰日记，
+`diary_snippets` 恒空、overlay 与接线前**逐字节一致**，集成测试用 JSON 全等钉死）。
+
+**真机证据**：真 CLI 跑 `apeireth dream --date 2026-10-25` 落盘 `<data>/diary/2026-10-25.json`
+（`source="dream"` + markdown body + `timestamp_epoch_ms`）；生产检索路径指到同一真目录
+⇒ 命中事实确实挂上梦境日志摘要（共享词证据齐全）。
+**未验**：「片段出现在真实模型提示词里」只有代码级证据（需真 LLM 回合）。
+
+### 5.5o D-6 裁定落地：后果追踪的**显式绑定账** + `failed` 自动回填（2026-10-25）
+
+**裁定**：owner 选 D-6 **A 的第一步**（`confirmed` 仍人工/外部）。
+
+**最关键的查证结论**（决定了实现形态）：egress 的 `action_id`（`act-{now_ms}`，墙钟派生）
+与工具调用的 `ToolCall.id`（provider 赋的不透明 id）**不同源、不可推导** ——
+出网闸在 *provider 请求* 上判定，影响声明在工具调用存在**之前**就落账；边界也不是同一件事。
+⇒ **不能自动归属**。按纪律**不编造归属**，落地为**显式绑定账**：
+
+- `ActionToolBindingLedger`（append-only `action-tool-bindings.jsonl`，零真值）：
+  `bind(action_id, tool_call_id)` **两侧各 1:1**（破坏即拒、同一对幂等）；
+- 登记入口两处同语义：库级 `OutcomeBackfiller::bind` + CLI `apeireth egress bind <ACTION_ID> <TOOL_CALL_ID>`
+  （**只指向已声明的影响**，查不到即拒、明说「不编造归属」）。
+
+**`failed` 自动回填**：`backfill_from_tool_result_at` —— 成功 ⇒ **第一步就不动**
+（填 `confirmed` 的代码路径**根本不存在**）；未登记 ⇒ 不动；已是 `failed` ⇒ 幂等；
+**已是 `confirmed` ⇒ 不降级**；其余 ⇒ `Failed` + `locally_observed`。
+生产触发面只听 `AfterToolResult`，装配根按**已有 env** `APEIRETH_ENABLE_EGRESS_GATE` 注册
+（**默认关 = 零注册**，符合「未启用 = 不注册」纪律）。
+
+**顺带修的真缺陷**：`act-{now_ms}` 是**毫秒级** ⇒ **同一毫秒两次出网会共用一个 `action_id`**
+（两条影响声明一个 id）⇒ 源头就破坏 1:1。已改为 `act-{now_ms}-{序号}`（进程内单调），
+并加回归测试钉死「同毫秒两次出网 ⇒ 不同 id」。
+
+**诚实边界**：`bind`/`impact` **真机跑过**；但「工具失败 → 账本变 failed」的**完整真机链路未跑**
+（需真实 provider 回合 + 工具失败，本环境无凭据）—— 钩子路径、账本写入、报告面读取三段
+各有集成测试钉死，但未在真机串起来。
+**待定**：「为工具动作落影响声明」的生产者仍缺位（真正闭环需要指定谁在何时落）。
+
+### 5.5q orphan 专项（cli/sdk/memory/provider 区 47 条）：真死 6 / 设计如此 41
+
+判据口径（沿用仓库既有先例 `append_fact` / `as_session_store` / `stats_ref`）：
+**「与另一公开 API 同签名纯改名」且零引用 ⇒ 删**；**签名不同的便利包装**、
+**私有字段的唯一注入点**、**公开字段上的语法糖** ⇒ 保留（属公开 API 表面）。
+
+**已删 6 条**（零能力损失、零测试需删）：`events_with_ids` / `select_candidates` /
+`query_facts` / `traverse_from` / `retract_relation` / `get_history` ——
+全部是同签名纯别名，主路径在生产在用。**基线 149 → 143**（G6 78→72）。
+
+**另更正 2 处过期 doc**：`consolidate_governed` 自称「production entry point」实为**未接线**；
+`put_episode_full` 的「与 `put_episode` 不同」自 2026-10-24 起**已不成立**（现已一并写全 4 列）。
+
+**判据盲区（未改判据，报备）**：裸 token 计数会**同名遮蔽** ——
+`TemporalGraphStore::facts_as_of` / `::history` 是**真死但被同名方法遮蔽**
+（`BitemporalGraph::facts_as_of` / `TuningEngine::history` 在生产出现）⇒ 不在基线里。
+**不改判据缩表**（那是 cosmetic 抵扣），单独立条目待处理。
+另：`without_as_of` 的归组理由**指向另一个孤儿** ⇒ 理由循环；`with_len` 被 `with_` 前缀
+误扫进 G4（它是便利构造，不是注入点）。
+
+**整族未接线（模块级，建议单独立条目）**：`memory/src/scope.rs` 的 `RecallPolicy`、
+`dailynote/` 的 `DailyNote`、`online_calibration.rs` 的 `AdaptiveBaseline`/`DriftDetector`、
+`cluster_store.rs` 的 `ClusterStore` —— 各自那几条基线条目是**症状**，不是独立债。
+
+**「零引用 ≠ 没接电」的反例**：`apeireth_sdk_py`（PyO3 `#[pymodule]`）由 **Python import
+机制**调用，Rust 侧零引用是正常态 —— 判据看不见。
+
+### 5.5n D-3 裁定落地：`care_potential_field` 有了**真实信号源**并接进生产（2026-10-25）
+
+**裁定**：owner 选 D-3 **A 的 ①②**（纯确定性、可测、不猜语义），③ 时区信号后置。
+
+**之前的状态**：`CarePotentialField`（关怀势能场）有完整实现、有势能公式、有三级
+关怀动作，但**零生产调用** —— 缺的不是算法，是**输入**：五个因子
+（nocturnal/distress/fatigue/silence/flow_resistance）没人算。
+
+**本轮落地（三层）**：
+
+| 层 | 内容 | 真实性 |
+|---|---|---|
+| ① 信号源 | `BioLifecycleState` 新增 `consecutive_tool_failures`（连续失败数，**成功即清零**）+ `last_tool_success_ms`（最近工具成功时刻） | **真实** `ToolOutcome` 总线回调维护，非采样非估算 |
+| ② 因子映射 | 新模块 `care_signals.rs`：`distress` = 连续失败/3（钳 [0,1]）、`fatigue` = 无成功小时数/6（钳 [0,1]）、`silence` = 同源秒数；`nocturnal`/`flow_resistance` **固定 0**（时区债未收 / 无心流检测面） | 纯函数、确定性、时钟回拨不误剪 |
+| ③ 生产接线 | `CarePotentialDriver` + `CarePotentialFeed`（实现 `ReminderFeed`）接进**常驻关怀心跳**（CLI `care_heartbeat`） | 势能突破**只产一条提醒信号**，之后与天气提醒/守护告警**同管道同纪律**消费（勿扰/专注/频率/预算/发起闸**一道都不绕**） |
+
+**开关与时基**：
+- **不新增 env**（env 预算 160/160 已满）⇒ 复用 `APEIRETH_ENABLE_BIO_LIFECYCLE`
+  （信号源本身的存在条件）；关怀心跳另有既有的双闸
+  （`APEIRETH_ENABLE_CARE` + `APEIRETH_ENABLE_CARE_HEARTBEAT`）。
+- 时基统一用 `state.now_ms()`（与「最近工具成功时刻」同一时钟）⇒ 时钟回拨/注入时钟下两者同轴。
+- 构造即锚定起始时刻 ⇒ **首拍** dt = 构造到首拍的真实间隔（生产 ≈ 一个心跳间隔），
+  不是 0（否则势能永远起步为 0、永远不突破）。
+
+**证据**：`care_signals.rs` 内 11 个测试（含「未突破无信号 / 突破产一条 / 未消费重投不
+重复 / 消费后清位 / 闸关恒静默 / 势能信号必须走标准纪律管道」）。
+
+**口径**：**装配面已接、默认关**（`APEIRETH_ENABLE_BIO_LIFECYCLE=1` + 关怀双闸开才生效）。
+
 ### 5.5m `tool.repo_map` 的 HTTP 级注册证据（2026-10-25，四层证据齐）
 
 代码地图这条线此前有「工具面测试 + 装配级注册条件测试」，但**缺 HTTP 级证据**

@@ -181,6 +181,10 @@ pub struct BioLifecycleObservation {
     pub last_action: Option<String>,
     /// 当前生效策略（阈值真值，供自述阈值字段使用）。
     pub policy: LifecyclePolicy,
+    /// **连续**工具失败数（D-3 关怀势能场 distress 信号源）。
+    pub consecutive_tool_failures: u64,
+    /// 最近一次工具成功时刻（epoch 毫秒）；`None` = 尚无成功。
+    pub last_tool_success_ms: Option<u64>,
 }
 
 /// 生命周期装配状态（装配面唯一持有者）：内存账本 + 注入时钟 + 只读计数器。
@@ -202,6 +206,14 @@ pub struct BioLifecycleState {
     dirty: AtomicBool,
     /// 持久化诊断（启动装载失败真因 / 落盘失败计数与最近真因）。
     persistence: Mutex<PersistenceDiagnostics>,
+    /// **连续**工具失败数（成功即清零）。关怀势能场 distress 信号源（D-3）。
+    ///
+    /// 由 [`observe_tool_outcome_at`](Self::observe_tool_outcome_at) 在真实
+    /// `ToolOutcome` 总线回调里维护 —— 不是估算、不是采样。
+    consecutive_tool_failures: AtomicU64,
+    /// 最近一次**工具成功**时刻（epoch 毫秒）；`0` = 尚无成功。
+    /// 关怀势能场 fatigue / silence 信号源（D-3）。
+    last_tool_success_ms: AtomicU64,
 }
 
 /// 持久化诊断（只增不减的失败计数 + 最近真因；启动装载失败 = 本进程拒写）。
@@ -236,6 +248,8 @@ impl BioLifecycleState {
             store: None,
             dirty: AtomicBool::new(false),
             persistence: Mutex::new(PersistenceDiagnostics::default()),
+            consecutive_tool_failures: AtomicU64::new(0),
+            last_tool_success_ms: AtomicU64::new(0),
         }
     }
 
@@ -312,6 +326,25 @@ impl BioLifecycleState {
                 self.note_save_failure(&message);
                 Err(message)
             }
+        }
+    }
+
+    /// **连续**工具失败数（成功即清零；真实 `ToolOutcome` 回调维护）。
+    ///
+    /// 关怀势能场 distress 信号源（D-3）：0 = 无失败；数值越大越挫败。
+    #[must_use]
+    pub fn consecutive_tool_failures(&self) -> u64 {
+        self.consecutive_tool_failures.load(Ordering::SeqCst)
+    }
+
+    /// 最近一次工具**成功**时刻（epoch 毫秒）；`None` = 尚无成功。
+    ///
+    /// 关怀势能场 fatigue / silence 信号源（D-3）。
+    #[must_use]
+    pub fn last_tool_success_ms(&self) -> Option<u64> {
+        match self.last_tool_success_ms.load(Ordering::SeqCst) {
+            0 => None,
+            at => Some(at),
         }
     }
 
@@ -406,6 +439,14 @@ impl BioLifecycleState {
         match recorded {
             Ok(()) => {
                 self.dirty.store(true, Ordering::SeqCst);
+                // D-3 信号源: 连续失败计数 + 最近成功时刻（成功即清零连续失败）。
+                if ok {
+                    self.consecutive_tool_failures.store(0, Ordering::SeqCst);
+                    self.last_tool_success_ms.store(at_ms, Ordering::SeqCst);
+                } else {
+                    self.consecutive_tool_failures
+                        .fetch_add(1, Ordering::SeqCst);
+                }
                 let label = if ok { "ok" } else { "error" };
                 self.set_last_action(format!("tool_result {name} {label}"));
                 Ok(())
@@ -474,6 +515,8 @@ impl BioLifecycleState {
             last_transitions: self.lock_last_transitions().clone(),
             last_action: self.lock_last_action().clone(),
             policy: ledger.policy(),
+            consecutive_tool_failures: self.consecutive_tool_failures(),
+            last_tool_success_ms: self.last_tool_success_ms(),
         }
     }
 
