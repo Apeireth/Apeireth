@@ -3,6 +3,10 @@
 //! accepted 标记不执行 (执行仍走既有工具面) / 账 append-only / 开关 fail-closed /
 //! 拒绝即帧 / 列表真值 / 自述提案节同账。
 
+/// 本集成测试二进制内的 env 锁（进程级全局量 ⇒ 串行）。
+/// 放在**模块级**（不在测试函数内）：同文件多个测试函数共用同一把。
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 use apeireth_governance::{ToolGuard, ToolGuardRequest};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
@@ -324,10 +328,6 @@ async fn the_proposal_ledger_is_append_only() {
 #[test]
 fn the_enable_switch_is_fail_closed_except_the_exact_one() {
     // 串行护住 env 读写 (进程级全局量, 同二进制内其它用例不读这把开关)。
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    std::env::remove_var(PROPOSALS_ENABLE_ENV);
-    assert!(!proposals_enabled_from_env(), "未设 = 关 (fail-closed)");
     assert!(ProposalConfig::from_env(".").is_none());
     for value in ["0", "2", "true", "yes", ""] {
         std::env::set_var(PROPOSALS_ENABLE_ENV, value);

@@ -4,6 +4,10 @@
 //! 创建类原子写 / 敏感面拒 / 越界不回显路径 / 写总闸 fail-closed / 开关
 //! fail-closed / 审批档与边界 Guard 各一枚。口径钉死处都断言精确值, 演进须改测试。
 
+/// 本集成测试二进制内的 env 锁（进程级全局量 ⇒ 串行）。
+/// 放在**模块级**（不在测试函数内）：同文件多个测试函数共用同一把。
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 use std::path::{Path, PathBuf};
 
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
@@ -782,6 +786,9 @@ fn write_gate_fails_closed_but_reads_pass() {
 /// ⑲ 开关 fail-closed: `APEIRETH_ENABLE_SHEET_OPS` 只认显式 "1"。
 #[test]
 fn sheet_ops_switch_fails_closed_on_anything_but_one() {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     std::env::remove_var(SHEET_OPS_ENABLE_ENV);
     assert!(!sheet_ops_enabled_from_env(), "未设 = 关");
     assert!(

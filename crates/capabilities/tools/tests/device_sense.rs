@@ -4,6 +4,10 @@
 //! 提醒信号格式 (只交信号) / 真实协议与 live 插槽留位不接 / 开关 fail-closed /
 //! 自述在场节同表同源。
 
+/// 本集成测试二进制内的 env 锁（进程级全局量 ⇒ 串行）。
+/// 放在**模块级**（不在测试函数内）：同文件多个测试函数共用同一把。
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -356,10 +360,6 @@ async fn real_protocol_and_live_slots_refuse_until_wired() {
 #[tokio::test]
 async fn the_device_sense_switch_is_fail_closed() {
     // 串行护住 env 读写 (进程级全局量)。
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-    let _guard = ENV_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
     std::env::remove_var(DEVICE_SENSE_ENABLE_ENV);
     assert!(!device_sense_enabled_from_env());
     assert!(DeviceSenseConfig::from_env(".").is_none());
