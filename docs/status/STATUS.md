@@ -8,7 +8,7 @@
 | `rt.provider_router` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `c9251271` | 2026-11-20 |
 | `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `c9251271` | 2026-11-20 |
-| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `c9251271` | 2026-11-20 |
+| `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `04a1c3983149` | 2026-11-20 |
 | `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `c9251271` | 2026-11-20 |
 | `sec.egress_control` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `sec.object_access` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
@@ -20,7 +20,7 @@
 | `sec.linux_containment` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `c9251271` | 2026-11-20 |
 | `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `c9251271` | 2026-11-20 |
-| `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
+| `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `04a1c3983149` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `gov.reflection_queue` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `gov.chain_drill_ci` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
