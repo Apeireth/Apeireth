@@ -46,7 +46,18 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "scripts" / "dead-code-baseline.txt"
 REASONS = ROOT / "scripts" / "dead-code-reasons.txt"
-CRATES = ROOT / "crates"
+# 扫描范围 = **workspace 真正编译的** Rust 源码（与 CI 的
+# `cargo clippy --workspace --all-targets` 覆盖面一致）：
+#   crates/  —— 全部产品 crate；
+#   benches/ —— workspace 成员（基准复现 harness，publish = false）。
+#
+# 刻意**不含**：
+#   legacy/ research/ —— Cargo.toml 的 `exclude` 项（归档冻结，不编译 ⇒
+#                         编译器根本不会在那里报 dead_code ⇒ 无需登记）；
+#   fuzz/ examples/    —— 非 workspace 成员（cargo-fuzz 单独构建），
+#                         同样不进 `--workspace --all-targets` 的编译面。
+# 范围与编译面不一致 = 守卫有洞（多登记）或误报（少适用）。
+SOURCE_DIRS = ["crates", "benches"]
 
 ITEM_ALLOW = re.compile(r"^\s*#\[allow\(dead_code\)\]\s*$")
 FILE_ALLOW = re.compile(r"^\s*#!\[allow\(dead_code\)\]\s*$")
@@ -55,7 +66,12 @@ FILE_ALLOW = re.compile(r"^\s*#!\[allow\(dead_code\)\]\s*$")
 def collect() -> list[tuple[str, str]]:
     """返回 [(站点标识, 文件路径)]。"""
     sites: list[tuple[str, str]] = []
-    for path in sorted(CRATES.rglob("*.rs")):
+    paths: list[pathlib.Path] = []
+    for name in SOURCE_DIRS:
+        base = ROOT / name
+        if base.is_dir():
+            paths.extend(base.rglob("*.rs"))
+    for path in sorted(paths):
         rel = path.relative_to(ROOT).as_posix()
         lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
         for index, line in enumerate(lines):

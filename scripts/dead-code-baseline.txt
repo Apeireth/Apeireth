@@ -6,10 +6,12 @@
 # ② 本清单里的既有豁免**只减不增** —— 新增豁免必须写清理由并登记；
 # ③ 理由在 `scripts/dead-code-reasons.txt`（按文件登记）。
 #
-# 合计: 41 处 · 指纹: fc686e405369ea02
+# 合计: 43 处 · 指纹: 2aa04aef9b1b0b40
 #
 # 格式: <站点标识>  <理由>
 
+benches/src/assembly.rs#file  基准夹具 helper（供各基准构造完整装配，部分 helper 本文件内未被调用）
+benches/src/support.rs#file  基准支撑 helper（采样/计时共用，部分 helper 本文件内未被调用）
 crates/adapters/gateway/src/presence.rs:heartbeat: Arc<HeartbeatDriver>, // D-1（owner 裁定  心跳驱动器句柄：仅测试读（断言开流即起心跳产出）
 crates/adapters/gateway/tests/round_limit_frame.rs#file  测试夹具枚举变体（供用例构造完整帧）
 crates/adapters/sdk/src/abi.rs:fn _ensure_error_linked() -> Result<(), SdkError  FFI 链接锚（保证符号被链入，仓内无 Rust 侧读点）
