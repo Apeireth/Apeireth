@@ -60,6 +60,92 @@ pub fn attach_decision_log(guard: BehaviorChainGuardHook) -> BehaviorChainGuardH
 /// - `reason` ← 多条理由以 `; ` 连接（空理由给空串，不编造）。
 ///
 /// 读不到 / 账不存在 ⇒ 空集合（nightwatch 会照实报缺口，不算错）。
+/// D-2：council ballot 账的读取上限（与守卫判定账同量级）。
+pub const NIGHTWATCH_COUNCIL_BALLOT_READ_LIMIT: usize = 200;
+
+/// D-2：council ballot 账路径（与其它账同根 ⇒ 与生产装配写账处**同一份**）。
+pub fn council_ballot_log_path() -> std::path::PathBuf {
+    apeireth_runtime_assembly::canonical::council_ballot_log::default_council_ballot_log_path(
+        &crate::default_panel_data_dir(),
+    )
+}
+
+/// D-2 端到端：一条顾问评价 ⇒ 票 ⇒ 落盘 ⇒ 读回 ⇒ 守夜人复盘段真的能跑。
+///
+/// 这条测试钉的是**整条链**（不是单个函数）：映射口径、落盘、读回、复盘段不空转。
+#[cfg(test)]
+mod council_ballot_e2e_tests {
+    use super::*;
+    use apeireth_governance::rubric;
+    use apeireth_orchestration::{AdvisorDecision, AdvisorEvaluation, AdvisorKind, AdvisorVerdict};
+
+    #[test]
+    fn a_consultant_evaluation_becomes_a_persisted_ballot_the_nightwatch_can_read() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("council-ballots.jsonl");
+        let log =
+            apeireth_runtime_assembly::canonical::council_ballot_log::CouncilBallotLog::open(&path);
+
+        let evaluation = AdvisorEvaluation {
+            advisor: "safety-advisor".to_string(),
+            kind: AdvisorKind::Safety,
+            verdict: AdvisorVerdict::new(0.8, AdvisorDecision::Allow, "ok", Some(0.9))
+                .expect("valid verdict"),
+        };
+
+        let record = apeireth_runtime_assembly::canonical::council_ballots::record_from_evaluation(
+            &evaluation,
+            1_700_000_000_000,
+        );
+        log.append(&record).expect("append");
+
+        let records = log.read_recent(10).expect("read");
+        assert_eq!(records.len(), 1, "账里应有一票");
+        let ballots =
+            apeireth_runtime_assembly::canonical::council_ballots::ballots_from_records(&records);
+        assert_eq!(ballots.len(), 1);
+        let ballot = &ballots[0];
+        assert_eq!(ballot.advisor_id, "safety-advisor");
+        assert_eq!(ballot.stance, rubric::StanceKind::Approve);
+        assert!((ballot.confidence - 0.9).abs() < 1e-9, "显式置信度原样取用");
+        assert!(!ballot.confidence_defaulted, "显式置信度不是兜底");
+        assert_eq!(ballot.domain, Some(rubric::AdvisorDomain::Safety));
+        assert!((ballot.weight - rubric::AdvisorDomain::Safety.default_weight()).abs() < 1e-9);
+
+        // 守夜人复盘段：票非空 ⇒ 不再报「council ballot 未持久化」缺口。
+        let report = apeireth_runtime_assembly::canonical::nightwatch_audit(
+            &apeireth_runtime_assembly::canonical::nightwatch::NightwatchInputs {
+                council_ballots: ballots,
+                ..Default::default()
+            },
+        );
+        assert!(
+            !report
+                .advisory_gaps
+                .iter()
+                .any(|gap| gap.contains("council ballot 未持久化")),
+            "有票就不该再报缺口: {:?}",
+            report.advisory_gaps
+        );
+    }
+}
+
+/// D-2：读 council ballot 账 ⇒ 守夜人「立场平衡复盘」段的票。
+///
+/// * 账不存在 / 打不开 ⇒ 空集合（守夜人会照实报缺口，不静默冒充有票）；
+/// * 损坏行由账层跳过（不 panic）。
+pub fn nightwatch_council_ballots(limit: usize) -> Vec<apeireth_governance::rubric::Ballot> {
+    let log = apeireth_runtime_assembly::canonical::council_ballot_log::CouncilBallotLog::open(
+        council_ballot_log_path(),
+    );
+    match log.read_recent(limit) {
+        Ok(records) => {
+            apeireth_runtime_assembly::canonical::council_ballots::ballots_from_records(&records)
+        }
+        Err(_) => Vec::new(),
+    }
+}
+
 pub fn nightwatch_audit_snapshots(
     limit: usize,
 ) -> Vec<apeireth_runtime_assembly::canonical::nightwatch::AuditSnapshot> {

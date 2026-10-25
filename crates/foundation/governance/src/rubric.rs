@@ -118,8 +118,29 @@ pub struct Ballot {
     pub advisor_id: String,
     pub stance: StanceKind,
     pub confidence: f64,
+    /// D-2：置信度是否为「兜底值」而非顾问显式给出。
+    ///
+    /// `true` = 顾问没给置信度，这个值是映射层兜底/从质量分折算来的
+    /// （消费者据此如实标注「此置信度非显式」）；`false` = 顾问显式给出。
+    ///
+    /// `#[serde(default)]` ⇒ 旧 JSON（没有这个键）读出来是 `false`，
+    /// 与「显式给出」的旧语义保持一致。
+    #[serde(default)]
+    pub confidence_defaulted: bool,
     pub weight: f64,
     pub domain: Option<AdvisorDomain>,
+}
+
+/// Clamp a confidence-like value into `0.0..=1.0`.
+///
+/// `f64::clamp` keeps NaN as NaN (NaN 比较恒为 false)，这里显式把 NaN 挡掉
+/// ⇒ 落到 `0.0`，避免 NaN 置信度污染下游加权分。
+fn clamp_confidence(value: f64) -> f64 {
+    if value.is_nan() {
+        0.0
+    } else {
+        value.clamp(0.0, 1.0)
+    }
 }
 
 impl Ballot {
@@ -133,8 +154,40 @@ impl Ballot {
             advisor_id: advisor_id.into(),
             stance,
             confidence: confidence.clamp(0.0, 1.0),
+            confidence_defaulted: false,
             weight,
             domain: None,
+        }
+    }
+
+    /// D-2 映射口径：从「顾问给的一条评价」折算成一张票。
+    ///
+    /// * `confidence`：`Some(c)` = 顾问**显式**给的置信度（原样取用，clamp 0..=1）；
+    ///   `None` = 顾问没给 ⇒ 用 `fallback_confidence`（映射层折算出的质量分），
+    ///   并把 `confidence_defaulted` 置 `true`。
+    /// * `weight`：调用方给的权重（映射层会传「现有顾问注册权重」）。
+    /// * `domain`：记下这张票来自哪个顾问域（`domain` 字段同时可用于
+    ///   `effective_weight()` 的兜底）。
+    pub fn from_advice(
+        advisor_id: impl Into<String>,
+        stance: StanceKind,
+        confidence: Option<f64>,
+        fallback_confidence: f64,
+        weight: f64,
+        domain: AdvisorDomain,
+    ) -> Self {
+        let confidence_defaulted = confidence.is_none();
+        let confidence = match confidence {
+            Some(explicit) => clamp_confidence(explicit),
+            None => clamp_confidence(fallback_confidence),
+        };
+        Self {
+            advisor_id: advisor_id.into(),
+            stance,
+            confidence,
+            confidence_defaulted,
+            weight,
+            domain: Some(domain),
         }
     }
 
@@ -472,5 +525,193 @@ mod tests {
             &ballots,
             &report
         ));
+    }
+
+    // ---- D-2: council ballot 接线（from_advice 映射口径） ----
+
+    #[test]
+    fn from_advice_keeps_explicit_confidence_and_is_not_defaulted() {
+        let b = Ballot::from_advice(
+            "advisor-safety",
+            StanceKind::StrongApprove,
+            Some(0.82),
+            0.10,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(!b.confidence_defaulted, "显式给的置信度不能标成兜底值");
+        assert!((b.confidence - 0.82).abs() < 1e-9, "显式置信度原样取用");
+        assert_eq!(b.advisor_id, "advisor-safety");
+        assert_eq!(b.stance, StanceKind::StrongApprove);
+    }
+
+    #[test]
+    fn from_advice_falls_back_and_flags_defaulted() {
+        let b = Ballot::from_advice(
+            "advisor-history",
+            StanceKind::Approve,
+            None,
+            0.42,
+            0.55,
+            AdvisorDomain::History,
+        );
+        assert!(b.confidence_defaulted, "缺省置信度必须标成兜底值");
+        assert!(
+            (b.confidence - 0.42).abs() < 1e-9,
+            "缺省时取 fallback_confidence"
+        );
+    }
+
+    #[test]
+    fn from_advice_clamps_out_of_range_and_nan() {
+        let low = Ballot::from_advice(
+            "a",
+            StanceKind::Approve,
+            Some(-0.5),
+            0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (low.confidence - 0.0).abs() < 1e-9,
+            "显式 -0.5 应 clamp 到 0.0"
+        );
+
+        let high = Ballot::from_advice(
+            "b",
+            StanceKind::Approve,
+            Some(1.7),
+            0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (high.confidence - 1.0).abs() < 1e-9,
+            "显式 1.7 应 clamp 到 1.0"
+        );
+
+        let nan = Ballot::from_advice(
+            "c",
+            StanceKind::Approve,
+            Some(f64::NAN),
+            0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!((nan.confidence - 0.0).abs() < 1e-9, "NaN 置信度应落到 0.0");
+
+        // fallback 同样要 clamp / 挡 NaN
+        let low_fallback = Ballot::from_advice(
+            "d",
+            StanceKind::Approve,
+            None,
+            -0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!((low_fallback.confidence - 0.0).abs() < 1e-9);
+        assert!(low_fallback.confidence_defaulted);
+
+        let high_fallback = Ballot::from_advice(
+            "e",
+            StanceKind::Approve,
+            None,
+            1.7,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!((high_fallback.confidence - 1.0).abs() < 1e-9);
+
+        let nan_fallback = Ballot::from_advice(
+            "f",
+            StanceKind::Approve,
+            None,
+            f64::NAN,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (nan_fallback.confidence - 0.0).abs() < 1e-9,
+            "NaN fallback 应落到 0.0"
+        );
+        assert!(nan_fallback.confidence_defaulted);
+    }
+
+    #[test]
+    fn from_advice_records_domain_and_effective_weight_uses_domain_default() {
+        let b = Ballot::from_advice(
+            "advisor-history",
+            StanceKind::Approve,
+            Some(0.5),
+            0.5,
+            0.0,
+            AdvisorDomain::History,
+        );
+        assert_eq!(b.domain, Some(AdvisorDomain::History), "domain 必须被记下");
+        assert!(
+            (b.effective_weight() - AdvisorDomain::History.default_weight()).abs() < 1e-9,
+            "weight = 0 时 effective_weight 应回落到域默认权重"
+        );
+
+        let explicit = Ballot::from_advice(
+            "advisor-safety",
+            StanceKind::Approve,
+            Some(0.5),
+            0.5,
+            2.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (explicit.effective_weight() - 2.0).abs() < 1e-9,
+            "weight > 0 时 effective_weight 用调用方给的权重"
+        );
+    }
+
+    #[test]
+    fn new_keeps_explicit_confidence_and_is_not_defaulted() {
+        let b = Ballot::new("advisor-safety", StanceKind::Approve, 0.7, 1.0);
+        assert!(!b.confidence_defaulted, "new 的置信度是调用方显式给的");
+        assert!((b.confidence - 0.7).abs() < 1e-9);
+        assert_eq!(b.domain, None);
+    }
+
+    #[test]
+    fn weighted_score_denominator_excludes_confidence() {
+        // 现有口径：weighted_score = Σ(stance.score() × confidence × weight) / Σ(weight)
+        // ⇒ **分母不含 confidence**。
+        // 这是**当前**口径；改口径属产品决策（D-8），不要顺手改。
+        let ballots = vec![
+            Ballot::new("zero", StanceKind::StrongApprove, 0.0, 1.0),
+            Ballot::new("one", StanceKind::StrongApprove, 1.0, 1.0),
+        ];
+        let report = synthesize(&ballots);
+        // 分子 = 1.00×0 + 1.00×1 = 1.00；分母 = 1 + 1 = 2 ⇒ 0.5
+        assert!(
+            (report.weighted_score - 0.5).abs() < 1e-9,
+            "分母不含 confidence ⇒ 一张 confidence=0 + 一张 confidence=1 的赞成票得到 0.5，而不是 1.0"
+        );
+        // 等权同立场：分子 = 0.60×0.25 + 0.60×0.75 = 0.60；分母 = 2 ⇒ 0.30
+        // （= stance.score() × 平均 confidence 0.50；若分母含 confidence 则会是 0.60）
+        let equal = vec![
+            Ballot::new("a", StanceKind::Approve, 0.25, 1.0),
+            Ballot::new("b", StanceKind::Approve, 0.75, 1.0),
+        ];
+        let equal_report = synthesize(&equal);
+        assert!(
+            (equal_report.weighted_score - 0.30).abs() < 1e-9,
+            "分母是纯 Σ(weight)，不是 Σ(weight × confidence)"
+        );
+
+        // 不等权：分子 = 0.60×1.00×3 + 0.60×0.00×1 = 1.80；分母 = 3 + 1 = 4 ⇒ 0.45
+        // （若分母含 confidence 则是 1.80/3 = 0.60）
+        let uneven = vec![
+            Ballot::new("heavy", StanceKind::Approve, 1.0, 3.0),
+            Ballot::new("light", StanceKind::Approve, 0.0, 1.0),
+        ];
+        let uneven_report = synthesize(&uneven);
+        assert!(
+            (uneven_report.weighted_score - 0.45).abs() < 1e-9,
+            "分母不含 confidence：低置信度票仍然全额占权重"
+        );
     }
 }

@@ -282,7 +282,16 @@ def classify(symbol: str, file_path: str) -> str:
         return "G7"
     if any(key in file_path for key in BIO_FILES):
         return "G3"
-    if symbol.startswith("with_") or "probe" in symbol:
+    if symbol.startswith("with_"):
+        # `with_*` 这一族要再分一次（2026-10-25 复核）：
+        # * **接入面**（builder 设置 `mut self`，或注入的是依赖 `Arc<dyn …>`/`Box<dyn …>`）
+        #   ⇒ G4（注入点 / 探测口）；
+        # * **独立便利构造器**（既不吃 `mut self`，也不注入依赖，只是「造一个默认实例」）
+        #   ⇒ G6（与主路径并行的便利包装/别名，不是「没人接的接入面」）。
+        #   之前用**无差别前缀匹配** ⇒ `with_len`（`DriftDetector` 的默认构造器）
+        #   被误分到 G4，方向错了（它不是待接线的接入面）。
+        return "G4" if _is_extension_seam(symbol) else "G6"
+    if "probe" in symbol:
         return "G4"
     if symbol.startswith(ASSEMBLY_PREFIXES) or symbol.endswith("_from_env"):
         return "G6"
@@ -384,3 +393,34 @@ def usage_counts(texts) -> dict[str, int]:
         for word in IDENT.findall(strip_noise(raw)):
             counts[word] = counts.get(word, 0) + 1
     return counts
+
+
+def _is_extension_seam(symbol: str) -> bool:
+    """`with_*` 是不是**接入面**（builder 设置 / 依赖注入）。
+
+    判据取自**源码签名**（不是名字）：
+    * 吃 `mut self` ⇒ builder 设置面（配置/注入同族）⇒ 接入面；
+    * 形参含依赖类型（`Arc<` / `Box<dyn` / `&dyn` / `Arc<dyn`）⇒ 注入点 ⇒ 接入面；
+    * 其余（纯标量/配置结构体，且不返回 self 链）⇒ **独立便利构造器** ⇒ 不是接入面。
+
+    找不到符号（源码已改名/删除）时**保守判为接入面**（留在 G4）——
+    「不确定就留在待判组」比「误判成便利包装」安全。
+    """
+    pattern = re.compile(
+        rf"pub(?:\([^)]*\))?\s+(?:async\s+)?fn\s+{re.escape(symbol)}\s*\(([^)]*)\)", re.S
+    )
+    for path in sorted(ROOT.glob("crates/*/*/src/**/*.rs")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        match = pattern.search(text)
+        if not match:
+            continue
+        params = " ".join(match.group(1).split())
+        if "mut self" in params:
+            return True
+        if any(token in params for token in ("Arc<", "Box<dyn", "&dyn", "Arc<dyn")):
+            return True
+        return False
+    return True

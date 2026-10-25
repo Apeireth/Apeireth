@@ -340,15 +340,7 @@ impl BehaviorModule for ConsequenceBackfillModule {
 /// 与 CLI 的 `default_panel_data_dir()` **同一路径约定**（CLI 侧那份是面板归档
 /// 的数据根）：CLI 写的账与运行时读账必须落在**同一处**，否则回填看不见。
 pub fn default_data_root() -> PathBuf {
-    if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
-        if !dir.trim().is_empty() {
-            return PathBuf::from(dir);
-        }
-    }
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".apeireth")
+    crate::paths::default_data_root()
 }
 
 /// 墙钟毫秒（epoch）。

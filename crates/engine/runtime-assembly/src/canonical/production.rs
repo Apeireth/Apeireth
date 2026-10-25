@@ -1608,11 +1608,18 @@ impl ProductionModules {
 
         if config.council {
             instrument.constructed(ModuleFamily::Council);
+            // D-2：council 决议的票落盘（append-only）⇒ 守夜人的「立场平衡复盘」段
+            // 不再永远空转。路径与 CLI 侧读账处**同一份**（`default_data_root()` 与
+            // `default_panel_data_dir()` 同实现同路径：`$APEIRETH_DATA_DIR` 或 `~/.apeireth`）。
+            let ballot_log = Arc::new(super::council_ballot_log::CouncilBallotLog::open(
+                super::council_ballot_log::default_council_ballot_log_path(&default_data_root()),
+            ));
             modules.push(Arc::new(
                 CouncilModule::new(
                     required(backends.council, "council", "council")?,
                     Arc::clone(&clock),
                 )
+                .with_ballot_log(ballot_log)
                 .with_telemetry(Arc::clone(&telemetry)),
             ));
         }

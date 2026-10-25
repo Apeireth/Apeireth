@@ -12,6 +12,7 @@ pub mod consequence;
 // 问责闭环第 ③ 步 · 自动回填面: 工具失败 ⇒ 对应已声明影响回填 `failed`
 // （归属由调用方**显式登记**；`confirmed` 仍只走人工/外部）。
 pub mod consequence_backfill;
+pub mod paths;
 pub mod weather_probe;
 // W3-① 多户数据隔离 (星群数据层): 用户域数据平面 (三面按域分库 + 跨域拒绝即帧)。
 pub mod domain_plane;

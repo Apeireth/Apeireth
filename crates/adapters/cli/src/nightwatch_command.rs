@@ -43,6 +43,12 @@ pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Resul
         })
         .collect();
 
+    // D-2：council ballot 账（append-only）⇒ 立场平衡复盘段真的有票可吃。
+    // 账不存在 = 还没开过 council（不是错误）；损坏行跳过（读取侧如实跳过，不 panic）。
+    let council_ballots = guard_decision_wiring::nightwatch_council_ballots(
+        guard_decision_wiring::NIGHTWATCH_COUNCIL_BALLOT_READ_LIMIT,
+    );
+
     let inputs = NightwatchInputs {
         episodes: snapshots,
         // 守卫判定账（append-only）：映射口径见 `guard_decision_wiring`（含 score→档 定义）。
@@ -52,6 +58,7 @@ pub async fn dispatch_nightwatch(session: Option<String>, limit: usize) -> Resul
         // 装配根无条件接上判定落盘（`attach_decision_log` 恒被调用）⇒ 恒 true；
         // 文件不存在只说明「还没有判定记录」（按存在性判断会误报）。
         audit_source_wired: true,
+        council_ballots,
         ..Default::default()
     };
     let report = apeireth_runtime_assembly::canonical::nightwatch_audit(&inputs);

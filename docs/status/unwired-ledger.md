@@ -1128,9 +1128,24 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | `crates/capabilities/tools/src/doc_ops.rs` `obj_ref` 从不读 | 待人（副总指挥 crate） | 已在看板同步 |
 | 其余 ~55 条 | 多为测试夹具字段 / `_` 前缀保留字段 / v2.1 占位（`_llm_factory` 等已用下划线表意） | 不动 |
 
-> **建议（不擅自执行）**：`dead_code = 'warn'` + 基线棘轮能把这类缺陷长期挡住。
-> 但它会改动 workspace 共享 lint 策略并让 CI 立刻红 60 处，
-> 且 CI workflow 属副总指挥范围 ⇒ 记在这里等 owner 拍板，本批不动策略。
+> **已按 owner 裁定执行（2026-10-25，D-1 = A）**：`dead_code` 已从 `'allow'` 改成 **`'warn'`**，
+> 且加了**豁免棘轮**（`scripts/check_dead_code.py` + `scripts/dead-code-baseline.txt`：
+> 既有豁免只减不增）+ **理由登记**（`scripts/dead-code-reasons.txt`）+
+> CI workflow（`.github/workflows/dead-code-ratchet.yml`：编译期 `-D warnings` 闸 + 棘轮闸）。
+> 本批同时把「真死」清掉 11 处（详见该 commit `718ccb7a` 的说明），
+> 其中 `crates/foundation/plugin/src/llm_factory.rs` `role`/`model` 与
+> `crates/capabilities/tools/src/doc_ops.rs` `obj_ref` 两处**当时标为「待人（副总指挥 crate）」**
+> ⇒ 现已**处理**：`obj_ref` 字段与其构造**已删**（真死，零读）；
+> `role`/`model` 字段**保留**（是 Noop 实例的身份信息，删了会丢语义）
+> 并带理由标注 + 登记在 `scripts/dead-code-reasons.txt`。
+> **棘轮扫描面 = workspace 真正编译的源码**（`crates/` + `benches/`）——
+> 刻意不含 `legacy/` `research/`（Cargo `exclude`，归档冻结不编译）与 `fuzz/` `examples/`
+> （非 workspace 成员）⇒ 范围与编译面一致，守卫既不漏也不误报。
+
+> **口径纪律（留给下一个人）**：守门属性由 rustfmt 规范形态决定**至少 +1 行/处**；
+> 尺寸棘轮零余量的文件要么删真死代码、要么把属性挂到**已存在**的 impl/struct 上、
+> 要么在 `scripts/arch-baseline.txt` 里**注明**「+1 = 守门属性，非逻辑增长」
+> （本批只有 `crates/adapters/gateway/src/presence.rs` 一处，属后者）。
 
 ### 5.4b 守夜人自报缺口（系统自己报告的未接线项）
 
@@ -1140,7 +1155,7 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 | 缺口 | 状态 |
 |---|---|
 | `audit chain 未持久化供闲时读取 —— no-degrade 复盘段空转` | ✅ **已修**：守卫判定（decision/risk_score/reasons）此前只在内存 `Mutex<VecDeque>`，重启即散 ⇒ 新增 append-only `guard-decisions.jsonl`（`GuardDecisionLog`）+ nightwatch 读取映射。**真机验证**：无账时报缺口 → 有账时 `2 audit` 且报出 `[medium] NoDegrade: critical → info`。风险档映射是本仓**首个** score→档定义（此前不存在），已用 `governance::risk` 闭合词表交叉校验 + 单调性/6 档全覆盖测试钉死 |
-| `council ballot 未持久化 —— 立场平衡复盘段空转` | 🔶 **E 类待裁定（深查后确认不能硬接）**：`council` **已在生产装配**（`config.council` + env 开关 + 后端注入），所以不是「council 没接」。真缺口是：`rubric::Ballot` 需要 `{advisor_id, stance: StanceKind, confidence, weight, domain}`，而 council 只产出 `AdvisorEvaluation { advisor, kind, verdict: AdvisorVerdict }` —— **没有 confidence / weight**，且 `Ballot::new` **全仓从未被构造过**（只有它自己的测试）。硬接必须**编造** confidence 与 weight ⇒ 按「不编造信号」纪律**停下**。待裁定：一个顾问评价如何折算成一张票（stance 从 verdict 怎么来、confidence/weight 谁给、或干脆改 nightwatch 的输入类型）—— 这是评分口径决策 |
+| `council ballot 未持久化 —— 立场平衡复盘段空转` | ✅ **已修**（owner 裁定 D-2 = A，2026-10-25）：`rubric::Ballot` 需要的 `{advisor_id, stance, confidence, weight, domain}` 现已**真的**被造出来 —— ①`Ballot` 加 `confidence_defaulted` + 新增 `Ballot::from_advice`（显式置信度原样取用；未给则用顾问自评质量分并标注兜底；越界/NaN 夹到 0..=1）；②`AdvisorKind`→`rubric::AdvisorDomain` **7 域一一同名对应**，`weight` 取**现有顾问注册权重** `AdvisorDomain::default_weight()`（不另造）；③新增 append-only 账 `council-ballots.jsonl`（同根 `~/.apeireth`）与读回面；④council 决议后落盘（**旁路**：落盘失败只留痕，不阻断本轮决策）；⑤守夜人读账 ⇒ 立场平衡复盘段**不再空转**。**不编造**：顾问没显式给置信度时用其自评分并标注 `confidence_defaulted=true`（不用 1.0 兜底 = 凭空宣称满置信）。端到端测试钉住整条链（评价→票→落盘→读回→复盘段不报缺口）。**遗留语义问题已单独立 D-8**（`synthesize` 的分母不含 `confidence`），已加测试把现状钉死，未擅自改公式 |
 
 ### 5.5 待判 31 条 —— 人工过筛结论
 
@@ -1184,3 +1199,28 @@ quota（`check_quota`）仍是桩，但都返**显式错误码**（不 panic、�
 
 > **D 类（真死代码）0 条** —— 没有任何模块同时满足「无重复实现 + 无设计意图 + 零引用」。
 > 这本身是个结论：**模块级债的主体是「接线缺口」与「有意不接」，不是死代码。**
+
+### 5.5r 孤儿基线判据的三处口径修正（2026-10-25，与 D-1/D-2 同批）
+
+孤儿棘轮（`scripts/audit_unwired.py` + `scripts/unwired_baseline_common.py`）本批复核时发现
+**判据本身**有三处需要修正 —— 记在这里，免得下次又按旧口径判。
+
+| 修正 | 旧口径 | 新口径 | 影响 |
+|---|---|---|---|
+| **同名遮蔽** | 判据是**裸 token 计数**：某符号名在全仓出现过就算「被使用」 | 仍按 token 计数，但**已记录的已知遮蔽**要单独标注（同名方法/类型会互相顶替） | 判据**不改**（改了会大面积误判），改为在台账登记具体遮蔽点，让人知道「这处看起来已接线，其实是另一个同名符号在用」 |
+| **`with_*` 的分组** | 名字以 `with_` 开头 ⇒ G4（注入点/探测口） | 按**源码签名**分：吃 `mut self`（builder 设置）或注入依赖（`Arc<dyn…>`/`Box<dyn…>`）⇒ G4；**两者都不是**（独立便利构造器）⇒ **G6** | `with_len`（`DriftDetector` 默认构造器）、`with_used`（0 引用构造器）从 G4 挪到 G6（G4 38→36，G6 72→74，总数 143 不变） |
+| **数据根路径真源** | `runtime_assembly::consequence_backfill::default_data_root()` 与 `cli::default_panel_data_dir()` 是**两份逐字相同**的实现 | 抽到 `apeireth_runtime_assembly::paths::default_data_root()`，两边都委派 | 消除「改一处忘另一处 ⇒ 生产写账与 CLI 读账指向不同文件」的风险（本批正好用于 council ballot 账） |
+
+**新增的 D-8（产品决策，等 owner 裁定，不擅自执行）**：
+`rubric::synthesize` 的加权平均**分子含 `confidence`、分母不含** ⇒ 一张 `confidence = 0` 的票
+对结果零发言权，却把分母全额占住、把所有人的加权分往下压。
+D-2 引入**真置信度**后该不一致变得可见可测。已加测试把**现状**钉死（改口径会红），
+但**公式本身属治理判定数学 = 产品决策** ⇒ 简报见
+`docs/04-internal/backend-enhancement/owner-decision-brief-2026-10-25.md` 的 D-8 节。
+
+**另记一条工具链陷阱**（本批实测，浪费了不少时间）：
+并行 agent 在**构建进行中**写源文件时，`sccache` 可能返回**按旧内容**编译的产物，
+而 cargo 的指纹仍判定为「新鲜」⇒ 表现为「源码里明明有那个符号，编译器却说找不到」
+（本批症状：`COUNCIL_BALOT_LOG_FILE` 在集成测试里可见、在下游 crate 里不可见）。
+**解法**：`cargo clean -p <该 crate>` 后重建（必要时 `RUSTC_WRAPPER=` 绕过 sccache 验证）。
+⇒ **并行改同一批 crate 时，构建前先确认子代理已落盘并停止写入。**

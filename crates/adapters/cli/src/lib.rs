@@ -3313,15 +3313,9 @@ async fn graceful_shutdown_signal() {
 /// Data directory for panel archives. `APEIRETH_DATA_DIR` overrides; the
 /// default is `~/.apeireth` (same place as the keyring and session dbs).
 pub fn default_panel_data_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
-        if !dir.trim().is_empty() {
-            return PathBuf::from(dir);
-        }
-    }
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".apeireth")
+    // 单一真源在 `apeireth_runtime_assembly::paths`（此前这里是**第二份逐字相同**
+    // 的实现 ⇒ 改一处忘另一处会让「生产写账」与「CLI 读账」指向不同文件）。
+    apeireth_runtime_assembly::paths::default_data_root()
 }
 
 #[cfg(test)]

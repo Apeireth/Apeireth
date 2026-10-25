@@ -90,7 +90,7 @@ orphan with_quorum_gate_probe  # G3
 orphan with_system_markers  # G3
 orphan with_task_type  # G3
 
-# --- G4（38 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（36 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4
 orphan with_allowed_capability  # G4
@@ -108,7 +108,6 @@ orphan with_envelope_budget  # G4
 orphan with_foreign_keys  # G4
 orphan with_importance_weight  # G4
 orphan with_journal_mode  # G4
-orphan with_len  # G4
 orphan with_max_episodes  # G4
 orphan with_metrics_window  # G4
 orphan with_min_candidate_score  # G4
@@ -127,15 +126,16 @@ orphan with_synchronous  # G4
 orphan with_system_clock  # G4
 orphan with_system_prompt  # G4
 orphan with_task_scope  # G4
-orphan with_used  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
 # --- G5（0 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
 
-# --- G6（72 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（74 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
+orphan with_used  # G6
+orphan with_len  # G6
 orphan constrain_to_trusted  # G6
 orphan decompose_default  # G6
 orphan doc_ops_capability  # G6

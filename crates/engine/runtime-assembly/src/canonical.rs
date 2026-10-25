@@ -82,6 +82,12 @@ pub mod cognitive;
 pub mod context_budget;
 #[path = "canonical/cost_telemetry.rs"]
 pub mod cost_telemetry;
+/// D-2：council ballot 的 append-only 落盘面（JSONL）。
+#[path = "canonical/council_ballot_log.rs"]
+pub mod council_ballot_log;
+/// D-2：顾问评价 ⇒ 立场票的折算（唯一的折算点）。
+#[path = "canonical/council_ballots.rs"]
+pub mod council_ballots;
 #[path = "canonical/dream_llm.rs"]
 pub mod dream_llm;
 /// W3 实现批: 自我改进闭环实验侧 (2026-10-10)。

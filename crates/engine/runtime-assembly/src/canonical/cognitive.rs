@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use super::council_ballot_log::CouncilBallotLog;
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_memory::{
     build_constant_injection, consolidate_persona, BoundedMemoryInput, MemoryCoordinator,
@@ -19,8 +20,8 @@ use apeireth_memory::{
     SelectedMemoryAccess, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::{
-    Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
-    CouncilInvoker, Proposal,
+    Advisor, AdvisorDecision, AdvisorEvaluation, AdvisorVerdict, Council, CouncilCallError,
+    CouncilDecision, CouncilInvoker, Proposal,
 };
 use apeireth_organ::context_assembly::{
     AssemblyPolicy, ContextAssembler, ContextAssemblerPolicyExt, ContextBlock,
@@ -2548,6 +2549,10 @@ pub struct CouncilModule {
     council: Arc<Council>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
+    /// D-2：council ballot 的 append-only 落盘账（**可选**：不挂 = 不落盘）。
+    ///
+    /// 守夜人的「立场平衡复盘」段要吃的就是这张账（此前永远空转）。
+    ballot_log: Option<Arc<CouncilBallotLog>>,
 }
 
 impl CouncilModule {
@@ -2558,6 +2563,39 @@ impl CouncilModule {
             council,
             clock,
             metrics: ModuleMetrics::default(),
+            ballot_log: None,
+        }
+    }
+
+    /// 挂上 council ballot 的 append-only 落盘账（D-2）。
+    ///
+    /// 落盘是**旁路**：失败只留痕（stderr），**不阻断**本轮决策 ——
+    /// 「记录能力缺失」≠「功能不可用」。
+    #[must_use]
+    pub fn with_ballot_log(self, log: Arc<CouncilBallotLog>) -> Self {
+        Self {
+            ballot_log: Some(log),
+            ..self
+        }
+    }
+
+    /// D-2：把本次顾问评价折算成票并落盘（append-only）。
+    ///
+    /// * 折算口径（owner 裁定）：置信度显式优先、缺省用顾问自评质量分并标注兜底、
+    ///   权重用现有顾问注册权重、域一一对应 —— **不编造**顾问没给的信息。
+    /// * 失败**如实报告、不阻断**（stderr 留痕），也不伪造任何票。
+    fn persist_ballots(&self, evaluations: &[AdvisorEvaluation]) {
+        let Some(log) = self.ballot_log.as_ref() else {
+            return;
+        };
+        let at_ms = self.clock.now().timestamp_millis();
+        for evaluation in evaluations {
+            let record = super::council_ballots::record_from_evaluation(evaluation, at_ms);
+            if let Err(error) = log.append(&record) {
+                eprintln!(
+                    "[cognitive.council] ballot 落盘失败（如实报告，不影响本轮决策）: {error}"
+                );
+            }
         }
     }
 
@@ -2602,6 +2640,7 @@ impl BehaviorModule for CouncilModule {
                     invoker: ctx.invoker(),
                 };
                 let result = self.council.decide_with_invoker(&proposal, &adapter).await;
+                self.persist_ballots(&result.evaluations);
                 let side_calls = result.side_call_count;
                 let outcome = match result.decision {
                     CouncilDecision::Continue => ModuleOutcome::continue_(),
