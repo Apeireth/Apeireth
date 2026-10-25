@@ -20,7 +20,7 @@ use wasm_bindgen_futures::JsFuture;
 
 /// 调试用日志（scratch 宿主专用）。
 fn trace(message: &str) {
-    let _ = web_sys::console::log_1(&JsValue::from_str(&format!("[p5b] {message}")));
+    web_sys::console::log_1(&JsValue::from_str(&format!("[p5b] {message}")));
 }
 
 /// 全屏三角形（与生产版一致：`[-1,-1, 3,-1, -1,3]`）。
@@ -54,7 +54,9 @@ pub async fn run(
         height,
     };
 
-    trace(&format!("create engine: backend={backend} {width}x{height}"));
+    trace(&format!(
+        "create engine: backend={backend} {width}x{height}"
+    ));
     let engine = Engine::create(SurfaceTargetInput::HtmlCanvas(canvas.clone()), options)
         .await
         .map_err(|e| JsValue::from_str(&format!("engine: {e}")))?;
