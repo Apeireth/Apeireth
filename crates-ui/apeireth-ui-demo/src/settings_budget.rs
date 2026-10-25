@@ -200,7 +200,10 @@ impl BudgetHost {
     /// 建一份宿主状态（**生产同口径**：初始分区 = `budget`）。
     pub fn new() -> Self {
         let runtime = Runtime::new();
-        let state = BudgetState::new();
+        // ⚠️ **状态与渲染必须同属一个 runtime**（2026-10-25 修）：
+        // 此前 `BudgetState` **自建** runtime ⇒ ⇒ 草稿信号不在宿主的 runtime 里
+        // ⇒ ⇒ effect **不依赖**它们 ⇒ ⇒ 改草稿**不重渲染** ⇒ ⇒ **幽灵输入**。
+        let state = BudgetState::new(runtime.clone());
         // 草稿初值 = 配置值（生产 `budgetDraftFromConfig`）。
         state.set_draft(KnobKey::MaxTurnRounds, String::from("8"));
         state.set_draft(KnobKey::MaxToolCalls, String::from("16"));

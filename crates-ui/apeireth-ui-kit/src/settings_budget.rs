@@ -1186,6 +1186,15 @@ fn render_number_input(props: &BudgetPanelProps, row: &KnobRow) -> VNode {
     let key = row.key;
     let on_input = props.on_knob_input.clone();
     let on_commit = props.on_knob_commit.clone();
+    // ⭐ **property 通道**（2026-10-25 补）：生产的原生控件是 `bind:value`
+    // ⇒ 取值**受控** ⇒ 组件用 `prop("value", …)` **声明**、引擎写入
+    // ⇒ ⚠️ 此前本控件**既没有** `prop("value")`、**又**靠事件负载取值
+    // ⇒ 而事件负载此前**永远是空的** ⇒ ⇒ **幽灵输入**（实测）：
+    // 键入 `87` ⇒ DOM 显示 `87`（浏览器自己画的）⇒ 引擎草稿却是 `""`
+    // ⇒ ⇒ 失焦后引擎**不接管**（参考侧会归一化并写回）⇒ ⇒ 用户输入**没进引擎状态**。
+    // ⇒ ⇒ 现在两条通道都在：事件负载带**用户刚敲的值**，property 带**引擎的草稿**。
+    let draft_value = props.draft.get(key).to_owned();
+    node = node.prop("value", draft_value);
     node = node.handler(
         EventKind::Input,
         ElementHandler::new(move |event: &mut DomEvent| {
@@ -1382,8 +1391,20 @@ pub struct BudgetState {
 
 impl BudgetState {
     /// 建一份状态。
-    pub fn new() -> Self {
-        let runtime = Runtime::new();
+    /// ⭐ **接受外部运行时**（2026-10-25 修）。
+    ///
+    /// ## 为什么不能自建
+    ///
+    /// 此前本构造**自建**一个 `Runtime` ⇒ ⇒ 草稿 / 反馈信号**不属于**宿主
+    /// 挂 effect 的那个 runtime ⇒ ⇒ **effect 根本不依赖这些信号**
+    /// ⇒ ⇒ 改草稿**不触发重渲染** ⇒ ⇒ **幽灵输入**（实测）：
+    /// 键入 `87` ⇒ DOM 显示 `87`（浏览器自己画的）⇒ 引擎侧草稿/反馈**不更新**
+    /// ⇒ ⇒ 失焦后引擎**不接管**（参考侧会钳制并写回）。
+    ///
+    /// ⇒ ⇒ **响应式链要求「状态与渲染同属一个 runtime」**
+    /// ⇒ ⇒ 这里改成**接收**宿主给的 runtime（与 `provider` 面的做法一致：
+    /// 那边所有信号都在宿主里建 ⇒ 链完整）。
+    pub fn new(runtime: Runtime) -> Self {
         Self {
             draft_max_turn_rounds: runtime.signal(String::new()),
             draft_max_tool_calls: runtime.signal(String::new()),
@@ -1449,8 +1470,11 @@ impl BudgetState {
 }
 
 impl Default for BudgetState {
+    /// ⚠️ **自建 runtime 的默认实现只给「原型 / 测试」用**：
+    /// 生产路径**必须**把宿主的 runtime 传进来
+    /// ⇒ ⇒ 否则状态与渲染**分属两个 runtime** ⇒ ⇒ 响应式链断（见 [`BudgetState::new`]）。
     fn default() -> Self {
-        Self::new()
+        Self::new(Runtime::new())
     }
 }
 
@@ -1927,7 +1951,7 @@ mod tests {
 
     #[test]
     fn the_host_state_owns_the_draft_and_the_feedback() {
-        let state = BudgetState::new();
+        let state = BudgetState::new(Runtime::new());
         assert_eq!(state.draft().max_turn_rounds, "");
         state.set_draft(KnobKey::MaxTurnRounds, String::from("12"));
         assert_eq!(state.draft().max_turn_rounds, "12");

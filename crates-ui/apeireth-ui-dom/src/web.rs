@@ -319,6 +319,28 @@ impl Dom for WebDom {
                 .target()
                 .and_then(|value| value.dyn_ref::<Node>().cloned());
             let mut dom_event = DomEvent::new(kind, target_path(target.as_ref()));
+            // ⭐ **带上目标取值**（2026-10-25 修）：`input` / `change` 事件里
+            // 控件的当前值（`value` property）⇒ 处理器**不必**再回读 DOM。
+            //
+            // ## 为什么必须有
+            //
+            // 生产的原生控件用 `bind:value` ⇒ 取值随 `input` 事件推进
+            // ⇒ ⇒ **事件负载里就带着值**。
+            // ⇒ 引擎侧此前**从不填** ⇒ `event.target_value()` 恒为 `None`
+            // ⇒ ⇒ 消费方（`ui-kit/settings_budget.rs` 的旋钮）只能拿到 `""`
+            // ⇒ ⇒ **用户敲进去的字符被丢掉** ⇒ ⇒ 实测：键入 `87` 后
+            // 引擎侧草稿是 `""`、DOM 仍是浏览器自己画的 `87`
+            // ⇒ ⇒ **幽灵输入**：用户看得见，引擎不知道。
+            //
+            // ⚠️ 只在目标**确实是表单控件**时填（`value` 是字符串 property）
+            // ⇒ 非控件元素读不到 `value` ⇒ 跳过（不留 `undefined` 语义）。
+            if let Some(element) = target.as_ref().and_then(|node| node.dyn_ref::<Element>()) {
+                if let Ok(value) = Reflect::get(element.as_ref(), &JsValue::from_str("value")) {
+                    if let Some(text) = value.as_string() {
+                        dom_event = dom_event.with_target_value(text);
+                    }
+                }
+            }
             if let Some(keyboard) = event.dyn_ref::<KeyboardEvent>() {
                 dom_event = dom_event.with_key(keyboard.key());
             }
