@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::cross_diary_wiring::DiarySnippet;
 use crate::{MemoryProvenance, MemoryScope};
 
 /// The four canonical memory layers in Apeireth Unified Memory 2.0.
@@ -49,6 +50,13 @@ pub struct RecalledMemoryItem {
     /// Explainable score breakdown from hybrid ranking.
     #[serde(default)]
     pub score_components: Option<crate::ScoreComponents>,
+    /// Related diary excerpts attached to this hit (cross-diary retrieval wiring).
+    ///
+    /// Empty unless a read-only diary store was injected into the retrieval path
+    /// (see [`crate::cross_diary_wiring`]); the default recall therefore stays
+    /// byte-for-byte identical to the pre-wiring behavior.
+    #[serde(default)]
+    pub diary_snippets: Vec<DiarySnippet>,
 }
 
 /// Query specification for unified memory recall.

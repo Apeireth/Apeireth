@@ -7,6 +7,31 @@
 use crate::layers::MemoryRecallResult;
 use crate::retrieval_tuning::{RetrievalDimension, SelectedAttribution};
 
+/// 单次 overlay 最多渲染多少条**关联日记片段**行 (全局上限).
+///
+/// 日记片段是**附加证据**：记忆正文优先，预算不足时先裁日记行.
+const DIARY_LINES_MAX: usize = 3;
+
+/// 渲染一条关联日记片段行 (日期 + 正文摘要, 过凭据脱敏 + 单行化).
+///
+/// 日记正文是**用户写下的内容** ⇒ 与召回正文同等对待：先过
+/// [`sanitize_text`] 脱敏，再进 overlay.
+///
+/// **单行化**: 日记正文可能是多行 markdown（`dream` 落的是报告）⇒ 折行会破坏
+/// 「一行一条证据」的编号/行结构 ⇒ 换行一律压成空格.
+fn render_diary_line(snippet: &crate::cross_diary_wiring::DiarySnippet) -> String {
+    format!(
+        "[diary:{}] {}",
+        snippet.diary_date,
+        single_line(&sanitize_text(&snippet.snippet))
+    )
+}
+
+/// 把多行文本压成单行 (换行 ⇒ 空格), 保持行结构可解析.
+fn single_line(text: &str) -> String {
+    text.replace(['\n', '\r'], " ")
+}
+
 /// The transient overlay and the candidates that actually made it into it.
 ///
 /// The IDs are reported after closed-world sanitization and budget selection,
@@ -110,6 +135,7 @@ impl ClosedWorldContextCompiler {
         let mut current_chars = lines.iter().map(|l| l.len() + 1).sum::<usize>();
         let mut selected_candidate_ids = Vec::new();
         let mut selected_attribution = Vec::new();
+        let mut diary_lines = 0usize;
 
         for item in &recalled.items {
             let sanitized_content = sanitize_text(&item.content);
@@ -128,6 +154,21 @@ impl ClosedWorldContextCompiler {
             lines.push(line);
             selected_attribution.push(attribution_for(&item.id, item.score_components));
             selected_candidate_ids.push(item.id.clone());
+
+            // 跨日记片段 (附加在命中事实之后): 预算装不下就跳过这一行，
+            // **不挤掉记忆正文** (记忆正文优先)。
+            for snippet in item.diary_snippets.iter() {
+                if diary_lines >= DIARY_LINES_MAX {
+                    break;
+                }
+                let diary_line = render_diary_line(snippet);
+                if current_chars + diary_line.len() + 25 > max_chars {
+                    continue;
+                }
+                current_chars += diary_line.len() + 1;
+                lines.push(diary_line);
+                diary_lines += 1;
+            }
         }
 
         lines.push("</governed_memory>".to_string());
@@ -172,6 +213,27 @@ impl ClosedWorldContextCompiler {
             selected_attribution.push(attribution_for(&item.id, item.score_components));
             selected_candidate_ids.push(item.id.clone());
         }
+        // 记忆正文行数 (跨日记片段行排在它们**之后** ⇒ 预算不足时先被裁掉).
+        let memory_entry_count = entries.len();
+        // 跨日记片段 (附加证据行): 编号接在记忆正文之后，仍在「编号证据清单」
+        // 之内 ⇒ 反幻觉规则 («说话只能基于以上编号条目») 同样覆盖日记片段。
+        let mut diary_lines = 0usize;
+        for item in &recalled.items {
+            if diary_lines >= DIARY_LINES_MAX {
+                break;
+            }
+            for snippet in item.diary_snippets.iter() {
+                if diary_lines >= DIARY_LINES_MAX {
+                    break;
+                }
+                entries.push(format!(
+                    "[日记 {}] {}",
+                    snippet.diary_date,
+                    single_line(&sanitize_text(&snippet.snippet))
+                ));
+                diary_lines += 1;
+            }
+        }
         loop {
             let rendered = build_memory_injection(&entries);
             if rendered.chars().count() <= max_chars {
@@ -184,11 +246,16 @@ impl ClosedWorldContextCompiler {
                     selected_attribution,
                 });
             }
+            // 尾部先裁日记行 (它不属于任何候选) ⇒ 只有裁到记忆正文行时,
+            // 才同步回退该候选的选择回执 (id / 归因).
+            let popped_memory_entry = entries.len() <= memory_entry_count;
             if entries.pop().is_none() {
                 return None;
             }
-            selected_candidate_ids.pop();
-            selected_attribution.pop();
+            if popped_memory_entry {
+                selected_candidate_ids.pop();
+                selected_attribution.pop();
+            }
         }
     }
 
@@ -263,6 +330,7 @@ mod tests {
                     importance: 1.0,
                     source_ref: None,
                     score_components: None,
+                    diary_snippets: Vec::new(),
                 })
                 .collect(),
             ..MemoryRecallResult::default()

@@ -158,6 +158,7 @@ fn test_closed_world_memory_contract() {
         importance: 0.8,
         source_ref: Some("working:session-1".into()),
         score_components: None,
+        diary_snippets: Vec::new(),
     }];
     let recalled = MemoryRecallResult {
         items,

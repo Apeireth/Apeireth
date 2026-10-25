@@ -66,6 +66,7 @@ pub mod calibration_critic;
 pub mod cluster_store;
 pub mod confidence;
 pub mod cross_diary;
+pub mod cross_diary_wiring;
 pub mod daily_summary;
 pub mod diary;
 pub mod dream_wiring;
@@ -207,6 +208,11 @@ pub use reflexion::{
 };
 
 pub use cross_diary::{link_core, CrossDiaryIndex, CrossLink, SNIPPET_MAX_CHARS};
+pub use cross_diary_wiring::{
+    attach_diary_snippets, build_cross_diary_context, CrossDiaryContext, CrossDiaryLimits,
+    DiarySnippet, DIARY_MIN_SHARED_TOKENS, DIARY_SCAN_MAX_DAYS, DIARY_SNIPPETS_PER_FACT_MAX,
+    DIARY_SNIPPET_MAX_CHARS,
+};
 pub use daily_summary::{build_daily_summary, DailySummary};
 pub use diary::{
     valid_date, DayPage, DiaryEntry, DiaryError, DiaryHit, DiaryInjector, DiaryStore,

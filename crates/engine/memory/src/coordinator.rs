@@ -22,6 +22,8 @@ use crate::access_history::ActivationSource;
 use crate::consolidation::{ConsolidationReport, MemoryConsolidationJob};
 use crate::context_compiler::{ClosedWorldContextCompiler, SelectedMemoryAccess};
 use crate::continuity_state::{ContinuityCompressor, ContinuityState};
+use crate::cross_diary_wiring::{self, CrossDiaryLimits};
+use crate::diary::DiaryStore;
 use crate::layers::{
     MemoryLayerKind, MemoryRecallQuery, MemoryRecallResult, MemoryWritebackEntry,
     RecalledMemoryItem,
@@ -62,6 +64,11 @@ pub struct MemoryCoordinator {
     typed_recall_source: Option<Arc<dyn TypedMemoryRecallSource>>,
     typed_identity: Option<TypedRecallIdentity>,
     injection_format: bool,
+    /// Optional read-only diary store (cross-diary retrieval wiring).
+    ///
+    /// Absent = the recall path never touches the diary ⇒ byte-for-byte the
+    /// pre-wiring behavior. Present = hits may carry related diary excerpts.
+    diary_store: Option<Arc<dyn DiaryStore>>,
     /// Optional observation-layer feed for memory-governance audit events.
     /// Emission is after-the-fact and never changes an operation's outcome.
     audit_events: Option<AuditEventSink>,
@@ -125,6 +132,7 @@ impl MemoryCoordinator {
             typed_recall_source: None,
             typed_identity: None,
             injection_format: false,
+            diary_store: None,
             audit_events: None,
         }
     }
@@ -198,6 +206,23 @@ impl MemoryCoordinator {
     pub fn with_memory_injection_format(mut self) -> Self {
         self.injection_format = true;
         self
+    }
+
+    /// Attach a **read-only** diary store so recall hits can carry related
+    /// diary excerpts (cross-diary retrieval wiring).
+    ///
+    /// The store is only ever **read** (`list_days` / `read_day`): the recall
+    /// path never writes, edits, or deletes a diary. Without this injection the
+    /// recall path stays byte-for-byte identical to the pre-wiring behavior.
+    #[must_use]
+    pub fn with_diary_store(mut self, diary_store: Arc<dyn DiaryStore>) -> Self {
+        self.diary_store = Some(diary_store);
+        self
+    }
+
+    /// Reference to the optional read-only diary store.
+    pub fn diary_store(&self) -> Option<&dyn DiaryStore> {
+        self.diary_store.as_deref()
     }
 
     /// values remain unchanged for backwards-compatible ranking.
@@ -781,7 +806,21 @@ impl MemoryCoordinator {
                 importance: cand.score_components.importance,
                 source_ref,
                 score_components: Some(cand.score_components),
+                diary_snippets: Vec::new(),
             });
+        }
+
+        // 跨日记检索接线 (只读): 命中事实附上**关联日记片段**。
+        //
+        // **缺省零变化**: 未注入日记面 (`diary_store == None`) ⇒ 这一段整段跳过，
+        // 召回结果与接线前逐字节一致。注入后也只是**附加**片段：不改内容、
+        // 不改分数、不改排序。
+        if let Some(diary) = &self.diary_store {
+            cross_diary_wiring::attach_diary_snippets(
+                &mut final_items,
+                diary.as_ref(),
+                CrossDiaryLimits::default(),
+            );
         }
 
         Ok(MemoryRecallResult {
