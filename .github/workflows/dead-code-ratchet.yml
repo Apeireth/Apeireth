@@ -52,6 +52,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # keyring/dbus/wayland/pipewire/egl 需要系统库 (仅 Linux)。
+      # **与 `rust.yml` 的同名步骤保持一致** —— 少了这步，workspace 里的 TUI
+      # crate 会在 `libdbus-sys` 上构建失败（本 workflow 首次跑就是因此红的：
+      # 报错与死代码毫无关系，容易误判成「我的门禁抓到了什么」）。
+      - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
+        run: |
+          sudo apt-get update && sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config
+
       - name: 编译期守卫（dead_code = warn ⇒ 任何未豁免的死代码都红）
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
