@@ -5,7 +5,7 @@
     "height": 900
   },
   "device_pixel_ratio": 1,
-  "timezone": "UTC",
+  "timezone": "Asia/Shanghai",
   "channel_threshold": 2,
   "pixel_budget": 0.01,
   "reference_page": "/web/reference/data/index.html",
@@ -42,11 +42,11 @@
           "x": 236,
           "y": 219.765625
         },
-        "t1_pixel_ratio_unaligned": 0.01999701739401581
+        "t1_pixel_ratio_unaligned": 0.02052349254122549
       },
-      "t1_pixel_different": 0,
+      "t1_pixel_different": 554,
       "t1_pixel_total": 885132,
-      "t1_pixel_ratio": 0.0,
+      "t1_pixel_ratio": 0.0006258953466827547,
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
@@ -63,7 +63,7 @@
         "w": 828,
         "h": 1069.265625
       },
-      "passed": true
+      "passed": false
     },
     {
       "case": "data-no-readings",
@@ -86,11 +86,11 @@
           "x": 236,
           "y": 219.765625
         },
-        "t1_pixel_ratio_unaligned": 0.020453446491596732
+        "t1_pixel_ratio_unaligned": 0.02097766208881839
       },
-      "t1_pixel_different": 0,
+      "t1_pixel_different": 554,
       "t1_pixel_total": 885132,
-      "t1_pixel_ratio": 0.0,
+      "t1_pixel_ratio": 0.0006258953466827547,
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
@@ -107,7 +107,7 @@
         "w": 828,
         "h": 1069.265625
       },
-      "passed": true
+      "passed": false
     },
     {
       "case": "user-readings",
@@ -130,15 +130,15 @@
           "x": 236,
           "y": 219.765625
         },
-        "t1_pixel_ratio_unaligned": 1.0
+        "t1_pixel_ratio_unaligned": 0.025598797337927772
       },
-      "t1_pixel_different": -1,
-      "t1_pixel_total": 0,
-      "t1_pixel_ratio": 1.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 355212,
+      "t1_pixel_ratio": 0.0,
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
-      "t3b_same_height": false,
+      "t3b_same_height": true,
       "reference_box": {
         "x": 236,
         "y": 219.765625,
@@ -149,9 +149,9 @@
         "x": 236,
         "y": 219.765625,
         "w": 828,
-        "h": 436.125
+        "h": 429.9375
       },
-      "passed": false
+      "passed": true
     },
     {
       "case": "user-no-readings",
@@ -174,15 +174,15 @@
           "x": 236,
           "y": 219.765625
         },
-        "t1_pixel_ratio_unaligned": 1.0
+        "t1_pixel_ratio_unaligned": 0.025598797337927772
       },
-      "t1_pixel_different": -1,
-      "t1_pixel_total": 0,
-      "t1_pixel_ratio": 1.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 355212,
+      "t1_pixel_ratio": 0.0,
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
-      "t3b_same_height": false,
+      "t3b_same_height": true,
       "reference_box": {
         "x": 236,
         "y": 219.765625,
@@ -193,16 +193,16 @@
         "x": 236,
         "y": 219.765625,
         "w": 828,
-        "h": 436.125
+        "h": 429.9375
       },
-      "passed": false
+      "passed": true
     }
   ],
   "checks": {
     "t1_all_pixels_zero": false,
     "t2_dom_identical": true,
     "t3_same_width": true,
-    "t3b_same_height": false
+    "t3b_same_height": true
   },
   "notes": [
     "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",

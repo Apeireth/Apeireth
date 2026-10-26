@@ -6,7 +6,7 @@
     "height": 900
   },
   "device_pixel_ratio": 1,
-  "timezone": "UTC",
+  "timezone": "Asia/Shanghai",
   "channel_threshold": 2,
   "pixel_budget": 0.01,
   "reference_page": "/web/reference/frame/index.html",
