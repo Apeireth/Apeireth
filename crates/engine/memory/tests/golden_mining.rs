@@ -473,3 +473,112 @@ fn mine_fragments_are_always_substrings() {
         }
     }
 }
+
+// ============================================================
+// 题面质量：数量短语、主张词分离、词边界截断
+// ============================================================
+
+#[test]
+fn chinese_quantity_phrases_are_not_question_subjects() {
+    // 「数量不是话题」⇒ 「关于两千，我们当时记了什么？」不像人话。
+    let terms = key_terms("接入层的限流阈值今天定在每秒两千次。", 20);
+    assert!(
+        !terms.iter().any(|term| term.contains("两千")),
+        "中文数量短语不该当题面关键词：{terms:?}"
+    );
+    assert!(
+        !terms.iter().any(|term| term.contains("三次")),
+        "数词+量词也不该：{terms:?}"
+    );
+}
+
+#[test]
+fn numbered_labels_still_work_as_question_subjects() {
+    // ⚠️ **本仓的领域词汇大量是编号标签**（「五层」「六层」）⇒
+    // 不能把「含数词」一刀切掉，否则会误伤真问题主体。
+    let terms = key_terms("六层纵深体系里，D0 到 D5 各层职责不同。", 20);
+    assert!(
+        terms.iter().any(|term| term.contains("六层")),
+        "编号标签应保留：{terms:?}"
+    );
+}
+
+#[test]
+fn same_claim_in_two_records_is_temporal_not_conflict() {
+    // 两条记录讲**同一件事**（阈值都是每秒两千次）⇒ 不该被判成「冲突」，
+    // 而该挖出「时序题」（较晚那条是定稿）。
+    // ⚠️ 这条钉住的是「题面过滤」与「相似度判断」**必须用两套词池**：
+    // 数量短语从题面丢，但它是「是不是同一主张」的**关键证据**。
+    let a = rec(
+        "t1",
+        "接入层的限流阈值今天定在每秒两千次。压测跑完没有明显抖动。",
+        0,
+        Some("th-1"),
+        Some("限流阈值"),
+    );
+    let b = rec(
+        "t2",
+        "限流阈值最终定在每秒两千次。这个数字是压测跑出来的结论。",
+        3_600_000,
+        Some("th-1"),
+        Some("限流阈值定稿"),
+    );
+    let cases = mine(&[a, b], MiningConfig::default());
+    let temporal = cases
+        .iter()
+        .find(|case| case.kind == "temporal")
+        .expect("同主张 + 时间相邻 ⇒ 该挖出 temporal 题");
+    assert_eq!(temporal.expect_ids.len(), 2);
+    assert!(!cases.iter().any(|case| case.kind == "conflict"));
+}
+
+#[test]
+fn conflicting_quantity_values_are_still_detected_as_conflict() {
+    // 数量短语对「是否冲突」是**关键证据**：
+    // 「两千次」vs「五千次」⇒ 真的改了 ⇒ 该判成冲突。
+    let a = rec(
+        "c1",
+        "接入层的限流阈值今天定在每秒两千次。",
+        0,
+        Some("th-1"),
+        Some("限流阈值"),
+    );
+    let b = rec(
+        "c2",
+        "限流阈值最终定在每秒五千次，比原计划放宽很多。",
+        3_600_000,
+        Some("th-1"),
+        Some("限流阈值定稿"),
+    );
+    let cases = mine(&[a, b], MiningConfig::default());
+    assert!(
+        cases.iter().any(|case| case.kind == "conflict"),
+        "数量不同 ⇒ 该判成冲突：{:?}",
+        cases
+            .iter()
+            .map(|c| (&c.kind, &c.query))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn subject_is_clipped_at_a_word_boundary_not_mid_word() {
+    // 硬切 16 字会留下半截词（「15-proactive-sch」）⇒ 不像人话。
+    let cases = mine(
+        &[rec(
+            "w1",
+            "提交 15-proactive-schedule 与 12-mcp-extension 的说明正文，内容足够长以便挖题。",
+            0,
+            Some("th-1"),
+            Some("15-proactive-schedule 与 12-mcp-extension 的说明"),
+        )],
+        MiningConfig::default(),
+    );
+    for case in &cases {
+        assert!(
+            !case.query.contains("sch是") && !case.query.contains("pro-sch"),
+            "不该切出半截词：{}",
+            case.query
+        );
+    }
+}

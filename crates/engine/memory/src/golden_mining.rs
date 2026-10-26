@@ -128,12 +128,29 @@ const KEY_TERM_POOL: usize = 12;
 /// 问题主体（标题）最多用多少字（太长就不是「一句话」了）。
 const SUBJECT_MAX_CHARS: usize = 16;
 
+/// 主体截断时的**词边界**字符（在这些地方断开 ⇒ 不会切出半截词）。
+const SUBJECT_BOUNDARY_CHARS: &str = " \t\u{3000}-\u{2014}_/,，、·";
+
 /// 高频虚词字：出现在 CJK bigram 里 ⇒ 该 bigram 多半是**跨词边界的碎片**（「们需」「定把」），
 /// 不是词 ⇒ 丢掉，否则挖出来的题目全是碎片词（不像人话）。
 ///
 /// 代价：含这些字的真词也会被丢（「需要」「如果」「结果」）。这是**质量取舍**：
 /// 宁可少几个召回好的词，也不要让题目变成「关于们需，我们当时记了什么？」。
 const FUNCTION_CHARS: &str = "的了着过是在和与就都也而及或但却还又再更很太把被让使给对从向于并之其有无不要会能可说我你他她们这那些什么怎样呢吗吧啊呀嘛哪谁因所果如";
+
+/// 中文数词（数量词的核心字）。
+///
+/// **为什么要单列**：纯 ASCII 数字的过滤（`is_ascii_digit` 全命中）拦不住
+/// 「两千」「三次」「十毫秒」这类**中文数量词** ⇒ 会挖出
+/// 「关于两千，我们当时记了什么？」这种**不像人话**的题
+/// （**数量不是话题** —— 人不会「关于两千」地去回忆）。
+const CHINESE_NUMERALS: &str = "零一二三四五六七八九十百千万亿两";
+
+/// 量词/计量单位字（跟在数词后面 ⇒ 「数词+量词」= 数量短语）。
+///
+/// 收录的是**能独立构成数量短语**的字：个数（个/条/次/件…）、
+/// 时间（年/月/日/时/分/秒/毫…）、度量（张/份/台/块/位…）。
+const QUANTIFIER_CHARS: &str = "个条次件遍趟回下把张份台辆支块位名只年月日时分秒毫厘微周轮番度";
 
 /// 停用词（整词命中才丢；与上面的虚词字过滤互补）。
 const STOPWORDS: &[&str] = &[
@@ -187,7 +204,8 @@ pub fn tokenize(text: &str) -> Vec<String> {
 /// 1. 过短 token（< 2 字）；
 /// 2. 停用词（整词）；
 /// 3. 纯数字 token（`2024` 不配当问题关键词）；
-/// 4. 含虚词字的 CJK bigram（跨词边界的碎片，如「们需」）。
+/// 4. 含虚词字的 CJK bigram（跨词边界的碎片，如「们需」）；
+/// 5. 中文数量短语（「两千」「三次」—— **数量不是话题**，否则出「关于两千…」这种假题）。
 ///
 /// 英文 token 不做大小写折叠：契约口径是「按空格词」，保持原样最可预期。
 pub fn key_terms(content: &str, max_terms: usize) -> Vec<String> {
@@ -568,8 +586,11 @@ fn same_thread(a: &Prepared, b: &Prepared) -> bool {
 /// 相似度口径：共享词数 / 较短一侧的词数（重叠系数）。
 /// 整数比较 `shared * 2 < min_len` 避免浮点误差（0.5 边界判为「相同」⇒ 不算冲突）。
 fn content_differs(a: &Prepared, b: &Prepared) -> bool {
-    let shared = a.content_terms.intersection(&b.content_terms).count();
-    let min_len = a.content_terms.len().min(b.content_terms.len());
+    // ⚠️ **必须用主张词（保留数量短语），不能用题面词**：
+    // 「阈值定在每秒两千次」vs「阈值定在每秒五千次」**是冲突** ⇒ 数量短语是关键证据；
+    // 用题面词会把「同主张的两条」误判成「冲突」（数量词被丢 ⇒ 相似度虚高 ⇒ 判定翻转）。
+    let shared = a.claim_terms.intersection(&b.claim_terms).count();
+    let min_len = a.claim_terms.len().min(b.claim_terms.len());
     shared.saturating_mul(2) < min_len
 }
 
@@ -665,8 +686,10 @@ struct Prepared {
     sentences: Vec<String>,
     /// 正文主题词 → 频次。
     content_counts: BTreeMap<String, usize>,
-    /// 正文主题词集合。
+    /// 正文主题词集合（**题面口径**��数量短语已丢）。
     content_terms: BTreeSet<String>,
+    /// **主张词**集合（**相似度口径**：保留数量短语）⇒ 判断「是不是同一主张」用。
+    claim_terms: BTreeSet<String>,
     /// 标题主题词 → 在标题中首次出现的字符位置。
     title_pos: BTreeMap<String, usize>,
     /// 标题 + 正文的主题词集合（「同主题」判定用）。
@@ -679,6 +702,8 @@ impl Prepared {
     fn from_record(record: &MineRecord) -> Self {
         let content_counts = term_counts(&record.content);
         let content_terms: BTreeSet<String> = content_counts.keys().cloned().collect();
+        let claim_terms: BTreeSet<String> =
+            claim_term_counts(&record.content).keys().cloned().collect();
         let title_pos = record
             .title
             .as_deref()
@@ -694,6 +719,7 @@ impl Prepared {
             sentences: split_sentences(&record.content),
             content_counts,
             content_terms,
+            claim_terms,
             title_pos,
             all_terms,
             keys: key_terms(&record.content, KEY_TERM_POOL),
@@ -768,8 +794,41 @@ fn term_counts(text: &str) -> BTreeMap<String, usize> {
     counts
 }
 
-/// 这个 token 是不是噪声（不进关键词池）。
+/// **主张词**计数（用于**相似度判断**：两条记录是不是在讲同一件事）。
+///
+/// 与 [`term_counts`] 的差别：**保留中文数量短语**（理由见 [`is_claim_noise_token`]）。
+fn claim_term_counts(text: &str) -> BTreeMap<String, usize> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for tok in raw_tokens(text) {
+        if is_claim_noise_token(&tok) {
+            continue;
+        }
+        *counts.entry(tok).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// 这个 token 是不是噪声（不进**题面**关键词池）。
 fn is_noise_token(token: &str) -> bool {
+    is_noise_token_impl(token, true)
+}
+
+/// 这个 token 是不是噪声（用于**相似度判断**的词池）。
+///
+/// ⚠️ **与 [`is_noise_token`] 的唯一差别 = 不丢中文数量短语**。
+///
+/// **为什么必须分开**：题面里「关于两千」不像人话 ⇒ 数量词该从**题面**里丢；
+/// 但「阈值定在每秒两千次」vs「阈值定在每秒五千次」**恰恰是冲突**
+/// ⇒ 数量词对「这两条是不是在讲同一主张」是**关键证据**，丢了就误判。
+/// ⇒ 两种用途必须用两套词池。
+fn is_claim_noise_token(token: &str) -> bool {
+    is_noise_token_impl(token, false)
+}
+
+/// 噪声判定的共同实现。
+///
+/// `filter_quantities` = 是否丢掉中文数量短语（题面口径要丢，相似度口径不能丢）。
+fn is_noise_token_impl(token: &str, filter_quantities: bool) -> bool {
     let len = token.chars().count();
     if len < 2 {
         return true;
@@ -784,6 +843,26 @@ fn is_noise_token(token: &str) -> bool {
     // 含虚词字的 CJK bigram = 跨词边界的碎片。
     if is_cjk_token(token) && token.chars().any(|c| FUNCTION_CHARS.contains(c)) {
         return true;
+    }
+    // 中文数量短语（**数量不是话题**）⇒ 丢掉，否则会挖出「关于两千……」这种不像人话的题。
+    //
+    // 两条规则，**刻意收窄**（只拦「纯数词」与「数词+量词」）：
+    // * 纯数词：「两千」「三万」；
+    // * 数词+量词：「三次」「十毫」。
+    //
+    // ⚠️ **为什么不是「含数词就丢」**：本仓的领域词汇大量是**编号标签**
+    // （「五层」「六层」「D0–D5」「三维」）⇒ 那样会误伤真问题主体。
+    // 这里只丢「读起来就是个数量」的 ⇒ 编号标签照常可当主题。
+    if filter_quantities && is_cjk_token(token) {
+        let mut chars = token.chars();
+        let first = chars.next().unwrap_or('\0');
+        let second = chars.next();
+        let all_numerals = token.chars().all(|c| CHINESE_NUMERALS.contains(c));
+        let numeral_plus_quantifier = CHINESE_NUMERALS.contains(first)
+            && second.is_some_and(|c| QUANTIFIER_CHARS.contains(c));
+        if all_numerals || numeral_plus_quantifier {
+            return true;
+        }
     }
     false
 }
@@ -821,7 +900,39 @@ fn clip_subject(title: &str) -> String {
     if chars.len() <= SUBJECT_MAX_CHARS {
         return trimmed.to_string();
     }
-    chars[..SUBJECT_MAX_CHARS].iter().collect()
+    let window: String = chars[..SUBJECT_MAX_CHARS].iter().collect();
+    // **在词边界截断**，而不是硬切。
+    //
+    // 硬切会留下半截词：「15-proactive-sch」「kickoff wisdom 综」「中央 AI 永生身份 v1 -」
+    // ⇒ 题目读起来像机器切出来的 ⇒ **不像人话**。
+    //
+    // 规则：窗口内**最后一个**边界（空白 / `-` / `_` / `/` / `—` / `,` / `，`）处断开，
+    // 再去掉尾部残留的分隔符。
+    //
+    // ⚠️ 兜底：断出来的部分太短（< 4 字）⇒ 说明这窗口里几乎没有边界
+    // ⇒ 宁可硬切（宁可半截词，也不要「a b」这种没信息的主体）。
+    let cut = window
+        .char_indices()
+        .filter(|(_, ch)| SUBJECT_BOUNDARY_CHARS.contains(*ch))
+        .map(|(index, _)| index)
+        .next_back();
+    match cut {
+        Some(index) if index >= 4 => {
+            let head: String = window[..index].chars().collect();
+            let cleaned = head
+                .trim_end_matches(|ch: char| {
+                    SUBJECT_BOUNDARY_CHARS.contains(ch) || ch.is_whitespace()
+                })
+                .trim()
+                .to_string();
+            if cleaned.is_empty() {
+                window
+            } else {
+                cleaned
+            }
+        }
+        _ => window,
+    }
 }
 
 /// 切句：按句号/问号/叹号/分号/换行切；片段仍是 `content` 的子串。
