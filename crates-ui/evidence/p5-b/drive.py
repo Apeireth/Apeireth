@@ -635,6 +635,14 @@ def main():
         webgl_stats = diff_stats(production_png, out_dir / "webgl.canvas.png")
         webgpu_stats = diff_stats(production_png, out_dir / "webgpu.canvas.png")
 
+        # ⭐ 引擎两个后端的互比（**必须同尺寸才可比** ⇒ 不然记为不可比）。
+        engine_webgl_png = out_dir / "webgl.canvas.png"
+        engine_webgpu_png = out_dir / "webgpu.canvas.png"
+        if engine_webgl_png.exists() and engine_webgpu_png.exists():
+            engine_backend_parity = diff_stats(engine_webgl_png, engine_webgpu_png)
+        else:
+            engine_backend_parity = {"comparable": False, "reason": "缺少某后端的画布"}
+
         diagnostics = {}
         if webgl_stats.get("comparable"):
             diagnostics["webgl_vs_vertically_flipped"] = flipped_diff_stats(
@@ -699,6 +707,18 @@ def main():
             "webgpu_surface_format": webgpu_report.get("surface_format"),
             "production_vs_engine_webgl": webgl_stats,
             "production_vs_engine_webgpu": webgpu_stats,
+            # ⭐⭐ **引擎双后端逐像素一致**（2026-10-26 新增）。
+            #
+            # ## 为什么要有这条
+            #
+            # 「同一份逻辑在 WebGL 与 WebGPU 上产出**同一张画面**」是**引擎自己的**
+            # 硬要求 ⇒ ⇒ 否则「选后端」就等于「选画面」⇒ ⇒ 宿主没法信任任何一腿。
+            #
+            # ⭐ 实测依据：intro 场景曾出现「引擎 webgl vs 引擎 webgpu 差 **84.5%**」
+            # ⇒ ⇒ 根因是点图元只在 GLES 可用（WebGPU 缺 `gl_PointSize`）
+            # ⇒ ⇒ 引入实例化四边形后两条路径**互证一致**（仅差 15 像素）
+            # ⇒ ⇒ ⇒ 这条判据就是为了**把那个能力缺口钉住**，不许复发。
+            "engine_webgl_vs_engine_webgpu": engine_backend_parity,
             "webgl_diff_ratio_ok": ratio_ok(webgl_stats),
             "webgpu_diff_ratio_ok": ratio_ok(webgpu_stats),
             "max_diff_ratio": MAX_DIFF_RATIO,
@@ -817,12 +837,36 @@ def main():
             "ok": resize_ok,
             "verified_any": resize_verified_any,
         }
+        # ⭐⭐ **引擎双后端一致**也要过（**两腿都可验证时**才判）。
+        #
+        # ⚠ 若宿主只提供 WebGL（没有 WebGPU 适配器）⇒ ⇒ 双后端互比**不可验证**
+        # ⇒ ⇒ 那时**不参与**判定（而不是假装通过）。
+        backend_parity_comparable = bool(engine_backend_parity.get("comparable"))
+        backend_parity_ok = (
+            not backend_parity_comparable
+            or (engine_backend_parity.get("differing_pixels") or 0) == 0
+        )
+        criteria["engine_backend_parity_comparable"] = backend_parity_comparable
+        criteria["engine_backend_parity_ok"] = backend_parity_ok
+        criteria["engine_backend_parity_note"] = (
+            "引擎 WebGL 与 WebGPU 的画布**逐像素相同**（0 差异）⇒ "
+            "⇒ 同一份逻辑在两个后端产出同一画面 ✔"
+            if backend_parity_comparable and backend_parity_ok
+            else (
+                "两后端画布**不可比**（缺某后端产物）⇒ ⇒ 该判据**不可验证**"
+                "（非通过、非失败）"
+                if not backend_parity_comparable
+                else "两后端画布**存在像素差异** ⇒ ⇒ 引擎的后端一致性**被破坏** ✗"
+            )
+        )
+
         criteria["verdict"] = (
             "pass"
             if (
                 webgl_leg_ok
                 and (webgpu_leg_ok or not webgpu_verifiable)
                 and resize_ok
+                and backend_parity_ok
             )
             else "fail"
         )
