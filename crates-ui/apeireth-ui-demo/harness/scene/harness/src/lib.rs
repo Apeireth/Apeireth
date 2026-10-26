@@ -14,8 +14,8 @@
 //!   ⇒ 状态指数趋近与机位插值在两侧**逐步一致**（不是「各自跑各自的」）。
 
 use apeireth_ui_gpu::{
-    BackendPreference, Engine, EngineOptions, SceneDescriptor, SurfaceTargetInput, UniformValues,
-    SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL,
+    BackendPreference, CanvasSizeSource, Engine, EngineOptions, SceneDescriptor, SurfaceTargetInput,
+    UniformValues, SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL,
 };
 use apeireth_ui_scene::{PadBias, Scene, SceneMode, SceneOptions, Viewport};
 use wasm_bindgen::prelude::*;
@@ -142,6 +142,20 @@ pub async fn run_case(
         backend: preference,
         width,
         height,
+        // ⭐ **画布尺寸自侦测**（2026-10-25 的 resize 闭合物料）：
+        // 引擎**每帧**比对画布实际尺寸 ⇒ ⇒ 宿主改 `canvas.width/height` 时
+        // ⇒ 引擎**自己**跟上（重配表面 + 换交换链）⇒ ⇒ 行为与生产**同形**
+        // （生产也是「改 canvas 尺寸就完事」，什么都不调）。
+        // ⇒ ⇒ `None` ⇒ 不自侦测（原生路径）。
+        canvas_size: Some(CanvasSizeSource::new({
+            let canvas = canvas.clone();
+            move || {
+                (
+                    u32::try_from(canvas.width().max(1)).unwrap_or(1),
+                    u32::try_from(canvas.height().max(1)).unwrap_or(1),
+                )
+            }
+        })),
     };
     trace(&format!(
         "engine: backend={backend} {width}x{height} mode={mode} path={path}"
