@@ -56,6 +56,113 @@ thread_local! {
     static ENGINE: EngineSlot = RefCell::new(HashMap::new());
 }
 
+/// ⭐⭐ **读取设备事件**（设备丢失 / 设备错误）—— **真实 GPU 实测**用。
+///
+/// ## 为什么需要这个出口
+///
+/// 「设备丢失」（GPU 上下文被作废）在**真实硬件**上才会真发生
+/// （浏览器回收 GPU 上下文 / 驱动复位 / GPU 进程崩溃）
+/// ⇒ ⇒ 要验它，必须能**从浏览器侧**把引擎观测到的事件**取出来**
+/// ⇒ ⇒ 宿主（页面）才能断言「引擎确实报了丢失，且带帧号」。
+///
+/// ## 口径
+///
+/// - 先调 [`Engine::poll_device`]（**有界等待**）⇒ ⇒ 把**异步到达**的事件取回来
+///   ⇒ ⇒ ⚠️ 不 poll ⇒ ⇒ 后端错误**永远不派发**（失败完全静默）。
+/// - 返回 JSON 数组；每个元素形如
+///   `{"kind":"lost","frame":12,"reason":"Destroyed","message":"…"}`
+///   或 `{"kind":"error","frame":7,"message":"…"}`。
+#[wasm_bindgen(js_name = pollDeviceEvents)]
+pub fn poll_device_events() -> String {
+    let mut out: Vec<String> = Vec::new();
+    ENGINE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        for (name, entry) in slot.iter_mut() {
+            // ⚠️ poll 失败也算**可报告的事实**（设备已丢时 poll 会失败）。
+            if let Err(error) = entry.engine.poll_device() {
+                out.push(format!(
+                    "{{\"kind\":\"poll_error\",\"engine\":{},\"message\":{}}}",
+                    json_string(name),
+                    json_string(&format!("{error:?}")),
+                ));
+            }
+            for event in entry.engine.take_device_events() {
+                let text = match event {
+                    apeireth_ui_gpu::DeviceEvent::Lost {
+                        frame,
+                        reason,
+                        message,
+                    } => format!(
+                        "{{\"kind\":\"lost\",\"engine\":{},\"frame\":{frame},\"reason\":{reason_json},\"message\":{message_json}}}",
+                        json_string(name),
+                        reason_json = json_string(&reason),
+                        message_json = json_string(&message),
+                    ),
+                    apeireth_ui_gpu::DeviceEvent::Error { frame, message } => format!(
+                        "{{\"kind\":\"error\",\"engine\":{},\"frame\":{frame},\"message\":{}}}",
+                        json_string(name),
+                        json_string(&message),
+                    ),
+                    other => format!(
+                        "{{\"kind\":\"other\",\"engine\":{},\"detail\":{}}}",
+                        json_string(name),
+                        json_string(&format!("{other:?}")),
+                    ),
+                };
+                out.push(text);
+            }
+        }
+    });
+    format!("[{}]", out.join(","))
+}
+
+/// ⭐⭐ **主动销毁设备**（= WebGPU 规范的 `device.destroy()`）⇒ ⇒ 触发**设备丢失**。
+///
+/// ## 为什么用它来验「设备丢失」
+///
+/// - 真实硬件上最自然的丢失触发是「GPU 进程被杀 / 驱动复位」
+///   ⇒ ⇒ 但那会让**渲染进程一起崩** ⇒ ⇒ **页面 JS 上下文随之消失**
+///   ⇒ ⇒ ⇒ **观测不到**（实测：headless 下杀 GPU 进程 ⇒ 页面失联）。
+/// - 而 `device.destroy()` 是 **WebGPU 规范自带**的动作
+///   ⇒ ⇒ 引擎侧同样走 `DeviceLost` 回调（reason = `Destroyed`）
+///   ⇒ ⇒ **确定性高、页面不死** ⇒ ⇒ ⇒ **可观测**。
+///
+/// ⇒ ⇒ 两者在**引擎看来是同一种事件** ⇒ ⇒ 用后者验通路，前者作为补充记录。
+#[wasm_bindgen(js_name = destroyDevice)]
+pub fn destroy_device() -> String {
+    let mut out: Vec<String> = Vec::new();
+    ENGINE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        for (name, entry) in slot.iter_mut() {
+            entry.engine.destroy_device();
+            out.push(format!(
+                "{{\"kind\":\"destroyed\",\"engine\":{}}}",
+                json_string(name),
+            ));
+        }
+    });
+    format!("[{}]", out.join(","))
+}
+
+/// JSON 字符串转义（最小实现：够用于设备事件文本）。
+fn json_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for ch in value.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// 调试用日志（scratch 宿主专用）。
 fn trace(message: &str) {
     web_sys::console::log_1(&JsValue::from_str(&format!("[p5b] {message}")));
