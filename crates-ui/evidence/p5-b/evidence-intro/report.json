@@ -1,6 +1,6 @@
 {
   "schema": "apeireth.ui-engine.p5-b.intro-parity-report/1",
-  "generated_at": "2026-10-26T18:34:27+0800",
+  "generated_at": "2026-10-26T21:02:10+0800",
   "environment": {
     "chromium": "Chromium 154.0.8037.92 built on Debian GNU/Linux forky/sid",
     "frozen_times_seconds": [
@@ -10,11 +10,12 @@
     "channel_threshold": 2
   },
   "legs": {
-    "13.5:all": {
+    "13.5:all:quad": {
       "frozen_at": 13.5,
       "only": "all",
       "source": "rust",
-      "production_draws": 3,
+      "sprite_mode": "quad",
+      "production_draws": 2,
       "rust": {
         "beats": 1,
         "drawn_passes": 0,
@@ -239,9 +240,11 @@
         "height": 600,
         "frames_drawn": 3,
         "vertex_count": 3,
+        "instance_count": 1,
         "uniform_members": 28,
         "passes": "all",
         "sprite_passes": 0,
+        "sprite_mode": "quad",
         "uniforms_used": {
           "uRes": [
             960,
@@ -342,9 +345,11 @@
         "height": 600,
         "frames_drawn": 3,
         "vertex_count": 3,
+        "instance_count": 1,
         "uniform_members": 28,
         "passes": "all",
         "sprite_passes": 0,
+        "sprite_mode": "quad",
         "uniforms_used": {
           "uRes": [
             960,
@@ -436,6 +441,7 @@
           ]
         }
       },
+      "sync_mode": true,
       "pixel_diff": {
         "webgl": {
           "comparable": true,
@@ -451,7 +457,11 @@
           "differing_pixels": 0,
           "differing_ratio": 0.0,
           "max_channel_delta": 0,
-          "channel_threshold": 2
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 2,
+            "engine": "n/a"
+          }
         },
         "webgpu": {
           "comparable": true,
@@ -467,16 +477,37 @@
           "differing_pixels": 0,
           "differing_ratio": 0.0,
           "max_channel_delta": 1,
-          "channel_threshold": 2
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 2,
+            "engine": "n/a"
+          }
         }
+      },
+      "engine_dual_backend_diff": {
+        "comparable": true,
+        "left_size": [
+          960,
+          600
+        ],
+        "right_size": [
+          960,
+          600
+        ],
+        "pixels_compared": 576000,
+        "differing_pixels": 0,
+        "differing_ratio": 0.0,
+        "max_channel_delta": 1,
+        "channel_threshold": 2
       },
       "valid": true
     },
-    "2.5:all": {
+    "2.5:all:quad": {
       "frozen_at": 2.5,
       "only": "all",
       "source": "rust",
-      "production_draws": 8,
+      "sprite_mode": "quad",
+      "production_draws": 4,
       "rust": {
         "beats": 1,
         "drawn_passes": 1,
@@ -969,9 +1000,11 @@
         "height": 600,
         "frames_drawn": 3,
         "vertex_count": 3,
+        "instance_count": 1,
         "uniform_members": 28,
         "passes": "all",
         "sprite_passes": 1,
+        "sprite_mode": "quad",
         "uniforms_used": {
           "uRes": [
             960,
@@ -1064,8 +1097,111 @@
         }
       },
       "webgpu": {
-        "error": "sprite pipeline: Unsupported: 点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：BrowserWebGpu）⇒ WebGPU 规范没有点尺寸（gl_PointSize）"
+        "backend_requested": "webgpu",
+        "backend_actual": "BrowserWebGpu",
+        "surface_format": "Rgba8Unorm",
+        "encoding": "raw_bytes",
+        "width": 960,
+        "height": 600,
+        "frames_drawn": 3,
+        "vertex_count": 3,
+        "instance_count": 1,
+        "uniform_members": 28,
+        "passes": "all",
+        "sprite_passes": 1,
+        "sprite_mode": "quad",
+        "uniforms_used": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            2.5
+          ],
+          "uStars": [
+            0
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            1
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            0
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0.55
+          ],
+          "uCorePos": [
+            0,
+            -0.03
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        }
       },
+      "sync_mode": true,
       "pixel_diff": {
         "webgl": {
           "comparable": true,
@@ -1078,37 +1214,229 @@
             600
           ],
           "pixels_compared": 576000,
-          "differing_pixels": 69360,
-          "differing_ratio": 0.12041666666666667,
-          "max_channel_delta": 72,
-          "channel_threshold": 2
+          "differing_pixels": 69345,
+          "differing_ratio": 0.120390625,
+          "max_channel_delta": 71,
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 4,
+            "engine": "n/a"
+          }
         },
         "webgpu": {
-          "skipped": true,
-          "error": "sprite pipeline: Unsupported: 点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：BrowserWebGpu）⇒ WebGPU 规范没有点尺寸（gl_PointSize）"
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 69345,
+          "differing_ratio": 0.120390625,
+          "max_channel_delta": 71,
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 4,
+            "engine": "n/a"
+          }
         }
       },
-      "valid": false,
-      "invalid_backends": [
-        "webgpu"
-      ]
+      "engine_dual_backend_diff": {
+        "comparable": true,
+        "left_size": [
+          960,
+          600
+        ],
+        "right_size": [
+          960,
+          600
+        ],
+        "pixels_compared": 576000,
+        "differing_pixels": 0,
+        "differing_ratio": 0.0,
+        "max_channel_delta": 1,
+        "channel_threshold": 2
+      },
+      "valid": true
     }
   },
-  "legs_invalid": {
-    "2.5:all": [
-      "webgpu"
-    ]
-  },
+  "legs_invalid": {},
   "browser_console": [
     "[intro:log.error] Failed to load resource: the server responded with a status of 404 (File not found)",
-    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "[intro:console.log] [p5b] sprite pipeline 0 created",
     "[intro:console.log] [p5b] sprite pipeline 0 created"
   ],
   "legs_valid": [
-    "13.5:all"
+    "13.5:all:quad",
+    "2.5:all:quad"
   ],
-  "verdict": "pass"
+  "criteria": [
+    {
+      "id": "engine_dual_backend_parity",
+      "description": "引擎 WebGL vs 引擎 WebGPU：同一场景、同一时刻各截一张引擎画布 ⇒ 逐像素差 0（⇒ 两个后端真的画出同一张图；「生产 vs 引擎」证明不了这件事）",
+      "threshold": {
+        "differing_pixels": 0,
+        "channel_threshold": 2
+      },
+      "mandatory": true,
+      "measured": [
+        {
+          "leg": "13.5:all:quad",
+          "sprite_mode": "quad",
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 0,
+          "differing_ratio": 0.0,
+          "max_channel_delta": 1,
+          "channel_threshold": 2
+        },
+        {
+          "leg": "2.5:all:quad",
+          "sprite_mode": "quad",
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 0,
+          "differing_ratio": 0.0,
+          "max_channel_delta": 1,
+          "channel_threshold": 2
+        }
+      ],
+      "status": "pass"
+    },
+    {
+      "id": "quad_path_matches_point_path",
+      "description": "实例化四边形路径 vs 点图元路径（同一后端 WebGL、同一时刻）⇒ 逐像素差 0（⇒ 四边形展开忠实复现点精灵 ⇒ 不是「分叉语义」）",
+      "threshold": {
+        "differing_pixels": 0,
+        "channel_threshold": 2
+      },
+      "mandatory": true,
+      "measured": [],
+      "status": "inconclusive"
+    },
+    {
+      "id": "production_vs_engine",
+      "description": "生产（原生 WebGL2 点图元）vs 引擎（同一批 uniform 取值）⇒ 逐像素差（⚠ 这一条在本批之前对 WebGPU 是**假绿**：引擎侧根本没画粒子）",
+      "threshold": {
+        "differing_pixels": 0,
+        "channel_threshold": 2
+      },
+      "mandatory": false,
+      "measured": [
+        {
+          "leg": "13.5:all:quad",
+          "backend": "webgl",
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 0,
+          "differing_ratio": 0.0,
+          "max_channel_delta": 0,
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 2,
+            "engine": "n/a"
+          }
+        },
+        {
+          "leg": "13.5:all:quad",
+          "backend": "webgpu",
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 0,
+          "differing_ratio": 0.0,
+          "max_channel_delta": 1,
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 2,
+            "engine": "n/a"
+          }
+        },
+        {
+          "leg": "2.5:all:quad",
+          "backend": "webgl",
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 69345,
+          "differing_ratio": 0.120390625,
+          "max_channel_delta": 71,
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 4,
+            "engine": "n/a"
+          }
+        },
+        {
+          "leg": "2.5:all:quad",
+          "backend": "webgpu",
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 69345,
+          "differing_ratio": 0.120390625,
+          "max_channel_delta": 71,
+          "channel_threshold": 2,
+          "draw_counts_at_capture": {
+            "production": 4,
+            "engine": "n/a"
+          }
+        }
+      ],
+      "status": "fail"
+    }
+  ],
+  "verdict": "fail"
 }

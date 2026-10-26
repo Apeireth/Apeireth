@@ -260,7 +260,7 @@ def wait_until(cdp, expression, timeout=120, interval=0.25):
     return False
 
 
-def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", source="rust", probe="", sprite="quad"):
+def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", source="rust", probe="", sprite="quad", sync=False, diag=False, frames=0):
     """跑一条片头腿（一个冻结时刻 × 一种粒子绘制路径）。"""
     target = http_json(f"http://127.0.0.1:{devtools_port}/json/new?about:blank", method="PUT")
     cdp = Cdp(target["webSocketDebuggerUrl"])
@@ -275,7 +275,15 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
         "Page.navigate",
         {
             "url": f"{base}/intro/?it={frozen_at}&only={only}&source={source}&sprite={sprite}"
+            # ⭐⭐ **对称模式**（2026-10-26 实测定位的关键）：
+            # 不带 `sync=1` ⇒ ⇒ 生产侧用**自己的** rAF、引擎侧用**泵**
+            # ⇒ ⇒ 两侧的**绘制次数 / 画面累积**不对称 ⇒ ⇒ 差异混着「装置差」。
+            # ⇒ ⇒ `sync=1` ⇒ ⇒ 同一个泵里「生产画一次 ⇒ 引擎画一次」⇒ ⇒ 对称。
+            + "&sync=1"
             + (f"&probe={probe}" if probe else "")
+            + (f"&frames={frames}" if frames else "")
+            + ("&sync=1" if sync else "")
+            + ("&diag=1" if diag else "")
         },
     )
     if not wait_until(cdp, "!!window.__INTRO_DONE__", timeout=180):
@@ -287,6 +295,7 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
 
     # 逐像素：生产画布 vs 引擎画布（**每个后端各一张**）。
     pixels = {}
+    diagnostics = {}
     for backend in ("webgl", "webgpu"):
         leg = report.get(backend) or {}
         if leg.get("error"):
@@ -295,6 +304,37 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
         try:
             cdp.evaluate(f"window.__INTRO_REDRAW__.start({json.dumps(backend)}); true")
             time.sleep(0.5)
+            # ⭐ **绘制次数**快照（对称性证据）：两侧各画了多少次。
+            counts = cdp.evaluate(
+                "JSON.stringify({production: (window.__INTRO__||{}).production_draws,"
+                " engine: (window.__INTRO_REDRAW__||{}).diag ? 'n/a' : 'n/a'})"
+            )
+            try:
+                counts = json.loads(counts)
+            except Exception:
+                counts = {"raw": counts}
+            if diag:
+                # ⭐ **对称诊断**：同一任务里两侧各画一次 ⇒ 立刻**回读** ⇒ 比较
+                #   （绕开合成/截图路径 ⇒ 把「渲染不同」与「呈现不同」分开）。
+                raw = cdp.evaluate(
+                    f"JSON.stringify(window.__INTRO_REDRAW__.diag({json.dumps(backend)}))"
+                )
+                try:
+                    entry = json.loads(raw)
+                except Exception:
+                    entry = {"raw": raw}
+                # ⭐ 回读的 PNG（与截图同向）⇒ ⇒ 落盘后可与截图**逐像素**对照。
+                for key, name in (
+                    ("production_readback_png", f"readback.production.{sprite}.{backend}.png"),
+                    ("engine_readback_png", f"readback.engine.{sprite}.{backend}.png"),
+                ):
+                    data_url = entry.pop(key, None)
+                    if isinstance(data_url, str) and data_url.startswith("data:image/png;base64,"):
+                        (out_dir / name).write_bytes(
+                            base64.b64decode(data_url.split(",", 1)[1])
+                        )
+                        entry[key.replace("_png", "_saved")] = name
+                diagnostics[backend] = entry
             production_box = element_box(cdp, "production")
             engine_box = element_box(cdp, f"engine-{backend}")
             # ⚠️ 文件名**带路径标识**（`{sprite}`）⇒ ⇒ `quad` 与 `point` 两条腿
@@ -317,10 +357,13 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
                 out_dir / f"intro.production.{sprite}.{backend}.png",
                 out_dir / f"intro.engine.{sprite}.{backend}.png",
             )
+            pixels[backend]["draw_counts_at_capture"] = counts
         except Exception as error:  # noqa: BLE001 —— 驱动层：失败要**显式**记下来
             pixels[backend] = {"skipped": True, "error": str(error)}
     report["pixel_diff"] = pixels
     report["sprite_mode"] = sprite
+    if diagnostics:
+        report["readback_diagnostics"] = diagnostics
 
     # ⭐⭐ **双后端逐像素对照**（本批的**核心判据**）：引擎 WebGL vs 引擎 WebGPU。
     #
@@ -385,6 +428,22 @@ def main():
         default="quad,point",
         help="粒子的绘制路径（quad = 实例化四边形（后端无关）；point = 点图元（WebGL 快路径））",
     )
+    parser.add_argument(
+        "--sync",
+        action="store_true",
+        help="对称重绘：两侧在**同一个 rAF 帧**里各画一次（绘制次数对称）",
+    )
+    parser.add_argument(
+        "--frames",
+        type=int,
+        default=0,
+        help="生产侧**只画一帧**（`?frames=1`）⇒ 用于隔离对照（画面不累积）",
+    )
+    parser.add_argument(
+        "--diag",
+        action="store_true",
+        help="对称诊断：同一任务里两侧各画一次并**立刻回读**像素（绕开合成路径）",
+    )
     args = parser.parse_args()
 
     out_dir = pathlib.Path(args.out)
@@ -444,6 +503,7 @@ def main():
                     legs[key] = run_leg(
                         devtools_port, base, console_log, frozen_at, out_dir,
                         only=only, source=args.source, probe=args.probe, sprite=sprite,
+                        sync=args.sync, diag=args.diag, frames=args.frames,
                     )
 
         report = {

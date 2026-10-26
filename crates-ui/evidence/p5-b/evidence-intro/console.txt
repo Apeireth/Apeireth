@@ -1,6 +1,7 @@
 [intro:log.error] Failed to load resource: the server responded with a status of 404 (File not found)
-[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
-[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
-[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
-[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[intro:log.warning] [.WebGL-0x30bc001b1400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+[intro:console.log] [p5b] sprite pipeline 0 created
 [intro:console.log] [p5b] sprite pipeline 0 created
