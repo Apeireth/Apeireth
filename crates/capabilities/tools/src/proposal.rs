@@ -524,26 +524,11 @@ pub(crate) fn append_jsonl_row<T: Serialize>(
     label: &str,
     doc: &StoredDoc<T>,
 ) -> Result<(), String> {
-    use std::io::{Read, Seek, SeekFrom, Write};
-    let mut line =
-        serde_json::to_vec(doc).map_err(|error| format!("{label}序列化失败: {error}"))?;
-    line.push(b'\n');
-    let mut file = std::fs::OpenOptions::new()
-        .read(true)
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|error| format!("{label}打开失败 {}: {error}", path.display()))?;
-    let mut buffer = Vec::with_capacity(line.len() + 1);
-    if tail_needs_separator(&mut file)
-        .map_err(|error| format!("{label}读取失败 {}: {error}", path.display()))?
-    {
-        // 撕裂写半行封口 (只追加一个换行; append-only 不变)。
-        buffer.push(b'\n');
-    }
-    buffer.extend_from_slice(&line);
-    file.write_all(&buffer)
-        .and_then(|()| file.sync_all())
+    // ⚠️ **2026-10-26 上移到共用原语**：实现搬到了
+    // `apeireth_core::stored_doc::append_record` —— **与读面 `scan_records` 同模块**
+    // ⇒ 写面与读面**同源** ⇒ **一个实现，不分叉**（原先本仓有**四个**追加器，
+    // 其中两个仍是「行体与换行分两次写」的旧形态 ⇒ 并发写会把两行挤成一行 ⇒ 丢记录）。
+    apeireth_core::stored_doc::append_record(path, doc)
         .map_err(|error| format!("{label}写入失败 {}: {error}", path.display()))
 }
 
