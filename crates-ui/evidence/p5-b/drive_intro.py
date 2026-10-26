@@ -297,6 +297,11 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
             time.sleep(0.5)
             production_box = element_box(cdp, "production")
             engine_box = element_box(cdp, f"engine-{backend}")
+            # ⚠️ 文件名**带路径标识**（`{sprite}`）⇒ ⇒ `quad` 与 `point` 两条腿
+            # ⇒ ⇒ **不会互相覆盖** ⇒ ⇒ 落盘的 PNG 与 `report.json` 的数字一一对应。
+            # ⇒ ⇒ （该标识在引入 `--sprite` 时就一并做了；2026-10-26 **复核确认**了它，
+            # ⇒ ⇒ 并用**独立重算**验证「报告数字 == 落盘图」：任一通道 / 阈值 > 2 ⇒
+            # ⇒ ⇒ 69,345 ⇒ ⇒ 与报告**逐个一致** ⇒ ⇒ 12% 这个数字**可信**。）
             capture(
                 cdp,
                 out_dir / f"intro.production.{sprite}.{backend}.png",
