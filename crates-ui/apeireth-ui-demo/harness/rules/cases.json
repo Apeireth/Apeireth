@@ -6,7 +6,7 @@
     "node": "v22.23.1",
     "mode": "--experimental-strip-types",
     "tz": "Asia/Shanghai",
-    "production": "frontend/companion-desktop/src/lib/{governance/ledger.ts,governance/format.ts,runtime.ts,chat-shell/turn-telemetry.ts,budget.ts}"
+    "production": "frontend/companion-desktop/src/lib/{governance/ledger.ts,governance/format.ts,governance/trace.ts,governance/guard.ts,runtime.ts,chat-shell/turn-telemetry.ts,budget.ts}"
   },
   "notes": [
     "expected 字段一律由 gen_expected.mjs（node --experimental-strip-types，直接 import 生产 .ts）算出 ⇒ 手改 expected 会被 Rust 侧比对测试判红。",
@@ -1034,6 +1034,94 @@
             ]
           },
           "parity": "same"
+        },
+        {
+          "id": "merge-created-at-no-offset-known-drift",
+          "args": {
+            "ledger": [],
+            "sessionId": "sess-a",
+            "inbox": [
+              {
+                "approval_id": "apr-1",
+                "session": "sess-a",
+                "tool_name": "fs.write",
+                "governance_reason": "写文件",
+                "created_at": "2026-01-02T03:04:05",
+                "expires_at": "2026-01-02T03:09:05"
+              }
+            ],
+            "sessionTitle": "会话 A"
+          },
+          "parity": "known_drift",
+          "rust_expected": {
+            "length": 1,
+            "items": [
+              {
+                "approvalId": "apr-1",
+                "session": "sess-a",
+                "sessionTitle": "会话 A",
+                "createdAtMs": 1767323045000,
+                "expiresAtMs": 1767323345000
+              }
+            ]
+          },
+          "why": "created_at **不带时区偏移**：生产走 `Date.parse` ⇒ 按 ES 规范「无偏移的日期时间 = **本地时间**」⇒ 装置时区 Asia/Shanghai ⇒ 折算成 UTC 要减 8 小时；Rust 侧 `parse_rfc3339_ms` 把「缺偏移」当 **UTC**（偏移量 0）⇒ 两侧差 8 小时（28 800 000 ms）。属「本地时区 vs UTC」的解析口径差（Rust 侧 0 依赖 ⇒ 无本地时区概念 ⇒ 不能统一）。",
+          "expected": {
+            "length": 1,
+            "items": [
+              {
+                "approvalId": "apr-1",
+                "session": "sess-a",
+                "sessionTitle": "会话 A",
+                "createdAtMs": 1767294245000,
+                "expiresAtMs": 1767294545000
+              }
+            ]
+          }
+        },
+        {
+          "id": "merge-created-at-date-only-known-drift",
+          "args": {
+            "ledger": [],
+            "sessionId": "sess-a",
+            "inbox": [
+              {
+                "approval_id": "apr-1",
+                "session": "sess-a",
+                "tool_name": "fs.write",
+                "governance_reason": "写文件",
+                "created_at": "2026-01-02",
+                "expires_at": "2026-01-02T00:05:00Z"
+              }
+            ],
+            "sessionTitle": "会话 A"
+          },
+          "parity": "known_drift",
+          "rust_expected": {
+            "length": 1,
+            "items": [
+              {
+                "approvalId": "apr-1",
+                "session": "sess-a",
+                "sessionTitle": "会话 A",
+                "createdAtMs": null,
+                "expiresAtMs": 1767312300000
+              }
+            ]
+          },
+          "why": "created_at 是**纯日期**（无时刻、无偏移）：生产 `Date.parse(\"2026-01-02\")` 接受 ⇒ 给 UTC 零点（1 767 312 000 000）；Rust 侧 `parse_rfc3339_ms` 要求完整 `YYYY-MM-DDTHH:MM:SS` ⇒ 解析失败 ⇒ 字段为 null。属「生产 Date.parse 的可接受形态更宽」的解析口径差。",
+          "expected": {
+            "length": 1,
+            "items": [
+              {
+                "approvalId": "apr-1",
+                "session": "sess-a",
+                "sessionTitle": "会话 A",
+                "createdAtMs": 1767312000000,
+                "expiresAtMs": 1767312300000
+              }
+            ]
+          }
         }
       ]
     },
@@ -4392,6 +4480,1651 @@
               }
             ]
           }
+        }
+      ]
+    },
+    {
+      "rule": "short_id",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/format.ts",
+        "export": "shortId"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "short_id"
+      },
+      "normalization": "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（按 UTF-16 码元计数与截断；截断位补「…」；head 缺省 ⇒ 两侧同取 8）。",
+      "args_schema": "{\"id\": <字符串>, \"head\": <整数，可缺省 ⇒ 取 8（生产 shortId 的默认值）>}",
+      "cases": [
+        {
+          "id": "short-id-shorter",
+          "args": {
+            "id": "abc",
+            "head": 8
+          },
+          "parity": "same",
+          "expected": "abc"
+        },
+        {
+          "id": "short-id-exact-boundary",
+          "args": {
+            "id": "abcdefgh",
+            "head": 8
+          },
+          "parity": "same",
+          "expected": "abcdefgh"
+        },
+        {
+          "id": "short-id-longer",
+          "args": {
+            "id": "abcdefghi",
+            "head": 8
+          },
+          "parity": "same",
+          "expected": "abcdefgh…"
+        },
+        {
+          "id": "short-id-head-zero",
+          "args": {
+            "id": "abc",
+            "head": 0
+          },
+          "parity": "same",
+          "expected": "…"
+        },
+        {
+          "id": "short-id-empty",
+          "args": {
+            "id": "",
+            "head": 8
+          },
+          "parity": "same",
+          "expected": ""
+        },
+        {
+          "id": "short-id-default-head",
+          "args": {
+            "id": "0123456789abcdef"
+          },
+          "parity": "same",
+          "expected": "01234567…"
+        },
+        {
+          "id": "short-id-astral-inside",
+          "args": {
+            "id": "😀abc",
+            "head": 2
+          },
+          "parity": "same",
+          "expected": "😀…"
+        },
+        {
+          "id": "short-id-cjk",
+          "args": {
+            "id": "会话标题很长",
+            "head": 2
+          },
+          "parity": "same",
+          "expected": "会话…"
+        }
+      ]
+    },
+    {
+      "rule": "span_depth",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/trace.ts",
+        "export": "spanDepth"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "span_depth"
+      },
+      "normalization": "整数原样：TS 的 number ⇒ JSON number；Rust 的 usize ⇒ JSON number ⇒ 逐值相等（父链深度；上限 6；环由 visited 集合截断）。",
+      "args_schema": "{\"spans\": [<span>…], \"span\": <span>}；span = {\"span_id\": <字符串>, \"parent_span_id\": <字符串|null|缺省>}（规则只读这两个字段）",
+      "cases": [
+        {
+          "id": "span-depth-root",
+          "args": {
+            "spans": [
+              {
+                "span_id": "s1",
+                "parent_span_id": null,
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              }
+            ],
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": null
+            }
+          },
+          "parity": "same",
+          "expected": 0
+        },
+        {
+          "id": "span-depth-one",
+          "args": {
+            "spans": [
+              {
+                "span_id": "s1",
+                "parent_span_id": null,
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s2",
+                "parent_span_id": "s1",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              }
+            ],
+            "span": {
+              "span_id": "s2",
+              "parent_span_id": "s1",
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": null
+            }
+          },
+          "parity": "same",
+          "expected": 1
+        },
+        {
+          "id": "span-depth-three",
+          "args": {
+            "spans": [
+              {
+                "span_id": "s1",
+                "parent_span_id": null,
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s2",
+                "parent_span_id": "s1",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s3",
+                "parent_span_id": "s2",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s4",
+                "parent_span_id": "s3",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              }
+            ],
+            "span": {
+              "span_id": "s4",
+              "parent_span_id": "s3",
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": null
+            }
+          },
+          "parity": "same",
+          "expected": 3
+        },
+        {
+          "id": "span-depth-cap-six",
+          "args": {
+            "spans": [
+              {
+                "span_id": "s1",
+                "parent_span_id": null,
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s2",
+                "parent_span_id": "s1",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s3",
+                "parent_span_id": "s2",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s4",
+                "parent_span_id": "s3",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s5",
+                "parent_span_id": "s4",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s6",
+                "parent_span_id": "s5",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s7",
+                "parent_span_id": "s6",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s8",
+                "parent_span_id": "s7",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s9",
+                "parent_span_id": "s8",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              }
+            ],
+            "span": {
+              "span_id": "s9",
+              "parent_span_id": "s8",
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": null
+            }
+          },
+          "parity": "same",
+          "expected": 6
+        },
+        {
+          "id": "span-depth-missing-parent",
+          "args": {
+            "spans": [],
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": "ghost",
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": null
+            }
+          },
+          "parity": "same",
+          "expected": 1
+        },
+        {
+          "id": "span-depth-cycle",
+          "args": {
+            "spans": [
+              {
+                "span_id": "s1",
+                "parent_span_id": "s2",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              },
+              {
+                "span_id": "s2",
+                "parent_span_id": "s1",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              }
+            ],
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": "s2",
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": null
+            }
+          },
+          "parity": "same",
+          "expected": 2
+        },
+        {
+          "id": "span-depth-empty-parent",
+          "args": {
+            "spans": [
+              {
+                "span_id": "s1",
+                "parent_span_id": "",
+                "kind": "tool",
+                "actor": "engine",
+                "status": "ok",
+                "summary": null,
+                "started_at": 0,
+                "ended_at": null
+              }
+            ],
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": "",
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": null
+            }
+          },
+          "parity": "known_drift",
+          "rust_expected": 1,
+          "why": "父 span id 是空串时：生产 spanDepth 的 while 条件是 `cur && …` ⇒ 空串为**假值** ⇒ 直接停 ⇒ 深度 0；Rust 侧是 Option<String> ⇒ Some(\"\") 仍进循环 ⇒ 深度 1。属「JS 假值语义 vs Rust Option 语义」的口径差（两侧都把空串当「有父」/「无父」的边界处理不一致）。",
+          "expected": 0
+        }
+      ]
+    },
+    {
+      "rule": "span_duration_ms",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/trace.ts",
+        "export": "spanDurationMs"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "span_duration_ms"
+      },
+      "normalization": "数值或 null：TS 的 number | null ⇒ JSON number | null；Rust 的 Option<f64> ⇒ 同 ⇒ 逐值相等（未收口 ⇒ null；负时长钳到 0）。",
+      "args_schema": "{\"span\": <span>}；span 只需 {\"started_at\": <数字>, \"ended_at\": <数字|null|缺省>}（规则只读这两个字段）",
+      "cases": [
+        {
+          "id": "span-duration-not-closed",
+          "args": {
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 100,
+              "ended_at": null
+            }
+          },
+          "parity": "same",
+          "expected": null
+        },
+        {
+          "id": "span-duration-ended-missing",
+          "args": {
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "started_at": 100
+            }
+          },
+          "parity": "same",
+          "expected": null
+        },
+        {
+          "id": "span-duration-normal",
+          "args": {
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 100,
+              "ended_at": 250
+            }
+          },
+          "parity": "same",
+          "expected": 150
+        },
+        {
+          "id": "span-duration-zero",
+          "args": {
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 500,
+              "ended_at": 500
+            }
+          },
+          "parity": "same",
+          "expected": 0
+        },
+        {
+          "id": "span-duration-negative-clamped",
+          "args": {
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 500,
+              "ended_at": 400
+            }
+          },
+          "parity": "same",
+          "expected": 0
+        },
+        {
+          "id": "span-duration-fractional",
+          "args": {
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 100.5,
+              "ended_at": 200.25
+            }
+          },
+          "parity": "same",
+          "expected": 99.75
+        },
+        {
+          "id": "span-duration-large",
+          "args": {
+            "span": {
+              "span_id": "s1",
+              "parent_span_id": null,
+              "kind": "tool",
+              "actor": "engine",
+              "status": "ok",
+              "summary": null,
+              "started_at": 0,
+              "ended_at": 1000000000000
+            }
+          },
+          "parity": "same",
+          "expected": 1000000000000
+        }
+      ]
+    },
+    {
+      "rule": "span_status_badge",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/trace.ts",
+        "export": "spanStatusBadge"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "span_status_badge"
+      },
+      "normalization": "两字段对象：{\"variant\": \"green\"|\"danger\"|\"blue\"|\"dim\", \"label\": 字符串}（Rust 的 BadgeVariant 取 class_name ⇒ 与 TS 字面量同形；label 逐码点相等）。",
+      "args_schema": "{\"status\": <字符串>}",
+      "cases": [
+        {
+          "id": "span-status-ok",
+          "args": {
+            "status": "ok"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "green",
+            "label": "ok"
+          }
+        },
+        {
+          "id": "span-status-ok-upper",
+          "args": {
+            "status": "OK"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "green",
+            "label": "ok"
+          }
+        },
+        {
+          "id": "span-status-error",
+          "args": {
+            "status": "error"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "danger",
+            "label": "error"
+          }
+        },
+        {
+          "id": "span-status-error-upper",
+          "args": {
+            "status": "ERROR"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "danger",
+            "label": "error"
+          }
+        },
+        {
+          "id": "span-status-empty",
+          "args": {
+            "status": ""
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "dim",
+            "label": "—"
+          }
+        },
+        {
+          "id": "span-status-other",
+          "args": {
+            "status": "running"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "blue",
+            "label": "running"
+          }
+        },
+        {
+          "id": "span-status-other-mixed-case",
+          "args": {
+            "status": "Running"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "blue",
+            "label": "Running"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "audit_event_group",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/trace.ts",
+        "export": "auditEventGroup"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "audit_event_group"
+      },
+      "normalization": "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（取首段并去空白；空 ⇒ 「other」）。",
+      "args_schema": "{\"eventName\": <字符串>}",
+      "cases": [
+        {
+          "id": "audit-group-dotted",
+          "args": {
+            "eventName": "chat.turn.completed"
+          },
+          "parity": "same",
+          "expected": "chat"
+        },
+        {
+          "id": "audit-group-plain",
+          "args": {
+            "eventName": "runtime"
+          },
+          "parity": "same",
+          "expected": "runtime"
+        },
+        {
+          "id": "audit-group-empty",
+          "args": {
+            "eventName": ""
+          },
+          "parity": "same",
+          "expected": "other"
+        },
+        {
+          "id": "audit-group-blank",
+          "args": {
+            "eventName": "   "
+          },
+          "parity": "same",
+          "expected": "other"
+        },
+        {
+          "id": "audit-group-leading-dot",
+          "args": {
+            "eventName": ".chat.turn"
+          },
+          "parity": "same",
+          "expected": "other"
+        },
+        {
+          "id": "audit-group-spaced-head",
+          "args": {
+            "eventName": "  chat . turn"
+          },
+          "parity": "same",
+          "expected": "chat"
+        }
+      ]
+    },
+    {
+      "rule": "audit_group_chips",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/trace.ts",
+        "export": "auditGroupChips"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "audit_group_chips"
+      },
+      "normalization": "数组 ⇒ 长度 + 每行两字段：{\"length\": n, \"items\": [{\"group\": 字符串, \"count\": 整数}]}；按 count 倒序（两侧皆稳定排序 ⇒ 同计数按首次出现序）；行序敏感。",
+      "args_schema": "{\"items\": [<留痕条目>…]}；留痕条目 = {\"id\": <字符串>, \"timestamp\": <整数>, \"title\": <字符串>, \"summary\": <字符串>, \"source\": <字符串>, \"detail\": <字符串|null>}（规则只读 title）",
+      "cases": [
+        {
+          "id": "chips-empty",
+          "args": {
+            "items": []
+          },
+          "parity": "same",
+          "expected": {
+            "length": 0,
+            "items": []
+          }
+        },
+        {
+          "id": "chips-single",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.completed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ]
+          },
+          "parity": "same",
+          "expected": {
+            "length": 1,
+            "items": [
+              {
+                "group": "chat",
+                "count": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "chips-multi",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.completed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a2",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.failed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a3",
+                "timestamp": 1792922400000,
+                "title": "tool.invoke",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ]
+          },
+          "parity": "same",
+          "expected": {
+            "length": 2,
+            "items": [
+              {
+                "group": "chat",
+                "count": 2
+              },
+              {
+                "group": "tool",
+                "count": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "chips-equal-counts-stable-order",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "zeta.one",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a2",
+                "timestamp": 1792922400000,
+                "title": "alpha.two",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a3",
+                "timestamp": 1792922400000,
+                "title": "zeta.three",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a4",
+                "timestamp": 1792922400000,
+                "title": "alpha.four",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ]
+          },
+          "parity": "same",
+          "expected": {
+            "length": 2,
+            "items": [
+              {
+                "group": "zeta",
+                "count": 2
+              },
+              {
+                "group": "alpha",
+                "count": 2
+              }
+            ]
+          }
+        },
+        {
+          "id": "chips-other-group",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "plain",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a2",
+                "timestamp": 1792922400000,
+                "title": ".leading",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a3",
+                "timestamp": 1792922400000,
+                "title": "plain",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ]
+          },
+          "parity": "same",
+          "expected": {
+            "length": 2,
+            "items": [
+              {
+                "group": "plain",
+                "count": 2
+              },
+              {
+                "group": "other",
+                "count": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "rule": "filter_audit_items",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/trace.ts",
+        "export": "filterAuditItems"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "filter_audit_items"
+      },
+      "normalization": "数组 ⇒ 长度 + 每项归一化条目：{\"length\": n, \"items\": [{\"id\", \"timestamp\", \"title\", \"summary\", \"source\", \"detail\"}]}；detail 缺失与 null 一律归一为 null；条目顺序敏感（保序筛选）。",
+      "args_schema": "{\"items\": [<留痕条目>…], \"group\": <字符串（\"all\" ⇒ 全量）>}；留痕条目同 audit_group_chips",
+      "cases": [
+        {
+          "id": "filter-all",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.completed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a2",
+                "timestamp": 1792922400000,
+                "title": "tool.invoke",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ],
+            "group": "all"
+          },
+          "parity": "same",
+          "expected": {
+            "length": 2,
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.completed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a2",
+                "timestamp": 1792922400000,
+                "title": "tool.invoke",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "filter-group",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.completed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a2",
+                "timestamp": 1792922400000,
+                "title": "tool.invoke",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a3",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.failed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ],
+            "group": "chat"
+          },
+          "parity": "same",
+          "expected": {
+            "length": 2,
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.completed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a3",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.failed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "filter-no-match",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "chat.turn.completed",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ],
+            "group": "zzz"
+          },
+          "parity": "same",
+          "expected": {
+            "length": 0,
+            "items": []
+          }
+        },
+        {
+          "id": "filter-empty-items",
+          "args": {
+            "items": [],
+            "group": "chat"
+          },
+          "parity": "same",
+          "expected": {
+            "length": 0,
+            "items": []
+          }
+        },
+        {
+          "id": "filter-other-group",
+          "args": {
+            "items": [
+              {
+                "id": "a1",
+                "timestamp": 1792922400000,
+                "title": "plain",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              },
+              {
+                "id": "a2",
+                "timestamp": 1792922400000,
+                "title": "chat.x",
+                "summary": "摘要",
+                "source": "audit",
+                "detail": null
+              }
+            ],
+            "group": "other"
+          },
+          "parity": "same",
+          "expected": {
+            "length": 0,
+            "items": []
+          }
+        }
+      ]
+    },
+    {
+      "rule": "guard_decision_badge",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/guard.ts",
+        "export": "guardDecisionBadge"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "guard_decision_badge"
+      },
+      "normalization": "两字段对象：{\"variant\": \"green\"|\"danger\"|\"amber\"|\"blue\"|\"dim\", \"label\": 字符串}（Rust 的 BadgeVariant 取 class_name ⇒ 与 TS 字面量同形；label 逐码点相等）。",
+      "args_schema": "{\"decision\": <字符串>}",
+      "cases": [
+        {
+          "id": "guard-allow",
+          "args": {
+            "decision": "allow"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "green",
+            "label": "放行"
+          }
+        },
+        {
+          "id": "guard-allowed",
+          "args": {
+            "decision": "allowed"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "green",
+            "label": "放行"
+          }
+        },
+        {
+          "id": "guard-allow-upper",
+          "args": {
+            "decision": "ALLOW"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "green",
+            "label": "放行"
+          }
+        },
+        {
+          "id": "guard-deny",
+          "args": {
+            "decision": "deny"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "danger",
+            "label": "否决"
+          }
+        },
+        {
+          "id": "guard-blocked",
+          "args": {
+            "decision": "blocked"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "danger",
+            "label": "否决"
+          }
+        },
+        {
+          "id": "guard-approval-required",
+          "args": {
+            "decision": "approval_required"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "amber",
+            "label": "待签"
+          }
+        },
+        {
+          "id": "guard-warn",
+          "args": {
+            "decision": "warning"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "amber",
+            "label": "预警"
+          }
+        },
+        {
+          "id": "guard-empty",
+          "args": {
+            "decision": ""
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "dim",
+            "label": "未知"
+          }
+        },
+        {
+          "id": "guard-custom",
+          "args": {
+            "decision": "custom_decision"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "blue",
+            "label": "custom_decision"
+          }
+        },
+        {
+          "id": "guard-custom-mixed-case",
+          "args": {
+            "decision": "CustomDecision"
+          },
+          "parity": "same",
+          "expected": {
+            "variant": "blue",
+            "label": "CustomDecision"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "guard_stage_label",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/guard.ts",
+        "export": "guardStageLabel"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "guard_stage_label"
+      },
+      "normalization": "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（三段管线中文名；未知名原样返回）。",
+      "args_schema": "{\"stage\": <字符串>}",
+      "cases": [
+        {
+          "id": "stage-fast-guard",
+          "args": {
+            "stage": "fast_guard"
+          },
+          "parity": "same",
+          "expected": "快速守卫"
+        },
+        {
+          "id": "stage-chain-guard",
+          "args": {
+            "stage": "chain_guard"
+          },
+          "parity": "same",
+          "expected": "链式守卫"
+        },
+        {
+          "id": "stage-decision-fusion",
+          "args": {
+            "stage": "decision_fusion"
+          },
+          "parity": "same",
+          "expected": "决策融合"
+        },
+        {
+          "id": "stage-unknown",
+          "args": {
+            "stage": "other_stage"
+          },
+          "parity": "same",
+          "expected": "other_stage"
+        },
+        {
+          "id": "stage-empty",
+          "args": {
+            "stage": ""
+          },
+          "parity": "same",
+          "expected": ""
+        }
+      ]
+    },
+    {
+      "rule": "risk_score_percent",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/guard.ts",
+        "export": "riskScorePercent"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "risk_score_percent"
+      },
+      "normalization": "整数原样：TS 的 number ⇒ JSON number；Rust 的 i64 ⇒ JSON number ⇒ 逐值相等（0..1 钳制后 ×100 取整，半数向 +∞）。",
+      "args_schema": "{\"score\": <数字（0..1 的风险分）>}",
+      "cases": [
+        {
+          "id": "risk-score-zero",
+          "args": {
+            "score": 0
+          },
+          "parity": "same",
+          "expected": 0
+        },
+        {
+          "id": "risk-score-one",
+          "args": {
+            "score": 1
+          },
+          "parity": "same",
+          "expected": 100
+        },
+        {
+          "id": "risk-score-half",
+          "args": {
+            "score": 0.5
+          },
+          "parity": "same",
+          "expected": 50
+        },
+        {
+          "id": "risk-score-round-half-up",
+          "args": {
+            "score": 0.005
+          },
+          "parity": "same",
+          "expected": 1
+        },
+        {
+          "id": "risk-score-round-down",
+          "args": {
+            "score": 0.004
+          },
+          "parity": "same",
+          "expected": 0
+        },
+        {
+          "id": "risk-score-clamp-high",
+          "args": {
+            "score": 1.5
+          },
+          "parity": "same",
+          "expected": 100
+        },
+        {
+          "id": "risk-score-clamp-low",
+          "args": {
+            "score": -0.5
+          },
+          "parity": "same",
+          "expected": 0
+        },
+        {
+          "id": "risk-score-near-one",
+          "args": {
+            "score": 0.999
+          },
+          "parity": "same",
+          "expected": 100
+        }
+      ]
+    },
+    {
+      "rule": "guard_event_row",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/guard.ts",
+        "export": "guardEventRow"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "guard_event_row"
+      },
+      "normalization": "四字段对象：{\"id\": 字符串, \"badge\": {\"variant\", \"label\"}, \"stageLabel\": 字符串, \"riskPct\": 整数}（徽标 = 守卫决策徽标语义；riskPct = 风险百分比；键序固定）。",
+      "args_schema": "{\"event\": <守卫事件>}；守卫事件 = {\"timestamp_ms\": <整数>, \"session_id\": <字符串>, \"trace_id\": <字符串>, \"round\": <整数>, \"capability_id\": <字符串>, \"stage\": <字符串>, \"decision\": <字符串>, \"risk_score\": <数字>, \"reasons\": [<字符串>…], \"evidence\": [<字符串>…]}",
+      "cases": [
+        {
+          "id": "guard-row-allow",
+          "args": {
+            "event": {
+              "timestamp_ms": 1792922400000,
+              "session_id": "sess-a",
+              "trace_id": "trace-1",
+              "round": 3,
+              "capability_id": "fs.write",
+              "stage": "fast_guard",
+              "decision": "allow",
+              "risk_score": 0.25,
+              "reasons": [],
+              "evidence": []
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "id": "trace-1-3-1792922400000",
+            "badge": {
+              "variant": "green",
+              "label": "放行"
+            },
+            "stageLabel": "快速守卫",
+            "riskPct": 25
+          }
+        },
+        {
+          "id": "guard-row-deny",
+          "args": {
+            "event": {
+              "timestamp_ms": 1792922400000,
+              "session_id": "sess-a",
+              "trace_id": "trace-1",
+              "round": 3,
+              "capability_id": "fs.write",
+              "stage": "chain_guard",
+              "decision": "deny",
+              "risk_score": 0.9,
+              "reasons": [],
+              "evidence": []
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "id": "trace-1-3-1792922400000",
+            "badge": {
+              "variant": "danger",
+              "label": "否决"
+            },
+            "stageLabel": "链式守卫",
+            "riskPct": 90
+          }
+        },
+        {
+          "id": "guard-row-approval",
+          "args": {
+            "event": {
+              "timestamp_ms": 1792922400000,
+              "session_id": "sess-a",
+              "trace_id": "trace-1",
+              "round": 3,
+              "capability_id": "fs.write",
+              "stage": "decision_fusion",
+              "decision": "approval_required",
+              "risk_score": 0.25,
+              "reasons": [],
+              "evidence": []
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "id": "trace-1-3-1792922400000",
+            "badge": {
+              "variant": "amber",
+              "label": "待签"
+            },
+            "stageLabel": "决策融合",
+            "riskPct": 25
+          }
+        },
+        {
+          "id": "guard-row-risk-zero",
+          "args": {
+            "event": {
+              "timestamp_ms": 1792922400000,
+              "session_id": "sess-a",
+              "trace_id": "trace-1",
+              "round": 3,
+              "capability_id": "fs.write",
+              "stage": "fast_guard",
+              "decision": "allow",
+              "risk_score": 0,
+              "reasons": [],
+              "evidence": []
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "id": "trace-1-3-1792922400000",
+            "badge": {
+              "variant": "green",
+              "label": "放行"
+            },
+            "stageLabel": "快速守卫",
+            "riskPct": 0
+          }
+        },
+        {
+          "id": "guard-row-risk-one",
+          "args": {
+            "event": {
+              "timestamp_ms": 1792922400000,
+              "session_id": "sess-a",
+              "trace_id": "trace-1",
+              "round": 3,
+              "capability_id": "fs.write",
+              "stage": "fast_guard",
+              "decision": "allow",
+              "risk_score": 1,
+              "reasons": [],
+              "evidence": []
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "id": "trace-1-3-1792922400000",
+            "badge": {
+              "variant": "green",
+              "label": "放行"
+            },
+            "stageLabel": "快速守卫",
+            "riskPct": 100
+          }
+        },
+        {
+          "id": "guard-row-id-shape",
+          "args": {
+            "event": {
+              "timestamp_ms": 1700000000000,
+              "session_id": "sess-a",
+              "trace_id": "trace-abc",
+              "round": 7,
+              "capability_id": "fs.write",
+              "stage": "fast_guard",
+              "decision": "allow",
+              "risk_score": 0.25,
+              "reasons": [],
+              "evidence": []
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "id": "trace-abc-7-1700000000000",
+            "badge": {
+              "variant": "green",
+              "label": "放行"
+            },
+            "stageLabel": "快速守卫",
+            "riskPct": 25
+          }
+        }
+      ]
+    },
+    {
+      "rule": "format_duration_f64",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/chat-shell/turn-telemetry.ts",
+        "export": "formatDuration"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "settings_budget",
+        "fn": "format_duration_f64"
+      },
+      "normalization": "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（含「—」占位与「m/s」后缀；小数毫秒可比）。",
+      "args_schema": "{\"ms\": <毫秒（可为小数 / null / 缺省）>}",
+      "cases": [
+        {
+          "id": "f64-duration-none-null",
+          "args": {
+            "ms": null
+          },
+          "parity": "same",
+          "expected": "—"
+        },
+        {
+          "id": "f64-duration-none-absent",
+          "args": {},
+          "parity": "same",
+          "expected": "—"
+        },
+        {
+          "id": "f64-duration-negative",
+          "args": {
+            "ms": -0.5
+          },
+          "parity": "same",
+          "expected": "—"
+        },
+        {
+          "id": "f64-duration-zero",
+          "args": {
+            "ms": 0
+          },
+          "parity": "same",
+          "expected": "0ms"
+        },
+        {
+          "id": "f64-duration-integer",
+          "args": {
+            "ms": 86
+          },
+          "parity": "same",
+          "expected": "86ms"
+        },
+        {
+          "id": "f64-duration-half-up",
+          "args": {
+            "ms": 86.5
+          },
+          "parity": "same",
+          "expected": "87ms"
+        },
+        {
+          "id": "f64-duration-round-to-1000",
+          "args": {
+            "ms": 999.5
+          },
+          "parity": "same",
+          "expected": "1000ms"
+        },
+        {
+          "id": "f64-duration-just-below-1000",
+          "args": {
+            "ms": 999.9
+          },
+          "parity": "same",
+          "expected": "1000ms"
+        },
+        {
+          "id": "f64-duration-1000",
+          "args": {
+            "ms": 1000
+          },
+          "parity": "same",
+          "expected": "1.0s"
+        },
+        {
+          "id": "f64-duration-fractional-seconds",
+          "args": {
+            "ms": 1234.5
+          },
+          "parity": "same",
+          "expected": "1.2s"
+        },
+        {
+          "id": "f64-duration-59999_5",
+          "args": {
+            "ms": 59999.5
+          },
+          "parity": "same",
+          "expected": "60s"
+        },
+        {
+          "id": "f64-duration-60000",
+          "args": {
+            "ms": 60000
+          },
+          "parity": "same",
+          "expected": "1m00s"
+        },
+        {
+          "id": "f64-duration-60500_5",
+          "args": {
+            "ms": 60500.5
+          },
+          "parity": "same",
+          "expected": "1m01s"
         }
       ]
     }

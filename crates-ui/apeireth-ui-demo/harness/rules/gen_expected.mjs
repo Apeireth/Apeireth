@@ -83,12 +83,14 @@ async function loadProduction() {
   const governance = join(lib, 'governance');
   const ledger = await import(pathToFileURL(join(governance, 'ledger.ts')).href);
   const format = await import(pathToFileURL(join(governance, 'format.ts')).href);
+  const trace = await import(pathToFileURL(join(governance, 'trace.ts')).href);
+  const guard = await import(pathToFileURL(join(governance, 'guard.ts')).href);
   const runtime = await import(pathToFileURL(join(lib, 'runtime.ts')).href);
   const telemetry = await import(
     pathToFileURL(join(lib, 'chat-shell', 'turn-telemetry.ts')).href
   );
   const budget = await import(pathToFileURL(join(lib, 'budget.ts')).href);
-  return {ledger, format, runtime, telemetry, budget};
+  return {ledger, format, trace, guard, runtime, telemetry, budget};
 }
 
 // ── 归一化（与 Rust 侧适配器同口径；cases.json 的 `normalization` 字段登记同一句话） ──
@@ -140,6 +142,28 @@ function normalizeSessionTotals(view) {
     duration: view.duration,
     toolCalls: view.toolCalls,
   };
+}
+
+/** 留痕条目 ⇒ 归一化条目（detail 缺失与 null 一律归一为 null；键序固定）。 */
+function normalizeActivityItem(item) {
+  return {
+    id: item.id,
+    timestamp: item.timestamp,
+    title: item.title,
+    summary: item.summary,
+    source: item.source,
+    detail: item.detail ?? null,
+  };
+}
+
+/** 留痕条目数组 ⇒ {length, items}（顺序敏感）。 */
+function normalizeActivityItems(items) {
+  return {length: items.length, items: items.map(normalizeActivityItem)};
+}
+
+/** 徽标语义 ⇒ {variant, label}（键序固定）。 */
+function normalizeBadgePair(badge) {
+  return {variant: badge.variant, label: badge.label};
 }
 
 /** 生效值徽标 ⇒ 定长四字段对象。 */
@@ -246,7 +270,7 @@ function assertKnobRowsMatchProduction(rule, specs) {
 }
 
 /** 生产侧规则实现表（rule 名 ⇒ (args) => 归一化输出）。 */
-function buildImpls({ledger, format, runtime, telemetry, budget}) {
+function buildImpls({ledger, format, trace, guard, runtime, telemetry, budget}) {
   const specs = budget.BUDGET_KNOB_SPECS;
   return {
     is_approval_expired: ({entry, nowMs}) => ledger.isApprovalExpired(entry, nowMs),
@@ -299,6 +323,40 @@ function buildImpls({ledger, format, runtime, telemetry, budget}) {
       );
       return {length: rows.length, items: rows.map(normalizeRemainingRow)};
     },
+    // ── 治理卷宗 · 轨迹 / 留痕（`governance/trace.ts`）────────────────────
+    short_id: ({id, head}) =>
+      // ⚠️ 生产 `shortId(id, head = 8)` 的**默认 head = 8** ⇒ 用例省略 head 时
+      // ⇒ 走生产默认值（Rust 侧同样取 8 ⇒ 两侧同口径）。
+      format.shortId(id, head ?? 8),
+    span_depth: ({spans, span}) => trace.spanDepth(spans, span),
+    span_duration_ms: ({span}) => trace.spanDurationMs(span),
+    span_status_badge: ({status}) => normalizeBadgePair(trace.spanStatusBadge(status)),
+    audit_event_group: ({eventName}) => trace.auditEventGroup(eventName),
+    audit_group_chips: ({items}) => {
+      const chips = trace.auditGroupChips(items);
+      return {
+        length: chips.length,
+        items: chips.map((chip) => ({group: chip.group, count: chip.count})),
+      };
+    },
+    filter_audit_items: ({items, group}) =>
+      normalizeActivityItems(trace.filterAuditItems(items, group)),
+    // ── 治理卷宗 · 守卫（`governance/guard.ts`）──────────────────────────
+    guard_decision_badge: ({decision}) =>
+      normalizeBadgePair(guard.guardDecisionBadge(decision)),
+    guard_stage_label: ({stage}) => guard.guardStageLabel(stage),
+    risk_score_percent: ({score}) => guard.riskScorePercent(score),
+    guard_event_row: ({event}) => {
+      const row = guard.guardEventRow(event);
+      return {
+        id: row.id,
+        badge: {variant: row.badge.variant, label: row.badge.label},
+        stageLabel: row.stageLabel,
+        riskPct: row.riskPct,
+      };
+    },
+    // ── 小数毫秒面（生产 `formatDuration` 收 `number` ⇒ 可小数）──────────
+    format_duration_f64: ({ms}) => telemetry.formatDuration(ms ?? null),
   };
 }
 
@@ -352,7 +410,7 @@ async function main() {
     mode: '--experimental-strip-types',
     tz: TIME_ZONE,
     production:
-      'frontend/companion-desktop/src/lib/{governance/ledger.ts,governance/format.ts,runtime.ts,chat-shell/turn-telemetry.ts,budget.ts}',
+      'frontend/companion-desktop/src/lib/{governance/ledger.ts,governance/format.ts,governance/trace.ts,governance/guard.ts,runtime.ts,chat-shell/turn-telemetry.ts,budget.ts}',
   };
 
   const rendered = `${JSON.stringify(doc, null, 2)}\n`;

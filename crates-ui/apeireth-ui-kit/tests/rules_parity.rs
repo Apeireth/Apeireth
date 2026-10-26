@@ -36,17 +36,20 @@
 #![forbid(unsafe_code)]
 
 use apeireth_ui_kit::governance_tab::{
-    approval_filter_counts, capability_available, capability_unavailable_reason,
-    filter_approval_ledger, find_capability, format_clock_ms, format_date_time_ms,
-    format_duration_ms, format_relative_ms, is_approval_expired, merge_session_inbox,
-    set_time_text_formatter, ApprovalFilter, ApprovalLedgerEntry, Capability, CapabilityGroup,
-    CapabilityManifest, PendingApproval, TimeTextFormatter,
+    approval_filter_counts, audit_event_group, audit_group_chips, capability_available,
+    capability_unavailable_reason, filter_approval_ledger, filter_audit_items, find_capability,
+    format_clock_ms, format_date_time_ms, format_duration_ms, format_relative_ms,
+    guard_decision_badge, guard_event_row, guard_stage_label, is_approval_expired,
+    merge_session_inbox, risk_score_percent, set_time_text_formatter, short_id, span_depth,
+    span_duration_ms, span_status_badge, ActivityItem, ApprovalFilter, ApprovalLedgerEntry,
+    BadgeVariant, Capability, CapabilityGroup, CapabilityManifest, GuardEvent, PendingApproval,
+    TimeTextFormatter, TraceSpanItem,
 };
 use apeireth_ui_kit::settings_budget::{
     budget_knob_badge, budget_remaining_rows, effective_budget, format_duration,
-    format_session_totals, resolve_budget_limit_input, BudgetBadge, BudgetKnobResolution,
-    BudgetRemainingRow, KnobKey, KnobResolutionStatus, KnobRow, KnobValues, OutOfRange,
-    SessionUsageTotals, ICON_INFO,
+    format_duration_f64, format_session_totals, resolve_budget_limit_input, BudgetBadge,
+    BudgetKnobResolution, BudgetRemainingRow, KnobKey, KnobResolutionStatus, KnobRow, KnobValues,
+    OutOfRange, SessionUsageTotals, ICON_INFO,
 };
 use apeireth_ui_kit::IconData;
 
@@ -379,6 +382,12 @@ const JS_DATE_LIMIT_MS: i64 = 8_640_000_000_000_000;
 /// 装置的时区名（**必须与 `cases.json` 的 `generator.tz` 一致** ⇒ 自检断言）。
 const TIME_ZONE_LABEL: &str = "Asia/Shanghai";
 
+/// 生产 `shortId(id, head = 8)` 的**默认 head**。
+///
+/// ⚠️ Rust 侧的 `short_id(id, head)` **没有默认参数** ⇒ 用例省略 `head` 时
+/// ⇒ 装置**显式**补 8 ⇒ 与生产默认值同口径（若生产默认值改了 ⇒ 装置变红）。
+const SHORT_ID_DEFAULT_HEAD: usize = 8;
+
 /// 距 1970-01-01 的天数 ⇒ 民用日历日（Howard Hinnant 的 `civil_from_days`）。
 ///
 /// ⚠️ 与 `governance_tab` 里的同名私有助手**同算法**（那里是私有的 ⇒ 夹具自带一份；
@@ -691,6 +700,54 @@ const NORMALIZATIONS: &[(&str, &str)] = &[
         "budget_remaining_rows",
         "数组 ⇒ 长度 + 每行归一化：{\"length\": n, \"items\": [{\"key\", \"label\", \"scope\", \"cap\", \"used\", \"remaining\", \"ratio\"}]}；ratio 为数字或 null（逐值相等）；行序敏感（固定七行）。",
     ),
+    (
+        "short_id",
+        "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（按 UTF-16 码元计数与截断；截断位补「…」；head 缺省 ⇒ 两侧同取 8）。",
+    ),
+    (
+        "span_depth",
+        "整数原样：TS 的 number ⇒ JSON number；Rust 的 usize ⇒ JSON number ⇒ 逐值相等（父链深度；上限 6；环由 visited 集合截断）。",
+    ),
+    (
+        "span_duration_ms",
+        "数值或 null：TS 的 number | null ⇒ JSON number | null；Rust 的 Option<f64> ⇒ 同 ⇒ 逐值相等（未收口 ⇒ null；负时长钳到 0）。",
+    ),
+    (
+        "span_status_badge",
+        "两字段对象：{\"variant\": \"green\"|\"danger\"|\"blue\"|\"dim\", \"label\": 字符串}（Rust 的 BadgeVariant 取 class_name ⇒ 与 TS 字面量同形；label 逐码点相等）。",
+    ),
+    (
+        "audit_event_group",
+        "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（取首段并去空白；空 ⇒ 「other」）。",
+    ),
+    (
+        "audit_group_chips",
+        "数组 ⇒ 长度 + 每行两字段：{\"length\": n, \"items\": [{\"group\": 字符串, \"count\": 整数}]}；按 count 倒序（两侧皆稳定排序 ⇒ 同计数按首次出现序）；行序敏感。",
+    ),
+    (
+        "filter_audit_items",
+        "数组 ⇒ 长度 + 每项归一化条目：{\"length\": n, \"items\": [{\"id\", \"timestamp\", \"title\", \"summary\", \"source\", \"detail\"}]}；detail 缺失与 null 一律归一为 null；条目顺序敏感（保序筛选）。",
+    ),
+    (
+        "guard_decision_badge",
+        "两字段对象：{\"variant\": \"green\"|\"danger\"|\"amber\"|\"blue\"|\"dim\", \"label\": 字符串}（Rust 的 BadgeVariant 取 class_name ⇒ 与 TS 字面量同形；label 逐码点相等）。",
+    ),
+    (
+        "guard_stage_label",
+        "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（三段管线中文名；未知名原样返回）。",
+    ),
+    (
+        "risk_score_percent",
+        "整数原样：TS 的 number ⇒ JSON number；Rust 的 i64 ⇒ JSON number ⇒ 逐值相等（0..1 钳制后 ×100 取整，半数向 +∞）。",
+    ),
+    (
+        "guard_event_row",
+        "四字段对象：{\"id\": 字符串, \"badge\": {\"variant\", \"label\"}, \"stageLabel\": 字符串, \"riskPct\": 整数}（徽标 = 守卫决策徽标语义；riskPct = 风险百分比；键序固定）。",
+    ),
+    (
+        "format_duration_f64",
+        "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（含「—」占位与「m/s」后缀；小数毫秒可比）。",
+    ),
 ];
 
 // ── 适配器：JSON 输入 ⇒ 各自语言的类型 ⇒ 各自函数 ⇒ 归一化 JSON ──────────
@@ -949,6 +1006,162 @@ fn build_filter(value: &Json) -> Result<ApprovalFilter, String> {
         Some("expired") => Ok(ApprovalFilter::Expired),
         other => Err(format!("filter 期望 all/open/expired，实际是 {other:?}")),
     }
+}
+
+/// 可选浮点数（缺省 / `null` ⇒ `None`）。
+fn optional_f64(value: Option<&Json>) -> Result<Option<f64>, String> {
+    match value {
+        None | Some(Json::Null) => Ok(None),
+        Some(Json::Number(number)) => Ok(Some(*number)),
+        Some(other) => Err(format!("期望数值，实际是 {}", render(other))),
+    }
+}
+
+/// 必填浮点数（缺省 ⇒ 显式失败 ⇒ 不静默当 0）。
+fn required_f64(value: &Json, key: &str) -> Result<f64, String> {
+    optional_f64(value.get(key))?.ok_or_else(|| format!("缺字段 {key}"))
+}
+
+/// 可选非负整数（缺省 / `null` ⇒ `None`）。
+fn optional_usize(value: Option<&Json>) -> Result<Option<usize>, String> {
+    match value {
+        None | Some(Json::Null) => Ok(None),
+        Some(Json::Number(number)) => {
+            if number.fract() != 0.0 || *number < 0.0 {
+                return Err(format!("期望非负整数，实际是 {number}"));
+            }
+            Ok(Some(*number as usize))
+        }
+        Some(other) => Err(format!("期望非负整数，实际是 {}", render(other))),
+    }
+}
+
+/// JSON 字符串数组 ⇒ Rust 字符串数组（缺省 / `null` ⇒ 空数组）。
+fn build_string_list(value: Option<&Json>) -> Result<Vec<String>, String> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    if matches!(value, Json::Null) {
+        return Ok(Vec::new());
+    }
+    let items = value
+        .as_array()
+        .ok_or_else(|| "期望字符串数组".to_owned())?;
+    items
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "期望字符串数组".to_owned())
+        })
+        .collect()
+}
+
+/// JSON span 条目 ⇒ Rust span 条目。
+///
+/// ⚠️ 规则只读 `span_id` / `parent_span_id` / `started_at` / `ended_at`；
+/// 其余字段是**夹具填充**（Rust 结构体要求非缺省 ⇒ 置空串 / `None`）。
+fn build_trace_span(value: &Json) -> Result<TraceSpanItem, String> {
+    Ok(TraceSpanItem {
+        span_id: required_string(value, "span_id")?,
+        parent_span_id: optional_string(value.get("parent_span_id"))?,
+        kind: required_string(value, "kind")?,
+        actor: required_string(value, "actor")?,
+        status: required_string(value, "status")?,
+        summary: optional_string(value.get("summary"))?,
+        started_at: required_f64(value, "started_at")?,
+        ended_at: optional_f64(value.get("ended_at"))?,
+    })
+}
+
+/// JSON span 条目数组 ⇒ Rust span 条目数组（缺省 / `null` ⇒ 空数组）。
+fn build_trace_spans(value: Option<&Json>) -> Result<Vec<TraceSpanItem>, String> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    if matches!(value, Json::Null) {
+        return Ok(Vec::new());
+    }
+    let items = value
+        .as_array()
+        .ok_or_else(|| "spans 期望数组".to_owned())?;
+    items.iter().map(build_trace_span).collect()
+}
+
+/// JSON 留痕条目 ⇒ Rust 留痕条目。
+///
+/// ⚠️ 规则只读 `title`；其余字段是**夹具填充**（Rust 结构体要求非缺省 ⇒ 置空串）。
+fn build_activity_item(value: &Json) -> Result<ActivityItem, String> {
+    Ok(ActivityItem {
+        id: required_string(value, "id")?,
+        timestamp: required_i64(value, "timestamp")?,
+        title: required_string(value, "title")?,
+        summary: required_string(value, "summary")?,
+        source: required_string(value, "source")?,
+        detail: optional_string(value.get("detail"))?,
+    })
+}
+
+/// JSON 留痕条目数组 ⇒ Rust 留痕条目数组（缺省 / `null` ⇒ 空数组）。
+fn build_activity_items(value: Option<&Json>) -> Result<Vec<ActivityItem>, String> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    if matches!(value, Json::Null) {
+        return Ok(Vec::new());
+    }
+    let items = value
+        .as_array()
+        .ok_or_else(|| "items 期望数组".to_owned())?;
+    items.iter().map(build_activity_item).collect()
+}
+
+/// JSON 守卫事件 ⇒ Rust 守卫事件。
+fn build_guard_event(value: &Json) -> Result<GuardEvent, String> {
+    Ok(GuardEvent {
+        timestamp_ms: required_i64(value, "timestamp_ms")?,
+        session_id: required_string(value, "session_id")?,
+        trace_id: required_string(value, "trace_id")?,
+        round: required_i64(value, "round")?,
+        capability_id: required_string(value, "capability_id")?,
+        stage: required_string(value, "stage")?,
+        decision: required_string(value, "decision")?,
+        risk_score: required_f64(value, "risk_score")?,
+        reasons: build_string_list(value.get("reasons"))?,
+        evidence: build_string_list(value.get("evidence"))?,
+    })
+}
+
+/// Rust 留痕条目 ⇒ 归一化 JSON（键序固定；`detail` 缺失 ⇒ `null`）。
+fn normalize_activity_item(item: &ActivityItem) -> Json {
+    Json::Object(vec![
+        (String::from("id"), Json::String(item.id.clone())),
+        (
+            String::from("timestamp"),
+            Json::Number(item.timestamp as f64),
+        ),
+        (String::from("title"), Json::String(item.title.clone())),
+        (String::from("summary"), Json::String(item.summary.clone())),
+        (String::from("source"), Json::String(item.source.clone())),
+        (
+            String::from("detail"),
+            match &item.detail {
+                Some(text) => Json::String(text.clone()),
+                None => Json::Null,
+            },
+        ),
+    ])
+}
+
+/// Rust 徽标语义 ⇒ 归一化 JSON（`variant` 取 `class_name` ⇒ 与 TS 字面量同形）。
+fn normalize_badge_pair(variant: BadgeVariant, label: &str) -> Json {
+    Json::Object(vec![
+        (
+            String::from("variant"),
+            Json::String(String::from(variant.class_name())),
+        ),
+        (String::from("label"), Json::String(label.to_owned())),
+    ])
 }
 
 // ── 预算类规则的适配件（**旋钮行从 JSON 构造**） ──────────────────────────
@@ -1290,6 +1503,106 @@ fn eval(rule: &Rule, args: &Json) -> Result<Json, String> {
                 ),
             ]))
         }
+        "short_id" => {
+            let id = required_string(args, "id")?;
+            // ⚠️ 生产 `shortId(id, head = 8)` 的**默认 head = 8**
+            // ⇒ 用例省略 head 时 ⇒ 两侧同取 8（Rust 侧没有默认参数 ⇒ 装置显式补）。
+            let head = optional_usize(args.get("head"))?.unwrap_or(SHORT_ID_DEFAULT_HEAD);
+            Ok(Json::String(short_id(&id, head)))
+        }
+        "span_depth" => {
+            let spans = build_trace_spans(args.get("spans"))?;
+            let span =
+                build_trace_span(args.get("span").ok_or_else(|| "args 缺 span".to_owned())?)?;
+            Ok(Json::Number(span_depth(&spans, &span) as f64))
+        }
+        "span_duration_ms" => {
+            let span =
+                build_trace_span(args.get("span").ok_or_else(|| "args 缺 span".to_owned())?)?;
+            Ok(match span_duration_ms(&span) {
+                Some(value) => Json::Number(value),
+                None => Json::Null,
+            })
+        }
+        "span_status_badge" => {
+            let status = required_string(args, "status")?;
+            let (variant, label) = span_status_badge(&status);
+            Ok(normalize_badge_pair(variant, &label))
+        }
+        "audit_event_group" => {
+            let event_name = required_string(args, "eventName")?;
+            Ok(Json::String(audit_event_group(&event_name)))
+        }
+        "audit_group_chips" => {
+            let items = build_activity_items(args.get("items"))?;
+            let chips = audit_group_chips(&items);
+            let rows: Vec<Json> = chips
+                .iter()
+                .map(|(group, count)| {
+                    Json::Object(vec![
+                        (String::from("group"), Json::String(group.clone())),
+                        (String::from("count"), Json::Number(*count as f64)),
+                    ])
+                })
+                .collect();
+            Ok(Json::Object(vec![
+                (String::from("length"), Json::Number(chips.len() as f64)),
+                (String::from("items"), Json::Array(rows)),
+            ]))
+        }
+        "filter_audit_items" => {
+            let items = build_activity_items(args.get("items"))?;
+            let group = required_string(args, "group")?;
+            let selected = filter_audit_items(&items, &group);
+            Ok(Json::Object(vec![
+                (String::from("length"), Json::Number(selected.len() as f64)),
+                (
+                    String::from("items"),
+                    Json::Array(
+                        selected
+                            .iter()
+                            .map(|item| normalize_activity_item(item))
+                            .collect(),
+                    ),
+                ),
+            ]))
+        }
+        "guard_decision_badge" => {
+            let decision = required_string(args, "decision")?;
+            let (variant, label) = guard_decision_badge(&decision);
+            Ok(normalize_badge_pair(variant, &label))
+        }
+        "guard_stage_label" => {
+            let stage = required_string(args, "stage")?;
+            Ok(Json::String(guard_stage_label(&stage)))
+        }
+        "risk_score_percent" => {
+            let score = required_f64(args, "score")?;
+            Ok(Json::Number(risk_score_percent(score) as f64))
+        }
+        "guard_event_row" => {
+            let event = build_guard_event(
+                args.get("event")
+                    .ok_or_else(|| "args 缺 event".to_owned())?,
+            )?;
+            let row = guard_event_row(&event);
+            let (variant, label) = row.badge;
+            Ok(Json::Object(vec![
+                (String::from("id"), Json::String(row.id.clone())),
+                (String::from("badge"), normalize_badge_pair(variant, &label)),
+                (
+                    String::from("stageLabel"),
+                    Json::String(row.stage_label.clone()),
+                ),
+                (String::from("riskPct"), Json::Number(row.risk_pct as f64)),
+            ]))
+        }
+        "format_duration_f64" => {
+            // ⚠️ 生产 `formatDuration` 收 `number` ⇒ **可小数**
+            // ⇒ Rust 侧走 `format_duration_f64`（`format_duration` 的薄封装同实现）。
+            let ms = optional_f64(args.get("ms"))?;
+            Ok(Json::String(format_duration_f64(ms)))
+        }
         other => Err(format!("规则「{other}」没有 Rust 侧适配器")),
     }
 }
@@ -1588,4 +1901,76 @@ fn effective_budget_matches_production_typescript() {
 #[test]
 fn budget_remaining_rows_matches_production_typescript() {
     assert_rule("budget_remaining_rows");
+}
+
+/// `short_id`：TS ↔ Rust 逐字一致（UTF-16 码元口径）。
+#[test]
+fn short_id_matches_production_typescript() {
+    assert_rule("short_id");
+}
+
+/// `span_depth`：TS ↔ Rust 逐字一致。
+#[test]
+fn span_depth_matches_production_typescript() {
+    assert_rule("span_depth");
+}
+
+/// `span_duration_ms`：TS ↔ Rust 逐字一致。
+#[test]
+fn span_duration_ms_matches_production_typescript() {
+    assert_rule("span_duration_ms");
+}
+
+/// `span_status_badge`：TS ↔ Rust 逐字一致。
+#[test]
+fn span_status_badge_matches_production_typescript() {
+    assert_rule("span_status_badge");
+}
+
+/// `audit_event_group`：TS ↔ Rust 逐字一致。
+#[test]
+fn audit_event_group_matches_production_typescript() {
+    assert_rule("audit_event_group");
+}
+
+/// `audit_group_chips`：TS ↔ Rust 逐字一致。
+#[test]
+fn audit_group_chips_matches_production_typescript() {
+    assert_rule("audit_group_chips");
+}
+
+/// `filter_audit_items`：TS ↔ Rust 逐字一致。
+#[test]
+fn filter_audit_items_matches_production_typescript() {
+    assert_rule("filter_audit_items");
+}
+
+/// `guard_decision_badge`：TS ↔ Rust 逐字一致。
+#[test]
+fn guard_decision_badge_matches_production_typescript() {
+    assert_rule("guard_decision_badge");
+}
+
+/// `guard_stage_label`：TS ↔ Rust 逐字一致。
+#[test]
+fn guard_stage_label_matches_production_typescript() {
+    assert_rule("guard_stage_label");
+}
+
+/// `risk_score_percent`：TS ↔ Rust 逐字一致。
+#[test]
+fn risk_score_percent_matches_production_typescript() {
+    assert_rule("risk_score_percent");
+}
+
+/// `guard_event_row`：TS ↔ Rust 逐字一致。
+#[test]
+fn guard_event_row_matches_production_typescript() {
+    assert_rule("guard_event_row");
+}
+
+/// `format_duration_f64`：TS ↔ Rust 逐字一致（**小数毫秒面**）。
+#[test]
+fn format_duration_f64_matches_production_typescript() {
+    assert_rule("format_duration_f64");
 }
