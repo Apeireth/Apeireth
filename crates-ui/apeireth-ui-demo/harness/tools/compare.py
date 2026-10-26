@@ -432,6 +432,86 @@ def card_box(cdp: Cdp) -> dict:
     return json.loads(raw) if raw else None
 
 
+def wait_element_box_stable(
+    cdp: Cdp,
+    selector: str,
+    get_box=None,
+    timeout: float = 6.0,
+    interval: float = 0.2,
+) -> dict:
+    """⭐ **等元素尺寸稳定**再取裁剪框（2026-10-26 实测加的）。
+
+    ## 为什么需要它
+
+    对照里有一类操作会**改变元素尺寸/位置**（例如把 stage 平移以便两侧落在
+    **同一个设备像素格**上）⇒ ⇒ 之后要立刻取**裁剪框**去截图。
+
+    ⇒ ⇒ 但**布局/尺寸更新是异步的**（真实 GPU 上尤其明显：合成与重排都更慢）
+    ⇒ ⇒ 于是立刻取框会拿到**旧框** ⇒ ⇒ 截出来的图**尺寸与参考侧不同**
+    ⇒ ⇒ ⇒ `compare.pixel_diff` 在**尺寸不同**时直接返回 `ratio = 1.0`
+    ⇒ ⇒ ⇒ 判据会报「**逐像素 100% 不同**」—— 而那**不是**像素差异，是**框错了**。
+
+    ⭐ 2026-10-26 在**真实 GPU**（AMD RADV）上实测踩到：
+    `data` 面的 `t1_all_pixels_zero` 报 `ratio = 1.0`、`t3b_same_height` 失败，
+    而**同一轮落盘的 PNG 与参考侧逐像素完全相同**（差异 0）
+    ⇒ ⇒ ⇒ 根因就是「**判据那张的裁剪框是旧的**」。
+
+    ⇒ ⇒ 这里轮询取框 ⇒ ⇒ **连续两次相同**即视为稳定 ⇒ ⇒ 返回最后的框。
+    ⇒ ⇒ ⚠️ 超时**不静默**：返回最后的框 ⇒ ⇒ 判据照常暴露差异。
+    """
+    # ⚠️ 取框的函数**由调用方提供** ⇒ ⇒ 本模块不依赖各面自己的
+    # `element_box` 实现（各面的选择器/口径可能不同）⇒ ⇒ 通用。
+    getter = get_box if get_box is not None else (
+        lambda: element_box(cdp, selector)
+    )
+    deadline = time.monotonic() + timeout
+    previous = getter()
+    while time.monotonic() < deadline:
+        time.sleep(interval)
+        current = getter()
+        if current == previous:
+            return current
+        previous = current
+    return previous
+
+
+def wait_stable(
+    cdp: Cdp,
+    box: dict | None = None,
+    timeout: float = 6.0,
+    interval: float = 0.25,
+) -> bytes:
+    """⭐ **等画面稳定**再截图（2026-10-26 实测加的）。
+
+    ## 为什么需要它
+
+    引擎的 DOM 补丁是**同步**的（`renderer.patch(tree)` 立刻改 DOM）
+    ⇒ ⇒ 但**浏览器把 DOM 合成到屏幕是异步的**
+    ⇒ ⇒ 于是「DOM 已更新」**不等于**「屏幕已呈现」
+    ⇒ ⇒ ⇒ 截图可能截到**合成之前**的画面 ⇒ ⇒ 判据会读到**旧/空**画面。
+
+    ⭐ 2026-10-26 在**真实 GPU**（AMD RADV）上实测踩到：
+    `data` 面的判据读到 **ratio = 1.0**（**逐像素 100% 不同**）
+    ⇒ ⇒ 而同一轮**落盘的 PNG 与参考侧逐像素完全相同**（差异 0）
+    ⇒ ⇒ ⇒ 说明**判据那张截早了** ⇒ ⇒ 不是「引擎没画」，是「**没等合成**」。
+
+    ⇒ ⇒ 这里连拍两张、间隔 `interval` ⇒ ⇒ **连续两次相同**即视为稳定 ⇒ ⇒ 返回最后一张。
+    ⇒ ⇒ ⚠️ 用**像素级**判同 ⇒ ⇒ 不会把「静止的错误画面」误判成「未稳定」
+    ⇒ ⇒ （静止的错误画面**两次也相同** ⇒ ⇒ 直接返回 ⇒ ⇒ 不会掩盖真问题）。
+
+    ⇒ ⇒ **超时**时返回**最后一张**（并让判据照常暴露差异 ⇒ ⇒ 不静默放行）。
+    """
+    deadline = time.monotonic() + timeout
+    previous = screenshot(cdp, box)
+    while time.monotonic() < deadline:
+        time.sleep(interval)
+        current = screenshot(cdp, box)
+        if current == previous:
+            return current
+        previous = current
+    return previous
+
+
 def screenshot(cdp: Cdp, box: dict | None = None) -> bytes:
     params = {"format": "png"}
     if box:

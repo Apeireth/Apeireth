@@ -290,8 +290,8 @@ def collect_pair(panel: str, section: str, port: int) -> dict:
             % (delta_y, delta_x)
         )
         time.sleep(0.3)
-        eng_box_after = element_box(cdp, ENGINE_SELECTOR)
-        engine_shot = compare.screenshot(cdp, eng_box_after)
+        eng_box_after = compare.wait_element_box_stable(cdp, ENGINE_SELECTOR, get_box=lambda: element_box(cdp, ENGINE_SELECTOR))
+        engine_shot = compare.wait_stable(cdp, eng_box_after)
         unaligned = compare.pixel_diff(shots["reference"]["shot"], shots["engine"]["shot"])
         shots["engine"]["shot"] = engine_shot
         shots["engine"]["box"] = eng_box_after
@@ -420,8 +420,8 @@ def main() -> int:
                     % (delta_y, delta_x)
                 )
                 time.sleep(0.3)
-                eng_box_after = element_box(cdp, ENGINE_SELECTOR)
-                engine_shot = compare.screenshot(cdp, eng_box_after)
+                eng_box_after = compare.wait_element_box_stable(cdp, ENGINE_SELECTOR, get_box=lambda: element_box(cdp, ENGINE_SELECTOR))
+                engine_shot = compare.wait_stable(cdp, eng_box_after)
                 unaligned = compare.pixel_diff(shots["reference"]["shot"], shots["engine"]["shot"])
                 shots["engine"]["shot"] = engine_shot
                 shots["engine"]["box"] = eng_box_after
