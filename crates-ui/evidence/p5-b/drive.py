@@ -310,6 +310,73 @@ def flipped_diff_stats(left_path, right_path, threshold=CHANNEL_THRESHOLD):
     }
 
 
+def crop_stats(left_path, right_path, crop_box, threshold=CHANNEL_THRESHOLD):
+    """差分（**左侧先裁剪**）：用于「同一场景、不同画布尺寸」的对照。
+
+    场景着色器是 `gl_FragCoord` 的**纯函数**（几何全在设备像素里）⇒
+    ⇒ 画布从 960×600 缩到 720×600 时，画面应当是**原图的左侧 720 列**
+    （= **裁剪**，不是**缩放**）⇒ ⇒ 「裁剪 vs 引擎实拍」逐像素差 = 0
+    ⇒ ⇒ 这一条同时证明「尺寸真的生效」与「画面没有被拉伸」。
+    """
+    left = load_rgb(left_path).crop(crop_box)
+    right = load_rgb(right_path)
+    if left.size != right.size:
+        return {
+            "comparable": False,
+            "left_size": list(left.size),
+            "right_size": list(right.size),
+            "pixels_compared": 0,
+            "differing_pixels": None,
+            "differing_ratio": None,
+            "max_channel_delta": None,
+        }
+    difference = ImageChops.difference(left, right)
+    red, green, blue = difference.split()
+    worst = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    histogram = worst.histogram()
+    differing = sum(histogram[threshold + 1 :])
+    total = left.size[0] * left.size[1]
+    return {
+        "comparable": True,
+        "left_size": list(left.size),
+        "right_size": list(right.size),
+        "pixels_compared": total,
+        "differing_pixels": differing,
+        "differing_ratio": differing / total if total else 0.0,
+        "max_channel_delta": worst.getextrema()[1],
+        "channel_threshold": threshold,
+    }
+
+
+def squeeze_stats(source_path, right_path, size, threshold=CHANNEL_THRESHOLD):
+    """**反事实**对照：把源图**缩放**到 `size` 再与右侧比。
+
+    用途：证明「resize 腿的判据是**灵敏**的」—— 若引擎**没有**跟上尺寸
+    （表面仍是旧尺寸 ⇒ 浏览器把旧画面**缩放**到新画布）⇒ 差分必然**很大**；
+    ⇒ 与「裁剪 = 0 差异」并列 ⇒ ⇒ 0 差异不是因为「判据不灵敏」。
+    """
+    source = load_rgb(source_path).resize(size, Image.LANCZOS)
+    right = load_rgb(right_path)
+    if source.size != right.size:
+        return {"comparable": False, "left_size": list(source.size), "right_size": list(right.size)}
+    difference = ImageChops.difference(source, right)
+    red, green, blue = difference.split()
+    worst = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    histogram = worst.histogram()
+    differing = sum(histogram[threshold + 1 :])
+    total = source.size[0] * source.size[1]
+    return {
+        "comparable": True,
+        "left_size": list(source.size),
+        "right_size": list(right.size),
+        "pixels_compared": total,
+        "differing_pixels": differing,
+        "differing_ratio": differing / total if total else 0.0,
+        "max_channel_delta": worst.getextrema()[1],
+        "channel_threshold": threshold,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
@@ -499,6 +566,70 @@ def main():
             engine.evaluate(f"window.__P5B_REDRAW__.stop({json.dumps(backend)}); true")
         capture(engine, out_dir / "engine.page.png")
 
+        # ── 阶段 2′：⭐ resize **自侦测**腿（引擎必须**自己**跟上画布尺寸）────
+        #
+        # 探针**只**改画布的 `width/height`（**不调**任何引擎 resize 接口
+        # ⇒ 引擎页里根本没有这种接口）⇒ ⇒ 引擎能跟上**只能**靠**引擎自己**
+        # 侦测（`EngineOptions::canvas_size` ⇒ 每帧比对）。
+        #
+        # 尺寸取 **960×600 → 720×600**（**比例不同** ⇒ 构图变化可测）。
+        #
+        # ⚠ **两个后端各跑一遍**：WebGPU 后端改 `canvas.width/height` 会**作废
+        #   交换链** ⇒ ⇒ 这一腿同时验「交换链作废后能**自动**恢复」。
+        resize_leg = {"skipped": True, "backends": {}}
+        for resize_backend in ("webgl", "webgpu"):
+            try:
+                box = element_box(engine, resize_backend)
+                if not box:
+                    continue
+                # ① 持续重绘（drawing buffer 永远有内容 ⇒ 截图对时序不敏感）。
+                engine.evaluate(
+                    f"window.__P5B_REDRAW__.start({json.dumps(resize_backend)}); true"
+                )
+                time.sleep(0.5)
+                before_state = engine.evaluate(
+                    f"window.__P5B_PROBE__.surfaceState({json.dumps(resize_backend)})"
+                )
+                capture(
+                    engine,
+                    out_dir / f"resize.{resize_backend}.before.png",
+                    clip=clip_of(box),
+                )
+
+                # ② 探针改画布尺寸（比例不同：960×600 → 720×600）。
+                engine.evaluate(
+                    f"window.__P5B_PROBE__.resizeCanvas({json.dumps(resize_backend)}, 720, 600); true"
+                )
+                # ③ 等引擎至少画一帧（自侦测发生在 `draw_frame` 里）。
+                time.sleep(1.0)
+                after_state = engine.evaluate(
+                    f"window.__P5B_PROBE__.surfaceState({json.dumps(resize_backend)})"
+                )
+                box_after = element_box(engine, resize_backend)
+                capture(
+                    engine,
+                    out_dir / f"resize.{resize_backend}.after.png",
+                    clip=clip_of(box_after),
+                )
+                engine.evaluate(
+                    f"window.__P5B_REDRAW__.stop({json.dumps(resize_backend)}); true"
+                )
+                resize_leg["backends"][resize_backend] = {
+                    "skipped": False,
+                    "backend": resize_backend,
+                    "canvas_before": [960, 600],
+                    "canvas_after": [720, 600],
+                    "surface_before": before_state,
+                    "surface_after": after_state,
+                }
+            except Exception as error:  # noqa: BLE001 —— 驱动层：失败要**显式**记下来
+                resize_leg["backends"][resize_backend] = {
+                    "skipped": True,
+                    "error": str(error),
+                }
+                collect_console(engine, console_log, "engine")
+        resize_leg["skipped"] = not resize_leg["backends"]
+
         # ── 阶段 3：逐像素对照 ───────────────────────────────────────────
         production_png = out_dir / "production.canvas.png"
         webgl_stats = diff_stats(production_png, out_dir / "webgl.canvas.png")
@@ -513,6 +644,34 @@ def main():
             diagnostics["webgpu_vs_vertically_flipped"] = flipped_diff_stats(
                 production_png, out_dir / "webgpu.canvas.png"
             )
+
+        # ── 阶段 3′：resize 腿的逐像素判据 ──────────────────────────────
+        #
+        # 场景着色器是 `gl_FragCoord` 的**纯函数**（几何全在设备像素里）⇒
+        # ⇒ 画布从 960×600 变成 720×600 时，画面应当是**原图左侧 720 列**
+        # （= **裁剪**，不是**缩放**）⇒ ⇒ 判据：
+        #   ① 「生产图裁剪 720 列」 vs 「引擎 resize 后的实拍」 ⇒ **0 差异**
+        #      ⇒ 同时证明「尺寸真的生效」**与**「画面没有被拉伸」；
+        #   ② 「resize 前的实拍裁剪 720 列」 vs 「resize 后的实拍」 ⇒ **0 差异**
+        #      ⇒ 证明画面是**裁剪**而非**缩放**（构图真的随尺寸变了）；
+        #   ③ **反事实**：把生产图**缩放**到 720×600 再比 ⇒ 差异**必须很大**
+        #      ⇒ 证明判据①是**灵敏**的（0 差异不是因为「怎么比都一样」）。
+        for resize_backend, leg in resize_leg.get("backends", {}).items():
+            if leg.get("skipped"):
+                continue
+            after_png = out_dir / f"resize.{resize_backend}.after.png"
+            before_png = out_dir / f"resize.{resize_backend}.before.png"
+            leg["pixel_diff"] = {
+                "production_crop_vs_engine_after": crop_stats(
+                    production_png, after_png, (0, 0, 720, 600)
+                ),
+                "before_crop_vs_engine_after": crop_stats(
+                    before_png, after_png, (0, 0, 720, 600)
+                ),
+                "counterfactual_squeezed_production_vs_engine_after": squeeze_stats(
+                    production_png, after_png, (720, 600)
+                ),
+            }
 
         webgl_report = reports.get("webgl", {})
         webgpu_report = reports.get("webgpu", {})
@@ -576,9 +735,95 @@ def main():
         )
         criteria["webgl_leg_ok"] = webgl_leg_ok
         criteria["webgpu_leg_ok"] = webgpu_leg_ok if webgpu_verifiable else None
+
+        # ── resize **自侦测**腿的判据 ────────────────────────────────────
+        #
+        # ① 引擎**自己**把表面改到了新尺寸（宿主**没有**调任何 resize 接口）；
+        # ② 表面**代号** +1（⇒ 表面确实被重新配置过 ⇒ 交换链重建）；
+        # ③ 自动 resize 计数 +1（⇒ 是**自动**路径，不是宿主显式调用）；
+        # ④ 画面 = 生产图**裁剪** 720 列（0 差异）⇒ 新尺寸**真的生效**，
+        #    且画面**没有被拉伸**。
+        #
+        # ⚠ **逐后端判定**：某个后端不可验证（宿主没给适配器 / 探针失败）
+        #   ⇒ 那一腿**不可验证**（非通过、非失败）⇒ 判定退到**实际跑过的那腿**。
+        resize_leg_criteria = {}
+        resize_ok = True
+        resize_verified_any = False
+        for resize_backend, leg in resize_leg.get("backends", {}).items():
+            if leg.get("skipped"):
+                resize_leg_criteria[resize_backend] = {
+                    "verifiable": False,
+                    "note": "该后端的 resize 腿未跑成 ⇒ **不可验证**（非通过、非失败）",
+                    "error": leg.get("error"),
+                }
+                continue
+            before_state = leg.get("surface_before", {})
+            after_state = leg.get("surface_after", {})
+            pixel = leg.get("pixel_diff", {})
+            crop_diff = pixel.get("production_crop_vs_engine_after", {})
+            counterfactual = pixel.get(
+                "counterfactual_squeezed_production_vs_engine_after", {}
+            )
+            resize_surface_ok = (
+                after_state.get("surface_width") == 720
+                and after_state.get("surface_height") == 600
+            )
+            resize_generation_ok = (
+                int(after_state.get("surface_generation", 0))
+                > int(before_state.get("surface_generation", 0))
+            )
+            resize_auto_ok = int(after_state.get("auto_resize_count", 0)) > int(
+                before_state.get("auto_resize_count", 0)
+            )
+            resize_pixels_ok = bool(
+                crop_diff.get("comparable") and crop_diff.get("differing_pixels") == 0
+            )
+            # 反事实必须**显著不同**（否则判据不灵敏 ⇒ 0 差异没有意义）。
+            counterfactual_sensitive = bool(
+                counterfactual.get("comparable")
+                and (counterfactual.get("differing_ratio") or 0.0) > 0.01
+            )
+            leg_ok = bool(
+                resize_surface_ok
+                and resize_generation_ok
+                and resize_auto_ok
+                and resize_pixels_ok
+                and counterfactual_sensitive
+            )
+            resize_ok = resize_ok and leg_ok
+            resize_verified_any = True
+            resize_leg_criteria[resize_backend] = {
+                "verifiable": True,
+                "canvas_before": leg.get("canvas_before"),
+                "canvas_after": leg.get("canvas_after"),
+                "surface_before": before_state,
+                "surface_after": after_state,
+                "surface_size_followed": resize_surface_ok,
+                "surface_generation_advanced": resize_generation_ok,
+                "auto_resize_count_advanced": resize_auto_ok,
+                "pixels_are_a_crop_not_a_stretch": resize_pixels_ok,
+                "counterfactual_is_sensitive": counterfactual_sensitive,
+                "pixel_diff": pixel,
+                "ok": leg_ok,
+            }
+        if not resize_verified_any:
+            # 一腿都没验成 ⇒ resize 腿**不可验证**（不判失败，也不算通过）。
+            resize_ok = True
+            resize_leg_criteria["note"] = (
+                "resize 腿**没有任何后端**跑成 ⇒ **不可验证**（非通过、非失败）"
+            )
+        criteria["resize_leg"] = {
+            "backends": resize_leg_criteria,
+            "ok": resize_ok,
+            "verified_any": resize_verified_any,
+        }
         criteria["verdict"] = (
             "pass"
-            if (webgl_leg_ok and (webgpu_leg_ok or not webgpu_verifiable))
+            if (
+                webgl_leg_ok
+                and (webgpu_leg_ok or not webgpu_verifiable)
+                and resize_ok
+            )
             else "fail"
         )
 
@@ -628,6 +873,7 @@ def main():
                 },
             },
             "criteria": criteria,
+            "resize_leg": resize_leg,
             "browser_console": console_log,
         }
         (out_dir / "report.json").write_text(
@@ -645,6 +891,7 @@ def main():
                     "uniform_count": len(uniforms),
                     "webgl": webgl_stats,
                     "webgpu": webgpu_stats,
+                    "resize_leg": criteria.get("resize_leg"),
                 },
                 ensure_ascii=False,
                 indent=2,

@@ -22,6 +22,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # 被验证对象：引擎本体（仓库内路径依赖，0 拷贝 0 改写）。
 apeireth-ui-gpu = { path = "../../../apeireth-ui-gpu" }
+# 场景层（片头编舞取值链）—— 被验证对象之一。
+apeireth-ui-scene = { path = "../../../apeireth-ui-scene" }
 wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = "=0.4.79"
 js-sys = "=0.3.106"

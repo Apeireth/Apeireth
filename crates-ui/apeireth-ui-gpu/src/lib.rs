@@ -49,6 +49,17 @@
 //!   以后场景层按新尺寸算几何、GPU 按旧 config 出图（拉伸/裁切），翻转高度
 //!   陈旧（竖直错位），WebGPU 后端改 `canvas.width/height` 还会**作废交换链**
 //!   ⇒ `get_current_texture()` 永久 `Lost` ⇒ **没有重建入口就永远画不出来**。
+//! - ⭐⭐ **尺寸自侦测**（[`engine::CanvasSizeSource`] +
+//!   [`engine::EngineOptions::canvas_size`]）：引擎**不持有画布句柄** ⇒ 它
+//!   自己**看不到** `canvas.width/height` 变没变 ⇒ ⇒ 若只有「宿主显式调
+//!   [`engine::Engine::resize`]」一条路 ⇒ **与生产行为不一致**（生产是
+//!   Svelte + `<canvas>`：改 `canvas.width/height` 就完事，**什么都不调**）。
+//!   ⇒ 宿主把「读画布尺寸」的闭包交给引擎 ⇒ 引擎**每帧**比对 ⇒ 不一致就
+//!   **自动** resize ⇒ ⇒ **行为与生产一致**。
+//!   - ⚠ 上游事实：wgpu 的两个后端在 `configure()` 里都会**改写
+//!     `canvas.width/height`**（`wgpu-30.0.1/src/backend/webgpu.rs:4213-4215`、
+//!     `wgpu-hal-30.0.1/src/gles/web.rs:357-358`）⇒ ⇒ 引擎的 config 尺寸
+//!     **必须**与画布一致 ⇒ ⇒ 自侦测也是「**不让引擎与宿主抢画布尺寸**」。
 //! - ⭐ **表面重建路径**（[`engine::Engine::reconfigure_surface`]）：交换链
 //!   失效时重新配置表面 ⇒ 恢复；[`engine::Engine::draw_frame`] 检出 `Lost` 时
 //!   **自动**重建并重试一次。
@@ -88,6 +99,25 @@
 //!   - ⇒ 结论：**该证据按构造仍然成立**，但**未在本批重新实测**（诚实标注：
 //!     未经重新抓取的证据不能算「本批实测」）。
 //!
+//! ### ✅ resize 自侦测**已在浏览器实测**（2026-10-25）
+//!
+//! - 探针把引擎页的画布从 **960×600 改成 720×600**（**比例不同** ⇒ 构图
+//!   变化可测）⇒ 宿主**没有**调任何 resize 接口（引擎页里根本没有这种接口）
+//!   ⇒ 引擎**自己**侦测到并 resize：
+//!   - 两个后端的表面尺寸都从 `960×600` 变成 `720×600`；
+//!   - 表面**代号** `0 → 1`（⇒ 表面确实被重新配置过 ⇒ 交换链重建 ⇒
+//!     WebGPU 后端「改画布尺寸 ⇒ 交换链作废」的恢复路径**实测**走通）；
+//!   - **自动 resize 计数** `0 → 1`（⇒ 走的是**自动**路径，不是宿主显式调用）。
+//! - 逐像素判据：生产画面**裁剪**左侧 720 列 vs 引擎 resize 后的实拍 ⇒
+//!   **0 / 432,000** 像素不同（WebGL 与 WebGPU **都是 0**）⇒ ⇒ 新尺寸**真的
+//!   生效**，且画面是**裁剪**（不是**拉伸**）。
+//!   - **反事实**（判据灵敏性）：把生产画面**缩放**到 720×600 再比 ⇒
+//!     **208,508 / 432,000 = 48.27%** 像素不同 ⇒ ⇒ 0 差异不是因为「怎么比
+//!     都一样」。
+//! - ⚠ **本批未把重新生成的证据入库**（批次纪律：证据目录只改 harness 源码）
+//!   ⇒ ⇒ 上面的数字来自**本批实测**（Chromium 154 + SwiftShader），但
+//!   **对应的 PNG / report.json 不在版本库里**。
+//!
 //! ### 🔵 未接线 / 未做
 //!
 //! - **uniform 取值来源仍未接线（按设计如此）**：引擎**不知道**场景语义
@@ -96,9 +126,6 @@
 //!   算得出取值」。
 //! - **未在 Tauri WebView 内验证**：本批只在 Linux 无头 Chromium 154 上实测；
 //!   macOS WKWebView / Windows WebView2 / Linux WebKitGTK **均未实测**。
-//! - **resize 通路未在浏览器里实测**：本批只做了**逻辑层**的重构与单测；
-//!   真实浏览器的「改尺寸 → 重新配置表面 → 交换链恢复」**未实测**
-//!   （宿主侧仍需按 [`engine::Engine::resize`] 接上）。
 //! - **顶点阶段的 uniform 未接线**：[`engine::Engine::create_scene_pipeline`]
 //!   对「顶点阶段有 uniform」的着色器**显式报错**（不静默忽略：静默忽略会让
 //!   顶点阶段的 uniform 永远拿到 0 值，画出错位的画面）。
@@ -132,14 +159,19 @@ pub use bindings::{
 };
 pub use context::{GpuContext, GpuError, Tier, UnavailableGpuContext};
 pub use engine::{
-    select_surface_format, BackendPreference, ColorProfile, DeviceEvent, Engine, EngineOptions,
-    EngineReport, FrameReport, OutputEncoding, SceneDescriptor, ScenePipeline, SurfaceTargetInput,
+    select_surface_format, BackendPreference, BlendMode, CanvasSizeSource, ColorProfile,
+    DeviceEvent, Engine, EngineOptions, EngineReport, FrameReport, OutputEncoding, SceneDescriptor,
+    ScenePass, ScenePipeline, SurfaceTargetInput, Topology, VertexFormat,
 };
 pub use glsl::{GlslError, UniformDecl};
 pub use scene::{
     BlackHoleParams, SceneError, SceneUniforms, GRAVITATIONAL_CONSTANT, SOLAR_MASS, SPEED_OF_LIGHT,
 };
-pub use shaders::{SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL};
+pub use shaders::{
+    INTRO_BACKDROP_FRAGMENT_GLSL, INTRO_BACKDROP_UNIFORM_NAMES, INTRO_BACKDROP_VERTEX_GLSL,
+    INTRO_SPRITE_FRAGMENT_GLSL, INTRO_SPRITE_UNIFORM_NAMES, INTRO_SPRITE_VERTEX_GLSL,
+    SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL,
+};
 
 #[cfg(test)]
 mod tests {

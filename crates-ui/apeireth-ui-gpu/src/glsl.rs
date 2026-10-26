@@ -872,6 +872,81 @@ pub fn float_std140_alignment(type_name: &str) -> Option<u64> {
 }
 
 // ---------------------------------------------------------------------------
+// 变换 5（X5）：给 varying 补 `layout(location=N)`
+// ---------------------------------------------------------------------------
+
+/// ⭐ 给**没有显式 location** 的 `in` / `out` 声明补上顺序 location。
+///
+/// ## 为什么必须做（方言外壳层，**不碰数学**）
+///
+/// GLSL ES 3.00 规定：varying（顶点输出 / 片元输入）的 location 由**声明顺序**
+/// 自动分配；而 **naga 的 GLSL 前端（无 ES profile）把未声明 location 的
+/// varying 全当 location 0** ⇒ ⇒
+///
+/// - 同一阶段里有两个以上 varying ⇒ 彼此 `BindingCollision`；
+/// - 顶点输入（`layout(location=0) in vec4 aSeed;`）与 varying **共用** naga
+///   的 location 空间 ⇒ ⇒ 顶点输入占着 location 0 时，varying 再拿 0 ⇒ 撞车。
+///
+/// ⇒ 按**声明顺序**补 `0,1,2,…` ⇒ ⇒ 与 GLSL ES 的自动分配**同义**
+/// （varying 的 location 空间与顶点属性的 location 空间**互相独立**，
+/// 生产代码正是这么用的）。
+///
+/// ## 行为细节
+///
+/// - **不碰**已带 `layout(...)` 的声明（顶点属性 `layout(location=0) in …`）；
+/// - **不插行**（只在前缀里加 `layout(location=N) `）⇒ 行号不变；
+/// - `in` 与 `out` **共用**一个计数器 ⇒ 片元着色器里 `in`（0..N-1）与
+///   `out`（N）⇒ ⇒ 片元输出不会与片元输入撞 location。
+pub fn add_varying_locations(src: &str, stage: ShaderStage) -> String {
+    // ⚠ 两个**独立**的计数器：GLSL ES 里「顶点输入（属性）」与「顶点输出
+    //   （varying）」的 location 空间**互相独立**（属性占 location 0 时，
+    //   varying 仍然从 0 开始分配）。
+    let mut next_in = 0usize;
+    let mut next_out = 0usize;
+    let mut out = String::with_capacity(src.len());
+    for line in src.split_inclusive('\n') {
+        let bare = line.trim_end_matches(['\n', '\r']);
+        let trimmed = bare.trim_start();
+        let has_layout = trimmed.contains("layout(");
+        let is_in = trimmed.starts_with("in ") && !has_layout;
+        let is_out = trimmed.starts_with("out ") && !has_layout;
+        if is_in {
+            let indent_len = bare.len() - trimmed.len();
+            let (indent, rest) = bare.split_at(indent_len);
+            out.push_str(indent);
+            out.push_str(&format!("layout(location={next_in}) "));
+            out.push_str(rest);
+            out.push('\n');
+            next_in += 1;
+            continue;
+        }
+        if is_out {
+            // ⚠⭐ **片元阶段的输出不补 location**。
+            //
+            // 片元输出必须落在**颜色附件 0**（渲染通道只有 1 个附件）⇒ ⇒
+            // 若给它补了 `layout(location=N)`（N > 0）⇒ 附件 0 **没有**对应的
+            // 片元输出 ⇒ GL 报 `GL_INVALID_OPERATION: Active draw buffers with
+            // missing fragment shader outputs` ⇒ ⇒ **画面全废**（实测踩过）。
+            //
+            // ⇒ 顶点阶段的输出（varying）**要**补（要与片元输入对上）⇒
+            //   片元阶段的输出**不补**（naga 自动给 location 0 ✓）。
+            if stage == ShaderStage::Vertex {
+                let indent_len = bare.len() - trimmed.len();
+                let (indent, rest) = bare.split_at(indent_len);
+                out.push_str(indent);
+                out.push_str(&format!("layout(location={next_out}) "));
+                out.push_str(rest);
+                out.push('\n');
+                next_out += 1;
+                continue;
+            }
+        }
+        out.push_str(line);
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
 // 变换链与解析
 // ---------------------------------------------------------------------------
 
@@ -893,7 +968,10 @@ pub fn transform(src: &str) -> Result<String, GlslError> {
 pub fn transform_with_block_binding(src: &str, block_binding: u32) -> Result<String, GlslError> {
     let stripped = strip_comments(src);
     let no_version = strip_version_directive(&stripped);
-    pack_uniforms_into_block(&no_version, block_binding)
+    let packed = pack_uniforms_into_block(&no_version, block_binding)?;
+    // ⭐ 补 varying 的 location（X5）⇒ 与 GLSL ES 的自动分配同义
+    //   （不碰数学、不改行数）。
+    Ok(add_varying_locations(&packed, ShaderStage::Vertex))
 }
 
 /// **片元阶段**的变换链：在 [`transform_with_block_binding`] 之外，额外做
@@ -937,7 +1015,9 @@ pub fn transform_fragment_with_block_binding(
                 .to_string(),
         ));
     }
-    Ok(fix_frag_coord_semantics(&packed))
+    // ⭐ 补 varying 的 location（X5）⇒ 与 GLSL ES 的自动分配同义。
+    let located = add_varying_locations(&packed, ShaderStage::Fragment);
+    Ok(fix_frag_coord_semantics(&located))
 }
 
 // ---------------------------------------------------------------------------
@@ -1795,6 +1875,81 @@ mod tests {
             src.lines().count(),
             "跨行声明也不得改变行数：{out}"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ varying 的 location（X5）
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn the_vertex_uniform_block_keeps_its_own_binding() {
+        // ⭐⭐ 顶点阶段的 uniform 块必须留在 **binding = 1**（与片元块的 0 错开）
+        //   ⇒ 否则两侧的 `binding=0` 会**撞车** ⇒ 顶点阶段读到的是**别的**块
+        //   ⇒ 画面「静默地错」（不报错，只是没东西）。
+        //
+        // ⚠ 关键：`glsl::parse` 走的是**通用**变换（默认 binding = 0）⇒ ⇒
+        //   **二次变换不得**把已打包的块的 binding 改回去。
+        let src = "precision highp float;\nuniform float uCount;\nvoid main(){ gl_Position = vec4(0.0, 0.0, 0.0, 1.0); }\n";
+        let transformed =
+            transform_with_block_binding(src, VERTEX_UNIFORM_BLOCK_BINDING).expect("变换成功");
+        assert!(
+            transformed.contains("binding=1"),
+            "顶点块的 binding 必须是 1：{transformed}"
+        );
+        let module = parse(&transformed, ShaderStage::Vertex).expect("解析成功");
+        let bindings: Vec<u32> = module
+            .global_variables
+            .iter()
+            .filter_map(|(_, var)| var.binding.as_ref().map(|b| b.binding))
+            .collect();
+        assert_eq!(
+            bindings,
+            vec![1],
+            "naga IR 里的顶点 uniform 块必须仍在 binding = 1（实际：{bindings:?}）"
+        );
+    }
+
+    #[test]
+    fn the_fragment_output_keeps_location_zero() {
+        // ⭐⭐ **实测踩过的坑**：若给片元输出补了 `layout(location=1)` ⇒
+        //   渲染通道的颜色附件 0 **没有**对应的片元输出 ⇒
+        //   GL 报 `GL_INVALID_OPERATION: Active draw buffers with missing
+        //   fragment shader outputs` ⇒ ⇒ **画面全废**。
+        //
+        // ⇒ 片元输出**不补** location（naga 自动给 0 ✓）。
+        let src = "precision highp float;\nlayout(location=0) in vec4 vColor;\nout vec4 fragColor;\nvoid main(){ fragColor = vColor; }\n";
+        let out = transform_fragment_with_block_binding(src, 0).expect("变换成功");
+        assert!(
+            out.contains("out vec4 fragColor;"),
+            "片元输出不得被补 location：{out}"
+        );
+        assert!(
+            !out.contains("layout(location=1) out"),
+            "片元输出必须落在颜色附件 0：{out}"
+        );
+    }
+
+    #[test]
+    fn the_vertex_outputs_get_locations_in_declaration_order() {
+        // 顶点输出（varying）**要**补 location ⇒ 且要与片元输入对上
+        // （同一顺序 ⇒ 同一组 location ✓）。
+        let src = "precision highp float;\nlayout(location=0) in vec4 aSeed;\nout vec3 vCol;\nout float vAlpha;\nvoid main(){ vCol = aSeed.xyz; vAlpha = 1.0; }\n";
+        let out = transform_with_block_binding(src, 1).expect("变换成功");
+        assert!(out.contains("layout(location=0) out vec3 vCol;"), "{out}");
+        assert!(
+            out.contains("layout(location=1) out float vAlpha;"),
+            "{out}"
+        );
+        // ⚠ 顶点**输入**（属性）已有显式 layout ⇒ 不得被改。
+        assert!(out.contains("layout(location=0) in vec4 aSeed;"), "{out}");
+    }
+
+    #[test]
+    fn the_fragment_inputs_get_locations_in_declaration_order() {
+        let src = "precision highp float;\nlayout(location=0) in vec3 vCol;\nlayout(location=1) in float vAlpha;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(vCol, vAlpha); }\n";
+        let out = transform_fragment_with_block_binding(src, 0).expect("变换成功");
+        assert!(out.contains("layout(location=0) in vec3 vCol;"), "{out}");
+        assert!(out.contains("layout(location=1) in float vAlpha;"), "{out}");
     }
 
     // -----------------------------------------------------------------------

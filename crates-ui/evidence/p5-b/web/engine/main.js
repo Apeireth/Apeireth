@@ -75,6 +75,51 @@ window.__P5B_REDRAW__ = {
   stop: (backend) => stopRedrawLoop(backend),
 };
 
+/**
+ * ⭐ 探针 API（resize 自侦测腿用）。
+ *
+ * ## 关键纪律：探针**只**改画布的 `width/height`
+ *
+ * 探针**不调**任何引擎的 resize 接口（引擎页里根本没有这种接口）⇒
+ * ⇒ 画布尺寸变了以后，引擎能跟上**只能**靠**引擎自己**侦测到
+ *   （`EngineOptions::canvas_size` 给的「读画布尺寸」闭包 ⇒ 每帧比对）。
+ *
+ * ⇒ 这条腿测的正是「**自侦测是默认行为**」，而不是「宿主必须显式调 resize」。
+ */
+window.__P5B_PROBE__ = {
+  /**
+   * 改画布的**设备像素尺寸**（并同步 CSS 尺寸 ⇒ 截图 1:1，无浏览器缩放）。
+   *
+   * @param {string} id 画布 id
+   * @param {number} width 设备像素宽
+   * @param {number} height 设备像素高
+   * @returns {string} 改完后的 `宽x高`
+   */
+  resizeCanvas: (id, width, height) => {
+    const canvas = document.getElementById(id);
+    if (!canvas) throw new Error('no canvas #' + id);
+    canvas.width = width;
+    canvas.height = height;
+    // ⚠ CSS 尺寸必须**同步**改 ⇒ 否则浏览器会把画布**缩放**到 CSS 尺寸
+    //   ⇒ 截图拿到的是被拉伸的画面 ⇒ 差分测不出「引擎有没有跟上尺寸」。
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    return canvas.width + 'x' + canvas.height;
+  },
+
+  /**
+   * 读引擎的**表面状态**（尺寸 / 代号 / 自动 resize 次数）。
+   *
+   * ⚠ 这会**顺带画一帧**（`redraw`）⇒ 正好让引擎在读状态前**再侦测一次**
+   *   尺寸 ⇒ ⇒ 读到的状态一定是「最新」的。
+   */
+  surfaceState: async (backend) => {
+    const wasm = window.__P5B_WASM__;
+    if (!wasm) throw new Error('wasm not loaded');
+    return JSON.parse(await wasm.redraw(backend, 1));
+  },
+};
+
 (async () => {
   try {
     const wasm = await import(/* @vite-ignore */ '/engine/pkg/p5b_harness.js');

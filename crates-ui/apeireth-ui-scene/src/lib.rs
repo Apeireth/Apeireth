@@ -62,6 +62,7 @@
 #![forbid(unsafe_code)]
 
 pub mod camera;
+pub mod intro;
 pub mod jsnum;
 pub mod scene;
 pub mod state;
@@ -76,6 +77,7 @@ pub mod uniforms;
 mod parity;
 
 pub use camera::{CameraRig, CameraState, EffectiveCamera, HoleCircle, Layout};
+pub use intro::{intro_frame, IntroFrame, IntroViewport};
 pub use scene::{Scene, SceneOptions, Viewport};
 pub use state::{PadBias, PresenceStateParams, SceneMode};
 pub use timeline::{timeline_params, TimelineParams};

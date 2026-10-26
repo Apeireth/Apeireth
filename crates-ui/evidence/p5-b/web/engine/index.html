@@ -4,14 +4,16 @@
 <meta charset="utf-8">
 <title>P5-b engine — Rust engine on captured uniforms</title>
 <style>
-  /* 两个画布的 CSS 尺寸 = 设备像素尺寸（dpr 由 CDP 固定为 1）⇒ 截图 1:1 无缩放。 */
+  /* 两个画布的 CSS 尺寸 = 设备像素尺寸（dpr 由 CDP 固定为 1）⇒ 截图 1:1 无缩放。
+     ⚠ CSS 尺寸**不写死**在样式表里 ⇒ 由探针（`__P5B_PROBE__.resizeCanvas`）
+     **同步**成画布的当前设备像素尺寸 ⇒ ⇒ resize 腿的截图不会被浏览器缩放。 */
   html, body { margin: 0; padding: 0; background: #000; }
-  canvas { display: block; width: 960px; height: 600px; }
+  canvas { display: block; }
 </style>
 </head>
 <body>
-<canvas id="webgl" width="960" height="600"></canvas>
-<canvas id="webgpu" width="960" height="600"></canvas>
+<canvas id="webgl" width="960" height="600" style="width:960px;height:600px"></canvas>
+<canvas id="webgpu" width="960" height="600" style="width:960px;height:600px"></canvas>
 <script type="module" src="./main.js"></script>
 </body>
 </html>

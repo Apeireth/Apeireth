@@ -18,7 +18,7 @@ REPO="$(cd "${HERE}/../../.." && pwd)"
 
 # wasm-bindgen CLI 的版本必须与 crates-ui 的 wasm-bindgen 依赖**精确一致**（0.2.129）。
 WASM_BINDGEN="${WASM_BINDGEN:-}"
-if [ -z # ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
+# ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
 # 否则外部设了 `CARGO_TARGET_DIR` 时 cargo 把产物写到别处，
 # 而本脚本仍去读硬编码的 `…/target/…` ⇒ ⇒ **拿到旧 wasm**
 # ⇒ ⇒ 实测踩过：注入的修复**没进浏览器** ⇒ ⇒ **假绿/假红**。
@@ -28,7 +28,7 @@ if [ ! -f "${WASM_ARTIFACT}" ]; then
   echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
   exit 1
 fi
-"${WASM_BINDGEN}" ]; then
+if [ -z "${WASM_BINDGEN}" ]; then
   for candidate in \
     "$(command -v wasm-bindgen || true)" \
     "${REPO}/target/ui-probe-scratch/bin/bin/wasm-bindgen"; do

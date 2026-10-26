@@ -49,6 +49,25 @@
 //! ⇒ 现在有 [`Engine::resize`]（重新配置表面 + 更新配置）与
 //! [`Engine::reconfigure_surface`]（交换链失效后的恢复路径）。
 //!
+//! ## ⭐⭐ 尺寸变化必须**自侦测**（不要求宿主显式调）
+//!
+//! 引擎**不持有画布句柄**（`SurfaceTargetInput::HtmlCanvas` 只在建表面时用
+//! 一次）⇒ 引擎**自己看不到** `canvas.width/height` 变没变 ⇒ ⇒ 若只有
+//! 「宿主显式调 [`Engine::resize`]」一条路 ⇒ **与生产行为不一致**（生产是
+//! Svelte + `<canvas>`：改 `canvas.width/height` 就完事，**什么都不调**）。
+//!
+//! ⇒ 宿主把「读 `canvas.width/height`」的闭包交给引擎
+//! （[`EngineOptions::canvas_size`]）⇒ 引擎**每帧**比对 ⇒ 不一致就
+//! **自动** resize（重配表面 + 更新配置 + 代号 +1）⇒ ⇒ **行为与生产一致**。
+//!
+//! ### ⚠ 上游事实：wgpu 的 `configure()` 会**改写画布尺寸**
+//!
+//! - WebGPU 后端：`wgpu-30.0.1/src/backend/webgpu.rs:4213-4215`
+//! - GLES 后端：`wgpu-hal-30.0.1/src/gles/web.rs:357-358`
+//!
+//! ⇒ 引擎的 config 尺寸**必须**与画布一致 ⇒ ⇒ 「自侦测」不只是「让画面
+//! 跟上」，还是「**不让引擎与宿主抢画布尺寸**」。
+//!
 //! ## ⭐ 设备事件是**异步**的
 //!
 //! 设备错误与设备丢失由后端**异步**投递 ⇒ 引擎每帧**先 poll** 再取事件
@@ -79,6 +98,7 @@
 //! 记进 [`ColorProfile`]。详见该函数的文档。
 
 use std::num::NonZeroU64;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -226,6 +246,92 @@ pub fn select_surface_format(
     None
 }
 
+/// 画布尺寸**来源**（引擎**自侦测**尺寸变化的入口）。
+///
+/// ## ⭐ 为什么必须有它（**这是「迁移」要消除的差距**）
+///
+/// 引擎**不持有画布句柄**：[`SurfaceTargetInput::HtmlCanvas`] 只在
+/// [`Engine::create`] 建表面时用**一次** ⇒ 之后引擎**看不到**
+/// `canvas.width/height` 变没变。
+///
+/// ⇒ 早期形态只有「宿主显式调 [`Engine::resize`]」这一条路 ⇒
+///
+/// - 宿主**不调** ⇒ 尺寸变化**永远不生效**（GPU 仍按**旧** config 出图 ⇒
+///   拉伸 / 裁切；`uRes` 与真实 framebuffer 不符）；
+/// - 而**生产**的宿主（Svelte + `<canvas>`）**什么都不调** ⇒ 改
+///   `canvas.width/height` 就完事 ⇒ ⇒ **引擎与生产的行为不一致**
+///   ⇒ ⇒ 这正是「迁移」要消除的差距。
+///
+/// ⇒ 现在：宿主把「读 `canvas.width/height`」的闭包交给引擎 ⇒ 引擎**每帧**
+/// 比对 ⇒ 不一致就**自动** resize ⇒ ⇒ 行为与生产**一致**。
+///
+/// ## ⭐ 为什么用 `Rc` 而不是 `Arc`
+///
+/// wasm 是**单线程**的；且浏览器的 `HtmlCanvasElement`（`web_sys` 包装的
+/// `JsValue`）**不是** `Send`/`Sync` ⇒ 若用
+/// `Arc<dyn Fn() -> (u32, u32) + Send + Sync>`，「读画布尺寸」这个闭包
+/// **根本实现不出来**（捕获 canvas 就不满足 `Send`）⇒ ⇒ 用 `Rc`
+/// （wasm 单线程够用、零额外开销）。
+///
+/// ## 零开销
+///
+/// 没有来源 ⇒ 引擎**完全不看**尺寸（行为与上批逐字一致）；有来源但尺寸
+/// **没变** ⇒ 每帧只多**一次闭包调用**（不做任何 GPU 操作、不重新配置表面）。
+#[derive(Clone)]
+pub struct CanvasSizeSource(Rc<dyn Fn() -> (u32, u32)>);
+
+impl std::fmt::Debug for CanvasSizeSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ⚠ 闭包**不可** `Debug` ⇒ 只报「有一个来源」，**不**试图打印闭包内容
+        //   （闭包里可能捕获着宿主对象，打印出来没有意义还可能泄漏细节）。
+        f.write_str("CanvasSizeSource(<闭包>)")
+    }
+}
+
+impl PartialEq for CanvasSizeSource {
+    /// **按指针**比较（同一个 `Rc` 才是同一个来源）。
+    ///
+    /// ⚠ 闭包**没有**语义上的相等（两个不同的闭包可以行为完全相同）⇒ 用
+    ///   `Rc::ptr_eq` ⇒ 只把「同一个来源」判为相等 ⇒ **不**给调用方
+    ///   「内容相等」的错觉。
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl CanvasSizeSource {
+    /// 建一个尺寸来源（闭包返回**设备像素**的 `(宽, 高)`）。
+    ///
+    /// 浏览器宿主的典型用法：闭包里读 `canvas.width` / `canvas.height`。
+    pub fn new(source: impl Fn() -> (u32, u32) + 'static) -> Self {
+        Self(Rc::new(source))
+    }
+
+    /// 读一次当前尺寸（**设备像素**）。
+    pub fn size(&self) -> (u32, u32) {
+        (self.0)()
+    }
+
+    /// ⭐ **侦测**尺寸变化。
+    ///
+    /// - 来源报告的尺寸与**当前表面尺寸**不同 ⇒ `Some(应 resize 到的新尺寸)`；
+    /// - 相同 ⇒ `None`（**不动**表面 ⇒ 零开销）。
+    ///
+    /// ⚠ 尺寸**下限是 1**（与生产一致：生产的 `resizeGL` 也是
+    ///   `Math.max(1, …)`）⇒ 画布被置 0（少见）时不会把表面配成 0 尺寸
+    ///   （wgpu 会拒绝 0 尺寸的表面配置）。
+    pub fn detect_change(&self, current: (u32, u32)) -> Option<(u32, u32)> {
+        let (width, height) = self.size();
+        let width = width.max(1);
+        let height = height.max(1);
+        if (width, height) == current {
+            None
+        } else {
+            Some((width, height))
+        }
+    }
+}
+
 /// 引擎创建参数。
 #[derive(Debug, Clone, PartialEq)]
 pub struct EngineOptions {
@@ -235,6 +341,13 @@ pub struct EngineOptions {
     pub width: u32,
     /// 画布高度（像素）。
     pub height: u32,
+    /// ⭐ 画布尺寸**来源**（宿主注入）⇒ 引擎**自侦测**尺寸变化。
+    ///
+    /// - `Some` ⇒ 引擎**每帧**比对来源报告的尺寸 ⇒ 不一致就**自动**
+    ///   [`Engine::resize`]（重配表面 + 更新配置 + 代号 +1）；
+    /// - `None` ⇒ **没有画布**（native / 无画布宿主）⇒ 行为与上批**逐字一致**
+    ///   （不自动 resize；宿主想改尺寸仍可显式调 [`Engine::resize`]）。
+    pub canvas_size: Option<CanvasSizeSource>,
 }
 
 impl Default for EngineOptions {
@@ -243,6 +356,7 @@ impl Default for EngineOptions {
             backend: BackendPreference::Auto,
             width: 320,
             height: 240,
+            canvas_size: None,
         }
     }
 }
@@ -293,6 +407,95 @@ pub struct FrameReport {
     ///
     /// ⚠ 用途：设备事件带帧号 ⇒ 宿主能把「哪一帧出的问题」对上来。
     pub frame_number: u64,
+    /// 本帧用的**表面宽度**（设备像素）。
+    ///
+    /// ⚠ 用途：宿主能直接看出「画布改了尺寸以后，引擎这一帧用的是**新**尺寸」。
+    pub surface_width: u32,
+    /// 本帧用的**表面高度**（设备像素）。
+    pub surface_height: u32,
+    /// 本帧的**表面代号**（每次重新配置表面 +1）。
+    ///
+    /// ⚠ 用途：宿主能看出「表面被重新配置过」（⇒ 交换链重建 ⇒ 旧纹理作废）。
+    pub surface_generation: u64,
+    /// 本帧是否**自动 resize**了表面（自侦测到画布尺寸变化）。
+    ///
+    /// ⚠ 用途：**自侦测**这条通路的直接证据（宿主不必自己比对尺寸）。
+    pub auto_resized: bool,
+}
+
+/// 顶点属性的**分量格式**。
+///
+/// ## 为什么需要
+///
+/// 生产侧的顶点属性有两种形态：
+///
+/// - 全屏三角形：`vec2`（stride 8 字节）；
+/// - 粒子 sprite：`vec4`（`aSeed`，stride 16 字节）。
+///
+/// ⇒ 引擎的顶点缓冲布局必须**按形态**给 ⇒ ⇒ 这里显式建模（不猜）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VertexFormat {
+    /// 两个分量（`vec2`；stride 8）。
+    Vec2,
+    /// 四个分量（`vec4`；stride 16）。
+    Vec4,
+}
+
+impl VertexFormat {
+    /// 每个顶点的字节步长（stride）。
+    pub fn stride(&self) -> u64 {
+        match self {
+            VertexFormat::Vec2 => 8,
+            VertexFormat::Vec4 => 16,
+        }
+    }
+
+    /// 对应的 wgpu 顶点格式。
+    pub fn wgpu_format(&self) -> wgpu::VertexFormat {
+        match self {
+            VertexFormat::Vec2 => wgpu::VertexFormat::Float32x2,
+            VertexFormat::Vec4 => wgpu::VertexFormat::Float32x4,
+        }
+    }
+}
+
+/// 图元拓扑。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Topology {
+    /// 三角形列表（默认；全屏三角形走这条）。
+    TriangleList,
+    /// 点列表（生产侧的 `GL_POINTS` 火焰粒子走这条）。
+    ///
+    /// ⚠ **WebGPU 后端没有点尺寸**（`gl_PointSize`）⇒ 该拓扑**只在 WebGL
+    ///   （GLES）后端**可用 ⇒ 其它后端**显式报错**（[`GpuError::Unsupported`]），
+    ///   不静默画错。
+    PointList,
+}
+
+/// 混合方式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlendMode {
+    /// 直接覆盖（默认；背景 matte pass 走这条）。
+    Replace,
+    /// 加法混合（`ONE / ONE`）—— 生产侧的火焰粒子 pass 走这条
+    /// （`gl.blendFunc(gl.ONE, gl.ONE)`）。
+    Additive,
+}
+
+impl BlendMode {
+    /// 该混合方式的 wgpu 混合状态。
+    ///
+    /// ⚠ 加法混合用 `BlendComponent::OVER`（= `ONE`）⇒ 与生产的
+    ///   `gl.blendFunc(gl.ONE, gl.ONE)` **同义**。
+    pub fn wgpu_state(&self) -> wgpu::BlendState {
+        match self {
+            BlendMode::Replace => wgpu::BlendState::REPLACE,
+            BlendMode::Additive => wgpu::BlendState {
+                color: wgpu::BlendComponent::OVER,
+                alpha: wgpu::BlendComponent::OVER,
+            },
+        }
+    }
 }
 
 /// 一次绘制请求的描述（与业务无关：着色器源 + 顶点数据 + uniform 值）。
@@ -302,10 +505,16 @@ pub struct SceneDescriptor {
     pub vertex_glsl: String,
     /// 片元着色器（GLSL ES 3.0 源）。
     pub fragment_glsl: String,
-    /// 顶点数据（`vec2` 一对一个顶点；位置语义由着色器自己定义）。
+    /// 顶点数据（分量按 [`SceneDescriptor::vertex_format`]）。
     pub vertex_data: Vec<f32>,
     /// 要画的顶点数（`None` = 全部）。
     pub vertex_count: Option<u32>,
+    /// 顶点属性的分量格式（默认 [`VertexFormat::Vec2`]）。
+    pub vertex_format: VertexFormat,
+    /// 图元拓扑（默认 [`Topology::TriangleList`]）。
+    pub topology: Topology,
+    /// 混合方式（默认 [`BlendMode::Replace`]）。
+    pub blend: BlendMode,
 }
 
 impl SceneDescriptor {
@@ -316,10 +525,13 @@ impl SceneDescriptor {
             fragment_glsl: fragment_glsl.into(),
             vertex_data: Vec::new(),
             vertex_count: None,
+            vertex_format: VertexFormat::Vec2,
+            topology: Topology::TriangleList,
+            blend: BlendMode::Replace,
         }
     }
 
-    /// 附上顶点数据（`vec2` 一对一个顶点）。
+    /// 附上顶点数据（分量按 [`SceneDescriptor::vertex_format`]）。
     pub fn with_vertex_data(mut self, data: Vec<f32>) -> Self {
         self.vertex_data = data;
         self
@@ -331,10 +543,41 @@ impl SceneDescriptor {
         self
     }
 
-    /// 实际要画的顶点数。
+    /// 指定顶点属性的分量格式。
+    pub fn with_vertex_format(mut self, format: VertexFormat) -> Self {
+        self.vertex_format = format;
+        self
+    }
+
+    /// 指定图元拓扑。
+    pub fn with_topology(mut self, topology: Topology) -> Self {
+        self.topology = topology;
+        self
+    }
+
+    /// 指定混合方式。
+    pub fn with_blend(mut self, blend: BlendMode) -> Self {
+        self.blend = blend;
+        self
+    }
+
+    /// 实际要画的顶点数（**历史口径**：按 `vec2` 算）。
+    ///
+    /// ⚠ 粒子（`vec4` 属性）必须用 [`SceneDescriptor::resolved_vertex_count_by_format`]。
     pub fn resolved_vertex_count(&self) -> u32 {
         self.vertex_count
             .unwrap_or((self.vertex_data.len() / 2) as u32)
+    }
+
+    /// 实际要画的顶点数（**按顶点格式**算：`vec2` ⇒ 长度 / 2；`vec4` ⇒ 长度 / 4）。
+    pub fn resolved_vertex_count_by_format(&self) -> u32 {
+        self.vertex_count.unwrap_or_else(|| {
+            let per_vertex = match self.vertex_format {
+                VertexFormat::Vec2 => 2,
+                VertexFormat::Vec4 => 4,
+            };
+            (self.vertex_data.len() / per_vertex) as u32
+        })
     }
 }
 
@@ -343,10 +586,16 @@ pub struct ScenePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     uniform_buffer: Option<wgpu::Buffer>,
+    /// 顶点阶段的 uniform 缓冲（**另一个块**，binding = 1）。
+    vertex_uniform_buffer: Option<wgpu::Buffer>,
     vertex_buffer: Option<wgpu::Buffer>,
     layout: UniformBufferLayout,
+    /// 顶点阶段的 uniform 布局（**另一个块**）。
+    vertex_layout: UniformBufferLayout,
     vertex_count: u32,
     scratch: Vec<u8>,
+    /// 顶点阶段 uniform 的**暂存字节**（每帧写入 ⇒ 零分配）。
+    vertex_scratch: Vec<u8>,
     /// 建管线时的表面格式（color target 格式）。
     ///
     /// ⚠ 用途：表面格式**变了** ⇒ 旧的 color target 格式不再匹配 ⇒ 管线
@@ -381,6 +630,21 @@ impl ScenePipeline {
     pub fn surface_generation(&self) -> u64 {
         self.surface_generation
     }
+}
+
+/// 一个绘制 pass（管线 + 该 pass 的 uniform 取值）。
+///
+/// ## 为什么需要
+///
+/// 生产侧的片头是**两个 pass**（背景 matte + 火焰粒子）⇒ ⇒ 两者必须画进
+/// **同一张**表面纹理（一次呈现）⇒ ⇒ [`Engine::draw_passes`] 收一组 pass。
+pub struct ScenePass<'a> {
+    /// 该 pass 的管线（uniform 缓冲 / 顶点缓冲 / 绑定组都在里面）。
+    pub pipeline: &'a mut ScenePipeline,
+    /// 该 pass 的**片元阶段** uniform 取值（按索引 = 声明序）。
+    pub uniforms: &'a UniformValues,
+    /// 该 pass 的**顶点阶段** uniform 取值（`None` = 该管线没有顶点 uniform）。
+    pub vertex_uniforms: Option<&'a UniformValues>,
 }
 
 /// 表面状态（配置 + **代号**）。
@@ -456,6 +720,12 @@ pub struct Engine {
     frame_counter: Arc<AtomicU64>,
     /// 管线创建次数（**可观测**：重复创建是重资源操作）。
     pipeline_creations: AtomicU64,
+    /// ⭐ 画布尺寸**来源**（宿主注入）⇒ 引擎**自侦测**尺寸变化。
+    ///
+    /// `None` ⇒ 没有画布（native / 无画布宿主）⇒ 引擎**不看**尺寸。
+    canvas_size: Option<CanvasSizeSource>,
+    /// ⭐ **自动 resize** 次数（**可观测**：自侦测这条通路的直接证据）。
+    auto_resizes: AtomicU64,
 }
 
 impl Engine {
@@ -609,6 +879,8 @@ impl Engine {
             device_events,
             frame_counter,
             pipeline_creations: AtomicU64::new(0),
+            canvas_size: options.canvas_size.clone(),
+            auto_resizes: AtomicU64::new(0),
         })
     }
 
@@ -675,6 +947,31 @@ impl Engine {
     /// - WebGPU 后端改 `canvas.width/height` 会**作废交换链** ⇒
     ///   `get_current_texture()` 永久 `Lost` ⇒ 没有重建入口就**永远画不出来**。
     ///
+    /// ## ⭐ 但「宿主必须显式调它」**不是**可接受的约定
+    ///
+    /// 生产的宿主（Svelte + `<canvas>`）**不调**任何东西 ⇒ 改
+    /// `canvas.width/height` 就完事 ⇒ ⇒ 引擎若要求宿主显式调本方法 ⇒
+    /// **与生产的行为不一致** ⇒ ⇒ 这正是「迁移」要消除的差距。
+    ///
+    /// ⇒ 自侦测是**默认行为**：宿主把尺寸**来源**交给引擎
+    /// （[`EngineOptions::canvas_size`]）⇒ 引擎每帧自动比对
+    /// （见 [`Engine::sync_surface_size`]）；本方法仍保留 ⇒ 宿主**知道**
+    /// 尺寸时可以显式用。
+    ///
+    /// ## ⚠ 上游事实：wgpu 的 `configure()` 会**改写画布尺寸**
+    ///
+    /// 两个后端都在 `configure()` 里把 `canvas.width/height` 设成
+    /// `config.width/height`：
+    ///
+    /// - WebGPU 后端：`wgpu-30.0.1/src/backend/webgpu.rs:4213-4215`
+    ///   （`canvas.set_width(config.width); canvas.set_height(config.height);`）
+    /// - GLES 后端：`wgpu-hal-30.0.1/src/gles/web.rs:357-358`
+    ///   （同上）
+    ///
+    /// ⇒ 引擎的 **config 尺寸必须与画布尺寸一致** ⇒ ⇒ 引擎若用**旧**尺寸
+    /// 重新配置表面 ⇒ **会把宿主的画布尺寸悄悄改回去** ⇒ ⇒ 「自侦测」
+    /// 不只是「让画面跟上」，还是「不让引擎与宿主抢画布尺寸」。
+    ///
     /// ## 管线要不要重建？
     ///
     /// **不要**（除非表面**格式**变了）：渲染管线依赖的是 `config.format`
@@ -700,16 +997,76 @@ impl Engine {
             .surface_state
             .write()
             .map_err(|_| GpuError::Unsupported("引擎的表面状态锁被毒化（内部错误）".to_string()))?;
-        if state.config.width == width && state.config.height == height {
+        // ⚠ 幂等：尺寸没变 ⇒ **不动**表面（不重新配置 ⇒ 不作废交换链 ⇒ 不闪一帧）。
+        if !resize_surface_state(&mut state, width, height) {
             return Ok(());
         }
-        let mut config = state.config.clone();
-        config.width = width;
-        config.height = height;
+        let config = state.config.clone();
         self.surface.configure(&self.device, &config);
-        state.config = config;
-        state.generation += 1;
         Ok(())
+    }
+
+    /// ⭐ **自侦测**画布尺寸变化 ⇒ 需要时**自动** resize。
+    ///
+    /// ## 为什么必须有这条
+    ///
+    /// 引擎**不持有画布句柄** ⇒ 它自己**看不到** `canvas.width/height` 变没变
+    /// ⇒ ⇒ 只有宿主**显式**调 [`Engine::resize`] 才会有反应 ⇒ ⇒ 与生产的
+    /// 宿主行为**不一致**（见 [`CanvasSizeSource`] 的文档）。
+    ///
+    /// ## 零开销
+    ///
+    /// - 没有尺寸来源 ⇒ 直接返回（`None` 分支，**零**额外工作）；
+    /// - 有来源但尺寸**没变** ⇒ 每帧只多**一次闭包调用**（不做任何 GPU 操作）。
+    ///
+    /// ## 位置（**不可换**）
+    ///
+    /// 必须在**写 uniform 之前**、**取表面纹理之前**调用：
+    ///
+    /// 1. 帧缓冲高度成员（`gl_FragCoord` 修正用）要按**新**尺寸写；
+    /// 2. 表面纹理要按**新**尺寸拿（否则拿到的是**旧**尺寸的纹理 ⇒ 画面拉伸）。
+    ///
+    /// # Errors
+    ///
+    /// 内部状态锁被毒化 ⇒ [`GpuError::Unsupported`]（极罕见）。
+    pub fn sync_surface_size(&self) -> Result<bool, GpuError> {
+        let Some(source) = &self.canvas_size else {
+            return Ok(false);
+        };
+        let Some((width, height)) = source.detect_change(self.surface_size()) else {
+            return Ok(false);
+        };
+        self.resize(width, height)?;
+        self.auto_resizes.fetch_add(1, Ordering::Relaxed);
+        Ok(true)
+    }
+
+    /// ⭐ **自动 resize** 次数（**可观测**：自侦测这条通路的直接证据）。
+    ///
+    /// 宿主可用它判断「引擎有没有自己跟上画布尺寸变化」。
+    pub fn auto_resize_count(&self) -> u64 {
+        self.auto_resizes.load(Ordering::Relaxed)
+    }
+
+    /// ⭐ **表面恢复**：重新侦测尺寸 ⇒ 必要时 resize ⇒ 否则重新配置表面。
+    ///
+    /// ## 为什么必须**先侦测**再重新配置
+    ///
+    /// wgpu 的两个后端在 `configure()` 里都会**改写画布尺寸**
+    /// （见 [`Engine::resize`] 的「上游事实」小节）⇒ ⇒ 若用**旧**尺寸重新
+    /// 配置 ⇒ **会把宿主刚改的画布尺寸悄悄改回去** ⇒ ⇒ 必须先侦测。
+    ///
+    /// ## 覆盖两种失败
+    ///
+    /// - `Lost`：交换链作废（WebGPU 后端改画布尺寸就会这样）；
+    /// - `Outdated`：表面配置与画布当前状态不匹配（画布在自侦测之后又变了）。
+    fn recover_surface(&self) -> Result<(), GpuError> {
+        // 尺寸变了 ⇒ `resize` 内部已经重新配置过表面（**一次** configure 足够）。
+        if self.sync_surface_size()? {
+            return Ok(());
+        }
+        // 尺寸没变 ⇒ 仍然重新配置一次 ⇒ 换一条交换链（代号 +1）。
+        self.reconfigure_surface()
     }
 
     /// ⭐ **重新配置表面**（尺寸不变）—— **交换链失效后的恢复路径**。
@@ -722,6 +1079,14 @@ impl Engine {
     ///
     /// ⇒ 本方法同时是 [`Engine::draw_frame`] 检出 `Lost` 时的**自动恢复**
     /// 与宿主的**显式恢复**入口。
+    ///
+    /// ## ⚠ 用它之前先看尺寸
+    ///
+    /// wgpu 的两个后端在 `configure()` 里都会**改写画布尺寸**
+    /// （见 [`Engine::resize`] 的「上游事实」小节）⇒ ⇒ 本方法用**当前
+    /// config** 重新配置 ⇒ 若当前 config 的尺寸**落后于**画布 ⇒ 画布会被
+    /// **改回**旧尺寸 ⇒ ⇒ 引擎内部一律先走 [`Engine::recover_surface`]
+    /// （先侦测尺寸再配置）。
     ///
     /// # Errors
     ///
@@ -859,6 +1224,20 @@ impl Engine {
     /// 真正建管线的实现（[`Engine::create_scene_pipeline`] 与
     /// [`Engine::recreate_pipeline`] 共用）。
     fn build_pipeline(&self, scene: &SceneDescriptor) -> Result<ScenePipeline, GpuError> {
+        // ⚠ 点列表（`GL_POINTS`）**只在 WebGL（GLES）后端**可用 ⇒ ⇒ 其它后端
+        //   **在进 wgpu 之前**显式拒绝。
+        //
+        // ⭐ **为什么必须提前拒绝**（实测）：wgpu 的 **WebGPU 后端**在
+        //   `create_shader_module` 里处理 `gl_PointSize` 内建时会
+        //   `unwrap_failed` ⇒ ⇒ **panic** ⇒ 在浏览器里就是**页面崩溃** ⇒ ⇒
+        //   绝不能让它走到那一步。
+        if scene.topology == Topology::PointList && !point_list_supported(self.backend) {
+            return Err(GpuError::Unsupported(format!(
+                "点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：{:?}）⇒ \
+                 WebGPU 规范没有点尺寸（gl_PointSize）",
+                self.backend
+            )));
+        }
         // 顶点阶段：变换 + 解析。
         let vertex_source = glsl::transform_with_block_binding(
             &scene.vertex_glsl,
@@ -882,13 +1261,25 @@ impl Engine {
         let fragment_module_ir = glsl::parse(&fragment_source, naga::ShaderStage::Fragment)
             .map_err(|e| GpuError::ShaderCompilationFailed(format!("fragment: {e}")))?;
 
-        // 顶点阶段的 uniform 尚未接线 ⇒ **显式拒绝**（不静默忽略：静默忽略
-        // 会让顶点阶段的 uniform 永远拿到 0 值，画出错位的画面）。
-        if !glsl::uniform_declarations(&scene.vertex_glsl).is_empty() {
-            return Err(GpuError::Unsupported(
-                "顶点阶段的 uniform 尚未接线（本批只支持片元阶段的 uniform 块）".to_string(),
-            ));
-        }
+        // ⭐ 顶点阶段的 uniform：**接线**（独立的 std140 块，binding = 1）。
+        //
+        // ## 为什么必须接线
+        //
+        // 顶点阶段有 uniform 的着色器（生产侧的火焰粒子 pass：40 个 uniform）
+        // 若**静默忽略** ⇒ 顶点阶段的 uniform 永远拿到 0 值 ⇒ 画面**错位**
+        // ⇒ ⇒ 必须**显式接线**（或显式拒绝）⇒ 现在是前者。
+        //
+        // ## 为什么是**另一个块**（binding = 1）
+        //
+        // 顶点与片元的 uniform 块**各占一个 binding**（否则两侧的 `binding=0`
+        // 会互相撞车）⇒ 见 [`glsl::VERTEX_UNIFORM_BLOCK_BINDING`]。
+        let vertex_members =
+            glsl::uniform_block_members(&glsl::uniform_declarations(&scene.vertex_glsl));
+        let vertex_layout =
+            UniformBufferLayout::from_members(&vertex_members, glsl::VERTEX_UNIFORM_BLOCK_BINDING)
+                .map_err(|e: GlslError| GpuError::ShaderCompilationFailed(e.to_string()))?;
+        // 与 naga IR 对照（不一致 ⇒ 显式报错，绝不「静默写错字节」）。
+        verify_naga_layout(&vertex_module_ir, &vertex_layout)?;
 
         // 片元块的成员清单 = 生产 uniform + **引擎注入的帧缓冲高度成员**
         // （⇒ 生产 uniform 的偏移逐字节不变 ⇒ 既有逐像素证据不受影响）。
@@ -912,7 +1303,7 @@ impl Engine {
         // 显式绑定组布局：整个 uniform 块 = **一个** binding。
         // （WebGL2 后端每个着色阶段能用的 uniform buffer 只有 12–14 个 ⇒
         //  16 个 uniform 必须合并成一个块，见 glsl 模块的 X3 说明。）
-        let entries = if layout.is_empty() {
+        let mut entries = if layout.is_empty() {
             Vec::new()
         } else {
             vec![wgpu::BindGroupLayoutEntry {
@@ -926,6 +1317,19 @@ impl Engine {
                 count: None,
             }]
         };
+        // 顶点阶段的 uniform 块（binding = 1）—— 与片元块**各占一个 binding**。
+        if !vertex_layout.is_empty() {
+            entries.push(wgpu::BindGroupLayoutEntry {
+                binding: vertex_layout.binding(),
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(vertex_layout.total_size()),
+                },
+                count: None,
+            });
+        }
         let bind_group_layout =
             self.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -956,17 +1360,18 @@ impl Engine {
                 source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(fragment_module_ir)),
             });
 
+        let vertex_attributes = [wgpu::VertexAttribute {
+            format: scene.vertex_format.wgpu_format(),
+            offset: 0,
+            shader_location: 0,
+        }];
         let vertex_buffer_layout = if scene.vertex_data.is_empty() {
             Vec::new()
         } else {
             vec![Some(wgpu::VertexBufferLayout {
-                array_stride: 8,
+                array_stride: scene.vertex_format.stride(),
                 step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 0,
-                    shader_location: 0,
-                }],
+                attributes: &vertex_attributes,
             })]
         };
 
@@ -982,7 +1387,10 @@ impl Engine {
                     buffers: &vertex_buffer_layout,
                 },
                 primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    topology: match scene.topology {
+                        Topology::TriangleList => wgpu::PrimitiveTopology::TriangleList,
+                        Topology::PointList => wgpu::PrimitiveTopology::PointList,
+                    },
                     strip_index_format: None,
                     front_face: wgpu::FrontFace::Ccw,
                     cull_mode: None,
@@ -998,7 +1406,9 @@ impl Engine {
                     compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: surface_format,
-                        blend: Some(wgpu::BlendState::REPLACE),
+                        // ⚠ 混合方式按**请求**给（生产侧：背景 = 关闭混合，
+                        //   粒子 = `ONE/ONE` 加法）。
+                        blend: Some(scene.blend.wgpu_state()),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),
@@ -1019,20 +1429,44 @@ impl Engine {
             }))
         };
 
+        // 顶点阶段的 uniform 缓冲（另一个块 ⇒ 另一个 binding）。
+        let vertex_total_size = vertex_layout.total_size();
+        let vertex_uniform_buffer = if vertex_total_size == 0 {
+            None
+        } else {
+            Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("apeireth-ui-gpu.uniforms.vertex"),
+                size: vertex_total_size,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }))
+        };
+
+        let mut bind_entries: Vec<wgpu::BindGroupEntry> = Vec::new();
+        if let Some(buffer) = &uniform_buffer {
+            bind_entries.push(wgpu::BindGroupEntry {
+                binding: layout.binding(),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer,
+                    offset: 0,
+                    size: NonZeroU64::new(total_size),
+                }),
+            });
+        }
+        if let Some(buffer) = &vertex_uniform_buffer {
+            bind_entries.push(wgpu::BindGroupEntry {
+                binding: vertex_layout.binding(),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer,
+                    offset: 0,
+                    size: NonZeroU64::new(vertex_total_size),
+                }),
+            });
+        }
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("apeireth-ui-gpu.uniforms"),
             layout: &bind_group_layout,
-            entries: &match &uniform_buffer {
-                Some(buffer) => vec![wgpu::BindGroupEntry {
-                    binding: layout.binding(),
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer,
-                        offset: 0,
-                        size: NonZeroU64::new(total_size),
-                    }),
-                }],
-                None => Vec::new(),
-            },
+            entries: &bind_entries,
         });
 
         let vertex_buffer = if scene.vertex_data.is_empty() {
@@ -1062,10 +1496,13 @@ impl Engine {
             pipeline,
             bind_group,
             uniform_buffer,
+            vertex_uniform_buffer,
             vertex_buffer,
             layout,
-            vertex_count: scene.resolved_vertex_count(),
+            vertex_layout,
+            vertex_count: scene.resolved_vertex_count_by_format(),
             scratch: vec![0u8; total_size as usize],
+            vertex_scratch: vec![0u8; vertex_total_size as usize],
             surface_format,
             surface_generation,
         })
@@ -1098,29 +1535,97 @@ impl Engine {
         pipeline: &mut ScenePipeline,
         uniforms: &UniformValues,
     ) -> Result<FrameReport, GpuError> {
+        // 单 pass ⇒ 走**多 pass** 那条路（**同一条**代码路径 ⇒ 行为一致）。
+        let mut pass = ScenePass {
+            pipeline,
+            uniforms,
+            vertex_uniforms: None,
+        };
+        self.draw_passes(std::slice::from_mut(&mut pass))
+    }
+
+    /// ⭐ **画一帧**（**多个 pass**，一次取纹理、一次呈现）。
+    ///
+    /// ## 为什么需要多 pass
+    ///
+    /// 生产侧的片头是**两个 pass**（背景 matte + 火焰粒子）⇒ ⇒ 两者必须画进
+    /// **同一张**表面纹理 ⇒ ⇒ 若分两次调 [`Engine::draw_frame`] ⇒ 第二次会
+    /// **重新取纹理并呈现** ⇒ ⇒ 第一次的画面被**覆盖** ⇒ ⇒ 必须一次呈现。
+    ///
+    /// ## 每帧的动作顺序（不可换）
+    ///
+    /// 1. **帧号 +1**（设备事件据此打帧号）；
+    /// 2. ⭐ **自侦测**画布尺寸变化（宿主给了尺寸来源时）；
+    /// 3. 写 uniform（宿主的取值 + **引擎自填的帧缓冲高度**）；
+    /// 4. 取表面纹理（`Lost` ⇒ **自动重新配置表面**并重试一次）；
+    /// 5. 编码 + 提交 + 呈现（**每个 pass 一个 render pass**，
+    ///    **只有第一个 pass 清屏**——否则后一个 pass 会把前一个擦掉）；
+    /// 6. **poll 设备** ⇒ 后端异步错误在这一帧内**派发**；
+    /// 7. 取设备事件：设备丢失 ⇒ [`GpuError::DeviceLost`]；设备错误 ⇒
+    ///    [`GpuError::DeviceError`]。
+    ///
+    /// # Errors
+    ///
+    /// - uniform 值与布局不符 → [`GpuError::BindingFailed`]；
+    /// - 管线格式过期 → [`GpuError::PipelineStale`]；
+    /// - 表面纹理**丢失 / 过期 / 超时 / 被遮挡** → 对应的 [`GpuError`]；
+    /// - 设备丢失 → [`GpuError::DeviceLost`]；
+    /// - 设备错误 → [`GpuError::DeviceError`]。
+    pub fn draw_passes(&self, passes: &mut [ScenePass<'_>]) -> Result<FrameReport, GpuError> {
         // ① 帧号 +1（设备事件回调据此打帧号）。
         let frame_number = self.frame_counter.fetch_add(1, Ordering::Relaxed) + 1;
 
-        // ①′ 管线与当前表面**格式**必须一致（格式变了 ⇒ color target 不匹配
+        // ①′ ⭐ **自侦测**画布尺寸变化（宿主给了尺寸来源时）。
+        //
+        // ⚠ **位置不可换**：必须在写 uniform（帧缓冲高度成员）与取表面纹理
+        //   **之前** ⇒ ① 高度成员按**新**尺寸写；② 纹理按**新**尺寸拿。
+        //
+        // ⇒ 尺寸没变 ⇒ 只多一次闭包调用（**零** GPU 操作）。
+        let auto_resized = self.sync_surface_size()?;
+
+        // ①′ 本帧**实际使用**的表面尺寸与代号（自侦测之后 ⇒ 已是新尺寸）。
+        let surface_size = self.surface_size();
+        let surface_generation = self.surface_generation();
+
+        // ①″ 每条管线与当前表面**格式**必须一致（格式变了 ⇒ color target 不匹配
         //     ⇒ 画出来是错格式的图）⇒ **显式报错**，让宿主去重建管线。
         //
         // ⚠ **尺寸**变化**不**触发本检查（见 `Engine::resize` 的文档）。
         let current_format = self.surface_format();
-        if pipeline.surface_format != current_format {
-            return Err(GpuError::PipelineStale(format!(
-                "管线的表面格式是 {:?}，当前表面格式是 {:?} ⇒ 宿主需调用 Engine::recreate_pipeline",
-                pipeline.surface_format, current_format
-            )));
+        for pass in passes.iter() {
+            if pass.pipeline.surface_format != current_format {
+                return Err(GpuError::PipelineStale(format!(
+                    "管线的表面格式是 {:?}，当前表面格式是 {:?} ⇒ 宿主需调用 Engine::recreate_pipeline",
+                    pass.pipeline.surface_format, current_format
+                )));
+            }
         }
 
-        // ② 写 uniform：宿主取值 + 引擎自填的帧缓冲高度。
-        uniforms
-            .write_into(&pipeline.layout, &mut pipeline.scratch)
-            .map_err(|e: BindingError| GpuError::BindingFailed(e.to_string()))?;
-        self.write_framebuffer_height(pipeline);
-        if let Some(buffer) = &pipeline.uniform_buffer {
-            if !pipeline.scratch.is_empty() {
-                self.queue.write_buffer(buffer, 0, &pipeline.scratch);
+        // ② 写 uniform：宿主取值 + 引擎自填的帧缓冲高度（**每个 pass 各自**）。
+        for pass in passes.iter_mut() {
+            pass.uniforms
+                .write_into(&pass.pipeline.layout, &mut pass.pipeline.scratch)
+                .map_err(|e: BindingError| GpuError::BindingFailed(e.to_string()))?;
+            self.write_framebuffer_height(pass.pipeline);
+            if let Some(buffer) = &pass.pipeline.uniform_buffer {
+                if !pass.pipeline.scratch.is_empty() {
+                    self.queue.write_buffer(buffer, 0, &pass.pipeline.scratch);
+                }
+            }
+            // 顶点阶段的 uniform（**另一个块** ⇒ 另一个缓冲）。
+            if let Some(values) = pass.vertex_uniforms {
+                values
+                    .write_into(
+                        &pass.pipeline.vertex_layout,
+                        &mut pass.pipeline.vertex_scratch,
+                    )
+                    .map_err(|e: BindingError| GpuError::BindingFailed(e.to_string()))?;
+                if let Some(buffer) = &pass.pipeline.vertex_uniform_buffer {
+                    if !pass.pipeline.vertex_scratch.is_empty() {
+                        self.queue
+                            .write_buffer(buffer, 0, &pass.pipeline.vertex_scratch);
+                    }
+                }
             }
         }
 
@@ -1134,20 +1639,27 @@ impl Engine {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("apeireth-ui-gpu.frame"),
             });
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        for (index, pass) in passes.iter_mut().enumerate() {
+            // ⚠ **只有第一个 pass 清屏**：后一个 pass 必须 `Load`（否则会把
+            //   前一个 pass 的画面**擦掉**）⇒ ⇒ 多 pass 才叠得起来。
+            let load = if index == 0 {
+                wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                })
+            } else {
+                wgpu::LoadOp::Load
+            };
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("apeireth-ui-gpu.frame"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        }),
+                        load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -1156,12 +1668,12 @@ impl Engine {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(&pipeline.pipeline);
-            pass.set_bind_group(0, &pipeline.bind_group, &[]);
-            if let Some(vertex_buffer) = &pipeline.vertex_buffer {
-                pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            render_pass.set_pipeline(&pass.pipeline.pipeline);
+            render_pass.set_bind_group(0, &pass.pipeline.bind_group, &[]);
+            if let Some(vertex_buffer) = &pass.pipeline.vertex_buffer {
+                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             }
-            pass.draw(0..pipeline.vertex_count, 0..1);
+            render_pass.draw(0..pass.pipeline.vertex_count, 0..1);
         }
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
@@ -1199,13 +1711,18 @@ impl Engine {
             return Err(GpuError::DeviceError(errors.join("; ")));
         }
 
+        let first_pass = passes.first();
         Ok(FrameReport {
             backend: self.backend,
             surface_format: self.color.surface_format,
             encoding: self.color.encoding,
-            vertex_count: pipeline.vertex_count,
-            uniform_members: pipeline.layout.len() as u32,
+            vertex_count: first_pass.map_or(0, |pass| pass.pipeline.vertex_count),
+            uniform_members: first_pass.map_or(0, |pass| pass.pipeline.layout.len() as u32),
             frame_number,
+            surface_width: surface_size.0,
+            surface_height: surface_size.1,
+            surface_generation,
+            auto_resized,
         })
     }
 
@@ -1237,7 +1754,7 @@ impl Engine {
     /// | 取值 | 语义 | 该做什么 |
     ///|---|---|---|
     /// | `Lost` | 交换链**作废**（WebGPU 后端改 `canvas.width/height` 就会这样） | **重建表面**（重新 configure） |
-    /// | `Outdated` | 表面配置**过期**（尺寸变了） | 调 [`Engine::resize`] |
+    /// | `Outdated` | 表面配置**过期**（尺寸变了） | **自动**重新侦测尺寸 + 重新 configure |
     /// | `Timeout` | 本帧没拿到纹理（**瞬时**） | **跳过本帧**，下一帧再来 |
     /// | `Occluded` | 画布**不可见**（**瞬时**） | 跳过本帧 |
     /// | `Validation` | 配置非法 | 修配置 |
@@ -1247,13 +1764,21 @@ impl Engine {
     ///
     /// ⇒ 现在：**逐个区分**；并且 `Lost` 会**自动**重新配置表面并重试一次
     /// （这就是「交换链失效后的恢复路径」）。
+    ///
+    /// ## ⭐ `Outdated` 也**自动**恢复
+    ///
+    /// `Outdated` = 「表面配置与画布当前状态不匹配」⇒ 典型成因是画布尺寸在
+    /// 「自侦测」之后**又**变了（**竞态**：同一帧里画布被改）。
+    ///
+    /// ⇒ 现在：`Outdated` ⇒ **重新侦测**尺寸（自侦测路径）+ 必要时**重新
+    /// 配置**表面 ⇒ 重试一次 ⇒ ⇒ 宿主不必再显式调 `Engine::resize`。
     fn acquire_surface_texture(&self) -> Result<wgpu::SurfaceTexture, GpuError> {
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => Ok(texture),
             wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
             wgpu::CurrentSurfaceTexture::Lost => {
                 // 交换链作废 ⇒ 重新配置表面 ⇒ 再试一次。
-                self.reconfigure_surface()?;
+                self.recover_surface()?;
                 match self.surface.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(texture)
                     | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
@@ -1262,9 +1787,18 @@ impl Engine {
                     ))),
                 }
             }
-            wgpu::CurrentSurfaceTexture::Outdated => Err(GpuError::SurfaceTextureOutdated(
-                "表面配置已过期（画布尺寸变了）⇒ 宿主需调用 Engine::resize".to_string(),
-            )),
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                // 画布尺寸在「自侦测」之后又变了（竞态）⇒ 重新侦测 + 重新配置
+                // ⇒ 重试一次（自侦测路径在这里**复用** ⇒ 不会漏掉尺寸变化）。
+                self.recover_surface()?;
+                match self.surface.get_current_texture() {
+                    wgpu::CurrentSurfaceTexture::Success(texture)
+                    | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
+                    other => Err(GpuError::SurfaceTextureOutdated(format!(
+                        "表面配置已过期（画布尺寸变了）且自动重新配置后仍拿不到：{other:?} ⇒ 宿主需调用 Engine::resize"
+                    ))),
+                }
+            }
             wgpu::CurrentSurfaceTexture::Timeout => Err(GpuError::SurfaceTextureTimeout(
                 "本帧没拿到表面纹理（瞬时）⇒ 跳过本帧即可".to_string(),
             )),
@@ -1276,6 +1810,43 @@ impl Engine {
             )),
         }
     }
+}
+
+/// ⭐ 点列表拓扑的**后端能力判定**（**纯逻辑** ⇒ native 可单测）。
+///
+/// ## 为什么只有 WebGL（GLES）后端
+///
+/// - **WebGL（GLES）**：`gl_PointSize` 是 GLSL ES 的**原生**内建 ⇒ 点 sprite
+///   直接可用；
+/// - **WebGPU**：规范**没有**点尺寸 ⇒ wgpu 的 WebGPU 后端在
+///   `create_shader_module` 处理该内建时**会 panic**（实测：`unwrap_failed`
+///   ⇒ 浏览器里 = 页面崩溃）⇒ ⇒ 必须在**进 wgpu 之前**显式拒绝。
+fn point_list_supported(backend: wgpu::Backend) -> bool {
+    matches!(backend, wgpu::Backend::Gl)
+}
+
+/// ⭐ 把表面状态改到新尺寸（**纯逻辑**：只改状态，不碰 GPU ⇒ native 可单测）。
+///
+/// ## 为什么抽成纯函数
+///
+/// 「尺寸变了 ⇒ 代号 +1」这条不变量**必须**能被测到，而
+/// [`Engine::resize`] 里有 `surface.configure()`（**要真设备**）⇒ native 上
+/// 造不出引擎 ⇒ ⇒ 把**状态迁移**（改尺寸 + 代号 +1 + 幂等判定）抽出来 ⇒
+/// [`Engine::resize`] 与单测走**同一条**代码路径。
+///
+/// ## 返回值
+///
+/// `true` = 尺寸**真的**变了（调用方需要重新配置表面）；`false` = 幂等
+/// （尺寸没变 ⇒ 不动表面 ⇒ 不作废交换链 ⇒ 不闪一帧）。
+fn resize_surface_state(state: &mut SurfaceState, width: u32, height: u32) -> bool {
+    if state.config.width == width && state.config.height == height {
+        return false;
+    }
+    state.config.width = width;
+    state.config.height = height;
+    // 代号 +1 ⇒ 宿主能看出「表面被重新配置过」（⇒ 交换链重建 ⇒ 旧纹理作废）。
+    state.generation += 1;
+    true
 }
 
 /// 按画布目标建表面（步骤 3）。
@@ -1781,5 +2352,170 @@ mod tests {
         assert!(lost.to_string().contains("需重建表面"), "{lost}");
         assert!(outdated.to_string().contains("需 resize"), "{outdated}");
         assert!(timeout.to_string().contains("跳过本帧"), "{timeout}");
+    }
+
+    // -----------------------------------------------------------------------
+    // ⭐ 画布尺寸**自侦测**（resize 通路闭合）
+    // -----------------------------------------------------------------------
+
+    /// 造一个「表面状态」用于纯逻辑测试。
+    ///
+    /// ⚠ native 上**没有设备** ⇒ 造不出真表面 ⇒ 但「尺寸变了 ⇒ 代号 +1」
+    /// 这条不变量**必须**能测 ⇒ 把**状态迁移**抽成纯函数
+    /// （[`resize_surface_state`]）⇒ 引擎与单测走**同一条**代码路径。
+    fn fake_surface_state(width: u32, height: u32) -> SurfaceState {
+        SurfaceState {
+            config: wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width,
+                height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![],
+                desired_maximum_frame_latency: 2,
+            },
+            generation: 0,
+        }
+    }
+
+    #[test]
+    fn the_point_topology_is_only_allowed_on_the_webgl_backend() {
+        // ⭐⭐ **实测踩过的坑**：wgpu 的 **WebGPU 后端**处理 `gl_PointSize`
+        //   内建时会 **panic**（`unwrap_failed`）⇒ 浏览器里 = **页面崩溃**
+        //   ⇒ ⇒ 引擎必须在**进 wgpu 之前**显式拒绝。
+        assert!(
+            point_list_supported(wgpu::Backend::Gl),
+            "WebGL（GLES）后端支持点尺寸 ⇒ 必须放行"
+        );
+        for backend in [
+            wgpu::Backend::BrowserWebGpu,
+            wgpu::Backend::Vulkan,
+            wgpu::Backend::Metal,
+            wgpu::Backend::Dx12,
+            wgpu::Backend::Noop,
+        ] {
+            assert!(
+                !point_list_supported(backend),
+                "{backend:?} 没有点尺寸 ⇒ 必须拒绝（否则 wgpu 会 panic）"
+            );
+        }
+    }
+
+    #[test]
+    fn a_size_source_reporting_a_new_size_triggers_an_automatic_resize() {
+        // ⭐⭐ 核心不变量：**尺寸来源报告新尺寸 ⇒ 引擎自动 resize**。
+        //
+        // 为什么必须有这条：宿主**不调** `Engine::resize` 时（生产宿主就是
+        // 这样），尺寸变化**也**必须生效 ⇒ ⇒ 这正是「迁移」要消除的差距。
+        let source = CanvasSizeSource::new(|| (720, 600));
+        let mut state = fake_surface_state(960, 600);
+        let current = (state.config.width, state.config.height);
+
+        // ① 侦测：来源报告的尺寸与当前表面尺寸不同 ⇒ 必须给出「新尺寸」。
+        let new_size = source
+            .detect_change(current)
+            .expect("尺寸变了 ⇒ 必须触发自动 resize");
+        assert_eq!(new_size, (720, 600));
+
+        // ② 应用：状态改到新尺寸 + 代号 +1（与 `Engine::resize` 同一段代码）。
+        assert!(
+            resize_surface_state(&mut state, new_size.0, new_size.1),
+            "尺寸真的变了 ⇒ 状态必须被改"
+        );
+        assert_eq!(
+            (state.config.width, state.config.height),
+            (720, 600),
+            "表面尺寸必须跟上画布尺寸"
+        );
+        assert_eq!(state.generation, 1, "每次重新配置表面 ⇒ 代号 +1");
+    }
+
+    #[test]
+    fn a_size_source_reporting_the_current_size_triggers_no_resize() {
+        // ⚠ 尺寸**没变** ⇒ **零开销**：不动表面（不重新配置 ⇒ 不作废交换链）。
+        let source = CanvasSizeSource::new(|| (960, 600));
+        let mut state = fake_surface_state(960, 600);
+        let current = (state.config.width, state.config.height);
+
+        assert_eq!(
+            source.detect_change(current),
+            None,
+            "尺寸没变 ⇒ 不得 resize"
+        );
+        assert!(
+            !resize_surface_state(&mut state, 960, 600),
+            "幂等：不得改状态"
+        );
+        assert_eq!(state.generation, 0, "幂等：代号不得动");
+    }
+
+    #[test]
+    fn without_a_size_source_nothing_is_auto_resized() {
+        // ⚠ native / 无画布宿主 ⇒ `canvas_size` 缺省为 `None` ⇒ 行为与上批
+        //   **逐字一致**（不自动 resize；宿主想改尺寸仍可显式调 `resize`）。
+        let options = EngineOptions::default();
+        assert!(
+            options.canvas_size.is_none(),
+            "默认不得有尺寸来源（否则 native 侧行为会变）"
+        );
+        // 没有来源 ⇒ 「侦测」这一步根本不存在 ⇒ 没有新尺寸可给。
+        let source: Option<&CanvasSizeSource> = None;
+        assert!(source.is_none());
+    }
+
+    #[test]
+    fn a_zero_sized_report_is_clamped_to_one_pixel() {
+        // ⚠ 画布被置 0（少见）时**不得**把表面配成 0 尺寸（wgpu 会拒绝）
+        //   ⇒ 与生产的 `Math.max(1, …)` 同口径。
+        let source = CanvasSizeSource::new(|| (0, 0));
+        assert_eq!(source.detect_change((960, 600)), Some((1, 1)));
+    }
+
+    #[test]
+    fn the_surface_generation_only_moves_when_the_size_really_changes() {
+        // ⭐ 代号是宿主的**可观测**信号 ⇒ 不得在「尺寸没变」时乱动。
+        let mut state = fake_surface_state(960, 600);
+        assert!(resize_surface_state(&mut state, 720, 600));
+        assert_eq!(state.generation, 1);
+        assert!(!resize_surface_state(&mut state, 720, 600));
+        assert_eq!(state.generation, 1, "尺寸没变 ⇒ 代号不得动");
+        assert!(resize_surface_state(&mut state, 720, 450));
+        assert_eq!(state.generation, 2);
+        assert_eq!((state.config.width, state.config.height), (720, 450));
+    }
+
+    #[test]
+    fn two_size_sources_are_compared_by_identity_not_by_content() {
+        // ⚠ 闭包**没有**语义上的相等 ⇒ 按 `Rc` 指针比较 ⇒ 「同一个来源」才
+        //   相等 ⇒ 不给调用方「内容相等」的错觉。
+        let a = CanvasSizeSource::new(|| (1, 2));
+        let b = a.clone();
+        let c = CanvasSizeSource::new(|| (1, 2));
+        assert_eq!(a, b, "同一个来源的克隆必须相等");
+        assert_ne!(a, c, "不同来源（哪怕行为相同）不得判为相等");
+    }
+
+    #[test]
+    fn the_frame_report_carries_the_surface_facts() {
+        // ⚠ 宿主要能**直接**看出「引擎这一帧用的是新尺寸、且自动 resize 过」
+        //   ⇒ 这两个字段是自侦测通路的**对外证据**。
+        let report = FrameReport {
+            backend: wgpu::Backend::Noop,
+            surface_format: wgpu::TextureFormat::Rgba8Unorm,
+            encoding: OutputEncoding::RawBytes,
+            vertex_count: 3,
+            uniform_members: 17,
+            frame_number: 7,
+            surface_width: 720,
+            surface_height: 600,
+            surface_generation: 2,
+            auto_resized: true,
+        };
+        assert_eq!(report.surface_width, 720);
+        assert_eq!(report.surface_height, 600);
+        assert_eq!(report.surface_generation, 2);
+        assert!(report.auto_resized, "自动 resize 必须能被宿主看见");
     }
 }

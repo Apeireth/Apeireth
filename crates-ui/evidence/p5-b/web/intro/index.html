@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>P5-b intro — production fire.ts vs engine (value + pixel)</title>
+<style>
+  /* 画布的 CSS 尺寸 = 设备像素尺寸（dpr 由 CDP 固定为 1）⇒ 截图 1:1 无缩放。 */
+  html, body { margin: 0; padding: 0; background: #000; }
+  canvas { display: block; width: 960px; height: 600px; }
+</style>
+</head>
+<body>
+<canvas id="production" width="960" height="600"></canvas>
+<!-- ⚠ **每个后端一块画布**：一个 canvas 只能绑一种 context 类型
+     （先绑 WebGL2 再绑 WebGPU ⇒ `canvas already in use`）。 -->
+<canvas id="engine-webgl" width="960" height="600"></canvas>
+<canvas id="engine-webgpu" width="960" height="600"></canvas>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

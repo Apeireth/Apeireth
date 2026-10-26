@@ -17,6 +17,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-ui-scene"
+version = "2.0.0-rc.4"
+dependencies = [
+ "apeireth-ui-gpu",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -403,6 +410,7 @@ name = "p5b-harness"
 version = "0.0.0"
 dependencies = [
  "apeireth-ui-gpu",
+ "apeireth-ui-scene",
  "js-sys",
  "wasm-bindgen",
  "wasm-bindgen-futures",
