@@ -270,8 +270,22 @@ impl PromptServer for StaticPromptServer {
                         rest = &after[close + 1..];
                     }
                     None => {
+                        // ⚠️ **2026-10-26 修一个真缺陷（DoS）**：原写法 `rest = after`
+                        // ⇒ `after = &rest[open..]` ⇒ **rest 完全不前进** ⇒
+                        // `while let Some(open) = rest.find('{')` 永远找到**同一个** `{`
+                        // ⇒ ⇒ **死循环 + rendered 无限增长（内存爆掉）**。
+                        //
+                        // **触发条件**：模板里有**未闭合**的 `{`（`"{zq"` / `"{"`），
+                        // 或 `{` 之后又出现 `{`（`"{a{b}"`）⇒ 过滤掉不成对的 `}` 后落进本分支。
+                        // ⇒ **可达性**：模板来自**远端 MCP 服务器**（`prompts/list` 提供的模板）
+                        // ⇒ **不可信输入** ⇒ 一个畸形模板就能把渲染方**永久挂住**。
+                        //
+                        // **修法（最小、且保持「原样保留」语义）**：本分支已经**输出了** `{`
+                        // ⇒ 扫描位置**必须前进** ⇒ `rest = &after[1..]`（跳过这个 `{`）。
+                        // ⇒ 契约「占位符名必须是完整 `{key}`（key 不含 `{`），否则**原样保留**」
+                        //   仍然成立：`"{zq"` ⇒ 渲染成 `{zq`（逐字保留）✔。
                         rendered.push('{');
-                        rest = after;
+                        rest = &after[1..];
                     }
                 }
             }
@@ -301,6 +315,42 @@ mod tests {
     /// 模板插值是**单遍**的：代入的**值不再被当作模板解释**。
     ///
     /// 契约（`with_prompt` 文档）：「`{key}` is replaced with `arguments[key]`
+    /// 回归（2026-10-26）：**未闭合的 `{` 不得把渲染挂死**（真缺陷：DoS）。
+    ///
+    /// 旧实现里「不成对的 `}`」分支把扫描位置**原样放回**（`rest = after`）
+    /// ⇒ `find('{')` 永远找到同一个 `{` ⇒ **死循环 + 内存无限增长**。
+    /// ⇒ 触发形态：`"{zq"` / `"{"` / `"{a{b}"`。
+    /// ⇒ 契约（「占位符名必须是完整 `{key}`（key 不含 `{`），否则**原样保留**」）仍须成立。
+    #[test]
+    fn unclosed_placeholder_is_kept_verbatim_and_does_not_hang() {
+        for (template, expected) in [
+            ("{zq", "{zq"),
+            ("{", "{"),
+            ("{a{b}", "{a{b}"),
+            ("pre{zq", "pre{zq"),
+            // ⚠️ `{a}` 是**已知键** ⇒ 按契约**应当被代入**（`{zq}` 是未知键 ⇒ 原样保留）
+            // ⇒ 我第一版期望 `{zq}{a}` ⇒ **我的期望写错了**（自造期望 ⇒ 假阳性）。
+            ("{zq}{a}", "{zq}V"),
+        ] {
+            let server = StaticPromptServer::new().with_prompt(
+                Prompt {
+                    name: "demo".to_string(),
+                    description: None,
+                    arguments: None,
+                },
+                template,
+            );
+            let out = server
+                .get("demo", &serde_json::json!({"a": "V"}))
+                .expect("提示词可渲染");
+            let text = rendered_text(&out);
+            assert_eq!(
+                text, expected,
+                "未闭合占位符必须**原样保留**（且不得挂死）: template={template:?} -> {text:?}"
+            );
+        }
+    }
+
     /// (stringified) at get-time」—— 值被**代入**，不是被**再求值**。
     /// 旧实现逐键 `replace` 迭代 ⇒ 值会被后续键二次解释
     /// （模板 `{a}` + 参数 `{"a":"{b}","b":"SECRET"}` ⇒ 渲染出 `"SECRET"`），

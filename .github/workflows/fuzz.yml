@@ -89,7 +89,13 @@ jobs:
         #      error: the option `Z` is only accepted on the nightly compiler
         #      Error: failed to build fuzz script: ASAN_OPTIONS=... RUSTFLAGS=" -Cpasses=sancov-module ..."
         # 命令行 `+nightly` 优先级最高，能压过该 pin（2026-10-24 实测修正）。
-        run: cargo +nightly fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
+        # ⚠️ **2026-10-26 加 `-timeout=25`**（单次输入的执行上限，秒）：
+        # 实测：`mcp_schema` 的**固定对抗串电池**里有一个模板 `"{zq"` 让渲染器
+        # **死循环**（产品已修，见 `crates/foundation/plugin/src/mcp/prompt.rs`）。
+        # ⇒ 但**任何** target 若再出现「单次输入挂死」，没有 `-timeout` 的话
+        # libFuzzer 会**一直等** ⇒ 整个 job 跑到 45 分钟上限才红 ⇒ ⇒
+        # **反馈极慢**。⇒ 加了上限 ⇒ **单输入超 25 秒立刻报 timeout 并落 artifact**。
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }} -timeout=25
       - name: Upload crash artifacts
         if: always()
         uses: actions/upload-artifact@v4
