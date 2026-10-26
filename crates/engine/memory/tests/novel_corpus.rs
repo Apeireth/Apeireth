@@ -51,9 +51,12 @@ Language: Chinese
 -----------------------------------------------------------------
 此開卷記的是一場夢幻，故將真事隱去，
 只說些市井雜談．此書記了許多人，大約是
-某府裡的舊事．
+某府裡的舊事．賈雨村在門外站了許久，
+賈雨村又問了兩句．林黛玉聽得明白，
+便問那賈雨村．賈雨村笑道：好事好事．
 
 　　這一段是第二段，用來驗證空行要留成段落分隔．
+　　賈雨村與林黛玉說了許多話，賈雨村便辭了．
 
 第三回
 
@@ -349,19 +352,48 @@ fn mine_novel_produces_cases_with_the_couplet_in_the_question() {
     let cases = mine_novel(&chapters, MiningConfig::default());
 
     assert!(!cases.is_empty(), "小说正文应当挖得出题");
+    // ⚠️ **口径变更（2026-10-26，B0-g）**：题面主体改成**正文里的实体**，
+    // **不再用回目联 / 回次**当主体。
+    //
+    // 理由（实测三条）：① 查询词若不在正文里 ⇒ 检索只能靠 bigram 偶然命中；
+    // ② 注入按查询选窗口**必然选到无关处** ⇒ 证据族指标**测不出注入好坏**；
+    // ③ 题面像「检索结果的目录名」，**不像人话**（人会问「賈雨村后来怎麼樣」）。
+    //
+    // ⇒ 现在断言的是「**题面里的主体词真的出现在正文里**」（这才是「像人话 + 可检索」）。
+    for case in &cases {
+        assert!(
+            !case.query.contains("第三回"),
+            "题面不该用回次当主体：{}",
+            case.query
+        );
+    }
+    // 主体词必须**真实出现在**被指向记录的正文里（否则检索不到 ⇒ 题是假的）。
+    for case in &cases {
+        for (index, id) in case.expect_ids.iter().enumerate() {
+            let Some(chapter) = chapters
+                .iter()
+                .find(|chapter| &format!("novel-{:04}", chapter.index) == id)
+            else {
+                continue;
+            };
+            let Some(fragment) = case.expect_fragments.get(index) else {
+                continue;
+            };
+            assert!(
+                chapter.body.contains(fragment.as_str()),
+                "期望片段必须真的在正文里：{fragment}"
+            );
+        }
+    }
+    // ⚠️ **短正文下的已知质量上限**（2026-10-26 实测，如实记录）：
+    // 短正文里任何词都只出现 1~2 次 ⇒ **频次判据失效** ⇒ 主体可能是
+    // bigram 碎片（「賈雨」「中既」）⇒ 此时「宁可粗，不可无题」。
+    // ⇒ 质量由**长正文**（真实语料：每回 4000+ 字 ⇒ 频次判据有效）保证；
+    //    本测试的合成样本是**短正文** ⇒ 不断言具体主体词。
+    // ⇒ 真正的质量断言在 `golden_mining` 里（「长正文 ⇒ 主体是高频实体」）。
     assert!(
-        cases.iter().any(|case| case.query.contains("第三回")),
-        "题面里要出现回次（像人话）：{:?}",
-        cases
-            .iter()
-            .map(|case| case.query.as_str())
-            .collect::<Vec<_>>()
-    );
-    assert!(
-        cases
-            .iter()
-            .any(|case| case.query.contains("賈雨村夤緣复舊職")),
-        "题面里要出现回目联：{:?}",
+        cases.iter().all(|case| !case.query.contains("第三回")),
+        "题面不该用回次当主体：{:?}",
         cases
             .iter()
             .map(|case| case.query.as_str())

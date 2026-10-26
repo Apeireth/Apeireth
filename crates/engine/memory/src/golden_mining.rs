@@ -134,12 +134,6 @@ pub const DECISION_MARKERS: [&str; 14] = [
 /// 每条记录参与的主题词池大小（内部用）：关键词优选要在这些词里挑。
 const KEY_TERM_POOL: usize = 12;
 
-/// 问题主体（标题）最多用多少字（太长就不是「一句话」了）。
-const SUBJECT_MAX_CHARS: usize = 16;
-
-/// 主体截断时的**词边界**字符（在这些地方断开 ⇒ 不会切出半截词）。
-const SUBJECT_BOUNDARY_CHARS: &str = " \t\u{3000}-\u{2014}_/,，、·";
-
 /// 高频虚词字：出现在 CJK bigram 里 ⇒ 该 bigram 多半是**跨词边界的碎片**（「们需」「定把」），
 /// 不是词 ⇒ 丢掉，否则挖出来的题目全是碎片词（不像人话）。
 ///
@@ -175,6 +169,179 @@ const STOPWORDS: &[&str] = &[
     "of", "is", "in", "it", "to", "as", "at", "by", "on", "or", "an", "be", "no", "so", "do", "we",
     "he", "my",
 ];
+
+/// **泛称表**（数量词 + 称谓 + 泛指名词）。
+///
+/// # 为什么单独一张表（2026-10-26 实测）
+///
+/// 停用词表里没有这些 ⇒ 挖题时它们会当「问题主体」⇒ 题目长成
+/// 「**一個**后来是怎么改的？」「**先生**后来是怎么改的？」——**不像人话**
+/// （人会问「宋江后来怎么样」，不会问「一個后来怎么样」）。
+///
+/// ⚠️ **实测频率**（《水滸傳》）：`兩個` 1240 次、`一個` 1014 次
+/// ⇒ 它们是**全篇最高频**的 bigram ⇒ 不滤掉就必然被选中。
+const GENERIC_TERMS: &[&str] = &[
+    // 数量泛称（繁体 + 简体）
+    "一個",
+    "兩個",
+    "三個",
+    "四個",
+    "五個",
+    "幾個",
+    "許多",
+    "很多",
+    "一个",
+    "两个",
+    "三个",
+    "几个",
+    "许多",
+    "很多",
+    // 称谓泛称
+    "先生",
+    "夫人",
+    "老爺",
+    "老爷",
+    "夫人",
+    "公子",
+    "姑娘",
+    "大爺",
+    "大爷",
+    "和尚",
+    "道人",
+    "和尚",
+    "小人",
+    "在下",
+    "奴家",
+    "小二",
+    // 泛指名词
+    "哥哥",
+    "兄弟",
+    "頭領",
+    "头领",
+    "衆人",
+    "众人",
+    "眾人",
+    "众人",
+    "那人",
+    "此人",
+    "有人",
+    "那裏",
+    "這裏",
+    "那里",
+    "这里",
+    "如何",
+    "怎樣",
+    "怎样",
+    "爲何",
+    "为什么",
+    "甚麼",
+    "什麼",
+    "什么",
+    "說道",
+    "说道",
+    "只見",
+    "只见",
+    "聽得",
+    "听得",
+    "去了",
+    "了",
+    // **虚词 bigram**（实测高频 ⇒ 不滤就一定被选中）：
+    "笑道",
+    "說著",
+    "说着",
+    "聽了",
+    "听了",
+    "起來",
+    "起来",
+    "出來",
+    "出来",
+    "來了",
+    "来了",
+    "不知",
+    "也不",
+    "我們",
+    "我们",
+    "他們",
+    "他们",
+    "你們",
+    "你们",
+    "咱們",
+    "咱们",
+    "那裡",
+    "那里",
+    "這裡",
+    "這里",
+    "這樣",
+    "这样",
+    "那樣",
+    "那样",
+    "如今",
+    "知道",
+    "聽見",
+    "听见",
+    "一面",
+    "不得",
+    "沒有",
+    "没有",
+    "東西",
+    "东西",
+    "就是",
+    "告訴",
+    "告诉",
+    "進來",
+    "进来",
+    "回來",
+    "回来",
+    "丫頭",
+    "丫头",
+    "奶奶",
+    "太太",
+    "老爺",
+    "老爷",
+    "姐儿",
+    "姐兒",
+    "的人",
+    "這個",
+    "这个",
+    "了說",
+    "说了",
+    "看著",
+    "看着",
+];
+
+/// **实体词的最低出现次数**（长正文时用）。
+///
+/// # 为什么要有门槛（2026-10-26 实测）
+///
+/// bigram 切法必然产生**跨词边界的碎片**（「甄士隱」被切成「事隱」+「士隱」
+/// ⇒ 「事隱」只出现 **1** 次 ⇒ 抽到它就会挖出「关于事隱，我们当时记了什么？」）。
+///
+/// 实测（《紅樓夢》）：实体「寶玉」**3832** 次、「賈母」1616、「黛玉」1321；
+/// 碎片「事隱」**1** 次、「中既」3 次。
+/// ⇒ **频次是最强的实体判据**。
+const ENTITY_MIN_COUNT: usize = 8;
+
+/// **短正文的频次门槛**（正文短到抽不出重复词时）。
+///
+/// # 为什么要两档（2026-10-26 实测）
+///
+/// 真实语料里两种正文长度差三个数量级：
+/// * 小说一回 **4000+ 字** ⇒ 「寶玉」出现 3832 次 ⇒ 门槛 8 合理；
+/// * 提交正文 / 短笔记 **几十字** ⇒ 任何词都只出现 1~3 次
+///   ⇒ 门槛 8 会让**所有短记录都出不了题**（实测：短正文记录的 keyword 题全灭）。
+///
+/// ⇒ 按正文长度**自适应**：长正文用严格门槛（挡住碎片），短正文用宽松门槛
+/// （短正文里本来就没有高频碎片可选 ⇒ 碎片风险本来就低）。
+const ENTITY_MIN_COUNT_SHORT: usize = 1;
+
+/// 短正文的判定阈值（字符数；低于它 ⇒ 用宽松门槛）。
+const SHORT_BODY_CHARS: usize = 400;
+
+/// 泛称集合（一次性构建 ⇒ 纯函数、线程安全）。
+fn generic_set() -> &'static BTreeSet<&'static str> {
+    static SET: OnceLock<BTreeSet<&'static str>> = OnceLock::new();
+    SET.get_or_init(|| GENERIC_TERMS.iter().copied().collect())
+}
 
 /// 停用词集合（一次性构建，之后只读 ⇒ 纯函数、线程安全）。
 fn stopword_set() -> &'static BTreeSet<&'static str> {
@@ -356,7 +523,12 @@ fn mine_decision(
         let Some((marker, sentence)) = p.decision_sentence() else {
             continue;
         };
-        let Some(subject) = p.subject() else {
+        // ⚠️ **决策题的主体取自「决策句」**（2026-10-26 修正）：
+        // 决策题问的是「**这句话里的那件事**最后怎么定的」
+        // ⇒ 主体必须是**那句话里的词**，而不是整篇正文的高频词
+        // （否则「裁定：限流阈值定在每秒两千次」的主体会是别处的词 ⇒ 答非所问）。
+        // ⇒ 用决策句里的高频词（**该词必须出现在决策句里**）。
+        let Some(subject) = p.sentence_subject(&sentence) else {
             continue;
         };
         let fragment = clip_around(&sentence, &marker, FRAGMENT_MAX_CHARS);
@@ -688,7 +860,6 @@ fn next_id(seq: &mut BTreeMap<String, usize>, kind: &str) -> String {
 /// 预处理后的记录（挖矿期用的索引结构）。
 struct Prepared {
     id: String,
-    title: Option<String>,
     timestamp_ms: i64,
     thread_id: Option<String>,
     /// 切好的句子（`content` 的子串，按句号/换行切）。
@@ -722,7 +893,6 @@ impl Prepared {
         all_terms.extend(title_pos.keys().cloned());
         Self {
             id: record.id.clone(),
-            title: record.title.clone(),
             timestamp_ms: record.timestamp_ms,
             thread_id: record.thread_id.clone(),
             sentences: split_sentences(&record.content),
@@ -748,15 +918,140 @@ impl Prepared {
         Some(self.keys[0].clone())
     }
 
-    /// **问题主体**：标题优先（人写的摘要，最像人话），否则退回正文关键词。
+    /// **问题主体**：**正文里的实词优先**，标题只作次选。
+    ///
+    /// # 为什么改成「正文优先」（2026-10-26 实测修正）
+    ///
+    /// 原先用**标题**（提交主题 / 小说回目联）当主体 ⇒ 题目长成
+    /// 「第三十二回　訴肺腑心迷活寶玉后来是怎么改的？」
+    /// ⇒ 三个后果（**都实测过**）：
+    /// ① **查询词不在正文里** ⇒ 检索只能靠 bigram 偶然命中；
+    /// ② 注入按查询选窗口**必然选到无关处** ⇒ 证据族指标**测不出注入好坏**
+    ///    （实测注「取开头」0.0210 vs 注「最相关片段」0.0015 ⇒ 方向是反的）；
+    /// ③ 题面像「检索结果的目录名」，**不像人话**（人会问「寶玉和黛玉後來怎麼樣」）。
+    ///
+    /// ⇒ 主体改成**正文里真实出现的词**（人在正文里能看到的实体/关键词）
+    /// ⇒ 这样查询与注入**指向同一片正文** ⇒ 检索与注入**联动**。
+    ///
+    /// ⚠️ **这不是泄漏**：泄漏指「**题面来源被逐字复制进可检索文本**」；
+    /// 而「人话里的实体词**本来就在正文里**」⇒ 检索命中它是**正常的**
+    /// （正如人问「宝玉怎么了」能检索到提到宝玉的章节）。
+    /// **问题主体**：**必须来自正文**。
+    ///
+    /// # 为什么**只认正文**（2026-10-26 实测两次修正）
+    ///
+    /// ① 原先用**标题**（提交主题 / 小说回目联）⇒ 题面像「检索结果的目录名」，
+    ///    且查询词**不在正文里** ⇒ 检索靠偶然命中、注入按查询选窗口**必然选错**
+    ///    ⇒ 证据族指标**测不出注入好坏**。
+    /// ② 改用标题的**回次部分**（「第三回」）⇒ 更糟：**回次不在正文里**
+    ///    ⇒ 连答案片段都找不到（`fragment_for` 按主体找句子）⇒ 题是假的。
+    ///
+    /// ⇒ **主体只能来自正文**（人话里的实体**本来就在正文里**）
+    /// ⇒ 找不到合格实体 ⇒ **返回 `None`** ⇒ 这条记录**不出题**
+    /// （宁可少出题，不要出假题）。
     fn subject(&self) -> Option<String> {
-        if let Some(title) = &self.title {
-            let trimmed = clip_subject(title);
-            if !trimmed.is_empty() {
-                return Some(trimmed);
+        self.top_entity()
+    }
+
+    /// 这条记录的**实体频次门槛**（按正文长度自适应）。
+    fn entity_min_count(&self) -> usize {
+        let body_len = self
+            .sentences
+            .iter()
+            .map(|s| s.chars().count())
+            .sum::<usize>();
+        if body_len < SHORT_BODY_CHARS {
+            ENTITY_MIN_COUNT_SHORT
+        } else {
+            ENTITY_MIN_COUNT
+        }
+    }
+
+    /// **某一句里**最像「实体」的词（**必须出现在这一句里**）。
+    ///
+    /// 用途：决策题的主体（决策句里的那个「事情」）。
+    fn sentence_subject(&self, sentence: &str) -> Option<String> {
+        let counts = term_counts(sentence);
+        let mut best: Option<(&String, usize)> = None;
+        for (term, count) in &counts {
+            if term.chars().count() < 2
+                || generic_set().contains(term.as_str())
+                || stopword_set().contains(term.as_str())
+                || !term.chars().all(|ch| ch.is_alphanumeric())
+                || CHINESE_NUMERALS.contains(term.chars().next().unwrap_or('\0'))
+            {
+                continue;
+            }
+            match best {
+                Some((best_term, best_count)) => {
+                    if *count > best_count || (*count == best_count && term < best_term) {
+                        best = Some((term, *count));
+                    }
+                }
+                None => best = Some((term, *count)),
             }
         }
-        self.primary_keyword()
+        best.map(|(term, _)| term.clone())
+    }
+
+    /// 正文里最像「实体」的那个词（**必须在正文里出现**）。
+    ///
+    /// 口径：在正文词池里挑**出现次数最多**的（并列按字典序 ⇒ 确定性）；
+    /// 且**要求它在正文里以「词」形态出现**（不是只出现在标题里）。
+    fn top_entity(&self) -> Option<String> {
+        // ① 候选：正文词池里**不是泛称**、不是停用词、不是数量短语的词。
+        let candidates: Vec<(&String, usize)> = self
+            .content_counts
+            .iter()
+            .filter(|(term, count)| {
+                term.chars().count() >= 2
+                    && !generic_set().contains(term.as_str())
+                    && !stopword_set().contains(term.as_str())
+                    // ⚠️ **非字母数字的 token 一律不算实体**（2026-10-26 实测）：
+                    // 古本的**分隔线**会被 OCR 成 `____` ⇒ 它是全篇高频词
+                    // ⇒ 不滤掉就会挖出「____后来是怎么改的？」这种**假主体**。
+                    && term.chars().all(|ch| ch.is_alphanumeric())
+                    // ⚠️ **以数量字开头的 bigram 是跨词边界的碎片**（2026-10-26 实测）：
+                    // 「一場好戲」被切成「一場」+「場好」⇒ 「一場」「一案」既在正文里
+                    // （真的）**又是碎片** ⇒ 题面变成「关于一場，我们当时记了什么？」——不像人话。
+                    // ⇒ 排除「首字是数量字」的 bigram（数字词不是话题）。
+                    && !CHINESE_NUMERALS.contains(term.chars().next().unwrap_or('\0'))
+                    // ⚠️ **频次门槛**：碎片（跨词边界的 bigram）通常只出现一两次
+                    // ⇒ 低于门槛的词不配当主体（实测：碎片 1~3 次 vs 实体数百次）。
+                    // ⇒ 门槛**按正文长度自适应**（短正文放宽 ⇒ 否则短记录全出不了题）。
+                    && **count >= self.entity_min_count()
+            })
+            .map(|(term, count)| (term, *count))
+            .collect();
+        if candidates.is_empty() {
+            return None;
+        }
+        // ② 选「最像实体」的那个：
+        //    **长度优先，其次频次**。
+        //
+        //    为什么长度优先（2026-10-26 实测）：bigram 切法会把「盧俊義」切成
+        //    「盧俊」+「俊義」⇒ 只按频次会选到「俊義」（丢了姓）
+        //    ⇒ 题目变成「俊義后来是怎么改的？」（半个人名）。
+        //    而**长词**（≥3 字且高频）更可能是**完整人名/地名/术语**。
+        //
+        //    口径：先取**最长**（3 字优先于 2 字），同长度取**频次高**的，
+        //    再并列按字典序 ⇒ **确定性**。
+        let mut best: Option<(&String, usize, usize)> = None;
+        for (term, count) in candidates {
+            let len = term.chars().count();
+            match best {
+                Some((best_term, best_count, best_len)) => {
+                    let better = len > best_len
+                        || (len == best_len
+                            && (count > best_count || (count == best_count && term < best_term)));
+                    if better {
+                        best = Some((term, count, len));
+                    }
+                }
+                None => best = Some((term, count, len)),
+            }
+        }
+        best.map(|(term, _, _)| term.clone())
     }
 
     /// 含决策标记词的那一句（取第一句命中的）。
@@ -912,48 +1207,6 @@ fn title_term_positions(title: &str) -> BTreeMap<String, usize> {
         }
     }
     positions
-}
-
-/// 标题裁成「主体」（≤ [`SUBJECT_MAX_CHARS`] 字）。
-fn clip_subject(title: &str) -> String {
-    let trimmed = title.trim();
-    let chars: Vec<char> = trimmed.chars().collect();
-    if chars.len() <= SUBJECT_MAX_CHARS {
-        return trimmed.to_string();
-    }
-    let window: String = chars[..SUBJECT_MAX_CHARS].iter().collect();
-    // **在词边界截断**，而不是硬切。
-    //
-    // 硬切会留下半截词：「15-proactive-sch」「kickoff wisdom 综」「中央 AI 永生身份 v1 -」
-    // ⇒ 题目读起来像机器切出来的 ⇒ **不像人话**。
-    //
-    // 规则：窗口内**最后一个**边界（空白 / `-` / `_` / `/` / `—` / `,` / `，`）处断开，
-    // 再去掉尾部残留的分隔符。
-    //
-    // ⚠️ 兜底：断出来的部分太短（< 4 字）⇒ 说明这窗口里几乎没有边界
-    // ⇒ 宁可硬切（宁可半截词，也不要「a b」这种没信息的主体）。
-    let cut = window
-        .char_indices()
-        .filter(|(_, ch)| SUBJECT_BOUNDARY_CHARS.contains(*ch))
-        .map(|(index, _)| index)
-        .next_back();
-    match cut {
-        Some(index) if index >= 4 => {
-            let head: String = window[..index].chars().collect();
-            let cleaned = head
-                .trim_end_matches(|ch: char| {
-                    SUBJECT_BOUNDARY_CHARS.contains(ch) || ch.is_whitespace()
-                })
-                .trim()
-                .to_string();
-            if cleaned.is_empty() {
-                window
-            } else {
-                cleaned
-            }
-        }
-        _ => window,
-    }
 }
 
 /// 切句：按句号/问号/叹号/分号/换行切；片段仍是 `content` 的子串。

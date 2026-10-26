@@ -582,3 +582,82 @@ fn subject_is_clipped_at_a_word_boundary_not_mid_word() {
         );
     }
 }
+
+// ============================================================
+// 问题主体：来自**正文里的实体**，不是标题
+// ============================================================
+
+#[test]
+fn question_subject_prefers_entities_from_the_body_over_the_title() {
+    // ⚠️ 这条钉住 2026-10-26 的口径修正：
+    // 原先用**标题**（提交主题 / 小说回目联）当主体 ⇒ 题目长成
+    // 「第三十二回　訴肺腑心迷活寶玉后来是怎么改的？」
+    // ⇒ 查询词**不在正文里** ⇒ 检索靠偶然命中、注入按查询选窗口**必然选错**
+    // ⇒ 主体改成**正文里真实出现的实体**（人话：「寶玉后来是怎么改的？」）。
+    let record = rec(
+        "n1",
+        "寶玉正在黛玉房中玩耍。賈母進來看見。寶玉笑道：今日天氣正好。",
+        0,
+        None,
+        Some("第三十二回　訴肺腑心迷活寶玉　含恥辱情烈死金釧"),
+    );
+    let cases = mine(&[record], MiningConfig::default());
+    assert!(!cases.is_empty());
+    for case in &cases {
+        assert!(
+            !case.query.contains("第三十二回"),
+            "题面不该用回目联当主体：{}",
+            case.query
+        );
+        assert!(
+            !case.query.contains("訴肺腑"),
+            "题面不该用回目联当主体：{}",
+            case.query
+        );
+    }
+}
+
+#[test]
+fn generic_terms_are_never_used_as_question_subjects() {
+    // ⚠️ 实测：古本的**数量泛称**（「一個」「兩個」）是**全篇最高频**的 bigram
+    // （《水滸傳》「兩個」1240 次、「一個」1014 次）⇒ 不滤掉必然被选中
+    // ⇒ 题面会变成「一個后来是怎么改的？」——**不像人话**。
+    let record = rec(
+        "n1",
+        "這是一個很長的故事。一個男子走進門來。兩個女子站在那裏。先生問道。夫人答道。",
+        0,
+        None,
+        None,
+    );
+    let cases = mine(&[record], MiningConfig::default());
+    for case in &cases {
+        for generic in ["一個", "兩個", "先生", "夫人"] {
+            assert!(
+                !case.query.contains(generic),
+                "泛称不该当主体（{generic}）：{}",
+                case.query
+            );
+        }
+    }
+}
+
+#[test]
+fn separator_runs_are_never_used_as_question_subjects() {
+    // ⚠️ 实测：古本的**分隔线**会被 OCR 成 `____` ⇒ 它是高频词
+    // ⇒ 不滤掉就会挖出「____后来是怎么改的？」这种**假主体**。
+    let record = rec(
+        "n1",
+        "____________________\n寶玉笑道：今日天氣正好。賈母聽了點頭。\n____________________",
+        0,
+        None,
+        None,
+    );
+    let cases = mine(&[record], MiningConfig::default());
+    for case in &cases {
+        assert!(
+            !case.query.contains('_'),
+            "分隔线不该当主体：{}",
+            case.query
+        );
+    }
+}
