@@ -384,25 +384,21 @@ pub fn parse_diary_docs(text: &str, date: &str) -> Option<(Vec<DiaryDoc>, usize)
 /// 且本批不新增依赖 ⇒ 这里按**同一口径**镜像一份。
 /// ⇒ 接线批次应补一条「两边口径一致」的一致性测试（或把单一真源下沉到 `apeireth-core`）。
 pub fn default_data_root() -> PathBuf {
-    if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
-        if !dir.trim().is_empty() {
-            return PathBuf::from(dir);
-        }
-    }
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".apeireth")
+    // ⚠️ **委派给 core**（唯一真源）—— 本仓曾出过**两份逐字相同**的��现
+    // （这里 + `runtime_assembly::paths`）⇒ 漂移就会让「生产写账」与「CLI 读账」
+    // 指向不同文件（体检读不到刚写的记忆 / 备份漏文件 / 回滚找不到目标）。
+    // 记忆层不能依赖 `runtime-assembly`（成环）⇒ 真源落 `apeireth-core`。
+    apeireth_core::paths::default_data_root()
 }
 
 /// 真实日记目录（`<数据根>/diary`，一天一个 JSON 文件）。
 pub fn default_diary_root() -> PathBuf {
-    default_data_root().join("diary")
+    diary_root_for(&default_data_root())
 }
 
 /// 一个数据根 → 它的日记目录（`<数据根>/diary`）。
 pub fn diary_root_for(data_dir: &Path) -> PathBuf {
-    data_dir.join("diary")
+    apeireth_core::paths::data_subdir(data_dir, "diary")
 }
 
 // ============================================================

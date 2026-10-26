@@ -38,6 +38,7 @@ pub mod clock;
 pub mod kernel;
 // 哈希链原语 (纯密码学布局, 无策略): 治理审计账本与记忆层共用同一套字节布局。
 pub mod hash_chain;
+pub mod paths;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 // P-arch (2026-08-27) Refactor-5: lib.rs 直接 `pub use memory::*` (memory 模块

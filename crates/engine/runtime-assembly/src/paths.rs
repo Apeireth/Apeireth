@@ -8,14 +8,12 @@
 use std::path::PathBuf;
 
 /// 数据根目录：`$APEIRETH_DATA_DIR`（非空时）否则 `$USERPROFILE`/`$HOME` 下的 `.apeireth`。
+///
+/// ⚠️ **实现已下沉到 `apeireth_core::paths`**（唯一真源）⇒ 这里只做**委派**。
+/// 原因：记忆层（`apeireth-memory`）**不能**依赖本 crate（会成环），
+/// 但两边都需要同一份口径 ⇒ 落在两边都依赖的 `apeireth-core`。
+/// （此前这里与记忆层各有一份**逐字相同**的实现 ⇒ 漂移就会让
+/// 「生产写账」与「CLI 读账」指向不同文件。）
 pub fn default_data_root() -> PathBuf {
-    if let Ok(dir) = std::env::var("APEIRETH_DATA_DIR") {
-        if !dir.trim().is_empty() {
-            return PathBuf::from(dir);
-        }
-    }
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".apeireth")
+    apeireth_core::paths::default_data_root()
 }
