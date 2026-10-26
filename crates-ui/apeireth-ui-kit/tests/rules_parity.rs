@@ -37,13 +37,18 @@
 
 use apeireth_ui_kit::governance_tab::{
     approval_filter_counts, capability_available, capability_unavailable_reason,
-    filter_approval_ledger, find_capability, format_duration_ms, format_relative_ms,
-    is_approval_expired, merge_session_inbox, ApprovalFilter, ApprovalLedgerEntry, Capability,
-    CapabilityGroup, CapabilityManifest, PendingApproval,
+    filter_approval_ledger, find_capability, format_clock_ms, format_date_time_ms,
+    format_duration_ms, format_relative_ms, is_approval_expired, merge_session_inbox,
+    set_time_text_formatter, ApprovalFilter, ApprovalLedgerEntry, Capability, CapabilityGroup,
+    CapabilityManifest, PendingApproval, TimeTextFormatter,
 };
 use apeireth_ui_kit::settings_budget::{
-    format_duration, format_session_totals, SessionUsageTotals,
+    budget_knob_badge, budget_remaining_rows, effective_budget, format_duration,
+    format_session_totals, resolve_budget_limit_input, BudgetBadge, BudgetKnobResolution,
+    BudgetRemainingRow, KnobKey, KnobResolutionStatus, KnobRow, KnobValues, OutOfRange,
+    SessionUsageTotals, ICON_INFO,
 };
+use apeireth_ui_kit::IconData;
 
 // ── 零依赖 JSON 值与解析器 ────────────────────────────────────────────────
 
@@ -363,6 +368,132 @@ fn render(value: &Json) -> String {
     }
 }
 
+// ── 时刻文本夹具（**固定 +08:00** ⇒ 与 Node 侧同一时区） ──────────────────
+
+/// 装置固定的时区偏移（Asia/Shanghai ⇒ **UTC+08:00**，无夏令时）。
+const PLUS_EIGHT_OFFSET_MS: i64 = 8 * 3_600 * 1_000;
+
+/// JS `Date` 的有效时间范围（±8.64e15 ms）—— 超出 ⇒ `new Date(ts)` 是 Invalid Date。
+const JS_DATE_LIMIT_MS: i64 = 8_640_000_000_000_000;
+
+/// 装置的时区名（**必须与 `cases.json` 的 `generator.tz` 一致** ⇒ 自检断言）。
+const TIME_ZONE_LABEL: &str = "Asia/Shanghai";
+
+/// 距 1970-01-01 的天数 ⇒ 民用日历日（Howard Hinnant 的 `civil_from_days`）。
+///
+/// ⚠️ 与 `governance_tab` 里的同名私有助手**同算法**（那里是私有的 ⇒ 夹具自带一份；
+/// 本 crate 是 **0 外部依赖** ⇒ 不能引 chrono）。
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let days = days + 719_468;
+    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted_month = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
+    let month = if shifted_month < 10 {
+        shifted_month + 3
+    } else {
+        shifted_month - 9
+    };
+    let year = if month <= 2 { year + 1 } else { year };
+    (year, month, day)
+}
+
+/// 固定 +08:00 的时刻字段。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LocalParts {
+    /// 年。
+    year: i64,
+    /// 月（1..=12）。
+    month: i64,
+    /// 日（1..=31）。
+    day: i64,
+    /// 时（0..=23）。
+    hour: i64,
+    /// 分（0..=59）。
+    minute: i64,
+    /// 秒（0..=59）。
+    second: i64,
+}
+
+/// 毫秒 ⇒ **+08:00 本地**时刻字段（负数向下取整到秒 ⇒ 与 `new Date(ts)` 的取整一致）。
+fn plus_eight_parts(ts_ms: i64) -> LocalParts {
+    let local_ms = ts_ms.saturating_add(PLUS_EIGHT_OFFSET_MS);
+    let seconds = local_ms.div_euclid(1000);
+    let days = seconds.div_euclid(86_400);
+    let rest = seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    LocalParts {
+        year,
+        month,
+        day,
+        hour: rest / 3600,
+        minute: (rest % 3600) / 60,
+        second: rest % 60,
+    }
+}
+
+/// 两个时刻是否落在同一个 **+08:00 日历日**（生产按**本地时区**判「同日」）。
+fn same_plus_eight_day(left_ms: i64, right_ms: i64) -> bool {
+    let left = plus_eight_parts(left_ms);
+    let right = plus_eight_parts(right_ms);
+    left.year == right.year && left.month == right.month && left.day == right.day
+}
+
+/// JS `Date` 的有效范围判定（超出 ⇒ `new Date(ts)` 是 Invalid Date ⇒ 生产返回「—」）。
+fn js_date_valid(ts_ms: i64) -> bool {
+    (-JS_DATE_LIMIT_MS..=JS_DATE_LIMIT_MS).contains(&ts_ms)
+}
+
+/// **固定 +08:00** 的时刻文本器（**测试夹具**；对应宿主的 `BrowserTimeText`）。
+///
+/// ## 为什么夹具自己实现
+///
+/// 引擎侧默认的 `UtcTimeText` 是**固定 UTC** ⇒ 与生产的**本地时区**口径不同
+/// ⇒ 两侧直接比对必然不等（**假红**，不是规则漂移）
+/// ⇒ ⇒ 装置必须在**同一个时区**比对 ⇒ 这里注入**固定 +08:00**（Asia/Shanghai）
+/// ⇒ 与 Node 侧的 `TZ=Asia/Shanghai` 对齐（见 `cases.json` 的 `generator.tz`）。
+///
+/// ## 口径（逐字照抄生产 `governance/format.ts`）
+///
+/// - 非法日期（超出 JS 有效范围）⇒ 「—」（生产有 `Number.isNaN(d.getTime())` 守卫）；
+/// - 时刻 ⇒ `HH:MM:SS`（2 位补零 ⇒ zh-CN 的 h23 口径）；
+/// - 短日期时刻 ⇒ 同日只给 `HH:MM`，跨日给 `MM/DD HH:MM`
+///   （**按 +08:00 日历日**判同日 —— 与生产的 `toDateString()` 本地日比较同口径）。
+struct PlusEightTimeText;
+
+impl TimeTextFormatter for PlusEightTimeText {
+    fn clock(&self, ts_ms: i64) -> String {
+        if !js_date_valid(ts_ms) {
+            return String::from("—");
+        }
+        let parts = plus_eight_parts(ts_ms);
+        format!("{:02}:{:02}:{:02}", parts.hour, parts.minute, parts.second)
+    }
+
+    fn date_time(&self, ts_ms: i64, now_ms: i64) -> String {
+        if !js_date_valid(ts_ms) {
+            return String::from("—");
+        }
+        let parts = plus_eight_parts(ts_ms);
+        let clock = format!("{:02}:{:02}", parts.hour, parts.minute);
+        if js_date_valid(now_ms) && same_plus_eight_day(ts_ms, now_ms) {
+            return clock;
+        }
+        format!("{:02}/{:02} {}", parts.month, parts.day, clock)
+    }
+}
+
+/// 装上**固定 +08:00** 的时刻文本器。
+///
+/// ⚠️ 进程级槽是 **thread-local** ⇒ 每个测试线程各自装一次即可。
+fn install_plus_eight_time_text() {
+    set_time_text_formatter(Some(std::rc::Rc::new(PlusEightTimeText)));
+}
+
 // ── 装置真源（cases.json） ────────────────────────────────────────────────
 
 /// 装置真源（**编译期**嵌入 ⇒ 零运行时 IO、零新依赖）。
@@ -411,6 +542,10 @@ struct Rule {
     cases: Vec<RuleCase>,
     /// TS 侧被跳过（跑不通 ⇒ 不伪造 expected ⇒ 显式跳过并提示）。
     ts_status: Option<String>,
+    /// 旋钮行夹具（**引擎侧宿主的输入**；= 生产 `BUDGET_KNOB_SPECS` 的规则相关字段）。
+    ///
+    /// 只有预算类规则有 ⇒ 其余规则为空数组。
+    knob_rows: Vec<Json>,
 }
 
 /// 读装置真源（编译期嵌入的文本 ⇒ 无运行时 IO）。
@@ -438,6 +573,11 @@ fn load_rules() -> Vec<Rule> {
                 .get("ts_status")
                 .and_then(Json::as_str)
                 .map(str::to_owned);
+            let knob_rows = rule
+                .get("knob_rows")
+                .and_then(Json::as_array)
+                .map(<[Json]>::to_vec)
+                .unwrap_or_default();
             let mut cases: Vec<RuleCase> = Vec::new();
             for case in rule
                 .get("cases")
@@ -475,6 +615,7 @@ fn load_rules() -> Vec<Rule> {
                 normalization,
                 cases,
                 ts_status,
+                knob_rows,
             }
         })
         .collect()
@@ -507,6 +648,14 @@ const NORMALIZATIONS: &[(&str, &str)] = &[
         "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（含 \"ms\" / \"s\" 后缀与小数点）。",
     ),
     (
+        "format_clock_ms",
+        "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（两侧同在 Asia/Shanghai：Node 侧 TZ + Rust 侧固定 +08:00 夹具；超出 JS 有效日期范围时两侧同为「—」）。",
+    ),
+    (
+        "format_date_time_ms",
+        "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（两侧同在 Asia/Shanghai：Node 侧 TZ + Rust 侧固定 +08:00 夹具；同日按**本地日历日**判定 ⇒ 同日只给「HH:MM」，跨日给「MM/DD HH:MM」）。",
+    ),
+    (
         "find_capability",
         "命中 ⇒ {\"found\": true, \"id\", \"supported\", \"available\", \"reason\", \"aliasOf\"}；未命中 ⇒ {\"found\": false, 其余全 null}；缺失与 null 一律归一为 null；只看命中的那一条能力声明（不比整个清单）。",
     ),
@@ -525,6 +674,22 @@ const NORMALIZATIONS: &[(&str, &str)] = &[
     (
         "format_session_totals",
         "五字段显示串对象：{\"tokens\", \"cache\", \"turns\", \"duration\", \"toolCalls\"} ⇒ 五个字符串逐码点相等（键序固定）。",
+    ),
+    (
+        "resolve_budget_limit_input",
+        "四字段对象：{\"value\": 整数|null, \"effective\": 整数, \"status\": \"ok\"|\"clamped\"|\"fallback\", \"feedback\": 字符串}（解析结果摊平；反馈文案逐码点相等）。",
+    ),
+    (
+        "budget_knob_badge",
+        "四字段对象：{\"effective\": 整数, \"source\": \"configured\"|\"constant\", \"note\": 字符串, \"label\": 字符串}（徽标摊平；口径注记与徽标文案逐码点相等）。",
+    ),
+    (
+        "effective_budget",
+        "三键徽标对象：{\"maxTurnRounds\": 徽标, \"maxToolCalls\": 徽标, \"contextBudgetChars\": 徽标}；徽标 = {\"effective\", \"source\", \"note\", \"label\"}（四字段逐码点相等）。",
+    ),
+    (
+        "budget_remaining_rows",
+        "数组 ⇒ 长度 + 每行归一化：{\"length\": n, \"items\": [{\"key\", \"label\", \"scope\", \"cap\", \"used\", \"remaining\", \"ratio\"}]}；ratio 为数字或 null（逐值相等）；行序敏感（固定七行）。",
     ),
 ];
 
@@ -786,9 +951,166 @@ fn build_filter(value: &Json) -> Result<ApprovalFilter, String> {
     }
 }
 
+// ── 预算类规则的适配件（**旋钮行从 JSON 构造**） ──────────────────────────
+
+/// 夹具占位图标。
+///
+/// ⚠️ `KnobRow.icon` 是 `&'static IconData` ⇒ JSON 造不出图标数据
+/// ⇒ 用 crate 内**既有**的公开图标常量占位 ⇒ **零改动 `src/**`**。
+/// ⇒ 这四条规则（解析 / 徽标 / 生效值 / 余量行）**都不读** icon ⇒ 不影响输出。
+static ICON_PLACEHOLDER: IconData = ICON_INFO;
+
+/// 旋钮键名 ⇒ Rust 旋钮键（**生产的三枚真旋钮**）。
+fn build_knob_key(value: Option<&Json>) -> Result<KnobKey, String> {
+    match value.and_then(Json::as_str) {
+        Some("maxTurnRounds") => Ok(KnobKey::MaxTurnRounds),
+        Some("maxToolCalls") => Ok(KnobKey::MaxToolCalls),
+        Some("contextBudgetChars") => Ok(KnobKey::ContextBudgetChars),
+        other => Err(format!(
+            "旋钮键期望 maxTurnRounds/maxToolCalls/contextBudgetChars，实际是 {other:?}"
+        )),
+    }
+}
+
+/// 越界处置名 ⇒ Rust 越界处置。
+fn build_out_of_range(value: Option<&Json>) -> Result<OutOfRange, String> {
+    match value.and_then(Json::as_str) {
+        Some("clamp") => Ok(OutOfRange::Clamp),
+        Some("reject") => Ok(OutOfRange::Reject),
+        other => Err(format!("outOfRange 期望 clamp/reject，实际是 {other:?}")),
+    }
+}
+
+/// 用例里的旋钮行 ⇒ Rust 旋钮行（**引擎侧宿主的输入**）。
+///
+/// ⚠️ `label` / `env` / `desc` / `hint` 是**宿主喂的文案** ⇒ 这四条规则不读它们
+/// ⇒ 夹具置空（不是伪造文案，是「本规则不涉及」）。
+fn build_knob_rows(value: &[Json]) -> Result<Vec<KnobRow>, String> {
+    let mut rows = Vec::with_capacity(value.len());
+    for item in value {
+        rows.push(KnobRow {
+            key: build_knob_key(item.get("key"))?,
+            label: String::new(),
+            env: String::new(),
+            desc: String::new(),
+            min: required_i64(item, "min")?,
+            max: optional_i64(item.get("max"))?,
+            fallback: required_i64(item, "fallback")?,
+            out_of_range: build_out_of_range(item.get("outOfRange"))?,
+            icon: &ICON_PLACEHOLDER,
+            hint: String::new(),
+        });
+    }
+    Ok(rows)
+}
+
+/// 旋钮行夹具 ⇒ 指定键的那一行（缺 ⇒ 显式失败，不静默用别的行）。
+fn knob_row(rows: &[KnobRow], key: KnobKey) -> Result<&KnobRow, String> {
+    rows.iter()
+        .find(|row| row.key == key)
+        .ok_or_else(|| format!("knob_rows 缺旋钮 {key:?}"))
+}
+
+/// 用例里的旋钮配置值 ⇒ Rust 旋钮配置值（缺省 / `null` ⇒ 未配置）。
+fn build_knob_values(value: Option<&Json>) -> Result<KnobValues, String> {
+    let mut knobs = KnobValues::default();
+    let Some(value) = value else {
+        return Ok(knobs);
+    };
+    if matches!(value, Json::Null) {
+        return Ok(knobs);
+    }
+    knobs.max_turn_rounds = optional_i64(value.get("maxTurnRounds"))?;
+    knobs.max_tool_calls = optional_i64(value.get("maxToolCalls"))?;
+    knobs.context_budget_chars = optional_i64(value.get("contextBudgetChars"))?;
+    Ok(knobs)
+}
+
+/// 旋钮输入字面量 ⇒ Rust 侧的文本形态（**镜像脚本侧的 `String(raw)`**）。
+///
+/// - 缺省 / `null` ⇒ 空串（脚本侧 `(raw ?? '').trim()` ⇒ 非法 ⇒ 回默认）；
+/// - 字符串 ⇒ 原样（脚本侧会 `trim()` ⇒ 由 `parse_integer_field` 负责）；
+/// - 数字 ⇒ 文本化（脚本侧 `String(raw)`；整数不带小数点 ⇒ 与 Rust 侧同形）。
+fn build_raw_text(value: Option<&Json>) -> Result<String, String> {
+    match value {
+        None | Some(Json::Null) => Ok(String::new()),
+        Some(Json::String(text)) => Ok(text.clone()),
+        Some(Json::Number(number)) => Ok(format!("{number}")),
+        Some(other) => Err(format!(
+            "raw 期望字符串/数字/null，实际是 {}",
+            render(other)
+        )),
+    }
+}
+
+/// Rust 生效值徽标 ⇒ 归一化 JSON。
+fn normalize_badge(badge: &BudgetBadge) -> Json {
+    Json::Object(vec![
+        (
+            String::from("effective"),
+            Json::Number(badge.effective as f64),
+        ),
+        (
+            String::from("source"),
+            Json::String(String::from(badge.source.as_str())),
+        ),
+        (String::from("note"), Json::String(badge.note.clone())),
+        (String::from("label"), Json::String(badge.label.clone())),
+    ])
+}
+
+/// Rust 旋钮解析结果 ⇒ 归一化 JSON。
+fn normalize_resolution(resolution: &BudgetKnobResolution) -> Json {
+    let status = match resolution.status {
+        KnobResolutionStatus::Ok => "ok",
+        KnobResolutionStatus::Clamped => "clamped",
+        KnobResolutionStatus::Fallback => "fallback",
+    };
+    Json::Object(vec![
+        (
+            String::from("value"),
+            match resolution.value {
+                Some(value) => Json::Number(value as f64),
+                None => Json::Null,
+            },
+        ),
+        (
+            String::from("effective"),
+            Json::Number(resolution.effective as f64),
+        ),
+        (String::from("status"), Json::String(String::from(status))),
+        (
+            String::from("feedback"),
+            Json::String(resolution.feedback.clone()),
+        ),
+    ])
+}
+
+/// Rust 预算余量行 ⇒ 归一化 JSON。
+fn normalize_remaining_row(row: &BudgetRemainingRow) -> Json {
+    Json::Object(vec![
+        (String::from("key"), Json::String(row.key.clone())),
+        (String::from("label"), Json::String(row.label.clone())),
+        (String::from("scope"), Json::String(row.scope.clone())),
+        (String::from("cap"), Json::String(row.cap.clone())),
+        (String::from("used"), Json::String(row.used.clone())),
+        (
+            String::from("remaining"),
+            Json::String(row.remaining.clone()),
+        ),
+        (
+            String::from("ratio"),
+            match row.ratio {
+                Some(value) => Json::Number(value),
+                None => Json::Null,
+            },
+        ),
+    ])
+}
+
 /// 按规则名跑 Rust 侧实现 ⇒ 归一化 JSON。
-fn eval(rule: &str, args: &Json) -> Result<Json, String> {
-    match rule {
+fn eval(rule: &Rule, args: &Json) -> Result<Json, String> {
+    match rule.name.as_str() {
         "is_approval_expired" => {
             let entry = build_entry(
                 args.get("entry")
@@ -855,6 +1177,19 @@ fn eval(rule: &str, args: &Json) -> Result<Json, String> {
                 .ok_or_else(|| "args 缺 ms".to_owned())?;
             Ok(Json::String(format_duration_ms(ms)))
         }
+        "format_clock_ms" => {
+            // ⚠️ 进程级时刻文本器默认是**固定 UTC** ⇒ 装置必须装**固定 +08:00**
+            // ⇒ 与 Node 侧的 `TZ=Asia/Shanghai` 同一时区（否则必假红）。
+            install_plus_eight_time_text();
+            let ts_ms = required_i64(args, "tsMs")?;
+            Ok(Json::String(format_clock_ms(ts_ms)))
+        }
+        "format_date_time_ms" => {
+            install_plus_eight_time_text();
+            let ts_ms = required_i64(args, "tsMs")?;
+            let now_ms = required_i64(args, "nowMs")?;
+            Ok(Json::String(format_date_time_ms(ts_ms, now_ms)))
+        }
         "find_capability" => {
             let manifest = build_manifest(args.get("manifest"))?;
             let id = args
@@ -898,6 +1233,61 @@ fn eval(rule: &str, args: &Json) -> Result<Json, String> {
                 (String::from("turns"), Json::String(view.turns)),
                 (String::from("duration"), Json::String(view.duration)),
                 (String::from("toolCalls"), Json::String(view.tool_calls)),
+            ]))
+        }
+        "resolve_budget_limit_input" => {
+            let rows = build_knob_rows(&rule.knob_rows)?;
+            let key = build_knob_key(args.get("key"))?;
+            let row = knob_row(&rows, key)?;
+            let raw = build_raw_text(args.get("raw"))?;
+            Ok(normalize_resolution(&resolve_budget_limit_input(&raw, row)))
+        }
+        "budget_knob_badge" => {
+            let rows = build_knob_rows(&rule.knob_rows)?;
+            let key = build_knob_key(args.get("key"))?;
+            let row = knob_row(&rows, key)?;
+            let configured = optional_i64(args.get("configured"))?;
+            Ok(normalize_badge(&budget_knob_badge(configured, row)))
+        }
+        "effective_budget" => {
+            let rows = build_knob_rows(&rule.knob_rows)?;
+            let knobs = build_knob_values(args.get("knobs"))?;
+            let budget = effective_budget(&knobs, &rows);
+            Ok(Json::Object(vec![
+                (
+                    String::from("maxTurnRounds"),
+                    normalize_badge(&budget.max_turn_rounds),
+                ),
+                (
+                    String::from("maxToolCalls"),
+                    normalize_badge(&budget.max_tool_calls),
+                ),
+                (
+                    String::from("contextBudgetChars"),
+                    normalize_badge(&budget.context_budget_chars),
+                ),
+            ]))
+        }
+        "budget_remaining_rows" => {
+            let rows = build_knob_rows(&rule.knob_rows)?;
+            let knobs = build_knob_values(args.get("knobs"))?;
+            let totals = args
+                .get("totals")
+                .ok_or_else(|| "args 缺 totals".to_owned())?;
+            // ⚠️ 生产侧是 `String(totals.turns)` ⇒ 缺 `turns` 会给「undefined」
+            // ⇒ 而 Rust 侧是 `u64`（缺省 0）⇒ 两侧不可比 ⇒ 显式失败（不假绿）。
+            if totals.get("turns").is_none() {
+                return Err("totals 缺 turns（生产侧会显示「undefined」⇒ 两侧不可比）".to_owned());
+            }
+            let totals = build_session_totals(totals)?;
+            let budget = effective_budget(&knobs, &rows);
+            let remaining = budget_remaining_rows(&totals, &budget);
+            Ok(Json::Object(vec![
+                (String::from("length"), Json::Number(remaining.len() as f64)),
+                (
+                    String::from("items"),
+                    Json::Array(remaining.iter().map(normalize_remaining_row).collect()),
+                ),
             ]))
         }
         other => Err(format!("规则「{other}」没有 Rust 侧适配器")),
@@ -981,7 +1371,7 @@ fn assert_rule(rule_name: &str) {
     let mut checked = 0usize;
     let mut drifts = 0usize;
     for case in &rule.cases {
-        let actual = eval(rule_name, &case.args)
+        let actual = eval(rule, &case.args)
             .unwrap_or_else(|err| panic!("规则「{rule_name}」用例「{}」跑不起来：{err}", case.id));
         if case.parity == "known_drift" {
             drifts += 1;
@@ -1024,6 +1414,19 @@ fn case_file_is_machine_generated_and_self_consistent() {
             .unwrap_or_default()
             .is_empty(),
         "装置真源的 generator 标记缺 node 版本"
+    );
+    // 时区标记必须存在（**两侧对齐的关键**）⇒ 且必须与 Rust 侧夹具的时区一致。
+    let generator_tz = generator
+        .get("tz")
+        .and_then(Json::as_str)
+        .unwrap_or_default();
+    assert!(
+        !generator_tz.is_empty(),
+        "装置真源的 generator 标记缺时区（时区口径未登记 ⇒ 无法复现）"
+    );
+    assert_eq!(
+        generator_tz, TIME_ZONE_LABEL,
+        "装置真源的 generator.tz 与 Rust 侧夹具时区不一致 ⇒ 两侧不在同一时区 ⇒ 比对必假红"
     );
 
     let rules = load_rules();
@@ -1069,7 +1472,7 @@ fn case_file_is_machine_generated_and_self_consistent() {
                 case.id
             );
             // 规则必须能被 Rust 侧适配器执行（防止加了规则却忘了写适配器）。
-            eval(&rule.name, &case.args).unwrap_or_else(|err| {
+            eval(rule, &case.args).unwrap_or_else(|err| {
                 panic!(
                     "规则「{}」用例「{}」Rust 侧适配器跑不起来：{err}",
                     rule.name, case.id
@@ -1121,6 +1524,18 @@ fn format_duration_ms_matches_production_typescript() {
     assert_rule("format_duration_ms");
 }
 
+/// `format_clock_ms`：TS ↔ Rust 逐字一致（**两侧同在 Asia/Shanghai**）。
+#[test]
+fn format_clock_ms_matches_production_typescript() {
+    assert_rule("format_clock_ms");
+}
+
+/// `format_date_time_ms`：TS ↔ Rust 逐字一致（**同日按本地日历日**）。
+#[test]
+fn format_date_time_ms_matches_production_typescript() {
+    assert_rule("format_date_time_ms");
+}
+
 /// `find_capability`：TS ↔ Rust 逐字一致。
 #[test]
 fn find_capability_matches_production_typescript() {
@@ -1149,4 +1564,28 @@ fn format_duration_matches_production_typescript() {
 #[test]
 fn format_session_totals_matches_production_typescript() {
     assert_rule("format_session_totals");
+}
+
+/// `resolve_budget_limit_input`：TS ↔ Rust 逐字一致。
+#[test]
+fn resolve_budget_limit_input_matches_production_typescript() {
+    assert_rule("resolve_budget_limit_input");
+}
+
+/// `budget_knob_badge`：TS ↔ Rust 逐字一致。
+#[test]
+fn budget_knob_badge_matches_production_typescript() {
+    assert_rule("budget_knob_badge");
+}
+
+/// `effective_budget`：TS ↔ Rust 逐字一致。
+#[test]
+fn effective_budget_matches_production_typescript() {
+    assert_rule("effective_budget");
+}
+
+/// `budget_remaining_rows`：TS ↔ Rust 逐字一致。
+#[test]
+fn budget_remaining_rows_matches_production_typescript() {
+    assert_rule("budget_remaining_rows");
 }

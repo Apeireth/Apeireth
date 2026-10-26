@@ -1,16 +1,20 @@
 {
-  "schema": 1,
+  "schema": 2,
   "title": "规则层差分装置 — 用例真源（生产 TS 侧 expected + 引擎 Rust 侧比对）",
   "generator": {
     "script": "crates-ui/apeireth-ui-demo/harness/rules/gen_expected.mjs",
     "node": "v22.23.1",
     "mode": "--experimental-strip-types",
-    "production": "frontend/companion-desktop/src/lib/{governance/ledger.ts,governance/format.ts,runtime.ts,chat-shell/turn-telemetry.ts}"
+    "tz": "Asia/Shanghai",
+    "production": "frontend/companion-desktop/src/lib/{governance/ledger.ts,governance/format.ts,runtime.ts,chat-shell/turn-telemetry.ts,budget.ts}"
   },
   "notes": [
     "expected 字段一律由 gen_expected.mjs（node --experimental-strip-types，直接 import 生产 .ts）算出 ⇒ 手改 expected 会被 Rust 侧比对测试判红。",
     "parity=same 的用例要求两侧逐字相同；parity=known_drift 的用例是**已实测的双实现漂移**：expected 是 TS 侧真值，rust_expected 钉住 Rust 侧当前行为 ⇒ 漂移若被修好，测试会红并要求更新本文件。",
-    "args 里出现的 null / 缺省键是**刻意**的边界（契约边界：后端 skip_serializing_if ⇒ 字段是省略而非 null）。"
+    "args 里出现的 null / 缺省键是**刻意**的边界（契约边界：后端 skip_serializing_if ⇒ 字段是省略而非 null）。",
+    "时区口径：生产 formatClockMs / formatDateTimeMs 走 toLocaleTimeString('zh-CN') ⇒ 依赖本地时区 ⇒ 装置两侧强制同在 Asia/Shanghai（Node 侧进程最早期设 TZ；Rust 侧测试注入固定 +08:00 的 TimeTextFormatter）⇒ 比的是「非 UTC 时区下也逐字一致」。",
+    "format_date_time_ms 的「同日」按**本地日历日**判定（生产的 toDateString 比较）⇒ 用例里的 nowMs 是**钉住的「现在」**（TS 侧调用期间把全局 Date 的无参构造钉住；Rust 侧直接用 now_ms）⇒ 期望值可复现。",
+    "预算四条规则的 knob_rows 是**引擎侧宿主的旋钮行夹具**（= 生产 BUDGET_KNOB_SPECS 的规则相关字段）⇒ 生成器每次都会核对它与生产常量表一致 ⇒ 不一致 ⇒ 退出码 1（不产出错的期望值）。"
   ],
   "rules": [
     {
@@ -1250,6 +1254,208 @@
           },
           "expected": "-0.25ms",
           "parity": "same"
+        }
+      ]
+    },
+    {
+      "rule": "format_clock_ms",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/format.ts",
+        "export": "formatClockMs"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "format_clock_ms"
+      },
+      "normalization": "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（两侧同在 Asia/Shanghai：Node 侧 TZ + Rust 侧固定 +08:00 夹具；超出 JS 有效日期范围时两侧同为「—」）。",
+      "args_schema": "{\"tsMs\": <整数毫秒>}",
+      "cases": [
+        {
+          "id": "epoch-zero",
+          "args": {
+            "tsMs": 0
+          },
+          "parity": "same",
+          "expected": "08:00:00"
+        },
+        {
+          "id": "local-midnight",
+          "args": {
+            "tsMs": -28800000
+          },
+          "parity": "same",
+          "expected": "00:00:00"
+        },
+        {
+          "id": "local-last-second",
+          "args": {
+            "tsMs": 57599999
+          },
+          "parity": "same",
+          "expected": "23:59:59"
+        },
+        {
+          "id": "negative-epoch",
+          "args": {
+            "tsMs": -1000
+          },
+          "parity": "same",
+          "expected": "07:59:59"
+        },
+        {
+          "id": "sub-second",
+          "args": {
+            "tsMs": 1500
+          },
+          "parity": "same",
+          "expected": "08:00:01"
+        },
+        {
+          "id": "afternoon-2026",
+          "args": {
+            "tsMs": 1792834200000
+          },
+          "parity": "same",
+          "expected": "17:30:00"
+        },
+        {
+          "id": "far-future-2100",
+          "args": {
+            "tsMs": 4102444800000
+          },
+          "parity": "same",
+          "expected": "08:00:00"
+        },
+        {
+          "id": "max-js-date",
+          "args": {
+            "tsMs": 8640000000000000
+          },
+          "parity": "same",
+          "expected": "08:00:00"
+        },
+        {
+          "id": "invalid-over-max",
+          "args": {
+            "tsMs": 8640000000000001
+          },
+          "parity": "same",
+          "expected": "—"
+        },
+        {
+          "id": "invalid-under-min",
+          "args": {
+            "tsMs": -8640000000000001
+          },
+          "parity": "same",
+          "expected": "—"
+        }
+      ]
+    },
+    {
+      "rule": "format_date_time_ms",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/governance/format.ts",
+        "export": "formatDateTimeMs"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "governance_tab",
+        "fn": "format_date_time_ms"
+      },
+      "normalization": "字符串原样：TS 的 string ⇒ JSON string；Rust 的 String ⇒ JSON string ⇒ 逐码点相等（两侧同在 Asia/Shanghai：Node 侧 TZ + Rust 侧固定 +08:00 夹具；同日按**本地日历日**判定 ⇒ 同日只给「HH:MM」，跨日给「MM/DD HH:MM」）。",
+      "args_schema": "{\"tsMs\": <整数毫秒>, \"nowMs\": <整数毫秒（钉住的「现在」）>}",
+      "cases": [
+        {
+          "id": "same-instant",
+          "args": {
+            "tsMs": 0,
+            "nowMs": 0
+          },
+          "parity": "same",
+          "expected": "08:00"
+        },
+        {
+          "id": "same-day-later",
+          "args": {
+            "tsMs": 3600000,
+            "nowMs": 0
+          },
+          "parity": "same",
+          "expected": "09:00"
+        },
+        {
+          "id": "same-day-utc-differs",
+          "args": {
+            "tsMs": -1000,
+            "nowMs": 0
+          },
+          "parity": "same",
+          "expected": "07:59"
+        },
+        {
+          "id": "cross-day",
+          "args": {
+            "tsMs": -28800001,
+            "nowMs": 0
+          },
+          "parity": "same",
+          "expected": "12/31 23:59"
+        },
+        {
+          "id": "cross-day-now-midnight",
+          "args": {
+            "tsMs": 0,
+            "nowMs": 28800000
+          },
+          "parity": "same",
+          "expected": "08:00"
+        },
+        {
+          "id": "cross-month",
+          "args": {
+            "tsMs": 1793460600000,
+            "nowMs": 1793493000000
+          },
+          "parity": "same",
+          "expected": "10/31 23:30"
+        },
+        {
+          "id": "cross-year",
+          "args": {
+            "tsMs": 1767195000000,
+            "nowMs": 1767227400000
+          },
+          "parity": "same",
+          "expected": "12/31 23:30"
+        },
+        {
+          "id": "local-midnight-exact",
+          "args": {
+            "tsMs": -28800000,
+            "nowMs": -28800000
+          },
+          "parity": "same",
+          "expected": "00:00"
+        },
+        {
+          "id": "invalid-ts",
+          "args": {
+            "tsMs": 8640000000000001,
+            "nowMs": 0
+          },
+          "parity": "same",
+          "expected": "—"
+        },
+        {
+          "id": "max-js-date",
+          "args": {
+            "tsMs": 8640000000000000,
+            "nowMs": 0
+          },
+          "parity": "same",
+          "expected": "09/13 08:00"
         }
       ]
     },
@@ -3073,6 +3279,1119 @@
             "toolCalls": "12"
           },
           "parity": "same"
+        }
+      ]
+    },
+    {
+      "rule": "resolve_budget_limit_input",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/budget.ts",
+        "export": "resolveBudgetLimitInput"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "settings_budget",
+        "fn": "resolve_budget_limit_input"
+      },
+      "normalization": "四字段对象：{\"value\": 整数|null, \"effective\": 整数, \"status\": \"ok\"|\"clamped\"|\"fallback\", \"feedback\": 字符串}（解析结果摊平；反馈文案逐码点相等）。",
+      "args_schema": "{\"key\": \"maxTurnRounds\"|\"maxToolCalls\"|\"contextBudgetChars\", \"raw\": <字符串|数字|null（可缺省）>}",
+      "knob_rows": [
+        {
+          "key": "maxTurnRounds",
+          "min": 1,
+          "max": 64,
+          "fallback": 8,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "maxToolCalls",
+          "min": 1,
+          "max": 64,
+          "fallback": 16,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "contextBudgetChars",
+          "min": 1,
+          "max": null,
+          "fallback": 24000,
+          "outOfRange": "reject"
+        }
+      ],
+      "cases": [
+        {
+          "id": "ok-in-range",
+          "args": {
+            "key": "maxTurnRounds",
+            "raw": "12"
+          },
+          "parity": "same",
+          "expected": {
+            "value": 12,
+            "effective": 12,
+            "status": "ok",
+            "feedback": ""
+          }
+        },
+        {
+          "id": "ok-number-raw",
+          "args": {
+            "key": "maxToolCalls",
+            "raw": 16
+          },
+          "parity": "same",
+          "expected": {
+            "value": 16,
+            "effective": 16,
+            "status": "ok",
+            "feedback": ""
+          }
+        },
+        {
+          "id": "ok-trimmed",
+          "args": {
+            "key": "maxToolCalls",
+            "raw": " 7 "
+          },
+          "parity": "same",
+          "expected": {
+            "value": 7,
+            "effective": 7,
+            "status": "ok",
+            "feedback": ""
+          }
+        },
+        {
+          "id": "ok-plus-sign",
+          "args": {
+            "key": "maxToolCalls",
+            "raw": "+7"
+          },
+          "parity": "same",
+          "expected": {
+            "value": 7,
+            "effective": 7,
+            "status": "ok",
+            "feedback": ""
+          }
+        },
+        {
+          "id": "ok-context-chars",
+          "args": {
+            "key": "contextBudgetChars",
+            "raw": "30000"
+          },
+          "parity": "same",
+          "expected": {
+            "value": 30000,
+            "effective": 30000,
+            "status": "ok",
+            "feedback": ""
+          }
+        },
+        {
+          "id": "clamp-over-max",
+          "args": {
+            "key": "maxTurnRounds",
+            "raw": "100"
+          },
+          "parity": "same",
+          "expected": {
+            "value": 64,
+            "effective": 64,
+            "status": "clamped",
+            "feedback": "越界：已钳制到 64（1..=64）"
+          }
+        },
+        {
+          "id": "clamp-under-min",
+          "args": {
+            "key": "maxTurnRounds",
+            "raw": "0"
+          },
+          "parity": "same",
+          "expected": {
+            "value": 1,
+            "effective": 1,
+            "status": "clamped",
+            "feedback": "越界：已钳制到 1（1..=64）"
+          }
+        },
+        {
+          "id": "clamp-negative",
+          "args": {
+            "key": "maxToolCalls",
+            "raw": "-5"
+          },
+          "parity": "same",
+          "expected": {
+            "value": 1,
+            "effective": 1,
+            "status": "clamped",
+            "feedback": "越界：已钳制到 1（1..=64）"
+          }
+        },
+        {
+          "id": "fallback-non-integer",
+          "args": {
+            "key": "maxTurnRounds",
+            "raw": "12.5"
+          },
+          "parity": "same",
+          "expected": {
+            "value": null,
+            "effective": 8,
+            "status": "fallback",
+            "feedback": "非法值：已回默认 8"
+          }
+        },
+        {
+          "id": "fallback-empty",
+          "args": {
+            "key": "maxTurnRounds",
+            "raw": ""
+          },
+          "parity": "same",
+          "expected": {
+            "value": null,
+            "effective": 8,
+            "status": "fallback",
+            "feedback": "非法值：已回默认 8"
+          }
+        },
+        {
+          "id": "fallback-null",
+          "args": {
+            "key": "maxTurnRounds",
+            "raw": null
+          },
+          "parity": "same",
+          "expected": {
+            "value": null,
+            "effective": 8,
+            "status": "fallback",
+            "feedback": "非法值：已回默认 8"
+          }
+        },
+        {
+          "id": "fallback-missing",
+          "args": {
+            "key": "maxTurnRounds"
+          },
+          "parity": "same",
+          "expected": {
+            "value": null,
+            "effective": 8,
+            "status": "fallback",
+            "feedback": "非法值：已回默认 8"
+          }
+        },
+        {
+          "id": "ok-over-context",
+          "args": {
+            "key": "contextBudgetChars",
+            "raw": "99999"
+          },
+          "parity": "same",
+          "expected": {
+            "value": 99999,
+            "effective": 99999,
+            "status": "ok",
+            "feedback": ""
+          }
+        },
+        {
+          "id": "reject-under-min",
+          "args": {
+            "key": "contextBudgetChars",
+            "raw": "0"
+          },
+          "parity": "same",
+          "expected": {
+            "value": null,
+            "effective": 24000,
+            "status": "fallback",
+            "feedback": "越界（1 起）：已回默认 24000"
+          }
+        },
+        {
+          "id": "known-drift-unsafe-int",
+          "args": {
+            "key": "contextBudgetChars",
+            "raw": "9007199254740992"
+          },
+          "rust_expected": {
+            "value": 9007199254740992,
+            "effective": 9007199254740992,
+            "status": "ok",
+            "feedback": ""
+          },
+          "why": "JS 的安全整数上限是 2^53-1：生产 `parseIntegerField` 用 `Number.isSafeInteger` 判定 ⇒ 2^53 及以上被当成非法值 ⇒ 回默认；Rust 侧是 i64（上限 2^63-1）⇒ 同一串字面量被当成合法值直通 ⇒ 两侧处置不同（引擎侧的整数通道更宽，不是文案漂移）。",
+          "parity": "known_drift",
+          "expected": {
+            "value": null,
+            "effective": 24000,
+            "status": "fallback",
+            "feedback": "非法值：已回默认 24000"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "budget_knob_badge",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/budget.ts",
+        "export": "budgetKnobBadge"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "settings_budget",
+        "fn": "budget_knob_badge"
+      },
+      "normalization": "四字段对象：{\"effective\": 整数, \"source\": \"configured\"|\"constant\", \"note\": 字符串, \"label\": 字符串}（徽标摊平；口径注记与徽标文案逐码点相等）。",
+      "args_schema": "{\"key\": \"maxTurnRounds\"|\"maxToolCalls\"|\"contextBudgetChars\", \"configured\": <整数|null（可缺省）>}",
+      "knob_rows": [
+        {
+          "key": "maxTurnRounds",
+          "min": 1,
+          "max": 64,
+          "fallback": 8,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "maxToolCalls",
+          "min": 1,
+          "max": 64,
+          "fallback": 16,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "contextBudgetChars",
+          "min": 1,
+          "max": null,
+          "fallback": 24000,
+          "outOfRange": "reject"
+        }
+      ],
+      "cases": [
+        {
+          "id": "unconfigured-missing",
+          "args": {
+            "key": "maxTurnRounds"
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 8,
+            "source": "constant",
+            "note": "读编译期常量（旋钮未配置，取常量默认值）",
+            "label": "生效 8 · constant"
+          }
+        },
+        {
+          "id": "unconfigured-null",
+          "args": {
+            "key": "maxToolCalls",
+            "configured": null
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 16,
+            "source": "constant",
+            "note": "读编译期常量（旋钮未配置，取常量默认值）",
+            "label": "生效 16 · constant"
+          }
+        },
+        {
+          "id": "configured-in-range",
+          "args": {
+            "key": "maxTurnRounds",
+            "configured": 12
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 12,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 12 · configured"
+          }
+        },
+        {
+          "id": "configured-over-max",
+          "args": {
+            "key": "maxTurnRounds",
+            "configured": 100
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 64,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 64 · configured"
+          }
+        },
+        {
+          "id": "configured-under-min",
+          "args": {
+            "key": "maxTurnRounds",
+            "configured": 0
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 1,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 1 · configured"
+          }
+        },
+        {
+          "id": "configured-zero",
+          "args": {
+            "key": "maxToolCalls",
+            "configured": 0
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 1,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 1 · configured"
+          }
+        },
+        {
+          "id": "configured-negative",
+          "args": {
+            "key": "maxToolCalls",
+            "configured": -3
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 1,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 1 · configured"
+          }
+        },
+        {
+          "id": "configured-toolcalls",
+          "args": {
+            "key": "maxToolCalls",
+            "configured": 16
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 16,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 16 · configured"
+          }
+        },
+        {
+          "id": "configured-context-no-upper-bound",
+          "args": {
+            "key": "contextBudgetChars",
+            "configured": 99999
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 99999,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 99999 · configured"
+          }
+        },
+        {
+          "id": "configured-context-ok",
+          "args": {
+            "key": "contextBudgetChars",
+            "configured": 30000
+          },
+          "parity": "same",
+          "expected": {
+            "effective": 30000,
+            "source": "configured",
+            "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+            "label": "生效 30000 · configured"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "effective_budget",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/budget.ts",
+        "export": "effectiveBudget"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "settings_budget",
+        "fn": "effective_budget"
+      },
+      "normalization": "三键徽标对象：{\"maxTurnRounds\": 徽标, \"maxToolCalls\": 徽标, \"contextBudgetChars\": 徽标}；徽标 = {\"effective\", \"source\", \"note\", \"label\"}（四字段逐码点相等）。",
+      "args_schema": "{\"knobs\": {\"maxTurnRounds\"?: 整数|null, \"maxToolCalls\"?: 整数|null, \"contextBudgetChars\"?: 整数|null} | null}",
+      "knob_rows": [
+        {
+          "key": "maxTurnRounds",
+          "min": 1,
+          "max": 64,
+          "fallback": 8,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "maxToolCalls",
+          "min": 1,
+          "max": 64,
+          "fallback": 16,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "contextBudgetChars",
+          "min": 1,
+          "max": null,
+          "fallback": 24000,
+          "outOfRange": "reject"
+        }
+      ],
+      "cases": [
+        {
+          "id": "all-unset",
+          "args": {
+            "knobs": {}
+          },
+          "parity": "same",
+          "expected": {
+            "maxTurnRounds": {
+              "effective": 8,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 8 · constant"
+            },
+            "maxToolCalls": {
+              "effective": 16,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 16 · constant"
+            },
+            "contextBudgetChars": {
+              "effective": 24000,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 24000 · constant"
+            }
+          }
+        },
+        {
+          "id": "all-set",
+          "args": {
+            "knobs": {
+              "maxTurnRounds": 12,
+              "maxToolCalls": 16,
+              "contextBudgetChars": 30000
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "maxTurnRounds": {
+              "effective": 12,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 12 · configured"
+            },
+            "maxToolCalls": {
+              "effective": 16,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 16 · configured"
+            },
+            "contextBudgetChars": {
+              "effective": 30000,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 30000 · configured"
+            }
+          }
+        },
+        {
+          "id": "mixed",
+          "args": {
+            "knobs": {
+              "maxTurnRounds": 12,
+              "maxToolCalls": null,
+              "contextBudgetChars": 30000
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "maxTurnRounds": {
+              "effective": 12,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 12 · configured"
+            },
+            "maxToolCalls": {
+              "effective": 16,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 16 · constant"
+            },
+            "contextBudgetChars": {
+              "effective": 30000,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 30000 · configured"
+            }
+          }
+        },
+        {
+          "id": "clamped-and-rejected",
+          "args": {
+            "knobs": {
+              "maxTurnRounds": 100,
+              "maxToolCalls": 0,
+              "contextBudgetChars": -5
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "maxTurnRounds": {
+              "effective": 64,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 64 · configured"
+            },
+            "maxToolCalls": {
+              "effective": 1,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 1 · configured"
+            },
+            "contextBudgetChars": {
+              "effective": 24000,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 24000 · constant"
+            }
+          }
+        },
+        {
+          "id": "knobs-null",
+          "args": {
+            "knobs": null
+          },
+          "parity": "same",
+          "expected": {
+            "maxTurnRounds": {
+              "effective": 8,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 8 · constant"
+            },
+            "maxToolCalls": {
+              "effective": 16,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 16 · constant"
+            },
+            "contextBudgetChars": {
+              "effective": 24000,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 24000 · constant"
+            }
+          }
+        },
+        {
+          "id": "only-toolcalls",
+          "args": {
+            "knobs": {
+              "maxToolCalls": 5
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "maxTurnRounds": {
+              "effective": 8,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 8 · constant"
+            },
+            "maxToolCalls": {
+              "effective": 5,
+              "source": "configured",
+              "note": "读自生效中的预算旋钮（env 可配；未设值时回落默认）",
+              "label": "生效 5 · configured"
+            },
+            "contextBudgetChars": {
+              "effective": 24000,
+              "source": "constant",
+              "note": "读编译期常量（旋钮未配置，取常量默认值）",
+              "label": "生效 24000 · constant"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rule": "budget_remaining_rows",
+      "ts": {
+        "file": "frontend/companion-desktop/src/lib/budget.ts",
+        "export": "budgetRemainingRows"
+      },
+      "rust": {
+        "crate": "apeireth-ui-kit",
+        "module": "settings_budget",
+        "fn": "budget_remaining_rows"
+      },
+      "normalization": "数组 ⇒ 长度 + 每行归一化：{\"length\": n, \"items\": [{\"key\", \"label\", \"scope\", \"cap\", \"used\", \"remaining\", \"ratio\"}]}；ratio 为数字或 null（逐值相等）；行序敏感（固定七行）。",
+      "args_schema": "{\"knobs\": <同 effective_budget>, \"totals\": {\"turns\": 整数, \"promptTokens\"?: 整数|null, \"completionTokens\"?: 整数|null, \"cacheHitTokens\"?: 整数|null, \"durationMs\"?: 整数|null, \"toolCalls\"?: 整数, \"lastTurnToolCalls\"?: 整数|null}}",
+      "knob_rows": [
+        {
+          "key": "maxTurnRounds",
+          "min": 1,
+          "max": 64,
+          "fallback": 8,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "maxToolCalls",
+          "min": 1,
+          "max": 64,
+          "fallback": 16,
+          "outOfRange": "clamp"
+        },
+        {
+          "key": "contextBudgetChars",
+          "min": 1,
+          "max": null,
+          "fallback": 24000,
+          "outOfRange": "reject"
+        }
+      ],
+      "cases": [
+        {
+          "id": "empty-totals",
+          "args": {
+            "knobs": {},
+            "totals": {
+              "turns": 0,
+              "promptTokens": null,
+              "completionTokens": null,
+              "cacheHitTokens": null,
+              "durationMs": null,
+              "toolCalls": 0,
+              "lastTurnToolCalls": null
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "length": 7,
+            "items": [
+              {
+                "key": "tokenIn",
+                "label": "Token（入）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "tokenOut",
+                "label": "Token（出）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "cacheHit",
+                "label": "提示缓存命中",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "turns",
+                "label": "回合数",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "0",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "duration",
+                "label": "累计耗时",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "toolCalls",
+                "label": "单轮工具调用",
+                "scope": "最近一回合",
+                "cap": "16 · constant",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "turnRounds",
+                "label": "回合轮数",
+                "scope": "每回合（前端未测得轮数）",
+                "cap": "8 · constant",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "toolcalls-known",
+          "args": {
+            "knobs": {
+              "maxToolCalls": 16
+            },
+            "totals": {
+              "turns": 3,
+              "promptTokens": 1234567,
+              "completionTokens": 89,
+              "cacheHitTokens": 1000000,
+              "durationMs": 65000,
+              "toolCalls": 42,
+              "lastTurnToolCalls": 4
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "length": 7,
+            "items": [
+              {
+                "key": "tokenIn",
+                "label": "Token（入）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "1,234,567",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "tokenOut",
+                "label": "Token（出）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "89",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "cacheHit",
+                "label": "提示缓存命中",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "1,000,000",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "turns",
+                "label": "回合数",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "3",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "duration",
+                "label": "累计耗时",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "1m05s",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "toolCalls",
+                "label": "单轮工具调用",
+                "scope": "最近一回合",
+                "cap": "16 · configured",
+                "used": "4",
+                "remaining": "12",
+                "ratio": 0.25
+              },
+              {
+                "key": "turnRounds",
+                "label": "回合轮数",
+                "scope": "每回合（前端未测得轮数）",
+                "cap": "8 · constant",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "toolcalls-over-cap",
+          "args": {
+            "knobs": {
+              "maxToolCalls": 16
+            },
+            "totals": {
+              "turns": 1,
+              "promptTokens": null,
+              "completionTokens": null,
+              "cacheHitTokens": null,
+              "durationMs": null,
+              "toolCalls": 0,
+              "lastTurnToolCalls": 20
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "length": 7,
+            "items": [
+              {
+                "key": "tokenIn",
+                "label": "Token（入）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "tokenOut",
+                "label": "Token（出）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "cacheHit",
+                "label": "提示缓存命中",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "turns",
+                "label": "回合数",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "1",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "duration",
+                "label": "累计耗时",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "toolCalls",
+                "label": "单轮工具调用",
+                "scope": "最近一回合",
+                "cap": "16 · configured",
+                "used": "20",
+                "remaining": "0",
+                "ratio": 1
+              },
+              {
+                "key": "turnRounds",
+                "label": "回合轮数",
+                "scope": "每回合（前端未测得轮数）",
+                "cap": "8 · constant",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "toolcalls-negative",
+          "args": {
+            "knobs": {
+              "maxToolCalls": 16
+            },
+            "totals": {
+              "turns": 1,
+              "promptTokens": null,
+              "completionTokens": null,
+              "cacheHitTokens": null,
+              "durationMs": null,
+              "toolCalls": 0,
+              "lastTurnToolCalls": -2
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "length": 7,
+            "items": [
+              {
+                "key": "tokenIn",
+                "label": "Token（入）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "tokenOut",
+                "label": "Token（出）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "cacheHit",
+                "label": "提示缓存命中",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "turns",
+                "label": "回合数",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "1",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "duration",
+                "label": "累计耗时",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "toolCalls",
+                "label": "单轮工具调用",
+                "scope": "最近一回合",
+                "cap": "16 · configured",
+                "used": "-2",
+                "remaining": "18",
+                "ratio": -0.125
+              },
+              {
+                "key": "turnRounds",
+                "label": "回合轮数",
+                "scope": "每回合（前端未测得轮数）",
+                "cap": "8 · constant",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "constant-cap",
+          "args": {
+            "knobs": {},
+            "totals": {
+              "turns": 2,
+              "promptTokens": null,
+              "completionTokens": null,
+              "cacheHitTokens": null,
+              "durationMs": null,
+              "toolCalls": 0,
+              "lastTurnToolCalls": 0
+            }
+          },
+          "parity": "same",
+          "expected": {
+            "length": 7,
+            "items": [
+              {
+                "key": "tokenIn",
+                "label": "Token（入）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "tokenOut",
+                "label": "Token（出）",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "cacheHit",
+                "label": "提示缓存命中",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "turns",
+                "label": "回合数",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "2",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "duration",
+                "label": "累计耗时",
+                "scope": "会话累计",
+                "cap": "—",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              },
+              {
+                "key": "toolCalls",
+                "label": "单轮工具调用",
+                "scope": "最近一回合",
+                "cap": "16 · constant",
+                "used": "0",
+                "remaining": "16",
+                "ratio": 0
+              },
+              {
+                "key": "turnRounds",
+                "label": "回合轮数",
+                "scope": "每回合（前端未测得轮数）",
+                "cap": "8 · constant",
+                "used": "—",
+                "remaining": "—",
+                "ratio": null
+              }
+            ]
+          }
         }
       ]
     }
