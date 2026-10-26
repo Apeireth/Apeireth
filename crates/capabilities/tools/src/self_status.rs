@@ -1128,6 +1128,13 @@ pub const CAPABILITIES_ACCOUNTABILITY: &str = "accountability";
 /// 生物机制自述开关的 env 名: 只认显式 `"1"`，其余任何取值 = 关 (fail-closed)。
 pub const BIO_SELF_STATUS_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_SELF_STATUS";
 
+/// 生物机制子对象的**读数标注**（D32 建议②：键位属冻结合同 ⇒ 改在节旁显式标注）。
+/// 14 条机制里 5 条的 wire 名仍是体验名（`nociception`/`attachment`/`ritual`/`quorum`/`play`）
+/// ⇒ 用户看到本行即知那是**检测读数**，不是系统声称自己有这些体验。
+/// **诚实边界**：只声明读数的性质；每格的接线状态另有 `wired`/`stage`/`reason` 如实标注。
+pub const BIO_MECHANISMS_READING_NOTE: &str =
+    "以下为检测读数（分类/估计），不是内在体验；每格的接线状态见 wired/stage/reason";
+
 /// 开关关时的整节原因（0 装诚实: 明说未启用，不冒充已采集）。
 pub const BIO_SELF_STATUS_DISABLED_REASON: &str = "未启用: APEIRETH_ENABLE_BIO_SELF_STATUS != 1 \
      (默认关, fail-closed; 启用后才采集已接线机制的只读值)";
@@ -2002,6 +2009,8 @@ fn render_bio_mechanisms(status: &BioMechanismsStatus) -> Value {
         "enabled": status.enabled,
         "mechanisms": mechanisms,
         "reason": status.reason,
+        // D32 建议②：键位保留（冻结合同），但**在节旁显式标注是读数**。
+        "note": BIO_MECHANISMS_READING_NOTE,
     })
 }
 
@@ -4040,6 +4049,47 @@ mod tests {
             assert!(switch.is_boolean(), "{name} 必须仍是布尔: {switch}");
         }
         assert!(SelfStatusTool::output_schema().validate(&value).is_ok());
+    }
+
+    /// D32 建议②：**键位保留 + 节旁显式标注是读数**（两条都钉住）。
+    /// ① `note` 在场且措辞落在顾问可接受词表内（「检测」/「分类」/「估计」）；
+    /// ② 5 条体验名键位**必须仍在**（本波不改冻结合同）—— 守卫「不越界」：
+    ///    将来改键位须先改冻结合同（连带 render/schema/fixture 三侧），不能顺手删。
+    #[test]
+    fn bio_mechanisms_note_declares_readings_without_changing_keys() {
+        let value = render_snapshot(&fixture_snapshot());
+        let bio = &value["capabilities"][CAPABILITIES_BIO_MECHANISMS];
+
+        // ① 标注在场，且说的是「检测读数」而不是体验。
+        let note = bio["note"].as_str().expect("读数标注文案在场");
+        assert!(
+            note.contains("检测读数"),
+            "标注文案必须说明这是检测读数: {note}"
+        );
+        assert!(
+            note.contains("不是内在体验"),
+            "标注文案必须否定「体验」读法: {note}"
+        );
+        assert!(
+            !note.contains("我有") && !note.contains("我感到"),
+            "标注文案不得反过来声称体验: {note}"
+        );
+
+        // ② 5 条体验名键位仍在（本波不动冻结合同）。
+        let rows = bio["mechanisms"].as_object().expect("mechanisms object");
+        for wire in ["nociception", "attachment", "ritual", "quorum", "play"] {
+            assert!(
+                rows.contains_key(wire),
+                "键位 {wire} 本波不得改动（冻结合同）: {:?}",
+                rows.keys().collect::<Vec<_>>()
+            );
+        }
+        // ③ 顶层节数不变（21 节冻结合同）。
+        assert_eq!(
+            SelfStatusTool::output_schema().validate(&value).is_ok(),
+            true,
+            "加了读数标注后 schema 校验仍须通过"
+        );
     }
 
     /// W3.2 默认关: 观测面已挂但开关关 = mechanisms 显式 null + 「未启用」原因,
