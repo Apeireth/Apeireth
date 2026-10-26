@@ -141,7 +141,18 @@ in float vStreak;
 in vec2 vAxis;
 in float vSoft;
 out vec4 fragColor;
-void main(){ fragColor = vec4(1.0, 0.0, 0.0, 1.0); }`;
+void main(){
+  // ⚠⚠️ **必须碰一下 gl_PointCoord**（2026-10-26 实测修的坑）：
+  // 引擎的**四边形路径**会把 gl_PointCoord 换成 varying
+  // _engine_point_coord，且**顶点阶段总是输出**它
+  // ⇒ ⇒ 若片元**完全不提及**它 ⇒ ⇒ 顶点输出与片元输入**不匹配**
+  // ⇒ ⇒ wgpu 报错 ⇒ ⇒ wasm panic（实测：页面跑不完 ⇒ 「片头页没有跑完」）。
+  // ⇒ ⇒ 这里引用一次 ⇒ ⇒ 引擎的替换器会替换它并**补上** in vec2 声明
+  // ⇒ ⇒ 而**生产侧**（WebGL2）里 gl_PointCoord 是**内建** ⇒ ⇒ 天然合法。
+  // ⚠️ 注释里**不能出现反引号**（这段在 TS 模板字符串里 ⇒ 反引号会终止它）。
+  float unusedCoord = gl_PointCoord.x;
+  fragColor = vec4(1.0, 0.0, 0.0, unusedCoord * 0.0 + 1.0);
+}`;
     const originalShaderSource = proto['shaderSource'] as (
       shader: WebGLShader,
       source: string,
