@@ -89,6 +89,7 @@ pub mod meta_thinking;
 pub mod metadata_filter;
 pub mod milestone;
 pub mod milestone_store_sqlite;
+pub mod novel_corpus;
 pub mod online_calibration;
 pub mod partner;
 pub mod perltqa_adapter;
