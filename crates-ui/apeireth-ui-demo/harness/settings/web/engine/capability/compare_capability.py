@@ -78,8 +78,9 @@ HARNESS = SETTINGS.parent
 sys.path.insert(0, str(HARNESS / "tools"))
 
 try:
-    import compare  # noqa: E402
+    import compare
     import compare_toolcard  # noqa: E402
+    import interaction  # noqa: E402
 except ImportError:  # pragma: no cover - 批一装置缺失时的显式失败
     print(
         "找不到批一的对照装置："
@@ -878,6 +879,47 @@ def collect_pair(panel: dict, section: str, port: int) -> dict:
     return record
 
 
+def run_interaction_checks(env: dict) -> list:
+    """⭐ **交互对照**（真实键入 ⇒ 两侧逐字比对）。
+
+    ## 为什么这个面需要它
+
+    本面的两个文本输入（**推理过滤器** / **推理标签**）**不带** `prop("value")`
+    ⇒ ⇒ 取值靠**宿主回读 DOM** ⇒ ⇒ 一旦「宿主回读 → 引擎状态」这条路断了
+    ⇒ ⇒ 用户敲的字**引擎不知道**（**幽灵输入**）
+    ⇒ ⇒ 而**静态像素对照测不到**（浏览器自己画了值 ⇒ 画面对）
+    ⇒ ⇒ 必须有**真实键入**的对照。
+
+    ⚠️ 键入用**真实键盘事件**（`Input.dispatchKeyEvent`）⇒ 走真实事件路径。
+    """
+    cdp = env["cdp"]
+    base = env["base"]
+
+    def navigate(cdp, side: str) -> None:
+        if side == "reference":
+            navigate_reference(cdp, f"{base}/web/reference/capability/index.html")
+        else:
+            navigate_engine(cdp, f"{base}/web/engine/capability/index.html")
+
+    # 本面两个文本输入的 aria-label（生产与引擎**逐字相同** ⇒ 两侧通用选择器）。
+    cases = [
+        (".cap-input-wrap input[aria-label]", "7pt"),
+        (".cap-input-wrap input[type=text]", "abc"),
+    ]
+    records = []
+    for selector, text in cases:
+        record = interaction.type_into_pair(
+            cdp, navigate, ("reference", "engine"), selector, text
+        )
+        records.append(record)
+        log(
+            f"  交互 {selector}：键入值一致="
+            f"{record['equal']['typed_value']} / 提交值一致="
+            f"{record['equal']['committed_value']}"
+        )
+    return records
+
+
 def main() -> int:
     """本面独立跑（三个分区 + 七个态用例 + 四项专项 ⇒ 写全量证据）。"""
     env = ensure_env(8787)
@@ -933,6 +975,16 @@ def main() -> int:
         report["shared_api_selection"] = shared
         log(f"  共享入口切分区：{'通过' if shared['passed'] else '未通过'}")
 
+        # ⭐ **交互对照**（真实键入 ⇒ 两侧逐字比对）——
+        # 本面两个文本输入靠**宿主回读 DOM** ⇒ 「读路径断了」这类缺陷
+        # **静态像素测不到**（浏览器自己画了值 ⇒ 画面对）。
+        interactions = run_interaction_checks(env)
+        report["interactions"] = interactions
+        log(
+            "  交互对照："
+            + ("通过" if interaction.compare_records(interactions)["passed"] else "未通过")
+        )
+
         report["checks"] = {
             "t1_pixels_zero": all(row["t1_pixel_ratio"] <= PIXEL_BUDGET for row in cases),
             "t2_dom_identical": all(row["t2_dom_equal"] for row in cases),
@@ -944,6 +996,8 @@ def main() -> int:
             "t6_requires_two_states": requires["passed"],
             "t7_nested_row_and_mcp": nested["passed"],
             "t8_shared_api_selection": shared["passed"],
+            # ⭐ 键入后取值 / 提交后取值 / 回显文本 ⇒ 两侧**逐字相同**。
+            "t9_interaction_identical": interaction.compare_records(interactions)["passed"],
         }
         report["notes"] = [
             "T1 的判据是**差异 0**（任一通道绝对差 > 2/255 即记「不同」）。",
@@ -956,7 +1010,12 @@ def main() -> int:
             "与浏览器侧 `JSON.stringify` 逐字节相同。",
             "T6/T7 的两态靠**生产自己的交互路径**驱动参考侧（点行 / 输入 / 添加）"
             "⇒ **生产代码与生产固定数据一字未改**。",
-            "环境：视口 1440×900、DPR 1、时区 UTC。",
+            "T9 是**真实键入**的对照（`Input.dispatchKeyEvent`）⇒ 断言**键入值 / "
+            "提交值 / 回显文本**两侧**逐字相同** ⇒ ⇒ 覆盖「用户输入进不进引擎状态」"
+            "这类**静态像素测不到**的缺陷（2026-10-25 补）。",
+            "环境：视口 1440×900、DPR 1、时区 Asia/Shanghai"
+            "（⚠️ **刻意用非 UTC**：生产时刻显示走浏览器 `Intl`（本地时区）⇒"
+            "若装置也用 UTC ⇒ **两边一起错 ⇒ 掩盖时区缺陷**）。",
             "⚠️ **范围声明**：`security` 分区（markup 3006–3021）**不迁** —— 那一段"
             "整块委派给独立面（`GovernanceView`）⇒ 不属本面。",
             "⚠️ **未覆盖**：`configJsonCopied` 的「已复制」态在无头浏览器里到不了"

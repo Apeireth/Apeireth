@@ -78,6 +78,7 @@ sys.path.insert(0, str(HARNESS / "tools"))
 try:
     import compare  # noqa: E402
     import compare_toolcard  # noqa: E402
+    import interaction  # noqa: E402
 except ImportError:  # pragma: no cover - 批一装置缺失时的显式失败
     print(
         "找不到批一的对照装置："
@@ -847,6 +848,88 @@ def collect_pair(panel: dict, section: str, port: int) -> dict:
     return record
 
 
+def run_text_interaction(env: dict) -> dict:
+    """**文本输入交互对照**（真实键入 => 两侧逐字比对）。
+
+    ## 为什么这个面需要它
+
+    本面的文本输入（名字 / 伙伴名 ...）是**受控输入** => => 取值由**引擎**写回
+    => => 一旦「用户输入 -> 引擎状态 -> 渲染」这条路断了
+    => => 用户敲的字**引擎不知道**（**幽灵输入**）
+    => => 而**静态像素对照测不到**（浏览器自己画了值 => 画面对）
+    => => 必须有**真实键入**的对照。
+
+    键入用**真实键盘事件**（`Input.dispatchKeyEvent`）=> 走真实事件路径。
+    """
+    cdp = env["cdp"]
+    base = env["base"]
+
+    def navigate(cdp, side: str) -> None:
+        if side == "reference":
+            navigate_reference(cdp, f"{base}/web/reference/character/index.html")
+        else:
+            navigate_engine(cdp, f"{base}/web/engine/character/index.html")
+
+    # 本面第一个文本输入（名字框）—— 生产与引擎**同一位置**（同一 DOM 序）。
+    selector = "input[type=text]"
+    records = []
+    for side in ("reference", "engine"):
+        navigate(cdp, side)
+        cdp.evaluate(
+            "(() => { const el = document.querySelector(%s);"
+            " if (el) el.focus(); return !!el; })()" % json.dumps(selector)
+        )
+        before = interaction.read_control(cdp, selector)
+        # **清空**再键入 => 两侧起点一致，且「键入后取值变了」可判定。
+        cdp.evaluate(
+            "(() => { const el = document.querySelector(%s);"
+            " if (el) { el.focus(); el.value = ''; } return true; })()" % json.dumps(selector)
+        )
+        interaction.type_text(cdp, "abc")
+        time.sleep(0.5)
+        typed = interaction.read_control(cdp, selector)
+        cdp.evaluate(
+            "(() => { const el = document.querySelector(%s);"
+            " if (el) el.blur(); return true; })()" % json.dumps(selector)
+        )
+        time.sleep(0.5)
+        committed = interaction.read_control(cdp, selector)
+        records.append(
+            {
+                "side": side,
+                "before_value": (before or {}).get("value"),
+                "typed_value": (typed or {}).get("value"),
+                "committed_value": (committed or {}).get("value"),
+            }
+        )
+        log(f"  文本输入 {side}：{records[-1]}")
+
+    reference, engine = records[0], records[1]
+    equal = {
+        "typed_value": reference["typed_value"] == engine["typed_value"],
+        "committed_value": reference["committed_value"] == engine["committed_value"],
+    }
+    # ⚠️ 「键入后取值必须**确实是我们键入的那串**」=> 否则两侧「都没收到」
+    # （值仍是被清空的 ""）也会「一致」=> => 假绿。
+    took_effect = (
+        reference["typed_value"] == "abc" and engine["typed_value"] == "abc"
+    )
+    result = {
+        "case": "type-into:character-name",
+        "selector": selector,
+        "reference": reference,
+        "engine": engine,
+        "equal": equal,
+        "typed_took_effect": took_effect,
+        "passed": bool(all(equal.values()) and took_effect),
+    }
+    log(
+        f"  文本交互：键入值一致={equal['typed_value']} / "
+        f"提交值一致={equal['committed_value']} / 键入有效果={took_effect}"
+    )
+    return result
+
+
 def main() -> int:
     """本面独立跑（四个分区 + 三项专项 ⇒ 写全量证据）。"""
     env = ensure_env(8787)
@@ -897,6 +980,11 @@ def main() -> int:
         report["nested_row_assertion"] = nested
         log(f"  嵌套行断言：{'通过' if nested['passed'] else '未通过'}")
 
+        # ⭐ **滑块交互对照**（真实方向键 ⇒ 两侧逐字比对）——
+        # 静态像素对照只覆盖**初始值** ⇒ ⇒ 「宿主写入 → 引擎状态」断了也测不到。
+        slider = run_text_interaction(env)
+        report["text_interaction"] = slider
+
         report["checks"] = {
             "t1_all_pixels_within_budget": all(
                 row["t1_pixel_ratio"] <= PIXEL_BUDGET for row in pairs
@@ -909,6 +997,9 @@ def main() -> int:
             # 最后一个子元素 ⇒ 少 1px 下边框 ⇒ 高度差 1px、宽度不变 ⇒ 旧判据放行）。
             "t3b_same_height": all(row["t3b_same_height"] for row in pairs),
             "t4_invert_two_states": invert["passed"],
+            # ⭐ 滑块按**真实方向键**后 ⇒ 两侧取值**逐字相同** ⇒ ⇒ 覆盖
+            # 「宿主写入 → 引擎状态 → 渲染」这条链（静态像素只覆盖**初始值**）。
+            "t9_text_interaction_identical": bool(slider.get("passed")),
             # ⚠️ `requires` 两态**属 S4（能力治理面）**，**不属本面（S3）**：
             # 生产的依赖子行（`fileWriteAutoPass` ← `fileWrite`）渲染在
             # 「工具与安全」分区（markup 3023–3199 ⇒ S4 的区间）⇒
