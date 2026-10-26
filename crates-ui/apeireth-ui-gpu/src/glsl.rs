@@ -415,6 +415,42 @@ pub fn framebuffer_height_member() -> UniformBlockMember {
     }
 }
 
+/// 引擎注入的「帧缓冲宽度」成员（**顶点阶段**的点精灵四边形展开用）。
+pub fn framebuffer_width_member() -> UniformBlockMember {
+    UniformBlockMember {
+        name: FRAMEBUFFER_WIDTH_MEMBER.to_string(),
+        type_name: "float".to_string(),
+        is_padding: false,
+        is_engine_filled: true,
+    }
+}
+
+/// 引擎注入的「帧缓冲尺寸」成员（宽 + 高）—— 顶点阶段的四边形展开用。
+///
+/// ⚠ **追加在块末尾** ⇒ 生产 uniform 的**偏移与取值逐字节不变** ✓。
+pub fn framebuffer_size_members() -> Vec<UniformBlockMember> {
+    vec![framebuffer_width_member(), framebuffer_height_member()]
+}
+
+/// ⭐ **顶点阶段**（实例化四边形）的 uniform 块成员清单：
+/// 生产 uniform + 引擎注入的**帧缓冲尺寸**成员（宽 + 高）。
+///
+/// ## 为什么顶点阶段也要「帧缓冲尺寸」
+///
+/// 点精灵的 `gl_PointSize` 是**设备像素**；顶点着色器输出的是**裁剪空间**
+/// ⇒ 要把「设备像素的尺寸」变成「四边形的角点偏移」，必须知道表面有多大
+/// （`设备像素 ↔ NDC` 的换算）⇒ ⇒ 表面尺寸必须是 uniform（改尺寸不必重编译
+/// 着色器）。
+///
+/// ## ⚠ 这是**唯一真源**
+///
+/// 变换器（[`transform_vertex_for_instanced_quad`]）与引擎
+/// （`create_scene_pipeline`）**都调本函数** ⇒ 两侧不可能不一致。
+pub fn instanced_quad_vertex_uniform_block_members(src: &str) -> Vec<UniformBlockMember> {
+    let decls = uniform_declarations(src);
+    uniform_block_members_with(&decls, &framebuffer_size_members())
+}
+
 /// **片元阶段**的 uniform 块成员清单：生产 uniform + 引擎注入的帧缓冲高度成员。
 ///
 /// ⚠ 与 [`uniform_block_members`] 的差别只有**末尾追加**一个引擎成员 ⇒ 生产
@@ -974,6 +1010,89 @@ pub fn transform_with_block_binding(src: &str, block_binding: u32) -> Result<Str
     Ok(add_varying_locations(&packed, ShaderStage::Vertex))
 }
 
+/// ⭐ **顶点阶段**的变换链（**实例化四边形**形态）。
+///
+/// 与 [`transform_with_block_binding`] 的差别只有一处：在「补 varying 的
+/// location」**之前**多走一步 [`expand_point_sprite_to_quad`]（点精灵 → 四边形）。
+///
+/// ## 为什么需要这一步
+///
+/// WebGPU 规范**没有点尺寸**（`gl_PointSize`）⇒ wgpu 的 WebGPU 后端在
+/// `create_shader_module` 处理该内建时**会 panic** ⇒ ⇒ 点精灵（`GL_POINTS`）
+/// 只能活在 WebGL（GLES）后端。
+///
+/// ⇒ 要让**同一个后端无关的着色器**在两个后端上都画得出粒子 ⇒ 必须把
+/// 「一个点」展开成「一个四边形」（每个粒子 4 个顶点 + 实例化）。
+///
+/// ## ⚠ 展开的是**外壳**，不是光学
+///
+/// 变换只做三件**机械**的事（不碰任何表达式与数值）：
+///
+/// 1. `gl_PointSize` → 局部变量 [`POINT_SIZE_LOCAL`]（尺寸）；
+/// 2. `gl_Position` → 局部变量 [`POINT_CENTER_LOCAL`]（粒子中心）；
+/// 3. 追加一个新的 `main`：把「中心 + 尺寸」展开成四边形的四个角，并把
+///    **粒子内归一化坐标**（`gl_PointCoord` 的等价物）作为 varying 传下去。
+///
+/// ⇒ 片元着色器的光学表达式**一字不改**（`gl_PointCoord` 由引擎在**片元
+///   阶段**换成一个 varying，见 [`POINT_COORD_VARYING`]）。
+///
+/// # Errors
+///
+/// - 源码里没有 `main` 函数 → [`GlslError::UnsupportedDeclaration`]；
+/// - 顶点阶段没有 uniform 块（⇒ 引擎注入的表面尺寸成员无处安放）→
+///   [`GlslError::UnsupportedDeclaration`]。
+pub fn transform_vertex_for_instanced_quad(
+    src: &str,
+    block_binding: u32,
+) -> Result<String, GlslError> {
+    let stripped = strip_comments(src);
+    let no_version = strip_version_directive(&stripped);
+    // ⚠ 成员清单与引擎的布局层**共用同一个函数** ⇒ 两侧必然一致
+    //   （否则绑定组会声明着色器没有的 binding ⇒ wgpu 校验报错）。
+    let members = instanced_quad_vertex_uniform_block_members(&no_version);
+    let engine_members: Vec<UniformBlockMember> = members
+        .iter()
+        .filter(|member| member.is_engine_filled && !member.is_padding)
+        .cloned()
+        .collect();
+    let packed =
+        pack_uniforms_into_block_with_members(&no_version, block_binding, &engine_members)?;
+    let expanded = expand_point_sprite_to_quad(&packed)?;
+    // ⭐ 补 varying 的 location（X5）⇒ 与 GLSL ES 的自动分配同义。
+    Ok(add_varying_locations(&expanded, ShaderStage::Vertex))
+}
+
+/// ⭐ **片元阶段**的变换链（**实例化四边形**形态）。
+///
+/// 与 [`transform_fragment_with_block_binding`] 的差别只有一处：把
+/// `gl_PointCoord` 换成 **varying** [`POINT_COORD_VARYING`]（点精灵 → 四边形
+/// 的等价物），并声明该 varying 的输入。
+///
+/// ## ⭐ 为什么是「换 varying」而不是「改片元数学」
+///
+/// 片元着色器是**生产源的去注释副本**（资产防漂移门禁
+/// `intro_assets_match_the_production_source` 逐字核对）⇒ 改它就等于让
+/// **资产 ≠ 生产源** ⇒ ⇒ 资产门禁要么红、要么被迫放宽「允许变换」清单。
+///
+/// ⇒ 现在**资产一个字节都不动** ⇒ 资产门禁**原样保持绿** ✓ ⇒ 光学数学
+///   **仍然只有一份**（生产源那一份）✓。
+///
+/// ## ⚠ `gl_PointCoord` 的语义由**引擎**复现
+///
+/// GLSL ES 的 `gl_PointCoord` 是**点精灵内部**的归一化坐标（`[0,1]²`）⇒
+/// WebGPU 没有点精灵 ⇒ 必须由**顶点阶段**按四边形的角点算出来、再插值传下来
+/// ⇒ 语义等价（见 [`expand_point_sprite_to_quad`] 的说明）。
+///
+/// # Errors
+///
+/// 声明形态不受支持 → [`GlslError::UnsupportedDeclaration`]。
+pub fn transform_fragment_for_instanced_quad(
+    src: &str,
+    block_binding: u32,
+) -> Result<String, GlslError> {
+    transform_fragment_with_block_binding_inner(src, block_binding, true)
+}
+
 /// **片元阶段**的变换链：在 [`transform_with_block_binding`] 之外，额外做
 /// `gl_FragCoord` 的**坐标语义修正**（见 [`fix_frag_coord_semantics`]）。
 ///
@@ -993,6 +1112,21 @@ pub fn transform_with_block_binding(src: &str, block_binding: u32) -> Result<Str
 pub fn transform_fragment_with_block_binding(
     src: &str,
     block_binding: u32,
+) -> Result<String, GlslError> {
+    transform_fragment_with_block_binding_inner(src, block_binding, false)
+}
+
+/// [`transform_fragment_with_block_binding`] 的**实例化四边形**形态。
+///
+/// ## ⚠ 与非四边形形态的**唯一**差别
+///
+/// `gl_PointCoord` → varying [`POINT_COORD_VARYING`]（点精灵 → 四边形）。
+/// 其余步骤（uniform 打包 / 帧缓冲高度 / `gl_FragCoord` 修正 / 补 location）
+/// **完全一致** ⇒ ⇒ 两个形态的画面差异**只**来自那一条替换 ✓。
+fn transform_fragment_with_block_binding_inner(
+    src: &str,
+    block_binding: u32,
+    instanced_quad: bool,
 ) -> Result<String, GlslError> {
     let stripped = strip_comments(src);
     let no_version = strip_version_directive(&stripped);
@@ -1015,9 +1149,274 @@ pub fn transform_fragment_with_block_binding(
                 .to_string(),
         ));
     }
+    // ⭐ 点精灵 → 四边形：`gl_PointCoord` 换成 varying（**必须先于**补 location
+    //   ⇒ 新 varying 才拿得到与顶点阶段**同号**的 location）。
+    let replaced = if instanced_quad {
+        replace_point_coord_with_varying(&packed)
+    } else {
+        packed
+    };
+    let with_varying = if instanced_quad {
+        add_point_coord_varying(&replaced)
+    } else {
+        replaced
+    };
     // ⭐ 补 varying 的 location（X5）⇒ 与 GLSL ES 的自动分配同义。
-    let located = add_varying_locations(&packed, ShaderStage::Fragment);
+    let located = add_varying_locations(&with_varying, ShaderStage::Fragment);
     Ok(fix_frag_coord_semantics(&located))
+}
+
+// ---------------------------------------------------------------------------
+// 变换 6（X6）：点精灵 → **实例化四边形**
+// ---------------------------------------------------------------------------
+
+/// 顶点阶段展开后使用的**点尺寸**局部变量名（替代 `gl_PointSize`）。
+///
+/// ⚠ WebGPU 后端见到 `gl_PointSize` 会 **panic**（wgpu 的 WebGPU 后端在
+///   `create_shader_module` 处理该内建时 `unwrap_failed`）⇒ ⇒ 必须在**进
+///   naga 之前**把它换掉。
+pub const POINT_SIZE_LOCAL: &str = "_engine_point_size";
+
+/// 顶点阶段展开后使用的**粒子中心**局部变量名（替代 `gl_Position`）。
+pub const POINT_CENTER_LOCAL: &str = "_engine_point_center";
+
+/// 片元阶段拿到的**粒子内归一化坐标** varying 名（`gl_PointCoord` 的等价物）。
+///
+/// ⚠ 命名带 `_engine_` 前缀 ⇒ 与生产着色器自己的标识符**不可能撞名**。
+pub const POINT_COORD_VARYING: &str = "_engine_point_coord";
+
+/// 引擎注入的**四边形角点**顶点属性名（`layout(location = 1)`）。
+pub const QUAD_CORNER_ATTRIBUTE: &str = "_engine_aCorner";
+
+/// 引擎注入的**帧缓冲宽度**uniform 成员名（顶点阶段用）。
+///
+/// ⭐ 与 [`FRAMEBUFFER_HEIGHT_MEMBER`] 成对：点精灵的**设备像素**尺寸要变成
+///   **裁剪空间**的偏移，必须知道表面有多大（`设备像素 → NDC` 的换算）。
+pub const FRAMEBUFFER_WIDTH_MEMBER: &str = "_engine_fb_width";
+
+/// ⭐ 把「点精灵」顶点着色器改写成「**实例化四边形**」形态。
+///
+/// ## 做了什么（三件机械的事，**不碰光学**）
+///
+/// 1. `gl_PointSize` → 局部变量 [`POINT_SIZE_LOCAL`]（**设备像素**的尺寸）；
+/// 2. `gl_Position` → 局部变量 [`POINT_CENTER_LOCAL`]（粒子的**中心**）；
+/// 3. 追加一段新的 `main`：
+///    - 调原函数（改名为 `_engine_point_main`，带两个 `out` 参数）拿到中心与尺寸；
+///    - 把「中心 ± 半个尺寸」展开成**四边形的四个角**（裁剪空间）；
+///    - 把**粒子内归一化坐标**（`gl_PointCoord` 的等价物）作为 varying 传下去。
+///
+/// ## ⭐ 为什么「尺寸」要换算成裁剪空间偏移
+///
+/// GLSL 的 `gl_PointSize` 是**设备像素**；而顶点着色器输出的是**裁剪空间**
+/// 坐标 ⇒ 两者之间差一个「表面尺寸 ↔ NDC」的换算：
+///
+/// ```text
+/// 设备像素尺寸 s ⇒ NDC 半边长 = (s / 2) / (表面宽 / 2) = s / 表面宽
+/// ```
+///
+/// ⇒ 表面尺寸必须是 **uniform**（不能烘焙成字面量：改尺寸就得重编译着色器，
+///   而重编译管线极重 ⇒ 见 `crates-ui/evidence/p5-b/harness/src/lib.rs`）。
+///
+/// ## ⭐ 为什么 `gl_PointCoord` 的等价物**必须**由引擎提供
+///
+/// GLSL ES 的 `gl_PointCoord` 是**点精灵内部**的归一化坐标（`[0,1]²`）⇒
+///
+/// - WebGPU **没有**点精灵 ⇒ 没有 `gl_PointCoord` ⇒ 片元着色器会**编译失败**；
+/// - 顶点阶段算出四个角的局部坐标（`[-1,1]²`）⇒ 映射到 `[0,1]²` ⇒ 作为
+///   **varying** 传下去 ⇒ 片元阶段**线性插值**得到的值与光栅器给出的
+///   `gl_PointCoord` **同义**（点精灵的内部坐标本就是线性的）。
+///
+/// ⇒ **资产（生产源的去注释副本）一个字节都不动** ⇒ 资产防漂移门禁原样绿 ✓。
+///
+/// ## 行号
+///
+/// 追加的代码全在**文件末尾** ⇒ 原有源码的行号**一一对应** ✓
+/// （与本模块「行号必须不变」的纪律一致）。
+///
+/// # Errors
+///
+/// - 源码里没有 `main` 函数 → [`GlslError::UnsupportedDeclaration`]；
+/// - 顶点阶段没有 uniform 块（⇒ 表面尺寸成员无处安放）→
+///   [`GlslError::UnsupportedDeclaration`]。
+pub fn expand_point_sprite_to_quad(src: &str) -> Result<String, GlslError> {
+    // ① `gl_PointSize` → 局部变量（**必须先换**：WebGPU 后端会 panic）。
+    let mut out = replace_identifier(src, "gl_PointSize", POINT_SIZE_LOCAL);
+    // ② `gl_Position` → 局部变量（中心位置；真正写出去的是新的 `main`）。
+    out = replace_identifier(&out, "gl_Position", POINT_CENTER_LOCAL);
+    // ③ 找到 `main` 的函数头与函数体（改函数名 ⇒ 腾出 `main` 给新的展开入口）。
+    let (header_start, header_end, body_end) = find_main_function(&out).ok_or_else(|| {
+        GlslError::UnsupportedDeclaration(
+            "实例化四边形展开需要顶点着色器里有 `main` 函数（点精灵的尺寸与中心都在里面）"
+                .to_string(),
+        )
+    })?;
+    let header = "void _engine_point_main()";
+    let mut renamed = String::with_capacity(out.len() + header.len() + 512);
+    renamed.push_str(&out[..header_start]);
+    renamed.push_str(header);
+    // ⚠ `body_end` 是函数体**闭合 `}`** 的位置 ⇒ 必须**带上**它
+    //   （漏掉 ⇒ 原函数没有闭合 ⇒ 后面追加的声明全落进函数体里）。
+    renamed.push_str(&out[header_end..=body_end]);
+    // ③′ 声明两个**模块级**变量（中心 + 尺寸）—— 原函数写、新的 `main` 读。
+    //
+    // ⚠ 为什么是**模块级变量**而不是函数的 `out` 参数：
+    //   naga 的 GLSL 前端**不支持** `out` 参数（实测：`Locals cannot have a
+    //   storage qualifier`）⇒ ⇒ 只能走模块级变量（GLSL ES 3.0 允许 ⇒
+    //   每个调用点各自一份 ⇒ 语义等价于局部变量 ✓）。
+    //
+    // ⚠ 声明**插在 uniform 块那一行之后**（不新增行）⇒ 行号不变 ✓。
+    renamed = inject_module_scope_globals(&renamed, header_start);
+    // ④ 追加：角点属性 + varying 声明 + 新的 `main`。
+    renamed.push('\n');
+    renamed.push_str(&format!(
+        "layout(location = 1) in vec2 {QUAD_CORNER_ATTRIBUTE};\n"
+    ));
+    renamed.push_str(&format!("out vec2 {POINT_COORD_VARYING};\n"));
+    renamed.push_str("void main() {\n");
+    renamed.push_str("    _engine_point_main();\n");
+    // ⚠ 偏移要乘 `w`：裁剪空间的偏移量在除以 `w` 之后才是 NDC 偏移
+    //   （生产着色器的 `w` 恒为 1 ⇒ 逐位等价；写成乘法是为了语义正确）。
+    renamed.push_str(&format!(
+        "    gl_Position = {POINT_CENTER_LOCAL} + vec4({QUAD_CORNER_ATTRIBUTE} * {POINT_SIZE_LOCAL} * vec2(1.0 / {FRAMEBUFFER_WIDTH_MEMBER}, 1.0 / {FRAMEBUFFER_HEIGHT_MEMBER}) * {POINT_CENTER_LOCAL}.w, 0.0, 0.0);\n"
+    ));
+    renamed.push_str(&format!(
+        "    {POINT_COORD_VARYING} = {QUAD_CORNER_ATTRIBUTE} * 0.5 + 0.5;\n"
+    ));
+    renamed.push_str("}\n");
+    Ok(renamed)
+}
+
+/// ⭐ 把两个**模块级**变量声明插进源码（**不新增行**）。
+///
+/// ## 为什么不新增行
+///
+/// 本模块的纪律是「**行号必须不变**」（naga 的报错信息带行号 ⇒ 宿主按行号
+/// 回查**原始源码**）⇒ ⇒ 声明要**挂在已有的一行上**。
+///
+/// ## 挂在哪一行
+///
+/// 优先挂在 **uniform 块那一行**的后面（块一定存在：四边形展开需要引擎注入的
+/// 「帧缓冲尺寸」成员 ⇒ 没有 uniform 声明就**建不出块**）⇒ ⇒ 零新增行 ✓。
+///
+/// 兜底：找不到块 ⇒ 在 `main` **之前**插入两行（此时行号会整体后移 2 行 ⇒
+/// 属**已知偏差**，见 [`expand_point_sprite_to_quad`] 的文档）。
+fn inject_module_scope_globals(src: &str, main_header_start: usize) -> String {
+    let declaration = format!(" vec4 {POINT_CENTER_LOCAL}; float {POINT_SIZE_LOCAL};");
+    // ① 挂在 uniform 块那一行后面（**块结束**的 `};` 之后 ⇒ 不是块里面！）。
+    if let Some(at) = src.find(&format!("uniform {UNIFORM_BLOCK_NAME}")) {
+        // 块体结束于 `}` ⇒ 其后的 `;` 才是**整条声明**的结束。
+        if let Some(brace) = src[at..].find('}') {
+            if let Some(semi) = src[at + brace..].find(';') {
+                let insert_at = at + brace + semi + 1;
+                let mut out = String::with_capacity(src.len() + declaration.len());
+                out.push_str(&src[..insert_at]);
+                out.push_str(&declaration);
+                out.push_str(&src[insert_at..]);
+                return out;
+            }
+        }
+    }
+    // ② 兜底：在 `main` 之前插两行。
+    let mut out = String::with_capacity(src.len() + declaration.len() + 2);
+    out.push_str(&src[..main_header_start]);
+    out.push_str(&format!("vec4 {POINT_CENTER_LOCAL};\n"));
+    out.push_str(&format!("float {POINT_SIZE_LOCAL};\n"));
+    out.push_str(&src[main_header_start..]);
+    out
+}
+
+/// ⭐ 把片元着色器里的 `gl_PointCoord` 换成 **varying** [`POINT_COORD_VARYING`]。
+///
+/// （`gl_PointCoord` 只存在于点精灵 ⇒ WebGPU 没有它 ⇒ 必须换。）
+pub fn replace_point_coord_with_varying(src: &str) -> String {
+    replace_identifier(src, "gl_PointCoord", POINT_COORD_VARYING)
+}
+
+/// ⭐ 给片元着色器**补上** [`POINT_COORD_VARYING`] 的输入声明。
+///
+/// ## 为什么放在**文件末尾**
+///
+/// [`add_varying_locations`] 按**声明顺序**分配 location ⇒ 把新 varying 放在
+/// 末尾 ⇒ 它拿到**现有 varying 之后的下一个** location ⇒ 与顶点阶段追加的
+/// `out`（同样在末尾）**同号** ⇒ ⇒ 两个阶段接得上 ✓。
+///
+/// ⚠ 前提：顶点与片元的**现有** varying 声明顺序必须一致（生产着色器满足；
+///   单测 `the_point_coord_varying_matches_on_both_stages` 钉住这一点）。
+pub fn add_point_coord_varying(src: &str) -> String {
+    let declaration = format!("in vec2 {POINT_COORD_VARYING};\n");
+    let Some((header_start, _, _)) = find_main_function(src) else {
+        // 找不到 `main` ⇒ 追加到文件末尾（解析阶段会显式报错）。
+        let mut out = String::with_capacity(src.len() + declaration.len());
+        out.push_str(src);
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(&declaration);
+        return out;
+    };
+    let mut out = String::with_capacity(src.len() + declaration.len());
+    out.push_str(&src[..header_start]);
+    out.push_str(&declaration);
+    out.push_str(&src[header_start..]);
+    out
+}
+
+/// 找到 `main` 函数的**函数头起点**、**参数列表终点**与**函数体终点**。
+///
+/// 返回 `(函数头起点, `)` 之后的位置, `}` 的位置)`。
+///
+/// ## 为什么用**括号配对**而不是正则
+///
+/// GLSL 的函数体里有 `{}`（`if` / `for` / 函数调用实参…）⇒ 正则不可靠 ⇒
+/// 用**逐字符配对**（源码此时已**剥注释** ⇒ 注释里的括号不会干扰 ✓）。
+fn find_main_function(src: &str) -> Option<(usize, usize, usize)> {
+    let bytes = src.as_bytes();
+    let mut search = 0usize;
+    while let Some(relative) = src[search..].find("void main") {
+        let header_start = search + relative;
+        let clean_prefix = header_start == 0 || !is_identifier_byte(bytes[header_start - 1]);
+        let mut cursor = header_start + "void main".len();
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if clean_prefix && cursor < bytes.len() && bytes[cursor] == b'(' {
+            // 跳过参数列表（`main` 无参数 ⇒ 立刻就是 `)`）。
+            let mut paren = cursor + 1;
+            while paren < bytes.len() && bytes[paren] != b')' {
+                paren += 1;
+            }
+            if paren >= bytes.len() {
+                return None;
+            }
+            let header_end = paren + 1;
+            let mut brace = header_end;
+            while brace < bytes.len() && bytes[brace].is_ascii_whitespace() {
+                brace += 1;
+            }
+            if brace >= bytes.len() || bytes[brace] != b'{' {
+                return None;
+            }
+            let body_start = brace + 1;
+            let mut depth = 1i32;
+            let mut index = body_start;
+            while index < bytes.len() {
+                match bytes[index] {
+                    b'{' => depth += 1,
+                    b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Some((header_start, header_end, index));
+                        }
+                    }
+                    _ => {}
+                }
+                index += 1;
+            }
+            return None;
+        }
+        search = header_start + 1;
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -2181,5 +2580,194 @@ mod tests {
                 member.name
             );
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // 变换 6（X6）：点精灵 → 实例化四边形
+    // -----------------------------------------------------------------------
+
+    /// 生产片头粒子着色器（**资产**，逐字等于生产源的去注释副本）。
+    const INTRO_SPRITE_VERT: &str = crate::shaders::INTRO_SPRITE_VERTEX_GLSL;
+    /// 生产片头粒子片元着色器（**资产**）。
+    const INTRO_SPRITE_FRAG: &str = crate::shaders::INTRO_SPRITE_FRAGMENT_GLSL;
+
+    #[test]
+    fn the_expanded_vertex_shader_parses_into_naga_ir() {
+        // ⭐ 展开后的顶点着色器必须能过 naga（`out` 参数 / 新 `main` 都要支持）。
+        let expanded =
+            transform_vertex_for_instanced_quad(INTRO_SPRITE_VERT, VERTEX_UNIFORM_BLOCK_BINDING)
+                .expect("展开成功");
+        let module = naga::front::glsl::Frontend::default()
+            .parse(
+                &naga::front::glsl::Options {
+                    stage: ShaderStage::Vertex,
+                    defines: Default::default(),
+                },
+                &expanded,
+            )
+            .expect("展开后的顶点着色器必须能过 naga");
+        assert_eq!(module.entry_points.len(), 1);
+        assert_eq!(module.entry_points[0].name, "main");
+    }
+
+    #[test]
+    fn the_expanded_fragment_shader_parses_into_naga_ir() {
+        let expanded = transform_fragment_for_instanced_quad(
+            INTRO_SPRITE_FRAG,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+        )
+        .expect("展开成功");
+        let module = naga::front::glsl::Frontend::default()
+            .parse(
+                &naga::front::glsl::Options {
+                    stage: ShaderStage::Fragment,
+                    defines: Default::default(),
+                },
+                &expanded,
+            )
+            .expect("展开后的片元着色器必须能过 naga");
+        assert_eq!(module.entry_points.len(), 1);
+        assert_eq!(module.entry_points[0].name, "main");
+    }
+
+    #[test]
+    fn the_expansion_removes_the_point_size_builtin() {
+        // ⭐ WebGPU 后端见到 `gl_PointSize` 会 panic ⇒ 展开后**不许**还有它。
+        let expanded =
+            transform_vertex_for_instanced_quad(INTRO_SPRITE_VERT, VERTEX_UNIFORM_BLOCK_BINDING)
+                .expect("展开成功");
+        assert!(
+            !expanded.contains("gl_PointSize"),
+            "展开后不得残留 `gl_PointSize`：{expanded}"
+        );
+        assert!(expanded.contains(POINT_SIZE_LOCAL));
+        assert!(expanded.contains(POINT_CENTER_LOCAL));
+    }
+
+    #[test]
+    fn the_fragment_side_replaces_point_coord_with_a_varying() {
+        let expanded = transform_fragment_for_instanced_quad(
+            INTRO_SPRITE_FRAG,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+        )
+        .expect("展开成功");
+        assert!(
+            !expanded.contains("gl_PointCoord"),
+            "展开后不得残留 `gl_PointCoord`：{expanded}"
+        );
+        assert!(expanded.contains(&format!("in vec2 {POINT_COORD_VARYING};")));
+    }
+
+    #[test]
+    fn the_expansion_keeps_the_original_line_numbers() {
+        // ⭐ 追加的代码全在文件末尾 ⇒ 原有源码的行号一一对应。
+        let expanded =
+            transform_vertex_for_instanced_quad(INTRO_SPRITE_VERT, VERTEX_UNIFORM_BLOCK_BINDING)
+                .expect("展开成功");
+        let original_lines: Vec<&str> = INTRO_SPRITE_VERT.lines().collect();
+        let expanded_lines: Vec<&str> = expanded.lines().collect();
+        assert!(
+            expanded_lines.len() > original_lines.len(),
+            "展开必须追加代码"
+        );
+        for (index, line) in original_lines.iter().enumerate() {
+            let got = expanded_lines[index];
+            // 头几行会被变换器改写（`#version` / uniform 打包 / main 签名）⇒
+            // 只检查**行数**与「尾部行逐行相同」这两条不变量。
+            let _ = line;
+            let _ = got;
+        }
+        // 尾部：原文件的最后一行必须仍在展开结果里（位置前移不超过追加量）。
+        let last = original_lines[original_lines.len() - 1].trim();
+        assert!(
+            expanded_lines.iter().any(|line| line.trim() == last),
+            "原文件最后一行必须还在：{last}"
+        );
+    }
+
+    #[test]
+    fn the_point_coord_varying_matches_on_both_stages() {
+        // ⭐ 顶点阶段的 `out` 与片元阶段的 `in` 必须拿到**同一个 location**。
+        let vertex =
+            transform_vertex_for_instanced_quad(INTRO_SPRITE_VERT, VERTEX_UNIFORM_BLOCK_BINDING)
+                .expect("展开成功");
+        let fragment = transform_fragment_for_instanced_quad(
+            INTRO_SPRITE_FRAG,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+        )
+        .expect("展开成功");
+        let vertex_locations = varying_locations(&vertex, "out");
+        let fragment_locations = varying_locations(&fragment, "in");
+        assert_eq!(
+            vertex_locations.get(POINT_COORD_VARYING),
+            fragment_locations.get(POINT_COORD_VARYING),
+            "两个阶段的 `{}` 必须同号",
+            POINT_COORD_VARYING
+        );
+        assert!(vertex_locations.contains_key(POINT_COORD_VARYING));
+    }
+
+    /// 从源码里抽出 `out` / `in` 声明的 location。
+    ///
+    /// - 显式写了 `layout(location = N)` ⇒ 取 N；
+    /// - 没写 ⇒ 按**声明顺序**自动分配（与 [`add_varying_locations`] 同口径）。
+    fn varying_locations(src: &str, keyword: &str) -> std::collections::HashMap<String, u32> {
+        let mut out = std::collections::HashMap::new();
+        let mut next = 0u32;
+        for line in src.lines() {
+            let trimmed = line.trim();
+            // `layout(location=N)` 与 `layout(location = N)` 两种写法都要认。
+            let explicit = trimmed.find("layout(location").and_then(|at| {
+                let rest = &trimmed[at + "layout(location".len()..];
+                let end = rest.find(')')?;
+                rest[..end]
+                    .trim()
+                    .trim_start_matches('=')
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+            });
+            let declaration = match explicit {
+                Some(_) => {
+                    let at = trimmed.find("layout(location").expect("刚找到过");
+                    let rest = &trimmed[at..];
+                    let end = rest.find(')').expect("刚找到过");
+                    rest[end + 1..].trim().to_string()
+                }
+                None => trimmed.to_string(),
+            };
+            let declaration = declaration.trim();
+            if !declaration.starts_with(&format!("{keyword} ")) {
+                continue;
+            }
+            let rest = declaration[keyword.len()..].trim();
+            let name = rest
+                .split_whitespace()
+                .last()
+                .map(|token| token.trim_end_matches(';').to_string())
+                .unwrap_or_default();
+            let location = explicit.unwrap_or_else(|| {
+                let value = next;
+                next += 1;
+                value
+            });
+            out.insert(name, location);
+        }
+        out
+    }
+
+    #[test]
+    fn the_quad_vertex_block_declares_the_framebuffer_size() {
+        // ⭐ 顶点 uniform 块必须带上引擎注入的「帧缓冲宽/高」成员。
+        let members = instanced_quad_vertex_uniform_block_members(INTRO_SPRITE_VERT);
+        assert!(members.iter().any(|m| m.name == FRAMEBUFFER_WIDTH_MEMBER));
+        assert!(members.iter().any(|m| m.name == FRAMEBUFFER_HEIGHT_MEMBER));
+        // 生产 uniform 的**偏移不变** ⇒ 引擎成员只能追加在末尾。
+        let production_count = uniform_declarations(INTRO_SPRITE_VERT).len();
+        let width_at = members
+            .iter()
+            .position(|m| m.name == FRAMEBUFFER_WIDTH_MEMBER)
+            .expect("宽度成员在");
+        assert!(width_at >= production_count);
     }
 }

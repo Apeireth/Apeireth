@@ -38,16 +38,18 @@ use wasm_bindgen_futures::JsFuture;
 /// ⚠️ wasm 是**单线程**的 ⇒ 用 [`thread_local!]` 存放即可（无需 `Send`/`Sync`）。
 type EngineSlot = RefCell<HashMap<String, EngineEntry>>;
 
-/// 已建的引擎 + 管线（**可带一条精灵管线**：片头是**两个 pass**）。
+/// 已建的引擎 + 管线（**可带多条精灵管线**：片头是**两个 pass**）。
 struct EngineEntry {
     /// 引擎本体。
     engine: Engine,
-    /// 主 pass 的管线（背景 / 全屏三角形）。
-    pipeline: ScenePipeline,
+    /// 主 pass 的管线（背景 / 全屏三角形）—— `None` = 只画粒子（隔离对照）。
+    pipeline: Option<ScenePipeline>,
     /// 主 pass 的 uniform 取值。
     values: UniformValues,
-    /// 精灵 pass（`GL_POINTS`）的管线与取值 —— `None` = 只有主 pass。
-    sprite: Option<(ScenePipeline, UniformValues)>,
+    /// 精灵 pass（`GL_POINTS`）的管线与取值（**每拍一组**）。
+    sprites: Vec<(ScenePipeline, UniformValues)>,
+    /// 本次跑的 pass 组合（`all` / `backdrop` / `sprite`）—— 重绘时**照旧**。
+    passes: String,
 }
 
 thread_local! {
@@ -93,9 +95,12 @@ pub async fn redraw(backend: &str, frames: u32) -> Result<String, JsValue> {
             )));
         };
         for _ in 0..frames.max(1) {
+            let Some(pipeline) = entry.pipeline.as_mut() else {
+                return Err(JsValue::from_str("redraw: 片头管线不存在"));
+            };
             entry
                 .engine
-                .draw_frame(&mut entry.pipeline, &entry.values)
+                .draw_frame(pipeline, &entry.values)
                 .map_err(|e| JsValue::from_str(&format!("draw: {e}")))?;
             drawn += 1;
         }
@@ -212,9 +217,10 @@ pub async fn run(
             String::from(backend),
             EngineEntry {
                 engine,
-                pipeline,
+                pipeline: Some(pipeline),
                 values,
-                sprite: None,
+                sprites: Vec::new(),
+                passes: String::from(PASS_ALL),
             },
         );
     });
@@ -289,22 +295,64 @@ fn read_uniform(uniforms: &JsValue, name: &str) -> Result<Vec<f32>, JsValue> {
 // ⭐ 片头「火之文明史」腿（生产 `intro/fire.ts` 的迁移验证）
 // ---------------------------------------------------------------------------
 
-/// ⭐ 片头背景 matte 的 uniform 取值（生产 `fire.ts` 的 `BG_UNIFORMS`）。
+/// ⭐ 片头**要画哪些 pass**（诊断用：单 pass 隔离对照）。
 ///
-/// 按**索引**（= 声明序）写入引擎的 uniform 集合 ⇒ 与引擎的
-/// `glsl::fragment_uniform_block_members` 成员序**必然一致**。
+/// - `all`：背景 matte + 全部粒子 pass（= 生产的完整一帧）；
+/// - `backdrop`：**只**画背景 matte（⇒ 与生产的「只画背景」逐像素对照）；
+/// - `sprite`：**只**画粒子（⇒ 与生产的「只画粒子」逐像素对照）。
+const PASS_ALL: &str = "all";
+const PASS_BACKDROP: &str = "backdrop";
+const PASS_SPRITE: &str = "sprite";
+
+/// ⭐ 粒子的**绘制路径**（两条路径**必须产出同一画面** ⇒ 由逐像素门禁对照）。
+///
+/// - [`SpriteTopology::InstancedQuad`]：**实例化四边形**（后端无关 ⇒ 两个
+///   后端都能画）⇒ **默认路径**；
+/// - [`SpriteTopology::PointList`]：点图元（WebGL 快路径；WebGPU 后端
+///   **显式报错** ⇒ 那一腿**无效** ⇒ 只作对照用）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpriteTopology {
+    InstancedQuad,
+    PointList,
+}
+
+/// ⭐ 片头一帧的 uniform 取值（宿主注入的 JS 对象）。
+///
+/// 形如：
+/// ```text
+/// {"__backdrop": {"uRes": [960, 600], …},
+///  "__sprites": [{"uAspect": [1.6], …}, …]}
+/// ```
+///
+/// - `__backdrop` = 背景 matte 的 27 项（生产 `BG_UNIFORMS`）；
+/// - `__sprites` = **每拍一组**的 40 项（生产 `FIRE_UNIFORMS`）⇒ crossfade
+///   期间有**两组** ⇒ ⇒ 数组长度 = 活跃拍数。
+///
+/// ⚠ 取值**按索引**（= 声明序）写进引擎的 uniform 集合 ⇒ 与引擎的
+///   `glsl::fragment_uniform_block_members` 成员序**必然一致**。
 #[wasm_bindgen]
 pub async fn run_intro(
     canvas: web_sys::HtmlCanvasElement,
     backend: &str,
     frames: u32,
     uniforms: JsValue,
+    passes: &str,
+    sprite_mode: &str,
 ) -> Result<String, JsValue> {
     let preference = match backend {
         "webgl" => BackendPreference::WebGl,
         "webgpu" => BackendPreference::WebGpu,
         "auto" => BackendPreference::Auto,
         other => return Err(JsValue::from_str(&format!("unknown backend: {other}"))),
+    };
+    if !matches!(passes, PASS_ALL | PASS_BACKDROP | PASS_SPRITE) {
+        return Err(JsValue::from_str(&format!("unknown pass filter: {passes}")));
+    }
+    // ⭐ 粒子的**绘制路径**：实例化四边形（后端无关）/ 点图元（WebGL 快路径）。
+    let sprite_topology = match sprite_mode {
+        "quad" => SpriteTopology::InstancedQuad,
+        "point" => SpriteTopology::PointList,
+        other => return Err(JsValue::from_str(&format!("unknown sprite mode: {other}"))),
     };
     let width = canvas.width().max(1);
     let height = canvas.height().max(1);
@@ -322,80 +370,83 @@ pub async fn run_intro(
         .map_err(|e| JsValue::from_str(&format!("engine: {e}")))?;
     let report = engine.report();
 
-    let scene = SceneDescriptor::new(
-        INTRO_BACKDROP_VERTEX_GLSL,
-        INTRO_BACKDROP_FRAGMENT_GLSL,
-    )
-    .with_vertex_data(FULLSCREEN_TRIANGLE.to_vec());
-    let mut pipeline = engine
-        .create_scene_pipeline(&scene)
-        .map_err(|e| JsValue::from_str(&format!("pipeline: {e}")))?;
-
-    // uniform：按**索引**（= 声明序）写 ⇒ 名字 → 索引走引擎自维护的表。
+    // ── 背景 matte pass ──────────────────────────────────────────────────
+    let mut pipeline = None;
     let mut values = UniformValues::new();
-    let mut used: Vec<String> = Vec::with_capacity(INTRO_BACKDROP_UNIFORM_NAMES.len());
-    for (index, name) in INTRO_BACKDROP_UNIFORM_NAMES.iter().enumerate() {
-        let components = read_uniform(&uniforms, name)?;
-        values.set(index as u32, &components);
-        used.push(format!("\"{name}\":{}", format_components(&components)));
+    let mut used: Vec<String> = Vec::new();
+    if passes != PASS_SPRITE {
+        let scene = SceneDescriptor::new(
+            INTRO_BACKDROP_VERTEX_GLSL,
+            INTRO_BACKDROP_FRAGMENT_GLSL,
+        )
+        .with_vertex_data(FULLSCREEN_TRIANGLE.to_vec());
+        pipeline = Some(
+            engine
+                .create_scene_pipeline(&scene)
+                .map_err(|e| JsValue::from_str(&format!("pipeline: {e}")))?,
+        );
+        let backdrop = js_sys::Reflect::get(&uniforms, &JsValue::from_str("__backdrop"))
+            .map_err(|e| JsValue::from_str(&format!("__backdrop read: {e:?}")))?;
+        for (index, name) in INTRO_BACKDROP_UNIFORM_NAMES.iter().enumerate() {
+            let components = read_uniform(&backdrop, name)?;
+            values.set(index as u32, &components);
+            used.push(format!("\"{name}\":{}", format_components(&components)));
+        }
     }
 
-    // ⭐ 火焰粒子 pass（**可选**）：生产侧同一帧还有一层 `GL_POINTS`。
+    // ⭐ 火焰粒子 pass（**每拍一组**）：生产侧同一帧可能画**两层** `GL_POINTS`
+    //   （crossfade 期间两拍同时活跃）⇒ ⇒ 必须**逐组**画。
     //   - 顶点阶段有 40 个 uniform ⇒ 走引擎的**顶点 uniform 块**（binding = 1）；
     //   - 顶点属性是 `vec4`（`aSeed`，4096 个）⇒ stride 16；
-    //   - 拓扑是**点列表** ⇒ 只在 WebGL（GLES）后端可用（WebGPU 没有点尺寸）；
+    //   - 拓扑：⭐ **实例化四边形**（后端无关 ⇒ WebGL 与 WebGPU **都能画**）
+    //     / **点列表**（WebGL 快路径；WebGPU 后端**显式报错** ⇒ 该腿无效）；
     //   - 混合是**加法**（`ONE/ONE`）⇒ 与生产的 `gl.blendFunc(ONE, ONE)` 同义。
-    let mut sprite_pipeline: Option<ScenePipeline> = None;
-    let mut sprite_values: Option<UniformValues> = None;
-    if let Some(sprite_uniforms) = js_sys::Reflect::get(&uniforms, &JsValue::from_str("__sprite"))
-        .ok()
-        .filter(|value| !value.is_null() && !value.is_undefined())
-    {
-        let sprite_scene = SceneDescriptor::new(
-            INTRO_SPRITE_VERTEX_GLSL,
-            INTRO_SPRITE_FRAGMENT_GLSL,
-        )
-        .with_vertex_data(apeireth_ui_scene::intro::sprites::sprite_seeds())
-        .with_vertex_format(VertexFormat::Vec4)
-        .with_topology(Topology::PointList)
-        .with_blend(BlendMode::Additive);
-        let pipeline = engine
-            .create_scene_pipeline(&sprite_scene)
-            .map_err(|e| JsValue::from_str(&format!("sprite pipeline: {e}")))?;
-        let mut values = UniformValues::new();
-        for (index, name) in INTRO_SPRITE_UNIFORM_NAMES.iter().enumerate() {
-            let components = read_uniform(&sprite_uniforms, name)?;
-            values.set(index as u32, &components);
+    let mut sprites: Vec<(ScenePipeline, UniformValues)> = Vec::new();
+    if passes != PASS_BACKDROP {
+        let seeds = apeireth_ui_scene::intro::sprites::sprite_seeds();
+        let sprite_scene = match sprite_topology {
+            // ⭐ 四边形路径：粒子属性走**实例缓冲**（每实例 1 个粒子）
+            //   ⇒ 顶点数据**不变**（不是 4 × 4096 个顶点）。
+            SpriteTopology::InstancedQuad => SceneDescriptor::new(
+                INTRO_SPRITE_VERTEX_GLSL,
+                INTRO_SPRITE_FRAGMENT_GLSL,
+            )
+            .with_instance_data(seeds)
+            .with_instance_format(VertexFormat::Vec4)
+            .with_topology(Topology::InstancedQuad)
+            .with_blend(BlendMode::Additive),
+            // 点图元路径（WebGL 快路径）：粒子属性走**顶点缓冲**。
+            SpriteTopology::PointList => SceneDescriptor::new(
+                INTRO_SPRITE_VERTEX_GLSL,
+                INTRO_SPRITE_FRAGMENT_GLSL,
+            )
+            .with_vertex_data(seeds)
+            .with_vertex_format(VertexFormat::Vec4)
+            .with_topology(Topology::PointList)
+            .with_blend(BlendMode::Additive),
+        };
+        let list = js_sys::Reflect::get(&uniforms, &JsValue::from_str("__sprites"))
+            .map_err(|e| JsValue::from_str(&format!("__sprites read: {e:?}")))?;
+        let array = js_sys::Array::from(&list);
+        for (index, item) in array.iter().enumerate() {
+            let pipeline = engine
+                .create_scene_pipeline(&sprite_scene)
+                .map_err(|e| JsValue::from_str(&format!("sprite pipeline: {e}")))?;
+            let mut values = UniformValues::new();
+            for (slot, name) in INTRO_SPRITE_UNIFORM_NAMES.iter().enumerate() {
+                let components = read_uniform(&item, name)?;
+                values.set(slot as u32, &components);
+            }
+            sprites.push((pipeline, values));
+            trace(&format!("sprite pipeline {index} created"));
         }
-        sprite_values = Some(values);
-        sprite_pipeline = Some(pipeline);
     }
 
+    let sprite_pass_count = sprites.len();
     let mut drawn = 0u32;
     let mut last = None;
     for _ in 0..frames.max(1) {
-        let frame = match (&mut sprite_pipeline, &sprite_values) {
-            (Some(sprite_pipeline), Some(sprite_values)) => {
-                let mut passes = [
-                    ScenePass {
-                        pipeline: &mut pipeline,
-                        uniforms: &values,
-                        vertex_uniforms: None,
-                    },
-                    ScenePass {
-                        pipeline: sprite_pipeline,
-                        uniforms: sprite_values,
-                        vertex_uniforms: Some(sprite_values),
-                    },
-                ];
-                engine
-                    .draw_passes(&mut passes)
-                    .map_err(|e| JsValue::from_str(&format!("draw: {e}")))?
-            }
-            _ => engine
-                .draw_frame(&mut pipeline, &values)
-                .map_err(|e| JsValue::from_str(&format!("draw: {e}")))?,
-        };
+        let frame = draw_intro_frame(&engine, pipeline.as_mut(), &values, &mut sprites)?;
         last = Some(frame);
         drawn += 1;
         yield_to_browser().await;
@@ -409,10 +460,8 @@ pub async fn run_intro(
                 engine,
                 pipeline,
                 values,
-                sprite: match (sprite_pipeline, sprite_values) {
-                    (Some(pipeline), Some(values)) => Some((pipeline, values)),
-                    _ => None,
-                },
+                sprites,
+                passes: String::from(passes),
             },
         );
     });
@@ -421,7 +470,8 @@ pub async fn run_intro(
             "{{\"backend_requested\":\"{}\",\"backend_actual\":\"{}\",",
             "\"surface_format\":\"{}\",\"encoding\":\"{}\",",
             "\"width\":{},\"height\":{},\"frames_drawn\":{},",
-            "\"vertex_count\":{},\"uniform_members\":{},",
+            "\"vertex_count\":{},\"instance_count\":{},\"uniform_members\":{},",
+            "\"passes\":\"{}\",\"sprite_passes\":{},\"sprite_mode\":\"{}\",",
             "\"uniforms_used\":{{{}}}}}"
         ),
         match preference {
@@ -439,9 +489,50 @@ pub async fn run_intro(
         report.height,
         drawn,
         frame.vertex_count,
+        frame.instance_count,
         frame.uniform_members,
+        passes,
+        sprite_pass_count,
+        match sprite_topology {
+            SpriteTopology::InstancedQuad => "quad",
+            SpriteTopology::PointList => "point",
+        },
         used.join(","),
     ))
+}
+
+/// ⭐ 画片头的一帧（背景 + N 组粒子 ⇒ **一次呈现**）。
+///
+/// ⚠ **一次呈现**是硬要求：生产侧背景与粒子画进**同一张**表面 ⇒ 分两次画
+///   ⇒ 第二次会重新取纹理并呈现 ⇒ ⇒ 第一次的画面被覆盖。
+fn draw_intro_frame(
+    engine: &Engine,
+    pipeline: Option<&mut ScenePipeline>,
+    backdrop_values: &UniformValues,
+    sprites: &mut [(ScenePipeline, UniformValues)],
+) -> Result<apeireth_ui_gpu::FrameReport, JsValue> {
+    let mut all: Vec<ScenePass<'_>> = Vec::with_capacity(1 + sprites.len());
+    if let Some(pipeline) = pipeline {
+        all.push(ScenePass {
+            pipeline,
+            uniforms: backdrop_values,
+            vertex_uniforms: None,
+        });
+    }
+    for (pipeline, sprite_values) in sprites.iter_mut() {
+        let uniforms: &UniformValues = sprite_values;
+        all.push(ScenePass {
+            pipeline,
+            uniforms,
+            vertex_uniforms: Some(uniforms),
+        });
+    }
+    if all.is_empty() {
+        return Err(JsValue::from_str("no pass to draw"));
+    }
+    engine
+        .draw_passes(&mut all)
+        .map_err(|e| JsValue::from_str(&format!("draw: {e}")))
 }
 
 /// ⭐ **复用**已建的片头引擎与管线再画 N 帧（**不重建** GPU 资源）。
@@ -463,32 +554,13 @@ pub async fn redraw_intro(backend: &str, frames: u32) -> Result<String, JsValue>
             )));
         };
         for _ in 0..frames.max(1) {
-            match &mut entry.sprite {
-                Some((sprite_pipeline, sprite_values)) => {
-                    let mut passes = [
-                        ScenePass {
-                            pipeline: &mut entry.pipeline,
-                            uniforms: &entry.values,
-                            vertex_uniforms: None,
-                        },
-                        ScenePass {
-                            pipeline: sprite_pipeline,
-                            uniforms: sprite_values,
-                            vertex_uniforms: Some(sprite_values),
-                        },
-                    ];
-                    entry
-                        .engine
-                        .draw_passes(&mut passes)
-                        .map_err(|e| JsValue::from_str(&format!("draw: {e}")))?;
-                }
-                None => {
-                    entry
-                        .engine
-                        .draw_frame(&mut entry.pipeline, &entry.values)
-                        .map_err(|e| JsValue::from_str(&format!("draw: {e}")))?;
-                }
-            }
+            draw_intro_frame(
+                &entry.engine,
+                entry.pipeline.as_mut(),
+                &entry.values,
+                &mut entry.sprites,
+            )
+            .map_err(|e| JsValue::from_str(&format!("draw: {e:?}")))?;
             drawn += 1;
         }
         Ok(())
@@ -535,8 +607,11 @@ pub fn intro_uniforms(
     let Some(frame) = apeireth_ui_scene::intro::intro_frame(t, &viewport) else {
         return Ok("{\"beats\":0,\"backdrop\":null,\"sprites\":[]}".to_string());
     };
+    let drawn = frame.drawn_sprites();
     let mut out = String::from("{\"beats\":");
     out.push_str(&frame.sprites.len().to_string());
+    out.push_str(",\"drawn_passes\":");
+    out.push_str(&drawn.len().to_string());
     out.push_str(",\"backdrop\":");
     match &frame.backdrop {
         Some(backdrop) => {
@@ -554,7 +629,10 @@ pub fn intro_uniforms(
         None => out.push_str("null"),
     }
     out.push_str(",\"sprites\":[");
-    for (index, sprite) in frame.sprites.iter().enumerate() {
+    // ⚠ 只报**生产真正会画的那几组**（生产 `drawFire` 的跳过判据）⇒
+    //   ⇒ 与生产侧抓到的绘制**逐组一一对应**（落幅拍的 `count01 = 0`
+    //   ⇒ 生产侧不画 ⇒ 这里也不报）。
+    for (index, sprite) in drawn.iter().enumerate() {
         if index > 0 {
             out.push(',');
         }

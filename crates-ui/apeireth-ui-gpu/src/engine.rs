@@ -401,6 +401,8 @@ pub struct FrameReport {
     pub encoding: OutputEncoding,
     /// 本帧画的顶点数。
     pub vertex_count: u32,
+    /// 本帧画的**实例**数（非实例化拓扑 ⇒ 1；四边形拓扑 ⇒ 粒子数）。
+    pub instance_count: u32,
     /// 本帧写入的 uniform **成员**数（= uniform 块里的成员个数）。
     pub uniform_members: u32,
     /// 本帧的**帧号**（从 1 起）。
@@ -469,7 +471,29 @@ pub enum Topology {
     /// ⚠ **WebGPU 后端没有点尺寸**（`gl_PointSize`）⇒ 该拓扑**只在 WebGL
     ///   （GLES）后端**可用 ⇒ 其它后端**显式报错**（[`GpuError::Unsupported`]），
     ///   不静默画错。
+    ///
+    /// ⭐ **后端无关的路径是 [`Topology::InstancedQuad`]**：本拓扑保留为
+    ///   **WebGL 快路径**（点图元 ⇒ 顶点着色器直接画点）⇒ 但它与四边形路径
+    ///   **必须产出同一画面**（由逐像素门禁对照，见
+    ///   `crates-ui/evidence/p5-b/drive_intro.py`）。
     PointList,
+    /// ⭐ **实例化四边形**（点精灵的**展开**形态）—— **后端无关**的粒子路径。
+    ///
+    /// ## 为什么需要
+    ///
+    /// WebGPU 规范**没有点尺寸**（`gl_PointSize`）⇒ 点图元在 WebGPU 后端
+    /// **根本不存在** ⇒ ⇒ 要让**同一份**着色器在两个后端上都画得出粒子 ⇒
+    /// 必须把「一个点」展开成「一个四边形」（每个粒子 6 个顶点 + 实例化）。
+    ///
+    /// ## 语义（与点图元**逐像素等价**）
+    ///
+    /// - **顶点缓冲** = 四边形模板（6 个顶点 = 2 个三角形；**引擎生成**）；
+    /// - **实例缓冲** = 粒子属性（`vec4` × N；`step_mode = Instance`）⇒
+    ///   **顶点数据不变**（不是 4 × N 个顶点 ⇒ 不浪费显存）；
+    /// - 顶点着色器把「粒子中心 ± 半个尺寸」展开成四个角，并把**粒子内归一化
+    ///   坐标**（`gl_PointCoord` 的等价物）作为 varying 传进片元阶段
+    ///   （见 [`glsl::expand_point_sprite_to_quad`]）。
+    InstancedQuad,
 }
 
 /// 混合方式。
@@ -526,6 +550,16 @@ pub struct SceneDescriptor {
     pub vertex_count: Option<u32>,
     /// 顶点属性的分量格式（默认 [`VertexFormat::Vec2`]）。
     pub vertex_format: VertexFormat,
+    /// ⭐ **实例**属性（每实例一份；分量按 [`SceneDescriptor::instance_format`]）。
+    ///
+    /// ⚠ 只在 [`Topology::InstancedQuad`] 下有意义（其它拓扑**忽略**它 ⇒
+    ///   不会静默画错：那条拓扑的顶点数据仍是逐顶点的一份）。
+    pub instance_data: Vec<f32>,
+    /// 实例属性的分量格式（默认 [`VertexFormat::Vec4`]）。
+    ///
+    /// ⚠ 必须与着色器里**实例属性**的声明一致（生产粒子着色器：
+    ///   `layout(location=0) in vec4 aSeed;` ⇒ `vec4` ✓）。
+    pub instance_format: VertexFormat,
     /// 图元拓扑（默认 [`Topology::TriangleList`]）。
     pub topology: Topology,
     /// 混合方式（默认 [`BlendMode::Replace`]）。
@@ -541,6 +575,8 @@ impl SceneDescriptor {
             vertex_data: Vec::new(),
             vertex_count: None,
             vertex_format: VertexFormat::Vec2,
+            instance_data: Vec::new(),
+            instance_format: VertexFormat::Vec4,
             topology: Topology::TriangleList,
             blend: BlendMode::Replace,
         }
@@ -549,6 +585,21 @@ impl SceneDescriptor {
     /// 附上顶点数据（分量按 [`SceneDescriptor::vertex_format`]）。
     pub fn with_vertex_data(mut self, data: Vec<f32>) -> Self {
         self.vertex_data = data;
+        self
+    }
+
+    /// ⭐ 附上**实例**属性（每实例一份；分量按 [`SceneDescriptor::instance_format`]）。
+    ///
+    /// ⚠ 只在 [`Topology::InstancedQuad`] 下生效（点精灵展开 ⇒ 每个实例一个
+    ///   四边形 ⇒ 顶点数据**不变** ⇒ 不浪费显存）。
+    pub fn with_instance_data(mut self, data: Vec<f32>) -> Self {
+        self.instance_data = data;
+        self
+    }
+
+    /// 指定实例属性的分量格式。
+    pub fn with_instance_format(mut self, format: VertexFormat) -> Self {
+        self.instance_format = format;
         self
     }
 
@@ -594,6 +645,21 @@ impl SceneDescriptor {
             (self.vertex_data.len() / per_vertex) as u32
         })
     }
+
+    /// ⭐ 实际要画的**实例**数（[`Topology::InstancedQuad`] 下 = 粒子数）。
+    ///
+    /// ⚠ 其它拓扑 ⇒ **1**（一个实例 = 一次普通绘制）⇒ ⇒ `draw(0..n, 0..1)`
+    ///   与非实例化绘制**完全一致** ✓。
+    pub fn resolved_instance_count(&self) -> u32 {
+        if self.topology != Topology::InstancedQuad {
+            return 1;
+        }
+        let per_instance = match self.instance_format {
+            VertexFormat::Vec2 => 2,
+            VertexFormat::Vec4 => 4,
+        };
+        (self.instance_data.len() / per_instance) as u32
+    }
 }
 
 /// 已建好的绘制管线（含 uniform 缓冲、顶点缓冲与绑定组）。
@@ -604,10 +670,14 @@ pub struct ScenePipeline {
     /// 顶点阶段的 uniform 缓冲（**另一个块**，binding = 1）。
     vertex_uniform_buffer: Option<wgpu::Buffer>,
     vertex_buffer: Option<wgpu::Buffer>,
+    /// ⭐ **实例**缓冲（`step_mode = Instance`；只在 [`Topology::InstancedQuad`] 下有）。
+    instance_buffer: Option<wgpu::Buffer>,
     layout: UniformBufferLayout,
     /// 顶点阶段的 uniform 布局（**另一个块**）。
     vertex_layout: UniformBufferLayout,
     vertex_count: u32,
+    /// ⭐ 实际要画的**实例**数（非实例化拓扑 ⇒ 1）。
+    instance_count: u32,
     scratch: Vec<u8>,
     /// 顶点阶段 uniform 的**暂存字节**（每帧写入 ⇒ 零分配）。
     vertex_scratch: Vec<u8>,
@@ -634,6 +704,11 @@ impl ScenePipeline {
     /// 本管线要画的顶点数。
     pub fn vertex_count(&self) -> u32 {
         self.vertex_count
+    }
+
+    /// ⭐ 本管线要画的**实例**数（非实例化拓扑 ⇒ 1）。
+    pub fn instance_count(&self) -> u32 {
+        self.instance_count
     }
 
     /// 建管线时的表面格式。
@@ -1249,15 +1324,36 @@ impl Engine {
         if scene.topology == Topology::PointList && !point_list_supported(self.backend) {
             return Err(GpuError::Unsupported(format!(
                 "点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：{:?}）⇒ \
-                 WebGPU 规范没有点尺寸（gl_PointSize）",
+                 WebGPU 规范没有点尺寸（gl_PointSize）⇒ 请改用实例化四边形拓扑 \
+                 （Topology::InstancedQuad，后端无关）",
                 self.backend
             )));
         }
-        // 顶点阶段：变换 + 解析。
-        let vertex_source = glsl::transform_with_block_binding(
-            &scene.vertex_glsl,
-            glsl::VERTEX_UNIFORM_BLOCK_BINDING,
-        )
+        // ⚠ 四边形拓扑必须**有实例数据**（否则画不出任何粒子）⇒ **显式拒绝**
+        //   （不静默画一张空图 ⇒ 免得「没画」被误读成「一致」）。
+        if scene.topology == Topology::InstancedQuad && scene.instance_data.is_empty() {
+            return Err(GpuError::Unsupported(
+                "实例化四边形拓扑需要实例数据（SceneDescriptor::with_instance_data）⇒ \
+                 没有实例数据就画不出任何粒子"
+                    .to_string(),
+            ));
+        }
+        // ⭐ 顶点阶段：变换 + 解析。
+        //
+        // ⚠ 四边形拓扑走**另一条**变换链（点精灵 → 四边形的展开，
+        //   见 [`glsl::transform_vertex_for_instanced_quad`]）⇒ ⇒ 顶点阶段
+        //   **不再有** `gl_PointSize` ⇒ WebGPU 后端**不会** panic ✓。
+        let vertex_source = if scene.topology == Topology::InstancedQuad {
+            glsl::transform_vertex_for_instanced_quad(
+                &scene.vertex_glsl,
+                glsl::VERTEX_UNIFORM_BLOCK_BINDING,
+            )
+        } else {
+            glsl::transform_with_block_binding(
+                &scene.vertex_glsl,
+                glsl::VERTEX_UNIFORM_BLOCK_BINDING,
+            )
+        }
         .map_err(|e| GpuError::ShaderCompilationFailed(format!("vertex: {e}")))?;
         let vertex_module_ir = glsl::parse(&vertex_source, naga::ShaderStage::Vertex)
             .map_err(|e| GpuError::ShaderCompilationFailed(format!("vertex: {e}")))?;
@@ -1268,10 +1364,21 @@ impl Engine {
         // （glsl::fix_frag_coord_semantics）：GLSL ES 规定片元坐标的 y 轴
         // **向上**，而本引擎的两个后端都把它变成**向下** ⇒ 不修正的话同一份
         // GLSL 源画出来的画面是上下颠倒的（实测证据见 crates-ui/evidence/p5-b/）。
-        let fragment_source = glsl::transform_fragment_with_block_binding(
-            &scene.fragment_glsl,
-            glsl::FRAGMENT_UNIFORM_BLOCK_BINDING,
-        )
+        //
+        // ⭐ 四边形拓扑额外把 `gl_PointCoord` 换成 **varying**
+        //   （点精灵内部坐标的等价物 ⇒ 见
+        //   [`glsl::transform_fragment_for_instanced_quad`]）。
+        let fragment_source = if scene.topology == Topology::InstancedQuad {
+            glsl::transform_fragment_for_instanced_quad(
+                &scene.fragment_glsl,
+                glsl::FRAGMENT_UNIFORM_BLOCK_BINDING,
+            )
+        } else {
+            glsl::transform_fragment_with_block_binding(
+                &scene.fragment_glsl,
+                glsl::FRAGMENT_UNIFORM_BLOCK_BINDING,
+            )
+        }
         .map_err(|e| GpuError::ShaderCompilationFailed(format!("fragment: {e}")))?;
         let fragment_module_ir = glsl::parse(&fragment_source, naga::ShaderStage::Fragment)
             .map_err(|e| GpuError::ShaderCompilationFailed(format!("fragment: {e}")))?;
@@ -1288,8 +1395,15 @@ impl Engine {
         //
         // 顶点与片元的 uniform 块**各占一个 binding**（否则两侧的 `binding=0`
         // 会互相撞车）⇒ 见 [`glsl::VERTEX_UNIFORM_BLOCK_BINDING`]。
-        let vertex_members =
-            glsl::uniform_block_members(&glsl::uniform_declarations(&scene.vertex_glsl));
+        //
+        // ⭐ 四边形拓扑：顶点块**追加**引擎注入的「帧缓冲宽/高」成员
+        //   （点精灵的设备像素尺寸 → 裁剪空间偏移的换算要用）⇒
+        //   ⇒ 成员清单与变换器**共用同一个函数**（两侧必然一致）。
+        let vertex_members = if scene.topology == Topology::InstancedQuad {
+            glsl::instanced_quad_vertex_uniform_block_members(&scene.vertex_glsl)
+        } else {
+            glsl::uniform_block_members(&glsl::uniform_declarations(&scene.vertex_glsl))
+        };
         let vertex_layout =
             UniformBufferLayout::from_members(&vertex_members, glsl::VERTEX_UNIFORM_BLOCK_BINDING)
                 .map_err(|e: GlslError| GpuError::ShaderCompilationFailed(e.to_string()))?;
@@ -1375,12 +1489,43 @@ impl Engine {
                 source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(fragment_module_ir)),
             });
 
+        // ⚠ 顶点缓冲布局：四边形拓扑与普通拓扑**结构不同**。
+        //
+        // - **普通拓扑**：一个逐顶点缓冲（location 0）；
+        // - **四边形拓扑**：两个缓冲 ——
+        //   ① **四边形模板**（location 1，`step_mode = Vertex`，**引擎生成**）；
+        //   ② **实例属性**（location 0，`step_mode = Instance`，来自
+        //     [`SceneDescriptor::instance_data`]）⇒ ⇒ 粒子属性**逐顶点**的那
+        //     份数据**不需要**展开成 4 份 ⇒ 不浪费显存 ✓。
         let vertex_attributes = [wgpu::VertexAttribute {
             format: scene.vertex_format.wgpu_format(),
             offset: 0,
             shader_location: 0,
         }];
-        let vertex_buffer_layout = if scene.vertex_data.is_empty() {
+        let quad_corner_attributes = [wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32x2,
+            offset: 0,
+            shader_location: 1,
+        }];
+        let instance_attributes = [wgpu::VertexAttribute {
+            format: scene.instance_format.wgpu_format(),
+            offset: 0,
+            shader_location: 0,
+        }];
+        let vertex_buffer_layout = if scene.topology == Topology::InstancedQuad {
+            vec![
+                Some(wgpu::VertexBufferLayout {
+                    array_stride: VertexFormat::Vec2.stride(),
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &quad_corner_attributes,
+                }),
+                Some(wgpu::VertexBufferLayout {
+                    array_stride: scene.instance_format.stride(),
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &instance_attributes,
+                }),
+            ]
+        } else if scene.vertex_data.is_empty() {
             Vec::new()
         } else {
             vec![Some(wgpu::VertexBufferLayout {
@@ -1405,6 +1550,8 @@ impl Engine {
                     topology: match scene.topology {
                         Topology::TriangleList => wgpu::PrimitiveTopology::TriangleList,
                         Topology::PointList => wgpu::PrimitiveTopology::PointList,
+                        // ⭐ 四边形 = 两个三角形（模板缓冲里就是 6 个顶点）。
+                        Topology::InstancedQuad => wgpu::PrimitiveTopology::TriangleList,
                     },
                     strip_index_format: None,
                     front_face: wgpu::FrontFace::Ccw,
@@ -1484,7 +1631,17 @@ impl Engine {
             entries: &bind_entries,
         });
 
-        let vertex_buffer = if scene.vertex_data.is_empty() {
+        let vertex_buffer = if scene.topology == Topology::InstancedQuad {
+            // ⭐ 四边形拓扑：顶点缓冲 = **模板**（引擎生成，6 个顶点）。
+            Some(
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("apeireth-ui-gpu.quad-template"),
+                        contents: &quad_template_bytes(),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    }),
+            )
+        } else if scene.vertex_data.is_empty() {
             None
         } else {
             let bytes: Vec<u8> = scene
@@ -1502,6 +1659,25 @@ impl Engine {
             )
         };
 
+        // ⭐ 四边形拓扑：实例缓冲（`step_mode = Instance`）。
+        let instance_buffer = if scene.topology == Topology::InstancedQuad {
+            let bytes: Vec<u8> = scene
+                .instance_data
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect();
+            Some(
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("apeireth-ui-gpu.instances"),
+                        contents: &bytes,
+                        usage: wgpu::BufferUsages::VERTEX,
+                    }),
+            )
+        } else {
+            None
+        };
+
         let errors = self.take_device_errors();
         if !errors.is_empty() {
             return Err(GpuError::PipelineCreationFailed(errors.join("; ")));
@@ -1513,9 +1689,15 @@ impl Engine {
             uniform_buffer,
             vertex_uniform_buffer,
             vertex_buffer,
+            instance_buffer,
             layout,
             vertex_layout,
-            vertex_count: scene.resolved_vertex_count_by_format(),
+            vertex_count: if scene.topology == Topology::InstancedQuad {
+                QUAD_TEMPLATE_VERTICES
+            } else {
+                scene.resolved_vertex_count_by_format()
+            },
+            instance_count: scene.resolved_instance_count(),
             scratch: vec![0u8; total_size as usize],
             vertex_scratch: vec![0u8; vertex_total_size as usize],
             surface_format,
@@ -1635,11 +1817,15 @@ impl Engine {
                         &mut pass.pipeline.vertex_scratch,
                     )
                     .map_err(|e: BindingError| GpuError::BindingFailed(e.to_string()))?;
-                if let Some(buffer) = &pass.pipeline.vertex_uniform_buffer {
-                    if !pass.pipeline.vertex_scratch.is_empty() {
-                        self.queue
-                            .write_buffer(buffer, 0, &pass.pipeline.vertex_scratch);
-                    }
+            }
+            // ⚠ 引擎自填的「帧缓冲宽/高」（四边形展开用）⇒ **每帧**写
+            //   （尺寸会变 ⇒ 高度会变 ⇒ uniform 缓冲里的那两个 f32 必须跟着变
+            //   ⇒ **改尺寸不必重编译着色器**）。
+            self.write_framebuffer_size(pass.pipeline);
+            if let Some(buffer) = &pass.pipeline.vertex_uniform_buffer {
+                if !pass.pipeline.vertex_scratch.is_empty() {
+                    self.queue
+                        .write_buffer(buffer, 0, &pass.pipeline.vertex_scratch);
                 }
             }
         }
@@ -1688,7 +1874,15 @@ impl Engine {
             if let Some(vertex_buffer) = &pass.pipeline.vertex_buffer {
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             }
-            render_pass.draw(0..pass.pipeline.vertex_count, 0..1);
+            // ⚠ 四边形拓扑：**实例缓冲**在 slot 1（模板在 slot 0）。
+            if let Some(instance_buffer) = &pass.pipeline.instance_buffer {
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            }
+            // ⭐ 实例数：非实例化拓扑 = 1（与旧的 `draw(0..n, 0..1)` **逐位相同**）。
+            render_pass.draw(
+                0..pass.pipeline.vertex_count,
+                0..pass.pipeline.instance_count,
+            );
         }
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
@@ -1732,6 +1926,7 @@ impl Engine {
             surface_format: self.color.surface_format,
             encoding: self.color.encoding,
             vertex_count: first_pass.map_or(0, |pass| pass.pipeline.vertex_count),
+            instance_count: first_pass.map_or(0, |pass| pass.pipeline.instance_count),
             uniform_members: first_pass.map_or(0, |pass| pass.pipeline.layout.len() as u32),
             frame_number,
             surface_width: surface_size.0,
@@ -1758,6 +1953,32 @@ impl Engine {
             return;
         }
         pipeline.scratch[at..at + 4].copy_from_slice(&height.to_le_bytes());
+    }
+
+    /// 写**引擎自填**的帧缓冲**尺寸**（宽 + 高；顶点阶段的四边形展开用）。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 点精灵的 `gl_PointSize` 是**设备像素**；顶点着色器输出的是**裁剪空间**
+    /// ⇒ 要把「设备像素的尺寸」变成「四边形的角点偏移」，必须知道表面有多大
+    /// ⇒ ⇒ 表面尺寸必须是 uniform（改尺寸不必重编译着色器 —— 重编译管线极重）。
+    ///
+    /// ⚠ 每帧都写（不是建管线时写一次）：尺寸会变 ⇒ 数值必须跟着变。
+    fn write_framebuffer_size(&self, pipeline: &mut ScenePipeline) {
+        let (width, height) = self.surface_size();
+        for (name, value) in [
+            (glsl::FRAMEBUFFER_WIDTH_MEMBER, width as f32),
+            (glsl::FRAMEBUFFER_HEIGHT_MEMBER, height as f32),
+        ] {
+            let Some(slot) = pipeline.vertex_layout.slot_by_name(name) else {
+                continue;
+            };
+            let at = slot.offset as usize;
+            if at + 4 > pipeline.vertex_scratch.len() {
+                continue;
+            }
+            pipeline.vertex_scratch[at..at + 4].copy_from_slice(&value.to_le_bytes());
+        }
     }
 
     /// 取表面纹理（`Lost` ⇒ **自动重新配置表面**并重试一次）。
@@ -1836,8 +2057,48 @@ impl Engine {
 /// - **WebGPU**：规范**没有**点尺寸 ⇒ wgpu 的 WebGPU 后端在
 ///   `create_shader_module` 处理该内建时**会 panic**（实测：`unwrap_failed`
 ///   ⇒ 浏览器里 = 页面崩溃）⇒ ⇒ 必须在**进 wgpu 之前**显式拒绝。
+///
+/// ## ⭐ 后端无关的替代路径
+///
+/// [`Topology::InstancedQuad`]（实例化四边形）**没有**这个限制 ⇒ ⇒ 需要
+/// 「两个后端画同一张画面」时**必须**走那条路径。
 fn point_list_supported(backend: wgpu::Backend) -> bool {
     matches!(backend, wgpu::Backend::Gl)
+}
+
+/// ⭐ 四边形模板的**顶点数**（2 个三角形 = 6 个顶点）。
+pub const QUAD_TEMPLATE_VERTICES: u32 = 6;
+
+/// ⭐ 四边形模板的**角点**（`[-1,1]²`；两个三角形）。
+///
+/// ## 为什么是 6 个顶点而不是 4 个
+///
+/// 引擎的绘制路径**只支持非索引绘制**（`draw`）⇒ ⇒ 一个四边形要画成
+/// **两个三角形**（6 个顶点）⇒ ⇒ 模板缓冲里就是这 6 个角点。
+///
+/// ## 角点顺序
+///
+/// ```text
+/// (-1,-1) → (1,-1) → (1,1)      （逆时针，y 向上）
+/// (-1,-1) →  (1,1) → (-1,1)
+/// ```
+///
+/// ⚠ 顶点着色器把角点乘上「半个尺寸」并加到粒子中心上 ⇒ ⇒ 角点就是
+///   **裁剪空间**的单位方向 ✓。
+fn quad_template_bytes() -> Vec<u8> {
+    let corners: [(f32, f32); 6] = [
+        (-1.0, -1.0),
+        (1.0, -1.0),
+        (1.0, 1.0),
+        (-1.0, -1.0),
+        (1.0, 1.0),
+        (-1.0, 1.0),
+    ];
+    corners
+        .iter()
+        .flat_map(|(x, y)| [*x, *y])
+        .flat_map(f32::to_le_bytes)
+        .collect()
 }
 
 /// ⭐ 把表面状态改到新尺寸（**纯逻辑**：只改状态，不碰 GPU ⇒ native 可单测）。
@@ -2521,6 +2782,7 @@ mod tests {
             surface_format: wgpu::TextureFormat::Rgba8Unorm,
             encoding: OutputEncoding::RawBytes,
             vertex_count: 3,
+            instance_count: 1,
             uniform_members: 17,
             frame_number: 7,
             surface_width: 720,

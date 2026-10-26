@@ -260,8 +260,8 @@ def wait_until(cdp, expression, timeout=120, interval=0.25):
     return False
 
 
-def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", source="rust", probe=""):
-    """跑一条片头腿（一个冻结时刻）。"""
+def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", source="rust", probe="", sprite="quad"):
+    """跑一条片头腿（一个冻结时刻 × 一种粒子绘制路径）。"""
     target = http_json(f"http://127.0.0.1:{devtools_port}/json/new?about:blank", method="PUT")
     cdp = Cdp(target["webSocketDebuggerUrl"])
     cdp.call("Runtime.enable")
@@ -273,7 +273,10 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
     )
     cdp.call(
         "Page.navigate",
-        {"url": f"{base}/intro/?it={frozen_at}&only={only}&source={source}" + (f"&probe={probe}" if probe else "")},
+        {
+            "url": f"{base}/intro/?it={frozen_at}&only={only}&source={source}&sprite={sprite}"
+            + (f"&probe={probe}" if probe else "")
+        },
     )
     if not wait_until(cdp, "!!window.__INTRO_DONE__", timeout=180):
         collect_console(cdp, console_log, "intro")
@@ -282,7 +285,7 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
     collect_console(cdp, console_log, "intro")
     report = json.loads(cdp.evaluate("JSON.stringify(window.__INTRO__)"))
 
-    # 逐像素：生产画布 vs 引擎画布。
+    # 逐像素：生产画布 vs 引擎画布（**每个后端各一张**）。
     pixels = {}
     for backend in ("webgl", "webgpu"):
         leg = report.get(backend) or {}
@@ -294,16 +297,60 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
             time.sleep(0.5)
             production_box = element_box(cdp, "production")
             engine_box = element_box(cdp, f"engine-{backend}")
-            capture(cdp, out_dir / f"intro.production.{backend}.png", clip=clip_of(production_box))
-            capture(cdp, out_dir / f"intro.engine.{backend}.png", clip=clip_of(engine_box))
+            capture(
+                cdp,
+                out_dir / f"intro.production.{sprite}.{backend}.png",
+                clip=clip_of(production_box),
+            )
+            capture(
+                cdp,
+                out_dir / f"intro.engine.{sprite}.{backend}.png",
+                clip=clip_of(engine_box),
+            )
             cdp.evaluate(f"window.__INTRO_REDRAW__.stop({json.dumps(backend)}); true")
             pixels[backend] = diff_stats(
-                out_dir / f"intro.production.{backend}.png",
-                out_dir / f"intro.engine.{backend}.png",
+                out_dir / f"intro.production.{sprite}.{backend}.png",
+                out_dir / f"intro.engine.{sprite}.{backend}.png",
             )
         except Exception as error:  # noqa: BLE001 —— 驱动层：失败要**显式**记下来
             pixels[backend] = {"skipped": True, "error": str(error)}
     report["pixel_diff"] = pixels
+    report["sprite_mode"] = sprite
+
+    # ⭐⭐ **双后端逐像素对照**（本批的**核心判据**）：引擎 WebGL vs 引擎 WebGPU。
+    #
+    # ## 为什么必须在这一层做
+    #
+    # 「生产 vs 引擎」只能证明「引擎与生产一致」⇒ **证明不了**「两个后端一致」。
+    # ⇒ ⇒ 必须**同一场景、同一时刻**各截一张引擎画布 ⇒ **逐像素**对照 ⇒
+    #   ⇒ 差 0 ⇒ 两个后端**真的**画出同一张图。
+    #
+    # ⚠ **有效性检查**：某后端段带 `error` / `skipped` ⇒ 该对照**无效**
+    #   （「没画」**不等于**「一致」⇒ 不许把无效腿说成一致）。
+    engine_dual = {}
+    webgl_segment = pixels.get("webgl") or {}
+    webgpu_segment = pixels.get("webgpu") or {}
+    webgl_broken = bool(webgl_segment.get("error") or webgl_segment.get("skipped"))
+    webgpu_broken = bool(webgpu_segment.get("error") or webgpu_segment.get("skipped"))
+    if webgl_broken or webgpu_broken:
+        engine_dual = {
+            "comparable": False,
+            "skipped": True,
+            "error": "；".join(
+                part
+                for part in (
+                    f"webgl: {webgl_segment.get('error')}" if webgl_broken else "",
+                    f"webgpu: {webgpu_segment.get('error')}" if webgpu_broken else "",
+                )
+                if part
+            ),
+        }
+    else:
+        engine_dual = diff_stats(
+            out_dir / f"intro.engine.{sprite}.webgl.png",
+            out_dir / f"intro.engine.{sprite}.webgpu.png",
+        )
+    report["engine_dual_backend_diff"] = engine_dual
 
     return report
 
@@ -327,6 +374,11 @@ def main():
         "--source",
         default="rust",
         help="引擎侧用哪套取值渲染（rust = 端到端；production = 只比着色器）",
+    )
+    parser.add_argument(
+        "--sprite",
+        default="quad,point",
+        help="粒子的绘制路径（quad = 实例化四边形（后端无关）；point = 点图元（WebGL 快路径））",
     )
     args = parser.parse_args()
 
@@ -382,11 +434,12 @@ def main():
         for raw in args.it.split(","):
             frozen_at = float(raw)
             for only in args.only.split(","):
-                key = f"{frozen_at}:{only}"
-                legs[key] = run_leg(
-                    devtools_port, base, console_log, frozen_at, out_dir,
-                    only=only, source=args.source, probe=args.probe,
-                )
+                for sprite in args.sprite.split(","):
+                    key = f"{frozen_at}:{only}:{sprite}"
+                    legs[key] = run_leg(
+                        devtools_port, base, console_log, frozen_at, out_dir,
+                        only=only, source=args.source, probe=args.probe, sprite=sprite,
+                    )
 
         report = {
             "schema": "apeireth.ui-engine.p5-b.intro-parity-report/1",
@@ -431,15 +484,131 @@ def main():
         report["legs_valid"] = [
             key for key, leg in report.get("legs", {}).items() if leg.get("valid")
         ]
-        # ⚠️ **判定**：只有**有效**的腿才能参与结论。
+
+        # ── ⭐⭐ **判据 ②：四边形路径 ≡ 点图元路径**（同一后端 WebGL）──────────
+        #
+        # 两条路径**必须产出同一画面** ⇒ ⇒ 「四边形展开忠实复现点精灵」这条
+        # 不变量**可复核** ⇒ ⇒ 才敢说「四边形路径不是分叉语义」。
+        #
+        # ⚠ **有效性**：两条腿的 **webgl 段**都必须**没有** error ⇒ 否则
+        #   「没画」会被误读成「一致」。
+        quad_vs_point = []
+        for key, leg in report.get("legs", {}).items():
+            parts = key.split(":")
+            if len(parts) != 3 or parts[2] != "quad":
+                continue
+            point_key = f"{parts[0]}:{parts[1]}:point"
+            point_leg = report.get("legs", {}).get(point_key)
+            if not isinstance(point_leg, dict):
+                continue
+            webgl_ok = not (
+                (leg.get("pixel_diff") or {}).get("webgl", {}).get("error")
+                or (leg.get("pixel_diff") or {}).get("webgl", {}).get("skipped")
+            )
+            point_webgl_ok = not (
+                (point_leg.get("pixel_diff") or {}).get("webgl", {}).get("error")
+                or (point_leg.get("pixel_diff") or {}).get("webgl", {}).get("skipped")
+            )
+            if not (webgl_ok and point_webgl_ok):
+                quad_vs_point.append(
+                    {
+                        "quad_leg": key,
+                        "point_leg": point_key,
+                        "comparable": False,
+                        "skipped": True,
+                        "error": "webgl 段无效（没画出来 ⇒ 不能当「一致」）",
+                    }
+                )
+                continue
+            diff = diff_stats(
+                out_dir / f"intro.engine.quad.webgl.png",
+                out_dir / f"intro.engine.point.webgl.png",
+            )
+            diff["quad_leg"] = key
+            diff["point_leg"] = point_key
+            quad_vs_point.append(diff)
+
+        # ── ⭐⭐ **判据 ①：引擎双后端逐像素对照**（webgl vs webgpu）────────────
+        dual_backend = []
+        for key, leg in report.get("legs", {}).items():
+            diff = leg.get("engine_dual_backend_diff") or {}
+            entry = {"leg": key, "sprite_mode": leg.get("sprite_mode")}
+            entry.update(diff)
+            dual_backend.append(entry)
+
+        # ── **判据 ③：生产 vs 引擎**（逐像素；两个后端各一份）──────────────────
+        production_vs_engine = []
+        for key, leg in report.get("legs", {}).items():
+            for backend, segment in (leg.get("pixel_diff") or {}).items():
+                production_vs_engine.append(
+                    {"leg": key, "backend": backend, **(segment if isinstance(segment, dict) else {})}
+                )
+
+        def _zero(entries, key="differing_pixels"):
+            """判据的通过条件：**每一条**都必须可比较且差 0 像素。"""
+            if not entries:
+                return None
+            for entry in entries:
+                if not entry.get("comparable") or entry.get("skipped"):
+                    return False
+                if entry.get(key) != 0:
+                    return False
+            return True
+
+        criteria = [
+            {
+                "id": "engine_dual_backend_parity",
+                "description": (
+                    "引擎 WebGL vs 引擎 WebGPU：同一场景、同一时刻各截一张引擎画布 ⇒ 逐像素差 0"
+                    "（⇒ 两个后端真的画出同一张图；「生产 vs 引擎」证明不了这件事）"
+                ),
+                "threshold": {"differing_pixels": 0, "channel_threshold": CHANNEL_THRESHOLD},
+                "mandatory": True,
+                "measured": dual_backend,
+                "status": (
+                    "pass"
+                    if _zero(dual_backend) is True
+                    else ("fail" if _zero(dual_backend) is False else "inconclusive")
+                ),
+            },
+            {
+                "id": "quad_path_matches_point_path",
+                "description": (
+                    "实例化四边形路径 vs 点图元路径（同一后端 WebGL、同一时刻）⇒ 逐像素差 0"
+                    "（⇒ 四边形展开忠实复现点精灵 ⇒ 不是「分叉语义」）"
+                ),
+                "threshold": {"differing_pixels": 0, "channel_threshold": CHANNEL_THRESHOLD},
+                "mandatory": True,
+                "measured": quad_vs_point,
+                "status": (
+                    "pass"
+                    if _zero(quad_vs_point) is True
+                    else ("fail" if _zero(quad_vs_point) is False else "inconclusive")
+                ),
+            },
+            {
+                "id": "production_vs_engine",
+                "description": (
+                    "生产（原生 WebGL2 点图元）vs 引擎（同一批 uniform 取值）⇒ 逐像素差"
+                    "（⚠ 这一条在本批之前对 WebGPU 是**假绿**：引擎侧根本没画粒子）"
+                ),
+                "threshold": {"differing_pixels": 0, "channel_threshold": CHANNEL_THRESHOLD},
+                "mandatory": False,
+                "measured": production_vs_engine,
+                "status": (
+                    "pass"
+                    if _zero(production_vs_engine) is True
+                    else ("fail" if _zero(production_vs_engine) is False else "inconclusive")
+                ),
+            },
+        ]
+        report["criteria"] = criteria
+
+        # ⚠️ **判定**：**强制**判据全绿才算 pass（信息性判据只报数）。
+        mandatory = [c for c in criteria if c.get("mandatory")]
         report["verdict"] = (
             "pass"
-            if report["legs_valid"]
-            and all(
-                ((leg.get("pixel_diff") or {}).get("webgl") or {}).get("differing_pixels") == 0
-                for key, leg in report.get("legs", {}).items()
-                if leg.get("valid")
-            )
+            if mandatory and all(c.get("status") == "pass" for c in mandatory)
             else "fail"
         )
         (out_dir / "report.json").write_text(

@@ -6,7 +6,7 @@
  * | 判据 | 含义 |
  * |---|---|
  * | **逐值** | 生产侧**实际用的那一帧**的 uniform 取值 vs Rust 场景层算出来的取值 ⇒ **逐个分量**比 |
- * | **逐像素** | 生产侧画布 vs 引擎侧画布（同一批取值）⇒ 逐像素差 |
+ * | **逐像素** | 生产侧画布 vs 引擎侧画布（**同一帧**、同尺寸、同 DPR）⇒ 逐像素差 |
  *
  * ## ⭐ 取值怎么抓（**不**改生产文件一行）
  *
@@ -24,6 +24,16 @@
  * 生产侧：`drawArrays(gl.TRIANGLES, 0, 3)` = 背景 matte；
  * `drawArrays(gl.POINTS, 0, 4096)` = 火焰粒子 ⇒ ⇒ **按 draw mode 分类**。
  *
+ * ⚠ **粒子 pass 可能有 0/1/2 组**（crossfade 期间两拍同时活跃 ⇒ 两组；
+ *   `count01 <= 0.001` 或 `alpha <= 0.001` 的拍**不画** ⇒ 生产侧会**跳过**）
+ * ⇒ ⇒ 本页按**绘制顺序**把**每一次**粒子绘制**逐组**记下来。
+ *
+ * ## ⭐ 隔离对照（`?only=`）
+ *
+ * `?only=backdrop` ⇒ 生产侧**跳过**粒子绘制、引擎侧**只**画背景 ⇒ 两者逐像素对照
+ * ⇒ ⇒ 把「背景 pass」与「粒子 pass」的问题**分开**定位。
+ * `?only=sprite` ⇒ 反之（只画粒子；背景是透明 ⇒ 画布上只剩粒子的加法）。
+ *
  * ## 时钟冻结
  *
  * 生产 `fire.ts` 自带 `?it=<秒>` 调试钩子（把 `tSec` 钉在 `it`）⇒
@@ -38,10 +48,31 @@ import { IntroFire } from '../../../../../frontend/companion-desktop/src/lib/int
 type UniformSnapshot = Record<string, number[]>;
 
 const captured: {
-  background: UniformSnapshot | null;
-  sprite: UniformSnapshot | null;
+  backdrop: UniformSnapshot | null;
+  sprites: UniformSnapshot[];
   draws: number;
-} = { background: null, sprite: null, draws: 0 };
+  frame_modes: number[];
+} = { backdrop: null, sprites: [], draws: 0, frame_modes: [] };
+
+/** 只画某个 pass（`bg` / `sprite`）—— 生产侧**跳过**另一个 pass 的绘制。 */
+const only = new URLSearchParams(location.search).get('only') ?? 'all';
+
+/** 引擎侧用哪一套取值渲染：`rust` = Rust 场景层算的（端到端）；`production` = 生产抓到的。 */
+const source = new URLSearchParams(location.search).get('source') ?? 'rust';
+
+/**
+ * ⭐ 粒子的**绘制路径**（`quad` = 实例化四边形（后端无关）/ `point` = 点图元）。
+ *
+ * ## 为什么要有这个开关
+ *
+ * 两条路径**必须产出同一画面** ⇒ ⇒ 驱动要把两条腿的截图**逐像素对照**
+ * （⇒ 「四边形展开忠实复现点精灵」这条不变量**可复核**）。
+ *
+ * ⚠ `point` 路径在 **WebGPU 后端不可用**（规范没有点尺寸）⇒ 那一腿的
+ *   webgpu 段会带 `error` ⇒ ⇒ 驱动按既有规则把该腿标成 **invalid** ✓
+ *   （不把「没画」当「一致」）。
+ */
+const spriteMode = new URLSearchParams(location.search).get('sprite') ?? 'quad';
 
 (function installRecorder() {
   const proto = WebGL2RenderingContext.prototype as unknown as Record<string, unknown>;
@@ -97,6 +128,30 @@ const captured: {
     };
   }
 
+  // ⭐ **探针模式**（`?probe=flat`）：把**粒子**片元着色器换成平色 ⇒ 画布上只剩
+  //   粒子 quad 的并集 ⇒ 可直接量出 sprite 的**位置/尺寸**，与引擎侧同款探针逐像素对照。
+  //   （只认带 `vStreak` 的那支 = 火焰粒子；背景 matte 的片元不动。）
+  const probe = new URLSearchParams(location.search).get('probe');
+  if (probe === 'flat') {
+    const flatFrag = `#version 300 es
+precision highp float;
+in vec3 vCol;
+in float vAlpha;
+in float vStreak;
+in vec2 vAxis;
+in float vSoft;
+out vec4 fragColor;
+void main(){ fragColor = vec4(1.0, 0.0, 0.0, 1.0); }`;
+    const originalShaderSource = proto['shaderSource'] as (
+      shader: WebGLShader,
+      source: string,
+    ) => void;
+    proto['shaderSource'] = function (this: WebGL2RenderingContext, shader: WebGLShader, source: string) {
+      const src = source.includes('vStreak') ? flatFrag : source;
+      return originalShaderSource.call(this, shader, src);
+    };
+  }
+
   const originalDrawArrays = proto['drawArrays'] as (
     mode: number,
     first: number,
@@ -120,8 +175,21 @@ const captured: {
     }
     captured.draws += 1;
     // gl.TRIANGLES = 4 ⇒ 背景 matte；gl.POINTS = 0 ⇒ 火焰粒子。
-    if (mode === 0) captured.sprite = snapshot;
-    else captured.background = snapshot;
+    const isPoints = mode === 0;
+    // ⚠ **只留最新一帧**：生产侧每帧都重画 ⇒ 若把**所有帧**的粒子快照都攒着
+    //   ⇒ 帧数一多就与 Rust 侧的「每拍一组」**错位** ⇒ ⇒ 背景绘制 = 帧边界
+    //   ⇒ 一见背景绘制就把粒子快照**清空**（生产侧 `render()` 里背景**先**画）。
+    if (isPoints) {
+      captured.sprites.push(snapshot);
+      captured.frame_modes.push(mode);
+    } else {
+      captured.backdrop = snapshot;
+      captured.sprites = [];
+      captured.frame_modes = [mode];
+    }
+    // ⚠ **隔离对照**：被跳过的 pass **不画**（但快照照样记 ⇒ 取值仍可对照）。
+    if (only === 'backdrop' && isPoints) return;
+    if (only === 'sprite' && !isPoints) return;
     return originalDrawArrays.call(this, mode, first, count);
   };
 })();
@@ -136,6 +204,26 @@ const engineCanvases: Record<string, HTMLCanvasElement> = {
   webgl: document.getElementById('engine-webgl') as HTMLCanvasElement,
   webgpu: document.getElementById('engine-webgpu') as HTMLCanvasElement,
 };
+
+// ⭐ **单帧模式**（`?frames=1`）：生产侧**只画一帧**。
+//
+// ## 为什么需要这个开关
+//
+// 浏览器的 drawing buffer 在合成后被清空 ⇒ 但 **rAF 帧率可能远高于合成帧率**
+// ⇒ ⇒ 在两次合成之间，生产侧可能已经画了**很多帧** ⇒ ⇒ 画布上是**多帧叠加**
+// ⇒ ⇒ 引擎侧（每帧清屏 ⇒ 只画一帧）就与它**对不上**。
+//
+// ⇒ 本开关把 rAF 掐成「只跑一次」⇒ ⇒ 生产侧画布 = **确定的一帧**。
+const singleFrame = params.get('frames') === '1';
+if (singleFrame) {
+  const realRaf = window.requestAnimationFrame.bind(window);
+  let calls = 0;
+  window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    calls += 1;
+    if (calls === 1) return realRaf(callback);
+    return 0;
+  }) as typeof window.requestAnimationFrame;
+}
 
 const fire = new IntroFire(productionCanvas);
 
@@ -163,7 +251,7 @@ function compareComponents(left: number[] | undefined, right: number[] | undefin
 }
 
 async function main() {
-  const result: Record<string, unknown> = { frozen_at: frozenAt };
+  const result: Record<string, unknown> = { frozen_at: frozenAt, only, source, sprite_mode: spriteMode };
   try {
     // ① 等生产侧画出第一帧（录制器会抓到取值）。
     const deadline = Date.now() + 30000;
@@ -171,9 +259,10 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     result.production_draws = captured.draws;
-    if (!captured.background) {
+    if (!captured.backdrop) {
       result.error = '生产侧没有抓到背景 uniform';
       window.__INTRO__ = result;
+      window.__INTRO_DONE__ = true;
       return;
     }
 
@@ -184,20 +273,34 @@ async function main() {
 
     const rect = productionCanvas.getBoundingClientRect();
     const aspect = rect.width / rect.height;
+    // ⚠ 生产侧 `layout()`：`dpr = min(window.devicePixelRatio, PERFORMANCE.dprMax=2)`。
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rustRaw = wasm.intro_uniforms(
       frozenAt,
       productionCanvas.width,
       productionCanvas.height,
       aspect,
-      window.devicePixelRatio || 1,
+      dpr,
     );
     const rust = JSON.parse(rustRaw);
     result.rust = rust;
+    result.production = {
+      backdrop: captured.backdrop,
+      sprites: captured.sprites,
+    };
+    result.viewport = {
+      canvas_width: productionCanvas.width,
+      canvas_height: productionCanvas.height,
+      css_width: rect.width,
+      css_height: rect.height,
+      aspect,
+      dpr,
+    };
 
     // ③ **逐值**对照：背景 matte 的 27 项。
     const valueDiff: unknown[] = [];
     let compared = 0;
-    for (const [name, value] of Object.entries(captured.background)) {
+    for (const [name, value] of Object.entries(captured.backdrop)) {
       const rustValue = (rust.backdrop ?? {})[name];
       const outcome = compareComponents(value, rustValue);
       compared += 1;
@@ -209,17 +312,25 @@ async function main() {
       differences: valueDiff.slice(0, 20),
     };
 
-    // ④ 粒子 pass 的取值对照（生产侧在粒子 pass 存在时才有）。
+    // ④ 粒子 pass 的取值对照（**逐组**：生产侧画了几组就比几组）。
+    //    ⚠ 生产侧会**跳过** `count01 <= 0.001` / `alpha <= 0.001` 的拍 ⇒
+    //    ⇒ Rust 侧也必须**只报实际会画的那几组**（`rust.sprites`）。
     const spriteDiff: unknown[] = [];
     let spriteCompared = 0;
-    if (captured.sprite && Array.isArray(rust.sprites) && rust.sprites.length > 0) {
-      const rustSprite = rust.sprites[0] as Record<string, number[]>;
-      for (const [name, value] of Object.entries(captured.sprite)) {
-        const rustValue = rustSprite[name];
+    const rustSprites = Array.isArray(rust.sprites) ? rust.sprites : [];
+    result.sprite_pass_counts = {
+      production: captured.sprites.length,
+      rust: rustSprites.length,
+    };
+    for (let pass = 0; pass < captured.sprites.length; pass += 1) {
+      const productionPass = captured.sprites[pass];
+      const rustPass = rustSprites[pass] as Record<string, number[]> | undefined;
+      for (const [name, value] of Object.entries(productionPass)) {
+        const rustValue = rustPass ? rustPass[name] : undefined;
         const outcome = compareComponents(value, rustValue);
         spriteCompared += 1;
         if (!outcome.same) {
-          spriteDiff.push({ name, production: value, rust: rustValue, reason: outcome.reason });
+          spriteDiff.push({ pass, name, production: value, rust: rustValue, reason: outcome.reason });
         }
       }
     }
@@ -261,15 +372,28 @@ async function main() {
       first_difference: seedFirstDifference,
     };
 
-    // ⑥ 引擎侧：用**生产侧抓到的**取值画一张（与 P5-b 的生产对照**同一口径**）。
-    //    ⇒ 背景 + 粒子**两个 pass**（生产侧同一帧也是两个 pass）。
-    const engineUniforms: Record<string, number[]> = { ...captured.background };
-    if (captured.sprite && !params.get('nosprite')) {
-      (engineUniforms as Record<string, unknown>)['__sprite'] = captured.sprite;
-    }
+    // ⑥ 引擎侧：用**选定来源**的取值画（与 P5-b 的生产对照**同一口径**）。
+    //    - `rust`（默认）：Rust 场景层算出来的取值 ⇒ **端到端**对照
+    //      （生产 TS 编舞 ↔ Rust 编舞 ↔ 着色器 ↔ 像素）；
+    //    - `production`：生产抓到的取值 ⇒ 隔离出「着色器是否等价」。
+    const engineUniforms: Record<string, unknown> = {
+      __backdrop: source === 'rust' ? rust.backdrop : captured.backdrop,
+      __sprites:
+        source === 'rust'
+          ? rustSprites
+          : captured.sprites.map((pass) => ({ ...pass })),
+    };
+    const passFilter = only;
     for (const backend of ['webgl', 'webgpu']) {
       try {
-        const raw = await wasm.run_intro(engineCanvases[backend], backend, 3, engineUniforms);
+        const raw = await wasm.run_intro(
+          engineCanvases[backend],
+          backend,
+          3,
+          engineUniforms,
+          passFilter,
+          spriteMode,
+        );
         (result as Record<string, unknown>)[backend] = JSON.parse(raw);
       } catch (error) {
         (result as Record<string, unknown>)[backend] = { error: String(error) };
