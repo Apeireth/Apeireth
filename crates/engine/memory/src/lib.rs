@@ -79,6 +79,7 @@ pub mod d4_eval;
 // 内部卷「挖题」工序 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
 pub mod git_corpus;
 pub mod golden_mining;
+pub mod golden_run;
 pub mod golden_set;
 pub mod graph_algo;
 pub mod hybrid_search;
