@@ -131,6 +131,7 @@ pub fn intro_frame(t: f64, viewport: &IntroViewport) -> Option<IntroFrame> {
             SpriteUniforms::new(&SpriteUniformsArgs {
                 params,
                 track: &motion.track,
+                // ⭐ **拍本地时间**（生产 `drawFire` 的 `uTime` 口径）⇒ ⇒ 不是全局 `t`。
                 local_t: beat.local_t,
                 gain_mul: motion.gain_mul,
                 count_mul: motion.count_mul,

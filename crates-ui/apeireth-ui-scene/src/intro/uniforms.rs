@@ -304,7 +304,21 @@ pub struct SpriteUniformsArgs<'a> {
     pub params: &'a FireParams,
     /// 弹道。
     pub track: &'a OriginTrack,
-    /// 本拍的本地时间。
+    /// ⭐ **本拍本地时间**（秒）—— 生产 `fire.ts` 的 **sprite pass** 的 `uTime`。
+    ///
+    /// ⚠⚠️ **口径与背景 pass 不同**（这是 2026-10-26 实测钉死的）：
+    /// - 生产 `drawBg`  ⇒ `gl.uniform1f(u.uTime, tGlobal);` ⇒ **背景用全局时间**；
+    /// - 生产 `drawFire`⇒ `gl.uniform1f(u.uTime, localT);`  ⇒ **粒子用拍本地时间**。
+    ///
+    /// ⇒ ⇒ 引擎的 sprite pass 必须用**拍本地时间**（`localT = t - start + XF/2`）
+    /// ⇒ ⇒ 用全局时间会**错**（虽然在一拍上可能偶然相等）。
+    ///
+    /// 生产原文（`FIRE_VERT`）：
+    /// ```text
+    /// float birth  = uBurst > 0.5 ? r2 * (radial ? min(uBurstSpan, 0.18) : uBurstSpan) : 0.0;
+    /// float ageSec = uBurst > 0.5 ? (uTime - birth) : fract(uTime / life + r2) * life;
+    /// ```
+    /// ⇒ ⇒ 非 burst 时 `birth = 0` ⇒ ⇒ 粒子年龄**只由 `uTime` 的相位**决定。
     pub local_t: f64,
     /// 增益乘子。
     pub gain_mul: f64,
@@ -327,7 +341,7 @@ impl SpriteUniforms {
         let SpriteUniformsArgs {
             params,
             track,
-            local_t,
+            local_t: _,
             gain_mul,
             count_mul,
             alpha,
@@ -337,7 +351,8 @@ impl SpriteUniforms {
         Self {
             aspect,
             dpr,
-            time: local_t,
+            // ⭐ **拍本地时间**（生产 `drawFire` 的 `uTime` 口径）⇒ ⇒ 见 `SpriteUniformsArgs::local_t`。
+            time: args.local_t,
             p0: track.p,
             vel: track.v,
             acc: track.a,
