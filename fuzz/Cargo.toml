@@ -347,3 +347,10 @@ path = "fuzz_targets/repo_map.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exposure_audit"
+path = "fuzz_targets/exposure_audit.rs"
+test = false
+doc = false
+bench = false

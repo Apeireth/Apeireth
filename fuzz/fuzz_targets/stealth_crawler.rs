@@ -157,15 +157,20 @@ fn section_user_agent(fields: &[&[u8]]) {
     let url = text(field(fields, 0));
 
     // 池：由 fuzz 字段拼出（可为空 ⇒ 覆盖兜底分支）。
+    //
+    // ⚠️ **2026-10-26 修编译错**：原写法 `.filter(|entry| !entry.is_empty() ||
+    // index_is_empty(fields, index))` 里的 `index` **不在作用域**
+    // （它是 `.map(|index| …)` 闭包的绑定，外面拿不到）⇒ **这个 target 从没编译过**
+    // ⇒ 而它**已登记进 CI 矩阵** ⇒ ⇒ CI 那个 job 必红，而本地「全绿」是假的。
+    //
+    // ⚠️ **顺带修正语义**：原意（按 `index_is_empty` 的文档「区分『空字段』与
+    // 『不存在字段』—— 两者都算空池」）是 **池里只留非空项** ⇒ 四个字段全空 ⇒ 池空
+    // ⇒ 才走「池空 ⇒ 固定兜底串」那条分支。原来的 `|| index_is_empty(...)`
+    // 恒真 ⇒ 等于不过滤 ⇒ **兜底分支永远走不到**。
     let pool: Vec<String> = (1..=4)
         .map(|index| text(field(fields, index)))
-        .filter(|entry| !entry.is_empty() || index_is_empty(fields, index))
+        .filter(|entry| !entry.is_empty())
         .collect();
-    let pool: Vec<String> = if pool.is_empty() {
-        Vec::new()
-    } else {
-        pool
-    };
 
     let config = StealthBrowserConfig {
         user_agent_pool: pool.clone(),
@@ -196,10 +201,6 @@ fn section_user_agent(fields: &[&[u8]]) {
     );
 }
 
-/// 字段是否本就存在（用于区分「空字段」与「不存在字段」—— 两者都算空池）。
-fn index_is_empty(fields: &[&[u8]], index: usize) -> bool {
-    field(fields, index).is_empty()
-}
 
 // ───────────────────────── 判据 2+3+4：信封 ─────────────────────────
 
@@ -210,6 +211,10 @@ fn index_is_empty(fields: &[&[u8]], index: usize) -> bool {
 /// - 信源标注在带引号的属性位里必须安全（`untrusted_envelope.rs:240-247`）。
 fn assert_envelope_contract(wrapped: &str, source: &str, content: &str) {
     // ① 结构：固定的开/收标记。
+    assert!(
+        wrapped.starts_with(OPEN_TAG),
+        "信封必须以固定开标记起头 {OPEN_TAG:?}: wrapped={wrapped:?}"
+    );
     assert!(
         wrapped.starts_with(HEADER_PREFIX),
         "信封头部必须是固定形态 {HEADER_PREFIX:?}: wrapped={wrapped:?}"
@@ -258,7 +263,12 @@ fn assert_envelope_contract(wrapped: &str, source: &str, content: &str) {
             "干净信源的渲染形态必须逐字一致: source={source:?}"
         );
     }
-    if !content.contains(BOUNDARY_PREFIX) {
+    // ⚠️ **前提要覆盖「被测代码自己会做的变换」**（2026-10-26 修；harness 坑 A）：
+    // 正文里若含 ① 边界前缀 ⇒ 会被中和（`<<<[` → `<<< [`）；② script 标签 ⇒
+    // 会被剥离（大小写不敏感）⇒ 这两种情况下正文**本来就不该逐字相等**。
+    // ⇒ 只在「两种变换都不触发」时才断言逐字相等。
+    let has_script_tag = content.to_ascii_lowercase().contains("<script");
+    if !content.contains(BOUNDARY_PREFIX) && !has_script_tag {
         assert_eq!(
             payload_region(wrapped),
             content,
@@ -292,9 +302,33 @@ fn section_document(fields: &[&[u8]]) {
     let crawler = StealthCrawlerEngine::default();
     let item = crawler.parse_scraped_document(&url, &title, &body, &media_type);
 
+    // 标题同样是**抓回来的外部原文** ⇒ 不得能伪造边界标记、不得撑成多行
+    // （模块头「encapsulates **all** harvested external HTML/text」+ 同族处理口径）。
+    assert!(
+        !item.title.contains(BOUNDARY_PREFIX),
+        "标题不得能伪造边界标记（它在信封之外）: title={:?}",
+        item.title
+    );
+    assert!(
+        !item.title.contains('\n') && !item.title.contains('\r'),
+        "标题是单行字段: title={:?}",
+        item.title
+    );
+
     // ① 结构化字段（实现自述）。
     assert_eq!(item.url, url, "url 字段必须原样带回");
-    assert_eq!(item.title, title.trim(), "标题必须去空白");
+    // ⚠️ 标题的**合同已硬化**（2026-10-26 我裁决：标题也是抓回来的外部原文 ⇒
+    // 不得能伪造边界、不得撑成多行）⇒ 期望值 = 去空白 + 边界中和 + 换行折平。
+    // ⇒ 这里按**已写明的规则**重述（characterization），不是自造期望。
+    let expected_title = title
+        .trim()
+        .replace("<<<[", "<<< [")
+        .replace('\r', " ")
+        .replace('\n', " ");
+    assert_eq!(
+        item.title, expected_title,
+        "标题必须等于「去空白 + 边界中和 + 换行折平」后的值"
+    );
     assert_eq!(
         item.media_duration_secs,
         if media_type == "short_video" {
@@ -452,8 +486,16 @@ fn section_fetch_url(fields: &[&[u8]]) {
                     .get("url")
                     .and_then(|value| value.as_str())
                     .unwrap_or_default();
+                // ⚠️ **坑 B（2026-10-26 修）**：`@` 出现在**路径**里是合法的
+                // （`https://host/a@b`）⇒ 不能用「含 `@`」判凭据。
+                // ⇒ 凭据（userinfo）只存在于 **authority** 段
+                //   （`://` 之后、首个 `/`、`?`、`#` 之前）⇒ 只查那一段。
+                let authority = frozen_url
+                    .split_once("://")
+                    .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or(""))
+                    .unwrap_or("");
                 assert!(
-                    !frozen_url.contains('#') && !frozen_url.contains('@'),
+                    !frozen_url.contains('#') && !authority.contains('@'),
                     "冻结的 URL 不得含片段或凭据: url={raw:?} frozen={frozen_url:?}"
                 );
             }

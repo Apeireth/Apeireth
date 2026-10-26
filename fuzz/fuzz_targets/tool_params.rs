@@ -1923,12 +1923,20 @@ fn check_device_binding(payload: &[u8]) {
         "device_control: 不同动作/参数的 plan_id 相同 (计划身份失去区分度)"
     );
     // 未登记设备 ⇒ 拒绝即帧 (白名单面)。
-    let unknown_device = payload
+    //
+    // ⚠️ **2026-10-26 修 harness 自身的错**（子代理报的 `tool_params` crash）：
+    // 原写法拿**载荷前 16 字节**当设备名 ⇒ 撞上 mock 白名单里的 `lamp` 时
+    // 断言要求「拒绝」，而 `lamp` **本来就在白名单里** ⇒ **自相矛盾 ⇒ 假阳性**。
+    // ⇒ 现在保证这个名字**真的未登记**：命中 mock 白名单就加后缀。
+    let mut unknown_device = payload
         .iter()
         .copied()
         .take(16)
         .map(|byte| char::from(byte))
         .collect::<String>();
+    if DEVICE_MOCK_IDS.iter().any(|id| *id == unknown_device.as_str()) {
+        unknown_device.push_str("__unregistered");
+    }
     assert!(
         runner
             .plan(&unknown_device, "power_on", &json!({}))
