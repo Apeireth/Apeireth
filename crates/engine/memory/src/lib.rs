@@ -73,7 +73,11 @@ pub mod dream_wiring;
 pub mod dreaming;
 pub mod ensemble;
 pub mod five_dimensional;
+// D4 模式层离线评估器 (设计稿 §3.5 / §8 B0-c): 不接线也能量「某算法开启的增量价值」。
+// 状态 NOT IMPLEMENTED (新增未接线; 只做评估与判定, 不实现任何 D4 算法)。
+pub mod d4_eval;
 // 内部卷「挖题」工序 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
+pub mod git_corpus;
 pub mod golden_mining;
 pub mod golden_set;
 pub mod graph_algo;
@@ -101,6 +105,8 @@ pub mod three_tier_vault;
 pub mod topic_predictor;
 pub mod vector_distance;
 pub mod wiki_corpus;
+// 真实语料 → 内部卷挖题器的接线 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
+pub mod wiki_corpus_real;
 pub mod wiki_fs;
 // Salvage-03 (memory-advanced): closed-world injection + A-MEM residual CRAWL.
 // Default-off; not production-wired.
