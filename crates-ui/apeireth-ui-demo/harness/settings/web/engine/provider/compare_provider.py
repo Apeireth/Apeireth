@@ -1416,19 +1416,28 @@ def collect_pair(panel: dict, section: str, port: int) -> dict:
     return record
 
 
-def run_secret_input_check(env: dict) -> dict:
-    """**敏感输入（API key）的交互对照**（**只记相等性与长度，不落明文**）。
+def run_input_interaction_checks(env: dict) -> list:
+    """**全部输入控件**的交互对照（真实键入 ⇒ 两侧逐字比对）。
 
-    ## 为什么需要它
+    ## 覆盖范围（2026-10-26 实测探明）
 
-    API key 输入框是**受控输入**（取值由引擎写回）⇒ ⇒ 一旦
-    「用户输入 -> 引擎状态 -> 渲染」断了 ⇒ ⇒ 用户敲的密钥**引擎不知道**
-    ⇒ ⇒ 而**静态像素对照测不到**（浏览器自己画了值）。
+    provider 页面共 **3 个** `input`：
+    `#provider-url-input`（text）、`#provider-model-input`（text）、
+    `#provider-key-input`（password）。
 
-    ## ⚠️ 为什么**不记明文**
+    ⇒ ⇒ 上一批只覆盖了**密钥**那一个 ⇒ ⇒ 本批**全部覆盖**。
 
-    密钥是**敏感值** ⇒ ⇒ 报告 / 证据文件里**只记**「两侧是否相等」与「长度」
-    ⇒ ⇒ **明文一律不落盘**（证据文件会进版本库）。
+    ## ⚠️ 敏感值：**明文不落盘**
+
+    `type=password` 的控件 ⇒ ⇒ 报告里**只记**「长度」与「是否等于我们键入的那串」
+    ⇒ ⇒ **明文一律不落盘**（证据文件会进版本库 ⇒ ⇒ 落盘即泄漏）。
+
+    ⇒ ⇒ `type=text` 的控件**明文可比**（它们是 URL / 模型名，不是机密）。
+
+    ## ⚠️ 为什么「键入必须生效」是**判据的一部分**
+
+    若两侧**都没收到**输入 ⇒ ⇒ 两边的取值会「一致」（都是原值）
+    ⇒ ⇒ ⇒ **假绿**！⇒ ⇒ 所以额外要求「键入后的取值**确实变了**」。
     """
     cdp = env["cdp"]
     base = env["base"]
@@ -1439,64 +1448,108 @@ def run_secret_input_check(env: dict) -> dict:
         else:
             navigate_engine(cdp, f"{base}/web/engine/provider/index.html")
 
-    selector = "#provider-key-input"
+    # （选择器, 键入文本, 是否敏感）
+    cases = [
+        ("#provider-url-input", "http://127.0.0.1:9911", False),
+        ("#provider-model-input", "gpt-test", False),
+        ("#provider-key-input", "sk-test", True),
+    ]
     records = []
-    for side in ("reference", "engine"):
-        navigate(cdp, side)
-        cdp.evaluate(
-            "(() => { const el = document.querySelector(%s);"
-            " if (el) el.focus(); return !!el; })()" % json.dumps(selector)
-        )
-        interaction.type_text(cdp, "sk-test")
-        time.sleep(0.5)
-        typed = interaction.read_control(cdp, selector)
-        cdp.evaluate(
-            "(() => { const el = document.querySelector(%s);"
-            " if (el) el.blur(); return true; })()" % json.dumps(selector)
-        )
-        time.sleep(0.5)
-        committed = interaction.read_control(cdp, selector)
-        typed_value = (typed or {}).get("value")
-        committed_value = (committed or {}).get("value")
-        records.append(
-            {
+    for selector, text, sensitive in cases:
+        sides = []
+        for side in ("reference", "engine"):
+            navigate(cdp, side)
+            cdp.evaluate(
+                "(() => { const el = document.querySelector(%s);"
+                " if (el) el.focus(); return !!el; })()" % json.dumps(selector)
+            )
+            before = interaction.read_control(cdp, selector)
+            # ⚠️⚠️ **不要**先程序化清空（2026-10-26 实测踩的坑）：
+            # 对**受控输入**，程序化 `el.value = ''` 会**破坏其内部状态**
+            # ⇒ ⇒ 实测：清空后再键入，**生产侧的密钥框收不到输入**（长度仍为 0）
+            # ⇒ ⇒ ⇒ 那是**装置自己制造**的假象，不是引擎的缺陷。
+            # ⇒ ⇒ 改为**追加键入**（不碰原值）⇒ ⇒ 判据看「与键入前不同」。
+            interaction.type_text(cdp, text)
+            time.sleep(0.5)
+            typed = interaction.read_control(cdp, selector)
+            cdp.evaluate(
+                "(() => { const el = document.querySelector(%s);"
+                " if (el) el.blur(); return true; })()" % json.dumps(selector)
+            )
+            time.sleep(0.5)
+            committed = interaction.read_control(cdp, selector)
+            typed_value = (typed or {}).get("value")
+            committed_value = (committed or {}).get("value")
+            record = {
                 "side": side,
-                # ⚠️ **只记长度与相等性** ⇒ 明文**不落盘**。
+                "before_value": (before or {}).get("value"),
+                "typed_is_expected": typed_value == text,
+                "committed_is_expected": committed_value == text,
                 "typed_length": len(typed_value) if isinstance(typed_value, str) else None,
                 "committed_length": (
                     len(committed_value) if isinstance(committed_value, str) else None
                 ),
-                "typed_is_expected": typed_value == "sk-test",
-                "committed_is_expected": committed_value == "sk-test",
+            }
+            if not sensitive:
+                # 非敏感 ⇒ ⇒ **明文可比**（URL / 模型名不是机密）。
+                record["typed_value"] = typed_value
+                record["committed_value"] = committed_value
+            sides.append(record)
+            log(f"  输入 {selector}（{side}）：{record}")
+
+        reference, engine = sides[0], sides[1]
+        equal = {
+            "typed_is_expected": reference["typed_is_expected"] == engine["typed_is_expected"],
+            "committed_is_expected": (
+                reference["committed_is_expected"] == engine["committed_is_expected"]
+            ),
+            "typed_length": reference["typed_length"] == engine["typed_length"],
+            "committed_length": reference["committed_length"] == engine["committed_length"],
+        }
+        if not sensitive:
+            equal["typed_value"] = reference["typed_value"] == engine["typed_value"]
+            equal["committed_value"] = reference["committed_value"] == engine["committed_value"]
+        # ⭐ 「键入**确实生效**」⇒ ⇒ 否则两侧都没收到会**假绿**。
+        #
+        # ⚠️ 判据是「值**变了**」，**不是**「逐字等于我们键入的那串」——
+        # ⇒ ⇒ 因为某些输入框**会规范化**（实测：URL 框会把键入串规范化/补全）
+        # ⇒ ⇒ 两侧**同样**地规范化 ⇒ ⇒ 「逐字等于我键入的串」这条会**误报**。
+        # ⇒ ⇒ 「变了」才既能抓「没收到」，又不会被规范化误伤。
+        def changed(record) -> bool:
+            before = record.get("before_value")
+            if not sensitive:
+                after = record.get("typed_value")
+                if after is None:
+                    return False
+                return after != before
+            # ⚠️ 敏感控件**没有** `typed_value`（**明文不落盘**）
+            # ⇒ ⇒ **不能**用 `after is None` 判失败（那会让敏感控件**永远**判「没生效」）
+            # ⇒ ⇒ 只比**长度**是否变化。
+            return record.get("typed_length") != len(before or "")
+
+        took_effect = bool(changed(reference) and changed(engine))
+        records.append(
+            {
+                "case": f"type-into:{selector}",
+                "selector": selector,
+                "sensitive": sensitive,
+                "note": (
+                    "**明文不落盘** ⇒ 只记长度与「是否等于键入的那串」"
+                    if sensitive
+                    else "非敏感控件 ⇒ 明文逐字可比"
+                ),
+                "reference": reference,
+                "engine": engine,
+                "equal": equal,
+                "typed_took_effect": took_effect,
+                "passed": bool(all(equal.values()) and took_effect),
             }
         )
-        log(f"  密钥输入 {side}：{records[-1]}")
+        log(
+            f"  输入对照 {selector}：一致={all(equal.values())} / 键入有效果={took_effect}"
+        )
+    return records
 
-    reference, engine = records[0], records[1]
-    equal = {
-        "typed_length": reference["typed_length"] == engine["typed_length"],
-        "committed_length": reference["committed_length"] == engine["committed_length"],
-        "typed_is_expected": reference["typed_is_expected"] == engine["typed_is_expected"],
-        "committed_is_expected": (
-            reference["committed_is_expected"] == engine["committed_is_expected"]
-        ),
-    }
-    took_effect = bool(reference["typed_is_expected"])
-    result = {
-        "case": "type-into:provider-api-key",
-        "selector": selector,
-        "note": "**明文不落盘** ⇒ 只记长度与「是否等于我们键入的那串」",
-        "reference": reference,
-        "engine": engine,
-        "equal": equal,
-        "typed_took_effect": took_effect,
-        "passed": bool(all(equal.values()) and took_effect),
-    }
-    log(
-        f"  密钥交互：长度一致={equal['typed_length']} / "
-        f"键入有效果={took_effect}"
-    )
-    return result
 
 
 def main() -> int:
@@ -1683,14 +1736,16 @@ def main() -> int:
         # ⭐ **敏感输入的交互对照**（**明文不落盘**）——
         # API key 输入是**受控输入** ⇒ 「用户输入 -> 引擎状态」断了
         # ⇒ 静态像素测不到（浏览器自己画了值）。
-        secret_input = run_secret_input_check(env)
-        report["secret_input"] = secret_input
+        input_records = run_input_interaction_checks(env)
+        report["input_interactions"] = input_records
 
         report["checks"] = {
             "t1_models_pixel_exact_zero": pairs[0]["t1_pixel_exact_zero"],
             # ⭐ 密钥输入：两侧**长度**与「是否等于键入的那串」都一致
             # ⇒ ⇒ **明文不落盘**（证据文件会进版本库）。
-            "t9_secret_input_identical": bool(secret_input.get("passed")),
+            "t9_input_interactions_identical": all(
+            record.get("passed") for record in input_records
+        ),
             "t1_modal_pixel_exact_zero": pairs[1]["t1_pixel_exact_zero"],
             "t1_extra_cases_pixel_exact_zero": all(
                 row["t1_pixel_exact_zero"] for row in extra
