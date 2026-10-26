@@ -353,9 +353,17 @@ fn to_mine_records_joins_subject_and_body() {
     assert_eq!(records.len(), 1);
     let record = &records[0];
     assert_eq!(record.id, "abc1234", "记录 id = 短 hash");
+    // ⚠️ **可检索文本 = 正文，不含主题**：
+    // 题目由主题生成 ⇒ 若主题又出现在可检索文本里 ⇒ 检索**字面命中**
+    // ⇒ recall@10 恒满分 ⇒ **卷子失效**。
     assert_eq!(
-        record.content, "主题：为什么这样改\n\n原因：压测不通过。",
-        "content = 主题 + 空行 + 正文"
+        record.content, "原因：压测不通过。",
+        "可检索文本 = 正文（不含主题）"
+    );
+    assert!(
+        !record.content.contains("主题：为什么这样改"),
+        "主题不得进可检索文本：{}",
+        record.content
     );
     assert_eq!(record.title.as_deref(), Some("主题：为什么这样改"));
     assert_eq!(record.timestamp_ms, 1_700_000_000_000, "时间戳 = 秒 × 1000");
@@ -366,7 +374,14 @@ fn to_mine_records_joins_subject_and_body() {
 }
 
 #[test]
-fn to_mine_records_uses_subject_only_when_body_is_empty() {
+fn commits_without_body_have_no_searchable_content() {
+    // ⚠️ **口径变更（2026-10-26，防泄漏）**：可检索文本 = **正文**。
+    // ⇒ body 为空的提交**没有可检索文本**（原先会退化成「拿主题当正文」）。
+    //
+    // **为什么不能退回主题**：主题是**题面来源** ⇒ 它若同时是可检索文本
+    // ⇒ 检索**字面命中** ⇒ recall 恒满分 ⇒ **卷子失效**。
+    // ⇒ 这类提交**由 `mine_commits` 过滤掉**（不进语料），但 `to_mine_records`
+    // 仍如实反映「正文为空 ⇒ 可检索文本为空」。
     let commits = vec![CommitDoc {
         short_hash: "deadbee".to_string(),
         subject: "只有主题".to_string(),
@@ -377,7 +392,12 @@ fn to_mine_records_uses_subject_only_when_body_is_empty() {
     let records = to_mine_records(&commits);
 
     assert_eq!(records.len(), 1);
-    assert_eq!(records[0].content, "只有主题", "正文为空 ⇒ 只要主题");
+    assert_eq!(records[0].content, "", "正文为空 ⇒ 可检索文本为空");
+    assert_eq!(
+        records[0].title.as_deref(),
+        Some("只有主题"),
+        "主题仍在（它是提问的把手）"
+    );
     assert_eq!(records[0].timestamp_ms, 42_000);
 }
 
@@ -450,7 +470,7 @@ fn mine_commits_filters_out_too_short_commits() {
         "b.txt",
         "y",
         "裁定：限流阈值定在每秒两千次并写进文档",
-        None,
+        Some("正文：限流阈值定为每秒两千次，理由是压测通过。"),
         "@1700000100 +0000",
     );
 
@@ -467,7 +487,7 @@ fn mine_commits_filters_out_too_short_commits() {
         !cases
             .iter()
             .any(|case| case.expect_ids.contains(&short_hash)),
-        "主题 < 8 字且无正文 ⇒ 不该出题"
+        "**没有正文** ⇒ 没有可检索文本 ⇒ 不该出题（防泄漏口径）"
     );
     assert!(
         !cases.is_empty(),

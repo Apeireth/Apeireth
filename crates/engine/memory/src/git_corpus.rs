@@ -84,7 +84,6 @@ const LOG_FORMAT: &str = "%h%x1f%s%x1f%at%x1f%b%x1e";
 ///
 /// 为什么是 8：太短的主题（「改个 typo」）挖不出有意义的题；但也不能太严，
 /// 否则「为什么改」这种短而有力的决策标题会被误杀。
-const MIN_SUBJECT_CHARS: usize = 8;
 
 /// 错误类型。
 #[derive(Debug, thiserror::Error)]
@@ -205,11 +204,17 @@ pub fn to_mine_records(commits: &[CommitDoc]) -> Vec<MineRecord> {
                 return None;
             }
             let body = commit.body.trim();
-            let content = if body.is_empty() {
-                subject.to_string()
-            } else {
-                format!("{subject}\n\n{body}")
-            };
+            // ⚠️ **可检索文本 = 正文（body）**，**不含提交主题**。
+            //
+            // **为什么**：题目由主题生成（`Phase 41+ 中央 AI后来是怎么改的？`）
+            // ⇒ 若主题又出现在可检索文本里 ⇒ 检索是**字面命中** ⇒
+            // recall@10 恒等于满分 ⇒ **这个卷子测不出任何东西**。
+            // ⇒ 主题只当「提问的把手」，不进可检索文本。
+            //
+            // ⚠️ **代价（如实）**：body 为空的提交**没有可检索文本** ⇒
+            // 它们**不再能被挖题**（实测 38% 的提交 body 为空）⇒
+            // 语料从 ~3534 条降到 ~2200 条 ⇒ 换「卷子不测假东西」。
+            let content = body.to_string();
             Some(MineRecord {
                 id: commit.short_hash.clone(),
                 content,
@@ -294,7 +299,10 @@ fn strip_conventional_prefix(subject: &str) -> String {
 pub fn mine_commits(commits: &[CommitDoc], config: MiningConfig) -> Vec<MinedCase> {
     let kept: Vec<CommitDoc> = commits
         .iter()
-        .filter(|commit| is_substantial(commit))
+        // ⚠️ **必须有正文**（body 非空）—— 因为**可检索文本 = 正文**
+        // ⇒ body 为空的提交没有可检索文本 ⇒ 挖不出「有据可依」的题。
+        // （实测 38% 的提交 body 为空；把它们算进来只会产出「题目无据」的假卷子。）
+        .filter(|commit| !commit.body.trim().is_empty())
         .cloned()
         .collect();
     let records = to_mine_records(&kept);
@@ -304,11 +312,6 @@ pub fn mine_commits(commits: &[CommitDoc], config: MiningConfig) -> Vec<MinedCas
 // ============================================================
 // 内部
 // ============================================================
-
-/// 这条提交的内容**够长**吗（正文非空，或主题 ≥ [`MIN_SUBJECT_CHARS`] 字）。
-fn is_substantial(commit: &CommitDoc) -> bool {
-    !commit.body.trim().is_empty() || commit.subject.trim().chars().count() >= MIN_SUBJECT_CHARS
-}
 
 /// 在仓库目录里跑一条 git 命令（**只读**）。
 ///
