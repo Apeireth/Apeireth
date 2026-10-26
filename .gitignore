@@ -229,6 +229,7 @@ crates/apeireth-integration-e2e/.*.log
 # ⚠️ `*.py` 是全局忽略 ⇒ ⇒ 新的驱动脚本**进不了仓** ⇒ ⇒ 「本地能跑、提交里没有、
 # CI 不会跑」⇒ ⇒ 与 `harness/scripts/` 同一类静默失败 ⇒ ⇒ 同样要逐层放行。
 !crates-ui/evidence/p5-b/drive_intro.py
+!crates-ui/evidence/p5-b/drive_device.py
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py
