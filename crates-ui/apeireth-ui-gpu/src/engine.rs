@@ -485,14 +485,29 @@ pub enum BlendMode {
 impl BlendMode {
     /// 该混合方式的 wgpu 混合状态。
     ///
-    /// ⚠ 加法混合用 `BlendComponent::OVER`（= `ONE`）⇒ 与生产的
+    /// ⚠ 加法混合必须显式写 `(ONE, ONE)` ⇒ 与生产的
     ///   `gl.blendFunc(gl.ONE, gl.ONE)` **同义**。
+    ///
+    /// ⚠ **不可**用 `wgpu::BlendComponent::OVER`：它的 dst 因子是
+    ///   `ONE_MINUS_SRC_ALPHA`（= `1 - src.a`）。火焰粒子的片元 alpha 写死
+    ///   `1.0`（与生产同）⇒ dst 因子归零 ⇒ 目标色被丢弃 ⇒ 退化成
+    ///   `REPLACE`（后画的粒子覆盖先画的，**不做加法累加**）。
+    ///   该退化在实测中表现为：加法/覆盖两档渲染**逐像素相同**，
+    ///   粒子叠加处不增亮（火焰比生产暗约两个数量级）。
     pub fn wgpu_state(&self) -> wgpu::BlendState {
         match self {
             BlendMode::Replace => wgpu::BlendState::REPLACE,
             BlendMode::Additive => wgpu::BlendState {
-                color: wgpu::BlendComponent::OVER,
-                alpha: wgpu::BlendComponent::OVER,
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
             },
         }
     }

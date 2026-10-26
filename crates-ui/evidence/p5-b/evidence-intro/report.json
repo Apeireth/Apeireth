@@ -1,0 +1,1100 @@
+{
+  "schema": "apeireth.ui-engine.p5-b.intro-parity-report/1",
+  "generated_at": "2026-10-26T18:22:58+0800",
+  "environment": {
+    "chromium": "Chromium 154.0.8037.92 built on Debian GNU/Linux forky/sid",
+    "frozen_times_seconds": [
+      13.5,
+      2.5
+    ],
+    "channel_threshold": 2
+  },
+  "legs": {
+    "13.5:all": {
+      "frozen_at": 13.5,
+      "only": "all",
+      "source": "rust",
+      "production_draws": 2,
+      "rust": {
+        "beats": 1,
+        "drawn_passes": 0,
+        "backdrop": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            13.5
+          ],
+          "uStars": [
+            1
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0.3
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            0
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            1
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0
+          ],
+          "uCorePos": [
+            0,
+            0
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        },
+        "sprites": []
+      },
+      "production": {
+        "backdrop": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            13.5
+          ],
+          "uStars": [
+            1
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0.3
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            0
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            1
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0
+          ],
+          "uCorePos": [
+            0,
+            0
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        },
+        "sprites": []
+      },
+      "viewport": {
+        "canvas_width": 960,
+        "canvas_height": 600,
+        "css_width": 960,
+        "css_height": 600,
+        "aspect": 1.6,
+        "dpr": 1
+      },
+      "value_comparison": {
+        "compared": 27,
+        "differing": 0,
+        "differences": []
+      },
+      "sprite_pass_counts": {
+        "production": 0,
+        "rust": 0
+      },
+      "sprite_value_comparison": {
+        "compared": 0,
+        "differing": 0,
+        "differences": []
+      },
+      "seed_comparison": {
+        "compared": 16384,
+        "differing": 0,
+        "first_difference": ""
+      },
+      "webgl": {
+        "backend_requested": "webgl",
+        "backend_actual": "Gl",
+        "surface_format": "Rgba8Unorm",
+        "encoding": "raw_bytes",
+        "width": 960,
+        "height": 600,
+        "frames_drawn": 3,
+        "vertex_count": 3,
+        "uniform_members": 28,
+        "passes": "all",
+        "sprite_passes": 0,
+        "uniforms_used": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            13.5
+          ],
+          "uStars": [
+            1
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0.3
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            0
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            1
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0
+          ],
+          "uCorePos": [
+            0,
+            0
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        }
+      },
+      "webgpu": {
+        "backend_requested": "webgpu",
+        "backend_actual": "BrowserWebGpu",
+        "surface_format": "Rgba8Unorm",
+        "encoding": "raw_bytes",
+        "width": 960,
+        "height": 600,
+        "frames_drawn": 3,
+        "vertex_count": 3,
+        "uniform_members": 28,
+        "passes": "all",
+        "sprite_passes": 0,
+        "uniforms_used": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            13.5
+          ],
+          "uStars": [
+            1
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0.3
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            0
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            1
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0
+          ],
+          "uCorePos": [
+            0,
+            0
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        }
+      },
+      "pixel_diff": {
+        "webgl": {
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 0,
+          "differing_ratio": 0.0,
+          "max_channel_delta": 0,
+          "channel_threshold": 2
+        },
+        "webgpu": {
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 0,
+          "differing_ratio": 0.0,
+          "max_channel_delta": 1,
+          "channel_threshold": 2
+        }
+      }
+    },
+    "2.5:all": {
+      "frozen_at": 2.5,
+      "only": "all",
+      "source": "rust",
+      "production_draws": 6,
+      "rust": {
+        "beats": 1,
+        "drawn_passes": 1,
+        "backdrop": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            2.5
+          ],
+          "uStars": [
+            0
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            1
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            0
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0.55
+          ],
+          "uCorePos": [
+            0,
+            -0.03
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        },
+        "sprites": [
+          {
+            "uAspect": [
+              1.6
+            ],
+            "uDpr": [
+              1
+            ],
+            "uTime": [
+              0.65
+            ],
+            "uP0": [
+              0,
+              -0.03
+            ],
+            "uVel": [
+              0,
+              0
+            ],
+            "uAcc": [
+              0,
+              0
+            ],
+            "uDir": [
+              0,
+              1
+            ],
+            "uSpread": [
+              0.9
+            ],
+            "uSpawnR": [
+              0.1
+            ],
+            "uSpeed": [
+              0.42
+            ],
+            "uSpeedVar": [
+              0.6
+            ],
+            "uInherit": [
+              0
+            ],
+            "uLife": [
+              0.95
+            ],
+            "uLifeVar": [
+              0.5
+            ],
+            "uSize0": [
+              14
+            ],
+            "uSize1": [
+              3
+            ],
+            "uSizeVar": [
+              0.5
+            ],
+            "uGrav": [
+              0,
+              0.12
+            ],
+            "uDrag": [
+              0.9
+            ],
+            "uTurb": [
+              0.42
+            ],
+            "uTurbFreq": [
+              3
+            ],
+            "uTurbTime": [
+              1.2
+            ],
+            "uCount01": [
+              0.85
+            ],
+            "uBurst": [
+              0
+            ],
+            "uBurstSpan": [
+              0
+            ],
+            "uRadial01": [
+              0
+            ],
+            "uRadialSpeed": [
+              0
+            ],
+            "uRadialDrag": [
+              0
+            ],
+            "uRadialLife": [
+              0.5
+            ],
+            "uSoft01": [
+              0.3
+            ],
+            "uSoftSize": [
+              130
+            ],
+            "uSoftGain": [
+              0.05
+            ],
+            "uStreak": [
+              0.1
+            ],
+            "uTwinkle": [
+              0.25
+            ],
+            "uGain": [
+              0.88
+            ],
+            "uEmber01": [
+              0.05
+            ],
+            "uAlpha": [
+              1
+            ],
+            "uColHot": [
+              1,
+              0.95,
+              0.82
+            ],
+            "uColMid": [
+              1,
+              0.824,
+              0.478
+            ],
+            "uColTail": [
+              0.45,
+              0.16,
+              0.04
+            ]
+          }
+        ]
+      },
+      "production": {
+        "backdrop": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            2.5
+          ],
+          "uStars": [
+            0
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            1
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            0
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0.55
+          ],
+          "uCorePos": [
+            0,
+            -0.03
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        },
+        "sprites": [
+          {
+            "uAspect": [
+              1.6
+            ],
+            "uDpr": [
+              1
+            ],
+            "uTime": [
+              0.65
+            ],
+            "uP0": [
+              0,
+              -0.03
+            ],
+            "uVel": [
+              0,
+              0
+            ],
+            "uAcc": [
+              0,
+              0
+            ],
+            "uDir": [
+              0,
+              1
+            ],
+            "uSpread": [
+              0.9
+            ],
+            "uSpawnR": [
+              0.1
+            ],
+            "uSpeed": [
+              0.42
+            ],
+            "uSpeedVar": [
+              0.6
+            ],
+            "uInherit": [
+              0
+            ],
+            "uLife": [
+              0.95
+            ],
+            "uLifeVar": [
+              0.5
+            ],
+            "uSize0": [
+              14
+            ],
+            "uSize1": [
+              3
+            ],
+            "uSizeVar": [
+              0.5
+            ],
+            "uGrav": [
+              0,
+              0.12
+            ],
+            "uDrag": [
+              0.9
+            ],
+            "uTurb": [
+              0.42
+            ],
+            "uTurbFreq": [
+              3
+            ],
+            "uTurbTime": [
+              1.2
+            ],
+            "uCount01": [
+              0.85
+            ],
+            "uBurst": [
+              0
+            ],
+            "uBurstSpan": [
+              0
+            ],
+            "uRadial01": [
+              0
+            ],
+            "uRadialSpeed": [
+              0
+            ],
+            "uRadialDrag": [
+              0
+            ],
+            "uRadialLife": [
+              0.5
+            ],
+            "uSoft01": [
+              0.3
+            ],
+            "uSoftSize": [
+              130
+            ],
+            "uSoftGain": [
+              0.05
+            ],
+            "uStreak": [
+              0.1
+            ],
+            "uTwinkle": [
+              0.25
+            ],
+            "uGain": [
+              0.88
+            ],
+            "uEmber01": [
+              0.05
+            ],
+            "uAlpha": [
+              1
+            ],
+            "uColHot": [
+              1,
+              0.95,
+              0.82
+            ],
+            "uColMid": [
+              1,
+              0.824,
+              0.478
+            ],
+            "uColTail": [
+              0.45,
+              0.16,
+              0.04
+            ]
+          }
+        ]
+      },
+      "viewport": {
+        "canvas_width": 960,
+        "canvas_height": 600,
+        "css_width": 960,
+        "css_height": 600,
+        "aspect": 1.6,
+        "dpr": 1
+      },
+      "value_comparison": {
+        "compared": 27,
+        "differing": 0,
+        "differences": []
+      },
+      "sprite_pass_counts": {
+        "production": 1,
+        "rust": 1
+      },
+      "sprite_value_comparison": {
+        "compared": 40,
+        "differing": 0,
+        "differences": []
+      },
+      "seed_comparison": {
+        "compared": 16384,
+        "differing": 0,
+        "first_difference": ""
+      },
+      "webgl": {
+        "backend_requested": "webgl",
+        "backend_actual": "Gl",
+        "surface_format": "Rgba8Unorm",
+        "encoding": "raw_bytes",
+        "width": 960,
+        "height": 600,
+        "frames_drawn": 3,
+        "vertex_count": 3,
+        "uniform_members": 28,
+        "passes": "all",
+        "sprite_passes": 1,
+        "uniforms_used": {
+          "uRes": [
+            960,
+            600
+          ],
+          "uAspect": [
+            1.6
+          ],
+          "uTime": [
+            2.5
+          ],
+          "uStars": [
+            0
+          ],
+          "uStarStretch": [
+            0
+          ],
+          "uMilky": [
+            0
+          ],
+          "uMoon": [
+            0
+          ],
+          "uMoonPos": [
+            -0.672,
+            0.38
+          ],
+          "uMoonR": [
+            0.52
+          ],
+          "uFurnace": [
+            1
+          ],
+          "uFurnaceR": [
+            0.4
+          ],
+          "uEngine": [
+            0
+          ],
+          "uShock": [
+            0
+          ],
+          "uShockApex": [
+            0.46,
+            0
+          ],
+          "uBody": [
+            0
+          ],
+          "uBodyPos": [
+            0.32,
+            0
+          ],
+          "uBodyLen": [
+            0.15
+          ],
+          "uBodyMolten": [
+            0
+          ],
+          "uBodyMorph": [
+            0
+          ],
+          "uPlanetHint": [
+            0
+          ],
+          "uGroundGlow": [
+            0
+          ],
+          "uGroundPos": [
+            0,
+            -0.55
+          ],
+          "uCoreGlow": [
+            0.55
+          ],
+          "uCorePos": [
+            0,
+            -0.03
+          ],
+          "uFlash": [
+            0
+          ],
+          "uFlashPos": [
+            0,
+            0
+          ],
+          "uVig": [
+            0.42
+          ]
+        }
+      },
+      "webgpu": {
+        "error": "sprite pipeline: Unsupported: 点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：BrowserWebGpu）⇒ WebGPU 规范没有点尺寸（gl_PointSize）"
+      },
+      "pixel_diff": {
+        "webgl": {
+          "comparable": true,
+          "left_size": [
+            960,
+            600
+          ],
+          "right_size": [
+            960,
+            600
+          ],
+          "pixels_compared": 576000,
+          "differing_pixels": 189757,
+          "differing_ratio": 0.3294392361111111,
+          "max_channel_delta": 249,
+          "channel_threshold": 2
+        },
+        "webgpu": {
+          "skipped": true,
+          "error": "sprite pipeline: Unsupported: 点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：BrowserWebGpu）⇒ WebGPU 规范没有点尺寸（gl_PointSize）"
+        }
+      }
+    }
+  },
+  "browser_console": [
+    "[intro:log.error] Failed to load resource: the server responded with a status of 404 (File not found)",
+    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "[intro:console.log] [p5b] sprite pipeline 0 created"
+  ]
+}

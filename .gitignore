@@ -224,6 +224,11 @@ crates/apeireth-integration-e2e/.*.log
 # ⚠️ `*.py` 是全局忽略 ⇒ 上面这些 `!` 例外只放行了**仓库根** `scripts/` 一级
 # ⇒ crates-ui 内的脚本**必须**在这里逐层放行，否则「写了门禁但没进仓 ⇒ CI 不会跑」。
 !crates-ui/apeireth-ui-demo/harness/scripts/*.py
+
+# crates-ui/evidence/ 下的**对照驱动**（2026-10-26 补）。
+# ⚠️ `*.py` 是全局忽略 ⇒ ⇒ 新的驱动脚本**进不了仓** ⇒ ⇒ 「本地能跑、提交里没有、
+# CI 不会跑」⇒ ⇒ 与 `harness/scripts/` 同一类静默失败 ⇒ ⇒ 同样要逐层放行。
+!crates-ui/evidence/p5-b/drive_intro.py
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py

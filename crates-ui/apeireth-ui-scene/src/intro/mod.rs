@@ -66,6 +66,29 @@ pub struct IntroFrame {
     pub sprites: Vec<SpriteUniforms>,
 }
 
+impl IntroFrame {
+    /// ⭐ **生产真正会画的那几组**粒子（生产 `drawFire` 的跳过判据）。
+    ///
+    /// 生产 `fire.ts` 的 `drawFire`：
+    /// ```text
+    /// const count = p.count01 * countMul;
+    /// if (count <= 0.001 || alpha <= 0.001) return;
+    /// ```
+    ///
+    /// ⇒ **粒子数为 0**（落幅拍 `count01 = 0`）或**拍权重为 0** 的那一组，
+    ///   生产侧**根本不画** ⇒ ⇒ 逐像素对照时引擎侧也必须**不画**
+    ///   （否则多画一层 ⇒ 多一层加法 ⇒ 像素不同）。
+    ///
+    /// ⚠ [`IntroFrame::sprites`] 保留**全部活跃拍**（编舞事实）⇒
+    ///   「编舞有几拍」与「画面画了几层」是**两件事** ⇒ 分开暴露。
+    pub fn drawn_sprites(&self) -> Vec<&SpriteUniforms> {
+        self.sprites
+            .iter()
+            .filter(|sprite| sprite.count01 > 0.001 && sprite.alpha > 0.001)
+            .collect()
+    }
+}
+
 /// 时刻 `t` 的完整编舞（生产 `render(t)` 的等价物）。
 ///
 /// ## 与生产的对应关系
