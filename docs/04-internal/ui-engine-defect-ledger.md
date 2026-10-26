@@ -172,6 +172,7 @@
 | **E-51** | ⭐ **引擎的 WebGPU 后端画不出点图元**（wgpu 的 `PointList` 没有点尺寸，`gl_PointSize` 无处落地）⇒ ⇒ 同一份 intro 逻辑**换后端 = 换画面** ⇒ ⇒ 且该腿的「0 差异」是**假绿**（引擎侧根本没画粒子）| `apeireth-ui-gpu/src/engine.rs` 的 `point_list_supported` ⇒ 只认 `Backend::Gl` ⇒ ⇒ **待修**：改用**实例化四边形**粒子路径（⇒ WebGPU 后端也能画） |
 | **E-52** | ⭐ intro 火焰**与生产仍有 12% 逐像素差异**（69,345 / 576,000）⇒ ⇒ 引擎内部两条渲染路径（点图元 / 实例化四边形）**互证一致**（仅差 15 像素）⇒ ⇒ 已排除「后端差异」「路径差异」「uniform 值」「着色器抄错」「粒子数」「种子序列」「时间语义」⇒ ⇒ 根因**仍未定位** | 见下方 §3.6 的排除清单与候选实验 |
 | **E-53** | ⭐⭐ **headless Chrome 默认走 SwiftShader（纯软件）** ⇒ ⇒ 此前**所有**浏览器实测都跑在软件渲染上 ⇒ ⇒ 「真实 GPU 未实测」这条账长期挂着（且**误以为**是缺设备）| `harness/tools/compare.py` 的 `launch_chrome` ⇒ 已加 `--use-angle=vulkan` / `--enable-features=Vulkan` / `--ignore-gpu-blocklist` ⇒ ⇒ 实测 renderer 由 `SwiftShader` 变为 `AMD Radeon 8060S (RADV STRIX_HALO)` ✔ |
+| **E-54** | ⚠️ `data` 面在**真实 GPU** 上有 **0.063%**（554 / 885,132）的像素差⇒ ⇒ **散布全图**、**非位移**（各向平移 1px ⇒ 差异涨到 5.5 万+）、**非字体时机**（等 `document.fonts.ready` 后**不变**）⇒ ⇒ 定位到「**排版/亚像素**」层⇒ ⇒ 引擎侧元素宽度是**分数**（如 69.140625）⇒ ⇒ **根因待定** |
 | **E-48** | ⭐ **「写了门禁但进不了仓」的静默失败**：`.gitignore` 全局 `*.py` ⇒ `crates-ui` 内的 `.py` 一律被忽略 ⇒ ⇒ 本地能跑、`git status` 不显示、**提交里没有、CI 不会跑** ⇒ ⇒ 门禁形同虚设 | `.gitignore` ⇒ 已加**逐层放行** |
 
 ---

@@ -135,6 +135,22 @@ def normalize_script(selector: str) -> str:
     return NORMALIZE_SCRIPT % json.dumps(selector)
 
 
+def await_fonts(cdp) -> None:
+    """等字体就绪（**失败不致命** ⇒ 字体没就绪也只是像素差一点）。
+
+    ⭐ **必要性**（2026-10-26 实测定位）：
+    本面此前**没有**等字体 ⇒ ⇒ 截图时字体**可能还没加载完**
+    ⇒ ⇒ 生产侧与引擎侧的字体**加载时机不同** ⇒ ⇒ **文字宽度**不同
+    ⇒ ⇒ 按钮宽度随之不同 ⇒ ⇒ 表现为「**散布全图**的 0.063% 排版级差异」
+    （实测差异包围盒覆盖整幅画面 ⇒ ⇒ 不是单个元素的问题）。
+    ⇒ ⇒ 其余各面（capability / character / provider）**都有**这一步 ⇒ ⇒ 本面是**漏的**。
+    """
+    try:
+        cdp.evaluate("document.fonts ? document.fonts.ready.then(() => true) : true", True)
+    except Exception:
+        pass
+
+
 def element_box(cdp, selector: str) -> dict | None:
     """取元素的外框（相对文档坐标）。"""
     raw = cdp.evaluate(
@@ -148,9 +164,16 @@ def element_box(cdp, selector: str) -> dict | None:
 
 
 def navigate(cdp, url: str) -> None:
-    """导航到一个页面（等它加载完）。"""
+    """导航到一个页面（等它加载完 + **等字体就绪**）。"""
     cdp.call("Page.navigate", {"url": url})
-    time.sleep(1.2)
+    # ⭐ **轮询等就绪**（2026-10-26 实测修的脆弱点）：
+    # 原先只 `sleep(1.2)` ⇒ ⇒ 慢机器 / 冷启动时**页面还没加载完**
+    # ⇒ ⇒ 随后的 `window.__SETTINGS__.selectSection(...)` 抛
+    #     「Cannot read properties of undefined」⇒ ⇒ 整轮失败。
+    # ⇒ ⇒ 改为等 `__SETTINGS__` 与 `ready()`（**与其它面同口径**）。
+    cdp.wait_for("!!window.__SETTINGS__ && window.__SETTINGS__.ready()", timeout=60)
+    # ⭐ 等字体 ⇒ ⇒ 否则**文字宽度**会因加载时机不同而不同（2026-10-26 实测）。
+    await_fonts(cdp)
 
 
 def select_section(cdp, section: str) -> None:
