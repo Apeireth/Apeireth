@@ -37,7 +37,8 @@ pub use apeireth_ui_macro::{component, view};
 
 pub use apeireth_ui_core::{
     Callback, Derived, EffectHandle, FlushReport, HostScheduler, InstanceRef, NodeId,
-    QueuedScheduler, ReactiveError, ReadSignal, Runtime, Scope, Signal, SyncScheduler, UiComponent,
+    QueuedScheduler, ReactiveError, ReactiveScope, ReadSignal, Runtime, Scope, Signal, SyncScheduler,
+    UiComponent,
 };
 pub use apeireth_ui_dom::{
     diff, diff_keyed, list_diff_mode, AttrValue, Binding, BindingSlot, Children, Dom, DomError,

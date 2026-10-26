@@ -89,6 +89,7 @@ sys.path.insert(0, str(HARNESS / "tools"))
 try:
     import compare  # noqa: E402
     import compare_toolcard  # noqa: E402
+    import interaction  # noqa: E402
 except ImportError:  # pragma: no cover - 批一装置缺失时的显式失败
     print(
         "找不到批一的对照装置："
@@ -1415,6 +1416,89 @@ def collect_pair(panel: dict, section: str, port: int) -> dict:
     return record
 
 
+def run_secret_input_check(env: dict) -> dict:
+    """**敏感输入（API key）的交互对照**（**只记相等性与长度，不落明文**）。
+
+    ## 为什么需要它
+
+    API key 输入框是**受控输入**（取值由引擎写回）⇒ ⇒ 一旦
+    「用户输入 -> 引擎状态 -> 渲染」断了 ⇒ ⇒ 用户敲的密钥**引擎不知道**
+    ⇒ ⇒ 而**静态像素对照测不到**（浏览器自己画了值）。
+
+    ## ⚠️ 为什么**不记明文**
+
+    密钥是**敏感值** ⇒ ⇒ 报告 / 证据文件里**只记**「两侧是否相等」与「长度」
+    ⇒ ⇒ **明文一律不落盘**（证据文件会进版本库）。
+    """
+    cdp = env["cdp"]
+    base = env["base"]
+
+    def navigate(cdp, side: str) -> None:
+        if side == "reference":
+            navigate_reference(cdp, f"{base}/web/reference/provider/index.html")
+        else:
+            navigate_engine(cdp, f"{base}/web/engine/provider/index.html")
+
+    selector = "#provider-key-input"
+    records = []
+    for side in ("reference", "engine"):
+        navigate(cdp, side)
+        cdp.evaluate(
+            "(() => { const el = document.querySelector(%s);"
+            " if (el) el.focus(); return !!el; })()" % json.dumps(selector)
+        )
+        interaction.type_text(cdp, "sk-test")
+        time.sleep(0.5)
+        typed = interaction.read_control(cdp, selector)
+        cdp.evaluate(
+            "(() => { const el = document.querySelector(%s);"
+            " if (el) el.blur(); return true; })()" % json.dumps(selector)
+        )
+        time.sleep(0.5)
+        committed = interaction.read_control(cdp, selector)
+        typed_value = (typed or {}).get("value")
+        committed_value = (committed or {}).get("value")
+        records.append(
+            {
+                "side": side,
+                # ⚠️ **只记长度与相等性** ⇒ 明文**不落盘**。
+                "typed_length": len(typed_value) if isinstance(typed_value, str) else None,
+                "committed_length": (
+                    len(committed_value) if isinstance(committed_value, str) else None
+                ),
+                "typed_is_expected": typed_value == "sk-test",
+                "committed_is_expected": committed_value == "sk-test",
+            }
+        )
+        log(f"  密钥输入 {side}：{records[-1]}")
+
+    reference, engine = records[0], records[1]
+    equal = {
+        "typed_length": reference["typed_length"] == engine["typed_length"],
+        "committed_length": reference["committed_length"] == engine["committed_length"],
+        "typed_is_expected": reference["typed_is_expected"] == engine["typed_is_expected"],
+        "committed_is_expected": (
+            reference["committed_is_expected"] == engine["committed_is_expected"]
+        ),
+    }
+    took_effect = bool(reference["typed_is_expected"])
+    result = {
+        "case": "type-into:provider-api-key",
+        "selector": selector,
+        "note": "**明文不落盘** ⇒ 只记长度与「是否等于我们键入的那串」",
+        "reference": reference,
+        "engine": engine,
+        "equal": equal,
+        "typed_took_effect": took_effect,
+        "passed": bool(all(equal.values()) and took_effect),
+    }
+    log(
+        f"  密钥交互：长度一致={equal['typed_length']} / "
+        f"键入有效果={took_effect}"
+    )
+    return result
+
+
 def main() -> int:
     """本面独立跑（两个分区 + 额外状态 + 四项专项 ⇒ 写全量证据）。"""
     env = ensure_env(8787)
@@ -1596,8 +1680,17 @@ def main() -> int:
             for row in report["extra_cases"].values()
             if row.get("gate") != "out_of_gate"
         ]
+        # ⭐ **敏感输入的交互对照**（**明文不落盘**）——
+        # API key 输入是**受控输入** ⇒ 「用户输入 -> 引擎状态」断了
+        # ⇒ 静态像素测不到（浏览器自己画了值）。
+        secret_input = run_secret_input_check(env)
+        report["secret_input"] = secret_input
+
         report["checks"] = {
             "t1_models_pixel_exact_zero": pairs[0]["t1_pixel_exact_zero"],
+            # ⭐ 密钥输入：两侧**长度**与「是否等于键入的那串」都一致
+            # ⇒ ⇒ **明文不落盘**（证据文件会进版本库）。
+            "t9_secret_input_identical": bool(secret_input.get("passed")),
             "t1_modal_pixel_exact_zero": pairs[1]["t1_pixel_exact_zero"],
             "t1_extra_cases_pixel_exact_zero": all(
                 row["t1_pixel_exact_zero"] for row in extra
