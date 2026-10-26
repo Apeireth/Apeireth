@@ -1,0 +1,8 @@
+{
+  "version": "internal-2026-10-26b",
+  "k": 10,
+  "corpora": [
+    { "name": "redchamber", "recall_at_k": 0.2983, "ndcg_at_k": 0.1615, "cases": 476 },
+    { "name": "watershed", "recall_at_k": 0.6875, "ndcg_at_k": 0.4817, "cases": 248 }
+  ]
+}
