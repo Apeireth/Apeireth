@@ -318,11 +318,77 @@ fn evidence_and_groundedness_scored_on_annotated_cases() {
         "第 1 题 1/2、第 2 题 1/1 ⇒ 平均 0.75，实际 = {}",
         m.evidence_precision
     );
+    // ⚠️ **口径拆分（2026-10-26）**：Groundedness 现在是**题级**
+    // （「这道题拿到了至少一条有据证据吗」）⇒ 与 Evidence Precision（片段级）**分母不同**。
+    // 本例：两题都拿到了有据证据 ⇒ 题级 = 2/2 = **1.0**（而片段级是 0.75）。
     assert!(
-        approx(m.groundedness, 0.75),
-        "Groundedness 与 Evidence Precision 同口径（契约如此），实际 = {}",
+        approx(m.groundedness, 1.0),
+        "Groundedness 是题级覆盖（两题都有有据证据 ⇒ 1.0），实际 = {}",
         m.groundedness
     );
+}
+
+#[test]
+fn evidence_precision_and_groundedness_have_different_denominators() {
+    // 第 1 题：注了 2 段，只有 1 段有据 ⇒ 片段级 = 0.5，题级 = 1.0；
+    // 第 2 题：注了 2 段，**都没**有据 ⇒ 片段级 = 0.0，题级 = 0.0。
+    // ⇒ 片段级平均 = 0.25；题级平均 = 0.5。
+    // ⇒ **两个指标确实在测两件事**（之前它们同口径 ⇒ 一个指标测两件事）。
+    let batch = EvalBatch {
+        cases: vec![
+            case_with_fragments("c1", &["r1"], &["贝尔不等式"]),
+            case_with_fragments("c2", &["r2"], &["三段式处置"]),
+        ],
+        results: vec![
+            retrieved_with_fragments(&["r1"], &["这里提到了贝尔不等式", "无关内容"]),
+            retrieved_with_fragments(&["r2"], &["完全无关", "依然无关"]),
+        ],
+    };
+    let m = evaluate(&batch, 1).expect("长度一致");
+    assert!(
+        approx(m.evidence_precision, 0.25),
+        "片段级：(0.5 + 0.0)/2 = 0.25，实际 = {}",
+        m.evidence_precision
+    );
+    assert!(
+        approx(m.groundedness, 0.5),
+        "题级：(1.0 + 0.0)/2 = 0.5，实际 = {}",
+        m.groundedness
+    );
+}
+
+#[test]
+fn a_fragment_cut_by_the_window_still_counts_as_grounded() {
+    // ⚠️ 这条钉住**口径修正的核心**：期望片段是**句子里的一个切片**，
+    // 注入窗口切过那句话 ⇒ **逐字包含必然失败** ⇒ 指标对窗口对齐过敏。
+    // ⇒ 新口径按**覆盖**（最长公共子串 ≥ 60% 且 ≥ 4 字）判定 ⇒ 切了一半**仍算有据**。
+    let expected = "贝尔不等式是量子信息学的核心工具";
+    let injected = "这里提到了贝尔不等式是量子信息学的"; // 被窗口切掉尾巴
+    let m = EvalBatch {
+        cases: vec![case_with_fragments("c1", &["r1"], &[expected])],
+        results: vec![retrieved_with_fragments(&["r1"], &[injected])],
+    };
+    let metrics = evaluate(&m, 1).expect("长度一致");
+    assert!(
+        approx(metrics.evidence_precision, 1.0),
+        "切了一半仍算有据（覆盖判定），实际 = {}",
+        metrics.evidence_precision
+    );
+}
+
+#[test]
+fn an_unrelated_injection_does_not_count_as_grounded() {
+    // 覆盖判定的**下界**：完全无关 ⇒ 不算有据。
+    let batch = EvalBatch {
+        cases: vec![case_with_fragments("c1", &["r1"], &["贝尔不等式"])],
+        results: vec![retrieved_with_fragments(
+            &["r1"],
+            &["今天天气不错适合出门散步"],
+        )],
+    };
+    let m = evaluate(&batch, 1).expect("长度一致");
+    assert!(approx(m.evidence_precision, 0.0));
+    assert!(approx(m.groundedness, 0.0));
 }
 
 #[test]
@@ -345,8 +411,8 @@ fn evidence_metrics_skip_unannotated_cases() {
         m.evidence_precision
     );
     assert!(
-        approx(m.groundedness, 0.5),
-        "Groundedness 同样只算有标注的题，实际 = {}",
+        approx(m.groundedness, 1.0),
+        "Groundedness 是题级 ⇒ 有标注的第 1 题拿到了有据证据 ⇒ 1.0，实际 = {}",
         m.groundedness
     );
     assert_eq!(

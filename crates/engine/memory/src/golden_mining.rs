@@ -775,14 +775,26 @@ impl Prepared {
     ///
     /// 优先取含 `subject` 的第一句；没有就退到含 `anchor` 的第一句；再没有就取第一句
     /// —— 三种情况都保证片段是 `content` 的子串。
+    /// 取一条**确实出现在正文里**的答案片段（≤ [`FRAGMENT_MAX_CHARS`] 字）。
+    ///
+    /// ⚠️ **不做「取首句」兜底**（2026-10-26 口径修正）：
+    /// 兜底会让**期望片段系统性地偏向记录开头** ⇒
+    /// 「注开头 120 字」的注入口径天然占优 ⇒ **证据族指标测不出注入好坏**
+    /// （实测：注「取开头」0.0210 vs 注「最相关片段」0.0015 ⇒ 方向是反的）。
+    ///
+    /// ⇒ **找不到真凭实据就返回 `None`**（这条题没有片段标注）
+    /// ⇒ 与全仓纪律一致：「**不静默保留假的**」——
+    /// 一个凭空取来的首句**不是证据**，只是让指标好看。
     fn fragment_for(&self, subject: &str, anchor: &str) -> Option<String> {
-        let first = self.sentences.first()?;
         let chosen = self
             .sentences
             .iter()
-            .find(|s| s.contains(subject))
-            .or_else(|| self.sentences.iter().find(|s| s.contains(anchor)))
-            .unwrap_or(first);
+            .find(|sentence| sentence.contains(subject))
+            .or_else(|| {
+                self.sentences
+                    .iter()
+                    .find(|sentence| sentence.contains(anchor))
+            })?;
         Some(clip_around(chosen, subject, FRAGMENT_MAX_CHARS))
     }
 }

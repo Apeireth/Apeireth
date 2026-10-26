@@ -206,11 +206,17 @@ pub struct Metrics {
 ///   并计入分母**（保守方向：宁可低估，不许靠「跳过难题」把分刷高）。
 ///   ⚠️ 这与 Recall 的「expect 为空即跳过」**故意不对称**：
 ///   Recall 的分母是「有答案的题数」，nDCG 的分母是「全部题数」。
-/// - **Evidence Precision / Groundedness**：只对**有 `expect_fragments`** 的题统计
+/// - **Evidence Precision**（片段级）：只对**有 `expect_fragments`** 的题统计
 ///   （无标注 ⇒ 该题对这族指标「不适用」：不进分母、**不记 0 分**、
-///   也不计入 [`Metrics::skipped_cases`]——那一栏专记「整题无法评」的题）；
-///   有标注但**一条片段都没注入** ⇒ 该题记 0.0
-///   （什么都没注入不是「精准」，保守记 0）。
+///   也不计入 [`Metrics::skipped_cases`]——那一栏专记「整题无法评」的题）。
+///   口径 = **「注入的片段里有多少是『有据的』」**：对每条注入片段，
+///   若它**覆盖**了期望片段（见 [`covers_fragment`]）⇒ 算有据；
+///   该题的比值 = 有据片段数 / 注入片段总数；再对有标注的题**取平均**。
+///   有标注但**一条片段都没注入** ⇒ 该题记 0.0（什么都没注入不是「精准」，保守记 0）。
+/// - **Groundedness**（题级）：同一批有标注的题里，**有多少题拿到了至少一条有据的证据**。
+///   ⚠️ **与 Evidence Precision 刻意分母不同**（2026-10-26 口径拆分）：
+///   前者问「**注入的东西里有多少有用**」（精度），后者问「**答案有没有被证据支撑**」（覆盖）。
+///   ⇒ 之前两者**同一口径** ⇒ 一个指标测两件事 ⇒ 现已拆开。
 /// - 分母为 0 的指标整体记 0.0（该指标这批没得分，不是「满分」也不是「零分」）。
 pub fn evaluate(batch: &EvalBatch, k: usize) -> Result<Metrics, GoldenSetError> {
     if batch.cases.len() != batch.results.len() {
@@ -258,20 +264,26 @@ pub fn evaluate(batch: &EvalBatch, k: usize) -> Result<Metrics, GoldenSetError> 
         // 不进分母、**不记 0 分**，也不计入 skipped_cases
         // （否则一份只标了检索标注的正常卷子会显示一堆 skipped，容易被误读成「什么都没评上」）。
         if !fragments.is_empty() {
+            // **片段级**：有据片段数 / 注入片段总数（精度）。
             let hit = retrieved
                 .fragments
                 .iter()
-                .filter(|f| fragments.iter().any(|e| f.contains(e)))
+                .filter(|fragment| {
+                    fragments
+                        .iter()
+                        .any(|expected| covers_fragment(fragment, expected))
+                })
                 .count();
-            let ratio = if retrieved.fragments.is_empty() {
+            let precision = if retrieved.fragments.is_empty() {
                 // 有标注却什么都没注入 ⇒ 记 0（保守），不算「无标注」。
                 0.0
             } else {
                 hit as f64 / retrieved.fragments.len() as f64
             };
-            evidence_sum += ratio;
+            evidence_sum += precision;
             evidence_n += 1;
-            grounded_sum += ratio;
+            // **题级**：这道题有没有拿到至少一条有据证据（覆盖）⇒ 与上面的精度**分母不同**。
+            grounded_sum += if hit > 0 { 1.0 } else { 0.0 };
             grounded_n += 1;
         }
     }
@@ -456,6 +468,73 @@ fn expect_set(expect_ids: &[String]) -> BTreeMap<String, ()> {
         set.insert(trimmed.to_string(), ());
     }
     set
+}
+
+/// 判定一条**注入片段**是否「有据」：它是否**覆盖**了某个期望片段。
+///
+/// # 为什么不是「逐字包含」（2026-10-26 口径修正）
+///
+/// 期望片段是**句子里的一个切片**（挖题时按词位置裁 60 字）⇒ 注入窗口只要
+/// **切过那句话**，逐字包含就必然失败 ⇒ 指标**对窗口对齐过敏**
+/// （实测：注「取开头」0.0353 vs 注「最相关片段」0.0025 ⇒ 方向都是反的
+/// ⇒ 该指标**测不出**注入好坏）。
+///
+/// # 现在的口径
+///
+/// **覆盖** = 注入片段与期望片段的**最长公共子串**长度 ≥ 期望片段长度的
+/// [`FRAGMENT_COVERAGE_RATIO`]（且至少 4 字）。
+///
+/// * 用**最长公共子串**（不是集合交集）⇒ 窗口切掉一半时，剩下的那半**仍算覆盖**；
+/// * 「至少 4 字」的下限 ⇒ 防止「1 个字碰巧相同」也算有据；
+/// * **逐字包含仍算覆盖**（公共子串可以等于整个期望片段）⇒ 旧行为**不被推翻**，只是放宽。
+pub const FRAGMENT_COVERAGE_RATIO: f64 = 0.6;
+
+/// 期望片段长度（字符数）。
+fn fragment_len(fragment: &str) -> usize {
+    fragment.chars().count()
+}
+
+/// 注入片段是否覆盖了期望片段。
+pub fn covers_fragment(injected: &str, expected: &str) -> bool {
+    let expected_len = fragment_len(expected);
+    if expected_len == 0 {
+        return false;
+    }
+    if injected.contains(expected) {
+        return true;
+    }
+    let common = longest_common_substring_len(injected, expected);
+    let needed = ((expected_len as f64) * FRAGMENT_COVERAGE_RATIO).ceil() as usize;
+    common >= needed.max(4)
+}
+
+/// 两个字符串的**最长公共子串**长度（按字符计）。
+///
+/// # 实现口径
+///
+/// 经典 DP（`O(n·m)`）⇒ **确定性**、无依赖。
+/// ⚠️ 长度按**字符**计（不是字节）⇒ 中文不被算成 3 倍。
+fn longest_common_substring_len(left: &str, right: &str) -> usize {
+    let left: Vec<char> = left.chars().collect();
+    let right: Vec<char> = right.chars().collect();
+    if left.is_empty() || right.is_empty() {
+        return 0;
+    }
+    let mut previous = vec![0usize; right.len() + 1];
+    let mut best = 0usize;
+    for a in &left {
+        let mut current = vec![0usize; right.len() + 1];
+        for (index, b) in right.iter().enumerate() {
+            if a == b {
+                current[index + 1] = previous[index] + 1;
+                if current[index + 1] > best {
+                    best = current[index + 1];
+                }
+            }
+        }
+        previous = current;
+    }
+    best
 }
 
 /// 期望片段列表（去掉空白片段：空串会被任何文本「包含」，会让指标虚高）。
