@@ -333,3 +333,17 @@ path = "fuzz_targets/backup.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "search"
+path = "fuzz_targets/search.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "repo_map"
+path = "fuzz_targets/repo_map.rs"
+test = false
+doc = false
+bench = false
