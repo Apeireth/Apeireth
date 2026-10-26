@@ -326,3 +326,10 @@ path = "fuzz_targets/self_status.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "backup"
+path = "fuzz_targets/backup.rs"
+test = false
+doc = false
+bench = false

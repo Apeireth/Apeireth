@@ -200,11 +200,15 @@ try {
         $gwArgs = @("run", "--bin", "apeireth", "--", "gateway", "serve", "--port", "$port")
     }
     $gw = Start-Process -FilePath $gwFile -ArgumentList $gwArgs -PassThru -NoNewWindow -RedirectStandardOutput (Join-Path $script:TempDir "gw-live-check.out") -RedirectStandardError (Join-Path $script:TempDir "gw-live-check.err")
+    # ⚠️ **自测抓到的坑 ④：探针不能用「无异常」当就绪判据**。
+    # gateway 的 `/v1/models` **要鉴权** ⇒ 未配 token 时返回 401/403 ⇒
+    # `Invoke-WebRequest` 会**抛异常** ⇒ 「有异常 = 没起来」⇒ **明明起来了却判失败**（自测实测）。
+    # ⇒ 改用 `-SkipHttpErrorCheck`：**拿到任何 HTTP 响应**就算起来了（401 也算）。
     $ready = $false
-    for ($i = 0; $i -lt 90; $i++) {
+    for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Seconds 2
         try {
-            $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$port/v1/models" -TimeoutSec 3 -UseBasicParsing
+            $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$port/v1/models" -TimeoutSec 3 -UseBasicParsing -SkipHttpErrorCheck
             $ready = $true
             break
         } catch { }
@@ -214,7 +218,7 @@ try {
         $eventsOk = $false
         $eventsDetail = ""
         try {
-            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$port/v1/apeireth/events" -TimeoutSec 8 -UseBasicParsing
+            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$port/v1/apeireth/events" -TimeoutSec 8 -UseBasicParsing -SkipHttpErrorCheck
             $eventsOk = ($resp.Headers["Content-Type"] -like "text/event-stream*")
             $eventsDetail = ("content-type={0}" -f $resp.Headers["Content-Type"])
         } catch { $eventsDetail = ("异常：{0}" -f $_.Exception.Message) }
@@ -224,7 +228,7 @@ try {
         $code = 0
         $body = ""
         try {
-            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$port/v1/approvals" -TimeoutSec 8 -UseBasicParsing
+            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$port/v1/approvals" -TimeoutSec 8 -UseBasicParsing -SkipHttpErrorCheck
             $code = [int]$resp.StatusCode
         } catch {
             if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
@@ -233,7 +237,7 @@ try {
         Add-Result -Name "⑥ 行4 approvals 缺参（期望 400/422）" -Status $(if ($code -in 400, 422) { "PASS" } else { "FAIL" }) -Detail ("http={0} {1}" -f $code, ($body -replace "\s+", " "))
     }
     else {
-        Add-Result -Name "⑥ gateway 起动" -Status "FAIL" -Detail ("180s 内没起来（看 {0}/gw-live-check.err）" -f $script:TempDir)
+        Add-Result -Name "⑥ gateway 起动" -Status "FAIL" -Detail ("60s 内没起来（看 {0}/gw-live-check.err）" -f $script:TempDir)
     }
 }
 finally {
