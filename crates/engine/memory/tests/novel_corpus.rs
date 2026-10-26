@@ -15,7 +15,9 @@
 //!
 //! ⚠️ **测试不依赖网络、不依赖真实小说文件**：全部用**手写的合成文本**
 //! （形状照抄 Gutenberg 格式，含 `*** START/END OF`、折行、回目联两种位置）。
-//! **小说正文不入库**（版权 + 体积）⇒ 这里一个字都不抄真书。
+//! **小说正文不入库**（版权 + 体积）⇒ 样本里的**正文是手写的仿句**，
+//! 一个字都不抄真书（只有**回目联**（= 章节标题，各 7~8 字）沿用真实书名，
+//! 因为测试要的就是「标题长这样」的真实形状）。
 
 use std::path::{Path, PathBuf};
 
@@ -47,9 +49,9 @@ Language: Chinese
 
 第一回　甄士隱夢幻識通靈　賈雨村風塵怀閨秀
 -----------------------------------------------------------------
-此開卷第一回也．作者自云：因曾歷過一番夢幻之后，故將真事隱去，
-留與後世話者．故曰\"甄士隱\"云云．此書記了許多人，大約是
-賈雨村賈母等人的故事．
+此開卷記的是一場夢幻，故將真事隱去，
+只說些市井雜談．此書記了許多人，大約是
+某府裡的舊事．
 
 　　這一段是第二段，用來驗證空行要留成段落分隔．
 
@@ -140,11 +142,11 @@ fn joins_hard_wrapped_lines_with_spaces() {
     let body = &chapters[0].body;
 
     assert!(
-        body.contains("故將真事隱去， 留與後世話者"),
+        body.contains("故將真事隱去， 只說些市井雜談"),
         "硬折行之间要补空格（原文没有这个空格）：{body}"
     );
     assert!(
-        !body.contains("故將真事隱去，留與後世話者"),
+        !body.contains("故將真事隱去，只說些市井雜談"),
         "折行**不能**粘连（会造出原文里不存在的串）：{body}"
     );
 }
@@ -269,7 +271,7 @@ fn to_mine_records_uses_deterministic_fields() {
         records[0].content
     );
     assert!(
-        records[0].content.contains("此開卷第一回也"),
+        records[0].content.contains("此開卷記的是一場夢幻"),
         "content 必须包含正文：{}",
         records[0].content
     );
@@ -591,4 +593,25 @@ fn mined_questions_do_not_leak_the_title_into_the_target_content() {
             let _ = index;
         }
     }
+}
+
+#[test]
+fn ocr_at_artifact_is_normalized_to_a_space() {
+    // ⚠️ **真实语料里的 OCR 伪影**：《紅樓夢》第 62、102 回的回目行里，
+    // 两个联句之间的**全角空格**被识别成 `@` ⇒ 联句粘成一段
+    // ⇒ 题目主体被 16 字预算截短、**失去抓手**。
+    // ⇒ 归一成普通空格（**只影响联句切分**）。
+    let text = "*** START OF THE PROJECT GUTENBERG EBOOK TEST ***\n\
+第六十二回　　憨湘云醉眠芍藥茵屆@呆香菱情解石榴裙\n\
+--------------------------------\n\
+此處是正文內容．\n\
+*** END OF THE PROJECT GUTENBERG EBOOK TEST ***\n";
+    let chapters = parse_chapters(text);
+    assert_eq!(chapters.len(), 1);
+    let title = &chapters[0].title;
+    assert!(!title.contains('@'), "OCR 伪影 '@' 应被归一：{title}");
+    assert!(
+        title.contains("屆 呆香菱") || title.contains("屆　呆香菱"),
+        "归一后两个联句应能分开：{title}"
+    );
 }

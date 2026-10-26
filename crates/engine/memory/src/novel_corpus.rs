@@ -142,7 +142,18 @@ const MAX_COUPLET_CLAUSES: usize = 2;
 /// * **正文为空的回**：跳过（源文件里存在**重复的标题行**，实测《紅樓夢》第四十五回）。
 pub fn parse_chapters(text: &str) -> Vec<Chapter> {
     let region = slice_region(text);
-    let lines: Vec<&str> = region.lines().map(str::trim).collect();
+    // ⚠️ **归一 OCR 伪影 `@`** → 空格。
+    //
+    // 《紅樓夢》第 62、102 回的回目行里，两联句之间的**全角空格**被识别成了 `@`：
+    // `憨湘云醉眠芍藥茵屆@呆香菱情解石榴裙` ⇒ 联句粘成一段 ⇒
+    // 题目主体被 16 字预算截成只剩「第X回」（**题目失去抓手**）。
+    //
+    // ⇒ `@` 归一成普通空格（**不是**全角空格：分句按空白切，普通空格最省事）。
+    // ⚠️ **实测影响面**：这两本书里 `@` **共 2 处，且都在回目行**
+    // ⇒ **正文一个字都没被改**（这才是「保真」的关键事实）。
+    // 换成别的书时若 `@` 出现在正文里 ⇒ 会被一并替换（已知代价，如实记录）。
+    let normalized = region.replace('@', " ");
+    let lines: Vec<&str> = normalized.lines().map(str::trim).collect();
 
     let mut chapters: Vec<Chapter> = Vec::new();
     let mut used_indexes: BTreeSet<usize> = BTreeSet::new();
