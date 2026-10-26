@@ -5,6 +5,7 @@
 //! - `EpisodeMeta` 4 字段结构: created_ms (必填), valid_from_ms/valid_until_ms (Option), provenance (默认 Manual)
 //! - 在 `SqliteMemoryStore` 上加 inherent 方法 (不引入 trait, 不破坏 `EpisodeStore` API):
 //!   - `put_episode_full(ep, meta)`: 一次 INSERT 写 10 列 (含 V4 加的 4 列元数据)
+//!     **+ 2 个链列** (`chain_hash` / `chain_prev_hash`, 见下)
 //!   - `query_with_time_range(from_ms, until_ms)`: 按 ms 时间窗过滤, 跨 session 扫
 //!   - `read_episode_meta(id)`: 读 4 列元数据 (兼容默认由 [`normalize_meta`] 提供)
 //! - 老条目 (V4 迁移前) 4 列均为 NULL → 读取时按任务纪律自动填默认
@@ -12,11 +13,24 @@
 //! 向后兼容铁律:
 //! - `EpisodeStore::put_episode(ep)` 签名不变; 旧调用方 4 列写 NULL (默认 Manual / 永久有效)
 //! - 旧 row 通过 `query_with_time_range` 也能正常返回 (created_ms 兜底为 timestamp * 1000)
+//!
+//! D0 哈希链 (W-10):
+//! - 本模块的两个写入口 (`put_episode_full` / `put_episode_full_for_subject`) 与
+//!   `EpisodeStore::put_episode` **同样入链** —— 链摘要与内容**一次 INSERT** 落库
+//!   （`episodes` 是 append-only ⇒ 事后 UPDATE 补链列根本不可能）。
+//! - 摘要覆盖的元数据 = **落库的元数据**（同一个 `EpisodeMeta`）⇒ 校验侧重算得
+//!   到同一摘要；不另起一份推导逻辑（两份口径漂移是本仓反复吃过的亏）。
+//! - 链键 = `continuity_id`（沿用既有占位口径，不改口径）。
+//! - **口径**: 库级能力 = **IMPLEMENTED**；`EpisodeStore::put_episode` 那条生产
+//!   接线 = **DEFAULT ENABLED**；本模块两个入口的生产接线 = **NOT WIRED**
+//!   （全仓零生产调用点, 如实标注）。
 
 use rusqlite::{params, Connection, OptionalExtension};
 
 use apeireth_core::kernel::memory::Episode;
 
+use crate::episode::DEFAULT_CONTINUITY_ID;
+use crate::memory_chain::{put_chained_episode, ChainEntry};
 use crate::{MemoryError, MemoryResult};
 
 /// 记忆来源 (TP24/M5+N25).
@@ -128,6 +142,15 @@ impl crate::SqliteMemoryStore {
     ///
     /// **未接线**：全仓零生产调用点（`EpisodeMeta` 的构造器 `EpisodeMeta::now` 也只被
     /// 测试调用）⇒ 保留作显式元数据写入口，不假装它已接线。
+    ///
+    /// **D0 哈希链 (W-10)**: 本入口与 `EpisodeStore::put_episode` **一样入链**
+    /// （`chain_hash` / `chain_prev_hash` 随内容一次 INSERT 落库）⇒ v1 存储的
+    /// 默认写入路径不再产出「未纳管」记录。链键 = `continuity_id`（沿用既有占位
+    /// 口径，不改口径）。
+    ///
+    /// **口径**: 库级能力 = **IMPLEMENTED**；本入口的生产接线仍是 **NOT WIRED**
+    /// （全仓零生产调用点，见上）—— 但它**一旦被调用就必然入链**（不留「未纳管」
+    /// 的口子）。
     pub fn put_episode_full(&self, ep: &Episode, meta: &EpisodeMeta) -> MemoryResult<()> {
         // 复用 EpisodeStore 的字段校验 (id/session_id/role 非空)
         if ep.id.trim().is_empty() {
@@ -140,25 +163,12 @@ impl crate::SqliteMemoryStore {
             return Err(MemoryError::Invalid("episode role is empty".into()));
         }
         let conn = self.conn()?;
-        conn.execute(
-            "INSERT OR IGNORE INTO episodes \
-             (id, continuity_id, session_id, timestamp, role, content, \
-              valid_from_ms, valid_until_ms, created_ms, provenance) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![
-                ep.id,
-                "default",
-                ep.session_id,
-                ep.timestamp,
-                ep.role,
-                ep.content,
-                meta.valid_from_ms,
-                meta.valid_until_ms,
-                meta.created_ms,
-                meta.provenance.as_str(),
-            ],
-        )?;
-        Ok(())
+        // 硬失败语义: 链算不出来 / 落库失败 ⇒ 返回 Err（宁可拒写，不可无链写入）。
+        //
+        // **摘要用的元数据 = 落库的元数据**（同一个 `meta`）⇒ 校验侧重算得到同一
+        // 摘要；不另起一份推导逻辑（两份口径漂移）。
+        let entry = ChainEntry::from_episode(ep, Some(meta));
+        put_chained_episode(&conn, DEFAULT_CONTINUITY_ID, &entry).map(|_| ())
     }
 
     /// Same as [`Self::put_episode_full`] but binds a real `continuity_id`.
@@ -186,25 +196,9 @@ impl crate::SqliteMemoryStore {
             ));
         }
         let conn = self.conn()?;
-        conn.execute(
-            "INSERT OR IGNORE INTO episodes \
-             (id, continuity_id, session_id, timestamp, role, content, \
-              valid_from_ms, valid_until_ms, created_ms, provenance) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![
-                ep.id,
-                cid,
-                ep.session_id,
-                ep.timestamp,
-                ep.role,
-                ep.content,
-                meta.valid_from_ms,
-                meta.valid_until_ms,
-                meta.created_ms,
-                meta.provenance.as_str(),
-            ],
-        )?;
-        Ok(())
+        // 硬失败语义 + 链键 = 真实 continuity_id（与 `put_episode_for_subject` 同口径）。
+        let entry = ChainEntry::from_episode(ep, Some(meta));
+        put_chained_episode(&conn, cid, &entry).map(|_| ())
     }
 
     /// 按时间窗检索 (epoch_ms). SQL 过滤:

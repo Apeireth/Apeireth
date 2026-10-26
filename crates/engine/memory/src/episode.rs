@@ -12,7 +12,16 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use apeireth_core::kernel::memory::Episode;
 
+use crate::memory_chain::{put_chained_episode, ChainEntry};
+use crate::provenance::EpisodeMeta;
 use crate::{MemoryError, MemoryResult};
+
+/// v1 存储 `continuity_id` 的**既有占位值**（历史口径, 本批不改）。
+///
+/// **为什么提成常量而不是散落的字面量**: `continuity_id` 既是「主体引用」
+/// 也是**哈希链的链键**（链按主体分链）⇒ 占位值一旦在多处各写一份, 迟早分叉
+/// （一处 "default"、一处 "Default" ⇒ 链被切成两条）。单一真源 = 链键口径。
+pub(crate) const DEFAULT_CONTINUITY_ID: &str = "default";
 
 /// Episode 复合查询条件.
 #[derive(Debug, Clone, Default)]
@@ -115,6 +124,14 @@ impl crate::SqliteMemoryStore {
     /// `EpisodeStore::put_episode` hard-codes `continuity_id = "default"`. The trait
     /// signature is LOCKED; this inherent method is the compatible extension.
     /// Empty continuity_id is rejected (does not silently fall back to `"default"`).
+    ///
+    /// **D0 哈希链 (W-10)**: 本路径同样**入链** —— 链键 = 本方法绑定的真实
+    /// `continuity_id`（不是占位值）⇒ 真实主体的链与占位主体的链互不干扰。
+    ///
+    /// 本路径只写 6 列（不带 V4 元数据）⇒ 摘要里那 4 个元数据字段按 `NULL`
+    /// 口径参与（写入侧与校验侧同一口径 ⇒ 重算得到同一摘要）。
+    ///
+    /// **口径**: 库级能力 = **IMPLEMENTED**；生产接线 = **DEFAULT ENABLED**。
     pub fn put_episode_for_subject(&self, ep: &Episode, continuity_id: &str) -> MemoryResult<()> {
         Self::validate_episode(ep)?;
         let cid = continuity_id.trim();
@@ -125,19 +142,10 @@ impl crate::SqliteMemoryStore {
             ));
         }
         let conn = self.conn()?;
-        conn.execute(
-            "INSERT OR IGNORE INTO episodes (id, continuity_id, session_id, timestamp, role, content)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                ep.id,
-                cid,
-                ep.session_id,
-                ep.timestamp,
-                ep.role,
-                ep.content,
-            ],
-        )?;
-        Ok(())
+        // 硬失败语义: 链算不出来 / 落库失败 ⇒ 返回 Err, 绝不「无链写入后静默跳过」
+        // (无链写入 = 体检报告里的「未纳管」, 而调用方会以为数据受保护).
+        let entry = ChainEntry::from_episode(ep, None);
+        put_chained_episode(&conn, cid, &entry).map(|_| ())
     }
 }
 
@@ -157,7 +165,12 @@ impl crate::SqliteMemoryStore {
 /// 所以这里**只做不撒谎的最小区分**：认不出来的一律 `Manual`（不假装）。
 ///
 /// `role` 的取值口径见 [`EpisodeQuery::role`]：`user` / `assistant` / `system` / `tool`。
-fn provenance_for_role(role: &str) -> crate::Provenance {
+///
+/// **为什么是 `pub(crate)` 而不是私有**: 这份「role → 来源」映射是**全仓唯一的
+/// 口径**（写入路径用它推导 `provenance` 列, 链摘要也用它 ⇒ 摘要与落库值同源）。
+/// 保持私有会让下一个需要它的模块**抄一份** ⇒ 两份口径漂移（本仓反复吃过的亏）。
+/// 公开到 crate 内即可: crate 外没有理由绕过存储层自己猜来源。
+pub(crate) fn provenance_for_role(role: &str) -> crate::Provenance {
     use crate::Provenance;
     match role.trim().to_ascii_lowercase().as_str() {
         "tool" | "tool_result" | "tool_use" => Provenance::Tool,
@@ -183,24 +196,33 @@ impl EpisodeStore for crate::SqliteMemoryStore {
         // 来源按 `role` **保守推导**（不是精确追踪，如实标注）：
         //   tool → Tool · user/assistant → Dialog · system → Observation
         //   其它 → Manual（不假装）。
-        conn.execute(
-            "INSERT OR IGNORE INTO episodes (id, continuity_id, session_id, timestamp, role, content,
-             valid_from_ms, valid_until_ms, created_ms, provenance)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![
-                ep.id,
-                "default", // continuity_id 占位, 真正场景由调用方先建 IdentityCard
-                ep.session_id,
-                ep.timestamp,
-                ep.role,
-                ep.content,
-                ep.timestamp.saturating_mul(1000), // valid_from_ms = created_ms
-                Option::<i64>::None,                 // valid_until_ms = 永久有效
-                ep.timestamp.saturating_mul(1000), // created_ms（秒 → 毫秒）
-                provenance_for_role(&ep.role).as_str(),
-            ],
-        )?;
-        Ok(())
+        //
+        // **D0 哈希链 (W-10)**: 本路径是 v1 存储的**默认写入路径** ⇒ 产出的记录
+        // 必须**带链字段**（`chain_hash` / `chain_prev_hash`）。此前只写 10 列 ⇒
+        // 体检（`memory verify`）把这些记录算成「未纳管」⇒ 链覆盖率取决于调用方。
+        //
+        // **为什么只能在 INSERT 时写链列**: `episodes` 有 append-only 触发器
+        // （`BEFORE UPDATE` / `BEFORE DELETE` 直接 ABORT）⇒ 事后 UPDATE 补链字段
+        // **不可能** ⇒ 链摘要必须在插入前算好、和内容一起一次 INSERT。
+        //
+        // **链键 = `continuity_id`**（链按主体分链）⇒ 本路径沿用既有占位口径
+        // [`DEFAULT_CONTINUITY_ID`]（真实主体走 `put_episode_for_subject`）。
+        // 本批**不改口径**：占位值就是占位值，如实沿用。
+        //
+        // **失败语义**: 链算不出来 / 落库失败 ⇒ **硬失败**（宁可拒写，不可无链写入
+        // —— 无链写入 = 缺口原地不动，而调用方会以为数据受保护）。
+        //
+        // **口径**: 库级能力 = **IMPLEMENTED**（链摘要随内容一次 INSERT 落库, 有测试
+        // 覆盖）；生产接线 = **DEFAULT ENABLED**（默认写入路径自动入链, 无 feature
+        // 开关, 调用方零改动 ⇒ 链覆盖率不再取决于调用方）。
+        let meta = EpisodeMeta {
+            valid_from_ms: Some(ep.timestamp.saturating_mul(1000)),
+            valid_until_ms: None,                          // 永久有效
+            created_ms: ep.timestamp.saturating_mul(1000), // 秒 → 毫秒
+            provenance: provenance_for_role(&ep.role),
+        };
+        let entry = ChainEntry::from_episode(ep, Some(&meta));
+        put_chained_episode(&conn, DEFAULT_CONTINUITY_ID, &entry).map(|_| ())
     }
 
     fn get_episode(&self, id: &str) -> MemoryResult<Option<Episode>> {

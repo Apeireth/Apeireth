@@ -160,7 +160,8 @@ size crates/engine/image/doc/src/lib.rs 1520
 size crates/engine/image/geom/src/warp.rs 1374
 size crates/engine/image/psd/src/tiff.rs 2440
 size crates/engine/image/raster/src/lib.rs 1676
-size crates/engine/memory/src/migrations.rs 1368
+size crates/engine/memory/src/migrations.rs 1171
+size crates/engine/memory/src/migrations/list.rs 335
 size crates/engine/memory/src/persona_layer.rs 1680
 size crates/engine/memory/src/research_derived_memory.rs 1211
 size crates/engine/organ/src/causal_world_model.rs 1864
