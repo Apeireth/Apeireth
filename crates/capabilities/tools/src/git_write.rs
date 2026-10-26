@@ -386,6 +386,28 @@ fn grade_commit(args: &[String]) -> Result<GitWriteTier, String> {
                     // 与短选项 `-e` 同一族（此前长选项分支**根本没检查**它 ⇒ 放行）。
                     return Err(refuse_offlist("commit --edit 开编辑器: 本工具不开编辑器面"));
                 }
+                if long_option_overlaps(base, "--patch")
+                    || long_option_overlaps(base, "--interactive")
+                {
+                    // ⚠️ **交互补丁面（长选项形）**（2026-10-26 修，缺陷 ㉑）：
+                    // 拒绝表只挡了短选项 `-p`，而 git 自己的 usage 行写着
+                    // `用法：git commit [-a | --interactive | --patch] …`
+                    // ⇒ **`--patch` / `--interactive` 与 `-p` 是同一张脸**
+                    // ⇒ 放行它们 = **别名绕过**（fuzz 实测：
+                    // `git commit -m msg --interactive` 被放行成 ReversibleLocal）。
+                    return Err(refuse_offlist(
+                        "commit --patch/--interactive 交互补丁面: 本工具不开交互面",
+                    ));
+                }
+                if long_option_overlaps(base, "--reedit-message") {
+                    // ⚠️ **复用并编辑面（长选项形）**（2026-10-26 修，缺陷 ㉑）：
+                    // `-c` 早已在拒绝表里，而它的长形 `--reedit-message`
+                    // （复用既有提交的 message **并进编辑器改**）此前**没被检查**
+                    // ⇒ 同脸不同形 ⇒ 别名绕过。
+                    return Err(refuse_offlist(
+                        "commit --reedit-message 复用并编辑面: 本工具不开编辑器面",
+                    ));
+                }
                 if long_option_overlaps(base, "--sign") || long_option_overlaps(base, "--gpg-sign")
                 {
                     return Err(refuse_offlist("签名/密钥面不入本工具"));

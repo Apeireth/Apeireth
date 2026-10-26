@@ -301,7 +301,7 @@ bench = false
 
 [[bin]]
 name = "stealth_crawler"
-path = "fuzz_targets/spill_access.rs"
+path = "fuzz_targets/stealth_crawler.rs"
 test = false
 doc = false
 bench = false
@@ -309,6 +309,13 @@ bench = false
 [[bin]]
 name = "guard_supervisor"
 path = "fuzz_targets/guard_supervisor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fetch_image"
+path = "fuzz_targets/fetch_image.rs"
 test = false
 doc = false
 bench = false

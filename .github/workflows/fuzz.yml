@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-                                                                                                                                                                target: [protocol_decode, gateway_guards, resident_parse, sentence_split, tool_schema, im_config, mcp_config, plugin_bounds, content_sanitize, guardrail_security, device_actions, untrusted_envelope, client_tokens, stored_doc, approval_risk, recon_scope, sensitive_path, write_intent, domain_context, filesystem, external, apply_patch, egress, canonical_entry, input_security, chain_audit, mcp_governance, approval_policy, im_payload, exec_pipeline, canonical_binding, mcp_schema, post_execute, credentials, tool_params, proposal, spill_access, stealth_crawler, guard_supervisor]
+                                                                                                                                                                target: [apply_patch, approval_policy, approval_risk, canonical_binding, canonical_entry, chain_audit, client_tokens, content_sanitize, credentials, device_actions, domain_context, egress, exec_pipeline, external, fetch_image, filesystem, gateway_guards, git_write, guard_supervisor, guardrail_security, im_config, im_payload, input_security, mcp_config, mcp_governance, mcp_schema, plugin_bounds, post_execute, proposal, protocol_decode, recon_scope, resident_parse, sensitive_path, sentence_split, spill_access, stealth_crawler, stored_doc, tool_params, tool_schema, untrusted_envelope, write_intent]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -135,3 +135,20 @@ jobs:
           path: crates/engine/image/codecs/fuzz/artifacts/
           if-no-files-found: ignore
           retention-days: 14
+
+  # ── fuzz 目标登记一致性（三条静默空洞的机器守卫，2026-10-26 加）
+  #
+  # ① `[[bin]] name` ↔ `path` 必须一致 ⇒ 否则 **CI 跑的是另一个 target**
+  #    （实战踩到：`stealth_crawler` 指向 `spill_access.rs` ⇒ 那个 job 跑的是 spill_access）
+  # ② `fuzz/fuzz_targets/*.rs` 无孤儿 ⇒ 写了没登记 = 白写
+  # ③ 每个 `[[bin]]` 必须在矩阵里 ⇒ 登记了不跑 = 白登记
+  #    （实战又抓到：`git_write` 登记了但**从来没进过矩阵**）
+  #
+  # 这三类都是**静默**的：CI 全绿、报告好看，**实际覆盖面是假的**。
+  fuzz-registry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check fuzz target registry consistency
+        run: python3 scripts/check_fuzz_bins.py
