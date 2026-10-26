@@ -629,6 +629,24 @@ impl Runtime {
         Derived::new(self.inner.clone(), compute)
     }
 
+    /// 交出一个**使用者形态**的作用域（**给状态持有者**）。
+    ///
+    /// # 为什么宿主要把运行时「降级」交给状态持有者
+    ///
+    /// 状态持有者**只需要**建信号 / 派生 ⇒ ⇒ 它**不需要**挂 effect / flush
+    /// ⇒ ⇒ 把它**降级**成 [`ReactiveScope`] ⇒ ⇒ 它在**类型层面**就拿不到
+    /// 「成为渲染链另一端」的能力 ⇒ ⇒ 「幽灵输入」的结构条件被切断
+    /// （见 [`ReactiveScope`] 的文档）。
+    ///
+    /// # 唯一的移交通道
+    ///
+    /// 本方法是**唯一**能造出 [`ReactiveScope`] 的入口 ⇒ ⇒ 作用域**必然**
+    /// 来自某个**已存在的**运行时 ⇒ ⇒ 状态持有者**要么**被授予宿主的作用域，
+    /// **要么**自己另建一个运行时（后者由宿主脚本以精确判据守住）。
+    pub fn reactive_scope(&self) -> ReactiveScope {
+        ReactiveScope::from_inner(self.inner.clone())
+    }
+
     /// 建一个 effect（渲染后执行）。
     pub fn effect<F: FnMut() + 'static>(&self, f: F) -> EffectHandle {
         self.spawn_effect(f, false)
@@ -978,6 +996,123 @@ impl Runtime {
                 Phase::Post => scheduler.schedule_post(*id),
             }
         }
+    }
+}
+
+/// 响应式作用域（**使用者形态**）—— 状态持有者唯一能持有的运行时能力。
+///
+/// # 为什么要有这个形态（架构不变量：从「脚本近似检查」升级为「类型层面强制」）
+///
+/// 2026-10-25 实测到一个**架构级缺陷**：`ui-kit` 的 `BudgetState::new()`
+/// **自建**了一个 `Runtime` ⇒ ⇒ 它的草稿 / 反馈信号**不属于**宿主挂 effect
+/// 的那个 runtime ⇒ ⇒ **effect 根本不依赖这些信号** ⇒ ⇒ 改草稿**不触发重渲染**
+/// ⇒ ⇒ 实测表现为「**幽灵输入**」（用户敲进去的值**引擎不知道**）。
+///
+/// ⇒ ⇒ 缺陷的**结构条件**是：「**状态持有者手里有一个能挂 effect 的运行时**」
+/// ⇒ ⇒ 只要状态持有者**拿不到**这种运行时，它就**不可能**成为渲染链的一端
+/// ⇒ ⇒ 它的信号**只可能**建在**被授予的**那个 runtime 上。
+///
+/// ⇒ ⇒ 本类型就是那条**类型层面的刀**：
+///
+/// | 形态 | 类型 | 能力 | 谁拿 |
+/// |---|---|---|---|
+/// | **所有者形态** | [`Runtime`] | 建信号 / 派生 / **挂 effect** / flush / 调度器注入 | **应用根**（宿主入口） |
+/// | **使用者形态** | [`ReactiveScope`]（本类型） | **只**能建信号 / 派生 | **状态持有者** |
+///
+/// ⇒ ⇒ 状态持有者**在类型层面**拿不到 `effect` / `flush` ⇒ ⇒ 它**不可能**
+/// 自建一个「渲染链的另一端」⇒ ⇒ 「幽灵输入」的结构条件被切断。
+///
+/// # 能力边界（**故意不给**的东西）
+///
+/// - **没有** `effect` / `effect_pre` ⇒ 挂不了渲染任务；
+/// - **没有** `flush` / `batch` ⇒ 跑不了渲染循环；
+/// - **没有** `set_host_scheduler` ⇒ 换不掉宿主的调度器；
+/// - **没有** `new` ⇒ 造不出新的运行时（唯一的来源是 [`Runtime::reactive_scope`]）。
+///
+/// ⇒ ⇒ 这四条缺失**就是**类型层面的强制（`compile_fail` doc-test 钉住它们）。
+///
+/// # 类型层面的强制（`compile_fail` doc-test 钉住）
+///
+/// 下面三段**都编译不过** ⇒ ⇒ 这三条能力**确实**不在使用者形态上：
+///
+/// 1. **挂不了 effect** ⇒ ⇒ 状态持有者**不可能**成为渲染链的另一端：
+///
+/// ```compile_fail
+/// use apeireth_ui_core::{ReactiveScope, Runtime};
+///
+/// let runtime = Runtime::new();
+/// let scope: ReactiveScope = runtime.reactive_scope();
+/// // ← 编译不过：`ReactiveScope` 上没有 `effect` 方法
+/// scope.effect(|| {});
+/// ```
+///
+/// 2. **跑不了 flush** ⇒ ⇒ 状态持有者**不可能**自己驱动渲染：
+///
+/// ```compile_fail
+/// use apeireth_ui_core::Runtime;
+///
+/// let runtime = Runtime::new();
+/// let scope = runtime.reactive_scope();
+/// // ← 编译不过：`ReactiveScope` 上没有 `flush` 方法
+/// scope.flush();
+/// ```
+///
+/// 3. **造不出作用域** ⇒ ⇒ 作用域**必然**来自某个已存在的运行时：
+///
+/// ```compile_fail
+/// use apeireth_ui_core::ReactiveScope;
+///
+/// // ← 编译不过：没有 `new` 这个关联函数（字段私有）
+/// let scope = ReactiveScope::new();
+/// ```
+///
+/// # 仍然保留的入口（诚实登记）
+///
+/// [`Runtime::new`] 仍是 `pub`（native 测试 / 独立运行时 / 既有 crate 的调用点
+/// 不可改）⇒ ⇒ 「状态持有者**显式**自建运行时」这条路径在**编译期**仍可写出来
+/// ⇒ ⇒ 它由 `crates-ui/apeireth-ui-demo/harness/scripts/check_runtime_ownership.py`
+/// 以**精确判据**守住（不再是近似判据）⇒ ⇒ 且即便写出来，其信号也**无处挂
+/// effect**（本类型不给这个能力）⇒ ⇒ 症状（幽灵输入）**不成立**。
+#[derive(Clone)]
+pub struct ReactiveScope {
+    inner: Rc<RuntimeInner>,
+}
+
+impl std::fmt::Debug for ReactiveScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReactiveScope")
+            .field("nodes", &self.inner.next_id.get())
+            .finish()
+    }
+}
+
+impl ReactiveScope {
+    /// 建一个信号（可写状态）。
+    ///
+    /// ⭐ **信号只能建在被授予的运行时上** ⇒ ⇒ 「状态与渲染同属一个 runtime」
+    /// 是**类型层面**的事实，不是约定。
+    pub fn signal<T: Clone>(&self, value: T) -> Signal<T> {
+        Signal::new(self.inner.clone(), value)
+    }
+
+    /// 建一个派生值（惰性求值 + 主动失效）。
+    pub fn derived<T: Clone + 'static>(&self, compute: impl Fn() -> T + 'static) -> Derived<T> {
+        Derived::new(self.inner.clone(), compute)
+    }
+
+    /// 两个作用域是否属于**同一个**运行时（**指针身份**判定）。
+    ///
+    /// ## 用途
+    ///
+    /// 宿主侧可据此**断言**「我交给状态持有者的作用域与我自己的运行时是同一个」
+    /// ⇒ ⇒ 这是类型层保证之外的**运行期复核**（双保险的第二层）。
+    pub fn same_runtime(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+
+    /// 内部：从共享的内部状态构造作用域（仅供 `ui-core` 内部使用）。
+    pub(crate) fn from_inner(inner: Rc<RuntimeInner>) -> Self {
+        Self { inner }
     }
 }
 
@@ -1766,6 +1901,91 @@ mod tests {
             runtime.graph().label_count(),
             0,
             "销毁后标签必须被摘掉（否则标签表只增不减）"
+        );
+    }
+
+    // ── 使用者形态（[`ReactiveScope`]）的行为断言 ──────────────────────────
+
+    /// **作用域里的信号能被宿主的 effect 驱动**（⇒ 不出现「幽灵输入」）。
+    ///
+    /// 这就是 2026-10-25 那个缺陷的**行为级反证**：状态持有者拿到的作用域
+    /// 建出来的信号，**宿主挂在同一个运行时上的 effect 必须能观察到它**。
+    #[test]
+    fn scope_signals_are_driven_by_the_host_effect() {
+        let runtime = Runtime::new();
+        // 宿主把运行时「降级」成使用者形态交给状态持有者。
+        let scope = runtime.reactive_scope();
+        // 状态持有者在作用域上建草稿信号。
+        let draft = scope.signal(String::from(""));
+        // 宿主在**同一个运行时**上挂渲染 effect（读草稿 ⇒ 建立依赖边）。
+        let observed = Rc::new(RefCell::new(Vec::<String>::new()));
+        let sink = observed.clone();
+        let watched = draft.clone();
+        runtime.effect(move || {
+            sink.borrow_mut().push(watched.get());
+        });
+
+        runtime.flush();
+        assert_eq!(
+            observed.borrow().as_slice(),
+            &[String::from("")],
+            "首次 flush 必须看到初值"
+        );
+
+        // 状态持有者改草稿 ⇒ ⇒ 宿主的 effect 必须被驱动（**不是幽灵输入**）。
+        draft.set(String::from("87"));
+        runtime.flush();
+        assert_eq!(
+            observed.borrow().as_slice(),
+            &[String::from(""), String::from("87")],
+            "改草稿必须驱动宿主 effect（否则就是「幽灵输入」）"
+        );
+    }
+
+    /// 作用域**必然**来自某个已存在的运行时（⇒ 身份可复核）。
+    #[test]
+    fn a_scope_belongs_to_exactly_one_runtime() {
+        let runtime = Runtime::new();
+        let scope = runtime.reactive_scope();
+        let other = Runtime::new().reactive_scope();
+
+        assert!(
+            scope.same_runtime(&runtime.reactive_scope()),
+            "同一个运行时的两个作用域必须是同一个运行时"
+        );
+        assert!(
+            !scope.same_runtime(&other),
+            "不同运行时的作用域不得被误判成同一个"
+        );
+    }
+
+    /// **另一个运行时**上的信号**驱动不了**本运行时的 effect（⇒ 结构性隔离）。
+    ///
+    /// ⇒ ⇒ 这条断言说明：状态持有者若**自建**运行时，它的信号对宿主是**死的**
+    /// ⇒ ⇒ 「幽灵输入」的结构条件（信号与 effect 分属两个运行时）在**行为上**
+    /// 也可观测 ⇒ ⇒ 宿主脚本必须守住「状态持有者不自建运行时」。
+    #[test]
+    fn a_signal_from_another_runtime_cannot_drive_this_runtime() {
+        let runtime = Runtime::new();
+        let foreign = Runtime::new().reactive_scope().signal(0u32);
+        let watched = foreign.clone();
+
+        let runs = Rc::new(Cell::new(0));
+        let counter = runs.clone();
+        runtime.effect(move || {
+            let _ = watched.get();
+            counter.set(counter.get() + 1);
+        });
+        runtime.flush();
+        assert_eq!(runs.get(), 1, "首次 flush 跑一次");
+
+        // 改**外来**信号 ⇒ ⇒ 本运行时的 effect **不得**被驱动。
+        foreign.set(1);
+        runtime.flush();
+        assert_eq!(
+            runs.get(),
+            1,
+            "外来运行时的信号不得驱动本运行时的 effect（幽灵输入的结构条件）"
         );
     }
 }

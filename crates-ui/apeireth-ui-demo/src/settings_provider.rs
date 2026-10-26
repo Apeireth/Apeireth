@@ -43,7 +43,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use apeireth_ui_core::{Runtime, Signal};
+use apeireth_ui_core::{ReactiveScope, Signal};
 use apeireth_ui_kit::settings_frame::FieldFlagState;
 use apeireth_ui_kit::settings_provider::{
     mask_api_key, ApplyResult, DiscoveredModel, EffectiveConfig, ProviderGroupDraft,
@@ -421,8 +421,8 @@ pub type FieldReader = Rc<dyn Fn(&str) -> Option<String>>;
 /// 宿主状态（**状态归宿主** ⇒ 组件是纯函数）。
 #[derive(Clone)]
 pub struct ProviderHost {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 当前分区（**只用于共享 API 的语义**；渲染时两个区域同时存在）。
     section: Signal<String>,
     /// 协议。
@@ -502,49 +502,48 @@ pub struct ProviderHost {
 
 impl ProviderHost {
     /// 建一份宿主状态（**固定数据坏了 ⇒ 显式报错**）。
-    pub fn new(fixture: ProviderFixture) -> Self {
-        let runtime = Runtime::new();
+    pub fn new(fixture: ProviderFixture, scope: ReactiveScope) -> Self {
         let state = fixture.state.clone();
         let keychain = fixture.keychain.clone();
-        let section = runtime.signal(String::from(SECTION_MODELS));
-        let protocol = runtime.signal(state.protocol.clone());
-        let preset = runtime.signal(state.preset.clone());
-        let base_url = runtime.signal(state.base_url.clone());
-        let api_key = runtime.signal(state.api_key.clone());
-        let model = runtime.signal(state.model.clone());
-        let anthropic_version = runtime.signal(state.anthropic_version.clone());
-        let show_api_key = runtime.signal(state.show_api_key);
-        let discovered_models = runtime.signal(fixture.discovered_models.clone());
-        let models_loading = runtime.signal(state.models_loading);
-        let models_error = runtime.signal(state.models_error.clone());
-        let model_search_query = runtime.signal(state.model_search_query.clone());
+        let section = scope.signal(String::from(SECTION_MODELS));
+        let protocol = scope.signal(state.protocol.clone());
+        let preset = scope.signal(state.preset.clone());
+        let base_url = scope.signal(state.base_url.clone());
+        let api_key = scope.signal(state.api_key.clone());
+        let model = scope.signal(state.model.clone());
+        let anthropic_version = scope.signal(state.anthropic_version.clone());
+        let show_api_key = scope.signal(state.show_api_key);
+        let discovered_models = scope.signal(fixture.discovered_models.clone());
+        let models_loading = scope.signal(state.models_loading);
+        let models_error = scope.signal(state.models_error.clone());
+        let model_search_query = scope.signal(state.model_search_query.clone());
         // ⚠️ **回执类信号初值 `None`**（参考侧是生产初始态 ⇒ 见模块头）。
-        let test_result = runtime.signal(None);
-        let testing = runtime.signal(false);
-        let apply_result = runtime.signal(None);
-        let effective_config = runtime.signal(None);
-        let edit_base_url = runtime.signal(state.edit_base_url.clone());
-        let show_advanced_gateway = runtime.signal(state.show_advanced_gateway);
-        let has_api_key = runtime.signal(state.has_api_key);
-        let stored_key_masked = runtime.signal(keychain.stored_key_masked.clone());
-        let stored_key_exists = runtime.signal(keychain.stored_key_exists);
-        let keychain_loading = runtime.signal(keychain.loading);
-        let keychain_saving = runtime.signal(keychain.saving);
-        let keychain_deleting = runtime.signal(keychain.deleting);
-        let keychain_action_error = runtime.signal(keychain.action_error.clone());
-        let temp_api_key = runtime.signal(keychain.temp_api_key.clone());
-        let show_api_key_modal = runtime.signal(false);
-        let text_flags = runtime.signal(fixture.text_flags.clone());
-        let intent = runtime.signal(String::new());
-        let submit_count = runtime.signal(0u32);
-        let last_submit = runtime.signal(String::new());
+        let test_result = scope.signal(None);
+        let testing = scope.signal(false);
+        let apply_result = scope.signal(None);
+        let effective_config = scope.signal(None);
+        let edit_base_url = scope.signal(state.edit_base_url.clone());
+        let show_advanced_gateway = scope.signal(state.show_advanced_gateway);
+        let has_api_key = scope.signal(state.has_api_key);
+        let stored_key_masked = scope.signal(keychain.stored_key_masked.clone());
+        let stored_key_exists = scope.signal(keychain.stored_key_exists);
+        let keychain_loading = scope.signal(keychain.loading);
+        let keychain_saving = scope.signal(keychain.saving);
+        let keychain_deleting = scope.signal(keychain.deleting);
+        let keychain_action_error = scope.signal(keychain.action_error.clone());
+        let temp_api_key = scope.signal(keychain.temp_api_key.clone());
+        let show_api_key_modal = scope.signal(false);
+        let text_flags = scope.signal(fixture.text_flags.clone());
+        let intent = scope.signal(String::new());
+        let submit_count = scope.signal(0u32);
+        let last_submit = scope.signal(String::new());
         // ⭐ 「已提交快照」⇒ 「空提交」判定（生产 `providerCommitted`）。
         //
         // ⚠️ 生产在**加载时**就把当前值当作**已提交值**
         // （`providerCommitted = {...draft}`）⇒ ⇒ 首次失焦时**值没变**
         // ⇒ ⇒ 生产走「**空提交**」⇒ ⇒ **不闪 ✓**（实测：参考侧 `.field-ack` = 0）。
         // ⇒ ⇒ 引擎侧必须**同样**以初值作基线 ⇒ 否则首次失焦就会提交 ⇒ ⇒ 多闪 ✓。
-        let committed_draft = runtime.signal(Some(ProviderGroupDraft {
+        let committed_draft = scope.signal(Some(ProviderGroupDraft {
             protocol: state.protocol.clone(),
             preset: state.preset.clone(),
             base_url: state.base_url.clone(),
@@ -554,7 +553,7 @@ impl ProviderHost {
         }));
         let presets = fixture.presets.clone();
         Self {
-            runtime,
+            scope,
             section,
             protocol,
             preset,
@@ -594,9 +593,9 @@ impl ProviderHost {
         }
     }
 
-    /// 运行时。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 当前分区。
@@ -1328,7 +1327,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_provider::ProviderGroup;
     use apeireth_ui_macro::view;
@@ -1408,9 +1407,10 @@ pub mod wasm {
         let mut renderer = Renderer::new(dom, root);
 
         let fixture = ProviderFixture::load()?;
-        let host = ProviderHost::new(fixture);
-        host.runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let host = ProviderHost::new(fixture, runtime.reactive_scope());
 
         // 字段回读钩子（**DOM 访问只在这里** ⇒ 宿主保持可 native 测试）。
         host.set_field_reader(Rc::new(|key: &str| read_field_from_dom(key)));
@@ -1423,7 +1423,7 @@ pub mod wasm {
         let effect_renderer = renderer.clone();
         let effect_host = host.clone();
         let effect_container = container.clone();
-        host.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_tree(&effect_host);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -1698,6 +1698,7 @@ mod tests {
     //! 宿主侧的**行为**断言（固定数据装配 + 状态转移 ⇒ 与生产同口径）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use apeireth_ui_kit::settings_provider::{
         mask_api_key, preset_model_after_select, provider_family, DEFAULT_MODEL_ID,
     };
@@ -1785,7 +1786,7 @@ mod tests {
         assert!(fixture.test_result.is_some(), "固定数据里有回执素材");
         assert!(fixture.apply_result.is_some());
         assert!(fixture.effective_config.is_some());
-        let host = ProviderHost::new(fixture);
+        let host = ProviderHost::new(fixture, Runtime::new().reactive_scope());
         assert!(host.test_result.get().is_none(), "首屏无测连接回执");
         assert!(host.apply_result.get().is_none(), "首屏无热应用回执");
         assert!(host.effective_config.get().is_none(), "首屏无生效配置");
@@ -1806,7 +1807,10 @@ mod tests {
     #[test]
     fn opening_the_modal_clears_and_then_fills_the_keychain_echo() {
         // 生产 `openApiKeyModal()`：先清空 + 置 reading，再填回显。
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("open-api-key-modal");
         assert!(host.show_api_key_modal.get(), "模态打开");
@@ -1819,7 +1823,10 @@ mod tests {
 
     #[test]
     fn the_show_key_intent_flips_the_structural_branch() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         assert!(!host.show_api_key.get());
         (props.on_action)("toggle-show-key");
@@ -1838,7 +1845,10 @@ mod tests {
     /// ⇒ ⇒ **DOM 不全等** + 像素有差 ⇒ ⇒ 对照判据红。
     #[test]
     fn an_unchanged_group_is_an_empty_submit_and_does_not_flash_the_ack() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         assert_eq!(host.submit_count(), 0);
         // ⭐ **值与已提交快照相同** ⇒ 空提交。
@@ -1862,7 +1872,10 @@ mod tests {
     #[test]
     fn the_submit_intent_records_one_whole_group_and_fills_the_receipts() {
         // ## 判据 T5（**整组提交原子性**）的宿主侧断言
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         assert_eq!(host.submit_count(), 0);
         // ⚠️ **值必须真的变了** ⇒ 否则走生产的「**空提交**」分支
@@ -1895,7 +1908,10 @@ mod tests {
 
     #[test]
     fn an_empty_key_is_rejected_before_any_write() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("open-api-key-modal");
         (props.on_action)("save-new-api-key");
@@ -1906,7 +1922,10 @@ mod tests {
 
     #[test]
     fn saving_a_new_key_masks_it_and_closes_the_modal() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("open-api-key-modal");
         host.temp_api_key
@@ -1935,7 +1954,10 @@ mod tests {
     #[test]
     fn deleting_the_stored_key_also_clears_the_group_key() {
         // 生产 `deleteStoredKey()`：删钥匙串 + 清组内密钥。
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("open-api-key-modal");
         host.api_key.set(String::from("provider-placeholder-key"));
@@ -1947,7 +1969,10 @@ mod tests {
 
     #[test]
     fn the_test_connection_intent_fills_the_shared_receipt() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("test-connection");
         let result = host.test_result.get().expect("有回执");
@@ -1960,7 +1985,10 @@ mod tests {
     #[test]
     fn switching_the_protocol_restores_the_other_buffer() {
         // 生产 `switchProtocol`：双缓冲 + 清测连接回执 + Anthropic 侧有协议头。
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("test-connection");
         (props.on_action)("protocol:anthropic");
@@ -1980,7 +2008,10 @@ mod tests {
     #[test]
     fn the_first_protocol_switch_restores_the_initial_buffer() {
         // 生产的两份缓冲**有初值**（官方预设）⇒ 首次切到 Anthropic 就恢复它们。
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("protocol:anthropic");
         assert_eq!(host.protocol.get(), "anthropic");
@@ -1992,7 +2023,10 @@ mod tests {
 
     #[test]
     fn selecting_a_preset_moves_the_endpoint_and_the_model() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_action)("preset:deepseek");
         assert_eq!(host.preset.get(), "deepseek");
@@ -2023,7 +2057,10 @@ mod tests {
 
     #[test]
     fn the_host_switches_sections_and_ignores_unknown_ones() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         assert_eq!(host.section(), "models");
         assert!(host.select_section("api-key-modal"));
         assert_eq!(host.section(), "api-key-modal");
@@ -2033,7 +2070,10 @@ mod tests {
 
     #[test]
     fn the_host_records_the_field_dirty_keys_without_a_dom_reader() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         let props = host.props();
         (props.on_field_input)("provider.baseUrl,provider.model");
         let flags = host.text_flags.get();
@@ -2048,7 +2088,10 @@ mod tests {
     #[test]
     fn the_host_reads_back_field_values_through_the_reader_hook() {
         // wasm 层的 `bind:value` 等价物：回读钩子 ⇒ 宿主信号。
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         host.set_field_reader(Rc::new(|key: &str| {
             if key == "provider.baseUrl" {
                 Some(String::from("http://127.0.0.1:9999/v1"))
@@ -2064,7 +2107,10 @@ mod tests {
     #[test]
     fn the_compare_hook_masks_the_raw_key_with_the_local_function() {
         // 对照装置入口 ⇒ **本侧自己的**打码函数（T6 的跨侧证据来源）。
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         host.apply_stored_key("abcdefghijklmnop");
         assert_eq!(host.stored_key_masked.get(), "abc****nop");
         host.apply_stored_key("12345678");
@@ -2075,7 +2121,10 @@ mod tests {
 
     #[test]
     fn the_published_state_never_carries_a_plaintext_key() {
-        let host = ProviderHost::new(ProviderFixture::load().expect("固定数据可读"));
+        let host = ProviderHost::new(
+            ProviderFixture::load().expect("固定数据可读"),
+            Runtime::new().reactive_scope(),
+        );
         host.api_key.set(String::from("provider-placeholder-key"));
         let state = host.state();
         assert_eq!(state["hasGroupApiKey"], "true");

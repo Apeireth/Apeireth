@@ -32,7 +32,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use apeireth_ui_core::{Runtime, Signal};
+use apeireth_ui_core::{ReactiveScope, Signal};
 use apeireth_ui_kit::settings_budget::{
     self as kit, BudgetPanelProps, BudgetSection, BudgetState, KnobDraft, KnobFlags, KnobKey,
     KnobRow, KnobValues, OutOfRange, QuotaDimension, SessionUsageTotals,
@@ -186,8 +186,8 @@ pub mod data {
 /// 宿主状态（**分区 + 旋钮草稿 / 反馈**）。
 #[derive(Clone)]
 pub struct BudgetHost {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 当前分区。
     section: Signal<BudgetSection>,
     /// 旋钮草稿与反馈（`ui-kit` 的**状态容器**）。
@@ -198,27 +198,33 @@ pub struct BudgetHost {
 
 impl BudgetHost {
     /// 建一份宿主状态（**生产同口径**：初始分区 = `budget`）。
-    pub fn new() -> Self {
-        let runtime = Runtime::new();
+    ///
+    /// ⭐ **接受宿主给的响应式作用域**（**使用者形态**；2026-10-26）。
+    ///
+    /// ⇒ ⇒ 本宿主**拿不到**挂 effect / flush 的能力 ⇒ ⇒ 渲染链只在**应用根**
+    /// ⇒ ⇒ 草稿信号**必然**落在宿主授予的运行时上 ⇒ ⇒ 「幽灵输入」不可能。
+    pub fn new(scope: ReactiveScope) -> Self {
         // ⚠️ **状态与渲染必须同属一个 runtime**（2026-10-25 修）：
         // 此前 `BudgetState` **自建** runtime ⇒ ⇒ 草稿信号不在宿主的 runtime 里
         // ⇒ ⇒ effect **不依赖**它们 ⇒ ⇒ 改草稿**不重渲染** ⇒ ⇒ **幽灵输入**。
-        let state = BudgetState::new(runtime.clone());
+        // ⇒ ⇒ 2026-10-26 再收一层：连**宿主形态**都不给了，只给**作用域**
+        // ⇒ ⇒ 本模块**无法**成为渲染链的另一端。
+        let state = BudgetState::new(scope.clone());
         // 草稿初值 = 配置值（生产 `budgetDraftFromConfig`）。
         state.set_draft(KnobKey::MaxTurnRounds, String::from("8"));
         state.set_draft(KnobKey::MaxToolCalls, String::from("16"));
         state.set_draft(KnobKey::ContextBudgetChars, String::from("24000"));
         Self {
-            runtime: runtime.clone(),
-            section: runtime.signal(BudgetSection::Budget),
+            section: scope.signal(BudgetSection::Budget),
             state,
             intents: Rc::new(RefCell::new(Vec::new())),
+            scope,
         }
     }
 
-    /// 运行时（信号宿主）。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 当前分区。
@@ -305,12 +311,6 @@ impl BudgetHost {
     }
 }
 
-impl Default for BudgetHost {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// wasm32 侧的装配（**native 编译不参与** ⇒ 行为由浏览器内对照钉住）。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
@@ -342,7 +342,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_budget::BudgetPanel;
     use apeireth_ui_macro::view;
@@ -433,9 +433,10 @@ pub mod wasm {
         let root: web_sys::Node = container.clone().into();
         let mut renderer = Renderer::new(dom, root);
 
-        let host = BudgetHost::new();
-        host.runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let host = BudgetHost::new(runtime.reactive_scope());
 
         renderer
             .mount(render_tree(&host))
@@ -445,7 +446,7 @@ pub mod wasm {
         let effect_renderer = renderer.clone();
         let effect_host = host.clone();
         let effect_container = container.clone();
-        host.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_tree(&effect_host);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -685,6 +686,7 @@ mod tests {
     //! 宿主侧的**行为**断言（状态转移 ⇒ 与生产同口径）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
 
     #[test]
     fn the_fixed_data_matches_the_two_sides() {
@@ -723,13 +725,13 @@ mod tests {
 
     #[test]
     fn the_initial_section_is_the_budget_one() {
-        let host = BudgetHost::new();
+        let host = BudgetHost::new(Runtime::new().reactive_scope());
         assert_eq!(host.section(), BudgetSection::Budget);
     }
 
     #[test]
     fn selecting_an_unknown_section_changes_nothing() {
-        let host = BudgetHost::new();
+        let host = BudgetHost::new(Runtime::new().reactive_scope());
         host.select_section("nope");
         assert_eq!(host.section(), BudgetSection::Budget);
         host.select_section("runtime");
@@ -738,7 +740,7 @@ mod tests {
 
     #[test]
     fn the_knob_input_updates_the_draft_and_records_an_intent() {
-        let host = BudgetHost::new();
+        let host = BudgetHost::new(Runtime::new().reactive_scope());
         host.on_knob_input(KnobKey::MaxTurnRounds, String::from("12"));
         assert_eq!(host.state.draft().max_turn_rounds, "12");
         assert_eq!(
@@ -749,7 +751,7 @@ mod tests {
 
     #[test]
     fn the_knob_commit_normalizes_the_draft_and_writes_the_feedback() {
-        let host = BudgetHost::new();
+        let host = BudgetHost::new(Runtime::new().reactive_scope());
         host.on_knob_input(KnobKey::MaxTurnRounds, String::from("100"));
         host.on_knob_commit(KnobKey::MaxTurnRounds);
         assert_eq!(host.state.draft().max_turn_rounds, "64");
@@ -768,7 +770,7 @@ mod tests {
 
     #[test]
     fn the_reject_knob_falls_back_to_the_default() {
-        let host = BudgetHost::new();
+        let host = BudgetHost::new(Runtime::new().reactive_scope());
         host.on_knob_input(KnobKey::ContextBudgetChars, String::from("0"));
         host.on_knob_commit(KnobKey::ContextBudgetChars);
         assert_eq!(host.state.draft().context_budget_chars, "");
@@ -781,7 +783,7 @@ mod tests {
     #[test]
     fn the_diagnostics_button_only_records_an_intent() {
         // 深度诊断是 **HTTP** ⇒ 本批**不接线** ⇒ 只记录意图。
-        let host = BudgetHost::new();
+        let host = BudgetHost::new(Runtime::new().reactive_scope());
         host.on_check_runtime();
         assert_eq!(host.intents(), vec![String::from("check-diagnostics")]);
         assert!(!host.state.checking_runtime(), "未接线 ⇒ 不假装在诊断");
@@ -789,7 +791,7 @@ mod tests {
 
     #[test]
     fn the_rendered_tree_carries_the_budget_panel() {
-        let host = BudgetHost::new();
+        let host = BudgetHost::new(Runtime::new().reactive_scope());
         let props = host.props();
         assert_eq!(props.section, BudgetSection::Budget);
         assert_eq!(props.rows.len(), 3);

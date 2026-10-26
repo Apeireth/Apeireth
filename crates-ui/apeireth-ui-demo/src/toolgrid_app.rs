@@ -21,7 +21,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{Runtime, Signal, UiComponent};
+    use apeireth_ui_core::{ReactiveScope, Runtime, Signal, UiComponent};
     use apeireth_ui_demo::toolgrid_fixture::{toolgrid_cases, toolgrid_tools};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::tool_grid::{
@@ -34,18 +34,18 @@ pub mod wasm {
     /// 工具卡面应用的状态（响应式部分；**可共享** ⇒ effect 闭包能捕获它）。
     #[derive(Clone)]
     struct ToolGridState {
-        /// 运行时（信号宿主）。
-        runtime: Runtime,
         /// 搜索词（宿主写入 ⇒ 网格重算）。
         query: Signal<String>,
     }
 
     impl ToolGridState {
         /// 建一份状态。
-        fn new() -> Self {
-            let runtime = Runtime::new();
-            let query = runtime.signal(String::new());
-            Self { runtime, query }
+        ///
+        /// ⭐ **接受宿主给的响应式作用域**（**使用者形态**）⇒ ⇒ 本状态**拿不到**
+        /// 挂 effect 的能力 ⇒ ⇒ 渲染链只在应用根。
+        fn new(scope: ReactiveScope) -> Self {
+            let query = scope.signal(String::new());
+            Self { query }
         }
     }
 
@@ -81,7 +81,9 @@ pub mod wasm {
         let root: web_sys::Node = container.clone().into();
         let mut renderer = Renderer::new(dom, root);
 
-        let state = ToolGridState::new();
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        let state = ToolGridState::new(runtime.reactive_scope());
         renderer
             .mount(render_toolgrid(&state))
             .map_err(|error| error.to_string())?;
@@ -89,7 +91,7 @@ pub mod wasm {
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
         let effect_state = state.clone();
-        state.runtime.effect(move || {
+        runtime.effect(move || {
             let tree = render_toolgrid(&effect_state);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);

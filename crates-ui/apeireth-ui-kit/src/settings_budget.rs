@@ -66,7 +66,7 @@ use std::rc::Rc;
 use crate::icon::{Icon, IconData, IconNode, IconProps};
 use crate::num;
 use crate::settings_frame::{icons as frame_icons, FieldFlag, FieldFlagProps, FieldFlagState};
-use apeireth_ui_core::{Runtime, Signal, UiComponent};
+use apeireth_ui_core::{ReactiveScope, Signal, UiComponent};
 use apeireth_ui_dom::{DomEvent, ElementHandler, EventKind, VNode};
 use apeireth_ui_macro::view;
 
@@ -575,14 +575,41 @@ pub fn format_count(value: Option<i64>) -> String {
 /// - `ms < 60_000` ⇒ 秒数 < 10 用 `toFixed(1)`（**半数进位** ⇒ 用
 ///   [`num::to_fixed`]），否则 `Math.round(seconds)`；
 /// - 其余 ⇒ `分` + `秒`（秒数**两位补零**）。
+///
+/// ## 入口类型
+///
+/// 本入口是 [`format_duration_f64`] 的**薄封装**（`i64` ⇒ `f64`）⇒ 两个入口
+/// **同一实现、同一口径** ⇒ 规则层差分装置（`harness/rules/`）可用整数入口，
+/// 也可用 [`format_duration_f64`] 比对**小数毫秒**（生产 `formatDuration`
+/// 收 `number` ⇒ 可小数）。
 pub fn format_duration(ms: Option<i64>) -> String {
+    format_duration_f64(ms.map(|value| value as f64))
+}
+
+/// 回合耗时展示串（**小数毫秒**入口；生产 `formatDuration` 的 `number` 面）。
+///
+/// ## 为什么要有这个入口
+///
+/// 生产 `formatDuration(ms: number | null | undefined)` 收 **`number`** ⇒ **可小数**；
+/// 而 [`format_duration`] 收 `Option<i64>` ⇒ **小数表达不了**。
+/// ⇒ 二者**不是同一层 API**：`999.5` 在生产给 `1000ms`（`ms < 1000` 分支里的
+/// `Math.round(999.5)`），而整数入口**永远给不出** `1000ms`
+/// （`999` ⇒ `999ms`，`1000` ⇒ `1.0s`）⇒ 该形态是**可观测差异**，不是名义差异。
+///
+/// ## 与脚本侧的逐条对齐
+///
+/// - 缺省 / 非有限 / 负 ⇒ 「—」（生产 `!Number.isFinite(ms) || ms < 0` ⇒ `DASH`）；
+/// - `ms < 1000` ⇒ `Math.round(ms)`ms（**半数向 +∞** ⇒ 用 [`num::round`]）；
+/// - `ms < 60_000` ⇒ 秒数 < 10 用 `toFixed(1)`（**半数进位** ⇒ 用
+///   [`num::to_fixed`]），否则 `Math.round(seconds)`；
+/// - 其余 ⇒ `分` + `秒`（秒数**两位补零**）。
+pub fn format_duration_f64(ms: Option<f64>) -> String {
     let Some(ms) = ms else {
         return String::from(DASH);
     };
-    if ms < 0 {
+    if !ms.is_finite() || ms < 0.0 {
         return String::from(DASH);
     }
-    let ms = ms as f64;
     if ms < 1000.0 {
         return format!("{}ms", num::number_to_string(num::round(ms)));
     }
@@ -1371,8 +1398,8 @@ fn render_diagnostics_button(checking: bool, on_check: Rc<dyn Fn()>) -> VNode {
 /// ⇒ 组件只渲染 + 发意图。
 #[derive(Clone)]
 pub struct BudgetState {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 旋钮草稿（回合轮数上限）。
     draft_max_turn_rounds: Signal<String>,
     /// 旋钮草稿（单轮工具调用上限）。
@@ -1391,7 +1418,7 @@ pub struct BudgetState {
 
 impl BudgetState {
     /// 建一份状态。
-    /// ⭐ **接受外部运行时**（2026-10-25 修）。
+    /// ⭐ **接受宿主给的响应式作用域**（**使用者形态**；2026-10-26 升级）。
     ///
     /// ## 为什么不能自建
     ///
@@ -1401,25 +1428,69 @@ impl BudgetState {
     /// 键入 `87` ⇒ DOM 显示 `87`（浏览器自己画的）⇒ 引擎侧草稿/反馈**不更新**
     /// ⇒ ⇒ 失焦后引擎**不接管**（参考侧会钳制并写回）。
     ///
-    /// ⇒ ⇒ **响应式链要求「状态与渲染同属一个 runtime」**
-    /// ⇒ ⇒ 这里改成**接收**宿主给的 runtime（与 `provider` 面的做法一致：
-    /// 那边所有信号都在宿主里建 ⇒ 链完整）。
-    pub fn new(runtime: Runtime) -> Self {
+    /// ## 为什么是「作用域」而不是「运行时」（**类型层面的强制**）
+    ///
+    /// 2026-10-25 的修法只把 `Runtime` 改成**参数** ⇒ ⇒ 但 [`Runtime::new`]
+    /// 仍是 `pub` ⇒ ⇒ 「状态对象自建运行时」在**类型层面**仍然写得出来
+    /// ⇒ ⇒ 编译器**不可能**发现 ⇒ ⇒ 只能靠脚本近似检查。
+    ///
+    /// ⇒ ⇒ 现在本状态持有的是 [`ReactiveScope`]（**使用者形态**）：
+    /// 它**能**建信号 / 派生，**不能**挂 effect、**不能** flush、**不能**造新的
+    /// 运行时 ⇒ ⇒ **状态持有者在类型层面拿不到「渲染链的另一端」**
+    /// ⇒ ⇒ 「信号与 effect 分属两个运行时」这个结构条件**被切断**
+    /// ⇒ ⇒ 「幽灵输入」不再可能发生（证明见 `ui-core` 的 `compile_fail`
+    /// doc-test）。
+    ///
+    /// ## 唯一正确的用法
+    ///
+    /// ⭐ **这段是**可运行的 doc-test（不是 `ignore`）⇒ ⇒ 「宿主建运行时 →
+    /// 挂 effect → 交作用域」这条链**每次构建都在跑** ⇒ ⇒ 「幽灵输入」的
+    /// 回归护栏。
+    ///
+    /// ```
+    /// use apeireth_ui_core::Runtime;
+    /// use apeireth_ui_kit::settings_budget::{BudgetState, KnobKey};
+    ///
+    /// // 宿主（应用根）建运行时 ⇒ ⇒ 挂渲染 effect ⇒ ⇒ 把作用域交给状态持有者。
+    /// let runtime = Runtime::new();
+    /// let state = BudgetState::new(runtime.reactive_scope());
+    ///
+    /// let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+    /// let sink = seen.clone();
+    /// let watched = state.clone();
+    /// runtime.effect(move || {
+    ///     sink.borrow_mut().push(watched.draft().max_turn_rounds);
+    /// });
+    /// runtime.flush();
+    ///
+    /// // 状态持有者改草稿 ⇒ ⇒ 宿主的 effect 必须被驱动（**不是幽灵输入**）。
+    /// state.set_draft(KnobKey::MaxTurnRounds, String::from("87"));
+    /// runtime.flush();
+    /// assert_eq!(
+    ///     seen.borrow().as_slice(),
+    ///     &[String::from(""), String::from("87")],
+    ///     "改草稿必须驱动宿主 effect"
+    /// );
+    /// ```
+    pub fn new(scope: ReactiveScope) -> Self {
         Self {
-            draft_max_turn_rounds: runtime.signal(String::new()),
-            draft_max_tool_calls: runtime.signal(String::new()),
-            draft_context_budget_chars: runtime.signal(String::new()),
-            feedback_max_turn_rounds: runtime.signal(String::new()),
-            feedback_max_tool_calls: runtime.signal(String::new()),
-            feedback_context_budget_chars: runtime.signal(String::new()),
-            checking_runtime: runtime.signal(false),
-            runtime,
+            draft_max_turn_rounds: scope.signal(String::new()),
+            draft_max_tool_calls: scope.signal(String::new()),
+            draft_context_budget_chars: scope.signal(String::new()),
+            feedback_max_turn_rounds: scope.signal(String::new()),
+            feedback_max_tool_calls: scope.signal(String::new()),
+            feedback_context_budget_chars: scope.signal(String::new()),
+            checking_runtime: scope.signal(false),
+            scope,
         }
     }
 
-    /// 运行时（信号宿主）。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**）。
+    ///
+    /// ⚠️ **只给宿主做「同一个运行时」的复核用**（[`ReactiveScope::same_runtime`]）
+    /// ⇒ ⇒ 它**不是**渲染入口（渲染入口在**应用根**）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 旋钮草稿快照。
@@ -1469,20 +1540,19 @@ impl BudgetState {
     }
 }
 
-impl Default for BudgetState {
-    /// ⚠️ **自建 runtime 的默认实现只给「原型 / 测试」用**：
-    /// 生产路径**必须**把宿主的 runtime 传进来
-    /// ⇒ ⇒ 否则状态与渲染**分属两个 runtime** ⇒ ⇒ 响应式链断（见 [`BudgetState::new`]）。
-    fn default() -> Self {
-        Self::new(Runtime::new())
-    }
-}
+// ⚠️ **本类型刻意没有 `Default` 实现**（2026-10-26）。
+//
+// 原因：`Default` 只能写成「自建一个运行时」⇒ ⇒ 那正是「幽灵输入」的根
+// ⇒ ⇒ 有 `Default` ⇒ 就有一条**隐式**的自建路径 ⇒ ⇒ 类型层面的收口被绕过。
+// ⇒ ⇒ 想要一份默认状态，调用方**必须**显式给出一个作用域：
+// `BudgetState::new(runtime.reactive_scope())`。
 
 #[cfg(test)]
 mod tests {
     //! 预算面的**行为**断言（**不读生产源码**；只断言本模块的产物）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use apeireth_ui_dom::EventKind;
 
     /// 一枚旋钮行（测试用）。
@@ -1951,7 +2021,7 @@ mod tests {
 
     #[test]
     fn the_host_state_owns_the_draft_and_the_feedback() {
-        let state = BudgetState::new(Runtime::new());
+        let state = BudgetState::new(Runtime::new().reactive_scope());
         assert_eq!(state.draft().max_turn_rounds, "");
         state.set_draft(KnobKey::MaxTurnRounds, String::from("12"));
         assert_eq!(state.draft().max_turn_rounds, "12");
@@ -1960,5 +2030,55 @@ mod tests {
         assert!(!state.checking_runtime());
         state.set_checking_runtime(true);
         assert!(state.checking_runtime());
+    }
+
+    /// ⭐ **「幽灵输入」的行为级反证**：状态持有者拿到的作用域建出来的草稿，
+    /// **宿主挂在同一个运行时上的 effect 必须能驱动它**。
+    ///
+    /// ⇒ ⇒ 这是 2026-10-25 那个缺陷的**回归护栏**（缺陷原文：草稿信号不在
+    /// 宿主的 runtime 里 ⇒ ⇒ effect 不依赖它 ⇒ ⇒ 改草稿不重渲染）。
+    #[test]
+    fn the_host_effect_drives_the_state_draft() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        // 宿主（应用根）建运行时 ⇒ ⇒ 挂渲染 effect。
+        let runtime = Runtime::new();
+        // 宿主把作用域交给状态持有者。
+        let state = BudgetState::new(runtime.reactive_scope());
+
+        // 渲染 effect 读草稿 ⇒ ⇒ 依赖边建在**同一个运行时**上。
+        let seen = Rc::new(RefCell::new(Vec::<String>::new()));
+        let sink = seen.clone();
+        let watched = state.clone();
+        runtime.effect(move || {
+            sink.borrow_mut().push(watched.draft().max_turn_rounds);
+        });
+        runtime.flush();
+        assert_eq!(
+            seen.borrow().as_slice(),
+            &[String::from("")],
+            "首帧读到初值"
+        );
+
+        // 状态持有者改草稿 ⇒ ⇒ **宿主的 effect 必须被驱动**（不是幽灵输入）。
+        state.set_draft(KnobKey::MaxTurnRounds, String::from("87"));
+        runtime.flush();
+        assert_eq!(
+            seen.borrow().as_slice(),
+            &[String::from(""), String::from("87")],
+            "改草稿必须驱动宿主 effect（幽灵输入 = 引擎不知道用户敲的值）"
+        );
+    }
+
+    /// 状态持有者与宿主**同属一个运行时**（⇒ 作用域身份可复核）。
+    #[test]
+    fn the_state_shares_the_host_runtime() {
+        let runtime = Runtime::new();
+        let state = BudgetState::new(runtime.reactive_scope());
+        assert!(
+            state.scope().same_runtime(&runtime.reactive_scope()),
+            "状态持有者必须与宿主同属一个运行时"
+        );
     }
 }

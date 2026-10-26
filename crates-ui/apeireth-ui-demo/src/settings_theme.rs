@@ -31,7 +31,7 @@
 //! ⚠️ 归一化**必须**在每次 DOM 补丁之后重跑（补丁会把属性写回原文）⇒ 归一化
 //! 与渲染在**同一条链**上（见 [`wasm::mount`]）。
 
-use apeireth_ui_core::{Callback, Runtime, Signal};
+use apeireth_ui_core::{Callback, ReactiveScope, Signal};
 use apeireth_ui_kit::settings_theme::{AccentEntry, ThemeEntry, ThemeSettingsPanelProps};
 
 /// 固定数据的原文（**编译期内嵌** ⇒ 与参考侧同一份文件）。
@@ -476,8 +476,8 @@ fn bool_field(value: &Json, key: &str) -> Result<bool, String> {
 /// 主题子面的宿主状态（响应式部分）。
 #[derive(Clone)]
 pub struct ThemeHostState {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 当前主题 id（**选中态的意图出口**：宿主写 ⇒ 组件重渲染）。
     active_theme: Signal<String>,
     /// 当前配色 id（同上）。
@@ -489,19 +489,18 @@ pub struct ThemeHostState {
 
 impl ThemeHostState {
     /// 建一份状态（读固定数据 ⇒ 数据坏了**显式报错**）。
-    pub fn new(fixture: ThemeFixture) -> Self {
-        let runtime = Runtime::new();
+    pub fn new(fixture: ThemeFixture, scope: ReactiveScope) -> Self {
         Self {
-            active_theme: runtime.signal(fixture.active_theme.clone()),
-            active_accent: runtime.signal(fixture.active_accent.clone()),
-            intent: runtime.signal(String::new()),
-            runtime,
+            active_theme: scope.signal(fixture.active_theme.clone()),
+            active_accent: scope.signal(fixture.active_accent.clone()),
+            intent: scope.signal(String::new()),
+            scope,
         }
     }
 
-    /// 运行时。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 当前主题 id。
@@ -610,7 +609,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_theme::ThemeSettingsPanel;
     use apeireth_ui_macro::view;
@@ -701,10 +700,10 @@ pub mod wasm {
         let mut renderer = Renderer::new(dom, root);
 
         let fixture = theme_fixture()?;
-        let state = ThemeHostState::new(fixture.clone());
-        state
-            .runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let state = ThemeHostState::new(fixture.clone(), runtime.reactive_scope());
 
         renderer
             .mount(render_tree(&state, &fixture))
@@ -716,7 +715,7 @@ pub mod wasm {
         let effect_state = state.clone();
         let effect_fixture = fixture.clone();
         let effect_container = container.clone();
-        state.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_tree(&effect_state, &effect_fixture);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -850,6 +849,7 @@ mod tests {
     //! 固定数据装载与 props 组装的**行为**断言。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
 
     #[test]
     fn the_json_parser_reads_the_fixture_shape() {
@@ -910,7 +910,7 @@ mod tests {
     #[test]
     fn the_props_carry_the_fixture_data() {
         let fixture = theme_fixture().expect("固定数据可读");
-        let state = ThemeHostState::new(fixture.clone());
+        let state = ThemeHostState::new(fixture.clone(), Runtime::new().reactive_scope());
         let props = theme_panel_props(&fixture, &state);
         assert_eq!(props.themes.len(), 10);
         assert_eq!(props.accents.len(), 4);
@@ -924,7 +924,7 @@ mod tests {
     #[test]
     fn picking_a_theme_updates_the_host_state_only() {
         let fixture = theme_fixture().expect("固定数据可读");
-        let state = ThemeHostState::new(fixture.clone());
+        let state = ThemeHostState::new(fixture.clone(), Runtime::new().reactive_scope());
         let props = theme_panel_props(&fixture, &state);
         let entry = props.themes.first().expect("有主题");
         let callback = entry.on_pick.clone().expect("有意图出口");
@@ -935,7 +935,7 @@ mod tests {
     #[test]
     fn the_other_intents_are_recorded_by_the_host() {
         let fixture = theme_fixture().expect("固定数据可读");
-        let state = ThemeHostState::new(fixture.clone());
+        let state = ThemeHostState::new(fixture.clone(), Runtime::new().reactive_scope());
         let props = theme_panel_props(&fixture, &state);
         props.on_request_upload.clone().expect("有上传意图").call();
         assert_eq!(state.intent().get(), "request-upload");

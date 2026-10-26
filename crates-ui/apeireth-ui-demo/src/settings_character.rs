@@ -31,7 +31,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use apeireth_ui_core::{Runtime, Signal};
+use apeireth_ui_core::{ReactiveScope, Signal};
 use apeireth_ui_kit::settings_character::{
     icons, CapabilityDef, CapabilityTable, CapabilityValue, CharacterPanelsProps, Impression,
     KnobSpec, Persona, TuningLogEntry,
@@ -463,8 +463,8 @@ fn read_preset_names(value: &Json) -> Result<Vec<String>, String> {
 /// 宿主状态（**状态归宿主** ⇒ 组件是纯函数）。
 #[derive(Clone)]
 pub struct CharacterHost {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 当前分区。
     section: Signal<String>,
     /// 人设列表。
@@ -499,18 +499,17 @@ pub struct CharacterHost {
 
 impl CharacterHost {
     /// 建一份宿主状态（**固定数据坏了 ⇒ 显式报错**）。
-    pub fn new(fixture: CharacterFixture) -> Self {
-        let runtime = Runtime::new();
-        let section = runtime.signal(String::from("personality"));
-        let personas = runtime.signal(fixture.personas.clone());
-        let active_persona_id = runtime.signal(fixture.active_persona_id.clone());
-        let text_flags = runtime.signal(fixture.text_flags.clone());
-        let impression = runtime.signal(fixture.impression.clone());
-        let impression_draft = runtime.signal(fixture.impression_draft.clone());
-        let impression_error = runtime.signal(fixture.impression_error.clone());
-        let impression_busy = runtime.signal(fixture.impression_busy);
-        let capabilities = runtime.signal(fixture.capabilities.clone());
-        let pending_key = runtime.signal(None);
+    pub fn new(fixture: CharacterFixture, scope: ReactiveScope) -> Self {
+        let section = scope.signal(String::from("personality"));
+        let personas = scope.signal(fixture.personas.clone());
+        let active_persona_id = scope.signal(fixture.active_persona_id.clone());
+        let text_flags = scope.signal(fixture.text_flags.clone());
+        let impression = scope.signal(fixture.impression.clone());
+        let impression_draft = scope.signal(fixture.impression_draft.clone());
+        let impression_error = scope.signal(fixture.impression_error.clone());
+        let impression_busy = scope.signal(fixture.impression_busy);
+        let capabilities = scope.signal(fixture.capabilities.clone());
+        let pending_key = scope.signal(None);
         // ⚠️ **学习日志：喂固定数据**（**不是** `None`）。
         //
         // 生产的读面是 **Tauri IPC**（`readTuningLog`）⇒ 真实浏览器里读不到；
@@ -528,12 +527,12 @@ impl CharacterHost {
         //
         // ⇒ 「不可读」那一支（`None`）**在浏览器里不可对照**（替身恒返回日志）
         // ⇒ 登记为**未覆盖**（native 单测覆盖它的渲染）。
-        let tuning_log = runtime.signal(fixture.tuning_log.clone());
-        let tuning_log_loading = runtime.signal(false);
-        let intent = runtime.signal(String::new());
-        let probe_enabled = runtime.signal(false);
+        let tuning_log = scope.signal(fixture.tuning_log.clone());
+        let tuning_log_loading = scope.signal(false);
+        let intent = scope.signal(String::new());
+        let probe_enabled = scope.signal(false);
         Self {
-            runtime,
+            scope,
             section,
             personas,
             active_persona_id,
@@ -552,9 +551,9 @@ impl CharacterHost {
         }
     }
 
-    /// 运行时。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 当前分区。
@@ -726,7 +725,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_character::CharacterPanels;
     use apeireth_ui_macro::view;
@@ -894,9 +893,10 @@ pub mod wasm {
                 entry.at_text = format_time(entry.at_epoch_ms, Some("zh-CN"));
             }
         }
-        let host = CharacterHost::new(fixture);
-        host.runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let host = CharacterHost::new(fixture, runtime.reactive_scope());
 
         renderer
             .mount(render_tree(&host))
@@ -906,7 +906,7 @@ pub mod wasm {
         let effect_renderer = renderer.clone();
         let effect_host = host.clone();
         let effect_container = container.clone();
-        host.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_tree(&effect_host);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -1125,6 +1125,7 @@ mod tests {
     //! 宿主侧的**行为**断言（固定数据装配 + 状态转移 ⇒ 与生产同口径）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use apeireth_ui_kit::settings_character::{
         cap_disabled, enabled_count, is_cap_on, CapabilityDef,
     };
@@ -1218,7 +1219,7 @@ mod tests {
     #[test]
     fn the_host_switches_sections_and_ignores_unknown_ones() {
         let fixture = CharacterFixture::load().expect("固定数据可读");
-        let host = CharacterHost::new(fixture);
+        let host = CharacterHost::new(fixture, Runtime::new().reactive_scope());
         assert_eq!(host.section().get(), "personality");
         assert!(host.select_section("cognition"));
         assert_eq!(host.section().get(), "cognition");
@@ -1229,7 +1230,7 @@ mod tests {
     #[test]
     fn the_host_records_intents_instead_of_changing_state() {
         let fixture = CharacterFixture::load().expect("固定数据可读");
-        let host = CharacterHost::new(fixture);
+        let host = CharacterHost::new(fixture, Runtime::new().reactive_scope());
         let props = host.props();
         (props.on_toggle_capability)("memoryInjection");
         assert_eq!(host.last_intent(), "toggle-capability:memoryInjection");
@@ -1243,7 +1244,7 @@ mod tests {
     #[test]
     fn the_host_can_push_a_capability_to_a_given_state() {
         let fixture = CharacterFixture::load().expect("固定数据可读");
-        let host = CharacterHost::new(fixture);
+        let host = CharacterHost::new(fixture, Runtime::new().reactive_scope());
         host.set_capability("typedRecall", CapabilityValue::Bool(false));
         assert_eq!(
             host.capability("typedRecall"),

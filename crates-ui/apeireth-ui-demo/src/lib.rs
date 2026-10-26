@@ -43,7 +43,7 @@ pub use toolgrid_fixture::{toolgrid_cases, toolgrid_tools, ToolGridCase};
 
 use std::rc::Rc;
 
-use apeireth_ui_core::{Callback, Runtime, Signal};
+use apeireth_ui_core::{Callback, ReactiveScope, Signal};
 use apeireth_ui_dom::VNode;
 
 /// 试点应用状态（响应式部分）。
@@ -62,8 +62,8 @@ pub struct PilotState {
 
 /// 试点状态的内层（可共享 ⇒ 回调能捕获它）。
 struct PilotInner {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 处理中。
     busy: Signal<bool>,
     /// 已复制。
@@ -74,11 +74,9 @@ struct PilotInner {
     visible: Signal<bool>,
 }
 
-impl Default for PilotState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// ⚠️ **本类型刻意没有 `Default` 实现**（2026-10-26）：
+// `Default` 只能写成「自建一个运行时」⇒ ⇒ 那正是「幽灵输入」的根
+// ⇒ ⇒ 有 `Default` ⇒ 就有一条**隐式**的自建路径 ⇒ ⇒ 类型层面的收口被绕过。
 
 impl Clone for PilotState {
     fn clone(&self) -> Self {
@@ -90,22 +88,26 @@ impl Clone for PilotState {
 
 impl PilotState {
     /// 建一份初始状态。
-    pub fn new() -> Self {
-        let runtime = Runtime::new();
+    /// ⭐ **接受宿主给的响应式作用域**（**使用者形态**；2026-10-26）。
+    ///
+    /// ⇒ ⇒ 本状态**拿不到**挂 effect / flush 的能力 ⇒ ⇒ 它**不可能**成为
+    /// 渲染链的另一端 ⇒ ⇒ 它的信号**必然**落在宿主授予的运行时上
+    /// ⇒ ⇒ 「幽灵输入」的结构条件被切断。
+    pub fn new(scope: ReactiveScope) -> Self {
         Self {
             inner: Rc::new(PilotInner {
-                busy: runtime.signal(false),
-                copied: runtime.signal(false),
-                decision: runtime.signal(None),
-                visible: runtime.signal(true),
-                runtime,
+                busy: scope.signal(false),
+                copied: scope.signal(false),
+                decision: scope.signal(None),
+                visible: scope.signal(true),
+                scope,
             }),
         }
     }
 
-    /// 运行时（信号宿主）。
-    pub fn runtime(&self) -> &Runtime {
-        &self.inner.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.inner.scope
     }
 
     /// 处理中信号。
@@ -148,11 +150,6 @@ impl PilotState {
     /// 标记为已复制。
     pub fn mark_copied(&self) {
         self.inner.copied.set(true);
-    }
-
-    /// 跑一次调度（native 同步 flush）。
-    pub fn flush(&self) {
-        self.inner.runtime.flush();
     }
 }
 
@@ -214,6 +211,7 @@ mod tests {
     //! crate 级断言：跨层组合行为（宏组件 + 组件库 + 响应式信号）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use apeireth_ui_core::UiComponent;
     use apeireth_ui_dom::Children;
 
@@ -258,7 +256,7 @@ mod tests {
 
     #[test]
     fn approval_card_renders_the_twenty_one_class_names() {
-        let state = PilotState::new();
+        let state = PilotState::new(Runtime::new().reactive_scope());
         let node = ApprovalCard::render(&pilot_props(&state));
         let text = tree_to_text(&node);
 
@@ -272,7 +270,7 @@ mod tests {
 
     #[test]
     fn approval_card_renders_the_expected_structure() {
-        let state = PilotState::new();
+        let state = PilotState::new(Runtime::new().reactive_scope());
         let node = ApprovalCard::render(&pilot_props(&state));
         let text = tree_to_text(&node);
 
@@ -286,9 +284,10 @@ mod tests {
 
     #[test]
     fn dismiss_hides_the_card_without_making_a_business_decision() {
-        let state = PilotState::new();
+        let runtime = Runtime::new();
+        let state = PilotState::new(runtime.reactive_scope());
         state.dismiss();
-        state.flush();
+        runtime.flush();
 
         assert!(!state.visible().get(), "关闭 ⇒ 卡片隐藏");
         assert!(
@@ -299,14 +298,16 @@ mod tests {
 
     #[test]
     fn allow_and_reject_record_different_decisions() {
-        let allow_state = PilotState::new();
+        let allow_runtime = Runtime::new();
+        let allow_state = PilotState::new(allow_runtime.reactive_scope());
         allow_state.allow();
-        allow_state.flush();
+        allow_runtime.flush();
         assert_eq!(allow_state.decision().get(), Some(true));
 
-        let reject_state = PilotState::new();
+        let reject_runtime = Runtime::new();
+        let reject_state = PilotState::new(reject_runtime.reactive_scope());
         reject_state.reject();
-        reject_state.flush();
+        reject_runtime.flush();
         assert_eq!(reject_state.decision().get(), Some(false));
     }
 }

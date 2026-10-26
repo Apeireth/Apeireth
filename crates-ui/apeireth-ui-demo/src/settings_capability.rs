@@ -50,7 +50,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use apeireth_ui_core::{Runtime, Signal};
+use apeireth_ui_core::{ReactiveScope, Signal};
 use apeireth_ui_kit::json::JsonValue;
 use apeireth_ui_kit::settings_capability::icons as face_icons;
 use apeireth_ui_kit::settings_capability::{
@@ -422,8 +422,8 @@ fn client_config_json(provider_fixture: &Json) -> Result<String, String> {
 /// 宿主状态（**状态归宿主** ⇒ 组件是纯函数）。
 #[derive(Clone)]
 pub struct CapabilityHost {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 当前分区。
     section: Signal<String>,
     /// 能力表。
@@ -461,30 +461,29 @@ pub struct CapabilityHost {
 
 impl CapabilityHost {
     /// 建一份宿主状态（**固定数据坏了 ⇒ 显式报错**）。
-    pub fn new(fixture: CapabilityFixture) -> Self {
-        let runtime = Runtime::new();
-        let section = runtime.signal(String::from(SECTION_GOVERNANCE));
-        let capabilities = runtime.signal(fixture.capabilities.clone());
-        let pending_key = runtime.signal(None);
-        let cognitive_depth = runtime.signal(fixture.cognitive_depth.clone());
-        let permission_preset = runtime.signal(fixture.permission_preset.clone());
-        let allowed_servers = runtime.signal(fixture.allowed_servers.clone());
-        let allowed_server_input = runtime.signal(fixture.allowed_server_input.clone());
-        let allowed_server_error = runtime.signal(fixture.allowed_server_error.clone());
-        let allowed_servers_busy = runtime.signal(false);
-        let text_flags = runtime.signal(fixture.text_flags.clone());
+    pub fn new(fixture: CapabilityFixture, scope: ReactiveScope) -> Self {
+        let section = scope.signal(String::from(SECTION_GOVERNANCE));
+        let capabilities = scope.signal(fixture.capabilities.clone());
+        let pending_key = scope.signal(None);
+        let cognitive_depth = scope.signal(fixture.cognitive_depth.clone());
+        let permission_preset = scope.signal(fixture.permission_preset.clone());
+        let allowed_servers = scope.signal(fixture.allowed_servers.clone());
+        let allowed_server_input = scope.signal(fixture.allowed_server_input.clone());
+        let allowed_server_error = scope.signal(fixture.allowed_server_error.clone());
+        let allowed_servers_busy = scope.signal(false);
+        let text_flags = scope.signal(fixture.text_flags.clone());
         let mut text_values = BTreeMap::new();
         text_values.insert(
             String::from("reasoningModelFilters"),
-            runtime.signal(fixture.reasoning_model_filters.clone()),
+            scope.signal(fixture.reasoning_model_filters.clone()),
         );
         text_values.insert(
             String::from("reasoningTag"),
-            runtime.signal(fixture.reasoning_tag.clone()),
+            scope.signal(fixture.reasoning_tag.clone()),
         );
-        let config_json_preview = runtime.signal(fixture.config_json_preview.clone());
-        let config_json_copied = runtime.signal(false);
-        let intent = runtime.signal(String::new());
+        let config_json_preview = scope.signal(fixture.config_json_preview.clone());
+        let config_json_copied = scope.signal(false);
+        let intent = scope.signal(String::new());
 
         // ⚠️ 卡组件的两个意图出口**直接捕获意图信号**（不捕获 `self`）⇒
         // 不会出现「先有宿主还是先有 props」的循环依赖。
@@ -496,10 +495,10 @@ impl CapabilityHost {
         let knob: KnobIntent = Rc::new(move |key: &str| {
             knob_intent.set(format!("set-knob:{key}"));
         });
-        let card = card_bridge(&runtime, toggle, knob);
+        let card = card_bridge(&scope, toggle, knob);
 
         Self {
-            runtime,
+            scope,
             section,
             capabilities,
             pending_key,
@@ -519,9 +518,9 @@ impl CapabilityHost {
         }
     }
 
-    /// 运行时。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 当前分区。
@@ -864,7 +863,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_capability::{
         CapabilityPanels, ADVISORS_ARIA_LABEL, ADVISORS_VALUE_KEY, DEPTH_SELECT_ID,
@@ -946,9 +945,10 @@ pub mod wasm {
         let mut renderer = Renderer::new(dom, root);
 
         let fixture = CapabilityFixture::load()?;
-        let host = CapabilityHost::new(fixture);
-        host.runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let host = CapabilityHost::new(fixture, runtime.reactive_scope());
 
         renderer
             .mount(render_tree(&host))
@@ -958,7 +958,7 @@ pub mod wasm {
         let effect_renderer = renderer.clone();
         let effect_host = host.clone();
         let effect_container = container.clone();
-        host.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_tree(&effect_host);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -1313,6 +1313,7 @@ mod tests {
     //! **不读生产源码**。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use apeireth_ui_kit::settings_capability::{
         ADVISORS_VALUE_KEY, REASONING_FILTERS_VALUE_KEY, REASONING_TAG_VALUE_KEY,
         SANDBOX_VALUE_KEY, TIMEOUT_VALUE_KEY,
@@ -1325,7 +1326,7 @@ mod tests {
 
     /// 建一份宿主。
     fn host() -> CapabilityHost {
-        CapabilityHost::new(fixture())
+        CapabilityHost::new(fixture(), Runtime::new().reactive_scope())
     }
 
     #[test]

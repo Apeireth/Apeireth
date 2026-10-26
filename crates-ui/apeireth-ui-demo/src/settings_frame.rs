@@ -35,7 +35,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use apeireth_ui_core::{Runtime, Signal};
+use apeireth_ui_core::{ReactiveScope, Signal};
 use apeireth_ui_dom::VNode;
 use apeireth_ui_kit::settings_frame::{NavGroup, SettingsFrameProps};
 use apeireth_ui_macro::view;
@@ -223,8 +223,8 @@ fn page_header() -> VNode {
 /// | 每大类最近访问的分区页 | [`RefCell`] + `HashMap` | `lastSectionByGroup`（**普通 `Map`** ⇒ **非响应式**） | 本模块（宿主） |
 #[derive(Clone)]
 pub struct FrameState {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 当前分区 id。
     active_section: Signal<String>,
     /// 展开的大类集合（**真值口径** = 集合里有它）。
@@ -240,21 +240,20 @@ pub struct FrameState {
 impl FrameState {
     /// 建一份初始状态（**生产同口径**：`activeSection = 'appearance'`，
     /// `expandedGroups = [分组(activeSection)]`）。
-    pub fn new() -> Self {
-        let runtime = Runtime::new();
+    pub fn new(scope: ReactiveScope) -> Self {
         Self {
-            active_section: runtime.signal(String::from("appearance")),
-            expanded_groups: runtime.signal(vec![String::from("appearance")]),
-            live_apply_pending: runtime.signal(false),
+            active_section: scope.signal(String::from("appearance")),
+            expanded_groups: scope.signal(vec![String::from("appearance")]),
+            live_apply_pending: scope.signal(false),
             last_section_by_group: Rc::new(RefCell::new(HashMap::new())),
             groups: data::nav_groups(),
-            runtime,
+            scope,
         }
     }
 
-    /// 运行时（信号宿主）。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 当前分区 id。
@@ -354,12 +353,6 @@ impl FrameState {
     }
 }
 
-impl Default for FrameState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// wasm32 侧的装配（**native 编译不参与** ⇒ 行为由浏览器内对照钉住）。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
@@ -381,7 +374,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_frame::SettingsFrame;
     use wasm_bindgen::prelude::*;
@@ -434,10 +427,10 @@ pub mod wasm {
         let root: web_sys::Node = container.clone().into();
         let mut renderer = Renderer::new(dom, root);
 
-        let state = FrameState::new();
-        state
-            .runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let state = FrameState::new(runtime.reactive_scope());
 
         if let Err(error) = renderer.mount(render_frame(&state)) {
             let message = format!("框架面首次挂载失败：{error}");
@@ -448,7 +441,7 @@ pub mod wasm {
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
         let effect_state = state.clone();
-        state.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_frame(&effect_state);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -491,11 +484,12 @@ mod tests {
     //! 宿主侧的**行为**断言（状态转移 ⇒ 与生产同口径）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use apeireth_ui_core::UiComponent;
 
     #[test]
     fn the_fixture_carries_five_groups_and_fifteen_sections_in_order() {
-        let state = FrameState::new();
+        let state = FrameState::new(Runtime::new().reactive_scope());
         let groups = state.groups();
         assert_eq!(groups.len(), 5, "5 个大类");
         let ids: Vec<&str> = groups.iter().map(|group| group.id.as_str()).collect();
@@ -512,14 +506,14 @@ mod tests {
 
     #[test]
     fn the_initial_state_matches_the_production_one() {
-        let state = FrameState::new();
+        let state = FrameState::new(Runtime::new().reactive_scope());
         assert_eq!(state.active_section(), "appearance");
         assert_eq!(state.expanded_groups(), vec![String::from("appearance")]);
     }
 
     #[test]
     fn selecting_a_section_remembers_it_for_its_group() {
-        let state = FrameState::new();
+        let state = FrameState::new(Runtime::new().reactive_scope());
         state.select_section("models");
         assert_eq!(state.active_section(), "models");
         let remembered = state.last_section_by_group();
@@ -532,7 +526,7 @@ mod tests {
 
     #[test]
     fn toggling_an_expanded_group_closes_it_and_keeps_the_section() {
-        let state = FrameState::new();
+        let state = FrameState::new(Runtime::new().reactive_scope());
         state.select_section("avatar");
         state.toggle_group("appearance");
         assert_eq!(state.expanded_groups(), Vec::<String>::new(), "收起了");
@@ -541,7 +535,7 @@ mod tests {
 
     #[test]
     fn toggling_a_closed_group_opens_it_and_lands_on_the_remembered_section() {
-        let state = FrameState::new();
+        let state = FrameState::new(Runtime::new().reactive_scope());
         // 先访问 appearance 大类的第二格 ⇒ 记住它。
         state.select_section("avatar");
         // 收起 appearance，再重新展开 ⇒ 应回到「形象」而不是首格。
@@ -561,7 +555,7 @@ mod tests {
 
     #[test]
     fn toggling_a_never_visited_group_lands_on_its_first_section() {
-        let state = FrameState::new();
+        let state = FrameState::new(Runtime::new().reactive_scope());
         state.toggle_group("data");
         assert_eq!(state.active_section(), "data", "落首格");
     }
@@ -570,17 +564,18 @@ mod tests {
     fn the_last_section_map_is_not_reactive() {
         // 生产里它是**普通 Map** ⇒ 写它**不触发**重绘。
         // ⇒ 这里用 effect 的运行次数把「非响应式」钉成**可断言的行为**。
-        let state = FrameState::new();
+        let runtime = Runtime::new();
+        let state = FrameState::new(runtime.reactive_scope());
         let counter = Rc::new(RefCell::new(0usize));
         let counter_for_effect = counter.clone();
         let state_for_effect = state.clone();
-        let handle = state.runtime().effect(move || {
+        let handle = runtime.effect(move || {
             // 读信号 ⇒ effect 订阅它们。
             let _ = state_for_effect.active_section();
             let _ = state_for_effect.expanded_groups();
             *counter_for_effect.borrow_mut() += 1;
         });
-        state.runtime().flush();
+        runtime.flush();
         let after_first = handle.runs();
 
         // 只写**非响应式映射** ⇒ **不重绘**。
@@ -588,7 +583,7 @@ mod tests {
             .last_section_by_group()
             .borrow_mut()
             .insert(String::from("account"), String::from("models"));
-        state.runtime().flush();
+        runtime.flush();
         assert_eq!(
             handle.runs(),
             after_first,
@@ -597,7 +592,7 @@ mod tests {
 
         // 写**响应式信号** ⇒ 重绘。
         state.select_section("models");
-        state.runtime().flush();
+        runtime.flush();
         assert!(
             handle.runs() > after_first,
             "写 `activeSection` ⇒ 重绘（响应式）"
@@ -606,7 +601,7 @@ mod tests {
 
     #[test]
     fn the_rendered_tree_carries_the_sidebar_and_the_content_column() {
-        let state = FrameState::new();
+        let state = FrameState::new(Runtime::new().reactive_scope());
         let node = apeireth_ui_kit::settings_frame::SettingsFrame::render(&state.props());
         let text = crate::tree_to_text(&node);
         assert!(text.contains("<aside class=\"settings-subnav\""), "{text}");

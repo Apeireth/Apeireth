@@ -8,7 +8,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use apeireth_ui_core::{HostScheduler, Runtime, Signal, UiComponent};
+use apeireth_ui_core::{HostScheduler, ReactiveScope, Runtime, Signal, UiComponent};
 use apeireth_ui_dom::{Renderer, VNode, WebDom};
 use apeireth_ui_kit::governance_tab::{
     format_rfc3339_ms, merge_session_inbox, ActivityItem, ApprovalFilter, ApprovalLedgerEntry,
@@ -47,8 +47,6 @@ extern "C" {
 /// 应用状态（响应式部分；**可共享** ⇒ effect 闭包能捕获它）。
 #[derive(Clone)]
 struct GovState {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
     /// 当前卷宗面（`approvals` / `grants` / `audit` / `guard`）。
     tab: String,
     /// 基准时刻（毫秒；对照 harness 注入 ⇒ 两侧同一份）。
@@ -75,19 +73,20 @@ struct GovState {
 
 impl GovState {
     /// 建一份状态。
-    fn new(tab: String, case_index: usize, base_ms: i64) -> Self {
-        let runtime = Runtime::new();
-        let case_index = runtime.signal(case_index);
-        let filter = runtime.signal(ApprovalFilter::All);
-        let source = runtime.signal(AuditSource::Traces);
-        let trace_filter = runtime.signal(TraceFilter::All);
-        let audit_group = runtime.signal(String::from("all"));
-        let expanded_ids = runtime.signal(Vec::new());
-        let confirming_id = runtime.signal(None);
-        let selected_trace_id = runtime.signal(None);
-        let selected_audit_id = runtime.signal(None);
+    ///
+    /// ⭐ **接受宿主给的响应式作用域**（**使用者形态**）⇒ ⇒ 本状态**拿不到**挂
+    /// effect 的能力 ⇒ ⇒ 渲染链只在应用根（`mount`）。
+    fn new(scope: ReactiveScope, tab: String, case_index: usize, base_ms: i64) -> Self {
+        let case_index = scope.signal(case_index);
+        let filter = scope.signal(ApprovalFilter::All);
+        let source = scope.signal(AuditSource::Traces);
+        let trace_filter = scope.signal(TraceFilter::All);
+        let audit_group = scope.signal(String::from("all"));
+        let expanded_ids = scope.signal(Vec::new());
+        let confirming_id = scope.signal(None);
+        let selected_trace_id = scope.signal(None);
+        let selected_audit_id = scope.signal(None);
         Self {
-            runtime,
             tab,
             base_ms,
             case_index,
@@ -528,10 +527,10 @@ fn mount(container: &Element, tab: String, case_index: usize, base_ms: i64) -> R
     let root: web_sys::Node = stage.into();
     let mut renderer = Renderer::new(dom, root);
 
-    let state = GovState::new(tab, case_index, base_ms);
-    state
-        .runtime
-        .set_host_scheduler(Rc::new(MicrotaskScheduler));
+    // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+    let runtime = Runtime::new();
+    runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+    let state = GovState::new(runtime.reactive_scope(), tab, case_index, base_ms);
 
     renderer
         .mount(render(&state))
@@ -540,7 +539,7 @@ fn mount(container: &Element, tab: String, case_index: usize, base_ms: i64) -> R
     let renderer = Rc::new(RefCell::new(renderer));
     let effect_renderer = renderer.clone();
     let effect_state = state.clone();
-    state.runtime.effect(move || {
+    runtime.effect(move || {
         let tree = render(&effect_state);
         let mut guard = effect_renderer.borrow_mut();
         let _ = guard.patch(tree);

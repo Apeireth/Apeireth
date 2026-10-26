@@ -3,7 +3,7 @@
 //! 设计文档 §10.2：禁���「读源文件 + 文本断言」⇒ 这里全部是**调用组件**、
 //! **断言产物**。
 
-use apeireth_ui_core::UiComponent;
+use apeireth_ui_core::{Runtime, UiComponent};
 use apeireth_ui_demo::{pilot_callbacks, pilot_item, ApprovalCard, ApprovalCardProps, PilotState};
 use apeireth_ui_dom::{Children, Dom, InMemoryDom, Renderer, VNode};
 
@@ -35,7 +35,7 @@ fn collect_classes(node: &VNode, out: &mut Vec<String>) {
 
 #[test]
 fn the_pilot_card_renders_the_same_class_vocabulary_as_the_reference() {
-    let state = PilotState::new();
+    let state = PilotState::new(Runtime::new().reactive_scope());
     let node = ApprovalCard::render(&pilot_props(&state));
     let mut classes = Vec::new();
     collect_classes(&node, &mut classes);
@@ -72,7 +72,7 @@ fn the_pilot_card_renders_the_same_class_vocabulary_as_the_reference() {
 
 #[test]
 fn the_pilot_card_mounts_into_the_memory_backend() {
-    let state = PilotState::new();
+    let state = PilotState::new(Runtime::new().reactive_scope());
     let dom = InMemoryDom::new();
     let root = dom.create_element("main").expect("建节点必须成功");
     let mut renderer = Renderer::new(dom, root);
@@ -86,13 +86,14 @@ fn the_pilot_card_mounts_into_the_memory_backend() {
 
 #[test]
 fn the_copy_button_switches_its_icon_and_class_when_copied() {
-    let state = PilotState::new();
+    let runtime = Runtime::new();
+    let state = PilotState::new(runtime.reactive_scope());
     let before = ApprovalCard::render(&pilot_props(&state));
     let before_text = apeireth_ui_demo::tree_to_text(&before);
     assert!(!before_text.contains("copied"), "复制前没有 `copied` class");
 
     state.mark_copied();
-    state.flush();
+    runtime.flush();
 
     let after = ApprovalCard::render(&pilot_props(&state));
     let after_text = apeireth_ui_demo::tree_to_text(&after);

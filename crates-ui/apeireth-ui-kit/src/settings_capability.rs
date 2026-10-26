@@ -70,7 +70,7 @@ use crate::settings_character::{
     TuningLogEntry,
 };
 use crate::settings_frame::{FieldFlag, FieldFlagProps, FieldFlagState};
-use apeireth_ui_core::{Runtime, Signal, UiComponent};
+use apeireth_ui_core::{ReactiveScope, Signal, UiComponent};
 use apeireth_ui_dom::{DomEvent, ElementHandler, EventKind, VNode};
 use apeireth_ui_macro::view;
 
@@ -760,25 +760,30 @@ impl UiComponent for CapabilityPanels {
 /// ⇒ 本适配把**其余字段填空值**，只把两个出口接到本面的意图上 ⇒ 行渲染
 /// **逐字复用**，且**不改冻结文件**（正解：把行组件的 props 解耦成
 /// 「两个意图 + 表」⇒ 见报告的「需要主线改的共享文件」）。
+/// ⭐ **接受宿主给的响应式作用域**（**使用者形态**；2026-10-26）。
+///
+/// ⇒ ⇒ 本函数建的全部信号都落在**宿主授予的**那个运行时上
+/// ⇒ ⇒ 组件库**拿不到**「渲染链的另一端」（挂不了 effect）⇒ ⇒ 幽灵输入
+/// 的结构条件被切断。
 pub fn card_bridge(
-    runtime: &Runtime,
+    scope: &ReactiveScope,
     toggle: CapabilityIntent,
     knob: KnobIntent,
 ) -> CharacterPanelsProps {
     let noop: ActionIntent = Rc::new(|_: &str| {});
     CharacterPanelsProps {
-        section: runtime.signal(String::new()),
-        personas: runtime.signal(Vec::new()),
-        active_persona_id: runtime.signal(String::new()),
-        text_flags: runtime.signal(Vec::new()),
-        impression: runtime.signal(Impression::default()),
-        impression_draft: runtime.signal(String::new()),
-        impression_error: runtime.signal(String::new()),
-        impression_busy: runtime.signal(false),
-        capabilities: runtime.signal(CapabilityTable::new()),
-        pending_key: runtime.signal(None),
-        tuning_log: runtime.signal(None::<Vec<TuningLogEntry>>),
-        tuning_log_loading: runtime.signal(false),
+        section: scope.signal(String::new()),
+        personas: scope.signal(Vec::new()),
+        active_persona_id: scope.signal(String::new()),
+        text_flags: scope.signal(Vec::new()),
+        impression: scope.signal(Impression::default()),
+        impression_draft: scope.signal(String::new()),
+        impression_error: scope.signal(String::new()),
+        impression_busy: scope.signal(false),
+        capabilities: scope.signal(CapabilityTable::new()),
+        pending_key: scope.signal(None),
+        tuning_log: scope.signal(None::<Vec<TuningLogEntry>>),
+        tuning_log_loading: scope.signal(false),
         global_model: String::new(),
         memory_flow_defs: Vec::new(),
         cognition_defs: Vec::new(),
@@ -1674,6 +1679,7 @@ mod tests {
 
     use super::*;
     use crate::settings_character::CapabilityValue;
+    use apeireth_ui_core::Runtime;
 
     /// 收集全部 class token（去重、保序）。
     fn classes(node: &VNode, out: &mut Vec<String>) {
@@ -1869,6 +1875,7 @@ mod tests {
         entries: &[(&str, CapabilityValue)],
     ) -> (Runtime, CapabilityPanelsProps) {
         let runtime = Runtime::new();
+        let scope = runtime.reactive_scope();
         let intents: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
         let toggle_intents = intents.clone();
         let knob_intents = intents.clone();
@@ -1878,7 +1885,7 @@ mod tests {
         let knob: KnobIntent = Rc::new(move |key: &str| {
             knob_intents.borrow_mut().push(format!("knob:{key}"));
         });
-        let card = card_bridge(&runtime, toggle, knob);
+        let card = card_bridge(&scope, toggle, knob);
         let (decision, guard, tool, tool_sub, beta) = registries();
         let record = |name: &'static str, intents: Rc<RefCell<Vec<String>>>| -> ActionIntent {
             Rc::new(move |key: &str| {

@@ -32,7 +32,7 @@
 //! ⇒ 本模块按**生产原文**给出指引行（[`DAEMON_GUIDANCE`]）⇒ 两侧一致；
 //! ⚠️ 共享固定数据需要主线对齐（见交付报告的「需要主线改的共享文件」清单）。
 
-use apeireth_ui_core::{Callback, Runtime, Signal};
+use apeireth_ui_core::{Callback, ReactiveScope, Signal};
 use apeireth_ui_kit::settings_data::{
     DangerAction, DataPanelsProps, DataSection, GuidanceRow, OpsRow, UserProfile, DANGER_ACTIONS,
 };
@@ -624,8 +624,8 @@ pub fn probe_rows(probe: Option<&ResidentProbe>) -> Vec<OpsRow> {
 /// 数据子面的宿主状态。
 #[derive(Clone)]
 pub struct DataHostState {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 当前分区。
     section: Signal<DataSection>,
     /// 读数**是否可读**（`false` ⇒ 走「读不到」分支）。
@@ -654,28 +654,27 @@ pub struct DataHostState {
 
 impl DataHostState {
     /// 建一份状态（读固定数据 ⇒ 数据坏了**显式报错**）。
-    pub fn new(fixture: &DataFixture) -> Self {
-        let runtime = Runtime::new();
+    pub fn new(fixture: &DataFixture, scope: ReactiveScope) -> Self {
         Self {
-            section: runtime.signal(DataSection::Data),
-            readings_available: runtime.signal(true),
-            copied_key: runtime.signal(fixture.copied_key.clone()),
-            copy_error: runtime.signal(fixture.copy_error.clone()),
-            daemon_loading: runtime.signal(false),
-            workspace_dir: runtime.signal(fixture.workspace_dir.clone()),
-            workspace_error: runtime.signal(fixture.workspace_error.clone()),
-            workspace_loading: runtime.signal(fixture.workspace_loading),
-            user_profile: runtime.signal(fixture.user_profile.clone()),
-            user_profile_error: runtime.signal(fixture.user_profile_error.clone()),
-            danger_pending: runtime.signal(fixture.danger_pending.clone().unwrap_or_default()),
+            section: scope.signal(DataSection::Data),
+            readings_available: scope.signal(true),
+            copied_key: scope.signal(fixture.copied_key.clone()),
+            copy_error: scope.signal(fixture.copy_error.clone()),
+            daemon_loading: scope.signal(false),
+            workspace_dir: scope.signal(fixture.workspace_dir.clone()),
+            workspace_error: scope.signal(fixture.workspace_error.clone()),
+            workspace_loading: scope.signal(fixture.workspace_loading),
+            user_profile: scope.signal(fixture.user_profile.clone()),
+            user_profile_error: scope.signal(fixture.user_profile_error.clone()),
+            danger_pending: scope.signal(fixture.danger_pending.clone().unwrap_or_default()),
             intents: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
-            runtime,
+            scope,
         }
     }
 
-    /// 运行时。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 当前分区。
@@ -819,7 +818,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, UiComponent};
+    use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_data::DataPanels;
     use apeireth_ui_macro::view;
@@ -913,10 +912,10 @@ pub mod wasm {
         let mut renderer = Renderer::new(dom, root);
 
         let fixture = data_fixture()?;
-        let state = DataHostState::new(&fixture);
-        state
-            .runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let state = DataHostState::new(&fixture, runtime.reactive_scope());
 
         renderer
             .mount(render_tree(&state, &fixture))
@@ -927,7 +926,7 @@ pub mod wasm {
         let effect_state = state.clone();
         let effect_fixture = fixture.clone();
         let effect_container = container.clone();
-        state.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_tree(&effect_state, &effect_fixture);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -1143,6 +1142,7 @@ mod tests {
     //! 宿主侧的**行为**断言（固定数据 ⇒ 读数行 / 意图 ⇒ 状态）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
 
     #[test]
     fn the_json_parser_reads_the_fixture_shape() {
@@ -1235,7 +1235,7 @@ mod tests {
     #[test]
     fn the_props_follow_the_readings_switch() {
         let fixture = data_fixture().expect("固定数据可读");
-        let state = DataHostState::new(&fixture);
+        let state = DataHostState::new(&fixture, Runtime::new().reactive_scope());
         let props = data_panel_props(&fixture, &state);
         assert_eq!(props.status_rows.len(), 4);
         assert_eq!(props.status_rows[0].value, "运行中");
@@ -1250,7 +1250,7 @@ mod tests {
     #[test]
     fn the_danger_action_only_records_an_intent() {
         let fixture = data_fixture().expect("固定数据可读");
-        let state = DataHostState::new(&fixture);
+        let state = DataHostState::new(&fixture, Runtime::new().reactive_scope());
         let props = data_panel_props(&fixture, &state);
         let action = props.danger_actions.first().expect("有危险动作");
         let callback = action.on_request.clone().expect("有意图出口");
@@ -1266,7 +1266,7 @@ mod tests {
     #[test]
     fn the_copy_intent_carries_the_row_key() {
         let fixture = data_fixture().expect("固定数据可读");
-        let state = DataHostState::new(&fixture);
+        let state = DataHostState::new(&fixture, Runtime::new().reactive_scope());
         let props = data_panel_props(&fixture, &state);
         let row = props.guidance.first().expect("有指引行");
         let callback = row.on_copy.clone().expect("有复制意图");
@@ -1307,7 +1307,7 @@ mod tests {
     #[test]
     fn the_guidance_rows_are_the_production_ones() {
         let fixture = data_fixture().expect("固定数据可读");
-        let state = DataHostState::new(&fixture);
+        let state = DataHostState::new(&fixture, Runtime::new().reactive_scope());
         let props = data_panel_props(&fixture, &state);
         assert_eq!(props.guidance.len(), 3);
         assert_eq!(props.guidance[0].label, "看状态（只读）");
@@ -1324,7 +1324,7 @@ mod tests {
     #[test]
     fn the_section_switch_is_recorded_in_the_host() {
         let fixture = data_fixture().expect("固定数据可读");
-        let state = DataHostState::new(&fixture);
+        let state = DataHostState::new(&fixture, Runtime::new().reactive_scope());
         assert_eq!(state.section.get(), DataSection::Data);
         state.select_section("user");
         assert_eq!(state.section.get(), DataSection::User);

@@ -31,7 +31,9 @@ use apeireth_ui_kit::tool_card::{
 /// 跑一遍试点流程，返回打印文本（入口与测试共用同一路径）。
 #[cfg(not(target_arch = "wasm32"))]
 fn run_demo() -> String {
-    let state = PilotState::new();
+    // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+    let runtime = apeireth_ui_core::Runtime::new();
+    let state = PilotState::new(runtime.reactive_scope());
     let (allow, reject, dismiss) = pilot_callbacks(&state);
     let props = ApprovalCardProps {
         item: pilot_item(),
@@ -49,7 +51,7 @@ fn run_demo() -> String {
 
     out.push_str("\n\n== 关闭卡片（不做业务决策） ==\n");
     state.dismiss();
-    state.flush();
+    runtime.flush();
     out.push_str(&format!(
         "可见：{} / 决策：{:?}\n",
         state.visible().get(),
@@ -58,7 +60,7 @@ fn run_demo() -> String {
 
     out.push_str("\n== 允许 ==\n");
     state.allow();
-    state.flush();
+    runtime.flush();
     out.push_str(&format!("决策：{:?}\n", state.decision().get()));
 
     out.push_str(&tool_card_demo());
@@ -145,7 +147,7 @@ pub mod wasm_app {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::{HostScheduler, Runtime, Signal, UiComponent};
+    use apeireth_ui_core::{HostScheduler, ReactiveScope, Runtime, Signal, UiComponent};
     use apeireth_ui_demo::{
         pilot_callbacks, pilot_item, tool_card_cases, ApprovalCard, ApprovalCardProps, PilotState,
     };
@@ -196,10 +198,10 @@ pub mod wasm_app {
         let root: web_sys::Node = container.clone().into();
         let mut renderer = Renderer::new(dom, root);
 
-        let state = PilotState::new();
-        state
-            .runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let state = PilotState::new(runtime.reactive_scope());
 
         let (allow, reject, dismiss) = pilot_callbacks(&state);
         let props = ApprovalCardProps {
@@ -223,7 +225,7 @@ pub mod wasm_app {
         let effect_renderer = renderer.clone();
         let effect_props = props.clone();
         let effect_state = state.clone();
-        state.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_tree(&effect_state, &effect_props);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -416,8 +418,6 @@ pub mod wasm_app {
     /// 工具卡面应用的状态（响应式部分；**可共享** ⇒ effect 闭包能捕获它）。
     #[derive(Clone)]
     struct ToolCardState {
-        /// 运行时（信号宿主；`Runtime` 本身可共享）。
-        runtime: Runtime,
         /// 当前用例下标。
         case_index: Signal<usize>,
         /// 每组用例的交互信号。
@@ -425,26 +425,22 @@ pub mod wasm_app {
     }
 
     impl ToolCardState {
-        /// 运行时（信号宿主）。
-        fn runtime(&self) -> &Runtime {
-            &self.runtime
-        }
-
         /// 建一份状态（每组用例一套信号）。
-        fn new() -> Self {
-            let runtime = Runtime::new();
+        ///
+        /// ⭐ **接受宿主给的响应式作用域**（**使用者形态**）⇒ ⇒ 本状态**拿不到**
+        /// 挂 effect 的能力 ⇒ ⇒ 渲染链只在应用根。
+        fn new(scope: ReactiveScope) -> Self {
             let count = tool_card_cases().len();
             let cases = (0..count)
                 .map(|_| CaseSignals {
-                    tool_expanded: runtime.signal(false),
-                    tool_raw: runtime.signal(false),
-                    lifecycle_expanded: runtime.signal(false),
+                    tool_expanded: scope.signal(false),
+                    tool_raw: scope.signal(false),
+                    lifecycle_expanded: scope.signal(false),
                 })
                 .collect();
             Self {
-                case_index: runtime.signal(0),
+                case_index: scope.signal(0),
                 cases,
-                runtime,
             }
         }
     }
@@ -469,11 +465,10 @@ pub mod wasm_app {
         let root: web_sys::Node = container.clone().into();
         let mut renderer = Renderer::new(dom, root);
 
-        let state = ToolCardState::new();
-        let scheduler_state = state.clone();
-        scheduler_state
-            .runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let state = ToolCardState::new(runtime.reactive_scope());
 
         renderer
             .mount(render_toolcards(&state))
@@ -482,7 +477,7 @@ pub mod wasm_app {
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
         let effect_state = state.clone();
-        state.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = render_toolcards(&effect_state);
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);

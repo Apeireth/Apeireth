@@ -25,6 +25,9 @@
 //! - **批次**：多次写合并为一次 flush（可嵌套）；
 //! - **实例引用槽位**：[`InstanceRef`]（`bind:this` 的语义内核：挂载写引用、
 //!   卸载前清空）；
+//! - **运行时能力的两形态**：[`Runtime`]（所有者形态：可挂 effect / flush）
+//!   与 [`ReactiveScope`]（使用者形态：只能建信号 / 派生）⇒ ⇒ 「状态与渲染
+//!   同属一个 runtime」在**类型层面**可强制；
 //! - **组件 trait 边界**：[`UiComponent`]；
 //! - **组件回调**：[`Callback`]（类型擦除的 `Fn()`；`Clone` + `Debug` + 按指针
 //!   身份比较 ⇒ 能当 props 字段放进宏生成的结构体）。
@@ -53,6 +56,32 @@
 //!   捕获的 DOM 节点 / 组件状态可被回收）；派生用**弱引用**登记，并提供
 //!   `Derived::dispose()` 提前释放。
 //!
+//! ## 运行时能力的两形态（**架构不变量：状态与渲染同属一个 runtime**）
+//!
+//! 2026-10-25 实测到一个**架构级缺陷**：状态对象**自建**了一个 `Runtime`
+//! ⇒ ⇒ 它的草稿 / 反馈信号**不属于**宿主挂 effect 的那个 runtime
+//! ⇒ ⇒ **effect 根本不依赖这些信号** ⇒ ⇒ 改草稿**不触发重渲染**
+//! ⇒ ⇒ 实测表现为「**幽灵输入**」（用户敲进去的值**引擎不知道**）。
+//!
+//! ⇒ ⇒ 2026-10-26 起，本 crate 用**两种能力形态**把这条不变量**落到类型层**：
+//!
+//! | 形态 | 类型 | 能力 | 谁拿 |
+//! |---|---|---|---|
+//! | **所有者形态** | [`Runtime`] | 建信号 / 派生 / **挂 effect** / flush / 注入调度器 | **应用根**（宿主入口） |
+//! | **使用者形态** | [`ReactiveScope`] | **只**能建信号 / 派生 | **状态持有者** |
+//!
+//! ⇒ ⇒ 状态持有者**在类型层面**拿不到 `effect` / `flush`
+//! ⇒ ⇒ 它**不可能**成为渲染链的另一端
+//! ⇒ ⇒ 「信号与 effect 分属两个 runtime」这个**结构条件**被切断。
+//!
+//! ⇒ ⇒ 证明方式 = [`ReactiveScope`] 上的三个 `compile_fail` doc-test
+//! （`ReactiveScope` 上没有 `effect` / `flush` / `new`）。
+//!
+//! ⚠️ **诚实登记**：[`Runtime::new`] 仍是 `pub`（native 测试 / 独立运行时 /
+//! 既有 crate 的调用点不可改）⇒ ⇒ 「显式自建运行时」这条路径在**编译期**仍
+//! 可写出来 ⇒ ⇒ 它由 `crates-ui/apeireth-ui-demo/harness/scripts/
+//! check_runtime_ownership.py` 以**精确判据**守住（双保险）。
+//!
 //! ## 契约登记
 //! `docs/architecture/contract.toml` `[extension_points]`：
 //! `ui_component_trait = "crates-ui/apeireth-ui-core/src/component.rs::UiComponent"`。
@@ -80,7 +109,7 @@ pub use error::ReactiveError;
 pub use graph::{DependencyGraph, NodeId};
 pub use host_scheduler::{HostScheduler, QueuedScheduler, SyncScheduler};
 pub use instance::InstanceRef;
-pub use runtime::{FlushReport, Runtime, MAX_NODE_RUNS_PER_FLUSH};
+pub use runtime::{FlushReport, ReactiveScope, Runtime, MAX_NODE_RUNS_PER_FLUSH};
 pub use scheduler::{Phase, Scheduler};
 pub use signal::{ReadSignal, Signal};
 

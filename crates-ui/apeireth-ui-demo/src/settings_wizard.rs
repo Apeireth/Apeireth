@@ -29,7 +29,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use apeireth_ui_core::{Callback, Runtime, Signal, UiComponent};
+use apeireth_ui_core::{Callback, ReactiveScope, Signal, UiComponent};
 use apeireth_ui_dom::VNode;
 use apeireth_ui_kit::settings_wizard::{
     FirstRunWizard, FirstRunWizardProps, WizardPreset, WizardStep, WizardStepTitle, WizardTier,
@@ -225,8 +225,8 @@ pub fn step_anchor(step_id: &str) -> Option<(Option<WizardTier>, usize)> {
 /// 宿主状态（**十个本地状态 + 运行时 + 已发出的意图**）。
 #[derive(Clone)]
 pub struct WizardHost {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 分流。
     tier: Signal<Option<WizardTier>>,
     /// 步序下标。
@@ -251,30 +251,23 @@ pub struct WizardHost {
     emitted: Rc<RefCell<Vec<String>>>,
 }
 
-impl Default for WizardHost {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl WizardHost {
     /// 建一份宿主状态（**初始态取固定数据**）。
-    pub fn new() -> Self {
-        let runtime = Runtime::new();
+    pub fn new(scope: ReactiveScope) -> Self {
         let state = WizardState::default();
         Self {
-            tier: runtime.signal(state.tier),
-            step_index: runtime.signal(state.step_index),
-            preset_id: runtime.signal(state.preset_id),
-            api_key: runtime.signal(state.api_key),
-            base_url: runtime.signal(state.base_url),
-            model: runtime.signal(state.model),
-            self_description: runtime.signal(state.self_description),
-            auto_tune: runtime.signal(state.auto_tune),
-            applying: runtime.signal(state.applying),
-            error: runtime.signal(state.error),
+            tier: scope.signal(state.tier),
+            step_index: scope.signal(state.step_index),
+            preset_id: scope.signal(state.preset_id),
+            api_key: scope.signal(state.api_key),
+            base_url: scope.signal(state.base_url),
+            model: scope.signal(state.model),
+            self_description: scope.signal(state.self_description),
+            auto_tune: scope.signal(state.auto_tune),
+            applying: scope.signal(state.applying),
+            error: scope.signal(state.error),
             emitted: Rc::new(RefCell::new(Vec::new())),
-            runtime,
+            scope,
         }
     }
 
@@ -295,9 +288,9 @@ impl WizardHost {
         self.emitted.borrow_mut().push(String::from(intent));
     }
 
-    /// 运行时（信号宿主）。
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.scope
     }
 
     /// 分流信号。
@@ -597,7 +590,7 @@ pub mod wasm {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use apeireth_ui_core::HostScheduler;
+    use apeireth_ui_core::{HostScheduler, Runtime};
     use apeireth_ui_dom::{Renderer, WebDom};
     use js_sys::Reflect;
     use wasm_bindgen::prelude::*;
@@ -660,9 +653,10 @@ pub mod wasm {
         let root: web_sys::Node = container.clone().into();
         let mut renderer = Renderer::new(dom, root);
 
-        let host = WizardHost::new();
-        host.runtime()
-            .set_host_scheduler(Rc::new(MicrotaskScheduler));
+        // 应用根（**runtime 的所有者**）：建运行时 ⇒ ⇒ 交给状态持有者一个作用域。
+        let runtime = Runtime::new();
+        runtime.set_host_scheduler(Rc::new(MicrotaskScheduler));
+        let host = WizardHost::new(runtime.reactive_scope());
 
         let tree = host.render_tree();
         renderer.mount(tree).map_err(|error| error.to_string())?;
@@ -671,7 +665,7 @@ pub mod wasm {
         let effect_renderer = renderer.clone();
         let effect_host = host.clone();
         let effect_container = container.clone();
-        host.runtime().effect(move || {
+        runtime.effect(move || {
             let tree = effect_host.render_tree();
             let mut guard = effect_renderer.borrow_mut();
             let _ = guard.patch(tree);
@@ -1007,6 +1001,7 @@ mod tests {
     //! 宿主侧的**行为**断言（状态 ⇒ 步序 / 校验 / 意图），不读源码。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use std::cell::Cell;
     use std::rc::Rc;
 
@@ -1038,7 +1033,7 @@ mod tests {
 
     #[test]
     fn the_step_list_follows_the_tier() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         assert_eq!(host.steps().len(), 5, "未选 ⇒ 普通轨道预览");
         host.tier.set(Some(WizardTier::Pro));
         assert_eq!(host.steps().len(), 3, "专业轨道三步");
@@ -1047,7 +1042,7 @@ mod tests {
 
     #[test]
     fn selecting_a_step_moves_the_state() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         assert!(host.select_step("api"));
         assert_eq!(host.tier.get(), Some(WizardTier::Casual));
         assert_eq!(host.step_index.get(), 2);
@@ -1056,7 +1051,7 @@ mod tests {
 
     #[test]
     fn selecting_a_preset_updates_the_endpoint_and_the_model() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         assert!(host.select_preset("ollama"));
         assert_eq!(host.preset_id.get(), "ollama");
         assert_eq!(host.base_url.get(), "http://localhost:11434/v1");
@@ -1066,7 +1061,7 @@ mod tests {
 
     #[test]
     fn the_connection_validation_follows_the_production_rules() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         // 默认预设（deepseek）⇒ 缺密钥 ⇒ 不通过。
         assert!(!host.validate_connection());
         assert_eq!(host.error.get(), "请填写 API Key（Ollama 本地可留空）");
@@ -1089,7 +1084,7 @@ mod tests {
 
     #[test]
     fn the_next_intent_advances_and_stops_at_the_tier_step() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         let props = host.props();
         // 分流步未选 ⇒ 报错并停住。
         host.step_index.set(1);
@@ -1107,7 +1102,7 @@ mod tests {
 
     #[test]
     fn the_back_intent_never_goes_below_the_first_step() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         host.props().on_back.call();
         assert_eq!(host.step_index.get(), 0);
         host.step_index.set(3);
@@ -1117,7 +1112,7 @@ mod tests {
 
     #[test]
     fn the_pick_intent_sets_the_tier_and_clears_the_error() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         host.error.set(String::from("旧错误"));
         host.props().on_pick_pro.call();
         assert_eq!(host.tier.get(), Some(WizardTier::Pro));
@@ -1126,7 +1121,7 @@ mod tests {
 
     #[test]
     fn the_preset_intents_select_their_own_preset() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         let props = host.props();
         assert_eq!(props.preset_intents.len(), fixture::PRESETS.len());
         props.preset_intents[3].call();
@@ -1136,7 +1131,7 @@ mod tests {
 
     #[test]
     fn the_state_round_trips_through_the_host() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         let state = WizardState {
             tier: Some(WizardTier::Pro),
             step_index: 2,
@@ -1155,7 +1150,7 @@ mod tests {
 
     #[test]
     fn the_render_tree_carries_the_backdrop_class() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         let tree = host.render_tree();
         assert_eq!(tree.tag(), Some("div"));
         assert_eq!(tree.class_tokens(), vec![String::from("wizard-backdrop")]);
@@ -1267,7 +1262,7 @@ mod tests {
     fn the_host_side_intents_are_recorded_not_swallowed() {
         // 「完成」/「以后再说」的**执行**在宿主（写配置 / 钥匙串 / 印象）⇒ 本模块
         // **只发意图** ⇒ 意图**必须被记录**（不静默吞掉）。
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         let props = host.props();
         props.on_complete.call();
         props.on_skip.call();
@@ -1279,7 +1274,7 @@ mod tests {
 
     #[test]
     fn the_intent_callbacks_are_present_on_the_props() {
-        let host = WizardHost::new();
+        let host = WizardHost::new(Runtime::new().reactive_scope());
         let props = host.props();
         let hits = Rc::new(Cell::new(0u32));
         let counter = hits.clone();
