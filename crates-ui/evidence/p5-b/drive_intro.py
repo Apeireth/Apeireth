@@ -304,6 +304,7 @@ def run_leg(devtools_port, base, console_log, frozen_at, out_dir, only="all", so
         except Exception as error:  # noqa: BLE001 —— 驱动层：失败要**显式**记下来
             pixels[backend] = {"skipped": True, "error": str(error)}
     report["pixel_diff"] = pixels
+
     return report
 
 
@@ -398,8 +399,49 @@ def main():
                 "channel_threshold": CHANNEL_THRESHOLD,
             },
             "legs": legs,
+
+            # ⚠️⚠️ **有效性检查**（2026-10-26 补）—— 防止「**没画**」被误读成「**一致**」。
+            #
+            # 实测踩到的坑：引擎的 **WebGPU 后端画不了点图元**（wgpu 的 `PointList` 没有点尺寸）
+            # ⇒ 该腿的引擎侧**根本没画粒子**（只画了背景）⇒ ⇒ 于是「生产 vs 引擎」得到 **0 差异**
+            # ⇒ ⇒ 极易被误读成「迁移已对齐」⇒ ⇒ **假绿**！
+            # ⇒ ⇒ 因此：某条腿若某后端段带 `error`（或 `skipped`）⇒ ⇒ 该腿**标记为 `invalid`**
+            # ⇒ ⇒ **不参与**任何「0 差异」的结论 ⇒ ⇒ 且 `legs_invalid` **显式列出**能力缺口。
+            "legs_invalid": {},
             "browser_console": console_log,
         }
+        # ⇒ ⇒ 计算每条腿的有效性（某后端报错 ⇒ 该腿无效）。
+        invalid_legs = {}
+        for key, leg in report.get("legs", {}).items():
+            broken = []
+            for backend, segment in (leg.get("pixel_diff") or {}).items():
+                if isinstance(segment, dict) and (segment.get("error") or segment.get("skipped")):
+                    broken.append(backend)
+            for backend in ("webgl", "webgpu"):
+                segment = leg.get(backend) or {}
+                if isinstance(segment, dict) and segment.get("error") and backend not in broken:
+                    broken.append(backend)
+            if broken:
+                invalid_legs[key] = broken
+                leg["valid"] = False
+                leg["invalid_backends"] = broken
+            else:
+                leg["valid"] = True
+        report["legs_invalid"] = invalid_legs
+        report["legs_valid"] = [
+            key for key, leg in report.get("legs", {}).items() if leg.get("valid")
+        ]
+        # ⚠️ **判定**：只有**有效**的腿才能参与结论。
+        report["verdict"] = (
+            "pass"
+            if report["legs_valid"]
+            and all(
+                ((leg.get("pixel_diff") or {}).get("webgl") or {}).get("differing_pixels") == 0
+                for key, leg in report.get("legs", {}).items()
+                if leg.get("valid")
+            )
+            else "fail"
+        )
         (out_dir / "report.json").write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
         )

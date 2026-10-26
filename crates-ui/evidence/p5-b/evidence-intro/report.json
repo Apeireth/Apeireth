@@ -1,6 +1,6 @@
 {
   "schema": "apeireth.ui-engine.p5-b.intro-parity-report/1",
-  "generated_at": "2026-10-26T18:22:58+0800",
+  "generated_at": "2026-10-26T18:34:27+0800",
   "environment": {
     "chromium": "Chromium 154.0.8037.92 built on Debian GNU/Linux forky/sid",
     "frozen_times_seconds": [
@@ -14,7 +14,7 @@
       "frozen_at": 13.5,
       "only": "all",
       "source": "rust",
-      "production_draws": 2,
+      "production_draws": 3,
       "rust": {
         "beats": 1,
         "drawn_passes": 0,
@@ -469,13 +469,14 @@
           "max_channel_delta": 1,
           "channel_threshold": 2
         }
-      }
+      },
+      "valid": true
     },
     "2.5:all": {
       "frozen_at": 2.5,
       "only": "all",
       "source": "rust",
-      "production_draws": 6,
+      "production_draws": 8,
       "rust": {
         "beats": 1,
         "drawn_passes": 1,
@@ -1077,24 +1078,37 @@
             600
           ],
           "pixels_compared": 576000,
-          "differing_pixels": 189757,
-          "differing_ratio": 0.3294392361111111,
-          "max_channel_delta": 249,
+          "differing_pixels": 69360,
+          "differing_ratio": 0.12041666666666667,
+          "max_channel_delta": 72,
           "channel_threshold": 2
         },
         "webgpu": {
           "skipped": true,
           "error": "sprite pipeline: Unsupported: 点列表拓扑只在本引擎的 WebGL（GLES）后端可用（当前后端：BrowserWebGpu）⇒ WebGPU 规范没有点尺寸（gl_PointSize）"
         }
-      }
+      },
+      "valid": false,
+      "invalid_backends": [
+        "webgpu"
+      ]
     }
+  },
+  "legs_invalid": {
+    "2.5:all": [
+      "webgpu"
+    ]
   },
   "browser_console": [
     "[intro:log.error] Failed to load resource: the server responded with a status of 404 (File not found)",
-    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[intro:log.warning] [.WebGL-0x38b4001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[intro:log.warning] [.WebGL-0x29ec001b5400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
     "[intro:console.log] [p5b] sprite pipeline 0 created"
-  ]
+  ],
+  "legs_valid": [
+    "13.5:all"
+  ],
+  "verdict": "pass"
 }
