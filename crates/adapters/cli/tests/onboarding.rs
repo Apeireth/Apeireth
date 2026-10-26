@@ -200,6 +200,13 @@ fn auto_tune_off_keeps_presets_but_skips_budget_knobs() {
 
 #[test]
 fn tuning_state_evolution_reshapes_budgets_during_use() {
+    // ⚠️ **持锁 + 清 env**（2026-10-26 修并行 flake）：本测试读档案/调参状态，
+    // 而别的测试会**临时**设 `APEIRETH_DISABLE_ONBOARDING=1`（逃生门）。
+    // 本测试**不持 `ENV_LOCK`** ⇒ 两者可**并行** ⇒ 偶发读到被污染的进程 env
+    // （实测：单跑 12 次 0 失败，全量并行时偶发）。
+    // ⇒ 与「设 env」的测试**串行**，并把自己的 env 清干净（照 L167-169 的现成写法）。
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _guard = EnvGuard::apply(&activation_env_overrides(&[]));
     let (_dir, paths) = temp_paths("tuning");
     onboarding::save_profile_at(&paths, &casual_profile()).expect("save");
 
@@ -230,6 +237,9 @@ fn tuning_state_evolution_reshapes_budgets_during_use() {
 
 #[test]
 fn tuning_recording_is_a_noop_without_casual_auto_tune_profile() {
+    // ⚠️ 同上：持锁 + 清 env（并行 flake 修复）。
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _guard = EnvGuard::apply(&activation_env_overrides(&[]));
     let (_dir, paths) = temp_paths("tuning-noop");
     onboarding::record_usage_at(&paths, 100, 2, 10, 5);
     assert!(
@@ -287,6 +297,9 @@ fn wizard_casual_flow_end_to_end_feeds_identity_and_activation() {
 
 #[test]
 fn wizard_pro_flow_writes_nothing() {
+    // ⚠️ 同上：持锁 + 清 env（并行 flake 修复）—— 向导流程读档案与 env。
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _guard = EnvGuard::apply(&activation_env_overrides(&[]));
     let (_dir, paths) = temp_paths("wizard-pro-e2e");
     let mut input = Cursor::new(b"2\n".to_vec());
     let mut output: Vec<u8> = Vec::new();
