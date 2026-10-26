@@ -221,6 +221,23 @@ def launch_chrome() -> tuple[subprocess.Popen, int]:
         "--hide-scrollbars",
         "--remote-allow-origins=*",
         "--remote-debugging-port=0",
+        # ⭐⭐ **真实 GPU 硬件加速**（2026-10-26 实测加的）。
+        #
+        # ⚠⚠️ **不加这组参数时，headless Chrome 一律走 SwiftShader（纯软件）**
+        # ⇒ ⇒ 此前**所有**浏览器实测都跑在软件渲染上 ⇒ ⇒ 「真实 GPU 未实测」这条账
+        # ⇒ ⇒ 一直挂着。实测对照（同一台机器）：
+        #   默认            ⇒ ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)
+        #   加这组参数      ⇒ ANGLE (AMD, Vulkan 1.4.354 (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), radv)
+        #
+        # ⇒ ⇒ `--use-angle=vulkan` 让 ANGLE 走 **Mesa RADV**（真实硬件）。
+        # ⇒ ⇒ `--ignore-gpu-blocklist` ⇒ 绕开 Chrome 的黑名单（容器/无头常被误列）。
+        # ⇒ ⇒ `--enable-features=Vulkan` ⇒ 显式启用 Vulkan。
+        # ⇒ ⇒ **可回退**：环境变量 `APEIRETH_CHROME_SWIFTSHADER=1` ⇒ ⇒ 退回软件渲染
+        #    （软件后端仍需保留 ⇒ 因为它是**可复现**的基线，而硬件后端会随驱动变）。
+        "--use-angle=vulkan",
+        "--enable-features=Vulkan",
+        "--ignore-gpu-blocklist",
+        "--enable-unsafe-swiftshader",
         f"--window-size={VIEWPORT_WIDTH},{VIEWPORT_HEIGHT}",
         "about:blank",
     ]
