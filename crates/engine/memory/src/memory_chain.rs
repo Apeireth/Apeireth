@@ -63,12 +63,16 @@
 //! # 口径（诚实标注）
 //!
 //! - 库级能力（链写入 + 校验 API + 汇总）：**IMPLEMENTED**（本文件 + 集成测试覆盖）。
-//! - 生产接线：**只接了一条**写入路径 —— RC-1 后端 `SqliteBackend::put_episode`。
-//!   v1 存储 `SqliteMemoryStore` 的既有入口（`EpisodeStore::put_episode` /
-//!   `put_episode_full`）**保持原样不接链**（那两条路径的产出是「未纳管」记录），
-//!   另提供显式链入口 [`SqliteMemoryStore::put_episode_chained`]。
-//! - 设计稿 G7 要求的 `memory verify` **体检命令**：**NOT IMPLEMENTED**
-//!   （本批只交付库级 API，CLI 入口未接线）。
+//! - 生产接线：**v1 四条写路径全部入链** —— `EpisodeStore::put_episode` /
+//!   `put_episode_for_subject` / `put_episode_full` / `put_episode_full_for_subject`
+//!   （2026-10-26，B1-d 批次）⇒ 既有调用方**零改动**即入链。
+//!   另有 RC-1 后端 `SqliteBackend::put_episode` 与显式入口
+//!   [`SqliteMemoryStore::put_episode_chained`]。
+//! - **正式迁移**：`V19__memory_chain_schema`（建链头表 + 两列，幂等）⇒
+//!   `schema_migrations` 簿记里**有这一版**（此前只有运行时懒建 ⇒ 簿记缺失）。
+//! - 设计稿 G7 要求的 `memory verify` **体检命令**：**IMPLEMENTED**
+//!   （`crates/adapters/cli/src/memory_verify_command.rs`，2026-10-26 落地；
+//!   校验规则**委派**给本模块 ⇒ 单一真源）。
 //!
 //! # 边界（不假装）
 //!
