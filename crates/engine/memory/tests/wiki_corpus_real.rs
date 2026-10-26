@@ -527,6 +527,12 @@ fn real_corpus_probe_prints_samples() {
     );
     eprintln!("—— 样本 ——\n{samples}");
 
+    // 顺带把卷子形状给 owner 看一行（JSONL ⇒ 可直接喂 `GoldenSet::load_jsonl`）。
+    let jsonl = to_jsonl(&cases);
+    if let Some(first) = jsonl.lines().next() {
+        eprintln!("—— 考卷 JSONL 首行 ——\n{first}");
+    }
+
     // 真实语料上也必须守住「片段在原文里」这条硬契约。
     for case in &cases {
         for (id, fragment) in case.expect_ids.iter().zip(case.expect_fragments.iter()) {
