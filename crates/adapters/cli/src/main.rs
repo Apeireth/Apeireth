@@ -43,6 +43,7 @@ Usage:
     apeireth council <主题...>
     apeireth subagent <标题...> [--payload JSON]
     apeireth memory verify [--db DB] [--subject SUBJECT]
+    apeireth memory migrate-subject --from ANCHOR --to ANCHOR [--db DB]
   [治理与安全]
     apeireth trait report
     apeireth trait lock <SLIDER>
@@ -1041,8 +1042,14 @@ fn run_cli() -> ExitCode {
                     ExitCode::from(2)
                 }
             },
+            // 主体锚点迁移（copy-forward）：把记忆复制到新主体，原记录保留。
+            Some("migrate-subject") => ExitCode::from(
+                apeireth_cli::memory_migrate_command::run_migrate(&args[2..]),
+            ),
             _ => {
                 eprintln!("{}", apeireth_cli::memory_verify_command::USAGE);
+                eprintln!();
+                eprintln!("{}", apeireth_cli::memory_migrate_command::USAGE);
                 ExitCode::FAILURE
             }
         },
