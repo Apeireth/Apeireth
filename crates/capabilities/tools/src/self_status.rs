@@ -1128,10 +1128,8 @@ pub const CAPABILITIES_ACCOUNTABILITY: &str = "accountability";
 /// 生物机制自述开关的 env 名: 只认显式 `"1"`，其余任何取值 = 关 (fail-closed)。
 pub const BIO_SELF_STATUS_ENABLE_ENV: &str = "APEIRETH_ENABLE_BIO_SELF_STATUS";
 
-/// 生物机制子对象的**读数标注**（D32 建议②：键位属冻结合同 ⇒ 改在节旁显式标注）。
-/// 14 条机制里 5 条的 wire 名仍是体验名（`nociception`/`attachment`/`ritual`/`quorum`/`play`）
-/// ⇒ 用户看到本行即知那是**检测读数**，不是系统声称自己有这些体验。
-/// **诚实边界**：只声明读数的性质；每格的接线状态另有 `wired`/`stage`/`reason` 如实标注。
+/// 生物机制子对象的**读数标注**（D32 建议②：键位属冻结合同 ⇒ 改在节旁显式标注；
+/// 14 条机制里 5 条的 wire 名仍是体验名 ⇒ 用户看到本行即知那是**检测读数**）。
 pub const BIO_MECHANISMS_READING_NOTE: &str =
     "以下为检测读数（分类/估计），不是内在体验；每格的接线状态见 wired/stage/reason";
 
@@ -1337,6 +1335,8 @@ pub struct BioMechanismsStatus {
     pub mechanisms: Option<BTreeMap<BioMechanismKind, BioMechanismReading>>,
     /// 整节未启用 / 不可用的原因；正常采集 = `None`。
     pub reason: Option<String>,
+    /// **读数标注**（D32 建议②）：属**类型的一部分** ⇒ serde 往返**逐字段稳定**。
+    pub note: Option<String>,
 }
 
 impl Default for BioMechanismsStatus {
@@ -1353,6 +1353,7 @@ impl BioMechanismsStatus {
             enabled: false,
             mechanisms: None,
             reason: Some(reason.into()),
+            note: Some(BIO_MECHANISMS_READING_NOTE.to_string()),
         }
     }
 
@@ -1363,6 +1364,7 @@ impl BioMechanismsStatus {
             enabled: true,
             mechanisms: Some(mechanisms),
             reason: None,
+            note: Some(BIO_MECHANISMS_READING_NOTE.to_string()),
         }
     }
 
@@ -2010,7 +2012,12 @@ fn render_bio_mechanisms(status: &BioMechanismsStatus) -> Value {
         "mechanisms": mechanisms,
         "reason": status.reason,
         // D32 建议②：键位保留（冻结合同），但**在节旁显式标注是读数**。
-        "note": BIO_MECHANISMS_READING_NOTE,
+        // 优先用**类型里的** `note`（serde 往返稳定）；缺失时回落常量 ⇒ 标注永不失。
+        // ⇒ **标注永不失**（且常量仍在渲染面 ⇒ 词表检查器守得住这条）。
+        "note": status
+            .note
+            .clone()
+            .unwrap_or_else(|| BIO_MECHANISMS_READING_NOTE.to_string()),
     })
 }
 
@@ -4052,15 +4059,12 @@ mod tests {
     }
 
     /// D32 建议②：**键位保留 + 节旁显式标注是读数**（两条都钉住）。
-    /// ① `note` 在场且措辞落在顾问可接受词表内（「检测」/「分类」/「估计」）；
-    /// ② 5 条体验名键位**必须仍在**（本波不改冻结合同）—— 守卫「不越界」：
-    ///    将来改键位须先改冻结合同（连带 render/schema/fixture 三侧），不能顺手删。
+    /// D32 建议②：**键位保留 + 节旁显式标注是读数**（两条都钉住）。
+    /// ① `note` 在场且措辞在顾问词表内；② 5 条体验名键位**必须仍在**（守卫「不越界」）。
     #[test]
     fn bio_mechanisms_note_declares_readings_without_changing_keys() {
         let value = render_snapshot(&fixture_snapshot());
         let bio = &value["capabilities"][CAPABILITIES_BIO_MECHANISMS];
-
-        // ① 标注在场，且说的是「检测读数」而不是体验。
         let note = bio["note"].as_str().expect("读数标注文案在场");
         assert!(
             note.contains("检测读数"),
@@ -4072,28 +4076,18 @@ mod tests {
         );
         assert!(
             !note.contains("我有") && !note.contains("我感到"),
-            "标注文案不得反过来声称体验: {note}"
+            "不得反过来声称体验: {note}"
         );
-
-        // ② 5 条体验名键位仍在（本波不动冻结合同）。
         let rows = bio["mechanisms"].as_object().expect("mechanisms object");
         for wire in ["nociception", "attachment", "ritual", "quorum", "play"] {
             assert!(
                 rows.contains_key(wire),
-                "键位 {wire} 本波不得改动（冻结合同）: {:?}",
-                rows.keys().collect::<Vec<_>>()
+                "键位 {wire} 本波不得改动（冻结合同）"
             );
         }
-        // ③ 顶层节数不变（21 节冻结合同）。
-        assert_eq!(
-            SelfStatusTool::output_schema().validate(&value).is_ok(),
-            true,
-            "加了读数标注后 schema 校验仍须通过"
-        );
+        assert!(SelfStatusTool::output_schema().validate(&value).is_ok());
     }
 
-    /// W3.2 默认关: 观测面已挂但开关关 = mechanisms 显式 null + 「未启用」原因,
-    /// 不冒充采集、不把「没采」写成 0。
     #[test]
     fn bio_mechanisms_disabled_renders_null_mechanisms_with_a_reason() {
         let mut snapshot = fixture_snapshot();
