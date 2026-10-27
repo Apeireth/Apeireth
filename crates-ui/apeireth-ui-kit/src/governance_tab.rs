@@ -153,6 +153,23 @@ fn same_utc_day(left_ms: i64, right_ms: i64) -> bool {
 pub trait TimeTextFormatter: 'static {
     /// `HH:MM:SS` 时刻（生产 `formatClockMs` 的口径）。
     fn clock(&self, ts_ms: i64) -> String;
+    /// `HH:MM` 时刻（部分界面只要到分钟）。
+    ///
+    /// ## 为什么要有这一档（2026-10-27 修的真缺陷）
+    ///
+    /// 审批卡的 `<span class="time">` 只要**到分钟**（生产同款），而它有自己那份
+    /// 「固定 UTC」实现（`approval_card::format_clock_utc`）⇒ ⇒ **绕过了**本 trait 的
+    /// 进程级时间器 ⇒ ⇒ 宿主虽然装了浏览器 `Intl`（`apeireth_ui_time::install()`）
+    /// 却**不被消费** ⇒ ⇒ 实测：非 UTC 时区下生产 `09:10` / 引擎 `01:10`（**差 8 小时**）。
+    /// ⇒ ⇒ 把「到分钟」升为 **trait 口径** ⇒ ⇒ 所有消费方走同一个时间器。
+    ///
+    /// 默认实现：取 [`Self::clock`] 的**前 5 个字符**。
+    /// ⚠ 用 `chars().take(5)`（**不按字节切**）：`clock` 可能返回 `—`（多字节）
+    /// ⇒ ⇒ 按字节切会 **panic**。
+    fn clock_hm(&self, ts_ms: i64) -> String {
+        self.clock(ts_ms).chars().take(5).collect()
+    }
+
     /// 短日期时刻（生产 `formatDateTimeMs` 的口径）。
     fn date_time(&self, ts_ms: i64, now_ms: i64) -> String;
 }
@@ -203,6 +220,11 @@ pub fn time_text() -> Rc<dyn TimeTextFormatter> {
             .clone()
             .unwrap_or_else(|| Rc::new(UtcTimeText))
     })
+}
+
+/// `HH:MM` 时刻（走**进程级**时间器 ⇒ 与生产**同一时区**口径）。
+pub fn format_clock_hm(ts_ms: i64) -> String {
+    time_text().clock_hm(ts_ms)
 }
 
 /// `HH:MM:SS` 时刻（生产 `formatClockMs` 的口径）。

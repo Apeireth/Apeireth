@@ -120,7 +120,10 @@ pub fn ApprovalCard(
     let show_time = item.created_at.is_some();
     let clock = item
         .created_at
-        .map(format_clock_utc)
+        // ⚠️ **必须走进程级时间器**（不自己算 UTC）：
+        // 宿主在 wasm 上装了浏览器 `Intl` ⇒ 与生产**同一时区**；
+        // 自己算固定 UTC ⇒ ⇒ 非 UTC 时区下**差 8 小时**（实测踩到）。
+        .map(apeireth_ui_kit::governance_tab::format_clock_hm)
         .unwrap_or_else(String::new);
 
     let close_button = on_dismiss.as_ref().map(|dismiss| {
