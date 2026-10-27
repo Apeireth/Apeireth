@@ -523,9 +523,10 @@ async function main() {
           // ⇒ ⇒ 两侧逐像素差分**直接读出是哪个 varying 不同**。
           // ⚠ 在**此处**现取 URL 参数（外层的 `probe` 常量与本处**不同作用域**，
           //   实测报 `ReferenceError: probe is not defined`）。
-          new URLSearchParams(location.search).get('probe') === 'varying'
-            ? 'varying'
-            : '',
+          (() => {
+            const pr = new URLSearchParams(location.search).get('probe');
+            return pr === 'varying' || pr === 'flat' ? pr : '';
+          })(),
         );
         (result as Record<string, unknown>)[backend] = JSON.parse(raw);
       } catch (error) {

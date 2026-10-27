@@ -17,6 +17,7 @@ use apeireth_ui_gpu::{
     INTRO_BACKDROP_FRAGMENT_GLSL, INTRO_BACKDROP_UNIFORM_NAMES, INTRO_BACKDROP_VERTEX_GLSL,
     INTRO_SPRITE_FRAGMENT_GLSL, INTRO_SPRITE_UNIFORM_NAMES, INTRO_SPRITE_VERTEX_GLSL,
     INTRO_SPRITE_PROBE_FRAGMENT_GLSL,
+    INTRO_SPRITE_FLAT_FRAGMENT_GLSL,
     SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL, SHADER_UNIFORM_NAMES,
 };
 use std::cell::RefCell;
@@ -519,6 +520,7 @@ pub async fn run_intro(
     // ⭐ **诊断探针片元**（2026-10-27）：`probe == "varying"` ⇒ ⇒ 用 varying 编码探针。
     let sprite_fragment = match probe.as_deref() {
         Some("varying") => INTRO_SPRITE_PROBE_FRAGMENT_GLSL,
+        Some("flat") => INTRO_SPRITE_FLAT_FRAGMENT_GLSL,
         Some(other) => {
             return Err(JsValue::from_str(&format!(
                 "run_intro: 未知探针 `{other}`（支持：\"\" / \"varying\"）"

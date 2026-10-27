@@ -44,6 +44,9 @@ pub const INTRO_SPRITE_FRAGMENT_GLSL: &str = include_str!("../assets/intro_sprit
 pub const INTRO_SPRITE_PROBE_FRAGMENT_GLSL: &str =
     include_str!("../assets/intro_sprite_probe.frag");
 
+/// ⭐⭐ **纯色探针**（2026-10-27 诊断用）⇒ ⇒ 画布上只剩**粒子并集** ⇒ ⇒ 专测几何。
+pub const INTRO_SPRITE_FLAT_FRAGMENT_GLSL: &str = include_str!("../assets/intro_sprite_flat.frag");
+
 /// 资产与生产源之间的**声明外壳变换**（资产 = 生产源 ∘ 这些变换）。
 ///
 /// ## 为什么要有这张表
