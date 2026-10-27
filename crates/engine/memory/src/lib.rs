@@ -52,8 +52,8 @@ pub mod arbitration;
 pub mod betti_hole_detector;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
-// 语料的段落级切分（内部卷召回缺口的根因修复: 一回一条 7401 字 ⇒ 同主体竞争者 88/120）;
-// 状态 NOT IMPLEMENTED (新增未接线; 库级实现, 生产 0 调用点).
+// 语料的段落级切分（内部卷召回缺口「切分粒度」假设的验证器: 一回一条 7401 字 ⇒ 同主体竞争者 88/120）;
+// 状态 NOT IMPLEMENTED (新增未接线; 库级实现, 生产 0 调用点); 2026-10-27 实测: 段落化不升 recall 反降.
 pub mod chunking;
 /// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
 pub mod community;
@@ -87,6 +87,8 @@ pub mod golden_diag; // 召回缺口诊断 (内部卷): Hit / RankedOut / NotInP
 pub mod golden_injection;
 pub mod golden_injection2; // 注入形态对照第二轮 (消偏置 + 总预算固定); 状态 NOT IMPLEMENTED (新增未接线).
 pub mod golden_mining;
+pub mod quality_metrics; // 设计稿 §6.1 剩余指标 (时间正确率/矛盾检出率/Token 效率/Citation coverage/影子胜率/回退时间); 状态 NOT IMPLEMENTED (新增未接线).
+
 pub mod golden_run;
 pub mod golden_set;
 pub mod graph_algo;
@@ -328,6 +330,7 @@ pub use derived_repair::{RepairExecutor, RepairNode, RepairOutcome, RepairTradeo
 // (吸收自 arXiv:2609.04875; 持久化遗忘集 V10 + 行为契约自验 + P0-B 结局应用).
 pub mod forget_access_guard;
 pub mod forget_coordinator; // 遗忘访问闸门 (W-18): 状态 NOT IMPLEMENTED (新增未接线).
+pub mod forgetting_metrics; // 设计稿 §6.2 四个「遗忘」指标 (降权正确率/保真可达率/销毁合规率/秩位位移); 状态 NOT IMPLEMENTED (新增未接线).
 pub use forget_coordinator::{CoordinatedForget, CoordinatedForgetReport};
 // B2 · RA-15 P1-A (research, 默认关闭): 记忆准入控制 (吸收自 arXiv:2603.04549 A-MAC).
 pub mod admission_gate;
@@ -390,6 +393,7 @@ pub mod reconciler;
 pub mod retrieval_pipeline;
 // V4-c 检索维度自进化 (证据账 + 有界调权内核 + 生效值落地槽)。
 pub mod retrieval_tuning;
+pub mod robustness_metrics;
 pub mod scope;
 pub mod temporal_graph_store;
 pub mod universal_forget;
