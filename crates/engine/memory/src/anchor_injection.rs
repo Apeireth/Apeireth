@@ -204,6 +204,30 @@ pub struct Span {
     pub text: String,
 }
 
+/// 从**问句**里提取主体（**不读答案**）。
+///
+/// # 为什么需要这个
+///
+/// 主体是**用户会给的信息**（题面里就有）⇒ ⇒ 用它做**段内定位**⇒ ⇒ **不是 oracle**。
+/// ⇒ ⇒ 但主体必须**从问句**里取 ⇒ ⇒ **绝不能**从「召回内容」里取
+/// ⇒ ⇒ （从内容里取 ⇒ 内容里就有答案 ⇒ ⇒ **那就成了 oracle** ⇒ ⇒ 数字会虚高）。
+///
+/// # 口径
+///
+/// * 与 [`crate::query_signals::parse_signals`] **同口径**（实现上就是它，
+///   但**把期望片段置空** ⇒ ⇒ 答案侧信息进不来）；
+/// * 解析不出来 ⇒ `None`（**不许**回退到「随便取个词」）。
+pub fn subject_of_query(query: &str) -> Option<String> {
+    let probe = crate::golden_set::GoldenCase {
+        id: "anchor-probe".to_string(),
+        query: query.to_string(),
+        expect_ids: Vec::new(),
+        expect_fragments: Vec::new(),
+        tags: Vec::new(),
+    };
+    crate::query_signals::parse_signals(&probe).subject
+}
+
 /// 在正文里**定位含 `subject` 的那一段**（**段内定位**）。
 ///
 /// # 口径
@@ -341,6 +365,30 @@ pub fn anchor_reference_time_ms(now_ms: i64, anchors: &[TimeAnchor]) -> Option<i
     // ⇒ ⇒ 「N天後」⇒ 指向「现在之后」⇒ 那在记忆库里**没有对应记录** ⇒
     // ⇒ ⇒ **向前**是唯一有意义的解读 ⇒ ⇒ 因此统一按 `now - amount` 处理。
     Some(now_ms - (amount as i64).saturating_mul(unit_ms))
+}
+
+/// **锚定注入**的配置（**默认关闭** ⇒ **零行为变化**）。
+///
+/// # 口径
+///
+/// * `enabled = false` ⇒ 调用方**必须**走原来的路径 ⇒ ⇒ **零行为变化**；
+/// * `span_chars` ⇒ 每条证据的**单条**字符上限
+///   ⇒ ⇒ ⚠️ **总量**仍由调用方的总量预算控制 ⇒ ⇒ **放大它不会增加总消耗**。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnchoredInjectionConfig {
+    /// **要不要启用**锚定注入（**默认 false**）。
+    pub enabled: bool,
+    /// 每条证据的**单条**字符上限。
+    pub span_chars: usize,
+}
+
+impl Default for AnchoredInjectionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            span_chars: crate::memory_injection::EVIDENCE_MAX_CHARS,
+        }
+    }
 }
 
 /// 一条**锚定证据**（**定位 + 送达**都做完了）。

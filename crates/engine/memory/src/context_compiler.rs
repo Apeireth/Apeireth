@@ -225,13 +225,89 @@ impl ClosedWorldContextCompiler {
     /// 显式反幻觉规则 ("禁止说「我记得我们以前聊过」"). 预算语义: 每条证据按既有
     /// 口径截 120 字, 渲染整体超出 `max_chars` 时从尾部弹条目 (0 装: 截断而非放行);
     /// 预算容不下任何条目或空召回时返回 `None` (既有渲染器空输入出空串, 空 overlay 无意义).
+    /// **锚定注入**：按**问句里的主体**在召回内容里**选段**，而不是截开头。
+    ///
+    /// # 这是什么（2026-10-27）
+    ///
+    /// 实测（`docs/status/chapter-anchor-value-2026-10-27.md`）：
+    /// **同一成本（400 字/条）下，「选对段」的送达能力是「多给字」的 5.1 倍**
+    /// ⇒ ⇒ ⇒ **「信号」远比「预算」重要**。
+    ///
+    /// ⇒ 本方法是那条结论的**生产落点**：主体**来自问句**（**不是** oracle），
+    /// ⇒ ⇒ 在**同一总量预算内**重新分配 ⇒ ⇒ **总消耗不变**。
+    ///
+    /// # 口径
+    ///
+    /// * `config.enabled = false` ⇒ **完全等同** [`Self::compile_injection_with_selected_access`]
+    ///   ⇒ ⇒ **零行为变化**（这是默认）；
+    /// * `config.span_chars` ⇒ 每条证据的**单条**上限（**总量仍由 `max_chars` 控制**）；
+    /// * 主体解析不出来 ⇒ **退回开头截断**（**不返回空**）。
+    pub fn compile_injection_with_selected_access_and_query(
+        &self,
+        recalled: &MemoryRecallResult,
+        _session_id: &str,
+        max_chars: usize,
+        query_text: &str,
+        config: crate::anchor_injection::AnchoredInjectionConfig,
+    ) -> Option<SelectedMemoryAccess> {
+        if !config.enabled {
+            return self.compile_injection_with_selected_access(recalled, _session_id, max_chars);
+        }
+        let subject = crate::anchor_injection::subject_of_query(query_text);
+        let mut accessed = recalled.clone();
+        for item in accessed.items.iter_mut() {
+            let Some(subject) = subject.as_deref() else {
+                continue;
+            };
+            let span = crate::anchor_injection::find_subject_window(
+                &item.content,
+                subject,
+                config.span_chars,
+            );
+            if let Some(span) = span {
+                // ⚠️ **窗口可能为空** ⇒ ⇒ 保留原文（**不注入空证据**）。
+                if !span.trim().is_empty() {
+                    item.content = span;
+                }
+            }
+        }
+        self.compile_injection_with_selected_access_budget(
+            &accessed,
+            _session_id,
+            max_chars,
+            config.span_chars,
+        )
+    }
+
     pub fn compile_injection_with_selected_access(
         &self,
         recalled: &MemoryRecallResult,
         _session_id: &str,
         max_chars: usize,
     ) -> Option<SelectedMemoryAccess> {
-        use crate::memory_injection::{build_memory_injection, EVIDENCE_MAX_CHARS};
+        self.compile_injection_with_selected_access_budget(
+            recalled,
+            _session_id,
+            max_chars,
+            crate::memory_injection::EVIDENCE_MAX_CHARS,
+        )
+    }
+
+    /// 同 [`Self::compile_injection_with_selected_access`]，但**单条证据上限可配**。
+    ///
+    /// # 口径
+    ///
+    /// * `per_entry_chars` ⇒ **单条**证据的字符上限（**总量仍由 `max_chars` 控制**）
+    ///   ⇒ ⇒ ⇒ **放大单条上限不会增加总消耗**；
+    /// * `per_entry_chars = EVIDENCE_MAX_CHARS` ⇒ **与老路径逐字一致**。
+    pub fn compile_injection_with_selected_access_budget(
+        &self,
+        recalled: &MemoryRecallResult,
+        _session_id: &str,
+        max_chars: usize,
+        per_entry_chars: usize,
+    ) -> Option<SelectedMemoryAccess> {
+        use crate::memory_injection::build_memory_injection_with_budget;
         if recalled.items.is_empty() {
             return None;
         }
@@ -243,7 +319,7 @@ impl ClosedWorldContextCompiler {
         let mut current_chars = RULES_RESERVE;
         for item in &recalled.items {
             let sanitized_content = sanitize_text(&item.content);
-            let cost = sanitized_content.chars().count().min(EVIDENCE_MAX_CHARS) + 8;
+            let cost = sanitized_content.chars().count().min(per_entry_chars) + 8;
             if current_chars + cost > max_chars {
                 break;
             }
@@ -291,7 +367,7 @@ impl ClosedWorldContextCompiler {
             wiki_lines += 1;
         }
         loop {
-            let rendered = build_memory_injection(&entries);
+            let rendered = build_memory_injection_with_budget(&entries, per_entry_chars);
             if rendered.chars().count() <= max_chars {
                 if entries.is_empty() {
                     return None;
