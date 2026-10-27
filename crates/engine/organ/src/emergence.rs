@@ -716,10 +716,20 @@ impl<R: RelationshipState> EmergenceLoop<R> {
 // v2 schema 适配 helpers (epoch ms → day_key + minutes_of_day)
 // ============================================
 
-/// epoch ms → "YYYY-MM-DD" UTC day key.
+/// epoch ms → "YYYY-MM-DD" **UTC** day key.
 ///
 /// **v2 适配**: 不用 chrono, 手算 UTC 日期. 范围 [1970-01-01, 2100-01-01] 安全.
 /// v2 真生产路径此函数由 Runtime 在外部喂入; 本模块提供测试 + 离线分析便利.
+///
+/// ## ⚠️ **UTC 日键 ≠ 本地日**（2026-10-27 补，台账 A5）
+///
+/// 这个键服务的是**触发器语义**：`(UTC 日键, UTC 分钟-of-day)` 表示「在任何观看者
+/// 时区下都是同一瞬间」⇒ ⇒ 例如「每天 09:00」在 UTC 下是唯一时刻，不随用户时区漂移。
+///
+/// ⇒ ⇒ **不要**把它当作「用户眼里的今天」去展示：北京时间 / 洛杉矶的「今天」边界
+/// 与 UTC 日界最多差 **±1 天**。凡是面向用户的「今天 / 昨日」必须走
+/// **进程级时间文本器**（`apeireth_ui_kit::governance_tab::time_text()`，wasm 上是浏览器
+/// `Intl`）或宿主的本地时区实现，而不是复用本函数。
 pub fn day_key_from_epoch_ms(at_ms: i64) -> String {
     let (y, m, d) = days_since_epoch_to_ymd(at_ms.div_euclid(86_400_000));
     format!("{:04}-{:02}-{:02}", y, m, d)
