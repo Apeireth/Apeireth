@@ -68,6 +68,7 @@ pub mod manager;
 pub mod manifest;
 pub mod mcp;
 pub mod memory_backend;
+pub mod observation;
 pub mod organ;
 pub mod perception;
 pub mod perception_backend;
@@ -96,6 +97,7 @@ pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentia
 pub use error::{PluginError, PluginResult};
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;
+pub use observation::{FnToolCompletionObserver, ToolCompletionFact, ToolCompletionObserver};
 pub use semver::{
     compare as compare_semver, is_valid as is_valid_semver, parse as parse_semver, Semver,
     SemverError,

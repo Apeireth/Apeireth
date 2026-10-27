@@ -50,12 +50,12 @@ use apeireth_orchestration::repetition_advisory::{
 use apeireth_orchestration::runtime_invariants::InvariantAuditor;
 use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
+    ToolCompletionFact, ToolCompletionObserver,
 };
 use apeireth_protocol::canonical::{ModelDescriptor, ModelFeature};
 use serde::Serialize;
 
 use super::approval::PendingApprovalView;
-use super::bio_pain::{BioPainSnapshot, BioPainState, BioRecoverySnapshot};
 use super::capability::CapabilityRegistry;
 use super::context::{ContextProjector, NoContextProjector};
 use super::error::{RuntimeError, RuntimeResult};
@@ -163,13 +163,6 @@ pub struct RuntimeConfig {
     /// postures changes the prompt projection and nothing else. Default `false`:
     /// a runtime that never engages the mechanism is byte-for-byte unchanged.
     pub plan_mode_enabled: bool,
-    /// 痛觉评估 (SG-16) + 再生案例记账 (SG-17) 在失败处理链上的观测开关。
-    /// 默认 `false`: 关闭时 `record_call_completed` 不取锁、不写账本,
-    /// `ToolFailed` 事件与 `CapabilityCompleted` 轨迹逐字节不变。开启后仍在
-    /// 原有落账**之后**只追加只读评估与再生案例 (`Runtime::bio_pain_snapshot` /
-    /// `Runtime::bio_recovery_snapshot`), 不改变任何错误处理/重试决策。
-    /// 见 [`super::bio_pain`]。
-    pub bio_pain_enabled: bool,
     /// Session-scoped cognitive quota ceilings (opt-in spend gate). `None` on a
     /// dimension means no limit; the metering itself always runs so the
     /// self-report's consumption column stays real. See
@@ -254,7 +247,6 @@ impl Default for RuntimeConfig {
             context_spill_root: None,
             repetition_advisory: RepetitionPolicy::default(),
             plan_mode_enabled: false,
-            bio_pain_enabled: false,
             quota: super::quota::SessionQuotaLimits::default(),
             cost_rates: None,
             metrics_window_turns: super::metrics::DEFAULT_METRICS_WINDOW_TURNS,
@@ -313,10 +305,13 @@ pub struct Runtime {
     /// G-P1 指标面: 回合收束指标的进程内滚动窗口 (会话 + 全局两层),回合
     /// 收束埋点写这里, `/v1/panel/metrics` 从这里读 (见 [`super::metrics`])。
     pub(super) metrics: Arc<super::metrics::MetricsRegistry>,
-    /// 运行时级痛觉账本 + 再生案例账 (SG-16/17, 默认关): 只在
-    /// [`RuntimeConfig::bio_pain_enabled`] 为真时由失败/成功路径写入; 跨会话,
-    /// 只观测不决策。见 [`super::bio_pain`]。
-    pub(super) bio_pain: Mutex<BioPainState>,
+    /// Optional domain-neutral observer of completed tool calls.
+    ///
+    /// The kernel emits one [`ToolCompletionFact`] at the single completion
+    /// bookkeeping point (serial dispatch, parallel commit, cancel drain).
+    /// With no observer installed, completion bookkeeping is exactly its
+    /// historical two records — no extra lock, no domain state.
+    pub(super) tool_completion_observer: Option<Arc<dyn ToolCompletionObserver>>,
 }
 
 impl Runtime {
@@ -359,32 +354,6 @@ impl Runtime {
     /// 指标注册表 (G-P1 指标数据源): 回合收束指标的进程内滚动窗口。
     pub fn metrics(&self) -> &super::metrics::MetricsRegistry {
         &self.metrics
-    }
-
-    /// 痛觉观测面的只读快照 (SG-16/17)。
-    ///
-    /// 默认关时返回 `enabled = false` 的空快照; 开启后返回运行时级账本当前
-    /// 全部组、最近 [`super::bio_pain::DEFAULT_BIO_PAIN_OBSERVATIONS`] 条评估,
-    /// 以及再生案例账快照 ([`BioRecoverySnapshot`])。读取本身不改变任何状态。
-    /// 本访问器**不是**事件通道: 评估与案例迁移从不伪造 session / trace 事件。
-    pub fn bio_pain_snapshot(&self) -> BioPainSnapshot {
-        self.bio_pain_guard().snapshot(self.config.bio_pain_enabled)
-    }
-
-    /// 再生案例账的只读快照 (SG-17, 与痛觉共用 `bio_pain_enabled` 开关)。
-    ///
-    /// 等价于 `self.bio_pain_snapshot().recovery` 但不克隆痛觉组与观测环。
-    /// 关闭时返回全零/空的 [`BioRecoverySnapshot`]。
-    pub fn bio_recovery_snapshot(&self) -> BioRecoverySnapshot {
-        self.bio_pain_guard().recovery_snapshot()
-    }
-
-    /// 痛觉账本写闸: 持锁线程 panic 后账本数据并未损坏, 按 L 组口径恢复而非
-    /// 把一次 panic 放大成之后所有失败路径的级联 panic。默认关路径不取此锁。
-    pub(super) fn bio_pain_guard(&self) -> std::sync::MutexGuard<'_, BioPainState> {
-        self.bio_pain
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Return a live, secret-free projection for diagnostics and capability
@@ -579,9 +548,8 @@ impl Runtime {
             .into_iter()
             .collect::<Vec<_>>();
         declarations.extend(self.plugins.tool_declarations());
-        if self.config.plan_mode_enabled {
-            declarations.push(super::execute::plan_mode_exit_declaration());
-        }
+        // Control declarations are part of the one registry-driven catalog.
+        declarations.extend(self.capabilities.control_declarations());
         declarations
     }
 
@@ -679,6 +647,8 @@ pub struct RuntimeBuilder {
     summary_generator: Option<Arc<dyn SummaryGenerator>>,
     call_scheduler: Option<Arc<CallScheduler>>,
     session_manager: Option<Arc<SessionManager>>,
+    /// 通用工具完成观察口（不注入 = 零观测 = 零行为变化）。
+    tool_completion_observer: Option<Arc<dyn ToolCompletionObserver>>,
     /// 出网闸（不注入 = 默认放行 = 零行为变化）。
     egress_gate: Option<Arc<dyn super::egress_gate::EgressGate>>,
 }
@@ -708,6 +678,7 @@ impl RuntimeBuilder {
             summary_generator: None,
             call_scheduler: None,
             session_manager: None,
+            tool_completion_observer: None,
             egress_gate: None,
         }
     }
@@ -899,27 +870,23 @@ impl RuntimeBuilder {
         self
     }
 
-    /// Enable the bio-pain observation + recovery bookkeeping of the failure path
-    /// (SG-16/17), default off.
+    /// Install a domain-neutral observer of completed tool calls.
     ///
-    /// When enabled, every completed tool call is folded into a runtime-level
-    /// pain ledger *after* its existing session/trace records have landed:
-    /// failures are assessed (class approximation + habituation + chronic
-    /// progression) and successes repair the capability's recorded causes.
-    /// Escalated recommendations (`Backoff`/`Diagnose`/`Abandon`) additionally
-    /// open or advance one `recovery_protocol::RecoveryCase` per
-    /// `(capability, cause_key)`, and a success closes that capability's cases
-    /// through the kernel state machine to `Resolved`. Everything is
-    /// bookkeeping only — it never changes the tool result, the error text, or
-    /// any retry/error-handling decision — and is readable through
-    /// [`Runtime::bio_pain_snapshot`] / [`Runtime::bio_recovery_snapshot`].
-    /// When disabled (the default), `record_call_completed` takes no extra lock
-    /// and writes no ledger, so the `ToolFailed` event and
-    /// `CapabilityCompleted` trace stay byte-for-byte identical.
-    /// See [`super::bio_pain`].
+    /// The observer receives exactly one [`ToolCompletionFact`] per executed
+    /// call, after the canonical `ToolFailed` session event and
+    /// `CapabilityCompleted` trace entry have landed. It is observational only:
+    /// the runtime ignores anything it sees, so results, events, retries, and
+    /// approvals are unchanged. Without an observer the completion bookkeeping
+    /// takes no extra lock and writes no extra state (byte-for-byte identical).
+    ///
+    /// Domain owners implement the trait in [`apeireth_plugin::observation`];
+    /// the kernel never names a domain crate or a concrete observer.
     #[must_use]
-    pub fn with_bio_pain(mut self, enabled: bool) -> Self {
-        self.config.bio_pain_enabled = enabled;
+    pub fn with_tool_completion_observer(
+        mut self,
+        observer: Arc<dyn ToolCompletionObserver>,
+    ) -> Self {
+        self.tool_completion_observer = Some(observer);
         self
     }
 
@@ -1018,6 +985,16 @@ impl RuntimeBuilder {
         capability_registry
             .register_all_for_builder(self.capabilities)
             .map_err(RuntimeError::misconfigured)?;
+        // Internal control commands are registered, not branched on in the
+        // execution loop. Plan mode is the first (and currently only) one; a
+        // runtime with the mechanism off registers nothing at all.
+        if self.config.plan_mode_enabled {
+            capability_registry
+                .register_control(Arc::new(
+                    super::plan_mode_control::PlanModeExitControl::new(),
+                ))
+                .map_err(RuntimeError::misconfigured)?;
+        }
 
         let mut manager = PluginManager::new();
         for plugin in self.plugins {
@@ -1089,7 +1066,7 @@ impl RuntimeBuilder {
                 .map(|generator| Arc::new(CompactionEngine::new(generator))),
             call_scheduler: self.call_scheduler,
             metrics,
-            bio_pain: Mutex::new(BioPainState::new()),
+            tool_completion_observer: self.tool_completion_observer,
         })
     }
 }

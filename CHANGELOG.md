@@ -1,5 +1,16 @@
 # Changelog — Apeireth
 
+## [Unreleased] — KC-1 内核收束：痛觉/再生领域账本外迁到 organ，通用完成观察口取代内核领域状态（2026-10-27）
+
+- **领域状态外迁**：`BioPainState` / `BioRecoveryLedger` / 失败分类与再生案例逻辑从 `apeireth-runtime::canonical::bio_pain` 整体迁至 `apeireth-organ::nociception`；`Runtime` 不再持有 `bio_pain: Mutex<...>`，`RuntimeConfig::bio_pain_enabled` 与 `RuntimeBuilder::with_bio_pain` 退役。
+- **通用观察口**：新增 `apeireth_plugin::observation::{ToolCompletionFact, ToolCompletionObserver}`；内核在既有唯一收口 `record_call_completed`（串行派发 / 并行正常提交 / 取消排水）中、在 `ToolFailed` 事件与 `CapabilityCompleted` 轨迹落账**之后**，向已安装观察者发出**一次**事实。未安装 = 不取锁、不写账、事件/轨迹逐字节不变。
+- **装配**：CLI 仍按 `APEIRETH_ENABLE_BIO_PAIN`（env > 配置 > 默认关）构造 `NociceptionObserver` 并装入 builder；probe 读取口绑定同一 `Arc` 实例（开关关 = 同口径 `enabled=false` 空快照，不假装已接线）。
+- **兼容性**：串行/并行/取消/审批恢复语义不变；取消槽位与人工拒绝伪结果不经过完成收口，不产生评估（与迁移前行为一致）；公开快照类型迁至 `apeireth_organ::nociception`，`bio_pain_wiring` 4 例真实链路回归全绿。
+- **KC-2 内部控制命令**：`exit_plan_mode` 的硬编码分支从 `execute.rs` 移除；新增 `ControlCommand` 契约与 `PlanModeExitControl`，描述符/实现归位 `canonical/plan_mode_control.rs`，由 registry 统一声明与查找。同名工具/控制注册被拒；后到的同名插件工具在执行点 fail-closed。计划模式切换语义、持久化与恢复回归 5 例全绿。
+- **KC-3 基础层收束**：业务话术与关怀动作分级的 `care_potential_field` 从 `foundation/orchestration` 迁至 `apeireth-organ`（算法与行为未改）；其余 B 类领域算法登记为后续候选，不在本批搬迁。
+- **KC-4 架构守卫**：`docs/architecture/contract.toml [kernel]` 增加 runtime 生产依赖白名单、执行循环禁用字面量、领域类型黑名单；`arch_guard.py` 新增 `check_kernel_boundaries` + `--self-test`（域依赖/硬编码分派/领域类型三类违规 fixture 均稳定失败）；新增 `kernel_boundary.rs` 4 例回归（空内核启动/零业务模块运行/每次执行恰一次完成事实/观察者不改变工具目录）。
+- **真账（本机 2026-10-27，scoped）**：`apeireth-plugin` observation 1 passed；`apeireth-organ --lib nociception` 24 passed；`apeireth-runtime --test bio_pain_wiring` 4 passed；`apeireth-runtime --test canonical_plan_mode` 5 passed；`apeireth-runtime --test kernel_boundary` 4 passed；`apeireth-runtime --lib` pain 3 + control/registry 8 passed；`apeireth-runtime-assembly --test bio_mechanisms_self_status` 22 passed；受影响 crate `cargo clippy ... -D warnings` 0 警告；`cargo fmt --all -- --check` 0 diff；`python scripts/arch_guard.py --strict` VIOLATIONS 0；`--self-test` 4/4 PASS。全量 workspace 数字以 `gate_full.ps1` 收口为准。0 触碰 LOCKED 5 项；0 引新外部 dep（仅新增内部 path dev-dep `apeireth-organ`）。
+
 ## [Unreleased] — 安全线重启批 S1-S3：治理单一入口 + 持久审计 + TLS/加密/SSRF 收口（2026-10-21/22）
 
 - **S1·R8-B2 装配根单点**（4e380a69）：CLI 生产治理收敛 GovernanceChain::run 单入口，四态行为等价真账。

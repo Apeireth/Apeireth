@@ -11,6 +11,7 @@ pub mod env_switches;
 pub mod canonical_approval;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
 pub mod bio_command;
+mod bio_pain_wiring;
 pub mod bio_switches;
 pub mod care_heartbeat;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。
@@ -1422,11 +1423,19 @@ type CanonicalRuntimeParts = (
 );
 
 type BioHandle = Option<Arc<BioApprovalSocialSource>>;
-type BioParts = (CanonicalRuntimeParts, BioProbeSlots, BioHandle);
+/// W3.3 SG-16/17: 痛觉/再生领域观察者句柄（开关关 = None，内核零接线）。
+type NociceptionHandle = Option<Arc<apeireth_organ::nociception::NociceptionObserver>>;
+type BioParts = (
+    CanonicalRuntimeParts,
+    BioProbeSlots,
+    BioHandle,
+    NociceptionHandle,
+);
 
 pub async fn build_canonical_runtime_with_sessions_and_voice_emotion_from_env(
 ) -> Result<CanonicalRuntimeParts, String> {
-    let (parts, _slots, _approval) = build_canonical_runtime_assembly_from_env().await?;
+    let (parts, _slots, _approval, _nociception) =
+        build_canonical_runtime_assembly_from_env().await?;
     Ok(parts)
 }
 
@@ -1469,7 +1478,7 @@ async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String>
         Arc::clone(&session_store),
         Arc::clone(&clock),
     ));
-    let (runtime, policy, guard_hook) =
+    let (runtime, policy, guard_hook, nociception) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok((
         (
@@ -1484,17 +1493,8 @@ async fn build_canonical_runtime_assembly_from_env() -> Result<BioParts, String>
         ),
         bio_probe_slots,
         bio_approval,
+        nociception,
     ))
-}
-
-/// W3.6: 迟绑定痛觉/再生读取口到已 `Arc` 化的 runtime (Weak 无环; Fill 前 = 该格真因)。
-fn bind_bio_pain_reader(slots: &BioProbeSlots, runtime: &Arc<Runtime>) {
-    let weak = Arc::downgrade(runtime);
-    slots.fill_pain_reader(Arc::new(move || {
-        weak.upgrade()
-            .map(|runtime| runtime.bio_pain_snapshot())
-            .ok_or_else(|| "runtime 已释放: 痛觉迟绑定读取口失效".to_string())
-    }));
 }
 
 /// W3-③ 逐域伙伴运行时组装 (星群正身): 该域自己的会话写闸 + 独立记忆库 + 同款旋钮。
@@ -1520,7 +1520,7 @@ async fn build_domain_partner_runtime(
     cognitive
         .bio_probe_slots()
         .fill_care_status(care_heartbeat.status_probe());
-    let (runtime, _policy, _guard_hook) =
+    let (runtime, _policy, _guard_hook, _nociception) =
         build_canonical_runtime_with_parts(sessions, cognitive, clock).await?;
     Ok(runtime)
 }
@@ -1534,6 +1534,7 @@ async fn build_canonical_runtime_with_parts(
         Runtime,
         Arc<std::sync::Mutex<PermissionPolicy>>,
         Arc<BehaviorChainGuardHook>,
+        NociceptionHandle,
     ),
     String,
 > {
@@ -1592,11 +1593,15 @@ async fn build_canonical_runtime_with_parts(
             eprintln!("[bio] 生物机制配置读取失败（{error}）—— 全部按关闭处理");
             crate::bio_switches::BioMechanismSwitches::default()
         });
-    if bio_switches
-        .raw_for("nociception")
-        .is_some_and(|value| value.trim() == "1")
-    {
-        builder = builder.with_bio_pain(true);
+    // 痛觉/再生领域观察者：装配层构造并装入通用完成观察口。内核不认识
+    // `nociception`、不持有领域状态；开关关 = 不构造 = 零接线 (逐字节不变)。
+    let nociception = bio_pain_wiring::observer_from_switch(
+        bio_switches
+            .raw_for("nociception")
+            .is_some_and(|value| value.trim() == "1"),
+    );
+    if let Some(observer) = &nociception {
+        builder = builder.with_tool_completion_observer(observer.clone());
     }
     // W3-①/③: 注入预组装写闸 (每域恰一把 —— 默认域与域平面共用同一实例,
     // 伙伴域用自己的那一把)。
@@ -1669,7 +1674,7 @@ async fn build_canonical_runtime_with_parts(
                 .with_hook(guard_hook.clone()),
         ));
     }
-    Ok((runtime, policy, guard_hook))
+    Ok((runtime, policy, guard_hook, nociception))
 }
 
 async fn production_session_store() -> Result<Arc<dyn apeireth_runtime::SessionStore>, String> {
@@ -1715,10 +1720,11 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         ),
         bio_probe_slots,
         bio_approval,
+        nociception,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
-    // W3.6: 痛觉/再生 probe 迟绑定到 runtime 自身 (Weak 无环)。
-    bind_bio_pain_reader(&bio_probe_slots, &runtime);
+    // W3.6: 痛觉/再生 probe 绑定到装配时装入 runtime 的同一观察者实例。
+    bio_pain_wiring::bind_reader(&bio_probe_slots, nociception.as_ref());
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
@@ -3249,10 +3255,11 @@ pub async fn dispatch_gateway_serve_with(
         ),
         bio_probe_slots,
         _bio_approval,
+        nociception,
     ) = build_canonical_runtime_assembly_from_env().await?;
     let runtime = Arc::new(runtime);
-    // W3.6: 常驻宿主同样把痛觉/再生 probe 迟绑定到 runtime。
-    bind_bio_pain_reader(&bio_probe_slots, &runtime);
+    // W3.6: 常驻宿主同样把痛觉/再生 probe 绑定到装配时装入的观察者。
+    bio_pain_wiring::bind_reader(&bio_probe_slots, nociception.as_ref());
     let governance = Arc::new(
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,

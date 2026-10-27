@@ -106,6 +106,45 @@ to = "apeireth-orchestration"
 why = "foundation 内反向依赖: LlmFactory/SubagentRole mirror (llm_orchestration_mirror.rs 自认反向依赖成环)"
 target = "R2 (单项 ADR 待出, Wave 3): 删除 mirror, 契约下沉 plugin 或 protocol"
 
+# ============================================================================
+# 机制型微内核边界 (KC-1, 2026-10-27)
+# ============================================================================
+# runtime 是机制内核: 只持有通用机制, 不依赖领域实现 crate, 不在执行循环里按
+# 业务工具名分支。新增生产依赖 / 执行循环字面量 / 领域类型必须先出 ADR 并改本表。
+# 静态扫描是预警手段, 不是完整架构证明。
+[kernel]
+crate = "apeireth-runtime"
+allowed_production_deps = [
+  "apeireth-core",
+  "apeireth-protocol",
+  "apeireth-plugin",
+  "apeireth-governance",
+  "apeireth-orchestration",
+]
+forbidden_production_deps = [
+  "apeireth-organ",
+  "apeireth-memory",
+  "apeireth-guard",
+  "apeireth-storage",
+  "apeireth-provider",
+  "apeireth-tools-canonical",
+]
+execution_loop_files = [
+  "crates/engine/runtime/src/canonical/execute.rs",
+]
+forbidden_dispatch_literals = [
+  "exit_plan_mode",
+]
+forbidden_domain_types = [
+  "BioPainState",
+  "BioRecoveryLedger",
+  "BioPainSnapshot",
+  "NociceptionObserver",
+  "CarePotentialField",
+  "care_potential_field",
+  "nociception",
+]
+
 # 现役装配根 (允许多个但必须登记; 目标收敛到 runtime-assembly + 薄适配器)。
 [[composition_roots]]
 crate = "apeireth-runtime-assembly"

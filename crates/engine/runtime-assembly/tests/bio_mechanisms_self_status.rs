@@ -30,11 +30,11 @@ use apeireth_orchestration::quorum::{QuorumDecision, QuorumEscalation};
 use apeireth_orchestration::task_queue::{
     EnqueueOutcome, TaskCaller, TaskQueue, TaskQueueConfig, TaskSpec, TaskStore,
 };
-use apeireth_plugin::ToolCapability;
-use apeireth_protocol::canonical::ToolCall;
-use apeireth_runtime::canonical::{
+use apeireth_organ::nociception::{
     BioPainObservation, BioPainSnapshot, BioRecoveryPhaseCounts, BioRecoverySnapshot,
 };
+use apeireth_plugin::ToolCapability;
+use apeireth_protocol::canonical::ToolCall;
 use apeireth_runtime_assembly::canonical::orchestrator::QuorumTrace;
 use apeireth_runtime_assembly::canonical::self_status_source::{
     capacity_bio_probe, care_heartbeat_probe, immune_quorum_probe, pain_probe, play_probe,

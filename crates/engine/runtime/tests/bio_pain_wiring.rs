@@ -24,6 +24,9 @@ use apeireth_governance::AllowAll;
 use apeireth_orchestration::nociception::{FailureClass, Recommendation};
 use apeireth_orchestration::recovery_protocol::HealingPhase;
 use apeireth_orchestration::{CallScheduler, SafetyRule, SafetyWhitelist, SchedulerConfig};
+use apeireth_organ::nociception::{
+    BioPainSnapshot, BioRecoveryPhaseCounts, BioRecoverySnapshot, NociceptionObserver,
+};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError, ToolCapability,
@@ -32,9 +35,7 @@ use apeireth_protocol::canonical::{
     ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse, NormalizedTool,
     NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
-use apeireth_runtime::canonical::{
-    BioRecoveryPhaseCounts, BioRecoverySnapshot, Runtime, SessionEventKind, TraceEvent, TurnRequest,
-};
+use apeireth_runtime::canonical::{Runtime, SessionEventKind, TraceEvent, TurnRequest};
 use async_trait::async_trait;
 use serde_json::json;
 
@@ -384,29 +385,53 @@ fn named_tool_call(name: &str, id: &str) -> ToolCall {
     }
 }
 
-async fn build_scripted_runtime(script: Vec<Step>, bio_pain: bool) -> Runtime {
+/// 观察者只在开关开启时构造并安装; 未开启 = 内核零接线。
+fn pain_observer(bio_pain: bool) -> Option<Arc<NociceptionObserver>> {
+    bio_pain.then(|| Arc::new(NociceptionObserver::new()))
+}
+
+fn pain_snapshot(observer: &Option<Arc<NociceptionObserver>>) -> BioPainSnapshot {
+    observer
+        .as_ref()
+        .map(|observer| observer.snapshot())
+        .unwrap_or_default()
+}
+
+async fn build_scripted_runtime(
+    script: Vec<Step>,
+    bio_pain: bool,
+) -> (Runtime, Option<Arc<NociceptionObserver>>) {
     let provider = FakeProvider::new(script);
-    Runtime::builder()
+    let observer = pain_observer(bio_pain);
+    let mut builder = Runtime::builder()
         .with_clock(frozen_clock())
         .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new(provider))
         .with_plugin(ScriptedToolPlugin::new())
-        .with_default_model(MODEL)
-        .with_bio_pain(bio_pain)
-        .build()
-        .await
-        .expect("runtime builds")
+        .with_default_model(MODEL);
+    if let Some(observer) = &observer {
+        builder = builder.with_tool_completion_observer(observer.clone());
+    }
+    let runtime = builder.build().await.expect("runtime builds");
+    (runtime, observer)
 }
 
-async fn build_runtime(script: Vec<Step>, bio_pain: bool, parallel: bool) -> Runtime {
+async fn build_runtime(
+    script: Vec<Step>,
+    bio_pain: bool,
+    parallel: bool,
+) -> (Runtime, Option<Arc<NociceptionObserver>>) {
     let provider = FakeProvider::new(script);
+    let observer = pain_observer(bio_pain);
     let mut builder = Runtime::builder()
         .with_clock(frozen_clock())
         .with_governance(Arc::new(AllowAll))
         .with_plugin(ProviderPlugin::new(provider))
         .with_plugin(FlakyPlugin::new())
-        .with_default_model(MODEL)
-        .with_bio_pain(bio_pain);
+        .with_default_model(MODEL);
+    if let Some(observer) = &observer {
+        builder = builder.with_tool_completion_observer(observer.clone());
+    }
     if parallel {
         let scheduler = CallScheduler::new(
             Arc::new(SafetyWhitelist::new().allow(SafetyRule::for_tool(FLAKY_TOOL))),
@@ -418,7 +443,8 @@ async fn build_runtime(script: Vec<Step>, bio_pain: bool, parallel: bool) -> Run
         .expect("scheduler config");
         builder = builder.with_call_scheduler(Arc::new(scheduler));
     }
-    builder.build().await.expect("runtime builds")
+    let runtime = builder.build().await.expect("runtime builds");
+    (runtime, observer)
 }
 
 fn failed_completions(outcome: &apeireth_runtime::canonical::TurnResponse) -> usize {
@@ -449,7 +475,7 @@ async fn the_serial_call_site_records_pain_only_when_the_flag_is_on() {
     let mut serialized_events = Vec::new();
 
     for enabled in [false, true] {
-        let runtime = build_runtime(
+        let (runtime, observer) = build_runtime(
             vec![
                 Step::CallTools(vec![tool_call("call_1")]),
                 Step::Say("I saw the failure."),
@@ -498,7 +524,7 @@ async fn the_serial_call_site_records_pain_only_when_the_flag_is_on() {
             persisted.events.iter().map(|entry| &entry.event).collect();
         serialized_events.push(serde_json::to_string(&event_payloads).expect("events serialize"));
 
-        let snapshot = runtime.bio_pain_snapshot();
+        let snapshot = pain_snapshot(&observer);
         assert_eq!(snapshot.enabled, enabled);
         if enabled {
             assert_eq!(snapshot.assessed, 1);
@@ -538,7 +564,7 @@ async fn the_serial_call_site_records_pain_only_when_the_flag_is_on() {
 /// 并行窗口正常提交调用点: 同一轮两笔失败各记一次评估, 同因归入同组。
 #[tokio::test]
 async fn the_parallel_window_call_site_records_one_assessment_per_failed_call() {
-    let runtime = build_runtime(
+    let (runtime, observer) = build_runtime(
         vec![
             Step::CallTools(vec![tool_call("call_a"), tool_call("call_b")]),
             Step::Say("Both failed."),
@@ -566,7 +592,7 @@ async fn the_parallel_window_call_site_records_one_assessment_per_failed_call() 
         .count();
     assert_eq!(failed_events, 2, "两笔失败各一条会话事件");
 
-    let snapshot = runtime.bio_pain_snapshot();
+    let snapshot = pain_snapshot(&observer);
     assert_eq!(snapshot.assessed, 2);
     assert_eq!(snapshot.observations.len(), 2);
     assert_eq!(
@@ -609,7 +635,7 @@ async fn the_recovery_case_opens_on_a_failure_and_closes_after_a_success() {
     let mut serialized_events: Vec<Vec<String>> = Vec::new();
 
     for enabled in [false, true] {
-        let runtime = build_scripted_runtime(recovery_script(), enabled).await;
+        let (runtime, observer) = build_scripted_runtime(recovery_script(), enabled).await;
         let mut turn_traces = Vec::new();
         let mut turn_events = Vec::new();
 
@@ -630,12 +656,14 @@ async fn the_recovery_case_opens_on_a_failure_and_closes_after_a_success() {
                 .push(serde_json::to_string(&outcome.trace.entries).expect("trace serializes"));
             turn_events.push(serde_json::to_string(&event_payloads).expect("events serialize"));
 
-            let snapshot = runtime.bio_pain_snapshot();
-            assert_eq!(
-                runtime.bio_recovery_snapshot(),
-                snapshot.recovery,
-                "两个只读访问器同源"
-            );
+            let snapshot = pain_snapshot(&observer);
+            if let Some(observer) = &observer {
+                assert_eq!(
+                    observer.recovery_snapshot(),
+                    snapshot.recovery,
+                    "两个只读访问器同源"
+                );
+            }
             if !enabled {
                 assert_eq!(
                     snapshot.recovery,
@@ -691,7 +719,7 @@ async fn repeated_wired_failures_advance_one_case_without_duplicating_it() {
         Step::CallTools(vec![named_tool_call(POISON_TOOL, "call_poison_3")]),
         Step::Say("third failure"),
     ];
-    let runtime = build_scripted_runtime(script, true).await;
+    let (runtime, observer) = build_scripted_runtime(script, true).await;
     let expected = [
         HealingPhase::Inflammation,
         HealingPhase::Proliferation,
@@ -706,7 +734,7 @@ async fn repeated_wired_failures_advance_one_case_without_duplicating_it() {
             .await
             .expect("the turn completes");
         assert_eq!(failed_completions(&outcome), 1);
-        let snapshot = runtime.bio_pain_snapshot();
+        let snapshot = pain_snapshot(&observer);
         assert_eq!(
             snapshot.recovery.active_cases, 1,
             "同因多次失败不得重复开案例 (turn {turn})"
@@ -718,7 +746,7 @@ async fn repeated_wired_failures_advance_one_case_without_duplicating_it() {
         assert_eq!(snapshot.recovery.closed_cases, 0, "失败驱动不收尾");
         assert_eq!(snapshot.recovery.rejected_transitions, 0);
     }
-    let snapshot = runtime.bio_pain_snapshot();
+    let snapshot = pain_snapshot(&observer);
     assert_eq!(snapshot.recovery.cases[0].capability, "tool.poison");
     assert_eq!(snapshot.assessed, 3, "三次失败各一次痛觉评估");
     assert_eq!(snapshot.groups.len(), 1, "同因归入同一痛觉组");

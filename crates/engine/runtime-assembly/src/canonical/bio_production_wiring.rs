@@ -750,7 +750,7 @@ mod tests {
     use apeireth_orchestration::nociception::{FailureClass, Habituation, Recommendation};
     use apeireth_orchestration::quorum::QuorumDecision;
     use apeireth_orchestration::task_queue::{TaskQueueConfig, TaskStore};
-    use apeireth_runtime::canonical::{
+    use apeireth_organ::nociception::{
         BioPainObservation, BioPainSnapshot, BioRecoveryPhaseCounts, BioRecoverySnapshot,
     };
     use apeireth_tools_canonical::self_status::{

@@ -511,13 +511,15 @@ claims:
     default: "OFF"
     switch_env: APEIRETH_ENABLE_BIO_PAIN
     sources:
-      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/engine/organ/src/nociception.rs
       - crates/foundation/orchestration/src/nociception.rs
+      - crates/foundation/plugin/src/observation.rs
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
+      - crates/engine/organ/src/nociception.rs
     verified_at: c9251271
-    verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
+    verify_cmd: "cargo test -p apeireth-organ --lib nociception"
     owner: runtime
     next_review: "2026-11-20"
     notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
@@ -528,10 +530,11 @@ claims:
     default: "OFF"
     switch_env: APEIRETH_ENABLE_BIO_PAIN
     sources:
-      - crates/engine/runtime/src/canonical/bio_pain.rs
+      - crates/engine/organ/src/nociception.rs
       - crates/foundation/orchestration/src/recovery_protocol.rs
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
+      - crates/engine/organ/src/nociception.rs
     verified_at: c9251271
     verify_cmd: "cargo test -p apeireth-runtime --test bio_pain_wiring"
     owner: orchestration

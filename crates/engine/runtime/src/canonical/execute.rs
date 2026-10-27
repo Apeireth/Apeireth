@@ -74,6 +74,7 @@ use apeireth_orchestration::token_meter::TokenMeter;
 use apeireth_orchestration::untrusted_envelope::{
     EnvelopeBudget, EnvelopeCompleteness, UntrustedEnvelope,
 };
+use apeireth_plugin::observation::ToolCompletionFact;
 use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     ContentPart, MessageRole, NormalizedMessage, NormalizedRequest, NormalizedResponse,
@@ -89,6 +90,7 @@ use super::approval::{
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
 use super::cache_trace;
+use super::control::ControlContext;
 use super::error::{RuntimeError, RuntimeResult};
 use super::events::RuntimeEvent;
 use super::module::{
@@ -107,33 +109,9 @@ use super::trace::{ExecutionTrace, TraceEvent};
 /// fs / http), 异常或注入诱导的输出可被放大成批处理。超出即截断并留痕。
 pub const MAX_TOOL_CALLS_PER_ROUND: usize = 16;
 
-/// The resident plan-mode exit control's model-facing name.
-///
-/// Resident in *both* plan-mode postures whenever the mechanism is enabled, so
-/// a posture switch alters the prompt projection and never the tool catalog.
-pub const PLAN_MODE_EXIT_TOOL_NAME: &str = "exit_plan_mode";
-
-/// The resident `exit_plan_mode` tool declaration.
-///
-/// The control is answered by the runtime itself: it parks a posture switch
-/// that lands at the pre-step of the next accepted turn. It dispatches no
-/// capability and grants nothing.
-pub fn plan_mode_exit_declaration() -> NormalizedTool {
-    let mut parameters = ToolParameters::new();
-    parameters.insert(
-        "plan".to_string(),
-        serde_json::json!({
-            "type": "string",
-            "description": "确认后的计划全文, 随本次工具调用留在转写里, 仅作记录。",
-        }),
-    );
-    NormalizedTool::new(PLAN_MODE_EXIT_TOOL_NAME)
-        .with_description(
-            "结束计划阶段并进入执行阶段。切换在下一被接受回合开始处落账生效, 本回合的行为约定投影不变; \
-             本工具始终在场, 不改变可用工具清单与审批判定。",
-        )
-        .with_parameters(parameters)
-}
+// The resident plan-mode control's identity and descriptor live with its
+// mechanism (`plan_mode_control`); re-exported here for the stable public path.
+pub use super::plan_mode_control::{plan_mode_exit_declaration, PLAN_MODE_EXIT_TOOL_NAME};
 
 /// One turn's input.
 #[derive(Debug, Clone)]
@@ -987,7 +965,14 @@ impl Runtime {
         {
             return Ok(());
         }
-        self.record_plan_mode_entries(session, &ledger, mark, request_id, trace_id);
+        super::plan_mode_control::record_plan_mode_entries(
+            session,
+            &ledger,
+            mark,
+            request_id,
+            trace_id,
+            self.clock.as_ref(),
+        );
         Ok(())
     }
 
@@ -1003,32 +988,13 @@ impl Runtime {
         request_id: RequestId,
         trace_id: TraceId,
     ) -> PlanModeRequestOutcome {
-        let mut ledger = PlanModeLedger::from_events(session.plan_mode_log());
-        let mark = ledger.events().len();
-        let outcome = ledger.request_switch(target);
-        self.record_plan_mode_entries(session, &ledger, mark, request_id, trace_id);
-        outcome
-    }
-
-    /// Journal the ledger entries appended since `from` as session events.
-    fn record_plan_mode_entries(
-        &self,
-        session: &mut Session,
-        ledger: &PlanModeLedger,
-        from: usize,
-        request_id: RequestId,
-        trace_id: TraceId,
-    ) {
-        for entry in ledger.events().iter().skip(from) {
-            session.record(
-                request_id,
-                trace_id,
-                SessionEventKind::PlanMode {
-                    entry: entry.clone(),
-                },
-                self.clock.as_ref(),
-            );
-        }
+        super::plan_mode_control::queue_plan_mode_switch(
+            session,
+            target,
+            request_id,
+            trace_id,
+            self.clock.as_ref(),
+        )
     }
 
     /// Queue a plan-mode switch for one session (host-side control surface).
@@ -3021,37 +2987,28 @@ impl Runtime {
     ) -> RuntimeResult<ToolAdmission> {
         let clock = self.clock.as_ref();
 
-        // The resident plan-mode exit control is a runtime-owned state request,
-        // not a capability dispatch: it has no side effect and changes no
-        // permission, so there is no capability to look up and no dispatch
-        // verdict to render (a pause here would mint a human approval over a
-        // pure state flip). It only parks a posture switch — which lands at the
-        // next accepted turn's pre-step, so this turn's projection never flips
-        // mid-turn. The parked request is journaled in the session event log.
-        if self.config.plan_mode_enabled && call.name == PLAN_MODE_EXIT_TOOL_NAME {
-            let outcome =
-                self.queue_plan_mode_switch(session, PlanMode::Executing, request_id, trace_id);
-            let (queued, note) = match outcome {
-                PlanModeRequestOutcome::Queued => (
-                    true,
-                    "计划模式切换已排队: 在下一被接受回合开始处落账生效; 本回合的行为约定投影不变",
-                ),
-                PlanModeRequestOutcome::AlreadyQueued => {
-                    (true, "同样的切换已在排队中, 等待下一被接受回合落账")
-                }
-                PlanModeRequestOutcome::NoChange => (false, "当前不在计划模式, 无须切换, 未记账"),
-            };
-            return Ok(ToolAdmission::Resolved(
-                ToolResult::ok(
-                    &call.id,
-                    serde_json::json!({
-                        "queued": queued,
-                        "target_mode": "executing",
-                        "note": note,
-                    }),
-                )
-                .with_name(&call.name),
-            ));
+        // Internal control commands are registered surfaces, not business-name
+        // branches. They are runtime-owned state requests: no capability lookup,
+        // no governance verdict, and no human approval over a pure state flip.
+        // The registry guarantees unique names; if a tool somehow appears under
+        // the same name later, the dispatch fails closed instead of picking one.
+        if let Some(control) = self.capabilities.find_control_by_name(&call.name) {
+            let tool_shadowed = self.capabilities.find_by_name(&call.name).is_some()
+                || self.plugins.tool_by_name(&call.name).is_some();
+            if tool_shadowed {
+                return Ok(ToolAdmission::Resolved(
+                    ToolResult::permanent_error(
+                        &call.id,
+                        format!(
+                            "internal control {:?} collides with a registered tool of the same name",
+                            call.name
+                        ),
+                    )
+                    .with_name(&call.name),
+                ));
+            }
+            let mut ctx = ControlContext::new(session, request_id, trace_id, clock);
+            return Ok(ToolAdmission::Resolved(control.invoke(call, &mut ctx)));
         }
 
         let module_tool = self.capabilities.find_by_name(&call.name);
@@ -3349,14 +3306,13 @@ impl Runtime {
     /// Completion records of one invoked call: the failure record (when the
     /// call failed) and the completion trace entry, in that order.
     ///
-    /// With [`RuntimeConfig::bio_pain_enabled`](super::runtime::RuntimeConfig)
-    /// on, the bio-pain assessment (SG-16) and the recovery-case bookkeeping
-    /// (SG-17) are appended **after** those two records as an observational side
-    /// effect: it reads the finished [`ToolResult`] and writes the runtime-level
-    /// pain ledger + `(capability, cause_key)` recovery cases only. It never
-    /// changes the result, the error text, the emitted events, or any retry /
-    /// error-handling decision. With it off (the default) this function is the
-    /// same two records it has always been, byte for byte.
+    /// When a [`ToolCompletionObserver`](apeireth_plugin::observation::ToolCompletionObserver)
+    /// is installed, exactly one domain-neutral [`ToolCompletionFact`] is
+    /// emitted **after** those two records. The kernel does not interpret the
+    /// fact and never changes the result, the error text, the emitted events,
+    /// or any retry / error-handling decision because of it. With no observer
+    /// installed this function is the same two records it has always been,
+    /// byte for byte.
     fn record_call_completed(
         &self,
         session: &mut Session,
@@ -3393,23 +3349,20 @@ impl Runtime {
             },
         );
 
-        // 痛觉观测 (SG-16) + 再生案例记账 (SG-17, 默认关, 同开关): 事实证明之后
-        // 才追加只读记账。开关关闭时整段不执行 —— 不取锁、不写账本, 事件/轨迹与
-        // 未接线前逐字节一致。开启时也只记录评估与案例状态: `recommended` 不落地
-        // 为动作, 不新增 RetryPolicy; 案例迁移发生在 `observe_failure` 内部的
-        // `assess` 之后, 成功收尾发生在 `observe_success` 内部。
-        if self.config.bio_pain_enabled {
-            let now_ms = u64::try_from(Timestamp::from_clock(clock).epoch_millis()).unwrap_or(0);
-            let mut bio_pain = self.bio_pain_guard();
-            match super::bio_pain::failure_class_for_result(result) {
-                Some(class) => {
-                    bio_pain.observe_failure(capability.as_str(), class, &result.render(), now_ms)
-                }
-                // `None` 只表示这次调用成功 (失败信号不成立) → 记修复。
-                None => {
-                    bio_pain.observe_success(capability.as_str(), now_ms);
-                }
-            }
+        // 通用完成事实 (与 `CapabilityCompleted` 同一收口): 内核只发出事实,
+        // 不认识领域、不取领域锁、不写领域账。未安装观察者时整段零开销,
+        // 事件/轨迹与未接线前逐字节一致；观察者的任何判断都不回流到本函数。
+        if let Some(observer) = &self.tool_completion_observer {
+            observer.observe(&ToolCompletionFact {
+                session: session.id,
+                request: request_id,
+                trace: trace_id,
+                round,
+                call,
+                capability,
+                result,
+                at: Timestamp::from_clock(clock),
+            });
         }
     }
 
@@ -4684,6 +4637,7 @@ mod tests {
 
     struct CompletionFixture {
         runtime: Runtime,
+        observer: Option<Arc<apeireth_organ::nociception::NociceptionObserver>>,
         session: Session,
         trace: ExecutionTrace,
         request: RequestId,
@@ -4696,12 +4650,13 @@ mod tests {
     async fn completion_fixture(bio_pain: bool) -> CompletionFixture {
         let clock = pain_clock();
         let at = Timestamp::from_clock(clock.as_ref());
-        let runtime = Runtime::builder()
-            .with_clock(clock)
-            .with_bio_pain(bio_pain)
-            .build()
-            .await
-            .expect("runtime builds");
+        let observer =
+            bio_pain.then(|| Arc::new(apeireth_organ::nociception::NociceptionObserver::new()));
+        let mut builder = Runtime::builder().with_clock(clock);
+        if let Some(observer) = &observer {
+            builder = builder.with_tool_completion_observer(observer.clone());
+        }
+        let runtime = builder.build().await.expect("runtime builds");
         let session_id = SessionId::new();
         let session = runtime
             .sessions()
@@ -4719,6 +4674,7 @@ mod tests {
         };
         CompletionFixture {
             runtime,
+            observer,
             session,
             trace,
             request,
@@ -4730,6 +4686,14 @@ mod tests {
     }
 
     impl CompletionFixture {
+        /// The installed observer's read-only snapshot (empty when absent).
+        fn snapshot(&self) -> apeireth_organ::nociception::BioPainSnapshot {
+            self.observer
+                .as_ref()
+                .map(|observer| observer.snapshot())
+                .unwrap_or_default()
+        }
+
         /// One `record_call_completed` through the default call.
         fn complete(&mut self, result: &ToolResult) {
             self.complete_call(self.call.clone(), result);
@@ -4751,11 +4715,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn bio_pain_is_disabled_in_the_default_configuration() {
+    #[tokio::test]
+    async fn tool_completion_observation_is_absent_by_default() {
+        let runtime = Runtime::builder().build().await.expect("runtime builds");
         assert!(
-            !crate::canonical::runtime::RuntimeConfig::default().bio_pain_enabled,
-            "默认关: 未显式 with_bio_pain(true) 的运行时零接线"
+            runtime.tool_completion_observer.is_none(),
+            "默认: 未安装观察者 = 内核零观测"
         );
     }
 
@@ -4798,7 +4763,7 @@ mod tests {
             "完成轨迹不得被观测追加"
         );
 
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         assert!(!snapshot.enabled);
         assert_eq!(snapshot.assessed, 0);
         assert_eq!(snapshot.repaired, 0);
@@ -4820,7 +4785,7 @@ mod tests {
         assert_eq!(fixture.trace.entries.len(), 1, "完成轨迹仍恰一条");
         assert_eq!(fixture.trace.entries[0].at, fixture.at);
 
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         assert!(snapshot.enabled);
         assert_eq!(snapshot.assessed, 1);
         assert_eq!(snapshot.observations.len(), 1);
@@ -4828,7 +4793,7 @@ mod tests {
         assert_eq!(observation.capability, "tool.calculator");
         assert_eq!(
             observation.cause_key,
-            crate::canonical::bio_pain::failure_cause_key(
+            apeireth_organ::nociception::failure_cause_key(
                 "tool.calculator",
                 FailureClass::Transient,
                 "error: upstream timeout"
@@ -4852,7 +4817,7 @@ mod tests {
         for _ in 0..3 {
             fixture.complete(&failure);
         }
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         assert_eq!(snapshot.observations[0].habituation, Habituation::Normal);
         assert_eq!(
             snapshot.observations[2].habituation,
@@ -4862,7 +4827,7 @@ mod tests {
         assert!(!snapshot.observations[2].chronic);
 
         fixture.complete(&failure);
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         let fourth = snapshot.observations.last().expect("有第四次观测");
         assert!(fourth.chronic, "第 4 次达慢性阈值");
         assert_eq!(fourth.habituation, Habituation::Sensitized);
@@ -4875,7 +4840,7 @@ mod tests {
         let mut fixture = completion_fixture(true).await;
         fixture.complete(&ToolResult::permanent_error("call_1", "bad argument"));
 
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         let observation = &snapshot.observations[0];
         assert_eq!(observation.class, FailureClass::Systematic);
         assert_eq!(observation.habituation, Habituation::Sensitized);
@@ -4895,10 +4860,10 @@ mod tests {
         let mut fixture = completion_fixture(true).await;
         fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
         fixture.complete(&ToolResult::permanent_error("call_1", "bad argument"));
-        assert_eq!(fixture.runtime.bio_pain_snapshot().groups.len(), 2);
+        assert_eq!(fixture.snapshot().groups.len(), 2);
 
         fixture.complete(&ToolResult::ok("call_1", serde_json::json!("2")));
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         assert_eq!(snapshot.repaired, 2, "成功修复该能力的全部已记账原因");
         assert_eq!(snapshot.assessed, 2, "成功不是失败评估");
         for group in &snapshot.groups {
@@ -4908,7 +4873,7 @@ mod tests {
         }
 
         fixture.complete(&ToolResult::retryable_error("call_1", "upstream timeout"));
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         let relapse = snapshot.observations.last().expect("复发观测");
         assert_eq!(
             relapse.habituation,
@@ -4945,7 +4910,7 @@ mod tests {
 
         assert_eq!(fixture.session.events.len(), 2, "每笔失败恰一条事件");
         assert_eq!(fixture.trace.entries.len(), 2, "每笔完成恰一条轨迹");
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         assert_eq!(snapshot.assessed, 2);
         assert_eq!(snapshot.observations.len(), 2);
         assert_eq!(snapshot.groups.len(), 1, "同能力同原因归一组");
@@ -4958,7 +4923,7 @@ mod tests {
         let mut fixture = completion_fixture(true).await;
         fixture.complete(&ToolResult::ok("call_1", serde_json::json!(1)));
 
-        let snapshot = fixture.runtime.bio_pain_snapshot();
+        let snapshot = fixture.snapshot();
         assert_eq!(snapshot.assessed, 0);
         assert_eq!(snapshot.repaired, 0);
         assert!(snapshot.groups.is_empty());
@@ -4978,8 +4943,8 @@ mod tests {
             fixture.complete(&ToolResult::ok("call_1", serde_json::json!("2")));
         }
 
-        let first_snapshot = first.runtime.bio_pain_snapshot();
-        let second_snapshot = second.runtime.bio_pain_snapshot();
+        let first_snapshot = first.snapshot();
+        let second_snapshot = second.snapshot();
         assert_eq!(first_snapshot, second_snapshot);
         assert_eq!(first_snapshot.assessed, 3);
         assert_eq!(first_snapshot.repaired, 2, "成功修复两个已记账原因");

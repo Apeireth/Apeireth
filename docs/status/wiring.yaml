@@ -548,8 +548,9 @@ items:
     capability: "痛觉→失败链（W3.4 接失败链，默认关）"
     implemented:
       sources:
-        - "crates/engine/runtime/src/canonical/bio_pain.rs"
+        - "crates/engine/organ/src/nociception.rs"
         - "crates/foundation/orchestration/src/nociception.rs"
+        - "crates/foundation/plugin/src/observation.rs"
         - "crates/adapters/cli/src/lib.rs"
     wired:
       production_refs:
@@ -557,7 +558,8 @@ items:
         - "crates/adapters/cli/src/lib.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
-        - "crates/engine/runtime/src/canonical/bio_pain.rs"
+        - "crates/engine/organ/src/nociception.rs"
+        - "crates/foundation/plugin/src/observation.rs"
         - "crates/foundation/orchestration/src/nociception.rs"
     default_enabled: false
     validated:
@@ -570,14 +572,15 @@ items:
     capability: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"
     implemented:
       sources:
-        - "crates/engine/runtime/src/canonical/bio_pain.rs"
+        - "crates/engine/organ/src/nociception.rs"
         - "crates/foundation/orchestration/src/recovery_protocol.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/bio_switches.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
-        - "crates/engine/runtime/src/canonical/bio_pain.rs"
+        - "crates/engine/organ/src/nociception.rs"
+        - "crates/foundation/plugin/src/observation.rs"
         - "crates/foundation/orchestration/src/recovery_protocol.rs"
     default_enabled: false
     validated:

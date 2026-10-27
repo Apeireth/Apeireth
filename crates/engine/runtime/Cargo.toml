@@ -28,6 +28,8 @@ parking_lot = "0.12"
 tempfile = "3"
 chrono = { workspace = true }
 apeireth-provider = { path = "../provider" }
+# 领域观察者接线测试 (痛觉/再生账本已迁至 organ; runtime 只认识通用观察口).
+apeireth-organ = { path = "../organ" }
 reqwest = { workspace = true }
 
 [lints]
