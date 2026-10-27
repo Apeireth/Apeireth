@@ -806,16 +806,50 @@ fn real_corpus_second_round_prints_the_debiased_tables() {
         ))
     );
 
+    // --- 渲染开销（生产口径的额外成本）：出处「 —— 」+ 记录 id + 换行 ---
+    //
+    // ⚠️ 本台子的预算**只计证据正文** ⇒ 「条数多」的方案在生产里还要**另付**这部分开销
+    // ⇒ 读表时必须把它算进去（否则会**偏向多条方案**）。
+    {
+        let id_len = setup
+            .corpus
+            .first()
+            .map(|record| record.id.chars().count())
+            .unwrap_or(0);
+        let per_item = 4 + id_len + 1; // " —— " + id + 换行分隔符
+        println!("--- 渲染开销（每条 ≈ {per_item} 字：出处 4 + id {id_len} + 换行 1）---");
+        for outcome in &fixed {
+            let overhead = outcome.injected_items * per_item;
+            let share = if outcome.plan.total_chars > 0 {
+                overhead as f64 / outcome.plan.total_chars as f64 * 100.0
+            } else {
+                0.0
+            };
+            println!(
+                "{:<26} 证据正文 {} 字 · 渲染开销 ≈ {} 字（占总预算 {:.1}%）",
+                outcome.label(),
+                outcome.injected_chars,
+                overhead,
+                share
+            );
+        }
+    }
+
     // --- 不变量：总量封顶 + 检索固定 ---
     for outcome in fixed.iter().chain(debiased.iter()) {
-        assert!(
-            outcome.injected_chars <= outcome.plan.total_chars,
-            "总预算硬上限：{outcome:?}"
-        );
-        assert!(
-            outcome.injected_items <= outcome.plan.max_items,
-            "条数封顶：{outcome:?}"
-        );
+        // ⚠️ `total_chars = 0` ⇒ **不限总量** ⇒ 上限不适用（口径见 `BudgetPlan`）。
+        if outcome.plan.total_chars > 0 {
+            assert!(
+                outcome.injected_chars <= outcome.plan.total_chars,
+                "总预算硬上限：{outcome:?}"
+            );
+        }
+        if outcome.plan.max_items > 0 {
+            assert!(
+                outcome.injected_items <= outcome.plan.max_items,
+                "条数封顶：{outcome:?}"
+            );
+        }
     }
     for outcome in &debiased {
         assert_eq!(
