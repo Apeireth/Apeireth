@@ -195,6 +195,14 @@ impl CapabilityRegistry {
         found
     }
 
+    /// Registered control commands (read-only snapshot, registration order).
+    pub fn controls(&self) -> Vec<Arc<dyn ControlCommand>> {
+        read_lock_or_recover(&self.controls)
+            .iter()
+            .map(Arc::clone)
+            .collect()
+    }
+
     /// Model-facing control declarations in registration order.
     pub fn control_declarations(&self) -> Vec<NormalizedTool> {
         read_lock_or_recover(&self.controls)
@@ -272,7 +280,7 @@ mod tests {
     use apeireth_protocol::canonical::{ToolCall, ToolParameters, ToolResult};
     use async_trait::async_trait;
 
-    use super::super::control::ControlContext;
+    use super::super::control::{reject_control_tool_collisions, ControlContext};
     use super::super::session::Session;
 
     struct DummyTool {
@@ -391,6 +399,15 @@ mod tests {
             .register_control(DummyControl::new("echo"))
             .expect_err("control shadowing a tool is rejected");
         assert!(error.contains("collides with tool capability"));
+    }
+
+    #[test]
+    fn plugin_tools_are_rejected_when_they_shadow_a_control_at_wiring() {
+        let controls = vec![DummyControl::new("exit_plan_mode")];
+        let tools = vec![DummyTool::new("exit_plan_mode")];
+        let error = reject_control_tool_collisions(&controls, &tools)
+            .expect_err("plugin tool shadowing a control must be rejected");
+        assert!(error.contains("collides with control"));
     }
 
     #[test]

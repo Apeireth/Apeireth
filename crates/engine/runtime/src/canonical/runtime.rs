@@ -1014,6 +1014,11 @@ impl RuntimeBuilder {
             "plugin tools",
         )
         .map_err(RuntimeError::misconfigured)?;
+        crate::canonical::control::reject_control_tool_collisions(
+            &capability_registry.controls(),
+            &manager.active_tools(),
+        )
+        .map_err(RuntimeError::misconfigured)?;
 
         // Providers are read out of the capability registry *after* start-up, so
         // the router contains exactly those whose plugins actually came up. A

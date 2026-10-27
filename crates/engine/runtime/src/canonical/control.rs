@@ -16,7 +16,11 @@
 //!   [`ControlContext`], so they cannot reach the provider router, governance,
 //!   or another turn's state.
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use apeireth_core::kernel::{CapabilityId, Clock, RequestId, TraceId};
+use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 
 use super::session::Session;
@@ -51,6 +55,41 @@ impl<'a> ControlContext<'a> {
             clock,
         }
     }
+}
+
+/// Reject duplicate control/tool identities before the runtime starts serving.
+///
+/// The registry rejects collisions between controls and builder-registered
+/// tools; plugin tools only become visible after start-up, so this check runs
+/// at the same boundary as the existing plugin-tool collision check. A name or
+/// id may belong to exactly one surface.
+pub fn reject_control_tool_collisions(
+    controls: &[Arc<dyn ControlCommand>],
+    tools: &[Arc<dyn ToolCapability>],
+) -> Result<(), String> {
+    let mut control_ids: BTreeMap<String, String> = BTreeMap::new();
+    let mut control_names: BTreeMap<String, String> = BTreeMap::new();
+    for control in controls {
+        let id = control.id().to_string();
+        let name = control.declaration().name;
+        control_ids.insert(id.clone(), name.clone());
+        control_names.insert(name, id);
+    }
+    for tool in tools {
+        let id = tool.id().to_string();
+        let name = tool.declaration().name;
+        if let Some(control_name) = control_ids.get(&id) {
+            return Err(format!(
+                "plugin tool id {id} collides with control {control_name:?}"
+            ));
+        }
+        if let Some(control_id) = control_names.get(&name) {
+            return Err(format!(
+                "plugin tool name {name:?} collides with control {control_id}"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// A registered internal control command.
