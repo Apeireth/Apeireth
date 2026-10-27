@@ -545,7 +545,7 @@ async function main() {
           //   实测报 `ReferenceError: probe is not defined`）。
           (() => {
             const pr = new URLSearchParams(location.search).get('probe');
-            return pr === 'varying' || pr === 'flat' || pr === 'coord' ? pr : '';
+            return pr === 'varying' || pr === 'flat' || pr === 'coord' ? pr : undefined;
           })(),
         );
         (result as Record<string, unknown>)[backend] = JSON.parse(raw);

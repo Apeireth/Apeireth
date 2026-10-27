@@ -1279,8 +1279,13 @@ pub fn expand_point_sprite_to_quad(src: &str) -> Result<String, GlslError> {
     renamed.push_str(&format!(
         "    gl_Position = {POINT_CENTER_LOCAL} + vec4({QUAD_CORNER_ATTRIBUTE} * {POINT_SIZE_LOCAL} * vec2(1.0 / {FRAMEBUFFER_WIDTH_MEMBER}, 1.0 / {FRAMEBUFFER_HEIGHT_MEMBER}) * {POINT_CENTER_LOCAL}.w, 0.0, 0.0);\n"
     ));
+    // ⭐⭐⭐ **y 原点与 GLES 对齐**（2026-10-27，E-68 根因修复）：
+    // ⇒ ⇒ **GLES 的 `gl_PointCoord` 原点在左上、y 向下递增**；
+    // ⇒ ⇒ 而 `aCorner.y` 沿 NDC **向上**递增（底部 = -1）⇒ ⇒ 直接映射会让
+    //   粒子内的 y **整体上下颠倒**（实测 G 差 ≈ -0.67，与「翻转差 = 1-2y」吻合）。
+    // ⇒ ⇒ ⇒ 这里显式翻转 y ⇒ ⇒ 与生产（原生 GLES）**逐位同语义**。
     renamed.push_str(&format!(
-        "    {POINT_COORD_VARYING} = {QUAD_CORNER_ATTRIBUTE} * 0.5 + 0.5;\n"
+        "    {POINT_COORD_VARYING} = vec2({QUAD_CORNER_ATTRIBUTE}.x * 0.5 + 0.5, 0.5 - {QUAD_CORNER_ATTRIBUTE}.y * 0.5);\n"
     ));
     renamed.push_str("}\n");
     Ok(renamed)
