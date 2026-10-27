@@ -14,6 +14,7 @@ pub mod bio_command;
 pub mod bio_switches;
 pub mod bundle_command;
 pub mod care_heartbeat;
+pub mod memory_export_command;
 pub mod memory_migrate_command;
 pub mod memory_verify_command;
 // B6 会话/记忆静态加密（隐患 #6）密钥面：engine `apeireth_storage::crypto` 的 CLI 出口（密钥丢失 = 显式不可恢复）。

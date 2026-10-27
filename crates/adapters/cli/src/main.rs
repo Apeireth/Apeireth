@@ -1046,8 +1046,12 @@ fn run_cli() -> ExitCode {
             Some("migrate-subject") => ExitCode::from(
                 apeireth_cli::memory_migrate_command::run_migrate(&args[2..]),
             ),
+            // 脱机可读归档物导出（只读 + 当场自校验）。
+            Some("export") => ExitCode::from(apeireth_cli::memory_export_command::run(&args[2..])),
             _ => {
                 eprintln!("{}", apeireth_cli::memory_verify_command::USAGE);
+                eprintln!();
+                eprintln!("{}", apeireth_cli::memory_export_command::USAGE);
                 eprintln!();
                 eprintln!("{}", apeireth_cli::memory_migrate_command::USAGE);
                 ExitCode::FAILURE

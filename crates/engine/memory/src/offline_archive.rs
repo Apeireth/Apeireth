@@ -50,7 +50,7 @@ use sha2::{Digest, Sha256};
 pub const ARCHIVE_FORMAT_VERSION: &str = "apeireth-offline-archive/v1";
 
 /// 一条记忆（**脱机形态**）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ArchivedEpisode {
     /// 记录 id。
     pub id: String,
@@ -79,7 +79,7 @@ pub struct ArchivedEpisode {
 }
 
 /// 一条链头（链的账本 ⇒ 导出物要能**独立核对**每条链）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ArchivedChainHead {
     /// 主体 id（链的键）。
     pub subject_id: String,
@@ -92,7 +92,7 @@ pub struct ArchivedChainHead {
 }
 
 /// **自说明**：这个导出物怎么读（**随物走** ⇒ 三年后仍可读）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ArchiveManifest {
     /// 格式版本（[`ARCHIVE_FORMAT_VERSION`]）。
     pub format_version: String,
@@ -114,7 +114,7 @@ pub struct ArchiveManifest {
 }
 
 /// 一个完整的脱机归档物。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OfflineArchive {
     /// 自说明清单。
     pub manifest: ArchiveManifest,
