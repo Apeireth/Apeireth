@@ -204,6 +204,19 @@ fn report_one(name: &str, path: &Path) -> Result<(), Box<dyn std::error::Error>>
     let anchored_full = run_anchored(&records, &golden, true);
     print_row("C 锚定检索（+ 整回正文）", &anchored_full, 0);
 
+    // ---------- 变体 H：**只**放大单条注入预算（**不定位、不换内容**） ----------
+    //
+    // # 为什么这个变体重要（**产品侧几乎零成本**）
+    //
+    // 生产注入把每条证据**硬截断到 120 字**（`memory_injection::EVIDENCE_MAX_CHARS`）
+    // ⇒ ⇒ 但**真正的预算是总量**（`context_compiler` 的 `max_chars`）
+    // ⇒ ⇒ **放大单条上限并不会增加总消耗** ⇒ ⇒ **零成本**
+    // ⇒ ⇒ 那它到底能救回多少送达？⇒ **实测**。
+    for budget in [PRODUCTION_CHARS, 400usize, 1200] {
+        let h = run_with_budget(&index, &golden, budget);
+        print_row(&format!("H 单条预算 {budget} 字"), &h, budget);
+    }
+
     println!();
     println!("── 读数 ──");
     println!(
@@ -257,6 +270,14 @@ fn report_one(name: &str, path: &Path) -> Result<(), Box<dyn std::error::Error>>
             a_prime.groundedness,
             d.groundedness
         );
+
+        // ---------- 变体 H'：**只**放大单条注入预算（**生产片段口径**） ----------
+        //
+        // ⇒ 与上面的 H（深处片段口径）对照 ⇒ ⇒ 看「放大预算」在**真实片段**下有没有用。
+        for budget in [PRODUCTION_CHARS, 400usize, 1200, 4000] {
+            let h = run_with_budget(&index, &real_base, budget);
+            print_row(&format!("H' 单条预算 {budget} 字"), &h, budget);
+        }
 
         // ---------- 变体 E：**段内定位**（主体 ⇒ 挑那一段） ----------
         //
@@ -766,4 +787,56 @@ fn window_around_subject(text: &str, subject: &str, max_chars: usize) -> String 
     let start = offset.saturating_sub(max_chars / 2);
     let end = (start + max_chars).min(chars.len());
     chars[start..end].iter().collect()
+}
+
+/// 变体 H：**生产检索** + **可配的单条注入预算**（**不定位、不换内容**）。
+///
+/// # 口径
+///
+/// * 检索：**生产**（`golden_run::run` 的同一套 BM25）；
+/// * 注入：与生产**同一条**（每条**开头 `budget` 字**）⇒ ⇒ **唯一变量 = 预算**。
+fn run_with_budget(
+    index: &[apeireth_memory::golden_run::IndexRecord],
+    golden: &GoldenSet,
+    budget: usize,
+) -> Metrics {
+    let mut hits = 0usize;
+    let mut grounded = 0usize;
+    let mut scored = 0usize;
+    let mut bm25 = Bm25Index::new(Bm25Config::default());
+    for record in index {
+        bm25.insert(&record.id, &record.text);
+    }
+    for case in &golden.cases {
+        let hits_for_case = bm25.search(&case.query, K);
+        let mut evidence: Vec<String> = Vec::new();
+        for hit in hits_for_case.iter().take(K) {
+            if let Some(record) = index.iter().find(|record| record.id == hit.id) {
+                evidence.push(record.text.chars().take(budget).collect());
+            }
+        }
+        scored += 1;
+        if hits_for_case
+            .iter()
+            .take(K)
+            .any(|hit| hit.id == case.expect_ids[0])
+        {
+            hits += 1;
+        }
+        let expected = case.expect_fragments.first().cloned().unwrap_or_default();
+        if !expected.is_empty() && evidence.iter().any(|text| text.contains(&expected)) {
+            grounded += 1;
+        }
+    }
+    if scored == 0 {
+        return Metrics::default();
+    }
+    Metrics {
+        recall_at_k: hits as f64 / scored as f64,
+        ndcg_at_k: 0.0,
+        evidence_precision: 0.0,
+        groundedness: grounded as f64 / scored as f64,
+        skipped_cases: 0,
+        total_cases: scored,
+    }
 }
