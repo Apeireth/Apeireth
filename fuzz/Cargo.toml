@@ -396,3 +396,10 @@ path = "fuzz_targets/device_control.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "path_guard"
+path = "fuzz_targets/path_guard.rs"
+test = false
+doc = false
+bench = false
