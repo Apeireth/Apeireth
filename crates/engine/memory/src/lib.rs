@@ -328,7 +328,8 @@ pub use research_derived_memory::{
 };
 // B2 · RA-15 P0-B (research, 默认关闭): 屏障优先级联修复执行器
 // (吸收自 arXiv:2605.07242 MEMOREPAIR; 自写 Dinic, 0 新外部依赖).
-pub mod derived_repair;
+pub mod delivery_metrics;
+pub mod derived_repair; // 证据「送达率」 (groundedness/recall): 把「检索到了却没送到」变成常驻数字; 状态 NOT IMPLEMENTED (新增未接线).
 pub use derived_repair::{RepairExecutor, RepairNode, RepairOutcome, RepairTradeoff};
 // B2 · RA-15 P0-A 生产接线 (opt-in, 默认关闭): 三段式协调遗忘
 // (吸收自 arXiv:2609.04875; 持久化遗忘集 V10 + 行为契约自验 + P0-B 结局应用).
