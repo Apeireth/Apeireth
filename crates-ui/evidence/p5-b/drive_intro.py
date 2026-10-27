@@ -499,7 +499,12 @@ def main():
             frozen_at = float(raw)
             for only in args.only.split(","):
                 for sprite in args.sprite.split(","):
-                    key = f"{frozen_at}:{only}:{sprite}"
+                    # ⭐⭐ **key 必须带 probe**（2026-10-27 修的真缺陷）：
+                    # 原先 key 只含 `frozen_at:only:sprite` ⇒ ⇒ 探针跑的 leg 与
+                    # 正常渲染的 leg **同 key** ⇒ ⇒ ⇒ 后者**覆盖**前者
+                    # ⇒ ⇒ ⇒ 「报告里没有 flat leg」⇒ ⇒ 探针结果**丢失**
+                    # ⇒ ⇒ ⇒ 而且**看不出来**（只看到「少了一腿」）。
+                    key = f"{frozen_at}:{only}:{sprite}:{args.probe or 'normal'}"
                     legs[key] = run_leg(
                         devtools_port, base, console_log, frozen_at, out_dir,
                         only=only, source=args.source, probe=args.probe, sprite=sprite,
