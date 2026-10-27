@@ -332,14 +332,14 @@ impl SkillLibrary {
         );
         // ⚠️ **2026-10-26 修同族缺陷**：原写法是**两次写**（行体一次、换行一次）
         // ⇒ **并发写者**可以在两次写之间插进来 ⇒ ⇒ **两行被挤成一行** ⇒ 记录丢失。
-        // ⇒ 改用**共用原语** `apeireth_core::stored_doc::append_record`
-        // （与读面 `scan_records` 同模块 ⇒ 读写同源、一个实现不分叉）。
-        apeireth_core::stored_doc::append_record(&self.audit_path(), &doc).map_err(|source| {
-            SkillLibraryError::Io {
+        // ⇒ 改用**共用原语** `crate::proposal::append_jsonl_row`
+        // （四个逐记录追加器**全部**用它 ⇒ 一个实现、不分叉）。
+        crate::proposal::append_jsonl_row(&self.audit_path(), "技能卡审计账", &doc).map_err(
+            |error| SkillLibraryError::Io {
                 path: self.audit_path(),
-                source,
-            }
-        })
+                source: std::io::Error::other(error),
+            },
+        )
     }
 }
 

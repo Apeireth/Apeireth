@@ -139,8 +139,7 @@ impl SpokenLedger {
         // （与读面 `scan_records` 同模块 ⇒ 读写同源、一个实现不分叉）：
         // **行体与行尾换行同在一次写**（O_APPEND 原子），
         // 且**末行缺换行**（撕裂写半行）时先补一个换行。
-        apeireth_core::stored_doc::append_record(&self.path, &doc)
-            .map_err(|error| format!("语句账本写入失败 {}: {error}", self.path.display()))
+        crate::proposal::append_jsonl_row(&self.path, "语句账本", &doc)
     }
 
     /// 读回整本 (逐记录语义: 坏行读作不存在并计入 `skipped`)。

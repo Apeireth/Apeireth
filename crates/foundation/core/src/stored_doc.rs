@@ -308,64 +308,6 @@ fn validate_doc<T>(doc: &StoredDoc<T>, compat: &DocCompat) -> Result<(), StoredD
 // 逐记录类: 单条坏行读作不存在 (跳过并计数), 不砖化整个单元
 // ---------------------------------------------------------------------------
 
-/// **追加**一条逐记录 (jsonl: 每行一个 [`StoredDoc`] 信封 JSON) —— [`scan_records`] 的**写面对偶**。
-///
-/// **为什么要有它（2026-10-26）**：仓内有**四个**逐记录追加器（提案账、推送账、
-/// 语句账本、技能卡审计）。它们原先都写成
-/// ```text
-/// file.write_all(&line).and_then(|()| file.write_all(b"\n"))
-/// ```
-/// ⇒ **行体与行尾换行是两次写** ⇒ ⇒ **并发写者**可以在两次写之间插进来
-/// ⇒ ⇒ **两行被挤成一行** ⇒ ⇒ **记录丢失**（读回时那行 JSON 解析失败 ⇒ 计入
-/// `skipped` ⇒ **看起来像"坏行"，实则是"丢记录"**）。
-/// ⇒ 同族实测：撕裂写（末行缺换行）后追加 ⇒ 旧行被粘掉 ⇒ **可读行数 1 → 0**。
-///
-/// **本原语的两条保证**：
-/// ① **行体与行尾换行同在一次写** ⇒ `O_APPEND` 的追加是原子的
-///    ⇒ 并发写者不会把两行挤成一行；
-/// ② **末行缺换行（撕裂写半行）时先补一个换行**（只追加字节 ⇒ append-only 不变）
-///    ⇒ 撕裂的半行不会把下一行吞掉。
-///
-/// **口径与读面同源**：本函数与 [`scan_records`] 住在**同一模块** ⇒ 写面与读面
-/// 不会各自长出一套语义（**一个实现，不分叉**）。
-pub fn append_record<T: Serialize>(path: &Path, doc: &StoredDoc<T>) -> std::io::Result<()> {
-    use std::io::{Read, Seek, SeekFrom, Write};
-
-    // ⚠️ 返回 `io::Result`（**不是** `StoredDocError`）：这是**IO 原语**
-    // ⇒ 各调用方有自己的错误类型（`String` / `SkillLibraryError` / …）
-    // ⇒ ⇒ 错误**在调用方翻译**，不强制它们都依赖 `StoredDocError`。
-    let mut line = serde_json::to_vec(doc)
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-    line.push(b'\n');
-
-    let mut file = std::fs::OpenOptions::new()
-        .read(true)
-        .create(true)
-        .append(true)
-        .open(path)?;
-
-    let mut buffer = Vec::with_capacity(line.len() + 1);
-    if tail_needs_separator(&mut file)? {
-        // 撕裂写半行封口 (只追加一个换行; append-only 不变)。
-        buffer.push(b'\n');
-    }
-    buffer.extend_from_slice(&line);
-    file.write_all(&buffer)?;
-    file.sync_all()
-}
-
-/// 账本末字节不是换行 (撕裂写半行) ⇒ 需要先补一个分隔符。
-fn tail_needs_separator(file: &mut std::fs::File) -> std::io::Result<bool> {
-    use std::io::{Read, Seek, SeekFrom};
-    if file.metadata()?.len() == 0 {
-        return Ok(false);
-    }
-    file.seek(SeekFrom::End(-1))?;
-    let mut last = [0u8; 1];
-    file.read_exact(&mut last)?;
-    Ok(last[0] != b'\n')
-}
-
 /// 扫描逐记录文件 (jsonl: 每行一个 [`StoredDoc`] 信封 JSON)。
 ///
 /// - 单条坏行 (JSON 解析失败/身份不符/自洽性失败/版本戳不符/未知未来版本)

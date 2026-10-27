@@ -354,3 +354,17 @@ path = "fuzz_targets/exposure_audit.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "weather"
+path = "fuzz_targets/weather.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_sense"
+path = "fuzz_targets/device_sense.rs"
+test = false
+doc = false
+bench = false
