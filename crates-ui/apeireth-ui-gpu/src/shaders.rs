@@ -37,6 +37,13 @@ pub const INTRO_SPRITE_VERTEX_GLSL: &str = include_str!("../assets/intro_sprite.
 /// 片头「火焰粒子」片元着色器（生产 `intro/fire.ts` 的 `FIRE_FRAG` 去注释副本）。
 pub const INTRO_SPRITE_FRAGMENT_GLSL: &str = include_str!("../assets/intro_sprite.frag");
 
+/// ⭐⭐ **varying 编码探针**（2026-10-27 诊断用）。
+///
+/// ⚠️ **不是**生产着色器 ⇒ ⇒ **不**进「引擎资产 == 生产源」的逐字校验表。
+/// 用途：把 varying 编码进 RGB ⇒ ⇒ 直接读出「哪个 varying 不同」。
+pub const INTRO_SPRITE_PROBE_FRAGMENT_GLSL: &str =
+    include_str!("../assets/intro_sprite_probe.frag");
+
 /// 资产与生产源之间的**声明外壳变换**（资产 = 生产源 ∘ 这些变换）。
 ///
 /// ## 为什么要有这张表

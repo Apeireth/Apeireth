@@ -132,7 +132,102 @@ const spriteMode = new URLSearchParams(location.search).get('sprite') ?? 'quad';
   //   粒子 quad 的并集 ⇒ 可直接量出 sprite 的**位置/尺寸**，与引擎侧同款探针逐像素对照。
   //   （只认带 `vStreak` 的那支 = 火焰粒子；背景 matte 的片元不动。）
   const probe = new URLSearchParams(location.search).get('probe');
-  if (probe === 'flat') {
+  // ⭐ **诊断日志**（2026-10-27）：探针分支是否进入
+  console.log('[probe-diag] search=', location.search, 'probe=', probe);
+  // ⭐⭐ **诊断信息写进页面全局**（2026-10-27）：
+  // ⇒ ⇒ 驱动的 console 收集是**导航之后**才开始的 ⇒ ⇒ **导航期间的消息全丢**
+  // ⇒ ⇒ ⇒ 探针的诊断**必须**放在页面里可读的地方，否则「看不到日志」
+  //    **不能**推出「hook 没被调用」（实测踩过这个推理错误）。
+  const diag = {
+    search: location.search,
+    probe,
+    shaderSources: [] as string[],
+    // ⭐ **上下文判定**：生产到底用哪个 GL 原型？
+    contexts: [] as string[],
+    getContextCalls: 0,
+    hookInstalledOn: [] as string[],
+  };
+  // ⭐ hook `HTMLCanvasElement.prototype.getContext`（**正确**的对象）
+  {
+    const cp = (HTMLCanvasElement as unknown as { prototype: Record<string, unknown> }).prototype;
+    const orig = cp['getContext'] as (...a: unknown[]) => unknown;
+    cp['getContext'] = function (this: unknown, ...args: unknown[]) {
+      diag.getContextCalls += 1;
+      diag.contexts.push(String(args[0]));
+      return orig.apply(this, args);
+    };
+    diag.hookInstalledOn.push('HTMLCanvasElement');
+  }
+  (window as unknown as Record<string, unknown>).__PROBE_DIAG__ = diag;
+  // ⭐ hook **两个**原型（WebGL1 / WebGL2）⇒ ⇒ 排除「装错原型」。
+  for (const [name, protoAny] of [
+    ['WebGL2', (WebGL2RenderingContext as unknown as { prototype: Record<string, unknown> }).prototype],
+    ['WebGL1', (WebGLRenderingContext as unknown as { prototype: Record<string, unknown> }).prototype],
+  ]) {
+    const p2 = protoAny;
+    const origGetContext = p2['getContext'] as (...a: unknown[]) => unknown;
+    p2['getContext'] = function (this: unknown, ...args: unknown[]) {
+      diag.getContextCalls += 1;
+      diag.contexts.push(String(args[0]));
+      return origGetContext.apply(this, args);
+    };
+    diag.hookInstalledOn.push(name);
+  }
+  if (probe === 'varying') {
+    // ⭐⭐ **varying 编码探针**（2026-10-27 诊断用）。
+    // ⇒ ⇒ 与引擎侧 `assets/intro_sprite_probe.frag` **逐字同源**。
+    // ⇒ ⇒ 把 varying 编码进 RGB ⇒ ⇒ 逐像素差分**直接读出是哪个 varying 不同**。
+    //
+    // ⚠⚠️ **必须碰一次 `gl_PointCoord`**：引擎的**四边形路径**会把
+    // `gl_PointCoord` 换成 varying `_engine_point_coord`，且**顶点阶段总是输出**它
+    // ⇒ ⇒ 若片元完全不提及 ⇒ ⇒ 顶点输出与片元输入**不匹配**
+    // ⇒ ⇒ wgpu 报错 ⇒ ⇒ wasm panic（实测踩过）。
+    // ⇒ ⇒ 生产侧是**原生 WebGL2** ⇒ ⇒ `gl_PointCoord` 是**内建** ⇒ ⇒ 天然合法。
+    //
+    // ⚠ 注释里**不能出现反引号**（这段在 TS 模板字符串里 ⇒ 反引号会终止它）。
+    const varyingFrag = `#version 300 es
+precision highp float;
+in vec3 vCol;
+in float vAlpha;
+in float vStreak;
+in vec2 vAxis;
+in float vSoft;
+out vec4 fragColor;
+void main(){
+  // ⚠⚠️ **必须触碰全部 5 个 varying**（2026-10-27 实测踩到的坑）：
+  // 未被使用的 varying 会被**编译器优化剔除** ⇒ ⇒ 顶点输出集合与片元输入集合
+  // **不匹配** ⇒ ⇒ wgpu 报 FRAGMENT varying vCol does not match any VERTEX varying
+  // ⇒ ⇒ 建管线失败（实测）。
+  //
+  // 手法：用「**不可能成立的分支**」引用它们
+  // ⇒ ⇒ 编译器**无法证明**它恒假 ⇒ ⇒ varying **被保留**
+  // ⇒ ⇒ 而输出值**不变**（该分支永不进入）。
+  float unusedCoord = gl_PointCoord.x;
+  float guard = vSoft * vAxis.x;
+  float guard2 = unusedCoord * vSoft;
+  if (guard < -1.0 || guard2 < -1.0) {
+    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+  }
+  fragColor = vec4(vAlpha, vCol.g, vStreak, 1.0);
+}`;
+    const originalShaderSource = proto['shaderSource'] as (
+      shader: WebGLShader,
+      source: string,
+    ) => void;
+    proto['shaderSource'] = function (this: WebGL2RenderingContext, shader: WebGLShader, source: string) {
+      // ⭐⭐ **纯源码特征判「片元」**（2026-10-27 修的真缺陷）：
+      // 原先用 `getShaderParameter(shader, SHADER_TYPE)` ⇒ ⇒ 在 `shaderSource`
+      // **调用期间**查询会**抛异常**（实测：ANGLE 拒绝）⇒ ⇒ hook 中断
+      // ⇒ ⇒ ⇒ 探针**从不生效**（而且日志上看不出来）。
+      // ⇒ ⇒ 改用源码特征：**含 `vStreak`**（火焰片元有）
+      // 且**不含 `gl_Position`**（顶点着色器有）⇒ ⇒ 无需任何 API 查询。
+      const isFragment =
+        source.includes('vStreak') && !source.includes('gl_Position');
+      console.log('[probe] shaderSource', { isFragment, hasVStreak: source.includes('vStreak'), head: source.slice(0, 70).replace(/\s+/g, ' ') });
+      const src = isFragment && source.includes('vStreak') ? varyingFrag : source;
+      return originalShaderSource.call(this, shader, src);
+    };
+  } else if (probe === 'flat') {
     const flatFrag = `#version 300 es
 precision highp float;
 in vec3 vCol;
@@ -158,7 +253,27 @@ void main(){
       source: string,
     ) => void;
     proto['shaderSource'] = function (this: WebGL2RenderingContext, shader: WebGLShader, source: string) {
-      const src = source.includes('vStreak') ? flatFrag : source;
+      // ⭐ **诊断日志**（2026-10-27）
+      {
+        const diag = (window as unknown as Record<string, unknown>)
+          .__PROBE_DIAG__ as { shaderSources: string[] } | undefined;
+        if (diag) {
+          diag.shaderSources.push(
+            `${isFragment ? 'FRAG' : 'VERT'} vStreak=${source.includes('vStreak')} ${source
+              .slice(0, 60)
+              .replace(/\s+/g, ' ')}`,
+          );
+        }
+      }
+      // ⭐⭐ **纯源码特征判「片元」**（2026-10-27 修的真缺陷）：
+      // ⇒ ⇒ `getShaderParameter(SHADER_TYPE)` 在 `shaderSource` 调用期间**抛异常**
+      // ⇒ ⇒ ⇒ hook 中断 ⇒ ⇒ **探针从不生效**（且日志上看不出来）。
+      // ⇒ ⇒ 判据：**含 `vStreak`** 且**不含 `gl_Position`**（顶点着色器有 `gl_Position`）。
+      // ⚠⚠️ **必须判「片元」**：顶点着色器**也含** `vStreak`（`out float vStreak;`）
+      // ⇒ ⇒ 若不判 ⇒ ⇒ 顶点被换成片元 ⇒ ⇒ **编译失败** ⇒ ⇒ 画面空 ⇒ ⇒ **假绿**。
+      const isFragment =
+        source.includes('vStreak') && !source.includes('gl_Position');
+      const src = isFragment ? flatFrag : source;
       return originalShaderSource.call(this, shader, src);
     };
   }
@@ -404,6 +519,13 @@ async function main() {
           engineUniforms,
           passFilter,
           spriteMode,
+          // ⭐ **诊断探针**：与生产侧 hook 用**同一个**探针
+          // ⇒ ⇒ 两侧逐像素差分**直接读出是哪个 varying 不同**。
+          // ⚠ 在**此处**现取 URL 参数（外层的 `probe` 常量与本处**不同作用域**，
+          //   实测报 `ReferenceError: probe is not defined`）。
+          new URLSearchParams(location.search).get('probe') === 'varying'
+            ? 'varying'
+            : '',
         );
         (result as Record<string, unknown>)[backend] = JSON.parse(raw);
       } catch (error) {

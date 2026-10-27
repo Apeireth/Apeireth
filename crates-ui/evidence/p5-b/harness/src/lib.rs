@@ -16,6 +16,7 @@ use apeireth_ui_gpu::{
     ScenePass, ScenePipeline, SurfaceTargetInput, Topology, UniformValues, VertexFormat,
     INTRO_BACKDROP_FRAGMENT_GLSL, INTRO_BACKDROP_UNIFORM_NAMES, INTRO_BACKDROP_VERTEX_GLSL,
     INTRO_SPRITE_FRAGMENT_GLSL, INTRO_SPRITE_UNIFORM_NAMES, INTRO_SPRITE_VERTEX_GLSL,
+    INTRO_SPRITE_PROBE_FRAGMENT_GLSL,
     SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL, SHADER_UNIFORM_NAMES,
 };
 use std::cell::RefCell;
@@ -445,6 +446,13 @@ pub async fn run_intro(
     uniforms: JsValue,
     passes: &str,
     sprite_mode: &str,
+    // ⭐ **诊断探针**（2026-10-27）：`""` = 正常渲染；`"varying"` = 用
+    // **varying 编码探针片元**（把 `vAlpha`/`vCol.g`/`vStreak` 编码进 RGB）。
+    // ⇒ ⇒ 目的：**两侧用同一个探针** ⇒ ⇒ 逐像素差分**直接读出是哪个 varying 不同**。
+    // ⚠⚠️ 这里**必须**用 `//` 而不是 `///`：`#[wasm_bindgen]` 的**参数**上
+    // 只接受 `allow`/`cfg`/`cfg_attr`/`deny`/`expect`/`forbid`/`warn`
+    // ⇒ ⇒ `///` 会被当成**属性** ⇒ ⇒ 编译错误（实测踩到）。
+    probe: Option<String>,
 ) -> Result<String, JsValue> {
     let preference = match backend {
         "webgl" => BackendPreference::WebGl,
@@ -508,6 +516,16 @@ pub async fn run_intro(
     //   - 拓扑：⭐ **实例化四边形**（后端无关 ⇒ WebGL 与 WebGPU **都能画**）
     //     / **点列表**（WebGL 快路径；WebGPU 后端**显式报错** ⇒ 该腿无效）；
     //   - 混合是**加法**（`ONE/ONE`）⇒ 与生产的 `gl.blendFunc(ONE, ONE)` 同义。
+    // ⭐ **诊断探针片元**（2026-10-27）：`probe == "varying"` ⇒ ⇒ 用 varying 编码探针。
+    let sprite_fragment = match probe.as_deref() {
+        Some("varying") => INTRO_SPRITE_PROBE_FRAGMENT_GLSL,
+        Some(other) => {
+            return Err(JsValue::from_str(&format!(
+                "run_intro: 未知探针 `{other}`（支持：\"\" / \"varying\"）"
+            )))
+        }
+        None => INTRO_SPRITE_FRAGMENT_GLSL,
+    };
     let mut sprites: Vec<(ScenePipeline, UniformValues)> = Vec::new();
     if passes != PASS_BACKDROP {
         let seeds = apeireth_ui_scene::intro::sprites::sprite_seeds();
@@ -516,7 +534,7 @@ pub async fn run_intro(
             //   ⇒ 顶点数据**不变**（不是 4 × 4096 个顶点）。
             SpriteTopology::InstancedQuad => SceneDescriptor::new(
                 INTRO_SPRITE_VERTEX_GLSL,
-                INTRO_SPRITE_FRAGMENT_GLSL,
+                sprite_fragment,
             )
             .with_instance_data(seeds)
             .with_instance_format(VertexFormat::Vec4)
@@ -525,7 +543,7 @@ pub async fn run_intro(
             // 点图元路径（WebGL 快路径）：粒子属性走**顶点缓冲**。
             SpriteTopology::PointList => SceneDescriptor::new(
                 INTRO_SPRITE_VERTEX_GLSL,
-                INTRO_SPRITE_FRAGMENT_GLSL,
+                sprite_fragment,
             )
             .with_vertex_data(seeds)
             .with_vertex_format(VertexFormat::Vec4)
