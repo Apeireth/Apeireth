@@ -389,3 +389,10 @@ path = "fuzz_targets/guard_watch.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "device_control"
+path = "fuzz_targets/device_control.rs"
+test = false
+doc = false
+bench = false
