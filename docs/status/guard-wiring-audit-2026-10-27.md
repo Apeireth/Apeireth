@@ -299,6 +299,16 @@ runtime    crates/engine/runtime/src/canonical/execute.rs:3191   governance.eval
   结论是 **`RequireApproval`（人工审批），不是 `Deny`**；
 * **后果**：插件注册的能力在护栏眼里是「未知」⇒ 只到「停人工」不到「拒」。
 
+#### ⏸️ **P1-4 暂不修 —— 理由已写进决策书（owner 待决 **D-15**）**
+
+* **为什么不是我修**：「插件怎么声明安全元数据」（**哪些键、什么取值**）是**插件 API 的协议**
+  ⇒ ⇒ ⇒ **不该由我单方面发明**；
+* ⇒ 且 CLI 的护栏装配点**根本拿不到插件清单**
+  ⇒ ⇒ ⇒ 若只把 `with_safety_provider` 接上、却仍传**同一个 canonical 注册表**
+  ⇒ ⇒ ⇒ **台账会显示「已接线」而行为一点没变** ⇒ ⇒ ⇒ **那就是撒谎** ⇒ ⇒ ⇒ **不做**；
+* ⇒ ⇒ **建议方案 A**（插件清单加**可选**安全描述段 ⇒ 不声明就维持现状 ⇒ **向后兼容**）
+  ⇒ ⇒ **schema 需 owner 拍板**（见 `docs/04-internal/backend-enhancement/owner-decision-brief-2026-10-27.md` 的 **D-15**）。
+
 ### P2-5 模型提案向可信信封收窄 —— 死代码
 
 * **事实**：`constrain_to_trusted`（`crates/engine/guard/src/intent.rs:569`）零调用点
