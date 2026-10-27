@@ -257,6 +257,52 @@ where
         .cloned()
 }
 
+/// 在正文里**以主体第一次出现处为中心**取一个窗口（**段内定位的更好做法**）。
+///
+/// # 为什么要有这个（2026-10-27 实测）
+///
+/// 实测对照（同一批题、同一检索，只改**窗口位置**）：
+///
+/// | 窗口位置 | 《紅樓夢》 grounded | 《水滸傳》 grounded |
+/// |---|---|---|
+/// | **段首** 400 字 | 0.4202 | 0.7056 |
+/// | **主体出现处** 400 字 | **0.8718** | **0.8992** |
+///
+/// ⇒ ⇒ 古典小说的**段落很长** ⇒ ⇒ 答案句常在段的**后半部分**
+/// ⇒ ⇒ **段首窗口够不着** ⇒ ⇒ **以主体出现处为中心**才是对的。
+///
+/// # ⚠️ 口径警告（**必读**）
+///
+/// 这个做法在**内部卷基准**上**接近 oracle**
+/// ⇒ 因为基准把期望片段定义为「**第一句**含主体的句子」
+/// ⇒ ⇒ 「主体第一次出现处」≈ 答案处 ⇒ ⇒ **绝对值偏乐观**
+/// ⇒ ⇒ **不许**把它的数字当成「上线后的收益」。
+///
+/// # 口径
+///
+/// * 窗口以**主体第一次出现处**为中心，前后各取约 `max_chars / 2`；
+/// * 主体**不在正文里** ⇒ **退回开头 `max_chars` 字**（**不返回空**）。
+pub fn find_subject_window(text: &str, subject: &str, max_chars: usize) -> Option<String> {
+    if text.is_empty() || max_chars == 0 {
+        return None;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let Some(subject) = (if subject.is_empty() {
+        None
+    } else {
+        Some(subject)
+    }) else {
+        return Some(chars.iter().take(max_chars).collect());
+    };
+    let Some(position) = text.find(subject) else {
+        return Some(chars.iter().take(max_chars).collect());
+    };
+    let offset = text[..position].chars().count();
+    let start = offset.saturating_sub(max_chars / 2);
+    let end = (start + max_chars).min(chars.len());
+    Some(chars[start..end].iter().collect())
+}
+
 /// 一条**锚定证据**（**定位 + 送达**都做完了）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnchoredEvidence {

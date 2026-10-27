@@ -6,8 +6,8 @@
 //! * **主体段定位取第一段** ⇒ 已知局限 ⇒ **不许**假装它是精确的。
 
 use apeireth_memory::anchor_injection::{
-    build_anchored_evidence, chapter_text, find_subject_span, parse_time_anchors,
-    render_anchor_report, TimeAnchor, TimeUnit, FIXED_TIME_WORDS,
+    build_anchored_evidence, chapter_text, find_subject_span, find_subject_window,
+    parse_time_anchors, render_anchor_report, TimeAnchor, TimeUnit, FIXED_TIME_WORDS,
 };
 
 #[test]
@@ -191,4 +191,27 @@ fn fixed_time_words_are_all_parseable() {
             "词表里的 {word} 应能被解析出来"
         );
     }
+}
+
+#[test]
+fn subject_window_centers_on_the_first_occurrence() {
+    // ⚠️ **窗口位置**才是关键（今天实测：段首 0.4202 vs 主体处 0.8718）。
+    let filler = "甲".repeat(1000);
+    let text = format!("{filler}賈寶玉在這裡說話。{filler}");
+    let window = find_subject_window(&text, "賈寶玉", 400).expect("应能取到窗口");
+    assert!(window.contains("賈寶玉"), "窗口应含主体：{window}");
+    assert!(window.chars().count() <= 400);
+}
+
+#[test]
+fn subject_window_falls_back_to_the_head_when_the_subject_is_absent() {
+    // ⚠️ **不返回空** ⇒ 退回开头。
+    let window = find_subject_window("正文开头的内容", "不存在的主体", 10).expect("应退回");
+    assert_eq!(window, "正文开头的内容");
+}
+
+#[test]
+fn subject_window_handles_empty_subject() {
+    let window = find_subject_window("正文", "", 5).expect("应退回");
+    assert_eq!(window, "正文");
 }

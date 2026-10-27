@@ -288,6 +288,54 @@ fn report_one(name: &str, path: &Path) -> Result<(), Box<dyn std::error::Error>>
             span = SUBJECT_SPAN_CHARS,
             e = e.groundedness
         );
+
+        // ---------- 变体 F：**多个**主体段（补 E 的缺口） ----------
+        //
+        // # 缺口在哪（**实测机制**）
+        //
+        // E 只取「**第一段**含主体的段」⇒ ⇒ 主体在同一回里**出现多次**时
+        // ⇒ ⇒ 挑到的那段**未必是答案段** ⇒ ⇒ groundedness 只到 0.4202。
+        //
+        // ⇒ ⇒ 补法：**把含主体的段都取出来**（前 N 段）⇒ ⇒ 成本 ×N
+        // ⇒ ⇒ 看 groundedness 涨多少、值不值。
+        // ---------- 变体 G：窗口**以主体出现处为中心** ----------
+        //
+        // # 为什么试它（E/F 的缺口在哪）
+        //
+        // E（段首 400 字）0.4202 · F（前 2/3 段）**几乎不涨** ⇒ ⇒ 缺口**不在「取几段」**
+        // ⇒ ⇒ **在窗口位置**：古典小说的段落很长 ⇒ ⇒ 答案句在段的**后半部分** ⇒ ⇒ 段首够不着。
+        //
+        // # ⚠️ 这个变体可能暴露**基准构造问题**
+        //
+        // 生产挖题的期望片段 = 「**第一句**含主体的句子」（`golden_mining::fragment_for`）
+        // ⇒ ⇒ 「取主体**第一次出现处**附近的窗口」**几乎就是答案**
+        // ⇒ ⇒ 若 G 直奔 1.0 ⇒ ⇒ 说明「主体定位」在这个基准上**接近 oracle**
+        // ⇒ ⇒ ⇒ **必须如实指出**（否则会把这个数字当成可上线的收益）。
+        let g = run_anchored_centered(&records, &real_anchor);
+        print_row("G 锚定 + 主体出现处窗口", &g, SUBJECT_SPAN_CHARS);
+        println!(
+            "  ⇒ E→G（**窗口从段首挪到主体处**）：grounded {e:.4} → {g:.4}（Δ {delta:+.4}）",
+            e = e.groundedness,
+            g = g.groundedness,
+            delta = g.groundedness - e.groundedness
+        );
+
+        for count in [2usize, 3] {
+            let f = run_anchored_with_subject_spans(&records, &real_anchor, count);
+            print_row(
+                &format!("F 锚定 + 前 {count} 个主体段"),
+                &f,
+                SUBJECT_SPAN_CHARS * count,
+            );
+            println!(
+                "  ⇒ E→F（前 {count} 段）：grounded {e:.4} → {f:.4}（Δ {delta:+.4}）· 成本 {span} → {span2} 字/条",
+                e = e.groundedness,
+                f = f.groundedness,
+                delta = f.groundedness - e.groundedness,
+                span = SUBJECT_SPAN_CHARS,
+                span2 = SUBJECT_SPAN_CHARS * count
+            );
+        }
     }
     println!();
     println!("  ⚠️ 口径：");
@@ -543,6 +591,179 @@ fn paragraph_around(text: &str, subject: &str, max_chars: usize) -> String {
     }
     let chars: Vec<char> = text.chars().collect();
     let start = start.min(chars.len());
+    let end = (start + max_chars).min(chars.len());
+    chars[start..end].iter().collect()
+}
+
+/// 变体 F：锚定检索 + **注入前 N 个含主体的段**。
+///
+/// # 口径
+///
+/// * 同变体 E，但**不是只取第一段** ⇒ ⇒ 取**前 N 段**含主体的段（各最多
+///   `SUBJECT_SPAN_CHARS` 字）⇒ ⇒ 成本 ×N；
+/// * ⚠️ **段之间按出现顺序**（**确定性** ⇒ 可复算）。
+fn run_anchored_with_subject_spans(
+    records: &[(String, String)],
+    golden: &GoldenSet,
+    count: usize,
+) -> Metrics {
+    let mut bm25 = Bm25Index::new(Bm25Config::default());
+    for (id, text) in records {
+        bm25.insert(id, text);
+    }
+    let mut hits = 0usize;
+    let mut grounded = 0usize;
+    let mut scored = 0usize;
+    for case in &golden.cases {
+        let Some(chapter) = chapter_of_query(&case.query) else {
+            continue;
+        };
+        let target_id = format!("novel-{chapter:04}");
+        let mut ranked: Vec<String> = Vec::with_capacity(K);
+        if records.iter().any(|(id, _)| *id == target_id) {
+            ranked.push(target_id.clone());
+        }
+        for hit in bm25.search(&case.query, K) {
+            if !ranked.contains(&hit.id) {
+                ranked.push(hit.id.clone());
+            }
+        }
+        let subject = apeireth_memory::query_signals::parse_signals(case).subject;
+        let mut evidence: Vec<String> = Vec::new();
+        for id in ranked.iter().take(K) {
+            let Some((_, text)) = records.iter().find(|(record_id, _)| record_id == id) else {
+                continue;
+            };
+            if id == &target_id {
+                let spans = match subject.as_deref() {
+                    Some(subject) => subject_spans(text, subject, SUBJECT_SPAN_CHARS, count),
+                    None => vec![text.chars().take(PRODUCTION_CHARS).collect()],
+                };
+                for span in spans {
+                    evidence.push(span);
+                }
+            } else {
+                evidence.push(text.chars().take(PRODUCTION_CHARS).collect());
+            }
+        }
+        scored += 1;
+        if ranked.iter().take(K).any(|id| id == &case.expect_ids[0]) {
+            hits += 1;
+        }
+        let expected = case.expect_fragments.first().cloned().unwrap_or_default();
+        if !expected.is_empty() && evidence.iter().any(|text| text.contains(&expected)) {
+            grounded += 1;
+        }
+    }
+    if scored == 0 {
+        return Metrics::default();
+    }
+    Metrics {
+        recall_at_k: hits as f64 / scored as f64,
+        ndcg_at_k: 0.0,
+        evidence_precision: 0.0,
+        groundedness: grounded as f64 / scored as f64,
+        skipped_cases: 0,
+        total_cases: scored,
+    }
+}
+
+/// 正文里**前 `count` 个**含 `subject` 的段（各最多 `max_chars` 字）。
+fn subject_spans(text: &str, subject: &str, max_chars: usize, count: usize) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut start = 0usize;
+    for paragraph in text.split('\n') {
+        let trimmed = paragraph.trim();
+        if !trimmed.is_empty() && trimmed.contains(subject) {
+            let begin = start.min(chars.len());
+            let end = (begin + max_chars).min(chars.len());
+            out.push(chars[begin..end].iter().collect());
+            if out.len() >= count {
+                break;
+            }
+        }
+        start += paragraph.chars().count() + 1;
+    }
+    out
+}
+
+/// 变体 G：锚定检索 + **以主体出现处为中心的窗口**。
+///
+/// # ⚠️ 口径警告（**这是本变体存在的理由**）
+///
+/// 生产挖题的期望片段 = 「**第一句**含主体的句子」
+/// ⇒ ⇒ 「取主体**第一次出现处**附近的窗口」**几乎就是答案**
+/// ⇒ ⇒ 这个变体**很可能接近 oracle** ⇒ ⇒ **它量的是「基准构造」，不是「产品收益」**
+/// ⇒ ⇒ **如实标出**，不许拿它的数字去许诺。
+fn run_anchored_centered(records: &[(String, String)], golden: &GoldenSet) -> Metrics {
+    let mut bm25 = Bm25Index::new(Bm25Config::default());
+    for (id, text) in records {
+        bm25.insert(id, text);
+    }
+    let mut hits = 0usize;
+    let mut grounded = 0usize;
+    let mut scored = 0usize;
+    for case in &golden.cases {
+        let Some(chapter) = chapter_of_query(&case.query) else {
+            continue;
+        };
+        let target_id = format!("novel-{chapter:04}");
+        let mut ranked: Vec<String> = Vec::with_capacity(K);
+        if records.iter().any(|(id, _)| *id == target_id) {
+            ranked.push(target_id.clone());
+        }
+        for hit in bm25.search(&case.query, K) {
+            if !ranked.contains(&hit.id) {
+                ranked.push(hit.id.clone());
+            }
+        }
+        let subject = apeireth_memory::query_signals::parse_signals(case).subject;
+        let mut evidence: Vec<String> = Vec::new();
+        for id in ranked.iter().take(K) {
+            let Some((_, text)) = records.iter().find(|(record_id, _)| record_id == id) else {
+                continue;
+            };
+            if id == &target_id {
+                let window = match subject.as_deref() {
+                    Some(subject) => window_around_subject(text, subject, SUBJECT_SPAN_CHARS),
+                    None => text.chars().take(PRODUCTION_CHARS).collect(),
+                };
+                evidence.push(window);
+            } else {
+                evidence.push(text.chars().take(PRODUCTION_CHARS).collect());
+            }
+        }
+        scored += 1;
+        if ranked.iter().take(K).any(|id| id == &case.expect_ids[0]) {
+            hits += 1;
+        }
+        let expected = case.expect_fragments.first().cloned().unwrap_or_default();
+        if !expected.is_empty() && evidence.iter().any(|text| text.contains(&expected)) {
+            grounded += 1;
+        }
+    }
+    if scored == 0 {
+        return Metrics::default();
+    }
+    Metrics {
+        recall_at_k: hits as f64 / scored as f64,
+        ndcg_at_k: 0.0,
+        evidence_precision: 0.0,
+        groundedness: grounded as f64 / scored as f64,
+        skipped_cases: 0,
+        total_cases: scored,
+    }
+}
+
+/// 以**主体第一次出现处**为中心的窗口（`max_chars` 字）。
+fn window_around_subject(text: &str, subject: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let Some(position) = text.find(subject) else {
+        return chars.iter().take(max_chars).collect();
+    };
+    let offset = text[..position].chars().count();
+    let start = offset.saturating_sub(max_chars / 2);
     let end = (start + max_chars).min(chars.len());
     chars[start..end].iter().collect()
 }
