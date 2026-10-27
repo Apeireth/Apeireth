@@ -38,6 +38,15 @@ use apeireth_memory::handover::{
 /// 命令用法（与其它命令的 `USAGE` 风格一致）。
 pub const USAGE: &str = "apeireth memory handover [--db <COGNITIVE_DB>] --out <PACKAGE.json> [--issue <TEXT>]... [--next <TEXT>]\n\n  只读打包：把认知库打成**交接包**（数据 + 状态 + 下一步 + 红线），并**当场跑演练**。\n\n  --db      认知库路径（缺省 = APEIRETH_COGNITIVE_DB 或数据目录下 cognitive.sqlite3）\n  --out     交接包输出路径（**必填**）\n  --issue   一条**已知问题**（可重复；**不隐瞒坏消息**）\n  --next    一条**下一步**（可重复；格式：做什么 | 为什么 | 怎么验收 | 工作量1-3）\n\n  退出码：0 = 打包并演练通过 · 1 = 演练失败 · 2 = 无法打包";
 
+/// **大包**阈值（字节）⇒ ⇒ 超过就在报告里**如实提醒**。
+///
+/// # 为什么有这个
+///
+/// 交接包里的 `archive` 是**数据本体**（**逐字正文**）⇒ ⇒ 包体积**随库线性增长**
+/// ⇒ ⇒ 真实库上可能到**几百 KB ~ 几 MB** ⇒ ⇒ **体积是产品口径**
+/// （要不要改成「**路径 + 哈希**」）⇒ ⇒ **待 owner 裁决** ⇒ ⇒ 但**先如实报出来**。
+pub const LARGE_PACKAGE_BYTES: u64 = 1024 * 1024;
+
 /// 交接包参数。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HandoverOptions {
@@ -154,6 +163,8 @@ pub struct HandoverReport {
     pub entries: usize,
     /// **未纳管**条数（**如实** ⇒ 接手者知道账不完整）。
     pub unmanaged_entries: usize,
+    /// **交接包的字节数**（**写盘后**量 ⇒ ⇒ 如实）。
+    pub package_bytes: u64,
     /// 演练是否全过。
     pub drill_passed: bool,
     /// 演练的问题清单（全过时为空）。
@@ -196,11 +207,16 @@ pub fn run_handover(args: &[String]) -> Result<HandoverReport, HandoverFailure> 
     std::fs::write(&options.out, payload).map_err(|error| {
         HandoverFailure::Unavailable(format!("写不出去（{}）：{error}", options.out.display()))
     })?;
+    // ⇒ **先量体积**（写盘后）⇒ ⇒ 再移动 `options.out`（避免移动后借用）。
+    let package_bytes = std::fs::metadata(&options.out)
+        .map(|meta| meta.len())
+        .unwrap_or(0);
     Ok(HandoverReport {
         db_path,
         out_path: options.out,
         entries: package.archive.episodes.len(),
         unmanaged_entries: package.state.unmanaged_count,
+        package_bytes,
         drill_passed: passed,
         drill_problems: problems,
     })
@@ -247,6 +263,7 @@ pub fn handover_package_from_conn(
         out_path: out.to_path_buf(),
         entries: package.archive.episodes.len(),
         unmanaged_entries: package.state.unmanaged_count,
+        package_bytes: std::fs::metadata(out).map(|meta| meta.len()).unwrap_or(0),
         drill_passed: passed,
         drill_problems: problems,
     })
@@ -265,6 +282,18 @@ pub fn render(report: &HandoverReport) -> String {
         report.unmanaged_entries
     ));
     lines.push(format!("  红线条数：{}", default_red_lines().len()));
+    lines.push(format!(
+        "  交接包体积：{} 字节（{:.1} KB）",
+        report.package_bytes,
+        report.package_bytes as f64 / 1024.0
+    ));
+    if report.package_bytes > LARGE_PACKAGE_BYTES {
+        lines.push(String::new());
+        lines.push(format!(
+            "  ⚠️ **包偏大**（> {} KB）⇒ ⇒ 里面的 `archive` 是**数据本体**（逐字正文）⇒ ⇒ 可考虑改成「**路径 + 哈希**」⇒ ⇒ **这是产品口径 ⇒ 待 owner 裁决**",
+            LARGE_PACKAGE_BYTES / 1024
+        ));
+    }
     lines.push(String::new());
     if report.drill_passed {
         lines.push("  ✅ **演练通过**（读方能独立读懂这个包）".to_string());
