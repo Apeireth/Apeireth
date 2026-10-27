@@ -94,19 +94,6 @@ const MAX_RECENT_EVENTS: usize = 200;
 /// 未命中的链; 正在评估的链由回写阶段重新插回, 不会丢本轮的 action。
 const MAX_ACTIVE_CHAINS: usize = 256;
 
-/// **被跟踪会话数**上限（2026-10-27，护栏审计 P1-3）。
-///
-/// # 为什么需要
-///
-/// 护栏按会话键持有**六张无上界的表**（`session_scopes` / `session_risk_history` /
-/// `session_behavior_summary` / `session_history` / `turn_intents` /
-/// `last_immune_signals`）⇒ ⇒ 长跑进程里**只增不减** ⇒ ⇒ **无界增长**。
-///
-/// ⇒ 而 `clear_session` 虽有实现，**生产零调用点**（运行时**没有「会话结束」概念**
-/// ⇒ ⇒ 那是**协议决策**，不是护栏能自己发明的）⇒ ⇒
-/// ⇒ ⇒ 所以这里给这些表**加上界**：超限时**按会话 LRU 驱逐**最久未用的会话。
-const MAX_TRACKED_SESSIONS: usize = 256;
-
 /// 算本次判定的收容义务；没有义务时返回 `None`（不给事件流塞噪音）。
 ///
 /// [`crate::enforcement::EnforcementDirective::from_decision`] 会把
@@ -415,8 +402,8 @@ pub struct BehaviorChainGuardHook {
     /// 直接 `chains.keys().next()` (`HashMap` 任意键序), 注释说的顺序驱逐
     /// 并未成立。
     chain_order: Mutex<VecDeque<(SessionId, String)>>,
-    /// **会话 LRU**（插入顺序 ⇒ 队首最久未用）⇒ ⇒ 驱动 [`Self::prune_sessions`]。
-    session_order: Mutex<VecDeque<SessionId>>,
+    /// **会话 LRU**（插入顺序 ⇒ 队首最久未用）⇒ ⇒ 驱动会话态裁剪。
+    session_order: crate::hook::session_state::SessionStateRegistry,
     dataset_recorder: Option<Arc<DatasetRecorder>>,
     classifier: Arc<dyn ChainRiskClassifier>,
     safety_provider: Arc<dyn CapabilitySafetyMetadataProvider>,
@@ -453,7 +440,7 @@ impl BehaviorChainGuardHook {
             turn_intents: Mutex::new(HashMap::new()),
             last_snapshots: crate::snapshot_store::SnapshotStore::new(),
             chain_order: Mutex::new(VecDeque::new()),
-            session_order: Mutex::new(VecDeque::new()),
+            session_order: crate::hook::session_state::SessionStateRegistry::default(),
             dataset_recorder: None,
             classifier: Arc::new(NoClassifier),
             safety_provider: Arc::new(CapabilitySafetyRegistry::canonical()),
@@ -692,64 +679,6 @@ impl BehaviorChainGuardHook {
         events.iter().rev().take(limit).cloned().collect()
     }
 
-    /// **记账一次会话访问**并在超限时**按 LRU 驱逐**最久未用的会话。
-    ///
-    /// # 为什么（护栏审计 P1-3）
-    ///
-    /// 六张按会话键持有的表**无上界** ⇒ ⇒ 长跑进程里**只增不减**
-    /// ⇒ ⇒ 而 `clear_session` **生产零调用点**（运行时没有「会话结束」概念）
-    /// ⇒ ⇒ ⇒ 所以这里**自己**加上界：超限时把**最久未用**的会话**整段清掉**。
-    ///
-    /// # 口径
-    ///
-    /// * **按会话**（不是按 trace）⇒ ⇒ 一个会话的所有表**一起**被清
-    ///   ⇒ ⇒ **不会出现「清了一半」的半吊子状态**；
-    /// * **LRU** ⇒ 命中即移到队尾 ⇒ ⇒ 驱逐的是**最久未用**的（**不是**任意一个）；
-    /// * 驱逐**复用** [`Self::clear_session`] ⇒ ⇒ **一份清理实现**；
-    /// * **不改变判定结果** ⇒ ⇒ 只影响**历史状态**的可见性。
-    fn track_session(&self, session_id: SessionId) {
-        {
-            let mut order = self.session_order.lock();
-            if let Some(position) = order.iter().position(|entry| *entry == session_id) {
-                order.remove(position);
-            }
-            order.push_back(session_id);
-        }
-        self.prune_sessions();
-    }
-
-    /// 超限时按 LRU 驱逐**最久未用**的会话（**复用 `clear_session`**）。
-    fn prune_sessions(&self) {
-        let victims: Vec<SessionId> = {
-            let mut order = self.session_order.lock();
-            let mut victims = Vec::new();
-            while order.len() > MAX_TRACKED_SESSIONS {
-                let Some(oldest) = order.pop_front() else {
-                    break;
-                };
-                victims.push(oldest);
-            }
-            victims
-        };
-        // ⇒ ⚠️ **先放锁再清**（`clear_session` 自己会锁那些表 ⇒ ⇒ 持锁调用 ⇒ **死锁**）。
-        for victim in victims {
-            self.clear_session(&victim);
-        }
-    }
-
-    /// 当前**被跟踪**的会话数（**可观测** ⇒ ⇒ 运维能看见它有没有涨）。
-    pub fn tracked_sessions(&self) -> usize {
-        self.session_order.lock().len()
-    }
-
-    /// 这个会话**当前是否还被跟踪**（**可观测** ⇒ ⇒ 用来验证「LRU 驱逐」与「在用的不被误杀」）。
-    pub fn tracks_session(&self, session_id: &SessionId) -> bool {
-        self.session_order
-            .lock()
-            .iter()
-            .any(|entry| entry == session_id)
-    }
-
     /// Clear memory for a completed session.
     pub fn clear_session(&self, session_id: &SessionId) {
         let mut chains = self.chains.lock();
@@ -770,6 +699,8 @@ impl BehaviorChainGuardHook {
         // 特征快照同样按会话持有 —— 不清的话，会话结束后它的快照仍然驻留
         // （而 `last_snapshots` 的键是 (会话, 动作)，容量上限只是兜底）。
         self.last_snapshots.remove_session(session_id);
+        // ⇒ 会话 LRU 队列同步清（否则留下永不命中的幽灵 key ⇒ 挤占额度）。
+        self.session_order.forget(session_id);
     }
 
     /// Dry-run evaluate an action without permanently recording it in the chain.
@@ -850,7 +781,10 @@ impl BehaviorChainGuardHook {
         // ⇒ 六张按会话键持有的表**无上界** ⇒ ⇒ 长跑进程里只增不减
         // ⇒ ⇒ 这里在**唯一的热路径入口**记账 ⇒ ⇒ 超限就**按 LRU 驱逐**最久未用的会话
         // ⇒ ⇒ （驱逐复用 [`Self::clear_session`] ⇒ **一份实现**，不重复写清理逻辑）。
-        self.track_session(request.session);
+        let evicted = self.session_order.track(request.session);
+        for victim in evicted {
+            self.clear_session(&victim);
+        }
 
         // 快照阶段 (持锁): 全局 chains 锁内只做"取链 / 建链"与 LRU 记账。
         // 旧实现在持锁状态下跑完 fast guard、chain guard、fusion 与全部
@@ -1152,70 +1086,8 @@ impl BehaviorChainGuardHook {
     }
 }
 
-#[async_trait]
-impl GovernanceHook for BehaviorChainGuardHook {
-    fn name(&self) -> &str {
-        "behavior_chain_guard"
-    }
-
-    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
-        let (decision, _) = self.evaluate_internal(request);
-        decision.decision
-    }
-
-    async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
-        let (_, verdict) = self.evaluate_internal(request);
-        verdict
-    }
-
-    /// **上游拒绝** ⇒ ⇒ 把它记进行为链（2026-10-27，护栏审计 **P0-2**）。
-    ///
-    /// # 为什么需要（**后果**）
-    ///
-    /// 治理管线在**第一个非 allow 处短路** ⇒ ⇒ 护栏（排在后面）**根本不会被评估**
-    /// ⇒ ⇒ **被上游闸拒掉的动作不进护栏的行为链**
-    /// ⇒ ⇒ 而护栏的**复合检测**依赖链里有**被拒动作**：
-    /// * `BehaviorChain::has_same_effect_after_denial`（同效果绕过）
-    /// * `has_retry_escalation`（重试升级）
-    /// * `has_destructive_chain`（破坏链）
-    /// ⇒ ⇒ ⇒ 「**拒绝后换个工具再来一次**」对**上游拒绝**是**失明**的。
-    ///
-    /// # 口径
-    ///
-    /// * **只记「被拒」这一个事实** ⇒ ⇒ 不做任何判定 ⇒ ⇒ **不改变护栏的判定结果**
-    ///   （只影响**后续**评估能看到这条历史）；
-    /// * 与护栏**自己**拒绝时的记法**完全一致**（同一条链、同样的 `denied` 标记）
-    ///   ⇒ ⇒ ⇒ 下游的复合检测**分不出**这是护栏拒的还是上游拒的
-    ///   ⇒ ⇒ ⇒ **这正是要的**（「拒绝过」这件事本身就够了）。
-    async fn on_denied(&self, request: &GovernanceRequest<'_>, _verdict: &GovernanceVerdict) {
-        let trace_id = request.trace.to_string();
-        let key = (request.session, trace_id.clone());
-        let mut chains = self.chains.lock();
-        let chain = chains
-            .entry(key)
-            .or_insert_with(|| BehaviorChain::new(request.session.to_string(), trace_id.clone()));
-        let actions = chain.actions();
-        let denied_before = actions.iter().any(|action| action.denied);
-        let retry_count = actions
-            .iter()
-            .rev()
-            .take_while(|action| action.denied)
-            .count() as u32;
-        let prior_actions = actions
-            .iter()
-            .map(|action| action.capability_id.clone())
-            .collect();
-        let observation = SafetyObservation::from_governance_request_with_provider(
-            request,
-            retry_count,
-            denied_before,
-            prior_actions,
-            Some(self.safety_provider.as_ref()),
-        );
-        let action_id = chain.add_action_with_id(&observation, request.round, request.action_id);
-        chain.update_action_status(&action_id, ActionStatus::Denied);
-    }
-}
+mod session_state;
+mod upstream_denial;
 
 #[cfg(test)]
 mod tests;

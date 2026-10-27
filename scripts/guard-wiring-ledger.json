@@ -6,8 +6,8 @@
   "note": "本台账由 `python3 scripts/check_guard_wiring.py --update` 生成；「已接生产」必须有**代码锚点**支撑，手改后跑检查会因锚点对不上而退出码 1。",
   "summary": {
     "PRODUCTION WIRED": 19,
-    "PRODUCTION WIRED (crate 内生产路径)": 15,
-    "TEST ONLY": 12,
+    "PRODUCTION WIRED (crate 内生产路径)": 16,
+    "TEST ONLY": 11,
     "NOT WIRED": 3,
     "total": 49
   },
@@ -26,10 +26,10 @@
         "crates/adapters/cli/src/gateway_panels.rs:124",
         "crates/adapters/cli/src/gateway_panels.rs:84",
         "crates/adapters/cli/src/guard_decision_wiring.rs:37",
-        "crates/adapters/cli/src/lib.rs:1029",
-        "crates/adapters/cli/src/lib.rs:1133",
-        "crates/adapters/cli/src/lib.rs:865",
-        "crates/adapters/cli/src/lib.rs:913",
+        "crates/adapters/cli/src/lib.rs:1031",
+        "crates/adapters/cli/src/lib.rs:1135",
+        "crates/adapters/cli/src/lib.rs:867",
+        "crates/adapters/cli/src/lib.rs:915",
         "crates/adapters/gateway/src/panels.rs:508",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:23",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:39"
@@ -54,6 +54,11 @@
         "crates/engine/guard/tests/guard_v31_correctness.rs:184",
         "crates/engine/guard/tests/guard_v31_correctness.rs:268",
         "crates/engine/guard/tests/guard_v31_correctness.rs:341",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:106",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:74",
+        "crates/engine/guard/tests/session_state_bounds.rs:48",
+        "crates/engine/guard/tests/session_state_bounds.rs:71",
+        "crates/engine/guard/tests/session_state_bounds.rs:92",
         "crates/engine/guard/tests/wiring_evidence.rs:252",
         "crates/engine/guard/tests/wiring_evidence.rs:287",
         "crates/engine/guard/tests/wiring_evidence.rs:61",
@@ -124,8 +129,8 @@
         "crates/adapters/gateway/src/panels.rs:509"
       ],
       "internal_sites": [
-        "crates/engine/guard/src/hook.rs:642",
-        "crates/engine/guard/src/hook.rs:651"
+        "crates/engine/guard/src/hook.rs:645",
+        "crates/engine/guard/src/hook.rs:654"
       ],
       "test_sites": [],
       "note": ""
@@ -208,7 +213,7 @@
       "call_form": true,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1198"
+        "crates/adapters/cli/src/lib.rs:1200"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -228,7 +233,7 @@
       "call_form": true,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1031"
+        "crates/adapters/cli/src/lib.rs:1033"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -249,7 +254,7 @@
       "call_form": true,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1148"
+        "crates/adapters/cli/src/lib.rs:1150"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -315,9 +320,11 @@
       ],
       "scope": "any",
       "call_form": true,
-      "status": "TEST ONLY",
+      "status": "PRODUCTION WIRED (crate 内生产路径)",
       "production_sites": [],
-      "internal_sites": [],
+      "internal_sites": [
+        "crates/engine/guard/src/hook.rs:786"
+      ],
       "test_sites": [
         "crates/engine/guard/src/hook/tests.rs:134"
       ],
@@ -347,6 +354,8 @@
         "crates/engine/guard/tests/guard_v31_correctness.rs:177",
         "crates/engine/guard/tests/guard_v31_correctness.rs:374",
         "crates/engine/guard/tests/guard_v31_correctness.rs:568",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:117",
+        "crates/engine/guard/tests/p0_2_upstream_denial.rs:90",
         "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:203",
         "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:232",
         "crates/engine/runtime-assembly/tests/convergence_production_integration.rs:238"
@@ -403,7 +412,7 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:2725",
+        "crates/adapters/cli/src/lib.rs:2727",
         "crates/adapters/gateway/src/canonical_entry.rs:342"
       ],
       "internal_sites": [],
@@ -431,7 +440,7 @@
       "status": "PRODUCTION WIRED (crate 内生产路径)",
       "production_sites": [],
       "internal_sites": [
-        "crates/engine/guard/src/hook.rs:853"
+        "crates/engine/guard/src/hook.rs:867"
       ],
       "test_sites": [],
       "note": ""
@@ -504,7 +513,7 @@
         "crates/engine/guard/src/decision.rs:44",
         "crates/engine/guard/src/decision.rs:64",
         "crates/engine/guard/src/hook.rs:390",
-        "crates/engine/guard/src/hook.rs:431"
+        "crates/engine/guard/src/hook.rs:433"
       ],
       "test_sites": [
         "crates/adapters/cli/src/guard_decision_wiring.rs:202",
@@ -531,7 +540,7 @@
         "crates/engine/guard/src/hook.rs:333",
         "crates/engine/guard/src/hook.rs:336",
         "crates/engine/guard/src/hook.rs:391",
-        "crates/engine/guard/src/hook.rs:432"
+        "crates/engine/guard/src/hook.rs:434"
       ],
       "test_sites": [
         "crates/engine/guard/src/hook/tests.rs:194",
@@ -556,8 +565,8 @@
         "crates/engine/guard/src/fusion.rs:115",
         "crates/engine/guard/src/fusion.rs:138",
         "crates/engine/guard/src/fusion.rs:74",
-        "crates/engine/guard/src/hook.rs:751",
-        "crates/engine/guard/src/hook.rs:896"
+        "crates/engine/guard/src/hook.rs:756",
+        "crates/engine/guard/src/hook.rs:910"
       ],
       "test_sites": [
         "crates/engine/guard/src/fusion.rs:166",
@@ -581,7 +590,7 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1146"
+        "crates/adapters/cli/src/lib.rs:1148"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -627,7 +636,7 @@
       "status": "PRODUCTION WIRED (crate 内生产路径)",
       "production_sites": [],
       "internal_sites": [
-        "crates/engine/guard/src/hook.rs:442"
+        "crates/engine/guard/src/hook.rs:445"
       ],
       "test_sites": [
         "crates/engine/guard/tests/guard_v31_correctness.rs:243",
@@ -698,7 +707,7 @@
         "crates/engine/guard/src/hook.rs:104",
         "crates/engine/guard/src/hook.rs:292",
         "crates/engine/guard/src/hook.rs:315",
-        "crates/engine/guard/src/hook.rs:582"
+        "crates/engine/guard/src/hook.rs:585"
       ],
       "test_sites": [
         "crates/engine/guard/src/fusion.rs:162",
@@ -722,7 +731,7 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1564"
+        "crates/adapters/cli/src/lib.rs:1566"
       ],
       "internal_sites": [
         "crates/engine/guard/src/hook.rs:105",
@@ -751,7 +760,7 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1564"
+        "crates/adapters/cli/src/lib.rs:1566"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -775,8 +784,8 @@
         "crates/adapters/cli/src/guard_decision_wiring.rs:38"
       ],
       "internal_sites": [
-        "crates/engine/guard/src/hook.rs:418",
-        "crates/engine/guard/src/hook.rs:457"
+        "crates/engine/guard/src/hook.rs:420",
+        "crates/engine/guard/src/hook.rs:460"
       ],
       "test_sites": [
         "crates/adapters/cli/src/guard_decision_wiring.rs:215",
@@ -823,17 +832,17 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1153",
-        "crates/adapters/cli/src/lib.rs:1164",
-        "crates/adapters/cli/src/lib.rs:897",
+        "crates/adapters/cli/src/lib.rs:1155",
+        "crates/adapters/cli/src/lib.rs:1166",
+        "crates/adapters/cli/src/lib.rs:899",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:22",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:30",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:45"
       ],
       "internal_sites": [
-        "crates/engine/guard/src/hook.rs:405",
-        "crates/engine/guard/src/hook.rs:514",
-        "crates/engine/guard/src/hook.rs:522"
+        "crates/engine/guard/src/hook.rs:407",
+        "crates/engine/guard/src/hook.rs:517",
+        "crates/engine/guard/src/hook.rs:525"
       ],
       "test_sites": [
         "crates/engine/guard/src/dataset.rs:558",
@@ -885,7 +894,7 @@
         "crates/engine/runtime-assembly/src/canonical/parallel_dispatch.rs:65"
       ],
       "internal_sites": [
-        "crates/engine/guard/src/hook.rs:443",
+        "crates/engine/guard/src/hook.rs:446",
         "crates/engine/guard/src/semantics.rs:168",
         "crates/engine/guard/src/semantics.rs:250"
       ],
@@ -988,7 +997,8 @@
         "crates/engine/guard/src/hook.rs:199",
         "crates/engine/guard/src/hook.rs:266",
         "crates/engine/guard/src/hook.rs:291",
-        "crates/engine/guard/src/hook.rs:703",
+        "crates/engine/guard/src/hook.rs:708",
+        "crates/engine/guard/src/hook/upstream_denial.rs:68",
         "crates/engine/guard/src/intent.rs:616",
         "crates/engine/guard/src/intent.rs:771",
         "crates/engine/guard/src/session.rs:36"
@@ -1023,9 +1033,10 @@
         "crates/engine/guard/src/features_v2.rs:83",
         "crates/engine/guard/src/features_v2.rs:88",
         "crates/engine/guard/src/hook.rs:392",
-        "crates/engine/guard/src/hook.rs:625",
-        "crates/engine/guard/src/hook.rs:737",
-        "crates/engine/guard/src/hook.rs:818",
+        "crates/engine/guard/src/hook.rs:628",
+        "crates/engine/guard/src/hook.rs:742",
+        "crates/engine/guard/src/hook.rs:832",
+        "crates/engine/guard/src/hook/upstream_denial.rs:56",
         "crates/engine/guard/src/session.rs:35"
       ],
       "test_sites": [
@@ -1083,8 +1094,8 @@
         "crates/engine/guard/src/dataset.rs:418",
         "crates/engine/guard/src/fusion.rs:29",
         "crates/engine/guard/src/fusion.rs:58",
-        "crates/engine/guard/src/hook.rs:749",
-        "crates/engine/guard/src/hook.rs:893",
+        "crates/engine/guard/src/hook.rs:754",
+        "crates/engine/guard/src/hook.rs:907",
         "crates/engine/guard/src/snapshot.rs:13",
         "crates/engine/guard/src/snapshot.rs:17"
       ],
@@ -1134,7 +1145,7 @@
       "production_sites": [],
       "internal_sites": [
         "crates/engine/guard/src/hook.rs:399",
-        "crates/engine/guard/src/hook.rs:439"
+        "crates/engine/guard/src/hook.rs:441"
       ],
       "test_sites": [],
       "note": ""
@@ -1232,11 +1243,11 @@
         "crates/engine/guard/src/decision_log.rs:118",
         "crates/engine/guard/src/decision_log.rs:121",
         "crates/engine/guard/src/decision_log.rs:93",
-        "crates/engine/guard/src/hook.rs:1008",
-        "crates/engine/guard/src/hook.rs:408",
-        "crates/engine/guard/src/hook.rs:673",
-        "crates/engine/guard/src/hook.rs:702",
-        "crates/engine/guard/src/hook.rs:759"
+        "crates/engine/guard/src/hook.rs:1022",
+        "crates/engine/guard/src/hook.rs:410",
+        "crates/engine/guard/src/hook.rs:676",
+        "crates/engine/guard/src/hook.rs:707",
+        "crates/engine/guard/src/hook.rs:764"
       ],
       "test_sites": [
         "crates/adapters/cli/src/guard_decision_wiring.rs:195",
