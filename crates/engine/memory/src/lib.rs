@@ -104,6 +104,7 @@ pub mod injection_renderer;
 pub mod memory_view;
 pub mod meta_thinking;
 pub mod metadata_filter;
+pub mod migrate_rollback;
 pub mod milestone;
 pub mod milestone_store_sqlite;
 pub mod novel_corpus;
@@ -125,6 +126,8 @@ pub mod river_topology;
 pub mod semantic_axis;
 // 影子双跑 (设计稿 §8 B3): 让「换算法」可零风险上线/回退; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod shadow_run;
+// 非答案侧的题面信号来源（「信号从哪来」的那一半）: 状态 NOT IMPLEMENTED (新增未接线).
+pub mod signal_sources;
 // 算法切换流程 (设计稿 §8 B3): 影子→裁决→切换/回退 + Swap cost 度量 + 评测报告归档; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod swap_flow;
 pub mod three_tier_vault;
