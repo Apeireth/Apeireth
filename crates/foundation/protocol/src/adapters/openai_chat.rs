@@ -45,6 +45,8 @@ impl ProtocolAdapter for OpenAiChatAdapter {
     }
 
     fn adapt_request(&self, req: &NormalizedRequest) -> Result<Value, ProtocolError> {
+        crate::canonical::validate_closed_tool_context(&req.messages)
+            .map_err(|error| ProtocolError::invalid("messages", error.to_string()))?;
         if req.model.is_empty() {
             return Err(ProtocolError::missing("model"));
         }
@@ -118,7 +120,7 @@ impl ProtocolAdapter for OpenAiChatAdapter {
                 if let Some(id) = &m.tool_call_id {
                     msg.insert("tool_call_id".into(), Value::String(id.clone()));
                 }
-                if let Some(name) = &m.name {
+                if let Some(name) = m.name.as_ref().filter(|_| m.role != MessageRole::Tool) {
                     msg.insert("name".into(), Value::String(name.clone()));
                 }
                 Value::Object(msg)
@@ -393,7 +395,13 @@ mod tests {
             arguments: json!({"city": "Beijing"}),
         };
         let m = NormalizedMessage::assistant_with_tool_calls("", vec![tc]);
-        let req = NormalizedRequest::new("gpt-4o", vec![m]);
+        let req = NormalizedRequest::new(
+            "gpt-4o",
+            vec![
+                m,
+                NormalizedMessage::tool_result("call_1", Some("get_weather".into()), "sunny"),
+            ],
+        );
         let v = OpenAiChatAdapter::new().adapt_request(&req).unwrap();
         assert_eq!(v["messages"][0]["role"], "assistant");
         assert!(

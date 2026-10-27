@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Registry Kernel 第一批：工具事件协议基础设施（2026-10-27）
+
+- **基线先验**：从远端 `refactor/kc1-kernel-convergence@82724dc3` 开始，KC 全部交付可达；原版全量门禁在 Cloud 修复依赖/进程回收后五段通过，实测见 `docs/04-internal/registry-kernel-migration-2026-10-27.md`，不引用历史数字充当本次结果。
+- **IMPLEMENTED**：`protocol::canonical::ToolEventV1` 区分模型/模块来源，复用 PluginId/TaskId/ToolCall/ToolResult；内部执行 ID 与 Provider wire id 分离。批次有字节/数量限额、幂等去重、冲突拒绝、原子追加与闭合上下文校验。
+- **协议修复**：请求适配器拒绝孤立结果和未回答调用；修复 Responses 请求丢失 assistant tool calls，保持混合文本与多调用、平铺函数工具 Schema；结果块只发送相应协议允许的字段。
+- **接线边界**：本批没有迁移既有业务 overlay，也没有实现 Registry 统一生命周期、后台独立 Agent、Profile Namespace 或 Android App。固定 Hook 枚举是 V1 数据词汇，不是已发出的生命周期事件。canonical 文本 provider 的既有限制不会因协议适配器测试通过而消失。
+- **兼容**：保留现有 Loop/审批/完成观察口/工具执行/数据库/桌面装配；旧的非法工具历史会在协议边界显式报错。ADR-0018 与迁移审计登记范围及后续切片。
+
 ## [Unreleased] — KC-1 内核收束：痛觉/再生领域账本外迁到 organ，通用完成观察口取代内核领域状态（2026-10-27）
 
 - **领域状态外迁**：`BioPainState` / `BioRecoveryLedger` / 失败分类与再生案例逻辑从 `apeireth-runtime::canonical::bio_pain` 整体迁至 `apeireth-organ::nociception`；`Runtime` 不再持有 `bio_pain: Mutex<...>`，`RuntimeConfig::bio_pain_enabled` 与 `RuntimeBuilder::with_bio_pain` 退役。

@@ -180,6 +180,12 @@ sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
 
 # 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
 [[concepts]]
+name = "ToolEventV1"
+canonical = "crates/foundation/protocol/src/canonical/tool_event.rs"
+known_debt = []
+target = "ADR-0018: 统一来源/执行身份/相关性与成对消息投影；Runtime Hook 自动接线另批验收"
+
+[[concepts]]
 name = "ContextAssembler"
 canonical = "crates/foundation/orchestration/src/context_budget.rs"
 known_debt = []
