@@ -410,3 +410,10 @@ path = "fuzz_targets/doc_ops.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "content_feed"
+path = "fuzz_targets/content_feed.rs"
+test = false
+doc = false
+bench = false
