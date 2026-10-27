@@ -129,6 +129,26 @@ def find_orphan_module_files(manifest: Path) -> list[str]:
     for sibling_root in sorted(root_dir.glob("lib.rs")) + sorted(root_dir.glob("main.rs")):
         text = sibling_root.read_text(encoding="utf-8", errors="replace")
         declared.update(match.group(1) for match in MOD_RE.finditer(text))
+    # ⚠️ **同名声明两次**（2026-10-27 加）：今天发生过**三条线同时写同一批文件**
+    # ⇒ 各自往 `lib.rs` 里插 `pub mod …;` ⇒ **同一个模块被声明两次**
+    # ⇒ 编译器会报「duplicate module」⇒ 但**若两条线用了不同名字**
+    # （或一个被改掉了）⇒ **编译能过** ⇒ 而**内容已被后写的覆盖** ⇒ **无声的数据丢失**。
+    # ⇒ 这里查：**同一个 crate 根里，同一个模块名被声明了两次**。
+    manifest_text = ""
+    for sibling_root in sorted(root_dir.glob("lib.rs")) + sorted(root_dir.glob("main.rs")):
+        text = sibling_root.read_text(encoding="utf-8", errors="replace")
+        if sibling_root == manifest:
+            manifest_text = text
+    seen: dict[str, int] = {}
+    for match in MOD_RE.finditer(manifest_text):
+        name = match.group(1)
+        seen[name] = seen.get(name, 0) + 1
+    for name, count in sorted(seen.items()):
+        if count > 1:
+            problems.append(
+                f"DUPLICATE_DECL  {display_path(manifest)}: `mod {name};` 被声明了 **{count} 次**"
+                f" ⇒ 并行线撞车留下的痕迹（**内容可能被无声覆盖**）"
+            )
     for candidate in sorted(root_dir.glob("*.rs")):
         stem = candidate.stem
         if stem in ("lib", "main"):
