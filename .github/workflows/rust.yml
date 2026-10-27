@@ -324,6 +324,23 @@ jobs:
       - name: Check that every CI gate step is covered locally
         run: python3 scripts/check_ci_gate_coverage.py
 
+  # === 跨测试 env 竞态清单（2026-10-27 加；**报告型，不消警**）===
+  #
+  # Rust 的 `env::set_var` 改的是**进程级**状态 ⇒ 同二进制的**另一个测试**可能同时读到
+  # ⇒ ⇒ 表现为「**单跑几十次 0 失败、全量并行时偶发**」。
+  # ⇒ 2026-10-27 实测撞了两次（cli 的 onboarding 竞态 / memory 的 retrieval_pipeline 竞态）
+  # ⇒ ⇒ 本 job 把候选**一次性暴露**（而不是等下一次偶发）。
+  # ⚠️ **为什么不做成判红门禁**：精确判据需要**跨文件**的数据流分析 ⇒
+  #    机械判据必然有假阳性 ⇒ ⇒ 与其做一个会误报的消警器，不如给出**可复核的候选清单**。
+  env-race-inventory:
+    name: Cross-test env race inventory (候选清单, 报告型)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: List env-writing tests that do not hold a lock in the same function
+        run: python3 scripts/check_env_race.py
+
   # === R215 防御层: Secret 扫描 (per docs/04-internal/secret-management-policy.md) ===
   # 4 层防御: pre-commit hook (本地) + CI gate (本 workflow) + GitHub Secret Scanning (平台, 主人启用) + .gitleaks.toml (gitleaks binary 装上时升级)
   # 当前用本地 PowerShell 扫描器 (gitleaks binary 因 release-assets DNS 阻塞装不上, 0 装 PASS 标注)

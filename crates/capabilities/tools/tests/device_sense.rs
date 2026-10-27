@@ -363,6 +363,13 @@ async fn real_protocol_and_live_slots_refuse_until_wired() {
 #[tokio::test]
 async fn the_device_sense_switch_is_fail_closed() {
     // 串行护住 env 读写 (进程级全局量)。
+    // ⚠️ **2026-10-27 补**：本测试**改进程级 env**（`DEVICE_SENSE_ENABLE_ENV`）
+    // ⇒ **同二进制的其它测试**可能同时读到 ⇒ ⇒ 跨测试污染
+    // ⇒ （`scripts/check_env_race.py` 清单把它列为「未见同函数内持锁」的候选）。
+    // ⇒ 照本文件既有写法（`:82`）取同一把锁。
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     std::env::remove_var(DEVICE_SENSE_ENABLE_ENV);
     assert!(!device_sense_enabled_from_env());
     assert!(DeviceSenseConfig::from_env(".").is_none());
