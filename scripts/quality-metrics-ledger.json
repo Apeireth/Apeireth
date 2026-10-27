@@ -18,11 +18,10 @@
     "影子胜率",
     "回退时间",
     "脱机可读",
-    "schema 自说明覆盖"
-  ],
-  "missing": [
+    "schema 自说明覆盖",
     "handover 演练通过"
   ],
+  "missing": [],
   "anchors": {
     "Citation coverage": [
       "crates/engine/memory/src/quality_metrics.rs:pub fn measure_citation_coverage"
@@ -42,7 +41,9 @@
     "Token 效率": [
       "crates/engine/memory/src/quality_metrics.rs:pub fn measure_token_efficiency"
     ],
-    "handover 演练通过": [],
+    "handover 演练通过": [
+      "crates/engine/memory/src/handover.rs:pub fn drill_handover"
+    ],
     "nDCG@k": [
       "crates/engine/memory/src/golden_set.rs:pub ndcg_at_k: f64"
     ],
