@@ -54,6 +54,8 @@ use std::process::ExitCode;
 const K: usize = 10;
 /// 生产注入每条证据的字符数（**逐字对齐生产常量**）。
 const PRODUCTION_CHARS: usize = apeireth_memory::memory_injection::EVIDENCE_MAX_CHARS;
+/// 变体 E：注入「含主体的那一段」的**字符上限**。
+const SUBJECT_SPAN_CHARS: usize = 400;
 
 fn main() -> ExitCode {
     let paths = novels();
@@ -255,6 +257,37 @@ fn report_one(name: &str, path: &Path) -> Result<(), Box<dyn std::error::Error>>
             a_prime.groundedness,
             d.groundedness
         );
+
+        // ---------- 变体 E：**段内定位**（主体 ⇒ 挑那一段） ----------
+        //
+        // # 这个变体在问什么
+        //
+        // 变体 C 证明：**定位到那一回**之后，**整回注入**能让 groundedness = 1.0
+        // ⇒ 但代价是 **7401 字/条** ⇒ **不可接受**。
+        //
+        // ⇒ 那能不能**只注入「那一回里含主体的段落」**？
+        // ⇒ ⇒ **主体是用户会给的信息**（题面里就有）⇒ ⇒ **不是 oracle**
+        // ⇒ ⇒ 成本：几百字 ⇒ **可接受**
+        //
+        // # ⚠️ 口径（**构造红利**）
+        //
+        // 本变体用**生产挖题**里的主体（由 `query_signals::parse_signals` 从期望片段推出）
+        // ⇒ ⇒ **主体本身含「构造红利」**（与现有基准**同口径** ⇒ 可比）
+        // ⇒ ⇒ 但**真实用户提问里未必有这么干净的主体** ⇒ **绝对值偏乐观**。
+        let e = run_anchored_with_subject_span(&records, &real_anchor);
+        print_row("E 锚定 + 主体段注入", &e, SUBJECT_SPAN_CHARS);
+        println!(
+            "  ⇒ **D→E（只改注入：从「开头 120 字」到「含主体的段」）**：grounded {:.4} → {:.4}（Δ {:+.4}）",
+            d.groundedness,
+            e.groundedness,
+            e.groundedness - d.groundedness
+        );
+        println!(
+            "  ⇒ 对照 C（**整回注入**，{avg} 字/条）：grounded 1.0000 ⇒ ⇒ E 用 ~{span} 字达到 {e:.4}（**不是** 1.0 ⇒ ⇒ **段内定位仍有缺口**）",
+            avg = average_len(&records),
+            span = SUBJECT_SPAN_CHARS,
+            e = e.groundedness
+        );
     }
     println!();
     println!("  ⚠️ 口径：");
@@ -421,4 +454,95 @@ fn chapter_of_id(id: &str) -> Option<usize> {
 /// 章节 ⇒ 挖题用的记录（**只取 id 与正文**⇒ 与生产同口径）。
 fn records_to_mine(chapters: &[Chapter]) -> Vec<apeireth_memory::golden_mining::MineRecord> {
     novel_corpus::to_mine_records(chapters)
+}
+
+/// 变体 E：锚定检索 + **注入「那一回里含主体的段落」**。
+///
+/// # 口径
+///
+/// * 检索：同变体 B/D（用题面「第N回」定位）；
+/// * 注入：**不再取开头 120 字**，而是取**那一回里含主体的那一段**
+///   （`SUBJECT_SPAN_CHARS` 字上限）⇒ ⇒ **成本 ~几百字**（不是 7401 字）；
+/// * 主体：取自**题面**（`query_signals::parse_signals`）⇒ ⚠️ **含构造红利**（见上）。
+fn run_anchored_with_subject_span(records: &[(String, String)], golden: &GoldenSet) -> Metrics {
+    let mut bm25 = Bm25Index::new(Bm25Config::default());
+    for (id, text) in records {
+        bm25.insert(id, text);
+    }
+    let mut hits = 0usize;
+    let mut grounded = 0usize;
+    let mut scored = 0usize;
+    for case in &golden.cases {
+        let Some(chapter) = chapter_of_query(&case.query) else {
+            continue;
+        };
+        let target_id = format!("novel-{chapter:04}");
+        let mut ranked: Vec<String> = Vec::with_capacity(K);
+        if records.iter().any(|(id, _)| *id == target_id) {
+            ranked.push(target_id.clone());
+        }
+        for hit in bm25.search(&case.query, K) {
+            if !ranked.contains(&hit.id) {
+                ranked.push(hit.id.clone());
+            }
+        }
+        let subject = apeireth_memory::query_signals::parse_signals(case).subject;
+        let mut evidence: Vec<String> = Vec::new();
+        for id in ranked.iter().take(K) {
+            let Some((_, text)) = records.iter().find(|(record_id, _)| record_id == id) else {
+                continue;
+            };
+            // ① 锚定命中的那一条 ⇒ 注入「含主体的段」
+            if id == &target_id {
+                let span = match subject.as_deref() {
+                    Some(subject) => paragraph_around(text, subject, SUBJECT_SPAN_CHARS),
+                    None => text.chars().take(PRODUCTION_CHARS).collect(),
+                };
+                evidence.push(span);
+            } else {
+                evidence.push(text.chars().take(PRODUCTION_CHARS).collect());
+            }
+        }
+        scored += 1;
+        if ranked.iter().take(K).any(|id| id == &case.expect_ids[0]) {
+            hits += 1;
+        }
+        let expected = case.expect_fragments.first().cloned().unwrap_or_default();
+        if !expected.is_empty() && evidence.iter().any(|text| text.contains(&expected)) {
+            grounded += 1;
+        }
+    }
+    if scored == 0 {
+        return Metrics::default();
+    }
+    Metrics {
+        recall_at_k: hits as f64 / scored as f64,
+        ndcg_at_k: 0.0,
+        evidence_precision: 0.0,
+        groundedness: grounded as f64 / scored as f64,
+        skipped_cases: 0,
+        total_cases: scored,
+    }
+}
+
+/// 取**含 `subject` 的那一段**（不足则补到 `max_chars`）⇒ **段内定位**。
+fn paragraph_around(text: &str, subject: &str, max_chars: usize) -> String {
+    if subject.is_empty() {
+        return text.chars().take(max_chars).collect();
+    }
+    // ⚠️ **偏移**（不是段长！）⇒ 命中时**不要**覆盖 `start`
+    // ⇒ ⚠️ 早先版本误写成 `start = trimmed.chars().count()` ⇒ **注入的是错位置**
+    // ⇒ ⇒ groundedness 掉到 0.0126 ⇒ **一个纯 bug 伪装成了结论**。
+    let mut start = 0usize;
+    for paragraph in text.split('\n') {
+        let trimmed = paragraph.trim();
+        if !trimmed.is_empty() && trimmed.contains(subject) {
+            break;
+        }
+        start += paragraph.chars().count() + 1;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let start = start.min(chars.len());
+    let end = (start + max_chars).min(chars.len());
+    chars[start..end].iter().collect()
 }
