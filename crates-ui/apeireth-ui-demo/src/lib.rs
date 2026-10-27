@@ -36,7 +36,13 @@ mod toolcard_fixture_generated;
 pub mod toolgrid_fixture;
 mod toolgrid_fixture_generated;
 
-pub use approval_card::{format_clock_utc, ApprovalCard, ApprovalCardProps, ApprovalItem};
+// ⚠⚠️ **`format_clock_utc` 不再从 crate 根公开导出**（2026-10-27 边界守卫的第一次命中）。
+//
+// 它是审批卡早期那份「固定 UTC」实现 ⇒ ⇒ **绕过**进程级时间器
+// ⇒ ⇒ 宿主装了浏览器 `Intl` 也不被消费 ⇒ ⇒ 非 UTC 时区下差 8 小时（实测）。
+// ⇒ ⇒ 组件已改用 `governance_tab::format_clock_hm`（进程级时间器）。
+// ⇒ ⇒ 保留它**只为** native 的可复现基准与单测 ⇒ ⇒ 故**不公开** ⇒ ⇒ 防复发。
+pub use approval_card::{ApprovalCard, ApprovalCardProps, ApprovalItem};
 pub use fixture::pilot_item;
 pub use toolcard_fixture::{tool_card_cases, ToolCardCase};
 pub use toolgrid_fixture::{toolgrid_cases, toolgrid_tools, ToolGridCase};
