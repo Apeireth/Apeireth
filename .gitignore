@@ -230,6 +230,10 @@ crates/apeireth-integration-e2e/.*.log
 # CI 不会跑」⇒ ⇒ 与 `harness/scripts/` 同一类静默失败 ⇒ ⇒ 同样要逐层放行。
 !crates-ui/evidence/p5-b/drive_intro.py
 !crates-ui/evidence/p5-b/drive_device.py
+# ⚠️ 2026-10-27 实测踩到**同一个坑**：`check_particle_edge.py`（intro 的「有界差异」门禁）
+# 写了、台账（E-60）也引用了，但**一直在忽略名单里** ⇒ ⇒ 仓库里根本没有这个文件
+# ⇒ ⇒ 「判据存在」只是本地幻觉。静默忽略比报错更危险 ⇒ ⇒ 这里补放行。
+!crates-ui/evidence/p5-b/check_particle_edge.py
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py
