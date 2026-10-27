@@ -45,6 +45,7 @@
 | [0013](0013-open-source-personal-utility-assistant.md) | 定位重裁定：开源免费的个人工具型助手，动态红线取代完全本地 | **Accepted**（2026-10-23，owner 口述拍板）；**取代 0012** | 主战场/红线/开源免费定位；承重墙=出境脱敏闸接电 |
 | [0014](0014-astra-derived-contract.md) | 外部顾问判据落地：四条共识改写、平台第四职责、最小诚实自述集 | **Accepted**（2026-10-24，owner 裁定）；内容已全部落地合入 main | 存在理由、义务分级、授权策略对象、问责五步、开源语境差异判据 |
 | [0016](0016-personal-line-carries-all-care-mechanisms.md) | 个人线带全部 14 条关怀机制，默认关，用户自行开启 | **Accepted**（2026-10-24，owner 拍板） | 机制归属裁定；数据面=配置文件+CLI（前端待接，不涉及本 ADR） |
+| [0017](0017-kernel-convergence-observation-port.md) | KC-1 内核收束：通用完成观察口与注册式内部控制命令 | **Accepted + 已交付**（2026-10-27，KC-1 SPEC） | 内核边界 / ToolCompletionObserver / ControlCommand / `[kernel]` 守卫 |
 
 ## 命名
 

@@ -168,6 +168,9 @@ role = "Gateway 引导 (目标同上)"
 # ExtensionCatalog（现存 PluginManager 与 BehaviorRegistry 两个实现）。
 module_trait = "crates/engine/runtime/src/canonical/module.rs::BehaviorModule"
 plugin_trait = "crates/foundation/plugin/src/plugin.rs::Plugin"
+# KC-1 (ADR-0017): 通用工具完成观察口 + 注册式内部控制命令。
+tool_completion_observer = "crates/foundation/plugin/src/observation.rs::ToolCompletionObserver"
+control_command = "crates/engine/runtime/src/canonical/control.rs::ControlCommand"
 module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry"
 capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
 plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
