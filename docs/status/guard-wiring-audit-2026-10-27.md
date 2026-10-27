@@ -211,6 +211,18 @@ runtime    crates/engine/runtime/src/canonical/execute.rs:3191   governance.eval
 * **后果**：一次高危越权被拒后，**会话授权仍在** ⇒ 同一会话内换一个动作再来一次，
   护栏不会因为「上一轮已拒绝」而加重 ⇒ **越权可以重复发生**。
 
+#### ✅ **P0-1 已修**（2026-10-27，commit `1c88655a`）
+
+* 护栏 crate 新增 `containment` 模块（`ContainmentDirective` / `GrantRevocations` /
+  `ContainmentGate` / `ContainmentConsumer`）；
+* **执行面在 CLI 装配根**（护栏 crate 外）⇒ ⇒ 消费护栏**发布**的义务 ⇒ ⇒ **真撤销**该会话授权；
+* 🎯 **机器证明**：第 1 次拒（`intent and action alignment is high risk`）
+  ⇒ ⇒ `revoked = true` ⇒ ⇒ **第 2 次同会话再来一次**被拒，理由变成
+  `session grant revoked by guard containment …` ⇒ ⇒ **「重复越权」被堵住**；
+* 台账 `enforcement.directive_consumer`：**NOT WIRED → PRODUCTION WIRED**；
+* ⚠️ **诚实边界**：撤销**只在内存**（进程重启即失效）· **无恢复通道** ·
+  **会话粒度**（整个会话被拒，含只读）⇒ ⇒ 这三条**需 owner 裁决**。
+
 ### P0-2 护栏挂在 pipeline **末位** ⇒ 上游闸拒掉的动作**不进护栏行为链**
 
 * **事实**：`crates/adapters/cli/src/lib.rs:1104-1107` 里，护栏是
@@ -229,6 +241,20 @@ runtime    crates/engine/runtime/src/canonical/execute.rs:3191   governance.eval
 * **后果**：被授权闸 / 提示注入闸 / 限流闸拒掉的动作，护栏**看不见** ⇒
   「拒绝后换个工具再来一次」（同效果绕过）、「拒绝后重试升级」这两条护栏能力
   对**上游拒绝**失明 ⇒ **复合越权检测有洞**。
+
+#### ✅ **P0-2 已修**（2026-10-27，commit `c4b0669f`）
+
+* **修法（不动 pipeline 顺序 ⇒ 不碰「上游拒绝 ⇒ 下游不得放行」这条安全属性）**：
+  1. `GovernanceHook` 新增 **`on_denied(request, verdict)`** 回调（**默认 no-op**）；
+  2. `GovernancePipeline::evaluate_verbose` 在短路时**通知后面的 hook**；
+  3. 护栏实现 `on_denied` ⇒ ⇒ 把「上游已拒」记进**它自己那条行为链**
+     （与护栏**自己**拒绝时的记法**完全一致**）⇒ ⇒ 复合检测**分不出**是谁拒的
+     ⇒ ⇒ ⇒ **这正是要的**（「拒绝过」这件事本身就够了）；
+* ⚠️ **只记事实** ⇒ ⇒ **不改变护栏的判定结果**（只影响**后续**评估能看到这条历史）；
+* **接线证据**（`crates/engine/guard/tests/p0_2_upstream_denial.rs`，3 条）：
+  * 上游拒绝 ⇒ **护栏链里出现那条被拒动作**（恰好 1 条）；
+  * **对照**：没有上游拒绝 ⇒ 链里**没有**被拒动作；
+  * ⚠️ **短路语义不变**：下游 hook **evaluated = 0 次**、**notified = 1 次**。
 
 ### P1-3 会话态**零回收面** ⇒ 跨会话污染 + 无界增长
 
