@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: a0a32bc81fd80810b5eb2069935f1b6345a600f92122d32b3b9d77a58e840909
+claims_sha256: 6a3e74f2d1ecd179b04edbe0f48711facfa3b0a950a11ca27e3ca3b0bc5f9042
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -556,15 +556,16 @@ items:
       production_refs:
         - "crates/adapters/cli/src/bio_switches.rs"
         - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/organ/src/nociception.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
-        - "crates/engine/organ/src/nociception.rs"
-        - "crates/foundation/plugin/src/observation.rs"
         - "crates/foundation/orchestration/src/nociception.rs"
+        - "crates/foundation/plugin/src/observation.rs"
     default_enabled: false
     validated:
       tests:
         - "crates/engine/runtime/tests/bio_pain_wiring.rs"
+        - "crates/engine/organ/src/nociception.rs"
       claims_id: "bio.nociception_pain"
     gaps:
       []
@@ -577,15 +578,15 @@ items:
     wired:
       production_refs:
         - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/engine/organ/src/nociception.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
         - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
-        - "crates/engine/organ/src/nociception.rs"
-        - "crates/foundation/plugin/src/observation.rs"
         - "crates/foundation/orchestration/src/recovery_protocol.rs"
     default_enabled: false
     validated:
       tests:
         - "crates/engine/runtime/tests/bio_pain_wiring.rs"
+        - "crates/engine/organ/src/nociception.rs"
       claims_id: "bio.recovery_protocol"
     gaps:
       []
