@@ -18,6 +18,7 @@ use apeireth_ui_gpu::{
     INTRO_SPRITE_FRAGMENT_GLSL, INTRO_SPRITE_UNIFORM_NAMES, INTRO_SPRITE_VERTEX_GLSL,
     INTRO_SPRITE_PROBE_FRAGMENT_GLSL,
     INTRO_SPRITE_FLAT_FRAGMENT_GLSL,
+    INTRO_SPRITE_COORD_FRAGMENT_GLSL,
     SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL, SHADER_UNIFORM_NAMES,
 };
 use std::cell::RefCell;
@@ -521,6 +522,7 @@ pub async fn run_intro(
     let sprite_fragment = match probe.as_deref() {
         Some("varying") => INTRO_SPRITE_PROBE_FRAGMENT_GLSL,
         Some("flat") => INTRO_SPRITE_FLAT_FRAGMENT_GLSL,
+        Some("coord") => INTRO_SPRITE_COORD_FRAGMENT_GLSL,
         Some(other) => {
             return Err(JsValue::from_str(&format!(
                 "run_intro: 未知探针 `{other}`（支持：\"\" / \"varying\"）"

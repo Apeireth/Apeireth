@@ -132,6 +132,9 @@ const spriteMode = new URLSearchParams(location.search).get('sprite') ?? 'quad';
   //   粒子 quad 的并集 ⇒ 可直接量出 sprite 的**位置/尺寸**，与引擎侧同款探针逐像素对照。
   //   （只认带 `vStreak` 的那支 = 火焰粒子；背景 matte 的片元不动。）
   const probe = new URLSearchParams(location.search).get('probe');
+  // ⭐⭐ **探针自证计数器**（2026-10-27）：模块级、位于所有 hook **之前** ⇒ ⇒ **无 TDZ 风险**
+  // ⇒ ⇒ 用途：确认片元**真的**被替换过 ⇒ ⇒ 「差异 0」与「两侧都没画」**可区分**。
+  let probeReplacements = 0;
   // ⭐ **诊断日志**（2026-10-27）：探针分支是否进入
   console.log('[probe-diag] search=', location.search, 'probe=', probe);
   // ⭐⭐ **诊断信息写进页面全局**（2026-10-27）：
@@ -146,6 +149,7 @@ const spriteMode = new URLSearchParams(location.search).get('sprite') ?? 'quad';
     contexts: [] as string[],
     getContextCalls: 0,
     hookInstalledOn: [] as string[],
+    get replacements() { return probeReplacements; },
   };
   // ⭐ hook `HTMLCanvasElement.prototype.getContext`（**正确**的对象）
   {
@@ -224,7 +228,34 @@ void main(){
       const isFragment =
         source.includes('vStreak') && !source.includes('gl_Position');
       console.log('[probe] shaderSource', { isFragment, hasVStreak: source.includes('vStreak'), head: source.slice(0, 70).replace(/\s+/g, ' ') });
-      const src = isFragment && source.includes('vStreak') ? varyingFrag : source;
+      if (isFragment) probeReplacements += 1;
+      const src = isFragment ? varyingFrag : source;
+      return originalShaderSource.call(this, shader, src);
+    };
+  } else if (probe === 'coord') {
+    // ⭐⭐ **坐标编码探针**（2026-10-27 诊断用）：R=x、G=y ⇒ ⇒ 直接读出坐标差。
+    // ⚠ 与引擎侧 `assets/intro_sprite_coord.frag` **逐字同源**；注释里**不能有反引号**。
+    const coordFrag = `#version 300 es
+precision highp float;
+in vec3 vCol;
+in float vAlpha;
+in float vStreak;
+in vec2 vAxis;
+in float vSoft;
+out vec4 fragColor;
+void main(){
+  fragColor = vec4(gl_PointCoord.x, gl_PointCoord.y, 0.0, 1.0);
+}`;
+    const originalShaderSource = proto['shaderSource'] as (
+      shader: WebGLShader,
+      source: string,
+    ) => void;
+    proto['shaderSource'] = function (this: WebGL2RenderingContext, shader: WebGLShader, source: string) {
+      const isFragment =
+        source.includes('vStreak') && !source.includes('gl_Position');
+      if (isFragment) probeReplacements += 1;
+      if (isFragment) probeReplacements += 1;
+      const src = isFragment ? coordFrag : source;
       return originalShaderSource.call(this, shader, src);
     };
   } else if (probe === 'flat') {
@@ -253,18 +284,6 @@ void main(){
       source: string,
     ) => void;
     proto['shaderSource'] = function (this: WebGL2RenderingContext, shader: WebGLShader, source: string) {
-      // ⭐ **诊断日志**（2026-10-27）
-      {
-        const diag = (window as unknown as Record<string, unknown>)
-          .__PROBE_DIAG__ as { shaderSources: string[] } | undefined;
-        if (diag) {
-          diag.shaderSources.push(
-            `${isFragment ? 'FRAG' : 'VERT'} vStreak=${source.includes('vStreak')} ${source
-              .slice(0, 60)
-              .replace(/\s+/g, ' ')}`,
-          );
-        }
-      }
       // ⭐⭐ **纯源码特征判「片元」**（2026-10-27 修的真缺陷）：
       // ⇒ ⇒ `getShaderParameter(SHADER_TYPE)` 在 `shaderSource` 调用期间**抛异常**
       // ⇒ ⇒ ⇒ hook 中断 ⇒ ⇒ **探针从不生效**（且日志上看不出来）。
@@ -273,6 +292,7 @@ void main(){
       // ⇒ ⇒ 若不判 ⇒ ⇒ 顶点被换成片元 ⇒ ⇒ **编译失败** ⇒ ⇒ 画面空 ⇒ ⇒ **假绿**。
       const isFragment =
         source.includes('vStreak') && !source.includes('gl_Position');
+      if (isFragment) probeReplacements += 1;
       const src = isFragment ? flatFrag : source;
       return originalShaderSource.call(this, shader, src);
     };
@@ -525,7 +545,7 @@ async function main() {
           //   实测报 `ReferenceError: probe is not defined`）。
           (() => {
             const pr = new URLSearchParams(location.search).get('probe');
-            return pr === 'varying' || pr === 'flat' ? pr : '';
+            return pr === 'varying' || pr === 'flat' || pr === 'coord' ? pr : '';
           })(),
         );
         (result as Record<string, unknown>)[backend] = JSON.parse(raw);
