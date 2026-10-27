@@ -3352,8 +3352,11 @@ impl Runtime {
         // 通用完成事实 (与 `CapabilityCompleted` 同一收口): 内核只发出事实,
         // 不认识领域、不取领域锁、不写领域账。未安装观察者时整段零开销,
         // 事件/轨迹与未接线前逐字节一致；观察者的任何判断都不回流到本函数。
+        //
+        // 观察者是外部扩展点, 其 panic 不得破坏已经落账的完成事实, 也不得
+        // 中止本回合: 事件与轨迹在上方已写入, 这里只做隔离, 不重试、不补发。
         if let Some(observer) = &self.tool_completion_observer {
-            observer.observe(&ToolCompletionFact {
+            let fact = ToolCompletionFact {
                 session: session.id,
                 request: request_id,
                 trace: trace_id,
@@ -3362,7 +3365,10 @@ impl Runtime {
                 capability,
                 result,
                 at: Timestamp::from_clock(clock),
-            });
+            };
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                observer.observe(&fact);
+            }));
         }
     }
 

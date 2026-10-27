@@ -40,7 +40,9 @@
 
 - `docs/architecture/contract.toml [kernel]` 新增运行时生产依赖白名单、执行循环禁用字面量、领域类型黑名单。
 - `scripts/arch_guard.py` 新增 `check_kernel_boundaries`；`--self-test` 用三类违规 fixture 证明守卫会稳定失败（域依赖 / 硬编码分派 / 领域类型）。
-- 回归钉死：`crates/engine/runtime/tests/kernel_boundary.rs`（空内核启动、零业务模块运行、每次执行恰一次完成事实、观察者不改变工具目录）。
+- 回归钉死：`crates/engine/runtime/tests/kernel_boundary.rs`（空内核启动、零业务模块运行、每次执行恰一次完成事实、观察者不改变工具目录、观察者 panic 不破坏已完成调用、审批恢复恰一次投递）。
+- 观察者失败隔离：`record_call_completed` 用 `catch_unwind` 包裹观察者调用，**不重试、不补发**；已落账的事件/轨迹与工具结果不受影响。这是进程内隔离，不构成跨崩溃/跨进程的 exactly-once 保证。
+- CI 接线：`.github/workflows/arch-guard.yml` 新增 `Arch guard self-test (kernel boundary fixtures)` 步骤，与既有 report 步骤同处灰度 job（`continue-on-error`），不改变 2026-11-03 前 report-only 的既有裁决。
 - 静态扫描是预警手段，不是完整架构证明；`--strict` 与 `--self-test` 的具体结果见交付 commit 正文与 `docs/03-reference/test-baseline.md` 收口记录。
 
 ## 5. KC-5 全量收口（2026-10-27）

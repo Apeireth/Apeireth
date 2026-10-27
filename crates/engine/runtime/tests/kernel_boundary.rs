@@ -9,7 +9,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
-use apeireth_governance::AllowAll;
+use apeireth_governance::{
+    AllowAll, GovernancePipeline, Permission, PermissionGovernanceHook, PermissionPolicy,
+};
 use apeireth_plugin::observation::{ToolCompletionFact, ToolCompletionObserver};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
@@ -19,7 +21,10 @@ use apeireth_protocol::canonical::{
     ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse, NormalizedTool,
     NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
-use apeireth_runtime::canonical::{Runtime, SessionEventKind, TraceEvent, TurnRequest};
+use apeireth_runtime::canonical::{
+    ApprovalDecision, ApprovalResolution, Runtime, SessionEventKind, TraceEvent, TurnOutcome,
+    TurnRequest,
+};
 use async_trait::async_trait;
 use serde_json::json;
 
@@ -224,6 +229,20 @@ impl ToolCompletionObserver for CountingObserver {
     }
 }
 
+/// An observer that always panics: observation is best-effort, so a broken
+/// observer must never abort a turn or undo an already recorded completion.
+#[derive(Default)]
+struct PanickingObserver {
+    calls: AtomicUsize,
+}
+
+impl ToolCompletionObserver for PanickingObserver {
+    fn observe(&self, _fact: &ToolCompletionFact<'_>) {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        panic!("observer is deliberately broken");
+    }
+}
+
 fn tool_call() -> ToolCall {
     ToolCall {
         id: "call_1".to_string(),
@@ -305,6 +324,124 @@ async fn one_completion_fact_is_emitted_per_executed_call() {
             .iter()
             .any(|event| matches!(event.event, SessionEventKind::ToolFailed { .. })),
         "成功调用不得伪造会话失败事件"
+    );
+}
+
+/// 观察者失败 (panic) 不得破坏已完成的工具执行与已落账的审计事实。
+#[tokio::test]
+async fn a_panicking_observer_cannot_break_the_completed_tool_call() {
+    let provider = ScriptedProvider::new(vec![Step::CallTool(tool_call()), Step::Say("done")]);
+    let observer = Arc::new(PanickingObserver::default());
+    let runtime = Runtime::builder()
+        .with_governance(Arc::new(AllowAll))
+        .with_plugin(ProviderPlugin::new(provider))
+        .with_plugin(EchoPlugin::new())
+        .with_default_model(MODEL)
+        .with_tool_completion_observer(observer.clone())
+        .build()
+        .await
+        .expect("kernel builds");
+
+    let session = SessionId::new();
+    let outcome = runtime
+        .execute(TurnRequest::new(session, "use echo"))
+        .await
+        .expect("a broken observer must not abort the turn");
+
+    assert_eq!(outcome.text, "done");
+    assert_eq!(observer.calls.load(Ordering::SeqCst), 1, "仍只投递一次");
+    let completed = outcome
+        .trace
+        .events()
+        .filter(|event| matches!(event, TraceEvent::CapabilityCompleted { .. }))
+        .count();
+    assert_eq!(completed, 1, "完成轨迹在观察者之前已落账且保持一条");
+
+    let persisted = runtime
+        .sessions()
+        .load_or_create(session)
+        .await
+        .expect("session persists");
+    assert!(
+        persisted.messages.iter().any(|message| {
+            message.role == apeireth_protocol::canonical::MessageRole::Tool
+                && !message.content.is_empty()
+        }),
+        "工具结果仍追加进转写"
+    );
+    assert!(
+        !persisted
+            .events
+            .iter()
+            .any(|event| matches!(event.event, SessionEventKind::ToolFailed { .. })),
+        "成功的执行不会被失败事件污染"
+    );
+}
+
+/// Approval resume re-enters the same dispatch path; the observer must still
+/// see exactly one fact for the single executed call (never one per resume).
+#[tokio::test]
+async fn an_approved_resume_emits_exactly_one_completion_fact() {
+    let provider = ScriptedProvider::new(vec![
+        Step::CallTool(tool_call()),
+        Step::Say("approved and done"),
+    ]);
+    let observer = Arc::new(CountingObserver::default());
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.echo".into()));
+    policy.require_approval_for("tool.echo");
+
+    let runtime = Runtime::builder()
+        .with_governance(Arc::new(
+            GovernancePipeline::new().with(Arc::new(PermissionGovernanceHook::new(policy))),
+        ))
+        .with_plugin(ProviderPlugin::new(provider))
+        .with_plugin(EchoPlugin::new())
+        .with_default_model(MODEL)
+        .with_tool_completion_observer(observer.clone())
+        .build()
+        .await
+        .expect("kernel builds");
+
+    let session = SessionId::new();
+    let paused = runtime
+        .execute_outcome(TurnRequest::new(session, "use echo"))
+        .await
+        .expect("turn pauses for approval");
+    let view = match paused {
+        TurnOutcome::PendingApproval(view) => view,
+        TurnOutcome::Completed(_) => panic!("expected the call to require approval"),
+    };
+    assert_eq!(
+        observer.seen.load(Ordering::SeqCst),
+        0,
+        "尚未执行的调用不得产生完成事实"
+    );
+
+    let resolution = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .expect("approval resolves");
+    assert!(matches!(
+        resolution,
+        ApprovalResolution::Resumed(TurnOutcome::Completed(_))
+    ));
+    assert_eq!(
+        observer.seen.load(Ordering::SeqCst),
+        1,
+        "恢复后执行一次 = 恰一次完成事实"
+    );
+
+    // Replaying the same approval cannot execute (or notify) a second time.
+    let replay = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .expect("replay resolves to a terminal status");
+    assert!(matches!(replay, ApprovalResolution::AlreadyResolved { .. }));
+    assert_eq!(
+        observer.seen.load(Ordering::SeqCst),
+        1,
+        "重复恢复不得重复投递"
     );
 }
 
