@@ -8,8 +8,9 @@
 //! | X2 | naga 的 GLSL 前端要求 uniform **显式带 `layout(binding=N)`** | `naga-30.0.1/src/front/glsl/variables.rs:618` | [`inject_layout_bindings`]（逐个注入）/ [`pack_uniforms_into_block`]（合并成一块） |
 //! | **X3** | **WebGL2 后端的 `max_uniform_buffers_per_shader_stage` 装不下 16 个独立 uniform buffer** | **实测**（本机 Chromium 154 + 软件 WebGL）：限额 **14**，`create_bind_group_layout` 直接报 `Too many bindings of type UniformBuffers in Stage ShaderStages(FRAGMENT), limit is 14, count was 16`（GLES3 规范下限是 12） | [`pack_uniforms_into_block`]：把 N 个 plain uniform **合并进一个 std140 uniform 块** ⇒ **1 个 binding** |
 //! | **X4** | **本引擎的两个后端都把片元坐标的 y 轴变成「向下」，而 GLSL ES 规定「向上」** | GLSL ES 3.0 规范（`gl_FragCoord` 原点在**左下角**）；WebGPU 的 `@builtin(position)` 原点在**左上角**；`wgpu-hal-30.0.1/src/gles/web.rs:301-312`（GL 路径把主渲染上下翻转：「GL's presentation is not flipped, but main rendering is. Therefore, we Y-flip the output positions in the shader, and also this blit.」） | [`fix_frag_coord_semantics`]：源级把 `gl_FragCoord` 换成 `vec4(x, 帧缓冲高 - y, z, w)`，**帧缓冲高来自 uniform**（[`FRAMEBUFFER_HEIGHT_MEMBER`]）⇒ 改尺寸**不必重编译着色器** |
+//! | **X7** | **点图元路径的 `gl_PointCoord` 在 WebGL 后端被整体翻转**（wgpu-hal 把主渲染上下翻转 ⇒ **只有 `gl_Position` 跟着翻** ⇒ 光栅器内建 `gl_PointCoord` 是**窗口空间**的量、**没跟着翻** ⇒ 最终画面里 y 朝向与生产相反） | `wgpu-hal-30.0.1/src/gles/mod.rs:1371`（naga 的 GLSL 后端开 `WriterFlags::ADJUST_COORDINATE_SPACE`，默认见 `naga-30.0.1/src/back/glsl/mod.rs:199`）⇒ `naga-30.0.1/src/back/glsl/writer.rs:1958-1967`（**顶点阶段**追加 `gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);`）⇒ `wgpu-hal-30.0.1/src/gles/web.rs:299-315`（呈现时再把帧缓冲**翻回来**） | [`fix_point_coord_semantics`]：源级把 `gl_PointCoord` 换成 `vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y)` ⇒ **只在点图元路径**调用（四边形路径的 `_engine_point_coord` 在**翻转前**的空间里算 ⇒ 不受影响） |
 //!
-//! 四步都是**方言外壳**层面的机械变换，**不触碰着色器数学**（光学数值零改写）。
+//! 这些变换都是**方言外壳**层面的机械变换，**不触碰着色器数学**（光学数值零改写）。
 //!
 //! ## ⭐ 行号必须一一对应（ADR §2.6.4 的承诺）
 //!
@@ -21,6 +22,7 @@
 //! - [`pack_uniforms_into_block`]：uniform 块**整体写在一行**里，放在**首条声明
 //!   所在行**；该声明原占的其余行**留空** ⇒ 净行数不变；
 //! - [`fix_frag_coord_semantics`：**不插行**（已满足）。
+//! - [`fix_point_coord_semantics`]：**不插行**（已满足）。
 //!
 //! ⇒ 整链（`transform_fragment_with_block_binding`）的行数 == 输入的行数。
 //! 本模块的单测 `transform_chain_preserves_line_count` 钉住这条不变量。
@@ -1151,10 +1153,19 @@ fn transform_fragment_with_block_binding_inner(
     }
     // ⭐ 点精灵 → 四边形：`gl_PointCoord` 换成 varying（**必须先于**补 location
     //   ⇒ 新 varying 才拿得到与顶点阶段**同号**的 location）。
+    //
+    // ⭐⭐⭐ **点图元路径**（`instanced_quad == false`）：`gl_PointCoord` 是
+    //   **原生 GLSL ES 内建** ⇒ ⇒ 但 wgpu 的 WebGL 后端把主渲染上下翻转
+    //   （只翻 `gl_Position`，**不翻**这个光栅器内建）⇒ ⇒ 最终画面里
+    //   点精灵内部的 y 轴与生产（原生 WebGL2，无翻转）**朝向相反**
+    //   ⇒ ⇒ 这里**源级**把 y 翻回来（见 [`fix_point_coord_semantics`]）。
+    //
+    //   ⚠ 四边形路径**不需要**这一步：那里的 `gl_PointCoord` 等价物是
+    //   **顶点阶段**从角点属性算的（翻转前的空间）⇒ 已经是对的。
     let replaced = if instanced_quad {
         replace_point_coord_with_varying(&packed)
     } else {
-        packed
+        fix_point_coord_semantics(&packed)
     };
     let with_varying = if instanced_quad {
         add_point_coord_varying(&replaced)
@@ -1496,6 +1507,81 @@ pub fn fix_frag_coord_semantics_baked(src: &str, framebuffer_height: u32) -> Str
         "vec4(gl_FragCoord.x, {framebuffer_height}.0 - gl_FragCoord.y, gl_FragCoord.z, gl_FragCoord.w)"
     );
     replace_identifier(src, "gl_FragCoord", &expansion)
+}
+
+/// ⭐⭐⭐ **点图元路径**的 `gl_PointCoord` **朝向修正**（E-56 根因修复）。
+///
+/// ## 为什么需要（实测根因，非推理）
+///
+/// GLSL ES 的 `gl_PointCoord` 是**点精灵内部**的归一化坐标（`[0,1]²`），
+/// **y 向下递增**（原点在**左上**）。
+///
+/// ⭐ **本引擎的 WebGL（GLES）后端会把主渲染上下翻转**，而**这个翻转只作用
+/// 于 `gl_Position`** ⇒ ⇒ 光栅器内建 `gl_PointCoord`（**窗口空间**的量）
+/// **没有跟着翻** ⇒ ⇒ 最终画面里，点精灵内部的 y 轴**整个反过来**。
+///
+/// 代码依据（逐级）：
+///
+/// 1. `wgpu-hal-30.0.1/src/gles/mod.rs:1371` ⇒ naga 的 GLSL 后端带
+///    `WriterFlags::ADJUST_COORDINATE_SPACE`（默认开启：
+///    `naga-30.0.1/src/back/glsl/mod.rs:199`）；
+/// 2. `naga-30.0.1/src/back/glsl/writer.rs:1958-1967` ⇒ **只在顶点阶段**追加
+///    `gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);`
+///    ⇒ ⇒ **片元阶段的 `gl_PointCoord` 不会被翻**；
+/// 3. `wgpu-hal-30.0.1/src/gles/web.rs:299-315` ⇒ 呈现时再把帧缓冲**翻回来**
+///    ⇒ ⇒ 几何位置正确（背景/三角形不受影响），但**点精灵内部 y 朝向被翻了**。
+///
+/// ## 实测证据（离线逐像素分析，2026-10-27）
+///
+/// 坐标探针（`?probe=coord` ⇒ `fragColor = vec4(gl_PointCoord.x, gl_PointCoord.y, 0, 1)`）
+/// 的生产图 vs 引擎图（`crates-ui/evidence/p5-b/evidence-intro/`）逐像素比对：
+///
+/// - 差异 **51,300 px（8.906%）**，**B 通道 100% 相同**、**R 通道 99.82% 相同**
+///   ⇒ ⇒ 差异**只在 y 轴**上；
+/// - 一个**孤立**的 4×4 点精灵（y[136..139] × x[765..768]）：
+///   - 生产 G（自上而下）：`36 100 165 229`（**向下递增**）；
+///   - 引擎 G（自上而下）：`237 173 108 44`（**向上递增**）；
+///   - 引擎 = 生产的**行序反转**（逐行精确：`273 - 生产`）；
+///   - R 逐像素相同（`48 112 177 241`）、B 逐像素相同（`14`）。
+///
+/// ⇒ ⇒ 差异**不是**半像素/光栅化约定（那样 R 也会动）、**不是**常数偏移
+/// （逐行反转是精确的），而是**纯粹的 y 朝向** ⇒ ⇒ 本函数就是它的正解。
+///
+/// ## ⭐ 为什么四边形路径**不受影响**（已修好、已验证）
+///
+/// 四边形路径的 `gl_PointCoord` 等价物 [`POINT_COORD_VARYING`] 是**顶点阶段**
+/// 从**角点属性**算出来的（[`expand_point_sprite_to_quad`]）：
+/// `vec2(aCorner.x * 0.5 + 0.5, 0.5 - aCorner.y * 0.5)`
+/// ⇒ 它在**翻转之前**的空间里算 ⇒ ⇒ 与几何**一起**被翻 ⇒ ⇒ 净效果正确
+/// （实测：引擎 quad vs 生产 = 93 px / 0.016%）。
+///
+/// ⇒ ⇒ **本函数只作用于点图元路径**（`instanced_quad == false`）。
+///
+/// ## ⚠ 只对**点图元路径**调用
+///
+/// 本引擎的点图元路径**只在 WebGL（GLES）后端可用**（引擎的
+/// `point_list_supported`）⇒ ⇒ 那里**一定**有上面那个翻转 ⇒ ⇒ 修正恒定正确。
+/// 其它拓扑（三角形等）的片元着色器里**没有** `gl_PointCoord`
+/// ⇒ ⇒ 本函数对它们是**恒等变换**。
+///
+/// ## 行为细节
+///
+/// - **单趟扫描**：替换文本里的 `gl_PointCoord` **不再被二次替换**
+///   ⇒ `vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y)` 不会递归；
+/// - **词边界**感知：`myGl_PointCoord` / `gl_PointCoordExtra` **不受影响**；
+/// - **不插行** ⇒ 变换前后**行号一一对应**（错误信息仍指回原始行）；
+/// - 源码里没有 `gl_PointCoord` ⇒ **原样返回**。
+///
+/// ## 用法形态与 [`fix_frag_coord_semantics`] 完全同构
+///
+/// `gl_PointCoord` 是 `vec2` ⇒ 用 `vec2(...)` 展开；`.x` / `.y` / 整体用法
+/// （`assets/intro_sprite.frag` 的 `gl_PointCoord * 2.0 - 1.0`）都仍然成立
+/// （`vec2(...).x` 这种「构造器上取分量」的形态与 `fix_frag_coord_semantics`
+/// 产出的 `vec4(...).xy` **同款**，生产资产 `assets/intro_backdrop.frag`
+/// 已经在用 ⇒ 该形态已被现有像素证据覆盖 ✓）。
+pub fn fix_point_coord_semantics(src: &str) -> String {
+    let expansion = "vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y)";
+    replace_identifier(src, "gl_PointCoord", expansion)
 }
 
 /// 把源码里的**标识符** `token` 换成 `replacement`（词边界感知，单趟扫描）。
@@ -2585,6 +2671,140 @@ mod tests {
                 member.name
             );
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // 变换 7（X7）：点图元路径的 `gl_PointCoord` 朝向修正
+    // -----------------------------------------------------------------------
+
+    const POINT_COORD_SAMPLE: &str = "#version 300 es\nprecision highp float;\nuniform vec2 uRes;\nout vec4 fragColor;\nvoid main(){ vec2 d = gl_PointCoord * 2.0 - 1.0; fragColor = vec4(d, 0.0, 1.0); }\n";
+
+    #[test]
+    fn point_coord_correction_flips_the_y_axis() {
+        // ⭐ 根因：wgpu 的 WebGL 后端把主渲染上下翻转（只翻 `gl_Position`）
+        //   ⇒ 光栅器内建 `gl_PointCoord` 没跟着翻 ⇒ 点图元路径的 y 朝向与
+        //   生产相反（实测 51,300 px / 8.906%，R、B 逐像素相同 ⇒ 纯 y 差异）。
+        let out = fix_point_coord_semantics(POINT_COORD_SAMPLE);
+        assert!(
+            out.contains("1.0 - gl_PointCoord.y"),
+            "点精灵内的 y 必须翻回生产朝向：{out}"
+        );
+        assert!(
+            out.contains("vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y)"),
+            "展开式必须只翻 y、保留 x：{out}"
+        );
+    }
+
+    #[test]
+    fn point_coord_correction_keeps_the_x_axis_untouched() {
+        // ⭐ 反例钉住「**只**翻 y」：x 翻了会把整个粒子左右镜像。
+        let out = fix_point_coord_semantics(POINT_COORD_SAMPLE);
+        assert!(!out.contains("1.0 - gl_PointCoord.x"), "x 不得被翻：{out}");
+    }
+
+    #[test]
+    fn point_coord_correction_keeps_line_numbers() {
+        let out = fix_point_coord_semantics(POINT_COORD_SAMPLE);
+        assert_eq!(
+            out.lines().count(),
+            POINT_COORD_SAMPLE.lines().count(),
+            "变换不得增删行（错误信息仍要指回原始行）"
+        );
+    }
+
+    #[test]
+    fn point_coord_correction_is_a_no_op_without_the_builtin() {
+        // ⭐ 三角形拓扑的片元着色器里没有 `gl_PointCoord` ⇒ 必须原样返回。
+        let source = "#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main(){ fragColor = vec4(1.0); }\n";
+        assert_eq!(
+            fix_point_coord_semantics(source),
+            source,
+            "源码里没有 gl_PointCoord 时必须原样返回"
+        );
+    }
+
+    #[test]
+    fn point_coord_correction_is_word_boundary_aware() {
+        let source = "float a = myGl_PointCoord.x;\nfloat b = gl_PointCoordExtra;\n";
+        assert_eq!(
+            fix_point_coord_semantics(source),
+            source,
+            "词边界外的同名标识符不得被改写"
+        );
+    }
+
+    #[test]
+    fn the_point_path_flips_the_point_coord() {
+        // ⭐ 点图元路径（`Topology::PointList`）必须走**修正**分支。
+        let out =
+            transform_fragment_with_block_binding(POINT_COORD_SAMPLE, 0).expect("片元变换成功");
+        assert!(
+            out.contains("1.0 - gl_PointCoord.y"),
+            "点图元路径必须翻回 `gl_PointCoord` 的 y：{out}"
+        );
+    }
+
+    #[test]
+    fn the_quad_path_does_not_flip_the_point_coord() {
+        // ⭐⭐ 反例钉住「**不许**破坏已修好的四边形路径」：
+        //   四边形路径的 `gl_PointCoord` 已被换成 varying `_engine_point_coord`
+        //   （那个值在翻转前的空间里算 ⇒ 已经是对的 ⇒ 不能再翻一次）。
+        let out = transform_fragment_for_instanced_quad(
+            INTRO_SPRITE_FRAG,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+        )
+        .expect("片元变换成功");
+        assert!(
+            !out.contains("gl_PointCoord"),
+            "四边形路径不得残留 `gl_PointCoord`：{out}"
+        );
+        assert!(
+            !out.contains("1.0 - gl_PointCoord.y"),
+            "四边形路径不得再翻一次 y（会与顶点阶段的翻转叠加）：{out}"
+        );
+        assert!(out.contains(&format!("in vec2 {POINT_COORD_VARYING};")));
+    }
+
+    #[test]
+    fn the_point_path_output_parses_into_naga_ir() {
+        // ⭐ 展开式必须是**合法 GLSL**（`vec2(...)` 上的 `.x` / `.y` 取分量）。
+        let out =
+            transform_fragment_with_block_binding(POINT_COORD_SAMPLE, 0).expect("片元变换成功");
+        let module = naga::front::glsl::Frontend::default()
+            .parse(
+                &naga::front::glsl::Options {
+                    stage: ShaderStage::Fragment,
+                    defines: Default::default(),
+                },
+                &out,
+            )
+            .expect("修正后的片元着色器必须能过 naga");
+        assert_eq!(module.entry_points.len(), 1);
+        assert_eq!(module.entry_points[0].name, "main");
+    }
+
+    #[test]
+    fn the_production_sprite_asset_still_parses_after_the_flip() {
+        // ⭐ 生产资产（`assets/intro_sprite.frag`）用的是**整体 vec2**：
+        //   `gl_PointCoord * 2.0 - 1.0` ⇒ 修正后必须仍是合法 GLSL。
+        let out = transform_fragment_with_block_binding(
+            INTRO_SPRITE_FRAG,
+            FRAGMENT_UNIFORM_BLOCK_BINDING,
+        )
+        .expect("片元变换成功");
+        assert!(
+            out.contains("vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y) * 2.0 - 1.0"),
+            "生产资产的整体系用法必须被正确展开：{out}"
+        );
+        naga::front::glsl::Frontend::default()
+            .parse(
+                &naga::front::glsl::Options {
+                    stage: ShaderStage::Fragment,
+                    defines: Default::default(),
+                },
+                &out,
+            )
+            .expect("修正后的生产资产必须能过 naga");
     }
 
     // -----------------------------------------------------------------------

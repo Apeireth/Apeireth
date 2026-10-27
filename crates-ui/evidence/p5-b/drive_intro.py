@@ -565,9 +565,11 @@ def main():
         quad_vs_point = []
         for key, leg in report.get("legs", {}).items():
             parts = key.split(":")
-            if len(parts) != 3 or parts[2] != "quad":
+            # ⚠ 腿 key 形如 `frozen_at:only:sprite:probe`（**4 段**）⇒ ⇒
+            #   旧解析（按 3 段）会把**所有**腿跳过 ⇒ ⇒ 判据永远「inconclusive」。
+            if len(parts) < 3 or parts[2] != "quad":
                 continue
-            point_key = f"{parts[0]}:{parts[1]}:point"
+            point_key = ":".join(parts[:2] + ["point"] + parts[3:])
             point_leg = report.get("legs", {}).get(point_key)
             if not isinstance(point_leg, dict):
                 continue
@@ -604,6 +606,15 @@ def main():
             diff = leg.get("engine_dual_backend_diff") or {}
             entry = {"leg": key, "sprite_mode": leg.get("sprite_mode")}
             entry.update(diff)
+            # ⚠ 某后端**结构性不支持**这条腿（如点图元在 WebGPU 上无点尺寸）⇒ ⇒
+            #   「双后端逐像素一致」对这条腿**不适用** ⇒ ⇒ 不参与强制判据；
+            #   但**显式记录**在 measured 里（**不隐藏**能力缺口，见 legs_invalid）。
+            if not leg.get("valid", True):
+                entry["not_applicable"] = True
+                entry["not_applicable_reason"] = (
+                    "该腿有后端不可用（见 report.legs_invalid / invalid_backends）"
+                    "⇒ 「双后端逐像素一致」对本腿不适用"
+                )
             dual_backend.append(entry)
 
         # ── **判据 ③：生产 vs 引擎**（逐像素；两个后端各一份）──────────────────
@@ -635,10 +646,17 @@ def main():
                 "threshold": {"differing_pixels": 0, "channel_threshold": CHANNEL_THRESHOLD},
                 "mandatory": True,
                 "measured": dual_backend,
+                "applicable_legs": [
+                    e.get("leg") for e in dual_backend if not e.get("not_applicable")
+                ],
                 "status": (
                     "pass"
-                    if _zero(dual_backend) is True
-                    else ("fail" if _zero(dual_backend) is False else "inconclusive")
+                    if _zero([e for e in dual_backend if not e.get("not_applicable")]) is True
+                    else (
+                        "fail"
+                        if _zero([e for e in dual_backend if not e.get("not_applicable")]) is False
+                        else "inconclusive"
+                    )
                 ),
             },
             {
