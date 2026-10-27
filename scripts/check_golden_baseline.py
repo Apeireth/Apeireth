@@ -253,6 +253,35 @@ def main() -> int:
             f"nDCG@{current.get('k')}={float(item.get('ndcg_at_k', 0.0)):.4f}"
         )
 
+    # ---------- 观察项：**送达率**（**不参与闸门**，但**每次都要看见**）----------
+    #
+    # ⚠️ **为什么**不参与闸门：注入族指标（`groundedness` / `evidence_precision` /
+    # `delivery_rate`）测的是「**注入给模型什么**」，与「**检索准不准**」不是一件事
+    # ⇒ 混进同一个闸门 ⇒ 「为了过闸而调注入」会**扭曲**检索优化。
+    #
+    # ⚠️ **为什么**要打印：L2 的恶化会**静默**发生
+    # ⇒ 实测（2026-10-27）：《紅樓夢》**送达率 0.31** ⇒ **69% 的正确答案
+    # 「检索到了却没送到模型面前」** ⇒ 这个事实**必须**每次跑批都露面。
+    print("-" * 72)
+    print("观察项（**不参与闸门**）：证据送达率")
+    baseline_corpora = {item.get("name"): item for item in baseline.get("corpora", [])}
+    for item in current.get("corpora", []):
+        name = item.get("name")
+        current_rate = item.get("delivery_rate")
+        base_rate = baseline_corpora.get(name, {}).get("delivery_rate")
+        if current_rate is None:
+            print(f"  · {name}：送达率 **没测到**")
+            continue
+        if base_rate is None:
+            print(f"  · {name}：送达率 {float(current_rate):.4f}（基线里没有 ⇒ 只报当前值）")
+            continue
+        delta = float(current_rate) - float(base_rate)
+        print(
+            f"  · {name}：送达率 {float(current_rate):.4f}"
+            f"（基线 {float(base_rate):.4f} · Δ {delta:+.4f}）"
+            f" · groundedness {float(item.get('groundedness', 0.0)):.4f}"
+        )
+
     problems = compare(baseline, current)
     print("-" * 72)
     if problems:

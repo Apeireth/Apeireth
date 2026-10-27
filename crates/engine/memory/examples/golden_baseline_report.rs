@@ -153,14 +153,30 @@ fn report_one(
         .collect();
 
     let report = run(&index, &golden, K, InjectionMode::Production)?;
+    // ⚠️ **送达率**（2026-10-27 加）：把「检索到了却没送到模型面前」变成**常驻数字**。
+    // ⇒ 它**不参与**基线闸门（闸门只管 recall/ndcg ⇒ 那是「检索准不准」）
+    // ⇒ 但**每次跑批都要看见它**（否则 L2 的恶化会**静默**发生）。
+    let delivery = apeireth_memory::delivery_metrics::measure_delivery(&report.metrics);
     eprintln!(
-        "· {name}：{} 回 · {} 题 · recall@{K}={:.4} · nDCG@{K}={:.4}",
-        report.corpus_size, report.cases, report.metrics.recall_at_k, report.metrics.ndcg_at_k
+        "· {name}：{} 回 · {} 题 · recall@{K}={:.4} · nDCG@{K}={:.4} · groundedness={:.4} · **送达率={}**",
+        report.corpus_size,
+        report.cases,
+        report.metrics.recall_at_k,
+        report.metrics.ndcg_at_k,
+        report.metrics.groundedness,
+        delivery
+            .delivery_rate
+            .map(|rate| format!("{rate:.4}"))
+            .unwrap_or_else(|| "没测到".to_string())
     );
     Ok(json!({
         "name": name,
         "recall_at_k": report.metrics.recall_at_k,
         "ndcg_at_k": report.metrics.ndcg_at_k,
         "cases": report.cases,
+        // ⚠️ **观察项**（**不参与闸门**）：注入族指标 + 送达率
+        "groundedness": report.metrics.groundedness,
+        "evidence_precision": report.metrics.evidence_precision,
+        "delivery_rate": delivery.delivery_rate,
     }))
 }
