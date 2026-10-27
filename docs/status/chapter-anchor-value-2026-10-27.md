@@ -233,6 +233,23 @@
 ⇒ ⇒ **回数锚点**（「第12回」）**未接线** ⇒ ⇒ 它需要**领域映射**
 （生产里「用户的『上次』= 哪个会话？」⇒ **产品决策** ⇒ **不擅自决定**）。
 
+## 七之二之二、✅ **「选对段」的生产落点已做好**（默认关闭 · 零总成本）
+
+| 交付 | 作用 | 口径 |
+|---|---|---|
+| `memory_injection::build_memory_injection_with_budget` | 单条上限可配（老函数委托它 ⇒ 逐字一致） | IMPLEMENTED |
+| `context_compiler::compile_injection_with_selected_access_budget` | 单条上限可配，**总量不变** | IMPLEMENTED |
+| `context_compiler::compile_injection_with_selected_access_and_query` | **加法式新入口**（不动老签名） | IMPLEMENTED |
+| `anchor_injection::subject_of_query` | 主体**只从问句**取（⚠️ 绝不从召回内容取 ⇒ 否则成 oracle） | IMPLEMENTED |
+| `anchor_injection::AnchoredInjectionConfig` | **默认 `enabled = false`** | — |
+
+⇒ ⇒ **启用只需 owner 拍板后改一个 `enabled: true`** ⇒ ⇒ **不改生产默认**。
+
+### 接线证据（4 条）
+
+默认关闭 ⇒ **输出逐字节相同** · 开启后 ⇒ **证据含主体**（老路径的开头 120 字里没有）·
+开启后 ⇒ **总量不超过预算**（**零总成本**）· **问句没主体 ⇒ 退回开头**（不注入空证据）。
+
 ## 八、复现
 
 ```sh
