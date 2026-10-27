@@ -331,6 +331,7 @@ pub use research_derived_memory::{
 };
 // B2 · RA-15 P0-B (research, 默认关闭): 屏障优先级联修复执行器
 // (吸收自 arXiv:2605.07242 MEMOREPAIR; 自写 Dinic, 0 新外部依赖).
+pub mod anchor_injection; // 结构化锚点（第N回/相对时间）+ 主体段定位: 把「定位」与「送达」两个信号做成库级能力; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod delivery_metrics;
 pub mod derived_repair; // 证据「送达率」 (groundedness/recall): 把「检索到了却没送到」变成常驻数字; 状态 NOT IMPLEMENTED (新增未接线).
 pub use derived_repair::{RepairExecutor, RepairNode, RepairOutcome, RepairTradeoff};
