@@ -99,6 +99,36 @@ def _is_in_allowed_context(line: str) -> bool:
     return any(marker in stripped for marker in _ALLOWED_CONTEXT)
 
 
+def _cfg_test_lines(lines: list[str]) -> set[int]:
+    """返回被 `#[cfg(test)]` 作用域**覆盖的行号集合**（1-based）。
+
+    ## 为什么必须是**块级**（2026-10-27 修，台账 A2）
+
+    旧实现只有**行级**标记（`"#[cfg(test)]" in line`）⇒ ⇒ 只能匹配属性**所在那一行**，
+    作用域**内部**的真实代码行匹配不到 ⇒ ⇒ 于是又对 `approval_card.rs`
+    **整文件 `continue`** 来「兜住」⇒ ⇒ 守卫的实际豁免面是**按文件**的，
+    而文档写的是「定义处 + 测试处」⇒ ⇒ **该文件里新写的第二份自算时刻会静默通过**。
+
+    这与台账 §5 的教训同型：**判据的豁免面比它自己声称的更大**。
+    ⇒ ⇒ 改成按花括号深度判断 `#[cfg(test)]` 作用域 ⇒ ⇒ 豁免面回到**符号级**。
+    """
+    covered: set[int] = set()
+    depth = 0
+    armed_at: int | None = None
+    armed_depth = 0
+    for number, line in enumerate(lines, start=1):
+        code = line.split("//", 1)[0]
+        if armed_at is None and "#[cfg(test)]" in code:
+            armed_at = number
+            armed_depth = depth
+        depth += code.count("{") - code.count("}")
+        if armed_at is not None:
+            covered.add(number)
+            if number > armed_at and depth <= armed_depth:
+                armed_at = None
+    return covered
+
+
 def check_no_shader_in_core_crates() -> list[str]:
     """守卫 A：三件套不得含着色器 / GPU 资产。"""
     violations: list[str] = []
@@ -128,18 +158,25 @@ def check_no_shader_in_core_crates() -> list[str]:
 
 
 def check_no_self_computed_time_in_components() -> list[str]:
-    """守卫 B：组件不得引用「自算时区」实现。"""
+    """守卫 B：组件不得引用「自算时区」实现。
+
+    ⚠️ 豁免面 = **注释/文档行** + **`#[cfg(test)]` 作用域内**（块级判断），
+    **不按文件整文件豁免** ⇒ ⇒ 连「定义该符号的那个文件」里**其它位置**的
+    第二次使用也会被抓住（2026-10-27 修，见台账 A2）。
+    """
     violations: list[str] = []
     demo_src = CRATES_UI / "apeireth-ui-demo" / "src"
     if not demo_src.is_dir():
         return violations
     for path in sorted(demo_src.rglob("*.rs")):
-        if path.name == "approval_card.rs":
-            # 定义处 + 其测试 ⇒ 允许（native 可复现基准）。
-            continue
-        text = path.read_text(encoding="utf-8")
-        for number, line in enumerate(text.splitlines(), start=1):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        # ⚠️ **不再**按文件名整文件豁免（那会让该文件里新写的自算时刻静默通过）。
+        #   豁免面 = 「注释 / 文档行」+「`#[cfg(test)]` 作用域内」⇒ ⇒ 符号级。
+        test_lines = _cfg_test_lines(lines)
+        for number, line in enumerate(lines, start=1):
             if _is_in_allowed_context(line):
+                continue
+            if number in test_lines:
                 continue
             for symbol in SELF_COMPUTED_TIME_SYMBOLS:
                 if symbol in line:

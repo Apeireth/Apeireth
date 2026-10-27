@@ -497,6 +497,45 @@ impl<D: Dom> Renderer<D> {
     /// - 分组块（Fragment）⇒ 对应**一组**兄弟 DOM 节点（它在 DOM 上被摊平）。
     ///
     /// ⇒ 块级配对（谁对谁）⇒ 块内配对（块里的内容怎么变）⇒ **两层分开**。
+    /// ⭐⭐⭐ **先定状态、再动作**：判断「本节点的 keyed 子节点差分是否可判定」。
+    ///
+    /// ## 为什么需要它（台账 B1 的根因）
+    ///
+    /// `patch_node` 原顺序是「① 写 DOM 属性 → ② `patch_children` →
+    /// `patch_keyed_children` 里 `diff_keyed` 才判定可判定性」。
+    /// 一旦不可判定（典型：**重复 key**）：
+    ///
+    /// - 属性**已经写进 DOM**（`:515`），而内存树仍是旧 vnode（`:364` 的 `self.tree = Some(old)`）；
+    /// - `Undecidable` 被显式**排除**在「标 `desynced`」之外（`:370-372`）
+    ///   ⇒ ⇒ 渲染器**自称同步**、且**不会**走整树重建（`:388-401`）自愈
+    ///   ⇒ ⇒ **静默分叉**，下一帧仍拿旧树差分。
+    ///
+    /// ⇒ ⇒ 把可判定性**提到写属性之前**：失败时 DOM **一个字节都没动**，
+    /// `:367-369` 那条注释（「`Undecidable` 发生在触碰 DOM 之前」）**才真正成立**，
+    /// 而不是像修之前那样只在「父元素属性恰好没变」的夹具下侥幸成立。
+    ///
+    /// ## 代价
+    ///
+    /// 只在会走 keyed 路径时预检，且只算**可判定性**（`patch_children` 里会重算一次
+    /// 真正的计划）；n = **同一父节点下的直接子节点数**，通常个位数。
+    fn ensure_children_keyed_decidable(
+        &self,
+        old: &[MountedNode<D>],
+        new: &[VNode],
+    ) -> Result<(), DomError> {
+        let old_vnodes: Vec<VNode> = old.iter().filter_map(|child| child.to_vnode()).collect();
+        if old_vnodes.len() != old.len() {
+            // 有子节点取不到 vnode（文本 / 空块）⇒ ⇒ 一定不走 keyed 路径。
+            return Ok(());
+        }
+        if crate::keyed::list_diff_mode(&old_vnodes, new) != crate::keyed::ListDiffMode::Keyed {
+            return Ok(());
+        }
+        diff_keyed(&old_vnodes, new)
+            .map(|_| ())
+            .map_err(|error| DomError::Undecidable(format!("keyed 差分不可判定：{error}")))
+    }
+
     fn patch_node(
         &mut self,
         old: &MountedNode<D>,
@@ -511,6 +550,13 @@ impl<D: Dom> Renderer<D> {
                     self.unmount_node(old, parent)?;
                     return self.mount_node(new, parent, after);
                 }
+                // ⭐⭐⭐ **先定状态、再动作**（台账 B1，2026-10-27 修）：
+                //   必须先确定「本节点的子节点差分**能不能做**」，**再**写任何 DOM 属性。
+                //   修之前的顺序是「先写属性 → 再在 keyed 差分里判定可判定性」
+                //   ⇒ ⇒ 不可判定时属性**已经落进 DOM**，而内存树仍留旧值；
+                //   更糟的是 `Undecidable` 被显式排除在「标劈叉」之外
+                //   ⇒ ⇒ 渲染器**自称同步**且**不走**整树重建自愈 ⇒ ⇒ **静默分叉**。
+                self.ensure_children_keyed_decidable(&old_element.children, &new_element.children)?;
                 // T1：同标签 ⇒ 复用同一个真实 DOM 节点，只改属性与子节点。
                 self.patch_attributes(&old_element.dom, &old_element.vnode, new_element)?;
                 self.patch_handlers(&old_element.dom, &old_element.vnode, new_element)?;
@@ -2993,6 +3039,58 @@ mod tests {
             !renderer.is_desynced(),
             "差分不可判定发生在触碰 DOM 之前 ⇒ 内存树仍可信 ⇒ 不算劈叉"
         );
+    }
+
+    /// ⭐⭐⭐ **回归（台账 B1，2026-10-27 修）**：`Undecidable` 必须发生在
+    /// **写任何 DOM 属性之前**。
+    ///
+    /// ## 为什么需要这条（上一条测试的「侥幸」）
+    ///
+    /// 上一条测试的夹具里**父元素一个属性都没有** ⇒ ⇒ `patch_attributes`
+    /// 一个字节都没写 ⇒ ⇒ 「DOM 未被触碰」只是**夹具侥幸**，不是构造保证。
+    /// 修前的真实顺序是：先写属性（`:515`）→ 再在 keyed 差分里判定可判定性
+    /// （`:681-683`）⇒ ⇒ 属性已落 DOM、内存树仍是旧值，且 `Undecidable`
+    /// 被排除在「标劈叉」之外 ⇒ ⇒ **静默分叉且不自愈**。
+    ///
+    /// ## 判据
+    ///
+    /// 让父元素属性**真的会变**（`class="a"` → `"b"`）同时子节点重复 key：
+    /// ① 报 `Undecidable`；② **DOM 里的 `class` 仍是 `"a"`**
+    /// ⇒ ⇒ 「先定状态、再动作」由**构造**保证（不是靠夹具）。
+    #[test]
+    fn an_undecidable_diff_happens_before_any_attribute_is_written() {
+        let (mut renderer, root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("ul")
+                    .class("a")
+                    .child(keyed_item("a", "1"))
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        let ul = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        assert_eq!(
+            renderer.dom().attribute(ul, "class"),
+            Some(String::from("a")),
+            "前提：挂载后 class 应为 a"
+        );
+
+        let err = renderer
+            .patch(
+                VNode::element("ul")
+                    .class("b")
+                    .child(keyed_item("x", "1"))
+                    .child(keyed_item("x", "2"))
+                    .build(),
+            )
+            .expect_err("重复 key 必须显式报错");
+        assert!(matches!(err, DomError::Undecidable(_)), "实测：{err:?}");
+        assert_eq!(
+            renderer.dom().attribute(ul, "class"),
+            Some(String::from("a")),
+            "`Undecidable` 必须发生在**写属性之前** ⇒ class 仍应是 a（修前会是 b）"
+        );
+        assert!(!renderer.is_desynced(), "内存在树仍可信 ⇒ 不算劈叉");
     }
 
     // ── property 消失：**不许中止整帧**（2026-10-25 修） ─────────────────────
