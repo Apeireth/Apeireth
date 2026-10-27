@@ -118,6 +118,122 @@ impl crate::SqliteMemoryStore {
         })
     }
 
+    /// Write an episode **with an explicit validity window**（带失效时间的写入）。
+    ///
+    /// # 为什么需要这条路径（2026-10-27）
+    ///
+    /// 设计稿 §6.1 的 **L1 时间正确率**要测「检索返回的是否**已失效**」，
+    /// 但实测发现（`quality_metrics` 的真实语料报告）：
+    /// **全仓没有任何写入路径会写 `episodes.valid_until_ms`**
+    /// ⇒ 真实库里**没有一条记录会过期**
+    /// ⇒ 「时间正确率 = 1.0」是**构造性**的 ⇒ 这个指标**没有区分力**。
+    ///
+    /// ⚠️ **为什么不能事后 UPDATE**：`episodes` 有 **append-only 触发器**
+    /// （`BEFORE UPDATE` 直接 ABORT）⇒ 失效时间**只能在插入时写**
+    /// ⇒ ⇒ 需要一条**带失效时间的新写入路径**。
+    ///
+    /// # 三条纪律
+    ///
+    /// 1. **不覆盖既有路径**：`EpisodeStore::put_episode` 的签名与语义**不变**
+    ///    （它硬写「永久有效」）⇒ 既有调用方**零改动**；
+    /// 2. **入链**（D0 哈希链）：本路径与 `put_episode` 同口径**入链**
+    ///    ⇒ 链摘要含 `valid_until_ms` ⇒ 校验侧同口径重算 ⇒ 摘要一致；
+    /// 3. **不许「已失效的记录」被当成新记录插入**：`valid_until_ms <= valid_from_ms`
+    ///    ⇒ **直接拒**（那是一条**永远无效**的记忆 ⇒ 插进去就是垃圾数据）。
+    ///
+    /// # 口径
+    ///
+    /// 库级能力 = **IMPLEMENTED**（类型 + 落库 + 测试齐备）；
+    /// 生产接线 = **PRODUCTION WIRED**（本方法在 `SqliteMemoryStore` 上可用）；
+    /// ⚠️ **但当前生产调用点仍为 0** ⇒ 对外一律 **NOT IMPLEMENTED（新增未接线）**。
+    pub fn put_episode_with_validity(
+        &self,
+        ep: &Episode,
+        continuity_id: &str,
+        valid_from_ms: i64,
+        valid_until_ms: Option<i64>,
+    ) -> MemoryResult<()> {
+        Self::validate_episode(ep)?;
+        let cid = continuity_id.trim();
+        if cid.is_empty() {
+            return Err(MemoryError::Invalid(
+                "continuity_id is empty (put_episode_with_validity refuses the default placeholder)"
+                    .into(),
+            ));
+        }
+        // ⚠️ **拒绝「永远无效」的记录**：失效时间不晚于生效时间 ⇒ 这条记忆
+        // 从生下来就无效 ⇒ 插进去只会污染「时间正确率」的分母。
+        if let Some(until) = valid_until_ms {
+            if until <= valid_from_ms {
+                return Err(MemoryError::Invalid(format!(
+                    "valid_until_ms ({until}) must be later than valid_from_ms ({valid_from_ms})"
+                )));
+            }
+        }
+        let conn = self.conn()?;
+        let meta = EpisodeMeta {
+            valid_from_ms: Some(valid_from_ms),
+            valid_until_ms,
+            created_ms: ep.timestamp.saturating_mul(1000),
+            provenance: provenance_for_role(&ep.role),
+        };
+        let entry = ChainEntry::from_episode(ep, Some(&meta));
+        put_chained_episode(&conn, cid, &entry).map(|_| ())
+    }
+
+    /// 读一条记忆的**有效期**（`valid_from_ms` / `valid_until_ms`）。
+    ///
+    /// # 为什么需要
+    ///
+    /// 「时间正确率」要判「这条记录在 `as_of` 时还有效吗」⇒ 需要**读出**有效期
+    /// ⇒ 而 `get_episode` **只返回 6 列**（不含 V4 元数据）
+    /// ⇒ ⇒ 需要一条**只读元数据**的路径（**不读正文** ⇒ 便宜）。
+    ///
+    /// # 返回
+    ///
+    /// * `Ok(None)` = 记录**不存在**；
+    /// * `Ok(Some((from, until)))` = `from`/`until`（`until = None` ⇒ **永久有效**）
+    ///   ⇒ ⚠️ **列不存在**（老库未迁移）⇒ `from = None`、`until = None`
+    ///   ⇒ **如实**（不假装有有效期）。
+    pub fn get_episode_validity(
+        &self,
+        id: &str,
+    ) -> MemoryResult<Option<(Option<i64>, Option<i64>)>> {
+        if id.trim().is_empty() {
+            return Err(MemoryError::Invalid("episode id is empty".into()));
+        }
+        let conn = self.conn()?;
+        // ⚠️ **直接查 PRAGMA**（不依赖 `memory_chain` 的私有列快照类型）
+        // ⇒ 老库没有这两列 ⇒ **如实**说「没有有效期信息」
+        // （**不许**假装「永久有效」—— 那会让「时间正确率」假绿）。
+        let mut probe = conn.prepare("PRAGMA table_info(episodes)")?;
+        let mut has_from = false;
+        let mut has_until = false;
+        {
+            let mut rows = probe.query([])?;
+            while let Some(row) = rows.next()? {
+                let name: String = row.get(1)?;
+                match name.as_str() {
+                    "valid_from_ms" => has_from = true,
+                    "valid_until_ms" => has_until = true,
+                    _ => {}
+                }
+            }
+        }
+        if !has_from || !has_until {
+            return Ok(None);
+        }
+        let mut statement = conn
+            .prepare("SELECT valid_from_ms, valid_until_ms FROM episodes WHERE id = ?1 LIMIT 1")?;
+        let mut rows = statement.query([id])?;
+        let Some(row) = rows.next()? else {
+            return Ok(None);
+        };
+        let from: Option<i64> = row.get(0)?;
+        let until: Option<i64> = row.get(1)?;
+        Ok(Some((from, until)))
+    }
+
     /// Write an episode bound to a real `continuity_id` (not the `"default"` placeholder).
     ///
     /// Companion `continuity::migrate_subject` needed this path because
