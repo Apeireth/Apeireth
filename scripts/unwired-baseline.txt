@@ -128,8 +128,10 @@ orphan with_task_scope  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（0 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（2 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
+orphan forget_principal_with_permit  # G5
+orphan research_coordinated_forget_with_permit  # G5
 
 # --- G6（73 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 

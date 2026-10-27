@@ -233,8 +233,8 @@ claims:
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
       - crates/engine/memory/tests/memory_2_tests.rs
-    verified_at: a4903b92
-    verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
+    verified_at: "698bba58"
+    verify_cmd: "cargo test -p apeireth-gateway --test panel_routes update_episode_route_rewrites_content_and_records_who_changed_it"
     owner: gateway
     next_review: "2026-11-20"
     notes: "2026-10-22 接通：存储层 `MemoryGovernanceStore::update_episode_content` 早已实现（重写治理视图内容、原始 append-only 行不动、乐观 rev CAS、检索走 override），缺口只在面板没接电。现已补 `PUT /v1/apeireth/memory/episodes/:id/content` + 治理端口 `update_episode`（默认实现对未接线 embedder 诚实报错）+ 能力清单 `memory.update` 与治理面同源。未做：桌面 MemoryView 的「纠正」入口（台账 SG-08 记为待补）。"
