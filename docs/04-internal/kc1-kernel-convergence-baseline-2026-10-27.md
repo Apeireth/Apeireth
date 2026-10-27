@@ -42,3 +42,19 @@
 - `scripts/arch_guard.py` 新增 `check_kernel_boundaries`；`--self-test` 用三类违规 fixture 证明守卫会稳定失败（域依赖 / 硬编码分派 / 领域类型）。
 - 回归钉死：`crates/engine/runtime/tests/kernel_boundary.rs`（空内核启动、零业务模块运行、每次执行恰一次完成事实、观察者不改变工具目录）。
 - 静态扫描是预警手段，不是完整架构证明；`--strict` 与 `--self-test` 的具体结果见交付 commit 正文与 `docs/03-reference/test-baseline.md` 收口记录。
+
+## 5. KC-5 全量收口（2026-10-27）
+
+- 执行器：`pwsh scripts/gate_full.ps1`（仓库唯一全量执行器；主 workspace 排除图像家族 + 图像家族独立两段）。
+- 结果：**GATE FULL PASSED**，五个阶段全 `OK`（`main.cargo-test` / `main.clippy` / `main.fmt` / `image.cargo-test` / `image.clippy`），日志 `logs/gate-full.log`。
+- 实测数字（2026-10-27，本机，日志逐行汇总）：**351 套件 / 8902 passed / 0 failed / 53 ignored**（套件 = 测试二进制目标计数）。
+- 工具链：rustc 1.97.1 / cargo 1.97.1（与 `docs/03-reference/test-baseline.md` 现行口径同工具链）。
+- 口径说明：`docs/03-reference/test-baseline.md` 维护权归效率线，本批**不代改真源**；其现行 341 套件 / 8570 passed 为 2026-10-21 历史口径，本批实测值如上，对外引用时按 AGENTS.md §3 报「本批实测值 + 日期」。
+- 架构验收：`python scripts/arch_guard.py --strict` = VIOLATIONS 0；`--self-test` = 4/4 PASS；`docs_truth.py --verify` = claims=29 fail=0 stale=0；`wiring_report.py --verify` = OK，`--crosscheck --strict` = problems=0；`docs_links.py --check` = 断链 0；`docs_index.py --check` = 问题 0。
+
+## 6. 未完成/后续（如实标注）
+
+- `contract.toml` 的 `[kernel].forbidden_domain_types` 是文本级黑名单，**不覆盖**宏展开、条件编译与动态分派；它不是完整架构证明。
+- foundation 的 B 类领域算法（`nociception` 内核、`recovery_protocol`、`quorum` 等）仍在原位，本轮只迁出确证越界的 `care_potential_field`；进一步归属迁移留待独立阶段。
+- `runtime-assembly` 的大型装配文件（`production.rs` / `cognitive.rs` / `orchestrator.rs`）未拆分，本轮只迁出已确认越界的 probe 绑定。
+- 远程 CI 未在本批验证（本地全量执行器已通过）；`apeireth-mesh-nat-e2e` 等独立工作线未运行。
