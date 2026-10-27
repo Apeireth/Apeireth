@@ -574,9 +574,20 @@ def capture_frames(cdp: Cdp, duration_ms: int, max_frames: int) -> list[tuple[fl
     调度影响（实测两侧可能差一帧）⇒ 这里按**固定帧数**采集（两侧帧数相同），
     并在比对时按**时间对齐**（容差内配对）。
     """
+    # ⭐⭐ **按帧数采，不按时间截**（2026-10-27 修的真缺陷）。
+    #
+    # 上面 docstring 写的就是「按**固定帧数**采集（两侧帧数相同）」
+    # ⇒ ⇒ 但原实现里还有一个「到 `duration_ms` 就停」的条件
+    # ⇒ ⇒ **实际帧数取决于截图有多快** ⇒ ⇒ 实测同一构建跑出 12 / 13 / 14 / 16 / 17 / 19 帧
+    # ⇒ ⇒ 而判据是 `len(frame_results) == FRAME_COUNT`（=20）
+    # ⇒ ⇒ ⇒ **几乎永远不可能等于 20** ⇒ ⇒ **该判据恒红**，且与引擎无关
+    #     （它测的是「采集机器的截图速度」）。
+    # ⇒ ⇒ 修法：**以帧数为主**（与文档一致），时间只作**兜底上限**
+    #     （`duration_ms * 4` ⇒ 正常根本不会触发，只为防某侧卡死）。
     frames: list[tuple[float, bytes]] = []
     started = time.time()
-    while (time.time() - started) * 1000.0 < duration_ms and len(frames) < max_frames:
+    hard_deadline = started + duration_ms * 4.0 / 1000.0
+    while len(frames) < max_frames and time.time() < hard_deadline:
         timestamp = (time.time() - started) * 1000.0
         frames.append((timestamp, screenshot(cdp, None)))
     return frames
@@ -668,18 +679,51 @@ def collect_side(cdp: Cdp, name: str, url: str) -> Side:
 
 
 def collect_phases(cdp: Cdp, url: str) -> dict[str, bytes]:
-    """相位冻结下的截图（每个相位一张）。"""
+    """相位冻结下的截图（每个相位一张）。
+
+    ## ⭐⭐ 为什么必须「**导航之前**」就把冻结设好（2026-10-27 实测）
+
+    原实现是「先 `navigate`、**再**设 `--pilot-phase` / `pilot-freeze`」
+    ⇒ ⇒ 页面加载后动画**已经跑了几毫秒**才被暂停
+    ⇒ ⇒ 冻结位置 = 「真实已过的时长」+ 指定相位 ⇒ ⇒ **每次运行都不同**
+    ⇒ ⇒ 实测（同一构建、同一份代码，连续三次运行）：
+    坏相位依次落在 `450ms` → `0/150/300ms` → `0/300/450ms`，**在移动**
+    ⇒ ⇒ 而每次「坏」的幅度都稳定在 4~5%
+    ⇒ ⇒ ⇒ 那是**采样抖动**，不是引擎的动画不对。
+
+    ⚠ 也试过两种「事后补救」，都**不够**：
+    - `wait_stable`（连续两帧截图相同）⇒ ⇒ 它**分不清**「稳定在旧相位」与
+      「稳定在新相位」⇒ ⇒ 冻结模式下旧相位也是静止的 ⇒ ⇒ 骗过判据；
+    - 「两次 `requestAnimationFrame`」⇒ ⇒ 只能保证**新样式已合成**，
+      但动画**早就跑过头**了 ⇒ ⇒ 冻结位置依旧随机。
+
+    ⇒ ⇒ 正解：用 `Page.addScriptToEvaluateOnNewDocument`，让冻结脚本
+    **在文档开始执行前**就生效 ⇒ ⇒ 动画从**第 0 毫秒**起就是「冻结在指定相位」
+    ⇒ ⇒ 冻结位置**确定**。
+    """
     shots: dict[str, bytes] = {}
     for phase in PHASES_MS:
-        navigate(cdp, url)
-        cdp.evaluate("document.documentElement.dataset.pilotMotion = 'on'; true")
-        cdp.evaluate("document.documentElement.dataset.pilotFreeze = '1'; true")
-        cdp.evaluate(
-            f"document.documentElement.style.setProperty('--pilot-phase', '-{phase}ms'); true"
+        source = (
+            "document.documentElement.dataset.pilotMotion = 'on';"
+            "document.documentElement.dataset.pilotFreeze = '1';"
+            f"document.documentElement.style.setProperty('--pilot-phase', '-{phase}ms');"
         )
-        time.sleep(0.25)
-        box = card_box(cdp)
-        shots[str(phase)] = screenshot(cdp, box)
+        # ① **导航之前**注册：新文档一执行就冻结在指定相位。
+        added = cdp.call(
+            "Page.addScriptToEvaluateOnNewDocument", {"source": source}
+        ).get("identifier")
+        try:
+            navigate(cdp, url)
+            # ② 幂等补一次（脚本在某些页面上可能在 `documentElement` 就绪前跑）。
+            cdp.evaluate(source + " true")
+            time.sleep(0.1)
+            box = card_box(cdp)
+            # ③ 再等稳定（双保险，防合成异步）。
+            shots[str(phase)] = wait_stable(cdp, box)
+        finally:
+            # ④ **必须移除**：否则后面每个相位的导航都会累积旧的冻结脚本。
+            if added:
+                cdp.call("Page.removeScriptToEvaluateOnNewDocument", {"identifier": added})
     return shots
 
 
