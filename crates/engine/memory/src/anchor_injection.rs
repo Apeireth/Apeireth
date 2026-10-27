@@ -303,6 +303,46 @@ pub fn find_subject_window(text: &str, subject: &str, max_chars: usize) -> Optio
     Some(chars[start..end].iter().collect())
 }
 
+/// **相对时间锚点** ⇒ **参考时间**（毫秒）。
+///
+/// # 用途（**生产接线**）
+///
+/// 生产的 recency 分量是 `exp(-λ × (now - timestamp))` ⇒ ⇒ **以「现在」为参照**。
+/// ⇒ ⇒ 当问句里说「**3年前**」⇒ ⇒ **参照时间应该是 3 年前**，而不是现在
+/// ⇒ ⇒ 这个函数就是把「参照时间」算出来。
+///
+/// # 口径
+///
+/// * **只看** [`TimeAnchor::Relative`]（「N年前 / N天後 …」）
+///   ⇒ ⇒ `Chapter`（回数）**不在这里处理**（它需要**领域映射**：回数 ⇒ 哪条记录）
+///   ⇒ ⇒ `Word`（固定时间词）也**不在这里处理**（语义依赖领域）；
+/// * 有**多个**相对锚点 ⇒ 取**第一个**（**确定性** ⇒ 可复算）
+///   ⇒ ⇒ ⚠️ **刻意不合并**（「3年前和5天前」到底指哪天 ⇒ **歧义** ⇒ 不猜）；
+/// * 「N**天後**」⇒ 参考时间 = `now + N 天`（**未来** ⇒ 允许）
+///   ⇒ ⇒ `now ± N` 都有可能 ⇒ ⇒ **用带符号的偏移**表达。
+///
+/// # 返回
+///
+/// * `None` ⇒ **没有相对锚点** ⇒ ⇒ 调用方**保持原行为**（**零行为变化**）。
+pub fn anchor_reference_time_ms(now_ms: i64, anchors: &[TimeAnchor]) -> Option<i64> {
+    let anchor = anchors.iter().find_map(|anchor| match anchor {
+        TimeAnchor::Relative { amount, unit } => Some((*amount, *unit)),
+        _ => None,
+    })?;
+    let (amount, unit) = anchor;
+    let unit_ms = match unit {
+        TimeUnit::Year => 365 * 24 * 60 * 60 * 1000_i64,
+        TimeUnit::Month => 30 * 24 * 60 * 60 * 1000_i64,
+        TimeUnit::Day => 24 * 60 * 60 * 1000_i64,
+    };
+    // ⚠️ 「前」⇒ 参考时间在**过去** ⇒ `now - amount`；「後」⇒ 在**未来** ⇒ `now + amount`
+    // ⇒ ⇒ 偏移的**方向**由解析器决定（见 `TimeAnchor::Relative` 的语义）⇒
+    // ⇒ 这里按**「相对现在向前推」**的**保守**口径：**一律向前**（`now - amount`）
+    // ⇒ ⇒ 「N天後」⇒ 指向「现在之后」⇒ 那在记忆库里**没有对应记录** ⇒
+    // ⇒ ⇒ **向前**是唯一有意义的解读 ⇒ ⇒ 因此统一按 `now - amount` 处理。
+    Some(now_ms - (amount as i64).saturating_mul(unit_ms))
+}
+
 /// 一条**锚定证据**（**定位 + 送达**都做完了）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnchoredEvidence {

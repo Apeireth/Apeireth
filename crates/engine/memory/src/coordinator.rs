@@ -290,6 +290,17 @@ impl MemoryCoordinator {
         HashMap<String, (MemoryLayerKind, i64, Option<String>)>,
         usize,
     ) {
+        // ⚠️ **时间锚点**（2026-10-27 生产接线）：问句里说「3年前」⇒
+        // ⇒ recency 的**参照时间**应该是「3年前」⇒ 而不是「现在」
+        // ⇒ ⇒ 下面 4 处 `delta_hours` **全部**改用这个参照时间
+        // ⇒ ⇒ ⚠️ **只影响 recency** ⇒ ⇒ `now_ms` 本身**照旧**传给外部 source
+        // ⇒ ⇒ ⇒ 外部 source 看到的仍是「现在」⇒ ⇒ **零副作用**。
+        //
+        // ⇒ 没有锚点 ⇒ `None` ⇒ ⇒ **完全保持原行为**（**零行为变化**）。
+        let recency_reference_ms = crate::anchor_injection::anchor_reference_time_ms(
+            now_ms,
+            &crate::anchor_injection::parse_time_anchors(&query.query_text),
+        );
         let mut candidates = Vec::new();
         let mut candidate_meta = HashMap::new();
         let mut governance_filtered = 0;
@@ -318,7 +329,7 @@ impl MemoryCoordinator {
                         continue;
                     }
                     let delta_hours =
-                        (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                        recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
                     let s_rec = (-query.recency_decay_lambda * delta_hours)
                         .exp()
                         .clamp(0.1, 1.0);
@@ -379,7 +390,7 @@ impl MemoryCoordinator {
                             }
                         }
                         let delta_hours =
-                            (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                            recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
                         let s_rec = (-query.recency_decay_lambda * delta_hours)
                             .exp()
                             .clamp(0.1, 1.0);
@@ -436,7 +447,7 @@ impl MemoryCoordinator {
                         }
                     }
                     let delta_hours =
-                        (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                        recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
                     let s_rec = (-query.recency_decay_lambda * delta_hours)
                         .exp()
                         .clamp(0.1, 1.0);
@@ -484,7 +495,8 @@ impl MemoryCoordinator {
                         } else {
                             pref.created_at
                         };
-                        let delta_hours = (now_ms - pref_ts_ms).max(0) as f64 / (1000.0 * 3600.0);
+                        let delta_hours =
+                            recency_delta_hours(recency_reference_ms, now_ms, pref_ts_ms);
                         let s_rec = (-query.recency_decay_lambda * delta_hours)
                             .exp()
                             .clamp(0.1, 1.0);
@@ -1384,4 +1396,22 @@ mod tests {
 
         std::fs::remove_dir_all(&root).expect("cleanup wiki root");
     }
+}
+
+/// recency 的**时间差**（小时）。
+///
+/// # 两种口径（**关键**）
+///
+/// * **没有时间锚点** ⇒ `(now - ts).max(0)` ⇒ ⇒ **与接线前逐字一致**（**零行为变化**）
+///   ⇒ ⇒ 未来时间戳的记忆仍然拿 recency = 1.0（**保持原语义**）；
+/// * **有相对时间锚点**（「3年前」）⇒ `|reference - ts|`
+///   ⇒ ⇒ **到参照点的距离** ⇒ ⇒ 「3年前」能分出「3 年前」和「10 年前」
+///   ⇒ ⇒ ⚠️ **这是实测抓出来的缺陷**：`max(0)` 会让**所有比参照点更老**的记忆
+///   ⇒ ⇒ 拿到同一个 recency = 1.0 ⇒ ⇒ 锚点**只在「参照点与现在之间」有效**。
+fn recency_delta_hours(reference_ms: Option<i64>, now_ms: i64, timestamp_ms: i64) -> f64 {
+    let delta_ms = match reference_ms {
+        Some(reference) => (reference - timestamp_ms).abs(),
+        None => (now_ms - timestamp_ms).max(0),
+    };
+    delta_ms as f64 / (1000.0 * 3600.0)
 }
