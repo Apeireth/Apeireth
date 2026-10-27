@@ -28,11 +28,11 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: b419826c
+    verified_at: 75ee2464
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）"
 
   - id: core.cost_router
     title: "成本分级路由（H-P2，四档选模）"
@@ -187,11 +187,11 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: b419826c
+    verified_at: 75ee2464
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
-    notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**回程还原已接**（双闸的闸二）：只还原本会话登记簿登记过的指纹，未登记占位照实留痕；还原只在受控回程面，对出境面不可逆。**出域账本已接**（零真值 append-only JSONL：对象类型/不可逆指纹/目的地/用途）+ CLI 出口 `apeireth egress ledger`（只读；账本若无人可查，「记录已知流向」就是空的）。**授权策略对象已接**（`apeireth_governance::authorization`：可携带/可委托/可过期/可追溯；委托只能收窄、过期即失效、内容指纹可追溯）：按用途授权（资源 `egress`，scope 装用途名如 `chat`），未授权即拒绝出网（fail-closed），授权写坏不装配闸并 stderr 报错。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）
+    notes: "第 5 条边界（模型上下文→provider）已接判定点：检出 PII→真值换不可逆占位；闸不可用→拒绝即帧（fail-closed）。默认 OFF（脱敏改写请求内容=行为变化，非'更安全的默认值'）。**回程还原已接**（双闸的闸二）：只还原本会话登记簿登记过的指纹，未登记占位照实留痕；还原只在受控回程面，对出境面不可逆。**出域账本已接**（零真值 append-only JSONL：对象类型/不可逆指纹/目的地/用途）+ CLI 出口 `apeireth egress ledger`（只读；账本若无人可查，「记录已知流向」就是空的）。**授权策略对象已接**（`apeireth_governance::authorization`：可携带/可委托/可过期/可追溯；委托只能收窄、过期即失效、内容指纹可追溯）：按用途授权（资源 `egress`，scope 装用途名如 `chat`），未授权即拒绝出网（fail-closed），授权写坏不装配闸并 stderr 报错。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）
 **问责闭环五步全部 PRODUCTION WIRED**（ADR-0014 §5）：
 ①影响声明 + 事实→行动索引（零真值）——`egress_gate.rs` 三条出网路径各写一条 + CLI `egress impact` 读出端；
 ②决策回执 —— **生产调用方 = `apeireth egress impact` 用 `DecisionReceipt::from_statement` 渲染**；

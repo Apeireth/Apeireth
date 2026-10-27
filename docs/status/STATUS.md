@@ -5,7 +5,7 @@
 
 | id | level | default | switch_env | verified_at | next_review |
 |---|---|---|---|---|---|
-| `rt.provider_router` | PRODUCTION WIRED | ON | - | `b419826c` | 2026-11-20 |
+| `rt.provider_router` | PRODUCTION WIRED | ON | - | `75ee2464` | 2026-11-20 |
 | `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `b419826c` | 2026-11-20 |
 | `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `b419826c` | 2026-11-20 |
 | `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `c9251271` | 2026-11-20 |
@@ -13,7 +13,7 @@
 | `sec.egress_control` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `sec.object_access` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `c9251271` | 2026-12-01 |
-| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `b419826c` | 2026-12-01 |
+| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `75ee2464` | 2026-12-01 |
 | `mem.lesson_object` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
