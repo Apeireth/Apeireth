@@ -1087,6 +1087,54 @@ impl GovernanceHook for BehaviorChainGuardHook {
         let (_, verdict) = self.evaluate_internal(request);
         verdict
     }
+
+    /// **上游拒绝** ⇒ ⇒ 把它记进行为链（2026-10-27，护栏审计 **P0-2**）。
+    ///
+    /// # 为什么需要（**后果**）
+    ///
+    /// 治理管线在**第一个非 allow 处短路** ⇒ ⇒ 护栏（排在后面）**根本不会被评估**
+    /// ⇒ ⇒ **被上游闸拒掉的动作不进护栏的行为链**
+    /// ⇒ ⇒ 而护栏的**复合检测**依赖链里有**被拒动作**：
+    /// * `BehaviorChain::has_same_effect_after_denial`（同效果绕过）
+    /// * `has_retry_escalation`（重试升级）
+    /// * `has_destructive_chain`（破坏链）
+    /// ⇒ ⇒ ⇒ 「**拒绝后换个工具再来一次**」对**上游拒绝**是**失明**的。
+    ///
+    /// # 口径
+    ///
+    /// * **只记「被拒」这一个事实** ⇒ ⇒ 不做任何判定 ⇒ ⇒ **不改变护栏的判定结果**
+    ///   （只影响**后续**评估能看到这条历史）；
+    /// * 与护栏**自己**拒绝时的记法**完全一致**（同一条链、同样的 `denied` 标记）
+    ///   ⇒ ⇒ ⇒ 下游的复合检测**分不出**这是护栏拒的还是上游拒的
+    ///   ⇒ ⇒ ⇒ **这正是要的**（「拒绝过」这件事本身就够了）。
+    async fn on_denied(&self, request: &GovernanceRequest<'_>, _verdict: &GovernanceVerdict) {
+        let trace_id = request.trace.to_string();
+        let key = (request.session, trace_id.clone());
+        let mut chains = self.chains.lock();
+        let chain = chains
+            .entry(key)
+            .or_insert_with(|| BehaviorChain::new(request.session.to_string(), trace_id.clone()));
+        let actions = chain.actions();
+        let denied_before = actions.iter().any(|action| action.denied);
+        let retry_count = actions
+            .iter()
+            .rev()
+            .take_while(|action| action.denied)
+            .count() as u32;
+        let prior_actions = actions
+            .iter()
+            .map(|action| action.capability_id.clone())
+            .collect();
+        let observation = SafetyObservation::from_governance_request_with_provider(
+            request,
+            retry_count,
+            denied_before,
+            prior_actions,
+            Some(self.safety_provider.as_ref()),
+        );
+        let action_id = chain.add_action_with_id(&observation, request.round, request.action_id);
+        chain.update_action_status(&action_id, ActionStatus::Denied);
+    }
 }
 
 #[cfg(test)]
