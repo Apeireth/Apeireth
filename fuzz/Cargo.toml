@@ -382,3 +382,10 @@ path = "fuzz_targets/skill_search.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "guard_watch"
+path = "fuzz_targets/guard_watch.rs"
+test = false
+doc = false
+bench = false
