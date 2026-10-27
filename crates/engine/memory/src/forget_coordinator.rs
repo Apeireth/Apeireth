@@ -20,8 +20,14 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::derived_repair::RepairOutcome;
+use crate::forget_access_guard::ForgetPermit;
 use crate::research_derived_memory::{ClosureMode, ClosureReport, DerivedRef, ExecutionStateEntry};
-use crate::{MemoryGovernanceStore, MemoryResult, SqliteMemoryStore};
+use crate::universal_forget::{
+    resolve_access_permit, verify_permit_against_history, AccessGuardStatus, GuardDecision,
+};
+use crate::{
+    MemoryError, MemoryGovernanceError, MemoryGovernanceStore, MemoryResult, SqliteMemoryStore,
+};
 
 /// 协调遗忘请求：roots 为遗忘根集；`approval_id` 引用上游已通过的审批工件
 /// （本模块不内建审批权威——per "无第二审批权威"架构不变量）。
@@ -45,6 +51,8 @@ pub struct CoordinatedForgetReport {
     pub closure: ClosureReport,
     /// 行为契约自验：执行态清单空 + 根被召回排除 + 持久遗忘集覆盖闭包。
     pub behavior_contract_verified: bool,
+    /// 访问史守卫的执行标注（如实标注；缺覆盖 ≠ 通过）。
+    pub access_guard: AccessGuardStatus,
 }
 
 impl SqliteMemoryStore {
@@ -92,11 +100,42 @@ impl SqliteMemoryStore {
 
     /// 三段式协调遗忘（P0-A 生产升级路径；opt-in）。
     ///
-    /// 顺序: ① 审计闭包（写入 lineage 事件）→ ② P1 明文 → ③ P2 派生标记 →
-    /// ④ P3 执行态注册行删除 + 报告 → ⑤ 行为契约自验。
+    /// 顺序: ① 审计闭包（写入 lineage 事件）→ ② 访问史守卫（反查真实访问史 ⇒
+    /// permit）→ ③ P1 明文 → ④ P2 派生标记 → ⑤ P3 执行态注册行删除 + 报告 →
+    /// ⑥ 行为契约自验。
+    ///
+    /// # 访问史纪律 (G1: 先记访问史, 再忘记)
+    ///
+    /// 闭包里 `kind=episode` 的节点才是**待销毁的明文目标**, 也是访问史表唯一
+    /// 有键的维度 ⇒ 这些节点必须**全部**有真实访问事件覆盖, 否则**整体拒绝**
+    /// (拒绝发生在任何销毁动作之前 ⇒ 不会半清)。
+    ///
+    /// 访问史事件来自真实观测面 (生产: runtime-assembly 的 canonical 召回面写
+    /// `memory_access_events`); 本路径**只反查、不造事件**。
     pub fn research_coordinated_forget(
         &self,
         req: &CoordinatedForget,
+    ) -> MemoryResult<CoordinatedForgetReport> {
+        self.coordinated_forget_core(req, None)
+    }
+
+    /// **带 permit 的三段式协调遗忘** (严格面)。
+    ///
+    /// permit 必须对准闭包里的 episode 节点, 且对应事件**真的落库**
+    /// (内部再反查一次) ⇒ 「有个 permit 就行」不成立。
+    pub fn research_coordinated_forget_with_permit(
+        &self,
+        req: &CoordinatedForget,
+        permit: ForgetPermit,
+    ) -> MemoryResult<CoordinatedForgetReport> {
+        self.coordinated_forget_core(req, Some(permit))
+    }
+
+    /// 三段式协调遗忘内核（permit 缺省时由本方法自解析访问史）。
+    fn coordinated_forget_core(
+        &self,
+        req: &CoordinatedForget,
+        permit: Option<ForgetPermit>,
     ) -> MemoryResult<CoordinatedForgetReport> {
         // ① 审计闭包 (先审计后动手 — 动作依据同一份闭包, 0 装).
         let closure = self.research_forget_closure(
@@ -106,17 +145,71 @@ impl SqliteMemoryStore {
             Some(&req.reason),
         )?;
 
-        // ② P1 明文: 闭包中 kind=episode 的节点走既有 forget_episode
+        // ② 访问史守卫: 闭包里的 episode 节点 = 待销毁的明文目标.
+        let episode_targets: Vec<String> = closure
+            .nodes
+            .iter()
+            .filter(|node| node.kind == "episode")
+            .map(|node| node.id.clone())
+            .collect();
+        let permit = match permit {
+            Some(permit) => {
+                let conn = self.conn()?;
+                verify_permit_against_history(&conn, &permit, &episode_targets)
+                    .map_err(MemoryError::Invalid)?;
+                Some(permit)
+            }
+            None if episode_targets.is_empty() => None,
+            None => {
+                let conn = self.conn()?;
+                match resolve_access_permit(
+                    &conn,
+                    &episode_targets,
+                    crate::research_derived_memory::now_ms(),
+                ) {
+                    GuardDecision::Permitted { permit, .. } => Some(permit),
+                    GuardDecision::Uncovered { missing } => {
+                        return Err(MemoryError::Invalid(format!(
+                            "访问史未覆盖待忘目标 (缺: {}); 拒绝销毁",
+                            missing.join(", ")
+                        )));
+                    }
+                    GuardDecision::Unavailable { reason } => {
+                        return Err(MemoryError::Invalid(format!(
+                            "访问史不可用: {reason}; 拒绝销毁"
+                        )));
+                    }
+                    GuardDecision::NoTargets => None,
+                }
+            }
+        };
+        let access_guard = AccessGuardStatus::permitted(
+            permit
+                .as_ref()
+                .map(|permit| permit.events.len())
+                .unwrap_or(0),
+        );
+
+        // ③ P1 明文: 闭包中 kind=episode 的节点走守卫版 forget_episode
         //    (governance sidecar, 默认检索排除 — 产品路径).
         let mut plaintext_forgotten: Vec<DerivedRef> = Vec::new();
         for node in &closure.nodes {
             if node.kind == "episode" {
-                let _ = self.forget_episode(&node.id, Some(&req.reason), 0);
+                let permit = permit
+                    .as_ref()
+                    .ok_or_else(|| MemoryError::Invalid("访问史守卫未放行: 缺少 permit".into()))?;
+                match self.forget_episode_guarded(&node.id, Some(&req.reason), 0, permit.clone()) {
+                    Ok(_) => {}
+                    // 治理态原因 (不存在 / 已遗忘) 与既有语义一致: 不阻断整体遗忘.
+                    Err(MemoryGovernanceError::NotFound(_))
+                    | Err(MemoryGovernanceError::AlreadyForgotten(_)) => {}
+                    Err(error) => return Err(MemoryError::Invalid(error.to_string())),
+                }
                 plaintext_forgotten.push(DerivedRef::new(&node.kind, &node.id));
             }
         }
 
-        // ③ P2 派生标记: 闭包全部节点入持久化遗忘集.
+        // ④ P2 派生标记: 闭包全部节点入持久化遗忘集.
         for node in &closure.nodes {
             self.research_persist_forgotten(
                 &DerivedRef::new(&node.kind, &node.id),
@@ -130,7 +223,7 @@ impl SqliteMemoryStore {
             .map(|n| DerivedRef::new(&n.kind, &n.id))
             .collect();
 
-        // ④ P3 执行态: 删除注册行 (污染源 ∈ 闭包), 报告被删条目给调用方
+        // ⑤ P3 执行态: 删除注册行 (污染源 ∈ 闭包), 报告被删条目给调用方
         //    清 runtime 活体工件 (store 不越权动 runtime).
         let conn = self.conn()?;
         let mut cleared: Vec<ExecutionStateEntry> = Vec::new();
@@ -172,7 +265,7 @@ impl SqliteMemoryStore {
         }
         drop(conn);
 
-        // ⑤ 行为契约自验 ("遗忘后 = 从未观察" 的回归断言, 内建不假装):
+        // ⑥ 行为契约自验 ("遗忘后 = 从未观察" 的回归断言, 内建不假装):
         //    a) 执行态清单对根集为空;
         //    b) 根集全部在持久遗忘集;
         //    c) 持久遗忘集覆盖闭包全部节点.
@@ -194,6 +287,7 @@ impl SqliteMemoryStore {
             execution_state_cleared: cleared,
             closure,
             behavior_contract_verified: verified,
+            access_guard,
         })
     }
 
@@ -228,10 +322,12 @@ impl SqliteMemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::access_history::SqliteAccessHistoryStore;
     use crate::derived_repair::{RepairExecutor, RepairNode, RepairTradeoff};
     use crate::research_derived_memory::ExecutionStateKind;
     use crate::{EpisodeStore, MemoryGovernanceStore, SqliteMemoryStore};
     use apeireth_core::kernel::memory::Episode;
+    use apeireth_storage::SqliteConnectionPool;
 
     fn store() -> SqliteMemoryStore {
         SqliteMemoryStore::open_in_memory().unwrap()
@@ -249,10 +345,37 @@ mod tests {
             .unwrap();
     }
 
+    /// **真实访问史写入面** (生产同一条路径: `SqliteAccessHistoryStore::record_event`).
+    ///
+    /// 守卫只认「真的落过库的访问事件」⇒ 测试也必须走真实写入面,
+    /// 不许手搓事件冒充访问。
+    async fn record_access(access: &SqliteAccessHistoryStore, memory_id: &str) {
+        access
+            .record_event(
+                memory_id,
+                None,
+                Some("session-forget".into()),
+                1_000,
+                None,
+                "selected_context",
+                Some(0),
+                Some(1.0),
+                serde_json::json!({"selected": true}),
+            )
+            .await
+            .expect("访问史写入");
+    }
+
     /// 三段式协调遗忘: 明文排除 + V10 标记 + 执行态清空 + 行为契约 verified。
-    #[test]
-    fn coordinated_forget_three_phase_verified() {
-        let s = store();
+    #[tokio::test]
+    async fn coordinated_forget_three_phase_verified() {
+        // 文件库 (访问史表与治理表同账) ⇒ 访问史写入面与 forgets 面看到同一份事实.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("coordinator.sqlite");
+        let s = SqliteMemoryStore::open(&path).unwrap();
+        let access =
+            SqliteAccessHistoryStore::new(SqliteConnectionPool::open(&path).await.unwrap(), 32);
+        access.ensure_schema().await.unwrap();
         put(&s, "ep-1", "me", "根事实");
         let note = DerivedRef::new("note", "note-1");
         s.research_record_derivation(
@@ -269,6 +392,8 @@ mod tests {
             note: String::new(),
         })
         .unwrap();
+        // 先记访问史, 再忘记 (纪律本体: 守卫要求 episode 目标有真实访问事件).
+        record_access(&access, "ep-1").await;
 
         let report = s
             .research_coordinated_forget(&CoordinatedForget {
@@ -279,6 +404,11 @@ mod tests {
             .unwrap();
 
         assert!(report.behavior_contract_verified, "契约自验必须通过");
+        assert_eq!(
+            report.access_guard.state,
+            crate::universal_forget::AccessGuardState::Permitted,
+            "有真实访问史 ⇒ 守卫放行"
+        );
         assert!(report
             .plaintext_forgotten
             .contains(&DerivedRef::new("episode", "ep-1")));
@@ -299,6 +429,34 @@ mod tests {
             .research_execution_state_inventory(&[DerivedRef::new("episode", "ep-1")])
             .unwrap();
         assert!(inv.items.is_empty());
+    }
+
+    /// 访问史纪律 (G1): episode 目标没有真实访问史 ⇒ **整体拒绝**, 一条都不销毁.
+    #[tokio::test]
+    async fn coordinated_forget_refuses_without_access_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("coordinator-guard.sqlite");
+        let s = SqliteMemoryStore::open(&path).unwrap();
+        let access =
+            SqliteAccessHistoryStore::new(SqliteConnectionPool::open(&path).await.unwrap(), 32);
+        access.ensure_schema().await.unwrap();
+        put(&s, "ep-1", "me", "根事实");
+        // 故意不写访问史 ⇒ 守卫不放行.
+        let error = s
+            .research_coordinated_forget(&CoordinatedForget {
+                roots: vec![DerivedRef::new("episode", "ep-1")],
+                reason: "用户要求".into(),
+                approval_id: "apv-1".into(),
+            })
+            .expect_err("无访问史必须拒绝");
+        assert!(
+            error.to_string().contains("访问史未覆盖"),
+            "理由应可读: {error}"
+        );
+        // 拒绝 ⇒ 记录仍在 (没被删).
+        let recent = s.governed_recent_episodes("me", 10).unwrap();
+        assert_eq!(recent.len(), 1, "拒绝 ⇒ 不得销毁");
+        assert_eq!(recent[0].episode.id, "ep-1");
     }
 
     /// 持久化遗忘集驱动 GovernedRecall (from_store_persisted).
