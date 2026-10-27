@@ -9,7 +9,8 @@
       "cases": 476,
       "groundedness": 0.09243697478991597,
       "evidence_precision": 0.009243697478991597,
-      "delivery_rate": 0.3098591549295775
+      "delivery_rate": 0.3098591549295775,
+      "case_fingerprint": "1d969ee2afe65edf5a27360223809ae9dfd866110453dc41bf7271eb5fbb1e7e"
     },
     {
       "name": "watershed",
@@ -18,7 +19,8 @@
       "cases": 248,
       "groundedness": 0.47580645161290325,
       "evidence_precision": 0.05685483870967732,
-      "delivery_rate": 0.6920821114369502
+      "delivery_rate": 0.6920821114369502,
+      "case_fingerprint": "3f7ee87e9c88bb8b22c40c36d60a5d27c7502b24172ffc3783759ddc3c7b14c4"
     }
   ]
 }

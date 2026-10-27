@@ -169,14 +169,53 @@ fn report_one(
             .map(|rate| format!("{rate:.4}"))
             .unwrap_or_else(|| "没测到".to_string())
     );
+    // ⚠️ **题集指纹**（2026-10-27 加）：**换语料 ⇒ 题集也变了 ⇒ 数字不可比**
+    // ⇒ ⇒ 把题集**指纹**写进基线 ⇒ 将来任何人换题 ⇒ 指纹变 ⇒ **可比性一眼可见**。
+    //
+    // 口径：逐题 `id` + `query` + `expect_ids`，**长度前缀**后 SHA-256
+    // ⇒ 与 `offline_archive::content_digest` 同口径（长度前缀防拼接歧义）。
+    let fingerprint = case_fingerprint(&golden.cases);
+    eprintln!("  · 题集指纹：{fingerprint}");
     Ok(json!({
         "name": name,
         "recall_at_k": report.metrics.recall_at_k,
         "ndcg_at_k": report.metrics.ndcg_at_k,
         "cases": report.cases,
+        "case_fingerprint": fingerprint,
         // ⚠️ **观察项**（**不参与闸门**）：注入族指标 + 送达率
         "groundedness": report.metrics.groundedness,
         "evidence_precision": report.metrics.evidence_precision,
         "delivery_rate": delivery.delivery_rate,
     }))
+}
+
+/// 题集的**指纹**（长度前缀 + SHA-256；与 `offline_archive::content_digest` 同口径）。
+///
+/// # 为什么需要
+///
+/// ⚠️ **换语料 ⇒ 题集也变了 ⇒ 数字不可比**（2026-10-27 实测踩到：
+/// 「语料减半 ⇒ recall 涨」其实是「**题集变简单**」⇒ 结论被自己的下一个实验推翻）。
+/// ⇒ ⇒ 把指纹写进基线 ⇒ **换题一眼可见**。
+fn case_fingerprint(cases: &[apeireth_memory::golden_set::GoldenCase]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    for case in cases {
+        let id = case.id.as_bytes();
+        hasher.update((id.len() as u64).to_be_bytes());
+        hasher.update(id);
+        let query = case.query.as_bytes();
+        hasher.update((query.len() as u64).to_be_bytes());
+        hasher.update(query);
+        for target in &case.expect_ids {
+            let target = target.as_bytes();
+            hasher.update((target.len() as u64).to_be_bytes());
+            hasher.update(target);
+        }
+    }
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
 }

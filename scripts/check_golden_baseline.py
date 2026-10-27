@@ -282,6 +282,23 @@ def main() -> int:
             f" · groundedness {float(item.get('groundedness', 0.0)):.4f}"
         )
 
+    # ---------- 题集**指纹**比对（**可比性一眼可见**）----------
+    #
+    # ⚠️ **为什么**要这个（2026-10-27 实测踩到）：
+    # 「语料减半 ⇒ recall 涨」其实是「**题集变简单了**」⇒ 结论被自己的下一个实验推翻。
+    # ⇒ ⇒ **换语料 / 换题 ⇒ 数字不可比** ⇒ ⇒ 把**题集指纹**写进基线
+    # ⇒ ⇒ 指纹变了 ⇒ **当场提示不可比**（而不是让人误读成「机制变了」）。
+    baseline_corpora = {item.get("name"): item for item in baseline.get("corpora", [])}
+    for item in current.get("corpora", []):
+        name = item.get("name")
+        base_fp = baseline_corpora.get(name, {}).get("case_fingerprint")
+        got_fp = item.get("case_fingerprint")
+        if not base_fp or not got_fp:
+            continue
+        if base_fp != got_fp:
+            print(f"  ⚠️ {name}：**题集指纹变了** ⇒ **数字不可比**（换题了）")
+            print(f"     基线 {base_fp[:16]}… → 当前 {str(got_fp)[:16]}…")
+
     problems = compare(baseline, current)
     print("-" * 72)
     if problems:
