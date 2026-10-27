@@ -403,3 +403,10 @@ path = "fuzz_targets/path_guard.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "doc_ops"
+path = "fuzz_targets/doc_ops.rs"
+test = false
+doc = false
+bench = false
