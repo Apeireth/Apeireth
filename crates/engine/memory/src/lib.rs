@@ -52,6 +52,9 @@ pub mod arbitration;
 pub mod betti_hole_detector;
 pub mod bitemporal_graph;
 pub mod chronicle_crystallizer;
+// 语料的段落级切分（内部卷召回缺口的根因修复: 一回一条 7401 字 ⇒ 同主体竞争者 88/120）;
+// 状态 NOT IMPLEMENTED (新增未接线; 库级实现, 生产 0 调用点).
+pub mod chunking;
 /// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
 pub mod community;
 pub mod continuity_link;
@@ -79,8 +82,10 @@ pub mod d4_eval;
 // 内部卷「挖题」工序 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
 pub mod git_corpus;
 pub mod golden_baseline;
-// 注入策略 x 评测的实验台 (内部卷): 让「注入形态」成为可比较的变量; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod golden_diag; // 召回缺口诊断 (内部卷): Hit / RankedOut / NotInPool 分类; 状态 NOT IMPLEMENTED (新增未接线).
+                     // 注入策略 x 评测的实验台 (内部卷): 让「注入形态」成为可比较的变量; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod golden_injection;
+pub mod golden_injection2; // 注入形态对照第二轮 (消偏置 + 总预算固定); 状态 NOT IMPLEMENTED (新增未接线).
 pub mod golden_mining;
 pub mod golden_run;
 pub mod golden_set;
@@ -98,6 +103,8 @@ pub mod metadata_filter;
 pub mod milestone;
 pub mod milestone_store_sqlite;
 pub mod novel_corpus;
+// 记忆数据的脱机归档 (设计稿 §8 B4): 保原文 + 自说明 + 可独立校验; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod offline_archive;
 pub mod online_calibration;
 pub mod partner;
 pub mod perltqa_adapter;
@@ -110,9 +117,14 @@ pub mod reflexion;
 pub mod residual_pyramid;
 pub mod river_topology;
 pub mod semantic_axis;
+// 影子双跑 (设计稿 §8 B3): 让「换算法」可零风险上线/回退; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod shadow_run;
+// 算法切换流程 (设计稿 §8 B3): 影子→裁决→切换/回退 + Swap cost 度量 + 评测报告归档; 状态 NOT IMPLEMENTED (新增未接线).
+pub mod swap_flow;
 pub mod three_tier_vault;
 pub mod topic_predictor;
 pub mod vector_distance;
+pub mod vector_rebuild; // 派生索引重建 + 换代检测 (B2): 本模块 + 其集成测试在 HEAD 里已入库, 但 `pub mod` 声明只在工作区未提交改动里 ⇒ 缺失会让 `cargo build --tests` 直接失败; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod wiki_corpus;
 // 真实语料 → 内部卷挖题器的接线 (设计稿 §7.1 内部卷 / §8 B0-b); 状态 NOT IMPLEMENTED (新增未接线)。
 pub mod wiki_corpus_real;
@@ -314,7 +326,8 @@ pub mod derived_repair;
 pub use derived_repair::{RepairExecutor, RepairNode, RepairOutcome, RepairTradeoff};
 // B2 · RA-15 P0-A 生产接线 (opt-in, 默认关闭): 三段式协调遗忘
 // (吸收自 arXiv:2609.04875; 持久化遗忘集 V10 + 行为契约自验 + P0-B 结局应用).
-pub mod forget_coordinator;
+pub mod forget_access_guard;
+pub mod forget_coordinator; // 遗忘访问闸门 (W-18): 状态 NOT IMPLEMENTED (新增未接线).
 pub use forget_coordinator::{CoordinatedForget, CoordinatedForgetReport};
 // B2 · RA-15 P1-A (research, 默认关闭): 记忆准入控制 (吸收自 arXiv:2603.04549 A-MAC).
 pub mod admission_gate;

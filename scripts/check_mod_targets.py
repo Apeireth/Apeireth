@@ -78,6 +78,8 @@ def check_tree(root: Path) -> list[str]:
     """检查 root 下所有 `lib.rs` / `main.rs` 的 mod 声明。返回问题清单。"""
     problems: list[str] = []
     manifests = sorted(set(root.rglob("src/lib.rs")) | set(root.rglob("src/main.rs")))
+    # ⚠️ **`legacy/` 是归档区**（不参与构建）⇒ 不查它的模块声明。
+    manifests = [m for m in manifests if "legacy" not in m.parts]
     for manifest in manifests:
         text = manifest.read_text(encoding="utf-8", errors="replace")
         # 按行切分，逐行判断该 mod 是否带 `#[path]` 覆盖。
@@ -108,6 +110,40 @@ def check_tree(root: Path) -> list[str]:
             # ⚠️ **不检查「`<name>/` 目录存在但没有 mod.rs」**：
             # `foo.rs` + `foo/` 目录是 Rust 的**标准布局**（`foo.rs` 里的
             # `mod bar;` ⇒ `foo/bar.rs`）⇒ 那不是问题，是常态。
+        problems.extend(find_orphan_module_files(manifest))
+    return problems
+
+
+def find_orphan_module_files(manifest: Path) -> list[str]:
+    """找「文件在、但没有任何 `mod` 声明指向它」的模块文件。
+
+    # 口径
+
+    * **按目录**判定：同一目录下可能有**多个 crate 根**（`lib.rs` 与 `main.rs`
+      共享 `src/`）⇒ 一个文件只要被**任一**根声明就算「已声明」；
+    * 只看 crate 根**同目录**下的 `*.rs`（不含 `lib.rs`/`main.rs`）。
+    """
+    problems: list[str] = []
+    root_dir = manifest.parent
+    declared: set[str] = set()
+    for sibling_root in sorted(root_dir.glob("lib.rs")) + sorted(root_dir.glob("main.rs")):
+        text = sibling_root.read_text(encoding="utf-8", errors="replace")
+        declared.update(match.group(1) for match in MOD_RE.finditer(text))
+    for candidate in sorted(root_dir.glob("*.rs")):
+        stem = candidate.stem
+        if stem in ("lib", "main"):
+            continue
+        # ⚠️ **白名单**：`*_tests.rs` / `tests_*.rs` 命名 ⇒ 本仓惯例是
+        # 「**放在 src/ 里的测试模块**」，由 `#[cfg(test)] mod` 内联引用
+        # ⇒ 不该按「crate 根声明」判它们。
+        if stem.endswith("_tests") or stem.startswith("tests_"):
+            continue
+        if stem not in declared:
+            problems.append(
+                f"ORPHAN  {display_path(candidate)}: 文件存在，但同目录下没有任何 "
+                f"`mod {stem};` / `pub mod {stem};` 声明 ⇒ **它不会被编译**"
+                f"（若它的测试引用了它 ⇒ 远端编译失败）"
+            )
     return problems
 
 
