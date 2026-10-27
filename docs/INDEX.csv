@@ -1197,7 +1197,7 @@ docs/security/process-executor-threat-model.md,L3,4,Threat Model: ProcessExecuto
 docs/status/CLOSEOUT-2026-10-20.md,L1,9,第三线收尾交接（2026-10-20）,2026-10-20,现行,4,保留,
 docs/status/README.md,L1,5,docs/status — 文档事实体系的机器真源,2026-10-20,现行,1,索引,
 docs/status/STATUS.md,L1,4,文档状态仪表盘（STATUS）,2026-10-25,现行,11,保留,
-docs/status/chapter-anchor-value-2026-10-27.md,L1,4,章节锚点值多少？—— **「定位」这半有解，「送达」那半仍无解**（2026-10-27）,2026-10-27,现行,2,保留,
+docs/status/chapter-anchor-value-2026-10-27.md,L1,4,章节锚点值多少？—— **「定位」这半有解，「送达」那半仍无解**（2026-10-27）,2026-10-27,现行,3,保留,
 docs/status/corpora-split-robustness-2026-10-27.md,L1,4,语料切半检验：**结论稳不稳** + 一个**新杠杆**（2026-10-27）,2026-10-27,现行,1,保留,
 docs/status/d0-fidelity-audit.md,L1,7,D0 保真审计 —— 「今天到底丢了什么」,2026-10-25,现行,3,保留,
 docs/status/formal-coverage.md,L1,4,形式化覆盖边界登记（formal-coverage）,2026-09-25,现行,6,保留,

@@ -152,19 +152,19 @@ pub trait InjectionRenderer {
 
 | 层 | 指标 | 实现位置 | 状态 |
 |---|---|---|---|
-| L1 | `Recall@k` · `nDCG@k` | `golden_set.rs` | 库级已实现 |
-| L1 | 时间正确率 | `quality_metrics.rs` | 库级已实现（⚠️ **无区分力**，见 §6.1.2） |
-| L1 | 矛盾检出率 | `quality_metrics.rs` | 库级已实现 |
-| L2 | Evidence Precision · Groundedness | `golden_set.rs` | 库级已实现 |
-| L2 | Token 效率 · Citation coverage | `quality_metrics.rs` | 库级已实现 |
-| L3 | 规模延展 · 噪声鲁棒 · 确定性 · 越权恒 0 | `robustness_metrics.rs` | 库级已实现（⚠️ **噪声档信息量低**，见 §6.1.2） |
-| L4 | `Swap cost` | `swap_flow.rs` | 库级已实现 |
-| L4 | 影子胜率 · 回退时间 | `quality_metrics.rs` | 库级已实现 |
-| L5 | 脱机可读 · schema 自说明 | `offline_archive.rs` | 库级已实现 |
-| L5 | handover 演练通过 | `handover.rs` | 库级已实现 |
-| — | §6.2 四个「遗忘」指标 | `forgetting_metrics.rs` | 库级已实现 |
+| L1 | `Recall@k` · `nDCG@k` | `golden_set.rs` | **IMPLEMENTED**（库级） |
+| L1 | 时间正确率 | `quality_metrics.rs` | **IMPLEMENTED**（库级；⚠️ **无区分力**，见 §6.1.2） |
+| L1 | 矛盾检出率 | `quality_metrics.rs` | **IMPLEMENTED**（库级） |
+| L2 | Evidence Precision · Groundedness | `golden_set.rs` | **IMPLEMENTED**（库级） |
+| L2 | Token 效率 · Citation coverage | `quality_metrics.rs` | **IMPLEMENTED**（库级） |
+| L3 | 规模延展 · 噪声鲁棒 · 确定性 · 越权恒 0 | `robustness_metrics.rs` | **IMPLEMENTED**（库级；⚠️ **噪声档信息量低**，见 §6.1.2） |
+| L4 | `Swap cost` | `swap_flow.rs` | **IMPLEMENTED**（库级） |
+| L4 | 影子胜率 · 回退时间 | `quality_metrics.rs` | **IMPLEMENTED**（库级） |
+| L5 | 脱机可读 · schema 自说明 | `offline_archive.rs` | **IMPLEMENTED**（库级） |
+| L5 | handover 演练通过 | `handover.rs` | **IMPLEMENTED**（库级） |
+| — | §6.2 四个「遗忘」指标 | `forgetting_metrics.rs` | **IMPLEMENTED**（库级） |
 
-⚠️ **口径**：「库级已实现」= **IMPLEMENTED**（类型 + 计算 + 测试 + 演练齐备）
+⚠️ **口径**：「**IMPLEMENTED**（库级）」= **IMPLEMENTED**（类型 + 计算 + 测试 + 演练齐备）
 ⇒ **PRODUCTION WIRED ✘**（生产 0 调用点）· **DEFAULT ENABLED ✘**（无开关位）
 ⇒ **对外一律 NOT IMPLEMENTED（新增未接线）**。
 
