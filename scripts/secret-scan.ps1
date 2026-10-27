@@ -94,6 +94,13 @@ $AllowlistPaths = @(
       # 用来验证 image_ops 的元数据脱敏面能盖住它。假标记非真凭据;
       # 同类：脱敏面测试必须写得出凭据的真形状，否则测不到要测的那条路)
       'fuzz/fuzz_targets/fetch_image.rs',
+    # `sk-11111111111111111111111111` 曾在本文件里作为**假凭据夹具**出现
+    # (测 PII/脱敏面必须写得出凭据的真形状, 否则测不到要测的那条路);
+    # 该字面量**当前已不在工作树**, 但**仍在 git 历史里**
+    # ⇒ `scan-history` 会报它 ⇒ ⇒ 豁免**本文件**的历史 blob
+    # (与上面 `fetch_image.rs` 同款处置: 整文件豁免, 代价是该文件的假密钥不再被逐条盯;
+    #  ⇒ 真密钥的兜底仍在 **GitHub Secret Scanning** 与**人工 review** 那一层)
+      'fuzz/fuzz_targets/input_security.rs',
     'crates/adapters/sdk/src/livekit/auth.rs',
     'crates/engine/perception/tests/*',
     'crates/foundation/governance/src/input_security.rs',
