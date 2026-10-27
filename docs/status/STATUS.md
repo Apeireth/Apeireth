@@ -23,7 +23,7 @@
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `da85caf59114` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `gov.reflection_queue` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
-| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
+| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `cf2bb4a1` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
