@@ -144,6 +144,45 @@ pub trait InjectionRenderer {
 | **L4 可塑性** | **`Swap cost`** · 影子胜率 · 回退时间 |
 | **L5 可继承** | 脱机可读 · schema 自说明覆盖 · handover 演练通过 |
 
+#### 6.1.1 每项的**实现状态**（机器可检，不许口头声称）
+
+> **台账**：`scripts/quality-metrics-ledger.json`
+> **守卫**：`python3 scripts/check_quality_metrics.py`（台账与代码**互相校验** ⇒ 台账撒谎即失败）
+> **流水线**：`.github/workflows/quality-metrics.yml`
+
+| 层 | 指标 | 实现位置 | 状态 |
+|---|---|---|---|
+| L1 | `Recall@k` · `nDCG@k` | `golden_set.rs` | 库级已实现 |
+| L1 | 时间正确率 | `quality_metrics.rs` | 库级已实现（⚠️ **无区分力**，见 §6.1.2） |
+| L1 | 矛盾检出率 | `quality_metrics.rs` | 库级已实现 |
+| L2 | Evidence Precision · Groundedness | `golden_set.rs` | 库级已实现 |
+| L2 | Token 效率 · Citation coverage | `quality_metrics.rs` | 库级已实现 |
+| L3 | 规模延展 · 噪声鲁棒 · 确定性 · 越权恒 0 | `robustness_metrics.rs` | 库级已实现（⚠️ **噪声档信息量低**，见 §6.1.2） |
+| L4 | `Swap cost` | `swap_flow.rs` | 库级已实现 |
+| L4 | 影子胜率 · 回退时间 | `quality_metrics.rs` | 库级已实现 |
+| L5 | 脱机可读 · schema 自说明 | `offline_archive.rs` | 库级已实现 |
+| L5 | handover 演练通过 | `handover.rs` | 库级已实现 |
+| — | §6.2 四个「遗忘」指标 | `forgetting_metrics.rs` | 库级已实现 |
+
+⚠️ **口径**：「库级已实现」= **IMPLEMENTED**（类型 + 计算 + 测试 + 演练齐备）
+⇒ **PRODUCTION WIRED ✘**（生产 0 调用点）· **DEFAULT ENABLED ✘**（无开关位）
+⇒ **对外一律 NOT IMPLEMENTED（新增未接线）**。
+
+#### 6.1.2 两条**结构性无区分力**的指标（2026-10-27 实测登记）
+
+⚠️ 这两项**能算**，但**当前的数字说明不了什么** ⇒ 记在这里，**免得被单独引用**：
+
+1. **时间正确率 = 1.0 是「构造性」的** ⇒ 真写真读真实 `episodes` 后发现
+   **全仓没有任何写入路径会写 `valid_until_ms`** ⇒ 没有记录会过期
+   ⇒ 这个 1.0 **不是**「检索很棒」的证据
+   ⇒ ⇒ **要真能测，得先有一条「会写失效时间」的生产路径**；
+2. **噪声鲁棒当前几乎测不出东西**（跌幅 0.0% / 1.17%）⇒ 噪声是**固定文案**
+   ⇒ 同一段话进了很多篇 ⇒ BM25 里它的 **IDF 极低** ⇒ 几乎不扰动排序
+   ⇒ ⇒ **要真能测，噪声得「与查询词竞争」**（噪声词取自 query）⇒ 那才是真检验。
+
+⚠️ 另：**影子胜率 0.7206 与聚合裁决 `Rejected` 矛盾** ⇒ 逐题胜多来自
+「**两边都没命中**但候选更省 token」⇒ ⇒ **胜率是计数，不是结论**（不许被单独引用）。
+
 ### 6.2 「遗忘」相关（D-9 改写，替换原"遗忘正确率"）
 
 | 指标 | 定义 |
