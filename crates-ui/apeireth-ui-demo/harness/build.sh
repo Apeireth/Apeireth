@@ -19,21 +19,18 @@ CRATES_UI="$(cd "${HERE}/../.." && pwd)"
 REPO="$(cd "${CRATES_UI}/.." && pwd)"
 
 WASM_BINDGEN="${WASM_BINDGEN:-${REPO}/target/ui-probe-scratch/bin/bin/wasm-bindgen}"
-if ! command -v wasm-bindgen >/dev/null 2>&1 && [ ! -x # ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
+if ! command -v wasm-bindgen >/dev/null 2>&1 && [ ! -x "${WASM_BINDGEN}" ]; then
+  echo "找不到 wasm-bindgen（可用 WASM_BINDGEN=<路径> 指定）" >&2
+  exit 1
+fi
+WASM_BINDGEN="$(command -v wasm-bindgen || echo "${WASM_BINDGEN}")"
+
+# ⚠️ **产物路径必须跟随 `CARGO_TARGET_DIR`**（仓库脚本纪律）：
 # 否则外部设了 `CARGO_TARGET_DIR` 时 cargo 把产物写到别处，
 # 而本脚本仍去读硬编码的 `…/target/…` ⇒ ⇒ **拿到旧 wasm**
 # ⇒ ⇒ 实测踩过：注入的修复**没进浏览器** ⇒ ⇒ **假绿/假红**。
 TARGET_DIR="${CARGO_TARGET_DIR:-${CRATES_UI}/target}"
 WASM_ARTIFACT="${TARGET_DIR}/wasm32-unknown-unknown/release/apeireth-ui-demo.wasm"
-if [ ! -f "${WASM_ARTIFACT}" ]; then
-  echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
-  exit 1
-fi
-"${WASM_BINDGEN}" ]; then
-  echo "找不到 wasm-bindgen（可用 WASM_BINDGEN=<路径> 指定）" >&2
-  exit 1
-fi
-WASM_BINDGEN="$(command -v wasm-bindgen || echo "${WASM_BINDGEN}")"
 
 echo "── 1/5 抽取单一真源资产 ──"
 node "${HERE}/scripts/extract-assets.mjs"
@@ -44,6 +41,15 @@ node "${HERE}/scripts/extract-toolgrid.mjs"
 
 echo "── 2/5 构建 wasm 产物 ──"
 (cd "${CRATES_UI}" && cargo build -p apeireth-ui-demo --bin apeireth-ui-demo --target wasm32-unknown-unknown --release --locked)
+
+# ⭐ 构建**之后**才断言产物存在（2026-10-27 顺序修正）：
+# 原先「先检查、后构建」⇒ ⇒ 在**干净 checkout**（CI）上产物必然不存在
+# ⇒ ⇒ 脚本在构建前就 exit 1 ⇒ ⇒ **CI 恒红**；开发机因为**之前构建过** ⇒ ⇒ 侥幸通过。
+if [ ! -f "${WASM_ARTIFACT}" ]; then
+  echo "构建完成但找不到 wasm 产物：${WASM_ARTIFACT}" >&2
+  echo "  ⇒ 检查 CARGO_TARGET_DIR 与本脚本推算的路径是否一致" >&2
+  exit 1
+fi
 
 echo "── 3/5 wasm-bindgen ──"
 rm -rf "${HERE}/public/engine/pkg"

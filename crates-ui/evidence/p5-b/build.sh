@@ -24,10 +24,13 @@ WASM_BINDGEN="${WASM_BINDGEN:-}"
 # ⇒ ⇒ 实测踩过：注入的修复**没进浏览器** ⇒ ⇒ **假绿/假红**。
 TARGET_DIR="${CARGO_TARGET_DIR:-${HERE}/harness/target}"
 WASM_ARTIFACT="${TARGET_DIR}/wasm32-unknown-unknown/release/p5b_harness.wasm"
-if [ ! -f "${WASM_ARTIFACT}" ]; then
-  echo "找不到 wasm 产物：${WASM_ARTIFACT}" >&2
-  exit 1
-fi
+# ⚠⚠️ **产物检查必须在「构建之后」**（2026-10-27 修的真缺陷）：
+# 此处曾经**先检查、后构建** ⇒ ⇒ 在**干净 checkout**（CI）上产物必然不存在
+# ⇒ ⇒ 脚本在第 1 步之前就 exit 1 ⇒ ⇒ **CI 恒红**；
+# 而开发机因为**之前构建过** ⇒ ⇒ 同样脚本「侥幸通过」
+# ⇒ ⇒ ⇒ 「本地绿、CI 红」长期并存且看不出原因（实测踩到）。
+# ⇒ ⇒ 现在挪到 `cargo build` 之后 ⇒ ⇒ 它才真正起「断言产物落在预期路径」的作用
+# （防 `CARGO_TARGET_DIR` 与硬编码路径不一致 ⇒ ⇒ 拿到旧 wasm ⇒ 假绿/假红）。
 if [ -z "${WASM_BINDGEN}" ]; then
   for candidate in \
     "$(command -v wasm-bindgen || true)" \
@@ -46,6 +49,13 @@ echo "   wasm-bindgen: ${WASM_BINDGEN} ($("${WASM_BINDGEN}" --version))"
 
 echo "── 1/4 构建 wasm 宿主 ──"
 (cd "${HERE}/harness" && cargo build --release --target wasm32-unknown-unknown --locked)
+
+# ⭐ 构建**之后**才断言产物存在（顺序修正，见上）。
+if [ ! -f "${WASM_ARTIFACT}" ]; then
+  echo "构建完成但找不到 wasm 产物：${WASM_ARTIFACT}" >&2
+  echo "  ⇒ 检查 CARGO_TARGET_DIR 与本脚本推算的路径是否一致" >&2
+  exit 1
+fi
 
 echo "── 2/4 wasm-bindgen ──"
 rm -rf "${HERE}/web/public/engine/pkg"

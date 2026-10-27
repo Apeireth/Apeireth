@@ -416,12 +416,34 @@ async function main() {
   const rendered = `${JSON.stringify(doc, null, 2)}\n`;
   const current = readFileSync(CASES_PATH, 'utf8');
 
+  // ⭐⭐ **`--check` 只比「被测语义」，不比「生成环境」**（2026-10-27 修的真缺陷）。
+  //
+  // `generator` 块记录的是**生成时的环境**（`process.version` / 时区 / 运行模式）
+  // ⇒ ⇒ 它与「规则的期望值对不对」**无关**
+  // ⇒ ⇒ 若把它算进一致性 ⇒ ⇒ **本机 Node 补丁号一变，门禁就红**
+  //   ⇒ ⇒ 实测：CI 的 Node 是 `v22.23.3`、开发机是 `v22.23.1`
+  //     ⇒ ⇒ **240 个用例的期望值逐字相同**，却因 `generator.node` 这个
+  //         **版本号字符串**不同而判「不一致」⇒ ⇒ **CI 红**。
+  // ⇒ ⇒ 故比对前**剔除 `generator`**；它**仍写进文件**（可追溯生成环境）。
+  const WITHOUT_GENERATOR = (text) => {
+    const parsed = JSON.parse(text);
+    delete parsed.generator;
+    return JSON.stringify(parsed, null, 2);
+  };
+
   if (CHECK_ONLY) {
-    if (rendered !== current) {
+    if (WITHOUT_GENERATOR(rendered) !== WITHOUT_GENERATOR(current)) {
       console.error('[rules] cases.json 与生产 TS 实算结果不一致 ⇒ 退出码 1');
+      console.error(
+        '  ⚠ 比对范围 = 规则与用例的期望值（**不含** `generator` 环境块）' +
+          '⇒ ⇒ 失败说明**期望值本身**需要重新生成，而不是运行环境不同。',
+      );
       process.exit(1);
     }
-    console.log('[rules] cases.json 与生产 TS 实算结果一致（--check 通过）');
+    console.log(
+      '[rules] cases.json 与生产 TS 实算结果一致（--check 通过；' +
+        '比对范围不含 `generator` 环境块 ⇒ 与本机 Node 补丁号无关）',
+    );
   } else {
     writeFileSync(CASES_PATH, rendered, 'utf8');
     const count = (doc.rules ?? []).reduce((sum, rule) => sum + (rule.cases ?? []).length, 0);
