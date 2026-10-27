@@ -55,6 +55,7 @@ pub mod chronicle_crystallizer;
 // 语料的段落级切分（内部卷召回缺口「切分粒度」假设的验证器: 一回一条 7401 字 ⇒ 同主体竞争者 88/120）;
 // 状态 NOT IMPLEMENTED (新增未接线; 库级实现, 生产 0 调用点); 2026-10-27 实测: 段落化不升 recall 反降.
 pub mod chunking;
+pub mod cold_archive;
 /// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
 pub mod community;
 pub mod continuity_link;
@@ -92,6 +93,7 @@ pub mod quality_metrics; // 设计稿 §6.1 剩余指标 (时间正确率/矛盾
 pub mod golden_run;
 pub mod golden_set;
 pub mod graph_algo;
+pub mod handover;
 pub mod hybrid_search;
 pub mod intent_brier;
 pub mod kuramoto_resonance;
@@ -107,6 +109,7 @@ pub mod milestone_store_sqlite;
 pub mod novel_corpus;
 // 记忆数据的脱机归档 (设计稿 §8 B4): 保原文 + 自说明 + 可独立校验; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod offline_archive;
+pub mod offline_embed; // 纯本地 embedder (无 API key/无网络): 让语义召回在离线环境可跑; 状态 NOT IMPLEMENTED (新增未接线).
 pub mod online_calibration;
 pub mod partner;
 pub mod perltqa_adapter;
@@ -115,6 +118,7 @@ pub mod principles;
 pub mod proactive_recall;
 pub mod procedural;
 pub mod query_expand;
+pub mod query_signals; // 题面「信号增强」的量化 (查询判别力体检): 状态 NOT IMPLEMENTED (新增未接线).
 pub mod reflexion;
 pub mod residual_pyramid;
 pub mod river_topology;
