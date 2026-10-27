@@ -213,12 +213,34 @@ pub fn set_time_text_formatter(formatter: Option<Rc<dyn TimeTextFormatter>>) {
     });
 }
 
-/// 取当前的**进程级**时间文本器（未装 ⇒ 默认固定 UTC）。
+/// 取当前的**进程级**时间文本器。
+///
+/// ## ⭐⭐ 未安装时的行为（2026-10-27 改，台账 A9）
+///
+/// | 目标 | 未装时的行为 | 为什么 |
+/// |------|--------------|--------|
+/// | **wasm32** | **panic**（响亮失败） | wasm 宿主未装 ⇒ 回落固定 UTC ⇒ ⇒ 画面里的时刻与生产**差一个时区**（E-66 的「差 8 小时」就是这么来的）⇒ ⇒ **静默给错答案**比报错更危险 ⇒ ⇒ 直接 panic，逼宿主调用 [`apeireth_ui_time::install`] |
+/// | native | 固定 UTC | native **不参与**「生产 vs 引擎」逐像素对照 ⇒ ⇒ 保持**可测、可复现** |
+///
+/// 修前是「一律回落固定 UTC」⇒ ⇒ **任何新宿主忘记装** ⇒ 时刻文本静默变 UTC 且**无任何报错**。
 pub fn time_text() -> Rc<dyn TimeTextFormatter> {
     TIME_TEXT.with(|slot| {
-        slot.borrow()
-            .clone()
-            .unwrap_or_else(|| Rc::new(UtcTimeText))
+        if let Some(installed) = slot.borrow().clone() {
+            return installed;
+        }
+        // ⚠️ 0 装纪律：**桩必须显式断言**，不许静默回落成「看起来能用」的错答案。
+        #[cfg(target_arch = "wasm32")]
+        {
+            panic!(
+                "时刻文本器未安装：wasm 宿主必须在启动时调用 \
+                 `apeireth_ui_time::install()` ⇒ ⇒ 否则时刻文本会与生产差一个时区 \
+                 （见台账 E-66 / A9）"
+            );
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Rc::new(UtcTimeText)
+        }
     })
 }
 
@@ -2845,6 +2867,20 @@ mod tests {
     //! 逐条对齐生产组件（生产侧的真值在浏览器对照里逐帧复核，见
     //! `crates-ui/apeireth-ui-demo/harness/governance/`）。
 
+    /// ⭐ **契约（台账 A9）**：native 侧**未安装** ⇒ 回落**固定 UTC**（可测、可复现）。
+    ///
+    /// 新线程 ⇒ 进程级槽为空 ⇒ 真正走到「未装」分支。
+    /// ⚠️ wasm 侧这条分支已改为 **panic**（宿主必须 `apeireth_ui_time::install()`），
+    /// 因此本测试只在 native 有意义。
+    #[test]
+    fn without_install_native_falls_back_to_utc() {
+        std::thread::spawn(|| {
+            // 1_761_354_600_000 = 2025-10-27T01:10:00Z
+            assert_eq!(format_clock_hm(1_761_354_600_000), "01:10");
+        })
+        .join()
+        .expect("子线程不应 panic");
+    }
     use std::fmt::Write as _;
 
     use super::*;
