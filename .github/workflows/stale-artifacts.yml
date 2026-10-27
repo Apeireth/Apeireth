@@ -1,0 +1,44 @@
+name: Stale build artifacts gate (陈旧产物守卫)
+
+# 2026-10-27 新增：守住「**target/ 里的一切都可能比源码旧**」这条纪律。
+#
+# 为什么要有：
+# `env!("CARGO_MANIFEST_DIR")` 是**编译期**常量 ⇒ 它被**烙进**二进制。
+# ⇒ **worktree 迁移 / 换路径**之后，cargo **不会**因路径变了而重编
+#   （**构建指纹里不含 `CARGO_MANIFEST_DIR`**）⇒ `target/` 里留下**陈旧二进制**
+# ⇒ ⇒ 运行时读**不存在目录**里的文件 ⇒ `NotFound`
+# ⇒ ⇒ 表现为「**全量跑红、单独跑绿**」的幽灵红 ⇒ **极易误判成产品坏了**。
+#
+# 实测（2026-10-27）：`/tmp/apeireth-r3` · `/tmp/w21-verify` · `/tmp/w15-injection2`
+# 三个旧 worktree 的产物 ⇒ 2 条测试在**全量**跑时必红、**单独**跑必绿。
+#
+# ⚠️ CI 上通常是**干净 checkout** ⇒ 没有 `target/` ⇒ 本检查**空跑即过**
+# ⇒ 它的价值在**本地**与**长跑的自托管 runner**（那里 `target/` 会累积）。
+# ⇒ 因此这里**不设为 required**，但**每次都跑**（发现问题会**在日志里**）。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'scripts/check_stale_binaries.py'
+      - 'crates/**'
+  pull_request:
+    paths:
+      - 'scripts/check_stale_binaries.py'
+      - 'crates/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stale-artifacts:
+    name: stale build artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for stale test binaries (compiled from vanished paths)
+        run: python3 scripts/check_stale_binaries.py --report
