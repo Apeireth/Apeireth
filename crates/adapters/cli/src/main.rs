@@ -43,6 +43,8 @@ Usage:
     apeireth council <主题...>
     apeireth subagent <标题...> [--payload JSON]
     apeireth memory verify [--db DB] [--subject SUBJECT]
+    apeireth memory export --out FILE [--db DB] [--subject SUBJECT] [--limit N]
+    apeireth memory handover --out FILE [--db DB] [--issue TEXT]... [--next TEXT]
     apeireth memory migrate-subject --from ANCHOR --to ANCHOR [--db DB]
   [治理与安全]
     apeireth trait report
@@ -1048,10 +1050,16 @@ fn run_cli() -> ExitCode {
             ),
             // 脱机可读归档物导出（只读 + 当场自校验）。
             Some("export") => ExitCode::from(apeireth_cli::memory_export_command::run(&args[2..])),
+            // 交接包（数据 + 状态 + 下一步 + 红线；只读 + 当场跑演练）。
+            Some("handover") => {
+                ExitCode::from(apeireth_cli::memory_handover_command::run(&args[2..]))
+            }
             _ => {
                 eprintln!("{}", apeireth_cli::memory_verify_command::USAGE);
                 eprintln!();
                 eprintln!("{}", apeireth_cli::memory_export_command::USAGE);
+                eprintln!();
+                eprintln!("{}", apeireth_cli::memory_handover_command::USAGE);
                 eprintln!();
                 eprintln!("{}", apeireth_cli::memory_migrate_command::USAGE);
                 ExitCode::FAILURE

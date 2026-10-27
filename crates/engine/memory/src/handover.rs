@@ -92,7 +92,7 @@ pub const REQUIRED_FIELD_DOCS: &[&str] = &[
 ];
 
 /// handover 包里的**数据引用**（**不复制大对象** ⇒ 包小、可传）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DataRef {
     /// 什么数据（如「记忆导出（JSONL）」）。
     pub what: String,
@@ -105,7 +105,7 @@ pub struct DataRef {
 }
 
 /// **当前状态**（接手者**必须知道现在怎么样**）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CurrentState {
     /// 库路径。
     pub db_path: String,
@@ -122,7 +122,7 @@ pub struct CurrentState {
 }
 
 /// **下一步**（接手者**马上能做的事**）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NextStep {
     /// 做什么。
     pub what: String,
@@ -135,7 +135,7 @@ pub struct NextStep {
 }
 
 /// **红线**（**不许碰**的东西）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RedLine {
     /// 不许做什么。
     pub forbidden: String,
@@ -144,7 +144,7 @@ pub struct RedLine {
 }
 
 /// 一个完整的 **handover 包**。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct HandoverPackage {
     /// 包的版本（改了结构就要升）。
     pub version: String,
