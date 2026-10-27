@@ -368,3 +368,17 @@ path = "fuzz_targets/device_sense.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "education"
+path = "fuzz_targets/education.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "skill_search"
+path = "fuzz_targets/skill_search.rs"
+test = false
+doc = false
+bench = false
