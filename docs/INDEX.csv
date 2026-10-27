@@ -1200,6 +1200,7 @@ docs/status/d0-fidelity-audit.md,L1,7,D0 保真审计 —— 「今天到底丢�
 docs/status/formal-coverage.md,L1,4,形式化覆盖边界登记（formal-coverage）,2026-09-25,现行,6,保留,
 docs/status/guard-wiring-audit-2026-10-27.md,L1,7,护栏接线审计（2026-10-27）,2026-10-27,现行,1,保留,
 docs/status/injection-layer-evidence-delivery-2026-10-27.md,L1,9,注入层（§6.1 L2）的真实状况 —— 与 L1 的**合并诊断**（2026-10-27）,2026-10-27,现行,0,保留,
+docs/status/injection-oracle-bound-2026-10-27.md,L1,4,注入层（L2）的 **oracle 上界** —— 「信号到位 ⇒ 证据能不能送达？」（2026-10-27）,2026-10-27,现行,0,保留,
 docs/status/internal-golden-set-run-2026-10-26.md,L1,4,内部卷首跑结果（2026-10-26）,2026-10-26,现行,0,保留,
 docs/status/recall-root-cause-2026-10-27.md,L1,4,内部卷召回瓶颈的**根因判定**（2026-10-27）,2026-10-27,现行,1,保留,
 docs/status/unwired-ledger.md,L1,3,未接线台账（能力齐全但没接电）,2026-10-23,现行,10,保留,
