@@ -60,9 +60,13 @@ use apeireth_governance::{
     PermissionPolicy, PromptInjectionHook,
 };
 use apeireth_guard::{
+    containment::{
+        apply as apply_containment_directive, ContainmentConsumer, ContainmentDirective,
+        ContainmentGate, GrantRevocations,
+    },
     immune_memory::{ImmuneMemory, DEFAULT_CAPACITY},
-    ClassifierEnforcementMode, DatasetRecorder, IntentInput, IntentInterpreter,
-    JointRiskClassifier, RuleIntentInterpreter,
+    ClassifierEnforcementMode, DatasetRecorder, EnforcementDirective, IntentInput,
+    IntentInterpreter, JointRiskClassifier, RuleIntentInterpreter,
 };
 use apeireth_plugin::memory_backend::MemoryBackend;
 
@@ -1537,6 +1541,57 @@ async fn build_domain_partner_runtime(
     Ok(runtime)
 }
 
+/// **执行面**：消费护栏发布的收容义务 ⇒ **撤销该会话的授权**。
+///
+/// # 为什么在 CLI（护栏 crate 外）
+///
+/// 护栏只**产出**义务（它不该知道 CLI 怎么执行）；「撤销会话授权」是**执行方**的活。
+/// 这里就是那个执行方：拿到护栏发布的 [`EnforcementDirective`] ⇒ 转成可执行的
+/// [`ContainmentDirective`] ⇒ 落到**会话授权撤销状态**上。
+///
+/// # 口径
+///
+/// * 撤销是**会话级**的（不是全局能力授权）：一个会话触发了高危越权 ⇒ 只有它
+///   失去授权，**别的会话不受影响**；
+/// * 撤销**不自动恢复**（fail-closed）：要恢复必须显式重新授权；
+/// * 义务里**仍需别的执行面处理**的部分（标记高风险 trace / 补偿线索）**不静默吞**：
+///   `apply` 把它们原样返回，这里说清给运维。
+struct SessionGrantContainmentConsumer {
+    revocations: Arc<std::sync::Mutex<GrantRevocations>>,
+}
+
+impl ContainmentConsumer for SessionGrantContainmentConsumer {
+    fn consume(&self, obligation: &EnforcementDirective, session_id: &str) {
+        let directive = ContainmentDirective::from_enforcement(obligation, session_id);
+        // 锁只护住状态变更；打印（IO）不持锁 ⇒ 不把慢 IO 压在互斥量上。
+        let (mark_high_risk, hint) = {
+            let mut revocations = self
+                .revocations
+                .lock()
+                .expect("grant revocations lock poisoned (0 装诚实)");
+            let pending = apply_containment_directive(&mut revocations, &directive);
+            (
+                pending.mark_trace_high_risk,
+                pending
+                    .compensation_hint
+                    .clone()
+                    .unwrap_or_else(|| "无".to_string()),
+            )
+        };
+        eprintln!(
+            "[guard-containment] 会话 {session_id} 的授权已撤销（高危拒绝 ⇒ 收容义务）; \
+             高风险 trace 标记: {mark_high_risk}; 补偿线索: {hint}"
+        );
+    }
+
+    fn is_revoked(&self, session_id: &str) -> bool {
+        self.revocations
+            .lock()
+            .expect("grant revocations lock poisoned (0 装诚实)")
+            .is_revoked(session_id)
+    }
+}
+
 async fn build_canonical_runtime_with_parts(
     sessions: Arc<apeireth_runtime::SessionManager>,
     cognitive: apeireth_runtime_assembly::ProductionCognitiveModules,
@@ -1574,7 +1629,19 @@ async fn build_canonical_runtime_with_parts(
             Arc::new(governance),
             Arc::clone(sessions.store()),
         );
-    builder = builder.with_governance(governance_chain::production(preset_governance));
+    // 收容执行面（W-37 / 审计 P0-1）：护栏**高危拒绝** ⇒ **撤销该会话的授权**
+    // ⇒ 同会话再来一次**仍被拒**（此前「拒绝了但授权还在」⇒ 可重复越权）。
+    //
+    // 位置：治理链入口与 runtime 之间。**不改** pipeline 内部顺序 —— 护栏仍是
+    // pipeline 的末位闸（那是审计 P0-2 的事，本批不碰）。
+    let containment = ContainmentGate::new(
+        Arc::new(preset_governance),
+        Arc::clone(&guard_hook),
+        Arc::new(SessionGrantContainmentConsumer {
+            revocations: Arc::new(std::sync::Mutex::new(GrantRevocations::default())),
+        }),
+    );
+    builder = builder.with_governance(governance_chain::production(containment));
     // 出网闸 (ADR-0014 §1.2: 把上下文发给模型就是行动): 默认关
     // (`APEIRETH_ENABLE_EGRESS_GATE=1` 才装配; 值也可以直接是授权策略 JSON),
     // 关时请求逐字节不变。

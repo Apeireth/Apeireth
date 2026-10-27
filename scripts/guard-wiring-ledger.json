@@ -5,10 +5,10 @@
   "guard_crate": "crates/engine/guard",
   "note": "本台账由 `python3 scripts/check_guard_wiring.py --update` 生成；「已接生产」必须有**代码锚点**支撑，手改后跑检查会因锚点对不上而退出码 1。",
   "summary": {
-    "PRODUCTION WIRED": 17,
-    "PRODUCTION WIRED (crate 内生产路径)": 16,
+    "PRODUCTION WIRED": 19,
+    "PRODUCTION WIRED (crate 内生产路径)": 15,
     "TEST ONLY": 12,
-    "NOT WIRED": 4,
+    "NOT WIRED": 3,
     "total": 49
   },
   "capabilities": [
@@ -26,10 +26,10 @@
         "crates/adapters/cli/src/gateway_panels.rs:124",
         "crates/adapters/cli/src/gateway_panels.rs:84",
         "crates/adapters/cli/src/guard_decision_wiring.rs:37",
-        "crates/adapters/cli/src/lib.rs:1025",
-        "crates/adapters/cli/src/lib.rs:1129",
-        "crates/adapters/cli/src/lib.rs:861",
-        "crates/adapters/cli/src/lib.rs:909",
+        "crates/adapters/cli/src/lib.rs:1029",
+        "crates/adapters/cli/src/lib.rs:1133",
+        "crates/adapters/cli/src/lib.rs:865",
+        "crates/adapters/cli/src/lib.rs:913",
         "crates/adapters/gateway/src/panels.rs:508",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:23",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:39"
@@ -37,11 +37,15 @@
       "internal_sites": [],
       "test_sites": [
         "crates/adapters/cli/src/guard_decision_wiring.rs:288",
+        "crates/engine/guard/src/containment.rs:171",
+        "crates/engine/guard/src/containment.rs:185",
         "crates/engine/guard/src/hook/tests.rs:122",
         "crates/engine/guard/src/hook/tests.rs:72",
         "crates/engine/guard/src/hook/tests.rs:73",
         "crates/engine/guard/src/hook/tests.rs:88",
         "crates/engine/guard/src/scenario.rs:330",
+        "crates/engine/guard/tests/containment_evidence.rs:117",
+        "crates/engine/guard/tests/containment_evidence.rs:130",
         "crates/engine/guard/tests/guard_tests.rs:117",
         "crates/engine/guard/tests/guard_tests.rs:33",
         "crates/engine/guard/tests/guard_tests.rs:48",
@@ -50,6 +54,10 @@
         "crates/engine/guard/tests/guard_v31_correctness.rs:184",
         "crates/engine/guard/tests/guard_v31_correctness.rs:268",
         "crates/engine/guard/tests/guard_v31_correctness.rs:341",
+        "crates/engine/guard/tests/wiring_evidence.rs:252",
+        "crates/engine/guard/tests/wiring_evidence.rs:287",
+        "crates/engine/guard/tests/wiring_evidence.rs:61",
+        "crates/engine/guard/tests/wiring_evidence.rs:70",
         "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs:306",
         "crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs:323",
         "crates/engine/runtime-assembly/tests/cognitive_vnext_production.rs:287",
@@ -143,7 +151,13 @@
       ],
       "internal_sites": [],
       "test_sites": [
-        "crates/engine/guard/tests/guard_tests.rs:276"
+        "crates/engine/guard/src/containment.rs:208",
+        "crates/engine/guard/tests/containment_evidence.rs:233",
+        "crates/engine/guard/tests/containment_evidence.rs:397",
+        "crates/engine/guard/tests/containment_evidence.rs:401",
+        "crates/engine/guard/tests/guard_tests.rs:276",
+        "crates/engine/guard/tests/wiring_evidence.rs:213",
+        "crates/engine/guard/tests/wiring_evidence.rs:327"
       ],
       "note": ""
     },
@@ -178,7 +192,9 @@
         "crates/adapters/cli/src/guard_decision_wiring.rs:39"
       ],
       "internal_sites": [],
-      "test_sites": [],
+      "test_sites": [
+        "crates/engine/guard/tests/wiring_evidence.rs:287"
+      ],
       "note": ""
     },
     {
@@ -192,7 +208,7 @@
       "call_form": true,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1194"
+        "crates/adapters/cli/src/lib.rs:1198"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -212,7 +228,7 @@
       "call_form": true,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1027"
+        "crates/adapters/cli/src/lib.rs:1031"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -233,7 +249,7 @@
       "call_form": true,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1144"
+        "crates/adapters/cli/src/lib.rs:1148"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -387,7 +403,7 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:2658",
+        "crates/adapters/cli/src/lib.rs:2725",
         "crates/adapters/gateway/src/canonical_entry.rs:342"
       ],
       "internal_sites": [],
@@ -396,8 +412,10 @@
         "crates/adapters/cli/tests/git_write_knob.rs:93",
         "crates/engine/guard/src/intent.rs:811",
         "crates/engine/guard/src/scenario.rs:332",
+        "crates/engine/guard/tests/containment_evidence.rs:162",
         "crates/engine/guard/tests/guard_tests.rs:283",
-        "crates/engine/guard/tests/guard_v31_correctness.rs:21"
+        "crates/engine/guard/tests/guard_v31_correctness.rs:21",
+        "crates/engine/guard/tests/wiring_evidence.rs:87"
       ],
       "note": "网关 / CLI 生产路径用它把用户原话变成可信信封。"
     },
@@ -563,7 +581,7 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1142"
+        "crates/adapters/cli/src/lib.rs:1146"
       ],
       "internal_sites": [],
       "test_sites": [
@@ -702,14 +720,24 @@
       ],
       "scope": "any",
       "call_form": false,
-      "status": "PRODUCTION WIRED (crate 内生产路径)",
-      "production_sites": [],
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1564"
+      ],
       "internal_sites": [
         "crates/engine/guard/src/hook.rs:105",
         "crates/engine/guard/src/hook.rs:108",
         "crates/engine/guard/src/introspection.rs:65"
       ],
-      "test_sites": [],
+      "test_sites": [
+        "crates/engine/guard/src/containment.rs:128",
+        "crates/engine/guard/src/containment.rs:148",
+        "crates/engine/guard/src/containment.rs:276",
+        "crates/engine/guard/src/containment.rs:277",
+        "crates/engine/guard/src/containment.rs:395",
+        "crates/engine/guard/src/containment.rs:415",
+        "crates/engine/guard/tests/containment_evidence.rs:87"
+      ],
       "note": ""
     },
     {
@@ -721,10 +749,14 @@
       ],
       "scope": "external",
       "call_form": false,
-      "status": "NOT WIRED",
-      "production_sites": [],
+      "status": "PRODUCTION WIRED",
+      "production_sites": [
+        "crates/adapters/cli/src/lib.rs:1564"
+      ],
       "internal_sites": [],
-      "test_sites": [],
+      "test_sites": [
+        "crates/engine/guard/tests/containment_evidence.rs:87"
+      ],
       "note": "只看护栏 crate 之外：仓内**零消费者** ⇒ 义务算了没人执行。"
     },
     {
@@ -753,7 +785,9 @@
         "crates/engine/guard/src/decision_log.rs:195",
         "crates/engine/guard/src/decision_log.rs:211",
         "crates/engine/guard/src/decision_log.rs:226",
-        "crates/engine/guard/src/decision_log.rs:249"
+        "crates/engine/guard/src/decision_log.rs:249",
+        "crates/engine/guard/tests/wiring_evidence.rs:286",
+        "crates/engine/guard/tests/wiring_evidence.rs:298"
       ],
       "note": ""
     },
@@ -789,9 +823,9 @@
       "call_form": false,
       "status": "PRODUCTION WIRED",
       "production_sites": [
-        "crates/adapters/cli/src/lib.rs:1149",
-        "crates/adapters/cli/src/lib.rs:1160",
-        "crates/adapters/cli/src/lib.rs:893",
+        "crates/adapters/cli/src/lib.rs:1153",
+        "crates/adapters/cli/src/lib.rs:1164",
+        "crates/adapters/cli/src/lib.rs:897",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:22",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:30",
         "crates/engine/runtime-assembly/src/canonical/guard_observer.rs:45"
@@ -1207,6 +1241,7 @@
       "test_sites": [
         "crates/adapters/cli/src/guard_decision_wiring.rs:195",
         "crates/adapters/cli/src/guard_decision_wiring.rs:196",
+        "crates/engine/guard/src/containment.rs:273",
         "crates/engine/guard/src/decision_log.rs:175",
         "crates/engine/guard/src/decision_log.rs:176"
       ],

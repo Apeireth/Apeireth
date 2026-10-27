@@ -10,6 +10,8 @@ pub mod chain;
 pub mod chain_guard;
 pub mod classifier;
 pub mod command_effect;
+// 收容执行面（W-37 / 审计 P0-1）：护栏**只产**收容指令，执行方（CLI/runtime）**消费**它。
+pub mod containment;
 pub mod dataset;
 pub mod decision;
 pub mod enforcement;
