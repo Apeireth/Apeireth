@@ -271,6 +271,19 @@ runtime    crates/engine/runtime/src/canonical/execute.rs:3191   governance.eval
   （`crates/engine/guard/src/session.rs:158`）算进新回合 ⇒ 判定被**跨会话污染**；
   ② 长跑进程里这六张表**只增不减**。
 
+#### ✅ **P1-3 部分已修**（2026-10-27，commit `62ec1b69`）
+
+* **加了上界**：新增**会话级 LRU**（`session_order` + `MAX_TRACKED_SESSIONS = 256`）
+  ⇒ ⇒ 在**唯一的热路径入口**记账 ⇒ ⇒ 超限**整段驱逐**最久未用的会话
+  ⇒ ⇒ 驱逐**复用** `clear_session` ⇒ ⇒ **一份清理实现**、不留半吊子状态；
+* **可观测**：`tracked_sessions()` / `tracks_session(&id)`；
+* **接线证据** 3 条（连续 320 会话 ⇒ 计数 ≤ 256 · 最久未用者**先**被驱逐 · **刚用过**者**不被**驱逐）；
+* ⚠️ **未修的部分**：
+  * **「会话结束」信号仍然没有** ⇒ ⇒ 真正的回收面要等运行时给出**生命周期**
+    ⇒ ⇒ **那是协议决策，不擅自发明**；
+  * **跨会话污染**的**根因**是「`SessionId` 复用」⇒ ⇒ 要**会话世代**才能根治 ⇒ ⇒ **未做**；
+  * 上限 **256** 是**可调旋钮** ⇒ ⇒ **要不要更大 ⇒ owner 可定**。
+
 ### P1-4 能力安全元数据源**不可注入** ⇒ 插件能力走启发式兜底
 
 * **事实**：`BehaviorChainGuardHook::with_safety_provider`
