@@ -153,7 +153,7 @@
 
 | # | 缺陷 | 位置 |
 |---|---|---|
-| **E-34** | `ui-dom` 文档仍写「事件委托未接线 / `Dom` 没有监听器接口」⇒ **与实况脱节** | `ui-dom/src/lib.rs:56-68`、`renderer.rs:203-209` |
+| **E-34** | ✅✅ **已闭合（2026-10-27 核验）**：`ui-dom` 的「事件委托未接线 / `Dom` 没有监听器接口」旧说法**已从文档移除**（`apeireth-ui-dom/src/lib.rs:56-68` 现在明确区分：**元素直挂已接线**、未接线的只有「委托根**单**监听器」这一形态、`EventRegistry` 未与渲染器接线）。**逐条核验**：① `Dom` trait 有监听器接口（`dom.rs:230/238/254` 的 `add_listener` / `remove_listeners` / `remove_listener`）✔；② 渲染器在**挂载/差分/卸载三处**真的接线（`renderer.rs:1121` / `:1162-1170` / `:1204`）✔；③ `EventRegistry` **确实未**接进渲染器（`renderer.rs` 零引用，只在 `events.rs` 自身单测里出现）✔。⭐ 复核命令：`grep -rn '没有监听器接口\|事件委托未接线' --include=*.rs --include=*.md crates-ui/` ⇒ **零命中**。| `crates-ui/apeireth-ui-dom/src/lib.rs`、`renderer.rs`、`events.rs` ⇒ ⇒ **文档与实现一致** |
 | **E-35** | `getIntents` 文档说有、**实际没有**（实测 `__BUDGET__` 只有 `getState`/`selectSection`/`ready`） | `ui-demo/src/settings_budget.rs:27` |
 | **E-36** | `ui-gpu` 文档宣称「变换链不插行 ⇒ 行号一一对应」⇒ **实测不成立**（见 E-19） | `ui-gpu/src/glsl.rs:10/39-44/766` |
 | **E-37** | `get_current_texture()` 的 `Lost`/`Outdated`/`Timeout` 语义**塌缩**成同一个错误 | `ui-gpu/src/engine.rs:703-709` |
