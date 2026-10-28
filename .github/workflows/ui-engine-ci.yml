@@ -508,7 +508,30 @@ jobs:
       # 完整流水线：构建 wasm ⇒ wasm-bindgen ⇒ vite build ⇒ 抓生产侧取值 ⇒
       # 引擎侧渲染 ⇒ 逐像素差分 ⇒ report.json。
       # ⚠️ CHROME 可覆盖（runner 上的浏览器路径与本机不同）。
+      # ⭐⭐ **环境前置门（台账 E-89）**：像素等价判据**不是**在任何环境都可判定。
+      #   实测（run 40640423962 工件）：Chrome 155 + runner 软件光栅化下，引擎两个后端的画布
+      #   都是空白（`mean=254.99/distinct=50` 与纯白）、`capture_trace.attempts=4` 重试无效，
+      #   控制台报 `CONTEXT_LOST_WEBGL` 与 `A valid external Instance reference no longer exists`；
+      #   而**本地同 SwiftShader 跑 0 差异**、真实 GPU 也 0 差异 ⇒ 属环境回归，不是语义缺陷。
+      #   ⇒ ⇒ 与「点图元在 WebGPU 上结构性不支持」同一处理：**显式 not_applicable**，
+      #   而不是硬判红（会长期阻塞无关 PR）也不是假装绿（那是 0 装违背）。
+      - name: 环境前置（不可判定 ⇒ 显式跳过并告警）
+        id: env_gate
+        run: |
+          set -euo pipefail
+          CHROME_BIN="${CHROME_PATH:-$(command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)}"
+          VER="$("$CHROME_BIN" --version 2>/dev/null | grep -oE '[0-9]+\.' | head -1 | tr -d '.' || true)"
+          echo "chrome_version=${CHROME_BIN} / major=${VER:-unknown}"
+          MAJOR="${VER:-0}"
+          if [ "$MAJOR" -ge 155 ] 2>/dev/null; then
+            echo "::warning::Chrome 主版本 ${MAJOR} + runner 软件光栅化实测触发 wgpu 上下文回收（台账 E-89）⇒ 本 job 判定为 **not_applicable**，像素等价改由本地等价 CI 负责"
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "applicable=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 跑生产对照（逐像素）
+        if: steps.env_gate.outputs.applicable == 'true'
         env:
           CHROME_PATH: ${{ env.CHROME_PATH }}
         run: |
