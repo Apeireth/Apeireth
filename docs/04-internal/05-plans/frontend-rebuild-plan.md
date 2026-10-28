@@ -135,6 +135,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 - owner 原话：「范式层留不留？回头我们会研讨，设立新范式。」
 - 新范式 = W0-A 的**唯一交付物**：可能取代 `docs/design/00-PHILOSOPHY.md`，也可能重写为独立文档。**新范式落地前，不进入 W1 打样**（否则打样没有靶子）。
 - 既有设计文档（`00-PHILOSOPHY.md` / `01-DESIGN-SYSTEM.md` / `design/**`）在新范式落地前只作**输入**，不作约束；**历史不追溯改写**。
+- **2026-10-28 更新**：新范式 v0.1 草案已落 [02-PARADIGM.md](../../design/02-PARADIGM.md)（待 owner 签署）；参考语言分析见 [reference-language-analysis-2026-10-28.md](../../design/reference-language-analysis-2026-10-28.md)。**签署前不进入 W1。**
 
 ---
 

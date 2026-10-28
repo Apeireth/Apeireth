@@ -7,8 +7,9 @@
 
 | 文件 | 讲什么 |
 |---|---|
+| `02-PARADIGM.md` | **Apeireth 界面范式 v0.1 · 指挥 OS**（新范式草案，待 owner 签署；试金石/三命题/三副面孔/明暗全双模式） |
 | `01-DESIGN-SYSTEM.md` | 前端设计系统（视觉令牌 / 层序规范） |
-| `00-PHILOSOPHY.md` | 设计哲学 |
+| `00-PHILOSOPHY.md` | 设计哲学（旧范式；新范式签署后由 owner 决定处置，暂作素材库） |
 
 ## 交接与评审
 
@@ -45,6 +46,7 @@
 |---|---|
 | `m-axis-3d-recon-2026-10-18.md` / `m-axis-3d-recon-wgpu3dgs-2026-10-18.md` | M 轴 3D 方向调研（**已判暂不立项**，仅存证） |
 | `tui-power-design-research.md` | TUI 力量设计调研 |
+| `reference-language-analysis-2026-10-28.md` | 新前端视觉参考语言分析（2026-10-28；共同语法 / 3D 分层 / 明暗观察；只取语言不搬素材） |
 
 ## 历史卷宗（只读）
 
