@@ -4,7 +4,7 @@
 
 - **PRODUCTION WIRED（兼容子执行证据）**：工具派发前保存原 Session checkpoint，显式排水后追加一次 AgentTaskInterrupted；复用 wire id 的新执行不会被旧结果遮蔽，保留兼容 API、原日志与唯一计量边界。
 - **验证**：真实 Runtime 验证子实例事实 / 前端隔离 / cancel / native drain / owner 汇总；原 gate_full 五段、指定集成、前端与文档门禁通过。首轮磁盘失败与一次重试如实保留，不删除或忽略测试。
-- **验收 Partial**：既有冷启动目标仍未达；Android target 未安装，本批交叉 check/build 未执行，无 HARDWARE VALIDATED。Mesh/NAT/P2P、PortableHost desktop-free 与可选授权映射保持。见 [S6 交付账](docs/04-internal/kernel-convergence-s6-2026-10-29.md) 和 [最终验收账](docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md)。
+- **验收 Partial**：既有冷启动目标仍未达；本批 Android runtime 库 check/build 与 assembly 最小库 check 通过（仅库），无设备/JNI/UI/HARDWARE VALIDATED。Mesh/NAT/P2P、PortableHost desktop-free 与可选授权映射保持。见 [S6 交付账](docs/04-internal/kernel-convergence-s6-2026-10-29.md) 和 [最终验收账](docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md)。
 
 ## [Unreleased] — Kernel Convergence S5：默认桌面受管 main（2026-10-29）
 

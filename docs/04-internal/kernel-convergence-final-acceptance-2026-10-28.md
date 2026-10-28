@@ -2,7 +2,7 @@
 
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md
-Version: 3.0 (S6 acceptance addendum)
+Version: 3.1 (S6 Android cross-check addendum)
 Last-Modified: 2026-10-29
 Status: Convergence Partial；S1–S6 软件门禁通过，冷启动目标仍未达
 Author: Codex
@@ -11,7 +11,8 @@ Author: Codex
 
 **整体仍为 Partial。** S1–S6 的兼容执行收敛为 **PRODUCTION WIRED**，原五段软件门禁通过；
 现存 Complete 阻塞项是既有冷启动目标未达。不会把基准进程 exit 0 当作性能阈值通过。
-本批 Android target 未安装，按条件未执行交叉 check/build；历史成功保留为历史，不冒称本批或设备验证。
+本批 Android 库交叉复验已通过：runtime 库 check/build、assembly 最小库 check 均 exit 0；
+范围仅为库编译，不代表设备/JNI/UI 或 HARDWARE VALIDATED。
 
 当前分支为 `refactor/kc1-kernel-convergence`，起点 clean `c303af09`，S6 源码冻结在
 `3f8048e8d8fca86eceba0e6e2eda89a16eed5ce1`，已 fetch 后快进推送。
@@ -26,7 +27,7 @@ Author: Codex
 | M3 Managed MCP / Hot Lifecycle | PRODUCTION WIRED；热替换、进程关闭、native drain 失败重试回归通过 | Drop 只撤销，显式关闭才提供排水结果；不是外部服务 live 实测 |
 | M4 Legacy SubLoop Migration | PRODUCTION WIRED；S1 的真实独立实例执行，S6 持久工具事实 / 中断 checkpoint / 前端隔离 / 唯一核算通过 | ABI 保留，不保留另一个 provider/round 循环 |
 | M5 Parallel Backend Elimination | PRODUCTION WIRED（旧模块执行入口范围）；S2 Invoker、S3 行为入口、S5 默认桌面 main 经同一实例 / Kernel / Dispatcher | 原兼容类型、显式 Host API 与既有日志 reader 保留；不等于所有产品命令均重写 |
-| M6 Portable Assembly | IMPLEMENTED；最终源码 native minimal 与 memory,profile-store portable_host 通过，无桌面依赖边界 | 本批未安装 Android target，未执行交叉 check/build；无设备/JNI/UI/HARDWARE VALIDATED |
+| M6 Portable Assembly | IMPLEMENTED；最终源码 native minimal 与 memory,profile-store portable_host 通过；本批 Android runtime 库 check/build、assembly 最小库 check 通过 | assembly 本次仅 check；无设备/JNI/UI/HARDWARE VALIDATED |
 | M7 Final Verification | 原 gate_full 五段、指定集成、前端、strict arch、文档真源 / 链接 / 索引通过 | 冷启动目标未达，整体验收 Partial |
 
 当前执行关系：
@@ -67,9 +68,17 @@ AgentTaskInterrupted 的 pending calls 只说明最后 checkpoint 未闭合，�
 这两个进程均 exit 0，但冷启动性能验收仍失败。沿用原完整生产组装口径，未为结果修改迁移、阈值、断言或持久化；
 没有同环境 release 前后对照，不能据此断言 S6 引入性能回归。待机是小样本观察，不当作 Android 真机内存。
 
+同日、同一 Rust/Cargo 1.97.1 工具链，`aarch64-linux-android` 库复验通过：
+`apeireth-runtime` 的 `cargo check/build --lib` 与 `apeireth-runtime-assembly` 的
+`cargo check --no-default-features --lib` 均使用 `--target aarch64-linux-android --locked -j 1`，exit 0。
+原始日志为 `/workspace/apeireth-codex/s6-android-runtime-check.log`、`s6-android-runtime-build.log`、
+`s6-android-assembly-check.log`，各有同名 `.exit`；完整命令见 [S6 平台证据](kernel-convergence-s6-2026-10-29.md#平台与验收边界)。
+此前 `s6-android-status.log` 的 target 未安装记录是复验前快照，保留原样；不再代表本批最终结果。
+本次没有 assembly build、可选 Memory/Profile 组合的 Android 构建或设备/JNI/UI 验证证据。
+
 无真实外部 LLM API、外部 MCP 服务、原生桌面窗口或硬件联调结果。
 Mesh/NAT/P2P 保留，PortableHost desktop-free；AfterToolCall 原串行屏障仍是已接受的调度限制。
-后续完成冷启动目标的同口径验收；在目标工具链可用时补本批 Android minimal check/build，设备验证单独记账。
+后续完成冷启动目标的同口径验收；设备验证单独记账。整体保持 **Partial**，不能宣布 Complete。
 
 ## 历史正文（2026-10-28，原样保留）
 

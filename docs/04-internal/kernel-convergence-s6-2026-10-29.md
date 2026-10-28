@@ -1,9 +1,9 @@
-# Kernel Convergence — S6 Legacy V1 closure evidence
+# Kernel Convergence — S6 Legacy V1 closure and Android cross-check evidence
 
 ```text
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-s6-2026-10-29.md
-Version: 1.0
+Version: 1.1 (Android library cross-check evidence)
 Last-Modified: 2026-10-29
 Status: S6 软件门禁通过；整体 Partial（冷启动目标未达）
 Author: Codex
@@ -104,8 +104,20 @@ claims 锚定上述源码，原宽泛能力等级与默认值保持，生成 STA
 ## 平台与验收边界
 
 Mesh/NAT/P2P 保留；PortableHost desktop-free；S4 映射仍由 Host 显式选择且未默认启用。
-当前只安装 native Rust target，本批 Android minimal check/build 未执行，记录在 `s6-android-status.log`。
-历史交叉构建证据保留为历史，不替代本批复验；无设备/JNI/UI 或 HARDWARE VALIDATED 声明。
+2026-10-29 本批后续已安装 `aarch64-linux-android` target，沿用 Linux x86_64 / Rust、Cargo 1.97.1，
+以下库交叉复验均通过。日志位于 `/workspace/apeireth-codex/`，每项有同名 `.exit`：
+
+| 完整命令 | 结果 | 日志 |
+| --- | --- | --- |
+| `cargo check -p apeireth-runtime --lib --target aarch64-linux-android --locked -j 1` | PASS，exit 0 | `s6-android-runtime-check.log` |
+| `cargo build -p apeireth-runtime --lib --target aarch64-linux-android --locked -j 1` | PASS，exit 0 | `s6-android-runtime-build.log` |
+| `cargo check -p apeireth-runtime-assembly --no-default-features --lib --target aarch64-linux-android --locked -j 1` | PASS，exit 0 | `s6-android-assembly-check.log` |
+
+早先 `s6-android-status.log` 的 target 未安装 / NOT RUN 记录是复验前快照，保留原样；
+本批最终 Android 库结果以上表为准，历史批次的成功仍单独保留。
+范围仅为 runtime 库 check/build 与 assembly 最小库 check；本次没有 assembly build 或
+可选 Memory/Profile 组合的 Android 构建证据，无设备/JNI/UI 或 HARDWARE VALIDATED 声明。
+本次文档收口核验现有日志及退出码，未重跑 gate_full，未修改 Rust / Cargo。
 性能基准进程 exit 0 不能冒充其显示目标通过；最终验收账分别记录软件门禁、性能与平台缺口。
 没有真实外部 API、外部 MCP 服务、原生桌面窗口或硬件联调实测。
 LOCKED、workspace.version、Cargo.lock 与外部依赖零改动；没有新增架构豁免。
@@ -114,4 +126,4 @@ O-6：总体补实际取消事实并重跑原门禁，拒用历史全绿替代�
 拒取消时造成功结果或重复扣账；架构只增加会话事实与排水后的观察，拒第二执行器、Registry 或生命周期系统。
 
 整体验收保持 **Partial**，阻塞 Complete 的现存项为冷启动性能目标。后续需在同口径完成性能验收；
-在目标工具链可用时补本批 Android minimal check/build，设备验证另记，不将条件性未执行项冒称通过。
+冷启动 P50 **17.4237 ms** 未达 **<10 ms**；Android 库复验通过不消除此阻塞，设备验证另记。
