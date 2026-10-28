@@ -137,11 +137,20 @@ def main() -> int:
     failures: list[str] = []
     planned = 0
     skipped = 0
+    deferred = 0
     for claim in claims:
         claim_id = claim.get("id", "?")
         command = claim.get("verify_cmd", "").strip()
         if not command:
             failures.append(f"{claim_id}: **没有 verify_cmd**（声明必须可验证）")
+            continue
+        # ⚠️ **延后**（`verify_defer_reason`）：命令本身能跑，但**当前环境不允许**
+        # （缺系统库 / 缺 node 工具链 / 由另一条 CI 流水线覆盖）。
+        # 与 `verify_skip_reason`（命令**根本跑不了**）分开 ⇒ 延后要单独可见、且**不算通过**。
+        defer_reason = claim.get("verify_defer_reason", "").strip()
+        if defer_reason:
+            deferred += 1
+            print(f"  ⏸ {claim_id}: 延后 · {defer_reason[:110]}")
             continue
         reason = unrunnable_reason(command)
         if reason is not None:
@@ -173,7 +182,7 @@ def main() -> int:
     mode = "list" if args.list else "check"
     if args.list:
         print(
-            f"\n计划：会跑 **{planned}** 条 · 豁免 **{skipped}** 条 "
+            f"\n计划：会跑 **{planned}** 条 · 豁免 **{skipped}** 条 · 延后 **{deferred}** 条 "
             f"（共 {len(claims)} 条 claim）"
         )
         return 0
@@ -189,7 +198,8 @@ def main() -> int:
         )
         return 1
     print(
-        f"OK: 状态声明验证通过（会跑 {planned} 条全过 · 豁免 {skipped} 条均有理由）"
+        f"OK: 状态声明验证通过（会跑 {planned} 条全过 · 豁免 {skipped} 条 · "
+        f"**延后 {deferred} 条**——延后项需人工复核，不算通过）"
     )
     return 0
 
