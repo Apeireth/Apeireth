@@ -109,7 +109,25 @@ def split_code_test(text: str) -> tuple[str, str]:
 
 
 def is_test_file(path: Path) -> bool:
-    return "/tests/" in path.as_posix() or path.name.endswith("_tests.rs") or path.name == "tests.rs"
+    """**不是生产代码**的文件（测试 / 示例 / 基准）。
+
+    # ⚠️ 为什么必须排除 `examples/` 与 `benches/`（2026-10-28 修正，H1）
+
+    原实现只排 `/tests/` ⇒ ⇒ **示例与基准被当成"生产引用"**
+    ⇒ 后果（已实测）：只要往 `examples/` 里写一句 `use some_module::...`，
+    该模块就从「整块未接线」审计里**消失** ⇒ 基线"改善" ⇒ ⇒ **假改善**。
+    ⇒ ⇒ 修法：把示例/基准一并排除 ⇒ 「接线」只认**生产代码**。
+
+    ⚠️ 已知残余局限：`build.rs`、`#[cfg(test)]` 内联模块、`crates/*/tests.rs`
+    之外的测试辅助文件仍可能被算作生产 ⇒ 记为**未解决的边界**（要彻底解决需
+    从 CLI / runtime 装配根做可达性分析，属更大改动）。
+    """
+    posix = path.as_posix()
+    if "/tests/" in posix or "/examples/" in posix or "/benches/" in posix:
+        return True
+    if path.name.endswith("_tests.rs") or path.name == "tests.rs":
+        return True
+    return False
 
 
 def main() -> int:

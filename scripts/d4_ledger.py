@@ -213,6 +213,87 @@ CLASSIFICATION: dict[str, dict[str, str]] = {
         "measurable_by": "annotation",
         "note": "历史流",
     },
+    # ---- 2026-10-28 H1 修正后**新暴露**的（此前被 examples/ 引用藏住）----
+    "signal_sources": {
+        "layer": "D4",
+        "kind": "expansion",
+        "consumes": "Text",
+        "produces": "Score",
+        "measurable_by": "retrieval",
+        "note": "5 种非答案侧查询扩展（共现/同主题/时间锚/段落首句/原文首句）",
+    },
+    "offline_embed": {
+        "layer": "D2",
+        "kind": "pseudo-semantic",
+        "consumes": "Text",
+        "produces": "Score",
+        "measurable_by": "retrieval",
+        "note": "字符 n-gram 哈希投影（**不是语义模型**，模块文档自述）",
+    },
+    "locomo_corpus": {
+        "layer": "—",
+        "kind": "corpus",
+        "consumes": "Text",
+        "produces": "Gap",
+        "measurable_by": "not-applicable",
+        "note": "LoCoMo 语料加载器（对照卷；设计稿 §7.1 明确不作主卷）",
+    },
+    "cold_archive": {
+        "layer": "D0",
+        "kind": "infra",
+        "consumes": "Text",
+        "produces": "Gap",
+        "measurable_by": "not-applicable",
+        "note": "冷层归档（B4 基建）",
+    },
+    "delivery_metrics": {
+        "layer": "—",
+        "kind": "eval",
+        "consumes": "TextAndRanking",
+        "produces": "Score",
+        "measurable_by": "not-applicable",
+        "note": "送达率诊断量（§6.1.3；**观察项**不参与闸门）",
+    },
+    "forgetting_metrics": {
+        "layer": "D5",
+        "kind": "eval",
+        "consumes": "Text",
+        "produces": "Score",
+        "measurable_by": "not-applicable",
+        "note": "§6.2 四个遗忘指标（评估基建）",
+    },
+    "golden_diag": {
+        "layer": "—",
+        "kind": "eval",
+        "consumes": "TextAndRanking",
+        "produces": "Gap",
+        "measurable_by": "not-applicable",
+        "note": "召回缺口诊断 Hit/RankedOut/NotInPool（评估基建）",
+    },
+    "quality_metrics": {
+        "layer": "—",
+        "kind": "eval",
+        "consumes": "TextAndRanking",
+        "produces": "Score",
+        "measurable_by": "not-applicable",
+        "note": "§6.1 十八项指标（评估基建）",
+    },
+    "robustness_metrics": {
+        "layer": "—",
+        "kind": "eval",
+        "consumes": "TextAndRanking",
+        "produces": "Score",
+        "measurable_by": "not-applicable",
+        "note": "L3 鲁棒/成长指标（评估基建）",
+    },
+    "swap_flow": {
+        "layer": "—",
+        "kind": "infra",
+        "consumes": "Text",
+        "produces": "Gap",
+        "measurable_by": "not-applicable",
+        "note": "算法切换流程（B3 基建）",
+    },
     # ---- 基础设施 / 适配器 ⇒ 不该进「算法候选池」 ----
     "admission_gate": {"layer": "—", "kind": "infra", "consumes": "TextAndRanking",
                        "produces": "Gap", "measurable_by": "not-applicable", "note": "准入闸（策略，不是算法）"},
@@ -264,6 +345,29 @@ CLASSIFICATION: dict[str, dict[str, str]] = {
 # **并写清原因**，绝不记一个假数字冒充结果（2026-10-28 两次假结果教训）。
 # ---------------------------------------------------------------------------
 MEASUREMENTS: dict[str, dict] = {
+    "signal_sources": {
+        "status": "measured",
+        "delta_recall": None,
+        "delta_grounded": None,
+        "measure_note": (
+            "**5 种非答案侧信号全灭**（此前的严格 A/B，见 "
+            "`docs/status/memory-quality-route-map-2026-10-27.md` §三 否证 #5）："
+            "紅樓夢 同主题 −0.0231 / 共现 −0.0189 / 段落首句 −0.0441 / 原文首句 −0.0515；"
+            "水滸傳 同主题 −0.1734 / 共现 −0.2802 / 段落首句 −0.0504 / 原文首句 −0.0383。"
+            "⇒ 结论：**单一弱信号打不过 BM25**（这是「逐个试」的结论，不是「特征无用」的结论）。"
+            "⚠️ 数字取自上述路线图（当时的严格 A/B）⇒ 本次未重跑。"
+        ),
+    },
+    "offline_embed": {
+        "status": "measured",
+        "delta_recall": None,
+        "delta_grounded": None,
+        "measure_note": (
+            "**字符 n-gram 哈希投影实测更差**：−0.1534 / −0.3165"
+            "（见路线图 §三 否证 #2）⇒ 它**不是语义模型**（模块文档自述），"
+            "原理上也难赢（桶空间被词面饱和）。⚠️ 数字取自路线图 ⇒ 本次未重跑。"
+        ),
+    },
     "memory_rank": {
         "status": "not-measurable-as-designed",
         "delta_recall": None,
