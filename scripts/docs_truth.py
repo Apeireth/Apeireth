@@ -158,6 +158,48 @@ def changed_since(commit: str, sources: list[str]) -> list[str]:
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
+def changed_in_scope_dirs(commit: str, sources: list[str]) -> list[str]:
+    """**目录级兜底**：返回 `sources` 所在目录里、相对 commit 被改过的**其他**文件。
+
+    # 为什么需要它（2026-10-28 审计认定 H3：**漏列 source 即静默漂**）
+
+    原 STALE 判据只比对**声明里列出的 sources**
+    ⇒ ⇒ 若某条 claim 的真实依据文件**没被列进去** ⇒ ⇒ **永远不会 STALE**
+    ⇒ ⇒ 声明与代码可以无限脱节，而**没有任何守卫会发现**。
+
+    ⇒ 兜底做法：取每条 source 的**所在目录**，看该目录下有没有**未被列出**的文件变过
+    ⇒ ⇒ 命中就报「**可疑漏列**」（不是直接判 STALE，因为同目录变更未必影响该声明）
+    ⇒ ⇒ 让**沉默的漏列变成可见的提示**。
+
+    ⚠️ 口径：只下探一层目录（`main.rs` → `src/`），不递归整个 crate ⇒ 避免噪声爆炸；
+    且**排除**已列出的 source 自身（那些由 [`changed_since`] 负责）。
+    """
+    listed = {path.strip() for path in sources}
+    # ⚠️ **只对窄目录兜底**：宽目录（如 `crates/adapters/cli/src/`，几十个文件）
+    #   天天有变动 ⇒ 兜底会变成噪声（实测 29 条里 17 条命中）⇒ ⇒ 噪声 = 训练人忽略告警。
+    #   口径：该目录下**被 git 跟踪**的文件数 ≤ `NARROW_DIR_MAX_FILES` 才算窄目录。
+    NARROW_DIR_MAX_FILES = 8
+    dirs: set[str] = set()
+    for path in listed:
+        parent = str(Path(path).parent)
+        if not parent or parent == ".":
+            continue
+        proc = _run(["git", "ls-files", parent])
+        tracked = [line for line in proc.stdout.splitlines() if line.strip()]
+        if 0 < len(tracked) <= NARROW_DIR_MAX_FILES:
+            dirs.add(parent)
+    if not dirs:
+        return []
+    proc = _run(["git", "diff", "--name-only", commit, "--", *sorted(dirs)])
+    if proc.returncode != 0:
+        return []
+    return [
+        line.strip()
+        for line in proc.stdout.splitlines()
+        if line.strip() and line.strip() not in listed
+    ]
+
+
 def _today() -> _dt.date:
     return _dt.date.today()
 
@@ -267,6 +309,7 @@ def cmd_verify(claims_path: Path, strict: bool, block_stale: bool = False) -> in
     rows: list[dict] = []
     errors = 0
     stale_count = 0
+    suspected_count = 0
     review_count = 0
     for i, claim in enumerate(claims, 1):
         cid = str(claim.get("id") or f"<claim-{i}>")
@@ -307,6 +350,9 @@ def cmd_verify(claims_path: Path, strict: bool, block_stale: bool = False) -> in
         verified_at = claim.get("verified_at")
         if sources and verified_at:
             stale = changed_since(str(verified_at), sources)
+            # ⚠️ **目录级兜底**（H3）：同目录下**未列出**的文件变过 ⇒ 提示「疑似漏列」
+            # ⇒ ⇒ 把「沉默的漏列」变成可见提示（不影响 stale 判定本身）。
+            suspected_missing = changed_in_scope_dirs(str(verified_at), sources)
         review_due = False
         next_review = claim.get("next_review")
         if next_review:
@@ -333,7 +379,16 @@ def cmd_verify(claims_path: Path, strict: bool, block_stale: bool = False) -> in
                 "default": claim.get("default"),
                 "switch": switch,
                 "status": status,
-                "detail": "; ".join(problems + [f"changed: {s}" for s in stale[:3]]),
+                "detail": "; ".join(
+                    problems
+                    + [f"changed: {s}" for s in stale[:3]]
+                    # ⚠️ 疑似漏列（H3）：同目录下未列出的文件变过
+                    + [
+                        f"**疑似漏列 source**: {s}"
+                        for s in suspected_missing[:3]
+                    ]
+                ),
+                "suspected": len(suspected_missing),
             }
         )
 
@@ -348,7 +403,16 @@ def cmd_verify(claims_path: Path, strict: bool, block_stale: bool = False) -> in
         if r["detail"]:
             print(f"{''.ljust(width)}  -> {r['detail']}")
     print()
-    print(f"claims={len(rows)} fail={errors} stale={stale_count} review_due={review_count}")
+    suspected_count = sum(1 for r in rows if r.get("suspected"))
+    print(
+        f"claims={len(rows)} fail={errors} stale={stale_count} review_due={review_count}"
+        f" suspected_missing={suspected_count}"
+    )
+    if suspected_count:
+        print(
+            "  ⚠️ suspected_missing = 「同目录下有**未列出**的文件变过」的声明数"
+            " ⇒ 提示**可能漏列 source**（不会判失败，但应当复核）"
+        )
     if errors:
         return 1
     if block_stale and stale_count:

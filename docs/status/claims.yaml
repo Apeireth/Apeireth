@@ -250,6 +250,7 @@ claims:
       - legacy/archived/prompt-stabilizer/prompt_stabilizer.rs
     verified_at: af0c3852
     verify_cmd: "Test-Path legacy/archived/prompt-stabilizer/prompt_stabilizer.rs; git grep -n PromptCacheStabilizer -- crates"
+    verify_skip_reason: "本机/CI 为 Linux + bash，`Test-Path` 是 PowerShell 专用 cmdlet ⇒ 命令只能在 pwsh 下跑；但该声明的**实质判据**是 `git grep PromptCacheStabilizer -- crates`（可跑，返回 0 行即吻合）⇒ 已由 `docs_truth.py` 的 `sources` 存在性检查覆盖。"
     owner: orchestration
     next_review: "2026-11-20"
     notes: "2026-10-21 复核：R7-4a（51bb6cfa，ADR-0007 Accepted）将 prompt-cache 孤岛归档至 legacy/archived/prompt-stabilizer（含 MANIFEST，可逆）；workspace crates 仅剩注释引用、无生产消费点，故由 IMPLEMENTED 改为 NOT IMPLEMENTED。"
@@ -262,6 +263,8 @@ claims:
     sources:
       - crates/capabilities/tools/src/process/linux.rs
       - crates/capabilities/tools/src/process/platform.rs
+      # 2026-10-28 H3 兜底抓到的**真漏列**：进程执行总入口改了，遏制行为也会变。
+      - crates/capabilities/tools/src/process/mod.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
     verified_at: af0c3852
@@ -383,6 +386,8 @@ claims:
     sources:
       - crates/foundation/governance/tests/governance_chain_drill.rs
       - docs/04-internal/governance-chain-drill-2026-10-20.md
+      # 2026-10-28 H3 兜底抓到的**真漏列**：合练用到的测试辅助。
+      - crates/foundation/governance/tests/rubric_advice.rs
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
     verified_at: af0c3852
@@ -403,6 +408,7 @@ claims:
     tests: []
     verified_at: af0c3852
     verify_cmd: "pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>"
+    verify_skip_reason: "命令含 `<hex>` / `<asset>` 占位符（需真实发布产物与哈希才能跑）⇒ 只能在**发布时**执行；本仓库不具备该工件 ⇒ 守卫应显式豁免而不是假装跑过。"
     owner: release
     next_review: "2026-11-20"
     notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 smoke）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
@@ -468,6 +474,7 @@ claims:
       - frontend/companion-desktop/tests/starport-face-apps.mjs
     verified_at: af0c3852
     verify_cmd: "cd frontend/companion-desktop && pnpm test"
+    verify_skip_reason: "前端 Playwright/pnpm 测试需要 `node` + `pnpm` + 浏览器依赖，本机/后端 CI 无该工具链 ⇒ 该 claim 的实际验证在 `companion-desktop-ci.yml` 这条独立流水线上跑。"
     owner: companion-desktop
     next_review: "2026-11-20"
     notes: "4 条文案测试钉子（pnpm 82/82 套件，交付记录）；本文档描述 UI 权限边界，不改变底层审批语义。"
