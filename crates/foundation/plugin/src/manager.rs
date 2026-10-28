@@ -19,6 +19,8 @@
 //! capability that silently disappears from listings when its plugin breaks,
 //! which is far harder to diagnose.
 
+mod lifecycle;
+
 use futures::FutureExt;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
@@ -107,7 +109,11 @@ impl PluginManager {
             let declared = manifest
                 .capability(tool.id())
                 .is_some_and(|descriptor| descriptor.kind == CapabilityKind::Tool);
-            if !declared {
+            if !declared
+                && !plugin.dynamic_tool_namespace().is_some_and(|prefix| {
+                    prefix.starts_with("tool.") && tool.id().as_str().starts_with(prefix)
+                })
+            {
                 return Err(PluginError::UndeclaredCapabilityImplementation {
                     plugin: plugin_id.clone(),
                     capability: tool.id().clone(),
@@ -151,6 +157,11 @@ impl PluginManager {
     }
 
     /// Ensure every model-facing tool name maps to exactly one capability id.
+    pub fn validate_current_implementations(&self, id: &PluginId) -> PluginResult<()> {
+        let plugin = self.plugins.get(id)?;
+        Self::validate_implementations(plugin.as_ref(), &plugin.tools(), &plugin.providers())
+    }
+
     fn validate_tool_names(&self, candidate_tools: &[Arc<dyn ToolCapability>]) -> PluginResult<()> {
         let mut names: BTreeMap<String, CapabilityId> = BTreeMap::new();
 
@@ -182,8 +193,16 @@ impl PluginManager {
     pub async fn start_all(&mut self, ctx: &PluginContext) -> PluginResult<Vec<PluginId>> {
         let order = self.resolve_order()?;
         for id in &order {
-            self.initialize(id, ctx).await?;
-            self.start(id, ctx).await?;
+            let result = match self.initialize(id, ctx).await {
+                Ok(()) => self.start(id, ctx).await,
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                if self.plugins.get(id)?.required_at_boot() {
+                    return Err(error);
+                }
+                let _ = self.stop(id).await;
+            }
         }
         Ok(order)
     }
@@ -316,74 +335,6 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Dependents must stop before their dependencies. Cancel, drain, then cleanup.
-    pub async fn stop(&mut self, id: &PluginId) -> PluginResult<()> {
-        for other in self.plugins.ids() {
-            if self
-                .plugins
-                .get(other)?
-                .manifest()
-                .dependencies
-                .contains(id)
-                && matches!(
-                    self.state(other)?,
-                    Lifecycle::Initializing
-                        | Lifecycle::Initialized
-                        | Lifecycle::Starting
-                        | Lifecycle::Active
-                        | Lifecycle::Stopping
-                )
-            {
-                return Err(PluginError::PluginFailed {
-                    plugin: id.clone(),
-                    phase: "stop",
-                    reason: format!("dependent {other} must stop first"),
-                });
-            }
-        }
-        let state = self.state(id)?;
-        let scope = self.task_scope(id)?;
-        scope.close_and_wait().await;
-        if state == Lifecycle::Registered {
-            return self.plugins.transition(id, Lifecycle::Stopped);
-        }
-        if state == Lifecycle::Stopped {
-            return Ok(());
-        }
-        if state != Lifecycle::Failed {
-            self.plugins.transition(id, Lifecycle::Stopping)?;
-        }
-        if self.plugins.entry(id).expect("registered").needs_cleanup {
-            let plugin = Arc::clone(self.plugins.get(id)?);
-            match std::panic::AssertUnwindSafe(plugin.shutdown())
-                .catch_unwind()
-                .await
-            {
-                Ok(Ok(())) => {
-                    self.plugins
-                        .entry_mut(id)
-                        .expect("registered")
-                        .needs_cleanup = false
-                }
-                result => {
-                    if state != Lifecycle::Failed {
-                        self.plugins.transition(id, Lifecycle::Failed)?;
-                    }
-                    let reason = match result {
-                        Ok(Err(error)) => error.to_string(),
-                        _ => "shutdown panicked".into(),
-                    };
-                    return Err(self.failure(id, "shutdown", reason));
-                }
-            }
-        }
-        self.start_order.retain(|started| started != id);
-        if state != Lifecycle::Failed {
-            self.plugins.transition(id, Lifecycle::Stopped)?;
-        }
-        Ok(())
-    }
-
     /// Remove only a cleaned, quiescent module, after removing its dependents.
     pub fn unregister(&mut self, id: &PluginId) -> PluginResult<()> {
         let entry = self
@@ -418,20 +369,6 @@ impl PluginManager {
         self.plugins.remove(id);
         self.start_order.retain(|started| started != id);
         Ok(())
-    }
-
-    /// Reverse dependency cleanup, continuing after individual failures.
-    pub async fn shutdown_all(&mut self) -> Vec<PluginError> {
-        let order = self
-            .resolve_order()
-            .unwrap_or_else(|_| self.plugins.ids().cloned().collect());
-        let mut failures = Vec::new();
-        for id in order.into_iter().rev() {
-            if let Err(error) = self.stop(&id).await {
-                failures.push(error);
-            }
-        }
-        failures
     }
 
     /// Dependency-respecting start order.

@@ -1029,17 +1029,7 @@ impl RuntimeBuilder {
             ))?;
         }
         manager.start_all_or_rollback(&ctx).await?;
-        for id in manager.plugins().ids() {
-            let plugin = manager.plugins().get(id)?;
-            capability_registry
-                .register_module(
-                    id,
-                    plugin.tools(),
-                    manager.task_scope(id)?,
-                    !plugin.uses_tool_events_v1(),
-                )
-                .map_err(RuntimeError::misconfigured)?;
-        }
+        super::module_host::populate_tool_catalog(&capability_registry, &mut manager).await?;
 
         // Providers are read out of the capability registry *after* start-up, so
         // the router contains exactly those whose plugins actually came up. A

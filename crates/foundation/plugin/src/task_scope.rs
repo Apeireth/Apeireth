@@ -26,6 +26,7 @@ struct Tasks {
 struct Inner {
     tasks: Mutex<Tasks>,
     drained: AtomicWaker,
+    parent: Option<ModuleTaskScope>,
 }
 
 /// Cloneable cancellation port; all clones belong to the same module instance.
@@ -37,20 +38,22 @@ pub struct ModuleTaskScope(Arc<Inner>);
 pub struct ModuleCancelled;
 
 pub struct ModuleTaskLease {
-    scope: ModuleTaskScope,
+    scopes: Vec<ModuleTaskScope>,
     id: TaskId,
 }
 
 impl Drop for ModuleTaskLease {
     fn drop(&mut self) {
-        self.scope
-            .0
-            .tasks
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .handles
-            .remove(&self.id);
-        self.scope.0.drained.wake();
+        for scope in &self.scopes {
+            scope
+                .0
+                .tasks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .handles
+                .remove(&self.id);
+            scope.0.drained.wake();
+        }
     }
 }
 
@@ -59,13 +62,50 @@ impl ModuleTaskScope {
         Self::default()
     }
 
+    /// A catalog generation or owned agent may be cancelled independently.
+    pub fn child(&self) -> Self {
+        Self(Arc::new(Inner {
+            parent: Some(self.clone()),
+            ..Default::default()
+        }))
+    }
+
+    fn ancestors(&self) -> Vec<Self> {
+        let mut scopes = vec![self.clone()];
+        while let Some(parent) = scopes.last().and_then(|scope| scope.0.parent.clone()) {
+            scopes.push(parent);
+        }
+        scopes.reverse();
+        scopes
+    }
+
     pub fn is_open(&self) -> bool {
-        !self
-            .0
-            .tasks
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .closed
+        self.ancestors().iter().all(|scope| {
+            !scope
+                .0
+                .tasks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .closed
+        })
+    }
+
+    fn register(&self, cancellation: TaskCancellation) -> Result<ModuleTaskLease, ModuleCancelled> {
+        let mut lease = ModuleTaskLease {
+            scopes: Vec::new(),
+            id: TaskId::new(),
+        };
+        for scope in self.ancestors() {
+            {
+                let mut tasks = scope.0.tasks.lock().unwrap_or_else(|e| e.into_inner());
+                if tasks.closed {
+                    return Err(ModuleCancelled);
+                }
+                tasks.handles.insert(lease.id, cancellation.clone());
+            }
+            lease.scopes.push(scope);
+        }
+        Ok(lease)
     }
 
     pub fn active_tasks(&self) -> usize {
@@ -79,19 +119,8 @@ impl ModuleTaskScope {
 
     /// Cancel on closure or on dropping the caller future; the lease always drains.
     pub async fn run<T>(&self, future: impl Future<Output = T>) -> Result<T, ModuleCancelled> {
-        let id = TaskId::new();
         let (handle, registration) = AbortHandle::new_pair();
-        {
-            let mut tasks = self.0.tasks.lock().unwrap_or_else(|e| e.into_inner());
-            if tasks.closed {
-                return Err(ModuleCancelled);
-            }
-            tasks.handles.insert(id, TaskCancellation::Async(handle));
-        }
-        let _lease = ModuleTaskLease {
-            scope: self.clone(),
-            id,
-        };
+        let _lease = self.register(TaskCancellation::Async(handle))?;
         Abortable::new(future, registration)
             .await
             .map_err(|_| ModuleCancelled)
@@ -100,34 +129,14 @@ impl ModuleTaskScope {
     /// Keep native work in the drain set even after its async caller is cancelled.
     /// The worker must observe its call cancellation and release this lease.
     pub fn lease(&self) -> Result<ModuleTaskLease, ModuleCancelled> {
-        let id = TaskId::new();
-        let mut tasks = self.0.tasks.lock().unwrap_or_else(|e| e.into_inner());
-        if tasks.closed {
-            return Err(ModuleCancelled);
-        }
-        tasks.handles.insert(id, TaskCancellation::Draining);
-        Ok(ModuleTaskLease {
-            scope: self.clone(),
-            id,
-        })
+        self.register(TaskCancellation::Draining)
     }
 
     pub fn lease_with_cancellation(
         &self,
         cancellation: crate::ToolCancellation,
     ) -> Result<ModuleTaskLease, ModuleCancelled> {
-        let id = TaskId::new();
-        let mut tasks = self.0.tasks.lock().unwrap_or_else(|e| e.into_inner());
-        if tasks.closed {
-            return Err(ModuleCancelled);
-        }
-        tasks
-            .handles
-            .insert(id, TaskCancellation::Native(cancellation));
-        Ok(ModuleTaskLease {
-            scope: self.clone(),
-            id,
-        })
+        self.register(TaskCancellation::Native(cancellation))
     }
 
     pub fn close(&self) {

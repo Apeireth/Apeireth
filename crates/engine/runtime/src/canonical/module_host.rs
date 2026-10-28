@@ -171,6 +171,10 @@ impl Runtime {
             let _ = self.plugins.stop(&id).await;
             return Err(error.into());
         }
+        if let Err(error) = self.plugins.validate_current_implementations(&id) {
+            let _ = self.plugins.stop(&id).await;
+            return Err(error.into());
+        }
         let plugin = self.plugins.plugins().get(&id)?;
         if let Err(error) = self.capabilities.register_module(
             &id,
@@ -182,6 +186,28 @@ impl Runtime {
             return Err(RuntimeError::misconfigured(error));
         }
         Ok(())
+    }
+
+    /// Refresh a live module without replacing the registry or permission gate.
+    pub async fn refresh_module_tools(&self, id: &PluginId) -> RuntimeResult<()> {
+        let plugin = self.plugins.plugins().get(id)?.clone();
+        if plugin.dynamic_tool_namespace().is_none() {
+            return Err(RuntimeError::misconfigured(
+                "module has no dynamic tool namespace",
+            ));
+        }
+        let scope = self.plugins.task_scope(id)?;
+        tokio::time::timeout(
+            self.dispatcher.limits.timeout,
+            scope.run(plugin.refresh_tools()),
+        )
+        .await
+        .map_err(|_| RuntimeError::misconfigured("dynamic refresh deadline exceeded"))?
+        .map_err(|_| RuntimeError::misconfigured("module stopping"))??;
+        self.plugins.validate_current_implementations(id)?;
+        self.capabilities
+            .replace_module_tools(id, plugin.tools(), scope)
+            .map_err(RuntimeError::misconfigured)
     }
 
     /// Cancels work immediately; exclusive stop subsequently drains and cleans up.
@@ -196,7 +222,9 @@ impl Runtime {
                 "stop provider modules through Runtime shutdown",
             ));
         }
-        self.plugins.stop(id).await?;
+        self.plugins
+            .stop_until(id, tokio::time::sleep(std::time::Duration::from_secs(30)))
+            .await?;
         Ok(())
     }
 
@@ -218,4 +246,33 @@ impl RuntimeBuilder {
             .map_err(RuntimeError::misconfigured)?;
         Ok(self.with_plugin(Arc::new(module)))
     }
+}
+
+pub(super) async fn populate_tool_catalog(
+    catalog: &super::capability::CapabilityRegistry,
+    manager: &mut apeireth_plugin::PluginManager,
+) -> RuntimeResult<()> {
+    let ids = manager.plugins().ids().cloned().collect::<Vec<_>>();
+    for id in ids {
+        if manager.state(&id)? != apeireth_core::kernel::Lifecycle::Active {
+            continue;
+        }
+        let result = (|| -> RuntimeResult<()> {
+            manager.validate_current_implementations(&id)?;
+            let plugin = manager.plugins().get(&id)?;
+            catalog
+                .register_module(
+                    &id,
+                    plugin.tools(),
+                    manager.task_scope(&id)?,
+                    !plugin.uses_tool_events_v1(),
+                )
+                .map_err(RuntimeError::misconfigured)
+        })();
+        if let Err(error) = result {
+            manager.shutdown_all().await;
+            return Err(error);
+        }
+    }
+    Ok(())
 }

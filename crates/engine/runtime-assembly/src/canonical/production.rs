@@ -1406,10 +1406,13 @@ impl ProductionModules {
             let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
                 RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))
             })?;
-            let module = Arc::new(McpModule::new());
-            collect_tool_module(&mut tool_modules, &mut capabilities, module.as_ref())?;
-            mcp_bridge = Some(Arc::new(bridge));
-            mcp_module = Some(module);
+            let bridge = Arc::new(bridge);
+            tool_modules.push(Arc::new(
+                apeireth_tools_canonical::mcp_bridge::McpPlugin::new(bridge.clone()),
+            ));
+            mcp_bridge = Some(bridge);
+            // Retained construction accessor is a compatibility bag, not the production catalog.
+            mcp_module = Some(Arc::new(McpModule::new()));
         }
 
         // 安全/逆向侦察 (`tool.recon.*`, 9 件, 默认关): 注册即闸 —— 开关

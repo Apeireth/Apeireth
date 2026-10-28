@@ -37,6 +37,9 @@ pub mod config;
 pub mod connection;
 pub mod governance;
 pub mod mock;
+pub mod module;
+mod process_owner;
+pub use module::McpPlugin;
 pub mod tool;
 pub mod transport;
 

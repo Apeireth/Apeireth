@@ -96,6 +96,11 @@ pub trait Plugin: Send + Sync {
         Ok(())
     }
 
+    /// Optional modules may fail boot in isolation; failures remain observable.
+    fn required_at_boot(&self) -> bool {
+        true
+    }
+
     /// Fixed, versioned subscriptions. Empty preserves legacy behavior.
     fn hooks(&self) -> Vec<apeireth_protocol::canonical::ModuleHookV1> {
         Vec::new()
@@ -126,6 +131,16 @@ pub trait Plugin: Send + Sync {
     /// Tool capabilities this plugin provides. Must match the manifest.
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
         Vec::new()
+    }
+
+    /// Opt-in dynamic tool namespace; all other tools must remain manifest-declared.
+    fn dynamic_tool_namespace(&self) -> Option<&str> {
+        None
+    }
+
+    /// Refresh owned descriptors. The Runtime publishes them atomically afterwards.
+    async fn refresh_tools(&self) -> PluginResult<()> {
+        Ok(())
     }
 
     /// Provider capabilities this plugin provides. Must match the manifest.

@@ -138,6 +138,46 @@ impl CapabilityRegistry {
         )
     }
 
+    /// Atomically replace one live dynamic owner's tools and revoke old handles.
+    pub(crate) fn replace_module_tools(
+        &self,
+        module: &apeireth_core::kernel::PluginId,
+        capabilities: Vec<Arc<dyn ToolCapability>>,
+        scope: apeireth_plugin::task_scope::ModuleTaskScope,
+    ) -> Result<(), String> {
+        let mut entries = write_lock_or_recover(&self.entries);
+        if !scope.is_open() {
+            return Err("module is stopping".into());
+        }
+        let existing = entries
+            .iter()
+            .filter(|e| e.module.as_ref() != Some(module))
+            .map(|e| e.capability.clone())
+            .collect::<Vec<_>>();
+        reject_tool_identity_collisions(&existing, &capabilities, module.as_str())?;
+        super::control::reject_control_tool_collisions(&self.controls(), &capabilities)?;
+        entries.retain(|entry| {
+            if entry.module.as_ref() == Some(module) {
+                entry.scope.close();
+                false
+            } else {
+                true
+            }
+        });
+        entries.extend(
+            capabilities
+                .into_iter()
+                .map(|capability| RegisteredCapability {
+                    owner: module.to_string(),
+                    capability,
+                    module: Some(module.clone()),
+                    scope: scope.child(),
+                    legacy: false,
+                }),
+        );
+        Ok(())
+    }
+
     fn register_scoped(
         &self,
         owner: String,
@@ -184,7 +224,7 @@ impl CapabilityRegistry {
                     capability,
                     module: module.clone(),
                     scope: if module.is_some() {
-                        scope.clone()
+                        scope.child()
                     } else {
                         apeireth_plugin::task_scope::ModuleTaskScope::new()
                     },

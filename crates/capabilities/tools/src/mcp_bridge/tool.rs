@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::CapabilityId;
 use apeireth_plugin::mcp::{content_block_to_wire, ToolCallResult};
-use apeireth_plugin::ToolCapability;
+use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use async_trait::async_trait;
 
@@ -72,6 +72,10 @@ impl McpDynamicTool {
         Self { entry, connection }
     }
 
+    fn descriptor_receipt(&self) -> serde_json::Value {
+        serde_json::json!({"server":self.entry.server,"tool":self.entry.remote_name,"schema":self.entry.input_schema,"read_only":self.entry.declared_read_only})
+    }
+
     /// The catalog entry backing this tool.
     pub fn entry(&self) -> &McpToolEntry {
         &self.entry
@@ -104,11 +108,37 @@ impl ToolCapability for McpDynamicTool {
         }
     }
 
+    fn freeze_invocation(&self, _call: &ToolCall) -> Result<Option<FrozenInvocation>, ToolResult> {
+        Ok(Some(FrozenInvocation::new(
+            self.descriptor_receipt(),
+            "Registered external tool descriptor".into(),
+        )))
+    }
+    async fn invoke_frozen(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+    ) -> ToolResult {
+        if frozen.is_some_and(|f| f.payload != self.descriptor_receipt()) {
+            return ToolResult::permanent_error(
+                &call.id,
+                "external tool descriptor changed since approval; approve a new call",
+            )
+            .with_name(&call.name);
+        }
+        self.invoke(call).await
+    }
+
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
         let name = self.entry.model_name.as_str();
         match self
             .connection
-            .call_tool(&self.entry.remote_name, call.arguments.clone())
+            .call_tool_checked(
+                &self.entry.remote_name,
+                call.arguments.clone(),
+                &self.entry.input_schema,
+                self.entry.declared_read_only,
+            )
             .await
         {
             Ok(result) => tool_result_from_mcp(&call.id, name, result),

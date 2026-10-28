@@ -9,7 +9,7 @@
 //! identities are refused at every level — a server that lists one name twice
 //! fails the refresh.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::CapabilityId;
@@ -79,6 +79,8 @@ pub struct McpToolBridge {
     deny_guard: Arc<McpToolDenyGuard>,
     pipeline: Arc<ToolExecutionPipeline>,
     tools: Mutex<BTreeMap<String, Arc<dyn ToolCapability>>>,
+    preset_grants: Mutex<BTreeSet<CapabilityId>>,
+    refresh_lock: tokio::sync::Mutex<()>,
 }
 
 impl McpToolBridge {
@@ -126,6 +128,8 @@ impl McpToolBridge {
             deny_guard,
             pipeline,
             tools: Mutex::new(BTreeMap::new()),
+            preset_grants: Mutex::new(BTreeSet::new()),
+            refresh_lock: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -173,6 +177,7 @@ impl McpToolBridge {
     /// Refresh the whole dynamic catalog: (re)connect where needed, run
     /// `tools/list` everywhere, reconcile, and report the delta.
     pub async fn refresh(&self) -> Result<DiscoveryReport, McpBridgeError> {
+        let _refresh = self.refresh_lock.lock().await;
         let mut registered = Vec::new();
         let mut removed = Vec::new();
         for connection in &self.connections {
@@ -227,7 +232,23 @@ impl McpToolBridge {
                 .policy
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut previous = self.preset_grants.lock().unwrap_or_else(|e| e.into_inner());
+            for id in previous
+                .iter()
+                .filter(|id| !self.catalog.is_declared_read_only(id))
+            {
+                policy.revoke(&apeireth_governance::Permission::ExecuteTool(
+                    id.to_string(),
+                ));
+            }
             McpPermissionMapping::authorize_readonly_declarations(&mut policy, &self.catalog);
+            *previous = self
+                .catalog
+                .list()
+                .into_iter()
+                .filter(|entry| entry.declared_read_only)
+                .map(|entry| entry.capability_id)
+                .collect();
         }
 
         // Operator-authored per-server allowlists become explicit grants,
