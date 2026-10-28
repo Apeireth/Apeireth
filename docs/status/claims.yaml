@@ -15,7 +15,7 @@
 #
 # 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
 version: 1
-updated_at: "2026-10-22"
+updated_at: "2026-10-28"
 
 claims:
   - id: rt.provider_router
@@ -28,7 +28,7 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: 75ee2464
+    verified_at: d63d209ffc911d0403c366e606d96479990049d0
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
@@ -187,7 +187,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: 75ee2464
+    verified_at: d63d209ffc911d0403c366e606d96479990049d0
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -540,3 +540,27 @@ claims:
     owner: orchestration
     next_review: "2026-11-20"
     notes: "RecoveryCase 状态机已接失败链；ScarLedger::learn 未接（如实）。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+
+  - id: rt.registered_module_v1
+    title: "注册插件生命周期、固定 V1 Hook 与治理工具分派"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: null
+    sources:
+      - crates/foundation/plugin/src/manager.rs
+      - crates/foundation/plugin/src/plugin.rs
+      - crates/foundation/plugin/src/hooks.rs
+      - crates/foundation/plugin/src/task_scope.rs
+      - crates/engine/runtime/src/canonical/runtime.rs
+      - crates/engine/runtime/src/canonical/execute.rs
+      - crates/engine/runtime/src/canonical/dispatch_admission.rs
+      - crates/engine/runtime/src/canonical/dispatcher.rs
+      - crates/engine/runtime/src/canonical/module_host.rs
+      - crates/engine/runtime/src/canonical/registered_hooks.rs
+    tests:
+      - crates/engine/runtime/tests/registry_runtime_v1.rs
+    verified_at: d63d209ffc911d0403c366e606d96479990049d0
+    verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked"
+    owner: runtime
+    next_review: "2026-11-28"
+    notes: "复用 PluginManager，宿主显式注册 Plugin；默认没有新增 V1 业务模块，无独立环境开关。自动输出经同一治理/冻结审批入口与 ToolEventV1，在闭合边界成对投影；真实 Runtime 模拟模型回合覆盖四协议 Adapter。旧非 strict 参数及持久日志显式兼容；AfterToolCall 自动工作构成工具串行屏障。尚无共享 Arc 在线热插拔、完整 Memory/Profile/多实例或 Android App，也无云 API 与硬件实测。证据及限制见 docs/04-internal/registry-kernel-phase2-2026-10-27.md。"

@@ -232,7 +232,10 @@ DBus/systemd 开发文件由工作区外临时目录提供；没有降低源码�
 完整门禁命令仍为 `pwsh -NoProfile -File scripts/gate_full.ps1`（只通过 `-Log` 分离日志）。
 最终完成于 2026-10-28 00:33:08 UTC：GATE FULL PASSED。主工作区 276 suites / 6640 passed / 0 failed / 18 ignored；图像家族 77 suites / 2309 passed / 0 failed / 33 ignored。两组 Clippy（-D warnings）和全仓格式检查均通过。
 日志中的测试数量为本批实测，历史单一真源 [test-baseline.md](../03-reference/test-baseline.md)
-不追溯改写。源码提交后再以真实提交 SHA 更新受影响 claims，文档状态最终检查结果随后记账。
+不追溯改写。本批源码提交 **`d63d209ffc911d0403c366e606d96479990049d0`**，对应上述完整门禁；随后仅更新文档证据。
+受影响的 ProviderRouter / egress claim 已复核并引用此真实源码 SHA；新增注册模块 claim 标为 PRODUCTION WIRED / default OFF，不冒充默认业务模块。
+文档最终检查：30 claims / fail=0 / stale=0；STATUS 与 wiring 生成物无漂移，严格 crosscheck problems=0。
+本批提交通过原 `commit.ps1`、严格架构检查及两个原版 hooks；仅在调用期间补可执行位，结束后恢复原 mode，未跳过检查。
 
 ### 原始失败与修复记录
 

@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 6a3e74f2d1ecd179b04edbe0f48711facfa3b0a950a11ca27e3ca3b0bc5f9042
-claims_total: 29
+claims_sha256: 92e08075a4c842541459bcda329a209f155810ee5e2ebc6d138015d50ff10a76
+claims_total: 30
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -588,5 +588,38 @@ items:
         - "crates/engine/runtime/tests/bio_pain_wiring.rs"
         - "crates/engine/organ/src/nociception.rs"
       claims_id: "bio.recovery_protocol"
+    gaps:
+      []
+  - id: "rt.registered_module_v1"
+    capability: "注册插件生命周期、固定 V1 Hook 与治理工具分派"
+    implemented:
+      sources:
+        - "crates/foundation/plugin/src/manager.rs"
+        - "crates/foundation/plugin/src/plugin.rs"
+        - "crates/foundation/plugin/src/hooks.rs"
+        - "crates/foundation/plugin/src/task_scope.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/dispatch_admission.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/registered_hooks.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime/src/canonical/dispatch_admission.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/registered_hooks.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/foundation/plugin/src/hooks.rs"
+        - "crates/foundation/plugin/src/manager.rs"
+        - "crates/foundation/plugin/src/plugin.rs"
+        - "crates/foundation/plugin/src/task_scope.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime/tests/registry_runtime_v1.rs"
+      claims_id: "rt.registered_module_v1"
     gaps:
       []
