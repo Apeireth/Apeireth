@@ -1,50 +1,100 @@
 {"id": "ig-v1-001", "query": "抗漂移审计里，未接线判据为什么要把 examples 和 benches 排除？", "expect_ids": ["doc:c57a6c44d4d4"], "expect_fragments": ["只排 `/tests/`"], "tags": ["audit", "H1"]}
-{"id":"ig-v1-002","query":"排除 examples 与 benches 后，整块未接线模块数从多少变成多少？","expect_ids":["doc:c57a6c44d4d4"],"expect_fragments":["整块未接线模块 **81 → 93**"],"tags":["audit","H1","数字"]}
-{"id":"ig-v1-003","query":"为什么改判据说 81 到 93 不是新增欠债？","expect_ids":["doc:c57a6c44d4d4"],"expect_fragments":["**这是「修正判据」不是「新增欠债」**"],"tags":["audit","H1"]}
-{"id":"ig-v1-004","query":"claims.yaml 的 verify_cmd 之前为什么算装饰品？","expect_ids":["doc:cb8a3f1320c3"],"expect_fragments":["但 `docs_truth.py` **只用 git grep + git diff**，**从不执行**"],"tags":["audit","H2"]}
-{"id":"ig-v1-005","query":"verify_cmd 真跑的纪律是什么？","expect_ids":["doc:cb8a3f1320c3"],"expect_fragments":["**要么真跑，要么显式声明为什么不能跑**"],"tags":["audit","H2"]}
-{"id":"ig-v1-006","query":"能跑但当前环境不允许的验证命令，用什么字段登记？","expect_ids":["doc:cb8a3f1320c3"],"expect_fragments":["`verify_defer_reason`"],"tags":["audit","H2"]}
-{"id":"ig-v1-007","query":"延后的验证为什么不算通过？","expect_ids":["doc:cb8a3f1320c3"],"expect_fragments":["**单独统计、不算通过**"],"tags":["audit","H2"]}
-{"id":"ig-v1-008","query":"STALE 判据只比对登记 source 会漏掉什么？","expect_ids":["doc:8354eaaf7759"],"expect_fragments":["真实依据文件没列进去 ⇒ **永远不会 STALE**"],"tags":["audit","H3"]}
-{"id":"ig-v1-009","query":"目录级兜底第一版为什么被收窄？","expect_ids":["doc:8354eaaf7759"],"expect_fragments":["**29 条里 17 条命中**"],"tags":["audit","H3"]}
-{"id":"ig-v1-010","query":"目录级兜底最终只对什么样的目录生效？","expect_ids":["doc:8354eaaf7759"],"expect_fragments":["**窄目录**"],"tags":["audit","H3"]}
-{"id":"ig-v1-011","query":"H3 的目录级兜底抓到了哪两处真漏列？","expect_ids":["doc:8354eaaf7759"],"expect_fragments":["`sec.linux_containment`"],"tags":["audit","H3"]}
-{"id":"ig-v1-012","query":"crate 体量预算为什么要单独做一个守卫？","expect_ids":["doc:00f9461d44e7"],"expect_fragments":["与 `arch_guard`（管**单文件**）分工：两者合起来"],"tags":["audit","H4"]}
-{"id":"ig-v1-013","query":"crate 体量预算的基线是多少？","expect_ids":["doc:00f9461d44e7"],"expect_fragments":["**29 个 crate · 合计 528,097 行**"],"tags":["audit","H4","数字"]}
-{"id":"ig-v1-014","query":"高口径声明不许靠什么样的方式成立？","expect_ids":["doc:179ffda9d224"],"expect_fragments":["**不许**靠 `verify_skip_reason` / `verify_defer_reason` 成立"],"tags":["audit","H5"]}
-{"id":"ig-v1-015","query":"H5 抓到哪三条虚标 PRODUCTION WIRED 的声明？","expect_ids":["doc:179ffda9d224"],"expect_fragments":["`sec.sql_readonly_gate`"],"tags":["audit","H5"]}
-{"id":"ig-v1-016","query":"慢性红的真实原因是什么？","expect_ids":["doc:b763c1ecac97"],"expect_fragments":["**rustdoc 内联链接**"],"tags":["audit","H6"]}
-{"id":"ig-v1-017","query":"慢性红修完之后 nightly doc 的结果是什么？","expect_ids":["doc:b763c1ecac97"],"expect_fragments":["**exit=0 · 0 error**"],"tags":["audit","H6","数字"]}
-{"id":"ig-v1-018","query":"为什么说清掉慢性红比加新守卫更值钱？","expect_ids":["doc:b763c1ecac97"],"expect_fragments":["慢性红消失，红重新有信号价值"],"tags":["audit","H6"]}
-{"id":"ig-v1-019","query":"批次进度页的自动事实块是怎么保证手写不漂的？","expect_ids":["doc:ead652a6e735"],"expect_fragments":["**手写散文无法覆盖事实值**"],"tags":["audit","H7"]}
-{"id":"ig-v1-020","query":"H7 的反证实验是怎么做的？","expect_ids":["doc:ead652a6e735"],"expect_fragments":["手把「已测行数」改成 `99`"],"tags":["audit","H7"]}
-{"id":"ig-v1-021","query":"文档分类守卫有哪九类？","expect_ids":["doc:d428585edadc"],"expect_fragments":["`SPEC`"],"tags":["audit","H8"]}
-{"id":"ig-v1-022","query":"文档分类守卫第一版的判定为什么被判为不可靠？","expect_ids":["doc:d428585edadc"],"expect_fragments":["本文**没有**批次/验收/不做章节"],"tags":["audit","H8"]}
-{"id":"ig-v1-023","query":"存量未分类文档用了什么棘轮机制？","expect_ids":["doc:d428585edadc"],"expect_fragments":["**491 份待分类**"],"tags":["audit","H8","数字"]}
-{"id":"ig-v1-024","query":"抗漂移审计对仓库自身约束力的总结论是什么？","expect_ids":["doc:91913cb76caa"],"expect_fragments":["判据严谨度：中等偏弱"],"tags":["audit","结论"]}
+{"id": "ig-v1-002", "query": "排除 examples 与 benches 后，整块未接线模块数从多少变成多少？", "expect_ids": ["doc:c57a6c44d4d4"], "expect_fragments": ["整块未接线模块 **81 → 93**"], "tags": ["audit", "H1", "数字"]}
+{"id": "ig-v1-003", "query": "为什么改判据说 81 到 93 不是新增欠债？", "expect_ids": ["doc:c57a6c44d4d4"], "expect_fragments": ["**这是「修正判据」不是「新增欠债」**"], "tags": ["audit", "H1"]}
+{"id": "ig-v1-004", "query": "claims.yaml 的 verify_cmd 之前为什么算装饰品？", "expect_ids": ["doc:cb8a3f1320c3"], "expect_fragments": ["但 `docs_truth.py` **只用 git grep + git diff**，**从不执行**"], "tags": ["audit", "H2"]}
+{"id": "ig-v1-005", "query": "verify_cmd 真跑的纪律是什么？", "expect_ids": ["doc:cb8a3f1320c3"], "expect_fragments": ["**要么真跑，要么显式声明为什么不能跑**"], "tags": ["audit", "H2"]}
+{"id": "ig-v1-006", "query": "能跑但当前环境不允许的验证命令，用什么字段登记？", "expect_ids": ["doc:cb8a3f1320c3"], "expect_fragments": ["`verify_defer_reason`"], "tags": ["audit", "H2"]}
+{"id": "ig-v1-007", "query": "延后的验证为什么不算通过？", "expect_ids": ["doc:cb8a3f1320c3"], "expect_fragments": ["**单独统计、不算通过**"], "tags": ["audit", "H2"]}
+{"id": "ig-v1-008", "query": "STALE 判据只比对登记 source 会漏掉什么？", "expect_ids": ["doc:8354eaaf7759"], "expect_fragments": ["真实依据文件没列进去 ⇒ **永远不会 STALE**"], "tags": ["audit", "H3"]}
+{"id": "ig-v1-009", "query": "目录级兜底第一版为什么被收窄？", "expect_ids": ["doc:8354eaaf7759"], "expect_fragments": ["**29 条里 17 条命中**"], "tags": ["audit", "H3"]}
+{"id": "ig-v1-010", "query": "目录级兜底最终只对什么样的目录生效？", "expect_ids": ["doc:8354eaaf7759"], "expect_fragments": ["**窄目录**"], "tags": ["audit", "H3"]}
+{"id": "ig-v1-011", "query": "H3 的目录级兜底抓到了哪两处真漏列？", "expect_ids": ["doc:8354eaaf7759"], "expect_fragments": ["`sec.linux_containment`"], "tags": ["audit", "H3"]}
+{"id": "ig-v1-012", "query": "crate 体量预算为什么要单独做一个守卫？", "expect_ids": ["doc:00f9461d44e7"], "expect_fragments": ["与 `arch_guard`（管**单文件**）分工：两者合起来"], "tags": ["audit", "H4"]}
+{"id": "ig-v1-013", "query": "crate 体量预算的基线是多少？", "expect_ids": ["doc:00f9461d44e7"], "expect_fragments": ["**29 个 crate · 合计 528,097 行**"], "tags": ["audit", "H4", "数字"]}
+{"id": "ig-v1-014", "query": "高口径声明不许靠什么样的方式成立？", "expect_ids": ["doc:179ffda9d224"], "expect_fragments": ["**不许**靠 `verify_skip_reason` / `verify_defer_reason` 成立"], "tags": ["audit", "H5"]}
+{"id": "ig-v1-015", "query": "H5 抓到哪三条虚标 PRODUCTION WIRED 的声明？", "expect_ids": ["doc:179ffda9d224"], "expect_fragments": ["`sec.sql_readonly_gate`"], "tags": ["audit", "H5"]}
+{"id": "ig-v1-016", "query": "慢性红的真实原因是什么？", "expect_ids": ["doc:b763c1ecac97"], "expect_fragments": ["**rustdoc 内联链接**"], "tags": ["audit", "H6"]}
+{"id": "ig-v1-017", "query": "慢性红修完之后 nightly doc 的结果是什么？", "expect_ids": ["doc:b763c1ecac97"], "expect_fragments": ["**exit=0 · 0 error**"], "tags": ["audit", "H6", "数字"]}
+{"id": "ig-v1-018", "query": "为什么说清掉慢性红比加新守卫更值钱？", "expect_ids": ["doc:b763c1ecac97"], "expect_fragments": ["慢性红消失，红重新有信号价值"], "tags": ["audit", "H6"]}
+{"id": "ig-v1-019", "query": "批次进度页的自动事实块是怎么保证手写不漂的？", "expect_ids": ["doc:ead652a6e735"], "expect_fragments": ["**手写散文无法覆盖事实值**"], "tags": ["audit", "H7"]}
+{"id": "ig-v1-020", "query": "H7 的反证实验是怎么做的？", "expect_ids": ["doc:ead652a6e735"], "expect_fragments": ["手把「已测行数」改成 `99`"], "tags": ["audit", "H7"]}
+{"id": "ig-v1-021", "query": "文档分类守卫有哪九类？", "expect_ids": ["doc:d428585edadc"], "expect_fragments": ["`SPEC`"], "tags": ["audit", "H8"]}
+{"id": "ig-v1-022", "query": "文档分类守卫第一版的判定为什么被判为不可靠？", "expect_ids": ["doc:d428585edadc"], "expect_fragments": ["本文**没有**批次/验收/不做章节"], "tags": ["audit", "H8"]}
+{"id": "ig-v1-023", "query": "存量未分类文档用了什么棘轮机制？", "expect_ids": ["doc:d428585edadc"], "expect_fragments": ["**491 份待分类**"], "tags": ["audit", "H8", "数字"]}
+{"id": "ig-v1-024", "query": "抗漂移审计对仓库自身约束力的总结论是什么？", "expect_ids": ["doc:91913cb76caa"], "expect_fragments": ["判据严谨度：中等偏弱"], "tags": ["audit", "结论"]}
 {"id": "ig-v1-025", "query": "抗漂移审计结论里对「健康度」的判断是什么？", "expect_ids": ["doc:91913cb76caa"], "expect_fragments": ["健康度：有慢性红"], "tags": ["audit", "结论"]}
-{"id":"ig-v1-026","query":"设计稿批次看板里 D0 哈希链的状态是什么？","expect_ids":["doc:71d04b109c2d"],"expect_fragments":["哈希链进写入路径"],"tags":["status","D0"]}
-{"id":"ig-v1-027","query":"D2 语义索引的真实状态是什么？","expect_ids":["doc:71d04b109c2d"],"expect_fragments":["关键词全开，语义靠外部 API"],"tags":["status","D2"]}
-{"id":"ig-v1-028","query":"D4 模式的现状被怎么描述？","expect_ids":["doc:71d04b109c2d"],"expect_fragments":["挖了坑没量"],"tags":["status","D4"]}
-{"id":"ig-v1-029","query":"B0-c 的验收标准是什么？","expect_ids":["doc:f25a6d5e6450"],"expect_fragments":["36 个模块进候选池，各有一行数字"],"tags":["status","B0-c"]}
-{"id":"ig-v1-030","query":"为什么 B0 是唯一没做完却最关键的一批？","expect_ids":["doc:c3e04a7d39d4"],"expect_fragments":["B0 是所有后续的裁判，必须最先做"],"tags":["status","B0"]}
-{"id":"ig-v1-031","query":"B0-c 的两个实测发现被称作什么级别的问题？","expect_ids":["doc:b1ccfabde538"],"expect_fragments":["都是架构级"],"tags":["status","B0-c"]}
-{"id":"ig-v1-032","query":"重排索引为什么不能用来测 D4 算法？","expect_ids":["doc:b1ccfabde538"],"expect_fragments":["重排索引对 BM25 完全无效"],"tags":["status","B0-c"]}
+{"id": "ig-v1-026", "query": "设计稿批次看板里 D0 哈希链的状态是什么？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["哈希链进写入路径"], "tags": ["status", "D0"]}
+{"id": "ig-v1-027", "query": "D2 语义索引的真实状态是什么？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["关键词全开，语义靠外部 API"], "tags": ["status", "D2"]}
+{"id": "ig-v1-028", "query": "D4 模式的现状被怎么描述？", "expect_ids": ["doc:71d04b109c2d"], "expect_fragments": ["挖了坑没量"], "tags": ["status", "D4"]}
+{"id": "ig-v1-029", "query": "B0-c 的验收标准是什么？", "expect_ids": ["doc:f25a6d5e6450"], "expect_fragments": ["36 个模块进候选池，各有一行数字"], "tags": ["status", "B0-c"]}
+{"id": "ig-v1-030", "query": "为什么 B0 是唯一没做完却最关键的一批？", "expect_ids": ["doc:c3e04a7d39d4"], "expect_fragments": ["B0 是所有后续的裁判，必须最先做"], "tags": ["status", "B0"]}
+{"id": "ig-v1-031", "query": "B0-c 的两个实测发现被称作什么级别的问题？", "expect_ids": ["doc:b1ccfabde538"], "expect_fragments": ["都是架构级"], "tags": ["status", "B0-c"]}
+{"id": "ig-v1-032", "query": "重排索引为什么不能用来测 D4 算法？", "expect_ids": ["doc:b1ccfabde538"], "expect_fragments": ["重排索引对 BM25 完全无效"], "tags": ["status", "B0-c"]}
 {"id": "ig-v1-033", "query": "B0-c 的真前置是什么？", "expect_ids": ["doc:b1ccfabde538"], "expect_fragments": ["**B0-c 的真前置条件是 B2/B3**"], "tags": ["status", "B0-c"]}
 {"id": "ig-v1-034", "query": "目前还剩几条前端声明被延后？", "expect_ids": ["doc:ae00ef7351eb"], "expect_fragments": ["只剩 1 条延后"], "tags": ["status", "未修"]}
-{"id":"ig-v1-035","query":"进度页的变更纪律要求引用状态时只引什么？","expect_ids":["doc:a391ba706796"],"expect_fragments":["只引本页"],"tags":["status","纪律"]}
+{"id": "ig-v1-035", "query": "进度页的变更纪律要求引用状态时只引什么？", "expect_ids": ["doc:a391ba706796"], "expect_fragments": ["只引本页"], "tags": ["status", "纪律"]}
 {"id": "ig-v1-036", "query": "真实语料送达率文档声明的四级口径是什么？", "expect_ids": ["doc:cb01de1018cd"], "expect_fragments": ["PRODUCTION WIRED ✘"], "tags": ["evidence", "送达率"]}
-{"id":"ig-v1-037","query":"这部真实对话语料一共多少轮对话多少组QA？","expect_ids":["doc:996ac356873f"],"expect_fragments":["5,882"],"tags":["evidence","语料"]}
-{"id":"ig-v1-038","query":"真实语料上单证据子集的题占比多少？","expect_ids":["doc:8dd4c4fd4e3d"],"expect_fragments":["73.5%"],"tags":["evidence","数字"]}
+{"id": "ig-v1-037", "query": "这部真实对话语料一共多少轮对话多少组QA？", "expect_ids": ["doc:996ac356873f"], "expect_fragments": ["5,882"], "tags": ["evidence", "语料"]}
+{"id": "ig-v1-038", "query": "真实语料上单证据子集的题占比多少？", "expect_ids": ["doc:8dd4c4fd4e3d"], "expect_fragments": ["73.5%"], "tags": ["evidence", "数字"]}
 {"id": "ig-v1-039", "query": "把送达率算成 1.1107 被称为什么？", "expect_ids": ["doc:ce80bcaa6adb"], "expect_fragments": ["这是口径混用，不是「超量送达」"], "tags": ["evidence", "口径"]}
-{"id":"ig-v1-040","query":"粒度变大时送达率怎么变？","expect_ids":["doc:de3ef284b8c8"],"expect_fragments":["截断损失"],"tags":["evidence","粒度"]}
-{"id":"ig-v1-041","query":"粒度曲线的因果结论是什么？","expect_ids":["doc:71704341a537"],"expect_fragments":["**但切分不是解法**"],"tags":["evidence","粒度"]}
+{"id": "ig-v1-040", "query": "粒度变大时送达率怎么变？", "expect_ids": ["doc:de3ef284b8c8"], "expect_fragments": ["截断损失"], "tags": ["evidence", "粒度"]}
+{"id": "ig-v1-041", "query": "粒度曲线的因果结论是什么？", "expect_ids": ["doc:71704341a537"], "expect_fragments": ["**但切分不是解法**"], "tags": ["evidence", "粒度"]}
 {"id": "ig-v1-042", "query": "对 D-10 的具体建议是什么？", "expect_ids": ["doc:de4a2cfc07aa"], "expect_fragments": ["入库时把记忆切到「能在注入窗口内完整送达」的粒度"], "tags": ["evidence", "决策"]}
-{"id":"ig-v1-043","query":"对 D-10 旧证据的修正说旧 A/B 混了哪两件事？","expect_ids":["doc:7125fa90106b"],"expect_fragments":["**两件事被混在一起**"],"tags":["evidence","修正"]}
+{"id": "ig-v1-043", "query": "对 D-10 旧证据的修正说旧 A/B 混了哪两件事？", "expect_ids": ["doc:7125fa90106b"], "expect_fragments": ["**两件事被混在一起**"], "tags": ["evidence", "修正"]}
 {"id": "ig-v1-044", "query": "真实语料交付里哪一类题完全没测？", "expect_ids": ["doc:dd95bca8042e"], "expect_fragments": ["对抗类（446 题，答案 `None`）没测"], "tags": ["evidence", "边界"]}
 {"id": "ig-v1-045", "query": "诊断里「候选集里根本没有」占多少？", "expect_ids": ["doc:adeecaee510e"], "expect_fragments": ["「候选集里根本没有」= 0.1970"], "tags": ["diagnosis", "诊断"]}
 {"id": "ig-v1-046", "query": "诊断结论说哪些手段救不了候选缺口？", "expect_ids": ["doc:adeecaee510e"], "expect_fragments": ["加大 k / 重排 / 加信号都救不了这部分"], "tags": ["diagnosis", "判据"]}
-{"id":"ig-v1-047","query":"诊断里被排除的那个看起来最像的元凶是什么？","expect_ids":["doc:adfc7500789b"],"expect_fragments":["中文被切成**单字**"],"tags":["diagnosis","假设否证"]}
-{"id":"ig-v1-048","query":"不需要 owner 拍板的两个杠杆各带来多少提升？","expect_ids":["doc:94fd2b1c5e47"],"expect_fragments":["**+0.0437**"],"tags":["diagnosis","杠杆"]}
-{"id":"ig-v1-049","query":"诊断结论说纯词面手段的天花板大约是多少？","expect_ids":["doc:d1073647ae9b"],"expect_fragments":["天花板 ≈ +5 个点"],"tags":["diagnosis","结论"]}
-{"id":"ig-v1-050","query":"还有哪些纯算法杠杆没试过？","expect_ids":["doc:c19c808cb102"],"expect_fragments":["PRF / RM3 伪相关反馈"],"tags":["diagnosis","待试"]}
+{"id": "ig-v1-047", "query": "诊断里被排除的那个看起来最像的元凶是什么？", "expect_ids": ["doc:adfc7500789b"], "expect_fragments": ["中文被切成**单字**"], "tags": ["diagnosis", "假设否证"]}
+{"id": "ig-v1-048", "query": "不需要 owner 拍板的两个杠杆各带来多少提升？", "expect_ids": ["doc:94fd2b1c5e47"], "expect_fragments": ["**+0.0437**"], "tags": ["diagnosis", "杠杆"]}
+{"id": "ig-v1-049", "query": "诊断结论说纯词面手段的天花板大约是多少？", "expect_ids": ["doc:d1073647ae9b"], "expect_fragments": ["天花板 ≈ +5 个点"], "tags": ["diagnosis", "结论"]}
+{"id": "ig-v1-050", "query": "还有哪些纯算法杠杆没试过？", "expect_ids": ["doc:c19c808cb102"], "expect_fragments": ["PRF / RM3 伪相关反馈"], "tags": ["diagnosis", "待试"]}
+{"id": "ig-v1-051", "query": "注入族与检索族的诊断结论说两层是什么关系？", "expect_ids": ["doc:2e2d5b1461fb"], "expect_fragments": ["两层是同一个病"], "tags": ["diagnosis"]}
+{"id": "ig-v1-052", "query": "「按 query 挑最相关段」为什么是负收益？", "expect_ids": ["doc:35eebc22cbfe"], "expect_fragments": ["按 query 挑出的段**恰好不是答案段**"], "tags": ["refuted"]}
+{"id": "ig-v1-053", "query": "水滸傳上按 query 挑段后 evidence precision 掉到多少？", "expect_ids": ["doc:58d8b0d4af24"], "expect_fragments": ["0.0185"], "tags": ["refuted", "数字"]}
+{"id": "ig-v1-054", "query": "注入 oracle 上界那个实验用哪个例子复现？", "expect_ids": ["doc:68601fe89544"], "expect_fragments": ["injection_oracle_bound"], "tags": ["reproduce"]}
+{"id": "ig-v1-055", "query": "三种注入形态里哪一种只是上界？", "expect_ids": ["doc:6fd7495c9120"], "expect_fragments": ["oracle 段"], "tags": ["injection"]}
+{"id": "ig-v1-056", "query": "送达率等于哪两个量的比值？", "expect_ids": ["doc:79a03fc44a92"], "expect_fragments": ["已送达比例"], "tags": ["metric"]}
+{"id": "ig-v1-057", "query": "oracle 注入为什么被称作乐观口径？", "expect_ids": ["doc:987dbebd2df9"], "expect_fragments": ["上界的乐观口径"], "tags": ["metric", "边界"]}
+{"id": "ig-v1-058", "query": "相对时间锚点接线后有哪几条证据？", "expect_ids": ["doc:059fdf36ecfa"], "expect_fragments": ["三年前那条排最前"], "tags": ["wiring"]}
+{"id": "ig-v1-059", "query": "为什么放大单条注入上限不算增加成本？", "expect_ids": ["doc:0e6c4a23047e"], "expect_fragments": ["放大单条上限并不增加总消耗"], "tags": ["injection", "成本"]}
+{"id": "ig-v1-060", "query": "生产挖题的期望片段是从正文哪个位置取的？", "expect_ids": ["doc:1b2a51e65726"], "expect_fragments": ["不是开头"], "tags": ["measurement"]}
+{"id": "ig-v1-061", "query": "为什么时间锚信号在真实题面上结构性地测不到？", "expect_ids": ["doc:1bdcf6c82a4c"], "expect_fragments": ["题面里根本没有时间词"], "tags": ["signal"]}
+{"id": "ig-v1-062", "query": "锚定加主体窗口在 400 字时的 groundedness 是多少？", "expect_ids": ["doc:1c30fb189aeb"], "expect_fragments": ["0.4202"], "tags": ["anchor", "数字"]}
+{"id": "ig-v1-063", "query": "H' 预算扫描的结果为什么不能与别的变体比 recall？", "expect_ids": ["doc:472432645a65"], "expect_fragments": ["H' 只可与 H' 内部比较"], "tags": ["measurement"]}
+{"id": "ig-v1-064", "query": "变体 E 的链条为什么可以上线？", "expect_ids": ["doc:532a0152bafa"], "expect_fragments": ["全程非 oracle"], "tags": ["anchor"]}
+{"id": "ig-v1-065", "query": "信号源报告 10 分钟出不来，加了什么缓存？", "expect_ids": ["doc:192675a95b69"], "expect_fragments": ["fragment_cache"], "tags": ["performance"]}
+{"id": "ig-v1-066", "query": "非答案侧信号里的哪些数字含数据集构造红利？", "expect_ids": ["doc:2a2ebc2dccf9"], "expect_fragments": ["构造红利"], "tags": ["measurement", "边界"]}
+{"id": "ig-v1-067", "query": "信号源对照实验用哪个例子复现？", "expect_ids": ["doc:6679444e9b26"], "expect_fragments": ["signal_source_report"], "tags": ["reproduce"]}
+{"id": "ig-v1-068", "query": "紅樓夢上时间锚信号命中了多少题？", "expect_ids": ["doc:691c24eee761"], "expect_fragments": ["0/476"], "tags": ["signal", "数字"]}
+{"id": "ig-v1-069", "query": "负面结果推出的两条下一步里，靠用户自己说信号的那条代价是什么？", "expect_ids": ["doc:6f2ed22a4f8c"], "expect_fragments": ["用户负担"], "tags": ["signal"]}
+{"id": "ig-v1-070", "query": "time_anchor_terms 的死循环是怎么产生的？", "expect_ids": ["doc:a2a875704bb0"], "expect_fragments": ["游标不前进"], "tags": ["bug"]}
+{"id": "ig-v1-071", "query": "五种非答案侧信号源的总结论是什么？", "expect_ids": ["doc:b724a22ac769"], "expect_fragments": ["没有一种比基线好"], "tags": ["signal", "结论"]}
+{"id": "ig-v1-072", "query": "被否证的路里「提高 k」为什么不算解法？", "expect_ids": ["doc:03028bf84618"], "expect_fragments": ["只是推迟问题"], "tags": ["refuted"]}
+{"id": "ig-v1-073", "query": "水滸傳整回加最相关段后 evidence precision 是多少？", "expect_ids": ["doc:0ffe0c14c4da"], "expect_fragments": ["0.0185"], "tags": ["injection", "数字"]}
+{"id": "ig-v1-074", "query": "紅樓夢生产注入的 evidence precision 是多少？", "expect_ids": ["doc:4381f6624789"], "expect_fragments": ["0.0092"], "tags": ["injection", "数字"]}
+{"id": "ig-v1-075", "query": "切分粒度实验是几格对照？", "expect_ids": ["doc:7b120303597b"], "expect_fragments": ["四格对照"], "tags": ["experiment"]}
+{"id": "ig-v1-076", "query": "段落化的期望片段更短本应更容易命中，实际结果如何？", "expect_ids": ["doc:9313baccb549"], "expect_fragments": ["还是降了"], "tags": ["refuted"]}
+{"id": "ig-v1-077", "query": "L1 与 L2 的共同病根是什么？", "expect_ids": ["doc:9441fd1a9c1e"], "expect_fragments": ["信号缺失"], "tags": ["diagnosis"]}
+{"id": "ig-v1-078", "query": "L1 与 L2 的口径为什么不能混读？", "expect_ids": ["doc:97326d80c462"], "expect_fragments": ["两个分母不同"], "tags": ["measurement"]}
+{"id": "ig-v1-079", "query": "语料切半检验为什么两半要各自挖题？", "expect_ids": ["doc:0a83c2f0e2ad"], "expect_fragments": ["各自挖题、各自检索"], "tags": ["experiment"]}
+{"id": "ig-v1-080", "query": "紅樓夢前半切半后 recall@10 是多少？", "expect_ids": ["doc:293622e6e1d8"], "expect_fragments": ["0.4578"], "tags": ["experiment", "数字"]}
+{"id": "ig-v1-081", "query": "语料规模为什么会影响排序难度？", "expect_ids": ["doc:2cf4ccdd3a61"], "expect_fragments": ["主体密度本身是自变量"], "tags": ["diagnosis"]}
+{"id": "ig-v1-082", "query": "水滸傳前半切半后 recall@10 是多少？", "expect_ids": ["doc:37bf6c903610"], "expect_fragments": ["0.8508"], "tags": ["experiment", "数字"]}
+{"id": "ig-v1-083", "query": "「语料减半 recall 涨」这条结论后来怎么了？", "expect_ids": ["doc:a0d26937b921"], "expect_fragments": ["语料规模/主体密度本身是杠杆"], "tags": ["retracted"]}
+{"id": "ig-v1-084", "query": "切半检验里哪条结论被收窄了？", "expect_ids": ["doc:a6bf2a1c6135"], "expect_fragments": ["结论**收窄*"], "tags": ["retracted"]}
+{"id": "ig-v1-085", "query": "语料切半检验用哪个例子复现？", "expect_ids": ["doc:c4931f8c9a56"], "expect_fragments": ["corpora_robustness"], "tags": ["reproduce"]}
+{"id": "ig-v1-086", "query": "D0 保真审计里「保真」的标准是什么？", "expect_ids": ["doc:251a2759efc3"], "expect_fragments": ["够未来算法用"], "tags": ["audit", "D0"]}
+{"id": "ig-v1-087", "query": "D0 缺口里哪一项不建议推迟？", "expect_ids": ["doc:28ebfb66c230"], "expect_fragments": ["过了写入时机就永远补不回来"], "tags": ["audit", "D0"]}
+{"id": "ig-v1-088", "query": "D0 缺口 G3 到 G5 对应设计稿哪一批？", "expect_ids": ["doc:38a149a05d8f"], "expect_fragments": ["三接口契约"], "tags": ["audit", "批次"]}
+{"id": "ig-v1-089", "query": "D0 缺口里关系这一项有没有落点？", "expect_ids": ["doc:610acf429248"], "expect_fragments": ["知识图谱"], "tags": ["audit", "D0"]}
+{"id": "ig-v1-090", "query": "内部卷真实语料里 git 提交历史有多少条？", "expect_ids": ["doc:9c4b8df4c329"], "expect_fragments": ["3534 条提交"], "tags": ["corpus", "数字"]}
+{"id": "ig-v1-091", "query": "两本小说语料的题型为什么不可直接比？", "expect_ids": ["doc:be86fb815318"], "expect_fragments": ["题型分布不可直接比"], "tags": ["corpus"]}
+{"id": "ig-v1-092", "query": "git 语料里有百分之多少提交正文为空？", "expect_ids": ["doc:c7567905740e"], "expect_fragments": ["38% 的提交 body 为空"], "tags": ["corpus", "数字"]}
+{"id": "ig-v1-093", "query": "D0 保真审计里哪一项还没验证因为数据没落地？", "expect_ids": ["doc:03a839c41efb"], "expect_fragments": ["PerLTQA 数据未落地"], "tags": ["audit", "边界"]}
+{"id": "ig-v1-094", "query": "期望片段在正文里的位置中位数是多少？", "expect_ids": ["doc:127c8544a8fb"], "expect_fragments": ["第 731 字"], "tags": ["measurement", "数字"]}
+{"id": "ig-v1-095", "query": "内部卷首跑用的检索器和生产是什么关系？", "expect_ids": ["doc:50fbc194df5c"], "expect_fragments": ["确定性 Okapi BM25"], "tags": ["corpus"]}
+{"id": "ig-v1-096", "query": "内部卷首跑怎么证明卷子在真的测东西？", "expect_ids": ["doc:a870ff74f9b7"], "expect_fragments": ["不是恒等于满分"], "tags": ["corpus"]}
+{"id": "ig-v1-097", "query": "内部卷首跑 k=10 的 recall 是多少？", "expect_ids": ["doc:d531c56720a2"], "expect_fragments": ["0.3729"], "tags": ["corpus", "数字"]}
+{"id": "ig-v1-098", "query": "为什么说内部卷首跑的数字是第一组有意义的数字？", "expect_ids": ["doc:df44f1b1a4a6"], "expect_fragments": ["第一组有意义的数字"], "tags": ["corpus"]}
+{"id": "ig-v1-099", "query": "按查询词选最相关窗口比生产注入低多少？", "expect_ids": ["doc:e7ce1f425b42"], "expect_fragments": ["低 43%"], "tags": ["refuted", "数字"]}
+{"id": "ig-v1-100", "query": "孤儿判据存在哪一类盲区？", "expect_ids": ["doc:03ff724ea618"], "expect_fragments": ["同名遮蔽"], "tags": ["audit", "判据"]}
