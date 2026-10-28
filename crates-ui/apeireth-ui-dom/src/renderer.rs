@@ -483,6 +483,30 @@ impl<D: Dom> Renderer<D> {
         ))
     }
 
+    /// ⭐⭐ **监听滚动容器并返回「已滚动」信号**（L1-G5 收尾）。
+    ///
+    /// ## 为什么用「信号」而不是直接把 scrollTop 传出来
+    ///
+    /// 事件处理器拿不到 `&Dom`（它只有 [`crate::events::DomEvent`]）
+    /// ⇒ ⇒ 直接在处理器里读滚动位置是做不到的
+    /// ⇒ ⇒ 而**滚动位置本来就有权威来源**（[`Self::scroll_metrics_at_path`] 读真实 DOM）
+    /// ⇒ ⇒ 所以信号只回答一个问题：「**刚刚滚动过，重新算窗口**」，位置由引擎自己再读
+    /// ⇒ ⇒ 避免出现"处理器缓存的位置"与"真实位置"两份可能不一致的真相。
+    ///
+    /// ⚠️ `scroll` **不冒泡**（浏览器规范）⇒ 必须直接监听到滚动容器本身
+    /// （[`crate::dom::EventKind::bubbles_to_delegation_root`] 已表达该约束）。
+    pub fn listen_scroll_at_path(&mut self, path: &[usize]) -> Result<ScrollSignal, DomError> {
+        let node = self.node_at_path(path)?;
+        let signal = ScrollSignal::default();
+        let dirty = signal.dirty.clone();
+        let handler = crate::events::ElementHandler::new(move |_event| {
+            dirty.set(true);
+        });
+        self.dom
+            .add_listener(&node, crate::dom::EventKind::Scroll, handler)?;
+        Ok(signal)
+    }
+
     /// ⭐⭐ **就地替换某个节点的子级**（L1-G5：嵌套虚拟列表的前提）。
     ///
     /// ## 为什么需要
@@ -1787,6 +1811,24 @@ fn class_tokens(element: &ElementVNode) -> Vec<String> {
     }
 }
 
+/// ⭐ **滚动信号**（L1-G5）：只回答「刚刚滚动过吗」——位置由引擎读真实 DOM。
+#[derive(Debug, Clone, Default)]
+pub struct ScrollSignal {
+    dirty: std::rc::Rc<std::cell::Cell<bool>>,
+}
+
+impl ScrollSignal {
+    /// 取走「已滚动」标记（返回是否滚动过；取走后置回未滚动）。
+    pub fn take(&self) -> bool {
+        self.dirty.replace(false)
+    }
+
+    /// 只看不取（调试用）。
+    pub fn peek(&self) -> bool {
+        self.dirty.get()
+    }
+}
+
 /// 子节点路径 ⇒ 稳定 `FocusId`（FNV-1a）。
 ///
 /// 用路径求 id 而不是另发编号：**一个概念一套编号**
@@ -1924,6 +1966,88 @@ mod tests {
                 .expect("补写必须成功"),
             0,
             "补写后队列必须清空"
+        );
+    }
+
+    /// ⭐⭐ **滚动信号**（L1-G5）：`scroll` 事件到达 ⇒ 信号置位；取走后复位；别的种类不触发。
+    #[test]
+    fn scroll_signal_tracks_scroll_events_only() {
+        let (mut renderer, root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("div").build())
+            .expect("挂载必须成功");
+        let container = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+
+        let signal = renderer
+            .listen_scroll_at_path(&[])
+            .expect("监听滚动必须成功");
+        assert!(!signal.peek(), "初始不应有滚动信号");
+
+        // ① `scroll` ⇒ 置位
+        let called = renderer
+            .dom()
+            .dispatch(container, crate::dom::EventKind::Scroll);
+        assert_eq!(called, 1, "滚动处理器必须被调用一次");
+        assert!(signal.peek(), "滚动后信号必须置位");
+
+        // ② 取走后复位
+        assert!(signal.take(), "第一次取走应为 true");
+        assert!(!signal.take(), "取走后再次取走应为 false");
+
+        // ③ 别的种类**不**触发信号（只监听 scroll）
+        renderer
+            .dom()
+            .dispatch(container, crate::dom::EventKind::Click);
+        assert!(!signal.peek(), "click 不得触发滚动信号");
+    }
+
+    /// ⭐⭐ **1k 行只挂窗口**（L1-G5 规模不变量）：挂载数 O(窗口)，不是 O(行数)。
+    #[test]
+    fn thousand_row_list_mounts_only_a_window() {
+        use crate::dom::{ElementBox, ScrollMetrics};
+
+        let (mut renderer, root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("div").build())
+            .expect("挂载必须成功");
+        let measured = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        renderer.dom().script_measurement(
+            measured,
+            ElementBox::new(0.0, 0.0, 300.0, 300.0),
+            ScrollMetrics {
+                scroll_top: 10_000.0,
+                scroll_height: 40_000.0,
+                client_height: 300.0,
+            },
+        );
+
+        let heights = vec![40.0_f64; 1000];
+        let plan = renderer
+            .patch_windowed(&heights, 2, |index| {
+                VNode::element("div")
+                    .attr("class", "row")
+                    .child(VNode::text(format!("{index}")))
+                    .build()
+            })
+            .expect("1000 行窗口化渲染必须成功");
+
+        // 视口 300 / 行高 40 ⇒ 8 行可见 + overscan 2×2 ⇒ ≤ 12 行
+        assert!(
+            plan.len() <= 12,
+            "窗口应约 12 行（含 overscan），实际 {}",
+            plan.len()
+        );
+        let list = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let inner = renderer.dom().children(&list).expect("读子节点必须成功");
+        assert!(
+            inner.len() <= 12 + 2,
+            "DOM 子节点必须 O(窗口)：实际 {}（行数 1000）",
+            inner.len()
+        );
+        assert_eq!(
+            renderer.dom().attribute(list, "style"),
+            Some(String::from("height: 40000px")),
+            "总高度必须等于全表高度"
         );
     }
 
