@@ -391,6 +391,27 @@ impl Default for AnchoredInjectionConfig {
     }
 }
 
+impl AnchoredInjectionConfig {
+    /// **生产配置**（owner 2026-10-28 **采纳 D-11**）。
+    ///
+    /// # 决策依据（实测，见 `docs/status/memory-bottleneck-diagnosis-2026-10-28.md`）
+    ///
+    /// * 旧口径「每条只给正文**开头 120 字**」⇒ ⇒ 答案常在中段 ⇒ **给了模型一段没用的**；
+    /// * 同 **400 字**预算下「**挑对段**」vs「**随便给**」：`groundedness`
+    ///   **0.4202 vs 0.0819**（**5.1×**）；
+    /// * ⚠️ **总量不变**：单条上限放大到 400 **不增加**总注入量
+    ///   （总量由调用方的 `max_chars` 控制 ⇒ 编译器在**同一预算内重新分配**）。
+    ///
+    /// # 为什么 `span_chars = 400`
+    ///
+    /// 实测扫描（120 → 4000）在 **400 字**处已拿到 5.1× 的绝大部分收益
+    /// （400 字 0.0819 → 0.4202；更大的跨度收益递减）⇒ ⇒ 取 **400** 作为生产值。
+    pub const PRODUCTION: Self = Self {
+        enabled: true,
+        span_chars: 400,
+    };
+}
+
 /// 一条**锚定证据**（**定位 + 送达**都做完了）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnchoredEvidence {

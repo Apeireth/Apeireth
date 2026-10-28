@@ -190,3 +190,75 @@ fn a_query_without_a_subject_falls_back_to_the_head() {
         anchored.overlay
     );
 }
+
+// ======================================================================
+// **D-11 生产接线证据**（owner 2026-10-28 采纳）
+// ======================================================================
+//
+// # 这条测试证明什么
+//
+// 决策书 D-11 裁定：注入「**主体出现处为中心**」的窗口（单条 400 字），
+// 而不是「正文开头 120 字」⇒ ⇒ 本测试钉住**生产路径真的变了**：
+//
+// * 生产入口是 `compile_prompt_overlay_with_selected_access`（走 `compile_selected`）；
+// * 记忆正文故意写成「开头 600 字填充 + 主体 + 600 字填充」
+//   ⇒ ⇒ **老口径（开头 120 字）里根本没有主体**；
+// * ⇒ ⇒ 若注入文本**含主体** ⇒ ⇒ 生产路径确实改成锚定窗口了。
+//
+// ⚠️ **只证明「路径变了」**，不证明「涨了多少」（涨幅在离线评测里测，见
+// `docs/status/memory-bottleneck-diagnosis-2026-10-28.md`）。
+
+#[test]
+fn production_overlay_injects_the_subject_window_not_the_head() {
+    let dir = tempdir().expect("临时目录");
+    let path = dir.path().join("memory.sqlite");
+    let session = "d11-session";
+    write_long_episode(&path, session);
+
+    // ⇒ **生产装配**：打开注入格式（`injection_format = true`）。
+    let coord = coordinator(&path).with_memory_injection_format();
+    let access = coord
+        .compile_prompt_overlay_with_selected_access(&query_of(session, "賈寶玉"))
+        .expect("应产出注入")
+        .expect("Option 应是 Some");
+
+    // 老口径「开头 120 字」是纯填充 ⇒ ⇒ 里面**不可能**出现主体。
+    let head_only: String = access.overlay.chars().take(120).collect();
+    assert!(
+        !head_only.contains("賈寶玉"),
+        "前提不成立：前 120 字里竟然有主体（{head_only:?}）"
+    );
+    // ⇒ ⇒ 生产注入**必须**含主体 ⇒ ⇒ 说明走的是「主体所在窗口」。
+    assert!(
+        access.overlay.contains("賈寶玉"),
+        "生产注入里**没有**主体 ⇒ D-11 没接上：{:?}",
+        access.overlay
+    );
+    // ⚠️ **总量不变**：单条上限放大到 400 **不许**把总注入量放大
+    // ⇒ ⇒ 这里是 4000 字总预算，注入不该超过它。
+    assert!(
+        access.overlay.chars().count() <= 4000 + 200,
+        "注入总量 {} 超出预算（**零总成本**被破坏）",
+        access.overlay.chars().count()
+    );
+}
+
+#[test]
+fn production_overlay_falls_back_when_subject_is_missing() {
+    // ⇒ **兜底**：问句里解析不出主体 ⇒ 内部**退回开头截断**
+    // ⇒ ⇒ **不许**因为 D-11 变成「什么都不注入」。
+    let dir = tempdir().expect("临时目录");
+    let path = dir.path().join("memory.sqlite");
+    let session = "d11-fallback";
+    write_long_episode(&path, session);
+
+    let coord = coordinator(&path).with_memory_injection_format();
+    let access = coord
+        .compile_prompt_overlay_with_selected_access(&query_of(session, "什么 时候"))
+        .expect("应产出注入")
+        .expect("Option 应是 Some");
+    assert!(
+        !access.overlay.trim().is_empty(),
+        "解析不出主体时**不许**返回空注入（兜底失效）"
+    );
+}

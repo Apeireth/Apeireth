@@ -983,11 +983,21 @@ impl MemoryCoordinator {
         query: &MemoryRecallQuery,
     ) -> Option<SelectedMemoryAccess> {
         if self.injection_format {
-            self.compiler.compile_injection_with_selected_access(
-                recalled,
-                &query.session_id,
-                query.max_chars,
-            )
+            // ⚠️ **D-11（owner 2026-10-28 采纳）**：注入「**主体出现处为中心**」的窗口
+            // （单条 400 字），而不是「正文开头 120 字」。
+            //
+            // * **总消耗不变**：总量仍由 `query.max_chars` 控制
+            //   ⇒ ⇒ 只是**在同一预算内重新分配**；
+            // * 主体解析不出来 ⇒ 内部**退回开头截断**（**不注入空证据**）；
+            // * 实测：同 400 字预算下「挑对段」**0.4202** vs「随便给」**0.0819** ⇒ **5.1×**。
+            self.compiler
+                .compile_injection_with_selected_access_and_query(
+                    recalled,
+                    &query.session_id,
+                    query.max_chars,
+                    &query.query_text,
+                    crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION,
+                )
         } else {
             self.compiler
                 .compile_with_selected_access(recalled, &query.session_id, query.max_chars)
