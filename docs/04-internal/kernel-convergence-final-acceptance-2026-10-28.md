@@ -115,3 +115,29 @@ Compatibility change: configuration-only callers use mcp_definition().config()/s
 mcp_bridge() now returns Option<Arc<McpToolBridge>> after initialization, rather than a prebuilt
 Option<&Arc<...>>. No in-repository production caller relied on the old pre-initialize reference;
 existing configuration tests now also assert that no bridge/process is acquired before initialization.
+
+## M6 portable assembly evidence
+
+Implemented / Wired / Tested on native Linux: existing desktop surface preserved
+by default; no-default-features exposes PortableHost over the same AgentRuntime,
+with independently selectable memory and profile-store features. No new crate or
+external dependency was added. Module selection, provider injection, scope and
+permissions remain explicit; an empty configuration installs no shell, process,
+filesystem, memory or networking module.
+
+PortableHost exposes initialization, main agent creation, submit, profile binding,
+snapshot, tool_scope, tool_events, usage, cancellation and shutdown. Core event
+sinks and managed approvals remain available through the existing Runtime APIs.
+A profile switch replaces only the main instance; a failed replacement leaves the
+old instance stopped rather than reviving private state.
+
+Native minimal configuration: 4 passed / 0 failed / 0 ignored.
+Native optional memory + profile-store: 6 passed / 0 failed / 0 ignored.
+Tests use the real managed Runtime with Mock Provider and real optional SQLite
+persistence; no external API or Android device is implied. The resource test also
+proves an owned pending background task drains before resource close while the
+Host retains an external resource Arc. Evidence:
+`apeireth-portable-host-final-tests.log`, `apeireth-portable-optional-final-tests.log`.
+The initial Android assembly check/build passed; final frozen-source target
+verification is still required below. The guide is
+[Portable Runtime Assembly](../02-guides/portable-runtime-assembly.md).

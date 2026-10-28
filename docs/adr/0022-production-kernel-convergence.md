@@ -132,3 +132,27 @@ observable drain/close results; Drop performs synchronous revocation only.
 Runtime tests cover hot replacement during a blocked model call, stale approvals,
 module-owned hot agents, preserved main-agent concurrency, and an actual controlled
 stdio server through ProductionModules. No real external API was used.
+
+## Portable assembly (M6)
+
+runtime-assembly now has default desktop composition and independent memory and
+profile-store features. The minimal feature set composes the same managed
+AgentRuntime with injected RuntimeBuilder ports. It does not depend on the desktop
+tool crate, cognition modules, SQLite, Gateway or desktop networking. The original
+desktop surface remains re-exported with default features; no desktop subsystem is
+deleted. Cargo.lock and external dependency versions are unchanged.
+
+PortableHost owns a single main instance and exposes submit, cancellation, profile
+binding, tool scope, durable V1 events, usage and shutdown. Host policy, provider
+plugins and module selection remain explicit. Cancellation stops the current main
+instance; profile replacement creates a fresh one. A failed replacement does not
+reactivate the old private context. Profile configuration types remain portable;
+SQLite persistence and MemoryModule can be compiled independently of desktop.
+
+Offline native tests cover minimal turns, unknown shell errors without fallback,
+private profile histories, blocked-request cancellation, owned background task
+drain with an external resource Arc, optional Memory Hook and durable profile
+loading. Android target check/build and dependency-tree evidence are recorded in
+the final acceptance report; cross compilation is not device validation.
+See the [portable Host guide](../02-guides/portable-runtime-assembly.md) for APIs,
+feature matrix and exact commands.

@@ -110,6 +110,7 @@ pub mod nervous_switchboard;
 #[path = "canonical/nightwatch.rs"]
 pub mod nightwatch;
 /// W3 三洋葱 L3-L5 物理执行面: 双洋葱判定的治理 hook (2026-10-10)。
+#[path = "canonical/onion_layer.rs"]
 pub mod onion_layer;
 #[path = "canonical/orchestrator.rs"]
 pub mod orchestrator;
@@ -143,6 +144,7 @@ pub mod ritual_tools;
 pub mod self_status_source;
 #[path = "canonical/self_tuning_wire.rs"]
 pub mod self_tuning_wire;
+#[path = "canonical/session_seal.rs"]
 pub mod session_seal;
 /// 任务簿工具面 (`tool.task_board`, V6-a): 增/列/改派/完成 + 治理档钩子
 /// (写面 = write_intent 同族, failed 只能人判无工具面)。
