@@ -145,6 +145,15 @@ impl Runtime {
             ));
         };
 
+        if !automatic && !tool.model_visible() {
+            return Ok(ToolAdmission::Resolved(
+                crate::canonical::dispatcher::failure(
+                    call,
+                    crate::canonical::dispatcher::DispatchErrorCode::PermissionDenied,
+                    "tool is reserved for authenticated module calls",
+                ),
+            ));
+        }
         if let Err(result) = self.dispatcher.validate(
             Some(*session_id),
             tool.as_ref(),

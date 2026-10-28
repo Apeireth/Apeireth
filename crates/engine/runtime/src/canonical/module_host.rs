@@ -11,6 +11,7 @@ impl Runtime {
         self.capabilities
             .capabilities()
             .into_iter()
+            .filter(|tool| tool.model_visible())
             .map(|tool| {
                 let registration = self
                     .capabilities

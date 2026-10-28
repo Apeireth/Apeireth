@@ -54,6 +54,18 @@ pub trait ToolCapability: Send + Sync {
     fn declaration(&self) -> NormalizedTool;
 
     /// Declarative output, permission, platform, timeout and concurrency policy.
+    /// Module-only tools are discoverable by the dispatcher, not advertised to models.
+    fn model_visible(&self) -> bool {
+        true
+    }
+    /// Model calls always receive their result; automatic observations may be audit-only.
+    fn module_result_delivery(
+        &self,
+        _result: &ToolResult,
+    ) -> crate::tool_execution::ModuleResultDelivery {
+        crate::tool_execution::ModuleResultDelivery::Provider
+    }
+
     fn execution_policy(&self) -> crate::tool_execution::ToolExecutionPolicy {
         crate::tool_execution::ToolExecutionPolicy::default()
     }

@@ -204,3 +204,10 @@ mod tests {
         assert!(native_execution_context().is_none());
     }
 }
+
+/// Module observations may be audited without adding empty provider messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleResultDelivery {
+    Provider,
+    AuditOnly,
+}

@@ -425,6 +425,7 @@ impl CapabilityRegistry {
     pub fn declarations(&self) -> Vec<NormalizedTool> {
         self.capabilities()
             .iter()
+            .filter(|capability| capability.model_visible())
             .map(|capability| capability.declaration())
             .collect()
     }

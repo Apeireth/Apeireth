@@ -342,7 +342,7 @@ async fn create(
             "provider is not registered",
         ));
     }
-    let visible = kernel.tools();
+    let visible = kernel.capabilities.capabilities();
     if config.tools.iter().any(|id| {
         !visible.iter().any(|tool| tool.id() == id)
             && !kernel

@@ -409,6 +409,15 @@ pub struct LegacyToolAdapter {
 
 #[async_trait]
 impl ToolCapability for LegacyToolAdapter {
+    fn model_visible(&self) -> bool {
+        self.tool.model_visible()
+    }
+    fn module_result_delivery(
+        &self,
+        result: &ToolResult,
+    ) -> apeireth_plugin::tool_execution::ModuleResultDelivery {
+        self.tool.module_result_delivery(result)
+    }
     fn id(&self) -> &CapabilityId {
         self.tool.id()
     }

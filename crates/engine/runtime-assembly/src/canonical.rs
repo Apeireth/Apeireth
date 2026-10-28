@@ -317,3 +317,6 @@ pub use voice_quiet::voice_quiet_hours_from_care_rules;
 
 #[path = "canonical/memory_module.rs"]
 pub mod memory_module;
+
+#[path = "canonical/cognitive_registry.rs"]
+mod cognitive_registry;

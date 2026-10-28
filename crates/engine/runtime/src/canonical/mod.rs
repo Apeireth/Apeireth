@@ -27,6 +27,7 @@
 
 pub mod accounting;
 pub mod approval;
+pub mod behavior_adapter;
 pub mod cache_trace;
 pub mod capability;
 pub mod context;

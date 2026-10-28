@@ -1610,8 +1610,7 @@ async fn build_canonical_runtime_with_parts(
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
-    builder = cognitive.register_context_projection(builder);
-    builder = cognitive.register_into(builder);
+    builder = cognitive.register_with_policy(builder, &policy)?;
 
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
 

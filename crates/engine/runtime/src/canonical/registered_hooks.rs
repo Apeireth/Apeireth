@@ -27,7 +27,8 @@ pub(super) fn fixed_hook(point: HookPoint) -> Option<ModuleHookV1> {
         HookPoint::BeforeToolCall => Some(ModuleHookV1::BeforeToolCall),
         HookPoint::AfterToolResult => Some(ModuleHookV1::AfterToolCall),
         HookPoint::AfterTurn => Some(ModuleHookV1::OnIdle),
-        _ => None,
+        HookPoint::BeforeFinalCommit => Some(ModuleHookV1::BeforeFinalCommit),
+        HookPoint::OnError => Some(ModuleHookV1::OnError),
     }
 }
 
@@ -63,6 +64,33 @@ impl Runtime {
         tool_call: Option<&ToolCall>,
         tool_result: Option<&ToolResult>,
     ) -> RuntimeResult<()> {
+        self.run_registered_hooks_for(
+            point,
+            session,
+            request,
+            trace,
+            security,
+            candidate,
+            tool_call,
+            tool_result,
+            None,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn run_registered_hooks_for(
+        &self,
+        point: ModuleHookV1,
+        session: &mut Session,
+        request: RequestId,
+        trace: TraceId,
+        security: Option<&TurnSecurityContext>,
+        candidate: Option<&NormalizedResponse>,
+        tool_call: Option<&ToolCall>,
+        tool_result: Option<&ToolResult>,
+        only: Option<&PluginId>,
+    ) -> RuntimeResult<()> {
         let context = HookContextV1 {
             hook: point,
             session: session.id,
@@ -79,6 +107,17 @@ impl Runtime {
         ));
         let mut owners = Vec::new();
         for id in self.plugins.resolve_order()? {
+            if let Some(selected) = only {
+                if selected != &id {
+                    continue;
+                }
+            } else if self
+                .registered_behaviors
+                .values()
+                .any(|adapter| adapter.id() == &id)
+            {
+                continue;
+            }
             if self.plugins.state(&id)? != Lifecycle::Active {
                 continue;
             }
@@ -277,6 +316,10 @@ impl Runtime {
                     event: entry.event,
                 });
             }
+            let audit_only = self.resolve_tool(&call.name).is_some_and(|tool| {
+                tool.module_result_delivery(&result)
+                    == apeireth_plugin::tool_execution::ModuleResultDelivery::AuditOnly
+            });
             let source = ToolEventSourceV1::Module {
                 module_id: module.clone(),
                 hook: point,
@@ -305,6 +348,16 @@ impl Runtime {
                 SessionEventKind::ToolEventRecorded { fact: event },
                 self.clock.as_ref(),
             );
+            if audit_only {
+                session.record(
+                    request,
+                    trace,
+                    SessionEventKind::ModuleToolEventObserved {
+                        call_id: proposed.execution,
+                    },
+                    self.clock.as_ref(),
+                );
+            }
             // A crash cannot safely replay an uncommitted external effect. Save
             // completed facts before the next tool; this is not transactional I/O.
             self.sessions.save(session).await?;
@@ -449,7 +502,8 @@ fn pending_batch(session: &Session) -> RuntimeResult<ToolEventBatch> {
         .events
         .iter()
         .filter_map(|entry| match entry.event {
-            SessionEventKind::ToolEventProjected { call_id } => Some(call_id),
+            SessionEventKind::ToolEventProjected { call_id }
+            | SessionEventKind::ModuleToolEventObserved { call_id } => Some(call_id),
             _ => None,
         })
         .collect();

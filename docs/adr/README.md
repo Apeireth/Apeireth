@@ -54,3 +54,5 @@
 ## 命名
 
 `NNNN-kebab-case-title.md`，四位递增编号（`0001-...`）。模板：[_template.md](_template.md)。
+
+- [0022 生产认知兼容与统一实例执行](0022-production-kernel-convergence.md)

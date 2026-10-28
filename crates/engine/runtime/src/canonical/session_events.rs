@@ -25,6 +25,10 @@ pub enum SessionEventKind {
     ToolEventProjected {
         call_id: apeireth_core::kernel::TaskId,
     },
+    /// Automatic observation had no model-visible data; its V1 fact remains auditable.
+    ModuleToolEventObserved {
+        call_id: apeireth_core::kernel::TaskId,
+    },
     /// Host explicitly closed the session after draining its turn.
     SessionEnded,
     /// A user turn entered canonical execution.

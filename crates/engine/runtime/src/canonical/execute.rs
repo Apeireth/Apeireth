@@ -2347,6 +2347,7 @@ impl Runtime {
         match self
             .run_hook(
                 hook,
+                session,
                 session_id,
                 trace_id,
                 invocation,
@@ -2393,6 +2394,19 @@ impl Runtime {
                             tool_result,
                         )
                         .await?;
+                        if hook == HookPoint::TurnStart {
+                            self.run_registered_hooks(
+                                apeireth_protocol::canonical::ModuleHookV1::TurnStart,
+                                session,
+                                request_id,
+                                trace_id,
+                                security_context,
+                                candidate,
+                                tool_call,
+                                tool_result,
+                            )
+                            .await?;
+                        }
                     }
                 }
                 Ok(effects)
@@ -2416,6 +2430,7 @@ impl Runtime {
     async fn run_hook(
         &self,
         hook: HookPoint,
+        session: &mut Session,
         session_id: &SessionId,
         trace_id: TraceId,
         invocation: &InvocationContext,
@@ -2468,7 +2483,56 @@ impl Runtime {
                 invoker_handle,
                 subloop: &*spawner,
             };
-            let outcome = match module.on_hook(hook, &context).await {
+            let invocation_result = if let Some(adapter) =
+                self.registered_behaviors.get(&manifest.id)
+            {
+                if session.principal.is_some()
+                    || !self.dispatcher.allows(*session_id, adapter.capability())
+                {
+                    continue;
+                }
+                let input = super::behavior_adapter::BehaviorInput {
+                    session: *session_id,
+                    request: request_id,
+                    trace: trace_id,
+                    hook,
+                    model: model.to_owned(),
+                    messages: super::behavior_adapter::business_messages(messages, session).into(),
+                    candidate: candidate.cloned(),
+                    tool_call: tool_call.cloned(),
+                    tool_result: tool_result.cloned(),
+                    invocation: invocation.clone(),
+                    error: error.map(str::to_owned),
+                    spawner: spawner.clone(),
+                };
+                if let Some(receipt) =
+                    adapter
+                        .prepare(input)
+                        .map_err(|source| RuntimeError::Module {
+                            module_id: manifest.id.clone(),
+                            source,
+                        })?
+                {
+                    self.run_registered_hooks_for(
+                        super::behavior_adapter::compatibility_hook(hook),
+                        session,
+                        request_id,
+                        trace_id,
+                        security_context,
+                        candidate,
+                        tool_call,
+                        tool_result,
+                        Some(adapter.id()),
+                    )
+                    .await?;
+                    receipt.take()
+                } else {
+                    Ok(ModuleOutcome::continue_())
+                }
+            } else {
+                module.on_hook(hook, &context).await
+            };
+            let outcome = match invocation_result {
                 Ok(outcome) => outcome,
                 Err(source) => {
                     // Budget exhaustion must not abort the whole turn: the
@@ -2669,10 +2733,14 @@ impl Runtime {
         request_id: RequestId,
         trace_id: TraceId,
     ) {
-        let messages = match self.sessions.load(&request.session).await {
-            Ok(Some(session)) => session.messages,
-            _ => Vec::new(),
-        };
+        let mut session = self
+            .sessions
+            .load(&request.session)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| Session::new(request.session, self.clock.as_ref()));
+        let messages = session.messages.clone();
         let model = request
             .model
             .clone()
@@ -2685,6 +2753,7 @@ impl Runtime {
         let _ = self
             .run_hook(
                 HookPoint::OnError,
+                &mut session,
                 &request.session,
                 trace_id,
                 &invocation,
@@ -2697,6 +2766,18 @@ impl Runtime {
                 &module_state,
                 request_id,
                 request.security_context.as_ref(),
+            )
+            .await;
+        let _ = self
+            .run_registered_hooks(
+                apeireth_protocol::canonical::ModuleHookV1::OnError,
+                &mut session,
+                request_id,
+                trace_id,
+                request.security_context.as_ref(),
+                None,
+                None,
+                None,
             )
             .await;
     }

@@ -1808,7 +1808,7 @@ impl ProductionModules {
         mut builder: super::runtime::RuntimeBuilder,
     ) -> super::runtime::RuntimeBuilder {
         for module in self.modules {
-            builder = builder.with_module(module);
+            builder = builder.with_registered_behavior(module);
         }
         for module in self.tool_modules {
             builder = builder.with_plugin(module);

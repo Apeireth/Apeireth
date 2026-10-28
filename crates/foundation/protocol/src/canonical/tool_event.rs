@@ -28,6 +28,9 @@ pub enum ModuleHookV1 {
     OnIdle,
     BeforeCompaction,
     SessionEnd,
+    TurnStart,
+    BeforeFinalCommit,
+    OnError,
 }
 
 /// Who produced the fact. Module ownership uses the existing extension id.
