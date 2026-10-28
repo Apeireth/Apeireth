@@ -1205,6 +1205,7 @@ docs/status/guard-wiring-audit-2026-10-27.md,L1,7,护栏接线审计（2026-10-2
 docs/status/injection-layer-evidence-delivery-2026-10-27.md,L1,9,注入层（§6.1 L2）的真实状况 —— 与 L1 的**合并诊断**（2026-10-27）,2026-10-27,现行,2,保留,
 docs/status/injection-oracle-bound-2026-10-27.md,L1,4,注入层（L2）的 **oracle 上界** —— 「信号到位 ⇒ 证据能不能送达？」（2026-10-27）,2026-10-27,现行,3,保留,
 docs/status/internal-golden-set-run-2026-10-26.md,L1,4,内部卷首跑结果（2026-10-26）,2026-10-26,现行,0,保留,
+docs/status/memory-bottleneck-diagnosis-2026-10-28.md,L1,4,记忆系统**真瓶颈**诊断（2026-10-28）：19.7% 是「候选集/语义」问题，不是排序问题,2026-10-28,现行,0,保留,
 docs/status/memory-quality-route-map-2026-10-27.md,L1,4,记忆质量路线图：**已证的路 / 已否的路 / 待决**（2026-10-27 速查）,2026-10-27,现行,1,保留,
 docs/status/non-oracle-signal-sources-2026-10-27.md,L1,4,非答案侧信号来源：**5 种全不提升**（2026-10-27）⇒ **D-12 的方案 A 失败**,2026-10-27,现行,1,保留,
 docs/status/real-corpus-delivery-2026-10-28.md,L1,9,真实对话语料上的送达率 —— **零漏送**，以及它**推翻了什么**,2026-10-28,现行,2,保留,
