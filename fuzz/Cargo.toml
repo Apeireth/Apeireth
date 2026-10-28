@@ -417,3 +417,10 @@ path = "fuzz_targets/content_feed.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "worktree_apply"
+path = "fuzz_targets/worktree_apply.rs"
+test = false
+doc = false
+bench = false
