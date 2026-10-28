@@ -424,3 +424,10 @@ path = "fuzz_targets/worktree_apply.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "sheet_ops"
+path = "fuzz_targets/sheet_ops.rs"
+test = false
+doc = false
+bench = false
