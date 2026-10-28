@@ -267,7 +267,7 @@ claims:
       - crates/capabilities/tools/src/process/mod.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
-    verified_at: af0c3852
+    verified_at: 86289d6d
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
@@ -390,7 +390,7 @@ claims:
       - crates/foundation/governance/tests/rubric_advice.rs
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: af0c3852
+    verified_at: 86289d6d
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
     owner: governance
     next_review: "2026-11-20"
