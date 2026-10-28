@@ -56,6 +56,11 @@ jobs:
         if: always()
         run: python3 scripts/check_doc_class.py --report
 
+      # 批次进度页的**自动事实块**（H7）：页面上的关键事实必须等于代码事实
+      # ⇒ 手写的散文无法覆盖它（漂移即红）。口径见脚本头注释。
+      - name: 批次进度页事实块（进度页不许手写漂移）
+        run: python3 scripts/check_batch_status.py --check
+
       - name: 题材与层的分布（供人工看体系是否失衡；不阻塞）
         if: always()
         run: python3 scripts/docs_index.py --report

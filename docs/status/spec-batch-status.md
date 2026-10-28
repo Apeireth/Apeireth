@@ -16,6 +16,31 @@ Author: lead
 
 ---
 
+<!-- BEGIN:auto-facts -->
+<!-- 本块由 `python3 scripts/check_batch_status.py --gen` 生成；**别手改**（改了 --check 会失败） -->
+
+| 事实 | 值 |
+|---|---|
+| `d0_hash_chain` · D0 保真：哈希链 | **在写入路径** |
+| `d4_default` · D4 姿态（默认关？） | **生产已接 · **默认关**** |
+| `d4_modules` · B0-c 候选池模块数 | **50** |
+| `d4_candidates` · B0-c 可测候选数 | **22** |
+| `d4_measured` · B0-c 已测行数 | **2** |
+| `d4_not_measurable` · B0-c 测法无效行数 | **2** |
+| `b1_memory_verify` · B1 `memory verify` CLI | **存在** |
+| `b4_offline_archive` · B4 脱机归档模块 | **存在** |
+| `b4_handover` · B4 handover 模块 | **存在** |
+| `b4_migrate_rollback` · B4 迁移回滚模块 | **存在** |
+| `cli_export` · `memory export` 分派 | **已分派** |
+| `cli_handover` · `memory handover` 分派 | **已分派** |
+| `b2_contracts` · B2 三接口契约 | **3/3** |
+| `b3_shadow_run` · B3 影子双跑模块 | **存在** |
+| `b0a_adapter` · B0-a PerLTQA 适配器 | **存在** |
+| `b0a_reproduce` · B0-a `reproduce.sh` | ****无**** |
+| `claims` · 状态声明 | **29 条（延后 4 · 豁免 3）** |
+
+<!-- END:auto-facts -->
+
 ## 0. 一句话
 
 > **纵向**：D0 做到底（哈希链已进生产写入路径）· D1/D3/D5 挖了一半 ·
