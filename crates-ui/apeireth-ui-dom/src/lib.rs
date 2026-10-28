@@ -133,6 +133,8 @@ pub mod events;
 pub mod focus;
 pub mod keyed;
 pub mod listeners;
+/// ⭐ panic 兜底钩子（L1-G8 第二片）：把「一崩全白」变成「一崩可见」。
+pub mod panic_guard;
 pub mod renderer;
 /// ⭐ 窗口化（虚拟列表）原语（L1-G5 第一片）。
 pub mod virtual_list;
