@@ -1129,3 +1129,90 @@ impl apeireth_ui_dom::resource::TextureUploader for DomTextureUploader<'_> {
         )
     }
 }
+
+/// ⭐⭐⭐ **纹理上传端到端探针**（L1-G7 浏览器证据）。
+///
+/// 链路：真实引擎（`Engine::create`）→ `DomTextureUploader`（适配器）
+/// → `TextureStore::upload`（**256 行对齐**）→ `upload_decoded` 状态收敛
+/// ⇒ ⇒ 端到端证明「上传 → 纹理可用 → 资源 Ready」，而不只是纯逻辑测试。
+///
+/// ⚠️ 用**宽度非 256 倍数**的图（3×2）⇒ 真正走一遍行对齐路径
+/// （3×4 = 12 字节/行，远小于 256）⇒ 若对齐写错，这里会失败或泛化不出视图。
+#[wasm_bindgen]
+pub async fn l1_upload_probe(
+    canvas: web_sys::HtmlCanvasElement,
+    backend: &str,
+) -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::resource::{ResourceRegistry, ResourceState, upload_decoded};
+
+    let mut failures: Vec<String> = Vec::new();
+    let preference = match backend {
+        "webgl" => BackendPreference::WebGl,
+        "webgpu" => BackendPreference::WebGpu,
+        _ => BackendPreference::Auto,
+    };
+    let width = canvas.width().max(1);
+    let height = canvas.height().max(1);
+    let size_canvas = canvas.clone();
+    let options = EngineOptions {
+        backend: preference,
+        width,
+        height,
+        canvas_size: Some(CanvasSizeSource::new(move || {
+            (size_canvas.width(), size_canvas.height())
+        })),
+    };
+    let engine = Engine::create(SurfaceTargetInput::HtmlCanvas(canvas.clone()), options)
+        .await
+        .map_err(|error| JsValue::from_str(&format!("engine: {error}")))?;
+
+    let mut store = apeireth_ui_gpu::upload::TextureStore::new();
+    let mut registry = ResourceRegistry::new();
+    let id = registry.register();
+    // 3×2 RGBA：每行 12 字节 ⇒ 必须补到 256
+    let image = apeireth_ui_dom::resource::ImageData::new(3, 2, vec![200u8; 3 * 2 * 4]);
+    let mut adapter = DomTextureUploader::new(&mut store, engine.device(), engine.queue());
+    let upload_ok = upload_decoded(&mut registry, &mut adapter, id, image).is_ok();
+    let uploaded = store.get(id.raw()).map(|texture| (texture.width, texture.height));
+    let ready = matches!(registry.state(id), Some(ResourceState::Ready));
+    if !upload_ok || uploaded != Some((3, 2)) || !ready {
+        failures.push(format!(
+            "G7 上传端到端失败：upload_ok={upload_ok} uploaded={uploaded:?} ready={ready}"
+        ));
+    }
+
+    // ⭐ 反向：坏数据必须被拒且**不得**标 Ready（不能把坏数据传进 GPU）
+    let bad_id = registry.register();
+    let bad = apeireth_ui_dom::resource::ImageData::new(2, 2, vec![0u8; 3]);
+    let mut adapter = DomTextureUploader::new(&mut store, engine.device(), engine.queue());
+    let bad_rejected = upload_decoded(&mut registry, &mut adapter, bad_id, bad).is_err();
+    let bad_not_ready = !matches!(registry.state(bad_id), Some(ResourceState::Ready));
+    if !(bad_rejected && bad_not_ready) {
+        failures.push(format!(
+            "G7 坏数据未被正确拒绝：rejected={bad_rejected} not_ready={bad_not_ready}"
+        ));
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("backend_actual"),
+        &JsValue::from_str(&format!("{:?}", engine.report().backend)),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("uploaded_w"),
+        &JsValue::from_f64(uploaded.map(|(w, _)| w as f64).unwrap_or(0.0)),
+    );
+    Ok(result.into())
+}

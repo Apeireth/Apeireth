@@ -78,10 +78,21 @@ def main() -> int:
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if report.get("probe_missing"):
         return 2
-    if not report.get("ok"):
-        print(f"❌ 失败项：{report.get('failures')}", file=sys.stderr)
+    # 探针结果分两段：`dom`（G1/G2/G3/G6/G8）与 `upload`（G7 纹理上传端到端）
+    dom = report.get("dom") or report
+    upload = report.get("upload") or {}
+    dom_ok = bool(dom.get("ok"))
+    upload_ok = bool(upload.get("ok"))
+    if not dom_ok:
+        print(f"❌ DOM 探针失败项：{dom.get('failures')}", file=sys.stderr)
+    if not upload_ok:
+        print(f"❌ 上传探针失败项：{upload.get('failures')}", file=sys.stderr)
+    if not (dom_ok and upload_ok):
         return 1
-    print("✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / G8 错误边界与 panic hook）")
+    print(
+        "✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / "
+        "G8 错误边界与 panic hook / G7 纹理上传端到端）"
+    )
     return 0
 
 
