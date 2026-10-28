@@ -765,3 +765,19 @@ impl apeireth_plugin::ExtensionCatalog for BehaviorRegistry {
         ))
     }
 }
+
+impl apeireth_plugin::agents::AgentRequestGate for ModuleTurnState {
+    fn reserve(&self) -> apeireth_plugin::agents::AgentResult<()> {
+        self.reserve().map_err(|e| {
+            apeireth_plugin::agents::AgentError::new(
+                apeireth_plugin::agents::AgentErrorCode::BudgetExceeded,
+                e.to_string(),
+            )
+        })
+    }
+}
+impl ModuleTurnState {
+    pub(crate) fn limit(&self) -> usize {
+        self.max
+    }
+}

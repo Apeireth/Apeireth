@@ -3,6 +3,9 @@ use super::Runtime;
 impl Runtime {
     pub(super) fn execution_view(&self) -> Self {
         Self {
+            instances: self.instances.clone(),
+            instance_host: None,
+            task: self.task.clone(),
             plugins: self.plugins.execution_snapshot(),
             v1_protocol: self.v1_protocol,
             providers: self.providers.clone(),

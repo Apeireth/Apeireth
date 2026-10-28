@@ -98,6 +98,7 @@ pub fn failure(call: &ToolCall, code: DispatchErrorCode, message: impl Into<Stri
 pub struct ToolDispatcher {
     pub limits: DispatchLimits,
     scopes: RwLock<BTreeMap<SessionId, ToolScope>>,
+    parents: RwLock<BTreeMap<SessionId, SessionId>>,
     agents: RwLock<BTreeMap<SessionId, AgentId>>,
     principals: RwLock<BTreeMap<SessionId, apeireth_plugin::agents::AgentPrincipal>>,
     instance_scopes: RwLock<BTreeMap<SessionId, ModuleTaskScope>>,
@@ -110,6 +111,7 @@ impl ToolDispatcher {
         Self {
             limits,
             scopes: RwLock::new(BTreeMap::new()),
+            parents: RwLock::new(BTreeMap::new()),
             agents: RwLock::new(BTreeMap::new()),
             principals: RwLock::new(BTreeMap::new()),
             instance_scopes: RwLock::new(BTreeMap::new()),
@@ -186,6 +188,13 @@ impl ToolDispatcher {
         }
         Ok(())
     }
+    pub(crate) fn instance_scope(&self, session: SessionId) -> Option<ModuleTaskScope> {
+        self.instance_scopes
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session)
+            .cloned()
+    }
     fn invocation_scope(
         &self,
         session: Option<SessionId>,
@@ -203,13 +212,35 @@ impl ToolDispatcher {
         }
     }
 
-    pub fn scope(&self, session: SessionId) -> ToolScope {
-        self.scopes
-            .read()
+    pub(crate) fn bind_parent(&self, child: SessionId, parent: SessionId) {
+        self.parents
+            .write()
             .unwrap_or_else(|e| e.into_inner())
-            .get(&session)
-            .cloned()
-            .unwrap_or(ToolScope::All)
+            .insert(child, parent);
+    }
+    pub fn scope(&self, session: SessionId) -> ToolScope {
+        let scopes = self.scopes.read().unwrap_or_else(|e| e.into_inner());
+        let parents = self.parents.read().unwrap_or_else(|e| e.into_inner());
+        let mut current = session;
+        let mut seen = BTreeSet::new();
+        let mut effective = ToolScope::All;
+        loop {
+            if !seen.insert(current) {
+                return ToolScope::Only(BTreeSet::new());
+            }
+            if let Some(ToolScope::Only(ids)) = scopes.get(&current) {
+                effective = match effective {
+                    ToolScope::All => ToolScope::Only(ids.clone()),
+                    ToolScope::Only(allowed) => {
+                        ToolScope::Only(allowed.intersection(ids).cloned().collect())
+                    }
+                };
+            }
+            match parents.get(&current) {
+                Some(parent) => current = *parent,
+                None => return effective,
+            }
+        }
     }
     pub(crate) fn scope_snapshot(&self, session: SessionId) -> Option<Vec<CapabilityId>> {
         match self.scope(session) {
@@ -256,11 +287,7 @@ impl ToolDispatcher {
     }
 
     pub fn allows(&self, session: SessionId, id: &CapabilityId) -> bool {
-        self.scopes
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&session)
-            .is_none_or(|scope| scope.allows(id))
+        self.scope(session).allows(id)
     }
 
     pub fn validate(
@@ -689,4 +716,22 @@ pub(super) fn validate_call_batch(calls: &[ToolCall]) -> Result<(), DispatchFail
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod scope_inheritance_tests {
+    use super::*;
+
+    #[test]
+    fn narrowing_parent_scope_revokes_child_authority_even_with_its_original_allowlist() {
+        let dispatcher = ToolDispatcher::new(DispatchLimits::default());
+        let parent = SessionId::new();
+        let child = SessionId::new();
+        let tool = CapabilityId::new("tool.scoped").unwrap();
+        dispatcher.set_scope(child, ToolScope::Only(BTreeSet::from([tool.clone()])));
+        dispatcher.bind_parent(child, parent);
+        assert!(dispatcher.allows(child, &tool));
+        dispatcher.set_scope(parent, ToolScope::Only(BTreeSet::new()));
+        assert!(!dispatcher.allows(child, &tool));
+    }
 }

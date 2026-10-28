@@ -1,7 +1,11 @@
 //! Owner-bound instance ports. Providers, loops and storage remain above this layer.
 use crate::task_scope::ModuleTaskScope;
 use apeireth_core::kernel::{
-    AgentId, CapabilityId, ModuleInstanceId, NamespaceId, PluginId, ProfileId, RequestId, SessionId,
+    AgentId, CapabilityId, ModuleInstanceId, NamespaceId, PluginId, ProfileId, RequestId,
+    SessionId, TraceId,
+};
+use apeireth_protocol::canonical::{
+    NormalizedMessage, NormalizedResponse, NormalizedUsage, ToolResult,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -92,6 +96,52 @@ pub struct AgentReply {
     pub request: RequestId,
     pub usage: AgentUsage,
 }
+/// Per-task execution policy. Isolated tasks suppress automatic callbacks and
+/// reject interactive approval; they still use the ordinary governed tool path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentExecutionMode {
+    Conversation,
+    Isolated,
+}
+
+/// Shared admission gate invoked at each actual provider attempt, including fallback.
+/// Reservations must not block or re-enter runtime accounting.
+pub trait AgentRequestGate: Send + Sync {
+    fn reserve(&self) -> AgentResult<()>;
+}
+
+/// Correlation metadata only; it conveys no authorization.
+#[derive(Debug, Clone)]
+pub struct AgentTaskOrigin {
+    pub agent: AgentId,
+    pub session: SessionId,
+    pub request: RequestId,
+    pub trace: TraceId,
+}
+
+#[derive(Clone)]
+pub struct AgentTask {
+    pub messages: Vec<NormalizedMessage>,
+    pub system: Option<String>,
+    pub model: Option<String>,
+    pub max_rounds: u32,
+    pub timeout: Option<std::time::Duration>,
+    pub mode: AgentExecutionMode,
+    pub request_gate: Option<Arc<dyn AgentRequestGate>>,
+    pub origin: Option<AgentTaskOrigin>,
+}
+
+/// This task's full final response and aggregate usage, distinct from lifetime usage.
+#[derive(Debug, Clone)]
+pub struct AgentTaskReply {
+    pub request: RequestId,
+    pub response: NormalizedResponse,
+    pub served_by: CapabilityId,
+    pub rounds: u32,
+    pub usage: NormalizedUsage,
+    pub tool_results: Vec<ToolResult>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgentErrorCode {
     NotReady,
@@ -101,11 +151,15 @@ pub enum AgentErrorCode {
     NamespaceDenied,
     BudgetExceeded,
     Cancelled,
+    Timeout,
     Paused,
     Provider,
     PendingApproval,
     InvalidConfig,
     NotFound,
+    RoundLimitExceeded,
+    Denied,
+    ApprovalRequired,
 }
 #[derive(Debug, Clone, thiserror::Error, Serialize, Deserialize)]
 #[error("{code:?}: {message}")]
@@ -128,6 +182,13 @@ pub trait AgentInstance: Send + Sync {
     fn id(&self) -> AgentId;
     fn snapshot(&self) -> AgentSnapshot;
     async fn run(&self, message: String) -> AgentResult<AgentReply>;
+    /// Execute normalized input without flattening roles, content parts or tool facts.
+    async fn execute(&self, _task: AgentTask) -> AgentResult<AgentTaskReply> {
+        Err(AgentError::new(
+            AgentErrorCode::NotReady,
+            "normalized task port is not bound",
+        ))
+    }
     fn pause(&self) -> AgentResult<()>;
     fn resume(&self) -> AgentResult<()>;
     async fn stop(&self) -> AgentResult<()>;

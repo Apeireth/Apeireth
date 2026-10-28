@@ -269,6 +269,9 @@ fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_,
 
 /// The assembled runtime.
 pub struct Runtime {
+    pub(super) instances: std::sync::Weak<super::instances::Inner>,
+    pub(super) instance_host: Option<super::instances::AgentRuntime>,
+    pub(super) task: Option<Arc<super::instances::TaskExecution>>,
     pub(super) plugins: PluginManager,
     pub(super) v1_protocol: bool,
     // Arc so per-turn invoker handles can carry the one canonical router
@@ -596,6 +599,14 @@ impl Runtime {
     ///
     /// Returns the failures encountered; shutdown continues past each one.
     pub async fn shutdown(&mut self) -> Vec<apeireth_plugin::PluginError> {
+        if let Some(host) = &self.instance_host {
+            if let Err(error) = host.drain_instances().await {
+                return vec![apeireth_plugin::PluginError::shutdown_failed(
+                    apeireth_core::kernel::PluginId::new("host.compat").expect("static owner"),
+                    error.to_string(),
+                )];
+            }
+        }
         let failures = self.plugins.shutdown_all().await;
         self.capabilities.shutdown_legacy().await;
         failures
@@ -974,7 +985,17 @@ impl RuntimeBuilder {
     /// Plugins are started here rather than lazily on first use, so that a
     /// misconfiguration surfaces at boot rather than inside somebody's first
     /// request.
-    pub async fn build(mut self) -> RuntimeResult<Runtime> {
+    pub async fn build(self) -> RuntimeResult<Runtime> {
+        let host = self.build_agent_runtime_compat().await?;
+        let mut slot = host.inner.kernel.write().await;
+        let view = slot.execution_view();
+        let mut runtime = std::mem::replace(&mut *slot, view);
+        drop(slot);
+        runtime.instance_host = Some(host);
+        Ok(runtime)
+    }
+
+    pub(super) async fn build_kernel(mut self) -> RuntimeResult<Runtime> {
         if self.config.max_rounds == 0 {
             return Err(RuntimeError::misconfigured(
                 "max_rounds must be at least 1, otherwise no turn can ever run",
@@ -1098,6 +1119,9 @@ impl RuntimeBuilder {
                 .with_usage(providers.accounting.clone()),
         );
         Ok(Runtime {
+            instances: Default::default(),
+            instance_host: None,
+            task: None,
             plugins: manager,
             v1_protocol: self.v1_protocol,
             providers: Arc::new(providers),

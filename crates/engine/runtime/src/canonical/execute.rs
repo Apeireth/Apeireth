@@ -821,10 +821,42 @@ impl Runtime {
                 session.append(NormalizedMessage::system(system.clone()), clock);
             }
         }
-        session.append(NormalizedMessage::user(request.input.clone()), clock);
+        if let Some(task) = &self.task {
+            if let Some(system) = &task.input.system {
+                session.append(NormalizedMessage::system(system.clone()), clock);
+            }
+            session.extend(task.input.messages.clone(), clock);
+        } else {
+            session.append(NormalizedMessage::user(request.input.clone()), clock);
+        }
         // A user message clears any repetition streak (advisory channel).
         self.note_user_message(request.session);
         session.record(request_id, trace_id, SessionEventKind::TurnStarted, clock);
+        if let Some(origin) = self
+            .task
+            .as_ref()
+            .and_then(|task| task.input.origin.as_ref())
+        {
+            if let Some(instance) = self
+                .agent_instances()
+                .into_iter()
+                .find(|a| a.session == request.session)
+            {
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::AgentTaskStarted {
+                        agent: instance.id,
+                        owner: instance.owner,
+                        parent_agent: origin.agent,
+                        parent_session: origin.session,
+                        parent_request: origin.request,
+                        parent_trace: origin.trace,
+                    },
+                    clock,
+                );
+            }
+        }
         self.sessions.save(&session).await?;
 
         // Per-session settings are read once per turn. A non-empty session
@@ -1599,12 +1631,15 @@ impl Runtime {
                         NormalizedRequest::new(continuation.model.clone(), provider_messages);
                     let attempt = self
                         .providers
-                        .complete_for_session(
+                        .complete_for_session_gated(
                             session.id,
                             request_id,
                             &provider_request,
                             Some(&tools),
                             stream_sink.as_ref(),
+                            self.task
+                                .as_ref()
+                                .and_then(|task| task.input.request_gate.as_deref()),
                         )
                         .await;
 
@@ -1691,6 +1726,9 @@ impl Runtime {
                 }
 
                 let mut response = routed.response;
+                if let Some(task) = &self.task {
+                    task.observe(&response);
+                }
                 let served_by = routed.served_by;
                 // 本回合已生成文本与服务方随冻结 continuation 走: 待批准收束
                 // 因此能把已生成文本原样交给 UI, 而不是把它丢掉。
@@ -2344,6 +2382,9 @@ impl Runtime {
         module_state: &Arc<ModuleTurnState>,
         security_context: Option<&TurnSecurityContext>,
     ) -> RuntimeResult<HookEffects> {
+        if self.isolated_task() {
+            return Ok(HookEffects::default());
+        }
         match self
             .run_hook(
                 hook,
@@ -2464,7 +2505,7 @@ impl Runtime {
                 super::subloop::SubLoopExecution {
                     request: request_id,
                     agent: self.dispatcher.agent(*session_id),
-                    dispatcher: self.dispatcher.clone(),
+                    runtime: Arc::new(self.execution_view()),
                     security: security_context.cloned(),
                 },
             ));

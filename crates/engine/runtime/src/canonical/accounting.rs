@@ -324,6 +324,16 @@ impl UsageAccounting {
         provider: CapabilityId,
         model: &str,
     ) -> RuntimeResult<RequestMeter> {
+        self.begin_gated(session, request, provider, model, None)
+    }
+    pub(crate) fn begin_gated(
+        self: &Arc<Self>,
+        session: SessionId,
+        request: RequestId,
+        provider: CapabilityId,
+        model: &str,
+        gate: Option<&dyn apeireth_plugin::agents::AgentRequestGate>,
+    ) -> RuntimeResult<RequestMeter> {
         let rate = self
             .rates
             .read()
@@ -339,6 +349,9 @@ impl UsageAccounting {
         self.shared_checks(&accounts, &owner, model, rate)?;
         let account = accounts.get_mut(&session).expect("account just inserted");
         Self::check(account, model, rate)?;
+        if let Some(gate) = gate {
+            gate.reserve()?;
+        }
         account.usage.requests = account.usage.requests.saturating_add(1);
         Ok(RequestMeter {
             ledger: self.clone(),

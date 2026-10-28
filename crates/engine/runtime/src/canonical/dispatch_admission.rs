@@ -321,6 +321,11 @@ impl Runtime {
                 ));
             }
             Decision::RequireApproval { reason } => {
+                if self.isolated_task() {
+                    return Ok(ToolAdmission::Resolved(ToolResult::permanent_error(
+                        &call.id, format!("subloop capability requires interactive approval which is not permitted in subloops: {reason}")
+                    ).with_name(&call.name)));
+                }
                 let effective_invocation = match tool.freeze_invocation(call) {
                     Ok(frozen) => frozen,
                     Err(result) => {

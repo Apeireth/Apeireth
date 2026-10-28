@@ -1,7 +1,7 @@
 //! Tests proving bounded, private-transcript SubLoops owned by modules and strictly governed.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
@@ -25,6 +25,7 @@ struct MockInstrumentedTool {
     id: CapabilityId,
     name: String,
     invocations: Arc<AtomicUsize>,
+    contexts: Arc<Mutex<Vec<apeireth_plugin::ToolExecutionContext>>>,
 }
 
 impl MockInstrumentedTool {
@@ -35,6 +36,7 @@ impl MockInstrumentedTool {
                 id: CapabilityId::new(id).unwrap(),
                 name: name.to_string(),
                 invocations: Arc::clone(&invocations),
+                contexts: Arc::new(Mutex::new(vec![])),
             },
             invocations,
         )
@@ -56,6 +58,16 @@ impl ToolCapability for MockInstrumentedTool {
         }
     }
 
+    async fn invoke_with_context(
+        &self,
+        call: &ToolCall,
+        _: Option<&apeireth_plugin::FrozenInvocation>,
+        context: &apeireth_plugin::ToolExecutionContext,
+    ) -> ToolResult {
+        self.contexts.lock().unwrap().push(context.clone());
+        self.invoke(call).await
+    }
+
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
         self.invocations.fetch_add(1, Ordering::SeqCst);
         ToolResult::ok(&call.id, serde_json::json!({ "executed": self.name }))
@@ -71,12 +83,15 @@ enum ScriptStep {
     },
     Say(&'static str),
     DelayAndSay(Duration, &'static str),
+    Reply(NormalizedResponse),
+    Fail,
 }
 
 struct ScriptedProvider {
     id: CapabilityId,
     script: Vec<ScriptStep>,
     calls: AtomicUsize,
+    requests: Mutex<Vec<NormalizedRequest>>,
 }
 
 impl ScriptedProvider {
@@ -85,6 +100,7 @@ impl ScriptedProvider {
             id: CapabilityId::new(id).unwrap(),
             script,
             calls: AtomicUsize::new(0),
+            requests: Mutex::new(vec![]),
         })
     }
 }
@@ -106,6 +122,7 @@ impl ProviderCapability for ScriptedProvider {
         &self,
         request: &NormalizedRequest,
     ) -> Result<NormalizedResponse, ProviderError> {
+        self.requests.lock().unwrap().push(request.clone());
         let index = self.calls.fetch_add(1, Ordering::SeqCst);
         let step = self
             .script
@@ -128,6 +145,11 @@ impl ProviderCapability for ScriptedProvider {
         };
 
         match step {
+            ScriptStep::Fail => Err(ProviderError::Network {
+                provider: self.id.to_string(),
+                detail: "offline transient failure".into(),
+            }),
+            ScriptStep::Reply(response) => Ok(response.clone()),
             ScriptStep::CallTool {
                 call_id,
                 tool,
@@ -653,6 +675,19 @@ async fn effectful_capability_requiring_approval_fails_cleanly_in_subloop() {
         .expect("load")
         .expect("session");
     assert!(session.active_approval_id.is_none());
+    for child in runtime.agent_instances() {
+        let private = runtime
+            .sessions()
+            .load(&child.session)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(private.active_approval_id.is_none());
+        assert!(
+            private.approvals.is_empty(),
+            "isolated tool cannot leave hidden approvals"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -828,4 +863,862 @@ async fn global_completion_deny_blocks_subloop_and_does_not_call_provider() {
         side.contains("refused by governance") || side.contains("completions blocked"),
         "{side}"
     );
+}
+
+// S1 evidence runs real instances and the existing Kernel/Dispatcher, with an
+// offline Provider only at the network boundary.
+use apeireth_plugin::agents::{AgentConfig, AgentErrorCode, AgentOwner, AgentStatus};
+use apeireth_runtime::{AgentHostPolicy, ModuleAgentGrant, SessionEventKind};
+
+struct RecordingSubLoops {
+    manifest: ModuleManifest,
+    specs: Vec<SubLoopSpec>,
+    results: Mutex<Vec<Result<SubLoopResult, SubLoopError>>>,
+    starts: AtomicUsize,
+}
+impl RecordingSubLoops {
+    fn new(id: &str, specs: Vec<SubLoopSpec>) -> Arc<Self> {
+        Arc::new(Self {
+            manifest: ModuleManifest::new(id, "Subtask evidence"),
+            specs,
+            results: Mutex::new(vec![]),
+            starts: AtomicUsize::new(0),
+        })
+    }
+}
+#[async_trait]
+impl Module for RecordingSubLoops {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, apeireth_runtime::ModuleError> {
+        if hook == HookPoint::TurnStart {
+            self.starts.fetch_add(1, Ordering::SeqCst);
+            for spec in &self.specs {
+                let result = ctx.subloop().spawn(spec.clone()).await;
+                self.results.lock().unwrap().push(result);
+            }
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+fn behavior_id(module: &RecordingSubLoops) -> PluginId {
+    PluginId::new(format!("compat.{}", module.manifest.id)).unwrap()
+}
+fn behavior_tool(module: &RecordingSubLoops) -> CapabilityId {
+    apeireth_runtime::canonical::behavior_adapter::registered_behavior_capability(
+        &module.manifest.id,
+    )
+    .unwrap()
+}
+fn child_spec(tool: &dyn ToolCapability) -> SubLoopSpec {
+    SubLoopSpec::single_turn("private task")
+        .with_max_rounds(2)
+        .with_allowed_capability(tool.id().clone())
+}
+fn granted_policy(module: &RecordingSubLoops, tools: Vec<CapabilityId>) -> AgentHostPolicy {
+    let mut policy = AgentHostPolicy {
+        concurrent_turns: 1,
+        ..Default::default()
+    };
+    policy.modules.insert(
+        behavior_id(module),
+        ModuleAgentGrant {
+            tools: tools.into_iter().collect(),
+            max_instances: 4,
+            ..Default::default()
+        },
+    );
+    policy
+}
+
+#[tokio::test]
+async fn registered_parent_subloop_uses_independent_instance_and_durable_paired_facts_with_one_turn_slot(
+) {
+    let (tool, count) = MockInstrumentedTool::new("tool.evidence", "evidence");
+    let module = RecordingSubLoops::new("module.evidence", vec![child_spec(&tool)]);
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::CallTool {
+                call_id: "child_call",
+                tool: "evidence",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::Say("child answer"),
+            ScriptStep::Say("parent answer"),
+        ],
+    );
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_capability(Arc::new(tool.clone()))
+        .with_registered_behavior(module.clone())
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .with_default_model("subloop-model")
+        .build_agent_runtime(granted_policy(&module, vec![tool.id().clone()]))
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![behavior_tool(&module), tool.id().clone()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let reply = tokio::time::timeout(Duration::from_secs(2), parent.run("parent input".into()))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(reply.text, "parent answer");
+    assert_eq!(
+        module.starts.load(Ordering::SeqCst),
+        1,
+        "child must suppress automatic hooks"
+    );
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    let child = host
+        .instances()
+        .into_iter()
+        .find(|a| a.id != parent.id())
+        .unwrap();
+    assert_ne!(child.session, parent.snapshot().session);
+    assert_eq!(child.status, AgentStatus::Stopped);
+    assert!(
+        matches!(&child.owner, AgentOwner::Module { definition, .. } if definition == &behavior_id(&module))
+    );
+    assert_eq!(child.usage.requests, 2);
+    assert_eq!(tool.contexts.lock().unwrap()[0].agent, child.id);
+    assert_eq!(
+        tool.contexts.lock().unwrap()[0].session,
+        Some(child.session)
+    );
+    assert_eq!(child.usage.tool_calls, 1);
+    assert_eq!(parent.snapshot().usage.requests, 1);
+    assert_eq!(
+        host.usage(None).requests,
+        3,
+        "actual requests are counted once"
+    );
+    let kernel = host.kernel().await;
+    let private = kernel
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    let public = kernel
+        .sessions()
+        .load(&parent.snapshot().session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!public
+        .messages
+        .iter()
+        .any(
+            |m| apeireth_protocol::canonical::ContentPart::join_text(&m.content)
+                .contains("private task")
+                || apeireth_protocol::canonical::ContentPart::join_text(&m.content)
+                    .contains("child answer")
+        ));
+    assert!(private.events.iter().any(|e| matches!(&e.event, SessionEventKind::AgentTaskStarted {
+        agent, parent_agent, parent_session, parent_request, ..
+    } if *agent == child.id && *parent_agent == parent.id() && *parent_session == public.id && *parent_request == reply.request)));
+    let facts: Vec<_> = private
+        .events
+        .iter()
+        .filter_map(|e| match &e.event {
+            SessionEventKind::ToolEventRecorded { fact } => Some((e.request, fact)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(facts.len(), 1);
+    assert_eq!(facts[0].1.call().id, "child_call");
+    assert!(facts[0].1.result().is_ok());
+    assert_ne!(facts[0].0, reply.request);
+    apeireth_protocol::canonical::validate_closed_tool_context(&private.provider_view()).unwrap();
+    let results = module.results.lock().unwrap();
+    let result = results[0].as_ref().unwrap();
+    assert_eq!(result.rounds, 2);
+    assert_eq!(result.usage.total_tokens, 20);
+    assert_eq!(result.usage.prompt_cache_hit_tokens, None);
+    assert_eq!(result.tool_results.len(), 1);
+}
+
+#[tokio::test]
+async fn subloop_scope_is_intersection_of_allowlist_parent_scope_and_host_grant() {
+    for parent_allows in [false, true] {
+        let (tool, count) = MockInstrumentedTool::new("tool.restricted", "restricted");
+        let module = RecordingSubLoops::new("module.scope", vec![child_spec(&tool)]);
+        let provider = ScriptedProvider::new(
+            "provider.mock",
+            vec![
+                ScriptStep::CallTool {
+                    call_id: "forbidden",
+                    tool: "restricted",
+                    arguments: serde_json::json!({}),
+                },
+                ScriptStep::Say("denied safely"),
+                ScriptStep::Say("main"),
+            ],
+        );
+        let policy = granted_policy(
+            &module,
+            if parent_allows {
+                vec![]
+            } else {
+                vec![tool.id().clone()]
+            },
+        );
+        let host = Runtime::builder()
+            .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+            .with_capability(Arc::new(tool.clone()))
+            .with_registered_behavior(module.clone())
+            .with_governance(Arc::new(apeireth_governance::AllowAll))
+            .with_default_model("subloop-model")
+            .build_agent_runtime(policy)
+            .await
+            .unwrap();
+        let mut tools = vec![behavior_tool(&module)];
+        if parent_allows {
+            tools.push(tool.id().clone());
+        }
+        let parent = host
+            .spawn_agent(
+                "main",
+                AgentConfig {
+                    tools,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        parent.run("input".into()).await.unwrap();
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+        assert!(provider.requests.lock().unwrap()[0].tools.is_empty());
+        let results = module.results.lock().unwrap();
+        let result = results[0].as_ref().unwrap();
+        assert_eq!(result.tool_results.len(), 1);
+        assert!(!result.tool_results[0].is_ok());
+    }
+}
+
+#[tokio::test]
+async fn subloops_share_turn_budget_across_modules_handles_and_new_children_and_reset_next_turn() {
+    let a = RecordingSubLoops::new("module.budget.a", vec![SubLoopSpec::single_turn("first")]);
+    let b = RecordingSubLoops::new(
+        "module.budget.b",
+        vec![
+            SubLoopSpec::single_turn("second"),
+            SubLoopSpec::single_turn("retry"),
+        ],
+    );
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::Say("side one"),
+            ScriptStep::Say("main one"),
+            ScriptStep::Say("side two"),
+            ScriptStep::Say("main two"),
+        ],
+    );
+    let mut runtime = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_module(a.clone())
+        .with_module(b.clone())
+        .with_default_model("subloop-model")
+        .with_max_module_invocations(1)
+        .build()
+        .await
+        .unwrap();
+    let session = SessionId::new();
+    runtime
+        .execute(TurnRequest::new(session, "one"))
+        .await
+        .unwrap();
+    runtime
+        .execute(TurnRequest::new(session, "two"))
+        .await
+        .unwrap();
+    assert!(a.results.lock().unwrap().iter().all(Result::is_ok));
+    assert_eq!(b.results.lock().unwrap().len(), 4);
+    assert!(b
+        .results
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|r| matches!(r, Err(SubLoopError::BudgetExceeded { limit: 1 }))));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 4);
+    assert_eq!(
+        runtime
+            .agent_instances()
+            .iter()
+            .map(|a| a.usage.requests)
+            .sum::<u64>(),
+        2
+    );
+}
+
+#[tokio::test]
+async fn subloop_preserves_normalized_input_model_system_round_errors_and_saturating_usage() {
+    let (tool, _) = MockInstrumentedTool::new("tool.usage", "usage");
+    let mut spec = child_spec(&tool)
+        .with_system_prompt("private system")
+        .with_model("subloop-model");
+    spec.messages = vec![
+        NormalizedMessage::assistant("prior answer"),
+        NormalizedMessage::user("follow up"),
+    ];
+    let zero = spec.clone().with_max_rounds(0);
+    let nonconverging = spec.clone().with_max_rounds(1);
+    let module = RecordingSubLoops::new("module.normalized", vec![zero, nonconverging, spec]);
+    let response = |id: &str, tool_call: bool| NormalizedResponse {
+        id: id.into(),
+        model: "subloop-model".into(),
+        content: if tool_call {
+            String::new()
+        } else {
+            "done".into()
+        },
+        finish_reason: Some(if tool_call {
+            NormalizedFinishReason::ToolCalls
+        } else {
+            NormalizedFinishReason::Stop
+        }),
+        usage: NormalizedUsage {
+            prompt_tokens: u32::MAX,
+            completion_tokens: u32::MAX,
+            total_tokens: u32::MAX,
+            prompt_cache_hit_tokens: Some(u32::MAX),
+        },
+        tool_calls: if tool_call {
+            vec![ToolCall {
+                id: id.into(),
+                name: "usage".into(),
+                arguments: serde_json::json!({}),
+            }]
+        } else {
+            vec![]
+        },
+        raw_metadata: serde_json::Map::new(),
+    };
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::Reply(response("limit_call", true)),
+            ScriptStep::Reply(response("usage_call", true)),
+            ScriptStep::Reply(response("final", false)),
+            ScriptStep::Say("parent"),
+        ],
+    );
+    let mut policy = AgentHostPolicy::default();
+    policy.max_budget.max_tokens = u64::MAX;
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_capability(Arc::new(tool))
+        .with_module(module.clone())
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .with_default_model("subloop-model")
+        .build_agent_runtime(policy)
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent("main", AgentConfig::default())
+        .await
+        .unwrap();
+    parent.run("parent".into()).await.unwrap();
+    let results = module.results.lock().unwrap();
+    assert!(matches!(
+        results[0],
+        Err(SubLoopError::RoundLimitReached { rounds: 0 })
+    ));
+    assert!(matches!(
+        results[1],
+        Err(SubLoopError::RoundLimitReached { rounds: 1 })
+    ));
+    let result = results[2].as_ref().unwrap();
+    assert_eq!(result.rounds, 2);
+    assert_eq!(result.usage.total_tokens, u32::MAX);
+    assert_eq!(result.usage.prompt_cache_hit_tokens, Some(u32::MAX));
+    let requests = provider.requests.lock().unwrap();
+    assert_eq!(
+        requests[0]
+            .messages
+            .iter()
+            .map(|m| apeireth_protocol::canonical::ContentPart::join_text(&m.content))
+            .collect::<Vec<_>>(),
+        vec!["private system", "prior answer", "follow up"]
+    );
+    assert_eq!(requests[0].model, "subloop-model");
+    assert_eq!(
+        host.instances()
+            .iter()
+            .filter(|a| a.id != parent.id())
+            .map(|a| a.usage.requests)
+            .sum::<u64>(),
+        3,
+        "nonconverging requests retain their usage"
+    );
+}
+
+struct NativeDrainTool {
+    id: CapabilityId,
+    started: Arc<tokio::sync::Notify>,
+    drained: Arc<AtomicUsize>,
+}
+#[async_trait]
+impl ToolCapability for NativeDrainTool {
+    fn id(&self) -> &CapabilityId {
+        &self.id
+    }
+    fn declaration(&self) -> NormalizedTool {
+        NormalizedTool {
+            name: "native_drain".into(),
+            description: None,
+            parameters: ToolParameters::new(),
+            strict: false,
+        }
+    }
+    async fn invoke(&self, _: &ToolCall) -> ToolResult {
+        panic!("context required")
+    }
+    async fn invoke_with_context(
+        &self,
+        call: &ToolCall,
+        _: Option<&apeireth_plugin::FrozenInvocation>,
+        context: &apeireth_plugin::ToolExecutionContext,
+    ) -> ToolResult {
+        let lease = context
+            .module_tasks
+            .lease_with_cancellation(context.cancellation.clone())
+            .unwrap();
+        let cancellation = context.cancellation.clone();
+        let started = self.started.clone();
+        let drained = self.drained.clone();
+        tokio::task::spawn_blocking(move || {
+            started.notify_one();
+            while !cancellation.is_cancelled() {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            // Cancellation acknowledgement and native cleanup are distinct.
+            std::thread::sleep(Duration::from_millis(20));
+            drained.fetch_add(1, Ordering::SeqCst);
+            drop(lease);
+        })
+        .await
+        .unwrap();
+        ToolResult::ok(&call.id, serde_json::json!("drained"))
+    }
+}
+
+#[tokio::test]
+async fn subloop_timeout_returns_only_after_native_tool_cancellation_drains() {
+    let tool = Arc::new(NativeDrainTool {
+        id: CapabilityId::new("tool.native").unwrap(),
+        started: Arc::new(tokio::sync::Notify::new()),
+        drained: Arc::new(AtomicUsize::new(0)),
+    });
+    let module = RecordingSubLoops::new(
+        "module.native",
+        vec![child_spec(tool.as_ref()).with_timeout(Duration::from_millis(50))],
+    );
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::CallTool {
+                call_id: "native",
+                tool: "native_drain",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::Say("parent"),
+        ],
+    );
+    let mut runtime = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider))
+        .with_capability(tool.clone())
+        .with_module(module.clone())
+        .with_default_model("subloop-model")
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .build()
+        .await
+        .unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        runtime.execute(TurnRequest::new(SessionId::new(), "parent")),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(matches!(
+        module.results.lock().unwrap()[0],
+        Err(SubLoopError::Timeout)
+    ));
+    assert_eq!(tool.drained.load(Ordering::SeqCst), 1);
+    let child = runtime.agent_instances().pop().unwrap();
+    assert_eq!(child.status, AgentStatus::Stopped);
+    assert_eq!(child.usage.requests, 1);
+}
+
+#[tokio::test]
+async fn parent_stop_cancels_inflight_subloop_and_drains_native_leases_without_stopping_provider() {
+    let tool = Arc::new(NativeDrainTool {
+        id: CapabilityId::new("tool.native").unwrap(),
+        started: Arc::new(tokio::sync::Notify::new()),
+        drained: Arc::new(AtomicUsize::new(0)),
+    });
+    let module = RecordingSubLoops::new("module.parent_cancel", vec![child_spec(tool.as_ref())]);
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::CallTool {
+                call_id: "native",
+                tool: "native_drain",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::Say("sibling still runs"),
+        ],
+    );
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider))
+        .with_capability(tool.clone())
+        .with_registered_behavior(module.clone())
+        .with_default_model("subloop-model")
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .build_agent_runtime(granted_policy(&module, vec![tool.id().clone()]))
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![behavior_tool(&module), tool.id().clone()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let running_parent = parent.clone();
+    let task = tokio::spawn(async move { running_parent.run("run".into()).await });
+    tokio::time::timeout(Duration::from_secs(2), tool.started.notified())
+        .await
+        .unwrap();
+    parent.stop().await.unwrap();
+    assert_eq!(tool.drained.load(Ordering::SeqCst), 1);
+    assert!(matches!(task.await.unwrap(), Err(e) if e.code == AgentErrorCode::Cancelled));
+    assert!(host
+        .instances()
+        .iter()
+        .all(|a| a.status == AgentStatus::Stopped));
+    let sibling = host
+        .spawn_agent("other", AgentConfig::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        sibling.run("hello".into()).await.unwrap().text,
+        "sibling still runs"
+    );
+}
+
+#[tokio::test]
+async fn each_provider_round_consumes_shared_budget_and_keeps_partial_tool_facts() {
+    let (tool, count) = MockInstrumentedTool::new("tool.round_budget", "round_budget");
+    let module = RecordingSubLoops::new(
+        "module.round_budget",
+        vec![child_spec(&tool), SubLoopSpec::single_turn("retry")],
+    );
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::CallTool {
+                call_id: "partial",
+                tool: "round_budget",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::Say("parent"),
+        ],
+    );
+    let mut runtime = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_capability(Arc::new(tool))
+        .with_module(module.clone())
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .with_default_model("subloop-model")
+        .with_max_module_invocations(1)
+        .build()
+        .await
+        .unwrap();
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "parent"))
+        .await
+        .unwrap();
+    assert!(module
+        .results
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|r| matches!(r, Err(SubLoopError::BudgetExceeded { limit: 1 }))));
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 2);
+    let child = runtime
+        .agent_instances()
+        .into_iter()
+        .find(|a| a.usage.requests == 1)
+        .unwrap();
+    let private = runtime
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    let facts: Vec<_> = private
+        .events
+        .iter()
+        .filter_map(|e| match &e.event {
+            SessionEventKind::ToolEventRecorded { fact } => Some(fact),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(facts.len(), 1);
+    assert_eq!(facts[0].call().id, "partial");
+    assert!(facts[0].result().is_ok());
+    apeireth_protocol::canonical::validate_closed_tool_context(&private.provider_view()).unwrap();
+    assert_eq!(child.usage.tool_calls, 1);
+    assert_eq!(child.usage.input_tokens, 5);
+}
+
+#[tokio::test]
+async fn provider_fallback_attempt_also_reserves_the_same_task_budget() {
+    use apeireth_plugin::agents::{AgentExecutionMode, AgentTask};
+    let a = ScriptedProvider::new("provider.a", vec![ScriptStep::Fail]);
+    let b = ScriptedProvider::new("provider.b", vec![ScriptStep::Fail]);
+    let second = Arc::new(ScriptedProviderPlugin {
+        manifest: PluginManifest::new(PluginId::new("vendor.second").unwrap(), "1.0.0", "Fallback")
+            .declare_capability(
+                b.id.clone(),
+                CapabilityKind::Provider,
+                "Fallback completions",
+            )
+            .unwrap(),
+        provider: b.clone(),
+    });
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(a.clone()))
+        .with_plugin(second)
+        .with_default_model("subloop-model")
+        .build_agent_runtime(AgentHostPolicy::default())
+        .await
+        .unwrap();
+    let agent = host
+        .spawn_agent("task", AgentConfig::default())
+        .await
+        .unwrap();
+    let gate = Arc::new(apeireth_runtime::canonical::module::ModuleTurnState::new(1));
+    let error = agent
+        .execute(AgentTask {
+            messages: vec![NormalizedMessage::user("private")],
+            system: None,
+            model: None,
+            max_rounds: 1,
+            timeout: None,
+            mode: AgentExecutionMode::Isolated,
+            request_gate: Some(gate.clone()),
+            origin: None,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, AgentErrorCode::BudgetExceeded);
+    assert!(apeireth_plugin::agents::AgentRequestGate::reserve(gate.as_ref()).is_err());
+    assert_eq!(
+        a.calls.load(Ordering::SeqCst) + b.calls.load(Ordering::SeqCst),
+        1
+    );
+    let facts = host.requests(agent.id()).unwrap();
+    assert_eq!(facts.len(), 1);
+    assert_eq!(agent.snapshot().usage.provider_errors, 1);
+    assert_eq!(agent.snapshot().usage.requests, 1);
+    agent.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn normalized_task_port_preserves_full_response_and_reports_task_usage_separately() {
+    use apeireth_plugin::agents::{AgentExecutionMode, AgentTask};
+    let response = NormalizedResponse {
+        id: "original-response".into(),
+        model: "subloop-model".into(),
+        content: "answer".into(),
+        finish_reason: Some(NormalizedFinishReason::Stop),
+        usage: NormalizedUsage {
+            prompt_tokens: 3,
+            completion_tokens: 4,
+            total_tokens: 7,
+            prompt_cache_hit_tokens: Some(2),
+        },
+        tool_calls: vec![],
+        raw_metadata: serde_json::Map::from_iter([(
+            "opaque".into(),
+            serde_json::json!({"retained": true}),
+        )]),
+    };
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::Reply(response.clone()),
+            ScriptStep::Reply(response.clone()),
+        ],
+    );
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_default_model("subloop-model")
+        .build_agent_runtime(AgentHostPolicy::default())
+        .await
+        .unwrap();
+    let agent = host
+        .spawn_agent("task", AgentConfig::default())
+        .await
+        .unwrap();
+    let mut ids = vec![];
+    for text in ["one", "two"] {
+        let reply = agent
+            .execute(AgentTask {
+                messages: vec![NormalizedMessage::user(text)],
+                system: None,
+                model: None,
+                max_rounds: 1,
+                timeout: None,
+                mode: AgentExecutionMode::Conversation,
+                request_gate: None,
+                origin: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(reply.response, response);
+        assert_eq!(reply.served_by, provider.id);
+        assert_eq!(reply.usage.total_tokens, 7);
+        assert_eq!(reply.usage.prompt_cache_hit_tokens, Some(2));
+        assert_eq!(reply.rounds, 1);
+        ids.push(reply.request);
+    }
+    assert_ne!(ids[0], ids[1]);
+    assert_eq!(agent.snapshot().usage.requests, 2);
+    assert_eq!(agent.snapshot().usage.input_tokens, 6);
+    assert_eq!(provider.requests.lock().unwrap()[1].messages.len(), 3);
+    agent.stop().await.unwrap();
+}
+
+struct RequireCompletionApproval;
+#[async_trait]
+impl GovernanceHook for RequireCompletionApproval {
+    fn name(&self) -> &str {
+        "completion_approval"
+    }
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        if matches!(request.action, Action::Completion { .. }) {
+            Decision::RequireApproval {
+                reason: "explicit approval required".into(),
+            }
+        } else {
+            Decision::Allow
+        }
+    }
+}
+#[tokio::test]
+async fn isolated_completion_approval_fails_closed_without_creating_pending_approvals() {
+    let module =
+        RecordingSubLoops::new("module.approval", vec![SubLoopSpec::single_turn("private")]);
+    let provider = ScriptedProvider::new("provider.mock", vec![]);
+    let mut runtime = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_module(module.clone())
+        .with_default_model("subloop-model")
+        .with_governance(Arc::new(RequireCompletionApproval))
+        .build()
+        .await
+        .unwrap();
+    assert!(runtime
+        .execute(TurnRequest::new(SessionId::new(), "parent"))
+        .await
+        .is_err());
+    assert!(matches!(
+        module.results.lock().unwrap()[0],
+        Err(SubLoopError::ApprovalRequired { .. })
+    ));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    let child = runtime.agent_instances().pop().unwrap();
+    let session = runtime
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(session.active_approval_id.is_none());
+    assert!(session.approvals.is_empty());
+    assert_eq!(child.status, AgentStatus::Stopped);
+}
+
+#[tokio::test]
+async fn registered_owner_stop_cancels_and_drains_child_without_stopping_parent() {
+    let tool = Arc::new(NativeDrainTool {
+        id: CapabilityId::new("tool.native").unwrap(),
+        started: Arc::new(tokio::sync::Notify::new()),
+        drained: Arc::new(AtomicUsize::new(0)),
+    });
+    let module = RecordingSubLoops::new("module.owner_cancel", vec![child_spec(tool.as_ref())]);
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::CallTool {
+                call_id: "native",
+                tool: "native_drain",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::Say("parent survives"),
+            ScriptStep::Say("next turn"),
+        ],
+    );
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider))
+        .with_capability(tool.clone())
+        .with_registered_behavior(module.clone())
+        .with_default_model("subloop-model")
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .build_agent_runtime(granted_policy(&module, vec![tool.id().clone()]))
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![behavior_tool(&module), tool.id().clone()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let run_parent = parent.clone();
+    let task = tokio::spawn(async move { run_parent.run("run".into()).await });
+    tokio::time::timeout(Duration::from_secs(2), tool.started.notified())
+        .await
+        .unwrap();
+    host.stop_module(&behavior_id(&module)).await.unwrap();
+    assert_eq!(tool.drained.load(Ordering::SeqCst), 1);
+    assert_eq!(task.await.unwrap().unwrap().text, "parent survives");
+    let child = host
+        .instances()
+        .into_iter()
+        .find(|a| a.id != parent.id())
+        .unwrap();
+    assert_eq!(child.status, AgentStatus::Stopped);
+    assert!(
+        matches!(child.owner, AgentOwner::Module { definition, instance }
+        if definition == behavior_id(&module) && instance == host.kernel().await.plugins().instance_id(&definition).unwrap())
+    );
+    assert_eq!(parent.run("again".into()).await.unwrap().text, "next turn");
+    assert_eq!(module.starts.load(Ordering::SeqCst), 1);
 }

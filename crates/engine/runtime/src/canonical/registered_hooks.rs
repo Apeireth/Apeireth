@@ -34,6 +34,9 @@ pub(super) fn fixed_hook(point: HookPoint) -> Option<ModuleHookV1> {
 
 impl Runtime {
     pub(super) fn has_automatic_after_tool_work(&self) -> bool {
+        if self.isolated_task() {
+            return false;
+        }
         self.plugins.plugins().ids().any(|id| {
             self.plugins
                 .state(id)
@@ -91,6 +94,9 @@ impl Runtime {
         tool_result: Option<&ToolResult>,
         only: Option<&PluginId>,
     ) -> RuntimeResult<()> {
+        if self.isolated_task() {
+            return Ok(());
+        }
         let context = HookContextV1 {
             hook: point,
             session: session.id,

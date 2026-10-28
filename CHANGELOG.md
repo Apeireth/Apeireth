@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Kernel Convergence S1：SubLoop 实例适配（2026-10-29）
+
+- **PRODUCTION WIRED（SubLoop 路径）**：兼容 spawner 委托既有 AgentInstance 规范化任务端口并进入同一 Runtime.execute_outcome；删除独立 Provider/round 循环，保留原 ABI、私有历史、治理与 Dispatcher。
+- **身份与资源**：绑定真实模块世代、父 principal/取消和权限交集；Isolated 禁止递归 Hook 与隐藏审批，timeout/stop 等待原生 lease 排水；共享 turn 预算在每次实际 Provider 尝试处扣减，实例/owner/Host 核算保持。
+- **证据与边界**：独立身份、持久工具对、预算与取消回归及完整响应端口见 [S1 交付账](docs/04-internal/kernel-convergence-s1-2026-10-29.md)。S2 后端、桌面 managed 默认、旧记忆 Profile 映射及最终全量门禁仍待后续切片。
+
 ## [Unreleased] — Capability Modules Phase 3（2026-10-28）
 
 - **PRODUCTION WIRED**：现有 CapabilityRegistry 成为 Runtime 唯一可执行工具目录，PluginManager 继续拥有模块生命周期；Desktop 生产工具按原 provider 注册 ToolModule，保留既有实现与开关。

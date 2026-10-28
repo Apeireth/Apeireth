@@ -11,6 +11,16 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "event", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum SessionEventKind {
+    /// Private instance task provenance. New readers retain the full correlation;
+    /// older binaries may reject this new event variant on downgrade.
+    AgentTaskStarted {
+        agent: apeireth_core::kernel::AgentId,
+        owner: apeireth_plugin::agents::AgentOwner,
+        parent_agent: apeireth_core::kernel::AgentId,
+        parent_session: SessionId,
+        parent_request: apeireth_core::kernel::RequestId,
+        parent_trace: apeireth_core::kernel::TraceId,
+    },
     /// A fixed-version hook attempt, ordered at commit, with no payload in errors.
     RegisteredHook {
         module: apeireth_core::kernel::PluginId,

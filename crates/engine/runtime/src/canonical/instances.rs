@@ -15,6 +15,8 @@ use std::time::Duration;
 mod control;
 mod hot;
 mod profiles;
+mod tasks;
+pub(super) use tasks::TaskExecution;
 
 #[derive(Clone)]
 pub struct ModuleAgentGrant {
@@ -69,10 +71,10 @@ impl Default for AgentHostPolicy {
     }
 }
 pub struct AgentRuntime {
-    inner: Arc<Inner>,
+    pub(super) inner: Arc<Inner>,
 }
-struct Inner {
-    kernel: tokio::sync::RwLock<Runtime>,
+pub(super) struct Inner {
+    pub(super) kernel: tokio::sync::RwLock<Runtime>,
     instances: Mutex<BTreeMap<AgentId, Arc<ManagedAgent>>>,
     policy: AgentHostPolicy,
     scope: ModuleTaskScope,
@@ -186,6 +188,7 @@ impl ModuleAgents for BoundModule {
             self.scope.clone(),
             config,
             Some(grant),
+            None,
         )
         .await
         .map(|a| a as Arc<dyn AgentInstance>)
@@ -215,9 +218,17 @@ fn check_budget(request: &AgentBudget, ceiling: &AgentBudget) -> AgentResult<()>
     Ok(())
 }
 impl RuntimeBuilder {
-    pub async fn build_agent_runtime(
+    pub async fn build_agent_runtime(self, policy: AgentHostPolicy) -> RuntimeResult<AgentRuntime> {
+        self.build_instance_host(policy, false).await
+    }
+    pub(super) async fn build_agent_runtime_compat(self) -> RuntimeResult<AgentRuntime> {
+        self.build_instance_host(AgentHostPolicy::default(), true)
+            .await
+    }
+    async fn build_instance_host(
         mut self,
-        policy: AgentHostPolicy,
+        mut policy: AgentHostPolicy,
+        compatibility: bool,
     ) -> RuntimeResult<AgentRuntime> {
         if policy.max_instances == 0
             || policy.max_records < policy.max_instances
@@ -231,13 +242,31 @@ impl RuntimeBuilder {
         }
         let binding = Arc::new(OnceLock::new());
         let ready = Arc::new(tokio::sync::Notify::new());
-        self.v1_protocol = true;
+        if !compatibility {
+            self.v1_protocol = true;
+        }
         let factory = Arc::new(Factory {
             binding: binding.clone(),
             ready: ready.clone(),
         });
         self.agent_factory = Some(factory.clone());
-        let kernel = self.build().await?;
+        let kernel = self.build_kernel().await?;
+        if compatibility {
+            // Legacy hosts already supply the selected behaviors and catalog.
+            // Bind those existing grants to the same instance service.
+            for adapter in kernel.registered_behaviors.values() {
+                policy.modules.insert(
+                    adapter.id().clone(),
+                    ModuleAgentGrant {
+                        tools: kernel.tools().iter().map(|t| t.id().clone()).collect(),
+                        max_instances: policy.max_instances,
+                        max_depth: super::module::DEFAULT_MAX_INVOCATION_DEPTH,
+                        budget: policy.max_budget.clone(),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
         let usage = kernel.providers.accounting.clone();
         let dispatcher = kernel.dispatcher.clone();
         usage.set_runtime_budget(policy.runtime_budget.clone());
@@ -256,12 +285,27 @@ impl RuntimeBuilder {
             profile_switch: tokio::sync::Mutex::new(None),
             factory,
         });
+        inner.kernel.write().await.instances = Arc::downgrade(&inner);
         let _ = binding.set(Arc::downgrade(&inner));
         ready.notify_waiters();
         Ok(AgentRuntime { inner })
     }
 }
 impl AgentRuntime {
+    pub(super) async fn drain_instances(&self) -> AgentResult<()> {
+        self.inner.scope.close();
+        tokio::time::timeout(
+            self.inner.policy.stop_timeout,
+            self.inner.scope.close_and_wait(),
+        )
+        .await
+        .map_err(|_| {
+            error(
+                AgentErrorCode::NotReady,
+                "runtime draining; resources remain owned",
+            )
+        })
+    }
     /// Shared read access is concurrent across model requests; control writes are bounded.
     pub async fn kernel(&self) -> tokio::sync::RwLockReadGuard<'_, Runtime> {
         self.inner.kernel.read().await
@@ -276,6 +320,7 @@ impl AgentRuntime {
             AgentOwner::Host(owner.into()),
             self.inner.scope.clone(),
             config,
+            None,
             None,
         )
         .await
@@ -313,6 +358,7 @@ async fn create(
     owner_scope: ModuleTaskScope,
     config: AgentConfig,
     grant: Option<ModuleAgentGrant>,
+    view: Option<Arc<Runtime>>,
 ) -> AgentResult<Arc<ManagedAgent>> {
     check_budget(&config.budget, &inner.policy.max_budget)?;
     if !inner.scope.is_open() || !owner_scope.is_open() {
@@ -321,7 +367,14 @@ async fn create(
             "owner or runtime stopped",
         ));
     }
-    let kernel = inner.kernel.read().await;
+    let owned_view;
+    let kernel = match &view {
+        Some(view) => view.as_ref(),
+        None => {
+            owned_view = inner.kernel.read().await.execution_view();
+            &owned_view
+        }
+    };
     if let AgentOwner::Module {
         definition,
         instance,
@@ -404,6 +457,8 @@ async fn create(
     }
     let id = AgentId::new();
     let session = SessionId::new();
+    // Generic module agents receive their Host grant independently of the
+    // parent ID. Restricted synchronous tasks explicitly join the parent scope.
     let scope = ModuleTaskScope::joined(vec![owner_scope, inner.scope.clone()]);
     if let Some(grant) = &grant {
         inner
@@ -435,6 +490,7 @@ async fn create(
         usage: inner.usage.clone(),
         sessions: kernel.sessions.clone(),
         queued: std::sync::atomic::AtomicUsize::new(0),
+        execution: view.clone(),
     });
     instances.insert(id, agent.clone());
     Ok(agent)
@@ -453,6 +509,7 @@ struct ManagedAgent {
     usage: Arc<UsageAccounting>,
     sessions: Arc<super::session::SessionManager>,
     queued: std::sync::atomic::AtomicUsize,
+    execution: Option<Arc<Runtime>>,
 }
 struct Running<'a> {
     agent: &'a ManagedAgent,
@@ -494,105 +551,13 @@ impl AgentInstance for ManagedAgent {
         }
     }
     async fn run(&self, message: String) -> AgentResult<AgentReply> {
-        if message.len() > 128 * 1024 {
-            return Err(error(
-                AgentErrorCode::InvalidConfig,
-                "agent task exceeds input limit",
-            ));
-        }
-        let inner = self
-            .inner
-            .upgrade()
-            .ok_or_else(|| error(AgentErrorCode::OwnerStopped, "runtime dropped"))?;
-        struct Queued<'a>(&'a std::sync::atomic::AtomicUsize);
-        impl Drop for Queued<'_> {
-            fn drop(&mut self) {
-                self.0.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
-            }
-        }
-        let queued = self
-            .queued
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-        let _queued = Queued(&self.queued);
-        if queued >= 4 {
-            return Err(error(
-                AgentErrorCode::LimitExceeded,
-                "agent task queue limit reached",
-            ));
-        }
-        let work = async {
-            let _turn = self.turn.lock().await;
-            {
-                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-                if !matches!(state.0, AgentStatus::Ready) {
-                    return Err(error(
-                        AgentErrorCode::Paused,
-                        "instance must be ready before accepting a turn",
-                    ));
-                }
-                state.0 = AgentStatus::Running;
-            }
-            let mut running = Running {
-                agent: self,
-                completed: false,
-            };
-            let _permit = inner
-                .turns
-                .acquire()
-                .await
-                .map_err(|_| error(AgentErrorCode::OwnerStopped, "runtime stopped"))?;
-            let kernel = inner.kernel.read().await.execution_view();
-            let mut request = TurnRequest::new(self.session, message);
-            request.model = self.config.model.clone();
-            request.security_context = self.security.clone();
-            let result = kernel.execute_outcome(request).await;
-            running.completed = true;
-            match result {
-                Ok(TurnOutcome::Completed(reply)) => {
-                    *self.state.lock().unwrap_or_else(|e| e.into_inner()) =
-                        (AgentStatus::Ready, None);
-                    Ok(AgentReply {
-                        text: reply.text,
-                        request: reply.request,
-                        usage: inner.usage.snapshot(self.session),
-                    })
-                }
-                Ok(TurnOutcome::PendingApproval(_)) => {
-                    *self.state.lock().unwrap_or_else(|e| e.into_inner()) =
-                        (AgentStatus::WaitingApproval, None);
-                    Err(error(
-                        AgentErrorCode::PendingApproval,
-                        "host approval required; no automatic approval granted",
-                    ))
-                }
-                Err(e) => {
-                    let code = if matches!(&e,super::RuntimeError::Denied{hook,..} if hook=="instance_budget")
-                    {
-                        AgentErrorCode::BudgetExceeded
-                    } else {
-                        AgentErrorCode::Provider
-                    };
-                    *self.state.lock().unwrap_or_else(|e| e.into_inner()) =
-                        (AgentStatus::Failed, Some(e.to_string()));
-                    Err(error(code, e.to_string()))
-                }
-            }
-        };
-        match tokio::time::timeout(
-            Duration::from_millis(self.config.budget.turn_timeout_ms),
-            self.scope.run(work),
-        )
-        .await
-        {
-            Ok(Ok(result)) => result,
-            _ => {
-                self.scope.close();
-                Err(error(
-                    AgentErrorCode::Cancelled,
-                    "agent cancelled or turn deadline exceeded",
-                ))
-            }
-        }
+        self.run_task(message, None).await.map(|(reply, _)| reply)
+    }
+    async fn execute(&self, task: AgentTask) -> AgentResult<AgentTaskReply> {
+        self.run_task(String::new(), Some(task))
+            .await?
+            .1
+            .ok_or_else(|| error(AgentErrorCode::Provider, "task result missing"))
     }
     fn pause(&self) -> AgentResult<()> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
