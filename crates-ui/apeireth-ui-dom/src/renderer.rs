@@ -231,6 +231,13 @@ pub struct Renderer<D: Dom> {
     last_error: Option<DomError>,
     /// 降级告警（例如「后端不支持移除 property ⇒ 已写回默认值」）。
     warnings: Vec<String>,
+    /// ⭐ **错误边界的兜底视图**（L1-G8）：渲染失败时挂它，而不是让整树劈叉/白屏。
+    ///
+    /// ⚠️ 只有**显式设置**过才生效（默认 `None` ⇒ 保持原有的「劈叉 + 下次整树重建」行为，
+    /// 不改变既有语义）。
+    error_fallback: Option<VNode>,
+    /// 最近一次被**兜底捕获**的错误（成功后不清 ⇒ 宿主可随时取走写日志）。
+    captured_error: Option<String>,
     /// ⭐ 测量/命中测试的乘数（L1-G6：DPR × 密度）。默认恒等。
     measurement_scale: MeasurementScale,
     /// ⭐ **焦点栈 + 陷阱**（L1-G3 接线）：焦点策略在引擎内，后端只负责真的挪焦点。
@@ -263,6 +270,8 @@ impl<D: Dom> Renderer<D> {
             desynced: false,
             last_error: None,
             warnings: Vec::new(),
+            error_fallback: None,
+            captured_error: None,
             measurement_scale: MeasurementScale::IDENTITY,
             focus: FocusTracker::new(),
             focus_paths: std::collections::HashMap::new(),
@@ -287,6 +296,51 @@ impl<D: Dom> Renderer<D> {
     }
 
     /// 当前是否已挂载。
+    /// ⭐⭐ **设置错误边界的兜底视图**（L1-G8）。
+    ///
+    /// ## 解决什么
+    ///
+    /// 渲染过程一旦失败，修前只有两条路：`desynced=true`（等下次整树重建）或把错误抛给宿主
+    /// ⇒ ⇒ 用户看到的是**冻结的旧界面**或**整片空白**，且没有任何可见提示
+    /// ⇒ ⇒ 设了兜底视图后，失败会**把兜底挂上去**并记录错误，界面至少还能用。
+    ///
+    /// 传 `None` ⇒ 关闭兜底（恢复既有语义）。
+    pub fn set_error_boundary(&mut self, fallback: Option<VNode>) {
+        self.error_fallback = fallback;
+    }
+
+    /// 最近一次被兜底捕获的错误（**成功后不清**，便于宿主上报后自行决定何时清）。
+    pub fn captured_error(&self) -> Option<&str> {
+        self.captured_error.as_deref()
+    }
+
+    /// 清空已捕获的错误。
+    pub fn clear_captured_error(&mut self) {
+        self.captured_error = None;
+    }
+
+    /// ⭐⭐ **带错误边界的渲染入口**（宿主应当用它替代裸 `patch`）。
+    ///
+    /// 正常路径与 [`Self::patch`] 完全一致；失败且设了兜底视图时：
+    /// ①记录错误；②把兜底视图**整树重建**到容器里；③返回兜底树的根。
+    /// 未设兜底 ⇒ 原样返回错误（行为与 `patch` 一致，**不吞错**）。
+    pub fn render_guarded(&mut self, vnode: VNode) -> Result<MountedNode<D>, DomError> {
+        match self.patch(vnode) {
+            Ok(mounted) => Ok(mounted),
+            Err(error) => {
+                let Some(fallback) = self.error_fallback.clone() else {
+                    return Err(error);
+                };
+                self.captured_error = Some(format!("{error}"));
+                // 兜底本身失败 ⇒ 仍要把**原始错误**报上去（否则会掩盖真因）。
+                match self.rebuild(fallback) {
+                    Ok(mounted) => Ok(mounted),
+                    Err(_) => Err(error),
+                }
+            }
+        }
+    }
+
     /// ⭐ 设定测量/命中测试的乘数（DPR × 密度）—— L1-G6。
     ///
     /// ⚠️ 乘数只影响**换算**，不改变 `ElementBox` 的 CSS 像素语义。
@@ -1821,6 +1875,58 @@ mod tests {
         renderer.close_focus_trap();
         renderer.focus_at_path(&[1]).expect("关闭陷阱后必须允许");
         assert_eq!(renderer.dom().focused(), Some(kids[1]));
+    }
+
+    /// ⭐⭐ **错误边界**（L1-G8）：渲染失败 ⇒ 挂兜底视图 + 记录错误，而不是白屏/冻结。
+    #[test]
+    fn guarded_render_falls_back_on_error_and_records_it() {
+        let (mut renderer, root) = renderer_with_dom();
+
+        // ① 未设兜底 ⇒ **不吞错**（行为与裸 patch 一致）
+        assert!(
+            renderer
+                .render_guarded(VNode::element("div").build())
+                .is_err(),
+            "未设兜底时必须把错误抛给宿主"
+        );
+        assert!(renderer.captured_error().is_none(), "未兜底时不得记录错误");
+
+        // ② 设兜底后：同样的失败 ⇒ 兜底顶上 + 记录错误
+        renderer.set_error_boundary(Some(
+            VNode::element("div")
+                .class("ap-error")
+                .child(VNode::text("界面出错了"))
+                .build(),
+        ));
+        renderer
+            .render_guarded(VNode::element("section").build())
+            .expect("兜底必须挂上");
+        let error = renderer
+            .captured_error()
+            .expect("必须记录原始错误")
+            .to_owned();
+        assert!(error.contains("未挂载"), "记录的应是**原始**错误：{error}");
+        let children = renderer.dom().children(&root).expect("读子节点必须成功");
+        assert_eq!(children.len(), 1, "兜底应当成为容器子节点");
+        assert_eq!(
+            renderer.dom().attribute(children[0], "class"),
+            Some(String::from("ap-error")),
+            "挂上的必须是兜底视图"
+        );
+
+        // ③ 兜底装上后，正常渲染不再报错，且不新增捕获
+        renderer
+            .render_guarded(VNode::element("main").build())
+            .expect("兜底修复后正常渲染必须成功");
+        assert_eq!(
+            renderer.captured_error(),
+            Some(error.as_str()),
+            "旧错误保留给宿主上报"
+        );
+
+        // ④ 清空后归 None
+        renderer.clear_captured_error();
+        assert!(renderer.captured_error().is_none());
     }
 
     fn renderer_with_dom() -> (Renderer<InMemoryDom>, InMemoryNodeId) {
