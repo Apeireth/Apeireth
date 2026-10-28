@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: bd5ae562241abdf7606f4c02f8dfadae92ea725700f8d3d3790fc062c32347f8
+claims_sha256: b19664fba93e30f61885cd75c096ec03a410848bcbe925dcd692a3d046fa008f
 claims_total: 32
 items:
   - id: "rt.provider_router"
@@ -671,6 +671,8 @@ items:
     implemented:
       sources:
         - "crates/engine/runtime/src/canonical/instances.rs"
+        - "crates/engine/runtime/src/canonical/instances/tasks.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/engine/runtime/src/canonical/instances/control.rs"
         - "crates/engine/runtime/src/canonical/accounting.rs"
         - "crates/foundation/plugin/src/agents.rs"
@@ -683,10 +685,13 @@ items:
         - "crates/engine/runtime/src/canonical/instances.rs"
         - "crates/engine/runtime/src/canonical/instances/control.rs"
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
+        - "crates/engine/runtime/src/canonical/instances/tasks.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/foundation/plugin/src/agents.rs"
     default_enabled: "n/a"
     validated:
       tests:
+        - "crates/engine/runtime/tests/canonical_subloop.rs"
         - "crates/engine/runtime-assembly/tests/convergence_agents.rs"
       claims_id: "rt.owned_agents"
     gaps:

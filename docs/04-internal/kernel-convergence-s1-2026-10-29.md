@@ -12,6 +12,7 @@ Author: Codex
 ## 基线与交付边界
 
 基线为 `refactor/kc1-kernel-convergence@5d0be742`，开始时 fetch 成功、工作树干净，包含 M0 债务图。
+源码提交为 `0aacb6d7d57a4fe3e144e6b787e650f1c1c7aa78`；随后的文档证据提交只更新 claims / STATUS / wiring 生成物和本报告，不修改源码。
 本批只收敛[债务图 D1 / S1](kernel-convergence-remaining-debt-map-2026-10-29.md)；
 沿用 ADR-0018～0022 与[历史验收报告](kernel-convergence-final-acceptance-2026-10-28.md)，不追改历史状态。
 取材为本地源码及恢复脚本；恢复序列先在仓库外重建、审查，再采用并修正，验证全部重新执行。
@@ -68,7 +69,7 @@ Conversation / Isolated 策略、逐 Provider 尝试的共享 admission gate，�
 | `cargo clippy -p apeireth-plugin -p apeireth-runtime --all-targets --locked -j 2 -- -D warnings` | 通过，零警告 |
 | `cargo check -p apeireth-runtime-assembly --no-default-features --locked -j 2` | 通过 |
 | `cargo fmt --check` / `python3 scripts/arch_guard.py --strict` | 通过 |
-| Docs Truth verify / check、wiring、docs links / index | wiring / links / index 通过；Docs Truth 待源码提交后锚定 |
+| Docs Truth verify / check、wiring、docs links / index | 通过；Docs Truth 已锚定源码提交，最终输出见同名前缀日志 |
 
 canonical_subloop 保留全部原安全断言；新增真实 Runtime 场景覆盖独立身份、私有历史、持久工具配对、
 allowlist/父 scope/Host grant 交集、跨模块/跨 turn 预算、逐轮及 fallback 扣账、完整响应元数据与单任务 usage、
