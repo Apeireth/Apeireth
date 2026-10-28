@@ -134,6 +134,8 @@ pub mod focus;
 pub mod keyed;
 pub mod listeners;
 pub mod renderer;
+/// ⭐ 窗口化（虚拟列表）原语（L1-G5 第一片）。
+pub mod virtual_list;
 pub mod vnode;
 
 /// 真实 DOM 后端（web-sys）—— **仅 wasm32 目标**。
