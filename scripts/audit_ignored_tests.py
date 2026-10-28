@@ -107,7 +107,7 @@ def main() -> None:
     parser.add_argument('--before-ref', required=True)
     parser.add_argument('--baseline-log', type=Path, required=True)
     parser.add_argument('--before-list', type=Path, required=True)
-    parser.add_argument('--current-list', type=Path)
+    parser.add_argument('--current-list', type=Path, required=True)
     parser.add_argument('--history', action='store_true')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
@@ -120,7 +120,7 @@ def main() -> None:
                                     (before_native, native(before), 'before')]:
         if {identity(row) for row in actual} != {identity(row) for row in expected}:
             raise ValueError(f'{label} native source/observed inventory differs')
-    current_native = observed(args.current_list, current, listing=True) if args.current_list else native(current)
+    current_native = observed(args.current_list, current, listing=True)
     if {identity(row) for row in current_native} != {identity(row) for row in native(current)}:
         raise ValueError('current native source/observed inventory differs')
     current_ids_for_check = {identity(row) for row in current}
@@ -145,23 +145,30 @@ def main() -> None:
     for row in before:
         row['full_name'] = full_names.get(identity(row), row['name'])
         row['restored'] = identity(row) not in current_ids
+    baseline_native_names = {(row['path'], row['full_name']) for row in observed_baseline}
+    before_native_names = {(row['path'], row['full_name']) for row in before_native}
+    current_native_names = {(row['path'], row['full_name']) for row in current_native}
     result = {
         'date_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'baseline_log': str(args.baseline_log),
         'baseline_log_sha256': hashlib.sha256(args.baseline_log.read_bytes()).hexdigest(),
         'before_list_sha256': hashlib.sha256(args.before_list.read_bytes()).hexdigest(),
-        'current_list_sha256': hashlib.sha256(args.current_list.read_bytes()).hexdigest() if args.current_list else None,
+        'current_list_sha256': hashlib.sha256(args.current_list.read_bytes()).hexdigest(),
         'baseline_ref': git('rev-parse', args.baseline_ref).strip(),
         'before_ref': git('rev-parse', args.before_ref).strip(),
         'before_native_count': len(before_native), 'current_native_count': len(current_native),
         'before_unconditional_count': sum(not row['conditional_miri'] for row in before),
         'current_unconditional_count': sum(not row['conditional_miri'] for row in current),
         'conditional_miri_count': sum(row['conditional_miri'] for row in current),
+        'baseline_native_names_added': sorted(before_native_names - baseline_native_names),
+        'baseline_native_names_removed': sorted(baseline_native_names - before_native_names),
+        'current_native_names_added': sorted(current_native_names - before_native_names),
+        'current_native_names_removed': sorted(before_native_names - current_native_names),
         'baseline_to_before_added': sorted(before_ids - baseline_ids),
         'baseline_to_before_removed': sorted(baseline_ids - before_ids),
         'restored': sorted(before_ids - current_ids), 'new_ignores': sorted(current_ids - before_ids),
         'before': before, 'current': current,
-        'rename_policy': 'source function names/paths are retained; removals are verified restorations, not renames',
+        'rename_policy': 'full native names/path deltas are explicit; source function removal or rename is rejected as a restoration',
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
@@ -169,6 +176,8 @@ def main() -> None:
     print(f"unconditional declarations: {result['before_unconditional_count']} -> {result['current_unconditional_count']}")
     print(f"conditional Miri declarations: {result['conditional_miri_count']}")
     print(f"baseline -> before set added/removed: {result['baseline_to_before_added']} / {result['baseline_to_before_removed']}")
+    print(f"baseline full native names added/removed: {result['baseline_native_names_added']} / {result['baseline_native_names_removed']}")
+    print(f"current full native names added/removed: {result['current_native_names_added']} / {result['current_native_names_removed']}")
     print(f"restored: {result['restored']}")
     print(f"new ignores: {result['new_ignores']}")
     print(args.output)
