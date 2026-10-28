@@ -2,7 +2,7 @@
 
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-2026-10-28.md
-Version: 1.0
+Version: 1.1
 Last-Modified: 2026-10-28
 Status: 本批已验证；整体 Convergence 为 Partial，未满足全部最终完成条件
 Author: Codex
@@ -296,3 +296,31 @@ Rust 公共结构新增可选 principal/scope 字段：序列化旧记录以 def
 整体不宣布完成：默认桌面 Legacy Memory/Persona/Organ 与旧 SubLoop、definition→instance 工厂、放弃外部 Arc 清理、
 完整 Managed 热生命周期、旧记忆授权迁移及 assembly 的 Android 裁剪未在本次执行预算内完成。
 已验证代码与现有桌面保持兼容，剩余风险及退出条件见上表；没有用空实现或关闭门禁代替交付。
+
+## 远端交付阻塞与恢复
+
+完成文档提交 `eb2a28808a6db44ff7465ef694160a7c4adb9922` 后再次 fetch，
+远端 `refactor/kc1-kernel-convergence` 仍为 `149291e7504f9a3928dd220010aa777f07a3acae`，
+已通过 ancestor 检查，工作区 clean。唯一一次安全推送返回：
+`Permission to Apeireth/Apeireth.git denied to Jimmyxiao2009` / HTTP 403。
+未重试推送、未更换凭据、未强推、未修改或合并 main。
+
+因此本批成果只在本地提交中，不标为远端已交付。
+最终 HEAD、完整提交清单、bundle SHA256、独立恢复校验及原始门禁日志随仓外 delivery manifest 提供。
+增量 bundle 仅依赖上述远端基准；新提交原样保留。
+
+在有写权限的环境中恢复（先核对 manifest/bundle SHA256）：
+
+```bash
+git clone --branch refactor/kc1-kernel-convergence https://github.com/Apeireth/Apeireth.git Apeireth
+cd Apeireth
+git bundle verify /path/to/apeireth-kernel-convergence.bundle
+git fetch /path/to/apeireth-kernel-convergence.bundle refs/heads/codex/kernel-convergence-final:refs/heads/convergence-import
+git merge --ff-only convergence-import
+git fetch origin refactor/kc1-kernel-convergence
+git merge-base --is-ancestor origin/refactor/kc1-kernel-convergence HEAD
+git push origin HEAD:refs/heads/refactor/kc1-kernel-convergence
+```
+
+任一基准/快进检查失败，应检查新提交并重新验证；不要强推或自动合并 main。
+这里只提供恢复说明，不再次尝试当前被拒绝的推送。
