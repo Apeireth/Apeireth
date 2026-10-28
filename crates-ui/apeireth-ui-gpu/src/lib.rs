@@ -155,6 +155,10 @@ pub mod shaders;
 /// ⭐ 纹理上传（L1-G7 最后一段：行对齐 + 上传）。
 pub mod upload;
 
+/// ⭐ 重导出 `wgpu`：消费方（适配器、探针）应经此引用，
+/// 避免各自钉同一个精确版本导致不一致。
+pub use wgpu;
+
 pub use bindings::{
     binding_of, binding_table, name_of, BindingError, UniformBufferLayout, UniformSlot,
     UniformValues, SHADER_UNIFORM_NAMES,

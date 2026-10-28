@@ -1083,3 +1083,49 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
     }
     Ok(result.into())
 }
+
+/// ⭐ **纹理上传适配器**（证据装置内）：
+/// 把 `apeireth_ui_dom::resource::TextureUploader` 接到 `apeireth_ui_gpu::upload::TextureStore`。
+///
+/// ## 为什么适配器放在这里，而不是 ui-gpu 里
+///
+/// 让 **ui-gpu 依赖 ui-dom** 会把分层方向倒过来（GPU 更底层）
+/// ⇒ ⇒ 适配器放在**同时依赖两边**的装置/上层 crate 里（本 harness、将来的 ui-demo/ui-kit）
+/// ⇒ ⇒ 产品分层的依赖方向保持单向。
+pub struct DomTextureUploader<'a> {
+    store: &'a mut apeireth_ui_gpu::upload::TextureStore,
+    device: &'a apeireth_ui_gpu::wgpu::Device,
+    queue: &'a apeireth_ui_gpu::wgpu::Queue,
+}
+
+impl<'a> DomTextureUploader<'a> {
+    /// 建适配器（借用纹理仓库 + 设备的只读引用）。
+    pub fn new(
+        store: &'a mut apeireth_ui_gpu::upload::TextureStore,
+        device: &'a apeireth_ui_gpu::wgpu::Device,
+        queue: &'a apeireth_ui_gpu::wgpu::Queue,
+    ) -> Self {
+        Self {
+            store,
+            device,
+            queue,
+        }
+    }
+}
+
+impl apeireth_ui_dom::resource::TextureUploader for DomTextureUploader<'_> {
+    fn upload(
+        &mut self,
+        id: apeireth_ui_dom::resource::ResourceId,
+        image: &apeireth_ui_dom::resource::ImageData,
+    ) -> Result<(), String> {
+        self.store.upload(
+            self.device,
+            self.queue,
+            id.raw(),
+            image.width,
+            image.height,
+            &image.rgba,
+        )
+    }
+}

@@ -975,6 +975,20 @@ impl Engine {
     }
 
     /// 引擎的对外报告（宿主可读的实测事实）。
+    /// ⭐ **只读访问 GPU 设备**（供纹理上传等需要 `&Device` 的操作）。
+    ///
+    /// 只给**不可变**引用：上传需要 `&Device`/`&Queue`，不需要改写引擎内部状态
+    /// ⇒ ⇒ 不暴露可变入口，避免外部绕过引擎改内部资源。
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    /// ⭐ **只读访问 GPU 队列**（供纹理上传等需要 `&Queue` 的操作）。
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    /// 引擎自述报告（后端 / 适配器 / 表面状态等，判据与日志用）。
     pub fn report(&self) -> EngineReport {
         let (width, height) = self.surface_size();
         EngineReport {

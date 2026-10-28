@@ -38,7 +38,7 @@
 
 | 项 | 缺什么 | 影响 |
 |---|---|---|
-| G7 解码/上传钩子 | **接口已就绪**（E-112）+ **GPU 侧上传已实现**（E-113：256 行对齐 + 逐行拷贝 + `TextureStore`）；**适配器待接**（`ui_dom::TextureUploader` ↔ `TextureStore`，需同时依赖两边的 crate） | 图片管线闭环前，宿主需自行上传或使用纯色占位 |
+| G7 解码/上传钩子 | **接口已就绪**（E-112）+ **GPU 侧上传已实现**（E-113：256 行对齐 + 逐行拷贝 + `TextureStore`）；**适配器已实现**（E-114：`DomTextureUploader` 放在**同时依赖两边**的证据装置里，避免 ui-gpu→ui-dom 倒置分层；`Engine::device/queue` 只读访问器 + `wgpu` 重导出）；产品路径接线与浏览器端到端证据待做 | 图片管线闭环前，宿主需自行上传或使用纯色占位 |
 | panic 钩子真 panic 行为 | 浏览器内不可靠触发（wasm 可能 `panic=abort`） | 「一崩可见」只覆盖渲染失败，不覆盖进程级崩溃 |
 | **真实 Tauri WebView（WebKitGTK / WebView2 / WKWebView）** | **无装置，0 次验证** | ⚠️ **上线前最大未知** |
 | 其它 GPU / Windows | 无装置 | 同上（当前仅 AMD RADV + Linux headless Chromium） |
