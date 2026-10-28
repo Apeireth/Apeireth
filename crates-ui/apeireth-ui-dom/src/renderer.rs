@@ -483,6 +483,87 @@ impl<D: Dom> Renderer<D> {
         ))
     }
 
+    /// ⭐⭐ **就地替换某个节点的子级**（L1-G5：嵌套虚拟列表的前提）。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 修前只能替换**根视图**（`patch` / `patch_windowed`）
+    /// ⇒ ⇒ 页面里的列表总是嵌在某块内容里 ⇒ ⇒ 想把「只挂窗口子项」用到嵌套位置就没路走
+    /// ⇒ ⇒ 只能整页重渲染（长列表一滚就重建整棵树）。
+    ///
+    /// ## 语义
+    ///
+    /// - `path` 指向**父节点**（空路径 = 已挂载树根）；父必须是元素或分组，**不能是文本**；
+    /// - 子级按与整树相同的规则差分（keyed / 位置），**保留可保留的节点身份**
+    ///   （输入框的值、焦点、`bind:this` 都不会因为兄弟变化而错位）；
+    /// - 只在**已挂载**的树上可用（未挂载 ⇒ `Err`）。
+    pub fn patch_children_at_path(
+        &mut self,
+        path: &[usize],
+        children: Vec<VNode>,
+    ) -> Result<(), DomError> {
+        let parent = self.node_at_path(path)?;
+        // ① 取旧子级（克隆：随后要 `&mut self` 做差分）
+        let (old_children, is_fragment) = {
+            let mounted = self.mounted_at_path(path)?;
+            match mounted {
+                MountedNode::Element(element) => (element.children.clone(), false),
+                MountedNode::Fragment(fragment) => (fragment.children.clone(), true),
+                MountedNode::Text(_) => {
+                    return Err(DomError::Unsupported(String::from(
+                        "patch_children_at_path: 父节点是文本节点（文本不能有子级）",
+                    )))
+                }
+            }
+        };
+        // ② 差分（与整树同一套规则）
+        let next = self.patch_children(&parent, &old_children, &children, None)?;
+        // ③ 写回已挂载树
+        {
+            let mounted = self.mounted_at_path_mut(path)?;
+            match mounted {
+                MountedNode::Element(element) => {
+                    element.children = next;
+                    element.vnode.children = children;
+                }
+                MountedNode::Fragment(fragment) => {
+                    fragment.children = next;
+                }
+                MountedNode::Text(_) => unreachable!("上面已拒绝文本父节点"),
+            }
+        }
+        let _ = is_fragment;
+        Ok(())
+    }
+
+    /// 按路径取**已挂载节点**（只读）。
+    fn mounted_at_path(&self, path: &[usize]) -> Result<&MountedNode<D>, DomError> {
+        let mut cursor = self.tree.as_ref().ok_or(DomError::NodeNotFound)?;
+        for index in path {
+            let children = match cursor {
+                MountedNode::Element(element) => &element.children,
+                MountedNode::Fragment(fragment) => &fragment.children,
+                MountedNode::Text(_) => return Err(DomError::NodeNotFound),
+            };
+            cursor = children.get(*index).ok_or(DomError::NodeNotFound)?;
+        }
+        Ok(cursor)
+    }
+
+    /// 按路径取**已挂载节点**（可变）。
+    fn mounted_at_path_mut(&mut self, path: &[usize]) -> Result<&mut MountedNode<D>, DomError> {
+        let mut cursor = self.tree.as_mut().ok_or(DomError::NodeNotFound)?;
+        for index in path {
+            let children = match cursor {
+                MountedNode::Element(element) => &mut element.children,
+                MountedNode::Fragment(fragment) => &mut fragment.children,
+                MountedNode::Text(_) => return Err(DomError::NodeNotFound),
+            };
+            cursor = children.get_mut(*index).ok_or(DomError::NodeNotFound)?;
+        }
+        Ok(cursor)
+    }
+
     /// ⭐⭐⭐ **窗口化渲染**（L1-G5 收尾）：只挂载可见窗口内的子项。
     ///
     /// ## 布局约定
@@ -1844,6 +1925,55 @@ mod tests {
             0,
             "补写后队列必须清空"
         );
+    }
+
+    /// ⭐⭐ **嵌套子级就地替换**（L1-G5：嵌套列表前提）：只换某块的子级，兄弟身份不受影响。
+    #[test]
+    fn nested_children_can_be_patched_in_place() {
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("section")
+            .child(VNode::element("h2").child(VNode::text("标题")).build())
+            .child(
+                VNode::element("ul")
+                    .child(keyed_item("a", "A"))
+                    .child(keyed_item("b", "B"))
+                    .build(),
+            )
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+        let section = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let children = renderer.dom().children(&section).expect("读子节点必须成功");
+        let heading = children[0];
+        let ul = children[1];
+        let items_before = renderer.dom().children(&ul).expect("读子节点必须成功");
+        assert_eq!(items_before.len(), 2);
+
+        // 只替换 <ul> 的子级（路径 [1]）：把 b 换掉、加一个 c
+        renderer
+            .patch_children_at_path(&[1], vec![keyed_item("a", "A"), keyed_item("c", "C")])
+            .expect("子级替换必须成功");
+
+        // ① 标题节点**身份不变**（没被重建）
+        let children = renderer.dom().children(&section).expect("读子节点必须成功");
+        assert_eq!(children[0], heading, "兄弟节点不得因兄弟块的子级变化而重建");
+        // ② ul 里的项：A 保留身份（keyed 复用）、B 消失、C 新增
+        let items_after = renderer.dom().children(&ul).expect("读子节点必须成功");
+        assert_eq!(items_after.len(), 2);
+        assert_eq!(
+            items_after[0], items_before[0],
+            "key 相同的项必须复用同一 DOM 节点"
+        );
+
+        // ③ 再替换回来（含 B）也能收敛，不报错
+        renderer
+            .patch_children_at_path(&[1], vec![keyed_item("a", "A"), keyed_item("b", "B")])
+            .expect("子级替换必须成功");
+
+        // ④ 越界路径 / 文本父节点都是**显式错误**（不静默）
+        assert!(matches!(
+            renderer.patch_children_at_path(&[9], vec![]),
+            Err(DomError::NodeNotFound)
+        ));
     }
 
     /// ⭐⭐⭐ **窗口化渲染**（L1-G5 收尾）：只挂载窗口子项 + 前后留白，总高度**恒定**。
