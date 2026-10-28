@@ -258,6 +258,49 @@ def load_rgb(path):
     return image.convert("RGB")
 
 
+def canvas_blank_stats(png_path) -> dict:
+    """判断一张画布截图是否**根本没画出来**（纯色 / 近纯色）。
+
+    ## 为什么需要（2026-10-28，CI 红因取证）
+
+    CI 上出过一次：引擎画布是**纯白**（`mean=255`），而报告把它呈现成
+    「生产 vs 引擎差 **99.9887%**」⇒ ⇒ 读者只会以为「渲染完全不对」，
+    **看不出真正的原因是「引擎根本没画、且 WebGL 上下文丢了」**。
+    ⇒ ⇒ 判据把根因藏起来，比判据报红更糟（台账 §5 的同型教训）。
+
+    ## 判据
+
+    纯色 ⇒ 通道极差 = 0；本函数给出 `range`（全图最大-最小）与 `distinct`
+    （不同颜色数）。`range <= 2` 视为**空白**。
+    """
+    from PIL import Image
+    import numpy as np
+
+    image = Image.open(png_path).convert("RGB")
+    array = np.asarray(image).astype(int)
+    flat = array.reshape(-1, 3)
+    value_range = int(flat.max() - flat.min())
+    distinct = int(np.unique(flat, axis=0).shape[0])
+    mean = round(float(array.mean()), 2)
+    # ① **严格空白**：真的是纯色（一张画都没画）。
+    blank_exact = value_range <= 2
+    # ② **近空白**：实测 CI 上的引擎画布是 `mean=254.99 / distinct=50 / range=173`
+    #    ⇒ ⇒ **不是**纯色（有几个暗像素），但显然**没画出火焰**（生产侧是
+    #    `mean=31.7 / distinct=11556`）⇒ ⇒ 只看 `range` 会漏判
+    #    ⇒ ⇒ 再加一条「几乎整片白且颜色种类极少」的判据。
+    near_blank = mean >= 250.0 and distinct <= 512
+    return {
+        "path": str(png_path),
+        "size": [image.size[0], image.size[1]],
+        "range": value_range,
+        "distinct": distinct,
+        "mean": mean,
+        "blank_exact": bool(blank_exact),
+        "near_blank": bool(near_blank),
+        "blank": bool(blank_exact or near_blank),
+    }
+
+
 def diff_stats(left_path, right_path, threshold=CHANNEL_THRESHOLD):
     """逐像素差分：任一通道绝对差 > threshold 记「不同」。"""
     left = load_rgb(left_path)
@@ -689,7 +732,18 @@ def main():
                 return False
             return stats["differing_ratio"] <= MAX_DIFF_RATIO
 
+        # ⭐ **空白画布守卫**（2026-10-28 加，见 `canvas_blank_stats` 的说明）：
+        #   把「引擎根本没画」显式登记成一条判据，而不是让它伪装成「99% 像素差」。
+        canvas_blank = {}
+        for backend in ("webgl", "webgpu"):
+            canvas_path = out_dir / f"{backend}.canvas.png"
+            if canvas_path.exists():
+                canvas_blank[backend] = canvas_blank_stats(canvas_path)
         criteria = {
+            "canvas_blank": canvas_blank,
+            "canvas_blank_any": any(
+                item.get("blank") for item in canvas_blank.values()
+            ),
             "uniform_count": len(uniforms),
             "uniform_names": sorted(uniforms.keys()),
             "uniform_components": {
@@ -928,10 +982,29 @@ def main():
         )
         (out_dir / "console.txt").write_text("\n".join(console_log), encoding="utf-8")
 
+        # ⭐ **空白画布必须响亮报出来**（2026-10-28）：
+        #   否则「引擎没画出来」会被读成「渲染差 99%」，把真正的根因藏起来。
+        if criteria.get("canvas_blank_any"):
+            blank_backends = [
+                backend
+                for backend, item in (criteria.get("canvas_blank") or {}).items()
+                if item.get("blank")
+            ]
+            print(
+                "  ❌ **引擎画布空白**："
+                + "、".join(blank_backends)
+                + " 端的画布几乎是一张纯色（见 report.json 的 canvas_blank）"
+                "⇒ ⇒ **不是「渲染差异大」，而是「根本没画出来」**"
+                "⇒ ⇒ 优先查：WebGL 上下文丢失（CONTEXT_LOST）/ 后端未真正绘制 / "
+                "截图早于首帧。"
+            )
+
         print(
             json.dumps(
                 {
                     "verdict": criteria["verdict"],
+                    "canvas_blank_any": criteria.get("canvas_blank_any"),
+                    "canvas_blank": criteria.get("canvas_blank"),
                     "uniform_count": len(uniforms),
                     "webgl": webgl_stats,
                     "webgpu": webgpu_stats,
