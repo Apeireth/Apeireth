@@ -483,6 +483,71 @@ impl<D: Dom> Renderer<D> {
         ))
     }
 
+    /// ⭐⭐⭐ **窗口化渲染**（L1-G5 收尾）：只挂载可见窗口内的子项。
+    ///
+    /// ## 布局约定
+    ///
+    /// 根视图是一个**滚动容器**，其内容 = `div.vlist`（高度 = 全表总高）
+    /// + 三个部分：**前留白**（`offset`）+ **窗口子项** + **后留白**。
+    ///
+    /// ⇒ ⇒ 总高度**恒定**（不随滚动变化）⇒ 滚动条长度稳定。
+    ///
+    /// ⇒ ⇒ 只有窗口内的子项被真正挂载（长列表不会一次建满）。
+    ///
+    /// ⚠️ 约定：**根即滚动容器**。嵌套列表需要挂在子树里 ⇒ ⇒ 那是下一片（需要
+    /// `patch_children` 公开化），本片不假装支持。
+    ///
+    /// 返回实际使用的 [`crate::virtual_list::VirtualPlan`]（判据/日志用）。
+    pub fn patch_windowed(
+        &mut self,
+        item_heights: &[f64],
+        overscan: usize,
+        item: impl Fn(usize) -> VNode,
+    ) -> Result<crate::virtual_list::VirtualPlan, DomError> {
+        let plan = self.virtual_window_for(&[], item_heights, overscan)?;
+        let sanitized: Vec<f64> = item_heights
+            .iter()
+            .map(|height| {
+                if height.is_finite() && *height > 0.0 {
+                    *height
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let total: f64 = sanitized.iter().sum();
+        let window_height: f64 = sanitized[plan.first..=plan.last]
+            .iter()
+            .sum::<f64>()
+            .max(0.0);
+        let spacer_after = (total - plan.offset - window_height).max(0.0);
+
+        let mut list = VNode::element("div")
+            .attr("class", "vlist")
+            .attr("style", format!("height: {total}px"));
+        if plan.offset > 0.0 {
+            list = list.child(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-before")
+                    .attr("style", format!("height: {}px", plan.offset))
+                    .build(),
+            );
+        }
+        for index in plan.first..=plan.last {
+            list = list.child(item(index));
+        }
+        if spacer_after > 0.0 {
+            list = list.child(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-after")
+                    .attr("style", format!("height: {spacer_after}px"))
+                    .build(),
+            );
+        }
+        self.render_guarded(list.build())?;
+        Ok(plan)
+    }
+
     /// ⭐ **设置滚动位置**（CSS 像素）⇒ 后端负责夹取，返回是否真的写。
     pub fn set_scroll_top_at_path(&self, path: &[usize], top: f64) -> Result<(), DomError> {
         let node = self.node_at_path(path)?;
@@ -1778,6 +1843,80 @@ mod tests {
                 .expect("补写必须成功"),
             0,
             "补写后队列必须清空"
+        );
+    }
+
+    /// ⭐⭐⭐ **窗口化渲染**（L1-G5 收尾）：只挂载窗口子项 + 前后留白，总高度**恒定**。
+    #[test]
+    fn windowed_render_mounts_only_the_window_and_keeps_total_height() {
+        use crate::dom::{ElementBox, ScrollMetrics};
+
+        let (mut renderer, root) = renderer_with_dom();
+        // 先挂一个占位视图，让 root 有子节点可被度量
+        renderer
+            .mount(VNode::element("div").build())
+            .expect("挂载必须成功");
+        // ⚠️ `virtual_window_for(&[])` 读的是**已挂载树的根**（= 这里的占位 div），
+        //   不是容器 `<main>` ⇒ ⇒ 度量必须脚本在这个节点上。
+        let measured = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        renderer.dom().script_measurement(
+            measured,
+            ElementBox::new(0.0, 0.0, 300.0, 200.0),
+            ScrollMetrics {
+                scroll_top: 0.0,
+                scroll_height: 1000.0,
+                client_height: 200.0,
+            },
+        );
+
+        let heights = vec![50.0; 20];
+        let plan = renderer
+            .patch_windowed(&heights, 0, |index| {
+                VNode::element("div")
+                    .attr("class", "item")
+                    .child(VNode::text(format!("第{index}项")))
+                    .build()
+            })
+            .expect("窗口化渲染必须成功");
+        assert_eq!((plan.first, plan.last), (0, 3), "视口 200 / 每项 50 ⇒ 4 项");
+
+        // ① 只挂窗口内的子项 + 后留白（前留白为 0 时省略）
+        let children = renderer.dom().children(&root).expect("读子节点必须成功");
+        let list = children[0];
+        let inner = renderer.dom().children(&list).expect("读子节点必须成功");
+        assert_eq!(inner.len(), 4 + 1, "4 个窗口子项 + 1 个后留白");
+        assert_eq!(
+            renderer.dom().attribute(list, "style"),
+            Some(String::from("height: 1000px")),
+            "列表总高必须等于全表高度（滚动条长度稳定）"
+        );
+
+        // ② 滚动到中间 ⇒ 前留白出现、窗口移动、**总挂载数仍然很小**
+        let list_node = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        renderer.dom().script_measurement(
+            list_node,
+            ElementBox::new(0.0, 0.0, 300.0, 200.0),
+            ScrollMetrics {
+                scroll_top: 400.0,
+                scroll_height: 1000.0,
+                client_height: 200.0,
+            },
+        );
+        let plan = renderer
+            .patch_windowed(&heights, 0, |_index| {
+                VNode::element("div").attr("class", "item").build()
+            })
+            .expect("窗口化渲染必须成功");
+        assert_eq!(plan.offset, 400.0, "窗口偏移应等于滚动位置");
+        let children = renderer.dom().children(&root).expect("读子节点必须成功");
+        let list = children[0];
+        let inner = renderer.dom().children(&list).expect("读子节点必须成功");
+        // 前留白 + 4 项 + 后留白
+        assert_eq!(inner.len(), 6, "中间位置应有前后两个留白");
+        assert_eq!(
+            renderer.dom().attribute(list, "style"),
+            Some(String::from("height: 1000px")),
+            "滚动后总高度**不得变化**"
         );
     }
 
