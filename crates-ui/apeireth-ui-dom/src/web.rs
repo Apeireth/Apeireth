@@ -61,6 +61,11 @@ pub struct WebDom {
     /// ⇒ ⇒ 组合事件到达时置位，渲染器经 `Dom::is_composing()` 读到
     /// ⇒ ⇒ **不必依赖宿主转告**（否则宿主忘一处就回到「中文输入被打散」）。
     composing: std::rc::Rc<Cell<bool>>,
+    /// ⭐ **document 级组合事件监听器**（持有所有权，避免被回收后静默失效）。
+    ///
+    /// 为什么必须由后端自己装：若只在「应用监听了 composition 事件」时才更新组合态
+    /// ⇒ ⇒ 不监听的应用会**静默失去 IME 保护**（中文输入被打散，且无任何报错）。
+    composition_closures: (Closure<dyn FnMut(Event)>, Closure<dyn FnMut(Event)>),
     /// 下一个节点编号。
     next_node_id: Cell<u32>,
     /// 已挂的监听器（按 **(节点编号, 事件类型)** 索引 ⇒ 增量替换）。
@@ -83,11 +88,37 @@ impl WebDom {
 
     /// 从给定文档建后端。
     pub fn from_document(document: Document) -> Self {
+        let composing = std::rc::Rc::new(Cell::new(false));
+        // ⭐ **document 级**跟踪组合态：与「应用是否监听了 composition 事件」无关
+        //   ⇒ ⇒ 否则不监听的应用会静默失去 IME 保护。
+        let start_flag = std::rc::Rc::clone(&composing);
+        let start = Closure::wrap(
+            Box::new(move |_event: Event| start_flag.set(true)) as Box<dyn FnMut(Event)>
+        );
+        let end_flag = std::rc::Rc::clone(&composing);
+        let end = Closure::wrap(
+            Box::new(move |_event: Event| end_flag.set(false)) as Box<dyn FnMut(Event)>
+        );
+        for (name, callback) in [
+            ("compositionstart", start.as_ref().unchecked_ref()),
+            ("compositionend", end.as_ref().unchecked_ref()),
+        ] {
+            if let Err(error) = document.add_event_listener_with_callback(name, callback) {
+                // 显式告警（不静默）：拿不到 document 级监听 ⇒ IME 保护会退化。
+                web_sys::console::warn_1(
+                    &format!(
+                        "引擎：无法安装 document 级 `{name}` 监听（IME 保护将退化）：{error:?}"
+                    )
+                    .into(),
+                );
+            }
+        }
         Self {
             document,
             detached: RefCell::new(WeakSet::<JsValue>::new_typed()),
             node_ids: RefCell::new(WeakMap::<Object, JsValue>::new_typed()),
-            composing: std::rc::Rc::new(Cell::new(false)),
+            composing,
+            composition_closures: (start, end),
             next_node_id: Cell::new(0),
             listeners: RefCell::new(ListenerTable::new()),
         }
