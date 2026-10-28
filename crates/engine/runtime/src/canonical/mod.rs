@@ -72,6 +72,7 @@ pub mod registered_hooks;
 // Long-lived: 7 deterministic organs + OrganOrchestrator backend; transient
 // per invocation: W1/W2 built from ctx.invoker_handle() and dropped.
 pub mod egress_gate;
+mod execution_view;
 pub mod provider;
 pub mod quota;
 pub mod runtime;

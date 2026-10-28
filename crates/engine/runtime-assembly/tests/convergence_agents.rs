@@ -692,3 +692,81 @@ async fn a_module_starts_its_own_real_agent_after_assembly_without_a_host_task_o
     assert!(provider.requests()[0].tools.is_empty());
     runtime.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn hot_registered_module_receives_scoped_agent_port_and_stop_cancels_only_its_child() {
+    let provider = Provider::new(vec![]);
+    let mut policy = AgentHostPolicy::default();
+    policy
+        .modules
+        .insert(pid("module.agents"), ModuleAgentGrant::default());
+    let runtime = builder(provider.clone())
+        .build_agent_runtime(policy)
+        .await
+        .unwrap();
+    let module = agent_module();
+    let context = {
+        let kernel = runtime.kernel().await;
+        PluginContext::new(
+            kernel.clock().clone(),
+            Arc::new(apeireth_plugin::credentials::NoCredentials),
+            apeireth_core::kernel::TraceId::new(),
+        )
+    };
+    runtime
+        .register_module(module.clone(), context)
+        .await
+        .unwrap();
+    let api = module
+        .tool
+        .agents
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("hot registration binds module-owned port");
+    let child = api.spawn_agent(AgentConfig::default()).await.unwrap();
+    let _hold = provider.hold_next();
+    let running = child.clone();
+    let worker = tokio::spawn(async move { running.run("owned hot background".into()).await });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while provider.requests().is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let main = runtime
+        .spawn_agent("main", AgentConfig::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        main.run("independent main".into()).await.unwrap().text,
+        "done"
+    );
+    runtime.stop_module(&pid("module.agents")).await.unwrap();
+    assert_eq!(
+        worker.await.unwrap().unwrap_err().code,
+        AgentErrorCode::Cancelled
+    );
+    assert_eq!(child.snapshot().status, AgentStatus::Stopped);
+    assert_eq!(main.snapshot().usage.requests, 1);
+    assert_eq!(child.snapshot().usage.requests, 1);
+    assert_eq!(child.snapshot().usage.cancellations, 1);
+    assert_eq!(
+        api.spawn_agent(AgentConfig::default())
+            .await
+            .err()
+            .unwrap()
+            .code,
+        AgentErrorCode::OwnerStopped
+    );
+    runtime
+        .unregister_module(&pid("module.agents"))
+        .await
+        .unwrap();
+    assert_eq!(
+        main.run("main after unload".into()).await.unwrap().text,
+        "done"
+    );
+    runtime.shutdown().await.unwrap();
+}

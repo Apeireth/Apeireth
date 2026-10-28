@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 use std::time::Duration;
 mod control;
+mod hot;
 mod profiles;
 
 #[derive(Clone)]
@@ -80,6 +81,7 @@ struct Inner {
     dispatcher: Arc<ToolDispatcher>,
     host_handles: std::sync::atomic::AtomicUsize,
     profile_switch: tokio::sync::Mutex<Option<Arc<dyn AgentInstance>>>,
+    factory: Arc<Factory>,
 }
 struct Factory {
     binding: Arc<OnceLock<Weak<Inner>>>,
@@ -230,10 +232,11 @@ impl RuntimeBuilder {
         let binding = Arc::new(OnceLock::new());
         let ready = Arc::new(tokio::sync::Notify::new());
         self.v1_protocol = true;
-        self.agent_factory = Some(Arc::new(Factory {
+        let factory = Arc::new(Factory {
             binding: binding.clone(),
             ready: ready.clone(),
-        }));
+        });
+        self.agent_factory = Some(factory.clone());
         let kernel = self.build().await?;
         let usage = kernel.providers.accounting.clone();
         let dispatcher = kernel.dispatcher.clone();
@@ -251,6 +254,7 @@ impl RuntimeBuilder {
             policy,
             host_handles: std::sync::atomic::AtomicUsize::new(1),
             profile_switch: tokio::sync::Mutex::new(None),
+            factory,
         });
         let _ = binding.set(Arc::downgrade(&inner));
         ready.notify_waiters();
@@ -537,7 +541,7 @@ impl AgentInstance for ManagedAgent {
                 .acquire()
                 .await
                 .map_err(|_| error(AgentErrorCode::OwnerStopped, "runtime stopped"))?;
-            let kernel = inner.kernel.read().await;
+            let kernel = inner.kernel.read().await.execution_view();
             let mut request = TurnRequest::new(self.session, message);
             request.model = self.config.model.clone();
             request.security_context = self.security.clone();

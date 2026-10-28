@@ -85,3 +85,33 @@ the real Runtime test verifies V1 facts and separate resource call counts.
 Plugin Clippy with `-D warnings` and strict architecture guard passed.
 Evidence: `apeireth-resource-factory-regression.log`,
 `apeireth-resource-factory-runtime.log`, `apeireth-resource-factory-clippy.log`.
+
+## M3 production MCP and hot lifecycle evidence
+
+Implemented / Wired / Tested:
+
+- ProductionModules MCP uses McpDefinition → module_from_definition → existing PluginManager.
+- Fresh per-registration connections, catalog and owned stdio resources; the definition's observation is Weak.
+- Connection epochs and task scopes invalidate both managed and raw cached tool handles.
+- Explicit close revokes and reaps while external Arcs remain, without strong_count assumptions.
+- Runtime turns and approval continuations use immutable execution membership views. Shared session locks,
+  dispatcher, usage and provider resources remain the original objects; snapshot drop cannot stop the owner.
+- Managed hot registration/refresh/stop/unregister use bounded control operations; module-owned agents receive
+  scoped creation ports on hot registration. Dependency/provider rejection happens before cancellation.
+- An old model response cannot call a replacement generation. An old factory approval carries its original
+  ModuleInstanceId and cannot authorize the same named replacement.
+
+`apeireth-production-mcp-process-test.log` proves a real controlled Python JSON-RPC stdio server is
+started, invoked through a production Runtime turn and reaped at stop while old bridge/tool Arcs remain;
+restart creates a different bridge and old connection handles remain stopped. This is a local transport
+acceptance test, not a real external MCP service validation.
+
+`apeireth-hot-lifecycle-tests.log` records concurrent-agent and hot replacement regression.
+`apeireth-production-m3-regression.log` records the expanded kernel/plugin/assembly regression
+(103 suites / 1471 passed / 0 failed / 0 ignored before the final stale-approval test addition).
+Final frozen-source full-gate results are recorded separately below when executed.
+
+Compatibility change: configuration-only callers use mcp_definition().config()/startup_log();
+mcp_bridge() now returns Option<Arc<McpToolBridge>> after initialization, rather than a prebuilt
+Option<&Arc<...>>. No in-repository production caller relied on the old pre-initialize reference;
+existing configuration tests now also assert that no bridge/process is acquired before initialization.

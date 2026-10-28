@@ -48,9 +48,7 @@ impl Plugin for McpPlugin {
         self.bridge.tools()
     }
     async fn initialize(&self, _: &PluginContext) -> PluginResult<()> {
-        for connection in self.bridge.connections() {
-            connection.reopen();
-        }
+        self.bridge.reopen();
         Ok(())
     }
     async fn start(&self, _: &PluginContext) -> PluginResult<()> {
@@ -66,7 +64,11 @@ impl Plugin for McpPlugin {
         .map(|_| ())
         .map_err(|e| self.error("refresh", e))
     }
+    fn revoke_resources(&self) {
+        self.bridge.revoke();
+    }
     async fn shutdown(&self) -> PluginResult<()> {
+        self.bridge.revoke();
         let mut failures = Vec::new();
         for connection in self.bridge.connections() {
             if let Err(error) = connection.close().await {

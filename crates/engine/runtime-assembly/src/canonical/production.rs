@@ -25,7 +25,7 @@ use apeireth_plugin::self_assessment::SelfAssessmentStore;
 use apeireth_plugin::{Plugin, ToolCapability, ToolModule};
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
-use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
+use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig};
 use apeireth_tools_canonical::{
     CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
 };
@@ -628,7 +628,7 @@ pub struct ProductionModules {
     tool_modules: Vec<Arc<dyn Plugin>>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     telemetry: Arc<CognitiveTelemetry>,
-    mcp_bridge: Option<Arc<McpToolBridge>>,
+    mcp_definition: Option<Arc<apeireth_tools_canonical::mcp_bridge::McpDefinition>>,
     mcp_module: Option<Arc<McpModule>>,
     /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
     organ_module: Option<Arc<OrganModule>>,
@@ -1398,19 +1398,23 @@ impl ProductionModules {
         // server list was loaded above (before the roster projection) — a
         // server list with no enabled entry assembles an inert bridge (no
         // external tools), and the roster reports that honestly.
-        let mut mcp_bridge = None;
+        let mut mcp_definition = None;
         let mut mcp_module = None;
         if let Some(server_config) = mcp_server_config {
             instrument.constructed(ModuleFamily::Mcp);
             let options = McpBridgeOptions::from_env();
-            let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
-                RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))
-            })?;
-            let bridge = Arc::new(bridge);
-            tool_modules.push(Arc::new(
-                apeireth_tools_canonical::mcp_bridge::McpPlugin::new(bridge.clone()),
+            let definition =
+                apeireth_tools_canonical::mcp_bridge::McpDefinition::new(server_config, options)
+                    .map_err(|error| {
+                        RuntimeError::misconfigured(format!(
+                            "mcp definition refused to assemble: {error}"
+                        ))
+                    })?;
+            let definition = Arc::new(definition);
+            tool_modules.push(apeireth_plugin::resource_factory::module_from_definition(
+                definition.clone(),
             ));
-            mcp_bridge = Some(bridge);
+            mcp_definition = Some(definition);
             // Retained construction accessor is a compatibility bag, not the production catalog.
             mcp_module = Some(Arc::new(McpModule::new()));
         }
@@ -1750,7 +1754,7 @@ impl ProductionModules {
             tool_modules,
             capabilities,
             telemetry,
-            mcp_bridge,
+            mcp_definition,
             mcp_module,
             organ_module,
             bio_tone_state: bio_wiring.tone_state,
@@ -1829,17 +1833,6 @@ impl ProductionModules {
         Arc::clone(&self.telemetry)
     }
 
-    /// The external tool bridge assembled for the MCP slot, when enabled.
-    /// Adapters keep this handle to run the asynchronous connect/discovery pass.
-    pub fn mcp_bridge(&self) -> Option<&Arc<McpToolBridge>> {
-        self.mcp_bridge.as_ref()
-    }
-
-    /// The MCP dynamic tool module bag, when the MCP slot is enabled.
-    pub fn mcp_module(&self) -> Option<&Arc<McpModule>> {
-        self.mcp_module.as_ref()
-    }
-
     /// W3.3 外部事件源: 把 guard 免疫记忆共享句柄接到器官模块的审议门, 并把
     /// **同一份**句柄填进 W3.6 自述槽 (开关关 = 槽未武装, fill no-op)。传进来的
     /// 必须是 hook 正在使用的同一份句柄 (否则观测与门读的不是同一份状态);
@@ -1868,3 +1861,6 @@ where
         ))
     })
 }
+
+#[path = "production_mcp.rs"]
+mod mcp;

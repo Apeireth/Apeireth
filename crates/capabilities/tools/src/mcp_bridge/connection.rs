@@ -47,6 +47,8 @@ pub struct McpServerConnection {
     reconnect: Mutex<ReconnectState>,
     reconnects: std::sync::atomic::AtomicUsize,
     closed: std::sync::atomic::AtomicBool,
+    generation: std::sync::atomic::AtomicU64,
+    generation_scope: Mutex<apeireth_plugin::task_scope::ModuleTaskScope>,
     lifecycle: tokio::sync::Mutex<()>,
     discovered: Mutex<Vec<DiscoveredTool>>,
 }
@@ -69,6 +71,8 @@ impl McpServerConnection {
             reconnect: Mutex::new(ReconnectState::new(options.reconnect.clone())),
             reconnects: std::sync::atomic::AtomicUsize::new(0),
             closed: std::sync::atomic::AtomicBool::new(false),
+            generation: std::sync::atomic::AtomicU64::new(0),
+            generation_scope: Mutex::new(apeireth_plugin::task_scope::ModuleTaskScope::new()),
             lifecycle: tokio::sync::Mutex::new(()),
             discovered: Mutex::new(Vec::new()),
         }
@@ -178,19 +182,59 @@ impl McpServerConnection {
     }
 
     /// Only module initialization may reopen a stopped connection definition.
-    pub fn reopen(&self) {
+    pub(crate) fn reopen(&self) {
+        if self.closed.load(std::sync::atomic::Ordering::SeqCst) {
+            *self
+                .generation_scope
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) =
+                apeireth_plugin::task_scope::ModuleTaskScope::new();
+        }
         self.closed
             .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
-    pub async fn close(&self) -> Result<(), McpError> {
-        self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
-        let _lifecycle = self.lifecycle.lock().await;
+    /// Logical revocation does not depend on the number of external references.
+    pub fn revoke(&self) {
+        if !self.closed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            self.generation
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        self.generation_scope
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .close();
         let channel = self
             .channel
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .take();
+            .clone();
+        if let Some(channel) = channel {
+            channel.revoke();
+        }
+    }
+    pub(crate) fn generation_scope(&self) -> apeireth_plugin::task_scope::ModuleTaskScope {
+        self.generation_scope
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    pub(crate) fn accepts_generation(&self, generation: u64) -> bool {
+        !self.closed.load(std::sync::atomic::Ordering::SeqCst) && self.generation() == generation
+    }
+    pub async fn close(&self) -> Result<(), McpError> {
+        self.revoke();
+        self.generation_scope().close_and_wait().await;
+        let _lifecycle = self.lifecycle.lock().await;
+        // Retain ownership across cancellation or a failed close so it can be retried.
+        let channel = self
+            .channel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         self.session
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -198,6 +242,10 @@ impl McpServerConnection {
         if let Some(channel) = channel {
             channel.close().await?;
         }
+        self.channel
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
         Ok(())
     }
 

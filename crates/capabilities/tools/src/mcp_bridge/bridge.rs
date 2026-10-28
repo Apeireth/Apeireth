@@ -174,6 +174,23 @@ impl McpToolBridge {
         self.config.redacted_startup_log()
     }
 
+    /// A new module activation gets a fresh catalog and fresh generation-bound tools.
+    pub(crate) fn reopen(&self) {
+        self.tools.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        for connection in &self.connections {
+            // Removing an existing server cannot create a name collision.
+            let _ = self
+                .catalog
+                .replace_server(connection.server_name(), Vec::new());
+            connection.reopen();
+        }
+    }
+    pub(crate) fn revoke(&self) {
+        for connection in &self.connections {
+            connection.revoke();
+        }
+    }
+
     /// Refresh the whole dynamic catalog: (re)connect where needed, run
     /// `tools/list` everywhere, reconcile, and report the delta.
     pub async fn refresh(&self) -> Result<DiscoveryReport, McpBridgeError> {

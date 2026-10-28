@@ -212,3 +212,19 @@ async fn failed_close_is_observable_retryable_and_successful_close_is_idempotent
         .own("late", Arc::new(Resource::default()))
         .is_err());
 }
+
+#[tokio::test]
+async fn immutable_membership_view_cannot_mutate_or_cancel_its_lifecycle_owner() {
+    let d = definition();
+    let plugin = module_from_definition(d.clone());
+    let mut manager = PluginManager::new();
+    manager.register(plugin.clone()).unwrap();
+    manager.start_all(&context()).await.unwrap();
+    let mut view = manager.execution_snapshot();
+    assert!(view.cancel(&d.manifest.id).is_err());
+    assert!(view.stop(&d.manifest.id).await.is_err());
+    drop(view);
+    assert!(plugin.tools()[0].invoke(&call()).await.is_ok());
+    manager.stop(&d.manifest.id).await.unwrap();
+    assert!(!plugin.tools()[0].invoke(&call()).await.is_ok());
+}

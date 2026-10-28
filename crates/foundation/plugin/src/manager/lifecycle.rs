@@ -4,29 +4,7 @@ use super::*;
 impl PluginManager {
     /// Dependents must stop before their dependencies. Cancel, drain, then cleanup.
     pub async fn stop(&mut self, id: &PluginId) -> PluginResult<()> {
-        for other in self.plugins.ids() {
-            if self
-                .plugins
-                .get(other)?
-                .manifest()
-                .dependencies
-                .contains(id)
-                && matches!(
-                    self.state(other)?,
-                    Lifecycle::Initializing
-                        | Lifecycle::Initialized
-                        | Lifecycle::Starting
-                        | Lifecycle::Active
-                        | Lifecycle::Stopping
-                )
-            {
-                return Err(PluginError::PluginFailed {
-                    plugin: id.clone(),
-                    phase: "stop",
-                    reason: format!("dependent {other} must stop first"),
-                });
-            }
-        }
+        self.validate_stop(id)?;
         self.cancel(id)?;
         let state = self.state(id)?;
         let scope = self.task_scope(id)?;
@@ -69,6 +47,55 @@ impl PluginManager {
         self.start_order.retain(|started| started != id);
         if state != Lifecycle::Failed {
             self.plugins.transition(id, Lifecycle::Stopped)?;
+        }
+        Ok(())
+    }
+
+    /// Publish Stopping before waiting for native drain. Failed/Stopped remain terminal.
+    pub fn begin_stop(
+        &mut self,
+        id: &PluginId,
+    ) -> PluginResult<crate::task_scope::ModuleTaskScope> {
+        self.validate_stop(id)?;
+        self.cancel(id)?;
+        if matches!(
+            self.state(id)?,
+            Lifecycle::Initializing
+                | Lifecycle::Initialized
+                | Lifecycle::Starting
+                | Lifecycle::Active
+        ) {
+            self.plugins.transition(id, Lifecycle::Stopping)?;
+        }
+        self.task_scope(id)
+    }
+
+    /// Read-only preflight before cancellation; a refused stop has no effects.
+    pub fn validate_stop(&self, id: &PluginId) -> PluginResult<()> {
+        self.require_owner()?;
+        self.state(id)?;
+        for other in self.plugins.ids() {
+            if self
+                .plugins
+                .get(other)?
+                .manifest()
+                .dependencies
+                .contains(id)
+                && matches!(
+                    self.state(other)?,
+                    Lifecycle::Initializing
+                        | Lifecycle::Initialized
+                        | Lifecycle::Starting
+                        | Lifecycle::Active
+                        | Lifecycle::Stopping
+                )
+            {
+                return Err(PluginError::PluginFailed {
+                    plugin: id.clone(),
+                    phase: "stop",
+                    reason: format!("dependent {other} must stop first"),
+                });
+            }
         }
         Ok(())
     }

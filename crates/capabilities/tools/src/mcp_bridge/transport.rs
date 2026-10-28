@@ -38,6 +38,9 @@ pub trait McpChannel: Send + Sync {
     /// Send one request and await its response.
     async fn request(&self, request: JsonRpcRequest) -> Result<JsonRpcResponse, McpError>;
 
+    /// Non-blocking invalidation; explicit close subsequently joins/reaps owned work.
+    fn revoke(&self) {}
+
     /// Close owned transport resources; in-process channels need no cleanup.
     async fn close(&self) -> Result<(), McpError> {
         Ok(())
@@ -277,6 +280,27 @@ impl StdioChannel {
 
 #[async_trait]
 impl McpChannel for StdioChannel {
+    fn revoke(&self) {
+        self.broken.store(true, Ordering::SeqCst);
+        self.router.fail_all();
+        if let Some(reader) = self
+            .reader
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            reader.abort();
+        }
+        if let Some(owner) = self
+            .process_owner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            let _ = owner.terminate();
+        }
+    }
+
     async fn close(&self) -> Result<(), McpError> {
         self.broken.store(true, Ordering::SeqCst);
         self.router.fail_all();
@@ -515,6 +539,19 @@ impl SseChannel {
 
 #[async_trait]
 impl McpChannel for SseChannel {
+    fn revoke(&self) {
+        self.broken.store(true, Ordering::SeqCst);
+        self.router.fail_all();
+        if let Some(reader) = self
+            .reader
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            reader.abort();
+        }
+    }
+
     async fn close(&self) -> Result<(), McpError> {
         self.broken.store(true, Ordering::SeqCst);
         self.router.fail_all();

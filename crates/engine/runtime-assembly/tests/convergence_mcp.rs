@@ -260,3 +260,98 @@ async fn descriptor_risk_changes_do_not_reuse_old_approval_or_readonly_grants() 
     assert_eq!(server.call_log().len(), 1);
     assert!(runtime.shutdown().await.is_empty());
 }
+
+#[tokio::test]
+async fn old_raw_mcp_tool_arc_stays_revoked_after_same_bridge_is_restarted() {
+    let server = InProcessMcpServer::new("demo");
+    server.set_tools(vec![MockToolSpec::new("echo", "first").read_only()]);
+    let bridge = bridge(&server);
+    let module = Arc::new(McpPlugin::new(bridge.clone()));
+    let mut runtime = builder(Provider::new(vec![]))
+        .with_plugin(module.clone())
+        .build()
+        .await
+        .unwrap();
+    // Keep the raw bridge Arc as well as dispatcher-managed handles.
+    let old = bridge.tools().pop().unwrap();
+    assert!(old.invoke(&call("mcp:demo:echo", json!({}))).await.is_ok());
+    runtime.stop_module(&pid("module.mcp")).await.unwrap();
+    assert!(!old.invoke(&call("mcp:demo:echo", json!({}))).await.is_ok());
+    runtime.unregister_module(&pid("module.mcp")).unwrap();
+    let context = apeireth_plugin::PluginContext::new(
+        runtime.clock().clone(),
+        Arc::new(apeireth_plugin::credentials::NoCredentials),
+        apeireth_core::kernel::TraceId::new(),
+    );
+    runtime.register_module(module, &context).await.unwrap();
+    assert!(
+        !old.invoke(&call("mcp:demo:echo", json!({}))).await.is_ok(),
+        "same tool name must not revive an old generation"
+    );
+    let fresh = runtime.tools().pop().unwrap();
+    assert!(fresh
+        .invoke(&call("mcp:demo:echo", json!({})))
+        .await
+        .is_ok());
+    assert_eq!(server.call_log().len(), 2);
+    assert!(runtime.shutdown().await.is_empty());
+}
+
+#[tokio::test]
+async fn mcp_definition_builds_new_owned_connections_and_catalog_on_replacement() {
+    use apeireth_plugin::resource_factory::module_from_definition;
+    use apeireth_tools_canonical::mcp_bridge::McpDefinition;
+    let server = InProcessMcpServer::new("demo");
+    server.set_tools(vec![
+        MockToolSpec::new("echo", "owned_factory_reply").read_only()
+    ]);
+    let options = McpBridgeOptions {
+        readonly_preset: true,
+        ..Default::default()
+    };
+    let definition = Arc::new(
+        McpDefinition::new(
+            McpServerConfig::new(vec![McpServerSpec::stdio("demo", "mock")]),
+            options,
+        )
+        .unwrap()
+        .with_channel_factories(vec![server.factory()])
+        .unwrap(),
+    );
+    let module = module_from_definition(definition.clone());
+    let provider = Provider::new(vec![vec![call("mcp:demo:echo", json!({}))]]);
+    let mut runtime = builder(provider.clone())
+        .with_plugin(module.clone())
+        .build()
+        .await
+        .unwrap();
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "echo"))
+        .await
+        .unwrap();
+    let old = module.tools().pop().unwrap();
+    runtime.stop_module(&pid("module.mcp")).await.unwrap();
+    assert!(module
+        .resource_statuses()
+        .iter()
+        .all(|resource| resource.closed));
+    runtime.unregister_module(&pid("module.mcp")).unwrap();
+    let context = apeireth_plugin::PluginContext::new(
+        runtime.clock().clone(),
+        Arc::new(apeireth_plugin::credentials::NoCredentials),
+        apeireth_core::kernel::TraceId::new(),
+    );
+    runtime
+        .register_module(module_from_definition(definition), &context)
+        .await
+        .unwrap();
+    assert!(!old.invoke(&call("mcp:demo:echo", json!({}))).await.is_ok());
+    provider.enqueue_tools(vec![call("mcp:demo:echo", json!({}))]);
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "new echo"))
+        .await
+        .unwrap();
+    assert_eq!(server.call_log().len(), 2);
+    assert_eq!(server.opened_channels(), 2);
+    assert!(runtime.shutdown().await.is_empty());
+}

@@ -306,7 +306,34 @@ struct InstanceTool {
     activation: ModuleActivation,
     tasks: crate::task_scope::ModuleTaskScope,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InstanceInvocation {
+    version: u8,
+    instance: ModuleInstanceId,
+    operation: Option<crate::tool::FrozenInvocation>,
+}
 impl InstanceTool {
+    fn unfreeze(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&crate::tool::FrozenInvocation>,
+    ) -> Result<Option<crate::tool::FrozenInvocation>, ToolResult> {
+        let Some(frozen) = frozen else {
+            return Ok(None);
+        };
+        let invocation: InstanceInvocation = serde_json::from_value(frozen.payload.clone())
+            .map_err(|_| {
+                ToolResult::permanent_error(&call.id, "factory invocation is not instance-bound")
+            })?;
+        if invocation.version != 1 || invocation.instance != self.activation.instance() {
+            return Err(ToolResult::permanent_error(
+                &call.id,
+                "approval belongs to an expired module instance; approve a new call",
+            ));
+        }
+        Ok(invocation.operation)
+    }
     async fn execute(
         &self,
         call: &ToolCall,
@@ -351,7 +378,21 @@ impl ToolCapability for InstanceTool {
                 "module instance is not running",
             ));
         }
-        self.tool.freeze_invocation(call)
+        let operation = self.tool.freeze_invocation(call)?;
+        let display = operation
+            .as_ref()
+            .map(|f| f.display.clone())
+            .unwrap_or_else(|| call.arguments.clone());
+        let payload = serde_json::to_value(InstanceInvocation {
+            version: 1,
+            instance: self.activation.instance(),
+            operation,
+        })
+        .expect("serializable invocation");
+        Ok(Some(crate::tool::FrozenInvocation::new(
+            payload,
+            serde_json::json!({"module_instance": self.activation.instance(), "operation": display}),
+        )))
     }
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
         self.execute(call, self.tool.invoke(call)).await
@@ -361,7 +402,11 @@ impl ToolCapability for InstanceTool {
         call: &ToolCall,
         frozen: Option<&crate::tool::FrozenInvocation>,
     ) -> ToolResult {
-        self.execute(call, self.tool.invoke_frozen(call, frozen))
+        let operation = match self.unfreeze(call, frozen) {
+            Ok(operation) => operation,
+            Err(error) => return error,
+        };
+        self.execute(call, self.tool.invoke_frozen(call, operation.as_ref()))
             .await
     }
     async fn invoke_in_session(
@@ -370,8 +415,16 @@ impl ToolCapability for InstanceTool {
         frozen: Option<&crate::tool::FrozenInvocation>,
         session: Option<SessionId>,
     ) -> ToolResult {
-        self.execute(call, self.tool.invoke_in_session(call, frozen, session))
-            .await
+        let operation = match self.unfreeze(call, frozen) {
+            Ok(operation) => operation,
+            Err(error) => return error,
+        };
+        self.execute(
+            call,
+            self.tool
+                .invoke_in_session(call, operation.as_ref(), session),
+        )
+        .await
     }
     async fn invoke_with_context(
         &self,
@@ -379,7 +432,21 @@ impl ToolCapability for InstanceTool {
         frozen: Option<&crate::tool::FrozenInvocation>,
         context: &crate::ToolExecutionContext,
     ) -> ToolResult {
-        self.execute(call, self.tool.invoke_with_context(call, frozen, context))
-            .await
+        if context.authorization.approved && frozen.is_none() {
+            return ToolResult::permanent_error(
+                &call.id,
+                "approved factory operation requires an instance-bound invocation",
+            );
+        }
+        let operation = match self.unfreeze(call, frozen) {
+            Ok(operation) => operation,
+            Err(error) => return error,
+        };
+        self.execute(
+            call,
+            self.tool
+                .invoke_with_context(call, operation.as_ref(), context),
+        )
+        .await
     }
 }

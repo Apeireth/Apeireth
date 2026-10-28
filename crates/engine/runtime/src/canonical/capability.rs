@@ -44,6 +44,7 @@ pub trait CapabilityProvider: Send + Sync {
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>>;
 }
 
+#[derive(Clone)]
 struct RegisteredCapability {
     owner: String,
     capability: Arc<dyn ToolCapability>,
@@ -78,6 +79,13 @@ impl Default for CapabilityRegistry {
 }
 
 impl CapabilityRegistry {
+    pub(super) fn execution_snapshot(&self) -> Self {
+        Self {
+            entries: RwLock::new(read_lock_or_recover(&self.entries).clone()),
+            controls: RwLock::new(read_lock_or_recover(&self.controls).clone()),
+        }
+    }
+
     /// Create an empty registry.
     pub fn new() -> Self {
         Self {

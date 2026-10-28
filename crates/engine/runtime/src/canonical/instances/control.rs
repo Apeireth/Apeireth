@@ -3,14 +3,35 @@ use super::*;
 impl AgentRuntime {
     pub async fn stop_module(&self, id: &PluginId) -> AgentResult<()> {
         let scope = {
-            let kernel = self.inner.kernel.read().await;
-            kernel
-                .cancel_module(id)
-                .map_err(|e| error(AgentErrorCode::NotFound, e.to_string()))?;
+            let mut kernel =
+                tokio::time::timeout(self.inner.policy.stop_timeout, self.inner.kernel.write())
+                    .await
+                    .map_err(|_| {
+                        error(AgentErrorCode::NotReady, "module control deadline exceeded")
+                    })?;
             kernel
                 .plugins
-                .task_scope(id)
+                .validate_stop(id)
+                .map_err(|e| error(AgentErrorCode::NotReady, e.to_string()))?;
+            if kernel
+                .plugins
+                .plugins()
+                .get(id)
                 .map_err(|e| error(AgentErrorCode::NotFound, e.to_string()))?
+                .manifest()
+                .capabilities
+                .iter()
+                .any(|c| c.kind == apeireth_plugin::CapabilityKind::Provider)
+            {
+                return Err(error(
+                    AgentErrorCode::InvalidConfig,
+                    "stop provider modules through runtime shutdown",
+                ));
+            }
+            kernel
+                .plugins
+                .begin_stop(id)
+                .map_err(|e| error(AgentErrorCode::Provider, e.to_string()))?
         };
         tokio::time::timeout(self.inner.policy.stop_timeout, scope.close_and_wait())
             .await
@@ -123,7 +144,7 @@ impl AgentRuntime {
                 .acquire()
                 .await
                 .map_err(|_| error(AgentErrorCode::OwnerStopped, "runtime stopped"))?;
-            let kernel = self.inner.kernel.read().await;
+            let kernel = self.inner.kernel.read().await.execution_view();
             match kernel
                 .resolve_approval(agent.session, approval, decision)
                 .await

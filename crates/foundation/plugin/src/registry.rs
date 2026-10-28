@@ -28,6 +28,7 @@ use crate::error::{PluginError, PluginResult};
 use crate::plugin::Plugin;
 
 /// A registered plugin and its current state.
+#[derive(Clone)]
 pub(crate) struct PluginEntry {
     pub(crate) plugin: Arc<dyn Plugin>,
     pub(crate) state: Lifecycle,
@@ -45,6 +46,11 @@ pub struct PluginRegistry {
 }
 
 impl PluginRegistry {
+    pub(crate) fn execution_snapshot(&self) -> Self {
+        Self {
+            entries: self.entries.clone(),
+        }
+    }
     /// An empty registry.
     pub fn new() -> Self {
         Self::default()

@@ -285,12 +285,12 @@ pub struct Runtime {
         BTreeMap<String, Arc<super::behavior_adapter::RegisteredBehavior>>,
     pub(super) capabilities: CapabilityRegistry,
     pub(super) dispatcher: Arc<super::dispatcher::ToolDispatcher>,
-    pub(super) session_locks: SessionLocks,
-    pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
+    pub(super) session_locks: Arc<SessionLocks>,
+    pub(super) event_sink: Arc<RwLock<Arc<dyn RuntimeEventSink>>>,
     pub(super) context_projector: Arc<dyn ContextProjector>,
     /// Session-scoped streak state for the repeated-identical-call advisory
     /// channel. Advisory only: it never blocks and never decides anything.
-    pub(super) repetition_detectors: Mutex<BTreeMap<SessionId, RepetitionDetector>>,
+    pub(super) repetition_detectors: Arc<Mutex<BTreeMap<SessionId, RepetitionDetector>>>,
     /// Optional runtime-invariant consumption point (observation layer). When
     /// absent, no invariant checking happens at the dispatch boundary.
     pub(super) invariant_auditor: Option<Arc<InvariantAuditor>>,
@@ -1109,10 +1109,10 @@ impl RuntimeBuilder {
             registered_behaviors,
             capabilities: capability_registry,
             dispatcher,
-            session_locks: SessionLocks::default(),
-            event_sink: RwLock::new(self.event_sink),
+            session_locks: Arc::new(SessionLocks::default()),
+            event_sink: Arc::new(RwLock::new(self.event_sink)),
             context_projector: self.context_projector,
-            repetition_detectors: Mutex::new(BTreeMap::new()),
+            repetition_detectors: Arc::new(Mutex::new(BTreeMap::new())),
             invariant_auditor: self.invariant_auditor,
             context_spill,
             compaction: self

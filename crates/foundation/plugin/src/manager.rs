@@ -42,6 +42,7 @@ pub struct PluginManager {
     capabilities: CapabilityIndex,
     /// Order in which plugins were started, so shutdown can reverse it.
     start_order: Vec<PluginId>,
+    execution_view: bool,
 }
 
 impl PluginManager {
@@ -50,11 +51,32 @@ impl PluginManager {
         Self::default()
     }
 
+    /// Derived membership view; it shares revocation tokens and cannot own lifecycle.
+    pub fn execution_snapshot(&self) -> Self {
+        Self {
+            plugins: self.plugins.execution_snapshot(),
+            capabilities: self.capabilities.clone(),
+            start_order: self.start_order.clone(),
+            execution_view: true,
+        }
+    }
+    fn require_owner(&self) -> PluginResult<()> {
+        if self.execution_view {
+            return Err(PluginError::PluginFailed {
+                plugin: PluginId::new("runtime.snapshot").expect("static id"),
+                phase: "control",
+                reason: "immutable execution view cannot mutate lifecycle".into(),
+            });
+        }
+        Ok(())
+    }
+
     /// Register a plugin and index its declared capabilities.
     ///
     /// All-or-nothing: if any capability collides, the plugin is not registered
     /// either.
     pub fn register(&mut self, plugin: Arc<dyn Plugin>) -> PluginResult<()> {
+        self.require_owner()?;
         let manifest = plugin.manifest();
         let id = manifest.id.clone();
 
@@ -280,6 +302,7 @@ impl PluginManager {
 
     /// Initialize one module once, after all dependencies are running.
     pub async fn initialize(&mut self, id: &PluginId, ctx: &PluginContext) -> PluginResult<()> {
+        self.require_owner()?;
         self.resolve_order()?;
         self.dependencies_active(id)?;
         self.plugins.transition(id, Lifecycle::Initializing)?;
@@ -319,6 +342,7 @@ impl PluginManager {
 
     /// Activate an initialized module. Active is the existing Running state.
     pub async fn start(&mut self, id: &PluginId, ctx: &PluginContext) -> PluginResult<()> {
+        self.require_owner()?;
         self.dependencies_active(id)?;
         self.plugins.transition(id, Lifecycle::Starting)?;
         let plugin = Arc::clone(self.plugins.get(id)?);
@@ -396,6 +420,7 @@ impl PluginManager {
 
     /// Refuse new work and request cancellation without mutating the registry.
     pub fn cancel(&self, id: &PluginId) -> PluginResult<()> {
+        self.require_owner()?;
         self.plugins
             .entry(id)
             .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))?
@@ -408,6 +433,7 @@ impl PluginManager {
 
     /// Remove only a cleaned, quiescent module, after removing its dependents.
     pub fn unregister(&mut self, id: &PluginId) -> PluginResult<()> {
+        self.require_owner()?;
         let entry = self
             .plugins
             .entry(id)
@@ -1196,6 +1222,9 @@ mod tests {
 
 impl Drop for PluginManager {
     fn drop(&mut self) {
+        if self.execution_view {
+            return;
+        }
         for id in self.plugins.ids() {
             // Drop cannot await. Explicit shutdown performs observable close/drain.
             let _ = self.cancel(id);

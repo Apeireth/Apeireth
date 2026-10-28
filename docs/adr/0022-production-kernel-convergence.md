@@ -89,3 +89,46 @@ provider membership still requires rebuilding the router.
 
 Verified by foundation factory rollback/retry/independence tests and a real
 Runtime turn followed by replacement while retaining an old raw tool Arc.
+
+## Managed hot lifecycle and MCP (M3)
+
+Managed turns and approval continuations obtain an immutable Runtime execution
+view under a short read lock, then release that lock before awaiting a provider.
+The view copies catalog membership, not running resources. It shares the original
+provider router, accounting, dispatcher, session locks, event sink, metrics,
+module scopes and activation tokens. Its PluginManager is an explicitly read-only
+derived view: it cannot register, start, stop or cancel, and dropping it cannot
+stop the real lifecycle owner. This preserves one mutable registry authority.
+
+AgentRuntime exposes bounded register_module, refresh_module_tools, stop_module
+and unregister_module operations. A new registration receives the existing scoped
+module-agent factory. Re-registering a stopped definition creates fresh resources;
+requests already in flight keep their old tool membership and closed scopes.
+Refused dependency/provider stops are checked before cancellation. Shutdown
+races are checked again after acquiring the control lock.
+
+Factory approvals also freeze ModuleInstanceId in a versioned invocation envelope;
+the factory adapter unwraps the original tool-owned frozen operation only for
+that instance. Old approvals cannot authorize a replacement with identical tool
+names, schemas or arguments. Existing non-factory frozen ABIs are unchanged.
+
+Desktop ProductionModules now registers a configuration-only McpDefinition through
+the same resource factory. It creates a fresh bridge, connection set and catalog
+per registration. McpDefinition keeps only a Weak observation of its latest
+bridge. MCP permissions remain explicit and are not copied into a new instance.
+The production compatibility accessor mcp_bridge now returns an owned Arc only
+after initialization; pre-initialize configuration is available through
+mcp_definition().config(). Existing construction-only McpModule bags do not own
+production discovery or a second execution backend.
+
+Connection revocation closes an epoch-specific task scope and invalidates raw
+tool handles. Stdio/SSE revocation aborts readers and fails pending replies;
+explicit close joins/reaps owned work even while external bridge/channel Arcs
+remain. Connection close retains its owned channel across cancellation/failure
+for retry. Reopening a connection is crate-private; tools from an old activation
+cannot revive when the bridge is reused. Explicit shutdown is required for
+observable drain/close results; Drop performs synchronous revocation only.
+
+Runtime tests cover hot replacement during a blocked model call, stale approvals,
+module-owned hot agents, preserved main-agent concurrency, and an actual controlled
+stdio server through ProductionModules. No real external API was used.

@@ -64,12 +64,21 @@ pub fn tool_result_from_mcp(call_id: &str, tool_name: &str, result: ToolCallResu
 pub struct McpDynamicTool {
     entry: McpToolEntry,
     connection: Arc<McpServerConnection>,
+    generation: u64,
+    generation_scope: apeireth_plugin::task_scope::ModuleTaskScope,
 }
 
 impl McpDynamicTool {
     /// A dynamic tool for `entry`, executing through `connection`.
     pub fn new(entry: McpToolEntry, connection: Arc<McpServerConnection>) -> Self {
-        Self { entry, connection }
+        let generation = connection.generation();
+        let generation_scope = connection.generation_scope();
+        Self {
+            entry,
+            connection,
+            generation,
+            generation_scope,
+        }
     }
 
     fn descriptor_receipt(&self) -> serde_json::Value {
@@ -131,15 +140,23 @@ impl ToolCapability for McpDynamicTool {
 
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
         let name = self.entry.model_name.as_str();
+        if !self.connection.accepts_generation(self.generation) {
+            return ToolResult::permanent_error(
+                &call.id,
+                "external tool belongs to an expired module generation",
+            )
+            .with_name(name);
+        }
         match self
-            .connection
-            .call_tool_checked(
+            .generation_scope
+            .run(self.connection.call_tool_checked(
                 &self.entry.remote_name,
                 call.arguments.clone(),
                 &self.entry.input_schema,
                 self.entry.declared_read_only,
-            )
+            ))
             .await
+            .unwrap_or_else(|_| Err(McpError::Transport("module generation stopped".into())))
         {
             Ok(result) => tool_result_from_mcp(&call.id, name, result),
             Err(McpError::Transport(reason)) => ToolResult::retryable_error(
