@@ -2,7 +2,7 @@
 
 > 计划、路线图、迁移方案、进度报告 —— **打算做什么**。读这里回答「下一步做什么」。
 
-**17 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
+**18 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
 
 | 篇 | 是什么 |
 |---|---|
@@ -12,6 +12,7 @@
 | [`design-intent.md`](design-intent.md) | Apeireth 设计意图记录（Design Intent） |
 | [`design-task-lease-2026-08-21.md`](design-task-lease-2026-08-21.md) | Task DAG Lease Mechanism — 设计文档 (B 项) — 2026-08-21 |
 | [`design-three-way-conflict-2026-08-21.md`](design-three-way-conflict-2026-08-21.md) | 三路冲突检测机制 (Three-Way Conflict Detection) — 设计 |
+| [`frontend-rebuild-plan.md`](frontend-rebuild-plan.md) | **前端视觉总攻 · 作战计划书 v2**（推倒重建 · 自研引擎为基底；2026-10-28 起草，待 owner 复核） |
 | [`migration-v1-to-v2.md`](migration-v1-to-v2.md) | Apeireth v1.0 → v2.0 迁移指南（2026-08-27） |
 | [`r12-coordination-context-1-merge-spec-2026-08-28.md`](r12-coordination-context-1-merge-spec-2026-08-28.md) | R12-CoordinationContext-1 真实施 brief — v1 context.rs + context_rot.rs rot_score 融合 (2026-08-28) |
 | [`release-plan.md`](release-plan.md) | Apeireth 发布路线（v2 工程重构线, 2026-08-27） |

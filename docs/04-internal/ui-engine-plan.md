@@ -5,10 +5,22 @@
 Document:        docs/04-internal/ui-engine-plan.md
 Version:         1.0
 Last-Modified:   2026-10-24
-Status:          🟡 计划（待实施）
+Status:          🔴 已冻结（2026-10-28；见头部横幅）
 Author:          前端重构项目组 · ui-planner
 口径真源:        上位决策 = docs/adr/0015-pure-rust-ui-engine.md；宪章 = docs/04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md
 ```
+
+> **🔴 冻结横幅（2026-10-28，总工程师批注；正文保留原样不追溯改写）**
+>
+> 本计划书的**作战目标已废止**——「把旧 Svelte 设计逐像素搬进引擎」被 owner 判定为替换对象
+> （旧前端「整体不行」，2026-10-28 定调）。新线见 [ADR-0016](../adr/0016-frontend-visual-rebuild.md)
+> 与 [05-plans/frontend-rebuild-plan.md](05-plans/frontend-rebuild-plan.md)。
+>
+> **仍然有效**：引擎能力与工程教训（§2.2 引擎边界、§3 各阶段能力清单、§4 验收装置与 G 门、
+> §5 风险登记、§7 G12 外部依赖逐个登记、§8 出处）。
+> **不再有效**：「视觉层零改写」约束、「与旧画面像素一致」验收目标、逐面迁移的作战序。
+> **已停止**：设置页剩余 5 个子面（预算/数据/人格记忆/能力治理/服务商）不再迁移。
+> **资产处置**：已完成项冻结为「引擎能力证据（FROZEN）」，不进产品（见新计划书 §7）。
 
 > 给谁看：接续本计划的人或 AI——**不读任何对话记录也能接手**。
 > 纪律：每个数字随行三件（命令 + 日期 + 工具链）；未实跑的一律写「未实测」，不写估计。
