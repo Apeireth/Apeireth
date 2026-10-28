@@ -21,7 +21,7 @@
 /**
  * 分类数量 (闭合词表规模, 测试钉死).
  */
-#define ErrorCategory_COUNT 9
+#define ErrorCategory_COUNT 10
 
 /**
  * 单帧帧体长度上界 (1 MiB): 覆盖最大信令帧 / 语音分块帧, 超限拒收.
@@ -41,8 +41,10 @@
 /**
  * **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
  *
- * R21 真接 `apeireth-api` HTTP/WS 时, **必须经 8 哲学锚 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5, baseline 2026-08-19)
- * + 主人审才能改 `false`**.
+ * **只守 WS 流层**（`invoke_stream`）：HTTP 工具传输自 W5（2026-10-10）已真接，
+ * 6 个工具方法可真调；仍为桩的只有 `invoke_stream` 与 `check_quota`，
+ * 两者都返**显式错误码**（不 panic、不假装支持）。
+ * 要把 WS 也真接（R21）时须经 8 哲学锚 + 主人审才能改 `false`。
  */
 #define STUB_MODE true
 

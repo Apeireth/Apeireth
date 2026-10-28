@@ -47,5 +47,10 @@ jobs:
       - name: 预构建测试产物（避免每条命令各自冷启动）
         run: cargo build --workspace --tests --locked
 
+      # **H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED
+      # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
+      - name: 高口径声明必须真验（H5）
+        run: python3 scripts/check_claims_verify.py --wired-gate
+
       - name: 跑每条 claim 的 verify_cmd
         run: python3 scripts/check_claims_verify.py --check --timeout 600

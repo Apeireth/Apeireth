@@ -17,7 +17,7 @@
 //!
 //! ## 1. 访问史必须是**真实的访问**
 //!
-//! 守卫本身**不落库** ([`AccessGuard`](crate::forget_access_guard::AccessGuard)
+//! 守卫本身**不落库**（`AccessGuard`
 //! 只做「凭据 → 令牌」转换)。所以本批**不造事件**: 事件一律来自真实观测面 ——
 //! 生产上由 `SqliteAccessHistoryStore::record_selected_context`
 //! (runtime-assembly 的 canonical 召回面, 见

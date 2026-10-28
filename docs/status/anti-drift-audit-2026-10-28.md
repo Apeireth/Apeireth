@@ -43,10 +43,10 @@ Author: lead
 | **H2** | `claims.yaml` 的 `verify_cmd` **从不被执行** ⇒ 装饰品 | 🔴 高 | ✅ **已修** |
 | **H3** | `STALE` 只查登记过的 source ⇒ **漏列即静默漂** | 🔴 高 | ✅ **已修** |
 | **H8** | 文档**无分类** ⇒ 约束靠 AI 自觉 | 🔴 高 | ✅ **已修** |
-| **H4** | 尺寸棘轮可被「搬家」满足（复杂度横向移动） | 🟠 中 | ⏳ **未修** |
-| **H5** | `check_doc_caliber` 是**形式守卫**（写标记就过） | 🟠 中 | ⏳ **未修** |
-| **H6** | **慢性红**（`cargo +nightly doc` 三次全红）⇒ 红失去信号价值 | 🟠 中 | ⏳ **未修** |
-| **H7** | 批次进度页**零守卫** ⇒ 漂一整天没人喊 | 🟠 中 | ⏳ **未修** |
+| **H4** | 尺寸棘轮可被「搬家」满足（复杂度横向移动） | 🟠 中 | ✅ **已修** |
+| **H5** | `check_doc_caliber` 是**形式守卫**（写标记就过） | 🟠 中 | ✅ **已修** |
+| **H6** | **慢性红**（`cargo +nightly doc` 三次全红）⇒ 红失去信号价值 | 🟠 中 | ✅ **已修** |
+| **H7** | 批次进度页**零守卫** ⇒ 漂一整天没人喊 | 🟠 中 | ✅ **已修** |
 
 ---
 
@@ -105,16 +105,44 @@ Author: lead
 
 ---
 
-## 4. 未修的四条（**如实**）
+## 4. 后修的四条：修法与实测效果
 
-| 编号 | 为什么还没修 | 计划 |
-|---|---|---|
-| **H4** | 需要新增 per-crate 总量口径（现在只量单文件） | 加 per-crate LOC/模块数兜底，防止"搬家式漂移" |
-| **H5** | 依赖 H2 的底座刚就位 | 标 `PRODUCTION WIRED` 的 claim 必须 `verify_cmd` 跑通才允许该级别 |
-| **H6** | 需逐条定位慢性红的真实原因（本地绿、CI 红 ⇒ 环境差异） | 清红或显式隔离并带**到期日**——慢性红是最危险的漂移形态 |
-| **H7** | 需要先有"可判定断言"清单 | `check_batch_status.py` 机检进度页的关键断言 |
+### H4 ✅ crate 体量预算（防「搬家式漂移」）
 
-**其余已知边界**：
+* **修法**：`scripts/check_crate_budget.py` —— **每 crate 的 `src/` 总量**（行数 + 文件数）进基线，**只减不增**。
+  ⇒ 与 `arch_guard`（管**单文件**）分工：两者合起来，"拆文件"不再能规避尺寸约束。
+* **基线**：**29 个 crate · 合计 528,097 行**。
+
+### H5 ✅ 高口径声明**必须真验**（把 caliber 从形式升级为真值）
+
+* **修法**：`check_claims_verify.py --wired-gate` ——
+  口径为 `PRODUCTION WIRED` / `DEFAULT ENABLED` / `HARDWARE VALIDATED` 的声明
+  **不许**靠 `verify_skip_reason` / `verify_defer_reason` 成立。
+* **实测抓到 3 条**（`sec.sql_readonly_gate` / `sec.provider_proxy_ssrf` / `sec.desktop_file_roots`）：
+  它们标着 `PRODUCTION WIRED` 却**验证被延后** ⇒ 按口径纪律**降级为 `IMPLEMENTED`**
+  （不能验证就不能宣称已接生产）。
+* 现已并入 `claims-verify.yml`（阻塞）。
+
+### H6 ✅ 清掉慢性红（**本轮最值钱的一条**）
+
+* **真实原因**（不是环境）：`crates/engine/memory/src/universal_forget.rs` 的一处
+  **rustdoc 内联链接**触发 `-D rustdoc::redundant-explicit-links`
+  ⇒ `cargo +nightly doc --workspace --no-deps --all-features` **exit 101**、`could not document apeireth-memory`。
+* **修法**：把 `[`AccessGuard`](crate::forget_access_guard::AccessGuard)` 改成行内代码 `` `AccessGuard` ``。
+* **实测**：`RUSTDOCFLAGS="-Dwarnings --cfg docsrs" cargo +nightly doc --workspace --no-deps --all-features`
+  ⇒ **exit=0 · 0 error** ⇒ **慢性红消失，红重新有信号价值**。
+* ⚠️ 另有 6 条 `unused workspace dependency`（nightly cargo 的 unstable lint）⇒ **不阻塞**，但记为**观察项**。
+
+### H7 ✅ 批次进度页**自动事实块**
+
+* **修法**：`scripts/check_batch_status.py` —— 进度页里嵌机器生成块
+  `<!-- BEGIN:auto-facts --> … <!-- END:auto-facts -->`，共 **17 条事实**
+  （D0 哈希链在写入路径 · D4 默认关 · B0-c 模块/候选/已测 · B1/B4 模块 · CLI 分派 ·
+  B2 三接口 **3/3** · B3 影子双跑 · B0-a 适配器与 **`reproduce.sh` 无** · claims 规模）。
+  ⇒ `--check` 不一致即红 ⇒ **手写散文无法覆盖事实值**。
+* **反证**：手把「已测行数」改成 `99` ⇒ 守卫**当场红**并指出差异行。
+
+**全部 8 条（H1–H8）均已修**；其余已知边界：
 * H1 残余：`build.rs`、`#[cfg(test)]` 内联模块仍可能被算作生产 ⇒ 彻底解决需**从装配根做可达性分析**；
 * 前端 4 条 claim 延后（见 H2），其中 `Cargo.lock` **不同步是真正的漂移**，应由前端侧修。
 

@@ -48,6 +48,13 @@ POWERSHELL_CMDLETS = ("Test-Path", "Get-Content", "Set-Content", "Select-String"
 #: `cargo test` 系命令 ⇒ 额外检查「0 failed」。
 TEST_COMMANDS = ("cargo test", "cargo nextest")
 
+#: **高口径**（宣称「已接生产」及以上）。这些级别**不许**靠豁免/延后成立。
+#:
+#: 为什么（**H5**）：`check_doc_caliber` 只检查「文档里**有没有写**四级口径标记」
+#: ⇒ ⇒ 标了 `PRODUCTION WIRED` 就能过，不管真假 ⇒ 那是**形式守卫**。
+#: ⇒ ⇒ 这里把它升级成**真值**：高口径声明必须**真跑通** `verify_cmd`。
+HIGH_CALIBERS = ("PRODUCTION WIRED", "DEFAULT ENABLED", "HARDWARE VALIDATED")
+
 
 def parse_claims() -> list[dict[str, str]]:
     """解析 `claims.yaml`（同仓的极简 YAML 子集：`- id:` 开头 + `key: value`）。"""
@@ -124,6 +131,14 @@ def main() -> int:
     group.add_argument("--check", action="store_true", help="门禁：真跑并判定")
     group.add_argument("--list", action="store_true", help="只列出计划")
     group.add_argument("--only", metavar="CLAIM_ID", help="只处理一条")
+    group.add_argument(
+        "--wired-gate",
+        action="store_true",
+        help=(
+            "**H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED "
+            "的声明**不许**豁免或延后（否则「已接线」只是个词）"
+        ),
+    )
     parser.add_argument("--timeout", type=int, default=600, help="单条超时秒数")
     args = parser.parse_args()
 
@@ -133,6 +148,37 @@ def main() -> int:
         if not claims:
             print(f"FAIL: 找不到 claim `{args.only}`", file=sys.stderr)
             return 1
+
+    if args.wired_gate:
+        offenders: list[str] = []
+        for claim in claims:
+            level = (claim.get("level") or "").strip().upper()
+            if level not in HIGH_CALIBERS:
+                continue
+            if claim.get("verify_skip_reason") or claim.get("verify_defer_reason"):
+                offenders.append(
+                    f"{claim.get('id')}（level={level}）靠"
+                    f"{'豁免' if claim.get('verify_skip_reason') else '延后'}成立"
+                    f" ⇒ **高口径声明必须真验**"
+                )
+        if offenders:
+            print(
+                f"FAIL: H5 真值闸 —— {len(offenders)} 条高口径声明的验证被跳过",
+                file=sys.stderr,
+            )
+            for line in offenders:
+                print(f"  · {line}", file=sys.stderr)
+            print(
+                "\n修法：① 把该 claim 的口径**降级**到 IMPLEMENTED（它就还没到「已接生产」）；"
+                "或 ② 让 verify_cmd **真能跑通**（补依赖/改命令/修实现）。",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"OK: H5 真值闸通过 —— 所有高口径声明（{len(HIGH_CALIBERS)} 级）"
+            "都**没有被豁免或延后**"
+        )
+        return 0
 
     failures: list[str] = []
     planned = 0

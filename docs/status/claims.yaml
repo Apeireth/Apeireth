@@ -415,7 +415,8 @@ claims:
 
   - id: sec.sql_readonly_gate
     title: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
-    level: PRODUCTION WIRED
+    level: IMPLEMENTED
+    # 2026-10-28 H5 降级：本仓无法验证其「已接生产」（子工程 Cargo.lock 不同步 + 缺 cairo/webkit/gtk）⇒ 按口径纪律降为 IMPLEMENTED。
     default: "ON"
     switch_env: null
     sources:
@@ -435,7 +436,8 @@ claims:
 
   - id: sec.provider_proxy_ssrf
     title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
-    level: PRODUCTION WIRED
+    level: IMPLEMENTED
+    # 2026-10-28 H5 降级：本仓无法验证其「已接生产」（子工程 Cargo.lock 不同步 + 缺 cairo/webkit/gtk）⇒ 按口径纪律降为 IMPLEMENTED。
     default: "ON"
     switch_env: null
     sources:
@@ -451,7 +453,8 @@ claims:
 
   - id: sec.desktop_file_roots
     title: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
-    level: PRODUCTION WIRED
+    level: IMPLEMENTED
+    # 2026-10-28 H5 降级：本仓无法验证其「已接生产」（子工程 Cargo.lock 不同步 + 缺 cairo/webkit/gtk）⇒ 按口径纪律降为 IMPLEMENTED。
     default: "ON"
     switch_env: null
     sources:
