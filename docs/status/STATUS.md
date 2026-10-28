@@ -34,8 +34,8 @@
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `c9251271` | 2026-11-20 |
 | `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `fc3e2c38eba0` | 2026-11-20 |
 | `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `b419826c` | 2026-11-20 |
-| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `0aacb6d7d57a` | 2026-11-28 |
-| `rt.owned_agents` | IMPLEMENTED | - | - | `0aacb6d7d57a` | 2026-11-20 |
+| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `14d87369989b` | 2026-11-28 |
+| `rt.owned_agents` | IMPLEMENTED | - | - | `14d87369989b` | 2026-11-20 |
 | `mem.registered_namespace` | IMPLEMENTED | - | - | `0aacb6d7d57a` | 2026-11-20 |
 
 ## 使用

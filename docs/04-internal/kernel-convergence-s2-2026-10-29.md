@@ -13,6 +13,7 @@ Author: Codex
 
 基线为 `refactor/kc1-kernel-convergence@e5cfe0c2`，fetch 成功、工作树干净，包含 S1 源码
 `0aacb6d7` 与 M0 债务图 `5d0be742`。本批仅实施[债务图 D2 / S2](kernel-convergence-remaining-debt-map-2026-10-29.md)，
+源码提交为 `14d87369989ba4539d1cdb8141e31c7b3f3f4f87`；后续文档证据提交仅锚定 claims / 生成物与本报告。
 沿用 [S1](kernel-convergence-s1-2026-10-29.md)、ADR-0018～0022 与
 [历史验收报告](kernel-convergence-final-acceptance-2026-10-28.md)，不追改历史记录。
 取材为本地源码与中断补丁提示；补丁经逐项审查后复用部分测试，执行适配基于当前 S1 重新实现，验证全部重新运行。
@@ -87,6 +88,13 @@ Native jobs=2，默认 dev/test profile、debug assertions 保留。原始输出
 | `cargo check -p apeireth-runtime-assembly --no-default-features --locked -j 2` | 通过 |
 | `cargo fmt --check` / `python3 scripts/arch_guard.py --strict` | 通过；无新增豁免或基线放宽 |
 
+`CARGO_BUILD_JOBS=2 python3 scripts/verify_changed.py --arch-strict` 完整 fast gate 通过，
+check / clippy / test(cargo) 均成功，落盘退出码为 0；原日志 `logs/verify-changed.log` 已备份为 `s2-fast.log`，
+控制台与退出码见 `s2-fast-console.log` / `s2-fast.exit`。此处不从 fast gate 发布测试数字。
+首次 dry-run 的冷 metadata 将下载 stderr 拼入 JSON 而失败；单独预热 metadata 后重跑原脚本通过，
+未修改或跳过脚本阶段。构建期间仅清理未占用的旧增量缓存与已有新版的旧测试二进制，
+清单为 `s2-build-cache-cleanup.json`；源码、断言、当前测试产物与日志保留。
+
 后端删除检索原始输出为 `s2-unified-invoker-rg.log`：
 
 ```bash
@@ -95,8 +103,23 @@ rg -n 'complete_for_session|ProviderRouter|NormalizedRequest' crates/engine/runt
 rg -n 'impl ModuleInvoker|RuntimeModuleInvoker::new|spawn_side_agent|\.execute\(AgentTask|\.invoke\(request\)|SingleShot' crates/engine/runtime/src/canonical/{module,subloop}.rs
 ```
 
-后者记录 module.rs 的 `spawn_side_agent` / `.execute(AgentTask` / `SingleShot`，以及 subloop.rs
-的 `impl ModuleInvoker` / `RuntimeModuleInvoker::new` / `.invoke(request)`。没有第二个侧模型执行后端。
+后者输出（exit 0）：
+
+```text
+crates/engine/runtime/src/canonical/subloop.rs:233:            .spawn_side_agent(
+crates/engine/runtime/src/canonical/subloop.rs:314:impl ModuleInvoker for RuntimeSubLoopSpawner {
+crates/engine/runtime/src/canonical/subloop.rs:319:        RuntimeModuleInvoker::new(
+crates/engine/runtime/src/canonical/subloop.rs:333:        .invoke(request)
+crates/engine/runtime/src/canonical/module.rs:662:impl ModuleInvoker for RuntimeModuleInvoker {
+crates/engine/runtime/src/canonical/module.rs:688:            .spawn_side_agent(
+crates/engine/runtime/src/canonical/module.rs:701:            .execute(AgentTask {
+crates/engine/runtime/src/canonical/module.rs:707:                mode: AgentExecutionMode::SingleShot,
+```
+
+没有第二个侧模型执行后端。
+
+Docs Truth verify / check、wiring verify、docs links / index 均通过；claims 无 FAIL / STALE，
+能力等级与默认开关未抬升。源码哈希与原测试名称保留检查见 `s2-source-manifest.json` / `s2-preserved-tests.log`。
 
 ## 后续与诚实账
 
@@ -110,3 +133,6 @@ Docs Truth 按 S1 方法在源码落提交后以独立文档证据提交锚定 v
 
 O-6：总体优先收敛实际生产 invoker，拒只修测试构造；系统复用原实例、治理与计量，拒 adapter 重复预算/成本账；
 架构使用通用 SingleShot 策略，拒借普通工具轮丢弃意外 tool_calls 或新造领域侧循环。
+
+当前环境 hooks 文件没有执行位；本批显式以 bash 跑 pre-commit / commit-msg，均通过，
+再通过 scripts/commit.ps1 的显式 author、secret / neutral 与 ArchStrict 提交，不跳过门禁或改变全局 hooksPath。

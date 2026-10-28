@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: b19664fba93e30f61885cd75c096ec03a410848bcbe925dcd692a3d046fa008f
+claims_sha256: 9b724bee8ab75e9237401f7bcfdf17ebacc542d781d82d16b5c10f4dc3eb7ab4
 claims_total: 32
 items:
   - id: "rt.provider_router"
@@ -610,6 +610,7 @@ items:
     capability: "注册模块生命周期、固定 V1 Hook 与唯一治理工具目录"
     implemented:
       sources:
+        - "crates/engine/runtime/src/canonical/module.rs"
         - "crates/foundation/plugin/src/manager.rs"
         - "crates/foundation/plugin/src/plugin.rs"
         - "crates/foundation/plugin/src/hooks.rs"
@@ -645,6 +646,7 @@ items:
         - "crates/engine/runtime/src/canonical/dispatch_admission.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
         - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/engine/runtime/src/canonical/registered_hooks.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
@@ -670,6 +672,7 @@ items:
     capability: "同一 Runtime 的模块拥有独立 Agent 与分层核算"
     implemented:
       sources:
+        - "crates/engine/runtime/src/canonical/module.rs"
         - "crates/engine/runtime/src/canonical/instances.rs"
         - "crates/engine/runtime/src/canonical/instances/tasks.rs"
         - "crates/engine/runtime/src/canonical/subloop.rs"
@@ -686,11 +689,16 @@ items:
         - "crates/engine/runtime/src/canonical/instances/control.rs"
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
         - "crates/engine/runtime/src/canonical/instances/tasks.rs"
+        - "crates/engine/runtime/src/canonical/module.rs"
         - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/foundation/plugin/src/agents.rs"
     default_enabled: "n/a"
     validated:
       tests:
+        - "crates/engine/runtime/tests/cognitive_module_abi.rs"
+        - "crates/engine/runtime-assembly/tests/canonical_invoker_handle.rs"
+        - "crates/engine/runtime-assembly/tests/canonical_organ_module.rs"
+        - "crates/engine/runtime-assembly/tests/organ_llm_bridge_compat.rs"
         - "crates/engine/runtime/tests/canonical_subloop.rs"
         - "crates/engine/runtime-assembly/tests/convergence_agents.rs"
       claims_id: "rt.owned_agents"
