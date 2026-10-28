@@ -1001,6 +1001,53 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
         failures.push(String::from("G2 事件载荷为空（监听器没被调用）"));
     }
 
+    // ── G8：错误边界（强制渲染失败 ⇒ 兜底可见 + 错误可读）────────
+    let mut g8_ok = false;
+    let mut g8_captured = String::new();
+    if let Ok(dom2) = WebDom::new() {
+        if let Ok(root2) = dom2.create_element("div") {
+            let _ = dom2.set_attribute(&root2, "id", "l1-g8");
+            if let Some(body) = document.body() {
+                let _ = body.append_child(&root2);
+            }
+            let mut guarded = Renderer::new(dom2, root2);
+            guarded.set_error_boundary(Some(
+                VNode::element("div")
+                    .class("ap-error")
+                    .child(VNode::text("兜底可见"))
+                    .build(),
+            ));
+            // 未挂载就渲染 ⇒ 必失败 ⇒ 兜底顶上（这正是错误边界要覆盖的场景）
+            let _ = guarded.render_guarded(VNode::element("section").build());
+            g8_captured = guarded.captured_error().unwrap_or_default().to_owned();
+            let fallback_visible = document
+                .query_selector("#l1-g8 .ap-error")
+                .ok()
+                .flatten()
+                .is_some();
+            g8_ok = fallback_visible && !g8_captured.is_empty();
+        }
+    }
+    if !g8_ok {
+        failures.push(format!(
+            "G8 错误边界未生效（fallback_visible={g8_ok}, captured=`{g8_captured}`）"
+        ));
+    }
+
+    // ── G8：panic hook 安装（⚠️ **不**触发真实 panic：wasm 目标可能 `panic=abort`
+    //    ⇒ ⇒ 真 panic 会 trap 掉整个实例，测不到；这里只验「hook 能装上」）────────
+    let panic_state = if apeireth_ui_dom::panic_guard::is_installed() {
+        String::from("already_installed")
+    } else {
+        match apeireth_ui_dom::panic_guard::install(Box::new(|_message| {})) {
+            Ok(()) => String::from("installed"),
+            Err(reason) => format!("failed: {reason}"),
+        }
+    };
+    if panic_state.starts_with("failed") {
+        failures.push(format!("G8 panic hook 未安装：{panic_state}"));
+    }
+
     // ── 组装结果（结构化对象，不拼 JSON）──────────────────────
     let result = js_sys::Object::new();
     let failures_array = js_sys::Array::new();
@@ -1010,6 +1057,21 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
     let _ = js_sys::Reflect::set(&result, &JsValue::from_str("ok"), &JsValue::from_bool(failures.is_empty()));
     let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
     let _ = js_sys::Reflect::set(&result, &JsValue::from_str("payload"), &JsValue::from_str(&payload));
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("g8_error_boundary_ok"),
+        &JsValue::from_bool(g8_ok),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("g8_captured_error"),
+        &JsValue::from_str(&g8_captured),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("g8_panic_hook"),
+        &JsValue::from_str(&panic_state),
+    );
     if let Some(rect) = engine_form {
         let _ = js_sys::Reflect::set(&result, &JsValue::from_str("engine_form"), &box_json(&rect));
     }

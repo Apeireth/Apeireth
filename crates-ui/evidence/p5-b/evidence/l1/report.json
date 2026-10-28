@@ -2,6 +2,9 @@
   "ok": true,
   "failures": [],
   "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
+  "g8_error_boundary_ok": true,
+  "g8_captured_error": "Undecidable: 渲染器未挂载：先 mount 再 patch",
+  "g8_panic_hook": "installed",
   "engine_form": {
     "x": 8,
     "y": 8,

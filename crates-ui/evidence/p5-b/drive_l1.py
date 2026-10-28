@@ -15,7 +15,9 @@ python3 drive_l1.py --out DIR  # 指定输出目录
 - **G2** 真实 `input` 事件载荷可读（`target_value` / `checked` / 坐标字段存在）；
 - **G3** `focus_at_path` 真的驱动 `document.activeElement`；`compositionstart/end`
   经 **document 级**监听翻转 `Dom::is_composing()`；
-- **G6** `bounding_box_in_device` 按 `dpr × density` 换算（2.0 × 1.25 = 2.5）。
+- **G6** `bounding_box_in_device` 按 `dpr × density` 换算（2.0 × 1.25 = 2.5）；
+- **G8** 错误边界：强制渲染失败 ⇒ **兜底视图真的进了 DOM** 且 `captured_error()` 是**原始错误**；
+  panic hook 可安装（⚠️ 不在浏览器里触发真 panic：wasm 可能 `panic=abort`，会 trap 掉实例）。
 
 ⚠️ 本脚本**只用标准库 + harness 既有 `compare` 工具**（`websocket-client` / `pillow` 之外无新依赖）。
 """
@@ -79,7 +81,7 @@ def main() -> int:
     if not report.get("ok"):
         print(f"❌ 失败项：{report.get('failures')}", file=sys.stderr)
         return 1
-    print("✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放）")
+    print("✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / G8 错误边界与 panic hook）")
     return 0
 
 
