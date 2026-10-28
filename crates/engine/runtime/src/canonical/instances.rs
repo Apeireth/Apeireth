@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 use std::time::Duration;
 mod control;
+mod profiles;
 
 #[derive(Clone)]
 pub struct ModuleAgentGrant {
@@ -78,12 +79,15 @@ struct Inner {
     usage: Arc<UsageAccounting>,
     dispatcher: Arc<ToolDispatcher>,
     host_handles: std::sync::atomic::AtomicUsize,
+    profile_switch: tokio::sync::Mutex<Option<Arc<dyn AgentInstance>>>,
 }
 struct Factory {
     binding: Arc<OnceLock<Weak<Inner>>>,
+    ready: Arc<tokio::sync::Notify>,
 }
 struct BoundModule {
     binding: Arc<OnceLock<Weak<Inner>>>,
+    ready: Arc<tokio::sync::Notify>,
     owner: AgentOwner,
     scope: ModuleTaskScope,
 }
@@ -96,6 +100,7 @@ impl ModuleAgentFactory for Factory {
     ) -> Arc<dyn ModuleAgents> {
         Arc::new(BoundModule {
             binding: self.binding.clone(),
+            ready: self.ready.clone(),
             owner: AgentOwner::Module {
                 definition,
                 instance,
@@ -106,6 +111,32 @@ impl ModuleAgentFactory for Factory {
 }
 #[async_trait]
 impl ModuleAgents for BoundModule {
+    async fn wait_ready(&self) -> AgentResult<()> {
+        self.scope
+            .run(async {
+                loop {
+                    let notified = self.ready.notified();
+                    tokio::pin!(notified);
+                    notified.as_mut().enable();
+                    if let Some(binding) = self.binding.get() {
+                        return binding
+                            .upgrade()
+                            .filter(|inner| inner.scope.is_open())
+                            .map(|_| ())
+                            .ok_or_else(|| error(AgentErrorCode::OwnerStopped, "runtime stopped"));
+                    }
+                    notified.await;
+                }
+            })
+            .await
+            .map_err(|_| {
+                error(
+                    AgentErrorCode::OwnerStopped,
+                    "module stopped before runtime ready",
+                )
+            })?
+    }
+
     async fn spawn_agent(&self, config: AgentConfig) -> AgentResult<Arc<dyn AgentInstance>> {
         if !self.scope.is_open() {
             return Err(error(AgentErrorCode::OwnerStopped, "module owner stopped"));
@@ -197,9 +228,11 @@ impl RuntimeBuilder {
             ));
         }
         let binding = Arc::new(OnceLock::new());
+        let ready = Arc::new(tokio::sync::Notify::new());
         self.v1_protocol = true;
         self.agent_factory = Some(Arc::new(Factory {
             binding: binding.clone(),
+            ready: ready.clone(),
         }));
         let kernel = self.build().await?;
         let usage = kernel.providers.accounting.clone();
@@ -217,8 +250,10 @@ impl RuntimeBuilder {
             dispatcher,
             policy,
             host_handles: std::sync::atomic::AtomicUsize::new(1),
+            profile_switch: tokio::sync::Mutex::new(None),
         });
         let _ = binding.set(Arc::downgrade(&inner));
+        ready.notify_waiters();
         Ok(AgentRuntime { inner })
     }
 }
@@ -394,6 +429,7 @@ async fn create(
         inner: Arc::downgrade(inner),
         security: grant.and_then(|g| g.security),
         usage: inner.usage.clone(),
+        sessions: kernel.sessions.clone(),
         queued: std::sync::atomic::AtomicUsize::new(0),
     });
     instances.insert(id, agent.clone());
@@ -411,6 +447,7 @@ struct ManagedAgent {
     inner: Weak<Inner>,
     security: Option<TurnSecurityContext>,
     usage: Arc<UsageAccounting>,
+    sessions: Arc<super::session::SessionManager>,
     queued: std::sync::atomic::AtomicUsize,
 }
 struct Running<'a> {
@@ -582,6 +619,9 @@ impl AgentInstance for ManagedAgent {
         Ok(())
     }
     async fn stop(&self) -> AgentResult<()> {
+        if self.state.lock().unwrap_or_else(|e| e.into_inner()).0 == AgentStatus::Destroyed {
+            return Ok(());
+        }
         self.scope.close();
         let timeout = self
             .inner
@@ -596,22 +636,16 @@ impl AgentInstance for ManagedAgent {
                     "agent draining; resources remain owned",
                 )
             })?;
-        *self.state.lock().unwrap_or_else(|e| e.into_inner()) = (AgentStatus::Stopped, None);
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).0 = AgentStatus::Stopped;
         Ok(())
     }
     async fn destroy(&self) -> AgentResult<()> {
         self.stop().await?;
-        if let Some(inner) = self.inner.upgrade() {
-            inner
-                .kernel
-                .read()
-                .await
-                .sessions
-                .delete(&self.session)
-                .await
-                .map_err(|e| error(AgentErrorCode::Provider, e.to_string()))?;
-        }
-        *self.state.lock().unwrap_or_else(|e| e.into_inner()) = (AgentStatus::Destroyed, None);
+        self.sessions
+            .delete(&self.session)
+            .await
+            .map_err(|e| error(AgentErrorCode::Provider, e.to_string()))?;
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).0 = AgentStatus::Destroyed;
         Ok(())
     }
 }

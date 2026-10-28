@@ -20,6 +20,7 @@ pub mod notification_duty;
 pub mod startup;
 // V6-a 持久任务队列存储: 与会话账本**同库** (`sessions.sqlite3`) 的任务表
 // (一次 update = 一次 IMMEDIATE 事务原子读改写)。
+pub mod profile_store;
 pub mod sqlite_session;
 pub mod sqlite_task_queue;
 

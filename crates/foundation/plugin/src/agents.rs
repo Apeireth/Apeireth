@@ -135,6 +135,10 @@ pub trait AgentInstance: Send + Sync {
 }
 #[async_trait]
 pub trait ModuleAgents: Send + Sync {
+    /// Wait from an owned background task, never synchronously inside initialize/start.
+    async fn wait_ready(&self) -> AgentResult<()> {
+        Ok(())
+    }
     async fn spawn_agent(&self, config: AgentConfig) -> AgentResult<Arc<dyn AgentInstance>>;
 }
 /// Supplied only by a host. A scoped PluginContext does not expose this factory.

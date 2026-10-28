@@ -314,3 +314,6 @@ pub use typed_recall::SqliteTypedMemoryRecallSource;
 pub use apeireth_tools_canonical::backup::backup_status_probe;
 // V3-b 发声面勿扰窗口的同源接缝导出 (care_rules 窗口优先, 最小 env 兜底)。
 pub use voice_quiet::voice_quiet_hours_from_care_rules;
+
+#[path = "canonical/memory_module.rs"]
+pub mod memory_module;

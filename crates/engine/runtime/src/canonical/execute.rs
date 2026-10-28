@@ -794,6 +794,7 @@ impl Runtime {
 
         let clock = self.clock.as_ref();
         let mut session = self.sessions.load_or_create(request.session).await?;
+        self.dispatcher.bind_session_principal(&mut session)?;
         self.expire_active_approval_if_needed(&mut session).await?;
         if session
             .events
@@ -1102,6 +1103,7 @@ impl Runtime {
         let Some(mut session) = self.sessions.load(&session_id).await? else {
             return Ok(ApprovalResolution::NotFound);
         };
+        self.dispatcher.bind_session_principal(&mut session)?;
 
         let Some(approval) = session.approvals.get(&approval_id).cloned() else {
             return Ok(ApprovalResolution::NotFound);

@@ -42,6 +42,8 @@ use crate::scope::{
 use crate::topic_predictor::TopicCue;
 use crate::MemoryError;
 
+#[path = "coordinator/owned.rs"]
+mod owned;
 const WORKING_RING_BUFFER_CAP: usize = 30;
 
 /// Unified memory orchestrator coordinating all memory layers and pipelines.

@@ -93,3 +93,75 @@ impl Drop for Inner {
         self.scope.close();
     }
 }
+impl AgentRuntime {
+    /// Host approval entry; the instance retains its original scope and resource identity.
+    pub async fn resolve_agent_approval(
+        &self,
+        id: AgentId,
+        approval: apeireth_core::kernel::ApprovalId,
+        decision: crate::canonical::approval::ApprovalDecision,
+    ) -> AgentResult<AgentReply> {
+        let agent = self
+            .inner
+            .instances
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| error(AgentErrorCode::NotFound, "unknown instance"))?;
+        let work = async {
+            let _turn = agent.turn.lock().await;
+            if agent.snapshot().status != AgentStatus::WaitingApproval {
+                return Err(error(
+                    AgentErrorCode::NotReady,
+                    "instance is not waiting for approval",
+                ));
+            }
+            let _permit = self
+                .inner
+                .turns
+                .acquire()
+                .await
+                .map_err(|_| error(AgentErrorCode::OwnerStopped, "runtime stopped"))?;
+            let kernel = self.inner.kernel.read().await;
+            match kernel
+                .resolve_approval(agent.session, approval, decision)
+                .await
+            {
+                Ok(crate::ApprovalResolution::Resumed(TurnOutcome::Completed(reply))) => {
+                    *agent.state.lock().unwrap_or_else(|e| e.into_inner()) =
+                        (AgentStatus::Ready, None);
+                    Ok(AgentReply {
+                        text: reply.text,
+                        request: reply.request,
+                        usage: agent.usage.snapshot(agent.session),
+                    })
+                }
+                Ok(_) => Err(error(
+                    AgentErrorCode::PendingApproval,
+                    "approval did not complete this turn",
+                )),
+                Err(e) => {
+                    *agent.state.lock().unwrap_or_else(|e| e.into_inner()) =
+                        (AgentStatus::Failed, Some(e.to_string()));
+                    Err(error(AgentErrorCode::Provider, e.to_string()))
+                }
+            }
+        };
+        match tokio::time::timeout(
+            Duration::from_millis(agent.config.budget.turn_timeout_ms),
+            agent.scope.run(work),
+        )
+        .await
+        {
+            Ok(Ok(result)) => result,
+            _ => {
+                agent.scope.close();
+                Err(error(
+                    AgentErrorCode::Cancelled,
+                    "approval continuation cancelled or deadline exceeded",
+                ))
+            }
+        }
+    }
+}

@@ -18,12 +18,12 @@ ADR-0018～0021 与现有 KC/Phase 3 交付账为设计与兼容边界。
 
 | 工作 | 依赖 | 当前状态 |
 |---|---|---|
-| 分层任务作用域、有界停止、动态工具 owner | 既有 PluginManager / Dispatcher | Implemented / Wired；相关测试通过，收口检查中 |
-| 动态 MCP 生命周期及描述符授权 | 上述所有权、既有 bridge/pipeline | Implemented / Wired；真实 Runtime 与原生清理测试收口中 |
+| 分层任务作用域、有界停止、动态工具 owner | 既有 PluginManager / Dispatcher | Implemented / Wired / Tested |
+| 动态 MCP 生命周期及描述符授权 | 上述所有权、既有 bridge/pipeline | Implemented / Wired / Tested；显式 shutdown 清理 |
 | 独立 Agent Session/Scope/取消 | 所有权、既有 Runtime.execute | Implemented / Wired / Tested；11 项真实实例验收 |
 | 实例/模块/全局请求核算、预算与 Provider 限流 | 独立实例、实际请求边界 | Implemented / Wired / Tested；未知用量与估算费用明确分开 |
-| Memory tools + 固定 V1 Hook + 后台整理实例 | 独立实例、Namespace 授权、既有 Memory 存储 | Not Implemented |
-| Profile 持久配置与授权绑定 | 通用身份与实例机制 | Not Implemented |
+| Memory tools + 固定 V1 Hook + 后台整理实例 | 独立实例、Namespace 授权、既有 Memory 存储 | Implemented / Wired / Tested；新 Host 组合；默认桌面替换 Partial |
+| Profile 持久配置与授权绑定 | 通用身份与实例机制 | Implemented / Wired / Tested；通用 Host API |
 | Legacy / Host / Android / 最终回归 | 上述接线与现有平台组合 | 待最终验收；不把接口当交付 |
 
 ## M1 实际接线
@@ -90,4 +90,110 @@ Host 显式配置 `ModuleAgentGrant` 的工具、Principal、实例数、深度�
 增加 Retry-After 验收后的实例测试 11 passed / 0 failed；四 crate 全目标 Clippy -D warnings、fmt、严格架构检查通过。
 日志 `apeireth-convergence-m2-regression.log`、`apeireth-convergence-m2-final.log`、
 `apeireth-convergence-m2-clippy.log`，均在 `/workspace/scratch/`。
-Profile 配置持久化、Memory 数据隔离及 Memory 后台 Agent 仍未交付，继续下一内部步骤。
+以上为 M2 提交时状态：当时 Profile/Memory 尚未交付；后续 M3 的实际状态见下。
+
+## M3 注册式 Memory / Profile 纵向切片
+
+新增文件集中在 runtime `profiles.rs` / `instances/profiles.rs`、assembly `memory_module/*` / `profile_store.rs`。
+没有新 crate、Cargo 依赖、数据库重建或桌面功能删除。
+
+| 功能 | 状态与边界 |
+|---|---|
+| 新 MemoryModule 的 7 个工具 | Implemented / Wired / Tested（真实 Runtime）；Desktop 默认替换未完成 |
+| BeforeModelCall 自动检索 | Implemented / Wired / Tested；固定 V1 Hook、每 request 幂等、成对 Provider 投影 |
+| Namespace 私有读写 | Implemented / Wired / Tested；仅受信任 ToolExecutionContext.principal，不接受模型 namespace 参数 |
+| 后台记忆 Agent | Implemented / Wired / Tested；独立 Session/Usage/Scope，可与主请求并发；stop/unload 取消清理 |
+| Profile 配置、CAS 持久化、单主切换 | Implemented / Wired / Tested（Host API + SQLite）；没有 UI 或产品人格逻辑 |
+| 模块启动后自主创建 Agent | Implemented / Wired / Tested；ModuleAgents.wait_ready，无 Host 工具触发也能启动 |
+| 原始 Memory 数据迁移到新 Namespace | Not Implemented；不擅自将旧私人数据归属新身份 |
+| 旧自动 Memory / Persona / Organ 全部改 V1 | Not Implemented；成熟生产兼容路径保留，见退出清单 |
+
+调用路径：
+
+```text
+Host-selected Plugin + AgentConfig(principal, tools, budget)
+  → PluginManager initialize/start
+  → AgentRuntime → existing Runtime.execute_outcome → existing SessionManager
+  → fixed BeforeModelCall → MemoryModule.on_hook (immutable snapshot)
+  → registered memory_retrieve → normal admission/schema/scope/governance/dispatcher
+  → module-owned DB worker lease → existing MemoryCoordinator/backend/governance
+  → ToolEventV1(Module, module.memory, fixed execution ID)
+  → existing paired Provider adapter projection → model
+
+Model memory_organize → same Dispatcher → owner-bound ModuleAgents.spawn_agent
+  → own Session + tools(memory_retrieve, memory_write) + own usage/cancellation
+  → same existing Runtime.execute_outcome → authorized namespace append
+```
+
+工具 ID 为 `tool.memory.retrieve/write/update/delete/search/compact/organize`；模型名称使用
+`memory_retrieve` 等下划线名称以适配 Provider 的工具名称约束。Namespace 不是工具名权限。
+查询预算同时受字符上限及 TokenMeter 估算限制；未报告的真实 usage 不由估算冒充。
+查询空结果正常返回空 items；DB 错误、权限拒绝、取消、预算超限返回结构化错误，不能升级为 System 消息。
+
+写入是追加式；同 Namespace/idempotency_key 重试返回既有 ID，内容冲突拒绝，不复活已遗忘记录。
+进程内模块写互斥与既有 SQLite append-only/CAS 维持一致性；不将可选 metadata sidecar 声称为跨后端分布式事务。
+更新/删除要求 expected_revision，并沿用受保护拒绝和冻结审批；后台实例不开放这两个工具。
+
+## Host API 示例
+
+```rust
+// Provider Plugin、governance 和 principal 均由 Host 配置，模型不能替换。
+let memory = Arc::new(MemoryModule::new(coordinator, clock)
+    .with_recall_token_budget(1024));
+let mut policy = AgentHostPolicy::default();
+policy.modules.insert(memory.manifest().id.clone(), ModuleAgentGrant {
+    tools: ["tool.memory.retrieve", "tool.memory.write"].into_iter()
+        .map(|id| CapabilityId::new(id).unwrap()).collect(),
+    principals: vec![principal.clone()],
+    ..Default::default()
+});
+let runtime = Runtime::builder().with_plugin(provider_plugin)
+    .with_plugin(memory).with_governance(host_governance)
+    .with_default_model(model).build_agent_runtime(policy).await?;
+let main = runtime.spawn_agent("main", AgentConfig {
+    principal: Some(principal), tools: allowed_main_tools, ..Default::default()
+}).await?;
+let reply = main.run("hello".into()).await?;
+main.stop().await?;
+runtime.shutdown().await?;
+```
+
+模块从 PluginContext 保存 `agents` 端口；在有 owner 的后台任务中等待 `wait_ready()`，
+再调用 `spawn_agent(config)` / `run(task)` / `destroy()`。本批 Runtime 测试包含不依赖主工具调用的自主启动。
+Host 可以完全不注册 Memory、Shell、Filesystem、MCP；默认 Kernel 不自动安装高权限工具。
+
+## 必须保留的 Legacy 退出清单
+
+| 入口 / 实现 | 当前实际准入和行为 | 风险、测试及退出条件 |
+|---|---|---|
+| ProductionCognitiveModules.register_into → with_module；cognitive.rs MemoryRecall/Writeback | 旧 BehaviorRegistry Hook，仍有 PromptOverlay；新 MemoryModule 不会自动替代它 | 不可同时对同一业务重复写回；保留 production_integration/cognitive_vnext/memory 回归；将调优、typed sink、materializer、consolidation、Persona 等语义逐项映射为注册工具后替换 |
+| OrganModule / PersonaConstantInjection / PreferenceRecall | 旧业务 Overlay/直接存储接口 | 未证明新 Namespace 隔离，不应与私有 Profile 混合装配；迁移前仍为桌面既有兼容模式 |
+| RuntimeSubLoopSpawner / RuntimeModuleInvoker | 独立旧临时 transcript；工具仍经 Dispatcher，provider 侧调用已接同一 session 核算 | 不冒充模块拥有的 Agent；保留 subloop/模块 ABI 测试；需逐调用点迁到 ModuleAgents 后退休旧算法 |
+| with_tool / with_capability / invoke* | 已有 LegacyToolAdapter 进入唯一目录和准入；可保留公开 ABI | 不是第二注册表；逐工具补完整 output schema，而非删除成熟工具 |
+| Raw Runtime 非 V1 日志 | 为既有公开日志 ABI 保留；Managed Runtime 强制 V1 | 旧消费者迁完后才能默认切换，不修改历史事件 |
+| after-tool barrier | 关闭且排空的 V1 模块不再触发 barrier；运行中有订阅仍保留确定性屏障 | 未将可启动 Agent 的观察器假定为无副作用；进一步缩小需要显式并发/提交契约及回归 |
+| 控制面热注册/刷新 | Raw Runtime 支持生命周期目录更新；Managed 门面当前只提供有界 stop/unregister/shutdown | 未提供任意模型请求中无阻塞热注册；应补 owner port 重绑定与 generation 测试 |
+| 隐式 Drop | Agent Host 最后句柄取消实例；原生 transport Drop 有终止兜底 | 可保证完整 drain/join 的入口是显式 shutdown；外部长期持有 MCP definition/bridge Arc 的放弃路径尚需同步撤销设计与测试 |
+
+这些是未完成的真实目标，不标为完成，也不通过删除旧测试或弱化断言规避。
+
+## 本批验证中的修正
+
+- 后台 Memory 卸载测试揭示控制写锁重入读锁死锁；Agent 销毁改为直接使用 SessionManager 端口。
+- 单测初次以不存在的 JSON origin 字段断言既有 ToolEventV1；改用原有强类型 source() 匹配 Module，并验证工具消息承载检索内容。未改协议。
+- 新 Profile 存储初次误将同步 read 当作 Future，编译拒绝后改为 spawn_blocking + 既有池 API。
+- Clippy 要求 let-else，按原 lint 修复；没有加 allow、ignored、改安全策略或架构例外。
+
+桌面前端本批实测：svelte-check 0 errors/0 warnings；82/82 suites；11 项素材许可；Vite build 通过。
+构建保留既有 bundle size 警告，未改变分包阈值。
+Android Runtime lib 的 `aarch64-linux-android` cargo check 已通过，未声称运行 Android 硬件或完整 assembly。
+
+M3 相关全目标回归：98 suites / 1449 passed / 0 failed / 0 ignored（新增最终两项验收前）。
+最终聚焦验收：12 项 Agent + 9 项 Memory/Profile，全部通过；五 crate 全目标 Clippy -D warnings、fmt、strict arch 通过。
+日志：`apeireth-convergence-m3-regression.log`、`apeireth-convergence-slice-final.log`、
+`apeireth-convergence-clippy-verified.log`、`apeireth-convergence-arch-verified.log`。
+最终全量五段仍待运行，不以这些聚焦结果替代。
+
+架构登记修正：初次把 owner 服务/存储端口归入扩展点导致严格守卫拒绝。
+按 ADR-0021 复核：两者与 Clock/SessionStore 同类，经既有 PluginContext/Host 注入，
+不接收模块注册、不构成第二扩展系统；改为唯一 canonical 概念登记。未改守卫或棘轮基线。

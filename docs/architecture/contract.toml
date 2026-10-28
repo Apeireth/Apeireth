@@ -215,6 +215,36 @@ known_debt = []
 target = "ADR-0020: 现有 Plugin 生命周期的工具模块实现，不构成第二注册表"
 
 [[concepts]]
+name = "AgentRuntime"
+canonical = "crates/engine/runtime/src/canonical/instances.rs"
+known_debt = []
+target = "ADR-0021: 复用既有 Runtime/Session/Dispatcher 的拥有权、核算与隔离机制；不复制 Agent Loop"
+
+[[concepts]]
+name = "UsageAccounting"
+canonical = "crates/engine/runtime/src/canonical/accounting.rs"
+known_debt = []
+target = "ADR-0021: 复用既有 Runtime/Session/Dispatcher 的拥有权、核算与隔离机制；不复制 Agent Loop"
+
+[[concepts]]
+name = "ProfileConfig"
+canonical = "crates/engine/runtime/src/canonical/profiles.rs"
+known_debt = []
+target = "ADR-0021: 复用既有 Runtime/Session/Dispatcher 的拥有权、核算与隔离机制；不复制 Agent Loop"
+
+[[concepts]]
+name = "ModuleAgents"
+canonical = "crates/foundation/plugin/src/agents.rs"
+known_debt = []
+target = "ADR-0021: PluginContext 的 owner 绑定服务端口或 Host 存储端口；不构成第二模块扩展系统"
+
+[[concepts]]
+name = "ProfileStore"
+canonical = "crates/engine/runtime/src/canonical/profiles.rs"
+known_debt = []
+target = "ADR-0021: PluginContext 的 owner 绑定服务端口或 Host 存储端口；不构成第二模块扩展系统"
+
+[[concepts]]
 name = "ContextAssembler"
 canonical = "crates/foundation/orchestration/src/context_budget.rs"
 known_debt = []

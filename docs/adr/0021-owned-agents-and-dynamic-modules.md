@@ -46,3 +46,31 @@ Author: Codex
 
 不批量升级依赖，不更改 LOCKED。保留旧 API 时必须委托统一准入；不能为零 Legacy 删除桌面功能。
 未验证的平台、资源清理或路径必须明确记为 Partial/Not Implemented；全量失败按原日志报告并修复。
+
+## 本批已落地的隔离决策
+
+- Module Definition 用 PluginId；每次注册用新的 ModuleInstanceId；AgentId 与 SessionId 独立；
+  工具调用仍用既有 TaskId / Tool Call ID，不混合四种身份。
+- `ModuleAgents.wait_ready()` 允许模块在 initialize/start 创建已拥有的后台任务，
+  assembly 完成后再自主创建 Agent。禁止在 initialize/start 内同步等待就绪，避免启动循环。
+- Agent 销毁直接持有 SessionManager 端口，不重入 Runtime 控制锁；这修复了真实后台 Memory 卸载测试发现的读写锁死锁。
+- Profile 身份和工具范围 ceiling 随 Session 保存、重载及 fork；模型参数不能指定 namespace。
+  Profile 切换停止并销毁前一个主实例，创建新 Session；配置加载不自动激活多个角色。
+- 注册式 Memory 使用 `(ProfileId, NamespaceId)` 作为既有 episode session 分区键，元数据保留真实来源 Session/Request/Trace。
+  不改旧数据、不自动认领旧 Global/Persona/Session；跨边界迁移必须由 Host 显式授权。
+- 检索仅选 Working/Episodic，并在模块边界重查所有权及治理后的内容；不将未隔离的全局偏好混入新 Profile。
+  Tool Result 是不可信数据。预算复用 TokenMeter 的估算，保留其 CJK 偏差声明，不声称精确 token。
+- 更新/删除继续冻结审批、版本 CAS 与 protected 保护。整理 Agent 仅开放 retrieve/write，不能递归整理或自动覆盖。
+  compact 返回非破坏性连续性摘要；不是偷偷删除或覆盖数据库。
+
+## 不能宣称已完成的兼容迁移
+
+新的 MemoryModule 已在真实 Runtime 接线测试，但 ProductionCognitiveModules 默认仍保留成熟的
+MemoryRecall/MemoryWriteback、偏好、调优、物化、Organ 和 Persona 管线。直接替换将丢失既有语义；
+本批未冒充这些路径已统一。旧 BehaviorModule / PromptOverlay / SubLoop 仍是明确技术债。
+Android 只验证通用 Runtime lib，未验证完整 runtime-assembly 或 Android 原生工具。
+只有这些剩余路径迁移并保持原回归时，才能宣布完整 Convergence 完成。
+
+ModuleAgents 是 PluginContext 提供的 owner 绑定内核服务，ProfileStore 是与 SessionStore 同类的 Host 存储端口。
+它们不注册扩展或动态执行步骤；在 contract 的唯一 canonical 概念表登记，而不误归为新模块扩展系统。
+唯一模块扩展入口仍为既有 Plugin/PluginManager；不新增扩展点例外或抬高结构/尺寸棘轮基线。

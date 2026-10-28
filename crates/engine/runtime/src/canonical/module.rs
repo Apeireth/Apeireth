@@ -721,7 +721,13 @@ impl ModuleInvoker for RuntimeModuleInvoker {
         // isolated side-call rather than a nested agent loop.
         let routed = self
             .router
-            .complete(&NormalizedRequest::new(model, messages))
+            .complete_for_session(
+                self.session_id,
+                apeireth_core::kernel::RequestId::new(),
+                &NormalizedRequest::new(model, messages),
+                None,
+                None,
+            )
             .await
             .map_err(|error| ModuleInvocationError::Provider {
                 reason: format!("module {}: {error}", self.module_id),

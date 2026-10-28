@@ -148,6 +148,44 @@ impl ToolDispatcher {
             .get(&session)
             .cloned()
     }
+    pub(crate) fn bind_session_principal(
+        &self,
+        session: &mut super::session::Session,
+    ) -> super::RuntimeResult<()> {
+        let mut bindings = self.principals.write().unwrap_or_else(|e| e.into_inner());
+        match (&session.principal, bindings.get(&session.id)) {
+            (Some(stored), Some(current)) if stored != current => {
+                return Err(super::RuntimeError::Denied {
+                    hook: "session_identity".into(),
+                    reason: "session principal cannot be rebound".into(),
+                })
+            }
+            (Some(stored), None) => {
+                bindings.insert(session.id, stored.clone());
+            }
+            (None, Some(current)) => {
+                session.principal = Some(current.clone());
+            }
+            _ => {}
+        }
+        if session.principal.is_some() {
+            let current = self.scope(session.id);
+            match &session.tool_scope {
+                Some(ceiling) => self.set_scope(
+                    session.id,
+                    ToolScope::Only(
+                        ceiling
+                            .iter()
+                            .filter(|id| current.allows(id))
+                            .cloned()
+                            .collect(),
+                    ),
+                ),
+                None => session.tool_scope = self.scope_snapshot(session.id),
+            }
+        }
+        Ok(())
+    }
     fn invocation_scope(
         &self,
         session: Option<SessionId>,

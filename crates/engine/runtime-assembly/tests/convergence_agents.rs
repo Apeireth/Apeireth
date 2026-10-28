@@ -630,3 +630,65 @@ async fn provider_retry_after_is_respected_and_failed_usage_is_not_invented() {
     assert_eq!(agent.snapshot().usage.input_tokens, 10);
     runtime.shutdown().await.unwrap();
 }
+struct AutonomousModule {
+    manifest: PluginManifest,
+    done: Arc<tokio::sync::Notify>,
+}
+#[async_trait]
+impl Plugin for AutonomousModule {
+    fn manifest(&self) -> &PluginManifest {
+        &self.manifest
+    }
+    async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
+        let agents = ctx.agents.clone().expect("managed host port");
+        let done = self.done.clone();
+        let scope = ctx.tasks.clone();
+        let lease = scope.lease().unwrap();
+        tokio::spawn(async move {
+            let _owner = lease;
+            let _ = scope
+                .run(async move {
+                    agents.wait_ready().await.unwrap();
+                    let child = agents.spawn_agent(AgentConfig::default()).await.unwrap();
+                    child.run("autonomous_owned_start".into()).await.unwrap();
+                    child.destroy().await.unwrap();
+                    done.notify_one();
+                })
+                .await;
+        });
+        Ok(())
+    }
+    async fn shutdown(&self) -> PluginResult<()> {
+        Ok(())
+    }
+}
+#[tokio::test]
+async fn a_module_starts_its_own_real_agent_after_assembly_without_a_host_task_or_tool_call() {
+    let done = Arc::new(tokio::sync::Notify::new());
+    let provider = Provider::new(vec![]);
+    let module = Arc::new(AutonomousModule {
+        manifest: PluginManifest::new(pid("module.autonomous"), "1.0.0", "autonomous owned agent"),
+        done: done.clone(),
+    });
+    let mut policy = AgentHostPolicy::default();
+    policy
+        .modules
+        .insert(pid("module.autonomous"), ModuleAgentGrant::default());
+    let runtime = builder(provider.clone())
+        .with_plugin(module)
+        .build_agent_runtime(policy)
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), done.notified())
+        .await
+        .unwrap();
+    let instances = runtime.instances();
+    assert_eq!(instances.len(), 1);
+    assert!(
+        matches!(&instances[0].owner,AgentOwner::Module{definition,..} if definition==&pid("module.autonomous"))
+    );
+    assert_eq!(instances[0].status, AgentStatus::Destroyed);
+    assert_eq!(instances[0].usage.requests, 1);
+    assert!(provider.requests()[0].tools.is_empty());
+    runtime.shutdown().await.unwrap();
+}
