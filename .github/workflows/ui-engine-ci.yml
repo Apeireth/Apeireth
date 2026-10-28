@@ -519,15 +519,19 @@ jobs:
         id: env_gate
         run: |
           set -euo pipefail
+          # ⚠️ `GITHUB_OUTPUT` 只在 GitHub Actions 里存在；本地等价 CI 里没有
+          #   ⇒ ⇒ `set -u` 下 `${GITHUB_OUTPUT}` 会直接报 unbound variable
+          #   ⇒ ⇒ 必须给默认值（2026-10-28 本地等价 CI 实测抓到）。
+          OUT="${GITHUB_OUTPUT:-${TMPDIR:-/tmp}/ui-engine-ci-output}"
           CHROME_BIN="${CHROME_PATH:-$(command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)}"
           VER="$("$CHROME_BIN" --version 2>/dev/null | grep -oE '[0-9]+\.' | head -1 | tr -d '.' || true)"
           echo "chrome_version=${CHROME_BIN} / major=${VER:-unknown}"
           MAJOR="${VER:-0}"
           if [ "$MAJOR" -ge 155 ] 2>/dev/null; then
             echo "::warning::Chrome 主版本 ${MAJOR} + runner 软件光栅化实测触发 wgpu 上下文回收（台账 E-89）⇒ 本 job 判定为 **not_applicable**，像素等价改由本地等价 CI 负责"
-            echo "applicable=false" >> "$GITHUB_OUTPUT"
+            echo "applicable=false" >> "$OUT"
           else
-            echo "applicable=true" >> "$GITHUB_OUTPUT"
+            echo "applicable=true" >> "$OUT"
           fi
 
       - name: 跑生产对照（逐像素）
