@@ -378,6 +378,47 @@ impl<D: Dom> Renderer<D> {
         Ok(Some(path))
     }
 
+    /// ⭐⭐ **按真实滚动状态计算虚拟窗口**（L1-G5 接线）。
+    ///
+    /// 链路：**后端真实 `scrollTop/clientHeight`** → [`crate::virtual_list::plan_virtual_window`]
+    /// ⇒ ⇒ 上层拿到的不是"猜的滚动位置"，而是 DOM 里此刻的真实状态
+    /// （滚轮、键盘、`scrollIntoView`、宿主设的 `scrollTop` 全都反映进来）。
+    ///
+    /// ## 边界（0 装）
+    ///
+    /// 内存后端**不计算**布局 ⇒ 未注入脚本化度量时返回
+    /// [`DomError::NotImplemented`]（显式），不会静默给出空窗口。
+    pub fn virtual_window_for(
+        &self,
+        path: &[usize],
+        item_heights: &[f64],
+        overscan: usize,
+    ) -> Result<crate::virtual_list::VirtualPlan, DomError> {
+        let node = self.node_at_path(path)?;
+        let metrics = self.dom.scroll_metrics(&node)?;
+        Ok(crate::virtual_list::plan_virtual_window(
+            item_heights,
+            metrics.scroll_top,
+            metrics.client_height,
+            overscan,
+        ))
+    }
+
+    /// ⭐ **设置滚动位置**（CSS 像素）⇒ 后端负责夹取，返回是否真的写。
+    pub fn set_scroll_top_at_path(&self, path: &[usize], top: f64) -> Result<(), DomError> {
+        let node = self.node_at_path(path)?;
+        self.dom.set_scroll_top(&node, top)
+    }
+
+    /// ⭐ **滚动容器度量**（真实 `scrollTop/scrollHeight/clientHeight`）。
+    pub fn scroll_metrics_at_path(
+        &self,
+        path: &[usize],
+    ) -> Result<crate::dom::ScrollMetrics, DomError> {
+        let node = self.node_at_path(path)?;
+        self.dom.scroll_metrics(&node)
+    }
+
     /// ⭐ 按路径取**后端节点**（浏览器侧探针与宿主挂监听时需要）。
     pub fn node_for_path(&self, path: &[usize]) -> Result<D::Node, DomError> {
         self.node_at_path(path)
@@ -1659,6 +1700,60 @@ mod tests {
             0,
             "补写后队列必须清空"
         );
+    }
+
+    /// ⭐⭐ **虚拟窗口吃真实滚动状态**（L1-G5 接线）：后端度量 → 窗口计划。
+    #[test]
+    fn virtual_window_uses_real_scroll_state() {
+        use crate::dom::{ElementBox, ScrollMetrics};
+
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("div")
+            .child(VNode::element("span").build())
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+        let container = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        renderer.dom().script_measurement(
+            container,
+            ElementBox::new(0.0, 0.0, 300.0, 200.0),
+            ScrollMetrics {
+                scroll_top: 120.0,
+                scroll_height: 1000.0,
+                client_height: 200.0,
+            },
+        );
+
+        let heights = vec![50.0; 10];
+        let plan = renderer
+            .virtual_window_for(&[], &heights, 0)
+            .expect("度量已注入 ⇒ 必须可算");
+        // 与 `virtual_list` 的边界语义一致：滚动 120、视口 200、每项 50
+        assert_eq!((plan.first, plan.last), (2, 6));
+        assert_eq!(plan.offset, 100.0);
+        assert_eq!(plan.count, 5);
+
+        // 越界滚动：真实状态里 scroll_top 被夹到 800 ⇒ 窗口落在尾部（不是空窗口）
+        renderer
+            .set_scroll_top_at_path(&[], 9_999.0)
+            .expect("设置滚动必须成功");
+        let metrics = renderer.scroll_metrics_at_path(&[]).expect("度量可读");
+        assert_eq!(metrics.scroll_top, 800.0, "后端必须夹到 max_scroll_top");
+        let tail = renderer.virtual_window_for(&[], &heights, 0).expect("可算");
+        assert_eq!(tail.last, 9, "滚到底必须仍包含最后一项");
+        assert!(tail.count > 0, "滚到底不得变成空窗口");
+    }
+
+    /// 未注入度量 ⇒ **显式 `NotImplemented`**（不静默给空窗口）。
+    #[test]
+    fn virtual_window_without_measurement_is_explicitly_unimplemented() {
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("div").build();
+        renderer.mount(view).expect("挂载必须成功");
+        let _ = root;
+        assert!(matches!(
+            renderer.virtual_window_for(&[], &[10.0; 3], 1),
+            Err(DomError::NotImplemented)
+        ));
     }
 
     /// ⭐⭐⭐ **焦点真的被驱动**（L1-G3 接线）：`focus_at_path` ⇒ 后端聚焦、`restore_focus` ⇒ 回到原处。
