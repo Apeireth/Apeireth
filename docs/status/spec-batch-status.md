@@ -139,6 +139,10 @@ Author: lead
 * **小说语料闸门**（`check_golden_baseline.py`）：redchamber **0.2983**、watershed **0.6875**
   ⇒ **两本逐字未变** ⇒ **不劣化** ⇒ 闸门通过（`golden-baseline.json` **无需更新**）；
 * **memory crate 测试**：**1,775 passed / 0 failed**；
+* **LoCoMo 生产口径复测**（`locomo_delivery`，走 `golden_run` ⇒ 已含融合）：
+  全量 1,527 题 `recall@10` 0.5236 → **0.5301** · groundedness 0.5815 → **0.5900**；
+  单证据 1,122 题 **0.6221 → 0.6283**（+0.0062）· **送达率仍 1.0000**；
+* ⇒ ⇒ **三个语料一致受益**（小说 0 / 内部卷 +0.0265 / LoCoMo +0.0062）⇒ 不是过拟合单卷；
 * 口径：`COVERAGE_WEIGHT = 0.5` 是**两语料都正收益**的档位（内部卷 ×0.5/×1.0 同为 0.9003；
   LoCoMo ×1.0 最高 0.6346）⇒ 取 0.5 更保守（对长记录偏向更小）。
 
