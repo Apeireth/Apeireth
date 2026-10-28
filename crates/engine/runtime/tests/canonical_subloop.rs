@@ -1412,6 +1412,13 @@ async fn subloop_timeout_returns_only_after_native_tool_cancellation_drains() {
     let child = runtime.agent_instances().pop().unwrap();
     assert_eq!(child.status, AgentStatus::Stopped);
     assert_eq!(child.usage.requests, 1);
+    let private = runtime
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_interrupted_checkpoint(&private, child.id, &["native"]);
 }
 
 #[tokio::test]
@@ -1421,12 +1428,23 @@ async fn parent_stop_cancels_inflight_subloop_and_drains_native_leases_without_s
         started: Arc::new(tokio::sync::Notify::new()),
         drained: Arc::new(AtomicUsize::new(0)),
     });
-    let module = RecordingSubLoops::new("module.parent_cancel", vec![child_spec(tool.as_ref())]);
+    let (first, count) = MockInstrumentedTool::new("tool.first", "first");
+    let module = RecordingSubLoops::new(
+        "module.parent_cancel",
+        vec![child_spec(tool.as_ref())
+            .with_max_rounds(3)
+            .with_allowed_capability(first.id().clone())],
+    );
     let provider = ScriptedProvider::new(
         "provider.mock",
         vec![
             ScriptStep::CallTool {
-                call_id: "native",
+                call_id: "reused",
+                tool: "first",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::CallTool {
+                call_id: "reused",
                 tool: "native_drain",
                 arguments: serde_json::json!({}),
             },
@@ -1436,17 +1454,25 @@ async fn parent_stop_cancels_inflight_subloop_and_drains_native_leases_without_s
     let host = Runtime::builder()
         .with_plugin(ScriptedProviderPlugin::new(provider))
         .with_capability(tool.clone())
+        .with_capability(Arc::new(first.clone()))
         .with_registered_behavior(module.clone())
         .with_default_model("subloop-model")
         .with_governance(Arc::new(apeireth_governance::AllowAll))
-        .build_agent_runtime(granted_policy(&module, vec![tool.id().clone()]))
+        .build_agent_runtime(granted_policy(
+            &module,
+            vec![tool.id().clone(), first.id().clone()],
+        ))
         .await
         .unwrap();
     let parent = host
         .spawn_agent(
             "main",
             AgentConfig {
-                tools: vec![behavior_tool(&module), tool.id().clone()],
+                tools: vec![
+                    behavior_tool(&module),
+                    tool.id().clone(),
+                    first.id().clone(),
+                ],
                 ..Default::default()
             },
         )
@@ -1464,6 +1490,37 @@ async fn parent_stop_cancels_inflight_subloop_and_drains_native_leases_without_s
         .instances()
         .iter()
         .all(|a| a.status == AgentStatus::Stopped));
+    let child = host
+        .instances()
+        .into_iter()
+        .find(|a| a.id != parent.id())
+        .unwrap();
+    let private = host
+        .kernel()
+        .await
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_interrupted_checkpoint(&private, child.id, &["reused"]);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    assert_eq!(child.usage.tool_calls, 2);
+    assert_eq!(private.events.iter().filter(|e| matches!(&e.event,
+        SessionEventKind::ToolEventRecorded { fact } if fact.call().id == "reused" && fact.result().is_ok())).count(), 1);
+    parent.stop().await.unwrap();
+    let again = host
+        .kernel()
+        .await
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&private).unwrap(),
+        serde_json::to_value(&again).unwrap()
+    );
     let sibling = host
         .spawn_agent("other", AgentConfig::default())
         .await
@@ -1767,6 +1824,291 @@ async fn registered_owner_stop_cancels_and_drains_child_without_stopping_parent(
         matches!(child.owner, AgentOwner::Module { definition, instance }
         if definition == behavior_id(&module) && instance == host.kernel().await.plugins().instance_id(&definition).unwrap())
     );
+    let private = host
+        .kernel()
+        .await
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_interrupted_checkpoint(&private, child.id, &["native"]);
     assert_eq!(parent.run("again".into()).await.unwrap().text, "next turn");
     assert_eq!(module.starts.load(Ordering::SeqCst), 1);
+}
+
+fn assert_interrupted_checkpoint(
+    session: &apeireth_runtime::canonical::session::Session,
+    agent: apeireth_core::kernel::AgentId,
+    pending: &[&str],
+) {
+    let facts: Vec<_> = session
+        .events
+        .iter()
+        .filter(|e| matches!(e.event, SessionEventKind::AgentTaskInterrupted { .. }))
+        .collect();
+    assert_eq!(
+        facts.len(),
+        1,
+        "explicit drain publishes one interruption fact"
+    );
+    assert!(
+        matches!(&facts[0].event, SessionEventKind::AgentTaskInterrupted {
+        agent: actual, pending_tool_calls
+    } if *actual == agent && pending_tool_calls == pending)
+    );
+    assert!(session.events.iter().any(|e| e.request == facts[0].request && e.trace == facts[0].trace
+        && matches!(e.event, SessionEventKind::AgentTaskStarted { agent: actual, .. } if actual == agent)));
+    assert!(!session.events.iter().any(|e| e.request == facts[0].request
+        && matches!(e.event, SessionEventKind::TurnCompleted { .. })));
+    let reloaded: apeireth_runtime::canonical::session::Session =
+        serde_json::from_value(serde_json::to_value(session).unwrap()).unwrap();
+    assert_eq!(
+        session.log, reloaded.log,
+        "reader preserves interruption and provenance"
+    );
+}
+
+#[tokio::test]
+async fn parent_cancel_preserves_child_commits_and_cancelled_provider_fact_without_recharging() {
+    let (tool, count) = MockInstrumentedTool::new("tool.partial", "partial");
+    let module = RecordingSubLoops::new("module.partial_cancel", vec![child_spec(&tool)]);
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::CallTool {
+                call_id: "committed",
+                tool: "partial",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::DelayAndSay(Duration::from_secs(30), "must not commit"),
+            ScriptStep::Say("sibling"),
+        ],
+    );
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_capability(Arc::new(tool.clone()))
+        .with_behavior(module.clone())
+        .with_default_model("subloop-model")
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .build_agent_runtime(granted_policy(&module, vec![tool.id().clone()]))
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![behavior_tool(&module), tool.id().clone()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let running = parent.clone();
+    let task = tokio::spawn(async move { running.run("parent".into()).await });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while provider.calls.load(Ordering::SeqCst) < 2 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    parent.stop().await.unwrap();
+    assert!(matches!(task.await.unwrap(), Err(e) if e.code == AgentErrorCode::Cancelled));
+    let child = host
+        .instances()
+        .into_iter()
+        .find(|a| a.id != parent.id())
+        .unwrap();
+    let session = host
+        .kernel()
+        .await
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_interrupted_checkpoint(&session, child.id, &[]);
+    apeireth_protocol::canonical::validate_closed_tool_context(&session.provider_view()).unwrap();
+    assert_eq!(session.events.iter().filter(|e| matches!(&e.event,
+        SessionEventKind::ToolEventRecorded { fact } if fact.call().id == "committed" && fact.result().is_ok())).count(), 1);
+    assert!(!session.messages.iter().any(|m| {
+        apeireth_protocol::canonical::ContentPart::join_text(&m.content).contains("must not commit")
+    }));
+    let facts = host.requests(child.id).unwrap();
+    assert_eq!(facts.len(), 2);
+    assert!(facts[0].reported.is_some() && !facts[0].cancelled);
+    assert!(facts[1].reported.is_none() && facts[1].cancelled && !facts[1].failed);
+    assert_eq!(facts[0].request, facts[1].request);
+    assert_eq!(child.usage.requests, 2);
+    assert_eq!(child.usage.cancellations, 1);
+    assert_eq!(child.usage.tool_calls, 1);
+    assert_eq!(host.usage(Some(&child.owner)).requests, 2);
+    assert_eq!(host.usage(None).requests, 2);
+    assert_eq!(parent.snapshot().usage.requests, 0);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    host.shutdown().await.unwrap();
+    let after = host
+        .kernel()
+        .await
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        session.log, after.log,
+        "shutdown does not duplicate interruption facts"
+    );
+}
+
+#[tokio::test]
+async fn managed_child_reused_wire_ids_keep_distinct_facts_and_one_meter_per_execution() {
+    use apeireth_runtime::canonical::events::{event_sink, RuntimeEvent};
+    let (tool, count) = MockInstrumentedTool::new("tool.audit", "audit");
+    let module = RecordingSubLoops::new(
+        "module.audit",
+        vec![child_spec(&tool).with_max_rounds(3), child_spec(&tool)],
+    );
+    let provider = ScriptedProvider::new(
+        "provider.mock",
+        vec![
+            ScriptStep::CallTool {
+                call_id: "reused",
+                tool: "audit",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::CallTool {
+                call_id: "reused",
+                tool: "audit",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::Say("private one"),
+            ScriptStep::CallTool {
+                call_id: "reused",
+                tool: "audit",
+                arguments: serde_json::json!({}),
+            },
+            ScriptStep::Say("private two"),
+            ScriptStep::Say("public"),
+        ],
+    );
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let captured = events.clone();
+    let host = Runtime::builder()
+        .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
+        .with_capability(Arc::new(tool.clone()))
+        .with_module(module.clone())
+        .with_default_model("subloop-model")
+        .with_governance(Arc::new(apeireth_governance::AllowAll))
+        .with_event_sink(event_sink(move |event| {
+            captured.lock().unwrap().push(event)
+        }))
+        .build_agent_runtime(granted_policy(&module, vec![tool.id().clone()]))
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![behavior_tool(&module), tool.id().clone()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        parent.run("public input".into()).await.unwrap().text,
+        "public"
+    );
+    let children: Vec<_> = host
+        .instances()
+        .into_iter()
+        .filter(|a| a.id != parent.id())
+        .collect();
+    assert_eq!(children.len(), 2);
+    let mut execution_ids = std::collections::BTreeSet::new();
+    let mut request_ids = std::collections::BTreeSet::new();
+    for child in &children {
+        let session = host
+            .kernel()
+            .await
+            .sessions()
+            .load(&child.session)
+            .await
+            .unwrap()
+            .unwrap();
+        let reloaded: apeireth_runtime::canonical::session::Session =
+            serde_json::from_value(serde_json::to_value(&session).unwrap()).unwrap();
+        assert_eq!(session.log, reloaded.log);
+        apeireth_protocol::canonical::validate_closed_tool_context(&reloaded.provider_view())
+            .unwrap();
+        assert!(!session
+            .events
+            .iter()
+            .any(|e| matches!(e.event, SessionEventKind::AgentTaskInterrupted { .. })));
+        let mut facts = 0;
+        for entry in &session.events {
+            if let SessionEventKind::ToolEventRecorded { fact } = &entry.event {
+                assert_eq!(fact.call().id, "reused");
+                assert!(
+                    execution_ids.insert(fact.call_id()),
+                    "wire id is not an execution identity"
+                );
+                facts += 1;
+            }
+        }
+        assert_eq!(child.usage.tool_calls, facts);
+        let requests = host.requests(child.id).unwrap();
+        assert_eq!(requests.len() as u64, child.usage.requests);
+        for fact in requests {
+            assert_eq!(fact.agent, child.id);
+            assert_eq!(fact.owner, child.owner);
+            assert!(request_ids.insert(fact.id));
+            assert!(!fact.failed && !fact.cancelled);
+        }
+    }
+    assert_eq!(execution_ids.len(), 3);
+    assert_eq!(count.load(Ordering::SeqCst), 3);
+    assert_eq!(
+        host.usage(None).requests,
+        provider.calls.load(Ordering::SeqCst) as u64
+    );
+    assert_eq!(host.usage(None).requests, 6);
+    assert_eq!(host.usage(Some(&children[0].owner)).requests, 5);
+    assert_eq!(parent.snapshot().usage.requests, 1);
+    // Every fixed Hook callback is separately executed, including empty audit
+    // observations. Count its durable facts rather than just TurnStart's output.
+    let public = host
+        .kernel()
+        .await
+        .sessions()
+        .load(&parent.snapshot().session)
+        .await
+        .unwrap()
+        .unwrap();
+    let callbacks = public
+        .events
+        .iter()
+        .filter(|e| matches!(e.event, SessionEventKind::ToolEventRecorded { .. }))
+        .count() as u64;
+    assert!(callbacks > 0);
+    assert_eq!(parent.snapshot().usage.tool_calls, callbacks);
+    assert_eq!(host.usage(None).tool_calls, callbacks + 3);
+    for event in events.lock().unwrap().iter() {
+        let session = match event {
+            RuntimeEvent::TurnStarted { session, .. }
+            | RuntimeEvent::TurnCompleted { session, .. }
+            | RuntimeEvent::TurnFailed { session, .. }
+            | RuntimeEvent::Trace { session, .. }
+            | RuntimeEvent::ApprovalRequired { session, .. } => session,
+        };
+        assert_eq!(
+            *session,
+            parent.snapshot().session,
+            "private child emits no frontend frames"
+        );
+    }
+    assert!(!events.lock().unwrap().is_empty());
+    host.shutdown().await.unwrap();
 }

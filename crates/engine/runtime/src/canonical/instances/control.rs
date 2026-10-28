@@ -58,7 +58,9 @@ impl AgentRuntime {
                     "module cleanup deadline exceeded; owner retained",
                 )
             })?
-            .map_err(|e| error(AgentErrorCode::Provider, e.to_string()))
+            .map_err(|e| error(AgentErrorCode::Provider, e.to_string()))?;
+        drop(kernel);
+        self.inner.record_interrupted_tasks().await
     }
     pub async fn unregister_module(&self, id: &PluginId) -> AgentResult<()> {
         self.stop_module(id).await?;
@@ -83,6 +85,7 @@ impl AgentRuntime {
                 "runtime draining; resources remain owned",
             )
         })?;
+        self.inner.record_interrupted_tasks().await?;
         let mut kernel =
             tokio::time::timeout(self.inner.policy.stop_timeout, self.inner.kernel.write())
                 .await

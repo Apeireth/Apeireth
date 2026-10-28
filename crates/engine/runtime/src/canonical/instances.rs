@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 use std::time::Duration;
+mod audit;
 mod control;
 mod hot;
 mod main;
@@ -642,6 +643,10 @@ impl AgentInstance for ManagedAgent {
                     "agent draining; resources remain owned",
                 )
             })?;
+        self.record_interrupted_task().await?;
+        if let Some(inner) = self.inner.upgrade() {
+            inner.record_interrupted_tasks().await?;
+        }
         self.state.lock().unwrap_or_else(|e| e.into_inner()).0 = AgentStatus::Stopped;
         Ok(())
     }

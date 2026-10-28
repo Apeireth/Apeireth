@@ -188,10 +188,12 @@ impl ManagedAgent {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => {
                 self.scope.close();
+                self.record_interrupted_task().await?;
                 Err(error(AgentErrorCode::Cancelled, "agent cancelled"))
             }
             Err(_) => {
                 self.scope.close();
+                self.record_interrupted_task().await?;
                 Err(error(
                     if normalized_task {
                         AgentErrorCode::Timeout

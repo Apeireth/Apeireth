@@ -21,6 +21,13 @@ pub enum SessionEventKind {
         parent_request: apeireth_core::kernel::RequestId,
         parent_trace: apeireth_core::kernel::TraceId,
     },
+    /// Explicit drain observed an interrupted private task. Pending calls refer
+    /// to the last durable checkpoint; their side effects may be incomplete.
+    /// This is not a tool result or a claim that cancellation rolled work back.
+    AgentTaskInterrupted {
+        agent: apeireth_core::kernel::AgentId,
+        pending_tool_calls: Vec<String>,
+    },
     /// A fixed-version hook attempt, ordered at commit, with no payload in errors.
     RegisteredHook {
         module: apeireth_core::kernel::PluginId,

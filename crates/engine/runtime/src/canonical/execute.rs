@@ -1969,6 +1969,13 @@ impl Runtime {
 
             let mut retry_requested = None;
             while continuation.next_tool_index < continuation.tool_calls.len() {
+                // Private tasks cannot reuse an interrupted context. Persist the
+                // proposed batch and previous commits before an awaited dispatch,
+                // so explicit drain can audit unresolved calls without inventing
+                // successful results or charging another execution.
+                if self.task.is_some() {
+                    self.sessions.save(&session).await?;
+                }
                 let index = continuation.next_tool_index;
                 let call = continuation.tool_calls[index].clone();
                 // 配额烧钱闸 (工具调用点): 派发本调用前查会话账本, 超限即帧
