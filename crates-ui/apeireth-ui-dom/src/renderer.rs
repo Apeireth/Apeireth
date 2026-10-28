@@ -30,7 +30,7 @@
 
 use std::fmt;
 
-use crate::dom::{Dom, DomError};
+use crate::dom::{Dom, DomError, ElementBox, MeasurementScale};
 use crate::keyed::diff_keyed;
 use crate::vnode::{AttrValue, ElementVNode, PropValue, TextVNode, VNode};
 
@@ -230,6 +230,8 @@ pub struct Renderer<D: Dom> {
     last_error: Option<DomError>,
     /// 降级告警（例如「后端不支持移除 property ⇒ 已写回默认值」）。
     warnings: Vec<String>,
+    /// ⭐ 测量/命中测试的乘数（L1-G6：DPR × 密度）。默认恒等。
+    measurement_scale: MeasurementScale,
 }
 
 impl<D: Dom> Renderer<D> {
@@ -243,6 +245,7 @@ impl<D: Dom> Renderer<D> {
             desynced: false,
             last_error: None,
             warnings: Vec::new(),
+            measurement_scale: MeasurementScale::IDENTITY,
         }
     }
 
@@ -262,6 +265,61 @@ impl<D: Dom> Renderer<D> {
     }
 
     /// 当前是否已挂载。
+    /// ⭐ 设定测量/命中测试的乘数（DPR × 密度）—— L1-G6。
+    ///
+    /// ⚠️ 乘数只影响**换算**，不改变 `ElementBox` 的 CSS 像素语义。
+    pub fn set_measurement_scale(&mut self, scale: MeasurementScale) {
+        self.measurement_scale = scale;
+    }
+
+    /// 当前测量乘数。
+    pub fn measurement_scale(&self) -> MeasurementScale {
+        self.measurement_scale
+    }
+
+    /// ⭐ **已挂载树根元素的元素盒**（CSS 像素）—— L1-G1 接线。
+    pub fn bounding_box(&self) -> Result<ElementBox, DomError> {
+        let tree = self.tree.as_ref().ok_or(DomError::NodeNotFound)?;
+        let node = tree.dom_node().ok_or(DomError::NodeNotFound)?;
+        self.dom.bounding_box(node)
+    }
+
+    /// ⭐ 按**子节点路径**取元素盒（路径语义与事件 `target_path` 一致：从根起的子下标序列）。
+    pub fn bounding_box_at_path(&self, path: &[usize]) -> Result<ElementBox, DomError> {
+        let mut cursor = self.tree.as_ref().ok_or(DomError::NodeNotFound)?;
+        for index in path {
+            let children = match cursor {
+                MountedNode::Element(element) => &element.children,
+                MountedNode::Fragment(fragment) => &fragment.children,
+                MountedNode::Text(_) => return Err(DomError::NodeNotFound),
+            };
+            cursor = children.get(*index).ok_or(DomError::NodeNotFound)?;
+        }
+        let node = cursor.dom_node().ok_or(DomError::NodeNotFound)?;
+        self.dom.bounding_box(node)
+    }
+
+    /// 元素盒换算到**设备像素**（用当前乘数）。
+    pub fn bounding_box_in_device(&self, path: &[usize]) -> Result<ElementBox, DomError> {
+        Ok(self
+            .measurement_scale
+            .box_to_device(self.bounding_box_at_path(path)?))
+    }
+
+    /// ⭐ **命中测试**：给定**设备像素**坐标，判断是否落在该路径的元素盒内。
+    pub fn hit_test_device(
+        &self,
+        path: &[usize],
+        device_x: f64,
+        device_y: f64,
+    ) -> Result<bool, DomError> {
+        let rect = self.bounding_box_at_path(path)?;
+        let x = self.measurement_scale.device_to_css(device_x);
+        let y = self.measurement_scale.device_to_css(device_y);
+        Ok(rect.contains(x, y))
+    }
+
+    /// 是否已挂载（挂载后才有 `tree`）。
     pub fn is_mounted(&self) -> bool {
         self.tree.is_some()
     }
@@ -1335,6 +1393,63 @@ mod tests {
 
     /// 建渲染器，并保留一份后端句柄（`InMemoryDom` 不是 `Clone` ⇒ 用
     /// `Renderer::dom()` 读回去）。
+    /// ⭐ **L1-G1/G6 接线**：测量经渲染器可读，且按乘数换算到设备像素，
+    /// 命中测试用**设备像素**坐标。
+    #[test]
+    fn measurement_api_is_wired_through_the_renderer() {
+        use crate::dom::{ElementBox, MeasurementScale, ScrollMetrics};
+
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("section")
+            .child(VNode::element("span").build())
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+
+        // ① 内存后端**不计算**几何 ⇒ ⇒ 未注入时必须是显式 NotImplemented，
+        //    而不是静默返回全 0（那会让上层把「没接线」当成「尺寸为 0」）。
+        assert!(
+            matches!(renderer.bounding_box(), Err(DomError::NotImplemented)),
+            "未注入脚本化测量时必须显式 NotImplemented"
+        );
+
+        // ② 注入几何（根 = 挂载的 section，路径 [0] = span）
+        let section = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let span = renderer.dom().children(&section).expect("读子节点必须成功")[0];
+        let empty = ScrollMetrics::default();
+        renderer
+            .dom()
+            .script_measurement(section, ElementBox::new(10.0, 20.0, 100.0, 50.0), empty);
+        renderer
+            .dom()
+            .script_measurement(span, ElementBox::new(15.0, 25.0, 20.0, 10.0), empty);
+
+        assert_eq!(
+            renderer.bounding_box().expect("根盒可读"),
+            ElementBox::new(10.0, 20.0, 100.0, 50.0)
+        );
+        assert_eq!(
+            renderer.bounding_box_at_path(&[0]).expect("子盒可读"),
+            ElementBox::new(15.0, 25.0, 20.0, 10.0)
+        );
+        assert!(
+            matches!(
+                renderer.bounding_box_at_path(&[9]),
+                Err(DomError::NodeNotFound)
+            ),
+            "越界路径必须报 NodeNotFound"
+        );
+
+        // ③ 乘数 = DPR 2.0 × 密度 1.25 = 2.5
+        renderer.set_measurement_scale(MeasurementScale::new(2.0, 1.25));
+        assert_eq!(
+            renderer.bounding_box_in_device(&[0]).expect("可换算"),
+            ElementBox::new(37.5, 62.5, 50.0, 25.0)
+        );
+        // ④ 命中测试吃**设备像素**坐标：(40, 70) ⇒ CSS (16, 28) ⇒ 在盒内
+        assert!(renderer.hit_test_device(&[0], 40.0, 70.0).expect("可测"));
+        assert!(!renderer.hit_test_device(&[0], 0.0, 0.0).expect("可测"));
+    }
+
     fn renderer_with_dom() -> (Renderer<InMemoryDom>, InMemoryNodeId) {
         let dom = InMemoryDom::new();
         let root = dom.create_element("main").expect("建节点必须成功");

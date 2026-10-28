@@ -67,6 +67,85 @@ impl ElementBox {
     }
 }
 
+/// ⭐ **测量与命中测试的乘数**：设备像素比（DPR）× 界面密度（L1-G6）。
+///
+/// ## 为什么必须由引擎拥有
+///
+/// 系统缩放 125%、紧凑密度、Retina 屏下，**同一份 CSS 像素**对应不同设备像素
+/// ⇒ ⇒ 命中测试、纹理采样、拖拽阈值都必须按这个乘数换算
+/// ⇒ ⇒ 若让每个上层自己拿 `devicePixelRatio` 相乘，必然出现「差 1px」「拖不动」
+/// 这类只在特定缩放下复现的缺陷。
+///
+/// ## 单位约定
+///
+/// - **CSS 像素**：布局与事件坐标（`ElementBox`、`client_position`）；
+/// - **设备像素**：渲染目标与采样。
+/// - `device = css × dpr × density`。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MeasurementScale {
+    device_pixel_ratio: f64,
+    density: f64,
+}
+
+impl Default for MeasurementScale {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
+impl MeasurementScale {
+    /// 恒等乘数（dpr = 1、密度 = 1）。
+    pub const IDENTITY: Self = Self {
+        device_pixel_ratio: 1.0,
+        density: 1.0,
+    };
+
+    /// 构造乘数。非法值（`<= 0` / 非有限）按 **1.0** 处理并**不**静默产生 0 尺寸。
+    pub fn new(device_pixel_ratio: f64, density: f64) -> Self {
+        let sanitize = |value: f64| {
+            if value.is_finite() && value > 0.0 {
+                value
+            } else {
+                1.0
+            }
+        };
+        Self {
+            device_pixel_ratio: sanitize(device_pixel_ratio),
+            density: sanitize(density),
+        }
+    }
+
+    /// 设备像素比。
+    pub fn device_pixel_ratio(&self) -> f64 {
+        self.device_pixel_ratio
+    }
+
+    /// 界面密度标量。
+    pub fn density(&self) -> f64 {
+        self.density
+    }
+
+    /// CSS 像素 ⇒ 设备像素。
+    pub fn css_to_device(&self, css: f64) -> f64 {
+        css * self.device_pixel_ratio * self.density
+    }
+
+    /// 设备像素 ⇒ CSS 像素。
+    pub fn device_to_css(&self, device: f64) -> f64 {
+        device / (self.device_pixel_ratio * self.density)
+    }
+
+    /// 把元素盒整体换算到设备像素。
+    pub fn box_to_device(&self, rect: ElementBox) -> ElementBox {
+        ElementBox::new(
+            self.css_to_device(rect.x),
+            self.css_to_device(rect.y),
+            self.css_to_device(rect.width),
+            self.css_to_device(rect.height),
+        )
+    }
+}
+
 /// 滚动度量（CSS 像素）。
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ScrollMetrics {
@@ -1574,6 +1653,45 @@ impl Dom for UnavailableDom {
 
 #[cfg(test)]
 mod tests {
+
+    // ── G6 缩放/密度标量（台账 L1-G6）────────────────────────────────────
+
+    /// 恒等乘数不改变数值。
+    #[test]
+    fn identity_scale_does_not_change_values() {
+        let scale = MeasurementScale::IDENTITY;
+        assert_eq!(scale.css_to_device(100.0), 100.0);
+        assert_eq!(scale.device_to_css(100.0), 100.0);
+    }
+
+    /// DPR 与密度**相乘**（2.0 × 1.25 = 2.5），且双向互逆。
+    #[test]
+    fn scale_multiplies_dpr_and_density_and_is_invertible() {
+        let scale = MeasurementScale::new(2.0, 1.25);
+        assert_eq!(scale.device_pixel_ratio(), 2.0);
+        assert_eq!(scale.density(), 1.25);
+        assert_eq!(scale.css_to_device(40.0), 100.0, "40 CSS × 2.5 = 100 设备");
+        assert_eq!(scale.device_to_css(100.0), 40.0, "必须可逆");
+    }
+
+    /// ⭐ **非法乘数不得静默变成 0 尺寸**（0/负数/NaN/∞ ⇒ 按 1.0 处理）。
+    #[test]
+    fn illegal_scale_falls_back_to_one_instead_of_zero() {
+        for bad in [0.0, -2.0, f64::NAN, f64::INFINITY] {
+            let scale = MeasurementScale::new(bad, bad);
+            assert_eq!(scale.device_pixel_ratio(), 1.0, "非法 dpr {bad} 应回落 1.0");
+            assert_eq!(scale.density(), 1.0, "非法 density {bad} 应回落 1.0");
+            assert!(scale.css_to_device(10.0) > 0.0, "不得把尺寸压成 0");
+        }
+    }
+
+    /// 元素盒整体换算。
+    #[test]
+    fn element_box_scales_to_device_pixels() {
+        let scale = MeasurementScale::new(2.0, 1.0);
+        let device = scale.box_to_device(ElementBox::new(10.0, 20.0, 30.0, 40.0));
+        assert_eq!(device, ElementBox::new(20.0, 40.0, 60.0, 80.0));
+    }
 
     // ── G1 布局测量（台账 L1-G1）──────────────────────────────────────────
 
