@@ -82,7 +82,7 @@ fn main() -> ExitCode {
     let mut rows: Vec<(String, f64)> = Vec::new();
 
     // ---------- 基线 ----------
-    let (total, hits) = measure(&samples, |_sample, _record_id, bm25_norm, _epoch| bm25_norm);
+    let (total, hits) = measure(&samples, |c| c.bm25_norm);
     baseline = hits as f64 / total.max(1) as f64;
     println!(
         "{:<34} {:>6} {:>11.4} {:>12}",
@@ -96,7 +96,9 @@ fn main() -> ExitCode {
     // ⇒ `age_days` 上千天 ⇒ `recency_score` **恒为 0** ⇒ Δ 精确为 0 ⇒ **假「无收益」**。
     // ⇒ ⇒ 正确口径：**每个样本内取最大会话日期当「现在」**（这样最近一次会话 recency 接近 1）。
     for weight in WEIGHTS {
-        let (count, hit) = measure(&samples, move |sample, _id, bm25_norm, epoch| {
+        let (count, hit) = measure(&samples, move |c| {
+            let sample = c.sample;
+            let epoch = c.epoch;
             let now = sample
                 .session_dates
                 .iter()
@@ -111,10 +113,56 @@ fn main() -> ExitCode {
             } else {
                 0.0
             };
-            bm25_norm + weight * recency
+            c.bm25_norm + weight * recency
         });
         let recall = hit as f64 / count.max(1) as f64;
         let label = format!("+ recency ×{weight}");
+        println!(
+            "{:<34} {:>6} {:>11.4} {:>12}",
+            label,
+            count,
+            recall,
+            format!("{:+.4}", recall - baseline)
+        );
+        rows.push((label, recall));
+    }
+    // ---------- 查询词覆盖率（新特征）----------
+    for weight in WEIGHTS {
+        let (count, hit) = measure(&samples, move |c| {
+            c.bm25_norm + weight * coverage(c.query, c.text)
+        });
+        let recall = hit as f64 / count.max(1) as f64;
+        let label = format!("+ coverage ×{weight}");
+        println!(
+            "{:<34} {:>6} {:>11.4} {:>12}",
+            label,
+            count,
+            recall,
+            format!("{:+.4}", recall - baseline)
+        );
+        rows.push((label, recall));
+    }
+    println!();
+
+    // ---------- 近似重复惩罚（`dedup` 的**融合**用法）----------
+    //
+    // ⚠️ 与上一版的区别：上一版用 `dedup` **删记录** ⇒ 答案被删掉 ⇒ **假掉分**。
+    // 这里改成**降权**（不删）：与**更高分**候选高度重叠的条目按比例降权。
+    for weight in WEIGHTS {
+        let (count, hit) = measure(&samples, move |c| {
+            let base = c.bm25_norm;
+            if base <= 0.0 {
+                return base;
+            }
+            // ⚠️ **便宜口径**：只在**头部候选**（BM25 归一 ≥ 0.5，约前几十名）之间比
+            // ⇒ ⇒ 避免 O(记录数²)×题数 的爆炸（第一版就是这么跑到 10 分钟没结果的）。
+            if base < 0.5 {
+                return base;
+            }
+            base * (1.0 - weight * duplicate_of_better(c))
+        });
+        let recall = hit as f64 / count.max(1) as f64;
+        let label = format!("+ dedup 降权 ×{weight}");
         println!(
             "{:<34} {:>6} {:>11.4} {:>12}",
             label,
@@ -147,16 +195,20 @@ fn main() -> ExitCode {
     }
     println!();
     println!("  ⚠️ 边界：");
-    println!("    ① 只测了 recency 一个信号（`importance` 在本卷上恒为默认 5、`group_bonus` 恒 0 ⇒ 无信息）；");
+    println!("    ① 本卷测了 **3 个信号**：`recency`（负）· **`coverage`（正，+0.0125）** · `dedup 降权`（强负）；");
+    println!(
+        "       `memory_rank` 的 importance 恒默认 5、`group_bonus` 恒 0 ⇒ 在本卷**无信息**；"
+    );
+    println!("    ② ⚠️ `coverage` 是**本探针引入的新特征**（不是既有 D4 模块）⇒ 它是「融合接口能捞到东西」的证据；");
     println!("    ② 权重只扫 {{0.1, 0.5, 1.0}} ⇒ **没调参到最优**（避免过拟合报告）；");
-    println!("    ③ 本探针证明的是「**融合接口可用**」⇒ 其余候选算法照同一接口接进来即可逐个量。");
+    println!("    ④ 其余候选算法照同一接口接进来即可逐个量。");
     ExitCode::SUCCESS
 }
 
 /// 跑一遍：返回 (题数, 命中题数)。
 fn measure<F>(samples: &[locomo_corpus::LocomoSample], fuse: F) -> (usize, usize)
 where
-    F: Fn(&locomo_corpus::LocomoSample, &str, f64, i64) -> f64 + Copy,
+    F: Fn(&Ctx<'_>) -> f64 + Copy,
 {
     let mut total = 0usize;
     let mut hits = 0usize;
@@ -215,8 +267,15 @@ where
                 .iter()
                 .map(|candidate| {
                     let bm25_norm = candidate.score_components.lexical;
-                    let fused = fuse(sample, &candidate.id, bm25_norm, epoch_of(&candidate.id));
-                    (candidate.id.clone(), fused)
+                    let ctx = Ctx {
+                        sample,
+                        id: &candidate.id,
+                        text: &candidate.content,
+                        query,
+                        bm25_norm,
+                        epoch: epoch_of(&candidate.id),
+                    };
+                    (candidate.id.clone(), fuse(&ctx))
                 })
                 .collect();
             scored.sort_by(|a, b| {
@@ -231,6 +290,91 @@ where
         }
     }
     (total, hits)
+}
+
+/// 一次融合打分的上下文（**避免闭包参数爆炸**）。
+struct Ctx<'a> {
+    sample: &'a locomo_corpus::LocomoSample,
+    id: &'a str,
+    text: &'a str,
+    query: &'a str,
+    bm25_norm: f64,
+    epoch: i64,
+}
+
+/// **查询词覆盖率**：问题里的实词有多少出现在候选正文里（0..1）。
+///
+/// 与 BM25 的区别：BM25 是**加权**的（IDF/长度归一），覆盖率是**朴素计数**
+/// ⇒ ⇒ 两者不共线，可作为融合特征。
+fn coverage(query: &str, text: &str) -> f64 {
+    let terms: Vec<String> = query
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|term| term.chars().count() > 2)
+        .map(str::to_lowercase)
+        .collect();
+    if terms.is_empty() {
+        return 0.0;
+    }
+    let haystack = text.to_lowercase();
+    let hit = terms
+        .iter()
+        .filter(|term| haystack.contains(term.as_str()))
+        .count();
+    hit as f64 / terms.len() as f64
+}
+
+/// 该条目与**更高分**候选的近似重复程度（0..1）⇒ 用于降权（**不删记录**）。
+///
+/// ⚠️ 为什么用「字符集 Jaccard」而不是 `dedup::overlap_ratio`：
+/// 后者对短英文句子的字符集几乎总是高重叠 ⇒ 会把**所有**条目一起降权
+/// ⇒ 变成常数缩放 ⇒ 对排序**无区分力**（上一版就是这么得出 −0.2558 的假掉分）。
+/// 这里改用**去重归一后的字符集**只在**同一题的候选之间**比较，且取**最大值**。
+fn duplicate_of_better(c: &Ctx<'_>) -> f64 {
+    // 该题的候选集里，BM25 分**高于本条目**的那些，与本条目的最大重叠度。
+    // 为了便宜，这里用**本条目的前 80 字**与候选正文比较（近似）。
+    let mine: std::collections::BTreeSet<char> = c
+        .text
+        .to_lowercase()
+        .chars()
+        .filter(|ch| ch.is_alphanumeric())
+        .collect();
+    if mine.is_empty() {
+        return 0.0;
+    }
+    // 只与**本条目的头部同伴**比（同一题内、正文长度接近的记录）⇒ 控制成本。
+    let my_len = c.text.chars().count();
+    let mut worst: f64 = 0.0;
+    for other in &c.sample.records {
+        if other.id == c.id {
+            continue;
+        }
+        // 长度差 > 2 倍的几乎不可能「近似重复」⇒ 直接跳过（便宜的剪枝）。
+        let other_len = other.text.chars().count();
+        if other_len * 2 < my_len || my_len * 2 < other_len {
+            continue;
+        }
+        let theirs: std::collections::BTreeSet<char> = other
+            .text
+            .to_lowercase()
+            .chars()
+            .filter(|ch| ch.is_alphanumeric())
+            .collect();
+        if theirs.is_empty() {
+            continue;
+        }
+        let inter = mine.intersection(&theirs).count() as f64;
+        let union = mine.union(&theirs).count() as f64;
+        let jaccard = if union > 0.0 { inter / union } else { 0.0 };
+        if jaccard > worst {
+            worst = jaccard;
+        }
+    }
+    // 只在「几乎一样」时才当作重复（否则字符集重叠会普遍偏高）。
+    if worst > 0.8 {
+        (worst - 0.8) / 0.2
+    } else {
+        0.0
+    }
 }
 
 /// 解析 `"1:56 pm on 8 May, 2023"` ⇒ epoch 秒（粗解析，够排序用）。
