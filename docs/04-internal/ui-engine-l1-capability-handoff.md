@@ -30,12 +30,12 @@
 
 | # | 缺口 | 现状证据 | 判据（可执行） | 批次 |
 |---|------|----------|----------------|------|
-| G1 | **布局测量 API** | ✅ **2026-10-28 已落地 API 面**：`ElementBox` / `ScrollMetrics` + `Dom::bounding_box/scroll_metrics/set_scroll_top`（默认 `NotImplemented`）；`InMemoryDom` 脚本化测量（测试专用）；`WebDom` 接真实 DOM。**IMPLEMENTED + 已接线（渲染器 `bounding_box*` 消费）/ 浏览器未实测** | 余下两件：①渲染器或上层**消费**该 API（PRODUCTION WIRED）；②浏览器侧逐值一致证据 | 第 1 批（API 已完成） |
+| G1 | **布局测量 API** | ✅ **2026-10-28 已落地 API 面**：`ElementBox` / `ScrollMetrics` + `Dom::bounding_box/scroll_metrics/set_scroll_top`（默认 `NotImplemented`）；`InMemoryDom` 脚本化测量（测试专用）；`WebDom` 接真实 DOM。**IMPLEMENTED + WIRED + 浏览器已实测**（E-98：引擎盒与 JS `getBoundingClientRect` 逐值相同） | 余下两件：①渲染器或上层**消费**该 API（PRODUCTION WIRED）；②浏览器侧逐值一致证据 | 第 1 批（API 已完成） |
 | G2 | **事件面与载荷** | ✅ **2026-10-28 扩到 17 类**（含 pointer 族/scroll/wheel/submit/contextmenu）并补齐载荷（`checked` / `client_position` / `button` / `pointer_id` / `alt_key`）；浏览器后端已填充；`scroll` 标注**不可委托**。**IMPLEMENTED；浏览器内合成事件证据待补** | 余下：浏览器内合成事件断言（真实事件 → 载荷齐备）+ 命中测试消费方 | 第 1 批（主体已完成） |
-| G3 | **焦点 / IME / a11y 通道** | ✅ **2026-10-28 逻辑层已落地**：`FocusTracker`（栈 + 陷阱）、`CompositionGate`（组合中禁止写回）、`AriaChannel`（24 条白名单）；事件面加 `CompositionStart/End`。**IME 静默期已接线**（渲染器 `patch_props` 门住 `value`/`checked`，含待写队列与组合结束补写）；**焦点栈也已接线**（`focus_at_path` 驱动后端 `focus()`、陷阱先判后动、`restore_focus` 回原处）| 余下：浏览器实测证据（中文输入法 + 真实焦点行为） | 第 1 批（已完成） |
+| G3 | **焦点 / IME / a11y 通道** | ✅ **2026-10-28 逻辑层已落地**：`FocusTracker`（栈 + 陷阱）、`CompositionGate`（组合中禁止写回）、`AriaChannel`（24 条白名单）；事件面加 `CompositionStart/End`。**IME 静默期 + 焦点均接线且浏览器已实测**（E-98：`focus_at_path` 驱动 `document.activeElement`；`compositionstart/end` 翻转组合态）| 真实中文输入法硬件级实测仍留待（当前用合成事件） | 第 1 批（已完成） |
 | G4 | **受控输入闭环（双向）** | **已接线**：`set_property` 在 `renderer.rs` 出现 12 处、`patch_props` 先 `get_property` 回读再写、宏支持 `bind:value` / `bind:checked`（`apeireth-ui-macro/src/view.rs:322`） | 补「输入 ⇒ 状态 ⇒ DOM」全链浏览器断言 + IME 期间不打断；**无需新建**，只需补证据与边界用例 | 第 1 批 |
 | G5 | **滚动容器与虚拟化原语** | 无 `scroll` 事件；`renderer.rs` 每帧遍历全树 | 滚动位置读写 API + 窗口化原语；1k 行列表 patch 耗时进基准门（不进 CI 判红，先报告） | 第 2 批 |
-| G6 | **缩放 / 密度标量** | ✅ **2026-10-28 已落地**：`MeasurementScale`（dpr × density，非法值回落 1.0）+ 渲染器接线（`bounding_box_in_device` / `hit_test_device`）。**IMPLEMENTED + WIRED**；浏览器 125% 实测待补 | 余下：浏览器 DPR/缩放实测证据 | 第 1 批（已完成） |
+| G6 | **缩放 / 密度标量** | ✅ **2026-10-28 已落地**：`MeasurementScale`（dpr × density，非法值回落 1.0）+ 渲染器接线（`bounding_box_in_device` / `hit_test_device`）。**IMPLEMENTED + WIRED + 浏览器已实测**（E-98：2.0×1.25 换算正确） | — | 第 1 批（已完成） |
 | G7 | **资源句柄与加载状态** | 无图片/字体加载、无「度量未定」状态 | 资源句柄 + 加载状态机 + 解码/上传钩子；字体未就绪时能表达「度量未定」⇒ 布局不跳（含 CLS 观测） | 第 2 批 |
 | G8 | **错误边界与 panic hook** | wasm 无 panic hook；`ReactiveError` 只在 flush 后取一次 | 注入 panic ⇒ 渲染兜底可见且可上报；native 断言错误边界不扩散到整树 | 第 2 批 |
 

@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "failures": [],
+  "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
+  "engine_form": {
+    "x": 8,
+    "y": 8,
+    "w": 1424,
+    "h": 21
+  },
+  "js_form": {
+    "x": 8,
+    "y": 8,
+    "w": 1424,
+    "h": 21
+  },
+  "device_input": {
+    "x": 20,
+    "y": 20,
+    "w": 462.5,
+    "h": 52.5
+  }
+}

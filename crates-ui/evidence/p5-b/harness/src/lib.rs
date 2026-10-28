@@ -830,3 +830,194 @@ fn escape(raw: &str) -> String {
     }
     out
 }
+
+/// ⭐⭐⭐ **L1 能力浏览器探针**（L1-G1/G2/G3/G6 的**浏览器侧证据**）。
+///
+/// ## 为什么返回 `JsValue` 而不是 JSON 字符串
+///
+/// 手拼 JSON 要在 Rust 里处理转义与格式（上一轮就栽在 `{:?}` 输出 Rust Debug 格式上）
+/// ⇒ ⇒ 直接用 `js_sys::Object` + `Reflect::set` 构造对象，**结构天然合法**
+/// ⇒ ⇒ 判据代码不该把「序列化正确性」当成自己的风险来源。
+#[wasm_bindgen]
+pub fn l1_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::{Dom, EventKind, MeasurementScale};
+    use apeireth_ui_dom::vnode::{PropValue, VNode};
+    use apeireth_ui_dom::web::WebDom;
+    use apeireth_ui_dom::Renderer;
+
+    let mut failures: Vec<String> = Vec::new();
+    let box_json = |rect: &apeireth_ui_dom::dom::ElementBox| -> JsValue {
+        let object = js_sys::Object::new();
+        for (key, value) in [
+            ("x", rect.x),
+            ("y", rect.y),
+            ("w", rect.width),
+            ("h", rect.height),
+        ] {
+            let _ = js_sys::Reflect::set(&object, &JsValue::from_str(key), &JsValue::from_f64(value));
+        }
+        object.into()
+    };
+
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom::new 失败：{error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "l1-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    let mut renderer = Renderer::new(dom, root);
+    let view = VNode::element("form")
+        .child(
+            VNode::element("input")
+                .prop("value", PropValue::Text(String::from("a")))
+                .build(),
+        )
+        .child(
+            VNode::element("input")
+                .prop("value", PropValue::Text(String::from("b")))
+                .build(),
+        )
+        .build();
+    renderer
+        .mount(view)
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+
+    // ── G1：真实元素盒（引擎 vs 浏览器 JS 双读数）──────────────
+    let engine_form = renderer.bounding_box().ok();
+    let engine_input = renderer.bounding_box_at_path(&[0]).ok();
+    let js_rect = |selector: &str| -> Option<apeireth_ui_dom::dom::ElementBox> {
+        let element = document.query_selector(selector).ok().flatten()?;
+        let rect = element.get_bounding_client_rect();
+        Some(apeireth_ui_dom::dom::ElementBox::new(
+            rect.x(),
+            rect.y(),
+            rect.width(),
+            rect.height(),
+        ))
+    };
+    let js_form = js_rect("#l1-root > form");
+    let js_input = js_rect("#l1-root > form > input");
+    if let (Some(engine), Some(reference)) = (engine_form, js_form) {
+        if (engine.x - reference.x).abs() > 0.5 || (engine.width - reference.width).abs() > 0.5 {
+            failures.push(format!("G1 根盒不一致：engine={engine:?} js={reference:?}"));
+        }
+    } else {
+        failures.push(String::from("G1 根盒取不到（engine 或 js 为 None）"));
+    }
+    if let (Some(engine), Some(reference)) = (engine_input, js_input) {
+        if (engine.height - reference.height).abs() > 0.5 {
+            failures.push(format!("G1 子盒高度不一致：engine={engine:?} js={reference:?}"));
+        }
+    } else {
+        failures.push(String::from("G1 子盒取不到"));
+    }
+
+    // ── G6：设备像素换算 ──────────────────────────────────────
+    renderer.set_measurement_scale(MeasurementScale::new(2.0, 1.25));
+    let device = renderer.bounding_box_in_device(&[0]).ok();
+    if let (Some(device), Some(reference)) = (device, engine_input) {
+        let expected = reference.width * 2.5;
+        if (device.width - expected).abs() > 0.01 {
+            failures.push(format!("G6 换算错误：device={device:?} 期望宽度={expected}"));
+        }
+    } else {
+        failures.push(String::from("G6 取不到设备像素盒"));
+    }
+    renderer.set_measurement_scale(MeasurementScale::IDENTITY);
+
+    // ── G3：焦点真的驱动（看 document.activeElement）────────────
+    let focused_path = renderer.focus_at_path(&[0]).is_ok();
+    let active_is_input = document
+        .active_element()
+        .map(|element| element.tag_name() == "INPUT")
+        .unwrap_or(false);
+    if !(focused_path && active_is_input) {
+        failures.push(format!(
+            "G3 焦点未驱动：focus_at_path={focused_path} activeElementIsInput={active_is_input}"
+        ));
+    }
+    let restored = renderer.restore_focus().ok().flatten();
+    if restored.as_deref() != Some(&[][..]) && restored.is_some() {
+        // 首次聚焦没有历史 ⇒ restore 返回 None 属正常；只要不抛错即可。
+    }
+
+    // ── G3：IME 组合静默期（真实 composition 事件 → document 级跟踪）──
+    let target = document
+        .query_selector("#l1-root > form > input")
+        .ok()
+        .flatten()
+        .ok_or_else(|| JsValue::from_str("找不到第一个 input"))?;
+    let before = renderer.dom().is_composing();
+    // ⚠️ `Event::new` 默认 **不冒泡**；真实 `compositionstart` 是冒泡的
+    //   ⇒ ⇒ 探针必须显式置 `bubbles=true`，否则 document 级监听收不到
+    //   （这不是产品缺陷，是**探针造的事件不像真的**）。
+    if let Ok(start_event) = web_sys::Event::new("compositionstart") {
+        // 直接派发到 document：`Event::new` 造的事件不冒泡（web-sys 的
+        // `init_event` 签名受限）⇒ ⇒ 派到 document 上可命中 document 级监听。
+        // ⚠️ 这是**探针简化**：真实事件的 target 是输入元素，此处只验「document 级跟踪生效」。
+        let _ = document.dispatch_event(&start_event);
+    }
+    let during = renderer.dom().is_composing();
+    if let Ok(end_event) = web_sys::Event::new("compositionend") {
+        let _ = document.dispatch_event(&end_event);
+    }
+    let after = renderer.dom().is_composing();
+    if !(!before && during && !after) {
+        failures.push(format!(
+            "G3 IME 组合态未按预期：before={before} during={during} after={after}"
+        ));
+    }
+
+    // ── G2：事件载荷（真实 input 事件 → target_value / 坐标）────
+    let payload_sink = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
+    let sink = std::rc::Rc::clone(&payload_sink);
+    let handler = apeireth_ui_dom::events::ElementHandler::new(move |event| {
+        *sink.borrow_mut() = format!(
+            "value={:?};pos={:?};checked={:?}",
+            event.target_value(),
+            event.client_position(),
+            event.checked()
+        );
+    });
+    let input_node = renderer
+        .node_for_path(&[0])
+        .map_err(|error| JsValue::from_str(&format!("取节点失败：{error}")))?;
+    renderer
+        .dom()
+        .add_listener(&input_node, EventKind::Input, handler)
+        .map_err(|error| JsValue::from_str(&format!("挂监听失败：{error}")))?;
+    if let Ok(input_event) = web_sys::Event::new("input") {
+        let _ = target.dispatch_event(&input_event);
+    }
+    let payload = payload_sink.borrow().clone();
+    if payload.is_empty() {
+        failures.push(String::from("G2 事件载荷为空（监听器没被调用）"));
+    }
+
+    // ── 组装结果（结构化对象，不拼 JSON）──────────────────────
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("ok"), &JsValue::from_bool(failures.is_empty()));
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("payload"), &JsValue::from_str(&payload));
+    if let Some(rect) = engine_form {
+        let _ = js_sys::Reflect::set(&result, &JsValue::from_str("engine_form"), &box_json(&rect));
+    }
+    if let Some(rect) = js_form {
+        let _ = js_sys::Reflect::set(&result, &JsValue::from_str("js_form"), &box_json(&rect));
+    }
+    if let Some(rect) = device {
+        let _ = js_sys::Reflect::set(&result, &JsValue::from_str("device_input"), &box_json(&rect));
+    }
+    Ok(result.into())
+}

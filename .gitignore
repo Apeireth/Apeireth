@@ -229,6 +229,8 @@ crates/apeireth-integration-e2e/.*.log
 # ⚠️ `*.py` 是全局忽略 ⇒ ⇒ 新的驱动脚本**进不了仓** ⇒ ⇒ 「本地能跑、提交里没有、
 # CI 不会跑」⇒ ⇒ 与 `harness/scripts/` 同一类静默失败 ⇒ ⇒ 同样要逐层放行。
 !crates-ui/evidence/p5-b/drive_intro.py
+# L1 能力浏览器探针驱动（台账 E-98）：**判据脚本必须进仓**，否则门禁只在本地存在。
+!crates-ui/evidence/p5-b/drive_l1.py
 !crates-ui/evidence/p5-b/drive_device.py
 # ⚠️ 2026-10-27 实测踩到**同一个坑**：`check_particle_edge.py`（intro 的「有界差异」门禁）
 # 写了、台账（E-60）也引用了，但**一直在忽略名单里** ⇒ ⇒ 仓库里根本没有这个文件

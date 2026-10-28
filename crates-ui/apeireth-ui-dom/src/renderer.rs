@@ -378,6 +378,11 @@ impl<D: Dom> Renderer<D> {
         Ok(Some(path))
     }
 
+    /// ⭐ 按路径取**后端节点**（浏览器侧探针与宿主挂监听时需要）。
+    pub fn node_for_path(&self, path: &[usize]) -> Result<D::Node, DomError> {
+        self.node_at_path(path)
+    }
+
     /// 按路径取**后端节点**（内部克隆，避免与 `&mut self` 借用冲突）。
     fn node_at_path(&self, path: &[usize]) -> Result<D::Node, DomError> {
         let mut cursor = self.tree.as_ref().ok_or(DomError::NodeNotFound)?;

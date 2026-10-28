@@ -22,6 +22,7 @@ export default defineConfig({
         reference: 'reference/index.html',
         engine: 'engine/index.html',
         intro: 'intro/index.html',
+        l1: 'l1/index.html',
       },
       // wasm 胶水是**构建期产物**（放在 public/engine/pkg/）⇒ 不进打包图，
       // 运行时按绝对路径装载（wasm 二进制原样送达）。
