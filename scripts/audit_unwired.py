@@ -127,6 +127,11 @@ def is_test_file(path: Path) -> bool:
         return True
     if path.name.endswith("_tests.rs") or path.name == "tests.rs":
         return True
+    # `build.rs` 是**构建脚本**，不是产品代码 ⇒ 它引用某个符号**不算接线**
+    # （2026-10-28 修正：H1 的**残余**只有这一处；`#[cfg(test)]` 内联模块
+    #   早已由 `split_code_test()` 排除，之前把那条也写进"残余"是我说错了）。
+    if path.name == "build.rs":
+        return True
     return False
 
 

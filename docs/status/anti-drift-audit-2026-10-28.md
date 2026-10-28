@@ -71,9 +71,18 @@ Author: lead
   * **跑不了**（`<占位符>` / 缺工具 / PowerShell cmdlet）⇒ 必须 `verify_skip_reason`；
   * **能跑但当前环境不允许**（缺系统库 / 由另一条流水线覆盖）⇒ `verify_defer_reason`
     ⇒ **单独统计、不算通过**（延后项必须人工复核）。
-* **实测（首次真跑就抓到 6 条问题）**：现 **23 跑全过 · 2 豁免 · 4 延后**。
-  ⇒ 4 条延后全是**前端**：子工程 `Cargo.lock` 与 `Cargo.toml` **不同步**（`--locked` 拒绝更新）
-  + 本机缺 `cairo`/`webkit`/`gtk`；且 `pnpm test` **当前是红的**。
+* **实测（首次真跑就抓到 6 条问题）**：现 **26 跑 · 2 豁免 · 1 延后**。
+* ⚠️ **我这一条最初判断错了，必须纠正**：当时写「子工程 `Cargo.lock` 与 `Cargo.toml` 不同步（真漂移）」——
+  **不对**。复测 `cargo metadata --locked` **exit=0** 且 lock **一行未变**
+  ⇒ ⇒ 真实原因是**本机缺 crate 缓存**（下载补齐后 `--locked` 就过了）。
+* **真实的三类情况（已分别处理）**：
+  1. **3 条 Tauri 声明**：装齐 `libwebkit2gtk-4.1-dev` / `libgtk-3-dev` / `libcairo2-dev` 等系统库
+     + 建 sidecar 占位后 ⇒ **`cargo test --locked` 真跑通过（11 passed / 0 failed）**
+     ⇒ ⇒ 恢复 `PRODUCTION WIRED`（**真验过才算**）；
+  2. **1 条前端 `pnpm test`**：本机 **Node v24** 这个构建未编译 TypeScript 支持
+     ⇒ `tests/run-all.mjs` 直接 `ERR_NO_TYPESCRIPT`（66/82 套件因此失败）；
+     项目 CI 固定 **node 22** ⇒ ⇒ **如实延后**（**不代表该 claim 成立**）；
+  3. 2 条命令本身跑不了（PowerShell cmdlet / `<占位符>`）⇒ `verify_skip_reason`。
 
 ### H3 ✅ `STALE` 加**目录级兜底**
 
@@ -143,7 +152,9 @@ Author: lead
 * **反证**：手把「已测行数」改成 `99` ⇒ 守卫**当场红**并指出差异行。
 
 **全部 8 条（H1–H8）均已修**；其余已知边界：
-* H1 残余：`build.rs`、`#[cfg(test)]` 内联模块仍可能被算作生产 ⇒ 彻底解决需**从装配根做可达性分析**；
+* H1 残余：**只有 `build.rs`**（构建脚本不算产品代码）——**已修**（加进 `is_test_file`）。
+  ⚠️ 我最初把「`#[cfg(test)]` 内联模块」也算进残余 ⇒ **说错**：它早已由 `split_code_test()` 排除。
+  彻底解决"引用 ≠ 可达"仍需**从装配根做可达性分析**（未做）；
 * 前端 4 条 claim 延后（见 H2），其中 `Cargo.lock` **不同步是真正的漂移**，应由前端侧修。
 
 ---

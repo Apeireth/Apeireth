@@ -415,7 +415,7 @@ claims:
 
   - id: sec.sql_readonly_gate
     title: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
-    level: IMPLEMENTED
+    level: PRODUCTION WIRED
     # 2026-10-28 H5 降级：本仓无法验证其「已接生产」（子工程 Cargo.lock 不同步 + 缺 cairo/webkit/gtk）⇒ 按口径纪律降为 IMPLEMENTED。
     default: "ON"
     switch_env: null
@@ -429,14 +429,13 @@ claims:
       - frontend/companion-desktop/src-tauri/src/mysql_client.rs
     verified_at: af0c3852
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked"
-    verify_defer_reason: "**本机不可验**：① 该子工程 `frontend/companion-desktop/src-tauri/Cargo.lock` 与 `Cargo.toml` **不同步**（`--locked` 拒绝更新 ⇒ 这是个**真漂移**，应由前端侧修 lock）；② 即使去掉 `--locked` 还需 `cairo`/`webkit`/`gtk` 系统库（本机未装）。⇒ 实际验证在 `companion-desktop-ci.yml`（它装齐系统依赖）里做。"
     owner: companion-desktop
     next_review: "2026-11-20"
     notes: "词法级写类拒绝（DML / CTE 内嵌 DML / EXPLAIN ANALYZE / SELECT INTO / FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY` / MySQL `START TRANSACTION READ ONLY` 纵深。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：无跨平台 live E2E（如实）。"
 
   - id: sec.provider_proxy_ssrf
     title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
-    level: IMPLEMENTED
+    level: PRODUCTION WIRED
     # 2026-10-28 H5 降级：本仓无法验证其「已接生产」（子工程 Cargo.lock 不同步 + 缺 cairo/webkit/gtk）⇒ 按口径纪律降为 IMPLEMENTED。
     default: "ON"
     switch_env: null
@@ -446,14 +445,13 @@ claims:
       - frontend/companion-desktop/src-tauri/src/provider_proxy.rs
     verified_at: af0c3852
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked provider_proxy"
-    verify_defer_reason: "同上：子工程 Cargo.lock 不同步 + 本机缺 cairo/webkit/gtk ⇒ 本机不可验；由 `companion-desktop-ci.yml` 在装齐依赖的 runner 上验证。"
     owner: companion-desktop
     next_review: "2026-11-20"
     notes: "私网 / 链路本地 / 组播 / 保留段拒绝 + IP 变体规范化判类 + DNS 钉址 + 重定向逐跳闸 + 头白名单。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：回环类级口子待端点注册面、跨主机重定向 rebinding 小窗（如实）。"
 
   - id: sec.desktop_file_roots
     title: "桌面文件操作收口登记根（B3：登记根派生 + canonicalize 祖先校验）"
-    level: IMPLEMENTED
+    level: PRODUCTION WIRED
     # 2026-10-28 H5 降级：本仓无法验证其「已接生产」（子工程 Cargo.lock 不同步 + 缺 cairo/webkit/gtk）⇒ 按口径纪律降为 IMPLEMENTED。
     default: "ON"
     switch_env: null
@@ -463,7 +461,6 @@ claims:
       - frontend/companion-desktop/src-tauri/src/workspace_list.rs
     verified_at: af0c3852
     verify_cmd: "cd frontend/companion-desktop/src-tauri && cargo test --locked workspace_list"
-    verify_defer_reason: "同上：子工程 Cargo.lock 不同步 + 本机缺 cairo/webkit/gtk ⇒ 本机不可验；由 `companion-desktop-ci.yml` 在装齐依赖的 runner 上验证。"
     owner: companion-desktop
     next_review: "2026-11-20"
     notes: "登记根派生 + canonicalize 祖先校验；junction / `..` 逃逸实测拒绝。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：TOCTOU 窗口未闭（std 无句柄级原子绑定，已缓解为操作规范）、live E2E 未实测（如实）。"
@@ -480,7 +477,7 @@ claims:
       - frontend/companion-desktop/tests/starport-face-apps.mjs
     verified_at: af0c3852
     verify_cmd: "cd frontend/companion-desktop && pnpm test"
-    verify_defer_reason: "**前端测试当前是红的**（本机 `pnpm test` 退出码 1；需 node+pnpm+浏览器依赖）⇒ 记为**已知未修**：它由 `companion-desktop-ci.yml` 的 svelte-check 线覆盖，但**红的测试不等于通过** ⇒ 本豁免只表示「后端仓无法验证」，**不代表该 claim 成立**。"
+    verify_defer_reason: "**本机不可验（环境）**：本机 Node 为 **v24**，该构建未编译 TypeScript 支持 ⇒ `tests/run-all.mjs` 直接报 `ERR_NO_TYPESCRIPT`（66/82 套件因此失败）；项目 CI 固定 **node 22**（`companion-desktop-ci.yml`）⇒ 由那条流水线验证。**这不代表该 claim 成立**。"
     verify_skip_reason: "前端 Playwright/pnpm 测试需要 `node` + `pnpm` + 浏览器依赖，本机/后端 CI 无该工具链 ⇒ 该 claim 的实际验证在 `companion-desktop-ci.yml` 这条独立流水线上跑。"
     owner: companion-desktop
     next_review: "2026-11-20"

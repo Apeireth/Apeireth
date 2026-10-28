@@ -37,7 +37,7 @@ Author: lead
 | `b3_shadow_run` · B3 影子双跑模块 | **存在** |
 | `b0a_adapter` · B0-a PerLTQA 适配器 | **存在** |
 | `b0a_reproduce` · B0-a `reproduce.sh` | ****无**** |
-| `claims` · 状态声明 | **29 条（延后 4 · 豁免 3）** |
+| `claims` · 状态声明 | **29 条（延后 1 · 豁免 3）** |
 
 <!-- END:auto-facts -->
 
@@ -109,7 +109,7 @@ Author: lead
 | 编号 | 漏洞 | 状态 | 实测效果 |
 |---|---|---|---|
 | **H1** | 未接线判据把 `examples/`/`benches/` 当生产引用 ⇒ **写个 example 就算接线** | ✅ **已修** | 整块未接线模块 **81 → 93**（+12 个此前被 example 藏住）；记忆 crate 侧 41 → 51 |
-| **H2** | `claims.yaml` 的 `verify_cmd` **从不被执行** ⇒ 装饰品 | ✅ **已修** | 新增 `check_claims_verify.py` + 独立 CI；**首次真跑就抓到 6 条问题**（2 条跑不了 + 4 条前端不可验）⇒ 现 **23 跑 / 2 豁免 / 4 延后** |
+| **H2** | `claims.yaml` 的 `verify_cmd` **从不被执行** ⇒ 装饰品 | ✅ **已修** | 新增 `check_claims_verify.py` + 独立 CI；**首次真跑抓到 6 条问题** ⇒ 修完后现 **26 跑 / 2 豁免 / 1 延后**（3 条 Tauri 声明已**真验通过 11 passed** 并恢复 `PRODUCTION WIRED`）|
 | **H3** | `STALE` 只查登记过的 source ⇒ **漏列即静默漂** | ✅ **已修** | 加**目录级兜底**（窄目录 ≤8 文件）⇒ **抓到 2 处真漏列**（`process/mod.rs` · `rubric_advice.rs`）⇒ 已补源并重验（19 / 3 passed）后 bump |
 | **H4** | 尺寸棘轮可被「搬家」满足 | ⏳ **未做** | 计划：加 per-crate 总量兜底 |
 | **H5** | `check_doc_caliber` 是**形式守卫**（写标记就过） | ⏳ **未做** | 计划：标 `PRODUCTION WIRED` 的 claim 必须 `verify_cmd` 跑通（H2 已提供底座） |
@@ -126,8 +126,8 @@ Author: lead
 
 ### 2.2.2 已知未修（**如实**）
 
-* `frontend/companion-desktop/src-tauri/Cargo.lock` **与 `Cargo.toml` 不同步**
-  （`--locked` 拒绝更新）⇒ **真漂移**，应由前端侧修 lock；
+* ⚠️ **纠正**：曾写「`src-tauri/Cargo.lock` 与 `Cargo.toml` 不同步 = 真漂移」——**说错了**。
+  复测 `cargo metadata --locked` **exit=0**、lock **一行未变**；当时失败是**本机缺 crate 缓存**。
 * 前端 `pnpm test` **当前是红的** ⇒ 4 条前端 claim **延后**（不算通过）；
 * H1 的残余局限：`build.rs`、`#[cfg(test)]` 内联模块仍可能被算作生产 ⇒ 彻底解决需**从装配根做可达性分析**。
 
