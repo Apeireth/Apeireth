@@ -1630,12 +1630,30 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
         })
     }
 
-    /// 估计今日已主动次数 (本地近似, per v1 EmergenceLoop 内部维护).
+    /// ⭐ **UTC 日界**：`at_ms` 所在 UTC 自然日的起点（毫秒）。
     ///
-    /// **0 装诚实**: Orchestrator 不重新实现 EmergenceLoop 内部计数; 本地近似 = 数
-    /// `feedback_history` 中今天的 Responded/Ignored 数量 (简化).
+    /// ## 为什么显式叫 `utc_day_start_ms`
+    ///
+    /// 修前这里直接内联 `at_ms - (at_ms % 86_400_000)`，而文档写的是「**本地**近似」
+    /// ⇒ ⇒ 读者会以为它是**用户本地日**，实际是 **UTC 日**（两者最多差 1 天）。
+    /// 台账 A4 要求把这条语义**显式化**，避免下游误当本地日。
+    ///
+    /// ## 顺带修的取模缺陷
+    ///
+    /// Rust 的 `%` 对**负数**返回**负余数**（`-1 % 3 == -1`）⇒ ⇒ 修前对 1970 前的
+    /// 时间戳会算出 `day_start > at_ms`（日界跑到"未来"）。这里用 `rem_euclid`
+    /// 保证余数恒非负 ⇒ ⇒ 日界恒 ≤ `at_ms`。
+
+    /// 估计**今日（UTC 日界）**已主动次数 (per v1 EmergenceLoop 内部维护).
+    ///
+    /// **0 装诚实**: Orchestrator 不重新实现 EmergenceLoop 内部计数; 近似 = 数
+    /// `feedback_history` 中**同一个 UTC 自然日**内的 Responded/Ignored 数量 (简化).
+    ///
+    /// ⚠️ **UTC 日界 ≠ 用户本地日**（台账 A4）：北京时间/洛杉矶的「今天」边界与
+    /// UTC 日界最多差 ±1 天。面向用户的「今天」必须走宿主的本地时区实现，
+    /// **不要**复用本函数的日界语义。
     fn estimate_initiatives_today(&self, at_ms: i64) -> u32 {
-        let day_start = at_ms - (at_ms % 86_400_000);
+        let day_start = utc_day_start_ms(at_ms);
         let day_end = day_start + 86_400_000;
         self.feedback_history
             .iter()
@@ -1643,9 +1661,11 @@ impl<RS: RelationshipState + 'static> OrganOrchestrator<RS> {
             .count() as u32
     }
 
-    /// 最后主动时间 (本地近似, per v1 `last_initiative_ms`).
+    /// 最后主动时间 (per v1 `last_initiative_ms`)，窗口起点同上 = **UTC 日界**。
+    ///
+    /// ⚠️ 同 [`Self::estimate_initiatives_today`]：**UTC 日界 ≠ 本地日**（台账 A4）。
     fn last_initiative_ms(&self, at_ms: i64) -> Option<i64> {
-        let day_start = at_ms - (at_ms % 86_400_000);
+        let day_start = utc_day_start_ms(at_ms);
         self.feedback_history
             .iter()
             .rev()
@@ -1965,9 +1985,58 @@ pub enum CycleStep {
 // 测试 (spec 层级验证, per R11 §10)
 // ============================================
 
+/// ⭐ **UTC 日界**：`at_ms` 所在 UTC 自然日的起点（毫秒），恒 ≤ `at_ms`。
+///
+/// ## 为什么显式成独立函数（台账 A4）
+///
+/// 修前这里是两处内联的 `at_ms - (at_ms % 86_400_000)`，而文档写的是「**本地**近似」
+/// ⇒ ⇒ 读者会以为它是**用户本地日**，实际是 **UTC 日**（两者最多差 1 天）。
+/// ⇒ ⇒ 抽成命名函数 + 明确文档 ⇒ 语义不再藏在算式里。
+///
+/// ## 顺带修的取模缺陷
+///
+/// Rust 的 `%` 对**负数**返回**负余数**（`-1 % 3 == -1`）⇒ ⇒ 修前对 1970 前的
+/// 时间戳会算出 `day_start > at_ms`（日界跑到"未来"）。`rem_euclid` 保证
+/// 余数恒非负 ⇒ ⇒ 恒有 `day_start <= at_ms` 且 `at_ms - day_start < 86_400_000`。
+///
+/// ⚠️ **UTC 日界 ≠ 用户本地日**：面向用户的「今天」必须走宿主本地时区实现。
+fn utc_day_start_ms(at_ms: i64) -> i64 {
+    at_ms - at_ms.rem_euclid(86_400_000)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ⭐ **回归（台账 A4）**：UTC 日界必须**恒 ≤ 输入时刻**（含**负**时间戳）。
+    ///
+    /// 修前用 `at_ms % 86_400_000`：Rust 的 `%` 对负数返回**负余数**
+    /// （`-1 % 86_400_000 == -1`）⇒ ⇒ `day_start = -1 - (-1) = 0` ⇒ ⇒
+    /// **日界跑到了输入的"未来"**。改用 `rem_euclid` 后余数恒非负。
+    #[test]
+    fn utc_day_start_is_never_after_the_instant() {
+        let day = 86_400_000_i64;
+        for at_ms in [
+            -1_i64,
+            -1_000,
+            -day,
+            -day - 1,
+            0,
+            1,
+            day - 1,
+            1_761_354_600_000,
+        ] {
+            let start = utc_day_start_ms(at_ms);
+            assert!(
+                start <= at_ms,
+                "at_ms={at_ms} ⇒ day_start={start} 不应大于输入"
+            );
+            assert!(
+                at_ms - start < day,
+                "at_ms={at_ms} ⇒ day_start={start} 与输入应落在同一天内"
+            );
+        }
+    }
     use apeireth_core::clock::VirtualClock;
     use apeireth_guard::immune_memory::{IncidentKind, IncidentSignature};
     use apeireth_orchestration::Council;
