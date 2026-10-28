@@ -231,6 +231,12 @@ pub struct Renderer<D: Dom> {
     last_error: Option<DomError>,
     /// 降级告警（例如「后端不支持移除 property ⇒ 已写回默认值」）。
     warnings: Vec<String>,
+    /// ⭐ **度量状态**（L1-G7）：字体未就绪时上层应置 [`crate::resource::MetricsStatus::Unknown`]
+    /// ⇒ ⇒ 引擎会**拒绝**基于度量的窗口计算（否则用错度量算出的结果会被缓存下来）。
+    ///
+    /// 默认 [`crate::resource::MetricsStatus::Ready`]：DOM 度量是**真实几何**
+    /// （不是预估值）⇒ 默认可用；只有「字体/资源尚未加载完、度量会变」时才需要置 Unknown。
+    metrics_status: crate::resource::MetricsStatus,
     /// ⭐ **错误边界的兜底视图**（L1-G8）：渲染失败时挂它，而不是让整树劈叉/白屏。
     ///
     /// ⚠️ 只有**显式设置**过才生效（默认 `None` ⇒ 保持原有的「劈叉 + 下次整树重建」行为，
@@ -270,6 +276,7 @@ impl<D: Dom> Renderer<D> {
             desynced: false,
             last_error: None,
             warnings: Vec::new(),
+            metrics_status: crate::resource::MetricsStatus::Ready,
             error_fallback: None,
             captured_error: None,
             measurement_scale: MeasurementScale::IDENTITY,
@@ -296,6 +303,16 @@ impl<D: Dom> Renderer<D> {
     }
 
     /// 当前是否已挂载。
+    /// ⭐ **设置度量状态**（L1-G7）：字体/资源未就绪期间置 `Unknown`。
+    pub fn set_metrics_status(&mut self, status: crate::resource::MetricsStatus) {
+        self.metrics_status = status;
+    }
+
+    /// 当前度量状态。
+    pub fn metrics_status(&self) -> crate::resource::MetricsStatus {
+        self.metrics_status
+    }
+
     /// ⭐⭐ **设置错误边界的兜底视图**（L1-G8）。
     ///
     /// ## 解决什么
@@ -448,6 +465,14 @@ impl<D: Dom> Renderer<D> {
         item_heights: &[f64],
         overscan: usize,
     ) -> Result<crate::virtual_list::VirtualPlan, DomError> {
+        // ⭐ **度量未定 ⇒ 拒绝计算**（L1-G7）：字体还没加载完时算出来的窗口
+        //   是用**错误度量**算的 ⇒ ⇒ 会被上层缓存并导致布局跳动
+        //   ⇒ ⇒ 宁可在入口显式拒绝，让上层等 [`crate::resource::MetricsStatus::Ready`]。
+        if !self.metrics_status.is_ready() {
+            return Err(DomError::Undecidable(String::from(
+                "度量未定（MetricsStatus::Unknown）：字体/资源未就绪前不得计算窗口",
+            )));
+        }
         let node = self.node_at_path(path)?;
         let metrics = self.dom.scroll_metrics(&node)?;
         Ok(crate::virtual_list::plan_virtual_window(
@@ -1754,6 +1779,46 @@ mod tests {
             0,
             "补写后队列必须清空"
         );
+    }
+
+    /// ⭐⭐ **度量未定 ⇒ 拒绝算窗口**（L1-G7 接线：字体未就绪时不得按错度量算布局）。
+    #[test]
+    fn unknown_metrics_block_virtual_window() {
+        use crate::dom::{ElementBox, ScrollMetrics};
+        use crate::resource::MetricsStatus;
+
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("div").build();
+        renderer.mount(view).expect("挂载必须成功");
+        let container = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        renderer.dom().script_measurement(
+            container,
+            ElementBox::new(0.0, 0.0, 300.0, 200.0),
+            ScrollMetrics {
+                scroll_top: 0.0,
+                scroll_height: 400.0,
+                client_height: 200.0,
+            },
+        );
+
+        // ① 默认 Ready ⇒ 可算
+        assert!(
+            renderer.metrics_status().is_ready(),
+            "默认应为 Ready（DOM 度量是真实几何）"
+        );
+        assert!(renderer.virtual_window_for(&[], &[50.0; 8], 0).is_ok());
+
+        // ② 置 Unknown（模拟字体未加载完）⇒ 必须显式拒绝
+        renderer.set_metrics_status(MetricsStatus::Unknown);
+        let blocked = renderer.virtual_window_for(&[], &[50.0; 8], 0);
+        assert!(
+            matches!(blocked, Err(DomError::Undecidable(_))),
+            "度量未定时必须拒绝，而不是算出一个错窗口：{blocked:?}"
+        );
+
+        // ③ 度量就绪后恢复
+        renderer.set_metrics_status(MetricsStatus::Ready);
+        assert!(renderer.virtual_window_for(&[], &[50.0; 8], 0).is_ok());
     }
 
     /// ⭐⭐ **虚拟窗口吃真实滚动状态**（L1-G5 接线）：后端度量 → 窗口计划。

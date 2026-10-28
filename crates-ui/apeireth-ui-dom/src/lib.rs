@@ -136,6 +136,8 @@ pub mod listeners;
 /// ⭐ panic 兜底钩子（L1-G8 第二片）：把「一崩全白」变成「一崩可见」。
 pub mod panic_guard;
 pub mod renderer;
+/// ⭐ 资源句柄与加载状态 + 度量未定（L1-G7 第一片）。
+pub mod resource;
 /// ⭐ 窗口化（虚拟列表）原语（L1-G5 第一片）。
 pub mod virtual_list;
 pub mod vnode;
