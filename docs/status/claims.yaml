@@ -28,11 +28,11 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
+    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。"
 
   - id: core.cost_router
     title: "成本分级路由（H-P2，四档选模）"
@@ -82,11 +82,11 @@ claims:
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
+    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
-    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-28 Phase 3 复核：生产工具通过普通 ToolModule 装配；动态 MCP 仍通过同一 CapabilityRegistry/Dispatcher 的独立取消 scope 兼容入口。transport 与动态 owner 完整 Plugin 生命周期未迁移，默认开关保持 OFF。"
+    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-28 Phase 3 复核：生产工具通过普通 ToolModule 装配；动态 MCP 仍通过同一 CapabilityRegistry/Dispatcher 的独立取消 scope 兼容入口。transport 与动态 owner 完整 Plugin 生命周期未迁移，默认开关保持 OFF。；本批复核：ProductionModules 注册拥有生命周期的 McpPlugin；动态目录 generation 撤销、描述符审批 pin、只读预设撤销、断线/停止/原生进程清理真实 Runtime 回归通过。显式 shutdown 是完整 join/drain 入口，外部 Arc 保留的放弃路径未全部收口。"
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
@@ -188,7 +188,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
+    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -573,8 +573,47 @@ claims:
       - crates/engine/runtime/tests/registry_runtime_v1.rs
       - crates/engine/runtime-assembly/tests/capability_modules_v1.rs
       - crates/adapters/cli/tests/gateway_panels.rs
-    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
+    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
-    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。"
+    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。"
+
+  - id: rt.owned_agents
+    title: "同一 Runtime 的模块拥有独立 Agent 与分层核算"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/engine/runtime/src/canonical/instances.rs
+      - crates/engine/runtime/src/canonical/instances/control.rs
+      - crates/engine/runtime/src/canonical/accounting.rs
+      - crates/foundation/plugin/src/agents.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/convergence_agents.rs
+    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test convergence_agents"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。"
+
+  - id: mem.registered_namespace
+    title: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"
+    level: IMPLEMENTED
+    default: null
+    switch_env: null
+    sources:
+      - crates/engine/runtime-assembly/src/canonical/memory_module.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_module/execution.rs
+      - crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs
+      - crates/engine/runtime/src/canonical/session.rs
+      - crates/engine/runtime/src/canonical/dispatcher.rs
+      - crates/engine/runtime-assembly/src/profile_store.rs
+      - crates/engine/runtime/src/canonical/profiles.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/convergence_memory.rs
+    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test convergence_memory"
+    owner: runtime
+    next_review: "2026-11-20"
+    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。"

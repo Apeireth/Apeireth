@@ -4,7 +4,7 @@
 Document: docs/04-internal/kernel-convergence-2026-10-28.md
 Version: 1.0
 Last-Modified: 2026-10-28
-Status: 连续实施中；不宣称最终验收已通过
+Status: 本批已验证；整体 Convergence 为 Partial，未满足全部最终完成条件
 Author: Codex
 
 ## 基线与边界
@@ -197,3 +197,102 @@ M3 相关全目标回归：98 suites / 1449 passed / 0 failed / 0 ignored（新�
 架构登记修正：初次把 owner 服务/存储端口归入扩展点导致严格守卫拒绝。
 按 ADR-0021 复核：两者与 Clock/SessionStore 同类，经既有 PluginContext/Host 注入，
 不接收模块注册、不构成第二扩展系统；改为唯一 canonical 概念登记。未改守卫或棘轮基线。
+
+## 本批实际结构
+
+```mermaid
+flowchart TD
+    Host[Host 选择模块与授权] --> AR[AgentRuntime 实例管理门面]
+    AR --> K[既有 Runtime.execute_outcome]
+    AR --> I[独立 Session / Agent / Scope]
+    K --> P[ProviderRouter 并发与退避]
+    K --> D[统一准入与 ToolDispatcher]
+    K --> H[固定 V1 Hook 调度]
+    H --> D
+    D --> R[唯一 CapabilityRegistry]
+    R --> M[PluginManager 模块生命周期]
+    M --> C[Shell / Filesystem / Process / MCP / 新 Memory]
+    C --> E[ToolEventV1]
+    E --> A[成对 Provider 消息投影]
+    A --> P
+    AR --> U[实例 / owner / Runtime 核算]
+    K -.仍保留.-> L[旧 Behavior / Overlay / SubLoop]
+```
+
+Facade 不复制 Loop；ProfileStore 是 Host 存储端口；MemoryCoordinator 继续拥有成熟的存储与治理。
+Usage 按实际 request attempt 记录 token/cache/latency/error/cancel；费用是价格表估算。
+owner 汇总目前区分具体 ModuleInstanceId，跨重启 definition 级视图仍需 Host 合并，不能将其描述为精确账单。
+新 API 已接线并测试；默认桌面旧认知管线、Managed 在线热注册和放弃持有外部 MCP Arc 的清理仍为 Partial/Not Implemented。
+
+## 系统场景证据映射
+
+| 场景 | 真实执行证据 | 限制 |
+|---|---|---|
+| A Minimal | convergence_agents 无工具 V1 错误、无模块对话；convergence_memory 无 Memory 仍对话 | Provider 使用离线 fixture |
+| B Complete Tool | Phase 3 capability_modules_v1 与本批 MCP/Memory 的 Dispatcher→V1→成对投影 | 四 Provider Adapter 都校验实际请求；无真实 API |
+| C Memory Hook | convergence_memory 的自动检索/工具内容、source=Module、无 System 拼接 | 新 Host 组合；不是默认桌面替换 |
+| D Background Memory | 独立 organizer 完成 retrieve/write；主 Agent 在 child Provider 阻塞期间仍完成回合 | 模型内容用确定性 mock |
+| E Concurrent Agents | convergence_agents Barrier 同时进入 Provider、不同 Session/Scope/usage、单实例取消、Provider 限流 | 不声称无限并发 |
+| F Stop/Unload | owned_lifecycle、convergence_mcp、convergence_memory 活跃任务取消及原生资源排水 | Drop 放弃路径仍有明确技术债 |
+| G MCP | 动态发现/替换/断线/重连/stop/restart/unload、描述符冻结、Linux stdio 清理 | Windows/macOS 仅既有条件编译实现，未硬件测试 |
+| H Profile | 私有 Namespace、跨空间修改拒绝、持久配置 CAS、单主切换、Session reload/fork Scope | 无 UI；旧私人数据不自动认领 |
+| I Desktop | 既有 workspace 回归与前端 82 suites/check/assets/build | 未运行 Tauri 原生窗口或真实设备/API |
+| J Android Core | aarch64-linux-android Runtime lib 交叉检查；Linux 无业务模块模拟运行 | 未运行 Android 二进制、未编译全部桌面 assembly |
+
+所有新场景均使用可重复、无外部 API 的 Provider/受控临时 SQLite/无害本机进程。
+最终五段结果以下方最终证据为准。
+
+## 尚不能满足最终完成定义的边界
+
+- 旧生产认知路径没有全部进入 V1/权限入口；不允许把新 Host 的场景测试冒充旧默认路径已经迁移。
+- PluginId / ModuleInstanceId / AgentId / invocation 已分开，但既有 Plugin trait 仍把声明与资源对象放在同一个 Arc。
+  Host 必须为各 Runtime 构造独立的有状态 MCP/Memory Plugin；本批没有提供可跨 Runtime 安全复用的 definition→instance factory。
+- 显式 shutdown/stop 的排水与 MCP 原生清理已测；外部长期持有 bridge/definition Arc 时，
+  丢弃 Runtime 的同步撤销机制未完整实现。不能将最佳努力 Drop 当成已完成的异步清理证明。
+- Managed 控制面尚未提供完整在线注册/刷新/restart；当前门面可停止/卸载，Raw Runtime 保留这些既有控制 API。
+- 新 Memory 不默认导入旧 Global/Persona 数据；未写跨身份迁移授权适配，也未将桌面全量调优/物化/Organ 迁完。
+- 新 Memory 工具使用共同输入 schema 和结构化结果，但精细 output schema 声明及 Native 取消以外的存储故障注入仍需补齐。
+- Android 证据止于通用 Runtime lib 交叉检查，桌面 assembly 的依赖裁剪和完整 Android Host 尚未验证。
+
+这些工作超出本批已验证切片的执行预算；保留既有桌面语义与可恢复提交，不以大批未验证改写追求形式上的零 Legacy。
+下一次施工应先做生产 Memory 兼容 Adapter（保留调优/typed sink/provenance），并建立 definition/instance 资源工厂和撤销式 Drop，
+再用 ModuleAgents 替换旧 SubLoop 调用点、补 Managed 在线生命周期控制，最后重新跑完整验收。
+在这些边界关闭之前，本任务的最终整体状态只能是 Partial。
+
+Provider 成员变更沿用既有 Runtime 不可变路由约束：只能经 Runtime shutdown/rebuild 完成。
+Managed 的模块停止/卸载控制当前应限工具/Hook 模块，不是运行中的 Provider 热替换 API。
+ProfileStore/AgentRuntime 是受信任 Host 端口；外部用户到 Session 的访问授权仍由既有 Host/domain governance 负责，
+不能把存储的 Principal 当成外部请求身份认证。
+
+## 最终源码与全量验证记录
+
+验证源码提交：`bbb7b58625043a204859bc42a758819bed26cd1d`，其父链包括
+`067bd3773d90f90e514203ef5ef232cca78a293f`（MCP/资源）与
+`4682c578b48e2ecac8d2d0d312023a29d5be9aea`（实例/核算）。
+
+2026-10-28，原始 `pwsh scripts/gate_full.ps1 -Log logs/gate-full-kernel-convergence-2026-10-28.log`
+实际退出 0：**358 suites / 9004 passed / 0 failed / 51 ignored，GATE FULL PASSED**。
+main.cargo-test、main.clippy、main.fmt、image.cargo-test、image.clippy 五段全部 OK。
+相对历史 Phase 3（354 / 8976 / 0 / 51），增加 4 个 integration suites 和 28 个实际测试：
+所有权 2、MCP 5、Agent 12、Memory/Profile 9；未删除测试或增加 ignored。
+
+- Rust/Cargo 1.97.1，PowerShell 7.6.0，Linux Cloud，jobs=2；dev/test debug=0，但 debug assertions 保持启用。
+- source freeze 的 3223 个 Rust/Cargo 文件 SHA256 在完整门禁前后逐一一致；后续仅文档改动。
+- Gate 原始日志 SHA256：`7485e36b9ea35b70771709a765d089beaac9e485f40a035d7fe4a66441755792`。
+- `cargo check -p apeireth-runtime --lib --target aarch64-linux-android --locked` 通过；
+  `cargo build -p apeireth-runtime --lib --target aarch64-linux-android --locked` 也通过，产出目标库。
+  正常依赖树不含 tools-canonical / memory / organ / runtime-assembly；没有完整 App/JNI/设备运行结论。
+- 桌面前端 check 0 errors/0 warnings，82/82 suites，素材许可 11 项，Vite build 通过；保留既有大 bundle 警告。
+- strict arch 0 violations；docs truth 32 claims / fail=0 / stale=0 / review_due=0；wiring crosscheck strict 0 problems，links 0 断链。
+- 原生 stdio 进程与后代清理在 Linux 实测；未虚构 Windows/macOS、真实模型 API、Android 或 Tauri 设备验证。
+- 第一次独立恢复基库从 Cloud 部分克隆复制失败（缺失旧 promisor 对象）；改从远端拉取基准后 full fsck 通过。
+  三个代码提交的增量 bundle 已独立 checkout，并验证 3223 个冻结文件完全一致；最终文档提交加入后再验 bundle。
+
+主源码六 crate 修改：foundation/core、foundation/plugin、engine/runtime、engine/runtime-assembly、engine/memory、capabilities/tools。
+无新增 crate、Cargo 外部依赖/feature/版本变化、无安全依赖批量升级、无 LOCKED 或 R11 修改，未修改 main。
+Rust 公共结构新增可选 principal/scope 字段：序列化旧记录以 default/skip_none 兼容；外部裸 struct literal 构造者需补 None，
+推荐继续使用 Session::new / PluginContext::new / AgentConfig::default 等构造入口。
+
+整体不宣布完成：默认桌面 Legacy Memory/Persona/Organ 与旧 SubLoop、definition→instance 工厂、放弃外部 Arc 清理、
+完整 Managed 热生命周期、旧记忆授权迁移及 assembly 的 Android 裁剪未在本次执行预算内完成。
+已验证代码与现有桌面保持兼容，剩余风险及退出条件见上表；没有用空实现或关闭门禁代替交付。
