@@ -369,15 +369,19 @@ MEASUREMENTS: dict[str, dict] = {
         ),
     },
     "memory_rank": {
-        "status": "not-measurable-as-designed",
-        "delta_recall": None,
+        "status": "measured",
+        "delta_recall": -0.008,
         "delta_grounded": None,
         "measure_note": (
-            "**重排索引对 BM25 完全无效** ⇒ 实测 Δ = 0.0000（精确 0）"
-            "⇒ 因为 `Bm25LexicalCandidateSource` 会按自己的 BM25 分数**重新排序** "
-            "⇒ ⇒ 换索引顺序等于没做。"
-            "要测它必须**融合分数** ⇒ 而检索路径**当前没有分数融合钩子**"
-            "⇒ ⇒ 这是**架构缺口**（B2/B3 的 `search_rrf` / `search_weighted` 存在但未接）。"
+            "**已用「分数融合」正确测出**（`examples/d4_fusion_probe.rs`）："
+            "本卷上 `memory_rank` 只剩 **recency** 一项有效信号"
+            "（重要度恒默认 5 · 分组加成恒 0）⇒ 融合权重扫描 "
+            "**×0.1 ⇒ −0.0080 · ×0.5 ⇒ −0.0793 · ×1.0 ⇒ −0.5000**"
+            "（**剂量响应**，证明融合接口真的生效）。"
+            "⇒ 结论：**recency 在 LoCoMo 上有害**（题目不按时间近远提问）⇒ **本卷不采用**。"
+            "⚠️ 两处**自造测量假象**已修："
+            "① 第一版用「重排索引」模拟 ⇒ Δ 精确 0.0000（BM25 会按自己分数重排，索引顺序无影响）；"
+            "② 第二版把「现在」写死成 2027 而语料是 2023 ⇒ `recency_score` 恒 0 ⇒ 假「无差异」。"
         ),
     },
     "dedup": {

@@ -25,8 +25,8 @@ Author: lead
 | `d4_default` · D4 姿态（默认关？） | **生产已接 · **默认关**** |
 | `d4_modules` · B0-c 候选池模块数 | **50** |
 | `d4_candidates` · B0-c 可测候选数 | **22** |
-| `d4_measured` · B0-c 已测行数 | **2** |
-| `d4_not_measurable` · B0-c 测法无效行数 | **2** |
+| `d4_measured` · B0-c 已测行数 | **3** |
+| `d4_not_measurable` · B0-c 测法无效行数 | **1** |
 | `b1_memory_verify` · B1 `memory verify` CLI | **存在** |
 | `b4_offline_archive` · B4 脱机归档模块 | **存在** |
 | `b4_handover` · B4 handover 模块 | **存在** |
