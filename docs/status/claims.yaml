@@ -218,15 +218,17 @@ claims:
     sources:
       - crates/engine/memory/src/lesson.rs
       - crates/engine/memory/src/migrations.rs
+      - crates/engine/memory/src/migrations/fresh_tables.sql
       - crates/adapters/cli/src/lessons_command.rs
     tests:
+      - crates/engine/memory/src/migrations/tests.rs
       - crates/engine/memory/src/lesson.rs
       - crates/adapters/cli/src/lessons_command.rs
-    verified_at: c9251271
+    verified_at: 1497fe7fc18ccf557e9d13aa58504b79bedd2f06
     verify_cmd: "cargo test -p apeireth-memory --lib lesson && cargo test -p apeireth-cli --lib lessons_command"
     owner: memory
     next_review: "2026-12-01"
-    notes: "四条硬约束由单测钉死：出处非空且必须真实存在（无出处=幻觉拒绝）/ 撤回必填理由 / 验证不得用来源经历自证 / rev CAS。消费面：CLI 只读出口 `apeireth lessons` + 自述面 memory_ledger.verified_lessons/candidate_lessons。L3 反思步与 L4 上下文注入未做（不注入=候选不注入上下文）。"
+    notes: "四条硬约束由单测钉死：出处非空且必须真实存在（无出处=幻觉拒绝）/ 撤回必填理由 / 验证不得用来源经历自证 / rev CAS。消费面：CLI 只读出口 `apeireth lessons` + 自述面 memory_ledger.verified_lessons/candidate_lessons。L3 反思步与 L4 上下文注入未做（不注入=候选不注入上下文）。2026-10-29 A1 复核：空库完整 schema 安装优化保留全部迁移效果与版本记录，历史升级、约束与 lesson 治理语义不变；Memory 库/迁移回归及 CLI lessons_command 定向验证通过，默认状态不变。证据见 kernel-convergence-a1-cold-start-2026-10-29.md 与 /tmp/apeireth-a1/a1-commit-claim-*.log。"
 
   - id: gap.memory_update
     title: "记忆更新/更正（既有事实编辑）——已接线（治理面 + 面板路由）"
