@@ -32,7 +32,7 @@
 |---|------|----------|----------------|------|
 | G1 | **布局测量 API** | ✅ **2026-10-28 已落地 API 面**：`ElementBox` / `ScrollMetrics` + `Dom::bounding_box/scroll_metrics/set_scroll_top`（默认 `NotImplemented`）；`InMemoryDom` 脚本化测量（测试专用）；`WebDom` 接真实 DOM。**IMPLEMENTED / 未接线（渲染器未消费）/ 浏览器未实测** | 余下两件：①渲染器或上层**消费**该 API（PRODUCTION WIRED）；②浏览器侧逐值一致证据 | 第 1 批（API 已完成） |
 | G2 | **事件面与载荷** | ✅ **2026-10-28 扩到 17 类**（含 pointer 族/scroll/wheel/submit/contextmenu）并补齐载荷（`checked` / `client_position` / `button` / `pointer_id` / `alt_key`）；浏览器后端已填充；`scroll` 标注**不可委托**。**IMPLEMENTED；浏览器内合成事件证据待补** | 余下：浏览器内合成事件断言（真实事件 → 载荷齐备）+ 命中测试消费方 | 第 1 批（主体已完成） |
-| G3 | **焦点 / IME / a11y 通道** | 仅 `focusout`；无 focus 栈 / trap / `focus()` / `aria-live` | focus 栈与 trap 的行为测试（Tab 循环、Esc 归还）；`compositionstart/end` 静默期不触发受控写回 | 第 1 批 |
+| G3 | **焦点 / IME / a11y 通道** | ✅ **2026-10-28 逻辑层已落地**：`FocusTracker`（栈 + 陷阱）、`CompositionGate`（组合中禁止写回）、`AriaChannel`（24 条白名单）；事件面加 `CompositionStart/End`。**IMPLEMENTED / 未接线** | 余下：渲染器接线（焦点真的 `focus()`、组合期真的门住 `set_property("value")`）+ 浏览器证据（中文输入法实测） | 第 1 批（逻辑已完成） |
 | G4 | **受控输入闭环（双向）** | **已接线**：`set_property` 在 `renderer.rs` 出现 12 处、`patch_props` 先 `get_property` 回读再写、宏支持 `bind:value` / `bind:checked`（`apeireth-ui-macro/src/view.rs:322`） | 补「输入 ⇒ 状态 ⇒ DOM」全链浏览器断言 + IME 期间不打断；**无需新建**，只需补证据与边界用例 | 第 1 批 |
 | G5 | **滚动容器与虚拟化原语** | 无 `scroll` 事件；`renderer.rs` 每帧遍历全树 | 滚动位置读写 API + 窗口化原语；1k 行列表 patch 耗时进基准门（不进 CI 判红，先报告） | 第 2 批 |
 | G6 | **缩放 / 密度标量** | 引擎无此概念（**测量与命中测试的乘数缺失**） | 注入 `scale`/`density` ⇒ 测量、滚动、命中测试全部按标量一致缩放；native 断言 + 浏览器 125% 缩放实测 | 第 1 批 |

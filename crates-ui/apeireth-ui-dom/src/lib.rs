@@ -129,6 +129,8 @@ pub mod children;
 pub mod diff;
 pub mod dom;
 pub mod events;
+/// ⭐ 焦点 / IME / a11y 通道（L1-G3）。
+pub mod focus;
 pub mod keyed;
 pub mod listeners;
 pub mod renderer;

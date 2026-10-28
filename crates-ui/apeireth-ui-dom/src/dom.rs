@@ -145,6 +145,10 @@ pub enum EventKind {
     Wheel,
     /// 右键菜单（冒泡）。
     ContextMenu,
+    /// ⭐ **IME 组合开始**（冒泡）⇒ 必须**关掉**受控写回（见 `focus::CompositionGate`）。
+    CompositionStart,
+    /// ⭐ **IME 组合结束**（冒泡）⇒ 打开写回并采纳组合结果（`data` 载荷）。
+    CompositionEnd,
 }
 
 impl EventKind {
@@ -168,6 +172,8 @@ impl EventKind {
             EventKind::Scroll => "scroll",
             EventKind::Wheel => "wheel",
             EventKind::ContextMenu => "contextmenu",
+            EventKind::CompositionStart => "compositionstart",
+            EventKind::CompositionEnd => "compositionend",
         }
     }
 
@@ -202,6 +208,8 @@ impl EventKind {
             EventKind::Scroll => 14,
             EventKind::Wheel => 15,
             EventKind::ContextMenu => 16,
+            EventKind::CompositionStart => 17,
+            EventKind::CompositionEnd => 18,
         }
     }
 
@@ -225,6 +233,8 @@ impl EventKind {
             14 => EventKind::Scroll,
             15 => EventKind::Wheel,
             16 => EventKind::ContextMenu,
+            17 => EventKind::CompositionStart,
+            18 => EventKind::CompositionEnd,
             _ => return None,
         })
     }

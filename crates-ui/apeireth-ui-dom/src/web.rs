@@ -442,6 +442,18 @@ impl Dom for WebDom {
                     dom_event = dom_event.with_related_target_path(target_path(Some(&related)));
                 }
             }
+            // ⭐ **IME 组合数据**（G3）：`compositionend.data` = 本次组合出来的字符串
+            //   ⇒ 上层可据此区分「组合提交」与普通 `input`。
+            if matches!(
+                kind,
+                EventKind::CompositionEnd | EventKind::CompositionStart
+            ) {
+                if let Ok(data) = Reflect::get(event.as_ref(), &JsValue::from_str("data")) {
+                    if let Some(text) = data.as_string() {
+                        dom_event = dom_event.with_composition_data(text);
+                    }
+                }
+            }
             if let Some(keyboard) = event.dyn_ref::<KeyboardEvent>() {
                 dom_event = dom_event.with_key(keyboard.key());
             }

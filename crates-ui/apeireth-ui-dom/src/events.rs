@@ -127,6 +127,8 @@ pub struct DomEvent {
     button: Option<u8>,
     /// 指针 id（多点触控时区分手指；仅 pointer 类事件有）。
     pointer_id: Option<i32>,
+    /// IME 组合数据（`compositionend` 的 `data`；其它事件为 `None`）。
+    composition_data: Option<String>,
     propagation_stopped: Cell<bool>,
     default_prevented: Cell<bool>,
 }
@@ -149,6 +151,7 @@ impl DomEvent {
             client_y: None,
             button: None,
             pointer_id: None,
+            composition_data: None,
             propagation_stopped: Cell::new(false),
             default_prevented: Cell::new(false),
         }
@@ -280,6 +283,17 @@ impl DomEvent {
     /// 设置指针 id。
     pub fn with_pointer_id(mut self, pointer_id: i32) -> Self {
         self.pointer_id = Some(pointer_id);
+        self
+    }
+
+    /// IME 组合数据（`compositionend.data`）；没有该载荷 ⇒ `None`。
+    pub fn composition_data(&self) -> Option<&str> {
+        self.composition_data.as_deref()
+    }
+
+    /// 设置 IME 组合数据。
+    pub fn with_composition_data(mut self, data: impl Into<String>) -> Self {
+        self.composition_data = Some(data.into());
         self
     }
 
@@ -421,7 +435,9 @@ mod tests {
             | EventKind::PointerLeave
             | EventKind::Scroll
             | EventKind::Wheel
-            | EventKind::ContextMenu => {}
+            | EventKind::ContextMenu
+            | EventKind::CompositionStart
+            | EventKind::CompositionEnd => {}
         }
     }
 
@@ -443,7 +459,7 @@ mod tests {
         // ⇒ ⇒ 不可能「加了变体但没进 all()」而无人发现。
         assert_eq!(
             EventKind::all().len(),
-            17,
+            19,
             "变体总数须与 exhaustive_variant_guard 一致"
         );
     }
