@@ -2,6 +2,83 @@
 
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md
+Version: 3.0 (S6 acceptance addendum)
+Last-Modified: 2026-10-29
+Status: Convergence Partial；S1–S6 软件门禁通过，冷启动目标仍未达
+Author: Codex
+
+## 2026-10-29 当前验收结论
+
+**整体仍为 Partial。** S1–S6 的兼容执行收敛为 **PRODUCTION WIRED**，原五段软件门禁通过；
+现存 Complete 阻塞项是既有冷启动目标未达。不会把基准进程 exit 0 当作性能阈值通过。
+本批 Android target 未安装，按条件未执行交叉 check/build；历史成功保留为历史，不冒称本批或设备验证。
+
+当前分支为 `refactor/kc1-kernel-convergence`，起点 clean `c303af09`，S6 源码冻结在
+`3f8048e8d8fca86eceba0e6e2eda89a16eed5ce1`，已 fetch 后快进推送。
+本批不修改 main、LOCKED、workspace.version、Cargo.lock 或外部依赖；源代码与文档分提交。
+精确命令、日期、工具链、逐项数字、首次环境失败与最终日志见
+[S6 交付账](kernel-convergence-s6-2026-10-29.md)。本文下半部历史原文完整保留。
+
+| 范围 | 当前状态 / 证据 | 仍需区分的边界 |
+| --- | --- | --- |
+| M1 Production Cognitive / Profile | 兼容执行 PRODUCTION WIRED；S4 显式授权映射 IMPLEMENTED，真实 Runtime 对抗回归通过 | 映射由 Host 选择，未默认启用；无 principal 仍使用原库，未映射私有 principal 默认拒绝 |
+| M2 Resource Factory | PRODUCTION WIRED；独立资源、回滚、旧代句柄与冻结审批回归通过 | 不重造工厂或共享资源所有权 |
+| M3 Managed MCP / Hot Lifecycle | PRODUCTION WIRED；热替换、进程关闭、native drain 失败重试回归通过 | Drop 只撤销，显式关闭才提供排水结果；不是外部服务 live 实测 |
+| M4 Legacy SubLoop Migration | PRODUCTION WIRED；S1 的真实独立实例执行，S6 持久工具事实 / 中断 checkpoint / 前端隔离 / 唯一核算通过 | ABI 保留，不保留另一个 provider/round 循环 |
+| M5 Parallel Backend Elimination | PRODUCTION WIRED（旧模块执行入口范围）；S2 Invoker、S3 行为入口、S5 默认桌面 main 经同一实例 / Kernel / Dispatcher | 原兼容类型、显式 Host API 与既有日志 reader 保留；不等于所有产品命令均重写 |
+| M6 Portable Assembly | IMPLEMENTED；最终源码 native minimal 与 memory,profile-store portable_host 通过，无桌面依赖边界 | 本批未安装 Android target，未执行交叉 check/build；无设备/JNI/UI/HARDWARE VALIDATED |
+| M7 Final Verification | 原 gate_full 五段、指定集成、前端、strict arch、文档真源 / 链接 / 索引通过 | 冷启动目标未达，整体验收 Partial |
+
+当前执行关系：
+
+```mermaid
+flowchart TD
+    Desktop[CLI / Gateway / approvals / stream / heartbeat] --> Agents[Existing AgentRuntime / managed main]
+    Portable[PortableHost / selected modules] --> Agents
+    Agents --> Kernel[One Runtime.execute_outcome]
+    Kernel --> Provider[Shared ProviderRouter / one request meter]
+    Kernel --> Hooks[Fixed Hook / authenticated RegisteredBehavior]
+    Hooks --> Dispatcher[One admission / governance / Dispatcher / tool meter]
+    Dispatcher --> Registry[Existing PluginManager / executable catalog / module resources]
+    Hooks --> Child[SubLoop / ModuleInvoker compatibility adapter]
+    Child --> Agents
+    Registry --> V1[ToolEventV1 / durable child Session facts]
+    V1 --> Kernel
+```
+
+取消持久记录使用子 request / trace 与真实 AgentId，原 AgentTaskStarted 关联 owner 世代与父来源。
+AgentTaskInterrupted 的 pending calls 只说明最后 checkpoint 未闭合，不证明副作用未发生或已回滚，
+不伪造 ToolResult、不额外扣账；显式排水成功才提供可观察事实，失败仍报错并保留 owner。
+新枚举要求升级 reader；旧日志与旧事件保留，不能承诺旧二进制无损降级读取新记录。
+
+## 当前门禁、性能和限制
+
+原版五段 gate_full 最终 exit 0，完整日志与退出码为
+`/workspace/apeireth-codex/s6-gate-full.log` / `s6-gate-full.exit`。
+首次运行在编译时 ENOSPC，未执行测试，且退出码文件写入失败；原记录明确为 `UNRECORDED_ENOSPC`，不冒称通过。
+只清理 incremental 与 deps 内超过 100 MiB 的构建产物后重试一次；没有 cargo clean 或改门禁。
+最终五段 jobs=2，dev/test debug info=0、incremental=0，debug assertions 保留；Rust / Cargo manifest 前后一致。
+具体全量数字只记在 S6 交付账，由 `s6-counts.py` 从日志复核，不代改 test-baseline 或 README 徽章。
+
+2026-10-29，Linux x86_64 / rustc、cargo 1.97.1：
+`CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p apeireth-bench-harness --locked -j 2 -- cold-start`
+观测 P50 **17.4237 ms**，未达到原 **<10 ms** 目标；原 harness 默认样本与完整统计见 `s6-cold-start.log`。
+同 profile 的 `-- idle-footprint` 观测 P50 **29.9922 MiB**，原 harness 判定达标，见 `s6-idle-footprint.log`。
+这两个进程均 exit 0，但冷启动性能验收仍失败。沿用原完整生产组装口径，未为结果修改迁移、阈值、断言或持久化；
+没有同环境 release 前后对照，不能据此断言 S6 引入性能回归。待机是小样本观察，不当作 Android 真机内存。
+
+无真实外部 LLM API、外部 MCP 服务、原生桌面窗口或硬件联调结果。
+Mesh/NAT/P2P 保留，PortableHost desktop-free；AfterToolCall 原串行屏障仍是已接受的调度限制。
+后续完成冷启动目标的同口径验收；在目标工具链可用时补本批 Android minimal check/build，设备验证单独记账。
+
+## 历史正文（2026-10-28，原样保留）
+
+以下全部“当前”“本轮”与状态指当时冻结代码及环境，不覆盖上面的 S6 现状。
+
+# Kernel Convergence Final Acceptance Report
+
+[Document-Meta]
+Document: docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md
 Version: 2.0
 Last-Modified: 2026-10-28
 Status: Convergence Partial；冻结代码全量门禁已通过

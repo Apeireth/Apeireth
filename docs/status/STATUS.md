@@ -34,10 +34,10 @@
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `2ee10a39869f` | 2026-11-20 |
 | `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `2ee10a39869f` | 2026-11-20 |
 | `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `b419826c` | 2026-11-20 |
-| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `2ee10a39869f` | 2026-11-28 |
-| `rt.owned_agents` | IMPLEMENTED | - | - | `2ee10a39869f` | 2026-11-20 |
+| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `3f8048e8d8fc` | 2026-11-28 |
+| `rt.owned_agents` | IMPLEMENTED | - | - | `3f8048e8d8fc` | 2026-11-20 |
 | `mem.registered_namespace` | IMPLEMENTED | - | - | `9015d9f044ad` | 2026-11-20 |
-| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `2ee10a39869f` | 2026-11-20 |
+| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `3f8048e8d8fc` | 2026-11-20 |
 
 ## 使用
 

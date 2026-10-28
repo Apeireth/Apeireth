@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 04095f3ea19ca6afd715558cd35550e1c86d630f4d97c5a7402e85bdb848f877
+claims_sha256: 8f96f9766a39bfc1788c1dca321383832b7fc0a47dd5e3e38fafaf08dc19f84d
 claims_total: 33
 items:
   - id: "rt.provider_router"
@@ -700,6 +700,9 @@ items:
         - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/adapters/cli/src/lib.rs"
         - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/engine/runtime/src/canonical/instances/audit.rs"
+        - "crates/engine/runtime/src/canonical/session_events.rs"
+        - "crates/engine/runtime/src/canonical/event_log.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/care_heartbeat.rs"
@@ -707,8 +710,10 @@ items:
         - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime/src/canonical/accounting.rs"
         - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
+        - "crates/engine/runtime/src/canonical/event_log.rs"
         - "crates/engine/runtime/src/canonical/execution_view.rs"
         - "crates/engine/runtime/src/canonical/instances.rs"
+        - "crates/engine/runtime/src/canonical/instances/audit.rs"
         - "crates/engine/runtime/src/canonical/instances/control.rs"
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
         - "crates/engine/runtime/src/canonical/instances/main.rs"
@@ -717,6 +722,7 @@ items:
         - "crates/engine/runtime/src/canonical/principal_authority.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
         - "crates/engine/runtime/src/canonical/session.rs"
+        - "crates/engine/runtime/src/canonical/session_events.rs"
         - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/foundation/plugin/src/agents.rs"
     default_enabled: "n/a"
