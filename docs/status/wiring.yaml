@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: b1b941f5d126b4b10c370711d9d6d468c37a9a97e2a32a276f3331e8ce142b60
+claims_sha256: 7d00a8ab8403399f0441251d8af9aacc9d07d3d634f6a0fcb04bc4aa402537b3
 claims_total: 32
 items:
   - id: "rt.provider_router"
@@ -634,6 +634,8 @@ items:
         - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
         - "crates/engine/runtime/src/canonical/behavior_projection.rs"
         - "crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs"
+        - "crates/engine/runtime/src/canonical/principal_authority.rs"
+        - "crates/engine/runtime/src/canonical/session.rs"
     wired:
       production_refs:
         - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
@@ -650,8 +652,10 @@ items:
         - "crates/engine/runtime/src/canonical/execute.rs"
         - "crates/engine/runtime/src/canonical/module.rs"
         - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/principal_authority.rs"
         - "crates/engine/runtime/src/canonical/registered_hooks.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime/src/canonical/session.rs"
         - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/foundation/plugin/src/hooks.rs"
         - "crates/foundation/plugin/src/manager.rs"
@@ -671,6 +675,7 @@ items:
         - "crates/engine/runtime-assembly/tests/capability_modules_v1.rs"
         - "crates/adapters/cli/tests/gateway_panels.rs"
         - "crates/engine/runtime-assembly/tests/production_cognitive_v1.rs"
+        - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
       claims_id: "rt.registered_module_v1"
     gaps:
       []
@@ -689,6 +694,8 @@ items:
         - "crates/foundation/plugin/src/agents.rs"
         - "crates/engine/runtime/src/canonical/execution_view.rs"
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
+        - "crates/engine/runtime/src/canonical/principal_authority.rs"
+        - "crates/engine/runtime/src/canonical/session.rs"
     wired:
       production_refs:
         - "crates/engine/runtime/src/canonical/accounting.rs"
@@ -699,7 +706,9 @@ items:
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
         - "crates/engine/runtime/src/canonical/instances/tasks.rs"
         - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/principal_authority.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime/src/canonical/session.rs"
         - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/foundation/plugin/src/agents.rs"
     default_enabled: "n/a"
@@ -711,6 +720,7 @@ items:
         - "crates/engine/runtime-assembly/tests/organ_llm_bridge_compat.rs"
         - "crates/engine/runtime/tests/canonical_subloop.rs"
         - "crates/engine/runtime-assembly/tests/convergence_agents.rs"
+        - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
       claims_id: "rt.owned_agents"
     gaps:
       - "未达 PRODUCTION WIRED：可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents…"
@@ -725,19 +735,34 @@ items:
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
         - "crates/engine/runtime-assembly/src/profile_store.rs"
         - "crates/engine/runtime/src/canonical/profiles.rs"
+        - "crates/engine/runtime-assembly/src/profile_memory.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime/src/canonical/principal_authority.rs"
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/layers.rs"
     wired:
       production_refs:
+        - "crates/engine/memory/src/coordinator.rs"
+        - "crates/engine/memory/src/layers.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module/execution.rs"
         - "crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_typed_sink.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/profile_memory.rs"
         - "crates/engine/runtime-assembly/src/profile_store.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
+        - "crates/engine/runtime/src/canonical/principal_authority.rs"
         - "crates/engine/runtime/src/canonical/profiles.rs"
         - "crates/engine/runtime/src/canonical/session.rs"
     default_enabled: "n/a"
     validated:
       tests:
         - "crates/engine/runtime-assembly/tests/convergence_memory.rs"
+        - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
       claims_id: "mem.registered_namespace"
     gaps:
       - "未达 PRODUCTION WIRED：新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Na…"

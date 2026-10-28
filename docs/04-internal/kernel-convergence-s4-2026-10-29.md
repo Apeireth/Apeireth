@@ -14,6 +14,7 @@ Author: Codex
 分支 `refactor/kc1-kernel-convergence`；前轮从 clean 工作树开始 S4，HEAD 为 `47e1ced9`，
 S3 源码为 `5adc0493`。本轮续接同一 HEAD 上的 S4 脏工作树；
 `git fetch origin && git status && git log -5 --oneline` 成功，沿用现有实现，未重写 S4。
+源码提交为 `9015d9f044ade5cdfbe80f73085a5e40038d6b4a`；后续文档证据提交只锚定该源码，不修改 Rust / Cargo。
 依据[债务图 D4 / S4](kernel-convergence-remaining-debt-map-2026-10-29.md)、
 [S1](kernel-convergence-s1-2026-10-29.md)、[S2](kernel-convergence-s2-2026-10-29.md)、
 [S3](kernel-convergence-s3-2026-10-29.md)、ADR-0018～0022 与
@@ -135,9 +136,17 @@ runtime / memory / assembly / plugin 回归全部保留；不删测试、不加 
 
 本轮源码与前轮微调后的 `s4-source-manifest.json` 完全一致；复核脚本为 `s4n-finalize-notes.py`，
 冻结证据为 `s4n-evidence.json`。LOCKED 与 Cargo.toml / Cargo.lock 无差异；原测试文件未改，
-新增对抗用例不加 ignore。全部指定窄门禁通过后，源码与随行说明先提交；随后单独将受影响
-claims 的 `verified_at` 锚定该源码 SHA，并从原真源生成 STATUS / wiring；级别和默认开关不抬升。
+新增对抗用例不加 ignore。全部指定窄门禁通过后，源码与随行说明先提交；本次文档提交将受影响
+claims 的 `verified_at` 锚定上述源码 SHA，并从原真源生成 STATUS / wiring；级别和默认开关不抬升。
 
+文档证据复核分别执行 `python scripts/docs_truth.py --verify --block-stale` 与
+`python scripts/docs_truth.py --check`，退出码均为 0，无 FAIL / STALE 或生成物漂移；
+日志为 `s4n-truth-verify-final.log` / `s4n-truth-check-final.log` 与同名 `.exit`。
+`python scripts/wiring_report.py --verify`、arch_doc、links / index 复核也通过，
+见 `s4n-wiring-final.log`、`s4n-arch-doc-final.log`、`s4n-docs-links-final.log`、
+`s4n-docs-index-final.log` 与对应 `.exit`。
+hooks 文件沿用现有无执行位状态；提交前显式以 bash 执行 pre-commit / commit-msg，
+再经 `scripts/commit.ps1` 的显式 author、secret / neutral 与 ArchStrict 提交，不使用 NoVerify。
 
 ## 边界与后续
 
