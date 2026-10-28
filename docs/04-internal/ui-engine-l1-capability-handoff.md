@@ -37,7 +37,7 @@
 | G5 | **滚动容器与虚拟化原语** | ⚠️ **部分**：窗口化纯计算已落地（`virtual_list::plan_virtual_window`，9 条测试：交叠语义/overscan 夹取/超出末尾不白屏/NaN 不污染）；滚动度量读写已有；⭐ **2026-10-28 窗口计算已接线**（`Renderer::virtual_window_for` 吃后端**真实**滚动状态，越界滚动夹到尾部 ⇒ 不白屏）。**未接线**：窗口 → 挂载/卸载子项、`scroll` 事件自动监听 | 余下：窗口 → 渲染器的挂载/卸载接线 + `scroll` 事件监听接线 + 1k 行 patch 基准 | 第 2 批（进行中） |
 | G6 | **缩放 / 密度标量** | ✅ **2026-10-28 已落地**：`MeasurementScale`（dpr × density，非法值回落 1.0）+ 渲染器接线（`bounding_box_in_device` / `hit_test_device`）。**IMPLEMENTED + WIRED + 浏览器已实测**（E-98：2.0×1.25 换算正确） | — | 第 1 批（已完成） |
 | G7 | **资源句柄与加载状态** | 无图片/字体加载、无「度量未定」状态 | 资源句柄 + 加载状态机 + 解码/上传钩子；字体未就绪时能表达「度量未定」⇒ 布局不跳（含 CLS 观测） | 第 2 批 |
-| G8 | **错误边界与 panic hook** | ⚠️ **部分**：错误边界已落地并接线（`render_guarded` + `set_error_boundary` + `captured_error`，未设兜底时不吞错，兜底失败仍报原始错误）。**panic hook 未做**（wasm `panic=abort` 下需额外装置） | 余下：panic hook / 崩溃可见兜底 + 浏览器注入 panic 证据 | 第 2 批（进行中） |
+| G8 | **错误边界与 panic hook** | ⚠️ **部分**：错误边界已落地并接线（`render_guarded` + `set_error_boundary` + `captured_error`，未设兜底时不吞错，兜底失败仍报原始错误）。**panic hook 已落地**（`panic_guard`：进程级 hook + 消息记录 + 宿主上报器，上报器 panic 被隔离；不决定兜底界面） | 余下：panic hook / 崩溃可见兜底 + 浏览器注入 panic 证据 | 第 2 批（进行中） |
 
 > L2/L3 项（表单控件族、Markdown、代码高亮、图标、富文本、弹层/虚拟列表组件、令牌数据、网络策略、dev server/HMR、
 > wasm 体积门）**不在**本表 ⇒ 由 `ui-kit` 或宿主线各自排期。其中「wasm 体积预算门」属**治理项**，归引擎线 CI 体系。
