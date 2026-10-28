@@ -63,3 +63,29 @@ ToolEventV1 字段、version、call/result 相关性与 Provider 投影格式未
 
 当前 Profile principal 存在时，旧全局认知 Adapter 不执行，防止旧未隔离数据进入私有 Namespace。
 现有原生 Namespace MemoryModule 仍可组合使用。生产旧数据的通用 Profile 映射尚需下一切片完成，不能将该项标为已迁移。
+
+## Resource factories (M2)
+
+`apeireth_plugin::resource_factory::ModuleDefinition` is configuration plus an
+async `instantiate(context, resources)` function. Hosts pass
+`module_from_definition(definition)` to the existing `with_plugin` or
+`register_module` entry. This adapter is an ordinary Plugin; it does not introduce
+another registry. Each registration receives the registry's ModuleInstanceId,
+read-only activation token, task scope, and explicitly granted agent port.
+
+The factory registers resources immediately after acquisition in ModuleResources.
+Shutdown revokes them synchronously, drains the existing module task scope, and
+closes resources in reverse acquisition order. A failed or cancelled close retains
+ownership for retry. ResourceStatus exposes close/error state. Factories must not
+register shared providers or host database pools as private resources.
+
+Deferred capabilities are checked against the definition's exact manifest and
+validated again before activation. Factory tool handles hold an instance-specific
+activation token and task scope. Initialized tools cannot execute, and stop,
+unregister, replacement, and manager drop revoke old handles even if external Arcs
+remain. Restart means creating a new adapter/instance, not reopening old resources.
+Hot registration also rejects provider declarations before factory construction;
+provider membership still requires rebuilding the router.
+
+Verified by foundation factory rollback/retry/independence tests and a real
+Runtime turn followed by replacement while retaining an old raw tool Arc.

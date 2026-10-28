@@ -33,6 +33,7 @@ pub(crate) struct PluginEntry {
     pub(crate) state: Lifecycle,
     pub(crate) instance: apeireth_core::kernel::ModuleInstanceId,
     pub(crate) scope: crate::task_scope::ModuleTaskScope,
+    pub(crate) activation: crate::resource_factory::ModuleActivation,
     pub(crate) errors: Vec<PluginError>,
     pub(crate) needs_cleanup: bool,
 }
@@ -58,12 +59,14 @@ impl PluginRegistry {
         if self.entries.contains_key(&id) {
             return Err(PluginError::DuplicatePlugin(id));
         }
+        let instance = apeireth_core::kernel::ModuleInstanceId::new();
         self.entries.insert(
             id,
             PluginEntry {
                 plugin,
                 state: Lifecycle::Registered,
-                instance: apeireth_core::kernel::ModuleInstanceId::new(),
+                instance,
+                activation: crate::resource_factory::ModuleActivation::new(instance),
                 scope: crate::task_scope::ModuleTaskScope::new(),
                 errors: Vec::new(),
                 needs_cleanup: false,

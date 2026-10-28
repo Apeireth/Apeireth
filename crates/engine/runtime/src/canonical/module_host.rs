@@ -148,7 +148,13 @@ impl Runtime {
         plugin: Arc<dyn Plugin>,
         ctx: &PluginContext,
     ) -> RuntimeResult<()> {
-        if !plugin.providers().is_empty() {
+        if !plugin.providers().is_empty()
+            || plugin
+                .manifest()
+                .capabilities
+                .iter()
+                .any(|capability| capability.kind == apeireth_plugin::CapabilityKind::Provider)
+        {
             return Err(RuntimeError::misconfigured(
                 "provider membership changes require rebuilding the Runtime",
             ));

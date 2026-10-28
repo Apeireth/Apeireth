@@ -63,7 +63,9 @@ impl PluginManager {
         }
         let tools = plugin.tools();
         let providers = plugin.providers();
-        Self::validate_implementations(plugin.as_ref(), &tools, &providers)?;
+        if !plugin.deferred_capabilities() {
+            Self::validate_implementations(plugin.as_ref(), &tools, &providers)?;
+        }
         self.validate_tool_names(&tools)?;
         // Index first: a capability collision must not leave the plugin behind.
         self.capabilities.index(&id, &manifest.capabilities)?;
@@ -189,6 +191,28 @@ impl PluginManager {
         Ok(())
     }
 
+    fn validate_tool_names_for_activation(&self, id: &PluginId) -> PluginResult<()> {
+        let mut names = BTreeMap::new();
+        for owner in self.plugins.ids().filter(|owner| *owner != id) {
+            for tool in self.plugins.get(owner)?.tools() {
+                names.insert(tool.declaration().name, tool.id().clone());
+            }
+        }
+        for tool in self.plugins.get(id)?.tools() {
+            let name = tool.declaration().name;
+            if let Some(incumbent) = names.insert(name.clone(), tool.id().clone()) {
+                if incumbent != *tool.id() {
+                    return Err(PluginError::AmbiguousToolName {
+                        name,
+                        incumbent,
+                        challenger: tool.id().clone(),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Start in dependency order. Legacy callers retain active-on-failure policy.
     pub async fn start_all(&mut self, ctx: &PluginContext) -> PluginResult<Vec<PluginId>> {
         let order = self.resolve_order()?;
@@ -265,7 +289,16 @@ impl PluginManager {
             .needs_cleanup = true;
         let plugin = Arc::clone(self.plugins.get(id)?);
         let scope = self.task_scope(id)?;
-        let ctx = ctx.scoped(id.clone(), self.instance_id(id)?, scope.clone());
+        let ctx = ctx.scoped(
+            id.clone(),
+            self.instance_id(id)?,
+            scope.clone(),
+            self.plugins
+                .entry(id)
+                .expect("registered")
+                .activation
+                .clone(),
+        );
         let result = scope
             .run(std::panic::AssertUnwindSafe(plugin.initialize(&ctx)).catch_unwind())
             .await;
@@ -290,13 +323,35 @@ impl PluginManager {
         self.plugins.transition(id, Lifecycle::Starting)?;
         let plugin = Arc::clone(self.plugins.get(id)?);
         let scope = self.task_scope(id)?;
-        let ctx = ctx.scoped(id.clone(), self.instance_id(id)?, scope.clone());
+        let ctx = ctx.scoped(
+            id.clone(),
+            self.instance_id(id)?,
+            scope.clone(),
+            self.plugins
+                .entry(id)
+                .expect("registered")
+                .activation
+                .clone(),
+        );
         let result = scope
             .run(std::panic::AssertUnwindSafe(plugin.start(&ctx)).catch_unwind())
             .await;
         match result {
             Ok(Ok(Ok(()))) => {
+                if let Err(error) = self
+                    .validate_current_implementations(id)
+                    .and_then(|()| self.validate_tool_names_for_activation(id))
+                {
+                    self.plugins.transition(id, Lifecycle::Failed)?;
+                    scope.close();
+                    return Err(self.failure(id, "start", error.to_string()));
+                }
                 self.plugins.transition(id, Lifecycle::Active)?;
+                self.plugins
+                    .entry(id)
+                    .expect("registered")
+                    .activation
+                    .activate();
                 self.start_order.push(id.clone());
                 Ok(())
             }
@@ -341,6 +396,12 @@ impl PluginManager {
 
     /// Refuse new work and request cancellation without mutating the registry.
     pub fn cancel(&self, id: &PluginId) -> PluginResult<()> {
+        self.plugins
+            .entry(id)
+            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))?
+            .activation
+            .revoke();
+        self.plugins.get(id)?.revoke_resources();
         self.task_scope(id)?.close();
         Ok(())
     }
@@ -1130,5 +1191,14 @@ mod tests {
         assert_eq!(d.kind, crate::extension::ExtensionKind::Plugin);
         assert_eq!(d.owner_crate, "apeireth-plugin");
         assert_eq!(d.id, "p.a");
+    }
+}
+
+impl Drop for PluginManager {
+    fn drop(&mut self) {
+        for id in self.plugins.ids() {
+            // Drop cannot await. Explicit shutdown performs observable close/drain.
+            let _ = self.cancel(id);
+        }
     }
 }

@@ -67,3 +67,21 @@ CLI + existing Desktop/Gateway bootstrap
 
 重要决策及实际审计入口见 [ADR-0022](../adr/0022-production-kernel-convergence.md)。
 每个稳定内部切片提交后自动继续，不请求阶段批准。
+
+## M2 resource factory evidence
+
+Implemented / Wired / Tested: configuration-only ModuleDefinition,
+module_from_definition compatibility with existing registration, authoritative
+ModuleInstanceId, deferred capability validation before activation, owned resource
+rollback, synchronous revocation, reverse close, observable/retryable close errors,
+and generation-specific tool handles. Existing legacy plugins remain compatible;
+they are not automatically converted into resource factories.
+
+Commands: `cargo test -p apeireth-plugin --all-targets --locked --no-fail-fast -j 2`
+(3 suites / 287 passed / 0 failed / 0 ignored) and
+`cargo test -p apeireth-runtime-assembly --test resource_factory_runtime --locked -j 2`
+(1 passed). Factory tests retain old external Arcs across stop and re-registration;
+the real Runtime test verifies V1 facts and separate resource call counts.
+Plugin Clippy with `-D warnings` and strict architecture guard passed.
+Evidence: `apeireth-resource-factory-regression.log`,
+`apeireth-resource-factory-runtime.log`, `apeireth-resource-factory-clippy.log`.

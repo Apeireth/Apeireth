@@ -27,6 +27,7 @@ impl PluginManager {
                 });
             }
         }
+        self.cancel(id)?;
         let state = self.state(id)?;
         let scope = self.task_scope(id)?;
 

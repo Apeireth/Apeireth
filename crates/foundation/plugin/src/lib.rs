@@ -77,6 +77,7 @@ pub mod plugin;
 pub mod preference;
 pub mod provider;
 pub mod registry;
+pub mod resource_factory;
 pub mod self_assessment;
 pub mod semver;
 pub mod task_scope;

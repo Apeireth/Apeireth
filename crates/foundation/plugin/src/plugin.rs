@@ -39,14 +39,23 @@ pub struct PluginContext {
     pub tasks: crate::task_scope::ModuleTaskScope,
     pub agents: Option<Arc<dyn crate::agents::ModuleAgents>>,
     agent_factory: Option<Arc<dyn crate::agents::ModuleAgentFactory>>,
+    pub(crate) activation: Option<crate::resource_factory::ModuleActivation>,
 }
 
 impl PluginContext {
+    /// Authoritative identity of this registry-created instance.
+    pub fn module_instance(&self) -> Option<apeireth_core::kernel::ModuleInstanceId> {
+        self.activation
+            .as_ref()
+            .map(|activation| activation.instance())
+    }
+
     pub(crate) fn scoped(
         &self,
         definition: apeireth_core::kernel::PluginId,
         instance: apeireth_core::kernel::ModuleInstanceId,
         tasks: crate::task_scope::ModuleTaskScope,
+        activation: crate::resource_factory::ModuleActivation,
     ) -> Self {
         Self {
             clock: self.clock.clone(),
@@ -57,6 +66,7 @@ impl PluginContext {
                 .as_ref()
                 .map(|factory| factory.bind(definition, instance, tasks.clone())),
             agent_factory: None,
+            activation: Some(activation),
             tasks,
         }
     }
@@ -82,6 +92,7 @@ impl PluginContext {
             tasks: crate::task_scope::ModuleTaskScope::new(),
             agents: None,
             agent_factory: None,
+            activation: None,
         }
     }
 }
@@ -149,6 +160,19 @@ pub trait Plugin: Send + Sync {
     /// the remaining plugins from shutting down: a shutdown that abandons half
     /// its plugins because one misbehaved leaks more than it protects.
     async fn shutdown(&self) -> PluginResult<()>;
+
+    /// Only factory adapters defer construction until initialize. Validation is
+    /// repeated before activation; deferral never makes a capability callable.
+    fn deferred_capabilities(&self) -> bool {
+        false
+    }
+
+    /// Synchronously revoke owned resources before bounded asynchronous cleanup.
+    fn revoke_resources(&self) {}
+
+    fn resource_statuses(&self) -> Vec<crate::resource_factory::ResourceStatus> {
+        Vec::new()
+    }
 
     /// Tool capabilities this plugin provides. Must match the manifest.
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
