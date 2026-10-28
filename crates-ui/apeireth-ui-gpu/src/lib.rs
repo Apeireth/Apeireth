@@ -152,6 +152,8 @@ pub mod engine;
 pub mod glsl;
 pub mod scene;
 pub mod shaders;
+/// ⭐ 纹理上传（L1-G7 最后一段：行对齐 + 上传）。
+pub mod upload;
 
 pub use bindings::{
     binding_of, binding_table, name_of, BindingError, UniformBufferLayout, UniformSlot,
