@@ -98,3 +98,53 @@
 {"id": "ig-v1-098", "query": "为什么说内部卷首跑的数字是第一组有意义的数字？", "expect_ids": ["doc:df44f1b1a4a6"], "expect_fragments": ["第一组有意义的数字"], "tags": ["corpus"]}
 {"id": "ig-v1-099", "query": "按查询词选最相关窗口比生产注入低多少？", "expect_ids": ["doc:e7ce1f425b42"], "expect_fragments": ["低 43%"], "tags": ["refuted", "数字"]}
 {"id": "ig-v1-100", "query": "孤儿判据存在哪一类盲区？", "expect_ids": ["doc:03ff724ea618"], "expect_fragments": ["同名遮蔽"], "tags": ["audit", "判据"]}
+{"id":"ig-v1-101","query":"crate 体量预算的基线规模是多少？","expect_ids":["doc:00f9461d44e7"],"expect_fragments":["29 个 crate"],"tags":["audit","H4"]}
+{"id":"ig-v1-102","query":"高口径真值闸实测抓到几条问题？","expect_ids":["doc:179ffda9d224"],"expect_fragments":["实测抓到 3 条"],"tags":["audit","H5"]}
+{"id":"ig-v1-103","query":"看疑似漏列 source 要看哪个输出字段？","expect_ids":["doc:2e913f8be611"],"expect_fragments":["suspected_missing="],"tags":["audit","H3"]}
+{"id":"ig-v1-104","query":"八个漏洞里哪一条描述的是「漏列即静默漂」？","expect_ids":["doc:54a1e9d3bca5"],"expect_fragments":["漏列即静默漂"],"tags":["audit"]}
+{"id":"ig-v1-105","query":"claims 验证计划当时是多少条会跑多少条豁免？","expect_ids":["doc:5b4258f28305"],"expect_fragments":["23 跑 / 2 豁免 / 4 延后"],"tags":["audit","H2"]}
+{"id":"ig-v1-106","query":"文档分类分布用哪个参数看？","expect_ids":["doc:5e97859dac0a"],"expect_fragments":["check_doc_class.py --report"],"tags":["audit","H8"]}
+{"id":"ig-v1-107","query":"目录级兜底收窄后命中数从多少降到多少？","expect_ids":["doc:8354eaaf7759"],"expect_fragments":["17 → 2"],"tags":["audit","H3","数字"]}
+{"id":"ig-v1-108","query":"抗漂移审计的审计对象是什么？","expect_ids":["doc:960d441206af"],"expect_fragments":["本仓库**自身**的抗漂移装置"],"tags":["audit"]}
+{"id":"ig-v1-109","query":"H6 的修法把内联链接改成了什么形式？","expect_ids":["doc:b763c1ecac97"],"expect_fragments":["改成行内代码"],"tags":["audit","H6"]}
+{"id":"ig-v1-110","query":"复核未接线模块数应为多少？","expect_ids":["doc:b8fe6b2b658c"],"expect_fragments":["应为 93"],"tags":["audit","H1"]}
+{"id":"ig-v1-111","query":"排除 examples 后整块未接线模块的增幅是多少？","expect_ids":["doc:c57a6c44d4d4"],"expect_fragments":["81 → 93"],"tags":["audit","H1","数字"]}
+{"id":"ig-v1-112","query":"Cargo.lock 那条结论错在哪里？","expect_ids":["doc:cb8a3f1320c3"],"expect_fragments":["本机缺 crate 缓存"],"tags":["audit","纠正"]}
+{"id":"ig-v1-113","query":"文档分类棘轮基线里还有多少份待分类？","expect_ids":["doc:d428585edadc"],"expect_fragments":["491 份待分类"],"tags":["audit","H8","数字"]}
+{"id":"ig-v1-114","query":"改动进度页事实后守卫会怎么反应？","expect_ids":["doc:ead652a6e735"],"expect_fragments":["当场红"],"tags":["audit","H7"]}
+{"id":"ig-v1-115","query":"行为锁定涉及多少个文件含确定性断言？","expect_ids":["doc:fbd9b37518b0"],"expect_fragments":["280"],"tags":["audit","家底"]}
+{"id":"ig-v1-116","query":"D2 的向量能力依赖哪个 provider？","expect_ids":["doc:1b186b3b06d6"],"expect_fragments":["OpenAiCompatibleEmbeddingProvider"],"tags":["status","D2"]}
+{"id":"ig-v1-117","query":"D4 默认关是由哪个环境变量控制的？","expect_ids":["doc:2794ea0d89fa"],"expect_fragments":["ABSORPTION_INSIGHT"],"tags":["status","D4"]}
+{"id":"ig-v1-118","query":"进度页事实块里 B0-c 候选池模块数是多少？","expect_ids":["doc:29204cb9a4f5"],"expect_fragments":["d4_modules"],"tags":["status","事实块"]}
+{"id":"ig-v1-119","query":"H3 的兜底为什么只对窄目录生效？","expect_ids":["doc:477595206336"],"expect_fragments":["窄目录 ≤8 文件"],"tags":["status","H3"]}
+{"id":"ig-v1-120","query":"怎么复核哈希链真在写入路径？","expect_ids":["doc:4e824195ae6a"],"expect_fragments":["put_chained_episode"],"tags":["status","D0"]}
+{"id":"ig-v1-121","query":"D2 在离线环境下的后果是什么？","expect_ids":["doc:71d04b109c2d"],"expect_fragments":["离线 = 没有向量召回"],"tags":["status","D2"]}
+{"id":"ig-v1-122","query":"B0-c 台账缺失时复核命令会输出什么？","expect_ids":["doc:83d5ca1d6fbb"],"expect_fragments":["B0-c 未开始"],"tags":["status","B0-c"]}
+{"id":"ig-v1-123","query":"B0-c 续做的起点是多少有效数字？","expect_ids":["doc:87882a211186"],"expect_fragments":["有效数字 0 行"],"tags":["status","B0-c"]}
+{"id":"ig-v1-124","query":"变更纪律里为什么要禁止引用对话记忆？","expect_ids":["doc:a391ba706796"],"expect_fragments":["我曾因此误判"],"tags":["status","纪律"]}
+{"id":"ig-v1-125","query":"claims-verify 为什么必须装 Tauri 系统库？","expect_ids":["doc:ae00ef7351eb"],"expect_fragments":["否则 CI 会假红"],"tags":["status","CI"]}
+{"id":"ig-v1-126","query":"dedup 那次的掉分被称为什么？","expect_ids":["doc:b1ccfabde538"],"expect_fragments":["被误用"],"tags":["status","B0-c"]}
+{"id":"ig-v1-127","query":"横向看 B0 这一批的整体状态是什么？","expect_ids":["doc:c3e04a7d39d4"],"expect_fragments":["B0 整批没完成"],"tags":["status","B0"]}
+{"id":"ig-v1-128","query":"B0-a 适配器文件叫什么？","expect_ids":["doc:d035d02f30db"],"expect_fragments":["perltqa_adapter.rs"],"tags":["status","B0-a"]}
+{"id":"ig-v1-129","query":"B0-a 现在缺的是什么？","expect_ids":["doc:f25a6d5e6450"],"expect_fragments":["适配器有，成绩单没有"],"tags":["status","B0-a"]}
+{"id":"ig-v1-130","query":"文档分类守卫改用哪种粒度锚定判定？","expect_ids":["doc:f8f5a90d4092"],"expect_fragments":["标题级 / 列表表格行级锚定"],"tags":["audit","H8"]}
+{"id":"ig-v1-131","query":"水滸傳段落 200 那档的送达率是多少？","expect_ids":["doc:036f36922581"],"expect_fragments":["1.2308"],"tags":["evidence","粒度"]}
+{"id":"ig-v1-132","query":"旧叙事把什么当成一条记忆？","expect_ids":["doc:0986fdfaab86"],"expect_fragments":["7,401 字的整回当成一条记忆"],"tags":["evidence","粒度"]}
+{"id":"ig-v1-133","query":"LoCoMo 全量的 groundedness 是多少？","expect_ids":["doc:33213413ee3b"],"expect_fragments":["0.5815"],"tags":["evidence","数字"]}
+{"id":"ig-v1-134","query":"粒度曲线用哪个例子复现？","expect_ids":["doc:3a21359ca926"],"expect_fragments":["granularity_delivery_curv"],"tags":["evidence","复现"]}
+{"id":"ig-v1-135","query":"紅樓夢段落 400 那档的送达率是多少？","expect_ids":["doc:4b23f4fc94fa"],"expect_fragments":["0.5495"],"tags":["evidence","粒度"]}
+{"id":"ig-v1-136","query":"LoCoMo 里单元大约多少字？","expect_ids":["doc:7125fa90106b"],"expect_fragments":["≈100 字"],"tags":["evidence","粒度"]}
+{"id":"ig-v1-137","query":"切分带来的净效果是什么？","expect_ids":["doc:71704341a537"],"expect_fragments":["净亏"],"tags":["evidence","结论"]}
+{"id":"ig-v1-138","query":"LoCoMo 的证据片段上限是多少字？","expect_ids":["doc:729e48593046"],"expect_fragments":["≤100 字"],"tags":["evidence","口径"]}
+{"id":"ig-v1-139","query":"单证据子集上十个样本的送达率是否一致？","expect_ids":["doc:8dd4c4fd4e3d"],"expect_fragments":["10 个样本全部 1.0000"],"tags":["evidence","送达率"]}
+{"id":"ig-v1-140","query":"LoCoMo 的 QA 是不是人工标注的？","expect_ids":["doc:996ac356873f"],"expect_fragments":["人工标注 QA"],"tags":["evidence","语料"]}
+{"id":"ig-v1-141","query":"送达率大于一时说明这是什么？","expect_ids":["doc:a0a5736a3977"],"expect_fragments":["截断"],"tags":["evidence","口径"]}
+{"id":"ig-v1-142","query":"真实语料文档里语料是哪一个？","expect_ids":["doc:cb01de1018cd"],"expect_fragments":["LoCoMo"],"tags":["evidence","语料"]}
+{"id":"ig-v1-143","query":"为什么小说语料从没暴露送达率大于一的问题？","expect_ids":["doc:ce80bcaa6adb"],"expect_fragments":["每题恰好 1 条"],"tags":["evidence","口径"]}
+{"id":"ig-v1-144","query":"真实语料复现输出里 A 段与 B 段分别是什么？","expect_ids":["doc:d9d396d16e95"],"expect_fragments":["单证据子集"],"tags":["evidence","复现"]}
+{"id":"ig-v1-145","query":"这一轮没有测哪一侧的正确性？","expect_ids":["doc:dd95bca8042e"],"expect_fragments":["生成侧不在本轮范围"],"tags":["evidence","边界"]}
+{"id":"ig-v1-146","query":"生产注入每条证据的字符上限常量叫什么？","expect_ids":["doc:de3ef284b8c8"],"expect_fragments":["EVIDENCE_MAX_CHARS"],"tags":["evidence","注入"]}
+{"id":"ig-v1-147","query":"整回粒度下的漏送被称为什么造成的？","expect_ids":["doc:de4a2cfc07aa"],"expect_fragments":["人为制造"],"tags":["evidence","粒度"]}
+{"id":"ig-v1-148","query":"要引入真语义模型大概需要多大的模型文件？","expect_ids":["doc:467927ddfdce"],"expect_fragments":["模型文件 50~120MB"],"tags":["diagnosis","决策"]}
+{"id":"ig-v1-149","query":"去疑问词杠杆把 recall 提到多少？","expect_ids":["doc:693c6bc25ea5"],"expect_fragments":["0.6658"],"tags":["diagnosis","杠杆"]}
+{"id":"ig-v1-150","query":"三个如实结论里第二条讲的是什么？","expect_ids":["doc:8ac978c1f0ae"],"expect_fragments":["词干归一会变差"],"tags":["diagnosis","结论"]}
