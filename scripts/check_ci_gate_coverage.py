@@ -11,7 +11,13 @@ CI 的 `Secret scan (R215 防御层)` job 有**两步**：
 ⇒ ⇒ 本脚本把这条教训变成**机制**：CI 的每一步要么在本地门禁里，要么被显式归类
 为 **CI 专属**（需网络 / 需特殊工具链 / 跨平台 / 每 target 矩阵）**并写明理由**。
 
-**用法**:
+**⚠️ 本脚本只在「本地」有意义，不是 CI job**（2026-10-28 修正）：
+它要读**仓外**的本地门禁脚本（`gates.sh`）⇒ ⇒ **CI 里没有那个文件** ⇒ 必然 `return 1`。
+⇒ 而它检查的是「**本地**门禁是否覆盖 CI 的每一步」⇒ CI 里没有输入 ⇒ **天然不适用**
+⇒ ⇒ 我原先把它做成 CI job 是**错的**（一个恒红的 job 与一个恒绿的 job 一样没有信息量）。
+⇒ ⇒ 现在：**只挂在本地门禁里**（`gates.sh` 的 `check_ci_gate_coverage.py` 项）。
+
+**用法**（在**本地**跑）:
     python3 scripts/check_ci_gate_coverage.py            # 报告（有问题则退出码 1）
     python3 scripts/check_ci_gate_coverage.py --quiet    # 只在有问题时输出
 """

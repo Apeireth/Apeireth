@@ -308,21 +308,22 @@ jobs:
             fi
           fi
 
-  # === CI 逐步门禁覆盖检查（2026-10-27 加）===
+  # === CI 逐步门禁覆盖检查（2026-10-27 加；**只在本地跑，不进 CI**）===
   #
-  # **为什么**：CI 的 `Secret scan` job 有**两步**（`scan-all` + `scan-history`）
+  # **为什么要有**：CI 的 `Secret scan` job 有**两步**（`scan-all` + `scan-history`）
   # ⇒ 而我此前的本地门禁**只按 workflow 文件清单提取** ⇒ **漏了同一个 job 里的第二步**
   # ⇒ ⇒ CI 红而本地绿（「门禁全绿」不等于「CI 会绿」）。
-  # ⇒ ⇒ 本 job 把这条教训变成**机制**：CI 的每一步，要么本地门禁也跑，
-  #    要么在 `scripts/check_ci_gate_coverage.py` 的 `CI_ONLY` 里显式豁免并写明理由。
-  ci-gate-coverage:
-    name: CI gate coverage (本地门禁逐步对齐)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check that every CI gate step is covered locally
-        run: python3 scripts/check_ci_gate_coverage.py
+  # ⇒ ⇒ `scripts/check_ci_gate_coverage.py` 把这条教训变成**机制**：CI 的每一步，
+  #    要么本地门禁也跑，要么在该脚本的 `CI_ONLY` 里显式豁免并写明理由。
+  #
+  # ⚠️ **2026-10-28 修正：这个 job 从 CI 移除**。
+  # 我原先把它做成了一个 CI job ⇒ ⇒ **它必然红**：脚本要读**仓外**的本地门禁脚本
+  # (`/root/Documents/.../gates.sh`)，CI 里根本没有那个文件 ⇒ 脚本 `return 1`。
+  # ⇒ ⇒ 而它检查的是「**本地**门禁是否覆盖 CI 的每一步」
+  # ⇒ ⇒ **在 CI 里没有输入 ⇒ 天然不适用** ⇒ ⇒ 做成 CI job 就是**装饰性的红**。
+  # ⇒ ⇒ 正解：**只留在本地门禁**（`gates.sh` 里已有该项）。
+  # （教训与 §一百零五–一百零七 同族：**检查器本身也要被检查** ——
+  #   一个恒红的 job 与一个恒绿的 job 一样没有信息量。）
 
   # === 跨测试 env 竞态清单（2026-10-27 加；**报告型，不消警**）===
   #
@@ -353,9 +354,18 @@ jobs:
         with:
           fetch-depth: 0  # scan-history 需要全历史
 
-      - name: Install PowerShell
-        shell: pwsh
+      - name: Ensure PowerShell (runner images preinstall pwsh; apt is a fallback)
+        # ⚠️ **2026-10-28 修正**：原写法是无条件
+        #     `sudo apt-get install -y powershell`
+        # ⇒ ⇒ Ubuntu 的**默认仓库没有这个包** ⇒ `Unable to locate package` ⇒ exit 100
+        # ⇒ ⇒ 而 `ubuntu-latest` **本来就预装 pwsh** ⇒ ⇒ 那一步既多余又必然失败
+        #   ⇒ ⇒ **整个 secret-scan job 一直红在这个准备步上**（而不是红在真扫描上）。
+        # ⇒ 现在改成**幂等守卫**：有 pwsh 就直接用并打印版本；没有才尝试装。
+        shell: bash
         run: |
+          if command -v pwsh >/dev/null 2>&1; then
+            echo "pwsh already present:"; pwsh --version; exit 0
+          fi
           sudo apt-get update
           sudo apt-get install -y powershell
 
