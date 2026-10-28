@@ -128,8 +128,15 @@ Author: lead
 
 * ⚠️ **纠正**：曾写「`src-tauri/Cargo.lock` 与 `Cargo.toml` 不同步 = 真漂移」——**说错了**。
   复测 `cargo metadata --locked` **exit=0**、lock **一行未变**；当时失败是**本机缺 crate 缓存**。
-* 前端 `pnpm test` **当前是红的** ⇒ 4 条前端 claim **延后**（不算通过）；
-* H1 的残余局限：`build.rs`、`#[cfg(test)]` 内联模块仍可能被算作生产 ⇒ 彻底解决需**从装配根做可达性分析**。
+* **3 条 Tauri 声明已真验**（`cargo test --locked`：**154 / 39 / 9 passed**）
+  ⇒ 已从 `IMPLEMENTED` **恢复 `PRODUCTION WIRED`**；
+  `claims-verify.yml` 也已同步补装 Tauri 系统库 + sidecar 占位（否则 CI 会假红）；
+* **只剩 1 条延后**：`sec.terminal_permission_surfaces`（`pnpm test`）——
+  本机 **Node v24** 未编译 TS 支持（`ERR_NO_TYPESCRIPT`），项目 CI 固定 **node 22**
+  ⇒ **不代表该 claim 成立**；
+* H1 残余：**只有 `build.rs`** —— **已修**（加进 `is_test_file`）。
+  ⚠️ 「`#[cfg(test)]` 内联模块」那条我原先也说错了，它早已被 `split_code_test()` 排除。
+  彻底解决「**引用 ≠ 可达**」仍需**从装配根做可达性分析**（未做）。
 
 ## 3. 下一步（按设计稿顺序，优先级从高到低）
 

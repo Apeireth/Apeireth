@@ -32,11 +32,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 安装系统依赖（dbus / wayland / pipewire / egl —— keyring 与图像族需要）
+      - name: 安装系统依赖（dbus / wayland / pipewire / egl / **Tauri 桌面壳**）
+        # ⚠️ Tauri 那几条声明（`sec.sql_readonly_gate` / `sec.provider_proxy_ssrf` /
+        # `sec.desktop_file_roots`）要跑 `cd frontend/companion-desktop/src-tauri && cargo test --locked`
+        # ⇒ 需要 webkit2gtk / gtk3 / cairo / soup ⇒ 不装就会**红**
+        # （2026-10-28 实测：装齐后本地 `11 passed / 0 failed`）。
         run: |
           sudo apt-get update
           sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev \
-            libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config
+            libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libcairo2-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      # Tauri 桌面壳要一个 **sidecar 占位**才能通过构建期校验
+      # （与 `companion-desktop-ci.yml` 同一口径）。
+      - name: 准备 Tauri sidecar 占位
+        run: |
+          mkdir -p frontend/companion-desktop/src-tauri/binaries
+          touch frontend/companion-desktop/src-tauri/binaries/apeireth-x86_64-unknown-linux-gnu
+          chmod +x frontend/companion-desktop/src-tauri/binaries/apeireth-x86_64-unknown-linux-gnu
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -44,8 +58,13 @@ jobs:
         with:
           shared-key: claims-verify
 
-      - name: 预构建测试产物（避免每条命令各自冷启动）
+      - name: 预构建测试产物（根 workspace；避免每条命令各自冷启动）
         run: cargo build --workspace --tests --locked
+
+      # `src-tauri` 是**独立 [workspace]**（不能落到根 workspace）⇒ 单独预构建。
+      - name: 预构建 Tauri 桌面壳（独立 workspace）
+        working-directory: frontend/companion-desktop/src-tauri
+        run: cargo build --workspace --all-targets --locked
 
       # **H5 真值闸**：口径为 PRODUCTION WIRED / DEFAULT ENABLED / HARDWARE VALIDATED
       # 的声明**不许**靠「豁免 / 延后」成立 ⇒ 否则「已接线」只是个词。
