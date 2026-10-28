@@ -131,8 +131,16 @@ Author: lead
 **同批对照（都是负的）**：`recency` −0.008/−0.079/−0.500 · `dedup 降权` −0.004/−0.139/−0.513
 ⇒ ⇒ 说明「融合接口」不是万灵药，**是逐信号验证**出来的。
 
-⚠️ **未做**：把它接进**生产排序**（会改 `Bm25LexicalCandidateSource` 打分
-⇒ 必须重跑**内部卷基线闸门**与全量测试）⇒ 记为**下一件**，不在这批里悄悄改生产。
+### ✅ **已接进生产排序**（2026-10-28，权重 `COVERAGE_WEIGHT = 0.5`）
+
+* 改动：`Bm25LexicalCandidateSource::candidates` 在 **BM25 已命中**的条目上加
+  `0.5 × query_coverage(query, 正文)`（**一个词都没命中的长记录不加分** ⇒ 防长度偏向）；
+* **内部卷基线**：`recall@10` **0.8738 → 0.9003**（**+0.0265**）· nDCG 0.7572 → 0.7842；
+* **小说语料闸门**（`check_golden_baseline.py`）：redchamber **0.2983**、watershed **0.6875**
+  ⇒ **两本逐字未变** ⇒ **不劣化** ⇒ 闸门通过（`golden-baseline.json` **无需更新**）；
+* **memory crate 测试**：**1,775 passed / 0 failed**；
+* 口径：`COVERAGE_WEIGHT = 0.5` 是**两语料都正收益**的档位（内部卷 ×0.5/×1.0 同为 0.9003；
+  LoCoMo ×1.0 最高 0.6346）⇒ 取 0.5 更保守（对长记录偏向更小）。
 
 复现：`cargo run -p apeireth-memory --example coverage_ab --locked -- ~/internal-records.jsonl`
 
