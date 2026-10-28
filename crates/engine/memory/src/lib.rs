@@ -101,6 +101,7 @@ pub mod memory_chain;
 // 记忆纵深体系读侧契约 (设计稿 §5 ①②: MemoryView 读契约 + MemoryAnnotation 标注契约);
 // 状态 NOT IMPLEMENTED (新增未接线; 生产 0 调用点).
 pub mod injection_renderer;
+pub mod locomo_corpus;
 pub mod memory_view;
 pub mod meta_thinking;
 pub mod metadata_filter;
