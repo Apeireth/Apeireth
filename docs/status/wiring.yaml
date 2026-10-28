@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 9b724bee8ab75e9237401f7bcfdf17ebacc542d781d82d16b5c10f4dc3eb7ab4
+claims_sha256: b1b941f5d126b4b10c370711d9d6d468c37a9a97e2a32a276f3331e8ce142b60
 claims_total: 32
 items:
   - id: "rt.provider_router"
@@ -632,6 +632,7 @@ items:
         - "crates/capabilities/tools/src/process/mod.rs"
         - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
         - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
+        - "crates/engine/runtime/src/canonical/behavior_projection.rs"
         - "crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs"
     wired:
       production_refs:
@@ -642,6 +643,7 @@ items:
         - "crates/engine/runtime-assembly/src/canonical/production.rs"
         - "crates/engine/runtime-assembly/src/canonical/tool_modules.rs"
         - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
+        - "crates/engine/runtime/src/canonical/behavior_projection.rs"
         - "crates/engine/runtime/src/canonical/capability.rs"
         - "crates/engine/runtime/src/canonical/dispatch_admission.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
@@ -661,6 +663,10 @@ items:
     default_enabled: true
     validated:
       tests:
+        - "crates/engine/runtime/tests/cognitive_module_abi.rs"
+        - "crates/engine/runtime/tests/cache_prefix.rs"
+        - "crates/engine/runtime/tests/context_budget.rs"
+        - "crates/engine/runtime/tests/context_overflow.rs"
         - "crates/engine/runtime/tests/registry_runtime_v1.rs"
         - "crates/engine/runtime-assembly/tests/capability_modules_v1.rs"
         - "crates/adapters/cli/tests/gateway_panels.rs"
@@ -673,6 +679,8 @@ items:
     implemented:
       sources:
         - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
         - "crates/engine/runtime/src/canonical/instances.rs"
         - "crates/engine/runtime/src/canonical/instances/tasks.rs"
         - "crates/engine/runtime/src/canonical/subloop.rs"
@@ -684,12 +692,14 @@ items:
     wired:
       production_refs:
         - "crates/engine/runtime/src/canonical/accounting.rs"
+        - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
         - "crates/engine/runtime/src/canonical/execution_view.rs"
         - "crates/engine/runtime/src/canonical/instances.rs"
         - "crates/engine/runtime/src/canonical/instances/control.rs"
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
         - "crates/engine/runtime/src/canonical/instances/tasks.rs"
         - "crates/engine/runtime/src/canonical/module.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
         - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/foundation/plugin/src/agents.rs"
     default_enabled: "n/a"

@@ -5,7 +5,7 @@
 
 | id | level | default | switch_env | verified_at | next_review |
 |---|---|---|---|---|---|
-| `rt.provider_router` | PRODUCTION WIRED | ON | - | `0aacb6d7d57a` | 2026-11-20 |
+| `rt.provider_router` | PRODUCTION WIRED | ON | - | `5adc04932552` | 2026-11-20 |
 | `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `fc3e2c38eba0` | 2026-11-20 |
 | `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `fc3e2c38eba0` | 2026-11-20 |
 | `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `fc3e2c38eba0` | 2026-11-20 |
@@ -13,7 +13,7 @@
 | `sec.egress_control` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `sec.object_access` | PRODUCTION WIRED | ON | - | `d45a96e877a5` | 2026-12-01 |
 | `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `c9251271` | 2026-12-01 |
-| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `0aacb6d7d57a` | 2026-12-01 |
+| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `5adc04932552` | 2026-12-01 |
 | `mem.lesson_object` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `d45a96e877a5` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
@@ -34,8 +34,8 @@
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `c9251271` | 2026-11-20 |
 | `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `fc3e2c38eba0` | 2026-11-20 |
 | `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `b419826c` | 2026-11-20 |
-| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `14d87369989b` | 2026-11-28 |
-| `rt.owned_agents` | IMPLEMENTED | - | - | `14d87369989b` | 2026-11-20 |
+| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `5adc04932552` | 2026-11-28 |
+| `rt.owned_agents` | IMPLEMENTED | - | - | `5adc04932552` | 2026-11-20 |
 | `mem.registered_namespace` | IMPLEMENTED | - | - | `0aacb6d7d57a` | 2026-11-20 |
 
 ## 使用

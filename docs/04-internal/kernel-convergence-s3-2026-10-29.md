@@ -12,6 +12,7 @@ Author: Codex
 ## 基线与范围
 
 分支 `refactor/kc1-kernel-convergence`，初始 fetch 成功、工作树 clean，HEAD 为 `031a1366`，
+源码提交为 `5adc04932552c5788255716b721a29de5a0137d9`，随后的文档证据提交只锚定 claims / STATUS / wiring 与本报告，不修改源码。
 其前为 S2 源码 `14d87369`、S1 与 M0。只实施[债务图 D3 / S3](kernel-convergence-remaining-debt-map-2026-10-29.md)
 的旧行为入口归并，并覆盖 D4 所指出的 principal guard 缺口；不实施 S4 数据映射或 S5 桌面受管主入口。
 沿用 [S1](kernel-convergence-s1-2026-10-29.md)、[S2](kernel-convergence-s2-2026-10-29.md)、
@@ -88,14 +89,13 @@ Native jobs=2，默认 dev/test profile，debug assertions 保留。
 | `cargo test -p apeireth-runtime --all-targets --locked -j 2` | 380 / 0 / 0（包含上述 runtime 目标） |
 | `cargo test -p apeireth-runtime-assembly --test production_cognitive_v1 --locked -j 2` | 5 / 0 / 0 |
 | assembly `canonical_invoker_handle` / `canonical_organ_module` / `organ_llm_bridge_compat` / `persona_constant_injection` / `cognitive_convergence_vertical` / `convergence_agents` / `convergence_memory`（`--locked -j 2`） | 61 / 0 / 0；确切命令见 s3-check-results.json |
-
 | `cargo test --workspace --all-targets --locked --no-fail-fast -j 2` | 9049 / 0 / 51（363 个 Rust test-result 汇总；既有 ignored 未增加） |
 | `cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings` | 通过，零警告 |
 | `cargo check -p apeireth-runtime-assembly --no-default-features --locked -j 2` | 通过 |
 | `cargo fmt --check` / `python3 scripts/arch_guard.py --strict` | 通过；无新豁免或基线放宽 |
 
 全量与定向结果不相加；all-targets 的基准目标也由原命令实际执行，退出码为 0。
-文档 links / index 检查通过；受影响 claims 在源码提交后以独立文档提交锚定，最终 Docs Truth / wiring 核验随之落账。
+文档 links / index 检查通过；受影响 claims 已锚定上述源码提交，Docs Truth verify / check 与 wiring verify 通过，无 FAIL / STALE 或生成物漂移。等级与默认开关保持。
 
 首轮定向失败日志保留为 `s3-cognitive-first.log`、`s3-runtime-first.log`、`s3-runtime-second.log`、
 `s3-assembly-first.log`：失败原因分别是已退休的表示断言、原本隐式执行的 callback 未显式授权、
@@ -142,3 +142,5 @@ O-6：总体优先关闭实际可调用的旧入口，拒只迁移默认 Host �
 
 当前 hooks 文件无执行位；提交前显式以 bash 执行 pre-commit / commit-msg，再经 scripts/commit.ps1
 的显式 author、secret / neutral 与 ArchStrict 提交；不使用 NoVerify、不更改全局 hooksPath。
+
+源码提交后的 cognitive_module_abi / registry_runtime_v1 / production_cognitive_v1 定向复验见 `s3-postcommit-*.log` 与 `s3-postcommit-results.json`；后续文档提交不改变这些源码。
