@@ -3,6 +3,9 @@
 > 依据：`docs/01-architecture/memory-knowledge-depth-system-spec.md`（321 行 / 11 章）
 > 本页是**唯一权威进度页** ⇒ 每批/每层状态变了就改这里，**别只留在对话里**。
 > 最后核对：**2026-10-28**（按代码实测，不是按记忆）
+>
+> 📍 **开工前先认领工作线**：[`workline-registry.md`](workline-registry.md)
+> （工作线 ↔ 设计稿 ↔ 进度页 ↔ 守卫 的登记表；`AGENTS.md` §0 的规则落地在这张表上）
 
 ---
 
