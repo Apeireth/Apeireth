@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 use std::time::Duration;
 mod control;
 mod hot;
+mod main;
 mod profiles;
 mod tasks;
 pub(super) use tasks::TaskExecution;
@@ -84,6 +85,7 @@ pub(super) struct Inner {
     host_handles: std::sync::atomic::AtomicUsize,
     profile_switch: tokio::sync::Mutex<Option<Arc<dyn AgentInstance>>>,
     factory: Arc<Factory>,
+    main: OnceLock<main::MainExecution>,
 }
 struct Factory {
     binding: Arc<OnceLock<Weak<Inner>>>,
@@ -284,6 +286,7 @@ impl RuntimeBuilder {
             host_handles: std::sync::atomic::AtomicUsize::new(1),
             profile_switch: tokio::sync::Mutex::new(None),
             factory,
+            main: OnceLock::new(),
         });
         inner.kernel.write().await.instances = Arc::downgrade(&inner);
         let _ = binding.set(Arc::downgrade(&inner));
@@ -349,6 +352,14 @@ impl AgentRuntime {
     }
     pub fn requests(&self, id: AgentId) -> AgentResult<Vec<super::accounting::RequestUsageFact>> {
         let session = self.snapshot(id)?.session;
+        if self
+            .inner
+            .main
+            .get()
+            .is_some_and(|main| main.agent.id == id)
+        {
+            return Ok(self.inner.usage.agent_requests(id));
+        }
         Ok(self.inner.usage.recent_requests(session))
     }
 }
@@ -540,13 +551,27 @@ impl AgentInstance for ManagedAgent {
                 AgentStatus::Stopping
             };
         }
+        let main = self.inner.upgrade();
+        let main = main
+            .as_ref()
+            .and_then(|inner| inner.main.get())
+            .filter(|main| main.agent.id == self.id);
+        if let Some(main) = main {
+            if self.scope.is_open() && status == AgentStatus::Ready {
+                status = main.status();
+            }
+        }
         AgentSnapshot {
             id: self.id,
             session: self.session,
             owner: self.owner.clone(),
             principal: self.config.principal.clone(),
             status,
-            usage: self.usage.snapshot(self.session),
+            usage: if main.is_some() {
+                self.usage.agent_usage(self.id)
+            } else {
+                self.usage.snapshot(self.session)
+            },
             last_error,
         }
     }
@@ -561,7 +586,19 @@ impl AgentInstance for ManagedAgent {
     }
     fn pause(&self) -> AgentResult<()> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.0 != AgentStatus::Ready {
+        if state.0 != AgentStatus::Ready
+            || self
+                .inner
+                .upgrade()
+                .and_then(|inner| {
+                    inner
+                        .main
+                        .get()
+                        .filter(|main| main.agent.id == self.id)
+                        .map(|main| main.status() == AgentStatus::Running)
+                })
+                .unwrap_or(false)
+        {
             return Err(error(
                 AgentErrorCode::NotReady,
                 "pause is defined at a turn boundary",

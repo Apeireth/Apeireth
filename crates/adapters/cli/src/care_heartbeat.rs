@@ -767,10 +767,23 @@ struct RuntimeTurnDispatch {
     errors: Arc<Mutex<Vec<String>>>,
 }
 
+/// Submit the producer's ordinary turn through the shared Host and session write gate.
+pub async fn dispatch_heartbeat_turn(
+    runtime: &Runtime,
+    session: SessionId,
+    input: &str,
+) -> Result<apeireth_runtime::TurnResponse, apeireth_runtime::RuntimeError> {
+    let _permit = runtime.sessions().write_permit(session).await;
+    runtime.execute(TurnRequest::new(session, input)).await
+}
+
 impl HeartbeatDispatch for RuntimeTurnDispatch {
     fn dispatch(&mut self, turn_input: &str, _at_ms: i64) {
-        let request = TurnRequest::new(self.session, turn_input.to_string());
-        if let Err(error) = self.handle.block_on(self.runtime.execute(request)) {
+        if let Err(error) = self.handle.block_on(dispatch_heartbeat_turn(
+            &self.runtime,
+            self.session,
+            turn_input,
+        )) {
             // 失败即帧式留痕: 真因不吞 (回合失败不倒心跳循环, 下拍照常)。
             let mut errors = self
                 .errors

@@ -339,3 +339,46 @@ async fn minimal_host_shutdown_drains_factory_owned_background_task_with_externa
     assert!(external.closed.load(Ordering::SeqCst));
     assert!(!external.active.load(Ordering::SeqCst));
 }
+
+#[test]
+fn minimal_host_dependency_graph_has_no_desktop_composition() {
+    let output = std::process::Command::new("cargo")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args([
+            "tree",
+            "-p",
+            "apeireth-runtime-assembly",
+            "--no-default-features",
+            "--locked",
+            "--offline",
+            "--edges",
+            "normal",
+            "--prefix",
+            "none",
+        ])
+        .output()
+        .expect("inspect the actual minimal feature graph");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let tree = String::from_utf8(output.stdout).unwrap();
+    for package in [
+        "apeireth-tools-canonical",
+        "apeireth-memory",
+        "apeireth-organ",
+        "apeireth-storage",
+        "apeireth-guard",
+        "apeireth-gateway",
+        "rusqlite",
+        "libsqlite3-sys",
+    ] {
+        assert!(
+            !tree
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(package)),
+            "minimal Host unexpectedly contains {package}: {tree}"
+        );
+    }
+}

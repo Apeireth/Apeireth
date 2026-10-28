@@ -218,13 +218,13 @@ target = "ADR-0020: 现有 Plugin 生命周期的工具模块实现，不构成�
 name = "AgentRuntime"
 canonical = "crates/engine/runtime/src/canonical/instances.rs"
 known_debt = []
-target = "ADR-0021: 复用既有 Runtime/Session/Dispatcher 的拥有权、核算与隔离机制；不复制 Agent Loop"
+target = "ADR-0021 / S5: 复用 Runtime/Session/Dispatcher 的拥有权与核算；桌面 main 的完整请求适配共享一个 AgentRuntime，短控制锁与独立会话写闸；PortableHost 保持桌面无依赖"
 
 [[concepts]]
 name = "UsageAccounting"
 canonical = "crates/engine/runtime/src/canonical/accounting.rs"
 known_debt = []
-target = "ADR-0021: 复用既有 Runtime/Session/Dispatcher 的拥有权、核算与隔离机制；不复制 Agent Loop"
+target = "ADR-0021 / S5: Provider/Dispatcher 独占实际记账；main 跨 Session 聚合 AgentId，有限实例/owner 预算不重置；桌面显式沿用 SessionQuota，未知用量如实记录"
 
 [[concepts]]
 name = "ProfileConfig"

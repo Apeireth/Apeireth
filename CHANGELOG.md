@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Kernel Convergence S5：默认桌面受管 main（2026-10-29）
+
+- **PRODUCTION WIRED / DEFAULT ENABLED（桌面 main）**：真实 bootstrap 持有同一 AgentRuntime 与 Host-owned ManagedAgent；CLI、gateway、流式、审批和心跳经同一完整请求适配进入原 Kernel。
+- **语义与授权**：Session / domain / security / 静态 system / 写闸 / 冻结审批与 delta 保留；模块 child grant 由 Host 显式选择，principal 默认拒绝边界不变，S4 映射仍为可选组合。PortableHost 继续桌面无依赖，Mesh/NAT/P2P 保留。
+- **证据与边界**：[S5 交付账](docs/04-internal/kernel-convergence-s5-2026-10-29.md) 记录真实 bootstrap 身份与多入口、并发控制、认知及可裁剪回归；整体 Production Convergence 仍为 Partial，S6 与最终 gates 留后续。
+
 ## [Unreleased] — Kernel Convergence S4：Profile / Memory 显式授权映射（2026-10-29）
 
 - **IMPLEMENTED（可选 Host 组合）**：旧 scope / store 显式绑定完整 Profile / Namespace；共享来源只读、写入私有分区，无 principal 的旧数据库与全局认知模式保持。未映射私有请求默认拒绝，无全局回退，S3 guard 保留。

@@ -518,6 +518,14 @@ impl Runtime {
         module_id: &str,
         tool: Arc<dyn ToolCapability>,
     ) -> Result<(), RuntimeError> {
+        if let Some(host) = self.agent_runtime() {
+            return host
+                .inner
+                .kernel
+                .try_read()
+                .map_err(|_| RuntimeError::misconfigured("control plane is busy"))?
+                .register_dynamic_tool(module_id, tool);
+        }
         let visible_plugins = self.plugins.active_tools();
         crate::canonical::module::reject_tool_identity_collisions(
             &visible_plugins,
@@ -602,6 +610,15 @@ impl Runtime {
     /// Returns the failures encountered; shutdown continues past each one.
     pub async fn shutdown(&mut self) -> Vec<apeireth_plugin::PluginError> {
         if let Some(host) = &self.instance_host {
+            if host.has_managed_main() {
+                return match Box::pin(host.shutdown()).await {
+                    Ok(()) => Vec::new(),
+                    Err(error) => vec![apeireth_plugin::PluginError::shutdown_failed(
+                        PluginId::new("host.main").expect("static owner"),
+                        error.to_string(),
+                    )],
+                };
+            }
             if let Err(error) = host.drain_instances().await {
                 return vec![apeireth_plugin::PluginError::shutdown_failed(
                     apeireth_core::kernel::PluginId::new("host.compat").expect("static owner"),

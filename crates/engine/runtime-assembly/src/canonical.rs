@@ -322,3 +322,6 @@ pub mod memory_module;
 
 #[path = "canonical/cognitive_registry.rs"]
 mod cognitive_registry;
+
+#[path = "canonical/desktop_host.rs"]
+pub mod desktop_host;

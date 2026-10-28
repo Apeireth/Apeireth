@@ -14,6 +14,10 @@ use async_trait::async_trait;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
+/// Registry owner identity for an explicitly selected compatibility behavior.
+pub fn registered_behavior_owner(id: &str) -> Result<PluginId, String> {
+    PluginId::new(format!("compat.{id}")).map_err(|e| e.to_string())
+}
 pub fn registered_behavior_capability(id: &str) -> Result<CapabilityId, String> {
     CapabilityId::new(format!("tool.behavior.{id}")).map_err(|e| e.to_string())
 }
@@ -84,8 +88,7 @@ impl BehaviorReceipt {
 }
 impl RegisteredBehavior {
     pub(crate) fn new(module: Arc<dyn BehaviorModule>) -> Result<Self, String> {
-        let owner =
-            PluginId::new(format!("compat.{}", module.manifest().id)).map_err(|e| e.to_string())?;
+        let owner = registered_behavior_owner(&module.manifest().id)?;
         let capability = registered_behavior_capability(&module.manifest().id)?;
         let name = format!("module_{}", module.manifest().id.replace('.', "_"));
         let manifest = PluginManifest::new(

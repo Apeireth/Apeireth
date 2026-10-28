@@ -706,11 +706,14 @@ impl Runtime {
             .await
     }
 
-    async fn execute_outcome_with_sink(
+    pub(super) async fn execute_outcome_with_sink(
         &self,
         request: TurnRequest,
         stream_sink: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> RuntimeResult<TurnOutcome> {
+        if let Some(main) = self.managed_execution() {
+            return Box::pin(main.execute(request, stream_sink)).await;
+        }
         let lock = self.session_locks.acquire(request.session).await;
         let _guard = lock.lock().await;
 
@@ -1071,6 +1074,9 @@ impl Runtime {
         approval_id: ApprovalId,
         decision: ApprovalDecision,
     ) -> RuntimeResult<ApprovalResolution> {
+        if let Some(main) = self.managed_execution() {
+            return Box::pin(main.resolve(session_id, approval_id, decision)).await;
+        }
         let lock = self.session_locks.acquire(session_id).await;
         let _guard = lock.lock().await;
 

@@ -1610,6 +1610,7 @@ async fn build_canonical_runtime_with_parts(
     // The CLI is the composition root. Gateway reuses this function, while
     // SDK remains an HTTP client and does not host a second Runtime.
     // Builtin tools are owned by ProductionModules, not BuiltinToolsPlugin.
+    let agent_policy = cognitive.desktop_agent_policy()?;
     builder = cognitive.register_with_policy(builder, &policy)?;
 
     let mut fallback_order: Vec<CapabilityId> = Vec::new();
@@ -1663,10 +1664,12 @@ async fn build_canonical_runtime_with_parts(
         builder = builder.with_default_model(model);
     }
 
-    let runtime = builder
-        .build()
-        .await
-        .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
+    let runtime = apeireth_runtime_assembly::canonical::desktop_host::build_desktop_main_runtime(
+        builder,
+        agent_policy,
+    )
+    .await
+    .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))?;
     if let Some(recorder) = guard_hook.dataset_recorder() {
         runtime.add_event_sink(Arc::new(
             apeireth_runtime_assembly::GuardDatasetObserver::new(recorder)

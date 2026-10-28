@@ -149,6 +149,17 @@ impl Runtime {
         plugin: Arc<dyn Plugin>,
         ctx: &PluginContext,
     ) -> RuntimeResult<()> {
+        if let Some(host) = self.agent_runtime().cloned() {
+            let result = Box::pin(host.register_module(
+                plugin,
+                PluginContext::new(ctx.clock.clone(), ctx.credentials.clone(), ctx.trace),
+            ))
+            .await;
+            let mut view = host.inner.kernel.read().await.execution_view();
+            view.instance_host = Some(host);
+            *self = view;
+            return result.map_err(RuntimeError::from);
+        }
         if !plugin.providers().is_empty()
             || plugin
                 .manifest()
@@ -200,6 +211,11 @@ impl Runtime {
 
     /// Refresh a live module without replacing the registry or permission gate.
     pub async fn refresh_module_tools(&self, id: &PluginId) -> RuntimeResult<()> {
+        if let Some(host) = self.agent_runtime() {
+            return Box::pin(host.refresh_module_tools(id))
+                .await
+                .map_err(RuntimeError::from);
+        }
         let plugin = self.plugins.plugins().get(id)?.clone();
         if plugin.dynamic_tool_namespace().is_none() {
             return Err(RuntimeError::misconfigured(
@@ -222,11 +238,26 @@ impl Runtime {
 
     /// Cancels work immediately; exclusive stop subsequently drains and cleans up.
     pub fn cancel_module(&self, id: &PluginId) -> RuntimeResult<()> {
+        if let Some(host) = self.agent_runtime() {
+            return host
+                .inner
+                .kernel
+                .try_read()
+                .map_err(|_| RuntimeError::misconfigured("control plane is busy"))?
+                .cancel_module(id);
+        }
         self.plugins.cancel(id)?;
         Ok(())
     }
 
     pub async fn stop_module(&mut self, id: &PluginId) -> RuntimeResult<()> {
+        if let Some(host) = self.agent_runtime().cloned() {
+            let result = Box::pin(host.stop_module(id)).await;
+            let mut view = host.inner.kernel.read().await.execution_view();
+            view.instance_host = Some(host);
+            *self = view;
+            return result.map_err(RuntimeError::from);
+        }
         if !self.plugins.plugins().get(id)?.providers().is_empty() {
             return Err(RuntimeError::misconfigured(
                 "stop provider modules through Runtime shutdown",
@@ -239,6 +270,20 @@ impl Runtime {
     }
 
     pub fn unregister_module(&mut self, id: &PluginId) -> RuntimeResult<()> {
+        if let Some(host) = self.agent_runtime().cloned() {
+            let mut view = {
+                let mut kernel = host
+                    .inner
+                    .kernel
+                    .try_write()
+                    .map_err(|_| RuntimeError::misconfigured("control plane is busy"))?;
+                kernel.unregister_module(id)?;
+                kernel.execution_view()
+            };
+            view.instance_host = Some(host);
+            *self = view;
+            return Ok(());
+        }
         self.plugins.unregister(id)?;
         self.capabilities.remove_module(id);
         Ok(())

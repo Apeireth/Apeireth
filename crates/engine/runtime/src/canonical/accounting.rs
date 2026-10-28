@@ -44,6 +44,7 @@ struct Account {
     agent: AgentId,
     owner: AgentOwner,
     config: Option<AgentConfig>,
+    instance_budget: bool,
     scope: Option<ModuleTaskScope>,
     usage: AgentUsage,
     facts: VecDeque<RequestUsageFact>,
@@ -54,6 +55,7 @@ impl Account {
             agent: AgentId::from_uuid(session.as_uuid()),
             owner: AgentOwner::Host("legacy".into()),
             config: None,
+            instance_budget: false,
             scope: None,
             usage: AgentUsage::default(),
             facts: VecDeque::new(),
@@ -262,12 +264,62 @@ impl UsageAccounting {
                 agent,
                 owner,
                 config: Some(config),
+                instance_budget: true,
                 scope: Some(scope),
                 usage: AgentUsage::default(),
                 facts: VecDeque::new(),
             },
         );
         Ok(())
+    }
+    /// Trusted Host selection: keep the existing session quota as the spend
+    /// policy. Identity, cancellation and unknown usage facts stay managed.
+    pub(crate) fn use_session_quotas(&self, session: SessionId) {
+        self.accounts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(&session)
+            .expect("registered main")
+            .instance_budget = false;
+    }
+    pub(crate) fn attach_main_session(
+        &self,
+        session: SessionId,
+        main: SessionId,
+    ) -> RuntimeResult<()> {
+        let mut accounts = self.accounts.lock().unwrap_or_else(|e| e.into_inner());
+        if accounts.contains_key(&session) {
+            return Err(denied("session already has accounting ownership"));
+        }
+        let source = accounts.get(&main).expect("registered main");
+        let account = Account {
+            agent: source.agent,
+            owner: source.owner.clone(),
+            config: source.config.clone(),
+            instance_budget: source.instance_budget,
+            scope: source.scope.clone(),
+            usage: AgentUsage::default(),
+            facts: VecDeque::new(),
+        };
+        accounts.insert(session, account);
+        Ok(())
+    }
+    pub(crate) fn agent_usage(&self, agent: AgentId) -> AgentUsage {
+        let accounts = self.accounts.lock().unwrap_or_else(|e| e.into_inner());
+        let mut usage = AgentUsage::default();
+        for account in accounts.values().filter(|account| account.agent == agent) {
+            usage.accumulate(&account.usage);
+        }
+        usage
+    }
+    pub(crate) fn agent_requests(&self, agent: AgentId) -> Vec<RequestUsageFact> {
+        self.accounts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .filter(|account| account.agent == agent)
+            .flat_map(|account| account.facts.iter().cloned())
+            .collect()
     }
     pub fn requested_provider(&self, session: SessionId) -> Option<CapabilityId> {
         self.accounts
@@ -281,7 +333,7 @@ impl UsageAccounting {
         if account.scope.as_ref().is_some_and(|scope| !scope.is_open()) {
             return Err(denied("agent or owner is stopped"));
         }
-        let Some(config) = &account.config else {
+        let Some(config) = account.config.as_ref().filter(|_| account.instance_budget) else {
             return Ok(());
         };
         Self::check_usage(
@@ -430,6 +482,7 @@ impl UsageAccounting {
         }
         if a.config
             .as_ref()
+            .filter(|_| a.instance_budget)
             .is_some_and(|c| a.usage.tool_calls >= c.budget.max_tool_calls)
         {
             return Err(denied("agent tool budget exhausted"));
