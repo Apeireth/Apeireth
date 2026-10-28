@@ -45,6 +45,7 @@ import os
 import pathlib
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -106,6 +107,53 @@ def _working_dir(job: dict) -> pathlib.Path:
     return path
 
 
+#: 本地 CI 专用 venv（避开 PEP 668「系统 Python 不允许 pip install」）。
+_CI_VENV = pathlib.Path.home() / ".cache" / "apeireth-ci-venv"
+
+
+def _ensure_ci_venv() -> pathlib.Path:
+    """确保本地 venv 存在，返回其 `bin` 目录。
+
+    ## 为什么需要（2026-10-28 实测）
+
+    两个浏览器 job 的第一步是 `python3 -m pip install --quiet websocket-client pillow`；
+    本机（Kali / Python 3.14）启用 **PEP 668** ⇒ ⇒ 直接 pip 到系统环境会**退出码 1**
+    ⇒ ⇒ 本地等价 CI 的 8 个 job 里有 2 个**永远失败**，而它们在 GitHub CI 上是正常的
+    ⇒ ⇒ 本地结论与 CI 结论之间出现**假差异**。
+
+    ⇒ ⇒ 修法：CI 里的 `python3 -m pip` 在本机改走**专用 venv**（不污染系统 Python）。
+    """
+    bin_dir = _CI_VENV / "bin"
+    if (bin_dir / "python").exists():
+        return bin_dir
+    print(f"  （首次）创建本地 CI venv：{_CI_VENV}", flush=True)
+    _CI_VENV.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["python3", "-m", "venv", str(_CI_VENV)], check=True)
+    return bin_dir
+
+
+def _rewrite_local(command: str, venv_bin: pathlib.Path) -> str:
+    """把 CI 里「对系统 Python 装包」的写法改成本地 venv 的写法。"""
+    replaced = command.replace(
+        "python3 -m pip", f"{venv_bin / 'python'} -m pip"
+    )
+    return replaced
+
+
+def _already_satisfied(name: str, command: str, cwd: pathlib.Path) -> str:
+    """判断某个**安装类**步骤在本地是否已经被满足 ⇒ 返回原因字符串（空串=未满足）。
+
+    ⚠️ 跳过必须**显式记录**（打印原因），不能静默 —— 否则本地结论会虚高。
+    """
+    if "pnpm install" in command and (cwd / "node_modules" / ".bin" / "vite").exists():
+        return f"本地已存在 {cwd / 'node_modules'}（含 vite）⇒ 跳过 pnpm install"
+    if "cargo install wasm-bindgen-cli" in command and shutil.which("wasm-bindgen"):
+        return f"本地已安装 wasm-bindgen（{shutil.which('wasm-bindgen')}）⇒ 跳过 cargo install"
+    if "pip install" in command:
+        return ""  # 交给 venv 真正安装（幂等且很快）
+    return ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="本地 CI 等价运行器")
     parser.add_argument(
@@ -133,6 +181,11 @@ def main() -> int:
         return 2
 
     env = {k: os.environ.get(k, "") for k in os.environ}
+    # ⭐ 本地 CI venv（PEP 668 对策）；把它的 bin 放到 PATH 最前
+    #   ⇒ 后续 `python3` 仍指系统解释器，但 `pip install` 被重写到 venv。
+    venv_bin = _ensure_ci_venv()
+    env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
+    env["VIRTUAL_ENV"] = str(venv_bin.parent)
     results: list[tuple[str, str, str, float]] = []  # (workflow, job, 状态, 秒)
     failed = 0
 
@@ -177,6 +230,11 @@ def main() -> int:
             started = time.monotonic()
             job_ok = True
             for name, command in runnable:
+                reason = _already_satisfied(name, command, wd)
+                if reason:
+                    print(f"  ⏭️ {name}：{reason}", flush=True)
+                    continue
+                command = _rewrite_local(command, venv_bin)
                 print(f"  ▶ {name}", flush=True)
                 proc = subprocess.run(
                     ["bash", "-euo", "pipefail", "-c", command],

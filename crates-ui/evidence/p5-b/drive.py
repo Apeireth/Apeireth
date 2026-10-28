@@ -321,21 +321,25 @@ def canvas_blank_stats(png_path) -> dict:
     纯色 ⇒ 通道极差 = 0；本函数给出 `range`（全图最大-最小）与 `distinct`
     （不同颜色数）。`range <= 2` 视为**空白**。
     """
-    from PIL import Image
-    import numpy as np
+    # ⚠️ **只用 pillow**（2026-10-28 修）：CI 的环境只装 `pillow` + `websocket-client`
+    #   ⇒ ⇒ 这里若 `import numpy` 会让 **整个 drive.py 崩在 CI 上**
+    #   （实测本地等价 CI 当场复现 `ModuleNotFoundError: No module named 'numpy'`）
+    #   ⇒ ⇒ 判据代码**不得**引入 CI 未声明的依赖。
+    from PIL import Image, ImageStat
 
     image = Image.open(png_path).convert("RGB")
-    array = np.asarray(image).astype(int)
-    flat = array.reshape(-1, 3)
-    value_range = int(flat.max() - flat.min())
-    distinct = int(np.unique(flat, axis=0).shape[0])
-    mean = round(float(array.mean()), 2)
+    extrema = image.getextrema()  # ((rmin,rmax),(gmin,gmax),(bmin,bmax))
+    low = min(channel[0] for channel in extrema)
+    high = max(channel[1] for channel in extrema)
+    value_range = int(high - low)
+    # distinct：`getcolors(maxcolors)` 超出上限返回 None ⇒ ⇒ 视为「> 上限」
+    colors = image.getcolors(maxcolors=513)
+    distinct = len(colors) if colors is not None else 513
+    mean = round(sum(ImageStat.Stat(image).mean) / 3.0, 2)
     # ① **严格空白**：真的是纯色（一张画都没画）。
     blank_exact = value_range <= 2
-    # ② **近空白**：实测 CI 上的引擎画布是 `mean=254.99 / distinct=50 / range=173`
-    #    ⇒ ⇒ **不是**纯色（有几个暗像素），但显然**没画出火焰**（生产侧是
-    #    `mean=31.7 / distinct=11556`）⇒ ⇒ 只看 `range` 会漏判
-    #    ⇒ ⇒ 再加一条「几乎整片白且颜色种类极少」的判据。
+    # ② **近空白**：实测 CI 上的引擎画布 `mean=254.99 / distinct=50 / range=173`
+    #    ⇒ ⇒ 不是纯色（有几个暗像素），但显然没画出火焰（生产侧 `mean=31.7 / distinct=11556`）。
     near_blank = mean >= 250.0 and distinct <= 512
     return {
         "path": str(png_path),
