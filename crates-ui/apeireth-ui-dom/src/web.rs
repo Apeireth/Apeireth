@@ -161,6 +161,26 @@ impl WebDom {
 }
 
 impl Dom for WebDom {
+    fn focus(&self, node: &Self::Node) -> Result<(), DomError> {
+        self.ensure_writable(node)?;
+        let element = self.as_element(node)?;
+        let html = element.dyn_ref::<web_sys::HtmlElement>().ok_or_else(|| {
+            DomError::Unsupported(String::from("节点不是可聚焦元素（非 HtmlElement）"))
+        })?;
+        html.focus()
+            .map_err(|error| DomError::Unsupported(format!("focus() 失败：{error:?}")))
+    }
+
+    fn blur(&self, node: &Self::Node) -> Result<(), DomError> {
+        self.ensure_writable(node)?;
+        let element = self.as_element(node)?;
+        let html = element.dyn_ref::<web_sys::HtmlElement>().ok_or_else(|| {
+            DomError::Unsupported(String::from("节点不是可失焦元素（非 HtmlElement）"))
+        })?;
+        html.blur()
+            .map_err(|error| DomError::Unsupported(format!("blur() 失败：{error:?}")))
+    }
+
     fn is_composing(&self) -> bool {
         self.composing.get()
     }

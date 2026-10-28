@@ -43,6 +43,7 @@ js-sys = "=0.3.106"
 web-sys = { version = "=0.3.106", features = [
     "Document",       # 建节点：create_element / create_text_node
     "DomRect",        # ⭐ 布局测量（L1-G1）：getBoundingClientRect() 返回 DomRect
+    "HtmlElement",    # ⭐ 焦点（L1-G3）：focus() / blur() 只在 HtmlElement 上
     "DomTokenList",   # class token 差分：class_list().add / .remove
     "Element",        # 属性读写：set_attribute / remove_attribute / class_list
     "Event",          # 事件对象：prevent_default / stop_propagation

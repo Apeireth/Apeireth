@@ -31,6 +31,7 @@
 use std::fmt;
 
 use crate::dom::{Dom, DomError, ElementBox, MeasurementScale};
+use crate::focus::{FocusId, FocusTracker};
 use crate::keyed::diff_keyed;
 use crate::vnode::{AttrValue, ElementVNode, PropValue, TextVNode, VNode};
 
@@ -232,6 +233,10 @@ pub struct Renderer<D: Dom> {
     warnings: Vec<String>,
     /// ⭐ 测量/命中测试的乘数（L1-G6：DPR × 密度）。默认恒等。
     measurement_scale: MeasurementScale,
+    /// ⭐ **焦点栈 + 陷阱**（L1-G3 接线）：焦点策略在引擎内，后端只负责真的挪焦点。
+    focus: FocusTracker,
+    /// 焦点 id → 子节点路径（陷阱与恢复都按路径表达，避免引入第二套编号）。
+    focus_paths: std::collections::HashMap<FocusId, Vec<usize>>,
     /// ⭐ **待补写的属性写回**（IME 组合期间被推迟的那些）。
     ///
     /// ## 为什么必须留队列（而不是"推迟就丢掉"）
@@ -259,6 +264,8 @@ impl<D: Dom> Renderer<D> {
             last_error: None,
             warnings: Vec::new(),
             measurement_scale: MeasurementScale::IDENTITY,
+            focus: FocusTracker::new(),
+            focus_paths: std::collections::HashMap::new(),
             pending_value_writes: Vec::new(),
             deferred_value_writes: 0,
         }
@@ -304,6 +311,85 @@ impl<D: Dom> Renderer<D> {
             }
         }
         Ok(written)
+    }
+
+    /// 焦点栈（只读）。
+    pub fn focus_tracker(&self) -> &FocusTracker {
+        &self.focus
+    }
+
+    /// ⭐ 打开**焦点陷阱**：只有这些路径允许获得焦点（弹层/对话框打开时用）。
+    pub fn open_focus_trap(&mut self, paths: &[&[usize]]) {
+        let ids: Vec<FocusId> = paths.iter().map(|path| path_id(path)).collect();
+        for path in paths {
+            self.focus_paths.insert(path_id(path), path.to_vec());
+        }
+        self.focus.open_trap(ids);
+    }
+
+    /// 关闭焦点陷阱。
+    pub fn close_focus_trap(&mut self) {
+        self.focus.close_trap();
+    }
+
+    /// ⭐ **把焦点移到某个路径的节点**（路径语义与事件 `target_path` 一致）。
+    ///
+    /// 顺序很重要：**先过陷阱判定**，再动 DOM
+    /// ⇒ ⇒ 否则越界时浏览器已经挪了焦点，再报错也回不去。
+    pub fn focus_at_path(&mut self, path: &[usize]) -> Result<(), DomError> {
+        let id = path_id(path);
+        if !self.focus.allows(id) {
+            return Err(DomError::Unsupported(String::from(
+                "焦点陷阱拒绝：目标不在允许集合内",
+            )));
+        }
+        let node = self.node_at_path(path)?;
+        self.focus_paths.insert(id, path.to_vec());
+        self.focus
+            .focus(id)
+            .map_err(|_| DomError::Unsupported(String::from("焦点栈拒绝")))?;
+        self.dom.focus(&node)
+    }
+
+    /// ⭐ **移走当前焦点**（返回是否真的动过）。
+    pub fn blur_focused(&mut self) -> Result<bool, DomError> {
+        let Some(id) = self.focus.current() else {
+            return Ok(false);
+        };
+        let Some(path) = self.focus_paths.get(&id).cloned() else {
+            return Ok(false);
+        };
+        let node = self.node_at_path(&path)?;
+        self.focus.blur();
+        self.dom.blur(&node)?;
+        Ok(true)
+    }
+
+    /// ⭐ **恢复到上一个焦点**（弹层关闭后调用）⇒ 返回落点路径。
+    pub fn restore_focus(&mut self) -> Result<Option<Vec<usize>>, DomError> {
+        let Some(id) = self.focus.restore_previous() else {
+            return Ok(None);
+        };
+        let Some(path) = self.focus_paths.get(&id).cloned() else {
+            return Ok(None);
+        };
+        let node = self.node_at_path(&path)?;
+        self.dom.focus(&node)?;
+        Ok(Some(path))
+    }
+
+    /// 按路径取**后端节点**（内部克隆，避免与 `&mut self` 借用冲突）。
+    fn node_at_path(&self, path: &[usize]) -> Result<D::Node, DomError> {
+        let mut cursor = self.tree.as_ref().ok_or(DomError::NodeNotFound)?;
+        for index in path {
+            let children = match cursor {
+                MountedNode::Element(element) => &element.children,
+                MountedNode::Fragment(fragment) => &fragment.children,
+                MountedNode::Text(_) => return Err(DomError::NodeNotFound),
+            };
+            cursor = children.get(*index).ok_or(DomError::NodeNotFound)?;
+        }
+        cursor.dom_node().cloned().ok_or(DomError::NodeNotFound)
     }
 
     /// 因 IME 组合而被推迟的 `value`/`checked` 写回次数（可观测，非静默）。
@@ -1430,6 +1516,19 @@ fn class_tokens(element: &ElementVNode) -> Vec<String> {
     }
 }
 
+/// 子节点路径 ⇒ 稳定 `FocusId`（FNV-1a）。
+///
+/// 用路径求 id 而不是另发编号：**一个概念一套编号**
+/// ⇒ ⇒ 焦点、事件 `target_path`、测量路径三者可以直接互相转换。
+fn path_id(path: &[usize]) -> FocusId {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for index in path {
+        hash ^= *index as u64 + 1;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 #[cfg(test)]
 mod tests {
     //! 渲染器的行为断言 + **T1–T6 六条保护规则的机械判定**。
@@ -1555,6 +1654,73 @@ mod tests {
             0,
             "补写后队列必须清空"
         );
+    }
+
+    /// ⭐⭐⭐ **焦点真的被驱动**（L1-G3 接线）：`focus_at_path` ⇒ 后端聚焦、`restore_focus` ⇒ 回到原处。
+    #[test]
+    fn focus_is_driven_through_the_backend_and_restored() {
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("form")
+            .child(VNode::element("input").build())
+            .child(VNode::element("textarea").build())
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+        let children = renderer.dom().children(&root).expect("读子节点必须成功");
+        let form = children[0];
+        let kids = renderer.dom().children(&form).expect("读子节点必须成功");
+        let (input, textarea) = (kids[0], kids[1]);
+
+        // ① 聚焦第一个子节点 ⇒ 后端真的聚焦了
+        renderer.focus_at_path(&[0]).expect("聚焦必须成功");
+        assert_eq!(renderer.dom().focused(), Some(input));
+        assert_eq!(renderer.focus_tracker().current(), Some(path_id(&[0])));
+
+        // ② 聚焦第二个 ⇒ 历史里有第一个
+        renderer.focus_at_path(&[1]).expect("聚焦必须成功");
+        assert_eq!(renderer.dom().focused(), Some(textarea));
+        assert_eq!(renderer.focus_tracker().history_depth(), 1);
+
+        // ③ 恢复到上一个焦点 ⇒ 后端回到 input
+        let restored = renderer.restore_focus().expect("恢复必须成功");
+        assert_eq!(restored, Some(vec![0]));
+        assert_eq!(renderer.dom().focused(), Some(input), "必须回到上一个焦点");
+
+        // ④ 失焦 ⇒ 后端不再聚焦
+        assert!(renderer.blur_focused().expect("失焦必须成功"));
+        assert_eq!(renderer.dom().focused(), None);
+    }
+
+    /// ⭐ **焦点陷阱**：陷阱外**不动 DOM**（先判定后动 DOM，避免挪了再报错回不去）。
+    #[test]
+    fn focus_trap_rejects_before_touching_the_dom() {
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("div")
+            .child(VNode::element("input").build())
+            .child(VNode::element("input").build())
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+        let div = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let kids = renderer.dom().children(&div).expect("读子节点必须成功");
+
+        renderer.focus_at_path(&[0]).expect("陷阱外聚焦必须成功");
+        assert_eq!(renderer.dom().focused(), Some(kids[0]));
+
+        // 打开只允许 [0] 的陷阱 ⇒ [1] 必须被拒绝，且后端焦点**不变**
+        renderer.open_focus_trap(&[&[0]]);
+        let rejected = renderer.focus_at_path(&[1]);
+        assert!(
+            matches!(rejected, Err(DomError::Unsupported(_))),
+            "陷阱外必须拒绝"
+        );
+        assert_eq!(
+            renderer.dom().focused(),
+            Some(kids[0]),
+            "拒绝时不得先挪 DOM 焦点"
+        );
+
+        renderer.close_focus_trap();
+        renderer.focus_at_path(&[1]).expect("关闭陷阱后必须允许");
+        assert_eq!(renderer.dom().focused(), Some(kids[1]));
     }
 
     fn renderer_with_dom() -> (Renderer<InMemoryDom>, InMemoryNodeId) {

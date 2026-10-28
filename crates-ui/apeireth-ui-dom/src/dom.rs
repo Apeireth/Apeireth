@@ -419,6 +419,26 @@ pub trait Dom: 'static {
         Err(DomError::NotImplemented)
     }
 
+    /// ⭐ **把焦点移到该节点**（L1-G3 接线点）。
+    ///
+    /// ⚠️ 焦点**策略**（栈 / 陷阱 / 恢复）在 [`crate::focus::FocusTracker`] 与渲染器里；
+    /// 后端只负责「把浏览器的焦点真的挪过去」这一件事。
+    fn focus(&self, node: &Self::Node) -> Result<(), DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// ⭐ **把焦点从该节点移走**。
+    fn blur(&self, node: &Self::Node) -> Result<(), DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// 当前聚焦的节点（后端不知道 ⇒ `None`；测试后端会记录）。
+    fn focused(&self) -> Option<Self::Node> {
+        None
+    }
+
     /// ⭐ **是否处于 IME 组合中**（L1-G3 接线点）。
     ///
     /// ## 为什么放在后端 trait 上
@@ -779,6 +799,8 @@ pub struct InMemoryDom {
     measurements: RefCell<HashMap<InMemoryNodeId, ScriptedMeasurement>>,
     /// ⭐ 测试用 IME 组合态（见 `script_composition`）。
     composing: Cell<bool>,
+    /// ⭐ 当前聚焦节点（**测试用**：记录 `focus()` 的效果 ⇒ 焦点策略可被断言）。
+    focused: Cell<Option<InMemoryNodeId>>,
     ops: RefCell<VecDeque<RecordedOp>>,
     /// 操作日志的上界（超出后丢弃最旧的记录）。
     op_capacity: Cell<usize>,
@@ -797,6 +819,7 @@ impl Default for InMemoryDom {
             listeners: RefCell::new(ListenerTable::new()),
             measurements: RefCell::new(HashMap::new()),
             composing: Cell::new(false),
+            focused: Cell::new(None),
             ops: RefCell::new(VecDeque::new()),
             op_capacity: Cell::new(DEFAULT_OP_CAPACITY),
         }
@@ -1070,6 +1093,24 @@ impl InMemoryDom {
 }
 
 impl Dom for InMemoryDom {
+    fn focus(&self, node: &InMemoryNodeId) -> Result<(), DomError> {
+        self.ensure_node_exists(node)?;
+        self.focused.set(Some(*node));
+        Ok(())
+    }
+
+    fn blur(&self, node: &InMemoryNodeId) -> Result<(), DomError> {
+        self.ensure_node_exists(node)?;
+        if self.focused.get() == Some(*node) {
+            self.focused.set(None);
+        }
+        Ok(())
+    }
+
+    fn focused(&self) -> Option<InMemoryNodeId> {
+        self.focused.get()
+    }
+
     fn is_composing(&self) -> bool {
         self.composing.get()
     }
