@@ -132,6 +132,8 @@ pub mod events;
 /// ⭐ 焦点 / IME / a11y 通道（L1-G3）。
 pub mod focus;
 pub mod keyed;
+/// ⭐ 布局位移（CLS）观测（L1-G7 的 CLS 部分）。
+pub mod layout_shift;
 pub mod listeners;
 /// ⭐ panic 兜底钩子（L1-G8 第二片）：把「一崩全白」变成「一崩可见」。
 pub mod panic_guard;

@@ -36,7 +36,7 @@
 | G4 | **受控输入闭环（双向）** | **已接线**：`set_property` 在 `renderer.rs` 出现 12 处、`patch_props` 先 `get_property` 回读再写、宏支持 `bind:value` / `bind:checked`（`apeireth-ui-macro/src/view.rs:322`） | 补「输入 ⇒ 状态 ⇒ DOM」全链浏览器断言 + IME 期间不打断；**无需新建**，只需补证据与边界用例 | 第 1 批 |
 | G5 | ✅ ✅ **完成**：窗口化纯计算 + 真实滚动状态窗口 + `patch_windowed`（只挂窗口子项、总高度恒定）+ 子级就地替换（嵌套列表）+ **`scroll` 自动监听（信号式）** + **1k 行只挂 O(窗口)** 均已接线 | —（G5 完成；1k 行 wall-clock 基准未做，只做了规模不变量） | 余下：窗口 → 渲染器的挂载/卸载接线 + `scroll` 事件监听接线 + 1k 行 patch 基准 | 第 2 批（进行中） |
 | G6 | **缩放 / 密度标量** | ✅ **2026-10-28 已落地**：`MeasurementScale`（dpr × density，非法值回落 1.0）+ 渲染器接线（`bounding_box_in_device` / `hit_test_device`）。**IMPLEMENTED + WIRED + 浏览器已实测**（E-98：2.0×1.25 换算正确） | — | 第 1 批（已完成） |
-| G7 | **资源句柄与加载状态** | ⚠️ **部分**：`ResourceRegistry`（句柄只增不复用、状态机、失败原因保留、未知句柄不默认）与 `MetricsStatus`（默认 Unknown）已落地，且**窗口计算入口被门住**（度量未定 ⇒ 拒绝算窗口，避免按错度量算布局）。**未做**：解码/上传钩子、CLS 观测、宿主接入 | 余下：解码/上传钩子 + CLS 观测 + 宿主接入证据 | 第 2 批（进行中） |
+| G7 | ⚠️ **基本可用**：`ResourceRegistry`（句柄/状态机/失败原因保留）+ `MetricsStatus`（默认 Unknown，**窗口计算入口被门住**）+ **CLS 观测**（`LayoutShiftTracker`，亚像素与视口外不计分，已接引擎真实几何）均已落地；**未做**：解码/上传钩子、宿主接入证据 | 余下：解码/上传钩子 + 宿主接入 + 浏览器 CLS 证据 | 余下：解码/上传钩子 + CLS 观测 + 宿主接入证据 | 第 2 批（进行中） |
 | G8 | **错误边界与 panic hook** | ⚠️ **部分**：错误边界已落地并接线（`render_guarded` + `set_error_boundary` + `captured_error`，未设兜底时不吞错，兜底失败仍报原始错误）。**两片均已落地并采到浏览器证据（E-106）**：错误边界「失败 ⇒ 兜底进 DOM + 原始错误可读」；panic hook 浏览器内**可安装**（真 panic 行为仍只有 native 证据） | 余下：panic hook / 崩溃可见兜底 + 浏览器注入 panic 证据 | 第 2 批（进行中） |
 
 > L2/L3 项（表单控件族、Markdown、代码高亮、图标、富文本、弹层/虚拟列表组件、令牌数据、网络策略、dev server/HMR、

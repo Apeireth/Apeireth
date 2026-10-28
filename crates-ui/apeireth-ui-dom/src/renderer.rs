@@ -483,6 +483,23 @@ impl<D: Dom> Renderer<D> {
         ))
     }
 
+    /// ⭐⭐ **观测某个元素的布局位移**（L1-G7 的 CLS 部分）。
+    ///
+    /// 链路：**引擎真实几何**（`bounding_box_at_path`）→ [`crate::layout_shift::LayoutShiftTracker`]
+    /// ⇒ ⇒ 上层每帧对所有「可能移动」的元素调一次，即可得到可复核的 CLS
+    /// ⇒ ⇒ 不需要另装浏览器指标库（引擎自己就有逐帧几何）。
+    ///
+    /// 返回本次位移得分（0.0 = 无位移/亚像素噪声/视口外）。
+    pub fn observe_layout_shift_at_path(
+        &self,
+        tracker: &mut crate::layout_shift::LayoutShiftTracker,
+        id: crate::layout_shift::TrackId,
+        path: &[usize],
+    ) -> Result<f64, DomError> {
+        let rect = self.bounding_box_at_path(path)?;
+        Ok(tracker.observe(id, rect))
+    }
+
     /// ⭐⭐ **监听滚动容器并返回「已滚动」信号**（L1-G5 收尾）。
     ///
     /// ## 为什么用「信号」而不是直接把 scrollTop 传出来
@@ -1967,6 +1984,48 @@ mod tests {
             0,
             "补写后队列必须清空"
         );
+    }
+
+    /// ⭐⭐ **CLS 观测吃引擎真实几何**（L1-G7 接线）：几何变化 ⇒ 位移得分可读。
+    #[test]
+    fn layout_shift_observation_uses_real_geometry() {
+        use crate::dom::{ElementBox, ScrollMetrics};
+        use crate::layout_shift::LayoutShiftTracker;
+
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("div")
+            .child(VNode::element("span").build())
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+        let container = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        let span = renderer
+            .dom()
+            .children(&container)
+            .expect("读子节点必须成功")[0];
+
+        let mut tracker = LayoutShiftTracker::new(1000.0, 1000.0);
+        // ① 基线：span 在 (0,0,100,100)
+        renderer.dom().script_measurement(
+            span,
+            ElementBox::new(0.0, 0.0, 100.0, 100.0),
+            ScrollMetrics::default(),
+        );
+        let first = renderer
+            .observe_layout_shift_at_path(&mut tracker, 7, &[0])
+            .expect("观测必须成功");
+        assert_eq!(first, 0.0, "首次观测只建基线");
+
+        // ② 下移 100 ⇒ 得分 = (100×200/1000×1000) × (100/1000) = 0.002
+        renderer.dom().script_measurement(
+            span,
+            ElementBox::new(0.0, 100.0, 100.0, 100.0),
+            ScrollMetrics::default(),
+        );
+        let score = renderer
+            .observe_layout_shift_at_path(&mut tracker, 7, &[0])
+            .expect("观测必须成功");
+        assert!((score - 0.002).abs() < 1e-9, "实际得分 {score}");
+        assert!((tracker.total() - 0.002).abs() < 1e-9);
     }
 
     /// ⭐⭐ **滚动信号**（L1-G5）：`scroll` 事件到达 ⇒ 信号置位；取走后复位；别的种类不触发。
