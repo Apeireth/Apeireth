@@ -354,6 +354,7 @@ docs/04-internal/kani-verification-playbook.md,L4,5,Kani 形式化验证实战�
 docs/04-internal/kc1-kernel-convergence-baseline-2026-10-27.md,L4,3,KC-1 内核收束基线（KC-0 冻结）,2026-10-27,在飞,1,保留,
 docs/04-internal/kernel-convergence-2026-10-28.md,L4,4,Registry Kernel 最终收敛施工与验证账,2026-10-28,在飞,1,保留,
 docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md,L4,4,Kernel Convergence Final Acceptance Report,2026-10-28,在飞,3,保留,
+docs/04-internal/kernel-convergence-remaining-debt-map-2026-10-29.md,L4,7,Production Kernel Convergence — Remaining Debt Map,2026-10-29,在飞,0,保留,
 docs/04-internal/license-port/README.md,L4,5,许可搬运线·第一批：图像核心（四关质检卷宗）,2026-10-18,在飞,2,索引,
 docs/04-internal/license-port/gate1-license.md,L4,4,四关质检·第一关：许可关（License Gate）,2026-10-18,在飞,364,保留,
 docs/04-internal/license-port/gate2-quality.md,L4,4,四关质检·第二关：质量关（Quality Gate）,2026-10-18,在飞,4,保留,
