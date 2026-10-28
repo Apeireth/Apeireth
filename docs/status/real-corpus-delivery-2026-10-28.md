@@ -1,5 +1,14 @@
 # 真实对话语料上的送达率 —— **零漏送**，以及它**推翻了什么**
 
+[Document-Meta]
+Document: docs/status/real-corpus-delivery-2026-10-28.md
+Class: EVIDENCE
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
+
+> **四级口径**：本页内容 = **IMPLEMENTED**（库级能力 + 离线评测）⇒ **PRODUCTION WIRED ✘**（这是测量，不是生产路径）· **DEFAULT ENABLED** 不适用。
 > 日期：2026-10-28 · 语料：**LoCoMo**（Snap Research，公开基准）· 代码：
 > `crates/engine/memory/src/locomo_corpus.rs` +
 > `crates/engine/memory/examples/locomo_delivery.rs`

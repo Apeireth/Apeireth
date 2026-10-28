@@ -1,5 +1,12 @@
 # 设计稿批次看板（B0–B4 / D0–D5）—— **当前实施到哪儿**
 
+[Document-Meta]
+Document: docs/status/spec-batch-status.md
+Class: STATUS
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
 > 依据：`docs/01-architecture/memory-knowledge-depth-system-spec.md`（321 行 / 11 章）
 > 本页是**唯一权威进度页** ⇒ 每批/每层状态变了就改这里，**别只留在对话里**。
 > 最后核对：**2026-10-28**（按代码实测，不是按记忆）

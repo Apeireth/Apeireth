@@ -1,5 +1,12 @@
 # 护栏接线审计（2026-10-27）
 
+[Document-Meta]
+Document: docs/status/guard-wiring-audit-2026-10-27.md
+Class: AUDIT
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
 > 审计对象：`crates/engine/guard`（`apeireth-guard`）—— 「越权命中恒 0」这条**安全红线**的执行者。
 > 审计问题：**护栏接到了哪些生产路径？**（此前无人验证过 ⇒ 「这本身是个缺口」）
 > 产出：机器可检的**接线台账** + **越权拦截实测** + **缺口清单**。

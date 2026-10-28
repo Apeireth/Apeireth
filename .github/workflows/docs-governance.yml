@@ -47,6 +47,15 @@ jobs:
       - name: 索引分层一致性（目录索引 / 覆盖 / 层 / 题材 / 重定向表）
         run: python3 scripts/docs_index.py --check
 
+      # 文档**分类**守卫（owner 2026-10-28 指令：AI 落下的文档都要有分类，
+      # 不论是否接生产都要被严格约束）。口径见脚本头注释。
+      - name: 文档分类（九类 + 每类强制结构 + 存量棘轮）
+        run: python3 scripts/check_doc_class.py --check
+
+      - name: 文档分类分布（供人工看；不阻塞）
+        if: always()
+        run: python3 scripts/check_doc_class.py --report
+
       - name: 题材与层的分布（供人工看体系是否失衡；不阻塞）
         if: always()
         run: python3 scripts/docs_index.py --report

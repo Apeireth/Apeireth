@@ -1,5 +1,12 @@
 # owner 决策请求书（2026-10-27 · 记忆质量路线）
 
+[Document-Meta]
+Document: docs/04-internal/backend-enhancement/owner-decision-brief-2026-10-27.md
+Class: DECISION
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
 > **用途**：今天（10-27）的实测把「内部卷召回/注入」的路线**整个翻过来了**
 > ⇒ 有 **4 件事**必须你拍板（不是技术细节，是**产品取向**）。
 > 每项都给出**证据（可复算的数字）**、**选项**、**我的建议**、**不裁定的后果**。

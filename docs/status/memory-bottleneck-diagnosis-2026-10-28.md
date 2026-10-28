@@ -1,5 +1,14 @@
 # 记忆系统**真瓶颈**诊断（2026-10-28）：19.7% 是「候选集/语义」问题，不是排序问题
 
+[Document-Meta]
+Document: docs/status/memory-bottleneck-diagnosis-2026-10-28.md
+Class: EVIDENCE
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
+
+> **四级口径**：本页内容 = **IMPLEMENTED**（诊断脚本 + 离线评测）⇒ **PRODUCTION WIRED ✘**（诊断，不接生产）· **DEFAULT ENABLED** 不适用。
 > 复现：`cargo run -p apeireth-memory --example locomo_bottleneck --locked`
 > 杠杆：`cargo run -p apeireth-memory --example locomo_levers --locked`
 > 语料：LoCoMo **单证据题 1,122 题**（人工标注 evidence）

@@ -1,5 +1,12 @@
 # 记忆与知识纵深体系 —— 设计稿（Draft for owner review）
 
+[Document-Meta]
+Document: docs/01-architecture/memory-knowledge-depth-system-spec.md
+Class: SPEC
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
 > **状态口径：设计稿（NOT IMPLEMENTED）**。
 > 本文描述**目标形态与施工计划**，不是已交付能力。文中"现状"字样均为对当前代码的**事实陈述**，
 > 凡属目标形态者一律用将来时；未经 §8 的批次验收，不得对外宣称任何完成度。

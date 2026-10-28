@@ -1,5 +1,12 @@
 # 工作线登记表（工作线 ↔ 设计稿 ↔ **进度页** ↔ 守卫）
 
+[Document-Meta]
+Document: docs/status/workline-registry.md
+Class: STATUS
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
 > **用途**：`AGENTS.md` §0 要求「开工前先认领工作线」⇒ 本表就是那张**认领清单**。
 > ⚠️ **卡点是哪一条**：一条工作线若**只登记了设计稿、没登记进度页**
 > ⇒ ⇒ 下一个人（或压缩后的你）**查不到"做到哪了"** ⇒ 一定会重演 2026-10-28 的事故

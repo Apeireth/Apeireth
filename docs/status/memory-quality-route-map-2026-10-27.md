@@ -1,5 +1,12 @@
 # 记忆质量路线图：**已证的路 / 已否的路 / 待决**（2026-10-27 速查）
 
+[Document-Meta]
+Document: docs/status/memory-quality-route-map-2026-10-27.md
+Class: ROUTE
+Status: 🟢 活跃
+Last-Modified: 2026-10-28
+Author: lead
+
 > **用途**：给「下一个动手的人」（不管是 agent 还是人）**一张速查表**：
 > **哪些路已经走过、结论是什么、哪些还没走** ⇒ **不重复走**。
 >
