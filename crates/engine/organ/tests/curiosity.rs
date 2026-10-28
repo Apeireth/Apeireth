@@ -2,7 +2,7 @@
 //!
 //! 3 测试:
 //! 1. `curiosity_organ_returns_score_and_question` (mock LlmFactory 返固定响应, 验 trait 边界)
-//! 2. `curiosity_organ_real_llm_smoke` (真 LLM smoke, #[ignore] 给 manual 跑; 验真接 LLM)
+//! 2. `curiosity_organ_real_llm_smoke` (Noop 工厂合同，默认运行；不代表 live 验证)
 //! 3. `curiosity_organ_no_llm_returns_error` (None factory trait 边界, 验 0 装诚实 —
 //!    Curiosity trait 默认 `llm_factory()` 返 None, 不假装能调)
 //!
@@ -12,7 +12,7 @@
 //!   接口不调**, 但 trait 边界 + future LLM 探索路径已就位)
 //! - dev 测试路径: `NoopLlmFactory` (per `apeireth-plugin::llm_factory::NoopLlmFactory`),
 //!   返 `LlmError::NotImplemented` (0 装: 不假装能调)
-//! - `#[ignore]` 测试: 真生产前阻塞 #1 — 跑 `cargo test -- --ignored` manual 验真接 LLM
+//! - Noop 工厂合同测试默认运行，不依赖密钥或外部服务。
 //!
 //! **承接**:
 //! - 子代理 D actionable #1 真兑现 (Experience 保守版是真接 LLM, Curiosity trait 边界预留)
@@ -53,7 +53,7 @@ impl LlmFactory for MockLlmFactory {
         apeireth_plugin::llm_factory::LlmError,
     > {
         // 0 装诚实: mock 直接返 NotImplemented, 不假装真 LLM.
-        // 真接 LLM 路径在 #[ignore] test 里.
+        // 本文件的工厂合同仅使用 Noop，不证明真实服务调用。
         Err(apeireth_plugin::llm_factory::LlmError::NotImplemented(
             "MockLlmFactory (test 0 装, 真接 LLM 在 --ignored test)",
         ))
@@ -140,19 +140,14 @@ async fn curiosity_organ_returns_score_and_question() {
 }
 
 // ============================================
-// Test 2: 真 LLM smoke (#[ignore], 需 APEIRETH_API_KEY)
+// Noop factory contract (default regression).
 // ============================================
 
-/// **0 装诚实**: 真接 LLM smoke 测试.
+/// 离线 Noop 工厂合同：默认回归，不读取密钥或调用外部服务。
+/// 保留历史函数名与原断言；通过不代表真实模型服务已验证。
 #[tokio::test]
-#[ignore = "requires APEIRETH_API_KEY env + real LLM endpoint; manual run: cargo test -p apeireth-organ -- --ignored"]
 async fn curiosity_organ_real_llm_smoke() {
-    // 真生产路径: 用 NoopLlmFactory 占位 (因为 v1 curiosity 当前**不调 LLM**,
-    // 这条 smoke test 仅验证 trait 边界在真 LLM factory 注入下能编译/构造).
-    //
-    // **重要 0 装**: 当前 trait `process()` 不调 LLM (v1 确定性无 LLM).
-    // 真 LLM 集成是 v2.1 路线 (LLM 探索具体内容, **不动 v1 算法真相**).
-    // 此 #[ignore] test 的目的: 验证 trait shape 在真 factory 注入下不变.
+    // 当前 process 是确定性路径；这里只验证 Noop 工厂注入后的输出合同。
     let factory: Arc<dyn LlmFactory> = Arc::new(NoopLlmFactory);
     let organ = CuriosityOrgan::new(factory, "minimax-m3-thinking");
     let output = organ.process(empty_input()).await.expect("process ok");

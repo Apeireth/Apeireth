@@ -8,7 +8,7 @@
 //! **0 装诚实** (per 任务 §3 + 子代理 R 同款):
 //! - 真生产路径: `EmotionOrgan::new()` (无 LLM 注入 — v1 emotion_memory 是确定性无 LLM).
 //! - dev 测试路径: 直接用 `EmotionMemoryEngine` (无 LLM 介入).
-//! - `#[ignore]` 测试: trait 边界 + LlmFactory 注入 shape 验 (per 子代理 Q1/R2 同模式)
+//! - Noop 工厂合同测试默认运行，不依赖密钥或外部服务。
 //!
 //! **承接**:
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入), F1 与 E4/F4/F6
@@ -230,15 +230,12 @@ async fn emotion_organ_recall_by_mood_finds_similar() {
 }
 
 // ============================================
-// Test 4 (#[ignore]): trait 边界 + LlmFactory 注入 shape (per 子代理 Q1/R2/R3 同模式)
+// Noop factory contract (default regression).
 // ============================================
 
-/// **0 装诚实**: trait 边界在 LlmFactory 注入下能编译/构造.
-///
-/// v1 emotion_memory 是确定性无 LLM, 当前 trait `process()` 不调 LLM. 此 #[ignore]
-/// test 的目的: 验证 trait shape 在 NoopLlmFactory 注入下不变.
+/// 离线 Noop 工厂合同：默认回归，不读取密钥或调用外部服务。
+/// 保留历史函数名与原断言；通过不代表真实模型服务已验证。
 #[tokio::test]
-#[ignore = "manual run: cargo test -p apeireth-organ --test emotion_memory -- --ignored; 验 trait shape with NoopLlmFactory"]
 async fn emotion_organ_trait_shape_with_noop_llm_factory() {
     let _noop: Arc<dyn LlmFactory> = Arc::new(NoopLlmFactory);
     // EmotionOrgan 不需要 LLM 注入 (v1 确定性); 验 trait shape 完整
