@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 92e08075a4c842541459bcda329a209f155810ee5e2ebc6d138015d50ff10a76
+claims_sha256: c212ba3607a525a59c34dc82e8818a49056a3823122106b56ddf061d211e3537
 claims_total: 30
 items:
   - id: "rt.provider_router"
@@ -132,11 +132,13 @@ items:
         - "crates/capabilities/tools/src/object_access.rs"
         - "crates/capabilities/tools/src/shell.rs"
         - "crates/capabilities/tools/src/observed_gate.rs"
+        - "crates/capabilities/tools/src/shell/execution.rs"
     wired:
       production_refs:
         - "crates/capabilities/tools/src/object_access.rs"
         - "crates/capabilities/tools/src/observed_gate.rs"
         - "crates/capabilities/tools/src/shell.rs"
+        - "crates/capabilities/tools/src/shell/execution.rs"
     default_enabled: true
     validated:
       tests:
@@ -276,9 +278,11 @@ items:
       sources:
         - "crates/capabilities/tools/src/process/linux.rs"
         - "crates/capabilities/tools/src/process/platform.rs"
+        - "crates/capabilities/tools/src/process/mod.rs"
     wired:
       production_refs:
         - "crates/capabilities/tools/src/process/linux.rs"
+        - "crates/capabilities/tools/src/process/mod.rs"
         - "crates/capabilities/tools/src/process/platform.rs"
     default_enabled: "n/a"
     validated:
@@ -286,7 +290,7 @@ items:
         - "crates/capabilities/tools/tests/process_executor.rs"
       claims_id: "sec.linux_containment"
     gaps:
-      - "未达 PRODUCTION WIRED：进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。"
+      - "未达 PRODUCTION WIRED：进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10…"
   - id: "sec.gateway_tls"
     capability: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
     implemented:
@@ -591,7 +595,7 @@ items:
     gaps:
       []
   - id: "rt.registered_module_v1"
-    capability: "注册插件生命周期、固定 V1 Hook 与治理工具分派"
+    capability: "注册模块生命周期、固定 V1 Hook 与唯一治理工具目录"
     implemented:
       sources:
         - "crates/foundation/plugin/src/manager.rs"
@@ -604,22 +608,44 @@ items:
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/engine/runtime/src/canonical/registered_hooks.rs"
+        - "crates/foundation/plugin/src/tool.rs"
+        - "crates/foundation/plugin/src/tool_module.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+        - "crates/engine/runtime/src/canonical/capability.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_modules.rs"
+        - "crates/capabilities/tools/src/shell/execution.rs"
+        - "crates/capabilities/tools/src/process/mod.rs"
+        - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
     wired:
       production_refs:
+        - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
+        - "crates/capabilities/tools/src/process/mod.rs"
+        - "crates/capabilities/tools/src/shell/execution.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_modules.rs"
+        - "crates/engine/runtime/src/canonical/capability.rs"
         - "crates/engine/runtime/src/canonical/dispatch_admission.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
         - "crates/engine/runtime/src/canonical/execute.rs"
         - "crates/engine/runtime/src/canonical/module_host.rs"
         - "crates/engine/runtime/src/canonical/registered_hooks.rs"
         - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime/src/canonical/subloop.rs"
         - "crates/foundation/plugin/src/hooks.rs"
         - "crates/foundation/plugin/src/manager.rs"
         - "crates/foundation/plugin/src/plugin.rs"
         - "crates/foundation/plugin/src/task_scope.rs"
-    default_enabled: false
+        - "crates/foundation/plugin/src/tool.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+        - "crates/foundation/plugin/src/tool_module.rs"
+    default_enabled: true
     validated:
       tests:
         - "crates/engine/runtime/tests/registry_runtime_v1.rs"
+        - "crates/engine/runtime-assembly/tests/capability_modules_v1.rs"
+        - "crates/adapters/cli/tests/gateway_panels.rs"
       claims_id: "rt.registered_module_v1"
     gaps:
       []

@@ -28,11 +28,11 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: d63d209ffc911d0403c366e606d96479990049d0
+    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。"
 
   - id: core.cost_router
     title: "成本分级路由（H-P2，四档选模）"
@@ -82,11 +82,11 @@ claims:
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: c9251271
+    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
-    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立"
+    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-28 Phase 3 复核：生产工具通过普通 ToolModule 装配；动态 MCP 仍通过同一 CapabilityRegistry/Dispatcher 的独立取消 scope 兼容入口。transport 与动态 owner 完整 Plugin 生命周期未迁移，默认开关保持 OFF。"
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
@@ -132,13 +132,14 @@ claims:
       - crates/capabilities/tools/src/object_access.rs
       - crates/capabilities/tools/src/shell.rs
       - crates/capabilities/tools/src/observed_gate.rs
+      - crates/capabilities/tools/src/shell/execution.rs
     tests:
       - crates/capabilities/tools/src/object_access.rs
-    verified_at: c9251271
+    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib object_access"
     owner: capabilities
     next_review: "2026-12-01"
-    notes: "对象级判定（32KB）：`ObjectAccessJudge` 按「对象域 × 主体」判是否越界，shell 工具面注入（`object_judgment`），越界即帧 + `sandbox.object_violation` 审计。这是顾问所说「比连接器开关更接近真实人类边界」的那一层。"
+    notes: "对象级判定（32KB）：`ObjectAccessJudge` 按「对象域 × 主体」判是否越界，shell 工具面注入（`object_judgment`），越界即帧 + `sandbox.object_violation` 审计。这是顾问所说「比连接器开关更接近真实人类边界」的那一层。；2026-10-28 Phase 3 复核：Shell 具体执行提取至 shell/execution.rs，原对象判定、写总闸、冻结参数与 cwd TOCTOU 校验保留；新增取消/lease 不授予额外权限，原审批与安全回归通过。"
 
   - id: sec.exposure_audit
     title: "暴露面体检（五个暴露面只读扫描 + 同一内核两出口）"
@@ -187,7 +188,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: d63d209ffc911d0403c366e606d96479990049d0
+    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -200,7 +201,7 @@ claims:
 ⑤自述面 `capabilities.accountability` —— 探测口接进 `ProductionBackends.self_status_accountability` + CLI 装配根。
 **沿革（如实记，不掩盖）**：2026-10-24 自查发现 ②④⑤ 此前**只有库级实现 + 测试调用、生产零调用**（被 `audit_unwired.py` 抓出 —— 而它此前自己也没接电，见该脚本 docstring）；同日已全部接上真实调用方，并新增 CI 棘轮 `.github/workflows/unwired-ratchet.yml` 防回归。
 **读出端已接**：出域账本 `apeireth egress ledger`（观测面）+ 问责账本 `apeireth egress impact`（责任面：授权/可逆性/影响谁/后果）。
-**后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。"
+**后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。；2026-10-28 Phase 3 复核：单一工具目录/上下文接线未改变出网闸与 Provider 边界，原出境治理/账本回归随全量门禁通过；默认仍 OFF，未声称自动外发或自动回执已接。"
 
   - id: mem.lesson_object
     title: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
@@ -233,11 +234,11 @@ claims:
     tests:
       - crates/adapters/gateway/tests/panel_routes.rs
       - crates/engine/memory/tests/memory_2_tests.rs
-    verified_at: c9251271
+    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
     verify_cmd: "cargo test -p apeireth-gateway --test panel_routes memory_update"
     owner: gateway
     next_review: "2026-11-20"
-    notes: "2026-10-22 接通：存储层 `MemoryGovernanceStore::update_episode_content` 早已实现（重写治理视图内容、原始 append-only 行不动、乐观 rev CAS、检索走 override），缺口只在面板没接电。现已补 `PUT /v1/apeireth/memory/episodes/:id/content` + 治理端口 `update_episode`（默认实现对未接线 embedder 诚实报错）+ 能力清单 `memory.update` 与治理面同源。未做：桌面 MemoryView 的「纠正」入口（台账 SG-08 记为待补）。"
+    notes: "2026-10-22 接通：存储层 `MemoryGovernanceStore::update_episode_content` 早已实现（重写治理视图内容、原始 append-only 行不动、乐观 rev CAS、检索走 override），缺口只在面板没接电。现已补 `PUT /v1/apeireth/memory/episodes/:id/content` + 治理端口 `update_episode`（默认实现对未接线 embedder 诚实报错）+ 能力清单 `memory.update` 与治理面同源。未做：桌面 MemoryView 的「纠正」入口（台账 SG-08 记为待补）。；2026-10-28 Phase 3 复核：gateway_panels.rs 仅工具清单改读单一目录及真实 owner；Memory 面板更新/治理路径未改，原回归通过；自动 Memory overlay 尚未迁为模块工具 Hook。"
 
   - id: gap.prompt_stabilizer_unwired
     title: "PromptCacheStabilizer 已归档（R7-4a，可逆保留）——生产中不存在该能力"
@@ -262,13 +263,14 @@ claims:
     sources:
       - crates/capabilities/tools/src/process/linux.rs
       - crates/capabilities/tools/src/process/platform.rs
+      - crates/capabilities/tools/src/process/mod.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
-    verified_at: c9251271
+    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
-    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。"
+    notes: "进程组 + setrlimit(AS/CPU/FSIZE/NPROC) + PR_SET_PDEATHSIG + PR_SET_NO_NEW_PRIVS；不承诺 cgroup/seccomp/namespace/网络隔离；memory/process-count 为 partial。；2026-10-28 Phase 3 复核：原进程组/rlimit/降权语义保留，增加期限/取消与退出后清理后代；实进程 PID 回归通过。不保证回收主动脱离进程组的后代，维持 PARTIAL，不升级为强隔离或硬件验证。"
 
   - id: sec.gateway_tls
     title: "Gateway TLS 真接线（PEM 真加载 fail-closed + TLS listener + 三态状态面）"
@@ -542,9 +544,9 @@ claims:
     notes: "RecoveryCase 状态机已接失败链；ScarLedger::learn 未接（如实）。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
 
   - id: rt.registered_module_v1
-    title: "注册插件生命周期、固定 V1 Hook 与治理工具分派"
+    title: "注册模块生命周期、固定 V1 Hook 与唯一治理工具目录"
     level: PRODUCTION WIRED
-    default: "OFF"
+    default: "ON"
     switch_env: null
     sources:
       - crates/foundation/plugin/src/manager.rs
@@ -557,10 +559,22 @@ claims:
       - crates/engine/runtime/src/canonical/dispatcher.rs
       - crates/engine/runtime/src/canonical/module_host.rs
       - crates/engine/runtime/src/canonical/registered_hooks.rs
+      - crates/foundation/plugin/src/tool.rs
+      - crates/foundation/plugin/src/tool_module.rs
+      - crates/foundation/plugin/src/tool_execution.rs
+      - crates/engine/runtime/src/canonical/capability.rs
+      - crates/engine/runtime/src/canonical/subloop.rs
+      - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/engine/runtime-assembly/src/canonical/tool_modules.rs
+      - crates/capabilities/tools/src/shell/execution.rs
+      - crates/capabilities/tools/src/process/mod.rs
+      - crates/capabilities/tools/src/exec_pipeline/mod.rs
     tests:
       - crates/engine/runtime/tests/registry_runtime_v1.rs
-    verified_at: d63d209ffc911d0403c366e606d96479990049d0
-    verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked"
+      - crates/engine/runtime-assembly/tests/capability_modules_v1.rs
+      - crates/adapters/cli/tests/gateway_panels.rs
+    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
+    verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
-    notes: "复用 PluginManager，宿主显式注册 Plugin；默认没有新增 V1 业务模块，无独立环境开关。自动输出经同一治理/冻结审批入口与 ToolEventV1，在闭合边界成对投影；真实 Runtime 模拟模型回合覆盖四协议 Adapter。旧非 strict 参数及持久日志显式兼容；AfterToolCall 自动工作构成工具串行屏障。尚无共享 Arc 在线热插拔、完整 Memory/Profile/多实例或 Android App，也无云 API 与硬件实测。证据及限制见 docs/04-internal/registry-kernel-phase2-2026-10-27.md。"
+    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。"

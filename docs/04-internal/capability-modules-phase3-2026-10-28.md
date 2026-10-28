@@ -227,7 +227,8 @@ Kernel 不自动安装任何业务工具。
 工具通过 ToolModule 装配这一机制，不是新增工具授权。Kernel 仍不自动安装业务工具，既有 Shell/网络/写入
 开关不变；Phase 2 带日期的历史记录不追改。
 
-源码与事实核验分为代码提交及后续文档证据提交，源码 SHA 在后续核验时填入。
+源码提交：`d45a96e877a501a0b580b836797c10d2a36be87f`（feat(runtime): unify capability modules and governed tool execution）。
+事实核验与文档生成物在后续 docs(status) 提交收口；只改证据，不再修改已通过门禁的 Rust 源码。
 最后远端 fetch、推送退出码与增量 bundle 的 SHA256 以本批交付 manifest 为准；本文不把本地提交冒称已推送。
 只向 refactor/kc1-kernel-convergence 安全快进推送；403 后不重试、不变更凭据、不碰 main。
 Phase 4 优先迁动态 MCP owner 与专有资源 shutdown，再将 Memory 自动 recall/writeback 转为注册工具+固定 Hook，
