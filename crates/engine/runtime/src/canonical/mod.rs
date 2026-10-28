@@ -25,6 +25,7 @@
 //! The crate boundary is intentionally the same as this canonical module:
 //! there is no second orchestration driver or legacy runtime dependency.
 
+pub mod accounting;
 pub mod approval;
 pub mod cache_trace;
 pub mod capability;
@@ -50,6 +51,7 @@ pub mod event_log;
 pub mod events;
 pub mod execute;
 pub mod heartbeat;
+pub mod instances;
 pub mod metrics;
 pub mod module;
 mod module_host;

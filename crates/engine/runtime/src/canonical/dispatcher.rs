@@ -99,6 +99,9 @@ pub struct ToolDispatcher {
     pub limits: DispatchLimits,
     scopes: RwLock<BTreeMap<SessionId, ToolScope>>,
     agents: RwLock<BTreeMap<SessionId, AgentId>>,
+    principals: RwLock<BTreeMap<SessionId, apeireth_plugin::agents::AgentPrincipal>>,
+    instance_scopes: RwLock<BTreeMap<SessionId, ModuleTaskScope>>,
+    usage: Option<Arc<super::accounting::UsageAccounting>>,
     concurrency: Mutex<BTreeMap<(CapabilityId, usize), Arc<tokio::sync::Semaphore>>>,
 }
 
@@ -108,7 +111,57 @@ impl ToolDispatcher {
             limits,
             scopes: RwLock::new(BTreeMap::new()),
             agents: RwLock::new(BTreeMap::new()),
+            principals: RwLock::new(BTreeMap::new()),
+            instance_scopes: RwLock::new(BTreeMap::new()),
+            usage: None,
             concurrency: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    pub(crate) fn with_usage(mut self, usage: Arc<super::accounting::UsageAccounting>) -> Self {
+        self.usage = Some(usage);
+        self
+    }
+    pub(crate) fn bind_instance(
+        &self,
+        session: SessionId,
+        agent: AgentId,
+        principal: Option<apeireth_plugin::agents::AgentPrincipal>,
+        scope: ModuleTaskScope,
+    ) {
+        self.set_agent(session, agent);
+        if let Some(principal) = principal {
+            self.principals
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(session, principal);
+        }
+        self.instance_scopes
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(session, scope);
+    }
+    pub fn principal(&self, session: SessionId) -> Option<apeireth_plugin::agents::AgentPrincipal> {
+        self.principals
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session)
+            .cloned()
+    }
+    fn invocation_scope(
+        &self,
+        session: Option<SessionId>,
+        module: ModuleTaskScope,
+    ) -> ModuleTaskScope {
+        match session.and_then(|id| {
+            self.instance_scopes
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&id)
+                .cloned()
+        }) {
+            Some(agent) => ModuleTaskScope::joined(vec![module, agent]),
+            None => module,
         }
     }
 
@@ -389,7 +442,8 @@ impl LegacyToolAdapter {
             .timeout
             .unwrap_or(self.dispatcher.limits.timeout)
             .min(self.dispatcher.limits.timeout);
-        let context = context.unwrap_or_else(|| ToolExecutionContext {
+        let mut context = context.unwrap_or_else(|| ToolExecutionContext {
+            principal: session.and_then(|id| self.dispatcher.principal(id)),
             agent: session
                 .map(|session| self.dispatcher.agent(session))
                 .unwrap_or_default(),
@@ -408,6 +462,10 @@ impl LegacyToolAdapter {
             module_tasks: self.scope.clone().unwrap_or_default(),
             resource_lease: None,
         });
+        context.principal = session.and_then(|id| self.dispatcher.principal(id));
+        context.module_tasks = self
+            .dispatcher
+            .invocation_scope(session, self.scope.clone().unwrap_or(context.module_tasks));
         if policy.permission == apeireth_plugin::ToolPermissionPolicy::RequireApproval
             && !context.authorization.approved
         {
@@ -427,13 +485,24 @@ impl LegacyToolAdapter {
                 "call cancelled or execution context mismatch",
             );
         }
+        if let (Some(usage), Some(session)) = (&self.dispatcher.usage, session) {
+            if let Err(error) = usage.tool_call(session) {
+                return failure(call, DispatchErrorCode::PermissionDenied, error.to_string());
+            }
+        }
+        let mut invocation_meter = self
+            .dispatcher
+            .usage
+            .clone()
+            .zip(session)
+            .map(|(ledger, session)| ledger.tool_meter(session));
         let timeout = timeout.min(context.deadline.saturating_duration_since(Instant::now()));
         let _cancel_on_drop = context.cancellation.cancel_on_drop();
         let permits = self.dispatcher.permits(self.tool.as_ref());
         let tool = self.tool.clone();
         let owned_call = call.clone();
         let frozen = frozen.cloned();
-        let scope = self.scope.clone();
+        let scope = Some(context.module_tasks.clone());
         // JoinSet aborts its owned task on drop, including caller cancellation.
         // No detached task may outlive a module's drain boundary.
         let mut tasks = tokio::task::JoinSet::new();
@@ -474,11 +543,14 @@ impl LegacyToolAdapter {
                 )
             }
             Ok(_) => {
+                if let Some(meter) = &mut invocation_meter {
+                    meter.settle(true);
+                }
                 return failure(
                     call,
                     DispatchErrorCode::Panicked,
                     "tool task failed; execution may be incomplete",
-                )
+                );
             }
             Err(_) => {
                 return failure(
@@ -488,6 +560,9 @@ impl LegacyToolAdapter {
                 )
             }
         };
+        if let Some(meter) = &mut invocation_meter {
+            meter.settle(!result.is_ok());
+        }
         if result.tool_call_id != call.id
             || result.name.as_deref().is_some_and(|name| name != call.name)
         {

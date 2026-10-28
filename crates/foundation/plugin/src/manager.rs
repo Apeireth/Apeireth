@@ -265,7 +265,7 @@ impl PluginManager {
             .needs_cleanup = true;
         let plugin = Arc::clone(self.plugins.get(id)?);
         let scope = self.task_scope(id)?;
-        let ctx = ctx.scoped(scope.clone());
+        let ctx = ctx.scoped(id.clone(), self.instance_id(id)?, scope.clone());
         let result = scope
             .run(std::panic::AssertUnwindSafe(plugin.initialize(&ctx)).catch_unwind())
             .await;
@@ -290,7 +290,7 @@ impl PluginManager {
         self.plugins.transition(id, Lifecycle::Starting)?;
         let plugin = Arc::clone(self.plugins.get(id)?);
         let scope = self.task_scope(id)?;
-        let ctx = ctx.scoped(scope.clone());
+        let ctx = ctx.scoped(id.clone(), self.instance_id(id)?, scope.clone());
         let result = scope
             .run(std::panic::AssertUnwindSafe(plugin.start(&ctx)).catch_unwind())
             .await;
@@ -318,6 +318,16 @@ impl PluginManager {
         self.plugins
             .entry(id)
             .map(|entry| entry.scope.clone())
+            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))
+    }
+
+    pub fn instance_id(
+        &self,
+        id: &PluginId,
+    ) -> PluginResult<apeireth_core::kernel::ModuleInstanceId> {
+        self.plugins
+            .entry(id)
+            .map(|entry| entry.instance)
             .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))
     }
 

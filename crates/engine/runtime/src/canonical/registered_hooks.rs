@@ -39,6 +39,10 @@ impl Runtime {
                 .is_ok_and(|state| state == Lifecycle::Active)
                 && self
                     .plugins
+                    .task_scope(id)
+                    .is_ok_and(|scope| scope.is_open() || scope.active_tasks() > 0)
+                && self
+                    .plugins
                     .plugins()
                     .get(id)
                     .is_ok_and(|plugin| plugin.hooks().contains(&ModuleHookV1::AfterToolCall))
@@ -167,14 +171,7 @@ impl Runtime {
         point: ModuleHookV1,
         session: &Session,
     ) -> RuntimeResult<()> {
-        if point == ModuleHookV1::BeforeModelCall
-            && self.plugins.plugins().ids().any(|id| {
-                self.plugins
-                    .plugins()
-                    .get(id)
-                    .is_ok_and(|plugin| plugin.uses_tool_events_v1())
-            })
-        {
+        if point == ModuleHookV1::BeforeModelCall && self.uses_v1_tool_events() {
             validate_closed_tool_context(&session.provider_view()).map_err(protocol_error)?;
         }
         Ok(())
@@ -356,12 +353,7 @@ impl Runtime {
         call: &ToolCall,
         result: &ToolResult,
     ) {
-        if !self.plugins.plugins().ids().any(|id| {
-            self.plugins
-                .plugins()
-                .get(id)
-                .is_ok_and(|plugin| plugin.uses_tool_events_v1())
-        }) {
+        if !self.uses_v1_tool_events() {
             return;
         }
         let owner = self

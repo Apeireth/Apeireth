@@ -29,12 +29,13 @@ impl Runtime {
     }
 
     pub(super) fn uses_v1_tool_events(&self) -> bool {
-        self.plugins.plugins().ids().any(|id| {
-            self.plugins
-                .plugins()
-                .get(id)
-                .is_ok_and(|plugin| plugin.uses_tool_events_v1())
-        })
+        self.v1_protocol
+            || self.plugins.plugins().ids().any(|id| {
+                self.plugins
+                    .plugins()
+                    .get(id)
+                    .is_ok_and(|plugin| plugin.uses_tool_events_v1())
+            })
     }
 
     /// Policy view, not another catalog. A session scope only restricts authority.
@@ -110,6 +111,7 @@ impl Runtime {
             .min(self.dispatcher.limits.timeout);
         let context = apeireth_plugin::ToolExecutionContext {
             agent: self.dispatcher.agent(session),
+            principal: self.dispatcher.principal(session),
             session: Some(session),
             turn: Some(request),
             call_id: call.id.clone(),

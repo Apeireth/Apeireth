@@ -33,6 +33,10 @@ pub struct Provider {
     id: CapabilityId,
     script: Mutex<VecDeque<Vec<ToolCall>>>,
     requests: Mutex<Vec<NormalizedRequest>>,
+    gate: Mutex<Option<(Arc<tokio::sync::Barrier>, usize)>>,
+    hold: Mutex<Option<Arc<tokio::sync::Notify>>>,
+    usage: Mutex<apeireth_protocol::canonical::NormalizedUsage>,
+    failures: Mutex<VecDeque<ProviderError>>,
 }
 impl Provider {
     pub fn new(script: Vec<Vec<ToolCall>>) -> Arc<Self> {
@@ -40,7 +44,31 @@ impl Provider {
             id: CapabilityId::new("provider.capability_fixture").unwrap(),
             script: Mutex::new(script.into()),
             requests: Mutex::new(vec![]),
+            gate: Mutex::new(None),
+            hold: Mutex::new(None),
+            failures: Mutex::new(VecDeque::new()),
+            usage: Mutex::new(
+                apeireth_protocol::canonical::NormalizedUsage::new(10, 5)
+                    .with_cache_hit_tokens(Some(3)),
+            ),
         })
+    }
+    pub fn fail_next(&self, error: ProviderError) {
+        self.failures.lock().unwrap().push_back(error);
+    }
+    pub fn set_usage(&self, usage: apeireth_protocol::canonical::NormalizedUsage) {
+        *self.usage.lock().unwrap() = usage;
+    }
+    pub fn requests(&self) -> Vec<NormalizedRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+    pub fn synchronize(&self, count: usize) {
+        *self.gate.lock().unwrap() = Some((Arc::new(tokio::sync::Barrier::new(count)), count));
+    }
+    pub fn hold_next(&self) -> Arc<tokio::sync::Notify> {
+        let signal = Arc::new(tokio::sync::Notify::new());
+        *self.hold.lock().unwrap() = Some(signal.clone());
+        signal
     }
     pub fn results(&self) -> Vec<String> {
         self.requests
@@ -83,10 +111,33 @@ impl ProviderCapability for Provider {
                 .expect("actual Runtime messages must project legally");
         }
         self.requests.lock().unwrap().push(request.clone());
+        let failure = self.failures.lock().unwrap().pop_front();
+        if let Some(failure) = failure {
+            return Err(failure);
+        }
+
+        let hold = self.hold.lock().unwrap().take();
+        if let Some(hold) = hold {
+            hold.notified().await;
+        }
+        let gate = {
+            let mut gate = self.gate.lock().unwrap();
+            gate.as_mut().and_then(|(barrier, left)| {
+                if *left > 0 {
+                    *left -= 1;
+                    Some(barrier.clone())
+                } else {
+                    None
+                }
+            })
+        };
+        if let Some(gate) = gate {
+            gate.wait().await;
+        }
+
         let mut response = NormalizedResponse::text("fixture", &request.model, "done");
         response.tool_calls = self.script.lock().unwrap().pop_front().unwrap_or_default();
-        response.usage = apeireth_protocol::canonical::NormalizedUsage::new(10, 5)
-            .with_cache_hit_tokens(Some(3));
+        response.usage = self.usage.lock().unwrap().clone();
         Ok(response)
     }
 }

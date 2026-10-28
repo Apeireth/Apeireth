@@ -37,16 +37,36 @@ pub struct PluginContext {
     pub trace: TraceId,
     /// Owned work must use this scope so stop can cancel and drain it.
     pub tasks: crate::task_scope::ModuleTaskScope,
+    pub agents: Option<Arc<dyn crate::agents::ModuleAgents>>,
+    agent_factory: Option<Arc<dyn crate::agents::ModuleAgentFactory>>,
 }
 
 impl PluginContext {
-    pub(crate) fn scoped(&self, tasks: crate::task_scope::ModuleTaskScope) -> Self {
+    pub(crate) fn scoped(
+        &self,
+        definition: apeireth_core::kernel::PluginId,
+        instance: apeireth_core::kernel::ModuleInstanceId,
+        tasks: crate::task_scope::ModuleTaskScope,
+    ) -> Self {
         Self {
             clock: self.clock.clone(),
             credentials: self.credentials.clone(),
             trace: self.trace,
+            agents: self
+                .agent_factory
+                .as_ref()
+                .map(|factory| factory.bind(definition, instance, tasks.clone())),
+            agent_factory: None,
             tasks,
         }
+    }
+
+    pub fn with_agent_factory(
+        mut self,
+        factory: Arc<dyn crate::agents::ModuleAgentFactory>,
+    ) -> Self {
+        self.agent_factory = Some(factory);
+        self
     }
 
     /// Assemble a context.
@@ -60,6 +80,8 @@ impl PluginContext {
             credentials,
             trace,
             tasks: crate::task_scope::ModuleTaskScope::new(),
+            agents: None,
+            agent_factory: None,
         }
     }
 }

@@ -1595,18 +1595,17 @@ impl Runtime {
                     }
                     let provider_request =
                         NormalizedRequest::new(continuation.model.clone(), provider_messages);
-                    let attempt = match &stream_sink {
-                        Some(sink) => {
-                            self.providers
-                                .complete_with_tools_streaming(&provider_request, &tools, sink)
-                                .await
-                        }
-                        None => {
-                            self.providers
-                                .complete_with_tools(&provider_request, &tools)
-                                .await
-                        }
-                    };
+                    let attempt = self
+                        .providers
+                        .complete_for_session(
+                            session.id,
+                            request_id,
+                            &provider_request,
+                            Some(&tools),
+                            stream_sink.as_ref(),
+                        )
+                        .await;
+
                     let error = match attempt {
                         Ok(routed) => break Ok(routed),
                         Err(error) => error,

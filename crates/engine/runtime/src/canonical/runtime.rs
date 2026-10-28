@@ -270,6 +270,7 @@ fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_,
 /// The assembled runtime.
 pub struct Runtime {
     pub(super) plugins: PluginManager,
+    pub(super) v1_protocol: bool,
     // Arc so per-turn invoker handles can carry the one canonical router
     // without borrowing the runtime. Still exactly one router instance.
     pub(super) providers: Arc<ProviderRouter>,
@@ -639,6 +640,8 @@ pub struct RuntimeBuilder {
     tool_completion_observer: Option<Arc<dyn ToolCompletionObserver>>,
     /// 出网闸（不注入 = 默认放行 = 零行为变化）。
     egress_gate: Option<Arc<dyn super::egress_gate::EgressGate>>,
+    pub(super) agent_factory: Option<Arc<dyn apeireth_plugin::agents::ModuleAgentFactory>>,
+    pub(super) v1_protocol: bool,
 }
 
 impl Default for RuntimeBuilder {
@@ -669,6 +672,8 @@ impl RuntimeBuilder {
             session_manager: None,
             tool_completion_observer: None,
             egress_gate: None,
+            agent_factory: None,
+            v1_protocol: false,
         }
     }
 
@@ -993,11 +998,14 @@ impl RuntimeBuilder {
             manager.register(plugin)?;
         }
 
-        let ctx = PluginContext::new(
+        let mut ctx = PluginContext::new(
             Arc::clone(&self.clock),
             Arc::clone(&self.credentials),
             TraceId::new(),
         );
+        if let Some(factory) = self.agent_factory {
+            ctx = ctx.with_agent_factory(factory);
+        }
         let declared_tools = manager
             .plugins()
             .ids()
@@ -1036,6 +1044,9 @@ impl RuntimeBuilder {
         // provider whose plugin failed to initialize is never routed to.
         let mut providers =
             ProviderRouter::new(manager.active_providers(), Arc::clone(&self.clock));
+        providers
+            .accounting
+            .set_rates(self.config.cost_rates.clone());
         if let Some(gate) = self.egress_gate.clone() {
             providers = providers.with_egress_gate(gate);
         }
@@ -1062,8 +1073,13 @@ impl RuntimeBuilder {
             )),
         };
 
+        let dispatcher = Arc::new(
+            super::dispatcher::ToolDispatcher::new(self.dispatch_limits)
+                .with_usage(providers.accounting.clone()),
+        );
         Ok(Runtime {
             plugins: manager,
+            v1_protocol: self.v1_protocol,
             providers: Arc::new(providers),
             sessions,
             governance: self.governance,
@@ -1071,7 +1087,7 @@ impl RuntimeBuilder {
             config: self.config,
             modules: module_registry,
             capabilities: capability_registry,
-            dispatcher: Arc::new(super::dispatcher::ToolDispatcher::new(self.dispatch_limits)),
+            dispatcher,
             session_locks: SessionLocks::default(),
             event_sink: RwLock::new(self.event_sink),
             context_projector: self.context_projector,

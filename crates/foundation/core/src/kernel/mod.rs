@@ -46,7 +46,8 @@ pub mod time;
 pub use error::{CoreError, CoreResult};
 pub use event::{Event, Topic};
 pub use ids::{
-    AgentId, ApprovalId, CapabilityId, ModelId, PluginId, RequestId, SessionId, TaskId, TraceId,
+    AgentId, ApprovalId, CapabilityId, ModelId, ModuleInstanceId, NamespaceId, PluginId, ProfileId,
+    RequestId, SessionId, TaskId, TraceId,
 };
 pub use lifecycle::Lifecycle;
 pub use metadata::Metadata;

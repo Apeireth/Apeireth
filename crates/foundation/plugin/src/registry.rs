@@ -31,6 +31,7 @@ use crate::plugin::Plugin;
 pub(crate) struct PluginEntry {
     pub(crate) plugin: Arc<dyn Plugin>,
     pub(crate) state: Lifecycle,
+    pub(crate) instance: apeireth_core::kernel::ModuleInstanceId,
     pub(crate) scope: crate::task_scope::ModuleTaskScope,
     pub(crate) errors: Vec<PluginError>,
     pub(crate) needs_cleanup: bool,
@@ -62,6 +63,7 @@ impl PluginRegistry {
             PluginEntry {
                 plugin,
                 state: Lifecycle::Registered,
+                instance: apeireth_core::kernel::ModuleInstanceId::new(),
                 scope: crate::task_scope::ModuleTaskScope::new(),
                 errors: Vec::new(),
                 needs_cleanup: false,

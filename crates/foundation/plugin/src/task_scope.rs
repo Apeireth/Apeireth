@@ -26,7 +26,7 @@ struct Tasks {
 struct Inner {
     tasks: Mutex<Tasks>,
     drained: AtomicWaker,
-    parent: Option<ModuleTaskScope>,
+    parents: Vec<ModuleTaskScope>,
 }
 
 /// Cloneable cancellation port; all clones belong to the same module instance.
@@ -65,17 +65,36 @@ impl ModuleTaskScope {
     /// A catalog generation or owned agent may be cancelled independently.
     pub fn child(&self) -> Self {
         Self(Arc::new(Inner {
-            parent: Some(self.clone()),
+            parents: vec![self.clone()],
+            ..Default::default()
+        }))
+    }
+
+    /// One invocation can belong to both a module and its calling agent.
+    pub fn joined(parents: Vec<Self>) -> Self {
+        Self(Arc::new(Inner {
+            parents,
             ..Default::default()
         }))
     }
 
     fn ancestors(&self) -> Vec<Self> {
-        let mut scopes = vec![self.clone()];
-        while let Some(parent) = scopes.last().and_then(|scope| scope.0.parent.clone()) {
-            scopes.push(parent);
+        let mut scopes = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut pending = vec![(self.clone(), false)];
+        while let Some((scope, visited)) = pending.pop() {
+            if visited {
+                scopes.push(scope);
+                continue;
+            }
+            if !seen.insert(Arc::as_ptr(&scope.0) as usize) {
+                continue;
+            }
+            pending.push((scope.clone(), true));
+            for parent in scope.0.parents.iter().rev() {
+                pending.push((parent.clone(), false));
+            }
         }
-        scopes.reverse();
         scopes
     }
 

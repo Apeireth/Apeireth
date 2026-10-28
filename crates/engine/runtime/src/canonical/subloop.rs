@@ -277,13 +277,13 @@ impl RuntimeSubLoopSpawner {
             )
             .await?;
 
-            let routed =
-                self.router
-                    .complete(&req)
-                    .await
-                    .map_err(|error| SubLoopError::Provider {
-                        reason: format!("module {} subloop: {error}", self.module_id),
-                    })?;
+            let routed = self
+                .router
+                .complete_for_session(self.session_id, self.execution.request, &req, None, None)
+                .await
+                .map_err(|error| SubLoopError::Provider {
+                    reason: format!("module {} subloop: {error}", self.module_id),
+                })?;
 
             let response = routed.response;
             // 与 M11 同类: usage 累加不得回绕 (debug panic / release 静默截断
@@ -420,6 +420,7 @@ impl RuntimeSubLoopSpawner {
                     .min(self.execution.dispatcher.limits.timeout);
                 let context = apeireth_plugin::ToolExecutionContext {
                     agent: self.execution.agent,
+                    principal: self.execution.dispatcher.principal(self.session_id),
                     session: Some(self.session_id),
                     turn: Some(self.execution.request),
                     call_id: call.id.clone(),
@@ -523,7 +524,13 @@ impl ModuleInvoker for RuntimeSubLoopSpawner {
 
         let routed = self
             .router
-            .complete(&NormalizedRequest::new(model, messages))
+            .complete_for_session(
+                self.session_id,
+                self.execution.request,
+                &NormalizedRequest::new(model, messages),
+                None,
+                None,
+            )
             .await
             .map_err(|error| ModuleInvocationError::Provider {
                 reason: format!("module {}: {error}", self.module_id),

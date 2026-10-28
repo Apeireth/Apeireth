@@ -44,6 +44,7 @@ pub struct ToolAuthorization {
 #[derive(Clone)]
 pub struct ToolExecutionContext {
     pub agent: AgentId,
+    pub principal: Option<crate::agents::AgentPrincipal>,
     pub session: Option<SessionId>,
     pub turn: Option<RequestId>,
     pub call_id: String,
