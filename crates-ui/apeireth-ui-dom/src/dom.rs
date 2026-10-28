@@ -23,9 +23,90 @@
 //! | [`UnavailableDom`] | —— | 🔵 未接线桩：每个操作都报 [`DomError::NotImplemented`] |
 
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use crate::listeners::ListenerTable;
+
+/// 元素盒（CSS 像素，语义与浏览器 `getBoundingClientRect()` 一致）。
+///
+/// ⚠️ **引擎不做布局**（ADR-0015）：`bounding_box` 是向 DOM/宿主**查询**，
+/// 不是引擎自己算出来的。内存后端只提供**脚本化**测量（测试用）。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ElementBox {
+    /// 左边（相对视口，CSS 像素）。
+    pub x: f64,
+    /// 上边（相对视口，CSS 像素）。
+    pub y: f64,
+    /// 宽（CSS 像素）。
+    pub width: f64,
+    /// 高（CSS 像素）。
+    pub height: f64,
+}
+
+impl ElementBox {
+    /// 构造元素盒（CSS 像素）。
+    pub fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+    /// 右边界（`x + width`）。
+    pub fn right(&self) -> f64 {
+        self.x + self.width
+    }
+    /// 下边界（`y + height`）。
+    pub fn bottom(&self) -> f64 {
+        self.y + self.height
+    }
+    /// 点是否落在盒内（命中测试的最基本形式）。
+    pub fn contains(&self, x: f64, y: f64) -> bool {
+        x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
+    }
+}
+
+/// 滚动度量（CSS 像素）。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ScrollMetrics {
+    /// 当前滚动位置（CSS 像素，0 = 顶部）。
+    pub scroll_top: f64,
+    /// 内容总高度（CSS 像素）。
+    pub scroll_height: f64,
+    /// 可视区高度（CSS 像素）。
+    pub client_height: f64,
+}
+
+impl ScrollMetrics {
+    /// 可滚动的最大 `scroll_top`（内容不足一屏时为 0）。
+    pub fn max_scroll_top(&self) -> f64 {
+        (self.scroll_height - self.client_height).max(0.0)
+    }
+    /// 把任意 `scroll_top` **夹到**合法区间。
+    pub fn clamp_scroll_top(&self, top: f64) -> f64 {
+        top.clamp(0.0, self.max_scroll_top())
+    }
+}
+
+/// 脚本化测量（**测试专用**）：一个节点的元素盒与滚动度量。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ScriptedMeasurement {
+    /// 该节点的元素盒。
+    pub bounding_box: ElementBox,
+    /// 该节点的滚动度量。
+    pub scroll_metrics: ScrollMetrics,
+}
+
+impl ScriptedMeasurement {
+    /// 构造脚本化测量。
+    pub fn new(bounding_box: ElementBox, scroll_metrics: ScrollMetrics) -> Self {
+        Self {
+            bounding_box,
+            scroll_metrics,
+        }
+    }
+}
 
 /// DOM 事件类型（按仓库实测使用面裁剪，不照抄浏览器 API 全集）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -122,6 +203,33 @@ pub trait Dom: 'static {
 
     /// 建一个文本节点。
     fn create_text(&self, data: &str) -> Result<Self::Node, DomError>;
+
+    /// ⭐ **元素盒（CSS 像素）** —— 与浏览器 `getBoundingClientRect()` **同语义**
+    /// （相对**视口**左上角、含边框、不含外边距）。
+    ///
+    /// ## 为什么是 CSS 像素而不是设备像素
+    ///
+    /// 上层（弹层定位、滚动、拖拽命中）用的是 CSS 像素；设备像素只在**上传/采样**时才需要
+    /// ⇒ ⇒ 换算放在一处，不要散落在各处
+    /// ⇒ ⇒ 否则 125% 缩放/紧凑密度下必然出现「差 1px」类缺陷。
+    ///
+    /// 默认实现返回 [`DomError::NotImplemented`]（**显式**不支持，不是静默零值）。
+    fn bounding_box(&self, node: &Self::Node) -> Result<ElementBox, DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// ⭐ **滚动度量**（CSS 像素）：当前滚动位置、内容高度、可视高度。
+    fn scroll_metrics(&self, node: &Self::Node) -> Result<ScrollMetrics, DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// ⭐ **设置滚动位置**（CSS 像素）⇒ 实现应把值**夹到** `[0, max_scroll_top]`。
+    fn set_scroll_top(&self, node: &Self::Node, top: f64) -> Result<(), DomError> {
+        let _ = (node, top);
+        Err(DomError::NotImplemented)
+    }
 
     /// 写属性。
     fn set_attribute(&self, node: &Self::Node, name: &str, value: &str) -> Result<(), DomError>;
@@ -456,6 +564,12 @@ pub struct InMemoryDom {
     nodes: RefCell<Vec<InMemoryNode>>,
     /// 事件监听器登记表（按 **(节点, 事件类型)** 索引 ⇒ 增量替换）。
     listeners: RefCell<ListenerTable<InMemoryNodeId, crate::events::ElementHandler>>,
+    /// ⭐ **脚本化测量表**（**测试用**，不是布局引擎）：节点 → (元素盒, 滚动度量)。
+    ///
+    /// 引擎不做布局（ADR-0015）⇒ ⇒ 内存后端**不计算**几何，只接受测试脚本注入的几何
+    /// ⇒ ⇒ 这样上层（弹层定位 / 滚动物理 / 命中测试）可以在 native 侧被确定性地测试。
+    /// 未注入 ⇒ 三个测量方法返回 [`DomError::NotImplemented`]（**显式**不支持）。
+    measurements: RefCell<HashMap<InMemoryNodeId, ScriptedMeasurement>>,
     ops: RefCell<VecDeque<RecordedOp>>,
     /// 操作日志的上界（超出后丢弃最旧的记录）。
     op_capacity: Cell<usize>,
@@ -472,6 +586,7 @@ impl Default for InMemoryDom {
         Self {
             nodes: RefCell::new(Vec::new()),
             listeners: RefCell::new(ListenerTable::new()),
+            measurements: RefCell::new(HashMap::new()),
             ops: RefCell::new(VecDeque::new()),
             op_capacity: Cell::new(DEFAULT_OP_CAPACITY),
         }
@@ -479,9 +594,32 @@ impl Default for InMemoryDom {
 }
 
 impl InMemoryDom {
+    /// 节点必须存在（测量 API 的公共前置检查）。
+    fn ensure_node_exists(&self, node: &InMemoryNodeId) -> Result<(), DomError> {
+        if self.nodes.borrow().get(node.0).is_none() {
+            return Err(DomError::NodeNotFound);
+        }
+        Ok(())
+    }
+
     /// 建一棵空的内存 DOM。
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// ⭐ **注入脚本化测量**（**测试用**）：给某个节点设定元素盒与滚动度量。
+    ///
+    /// ⚠️ 这不是布局引擎：引擎不做布局（ADR-0015）。这里只是让上层能在 native 侧
+    /// 对「测量 → 定位 / 滚动 / 命中」这条链做**确定性**测试。
+    pub fn script_measurement(
+        &self,
+        node: InMemoryNodeId,
+        bounding_box: ElementBox,
+        scroll_metrics: ScrollMetrics,
+    ) {
+        self.measurements
+            .borrow_mut()
+            .insert(node, ScriptedMeasurement::new(bounding_box, scroll_metrics));
     }
 
     /// 读节点标签（元素节点才有）。
@@ -717,6 +855,32 @@ impl InMemoryDom {
 }
 
 impl Dom for InMemoryDom {
+    fn bounding_box(&self, node: &InMemoryNodeId) -> Result<ElementBox, DomError> {
+        self.ensure_node_exists(node)?;
+        self.measurements
+            .borrow()
+            .get(node)
+            .map(|item| item.bounding_box)
+            .ok_or(DomError::NotImplemented)
+    }
+
+    fn scroll_metrics(&self, node: &InMemoryNodeId) -> Result<ScrollMetrics, DomError> {
+        self.ensure_node_exists(node)?;
+        self.measurements
+            .borrow()
+            .get(node)
+            .map(|item| item.scroll_metrics)
+            .ok_or(DomError::NotImplemented)
+    }
+
+    fn set_scroll_top(&self, node: &InMemoryNodeId, top: f64) -> Result<(), DomError> {
+        self.ensure_node_exists(node)?;
+        let mut measurements = self.measurements.borrow_mut();
+        let item = measurements.get_mut(node).ok_or(DomError::NotImplemented)?;
+        item.scroll_metrics.scroll_top = item.scroll_metrics.clamp_scroll_top(top);
+        Ok(())
+    }
+
     type Node = InMemoryNodeId;
 
     fn create_element(&self, tag: &str) -> Result<Self::Node, DomError> {
@@ -1295,6 +1459,98 @@ impl Dom for UnavailableDom {
 
 #[cfg(test)]
 mod tests {
+
+    // ── G1 布局测量（台账 L1-G1）──────────────────────────────────────────
+
+    /// **未注入脚本化测量 ⇒ 显式不支持**（不是静默返回 0）。
+    ///
+    /// 0 装纪律：引擎不做布局（ADR-0015）⇒ ⇒ 内存后端不能假装知道几何
+    /// ⇒ ⇒ 三个方法必须返回 [`DomError::NotImplemented`]，让上层立刻发现「没接线」。
+    #[test]
+    fn measurement_without_scripting_is_explicitly_unimplemented() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("div").expect("建元素必须成功");
+        assert!(matches!(
+            dom.bounding_box(&node),
+            Err(DomError::NotImplemented)
+        ));
+        assert!(matches!(
+            dom.scroll_metrics(&node),
+            Err(DomError::NotImplemented)
+        ));
+        assert!(matches!(
+            dom.set_scroll_top(&node, 10.0),
+            Err(DomError::NotImplemented)
+        ));
+    }
+
+    /// **脚本化测量可注入可读回**，且 `set_scroll_top` 会**夹到**合法区间。
+    #[test]
+    fn scripted_measurement_round_trips_and_clamps_scroll() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("div").expect("建元素必须成功");
+        dom.script_measurement(
+            node,
+            ElementBox::new(12.0, 34.0, 200.0, 100.0),
+            ScrollMetrics {
+                scroll_top: 0.0,
+                scroll_height: 1000.0,
+                client_height: 300.0,
+            },
+        );
+        assert_eq!(
+            dom.bounding_box(&node),
+            Ok(ElementBox::new(12.0, 34.0, 200.0, 100.0))
+        );
+        let metrics = dom.scroll_metrics(&node).expect("度量必须可读");
+        assert_eq!(metrics.max_scroll_top(), 700.0);
+        // 超过上界 ⇒ 夹到 700；负值 ⇒ 夹到 0。
+        dom.set_scroll_top(&node, 9999.0).expect("设置滚动必须成功");
+        assert_eq!(dom.scroll_metrics(&node).expect("可读").scroll_top, 700.0);
+        dom.set_scroll_top(&node, -5.0).expect("设置滚动必须成功");
+        assert_eq!(dom.scroll_metrics(&node).expect("可读").scroll_top, 0.0);
+    }
+
+    /// 元素盒的几何辅助（命中测试的最基本形式）。
+    #[test]
+    fn element_box_geometry_helpers() {
+        let rect = ElementBox::new(10.0, 20.0, 100.0, 50.0);
+        assert_eq!(rect.right(), 110.0);
+        assert_eq!(rect.bottom(), 70.0);
+        assert!(rect.contains(10.0, 20.0), "左上角算在内");
+        assert!(rect.contains(109.9, 69.9));
+        assert!(
+            !rect.contains(110.0, 20.0),
+            "右边界**不**算在内（半开区间）"
+        );
+        assert!(!rect.contains(10.0, 70.0), "下边界**不**算在内");
+        assert!(!rect.contains(9.9, 20.0));
+    }
+
+    /// 内容不足一屏 ⇒ 最大滚动量为 0（不会出现负的可滚动距离）。
+    #[test]
+    fn scroll_metrics_never_report_negative_range() {
+        let metrics = ScrollMetrics {
+            scroll_top: 0.0,
+            scroll_height: 120.0,
+            client_height: 300.0,
+        };
+        assert_eq!(metrics.max_scroll_top(), 0.0);
+        assert_eq!(metrics.clamp_scroll_top(50.0), 0.0);
+    }
+
+    /// 对不存在的节点做测量 ⇒ `NodeNotFound`（与「未接线」区分开）。
+    #[test]
+    fn measuring_a_missing_node_is_not_found() {
+        let dom = InMemoryDom::new();
+        let _existing = dom.create_element("div").expect("建元素必须成功");
+        let mut other = dom.create_element("span").expect("建元素必须成功");
+        other = InMemoryNodeId(other.0 + 1000);
+        assert!(matches!(
+            dom.bounding_box(&other),
+            Err(DomError::NodeNotFound)
+        ));
+    }
     use super::*;
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;

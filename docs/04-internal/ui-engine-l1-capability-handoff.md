@@ -30,7 +30,7 @@
 
 | # | 缺口 | 现状证据 | 判据（可执行） | 批次 |
 |---|------|----------|----------------|------|
-| G1 | **布局测量 API** | `apeireth-ui-dom/src/dom.rs` 中 `getBoundingClientRect` / `scrollHeight` / `scrollTop` **0 命中** | native：用 `InMemoryDom` 造已知几何 ⇒ 断言四个 API 返回值；浏览器：真实元素盒与 `getBoundingClientRect` 逐值一致 | 第 1 批 |
+| G1 | **布局测量 API** | ✅ **2026-10-28 已落地 API 面**：`ElementBox` / `ScrollMetrics` + `Dom::bounding_box/scroll_metrics/set_scroll_top`（默认 `NotImplemented`）；`InMemoryDom` 脚本化测量（测试专用）；`WebDom` 接真实 DOM。**IMPLEMENTED / 未接线（渲染器未消费）/ 浏览器未实测** | 余下两件：①渲染器或上层**消费**该 API（PRODUCTION WIRED）；②浏览器侧逐值一致证据 | 第 1 批（API 已完成） |
 | G2 | **事件面与载荷** | 事件枚举 **5 类**（`dom.rs:29-53`）；`Event` 已有 `target_value` 字段（`events.rs:114`），但浏览器后端填充稀薄 | 枚举覆盖生产实际使用面（click / input / change / focusout / keydown / keyup / pointer 等）；浏览器内合成事件断言 `target_value` / `current_target` / 坐标齐备 | 第 1 批 |
 | G3 | **焦点 / IME / a11y 通道** | 仅 `focusout`；无 focus 栈 / trap / `focus()` / `aria-live` | focus 栈与 trap 的行为测试（Tab 循环、Esc 归还）；`compositionstart/end` 静默期不触发受控写回 | 第 1 批 |
 | G4 | **受控输入闭环（双向）** | **已接线**：`set_property` 在 `renderer.rs` 出现 12 处、`patch_props` 先 `get_property` 回读再写、宏支持 `bind:value` / `bind:checked`（`apeireth-ui-macro/src/view.rs:322`） | 补「输入 ⇒ 状态 ⇒ DOM」全链浏览器断言 + IME 期间不打断；**无需新建**，只需补证据与边界用例 | 第 1 批 |

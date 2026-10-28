@@ -31,7 +31,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use web_sys::{Document, Element, Event, KeyboardEvent, MouseEvent, Node, Text};
 
-use crate::dom::{Dom, DomError, EventKind};
+use crate::dom::{Dom, DomError, ElementBox, EventKind, ScrollMetrics};
 use crate::events::{DomEvent, ElementHandler};
 use crate::listeners::ListenerTable;
 
@@ -156,6 +156,40 @@ impl WebDom {
 }
 
 impl Dom for WebDom {
+    fn bounding_box(&self, node: &Self::Node) -> Result<ElementBox, DomError> {
+        let element = self.as_element(node)?;
+        let rect = element.get_bounding_client_rect();
+        Ok(ElementBox::new(
+            rect.x(),
+            rect.y(),
+            rect.width(),
+            rect.height(),
+        ))
+    }
+
+    fn scroll_metrics(&self, node: &Self::Node) -> Result<ScrollMetrics, DomError> {
+        let element = self.as_element(node)?;
+        Ok(ScrollMetrics {
+            scroll_top: f64::from(element.scroll_top()),
+            scroll_height: f64::from(element.scroll_height()),
+            client_height: f64::from(element.client_height()),
+        })
+    }
+
+    fn set_scroll_top(&self, node: &Self::Node, top: f64) -> Result<(), DomError> {
+        self.ensure_writable(node)?;
+        let element = self.as_element(node)?;
+        // 浏览器侧 `scrollTop` 是整数像素；先按真实度量**夹住**再写，
+        // ⇒ 避免 `f64::NAN` / 负值 / 超界写成非法状态。
+        let metrics = ScrollMetrics {
+            scroll_top: 0.0,
+            scroll_height: f64::from(element.scroll_height()),
+            client_height: f64::from(element.client_height()),
+        };
+        element.set_scroll_top(metrics.clamp_scroll_top(top).round() as i32);
+        Ok(())
+    }
+
     type Node = Node;
 
     fn create_element(&self, tag: &str) -> Result<Self::Node, DomError> {
