@@ -385,7 +385,7 @@ claims:
       - docs/04-internal/governance-chain-drill-2026-10-20.md
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: c9251271
+    verified_at: 2f9ca243
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
     owner: governance
     next_review: "2026-11-20"
