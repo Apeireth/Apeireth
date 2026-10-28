@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: ad5597c93280fc938c34de89ac209a497454c0dbb20c0d53ce28803d4c14e0a3
+claims_sha256: bd5ae562241abdf7606f4c02f8dfadae92ea725700f8d3d3790fc062c32347f8
 claims_total: 32
 items:
   - id: "rt.provider_router"
@@ -70,19 +70,31 @@ items:
         - "crates/capabilities/tools/src/mcp_bridge/config.rs"
         - "crates/capabilities/tools/src/mcp_bridge/governance.rs"
         - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/definition.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/connection.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/module.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/transport.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production_mcp.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/lib.rs"
         - "crates/capabilities/tools/src/mcp_bridge/bridge.rs"
         - "crates/capabilities/tools/src/mcp_bridge/catalog.rs"
         - "crates/capabilities/tools/src/mcp_bridge/config.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/connection.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/definition.rs"
         - "crates/capabilities/tools/src/mcp_bridge/governance.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/module.rs"
+        - "crates/capabilities/tools/src/mcp_bridge/transport.rs"
         - "crates/engine/runtime-assembly/src/canonical/production.rs"
+        - "crates/engine/runtime-assembly/src/canonical/production_mcp.rs"
     default_enabled: false
     validated:
       tests:
         - "crates/capabilities/tools/src/mcp_bridge/config.rs"
         - "crates/capabilities/tools/src/mcp_bridge/catalog.rs"
+        - "crates/engine/runtime-assembly/tests/production_mcp_factory.rs"
+        - "crates/engine/runtime-assembly/tests/convergence_mcp.rs"
       claims_id: "tool.mcp_bridge"
     gaps:
       - "能力矩阵未出现开关 APEIRETH_ENABLE_MCP（待补）"
@@ -618,13 +630,17 @@ items:
         - "crates/capabilities/tools/src/shell/execution.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
         - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
+        - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs"
     wired:
       production_refs:
         - "crates/capabilities/tools/src/exec_pipeline/mod.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
         - "crates/capabilities/tools/src/shell/execution.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs"
         - "crates/engine/runtime-assembly/src/canonical/production.rs"
         - "crates/engine/runtime-assembly/src/canonical/tool_modules.rs"
+        - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
         - "crates/engine/runtime/src/canonical/capability.rs"
         - "crates/engine/runtime/src/canonical/dispatch_admission.rs"
         - "crates/engine/runtime/src/canonical/dispatcher.rs"
@@ -646,6 +662,7 @@ items:
         - "crates/engine/runtime/tests/registry_runtime_v1.rs"
         - "crates/engine/runtime-assembly/tests/capability_modules_v1.rs"
         - "crates/adapters/cli/tests/gateway_panels.rs"
+        - "crates/engine/runtime-assembly/tests/production_cognitive_v1.rs"
       claims_id: "rt.registered_module_v1"
     gaps:
       []
@@ -657,11 +674,15 @@ items:
         - "crates/engine/runtime/src/canonical/instances/control.rs"
         - "crates/engine/runtime/src/canonical/accounting.rs"
         - "crates/foundation/plugin/src/agents.rs"
+        - "crates/engine/runtime/src/canonical/execution_view.rs"
+        - "crates/engine/runtime/src/canonical/instances/hot.rs"
     wired:
       production_refs:
         - "crates/engine/runtime/src/canonical/accounting.rs"
+        - "crates/engine/runtime/src/canonical/execution_view.rs"
         - "crates/engine/runtime/src/canonical/instances.rs"
         - "crates/engine/runtime/src/canonical/instances/control.rs"
+        - "crates/engine/runtime/src/canonical/instances/hot.rs"
         - "crates/foundation/plugin/src/agents.rs"
     default_enabled: "n/a"
     validated:
@@ -669,7 +690,7 @@ items:
         - "crates/engine/runtime-assembly/tests/convergence_agents.rs"
       claims_id: "rt.owned_agents"
     gaps:
-      - "未达 PRODUCTION WIRED：可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。"
+      - "未达 PRODUCTION WIRED：可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents…"
   - id: "mem.registered_namespace"
     capability: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"
     implemented:

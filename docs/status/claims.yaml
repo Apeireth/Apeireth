@@ -28,11 +28,11 @@ claims:
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
 
   - id: core.cost_router
     title: "成本分级路由（H-P2，四档选模）"
@@ -44,11 +44,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: b419826c
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
-    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+    notes: "默认关 fail-closed；CLI chat 任务选型已接；网关任务源路由/显式档 CLI 旗标未接线（H-P2 记录）。；2026-10-22 批次复核：core cost_router 12 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
 
   - id: tool.task_board
     title: "任务簿（V6-a 持久任务队列工具面）"
@@ -62,11 +62,11 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: b419826c
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
-    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+    notes: "写面每次人批；失败只能人判；无 failed/retry 动作面。；2026-10-22 批次复核：assembly task_board_tool 6 + cli task_board_knob 2 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
 
   - id: tool.mcp_bridge
     title: "MCP 外部工具桥（catalog/连接/治理映射/配置面）"
@@ -79,14 +79,21 @@ claims:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/governance.rs
       - crates/engine/runtime-assembly/src/canonical/production.rs
+      - crates/capabilities/tools/src/mcp_bridge/definition.rs
+      - crates/capabilities/tools/src/mcp_bridge/connection.rs
+      - crates/capabilities/tools/src/mcp_bridge/module.rs
+      - crates/capabilities/tools/src/mcp_bridge/transport.rs
+      - crates/engine/runtime-assembly/src/canonical/production_mcp.rs
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+      - crates/engine/runtime-assembly/tests/production_mcp_factory.rs
+      - crates/engine/runtime-assembly/tests/convergence_mcp.rs
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
-    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-28 Phase 3 复核：生产工具通过普通 ToolModule 装配；动态 MCP 仍通过同一 CapabilityRegistry/Dispatcher 的独立取消 scope 兼容入口。transport 与动态 owner 完整 Plugin 生命周期未迁移，默认开关保持 OFF。；本批复核：ProductionModules 注册拥有生命周期的 McpPlugin；动态目录 generation 撤销、描述符审批 pin、只读预设撤销、断线/停止/原生进程清理真实 Runtime 回归通过。显式 shutdown 是完整 join/drain 入口，外部 Arc 保留的放弃路径未全部收口。"
+    notes: "服务器配置 = APEIRETH_MCP_SERVERS env + mcp-servers.json（拒开）；管理 UI/健康检查面未接线。；2026-10-22 批次复核：tools-canonical mcp_bridge 15 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-28 Phase 3 复核：生产工具通过普通 ToolModule 装配；动态 MCP 仍通过同一 CapabilityRegistry/Dispatcher 的独立取消 scope 兼容入口。transport 与动态 owner 完整 Plugin 生命周期未迁移，默认开关保持 OFF。；本批复核：ProductionModules 注册拥有生命周期的 McpPlugin；动态目录 generation 撤销、描述符审批 pin、只读预设撤销、断线/停止/原生进程清理真实 Runtime 回归通过。显式 shutdown 是完整 join/drain 入口，外部 Arc 保留的放弃路径未全部收口。；2026-10-28 生产收敛：默认 opt-in MCP 接线改为 McpDefinition 资源工厂；外部 Arc 保留时关闭/回收、旧工具代次、受管热控制与实际 stdio 生产回归已验证。配置预览用 mcp_definition，mcp_bridge 仅初始化后返回 Arc；完整全量证据见本批验收报告。"
 
   - id: tool.voice_speak
     title: "发声工具面（系统 TTS 合成即播 + 播放纪律 + 账本）"
@@ -100,11 +107,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: b419826c
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
-    notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+    notes: "情绪→语气微调生产情绪源未接线（无数据 = 零微调，如实）；定制音色后置。；2026-10-22 批次复核：voice_speak 16 passed / 2 ignored；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
 
   - id: sec.egress_control
     title: "受控出网（域名/地址许可 + 策略档；fetch 工具走同一闸）"
@@ -188,7 +195,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -284,11 +291,11 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: b419826c
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
-    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+    notes: "APEIRETH_TLS_CERT + APEIRETH_TLS_KEY 指向 PEM 才启用；缺/坏 PEM fail-closed；状态三态 + 审计事件 gateway.tls_enabled；非默认开。；2026-10-22 批次复核：gateway tls_serve 7 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
 
   - id: sec.storage_envelope_crypto
     title: "会话/记忆静态信封加密 + 备份恢复（B6 库级 + B6-2a sessions.data 试点）"
@@ -341,11 +348,11 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: b419826c
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+    notes: "R8-B1 b6d902ce 适配器（ChainOutcome → GovernanceVerdict 四态映射）；R8-B2 已接生产装配根：builder.with_governance(governance_chain::production(...))，回滚 = 换回 Arc<GovernancePipeline> 一行；既有 CLI 治理/审批测试期望不变。2026-10-22 抬级：原「零生产接线」口径失效。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
 
   - id: gov.reflection_queue
     title: "R8-C 进程内延迟反思队列——默认未装配、零行为变化"
@@ -520,11 +527,11 @@ claims:
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
       - crates/engine/organ/src/nociception.rs
-    verified_at: b419826c
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-organ --lib nociception"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+    notes: "只观测记账、不改错误/重试决策（0 装边界）；失败分类为近似。；2026-10-22 批次复核：runtime bio_pain_wiring 4 passed；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-22 recon 接线批复核：lib.rs / production.rs 变更均为新增可选字段与 env 接线，本 claim 语义未变，逐条确认仍成立；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
 
   - id: bio.recovery_protocol
     title: "再生→恢复协议接失败链（W3.4，与 bio_pain 同开关，默认关）"
@@ -569,15 +576,18 @@ claims:
       - crates/capabilities/tools/src/shell/execution.rs
       - crates/capabilities/tools/src/process/mod.rs
       - crates/capabilities/tools/src/exec_pipeline/mod.rs
+      - crates/engine/runtime/src/canonical/behavior_adapter.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive_registry.rs
     tests:
       - crates/engine/runtime/tests/registry_runtime_v1.rs
       - crates/engine/runtime-assembly/tests/capability_modules_v1.rs
       - crates/adapters/cli/tests/gateway_panels.rs
-    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+      - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
-    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。"
+    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。"
 
   - id: rt.owned_agents
     title: "同一 Runtime 的模块拥有独立 Agent 与分层核算"
@@ -589,13 +599,15 @@ claims:
       - crates/engine/runtime/src/canonical/instances/control.rs
       - crates/engine/runtime/src/canonical/accounting.rs
       - crates/foundation/plugin/src/agents.rs
+      - crates/engine/runtime/src/canonical/execution_view.rs
+      - crates/engine/runtime/src/canonical/instances/hot.rs
     tests:
       - crates/engine/runtime-assembly/tests/convergence_agents.rs
-    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test convergence_agents"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。"
+    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents 端口，模块停止不影响主 Agent。PortableHost 已接线；桌面 Raw Runtime 和旧 SubLoop 的完整多实例迁移仍未完成，维持 IMPLEMENTED 口径。"
 
   - id: mem.registered_namespace
     title: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"
@@ -612,8 +624,8 @@ claims:
       - crates/engine/runtime/src/canonical/profiles.rs
     tests:
       - crates/engine/runtime-assembly/tests/convergence_memory.rs
-    verified_at: bbb7b58625043a204859bc42a758819bed26cd1d
+    verified_at: fc3e2c38eba058c76ebfe5b37f420171d40f66f6
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test convergence_memory"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。"
+    notes: "新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Namespace。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。"
