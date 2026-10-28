@@ -1,9 +1,15 @@
 //! Common tool invocation boundary. Catalogs remain owned by the registries.
 //! Governance admission stays in the canonical runtime, including frozen approval.
 
+use apeireth_core::kernel::{AgentId, PluginId};
+use apeireth_plugin::{
+    ToolAuthorization, ToolCaller, ToolCancellation, ToolConcurrency, ToolExecutionContext,
+    ToolExecutionPolicy, ToolPlatform,
+};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use apeireth_core::kernel::{CapabilityId, SessionId, TaskId};
 use apeireth_plugin::{task_scope::ModuleTaskScope, FrozenInvocation, ToolCapability};
@@ -64,6 +70,10 @@ pub enum DispatchErrorCode {
     Panicked,
     InvalidResult,
     ResultLimit,
+    Unregistered,
+    PlatformUnavailable,
+    PermissionDenied,
+    DuplicateCallId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -88,6 +98,8 @@ pub fn failure(call: &ToolCall, code: DispatchErrorCode, message: impl Into<Stri
 pub struct ToolDispatcher {
     pub limits: DispatchLimits,
     scopes: RwLock<BTreeMap<SessionId, ToolScope>>,
+    agents: RwLock<BTreeMap<SessionId, AgentId>>,
+    concurrency: Mutex<BTreeMap<(CapabilityId, usize), Arc<tokio::sync::Semaphore>>>,
 }
 
 impl ToolDispatcher {
@@ -95,7 +107,54 @@ impl ToolDispatcher {
         Self {
             limits,
             scopes: RwLock::new(BTreeMap::new()),
+            agents: RwLock::new(BTreeMap::new()),
+            concurrency: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    pub fn scope(&self, session: SessionId) -> ToolScope {
+        self.scopes
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session)
+            .cloned()
+            .unwrap_or(ToolScope::All)
+    }
+    pub(crate) fn scope_snapshot(&self, session: SessionId) -> Option<Vec<CapabilityId>> {
+        match self.scope(session) {
+            ToolScope::All => None,
+            ToolScope::Only(ids) => Some(ids.into_iter().collect()),
+        }
+    }
+
+    pub fn set_agent(&self, session: SessionId, agent: AgentId) {
+        self.agents
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(session, agent);
+    }
+    pub fn agent(&self, session: SessionId) -> AgentId {
+        self.agents
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session)
+            .copied()
+            .unwrap_or_else(|| AgentId::from_uuid(session.as_uuid()))
+    }
+    fn permits(&self, tool: &dyn ToolCapability) -> Option<Arc<tokio::sync::Semaphore>> {
+        let count = match tool.execution_policy().concurrency {
+            ToolConcurrency::Parallel => return None,
+            ToolConcurrency::Serial => 1,
+            ToolConcurrency::Limited(count) => count,
+        };
+        Some(
+            self.concurrency
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .entry((tool.id().clone(), count))
+                .or_insert_with(|| Arc::new(tokio::sync::Semaphore::new(count)))
+                .clone(),
+        )
     }
 
     pub fn set_scope(&self, session: SessionId, scope: ToolScope) {
@@ -125,6 +184,37 @@ impl ToolDispatcher {
                 call,
                 DispatchErrorCode::ScopeDenied,
                 "tool is outside this session's tool scope",
+            ));
+        }
+        let policy = tool.execution_policy();
+        if matches!(policy.concurrency, ToolConcurrency::Limited(count) if count == 0 || count > tokio::sync::Semaphore::MAX_PERMITS)
+            || policy.timeout.is_some_and(|d| d.is_zero())
+        {
+            return Err(failure(
+                call,
+                DispatchErrorCode::InvalidArguments,
+                "invalid registered execution limits",
+            ));
+        }
+        if policy.platform == ToolPlatform::Desktop
+            && !cfg!(any(windows, target_os = "linux", target_os = "macos"))
+        {
+            return Err(failure(
+                call,
+                DispatchErrorCode::PlatformUnavailable,
+                "tool is unavailable on this platform",
+            ));
+        }
+        if session.is_some_and(|session| {
+            policy
+                .required_capabilities
+                .iter()
+                .any(|id| !self.allows(session, id))
+        }) {
+            return Err(failure(
+                call,
+                DispatchErrorCode::ScopeDenied,
+                "required capability is outside this session's scope",
             ));
         }
         if !call.arguments.is_object()
@@ -177,6 +267,41 @@ impl ToolDispatcher {
             dispatcher: self.clone(),
             scope,
             legacy_open_properties,
+            module: PluginId::new("host.legacy").expect("static module id"),
+            context: None,
+        })
+    }
+    pub(crate) fn adapt_context(
+        self: &Arc<Self>,
+        tool: Arc<dyn ToolCapability>,
+        scope: ModuleTaskScope,
+        legacy: bool,
+        context: ToolExecutionContext,
+    ) -> Arc<dyn ToolCapability> {
+        Arc::new(LegacyToolAdapter {
+            module: context.module.clone(),
+            context: Some(context),
+            tool,
+            scope: Some(scope),
+            legacy_open_properties: legacy,
+            dispatcher: self.clone(),
+        })
+    }
+
+    pub(crate) fn adapt_owned(
+        self: &Arc<Self>,
+        tool: Arc<dyn ToolCapability>,
+        scope: ModuleTaskScope,
+        legacy: bool,
+        module: PluginId,
+    ) -> Arc<dyn ToolCapability> {
+        Arc::new(LegacyToolAdapter {
+            module,
+            context: None,
+            tool,
+            scope: Some(scope),
+            legacy_open_properties: legacy,
+            dispatcher: self.clone(),
         })
     }
 }
@@ -187,6 +312,8 @@ pub struct LegacyToolAdapter {
     dispatcher: Arc<ToolDispatcher>,
     scope: Option<ModuleTaskScope>,
     legacy_open_properties: bool,
+    module: PluginId,
+    context: Option<ToolExecutionContext>,
 }
 
 #[async_trait]
@@ -199,6 +326,26 @@ impl ToolCapability for LegacyToolAdapter {
     }
     fn freeze_invocation(&self, call: &ToolCall) -> Result<Option<FrozenInvocation>, ToolResult> {
         self.tool.freeze_invocation(call)
+    }
+    fn execution_policy(&self) -> ToolExecutionPolicy {
+        let mut policy = self.tool.execution_policy();
+        policy.legacy_arguments = self.legacy_open_properties;
+        policy
+    }
+    async fn invoke_with_context(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        context: &ToolExecutionContext,
+    ) -> ToolResult {
+        let mut context = context.clone();
+        context.module = self.module.clone();
+        context.module_tasks = self
+            .scope
+            .clone()
+            .unwrap_or_else(|| context.module_tasks.clone());
+        self.execute_call(call, frozen, context.session, Some(context))
+            .await
     }
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
         self.invoke_in_session(call, None, None).await
@@ -216,6 +363,19 @@ impl ToolCapability for LegacyToolAdapter {
         frozen: Option<&FrozenInvocation>,
         session: Option<SessionId>,
     ) -> ToolResult {
+        self.execute_call(call, frozen, session, self.context.clone())
+            .await
+    }
+}
+
+impl LegacyToolAdapter {
+    async fn execute_call(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        session: Option<SessionId>,
+        context: Option<ToolExecutionContext>,
+    ) -> ToolResult {
         if let Err(error) = self.dispatcher.validate(
             session,
             self.tool.as_ref(),
@@ -224,6 +384,52 @@ impl ToolCapability for LegacyToolAdapter {
         ) {
             return error;
         }
+        let policy = self.tool.execution_policy();
+        let timeout = policy
+            .timeout
+            .unwrap_or(self.dispatcher.limits.timeout)
+            .min(self.dispatcher.limits.timeout);
+        let context = context.unwrap_or_else(|| ToolExecutionContext {
+            agent: session
+                .map(|session| self.dispatcher.agent(session))
+                .unwrap_or_default(),
+            session,
+            turn: None,
+            call_id: call.id.clone(),
+            caller: ToolCaller::Host,
+            module: self.module.clone(),
+            tool_scope: session.and_then(|session| self.dispatcher.scope_snapshot(session)),
+            authorization: ToolAuthorization::default(),
+            cancellation: ToolCancellation::default(),
+            deadline: Instant::now()
+                .checked_add(timeout)
+                .unwrap_or_else(Instant::now),
+            trace: None,
+            module_tasks: self.scope.clone().unwrap_or_default(),
+            resource_lease: None,
+        });
+        if policy.permission == apeireth_plugin::ToolPermissionPolicy::RequireApproval
+            && !context.authorization.approved
+        {
+            return failure(
+                call,
+                DispatchErrorCode::PermissionDenied,
+                "registered tool requires an approved invocation",
+            );
+        }
+        if context.cancellation.is_cancelled()
+            || context.call_id != call.id
+            || context.session != session
+        {
+            return failure(
+                call,
+                DispatchErrorCode::Stopping,
+                "call cancelled or execution context mismatch",
+            );
+        }
+        let timeout = timeout.min(context.deadline.saturating_duration_since(Instant::now()));
+        let _cancel_on_drop = context.cancellation.cancel_on_drop();
+        let permits = self.dispatcher.permits(self.tool.as_ref());
         let tool = self.tool.clone();
         let owned_call = call.clone();
         let frozen = frozen.cloned();
@@ -232,37 +438,56 @@ impl ToolCapability for LegacyToolAdapter {
         // No detached task may outlive a module's drain boundary.
         let mut tasks = tokio::task::JoinSet::new();
         tasks.spawn(async move {
-            let invoke = tool.invoke_in_session(&owned_call, frozen.as_ref(), session);
+            let mut context = context;
+            let invoke = async {
+                let _permit = match permits {
+                    Some(permits) => Some(Arc::new(
+                        permits
+                            .acquire_owned()
+                            .await
+                            .expect("local semaphore stays open"),
+                    )),
+                    None => None,
+                };
+                context.resource_lease = _permit.as_ref().map(|permit| {
+                    let lease: Arc<dyn Send + Sync> = permit.clone();
+                    Arc::downgrade(&lease)
+                });
+                apeireth_plugin::tool_execution::scope_native_execution(
+                    &context,
+                    tool.invoke_with_context(&owned_call, frozen.as_ref(), &context),
+                )
+                .await
+            };
             match scope {
                 Some(scope) => scope.run(invoke).await,
                 None => Ok(invoke.await),
             }
         });
-        let result =
-            match tokio::time::timeout(self.dispatcher.limits.timeout, tasks.join_next()).await {
-                Ok(Some(Ok(Ok(result)))) => result,
-                Ok(Some(Ok(Err(_)))) => {
-                    return failure(
-                        call,
-                        DispatchErrorCode::Stopping,
-                        "module stopping; execution may be incomplete",
-                    )
-                }
-                Ok(_) => {
-                    return failure(
-                        call,
-                        DispatchErrorCode::Panicked,
-                        "tool task failed; execution may be incomplete",
-                    )
-                }
-                Err(_) => {
-                    return failure(
-                        call,
-                        DispatchErrorCode::Timeout,
-                        "tool deadline exceeded; execution may be incomplete",
-                    )
-                }
-            };
+        let result = match tokio::time::timeout(timeout, tasks.join_next()).await {
+            Ok(Some(Ok(Ok(result)))) => result,
+            Ok(Some(Ok(Err(_)))) => {
+                return failure(
+                    call,
+                    DispatchErrorCode::Stopping,
+                    "module stopping; execution may be incomplete",
+                )
+            }
+            Ok(_) => {
+                return failure(
+                    call,
+                    DispatchErrorCode::Panicked,
+                    "tool task failed; execution may be incomplete",
+                )
+            }
+            Err(_) => {
+                return failure(
+                    call,
+                    DispatchErrorCode::Timeout,
+                    "tool deadline exceeded; execution may be incomplete",
+                )
+            }
+        };
         if result.tool_call_id != call.id
             || result.name.as_deref().is_some_and(|name| name != call.name)
         {
@@ -278,6 +503,19 @@ impl ToolCapability for LegacyToolAdapter {
                 DispatchErrorCode::ResultLimit,
                 "tool output exceeds byte limit; execution may have completed",
             );
+        }
+        if let (Some(schema), apeireth_protocol::canonical::ToolOutcome::Ok { value }) =
+            (&policy.output_schema, &result.outcome)
+        {
+            if jsonschema::validator_for(schema)
+                .map_or(true, |validator| !validator.is_valid(value))
+            {
+                return failure(
+                    call,
+                    DispatchErrorCode::InvalidResult,
+                    "tool output violates its registered schema; execution may have completed",
+                );
+            }
         }
         // The compatibility ABI returns ToolResult; correlation has already
         // crossed the same V1 fact boundary. Legacy durable logs stay stable.
@@ -313,4 +551,20 @@ pub(crate) fn fits_json(value: &impl Serialize, limit: usize) -> bool {
         }
     }
     serde_json::to_writer(Counter(limit), value).is_ok()
+}
+
+/// Reject malformed model batches before recording assistant calls or performing effects.
+/// Wire ids are checked within a response; durable idempotency still uses ToolEventV1 identities.
+pub(super) fn validate_call_batch(calls: &[ToolCall]) -> Result<(), DispatchFailure> {
+    let mut ids = BTreeSet::new();
+    for call in calls {
+        if call.id.trim().is_empty() || !ids.insert(&call.id) {
+            return Err(DispatchFailure {
+                code: DispatchErrorCode::DuplicateCallId,
+                message: "empty or duplicate tool call ID in one model response; no tools executed"
+                    .into(),
+            });
+        }
+    }
+    Ok(())
 }

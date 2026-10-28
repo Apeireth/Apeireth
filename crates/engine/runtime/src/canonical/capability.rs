@@ -33,6 +33,13 @@ pub trait CapabilityProvider: Send + Sync {
     /// Stable provider/source identity.
     fn id(&self) -> &str;
 
+    /// Snapshot this host provider into the existing Plugin lifecycle protocol.
+    fn tool_module(&self) -> Result<apeireth_plugin::ToolModule, String> {
+        let id =
+            apeireth_core::kernel::PluginId::new(self.id()).map_err(|error| error.to_string())?;
+        apeireth_plugin::ToolModule::new(id, self.capabilities()).map_err(|error| error.to_string())
+    }
+
     /// Capabilities currently exposed by this provider.
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>>;
 }
@@ -40,6 +47,16 @@ pub trait CapabilityProvider: Send + Sync {
 struct RegisteredCapability {
     owner: String,
     capability: Arc<dyn ToolCapability>,
+    module: Option<apeireth_core::kernel::PluginId>,
+    scope: apeireth_plugin::task_scope::ModuleTaskScope,
+    legacy: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct ToolRegistration {
+    pub module: Option<apeireth_core::kernel::PluginId>,
+    pub scope: apeireth_plugin::task_scope::ModuleTaskScope,
+    pub legacy: bool,
 }
 
 /// The dispatchable capability registry owned by one runtime instance.
@@ -83,11 +100,12 @@ impl CapabilityRegistry {
         self.register_all(owner, vec![capability])
     }
 
+    #[cfg(test)]
     pub(crate) fn register_all_for_builder(
         &self,
-        capabilities: Vec<Arc<dyn ToolCapability>>,
+        tools: Vec<Arc<dyn ToolCapability>>,
     ) -> Result<(), String> {
-        self.register_all("runtime", capabilities)
+        self.register_all("runtime", tools)
     }
 
     fn register_all(
@@ -95,7 +113,42 @@ impl CapabilityRegistry {
         owner: impl Into<String>,
         capabilities: Vec<Arc<dyn ToolCapability>>,
     ) -> Result<(), String> {
-        let owner = owner.into();
+        self.register_scoped(
+            owner.into(),
+            capabilities,
+            None,
+            apeireth_plugin::task_scope::ModuleTaskScope::new(),
+            true,
+        )
+    }
+
+    pub(crate) fn register_module(
+        &self,
+        module: &apeireth_core::kernel::PluginId,
+        capabilities: Vec<Arc<dyn ToolCapability>>,
+        scope: apeireth_plugin::task_scope::ModuleTaskScope,
+        legacy: bool,
+    ) -> Result<(), String> {
+        self.register_scoped(
+            module.to_string(),
+            capabilities,
+            Some(module.clone()),
+            scope,
+            legacy,
+        )
+    }
+
+    fn register_scoped(
+        &self,
+        owner: String,
+        capabilities: Vec<Arc<dyn ToolCapability>>,
+        module: Option<apeireth_core::kernel::PluginId>,
+        scope: apeireth_plugin::task_scope::ModuleTaskScope,
+        legacy: bool,
+    ) -> Result<(), String> {
+        if !scope.is_open() {
+            return Err("module is stopping".into());
+        }
         // Lock order is always entries -> controls (see `register_control`).
         let mut entries = write_lock_or_recover(&self.entries);
         let controls = read_lock_or_recover(&self.controls);
@@ -129,6 +182,13 @@ impl CapabilityRegistry {
                 .map(|capability| RegisteredCapability {
                     owner: owner.clone(),
                     capability,
+                    module: module.clone(),
+                    scope: if module.is_some() {
+                        scope.clone()
+                    } else {
+                        apeireth_plugin::task_scope::ModuleTaskScope::new()
+                    },
+                    legacy,
                 }),
         );
         Ok(())
@@ -162,7 +222,7 @@ impl CapabilityRegistry {
                     entry.capability.declaration().name
                 ));
             }
-            if entry.capability.declaration().name == name {
+            if entry.scope.is_open() && entry.capability.declaration().name == name {
                 return Err(format!(
                     "control name {name:?} collides with tool capability {}",
                     entry.capability.id()
@@ -220,14 +280,80 @@ impl CapabilityRegistry {
     pub fn unregister(&self, capability_id: &apeireth_core::kernel::CapabilityId) -> bool {
         let mut entries = write_lock_or_recover(&self.entries);
         let before = entries.len();
-        entries.retain(|entry| entry.capability.id() != capability_id);
+        entries.retain(|entry| {
+            if entry.capability.id() == capability_id && entry.module.is_none() {
+                entry.scope.close();
+                false
+            } else {
+                true
+            }
+        });
         entries.len() != before
+    }
+
+    pub(crate) fn registration(
+        &self,
+        id: &apeireth_core::kernel::CapabilityId,
+    ) -> Option<ToolRegistration> {
+        read_lock_or_recover(&self.entries)
+            .iter()
+            .find(|entry| entry.capability.id() == id)
+            .map(|entry| ToolRegistration {
+                module: entry.module.clone(),
+                scope: entry.scope.clone(),
+                legacy: entry.legacy,
+            })
+    }
+
+    pub(crate) fn registration_by_name(&self, name: &str) -> Option<ToolRegistration> {
+        read_lock_or_recover(&self.entries)
+            .iter()
+            .find(|entry| entry.capability.declaration().name == name)
+            .map(|entry| ToolRegistration {
+                module: entry.module.clone(),
+                scope: entry.scope.clone(),
+                legacy: entry.legacy,
+            })
+    }
+
+    pub(crate) fn remove_module(&self, id: &apeireth_core::kernel::PluginId) {
+        write_lock_or_recover(&self.entries).retain(|entry| entry.module.as_ref() != Some(id));
+    }
+
+    /// Compatibility dynamic unload, including cancellation and native work drain.
+    pub async fn unregister_and_drain(&self, id: &apeireth_core::kernel::CapabilityId) -> bool {
+        let scope = self
+            .registration(id)
+            .filter(|entry| entry.module.is_none())
+            .map(|entry| entry.scope);
+        if !self.unregister(id) {
+            return false;
+        }
+        if let Some(scope) = scope {
+            scope.close_and_wait().await;
+        }
+        true
+    }
+
+    pub(crate) async fn shutdown_legacy(&self) {
+        let scopes = read_lock_or_recover(&self.entries)
+            .iter()
+            .filter(|entry| entry.module.is_none())
+            .map(|entry| entry.scope.clone())
+            .collect::<Vec<_>>();
+        for scope in &scopes {
+            scope.close();
+        }
+        for scope in scopes {
+            scope.close_and_wait().await;
+        }
     }
 
     /// Current capabilities in deterministic registration order.
     pub fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
         read_lock_or_recover(&self.entries)
             .iter()
+            .filter(|entry| entry.scope.is_open())
             .map(|entry| Arc::clone(&entry.capability))
             .collect()
     }
@@ -236,6 +362,7 @@ impl CapabilityRegistry {
     pub fn entries(&self) -> Vec<(String, Arc<dyn ToolCapability>)> {
         read_lock_or_recover(&self.entries)
             .iter()
+            .filter(|entry| entry.scope.is_open())
             .map(|entry| (entry.owner.clone(), Arc::clone(&entry.capability)))
             .collect()
     }

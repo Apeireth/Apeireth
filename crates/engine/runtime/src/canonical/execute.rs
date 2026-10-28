@@ -766,7 +766,8 @@ impl Runtime {
             .execute_outcome_locked(request, state.clone(), request_id, trace_id, stream_sink)
             .await;
         if let Err(error) = &result {
-            self.observe_error(&observed_request, state, error).await;
+            self.observe_error(&observed_request, state, error, request_id, trace_id)
+                .await;
         }
         self.emit_outcome_events(observed_request.session, request_id, trace_id, &result);
         if matches!(result, Ok(TurnOutcome::Completed(_))) {
@@ -1065,7 +1066,8 @@ impl Runtime {
             .resolve_approval_locked(session_id, approval_id, decision, Arc::clone(&state))
             .await;
         if let Err(error) = &result {
-            self.observe_error(&request, state, error).await;
+            self.observe_error(&request, state, error, event_ids.0, event_ids.1)
+                .await;
         }
         match &result {
             Ok(ApprovalResolution::Resumed(outcome)) => {
@@ -1699,6 +1701,16 @@ impl Runtime {
                 // 落库点。
                 self.meter_provider_usage(&mut session, &continuation.model, &response.usage)
                     .await?;
+                if self.uses_v1_tool_events() {
+                    super::dispatcher::validate_call_batch(&response.tool_calls).map_err(
+                        |failure| {
+                            RuntimeError::Provider(apeireth_plugin::ProviderError::BadResponse {
+                                provider: served_by.to_string(),
+                                detail: failure.message,
+                            })
+                        },
+                    )?;
+                }
                 if !response.content.is_empty() {
                     continuation.generated_text.push_str(&response.content);
                 }
@@ -2344,6 +2356,8 @@ impl Runtime {
                 tool_result,
                 error,
                 module_state,
+                request_id,
+                security_context,
             )
             .await
         {
@@ -2411,6 +2425,8 @@ impl Runtime {
         tool_result: Option<&ToolResult>,
         error: Option<&str>,
         module_state: &Arc<ModuleTurnState>,
+        request_id: RequestId,
+        security_context: Option<&TurnSecurityContext>,
     ) -> RuntimeResult<HookEffects> {
         let mut effects = HookEffects::default();
         let active_tools = self.tools_for_session(*session_id);
@@ -2429,6 +2445,12 @@ impl Runtime {
                 manifest.id.as_str(),
                 Arc::clone(module_state),
                 invocation.depth,
+                super::subloop::SubLoopExecution {
+                    request: request_id,
+                    agent: self.dispatcher.agent(*session_id),
+                    dispatcher: self.dispatcher.clone(),
+                    security: security_context.cloned(),
+                },
             ));
             let invoker_handle: Arc<dyn ModuleInvoker> = spawner.clone();
             let context = ModuleContext {
@@ -2643,6 +2665,8 @@ impl Runtime {
         request: &TurnRequest,
         module_state: Arc<ModuleTurnState>,
         error: &RuntimeError,
+        request_id: RequestId,
+        trace_id: TraceId,
     ) {
         let messages = match self.sessions.load(&request.session).await {
             Ok(Some(session)) => session.messages,
@@ -2661,7 +2685,7 @@ impl Runtime {
             .run_hook(
                 HookPoint::OnError,
                 &request.session,
-                TraceId::new(),
+                trace_id,
                 &invocation,
                 &model,
                 &messages,
@@ -2670,6 +2694,8 @@ impl Runtime {
                 None,
                 Some(&error_text),
                 &module_state,
+                request_id,
+                request.security_context.as_ref(),
             )
             .await;
     }
@@ -3447,6 +3473,7 @@ impl Runtime {
                     security_context,
                     false,
                     None,
+                    false,
                 )
                 .await?
             {

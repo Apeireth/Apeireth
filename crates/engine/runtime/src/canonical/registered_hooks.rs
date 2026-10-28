@@ -196,7 +196,13 @@ impl Runtime {
                 }
             }
             let tool = self.resolve_tool(&call.name).ok_or(())?;
-            if self.plugins.record(tool.id()).map_err(|_| ())?.owner != module {
+            if self
+                .capabilities
+                .registration(tool.id())
+                .and_then(|entry| entry.module)
+                .as_ref()
+                != Some(module)
+            {
                 return Err(());
             }
             ToolEventV1::new(
@@ -358,12 +364,10 @@ impl Runtime {
         }) {
             return;
         }
-        let owner = self.resolve_tool(&call.name).and_then(|tool| {
-            self.plugins
-                .record(tool.id())
-                .ok()
-                .map(|record| record.owner.clone())
-        });
+        let owner = self
+            .capabilities
+            .registration_by_name(&call.name)
+            .and_then(|entry| entry.module);
         match ToolEventV1::new(
             TaskId::new(),
             ToolEventSourceV1::Model { module_id: owner },

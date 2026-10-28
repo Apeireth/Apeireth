@@ -290,8 +290,8 @@ pub use tool_ecosystem_probe::{
 };
 pub use tool_modules::{
     BackupExportModule, DeviceControlModule, DocOpsModule, EducationModule, FetchModule,
-    FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, RepoModule,
-    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
+    FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, ProcessModule,
+    RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
     VoiceSpeakModule, SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
 };
 pub use tool_taxonomy::{

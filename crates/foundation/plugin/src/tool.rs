@@ -53,6 +53,21 @@ pub trait ToolCapability: Send + Sync {
     /// model-facing names are short because they cost tokens on every request.
     fn declaration(&self) -> NormalizedTool;
 
+    /// Declarative output, permission, platform, timeout and concurrency policy.
+    fn execution_policy(&self) -> crate::tool_execution::ToolExecutionPolicy {
+        crate::tool_execution::ToolExecutionPolicy::default()
+    }
+
+    /// Canonical execution entry. Old tools retain the exact frozen/session ABI.
+    async fn invoke_with_context(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        context: &crate::tool_execution::ToolExecutionContext,
+    ) -> ToolResult {
+        self.invoke_in_session(call, frozen, context.session).await
+    }
+
     /// Execute one call and describe what happened.
     ///
     /// Simple tools implement this method and leave [`ToolCapability::invoke_frozen`]

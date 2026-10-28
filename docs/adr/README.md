@@ -48,6 +48,7 @@
 | [0017](0017-kernel-convergence-observation-port.md) | KC-1 内核收束：通用完成观察口与注册式内部控制命令 | **Accepted + 已交付**（2026-10-27，KC-1 SPEC） | 内核边界 / ToolCompletionObserver / ControlCommand / `[kernel]` 守卫 |
 | [0018](0018-registry-kernel-tool-events.md) | Registry Kernel 渐进迁移：工具事件与闭合消息投影 | **Accepted（协议基础设施范围）**（2026-10-27，owner 重构任务授权） | ToolEventV1 / 协议成对性 / 自动 Hook 与实例生命周期后续验收 |
 | [0019](0019-registry-runtime-dispatch.md) | Registry Runtime 接线：沿用插件生命周期与唯一治理入口 | **Accepted（Phase 2 纵向切片）**（2026-10-27，owner 授权） | PluginManager / 固定 V1 Hook / Dispatcher / Legacy Adapter |
+| [0020](0020-capability-module-ownership.md) | Capability 模块归属与执行上下文收敛 | **Accepted（Phase 3 执行路径迁移）**（2026-10-28，owner 授权） | 唯一工具目录 / Host 选装 / 执行上下文 / 原生取消与排水 |
 
 ## 命名
 

@@ -81,6 +81,13 @@ pub mod self_assessment;
 pub mod semver;
 pub mod task_scope;
 pub mod tool;
+pub mod tool_execution;
+pub mod tool_module;
+pub use tool_execution::{
+    ToolAuthorization, ToolCaller, ToolCancellation, ToolConcurrency, ToolExecutionContext,
+    ToolExecutionPolicy, ToolPermissionPolicy, ToolPlatform,
+};
+pub use tool_module::ToolModule;
 pub mod watch;
 
 pub use alias::{

@@ -76,6 +76,11 @@ macro_rules! generated_id {
 }
 
 generated_id! {
+    /// One independently identifiable agent instance; distinct from its session.
+    AgentId
+}
+
+generated_id! {
     /// Identifies one conversation: an ordered message history plus its state.
     ///
     /// A session outlives the individual requests made against it.

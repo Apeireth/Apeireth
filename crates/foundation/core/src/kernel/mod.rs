@@ -45,7 +45,9 @@ pub mod time;
 
 pub use error::{CoreError, CoreResult};
 pub use event::{Event, Topic};
-pub use ids::{ApprovalId, CapabilityId, ModelId, PluginId, RequestId, SessionId, TaskId, TraceId};
+pub use ids::{
+    AgentId, ApprovalId, CapabilityId, ModelId, PluginId, RequestId, SessionId, TaskId, TraceId,
+};
 pub use lifecycle::Lifecycle;
 pub use metadata::Metadata;
 pub use stream_kind::StreamKind;

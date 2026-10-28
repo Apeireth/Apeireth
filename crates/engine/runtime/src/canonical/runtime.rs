@@ -411,7 +411,7 @@ impl Runtime {
                 name: module.manifest().name.clone(),
             })
             .collect();
-        let mut capabilities = self
+        let capabilities = self
             .capabilities
             .entries()
             .into_iter()
@@ -422,14 +422,6 @@ impl Runtime {
                 available: true,
             })
             .collect::<Vec<_>>();
-        capabilities.extend(self.plugins.active_tools().into_iter().map(|capability| {
-            RuntimeCapabilitySnapshot {
-                id: capability.id().to_string(),
-                name: capability.declaration().name,
-                owner: "plugin".to_string(),
-                available: true,
-            }
-        }));
         RuntimeSnapshot {
             default_model: self.config.default_model.clone(),
             max_rounds: self.config.max_rounds,
@@ -441,27 +433,7 @@ impl Runtime {
         }
     }
 
-    /// Every tool that can currently be dispatched to.
-    pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        let mut tools = self
-            .capabilities
-            .capabilities()
-            .into_iter()
-            .map(|tool| self.dispatcher.adapt(tool, None, true))
-            .collect::<Vec<_>>();
-        tools.extend(self.plugins.active_tools().into_iter().map(|tool| {
-            let scope = self
-                .plugins
-                .record(tool.id())
-                .ok()
-                .and_then(|record| self.plugins.task_scope(record.owner).ok());
-            let legacy = self.tool_is_legacy(tool.id());
-            self.dispatcher.adapt(tool, scope, legacy)
-        }));
-        tools
-    }
-
-    /// The runtime-owned registry for non-plugin capabilities.
+    /// The single executable catalog for managed and compatibility capabilities.
     pub fn capability_registry(&self) -> &CapabilityRegistry {
         &self.capabilities
     }
@@ -561,7 +533,6 @@ impl Runtime {
             .declarations()
             .into_iter()
             .collect::<Vec<_>>();
-        declarations.extend(self.plugins.tool_declarations());
         // Control declarations are part of the one registry-driven catalog.
         declarations.extend(self.capabilities.control_declarations());
         declarations
@@ -622,7 +593,9 @@ impl Runtime {
     ///
     /// Returns the failures encountered; shutdown continues past each one.
     pub async fn shutdown(&mut self) -> Vec<apeireth_plugin::PluginError> {
-        self.plugins.shutdown_all().await
+        let failures = self.plugins.shutdown_all().await;
+        self.capabilities.shutdown_legacy().await;
+        failures
     }
 }
 
@@ -1004,9 +977,6 @@ impl RuntimeBuilder {
         }
 
         let capability_registry = CapabilityRegistry::new();
-        capability_registry
-            .register_all_for_builder(self.capabilities)
-            .map_err(RuntimeError::misconfigured)?;
         // Internal control commands are registered, not branched on in the
         // execution loop. Plan mode is the first (and currently only) one; a
         // runtime with the mechanism off registers nothing at all.
@@ -1034,7 +1004,7 @@ impl RuntimeBuilder {
             .flat_map(|id| manager.plugins().get(id).expect("registered").tools())
             .collect::<Vec<_>>();
         crate::canonical::module::reject_tool_identity_collisions(
-            &capability_registry.capabilities(),
+            &self.capabilities,
             &declared_tools,
             "plugin tools",
         )
@@ -1044,7 +1014,32 @@ impl RuntimeBuilder {
             &declared_tools,
         )
         .map_err(RuntimeError::misconfigured)?;
+        crate::canonical::control::reject_control_tool_collisions(
+            &capability_registry.controls(),
+            &self.capabilities,
+        )
+        .map_err(RuntimeError::misconfigured)?;
+        if !self.capabilities.is_empty() {
+            manager.register(Arc::new(
+                apeireth_plugin::ToolModule::new(
+                    PluginId::new("host.legacy.tools").expect("static module id"),
+                    self.capabilities,
+                )?
+                .with_legacy_events(),
+            ))?;
+        }
         manager.start_all_or_rollback(&ctx).await?;
+        for id in manager.plugins().ids() {
+            let plugin = manager.plugins().get(id)?;
+            capability_registry
+                .register_module(
+                    id,
+                    plugin.tools(),
+                    manager.task_scope(id)?,
+                    !plugin.uses_tool_events_v1(),
+                )
+                .map_err(RuntimeError::misconfigured)?;
+        }
 
         // Providers are read out of the capability registry *after* start-up, so
         // the router contains exactly those whose plugins actually came up. A

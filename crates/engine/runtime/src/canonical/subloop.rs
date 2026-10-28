@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
+use apeireth_core::kernel::{AgentId, CapabilityId, RequestId, SessionId, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{
@@ -159,6 +159,14 @@ pub trait SubLoopSpawner: Send + Sync {
     async fn spawn(&self, spec: SubLoopSpec) -> Result<SubLoopResult, SubLoopError>;
 }
 
+#[derive(Clone)]
+pub(crate) struct SubLoopExecution {
+    pub request: RequestId,
+    pub agent: AgentId,
+    pub dispatcher: Arc<super::dispatcher::ToolDispatcher>,
+    pub security: Option<apeireth_governance::TurnSecurityContext>,
+}
+
 /// Runtime-owned spawner that executes bounded SubLoops against router and tools.
 ///
 /// An owned turn-scoped handle: it carries one invocation's session, trace,
@@ -168,6 +176,7 @@ pub trait SubLoopSpawner: Send + Sync {
 /// retained as persistent module state across turns.
 #[derive(Clone)]
 pub struct RuntimeSubLoopSpawner {
+    execution: SubLoopExecution,
     router: Arc<ProviderRouter>,
     tools: Vec<Arc<dyn ToolCapability>>,
     governance: Arc<dyn GovernanceHook>,
@@ -191,8 +200,10 @@ impl RuntimeSubLoopSpawner {
         module_id: impl Into<Arc<str>>,
         state: Arc<ModuleTurnState>,
         parent_depth: u8,
+        execution: SubLoopExecution,
     ) -> Self {
         Self {
+            execution,
             router,
             tools,
             governance,
@@ -343,11 +354,11 @@ impl RuntimeSubLoopSpawner {
             .iter()
             .filter(|t| t.declaration().name == call.name);
         let Some(tool) = name_matches.next() else {
-            return ToolResult::permanent_error(
-                &call.id,
+            return super::dispatcher::failure(
+                call,
+                super::dispatcher::DispatchErrorCode::Unregistered,
                 format!("no tool named {:?} is available", call.name),
-            )
-            .with_name(&call.name);
+            );
         };
         if name_matches.next().is_some() {
             return ToolResult::permanent_error(
@@ -360,6 +371,14 @@ impl RuntimeSubLoopSpawner {
             .with_name(&call.name);
         }
 
+        if let Err(result) = self.execution.dispatcher.validate(
+            Some(self.session_id),
+            tool.as_ref(),
+            call,
+            tool.execution_policy().legacy_arguments,
+        ) {
+            return result;
+        }
         let capability = tool.id();
 
         // 2. Check SubLoop allowlist (allowlist is an ADDITIONAL constraint)
@@ -386,15 +405,50 @@ impl RuntimeSubLoopSpawner {
             .governance
             .evaluate_verbose(
                 &GovernanceRequest::new(action, self.session_id, self.trace_id, round)
-                    .with_action_id(&call.id),
+                    .with_action_id(&call.id)
+                    .with_optional_security_context(self.execution.security.as_ref()),
             )
             .await;
 
         match verdict.decision {
             Decision::Allow => {
                 // Succeeded all checks: invoke capability
-                tool.invoke_in_session(call, None, Some(self.session_id))
-                    .await
+                let timeout = tool
+                    .execution_policy()
+                    .timeout
+                    .unwrap_or(self.execution.dispatcher.limits.timeout)
+                    .min(self.execution.dispatcher.limits.timeout);
+                let context = apeireth_plugin::ToolExecutionContext {
+                    agent: self.execution.agent,
+                    session: Some(self.session_id),
+                    turn: Some(self.execution.request),
+                    call_id: call.id.clone(),
+                    caller: apeireth_plugin::ToolCaller::BehaviorModule(self.module_id.to_string()),
+                    module: apeireth_core::kernel::PluginId::new("host.legacy")
+                        .expect("adapter binds actual owner"),
+                    tool_scope: Some(allowlist.to_vec()),
+                    authorization: apeireth_plugin::ToolAuthorization {
+                        intent_id: self
+                            .execution
+                            .security
+                            .as_ref()
+                            .map(|ctx| ctx.intent_id.clone()),
+                        authorization_context: self
+                            .execution
+                            .security
+                            .as_ref()
+                            .and_then(|ctx| ctx.authorization_context.clone()),
+                        approved: false,
+                    },
+                    cancellation: Default::default(),
+                    deadline: std::time::Instant::now()
+                        .checked_add(timeout)
+                        .unwrap_or_else(std::time::Instant::now),
+                    trace: Some(self.trace_id),
+                    module_tasks: Default::default(),
+                    resource_lease: None,
+                };
+                tool.invoke_with_context(call, None, &context).await
             }
             Decision::Deny { reason } => {
                 // Denied by governance: do NOT invoke tool

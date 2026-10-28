@@ -65,6 +65,7 @@ impl Runtime {
         security_context: Option<&TurnSecurityContext>,
         preapproved: bool,
         approved_approval: Option<&PendingApproval>,
+        automatic: bool,
     ) -> RuntimeResult<ToolAdmission> {
         let clock = self.clock.as_ref();
 
@@ -83,8 +84,7 @@ impl Runtime {
                     ),
                 ));
             }
-            let tool_shadowed = self.capabilities.find_by_name(&call.name).is_some()
-                || self.plugins.tool_by_name(&call.name).is_some();
+            let tool_shadowed = self.capabilities.find_by_name(&call.name).is_some();
             if tool_shadowed {
                 return Ok(ToolAdmission::Resolved(
                     ToolResult::permanent_error(
@@ -137,7 +137,11 @@ impl Runtime {
                 clock,
             );
             return Ok(ToolAdmission::Resolved(
-                ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
+                crate::canonical::dispatcher::failure(
+                    call,
+                    crate::canonical::dispatcher::DispatchErrorCode::Unregistered,
+                    reason,
+                ),
             ));
         };
 
@@ -221,6 +225,19 @@ impl Runtime {
                 },
             );
 
+            let tool = match self.bind_admitted_tool(
+                tool,
+                call,
+                *session_id,
+                request_id,
+                trace_id,
+                security_context,
+                true,
+                automatic,
+            ) {
+                Ok(tool) => tool,
+                Err(result) => return Ok(ToolAdmission::Resolved(result)),
+            };
             return Ok(ToolAdmission::Ready(AdmittedCall {
                 capability,
                 tool,
@@ -243,9 +260,22 @@ impl Runtime {
                     .with_optional_security_context(security_context),
             )
             .await;
-        let hook = verdict.hook;
-        let owner = verdict.owner;
-        let decision = verdict.decision;
+        let (hook, owner, decision) = if matches!(verdict.decision, Decision::Allow)
+            && tool.execution_policy().permission
+                == apeireth_plugin::ToolPermissionPolicy::RequireApproval
+        {
+            (
+                "tool.execution_policy".to_string(),
+                self.capabilities
+                    .registration(tool.id())
+                    .and_then(|entry| entry.module),
+                Decision::RequireApproval {
+                    reason: "registered tool policy requires explicit approval".into(),
+                },
+            )
+        } else {
+            (verdict.hook, verdict.owner, verdict.decision)
+        };
 
         trace.record(
             Timestamp::from_clock(clock),
@@ -329,6 +359,19 @@ impl Runtime {
             },
         );
 
+        let tool = match self.bind_admitted_tool(
+            tool,
+            call,
+            *session_id,
+            request_id,
+            trace_id,
+            security_context,
+            false,
+            automatic,
+        ) {
+            Ok(tool) => tool,
+            Err(result) => return Ok(ToolAdmission::Resolved(result)),
+        };
         Ok(ToolAdmission::Ready(AdmittedCall {
             capability,
             tool,
@@ -374,6 +417,7 @@ impl Runtime {
                 security_context,
                 preapproved,
                 approved_approval,
+                automatic,
             )
             .await?
         {

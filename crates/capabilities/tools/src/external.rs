@@ -71,8 +71,12 @@ async fn run_external(
         request = request.with_arg(arg.clone());
     }
     let executor = ProcessExecutor::new();
-    executor
-        .execute(&request)
+    crate::process::run_native(move || executor.execute(&request))
+        .await
+        .map_err(|error| ExternalError::Spawn {
+            binary: binary.display().to_string(),
+            source: std::io::Error::other(error.to_string()),
+        })?
         .map_err(|error| ExternalError::Spawn {
             binary: binary.display().to_string(),
             source: std::io::Error::other(error.to_string()),

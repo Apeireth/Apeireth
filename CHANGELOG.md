@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Capability Modules Phase 3（2026-10-28）
+
+- **PRODUCTION WIRED**：现有 CapabilityRegistry 成为 Runtime 唯一可执行工具目录，PluginManager 继续拥有模块生命周期；Desktop 生产工具按原 provider 注册 ToolModule，保留既有实现与开关。
+- **模块与上下文**：Shell/Filesystem 可独立注册、停用、卸载和替换；ProcessModule 复用原结构化外部程序工具。逐调用 Agent/Session/Turn/Caller/Owner/Scope/授权/期限/取消/Trace 数据进入统一 Adapter，SubLoop 同步接入校验与身份转发。
+- **原生资源**：现有 ProcessExecutor 接取消与期限，阻塞 worker 持有模块 lease 和并发 permit；取消、超时与正常退出清理后代，不因丢弃 future 就假称资源已释放。原沙箱、路径、写总闸、冻结审批与输出限制保留。
+- **兼容范围**：旧 with_capability/with_tool、BuiltinToolsPlugin、动态 MCP、旧日志和自动 Memory overlay 明确登记；不宣称完整 Memory/Profile、多实例、共享 Arc 热插拔或专有设备资源迁移已完成。
+- **证据**：ADR-0020 与 `docs/04-internal/capability-modules-phase3-2026-10-28.md`；不改 LOCKED、依赖版本、组网能力或原门禁。
+
 ## [Unreleased] — Registry Kernel Phase 2：注册模块 Runtime 纵向接线（2026-10-28）
 
 - **PRODUCTION WIRED（显式注册）**：现有 PluginManager 支持分离 initialize/start、失败清理、依赖反序 stop、取消排水与 unregister；V1 模块沿用既有 Plugin/能力归属索引，默认旧插件接口兼容。
