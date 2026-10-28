@@ -14,6 +14,7 @@ impl Runtime {
             clock: self.clock.clone(),
             config: self.config.clone(),
             modules: self.modules.clone(),
+            principal_authorizations: self.principal_authorizations.clone(),
             registered_behaviors: self.registered_behaviors.clone(),
             capabilities: self.capabilities.execution_snapshot(),
             dispatcher: self.dispatcher.clone(),

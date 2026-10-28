@@ -101,6 +101,7 @@ pub struct ToolDispatcher {
     parents: RwLock<BTreeMap<SessionId, SessionId>>,
     agents: RwLock<BTreeMap<SessionId, AgentId>>,
     principals: RwLock<BTreeMap<SessionId, apeireth_plugin::agents::AgentPrincipal>>,
+    authorization_epochs: RwLock<BTreeMap<SessionId, String>>,
     instance_scopes: RwLock<BTreeMap<SessionId, ModuleTaskScope>>,
     usage: Option<Arc<super::accounting::UsageAccounting>>,
     concurrency: Mutex<BTreeMap<(CapabilityId, usize), Arc<tokio::sync::Semaphore>>>,
@@ -114,6 +115,7 @@ impl ToolDispatcher {
             parents: RwLock::new(BTreeMap::new()),
             agents: RwLock::new(BTreeMap::new()),
             principals: RwLock::new(BTreeMap::new()),
+            authorization_epochs: RwLock::new(BTreeMap::new()),
             instance_scopes: RwLock::new(BTreeMap::new()),
             usage: None,
             concurrency: Mutex::new(BTreeMap::new()),
@@ -169,6 +171,12 @@ impl ToolDispatcher {
                 session.principal = Some(current.clone());
             }
             _ => {}
+        }
+        if let Some(epoch) = &session.authorization_epoch {
+            self.authorization_epochs
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(session.id, epoch.clone());
         }
         if session.principal.is_some() {
             let current = self.scope(session.id);
@@ -537,6 +545,14 @@ impl LegacyToolAdapter {
             resource_lease: None,
         });
         context.principal = session.and_then(|id| self.dispatcher.principal(id));
+        context.authorization.principal_epoch = session.and_then(|id| {
+            self.dispatcher
+                .authorization_epochs
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&id)
+                .cloned()
+        });
         context.module_tasks = self
             .dispatcher
             .invocation_scope(session, self.scope.clone().unwrap_or(context.module_tasks));

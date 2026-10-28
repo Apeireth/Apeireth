@@ -102,6 +102,9 @@ pub struct Session {
     /// Persisted scope ceiling for identified profiles; a fork cannot widen it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_scope: Option<Vec<CapabilityId>>,
+    /// Revocable Host authorization epoch; copied on fork and checked on reload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization_epoch: Option<String>,
     /// Durable session-scoped settings (model override + permission preset).
     ///
     /// `#[serde(default)]` is the on-disk migration path: sessions persisted
@@ -167,6 +170,7 @@ impl Session {
             id,
             principal: None,
             tool_scope: None,
+            authorization_epoch: None,
             messages: Vec::new(),
             events: Vec::new(),
             log: Vec::new(),
@@ -404,6 +408,7 @@ impl Session {
         child.settings = self.settings.clone();
         child.principal = self.principal.clone();
         child.tool_scope = self.tool_scope.clone();
+        child.authorization_epoch = self.authorization_epoch.clone();
         child.inherited_event_count = Some(prefix_end_seq);
         child.log = self.log[..prefix_end_seq].to_vec();
         // The facts of the inherited prefix: the records that carry execution
@@ -522,6 +527,8 @@ struct SessionRepr {
     #[serde(default)]
     tool_scope: Option<Vec<CapabilityId>>,
     #[serde(default)]
+    authorization_epoch: Option<String>,
+    #[serde(default)]
     settings: SessionSettings,
     #[serde(default)]
     quota: CognitiveQuota,
@@ -544,6 +551,7 @@ impl From<SessionRepr> for Session {
             id: repr.id,
             principal: repr.principal,
             tool_scope: repr.tool_scope,
+            authorization_epoch: repr.authorization_epoch,
             settings: repr.settings,
             quota: repr.quota,
             messages: repr.messages,

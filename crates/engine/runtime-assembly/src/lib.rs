@@ -6,6 +6,8 @@
 #![deny(unsafe_code)]
 
 pub mod portable;
+#[cfg(feature = "memory")]
+pub mod profile_memory;
 pub use portable::{AssemblyError, PortableHost};
 
 #[cfg(feature = "desktop")]

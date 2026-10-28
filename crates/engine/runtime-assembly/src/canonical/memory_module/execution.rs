@@ -9,6 +9,19 @@ pub(super) fn execute(
     if ctx.cancellation.is_cancelled() || Instant::now() >= ctx.deadline {
         return fail(call, "cancelled", "call no longer active");
     }
+    let mapping = match &state.mappings {
+        Some(mappings) => match mappings.lease(ctx) {
+            Some(lease) => Some(lease),
+            None => {
+                return fail(
+                    call,
+                    "namespace_denied",
+                    "Host mapping is missing or revoked",
+                )
+            }
+        },
+        None => None,
+    };
     let principal = ctx.principal.as_ref().expect("checked execution context");
     let key = namespace_key(principal);
     let _write_guard = if matches!(op, "write" | "update" | "delete") {
@@ -20,7 +33,24 @@ pub(super) fn execute(
     if ctx.cancellation.is_cancelled() || Instant::now() >= ctx.deadline {
         return fail(call, "cancelled", "call no longer active");
     }
-    match execute_checked(state, op, call, ctx, &key) {
+    if mapping.as_ref().is_some_and(|m| !m.authority.is_active()) {
+        return fail(call, "namespace_denied", "Host mapping revoked");
+    }
+    let access = mapping.as_ref().and_then(|m| m.memory.as_ref());
+    if mapping.is_some() && access.is_none() {
+        return fail(call, "namespace_denied", "no memory store mapping");
+    }
+    if matches!(op, "write" | "update" | "delete") && access.is_some_and(|a| !a.writable_private) {
+        return fail(call, "namespace_denied", "shared source is read-only");
+    }
+    let result = execute_checked(state, op, call, ctx, &key, access);
+    if ctx.cancellation.is_cancelled() {
+        return fail(call, "cancelled", "call no longer active");
+    }
+    if mapping.as_ref().is_some_and(|m| !m.authority.is_active()) {
+        return fail(call, "namespace_denied", "Host mapping revoked");
+    }
+    match result {
         Ok(value) => ToolResult::ok(&call.id, value).with_name(&call.name),
         Err((code, message)) => fail(call, code, message),
     }
@@ -35,8 +65,9 @@ fn execute_checked(
     call: &ToolCall,
     ctx: &ToolExecutionContext,
     key: &str,
+    access: Option<&crate::profile_memory::ProfileMemoryAccess>,
 ) -> Result<Value, Failure> {
-    let c = &state.coordinator;
+    let c = access.map(|a| &a.coordinator).unwrap_or(&state.coordinator);
     match op {
         "retrieve" | "search" | "compact" => {
             let mut query =
@@ -45,6 +76,17 @@ fn execute_checked(
             query.visible_scopes = vec![MemoryScope::Session {
                 session_id: key.into(),
             }];
+            if let Some(access) = access {
+                query.visible_scopes =
+                    access.scopes(ctx.principal.as_ref().expect("authenticated"));
+                query.exact_scope_authorization = true;
+                query.layers = vec![
+                    MemoryLayerKind::Working,
+                    MemoryLayerKind::Episodic,
+                    MemoryLayerKind::Semantic,
+                    MemoryLayerKind::Relational,
+                ];
+            }
             query.limit = call.arguments["limit"].as_u64().unwrap_or(8).clamp(1, 20) as usize;
             query.max_chars = state.max_context_chars;
             query.as_of_ms = Some(state.clock.now().timestamp_millis());
@@ -56,7 +98,15 @@ fn execute_checked(
                 if c.backend()
                     .get_episode(&item.id)
                     .map_err(store_error)?
-                    .is_some_and(|e| e.session_id == key)
+                    .is_some_and(|e| {
+                        if access.is_some() {
+                            c.episode_scope_metadata(&e)
+                                .0
+                                .is_visible_in(&query.visible_scopes)
+                        } else {
+                            e.session_id == key
+                        }
+                    })
                 {
                     let governed = c
                         .governance()
@@ -72,6 +122,17 @@ fn execute_checked(
                         .chars()
                         .take(remaining_chars)
                         .collect();
+                    remaining_chars = remaining_chars.saturating_sub(item.content.chars().count());
+                    if !item.content.is_empty() {
+                        owned.push(item);
+                    }
+                } else if access.is_some()
+                    && c.backend()
+                        .get_episode(&item.id)
+                        .map_err(store_error)?
+                        .is_none()
+                {
+                    item.content = item.content.chars().take(remaining_chars).collect();
                     remaining_chars = remaining_chars.saturating_sub(item.content.chars().count());
                     if !item.content.is_empty() {
                         owned.push(item);

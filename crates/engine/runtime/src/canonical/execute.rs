@@ -739,9 +739,25 @@ impl Runtime {
             trace: trace_id,
         });
         let observed_request = request.clone();
-        let result = self
-            .execute_outcome_locked(request, state.clone(), request_id, trace_id, stream_sink)
-            .await;
+        let result = match self.authorize_session(request.session).await {
+            Ok(grant) => {
+                // Keep the large turn state on the heap when wrapping it in a
+                // revocation select, including builds with wider feature sets.
+                let execution = Box::pin(self.execute_outcome_locked(
+                    request,
+                    state.clone(),
+                    request_id,
+                    trace_id,
+                    stream_sink,
+                ));
+                if let Some(grant) = grant {
+                    grant.run(execution).await
+                } else {
+                    execution.await
+                }
+            }
+            Err(error) => Err(error),
+        };
         if let Err(error) = &result {
             self.observe_error(&observed_request, state, error, request_id, trace_id)
                 .await;
@@ -1075,9 +1091,22 @@ impl Runtime {
         let request = TurnRequest::new(session_id, "");
         // G-P1 指标埋点: 续跑段计时起点 (不含人工审批等待)。
         let metrics_started = std::time::Instant::now();
-        let result = self
-            .resolve_approval_locked(session_id, approval_id, decision, Arc::clone(&state))
-            .await;
+        let result = match self.authorize_session(session_id).await {
+            Ok(grant) => {
+                let execution = Box::pin(self.resolve_approval_locked(
+                    session_id,
+                    approval_id,
+                    decision,
+                    Arc::clone(&state),
+                ));
+                if let Some(grant) = grant {
+                    grant.run(execution).await
+                } else {
+                    execution.await
+                }
+            }
+            Err(error) => Err(error),
+        };
         if let Err(error) = &result {
             self.observe_error(&request, state, error, event_ids.0, event_ids.1)
                 .await;
@@ -2444,7 +2473,8 @@ impl Runtime {
                 .registered_behaviors
                 .get(&manifest.id)
                 .ok_or_else(|| RuntimeError::misconfigured("behavior adapter missing"))?;
-            if session.principal.is_some()
+            let authorization = self.behavior_grant(session, &manifest.id);
+            if (session.principal.is_some() && authorization.is_none())
                 || !self.dispatcher.allows(*session_id, adapter.capability())
             {
                 continue;
@@ -2470,6 +2500,8 @@ impl Runtime {
             let invocation_result = {
                 let input = super::behavior_adapter::BehaviorInput {
                     session: *session_id,
+                    principal: session.principal.clone(),
+                    authorization,
                     request: request_id,
                     trace: trace_id,
                     hook,

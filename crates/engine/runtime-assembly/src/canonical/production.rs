@@ -1820,6 +1820,20 @@ impl ProductionModules {
         builder
     }
 
+    /// Opt-in Host mapping. Tool modules retain the same factory/lifecycle path.
+    /// The Host must still grant each selected internal capability explicitly.
+    pub fn register_with_profile_mappings(
+        self,
+        builder: RuntimeBuilder,
+        mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
+    ) -> RuntimeBuilder {
+        let mut builder = mappings.register_into(builder, &self.modules);
+        for module in self.tool_modules {
+            builder = builder.with_plugin(module);
+        }
+        builder
+    }
+
     /// Stable slot ids in the exact registration order.
     pub fn ids(&self) -> Vec<String> {
         self.modules

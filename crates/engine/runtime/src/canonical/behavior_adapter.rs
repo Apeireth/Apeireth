@@ -27,6 +27,8 @@ pub(crate) fn compatibility_hook(hook: HookPoint) -> ModuleHookV1 {
 }
 pub(crate) struct BehaviorInput {
     pub session: SessionId,
+    pub principal: Option<apeireth_plugin::agents::AgentPrincipal>,
+    pub authorization: Option<super::principal_authority::PrincipalGrant>,
     pub request: RequestId,
     pub trace: TraceId,
     pub hook: HookPoint,
@@ -252,6 +254,12 @@ impl ToolCapability for BehaviorTool {
             let mut pending = self.0.pending.lock().unwrap_or_else(|e| e.into_inner());
             if !pending.get(&id).is_some_and(|i| {
                 Some(i.session) == ctx.session
+                    && i.principal == ctx.principal
+                    && (i.principal.is_none()
+                        || i.authorization.as_ref().is_some_and(|g| {
+                            g.allows_behavior(&self.0.module.manifest().id)
+                                && ctx.authorization.principal_epoch.as_deref() == Some(g.epoch())
+                        }))
                     && Some(i.request) == ctx.turn
                     && Some(i.trace) == ctx.trace
             }) {
@@ -274,7 +282,16 @@ impl ToolCapability for BehaviorTool {
             invoker_handle,
             subloop: &*input.spawner,
         };
-        let outcome = self.0.module.on_hook(input.hook, &context).await;
+        let outcome = self
+            .0
+            .module
+            .on_hook_authenticated(input.hook, &context, ctx)
+            .await;
+        if ctx.cancellation.is_cancelled()
+            || input.authorization.as_ref().is_some_and(|g| !g.is_active())
+        {
+            return ToolResult::permanent_error(&call.id, "principal authorization revoked");
+        }
         let result = match &outcome {
             Ok(outcome) => {
                 let data=outcome.prompt_overlays.iter().map(|overlay|serde_json::json!({"source":overlay.cross_source_label(),"text":ContentPart::join_text(&overlay.message().content)})).collect::<Vec<_>>();

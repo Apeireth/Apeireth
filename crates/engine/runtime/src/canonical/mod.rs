@@ -57,6 +57,7 @@ pub mod instances;
 pub mod metrics;
 pub mod module;
 mod module_host;
+pub mod principal_authority;
 pub mod profiles;
 pub mod registered_hooks;
 // OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).

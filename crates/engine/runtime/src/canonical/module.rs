@@ -427,6 +427,23 @@ pub trait BehaviorModule: Send + Sync {
     /// Stable module identity.
     fn manifest(&self) -> &ModuleManifest;
 
+    /// Whether this module can expose a shared store without mutating it.
+    /// Host mapping refuses read-only sharing unless the implementation opts in.
+    fn read_only_profile_projection(&self) -> bool {
+        false
+    }
+
+    /// Authenticated adapter entry. Host mappings can select isolated resources here.
+    /// The default preserves the public compatibility callback ABI.
+    async fn on_hook_authenticated(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        _execution: &apeireth_plugin::ToolExecutionContext,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        self.on_hook(hook, ctx).await
+    }
+
     /// Observe a lifecycle point and return transient policy effects.
     async fn on_hook(
         &self,

@@ -306,3 +306,9 @@ approval_policy = { structural = "owner", debt = "engineering-lead", size_doc = 
 strict_requires_adr_above_weight = 10
 register_file = "docs/architecture/exceptions.toml"
 release_freeze = false              # release authority 在冻结窗口置 true
+
+[[concepts]]
+name = "PrincipalAuthorizations"
+canonical = "crates/engine/runtime/src/canonical/principal_authority.rs"
+known_debt = []
+target = "S4: Host-only revocable execution epoch; store/scope mapping stays in assembly, not a second module registry"

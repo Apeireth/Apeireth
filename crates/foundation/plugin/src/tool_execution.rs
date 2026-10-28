@@ -36,6 +36,8 @@ pub enum ToolCaller {
 }
 #[derive(Debug, Clone, Default)]
 pub struct ToolAuthorization {
+    /// Host-bound authorization generation; Dispatcher overwrites caller input.
+    pub principal_epoch: Option<String>,
     pub intent_id: Option<String>,
     pub authorization_context: Option<String>,
     pub approved: bool,

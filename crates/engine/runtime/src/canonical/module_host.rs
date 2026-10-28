@@ -124,6 +124,7 @@ impl Runtime {
             module,
             tool_scope: self.dispatcher.scope_snapshot(session),
             authorization: apeireth_plugin::ToolAuthorization {
+                principal_epoch: None,
                 intent_id: security.map(|s| s.intent_id.clone()),
                 authorization_context: security.and_then(|s| s.authorization_context.clone()),
                 approved,

@@ -284,6 +284,8 @@ pub struct Runtime {
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
     pub(super) modules: BehaviorRegistry,
+    pub(super) principal_authorizations:
+        Option<Arc<super::principal_authority::PrincipalAuthorizations>>,
     pub(super) registered_behaviors:
         BTreeMap<String, Arc<super::behavior_adapter::RegisteredBehavior>>,
     pub(super) capabilities: CapabilityRegistry,
@@ -639,6 +641,7 @@ pub struct RuntimeBuilder {
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
     modules: Vec<Arc<dyn BehaviorModule>>,
+    principal_authorizations: Option<Arc<super::principal_authority::PrincipalAuthorizations>>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     event_sink: Arc<dyn RuntimeEventSink>,
     context_projector: Arc<dyn ContextProjector>,
@@ -673,6 +676,7 @@ impl RuntimeBuilder {
             governance: Arc::new(DenyUnconfigured),
             plugins: Vec::new(),
             modules: Vec::new(),
+            principal_authorizations: None,
             capabilities: Vec::new(),
             event_sink: Arc::new(NoopRuntimeEventSink),
             context_projector: Arc::new(NoContextProjector),
@@ -688,6 +692,15 @@ impl RuntimeBuilder {
             agent_factory: None,
             v1_protocol: false,
         }
+    }
+
+    #[must_use]
+    pub fn with_principal_authorizations(
+        mut self,
+        authority: Arc<super::principal_authority::PrincipalAuthorizations>,
+    ) -> Self {
+        self.principal_authorizations = Some(authority);
+        self
     }
 
     #[must_use]
@@ -1127,6 +1140,7 @@ impl RuntimeBuilder {
             clock: self.clock,
             config: self.config,
             modules: module_registry,
+            principal_authorizations: self.principal_authorizations,
             registered_behaviors,
             capabilities: capability_registry,
             dispatcher,

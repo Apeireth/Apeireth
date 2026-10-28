@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Kernel Convergence S4：Profile / Memory 显式授权映射（2026-10-29）
+
+- **IMPLEMENTED（可选 Host 组合）**：旧 scope / store 显式绑定完整 Profile / Namespace；共享来源只读、写入私有分区，无 principal 的旧数据库与全局认知模式保持。未映射私有请求默认拒绝，无全局回退，S3 guard 保留。
+- **撤销与来源**：回合、receipt、工具、后台整理、fork / reload 和审批续跑核对授权 epoch；旧会话不能复用新 grant，切换不继承旧缓存。原排序、治理、protected、CAS、typed sink、调优与物化保留，来源记录真实 session / request / trace。
+- **证据与边界**：真实 Runtime 对抗场景见 [S4 交付账](docs/04-internal/kernel-convergence-s4-2026-10-29.md)。映射不默认启用，整体 Convergence 仍为 Partial；未实施 S5 桌面受管 bootstrap。
+
 ## [Unreleased] — Kernel Convergence S3：旧行为入口统一注册工具路径（2026-10-29）
 
 - **PRODUCTION WIRED（兼容行为入口）**：with_module / with_behavior 委托 RegisteredBehavior、固定 Hook 与原 Dispatcher；删除直接 callback fallback 和动态 system Overlay 注入链，保留公开名称、指令时序与兼容数据类型。

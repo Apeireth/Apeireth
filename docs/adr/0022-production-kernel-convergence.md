@@ -48,7 +48,7 @@ Author: Codex
 - 系统最优：复用成熟认知引擎、数据、审批和 V1；拒数据库重建、重复注入和新权限旁路。
 - 架构最优：沿用 Registry/Dispatcher/Instance Runtime；拒新的注册表、全局模型串行锁或复制子 Loop。
 
-## 已实现的生产认知切片
+## 已实现的生产认知切片 <!-- 2026-10-29 口径复核注：本节路径为 PRODUCTION WIRED；历史整体 Partial 结论保留。 -->
 
 ProductionModules.register_into 为既有业务对象注册 RegisteredBehavior Plugin；CLI 使用 register_with_policy 显式授予所选内部能力。
 回调凭证只在当前边界有效，绑定 session/request/trace；模型无法调用 module-only 工具，即使猜到名字或已获同名 capability grant。
