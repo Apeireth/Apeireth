@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Kernel Convergence S2：ModuleInvoker 统一实例执行（2026-10-29）
+
+- **PRODUCTION WIRED（ModuleInvoker 路径）**：两个兼容实现共用既有 AgentInstance 任务端口，删除直接 Router completion 后端；单次私有执行不声明或派发工具、不递归 Hook，完整返回 NormalizedResponse 与 served_by。
+- **核算与兼容**：实际 Provider 尝试只在原边界扣共享 turn 预算及记账；事实归独立 child 与真实注册模块 owner，父 request/trace 作为来源。保留 ModuleInvoker ABI、Organ bridge、意外 tool_calls、逐次 usage、治理拒绝与审批限制。
+- **证据与边界**：真实 Runtime 的响应保真、身份/历史隔离、预算、失败/取消与分层核算见 [S2 交付账](docs/04-internal/kernel-convergence-s2-2026-10-29.md)。整体 Convergence 仍为 Partial；with_module/Overlay、Profile 映射、桌面 managed 默认与最终 gate_full 留后续切片。
+
 ## [Unreleased] — Kernel Convergence S1：SubLoop 实例适配（2026-10-29）
 
 - **PRODUCTION WIRED（SubLoop 路径）**：兼容 spawner 委托既有 AgentInstance 规范化任务端口并进入同一 Runtime.execute_outcome；删除独立 Provider/round 循环，保留原 ABI、私有历史、治理与 Dispatcher。

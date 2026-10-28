@@ -96,12 +96,16 @@ pub struct AgentReply {
     pub request: RequestId,
     pub usage: AgentUsage,
 }
-/// Per-task execution policy. Isolated tasks suppress automatic callbacks and
-/// reject interactive approval; they still use the ordinary governed tool path.
+/// Per-task execution policy. Private tasks suppress automatic callbacks and
+/// reject interactive approval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentExecutionMode {
     Conversation,
+    /// Bounded private conversation using the ordinary governed tool path.
     Isolated,
+    /// Return one complete provider response, including unexpected tool calls,
+    /// without declaring or dispatching tools or requesting another round.
+    SingleShot,
 }
 
 /// Shared admission gate invoked at each actual provider attempt, including fallback.

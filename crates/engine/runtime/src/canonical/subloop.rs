@@ -16,19 +16,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use apeireth_core::kernel::{AgentId, CapabilityId, RequestId, SessionId, TraceId};
-use apeireth_governance::GovernanceHook;
 use apeireth_plugin::ToolCapability;
-use apeireth_protocol::canonical::{
-    NormalizedMessage, NormalizedRequest, NormalizedUsage, ToolResult,
-};
+use apeireth_protocol::canonical::{NormalizedMessage, NormalizedUsage, ToolResult};
 use async_trait::async_trait;
 use thiserror::Error;
 
 use super::module::{
-    authorize_isolated_completion, ModuleInvocationError, ModuleInvocationRequest,
-    ModuleInvocationResponse, ModuleInvoker, ModuleTurnState, DEFAULT_MAX_INVOCATION_DEPTH,
+    ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse, ModuleInvoker,
+    ModuleTurnState, RuntimeModuleInvoker, DEFAULT_MAX_INVOCATION_DEPTH,
 };
-use super::provider::ProviderRouter;
 
 /// Specification defining the bounded constraints and goals of a SubLoop.
 #[derive(Debug, Clone)]
@@ -176,9 +172,7 @@ pub(crate) struct SubLoopExecution {
 #[derive(Clone)]
 pub struct RuntimeSubLoopSpawner {
     execution: SubLoopExecution,
-    router: Arc<ProviderRouter>,
     tools: Vec<Arc<dyn ToolCapability>>,
-    governance: Arc<dyn GovernanceHook>,
     session_id: SessionId,
     trace_id: TraceId,
     current_model: Arc<str>,
@@ -190,9 +184,7 @@ pub struct RuntimeSubLoopSpawner {
 impl RuntimeSubLoopSpawner {
     /// Create a new SubLoop spawner scoped to a module hook.
     pub(crate) fn new(
-        router: Arc<ProviderRouter>,
         tools: Vec<Arc<dyn ToolCapability>>,
-        governance: Arc<dyn GovernanceHook>,
         session_id: SessionId,
         trace_id: TraceId,
         current_model: impl Into<Arc<str>>,
@@ -203,9 +195,7 @@ impl RuntimeSubLoopSpawner {
     ) -> Self {
         Self {
             execution,
-            router,
             tools,
-            governance,
             session_id,
             trace_id,
             current_model: current_model.into(),
@@ -326,53 +316,21 @@ impl ModuleInvoker for RuntimeSubLoopSpawner {
         &self,
         request: ModuleInvocationRequest,
     ) -> Result<ModuleInvocationResponse, ModuleInvocationError> {
-        if self.depth > DEFAULT_MAX_INVOCATION_DEPTH {
-            return Err(ModuleInvocationError::RecursionLimit {
-                depth: self.depth,
-                maximum: DEFAULT_MAX_INVOCATION_DEPTH,
-            });
-        }
-        let model = request
-            .model
-            .unwrap_or_else(|| self.current_model.to_string());
-        if model.is_empty() {
-            return Err(ModuleInvocationError::NoModel);
-        }
-        self.state.reserve()?;
-
-        let mut messages = Vec::with_capacity(2);
-        if let Some(system) = request.system {
-            messages.push(NormalizedMessage::system(system));
-        }
-        messages.push(NormalizedMessage::user(request.input));
-
-        authorize_isolated_completion(
-            self.governance.as_ref(),
-            self.session_id,
-            self.trace_id,
-            &model,
-            messages.len(),
-            1,
+        RuntimeModuleInvoker::new(
+            self.execution.runtime.clone(),
+            apeireth_plugin::agents::AgentTaskOrigin {
+                agent: self.execution.agent,
+                session: self.session_id,
+                request: self.execution.request,
+                trace: self.trace_id,
+            },
+            self.execution.security.clone(),
+            self.current_model.clone(),
+            self.module_id.clone(),
+            self.state.clone(),
+            self.depth.saturating_sub(1),
         )
-        .await?;
-
-        let routed = self
-            .router
-            .complete_for_session(
-                self.session_id,
-                self.execution.request,
-                &NormalizedRequest::new(model, messages),
-                None,
-                None,
-            )
-            .await
-            .map_err(|error| ModuleInvocationError::Provider {
-                reason: format!("module {}: {error}", self.module_id),
-            })?;
-
-        Ok(ModuleInvocationResponse {
-            response: routed.response,
-            served_by: routed.served_by,
-        })
+        .invoke(request)
+        .await
     }
 }

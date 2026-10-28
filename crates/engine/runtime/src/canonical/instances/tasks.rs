@@ -91,7 +91,11 @@ impl ManagedAgent {
                 None => inner.kernel.read().await.execution_view(),
             };
             if let Some(task) = task {
-                kernel.config.max_rounds = task.max_rounds;
+                kernel.config.max_rounds = if task.mode == AgentExecutionMode::SingleShot {
+                    1
+                } else {
+                    task.max_rounds
+                };
                 kernel.v1_protocol = true;
                 kernel.task = Some(Arc::new(TaskExecution::new(task)));
             }
@@ -251,7 +255,12 @@ impl Runtime {
     pub(in crate::canonical) fn isolated_task(&self) -> bool {
         self.task
             .as_ref()
-            .is_some_and(|t| t.input.mode == AgentExecutionMode::Isolated)
+            .is_some_and(|t| t.input.mode != AgentExecutionMode::Conversation)
+    }
+    pub(in crate::canonical) fn single_shot_task(&self) -> bool {
+        self.task
+            .as_ref()
+            .is_some_and(|t| t.input.mode == AgentExecutionMode::SingleShot)
     }
     /// Instance audit view, including private child executions (no transcript data).
     pub fn agent_instances(&self) -> Vec<AgentSnapshot> {

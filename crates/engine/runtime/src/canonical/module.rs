@@ -7,15 +7,14 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
-use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
-use apeireth_protocol::canonical::{
-    NormalizedMessage, NormalizedRequest, NormalizedResponse, ToolCall, ToolResult,
+use apeireth_core::kernel::{CapabilityId, SessionId};
+use apeireth_governance::TurnSecurityContext;
+use apeireth_plugin::agents::{
+    AgentConfig, AgentError, AgentErrorCode, AgentExecutionMode, AgentTask, AgentTaskOrigin,
 };
+use apeireth_protocol::canonical::{NormalizedMessage, NormalizedResponse, ToolCall, ToolResult};
 use async_trait::async_trait;
 use thiserror::Error;
-
-use super::provider::ProviderRouter;
 
 /// Lifecycle points at which a module may observe or influence a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -521,33 +520,6 @@ pub fn reject_tool_identity_collisions(
     Ok(())
 }
 
-/// Canonical completion governance for isolated module/SubLoop side-calls.
-///
-/// Side loops never mint a hidden approval: `RequireApproval` fails closed.
-pub(crate) async fn authorize_isolated_completion(
-    governance: &dyn GovernanceHook,
-    session_id: SessionId,
-    trace_id: TraceId,
-    model: &str,
-    message_count: usize,
-    round: u32,
-) -> Result<(), ModuleInvocationError> {
-    let action = Action::Completion {
-        model,
-        message_count,
-    };
-    let verdict = governance
-        .evaluate_verbose(&GovernanceRequest::new(action, session_id, trace_id, round))
-        .await;
-    match verdict.decision {
-        Decision::Allow => Ok(()),
-        Decision::Deny { reason } => Err(ModuleInvocationError::Denied { reason }),
-        Decision::RequireApproval { reason } => {
-            Err(ModuleInvocationError::ApprovalRequired { reason })
-        }
-    }
-}
-
 impl std::ops::Deref for BehaviorRegistry {
     type Target = [Arc<dyn BehaviorModule>];
 
@@ -630,52 +602,58 @@ impl ModuleTurnState {
 /// and it is not task-local or global ambient authority — it exists only where
 /// the runtime hands it out for the current invocation. It must not be
 /// retained as persistent module state across turns.
+#[derive(Clone)]
 pub struct RuntimeModuleInvoker {
-    router: Arc<ProviderRouter>,
-    governance: Arc<dyn GovernanceHook>,
-    session_id: SessionId,
-    trace_id: TraceId,
+    runtime: Arc<super::Runtime>,
+    origin: AgentTaskOrigin,
+    security: Option<TurnSecurityContext>,
     current_model: Arc<str>,
     module_id: Arc<str>,
     state: Arc<ModuleTurnState>,
     depth: u8,
 }
 
-impl Clone for RuntimeModuleInvoker {
-    fn clone(&self) -> Self {
-        Self {
-            router: Arc::clone(&self.router),
-            governance: Arc::clone(&self.governance),
-            session_id: self.session_id,
-            trace_id: self.trace_id,
-            current_model: Arc::clone(&self.current_model),
-            module_id: Arc::clone(&self.module_id),
-            state: Arc::clone(&self.state),
-            depth: self.depth,
-        }
-    }
-}
-
 impl RuntimeModuleInvoker {
+    /// Bind the invoker to the existing instance service and originating turn.
+    /// A Runtime without that service fails closed; there is no provider fallback.
     pub fn new(
-        router: Arc<ProviderRouter>,
-        governance: Arc<dyn GovernanceHook>,
-        session_id: SessionId,
-        trace_id: TraceId,
+        runtime: Arc<super::Runtime>,
+        origin: AgentTaskOrigin,
+        security: Option<TurnSecurityContext>,
         current_model: impl Into<Arc<str>>,
         module_id: impl Into<Arc<str>>,
         state: Arc<ModuleTurnState>,
         parent_depth: u8,
     ) -> Self {
         Self {
-            router,
-            governance,
-            session_id,
-            trace_id,
+            runtime,
+            origin,
+            security,
             current_model: current_model.into(),
             module_id: module_id.into(),
             state,
             depth: parent_depth.saturating_add(1),
+        }
+    }
+
+    fn task_error(&self, error: AgentError) -> ModuleInvocationError {
+        match error.code {
+            AgentErrorCode::BudgetExceeded if self.state.used() >= self.state.limit() => {
+                ModuleInvocationError::BudgetExceeded {
+                    limit: self.state.limit(),
+                }
+            }
+            AgentErrorCode::Denied => ModuleInvocationError::Denied {
+                reason: error.message,
+            },
+            AgentErrorCode::ApprovalRequired | AgentErrorCode::PendingApproval => {
+                ModuleInvocationError::ApprovalRequired {
+                    reason: error.message,
+                }
+            }
+            _ => ModuleInvocationError::Provider {
+                reason: format!("module {}: {error}", self.module_id),
+            },
         }
     }
 }
@@ -698,44 +676,50 @@ impl ModuleInvoker for RuntimeModuleInvoker {
         if model.is_empty() {
             return Err(ModuleInvocationError::NoModel);
         }
-        self.state.reserve()?;
-
-        let mut messages = Vec::with_capacity(2);
-        if let Some(system) = request.system {
-            messages.push(NormalizedMessage::system(system));
+        // Fast refusal avoids audit-only children after exhaustion. The atomic
+        // reservation happens solely at each actual Provider admission.
+        if self.state.used() >= self.state.limit() {
+            return Err(ModuleInvocationError::BudgetExceeded {
+                limit: self.state.limit(),
+            });
         }
-        messages.push(NormalizedMessage::user(request.input));
-
-        authorize_isolated_completion(
-            self.governance.as_ref(),
-            self.session_id,
-            self.trace_id,
-            &model,
-            messages.len(),
-            1,
-        )
-        .await?;
-
-        // `complete` intentionally sends no tool declarations. It also does
-        // not enter the session store or the module hook bus, so this is an
-        // isolated side-call rather than a nested agent loop.
-        let routed = self
-            .router
-            .complete_for_session(
-                self.session_id,
-                apeireth_core::kernel::RequestId::new(),
-                &NormalizedRequest::new(model, messages),
-                None,
-                None,
+        let child = self
+            .runtime
+            .spawn_side_agent(
+                &self.module_id,
+                self.origin.session,
+                AgentConfig {
+                    model: Some(model.clone()),
+                    ..Default::default()
+                },
+                self.security.clone(),
             )
             .await
-            .map_err(|error| ModuleInvocationError::Provider {
-                reason: format!("module {}: {error}", self.module_id),
-            })?;
-
+            .map_err(|error| self.task_error(error))?;
+        let result = child
+            .agent
+            .execute(AgentTask {
+                messages: vec![NormalizedMessage::user(request.input)],
+                system: request.system,
+                model: Some(model),
+                max_rounds: 1,
+                timeout: None,
+                mode: AgentExecutionMode::SingleShot,
+                request_gate: Some(self.state.clone()),
+                origin: Some(self.origin.clone()),
+            })
+            .await;
+        // Reuse the instance cancellation/drain boundary on success and error.
+        // Dropping an interrupted adapter revokes via SideAgent's scope guard.
+        child
+            .agent
+            .stop()
+            .await
+            .map_err(|error| self.task_error(error))?;
+        let reply = result.map_err(|error| self.task_error(error))?;
         Ok(ModuleInvocationResponse {
-            response: routed.response,
-            served_by: routed.served_by,
+            response: reply.response,
+            served_by: reply.served_by,
         })
     }
 }

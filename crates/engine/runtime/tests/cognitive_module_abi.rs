@@ -3,11 +3,14 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
+use apeireth_core::kernel::{
+    AgentId, CapabilityId, ModelId, PluginId, RequestId, SessionId, TraceId,
+};
 use apeireth_governance::{
     Action, AllowAll, Decision, DenyCapabilities, GovernanceHook, GovernancePipeline,
     GovernanceRequest, Permission, PermissionGovernanceHook, PermissionPolicy,
 };
+use apeireth_plugin::agents::{AgentConfig, AgentOwner, AgentStatus, AgentTaskOrigin};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError, ToolCapability,
@@ -17,20 +20,523 @@ use apeireth_protocol::canonical::{
     NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedUsage, ToolCall,
     ToolParameters, ToolResult,
 };
+use apeireth_runtime::canonical::instances::{AgentHostPolicy, ModuleAgentGrant};
+use apeireth_runtime::canonical::module::{ModuleTurnState, RuntimeModuleInvoker};
+use apeireth_runtime::canonical::quota::{CostRateMicros, CostRateTable};
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, BehaviorModule, HookPoint, InvocationOrigin,
-    ModuleContext, ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleManifest,
-    ModuleOutcome, Runtime, RuntimeError, SessionEventKind, TurnOutcome, TurnRequest,
+    ModuleContext, ModuleError, ModuleInvocationError, ModuleInvocationRequest,
+    ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, Runtime, RuntimeError,
+    SessionEventKind, TurnOutcome, TurnRequest,
 };
 use async_trait::async_trait;
 
 const MODEL: &str = "fake-model-1";
+
+struct InvocationEvidence {
+    manifest: ModuleManifest,
+    requests: Vec<ModuleInvocationRequest>,
+    results: Mutex<Vec<Result<ModuleInvocationResponse, ModuleInvocationError>>>,
+    hooks: Mutex<Vec<HookPoint>>,
+}
+impl InvocationEvidence {
+    fn new(requests: usize) -> Arc<Self> {
+        Arc::new(Self {
+            manifest: ModuleManifest::new("module.invoker_evidence", "invoker evidence"),
+            requests: (0..requests)
+                .map(|_| {
+                    ModuleInvocationRequest::isolated("private system", "private task")
+                        .with_model(MODEL)
+                })
+                .collect(),
+            results: Mutex::new(vec![]),
+            hooks: Mutex::new(vec![]),
+        })
+    }
+    fn definition(&self) -> PluginId {
+        PluginId::new(format!("compat.{}", self.manifest.id)).unwrap()
+    }
+    fn capability(&self) -> CapabilityId {
+        apeireth_runtime::canonical::behavior_adapter::registered_behavior_capability(
+            &self.manifest.id,
+        )
+        .unwrap()
+    }
+}
+#[async_trait]
+impl BehaviorModule for InvocationEvidence {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        self.hooks.lock().unwrap().push(hook);
+        if hook == HookPoint::TurnStart {
+            for request in &self.requests {
+                let result = ctx.invoker_handle().invoke(request.clone()).await;
+                self.results.lock().unwrap().push(result);
+            }
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+fn opaque_side_response() -> NormalizedResponse {
+    let call = ToolCall {
+        id: "duplicate-wire-id".into(),
+        name: "echo".into(),
+        arguments: serde_json::json!({}),
+    };
+    NormalizedResponse {
+        id: "original-side-id".into(),
+        model: "reported-model".into(),
+        content: "private answer".into(),
+        finish_reason: Some(NormalizedFinishReason::ToolCalls),
+        usage: NormalizedUsage {
+            prompt_tokens: 7,
+            completion_tokens: 3,
+            total_tokens: 10,
+            prompt_cache_hit_tokens: Some(2),
+        },
+        // An opaque response is not an executable batch, even with duplicate IDs.
+        tool_calls: vec![call.clone(), call],
+        raw_metadata: serde_json::from_value(serde_json::json!({"wire": {"retained": true}}))
+            .unwrap(),
+    }
+}
+
+#[derive(Debug)]
+struct EvidenceRates;
+impl CostRateTable for EvidenceRates {
+    fn rate_for(&self, _: &str) -> Option<CostRateMicros> {
+        Some(CostRateMicros {
+            input_micros_per_1k_tokens: 1000,
+            output_micros_per_1k_tokens: 2000,
+        })
+    }
+}
+
+#[tokio::test]
+async fn standalone_invoker_uses_owned_single_shot_task_and_preserves_the_entire_response() {
+    let expected = opaque_side_response();
+    let provider = FakeProvider::new(vec![Reply::Response(Box::new(expected.clone()))]);
+    let module = InvocationEvidence::new(0);
+    let tool = EchoPlugin::new();
+    let runtime = Arc::new(
+        Runtime::builder()
+            .with_plugin(ProviderPlugin::new(provider.clone()))
+            .with_plugin(tool.clone())
+            .with_registered_behavior(module.clone())
+            .with_governance(Arc::new(AllowAll))
+            .build()
+            .await
+            .unwrap(),
+    );
+    let origin = AgentTaskOrigin {
+        agent: AgentId::new(),
+        session: SessionId::new(),
+        request: RequestId::new(),
+        trace: TraceId::new(),
+    };
+    let invoker = RuntimeModuleInvoker::new(
+        runtime.clone(),
+        origin.clone(),
+        None,
+        MODEL,
+        module.manifest.id.as_str(),
+        Arc::new(ModuleTurnState::new(1)),
+        0,
+    );
+    let response = invoker
+        .invoke(
+            ModuleInvocationRequest::isolated("private system", "private task").with_model(MODEL),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.response, expected);
+    assert_eq!(response.served_by, provider.id);
+    assert_eq!(provider.call_count(), 1);
+    assert_eq!(tool.calls.load(Ordering::SeqCst), 0);
+    assert!(module.hooks.lock().unwrap().is_empty());
+    assert!(provider.request(0).tools.is_empty());
+    assert_eq!(
+        provider.request(0).messages,
+        vec![
+            NormalizedMessage::system("private system"),
+            NormalizedMessage::user("private task")
+        ]
+    );
+    let children = runtime.agent_instances();
+    assert_eq!(children.len(), 1);
+    let child = &children[0];
+    assert_ne!(child.id, origin.agent);
+    assert_ne!(child.session, origin.session);
+    assert_eq!(child.status, AgentStatus::Stopped);
+    assert_eq!(child.usage.requests, 1);
+    assert_eq!(child.usage.input_tokens, 7);
+    assert_eq!(
+        child.owner,
+        AgentOwner::Module {
+            definition: module.definition(),
+            instance: runtime.plugins().instance_id(&module.definition()).unwrap()
+        }
+    );
+    let private = runtime
+        .sessions()
+        .load(&child.session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(private.events.iter().any(|e| matches!(&e.event, SessionEventKind::AgentTaskStarted { parent_request, parent_trace, .. } if *parent_request == origin.request && *parent_trace == origin.trace)));
+    assert!(matches!(
+        invoker
+            .clone()
+            .invoke(ModuleInvocationRequest::isolated("private system", "retry"))
+            .await,
+        Err(ModuleInvocationError::BudgetExceeded { limit: 1 })
+    ));
+    assert_eq!(provider.call_count(), 1);
+}
+
+#[tokio::test]
+async fn registered_invoker_usage_belongs_to_each_child_and_real_owner_with_parent_provenance() {
+    let expected = opaque_side_response();
+    let mut unknown_cache = expected.clone();
+    unknown_cache.usage.prompt_cache_hit_tokens = None;
+    let provider = FakeProvider::new(vec![
+        Reply::Response(Box::new(expected.clone())),
+        Reply::Response(Box::new(unknown_cache.clone())),
+        Reply::Text("parent answer"),
+    ]);
+    let module = InvocationEvidence::new(2);
+    let tool = EchoPlugin::new();
+    let mut policy = AgentHostPolicy {
+        concurrent_turns: 1,
+        ..Default::default()
+    };
+    policy.modules.insert(
+        module.definition(),
+        ModuleAgentGrant {
+            max_instances: 2,
+            ..Default::default()
+        },
+    );
+    let host = Runtime::builder()
+        .with_plugin(ProviderPlugin::new(provider.clone()))
+        .with_plugin(tool.clone())
+        .with_registered_behavior(module.clone())
+        .with_governance(Arc::new(AllowAll))
+        .with_default_model(MODEL)
+        .with_cost_rates(Arc::new(EvidenceRates))
+        .build_agent_runtime(policy)
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![module.capability(), CapabilityId::new("tool.echo").unwrap()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let reply = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        parent.run("parent input".into()),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(reply.text, "parent answer");
+    assert_eq!(provider.call_count(), 3);
+    assert_eq!(tool.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(module.hooks.lock().unwrap().len(), 5);
+    let results = module.results.lock().unwrap();
+    assert_eq!(results[0].as_ref().unwrap().response, expected);
+    assert_eq!(results[1].as_ref().unwrap().response, unknown_cache);
+    assert!(results
+        .iter()
+        .all(|r| r.as_ref().unwrap().served_by == provider.id));
+    drop(results);
+    let kernel = host.kernel().await;
+    let public = kernel
+        .sessions()
+        .load(&parent.snapshot().session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(public.messages.len(), 2);
+    assert_eq!(text(&public.messages[0]), "parent input");
+    assert_eq!(text(&public.messages[1]), "parent answer");
+    let parent_trace = public
+        .events
+        .iter()
+        .find(|e| e.request == reply.request)
+        .unwrap()
+        .trace;
+    let owner = AgentOwner::Module {
+        definition: module.definition(),
+        instance: kernel.plugins().instance_id(&module.definition()).unwrap(),
+    };
+    let children: Vec<_> = host
+        .instances()
+        .into_iter()
+        .filter(|a| a.id != parent.id())
+        .collect();
+    assert_eq!(children.len(), 2);
+    for child in children {
+        assert_eq!(child.owner, owner);
+        assert_ne!(child.session, public.id);
+        assert_eq!(child.status, AgentStatus::Stopped);
+        assert_eq!(child.usage.requests, 1);
+        assert_eq!(child.usage.tool_calls, 0);
+        let facts = host.requests(child.id).unwrap();
+        assert_eq!(facts.len(), 1);
+        let fact = &facts[0];
+        assert_eq!(fact.agent, child.id);
+        assert_eq!(fact.owner, owner);
+        assert_ne!(fact.request, reply.request);
+        assert_eq!(fact.provider, provider.id);
+        assert_eq!(fact.estimated_cost_micros, Some(13));
+        assert!(!fact.failed && !fact.cancelled);
+        let private = kernel
+            .sessions()
+            .load(&child.session)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(private.events.iter().any(|e| e.request == fact.request && matches!(&e.event, SessionEventKind::AgentTaskStarted { agent, owner: actual_owner, parent_agent, parent_session, parent_request, parent_trace: trace } if *agent == child.id && actual_owner == &owner && *parent_agent == parent.id() && *parent_session == public.id && *parent_request == reply.request && *trace == parent_trace)));
+        assert!(!private
+            .events
+            .iter()
+            .any(|e| matches!(e.event, SessionEventKind::ToolEventRecorded { .. })));
+    }
+    let usage = host.usage(Some(&owner));
+    assert_eq!(usage.requests, 2);
+    assert_eq!(usage.input_tokens, 14);
+    assert_eq!(usage.output_tokens, 6);
+    assert_eq!(usage.estimated_cost_micros, 26);
+    assert_eq!(usage.cached_tokens, 2);
+    assert_eq!(usage.unknown_cache_requests, 1);
+    assert_eq!(usage.complete_cache_count(), None);
+    assert_eq!(usage.unreported_usage_requests, 0);
+    assert_eq!(parent.snapshot().usage.requests, 1);
+    assert_eq!(parent.snapshot().usage.input_tokens, 1);
+    assert_eq!(host.usage(None).requests, 3);
+    assert_eq!(host.usage(None).estimated_cost_micros, 29);
+}
+
+#[tokio::test]
+async fn invoker_provider_failure_and_timeout_retain_child_facts_without_recursive_error_hooks() {
+    let provider = FakeProvider::new(vec![
+        Reply::Fail,
+        Reply::Delay,
+        Reply::Text("parent answer"),
+    ]);
+    let module = InvocationEvidence::new(2);
+    let mut policy = AgentHostPolicy::default();
+    let mut grant = ModuleAgentGrant::default();
+    grant.budget.turn_timeout_ms = 40;
+    policy.modules.insert(module.definition(), grant);
+    let host = Runtime::builder()
+        .with_plugin(ProviderPlugin::new(provider.clone()))
+        .with_registered_behavior(module.clone())
+        .with_governance(Arc::new(AllowAll))
+        .with_default_model(MODEL)
+        .build_agent_runtime(policy)
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![module.capability()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    parent.run("parent".into()).await.unwrap();
+    let results = module.results.lock().unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0]
+        .as_ref()
+        .unwrap_err()
+        .to_string()
+        .contains("side request failed"));
+    assert!(results[1]
+        .as_ref()
+        .unwrap_err()
+        .to_string()
+        .contains("deadline"));
+    drop(results);
+    assert_eq!(
+        module.hooks.lock().unwrap().len(),
+        5,
+        "child error hooks must also be suppressed"
+    );
+    let children: Vec<_> = host
+        .instances()
+        .into_iter()
+        .filter(|a| a.id != parent.id())
+        .collect();
+    assert_eq!(children.len(), 2);
+    let usage = host.usage(Some(&children[0].owner));
+    assert_eq!(usage.requests, 2);
+    assert_eq!(usage.provider_errors, 1);
+    assert_eq!(usage.cancellations, 1);
+    assert_eq!(usage.unreported_usage_requests, 2);
+    assert_eq!(usage.unknown_cache_requests, 2);
+    assert_eq!(usage.complete_cost_estimate(), None);
+    for child in children {
+        assert_eq!(child.status, AgentStatus::Stopped);
+        let facts = host.requests(child.id).unwrap();
+        assert_eq!(facts.len(), 1);
+        assert_eq!(facts[0].agent, child.id);
+        assert_eq!(facts[0].owner, child.owner);
+        assert!(facts[0].failed || facts[0].cancelled);
+        assert_eq!(facts[0].reported, None);
+    }
+    assert_eq!(host.usage(None).requests, 3);
+}
+
+#[tokio::test]
+async fn invoker_preserves_missing_usage_and_refuses_further_budgeted_owner_requests() {
+    let unreported = NormalizedResponse::text("no-usage", MODEL, "private answer");
+    let provider = FakeProvider::new(vec![
+        Reply::Response(Box::new(unreported.clone())),
+        Reply::Text("parent answer"),
+    ]);
+    let module = InvocationEvidence::new(2);
+    let mut policy = AgentHostPolicy::default();
+    policy
+        .modules
+        .insert(module.definition(), ModuleAgentGrant::default());
+    let host = Runtime::builder()
+        .with_plugin(ProviderPlugin::new(provider.clone()))
+        .with_registered_behavior(module.clone())
+        .with_governance(Arc::new(AllowAll))
+        .with_default_model(MODEL)
+        .build_agent_runtime(policy)
+        .await
+        .unwrap();
+    let parent = host
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![module.capability()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    parent.run("parent".into()).await.unwrap();
+    let results = module.results.lock().unwrap();
+    assert_eq!(results[0].as_ref().unwrap().response, unreported);
+    assert!(results[1]
+        .as_ref()
+        .unwrap_err()
+        .to_string()
+        .contains("usage is unavailable"));
+    drop(results);
+    let child = host
+        .instances()
+        .into_iter()
+        .find(|a| a.id != parent.id())
+        .unwrap();
+    let usage = host.usage(Some(&child.owner));
+    assert_eq!(usage.requests, 1);
+    assert_eq!(usage.unreported_usage_requests, 1);
+    assert_eq!(usage.complete_token_count(), None);
+    assert_eq!(usage.complete_cost_estimate(), None);
+    assert_eq!(usage.complete_cache_count(), None);
+    assert_eq!(provider.call_count(), 2);
+    assert_eq!(host.usage(None).requests, 2);
+}
+
+#[tokio::test]
+async fn invoker_and_subloop_share_the_same_turn_admission_budget() {
+    struct MixedCalls(ModuleManifest);
+    #[async_trait]
+    impl BehaviorModule for MixedCalls {
+        fn manifest(&self) -> &ModuleManifest {
+            &self.0
+        }
+        async fn on_hook(
+            &self,
+            hook: HookPoint,
+            ctx: &ModuleContext<'_>,
+        ) -> Result<ModuleOutcome, ModuleError> {
+            if hook == HookPoint::TurnStart {
+                ctx.invoker()
+                    .invoke(ModuleInvocationRequest::isolated("side", "first"))
+                    .await?;
+                ctx.subloop()
+                    .spawn(apeireth_runtime::canonical::subloop::SubLoopSpec::single_turn("second"))
+                    .await
+                    .unwrap();
+                let error = ctx
+                    .invoker_handle()
+                    .clone()
+                    .invoke(ModuleInvocationRequest::isolated("side", "third"))
+                    .await
+                    .unwrap_err();
+                assert!(matches!(
+                    error,
+                    ModuleInvocationError::BudgetExceeded { limit: 2 }
+                ));
+            }
+            Ok(ModuleOutcome::continue_())
+        }
+    }
+    let provider = FakeProvider::new(vec![
+        Reply::Text("one"),
+        Reply::Text("two"),
+        Reply::Text("parent"),
+    ]);
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_max_module_invocations(2)
+        .with_plugin(ProviderPlugin::new(provider.clone()))
+        .with_module(Arc::new(MixedCalls(ModuleManifest::new(
+            "module.mixed",
+            "mixed",
+        ))))
+        .with_governance(Arc::new(AllowAll))
+        .build()
+        .await
+        .unwrap();
+    assert_eq!(
+        runtime
+            .execute(TurnRequest::new(SessionId::new(), "parent"))
+            .await
+            .unwrap()
+            .text,
+        "parent"
+    );
+    assert_eq!(provider.call_count(), 3);
+    assert_eq!(
+        runtime
+            .agent_instances()
+            .iter()
+            .map(|a| a.usage.requests)
+            .sum::<u64>(),
+        2
+    );
+}
 
 #[derive(Clone)]
 enum Reply {
     Text(&'static str),
     Tool,
     TwoTools,
+    Response(Box<NormalizedResponse>),
+    Fail,
+    Delay,
 }
 
 struct FakeProvider {
@@ -90,11 +596,28 @@ impl ProviderCapability for FakeProvider {
             model: request.model.clone(),
             content: String::new(),
             finish_reason: Some(NormalizedFinishReason::Stop),
-            usage: NormalizedUsage::default(),
+            // Scripted normal calls report usage so owner budgets remain usable.
+            usage: NormalizedUsage {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                total_tokens: 2,
+                prompt_cache_hit_tokens: None,
+            },
             tool_calls: Vec::new(),
             raw_metadata: serde_json::Map::new(),
         };
         Ok(match reply {
+            Reply::Response(response) => *response.clone(),
+            Reply::Fail => {
+                return Err(ProviderError::BadResponse {
+                    provider: self.id.to_string(),
+                    detail: "side request failed".into(),
+                })
+            }
+            Reply::Delay => {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                panic!("side request must be cancelled");
+            }
             Reply::Text(text) => NormalizedResponse {
                 content: (*text).into(),
                 ..response

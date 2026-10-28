@@ -922,7 +922,11 @@ impl Runtime {
             }
         };
 
-        let tools = self.tool_declarations_for_session(request.session);
+        let tools = if self.single_shot_task() {
+            Vec::new()
+        } else {
+            self.tool_declarations_for_session(request.session)
+        };
         let continuation =
             FrozenTurnContinuation::start_of_round(request_id, trace_id, model.clone(), 1);
 
@@ -1559,15 +1563,17 @@ impl Runtime {
                 // one summary pass surface-replaces the compressible prefix
                 // (summary in view, originals archived, view replayable). Any
                 // failure leaves the session exactly as it was.
-                self.compact_session_if_due(
-                    &mut session,
-                    &continuation.model,
-                    &tools,
-                    request_id,
-                    trace_id,
-                    security_context,
-                )
-                .await?;
+                if !self.single_shot_task() {
+                    self.compact_session_if_due(
+                        &mut session,
+                        &continuation.model,
+                        &tools,
+                        request_id,
+                        trace_id,
+                        security_context,
+                    )
+                    .await?;
+                }
                 let mut session_view = session.provider_view();
                 // Plan mode is a prompt projection and nothing else: the
                 // folded posture's behavior convention is prepended to the
@@ -1647,7 +1653,8 @@ impl Runtime {
                         Ok(routed) => break Ok(routed),
                         Err(error) => error,
                     };
-                    if !error.is_context_window_exceeded()
+                    if self.single_shot_task()
+                        || !error.is_context_window_exceeded()
                         || overflow_attempts >= MAX_OVERFLOW_RETRIES
                     {
                         break Err(error);
@@ -1740,7 +1747,10 @@ impl Runtime {
                 // 落库点。
                 self.meter_provider_usage(&mut session, &continuation.model, &response.usage)
                     .await?;
-                if self.uses_v1_tool_events() {
+                // Single-shot responses are opaque results, never executable
+                // batches. Preserve even malformed/duplicate tool calls for
+                // the caller without admitting them to the Dispatcher.
+                if self.uses_v1_tool_events() && !self.single_shot_task() {
                     super::dispatcher::validate_call_batch(&response.tool_calls).map_err(
                         |failure| {
                             RuntimeError::Provider(apeireth_plugin::ProviderError::BadResponse {
@@ -1816,7 +1826,7 @@ impl Runtime {
                     }
                 }
 
-                if response.tool_calls.is_empty() {
+                if response.tool_calls.is_empty() || self.single_shot_task() {
                     let final_messages = session.messages.clone();
                     let before_final = self
                         .run_hook_checked(
@@ -2493,9 +2503,7 @@ impl Runtime {
             // owned handle below dereference the same Arc allocation, so every
             // path shares this turn's budget and identity.
             let spawner = Arc::new(RuntimeSubLoopSpawner::new(
-                self.providers_arc(),
                 active_tools.clone(),
-                Arc::clone(&self.governance),
                 *session_id,
                 trace_id,
                 model,
@@ -2774,6 +2782,9 @@ impl Runtime {
         request_id: RequestId,
         trace_id: TraceId,
     ) {
+        if self.isolated_task() {
+            return;
+        }
         let mut session = self
             .sessions
             .load(&request.session)
