@@ -35,9 +35,20 @@ pub struct PluginContext {
     /// The trace covering this start-up, so a plugin's own events correlate with
     /// the boot that caused them.
     pub trace: TraceId,
+    /// Owned work must use this scope so stop can cancel and drain it.
+    pub tasks: crate::task_scope::ModuleTaskScope,
 }
 
 impl PluginContext {
+    pub(crate) fn scoped(&self, tasks: crate::task_scope::ModuleTaskScope) -> Self {
+        Self {
+            clock: self.clock.clone(),
+            credentials: self.credentials.clone(),
+            trace: self.trace,
+            tasks,
+        }
+    }
+
     /// Assemble a context.
     pub fn new(
         clock: Arc<dyn Clock>,
@@ -48,6 +59,7 @@ impl PluginContext {
             clock,
             credentials,
             trace,
+            tasks: crate::task_scope::ModuleTaskScope::new(),
         }
     }
 }
@@ -78,6 +90,31 @@ pub trait Plugin: Send + Sync {
     /// Called at most once, after every declared dependency is active. Returning
     /// an error moves this plugin to `Failed` and aborts the boot.
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()>;
+
+    /// Complete activation after initialize. Legacy plugins need no second step.
+    async fn start(&self, _ctx: &PluginContext) -> PluginResult<()> {
+        Ok(())
+    }
+
+    /// Fixed, versioned subscriptions. Empty preserves legacy behavior.
+    fn hooks(&self) -> Vec<apeireth_protocol::canonical::ModuleHookV1> {
+        Vec::new()
+    }
+
+    /// Opt into versioned durable tool facts. Existing plugins keep their log
+    /// format; declaring a V1 hook opts in automatically.
+    fn uses_tool_events_v1(&self) -> bool {
+        !self.hooks().is_empty()
+    }
+
+    /// Observe an immutable boundary and request owned, registered tools.
+    /// The runtime authenticates ownership and executes through governance.
+    async fn on_hook(
+        &self,
+        _ctx: &crate::hooks::HookContextV1,
+    ) -> PluginResult<Vec<crate::hooks::HookToolRequest>> {
+        Ok(Vec::new())
+    }
 
     /// Release resources.
     ///

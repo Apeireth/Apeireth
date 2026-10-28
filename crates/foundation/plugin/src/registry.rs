@@ -31,6 +31,9 @@ use crate::plugin::Plugin;
 pub(crate) struct PluginEntry {
     pub(crate) plugin: Arc<dyn Plugin>,
     pub(crate) state: Lifecycle,
+    pub(crate) scope: crate::task_scope::ModuleTaskScope,
+    pub(crate) errors: Vec<PluginError>,
+    pub(crate) needs_cleanup: bool,
 }
 
 /// Which plugins exist, and what state each is in.
@@ -59,6 +62,9 @@ impl PluginRegistry {
             PluginEntry {
                 plugin,
                 state: Lifecycle::Registered,
+                scope: crate::task_scope::ModuleTaskScope::new(),
+                errors: Vec::new(),
+                needs_cleanup: false,
             },
         );
         Ok(())
@@ -110,6 +116,14 @@ impl PluginRegistry {
         self.entries.is_empty()
     }
 
+    pub(crate) fn entry_mut(&mut self, id: &PluginId) -> Option<&mut PluginEntry> {
+        self.entries.get_mut(id)
+    }
+
+    pub(crate) fn remove(&mut self, id: &PluginId) {
+        self.entries.remove(id);
+    }
+
     pub(crate) fn entry(&self, id: &PluginId) -> Option<&PluginEntry> {
         self.entries.get(id)
     }
@@ -153,6 +167,10 @@ impl CapabilityIndex {
             self.owners.insert(descriptor.id.clone(), owner.clone());
         }
         Ok(())
+    }
+
+    pub(crate) fn remove_owner(&mut self, id: &PluginId) {
+        self.owners.retain(|_, owner| owner != id);
     }
 
     /// The plugin that owns `id`.

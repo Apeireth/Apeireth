@@ -356,9 +356,12 @@ fn concurrent_observers_and_one_consumer_serialize_correctly() {
     let consumer = std::thread::spawn(move || {
         let mut collected = Vec::new();
         while collected.len() < consumer_expected.len() {
+            // Observe completion before the final read: a producer can append
+            // between an empty read and a later completion check.
+            let finished = consumer_done.load(Ordering::SeqCst);
             let slice = consumer_board.consume(consumer_id, 37).unwrap();
             if slice.is_empty() {
-                if consumer_done.load(Ordering::SeqCst) {
+                if finished {
                     break;
                 }
                 std::thread::yield_now();
@@ -380,9 +383,10 @@ fn concurrent_observers_and_one_consumer_serialize_correctly() {
                 let mut collected = Vec::new();
                 let mut offset = 0u64;
                 while collected.len() < observer_target {
+                    let finished = observer_done.load(Ordering::SeqCst);
                     let slice = observer_board.read_at(observer_id, offset).unwrap();
                     if slice.is_empty() {
-                        if observer_done.load(Ordering::SeqCst) {
+                        if finished {
                             break;
                         }
                         std::thread::yield_now();

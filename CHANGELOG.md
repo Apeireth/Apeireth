@@ -1,5 +1,13 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Registry Kernel Phase 2：注册模块 Runtime 纵向接线（2026-10-28）
+
+- **PRODUCTION WIRED（显式注册）**：现有 PluginManager 支持分离 initialize/start、失败清理、依赖反序 stop、取消排水与 unregister；V1 模块沿用既有 Plugin/能力归属索引，默认旧插件接口兼容。
+- **固定 Hook 实接**：不可变快照、受限并发回调、拓扑顺序提交；自动请求只调用自有注册工具，经过原治理与 Dispatcher，ToolEventV1 在闭合边界成对投影。错误、超时、取消和重复交付均有明确记录。
+- **统一执行适配**：LegacyToolAdapter 保留冻结审批载荷和 Session ID，收口 Schema、范围、期限、取消、panic 与输出相关性/预算；旧行为模块、宿主动态工具、SubLoop 和纯状态 control 的兼容边界逐项登记。
+- **兼容约束**：V1 持久事实显式升级，保留 KC 观察者逐字节契约；AfterToolCall 自动工作构成模型工具屏障，旧并行配置保留，不建立全局模型锁。并行协议结果按响应 turn 分组并保持调用 ID。
+- **范围与证据**：真实 Runtime 测试见 `registry_runtime_v1`，决策见 ADR-0019，实际门禁及推送权限状态见 `docs/04-internal/registry-kernel-phase2-2026-10-27.md`；未宣称完整 Memory/Profile、多实例或 Android App 已完成。
+
 ## [Unreleased] — Registry Kernel 第一批：工具事件协议基础设施（2026-10-27）
 
 - **基线先验**：从远端 `refactor/kc1-kernel-convergence@82724dc3` 开始，KC 全部交付可达；原版全量门禁在 Cloud 修复依赖/进程回收后五段通过，实测见 `docs/04-internal/registry-kernel-migration-2026-10-27.md`，不引用历史数字充当本次结果。

@@ -149,6 +149,7 @@ impl ProtocolAdapter for GeminiAdapter {
                             // 设计参考 functionCall 块
                             parts.push(json!({
                                 "functionCall": {
+                                    "id": tc.id,
                                     "name": tc.name,
                                     "args": tc.arguments,
                                 }
@@ -170,6 +171,7 @@ impl ProtocolAdapter for GeminiAdapter {
                                 .map(|call| call.name.clone())
                         });
                         let response = json!({
+                            "id": m.tool_call_id,
                             "name": name.unwrap_or_default(),
                             "response": {
                                 "content": ContentPart::join_text(&m.content),
@@ -208,7 +210,23 @@ impl ProtocolAdapter for GeminiAdapter {
             })
             .collect();
 
-        body.insert("contents".into(), Value::Array(contents));
+        // A parallel function-call turn must be answered by one response turn.
+        let mut grouped: Vec<Value> = Vec::new();
+        let mut previous_tool = false;
+        for (message, mut content) in non_system.iter().zip(contents) {
+            let tool = message.role == MessageRole::Tool;
+            if tool && previous_tool {
+                let parts = content["parts"].as_array_mut().expect("parts array");
+                grouped.last_mut().expect("previous tool")["parts"]
+                    .as_array_mut()
+                    .expect("parts array")
+                    .append(parts);
+            } else {
+                grouped.push(content);
+            }
+            previous_tool = tool;
+        }
+        body.insert("contents".into(), Value::Array(grouped));
 
         self.finalize_body(body, req)
     }

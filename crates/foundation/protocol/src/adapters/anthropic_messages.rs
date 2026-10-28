@@ -172,7 +172,23 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
             })
             .collect();
 
-        body.insert("messages".into(), Value::Array(messages));
+        // All results answering one assistant batch share the next user turn.
+        let mut grouped: Vec<Value> = Vec::new();
+        let mut previous_tool = false;
+        for (message, mut content) in non_system.iter().zip(messages) {
+            let tool = message.role == MessageRole::Tool;
+            if tool && previous_tool {
+                let blocks = content["content"].as_array_mut().expect("content blocks");
+                grouped.last_mut().expect("previous tool")["content"]
+                    .as_array_mut()
+                    .expect("content blocks")
+                    .append(blocks);
+            } else {
+                grouped.push(content);
+            }
+            previous_tool = tool;
+        }
+        body.insert("messages".into(), Value::Array(grouped));
 
         if let Some(t) = req.temperature {
             if !(0.0..=1.0).contains(&t) {

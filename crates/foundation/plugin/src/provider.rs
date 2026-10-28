@@ -239,6 +239,72 @@ pub trait ProviderCapability: Send + Sync {
     }
 }
 
+/// Bind cached router handles to their owning plugin's cancellation scope.
+pub(crate) fn scoped(
+    provider: Arc<dyn ProviderCapability>,
+    scope: crate::task_scope::ModuleTaskScope,
+) -> Arc<dyn ProviderCapability> {
+    Arc::new(ScopedProvider { provider, scope })
+}
+
+struct ScopedProvider {
+    provider: Arc<dyn ProviderCapability>,
+    scope: crate::task_scope::ModuleTaskScope,
+}
+
+impl ScopedProvider {
+    fn cancelled(&self) -> ProviderError {
+        ProviderError::Refused {
+            provider: self.id().to_string(),
+            detail: "owning plugin is stopping".into(),
+        }
+    }
+}
+
+#[async_trait]
+impl ProviderCapability for ScopedProvider {
+    fn id(&self) -> &CapabilityId {
+        self.provider.id()
+    }
+    fn models(&self) -> Vec<ModelDescriptor> {
+        self.provider.models()
+    }
+    fn supports_model(&self, model: &str) -> bool {
+        self.scope.is_open() && self.provider.supports_model(model)
+    }
+    fn supports_tool_calls(&self, model: &str) -> bool {
+        self.provider.supports_tool_calls(model)
+    }
+    fn supports_streaming(&self, model: &str) -> bool {
+        self.provider.supports_streaming(model)
+    }
+    async fn complete(
+        &self,
+        request: &NormalizedRequest,
+    ) -> Result<NormalizedResponse, ProviderError> {
+        self.scope
+            .run(self.provider.complete(request))
+            .await
+            .map_err(|_| self.cancelled())?
+    }
+    async fn complete_streaming(
+        &self,
+        request: &NormalizedRequest,
+        on_delta: Arc<dyn Fn(String) + Send + Sync>,
+    ) -> Result<NormalizedResponse, ProviderError> {
+        self.scope
+            .run(self.provider.complete_streaming(request, on_delta))
+            .await
+            .map_err(|_| self.cancelled())?
+    }
+    fn apply_hot_config(&self, patch: &ProviderHotConfig) -> Result<(), String> {
+        if !self.scope.is_open() {
+            return Err("owning plugin is stopping".into());
+        }
+        self.provider.apply_hot_config(patch)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

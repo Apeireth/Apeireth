@@ -281,6 +281,7 @@ pub struct Runtime {
     pub(super) config: RuntimeConfig,
     pub(super) modules: BehaviorRegistry,
     pub(super) capabilities: CapabilityRegistry,
+    pub(super) dispatcher: Arc<super::dispatcher::ToolDispatcher>,
     pub(super) session_locks: SessionLocks,
     pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
     pub(super) context_projector: Arc<dyn ContextProjector>,
@@ -442,8 +443,21 @@ impl Runtime {
 
     /// Every tool that can currently be dispatched to.
     pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        let mut tools = self.capabilities.capabilities();
-        tools.extend(self.plugins.active_tools());
+        let mut tools = self
+            .capabilities
+            .capabilities()
+            .into_iter()
+            .map(|tool| self.dispatcher.adapt(tool, None, true))
+            .collect::<Vec<_>>();
+        tools.extend(self.plugins.active_tools().into_iter().map(|tool| {
+            let scope = self
+                .plugins
+                .record(tool.id())
+                .ok()
+                .and_then(|record| self.plugins.task_scope(record.owner).ok());
+            let legacy = self.tool_is_legacy(tool.id());
+            self.dispatcher.adapt(tool, scope, legacy)
+        }));
         tools
     }
 
@@ -643,6 +657,7 @@ pub struct RuntimeBuilder {
     context_projector: Arc<dyn ContextProjector>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
+    dispatch_limits: super::dispatcher::DispatchLimits,
     invariant_auditor: Option<Arc<InvariantAuditor>>,
     summary_generator: Option<Arc<dyn SummaryGenerator>>,
     call_scheduler: Option<Arc<CallScheduler>>,
@@ -674,6 +689,7 @@ impl RuntimeBuilder {
             context_projector: Arc::new(NoContextProjector),
             fallback_order: None,
             config: RuntimeConfig::default(),
+            dispatch_limits: super::dispatcher::DispatchLimits::default(),
             invariant_auditor: None,
             summary_generator: None,
             call_scheduler: None,
@@ -681,6 +697,12 @@ impl RuntimeBuilder {
             tool_completion_observer: None,
             egress_gate: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_dispatch_limits(mut self, limits: super::dispatcher::DispatchLimits) -> Self {
+        self.dispatch_limits = limits;
+        self
     }
 
     /// Use a specific time source.
@@ -1006,19 +1028,23 @@ impl RuntimeBuilder {
             Arc::clone(&self.credentials),
             TraceId::new(),
         );
-        manager.start_all(&ctx).await?;
-
+        let declared_tools = manager
+            .plugins()
+            .ids()
+            .flat_map(|id| manager.plugins().get(id).expect("registered").tools())
+            .collect::<Vec<_>>();
         crate::canonical::module::reject_tool_identity_collisions(
             &capability_registry.capabilities(),
-            &manager.active_tools(),
+            &declared_tools,
             "plugin tools",
         )
         .map_err(RuntimeError::misconfigured)?;
         crate::canonical::control::reject_control_tool_collisions(
             &capability_registry.controls(),
-            &manager.active_tools(),
+            &declared_tools,
         )
         .map_err(RuntimeError::misconfigured)?;
+        manager.start_all_or_rollback(&ctx).await?;
 
         // Providers are read out of the capability registry *after* start-up, so
         // the router contains exactly those whose plugins actually came up. A
@@ -1060,6 +1086,7 @@ impl RuntimeBuilder {
             config: self.config,
             modules: module_registry,
             capabilities: capability_registry,
+            dispatcher: Arc::new(super::dispatcher::ToolDispatcher::new(self.dispatch_limits)),
             session_locks: SessionLocks::default(),
             event_sink: RwLock::new(self.event_sink),
             context_projector: self.context_projector,

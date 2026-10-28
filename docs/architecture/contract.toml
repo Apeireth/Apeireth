@@ -131,6 +131,10 @@ forbidden_production_deps = [
 ]
 execution_loop_files = [
   "crates/engine/runtime/src/canonical/execute.rs",
+  "crates/engine/runtime/src/canonical/dispatch_admission.rs",
+  "crates/engine/runtime/src/canonical/dispatcher.rs",
+  "crates/engine/runtime/src/canonical/registered_hooks.rs",
+  "crates/engine/runtime/src/canonical/subloop.rs",
 ]
 forbidden_dispatch_literals = [
   "exit_plan_mode",
@@ -171,6 +175,7 @@ plugin_trait = "crates/foundation/plugin/src/plugin.rs::Plugin"
 # KC-1 (ADR-0017): 通用工具完成观察口 + 注册式内部控制命令。
 tool_completion_observer = "crates/foundation/plugin/src/observation.rs::ToolCompletionObserver"
 control_command = "crates/engine/runtime/src/canonical/control.rs::ControlCommand"
+# Compatibility behavior registry; V1 module lifecycle reuses plugin_manager below (ADR-0019).
 module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry"
 capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
 plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
@@ -183,7 +188,13 @@ sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
 name = "ToolEventV1"
 canonical = "crates/foundation/protocol/src/canonical/tool_event.rs"
 known_debt = []
-target = "ADR-0018: 统一来源/执行身份/相关性与成对消息投影；Runtime Hook 自动接线另批验收"
+target = "ADR-0018/0019: 统一来源/执行身份/相关性与成对消息投影；V1 注册模块在 Runtime 接线，旧行为模块显式兼容"
+
+[[concepts]]
+name = "ToolDispatcher"
+canonical = "crates/engine/runtime/src/canonical/dispatcher.rs"
+known_debt = []
+target = "ADR-0019: 联合查询既有目录与统一执行策略，不拥有竞争注册表"
 
 [[concepts]]
 name = "ContextAssembler"

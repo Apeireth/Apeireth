@@ -393,7 +393,8 @@ impl RuntimeSubLoopSpawner {
         match verdict.decision {
             Decision::Allow => {
                 // Succeeded all checks: invoke capability
-                tool.invoke(call).await
+                tool.invoke_in_session(call, None, Some(self.session_id))
+                    .await
             }
             Decision::Deny { reason } => {
                 // Denied by governance: do NOT invoke tool

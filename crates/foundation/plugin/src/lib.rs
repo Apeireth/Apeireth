@@ -64,6 +64,7 @@ pub mod llm_factory;
 pub mod llm_orchestration_mirror;
 pub use extension::{ExtensionCatalog, ExtensionDescriptor, ExtensionKind};
 pub use llm_orchestration_mirror::MirrorLlmFactory;
+pub mod hooks;
 pub mod manager;
 pub mod manifest;
 pub mod mcp;
@@ -78,6 +79,7 @@ pub mod provider;
 pub mod registry;
 pub mod self_assessment;
 pub mod semver;
+pub mod task_scope;
 pub mod tool;
 pub mod watch;
 

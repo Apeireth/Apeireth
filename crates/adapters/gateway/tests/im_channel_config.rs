@@ -2,7 +2,7 @@
 //! 启动日志脱敏 / 启动装配 / 断线重连。外部端点一律本地 mock, 0 真实网络。
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use apeireth_gateway::{
     assemble_im_channels, im_channels_path, ImChannelConfig, ImConfigError, IM_CHANNELS_ENV,
@@ -13,6 +13,37 @@ use apeireth_sdk::im::{
 };
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+
+// These two configuration tests share a process environment. Isolate reads as
+// well as writes, and restore the caller's value even when an assertion panics.
+static CHANNEL_ENV_LOCK: Mutex<()> = Mutex::new(());
+struct ChannelEnvGuard {
+    _lock: MutexGuard<'static, ()>,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl ChannelEnvGuard {
+    fn clear() -> Self {
+        let lock = CHANNEL_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let previous = std::env::var_os(IM_CHANNELS_ENV);
+        std::env::remove_var(IM_CHANNELS_ENV);
+        Self {
+            _lock: lock,
+            previous,
+        }
+    }
+}
+
+impl Drop for ChannelEnvGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var(IM_CHANNELS_ENV, value),
+            None => std::env::remove_var(IM_CHANNELS_ENV),
+        }
+    }
+}
 
 fn temp_dir(tag: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("apeireth-im-it-{tag}-{}", std::process::id()));
@@ -243,6 +274,7 @@ async fn outbound_delivery_reconnects_after_transient_failures() {
 /// 6. 未配置渠道: 装配 inert, 本地零回归的前提条件。
 #[test]
 fn no_configured_channels_assembles_to_an_inert_surface() {
+    let _env = ChannelEnvGuard::clear();
     let dir = temp_dir("empty");
     let config = ImChannelConfig::load(Some(&dir)).unwrap();
     let assembly = assemble_im_channels(&config, ImReconnectPolicy::default()).unwrap();
@@ -255,6 +287,7 @@ fn no_configured_channels_assembles_to_an_inert_surface() {
 /// env 主入口优先于数据目录 (装配口径)。
 #[test]
 fn env_entry_wins_over_the_data_directory() {
+    let _env = ChannelEnvGuard::clear();
     let dir = temp_dir("env-wins");
     let body = ImChannelConfig::from_env_value(&format!(
         "[{}]",

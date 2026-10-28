@@ -443,3 +443,39 @@ fn every_adapter_rejects_orphan_results_and_unanswered_calls() {
         }
     }
 }
+
+#[test]
+fn parallel_results_share_one_response_turn_and_keep_call_ids() {
+    let mut request = projected_request();
+    request.messages[1].tool_calls.push(call("second"));
+    request.messages.push(
+        ToolResult::ok("second", json!(2))
+            .with_name("memory_retrieve")
+            .into_message(),
+    );
+    let messages = AnthropicMessagesAdapter::new()
+        .adapt_request(&request)
+        .unwrap();
+    assert_eq!(messages["messages"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        messages["messages"][2]["content"].as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(
+        messages["messages"][2]["content"][0]["tool_use_id"],
+        "call_memory_1"
+    );
+    assert_eq!(
+        messages["messages"][2]["content"][1]["tool_use_id"],
+        "second"
+    );
+    let gemini = GeminiAdapter::new().adapt_request(&request).unwrap();
+    assert_eq!(gemini["contents"].as_array().unwrap().len(), 3);
+    assert_eq!(gemini["contents"][2]["parts"].as_array().unwrap().len(), 2);
+    for i in 0..2 {
+        assert_eq!(
+            gemini["contents"][1]["parts"][i]["functionCall"]["id"],
+            gemini["contents"][2]["parts"][i]["functionResponse"]["id"]
+        );
+    }
+}

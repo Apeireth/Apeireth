@@ -44,6 +44,7 @@ pub use research_approval_sm::{
     ResearchRecoveryAction, ResearchRecoveryAdvice, ResearchSideEffectCategory,
     ResearchSideEffectDescriptor,
 };
+pub mod dispatcher;
 pub mod error;
 pub mod event_log;
 pub mod events;
@@ -51,6 +52,8 @@ pub mod execute;
 pub mod heartbeat;
 pub mod metrics;
 pub mod module;
+mod module_host;
+pub mod registered_hooks;
 // OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).
 // **0 装诚实真账 (子代理 R12 独立判断)**:
 // - 本 module 是 spec 部分真实施 (估 30-45 分钟), 完整 1-3 周估待 (per R11 §8.4).
@@ -69,6 +72,7 @@ pub mod provider;
 pub mod quota;
 pub mod runtime;
 pub mod session;
+mod session_events;
 pub mod session_locks;
 pub mod subloop;
 pub mod trace;
