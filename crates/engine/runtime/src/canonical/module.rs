@@ -62,11 +62,12 @@ impl ModuleManifest {
     }
 }
 
-/// A provider-request-only prompt message.
+/// Compatibility content block returned by a behavior producer.
 ///
-/// An overlay is deliberately not a session message. It is copied into one
-/// provider request and then dropped, so it cannot alter the persisted
-/// conversation or appear automatically in a later turn.
+/// The message shape is retained for readers and producers. RegisteredBehavior
+/// discards its role and records the text as untrusted ToolEventV1 data. Runtime
+/// projects a matched assistant/tool pair once; it never injects this as system
+/// policy. Facts persist, while business-history readers exclude module pairs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PromptOverlay {
     message: NormalizedMessage,
@@ -78,7 +79,7 @@ pub struct PromptOverlay {
 }
 
 impl PromptOverlay {
-    /// Add a transient system message to one provider invocation.
+    /// Construct a compatibility block; the system role is not provider authority.
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             message: NormalizedMessage::system(content),
@@ -86,12 +87,12 @@ impl PromptOverlay {
         }
     }
 
-    /// A transient system message carrying cross-source content — material
+    /// A compatibility block carrying cross-source content — material
     /// recalled from outside the current turn (other sessions, external
     /// stores). `source` names where the content came from and is rendered
     /// inside the disclosure envelope; the provider-request funnel discloses
     /// the block through the untrusted reference envelope before composition
-    /// (see `budget_injected_overlays`).
+    /// as data inside its authenticated tool result.
     pub fn system_cross_source(source: impl Into<String>, content: impl Into<String>) -> Self {
         Self {
             message: NormalizedMessage::system(content),
@@ -104,7 +105,7 @@ impl PromptOverlay {
         self.cross_source.as_deref()
     }
 
-    /// The normalized message that will be sent to the provider.
+    /// The producer representation; Runtime sends its text through V1 pairing.
     pub fn message(&self) -> &NormalizedMessage {
         &self.message
     }
@@ -130,13 +131,13 @@ pub enum ModuleDirective {
 /// The value returned by one module hook.
 ///
 /// When several modules observe the same hook, the canonical runtime invokes
-/// them in registration order, concatenates their overlays in that order, and
+/// them through registered tools in registration order, commits V1 data, and
 /// resolves directives by strength: `Stop` overrides `Retry`, which overrides
 /// `Continue`. Equal-strength directives keep the first module's result, and a
 /// directive does not short-circuit the remaining modules for that hook.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleOutcome {
-    /// Prompt messages to prepend to the next provider request in this turn.
+    /// Producer blocks converted to untrusted V1 data, never system instructions.
     pub prompt_overlays: Vec<PromptOverlay>,
     /// Generic control directive.
     pub directive: ModuleDirective,

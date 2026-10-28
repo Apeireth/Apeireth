@@ -190,6 +190,13 @@ impl GovernanceHook for SequenceHook {
     }
 
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        if let apeireth_governance::Action::CapabilityDispatch { capability, .. } = request.action {
+            return if capability.as_str() == "tool.behavior.cognitive.organs" {
+                Decision::Allow
+            } else {
+                Decision::deny("fixture has no grant for this capability")
+            };
+        }
         self.captures
             .lock()
             .unwrap()
@@ -231,6 +238,13 @@ impl GovernanceHook for SideCallHook {
     }
 
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        if let apeireth_governance::Action::CapabilityDispatch { capability, .. } = request.action {
+            return if capability.as_str() == "tool.behavior.cognitive.organs" {
+                Decision::Allow
+            } else {
+                Decision::deny("fixture has no grant for this capability")
+            };
+        }
         self.captures
             .lock()
             .unwrap()

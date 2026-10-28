@@ -20,6 +20,15 @@ use apeireth_runtime::{
 };
 use async_trait::async_trait;
 
+// S3: grant just the selected internal callback; unrelated tools remain denied.
+fn behavior_grant(id: &str) -> Arc<dyn GovernanceHook> {
+    let mut policy = apeireth_governance::PermissionPolicy::new();
+    policy.grant(apeireth_governance::Permission::ExecuteTool(format!(
+        "tool.behavior.{id}"
+    )));
+    Arc::new(apeireth_governance::PermissionGovernanceHook::new(policy))
+}
+
 #[derive(Clone)]
 struct MockInstrumentedTool {
     id: CapabilityId,
@@ -415,6 +424,7 @@ async fn hostile_provider_attempting_denied_capability_is_blocked_and_invoke_cou
     });
 
     let mut runtime = Runtime::builder()
+        .with_governance(behavior_grant("module.hostile"))
         .with_plugin(plugin)
         .with_capability(module.allowed_tool.clone())
         .with_capability(module.denied_tool.clone())
@@ -570,6 +580,13 @@ impl GovernanceHook for ApprovalRequiredGovernance {
 
     async fn evaluate(&self, req: &GovernanceRequest<'_>) -> Decision {
         match req.action {
+            // S3 Host grant covers only this callback. Every other capability
+            // keeps the original fixture's interactive-approval requirement.
+            Action::CapabilityDispatch { capability, .. }
+                if capability.as_str() == "tool.behavior.module.appr.test" =>
+            {
+                Decision::Allow
+            }
             Action::CapabilityDispatch { .. } => Decision::RequireApproval {
                 reason: "sensitive action needs human confirmation".into(),
             },
@@ -754,6 +771,7 @@ async fn subloop_timeout_enforces_overall_execution_deadline() {
     });
 
     let mut runtime = Runtime::builder()
+        .with_governance(behavior_grant("module.timeout.test"))
         .with_plugin(plugin)
         .with_module(module)
         .with_default_model("subloop-model")
@@ -1129,7 +1147,16 @@ async fn subloops_share_turn_budget_across_modules_handles_and_new_children_and_
             ScriptStep::Say("main two"),
         ],
     );
+    let mut callback_policy = apeireth_governance::PermissionPolicy::new();
+    for id in ["module.budget.a", "module.budget.b"] {
+        callback_policy.grant(apeireth_governance::Permission::ExecuteTool(format!(
+            "tool.behavior.{id}"
+        )));
+    }
     let mut runtime = Runtime::builder()
+        .with_governance(Arc::new(
+            apeireth_governance::PermissionGovernanceHook::new(callback_policy),
+        ))
         .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
         .with_module(a.clone())
         .with_module(b.clone())
@@ -1220,6 +1247,21 @@ async fn subloop_preserves_normalized_input_model_system_round_errors_and_satura
     );
     let mut policy = AgentHostPolicy::default();
     policy.max_budget.max_tokens = u64::MAX;
+    // The old Host fallback had an unbounded side budget in this saturation
+    // fixture. S3 uses the real module owner: grant that same test budget and
+    // only its actual tool explicitly, without changing production limits.
+    policy.modules.insert(
+        PluginId::new("compat.module.normalized").unwrap(),
+        ModuleAgentGrant {
+            tools: [tool.id().clone()].into(),
+            max_instances: 3,
+            budget: apeireth_plugin::agents::AgentBudget {
+                max_tokens: u64::MAX,
+                ..policy.max_budget.clone()
+            },
+            ..Default::default()
+        },
+    );
     let host = Runtime::builder()
         .with_plugin(ScriptedProviderPlugin::new(provider.clone()))
         .with_capability(Arc::new(tool))
@@ -1230,7 +1272,13 @@ async fn subloop_preserves_normalized_input_model_system_round_errors_and_satura
         .await
         .unwrap();
     let parent = host
-        .spawn_agent("main", AgentConfig::default())
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![CapabilityId::new("tool.behavior.module.normalized").unwrap()],
+                ..Default::default()
+            },
+        )
         .await
         .unwrap();
     parent.run("parent".into()).await.unwrap();

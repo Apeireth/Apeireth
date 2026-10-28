@@ -1318,7 +1318,9 @@ async fn session_start_precedes_model_when_legacy_turn_start_requests_retry() {
         .events
         .iter()
         .filter_map(|e| match e.event {
-            SessionEventKind::RegisteredHook { hook, .. } => Some(hook),
+            SessionEventKind::RegisteredHook {
+                ref module, hook, ..
+            } if module == &pid("module.start_retry") => Some(hook),
             _ => None,
         })
         .collect::<Vec<_>>();

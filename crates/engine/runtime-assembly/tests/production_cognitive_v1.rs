@@ -254,3 +254,94 @@ async fn a_model_cannot_call_module_only_tools_even_with_a_host_grant() {
     );
     assert!(runtime.shutdown().await.is_empty());
 }
+
+#[tokio::test]
+async fn old_builder_memory_entries_keep_v1_roles_stop_and_private_principal_isolation() {
+    use apeireth_core::kernel::{NamespaceId, ProfileId};
+    use apeireth_plugin::agents::AgentPrincipal;
+    for behavior_alias in [false, true] {
+        for private in [false, true] {
+            let session = SessionId::new();
+            let db = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+            user_data(&db, session);
+            let provider = Provider::new(vec![]);
+            let cognitive = modules(db.clone(), false, false);
+            // The test Host explicitly selects AllowAll in builder(); the API
+            // spelling itself supplies no capability grant.
+            let mut construction = builder(provider.clone());
+            for module in cognitive.modules() {
+                construction = if behavior_alias {
+                    construction.with_behavior(module.clone())
+                } else {
+                    construction.with_module(module.clone())
+                };
+            }
+            let mut runtime = construction.build().await.unwrap();
+            if private {
+                let mut stored = runtime.sessions().load_or_create(session).await.unwrap();
+                stored.principal = Some(AgentPrincipal {
+                    profile: ProfileId::new(),
+                    namespace: NamespaceId::new(),
+                });
+                runtime.sessions().save(&stored).await.unwrap();
+            }
+            runtime
+                .execute(
+                    TurnRequest::new(session, "old_apricot_memory")
+                        .with_system("STATIC_HOST_POLICY"),
+                )
+                .await
+                .unwrap();
+            let request = &provider.requests()[0];
+            apeireth_protocol::canonical::validate_closed_tool_context(&request.messages).unwrap();
+            assert_eq!(
+                request
+                    .messages
+                    .iter()
+                    .filter(|m| m.role == MessageRole::System)
+                    .map(|m| ContentPart::join_text(&m.content))
+                    .collect::<Vec<_>>(),
+                ["STATIC_HOST_POLICY"]
+            );
+            if private {
+                assert!(tool_text(request).is_empty());
+                assert!(facts(&runtime, session).await.is_empty());
+                assert_eq!(
+                    MemoryBackend::recent_episodes(db.as_ref(), &session.to_string(), 20)
+                        .unwrap()
+                        .len(),
+                    1,
+                    "private principal cannot read or write the old global engine"
+                );
+            } else {
+                assert_eq!(tool_text(request).matches("old_apricot_memory").count(), 1);
+                let count = facts(&runtime, session).await.len();
+                runtime
+                    .stop_module(&pid("compat.cognitive.memory_recall"))
+                    .await
+                    .unwrap();
+                runtime
+                    .stop_module(&pid("compat.cognitive.memory_writeback"))
+                    .await
+                    .unwrap();
+                runtime
+                    .execute(TurnRequest::new(session, "next"))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    facts(&runtime, session).await.len(),
+                    count,
+                    "stop cannot fall back to the old callbacks"
+                );
+                assert_eq!(
+                    tool_text(&provider.requests()[1])
+                        .matches("old_apricot_memory")
+                        .count(),
+                    1,
+                    "persisted fact is present once, with no second injection"
+                );
+            }
+            assert!(runtime.shutdown().await.is_empty());
+        }
+    }
+}

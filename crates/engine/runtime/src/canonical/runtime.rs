@@ -639,7 +639,6 @@ pub struct RuntimeBuilder {
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
     modules: Vec<Arc<dyn BehaviorModule>>,
-    registered_behavior_ids: std::collections::BTreeSet<String>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     event_sink: Arc<dyn RuntimeEventSink>,
     context_projector: Arc<dyn ContextProjector>,
@@ -674,7 +673,6 @@ impl RuntimeBuilder {
             governance: Arc::new(DenyUnconfigured),
             plugins: Vec::new(),
             modules: Vec::new(),
-            registered_behavior_ids: Default::default(),
             capabilities: Vec::new(),
             event_sink: Arc::new(NoopRuntimeEventSink),
             context_projector: Arc::new(NoContextProjector),
@@ -747,18 +745,19 @@ impl RuntimeBuilder {
         self
     }
 
-    /// Register a cognitive module. Modules run in registration order.
+    /// Register a cognitive module through authenticated fixed Hooks and V1 tools.
+    /// Modules run in registration order. The Host must grant their internal
+    /// capabilities explicitly; registration does not authorize execution.
     #[must_use]
     pub fn with_registered_behavior(mut self, module: Arc<dyn BehaviorModule>) -> Self {
-        self.registered_behavior_ids
-            .insert(module.manifest().id.clone());
         self.modules.push(module);
         self
     }
 
-    pub fn with_module(mut self, module: Arc<dyn BehaviorModule>) -> Self {
-        self.modules.push(module);
-        self
+    /// Compatibility name for [`Self::with_registered_behavior`].
+    #[must_use]
+    pub fn with_module(self, module: Arc<dyn BehaviorModule>) -> Self {
+        self.with_registered_behavior(module)
     }
 
     /// Compatibility alias that makes the behavior/capability distinction
@@ -1009,14 +1008,12 @@ impl RuntimeBuilder {
         let mut registered_behaviors = BTreeMap::new();
         let mut module_registry = BehaviorRegistry::new();
         for module in self.modules {
-            if self.registered_behavior_ids.contains(&module.manifest().id) {
-                let adapter = Arc::new(
-                    super::behavior_adapter::RegisteredBehavior::new(module.clone())
-                        .map_err(RuntimeError::misconfigured)?,
-                );
-                self.plugins.push(adapter.clone());
-                registered_behaviors.insert(module.manifest().id.clone(), adapter);
-            }
+            let adapter = Arc::new(
+                super::behavior_adapter::RegisteredBehavior::new(module.clone())
+                    .map_err(RuntimeError::misconfigured)?,
+            );
+            self.plugins.push(adapter.clone());
+            registered_behaviors.insert(module.manifest().id.clone(), adapter);
             module_registry
                 .register(module)
                 .map_err(RuntimeError::misconfigured)?;

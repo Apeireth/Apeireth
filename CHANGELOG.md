@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Kernel Convergence S3：旧行为入口统一注册工具路径（2026-10-29）
+
+- **PRODUCTION WIRED（兼容行为入口）**：with_module / with_behavior 委托 RegisteredBehavior、固定 Hook 与原 Dispatcher；删除直接 callback fallback 和动态 system Overlay 注入链，保留公开名称、指令时序与兼容数据类型。
+- **授权与数据**：Host 显式授权内部 capability，模型假 receipt / 同名工具借权继续拒绝；principal 存在时旧全局认知跳过。动态文本仅作为不可信 ToolEventV1 配对工具数据，单次投影、空观察仅审计；静态 Host policy、预算/spill/溢出重试与业务历史过滤保持。
+- **证据与边界**：表示迁移及真实 Runtime 回归见 [S3 交付账](docs/04-internal/kernel-convergence-s3-2026-10-29.md)。整体 Convergence 仍为 Partial；S4 Profile 授权映射、S5 桌面受管主入口与最终验收留后续。
+
 ## [Unreleased] — Kernel Convergence S2：ModuleInvoker 统一实例执行（2026-10-29）
 
 - **PRODUCTION WIRED（ModuleInvoker 路径）**：两个兼容实现共用既有 AgentInstance 任务端口，删除直接 Router completion 后端；单次私有执行不声明或派发工具、不递归 Hook，完整返回 NormalizedResponse 与 served_by。

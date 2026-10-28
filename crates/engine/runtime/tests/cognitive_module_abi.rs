@@ -1,4 +1,6 @@
 //! End-to-end coverage for the canonical cognitive-module ABI.
+#[path = "support/behavior_v1.rs"]
+mod behavior_v1;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -778,6 +780,13 @@ async fn runtime(provider: Arc<FakeProvider>, modules: Vec<Arc<dyn BehaviorModul
     builder.build().await.unwrap()
 }
 
+// The Host opts into the callback without granting unrelated tools.
+fn behavior_grant(id: &str) -> Arc<dyn GovernanceHook> {
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool(format!("tool.behavior.{id}")));
+    Arc::new(PermissionGovernanceHook::new(policy))
+}
+
 fn text(message: &NormalizedMessage) -> String {
     apeireth_protocol::canonical::ContentPart::join_text(&message.content)
 }
@@ -1199,15 +1208,32 @@ async fn hooks_fire_and_overlays_are_ordered_transient_and_not_persisted() {
         .unwrap();
 
     let first = provider.request(0);
-    let first_texts: Vec<String> = first.messages.iter().map(text).collect();
+    let first_texts = behavior_v1::texts(&first.messages);
     assert_eq!(first_texts, ["one", "A_MARKER", "B_MARKER"]); // 缓存友好组装：史在前、叠加层在尾
-    let second_texts: Vec<String> = provider.request(1).messages.iter().map(text).collect();
-    assert_eq!(second_texts, ["one", "first", "two"]);
+    let second_texts = behavior_v1::texts(&provider.request(1).messages);
+    assert_eq!(
+        second_texts,
+        ["one", "A_MARKER", "B_MARKER", "first", "two"]
+    );
 
     let session = runtime.sessions().load_or_create(session_id).await.unwrap();
-    let persisted: Vec<String> = session.messages.iter().map(text).collect();
-    assert_eq!(persisted, ["one", "first", "two", "second"]);
-    assert!(!persisted.iter().any(|message| message.contains("MARKER")));
+    // S3: V1 facts persist once, but callback business history excludes them.
+    let persisted = behavior_v1::texts(&session.messages);
+    assert_eq!(
+        persisted,
+        ["one", "A_MARKER", "B_MARKER", "first", "two", "second"]
+    );
+    let users: Vec<_> = session
+        .messages
+        .iter()
+        .filter(|m| m.role == MessageRole::User)
+        .map(text)
+        .collect();
+    assert_eq!(users, ["one", "two"]);
+    assert!(!session
+        .messages
+        .iter()
+        .any(|m| m.role == MessageRole::System && text(m).contains("MARKER")));
 }
 
 #[tokio::test]
@@ -1225,10 +1251,10 @@ async fn overlays_are_recomputed_for_each_provider_retry() {
         .await
         .unwrap();
 
-    let first: Vec<String> = provider.request(0).messages.iter().map(text).collect();
+    let first = behavior_v1::texts(&provider.request(0).messages);
     assert_eq!(first, ["question", "overlay-0"]); // 缓存友好组装：史在前、叠加层在尾
-    let second: Vec<String> = provider.request(1).messages.iter().map(text).collect();
-    assert_eq!(second, ["question", "overlay-1", "revise"]); // 史→叠→重试脚手架
+    let second = behavior_v1::texts(&provider.request(1).messages);
+    assert_eq!(second, ["question", "overlay-0", "overlay-1", "revise"]); // 史→叠→重试脚手架
     assert!(
         !second.iter().any(|message| message == "candidate 1"),
         "rejected candidate must not be replayed to the provider"
@@ -1462,6 +1488,7 @@ async fn side_call_tool_responses_are_never_dispatched() {
     });
     let tool_plugin = EchoPlugin::new();
     let runtime = Runtime::builder()
+        .with_governance(behavior_grant("module.side_tool_response"))
         .with_default_model(MODEL)
         .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
         .with_plugin(tool_plugin.clone())
@@ -1493,6 +1520,7 @@ async fn side_call_budget_is_shared_and_explicit() {
         budget_error: Arc::clone(&budget_error),
     });
     let runtime = Runtime::builder()
+        .with_governance(behavior_grant("module.budget"))
         .with_default_model(MODEL)
         .with_max_module_invocations(2)
         .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
@@ -1638,6 +1666,9 @@ async fn rejected_approval_still_emits_after_tool_result() {
     });
     let mut policy = PermissionPolicy::new();
     policy.grant(Permission::ExecuteTool("tool.echo".into()));
+    policy.grant(Permission::ExecuteTool(
+        "tool.behavior.module.approval_hooks".into(),
+    ));
     policy.require_approval_for("tool.echo");
     let runtime = Runtime::builder()
         .with_default_model(MODEL)
@@ -1684,6 +1715,9 @@ async fn module_veto_of_a_claimed_approval_clears_the_active_pause_fail_closed()
     let tool_plugin = EchoPlugin::new();
     let mut policy = PermissionPolicy::new();
     policy.grant(Permission::ExecuteTool("tool.echo".into()));
+    policy.grant(Permission::ExecuteTool(
+        "tool.behavior.module.approved_stop".into(),
+    ));
     policy.require_approval_for("tool.echo");
     let runtime = Runtime::builder()
         .with_default_model(MODEL)
@@ -1728,6 +1762,7 @@ async fn module_veto_of_a_claimed_approval_clears_the_active_pause_fail_closed()
 async fn retry_cannot_extend_the_structural_round_limit() {
     let provider = FakeProvider::new(vec![Reply::Text("candidate")]);
     let runtime = Runtime::builder()
+        .with_governance(behavior_grant("module.retry"))
         .with_default_model(MODEL)
         .with_max_rounds(1)
         .with_plugin(ProviderPlugin::new(provider.clone()))
@@ -1849,4 +1884,409 @@ async fn budget_exhaustion_degrades_the_module_instead_of_aborting_the_turn() {
     assert_eq!(response.text, "candidate");
     // main candidate + one successful side-call; the exhausting call never ran.
     assert_eq!(provider.call_count(), 2);
+}
+
+struct CompatibilityProbe {
+    manifest: ModuleManifest,
+    hooks: Mutex<Vec<HookPoint>>,
+}
+#[async_trait]
+impl BehaviorModule for CompatibilityProbe {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        // Internal projections must never become user/learning input.
+        assert!(!ctx
+            .messages
+            .iter()
+            .any(|m| text(m).contains("DYNAMIC_CANARY")));
+        self.hooks.lock().unwrap().push(hook);
+        Ok(
+            if matches!(hook, HookPoint::TurnStart | HookPoint::BeforeModelCall) {
+                ModuleOutcome::continue_().with_system_overlay(format!("DYNAMIC_CANARY_{hook:?}"))
+            } else {
+                ModuleOutcome::continue_()
+            },
+        )
+    }
+}
+fn compatibility_probe() -> Arc<CompatibilityProbe> {
+    Arc::new(CompatibilityProbe {
+        manifest: ModuleManifest::new("module.compat_probe", "compat probe"),
+        hooks: Mutex::new(vec![]),
+    })
+}
+fn add_behavior(
+    builder: apeireth_runtime::RuntimeBuilder,
+    entry: usize,
+    module: Arc<dyn BehaviorModule>,
+) -> apeireth_runtime::RuntimeBuilder {
+    match entry {
+        0 => builder.with_module(module),
+        1 => builder.with_behavior(module),
+        _ => builder.with_registered_behavior(module),
+    }
+}
+
+#[tokio::test]
+async fn all_behavior_entry_names_share_authenticated_v1_pairing_and_stop_unload_without_fallback()
+{
+    use apeireth_protocol::canonical::{validate_closed_tool_context, ToolEventSourceV1};
+    for entry in 0..3 {
+        let provider = FakeProvider::new(vec![
+            Reply::Text("first"),
+            Reply::Text("stopped"),
+            Reply::Text("unloaded"),
+        ]);
+        let probe = compatibility_probe();
+        let mut runtime = add_behavior(
+            Runtime::builder()
+                .with_plugin(ProviderPlugin::new(provider.clone()))
+                .with_default_model(MODEL)
+                .with_governance(behavior_grant(&probe.manifest.id)),
+            entry,
+            probe.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
+        let id = PluginId::new("compat.module.compat_probe").unwrap();
+        assert!(runtime.plugins().instance_id(&id).is_ok());
+        let session_id = SessionId::new();
+        runtime
+            .execute(TurnRequest::new(session_id, "one").with_system("STATIC_HOST_POLICY"))
+            .await
+            .unwrap();
+        let request = provider.request(0);
+        validate_closed_tool_context(&request.messages).unwrap();
+        assert_eq!(
+            request
+                .messages
+                .iter()
+                .filter(|m| m.role == MessageRole::System)
+                .map(text)
+                .collect::<Vec<_>>(),
+            ["STATIC_HOST_POLICY"]
+        );
+        assert!(request.tools.iter().all(|t| !t.name.starts_with("module_")));
+        let payloads = behavior_v1::texts(&request.messages);
+        assert_eq!(
+            payloads
+                .iter()
+                .filter(|t| t.as_str() == "DYNAMIC_CANARY_TurnStart")
+                .count(),
+            1
+        );
+        assert_eq!(
+            payloads
+                .iter()
+                .filter(|t| t.as_str() == "DYNAMIC_CANARY_BeforeModelCall")
+                .count(),
+            1
+        );
+        assert_eq!(
+            *probe.hooks.lock().unwrap(),
+            [
+                HookPoint::TurnStart,
+                HookPoint::BeforeModelCall,
+                HookPoint::AfterModelResponse,
+                HookPoint::BeforeFinalCommit,
+                HookPoint::AfterTurn
+            ]
+        );
+        let stored = runtime.sessions().load(&session_id).await.unwrap().unwrap();
+        let mut projected = 0;
+        let mut observed = 0;
+        let mut facts = 0;
+        for event in &stored.events {
+            match &event.event {
+                SessionEventKind::ToolEventRecorded { fact } => {
+                    assert!(
+                        matches!(fact.source(), ToolEventSourceV1::Module { module_id, .. } if module_id == &id)
+                    );
+                    facts += 1;
+                }
+                SessionEventKind::ToolEventProjected { .. } => projected += 1,
+                SessionEventKind::ModuleToolEventObserved { .. } => observed += 1,
+                _ => {}
+            }
+        }
+        assert_eq!((facts, projected, observed), (5, 2, 3));
+        assert_eq!(
+            stored
+                .messages
+                .iter()
+                .filter(|m| m.role == MessageRole::User)
+                .map(text)
+                .collect::<Vec<_>>(),
+            ["one"]
+        );
+        runtime.stop_module(&id).await.unwrap();
+        runtime
+            .execute(TurnRequest::new(session_id, "two"))
+            .await
+            .unwrap();
+        runtime.unregister_module(&id).unwrap();
+        runtime
+            .execute(TurnRequest::new(session_id, "three"))
+            .await
+            .unwrap();
+        assert_eq!(probe.hooks.lock().unwrap().len(), 5);
+        for index in 1..3 {
+            let request = provider.request(index);
+            validate_closed_tool_context(&request.messages).unwrap();
+            assert_eq!(
+                behavior_v1::texts(&request.messages)
+                    .iter()
+                    .filter(|t| t.contains("DYNAMIC_CANARY"))
+                    .count(),
+                2,
+                "old facts persist once; stopped/unloaded callback adds nothing"
+            );
+        }
+        let stored = runtime.sessions().load(&session_id).await.unwrap().unwrap();
+        assert_eq!(
+            stored
+                .events
+                .iter()
+                .filter(|e| matches!(e.event, SessionEventKind::ToolEventRecorded { .. }))
+                .count(),
+            5
+        );
+        assert!(runtime.shutdown().await.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn old_builder_entries_require_host_grants_and_skip_global_callbacks_for_private_principals()
+{
+    use apeireth_core::kernel::{NamespaceId, ProfileId};
+    use apeireth_plugin::agents::AgentPrincipal;
+    for entry in 0..3 {
+        for private in [false, true] {
+            let provider = FakeProvider::new(vec![Reply::Text("plain")]);
+            let probe = compatibility_probe();
+            let mut builder = Runtime::builder()
+                .with_plugin(ProviderPlugin::new(provider.clone()))
+                .with_default_model(MODEL);
+            // Private principal receives the grant and still fails closed.
+            // Global case keeps DenyUnconfigured: registration is no grant.
+            if private {
+                builder = builder.with_governance(behavior_grant(&probe.manifest.id));
+            }
+            let mut runtime = add_behavior(builder, entry, probe.clone())
+                .build()
+                .await
+                .unwrap();
+            let id = SessionId::new();
+            if private {
+                let mut session = runtime.sessions().load_or_create(id).await.unwrap();
+                session.principal = Some(AgentPrincipal {
+                    profile: ProfileId::new(),
+                    namespace: NamespaceId::new(),
+                });
+                runtime.sessions().save(&session).await.unwrap();
+            }
+            runtime
+                .execute(TurnRequest::new(id, "hello"))
+                .await
+                .unwrap();
+            assert!(probe.hooks.lock().unwrap().is_empty());
+            assert!(!provider
+                .request(0)
+                .messages
+                .iter()
+                .any(|m| text(m).contains("DYNAMIC_CANARY")));
+            assert!(provider.request(0).tools.is_empty());
+            if private {
+                let stored = runtime.sessions().load(&id).await.unwrap().unwrap();
+                assert!(!stored
+                    .events
+                    .iter()
+                    .any(|e| matches!(e.event, SessionEventKind::ToolEventRecorded { .. })));
+            }
+            assert!(runtime.shutdown().await.is_empty());
+        }
+    }
+}
+
+#[tokio::test]
+async fn old_builder_cannot_borrow_same_name_tool_privileges_or_accept_model_receipts() {
+    for entry in 0..3 {
+        let probe = compatibility_probe();
+        let tool_name = "module_module_compat_probe";
+        let response = NormalizedResponse {
+            tool_calls: vec![ToolCall {
+                id: "guessed".into(),
+                name: tool_name.into(),
+                arguments: serde_json::json!({"invocation": apeireth_core::kernel::TaskId::new()}),
+            }],
+            ..opaque_side_response()
+        };
+        let provider = FakeProvider::new(vec![
+            Reply::Response(Box::new(response)),
+            Reply::Text("safe"),
+        ]);
+        let mut runtime = add_behavior(
+            Runtime::builder()
+                .with_plugin(ProviderPlugin::new(provider.clone()))
+                .with_default_model(MODEL)
+                .with_governance(behavior_grant(&probe.manifest.id)),
+            entry,
+            probe.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
+        let session = SessionId::new();
+        runtime
+            .execute(TurnRequest::new(session, "hello"))
+            .await
+            .unwrap();
+        let results = provider
+            .request(1)
+            .messages
+            .iter()
+            .filter(|m| m.tool_call_id.as_deref() == Some("guessed"))
+            .map(text)
+            .collect::<Vec<_>>();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].contains("reserved for authenticated module calls"));
+        assert_eq!(
+            probe
+                .hooks
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|h| **h == HookPoint::TurnStart)
+                .count(),
+            1
+        );
+        assert!(runtime.shutdown().await.is_empty());
+        // A Host tool with the internal name cannot become a substitute callback.
+        struct SameNameTool(CapabilityId);
+        #[async_trait]
+        impl ToolCapability for SameNameTool {
+            fn id(&self) -> &CapabilityId {
+                &self.0
+            }
+            fn declaration(&self) -> NormalizedTool {
+                NormalizedTool::new("module_module_compat_probe")
+            }
+            async fn invoke(&self, _: &ToolCall) -> ToolResult {
+                panic!("same-name privilege borrowing")
+            }
+        }
+        let error = add_behavior(
+            Runtime::builder().with_capability(Arc::new(SameNameTool(
+                CapabilityId::new("tool.public_name").unwrap(),
+            ))),
+            entry,
+            compatibility_probe(),
+        )
+        .build()
+        .await
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("module_module_compat_probe"),
+            "{error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn old_behavior_tool_hook_data_waits_for_the_open_model_batch_and_projects_each_result_once()
+{
+    struct ToolData(ModuleManifest);
+    #[async_trait]
+    impl BehaviorModule for ToolData {
+        fn manifest(&self) -> &ModuleManifest {
+            &self.0
+        }
+        async fn on_hook(
+            &self,
+            hook: HookPoint,
+            ctx: &ModuleContext<'_>,
+        ) -> Result<ModuleOutcome, ModuleError> {
+            Ok(
+                if matches!(hook, HookPoint::BeforeToolCall | HookPoint::AfterToolResult) {
+                    ModuleOutcome::continue_()
+                        .with_system_overlay(format!("data_{hook:?}_{}", ctx.tool_call.unwrap().id))
+                } else {
+                    ModuleOutcome::continue_()
+                },
+            )
+        }
+    }
+    let provider = FakeProvider::new(vec![Reply::TwoTools, Reply::Text("done")]);
+    let tool = EchoPlugin::new();
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.echo".into()));
+    policy.grant(Permission::ExecuteTool(
+        "tool.behavior.module.tool_data".into(),
+    ));
+    let mut runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_plugin(ProviderPlugin::new(provider.clone()))
+        .with_plugin(tool.clone())
+        .with_module(Arc::new(ToolData(ModuleManifest::new(
+            "module.tool_data",
+            "tool data",
+        ))))
+        .with_governance(Arc::new(PermissionGovernanceHook::new(policy)))
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+    runtime
+        .execute(TurnRequest::new(session_id, "use both"))
+        .await
+        .unwrap();
+    assert_eq!(tool.calls.load(Ordering::SeqCst), 2);
+    let request = provider.request(1);
+    apeireth_protocol::canonical::validate_closed_tool_context(&request.messages).unwrap();
+    assert_eq!(request.messages[1].tool_calls.len(), 2);
+    assert_eq!(request.messages[2].tool_call_id.as_deref(), Some("call-1"));
+    assert_eq!(request.messages[3].tool_call_id.as_deref(), Some("call-2"));
+    let projected = behavior_v1::texts(&request.messages)
+        .into_iter()
+        .filter(|s| s.starts_with("data_"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        projected,
+        [
+            "data_BeforeToolCall_call-1",
+            "data_AfterToolResult_call-1",
+            "data_BeforeToolCall_call-2",
+            "data_AfterToolResult_call-2"
+        ]
+    );
+    assert!(!request
+        .messages
+        .iter()
+        .any(|m| m.role == MessageRole::System));
+    let session = runtime.sessions().load(&session_id).await.unwrap().unwrap();
+    assert_eq!(
+        session
+            .events
+            .iter()
+            .filter(|e| matches!(e.event, SessionEventKind::ToolEventProjected { .. }))
+            .count(),
+        4
+    );
+    assert_eq!(
+        session
+            .messages
+            .iter()
+            .filter(|m| m.role == MessageRole::User)
+            .map(text)
+            .collect::<Vec<_>>(),
+        ["use both"]
+    );
+    assert!(runtime.shutdown().await.is_empty());
 }
