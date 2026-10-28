@@ -240,6 +240,54 @@ def capture(cdp, path, clip=None):
     return len(png)
 
 
+def capture_with_redraw(engine, path, clip, backend, attempts: int = 4) -> dict:
+    """带**空白重试**的引擎画布截图（2026-10-28，台账 E-85）。
+
+    ## 为什么需要重试
+
+    WebGL 的 drawing buffer **默认不保留**（`preserveDrawingBuffer: false`）
+    ⇒ ⇒ 「画完就停」后浏览器合成一次就把 buffer 清空 ⇒ ⇒ 之后截图**全白**
+    （harness 早已用「持续重绘」`__P5B_REDRAW__.start/stop` 缓解，见 `harness/src/lib.rs` 的说明）。
+
+    ⚠️ **但在 CI（Chrome 155 + SwiftShader）上仍会复发**：实测引擎画布
+    `mean=254.99/distinct=50`（webgl）与 `mean=255.0/distinct=1`（webgpu 纯白），
+    同时控制台报 `WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost`
+    ⇒ ⇒ 重绘循环里的 `wasm.redraw(...)` **静默失败**（页面侧 `.catch(() => {})`）
+    ⇒ ⇒ 缓冲一直是空的。
+
+    ## 做法
+
+    每一轮：`start(backend)` → 等待 → 截图 → **判定是否空白** → `stop(backend)`；
+    空白则**重试**（最多 `attempts` 轮），并把实际轮数写进报告
+    ⇒ ⇒ 顺带区分「慢/丢上下文」与环境性故障。
+
+    ⚠️ 重试**不掩盖**问题：最终仍空白 ⇒ 报告里 `blank=True`、`attempts` 全记录。
+    """
+    last_stats = None
+    for attempt in range(1, attempts + 1):
+        try:
+            engine.evaluate(
+                f"window.__P5B_REDRAW__.start({json.dumps(backend)}); true"
+            )
+        except Exception:
+            pass
+        time.sleep(0.4 if attempt == 1 else 0.8)
+        try:
+            capture(engine, path, clip=clip)
+            last_stats = canvas_blank_stats(path)
+        except Exception as error:  # 截图本身失败也只记录
+            last_stats = {"blank": True, "error": str(error)}
+        try:
+            engine.evaluate(
+                f"window.__P5B_REDRAW__.stop({json.dumps(backend)}); true"
+            )
+        except Exception:
+            pass
+        if last_stats and not last_stats.get("blank"):
+            return {"attempts": attempt, **last_stats}
+    return {"attempts": attempts, **(last_stats or {"blank": True})}
+
+
 def clip_of(box):
     return {
         "x": max(0.0, float(box["x"])),
@@ -593,6 +641,7 @@ def main():
         # **降低**时序敏感出现的概率，**不是**回归保护；真正的保证是
         # **持续重绘**本身（drawing buffer 永远有内容 ⇒ 与时序无关）。
         time.sleep(2.0)
+        capture_trace = {}
         for backend in ("webgl", "webgpu"):
             box = element_box(engine, backend)
             if not box:
@@ -600,13 +649,12 @@ def main():
             # ⭐ 截图前**开启该后端的持续重绘** ⇒ drawing buffer 永远有内容
             # ⇒ ⇒ 截图**对时序不敏感**（否则「画完就停」⇒ 合成清空 buffer ⇒ 截图全白
             # ⇒ ⇒ 被误判为「引擎画错」；2026-10-25 CI 实测 99.94% 差异）。
-            engine.evaluate(f"window.__P5B_REDRAW__.start({json.dumps(backend)}); true")
-            time.sleep(0.4)
-            crops[backend] = capture(
-                engine, out_dir / f"{backend}.canvas.png", clip=clip_of(box)
+            # ⭐ 空白重试（见 `capture_with_redraw`）：CI 上曾因丢上下文而截出纯白。
+            shot = capture_with_redraw(
+                engine, out_dir / f"{backend}.canvas.png", clip_of(box), backend
             )
-            # 截完立即停 ⇒ 两个后端**不会**同时占着 context（runner 上资源紧）。
-            engine.evaluate(f"window.__P5B_REDRAW__.stop({json.dumps(backend)}); true")
+            crops[backend] = shot.get("attempts", 0)
+            capture_trace[backend] = shot
         capture(engine, out_dir / "engine.page.png")
 
         # ── 阶段 2′：⭐ resize **自侦测**腿（引擎必须**自己**跟上画布尺寸）────
@@ -740,6 +788,7 @@ def main():
             if canvas_path.exists():
                 canvas_blank[backend] = canvas_blank_stats(canvas_path)
         criteria = {
+            "capture_trace": locals().get("capture_trace", {}),
             "canvas_blank": canvas_blank,
             "canvas_blank_any": any(
                 item.get("blank") for item in canvas_blank.values()
