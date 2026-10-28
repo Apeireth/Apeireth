@@ -57,6 +57,10 @@ pub struct WebDom {
     /// ⇒ 而 `web_sys::Node` **不可哈希**（JS 对象没有内容哈希）⇒
     /// ⇒ 用弱引用映射给每个节点发一个编号 ⇒ ⇒ 表的键 = (编号, 事件类型)。
     node_ids: RefCell<WeakMap<Object, JsValue>>,
+    /// ⭐ **IME 组合态**（L1-G3）：与事件闭包**共享**（`Rc<Cell<bool>>`）
+    /// ⇒ ⇒ 组合事件到达时置位，渲染器经 `Dom::is_composing()` 读到
+    /// ⇒ ⇒ **不必依赖宿主转告**（否则宿主忘一处就回到「中文输入被打散」）。
+    composing: std::rc::Rc<Cell<bool>>,
     /// 下一个节点编号。
     next_node_id: Cell<u32>,
     /// 已挂的监听器（按 **(节点编号, 事件类型)** 索引 ⇒ 增量替换）。
@@ -83,6 +87,7 @@ impl WebDom {
             document,
             detached: RefCell::new(WeakSet::<JsValue>::new_typed()),
             node_ids: RefCell::new(WeakMap::<Object, JsValue>::new_typed()),
+            composing: std::rc::Rc::new(Cell::new(false)),
             next_node_id: Cell::new(0),
             listeners: RefCell::new(ListenerTable::new()),
         }
@@ -156,6 +161,10 @@ impl WebDom {
 }
 
 impl Dom for WebDom {
+    fn is_composing(&self) -> bool {
+        self.composing.get()
+    }
+
     fn bounding_box(&self, node: &Self::Node) -> Result<ElementBox, DomError> {
         let element = self.as_element(node)?;
         let rect = element.get_bounding_client_rect();
@@ -406,7 +415,14 @@ impl Dom for WebDom {
         // 同时挂 `click` 与 `keydown`），摘全部会把先挂的那个一起带走 ⇒ 先挂的
         // 处理器**静默失效**（点击不再触发）。
         self.remove_listener(node, kind)?;
+        // ⭐ 组合态与闭包共享（`Rc<Cell<bool>>`）：事件一到达就更新，渲染器立刻读到。
+        let composing = std::rc::Rc::clone(&self.composing);
         let closure = Closure::wrap(Box::new(move |event: Event| {
+            match kind {
+                EventKind::CompositionStart => composing.set(true),
+                EventKind::CompositionEnd => composing.set(false),
+                _ => {}
+            }
             let target = event
                 .target()
                 .and_then(|value| value.dyn_ref::<Node>().cloned());

@@ -419,6 +419,19 @@ pub trait Dom: 'static {
         Err(DomError::NotImplemented)
     }
 
+    /// ⭐ **是否处于 IME 组合中**（L1-G3 接线点）。
+    ///
+    /// ## 为什么放在后端 trait 上
+    ///
+    /// 组合事件的**到达**发生在后端（它把浏览器事件折成 [`crate::events::DomEvent`]）
+    /// ⇒ ⇒ 把「组合中」这个状态记在后端，渲染器就不必依赖宿主转告
+    /// ⇒ ⇒ 否则每个宿主都要自己记得调 `note_event()`，忘一处就回到「中文输入被打散」。
+    ///
+    /// 默认 `false`（不认识组合事件的后端 = 永远不在组合中）。
+    fn is_composing(&self) -> bool {
+        false
+    }
+
     /// ⭐ **设置滚动位置**（CSS 像素）⇒ 实现应把值**夹到** `[0, max_scroll_top]`。
     fn set_scroll_top(&self, node: &Self::Node, top: f64) -> Result<(), DomError> {
         let _ = (node, top);
@@ -764,6 +777,8 @@ pub struct InMemoryDom {
     /// ⇒ ⇒ 这样上层（弹层定位 / 滚动物理 / 命中测试）可以在 native 侧被确定性地测试。
     /// 未注入 ⇒ 三个测量方法返回 [`DomError::NotImplemented`]（**显式**不支持）。
     measurements: RefCell<HashMap<InMemoryNodeId, ScriptedMeasurement>>,
+    /// ⭐ 测试用 IME 组合态（见 `script_composition`）。
+    composing: Cell<bool>,
     ops: RefCell<VecDeque<RecordedOp>>,
     /// 操作日志的上界（超出后丢弃最旧的记录）。
     op_capacity: Cell<usize>,
@@ -781,6 +796,7 @@ impl Default for InMemoryDom {
             nodes: RefCell::new(Vec::new()),
             listeners: RefCell::new(ListenerTable::new()),
             measurements: RefCell::new(HashMap::new()),
+            composing: Cell::new(false),
             ops: RefCell::new(VecDeque::new()),
             op_capacity: Cell::new(DEFAULT_OP_CAPACITY),
         }
@@ -789,6 +805,11 @@ impl Default for InMemoryDom {
 
 impl InMemoryDom {
     /// 节点必须存在（测量 API 的公共前置检查）。
+    /// ⭐ **脚本化 IME 组合态**（**测试用**）：模拟「输入法正在组合」。
+    pub fn script_composition(&self, composing: bool) {
+        self.composing.set(composing);
+    }
+
     fn ensure_node_exists(&self, node: &InMemoryNodeId) -> Result<(), DomError> {
         if self.nodes.borrow().get(node.0).is_none() {
             return Err(DomError::NodeNotFound);
@@ -1049,6 +1070,10 @@ impl InMemoryDom {
 }
 
 impl Dom for InMemoryDom {
+    fn is_composing(&self) -> bool {
+        self.composing.get()
+    }
+
     fn bounding_box(&self, node: &InMemoryNodeId) -> Result<ElementBox, DomError> {
         self.ensure_node_exists(node)?;
         self.measurements

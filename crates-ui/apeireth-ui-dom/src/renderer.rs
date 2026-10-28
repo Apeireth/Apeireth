@@ -232,6 +232,19 @@ pub struct Renderer<D: Dom> {
     warnings: Vec<String>,
     /// ⭐ 测量/命中测试的乘数（L1-G6：DPR × 密度）。默认恒等。
     measurement_scale: MeasurementScale,
+    /// ⭐ **待补写的属性写回**（IME 组合期间被推迟的那些）。
+    ///
+    /// ## 为什么必须留队列（而不是"推迟就丢掉"）
+    ///
+    /// 推迟后虚拟树已记为**新值** ⇒ ⇒ 下一次 patch 会认为「没有差异」⇒
+    /// ⇒ ⇒ 这次更新**永远不会被写入** ⇒ ⇒ 用户看到的输入与引擎状态**永久分叉**。
+    /// 这比"打断输入法"更糟（那是可感知的，这是静默的）。
+    /// ⇒ ⇒ 队列在组合结束时（或下次 patch 且不在组合中）**补写**。
+    pending_value_writes: Vec<(D::Node, String, PropValue)>,
+    /// ⭐ 因 **IME 组合** 而被推迟的 `value`/`checked` 写回次数（L1-G3 接线）。
+    ///
+    /// 组合期间**不写**（否则打断输入法），但也不静默：累加计数，宿主可观测。
+    deferred_value_writes: usize,
 }
 
 impl<D: Dom> Renderer<D> {
@@ -246,6 +259,8 @@ impl<D: Dom> Renderer<D> {
             last_error: None,
             warnings: Vec::new(),
             measurement_scale: MeasurementScale::IDENTITY,
+            pending_value_writes: Vec::new(),
+            deferred_value_writes: 0,
         }
     }
 
@@ -270,6 +285,30 @@ impl<D: Dom> Renderer<D> {
     /// ⚠️ 乘数只影响**换算**，不改变 `ElementBox` 的 CSS 像素语义。
     pub fn set_measurement_scale(&mut self, scale: MeasurementScale) {
         self.measurement_scale = scale;
+    }
+
+    /// ⭐ **补写被推迟的属性写回**（IME 组合结束时调用；返回补写条数）。
+    ///
+    /// 组合中调用 ⇒ 返回 0 并保持队列（继续等）。
+    pub fn flush_deferred_value_writes(&mut self) -> Result<usize, DomError> {
+        if self.dom.is_composing() || self.pending_value_writes.is_empty() {
+            return Ok(0);
+        }
+        let pending: Vec<(D::Node, String, PropValue)> =
+            self.pending_value_writes.drain(..).collect();
+        let written = pending.len();
+        for (node, name, value) in pending {
+            match value {
+                PropValue::Text(text) => self.dom.set_property(&node, &name, &text)?,
+                PropValue::Bool(flag) => self.dom.set_property_bool(&node, &name, flag)?,
+            }
+        }
+        Ok(written)
+    }
+
+    /// 因 IME 组合而被推迟的 `value`/`checked` 写回次数（可观测，非静默）。
+    pub fn deferred_value_writes(&self) -> usize {
+        self.deferred_value_writes
     }
 
     /// 当前测量乘数。
@@ -403,6 +442,9 @@ impl<D: Dom> Renderer<D> {
     ///
     /// 失败**照样返回 `Err`**（不吞掉）⇒ 宿主能 log、能决定重建。
     pub fn patch(&mut self, vnode: VNode) -> Result<MountedNode<D>, DomError> {
+        // ⭐ 组合结束（或本就不在组合中）⇒ 先把被推迟的写回补上，
+        //   否则虚拟树已记新值、DOM 还是旧值 ⇒ 静默分叉且永不修复。
+        self.flush_deferred_value_writes()?;
         if self.desynced {
             // 已劈叉 ⇒ 不拿过期旧树差分 ⇒ 整树重建。
             return self.rebuild(vnode);
@@ -1064,6 +1106,18 @@ impl<D: Dom> Renderer<D> {
             if old_value == new_value {
                 continue;
             }
+            // ⭐⭐ **IME 组合静默期**（L1-G3 接线）：组合中**不得**写回 `value`/`checked`
+            //   ⇒ 否则会把输入法正在管理的预编辑串打散
+            //   （中文/日文输入下才复现；英文测试永远发现不了）。
+            //   ⚠️ 不静默忽略：累加计数，宿主可观测到「本帧被推迟」。
+            if matches!(name.as_str(), "value" | "checked") && self.dom.is_composing() {
+                self.deferred_value_writes += 1;
+                if let Some(value) = new_value.cloned() {
+                    self.pending_value_writes
+                        .push((dom.clone(), name.clone(), value));
+                }
+                continue;
+            }
             match new_value {
                 Some(PropValue::Text(text)) => {
                     // 当前值已是目标值 ⇒ 不写（避免无谓重写 / 光标跳动）。
@@ -1448,6 +1502,59 @@ mod tests {
         // ④ 命中测试吃**设备像素**坐标：(40, 70) ⇒ CSS (16, 28) ⇒ 在盒内
         assert!(renderer.hit_test_device(&[0], 40.0, 70.0).expect("可测"));
         assert!(!renderer.hit_test_device(&[0], 0.0, 0.0).expect("可测"));
+    }
+
+    /// ⭐⭐⭐ **IME 组合期不写回 `value`，组合结束后补写**（L1-G3 接线）。
+    ///
+    /// 这条测试同时钉住一个**静默分叉**缺陷：推迟后虚拟树已记新值 ⇒
+    /// 若不留待写队列，下次 patch 会认为"无差异" ⇒ 更新**永远丢失**。
+    #[test]
+    fn composing_defers_value_write_back_and_flushes_afterwards() {
+        use crate::vnode::PropValue;
+
+        let (mut renderer, root) = renderer_with_dom();
+        let first = VNode::element("input")
+            .prop("value", PropValue::Text(String::from("a")))
+            .build();
+        renderer.mount(first).expect("挂载必须成功");
+        let input = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+
+        // ① 组合中：value "a" → "b" 必须**不写**，且计数 +1
+        renderer.dom().script_composition(true);
+        let composing = VNode::element("input")
+            .prop("value", PropValue::Text(String::from("b")))
+            .build();
+        renderer.patch(composing).expect("打补丁必须成功");
+        assert_eq!(
+            renderer.deferred_value_writes(),
+            1,
+            "组合中必须推迟（可观测，不静默）"
+        );
+        assert_eq!(
+            renderer.dom().get_property(&input, "value").ok(),
+            Some(String::from("a")),
+            "组合中 DOM 值不得被引擎改写"
+        );
+
+        // ② 组合结束 + 下一次 patch（**内容与虚拟树相同** ⇒ 差分认为"无变化"）
+        //    ⇒ ⇒ 必须由 **patch 入口的补写**把 "b" 落盘；否则永久分叉。
+        renderer.dom().script_composition(false);
+        let same = VNode::element("input")
+            .prop("value", PropValue::Text(String::from("b")))
+            .build();
+        renderer.patch(same).expect("打补丁必须成功");
+        assert_eq!(
+            renderer.dom().get_property(&input, "value").ok(),
+            Some(String::from("b")),
+            "组合结束后（下一次 patch）必须真的写回"
+        );
+        assert_eq!(
+            renderer
+                .flush_deferred_value_writes()
+                .expect("补写必须成功"),
+            0,
+            "补写后队列必须清空"
+        );
     }
 
     fn renderer_with_dom() -> (Renderer<InMemoryDom>, InMemoryNodeId) {
