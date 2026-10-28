@@ -154,6 +154,24 @@
 | **编排 (Orchestration)** | daemon 化 / 多客户端会话复用 | `deploy/` 服务·计划任务脚本 + `apeireth-gateway` 会话路由（W2-①/W2-③） | 常驻占位+优雅停机收尾；并发会话路由（`/v1/apeireth/events?session=` 每客户端独立订阅、同会话扇出）+ 同会话写排队+审计（账本零交叠）+ 会话归属审计 + 面板读快照 | 已实证（[W2-3-multi-client-session-reuse.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)；daemon 见 [F-server-form.md](../04-internal/backend-enhancement/02-axes/F-server-form.md) 现状） | 待上屏（运维面无 UI） |
 | **治理 (Governance)** | 用户域数据门 / 角色门（多用户） | `apeireth-core::user_domain` + `runtime-assembly::domain_plane` + `governance::user_access` + `gateway::{domain_context,client_tokens}` | `users/<id>/` 每户一域+三面分库（会话/记忆/配额账本）+跨域拒绝即帧；`owner/member/guest` 冻结角色词表+24 格权限矩阵+令牌→用户→角色链+管理面 `apeireth user`（owner 门） | 已实证（[W3-1-multi-user-data-isolation.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md) / [W3-2-user-identity-roles.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)） | 自审（域节）+ 待上屏（域/用户管理仅 CLI） |
 | **观测 (Observability)** | `metrics.read`（`GET /v1/panel/metrics`） | `apeireth-runtime::canonical::metrics` + `apeireth-gateway::panel_metrics` | 回合一收束一拍 `TurnMetrics` → 会话/全局两层窗口聚合（`{count,mean,p50,p95,sum}` 最近秩分位）；`schema_version:1`、`retention:"in_process_rolling"`（进程内环形不落盘）；空态显式 `"—"`（null 不冒充 0）；过 W2-② 令牌门 | 已实证（[G-observability.md](../04-internal/backend-enhancement/G-observability.md) P1 交付记录，21 项测试） | 待上屏（仪表/驾驶舱 CACHE·BUDGET 面板与遥测条待前端消费批） |
+> **真源对账注记（2026-10-28 复核批）**：本表「生物机制」段用**机制名**（`bio.<机制>`，
+> 与 `BioMechanismKind::ALL` 的 **14** 格 1:1 对齐，即自述面 `BioMechanismsStatus.mechanisms`
+> 的键）；而四级口径真源 [`claims.yaml`](../status/claims.yaml) 里**已生产装配的 4 条**
+> 用的是**能力名**。两套命名的对应关系（**人工对账依据，机器不校**）：
+>
+> | 本表（机制名） | `claims.yaml`（能力名） | 交叉核对锚（`switch_env`） |
+> |---|---|---|
+> | `bio.neuromodulation` | `bio.tone` | `APEIRETH_ENABLE_BIO_TONE` |
+> | `bio.circadian` | `bio.circadian` | `APEIRETH_ENABLE_BIO_CIRCADIAN` |
+> | `bio.nociception` | `bio.nociception_pain` | `APEIRETH_ENABLE_BIO_PAIN` |
+> | `bio.recovery` | `bio.recovery_protocol` | `APEIRETH_ENABLE_BIO_PAIN` |
+>
+> ⇒ **其余 10 条**只有机制读数格（自述面）+ 生产接线（`bio_production_wiring.rs` 逐个
+> `register_bio_probe`），**尚未进 `claims.yaml`** ⇒ 即「**已接线、未作为对外能力承诺**」
+> （这个区别必须留着，否则会把「有读数」说成「已承诺」）。
+> ⚠️ `scripts/docs_truth.py --verify` **不校这层映射**（它只校 claims 自身的
+> `sources`/`tests`/`verified_at`）⇒ ⇒ 本节是**人工对账**，不是门禁。
+
 | **生物机制 (Bio)** | `bio.neuromodulation`（SG-13 神经调质→语气） | `apeireth-organ::{neuromodulation,tone}` + `runtime-assembly::canonical::bio_tone` | `NeuromodulatorState::apply` → `behavior_params()` → `tone_hint_with_params`；TurnStart 尾部独立 overlay | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_TONE`）；事件源 5/9 = 工具结局（TaskSuccess/TaskFailure）+ 工具名首见 Novelty（AfterToolResult）+ CLI 人批/人拒（SocialPositive/SocialNegative，仅 resolve 成功后）；R1b-2a 起工具结局/错误事件面经 `nervous.bridge`→`NervousBus` 订阅注入（模块不再旁路扫钩子，默认关零订阅）；其余 4 档仅显式注入；R1b-2c 起审批社交经 `NervousBus` 的 `ApprovalSocial` 信号发布（直写助手删除，发布=唯一真源；取消不编事件）** | env 开关；自述格已接（`BioMechanismKind::Neuromodulation`，真实调质向量/基线/行为参数/语气档；开关关单格 null + 原因） |
 | **生物机制 (Bio)** | `bio.homeostasis`（SG-14 内稳态→上下文策略） | `apeireth-organ::{homeostasis,context_assembly}` + `runtime-assembly::canonical::cognitive::BioAssemblyModule` | `VitalSignSet → regulate → AssemblyPolicy::from_plan → ContextAssembler::with_policy` | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_CONTEXT_POLICY`）；仅 ContextPressure 实测、其余中性基线** | env 开关；自述格已接（Wave 4：装配面装饰器每回合记录已用/预算/压力/策略/调节；只读，不剪枝、不改行为） |
 | **生物机制 (Bio)** | `bio.circadian`（SG-23 节律→主动消息闸） | `apeireth-organ::circadian` + `runtime-assembly::canonical::{bio_circadian,care_heartbeat}` | `proactive_gate(phase,window,urgency) → CareHeartbeatPoll 最前 decide() → Suppressed=Quiet` | **PRODUCTION WIRED（默认关 `APEIRETH_ENABLE_BIO_CIRCADIAN`，cli 心跳装配 + 显式 UTC 缺省 tz offset）**；睡眠压力源未接（门内压力恒 0） | env 开关；自述格已接（`BioMechanismKind::Circadian`：时区偏移 + 注入时钟纯算相位/振幅/局部时刻/主动门；睡眠压力 `not_wired` 子字段）；`circadian_decision()` 观测口 |
