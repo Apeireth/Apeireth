@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 7d00a8ab8403399f0441251d8af9aacc9d07d3d634f6a0fcb04bc4aa402537b3
-claims_total: 32
+claims_sha256: 04095f3ea19ca6afd715558cd35550e1c86d630f4d97c5a7402e85bdb848f877
+claims_total: 33
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -696,14 +696,22 @@ items:
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
         - "crates/engine/runtime/src/canonical/principal_authority.rs"
         - "crates/engine/runtime/src/canonical/session.rs"
+        - "crates/engine/runtime/src/canonical/instances/main.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
     wired:
       production_refs:
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
         - "crates/engine/runtime/src/canonical/accounting.rs"
         - "crates/engine/runtime/src/canonical/behavior_adapter.rs"
         - "crates/engine/runtime/src/canonical/execution_view.rs"
         - "crates/engine/runtime/src/canonical/instances.rs"
         - "crates/engine/runtime/src/canonical/instances/control.rs"
         - "crates/engine/runtime/src/canonical/instances/hot.rs"
+        - "crates/engine/runtime/src/canonical/instances/main.rs"
         - "crates/engine/runtime/src/canonical/instances/tasks.rs"
         - "crates/engine/runtime/src/canonical/module.rs"
         - "crates/engine/runtime/src/canonical/principal_authority.rs"
@@ -721,6 +729,9 @@ items:
         - "crates/engine/runtime/tests/canonical_subloop.rs"
         - "crates/engine/runtime-assembly/tests/convergence_agents.rs"
         - "crates/engine/runtime-assembly/tests/profile_memory_authorization.rs"
+        - "crates/engine/runtime-assembly/tests/managed_main.rs"
+        - "crates/adapters/cli/tests/canonical_cli_bootstrap.rs"
+        - "crates/adapters/cli/tests/care_heartbeat_host.rs"
       claims_id: "rt.owned_agents"
     gaps:
       - "未达 PRODUCTION WIRED：可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents…"
@@ -766,3 +777,36 @@ items:
       claims_id: "mem.registered_namespace"
     gaps:
       - "未达 PRODUCTION WIRED：新 Host 组合中的 9 项真实 Runtime 测试通过；七工具、合法 V1 检索、后台 Agent、审批 CAS、持久化与 fork Scope 隔离。默认 ProductionCognitiveModules 的旧 Memory/Persona/Organ 尚未替换，旧数据不自动归属新 Na…"
+  - id: "rt.desktop_managed_main"
+    capability: "默认桌面 main：同一受管 Host 的 CLI、gateway、审批、流式与心跳"
+    implemented:
+      sources:
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/adapters/gateway/src/canonical_entry.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
+        - "crates/engine/runtime/src/canonical/instances.rs"
+        - "crates/engine/runtime/src/canonical/instances/main.rs"
+        - "crates/engine/runtime/src/canonical/accounting.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/adapters/gateway/src/canonical_entry.rs"
+        - "crates/engine/runtime-assembly/src/canonical/desktop_host.rs"
+        - "crates/engine/runtime/src/canonical/accounting.rs"
+        - "crates/engine/runtime/src/canonical/execute.rs"
+        - "crates/engine/runtime/src/canonical/instances.rs"
+        - "crates/engine/runtime/src/canonical/instances/main.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/adapters/cli/tests/canonical_cli_bootstrap.rs"
+        - "crates/adapters/cli/tests/care_heartbeat_host.rs"
+        - "crates/engine/runtime-assembly/tests/managed_main.rs"
+        - "crates/engine/runtime-assembly/tests/production_cognitive_v1.rs"
+        - "crates/engine/runtime-assembly/tests/portable_host.rs"
+      claims_id: "rt.desktop_managed_main"
+    gaps:
+      []

@@ -13,6 +13,7 @@ Author: Codex
 
 初始 `git fetch origin && git status && git log -8 --oneline` 成功，分支为
 `refactor/kc1-kernel-convergence`，工作树 clean，HEAD `e51a8d5c` 位于 S4 源码 `9015d9f0` 之上。
+源码提交为 `2ee10a39869fe2d3723188d04114673896e5afb1`；后续文档证据提交不修改 Rust / Cargo。
 本批只实施[债务图 D3 / S5](kernel-convergence-remaining-debt-map-2026-10-29.md)；
 沿用 [S1](kernel-convergence-s1-2026-10-29.md)、[S2](kernel-convergence-s2-2026-10-29.md)、
 [S3](kernel-convergence-s3-2026-10-29.md)、[S4](kernel-convergence-s4-2026-10-29.md)、
@@ -94,7 +95,11 @@ Cargo jobs=2，默认 dev/test profile，debug assertions 保留。
 命令清单为 `s5-final-results.json`；`s5-counts.py` 从原日志生成 `s5-test-counts.json`，不重复累加重叠目标。
 门禁前后的 Rust / Cargo SHA256 清单相同，见 `s5-source-manifest.json`。
 测试名称与 ignore 保留检查为 `s5-preserved-tests.json`。按本批授权未跑 workspace 全量。
-源码提交前 Docs Truth 检出受影响 claims 的 STALE，未伪称已消除；源码落提交后立即进行独立证据锚定与最终 verify/check。
+源码提交前 Docs Truth 检出受影响 claims 的 STALE，未伪称已消除；本次独立文档提交已锚定上述源码 SHA。
+`docs_truth.py --verify --block-stale`、`--check` 与 `wiring_report.py --verify` 分别执行并通过，
+没有 FAIL / STALE 或生成物漂移。`s5-truth-verify-final.log` / `s5-truth-check-final.log` / `s5-wiring-final.log`
+及同名 `.exit` 保存证据；保留既有宽泛能力等级，仅为默认桌面 main 新增独立 claim。
+
 
 
 新增真实 bootstrap 测试覆盖 CLI→HTTP 同会话续接、独立 SSE delta、静态 system、真实审批恢复与重复消费、
@@ -108,7 +113,7 @@ production_cognitive_v1 的生产 load / stop / permission / guessed receipt / m
 
 ## 交付与后续
 
-源码及随行说明先提交，随后单独锚定受影响 claims 的 verified_at 并生成 STATUS / wiring；避免自引用 SHA。
+源码及随行说明先提交；本次独立文档提交已将受影响 claims 的 verified_at 锚定上述源码并生成 STATUS / wiring，避免自引用 SHA。
 默认 managed main 使用独立 claim 描述，已有宽泛多实例能力等级不因本批自动提升。
 整体 Production Convergence 仍为 **Partial**；S6 的余留 V1 兼容审计与最终 gates 未在本批启动。
 没有 workspace 全量、真实外部 API、外部 MCP 服务、原生桌面 UI、Android 交叉编译或设备实测声明；无 HARDWARE VALIDATED。
