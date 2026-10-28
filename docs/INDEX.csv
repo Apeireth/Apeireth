@@ -1207,7 +1207,7 @@ docs/status/injection-oracle-bound-2026-10-27.md,L1,4,注入层（L2）的 **ora
 docs/status/internal-golden-set-run-2026-10-26.md,L1,4,内部卷首跑结果（2026-10-26）,2026-10-26,现行,0,保留,
 docs/status/memory-quality-route-map-2026-10-27.md,L1,4,记忆质量路线图：**已证的路 / 已否的路 / 待决**（2026-10-27 速查）,2026-10-27,现行,1,保留,
 docs/status/non-oracle-signal-sources-2026-10-27.md,L1,4,非答案侧信号来源：**5 种全不提升**（2026-10-27）⇒ **D-12 的方案 A 失败**,2026-10-27,现行,1,保留,
-docs/status/real-corpus-delivery-2026-10-28.md,L1,9,真实对话语料上的送达率 —— **零漏送**，以及它**推翻了什么**,2026-10-28,现行,0,保留,
+docs/status/real-corpus-delivery-2026-10-28.md,L1,9,真实对话语料上的送达率 —— **零漏送**，以及它**推翻了什么**,2026-10-28,现行,1,保留,
 docs/status/recall-root-cause-2026-10-27.md,L1,4,内部卷召回瓶颈的**根因判定**（2026-10-27）,2026-10-27,现行,3,保留,
 docs/status/unwired-ledger.md,L1,3,未接线台账（能力齐全但没接电）,2026-10-23,现行,10,保留,
 docs/verification-ladder.md,L3,4,Apeireth Verification Ladder (L0–L5),2026-08-27,现行,0,保留,
