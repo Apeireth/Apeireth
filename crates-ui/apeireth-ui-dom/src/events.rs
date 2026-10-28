@@ -112,9 +112,21 @@ pub struct DomEvent {
     related_target_path: Option<Vec<usize>>,
     key: Option<String>,
     target_value: Option<String>,
+    /// 复选框/单选的 `checked`（`Change` 事件专用；`None` = 该事件没有这个载荷）。
+    checked: Option<bool>,
     ctrl_key: bool,
     shift_key: bool,
     meta_key: bool,
+    /// Alt 键（组合键判定必需；此前 **漏了** 这个修饰键）。
+    alt_key: bool,
+    /// 指针/鼠标的**视口坐标（CSS 像素）**，与 `ElementBox` 同一坐标系。
+    client_x: Option<f64>,
+    /// 见 [`Self::client_x`]。
+    client_y: Option<f64>,
+    /// 鼠标按键（0=主键 1=中键 2=次键；仅指针类事件有）。
+    button: Option<u8>,
+    /// 指针 id（多点触控时区分手指；仅 pointer 类事件有）。
+    pointer_id: Option<i32>,
     propagation_stopped: Cell<bool>,
     default_prevented: Cell<bool>,
 }
@@ -128,9 +140,15 @@ impl DomEvent {
             related_target_path: None,
             key: None,
             target_value: None,
+            checked: None,
             ctrl_key: false,
             shift_key: false,
             meta_key: false,
+            alt_key: false,
+            client_x: None,
+            client_y: None,
+            button: None,
+            pointer_id: None,
             propagation_stopped: Cell::new(false),
             default_prevented: Cell::new(false),
         }
@@ -212,6 +230,66 @@ impl DomEvent {
     }
 
     /// 带上目标取值（构造器）。
+    /// 复选框/单选的 `checked`（没有该载荷 ⇒ `None`，**不**用 `false` 冒充）。
+    pub fn checked(&self) -> Option<bool> {
+        self.checked
+    }
+
+    /// 指针/鼠标的**视口坐标**（CSS 像素）；没有该载荷 ⇒ `None`。
+    pub fn client_position(&self) -> Option<(f64, f64)> {
+        match (self.client_x, self.client_y) {
+            (Some(x), Some(y)) => Some((x, y)),
+            _ => None,
+        }
+    }
+
+    /// 鼠标按键（0=主键 1=中键 2=次键）。
+    pub fn button(&self) -> Option<u8> {
+        self.button
+    }
+
+    /// 指针 id（多点触控）。
+    pub fn pointer_id(&self) -> Option<i32> {
+        self.pointer_id
+    }
+
+    /// Alt 键是否按下。
+    pub fn alt_key(&self) -> bool {
+        self.alt_key
+    }
+
+    /// 设置 `checked` 载荷。
+    pub fn with_checked(mut self, checked: bool) -> Self {
+        self.checked = Some(checked);
+        self
+    }
+
+    /// 设置指针/鼠标的视口坐标（CSS 像素）。
+    pub fn with_client_position(mut self, x: f64, y: f64) -> Self {
+        self.client_x = Some(x);
+        self.client_y = Some(y);
+        self
+    }
+
+    /// 设置鼠标按键。
+    pub fn with_button(mut self, button: u8) -> Self {
+        self.button = Some(button);
+        self
+    }
+
+    /// 设置指针 id。
+    pub fn with_pointer_id(mut self, pointer_id: i32) -> Self {
+        self.pointer_id = Some(pointer_id);
+        self
+    }
+
+    /// 设置 Alt 键状态。
+    pub fn with_alt_key(mut self, pressed: bool) -> Self {
+        self.alt_key = pressed;
+        self
+    }
+
+    /// 设置事件目标取值（`input` / `change` 的控件当前值）。
     pub fn with_target_value(mut self, value: impl Into<String>) -> Self {
         self.target_value = Some(value.into());
         self
@@ -313,6 +391,132 @@ impl EventRegistry {
 
 #[cfg(test)]
 mod tests {
+
+    /// ⭐ **`all()` 与 `index/from_index` 必须一一对应**。
+    ///
+    /// 为什么单独一条：上一版测试写的是 `names.len() == all().len()`
+    /// ⇒ ⇒ 若有人**从 `all()` 里漏掉一个变体**，两侧同时变短 ⇒ ⇒ **测试照样通过**
+    /// （判据自身的缺陷）。改成 `all()` 由 `from_index` 枚举得出 + 本测试双射自检，
+    /// 漏项与提前截断都会红。
+    /// **编译期护栏**：`match` 必须**穷尽**全部 `EventKind` 变体。
+    ///
+    /// 新增变体却忘了同步 `index()` / `from_index()` / `all()` ⇒ ⇒ 本函数**编译失败**
+    /// ⇒ ⇒ 比任何运行时测试都早、都硬。
+    #[allow(dead_code)]
+    fn exhaustive_variant_guard(kind: EventKind) {
+        match kind {
+            EventKind::Click
+            | EventKind::DoubleClick
+            | EventKind::KeyDown
+            | EventKind::KeyUp
+            | EventKind::Input
+            | EventKind::Change
+            | EventKind::FocusIn
+            | EventKind::FocusOut
+            | EventKind::Submit
+            | EventKind::PointerDown
+            | EventKind::PointerUp
+            | EventKind::PointerMove
+            | EventKind::PointerEnter
+            | EventKind::PointerLeave
+            | EventKind::Scroll
+            | EventKind::Wheel
+            | EventKind::ContextMenu => {}
+        }
+    }
+
+    #[test]
+    fn event_kind_enumeration_is_bijective() {
+        for kind in EventKind::all() {
+            assert_eq!(
+                EventKind::from_index(kind.index()),
+                Some(kind),
+                "index/from_index 必须互逆：{kind:?}"
+            );
+        }
+        assert_eq!(
+            EventKind::from_index(EventKind::all().len()),
+            None,
+            "`all()` 必须恰好枚举到最后一个变体（不得提前截断或漏项）"
+        );
+        // 变体总数：新增变体时这里与上面的 `exhaustive_variant_guard` **同时**要求更新
+        // ⇒ ⇒ 不可能「加了变体但没进 all()」而无人发现。
+        assert_eq!(
+            EventKind::all().len(),
+            17,
+            "变体总数须与 exhaustive_variant_guard 一致"
+        );
+    }
+
+    // ── G2 事件面与载荷（台账 L1-G2）─────────────────────────────────────
+
+    /// **事件名唯一且非空**：新增 `EventKind` 变体却忘了映射时，这里会立刻红。
+    #[test]
+    fn every_event_kind_has_a_unique_lowercase_name() {
+        use std::collections::BTreeSet;
+        let mut names = BTreeSet::new();
+        for kind in EventKind::all() {
+            let name = kind.as_str();
+            assert!(!name.is_empty(), "事件名不得为空：{kind:?}");
+            assert_eq!(
+                name,
+                name.to_ascii_lowercase(),
+                "事件名必须小写（与 DOM 事件名同口径）：{kind:?} ⇒ {name}"
+            );
+            assert!(names.insert(name), "事件名重复：{name}");
+        }
+        assert_eq!(
+            names.len(),
+            EventKind::all().len(),
+            "`all()` 必须覆盖全部变体"
+        );
+    }
+
+    /// ⭐ **`scroll` 不冒泡** ⇒ 不得挂到委托根（挂了会静默收不到事件）。
+    #[test]
+    fn scroll_is_not_delegatable_to_root() {
+        assert!(!EventKind::Scroll.bubbles_to_delegation_root());
+        for kind in EventKind::all() {
+            if kind != EventKind::Scroll {
+                assert!(
+                    kind.bubbles_to_delegation_root(),
+                    "{kind:?} 应当可以委托到根"
+                );
+            }
+        }
+    }
+
+    /// **载荷构造器与访问器一一对应**（含此前缺失的 `alt` / 坐标 / 按钮 / 指针 id / checked）。
+    #[test]
+    fn event_payload_builders_round_trip() {
+        let event = DomEvent::new(EventKind::Change, vec![1, 2])
+            .with_target_value("hello")
+            .with_checked(true)
+            .with_client_position(12.5, 34.25)
+            .with_button(2)
+            .with_pointer_id(7)
+            .with_alt_key(true);
+        assert_eq!(event.kind(), EventKind::Change);
+        assert_eq!(event.target_path(), &[1, 2]);
+        assert_eq!(event.target_value(), Some("hello"));
+        assert_eq!(event.checked(), Some(true), "复选框 checked 必须可读");
+        assert_eq!(event.client_position(), Some((12.5, 34.25)));
+        assert_eq!(event.button(), Some(2));
+        assert_eq!(event.pointer_id(), Some(7));
+        assert!(event.alt_key(), "Alt 修饰键必须可读");
+    }
+
+    /// ⭐ **没有载荷就必须是 `None`**，不能用 `false` / `0` **冒充**
+    /// （0 装纪律：不知道 ≠ 知道是 false）。
+    #[test]
+    fn absent_payload_is_none_not_a_default_value() {
+        let event = DomEvent::new(EventKind::Click, vec![0]);
+        assert_eq!(event.checked(), None, "Click 没有 checked 载荷 ⇒ None");
+        assert_eq!(event.client_position(), None, "未填坐标 ⇒ None");
+        assert_eq!(event.button(), None);
+        assert_eq!(event.pointer_id(), None);
+        assert!(!event.alt_key(), "未按 Alt ⇒ false（布尔无三态）");
+    }
     use super::*;
     use std::cell::RefCell;
 

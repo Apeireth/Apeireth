@@ -113,14 +113,38 @@ impl ScriptedMeasurement {
 pub enum EventKind {
     /// 点击（冒泡，委托根监听）。
     Click,
+    /// 双击（冒泡）。
+    DoubleClick,
     /// 键盘按下（冒泡）。
     KeyDown,
-    /// 输入（冒泡；双向绑定的取值事件）。
+    /// 键盘抬起（冒泡）—— 组合键判定要用它（只按 `KeyDown` 会漏「松开」）。
+    KeyUp,
+    /// 输入（冒泡；双向绑定的取值事件；IME 组合期间**不**触发，见 G3）。
     Input,
-    /// 变更（冒泡）。
+    /// 变更（冒泡）—— 复选框/单选的 `checked` 走这条。
     Change,
+    /// 获得焦点（`focusin` **冒泡**版本；`focus` 本身不冒泡，不用）。
+    FocusIn,
     /// 失焦（冒泡）。
     FocusOut,
+    /// 表单提交（冒泡）。
+    Submit,
+    /// 指针按下（冒泡）。
+    PointerDown,
+    /// 指针抬起（冒泡）。
+    PointerUp,
+    /// 指针移动（冒泡；**默认会高频** ⇒ 上层需自行节流/合并）。
+    PointerMove,
+    /// 指针进入（冒泡）。
+    PointerEnter,
+    /// 指针离开（冒泡）。
+    PointerLeave,
+    /// 滚动（**不冒泡** ⇒ 必须直接监听滚动容器本身，不能靠委托根）。
+    Scroll,
+    /// 滚轮（冒泡）。
+    Wheel,
+    /// 右键菜单（冒泡）。
+    ContextMenu,
 }
 
 impl EventKind {
@@ -128,11 +152,92 @@ impl EventKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             EventKind::Click => "click",
+            EventKind::DoubleClick => "dblclick",
             EventKind::KeyDown => "keydown",
+            EventKind::KeyUp => "keyup",
             EventKind::Input => "input",
             EventKind::Change => "change",
+            EventKind::FocusIn => "focusin",
             EventKind::FocusOut => "focusout",
+            EventKind::Submit => "submit",
+            EventKind::PointerDown => "pointerdown",
+            EventKind::PointerUp => "pointerup",
+            EventKind::PointerMove => "pointermove",
+            EventKind::PointerEnter => "pointerenter",
+            EventKind::PointerLeave => "pointerleave",
+            EventKind::Scroll => "scroll",
+            EventKind::Wheel => "wheel",
+            EventKind::ContextMenu => "contextmenu",
         }
+    }
+
+    /// 该事件**能否**挂在委托根上统一监听。
+    ///
+    /// ⚠️ `scroll` **不冒泡**（浏览器规范）⇒ ⇒ 它**必须**直接监听到滚动容器本身
+    /// ⇒ ⇒ 若把它挂到委托根，会**永远收不到事件**（静默失效，最难查的一类缺陷）。
+    pub fn bubbles_to_delegation_root(&self) -> bool {
+        !matches!(self, EventKind::Scroll)
+    }
+
+    /// 该事件在本枚举中的**稳定序号**。
+    ///
+    /// ⚠️ **穷尽 `match`**：新增变体却忘了在这里登记 ⇒ ⇒ **编译失败**
+    /// ⇒ ⇒ 这是「新增事件类型」的**编译期护栏**（比测试更早、更硬）。
+    pub fn index(self) -> usize {
+        match self {
+            EventKind::Click => 0,
+            EventKind::DoubleClick => 1,
+            EventKind::KeyDown => 2,
+            EventKind::KeyUp => 3,
+            EventKind::Input => 4,
+            EventKind::Change => 5,
+            EventKind::FocusIn => 6,
+            EventKind::FocusOut => 7,
+            EventKind::Submit => 8,
+            EventKind::PointerDown => 9,
+            EventKind::PointerUp => 10,
+            EventKind::PointerMove => 11,
+            EventKind::PointerEnter => 12,
+            EventKind::PointerLeave => 13,
+            EventKind::Scroll => 14,
+            EventKind::Wheel => 15,
+            EventKind::ContextMenu => 16,
+        }
+    }
+
+    /// 由序号还原事件类型（与 [`Self::index`] 互逆；越界 ⇒ `None`）。
+    pub fn from_index(index: usize) -> Option<Self> {
+        Some(match index {
+            0 => EventKind::Click,
+            1 => EventKind::DoubleClick,
+            2 => EventKind::KeyDown,
+            3 => EventKind::KeyUp,
+            4 => EventKind::Input,
+            5 => EventKind::Change,
+            6 => EventKind::FocusIn,
+            7 => EventKind::FocusOut,
+            8 => EventKind::Submit,
+            9 => EventKind::PointerDown,
+            10 => EventKind::PointerUp,
+            11 => EventKind::PointerMove,
+            12 => EventKind::PointerEnter,
+            13 => EventKind::PointerLeave,
+            14 => EventKind::Scroll,
+            15 => EventKind::Wheel,
+            16 => EventKind::ContextMenu,
+            _ => return None,
+        })
+    }
+
+    /// 全部事件类型（**由 `from_index` 枚举得出** ⇒ 不会与变体集合漂移）。
+    pub fn all() -> Vec<EventKind> {
+        let mut kinds = Vec::new();
+        let mut index = 0;
+        while let Some(kind) = EventKind::from_index(index) {
+            kinds.push(kind);
+            index += 1;
+        }
+        kinds
     }
 }
 

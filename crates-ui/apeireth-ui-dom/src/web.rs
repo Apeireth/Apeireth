@@ -445,9 +445,36 @@ impl Dom for WebDom {
             if let Some(keyboard) = event.dyn_ref::<KeyboardEvent>() {
                 dom_event = dom_event.with_key(keyboard.key());
             }
+            // ⭐ **复选框/单选的 `checked`**（G2）：`change` 事件里 `checked` 是布尔 property
+            // ⇒ ⇒ 填进载荷，处理器不必回读 DOM（与 `target_value` 同一理由）。
+            if let Some(element) = target.as_ref().and_then(|node| node.dyn_ref::<Element>()) {
+                if let Ok(checked) = Reflect::get(element.as_ref(), &JsValue::from_str("checked")) {
+                    if let Some(flag) = checked.as_bool() {
+                        dom_event = dom_event.with_checked(flag);
+                    }
+                }
+            }
             if let Some(mouse) = event.dyn_ref::<MouseEvent>() {
-                dom_event =
-                    dom_event.with_modifiers(mouse.ctrl_key(), mouse.shift_key(), mouse.meta_key());
+                dom_event = dom_event
+                    .with_modifiers(mouse.ctrl_key(), mouse.shift_key(), mouse.meta_key())
+                    // ⭐ **Alt 键**（G2）：此前漏了这个修饰键 ⇒ 组合键判定做不了。
+                    .with_alt_key(mouse.alt_key())
+                    // ⭐ **视口坐标（CSS 像素）**（G2）：与 `ElementBox` 同一坐标系
+                    // ⇒ 命中测试可以直接和 `bounding_box()` 的返回值比较。
+                    .with_client_position(f64::from(mouse.client_x()), f64::from(mouse.client_y()));
+                // 鼠标按键：`-1` 表示「本事件没有按键」（如无按键的 `pointermove`）
+                // ⇒ ⇒ 不填（`None`），**不要**强转成 255。
+                let button = mouse.button();
+                if button >= 0 {
+                    dom_event = dom_event.with_button(button as u8);
+                }
+            }
+            // ⭐ **指针 id**（G2）：只有 pointer 类事件带 `pointerId`
+            // ⇒ ⇒ 用通用属性读取，避免为它单开 `web-sys` feature。
+            if let Ok(value) = Reflect::get(event.as_ref(), &JsValue::from_str("pointerId")) {
+                if let Some(id) = value.as_f64() {
+                    dom_event = dom_event.with_pointer_id(id as i32);
+                }
             }
             handler.call(&mut dom_event);
             if dom_event.is_default_prevented() {
