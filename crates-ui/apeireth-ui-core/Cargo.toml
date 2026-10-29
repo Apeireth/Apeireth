@@ -5,7 +5,7 @@
 # 之后放到哪」（设计文档 §3.3.1 / §4）。
 #
 # 0 外部依赖（含 0 依赖 web-sys）⇒ 永远能 native 单测，不需浏览器、不需 wasm
-# target（ADR-0015 §4 P1 验收门）。
+# target（ADR-0021 的纯逻辑验证范围）。
 #
 # 契约登记：docs/architecture/contract.toml [extension_points]
 #   ui_component_trait = "crates-ui/apeireth-ui-core/src/component.rs::UiComponent"

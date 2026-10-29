@@ -291,7 +291,7 @@ impl RuntimeInner {
     /// 把 effect 节点标脏并排入**它自己的阶段**对应的队列。
     ///
     /// 阶段必须跟着任务走：`effect_pre` 的重跑若被排进 post 队列 ⇒ 「渲染前先于
-    /// 渲染后」这条硬保证（ADR-0015）就破了。
+    /// 渲染后」这条硬保证（ADR-0021）就破了。
     ///
     /// ## 自激判定（早于次数上限）
     ///
@@ -1070,9 +1070,9 @@ impl Runtime {
 ///
 /// [`Runtime::new`] 仍是 `pub`（native 测试 / 独立运行时 / 既有 crate 的调用点
 /// 不可改）⇒ ⇒ 「状态持有者**显式**自建运行时」这条路径在**编译期**仍可写出来
-/// ⇒ ⇒ 它由 `crates-ui/apeireth-ui-demo/harness/scripts/check_runtime_ownership.py`
-/// 以**精确判据**守住（不再是近似判据）⇒ ⇒ 且即便写出来，其信号也**无处挂
-/// effect**（本类型不给这个能力）⇒ ⇒ 症状（幽灵输入）**不成立**。
+/// ⇒ ⇒ 本抽取不含 demo 宿主或其 ownership 扫描器，不能声称调用者已受扫描保护。
+/// `ReactiveScope` 限制可用方法；显式再建一个 `Runtime` 仍可发生。
+/// 宿主必须确保状态与 effect 来自同一 owning runtime；这里不证明所有宿主的接线。
 #[derive(Clone)]
 pub struct ReactiveScope {
     inner: Rc<RuntimeInner>,

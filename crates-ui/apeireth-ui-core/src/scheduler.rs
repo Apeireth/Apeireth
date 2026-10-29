@@ -25,7 +25,7 @@ use crate::graph::NodeId;
 /// 任务阶段：渲染前 / 渲染后。
 ///
 /// 为什么需要独立类型：任务被**重新排入**时必须回投到**同一个队列**
-/// （顺序保证 ⇒ ADR-0015 把「脏传播 → 渲染前任务 → effect」列为硬保证）。
+/// （顺序保证 ⇒ ADR-0021 把「脏传播 → 渲染前任务 → effect」列为硬保证）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     /// 渲染前任务（`effect_pre`）。
