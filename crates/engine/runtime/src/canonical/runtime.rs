@@ -270,6 +270,7 @@ fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_,
 /// The assembled runtime.
 pub struct Runtime {
     pub(super) instances: std::sync::Weak<super::instances::Inner>,
+    pub(super) message_invocation: Option<Arc<super::module_messages::MessageInvocation>>,
     pub(super) instance_host: Option<super::instances::AgentRuntime>,
     pub(super) task: Option<Arc<super::instances::TaskExecution>>,
     pub(super) plugins: PluginManager,
@@ -1151,6 +1152,7 @@ impl RuntimeBuilder {
         );
         Ok(Runtime {
             instances: Default::default(),
+            message_invocation: None,
             instance_host: None,
             task: None,
             plugins: manager,

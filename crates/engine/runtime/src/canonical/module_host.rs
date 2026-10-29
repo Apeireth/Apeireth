@@ -116,7 +116,12 @@ impl Runtime {
             session: Some(session),
             turn: Some(request),
             call_id: call.id.clone(),
-            caller: if automatic {
+            caller: if let Some(invocation) = &self.message_invocation {
+                apeireth_plugin::ToolCaller::ModuleMessage {
+                    source: invocation.envelope.source.definition.clone(),
+                    instance: invocation.envelope.source.instance,
+                }
+            } else if automatic {
                 apeireth_plugin::ToolCaller::Module(module.clone())
             } else {
                 apeireth_plugin::ToolCaller::Model
@@ -124,17 +129,45 @@ impl Runtime {
             module: module.clone(),
             module_instance: self.plugins.instance_id(&module).ok(),
             internal_review: None,
+            message_support: self.message_invocation.is_some() || self.messages_enabled(),
+            message_route: self
+                .message_invocation
+                .as_ref()
+                .map(|invocation| invocation.route.clone()),
+            delegated_tools: self
+                .message_invocation
+                .as_ref()
+                .map(|invocation| invocation.tools.iter().cloned().collect()),
+            delegation: self
+                .message_invocation
+                .as_ref()
+                .and_then(|invocation| invocation.parent.clone()),
             tool_scope: self.dispatcher.scope_snapshot(session),
             authorization: apeireth_plugin::ToolAuthorization {
                 principal_epoch: None,
                 intent_id: security.map(|s| s.intent_id.clone()),
                 authorization_context: security.and_then(|s| s.authorization_context.clone()),
                 approved,
+                host_context: security
+                    .cloned()
+                    .map(|security| Arc::new(security) as Arc<dyn std::any::Any + Send + Sync>),
             },
-            cancellation: Default::default(),
+            cancellation: self
+                .message_invocation
+                .as_ref()
+                .map(|invocation| {
+                    apeireth_plugin::ToolCancellation::joined(vec![invocation.cancellation.clone()])
+                })
+                .unwrap_or_default(),
             deadline: std::time::Instant::now()
                 .checked_add(timeout)
-                .unwrap_or_else(std::time::Instant::now),
+                .unwrap_or_else(std::time::Instant::now)
+                .min(
+                    self.message_invocation
+                        .as_ref()
+                        .map(|invocation| invocation.deadline)
+                        .unwrap_or_else(|| std::time::Instant::now() + timeout),
+                ),
             trace: Some(trace),
             module_tasks: registration.scope.clone(),
             resource_lease: None,

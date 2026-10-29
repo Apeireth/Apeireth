@@ -63,7 +63,9 @@ fn memory_contract(op: &str) -> apeireth_plugin::module_contract::ModuleToolCont
         "organizer_status" => (ExecutionMode::Direct, EffectClass::Pure),
         _ => (ExecutionMode::Direct, EffectClass::Protected),
     };
-    ModuleToolContract::logical(mode, effect)
+    let mut contract = ModuleToolContract::logical(mode, effect);
+    contract.query_safe = op == "organizer_status";
+    contract
 }
 fn wire_name(op: &str) -> String {
     format!("memory_{op}")

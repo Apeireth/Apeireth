@@ -54,6 +54,61 @@ impl ManagedAgent {
         else {
             return Ok(());
         };
+        let latest_message = session
+            .events
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, entry)| {
+                if let SessionEventKind::ModuleMessageStarted {
+                    agent,
+                    envelope,
+                    call_id,
+                } = &entry.event
+                {
+                    (*agent == self.id).then(|| {
+                        (
+                            index,
+                            entry.request,
+                            entry.trace,
+                            envelope.message_id,
+                            call_id.clone(),
+                        )
+                    })
+                } else {
+                    None
+                }
+            });
+        if let Some((index, request, trace, message_id, call_id)) = latest_message {
+            let newer_task = session.events.iter().skip(index + 1).any(|entry| matches!(entry.event, SessionEventKind::AgentTaskStarted { agent, .. } if agent == self.id));
+            if !newer_task {
+                let closed = session.events.iter().any(|entry| match &entry.event {
+                    SessionEventKind::ToolEventRecorded { fact } => fact.call_id() == message_id,
+                    SessionEventKind::ModuleMessageInterrupted {
+                        message_id: recorded,
+                        ..
+                    } => *recorded == message_id,
+                    _ => false,
+                });
+                if !closed {
+                    session.record(
+                        request,
+                        trace,
+                        SessionEventKind::ModuleMessageInterrupted {
+                            agent: self.id,
+                            message_id,
+                            pending_tool_calls: vec![call_id],
+                        },
+                        self.sessions.clock().as_ref(),
+                    );
+                    self.sessions
+                        .save(&session)
+                        .await
+                        .map_err(|e| error(AgentErrorCode::Provider, e.to_string()))?;
+                }
+                return Ok(());
+            }
+        }
         let Some(start) = session.events.iter().rev().find(|entry| {
             matches!(entry.event, SessionEventKind::AgentTaskStarted { agent, .. } if agent == self.id)
         }) else {

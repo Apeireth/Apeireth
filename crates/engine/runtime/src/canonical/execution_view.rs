@@ -4,6 +4,7 @@ impl Runtime {
     pub(super) fn execution_view(&self) -> Self {
         Self {
             instances: self.instances.clone(),
+            message_invocation: self.message_invocation.clone(),
             instance_host: None,
             task: self.task.clone(),
             plugins: self.plugins.execution_snapshot(),

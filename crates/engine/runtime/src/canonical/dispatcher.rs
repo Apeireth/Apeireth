@@ -567,6 +567,10 @@ impl LegacyToolAdapter {
             module: self.module.clone(),
             module_instance: None,
             internal_review: None,
+            message_support: false,
+            message_route: None,
+            delegated_tools: None,
+            delegation: None,
             tool_scope: session.and_then(|session| self.dispatcher.scope_snapshot(session)),
             authorization: ToolAuthorization::default(),
             cancellation: ToolCancellation::default(),
@@ -668,6 +672,20 @@ impl LegacyToolAdapter {
                         .await
                     {
                         return error;
+                    }
+                }
+                if context.delegated_tools.is_some() {
+                    if let Err(error) =
+                        dispatcher.validate(context.session, tool.as_ref(), &owned_call, legacy)
+                    {
+                        return error;
+                    }
+                    if !dispatcher.delegation_current(&context, tool.id()) {
+                        return failure(
+                            &owned_call,
+                            DispatchErrorCode::PermissionDenied,
+                            "message delegation is no longer authorized",
+                        );
                     }
                 }
                 apeireth_plugin::tool_execution::scope_native_execution(

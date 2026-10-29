@@ -43,6 +43,8 @@ pub struct ModuleToolContract {
     pub execution: ExecutionMode,
     pub effect: EffectClass,
     pub module_visible: bool,
+    #[serde(default)]
+    pub query_safe: bool,
 }
 impl Default for ModuleToolContract {
     fn default() -> Self {
@@ -52,6 +54,7 @@ impl Default for ModuleToolContract {
             execution: ExecutionMode::Direct,
             effect: EffectClass::Compatibility,
             module_visible: false,
+            query_safe: false,
         }
     }
 }
@@ -66,7 +69,11 @@ impl ModuleToolContract {
         }
     }
     pub fn validate(&self) -> Result<(), String> {
-        if self.version != 1
+        if (self.query_safe
+            && (self.surface != ToolSurface::Logical
+                || self.effect != EffectClass::Pure
+                || self.execution != ExecutionMode::Direct))
+            || self.version != 1
             || (self.surface == ToolSurface::Compatibility && self != &Self::default())
             || (self.surface == ToolSurface::Internal && self.module_visible)
             || (self.surface != ToolSurface::Compatibility

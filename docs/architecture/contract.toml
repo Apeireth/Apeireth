@@ -365,3 +365,21 @@ name = "SystemOneAudit"
 canonical = "crates/foundation/plugin/src/system_one.rs"
 known_debt = []
 target = "ADR-0023 P2: Host audit policy port; requires acknowledgement before effect, no extension/lifecycle authority"
+
+[[concepts]]
+name = "ModuleMessages"
+canonical = "crates/foundation/plugin/src/module_messages.rs"
+known_debt = []
+target = "ADR-0023 P3: owner-bound Host transport port; routes existing active public capabilities without granting authority"
+
+[[concepts]]
+name = "ModuleMessageEnvelope"
+canonical = "crates/foundation/plugin/src/module_messages.rs"
+known_debt = []
+target = "ADR-0023 P3: runtime-minted versioned causal provenance and bounded payload; not another event/lifecycle authority"
+
+[[concepts]]
+name = "ModuleMessagePipeline"
+canonical = "crates/engine/runtime/src/canonical/module_messages.rs"
+known_debt = []
+target = "ADR-0023 P3: bounded admission and local refusal window only; existing Registry/PluginManager remain authoritative"

@@ -13,7 +13,7 @@ impl ToolDispatcher {
         legacy: bool,
     ) -> Result<(), ToolResult> {
         self.validate(context.session, tool, call, legacy)?;
-        if !self.context_current(context) {
+        if !self.context_current(context) || !self.delegation_current(context, tool.id()) {
             return Err(failure(
                 call,
                 DispatchErrorCode::PermissionDenied,
@@ -48,6 +48,18 @@ impl ToolDispatcher {
             .and_then(|session| self.usage.as_ref()?.owner(session));
         let mut delegation_chain = match &context.caller {
             ToolCaller::Module(module) => vec![module.clone()],
+            ToolCaller::ModuleMessage { source, .. } => context
+                .message_route
+                .as_ref()
+                .map(|route| {
+                    route
+                        .visited
+                        .iter()
+                        .take(route.visited.len().saturating_sub(1))
+                        .map(|hop| hop.definition.clone())
+                        .collect()
+                })
+                .unwrap_or_else(|| vec![source.clone()]),
             _ => vec![],
         };
         if let Some(apeireth_plugin::agents::AgentOwner::Module { definition, .. }) = &owner {
@@ -106,7 +118,10 @@ impl ToolDispatcher {
             failure(call, code, "internal execution refused by mandatory review; no permission is granted by a model verdict")
         })?;
         self.validate(context.session, tool, call, legacy)?;
-        if !gate.is_current(generation) || !self.context_current(context) {
+        if !gate.is_current(generation)
+            || !self.context_current(context)
+            || !self.delegation_current(context, tool.id())
+        {
             return Err(failure(
                 call,
                 DispatchErrorCode::PermissionDenied,
@@ -120,6 +135,35 @@ impl ToolDispatcher {
             context,
         ));
         Ok(())
+    }
+    pub(super) fn delegation_current(
+        &self,
+        context: &ToolExecutionContext,
+        capability: &CapabilityId,
+    ) -> bool {
+        let mut current = Some(context);
+        let mut depth = 0;
+        while let Some(context) = current {
+            depth += 1;
+            if depth > 33
+                || !self.context_current(context)
+                || context
+                    .delegated_tools
+                    .as_ref()
+                    .is_some_and(|tools| !tools.contains(capability))
+                || context
+                    .tool_scope
+                    .as_ref()
+                    .is_some_and(|tools| !tools.contains(capability))
+                || context
+                    .session
+                    .is_some_and(|session| !self.allows(session, capability))
+            {
+                return false;
+            }
+            current = context.delegation.as_deref();
+        }
+        true
     }
     fn context_current(&self, context: &ToolExecutionContext) -> bool {
         if context.cancellation.is_cancelled()
