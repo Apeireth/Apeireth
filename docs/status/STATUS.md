@@ -5,7 +5,7 @@
 
 | id | level | default | switch_env | verified_at | next_review |
 |---|---|---|---|---|---|
-| `rt.provider_router` | PRODUCTION WIRED | ON | - | `4a1bb6668e3c` | 2026-11-20 |
+| `rt.provider_router` | PRODUCTION WIRED | ON | - | `4ff8853bd8c3` | 2026-11-20 |
 | `core.cost_router` | PRODUCTION WIRED | OFF | `APEIRETH_COST_ROUTING` | `2ee10a39869f` | 2026-11-20 |
 | `tool.task_board` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_TASK_BOARD` | `2ee10a39869f` | 2026-11-20 |
 | `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `9015d9f044ad` | 2026-11-20 |
@@ -13,7 +13,7 @@
 | `sec.egress_control` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-12-01 |
 | `sec.object_access` | PRODUCTION WIRED | ON | - | `d45a96e877a5` | 2026-12-01 |
 | `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `c9251271` | 2026-12-01 |
-| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `4a1bb6668e3c` | 2026-12-01 |
+| `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `4ff8853bd8c3` | 2026-12-01 |
 | `mem.lesson_object` | PRODUCTION WIRED | ON | - | `1497fe7fc18c` | 2026-12-01 |
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `d45a96e877a5` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
@@ -34,12 +34,13 @@
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `2ee10a39869f` | 2026-11-20 |
 | `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `2ee10a39869f` | 2026-11-20 |
 | `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `b419826c` | 2026-11-20 |
-| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `4a1bb6668e3c` | 2026-11-28 |
-| `rt.owned_agents` | IMPLEMENTED | - | - | `4a1bb6668e3c` | 2026-11-20 |
-| `mem.registered_namespace` | IMPLEMENTED | - | - | `4a1bb6668e3c` | 2026-11-20 |
-| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `4a1bb6668e3c` | 2026-11-20 |
-| `rt.module_execution_contract` | IMPLEMENTED | OFF | - | `4a1bb6668e3c` | 2026-11-20 |
-| `rt.system_one_internal` | IMPLEMENTED | OFF | - | `4a1bb6668e3c` | 2026-11-20 |
+| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `4ff8853bd8c3` | 2026-11-28 |
+| `rt.owned_agents` | IMPLEMENTED | - | - | `4ff8853bd8c3` | 2026-11-20 |
+| `mem.registered_namespace` | IMPLEMENTED | - | - | `4ff8853bd8c3` | 2026-11-20 |
+| `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `4ff8853bd8c3` | 2026-11-20 |
+| `rt.module_execution_contract` | IMPLEMENTED | OFF | - | `4ff8853bd8c3` | 2026-11-20 |
+| `rt.system_one_internal` | IMPLEMENTED | OFF | - | `4ff8853bd8c3` | 2026-11-20 |
+| `rt.module_messages` | IMPLEMENTED | OFF | - | `4ff8853bd8c3` | 2026-11-20 |
 
 ## 使用
 
