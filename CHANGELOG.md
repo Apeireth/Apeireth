@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — D4a protected Desktop merge and actual package verification（2026-10-29）
+
+- Execute #34 through the protected ordinary merge path after exact-head recovery verification; combined Desktop/Kernel package tests and typecheck pass.
+- Retain missing native desktop system libraries as an explicit environment limitation; preserve two original bot tips after autonomous upstream refreshes.
+
 ## [Unreleased] — F2 exact merged main verification（2026-10-29）
 
 - Verify exact protected main in a detached worktree: eight docs/architecture/wiring/ledger commands pass.
