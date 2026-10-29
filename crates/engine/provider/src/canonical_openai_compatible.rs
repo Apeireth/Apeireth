@@ -106,6 +106,11 @@ pub struct OpenAiCompatibleProviderCapability {
     timeout_ms: u64,
     credential_key: String,
     resolver: ResolverSlot,
+    /// 推理字段归一化配置（12 别名 → 前置 think 块；出向剥离别名字段）。
+    ///
+    /// 默认由 `reasoning_adapter` 的 `from_env` 读取（`APEIRETH_REASONING_ENABLED`
+    /// 等三个变量）且**默认关** ⇒ 关时响应解析与接线前逐字节一致（零行为变化）。
+    reasoning: crate::reasoning_adapter::ReasoningAdapterConfig,
 }
 
 impl OpenAiCompatibleProviderCapability {
@@ -128,6 +133,7 @@ impl OpenAiCompatibleProviderCapability {
             timeout_ms,
             credential_key: OPENAI_COMPATIBLE_API_KEY.to_string(),
             resolver,
+            reasoning: crate::reasoning_adapter::ReasoningAdapterConfig::from_env(),
         })
     }
 
@@ -199,6 +205,17 @@ impl OpenAiCompatibleProviderCapability {
         Ok(body)
     }
 
+    /// 显式注入推理适配配置（生产走 `ReasoningAdapterConfig::from_env`；
+    /// 测试与嵌入方用本方法把配置钉死，不依赖进程环境）。
+    #[must_use]
+    pub fn with_reasoning_config(
+        mut self,
+        reasoning: crate::reasoning_adapter::ReasoningAdapterConfig,
+    ) -> Self {
+        self.reasoning = reasoning;
+        self
+    }
+
     /// Classify a vendor HTTP outcome. Delegates to the shared [`openai_chat`]
     /// status classifier.
     fn classify_status(&self, status: reqwest::StatusCode, body_text: String) -> ProviderError {
@@ -212,7 +229,12 @@ impl OpenAiCompatibleProviderCapability {
         body: serde_json::Value,
         request_model: &str,
     ) -> Result<apeireth_protocol::canonical::NormalizedResponse, ProviderError> {
-        openai_chat::parse_response(body, request_model, self.id.as_str())
+        openai_chat::parse_response_with_reasoning(
+            body,
+            request_model,
+            self.id.as_str(),
+            &self.reasoning,
+        )
     }
 }
 
@@ -740,6 +762,8 @@ mod tests {
         });
         format!("http://{addr}")
     }
+
+    mod reasoning_contract;
 
     /// The streaming path forwards incremental content deltas (not one final
     /// blob) and reassembles the same canonical response the non-streaming
