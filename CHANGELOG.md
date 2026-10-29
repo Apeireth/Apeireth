@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — G Repository consolidation report（2026-10-29）
+
+- A–G 执行账收口：#64/#70 protected merges、11 verified recovery tags、7 E explicit deletions；#98 仍 OPEN/BLOCKED，main 尚未含 KC1。
+- 当前 36 refs / 31 unique-unmerged refs，原3463 IDs 全保留；main docs/architecture 六项通过，full gate 延后。限定 Kernel Complete、legacy unmet 历史与 true cold UNAVAILABLE 均保留。见 [G 总报告](docs/04-internal/repo-consolidation-g-report-2026-10-29.md)。
+
 ## [Unreleased] — F Exact main documentation and architecture verification（2026-10-29）
 
 - 在 exact main detached worktree 实跑 docs truth/generated/links/index、strict arch 与 arch-doc，六项 exit 0；worktree clean 后移除。
