@@ -98,3 +98,7 @@
 - 性能红行现状见 `reports/benchmark-reproduction.md`；开关权力现状见 `docs/02-guides/capability-switch-power-audit.md`；
 - 验证面硬化（Kani 证明收口）持续进行，与 A/E 的安全语义互为弹药；
 - 驾驶舱 P2 遥测、对话遥测条的"未接线"槽位=G 的数据源需求清单。
+
+## ALE baseline environment follow-up (2026-10-29)
+
+- D33: `gate_full.ps1` failure classifier can label a file-not-found test failure as OOM because broad patterns also scan successful test names. Preserve exit status; narrow attribution in a separate gate-tooling task. Cached binaries compiled in a removed worktree also retain stale `CARGO_MANIFEST_DIR`; rebuild affected targets in the current checkout. Evidence and rollback: [P0 ledger](../ale-system-one-p0-2026-10-29.md). Owner: gate tooling; open, no security threshold change.
