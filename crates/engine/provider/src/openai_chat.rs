@@ -178,8 +178,9 @@ pub fn parse_response(
 /// （`reasoning_content` / `thinking` / `reasoning` …共 12 个别名，
 /// 见 [`crate::reasoning_adapter::REASONING_ALIASES`]）。
 ///
-/// 这个入口把那些别名归一化成前置的 `<think>…</think>` 块，并把别名字段
-/// **从下发的 JSON 里剥掉**（不重复占 token，也不把内部推理当正文再传一遍）。
+/// 这个入口把响应里已有的别名内容归一化成前置的 `<think>…</think>` 块。
+/// 返回值是 `NormalizedResponse`，不会转发原始 message JSON 或其别名字段；
+/// JSON 转发场景的字段剥离 helper 仍由 `reasoning_adapter` 单独提供。
 ///
 /// # 门控
 ///

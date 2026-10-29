@@ -42,7 +42,8 @@ async fn reasoning_adapter_is_wired_through_the_real_complete_path() {
         DEFAULT_TIMEOUT_MS,
         resolver,
     )
-    .expect("capability builds");
+    .expect("capability builds")
+    .with_reasoning_config(crate::reasoning_adapter::ReasoningAdapterConfig::default());
 
     let mut request = request();
     request.model = "deepseek-v4".to_string();

@@ -106,7 +106,7 @@ pub struct OpenAiCompatibleProviderCapability {
     timeout_ms: u64,
     credential_key: String,
     resolver: ResolverSlot,
-    /// 推理字段归一化配置（12 别名 → 前置 think 块；出向剥离别名字段）。
+    /// 推理字段归一化配置（12 别名 → 前置 think 块；归一输出不携带原始别名字段）。
     ///
     /// 默认由 `reasoning_adapter` 的 `from_env` 读取（`APEIRETH_REASONING_ENABLED`
     /// 等三个变量）且**默认关** ⇒ 关时响应解析与接线前逐字节一致（零行为变化）。
