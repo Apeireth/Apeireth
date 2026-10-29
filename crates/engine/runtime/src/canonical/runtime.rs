@@ -568,13 +568,6 @@ impl Runtime {
         &self.providers
     }
 
-    /// The shared router behind an [`Arc`](std::sync::Arc), for turn-scoped
-    /// invoker construction. This is the same single router instance the
-    /// runtime serves every completion from.
-    pub(super) fn providers_arc(&self) -> Arc<ProviderRouter> {
-        Arc::clone(&self.providers)
-    }
-
     /// The modules registered with this runtime, in execution order.
     pub fn modules(&self) -> &[Arc<dyn BehaviorModule>] {
         self.modules.modules()

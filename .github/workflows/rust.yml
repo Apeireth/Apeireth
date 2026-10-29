@@ -320,11 +320,14 @@ jobs:
         with:
           fetch-depth: 0  # scan-history 需要全历史
 
-      - name: Install PowerShell
-        shell: pwsh
+      - name: Ensure PowerShell is available
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y powershell
+          if ! command -v pwsh >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y powershell
+          fi
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
 
       - name: "Secret scan: working tree (scan-all)"
         shell: pwsh

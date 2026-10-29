@@ -30,6 +30,101 @@ fn memory() -> (Arc<MemoryCoordinator>, Arc<SqliteMemoryStore>) {
     (Arc::new(MemoryCoordinator::new(backend, governance)), db)
 }
 #[tokio::test]
+async fn host_recall_budget_excludes_oversized_items_without_changing_stored_memory() {
+    use apeireth_core::kernel::{Clock, Episode};
+    let (coordinator, db) = memory();
+    let principal = principal();
+    let clock = Arc::new(SystemClock);
+    let large = format!("budget_marker {}", "界".repeat(400));
+    let small = "budget_marker 小记忆";
+    for (id, content) in [
+        ("large-budget-item", large.as_str()),
+        ("small-budget-item", small),
+    ] {
+        coordinator
+            .writeback_episode(&Episode {
+                id: id.into(),
+                timestamp: clock.now().timestamp(),
+                role: "memory".into(),
+                content: content.into(),
+                session_id: namespace_key(&principal),
+            })
+            .unwrap();
+    }
+    for budget in [128, 2048] {
+        let provider = Provider::new(vec![
+            vec![call("memory_retrieve", json!({"query":"budget_marker"}))],
+            vec![],
+        ]);
+        let runtime = builder(provider.clone())
+            .with_plugin(Arc::new(
+                MemoryModule::new(coordinator.clone(), clock.clone())
+                    .with_automatic_retrieval(false)
+                    .with_context_char_budget(budget),
+            ))
+            .build_agent_runtime(AgentHostPolicy::default())
+            .await
+            .unwrap();
+        let agent = runtime
+            .spawn_agent(
+                "budget",
+                AgentConfig {
+                    principal: Some(principal.clone()),
+                    tools: ids(&["retrieve"]),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        agent.run("recall budget_marker".into()).await.unwrap();
+        let results = provider.results();
+        let recall = results
+            .iter()
+            .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+            .find(|v| v.get("items").is_some())
+            .expect("recall tool result");
+        assert_eq!(recall["untrusted_data"], true);
+        let contents: Vec<_> = recall["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["content"].as_str().expect("UTF-8 content"))
+            .collect();
+        assert!(
+            contents.contains(&small),
+            "a fitting item must still be recalled"
+        );
+        assert_eq!(contents.contains(&large.as_str()), budget == 2048);
+        assert!(contents.iter().map(|c| c.chars().count()).sum::<usize>() <= budget);
+        assert!(!provider
+            .requests()
+            .iter()
+            .flat_map(|r| &r.messages)
+            .any(|m| m.role == MessageRole::System
+                && ContentPart::join_text(&m.content).contains("budget_marker")));
+        runtime.shutdown().await.unwrap();
+    }
+    let episodes =
+        MemoryBackend::recent_episodes(db.as_ref(), &namespace_key(&principal), 20).unwrap();
+    assert_eq!(episodes.len(), 2);
+    assert_eq!(
+        episodes
+            .iter()
+            .find(|e| e.id == "large-budget-item")
+            .unwrap()
+            .content,
+        large
+    );
+    assert_eq!(
+        episodes
+            .iter()
+            .find(|e| e.id == "small-budget-item")
+            .unwrap()
+            .content,
+        small
+    );
+}
+#[tokio::test]
 async fn memory_hook_is_a_paired_untrusted_tool_result_and_profiles_cannot_read_each_other() {
     let (coordinator, db) = memory();
     let a = principal();

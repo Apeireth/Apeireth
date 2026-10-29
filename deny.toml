@@ -55,6 +55,13 @@ allow = [
 name = "jpeg-encoder"
 allow = ["IJG"]
 
+# The locked schema dependency uses the permissive no-attribution MIT variant.
+# Review is limited to this exact crate release; unrelated licenses stay denied.
+[[licenses.exceptions]]
+name = "borrow-or-share"
+version = "=0.2.4"
+allow = ["MIT-0"]
+
 # ----------------------------------------------------------------------------
 # Bans — 多版本 / wildcards / 黑名单
 # ----------------------------------------------------------------------------

@@ -496,6 +496,10 @@ impl std::fmt::Debug for ProviderRouter {
 }
 
 #[cfg(test)]
+#[path = "provider/compat_tests.rs"]
+mod compat_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
