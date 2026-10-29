@@ -259,23 +259,33 @@ mod tests {
         let holder_flag = holding.clone();
         let observer_flag = saw_holding.clone();
 
+        // Establish ownership before starting the contender. The channel confirms
+        // an actual rejected acquisition instead of depending on scheduling delays.
+        let guard = lock_env();
+        holding.store(true, Ordering::SeqCst);
+        let (blocked_tx, blocked_rx) = std::sync::mpsc::channel();
         let observer = std::thread::spawn(move || {
+            assert!(matches!(
+                CRATE_ENV_LOCK.try_lock(),
+                Err(std::sync::TryLockError::WouldBlock)
+            ));
+            blocked_tx.send(()).expect("report blocked contender");
             let guard = lock_env();
             // 拿到锁时，另一个线程应当**不在**持锁中。
             observer_flag.store(!holder_flag.load(Ordering::SeqCst), Ordering::SeqCst);
             drop(guard);
         });
 
-        let guard = lock_env();
-        holding.store(true, Ordering::SeqCst);
+        blocked_rx
+            .recv()
+            .expect("contender must observe the held lock");
         // 观察者此时必须被挡住。
-        std::thread::sleep(std::time::Duration::from_millis(20));
         assert!(
             !saw_holding.load(Ordering::SeqCst),
             "第二个线程在第一个持锁期间拿到了锁 ⇒ 锁无效"
         );
-        drop(guard);
         holding.store(false, Ordering::SeqCst);
+        drop(guard);
         observer.join().expect("观察线程 join");
         assert!(
             saw_holding.load(Ordering::SeqCst),
