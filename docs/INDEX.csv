@@ -457,6 +457,7 @@ docs/adr/0017-kernel-convergence-observation-port.md,L2,1,0017. KC-1 内核收�
 docs/adr/0018-registry-kernel-tool-events.md,L2,1,0018. Registry Kernel 迁移：先统一工具事件，再迁移执行与生命周期,2026-10-27,现行,4,保留,
 docs/adr/0019-registry-runtime-dispatch.md,L2,1,0019. Registry Runtime 接线：沿用插件生命周期与唯一治理入口,2026-10-28,现行,3,保留,
 docs/adr/0020-capability-module-ownership.md,L2,1,0020. Capability 模块归属与执行上下文收敛,2026-10-28,现行,3,保留,
+docs/adr/0021-consolidation-ui-core-slice.md,L2,1,Bounded independent reactive library extract from PR 78,2026-10-29,现值,0,保留,
 docs/adr/0021-owned-agents-and-dynamic-modules.md,L2,1,0021. 模块资源、独立 Agent 与隔离边界最终收敛,2026-10-28,现行,3,保留,
 docs/adr/0022-production-kernel-convergence.md,L2,1,0022. 生产认知兼容与统一实例执行,2026-10-28,现行,3,保留,
 docs/adr/README.md,L2,5,ADR — 架构决策记录（Architecture Decision Records）,2026-10-20,现行,9,索引,
