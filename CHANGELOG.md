@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — F Exact main documentation and architecture verification（2026-10-29）
+
+- 在 exact main detached worktree 实跑 docs truth/generated/links/index、strict arch 与 arch-doc，六项 exit 0；worktree clean 后移除。
+- VERIFY=pass 限于本次 docs/architecture；#98 未合并，最终 main 软件 full gate 延后，不用 A4 旧结果替代。见 [F 核验账](docs/04-internal/repo-consolidation-f-main-verify-2026-10-29.md)。
+
 ## [Unreleased] — E Recovery anchors and cautious cleanup（2026-10-29）
 
 - 九个 SUPERSEDED 行均有远端 exact-tip 恢复 tag；加 D2 两项复核共 11 anchors。
