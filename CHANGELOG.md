@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — E Recovery anchors and cautious cleanup（2026-10-29）
+
+- 九个 SUPERSEDED 行均有远端 exact-tip 恢复 tag；加 D2 两项复核共 11 anchors。
+- 逐项删除 7 个 main 祖先 refs；两个 unique-ID 内容包含行及全部未决/档案/fork/活动线保留。见 [E 清理账](docs/04-internal/repo-consolidation-e-cleanup-2026-10-29.md)。
+
 ## [Unreleased] — D2 Anchored protected merges（2026-10-29）
 
 - #64/#70 经 exact-head recovery tag 验证后走受保护普通 merge；main 已推进，未改保护或强推。
