@@ -1,0 +1,29 @@
+name: UI core slice
+on:
+  pull_request:
+    branches: [main]
+    paths: ['crates-ui/**', '.github/workflows/ui-core-ci.yml']
+  push:
+    branches: [main]
+    paths: ['crates-ui/**', '.github/workflows/ui-core-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: UI core independent check clippy fmt test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'crates-ui -> target'
+      - run: cargo check --workspace --all-targets --locked -j 2
+      - run: cargo clippy --workspace --all-targets --locked -j 2 -- -D warnings
+      - run: cargo fmt --all -- --check
+      - run: cargo test --workspace --all-targets --locked -j 2
+      - run: cargo test --workspace --doc --locked -j 2

@@ -34,6 +34,14 @@ bench_crates = 1
 version = "2.0.0-rc.4"
 test_baseline = "docs/03-reference/test-baseline.md（单一真源；本契约不抄写测试数字）"
 
+[[workspace.independent_workspaces]]
+id = "ui_core_slice"
+path = "crates-ui"
+crates = 1
+ci = ".github/workflows/ui-core-ci.yml"
+adr = "docs/adr/0021-consolidation-ui-core-slice.md"
+note = "IMPLEMENTED pure reactive library only; no production frontend consumer/DOM/GPU wiring; root metadata and budgets unchanged."
+
 [locked]
 # 只引用, 不复制数值; 守卫检查契约批不触碰这些文件。
 nine_anchors = "crates/foundation/core/src/eight_anchors.rs"
@@ -172,6 +180,7 @@ file = "src/canonical_entry.rs"
 role = "Gateway 引导 (目标同上)"
 
 [extension_points]
+ui_component_trait = "crates-ui/apeireth-ui-core/src/component.rs::UiComponent"
 # 唯一扩展点登记。新增能力必须复用其一; 新增扩展点/注册表 = 结构变更, 必须 ADR。
 # 统一 ABI 家族（R2, ADR-0008 §2.1）: foundation/plugin/src/extension.rs 的
 # ExtensionKind / ExtensionDescriptor / ExtensionCatalog; 注册表对外须实现
