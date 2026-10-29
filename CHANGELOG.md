@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Repo Consolidation B：refs 与独有历史盘点（2026-10-29）
+
+- **仅盘点**：冻结本地/origin 分支、全部 tags、stash/worktree 和可见 open PR；45 个分支 refs 中 33 个含 main/KC1 之外的提交身份，9 个 topic tip 已是 main 祖先。名称、bot 或历史备份标签不构成删除授权。
+- **保留边界**：独有工作须经过合并或明确去留决定，任何后续删除先验证恢复锚；main 后续仅走受保护 PR。本批不合并、删分支、建锚或改产品源码，详细计数口径及快照见 [B inventory](docs/04-internal/repo-consolidation-b-inventory-2026-10-29.md)。
+
 ## [Unreleased] — Kernel Convergence A4：全量门禁与正式验收复核（2026-10-29）
 
 - **软件复验**：原 gate_full 五段、指定 Runtime/CLI/Gateway 集成、clippy/fmt/strict arch 与文档门禁通过；CLI 原 TCP mock 夹具本轮通过，补齐 A3 当时的环境复验缺口，没有生产源码修复或测试减弱。
