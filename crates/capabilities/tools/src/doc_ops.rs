@@ -82,6 +82,15 @@
 //!   stored / deflate 两档, 同一子集对称, 无第三方 zip 包)。
 //!   两者均为锁定文件既有 `[[package]]` 的直接化引用, 版本零漂移。
 
+// ── **测试夹具外置**（`#[path]` 挂子模块；**不**动 `lib.rs` —— 那是别人的文件）。
+//
+// 本文件曾是 6150 行的单文件，且在 size 棘轮基线上（`arch-baseline.txt`，0 容差）
+// ⇒ 任何净增都会让 `arch_guard` 变红。把**纯测试夹具**（手写 PDF 生成器等）挪到独立
+// 文件 ⇒ 本文件净减 ⇒ 新修复能落进去（棘轮文件**不归我改** ⇒ 只能让本文件净减）。
+// 纯**搬移**，不改任何逻辑。
+#[cfg(test)]
+#[path = "doc_ops/fixtures.rs"]
+mod fixtures;
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -3487,6 +3496,25 @@ pub struct DocOpsParams {
     pub text: Option<String>,
 }
 
+/// 逐动作字段集合 (恰好允许这些字段; 多余/缺失拒绝即帧)。
+///
+/// 取自各动作实现真正消费的参数 (动作分派 + 各动作函数体): 读面四动作只吃
+/// `input` (`pdf_extract_text` / `docx_extract_text` 另吃 `max_chars` 字符预算);
+/// 写面各吃自己的输入/输出字段。
+fn allowed_fields(action: &str) -> &'static [&'static str] {
+    match action {
+        ACTION_PDF_INFO | ACTION_DOCX_OUTLINE => &["input"],
+        ACTION_PDF_EXTRACT_TEXT | ACTION_DOCX_EXTRACT_TEXT => &["input", "max_chars"],
+        ACTION_PDF_MERGE => &["inputs", "output"],
+        ACTION_PDF_SPLIT => &["input", "output_dir"],
+        ACTION_PDF_EXTRACT_PAGES => &["input", "output", "pages"],
+        ACTION_PDF_WATERMARK_TEXT => &["input", "output", "watermark_text"],
+        ACTION_DOCX_FROM_MARKDOWN => &["text", "output"],
+        ACTION_DOCX_APPEND => &["input", "text", "output"],
+        _ => &[],
+    }
+}
+
 /// 参数矩阵校验 (纯判定, 工具面与边界 Guard 同一真源): 返回 `Some(拒绝错误)` 即拒。
 ///
 /// 逐项: ① 动作在闭合词表; ② 每动作的必填/禁填字段矩阵; ③ 选页合法
@@ -3514,6 +3542,29 @@ pub fn doc_ops_params_refusal(config: &DocOpsConfig, params: &DocOpsParams) -> O
             ))),
         }
     };
+
+    // 禁填字段面: 该动作**不消费**的字段一律拒绝即帧 (不多给字段)。
+    // 字段集合逐字取自各动作实现真正读的参数 (动作分派 + 各动作函数体):
+    // 读面四动作只吃 `input` (两提取动作另吃 `max_chars` 预算), 写面各吃
+    // 自己的输入/输出字段。多给的字段若被静默吞掉, 模型侧看不出「这个参数
+    // 没生效」—— 拒绝即帧才诚实 (与 `sheet_ops` 的同名字段集合同一把尺)。
+    let allowed = allowed_fields(action);
+    for (field, is_present) in [
+        ("input", params.input.is_some()),
+        ("inputs", params.inputs.is_some()),
+        ("output", params.output.is_some()),
+        ("output_dir", params.output_dir.is_some()),
+        ("pages", params.pages.is_some()),
+        ("watermark_text", params.watermark_text.is_some()),
+        ("max_chars", params.max_chars.is_some()),
+        ("text", params.text.is_some()),
+    ] {
+        if is_present && !allowed.contains(&field) {
+            return Some(DocOpsError::InvalidParam(format!(
+                "{action}: 不接受参数 [{field}] (该动作只认 {allowed:?})"
+            )));
+        }
+    }
 
     match action {
         ACTION_PDF_INFO
@@ -4603,160 +4654,11 @@ fn now_epoch_ms() -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use super::fixtures::*;
     use super::*;
     use apeireth_core::kernel::{SessionId, TraceId};
 
     // ---- 真 fixture 生成 (raw bytes, 不用生产写端) ----
-
-    /// 手写 PDF: N 页, 每页若干行文字 (Tj + Td 定位)。返回真实 PDF 字节。
-    fn fixture_pdf(pages: &[&[&str]]) -> Vec<u8> {
-        fixture_pdf_with_trailer(pages, None)
-    }
-
-    /// 手写 PDF + 可选 trailer 附加项 (加密标记检测用真形状)。
-    fn fixture_pdf_with_trailer(pages: &[&[&str]], trailer_extra: Option<&str>) -> Vec<u8> {
-        let n = pages.len();
-        let font_num = 3 + 2 * n;
-        let mut objects: Vec<(u32, Vec<u8>)> = Vec::new();
-
-        let kids: Vec<String> = (0..n)
-            .map(|index| format!("{} 0 R", 3 + 2 * index))
-            .collect();
-        objects.push((1, format!("<< /Type /Catalog /Pages 2 0 R >>").into_bytes()));
-        objects.push((
-            2,
-            format!("<< /Type /Pages /Kids [{}] /Count {n} >>", kids.join(" ")).into_bytes(),
-        ));
-        for (index, lines) in pages.iter().enumerate() {
-            let page_num = 3 + 2 * index;
-            let content_num = page_num + 1;
-            objects.push((
-                page_num as u32,
-                format!(
-                    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] \
-                     /Resources << /Font << /F1 {font_num} 0 R >> >> \
-                     /Contents {content_num} 0 R >>"
-                )
-                .into_bytes(),
-            ));
-            let mut body = String::from("BT\n/F1 12 Tf\n72 720 Td\n");
-            for (line_index, line) in lines.iter().enumerate() {
-                if line_index > 0 {
-                    body.push_str("0 -14 Td\n");
-                }
-                body.push('(');
-                body.push_str(line);
-                body.push_str(") Tj\n");
-            }
-            body.push_str("ET\n");
-            objects.push((
-                content_num as u32,
-                format!("<< /Length {} >>\nstream\n{body}endstream", body.len()).into_bytes(),
-            ));
-        }
-        objects.push((
-            font_num as u32,
-            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
-                .to_vec(),
-        ));
-        assemble_pdf(&objects, trailer_extra)
-    }
-
-    /// 手写 PDF, 单页内容流用 FlateDecode (zlib) 压缩 —— 真压缩 fixture。
-    fn fixture_pdf_flate(lines: &[&str]) -> Vec<u8> {
-        use std::io::Write;
-        let mut body = String::from("BT\n/F1 12 Tf\n72 720 Td\n");
-        for (index, line) in lines.iter().enumerate() {
-            if index > 0 {
-                body.push_str("0 -14 Td\n");
-            }
-            body.push('(');
-            body.push_str(line);
-            body.push_str(") Tj\n");
-        }
-        body.push_str("ET\n");
-        let mut encoder =
-            flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
-        encoder.write_all(body.as_bytes()).expect("压缩内容流");
-        let compressed = encoder.finish().expect("收尾压缩器");
-        let objects: Vec<(u32, Vec<u8>)> = vec![
-            (1, b"<< /Type /Catalog /Pages 2 0 R >>".to_vec()),
-            (2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec()),
-            (
-                3,
-                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] \
-                   /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
-                    .to_vec(),
-            ),
-            (
-                4,
-                format!(
-                    "<< /Length {} /Filter /FlateDecode >>\nstream\n",
-                    compressed.len()
-                )
-                .into_bytes(),
-            ),
-            (
-                5,
-                b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
-                    .to_vec(),
-            ),
-        ];
-        // 压缩流要拼进对象 4: 手工组装 (数据在流关键字之后)。
-        let mut out: Vec<u8> = Vec::new();
-        out.extend_from_slice(b"%PDF-1.4\n");
-        let mut offsets = vec![0usize; objects.len() + 1];
-        for (num, body_bytes) in &objects {
-            offsets[*num as usize] = out.len();
-            out.extend_from_slice(format!("{num} 0 obj\n").as_bytes());
-            out.extend_from_slice(body_bytes);
-            if *num == 4 {
-                out.extend_from_slice(&compressed);
-                out.extend_from_slice(b"\nendstream");
-            }
-            out.extend_from_slice(b"\nendobj\n");
-        }
-        append_xref(&mut out, &offsets, objects.len(), None);
-        out
-    }
-
-    /// 按对象表拼 PDF (算 xref 偏移)。
-    fn assemble_pdf(objects: &[(u32, Vec<u8>)], trailer_extra: Option<&str>) -> Vec<u8> {
-        let count = objects.iter().map(|(num, _)| *num).max().unwrap_or(0);
-        let mut out: Vec<u8> = b"%PDF-1.4\n".to_vec();
-        let mut offsets = vec![0usize; count as usize + 1];
-        for (num, body) in objects {
-            offsets[*num as usize] = out.len();
-            out.extend_from_slice(format!("{num} 0 obj\n").as_bytes());
-            out.extend_from_slice(body);
-            out.extend_from_slice(b"\nendobj\n");
-        }
-        append_xref(&mut out, &offsets, count as usize, trailer_extra);
-        out
-    }
-
-    /// 追加 xref 表 + trailer + startxref。
-    fn append_xref(
-        out: &mut Vec<u8>,
-        offsets: &[usize],
-        count: usize,
-        trailer_extra: Option<&str>,
-    ) {
-        let xref_at = out.len();
-        out.extend_from_slice(format!("xref\n0 {}\n", count + 1).as_bytes());
-        out.extend_from_slice(b"0000000000 65535 f \n");
-        for offset in &offsets[1..] {
-            out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
-        }
-        let extra = trailer_extra.unwrap_or_default();
-        out.extend_from_slice(
-            format!(
-                "trailer\n<< /Size {} /Root 1 0 R {extra}>>\nstartxref\n{xref_at}\n%%EOF\n",
-                count + 1
-            )
-            .as_bytes(),
-        );
-    }
 
     /// ZIP CRC32 (真 fixture 的完整性字段)。
     fn crc32(data: &[u8]) -> u32 {
@@ -4860,36 +4762,6 @@ mod tests {
     }
 
     // ---- 测试装配 ----
-
-    /// 每测试独立临时工作区。
-    fn workspace(tag: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("apeireth-doc-ops-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&p);
-        let dir = p.join("ws");
-        std::fs::create_dir_all(&dir).expect("创建测试工作区");
-        dir
-    }
-
-    /// 写 fixture 进工作区, 返回 (配置, 文件名)。
-    ///
-    /// 测试装配显式开写总闸 (生产由组装根注入 `file_write` 同一开关值)。
-    fn with_input(tag: &str, name: &str, bytes: &[u8]) -> (DocOpsConfig, String) {
-        let root = workspace(tag);
-        std::fs::write(root.join(name), bytes).expect("落 fixture");
-        (
-            DocOpsConfig::new(root).with_write_gate(true),
-            name.to_string(),
-        )
-    }
-
-    /// 参数快捷构造。
-    fn params(action: &str, input: &str) -> DocOpsParams {
-        DocOpsParams {
-            action: Some(action.to_string()),
-            input: Some(input.to_string()),
-            ..DocOpsParams::default()
-        }
-    }
 
     /// PDF 字节 → 逐页文本 (复用生产读端做行为核对)。
     fn pages_text(bytes: &[u8]) -> Vec<String> {
@@ -5298,24 +5170,70 @@ mod tests {
     /// ⑯ 开关 fail-closed: 只认显式 `"1"`。
     #[test]
     fn the_switch_is_fail_closed_except_the_exact_opt_in() {
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        std::env::remove_var(DOC_OPS_ENABLE_ENV);
-        assert!(!doc_ops_enabled_from_env());
-        assert!(DocOpsConfig::from_env(".").is_none());
-        for value in ["0", "true", "on", " 1 0 ", ""] {
-            std::env::set_var(DOC_OPS_ENABLE_ENV, value);
-            assert!(!doc_ops_enabled_from_env(), "必须拒绝 {value:?}");
-            assert!(DocOpsConfig::from_env(".").is_none(), "必须拒绝 {value:?}");
+        crate::test_support::assert_switch_fails_closed_except_exact_one(
+            DOC_OPS_ENABLE_ENV,
+            &["0", "true", "on", " 1 0 ", ""],
+            doc_ops_enabled_from_env,
+            Some(|| DocOpsConfig::from_env(".").is_some()),
+        );
+    }
+
+    /// ㉔ 禁填字段面: 该动作**不消费**的参数一律拒绝即帧 (不多给字段)。
+    ///
+    /// 旧实现只做「必填」不做「禁填」: 多给的字段被静默吞掉, 模型侧看不出
+    /// 「这个参数根本没生效」(与 `sheet_ops` 的同名字段集合同一把尺)。
+    #[test]
+    fn forbidden_fields_for_the_action_are_refused() {
+        let bytes = fixture_pdf(&[&["alpha"]]);
+        let (config, name) = with_input("forbidden", "sample.pdf", &bytes);
+
+        // 读面动作 (`pdf_info`) 只吃 `input`: 多给 `pages` / `watermark_text` /
+        // `output` / `max_chars` 一律拒绝即帧。
+        for (field, value) in [
+            ("pages", json!([1, 2])),
+            ("watermark_text", json!("WM")),
+            ("output", json!("out.pdf")),
+            ("max_chars", json!(10)),
+        ] {
+            let mut arguments = json!({"action": ACTION_PDF_INFO, "input": name.clone()});
+            arguments[field] = value;
+            let call: DocOpsParams = serde_json::from_value(arguments).expect("参数可解析");
+            let error = DocOpsRunner::new(config.clone())
+                .run(&call)
+                .expect_err(&format!("禁填字段 {field} 必须拒绝"));
+            assert!(
+                error.message().contains("不接受参数"),
+                "拒帧必须说明禁填字段: {}",
+                error.message()
+            );
         }
-        std::env::set_var(DOC_OPS_ENABLE_ENV, "1");
-        assert!(doc_ops_enabled_from_env());
-        assert!(DocOpsConfig::from_env(".").is_some());
-        std::env::set_var(DOC_OPS_ENABLE_ENV, " 1 ");
-        assert!(doc_ops_enabled_from_env(), "前后空白容忍");
-        std::env::remove_var(DOC_OPS_ENABLE_ENV);
+
+        // 写面动作 (`pdf_merge`) 只吃 `inputs` / `output`: 多给 `input` 拒绝即帧。
+        let merge = DocOpsParams {
+            action: Some(ACTION_PDF_MERGE.to_string()),
+            inputs: Some(vec![name.clone(), name.clone()]),
+            output: Some("merged.pdf".to_string()),
+            input: Some(name.clone()),
+            ..DocOpsParams::default()
+        };
+        let error = DocOpsRunner::new(config.clone())
+            .run(&merge)
+            .expect_err("禁填字段 input 必须拒绝");
+        assert!(
+            error.message().contains("不接受参数"),
+            "拒帧必须说明禁填字段: {}",
+            error.message()
+        );
+
+        // 合法调用不受影响 (字段集合逐项相符 ⇒ 放行)。
+        let ok = DocOpsParams {
+            action: Some(ACTION_PDF_MERGE.to_string()),
+            inputs: Some(vec![name.clone(), name.clone()]),
+            output: Some("merged.pdf".to_string()),
+            ..DocOpsParams::default()
+        };
+        let runner = DocOpsRunner::new(config);
+        assert!(runner.run(&ok).is_ok(), "字段集合相符的调用必须放行");
     }
 
     // ---- 治理面行为钉 ----

@@ -82,7 +82,7 @@ claims:
     tests:
       - crates/capabilities/tools/src/mcp_bridge/config.rs
       - crates/capabilities/tools/src/mcp_bridge/catalog.rs
-    verified_at: c9251271
+    verified_at: 97d93439f95f346ba107759c9dec3303e7278c77
     verify_cmd: "cargo test -p apeireth-tools-canonical mcp_bridge"
     owner: tools
     next_review: "2026-11-20"
@@ -100,7 +100,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: c9251271
+    verified_at: e2f1c885
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -321,7 +321,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: c9251271
+    verified_at: da85caf59114d32d547f5f2cf814d7e95977d8cb
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -369,7 +369,7 @@ claims:
       - .github/workflows/rust.yml
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: c9251271
+    verified_at: 4c2eee63
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
@@ -385,7 +385,7 @@ claims:
       - docs/04-internal/governance-chain-drill-2026-10-20.md
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: c9251271
+    verified_at: 2f9ca243
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill"
     owner: governance
     next_review: "2026-11-20"

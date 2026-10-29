@@ -239,15 +239,28 @@ impl ProtocolAdapter for OpenAiChatAdapter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let args_str = tc
-                    .get("function")
-                    .and_then(|f| f.get("arguments"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("{}");
-                let arguments = match serde_json::from_str(args_str) {
-                    Ok(value) => value,
-                    Err(_) => {
-                        malformed_tool_arguments.push(args_str.to_string());
+                // 工具调用参数归一口径（**规范形态 = JSON object**，
+                // 见 `normalized.rs:340`「参数 (JSON object 风格, 内部统一 object)」）：
+                //   · 缺 `arguments` / `null` ⇒ `Null` —— **不得**回落成 `{}`：
+                //     那会让工具侧拿到一个**看起来像「无参数」**的调用，掩盖「参数没了」
+                //     （provider 层 `parse_response_absent_tool_arguments_stay_null`
+                //     已把「缺失 ⇒ Null」钉成契约）。
+                //   · JSON 字符串 ⇒ 解析它；解析失败 ⇒ `Null` + 原文记入排障面（L4 口径）。
+                //   · **对象** ⇒ **原样保留**（就是规范形态）。
+                //   · 数组 / 数字 / 布尔 ⇒ 非 object 的非规范形态 ⇒ `Null` + 原文记入排障面
+                //     —— **不得**静默吞成 `{}`（真参数无声消失，调用方无从得知）。
+                let arguments = match tc.get("function").and_then(|f| f.get("arguments")) {
+                    None | Some(Value::Null) => Value::Null,
+                    Some(Value::String(text)) => match serde_json::from_str(text) {
+                        Ok(value) => value,
+                        Err(_) => {
+                            malformed_tool_arguments.push(text.clone());
+                            Value::Null
+                        }
+                    },
+                    Some(value @ Value::Object(_)) => value.clone(),
+                    Some(other) => {
+                        malformed_tool_arguments.push(other.to_string());
                         Value::Null
                     }
                 };
@@ -309,6 +322,77 @@ impl ProtocolAdapter for OpenAiChatAdapter {
 }
 
 #[cfg(test)]
+
+/// 工具调用参数归一**绝不静默吞掉真参数**（回归测试）。
+///
+/// 契约（`normalized.rs:340`）：参数**规范形态 = JSON object**；
+/// provider 层 `parse_response_absent_tool_arguments_stay_null`：「非字符串 (缺失) 形态 ⇒ Null」。
+/// ⇒ 缺字段 / 非字符串形态**都不得**回落成 `{}`（那会让工具侧拿到一个
+/// **看起来像「无参数」**的调用，掩盖「参数没了」）。
+#[test]
+fn tool_arguments_never_silently_become_an_empty_object() {
+    let adapter = OpenAiChatAdapter::new();
+    // ① 非字符串形态（对象）⇒ 原样保留（就是规范形态）。
+    let object_args = serde_json::json!({"command": "rm -rf /"});
+    let raw = serde_json::json!({
+        "id": "chatcmpl-x", "model": "gpt-4o",
+        "choices": [{"message": {"role": "assistant", "content": null,
+            "tool_calls": [{"id": "call_1", "type": "function",
+                "function": {"name": "tool.shell", "arguments": object_args}}]},
+            "finish_reason": "tool_calls"}]
+    });
+    let response = adapter.adapt_response(&raw).expect("合法响应可归一");
+    assert_eq!(
+        response.tool_calls[0].arguments,
+        serde_json::json!({"command": "rm -rf /"}),
+        "对象形态必须原样保留（真参数不能丢）"
+    );
+    // ② 数组 / 数字 / 布尔 ⇒ 非 object 的非规范形态 ⇒ Null + 记入排障面。
+    for malformed in [
+        serde_json::json!([1, 2]),
+        serde_json::json!(42),
+        serde_json::json!(true),
+    ] {
+        let raw = serde_json::json!({
+            "id": "chatcmpl-x", "model": "gpt-4o",
+            "choices": [{"message": {"role": "assistant", "content": null,
+                "tool_calls": [{"id": "call_1", "type": "function",
+                    "function": {"name": "tool.shell", "arguments": malformed}}]},
+                "finish_reason": "tool_calls"}]
+        });
+        let response = adapter.adapt_response(&raw).expect("响应可归一");
+        assert_eq!(
+            response.tool_calls[0].arguments,
+            serde_json::Value::Null,
+            "非 object 的非规范形态必须 Null（不得静默成 {{}}）: {malformed}"
+        );
+        let recorded = response
+            .raw_metadata
+            .get("malformed_tool_arguments")
+            .and_then(|v| v.as_array())
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        assert!(
+            recorded,
+            "非规范形态必须记入排障面（否则调用方无从得知）: {malformed}"
+        );
+    }
+    // ③ 缺 `arguments` ⇒ Null（对齐 provider 层既有契约），**不得**是 `{}`。
+    let raw = serde_json::json!({
+        "id": "chatcmpl-x", "model": "gpt-4o",
+        "choices": [{"message": {"role": "assistant", "content": null,
+            "tool_calls": [{"id": "call_1", "type": "function",
+                "function": {"name": "tool.shell"}}]},
+            "finish_reason": "tool_calls"}]
+    });
+    let response = adapter.adapt_response(&raw).expect("响应可归一");
+    assert_eq!(
+        response.tool_calls[0].arguments,
+        serde_json::Value::Null,
+        "缺 arguments 必须是 Null（provider 层已钉此契约），不得回落成 {{}}"
+    );
+}
+
 mod tests {
     use super::*;
     use crate::normalized::{NormalizedMessage, NormalizedTool};

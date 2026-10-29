@@ -199,7 +199,22 @@ impl ToolCapability for NmapTool {
             return ToolResult::permanent_error(&call.id, format!("scope refused: {error}"))
                 .with_name("ext.nmap");
         }
-        let ports = object.get("ports").and_then(Value::as_str);
+        // ports：声明 external.rs:173-174「"ports": {"type": "string", "maxLength": 128}」。
+        // 非字符串不能被静默当成「没给 ports」—— 那会让**端口约束整个被跳过**，
+        // 扫描面反而变宽到 nmap 的默认端口集（fail-open）。
+        let ports = match object.get("ports") {
+            None => None,
+            Some(value) => {
+                let Some(ports) = value.as_str() else {
+                    return ToolResult::permanent_error(
+                        &call.id,
+                        "ext.nmap ports must be a string",
+                    )
+                    .with_name("ext.nmap");
+                };
+                Some(ports)
+            }
+        };
         if let Some(ports) = ports {
             if ports.is_empty()
                 || ports.len() > 128
@@ -211,11 +226,32 @@ impl ToolCapability for NmapTool {
                     .with_name("ext.nmap");
             }
         }
-        let service_detection = object
-            .get("service_detection")
-            .and_then(Value::as_bool)
-            .unwrap_or(true);
-        let syn = object.get("syn").and_then(Value::as_bool).unwrap_or(false);
+        // service_detection / syn：声明 external.rs:175-178「"type": "boolean"」。
+        // 非布尔不能被静默变成默认值（`service_detection: "false"` 反而照样开 -sV，
+        // 比调用方要的探测更多）。
+        let service_detection = match object.get("service_detection") {
+            None => true,
+            Some(value) => {
+                let Some(flag) = value.as_bool() else {
+                    return ToolResult::permanent_error(
+                        &call.id,
+                        "ext.nmap service_detection must be a boolean",
+                    )
+                    .with_name("ext.nmap");
+                };
+                flag
+            }
+        };
+        let syn = match object.get("syn") {
+            None => false,
+            Some(value) => {
+                let Some(flag) = value.as_bool() else {
+                    return ToolResult::permanent_error(&call.id, "ext.nmap syn must be a boolean")
+                        .with_name("ext.nmap");
+                };
+                flag
+            }
+        };
 
         let scan_mode: OsString = if syn { "-sS".into() } else { "-sT".into() };
         let mut args: Vec<OsString> = vec!["-oX".into(), "-".into(), "-n".into(), scan_mode];
@@ -1596,12 +1632,50 @@ impl ToolCapability for OpenSslTool {
             return ToolResult::permanent_error(&call.id, "ext.openssl requires a string host")
                 .with_name("ext.openssl");
         };
-        let port = object.get("port").and_then(Value::as_u64).unwrap_or(443);
+        // port：「没给」与「给了个畸形值」必须分开。
+        //
+        // 旧写法 `object.get("port").and_then(Value::as_u64).unwrap_or(443)` 把两者
+        // 混为一谈 ⇒ 负数 / 浮点 / 字符串 / 布尔 / null 全部**静默变成 443**，
+        // 即「调用方要的端口」与「实际连的端口」不是一回事（fail-open）。
+        //
+        // 契约出处：声明 external.rs:1577-1578
+        //   「"port": {"type": "integer", "minimum": 1, "maximum": 65535}」；
+        //   同 crate 的 `re.net.recon` 对非整数端口明确报「ports must be integers」
+        //   （recon_tool.rs:529-531）。
+        let port = match object.get("port") {
+            None => 443u64,
+            Some(value) => {
+                let Some(port) = value.as_u64() else {
+                    // 负数是「整数但越界」，其余（浮点/字符串/布尔/null/数组/对象）是「非整数」。
+                    let message = if value.is_i64() {
+                        "port out of range"
+                    } else {
+                        "ext.openssl port must be an integer"
+                    };
+                    return ToolResult::permanent_error(&call.id, message).with_name("ext.openssl");
+                };
+                port
+            }
+        };
         if !(1..=65535).contains(&port) {
             return ToolResult::permanent_error(&call.id, "port out of range")
                 .with_name("ext.openssl");
         }
-        let sni = object.get("sni").and_then(Value::as_str);
+        // sni：声明 external.rs:1579-1580「"sni": {"type": "string"}」。
+        // 非字符串不能被静默当成「没给 sni」（那会让 TLS 身份悄悄变成 host 的）。
+        let sni = match object.get("sni") {
+            None => None,
+            Some(value) => {
+                let Some(sni) = value.as_str() else {
+                    return ToolResult::permanent_error(
+                        &call.id,
+                        "ext.openssl sni must be a string",
+                    )
+                    .with_name("ext.openssl");
+                };
+                Some(sni)
+            }
+        };
         if let Ok(address) = host.parse::<std::net::IpAddr>() {
             if let Err(error) = self.scope.check_address(address) {
                 return ToolResult::permanent_error(&call.id, format!("scope refused: {error}"))
@@ -1806,6 +1880,83 @@ mod tests {
             ToolOutcome::Ok { value } => value,
             other => panic!("expected ok, got {other:?}"),
         }
+    }
+
+    fn error_message(result: ToolResult) -> String {
+        match result.outcome {
+            ToolOutcome::Error { message, .. } => message,
+            other => panic!("expected error, got {other:?}"),
+        }
+    }
+
+    /// **畸形参数必须被拒，不能悄悄回落成默认值**（2026-10-25 fuzz 发现）。
+    ///
+    /// 契约出处：
+    /// * 声明 external.rs:173-178 —— `"ports": {"type": "string", "maxLength": 128}`、
+    ///   `"service_detection": {"type": "boolean"}`、`"syn": {"type": "boolean"}`；
+    /// * 实现自己的守门 external.rs:202-218（ports 只允许 `[0-9,-]` 且非空、≤128 字符；
+    ///   两个开关是布尔）。
+    ///
+    /// 修复前：`ports` 非字符串 ⇒ 被 `as_str` 静默丢成「没给 ports」⇒
+    /// **端口约束整个被跳过**（扫描面反而变宽到 nmap 的默认端口集，fail-open）；
+    /// 两个开关非布尔 ⇒ 被 `unwrap_or(默认值)` 静默变成默认值
+    /// （`service_detection: "false"` 反而照样开 `-sV`，比调用方要的探测更多）。
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn nmap_rejects_malformed_ports_and_flags() {
+        let workspace = temp_workspace("nmap-malformed");
+        let tool = NmapTool::new(local_scope()).with_binary(workspace.join("no-such-binary"));
+
+        for ports in [
+            json!(22),
+            json!(true),
+            json!(null),
+            json!(["22"]),
+            json!({ "p": 22 }),
+        ] {
+            let result = tool
+                .invoke(&call(
+                    "ext.nmap",
+                    json!({"target": "127.0.0.1", "ports": ports}),
+                ))
+                .await;
+            let message = error_message(result);
+            assert_eq!(message, "ext.nmap ports must be a string", "ports={ports}");
+        }
+
+        for (key, value) in [
+            ("service_detection", json!("false")),
+            ("service_detection", json!(1)),
+            ("syn", json!("true")),
+            ("syn", json!(null)),
+        ] {
+            let mut arguments = serde_json::Map::new();
+            arguments.insert("target".to_string(), json!("127.0.0.1"));
+            arguments.insert(key.to_string(), value.clone());
+            let result = tool
+                .invoke(&call("ext.nmap", Value::Object(arguments)))
+                .await;
+            let message = error_message(result);
+            assert_eq!(
+                message,
+                format!("ext.nmap {key} must be a boolean"),
+                "key={key} value={value}"
+            );
+        }
+
+        // 合法参数仍然放行到进程边界（守门不能把合法调用也拒了）。
+        let result = tool
+            .invoke(&call(
+                "ext.nmap",
+                json!({"target": "127.0.0.1", "ports": "22,80", "syn": false}),
+            ))
+            .await;
+        let message = error_message(result);
+        assert!(
+            message.starts_with("cannot start "),
+            "合法参数被拒: {message}"
+        );
+        std::fs::remove_dir_all(&workspace).ok();
     }
 
     #[cfg(unix)]
@@ -2337,6 +2488,90 @@ mod openssl_syn_tests {
             ToolOutcome::Ok { value } => value,
             other => panic!("expected ok, got {other:?}"),
         }
+    }
+
+    fn error_message(result: ToolResult) -> String {
+        match result.outcome {
+            ToolOutcome::Error { message, .. } => message,
+            other => panic!("expected error, got {other:?}"),
+        }
+    }
+
+    /// **畸形参数必须被拒，不能悄悄回落成默认值**（2026-10-25 fuzz 发现）。
+    ///
+    /// 契约出处：
+    /// * 声明 external.rs:1577-1580 —— `"port": {"type": "integer", "minimum": 1,
+    ///   "maximum": 65535}`、`"sni": {"type": "string"}`；
+    /// * 实现自己的端口守门 external.rs:1599-1603
+    ///   （`!(1..=65535).contains(&port)` → "port out of range"）；
+    /// * 同 crate 的 `re.net.recon` 对非整数端口明确报「ports must be integers」
+    ///   （recon_tool.rs:529-531）—— 同一族工具的同款约定。
+    ///
+    /// 修复前：`object.get("port").and_then(Value::as_u64).unwrap_or(443)` 把
+    /// 「没给 port」与「给了个非 u64 的 port」混为一谈 ⇒ 负数 / 浮点 / 字符串 /
+    /// 布尔 / null **全部静默变成 443**（调用方要的端口与实际连的端口不是一回事，
+    /// fail-open）；`sni` 同理被 `as_str` 静默丢弃（TLS 身份悄悄变成 host 的）。
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn openssl_rejects_malformed_port_and_sni() {
+        let workspace = dir("malformed");
+        let tool =
+            OpenSslTool::new(scope_localhost()).with_binary(workspace.join("no-such-binary"));
+
+        for (port, expected) in [
+            (json!(-1), "port out of range"),
+            (json!(0), "port out of range"),
+            (json!(65536), "port out of range"),
+            (json!(u64::MAX), "port out of range"),
+            (json!("443"), "ext.openssl port must be an integer"),
+            (json!(443.5), "ext.openssl port must be an integer"),
+            (json!(true), "ext.openssl port must be an integer"),
+            (json!(null), "ext.openssl port must be an integer"),
+            (json!([443]), "ext.openssl port must be an integer"),
+        ] {
+            let result = tool
+                .invoke(&ToolCall {
+                    id: "c".into(),
+                    name: "ext.openssl".into(),
+                    arguments: json!({"host": "127.0.0.1", "port": port}),
+                })
+                .await;
+            let message = error_message(result);
+            assert_eq!(message, expected, "port={port}");
+        }
+
+        for sni in [
+            json!(1),
+            json!(true),
+            json!(null),
+            json!(["a"]),
+            json!({"a": 1}),
+        ] {
+            let result = tool
+                .invoke(&ToolCall {
+                    id: "c".into(),
+                    name: "ext.openssl".into(),
+                    arguments: json!({"host": "127.0.0.1", "sni": sni}),
+                })
+                .await;
+            let message = error_message(result);
+            assert_eq!(message, "ext.openssl sni must be a string", "sni={sni}");
+        }
+
+        // 合法端口仍然放行到进程边界（守门不能把合法调用也拒了）。
+        let result = tool
+            .invoke(&ToolCall {
+                id: "c".into(),
+                name: "ext.openssl".into(),
+                arguments: json!({"host": "127.0.0.1", "port": 8443}),
+            })
+            .await;
+        let message = error_message(result);
+        assert!(
+            message.starts_with("cannot start "),
+            "合法参数被拒: {message}"
+        );
+        std::fs::remove_dir_all(&workspace).ok();
     }
 
     fn scope_localhost() -> Arc<Scope> {

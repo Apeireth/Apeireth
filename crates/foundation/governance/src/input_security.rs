@@ -301,7 +301,20 @@ pub const REDACTION_FINGERPRINT_HEX_LEN: usize = 12;
 // 严格解析面: `__AP_<CATEGORY>_<12 位小写 hex>__`。贪婪/懒惰歧义由固定长度
 // 的指纹段消解 —— 类别段吃到指纹前最后一个下划线为止。
 static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"__AP_([A-Z][A-Z0-9_]*?)_([0-9a-f]{12})__")
+    // 占位符正则的**类别组不允许含连续下划线**（2026-10-25 fuzz 发现的真缺陷）。
+    //
+    // 原式 `([A-Z][A-Z0-9_]*?)` 的类别组是**贪婪**的：它会一路吞掉 `__`，
+    // 于是「畸形前缀 + 合法占位符」被当成**一个**匹配，类别解析成
+    // `EMAIL__AP_EMAIL`（非法）⇒ **整个匹配被丢弃** ⇒ 后面那个**合法**占位符
+    // **整个不被识别**。实测 `__AP_EMAIL__` + `__AP_EMAIL_a1b2c3d4e5f6__`
+    // ⇒ `scan` 返回 0（契约要求「Every well-formed placeholder occurrence」）。
+    // 影响不只是漏还原：漏掉的占位符**连 skipped 都不记** ⇒ 破坏
+    // 「未登记占位符不还原、**照实留痕**」的审计承诺，且可被模型输出里的
+    // `__AP_EMAIL__` 触发。
+    // 修法：类别组改为 `[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*` —— 单个下划线分隔、
+    // **连续下划线不匹配** ⇒ 合法类别（`CREDENTIAL_KEY` / `ENV_SECRET` …）照旧，
+    // 而 `EMAIL__AP_EMAIL` 不再吞并。
+    Regex::new(r"__AP_([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)_([0-9a-f]{12})__")
         .expect("static placeholder pattern must compile")
 });
 
@@ -1155,5 +1168,57 @@ mod tests {
             .evaluate(&dispatch_request(&cap, &args, 1))
             .await
             .is_allowed());
+    }
+
+    /// **回归**：占位符扫描**必须**找出文本里**每一个**合法占位符（2026-10-25 fuzz 发现的真缺陷）。
+    ///
+    /// 原正则的类别组 `([A-Z][A-Z0-9_]*?)` **贪婪**吞掉 `__` ⇒
+    /// 「畸形前缀 + 合法占位符」被当成一个匹配，类别非法 ⇒ **整个被丢弃** ⇒
+    /// 后面那个**合法**占位符整个不被识别。
+    /// 实测 `__AP_EMAIL__` + `__AP_EMAIL_a1b2c3d4e5f6__` ⇒ `scan` 返回 0。
+    ///
+    /// 影响不只是漏还原：漏掉的占位符**连 skipped 都不记** ⇒ 破坏
+    /// 「未登记占位符不还原、**照实留痕**」的审计承诺，且可被模型输出里的
+    /// `__AP_EMAIL__` 触发。
+    #[test]
+    fn scan_finds_every_well_formed_placeholder_even_behind_a_malformed_one() {
+        let token = "__AP_EMAIL_a1b2c3d4e5f6__";
+        for prefix in ["", "__AP_EMAIL__", "__AP_", "X", "__", "__AP_EMAIL_X__"] {
+            let text = format!("{prefix}{token}");
+            let matches = RedactionPlaceholder::scan(&text);
+            assert_eq!(
+                matches.len(),
+                1,
+                "前缀 {prefix:?} 下的合法占位符必须被扫出: {text:?}"
+            );
+            assert_eq!(matches[0].start, prefix.len());
+            assert_eq!(&text[matches[0].start..matches[0].end], token);
+        }
+    }
+
+    /// **回归**：合法类别（含单下划线）必须照旧被扫出（正则收紧不得误伤）。
+    #[test]
+    fn scan_still_accepts_every_legal_category() {
+        for category in [
+            "EMAIL",
+            "PHONE",
+            "CREDENTIAL_KEY",
+            "SSN",
+            "CREDIT_CARD",
+            "IP_ADDRESS",
+            "CREDENTIAL_URL",
+            "ENV_SECRET",
+            "FEELING",
+        ] {
+            let token = format!("__AP_{category}_a1b2c3d4e5f6__");
+            let matches = RedactionPlaceholder::scan(&token);
+            assert_eq!(matches.len(), 1, "合法类别 {category} 必须被扫出");
+            // `label()` 返回小写标签（`EMAIL` ⇒ "email"）—— 我第一版按大写断言，
+            // 那是**我的断言写错**，不是产品缺陷。
+            assert_eq!(
+                matches[0].placeholder.kind.label(),
+                category.to_ascii_lowercase()
+            );
+        }
     }
 }

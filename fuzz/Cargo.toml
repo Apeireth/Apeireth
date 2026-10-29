@@ -23,8 +23,11 @@ serde_json = "1"
 apeireth-protocol = { path = "../crates/foundation/protocol" }
 apeireth-gateway = { path = "../crates/adapters/gateway" }
 apeireth-tools-canonical = { path = "../crates/capabilities/tools" }
+apeireth-runtime = { path = "../crates/engine/runtime" }
+apeireth-sdk = { path = "../crates/adapters/sdk" }
 apeireth-plugin = { path = "../crates/foundation/plugin" }
 apeireth-governance = { path = "../crates/foundation/governance" }
+apeireth-credentials = { path = "../crates/foundation/credentials" }
 apeireth-core = { path = "../crates/foundation/core" }
 
 [profile.release]
@@ -138,6 +141,293 @@ bench = false
 [[bin]]
 name = "recon_scope"
 path = "fuzz_targets/recon_scope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sensitive_path"
+path = "fuzz_targets/sensitive_path.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "write_intent"
+path = "fuzz_targets/write_intent.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "domain_context"
+path = "fuzz_targets/domain_context.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filesystem"
+path = "fuzz_targets/filesystem.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "external"
+path = "fuzz_targets/external.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "apply_patch"
+path = "fuzz_targets/apply_patch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "egress"
+path = "fuzz_targets/egress.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "git_write"
+path = "fuzz_targets/git_write.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_entry"
+path = "fuzz_targets/canonical_entry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "input_security"
+path = "fuzz_targets/input_security.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "chain_audit"
+path = "fuzz_targets/chain_audit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_governance"
+path = "fuzz_targets/mcp_governance.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "approval_policy"
+path = "fuzz_targets/approval_policy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "im_payload"
+path = "fuzz_targets/im_payload.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exec_pipeline"
+path = "fuzz_targets/exec_pipeline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_binding"
+path = "fuzz_targets/canonical_binding.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_schema"
+path = "fuzz_targets/mcp_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "post_execute"
+path = "fuzz_targets/post_execute.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "credentials"
+path = "fuzz_targets/credentials.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tool_params"
+path = "fuzz_targets/tool_params.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "proposal"
+path = "fuzz_targets/proposal.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "spill_access"
+path = "fuzz_targets/spill_access.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stealth_crawler"
+path = "fuzz_targets/stealth_crawler.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "guard_supervisor"
+path = "fuzz_targets/guard_supervisor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fetch_image"
+path = "fuzz_targets/fetch_image.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "self_status"
+path = "fuzz_targets/self_status.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "backup"
+path = "fuzz_targets/backup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "search"
+path = "fuzz_targets/search.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "repo_map"
+path = "fuzz_targets/repo_map.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exposure_audit"
+path = "fuzz_targets/exposure_audit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "weather"
+path = "fuzz_targets/weather.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_sense"
+path = "fuzz_targets/device_sense.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "education"
+path = "fuzz_targets/education.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "skill_search"
+path = "fuzz_targets/skill_search.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "guard_watch"
+path = "fuzz_targets/guard_watch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_control"
+path = "fuzz_targets/device_control.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "path_guard"
+path = "fuzz_targets/path_guard.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "doc_ops"
+path = "fuzz_targets/doc_ops.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "content_feed"
+path = "fuzz_targets/content_feed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "worktree_apply"
+path = "fuzz_targets/worktree_apply.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sheet_ops"
+path = "fuzz_targets/sheet_ops.rs"
 test = false
 doc = false
 bench = false

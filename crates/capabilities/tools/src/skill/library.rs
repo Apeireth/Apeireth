@@ -330,28 +330,16 @@ impl SkillLibrary {
             vec![SKILL_AUDIT_DOC_VERSION],
             entry,
         );
-        let line = serde_json::to_vec(&doc).map_err(|error| SkillLibraryError::Io {
-            path: self.audit_path(),
-            source: std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("审计序列化失败: {error}"),
-            ),
-        })?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(self.audit_path())
-            .map_err(|source| SkillLibraryError::Io {
+        // ⚠️ **2026-10-26 修同族缺陷**：原写法是**两次写**（行体一次、换行一次）
+        // ⇒ **并发写者**可以在两次写之间插进来 ⇒ ⇒ **两行被挤成一行** ⇒ 记录丢失。
+        // ⇒ 改用**共用原语** `crate::proposal::append_jsonl_row`
+        // （四个逐记录追加器**全部**用它 ⇒ 一个实现、不分叉）。
+        crate::proposal::append_jsonl_row(&self.audit_path(), "技能卡审计账", &doc).map_err(
+            |error| SkillLibraryError::Io {
                 path: self.audit_path(),
-                source,
-            })?;
-        file.write_all(&line)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|source| SkillLibraryError::Io {
-                path: self.audit_path(),
-                source,
-            })
+                source: std::io::Error::other(error),
+            },
+        )
     }
 }
 
@@ -382,6 +370,50 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("创建测试目录");
         dir
+    }
+
+    /// 回归（2026-10-26）：**撕裂写后追加不许把旧行吞掉**（技能卡版本审计账）。
+    ///
+    /// 旧实现是**两次写**（行体一次、换行一次）⇒ 末行缺换行时，下一次追加会把
+    /// **旧行与新行粘成一行** ⇒ 旧行读不出来（看着像「坏行」，实则是**丢记录**）。
+    #[test]
+    fn appending_audit_after_a_torn_line_keeps_every_row_readable() {
+        let root = temp_root("torn-audit");
+        let library = SkillLibrary::new(&root);
+
+        // 第一次入库（**不写审计行** —— 审计行是「版本演进时归档旧版」才写的）。
+        let _ = library
+            .create(&draft("换元法", "步骤一"), 1_000)
+            .expect("create");
+        // 演一版 ⇒ 归档旧版 ⇒ 写入第一条审计行。
+        let _ = library
+            .update(&draft("换元法", "步骤二"), 2_000)
+            .expect("update v2");
+
+        // 制造撕裂写：把审计账末行的换行去掉。
+        let audit_path = library.audit_path();
+        let mut bytes = std::fs::read(&audit_path).expect("read audit");
+        assert!(bytes.ends_with(b"\n"), "正常追加的末行应有换行");
+        bytes.pop();
+        std::fs::write(&audit_path, &bytes).expect("write torn audit");
+
+        // 再演一版（追加第二条审计行）。
+        let _ = library
+            .update(&draft("换元法", "步骤三"), 3_000)
+            .expect("update v3");
+
+        // 审计账读回：两行都在，且没有坏行。
+        let scan = scan_records::<SkillRevisionAudit>(&library.audit_path(), &audit_compat())
+            .expect("审计账可读");
+        assert_eq!(
+            scan.skipped, 0,
+            "撕裂写后追加不许产生坏行（丢记录）: scan={scan:?}"
+        );
+        assert_eq!(
+            scan.records.len(),
+            2,
+            "撕裂写后追加不许把旧行吞掉（两行都应可读）: scan={scan:?}"
+        );
     }
 
     #[test]

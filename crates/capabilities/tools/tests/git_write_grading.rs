@@ -197,6 +197,12 @@ fn off_list_subcommands_have_no_tool_surface() {
         "git some-alias",
         "git commit",
         "git commit -a",
+        // 编辑器面 (承诺「本工具不开编辑器面」): 短形 `-e` 与长形 `--edit` 都要拒。
+        // 此前 `e` 漏在拒绝表外 ⇒ 这四种形态被**静默放过**。
+        "git commit -m x -e",
+        "git commit -em x",
+        "git commit -m x --edit",
+        "git commit --edit -m x",
         "git branch",
         "git branch --list",
         "git tag",
@@ -720,4 +726,40 @@ async fn success_report_shape_is_frozen_by_the_output_contract() {
     assert_eq!(value["commands"], serde_json::json!(["git add b.txt"]));
     // 归一形状之外无多余字段 (合同冻结)。
     assert_eq!(value.as_object().map(|map| map.len()), Some(4), "{value}");
+}
+
+/// **缺陷 ㉑（2026-10-26 fuzz 挖到）**：`commit` 的**交互补丁面**与**复用编辑面**，
+/// 拒绝表只挡了**短选项**（`-p` / `-c`），**长选项别名全部放行** ⇒ **别名绕过**。
+///
+/// Git 自己的 usage 行就是证据（`git commit -h`）：
+/// `用法：git commit [-a | --interactive | --patch] …` ⇒ **`--interactive` 与 `--patch`
+/// 与 `-p` 是同一张脸**（交互式挑 hunk）；`-c` 的长形是 **`--reedit-message`**。
+///
+/// 本文件写死的承诺是「**本工具不开编辑器面**」「**交互补丁面**不入本工具」
+/// ⇒ 同脸不同形 ⇒ **必须同判**。
+#[test]
+fn commit_interactive_patch_and_reedit_aliases_are_refused_like_their_short_forms() {
+    // 交互补丁面：`-p` 已被拒 ⇒ 它的长形别名必须同判。
+    for command in [
+        "git commit -m x --patch",
+        "git commit -m x --interactive",
+        "git commit -m x -p",
+    ] {
+        let plan = git_write_plan_for_arguments(&serde_json::json!({ "command": command }));
+        assert!(
+            matches!(plan, GitWritePlan::Refused { .. }),
+            "交互补丁面必须被拒（`-p` 的同脸别名）: {command}"
+        );
+    }
+    // 复用并编辑面：`-c` 已被拒 ⇒ 长形 `--reedit-message` 必须同判。
+    for command in [
+        "git commit -m x --reedit-message=HEAD",
+        "git commit -m x -c HEAD",
+    ] {
+        let plan = git_write_plan_for_arguments(&serde_json::json!({ "command": command }));
+        assert!(
+            matches!(plan, GitWritePlan::Refused { .. }),
+            "复用编辑面必须被拒（`-c` 的同脸别名）: {command}"
+        );
+    }
 }

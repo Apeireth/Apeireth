@@ -232,16 +232,66 @@ impl PromptServer for StaticPromptServer {
                 }
             }
         }
-        let mut rendered = template.clone();
+        // 模板插值：**单遍**（值**不**再被当作模板解释）。
+        //
+        // 契约（`with_prompt` 文档）：「`{key}` is replaced with `arguments[key]`
+        // (stringified) at get-time」—— 「值被**代入**」的字面读法就是**单遍**。
+        // **旧实现是逐键 `replace` 迭代** ⇒ 被替换进去的**值会被后续键再次当模板解释**：
+        // 模板 `{a}` + 参数 `{"a":"{b}","b":"SECRET"}` ⇒ 渲染出 `"SECRET"`（而非 `"{b}"`），
+        // 且**是否展开取决于参数名的字典序** ⇒ 行为任意、未文档化。
+        // ⇒ 收窄成**单遍**：一次遍历模板，遇 `{key}` 就查表代入，**代入的值不被再解释**。
+        let mut rendered = String::with_capacity(template.len());
         if let Some(obj) = arguments.as_object() {
-            for (k, v) in obj {
-                let needle = format!("{{{k}}}");
-                let replacement = match v {
-                    Value::String(s) => s.clone(),
-                    other => other.to_string(),
-                };
-                rendered = rendered.replace(&needle, &replacement);
+            let mut rest = template.as_str();
+            while let Some(open) = rest.find('{') {
+                rendered.push_str(&rest[..open]);
+                let after = &rest[open..];
+                let closed = after.find('}').filter(|close| {
+                    // 占位符名必须是**完整**的 `{key}`（key 不含 `{`），
+                    // 否则原样保留（与旧 `replace` 的「找不到就不动」同语义）。
+                    !after[1..*close].contains('{')
+                });
+                match closed {
+                    Some(close) => {
+                        let key = &after[1..close];
+                        match obj.get(key) {
+                            Some(value) => {
+                                let replacement = match value {
+                                    Value::String(s) => s.clone(),
+                                    other => other.to_string(),
+                                };
+                                rendered.push_str(&replacement);
+                            }
+                            // 未知占位符 ⇒ **原样保留整个 `{key}`**（`{key}` 不是参数表里的键）。
+                            None => {
+                                rendered.push_str(&after[..close + 1]);
+                            }
+                        }
+                        rest = &after[close + 1..];
+                    }
+                    None => {
+                        // ⚠️ **2026-10-26 修一个真缺陷（DoS）**：原写法 `rest = after`
+                        // ⇒ `after = &rest[open..]` ⇒ **rest 完全不前进** ⇒
+                        // `while let Some(open) = rest.find('{')` 永远找到**同一个** `{`
+                        // ⇒ ⇒ **死循环 + rendered 无限增长（内存爆掉）**。
+                        //
+                        // **触发条件**：模板里有**未闭合**的 `{`（`"{zq"` / `"{"`），
+                        // 或 `{` 之后又出现 `{`（`"{a{b}"`）⇒ 过滤掉不成对的 `}` 后落进本分支。
+                        // ⇒ **可达性**：模板来自**远端 MCP 服务器**（`prompts/list` 提供的模板）
+                        // ⇒ **不可信输入** ⇒ 一个畸形模板就能把渲染方**永久挂住**。
+                        //
+                        // **修法（最小、且保持「原样保留」语义）**：本分支已经**输出了** `{`
+                        // ⇒ 扫描位置**必须前进** ⇒ `rest = &after[1..]`（跳过这个 `{`）。
+                        // ⇒ 契约「占位符名必须是完整 `{key}`（key 不含 `{`），否则**原样保留**」
+                        //   仍然成立：`"{zq"` ⇒ 渲染成 `{zq`（逐字保留）✔。
+                        rendered.push('{');
+                        rest = &after[1..];
+                    }
+                }
             }
+            rendered.push_str(rest);
+        } else {
+            rendered = template.clone();
         }
         Ok(
             GetPromptResult::new(vec![PromptMessage::user_text(rendered)])
@@ -251,7 +301,99 @@ impl PromptServer for StaticPromptServer {
 }
 
 #[cfg(test)]
+
 mod tests {
+
+    /// 取渲染出的文本（`PromptMessage.content` 是 `ContentBlock` 枚举）。
+    fn rendered_text(result: &GetPromptResult) -> String {
+        match &result.messages[0].content {
+            ContentBlock::Text { text, .. } => text.clone(),
+            other => panic!("提示词消息应是文本块: {other:?}"),
+        }
+    }
+
+    /// 模板插值是**单遍**的：代入的**值不再被当作模板解释**。
+    ///
+    /// 契约（`with_prompt` 文档）：「`{key}` is replaced with `arguments[key]`
+    /// 回归（2026-10-26）：**未闭合的 `{` 不得把渲染挂死**（真缺陷：DoS）。
+    ///
+    /// 旧实现里「不成对的 `}`」分支把扫描位置**原样放回**（`rest = after`）
+    /// ⇒ `find('{')` 永远找到同一个 `{` ⇒ **死循环 + 内存无限增长**。
+    /// ⇒ 触发形态：`"{zq"` / `"{"` / `"{a{b}"`。
+    /// ⇒ 契约（「占位符名必须是完整 `{key}`（key 不含 `{`），否则**原样保留**」）仍须成立。
+    #[test]
+    fn unclosed_placeholder_is_kept_verbatim_and_does_not_hang() {
+        for (template, expected) in [
+            ("{zq", "{zq"),
+            ("{", "{"),
+            ("{a{b}", "{a{b}"),
+            ("pre{zq", "pre{zq"),
+            // ⚠️ `{a}` 是**已知键** ⇒ 按契约**应当被代入**（`{zq}` 是未知键 ⇒ 原样保留）
+            // ⇒ 我第一版期望 `{zq}{a}` ⇒ **我的期望写错了**（自造期望 ⇒ 假阳性）。
+            ("{zq}{a}", "{zq}V"),
+        ] {
+            let server = StaticPromptServer::new().with_prompt(
+                Prompt {
+                    name: "demo".to_string(),
+                    description: None,
+                    arguments: None,
+                },
+                template,
+            );
+            let out = server
+                .get("demo", &serde_json::json!({"a": "V"}))
+                .expect("提示词可渲染");
+            let text = rendered_text(&out);
+            assert_eq!(
+                text, expected,
+                "未闭合占位符必须**原样保留**（且不得挂死）: template={template:?} -> {text:?}"
+            );
+        }
+    }
+
+    /// (stringified) at get-time」—— 值被**代入**，不是被**再求值**。
+    /// 旧实现逐键 `replace` 迭代 ⇒ 值会被后续键二次解释
+    /// （模板 `{a}` + 参数 `{"a":"{b}","b":"SECRET"}` ⇒ 渲染出 `"SECRET"`），
+    /// 且**是否展开取决于参数名字典序** ⇒ 行为任意、未文档化。
+    #[test]
+    fn prompt_template_substitution_is_single_pass() {
+        let server = StaticPromptServer::new().with_prompt(
+            Prompt {
+                name: "demo".to_string(),
+                description: None,
+                arguments: None,
+            },
+            "值={a}",
+        );
+        // ① 值里的 `{b}` **不得**被二次解释。
+        let out = server
+            .get("demo", &serde_json::json!({"a": "{b}", "b": "SECRET"}))
+            .expect("提示词可渲染");
+        let text = rendered_text(&out);
+        assert_eq!(
+            text, "值={b}",
+            "代入的值不得被再当模板解释（否则是模板逃逸）: {text}"
+        );
+        // ② 参数名顺序**不得**影响结果（字典序无关）。
+        let out2 = server
+            .get("demo", &serde_json::json!({"b": "SECRET", "a": "{b}"}))
+            .expect("提示词可渲染");
+        assert_eq!(
+            rendered_text(&out2),
+            "值={b}",
+            "渲染结果不得依赖参数名的字典序"
+        );
+        // ③ 未知占位符原样保留（与旧 `replace`「找不到就不动」同语义）。
+        let out3 = server
+            .get("demo", &serde_json::json!({"z": "Z"}))
+            .expect("提示词可渲染");
+        assert_eq!(rendered_text(&out3), "值={a}", "未知占位符必须原样保留");
+        // ④ 正常代入仍然逐字生效。
+        let out4 = server
+            .get("demo", &serde_json::json!({"a": "OK"}))
+            .expect("提示词可渲染");
+        assert_eq!(rendered_text(&out4), "值=OK");
+    }
     use super::*;
     use crate::mcp::jsonrpc::Id;
 
