@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — D3b scoped consolidation extraction and readiness plans（2026-10-29）
+
+- After protected #98 integration, re-scan remaining open PRs; no independent narrow CLEAN candidate is merged.
+- Preserve broad/fork/unique work and provide exact scoped extraction plans for #95/#94 plus Mesh/Desktop/UI/dependency readiness boundaries.
+
 ## [Unreleased] — D3a CI repair and anchored protected Kernel merge（2026-10-29）
 
 - PR98 merged through the protected ordinary path after all six required checks passed; verified recovery tag precedes auto-delete and active KC1 recreation.
