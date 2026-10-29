@@ -329,6 +329,10 @@ jobs:
           fi
           pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
 
+      - name: Verify secret scanner contracts
+        shell: bash
+        run: python -m unittest discover -s scripts -p test_secret_scan.py
+
       - name: "Secret scan: working tree (scan-all)"
         shell: pwsh
         run: pwsh scripts/secret-scan.ps1 -Mode scan-all

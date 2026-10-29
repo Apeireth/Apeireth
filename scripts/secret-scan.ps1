@@ -224,10 +224,17 @@ function Invoke-ScanHistory {
         $path = $Matches[2]
         # 跳过大文件 / binary / docs
         if ($path -match '\.(lock|json|png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|md|txt|wasm|exe|dll|so|dylib)$') { continue }
-        $content = & git cat-file -p $sha 2>$null
-        if ($null -eq $content) { continue }
+        $contentLines = & git cat-file -p $sha 2>$null
+        if ($null -eq $contentLines) { continue }
+        # Native command output is an array of lines; implicit string conversion
+        # joins it with spaces and creates cross-line matches and wrong locations.
+        $content = $contentLines -join "`n"
         if ($content.Length -gt 500000) { continue }  # 跳过大文件 (> 500KB)
-        $findings += Scan-Content -Content $content -FilePath "[history] $path"
+        $blobFindings = @(Scan-Content -Content $content -FilePath "[history] $path")
+        foreach ($finding in $blobFindings) {
+            $finding | Add-Member -NotePropertyName HistoryBlob -NotePropertyValue $sha
+        }
+        $findings += $blobFindings
         $scanned++
         if ($scanned % 500 -eq 0) { Write-Host "[scan-history] $scanned blobs scanned..." }
     }
@@ -247,6 +254,15 @@ if ($allowlist) {
     Write-Host "[secret-scan] Allowlist: paths=$($allowlist.Paths.Count) regexes=$($allowlist.Regexes.Count)"
 }
 
+# Reviewed synthetic fixtures in immutable historical blobs. These exceptions
+# cannot exempt a working file or any changed blob, path, line or match.
+$historyFixtures = @()
+$historyFixtureFile = Join-Path $PSScriptRoot 'secret-scan-history-fixtures.json'
+if (Test-Path $historyFixtureFile) {
+    $historyFixtures = @(Get-Content $historyFixtureFile -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop)
+}
+
 switch ($Mode) {
     'scan-staged'   { $findings = Invoke-ScanStaged }
     'scan-all'      { $findings = Invoke-ScanAll }
@@ -255,9 +271,19 @@ switch ($Mode) {
     default { Write-Host "Unknown mode: $Mode"; exit 2 }
 }
 
-# 过滤: allowlist paths
+# 过滤: immutable historical fixtures, then existing allowlist paths
+$reviewedHistoryCount = 0
 $filtered = foreach ($f in $findings) {
     $checkPath = $f.File -replace '^\[history\]\s*', ''
+    if ($f.HistoryBlob) {
+        $matchHash = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
+            [Text.Encoding]::UTF8.GetBytes($f.Match))).ToLowerInvariant()
+        $reviewed = @($historyFixtures | Where-Object {
+            $_.Blob -ceq $f.HistoryBlob -and $_.Path -ceq $checkPath -and
+            $_.Line -eq $f.Line -and $_.MatchSha256 -ceq $matchHash
+        })
+        if ($reviewed.Count -gt 0) { $reviewedHistoryCount++; continue }
+    }
     if (Test-PathAllowed -Path $checkPath -AllowlistPaths $AllowlistPaths) { continue }
     if ($allowlist -and (Test-PathAllowed -Path $checkPath -AllowlistPaths $allowlist.Paths)) { continue }
     # allowlist regexes
@@ -274,6 +300,8 @@ $filtered = foreach ($f in $findings) {
     $f
 }
 
+Write-Host "[secret-scan] Reviewed immutable historical fixtures: $reviewedHistoryCount"
+
 if ($filtered.Count -eq 0) {
     Write-Host "[OK] No secrets found." -ForegroundColor Green
     exit 0
@@ -283,10 +311,9 @@ Write-Host ""
 Write-Host "[FAIL] $($filtered.Count) secret(s) found:" -ForegroundColor Red
 Write-Host ""
 $filtered | ForEach-Object {
-    $redacted = $_.Match
-    if ($redacted.Length -gt 12) { $redacted = $redacted.Substring(0, 8) + "..." + $redacted.Substring($redacted.Length - 4) }
-    Write-Host "  $($_.File):$($_.Line):$($_.Column) - $($_.Pattern) [$($_.Match)]" -ForegroundColor Red
-    Write-Host "    > $($_.Snippet)" -ForegroundColor DarkRed
+    # A diagnostic must not publish the credential, including other credentials
+    # on the same line. The file, line, column and rule are enough to locate it.
+    Write-Host "  $($_.File):$($_.Line):$($_.Column) - $($_.Pattern) [REDACTED]" -ForegroundColor Red
 }
 Write-Host ""
 Write-Host "Action required:" -ForegroundColor Yellow
