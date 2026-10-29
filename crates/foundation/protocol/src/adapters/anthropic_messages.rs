@@ -62,6 +62,8 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
     }
 
     fn adapt_request(&self, req: &NormalizedRequest) -> Result<Value, ProtocolError> {
+        crate::canonical::validate_closed_tool_context(&req.messages)
+            .map_err(|error| ProtocolError::invalid("messages", error.to_string()))?;
         if req.model.is_empty() {
             return Err(ProtocolError::missing("model"));
         }
@@ -153,10 +155,6 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
                         if let Some(id) = &m.tool_call_id {
                             block.insert("tool_use_id".into(), Value::String(id.clone()));
                         }
-                        if let Some(name) = &m.name {
-                            // Anthropic 不需要 name 在 tool_result 里, 但保留允许
-                            block.insert("tool_name".into(), Value::String(name.clone()));
-                        }
                         let text = ContentPart::join_text(&m.content);
                         block.insert("content".into(), Value::String(text));
                         if let Some(c) = &req.metadata.get("is_error") {
@@ -174,7 +172,23 @@ impl ProtocolAdapter for AnthropicMessagesAdapter {
             })
             .collect();
 
-        body.insert("messages".into(), Value::Array(messages));
+        // All results answering one assistant batch share the next user turn.
+        let mut grouped: Vec<Value> = Vec::new();
+        let mut previous_tool = false;
+        for (message, mut content) in non_system.iter().zip(messages) {
+            let tool = message.role == MessageRole::Tool;
+            if tool && previous_tool {
+                let blocks = content["content"].as_array_mut().expect("content blocks");
+                grouped.last_mut().expect("previous tool")["content"]
+                    .as_array_mut()
+                    .expect("content blocks")
+                    .append(blocks);
+            } else {
+                grouped.push(content);
+            }
+            previous_tool = tool;
+        }
+        body.insert("messages".into(), Value::Array(grouped));
 
         if let Some(t) = req.temperature {
             if !(0.0..=1.0).contains(&t) {
@@ -471,7 +485,10 @@ mod tests {
         };
         let mut req = NormalizedRequest::new(
             "claude-sonnet-4",
-            vec![NormalizedMessage::assistant_with_tool_calls("", vec![tc])],
+            vec![
+                NormalizedMessage::assistant_with_tool_calls("", vec![tc]),
+                NormalizedMessage::tool_result("toolu_1", Some("get_weather".into()), "sunny"),
+            ],
         );
         req.max_tokens = Some(100);
         let v = AnthropicMessagesAdapter::new().adapt_request(&req).unwrap();
@@ -487,16 +504,22 @@ mod tests {
         // 设计参考 OpenAI tool → Anthropic user role + tool_result block
         let mut req = NormalizedRequest::new(
             "claude-sonnet-4",
-            vec![NormalizedMessage::tool_result(
-                "toolu_1",
-                Some("get_weather".into()),
-                "sunny",
-            )],
+            vec![
+                NormalizedMessage::assistant_with_tool_calls(
+                    "",
+                    vec![ToolCall {
+                        id: "toolu_1".into(),
+                        name: "get_weather".into(),
+                        arguments: json!({}),
+                    }],
+                ),
+                NormalizedMessage::tool_result("toolu_1", Some("get_weather".into()), "sunny"),
+            ],
         );
         req.max_tokens = Some(100);
         let v = AnthropicMessagesAdapter::new().adapt_request(&req).unwrap();
-        assert_eq!(v["messages"][0]["role"], "user");
-        let blocks = v["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(v["messages"][1]["role"], "user");
+        let blocks = v["messages"][1]["content"].as_array().unwrap();
         assert_eq!(blocks[0]["type"], "tool_result");
         assert_eq!(blocks[0]["tool_use_id"], "toolu_1");
         assert_eq!(blocks[0]["content"], "sunny");

@@ -22,10 +22,10 @@ use apeireth_plugin::experience::{AssociationStore, KnowledgeGraphStore, WikiEnt
 use apeireth_plugin::memory_backend::MemoryBackend;
 use apeireth_plugin::preference::PreferenceStore;
 use apeireth_plugin::self_assessment::SelfAssessmentStore;
-use apeireth_plugin::ToolCapability;
+use apeireth_plugin::{Plugin, ToolCapability, ToolModule};
 use apeireth_protocol::canonical::NormalizedMessage;
 use apeireth_runtime::{ContextProjectionError, ContextProjector, RuntimeBuilder};
-use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig, McpToolBridge};
+use apeireth_tools_canonical::mcp_bridge::{McpBridgeOptions, McpServerConfig};
 use apeireth_tools_canonical::{
     CapabilitySwitch, FetchConfig, MemoryLedgerStats, ObservedGate, StatusProbe, TrustedShellConfig,
 };
@@ -54,8 +54,8 @@ use super::self_status_source::{
 };
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
-    EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule, FilesystemModule,
-    GitWriteModule, ImageOpsModule, McpModule, ProposalModule, ReconModule, RepoModule,
+    EducationModule, ExposureAuditModule, FetchModule, FilesystemModule, GitWriteModule,
+    ImageOpsModule, McpModule, ProcessModule, ProposalModule, ReconModule, RepoModule,
     SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule,
     SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule,
     WorktreePlanModule,
@@ -607,12 +607,28 @@ pub struct ProductionBackends {
 /// Compatibility alias for [`ProductionBackends`].
 pub type CognitiveBackends = ProductionBackends;
 
+fn collect_tool_module(
+    tool_modules: &mut Vec<Arc<dyn Plugin>>,
+    capabilities: &mut Vec<Arc<dyn ToolCapability>>,
+    provider: &dyn CapabilityProvider,
+) -> RuntimeResult<()> {
+    let module = provider
+        .tool_module()
+        .map_err(RuntimeError::misconfigured)?;
+    capabilities.extend(module.tools());
+    if !module.tools().is_empty() {
+        tool_modules.push(Arc::new(module));
+    }
+    Ok(())
+}
+
 /// The validated, ordered module set to pass to [`RuntimeBuilder::with_module`].
 pub struct ProductionModules {
     modules: Vec<Arc<dyn Module>>,
+    tool_modules: Vec<Arc<dyn Plugin>>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     telemetry: Arc<CognitiveTelemetry>,
-    mcp_bridge: Option<Arc<McpToolBridge>>,
+    mcp_definition: Option<Arc<apeireth_tools_canonical::mcp_bridge::McpDefinition>>,
     mcp_module: Option<Arc<McpModule>>,
     /// 器官模块句柄 (`config.organs` 开才 `Some`), 供组合根迟绑定 guard 免疫记忆.
     organ_module: Option<Arc<OrganModule>>,
@@ -859,6 +875,7 @@ impl ProductionModules {
             );
         }
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
+        let mut tool_modules: Vec<Arc<dyn Plugin>> = Vec::new();
         // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
         let mut organ_module: Option<Arc<OrganModule>> = None;
         // W3.6: 自述 probe 迟绑定槽 (安装点按开关武装; cli/组合根后续填句柄).
@@ -939,7 +956,7 @@ impl ProductionModules {
                 instrument.constructed(ModuleFamily::Filesystem);
                 let provider =
                     FilesystemModule::new_with_gate(root.clone(), Arc::clone(&observed_gate));
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -947,7 +964,7 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::Search);
                 let provider = SearchModule::new(root.clone());
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -955,7 +972,7 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::Repo);
                 let provider = RepoModule::new(root.clone());
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -968,7 +985,7 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::ApplyPatch);
                 let provider = ApplyPatchModule::new(root.clone(), Arc::clone(&observed_gate));
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -982,7 +999,7 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::WorktreePlan);
                 let provider = WorktreePlanModule::new(root.clone());
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -990,7 +1007,7 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::WorktreeApply);
                 let provider = WorktreeApplyModule::new(root.clone(), Arc::clone(&observed_gate));
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -1001,7 +1018,7 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::GitWrite);
                 let provider = GitWriteModule::new(root.clone());
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -1015,7 +1032,7 @@ impl ProductionModules {
             if let (Some(root), Some(skills_dir)) = (&backends.workspace_root, &config.skills_dir) {
                 instrument.constructed(ModuleFamily::SkillDistill);
                 let provider = SkillDistillModule::new(root.clone(), skills_dir.clone());
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -1026,7 +1043,7 @@ impl ProductionModules {
                     skills_dir.clone(),
                     apeireth_tools_canonical::skill::DEFAULT_SKILL_DISCLOSURE_BUDGET_CHARS,
                 );
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -1034,7 +1051,7 @@ impl ProductionModules {
         if config.education {
             instrument.constructed(ModuleFamily::Education);
             let provider = EducationModule::new();
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 文件写入总闸 (宪法级, 内测整改): `file_write` 是**唯一写总闸** ——
@@ -1045,13 +1062,13 @@ impl ProductionModules {
         if let Some(shell_config) = config.shell {
             instrument.constructed(ModuleFamily::Shell);
             let provider = ShellModule::new(shell_config.with_file_write(config.file_write));
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         if let Some(fetch_config) = config.fetch {
             instrument.constructed(ModuleFamily::Fetch);
             let provider = FetchModule::new(fetch_config);
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 内容流接入 (`tool.content_feed`, J1, opt-in): 订阅源管理 + 受控拉取 +
@@ -1061,7 +1078,7 @@ impl ProductionModules {
         if let Some(feed_config) = config.content_feed {
             instrument.constructed(ModuleFamily::ContentFeed);
             let provider = ContentFeedModule::new(feed_config);
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 双引擎主动关怀 (`tool.care_schedule`, V3-a, opt-in): 关怀规则面
@@ -1074,7 +1091,7 @@ impl ProductionModules {
         if let Some(care_dir) = config.care_schedule {
             instrument.constructed(ModuleFamily::CareSchedule);
             let provider = CareScheduleModule::new(care_dir);
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 备份导出 (`tool.backup_export`, G5 备份恢复, opt-in): 全量打包 +
@@ -1083,7 +1100,7 @@ impl ProductionModules {
         if let Some(backup_config) = config.backup {
             instrument.constructed(ModuleFamily::BackupExport);
             let provider = BackupExportModule::new(backup_config);
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 通用嗓发声 (`tool.voice_speak`, V3-b, opt-in): 文本 → 系统语音引擎
@@ -1096,7 +1113,7 @@ impl ProductionModules {
                 voice_config,
                 apeireth_tools_canonical::system_synth_engine(),
             );
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 任务簿 (`tool.task_board`, V6-a 任务编排持久队列, opt-in): 增/列/
@@ -1108,7 +1125,7 @@ impl ProductionModules {
         if let Some(queue) = config.task_board.clone() {
             instrument.constructed(ModuleFamily::TaskBoard);
             let provider = TaskBoardModule::new(queue);
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 性格周报 (`tool.trait_report`, 裁定 ⑤): 近 7 天四杆移动量 / 移动原因
@@ -1118,7 +1135,7 @@ impl ProductionModules {
         if let Some(paths) = &config.trait_report {
             instrument.constructed(ModuleFamily::TraitReport);
             let provider = TraitReportModule::new(trait_growth_probe(paths.clone()));
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 暴露面体检 (`tool.exposure_audit`, V5-b 安全守望, 默认关): 本地只读
@@ -1127,7 +1144,7 @@ impl ProductionModules {
         if let Some(audit_config) = config.exposure_audit {
             instrument.constructed(ModuleFamily::ExposureAudit);
             let provider = ExposureAuditModule::new(audit_config);
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 自主度第一小步 · 边角料提案面 (`tool.proposal_draft`, 默认关): 它提案,
@@ -1136,7 +1153,7 @@ impl ProductionModules {
         // 链)。治理 = 低风险档 (读面 + append 账本, 注册即闸, grant 即用零审批)。
         if let Some(proposal_config) = &config.proposals {
             let provider = ProposalModule::new(proposal_config.clone());
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 创作工具面 W1 · 图像操作 (`tool.image_ops`, 默认关): 闭合操作词表管道 +
@@ -1150,7 +1167,7 @@ impl ProductionModules {
                 instrument.constructed(ModuleFamily::ImageOps);
                 let provider = ImageOpsModule::new(root.clone(), Arc::clone(&observed_gate));
                 image_ops_activity = Some(provider.activity());
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -1165,7 +1182,7 @@ impl ProductionModules {
             let provider =
                 DocOpsModule::new(doc_ops_config.clone().with_write_gate(config.file_write));
             doc_ops_counters = Some(provider.counters());
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // 创作工具面 K3 · 表格操作 (`tool.sheet_ops`, 默认关): 受控读写族 (CSV 读 +
@@ -1180,7 +1197,7 @@ impl ProductionModules {
             let provider =
                 SheetOpsModule::new(sheet_ops_config.clone().with_write_gate(config.file_write));
             sheet_ops_counters = Some(provider.counters());
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`, 默认关): 白名单制
@@ -1194,12 +1211,12 @@ impl ProductionModules {
             instrument.constructed(ModuleFamily::DeviceSense);
             let provider = super::tool_modules::DeviceSenseModule::new(device_config.clone());
             device_sense_activity = Some(provider.activity());
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
         if let Some(weather_config) = &config.weather {
             instrument.constructed(ModuleFamily::Weather);
             let provider = super::tool_modules::WeatherModule::new(weather_config.clone());
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // K 轴 L3/L4 受控执行骨架 (`tool.device_control`, 默认关): 三拍执行
@@ -1215,7 +1232,7 @@ impl ProductionModules {
             let provider =
                 super::tool_modules::DeviceControlModule::new(device_control_config.clone());
             device_control_runner = Some(Arc::clone(provider.runner()));
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // K 轴 L5 看家骨架 (`tool.guard_watch`, 默认关): 守护规则面 (阈值/时序
@@ -1227,7 +1244,7 @@ impl ProductionModules {
         if let Some(guard_watch_config) = &config.guard_watch {
             instrument.constructed(ModuleFamily::GuardWatch);
             let provider = super::tool_modules::GuardWatchModule::new(guard_watch_config.clone());
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // W3.3 · 游戏练习场 (`tool.play_*`, 默认关): 装配块在 `install_bio_play`
@@ -1366,7 +1383,7 @@ impl ProductionModules {
             // （装配根唯一 NervousBus；本帧未绑 = null，不编造计数）。
             let provider =
                 SelfStatusModule::new_with_bus(Arc::new(source), nervous_bus.as_ref().clone());
-            capabilities.extend(provider.capabilities());
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // Wave 4 观测补格: 自述槽此时已按开关武装 → 把仪式账句柄填入 SG-22 观测槽
@@ -1381,18 +1398,25 @@ impl ProductionModules {
         // server list was loaded above (before the roster projection) — a
         // server list with no enabled entry assembles an inert bridge (no
         // external tools), and the roster reports that honestly.
-        let mut mcp_bridge = None;
+        let mut mcp_definition = None;
         let mut mcp_module = None;
         if let Some(server_config) = mcp_server_config {
             instrument.constructed(ModuleFamily::Mcp);
             let options = McpBridgeOptions::from_env();
-            let bridge = McpToolBridge::new(server_config, options).map_err(|error| {
-                RuntimeError::misconfigured(format!("mcp tool bridge refused to assemble: {error}"))
-            })?;
-            let module = Arc::new(McpModule::new());
-            capabilities.extend(module.capabilities());
-            mcp_bridge = Some(Arc::new(bridge));
-            mcp_module = Some(module);
+            let definition =
+                apeireth_tools_canonical::mcp_bridge::McpDefinition::new(server_config, options)
+                    .map_err(|error| {
+                        RuntimeError::misconfigured(format!(
+                            "mcp definition refused to assemble: {error}"
+                        ))
+                    })?;
+            let definition = Arc::new(definition);
+            tool_modules.push(apeireth_plugin::resource_factory::module_from_definition(
+                definition.clone(),
+            ));
+            mcp_definition = Some(definition);
+            // Retained construction accessor is a compatibility bag, not the production catalog.
+            mcp_module = Some(Arc::new(McpModule::new()));
         }
 
         // 安全/逆向侦察 (`tool.recon.*`, 9 件, 默认关): 注册即闸 —— 开关
@@ -1403,7 +1427,7 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::Recon);
                 let provider = ReconModule::new(root.clone(), Arc::clone(&recon_config.scope));
-                capabilities.extend(provider.capabilities());
+                collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
             }
         }
 
@@ -1412,8 +1436,8 @@ impl ProductionModules {
         // (文件类限域 + 网络目标授权), 启动期不探测系统二进制。
         if let Some(external_config) = &config.external {
             instrument.constructed(ModuleFamily::ExternalTools);
-            let provider = ExternalToolsModule::new(external_config);
-            capabilities.extend(provider.capabilities());
+            let provider = ProcessModule::new(external_config);
+            collect_tool_module(&mut tool_modules, &mut capabilities, &provider)?;
         }
 
         // SG-25 工具生态健康: 静态能力表装配完毕 → 把剖面填入迟绑定只读槽
@@ -1708,11 +1732,29 @@ impl ProductionModules {
             }
         }
 
+        let owned: std::collections::BTreeSet<_> = tool_modules
+            .iter()
+            .flat_map(|module| module.tools())
+            .map(|tool| tool.id().clone())
+            .collect();
+        let remaining = capabilities
+            .iter()
+            .filter(|tool| !owned.contains(tool.id()))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !remaining.is_empty() {
+            tool_modules.push(Arc::new(ToolModule::new(
+                apeireth_core::kernel::PluginId::new("module.tool.host_extensions")
+                    .expect("static id"),
+                remaining,
+            )?));
+        }
         Ok(Self {
             modules,
+            tool_modules,
             capabilities,
             telemetry,
-            mcp_bridge,
+            mcp_definition,
             mcp_module,
             organ_module,
             bio_tone_state: bio_wiring.tone_state,
@@ -1770,10 +1812,24 @@ impl ProductionModules {
         mut builder: super::runtime::RuntimeBuilder,
     ) -> super::runtime::RuntimeBuilder {
         for module in self.modules {
-            builder = builder.with_module(module);
+            builder = builder.with_registered_behavior(module);
         }
-        for capability in self.capabilities {
-            builder = builder.with_capability(capability);
+        for module in self.tool_modules {
+            builder = builder.with_plugin(module);
+        }
+        builder
+    }
+
+    /// Opt-in Host mapping. Tool modules retain the same factory/lifecycle path.
+    /// The Host must still grant each selected internal capability explicitly.
+    pub fn register_with_profile_mappings(
+        self,
+        builder: RuntimeBuilder,
+        mappings: Arc<crate::profile_memory::ProfileMemoryMappings>,
+    ) -> RuntimeBuilder {
+        let mut builder = mappings.register_into(builder, &self.modules);
+        for module in self.tool_modules {
+            builder = builder.with_plugin(module);
         }
         builder
     }
@@ -1789,17 +1845,6 @@ impl ProductionModules {
     /// Shared non-sensitive hook telemetry for the registered modules.
     pub fn telemetry(&self) -> Arc<CognitiveTelemetry> {
         Arc::clone(&self.telemetry)
-    }
-
-    /// The external tool bridge assembled for the MCP slot, when enabled.
-    /// Adapters keep this handle to run the asynchronous connect/discovery pass.
-    pub fn mcp_bridge(&self) -> Option<&Arc<McpToolBridge>> {
-        self.mcp_bridge.as_ref()
-    }
-
-    /// The MCP dynamic tool module bag, when the MCP slot is enabled.
-    pub fn mcp_module(&self) -> Option<&Arc<McpModule>> {
-        self.mcp_module.as_ref()
     }
 
     /// W3.3 外部事件源: 把 guard 免疫记忆共享句柄接到器官模块的审议门, 并把
@@ -1830,3 +1875,6 @@ where
         ))
     })
 }
+
+#[path = "production_mcp.rs"]
+mod mcp;

@@ -1291,3 +1291,29 @@ impl CapabilityProvider for ExternalToolsModule {
         self.tools.clone()
     }
 }
+
+/// Host-selected structured external-process capabilities. No arbitrary command
+/// string or implicit shell fallback is introduced. Existing tool policies stay intact.
+pub struct ProcessModule {
+    tools: Vec<Arc<dyn ToolCapability>>,
+}
+impl ProcessModule {
+    pub fn new(config: &apeireth_tools_canonical::ExternalToolsConfig) -> Self {
+        Self {
+            tools: apeireth_tools_canonical::external_tool_set(config),
+        }
+    }
+    /// Select already configured process capabilities, e.g. a bounded executable
+    /// adapter supplied by the host. This does not grant tool permission.
+    pub fn with_capabilities(tools: Vec<Arc<dyn ToolCapability>>) -> Self {
+        Self { tools }
+    }
+}
+impl CapabilityProvider for ProcessModule {
+    fn id(&self) -> &str {
+        "module.tool.process"
+    }
+    fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>> {
+        self.tools.clone()
+    }
+}

@@ -358,6 +358,7 @@ pub const BOND_DEPTH_INCREMENT_PER_TURN: f64 = 0.02;
 /// partner 后端落点 = `PartnerStore` trait, 后续接 sqlite 实现即可, 本模块不动。
 pub struct PartnerBondModule {
     manifest: ModuleManifest,
+    read_only: bool,
     partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
     subject_id: String,
     clock: Arc<dyn Clock>,
@@ -366,6 +367,12 @@ pub struct PartnerBondModule {
 }
 
 impl PartnerBondModule {
+    /// A shared snapshot never creates a Partner or records private interactions.
+    pub fn with_read_only_snapshot(mut self) -> Self {
+        self.read_only = true;
+        self
+    }
+
     /// 构造 (subject_id = 跨会话伙伴身份)。
     pub fn new(
         partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
@@ -374,6 +381,7 @@ impl PartnerBondModule {
     ) -> Self {
         Self {
             manifest: ModuleManifest::new(PARTNER_BOND_MODULE_ID, "Partner bond"),
+            read_only: false,
             partner_store,
             subject_id: subject_id.into(),
             clock,
@@ -407,6 +415,7 @@ impl PartnerBondModule {
         let now = self.clock.now().timestamp_millis();
         match self.partner_store.get_partner(&id) {
             Ok(Some(partner)) => Some(partner),
+            Ok(None) if self.read_only => None,
             Ok(None) => {
                 let partner = Partner::new(
                     id,
@@ -468,6 +477,10 @@ fn bond_stage_cn(stage: &apeireth_memory::partner::BondStage) -> &'static str {
 
 #[async_trait::async_trait]
 impl BehaviorModule for PartnerBondModule {
+    fn read_only_profile_projection(&self) -> bool {
+        self.read_only
+    }
+
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -485,7 +498,7 @@ impl BehaviorModule for PartnerBondModule {
                 }
                 None => ModuleOutcome::continue_(),
             },
-            HookPoint::AfterTurn => {
+            HookPoint::AfterTurn if !self.read_only => {
                 // 羁绊演化: 纯确定性状态机 (touch + evolve), 0 LLM 调用。
                 if let Some(mut partner) = self.get_or_create_partner() {
                     let now = self.clock.now().timestamp_millis();
@@ -545,6 +558,9 @@ impl PersonaConstantInjectionModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for PersonaConstantInjectionModule {
+    fn read_only_profile_projection(&self) -> bool {
+        true
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
@@ -964,6 +980,8 @@ impl BehaviorModule for AbsorptionInsightModule {
 
 pub struct MemoryRecallModule {
     manifest: ModuleManifest,
+    profile_partition: Option<String>,
+    authorized_scopes: Option<Vec<MemoryScope>>,
     memory: Arc<dyn MemoryBackend>,
     coordinator: Option<Arc<MemoryCoordinator>>,
     wiki: Option<Arc<dyn WikiEntryStore>>,
@@ -1058,8 +1076,16 @@ fn community_overlay_text(
 }
 
 impl MemoryRecallModule {
+    /// Exact source scope grants. Unscoped auxiliary stores need their own mapping.
+    pub fn with_authorized_scopes(mut self, scopes: Vec<MemoryScope>) -> Self {
+        self.authorized_scopes = Some(scopes);
+        self
+    }
     /// W3 community 分诊 overlay (读 store → 转换 → 分诊; 0 装降级 = None)。
     fn community_overlay(&self, topic: &str) -> Option<String> {
+        if self.authorized_scopes.is_some() {
+            return None;
+        }
         let store = self.community_triage.as_ref()?;
         let facts = store.all_facts(COMMUNITY_FACT_LIMIT).ok()?;
         if facts.is_empty() {
@@ -1091,6 +1117,8 @@ impl MemoryRecallModule {
     pub fn new(memory: Arc<dyn MemoryBackend>) -> Self {
         Self {
             manifest: ModuleManifest::new(MEMORY_RECALL_MODULE_ID, "Memory recall"),
+            profile_partition: None,
+            authorized_scopes: None,
             memory,
             coordinator: None,
             wiki: None,
@@ -1192,6 +1220,12 @@ impl MemoryRecallModule {
         self
     }
 
+    /// Host-selected private partition. Real execution identity remains in context.
+    pub fn with_profile_partition(mut self, partition: String) -> Self {
+        self.profile_partition = Some(partition);
+        self
+    }
+
     /// Attach an optional dependency-free recorder for selected candidate IDs.
     #[must_use]
     pub fn with_access_recorder(mut self, recorder: Arc<MemoryRecallAccessRecorder>) -> Self {
@@ -1253,8 +1287,34 @@ impl MemoryRecallModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for MemoryRecallModule {
+    fn read_only_profile_projection(&self) -> bool {
+        self.access_recorder.is_none()
+            && self.access_store.is_none()
+            && self.self_tuning.is_none()
+            && self.retrieval_tuning.is_none()
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
+    }
+
+    async fn on_hook_authenticated(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        execution: &apeireth_plugin::ToolExecutionContext,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if let Some(principal) = &execution.principal {
+            if self.profile_partition.as_deref()
+                != Some(super::memory_module::namespace_key(principal).as_str())
+                || self.authorized_scopes.is_none()
+                || self.coordinator.is_none()
+            {
+                return Err(ModuleError::Message(
+                    "memory recall has no exact Profile scope mapping".into(),
+                ));
+            }
+        }
+        self.on_hook(hook, ctx).await
     }
 
     async fn on_hook(
@@ -1264,13 +1324,21 @@ impl BehaviorModule for MemoryRecallModule {
     ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
         let result = if hook == HookPoint::TurnStart {
-            let session = session_text(ctx.session_id);
+            let source_session = session_text(ctx.session_id);
+            let session = self
+                .profile_partition
+                .clone()
+                .unwrap_or_else(|| source_session.clone());
             if let Some(coord) = &self.coordinator {
                 let topic = topic_from_messages(ctx.messages);
                 let limit = morphology_recall_limit(&topic, self.limit, self.morphology_recall);
-                let query = MemoryRecallQuery::new(session.clone(), topic.clone())
+                let mut query = MemoryRecallQuery::new(session.clone(), topic.clone())
                     .with_limit(limit)
                     .with_max_chars(self.max_context_chars);
+                if let Some(scopes) = &self.authorized_scopes {
+                    query.visible_scopes = scopes.clone();
+                    query.exact_scope_authorization = true;
+                }
                 let result = if let Some(proactive) = &self.proactive_recall {
                     let cue = apeireth_memory::TopicCue {
                         recent_user_messages: ctx
@@ -1302,13 +1370,13 @@ impl BehaviorModule for MemoryRecallModule {
                         // V4-c: 注入回执喂证据账 (选中集为空的轮按空轮报)。
                         self.feed_retrieval_tuning(&selected);
                         if let Some(recorder) = &self.access_recorder {
-                            recorder.record_selected(&session, &selected);
+                            recorder.record_selected(&source_session, &selected);
                         }
                         if !selected.selected_candidate_ids.is_empty() {
                             if let (Some(store), Some(clock)) = (&self.access_store, &self.clock) {
                                 if store
                                     .record_selected(
-                                        &session,
+                                        &source_session,
                                         clock.now().timestamp_millis(),
                                         &selected.selected_candidate_ids,
                                     )
@@ -1339,7 +1407,7 @@ impl BehaviorModule for MemoryRecallModule {
                             wire.record_empty_round(self.now_epoch_ms());
                         }
                         if let Some(recorder) = &self.access_recorder {
-                            recorder.clear(&session);
+                            recorder.clear(&source_session);
                         }
                         ModuleOutcome::continue_()
                     }
@@ -1349,6 +1417,8 @@ impl BehaviorModule for MemoryRecallModule {
                         ModuleOutcome::continue_()
                     }
                 }
+            } else if self.authorized_scopes.is_some() {
+                ModuleOutcome::continue_()
             } else {
                 let mut context = match self.memory.recent_episodes(&session, self.limit) {
                     Ok(episodes) => {
@@ -1436,6 +1506,7 @@ impl BehaviorModule for MemoryRecallModule {
 /// Persist the current successful turn after the canonical transcript commit.
 pub struct MemoryWritebackModule {
     manifest: ModuleManifest,
+    profile_partition: Option<String>,
     memory: Arc<dyn MemoryBackend>,
     coordinator: Option<Arc<MemoryCoordinator>>,
     wiki: Option<Arc<dyn WikiEntryStore>>,
@@ -1461,6 +1532,7 @@ impl MemoryWritebackModule {
     pub fn new(memory: Arc<dyn MemoryBackend>, clock: Arc<dyn Clock>) -> Self {
         Self {
             manifest: ModuleManifest::new(MEMORY_WRITEBACK_MODULE_ID, "Memory writeback"),
+            profile_partition: None,
             memory,
             coordinator: None,
             wiki: None,
@@ -1481,6 +1553,12 @@ impl MemoryWritebackModule {
     #[must_use]
     pub fn with_coordinator(mut self, coordinator: Arc<MemoryCoordinator>) -> Self {
         self.coordinator = Some(coordinator);
+        self
+    }
+
+    /// Host-selected private partition. Real execution identity remains in context.
+    pub fn with_profile_partition(mut self, partition: String) -> Self {
+        self.profile_partition = Some(partition);
         self
     }
 
@@ -1614,17 +1692,66 @@ impl BehaviorModule for MemoryWritebackModule {
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }
-
     async fn on_hook(
         &self,
         hook: HookPoint,
         ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
+        self.writeback(hook, ctx, None).await
+    }
+    async fn on_hook_authenticated(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        execution: &apeireth_plugin::ToolExecutionContext,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if let Some(principal) = &execution.principal {
+            if self.profile_partition.as_deref()
+                != Some(super::memory_module::namespace_key(principal).as_str())
+                || self.coordinator.is_none()
+            {
+                return Err(ModuleError::Message(
+                    "memory writeback has no private Profile partition".into(),
+                ));
+            }
+        }
+        self.writeback(hook, ctx, Some(execution)).await
+    }
+}
+impl MemoryWritebackModule {
+    async fn writeback(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        execution: Option<&apeireth_plugin::ToolExecutionContext>,
+    ) -> Result<ModuleOutcome, ModuleError> {
         let started = Instant::now();
         let result = if hook == HookPoint::AfterTurn {
             if let Some(candidate) = ctx.candidate {
-                let session = session_text(ctx.session_id);
+                let session = self
+                    .profile_partition
+                    .clone()
+                    .unwrap_or_else(|| session_text(ctx.session_id));
+                let provenance = apeireth_memory::MemoryProvenance {
+                    source: "cognitive.memory_writeback".into(),
+                    source_session: Some(session_text(ctx.session_id)),
+                    source_trace: execution.and_then(|e| e.trace).map(|id| id.to_string()),
+                    source_request: execution
+                        .and_then(|e| e.turn)
+                        .map(|id| id.to_string())
+                        .or_else(|| Some(candidate.id.clone())),
+                };
                 let now = self.clock.now().timestamp();
+                // Private namespaces span sessions; provider response IDs are
+                // not an execution identity. Keep legacy IDs unchanged.
+                let response_key = if self.profile_partition.is_some() {
+                    provenance
+                        .source_request
+                        .as_deref()
+                        .unwrap_or(&candidate.id)
+                } else {
+                    &candidate.id
+                };
                 let mut episodes = Vec::new();
                 if let Some(user) = ctx
                     .messages
@@ -1635,7 +1762,7 @@ impl BehaviorModule for MemoryWritebackModule {
                     let content = ContentPart::join_text(&user.content);
                     if !content.is_empty() {
                         episodes.push(Episode {
-                            id: hash_id("ep-user", &[&session, &candidate.id]),
+                            id: hash_id("ep-user", &[&session, response_key]),
                             timestamp: now,
                             role: "user".into(),
                             content,
@@ -1644,7 +1771,7 @@ impl BehaviorModule for MemoryWritebackModule {
                     }
                 }
                 episodes.push(Episode {
-                    id: hash_id("ep-assistant", &[&session, &candidate.id]),
+                    id: hash_id("ep-assistant", &[&session, response_key]),
                     timestamp: now,
                     role: "assistant".into(),
                     content: candidate.content.clone(),
@@ -1658,9 +1785,9 @@ impl BehaviorModule for MemoryWritebackModule {
                     scope: MemoryScope::Session {
                         session_id: episodes[0].session_id.clone(),
                     },
-                    source_session: Some(episodes[0].session_id.clone()),
-                    source_trace: None,
-                    source_request: Some(candidate.id.clone()),
+                    source_session: provenance.source_session.clone(),
+                    source_trace: provenance.source_trace.clone(),
+                    source_request: provenance.source_request.clone(),
                     messages: episodes
                         .iter()
                         .map(|episode| apeireth_memory::MemoryExtractionMessage {
@@ -1676,9 +1803,9 @@ impl BehaviorModule for MemoryWritebackModule {
                         scope: MemoryScope::Session {
                             session_id: episodes[0].session_id.clone(),
                         },
-                        source_session: Some(episodes[0].session_id.clone()),
-                        source_trace: None,
-                        source_request: Some(candidate.id.clone()),
+                        source_session: provenance.source_session.clone(),
+                        source_trace: provenance.source_trace.clone(),
+                        source_request: provenance.source_request.clone(),
                         messages: episodes
                             .iter()
                             .map(|episode| apeireth_memory::MemoryExtractionMessage {
@@ -1689,9 +1816,23 @@ impl BehaviorModule for MemoryWritebackModule {
                         max_messages: 2,
                         max_message_chars: 4_096,
                     };
+                    let guarded_sink = super::memory_typed_sink::ProfileTypedSink {
+                        inner: sink.as_ref(),
+                        scope: MemoryScope::session(&session),
+                        provenance: provenance.clone(),
+                        cancellation: execution
+                            .map(|e| e.cancellation.clone())
+                            .unwrap_or_default(),
+                    };
+                    let target_sink: &dyn MemoryTypedMaterializationSink =
+                        if self.profile_partition.is_some() {
+                            &guarded_sink
+                        } else {
+                            sink.as_ref()
+                        };
                     if self
                         .materializer
-                        .materialize_typed(typed_input, now, sink.as_ref())
+                        .materialize_typed(typed_input, now, target_sink)
                         .await
                         .is_err()
                     {
@@ -1701,9 +1842,26 @@ impl BehaviorModule for MemoryWritebackModule {
 
                 match self.materializer.materialize_episodes(input, now).await {
                     Ok(materialized) => {
-                        for item in materialized {
+                        for mut item in materialized {
+                            if self.profile_partition.is_some() {
+                                if item.candidate.scope != MemoryScope::session(&session) {
+                                    self.metrics.warning();
+                                    continue;
+                                }
+                                item.episode.session_id = session.clone();
+                                item.candidate.provenance = provenance.clone();
+                            }
+                            if execution.is_some_and(|e| e.cancellation.is_cancelled()) {
+                                break;
+                            }
                             let result = if let Some(coord) = &self.coordinator {
-                                coord.writeback_episode(&item.episode).map(|_| ())
+                                coord
+                                    .writeback_scoped_episode(
+                                        &item.episode,
+                                        &MemoryScope::session(&item.episode.session_id),
+                                        &provenance,
+                                    )
+                                    .map(|_| ())
                             } else {
                                 self.memory.put_episode(&item.episode).map_err(|e| {
                                     apeireth_memory::MemoryError::Invalid(e.to_string())
@@ -1718,11 +1876,18 @@ impl BehaviorModule for MemoryWritebackModule {
                 }
 
                 for episode in episodes {
+                    if execution.is_some_and(|e| e.cancellation.is_cancelled()) {
+                        break;
+                    }
                     // Post-commit persistence is fail-open for the current
                     // answer, but the warning counter makes the loss visible.
                     let write_res = if let Some(coord) = &self.coordinator {
                         coord
-                            .writeback_episode(&episode)
+                            .writeback_scoped_episode(
+                                &episode,
+                                &MemoryScope::session(&session),
+                                &provenance,
+                            )
                             .map(|_| ())
                             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
                     } else {
@@ -1806,13 +1971,24 @@ impl BehaviorModule for MemoryWritebackModule {
                                 Ok(report) => {
                                     for insight in report.extracted_insights {
                                         let episode = Episode {
-                                            id: hash_id("ep-consolidation", &[&insight]),
+                                            id: if self.profile_partition.is_some() {
+                                                hash_id("ep-consolidation", &[&session, &insight])
+                                            } else {
+                                                hash_id("ep-consolidation", &[&insight])
+                                            },
                                             timestamp: now,
                                             role: "consolidation".into(),
                                             content: format!("[记忆整理洞察] {insight}"),
                                             session_id: session.clone(),
                                         };
-                                        if coord.writeback_episode(&episode).is_err() {
+                                        if coord
+                                            .writeback_scoped_episode(
+                                                &episode,
+                                                &MemoryScope::session(&session),
+                                                &provenance,
+                                            )
+                                            .is_err()
+                                        {
                                             self.metrics.warning();
                                             round_ok = false;
                                         }
@@ -1908,6 +2084,9 @@ impl PreferenceRecallModule {
 
 #[async_trait::async_trait]
 impl BehaviorModule for PreferenceRecallModule {
+    fn read_only_profile_projection(&self) -> bool {
+        true
+    }
     fn manifest(&self) -> &ModuleManifest {
         &self.manifest
     }

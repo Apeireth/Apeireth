@@ -1,5 +1,125 @@
 # Changelog — Apeireth
 
+## [Unreleased] — G Repository consolidation report（2026-10-29）
+
+- A–G 执行账收口：#64/#70 protected merges、11 verified recovery tags、7 E explicit deletions；#98 仍 OPEN/BLOCKED，main 尚未含 KC1。
+- 当前 36 refs / 31 unique-unmerged refs，原3463 IDs 全保留；main docs/architecture 六项通过，full gate 延后。限定 Kernel Complete、legacy unmet 历史与 true cold UNAVAILABLE 均保留。见 [G 总报告](docs/04-internal/repo-consolidation-g-report-2026-10-29.md)。
+
+## [Unreleased] — F Exact main documentation and architecture verification（2026-10-29）
+
+- 在 exact main detached worktree 实跑 docs truth/generated/links/index、strict arch 与 arch-doc，六项 exit 0；worktree clean 后移除。
+- VERIFY=pass 限于本次 docs/architecture；#98 未合并，最终 main 软件 full gate 延后，不用 A4 旧结果替代。见 [F 核验账](docs/04-internal/repo-consolidation-f-main-verify-2026-10-29.md)。
+
+## [Unreleased] — E Recovery anchors and cautious cleanup（2026-10-29）
+
+- 九个 SUPERSEDED 行均有远端 exact-tip 恢复 tag；加 D2 两项复核共 11 anchors。
+- 逐项删除 7 个 main 祖先 refs；两个 unique-ID 内容包含行及全部未决/档案/fork/活动线保留。见 [E 清理账](docs/04-internal/repo-consolidation-e-cleanup-2026-10-29.md)。
+
+## [Unreleased] — D2 Anchored protected merges（2026-10-29）
+
+- #64/#70 经 exact-head recovery tag 验证后走受保护普通 merge；main 已推进，未改保护或强推。
+- #98 required checks 未通过，仍保留；限定 Kernel Complete 与 PR eligibility 分开。见 [D2 执行账](docs/04-internal/repo-consolidation-d2-anchored-merges-2026-10-29.md)。
+
+## [Unreleased] — Kernel Startup Approval：日常定义批准与限定验收（2026-10-29）
+
+- **APPROVED**：repository owner / user (xiao ouyang) 于 2026-10-29（Asia/Shanghai）以「当然」批准已有 DB、完整进程重启、正常 OS 缓存及 A1b 相同 READY/session-pair 断言的 normal_start P50≤10 ms 日常核心准则。
+- **Kernel Convergence Complete (under approved startup definition)**：采用保留的 Dev normal_start P50=7.5642 ms 与 A4 GATE_FULL=0 / 软件 PASS；本批没有新性能样本。旧 OLD_COLD_P50=11.4143 ms 仍为 unmet 历史，真实 cold_start 仍 UNAVAILABLE，first_run/回归预算仍为提案。
+- **合并边界**：Phase D 的远端 CI 与 no-delete 策略阻塞不因批准解除；本批不合并、清理或改产品。定义原文与限定判断见 [Final Acceptance](docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md)、[A1b](docs/04-internal/kernel-convergence-a1b-startup-definitions-2026-10-29.md) 及 [A4 交叉注记](docs/04-internal/kernel-convergence-a4-final-gates-2026-10-29.md)。
+
+## [Unreleased] — Repo Consolidation D：受保护整合预检与阻塞留账（2026-10-29）
+
+- **零合并**：#64/#70 虽 CLEAN、required checks 通过，仓库自动删除 head 的设置与 D 不删分支规则冲突；未改设置或尝试旁路，main 保持原 SHA。
+- **Partial 保留**：#98 远端 BLOCKED，失败/等待项如实记录；按授权补充 PR 正文的正式 Partial、启动新定义未批准及真实冷缓存不可用状态。大范围/依赖 PR 留待分项复核，未清理分支或创建恢复锚。见 [D 执行账](docs/04-internal/repo-consolidation-d-merge-2026-10-29.md)。
+
+## [Unreleased] — Repo Consolidation C：分类与整合顺序建议（2026-10-29）
+
+- **仅分类**：B 的 45 个 ref 行各有唯一主类，16 个 open PR 各有下一步建议；全部 33 个含独有提交的行继续保留，无删除、合并或 PR 动作授权。
+- **后续边界**：先审 CI 证据链与活动 KC1，再按范围审独有增量；清理前须验证恢复锚并取得对应去留决定。main 只走受保护 PR，新启动定义仍未批准，正式验收保持 Partial。完整表及 D/E/F 建议见 [C classify](docs/04-internal/repo-consolidation-c-classify-2026-10-29.md)。
+
+## [Unreleased] — Repo Consolidation B：refs 与独有历史盘点（2026-10-29）
+
+- **仅盘点**：冻结本地/origin 分支、全部 tags、stash/worktree 和可见 open PR；45 个分支 refs 中 33 个含 main/KC1 之外的提交身份，9 个 topic tip 已是 main 祖先。名称、bot 或历史备份标签不构成删除授权。
+- **保留边界**：独有工作须经过合并或明确去留决定，任何后续删除先验证恢复锚；main 后续仅走受保护 PR。本批不合并、删分支、建锚或改产品源码，详细计数口径及快照见 [B inventory](docs/04-internal/repo-consolidation-b-inventory-2026-10-29.md)。
+
+## [Unreleased] — Kernel Convergence A4：全量门禁与正式验收复核（2026-10-29）
+
+- **软件复验**：原 gate_full 五段、指定 Runtime/CLI/Gateway 集成、clippy/fmt/strict arch 与文档门禁通过；CLI 原 TCP mock 夹具本轮通过，补齐 A3 当时的环境复验缺口，没有生产源码修复或测试减弱。
+- **正式验收仍 Partial**：原 Dev cold-start P50 11.4143 ms 仍未满足原 <10 ms。A1b normal_start 日常定义继续 PROPOSED_UNAPPROVED，真实冷缓存仍未实测；未改门槛、负载或历史数据。
+- **平台与证据**：Android runtime 库 check/build、assembly 最小库 check 通过，仅编译范围，无设备/JNI/UI/HARDWARE VALIDATED。见 [A4 验收账](docs/04-internal/kernel-convergence-a4-final-gates-2026-10-29.md) 与 [最终验收账](docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md)。
+
+## [Unreleased] — Kernel Convergence S6：子实例中断事实与最终门禁（2026-10-29）
+
+- **PRODUCTION WIRED（兼容子执行证据）**：工具派发前保存原 Session checkpoint，显式排水后追加一次 AgentTaskInterrupted；复用 wire id 的新执行不会被旧结果遮蔽，保留兼容 API、原日志与唯一计量边界。
+- **验证**：真实 Runtime 验证子实例事实 / 前端隔离 / cancel / native drain / owner 汇总；原 gate_full 五段、指定集成、前端与文档门禁通过。首轮磁盘失败与一次重试如实保留，不删除或忽略测试。
+- **验收 Partial**：既有冷启动目标仍未达；本批 Android runtime 库 check/build 与 assembly 最小库 check 通过（仅库），无设备/JNI/UI/HARDWARE VALIDATED。Mesh/NAT/P2P、PortableHost desktop-free 与可选授权映射保持。见 [S6 交付账](docs/04-internal/kernel-convergence-s6-2026-10-29.md) 和 [最终验收账](docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md)。
+
+## [Unreleased] — Kernel Convergence S5：默认桌面受管 main（2026-10-29）
+
+- **PRODUCTION WIRED / DEFAULT ENABLED（桌面 main）**：真实 bootstrap 持有同一 AgentRuntime 与 Host-owned ManagedAgent；CLI、gateway、流式、审批和心跳经同一完整请求适配进入原 Kernel。
+- **语义与授权**：Session / domain / security / 静态 system / 写闸 / 冻结审批与 delta 保留；模块 child grant 由 Host 显式选择，principal 默认拒绝边界不变，S4 映射仍为可选组合。PortableHost 继续桌面无依赖，Mesh/NAT/P2P 保留。
+- **证据与边界**：[S5 交付账](docs/04-internal/kernel-convergence-s5-2026-10-29.md) 记录真实 bootstrap 身份与多入口、并发控制、认知及可裁剪回归；整体 Production Convergence 仍为 Partial，S6 与最终 gates 留后续。
+
+## [Unreleased] — Kernel Convergence S4：Profile / Memory 显式授权映射（2026-10-29）
+
+- **IMPLEMENTED（可选 Host 组合）**：旧 scope / store 显式绑定完整 Profile / Namespace；共享来源只读、写入私有分区，无 principal 的旧数据库与全局认知模式保持。未映射私有请求默认拒绝，无全局回退，S3 guard 保留。
+- **撤销与来源**：回合、receipt、工具、后台整理、fork / reload 和审批续跑核对授权 epoch；旧会话不能复用新 grant，切换不继承旧缓存。原排序、治理、protected、CAS、typed sink、调优与物化保留，来源记录真实 session / request / trace。
+- **证据与边界**：真实 Runtime 对抗场景见 [S4 交付账](docs/04-internal/kernel-convergence-s4-2026-10-29.md)。映射不默认启用，整体 Convergence 仍为 Partial；未实施 S5 桌面受管 bootstrap。
+
+## [Unreleased] — Kernel Convergence S3：旧行为入口统一注册工具路径（2026-10-29）
+
+- **PRODUCTION WIRED（兼容行为入口）**：with_module / with_behavior 委托 RegisteredBehavior、固定 Hook 与原 Dispatcher；删除直接 callback fallback 和动态 system Overlay 注入链，保留公开名称、指令时序与兼容数据类型。
+- **授权与数据**：Host 显式授权内部 capability，模型假 receipt / 同名工具借权继续拒绝；principal 存在时旧全局认知跳过。动态文本仅作为不可信 ToolEventV1 配对工具数据，单次投影、空观察仅审计；静态 Host policy、预算/spill/溢出重试与业务历史过滤保持。
+- **证据与边界**：表示迁移及真实 Runtime 回归见 [S3 交付账](docs/04-internal/kernel-convergence-s3-2026-10-29.md)。整体 Convergence 仍为 Partial；S4 Profile 授权映射、S5 桌面受管主入口与最终验收留后续。
+
+## [Unreleased] — Kernel Convergence S2：ModuleInvoker 统一实例执行（2026-10-29）
+
+- **PRODUCTION WIRED（ModuleInvoker 路径）**：两个兼容实现共用既有 AgentInstance 任务端口，删除直接 Router completion 后端；单次私有执行不声明或派发工具、不递归 Hook，完整返回 NormalizedResponse 与 served_by。
+- **核算与兼容**：实际 Provider 尝试只在原边界扣共享 turn 预算及记账；事实归独立 child 与真实注册模块 owner，父 request/trace 作为来源。保留 ModuleInvoker ABI、Organ bridge、意外 tool_calls、逐次 usage、治理拒绝与审批限制。
+- **证据与边界**：真实 Runtime 的响应保真、身份/历史隔离、预算、失败/取消与分层核算见 [S2 交付账](docs/04-internal/kernel-convergence-s2-2026-10-29.md)。整体 Convergence 仍为 Partial；with_module/Overlay、Profile 映射、桌面 managed 默认与最终 gate_full 留后续切片。
+
+## [Unreleased] — Kernel Convergence S1：SubLoop 实例适配（2026-10-29）
+
+- **PRODUCTION WIRED（SubLoop 路径）**：兼容 spawner 委托既有 AgentInstance 规范化任务端口并进入同一 Runtime.execute_outcome；删除独立 Provider/round 循环，保留原 ABI、私有历史、治理与 Dispatcher。
+- **身份与资源**：绑定真实模块世代、父 principal/取消和权限交集；Isolated 禁止递归 Hook 与隐藏审批，timeout/stop 等待原生 lease 排水；共享 turn 预算在每次实际 Provider 尝试处扣减，实例/owner/Host 核算保持。
+- **证据与边界**：独立身份、持久工具对、预算与取消回归及完整响应端口见 [S1 交付账](docs/04-internal/kernel-convergence-s1-2026-10-29.md)。S2 后端、桌面 managed 默认、旧记忆 Profile 映射及最终全量门禁仍待后续切片。
+
+## [Unreleased] — Capability Modules Phase 3（2026-10-28）
+
+- **PRODUCTION WIRED**：现有 CapabilityRegistry 成为 Runtime 唯一可执行工具目录，PluginManager 继续拥有模块生命周期；Desktop 生产工具按原 provider 注册 ToolModule，保留既有实现与开关。
+- **模块与上下文**：Shell/Filesystem 可独立注册、停用、卸载和替换；ProcessModule 复用原结构化外部程序工具。逐调用 Agent/Session/Turn/Caller/Owner/Scope/授权/期限/取消/Trace 数据进入统一 Adapter，SubLoop 同步接入校验与身份转发。
+- **原生资源**：现有 ProcessExecutor 接取消与期限，阻塞 worker 持有模块 lease 和并发 permit；取消、超时与正常退出清理后代，不因丢弃 future 就假称资源已释放。原沙箱、路径、写总闸、冻结审批与输出限制保留。
+- **兼容范围**：旧 with_capability/with_tool、BuiltinToolsPlugin、动态 MCP、旧日志和自动 Memory overlay 明确登记；不宣称完整 Memory/Profile、多实例、共享 Arc 热插拔或专有设备资源迁移已完成。
+- **证据**：ADR-0020 与 `docs/04-internal/capability-modules-phase3-2026-10-28.md`；不改 LOCKED、依赖版本、组网能力或原门禁。
+
+## [Unreleased] — Registry Kernel Phase 2：注册模块 Runtime 纵向接线（2026-10-28）
+
+- **PRODUCTION WIRED（显式注册）**：现有 PluginManager 支持分离 initialize/start、失败清理、依赖反序 stop、取消排水与 unregister；V1 模块沿用既有 Plugin/能力归属索引，默认旧插件接口兼容。
+- **固定 Hook 实接**：不可变快照、受限并发回调、拓扑顺序提交；自动请求只调用自有注册工具，经过原治理与 Dispatcher，ToolEventV1 在闭合边界成对投影。错误、超时、取消和重复交付均有明确记录。
+- **统一执行适配**：LegacyToolAdapter 保留冻结审批载荷和 Session ID，收口 Schema、范围、期限、取消、panic 与输出相关性/预算；旧行为模块、宿主动态工具、SubLoop 和纯状态 control 的兼容边界逐项登记。
+- **兼容约束**：V1 持久事实显式升级，保留 KC 观察者逐字节契约；AfterToolCall 自动工作构成模型工具屏障，旧并行配置保留，不建立全局模型锁。并行协议结果按响应 turn 分组并保持调用 ID。
+- **范围与证据**：真实 Runtime 测试见 `registry_runtime_v1`，决策见 ADR-0019，实际门禁及推送权限状态见 `docs/04-internal/registry-kernel-phase2-2026-10-27.md`；未宣称完整 Memory/Profile、多实例或 Android App 已完成。
+
+## [Unreleased] — Registry Kernel 第一批：工具事件协议基础设施（2026-10-27）
+
+- **基线先验**：从远端 `refactor/kc1-kernel-convergence@82724dc3` 开始，KC 全部交付可达；原版全量门禁在 Cloud 修复依赖/进程回收后五段通过，实测见 `docs/04-internal/registry-kernel-migration-2026-10-27.md`，不引用历史数字充当本次结果。
+- **IMPLEMENTED**：`protocol::canonical::ToolEventV1` 区分模型/模块来源，复用 PluginId/TaskId/ToolCall/ToolResult；内部执行 ID 与 Provider wire id 分离。批次有字节/数量限额、幂等去重、冲突拒绝、原子追加与闭合上下文校验。
+- **协议修复**：请求适配器拒绝孤立结果和未回答调用；修复 Responses 请求丢失 assistant tool calls，保持混合文本与多调用、平铺函数工具 Schema；结果块只发送相应协议允许的字段。
+- **接线边界**：本批没有迁移既有业务 overlay，也没有实现 Registry 统一生命周期、后台独立 Agent、Profile Namespace 或 Android App。固定 Hook 枚举是 V1 数据词汇，不是已发出的生命周期事件。canonical 文本 provider 的既有限制不会因协议适配器测试通过而消失。
+- **兼容**：保留现有 Loop/审批/完成观察口/工具执行/数据库/桌面装配；旧的非法工具历史会在协议边界显式报错。ADR-0018 与迁移审计登记范围及后续切片。
+
+## [Unreleased] — KC-1 内核收束：痛觉/再生领域账本外迁到 organ，通用完成观察口取代内核领域状态（2026-10-27）
+
+- **领域状态外迁**：`BioPainState` / `BioRecoveryLedger` / 失败分类与再生案例逻辑从 `apeireth-runtime::canonical::bio_pain` 整体迁至 `apeireth-organ::nociception`；`Runtime` 不再持有 `bio_pain: Mutex<...>`，`RuntimeConfig::bio_pain_enabled` 与 `RuntimeBuilder::with_bio_pain` 退役。
+- **通用观察口**：新增 `apeireth_plugin::observation::{ToolCompletionFact, ToolCompletionObserver}`；内核在既有唯一收口 `record_call_completed`（串行派发 / 并行正常提交 / 取消排水）中、在 `ToolFailed` 事件与 `CapabilityCompleted` 轨迹落账**之后**，向已安装观察者发出**一次**事实。未安装 = 不取锁、不写账、事件/轨迹逐字节不变。
+- **装配**：CLI 仍按 `APEIRETH_ENABLE_BIO_PAIN`（env > 配置 > 默认关）构造 `NociceptionObserver` 并装入 builder；probe 读取口绑定同一 `Arc` 实例（开关关 = 同口径 `enabled=false` 空快照，不假装已接线）。
+- **兼容性**：串行/并行/取消/审批恢复语义不变；取消槽位与人工拒绝伪结果不经过完成收口，不产生评估（与迁移前行为一致）；公开快照类型迁至 `apeireth_organ::nociception`，`bio_pain_wiring` 4 例真实链路回归全绿。
+- **KC-2 内部控制命令**：`exit_plan_mode` 的硬编码分支从 `execute.rs` 移除；新增 `ControlCommand` 契约与 `PlanModeExitControl`，描述符/实现归位 `canonical/plan_mode_control.rs`，由 registry 统一声明与查找。同名工具/控制注册被拒；后到的同名插件工具在执行点 fail-closed。计划模式切换语义、持久化与恢复回归 5 例全绿。
+- **KC-3 基础层收束**：业务话术与关怀动作分级的 `care_potential_field` 从 `foundation/orchestration` 迁至 `apeireth-organ`（算法与行为未改）；其余 B 类领域算法登记为后续候选，不在本批搬迁。
+- **KC-4 架构守卫**：`docs/architecture/contract.toml [kernel]` 增加 runtime 生产依赖白名单、执行循环禁用字面量、领域类型黑名单；`arch_guard.py` 新增 `check_kernel_boundaries` + `--self-test`（域依赖/硬编码分派/领域类型三类违规 fixture 均稳定失败）；新增 `kernel_boundary.rs` 回归（空内核启动/零业务模块运行/每次执行恰一次完成事实/观察者不改变工具目录/观察者 panic 不破坏已完成调用/审批恢复恰一次投递）。
+- **观察者隔离（交付前核验补修）**：观察者是外部扩展点，其 panic 由 `catch_unwind` 隔离，**不重试、不补发**，已落账的 `ToolFailed` / `CapabilityCompleted` 与工具结果不受影响；`.github/workflows/arch-guard.yml` 新增 `Arch guard self-test` 步骤，CI 首次真正执行违规 fixture 自检（仍在既有灰度 job 内，不改变 2026-11-03 前 report-only 裁决）。
+- **真账（本机 2026-10-27，scoped）**：`apeireth-plugin` observation 1 passed；`apeireth-organ --lib nociception` 24 passed；`apeireth-runtime --test bio_pain_wiring` 4 passed；`apeireth-runtime --test canonical_plan_mode` 5 passed；`apeireth-runtime --test kernel_boundary` 4 passed；`apeireth-runtime --lib` pain 3 + control/registry 8 passed；`apeireth-runtime-assembly --test bio_mechanisms_self_status` 22 passed；受影响 crate `cargo clippy ... -D warnings` 0 警告；`cargo fmt --all -- --check` 0 diff；`python scripts/arch_guard.py --strict` VIOLATIONS 0；`--self-test` 4/4 PASS。全量 workspace 数字以 `gate_full.ps1` 收口为准。0 触碰 LOCKED 5 项；0 引新外部 dep（仅新增内部 path dev-dep `apeireth-organ`）。
+- **KC-5 全量收口（2026-10-27，`pwsh scripts/gate_full.ps1`）**：**GATE FULL PASSED**（`main.cargo-test` / `main.clippy` / `main.fmt` / `image.cargo-test` / `image.clippy` 五段全 OK）；实测 **351 套件 / 8902 passed / 0 failed / 53 ignored**（套件 = 测试二进制目标计数，日志 `logs/gate-full.log`）。`test-baseline.md` 维护权归效率线，本批不代改真源（其 341/8570 为 2026-10-21 历史口径）。
+
 ## [Unreleased] — 安全线重启批 S1-S3：治理单一入口 + 持久审计 + TLS/加密/SSRF 收口（2026-10-21/22）
 
 - **S1·R8-B2 装配根单点**（4e380a69）：CLI 生产治理收敛 GovernanceChain::run 单入口，四态行为等价真账。

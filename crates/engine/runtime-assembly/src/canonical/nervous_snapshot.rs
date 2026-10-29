@@ -527,7 +527,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_PAIN_ENABLE_ENV),
         parser: bio_switch_enabled_from_env_value,
-        wiring: "cli-assembly::Runtime::with_bio_pain",
+        wiring: "cli-assembly::NociceptionObserver → Runtime::with_tool_completion_observer",
         signals: &[
             SignalSpec {
                 id: "pain_ledger",
@@ -547,7 +547,7 @@ const MECHANISMS: [MechanismSpec; NERVOUS_MECHANISM_TOTAL] = [
         level: MechanismLevel::ProductionWired,
         enabled_env: Some(BIO_PAIN_ENABLE_ENV),
         parser: bio_switch_enabled_from_env_value,
-        wiring: "cli-assembly::Runtime::with_bio_pain（与痛觉同开关）",
+        wiring: "cli-assembly::NociceptionObserver（与痛觉同开关，通用观察端口）",
         signals: &[
             SignalSpec {
                 id: "recovery_state_machine",

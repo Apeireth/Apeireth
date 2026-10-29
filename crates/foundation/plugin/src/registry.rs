@@ -28,9 +28,15 @@ use crate::error::{PluginError, PluginResult};
 use crate::plugin::Plugin;
 
 /// A registered plugin and its current state.
+#[derive(Clone)]
 pub(crate) struct PluginEntry {
     pub(crate) plugin: Arc<dyn Plugin>,
     pub(crate) state: Lifecycle,
+    pub(crate) instance: apeireth_core::kernel::ModuleInstanceId,
+    pub(crate) scope: crate::task_scope::ModuleTaskScope,
+    pub(crate) activation: crate::resource_factory::ModuleActivation,
+    pub(crate) errors: Vec<PluginError>,
+    pub(crate) needs_cleanup: bool,
 }
 
 /// Which plugins exist, and what state each is in.
@@ -40,6 +46,11 @@ pub struct PluginRegistry {
 }
 
 impl PluginRegistry {
+    pub(crate) fn execution_snapshot(&self) -> Self {
+        Self {
+            entries: self.entries.clone(),
+        }
+    }
     /// An empty registry.
     pub fn new() -> Self {
         Self::default()
@@ -54,11 +65,17 @@ impl PluginRegistry {
         if self.entries.contains_key(&id) {
             return Err(PluginError::DuplicatePlugin(id));
         }
+        let instance = apeireth_core::kernel::ModuleInstanceId::new();
         self.entries.insert(
             id,
             PluginEntry {
                 plugin,
                 state: Lifecycle::Registered,
+                instance,
+                activation: crate::resource_factory::ModuleActivation::new(instance),
+                scope: crate::task_scope::ModuleTaskScope::new(),
+                errors: Vec::new(),
+                needs_cleanup: false,
             },
         );
         Ok(())
@@ -110,6 +127,14 @@ impl PluginRegistry {
         self.entries.is_empty()
     }
 
+    pub(crate) fn entry_mut(&mut self, id: &PluginId) -> Option<&mut PluginEntry> {
+        self.entries.get_mut(id)
+    }
+
+    pub(crate) fn remove(&mut self, id: &PluginId) {
+        self.entries.remove(id);
+    }
+
     pub(crate) fn entry(&self, id: &PluginId) -> Option<&PluginEntry> {
         self.entries.get(id)
     }
@@ -153,6 +178,10 @@ impl CapabilityIndex {
             self.owners.insert(descriptor.id.clone(), owner.clone());
         }
         Ok(())
+    }
+
+    pub(crate) fn remove_owner(&mut self, id: &PluginId) {
+        self.owners.retain(|_, owner| owner != id);
     }
 
     /// The plugin that owns `id`.

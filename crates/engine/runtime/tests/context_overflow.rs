@@ -204,12 +204,15 @@ async fn runtime_with(
 #[tokio::test]
 async fn window_exceeded_shrinks_the_budget_and_reassembles_until_it_fits() {
     let provider = WindowProbe::new(2_400, false);
-    let spill_root = tempfile::tempdir().unwrap();
+    // The retrieval guide includes the spill path. Keep this fixture relative
+    // so host-specific temporary-root length does not consume its fixed window.
+    let spill_root = tempfile::tempdir_in(".").unwrap();
+    let relative_spill_root = std::path::Path::new(spill_root.path().file_name().unwrap());
     let runtime = runtime_with(
         Arc::clone(&provider),
         "X".repeat(9_000),
         4_000,
-        Some(spill_root.path()),
+        Some(relative_spill_root),
     )
     .await;
 

@@ -349,7 +349,7 @@ fn project_live_tool_catalog(
     policy: &std::sync::Mutex<PermissionPolicy>,
 ) -> Vec<ToolDto> {
     let policy = policy.lock().ok();
-    let mut tools = runtime
+    runtime
         .capability_registry()
         .entries()
         .into_iter()
@@ -371,21 +371,7 @@ fn project_live_tool_catalog(
                 available: true,
             }
         })
-        .collect::<Vec<_>>();
-
-    for capability in runtime.plugins().active_tools() {
-        let declaration = capability.declaration();
-        tools.push(ToolDto {
-            name: declaration.name,
-            description: declaration.description.unwrap_or_default(),
-            args_schema: (!declaration.parameters.is_empty())
-                .then(|| serde_json::Value::Object(declaration.parameters)),
-            source: "plugin".to_string(),
-            permission: "plugin-managed".to_string(),
-            available: true,
-        });
-    }
-    tools
+        .collect::<Vec<_>>()
 }
 
 fn project_live_behavior_catalog(runtime: &Runtime) -> Vec<OrganDto> {

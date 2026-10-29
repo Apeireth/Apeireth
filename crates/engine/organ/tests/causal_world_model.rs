@@ -1,6 +1,6 @@
 //! W2 Causal World Model + W3 Causal Edge Mining 器官 集成测试 (per 任务 §3).
 //!
-//! 3 测试 + 1 ignored:
+//! 图操作、工厂合同与显式错误路径回归：
 //! 1. `causal_world_model_organ_add_entity_and_edge_deterministically` (W2 organ add_entity /
 //!    add_edge 确定性路径, 0 装诚实)
 //! 3. `causal_world_model_organ_simulate_counterfactual_uses_llm` (mock LlmFactory 返固定
@@ -14,7 +14,7 @@
 //! - 真生产路径: `CausalWorldModelOrgan::new(real_llm_factory, "minimax-m3-thinking")` +
 //!   `APEIRETH_API_KEY` env + 走真 LLM 调用 (v1 W2 是 LLM 重, **真实现** 必须真接 LLM)
 //! - dev 测试路径: `MockLlmFactory` (返 `CompletionResponse` 模拟 LLM 真响应), 不假装真 LLM
-//! - `#[ignore]` 测试: 真生产前阻塞 #1 — 跑 `cargo test -- --ignored` manual 验真接 LLM
+//! - Noop 工厂合同测试默认运行，不依赖密钥或外部服务。
 //!
 //! **承接**:
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入). W2 与 E4/F4/F6 共享
@@ -307,25 +307,16 @@ async fn causal_world_model_organ_no_llm_returns_error() {
 }
 
 // ============================================
-// Test 4 (#[ignore]): 真 LLM smoke (需 APEIRETH_API_KEY)
+// Noop factory contract (default regression).
 // ============================================
 
-/// **真接 LLM smoke**: 验 trait 边界在真 `LlmFactory` impl 注入下能编译/构造.
-///
-/// 真生产路径: 用 `apeireth_provider::minimax_llm_factory::MinimaxLlmFactory` (真接
-/// `provider.minimax.api_key` via `CredentialResolver`), 需 `APEIRETH_API_KEY` env.
-///
-/// **0 装诚实**: 当前 NoopLlmFactory 不调真 LLM. 真 LLM 集成是 v2.0.0-rc.1 真生产路径
-/// (per 任务 §3: "W2 必须 llm_factory() 返 Some(Arc<dyn LlmFactory>)"). 此 #[ignore]
-/// test 的目的: 验证 trait shape 在真 factory 注入下不变.
+/// 离线 Noop 工厂合同：默认回归，不读取密钥或调用外部服务。
+/// 保留历史函数名与原断言；通过不代表真实模型服务已验证。
 #[tokio::test]
-#[ignore = "requires APEIRETH_API_KEY env + real LLM endpoint; manual run: cargo test -p apeireth-organ -- --ignored"]
 async fn real_llm_smoke() {
     use apeireth_plugin::llm_factory::NoopLlmFactory;
 
-    // **0 装诚实**: 当前用 NoopLlmFactory 占位 (因为真 LLM provider impl 还在
-    // v2.0.0-rc.1 真生产路径, 当前 alpha 阶段不可用). 真生产前阻塞 #1:
-    // 替换为 `apeireth_provider::minimax_llm_factory::MinimaxLlmFactory`.
+    // 仅验证 Noop 注入与返回契约；真实服务验证使用独立 live 测试。
     let factory: Arc<dyn LlmFactory> = Arc::new(NoopLlmFactory);
     let organ = CausalWorldModelOrgan::new(factory, "minimax-m3-thinking");
     let inner = organ.inner();
@@ -344,11 +335,11 @@ async fn real_llm_smoke() {
     });
 
     // 0 装诚实: NoopLlmFactory 应返 LlmError → OrganError::LlmError
-    // (真生产路径用 MinimaxLlmFactory 时, 此处应返 OrganOutput::WorldModel)
+    // 返回分支保持原断言，不将 Noop 结果记为 live 成功。
     let result = organ.process(empty_input()).await;
     match result {
         Ok(OrganOutput::WorldModel { .. }) => {
-            // 真 LLM 路径成功 (此分支仅在真 LLM 接入后才到达)
+            // 保留原成功形状分支；本用例不验证真实服务。
         }
         Err(OrganError::LlmError(_)) | Err(OrganError::LlmUnavailable(_)) => {
             // 0 装诚实: NoopLlmFactory → LlmError 透传 (当前路径)

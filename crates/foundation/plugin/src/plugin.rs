@@ -35,9 +35,50 @@ pub struct PluginContext {
     /// The trace covering this start-up, so a plugin's own events correlate with
     /// the boot that caused them.
     pub trace: TraceId,
+    /// Owned work must use this scope so stop can cancel and drain it.
+    pub tasks: crate::task_scope::ModuleTaskScope,
+    pub agents: Option<Arc<dyn crate::agents::ModuleAgents>>,
+    agent_factory: Option<Arc<dyn crate::agents::ModuleAgentFactory>>,
+    pub(crate) activation: Option<crate::resource_factory::ModuleActivation>,
 }
 
 impl PluginContext {
+    /// Authoritative identity of this registry-created instance.
+    pub fn module_instance(&self) -> Option<apeireth_core::kernel::ModuleInstanceId> {
+        self.activation
+            .as_ref()
+            .map(|activation| activation.instance())
+    }
+
+    pub(crate) fn scoped(
+        &self,
+        definition: apeireth_core::kernel::PluginId,
+        instance: apeireth_core::kernel::ModuleInstanceId,
+        tasks: crate::task_scope::ModuleTaskScope,
+        activation: crate::resource_factory::ModuleActivation,
+    ) -> Self {
+        Self {
+            clock: self.clock.clone(),
+            credentials: self.credentials.clone(),
+            trace: self.trace,
+            agents: self
+                .agent_factory
+                .as_ref()
+                .map(|factory| factory.bind(definition, instance, tasks.clone())),
+            agent_factory: None,
+            activation: Some(activation),
+            tasks,
+        }
+    }
+
+    pub fn with_agent_factory(
+        mut self,
+        factory: Arc<dyn crate::agents::ModuleAgentFactory>,
+    ) -> Self {
+        self.agent_factory = Some(factory);
+        self
+    }
+
     /// Assemble a context.
     pub fn new(
         clock: Arc<dyn Clock>,
@@ -48,6 +89,10 @@ impl PluginContext {
             clock,
             credentials,
             trace,
+            tasks: crate::task_scope::ModuleTaskScope::new(),
+            agents: None,
+            agent_factory: None,
+            activation: None,
         }
     }
 }
@@ -79,6 +124,36 @@ pub trait Plugin: Send + Sync {
     /// an error moves this plugin to `Failed` and aborts the boot.
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()>;
 
+    /// Complete activation after initialize. Legacy plugins need no second step.
+    async fn start(&self, _ctx: &PluginContext) -> PluginResult<()> {
+        Ok(())
+    }
+
+    /// Optional modules may fail boot in isolation; failures remain observable.
+    fn required_at_boot(&self) -> bool {
+        true
+    }
+
+    /// Fixed, versioned subscriptions. Empty preserves legacy behavior.
+    fn hooks(&self) -> Vec<apeireth_protocol::canonical::ModuleHookV1> {
+        Vec::new()
+    }
+
+    /// Opt into versioned durable tool facts. Existing plugins keep their log
+    /// format; declaring a V1 hook opts in automatically.
+    fn uses_tool_events_v1(&self) -> bool {
+        !self.hooks().is_empty()
+    }
+
+    /// Observe an immutable boundary and request owned, registered tools.
+    /// The runtime authenticates ownership and executes through governance.
+    async fn on_hook(
+        &self,
+        _ctx: &crate::hooks::HookContextV1,
+    ) -> PluginResult<Vec<crate::hooks::HookToolRequest>> {
+        Ok(Vec::new())
+    }
+
     /// Release resources.
     ///
     /// Called in reverse dependency order. Errors are reported but do not stop
@@ -86,9 +161,32 @@ pub trait Plugin: Send + Sync {
     /// its plugins because one misbehaved leaks more than it protects.
     async fn shutdown(&self) -> PluginResult<()>;
 
+    /// Only factory adapters defer construction until initialize. Validation is
+    /// repeated before activation; deferral never makes a capability callable.
+    fn deferred_capabilities(&self) -> bool {
+        false
+    }
+
+    /// Synchronously revoke owned resources before bounded asynchronous cleanup.
+    fn revoke_resources(&self) {}
+
+    fn resource_statuses(&self) -> Vec<crate::resource_factory::ResourceStatus> {
+        Vec::new()
+    }
+
     /// Tool capabilities this plugin provides. Must match the manifest.
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
         Vec::new()
+    }
+
+    /// Opt-in dynamic tool namespace; all other tools must remain manifest-declared.
+    fn dynamic_tool_namespace(&self) -> Option<&str> {
+        None
+    }
+
+    /// Refresh owned descriptors. The Runtime publishes them atomically afterwards.
+    async fn refresh_tools(&self) -> PluginResult<()> {
+        Ok(())
     }
 
     /// Provider capabilities this plugin provides. Must match the manifest.

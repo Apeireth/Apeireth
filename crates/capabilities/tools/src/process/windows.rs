@@ -306,50 +306,6 @@ enum WindowsChild {
     Raw(WindowsRawChild),
 }
 
-impl ManagedChild for WindowsChild {
-    fn try_wait(&mut self) -> Result<Option<ChildStatus>, ProcessError> {
-        match self {
-            Self::Std(child) => child.try_wait(),
-            Self::Raw(child) => child.try_wait(),
-        }
-    }
-
-    fn wait(&mut self) -> Result<ChildStatus, ProcessError> {
-        match self {
-            Self::Std(child) => child.wait(),
-            Self::Raw(child) => child.wait(),
-        }
-    }
-
-    fn wait_timeout(&mut self, timeout: Duration) -> Result<Option<ChildStatus>, ProcessError> {
-        match self {
-            Self::Std(child) => child.wait_timeout(timeout),
-            Self::Raw(child) => child.wait_timeout(timeout),
-        }
-    }
-
-    fn terminate(&mut self) -> Result<(), ProcessError> {
-        match self {
-            Self::Std(child) => child.terminate(),
-            Self::Raw(child) => child.terminate(),
-        }
-    }
-
-    fn take_stdout(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
-        match self {
-            Self::Std(child) => child.take_stdout(),
-            Self::Raw(child) => child.take_stdout(),
-        }
-    }
-
-    fn take_stderr(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
-        match self {
-            Self::Std(child) => child.take_stderr(),
-            Self::Raw(child) => child.take_stderr(),
-        }
-    }
-}
-
 struct WindowsStdChild {
     child: Child,
     job: JobObject,
@@ -432,6 +388,10 @@ impl ManagedChild for WindowsStdChild {
             Ok(()) => Ok(()),
             Err(_) => self.child.kill().map_err(io_error),
         }
+    }
+
+    fn terminate_remaining(&mut self) -> Result<(), ProcessError> {
+        self.job.terminate()
     }
 
     fn take_stdout(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
@@ -820,6 +780,10 @@ impl ManagedChild for WindowsRawChild {
             }
         }
         Ok(())
+    }
+
+    fn terminate_remaining(&mut self) -> Result<(), ProcessError> {
+        self.job.terminate()
     }
 
     fn take_stdout(&mut self) -> Option<Box<dyn std::io::Read + Send>> {
@@ -1480,3 +1444,5 @@ fn status(status: std::process::ExitStatus) -> ChildStatus {
 fn io_error(e: std::io::Error) -> ProcessError {
     ProcessError::Io(e.to_string())
 }
+
+mod managed_child;

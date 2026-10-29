@@ -658,7 +658,7 @@ impl ToolCapability for WorktreeApplyTool {
         // 到期计时器仍能触发, 超时归既有 `timeout.*` code 族。
         let root = self.root.clone();
         let gate = Arc::clone(&self.gate);
-        match tokio::task::spawn_blocking(move || execute_four_beats(&root, &gate, &prepared)).await
+        match crate::process::run_native(move || execute_four_beats(&root, &gate, &prepared)).await
         {
             Ok(Ok(report)) => ToolResult::ok(
                 &call.id,

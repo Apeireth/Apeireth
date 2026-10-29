@@ -178,9 +178,20 @@ async fn build_runtime(db_path: &std::path::Path, provider: Arc<RecordingProvide
     )
     .unwrap();
 
+    // Selected Memory callbacks now require explicit Host capability grants.
+    let mut policy = apeireth_governance::PermissionPolicy::new();
+    for id in [
+        "tool.behavior.cognitive.memory_recall",
+        "tool.behavior.cognitive.memory_writeback",
+    ] {
+        policy.grant(apeireth_governance::Permission::ExecuteTool(id.into()));
+    }
     modules
         .register_into(
             Runtime::builder()
+                .with_governance(Arc::new(
+                    apeireth_governance::PermissionGovernanceHook::new(policy),
+                ))
                 .with_plugin(ProviderPlugin::new(provider))
                 .with_default_model(MODEL),
         )
@@ -235,7 +246,7 @@ async fn file_backed_sqlite_runtime_writeback_then_restart_recall_overlays_provi
     drop(first_store);
 
     // Rebuild both assembly and runtime against the same file. TurnStart recall
-    // must be visible only as a governed transient overlay to the provider.
+    // must be visible as a governed, paired module tool result to the provider.
     let second_provider = RecordingProvider::new();
     let second_runtime = build_runtime(&db_path, second_provider.clone()).await;
     second_runtime
@@ -249,6 +260,14 @@ async fn file_backed_sqlite_runtime_writeback_then_restart_recall_overlays_provi
     let requests = second_provider.requests();
     assert_eq!(requests.len(), 1);
     let provider_text = request_text(&requests[0]);
+    apeireth_protocol::canonical::validate_closed_tool_context(&requests[0].messages).unwrap();
+    assert!(requests[0].messages.iter().any(|m| m.role
+        == apeireth_protocol::canonical::MessageRole::Tool
+        && ContentPart::join_text(&m.content).contains("<governed_memory")));
+    assert!(!requests[0].messages.iter().any(|m| m.role
+        == apeireth_protocol::canonical::MessageRole::System
+        && ContentPart::join_text(&m.content).contains("<governed_memory")));
+
     assert!(
         provider_text.contains("<governed_memory"),
         "{provider_text}"

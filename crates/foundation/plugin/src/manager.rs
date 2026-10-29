@@ -19,6 +19,9 @@
 //! capability that silently disappears from listings when its plugin breaks,
 //! which is far harder to diagnose.
 
+mod lifecycle;
+
+use futures::FutureExt;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
 
@@ -39,6 +42,7 @@ pub struct PluginManager {
     capabilities: CapabilityIndex,
     /// Order in which plugins were started, so shutdown can reverse it.
     start_order: Vec<PluginId>,
+    execution_view: bool,
 }
 
 impl PluginManager {
@@ -47,11 +51,32 @@ impl PluginManager {
         Self::default()
     }
 
+    /// Derived membership view; it shares revocation tokens and cannot own lifecycle.
+    pub fn execution_snapshot(&self) -> Self {
+        Self {
+            plugins: self.plugins.execution_snapshot(),
+            capabilities: self.capabilities.clone(),
+            start_order: self.start_order.clone(),
+            execution_view: true,
+        }
+    }
+    fn require_owner(&self) -> PluginResult<()> {
+        if self.execution_view {
+            return Err(PluginError::PluginFailed {
+                plugin: PluginId::new("runtime.snapshot").expect("static id"),
+                phase: "control",
+                reason: "immutable execution view cannot mutate lifecycle".into(),
+            });
+        }
+        Ok(())
+    }
+
     /// Register a plugin and index its declared capabilities.
     ///
     /// All-or-nothing: if any capability collides, the plugin is not registered
     /// either.
     pub fn register(&mut self, plugin: Arc<dyn Plugin>) -> PluginResult<()> {
+        self.require_owner()?;
         let manifest = plugin.manifest();
         let id = manifest.id.clone();
 
@@ -60,7 +85,9 @@ impl PluginManager {
         }
         let tools = plugin.tools();
         let providers = plugin.providers();
-        Self::validate_implementations(plugin.as_ref(), &tools, &providers)?;
+        if !plugin.deferred_capabilities() {
+            Self::validate_implementations(plugin.as_ref(), &tools, &providers)?;
+        }
         self.validate_tool_names(&tools)?;
         // Index first: a capability collision must not leave the plugin behind.
         self.capabilities.index(&id, &manifest.capabilities)?;
@@ -83,12 +110,34 @@ impl PluginManager {
             .iter()
             .map(|provider| provider.id().clone())
             .collect();
+        let mut declared_ids = BTreeSet::new();
+        for descriptor in &manifest.capabilities {
+            if !declared_ids.insert(descriptor.id.clone()) {
+                return Err(PluginError::DuplicateCapability {
+                    capability: descriptor.id.clone(),
+                    incumbent: plugin_id.clone(),
+                    challenger: plugin_id.clone(),
+                });
+            }
+        }
+        if implemented_tools.len() != tools.len() || implemented_providers.len() != providers.len()
+        {
+            return Err(PluginError::PluginFailed {
+                plugin: plugin_id.clone(),
+                phase: "register",
+                reason: "duplicate capability implementation".into(),
+            });
+        }
 
         for tool in tools {
             let declared = manifest
                 .capability(tool.id())
                 .is_some_and(|descriptor| descriptor.kind == CapabilityKind::Tool);
-            if !declared {
+            if !declared
+                && !plugin.dynamic_tool_namespace().is_some_and(|prefix| {
+                    prefix.starts_with("tool.") && tool.id().as_str().starts_with(prefix)
+                })
+            {
                 return Err(PluginError::UndeclaredCapabilityImplementation {
                     plugin: plugin_id.clone(),
                     capability: tool.id().clone(),
@@ -132,6 +181,11 @@ impl PluginManager {
     }
 
     /// Ensure every model-facing tool name maps to exactly one capability id.
+    pub fn validate_current_implementations(&self, id: &PluginId) -> PluginResult<()> {
+        let plugin = self.plugins.get(id)?;
+        Self::validate_implementations(plugin.as_ref(), &plugin.tools(), &plugin.providers())
+    }
+
     fn validate_tool_names(&self, candidate_tools: &[Arc<dyn ToolCapability>]) -> PluginResult<()> {
         let mut names: BTreeMap<String, CapabilityId> = BTreeMap::new();
 
@@ -159,62 +213,259 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Start every registered plugin in dependency order.
-    ///
-    /// Returns the order used. On failure the already-started plugins remain
-    /// active and the failing one is marked [`Lifecycle::Failed`]; the caller
-    /// decides whether to shut down.
-    pub async fn start_all(&mut self, ctx: &PluginContext) -> PluginResult<Vec<PluginId>> {
-        let order = self.resolve_order()?;
-
-        for id in &order {
-            self.plugins.transition(id, Lifecycle::Initializing)?;
-            let plugin = Arc::clone(self.plugins.get(id)?);
-
-            match plugin.initialize(ctx).await {
-                Ok(()) => {
-                    self.plugins.transition(id, Lifecycle::Active)?;
-                    self.start_order.push(id.clone());
-                }
-                Err(e) => {
-                    self.plugins.transition(id, Lifecycle::Failed)?;
-                    return Err(PluginError::init_failed(id.clone(), e.to_string()));
+    fn validate_tool_names_for_activation(&self, id: &PluginId) -> PluginResult<()> {
+        let mut names = BTreeMap::new();
+        for owner in self.plugins.ids().filter(|owner| *owner != id) {
+            for tool in self.plugins.get(owner)?.tools() {
+                names.insert(tool.declaration().name, tool.id().clone());
+            }
+        }
+        for tool in self.plugins.get(id)?.tools() {
+            let name = tool.declaration().name;
+            if let Some(incumbent) = names.insert(name.clone(), tool.id().clone()) {
+                if incumbent != *tool.id() {
+                    return Err(PluginError::AmbiguousToolName {
+                        name,
+                        incumbent,
+                        challenger: tool.id().clone(),
+                    });
                 }
             }
         }
+        Ok(())
+    }
 
+    /// Start in dependency order. Legacy callers retain active-on-failure policy.
+    pub async fn start_all(&mut self, ctx: &PluginContext) -> PluginResult<Vec<PluginId>> {
+        let order = self.resolve_order()?;
+        for id in &order {
+            let result = match self.initialize(id, ctx).await {
+                Ok(()) => self.start(id, ctx).await,
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                if self.plugins.get(id)?.required_at_boot() {
+                    return Err(error);
+                }
+                let _ = self.stop(id).await;
+            }
+        }
         Ok(order)
     }
 
-    /// Stop every active plugin in reverse start order.
-    ///
-    /// Every plugin is asked to stop even if an earlier one failed; a shutdown
-    /// that abandons the rest because one misbehaved leaks more than it
-    /// protects. Returns the failures that occurred, in the order they occurred.
-    pub async fn shutdown_all(&mut self) -> Vec<PluginError> {
-        let mut failures = Vec::new();
-        let order: Vec<PluginId> = self.start_order.drain(..).rev().collect();
-
-        for id in order {
-            if self.plugins.transition(&id, Lifecycle::Stopping).is_err() {
-                continue;
-            }
-            let Ok(plugin) = self.plugins.get(&id).map(Arc::clone) else {
-                continue;
-            };
-
-            match plugin.shutdown().await {
-                Ok(()) => {
-                    let _ = self.plugins.transition(&id, Lifecycle::Stopped);
-                }
-                Err(e) => {
-                    let _ = self.plugins.transition(&id, Lifecycle::Failed);
-                    failures.push(PluginError::shutdown_failed(id, e.to_string()));
-                }
+    /// Runtime boot is transactional with respect to owned resources, not effects.
+    pub async fn start_all_or_rollback(
+        &mut self,
+        ctx: &PluginContext,
+    ) -> PluginResult<Vec<PluginId>> {
+        match self.start_all(ctx).await {
+            Ok(order) => Ok(order),
+            Err(error) => {
+                self.shutdown_all().await;
+                Err(error)
             }
         }
+    }
 
-        failures
+    fn failure(
+        &mut self,
+        id: &PluginId,
+        phase: &'static str,
+        reason: impl Into<String>,
+    ) -> PluginError {
+        let error = PluginError::PluginFailed {
+            plugin: id.clone(),
+            phase,
+            reason: reason.into(),
+        };
+        if let Some(entry) = self.plugins.entry_mut(id) {
+            if entry.errors.len() == 32 {
+                entry.errors.remove(0);
+            }
+            entry.errors.push(error.clone());
+        }
+        error
+    }
+
+    fn dependencies_active(&self, id: &PluginId) -> PluginResult<()> {
+        for dep in &self.plugins.get(id)?.manifest().dependencies {
+            if self.state(dep)? != Lifecycle::Active || !self.task_scope(dep)?.is_open() {
+                return Err(PluginError::PluginFailed {
+                    plugin: id.clone(),
+                    phase: "resolve",
+                    reason: format!("dependency {dep} is not running"),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Initialize one module once, after all dependencies are running.
+    pub async fn initialize(&mut self, id: &PluginId, ctx: &PluginContext) -> PluginResult<()> {
+        self.require_owner()?;
+        self.resolve_order()?;
+        self.dependencies_active(id)?;
+        self.plugins.transition(id, Lifecycle::Initializing)?;
+        self.plugins
+            .entry_mut(id)
+            .expect("registered")
+            .needs_cleanup = true;
+        let plugin = Arc::clone(self.plugins.get(id)?);
+        let scope = self.task_scope(id)?;
+        let ctx = ctx.scoped(
+            id.clone(),
+            self.instance_id(id)?,
+            scope.clone(),
+            self.plugins
+                .entry(id)
+                .expect("registered")
+                .activation
+                .clone(),
+        );
+        let result = scope
+            .run(std::panic::AssertUnwindSafe(plugin.initialize(&ctx)).catch_unwind())
+            .await;
+        match result {
+            Ok(Ok(Ok(()))) => self.plugins.transition(id, Lifecycle::Initialized),
+            other => {
+                self.plugins.transition(id, Lifecycle::Failed)?;
+                scope.close();
+                let reason = match other {
+                    Ok(Ok(Err(error))) => error.to_string(),
+                    Ok(Err(_)) => "initialize panicked".into(),
+                    _ => "initialize cancelled".into(),
+                };
+                Err(self.failure(id, "initialize", reason))
+            }
+        }
+    }
+
+    /// Activate an initialized module. Active is the existing Running state.
+    pub async fn start(&mut self, id: &PluginId, ctx: &PluginContext) -> PluginResult<()> {
+        self.require_owner()?;
+        self.dependencies_active(id)?;
+        self.plugins.transition(id, Lifecycle::Starting)?;
+        let plugin = Arc::clone(self.plugins.get(id)?);
+        let scope = self.task_scope(id)?;
+        let ctx = ctx.scoped(
+            id.clone(),
+            self.instance_id(id)?,
+            scope.clone(),
+            self.plugins
+                .entry(id)
+                .expect("registered")
+                .activation
+                .clone(),
+        );
+        let result = scope
+            .run(std::panic::AssertUnwindSafe(plugin.start(&ctx)).catch_unwind())
+            .await;
+        match result {
+            Ok(Ok(Ok(()))) => {
+                if let Err(error) = self
+                    .validate_current_implementations(id)
+                    .and_then(|()| self.validate_tool_names_for_activation(id))
+                {
+                    self.plugins.transition(id, Lifecycle::Failed)?;
+                    scope.close();
+                    return Err(self.failure(id, "start", error.to_string()));
+                }
+                self.plugins.transition(id, Lifecycle::Active)?;
+                self.plugins
+                    .entry(id)
+                    .expect("registered")
+                    .activation
+                    .activate();
+                self.start_order.push(id.clone());
+                Ok(())
+            }
+            other => {
+                self.plugins.transition(id, Lifecycle::Failed)?;
+                scope.close();
+                let reason = match other {
+                    Ok(Ok(Err(error))) => error.to_string(),
+                    Ok(Err(_)) => "start panicked".into(),
+                    _ => "start cancelled".into(),
+                };
+                Err(self.failure(id, "start", reason))
+            }
+        }
+    }
+
+    /// Cancellation port, shared by callbacks and dispatched tools.
+    pub fn task_scope(&self, id: &PluginId) -> PluginResult<crate::task_scope::ModuleTaskScope> {
+        self.plugins
+            .entry(id)
+            .map(|entry| entry.scope.clone())
+            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))
+    }
+
+    pub fn instance_id(
+        &self,
+        id: &PluginId,
+    ) -> PluginResult<apeireth_core::kernel::ModuleInstanceId> {
+        self.plugins
+            .entry(id)
+            .map(|entry| entry.instance)
+            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))
+    }
+
+    /// Latest lifecycle errors, bounded to 32 per registered module.
+    pub fn errors(&self, id: &PluginId) -> PluginResult<&[PluginError]> {
+        self.plugins
+            .entry(id)
+            .map(|entry| entry.errors.as_slice())
+            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))
+    }
+
+    /// Refuse new work and request cancellation without mutating the registry.
+    pub fn cancel(&self, id: &PluginId) -> PluginResult<()> {
+        self.require_owner()?;
+        self.plugins
+            .entry(id)
+            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))?
+            .activation
+            .revoke();
+        self.plugins.get(id)?.revoke_resources();
+        self.task_scope(id)?.close();
+        Ok(())
+    }
+
+    /// Remove only a cleaned, quiescent module, after removing its dependents.
+    pub fn unregister(&mut self, id: &PluginId) -> PluginResult<()> {
+        self.require_owner()?;
+        let entry = self
+            .plugins
+            .entry(id)
+            .ok_or_else(|| PluginError::UnknownPlugin(id.clone()))?;
+        if !matches!(
+            entry.state,
+            Lifecycle::Registered | Lifecycle::Stopped | Lifecycle::Failed
+        ) || entry.needs_cleanup
+            || entry.scope.active_tasks() != 0
+        {
+            return Err(PluginError::PluginFailed {
+                plugin: id.clone(),
+                phase: "unregister",
+                reason: "module must stop and release resources first".into(),
+            });
+        }
+        if self.plugins.ids().any(|other| {
+            self.plugins
+                .get(other)
+                .is_ok_and(|p| p.manifest().dependencies.contains(id))
+        }) {
+            return Err(PluginError::PluginFailed {
+                plugin: id.clone(),
+                phase: "unregister",
+                reason: "registered dependents still exist".into(),
+            });
+        }
+        entry.scope.close();
+        self.capabilities.remove_owner(id);
+        self.plugins.remove(id);
+        self.start_order.retain(|started| started != id);
+        Ok(())
     }
 
     /// Dependency-respecting start order.
@@ -222,7 +473,7 @@ impl PluginManager {
     /// Kahn's algorithm over a `BTreeMap`, so the order is deterministic: for a
     /// given set of plugins the boot sequence is always identical, which makes
     /// boot logs comparable across runs.
-    fn resolve_order(&self) -> PluginResult<Vec<PluginId>> {
+    pub fn resolve_order(&self) -> PluginResult<Vec<PluginId>> {
         let mut pending: BTreeMap<PluginId, BTreeSet<PluginId>> = BTreeMap::new();
 
         for id in self.plugins.ids() {
@@ -327,6 +578,7 @@ impl PluginManager {
             .providers()
             .into_iter()
             .find(|p| p.id() == &descriptor.id)
+            .map(|provider| crate::provider::scoped(provider, entry.scope.clone()))
             .ok_or_else(|| PluginError::UnknownCapability(id.clone()))
     }
 
@@ -384,6 +636,13 @@ impl PluginManager {
             .capability(id)
             .ok_or_else(|| PluginError::UnknownCapability(id.clone()))?;
 
+        if !entry.scope.is_open() {
+            return Err(PluginError::NotActive {
+                capability: id.clone(),
+                plugin: owner.clone(),
+                state: "stopping",
+            });
+        }
         if descriptor.kind != kind {
             return Err(PluginError::KindMismatch {
                 capability: id.clone(),
@@ -958,5 +1217,17 @@ mod tests {
         assert_eq!(d.kind, crate::extension::ExtensionKind::Plugin);
         assert_eq!(d.owner_crate, "apeireth-plugin");
         assert_eq!(d.id, "p.a");
+    }
+}
+
+impl Drop for PluginManager {
+    fn drop(&mut self) {
+        if self.execution_view {
+            return;
+        }
+        for id in self.plugins.ids() {
+            // Drop cannot await. Explicit shutdown performs observable close/drain.
+            let _ = self.cancel(id);
+        }
     }
 }

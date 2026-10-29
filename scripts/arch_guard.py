@@ -11,6 +11,7 @@
   python scripts/arch_guard.py --update-baseline  # 评审后初始化/缩表（谨慎）
   python scripts/arch_guard.py --wave 2           # 指定架构波次
   python scripts/arch_guard.py --json             # 机器可读输出
+  python scripts/arch_guard.py --self-test        # 守卫的守卫: 违规 fixture 必须被拦
 
 退出码: 0 = 通过/仅报告; 1 = strict 下有违规; 2 = fatal（契约/metadata 不可解析）
 
@@ -85,6 +86,7 @@ class Contract:
         self.ext_points = data.get("extension_points", {})
         self.flagged_edges = [(e["from"], e["to"]) for e in self.deps.get("flagged_edges", [])]
         self.composition_roots = data.get("composition_roots", [])
+        self.kernel = data.get("kernel", {})
 
     @property
     def current_wave(self) -> int:
@@ -221,6 +223,154 @@ def scan_ci_caliber() -> list[tuple[str, int, str]]:
                 if pattern.search(line):
                     hits.append((rel, idx, label))
     return hits
+
+
+# ------------------------------------------------------------- kernel boundary
+
+def _production_text(text: str) -> str:
+    """Drop everything from the first `#[cfg(test)]` marker onwards.
+
+    The kernel boundary protects the production mechanism; test fixtures may
+    legitimately name a domain crate or a tool to prove an observation port.
+    This is a warning-level scan, not a proof, and the cut is intentionally
+    conservative (tests live at the end of kernel files).
+    """
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        if re.match(r"^\s*#\[cfg\(test\)\]", line):
+            return "\n".join(lines[:idx])
+    return text
+
+
+def check_kernel_boundaries(
+    contract: Contract,
+    prod: dict[str, set[str]],
+    roots: dict[str, Path],
+    base: Path | None = None,
+) -> list[dict]:
+    """Return kernel-boundary violations (pure; no cargo call).
+
+    Three independent claims are checked:
+    1. the kernel's production dependency set is exactly the registered
+       mechanism whitelist (domain crates are a hard violation);
+    2. the execution loop files contain no forbidden business dispatch literal;
+    3. no kernel production source names a forbidden domain type/module.
+
+    `base` exists so the guard's own self-test can run against a temporary
+    fixture tree without touching the repository.
+    """
+    cfg = dict(contract.kernel or {})
+    if not cfg:
+        return []
+    base = ROOT if base is None else base
+    crate = str(cfg.get("crate", "")).strip()
+    if not crate:
+        return []
+    allowed = set(cfg.get("allowed_production_deps", []))
+    forbidden = set(cfg.get("forbidden_production_deps", []))
+    violations: list[dict] = []
+
+    def add(fingerprint: str, detail: str) -> None:
+        violations.append({
+            "weight": 10,
+            "category": "kernel",
+            "fingerprint": fingerprint,
+            "detail": detail,
+        })
+
+    for dep in sorted(prod.get(crate, set())):
+        if dep in forbidden:
+            add(f"kernel-dep {crate} -> {dep}",
+                f"机制内核新增领域/越界生产依赖 {dep}（见 contract [kernel]）")
+        elif allowed and dep not in allowed:
+            add(f"kernel-dep-unlisted {crate} -> {dep}",
+                f"机制内核生产依赖 {dep} 未在 [kernel].allowed_production_deps 登记")
+
+    for rel in cfg.get("execution_loop_files", []):
+        path = base / rel
+        if not path.exists():
+            add(f"kernel-loop-missing {rel}", "执行循环文件不存在（契约漂移）")
+            continue
+        text = _production_text(path.read_text(encoding="utf-8", errors="replace"))
+        for literal in cfg.get("forbidden_dispatch_literals", []):
+            if f'"{literal}"' in text:
+                add(f"kernel-branch {rel} {literal}",
+                    f"执行循环出现业务工具名字面量 {literal!r}（应走注册式控制/能力路径）")
+
+    kernel_root = roots.get(crate)
+    if kernel_root is not None:
+        src = kernel_root / "src"
+        if src.exists():
+            for path in sorted(src.rglob("*.rs")):
+                text = _production_text(path.read_text(encoding="utf-8", errors="replace"))
+                rel = _norm(str(path.relative_to(base)))
+                for name in cfg.get("forbidden_domain_types", []):
+                    if re.search(rf"\b{re.escape(name)}\b", text):
+                        add(f"kernel-domain-type {rel} {name}",
+                            f"内核生产源码出现领域类型/模块 {name}（领域状态必须外迁）")
+    return violations
+
+
+def run_kernel_self_test() -> int:
+    """Prove the guard actually blocks the three regression shapes it claims.
+
+    Each fixture is deliberately violating; the assertion is that the same
+    pure function used by `--strict` reports it. A clean fixture must report
+    nothing, so the test cannot pass by always failing.
+    """
+    import tempfile
+
+    cfg = {
+        "crate": "apeireth-runtime",
+        "allowed_production_deps": ["apeireth-core", "apeireth-plugin"],
+        "forbidden_production_deps": ["apeireth-organ"],
+        "execution_loop_files": ["src/canonical/execute.rs"],
+        "forbidden_dispatch_literals": ["exit_plan_mode"],
+        "forbidden_domain_types": ["BioPainState"],
+    }
+
+    class FakeContract:
+        kernel = cfg
+
+    cases: list[tuple[str, dict[str, set[str]], str, str | None]] = [
+        ("domain dependency", {"apeireth-runtime": {"apeireth-organ"}}, "", None),
+        ("hardcoded dispatch", {"apeireth-runtime": {"apeireth-core"}},
+         'if call.name == "exit_plan_mode" { }', None),
+        ("domain type", {"apeireth-runtime": {"apeireth-core"}}, "",
+         "pub struct BioPainState { pain: u32 }"),
+    ]
+
+    failures = 0
+    with tempfile.TemporaryDirectory(prefix="arch-guard-kernel-") as raw:
+        fixture = Path(raw)
+        loop = fixture / "src" / "canonical" / "execute.rs"
+        loop.parent.mkdir(parents=True, exist_ok=True)
+        loop.write_text("pub fn dispatch() {}\n", encoding="utf-8")
+        other = fixture / "src" / "canonical" / "runtime.rs"
+        other.write_text("pub struct Runtime;\n", encoding="utf-8")
+        roots = {"apeireth-runtime": fixture}
+
+        for label, prod, loop_body, domain_body in cases:
+            loop.write_text("pub fn dispatch() {}\n" + loop_body, encoding="utf-8")
+            other.write_text("pub struct Runtime;\n" + (domain_body or ""), encoding="utf-8")
+            found = check_kernel_boundaries(FakeContract(), prod, roots, base=fixture)  # type: ignore[arg-type]
+            ok = bool(found)
+            print(f"[self-test] {'PASS' if ok else 'FAIL'} {label}: {len(found)} violation(s)")
+            failures += 0 if ok else 1
+
+        loop.write_text("pub fn dispatch() {}\n", encoding="utf-8")
+        other.write_text("pub struct Runtime;\n", encoding="utf-8")
+        clean = check_kernel_boundaries(
+            FakeContract(),  # type: ignore[arg-type]
+            {"apeireth-runtime": {"apeireth-core"}},
+            roots,
+            base=fixture,
+        )
+        ok = not clean
+        print(f"[self-test] {'PASS' if ok else 'FAIL'} clean fixture: {len(clean)} violation(s)")
+        failures += 0 if ok else 1
+
+    return 0 if failures == 0 else 1
 
 
 # --------------------------------------------------------------------- cycles
@@ -406,6 +556,12 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
     for src, dst in contract.flagged_edges:
         if dst not in prod.get(src, set()):
             rep.note(f"flagged edge {src} -> {dst} 已不存在（可更新契约 flagged_edges）")
+
+    # 2.5 机制型微内核边界（KC-1）：依赖白名单 + 执行循环字面量 + 领域类型污染
+    kernel_violations = check_kernel_boundaries(contract, prod, roots)
+    rep.metrics["kernel_violations"] = len(kernel_violations)
+    for v in kernel_violations:
+        rep.violation(v["weight"], v["category"], v["fingerprint"], v["detail"])
 
     # 3. 循环
     prod_cycles = cycle_fingerprints(prod)
@@ -596,8 +752,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--update-baseline", action="store_true")
     parser.add_argument("--print-vendored", action="store_true",
                         help="输出契约 [vendored].image_family（供 gate 脚本生成 --exclude）")
+    parser.add_argument("--self-test", action="store_true",
+                        help="守卫的守卫: 用违规 fixture 证明内核边界检查能稳定失败")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.self_test:
+        return run_kernel_self_test()
 
     contract = load_contract(Path(args.contract))
     if args.print_vendored:

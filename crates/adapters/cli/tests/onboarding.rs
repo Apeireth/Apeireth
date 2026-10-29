@@ -200,6 +200,10 @@ fn auto_tune_off_keeps_presets_but_skips_budget_knobs() {
 
 #[test]
 fn tuning_state_evolution_reshapes_budgets_during_use() {
+    // Usage recording reads the process-wide disable switch too; serialize
+    // with activation tests so their escape hatch cannot suppress a write.
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _guard = EnvGuard::apply(&[("APEIRETH_DISABLE_ONBOARDING", None)]);
     let (_dir, paths) = temp_paths("tuning");
     onboarding::save_profile_at(&paths, &casual_profile()).expect("save");
 
@@ -230,6 +234,10 @@ fn tuning_state_evolution_reshapes_budgets_during_use() {
 
 #[test]
 fn tuning_recording_is_a_noop_without_casual_auto_tune_profile() {
+    // Usage recording reads the process-wide disable switch too; serialize
+    // with activation tests so their escape hatch cannot suppress a write.
+    let _lock = ENV_LOCK.lock().unwrap();
+    let _guard = EnvGuard::apply(&[("APEIRETH_DISABLE_ONBOARDING", None)]);
     let (_dir, paths) = temp_paths("tuning-noop");
     onboarding::record_usage_at(&paths, 100, 2, 10, 5);
     assert!(

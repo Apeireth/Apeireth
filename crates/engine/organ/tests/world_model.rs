@@ -8,7 +8,7 @@
 //! 2. `world_model_organ_state_diff_compares_two_states` (确定性 diff 路径, 对齐 v1)
 //! 3. `world_model_organ_no_llm_returns_error` (NoopLlmFactory → 透 LlmError 失败,
 //!    0 装诚实: 真接 LLM 真失败透传, 不假装"成功")
-//! 4. `world_model_organ_real_llm_smoke` (#[ignore], manual 跑验真接 LLM)
+//! 4. `world_model_organ_real_llm_smoke` (Noop 工厂合同，默认运行；不代表 live 验证)
 //!
 //! **0 装诚实** (per 任务 §3 + 子代理 R 同款):
 //! - W1 是 **LLM 重** (per v1 doc "第一层: LLM 按时间线展开反事实推演链"). 必然
@@ -17,7 +17,7 @@
 //!   `APEIRETH_API_KEY` env + 走真 LLM 调用.
 //! - dev 测试路径: `NoopLlmFactory` (per `apeireth-plugin::llm_factory::NoopLlmFactory`),
 //!   返 `LlmError::NotImplemented` (0 装: 不假装能调)
-//! - `#[ignore]` 测试: 真生产前阻塞 — 跑 `cargo test -- --ignored` manual 验真接 LLM
+//! - Noop 工厂合同测试默认运行，不依赖密钥或外部服务。
 //!
 //! **承接**:
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入), W1 共享同 trait
@@ -256,17 +256,14 @@ async fn world_model_organ_no_llm_returns_error() {
 }
 
 // ============================================
-// Test 4: real_llm_smoke (#[ignore], manual 跑)
+// Noop factory contract (default regression).
 // ============================================
 
-/// **0 装诚实**: 真接 LLM smoke 测试 (per 任务 §3).
+/// 离线 Noop 工厂合同：默认回归，不读取密钥或调用外部服务。
+/// 保留历史函数名与原断言；通过不代表真实模型服务已验证。
 #[tokio::test]
-#[ignore = "requires APEIRETH_API_KEY env + real LLM endpoint; manual run: cargo test -p apeireth-organ --test world_model -- --ignored"]
 async fn world_model_organ_real_llm_smoke() {
-    // 真生产路径: 用 NoopLlmFactory 占位 (当前 NoopLlmFactory 是 0 装).
-    // 此 #[ignore] test 目的: 验证 trait shape 在真 factory 注入下不变.
-    // 真 LLM 真接是 v2.0.0-rc.1 后的任务 — W1 是 v2 第一个**真接 LLM**的器官,
-    // 编译/构造 + LlmFactory 注入路径已就位, 真 LLM call 等 runtime 注入真 factory.
+    // 只检查工厂存在性与器官标识；不调用真实服务。
     let factory: Arc<dyn LlmFactory> = Arc::new(NoopLlmFactory);
     let organ = WorldModelOrgan::new(factory, "minimax-m3-thinking");
     assert_eq!(organ.organ_id(), OrganKind::W1);
