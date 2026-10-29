@@ -130,6 +130,31 @@ impl PluginManager {
         }
 
         for tool in tools {
+            let contract = tool.module_contract();
+            let declared_contract = manifest
+                .capability(tool.id())
+                .map(|d| d.module_tool_contract())
+                .transpose()
+                .map_err(|reason| PluginError::PluginFailed {
+                    plugin: plugin_id.clone(),
+                    phase: "register",
+                    reason,
+                })?
+                .flatten();
+            if contract.validate().is_err()
+                || declared_contract
+                    .as_ref()
+                    .is_some_and(|declared| declared != &contract)
+                || (contract != crate::module_contract::ModuleToolContract::default()
+                    && declared_contract.is_none())
+                || (!contract.model_visible() && tool.model_visible())
+            {
+                return Err(PluginError::PluginFailed {
+                    plugin: plugin_id.clone(),
+                    phase: "register",
+                    reason: "module tool contract does not match its executable surface".into(),
+                });
+            }
             let declared = manifest
                 .capability(tool.id())
                 .is_some_and(|descriptor| descriptor.kind == CapabilityKind::Tool);

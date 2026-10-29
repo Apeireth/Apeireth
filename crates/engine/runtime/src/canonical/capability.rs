@@ -40,6 +40,16 @@ pub trait CapabilityProvider: Send + Sync {
         apeireth_plugin::ToolModule::new(id, self.capabilities()).map_err(|error| error.to_string())
     }
 
+    /// Explicit Host selection of the typed public/private contract.
+    fn tool_module_with_contract(
+        &self,
+        mode: apeireth_plugin::module_contract::ExecutionMode,
+    ) -> Result<apeireth_plugin::ToolModule, String> {
+        self.tool_module()?
+            .with_public_contract(mode)
+            .map_err(|error| error.to_string())
+    }
+
     /// Capabilities currently exposed by this provider.
     fn capabilities(&self) -> Vec<Arc<dyn ToolCapability>>;
 }
@@ -433,8 +443,23 @@ impl CapabilityRegistry {
     pub fn declarations(&self) -> Vec<NormalizedTool> {
         self.capabilities()
             .iter()
-            .filter(|capability| capability.model_visible())
+            .filter(|capability| {
+                capability.model_visible() && capability.module_contract().model_visible()
+            })
             .map(|capability| capability.declaration())
+            .collect()
+    }
+
+    /// Public module view over the same active entries; discovery grants no authority.
+    pub fn module_public_declarations(&self) -> Vec<NormalizedTool> {
+        self.capabilities()
+            .into_iter()
+            .filter(|tool| {
+                let contract = tool.module_contract();
+                contract.surface == apeireth_plugin::module_contract::ToolSurface::Logical
+                    && contract.module_visible
+            })
+            .map(|tool| tool.declaration())
             .collect()
     }
 

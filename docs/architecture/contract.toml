@@ -321,3 +321,15 @@ name = "PrincipalAuthorizations"
 canonical = "crates/engine/runtime/src/canonical/principal_authority.rs"
 known_debt = []
 target = "S4: Host-only revocable execution epoch; store/scope mapping stays in assembly, not a second module registry"
+
+[[concepts]]
+name = "ModuleToolContract"
+canonical = "crates/foundation/plugin/src/module_contract.rs"
+known_debt = []
+target = "ADR-0023 P1: versioned manifest metadata and restricted views over the existing catalog; explicit Host composition, no permission grant"
+
+[[concepts]]
+name = "ModuleTaskHandle"
+canonical = "crates/foundation/plugin/src/module_contract.rs"
+known_debt = []
+target = "ADR-0023 P1: module-generation-bound task receipt; status authorization remains module-owned; no new lifecycle registry"

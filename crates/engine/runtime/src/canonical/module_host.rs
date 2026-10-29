@@ -11,7 +11,7 @@ impl Runtime {
         self.capabilities
             .capabilities()
             .into_iter()
-            .filter(|tool| tool.model_visible())
+            .filter(|tool| tool.model_visible() && tool.module_contract().model_visible())
             .map(|tool| {
                 let registration = self
                     .capabilities

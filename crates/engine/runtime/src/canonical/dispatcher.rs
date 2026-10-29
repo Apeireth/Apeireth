@@ -305,6 +305,13 @@ impl ToolDispatcher {
         call: &ToolCall,
         legacy_open_properties: bool,
     ) -> Result<(), ToolResult> {
+        if tool.module_contract().validate().is_err() {
+            return Err(failure(
+                call,
+                DispatchErrorCode::InvalidArguments,
+                "invalid registered module tool contract",
+            ));
+        }
         if session.is_some_and(|session| !self.allows(session, tool.id())) {
             return Err(failure(
                 call,
@@ -444,6 +451,9 @@ pub struct LegacyToolAdapter {
 
 #[async_trait]
 impl ToolCapability for LegacyToolAdapter {
+    fn module_contract(&self) -> apeireth_plugin::module_contract::ModuleToolContract {
+        self.tool.module_contract()
+    }
     fn model_visible(&self) -> bool {
         self.tool.model_visible()
     }

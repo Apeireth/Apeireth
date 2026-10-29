@@ -32,6 +32,9 @@ pub struct MemoryModule {
     automatic_retrieval: bool,
 }
 struct State {
+    contracts: bool,
+    instance: Mutex<Option<apeireth_core::kernel::ModuleInstanceId>>,
+    organizer_handles: Mutex<BTreeMap<TaskId, apeireth_core::kernel::AgentId>>,
     coordinator: Arc<MemoryCoordinator>,
     mappings: Option<Arc<crate::profile_memory::ProfileMemoryMappings>>,
     clock: Arc<dyn Clock>,
@@ -52,6 +55,15 @@ pub fn namespace_key(principal: &AgentPrincipal) -> String {
 }
 fn capability(op: &str) -> CapabilityId {
     CapabilityId::new(format!("tool.memory.{op}")).expect("constant capability")
+}
+fn memory_contract(op: &str) -> apeireth_plugin::module_contract::ModuleToolContract {
+    use apeireth_plugin::module_contract::{EffectClass, ExecutionMode, ModuleToolContract};
+    let (mode, effect) = match op {
+        "organize" => (ExecutionMode::Agentic, EffectClass::Orchestration),
+        "organizer_status" => (ExecutionMode::Direct, EffectClass::Pure),
+        _ => (ExecutionMode::Direct, EffectClass::Protected),
+    };
+    ModuleToolContract::logical(mode, effect)
 }
 fn wire_name(op: &str) -> String {
     format!("memory_{op}")
@@ -87,6 +99,9 @@ impl MemoryModule {
         Self {
             manifest,
             state: Arc::new(State {
+                contracts: false,
+                instance: Mutex::new(None),
+                organizer_handles: Mutex::new(BTreeMap::new()),
                 coordinator,
                 mappings: None,
                 clock,
@@ -100,6 +115,32 @@ impl MemoryModule {
             }),
             automatic_retrieval: true,
         }
+    }
+    /// Explicit Host selection; legacy construction retains its seven-tool surface.
+    pub fn with_module_contract(mut self) -> Self {
+        Arc::get_mut(&mut self.state)
+            .expect("unshared constructor")
+            .contracts = true;
+        self.manifest = self
+            .manifest
+            .declare_capability(
+                capability("organizer_status"),
+                CapabilityKind::Tool,
+                "Authorized organizer task status",
+            )
+            .expect("unique operation");
+        for descriptor in &mut self.manifest.capabilities {
+            let op = descriptor
+                .id
+                .as_str()
+                .strip_prefix("tool.memory.")
+                .expect("memory capability");
+            *descriptor = descriptor
+                .clone()
+                .with_module_tool_contract(&memory_contract(op))
+                .expect("valid memory contract");
+        }
+        self
     }
     pub fn with_profile_mappings(
         mut self,
@@ -154,6 +195,11 @@ impl Plugin for MemoryModule {
         }
     }
     async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
+        *self
+            .state
+            .instance
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = ctx.module_instance();
         *self.state.agents.lock().unwrap_or_else(|e| e.into_inner()) = ctx.agents.clone();
         *self.state.tasks.lock().unwrap_or_else(|e| e.into_inner()) = Some(ctx.tasks.clone());
         Ok(())
@@ -178,7 +224,11 @@ impl Plugin for MemoryModule {
         Ok(())
     }
     fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        OPERATIONS
+        let mut operations = OPERATIONS.to_vec();
+        if self.state.contracts {
+            operations.push("organizer_status");
+        }
+        operations
             .iter()
             .map(|op| {
                 Arc::new(MemoryTool {
@@ -222,6 +272,13 @@ struct MemoryTool {
 }
 #[async_trait]
 impl ToolCapability for MemoryTool {
+    fn module_contract(&self) -> apeireth_plugin::module_contract::ModuleToolContract {
+        if self.state.contracts {
+            memory_contract(self.op)
+        } else {
+            Default::default()
+        }
+    }
     fn id(&self) -> &CapabilityId {
         &self.id
     }
@@ -243,6 +300,10 @@ impl ToolCapability for MemoryTool {
             "retrieve" | "search" => (
                 json!({"query":{"type":"string","maxLength":4096},"limit":{"type":"integer","minimum":1,"maximum":20}}),
                 vec!["query"],
+            ),
+            "organizer_status" => (
+                json!({"task_handle":{"type":"object","properties":{"version":{"type":"integer","const":1},"module":{"type":"string"},"instance":{"type":"string"},"task":{"type":"string"}},"required":["version","module","instance","task"],"additionalProperties":false}}),
+                vec!["task_handle"],
             ),
             "write" => (
                 json!({"content":{"type":"string","minLength":1,"maxLength":16000},"idempotency_key":{"type":"string","minLength":1,"maxLength":128}}),
@@ -308,6 +369,9 @@ impl ToolCapability for MemoryTool {
                 json!({"untrusted_data":true,"items":[],"delivery":"compatibility_recall"}),
             )
             .with_name(&call.name);
+        }
+        if self.op == "organizer_status" {
+            return self.organizer_status(call, ctx);
         }
         if self.op == "organize" {
             return self.organize(call, ctx).await;

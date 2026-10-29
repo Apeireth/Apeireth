@@ -69,6 +69,7 @@ pub mod manager;
 pub mod manifest;
 pub mod mcp;
 pub mod memory_backend;
+pub mod module_contract;
 pub mod observation;
 pub mod organ;
 pub mod perception;

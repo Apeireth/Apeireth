@@ -145,7 +145,7 @@ impl Runtime {
             ));
         };
 
-        if !automatic && !tool.model_visible() {
+        if !automatic && (!tool.model_visible() || !tool.module_contract().model_visible()) {
             return Ok(ToolAdmission::Resolved(
                 crate::canonical::dispatcher::failure(
                     call,
