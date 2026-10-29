@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Repo Consolidation D：受保护整合预检与阻塞留账（2026-10-29）
+
+- **零合并**：#64/#70 虽 CLEAN、required checks 通过，仓库自动删除 head 的设置与 D 不删分支规则冲突；未改设置或尝试旁路，main 保持原 SHA。
+- **Partial 保留**：#98 远端 BLOCKED，失败/等待项如实记录；按授权补充 PR 正文的正式 Partial、启动新定义未批准及真实冷缓存不可用状态。大范围/依赖 PR 留待分项复核，未清理分支或创建恢复锚。见 [D 执行账](docs/04-internal/repo-consolidation-d-merge-2026-10-29.md)。
+
 ## [Unreleased] — Repo Consolidation C：分类与整合顺序建议（2026-10-29）
 
 - **仅分类**：B 的 45 个 ref 行各有唯一主类，16 个 open PR 各有下一步建议；全部 33 个含独有提交的行继续保留，无删除、合并或 PR 动作授权。
