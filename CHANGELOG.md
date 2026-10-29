@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — D4d executed Mesh UI and MCP scoped follow-ups（2026-10-29）
+
+- Land the bounded reactive core and current MCP guide while preserving broad Mesh and UI WIP with actual verification evidence.
+- Record the independently observed guide merge and its recovery chronology limitation without inventing a pre-merge receipt.
+
 ## [Unreleased] — D4b serial dependency execution and current blockers（2026-10-29）
 
 - Complete six protected serial dependency and action integrations after fresh required checks and exact-head recovery verification.
