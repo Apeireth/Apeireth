@@ -354,6 +354,7 @@ docs/04-internal/kani-verification-playbook.md,L4,5,Kani 形式化验证实战�
 docs/04-internal/kc1-kernel-convergence-baseline-2026-10-27.md,L4,3,KC-1 内核收束基线（KC-0 冻结）,2026-10-27,在飞,1,保留,
 docs/04-internal/kernel-convergence-2026-10-28.md,L4,4,Registry Kernel 最终收敛施工与验证账,2026-10-28,在飞,1,保留,
 docs/04-internal/kernel-convergence-a1-cold-start-2026-10-29.md,L4,9,A1 冷启动优化与复测账,2026-10-29,在飞,0,保留,
+docs/04-internal/kernel-convergence-a1b-startup-definitions-2026-10-29.md,L4,9,A1b 独立启动定义与进程测量,2026-10-29,在飞,0,保留,
 docs/04-internal/kernel-convergence-a2-ignored-tests-2026-10-29.md,L4,7,A2 忽略测试全量审计与恢复,2026-10-29,在飞,0,保留,
 docs/04-internal/kernel-convergence-a3-legacy-audit-2026-10-29.md,L4,7,A3 Legacy 执行入口审计,2026-10-29,在飞,0,保留,
 docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md,L4,9,Kernel Convergence Final Acceptance Report,2026-10-29,在飞,11,保留,
