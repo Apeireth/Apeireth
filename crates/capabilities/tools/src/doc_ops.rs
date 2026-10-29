@@ -5298,24 +5298,12 @@ mod tests {
     /// ⑯ 开关 fail-closed: 只认显式 `"1"`。
     #[test]
     fn the_switch_is_fail_closed_except_the_exact_opt_in() {
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        std::env::remove_var(DOC_OPS_ENABLE_ENV);
-        assert!(!doc_ops_enabled_from_env());
-        assert!(DocOpsConfig::from_env(".").is_none());
-        for value in ["0", "true", "on", " 1 0 ", ""] {
-            std::env::set_var(DOC_OPS_ENABLE_ENV, value);
-            assert!(!doc_ops_enabled_from_env(), "必须拒绝 {value:?}");
-            assert!(DocOpsConfig::from_env(".").is_none(), "必须拒绝 {value:?}");
-        }
-        std::env::set_var(DOC_OPS_ENABLE_ENV, "1");
-        assert!(doc_ops_enabled_from_env());
-        assert!(DocOpsConfig::from_env(".").is_some());
-        std::env::set_var(DOC_OPS_ENABLE_ENV, " 1 ");
-        assert!(doc_ops_enabled_from_env(), "前后空白容忍");
-        std::env::remove_var(DOC_OPS_ENABLE_ENV);
+        crate::test_support::assert_switch_fails_closed_except_exact_one(
+            DOC_OPS_ENABLE_ENV,
+            &["0", "true", "on", " 1 0 ", ""],
+            doc_ops_enabled_from_env,
+            Some(|| DocOpsConfig::from_env(".").is_some()),
+        );
     }
 
     // ---- 治理面行为钉 ----

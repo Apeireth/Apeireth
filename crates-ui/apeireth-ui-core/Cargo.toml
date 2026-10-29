@@ -1,0 +1,31 @@
+# ============================================================================
+# apeireth-ui-core — 响应式核心（信号 / 派生 / 依赖图 / 调度器 / effect）
+# ----------------------------------------------------------------------------
+# 引擎的**纯逻辑**层：只回答「什么时候、哪些东西需要重新算」，不回答「算出来
+# 之后放到哪」（设计文档 §3.3.1 / §4）。
+#
+# 0 外部依赖（含 0 依赖 web-sys）⇒ 永远能 native 单测，不需浏览器、不需 wasm
+# target（ADR-0021 的纯逻辑验证范围）。
+#
+# 契约登记：docs/architecture/contract.toml [extension_points]
+#   ui_component_trait = "crates-ui/apeireth-ui-core/src/component.rs::UiComponent"
+# ============================================================================
+[package]
+name = "apeireth-ui-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎响应式核心：信号 / 派生 / 依赖图 / 调度器 / effect / 作用域"
+
+[lib]
+name = "apeireth_ui_core"
+path = "src/lib.rs"
+
+[dependencies]
+# P0 阶段纪律：只允许 workspace 内部 path 依赖（外部依赖引入时机由 P0 探测
+# 结论决定，当前 0 引）。本 crate 是最底层，内部依赖也为 0。
+
+[lints]
+workspace = true

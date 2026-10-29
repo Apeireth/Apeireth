@@ -1,0 +1,22 @@
+# Focused independent reactive-library extract from PR #78; see ADR-0021.
+[workspace]
+resolver = "2"
+members = ["apeireth-ui-core"]
+
+[workspace.package]
+version = "2.0.0-rc.4"
+edition = "2021"
+rust-version = "1.97"
+authors = ["Apeireth Team"]
+license = "Apache-2.0 OR MIT"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unused_imports = "warn"
+unused_must_use = "warn"
+unused_qualifications = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+redundant_field_names = "warn"
+multiple_bound_locations = "warn"

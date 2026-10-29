@@ -2754,6 +2754,8 @@ mod tests {
     /// ⑮ 开关 fail-closed: 双闸齐开才生效 (显式 `"1"`, 杂值全拒)。
     #[test]
     fn switch_is_fail_closed_on_the_double_gate() {
+        // crate 级 env 锁（跨模块互斥，见 test_support::CRATE_ENV_LOCK）。
+        let _guard = crate::test_support::lock_env();
         // 跨件一致性: 感知族开关常量与感知批同一把钥匙 (同名同值不漂移)。
         assert_eq!(
             crate::device::sense::DEVICE_SENSE_ENABLE_ENV,
@@ -2774,10 +2776,7 @@ mod tests {
                 (name_control, &saved.1),
                 (name_auto, &saved.2),
             ] {
-                match value {
-                    Some(value) => std::env::set_var(name, value),
-                    None => std::env::remove_var(name),
-                }
+                crate::test_support::set_env(name, value.as_deref());
             }
         };
         let cases: &[(Option<&str>, Option<&str>)] = &[
@@ -2791,8 +2790,8 @@ mod tests {
             (Some("1"), Some("garbage")),
         ];
         for (sense, control) in cases {
-            set_env(name_sense, *sense);
-            set_env(name_control, *control);
+            crate::test_support::set_env(name_sense, *sense);
+            crate::test_support::set_env(name_control, *control);
             assert!(
                 !device_control_enabled_from_env(),
                 "双闸未齐必须关: {sense:?} {control:?}"
@@ -2802,24 +2801,16 @@ mod tests {
                 "双闸未齐 = 配置不构造 (fail-closed)"
             );
         }
-        set_env(name_sense, Some("1"));
-        set_env(name_control, Some(" 1 "));
-        set_env(name_auto, None);
+        crate::test_support::set_env(name_sense, Some("1"));
+        crate::test_support::set_env(name_control, Some(" 1 "));
+        crate::test_support::set_env(name_auto, None);
         assert!(device_control_enabled_from_env(), "双闸齐开 (空白容忍)");
         let config = DeviceControlConfig::from_env(".").expect("双闸齐开 = 配置构造");
         assert!(!config.auto_pass_reversible, "自动档默认关");
-        set_env(name_auto, Some("1"));
+        crate::test_support::set_env(name_auto, Some("1"));
         let config = DeviceControlConfig::from_env(".").expect("配置构造");
         assert!(config.auto_pass_reversible, "自动档随子开关");
         restore(&saved);
-    }
-
-    /// env 赋值小工具 (None = 移除)。
-    fn set_env(name: &str, value: Option<&str>) {
-        match value {
-            Some(value) => std::env::set_var(name, value),
-            None => std::env::remove_var(name),
-        }
     }
 
     /// ⑯ 治理钩子分级矩阵: 零副作用拍放行 / 三档分级审批 / 词表外拒绝即帧。

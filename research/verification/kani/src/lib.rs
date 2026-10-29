@@ -8,6 +8,7 @@
 //!   - crates/foundation/orchestration/src/async_context.rs
 //!   - crates/engine/memory/src/{residual_pyramid,semantic_axis,river_topology,bitemporal_graph}.rs
 //!   - crates/adapters/gateway/src/file_fetcher.rs
+//!   - crates/foundation/core/src/storage_atomic.rs (shared cache write primitive)
 //!   - crates/capabilities/tools/src/sensitive_path.rs
 //!   - crates/foundation/governance/src/{risk,intent}.rs
 //!
@@ -39,6 +40,12 @@
 // unused_imports 同 workspace lints 口径 (canonical 文件按整 crate 编译时
 // 部分导入仅测试路径使用)。
 #![allow(dead_code, unused_imports)]
+
+// Compile the exact storage primitive used by the shared file-fetch source;
+// no workspace dependency or alternate implementation is needed in the mirror.
+extern crate self as apeireth_core;
+#[path = "../../../../crates/foundation/core/src/storage_atomic.rs"]
+pub mod storage_atomic;
 
 #[path = "../../../../crates/engine/runtime/src/canonical/research_approval_sm.rs"]
 pub mod research_approval_sm;
@@ -209,10 +216,7 @@ pub mod kani_collections {
         where
             K: Borrow<Q>,
         {
-            let idx = self
-                .entries
-                .iter()
-                .position(|(k, _)| k.borrow() == key)?;
+            let idx = self.entries.iter().position(|(k, _)| k.borrow() == key)?;
             Some(self.entries.swap_remove(idx).1)
         }
 
@@ -331,10 +335,7 @@ pub mod kani_collections {
 
     impl<'a, K, V> IntoIterator for &'a HashMap<K, V> {
         type Item = (&'a K, &'a V);
-        type IntoIter = std::iter::Map<
-            std::slice::Iter<'a, (K, V)>,
-            fn(&(K, V)) -> (&K, &V),
-        >;
+        type IntoIter = std::iter::Map<std::slice::Iter<'a, (K, V)>, fn(&(K, V)) -> (&K, &V)>;
         fn into_iter(self) -> Self::IntoIter {
             fn pair<K, V>(slot: &(K, V)) -> (&K, &V) {
                 (&slot.0, &slot.1)
@@ -345,10 +346,8 @@ pub mod kani_collections {
 
     impl<'a, K, V> IntoIterator for &'a mut HashMap<K, V> {
         type Item = (&'a K, &'a mut V);
-        type IntoIter = std::iter::Map<
-            std::slice::IterMut<'a, (K, V)>,
-            fn(&mut (K, V)) -> (&K, &mut V),
-        >;
+        type IntoIter =
+            std::iter::Map<std::slice::IterMut<'a, (K, V)>, fn(&mut (K, V)) -> (&K, &mut V)>;
         fn into_iter(self) -> Self::IntoIter {
             fn pair<K, V>(slot: &mut (K, V)) -> (&K, &mut V) {
                 (&slot.0, &mut slot.1)
