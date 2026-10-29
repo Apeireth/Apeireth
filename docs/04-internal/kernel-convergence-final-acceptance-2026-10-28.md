@@ -2,12 +2,52 @@
 
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md
-Version: 3.2 (A4 full gates and formal startup judgment)
+Version: 3.3 (owner-approved daily startup definition and qualified judgment)
 Last-Modified: 2026-10-29
-Status: Convergence Partial；A4 五段与指定软件检查通过，原 Dev 冷启动门槛仍未达
+Status: Kernel Convergence Complete (under approved startup definition)
 Author: Codex
 
-## A4 当前验收结论（2026-10-29）
+## 当前验收：已批准的日常启动定义（2026-10-29）
+
+**Kernel Convergence Complete (under approved startup definition)**
+
+批准日期：**2026-10-29（Asia/Shanghai）**。批准者：**repository owner / user (xiao ouyang)**。
+用户答复词：**「当然」**；本次用户指令明确确认此批准，不再要求重复确认。
+以下为批准的定义原文，状态 **APPROVED**：
+
+> With existing-DB **normal_start P50 ≤ 10 ms** as the **daily core startup criterion**
+> (existing DB, full process restart, normal OS caches; same READY/session-pair assertions as A1b).
+
+这是有日期、批准者和明确范围的验收规则变更，不是修改旧测量或悄悄降低旧门槛。
+依据 [A1b 定义与保留测量](kernel-convergence-a1b-startup-definitions-2026-10-29.md) 和
+[A4 软件门禁](kernel-convergence-a4-final-gates-2026-10-29.md) 重新判定；本次没有新增性能样本或重跑全量软件门禁。
+从 A4 源码冻结到本批起点 `4b49f2dfeef21ebb4ce4b783ecc5766760679b30` 只有文档变化，
+本批也仅改文档；保留的 A4/A1b 证据的代码范围没有被新产品变更替代。
+
+| 验收项 | 保留证据与现行判断 |
+| --- | --- |
+| 已批准的 Dev daily normal_start | **P50=7.5642 ms ≤10 ms，PASS**；A1b n=30，P95=9.0289 ms；已有 DB、完整进程重启、正常 OS 缓存、相同 READY/session-pair-v1 断言 |
+| 其余必需软件条件 | A4 **GATE_FULL=0**，原五段及指定集成、clippy/fmt、strict arch、架构/文档检查 PASS；为保留证据，不是本批新跑的测试 |
+| Idle regression | A4 P50=30.1094 MiB，满足原同数值 35 MiB 目标；保留观测，非新增样本 |
+| 原 legacy Dev cold-start | **OLD_COLD_P50=11.4143 ms，原 <10 ms 未达（unmet，历史）**；不再作为已批准日常定义的阻塞项，旧 benchmark/阈值/负载/历史输出保留 |
+| 真正冷文件缓存 cold_start | **UNAVAILABLE，环境限制，不记作 PASS**；真实 drop_caches 写入被拒绝，Dev/Release n=0，P50/P95 未实测，未用正常缓存替代 |
+| first_run / 回归策略 | A1b first_run 目标与 relative+absolute regression detection 仍为 **PROPOSED / advisory**；不因本次批准自动升为正式门禁或删除 |
+
+批准仅覆盖 Dev normal_start 的日常 P50≤10 ms；A1b 的 P95/Release 附加预算、first_run、cold_start、
+warm_resume 建议预算及相对+绝对回归判定仍按原提案保留。旧报告器的兼容输出/提案标签不覆盖本条 owner 批准记录，
+本批不改 harness、报告脚本、就绪合同、初始化或持久化语义，也不宣称所有 cold gates 通过。
+外部 live、设备/JNI/UI 与真实冷缓存的未验证边界继续保留；没有增加 HARDWARE VALIDATED 声明。
+
+**Kernel 验收判断与 Phase D 的受保护 PR 合并资格分开记账。** D 已记录的 #98 required-check/merge-state 阻塞、
+#64/#70 的自动删 head 与 no-delete 冲突不因本次批准而通过或解除；本批不合并 PR、改保护/设置、删分支或执行 E 清理。
+下一步是 **Phase D merge eligibility / continue D→E→F→G**，不是自动合并。
+审批原文、保留日志核验与推送回执位于 `/tmp/apeireth-approve/`，归档到
+`/workspace/apeireth-codex/approve-evidence/`；A1b/A4 原始测量与退出码保持不变。
+
+## A4 验收结论（批准前历史冻结口径，2026-10-29）
+
+以下 A4 与更早各节的 Partial、PROPOSED_UNAPPROVED 和旧 gate 阻塞结论均为批准前记录；
+原文与数字保留，不覆盖上面的已批准定义及限定的当前 Kernel 判断。
 
 **正式状态仍为 Partial。** 从 clean `fffb712ed0d21fdab9768bed4aa0093d0ca13a75`
 重新运行原五段 `gate_full.ps1`，全部通过、exit **0**；指定集成、四包 clippy、fmt、

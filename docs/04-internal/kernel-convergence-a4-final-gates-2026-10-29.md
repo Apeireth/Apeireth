@@ -2,12 +2,27 @@
 
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-a4-final-gates-2026-10-29.md
-Version: 1.0
+Version: 1.1 (approval cross-note; A4 measurements and gates frozen)
 Last-Modified: 2026-10-29
-Status: Partial；本批所列软件检查通过，正式旧启动门槛未达标
+Status: A4 software PASS；Kernel 当前判断见已批准定义交叉注记
 Author: Codex
 
-## 正式判定
+## 批准后交叉注记（2026-10-29）
+
+**repository owner / user (xiao ouyang)** 于 **2026-10-29（Asia/Shanghai）** 以 **「当然」**
+明确批准已有 DB、完整进程重启、正常 OS 缓存、相同 READY/session-pair 断言的 daily normal_start P50≤10 ms。
+状态现为 **APPROVED**，定义原文和批准范围见 [Final Acceptance](kernel-convergence-final-acceptance-2026-10-28.md)
+与 [A1b](kernel-convergence-a1b-startup-definitions-2026-10-29.md)。结合保留的 Dev normal_start P50=7.5642 ms（PASS）
+和本笔记的 **GATE_FULL=0 / 软件 PASS**，当前限定判断为
+**Kernel Convergence Complete (under approved startup definition)**。
+
+A4 **OLD_COLD_P50=11.4143 ms，原 <10 ms 未达（unmet，历史）** 仍报告，
+但已不是批准后日常定义的阻塞项。真实 cold_start 仍 **UNAVAILABLE（环境限制，不记 pass）**；
+first_run 预算与 relative+absolute regression detection 仍是提案。没有新增测量、重新跑 A4 或清除设备/live 边界。
+本次批准不解决 Phase D 的远端 CI/保护与 no-delete 冲突，不进行合并或 E 清理。
+下文直至结尾均为 **A4 批准前的冻结执行账**；Partial / PROPOSED_UNAPPROVED 等表述只描述当时状态。
+
+## A4 原正式判定（批准前历史冻结口径）
 
 **STATUS=PARTIAL，GATE_FULL=0，OLD_COLD_P50=11.4143 ms。**
 本批从 clean `fffb712ed0d21fdab9768bed4aa0093d0ca13a75` 开始，先 fetch / status / log，

@@ -2,12 +2,38 @@
 
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-a1b-startup-definitions-2026-10-29.md
-Version: 1.0 (原门槛保留，新定义待批准)
+Version: 1.1 (daily normal_start APPROVED; original evidence retained)
 Last-Modified: 2026-10-29
-Status: Partial；旧 Dev gate 未达标，真实冷缓存未能实测，新日常定义尚未批准
+Status: APPROVED；daily normal_start 达标，Kernel 按已批准定义重新判定
 Author: Codex
 
-## 判定与提案
+## 当前批准与日常判定（2026-10-29）
+
+日常核心启动定义已由 **repository owner / user (xiao ouyang)** 于 **2026-10-29（Asia/Shanghai）** 批准，
+用户答复词为 **「当然」**。状态由 PROPOSED_UNAPPROVED 改为 **APPROVED**；依据本次明确授权记录，毋须再确认。
+批准定义原文：
+
+> With existing-DB **normal_start P50 ≤ 10 ms** as the **daily core startup criterion**
+> (existing DB, full process restart, normal OS caches; same READY/session-pair assertions as A1b).
+
+使用本笔记保留的 Dev normal_start **P50=7.5642 ms（≤10 ms，PASS）**，P95=9.0289 ms、n=30。
+这是 A1b 既有测量，不是本次新增样本；原 spawn→READY、独立进程/Runtime shutdown、已有 DB 与
+session-pair-v1 内容/断言全部保持。结合 A4 所列必需软件 PASS / GATE_FULL=0，
+[Final Acceptance 当前判断](kernel-convergence-final-acceptance-2026-10-28.md) 为
+**Kernel Convergence Complete (under approved startup definition)**。
+
+边界仍显式保留：
+
+- A4 **OLD_COLD_P50=11.4143 ms，原 <10 ms 未达（unmet，历史）**。A1/A1b 的更早数值与旧 benchmark 原样保留；旧 gate 不再作为日常定义的当前阻塞项。
+- 真正冷缓存 `cold_start` 仍 **UNAVAILABLE**：真实 drop_caches 写入被拒绝，Dev/Release n=0；是环境限制，不冒称 pass，不用 normal_start 补数。
+- 仅日常 Dev normal_start P50≤10 ms 获批准；first_run 目标与 relative+absolute regression detection 继续 **PROPOSED / advisory**。原表中 P95/Release、cold_start、warm_resume 附加预算也未自动批准。
+- 没有历史同定义性能对照，不能把此次规则批准称作新的性能优化或“无回归”；没有改报告脚本/旧 gate 输出或关键初始化。
+- Phase D 的远端 required checks、mergeStateStatus 和自动删除策略冲突独立保留，本次不授予 PR 合并或 E 清理许可。
+
+以下直至文件结尾为 **A1b 批准前的原始证据与提案记录**；其中 Partial、PROPOSED_UNAPPROVED 与“待批准”是历史口径，
+`normal_start` 日常 P50 的现行批准状态以上段为准，其余提案不因历史措辞而被静默丢弃。
+
+## A1b 原始判定与提案（批准前历史冻结口径）
 
 **正式验收仍为 Partial。** 原 `cold-start` 的本批最终 Dev P50 为 **11.5277 ms**，
 仍未满足原 **<10 ms**。新 `normal_start` 的 Dev P50 为 **7.5642 ms**，

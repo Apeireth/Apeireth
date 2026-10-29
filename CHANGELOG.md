@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Kernel Startup Approval：日常定义批准与限定验收（2026-10-29）
+
+- **APPROVED**：repository owner / user (xiao ouyang) 于 2026-10-29（Asia/Shanghai）以「当然」批准已有 DB、完整进程重启、正常 OS 缓存及 A1b 相同 READY/session-pair 断言的 normal_start P50≤10 ms 日常核心准则。
+- **Kernel Convergence Complete (under approved startup definition)**：采用保留的 Dev normal_start P50=7.5642 ms 与 A4 GATE_FULL=0 / 软件 PASS；本批没有新性能样本。旧 OLD_COLD_P50=11.4143 ms 仍为 unmet 历史，真实 cold_start 仍 UNAVAILABLE，first_run/回归预算仍为提案。
+- **合并边界**：Phase D 的远端 CI 与 no-delete 策略阻塞不因批准解除；本批不合并、清理或改产品。定义原文与限定判断见 [Final Acceptance](docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md)、[A1b](docs/04-internal/kernel-convergence-a1b-startup-definitions-2026-10-29.md) 及 [A4 交叉注记](docs/04-internal/kernel-convergence-a4-final-gates-2026-10-29.md)。
+
 ## [Unreleased] — Repo Consolidation D：受保护整合预检与阻塞留账（2026-10-29）
 
 - **零合并**：#64/#70 虽 CLEAN、required checks 通过，仓库自动删除 head 的设置与 D 不删分支规则冲突；未改设置或尝试旁路，main 保持原 SHA。
