@@ -1,0 +1,72 @@
+{
+  "passed": true,
+  "t1_pixel_ratio": 0.0,
+  "t1_pixel_different": 0,
+  "t1_pixel_total": 586224,
+  "t2_dom_equal": true,
+  "t2_dom_diffs": [],
+  "t3_same_width": true,
+  "t3b_same_height": true,
+  "t3_reference_width": 828,
+  "t3_engine_width": 828,
+  "t3_reference_height": 708.484375,
+  "t3_engine_height": 708.484375,
+  "t4_controls_equal": true,
+  "t4_reference_controls": [
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "思考模式模型过滤器",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=思考模式模型过滤器",
+        "placeholder=全部模型",
+        "type=text"
+      ]
+    },
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "reasoning 标签",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=reasoning 标签",
+        "type=text"
+      ]
+    }
+  ],
+  "t4_engine_controls": [
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "思考模式模型过滤器",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=思考模式模型过滤器",
+        "placeholder=全部模型",
+        "type=text"
+      ]
+    },
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "reasoning 标签",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=reasoning 标签",
+        "type=text"
+      ]
+    }
+  ],
+  "t5_preview_equal": true,
+  "t5_reference_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}",
+  "t5_engine_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}",
+  "case": "developer-reasoning-on",
+  "section": "developer",
+  "reference_scripts": [
+    "(() => { const label = \"\\u601d\\u8003\\u6a21\\u5f0f (Reasoning)\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+  ],
+  "engine_scripts": [
+    "window.__CAPABILITY__.toggleCapability(\"reasoningEnabled\")"
+  ]
+}

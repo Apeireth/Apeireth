@@ -315,7 +315,7 @@ impl ToolGuardrail {
 
     /// 反复脱敏同族**全部**匹配, 而不只是第一处。
     ///
-    /// 2026-10-24 fuzz 发现的**真实泄密路径**: 原实现每族只处理第一处匹配 ——
+    /// 2026-10-24 fuzz 发现的**真实泄密路径**: 改动前每族只处理第一处匹配 ——
     /// 一份工具输出里若出现两个同类凭证, 第二个会**原样出境**。实测修复前:
     /// ```text
     /// 输入  "xoxb-AAA... and xoxb-BBB..."
@@ -448,7 +448,7 @@ impl ToolGuardrail {
             }
             // 残留的**裸标记**: 输出里出现 `PRIVATE KEY-----` 却没有可整块红掉的块
             // (缺 END 行 / BEGIN 在标记之后 —— fuzz 实测的形态)。
-            // 原实现此处只「报告泄露」不「脱敏」: 二次扫描仍报同一泄露 → **绊线不幂等**,
+            // 改动前此处只「报告泄露」不「脱敏」: 二次扫描仍报同一泄露 → **绊线不幂等**,
             // 而且明文碎片其实一直留在输出里。这里把裸标记一并替换掉,
             // 保证**脱敏后的输出不再含 `PRIVATE KEY-----`** 这条硬不变量。
             if sanitized.contains("PRIVATE KEY-----") {
@@ -537,7 +537,7 @@ impl ToolGuardrail {
                         {
                             leaked_kinds.push(LeakedCredentialKind::PlaintextPassword);
                             sanitized.replace_range(value_start..value_end, "[REDACTED_PASSWORD]");
-                            // **脱敏全部匹配**: 原实现此处 `break`, 只处理第一处口令,
+                            // **脱敏全部匹配**: 改动前此处 `break`, 只处理第一处口令,
                             // 于是 `password=a\npassword=b` 的第二个值**原样出境**
                             // (2026-10-24 fuzz 发现)。
                             // 不能从 0 重扫: 替换后仍是 `password=[REDACTED_PASSWORD]` 形态,

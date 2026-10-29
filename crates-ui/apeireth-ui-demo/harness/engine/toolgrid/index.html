@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="night">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>引擎侧 · 工具卡面</title>
+    <!--
+      设计令牌层：**只读引用**生产前端的同一批 CSS（构建期复制到 public/design/）。
+      链接顺序与参考侧**完全一致** ⇒ 两侧的计算样式同源。
+    -->
+    <link rel="stylesheet" href="/design/tokens.css" />
+    <link rel="stylesheet" href="/design/base.css" />
+    <link rel="stylesheet" href="/design/essence.css" />
+    <link rel="stylesheet" href="/design/hud.css" />
+    <link rel="stylesheet" href="/design/motion.css" />
+    <link rel="stylesheet" href="/design/prose.css" />
+    <link rel="stylesheet" href="/design/shell.css" />
+    <!--
+      卡面 scoped CSS：构建期从生产组件的 `<style>` 块抽取，并按组件**作用域化**
+      （做法与组件编译器同构，规则写在抽取脚本里）。
+    -->
+    <link rel="stylesheet" href="/toolgrid/tool-grid.css" />
+    <link rel="stylesheet" href="/toolgrid/status-badge.css" />
+    <!-- 对照专用样式（两侧**逐字相同**地链入）：舞台宽度。 -->
+    <link rel="stylesheet" href="/toolgrid-test.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,52 @@
+[
+  { "id": "static-quiet-h0000", "path": "static", "mode": "quiet", "hour": 0, "camera": 0 },
+  { "id": "static-quiet-h0430", "path": "static", "mode": "quiet", "hour": 4.5, "camera": 0 },
+  { "id": "static-quiet-h0625", "path": "static", "mode": "quiet", "hour": 6.25, "camera": 0 },
+  { "id": "static-quiet-h0900", "path": "static", "mode": "quiet", "hour": 9, "camera": 0 },
+  { "id": "static-quiet-h1200", "path": "static", "mode": "quiet", "hour": 12, "camera": 0 },
+  { "id": "static-quiet-h1215", "path": "static", "mode": "quiet", "hour": 12.15, "camera": 0 },
+  { "id": "static-quiet-h1600", "path": "static", "mode": "quiet", "hour": 16, "camera": 0 },
+  { "id": "static-quiet-h2000", "path": "static", "mode": "quiet", "hour": 20, "camera": 0 },
+
+  { "id": "static-thinking-h0000", "path": "static", "mode": "thinking", "hour": 0, "camera": 0 },
+  { "id": "static-thinking-h0430", "path": "static", "mode": "thinking", "hour": 4.5, "camera": 0 },
+  { "id": "static-thinking-h0625", "path": "static", "mode": "thinking", "hour": 6.25, "camera": 0 },
+  { "id": "static-thinking-h0900", "path": "static", "mode": "thinking", "hour": 9, "camera": 0 },
+  { "id": "static-thinking-h1200", "path": "static", "mode": "thinking", "hour": 12, "camera": 0 },
+  { "id": "static-thinking-h1215", "path": "static", "mode": "thinking", "hour": 12.15, "camera": 0 },
+  { "id": "static-thinking-h1600", "path": "static", "mode": "thinking", "hour": 16, "camera": 0 },
+  { "id": "static-thinking-h2000", "path": "static", "mode": "thinking", "hour": 20, "camera": 0 },
+
+  { "id": "static-speaking-h0000", "path": "static", "mode": "speaking", "hour": 0, "camera": 0 },
+  { "id": "static-speaking-h0430", "path": "static", "mode": "speaking", "hour": 4.5, "camera": 0 },
+  { "id": "static-speaking-h0625", "path": "static", "mode": "speaking", "hour": 6.25, "camera": 0 },
+  { "id": "static-speaking-h0900", "path": "static", "mode": "speaking", "hour": 9, "camera": 0 },
+  { "id": "static-speaking-h1200", "path": "static", "mode": "speaking", "hour": 12, "camera": 0 },
+  { "id": "static-speaking-h1215", "path": "static", "mode": "speaking", "hour": 12.15, "camera": 0 },
+  { "id": "static-speaking-h1600", "path": "static", "mode": "speaking", "hour": 16, "camera": 0 },
+  { "id": "static-speaking-h2000", "path": "static", "mode": "speaking", "hour": 20, "camera": 0 },
+
+  { "id": "static-pad-quiet-h0900", "path": "static", "mode": "quiet", "hour": 9, "camera": 0, "pad": [0.6, -0.3, 0.2], "intensity": 0.8 },
+  { "id": "static-pad-thinking-h0900", "path": "static", "mode": "thinking", "hour": 9, "camera": 0, "pad": [0.6, -0.3, 0.2], "intensity": 0.8 },
+  { "id": "static-pad-speaking-h0900", "path": "static", "mode": "speaking", "hour": 9, "camera": 0, "pad": [0.6, -0.3, 0.2], "intensity": 0.8 },
+
+  { "id": "anim-quiet-cam0-h0000", "path": "animated", "mode": "quiet", "hour": 0, "camera": 0, "t0": 1.5 },
+  { "id": "anim-quiet-cam0-h0900", "path": "animated", "mode": "quiet", "hour": 9, "camera": 0, "t0": 1.5 },
+  { "id": "anim-quiet-cam0-h1200", "path": "animated", "mode": "quiet", "hour": 12, "camera": 0, "t0": 1.5 },
+  { "id": "anim-quiet-cam0-h2000", "path": "animated", "mode": "quiet", "hour": 20, "camera": 0, "t0": 1.5 },
+
+  { "id": "anim-quiet-cam1-h0000", "path": "animated", "mode": "quiet", "hour": 0, "camera": 1, "t0": 1.5 },
+  { "id": "anim-quiet-cam1-h0900", "path": "animated", "mode": "quiet", "hour": 9, "camera": 1, "t0": 1.5 },
+  { "id": "anim-quiet-cam1-h1200", "path": "animated", "mode": "quiet", "hour": 12, "camera": 1, "t0": 1.5 },
+  { "id": "anim-quiet-cam1-h2000", "path": "animated", "mode": "quiet", "hour": 20, "camera": 1, "t0": 1.5 },
+
+  { "id": "anim-quiet-cam2-h0000", "path": "animated", "mode": "quiet", "hour": 0, "camera": 2, "t0": 1.5 },
+  { "id": "anim-quiet-cam2-h0900", "path": "animated", "mode": "quiet", "hour": 9, "camera": 2, "t0": 1.5 },
+  { "id": "anim-quiet-cam2-h1200", "path": "animated", "mode": "quiet", "hour": 12, "camera": 2, "t0": 1.5 },
+  { "id": "anim-quiet-cam2-h2000", "path": "animated", "mode": "quiet", "hour": 20, "camera": 2, "t0": 1.5 },
+
+  { "id": "anim-thinking-cam1-h0900", "path": "animated", "mode": "thinking", "hour": 9, "camera": 1, "t0": 1.5 },
+  { "id": "anim-thinking-cam2-h0900", "path": "animated", "mode": "thinking", "hour": 9, "camera": 2, "t0": 1.5 },
+  { "id": "anim-speaking-cam1-h0900", "path": "animated", "mode": "speaking", "hour": 9, "camera": 1, "t0": 1.5 },
+  { "id": "anim-speaking-cam2-h0900", "path": "animated", "mode": "speaking", "hour": 9, "camera": 2, "t0": 1.5 }
+]

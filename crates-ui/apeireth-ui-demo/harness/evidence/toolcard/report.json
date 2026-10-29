@@ -1,0 +1,446 @@
+{
+  "batch": "工具卡面（ToolCallCard + ToolCallLifecycleCard）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "reference_page": "/reference/tool/index.html",
+  "engine_page": "/engine/tool/index.html",
+  "case_count": 5,
+  "t1_pixels": [
+    {
+      "case": 0,
+      "phase": "collapsed",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 92720,
+      "ratio": 0.0
+    },
+    {
+      "case": 0,
+      "phase": "expanded",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 221920,
+      "ratio": 0.0
+    },
+    {
+      "case": 0,
+      "phase": "raw",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 331360,
+      "ratio": 0.0
+    },
+    {
+      "case": 1,
+      "phase": "collapsed",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 92720,
+      "ratio": 0.0
+    },
+    {
+      "case": 1,
+      "phase": "expanded",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 297920,
+      "ratio": 0.0
+    },
+    {
+      "case": 1,
+      "phase": "raw",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 393680,
+      "ratio": 0.0
+    },
+    {
+      "case": 2,
+      "phase": "collapsed",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 92720,
+      "ratio": 0.0
+    },
+    {
+      "case": 2,
+      "phase": "expanded",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 401280,
+      "ratio": 0.0
+    },
+    {
+      "case": 2,
+      "phase": "raw",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 557840,
+      "ratio": 0.0
+    },
+    {
+      "case": 3,
+      "phase": "collapsed",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 92720,
+      "ratio": 0.0
+    },
+    {
+      "case": 3,
+      "phase": "expanded",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 332120,
+      "ratio": 0.0
+    },
+    {
+      "case": 3,
+      "phase": "raw",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 427880,
+      "ratio": 0.0
+    },
+    {
+      "case": 4,
+      "phase": "collapsed",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 92720,
+      "ratio": 0.0
+    },
+    {
+      "case": 4,
+      "phase": "expanded",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 392160,
+      "ratio": 0.0
+    },
+    {
+      "case": 4,
+      "phase": "raw",
+      "size_mismatch": false,
+      "different": 0,
+      "total": 392160,
+      "ratio": 0.0
+    }
+  ],
+  "t2_dom": [
+    {
+      "case": 0,
+      "phase": "collapsed",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 0,
+      "phase": "expanded",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 0,
+      "phase": "raw",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 1,
+      "phase": "collapsed",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 1,
+      "phase": "expanded",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 1,
+      "phase": "raw",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 2,
+      "phase": "collapsed",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 2,
+      "phase": "expanded",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 2,
+      "phase": "raw",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 3,
+      "phase": "collapsed",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 3,
+      "phase": "expanded",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 3,
+      "phase": "raw",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 4,
+      "phase": "collapsed",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 4,
+      "phase": "expanded",
+      "equal": true,
+      "diffs": []
+    },
+    {
+      "case": 4,
+      "phase": "raw",
+      "equal": true,
+      "diffs": []
+    }
+  ],
+  "t3_frames": {
+    "reference_frame_count": 16,
+    "engine_frame_count": 16,
+    "target_frame_count": 16,
+    "frames": [
+      {
+        "index": 0,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 1,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 2,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 3,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 4,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 5,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 6,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 7,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 8,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 9,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 10,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 11,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 12,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 13,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 14,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      },
+      {
+        "index": 15,
+        "size_mismatch": false,
+        "different": 0,
+        "total": 1296000,
+        "ratio": 0.0
+      }
+    ],
+    "events": [
+      {
+        "side": "reference",
+        "frames": 16,
+        "events": {
+          "transitionrun": 0,
+          "transitionstart": 0,
+          "transitionend": 0,
+          "animationstart": 0,
+          "animationend": 0,
+          "animationcancel": 0
+        }
+      },
+      {
+        "side": "engine",
+        "frames": 16,
+        "events": {
+          "transitionrun": 0,
+          "transitionstart": 0,
+          "transitionend": 0,
+          "animationstart": 0,
+          "animationend": 0,
+          "animationcancel": 0
+        }
+      }
+    ]
+  },
+  "t4_json": {
+    "total": 10,
+    "equal": 10,
+    "items": [
+      {
+        "id": "pending-basic:tool-args",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "running-summary:tool-args",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "running-summary:lifecycle-args",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "succeeded-full:tool-args",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "succeeded-full:tool-result",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "succeeded-full:lifecycle-args",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "succeeded-full:lifecycle-result",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "failed-zero-duration:tool-args",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "failed-zero-duration:lifecycle-args",
+        "equal": true,
+        "diffs": []
+      },
+      {
+        "id": "cancelled-raw-args:lifecycle-result",
+        "equal": true,
+        "diffs": []
+      }
+    ]
+  },
+  "notes": [
+    "T1/T3 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T1 静态抓取时两侧**同时**停掉无限循环动画（`data-toolcard-static`）——无限动画的相位随时间漂移 ⇒ 两侧先后抓取会出现**假差异**（实测 52 像素）；动画的存在与起播由 T3 逐帧对照覆盖。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与注释锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）⇒ 比试点口径更严。",
+    "T3 是**实时**对照：两帧的采集耗时不同 ⇒ 相位会有偏移（采集侧的偏移，不是渲染差异）。",
+    "T4 是**字节级**差分：同一批值分别过浏览器侧 `JSON.stringify` 与引擎侧序列化器（紧凑 / 缩进 / 超长截断三种形态）。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。"
+  ],
+  "checks": {
+    "t1_all_pixels_within_budget": true,
+    "t1_pixel_sum_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_enough_frames": true,
+    "t3_all_frames_within_budget": true,
+    "t4_json_byte_identical": true
+  },
+  "passed": true
+}

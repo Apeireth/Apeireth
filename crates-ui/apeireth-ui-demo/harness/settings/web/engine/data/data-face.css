@@ -1,0 +1,37 @@
+/* `data` 子面的**面内补丁样式**（只补**抽取器漏掉**的那几条规则）。
+ *
+ * ## 为什么有这份补丁
+ *
+ * 共享的抽取器（`scripts/extract-settings-assets.mjs`）按「**规则的全部 class
+ * 选择器**都在本面的 class 线索集里」来归属规则 ⇒ **一条规则里有多个选择器
+ * 分支、而各分支属于不同面时，整条规则会被漏掉**。
+ *
+ * 本面就撞上了这一条（生产 `SettingsView.svelte:4138-4142`）：
+ *
+ * ```css
+ * .form-group label,
+ * .form-group .group-label { font-size: 12px; font-weight: 500; color: var(--text); }
+ * ```
+ *
+ * ⇒ `group-label` 是**别的面**的 class ⇒ 整条规则**没有**归给本面 ⇒ 引擎侧
+ * 的 `<label>` 落到默认 14px ⇒ 两个表单行**各高 3.1px** ⇒ 内容块**高 6px**
+ * ⇒ 裁剪框**尺寸不等** ⇒ 逐像素对照必然失败。
+ *
+ * ⇒ 这里把**生产原文**（只这一条）补回引擎侧 ⇒ 两侧的计算样式**同源**。
+ *
+ * ⚠️ **正解是改抽取器**（共享文件 ⇒ 本面**只报不改**）⇒ 见交付报告的
+ * 「需要主线改的共享文件」清单。
+ *
+ * ## 纪律
+ *
+ * - 规则文本**逐字**取自生产（只改作用域前缀 ⇒ 与抽取器的改写口径一致）；
+ * - **只链到引擎侧页面**（参考侧自带生产样式 ⇒ 不需要 ⇒ 也不该重复）。
+ */
+
+/* 生产 `SettingsView.svelte:4138-4142`（`.group-label` 分支属别的面 ⇒ 整条被漏）。 */
+.sp-data .form-group label,
+.sp-data .form-group .group-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}

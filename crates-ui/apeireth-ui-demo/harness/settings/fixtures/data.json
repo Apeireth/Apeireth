@@ -1,0 +1,50 @@
+{
+  "_note": "S6 数据与用户的固定数据。运维读数 / 工作区 / 用户资料。",
+  "_source": "frontend/companion-desktop/src/lib/views/SettingsView.svelte:1247-1284、1536-1597、1715-1755、1775-1819",
+  "daemonStatus": {
+    "_note": "侧车状态读数（宿主填）。**null ⇒ 渲染 4 行「—」+「仅桌面版可读」** ⇒ 对照要覆盖「有读数」与「无读数」两态。",
+    "state": "Ready",
+    "ownership": "OwnedByDesktop",
+    "endpoint": "http://127.0.0.1:8080",
+    "backend_version": "2.0.0-rc.4",
+    "pid": 4821,
+    "restart_count": 0
+  },
+  "residentProbe": {
+    "health": "live",
+    "descriptor_present": true,
+    "endpoint": "http://127.0.0.1:8081",
+    "pid": 4822
+  },
+  "daemonGuidance": [
+    {"key": "status", "label": "查看状态", "command": "pwsh -NoProfile -File packaging/service/apeireth-service.ps1 status", "desc": "读取侧车当前状态。"},
+    {"key": "start", "label": "启动服务", "command": "pwsh -NoProfile -File packaging/service/apeireth-service.ps1 start", "desc": "启动侧车服务。"},
+    {"key": "stop", "label": "停止服务", "command": "pwsh -NoProfile -File packaging/service/apeireth-service.ps1 stop", "desc": "停止侧车服务。"}
+  ],
+  "daemonZeroInstallNote": "未安装：界面不代跑安装与启停；按上面的命令手动执行即可。",
+  "opsCopiedKey": "",
+  "opsCopyError": "",
+  "workspace": {
+    "dir": "/home/user/projects/demo",
+    "loading": false,
+    "error": "",
+    "suggestions": ["/home/user/projects", "/home/user/projects/demo"]
+  },
+  "userProfile": {
+    "_note": "用户资料（宿主从本地存储喂）。avatar 必须是**确定的** data URL（两侧同一张 ⇒ 像素可比）。",
+    "nickname": "小林",
+    "bio": "写点给自己看。",
+    "avatar": ""
+  },
+  "userProfileError": "",
+  "danger": {
+    "_note": "危险动作的**待确认态**（引擎只发意图；执行在宿主侧）。",
+    "pending": null,
+    "payload": ""
+  },
+  "textFlags": {
+    "_note": "S6 的 textDirty 键。",
+    "workspace.dir": false,
+    "user.info": false
+  }
+}

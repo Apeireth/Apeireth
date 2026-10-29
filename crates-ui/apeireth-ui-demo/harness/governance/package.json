@@ -1,0 +1,20 @@
+{
+  "name": "@apeireth/ui-engine-governance-harness",
+  "private": true,
+  "version": "2.0.0-rc.4",
+  "type": "module",
+  "description": "治理卷宗面对照 harness：Rust 引擎版四个卷宗 Tab vs 生产 Svelte 版（像素 / DOM / 逐帧）",
+  "scripts": {
+    "extract": "node scripts/extract-governance-assets.mjs",
+    "extract:check": "node scripts/extract-governance-assets.mjs --check",
+    "mock": "node scripts/gen-runtime-mock.mjs",
+    "mock:check": "node scripts/gen-runtime-mock.mjs --check",
+    "build": "npm run extract && npm run mock && vite build",
+    "compare": "python3 tools/compare_governance.py"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "5.1.1",
+    "svelte": "5.56.9",
+    "vite": "6.4.3"
+  }
+}

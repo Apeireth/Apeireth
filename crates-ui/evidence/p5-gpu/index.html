@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>P5 GPU bridge — dual-backend real-browser verification</title>
+<style>
+  body { background:#0b0b10; color:#e6e6ef; font: 13px/1.6 monospace; margin: 0; padding: 16px; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 12px; color:#9a9ab0; }
+  #out { white-space: pre-wrap; background:#16161d; padding:10px; border:1px solid #2a2a36; margin-bottom:14px; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  figure { margin:0 0 14px; }
+  figcaption { color:#9a9ab0; padding:4px 0; }
+  canvas { width: 480px; height: 360px; border:1px solid #33333f; display:block; background:#000; }
+  .ok { color:#7fdc7f } .err { color:#ff7f7f }
+</style>
+</head>
+<body>
+<h1>P5 GPU bridge — dual-backend real-browser verification</h1>
+<p class="sub">one wasm binary, two backends (WebGL / WebGPU), real surface → pipeline → draw → present</p>
+<div id="out">booting…</div>
+<div class="row">
+  <figure>
+    <figcaption>WebGL backend (canvas #webgl)</figcaption>
+    <canvas id="webgl" width="640" height="480"></canvas>
+  </figure>
+  <figure>
+    <figcaption>WebGPU backend (canvas #webgpu)</figcaption>
+    <canvas id="webgpu" width="640" height="480"></canvas>
+  </figure>
+</div>
+
+<script type="module">
+import init, { run } from './p5_gpu_harness.js';
+
+const out = document.getElementById('out');
+const log = [];
+const reports = {};
+function emit(s) {
+  log.push(s);
+  out.textContent = log.join('\n');
+  console.log('[P5GPU] ' + s);
+}
+
+(async () => {
+  emit('navigator.gpu present = ' + (typeof navigator.gpu !== 'undefined'));
+  emit('WebGL2 available     = ' + (!!document.createElement('canvas').getContext('webgl2')));
+  try {
+    await init();
+    emit('wasm module init: OK');
+  } catch (e) {
+    emit('wasm module init FAILED: ' + e);
+    window.__P5_DONE__ = true;
+    return;
+  }
+
+  for (const backend of ['webgl', 'webgpu']) {
+    const canvas = document.getElementById(backend);
+    try {
+      const raw = await run(canvas, backend, 3);
+      reports[backend] = JSON.parse(raw);
+      emit(backend + ' | ' + raw);
+    } catch (e) {
+      reports[backend] = { error: String((e && e.message) ? e.message : e) };
+      emit(backend + ' | ERROR ' + reports[backend].error);
+    }
+  }
+
+  window.__P5_REPORTS__ = reports;
+  emit('DONE');
+  window.__P5_DONE__ = true;
+})();
+</script>
+</body>
+</html>

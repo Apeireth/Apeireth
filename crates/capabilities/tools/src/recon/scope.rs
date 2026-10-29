@@ -100,7 +100,7 @@ impl Scope {
         let target = target.to_ascii_lowercase();
         // 目标必须**本身是一个裸域名**，不能只靠「后缀像」通过。
         //
-        // 2026-10-25 修复：原实现只做 `ends_with(".{allowed}")` 后缀匹配，
+        // 2026-10-25 修复：改动前只做 `ends_with(".{allowed}")` 后缀匹配，
         // 于是任何**以后缀结尾的任意字符串**都通过 —— 实测下列全部被放行：
         //   `evil.com/.example.com` / `evil.com#.example.com` / `evil.com?.example.com`
         //   `evil.com\\.example.com` / `-\n\n...example.com`

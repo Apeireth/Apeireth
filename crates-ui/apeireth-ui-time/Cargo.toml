@@ -1,0 +1,42 @@
+# ============================================================================
+# apeireth-ui-time — 宿主侧「时刻文本」能力（**wasm-only**）
+# ----------------------------------------------------------------------------
+# 作用：把生产侧时刻显示所依赖的**浏览器 `Intl`** 封装成可注入的格式化器
+# ⇒ 引擎（`apeireth-ui-kit`）只声明「时刻文本由宿主给」这个**契约**，
+#   具体怎么算（本地时区 + ICU + 补零规则）由**宿主**决定。
+#
+# ## 为什么单独一个 crate
+#
+# ① 生产的时刻显示走 `new Date(ts).toLocaleTimeString('zh-CN', {hour:'2-digit', …})`
+#    ⇒ 产出依赖 **本地时区** + **ICU 版本** + **`Intl` 补零规则**
+#    ⇒ ⇒ 引擎侧手写这三样**必然**偏差
+#    ⇒ ⇒ 实测：同一时刻，生产在 `Asia/Shanghai` 给 `14:30:15`，
+#       而引擎的固定 UTC 版给 `06:30:15` ⇒ **差 8 小时**；
+# ② 引擎 crate（`apeireth-ui-kit`）是 **0 外部依赖**的纯逻辑 crate
+#    ⇒ ⇒ 浏览器 `Intl` 只能住在**宿主侧**；
+# ③ **多个宿主**要用（`apeireth-ui-demo` 的 wasm 入口、治理面对照的独立宿主 crate）
+#    ⇒ ⇒ 抽成 crate ⇒ **一份实现**、两处使用 ⇒ **不重复**。
+#
+# ## 为什么是 wasm-only
+#
+# `js-sys` / `wasm-bindgen` 只在浏览器里有 ⇒ ⇒ 依赖写成 target-specific
+# ⇒ ⇒ native 编译本 crate 时不引入它们。
+# ============================================================================
+[package]
+name = "apeireth-ui-time"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "apeireth_ui_time"
+path = "src/lib.rs"
+
+[dependencies]
+#: 引擎的组件库（只为拿「时刻文本器」的**契约**（trait + 进程级槽））。
+apeireth-ui-kit = { path = "../apeireth-ui-kit" }
+
+#: 浏览器反射 API（**只用 `Reflect` 调全局函数** ⇒ 零 wasm 导出 ⇒ 零符号冲突）。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "=0.3.106"
+wasm-bindgen = "=0.2.129"

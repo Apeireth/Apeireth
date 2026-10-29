@@ -1,0 +1,152 @@
+{
+  "note": "该面对照资产的来源指纹（单一真源的可复核证据）",
+  "components": [
+    {
+      "path": "frontend/companion-desktop/src/lib/views/SettingsView.svelte",
+      "slug": "settings-capability-full",
+      "scoped_css_sha256_16": "17a975064c74490e"
+    }
+  ],
+  "icons": [
+    {
+      "alias": "server",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/server.svelte",
+      "name": "server"
+    },
+    {
+      "alias": "triangle-alert",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/triangle-alert.svelte",
+      "name": "triangle-alert"
+    },
+    {
+      "alias": "circle-check",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/circle-check.svelte",
+      "name": "circle-check"
+    },
+    {
+      "alias": "info",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/info.svelte",
+      "name": "info"
+    },
+    {
+      "alias": "brain",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/brain.svelte",
+      "name": "brain"
+    },
+    {
+      "alias": "scale",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/scale.svelte",
+      "name": "scale"
+    },
+    {
+      "alias": "wrench",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/wrench.svelte",
+      "name": "wrench"
+    },
+    {
+      "alias": "users",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/users.svelte",
+      "name": "users"
+    },
+    {
+      "alias": "shield-check",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/shield-check.svelte",
+      "name": "shield-check"
+    },
+    {
+      "alias": "shield-off",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/shield-off.svelte",
+      "name": "shield-off"
+    },
+    {
+      "alias": "terminal",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/terminal.svelte",
+      "name": "terminal"
+    },
+    {
+      "alias": "timer",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/timer.svelte",
+      "name": "timer"
+    },
+    {
+      "alias": "check",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/check.svelte",
+      "name": "check"
+    },
+    {
+      "alias": "sparkles",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/sparkles.svelte",
+      "name": "sparkles"
+    },
+    {
+      "alias": "filter",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/filter.svelte",
+      "name": "filter"
+    },
+    {
+      "alias": "tag",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/tag.svelte",
+      "name": "tag"
+    },
+    {
+      "alias": "copy",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/copy.svelte",
+      "name": "copy"
+    },
+    {
+      "alias": "workflow",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/workflow.svelte",
+      "name": "workflow"
+    },
+    {
+      "alias": "globe",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/globe.svelte",
+      "name": "globe"
+    },
+    {
+      "alias": "folder-search",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/folder-search.svelte",
+      "name": "folder-search"
+    },
+    {
+      "alias": "file-pen-line",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/file-pen-line.svelte",
+      "name": "file-pen-line"
+    },
+    {
+      "alias": "file-check-2",
+      "path": "frontend/companion-desktop/node_modules/lucide-svelte/dist/icons/file-check-2.svelte",
+      "name": "file-check-2"
+    }
+  ],
+  "design_css": [
+    {
+      "path": "frontend/companion-desktop/src/lib/design/base.css",
+      "sha256_16": "97498c495765332f"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/essence.css",
+      "sha256_16": "e96dd8efc9a61ecb"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/hud.css",
+      "sha256_16": "482d7ca607fc8b02"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/motion.css",
+      "sha256_16": "755013aff035b60e"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/prose.css",
+      "sha256_16": "cc3cf6501b68fa1e"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/shell.css",
+      "sha256_16": "0175375a1eecdfa6"
+    },
+    {
+      "path": "frontend/companion-desktop/src/lib/design/tokens.css",
+      "sha256_16": "80584b228c87ce40"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "note": "工具卡面固定数据：工具清单 + 能力清单 + 搜索用例（两侧同源；参考侧经 mock 喂给生产组件，引擎侧由抽取脚本生成 Rust）",
+  "capabilities": {
+    "schema_version": 1,
+    "runtime": {
+      "service": "apeireth-gateway",
+      "version": "2.0.0-rc.4"
+    },
+    "capabilities": [
+      {
+        "name": "tools",
+        "capabilities": [
+          {
+            "id": "tools.list",
+            "supported": true,
+            "available": true
+          }
+        ]
+      },
+      {
+        "name": "permissions",
+        "capabilities": [
+          {
+            "id": "permissions.approval.read",
+            "supported": true,
+            "available": true
+          },
+          {
+            "id": "permissions.grants.read",
+            "supported": true,
+            "available": true
+          },
+          {
+            "id": "permissions.revoke",
+            "supported": true,
+            "available": true
+          }
+        ]
+      }
+    ]
+  },
+  "tools": [
+    {
+      "name": "fs.read",
+      "description": "读取工作区内的文件内容，按路径返回文本。",
+      "available": true
+    },
+    {
+      "name": "fs.write",
+      "description": "把内容写入工作区内的指定路径。",
+      "available": true
+    },
+    {
+      "name": "shell.exec",
+      "description": "在工作区内执行受控的 shell 命令，输出按行返回。",
+      "available": true
+    },
+    {
+      "name": "memory.search",
+      "description": "在长期记忆里检索与查询相关的片段。",
+      "available": false
+    },
+    {
+      "name": "audit.read",
+      "description": "读取审计日志的最近记录。",
+      "available": false
+    },
+    {
+      "name": "web.fetch",
+      "description": "抓取远端页面并转成纯文本。",
+      "available": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "all",
+      "query": ""
+    },
+    {
+      "id": "by-name",
+      "query": "fs"
+    },
+    {
+      "id": "by-description",
+      "query": "读取"
+    },
+    {
+      "id": "no-match",
+      "query": "无此工具"
+    }
+  ]
+}

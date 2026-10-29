@@ -1,0 +1,70 @@
+{
+  "passed": true,
+  "t1_pixel_ratio": 0.0,
+  "t1_pixel_different": 0,
+  "t1_pixel_total": 862776,
+  "t2_dom_equal": true,
+  "t2_dom_diffs": [],
+  "t3_same_width": true,
+  "t3b_same_height": true,
+  "t3_reference_width": 828,
+  "t3_engine_width": 828,
+  "t3_reference_height": 1042.921875,
+  "t3_engine_height": 1042.921875,
+  "t4_controls_equal": true,
+  "t4_reference_controls": [
+    {
+      "tag": "input",
+      "id": "allowed-server-input",
+      "aria": "",
+      "value_attr": false,
+      "attrs": [
+        "id=allowed-server-input",
+        "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+        "type=text"
+      ]
+    },
+    {
+      "tag": "select",
+      "id": "permission-preset",
+      "aria": "",
+      "value_attr": false,
+      "attrs": [
+        "id=permission-preset"
+      ]
+    }
+  ],
+  "t4_engine_controls": [
+    {
+      "tag": "input",
+      "id": "allowed-server-input",
+      "aria": "",
+      "value_attr": false,
+      "attrs": [
+        "id=allowed-server-input",
+        "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+        "type=text"
+      ]
+    },
+    {
+      "tag": "select",
+      "id": "permission-preset",
+      "aria": "",
+      "value_attr": false,
+      "attrs": [
+        "id=permission-preset"
+      ]
+    }
+  ],
+  "t5_preview_equal": true,
+  "t5_reference_preview": null,
+  "t5_engine_preview": null,
+  "case": "tools-filewrite-on",
+  "section": "tools",
+  "reference_scripts": [
+    "(() => { const label = \"\\u6587\\u4ef6\\u5199\\u5165\\uff08apply_patch \\u00b7 shell \\u5199\\u547d\\u4ee4\\uff09\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+  ],
+  "engine_scripts": [
+    "window.__CAPABILITY__.toggleCapability(\"fileWrite\")"
+  ]
+}

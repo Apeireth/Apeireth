@@ -1,0 +1,419 @@
+{
+  "note": "治理卷宗面对照固定数据（**两侧同源**：参考侧 import 本文件；引擎侧由抽取器生成 Rust 产物）。",
+  "error_text": "网关不可达（对照固定数据）",
+  "manifests": {
+    "full": {
+      "schema_version": 1,
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "capabilities": [
+        {
+          "id": "permissions",
+          "capabilities": [
+            { "id": "permissions.approval.read", "supported": true, "available": true },
+            { "id": "permissions.approval.resolve", "supported": true, "available": true },
+            { "id": "permissions.grants.read", "supported": true, "available": true },
+            { "id": "permissions.revoke", "supported": true, "available": true }
+          ]
+        },
+        {
+          "id": "sessions",
+          "capabilities": [
+            { "id": "sessions.read", "supported": true, "available": true }
+          ]
+        },
+        {
+          "id": "activity",
+          "capabilities": [
+            {
+              "id": "activity.sse",
+              "supported": false,
+              "available": false,
+              "reason": "not_implemented"
+            }
+          ]
+        },
+        {
+          "id": "trace",
+          "capabilities": [
+            { "id": "trace.read", "supported": true, "available": true },
+            { "id": "audit.read", "supported": true, "available": true }
+          ]
+        },
+        {
+          "id": "safety",
+          "capabilities": [
+            { "id": "safety.guard.status.read", "supported": true, "available": true },
+            { "id": "safety.guard.events.read", "supported": true, "available": true },
+            { "id": "safety.guard.evaluate", "supported": true, "available": true }
+          ]
+        }
+      ]
+    },
+    "no_approval_read": {
+      "schema_version": 1,
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "capabilities": [
+        {
+          "id": "permissions",
+          "capabilities": [
+            {
+              "id": "permissions.approval.read",
+              "supported": false,
+              "available": false,
+              "reason": "not_implemented"
+            },
+            { "id": "permissions.approval.resolve", "supported": false, "available": false, "reason": "not_implemented" }
+          ]
+        }
+      ]
+    },
+    "grants_read_only": {
+      "schema_version": 1,
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "capabilities": [
+        {
+          "id": "permissions",
+          "capabilities": [
+            { "id": "permissions.grants.read", "supported": true, "available": true },
+            {
+              "id": "permissions.revoke",
+              "supported": false,
+              "available": false,
+              "reason": "not_implemented"
+            }
+          ]
+        }
+      ]
+    },
+    "audit_unavailable": {
+      "schema_version": 1,
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "capabilities": [
+        {
+          "id": "trace",
+          "capabilities": [
+            { "id": "trace.read", "supported": false, "available": false, "reason": "not_implemented" },
+            { "id": "audit.read", "supported": false, "available": false, "reason": "not_implemented" }
+          ]
+        }
+      ]
+    },
+    "guard_unavailable": {
+      "schema_version": 1,
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "capabilities": [
+        {
+          "id": "safety",
+          "capabilities": [
+            { "id": "safety.guard.status.read", "supported": false, "available": false, "reason": "not_implemented" },
+            { "id": "safety.guard.events.read", "supported": false, "available": false, "reason": "not_implemented" },
+            { "id": "safety.guard.evaluate", "supported": false, "available": false, "reason": "not_implemented" }
+          ]
+        }
+      ]
+    }
+  },
+  "sessions": [
+    { "id": "sess-alpha", "title": "主线程 · 装配" },
+    { "id": "sess-beta", "title": "" }
+  ],
+  "inbox": {
+    "sess-alpha": [
+      {
+        "session": "sess-alpha",
+        "approval_id": "ap-0001",
+        "request": "req-0001",
+        "trace_id": "trace-0001",
+        "capability_id": "tool.repo.write",
+        "tool_name": "fs.write",
+        "governance_hook": "write_guard",
+        "governance_reason": "写工作区文件需要主人点头",
+        "command_text": "fs.write(\"notes.md\", \"…\")",
+        "arguments_summary": "path=notes.md, bytes=128",
+        "created_offset_ms": -180000,
+        "expires_offset_ms": 900000
+      },
+      {
+        "session": "sess-alpha",
+        "approval_id": "ap-0002",
+        "request": "req-0002",
+        "trace_id": "trace-0001",
+        "capability_id": "shell.exec",
+        "tool_name": "shell.exec",
+        "governance_hook": "exec_guard",
+        "governance_reason": "",
+        "command_text": "",
+        "arguments_summary": "cmd=git status",
+        "created_offset_ms": -60000,
+        "expires_offset_ms": 0
+      }
+    ],
+    "sess-beta": [
+      {
+        "session": "sess-beta",
+        "approval_id": "ap-0003",
+        "request": "req-0003",
+        "trace_id": "trace-0002",
+        "capability_id": "net.fetch",
+        "tool_name": "net.fetch",
+        "governance_hook": "net_guard",
+        "governance_reason": "出网请求需要放行",
+        "command_text": "net.fetch(\"https://example.invalid/\")",
+        "arguments_summary": "net.fetch(\"https://example.invalid/\")",
+        "created_offset_ms": -3600000,
+        "expires_offset_ms": -600000
+      }
+    ]
+  },
+  "grants": [
+    {
+      "id": "tool.repo.write",
+      "name": "tool.repo.write",
+      "activated_offset_ms": -3600000
+    },
+    {
+      "id": "memory.read",
+      "name": "memory.read",
+      "activated_offset_ms": 0
+    }
+  ],
+  "traces": [
+    {
+      "trace_id": "trace-0001",
+      "span_count": 3,
+      "started_offset_ms": -300000,
+      "root_span": {
+        "span_id": "span-root-1",
+        "trace_id": "trace-0001",
+        "parent_span_id": null,
+        "kind": "turn",
+        "actor": "assistant",
+        "status": "ok",
+        "summary": "装配工作区",
+        "attributes": null,
+        "started_offset_ms": -300000,
+        "ended_offset_ms": -290000,
+        "session_id": "sess-alpha"
+      }
+    },
+    {
+      "trace_id": "trace-0002",
+      "span_count": 2,
+      "started_offset_ms": -900000,
+      "root_span": {
+        "span_id": "span-root-2",
+        "trace_id": "trace-0002",
+        "parent_span_id": null,
+        "kind": "tool",
+        "actor": "shell",
+        "status": "error",
+        "summary": "",
+        "attributes": null,
+        "started_offset_ms": -900000,
+        "ended_offset_ms": -895000,
+        "session_id": "sess-beta"
+      }
+    }
+  ],
+  "spans": {
+    "trace-0001": [
+      {
+        "span_id": "span-root-1",
+        "trace_id": "trace-0001",
+        "parent_span_id": null,
+        "kind": "turn",
+        "actor": "assistant",
+        "status": "ok",
+        "summary": "装配工作区",
+        "attributes": null,
+        "started_offset_ms": -300000,
+        "ended_offset_ms": -290000,
+        "session_id": "sess-alpha"
+      },
+      {
+        "span_id": "span-child-1",
+        "trace_id": "trace-0001",
+        "parent_span_id": "span-root-1",
+        "kind": "provider",
+        "actor": "provider",
+        "status": "ok",
+        "summary": "",
+        "attributes": null,
+        "started_offset_ms": -299000,
+        "ended_offset_ms": -295000,
+        "session_id": "sess-alpha"
+      },
+      {
+        "span_id": "span-child-2",
+        "trace_id": "trace-0001",
+        "parent_span_id": "span-child-1",
+        "kind": "tool",
+        "actor": "fs.write",
+        "status": "ok",
+        "summary": "写入 notes.md",
+        "attributes": null,
+        "started_offset_ms": -294000,
+        "ended_offset_ms": -290000,
+        "session_id": "sess-alpha"
+      }
+    ],
+    "trace-0002": [
+      {
+        "span_id": "span-root-2",
+        "trace_id": "trace-0002",
+        "parent_span_id": null,
+        "kind": "tool",
+        "actor": "shell",
+        "status": "error",
+        "summary": "退出码 1",
+        "attributes": null,
+        "started_offset_ms": -900000,
+        "ended_offset_ms": -895000,
+        "session_id": "sess-beta"
+      }
+    ]
+  },
+  "audit_events": [
+    {
+      "ts_offset_ms": -120000,
+      "event": "chat.turn.completed",
+      "service": "gateway",
+      "detail": "回合完成"
+    },
+    {
+      "ts_offset_ms": -180000,
+      "event": "governance.approval.resolved",
+      "service": "gateway",
+      "detail": "审批落笔"
+    },
+    {
+      "ts_offset_ms": -240000,
+      "event": "memory.write",
+      "service": "gateway",
+      "detail": "记忆变动"
+    }
+  ],
+  "guard_status": {
+    "enabled": true,
+    "fast_guard_active": true,
+    "chain_guard_active": true,
+    "intent_guard_active": true,
+    "cross_turn_monitoring_active": false,
+    "active_chains": 2,
+    "total_evaluations": 128,
+    "total_allowed": 96,
+    "total_denied": 12,
+    "total_approval_required": 20,
+    "dataset_recording_enabled": false,
+    "ml_classifier_available": true,
+    "ml_model_version": "m3"
+  },
+  "guard_events": [
+    {
+      "timestamp_offset_ms": -60000,
+      "session_id": "sess-alpha-0123456789",
+      "trace_id": "trace-0001",
+      "round": 3,
+      "capability_id": "tool.repo.write",
+      "stage": "chain_guard",
+      "decision": "approval_required",
+      "risk_score": 0.72,
+      "reasons": ["写操作需要主人点头", "路径在工作区内"],
+      "evidence": ["policy:repo.write", "chain:2"]
+    },
+    {
+      "timestamp_offset_ms": -120000,
+      "session_id": "sess-beta-9876543210",
+      "trace_id": "trace-0002",
+      "round": 1,
+      "capability_id": "shell.exec",
+      "stage": "fast_guard",
+      "decision": "allow",
+      "risk_score": 0.12,
+      "reasons": [],
+      "evidence": []
+    }
+  ],
+  "dry_run": {
+    "decision": "deny",
+    "stage": "decision_fusion",
+    "risk_score": 0.93,
+    "reasons": ["目标越界", "需要主人放行"],
+    "evidence": ["scope:mismatch"]
+  },
+  "cases": {
+    "approvals": [
+      { "id": "approvals-ledger", "manifest": "full", "data": "default", "actions": [] },
+      {
+        "id": "approvals-open",
+        "manifest": "full",
+        "data": "default",
+        "actions": [{ "click": ".gov-toolbar .gov-chips button", "index": 1 }]
+      },
+      {
+        "id": "approvals-expired",
+        "manifest": "full",
+        "data": "default",
+        "actions": [{ "click": ".gov-toolbar .gov-chips button", "index": 2 }]
+      },
+      { "id": "approvals-empty", "manifest": "full", "data": "empty", "actions": [] },
+      { "id": "approvals-error", "manifest": "full", "data": "error", "actions": [] },
+      { "id": "approvals-loading", "manifest": "full", "data": "loading", "actions": [] },
+      { "id": "approvals-unsupported", "manifest": "no_approval_read", "data": "default", "actions": [] },
+      { "id": "approvals-pending", "manifest": null, "data": "default", "actions": [] }
+    ],
+    "grants": [
+      { "id": "grants-list", "manifest": "full", "data": "default", "actions": [] },
+      {
+        "id": "grants-confirm",
+        "manifest": "full",
+        "data": "default",
+        "actions": [{ "click": ".gov-list .btn-revoke", "index": 0 }]
+      },
+      { "id": "grants-empty", "manifest": "full", "data": "empty", "actions": [] },
+      { "id": "grants-error", "manifest": "full", "data": "error", "actions": [] },
+      { "id": "grants-read-only", "manifest": "grants_read_only", "data": "default", "actions": [] },
+      { "id": "grants-pending", "manifest": null, "data": "default", "actions": [] }
+    ],
+    "audit": [
+      { "id": "audit-traces", "manifest": "full", "data": "default", "actions": [] },
+      {
+        "id": "audit-trace-detail",
+        "manifest": "full",
+        "data": "default",
+        "actions": [{ "click": ".md-master .md-row", "index": 0 }]
+      },
+      {
+        "id": "audit-events",
+        "manifest": "full",
+        "data": "default",
+        "actions": [{ "click": ".gov-toolbar .gov-chips button", "index": 1 }]
+      },
+      {
+        "id": "audit-event-detail",
+        "manifest": "full",
+        "data": "default",
+        "actions": [
+          { "click": ".gov-toolbar .gov-chips button", "index": 1 },
+          { "click": ".md-master .md-row", "index": 0 }
+        ]
+      },
+      { "id": "audit-error", "manifest": "full", "data": "error", "actions": [] },
+      { "id": "audit-unsupported", "manifest": "audit_unavailable", "data": "default", "actions": [] },
+      { "id": "audit-pending", "manifest": null, "data": "default", "actions": [] }
+    ],
+    "guard": [
+      { "id": "guard-status", "manifest": "full", "data": "default", "actions": [] },
+      {
+        "id": "guard-event-expanded",
+        "manifest": "full",
+        "data": "default",
+        "actions": [{ "click": ".gov-list .ev-expand", "index": 0 }]
+      },
+      { "id": "guard-empty", "manifest": "full", "data": "empty", "actions": [] },
+      { "id": "guard-error", "manifest": "full", "data": "error", "actions": [] },
+      { "id": "guard-unsupported", "manifest": "guard_unavailable", "data": "default", "actions": [] },
+      { "id": "guard-pending", "manifest": null, "data": "default", "actions": [] }
+    ]
+  }
+}

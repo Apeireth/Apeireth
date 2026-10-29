@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="night">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>参考侧 · 工具卡面</title>
+    <!--
+      设计令牌层：**只读引用**生产前端的同一批 CSS（构建期复制到 public/design/）。
+      链接顺序与引擎侧**完全一致** ⇒ 两侧的计算样式同源。
+    -->
+    <link rel="stylesheet" href="/design/tokens.css" />
+    <link rel="stylesheet" href="/design/base.css" />
+    <link rel="stylesheet" href="/design/essence.css" />
+    <link rel="stylesheet" href="/design/hud.css" />
+    <link rel="stylesheet" href="/design/motion.css" />
+    <link rel="stylesheet" href="/design/prose.css" />
+    <link rel="stylesheet" href="/design/shell.css" />
+    <!-- 对照专用样式（两侧**逐字相同**地链入）：容器盒 + 相位冻结。 -->
+    <link rel="stylesheet" href="/toolcard-test.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

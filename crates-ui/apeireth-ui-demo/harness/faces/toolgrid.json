@@ -1,0 +1,14 @@
+{
+  "note": "工具卡面批二（工具栏 + 工具网格）的抽取清单：状态徽标的 scoped CSS + 本面用到的四个图标（class 后缀取上游真实文件名）",
+  "out": "../public/toolgrid/",
+  "icons_out": "../../../apeireth-ui-kit/src/icons_tool_grid.rs",
+  "components": [
+    {
+      "slug": "status-badge",
+      "path": "frontend/companion-desktop/src/lib/components/StatusBadge.svelte",
+      "css": "status-badge.css",
+      "scope": ".toolgrid-stage"
+    }
+  ],
+  "icons": ["search", "cpu", "external-link", "x"]
+}

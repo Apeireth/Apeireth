@@ -1,0 +1,64 @@
+{
+  "_note": "S3 人格与记忆的固定数据。人设 / 印象 / 体验参数预设 / 学习日志。",
+  "_source": "frontend/companion-desktop/src/lib/views/SettingsView.svelte:555-613、711-779、1050-1107、1821-1919",
+  "personas": [
+    {
+      "id": "p-0001",
+      "name": "阿佩瑞斯",
+      "model": "",
+      "persona": "你是「阿佩瑞斯」——Apeireth 基地的主管。语气克制、结论先行；不确定就说不确定。"
+    },
+    {
+      "id": "p-0002",
+      "name": "新伙伴",
+      "model": "",
+      "persona": ""
+    }
+  ],
+  "activePersonaId": "p-0001",
+  "impression": {
+    "_note": "用户印象账本（按伙伴分档）。source: auto | manual。",
+    "personaId": "p-0001",
+    "personaName": "阿佩瑞斯",
+    "summary": "喜欢简洁直接的答案，提问偏工程实现，常在深夜使用。",
+    "updatedAt": 1758600000000,
+    "source": "auto",
+    "autoRefresh": true
+  },
+  "impressionDraft": "喜欢简洁直接的答案，提问偏工程实现，常在深夜使用。",
+  "impressionError": "",
+  "impressionBusy": false,
+  "dispositionPresets": [
+    {"id": "省心", "memoryFade": 1.5, "curiosityStrength": 0.75, "toneSaturation": 0.8, "consolidationCadence": 2},
+    {"id": "均衡", "memoryFade": 1.0, "curiosityStrength": 1.0, "toneSaturation": 1.0, "consolidationCadence": 1},
+    {"id": "深度记忆", "memoryFade": 0.5, "curiosityStrength": 1.5, "toneSaturation": 1.2, "consolidationCadence": 1}
+  ],
+  "dispositionBaselineReset": {
+    "_note": "「恢复基线」：四旋钮回基线 + 从使用中学习关回默认关（fail-closed）。**生产是 module 段导出 ⇒ 不迁 ⇒ 由宿主喂**。",
+    "memoryFade": 1.0,
+    "curiosityStrength": 1.0,
+    "toneSaturation": 1.0,
+    "consolidationCadence": 1,
+    "selfTuning": false
+  },
+  "tuningLog": [
+    {"seq": 12, "param": "memory_fade", "previous": 1.0, "next": 1.25, "reason": "连续命中率高，收紧遗忘", "at_epoch_ms": 1758590000000},
+    {"seq": 11, "param": "curiosity_strength", "previous": 1.0, "next": 1.1, "reason": "探索不足，放宽好奇", "at_epoch_ms": 1758580000000}
+  ],
+  "tuningParamLabels": {
+    "memory_fade": "遗忘衰减强度",
+    "curiosity_strength": "好奇心强度",
+    "tone_saturation": "语气情绪饱和度",
+    "consolidation_cadence": "整合节奏"
+  },
+  "textFlags": {
+    "_note": "S3 的 textDirty 键。persona.* 按伙伴 id 分键。",
+    "persona.name:p-0001": false,
+    "persona.model:p-0001": false,
+    "persona.text:p-0001": false,
+    "persona.name:p-0002": false,
+    "persona.model:p-0002": false,
+    "persona.text:p-0002": false,
+    "user.impression": false
+  }
+}

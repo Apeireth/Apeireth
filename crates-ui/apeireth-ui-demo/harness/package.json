@@ -1,0 +1,18 @@
+{
+  "name": "@apeireth/ui-engine-pilot-harness",
+  "private": true,
+  "version": "2.0.0-rc.4",
+  "type": "module",
+  "description": "P3 试点对照 harness：Rust 引擎版审批卡 vs 生产 Svelte 版（像素 / 逐帧）",
+  "scripts": {
+    "extract": "node scripts/extract-assets.mjs",
+    "extract:check": "node scripts/extract-assets.mjs --check",
+    "build": "node scripts/extract-assets.mjs && vite build",
+    "compare": "python3 tools/compare.py"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "5.1.1",
+    "svelte": "5.56.9",
+    "vite": "6.4.3"
+  }
+}

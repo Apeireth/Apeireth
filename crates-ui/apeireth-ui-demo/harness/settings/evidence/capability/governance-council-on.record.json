@@ -1,0 +1,98 @@
+{
+  "passed": true,
+  "t1_pixel_ratio": 0.0,
+  "t1_pixel_different": 0,
+  "t1_pixel_total": 668196,
+  "t2_dom_equal": true,
+  "t2_dom_diffs": [],
+  "t3_same_width": true,
+  "t3b_same_height": true,
+  "t3_reference_width": 828,
+  "t3_engine_width": 828,
+  "t3_reference_height": 807.21875,
+  "t3_engine_height": 807.21875,
+  "t4_controls_equal": true,
+  "t4_reference_controls": [
+    {
+      "tag": "select",
+      "id": "cognitive-depth",
+      "aria": "",
+      "value_attr": false,
+      "attrs": [
+        "id=cognitive-depth"
+      ]
+    },
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "顾问数量",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=顾问数量",
+        "max=7",
+        "min=1",
+        "step=1",
+        "type=range"
+      ]
+    },
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "单顾问超时毫秒",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=单顾问超时毫秒",
+        "min=1000",
+        "step=5000",
+        "type=number"
+      ]
+    }
+  ],
+  "t4_engine_controls": [
+    {
+      "tag": "select",
+      "id": "cognitive-depth",
+      "aria": "",
+      "value_attr": false,
+      "attrs": [
+        "id=cognitive-depth"
+      ]
+    },
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "顾问数量",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=顾问数量",
+        "max=7",
+        "min=1",
+        "step=1",
+        "type=range"
+      ]
+    },
+    {
+      "tag": "input",
+      "id": "",
+      "aria": "单顾问超时毫秒",
+      "value_attr": false,
+      "attrs": [
+        "aria-label=单顾问超时毫秒",
+        "min=1000",
+        "step=5000",
+        "type=number"
+      ]
+    }
+  ],
+  "t5_preview_equal": true,
+  "t5_reference_preview": null,
+  "t5_engine_preview": null,
+  "case": "governance-council-on",
+  "section": "governance",
+  "reference_scripts": [
+    "(() => { const label = \"\\u8bae\\u4f1a (Council)\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+  ],
+  "engine_scripts": [
+    "window.__CAPABILITY__.toggleCapability(\"council\")"
+  ]
+}

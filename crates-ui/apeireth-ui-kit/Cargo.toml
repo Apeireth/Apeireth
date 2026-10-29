@@ -1,0 +1,37 @@
+# ============================================================================
+# apeireth-ui-kit — 组件库（共享组件的 Rust 重写）
+# ----------------------------------------------------------------------------
+# 职责边界（设计文档 §3.3.5）：只回答「这块界面长什么样」，不含业务数据获取。
+#
+# 纪律（设计文档 §2.2）：组件库只允许出现 **class 名与结构**，不出现颜色字面量
+# 与时长字面量（那些归 CSS 资产与设计令牌）。
+#
+# 契约登记：docs/architecture/contract.toml [extension_points]
+#   ui_component = "crates-ui/apeireth-ui-kit/src/registry.rs::ComponentRegistry"
+# ============================================================================
+[package]
+name = "apeireth-ui-kit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎组件库：共享组件的 Rust 重写 + 组件注册表"
+
+[lib]
+name = "apeireth_ui_kit"
+path = "src/lib.rs"
+
+[dependencies]
+# 内部依赖：DOM 绑定层（组件产出虚拟节点）+ 响应式核心（组件 trait 边界）。
+apeireth-ui-dom = { path = "../apeireth-ui-dom" }
+apeireth-ui-core = { path = "../apeireth-ui-core" }
+# 过程宏（`view!`）—— 卡面组件的内部结构由宏构造。
+# ⚠️ 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**，
+# 见 apeireth-ui-macro 的 crate 文档头「运行时路径约定」）⇒ 这两个 crate 必须是
+# 使用方的**直接依赖**（上面已列）。
+apeireth-ui-macro = { path = "../apeireth-ui-macro" }
+# P0 阶段纪律：0 外部依赖。
+
+[lints]
+workspace = true

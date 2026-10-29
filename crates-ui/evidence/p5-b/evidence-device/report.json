@@ -1,0 +1,23 @@
+{
+  "schema": 2,
+  "generated_at": "2026-10-26T20:14:34+0800",
+  "environment": {
+    "chrome": "Chromium 154.0.8037.92 built on Debian GNU/Linux forky/sid",
+    "note": "**真实 GPU**（`--use-angle=vulkan` ⇒ Mesa RADV）"
+  },
+  "criteria": {
+    "no_spurious_lost_before": true,
+    "lost_observed": true,
+    "lost_has_frame": true,
+    "poll_channel_usable": true,
+    "webgpu_reports_device_lost": true,
+    "webgl_reports_surface_lost": true,
+    "verdict": "pass"
+  },
+  "events_before": [],
+  "events_after": [],
+  "redraw_after_destroy": {
+    "webgl": "ERR:draw: JsValue(\"draw: SurfaceTextureUnavailable: 表面配置非法（wgpu 校验失败）\")",
+    "webgpu": "ERR:draw: JsValue(\"draw: DeviceLost: GPU 设备丢失（第 3 帧：Destroyed（Device was destroyed.））\")"
+  }
+}
