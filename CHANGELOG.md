@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — D2 Anchored protected merges（2026-10-29）
+
+- #64/#70 经 exact-head recovery tag 验证后走受保护普通 merge；main 已推进，未改保护或强推。
+- #98 required checks 未通过，仍保留；限定 Kernel Complete 与 PR eligibility 分开。见 [D2 执行账](docs/04-internal/repo-consolidation-d2-anchored-merges-2026-10-29.md)。
+
 ## [Unreleased] — Kernel Startup Approval：日常定义批准与限定验收（2026-10-29）
 
 - **APPROVED**：repository owner / user (xiao ouyang) 于 2026-10-29（Asia/Shanghai）以「当然」批准已有 DB、完整进程重启、正常 OS 缓存及 A1b 相同 READY/session-pair 断言的 normal_start P50≤10 ms 日常核心准则。
