@@ -333,3 +333,35 @@ name = "ModuleTaskHandle"
 canonical = "crates/foundation/plugin/src/module_contract.rs"
 known_debt = []
 target = "ADR-0023 P1: module-generation-bound task receipt; status authorization remains module-owned; no new lifecycle registry"
+
+
+[[concepts]]
+name = "SystemOneGate"
+canonical = "crates/engine/runtime/src/canonical/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: mandatory review/audit service at the existing dispatcher seam; model decisions do not grant deterministic authority"
+
+[[concepts]]
+name = "SystemOneRequest"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: runtime-owned versioned action/provenance context; no model-writable execution receipt"
+
+[[concepts]]
+name = "SystemOneVerdict"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: bound Allow/Deny/Escalate review; invalid version/digest/review id refuses execution"
+
+
+[[concepts]]
+name = "SystemOneSupervisor"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: Host policy port analogous to ModuleAgents, not an ExtensionCatalog family or module registry"
+
+[[concepts]]
+name = "SystemOneAudit"
+canonical = "crates/foundation/plugin/src/system_one.rs"
+known_debt = []
+target = "ADR-0023 P2: Host audit policy port; requires acknowledgement before effect, no extension/lifecycle authority"

@@ -121,7 +121,9 @@ impl Runtime {
             } else {
                 apeireth_plugin::ToolCaller::Model
             },
-            module,
+            module: module.clone(),
+            module_instance: self.plugins.instance_id(&module).ok(),
+            internal_review: None,
             tool_scope: self.dispatcher.scope_snapshot(session),
             authorization: apeireth_plugin::ToolAuthorization {
                 principal_epoch: None,

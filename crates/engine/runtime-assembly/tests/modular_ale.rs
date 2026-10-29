@@ -1,4 +1,6 @@
 //! Explicit Host compositions using the real Runtime and existing native/store executors.
+#[path = "support/system_one.rs"]
+mod review_support;
 #[path = "support/convergence.rs"]
 mod support;
 use apeireth_core::kernel::{
@@ -61,7 +63,9 @@ async fn direct_shell_keeps_its_name_frozen_payload_and_has_no_owned_ale() {
         vec![call("shell", json!({"command":"echo ale_contract_direct"}))],
         vec![],
     ]);
+    let (gate, audit) = review_support::allow_gate();
     let runtime = builder(provider.clone())
+        .with_system_one(gate)
         .with_plugin(Arc::new(logical))
         .build()
         .await
@@ -83,6 +87,7 @@ async fn direct_shell_keeps_its_name_frozen_payload_and_has_no_owned_ale() {
         .iter()
         .any(|s| s.contains("ale_contract_direct")));
     assert_eq!(provider.requests().len(), 2);
+    assert_eq!(audit.records().len(), 1);
 }
 
 struct Observation {
@@ -215,7 +220,9 @@ async fn organizer_returns_a_closed_accepted_handle_and_only_authorized_status()
         .unwrap()
         .tools
         .insert(cid("tool.memory.retrieve"));
+    let (gate, audit) = review_support::allow_gate();
     let runtime = builder(provider.clone())
+        .with_system_one(gate)
         .with_plugin(module.clone())
         .build_agent_runtime(policy)
         .await
@@ -345,5 +352,6 @@ async fn organizer_returns_a_closed_accepted_handle_and_only_authorized_status()
             .unwrap()
             .contains("main_private_marker")));
     assert_eq!(child.owner, module.organizer_snapshots()[0].owner);
+    assert_eq!(audit.records().len(), 1);
     runtime.shutdown().await.unwrap();
 }

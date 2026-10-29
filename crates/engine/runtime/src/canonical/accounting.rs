@@ -452,6 +452,13 @@ impl UsageAccounting {
         }
         remaining.map(|tokens| tokens.min(u64::from(u32::MAX)) as u32)
     }
+    pub(crate) fn owner(&self, session: SessionId) -> Option<AgentOwner> {
+        self.accounts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session)
+            .map(|account| account.owner.clone())
+    }
     pub fn tool_call(&self, session: SessionId) -> RuntimeResult<()> {
         let mut accounts = self.accounts.lock().unwrap_or_else(|e| e.into_inner());
         let owner = accounts

@@ -343,9 +343,16 @@ impl ToolCapability for MemoryTool {
     async fn invoke_with_context(
         &self,
         call: &ToolCall,
-        _: Option<&FrozenInvocation>,
+        frozen: Option<&FrozenInvocation>,
         ctx: &ToolExecutionContext,
     ) -> ToolResult {
+        if apeireth_plugin::system_one::requires_system_one(&self.module_contract()) {
+            if let Err(error) =
+                apeireth_plugin::system_one::require_internal_review(self.id(), call, frozen, ctx)
+            {
+                return error;
+            }
+        }
         if ctx.principal.is_none() {
             return fail(call, "namespace_denied", "Host principal is required");
         }

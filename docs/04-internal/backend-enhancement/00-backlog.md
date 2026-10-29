@@ -102,3 +102,5 @@
 ## ALE baseline environment follow-up (2026-10-29)
 
 - D33: `gate_full.ps1` failure classifier can label a file-not-found test failure as OOM because broad patterns also scan successful test names. Preserve exit status; narrow attribution in a separate gate-tooling task. Cached binaries compiled in a removed worktree also retain stale `CARGO_MANIFEST_DIR`; rebuild affected targets in the current checkout. Evidence and rollback: [P0 ledger](../ale-system-one-p0-2026-10-29.md). Owner: gate tooling; open, no security threshold change.
+
+- D34 (2026-10-30): System One default enrollment is open. C01/C02 compatibility capability and raw Host consumers need per-module deny/unavailable/frozen/native-drain exits before universal/default protection can be claimed; C03 delegated/background authority must converge in message transport. Owners and exit criteria: [P2 migration ledger](../ale-system-one-p2-2026-10-30.md). No legacy security threshold or default permission was relaxed.

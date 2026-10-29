@@ -10,6 +10,9 @@ use std::time::{Duration, Instant};
 #[derive(Debug, Clone, Default)]
 pub struct ToolCancellation(Arc<AtomicBool>);
 impl ToolCancellation {
+    pub fn same_call(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
     pub fn cancel(&self) {
         self.0.store(true, Ordering::Release);
     }
@@ -52,6 +55,8 @@ pub struct ToolExecutionContext {
     pub call_id: String,
     pub caller: ToolCaller,
     pub module: PluginId,
+    pub module_instance: Option<apeireth_core::kernel::ModuleInstanceId>,
+    pub internal_review: Option<crate::system_one::InternalReviewReceipt>,
     /// Snapshot only; dispatcher checks current scope again before execution.
     pub tool_scope: Option<Vec<CapabilityId>>,
     pub authorization: ToolAuthorization,

@@ -122,6 +122,13 @@ impl ToolCapability for ContractTool {
         self.tool.freeze_invocation(call)
     }
     async fn invoke(&self, call: &ToolCall) -> ToolResult {
+        if crate::system_one::requires_system_one(&self.contract) {
+            return ToolResult::permanent_error(
+                &call.id,
+                "protected internal execution requires the Runtime context",
+            )
+            .with_name(&call.name);
+        }
         self.tool.invoke(call).await
     }
     async fn invoke_frozen(
@@ -129,6 +136,13 @@ impl ToolCapability for ContractTool {
         call: &ToolCall,
         frozen: Option<&FrozenInvocation>,
     ) -> ToolResult {
+        if crate::system_one::requires_system_one(&self.contract) {
+            return ToolResult::permanent_error(
+                &call.id,
+                "protected internal execution requires the Runtime context",
+            )
+            .with_name(&call.name);
+        }
         self.tool.invoke_frozen(call, frozen).await
     }
     async fn invoke_in_session(
@@ -137,6 +151,13 @@ impl ToolCapability for ContractTool {
         frozen: Option<&FrozenInvocation>,
         session: Option<SessionId>,
     ) -> ToolResult {
+        if crate::system_one::requires_system_one(&self.contract) {
+            return ToolResult::permanent_error(
+                &call.id,
+                "protected internal execution requires the Runtime context",
+            )
+            .with_name(&call.name);
+        }
         self.tool.invoke_in_session(call, frozen, session).await
     }
     async fn invoke_with_context(
@@ -145,6 +166,13 @@ impl ToolCapability for ContractTool {
         frozen: Option<&FrozenInvocation>,
         context: &ToolExecutionContext,
     ) -> ToolResult {
+        if crate::system_one::requires_system_one(&self.contract) {
+            if let Err(error) =
+                crate::system_one::require_internal_review(self.id(), call, frozen, context)
+            {
+                return error;
+            }
+        }
         self.tool.invoke_with_context(call, frozen, context).await
     }
 }

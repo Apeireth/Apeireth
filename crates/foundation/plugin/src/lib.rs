@@ -81,6 +81,7 @@ pub mod registry;
 pub mod resource_factory;
 pub mod self_assessment;
 pub mod semver;
+pub mod system_one;
 pub mod task_scope;
 pub mod tool;
 pub mod tool_execution;

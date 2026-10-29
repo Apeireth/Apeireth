@@ -60,6 +60,7 @@ mod module_host;
 pub mod principal_authority;
 pub mod profiles;
 pub mod registered_hooks;
+pub mod system_one;
 // OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).
 // **0 装诚实真账 (子代理 R12 独立判断)**:
 // - 本 module 是 spec 部分真实施 (估 30-45 分钟), 完整 1-3 周估待 (per R11 §8.4).

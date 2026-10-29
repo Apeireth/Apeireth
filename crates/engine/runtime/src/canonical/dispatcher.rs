@@ -19,6 +19,9 @@ use apeireth_protocol::canonical::{
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+#[path = "dispatcher/system_one.rs"]
+mod supervision;
+
 /// An additional restriction, never a permission grant. Missing scope allows the
 /// legacy catalog; an empty Only set exposes no tool, including controls.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +77,11 @@ pub enum DispatchErrorCode {
     PlatformUnavailable,
     PermissionDenied,
     DuplicateCallId,
+    SystemOneUnavailable,
+    SystemOneDenied,
+    SystemOneEscalated,
+    SystemOneInvalidVerdict,
+    SystemOneAuditFailed,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -97,6 +105,8 @@ pub fn failure(call: &ToolCall, code: DispatchErrorCode, message: impl Into<Stri
 /// Execution policy and instance/session restrictions, never a tool registry.
 pub struct ToolDispatcher {
     pub limits: DispatchLimits,
+    system_one: Option<Arc<super::system_one::SystemOneGate>>,
+    principal_authorizations: Option<Arc<super::principal_authority::PrincipalAuthorizations>>,
     scopes: RwLock<BTreeMap<SessionId, ToolScope>>,
     parents: RwLock<BTreeMap<SessionId, SessionId>>,
     agents: RwLock<BTreeMap<SessionId, AgentId>>,
@@ -111,6 +121,8 @@ impl ToolDispatcher {
     pub fn new(limits: DispatchLimits) -> Self {
         Self {
             limits,
+            system_one: None,
+            principal_authorizations: None,
             scopes: RwLock::new(BTreeMap::new()),
             parents: RwLock::new(BTreeMap::new()),
             agents: RwLock::new(BTreeMap::new()),
@@ -122,6 +134,15 @@ impl ToolDispatcher {
         }
     }
 
+    pub(crate) fn with_system_one(
+        mut self,
+        gate: Option<Arc<super::system_one::SystemOneGate>>,
+        authority: Option<Arc<super::principal_authority::PrincipalAuthorizations>>,
+    ) -> Self {
+        self.system_one = gate;
+        self.principal_authorizations = authority;
+        self
+    }
     pub(crate) fn with_usage(mut self, usage: Arc<super::accounting::UsageAccounting>) -> Self {
         self.usage = Some(usage);
         self
@@ -544,6 +565,8 @@ impl LegacyToolAdapter {
             call_id: call.id.clone(),
             caller: ToolCaller::Host,
             module: self.module.clone(),
+            module_instance: None,
+            internal_review: None,
             tool_scope: session.and_then(|session| self.dispatcher.scope_snapshot(session)),
             authorization: ToolAuthorization::default(),
             cancellation: ToolCancellation::default(),
@@ -585,6 +608,16 @@ impl LegacyToolAdapter {
                 "call cancelled or execution context mismatch",
             );
         }
+        let supervised =
+            apeireth_plugin::system_one::requires_system_one(&self.tool.module_contract());
+        let frozen = if supervised && frozen.is_none() {
+            match self.tool.freeze_invocation(call) {
+                Ok(frozen) => frozen,
+                Err(error) => return error,
+            }
+        } else {
+            frozen.cloned()
+        };
         if let (Some(usage), Some(session)) = (&self.dispatcher.usage, session) {
             if let Err(error) = usage.tool_call(session) {
                 return failure(call, DispatchErrorCode::PermissionDenied, error.to_string());
@@ -601,7 +634,8 @@ impl LegacyToolAdapter {
         let permits = self.dispatcher.permits(self.tool.as_ref());
         let tool = self.tool.clone();
         let owned_call = call.clone();
-        let frozen = frozen.cloned();
+        let dispatcher = self.dispatcher.clone();
+        let legacy = self.legacy_open_properties;
         let scope = Some(context.module_tasks.clone());
         // JoinSet aborts its owned task on drop, including caller cancellation.
         // No detached task may outlive a module's drain boundary.
@@ -622,6 +656,20 @@ impl LegacyToolAdapter {
                     let lease: Arc<dyn Send + Sync> = permit.clone();
                     Arc::downgrade(&lease)
                 });
+                if supervised {
+                    if let Err(error) = dispatcher
+                        .review_internal(
+                            tool.as_ref(),
+                            &owned_call,
+                            frozen.as_ref(),
+                            &mut context,
+                            legacy,
+                        )
+                        .await
+                    {
+                        return error;
+                    }
+                }
                 apeireth_plugin::tool_execution::scope_native_execution(
                     &context,
                     tool.invoke_with_context(&owned_call, frozen.as_ref(), &context),
