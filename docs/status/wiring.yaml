@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 49afc9c43bcb7e2774066fa685164bf6bb4d153d1f81f69e731646b8c567008c
-claims_total: 34
+claims_sha256: 1bae31a854af3d724a4808413e84455a6d11124ccc6f4dcde6964b5a097aed7b
+claims_total: 35
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -852,3 +852,37 @@ items:
       claims_id: "rt.module_execution_contract"
     gaps:
       - "未达 PRODUCTION WIRED：Explicit Host composition only. Existing shell wire name/frozen payload, private organizer Session, accepted task receipt, authorized status and inter…"
+  - id: "rt.system_one_internal"
+    capability: "Mandatory System One internal execution review"
+    implemented:
+      sources:
+        - "crates/foundation/plugin/src/system_one.rs"
+        - "crates/foundation/plugin/src/module_contract.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+        - "crates/engine/runtime/src/canonical/system_one.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher/system_one.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime-assembly/src/system_one.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
+        - "crates/engine/runtime-assembly/src/system_one.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher/system_one.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime/src/canonical/system_one.rs"
+        - "crates/foundation/plugin/src/module_contract.rs"
+        - "crates/foundation/plugin/src/system_one.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/system_one_execution.rs"
+        - "crates/engine/runtime-assembly/tests/modular_ale.rs"
+      claims_id: "rt.system_one_internal"
+    gaps:
+      - "未达 PRODUCTION WIRED：Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy befo…"
