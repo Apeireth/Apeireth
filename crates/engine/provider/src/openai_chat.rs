@@ -158,6 +158,41 @@ pub fn parse_response(
     request_model: &str,
     provider: &str,
 ) -> Result<NormalizedResponse, ProviderError> {
+    // 默认配置 = 推理适配**关**，与接线前的行为逐字节一致（零行为变化）。
+    parse_response_with_reasoning(
+        body,
+        request_model,
+        provider,
+        &crate::reasoning_adapter::ReasoningAdapterConfig::default(),
+    )
+}
+
+/// Parse a Chat Completions response **with reasoning-field adaptation**.
+///
+/// # 为什么需要这个入口
+///
+/// 推理模型把输出预算花在 `reasoning_content` 上，而本解析器原本只读
+/// `message.content` ⇒ 客户端看到的是**空正文**（本文件下方那条
+/// `finish_reason=length` 的 fail-loud 就是为它加的）。届时能做的只有报错，
+/// 而实际上推理文本就在同一个响应对象里，只是字段名各家不同
+/// （`reasoning_content` / `thinking` / `reasoning` …共 12 个别名，
+/// 见 [`crate::reasoning_adapter::REASONING_ALIASES`]）。
+///
+/// 这个入口把响应里已有的别名内容归一化成前置的 `<think>…</think>` 块。
+/// 返回值是 `NormalizedResponse`，不会转发原始 message JSON 或其别名字段；
+/// JSON 转发场景的字段剥离 helper 仍由 `reasoning_adapter` 单独提供。
+///
+/// # 门控
+///
+/// 只在 [`ReasoningAdapterConfig::should_convert_for_model`] 命中时才动
+/// （`enabled` + 模型名命中过滤器白名单）。**默认配置是关的** ——
+/// 所以 [`parse_response`] 的行为与接线前完全一致。
+pub fn parse_response_with_reasoning(
+    body: serde_json::Value,
+    request_model: &str,
+    provider: &str,
+    reasoning: &crate::reasoning_adapter::ReasoningAdapterConfig,
+) -> Result<NormalizedResponse, ProviderError> {
     let provider_owned = provider.to_string();
 
     let choices = body
@@ -178,6 +213,22 @@ pub fn parse_response(
         .and_then(|c| c.as_str())
         .unwrap_or("")
         .to_string();
+
+    // 推理字段归一化 (门控关时 `build_client_visible_content` 原样返回 content)。
+    //
+    // 顺序很重要: **先归一化，再做空正文判定** —— 否则「推理文本在场但 content 空」
+    // 会被下面的 fail-loud 判成「预算耗尽」，而其实手上就有内容可用。
+    let content = choice.get("message").map_or_else(
+        || content.clone(),
+        |message| {
+            crate::reasoning_adapter::build_client_visible_content(
+                message,
+                reasoning,
+                request_model,
+                &[],
+            )
+        },
+    );
     let finish_reason = choice
         .get("finish_reason")
         .and_then(|f| f.as_str())
@@ -507,6 +558,96 @@ mod tests {
             resp.tool_calls[0].arguments,
             serde_json::json!({"command": "echo hi"})
         );
+    }
+
+    /// 推理适配**关**时（默认配置）解析结果与纯 `parse_response` 逐字节一致 ——
+    /// 这是接线的前提：默认关必须零行为变化。
+    #[test]
+    fn reasoning_disabled_by_default_changes_nothing() {
+        let body = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "正文",
+                    "reasoning_content": "内部推理"
+                },
+                "finish_reason": "stop"
+            }]
+        });
+        let plain = parse_response(body.clone(), "m", "provider.test").expect("plain");
+        let with_default = parse_response_with_reasoning(
+            body,
+            "m",
+            "provider.test",
+            &crate::reasoning_adapter::ReasoningAdapterConfig::default(),
+        )
+        .expect("default");
+        assert_eq!(plain.content, with_default.content);
+        assert_eq!(plain.content, "正文", "默认关时推理文本不得进入可见正文");
+    }
+
+    /// 命中模型过滤器 ⇒ 推理文本归一化成前置 `<think>` 块。
+    #[test]
+    fn reasoning_enabled_prefixes_a_think_block() {
+        let body = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "结论",
+                    "reasoning_content": "先想一步"
+                },
+                "finish_reason": "stop"
+            }]
+        });
+        let config = crate::reasoning_adapter::ReasoningAdapterConfig {
+            enabled: true,
+            model_filters: vec!["deepseek".to_string()],
+            tag: "think".to_string(),
+        };
+        let parsed = parse_response_with_reasoning(body, "deepseek-v4", "provider.test", &config)
+            .expect("reasoning");
+        assert!(
+            parsed.content.starts_with("<think>"),
+            "think 块应前置: {}",
+            parsed.content
+        );
+        assert!(parsed.content.contains("先想一步"), "{}", parsed.content);
+        assert!(parsed.content.ends_with("结论"), "{}", parsed.content);
+    }
+
+    /// **实际故障场景**：推理模型把预算烧光，`content` 空 + `finish_reason=length`。
+    ///
+    /// - 适配关 ⇒ 仍是 fail-loud（空壳响应不能发出去）；
+    /// - 适配开且响应里就有推理文本 ⇒ **不该 fail-loud**，因为手上其实有内容。
+    ///
+    /// 这条钉住「先归一化、后判空」的顺序 —— 顺序反了就会把有内容的响应误判成
+    /// 预算耗尽。
+    #[test]
+    fn length_truncated_reasoning_only_response_is_not_treated_as_empty() {
+        let body = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "reasoning_content": "想了很久但没写下结论"
+                },
+                "finish_reason": "length"
+            }]
+        });
+
+        // 适配关：仍然是 fail-loud（这是接线前就有的保护）
+        let disabled = parse_response(body.clone(), "m", "provider.test");
+        assert!(disabled.is_err(), "空正文 + length 必须 fail-loud");
+
+        // 适配开：推理文本在场 ⇒ 有内容可发，不该报错
+        let config = crate::reasoning_adapter::ReasoningAdapterConfig {
+            enabled: true,
+            model_filters: vec!["deepseek".to_string()],
+            tag: "think".to_string(),
+        };
+        let enabled = parse_response_with_reasoning(body, "deepseek-v4", "provider.test", &config)
+            .expect("推理文本在场时不该 fail-loud");
+        assert!(enabled.content.contains("想了很久"), "{}", enabled.content);
     }
 
     #[test]
