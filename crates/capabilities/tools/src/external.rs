@@ -1757,6 +1757,36 @@ mod tests {
         path
     }
 
+    /// 调一次外部工具，遇到 Linux 的 ETXTBSY 瞬态错误就退避重试。
+    ///
+    /// Linux 的 `execve` 有一道内核闸门：只要还有进程持有该文件的**写** fd，
+    /// `execve` 就返回 `ETXTBSY`(os error 26)。本模块的用例把 fake 工具脚本
+    /// 写完立刻 exec，而 Rust 测试把多个用例分在不同线程上跑 —— 线程 A 写脚本
+    /// 期间，线程 B fork 出子进程（Linux 后端走 `pre_exec`，即 fork+exec，子进程
+    /// 会继承父进程的 fd），子进程在自身 exec 之前短暂持有 A 的写 fd，于是 A 的
+    /// `execve` 偶发 ETXTBSY。与 Go golang/go#22315、内核 `__fput` 竞态同源。
+    ///
+    /// 这个错误是**瞬态**的：那个子进程 exec/exit 之后写 fd 即释放。所以这里做
+    /// 有界退避重试，且只认 ETXTBSY 这一个具体错误 —— 真实失败（缺依赖、权限
+    /// 不足、非零退出）不会被重试掩盖成通过。
+    #[cfg(unix)]
+    async fn invoke_with_etxtbsy_retry(tool: &dyn ToolCapability, call: &ToolCall) -> ToolResult {
+        const ATTEMPTS: usize = 5;
+        let mut attempt = 0usize;
+        loop {
+            let result = tool.invoke(call).await;
+            let transient = matches!(
+                &result.outcome,
+                ToolOutcome::Error { message, .. } if message.contains("Text file busy")
+            );
+            if !transient || attempt + 1 >= ATTEMPTS {
+                return result;
+            }
+            attempt += 1;
+            tokio::time::sleep(Duration::from_millis(20 * attempt as u64)).await;
+        }
+    }
+
     fn local_scope() -> Arc<Scope> {
         Arc::new(Scope {
             name: "test".into(),
@@ -1798,10 +1828,10 @@ XML"#,
         );
         let tool = NmapTool::new(local_scope()).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&call(
-                "ext.nmap",
-                json!({"target": "127.0.0.1", "ports": "22"}),
-            ))
+            invoke_with_etxtbsy_retry(
+                &tool,
+                &call("ext.nmap", json!({"target": "127.0.0.1", "ports": "22"})),
+            )
             .await,
         );
         assert_eq!(value["details"]["hosts"][0]["ports"][0]["state"], "open");
@@ -1828,7 +1858,7 @@ JSON"#,
         std::fs::write(workspace.join("sample.jpg"), b"fake").expect("sample");
         let tool = ExifTool::new(&workspace).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&call("ext.exiftool", json!({"path": "sample.jpg"})))
+            invoke_with_etxtbsy_retry(&tool, &call("ext.exiftool", json!({"path": "sample.jpg"})))
                 .await,
         );
         assert_eq!(value["details"]["Make"], "Canon");
@@ -1855,7 +1885,7 @@ JSON"#,
         std::fs::write(workspace.join("capture.pcap"), b"fake").expect("pcap");
         let tool = TsharkTool::new(&workspace).with_binary(binary);
         let value = ok_value(
-            tool.invoke(&call("ext.tshark", json!({"path": "capture.pcap"})))
+            invoke_with_etxtbsy_retry(&tool, &call("ext.tshark", json!({"path": "capture.pcap"})))
                 .await,
         );
         assert_eq!(value["details"]["packets"], 2);
@@ -1873,9 +1903,9 @@ JSON"#,
         let workspace = temp_workspace("fail");
         let binary = fake_binary(&workspace, "echo bad >&2; exit 3");
         let tool = NmapTool::new(local_scope()).with_binary(binary);
-        let result = tool
-            .invoke(&call("ext.nmap", json!({"target": "127.0.0.1"})))
-            .await;
+        let result =
+            invoke_with_etxtbsy_retry(&tool, &call("ext.nmap", json!({"target": "127.0.0.1"})))
+                .await;
         assert!(!result.is_ok());
         std::fs::remove_dir_all(&workspace).ok();
     }
