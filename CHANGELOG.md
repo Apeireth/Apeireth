@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Repo Consolidation C：分类与整合顺序建议（2026-10-29）
+
+- **仅分类**：B 的 45 个 ref 行各有唯一主类，16 个 open PR 各有下一步建议；全部 33 个含独有提交的行继续保留，无删除、合并或 PR 动作授权。
+- **后续边界**：先审 CI 证据链与活动 KC1，再按范围审独有增量；清理前须验证恢复锚并取得对应去留决定。main 只走受保护 PR，新启动定义仍未批准，正式验收保持 Partial。完整表及 D/E/F 建议见 [C classify](docs/04-internal/repo-consolidation-c-classify-2026-10-29.md)。
+
 ## [Unreleased] — Repo Consolidation B：refs 与独有历史盘点（2026-10-29）
 
 - **仅盘点**：冻结本地/origin 分支、全部 tags、stash/worktree 和可见 open PR；45 个分支 refs 中 33 个含 main/KC1 之外的提交身份，9 个 topic tip 已是 main 祖先。名称、bot 或历史备份标签不构成删除授权。
