@@ -86,10 +86,19 @@ async fn assert_decision(governance: &GovernancePipeline, capability: &str, expe
 #[tokio::test]
 async fn explicit_false_policy_grants_repo_only_and_denies_read_tools() {
     let governance = build_production_governance(false);
+    // 生产治理链**组成契约**（顺序即语义：授权 → 限流 → 内容风险 → 行为链）。
+    //
+    // 2026-10-25 增 `rate_limit`：失控的死循环/高频外部调用会耗尽 API 配额或
+    // 造成 DoS —— 权限许可**不等于**可以无限调。它挂在授权之后、内容风险之前。
+    // **默认挂载**（而非「默认关 + env 开关」）的理由：
+    // ① env 棘轮只减不增已满额；② 「默认关 + 开关」等于这闸依然没接电。
+    // 行为影响可控：配额内**完全放行**，只在同一 (能力, 会话) 超 30/分钟或
+    // 300/小时时才拒（阈值宽松到正常路径碰不到）。
     assert_eq!(
         governance.hook_names(),
         [
             "permission_governance",
+            "rate_limit",
             "input_security.credential_disclosure",
             "input_security.prompt_injection",
             "behavior_chain_guard",
@@ -228,4 +237,62 @@ async fn authorized_tools_still_pass_through_security_hooks() {
         Decision::RequireApproval { .. }
     ));
     assert_eq!(injection.hook, "input_security.prompt_injection");
+}
+
+/// **限流守门的端到端证明**（2026-10-25 接线，此前只有 hook 级单测）。
+///
+/// 生产治理链**默认挂载** `RateLimitGovernanceHook`（配额内完全放行、超限才拒）。
+/// 本测试从生产构造器 `build_production_governance(false)` 出发，对同一
+/// (能力, 会话) 连续派发，断言：
+///
+/// 1. 配额内（前 30 次）**全部放行** —— 证明默认挂载不改正常路径；
+/// 2. 超限后（第 31 次起）**拒绝** —— 证明这道闸真的在生产链上生效，
+///    而不是"挂了一个永远放行的摆设"。
+///
+/// 阈值口径见 `RateLimitConfig::default()`（30/分钟、300/小时）；本测试只跑
+/// 前 31 次，落在分钟窗内，不依赖小时窗。
+#[tokio::test]
+async fn production_chain_rate_limit_denies_after_the_minute_quota() {
+    use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
+    use apeireth_governance::{Action, GovernancePipeline, GovernanceRequest};
+
+    let governance: GovernancePipeline = build_production_governance(false);
+    let capability = CapabilityId::new("tool.repo").expect("valid capability");
+    let session = SessionId::new();
+    let arguments = serde_json::json!({});
+
+    let mut allowed = 0usize;
+    let mut denied_at: Option<usize> = None;
+    for round in 1..=31u32 {
+        let request = GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability: &capability,
+                arguments: &arguments,
+            },
+            session,
+            TraceId::new(),
+            round,
+        );
+        let decision = governance.evaluate_verbose(&request).await.decision;
+        if decision.is_allowed() {
+            assert!(
+                denied_at.is_none(),
+                "第 {round} 次又被放行 —— 超限后不该回到放行（限流不是概率性的）"
+            );
+            allowed += 1;
+        } else {
+            assert!(
+                matches!(decision, Decision::Deny { .. }),
+                "超限应是拒绝而不是要求审批: {decision}"
+            );
+            denied_at.get_or_insert(round as usize);
+        }
+    }
+
+    assert_eq!(allowed, 30, "分钟配额 30 次应全部放行: allowed={allowed}");
+    assert_eq!(
+        denied_at,
+        Some(31),
+        "第 31 次必须被限流拒绝（证明限流 hook 真在生产链上生效）"
+    );
 }

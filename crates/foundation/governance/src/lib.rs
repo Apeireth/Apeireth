@@ -401,6 +401,27 @@ pub trait GovernanceHook: Send + Sync {
             .with_owner(self.owner().cloned())
     }
 
+    /// Notification that **an earlier hook denied** this action.
+    ///
+    /// # 为什么需要这个回调（2026-10-27，护栏审计 P0-2）
+    ///
+    /// [`GovernancePipeline::evaluate_verbose`] 在**第一个非 allow 处短路返回**
+    /// ⇒ ⇒ **排在后面的 hook 根本看不到这次拒绝**
+    /// ⇒ ⇒ 而护栏的**复合检测**（同效果绕过 / 重试升级 / 破坏链）**依赖链里有被拒动作**
+    /// ⇒ ⇒ 「**拒绝后换个工具再来一次**」这类绕过对**上游拒绝**是**失明**的。
+    ///
+    /// ⇒ 所以：管线在短路时**把这次拒绝通知给后面的 hook**
+    /// ⇒ ⇒ 后面的 hook 可以把「上游已拒」记进自己的状态 ⇒ ⇒ 下次评估就能看见它。
+    ///
+    /// # 口径
+    ///
+    /// * **只**在「**这个 hook 自己没参与评估**」时收到通知
+    ///   ⇒ ⇒ 即「上游拒绝、而我排在后面」；
+    /// * 默认实现是 **no-op** ⇒ ⇒ 不关心上游拒绝的 hook **完全不受影响**；
+    /// * ⚠️ 这**不改变**短路的语义（下游 hook **仍然不会被评估**）
+    ///   ⇒ ⇒ 「上游拒绝 ⇒ 下游不得放行」这条**安全属性不变**。
+    async fn on_denied(&self, _request: &GovernanceRequest<'_>, _verdict: &GovernanceVerdict) {}
+
     /// Notification that a human approved one pending approval.
     ///
     /// Called exactly once when the runtime consumes an `Approved` decision for
@@ -575,9 +596,17 @@ impl GovernanceHook for GovernancePipeline {
     }
 
     async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
-        for hook in &self.hooks {
+        for (index, hook) in self.hooks.iter().enumerate() {
             let verdict = hook.evaluate_verbose(request).await;
             if !verdict.is_allowed() {
+                // ⚠️ **通知后面的 hook**（2026-10-27，护栏审计 P0-2）：
+                // 短路意味着**后面的 hook 不会被评估** ⇒ ⇒ 它们看不见这次拒绝
+                // ⇒ ⇒ 护栏的**复合检测**（同效果绕过 / 重试升级）就对**上游拒绝失明**
+                // ⇒ ⇒ 这里把拒绝**通知**给它们（默认 no-op ⇒ 不关心的一律不受影响）
+                // ⇒ ⇒ ⚠️ **这不改变短路语义**（下游**仍然不会被评估**）。
+                for downstream in &self.hooks[index + 1..] {
+                    downstream.on_denied(request, &verdict).await;
+                }
                 return verdict;
             }
         }

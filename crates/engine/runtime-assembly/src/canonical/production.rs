@@ -55,12 +55,13 @@ use super::self_status_source::{
 use super::tool_modules::{
     ApplyPatchModule, BackupExportModule, CareScheduleModule, ContentFeedModule, DocOpsModule,
     EducationModule, ExposureAuditModule, ExternalToolsModule, FetchModule, FilesystemModule,
-    GitWriteModule, ImageOpsModule, McpModule, ProposalModule, ReconModule, RepoModule,
-    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule,
+    GitWriteModule, ImageOpsModule, McpModule, ProposalModule, ReconModule, RepoMapModule,
+    RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, SkillDistillModule,
     SkillSearchModule, TaskBoardModule, TraitReportModule, VoiceSpeakModule, WorktreeApplyModule,
     WorktreePlanModule,
 };
 use super::trait_growth::{trait_growth_probe, trait_status_probe, TraitGrowthPaths};
+use crate::consequence_backfill::{default_data_root, ConsequenceBackfillModule};
 use crate::startup::{StartupPhase, StartupTimeline};
 
 // 生物机制族装配块（W3.2/W3.3/W3.5/W3.6）搬至子模块；`production.rs` 只留调用与字段。
@@ -283,6 +284,15 @@ pub struct ProductionModulesConfig {
     pub community_triage: bool,
     /// W2 §4.3 (2026-10-10, 默认关): education Dx-Check 换元检查工具注册。
     pub education: bool,
+    /// 代码地图工具注册 (`tool.repo_map`, 代码骨架概览)。
+    ///
+    /// 2026-10-24: 跨语言符号提取 + 跨文件依赖图 + Personalized PageRank
+    /// 排序, 在 token 预算内输出紧凑大纲。**只读**、工作区限域、三重预算封顶。
+    ///
+    /// 扫描根与 `tool.repo` **同源**（[`Self::repo`] 用同一个
+    /// `backends.workspace_root`）—— 同一份工作区只有一把尺。
+    /// 工作区根缺席时不注册（名册按实际注册条件取值）。
+    pub repo_map: bool,
     /// W2 §4.4 (2026-10-10, 默认关): 研究吸收批认知体操 (四算法实验性洞察)。
     pub absorption_insight: bool,
     /// Register the structured self-report tool (`tool.self_status`, 自省通道).
@@ -447,6 +457,7 @@ impl Default for ProductionModulesConfig {
     fn default() -> Self {
         Self {
             memory_recall: true,
+            repo_map: true,
             proactive_recall: None,
             memory_writeback: true,
             preference_recall: true,
@@ -531,6 +542,11 @@ pub struct ProductionBackends {
     /// Council service, supplied only when the adapter explicitly enables it.
     pub council: Option<Arc<Council>>,
     /// Workspace root directory for local file tools.
+    /// 关系里程碑存储（初见 / 阶段跃迁）。
+    ///
+    /// 缺席 = 不记里程碑（零行为变化）。生产装配走
+    /// `SqliteMilestoneStore`（与认知库同一份库，关系史跨重启存活）。
+    pub milestone_store: Option<Arc<dyn apeireth_memory::milestone::MilestoneStore>>,
     pub workspace_root: Option<PathBuf>,
     /// Scoped memory backend for cross-session storage queries.
     pub scoped_memory: Option<Arc<dyn ScopedMemoryBackend>>,
@@ -538,6 +554,11 @@ pub struct ProductionBackends {
     pub embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
     /// Optional durable selected-context access history.
     pub access_history: Option<Arc<SqliteAccessHistoryStore>>,
+    /// Optional **read-only** diary store (cross-diary retrieval wiring).
+    ///
+    /// 缺席 = 检索路径不碰日记 (零行为变化); 在场 = 命中事实可附**关联日记片段**
+    /// (「你上周写过…」). 只读面: 检索路径只 `list_days` / `read_day`, 绝不写日记.
+    pub diary: Option<Arc<dyn apeireth_memory::diary::DiaryStore>>,
     /// Optional unified materializer for bounded AfterTurn memory writeback.
     pub memory_materializer: Option<Arc<dyn MemoryMaterializerPort>>,
     /// Optional unified extractor used to build a default materializer.
@@ -556,7 +577,8 @@ pub struct ProductionBackends {
     pub ingest_gate: Option<Arc<dyn apeireth_memory::IngestGate>>,
     /// Reflexion failure-feedback store (2026-10-06 W2 记忆闭环批).
     pub reflexion_store: Option<Arc<dyn apeireth_memory::reflexion::ReflexionStore>>,
-    /// W2 §4.2: partner 羁绊存储 (InMemoryPartnerStore 或未来 sqlite 实现)。
+    /// W2 §4.2: partner 羁绊存储（默认生产装配走 `SqlitePartnerStore`，
+    /// 2026-10-24 接上；trait 落点不绑后端）。
     pub partner_store: Option<Arc<dyn apeireth_memory::partner::PartnerStore>>,
     /// 「性格养成」第一铲 (默认无 = 自学习关): 自校准接线层, 接上后
     /// MemoryRecallModule 的召回结果作为真接信号喂给引擎。
@@ -858,6 +880,19 @@ impl ProductionModules {
                 Arc::new(NervousBridgeModule::new(nervous_bus.as_ref().clone())) as Arc<dyn Module>,
             );
         }
+        // 问责闭环第 ③ 步 · 自动回填面（ADR-0014 §5）：工具调用失败 ⇒ 把**对应的那条**
+        // 已声明影响回填 `failed`。归属（action_id ↔ tool_call_id）**由调用方显式登记**
+        // （`apeireth egress bind`），登记不到 ⇒ 不动 —— 系统不推断归属。
+        //
+        // **默认关**：与问责面共用同一个开关（`APEIRETH_ENABLE_EGRESS_GATE`）——
+        // 开闸才装（闸 = 影响声明 + 后果账 + 自动回填这一整套）；关时**零注册**、
+        // 零行为变化（未启用 = 不注册）。
+        // `confirmed` **绝不**自动填（本地成功 ≠ 影响已确认 = 替外部背书）。
+        if crate::egress_gate::egress_gate_enabled_from_env() {
+            modules.push(Arc::new(ConsequenceBackfillModule::from_data_root(
+                &default_data_root(),
+            )) as Arc<dyn Module>);
+        }
         let mut capabilities: Vec<Arc<dyn ToolCapability>> = Vec::new();
         // W3.3: 器官模块句柄留给组合根迟绑定 guard 免疫记忆 (默认 None = 未注册).
         let mut organ_module: Option<Arc<OrganModule>> = None;
@@ -955,6 +990,18 @@ impl ProductionModules {
             if let Some(root) = &backends.workspace_root {
                 instrument.constructed(ModuleFamily::Repo);
                 let provider = RepoModule::new(root.clone());
+                capabilities.extend(provider.capabilities());
+            }
+        }
+
+        // 代码地图 (`tool.repo_map`, 2026-10-24): 跨语言符号提取 + 跨文件
+        // 依赖图 + Personalized PageRank, token 预算内输出紧凑大纲。
+        // **只读**、工作区限域、三重预算封顶 (文件数 / 单文件字节 / token)。
+        // 扫描根与 `tool.repo` 同源 (同一个 `backends.workspace_root`)。
+        if config.repo_map {
+            if let Some(root) = &backends.workspace_root {
+                instrument.constructed(ModuleFamily::Repo);
+                let provider = RepoMapModule::new(root.clone());
                 capabilities.extend(provider.capabilities());
             }
         }
@@ -1454,6 +1501,15 @@ impl ProductionModules {
                     AccessHistoryActivationSource::new(Arc::clone(history), 0.5, 0.0),
                 ));
             }
+            // 跨日记检索接线 (只读): 日记面在场 ⇒ 命中事实可附关联日记片段.
+            // 缺席 = 检索路径不碰日记 ⇒ 逐字节零行为变化.
+            if let Some(diary) = &backends.diary {
+                coordinator = coordinator.with_diary_store(Arc::clone(diary));
+            }
+            // 用户知识库接线 (只读): 语料根 = <data>/wiki。
+            // 目录不存在 ⇒ 检索路径整段跳过 ⇒ 逐字节零行为变化。
+            coordinator =
+                coordinator.with_wiki_root(crate::paths::default_data_root().join("wiki"));
             if let (Some(source), Some(identity)) =
                 (&backends.typed_recall, &backends.typed_recall_identity)
             {
@@ -1556,11 +1612,18 @@ impl ProductionModules {
 
         if config.council {
             instrument.constructed(ModuleFamily::Council);
+            // D-2：council 决议的票落盘（append-only）⇒ 守夜人的「立场平衡复盘」段
+            // 不再永远空转。路径与 CLI 侧读账处**同一份**（`default_data_root()` 与
+            // `default_panel_data_dir()` 同实现同路径：`$APEIRETH_DATA_DIR` 或 `~/.apeireth`）。
+            let ballot_log = Arc::new(super::council_ballot_log::CouncilBallotLog::open(
+                super::council_ballot_log::default_council_ballot_log_path(&default_data_root()),
+            ));
             modules.push(Arc::new(
                 CouncilModule::new(
                     required(backends.council, "council", "council")?,
                     Arc::clone(&clock),
                 )
+                .with_ballot_log(ballot_log)
                 .with_telemetry(Arc::clone(&telemetry)),
             ));
         }
@@ -1597,10 +1660,17 @@ impl ProductionModules {
                 .as_ref()
                 .map(|identity| identity.subject_id.clone())
                 .unwrap_or_else(|| "local-user".to_string());
-            modules.push(Arc::new(
+            let mut bond_module =
                 super::cognitive::PartnerBondModule::new(store, subject_id, Arc::clone(&clock))
-                    .with_telemetry(Arc::clone(&telemetry)),
-            ));
+                    .with_telemetry(Arc::clone(&telemetry));
+            // 关系里程碑（初见 / 阶段跃迁）：只在注入了存储时挂 —— 缺存储 =
+            // 不记 = 零行为变化。记录面本身带幂等闸，装配层不必自己判重。
+            if let Some(milestones) = backends.milestone_store {
+                bond_module = bond_module.with_milestones(Arc::new(
+                    apeireth_memory::milestone::MilestoneRecorder::new(milestones),
+                ));
+            }
+            modules.push(Arc::new(bond_module));
         }
 
         // V4-a 恒定小注入 (人格记忆层回取面 ①) 的 TurnStart overlay 装配点:

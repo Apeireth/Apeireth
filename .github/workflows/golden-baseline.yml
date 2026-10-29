@@ -1,0 +1,62 @@
+name: Golden baseline (内部卷检索基线闸门)
+
+# 2026-10-26 新增：守住「**准确度不许掉**」这条 owner 裁定。
+#
+# 为什么要有：owner 裁定（2026-10-25）「准确度一分不许掉」⇒ 已实现为
+# `golden_set::check_no_regression`（相对劣化 > 1% ⇒ 拦下）⇒ 但**没有基线可比**
+# ⇒ 改检索代码时分数涨跌**无人知晓** ⇒ 纪律落空。
+# ⇒ 本 workflow 把「当前真实分数 vs 基线」变成**提交时就红**的检查。
+#
+# ⚠️ **语料在仓外**（`~/.apeireth/novels/`，下载器 `scripts/download_novels.sh` 带 SHA-256）
+# ⇒ CI 上**必须先下载**（脚本会校验 SHA-256 ⇒ 内容漂移当场报错）。
+# ⇒ 下载失败 ⇒ 门禁**如实失败**（不许静默跳过：那等于「没检查」）。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/engine/storage/**'
+      - 'crates/engine/runtime-assembly/**'
+      - 'scripts/check_golden_baseline.py'
+      - 'scripts/golden-baseline.json'
+      - 'scripts/download_novels.sh'
+  pull_request:
+    paths:
+      - 'crates/engine/memory/**'
+      - 'crates/engine/storage/**'
+      - 'crates/engine/runtime-assembly/**'
+      - 'scripts/check_golden_baseline.py'
+      - 'scripts/golden-baseline.json'
+      - 'scripts/download_novels.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden-baseline:
+    name: internal golden set retrieval baseline gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # 语料落仓外（与生产同口径：数据不入库）。
+      APEIRETH_DATA_DIR: /tmp/apeireth-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Download internal-set corpus (public domain novels, SHA-256 pinned)
+        run: bash scripts/download_novels.sh
+
+      - name: Build workspace tests
+        run: cargo build --workspace --tests --locked
+
+      - name: Retrieval baseline gate (accuracy must not drop)
+        run: python3 scripts/check_golden_baseline.py

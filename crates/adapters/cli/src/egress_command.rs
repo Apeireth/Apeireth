@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use apeireth_runtime_assembly::egress_ledger::EgressLedger;
 
 /// 用法帧。
-pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome <ACTION_ID> <confirmed|failed>\napeireth egress notify <FACT_ID> <wording|partial|refuted>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
+pub const USAGE: &str = "apeireth egress ledger [--path <LEDGER_JSONL>] [--limit <N>] [--json]\napeireth egress impact [--path <IMPACT_JSONL>] [--limit <N>] [--json]\napeireth egress outcome <ACTION_ID> <confirmed|failed>\napeireth egress bind <ACTION_ID> <TOOL_CALL_ID>\napeireth egress notify <FACT_ID> <wording|partial|refuted>\n\n  ledger = 出域账本（观测面：判定 / 对象类型 / 指纹 / 目的地 / 用途）。\n  impact = 问责账本（责任面：授权 / 可逆性 / 影响谁 / 后果）。\n  两个账本**都零真值**：只有指涉 id，没有内容原文。\n  bind = 显式登记「行动 ↔ 工具调用」的 1:1 归属（工具失败 ⇒ 自动回填 failed）。\n  缺省 path = 数据根（APEIRETH_DATA_DIR 或默认目录）下的 egress-ledger.jsonl / impact-ledger.jsonl。";
 
 /// 命令入口（数据根 = 默认数据目录）。
 pub fn run_egress(args: &[String]) -> Result<String, String> {
@@ -32,6 +32,7 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
         "ledger" => {}
         "impact" => return run_impact(data_root, rest),
         "outcome" => return run_outcome(data_root, rest),
+        "bind" => return run_bind(data_root, rest),
         "notify" => return run_correction_impact(data_root, rest),
         _ => return Err(format!("unknown egress command: {verb}\n{USAGE}")),
     }
@@ -106,6 +107,25 @@ pub fn run_egress_at(data_root: &std::path::Path, args: &[String]) -> Result<Str
 /// - `impact` = 责任面：「这次行动依赖了什么授权、能不能撤回、影响谁、后果如何」。
 ///
 /// **只读零写**，**零真值**（只指涉 id，不带内容）。
+/// 「超期未回填」阈值：后果未知超过这个时长 = 问责链上的**显式缺口**。
+///
+/// 为什么是 24 小时：日常外部行动（发信/提交申请）当日内必然知道结果；
+/// 一整天都没回填，就不是「还没来得及」，而是**没人管**。这个门槛写在这里
+/// 而不是配置项 —— 它只是**报告的强调阈值**，不是决策/守门依据。
+pub const STALE_UNKNOWN_MS: i64 = 24 * 60 * 60 * 1_000;
+
+/// 一条影响声明的「后果是否超期未知」判定（纯函数，便于脱时钟测试）。
+///
+/// 只有**真正未知**才算缺口：已 `confirmed` / `failed` 的语句不属于未回填。
+pub fn is_stale_unknown(
+    outcome_is_unknown: bool,
+    at_ms: i64,
+    now_ms: i64,
+    threshold_ms: i64,
+) -> bool {
+    outcome_is_unknown && now_ms.saturating_sub(at_ms) > threshold_ms
+}
+
 pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String, String> {
     let path = match parse_arg(rest, "--path") {
         Some(raw) => PathBuf::from(raw),
@@ -122,6 +142,25 @@ pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String
     let ledger =
         apeireth_runtime_assembly::accountability::AccountabilityLedger::new(Some(path.clone()));
     let mut statements = ledger.statements();
+
+    // **叠加后果账**：影响声明只记「当时打算做什么」，后果由 consequence-ledger
+    // 单独演进（`egress outcome` 往那写）。此前本命令**只读影响账**，导致
+    // 回填后报告仍显示「后果未知」—— 回填在 CLI 上**看不出任何效果**（闭环断在读取侧）。
+    // 真值读法用与自述面同一个 `ConsequenceTracker`（文件即共享真源）。
+    let consequence_ledger_path = path.with_file_name("consequence-ledger.jsonl");
+    let tracker = apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(
+        consequence_ledger_path,
+    );
+    for statement in &mut statements {
+        // **只升级、不降级**：后果账没有该行动的记录时 `current_outcome` 返
+        // `Unknown`，此时**保留影响声明自带的 outcome**（早期流程可能已写过
+        // `confirmed`/`failed`）。无条件覆盖会把已知后果**降级成未知** ——
+        // 那是把真信息变假信息，比不叠加更糟。
+        let tracked = tracker.current_outcome(&statement.action_id);
+        if tracked != apeireth_runtime_assembly::accountability::Outcome::Unknown {
+            statement.outcome = tracked;
+        }
+    }
     let total = statements.len();
     if statements.len() > limit {
         statements.drain(..statements.len() - limit);
@@ -133,15 +172,51 @@ pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String
             .map_err(|error| format!("问责账本序列化失败: {error}"));
     }
 
-    let counts = ledger.counts();
+    // 计数**必须按叠加后的语句重算**：`ledger.counts()` 读的是原始影响账，
+    // 会与上面叠加过的 outcome 打架（实测：回填后「超期未回填=0」却仍写
+    // 「后果未知=1」，自相矛盾）。所有计数一律从同一份叠加后数据派生。
+    let counts = apeireth_runtime_assembly::accountability::AccountabilityCounts {
+        total,
+        irreversible: statements.iter().filter(|s| !s.reversible).count(),
+        affecting_others: statements
+            .iter()
+            .filter(|s| s.affected != apeireth_runtime_assembly::accountability::Affected::SelfOnly)
+            .count(),
+        unknown_outcome: statements
+            .iter()
+            .filter(|s| s.outcome == apeireth_runtime_assembly::accountability::Outcome::Unknown)
+            .count(),
+    };
+    // 「超期未回填」= 问责链上的显式缺口：后果未知且已超过阈值。
+    // 这不是告警、不阻塞任何东西 —— 只是把「账面长期停在 unknown」这件事说出来。
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let stale = statements
+        .iter()
+        .filter(|statement| {
+            is_stale_unknown(
+                statement.outcome == apeireth_runtime_assembly::accountability::Outcome::Unknown,
+                statement.at_ms,
+                now_ms,
+                STALE_UNKNOWN_MS,
+            )
+        })
+        .count();
     let mut frame = format!(
         "impact ledger: {total} 条在册（显示最近 {} 条）\n\
-         不可逆={} 影响他人={} 后果未知={}\n",
+         不可逆={} 影响他人={} 后果未知={} 超期未回填={}\n",
         statements.len(),
         counts.irreversible,
         counts.affecting_others,
-        counts.unknown_outcome
+        counts.unknown_outcome,
+        stale
     );
+    if stale > 0 {
+        frame.push_str(
+            "⚠ 超期未回填 > 0：这些行动的后果至今**无人回填**。\n\
+             回填通道: apeireth egress outcome <ACTION_ID> <confirmed|failed>\n\
+             （系统不猜外部结果；逾期不回填 = 问责链断在最后一步）\n",
+        );
+    }
     if statements.is_empty() {
         frame.push_str(
             "（账本为空 —— 可能还没开过出网闸，或这些行动还没被记录。\n\
@@ -159,6 +234,19 @@ pub fn run_impact(data_root: &std::path::Path, rest: &[String]) -> Result<String
         frame.push_str(&format!("- {}\n", receipt.headline));
         for basis in &receipt.basis {
             frame.push_str(&format!("    {basis}\n"));
+        }
+        // 单条「超期未回填」标记（与头部的计数同源判据）
+        if is_stale_unknown(
+            statement.outcome == apeireth_runtime_assembly::accountability::Outcome::Unknown,
+            statement.at_ms,
+            now_ms,
+            STALE_UNKNOWN_MS,
+        ) {
+            let hours = now_ms.saturating_sub(statement.at_ms) / 3_600_000;
+            frame.push_str(&format!(
+                "    ⏰ 超期未回填（已 {hours} 小时，后果仍未知）-- 用 egress outcome {} 回填\n",
+                statement.action_id
+            ));
         }
         frame.push_str(&format!(
             "    [详细] {ts} {boundary} → {destination} 行动={action_id} 可逆={reversible} 后果={outcome}\n\
@@ -256,6 +344,101 @@ pub fn run_outcome(data_root: &std::path::Path, rest: &[String]) -> Result<Strin
     ))
 }
 
+/// `apeireth egress bind <ACTION_ID> <TOOL_CALL_ID>` —— **显式登记「行动 ↔ 工具调用」归属**。
+///
+/// 这是问责闭环第 ③ 步「后果追踪」**自动回填入口的另一半**。
+///
+/// 为什么要显式登记（2026-10-25 查证）：影响声明的 `action_id` 由出网闸按**墙钟**
+/// 生成（`act-{ms}`），工具调用带的是 **provider 赋的不透明 id**（`ToolCall.id`）——
+/// 两者**不同源、不可推导**，仓库里也不存在既有映射。所以系统**不推断**归属：
+/// 由**同时知道两边的调用方**在这里登记。
+///
+/// 登记之后：这次工具调用**失败** ⇒ 对应影响的后果自动回填 `failed`
+/// （运行时面 `ConsequenceBackfillModule`，来源 `locally_observed`）。
+/// 工具调用**成功** ⇒ **不动**（`confirmed` 只走人工/外部：本地成功 ≠ 影响已确认）。
+///
+/// 纪律：
+/// 1. **只指向已声明的影响** —— 行动 id 在影响账里查不到 ⇒ 拒（不编造归属）；
+/// 2. **1:1** —— 一次工具调用只对应一条影响，一条影响只对应一次工具调用；
+/// 3. **零真值** —— 只存两个 id。
+pub fn run_bind(data_root: &std::path::Path, rest: &[String]) -> Result<String, String> {
+    use apeireth_runtime_assembly::accountability::AccountabilityLedger;
+    use apeireth_runtime_assembly::consequence_backfill::{
+        ActionToolBindingLedger, BindOutcome, ACTION_TOOL_BINDINGS_FILE,
+    };
+
+    let path = match parse_arg(rest, "--path") {
+        Some(raw) => PathBuf::from(raw),
+        None => data_root.join("impact-ledger.jsonl"),
+    };
+    // 位置参数：<ACTION_ID> <TOOL_CALL_ID>（`--path` 的值不当位置参数）。
+    let mut positional: Vec<&String> = Vec::new();
+    let mut index = 0;
+    while index < rest.len() {
+        if rest[index].starts_with("--") {
+            index += 2;
+            continue;
+        }
+        positional.push(&rest[index]);
+        index += 1;
+    }
+    let (action_id, tool_call_id) = match positional.as_slice() {
+        [action_id, call_id] => (action_id.as_str(), call_id.as_str()),
+        _ => {
+            return Err(format!(
+                "bind 需要两个位置参数：<ACTION_ID> <TOOL_CALL_ID>\n{USAGE}"
+            ))
+        }
+    };
+    // 归属只能指向**已声明**的影响：查不到 ⇒ 拒（不编造归属）。
+    let ledger = AccountabilityLedger::new(Some(path.clone()));
+    if !ledger
+        .statements()
+        .iter()
+        .any(|statement| statement.action_id == action_id)
+    {
+        return Err(format!(
+            "行动 `{action_id}` 在影响账里**没有已声明的影响** —— 不登记归属\n\
+             （归属只能指向已声明的影响；不编造归属）\n影响账：{}",
+            path.display()
+        ));
+    }
+    let bindings_path = path.with_file_name(ACTION_TOOL_BINDINGS_FILE);
+    let bindings = ActionToolBindingLedger::new(Some(bindings_path.clone()));
+    match bindings.bind(action_id, tool_call_id) {
+        BindOutcome::Recorded | BindOutcome::AlreadyRecorded => Ok(format!(
+            "已登记归属：行动 {action_id} ↔ 工具调用 {tool_call_id}\n\
+             绑定账：{}\n\
+             之后这次工具调用**失败** ⇒ 该行动的后果自动回填 `failed`（来源：本地可验证）；\n\
+             **成功不自动填 confirmed**（本地成功 ≠ 影响已确认 —— 仍需人工/外部确认）。",
+            bindings_path.display()
+        )),
+        BindOutcome::Conflict => {
+            let detail = match (
+                bindings.action_for(tool_call_id),
+                bindings.tool_call_for(action_id),
+            ) {
+                (Some(bound_action), _) => {
+                    format!("工具调用 `{tool_call_id}` 已绑到行动 `{bound_action}`")
+                }
+                (_, Some(bound_call)) => {
+                    format!("行动 `{action_id}` 已绑到工具调用 `{bound_call}`")
+                }
+                _ => "归属两侧已被占用".to_string(),
+            };
+            Err(format!(
+                "归属登记被拒（1:1）：{detail}\n\
+                 （系统不推断归属：破坏 1:1 的登记一律拒）"
+            ))
+        }
+        BindOutcome::Failed => Err(format!(
+            "归属登记失败：绑定账不可写（{}）\n\
+             （不持久 = 不留「只在内存里」的影子归属）",
+            bindings_path.display()
+        )),
+    }
+}
+
 /// `apeireth egress notify <FACT_ID> <wording|partial|refuted>` —— **纠正影响检查**。
 ///
 /// 问责闭环第 4 步「通知义务」的生产调用方（之前 `assess_correction` 只有测试调用，
@@ -307,8 +490,27 @@ pub fn run_correction_impact(
         Some(raw) => PathBuf::from(raw),
         None => data_root.join("impact-ledger.jsonl"),
     };
+    // 后果账路径要在 `path` 被移进 ledger 之前算好。
+    let consequence_ledger_path = path.with_file_name("consequence-ledger.jsonl");
     let ledger = AccountabilityLedger::new(Some(path));
-    let Some(notice) = assess_correction(&ledger, fact_id, severity) else {
+    // **先叠加后果账、再评估补救**：否则建议会基于过期状态给错指引
+    // （实测：已回填 `failed` 仍建议「先确认这些行动的结果」）。
+    let mut referenced = ledger.actions_referencing(fact_id);
+    let overlay = apeireth_runtime_assembly::consequence::ConsequenceTracker::with_ledger(
+        consequence_ledger_path.clone(),
+    );
+    for statement in &mut referenced {
+        // 只升级、不降级（与 `run_impact` 同一口径）
+        let tracked = overlay.current_outcome(&statement.action_id);
+        if tracked != apeireth_runtime_assembly::accountability::Outcome::Unknown {
+            statement.outcome = tracked;
+        }
+    }
+    let Some(notice) = apeireth_runtime_assembly::notification_duty::assess_correction_from(
+        &referenced,
+        fact_id,
+        severity,
+    ) else {
         return Ok(format!(
             "这条事实（{fact_id}）没有被任何外部行动引用过 ⇒ **无需通知**。\n\
              （无差别通知一切纠正是另一种噪声 —— 所以「不打扰」是设计，不是遗漏。）"
@@ -321,13 +523,14 @@ pub fn run_correction_impact(
         notice.affected_actions.len()
     );
     for action in &notice.affected_actions {
+        let outcome = action.outcome;
         out.push_str(&format!(
-            "  - {action_id}  时间={at}  去向={destination}  可逆={reversible}  后果={outcome}\n",
+            "  - {action_id}  时间={at}  去向={destination}  可逆={reversible}  后果={}\n",
+            outcome.label(),
             action_id = action.action_id,
             at = action.at_ms,
             destination = action.destination,
             reversible = action.reversible,
-            outcome = action.outcome.label(),
         ));
     }
     out.push_str("建议补救：\n");
@@ -640,5 +843,279 @@ mod tests {
         )
         .expect_err("应拒绝");
         assert!(err.contains("unknown egress command"));
+    }
+}
+
+#[cfg(test)]
+mod stale_unknown_tests {
+    use super::*;
+    use apeireth_runtime_assembly::accountability::{
+        AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome,
+    };
+
+    fn statement(action_id: &str, at_ms: i64, outcome: Outcome) -> ImpactStatement {
+        ImpactStatement {
+            action_id: action_id.to_string(),
+            at_ms,
+            boundary: Boundary::ThirdParty,
+            facts_used: Vec::new(),
+            inferences: Vec::new(),
+            grants: Vec::new(),
+            affected: Affected::SelfOnly,
+            reversible: true,
+            destination: "provider:anthropic".to_string(),
+            outcome,
+        }
+    }
+
+    fn ledger_path(tag: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "apeireth-impact-stale-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ))
+    }
+
+    fn write(path: &std::path::Path, statements: &[ImpactStatement]) {
+        let ledger = AccountabilityLedger::new(Some(path.to_path_buf()));
+        for statement in statements {
+            assert!(ledger.append(&statement.clone()), "append");
+        }
+    }
+
+    /// 纯判据：只有「未知 + 超期」才算缺口。
+    #[test]
+    fn stale_predicate_only_fires_for_old_unknowns() {
+        let day = STALE_UNKNOWN_MS;
+        assert!(is_stale_unknown(true, 0, day + 1, day), "超期未知 = 缺口");
+        assert!(!is_stale_unknown(true, 0, day, day), "恰好门槛不算超期");
+        assert!(!is_stale_unknown(false, 0, day + 1, day), "已回填不算缺口");
+        // 时钟回拨：未来时间戳不误报
+        assert!(!is_stale_unknown(true, day * 2, 0, day));
+    }
+
+    /// 端到端：`egress impact` 对超期未回填既**计数**又**逐条标记**。
+    #[test]
+    fn impact_report_flags_stale_unknowns() {
+        let path = ledger_path("e2e");
+        let now = chrono::Utc::now().timestamp_millis();
+        write(
+            &path,
+            &[
+                // 3 天前的未知后果 ⇒ 超期
+                statement(
+                    "act-old-unknown",
+                    now - 3 * 24 * 3_600_000,
+                    Outcome::Unknown,
+                ),
+                // 1 小时前的未知后果 ⇒ 未超期
+                statement("act-fresh-unknown", now - 3_600_000, Outcome::Unknown),
+                // 3 天前但已回填 ⇒ 不算缺口
+                statement(
+                    "act-old-confirmed",
+                    now - 3 * 24 * 3_600_000,
+                    Outcome::Confirmed,
+                ),
+            ],
+        );
+
+        let out = run_impact(
+            std::path::Path::new("/nonexistent-root"),
+            &["--path".into(), path.display().to_string()],
+        )
+        .expect("应成功");
+
+        assert!(out.contains("超期未回填=1"), "头部应计数 1: {out}");
+        assert!(
+            out.contains("⏰ 超期未回填（已 72 小时"),
+            "应标出超期那条: {out}"
+        );
+        assert!(
+            out.contains("act-old-unknown"),
+            "标记要带可回填的行动 id: {out}"
+        );
+        // 未超期 / 已回填的两条不得被标记
+        assert_eq!(out.matches("超期未回填（已").count(), 1, "{out}");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 账本为空时不得出现「超期」噪声（空账 ≠ 有缺口）。
+    #[test]
+    fn empty_ledger_has_no_stale_noise() {
+        let path = ledger_path("empty");
+        let _ = std::fs::remove_file(&path);
+        let out = run_impact(
+            std::path::Path::new("/nonexistent-root"),
+            &["--path".into(), path.display().to_string()],
+        )
+        .expect("应成功");
+        assert!(out.contains("超期未回填=0"), "{out}");
+        assert!(!out.contains("⏰"), "空账不该有超期标记: {out}");
+    }
+}
+
+#[cfg(test)]
+mod consequence_join_tests {
+    use super::*;
+    use apeireth_runtime_assembly::accountability::{
+        AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome,
+    };
+    use apeireth_runtime_assembly::consequence::ConsequenceTracker;
+
+    fn statement(action_id: &str, at_ms: i64) -> ImpactStatement {
+        ImpactStatement {
+            action_id: action_id.to_string(),
+            at_ms,
+            boundary: Boundary::UserToOrg,
+            facts_used: Vec::new(),
+            inferences: Vec::new(),
+            grants: Vec::new(),
+            affected: Affected::NamedParty,
+            reversible: false,
+            destination: "smtp:hr@example.com".to_string(),
+            outcome: Outcome::Unknown,
+        }
+    }
+
+    fn dir(tag: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "apeireth-impact-join-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&path).expect("mkdir");
+        path
+    }
+
+    /// **闭环**：后果账里的回填必须反映到 `egress impact` 上。
+    ///
+    /// 这是「回填只写不读」那个缺陷的回归测试 ——
+    /// 修前：写入 consequence-ledger 后，impact 报告仍显示「后果未知」，
+    /// 回填在 CLI 上**看不出任何效果**（问责闭环断在读取侧）。
+    #[test]
+    fn impact_report_reflects_backfilled_outcomes() {
+        let root = dir("reflect");
+        let impact_path = root.join("impact-ledger.jsonl");
+        let ledger = AccountabilityLedger::new(Some(impact_path.clone()));
+        let old = chrono::Utc::now().timestamp_millis() - 3 * 24 * 3_600_000;
+        assert!(ledger.append(&statement("act-1", old)), "append");
+
+        // ① 未回填：未知 + 超期
+        let before = run_impact(
+            std::path::Path::new("/nonexistent-root"),
+            &["--path".into(), impact_path.display().to_string()],
+        )
+        .expect("impact");
+        assert!(before.contains("后果未知=1"), "{before}");
+        assert!(before.contains("超期未回填=1"), "{before}");
+
+        // ② 回填 confirmed（`record` 需要 &mut，且来源是 OutcomeSource::UserConfirmed）
+        let mut tracker = ConsequenceTracker::with_ledger(root.join("consequence-ledger.jsonl"));
+        assert!(
+            tracker.record(
+                "act-1",
+                Outcome::Confirmed,
+                apeireth_runtime_assembly::consequence::OutcomeSource::UserConfirmed,
+                chrono::Utc::now().timestamp_millis(),
+            ),
+            "record consequence"
+        );
+
+        // ③ 回填后：未知归零、超期归零、明细显示 confirmed
+        let after = run_impact(
+            std::path::Path::new("/nonexistent-root"),
+            &["--path".into(), impact_path.display().to_string()],
+        )
+        .expect("impact");
+        assert!(after.contains("后果未知=0"), "回填后不该再有未知: {after}");
+        assert!(after.contains("超期未回填=0"), "{after}");
+        assert!(
+            after.contains("后果=confirmed"),
+            "明细应显示回填后的后果: {after}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod notify_consequence_join_tests {
+    use super::*;
+    use apeireth_runtime_assembly::accountability::{
+        AccountabilityLedger, Affected, Boundary, ImpactStatement, Outcome,
+    };
+    use apeireth_runtime_assembly::consequence::{ConsequenceTracker, OutcomeSource};
+
+    fn statement(action_id: &str, fact: &str) -> ImpactStatement {
+        ImpactStatement {
+            action_id: action_id.to_string(),
+            at_ms: 1_700_000_000_000,
+            boundary: Boundary::UserToOrg,
+            facts_used: vec![fact.to_string()],
+            inferences: Vec::new(),
+            grants: Vec::new(),
+            affected: Affected::NamedParty,
+            reversible: false,
+            destination: "smtp:hr@example.com".to_string(),
+            outcome: Outcome::Unknown,
+        }
+    }
+
+    /// **`egress notify` 必须按回填后的后果给建议**。
+    ///
+    /// 修前实测：回填 `failed` 后仍显示「后果=unknown」，并据此给出
+    /// **错误建议**「先确认这些行动的结果（当前状态未知）」—— 而结果其实已知。
+    #[test]
+    fn remedies_follow_the_backfilled_outcome() {
+        let root = std::env::temp_dir().join(format!(
+            "apeireth-notify-join-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&root).expect("mkdir");
+        let impact_path = root.join("impact-ledger.jsonl");
+        let ledger = AccountabilityLedger::new(Some(impact_path.clone()));
+        assert!(ledger.append(&statement("act-1", "fact-a")), "append");
+
+        let args = vec![
+            "fact-a".to_string(),
+            "refuted".to_string(),
+            "--path".to_string(),
+            impact_path.display().to_string(),
+        ];
+
+        // ① 未回填：应提示「先确认结果」
+        let before = run_correction_impact(std::path::Path::new("/nonexistent-root"), &args)
+            .expect("notify");
+        assert!(before.contains("后果=unknown"), "{before}");
+        assert!(before.contains("先确认这些行动的结果"), "{before}");
+
+        // ② 回填 failed 后：逐条显示 failed，且**不再**建议「先确认结果」
+        let mut tracker = ConsequenceTracker::with_ledger(root.join("consequence-ledger.jsonl"));
+        assert!(
+            tracker.record(
+                "act-1",
+                Outcome::Failed,
+                OutcomeSource::UserConfirmed,
+                chrono::Utc::now().timestamp_millis(),
+            ),
+            "record"
+        );
+        let after = run_correction_impact(std::path::Path::new("/nonexistent-root"), &args)
+            .expect("notify");
+        assert!(after.contains("后果=failed"), "{after}");
+        assert!(
+            !after.contains("当前状态未知"),
+            "已知 failed 后不该再建议「先确认结果」: {after}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

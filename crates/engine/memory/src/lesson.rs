@@ -531,15 +531,30 @@ mod tests {
     }
 
     /// 造一条真实 episode 当出处（教训必须挂在真实经历上）。
+    ///
+    /// **D0 哈希链（W-13）**：此前这里是**裸 SQL INSERT**（只写 6 列）⇒ 产出
+    /// **没有链字段**的记录 ⇒ 体检报告（`memory_chain::summarize`）把它们算成
+    /// 「未纳管」。它虽然只在 `#[cfg(test)]` 里（**不是生产写路径**），但它写的
+    /// 是 `episodes` 表 ⇒ 同样**入链**：链键 = `continuity_id`（`c1`），走
+    /// `memory_chain::put_chained_episode`（单一真源）⇒ 库内夹具不再自己给
+    /// 链覆盖率挖坑。
     fn seed_episode(store: &SqliteMemoryStore, content: &str) -> String {
         let id = format!("ep-{}", uuid::Uuid::new_v4());
         let conn = store.conn().expect("conn");
-        conn.execute(
-            "INSERT INTO episodes (id, continuity_id, session_id, timestamp, role, content) \
-             VALUES (?1, 'c1', 's1', 0, 'user', ?2)",
-            params![id, content],
-        )
-        .expect("insert episode");
+        let entry = crate::memory_chain::ChainEntry {
+            id: id.clone(),
+            content: content.to_string(),
+            timestamp: 0,
+            role: "user".to_string(),
+            session_id: "s1".to_string(),
+            // 与本模块旧写法一致：只写 6 列 ⇒ 4 个 V4 元数据列按 NULL 口径参与摘要
+            // （写入侧与校验侧同一口径 ⇒ 重算得到同一摘要）。
+            valid_from_ms: None,
+            valid_until_ms: None,
+            created_ms: None,
+            provenance: None,
+        };
+        crate::memory_chain::put_chained_episode(&conn, "c1", &entry).expect("insert episode");
         id
     }
 
@@ -550,6 +565,35 @@ mod tests {
             source_episodes: vec![source.to_string()],
             evidence: "用户原话：我专注时别提醒我喝水".to_string(),
         }
+    }
+
+    #[test]
+    fn seeded_source_episodes_are_chained() {
+        // 夹具造出的经历必须**入链**（此前是裸 INSERT ⇒ 6 列无链字段 ⇒ 「未纳管」）。
+        let store = store();
+        let source = seed_episode(&store, "我专注时别提醒我喝水");
+        let witness = seed_episode(&store, "专注结束后我说了「现在可以提醒了」");
+
+        let conn = store.conn().expect("conn");
+        for id in [&source, &witness] {
+            let (hash, previous): (Option<String>, Option<String>) = conn
+                .query_row(
+                    "SELECT chain_hash, chain_prev_hash FROM episodes WHERE id = ?1",
+                    [id.as_str()],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .expect("读链列");
+            assert!(
+                hash.is_some_and(|value| !value.is_empty()),
+                "夹具造出的经历必须带链字段: {id}"
+            );
+            assert!(previous.is_some(), "必须带前驱摘要: {id}");
+        }
+
+        let report = crate::memory_chain::verify_subject_chain(&conn, "c1").expect("体检");
+        assert!(report.ok, "夹具链必须完整: {report:?}");
+        assert_eq!(report.entry_count, 2, "两条都应入链");
+        assert_eq!(report.unmanaged_entries, 0, "不得留下未纳管记录");
     }
 
     #[test]

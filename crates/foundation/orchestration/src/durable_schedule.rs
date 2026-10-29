@@ -383,34 +383,6 @@ fn fixed_time_latest(
     occ_local.checked_sub(off_ms)
 }
 
-/// 固定时刻: 严格晚于 `after_ms` 的下一个发生时点; `weekday` 为空 = 每日。
-fn fixed_time_next(
-    after_ms: i64,
-    target_tod_ms: i64,
-    utc_offset_minutes: i32,
-    weekday: Option<i64>,
-) -> Option<i64> {
-    let off_ms = i64::from(utc_offset_minutes) * 60_000;
-    let local = after_ms.checked_add(off_ms)?;
-    let day = local.div_euclid(DAY_MS);
-    let tod = local.rem_euclid(DAY_MS);
-    let fwd = match weekday {
-        None => i64::from(tod >= target_tod_ms),
-        Some(target) => {
-            let mut gap = (target - weekday_of_day(day)).rem_euclid(7);
-            if gap == 0 && tod >= target_tod_ms {
-                gap = 7;
-            }
-            gap
-        }
-    };
-    let occ_local = day
-        .checked_add(fwd)?
-        .checked_mul(DAY_MS)?
-        .checked_add(target_tod_ms)?;
-    occ_local.checked_sub(off_ms)
-}
-
 // ============================================================================
 // 记录 / 写
 // ============================================================================

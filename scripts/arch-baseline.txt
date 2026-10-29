@@ -119,6 +119,90 @@ edge apeireth-tui -> apeireth-credentials
 devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provider
 
 # --- env (153) ---
+
+# --- size (65) ---
+size crates/adapters/cli/src/gateway_panels.rs 1540
+size crates/adapters/cli/src/lib.rs 3811
+size crates/adapters/cli/src/onboarding.rs 1338
+size crates/adapters/gateway/src/canonical_entry.rs 2233
+size crates/adapters/gateway/src/events.rs 1623
+size crates/adapters/gateway/src/panels.rs 1623
+# D-1（2026-10-25）：下列 +1 = 守门属性 `#[allow(dead_code)]`（心跳驱动器句柄**仅测试读**）
+# 而非逻辑增长；同批其余被钉的 size 项全是**净减少**（删真死代码）。
+size crates/adapters/gateway/src/presence.rs 1279
+size crates/adapters/sdk/src/client.rs 1552
+size crates/adapters/tui/src/state.rs 1585
+size crates/capabilities/tools/src/device/device_control.rs 3144
+size crates/capabilities/tools/src/device/guard_watch.rs 1348
+size crates/capabilities/tools/src/doc_ops.rs 6150
+size crates/capabilities/tools/src/git_write.rs 1330
+size crates/capabilities/tools/src/image_ops.rs 2238
+size crates/capabilities/tools/src/process/windows.rs 1482
+size crates/capabilities/tools/src/self_status.rs 4140
+size crates/capabilities/tools/src/sheet_ops.rs 4261
+size crates/capabilities/tools/src/shell.rs 1375
+size crates/engine/guard/src/hook.rs 1093
+size crates/engine/guard/src/scenario.rs 3853
+size crates/engine/image/algo/src/artistic_fx.rs 1335
+size crates/engine/image/algo/src/inpaint.rs 2501
+size crates/engine/image/algo/src/lib.rs 1322
+size crates/engine/image/algo/src/liquify.rs 1453
+size crates/engine/image/algo/src/panorama.rs 1935
+size crates/engine/image/algo/src/puppet.rs 1597
+size crates/engine/image/algo/src/render2.rs 1542
+size crates/engine/image/algo/src/selection.rs 1567
+size crates/engine/image/codecs/src/codecs/tiff.rs 1268
+size crates/engine/image/compose/src/adjust.rs 2230
+size crates/engine/image/compose/src/effects.rs 3232
+size crates/engine/image/compose/src/lib.rs 1913
+size crates/engine/image/compose/src/tests.rs 3226
+size crates/engine/image/doc/src/lib.rs 1520
+size crates/engine/image/geom/src/warp.rs 1374
+size crates/engine/image/psd/src/tiff.rs 2440
+size crates/engine/image/raster/src/lib.rs 1676
+size crates/engine/memory/src/migrations.rs 1171
+size crates/engine/memory/src/migrations/list.rs 335
+size crates/engine/memory/src/persona_layer.rs 1680
+size crates/engine/memory/src/research_derived_memory.rs 1211
+size crates/engine/organ/src/causal_world_model.rs 1864
+size crates/engine/organ/src/emergence.rs 1224
+size crates/engine/organ/src/goal.rs 1619
+size crates/engine/organ/src/neuromodulation.rs 1608
+size crates/engine/organ/src/prompt_assembly.rs 1492
+size crates/engine/organ/src/world_model.rs 1336
+size crates/engine/runtime-assembly/src/canonical/cognitive.rs 4757
+size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
+size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
+size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
+size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1204
+size crates/engine/runtime/src/canonical/bio_pain.rs 1294
+size crates/engine/runtime/src/canonical/execute.rs 4987
+size crates/engine/runtime/src/canonical/runtime.rs 1358
+size crates/engine/runtime/src/canonical/session.rs 1595
+size crates/foundation/core/src/cost_router.rs 1399
+size crates/foundation/core/src/lib.rs 2483
+size crates/foundation/core/src/stored_doc.rs 1304
+size crates/foundation/credentials/src/keyring.rs 1763
+size crates/foundation/governance/src/sandbox_ladder.rs 1220
+size crates/foundation/orchestration/src/durable_schedule.rs 1270
+size crates/foundation/orchestration/src/lib.rs 1427
+size crates/foundation/orchestration/src/lifecycle.rs 1255
+size crates/foundation/orchestration/src/self_tuning.rs 1361
+size crates/foundation/orchestration/src/task_queue.rs 1479
+
+# --- concept (6) ---
+concept CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
+concept ContextAssembler crates/engine/organ/src/context_assembly.rs
+concept ContextAssembler crates/foundation/orchestration/src/context_budget.rs
+concept ContextBlock crates/foundation/orchestration/src/context_budget.rs
+
+# --- ext (7) ---
+ext BehaviorModule crates/engine/runtime/src/canonical/module.rs
+ext BehaviorRegistry crates/engine/runtime/src/canonical/module.rs
+ext CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
+ext Plugin crates/foundation/plugin/src/plugin.rs
+ext PluginManager crates/foundation/plugin/src/manager.rs
+ext SubLoopSpawner crates/engine/runtime/src/canonical/subloop.rs
 env APEIRETH_ANTHROPIC_
 env APEIRETH_ANTHROPIC_KEY
 env APEIRETH_ANTHROPIC_MODELS
@@ -272,84 +356,3 @@ env APEIRETH_UNIQ_SECRET_MARKER_12345
 env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
-
-# --- size (65) ---
-size crates/adapters/cli/src/gateway_panels.rs 1542
-size crates/adapters/cli/src/lib.rs 3878
-size crates/adapters/cli/src/onboarding.rs 1353
-size crates/adapters/gateway/src/canonical_entry.rs 2233
-size crates/adapters/gateway/src/events.rs 1623
-size crates/adapters/gateway/src/panels.rs 1641
-size crates/adapters/gateway/src/presence.rs 1299
-size crates/adapters/sdk/src/client.rs 1553
-size crates/adapters/tui/src/state.rs 1585
-size crates/capabilities/tools/src/device/device_control.rs 3144
-size crates/capabilities/tools/src/device/guard_watch.rs 1348
-size crates/capabilities/tools/src/doc_ops.rs 6150
-size crates/capabilities/tools/src/git_write.rs 1330
-size crates/capabilities/tools/src/image_ops.rs 2238
-size crates/capabilities/tools/src/process/windows.rs 1482
-size crates/capabilities/tools/src/self_status.rs 4193
-size crates/capabilities/tools/src/sheet_ops.rs 4261
-size crates/capabilities/tools/src/shell.rs 1375
-size crates/engine/guard/src/hook.rs 1518
-size crates/engine/guard/src/scenario.rs 3853
-size crates/engine/image/algo/src/artistic_fx.rs 1335
-size crates/engine/image/algo/src/inpaint.rs 2501
-size crates/engine/image/algo/src/lib.rs 1322
-size crates/engine/image/algo/src/liquify.rs 1453
-size crates/engine/image/algo/src/panorama.rs 1935
-size crates/engine/image/algo/src/puppet.rs 1597
-size crates/engine/image/algo/src/render2.rs 1542
-size crates/engine/image/algo/src/selection.rs 1567
-size crates/engine/image/codecs/src/codecs/tiff.rs 1268
-size crates/engine/image/compose/src/adjust.rs 2230
-size crates/engine/image/compose/src/effects.rs 3232
-size crates/engine/image/compose/src/lib.rs 1913
-size crates/engine/image/compose/src/tests.rs 3226
-size crates/engine/image/doc/src/lib.rs 1520
-size crates/engine/image/geom/src/warp.rs 1374
-size crates/engine/image/psd/src/tiff.rs 2440
-size crates/engine/image/raster/src/lib.rs 1676
-size crates/engine/memory/src/migrations.rs 1368
-size crates/engine/memory/src/persona_layer.rs 1685
-size crates/engine/memory/src/research_derived_memory.rs 1211
-size crates/engine/organ/src/causal_world_model.rs 1864
-size crates/engine/organ/src/emergence.rs 1227
-size crates/engine/organ/src/goal.rs 1619
-size crates/engine/organ/src/neuromodulation.rs 1608
-size crates/engine/organ/src/prompt_assembly.rs 1492
-size crates/engine/organ/src/world_model.rs 1336
-size crates/engine/runtime-assembly/src/canonical/cognitive.rs 4757
-size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2435
-size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
-size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
-size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1204
-size crates/engine/runtime/src/canonical/bio_pain.rs 1294
-size crates/engine/runtime/src/canonical/execute.rs 4987
-size crates/engine/runtime/src/canonical/runtime.rs 1361
-size crates/engine/runtime/src/canonical/session.rs 1595
-size crates/foundation/core/src/cost_router.rs 1399
-size crates/foundation/core/src/lib.rs 2488
-size crates/foundation/core/src/stored_doc.rs 1304
-size crates/foundation/credentials/src/keyring.rs 1763
-size crates/foundation/governance/src/sandbox_ladder.rs 1220
-size crates/foundation/orchestration/src/durable_schedule.rs 1310
-size crates/foundation/orchestration/src/lib.rs 1427
-size crates/foundation/orchestration/src/lifecycle.rs 1255
-size crates/foundation/orchestration/src/self_tuning.rs 1361
-size crates/foundation/orchestration/src/task_queue.rs 1479
-
-# --- concept (6) ---
-concept CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
-concept ContextAssembler crates/engine/organ/src/context_assembly.rs
-concept ContextAssembler crates/foundation/orchestration/src/context_budget.rs
-concept ContextBlock crates/foundation/orchestration/src/context_budget.rs
-
-# --- ext (7) ---
-ext BehaviorModule crates/engine/runtime/src/canonical/module.rs
-ext BehaviorRegistry crates/engine/runtime/src/canonical/module.rs
-ext CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
-ext Plugin crates/foundation/plugin/src/plugin.rs
-ext PluginManager crates/foundation/plugin/src/manager.rs
-ext SubLoopSpawner crates/engine/runtime/src/canonical/subloop.rs

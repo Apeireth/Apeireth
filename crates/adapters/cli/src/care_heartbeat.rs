@@ -81,6 +81,7 @@ use apeireth_runtime_assembly::canonical::care_heartbeat::bio_circadian::{
     bio_circadian_enabled_from_env_value, bio_circadian_wiring_from_env_value, BioCircadianGate,
     CircadianGateClock, BIO_CIRCADIAN_ENABLE_ENV,
 };
+use apeireth_runtime_assembly::canonical::care_heartbeat::bio_lifecycle::BioLifecycleState;
 use apeireth_runtime_assembly::canonical::care_heartbeat::{
     bio_care_assembly_from_env_value, BioCareClock, BioCarePoll,
 };
@@ -95,6 +96,12 @@ use apeireth_runtime_assembly::{
 
 /// 发起缝失败留痕的有界容量 (只留最近若干条真因, 不无界长)。
 const DISPATCH_ERROR_LOG_MAX: usize = 32;
+
+/// 关怀势能场突破阈值 (D-3): 势能越过 1.0 即产生一条关怀信号。
+///
+/// 取 1.0 = 内核 `CarePotentialField::new` 的下限口径 (threshold.max(1.0)),
+/// 突破后内核自行泄放 70%。
+const CARE_POTENTIAL_THRESHOLD: f64 = 1.0;
 
 /// 可续线索扫描上限 (会话账本按最近写入降序; 最多取最近 8 条产线索)。
 const RESUME_THREAD_SCAN_MAX: usize = 8;
@@ -437,12 +444,29 @@ pub struct CareHeartbeatSource {
     ritual: Arc<Mutex<Option<Arc<RitualStateStore>>>>,
     /// 仪式状态读失败真因 (与供给面共享; 诊断口, 不静默吞错)。
     ritual_error: Arc<Mutex<Option<String>>>,
+    /// 生命周期状态句柄 (D-3 关怀势能场的**真实信号源**)。
+    ///
+    /// 由组合根在模块装配后绑定 (`APEIRETH_ENABLE_BIO_LIFECYCLE=1` 才存在);
+    /// 缺省 = `None` ⇒ 势能场不接线、零读取零行为变化。
+    bio_lifecycle: Arc<Mutex<Option<Arc<BioLifecycleState>>>>,
 }
 
 impl CareHeartbeatSource {
     /// 空绑定位 (未起 = 心跳两列显式 null)。
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// 绑定生命周期状态句柄 (D-3 关怀势能场信号源)。
+    ///
+    /// 组合根在模块装配后调一次: `APEIRETH_ENABLE_BIO_LIFECYCLE=1` ⇒ 句柄存在
+    /// ⇒ 势能场接线 (连续失败 / 最近成功时刻为**真实**信号); 开关关 ⇒ 传 `None`
+    /// ⇒ 势能场不构造、信号零读取 (与既有行为逐字节一致)。
+    pub fn bind_bio_lifecycle(&self, state: Option<Arc<BioLifecycleState>>) {
+        *self
+            .bio_lifecycle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = state;
     }
 
     /// 自述关怀节心跳两列的真值口 (`care_status_probe_with_heartbeat` 的探测口)。
@@ -595,10 +619,30 @@ impl CareHeartbeatSource {
         // ③ 注册即闸: enabled 已核 = 起常驻线程, 真值随探针进自述关怀节。
         // ④ 提醒信号源 (K 轴 L2/L5 消费端): 天气提醒 + 守护告警两本账的消费桥
         //    随心跳消费 (同源纪律; 账空 = 零消费零动作)。
-        let reminder_feeds: Vec<Arc<dyn apeireth_organ::care::ReminderFeed>> = vec![
+        let mut reminder_feeds: Vec<Arc<dyn apeireth_organ::care::ReminderFeed>> = vec![
             Arc::new(WeatherSignalFeed::under_data_dir(&care_dir)),
             Arc::new(GuardAlertFeed::under_data_dir(&care_dir)),
         ];
+        // D-3 关怀势能场 (owner 裁定 2026-10-25): 信号源 = 生命周期状态里**真实**的
+        // 工具结果 (连续失败数 / 最近成功时刻)。走提醒信号面 ⇒ 势能突破只产一条
+        // 信号, 之后与天气提醒 / 守护告警**同管道同纪律**消费 (勿扰/专注/频率/
+        // 预算/发起闸一道都不绕)。生命周期开关关 (= 无信号源) ⇒ 不构造、零读取。
+        if let Some(state) = self
+            .bio_lifecycle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+        {
+            let driver = Arc::new(
+                apeireth_runtime_assembly::canonical::CarePotentialDriver::new(
+                    CARE_POTENTIAL_THRESHOLD,
+                    true,
+                ),
+            );
+            reminder_feeds.push(Arc::new(
+                apeireth_runtime_assembly::canonical::CarePotentialFeed::new(driver, state),
+            ));
+        }
         let producer = match (bio, circadian) {
             // 生物候选 + 节律门 (两开关都开): 门最前, 门不许 = 整拍 Quiet。
             (Some((_, bio_poll)), Some(gate)) => {

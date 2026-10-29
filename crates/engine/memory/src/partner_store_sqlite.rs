@@ -20,6 +20,17 @@ use crate::MemoryError;
 #[derive(Clone)]
 pub struct SqlitePartnerStore {
     pool: Arc<SqliteConnectionPool>,
+    /// 建表是否已尝试过（幂等，只试一次）。
+    ///
+    /// # 为什么需要这个标志
+    ///
+    /// `ensure_schema()` 是**手动**调用的，而调用方（装配层）不会想到要调 ——
+    /// 结果是 `save_partner` 直接报 `no such table: partner_records`。
+    /// 这是「能编译但用不了」的典型：**测试会抓，生产装配层不会**。
+    ///
+    /// 所以改成：**首次写入时自动确保 schema**（`CREATE TABLE IF NOT EXISTS`
+    /// 本身幂等，只在第一次时做一次），调用方不必记得调。
+    schema_ensured: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SqlitePartnerStore {
@@ -27,12 +38,27 @@ impl SqlitePartnerStore {
     pub fn new(pool: SqliteConnectionPool) -> Self {
         Self {
             pool: Arc::new(pool),
+            schema_ensured: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
     /// Creates a store sharing an existing connection pool.
     pub fn from_arc(pool: Arc<SqliteConnectionPool>) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            schema_ensured: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    /// 首次写入前自动确保表存在（幂等，失败则报原错误）。
+    fn ensure_schema_once(&self) -> Result<(), MemoryError> {
+        if self
+            .schema_ensured
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Ok(());
+        }
+        self.ensure_schema()
     }
 
     /// Returns the underlying pool for diagnostics and wiring code.
@@ -62,6 +88,7 @@ impl SqlitePartnerStore {
 
 impl PartnerStore for SqlitePartnerStore {
     fn save_partner(&self, partner: &Partner) -> Result<(), MemoryError> {
+        self.ensure_schema_once()?;
         let data = serde_json::to_string(partner)?;
         let partner_id = partner.id.0.clone();
         self.pool
@@ -83,6 +110,10 @@ impl PartnerStore for SqlitePartnerStore {
     }
 
     fn get_partner(&self, id: &PartnerId) -> Result<Option<Partner>, MemoryError> {
+        // 读路径也要确保表存在：否则「partner 不存在」会报
+        // `no such table` 而不是返回 `None` —— 那会让「查一个不存在的羁绊」
+        // 变成错误，而不是「确实没有」。
+        self.ensure_schema_once()?;
         let partner_id = id.0.clone();
         let row: Option<String> = self
             .pool
@@ -103,6 +134,7 @@ impl PartnerStore for SqlitePartnerStore {
     }
 
     fn list_partners(&self) -> Result<Vec<Partner>, MemoryError> {
+        self.ensure_schema_once()?;
         let rows: Vec<String> = self
             .pool
             .read(|conn| {

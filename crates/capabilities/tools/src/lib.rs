@@ -105,6 +105,7 @@ pub mod proposal_push;
 pub mod redaction_bridge;
 pub mod repo;
 pub mod repo_map;
+pub mod repo_map_tool;
 pub mod search;
 // 书→技能沉淀 (P 轴吸收自动化 P1): 技能卡模型 (StoredDoc 落盘 + 拒开语义) +
 // 沉淀管线 (`tool.skill_distill`, file_write 总闸族 + 审批档) + 调用面

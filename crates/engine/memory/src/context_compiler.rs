@@ -7,6 +7,51 @@
 use crate::layers::MemoryRecallResult;
 use crate::retrieval_tuning::{RetrievalDimension, SelectedAttribution};
 
+/// 单次 overlay 最多渲染多少条**关联日记片段**行 (全局上限).
+///
+/// 日记片段是**附加证据**：记忆正文优先，预算不足时先裁日记行.
+const DIARY_LINES_MAX: usize = 3;
+
+/// 单次 overlay 最多渲染多少条**用户知识库命中节**行 (全局上限).
+///
+/// 与日记片段同级：都是**附加证据**（记忆正文优先，预算不足时先裁这些行），
+/// 但命中节是**结果级**的（不像日记片段挂在单条命中事实上）⇒ 排在所有记忆条目之后.
+const WIKI_LINES_MAX: usize = 4;
+
+/// 渲染一条关联日记片段行 (日期 + 正文摘要, 过凭据脱敏 + 单行化).
+///
+/// 日记正文是**用户写下的内容** ⇒ 与召回正文同等对待：先过
+/// [`sanitize_text`] 脱敏，再进 overlay.
+///
+/// **单行化**: 日记正文可能是多行 markdown（`dream` 落的是报告）⇒ 折行会破坏
+/// 「一行一条证据」的编号/行结构 ⇒ 换行一律压成空格.
+fn render_diary_line(snippet: &crate::cross_diary_wiring::DiarySnippet) -> String {
+    format!(
+        "[diary:{}] {}",
+        snippet.diary_date,
+        single_line(&sanitize_text(&snippet.snippet))
+    )
+}
+
+/// 渲染一条用户知识库命中节行 (来源文件 + 小节标题 + 正文摘要).
+///
+/// 语料正文是**用户自己写下的 markdown** ⇒ 与召回正文同等对待：先过
+/// [`sanitize_text`] 脱敏（语料里也可能粘进凭据），再单行化（markdown 折行
+/// 会破坏「一行一条证据」的行结构）.
+fn render_wiki_line(section: &crate::wiki_corpus::WikiSection) -> String {
+    format!(
+        "[wiki:{}] {} {}",
+        section.source_path,
+        section.heading,
+        single_line(&sanitize_text(&section.text))
+    )
+}
+
+/// 把多行文本压成单行 (换行 ⇒ 空格), 保持行结构可解析.
+fn single_line(text: &str) -> String {
+    text.replace(['\n', '\r'], " ")
+}
+
 /// The transient overlay and the candidates that actually made it into it.
 ///
 /// The IDs are reported after closed-world sanitization and budget selection,
@@ -110,6 +155,7 @@ impl ClosedWorldContextCompiler {
         let mut current_chars = lines.iter().map(|l| l.len() + 1).sum::<usize>();
         let mut selected_candidate_ids = Vec::new();
         let mut selected_attribution = Vec::new();
+        let mut diary_lines = 0usize;
 
         for item in &recalled.items {
             let sanitized_content = sanitize_text(&item.content);
@@ -128,6 +174,40 @@ impl ClosedWorldContextCompiler {
             lines.push(line);
             selected_attribution.push(attribution_for(&item.id, item.score_components));
             selected_candidate_ids.push(item.id.clone());
+
+            // 跨日记片段 (附加在命中事实之后): 预算装不下就跳过这一行，
+            // **不挤掉记忆正文** (记忆正文优先)。
+            for snippet in item.diary_snippets.iter() {
+                if diary_lines >= DIARY_LINES_MAX {
+                    break;
+                }
+                let diary_line = render_diary_line(snippet);
+                if current_chars + diary_line.len() + 25 > max_chars {
+                    continue;
+                }
+                current_chars += diary_line.len() + 1;
+                lines.push(diary_line);
+                diary_lines += 1;
+            }
+        }
+
+        // 用户知识库命中节 (结果级附加证据): 排在**所有**记忆条目之后。
+        //
+        // 预算纪律与日记片段同口径：装不下就**跳过这一行**（continue），
+        // **绝不挤掉记忆正文** (记忆正文优先)。命中节为空 ⇒ 一行都不加
+        // ⇒ overlay 与接线前逐字节一致。
+        let mut wiki_lines = 0usize;
+        for section in recalled.wiki_sections.iter() {
+            if wiki_lines >= WIKI_LINES_MAX {
+                break;
+            }
+            let wiki_line = render_wiki_line(section);
+            if current_chars + wiki_line.len() + 25 > max_chars {
+                continue;
+            }
+            current_chars += wiki_line.len() + 1;
+            lines.push(wiki_line);
+            wiki_lines += 1;
         }
 
         lines.push("</governed_memory>".to_string());
@@ -145,13 +225,89 @@ impl ClosedWorldContextCompiler {
     /// 显式反幻觉规则 ("禁止说「我记得我们以前聊过」"). 预算语义: 每条证据按既有
     /// 口径截 120 字, 渲染整体超出 `max_chars` 时从尾部弹条目 (0 装: 截断而非放行);
     /// 预算容不下任何条目或空召回时返回 `None` (既有渲染器空输入出空串, 空 overlay 无意义).
+    /// **锚定注入**：按**问句里的主体**在召回内容里**选段**，而不是截开头。
+    ///
+    /// # 这是什么（2026-10-27）
+    ///
+    /// 实测（`docs/status/chapter-anchor-value-2026-10-27.md`）：
+    /// **同一成本（400 字/条）下，「选对段」的送达能力是「多给字」的 5.1 倍**
+    /// ⇒ ⇒ ⇒ **「信号」远比「预算」重要**。
+    ///
+    /// ⇒ 本方法是那条结论的**生产落点**：主体**来自问句**（**不是** oracle），
+    /// ⇒ ⇒ 在**同一总量预算内**重新分配 ⇒ ⇒ **总消耗不变**。
+    ///
+    /// # 口径
+    ///
+    /// * `config.enabled = false` ⇒ **完全等同** [`Self::compile_injection_with_selected_access`]
+    ///   ⇒ ⇒ **零行为变化**（这是默认）；
+    /// * `config.span_chars` ⇒ 每条证据的**单条**上限（**总量仍由 `max_chars` 控制**）；
+    /// * 主体解析不出来 ⇒ **退回开头截断**（**不返回空**）。
+    pub fn compile_injection_with_selected_access_and_query(
+        &self,
+        recalled: &MemoryRecallResult,
+        _session_id: &str,
+        max_chars: usize,
+        query_text: &str,
+        config: crate::anchor_injection::AnchoredInjectionConfig,
+    ) -> Option<SelectedMemoryAccess> {
+        if !config.enabled {
+            return self.compile_injection_with_selected_access(recalled, _session_id, max_chars);
+        }
+        let subject = crate::anchor_injection::subject_of_query(query_text);
+        let mut accessed = recalled.clone();
+        for item in accessed.items.iter_mut() {
+            let Some(subject) = subject.as_deref() else {
+                continue;
+            };
+            let span = crate::anchor_injection::find_subject_window(
+                &item.content,
+                subject,
+                config.span_chars,
+            );
+            if let Some(span) = span {
+                // ⚠️ **窗口可能为空** ⇒ ⇒ 保留原文（**不注入空证据**）。
+                if !span.trim().is_empty() {
+                    item.content = span;
+                }
+            }
+        }
+        self.compile_injection_with_selected_access_budget(
+            &accessed,
+            _session_id,
+            max_chars,
+            config.span_chars,
+        )
+    }
+
     pub fn compile_injection_with_selected_access(
         &self,
         recalled: &MemoryRecallResult,
         _session_id: &str,
         max_chars: usize,
     ) -> Option<SelectedMemoryAccess> {
-        use crate::memory_injection::{build_memory_injection, EVIDENCE_MAX_CHARS};
+        self.compile_injection_with_selected_access_budget(
+            recalled,
+            _session_id,
+            max_chars,
+            crate::memory_injection::EVIDENCE_MAX_CHARS,
+        )
+    }
+
+    /// 同 [`Self::compile_injection_with_selected_access`]，但**单条证据上限可配**。
+    ///
+    /// # 口径
+    ///
+    /// * `per_entry_chars` ⇒ **单条**证据的字符上限（**总量仍由 `max_chars` 控制**）
+    ///   ⇒ ⇒ ⇒ **放大单条上限不会增加总消耗**；
+    /// * `per_entry_chars = EVIDENCE_MAX_CHARS` ⇒ **与老路径逐字一致**。
+    pub fn compile_injection_with_selected_access_budget(
+        &self,
+        recalled: &MemoryRecallResult,
+        _session_id: &str,
+        max_chars: usize,
+        per_entry_chars: usize,
+    ) -> Option<SelectedMemoryAccess> {
+        use crate::memory_injection::build_memory_injection_with_budget;
         if recalled.items.is_empty() {
             return None;
         }
@@ -163,7 +319,7 @@ impl ClosedWorldContextCompiler {
         let mut current_chars = RULES_RESERVE;
         for item in &recalled.items {
             let sanitized_content = sanitize_text(&item.content);
-            let cost = sanitized_content.chars().count().min(EVIDENCE_MAX_CHARS) + 8;
+            let cost = sanitized_content.chars().count().min(per_entry_chars) + 8;
             if current_chars + cost > max_chars {
                 break;
             }
@@ -172,8 +328,46 @@ impl ClosedWorldContextCompiler {
             selected_attribution.push(attribution_for(&item.id, item.score_components));
             selected_candidate_ids.push(item.id.clone());
         }
+        // 记忆正文行数 (跨日记片段行排在它们**之后** ⇒ 预算不足时先被裁掉).
+        let memory_entry_count = entries.len();
+        // 跨日记片段 (附加证据行): 编号接在记忆正文之后，仍在「编号证据清单」
+        // 之内 ⇒ 反幻觉规则 («说话只能基于以上编号条目») 同样覆盖日记片段。
+        let mut diary_lines = 0usize;
+        for item in &recalled.items {
+            if diary_lines >= DIARY_LINES_MAX {
+                break;
+            }
+            for snippet in item.diary_snippets.iter() {
+                if diary_lines >= DIARY_LINES_MAX {
+                    break;
+                }
+                entries.push(format!(
+                    "[日记 {}] {}",
+                    snippet.diary_date,
+                    single_line(&sanitize_text(&snippet.snippet))
+                ));
+                diary_lines += 1;
+            }
+        }
+        // 用户知识库命中节 (附加证据行): 排在日记片段之后 ⇒ 预算不足时**先被裁掉**
+        // (尾部裁剪从最后一行开始 ⇒ 记忆正文永远优先)。
+        // 纪律与 `compile()` 那条渲染路径一致：**装不下就跳过这一行**。
+        let mut wiki_lines = 0usize;
+        for section in &recalled.wiki_sections {
+            if wiki_lines >= WIKI_LINES_MAX {
+                break;
+            }
+            let line = render_wiki_line(section);
+            let cost = line.chars().count() + 8;
+            if current_chars + cost > max_chars {
+                continue;
+            }
+            current_chars += cost;
+            entries.push(line);
+            wiki_lines += 1;
+        }
         loop {
-            let rendered = build_memory_injection(&entries);
+            let rendered = build_memory_injection_with_budget(&entries, per_entry_chars);
             if rendered.chars().count() <= max_chars {
                 if entries.is_empty() {
                     return None;
@@ -184,11 +378,16 @@ impl ClosedWorldContextCompiler {
                     selected_attribution,
                 });
             }
+            // 尾部先裁日记行 (它不属于任何候选) ⇒ 只有裁到记忆正文行时,
+            // 才同步回退该候选的选择回执 (id / 归因).
+            let popped_memory_entry = entries.len() <= memory_entry_count;
             if entries.pop().is_none() {
                 return None;
             }
-            selected_candidate_ids.pop();
-            selected_attribution.pop();
+            if popped_memory_entry {
+                selected_candidate_ids.pop();
+                selected_attribution.pop();
+            }
         }
     }
 
@@ -263,6 +462,7 @@ mod tests {
                     importance: 1.0,
                     source_ref: None,
                     score_components: None,
+                    diary_snippets: Vec::new(),
                 })
                 .collect(),
             ..MemoryRecallResult::default()
@@ -442,5 +642,119 @@ mod tests {
 
         assert!(result.is_none());
         assert!(!observed);
+    }
+
+    /// 构造一条命中节 (来源文件 + 标题 + 正文).
+    fn wiki_section(
+        source_path: &str,
+        heading: &str,
+        text: &str,
+    ) -> crate::wiki_corpus::WikiSection {
+        crate::wiki_corpus::WikiSection {
+            source_path: source_path.to_string(),
+            heading: heading.to_string(),
+            text: text.to_string(),
+        }
+    }
+
+    /// 用户知识库命中节渲染成 `[wiki:...]` 行, 且排在**所有**记忆条目之后。
+    #[test]
+    fn wiki_sections_also_render_in_the_injection_format() {
+        // **两条渲染路径都要出命中节** —— 否则「接了」只在一半路径成立
+        // （注入格式是反幻觉编号证据清单那一条，与 `compile()` 的
+        //  `<governed_memory>` 块是**两个不同的渲染器**）。
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section("knowledge.md", "项目背景", "语料正文")];
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let access = compiler
+            .compile_injection_with_selected_access(&recalled, "session-wiki", 4_000)
+            .expect("injection");
+        assert!(
+            access
+                .overlay
+                .contains("[wiki:knowledge.md] 项目背景 语料正文"),
+            "{}",
+            access.overlay
+        );
+        let mem_pos = access.overlay.find("记忆正文").expect("记忆正文");
+        let wiki_pos = access.overlay.find("[wiki:").expect("命中节行");
+        assert!(
+            mem_pos < wiki_pos,
+            "命中节排在记忆正文之后: {}",
+            access.overlay
+        );
+    }
+
+    #[test]
+    fn wiki_sections_render_as_wiki_lines_after_the_memory_entries() {
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section("knowledge.md", "项目背景", "语料正文")];
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, "session-wiki", 4_000)
+            .expect("overlay");
+
+        assert!(
+            overlay.contains("[wiki:knowledge.md] 项目背景 语料正文"),
+            "{}",
+            overlay
+        );
+        let mem_pos = overlay.find("[mem:first").expect("记忆条目行");
+        let wiki_pos = overlay.find("[wiki:").expect("命中节行");
+        assert!(
+            mem_pos < wiki_pos,
+            "命中节是结果级附加证据 ⇒ 排在记忆条目之后: {}",
+            overlay
+        );
+    }
+
+    /// 没有命中节 ⇒ overlay 不加任何 wiki 行 (逐字节零变化)。
+    #[test]
+    fn no_wiki_sections_adds_no_wiki_line() {
+        let recalled = recalled(vec![("first", "记忆正文")]);
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, "session-wiki-none", 4_000)
+            .expect("overlay");
+
+        assert!(!overlay.contains("[wiki:"), "{}", overlay);
+    }
+
+    /// 预算装不下 ⇒ **跳过**命中节行, 绝不挤掉记忆正文 (记忆正文优先)。
+    #[test]
+    fn tight_budget_skips_the_wiki_line_and_keeps_the_memory_entry() {
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section("knowledge.md", "项目背景", "语料正文")];
+        let session_id = "session-wiki-tight";
+        let max_chars = max_chars_for_first_candidate(&recalled, session_id);
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, session_id, max_chars)
+            .expect("overlay");
+
+        assert!(overlay.contains("[mem:first"), "{}", overlay);
+        assert!(!overlay.contains("[wiki:"), "{}", overlay);
+    }
+
+    /// 命中节里的凭据同样要脱敏 (语料是用户写下的内容, 可能粘进密钥)。
+    #[test]
+    fn wiki_sections_are_sanitized() {
+        let mut recalled = recalled(vec![("first", "记忆正文")]);
+        recalled.wiki_sections = vec![wiki_section(
+            "knowledge.md",
+            "项目背景",
+            "token=super_secret wikimarker",
+        )];
+        let compiler = ClosedWorldContextCompiler::default();
+
+        let overlay = compiler
+            .compile(&recalled, "session-wiki-secret", 4_000)
+            .expect("overlay");
+
+        assert!(!overlay.contains("super_secret"), "{}", overlay);
     }
 }

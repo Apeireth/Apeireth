@@ -286,7 +286,7 @@ impl HypothesisStore {
     /// v2 时间源 (free fn, 不持借用; 默认 0; 子代理 / runtime 可换 impl via
     /// `with_clock` 未来扩展). 0 装诚实: 当前不接真 chrono, 假设时间由对账层注入.
     #[allow(dead_code)]
-    fn _placeholder(&self) {}
+    fn _placeholder(&self) {} // D-1（owner 裁定 2026-10-25）：hypothesis 测试夹具：当前无用例调用
 }
 
 /// v2 时间源 (free fn, 无借用). 默认 0; 真时间由调用方在 reconcile 时注入.
@@ -601,6 +601,7 @@ mod tests {
         std::sync::Arc::new(apeireth_plugin::llm_factory::NoopLlmFactory)
     }
 
+    #[allow(dead_code)]
     fn empty_input() -> OrganInput {
         use apeireth_core::kernel::memory::Episode;
         use apeireth_core::kernel::SessionId;

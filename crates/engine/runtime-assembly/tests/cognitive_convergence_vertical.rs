@@ -13,6 +13,7 @@
 //! - T10: Memory forget dynamic invalidation from hybrid pipeline & ring buffer.
 //! - T11: Content update updates content_hash and invalidates vector cache.
 
+#![allow(dead_code)]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 

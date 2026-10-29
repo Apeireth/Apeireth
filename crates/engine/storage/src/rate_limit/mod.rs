@@ -177,6 +177,7 @@ impl PerKeyState {
         }
     }
 
+    #[allow(dead_code)]
     fn reset(&mut self, now: Instant) {
         match self {
             PerKeyState::Token(b) => b.reset_at(now),

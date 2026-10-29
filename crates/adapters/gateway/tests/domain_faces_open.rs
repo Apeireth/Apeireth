@@ -14,6 +14,7 @@
 //! 6. **同帧语义保持**: 自称域 403 恒定帧、跨域资源 404 与不存在逐字节同帧
 //!    (W3-① 契约); 默认域/域面未接线读数零回归。
 
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};

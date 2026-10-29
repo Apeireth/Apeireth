@@ -1399,6 +1399,7 @@ fn is_word_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
+#[allow(dead_code)]
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Vec<u64> {
     let mut hits = Vec::new();
     if needle.is_empty() || haystack.len() < needle.len() {

@@ -1,0 +1,40 @@
+name: Doc paths (源文件路径悬空守门)
+
+# 2026-10-25 新增：守住「文档里引用的源文件路径真实存在」。
+#
+# 为什么要有：实测发现**活文档**里有 26 处「文档说这个文件在这里，但它已经不在了」
+# —— 绝大多数是 crate 重组后文档没跟上（`engine/runtime/src/canonical/*`
+# → `engine/runtime-assembly/...`）。这类悬空**不会让任何测试变红**，
+# 但会让照文档找代码的人扑空 ⇒ 典型的**叙事滞后（narration-lag）**缺陷。
+#
+# 口径（刻意收窄，避免误判）：只判「**crate 目录存在、但文件没了**」；
+# 不判「整 crate 都不存在」（那是规划中/待建）与历史卷宗类文档。
+# 已知例外记在 `scripts/doc-path-baseline.txt`（只减不增，每条带理由）。
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - '**.md'
+      - 'scripts/check_doc_paths.py'
+      - 'scripts/doc-path-baseline.txt'
+  pull_request:
+    paths:
+      - '**.md'
+      - 'scripts/check_doc_paths.py'
+      - 'scripts/doc-path-baseline.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  doc-paths:
+    name: doc source path gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check dangling source paths in active docs
+        run: python3 scripts/check_doc_paths.py --check

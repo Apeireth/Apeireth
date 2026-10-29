@@ -163,7 +163,7 @@ per `v2-architecture-reflection.md` §6 (子代理 R11 整合 v1 AwakeCompanion 
 
 | 项 | 说明 |
 |---|---|
-| **位置** | `crates/engine/runtime/src/canonical/cognitive.rs` (slot `cognitive.self_assessment`) |
+| **位置** | `crates/engine/runtime-assembly/src/canonical/cognitive.rs` (slot `cognitive.self_assessment`) |
 | **真实现** | ✅ WIRED, Judge-backed (per `cognitive-module-wiring.md:28`) |
 | **依赖** | `Arc<dyn SelfAssessmentStore>` (RC-4 ✅) |
 | **触发** | `AfterTurn` hook (per `cognitive-module-wiring.md:42` 顺序) |

@@ -144,8 +144,10 @@ fn run_unlock(args: &[String]) -> Result<String, String> {
 
     let unlock = match options.get("--recovery") {
         Some(recovery_path) => {
-            let text = std::fs::read_to_string(recovery_path).map_err(|error| error.to_string())?;
-            let recovery = RecoveryKey::from_hex(&text).map_err(|error| error.to_string())?;
+            let text = std::fs::read_to_string(recovery_path)
+                .map_err(|error| format!("恢复件读取失败 {recovery_path}: {error}"))?;
+            let recovery = RecoveryKey::from_hex(&text)
+                .map_err(|error| format!("恢复件解析失败 {recovery_path}: {error}"))?;
             UnlockKey::Recovery(recovery)
         }
         None => UnlockKey::Passphrase(read_passphrase("口令 (stdin 一行, 回显): ")?),
@@ -180,8 +182,20 @@ fn run_unlock(args: &[String]) -> Result<String, String> {
 }
 
 fn read_key_wrap(path: &std::path::Path) -> Result<KeyWrapFile, String> {
-    let text = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
-    KeyWrapFile::from_json(&text).map_err(|error| error.to_string())
+    // 读失败要带**路径 + 下一步动作**：此前只回裸 `No such file or directory
+    // (os error 2)` —— 用户看不出是哪个文件、更不知道先去 `crypto wrap`
+    // （真机实测 2026-10-25）。
+    let text = std::fs::read_to_string(path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            return format!(
+                "密钥文件不存在: {} （先用 `apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>` 创建）",
+                path.display()
+            );
+        }
+        format!("密钥文件读取失败 {}: {error}", path.display())
+    })?;
+    KeyWrapFile::from_json(&text)
+        .map_err(|error| format!("密钥文件解析失败 {}: {error}", path.display()))
 }
 
 /// 从 stdin 读一行口令 (终端回显 —— 未接无回显输入, 见文件头 0 装诚实)。

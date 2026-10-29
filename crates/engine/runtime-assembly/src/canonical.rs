@@ -73,6 +73,7 @@ pub mod care_heartbeat;
 /// 关怀候选 (同源打扰纪律; 守护例外档)。
 #[path = "canonical/care_reminder.rs"]
 pub mod care_reminder;
+mod care_signals;
 #[path = "canonical/causal_world_model.rs"]
 pub mod causal_world_model;
 #[path = "canonical/cognitive.rs"]
@@ -81,6 +82,12 @@ pub mod cognitive;
 pub mod context_budget;
 #[path = "canonical/cost_telemetry.rs"]
 pub mod cost_telemetry;
+/// D-2：council ballot 的 append-only 落盘面（JSONL）。
+#[path = "canonical/council_ballot_log.rs"]
+pub mod council_ballot_log;
+/// D-2：顾问评价 ⇒ 立场票的折算（唯一的折算点）。
+#[path = "canonical/council_ballots.rs"]
+pub mod council_ballots;
 #[path = "canonical/dream_llm.rs"]
 pub mod dream_llm;
 /// W3 实现批: 自我改进闭环实验侧 (2026-10-10)。
@@ -117,6 +124,7 @@ pub mod orchestrator;
 pub mod organ_llm_bridge;
 #[path = "canonical/organ_module.rs"]
 pub mod organ_module;
+pub mod parallel_dispatch;
 #[path = "canonical/permission_preset.rs"]
 pub mod permission_preset;
 /// 生物机制族 W3.3 · 游戏练习场工具面 (`tool.play_propose` / `tool.play_start` /
@@ -194,6 +202,9 @@ pub use care_heartbeat::{
 pub use care_reminder::{
     guard_alert_to_candidate, weather_signal_to_candidate, CompositeReminderFeed, GuardAlertFeed,
     WeatherSignalFeed,
+};
+pub use care_signals::{
+    CarePotentialDriver, CarePotentialFeed, CareSignals, DISTRESS_FULL_FAILURES, FATIGUE_FULL_HOURS,
 };
 pub use context_budget::{
     context_budget_chars_from_env, context_budget_chars_from_env_value, CONTEXT_BUDGET_ENV,

@@ -148,7 +148,7 @@ O-4 任何人都能接手 → O-5 不假装 → O-6 永远追求最优 (NEW 2026
   - MemoryBackend / Experience / Perception / PreferenceStore / SelfAssessmentStore / LlmFactory / SubSupervisor
 - **认知模块 12 slot ledger** (其他 dev 推 5 commit, **6 WIRED + 6 DEFERRED**, judge/council 为 WIRED OFF by default)
 - **9 organ** trait 抽象 (`crates/foundation/plugin/src/organ.rs`) + 真实现 (`crates/engine/organ/`)
-- **OrganOrchestrator 串联层** (R12 真实施: `crates/engine/runtime/src/canonical/orchestrator.rs`)
+- **OrganOrchestrator 串联层** (R12 真实施: `crates/engine/runtime-assembly/src/canonical/orchestrator.rs`)
 - **9 哲学锚** (升 8→9, O-6 加, LOCKED)
 - **13 键** (降级为哲学标准, `RUNTIME_ENFORCED = false`)
 - **3 项不可变脊柱** (Self-Disable / L0 HA / 13 键 verdict cache 语义)

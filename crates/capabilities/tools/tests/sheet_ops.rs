@@ -4,7 +4,7 @@
 //! 创建类原子写 / 敏感面拒 / 越界不回显路径 / 写总闸 fail-closed / 开关
 //! fail-closed / 审批档与边界 Guard 各一枚。口径钉死处都断言精确值, 演进须改测试。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{
@@ -26,19 +26,38 @@ use apeireth_tools_canonical::sheet_ops::{
 // 夹具 (真 CSV 文件: tests/fixtures/sheet_ops/*.csv)
 // ---------------------------------------------------------------------------
 
-fn fixture_path(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/sheet_ops")
-        .join(name)
-}
-
-/// 建一个工作区临时目录并拷入夹具 (写面测试不脏仓库)。
+/// 建一个工作区临时目录并写入夹具 (写面测试不脏仓库)。
+///
+/// # ⚠️ 为什么**不用** `std::fs::copy`（2026-10-27 改）
+///
+/// 原实现从 `CARGO_MANIFEST_DIR/tests/fixtures/…` **运行时拷贝** ⇒ 在
+/// **工作树正在被改动**时（并行线落盘 / 分支切换 / 工具整树重写），
+/// 源文件可能**在 `copy` 的那一瞬间不可见** ⇒ `ENOENT` ⇒ **偶发**测试失败
+/// ⇒ 而这种失败**看起来像产品坏了**（其实不是）⇒ **污染「全量绿」的可信度**。
+///
+/// ⇒ 现在**编译期把夹具内容嵌进二进制**（`include_str!`）
+/// ⇒ 运行时**只写临时目录**（唯一的写面）⇒ **不再读工作树**
+/// ⇒ ⇒ 该 flaky **从根上消失**。
 fn workspace_with(names: &[&str]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("tempdir");
     for name in names {
-        std::fs::copy(fixture_path(name), dir.path().join(name)).expect("copy fixture");
+        let content = fixture_content(name);
+        std::fs::write(dir.path().join(name), content).expect("write fixture");
     }
     dir
+}
+
+/// 夹具的**编译期内容**（`include_str!` ⇒ 不依赖运行时文件系统）。
+fn fixture_content(name: &str) -> &'static str {
+    match name {
+        "sales.csv" => include_str!("fixtures/sheet_ops/sales.csv"),
+        "mixed.csv" => include_str!("fixtures/sheet_ops/mixed.csv"),
+        "blank_cells.csv" => include_str!("fixtures/sheet_ops/blank_cells.csv"),
+        "header_only.csv" => include_str!("fixtures/sheet_ops/header_only.csv"),
+        "decimals.csv" => include_str!("fixtures/sheet_ops/decimals.csv"),
+        "quoted.csv" => include_str!("fixtures/sheet_ops/quoted.csv"),
+        other => panic!("unknown fixture: {other}"),
+    }
 }
 
 fn runner(root: &Path) -> SheetOpsRunner {

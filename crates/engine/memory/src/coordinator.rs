@@ -22,6 +22,8 @@ use crate::access_history::ActivationSource;
 use crate::consolidation::{ConsolidationReport, MemoryConsolidationJob};
 use crate::context_compiler::{ClosedWorldContextCompiler, SelectedMemoryAccess};
 use crate::continuity_state::{ContinuityCompressor, ContinuityState};
+use crate::cross_diary_wiring::{self, CrossDiaryLimits};
+use crate::diary::DiaryStore;
 use crate::layers::{
     MemoryLayerKind, MemoryRecallQuery, MemoryRecallResult, MemoryWritebackEntry,
     RecalledMemoryItem,
@@ -62,9 +64,55 @@ pub struct MemoryCoordinator {
     typed_recall_source: Option<Arc<dyn TypedMemoryRecallSource>>,
     typed_identity: Option<TypedRecallIdentity>,
     injection_format: bool,
+    /// Optional read-only diary store (cross-diary retrieval wiring).
+    ///
+    /// Absent = the recall path never touches the diary ⇒ byte-for-byte the
+    /// pre-wiring behavior. Present = hits may carry related diary excerpts.
+    diary_store: Option<Arc<dyn DiaryStore>>,
+    /// Optional read-only user knowledge-base corpus root (`<data>/wiki`).
+    ///
+    /// Absent = the recall path never touches the corpus ⇒ byte-for-byte the
+    /// pre-wiring behavior. Present = matching corpus sections may ride along
+    /// as **additional** evidence (items / scores / ordering untouched).
+    wiki_root: Option<std::path::PathBuf>,
     /// Optional observation-layer feed for memory-governance audit events.
     /// Emission is after-the-fact and never changes an operation's outcome.
     audit_events: Option<AuditEventSink>,
+}
+
+/// 合并两批检索候选：按 `id` 并集去重，同 id 保留**更高分**那份。
+///
+/// 用于查询扩展的召回增强：并集只会**增加**候选，绝不压低任何已有候选的分数
+/// （这正是它不能写成「用扩展查询替换原查询」的原因）。
+///
+/// 排序口径与 [`HybridRetrievalPipeline::retrieve_with_status`] 一致：
+/// 分数降序、同分按 id 升序 —— 确定性输出，便于对账与测试。
+fn merge_candidates_by_id(
+    primary: Vec<MemoryCandidate>,
+    extra: Vec<MemoryCandidate>,
+) -> Vec<MemoryCandidate> {
+    let mut by_id: std::collections::HashMap<String, MemoryCandidate> =
+        std::collections::HashMap::with_capacity(primary.len() + extra.len());
+    for candidate in primary.into_iter().chain(extra) {
+        match by_id.get_mut(&candidate.id) {
+            Some(existing) if candidate.score > existing.score => {
+                *existing = candidate;
+            }
+            Some(_) => {}
+            None => {
+                by_id.insert(candidate.id.clone(), candidate);
+            }
+        }
+    }
+    let mut merged: Vec<MemoryCandidate> = by_id.into_values().collect();
+    merged.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    merged
 }
 
 impl MemoryCoordinator {
@@ -90,6 +138,8 @@ impl MemoryCoordinator {
             typed_recall_source: None,
             typed_identity: None,
             injection_format: false,
+            diary_store: None,
+            wiki_root: None,
             audit_events: None,
         }
     }
@@ -165,6 +215,38 @@ impl MemoryCoordinator {
         self
     }
 
+    /// Attach a **read-only** diary store so recall hits can carry related
+    /// diary excerpts (cross-diary retrieval wiring).
+    ///
+    /// The store is only ever **read** (`list_days` / `read_day`): the recall
+    /// path never writes, edits, or deletes a diary. Without this injection the
+    /// recall path stays byte-for-byte identical to the pre-wiring behavior.
+    #[must_use]
+    pub fn with_diary_store(mut self, diary_store: Arc<dyn DiaryStore>) -> Self {
+        self.diary_store = Some(diary_store);
+        self
+    }
+
+    /// Reference to the optional read-only diary store.
+    pub fn diary_store(&self) -> Option<&dyn DiaryStore> {
+        self.diary_store.as_deref()
+    }
+
+    /// 注入用户知识库语料根（`<data>/wiki`）。**存在性即开关**：
+    /// 目录不存在 ⇒ 检索路径整段跳过 ⇒ 逐字节零行为变化。
+    ///
+    /// 语料面**只读**：检索路径只扫描 `.md` 语料，绝不写回知识库。
+    #[must_use]
+    pub fn with_wiki_root(mut self, root: std::path::PathBuf) -> Self {
+        self.wiki_root = Some(root);
+        self
+    }
+
+    /// 用户知识库语料根（未注入 ⇒ `None`）。
+    pub fn wiki_root(&self) -> Option<&std::path::Path> {
+        self.wiki_root.as_deref()
+    }
+
     /// values remain unchanged for backwards-compatible ranking.
     #[must_use]
     pub fn with_activation_source(mut self, source: Arc<dyn ActivationSource>) -> Self {
@@ -208,6 +290,17 @@ impl MemoryCoordinator {
         HashMap<String, (MemoryLayerKind, i64, Option<String>)>,
         usize,
     ) {
+        // ⚠️ **时间锚点**（2026-10-27 生产接线）：问句里说「3年前」⇒
+        // ⇒ recency 的**参照时间**应该是「3年前」⇒ 而不是「现在」
+        // ⇒ ⇒ 下面 4 处 `delta_hours` **全部**改用这个参照时间
+        // ⇒ ⇒ ⚠️ **只影响 recency** ⇒ ⇒ `now_ms` 本身**照旧**传给外部 source
+        // ⇒ ⇒ ⇒ 外部 source 看到的仍是「现在」⇒ ⇒ **零副作用**。
+        //
+        // ⇒ 没有锚点 ⇒ `None` ⇒ ⇒ **完全保持原行为**（**零行为变化**）。
+        let recency_reference_ms = crate::anchor_injection::anchor_reference_time_ms(
+            now_ms,
+            &crate::anchor_injection::parse_time_anchors(&query.query_text),
+        );
         let mut candidates = Vec::new();
         let mut candidate_meta = HashMap::new();
         let mut governance_filtered = 0;
@@ -236,7 +329,7 @@ impl MemoryCoordinator {
                         continue;
                     }
                     let delta_hours =
-                        (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                        recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
                     let s_rec = (-query.recency_decay_lambda * delta_hours)
                         .exp()
                         .clamp(0.1, 1.0);
@@ -297,7 +390,7 @@ impl MemoryCoordinator {
                             }
                         }
                         let delta_hours =
-                            (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                            recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
                         let s_rec = (-query.recency_decay_lambda * delta_hours)
                             .exp()
                             .clamp(0.1, 1.0);
@@ -354,7 +447,7 @@ impl MemoryCoordinator {
                         }
                     }
                     let delta_hours =
-                        (now_ms - ep.timestamp * 1000).max(0) as f64 / (1000.0 * 3600.0);
+                        recency_delta_hours(recency_reference_ms, now_ms, ep.timestamp * 1000);
                     let s_rec = (-query.recency_decay_lambda * delta_hours)
                         .exp()
                         .clamp(0.1, 1.0);
@@ -402,7 +495,8 @@ impl MemoryCoordinator {
                         } else {
                             pref.created_at
                         };
-                        let delta_hours = (now_ms - pref_ts_ms).max(0) as f64 / (1000.0 * 3600.0);
+                        let delta_hours =
+                            recency_delta_hours(recency_reference_ms, now_ms, pref_ts_ms);
                         let s_rec = (-query.recency_decay_lambda * delta_hours)
                             .exp()
                             .clamp(0.1, 1.0);
@@ -539,6 +633,7 @@ impl MemoryCoordinator {
                         used_lexical_fallback: true,
                         reranked: false,
                     }),
+                    wiki_sections: Vec::new(),
                 });
             }
             self.execute_hybrid_retrieval(
@@ -579,6 +674,7 @@ impl MemoryCoordinator {
                     used_lexical_fallback: self.embedding_provider.is_none(),
                     reranked: false,
                 }),
+                wiki_sections: Vec::new(),
             });
         }
 
@@ -670,13 +766,51 @@ impl MemoryCoordinator {
         let pipeline = HybridRetrievalPipeline::new(crate::retrieval_tuning::effective_ranking_or(
             self.ranking,
         ));
-        let (ranked_candidates, mut status) = pipeline.retrieve_with_status(
+        let (primary_candidates, mut status) = pipeline.retrieve_with_status(
             &query.query_text,
             &query.visible_scopes,
             &sources,
             query.limit,
             query.max_chars,
         )?;
+
+        // 查询扩展（`query_expand`）：**召回增强**，不是替换查询。
+        //
+        // # 为什么不是「直接用 rewritten 查询」
+        //
+        // 检索打分是**各项之和**（BM25 逐词累加，无查询长度归一化）——
+        // 若把扩展后的查询整句送进去，「匹配到的同义/聚类词多」的文档会累出
+        // 更高分，反而压过精确匹配那一篇。加词本意是提召回，不该降精度。
+        //
+        // # 所以
+        //
+        // 只在**主查询召回不足 `limit`** 时补跑一遍扩展查询，再把两批候选按
+        // id **并集去重**（同 id 保留更高分）。于是：
+        // - 主查询够用 ⇒ 完全走原路径，**零行为变化**；
+        // - 主查询稀疏（用户短查询、生僻词）⇒ 扩展补召回，精确匹配那篇的分数
+        //   不会被任何东西压低（并集只增不减）。
+        let (ranked_candidates, mut status) = if primary_candidates.len() >= query.limit {
+            (primary_candidates, status)
+        } else {
+            let expanded = crate::query_expand::expand_query(&query.query_text);
+            if expanded.extra_terms.is_empty() {
+                (primary_candidates, status)
+            } else {
+                let (extra_candidates, extra_status) = pipeline.retrieve_with_status(
+                    &expanded.rewritten,
+                    &query.visible_scopes,
+                    &sources,
+                    query.limit,
+                    query.max_chars,
+                )?;
+                status.lexical_candidates += extra_status.lexical_candidates;
+                status.vector_candidates += extra_status.vector_candidates;
+                (
+                    merge_candidates_by_id(primary_candidates, extra_candidates),
+                    status,
+                )
+            }
+        };
 
         if self.embedding_provider.is_none() {
             status.used_lexical_fallback = true;
@@ -708,16 +842,48 @@ impl MemoryCoordinator {
                 importance: cand.score_components.importance,
                 source_ref,
                 score_components: Some(cand.score_components),
+                diary_snippets: Vec::new(),
             });
         }
 
-        Ok(MemoryRecallResult {
+        // 跨日记检索接线 (只读): 命中事实附上**关联日记片段**。
+        //
+        // **缺省零变化**: 未注入日记面 (`diary_store == None`) ⇒ 这一段整段跳过，
+        // 召回结果与接线前逐字节一致。注入后也只是**附加**片段：不改内容、
+        // 不改分数、不改排序。
+        if let Some(diary) = &self.diary_store {
+            cross_diary_wiring::attach_diary_snippets(
+                &mut final_items,
+                diary.as_ref(),
+                CrossDiaryLimits::default(),
+            );
+        }
+
+        let mut result = MemoryRecallResult {
             items: final_items,
             total_candidates,
             governance_filtered,
             total_chars,
             retrieval_status: Some(status),
-        })
+            wiki_sections: Vec::new(),
+        };
+
+        // 用户知识库接线 (只读): 语料在场 ⇒ 命中节作为**附加**证据附在结果上。
+        //
+        // 缺省 (无 wiki_root / 目录不存在 / 无 .md) ⇒ 这段整段跳过, 结果与接线前一致。
+        //
+        // **只附加**: 不改 items、不改分数、不改排序、不改 total_candidates ——
+        // 命中节是结果级的旁证, 不是召回候选。
+        if let Some(root) = &self.wiki_root {
+            let ctx = crate::wiki_corpus::WikiContext::build(
+                root,
+                &query.query_text,
+                crate::wiki_corpus::WikiLimits::default(),
+            );
+            result.wiki_sections = ctx.sections;
+        }
+
+        Ok(result)
     }
 
     /// Persist turn writeback entry into Working and Episodic layers.
@@ -817,11 +983,21 @@ impl MemoryCoordinator {
         query: &MemoryRecallQuery,
     ) -> Option<SelectedMemoryAccess> {
         if self.injection_format {
-            self.compiler.compile_injection_with_selected_access(
-                recalled,
-                &query.session_id,
-                query.max_chars,
-            )
+            // ⚠️ **D-11（owner 2026-10-28 采纳）**：注入「**主体出现处为中心**」的窗口
+            // （单条 400 字），而不是「正文开头 120 字」。
+            //
+            // * **总消耗不变**：总量仍由 `query.max_chars` 控制
+            //   ⇒ ⇒ 只是**在同一预算内重新分配**；
+            // * 主体解析不出来 ⇒ 内部**退回开头截断**（**不注入空证据**）；
+            // * 实测：同 400 字预算下「挑对段」**0.4202** vs「随便给」**0.0819** ⇒ **5.1×**。
+            self.compiler
+                .compile_injection_with_selected_access_and_query(
+                    recalled,
+                    &query.session_id,
+                    query.max_chars,
+                    &query.query_text,
+                    crate::anchor_injection::AnchoredInjectionConfig::PRODUCTION,
+                )
         } else {
             self.compiler
                 .compile_with_selected_access(recalled, &query.session_id, query.max_chars)
@@ -1088,4 +1264,164 @@ where
             .expect("local runtime")
             .block_on(f),
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layers::MemoryLayerKind;
+
+    /// 检索会话 (固定 ⇒ 时间探针固定 ⇒ 结果可复现).
+    const SESSION: &str = "wiki-wiring-session";
+    /// 语料命中标记 (纯 ASCII ⇒ 任何分词口径下都是**整词**命中).
+    const MARKER: &str = "wikimarker";
+
+    /// 建一个**进程内**检索器 (零磁盘依赖 ⇒ 便于断言「结果不变」).
+    fn coordinator() -> MemoryCoordinator {
+        let store = Arc::new(crate::fresh_store());
+        let backend = store.clone();
+        let governance: Arc<dyn MemoryGovernanceStore> = store;
+        MemoryCoordinator::new(backend, governance)
+    }
+
+    /// 写一条**可被召回**的记忆 (id 与时间戳固定 ⇒ 两次召回逐字节可比).
+    fn seed_memory(coordinator: &MemoryCoordinator) {
+        coordinator
+            .writeback_episode(&Episode {
+                id: "ep-wiki-wiring-fixed".to_string(),
+                timestamp: 1_800_000_000,
+                role: "user".to_string(),
+                content: format!("用户知识库检索标记 {MARKER}"),
+                session_id: SESSION.to_string(),
+            })
+            .expect("writeback episode");
+    }
+
+    /// 已写好记忆的检索器.
+    fn seeded_coordinator() -> MemoryCoordinator {
+        let coordinator = coordinator();
+        seed_memory(&coordinator);
+        coordinator
+    }
+
+    fn recall(coordinator: &MemoryCoordinator) -> MemoryRecallResult {
+        let mut request = MemoryRecallQuery::new(SESSION, MARKER)
+            .with_layers(vec![MemoryLayerKind::Episodic])
+            .with_limit(5)
+            .with_as_of_ms(1_800_000_000_000);
+        // 下限归零: 本组用例关心的是**附加证据**, 不是打分阈值。
+        request.min_score = 0.0;
+        coordinator.recall(&request).expect("recall should succeed")
+    }
+
+    /// 临时语料根 (进程 id + 用例名 ⇒ 同进程内不撞名; 用完清掉).
+    fn temp_wiki_root(tag: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("apeireth-wiki-{tag}-{}", std::process::id()))
+    }
+
+    /// **不注入**语料根 ⇒ 结果里没有命中节 (缺省零变化的第一层)。
+    #[test]
+    fn recall_without_wiki_root_carries_no_wiki_section() {
+        let coordinator = coordinator();
+        seed_memory(&coordinator);
+        assert!(
+            coordinator.wiki_root().is_none(),
+            "缺省 = 检索路径没有语料根"
+        );
+
+        let recalled = recall(&coordinator);
+
+        assert!(
+            recalled.wiki_sections.is_empty(),
+            "未注入语料根 ⇒ 不得凭空长出命中节: {:?}",
+            recalled.wiki_sections
+        );
+        assert!(
+            !recalled.items.is_empty(),
+            "召回本身必须照常命中 (否则这条用例是空转)"
+        );
+    }
+
+    /// 注入**不存在的**目录 ⇒ 优雅降级: 结果与未注入**逐字节一致**，且不 panic。
+    #[test]
+    fn missing_wiki_directory_degrades_to_the_unchanged_recall() {
+        let plain = recall(&seeded_coordinator());
+
+        let missing = temp_wiki_root("missing").join("no-such-dir");
+        let degraded = recall(&seeded_coordinator().with_wiki_root(missing));
+
+        assert!(
+            degraded.wiki_sections.is_empty(),
+            "目录不存在 ⇒ 命中节为空: {:?}",
+            degraded.wiki_sections
+        );
+        assert_eq!(
+            serde_json::to_string(&plain).expect("serialize plain"),
+            serde_json::to_string(&degraded).expect("serialize degraded"),
+            "语料根读不到东西 ⇒ 召回结果逐字节不变"
+        );
+    }
+
+    /// 注入**在场**的语料根 ⇒ 命中节作为**附加**证据附在结果上 (不改条目)。
+    #[test]
+    fn wiki_corpus_sections_ride_along_as_additional_evidence() {
+        let root = temp_wiki_root("hit");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create wiki root");
+        std::fs::write(
+            root.join("knowledge.md"),
+            format!("# 项目背景 {MARKER}\n\n这是用户知识库语料的检索标记段落。\n"),
+        )
+        .expect("write wiki markdown");
+
+        let plain = recall(&seeded_coordinator());
+        let wired = recall(&seeded_coordinator().with_wiki_root(root.clone()));
+
+        assert!(!wired.wiki_sections.is_empty(), "语料在场 ⇒ 结果应带命中节");
+        let section = wired
+            .wiki_sections
+            .iter()
+            .find(|section| section.heading.contains("项目背景"))
+            .expect("应命中含中文标题的节");
+        assert!(
+            section.source_path.ends_with("knowledge.md"),
+            "出处应指向语料文件: {:?}",
+            section.source_path
+        );
+        assert!(
+            section.heading.contains(MARKER),
+            "标题应保留原文: {:?}",
+            section.heading
+        );
+        assert!(
+            section.text.contains("检索标记段落"),
+            "正文应带该节内容: {:?}",
+            section.text
+        );
+        assert_eq!(
+            serde_json::to_string(&plain.items).expect("serialize plain items"),
+            serde_json::to_string(&wired.items).expect("serialize wired items"),
+            "命中节是附加证据 ⇒ 不得改动召回条目"
+        );
+
+        std::fs::remove_dir_all(&root).expect("cleanup wiki root");
+    }
+}
+
+/// recency 的**时间差**（小时）。
+///
+/// # 两种口径（**关键**）
+///
+/// * **没有时间锚点** ⇒ `(now - ts).max(0)` ⇒ ⇒ **与接线前逐字一致**（**零行为变化**）
+///   ⇒ ⇒ 未来时间戳的记忆仍然拿 recency = 1.0（**保持原语义**）；
+/// * **有相对时间锚点**（「3年前」）⇒ `|reference - ts|`
+///   ⇒ ⇒ **到参照点的距离** ⇒ ⇒ 「3年前」能分出「3 年前」和「10 年前」
+///   ⇒ ⇒ ⚠️ **这是实测抓出来的缺陷**：`max(0)` 会让**所有比参照点更老**的记忆
+///   ⇒ ⇒ 拿到同一个 recency = 1.0 ⇒ ⇒ 锚点**只在「参照点与现在之间」有效**。
+fn recency_delta_hours(reference_ms: Option<i64>, now_ms: i64, timestamp_ms: i64) -> f64 {
+    let delta_ms = match reference_ms {
+        Some(reference) => (reference - timestamp_ms).abs(),
+        None => (now_ms - timestamp_ms).max(0),
+    };
+    delta_ms as f64 / (1000.0 * 3600.0)
 }

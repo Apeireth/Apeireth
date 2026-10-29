@@ -17,7 +17,7 @@
 #
 # 8 项不修改承诺 (同 install-deb.sh, 不重述):
 #   - 0 改 24 LOCKED, 0 改 workspace version, 0 引 NewAPI
-#   - 编译期 hardcode VERSION=1.0.0, BUCKET_REPO=apeireth/scoop-bucket
+#   - 版本从 workspace Cargo.toml 派生（APEIRETH_VERSION 可覆盖）, BUCKET_REPO=apeireth/scoop-bucket
 #   - 不重复造轮子: 调 packaging/scoop/apeireth.json, 不重写 manifest
 #
 # 用法 (PowerShell):
@@ -32,7 +32,13 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..\..
 
 $VERSION = $env:APEIRETH_VERSION
-if (-not $VERSION) { $VERSION = "1.0.0" }
+if (-not $VERSION) {
+    # 版本唯一真源: workspace Cargo.toml（不再硬编码，避免与其它安装脚本漂移）
+    $cargoToml = Get-Content -Raw -LiteralPath "Cargo.toml"
+    $match = [regex]::Match($cargoToml, '(?s)\[workspace\.package\].*?^version\s*=\s*"([^"]+)"', 'Multiline')
+    if ($match.Success) { $VERSION = $match.Groups[1].Value }
+}
+if (-not $VERSION) { Write-Error "无法从 Cargo.toml 读取 workspace.version（可显式设 APEIRETH_VERSION）"; exit 1 }
 $BUCKET_REPO = $env:APEIRETH_BUCKET_REPO
 if (-not $BUCKET_REPO) { $BUCKET_REPO = "apeireth/scoop-bucket" }
 

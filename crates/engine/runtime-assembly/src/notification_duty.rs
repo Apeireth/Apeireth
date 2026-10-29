@@ -106,7 +106,23 @@ pub fn assess_correction(
     fact_id: &str,
     severity: CorrectionSeverity,
 ) -> Option<ImpactNotification> {
-    let statements = ledger.actions_referencing(fact_id);
+    assess_correction_from(&ledger.actions_referencing(fact_id), fact_id, severity)
+}
+
+/// 与 [`assess_correction`] 同语义，但直接吃**已读出的语句切片**。
+///
+/// # 为什么需要这个入口
+///
+/// 调用方（`apeireth egress notify`）必须先把 **consequence 账**叠加到语句上
+/// （后果可能已被回填为 `confirmed`/`failed`），再据此生成补救建议 ——
+/// 否则建议会基于**过期状态**给出错误指引（例如已知 `failed` 还建议
+/// 「先确认这些行动的结果」）。`assess_correction` 只接受 ledger、拿不到
+/// 叠加后的视图，故拆出本函数作为真源，旧入口委托它（行为不变）。
+pub fn assess_correction_from(
+    statements: &[ImpactStatement],
+    fact_id: &str,
+    severity: CorrectionSeverity,
+) -> Option<ImpactNotification> {
     if statements.is_empty() {
         // 纪律 ②：没被引用过 ⇒ 不打扰。
         return None;

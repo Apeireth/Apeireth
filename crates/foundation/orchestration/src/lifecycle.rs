@@ -39,7 +39,7 @@
 //! | `Retired` | `revive` | `Trial`，清墓碑 | 唯一复活路径；`use_count` 不重置 |
 //! | 任意未退役 | 显式 `retire(reason)` | `Retired(reason)` + 墓碑 | 显式操作可提前于冷静期执行 |
 //!
-//! # IMPLEMENTED（未接线）
+//! # IMPLEMENTED；装配面已接（默认关，2026-10-25 核对）：生产经 `NervousSwitchboard::BioSwitch::Lifecycle` 构造观测模块、状态句柄供自述 SG-18 格迟绑定；9 开关默认全关。
 //!
 //! 本模块是机制内核 v0：类型、迁移、固定容量、确定性顺序与单元测试齐备，落
 //! **IMPLEMENTED** 级；**未接工具注册表 / 技能目录 / 记忆清理 / `self_status` 自述节，

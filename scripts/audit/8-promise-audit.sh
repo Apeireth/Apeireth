@@ -87,6 +87,15 @@ echo ""
 
 # ---------- 1. 不假装已实现 ----------
 echo "[1/8] 不假装已实现 (skeleton / unimplemented!() / warn! skeleton)"
+# 判据修正 (2026-10-25): 原逻辑要求标记数 **> 50 才 PASS** —— 代码越干净越 FAIL，
+# 是**反向激励**。承诺「不假装已实现」的真实语义是：**生产代码里没有伪实现**。
+# 现改为：统计「非注释行的 unimplemented!()/todo!()」必须为 0；
+# 诚实标记（skeleton/⏳ 文案）只作信息量报告，不作为通过条件。
+FAKE_IMPL_LIST=$(grep -rnE "unimplemented!\(\)|todo!\(\)" crates/ --include="*.rs" 2>/dev/null \
+    | grep -vE ":[0-9]+:[[:space:]]*//" || true)   # 去掉注释行（`|| true`: 无命中时 grep 退出 1）
+FAKE_IMPL=$(printf '%s\n' "${FAKE_IMPL_LIST}" | grep -c '[^[:space:]]' || true)
+FAKE_IMPL=$(printf '%s' "${FAKE_IMPL}" | tr -cd '0-9')
+FAKE_IMPL=${FAKE_IMPL:-0}
 SKEL_TOTAL=$(grep -rE "TODO|unimplemented!\(\)|^\s*//.*skeleton|warn!.*skeleton" \
     crates/ --include="*.rs" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 SKEL_BREAKDOWN=""
@@ -96,12 +105,12 @@ for c in "${SKELETON_CRATES[@]}"; do
     SKEL_BREAKDOWN="${SKEL_BREAKDOWN} ${c}=${n}"
 done
 echo "  命中: ${SKEL_TOTAL} 处 (skeleton 9 crate:${SKEL_BREAKDOWN})"
-if [ "$SKEL_TOTAL" -gt 50 ]; then
+if [ "$FAKE_IMPL" -eq 0 ]; then
     PASS=$((PASS+1))
-    RESULTS+=("PASS  [1/8] 不假装已实现: ${SKEL_TOTAL} 处 skeleton 警告")
+    RESULTS+=("PASS  [1/8] 不假装已实现: 生产代码 0 处伪实现 (诚实标记 ${SKEL_TOTAL} 处, 仅报告)")
 else
     FAIL=$((FAIL+1))
-    RESULTS+=("FAIL  [1/8] 不假装已实现: 仅 ${SKEL_TOTAL} 处 (< 50 阈值)")
+    RESULTS+=("FAIL  [1/8] 不假装已实现: 生产代码 ${FAKE_IMPL} 处 pseudo-impl (unimplemented!/todo!)")
 fi
 echo ""
 
@@ -195,9 +204,15 @@ echo ""
 # ---------- 7. 不重复造轮子 ----------
 echo "[7/8] 不重复造轮子 (复用 std/tokio/业界标准, 例外: machine-id 4 平台系统命令)"
 # 例外: apeireth-machine-id 允许 wmic/ioreg/dmesg/systemd-machine-id-setup (R17 决策)
-WHEEL_TOTAL=$(grep -rE "wmic|ioreg|dmesg" crates/ --include="*.rs" 2>/dev/null | wc -l | tr -d ' ')
-WHEEL_EXCL_MACHINEID=$(grep -rE "wmic|ioreg|dmesg" crates/ \
-    --include="*.rs" --exclude-dir=apeireth-machine-id 2>/dev/null | wc -l | tr -d ' ')
+# 判据修正 (2026-10-25): 原逻辑 grep 所有 "wmic|ioreg|dmesg" **字样**并按目录名
+# `apeireth-machine-id` 排除 —— 但 machine-id 已迁到 `engine/storage/src/machine_id.rs`
+# （且改为**纯解析**，不再起子进程）⇒ 注释/测试夹具/安全黑名单里的字样全被误算成违规。
+# 承诺「不重复造轮子」的真实语义 = **不为这些平台信息去 spawn 系统命令**，故只统计
+# 真正的子进程调用 `Command::new("<cmd>")`，并允许 machine-id 实现的合法例外。
+WHEEL_TOTAL=$(grep -rnE 'Command::new\("(wmic|ioreg|dmesg)"\)' crates/ --include="*.rs" 2>/dev/null | wc -l | tr -d ' ')
+WHEEL_EXCL_MACHINEID=$(grep -rnE 'Command::new\("(wmic|ioreg|dmesg)"\)' crates/ \
+    --include="*.rs" 2>/dev/null \
+    | grep -vE "engine/storage/src/machine_id\.rs" | wc -l | tr -d ' ')
 echo "  命中: ${WHEEL_TOTAL} 处 (machine-id 4 平台: $((WHEEL_TOTAL - WHEEL_EXCL_MACHINEID)) 处, 其他 crate: ${WHEEL_EXCL_MACHINEID} 处)"
 if [ "$WHEEL_EXCL_MACHINEID" -eq 0 ]; then
     PASS=$((PASS+1))

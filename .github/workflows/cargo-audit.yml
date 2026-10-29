@@ -73,17 +73,67 @@ jobs:
         # 0 直接业务依赖、0 known vulnerability、无安全升级路径; 三处同步 ignore。
         # 复核日 2026-10-18; 条目变 unmatched 即删。
         run: |
+          set +e
           cargo audit --json --deny warnings \
             --ignore RUSTSEC-2024-0436 \
             --ignore RUSTSEC-2026-0370 \
             --ignore RUSTSEC-2026-0371 \
             --ignore RUSTSEC-2026-0372 \
+            --ignore RUSTSEC-2026-0338 \
+            --ignore RUSTSEC-2026-0339 \
+            --ignore RUSTSEC-2026-0340 \
+            --ignore RUSTSEC-2026-0341 \
+            --ignore RUSTSEC-2026-0342 \
             > audit-report.json
+          audit_status=$?
+          set -e
+          echo "cargo audit 退出码: $audit_status"
+          echo "AUDIT_STATUS=$audit_status" >> "$GITHUB_ENV"
+          # 报告已落盘（下一步转 SARIF + 上传），**判定交给下一步** ⇒ 红灯也必带证据。
+          exit 0
           # 2026-10-23 修「绿灯骗人」: 原 `|| echo ...` 把 cargo audit 的非零退出吞掉,
           # 整条 workflow 恒为绿。审计发现即应让作业失败; 报告已先落盘, 上传步骤
           # 用 if: always() 保证失败时也留证据 (见下两步)。
+          #
+          # 2026-10-25 修「红灯也骗人」（本 workflow 首次真红时暴露）:
+          # 审计失败 ⇒ cargo audit 非零退出 ⇒ **本步直接中止** ⇒ 后续
+          # 「Convert JSON report to SARIF」**根本没跑** ⇒ `audit-report.sarif`
+          # 从未生成 ⇒ 「Upload SARIF to Code Scanning」报
+          # `Path does not exist: audit-report.sarif` ⇒ **真实原因（哪几条 advisory）
+          # 被掩盖**，只看日志会以为是上传问题。
+          # 修法：**捕获退出码但不让本步失败**（报告一定落盘），
+          # 由紧随其后的「审计判定」步骤**显式**按退出码判红。
+          # ⇒ 红灯时必带证据，且证据里就是 advisory 明细。
+
+      - name: 审计判定（按 cargo audit 退出码判红/绿）
+        # 2026-10-25：把「判红」从 cargo audit 步骤挪到这里 ⇒
+        #   ① 报告一定落盘（红灯也带证据）；
+        #   ② 判红理由明确（不是「文件不存在」这种误导性报错）。
+        if: always()
+        run: |
+          if [ "${AUDIT_STATUS:-1}" != "0" ]; then
+            echo "::error::cargo audit 退出码 ${AUDIT_STATUS} —— 详见 audit-report.json / SARIF"
+            python3 - <<'PYEOF'
+          import json, os
+          try:
+              with open("audit-report.json") as f:
+                  data = json.load(f)
+          except Exception as error:  # 报告本身坏掉也要说清
+              print(f"::error::无法读取 audit-report.json: {error}")
+              raise SystemExit(1)
+          vulns = (data.get("vulnerabilities") or {}).get("list") or []
+          print(f"::error::命中 {len(vulns)} 条 advisory:")
+          for item in vulns:
+              advisory = item.get("advisory") or {}
+              package = item.get("package") or {}
+              print(f"::error::  {advisory.get('id')} {package.get('name')} {package.get('version')} — {advisory.get('title','')}")
+          raise SystemExit(1)
+          PYEOF
+          fi
+          echo "cargo audit: 0 未忽略 advisory"
 
       - name: Convert JSON report to SARIF (R66)
+        if: always()
         # 语义对齐 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
         # 0 引新 dep; 走 python3 (GitHub Actions ubuntu-latest 默认带).
         # CI fix 2026-09: cargo-audit 0.22 的 JSON 里 vulnerabilities.found 是布尔值

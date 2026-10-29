@@ -101,6 +101,44 @@ impl CapabilitySafetyRegistry {
             .insert(descriptor.capability_id.clone(), descriptor);
     }
 
+    /// 全部已登记描述符（按 capability id 升序）。
+    ///
+    /// 供**派生下游策略**用（例：并行派发的并发安全白名单只认“可证明只读”的能力）。
+    /// 返回借用切片，不克隆 —— 调用方不该改注册表内容。
+    pub fn descriptors(&self) -> impl Iterator<Item = &CapabilitySafetyDescriptor> {
+        self.descriptors.values()
+    }
+
+    /// 「可证明只读」判据：无持久化效果、无破坏性、无外部副作用、不联网、
+    /// 且运行类只有 `Read` / `Compute`（不含任何写/改/删/执行类）。
+    ///
+    /// **保守**：`known == false`（未知能力）一律返回 `false` —— 未知不等于安全。
+    pub fn is_provably_read_only(&self, capability_id: &str) -> bool {
+        let Some(descriptor) = self.descriptors.get(capability_id) else {
+            return false;
+        };
+        if !descriptor.known
+            || descriptor.persistent_effect
+            || descriptor.destructive
+            || descriptor.external_effect
+            || descriptor.requires_network
+        {
+            return false;
+        }
+        !descriptor.operation_classes.iter().any(|operation| {
+            matches!(
+                operation,
+                OperationClass::Write
+                    | OperationClass::Modify
+                    | OperationClass::Delete
+                    | OperationClass::Execute
+                    | OperationClass::CredentialRead
+                    | OperationClass::CredentialWrite
+                    | OperationClass::Unknown
+            )
+        })
+    }
+
     pub fn descriptor_for(
         &self,
         capability_id: &str,
@@ -409,6 +447,81 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
     vec![
         describe(
             "fs.read",
+            vec![OperationClass::Read],
+            vec![ResourceClass::FilesystemWorkspace],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
+        ),
+        // === 只读工具面（2026-10-25 补登记）===
+        //
+        // 此前这些**真实在生产的**只读工具在安全注册表里是 `unknown` ——
+        // 后果：①守卫对它们只能走保守兜底；②并行派发无法从元数据派生
+        // 「可证明只读」白名单（只能拍脑袋列名字）。补登记后单一真源成立。
+        describe(
+            "tool.repo",
+            vec![OperationClass::Read],
+            vec![
+                ResourceClass::Repository,
+                ResourceClass::FilesystemWorkspace,
+            ],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
+        ),
+        describe(
+            "tool.repo_map",
+            vec![OperationClass::Read],
+            vec![
+                ResourceClass::Repository,
+                ResourceClass::FilesystemWorkspace,
+            ],
+            vec![SourceClass::WorkspaceFile],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "workspace",
+        ),
+        describe(
+            "tool.self_status",
+            vec![OperationClass::Read],
+            vec![ResourceClass::RuntimePolicy],
+            // 读运行时自述（进程内派生值），非私密原文。
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "runtime",
+        ),
+        describe(
+            "tool.trait_report",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemorySemantic],
+            // 读的是**成长计数器**（派生聚合值），不是私有记忆内容。
+            // 用 PrivateMemory 会让 FastGuard 判到 0.40 风险（RequireApproval）——
+            // 那是「读私密原文」的风险档，与读聚合计数不符（实测见 trait_cli 契约测试）。
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "memory",
+        ),
+        describe(
+            "tool.search",
             vec![OperationClass::Read],
             vec![ResourceClass::FilesystemWorkspace],
             vec![SourceClass::WorkspaceFile],

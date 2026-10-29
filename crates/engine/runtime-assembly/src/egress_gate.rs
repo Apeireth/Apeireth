@@ -16,6 +16,7 @@
 //! 脱敏会改写请求内容 —— 那是**行为变化**，不是「更安全的默认值」。
 //! 因此闸由 env 显式开启（`APEIRETH_ENABLE_EGRESS_GATE`），关时逐字节零变化。
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::Clock;
@@ -45,6 +46,13 @@ pub const EGRESS_USAGE_CHAT: &str = "chat";
 /// 线程安全：`RedactionBridge` 内部有本会话登记簿（真值驻留处），用互斥量串行化。
 pub struct RedactionEgressGate {
     bridge: Mutex<RedactionBridge>,
+    /// **出网动作序号**（单调递增）：与毫秒时间戳一起组成 `action_id`。
+    ///
+    /// 修「同毫秒两次出网 ⇒ 同 `action_id`」的碰撞（2026-10-25 实测发现）：
+    /// 毫秒级 id 在同毫秒内产生两条影响声明时会**共用一个 id** ⇒ 破坏「一次
+    /// 行动 ↔ 一条影响声明」的 1:1 不变式（后果回填的绑定账会因此拒绑第二侧）。
+    /// 加序号后 id 恒唯一（进程内单调）。
+    action_seq: AtomicU64,
     /// 出域账本（承诺措辞里「记录已知流向」的载体；零真值、append-only）。
     ledger: Arc<EgressLedger>,
     /// 授权策略对象（可携带/可委托/可过期/可追溯）。
@@ -75,6 +83,7 @@ impl RedactionEgressGate {
     pub fn with_session_key(session_key: [u8; 32]) -> Self {
         Self {
             bridge: Mutex::new(RedactionBridge::with_session_key(session_key)),
+            action_seq: AtomicU64::new(0),
             ledger: Arc::new(EgressLedger::new(None)),
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
@@ -87,6 +96,7 @@ impl RedactionEgressGate {
     pub fn with_ledger(ledger: Arc<EgressLedger>) -> Self {
         Self {
             bridge: Mutex::new(RedactionBridge::new_session()),
+            action_seq: AtomicU64::new(0),
             ledger,
             authorization: None,
             clock: Arc::new(apeireth_core::kernel::SystemClock),
@@ -117,6 +127,13 @@ impl RedactionEgressGate {
         clock: Arc<dyn Clock>,
     ) -> Self {
         self.authorization = Some(Arc::new(policy));
+        self.clock = clock;
+        self
+    }
+
+    /// 注入时钟（判定过期与 `action_id` 时间戳用；默认系统时钟）。
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
         self.clock = clock;
         self
     }
@@ -172,7 +189,9 @@ impl RedactionEgressGate {
     /// （那要等上下文装配面接上来）。**空 = 如实没有**，不编。
     fn declare_impact(&self, destination: &str, _redacted: bool) {
         let now_ms = self.clock.now().timestamp_millis();
-        let action_id = format!("act-{now_ms}");
+        // 序号入 id ⇒ 同毫秒多次出网也不撞 id（1:1 不变式的前提）。
+        let seq = self.action_seq.fetch_add(1, Ordering::SeqCst);
+        let action_id = format!("act-{now_ms}-{seq}");
         // 后果初始状态 = `unknown`（**显式**，不假装知道）。
         // 模型侧发生了什么我们观测不到 —— 设计文档 §2.3 的最小实现就是这一档。
         // **独立于影响声明**：没挂问责账本时也要记后果。
@@ -291,6 +310,28 @@ impl EgressGate for RedactionEgressGate {
     }
 }
 
+/// 闸 env 的**生效判定**（值语义；不含 env 读取）。
+///
+/// 未设 / 空 / `"0"` / `"false"`（大小写不敏感）= **关**；其余（`"1"` 或授权策略
+/// JSON）= **开**。
+///
+/// 装配根（模块表）与闸工厂**共用这一条判据** —— 两边各判一次必然漂移。
+pub fn egress_gate_enabled_from_value(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    !(trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false"))
+}
+
+/// 闸 env 是否**开启**（读 env；未设 = 关）。
+///
+/// 问责闭环第 ③ 步的**自动回填面**与问责面共用这一个开关：
+/// 开闸 = 装影响声明 + 后果账 + 自动回填；关闸 = 一样都不装（零注册）。
+pub fn egress_gate_enabled_from_env() -> bool {
+    match std::env::var(EGRESS_GATE_ENV) {
+        Ok(raw) => egress_gate_enabled_from_value(&raw),
+        Err(_) => false,
+    }
+}
+
 /// 按 env 决定是否装配闸。**两种形态**（不新增第二个开关 —— env 名数有棘轮）：
 ///
 /// - 未设 / 其它值 → `None`（runtime 侧默认放行，零行为变化）；
@@ -335,7 +376,8 @@ pub fn egress_gate_from_env_with_all(
 ) -> Option<std::sync::Arc<dyn EgressGate>> {
     let raw = std::env::var(EGRESS_GATE_ENV).ok()?;
     let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("false") {
+    // 生效判据与装配根共用（`egress_gate_enabled_from_value`）。
+    if !egress_gate_enabled_from_value(&raw) {
         return None;
     }
     let ledger = Arc::new(EgressLedger::new(ledger_path));
@@ -390,6 +432,28 @@ mod tests {
                 name: None,
             }],
         )
+    }
+
+    #[test]
+    fn same_millisecond_egresses_get_distinct_action_ids() {
+        // 同毫秒两次出网 ⇒ 两条影响声明必须**不同 id**（1:1 不变式的前提）。
+        // 修前 id = `act-{now_ms}` ⇒ 同毫秒撞 id（后果回填绑定账会拒绑第二侧）。
+        let dir = tempfile::tempdir().expect("temp dir");
+        let ledger = Arc::new(AccountabilityLedger::new(Some(
+            dir.path().join("impact.jsonl"),
+        )));
+        let gate = RedactionEgressGate::new()
+            .with_accountability(Arc::clone(&ledger))
+            .with_clock(Arc::new(FixedClock(1_700_000_000_000)));
+        let request = request_with("今天天气不错");
+        assert!(matches!(gate.vet(&request), EgressVerdict::Pass));
+        assert!(matches!(gate.vet(&request), EgressVerdict::Pass));
+        let statements = ledger.statements();
+        assert_eq!(statements.len(), 2, "两次出网 ⇒ 两条影响声明");
+        assert_ne!(
+            statements[0].action_id, statements[1].action_id,
+            "同毫秒两次出网不得共用 action_id"
+        );
     }
 
     #[test]

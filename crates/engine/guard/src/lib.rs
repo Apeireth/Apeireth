@@ -10,6 +10,8 @@ pub mod chain;
 pub mod chain_guard;
 pub mod classifier;
 pub mod command_effect;
+// 收容执行面（W-37 / 审计 P0-1）：护栏**只产**收容指令，执行方（CLI/runtime）**消费**它。
+pub mod containment;
 pub mod dataset;
 pub mod decision;
 pub mod enforcement;
@@ -51,6 +53,9 @@ pub use intent::{
     constrain_to_trusted, AlignmentAssessment, AlignmentClass, IntentAlignmentGuard, IntentInput,
     IntentInterpreter, NegationAwareOperationExtractor, OperationPolarity, RuleIntentInterpreter,
 };
+pub mod decision_log;
+pub use decision_log::{risk_label_for_score, GuardDecisionLog, GUARD_DECISION_LOG_FILE};
+
 pub use introspection::{GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto};
 pub use observation::{DataSensitivity, ResourceClass, SafetyObservation, SinkClass, SourceClass};
 pub use oracle::{ActionOracleLabel, ScenarioOracle, SecurityScenarioOracle};

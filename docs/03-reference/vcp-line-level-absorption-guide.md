@@ -175,7 +175,7 @@ $$\Omega = \left( \Omega_{\text{edge}} \cdot \Omega_{\text{emerge}} \cdot \Omega
 - **Dense 态** ($\Omega \ge 0.45$)：全拓扑涌现，全量激活 DTSC 相对几何重排。
 
 #### 4. Apeireth 2.0 Safe Rust 结构设计
-在 `crates/engine/memory/src/tagmemo_v10.rs` 中：
+在 `crates/engine/memory/src/river_topology.rs` 中（原 `tagmemo_v10.rs` 已更名/重组）：
 ```rust
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DtscObservables {

@@ -71,7 +71,7 @@ SCRIPT_NAME="$(basename "$0")"
 # ⚠️ 历史脚本（v1 时代升级路径）：POSTGRES/APEIRETH_DB_URL 为 v1 口径，当前基线用 SQLite。
 # 路径配置 (install 守门)
 SQLITE_PATH="${APEIRETH_SQLITE_PATH:-/var/lib/apeireth/data/sessions.db}"
-POSTGRES_URL="${APEIRETH_DB_URL:-postgresql://apeireth:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (no weak default)}@localhost:5432/apeireth}"
+POSTGRES_URL="${APEIRETH_DB_URL:-}"   # 惰性: v1 迁移凭据只在非 dry-run 时要求 (见下方校验)
 CONFIG_PATH="${APEIRETH_CONFIG_PATH:-/etc/apeireth/config.toml}"
 BACKUP_DIR="${APEIRETH_BACKUP_DIR:-/var/backups/apeireth/upgrade-${TIMESTAMP}}"
 SERVICE_NAME="${APEIRETH_SERVICE_NAME:-apeireth}"
@@ -93,6 +93,8 @@ DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
 fi
+
+
 
 # ===================== 工具函数 =====================
 log_step() {
@@ -132,6 +134,21 @@ run_cmd() {
     "$@"
   fi
 }
+
+# v1 PostgreSQL 连接串：**只在非 dry-run 时要求凭据**。
+# 此前该变量在配置期用 `${POSTGRES_PASSWORD:?}` 展开 ⇒ dry-run 还没跑到
+# dry-run 分支就以「缺少密钥」exit 1（真机实测 2026-10-25）——
+# 而 release 清单第 5 项声称「upgrade dry-run 0 错」，CI 又用 `|| true` 吞掉错误
+# ⇒ 这一项其实是**假绿**。现在 dry-run 不需要任何密钥。
+if [[ -z "${POSTGRES_URL}" ]]; then
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    POSTGRES_URL="postgresql://apeireth:<DRY-RUN 不校验凭据>@localhost:5432/apeireth"
+    log_info "[DRY-RUN] 未设 APEIRETH_DB_URL/POSTGRES_PASSWORD：dry-run 不校验 v1 PostgreSQL 连接"
+  else
+    : "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (no weak default) or APEIRETH_DB_URL}"
+    POSTGRES_URL="postgresql://apeireth:${POSTGRES_PASSWORD}@localhost:5432/apeireth"
+  fi
+fi
 
 # 清理临时目录 (per O-5 不假装, 0 残留)
 cleanup() {

@@ -231,7 +231,7 @@ flowchart LR
 ---
 
 ### 模块 5：因果世界模型分支快照与 SAGA 逆向补偿 (`causal_world_model.rs`)
-- **目标路径**：`crates/engine/runtime/src/canonical/causal_world_model.rs`
+- **目标路径**：`crates/engine/runtime-assembly/src/canonical/causal_world_model.rs`
 - **机制**：动作前 Copy-On-Write 假说分支推演（State Fork），动作失败 100% 自动撤销；外部现实调用强制绑定 SAGA 逆向补偿算子 $\mathcal{T} = \langle A_i, A_i^{-1} \rangle$。
 - **核心 Trait**：
   ```rust

@@ -4,7 +4,9 @@
 //! module does not run advisors, does not own a loop, and is not wired into
 //! the canonical pipeline. It scores already-collected stances:
 //!
-//! * weighted synthesis (`score × confidence × weight`, clamped to [-1, 1])
+//! * weighted synthesis (`Σ(score × weight × confidence) / Σ(weight × confidence)`,
+//!   clamped to [-1, 1]) —— **影响力口径**（owner 裁定 D-8）：票的总权重 =
+//!   域权重 × 置信度，分子分母同权 ⇒ 标准加权平均
 //! * stance mapping at ±0.6 / ±0.2
 //! * hold triggers: ≥30% strong-disapprove, unanimous non-abstain disapprove,
 //!   optional 60s timeout
@@ -118,8 +120,29 @@ pub struct Ballot {
     pub advisor_id: String,
     pub stance: StanceKind,
     pub confidence: f64,
+    /// D-2：置信度是否为「兜底值」而非顾问显式给出。
+    ///
+    /// `true` = 顾问没给置信度，这个值是映射层兜底/从质量分折算来的
+    /// （消费者据此如实标注「此置信度非显式」）；`false` = 顾问显式给出。
+    ///
+    /// `#[serde(default)]` ⇒ 旧 JSON（没有这个键）读出来是 `false`，
+    /// 与「显式给出」的旧语义保持一致。
+    #[serde(default)]
+    pub confidence_defaulted: bool,
     pub weight: f64,
     pub domain: Option<AdvisorDomain>,
+}
+
+/// Clamp a confidence-like value into `0.0..=1.0`.
+///
+/// `f64::clamp` keeps NaN as NaN (NaN 比较恒为 false)，这里显式把 NaN 挡掉
+/// ⇒ 落到 `0.0`，避免 NaN 置信度污染下游加权分。
+fn clamp_confidence(value: f64) -> f64 {
+    if value.is_nan() {
+        0.0
+    } else {
+        value.clamp(0.0, 1.0)
+    }
 }
 
 impl Ballot {
@@ -133,8 +156,40 @@ impl Ballot {
             advisor_id: advisor_id.into(),
             stance,
             confidence: confidence.clamp(0.0, 1.0),
+            confidence_defaulted: false,
             weight,
             domain: None,
+        }
+    }
+
+    /// D-2 映射口径：从「顾问给的一条评价」折算成一张票。
+    ///
+    /// * `confidence`：`Some(c)` = 顾问**显式**给的置信度（原样取用，clamp 0..=1）；
+    ///   `None` = 顾问没给 ⇒ 用 `fallback_confidence`（映射层折算出的质量分），
+    ///   并把 `confidence_defaulted` 置 `true`。
+    /// * `weight`：调用方给的权重（映射层会传「现有顾问注册权重」）。
+    /// * `domain`：记下这张票来自哪个顾问域（`domain` 字段同时可用于
+    ///   `effective_weight()` 的兜底）。
+    pub fn from_advice(
+        advisor_id: impl Into<String>,
+        stance: StanceKind,
+        confidence: Option<f64>,
+        fallback_confidence: f64,
+        weight: f64,
+        domain: AdvisorDomain,
+    ) -> Self {
+        let confidence_defaulted = confidence.is_none();
+        let confidence = match confidence {
+            Some(explicit) => clamp_confidence(explicit),
+            None => clamp_confidence(fallback_confidence),
+        };
+        Self {
+            advisor_id: advisor_id.into(),
+            stance,
+            confidence,
+            confidence_defaulted,
+            weight,
+            domain: Some(domain),
         }
     }
 
@@ -172,8 +227,18 @@ pub fn synthesize(ballots: &[Ballot]) -> SynthesisReport {
         if ballot.stance.is_abstain() {
             continue;
         }
-        let weight = ballot.effective_weight();
-        sum_weighted_score += ballot.stance.score() * ballot.confidence * weight;
+        // **影响力口径**（owner 裁定 D-8，2026-10-25）：票的总权重 = 域权重 × 置信度，
+        // 分子分母都用它 ⇒ 这是标准加权平均 `Σ(x·w) / Σ(w)`，分母真的是**权重和**。
+        //
+        // 旧口径（分子乘 confidence、分母不乘）有两个缺陷：
+        // ① `confidence = 0` 的票对结果**零发言权**，却把分母**全额占住**
+        //    ⇒ 等价于「负权重」（任何加权平均里都没有这种语义）；
+        // ② 分母不是权重和 ⇒ 公式自相矛盾，且低置信度的票会**单方面**把
+        //    别人的加权分往下压（把「我很没底」变成「把大家拉到中立」）。
+        // 想让整体更保守的正确旋钮是**域权重**（`AdvisorDomain::default_weight()`），
+        // 不是让 confidence 在公式里暗中做手脚。
+        let weight = ballot.effective_weight() * ballot.confidence;
+        sum_weighted_score += ballot.stance.score() * weight;
         sum_weight += weight;
         weighted.push(ballot);
     }
@@ -472,5 +537,215 @@ mod tests {
             &ballots,
             &report
         ));
+    }
+
+    // ---- D-2: council ballot 接线（from_advice 映射口径） ----
+
+    #[test]
+    fn from_advice_keeps_explicit_confidence_and_is_not_defaulted() {
+        let b = Ballot::from_advice(
+            "advisor-safety",
+            StanceKind::StrongApprove,
+            Some(0.82),
+            0.10,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(!b.confidence_defaulted, "显式给的置信度不能标成兜底值");
+        assert!((b.confidence - 0.82).abs() < 1e-9, "显式置信度原样取用");
+        assert_eq!(b.advisor_id, "advisor-safety");
+        assert_eq!(b.stance, StanceKind::StrongApprove);
+    }
+
+    #[test]
+    fn from_advice_falls_back_and_flags_defaulted() {
+        let b = Ballot::from_advice(
+            "advisor-history",
+            StanceKind::Approve,
+            None,
+            0.42,
+            0.55,
+            AdvisorDomain::History,
+        );
+        assert!(b.confidence_defaulted, "缺省置信度必须标成兜底值");
+        assert!(
+            (b.confidence - 0.42).abs() < 1e-9,
+            "缺省时取 fallback_confidence"
+        );
+    }
+
+    #[test]
+    fn from_advice_clamps_out_of_range_and_nan() {
+        let low = Ballot::from_advice(
+            "a",
+            StanceKind::Approve,
+            Some(-0.5),
+            0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (low.confidence - 0.0).abs() < 1e-9,
+            "显式 -0.5 应 clamp 到 0.0"
+        );
+
+        let high = Ballot::from_advice(
+            "b",
+            StanceKind::Approve,
+            Some(1.7),
+            0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (high.confidence - 1.0).abs() < 1e-9,
+            "显式 1.7 应 clamp 到 1.0"
+        );
+
+        let nan = Ballot::from_advice(
+            "c",
+            StanceKind::Approve,
+            Some(f64::NAN),
+            0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!((nan.confidence - 0.0).abs() < 1e-9, "NaN 置信度应落到 0.0");
+
+        // fallback 同样要 clamp / 挡 NaN
+        let low_fallback = Ballot::from_advice(
+            "d",
+            StanceKind::Approve,
+            None,
+            -0.5,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!((low_fallback.confidence - 0.0).abs() < 1e-9);
+        assert!(low_fallback.confidence_defaulted);
+
+        let high_fallback = Ballot::from_advice(
+            "e",
+            StanceKind::Approve,
+            None,
+            1.7,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!((high_fallback.confidence - 1.0).abs() < 1e-9);
+
+        let nan_fallback = Ballot::from_advice(
+            "f",
+            StanceKind::Approve,
+            None,
+            f64::NAN,
+            1.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (nan_fallback.confidence - 0.0).abs() < 1e-9,
+            "NaN fallback 应落到 0.0"
+        );
+        assert!(nan_fallback.confidence_defaulted);
+    }
+
+    #[test]
+    fn from_advice_records_domain_and_effective_weight_uses_domain_default() {
+        let b = Ballot::from_advice(
+            "advisor-history",
+            StanceKind::Approve,
+            Some(0.5),
+            0.5,
+            0.0,
+            AdvisorDomain::History,
+        );
+        assert_eq!(b.domain, Some(AdvisorDomain::History), "domain 必须被记下");
+        assert!(
+            (b.effective_weight() - AdvisorDomain::History.default_weight()).abs() < 1e-9,
+            "weight = 0 时 effective_weight 应回落到域默认权重"
+        );
+
+        let explicit = Ballot::from_advice(
+            "advisor-safety",
+            StanceKind::Approve,
+            Some(0.5),
+            0.5,
+            2.0,
+            AdvisorDomain::Safety,
+        );
+        assert!(
+            (explicit.effective_weight() - 2.0).abs() < 1e-9,
+            "weight > 0 时 effective_weight 用调用方给的权重"
+        );
+    }
+
+    #[test]
+    fn new_keeps_explicit_confidence_and_is_not_defaulted() {
+        let b = Ballot::new("advisor-safety", StanceKind::Approve, 0.7, 1.0);
+        assert!(!b.confidence_defaulted, "new 的置信度是调用方显式给的");
+        assert!((b.confidence - 0.7).abs() < 1e-9);
+        assert_eq!(b.domain, None);
+    }
+
+    #[test]
+    fn weighted_score_uses_influence_weighting() {
+        // **影响力口径**（owner 裁定 D-8，2026-10-25）：
+        // weighted_score = Σ(stance.score() × weight × confidence) / Σ(weight × confidence)
+        // ⇒ 票的总权重 = 域权重 × 置信度，**分子分母同权**（标准加权平均）。
+        //
+        // 旧口径（分子乘 confidence、分母不乘）已废：它让 `confidence = 0` 的票
+        // 「零发言权却全额占分母」= 负权重语义，并把别人的加权分往下压。
+        let ballots = vec![
+            Ballot::new("zero", StanceKind::StrongApprove, 0.0, 1.0),
+            Ballot::new("one", StanceKind::StrongApprove, 1.0, 1.0),
+        ];
+        let report = synthesize(&ballots);
+        // 总权重 = 1×0 + 1×1 = 1；分子 = 1.00×1 = 1.00 ⇒ 1.00
+        // （旧口径会给 0.5：零置信度票把整组拉到中立）
+        assert!(
+            (report.weighted_score - 1.0).abs() < 1e-9,
+            "confidence=0 的票等价于弃权，不该把别人的加权分压到 0.5: {}",
+            report.weighted_score
+        );
+        assert_eq!(report.aggregated_stance, StanceKind::StrongApprove);
+
+        // 等权同立场：总权重 = 0.25 + 0.75 = 1；分子 = 0.60×1 ⇒ 0.60
+        // （= stance.score()，置信度只影响**相对权重**，不改变同向同权时的结果）
+        let equal = vec![
+            Ballot::new("a", StanceKind::Approve, 0.25, 1.0),
+            Ballot::new("b", StanceKind::Approve, 0.75, 1.0),
+        ];
+        let equal_report = synthesize(&equal);
+        assert!(
+            (equal_report.weighted_score - 0.60).abs() < 1e-9,
+            "同向票的加权分应等于立场分（旧口径给 0.30）: {}",
+            equal_report.weighted_score
+        );
+
+        // 不等权 + 零置信度：总权重 = 3×1 + 1×0 = 3；分子 = 0.60×3 ⇒ 0.60
+        // （旧口径给 0.45：零置信度票仍全额占分母）
+        let uneven = vec![
+            Ballot::new("heavy", StanceKind::Approve, 1.0, 3.0),
+            Ballot::new("light", StanceKind::Approve, 0.0, 1.0),
+        ];
+        let uneven_report = synthesize(&uneven);
+        assert!(
+            (uneven_report.weighted_score - 0.60).abs() < 1e-9,
+            "零置信度票不应占分母（旧口径给 0.45）: {}",
+            uneven_report.weighted_score
+        );
+
+        // 反向票：低置信度的反对票**少说话**（不再把结果往中立拉）
+        let opposed = vec![
+            Ballot::new("yes", StanceKind::StrongApprove, 1.0, 1.0),
+            Ballot::new("no", StanceKind::StrongDisapprove, 0.2, 1.0),
+        ];
+        let opposed_report = synthesize(&opposed);
+        // 总权重 = 1 + 0.2 = 1.2；分子 = 1.00×1 + (-1.00)×0.2 = 0.80 ⇒ 0.667
+        assert!(
+            (opposed_report.weighted_score - (0.8 / 1.2)).abs() < 1e-9,
+            "低置信度的反对票按 0.2 的权重参与: {}",
+            opposed_report.weighted_score
+        );
     }
 }

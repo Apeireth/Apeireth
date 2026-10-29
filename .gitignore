@@ -352,10 +352,19 @@ research/praisonai-git/
 # Python 缓存（scripts/ 运行副产物，不入库；2026-10-20 效率线）
 __pycache__/
 *.pyc
-
+# 本地跑 scripts/audit/run-cargo-audit-deny.sh 生成的审计报告（CI 上作为 artifact 上传，不提交）
+reports/r20-cargo-audit-stdout-*.txt
+reports/r20-cargo-deny-stdout-*.txt
+# Guard ML 4 大可再生导出件（F-02 执行批已外置，见 scripts/guard_ml/README.md）；
+# 本地跑 export_guard_scenarios 会再生成，**不应入库**（曾因 git add -A 误提交 22MB）
+scripts/guard_ml/action_samples.jsonl
+scripts/guard_ml/generated_features.jsonl
+scripts/guard_ml/trace_samples.jsonl
+scripts/guard_ml/pair_samples.jsonl
+# guard 数据集清单（export_guard_scenarios 再生；CI 每次导出后读取，库内不存放）
+artifacts/guard-dataseton
 # 覆盖率测量产物（tarpaulin 输出，非源码）
 cobertura.xml
-
 # 覆盖率插桩产物（tarpaulin 的 .profraw）—— 构建产物, 0 必进 git。
 # 它们会被 tarpaulin 当作覆盖率数据 merge 进去, 污染测量。
 #

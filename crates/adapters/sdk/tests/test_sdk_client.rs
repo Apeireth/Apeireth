@@ -145,7 +145,7 @@ fn auth_pipeline_preflight_walks_5_components() {
         .expect("preflight should succeed");
     assert!(!p.audit.is_empty());
     let err = p.check_quota();
-    assert!(matches!(err, Err(SdkClientError::QuotaExceeded(_))));
+    assert!(matches!(err, Err(SdkClientError::NotImplemented(_))));
 }
 
 /// M5: AuthPipeline / ApeirethClient Debug 脱秘 (0 打印 api_key 明文).
@@ -272,7 +272,7 @@ fn auth_5_components_individual() {
 
     let q = QuotaStub::new();
     let err = q.check();
-    assert!(matches!(err, Err(SdkClientError::QuotaExceeded(_))));
+    assert!(matches!(err, Err(SdkClientError::NotImplemented(_))));
 }
 
 // =====================================================================
@@ -639,7 +639,7 @@ fn quota_stub_always_501() {
     let q = QuotaStub::new();
     for _ in 0..10 {
         let err = q.check();
-        assert!(matches!(err, Err(SdkClientError::QuotaExceeded(_))));
+        assert!(matches!(err, Err(SdkClientError::NotImplemented(_))));
     }
     // 默认构造 + 0 monthly_limit.
     assert_eq!(q.monthly_limit, 0);

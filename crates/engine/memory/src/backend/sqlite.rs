@@ -72,6 +72,17 @@ impl SqliteBackend {
     }
 }
 
+/// `MemoryError` → `StorageError`（memory 层错误在 storage 层没有一一对应的变体）。
+///
+/// **为什么不吞信息**：链失败必须能被上层看到「为什么失败」（schema 缺失 / SQL 失败 /
+/// 参数非法）⇒ 原样带过去，不做「转成一句通用错误」。
+fn map_memory_error(error: crate::MemoryError) -> apeireth_storage::StorageError {
+    match error {
+        crate::MemoryError::Sqlite(inner) => apeireth_storage::StorageError::Db(inner),
+        other => apeireth_storage::StorageError::Serialization(other.to_string()),
+    }
+}
+
 impl MemoryBackend for SqliteBackend {
     fn name(&self) -> &'static str {
         "sqlite"
@@ -92,28 +103,24 @@ impl MemoryBackend for SqliteBackend {
     }
 
     fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // RC-1 真 SQL impl: 走 pool.read() 短借用 connection. 单 backend 实例假设单
+        // RC-1 真 SQL impl: 走 pool.write_sync() 短借用 connection. 单 backend 实例假设单
         // logical writer (per backend doc). v2.0.0-rc 阶段切 `pool.write().await` +
         // trait async 重构 (per 子代理审查 1.1 反馈, 见 backend/mod.rs 文档).
         //
-        // continuity_id: 生产迁移 schema 要求 NOT NULL; 核心 Episode 无此字段,
-        // 以 session_id 派生 (episode 的主体 = 其会话), 0 装诚实并保持写入可见.
+        // **D0 哈希链接线 (B1-c)**: 本路径写的是权威层（D0）的原始证据 ⇒ 必须入链。
+        // 链摘要算不出来 / 落库失败 ⇒ **硬失败**（宁可拒写，不可无链写入：无链写入
+        // 等于缺口 G6 原地不动, 而调用方会以为数据受保护）。
+        //
+        // 链粒度 = subject（`continuity_id` 列）。本后端把 `continuity_id` 填成
+        // `session_id`（既有占位语义: 核心 `Episode` 无主体字段）⇒ 此路径上的
+        // 「主体」实际是会话；等主体口径落地后同一套链代码不用改。
         let ep = ep.clone();
         self.pool
             .write_sync(move |conn| {
-                conn.execute(
-                    "INSERT OR IGNORE INTO episodes (id, continuity_id, timestamp, role, content, session_id) \
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    rusqlite::params![
-                        ep.id,
-                        ep.session_id,
-                        ep.timestamp,
-                        ep.role,
-                        ep.content,
-                        ep.session_id
-                    ],
-                )?;
-                Ok(())
+                let entry = crate::memory_chain::ChainEntry::from_episode(&ep, None);
+                crate::memory_chain::put_chained_episode(conn, &ep.session_id, &entry)
+                    .map(|_| ())
+                    .map_err(map_memory_error)
             })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
@@ -503,7 +510,16 @@ mod tests {
                     timestamp INTEGER NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
-                    session_id TEXT NOT NULL
+                    session_id TEXT NOT NULL,
+                    chain_hash TEXT,
+                    chain_prev_hash TEXT
+                );
+                -- D0 哈希链（B1-c）: 每个 subject 一条独立链, 链头落本表.
+                CREATE TABLE IF NOT EXISTS memory_chain_heads (
+                    subject_id TEXT PRIMARY KEY,
+                    last_hash TEXT NOT NULL,
+                    entry_count INTEGER NOT NULL DEFAULT 0,
+                    updated_at_ms INTEGER NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS episode_governance (
                     episode_id TEXT PRIMARY KEY,

@@ -344,6 +344,8 @@ struct GuardCounters {
     total_allowed: u64,
     total_denied: u64,
     total_approval_required: u64,
+    /// 判定落盘写失败次数（写完要能被看见 —— 审计面坏了不能静默）。
+    decision_log_write_failures: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -400,6 +402,8 @@ pub struct BehaviorChainGuardHook {
     /// 直接 `chains.keys().next()` (`HashMap` 任意键序), 注释说的顺序驱逐
     /// 并未成立。
     chain_order: Mutex<VecDeque<(SessionId, String)>>,
+    /// **会话 LRU**（插入顺序 ⇒ 队首最久未用）⇒ ⇒ 驱动会话态裁剪。
+    session_order: crate::hook::session_state::SessionStateRegistry,
     dataset_recorder: Option<Arc<DatasetRecorder>>,
     classifier: Arc<dyn ChainRiskClassifier>,
     safety_provider: Arc<dyn CapabilitySafetyMetadataProvider>,
@@ -409,6 +413,11 @@ pub struct BehaviorChainGuardHook {
     immune_memory: Option<SharedImmuneMemory>,
     /// 每个 `(session, trace)` 最近一次的免疫信号，供可观测 / 测试取回。
     last_immune_signals: Mutex<HashMap<(SessionId, String), ImmuneSignal>>,
+    /// 判定 append-only 落盘面（默认 `None` = 不落盘，零行为变化）。
+    ///
+    /// **只记录、不决策**：写盘失败绝不改变本次判定（计入
+    /// `decision_log_write_failures`，可通过自述面看见）。
+    decision_log: Option<Arc<crate::decision_log::GuardDecisionLog>>,
 }
 
 impl Default for BehaviorChainGuardHook {
@@ -431,6 +440,7 @@ impl BehaviorChainGuardHook {
             turn_intents: Mutex::new(HashMap::new()),
             last_snapshots: crate::snapshot_store::SnapshotStore::new(),
             chain_order: Mutex::new(VecDeque::new()),
+            session_order: crate::hook::session_state::SessionStateRegistry::default(),
             dataset_recorder: None,
             classifier: Arc::new(NoClassifier),
             safety_provider: Arc::new(CapabilitySafetyRegistry::canonical()),
@@ -438,7 +448,30 @@ impl BehaviorChainGuardHook {
             counters: Mutex::new(GuardCounters::default()),
             immune_memory: None,
             last_immune_signals: Mutex::new(HashMap::new()),
+            decision_log: None,
         }
+    }
+
+    /// 挂载判定落盘面（append-only JSONL）。
+    ///
+    /// 不挂 = 不落盘（零行为变化，与接线前逐字节一致）。
+    /// 挂上后每次判定额外追加一行 `GuardEventDto` —— **写盘失败只计数，不改变判定**。
+    #[must_use]
+    pub fn with_decision_log(mut self, log: Arc<crate::decision_log::GuardDecisionLog>) -> Self {
+        self.decision_log = Some(log);
+        self
+    }
+
+    /// 判定落盘面是否已挂载。
+    pub fn decision_log_enabled(&self) -> bool {
+        self.decision_log.is_some()
+    }
+
+    /// 判定落盘写失败次数（未挂载时恒 0）。
+    ///
+    /// 单独暴露：审计面坏了要能被告状，而不是让「账是空的」看起来像「没判定发生过」。
+    pub fn decision_log_write_failures(&self) -> u64 {
+        self.counters.lock().decision_log_write_failures
     }
 
     /// 挂载免疫记忆（默认关）。
@@ -666,6 +699,8 @@ impl BehaviorChainGuardHook {
         // 特征快照同样按会话持有 —— 不清的话，会话结束后它的快照仍然驻留
         // （而 `last_snapshots` 的键是 (会话, 动作)，容量上限只是兜底）。
         self.last_snapshots.remove_session(session_id);
+        // ⇒ 会话 LRU 队列同步清（否则留下永不命中的幽灵 key ⇒ 挤占额度）。
+        self.session_order.forget(session_id);
     }
 
     /// Dry-run evaluate an action without permanently recording it in the chain.
@@ -741,6 +776,15 @@ impl BehaviorChainGuardHook {
     ) -> (GuardDecision, GovernanceVerdict) {
         let trace_id = request.trace.to_string();
         let key = (request.session, trace_id.clone());
+
+        // ⚠️ **会话 LRU 记账 + 裁剪**（2026-10-27，护栏审计 P1-3）：
+        // ⇒ 六张按会话键持有的表**无上界** ⇒ ⇒ 长跑进程里只增不减
+        // ⇒ ⇒ 这里在**唯一的热路径入口**记账 ⇒ ⇒ 超限就**按 LRU 驱逐**最久未用的会话
+        // ⇒ ⇒ （驱逐复用 [`Self::clear_session`] ⇒ **一份实现**，不重复写清理逻辑）。
+        let evicted = self.session_order.track(request.session);
+        for victim in evicted {
+            self.clear_session(&victim);
+        }
 
         // 快照阶段 (持锁): 全局 chains 锁内只做"取链 / 建链"与 LRU 记账。
         // 旧实现在持锁状态下跑完 fast guard、chain guard、fusion 与全部
@@ -991,6 +1035,14 @@ impl BehaviorChainGuardHook {
                 containment: containment_obligations(&guard_decision),
             };
 
+            // 判定落盘（append-only）。**只记录、不决策**：
+            // 写盘失败只计数，判定照常返回 —— 审计面不该成为可用性风险。
+            if let Some(log) = &self.decision_log {
+                if log.append(&event).is_err() {
+                    self.counters.lock().decision_log_write_failures += 1;
+                }
+            }
+
             let mut events = self.recent_events.lock();
             if events.len() >= MAX_RECENT_EVENTS {
                 events.pop_front();
@@ -1034,22 +1086,8 @@ impl BehaviorChainGuardHook {
     }
 }
 
-#[async_trait]
-impl GovernanceHook for BehaviorChainGuardHook {
-    fn name(&self) -> &str {
-        "behavior_chain_guard"
-    }
-
-    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
-        let (decision, _) = self.evaluate_internal(request);
-        decision.decision
-    }
-
-    async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
-        let (_, verdict) = self.evaluate_internal(request);
-        verdict
-    }
-}
+mod session_state;
+mod upstream_denial;
 
 #[cfg(test)]
 mod tests;

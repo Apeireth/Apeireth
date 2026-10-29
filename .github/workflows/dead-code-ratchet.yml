@@ -1,0 +1,67 @@
+name: Dead code ratchet (死代码棘轮)
+
+# 「字段/函数存了不用」的**机检守卫**（D-1，owner 2026-10-25 裁定）。
+#
+# 背景：`[workspace.lints.rust] dead_code` 长期是 `'allow'`（2026-08 为绕开
+# 「别的协作者正在改的 src 文件」整体压掉）。压掉的代价是：这类缺陷
+# ——「能力齐全但没接电」最常见的形态之一 —— **只能靠人搜**。
+# 本仓实测已因此找到 4 个真实例（字段存了不用、函数永不调用）。
+#
+# 现在改成 `'warn'`，两道闸：
+#   ① **真守卫（编译期）**：没有局部豁免的死代码 ⇒ clippy 报 warning ⇒
+#      本 workflow 的 `cargo clippy -- -D warnings` 直接失败；
+#   ② **棘轮（本 workflow 的检查步）**：既有豁免（`#[allow(dead_code)]` /
+#      `#![allow(dead_code)]`）**只减不增** —— 没有这条，任何人加一个
+#      `#[allow(dead_code)]` 就能把新债悄悄藏起来。
+#
+# 豁免清单与理由在 `scripts/dead-code-baseline.txt`；
+# 判据与盲区写在 `scripts/check_dead_code.py` 的模块 docstring 里（读它再用）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'scripts/check_dead_code.py'
+      - 'scripts/dead-code-baseline.txt'
+      - '.github/workflows/dead-code-ratchet.yml'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'scripts/check_dead_code.py'
+      - 'scripts/dead-code-baseline.txt'
+      - '.github/workflows/dead-code-ratchet.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dead-code-ratchet:
+    name: 死代码棘轮（豁免只减不增 + 编译期零死代码）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # keyring/dbus/wayland/pipewire/egl 需要系统库 (仅 Linux)。
+      # **与 `rust.yml` 的同名步骤保持一致** —— 少了这步，workspace 里的 TUI
+      # crate 会在 `libdbus-sys` 上构建失败（本 workflow 首次跑就是因此红的：
+      # 报错与死代码毫无关系，容易误判成「我的门禁抓到了什么」）。
+      - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
+        run: |
+          sudo apt-get update && sudo apt-get install -y libdbus-1-dev libwayland-dev libpipewire-0.3-dev libspa-0.2-dev libegl1-mesa-dev libgbm-dev pkg-config
+
+      - name: 编译期守卫（dead_code = warn ⇒ 任何未豁免的死代码都红）
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: 棘轮（豁免清单只减不增）
+        run: python3 scripts/check_dead_code.py

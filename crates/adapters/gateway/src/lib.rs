@@ -18,6 +18,7 @@ pub mod admin;
 /// Native and OpenAI-compatible HTTP chat entry points.
 pub mod canonical_entry;
 
+pub(crate) mod panel_errors;
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).
 pub mod panel_memory_update;
 pub mod panels;

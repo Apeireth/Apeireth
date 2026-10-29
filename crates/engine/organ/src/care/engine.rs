@@ -850,6 +850,7 @@ mod tests {
         (dir, store)
     }
 
+    #[allow(dead_code)]
     fn daily_rule(minutes_of_day: u32) -> CareRule {
         CareRule {
             id: "daily".to_string(),

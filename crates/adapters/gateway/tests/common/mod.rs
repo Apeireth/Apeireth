@@ -2,7 +2,7 @@
 //!
 //! 只有 provider 与工具是测试夹具; 运行时 / 插件管理 / 治理管线 / 会话存储
 //! 都是真实现。所有外部端点用本地 mock (wiremock), 0 真实网络。
-#![allow(dead_code)]
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

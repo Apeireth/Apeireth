@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use super::council_ballot_log::CouncilBallotLog;
 use apeireth_core::kernel::{Clock, Episode, SessionId};
 use apeireth_memory::{
     build_constant_injection, consolidate_persona, BoundedMemoryInput, MemoryCoordinator,
@@ -19,8 +20,8 @@ use apeireth_memory::{
     SelectedMemoryAccess, SqliteAccessHistoryStore,
 };
 use apeireth_orchestration::{
-    Advisor, AdvisorDecision, AdvisorVerdict, Council, CouncilCallError, CouncilDecision,
-    CouncilInvoker, Proposal,
+    Advisor, AdvisorDecision, AdvisorEvaluation, AdvisorVerdict, Council, CouncilCallError,
+    CouncilDecision, CouncilInvoker, Proposal,
 };
 use apeireth_organ::context_assembly::{
     AssemblyPolicy, ContextAssembler, ContextAssemblerPolicyExt, ContextBlock,
@@ -354,8 +355,12 @@ pub const BOND_DEPTH_INCREMENT_PER_TURN: f64 = 0.02;
 /// **身份口径**: partner id = `subject_id` (`APEIRETH_SUBJECT_ID`, W2 首批身份
 /// 旋钮) —— 跨会话稳定, 与 typed 身份体系同源 (羁绊本义即跨 Session 连续)。
 ///
-/// **0 假装边界**: 存储现为 `InMemoryPartnerStore` (进程内, 重启即散) —— 持久
-/// partner 后端落点 = `PartnerStore` trait, 后续接 sqlite 实现即可, 本模块不动。
+/// **存储**: 默认生产装配走 `SqlitePartnerStore`（2026-10-24 接上，
+/// 此前是 `InMemoryPartnerStore` = 进程内、重启即散 —— 羁绊本义是**跨会话**的，
+/// 那种存法等于每次重启都要重新「认识」一遍）。
+/// `SqlitePartnerStore` 自带幂等建表（`partner_records`），与认知库同一份
+/// `cognitive.sqlite3` ⇒ 羁绊与记忆同生共死。
+/// 本模块只依赖 `PartnerStore` trait，具体后端由装配层决定。
 pub struct PartnerBondModule {
     manifest: ModuleManifest,
     partner_store: Arc<dyn apeireth_memory::partner::PartnerStore>,
@@ -363,6 +368,10 @@ pub struct PartnerBondModule {
     clock: Arc<dyn Clock>,
     depth_increment: f64,
     metrics: ModuleMetrics,
+    /// 关系里程碑记录面（初见 / 阶段跃迁 —— 两件**确定性**事件）。
+    ///
+    /// 缺省 `None` = 不记（未注入里程碑存储时零行为变化）。
+    milestones: Option<std::sync::Arc<apeireth_memory::milestone::MilestoneRecorder>>,
 }
 
 impl PartnerBondModule {
@@ -379,7 +388,21 @@ impl PartnerBondModule {
             clock,
             depth_increment: BOND_DEPTH_INCREMENT_PER_TURN,
             metrics: ModuleMetrics::default(),
+            milestones: None,
         }
+    }
+
+    /// 注入关系里程碑记录面（初见 / 阶段跃迁）。
+    ///
+    /// 不注入 = 不记里程碑（零行为变化）；注入后只在**确定性**事件上落一条：
+    /// 主体第一次建立伙伴记录（初见）、羁绊阶段真的变了（跃迁）。
+    #[must_use]
+    pub fn with_milestones(
+        mut self,
+        recorder: std::sync::Arc<apeireth_memory::milestone::MilestoneRecorder>,
+    ) -> Self {
+        self.milestones = Some(recorder);
+        self
     }
 
     /// 覆盖每回合深度增量 (测试/调参用)。
@@ -475,11 +498,20 @@ impl BehaviorModule for PartnerBondModule {
     async fn on_hook(
         &self,
         hook: HookPoint,
-        _ctx: &ModuleContext<'_>,
+        ctx: &ModuleContext<'_>,
     ) -> Result<ModuleOutcome, ModuleError> {
         let result = match hook {
             HookPoint::TurnStart => match self.get_or_create_partner() {
                 Some(partner) => {
+                    // 初见：本会话第一次跑羁绊模块就是「第一次相遇」。
+                    // 记录面自带幂等闸（`has_milestone` 直查 EXISTS），
+                    // 所以每回合都调也不会写重复条目。
+                    if let Some(recorder) = &self.milestones {
+                        let now = self.clock.now().timestamp_millis();
+                        if recorder.record_first_meeting(ctx.session_id, now).is_err() {
+                            self.metrics.warning();
+                        }
+                    }
                     let text = bond_overlay_text(&partner);
                     ModuleOutcome::continue_().with_prompt_overlay(PromptOverlay::system(text))
                 }
@@ -490,9 +522,31 @@ impl BehaviorModule for PartnerBondModule {
                 if let Some(mut partner) = self.get_or_create_partner() {
                     let now = self.clock.now().timestamp_millis();
                     partner.touch(now);
+                    // 演化前后比阶段：**只有真的跃迁了**才落里程碑
+                    // （`Bond::evolve` 的阶段推进是纯确定性阈值，没有歧义）。
+                    let stage_before = partner.bond.stage;
                     partner.bond.evolve(self.depth_increment.max(0.0), now);
+                    let stage_after = partner.bond.stage;
                     if self.partner_store.save_partner(&partner).is_err() {
                         self.metrics.warning();
+                    }
+                    if let Some(recorder) = &self.milestones {
+                        if stage_before != stage_after {
+                            // 记在**跃迁发生的这一次会话**下（羁绊本身跨会话，
+                            // 但「哪次会话里发生的」是有意义的真值；
+                            // `SessionId` 是随机生成 id，无法从伙伴 id 派生稳定键）。
+                            if recorder
+                                .record_stage_transition(
+                                    ctx.session_id,
+                                    &format!("{stage_before:?}"),
+                                    &format!("{stage_after:?}"),
+                                    now,
+                                )
+                                .is_err()
+                            {
+                                self.metrics.warning();
+                            }
+                        }
                     }
                 }
                 ModuleOutcome::continue_()
@@ -582,6 +636,41 @@ mod absorption_insight_tests {
     use super::*;
 
     #[test]
+    fn semantic_axis_section_is_deterministic_and_reports_real_quantities() {
+        // 第 5 段（semantic_axis）专项：确定性 + 数值在 [0,1] + 主轴数受样本数约束。
+        let messages = vec![
+            "记忆系统的检索层有 ACT-R 激活与混合检索。".to_string(),
+            "治理层的取舍我们还没聊过。".to_string(),
+            "检索层与治理层都需要可回放的审计链。".to_string(),
+        ];
+        let first = absorption_insight_text(&messages);
+        let second = absorption_insight_text(&messages);
+        assert_eq!(first, second, "同输入恒同输出");
+        assert!(first.contains("语义主轴"), "{first}");
+
+        // 主轴数 = min(消息数, SEMANTIC_AXIS_COMPONENTS) ⇒ 3 条消息 ⇒ 最多 3 维。
+        let expected = SEMANTIC_AXIS_COMPONENTS.min(messages.len());
+        assert!(
+            first.contains(&format!("主轴 {expected} 维")),
+            "主轴数应受样本数约束: {first}"
+        );
+
+        // 逻辑深度与跨域共振都在 [0,1]（不是 NaN / 不是负数）。
+        for label in ["逻辑深度", "跨域共振"] {
+            let value = first
+                .split(label)
+                .nth(1)
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|token| token.parse::<f32>().ok())
+                .unwrap_or_else(|| panic!("{label} 段应带可解析的数值: {first}"));
+            assert!(
+                (0.0..=1.0).contains(&value),
+                "{label} 应在 [0,1]，实得 {value}: {first}"
+            );
+        }
+    }
+
+    #[test]
     fn config_defaults_to_absorption_insight_off() {
         // W2 五件验收门②: 默认关 = 行为不变。
         let config = crate::canonical::production::CognitiveModuleConfig::default();
@@ -589,8 +678,9 @@ mod absorption_insight_tests {
     }
 
     #[test]
-    fn absorption_insight_reports_four_algorithm_sections_and_is_deterministic() {
-        // W2 五件验收门③: 效果可见 = 四算法各出一节 + 同输入恒同输出 (可重放)。
+    fn absorption_insight_reports_algorithm_sections_and_is_deterministic() {
+        // W2 五件验收门③: 效果可见 = 各算法各出一节 + 同输入恒同输出 (可重放)。
+        // （2026-10-25 owner 裁定：semantic_axis 并入 ⇒ 段数 4 → 5。）
         let messages = vec![
             "帮我梳理一下记忆系统的架构，特别是检索那一层。".to_string(),
             "检索层有 ACT-R 激活与混合检索；但治理层的取舍我们还没聊过。".to_string(),
@@ -603,6 +693,10 @@ mod absorption_insight_tests {
         assert!(first.contains("语义新颖度"), "{first}");
         assert!(first.contains("关联传导"), "{first}");
         assert!(first.contains("顿悟涌现"), "{first}");
+        // 第 5 段（owner 裁定 2026-10-25：semantic_axis 并入 absorption_insight）。
+        assert!(first.contains("语义主轴"), "{first}");
+        assert!(first.contains("逻辑深度"), "{first}");
+        assert!(first.contains("跨域共振"), "{first}");
         // 空输入 = 空报告 (0 装: 不凭空造洞察)。
         assert_eq!(absorption_insight_text(&[]), "");
     }
@@ -782,6 +876,12 @@ pub const ABSORPTION_INSIGHT_MODULE_ID: &str = "cognitive.absorption_insight";
 /// 吸收批特征维度 (确定性字节直方图, 与 OrthogonalResidualPyramid 对齐)。
 pub const ABSORPTION_FEATURE_DIM: usize = 32;
 
+/// 语义主轴的成分数（加权中心化 PCA 抽几个正交方向）。
+///
+/// 口径：主轴数 = min(消息数, 该上限) ⇒ 消息少时不硬凑维度
+/// （样本数少于成分数时 Gram 空间没有那么多正交方向）。
+pub const SEMANTIC_AXIS_COMPONENTS: usize = 3;
+
 /// 确定性文本特征 (字节直方图归一化)。
 ///
 /// **0 假装**: 这是浅层确定性特征 (与 morphology 手调启发式同口径), **不是**语义
@@ -807,6 +907,7 @@ fn absorption_insight_text(messages: &[String]) -> String {
     use apeireth_memory::kuramoto_resonance::{KuramotoOscillator, KuramotoResonanceEngine};
     use apeireth_memory::residual_pyramid::{FieldActivationGate, OrthogonalResidualPyramid};
     use apeireth_memory::river_topology::{RiverDynamicsEngine, TagNode};
+    use apeireth_memory::semantic_axis::SemanticAxisBridge;
 
     if messages.is_empty() {
         return String::new();
@@ -867,12 +968,40 @@ fn absorption_insight_text(messages: &[String]) -> String {
         .collect();
     let epiphanies = KuramotoResonanceEngine::new(1.0, 0.65).step(&mut oscillators, 1.0);
 
+    // ⑤ semantic_axis: 加权中心化 PCA 语义主轴 + 逻辑深度 + 跨域共振桥
+    // （owner 裁定 2026-10-25：semantic_axis 并入 absorption_insight 补第 5 段）。
+    //
+    // **口径**：把每条消息的浅特征向量当作一个**带权样本**（权重 = 该消息的
+    // 激活能量），拟合正交主轴，再把**末条消息**（本轮输入）投影上去：
+    // * 主轴能量分布 ⇒ 这一轮输入落在「已沉淀结构的哪一维」；
+    // * 逻辑深度（1 − 归一化熵）⇒ 聚焦还是发散；
+    // * 跨域共振桥 ⇒ 哪两个主轴被同时激活（跨域联结的证据）。
+    // 纯确定性（0 LLM / 0 IO），与前四段同口径：研究吸收批的**实验性洞察**，
+    // 不参与生产语义召回与决策。
+    let axis_samples: Vec<(Vec<f32>, f32)> = nodes
+        .iter()
+        .map(|node| (node.embedding.clone(), node.activation_energy.max(0.0)))
+        .collect();
+    let mut axis_bridge = SemanticAxisBridge::new(ABSORPTION_FEATURE_DIM);
+    axis_bridge.fit(
+        &axis_samples,
+        SEMANTIC_AXIS_COMPONENTS.min(axis_samples.len()),
+    );
+    let axis_projection = axis_bridge.project(&query_vec);
+    let dominant_axis = axis_projection
+        .probabilities
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(index, _)| index);
+
     format!(
         "【认知体操】(研究吸收批实验性洞察, 非生产语义)\n\
          - 认知空洞: β0 岛屿 {} 个 / β1 空洞 {} 处 / 内聚 {:.2}{}\n\
          - 语义新颖度: {:.2} (激活门控 {:.2})\n\
          - 关联传导: {} 个节点受激\n\
-         - 顿悟涌现: {} 起",
+         - 顿悟涌现: {} 起\n\
+         - 语义主轴: 主轴 {} 维 / 逻辑深度 {:.2} / 跨域共振 {:.2}{}",
         betti.betti_0_islands,
         betti.betti_1_voids.len(),
         betti.cohesion_score,
@@ -885,6 +1014,13 @@ fn absorption_insight_text(messages: &[String]) -> String {
         activation,
         spread.len(),
         epiphanies.len(),
+        axis_projection.probabilities.len(),
+        axis_projection.logic_depth,
+        axis_projection.resonance_score,
+        match dominant_axis {
+            Some(index) => format!(" (主导主轴 A{index})"),
+            None => String::new(),
+        },
     )
 }
 
@@ -2495,6 +2631,10 @@ pub struct CouncilModule {
     council: Arc<Council>,
     clock: Arc<dyn Clock>,
     metrics: ModuleMetrics,
+    /// D-2：council ballot 的 append-only 落盘账（**可选**：不挂 = 不落盘）。
+    ///
+    /// 守夜人的「立场平衡复盘」段要吃的就是这张账（此前永远空转）。
+    ballot_log: Option<Arc<CouncilBallotLog>>,
 }
 
 impl CouncilModule {
@@ -2505,6 +2645,39 @@ impl CouncilModule {
             council,
             clock,
             metrics: ModuleMetrics::default(),
+            ballot_log: None,
+        }
+    }
+
+    /// 挂上 council ballot 的 append-only 落盘账（D-2）。
+    ///
+    /// 落盘是**旁路**：失败只留痕（stderr），**不阻断**本轮决策 ——
+    /// 「记录能力缺失」≠「功能不可用」。
+    #[must_use]
+    pub fn with_ballot_log(self, log: Arc<CouncilBallotLog>) -> Self {
+        Self {
+            ballot_log: Some(log),
+            ..self
+        }
+    }
+
+    /// D-2：把本次顾问评价折算成票并落盘（append-only）。
+    ///
+    /// * 折算口径（owner 裁定）：置信度显式优先、缺省用顾问自评质量分并标注兜底、
+    ///   权重用现有顾问注册权重、域一一对应 —— **不编造**顾问没给的信息。
+    /// * 失败**如实报告、不阻断**（stderr 留痕），也不伪造任何票。
+    fn persist_ballots(&self, evaluations: &[AdvisorEvaluation]) {
+        let Some(log) = self.ballot_log.as_ref() else {
+            return;
+        };
+        let at_ms = self.clock.now().timestamp_millis();
+        for evaluation in evaluations {
+            let record = super::council_ballots::record_from_evaluation(evaluation, at_ms);
+            if let Err(error) = log.append(&record) {
+                eprintln!(
+                    "[cognitive.council] ballot 落盘失败（如实报告，不影响本轮决策）: {error}"
+                );
+            }
         }
     }
 
@@ -2549,6 +2722,7 @@ impl BehaviorModule for CouncilModule {
                     invoker: ctx.invoker(),
                 };
                 let result = self.council.decide_with_invoker(&proposal, &adapter).await;
+                self.persist_ballots(&result.evaluations);
                 let side_calls = result.side_call_count;
                 let outcome = match result.decision {
                     CouncilDecision::Continue => ModuleOutcome::continue_(),
@@ -4494,19 +4668,22 @@ mod tests {
         let modules =
             super::super::production::ProductionCognitiveModules::build(config, backends, clock)
                 .unwrap();
-        assert_eq!(
-            modules.ids(),
-            vec![
-                MEMORY_RECALL_MODULE_ID,
-                PREFERENCE_RECALL_MODULE_ID,
-                SELF_ASSESSMENT_MODULE_ID,
-                // 生物机制族 W3.2: BioAssemblyModule 为懒注册（两个 env 全关 =
-                // 不构造 = 不注册，见 startup_instrumentation 的懒加载语义）；
-                // 因此默认配置下不占槽位，开关开时注册在 self_assessment 与
-                // memory_writeback 之间（顺序由 production 注册点固定）。
-                MEMORY_WRITEBACK_MODULE_ID,
-            ]
-        );
+        let mut expected = vec![
+            MEMORY_RECALL_MODULE_ID,
+            PREFERENCE_RECALL_MODULE_ID,
+            SELF_ASSESSMENT_MODULE_ID,
+            // 生物机制族 W3.2: BioAssemblyModule 为懒注册（两个 env 全关 =
+            // 不构造 = 不注册，见 startup_instrumentation 的懒加载语义）；
+            // 因此默认配置下不占槽位，开关开时注册在 self_assessment 与
+            // memory_writeback 之间（顺序由 production 注册点固定）。
+            MEMORY_WRITEBACK_MODULE_ID,
+        ];
+        // 问责闭环第 ③ 步 · 自动回填面：**默认关**（与问责面同一个开关）——
+        // 开关开时它在模块表**首位**。
+        if crate::egress_gate::egress_gate_enabled_from_env() {
+            expected.insert(0, "accountability.backfill");
+        }
+        assert_eq!(modules.ids(), expected);
         let telemetry = modules.telemetry();
         let _runtime = modules
             .register_into(Runtime::builder())

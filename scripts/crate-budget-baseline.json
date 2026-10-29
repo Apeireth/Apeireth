@@ -1,0 +1,122 @@
+{
+  "crates": {
+    "crates/adapters/cli": {
+      "files": 36,
+      "loc": 16893
+    },
+    "crates/adapters/gateway": {
+      "files": 34,
+      "loc": 18653
+    },
+    "crates/adapters/sdk": {
+      "files": 22,
+      "loc": 6607
+    },
+    "crates/adapters/tui": {
+      "files": 16,
+      "loc": 7925
+    },
+    "crates/capabilities/tools": {
+      "files": 123,
+      "loc": 82915
+    },
+    "crates/engine/guard": {
+      "files": 28,
+      "loc": 14427
+    },
+    "crates/engine/image/algo": {
+      "files": 128,
+      "loc": 55506
+    },
+    "crates/engine/image/cms": {
+      "files": 13,
+      "loc": 4629
+    },
+    "crates/engine/image/codecs": {
+      "files": 38,
+      "loc": 14488
+    },
+    "crates/engine/image/color": {
+      "files": 3,
+      "loc": 1421
+    },
+    "crates/engine/image/compose": {
+      "files": 19,
+      "loc": 15347
+    },
+    "crates/engine/image/core": {
+      "files": 7,
+      "loc": 381
+    },
+    "crates/engine/image/doc": {
+      "files": 15,
+      "loc": 5120
+    },
+    "crates/engine/image/geom": {
+      "files": 2,
+      "loc": 1680
+    },
+    "crates/engine/image/psd": {
+      "files": 29,
+      "loc": 14214
+    },
+    "crates/engine/image/raster": {
+      "files": 2,
+      "loc": 1789
+    },
+    "crates/engine/image/vector": {
+      "files": 9,
+      "loc": 4159
+    },
+    "crates/engine/memory": {
+      "files": 174,
+      "loc": 77874
+    },
+    "crates/engine/organ": {
+      "files": 31,
+      "loc": 26169
+    },
+    "crates/engine/provider": {
+      "files": 12,
+      "loc": 5649
+    },
+    "crates/engine/runtime": {
+      "files": 24,
+      "loc": 18367
+    },
+    "crates/engine/runtime-assembly": {
+      "files": 70,
+      "loc": 41315
+    },
+    "crates/engine/storage": {
+      "files": 27,
+      "loc": 8605
+    },
+    "crates/foundation/core": {
+      "files": 28,
+      "loc": 14401
+    },
+    "crates/foundation/credentials": {
+      "files": 10,
+      "loc": 3862
+    },
+    "crates/foundation/governance": {
+      "files": 24,
+      "loc": 15004
+    },
+    "crates/foundation/orchestration": {
+      "files": 55,
+      "loc": 30320
+    },
+    "crates/foundation/plugin": {
+      "files": 36,
+      "loc": 12432
+    },
+    "crates/foundation/protocol": {
+      "files": 23,
+      "loc": 7992
+    }
+  },
+  "note": "每个 crate 的 src/ 总量；只减不增（--gen 只应在真的减少后跑）",
+  "version": "crate-budget/v1"
+}

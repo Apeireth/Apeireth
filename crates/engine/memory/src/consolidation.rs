@@ -103,8 +103,11 @@ impl MemoryConsolidationJob {
         self.consolidate(session_id, &visible)
     }
 
-    /// Consolidate only governance-visible episodes. This is the production
-    /// entry point for a deferred job; it performs no model call.
+    /// Consolidate only governance-visible episodes. Performs no model call.
+    ///
+    /// **未接线（2026-10-25 复核）**：全仓零生产调用点 —— 原 doc 自述
+    /// 「production entry point for a deferred job」与实况不符（没有延迟任务
+    /// 真的调它），按 0 装纪律改成如实表述。要接线时再谈入口。
     pub fn consolidate_governed(
         &self,
         session_id: &str,

@@ -19,7 +19,10 @@
 //!   每期该做什么由调用方按 [`HealingPhase::allowed_events`] 与 [`RecoveryEvent`] 落地。
 //! - **0 unsafe / 0 新外部依赖 / 0 系统时间依赖**。
 //!
-//! # IMPLEMENTED（未接线）
+//! # IMPLEMENTED；装配面已接（默认关，2026-10-25 核对）
+//!
+//! 生产经 runtime 快照读取口（与痛觉同一 `PainSnapshotReader`）接进自述 SG-17 格；
+//! 开关同 `APEIRETH_ENABLE_BIO_PAIN`（默认关）。原文「未接线」已过期。
 //! 本模块是机制内核 v0：类型、四期迁移表、瘢痕账本与单元测试齐备，落 **IMPLEMENTED** 级；
 //! **未接 `harness_patch`、未进失败处理链、无 `self_status` 自述节**，
 //! 生产路径 0 调用点（缺口见

@@ -72,7 +72,7 @@
 | `tests/pet-*.mjs`（6 套） | 行为钉子（真实模块 + 源码镜像） |
 | `scripts/pet-window-smoke.mjs` / `scripts/avatar-perf-probe.mjs` | 烟测 / 性能探针一键采集 |
 | `frontend/perf-probe/` | 探针工程 + 实测原始数据 |
-| `frontend/companion-desktop/asset-licenses.json` + `scripts/check-asset-licenses.mjs` | 素材许可台账 + 门禁 |
+| `frontend/companion-desktop/asset-licenses.json` + `frontend/companion-desktop/scripts/check-asset-licenses.mjs` | 素材许可台账 + 门禁 |
 | `docs/design/pet-resident-projection.md` | 施工总账（批次状态） |
 | `docs/design/avatar-pack-admission.md` | **准入规范**（渠道三分/白名单/五步流程） |
 | `docs/design/avatar-commission-brief.md` | 官方形象委托需求书（待签发） |

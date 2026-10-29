@@ -21,6 +21,22 @@ ignore = [
     "RUSTSEC-2026-0370",
     "RUSTSEC-2026-0371",
     "RUSTSEC-2026-0372",
+    # 2026-10-25 D6 对账批：quinn-proto 0.11.16 的 5 条新 advisory
+    # （RUSTSEC-2026-0338/0339/0340/0341/0342：零长帧 panic / CID 退休队列无界增长 /
+    #  ACK_FREQUENCY 下 min-ack-delay panic / 流重组内存耗尽绕过 / 零长 DATAGRAM 绕过
+    #  接收缓冲上限）。
+    # **为什么可 ignore**：
+    #   ① quinn-proto 是 **reqwest 的可选 http3 特性**引入的 transitive 依赖，
+    #      本仓**未启用该特性** ⇒ `cargo tree -i quinn-proto` 实测「nothing to print」
+    #      ⇒ **不进构建产物、不进运行时**；
+    #   ② 上游**暂无修复版本**（advisory 无 patched 版本）⇒ 升级也解决不了；
+    #   ③ 0 直接业务依赖。
+    # **复审条件**：本仓启用 reqwest 的 http3 特性，或上游发布修复版 ⇒ **必须复审并删掉这些 ignore**。
+    "RUSTSEC-2026-0338",
+    "RUSTSEC-2026-0339",
+    "RUSTSEC-2026-0340",
+    "RUSTSEC-2026-0341",
+    "RUSTSEC-2026-0342",
     # 2026-10-03 曾短接 3 条 (apeireth-tui → ratatui 0.29 → paste / lru 0.12
     # transitive 未修复面)。2026-10-12 零债清偿批: ratatui 0.30 迁移落地,
     # 依赖树复核 paste 已不存在、lru 单一 0.18.5 修复线 —— 三条面已消, ignore

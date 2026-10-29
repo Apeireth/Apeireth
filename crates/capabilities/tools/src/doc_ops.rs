@@ -717,6 +717,7 @@ fn slice(bytes: &[u8], at: usize, len: usize) -> Result<&[u8], DocOpsError> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ZipCompression {
     /// 不压缩 (method 0)。
+    #[allow(dead_code)]
     Stored,
     /// 原始 deflate (method 8)。
     Deflate,
@@ -1590,14 +1591,6 @@ impl PdfObject {
             _ => None,
         }
     }
-
-    /// 取字符串原始字节。
-    fn as_bytes(&self) -> Option<&[u8]> {
-        match self {
-            Self::Str(bytes) => Some(bytes),
-            _ => None,
-        }
-    }
 }
 
 /// 解析出的 PDF 文档 (对象表 + 目录 + 版本)。
@@ -1710,13 +1703,7 @@ impl PdfDocument {
         for (key, value) in merged {
             dict.entry(key).or_insert(value);
         }
-        out.push(PdfPage {
-            obj_ref: PdfRef {
-                num: node_ref.num,
-                gen: node_ref.gen,
-            },
-            dict,
-        });
+        out.push(PdfPage { dict });
         Ok(())
     }
 
@@ -1752,9 +1739,8 @@ impl PdfDocument {
 
 /// 页 (对象引用 + 物化后的页字典)。
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct PdfPage {
-    /// 页对象引用。
-    obj_ref: PdfRef,
     /// 页字典 (继承属性已物化)。
     dict: BTreeMap<String, PdfObject>,
 }

@@ -7,7 +7,7 @@
 //! 为什么不在各测试文件里直接 `TcpListener::bind(...).unwrap()`: Windows 上
 //! 临时端口偶发落进系统保留区间 → `WSAEACCES (os error 10013)`;
 //! 该助手只对这一类错误有界重试, 其它错误照常失败 (见 `src/test_support.rs`)。
-#![allow(dead_code)]
+#![allow(dead_code)] // D-1（owner 裁定 2026-10-25）：测试夹具字段/方法（供用例构造完整对象，部分字段本文件内未被读取）
 
 #[path = "../../src/test_support.rs"]
 mod test_support;

@@ -2,7 +2,7 @@
 
 > **本文档定位**: 子代理 R9 (2026-08-28) 写的 `v2-gateway-frontend-integration-spec.md` (565 行) + `v2-frontend-quickstart.md` (224 行) 的**接力审 + 错账修正 + frontend 真实施准备 checklist**. 不重复写 spec 主体, 仅做审 + 补 + 0 装诚实真账.
 > **HEAD 状态**: `22c6e72b` (v2.0.0 release 路径整合文档, 主代理亲做 0 装诚实真账).
-> **何时写**: 子代理 R13 在 R9 + R10 + R11 + R12 4 spec/实施跑中接力, R12 OrganOrchestrator 真实施 working tree (`crates/engine/runtime/src/canonical/orchestrator.rs` untracked) 已起.
+> **何时写**: 子代理 R13 在 R9 + R10 + R11 + R12 4 spec/实施跑中接力, R12 OrganOrchestrator 真实施 working tree (`crates/engine/runtime-assembly/src/canonical/orchestrator.rs` untracked) 已起.
 > **关系文档**: `v2-gateway-frontend-integration-spec.md` (R9 主 spec, 565 行, 不改) + `v2-frontend-quickstart.md` (R9 quickstart, 224 行, 不改) + `cognitive-9-organ-integration-spec.md` (R10, 1001 行, 不改) + `organ-orchestrator-spec.md` (R11, 500 行, 不改) + `v2.0.0-release-path-integration.md` (主代理整合, 274 行) + `cognitive-module-wiring.md` (12 slot ledger, LOCKED).
 > **本文状态**: 🟡 接力审 + 错账修正 + 真实施准备 (本 spec 仅写接力报告, 不真做 4-6 周 frontend 对接).
 
@@ -23,7 +23,7 @@ Author:          子代理 R13 (独立判断, 0 装诚实真账)
 **R9 spec (565 行) 主体完整可用**, 但有 **3 处错账**待主代理亲做核验 + 修正 (子代理 R13 接力审发现):
 
 1. **§0 TL;DR §25 + §5.1 §330 错账**: "4 WIRED + 1 SLOT READY + 6 DEFERRED" 真账应是 **"6 WIRED + 6 DEFERRED"** (per `cognitive-module-wiring.md:23-35`, `memory_writeback` 是 WIRED + `judge`/`council`/`self_assessment` 是 "WIRED, OFF by default", **不**是 "SLOT READY").
-2. **§5.2 §342 错账**: "OrganOrchestrator 待 R11 实施" 真账应是 **R11 spec 已完 (500 行) + R12 真实施 working tree 已起 (`crates/engine/runtime/src/canonical/orchestrator.rs` untracked)**, 不是 "R11 待实施".
+2. **§5.2 §342 错账**: "OrganOrchestrator 待 R11 实施" 真账应是 **R11 spec 已完 (500 行) + R12 真实施 working tree 已起 (`crates/engine/runtime-assembly/src/canonical/orchestrator.rs` untracked)**, 不是 "R11 待实施".
 3. **§11 接手人 5 actionable 错账**: 标 "5/5 done + 4 新加", 真账应是 **"5/5 done + 5 新加"** (per `v2.0.0-release-path-integration.md:218-222`, 加 #9 RC-7 Perception 真 modality, per R14 真兑现).
 
 **R13 接力范围**:
@@ -75,7 +75,7 @@ Author:          子代理 R13 (独立判断, 0 装诚实真账)
 
 **真账** (per R11 spec + R12 真实施 working tree + 子代理 R13 接力审):
 - ✅ **R11 spec 已完**: `docs/01-architecture/organ-orchestrator-spec.md` (500 行 15 节, 子代理 R11 写, 主代理亲做 0 装诚实真账).
-- 🔄 **R12 真实施 working tree 已起**: `crates/engine/runtime/src/canonical/orchestrator.rs` (untracked), `crates/engine/runtime/src/canonical/mod.rs` (modified), 估 1-3 周真实施 (per R11 §8.4 估).
+- 🔄 **R12 真实施 working tree 已起**: `crates/engine/runtime-assembly/src/canonical/orchestrator.rs` (untracked), `crates/engine/runtime/src/canonical/mod.rs` (modified), 估 1-3 周真实施 (per R11 §8.4 估).
 - ⚠️ **R12 working tree 状态**: 子代理 R13 接力时 `git status` 标 `orchestrator.rs` untracked + `mod.rs` modified, **未** commit.
 
 **修正建议** (待主代理审):
@@ -271,7 +271,7 @@ Changes not staged for commit:
   modified:   crates/engine/runtime/src/canonical/mod.rs  ← R12 working tree
 
 Untracked files:
-  crates/engine/runtime/src/canonical/orchestrator.rs  ← R12 working tree
+  crates/engine/runtime-assembly/src/canonical/orchestrator.rs  ← R12 working tree
   ../01-architecture/deferred-slot-activation-preference_learning-spec.md  ← R15 untracked
   ../01-architecture/organ-orchestrator-spec.md  ← R11 untracked
   v2-frontend-quickstart.md  ← R9 untracked
@@ -283,7 +283,7 @@ Untracked files:
 
 - **R13 接力审 ≠ 真实施**: 接力审 R9 spec 3 处错账 + 写 frontend 真实施准备 checklist, 不等于真做 4-6 周 frontend 对接. 真实施估 2027-Q1 启动.
 - **R9 spec 主体不动**: 565 行 spec 主体 (除 4 处错账外) 全部保留, 不假装"接力审 = 重写 spec".
-- **R12 working tree 不动**: `crates/engine/runtime/src/canonical/orchestrator.rs` 是 R12 真实施 sub-agent working tree, R13 不碰.
+- **R12 working tree 不动**: `crates/engine/runtime-assembly/src/canonical/orchestrator.rs` 是 R12 真实施 sub-agent working tree, R13 不碰.
 - **0 装诱导 prevention 本身是 0 装诱导** (per 子代理 Z 独立判断, R13 同意): R13 接力审写"前端实施准备"本身不假装"已实施前端对接".
 
 ---
@@ -401,7 +401,7 @@ per 子代理 R13 必读 #1-#11 + 必跑命令 + 必读文档, R13 独立看到 
 
 **R9 spec 错账来源**: 2026-08-28 写于 task brief 估错时 (brief 说 "4 WIRED + 1 SLOT READY + 6 DEFERRED"). R10 在 `0e53a668` 修正为 "5 WIRED + 1 SLOT READY" (但仍漏 `memory_writeback` + 错算 `judge`/`council`/`self_assessment`). 子代理 R13 接力审发现的**真账 = 6 WIRED + 6 DEFERRED** (per `cognitive-module-wiring.md:23-35` ledger).
 
-**R12 working tree 状态**: R9 spec §5.2 §342 标 "OrganOrchestrator 待 R11 实施" 是 2026-08-28 旧账. R11 spec 已完 (500 行) + R12 真实施 working tree 已起 (`crates/engine/runtime/src/canonical/orchestrator.rs` untracked). R13 接力审看到 R12 已经起，不是 "R11 待实施".
+**R12 working tree 状态**: R9 spec §5.2 §342 标 "OrganOrchestrator 待 R11 实施" 是 2026-08-28 旧账. R11 spec 已完 (500 行) + R12 真实施 working tree 已起 (`crates/engine/runtime-assembly/src/canonical/orchestrator.rs` untracked). R13 接力审看到 R12 已经起，不是 "R11 待实施".
 
 **R10 spec 错账**: R10 spec §10.1 也用 task brief 估错 "4 WIRED + 1 附加 WIRED = 5 WIRED" + §1.2 ledger "5 WIRED + 1 SLOT READY". R13 真账核验 = 6 WIRED + 6 DEFERRED. **R10 错账待主代理审 + 修正** (per §1.1 接力审).
 
@@ -416,7 +416,7 @@ per 子代理 R13 必读 #1-#11 + 必跑命令 + 必读文档, R13 独立看到 
 ### 9.3 R12 OrganOrchestrator working tree 状态
 
 per `git status` 子代理 R13 接力时:
-- `crates/engine/runtime/src/canonical/orchestrator.rs` (untracked) = R12 真实施起草中
+- `crates/engine/runtime-assembly/src/canonical/orchestrator.rs` (untracked) = R12 真实施起草中
 - `crates/engine/runtime/src/canonical/mod.rs` (modified) = R12 已注册 orchestrator module
 
 **R13 接力审观察**: R12 子代理**已起真实施**, 不是 "R11 待办". R12 估 1-3 周真实施 (per R11 §8.4 估), 接手人需继续派 R12 跑真实施.
@@ -445,7 +445,7 @@ per `git status` 子代理 R13 接力时:
 - R9 quickstart (本文接力审): `docs/02-guides/v2-frontend-quickstart.md:1-224`
 - R10 spec (本文接力审): `docs/01-architecture/cognitive-9-organ-integration-spec.md:1-1001`
 - R11 spec (本文接力审): `docs/01-architecture/organ-orchestrator-spec.md:1-500`
-- R12 working tree (untracked, R13 接力时已起): `crates/engine/runtime/src/canonical/orchestrator.rs` (per `git status`)
+- R12 working tree (untracked, R13 接力时已起): `crates/engine/runtime-assembly/src/canonical/orchestrator.rs` (per `git status`)
 - R14 spec (RC-7 Perception 真 modality): `docs/01-architecture/rc-7-perception-true-modality-spec.md` (per `abf59f2e` commit)
 - 主代理整合文档: `docs/04-internal/v2.0.0-release-path-integration.md:1-274`
 - 12 slot ledger (LOCKED, 真账): `docs/04-internal/cognitive-module-wiring.md:23-35`
@@ -455,7 +455,7 @@ per `git status` 子代理 R13 接力时:
 - HTTP error 映射: `crates/adapters/gateway/src/canonical_entry.rs:267-290`
 - 9 organ trait 抽象: `crates/foundation/plugin/src/organ.rs:60-394`
 - 9 organ v2 impl: `crates/engine/organ/src/lib.rs:11-32`
-- 认知模块 12 slot 真接 module: `crates/engine/runtime/src/canonical/cognitive.rs:37-42` (id) + `:255-1049` (struct)
+- 认知模块 12 slot 真接 module: `crates/engine/runtime-assembly/src/canonical/cognitive.rs:37-42` (id) + `:255-1049` (struct)
 - LlmFactory MiniMax 真实现: `crates/foundation/plugin/src/llm_factory.rs` (RC-5 真接)
 - Council 7 LlmAdvisor + 60s timeout: per `cognitive-module-wiring.md:96-102` (RC-6 真接)
 - SQLite backend: RC-1/2/3/4 真接 (per `cognitive.rs:50-65` SqliteConnectionPool 统一 backend)

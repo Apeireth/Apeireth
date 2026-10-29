@@ -18,7 +18,10 @@
 
 set -euo pipefail
 
-VERSION="${APEIRETH_VERSION:-1.0.0}"
+cd "$(dirname "$0")/../.."   # 先切到仓库根: 版本从 ./Cargo.toml 派生（与调用处 cwd 无关）
+# 版本唯一真源: workspace Cargo.toml（APEIRETH_VERSION 可覆盖；不再硬编码，避免各脚本版本漂移）
+VERSION="${APEIRETH_VERSION:-$(sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml | grep -E '^version[[:space:]]*=' | head -1 | sed 's/.*"\(.*\)".*/\1/')}"
+[[ -n "${VERSION}" ]] || { echo "❌ 无法从 Cargo.toml 读取 workspace.version（可显式设 APEIRETH_VERSION）" >&2; exit 1; }
 TAP="${APEIRETH_TAP:-apeireth/tap}"
 
 echo "=== apeireth brew install v${VERSION} (tap=${TAP}) ==="

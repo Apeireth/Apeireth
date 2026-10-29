@@ -136,15 +136,6 @@ impl ProactiveRecallService {
             .collect()
     }
 
-    /// Alias emphasizing that this operation never fetches from storage.
-    pub fn select_candidates(
-        &self,
-        cue: &TopicCue,
-        candidates: &[MemoryCandidate],
-    ) -> Vec<MemoryCandidate> {
-        self.recall(cue, candidates)
-    }
-
     /// Convenience entry point for callers that do not need to retain a service.
     pub fn recall_with_policy(
         policy: &ProactiveRecallPolicy,

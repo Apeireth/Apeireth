@@ -383,9 +383,9 @@ git -c http.sslVerify=false -c http.extraHeader="Host: github.com" -c credential
 
 ```bash
 # 单文件格式化 (走 cargo toolchain, 正确 edition):
-rustfmt crates/engine/runtime/src/canonical/orchestrator.rs
+rustfmt crates/engine/runtime-assembly/src/canonical/orchestrator.rs
 # 或
-cargo fmt -- crates/engine/runtime/src/canonical/orchestrator.rs  # 注意: 仍可能格式化其他文件, 用 rustfmt 替代
+cargo fmt -- crates/engine/runtime-assembly/src/canonical/orchestrator.rs  # 注意: 仍可能格式化其他文件, 用 rustfmt 替代
 ```
 
 **真账**: A 块 Stage 1 commit 时用 `cargo fmt -- file` 改了 21 个文件, 立即 `git checkout HEAD -- crates/engine/organ/ crates/foundation/plugin/` 回滚非我的改动. 0 触碰 LOCKED, 但浪费 5 分钟.
@@ -538,7 +538,7 @@ git diff HEAD -- crates/foundation/core/src/eight_anchors.rs  # 应 0 行
 git diff HEAD -- crates/foundation/core/src/philosophy.rs       # 应 0 行
 git diff HEAD -- crates/foundation/core/src/onion.rs            # 应 0 行
 git diff HEAD -- Cargo.toml | grep -E "^[+-]version"             # 应 0 行
-git diff HEAD -- crates/foundation/core/src/cognitive.rs        # 应 0 行
+git diff HEAD -- crates/engine/runtime-assembly/src/canonical/cognitive.rs        # 应 0 行
 git diff HEAD -- Cargo.lock                                    # 0 行 diff (或 Cargo.toml 改的连锁 lock)
 ```
 
@@ -555,7 +555,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 
 ```
 任务: 派子代理调研 A 块 5 缺口真生产路径, 写报告 docs/04-internal/A-block-5-gaps-research.md
-必读: ../01-architecture/organ-orchestrator-spec.md + crates/engine/runtime/src/canonical/orchestrator.rs + 9 organ lib + E7 emergence + cognitive ledger
+必读: ../01-architecture/organ-orchestrator-spec.md + crates/engine/runtime-assembly/src/canonical/orchestrator.rs + 9 organ lib + E7 emergence + cognitive ledger
 必跑: cargo check --workspace --all-targets + cargo test -p apeireth-runtime --test orchestrator 期望 6 passed
 必写: 报告 5 缺口 (接口现状 + 现有用法 + 接入候选 + 边界 + 建议主代理选)
 不 commit: 等主代理审 (Q1 C1 policy)

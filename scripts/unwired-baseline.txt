@@ -57,7 +57,7 @@
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G3（31 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+# --- G3（29 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
 orphan bio_care_assembly_from_env  # G3
 orphan bio_circadian_wiring_from_env  # G3
@@ -66,7 +66,6 @@ orphan deviation  # G3
 orphan disarm  # G3
 orphan engine_mut  # G3
 orphan entity_mut  # G3
-orphan from_episode  # G3
 orphan graph_snapshot  # G3
 orphan load_graph  # G3
 orphan mcts_search  # G3
@@ -83,7 +82,6 @@ orphan to_prompt  # G3
 orphan with_access_recorder  # G3
 orphan with_attrs  # G3
 orphan with_deadline  # G3
-orphan with_depth_increment  # G3
 orphan with_llm_proposer  # G3
 orphan with_material_source  # G3
 orphan with_miner  # G3
@@ -91,7 +89,7 @@ orphan with_quorum_gate_probe  # G3
 orphan with_system_markers  # G3
 orphan with_task_type  # G3
 
-# --- G4（38 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（36 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4
 orphan with_allowed_capability  # G4
@@ -109,7 +107,6 @@ orphan with_envelope_budget  # G4
 orphan with_foreign_keys  # G4
 orphan with_importance_weight  # G4
 orphan with_journal_mode  # G4
-orphan with_len  # G4
 orphan with_max_episodes  # G4
 orphan with_metrics_window  # G4
 orphan with_min_candidate_score  # G4
@@ -128,19 +125,18 @@ orphan with_synchronous  # G4
 orphan with_system_clock  # G4
 orphan with_system_prompt  # G4
 orphan with_task_scope  # G4
-orphan with_used  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（4 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（2 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
-orphan begin_wait  # G5
-orphan end_wait  # G5
-orphan idle_elapsed  # G5
-orphan is_tripped  # G5
+orphan forget_principal_with_permit  # G5
+orphan research_coordinated_forget_with_permit  # G5
 
-# --- G6（81 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（72 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
+orphan with_used  # G6
+orphan with_len  # G6
 orphan constrain_to_trusted  # G6
 orphan decompose_default  # G6
 orphan doc_ops_capability  # G6
@@ -151,8 +147,6 @@ orphan sheet_ops_capability  # G6
 orphan trait_locks_path  # G6
 orphan validate_schedule  # G6
 orphan recall_with_policy  # G6
-orphan retract_relation  # G6
-orphan select_candidates  # G6
 orphan accumulator_mut  # G6
 orphan active_profile  # G6
 orphan adapt_gate  # G6
@@ -166,16 +160,13 @@ orphan consolidate_governed  # G6
 orphan default_min_count  # G6
 orphan dispatch_gateway_serve  # G6
 orphan ensure_governance  # G6
-orphan events_with_ids  # G6
 orphan execute_streaming  # G6
 orphan explicit_allow_list  # G6
 orphan extract_features  # G6
 orphan extract_features_v2  # G6
 orphan family_enforced  # G6
 orphan fetch_governed  # G6
-orphan generate_portable_config  # G6
 orphan get_for_subject  # G6
-orphan get_history  # G6
 orphan get_page  # G6
 orphan get_persona  # G6
 orphan governance_cas_failure  # G6
@@ -195,10 +186,7 @@ orphan nervous_system_from_frame  # G6
 orphan not_wired_reason  # G6
 orphan outbound_budget  # G6
 orphan put_default  # G6
-orphan put_episode_full  # G6
 orphan query_as_of  # G6
-orphan query_facts  # G6
-orphan query_recent  # G6
 orphan query_with_time_range  # G6
 orphan rebind  # G6
 orphan recent_actions  # G6
@@ -207,10 +195,8 @@ orphan register_provider  # G6
 orphan remove_job  # G6
 orphan repetition_policy  # G6
 orphan retrieve_with_reranker  # G6
-orphan rule_count  # G6
 orphan scalar  # G6
 orphan sdk_method_names  # G6
-orphan session_state  # G6
 orphan set_quiet_threshold  # G6
 orphan shard_count  # G6
 orphan snapshot_from_env  # G6
@@ -219,7 +205,6 @@ orphan streaks  # G6
 orphan stream_len  # G6
 orphan tool_paths  # G6
 orphan total_subscriptions  # G6
-orphan traverse_from  # G6
 orphan upsert_hallway  # G6
 orphan without_as_of  # G6
 

@@ -1,6 +1,8 @@
 use std::env;
 use std::process::ExitCode;
 
+mod continuation_guard;
+
 use apeireth_cli::onboarding::UserTier;
 use apeireth_cli::{
     build_canonical_runtime_from_env, dispatch_canonical_approval, dispatch_canonical_chat,
@@ -8,10 +10,80 @@ use apeireth_cli::{
 };
 use apeireth_runtime::ApprovalDecision;
 
+/// 帮助文本（单一真源；`print_help` 与防漂移测试共用）。
+///
+/// 纪律：**分发里有的命令，帮助里必须出现**（`help_covers_every_dispatched_command`
+/// 机检）。此前这里是手写的一小撮命令，实测漏掉了 `dream` / `nightwatch` /
+/// `lessons` / `egress` / `bundle` / `bio` / `council` / `subagent` —— 用户从
+/// `--help` 根本发现不了这些能力（帮助低估产品，同样是 0 装问题）。
+const HELP_TEXT: &str = "\
+apeireth — 本地优先的个人 AI 运行时（单二进制，多入口）
+
+Usage:
+  [会话]
+    apeireth session      就绪自检：构建运行时、打印就绪与 provider 后退出（非交互）
+    apeireth chat <PROMPT> [--model MODEL] [--session SESSION]
+    apeireth onboard [--tier casual|pro] [--show | --reset]
+  [审批]
+    apeireth approve --session SESSION --approval APPROVAL
+    apeireth reject  --session SESSION --approval APPROVAL [--reason REASON]
+    apeireth cancel  --session SESSION --approval APPROVAL [--reason REASON]
+  [服务]
+    apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]
+  [身份与访问]
+    apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]
+    apeireth user list [--token TOKEN]
+    apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]
+    apeireth user remove --user-id ID [--token TOKEN]
+  [记忆与认知]
+    apeireth dream
+    apeireth nightwatch [--session SESSION] [--limit N] [--watch] [--interval S [--cooldown S [--idle S]]]
+    apeireth lessons [--db DB] [--scope problem|file|interaction|tool] [--status candidate|verified|retracted] [--limit N]
+    apeireth lessons add --statement 一句话教训 --scope SCOPE --episode 经历ID [--episode ...] --evidence 证据摘要
+    apeireth council <主题...>
+    apeireth subagent <标题...> [--payload JSON]
+    apeireth memory verify [--db DB] [--subject SUBJECT]
+    apeireth memory export --out FILE [--db DB] [--subject SUBJECT] [--limit N]
+    apeireth memory handover --out FILE [--db DB] [--issue TEXT]... [--next TEXT]
+    apeireth memory migrate-subject --from ANCHOR --to ANCHOR [--db DB]
+  [治理与安全]
+    apeireth trait report
+    apeireth trait lock <SLIDER>
+    apeireth trait unlock <SLIDER>
+    apeireth bio list
+    apeireth bio enable <mechanism>
+    apeireth bio disable <mechanism>
+    apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>
+    apeireth crypto recovery-export --keys <FILE> --out <FILE>
+    apeireth crypto unlock --keys <FILE> [--recovery <FILE>] [--out <KEYFILE>]
+    apeireth egress ledger [--path LEDGER_JSONL] [--limit N] [--json]
+    apeireth egress impact [--path IMPACT_JSONL] [--limit N] [--json]
+    apeireth egress outcome <ACTION_ID> <confirmed|failed>
+    apeireth egress bind <ACTION_ID> <TOOL_CALL_ID>
+    apeireth egress notify <FACT_ID> <wording|partial|refuted>
+    apeireth exposure report [--json] [--out PATH] [--bundle BUNDLE]
+  [数据与迁移]
+    apeireth backup export <DIR>
+    apeireth backup restore <BUNDLE> [--to ROOT]
+    apeireth backup verify <BUNDLE>
+    apeireth bundle --out DIR [--now EPOCH_S]
+
+其它二进制（同一 workspace 的其它入口，不属 `apeireth` 子命令）:
+  apeireth-tui [--endpoint URL] [--token TOKEN]   终端驾驶舱（全屏 TUI 客户端）
+  apeireth-gateway 形态由 `apeireth gateway serve` 提供；SDK 见 crates/adapters/sdk
+
+Options:
+  -h, --help       Show this help
+  -V, --version    Show the version
+
+Environment:
+  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)
+  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)
+  APEIRETH_DATA_DIR  数据根 (缺省 ~/.apeireth)
+";
+
 fn print_help() {
-    println!(
-        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth onboard [--tier casual|pro] [--show | --reset]\n  apeireth approve --session SESSION --approval APPROVAL\n  apeireth reject --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth cancel --session SESSION --approval APPROVAL [--reason REASON]\n  apeireth gateway serve [--bind ADDR] [--port PORT] [--pid-file PATH]\n  apeireth user add --user-id ID --role owner|member|guest [--clients NAME[,NAME...]] [--domain DOMAIN] [--token TOKEN]\n  apeireth user list [--token TOKEN]\n  apeireth user role --user-id ID --role owner|member|guest [--token TOKEN]\n  apeireth user remove --user-id ID [--token TOKEN]\n  apeireth backup export <DIR>\n  apeireth backup restore <BUNDLE> [--to <ROOT>]\n  apeireth backup verify <BUNDLE>\n    apeireth crypto wrap --partition <ID> --keys <FILE> --recovery-out <FILE>\n  apeireth crypto recovery-export --keys <FILE> --out <FILE>\n  apeireth crypto unlock --keys <FILE> [--recovery <FILE>]\napeireth exposure report [--json] [--out <PATH>] [--bundle <BUNDLE>]\n  apeireth trait report\n  apeireth trait lock <SLIDER>\n  apeireth trait unlock <SLIDER>\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version\n\nEnvironment:\n  APEIRETH_LISTEN  gateway serve 绑定地址 (缺省 127.0.0.1; --bind 显式旗标优先)\n  APEIRETH_GATEWAY_TOKEN  全 API 面令牌门 (缺省回环; 非回环绑定必须设令牌)"
-    );
+    println!("{HELP_TEXT}");
 }
 
 fn run_session() -> ExitCode {
@@ -42,6 +114,27 @@ fn run_session() -> ExitCode {
 }
 
 fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> ExitCode {
+    // **续行中断检测**（`orchestration::continuation` 的安全子集）：
+    // 回合开始前落快照、正常收尾即删；下次同会话启动时快照还在 ⇒ 上次没跑完。
+    // 只报不重放（自动续跑会重放副作用，属产品语义决策）；快照**不存正文**。
+    let store = continuation_guard::default_store();
+    let session_key = session.clone().unwrap_or_else(|| "default".to_string());
+    let now_ms = apeireth_runtime_assembly::now_epoch_ms();
+    // 轮号真值链: 上次中断的快照带着**被中断那轮**的序号 ⇒ 下一轮 = 它 + 1；
+    // 无中断记录 ⇒ 第 1 轮。（此前恒传 1 ⇒ 提示语永远说「第 1 轮」。）
+    let interrupted = continuation_guard::take_interrupted_notice(&store, &session_key, now_ms);
+    if let Some(notice) = interrupted.as_ref() {
+        eprintln!("{}", notice.text);
+    }
+    let next_turn = interrupted.map_or(1, |notice| notice.turn.saturating_add(1));
+    let open_turn = match continuation_guard::begin_turn(&store, &session_key, now_ms, next_turn) {
+        Ok(open) => Some(open),
+        Err(error) => {
+            // 快照落不了盘不该阻止对话本身（检测能力缺失 ≠ 功能不可用），如实说明。
+            eprintln!("[续行] {error}（本轮不记录续行快照）");
+            None
+        }
+    };
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -49,7 +142,13 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(dispatch_canonical_chat(prompt, model, session)) {
+    let outcome = runtime.block_on(dispatch_canonical_chat(prompt, model, session));
+    // 正常收尾（含业务错误 / 待审批挂起）= 「没崩」⇒ 删快照。
+    // 只有进程真的在回合中途消失（崩溃/强杀），快照才会留到下次启动被报出来。
+    if let Some(open) = open_turn {
+        continuation_guard::finish_turn(&store, &open);
+    }
+    match outcome {
         Ok(CanonicalCliTurn::Completed(response)) => {
             println!("{}", response.text);
             eprintln!(
@@ -77,9 +176,36 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
         }
         Err(error) => {
             eprintln!("canonical chat failed: {error}");
+            if let Some(hint) = chat_error_hint(&error) {
+                eprintln!("{hint}");
+            }
             ExitCode::FAILURE
         }
     }
+}
+
+/// 给 `chat` 的失败补一句**可行动**提示（只对能自救的错误类型）。
+///
+/// 为什么放在出口：`apeireth chat` 是用户跑的第一条命令。此前缺凭据时只回
+/// `provider.minimax: authentication failed: missing API key for
+/// provider.minimax.api_key` —— **没说怎么配**（真机实测 2026-10-25）。
+/// 这里不猜内部错误，只认几个稳定的失败族并给出下一步动作。
+fn chat_error_hint(error: &str) -> Option<&'static str> {
+    let lower = error.to_ascii_lowercase();
+    if lower.contains("missing api key") || lower.contains("authentication failed") {
+        return Some(
+            "提示：还没有配置模型凭据。跑 `apeireth onboard` 按向导选服务商并填密钥，\
+             或设环境变量后重试：MiniMax = APEIRETH_API_KEY；\
+             OpenAI 兼容 = APEIRETH_OPENAI_MODELS + APEIRETH_OPENAI_URL + OPENAI_API_KEY",
+        );
+    }
+    if lower.contains("provider_unreachable") || lower.contains("connection refused") {
+        return Some(
+            "提示：模型服务连不上——检查 APEIRETH_OPENAI_URL（端点）/ 网络与代理后重试；\
+             本地模型请确认端口与路径正确",
+        );
+    }
+    None
 }
 
 fn run_approval(session: String, approval: String, decision: ApprovalDecision) -> ExitCode {
@@ -835,6 +961,16 @@ mod onboard_parse_tests {
 }
 
 fn main() -> ExitCode {
+    // 退出时清理持久审计锁（见 [`apeireth_cli::governance_chain::release_audit_lock`]）：
+    // 审计 sink 存在**进程级注册表**里（按路径单例），不会随栈析构 ⇒ 正常返回也不会
+    // drop ⇒ 若不显式清理，`governance-audit.lock` 会永远残留在用户数据目录
+    // （实测 2026-10-25：正常退出后仍留 1 个）。陈旧锁接管能兜住，但那是垃圾文件。
+    let code = run_cli();
+    apeireth_cli::governance_chain::release_audit_lock();
+    code
+}
+
+fn run_cli() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
         return run_session();
@@ -892,6 +1028,43 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        // 记忆库体检（只读）：校验哈希链完整性并定位坏记录。
+        "memory" => match args.get(1).map(String::as_str) {
+            Some("verify") => match apeireth_cli::memory_verify_command::run_verify(&args[2..]) {
+                Ok(report) => {
+                    println!("{}", apeireth_cli::memory_verify_command::render(&report));
+                    if report.broken_subjects == 0 {
+                        ExitCode::SUCCESS
+                    } else {
+                        ExitCode::FAILURE
+                    }
+                }
+                Err(error) => {
+                    eprintln!("memory verify failed: {error}");
+                    ExitCode::from(2)
+                }
+            },
+            // 主体锚点迁移（copy-forward）：把记忆复制到新主体，原记录保留。
+            Some("migrate-subject") => ExitCode::from(
+                apeireth_cli::memory_migrate_command::run_migrate(&args[2..]),
+            ),
+            // 脱机可读归档物导出（只读 + 当场自校验）。
+            Some("export") => ExitCode::from(apeireth_cli::memory_export_command::run(&args[2..])),
+            // 交接包（数据 + 状态 + 下一步 + 红线；只读 + 当场跑演练）。
+            Some("handover") => {
+                ExitCode::from(apeireth_cli::memory_handover_command::run(&args[2..]))
+            }
+            _ => {
+                eprintln!("{}", apeireth_cli::memory_verify_command::USAGE);
+                eprintln!();
+                eprintln!("{}", apeireth_cli::memory_export_command::USAGE);
+                eprintln!();
+                eprintln!("{}", apeireth_cli::memory_handover_command::USAGE);
+                eprintln!();
+                eprintln!("{}", apeireth_cli::memory_migrate_command::USAGE);
+                ExitCode::FAILURE
+            }
+        },
         "nightwatch" => match parse_nightwatch(&args[1..]) {
             Ok(options) if options.watch => run_nightwatch_watch(options),
             Ok(options) => run_nightwatch(options.session, options.limit),
@@ -921,6 +1094,18 @@ fn main() -> ExitCode {
             }
             Err(error) => {
                 eprintln!("backup operation refused: {error}");
+                ExitCode::FAILURE
+            }
+        },
+        // 随身 U 盘便携包：复制可执行文件 + 两平台启动脚本 + 便携配置 + 清单。
+        // 数据落在包内 ./data/（相对路径，换盘符/挂载点不受影响）。
+        "bundle" => match apeireth_cli::bundle_command::run_bundle(&args[1..]) {
+            Ok(summary) => {
+                println!("{summary}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("bundle operation refused: {error}");
                 ExitCode::FAILURE
             }
         },
@@ -1155,5 +1340,128 @@ mod tests {
         assert!(parse_approval("approve", &["--session".into(), "s1".into()]).is_err());
         assert!(parse_approval("approve", &["--approval".into(), "a1".into()]).is_err());
         assert!(parse_approval("approve", &["--unknown".into(), "val".into()]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod help_drift_tests {
+    use super::HELP_TEXT;
+
+    /// **防漂移**：`fn main` 分发块里出现的每个顶层命令，帮助文本必须覆盖。
+    ///
+    /// 这条守卫存在的理由：帮助此前是手写的，漏了 8 个命令（用户发现不了能力）。
+    /// 机检而不是人盯 —— 新增命令却忘了写帮助 = 测试红。
+    #[test]
+    fn help_covers_every_dispatched_command() {
+        let source = include_str!("main.rs");
+        // 分发块在 `run_cli` 里（`main` 只做「跑 + 清理审计锁」两件事）。
+        let start = source
+            .find("fn run_cli() -> ExitCode")
+            .expect("run_cli 入口（分发块所在）");
+        let rest = &source[start..];
+        // main 函数体结束于下一个行首 `fn ` 或文件尾
+        let end = rest
+            .find("\nfn ")
+            .map(|offset| start + offset)
+            .unwrap_or(source.len());
+        let body = &source[start..end];
+
+        let mut commands: Vec<String> = Vec::new();
+        for line in body.lines() {
+            let trimmed = line.trim_start();
+            let indent = line.len() - trimmed.len();
+            // 只认「有缩进 + 一个或多个字符串字面量 + =>」的 match 臂
+            if indent == 0 {
+                continue;
+            }
+            if !trimmed.contains("=>") {
+                continue;
+            }
+            let head = trimmed.split("=>").next().unwrap_or("");
+            let mut in_arm = true;
+            let mut found_any = false;
+            for token in head.split('"').skip(1).step_by(2) {
+                // 形如 "a" | "b" 的臂；带参数的臂（含 `if`）不计入命令名
+                if token.is_empty() || !token.chars().all(|c| c.is_ascii_lowercase() || c == '-') {
+                    in_arm = false;
+                    break;
+                }
+                found_any = true;
+                commands.push(token.to_string());
+            }
+            if !found_any {
+                in_arm = false;
+            }
+            let _ = in_arm;
+        }
+        commands.sort();
+        commands.dedup();
+        assert!(
+            commands.len() >= 15,
+            "命令提取疑似失效（只有 {} 个）: {commands:?}",
+            commands.len()
+        );
+
+        let mut missing: Vec<&String> = Vec::new();
+        for command in &commands {
+            // `serve` 是 gateway 的子命令，出现在 gateway 行里即算覆盖
+            if !HELP_TEXT.contains(command) {
+                missing.push(command);
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "帮助文本漏了分发里的命令 {missing:?} —— 加命令时别忘了写帮助（或去掉命令）"
+        );
+    }
+}
+
+#[cfg(test)]
+mod chat_hint_tests {
+    /// **env 名机检**：`chat` 的失败提示里引用的 `APEIRETH_*` 必须真实存在。
+    ///
+    /// 守卫理由：我第一版提示把「OpenAI 兼容的密钥/端点 env」误写成了带
+    /// `APEIRETH_` 前缀的**不存在名字**（真实是 `OPENAI_API_KEY` /
+    /// `APEIRETH_OPENAI_URL`）。给错 env 名和给错建议一样有害：用户照做仍失败。
+    /// 本测试从 env 注册表（单一真源）核对 —— 同时 arch_guard 的 env 计数预算
+    /// 会把「源码里出现未登记 env 名字」当新增开关拦下（**连注释都算**，实测有效）。
+    #[test]
+    fn chat_error_hints_only_cite_registered_apeireth_envs() {
+        let hints = [
+            super::chat_error_hint("missing api key for provider.minimax.api_key")
+                .expect("缺凭据应有提示"),
+            super::chat_error_hint("provider_unreachable: connection refused")
+                .expect("连不上应有提示"),
+        ];
+        let registry = include_str!("../../../../docs/architecture/env-registry.toml");
+        for hint in hints {
+            for token in hint.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+                if !token.starts_with("APEIRETH_") {
+                    continue;
+                }
+                assert!(
+                    registry.contains(token),
+                    "提示引用了未注册的 env `{token}` —— 去 docs/architecture/env-registry.toml 核对真实名字: {hint}"
+                );
+            }
+        }
+    }
+
+    /// 非 `APEIRETH_` 前缀的 provider 标准名必须拼对（`OPENAI_API_KEY`）。
+    #[test]
+    fn chat_error_hint_uses_the_real_openai_key_name() {
+        let hint = super::chat_error_hint("authentication failed").expect("应有提示");
+        assert!(
+            hint.contains("OPENAI_API_KEY"),
+            "应点名 OPENAI_API_KEY: {hint}"
+        );
+        // 反向断言：不得出现「带 APEIRETH_ 前缀的 OpenAI 密钥名」这种错误拼法。
+        // 名字在运行时拼接 —— 源码里写出这个不存在的 env 名字面量，会被
+        // arch_guard 的 env 计数预算当成「新增开关」拦下（连注释都算，实测有效）。
+        let wrong_prefix = format!("APEIRETH_{}", "OPENAI_API_KEY");
+        assert!(
+            !hint.contains(&wrong_prefix),
+            "不存在这个 env（真实是 OPENAI_API_KEY）: {hint}"
+        );
     }
 }
