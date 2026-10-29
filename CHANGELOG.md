@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — G3 executed consolidation with final main and preservation evidence（2026-10-29）
+
+- Publish actual protected integrations superseded closures final main verification and preserved WIP instead of a plans-only report.
+- Reconcile original commit-ID preservation against live refs and recovery tags and retain the external merge chronology limitation.
+
 ## [Unreleased] — F3 final main exact-tree software and documentation verification（2026-10-29）
 
 - Verify final protected main with exact-tree binding to a completed five-stage gate and its own documentation architecture wiring and ledger scripts.

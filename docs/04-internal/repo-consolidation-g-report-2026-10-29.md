@@ -1,5 +1,7 @@
 # G Repository consolidation report
 
+> Historical D2–G snapshot: the integration state and inventory below are frozen history. Current #98/D4 merges, preserved work and final main verification are recorded in [G3](repo-consolidation-d4-g3-report-2026-10-29.md).
+
 [Document-Meta]
 Document: docs/04-internal/repo-consolidation-g-report-2026-10-29.md
 Version: 1.0
