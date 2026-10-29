@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — D3a CI repair and anchored protected Kernel merge（2026-10-29）
+
+- PR98 merged through the protected ordinary path after all six required checks passed; verified recovery tag precedes auto-delete and active KC1 recreation.
+- Record CI root causes and fixes; final local five-segment gate passes; preserve qualified Kernel acceptance and historical/cold-cache limitations.
+
 ## [Unreleased] — G Repository consolidation report（2026-10-29）
 
 - A–G 执行账收口：#64/#70 protected merges、11 verified recovery tags、7 E explicit deletions；#98 仍 OPEN/BLOCKED，main 尚未含 KC1。

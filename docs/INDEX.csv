@@ -410,6 +410,7 @@ docs/04-internal/repo-consolidation-b-inventory-2026-10-29.md,L4,7,Phase B 仓�
 docs/04-internal/repo-consolidation-c-classify-2026-10-29.md,L4,7,Phase C 仓库整合分类与后续顺序建议,2026-10-29,在飞,0,保留,
 docs/04-internal/repo-consolidation-d-merge-2026-10-29.md,L4,7,Phase D 受保护 PR 整合执行账,2026-10-29,在飞,0,保留,
 docs/04-internal/repo-consolidation-d2-anchored-merges-2026-10-29.md,L4,7,D2 Anchored protected merges,2026-10-29,在飞,0,保留,
+docs/04-internal/repo-consolidation-d3-pr98-ci-merge-2026-10-29.md,L4,7,D3a CI repair and anchored protected Kernel merge,2026-10-29,在飞,0,保留,
 docs/04-internal/repo-consolidation-e-cleanup-2026-10-29.md,L4,7,E Recovery anchors and cautious cleanup,2026-10-29,在飞,0,保留,
 docs/04-internal/repo-consolidation-f-main-verify-2026-10-29.md,L4,7,F Exact main documentation and architecture verification,2026-10-29,在飞,0,保留,
 docs/04-internal/repo-consolidation-g-report-2026-10-29.md,L4,7,G Repository consolidation report,2026-10-29,在飞,0,保留,
