@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — D4c executed focused environment provider and cache integrations（2026-10-29）
+
+- Land bounded environment-lock response-contract and verified file-cache extractions through green anchored protected PRs.
+- Preserve broad WIP and document local CI failures and corrected root causes without weakening assertions or gates.
+
 ## [Unreleased] — D4d executed Mesh UI and MCP scoped follow-ups（2026-10-29）
 
 - Land the bounded reactive core and current MCP guide while preserving broad Mesh and UI WIP with actual verification evidence.
