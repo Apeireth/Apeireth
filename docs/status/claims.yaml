@@ -27,12 +27,13 @@ claims:
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime/src/canonical/runtime.rs
     tests:
+      - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/tests/canonical_multi_provider.rs
-    verified_at: 2ee10a39869fe2d3723188d04114673896e5afb1
+    verified_at: 46246f2e4b8cd588d8978229e0d269e2e01825a6
     verify_cmd: "cargo test -p apeireth-runtime --test canonical_multi_provider"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：任务 gate 在实际 Provider 候选请求处预留共享预算，fallback/overflow 不绕预算；原路由、并发、出网和核算边界保持，证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S3 复核：builder 兼容行为统一注册工具路径，Provider routing/default 与限流语义不变；canonical_multi_provider 及 workspace 原命令通过，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4 复核：Runtime 新增可选 Host epoch，回合与审批恢复受撤销约束；Provider 路由、fallback、并发、预算与默认不变。runtime all-targets 及本轮包级 clippy 通过，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：桌面执行经 managed main 委托同一 Kernel/ProviderRouter；路由、fallback、治理与限流算法未改。真实 bootstrap、多入口和 runtime all-targets 回归通过；不声明外部 API 实测。 证据见 kernel-convergence-s5-2026-10-29.md。"
+    notes: "Runtime 持有 ProviderRouter；fallback 顺序/健康 EMA/retryable 才下抛/permanent 立即失败。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）；2026-10-27 KC-2 复核：runtime.rs 新增控制命令/插件工具同名启动期拒绝，本 claim 语义未变（实测见 75ee2464 正文）；2026-10-28 Phase 3 复核：Runtime 工具目录与模块装配改变，ProviderRouter 的路由/fallback/健康与并发边界未改；原回归随本批全量门禁通过。；本批复核：实际请求边界新增 owner 用量、可取消 Provider semaphore 与 Retry-After 退避；原 fallback/egress 测试保留，实例并发/限流/失败用量验收通过。；2026-10-28 生产收敛复核：源码变更及回归证据见 kernel-convergence-final-acceptance-2026-10-28.md；不将 Legacy SubLoop 或旧数据 Profile 映射宣称已迁移。；2026-10-29 S1 复核：任务 gate 在实际 Provider 候选请求处预留共享预算，fallback/overflow 不绕预算；原路由、并发、出网和核算边界保持，证据见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S3 复核：builder 兼容行为统一注册工具路径，Provider routing/default 与限流语义不变；canonical_multi_provider 及 workspace 原命令通过，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4 复核：Runtime 新增可选 Host epoch，回合与审批恢复受撤销约束；Provider 路由、fallback、并发、预算与默认不变。runtime all-targets 及本轮包级 clippy 通过，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：桌面执行经 managed main 委托同一 Kernel/ProviderRouter；路由、fallback、治理与限流算法未改。真实 bootstrap、多入口和 runtime all-targets 回归通过；不声明外部 API 实测。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 D3：仅新增兼容 Host 路由契约并移除未调用的内部 Arc getter，生产 gated 请求路径未变；fallback/逐候选 tool 投影、流式回落、会话计量与拒绝测试通过。"
 
   - id: core.cost_router
     title: "成本分级路由（H-P2，四档选模）"
@@ -186,6 +187,7 @@ claims:
       - crates/adapters/cli/src/egress_command.rs
       - crates/adapters/cli/src/lib.rs
     tests:
+      - crates/engine/runtime/src/canonical/provider/compat_tests.rs
       - crates/engine/runtime/src/canonical/provider.rs
       - crates/engine/runtime-assembly/src/egress_gate.rs
       - crates/engine/runtime-assembly/src/egress_ledger.rs
@@ -195,7 +197,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: 2ee10a39869fe2d3723188d04114673896e5afb1
+    verified_at: 46246f2e4b8cd588d8978229e0d269e2e01825a6
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -208,7 +210,7 @@ claims:
 ⑤自述面 `capabilities.accountability` —— 探测口接进 `ProductionBackends.self_status_accountability` + CLI 装配根。
 **沿革（如实记，不掩盖）**：2026-10-24 自查发现 ②④⑤ 此前**只有库级实现 + 测试调用、生产零调用**（被 `audit_unwired.py` 抓出 —— 而它此前自己也没接电，见该脚本 docstring）；同日已全部接上真实调用方，并新增 CI 棘轮 `.github/workflows/unwired-ratchet.yml` 防回归。
 **读出端已接**：出域账本 `apeireth egress ledger`（观测面）+ 问责账本 `apeireth egress impact`（责任面：授权/可逆性/影响谁/后果）。
-**后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。；2026-10-28 Phase 3 复核：单一工具目录/上下文接线未改变出网闸与 Provider 边界，原出境治理/账本回归随全量门禁通过；默认仍 OFF，未声称自动外发或自动回执已接。；2026-10-29 S4 复核：新增通用 principal epoch 检查，未改出网授权、脱敏或账本；默认仍 OFF。runtime all-targets 原出网回归通过，未声明自动回执或外部服务实测，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：完整 TurnRequest 委托保留 security/intent，上游批准的冻结 continuation 仍进入原出网与 Provider 边界。原算法与默认开关未改，runtime all-targets 及真实 bootstrap 通过；不声明外部出网实测。 证据见 kernel-convergence-s5-2026-10-29.md。"
+**后果回填通道已接**（`apeireth egress outcome <ACTION_ID> <confirmed|failed>`）：用户/回执渠道显式回填，系统不猜（只接受 confirmed/failed）；状态机把关（已确认的事实不能退回）；后果账本 append-only 持久化（`consequence-ledger.jsonl`）。**仍未接**：回执渠道的**自动**回报（当前只能用户手动回填）。；2026-10-28 Phase 3 复核：单一工具目录/上下文接线未改变出网闸与 Provider 边界，原出境治理/账本回归随全量门禁通过；默认仍 OFF，未声称自动外发或自动回执已接。；2026-10-29 S4 复核：新增通用 principal epoch 检查，未改出网授权、脱敏或账本；默认仍 OFF。runtime all-targets 原出网回归通过，未声明自动回执或外部服务实测，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：完整 TurnRequest 委托保留 security/intent，上游批准的冻结 continuation 仍进入原出网与 Provider 边界。原算法与默认开关未改，runtime all-targets 及真实 bootstrap 通过；不声明外部出网实测。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 D3：router 差异仅新增 cfg(test) 模块，runtime 仅移除无调用内部 getter；新增兼容会话入口拒绝测试证明拒绝时 Provider 零新增调用、计量事实零新增；默认 OFF 与受管 gate 路径不变。"
 
   - id: mem.lesson_object
     title: "教训对象（四拍状态机：经历→候选→新场景验证→撤回留痕）"
@@ -380,11 +382,11 @@ claims:
       - .github/workflows/rust.yml
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: c9251271
+    verified_at: 46246f2e4b8cd588d8978229e0d269e2e01825a6
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。"
+    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。；2026-10-29 D3：rust.yml 只修 secret-scan shell 引导并增加扫描器行为自检；governance chain drill 步骤、三路径判据与权限不变；本批 workspace 主门禁包含原回归。"
 
   - id: sec.governance_chain_drill
     title: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
@@ -585,6 +587,7 @@ claims:
       - crates/engine/runtime/src/canonical/principal_authority.rs
       - crates/engine/runtime/src/canonical/session.rs
     tests:
+      - crates/engine/runtime/tests/legacy_tool_adapter_contract.rs
       - crates/engine/runtime/tests/cognitive_module_abi.rs
       - crates/engine/runtime/tests/cache_prefix.rs
       - crates/engine/runtime/tests/context_budget.rs
@@ -594,11 +597,11 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 3f8048e8d8fca86eceba0e6e2eda89a16eed5ce1
+    verified_at: 46246f2e4b8cd588d8978229e0d269e2e01825a6
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
-    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。；2026-10-29 S1：SubLoop 已委托同一 AgentInstance/execute_outcome，独立 provider/round 循环已删除；注册 owner 世代、共享预算、隔离审批与原生排水经真实 Runtime 验证。with_module/Overlay 和两种 ModuleInvoker 后端仍留后续，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：两种 ModuleInvoker 均委托既有 AgentInstance 单次私有任务，直接 Router 后端已删除；无工具声明/派发、无递归 Hook、完整响应与 served_by 保真、child/真实模块 owner 用量和父来源经真实 Runtime 验证。with_module/Overlay、Profile 映射与桌面 managed 默认仍留后续，整体 Convergence 为 Partial，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：with_module / with_behavior 与 with_registered_behavior 共用 RegisteredBehavior、固定 Hook、原治理/Dispatcher 与 V1；execute 直接 callback fallback 和动态 system Overlay 插槽已删除。动态数据只成对投影一次，空观察仅审计，预算/spill/溢出收缩重组认证工具载荷；静态 Host policy、审批/指令时序及旧 reader 保留。Host grant、模型假 receipt/同名工具拒绝、开放批闭合、stop/unload 无回退及 principal 跳过旧全局引擎有真实 Runtime/旧 DB 回归。整体 Convergence 仍 Partial，S4 映射/S5 桌面主入口未实施，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：兼容 callback receipt 与 Dispatcher 上下文绑定完整 principal/epoch，未映射私有引擎继续默认拒绝；Host 显式选择的映射属于 IMPLEMENTED，映射未默认启用，原注册/治理/V1 机制等级与默认不变。指定窄门禁与真实 Runtime 对抗场景通过；整体 Convergence 仍 Partial，S5 桌面受管主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：生产认知 load/stop/permission/guessed receipt/module-only 原用例切入 managed desktop；兼容 builder 另保留原装配并扩展 managed/private principal 回归。主实例与模块 child 使用同一实例服务及短锁执行视图；注册仍不授权，整体 Convergence 保持 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。"
+    notes: "Kernel 不自动安装业务工具；Desktop 将原配置选择的工具注册为普通 ToolModule，注册后沿用 V1 协议。default ON 只表示该生产装配机制，未新开 Shell/网络/文件写权限，原业务开关不变。复用唯一 PluginManager 与 CapabilityRegistry；自动 Hook 输出仍经同一治理/冻结审批入口与 ToolEventV1 成对投影。新增执行上下文、局部并发、原生取消/排水；旧参数/日志兼容及 AfterToolCall 串行屏障保留。真实 Runtime 模拟模型回合覆盖四协议 Adapter。动态 MCP 完整 owner 生命周期、Memory 自动 overlay、专有设备原生清理、共享 Arc 热插拔与完整多实例仍未完成；无云 API/设备实测。Phase 2 历史 default OFF 不追改；Phase 3 接线证据见 docs/04-internal/capability-modules-phase3-2026-10-28.md。；本批复核：动态 MCP owner、独立 Agent Scope/Principal、Memory 固定 Hook 已在真实 Runtime 测试；Managed Runtime 无模块也使用 V1。Desktop 默认旧 Memory/Persona/Organ Overlay 和旧 SubLoop 尚未退出，不声称完整 Convergence。；2026-10-28 生产收敛：桌面认知回调经 RegisteredBehavior 私有工具与固定 Hook 注入 V1；空观察审计消费、模型猜名拒绝、旧投影不被重新学习有真实生产回归。with_module / SubLoop 仍为明确残留，不能视为全部 Legacy 后端退出。；2026-10-29 S1：SubLoop 已委托同一 AgentInstance/execute_outcome，独立 provider/round 循环已删除；注册 owner 世代、共享预算、隔离审批与原生排水经真实 Runtime 验证。with_module/Overlay 和两种 ModuleInvoker 后端仍留后续，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：两种 ModuleInvoker 均委托既有 AgentInstance 单次私有任务，直接 Router 后端已删除；无工具声明/派发、无递归 Hook、完整响应与 served_by 保真、child/真实模块 owner 用量和父来源经真实 Runtime 验证。with_module/Overlay、Profile 映射与桌面 managed 默认仍留后续，整体 Convergence 为 Partial，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：with_module / with_behavior 与 with_registered_behavior 共用 RegisteredBehavior、固定 Hook、原治理/Dispatcher 与 V1；execute 直接 callback fallback 和动态 system Overlay 插槽已删除。动态数据只成对投影一次，空观察仅审计，预算/spill/溢出收缩重组认证工具载荷；静态 Host policy、审批/指令时序及旧 reader 保留。Host grant、模型假 receipt/同名工具拒绝、开放批闭合、stop/unload 无回退及 principal 跳过旧全局引擎有真实 Runtime/旧 DB 回归。整体 Convergence 仍 Partial，S4 映射/S5 桌面主入口未实施，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：兼容 callback receipt 与 Dispatcher 上下文绑定完整 principal/epoch，未映射私有引擎继续默认拒绝；Host 显式选择的映射属于 IMPLEMENTED，映射未默认启用，原注册/治理/V1 机制等级与默认不变。指定窄门禁与真实 Runtime 对抗场景通过；整体 Convergence 仍 Partial，S5 桌面受管主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：生产认知 load/stop/permission/guessed receipt/module-only 原用例切入 managed desktop；兼容 builder 另保留原装配并扩展 managed/private principal 回归。主实例与模块 child 使用同一实例服务及短锁执行视图；注册仍不授权，整体 Convergence 保持 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 D3：只移除已无调用的内部旧 invoker getter；注册/生命周期生产边界不变，新增保留 Host adapter 的 schema、session scope 与 shutdown 拒绝契约通过。"
 
   - id: rt.owned_agents
     title: "同一 Runtime 的模块拥有独立 Agent 与分层核算"
@@ -637,11 +640,11 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 3f8048e8d8fca86eceba0e6e2eda89a16eed5ce1
+    verified_at: 46246f2e4b8cd588d8978229e0d269e2e01825a6
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents 端口，模块停止不影响主 Agent。PortableHost 已接线；桌面 Raw Runtime 和旧 SubLoop 的完整多实例迁移仍未完成，维持 IMPLEMENTED 口径。；2026-10-29 S1：SubLoop 路径为 PRODUCTION WIRED；规范化任务端口保留完整响应及本次 usage，父子身份/历史隔离、持久工具对、预算与 native drain 经真实 Runtime 验证。桌面 managed 默认及全部 Legacy 迁移仍未完成，整体维持 IMPLEMENTED，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：生产与独立 ModuleInvoker 共用 SingleShot 任务策略，意外 tool_calls 原样返回但不执行；请求事实归 child 与真实注册 owner，来源关联父 request/trace，适配器无重复计量。共享预算、跨 turn/session、失败/取消、未知缓存与缺失 usage 的 fail-closed 已实测；原 with_module 的兼容 Host owner 留 S3，不抬升整体等级，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：旧 builder 回调也绑定真实注册模块 owner 与世代，受原生命周期、内部 capability、父 scope 和模块 child grant 约束；原 SubLoop/Invoker 用量、预算与取消回归通过。未改桌面 managed 默认或旧数据 Profile 映射，不抬升整体等级，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：子任务核对父 principal/epoch，旧 invoker、fork、reload、审批与后台整理不能复用替换后的 grant；Profile 切换取消旧执行，新 main 不继承旧缓存。runtime all-targets 与 profile_memory_authorization 通过；维持 IMPLEMENTED，S5 默认主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：默认桌面 Host-owned main 使用现有 ManagedAgent；完整请求、流式、审批、CLI/gateway 和实际 heartbeat producer 共享同一 AgentRuntime/AgentId，历史按 Session 保留，用量在原实际边界记账后按身份汇总。Host 显式选择 SessionQuota，有限实例/共享预算仍默认拒绝未知用量；别实例 Session 认领、跨会话预算、阻塞 Provider 期间热控制/并发/关闭与原实例回归通过。该默认路径另有独立 PRODUCTION WIRED claim，宽泛本项维持 IMPLEMENTED，整体仍 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 S6 Android 库复验：aarch64-linux-android 的 runtime 库 check/build 与 assembly no-default-features 库 check 均 exit 0，精确命令与日志见 kernel-convergence-s6-2026-10-29.md。仅库编译，无设备/JNI/UI/HARDWARE VALIDATED；冷启动目标未达，整体仍 Partial，能力等级与默认不变。"
+    notes: "可由 Host API 组合；12 项真实实例测试覆盖并发、私有历史、预算、取消、模块自主创建及原生资源排水。不是桌面后台任务全面迁移，也不替代旧 SubLoop。；2026-10-28 生产收敛：请求使用共享服务的只读执行目录视图，模型等待期间不持控制读锁；热注册获得受限 ModuleAgents 端口，模块停止不影响主 Agent。PortableHost 已接线；桌面 Raw Runtime 和旧 SubLoop 的完整多实例迁移仍未完成，维持 IMPLEMENTED 口径。；2026-10-29 S1：SubLoop 路径为 PRODUCTION WIRED；规范化任务端口保留完整响应及本次 usage，父子身份/历史隔离、持久工具对、预算与 native drain 经真实 Runtime 验证。桌面 managed 默认及全部 Legacy 迁移仍未完成，整体维持 IMPLEMENTED，见 kernel-convergence-s1-2026-10-29.md。；2026-10-29 S2：生产与独立 ModuleInvoker 共用 SingleShot 任务策略，意外 tool_calls 原样返回但不执行；请求事实归 child 与真实注册 owner，来源关联父 request/trace，适配器无重复计量。共享预算、跨 turn/session、失败/取消、未知缓存与缺失 usage 的 fail-closed 已实测；原 with_module 的兼容 Host owner 留 S3，不抬升整体等级，见 kernel-convergence-s2-2026-10-29.md。；2026-10-29 S3：旧 builder 回调也绑定真实注册模块 owner 与世代，受原生命周期、内部 capability、父 scope 和模块 child grant 约束；原 SubLoop/Invoker 用量、预算与取消回归通过。未改桌面 managed 默认或旧数据 Profile 映射，不抬升整体等级，见 kernel-convergence-s3-2026-10-29.md。；2026-10-29 S4：子任务核对父 principal/epoch，旧 invoker、fork、reload、审批与后台整理不能复用替换后的 grant；Profile 切换取消旧执行，新 main 不继承旧缓存。runtime all-targets 与 profile_memory_authorization 通过；维持 IMPLEMENTED，S5 默认主入口未实施，见 kernel-convergence-s4-2026-10-29.md。；2026-10-29 S5：默认桌面 Host-owned main 使用现有 ManagedAgent；完整请求、流式、审批、CLI/gateway 和实际 heartbeat producer 共享同一 AgentRuntime/AgentId，历史按 Session 保留，用量在原实际边界记账后按身份汇总。Host 显式选择 SessionQuota，有限实例/共享预算仍默认拒绝未知用量；别实例 Session 认领、跨会话预算、阻塞 Provider 期间热控制/并发/关闭与原实例回归通过。该默认路径另有独立 PRODUCTION WIRED claim，宽泛本项维持 IMPLEMENTED，整体仍 Partial。 证据见 kernel-convergence-s5-2026-10-29.md。；2026-10-29 S6：兼容子执行经既有实例、Kernel 与 Dispatcher，未新增 Provider 后端或重复计量；真实 Runtime 验证多 child/round 复用 wire id 的独立事实、前端隔离、取消保账、native drain 后的持久 AgentTaskInterrupted 与重复 stop 幂等。新 reader 保留旧日志，新增变体不承诺旧二进制降级读取；pending 只表示最后 checkpoint 未闭合，不证明副作用回滚。原五段 gate_full 清理磁盘后重试通过；宽泛等级与默认不变，平台/性能及最终结论见 kernel-convergence-s6-2026-10-29.md。；2026-10-29 S6 Android 库复验：aarch64-linux-android 的 runtime 库 check/build 与 assembly no-default-features 库 check 均 exit 0，精确命令与日志见 kernel-convergence-s6-2026-10-29.md。仅库编译，无设备/JNI/UI/HARDWARE VALIDATED；冷启动目标未达，整体仍 Partial，能力等级与默认不变。；2026-10-29 D3：移除仅内部且无调用的 providers_arc；受管实例仍用原 gated router/执行视图，不把兼容 Host API 测试宣称新增生产接线；原实例回归随 workspace 主门禁通过。"
 
   - id: mem.registered_namespace
     title: "注册式 Memory 工具、固定 Hook 与通用 Profile 隔离"

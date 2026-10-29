@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 011d9542d907c4a85036af4db92b70677859c14e0d14f673de338fd3b250878f
+claims_sha256: 1af507a84e431ca384980c559c07e89f529d26500ca15e34e0a5f3a0b28b7ea2
 claims_total: 33
 items:
   - id: "rt.provider_router"
@@ -19,6 +19,7 @@ items:
     default_enabled: true
     validated:
       tests:
+        - "crates/engine/runtime/src/canonical/provider/compat_tests.rs"
         - "crates/engine/runtime/tests/canonical_multi_provider.rs"
       claims_id: "rt.provider_router"
     gaps:
@@ -215,6 +216,7 @@ items:
     default_enabled: false
     validated:
       tests:
+        - "crates/engine/runtime/src/canonical/provider/compat_tests.rs"
         - "crates/engine/runtime/src/canonical/provider.rs"
         - "crates/engine/runtime-assembly/src/egress_gate.rs"
         - "crates/engine/runtime-assembly/src/egress_ledger.rs"
@@ -233,15 +235,18 @@ items:
       sources:
         - "crates/engine/memory/src/lesson.rs"
         - "crates/engine/memory/src/migrations.rs"
+        - "crates/engine/memory/src/migrations/fresh_tables.sql"
         - "crates/adapters/cli/src/lessons_command.rs"
     wired:
       production_refs:
         - "crates/adapters/cli/src/lessons_command.rs"
         - "crates/engine/memory/src/lesson.rs"
         - "crates/engine/memory/src/migrations.rs"
+        - "crates/engine/memory/src/migrations/fresh_tables.sql"
     default_enabled: true
     validated:
       tests:
+        - "crates/engine/memory/src/migrations/tests.rs"
         - "crates/engine/memory/src/lesson.rs"
         - "crates/adapters/cli/src/lessons_command.rs"
       claims_id: "mem.lesson_object"
@@ -667,6 +672,7 @@ items:
     default_enabled: true
     validated:
       tests:
+        - "crates/engine/runtime/tests/legacy_tool_adapter_contract.rs"
         - "crates/engine/runtime/tests/cognitive_module_abi.rs"
         - "crates/engine/runtime/tests/cache_prefix.rs"
         - "crates/engine/runtime/tests/context_budget.rs"
