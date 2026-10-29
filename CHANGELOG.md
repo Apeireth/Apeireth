@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Modular ALE / System One（2026-10-30，Partial）
+
+- **IMPLEMENTED / 默认 OFF**：显式 Host 的 Module public/private 契约、Memory 任务句柄、强制 Internal 监督与审计、typed 模块消息及固定回环 UDP Mesh worker。模型 Allow 不覆盖确定性权限；拒绝、不可用、超时或审计失败不执行受保护操作。
+- **边界**：复用原 Registry、Lifecycle、Dispatcher、AgentInstance 与唯一计量；真实 Runtime/进程/存储/回环 socket 软件证据见 [P4 报告](docs/04-internal/ale-system-one-p4-2026-10-30.md)。兼容入口默认纳管、外部设备/网络/加密及 live model 验证仍待验收；无硬件声明，不改历史基准。
+
 ## [Unreleased] — G Repository consolidation report（2026-10-29）
 
 - A–G 执行账收口：#64/#70 protected merges、11 verified recovery tags、7 E explicit deletions；#98 仍 OPEN/BLOCKED，main 尚未含 KC1。

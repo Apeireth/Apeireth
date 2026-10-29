@@ -39,8 +39,9 @@
 | `mem.registered_namespace` | IMPLEMENTED | - | - | `4ff8853bd8c3` | 2026-11-20 |
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `4ff8853bd8c3` | 2026-11-20 |
 | `rt.module_execution_contract` | IMPLEMENTED | OFF | - | `4ff8853bd8c3` | 2026-11-20 |
-| `rt.system_one_internal` | IMPLEMENTED | OFF | - | `4ff8853bd8c3` | 2026-11-20 |
-| `rt.module_messages` | IMPLEMENTED | OFF | - | `4ff8853bd8c3` | 2026-11-20 |
+| `rt.system_one_internal` | IMPLEMENTED | OFF | - | `b80bc70b85b0` | 2026-11-20 |
+| `rt.module_messages` | IMPLEMENTED | OFF | - | `b80bc70b85b0` | 2026-11-20 |
+| `rt.mesh_local_worker` | IMPLEMENTED | OFF | - | `b80bc70b85b0` | 2026-11-20 |
 
 ## 使用
 
