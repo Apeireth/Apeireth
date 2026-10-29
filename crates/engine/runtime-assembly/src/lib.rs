@@ -5,6 +5,7 @@
 
 #![deny(unsafe_code)]
 
+pub mod mesh;
 pub mod portable;
 #[cfg(feature = "memory")]
 pub mod profile_memory;

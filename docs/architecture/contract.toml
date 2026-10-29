@@ -383,3 +383,9 @@ name = "ModuleMessagePipeline"
 canonical = "crates/engine/runtime/src/canonical/module_messages.rs"
 known_debt = []
 target = "ADR-0023 P3: bounded admission and local refusal window only; existing Registry/PluginManager remain authoritative"
+
+[[concepts]]
+name = "MeshModule"
+canonical = "crates/engine/runtime-assembly/src/mesh.rs"
+known_debt = []
+target = "ADR-0023 P4: opt-in fixed loopback peer worker and whitelist status; existing Internal Dispatcher gate, no external device or encryption claim"

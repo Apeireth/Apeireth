@@ -632,3 +632,102 @@ async fn stopping_source_drains_private_mailbox_and_old_generation_cannot_reacqu
         .unwrap()
         .is_ok());
 }
+
+#[tokio::test]
+async fn revoking_root_scope_during_nested_review_prevents_the_effect_after_model_allow() {
+    use apeireth_plugin::agents::AgentConfig;
+    use apeireth_runtime::canonical::dispatcher::ToolScope;
+    let a = Arc::new(State::default());
+    let b = Arc::new(State::default());
+    *a.relay.lock().unwrap() = Some(request("module.b", "write"));
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let (gate, audit, _) =
+        review_support::gate(review_support::Mode::Wait(entered.clone(), release.clone()));
+    let provider = Provider::new(vec![vec![call("relay", json!({}))], vec![]]);
+    let runtime = builder(provider.clone())
+        .with_system_one(gate)
+        .with_plugin(Module::new(
+            "module.a",
+            &[("relay", logical(EffectClass::Orchestration))],
+            a.clone(),
+        ))
+        .with_plugin(Module::new(
+            "module.b",
+            &[("write", logical(EffectClass::Protected))],
+            b.clone(),
+        ))
+        .build_agent_runtime(policy(&[("module.a", "module.b", &["write"])]))
+        .await
+        .unwrap();
+    let main = runtime
+        .spawn_agent(
+            "main",
+            AgentConfig {
+                tools: vec![cid("tool.relay"), cid("tool.write")],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let (turn, ()) = tokio::time::timeout(Duration::from_secs(3), async {
+        tokio::join!(main.run("request then revoke".into()), async {
+            entered.notified().await;
+            runtime.kernel().await.tool_dispatcher().set_scope(
+                main.snapshot().session,
+                ToolScope::Only([cid("tool.relay")].into_iter().collect()),
+            );
+            release.notify_one();
+        })
+    })
+    .await
+    .unwrap();
+    turn.unwrap();
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(audit.records().len(), 1);
+    assert!(provider.results().join("\n").contains("authority changed"));
+}
+
+#[tokio::test]
+async fn unresolved_idempotency_record_is_not_evicted_to_repeat_an_uncertain_effect() {
+    let a = Arc::new(State::default());
+    let b = Arc::new(State::default());
+    *b.hold.lock().unwrap() = Some(Arc::new(tokio::sync::Notify::new()));
+    let mut p = policy(&[("module.a", "module.b", &["hold"])]);
+    p.message_policy
+        .as_mut()
+        .unwrap()
+        .limits
+        .idempotency_records = 1;
+    let _runtime = builder(Provider::new(vec![]))
+        .with_plugin(Module::new("module.a", &[], a.clone()))
+        .with_plugin(Module::new(
+            "module.b",
+            &[("hold", logical(EffectClass::Pure))],
+            b.clone(),
+        ))
+        .build_agent_runtime(p)
+        .await
+        .unwrap();
+    let mut r = request("module.b", "hold");
+    r.timeout = Duration::from_millis(30);
+    r.idempotency_key = Some("uncertain".into());
+    assert!(
+        a.port()
+            .send(r.clone())
+            .await
+            .unwrap_err()
+            .may_have_executed
+    );
+    assert_eq!(
+        a.port().send(r.clone()).await.unwrap_err().code,
+        ModuleMessageErrorCode::Duplicate
+    );
+    r.idempotency_key = Some("new".into());
+    assert_eq!(
+        a.port().send(r).await.unwrap_err().code,
+        ModuleMessageErrorCode::Backpressure
+    );
+    assert_eq!(b.contexts.lock().unwrap().len(), 1);
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+}
