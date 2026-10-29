@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — D4b serial dependency execution and current blockers（2026-10-29）
+
+- Execute protected merges for Tokio serde_json and refreshed setup-python with verified recovery anchors.
+- Publish additive dependency and action replacements; retain the measured hyper-util duplicate-dependency blocker without policy relaxation.
+
 ## [Unreleased] — D4a protected Desktop merge and actual package verification（2026-10-29）
 
 - Execute #34 through the protected ordinary merge path after exact-head recovery verification; combined Desktop/Kernel package tests and typecheck pass.
