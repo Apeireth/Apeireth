@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — F3 final main exact-tree software and documentation verification（2026-10-29）
+
+- Verify final protected main with exact-tree binding to a completed five-stage gate and its own documentation architecture wiring and ledger scripts.
+- Record new same-harness Dev normal-start and idle samples while retaining legacy and true-cold environment limits.
+
 ## [Unreleased] — D4c executed focused environment provider and cache integrations（2026-10-29）
 
 - Land bounded environment-lock response-contract and verified file-cache extractions through green anchored protected PRs.
