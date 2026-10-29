@@ -279,6 +279,10 @@
 - **接线盘点（14 条）**：**PRODUCTION WIRED 9**（SG-13 调质→tone 模块｜SG-14 稳态→策略｜SG-15 免疫→hook｜SG-16 痛觉→失败链｜SG-19 依恋→care｜SG-20 修复→prompt｜SG-21 play｜SG-24 审议门｜SG-26 容量→自述）+ **半程 2**（SG-22 仪式→care 缺状态存储｜SG-23 节律门缺生产装配）+ **未接线 3**（SG-17 再生、SG-18 生命周期、SG-25 生态健康）。
 - **门禁**：scoped 全绿：assembly lib 194、cli lib 48、runtime lib 163/tests 322、既有 startup/懒加载断言全绿；clippy `-D warnings` 0；fmt 0 diff。**全量工作区复验未完成**（跑到 24 套件 / 186 passed / 0 failed 时收工中止，下一批补全量 + test-baseline 刷新）。
 
+## [Unreleased] — 桌面端：桌宠默认关闭 + 主窗标题栏配色 + 设计系统走查 (2026-10-20)
+
+- **companion-desktop**：桌宠「自动接管」改为显式偏好（`pet-prefs.json` 严格信封，缺文件/畸形=默认关闭），设置›外观›形象新增总开关，托盘「桌宠」仍为一次性手动召唤；主窗标题栏 DWM 深灰三色固定（`titlebar.rs`，非 Windows 空实现）；设计令牌/滚动条/设置页走查批次。**0 改 Rust workspace 代码与 24 LOCKED crate**；实证：src-tauri `cargo check --all-targets --locked` / `cargo clippy --all-targets -- -D warnings` / `cargo fmt --check` 干净，`cargo test --lib` 160 passed / 0 failed / 3 ignored；前端 `pnpm test` 83/83 suites、`pnpm check` 0 error 0 warning、`pnpm check:assets` 通过。
+
 ## [Unreleased] — 生物机制族 W3.2：装配面接线（5 条 PRODUCTION WIRED，默认关；2026-10-19）
 
 五线并行 + 装配根总装：把 W3.1 的内接线接进生产装配（**+68 新测**；全部默认关、开关只认显式 "1"、关时逐字节零变化）：

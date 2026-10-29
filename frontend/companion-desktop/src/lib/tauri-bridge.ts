@@ -75,6 +75,28 @@ export async function hasProviderKey(provider: string): Promise<boolean> {
 }
 
 // ============================================================
+// Desktop pet — auto-takeover preference (设置 › 外观 › 形象)
+// ============================================================
+
+/**
+ * Whether the pet window may auto-take over the bottom-right corner when the
+ * main window is minimized to tray. Default false (off) — see
+ * src-tauri/src/pet_prefs.rs. Always false outside the desktop shell.
+ */
+export async function getPetEnabled(): Promise<boolean> {
+  return (await invokeOptional<boolean>('get_pet_enabled')) ?? false;
+}
+
+/**
+ * Persist the pet auto-takeover preference (writes pet-prefs.json in Rust).
+ * Turning it off also hides/destroys a pet window currently on screen.
+ * Resolves false when not running in the desktop shell.
+ */
+export async function setPetEnabled(enabled: boolean): Promise<boolean> {
+  return (await invokeOptional<boolean>('set_pet_enabled', {enabled})) ?? false;
+}
+
+// ============================================================
 // Task B — no-restart config apply (P1-1 desktop side)
 // ============================================================
 
