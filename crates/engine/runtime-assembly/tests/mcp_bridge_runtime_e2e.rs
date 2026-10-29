@@ -197,7 +197,13 @@ async fn production_assembly_loads_the_server_list_when_enabled() {
 
     let modules = build_production(production_config(true, Some(dir.clone())))
         .expect("assembly must accept a valid stored server list");
-    let bridge = modules.mcp_bridge().expect("bridge assembled");
+    let bridge = modules
+        .mcp_definition()
+        .expect("definition assembled before resources");
+    assert!(
+        modules.mcp_bridge().is_none(),
+        "resource factory must remain lazy before initialization"
+    );
     assert_eq!(bridge.config().servers.len(), 1);
     assert!(modules.mcp_module().is_some());
     for line in bridge.startup_log() {

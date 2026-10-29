@@ -64,10 +64,12 @@ pub mod llm_factory;
 pub mod llm_orchestration_mirror;
 pub use extension::{ExtensionCatalog, ExtensionDescriptor, ExtensionKind};
 pub use llm_orchestration_mirror::MirrorLlmFactory;
+pub mod hooks;
 pub mod manager;
 pub mod manifest;
 pub mod mcp;
 pub mod memory_backend;
+pub mod observation;
 pub mod organ;
 pub mod perception;
 pub mod perception_backend;
@@ -75,9 +77,18 @@ pub mod plugin;
 pub mod preference;
 pub mod provider;
 pub mod registry;
+pub mod resource_factory;
 pub mod self_assessment;
 pub mod semver;
+pub mod task_scope;
 pub mod tool;
+pub mod tool_execution;
+pub mod tool_module;
+pub use tool_execution::{
+    ToolAuthorization, ToolCaller, ToolCancellation, ToolConcurrency, ToolExecutionContext,
+    ToolExecutionPolicy, ToolPermissionPolicy, ToolPlatform,
+};
+pub use tool_module::ToolModule;
 pub mod watch;
 
 pub use alias::{
@@ -96,6 +107,7 @@ pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentia
 pub use error::{PluginError, PluginResult};
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;
+pub use observation::{FnToolCompletionObserver, ToolCompletionFact, ToolCompletionObserver};
 pub use semver::{
     compare as compare_semver, is_valid as is_valid_semver, parse as parse_semver, Semver,
     SemverError,
@@ -114,3 +126,5 @@ pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError, ProviderHotConfig};
 pub use registry::{CapabilityRecord, PluginRegistry};
 pub use tool::{FrozenInvocation, ToolCapability};
+
+pub mod agents;

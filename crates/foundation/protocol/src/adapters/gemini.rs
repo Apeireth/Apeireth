@@ -51,6 +51,8 @@ impl ProtocolAdapter for GeminiAdapter {
     }
 
     fn adapt_request(&self, req: &NormalizedRequest) -> Result<Value, ProtocolError> {
+        crate::canonical::validate_closed_tool_context(&req.messages)
+            .map_err(|error| ProtocolError::invalid("messages", error.to_string()))?;
         if req.model.is_empty() {
             return Err(ProtocolError::missing("model"));
         }
@@ -109,27 +111,15 @@ impl ProtocolAdapter for GeminiAdapter {
             let mode = match tc {
                 NormalizedToolChoice::None => "NONE",
                 NormalizedToolChoice::Auto => "AUTO",
-                NormalizedToolChoice::Required => "ANY",
-                NormalizedToolChoice::Specific { name } => {
-                    body.insert(
-                        "toolConfig".into(),
-                        json!({
-                            "functionCallingConfig": {
-                                "mode": "ANY",
-                                "allowedFunctionNames": [name],
-                            }
-                        }),
-                    );
-                    return self.finalize_body(body, req);
-                }
+                NormalizedToolChoice::Required | NormalizedToolChoice::Specific { .. } => "ANY",
             };
+            let mut config = json!({"mode": mode});
+            if let NormalizedToolChoice::Specific { name } = tc {
+                config["allowedFunctionNames"] = json!([name]);
+            }
             body.insert(
                 "toolConfig".into(),
-                json!({
-                    "functionCallingConfig": {
-                        "mode": mode,
-                    }
-                }),
+                json!({"functionCallingConfig": config}),
             );
         }
 
@@ -139,7 +129,8 @@ impl ProtocolAdapter for GeminiAdapter {
         // contents
         let contents: Vec<Value> = non_system
             .iter()
-            .map(|m| {
+            .enumerate()
+            .map(|(index, m)| {
                 let mut content = Map::new();
                 match m.role {
                     MessageRole::User => {
@@ -158,6 +149,7 @@ impl ProtocolAdapter for GeminiAdapter {
                             // 设计参考 functionCall 块
                             parts.push(json!({
                                 "functionCall": {
+                                    "id": tc.id,
                                     "name": tc.name,
                                     "args": tc.arguments,
                                 }
@@ -168,8 +160,19 @@ impl ProtocolAdapter for GeminiAdapter {
                     MessageRole::Tool => {
                         // Gemini: tool → user role + functionResponse part
                         content.insert("role".into(), Value::String("user".into()));
+                        // Resolve an optional echo from the preceding validated
+                        // call, including ids reused in later closed rounds.
+                        let name = m.name.clone().or_else(|| {
+                            non_system[..index]
+                                .iter()
+                                .rev()
+                                .flat_map(|message| message.tool_calls.iter())
+                                .find(|call| Some(call.id.as_str()) == m.tool_call_id.as_deref())
+                                .map(|call| call.name.clone())
+                        });
                         let response = json!({
-                            "name": m.name.clone().unwrap_or_default(),
+                            "id": m.tool_call_id,
+                            "name": name.unwrap_or_default(),
                             "response": {
                                 "content": ContentPart::join_text(&m.content),
                             }
@@ -207,7 +210,23 @@ impl ProtocolAdapter for GeminiAdapter {
             })
             .collect();
 
-        body.insert("contents".into(), Value::Array(contents));
+        // A parallel function-call turn must be answered by one response turn.
+        let mut grouped: Vec<Value> = Vec::new();
+        let mut previous_tool = false;
+        for (message, mut content) in non_system.iter().zip(contents) {
+            let tool = message.role == MessageRole::Tool;
+            if tool && previous_tool {
+                let parts = content["parts"].as_array_mut().expect("parts array");
+                grouped.last_mut().expect("previous tool")["parts"]
+                    .as_array_mut()
+                    .expect("parts array")
+                    .append(parts);
+            } else {
+                grouped.push(content);
+            }
+            previous_tool = tool;
+        }
+        body.insert("contents".into(), Value::Array(grouped));
 
         self.finalize_body(body, req)
     }
@@ -251,8 +270,19 @@ impl ProtocolAdapter for GeminiAdapter {
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("")
                                 .to_string();
-                            // 设计参考 Gemini functionCall 没有 id, 用 name 替代 (保持唯一性靠 user 端)
-                            let id = format!("gemini_call_{}", name);
+                            let id = fc
+                                .get("id")
+                                .and_then(Value::as_str)
+                                .filter(|id| !id.is_empty())
+                                .map(str::to_owned)
+                                .unwrap_or_else(|| {
+                                    format!("gemini_call_{}_{}", tool_calls.len(), name)
+                                });
+                            if tool_calls.iter().any(|call: &ToolCall| call.id == id) {
+                                return Err(ProtocolError::inconsistent(
+                                    "duplicate provider tool call id",
+                                ));
+                            }
                             let args = fc.get("args").cloned().unwrap_or(Value::Object(Map::new()));
                             tool_calls.push(ToolCall {
                                 id,
@@ -475,7 +505,10 @@ mod tests {
         };
         let req = NormalizedRequest::new(
             "gemini-1.5-pro",
-            vec![NormalizedMessage::assistant_with_tool_calls("", vec![tc])],
+            vec![
+                NormalizedMessage::assistant_with_tool_calls("", vec![tc]),
+                NormalizedMessage::tool_result("call_1", Some("get_weather".into()), "sunny"),
+            ],
         );
         let v = GeminiAdapter::new().adapt_request(&req).unwrap();
         let parts = v["contents"][0]["parts"].as_array().unwrap();
@@ -488,15 +521,21 @@ mod tests {
         // 设计参考 OpenAI tool → Gemini user + functionResponse
         let req = NormalizedRequest::new(
             "gemini-1.5-pro",
-            vec![NormalizedMessage::tool_result(
-                "call_1",
-                Some("get_weather".into()),
-                "sunny",
-            )],
+            vec![
+                NormalizedMessage::assistant_with_tool_calls(
+                    "",
+                    vec![ToolCall {
+                        id: "call_1".into(),
+                        name: "get_weather".into(),
+                        arguments: json!({}),
+                    }],
+                ),
+                NormalizedMessage::tool_result("call_1", Some("get_weather".into()), "sunny"),
+            ],
         );
         let v = GeminiAdapter::new().adapt_request(&req).unwrap();
-        assert_eq!(v["contents"][0]["role"], "user");
-        let parts = v["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(v["contents"][1]["role"], "user");
+        let parts = v["contents"][1]["parts"].as_array().unwrap();
         assert_eq!(parts[0]["functionResponse"]["name"], "get_weather");
         assert_eq!(parts[0]["functionResponse"]["response"]["content"], "sunny");
     }

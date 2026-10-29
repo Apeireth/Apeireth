@@ -66,9 +66,13 @@ pub struct MemoryRecallQuery {
     #[serde(default)]
     pub as_of_ms: Option<i64>,
     /// Explicit closed-world visibility set. Legacy queries default to their
-    /// own session plus Global and therefore cannot see another session.
+    /// own session and therefore cannot see another session or Global.
     #[serde(default)]
     pub visible_scopes: Vec<MemoryScope>,
+    /// Host-authorized scope reads exclude unscoped preference/graph stores and
+    /// implicit typed identity visibility. Those stores require separate grants.
+    #[serde(default)]
+    pub exact_scope_authorization: bool,
 }
 
 impl MemoryRecallQuery {
@@ -88,6 +92,7 @@ impl MemoryRecallQuery {
             recency_decay_lambda: 0.05,
             min_score: 0.10,
             as_of_ms: None,
+            exact_scope_authorization: false,
             visible_scopes: vec![MemoryScope::Session {
                 session_id: session_id.clone(),
             }],

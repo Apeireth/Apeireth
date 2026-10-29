@@ -25,12 +25,16 @@
 //! The crate boundary is intentionally the same as this canonical module:
 //! there is no second orchestration driver or legacy runtime dependency.
 
+pub mod accounting;
 pub mod approval;
-// W3.3/W3.4 SG-16/17: 痛觉评估 + 再生案例记账 (失败处理链观测, 默认关) 的运行时接线面。
-pub mod bio_pain;
+pub mod behavior_adapter;
+mod behavior_projection;
 pub mod cache_trace;
 pub mod capability;
 pub mod context;
+// 内部控制命令: 注册式状态请求面 (描述符与实现分离; 内核不匹配业务工具名)。
+pub mod control;
+pub mod plan_mode_control;
 // W3-① 多户数据隔离 (星群数据层): 用户域会话平面 (域解析 + 按域路由会话写闸)。
 // W3-③ 逐域运行时实例面 (星群正身): 每户伙伴运行时实例 + 域级运行时上下文。
 pub mod domain_plane;
@@ -43,13 +47,19 @@ pub use research_approval_sm::{
     ResearchRecoveryAction, ResearchRecoveryAdvice, ResearchSideEffectCategory,
     ResearchSideEffectDescriptor,
 };
+pub mod dispatcher;
 pub mod error;
 pub mod event_log;
 pub mod events;
 pub mod execute;
 pub mod heartbeat;
+pub mod instances;
 pub mod metrics;
 pub mod module;
+mod module_host;
+pub mod principal_authority;
+pub mod profiles;
+pub mod registered_hooks;
 // OrganOrchestrator 类似 v1 AwakeCompanion 真实施 (per R11 spec + 子代理 R12 真实施).
 // **0 装诚实真账 (子代理 R12 独立判断)**:
 // - 本 module 是 spec 部分真实施 (估 30-45 分钟), 完整 1-3 周估待 (per R11 §8.4).
@@ -64,10 +74,12 @@ pub mod module;
 // Long-lived: 7 deterministic organs + OrganOrchestrator backend; transient
 // per invocation: W1/W2 built from ctx.invoker_handle() and dropped.
 pub mod egress_gate;
+mod execution_view;
 pub mod provider;
 pub mod quota;
 pub mod runtime;
 pub mod session;
+mod session_events;
 pub mod session_locks;
 pub mod subloop;
 pub mod trace;
@@ -82,13 +94,9 @@ pub use approval::{
     tool_schema_version_digest, ApprovalDecision, ApprovalStatus, FrozenOperationRecord,
     FrozenTurnContinuation, PendingApproval, PendingApprovalView,
 };
-pub use bio_pain::{
-    classify_retryability, failure_cause_key, failure_class_for_result, recovery_target_phase,
-    BioPainObservation, BioPainSnapshot, BioRecoveryCaseSnapshot, BioRecoveryPhaseCounts,
-    BioRecoverySnapshot, DEFAULT_BIO_PAIN_OBSERVATIONS,
-};
 pub use capability::{CapabilityProvider, CapabilityRegistry};
 pub use context::{ContextProjectionError, ContextProjector, NoContextProjector};
+pub use control::{ControlCommand, ControlContext};
 pub use domain_plane::{DomainRuntimeContext, DomainRuntimePlane, DomainSessionPlane};
 pub use egress_gate::{AllowAllEgress, EgressGate, EgressVerdict};
 pub use error::{RuntimeError, RuntimeResult};
@@ -119,6 +127,7 @@ pub use module::{
     ModuleInvocationResponse, ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay,
     DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
 };
+pub use plan_mode_control::PlanModeExitControl;
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use quota::{
     parse_quota_max_cost_micros, parse_quota_max_tokens, parse_quota_max_tool_steps,

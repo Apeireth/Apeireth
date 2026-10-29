@@ -14,8 +14,8 @@
 //! }
 //! ```
 //!
-//! It never accepts a shell command string and never invokes `cmd /c` or
-//! `sh -c`. Shell capability work belongs to a later phase.
+//! It never parses or falls back to a shell command string. The registered
+//! Shell capability explicitly supplies its chosen executable and argv.
 //!
 //! # Enforcement model
 //!
@@ -443,6 +443,8 @@ pub struct ProcessRequest {
     environment: EnvironmentSpec,
     limits: ProcessLimits,
     isolation: IsolationRequirement,
+    cancellation: Option<apeireth_plugin::ToolCancellation>,
+    native_context: Option<apeireth_plugin::tool_execution::NativeExecutionContext>,
 }
 
 impl ProcessRequest {
@@ -456,7 +458,20 @@ impl ProcessRequest {
             environment: EnvironmentSpec::Inherit,
             limits: ProcessLimits::default(),
             isolation: IsolationRequirement::default(),
+            cancellation: None,
+            native_context: apeireth_plugin::tool_execution::native_execution_context(),
         }
+    }
+
+    /// Attach a per-call cancellation signal; never serialized into approvals.
+    pub fn with_cancellation(mut self, cancellation: apeireth_plugin::ToolCancellation) -> Self {
+        self.cancellation = Some(cancellation);
+        self
+    }
+    fn cancelled(&self) -> bool {
+        self.cancellation
+            .as_ref()
+            .is_some_and(|signal| signal.is_cancelled())
     }
 
     /// Append one argument.
@@ -635,6 +650,9 @@ impl ProcessResult {
 /// exited 1 is a successful [`ProcessResult`] whose `success()` is `false`.
 #[derive(Debug, thiserror::Error)]
 pub enum ProcessError {
+    /// Cancelled before spawn or after terminating and reaping the child.
+    #[error("process cancelled; external effects may have occurred")]
+    Cancelled,
     /// The request itself is invalid.
     #[error("invalid process configuration: {0}")]
     InvalidConfiguration(String),
@@ -683,7 +701,30 @@ impl ProcessExecutor {
     /// `tokio::task::spawn_blocking` so a child timeout never blocks an async
     /// worker thread.
     pub fn execute(&self, request: &ProcessRequest) -> Result<ProcessResult, ProcessError> {
+        let mut effective = request.clone();
+        let _native_lease = if let Some(context) = effective.native_context.clone() {
+            if context.cancellation.is_cancelled() || Instant::now() >= context.deadline {
+                return Err(ProcessError::Cancelled);
+            }
+            effective.limits.max_runtime = effective
+                .limits
+                .max_runtime
+                .min(context.deadline.saturating_duration_since(Instant::now()));
+            effective.cancellation = Some(context.cancellation.clone());
+            Some(
+                context
+                    .tasks
+                    .lease_with_cancellation(context.cancellation)
+                    .map_err(|_| ProcessError::Cancelled)?,
+            )
+        } else {
+            None
+        };
+        let request = &effective;
         validate_request(request)?;
+        if request.cancelled() {
+            return Err(ProcessError::Cancelled);
+        }
 
         let capabilities = current_platform_capabilities();
         validate_limits_against_capabilities(request, &capabilities)?;
@@ -926,6 +967,12 @@ pub(crate) trait ManagedChild {
     fn try_wait(&mut self) -> Result<Option<ChildStatus>, ProcessError>;
     fn wait(&mut self) -> Result<ChildStatus, ProcessError>;
     fn terminate(&mut self) -> Result<(), ProcessError>;
+    /// Clean up descendants after the direct child exits. Unsupported generic
+    /// backends retain their advertised containment limitations.
+    fn terminate_remaining(&mut self) -> Result<(), ProcessError> {
+        Ok(())
+    }
+
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>>;
     fn take_stderr(&mut self) -> Option<Box<dyn Read + Send>>;
 
@@ -954,11 +1001,36 @@ pub(crate) trait ManagedChild {
     }
 }
 
+struct ChildCleanup<C: ManagedChild>(C, bool);
+impl<C: ManagedChild> std::ops::Deref for ChildCleanup<C> {
+    type Target = C;
+    fn deref(&self) -> &C {
+        &self.0
+    }
+}
+impl<C: ManagedChild> std::ops::DerefMut for ChildCleanup<C> {
+    fn deref_mut(&mut self) -> &mut C {
+        &mut self.0
+    }
+}
+impl<C: ManagedChild> Drop for ChildCleanup<C> {
+    fn drop(&mut self) {
+        if !self.1 {
+            let _ = self.0.terminate_remaining();
+        }
+        if !matches!(self.0.try_wait(), Ok(Some(_))) {
+            let _ = self.0.terminate();
+            let _ = self.0.wait_timeout(POST_KILL_WAIT);
+        }
+    }
+}
+
 pub(crate) fn supervise<C: ManagedChild>(
-    mut child: C,
+    child: C,
     request: &ProcessRequest,
     enforcement: PlatformEnforcement,
 ) -> Result<ProcessResult, ProcessError> {
+    let mut child = ChildCleanup(child, false);
     let stdout_pipe = child
         .take_stdout()
         .ok_or_else(|| ProcessError::InvalidConfiguration("stdout pipe was not captured".into()))?;
@@ -978,8 +1050,8 @@ pub(crate) fn supervise<C: ManagedChild>(
         }
 
         let elapsed = start.elapsed();
-        if elapsed >= request.limits.max_runtime {
-            timed_out = true;
+        if elapsed >= request.limits.max_runtime || request.cancelled() {
+            timed_out = !request.cancelled();
             child.terminate()?;
 
             let kill_deadline = Instant::now() + POST_KILL_WAIT;
@@ -999,11 +1071,21 @@ pub(crate) fn supervise<C: ManagedChild>(
         // Wake at child exit (event-style wait where the platform offers one)
         // instead of ticking at the coarse supervision poll interval; the
         // timeout boundary above is checked again on every wake-up.
-        if let Some(status) = child.wait_timeout(request.limits.max_runtime - elapsed)? {
+        let remaining = request.limits.max_runtime - elapsed;
+        let wait = if request.cancellation.is_some() {
+            remaining.min(POLL_INTERVAL)
+        } else {
+            remaining
+        };
+        if let Some(status) = child.wait_timeout(wait)? {
             break 'supervise status;
         }
     };
 
+    // Background descendants must not retain pipes/resources after a completed
+    // command; cleanup errors remain explicit on the normal return path.
+    child.terminate_remaining()?;
+    child.1 = true;
     let termination = if timed_out {
         TerminationReason::TimedOut { code: status.code }
     } else {
@@ -1013,6 +1095,9 @@ pub(crate) fn supervise<C: ManagedChild>(
     let (stdout, stdout_truncated) = join_reader(stdout_rx)?;
     let (stderr, stderr_truncated) = join_reader(stderr_rx)?;
 
+    if request.cancelled() {
+        return Err(ProcessError::Cancelled);
+    }
     Ok(ProcessResult {
         termination,
         stdout,
@@ -1077,4 +1162,41 @@ fn join_reader(rx: Receiver<ReaderMessage>) -> Result<(Vec<u8>, bool), ProcessEr
             "child output reader terminated unexpectedly".into(),
         )),
     }
+}
+
+/// Native tasks participate in module cancellation and draining. The per-poll
+/// compatibility context is explicitly transferred across the thread boundary.
+#[derive(Debug, thiserror::Error)]
+pub enum NativeTaskError {
+    #[error("module is stopping; native work was not started")]
+    Cancelled,
+    #[error("native task failed to join: {0}")]
+    Join(#[from] tokio::task::JoinError),
+}
+pub async fn run_native<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, NativeTaskError> {
+    let context = apeireth_plugin::tool_execution::native_execution_context();
+    let lease = context
+        .as_ref()
+        .map(|context| {
+            context
+                .tasks
+                .lease_with_cancellation(context.cancellation.clone())
+        })
+        .transpose()
+        .map_err(|_| NativeTaskError::Cancelled)?;
+    tokio::task::spawn_blocking(move || {
+        let _lease = lease;
+        if context
+            .as_ref()
+            .is_some_and(|context| context.cancellation.is_cancelled())
+        {
+            return Err(NativeTaskError::Cancelled);
+        }
+        Ok(apeireth_plugin::tool_execution::with_native_execution(
+            context, work,
+        ))
+    })
+    .await?
 }

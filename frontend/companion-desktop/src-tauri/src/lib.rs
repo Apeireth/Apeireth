@@ -13,6 +13,7 @@ mod imap_client;
 mod keychain;
 mod logging;
 mod mysql_client;
+mod pet_prefs;
 mod pg_client;
 mod portable_mode;
 mod provider_proxy;
@@ -21,6 +22,7 @@ mod speech_recognizer;
 mod sqlite_workbench;
 mod stored_config;
 mod terminal_exec;
+mod titlebar;
 pub mod workspace;
 mod workspace_list;
 
@@ -349,6 +351,11 @@ fn pet_leeway(main_window_presenting: bool) -> PetLeeway {
 /// （窗内右键菜单此时已不可达）。
 static PET_CLICK_THROUGH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// 桌宠「自动接管」偏好 (设置 › 外观 › 形象; 持久化见 [`pet_prefs`]).
+/// **默认关闭**: 主窗收起 (关进托盘) 时桌宠不接管 —— 右下角不再无故出现形象窗.
+/// 托盘「桌宠」仍是手动召唤 (一次性显隐, 不翻本开关).
+static PET_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// 桌宠窗统一构建入口（启动预建 + 托盘/互斥唤起共用同一组参数）。
 /// 透明、置顶、无边框、不进任务栏、不可缩放；默认落位主显示器右下角
 /// （桌宠的常驻位）。加载 `index.html?window=pet`（main.ts 角色路由）。
@@ -403,6 +410,11 @@ fn apply_pet_leeway(app: &tauri::AppHandle, main_window_presenting: bool) {
     use tauri::Emitter;
     match pet_leeway(main_window_presenting) {
         PetLeeway::Show => {
+            // 自动接管默认关闭 (pet_prefs): 未开启不接管 —— 神秘形象窗不出现;
+            // 托盘手动召唤走 toggle_pet_window, 不经过这道闸.
+            if !PET_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
             if let Some(pet) = app.get_webview_window("pet") {
                 let _ = pet.emit("pet-host-visibility", true);
             }
@@ -480,6 +492,39 @@ fn set_pet_click_through(app: tauri::AppHandle, enabled: bool) {
     if let Some(window) = app.get_webview_window("pet") {
         let _ = window.set_ignore_cursor_events(enabled);
     }
+}
+
+/// 桌宠「自动接管」偏好当前值 (设置面板初值; 失败/桌面外恒 false = 关闭).
+#[tauri::command]
+fn get_pet_enabled() -> bool {
+    PET_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 写桌宠自动接管偏好 (`pet-prefs.json`, 跨启动生效):
+/// 开启 = 预建隐藏窗 (主窗在场仍互斥礼让, 收起即接管);
+/// 关闭 = 即刻销毁在场桌宠 (先隐身影再销毁, 幽灵窗纪律) 并从此不接管.
+#[tauri::command]
+fn set_pet_enabled(
+    app: tauri::AppHandle,
+    logger: State<'_, Arc<DesktopLogger>>,
+    enabled: bool,
+) -> Result<(), String> {
+    PET_ENABLED.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    pet_prefs::save(
+        &pet_prefs::pet_prefs_path(&logger),
+        &pet_prefs::PetPrefs {
+            auto_takeover: enabled,
+        },
+    )?;
+    if enabled {
+        if app.get_webview_window("pet").is_none() {
+            let _ = build_pet_window(&app, false);
+        }
+    } else if let Some(window) = app.get_webview_window("pet") {
+        let _ = window.hide();
+        let _ = window.destroy();
+    }
+    Ok(())
 }
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -607,7 +652,9 @@ pub fn run() {
             close_pet_window,
             toggle_pet_window,
             open_main_target,
-            set_pet_click_through
+            set_pet_click_through,
+            get_pet_enabled,
+            set_pet_enabled
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -643,12 +690,25 @@ pub fn run() {
             });
 
             // 主窗口由 tauri.conf.json 声明 (app.windows[0] label=main), 这里不再重复创建.
+            // 标题栏: 系统强调色 (本机 #A1A1A1) 只该出现在别处 — 把未选中态那一档
+            // 深灰钉死在前台态, 前后台同色 (见 titlebar 模块头注释).
+            if let Some(window) = app.get_webview_window("main") {
+                titlebar::apply_dark_caption(&window);
+            }
 
             // 快捷窗 (启动预建、初始隐藏; 托盘「快捷窗口」新开/唤起/关闭)
             let _ = build_quick_window(app.handle(), false);
 
-            // 桌宠常驻窗 (启动预建、初始隐藏; 主窗在场即互斥礼让, 主窗收起接管)
-            let _ = build_pet_window(app.handle(), false);
+            // 桌宠常驻窗: 先读自动接管偏好 (**默认关闭 = 不预建零窗**, 托盘仍可
+            // 手动召唤); 只有偏好开启才预建隐藏窗 (主窗在场互斥礼让, 收起接管).
+            let pet_prefs_value = pet_prefs::load(&pet_prefs::pet_prefs_path(&logger));
+            PET_ENABLED.store(
+                pet_prefs_value.auto_takeover,
+                std::sync::atomic::Ordering::Relaxed,
+            );
+            if pet_prefs_value.auto_takeover {
+                let _ = build_pet_window(app.handle(), false);
+            }
 
             // 托盘
             let menu = build_menu(&handle)?;

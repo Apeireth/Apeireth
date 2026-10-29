@@ -7,15 +7,14 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
-use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
-use apeireth_protocol::canonical::{
-    NormalizedMessage, NormalizedRequest, NormalizedResponse, ToolCall, ToolResult,
+use apeireth_core::kernel::{CapabilityId, SessionId};
+use apeireth_governance::TurnSecurityContext;
+use apeireth_plugin::agents::{
+    AgentConfig, AgentError, AgentErrorCode, AgentExecutionMode, AgentTask, AgentTaskOrigin,
 };
+use apeireth_protocol::canonical::{NormalizedMessage, NormalizedResponse, ToolCall, ToolResult};
 use async_trait::async_trait;
 use thiserror::Error;
-
-use super::provider::ProviderRouter;
 
 /// Lifecycle points at which a module may observe or influence a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,11 +62,12 @@ impl ModuleManifest {
     }
 }
 
-/// A provider-request-only prompt message.
+/// Compatibility content block returned by a behavior producer.
 ///
-/// An overlay is deliberately not a session message. It is copied into one
-/// provider request and then dropped, so it cannot alter the persisted
-/// conversation or appear automatically in a later turn.
+/// The message shape is retained for readers and producers. RegisteredBehavior
+/// discards its role and records the text as untrusted ToolEventV1 data. Runtime
+/// projects a matched assistant/tool pair once; it never injects this as system
+/// policy. Facts persist, while business-history readers exclude module pairs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PromptOverlay {
     message: NormalizedMessage,
@@ -79,7 +79,7 @@ pub struct PromptOverlay {
 }
 
 impl PromptOverlay {
-    /// Add a transient system message to one provider invocation.
+    /// Construct a compatibility block; the system role is not provider authority.
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             message: NormalizedMessage::system(content),
@@ -87,12 +87,12 @@ impl PromptOverlay {
         }
     }
 
-    /// A transient system message carrying cross-source content — material
+    /// A compatibility block carrying cross-source content — material
     /// recalled from outside the current turn (other sessions, external
     /// stores). `source` names where the content came from and is rendered
     /// inside the disclosure envelope; the provider-request funnel discloses
     /// the block through the untrusted reference envelope before composition
-    /// (see `budget_injected_overlays`).
+    /// as data inside its authenticated tool result.
     pub fn system_cross_source(source: impl Into<String>, content: impl Into<String>) -> Self {
         Self {
             message: NormalizedMessage::system(content),
@@ -105,7 +105,7 @@ impl PromptOverlay {
         self.cross_source.as_deref()
     }
 
-    /// The normalized message that will be sent to the provider.
+    /// The producer representation; Runtime sends its text through V1 pairing.
     pub fn message(&self) -> &NormalizedMessage {
         &self.message
     }
@@ -131,13 +131,13 @@ pub enum ModuleDirective {
 /// The value returned by one module hook.
 ///
 /// When several modules observe the same hook, the canonical runtime invokes
-/// them in registration order, concatenates their overlays in that order, and
+/// them through registered tools in registration order, commits V1 data, and
 /// resolves directives by strength: `Stop` overrides `Retry`, which overrides
 /// `Continue`. Equal-strength directives keep the first module's result, and a
 /// directive does not short-circuit the remaining modules for that hook.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleOutcome {
-    /// Prompt messages to prepend to the next provider request in this turn.
+    /// Producer blocks converted to untrusted V1 data, never system instructions.
     pub prompt_overlays: Vec<PromptOverlay>,
     /// Generic control directive.
     pub directive: ModuleDirective,
@@ -427,6 +427,23 @@ pub trait BehaviorModule: Send + Sync {
     /// Stable module identity.
     fn manifest(&self) -> &ModuleManifest;
 
+    /// Whether this module can expose a shared store without mutating it.
+    /// Host mapping refuses read-only sharing unless the implementation opts in.
+    fn read_only_profile_projection(&self) -> bool {
+        false
+    }
+
+    /// Authenticated adapter entry. Host mappings can select isolated resources here.
+    /// The default preserves the public compatibility callback ABI.
+    async fn on_hook_authenticated(
+        &self,
+        hook: HookPoint,
+        ctx: &ModuleContext<'_>,
+        _execution: &apeireth_plugin::ToolExecutionContext,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        self.on_hook(hook, ctx).await
+    }
+
     /// Observe a lifecycle point and return transient policy effects.
     async fn on_hook(
         &self,
@@ -521,33 +538,6 @@ pub fn reject_tool_identity_collisions(
     Ok(())
 }
 
-/// Canonical completion governance for isolated module/SubLoop side-calls.
-///
-/// Side loops never mint a hidden approval: `RequireApproval` fails closed.
-pub(crate) async fn authorize_isolated_completion(
-    governance: &dyn GovernanceHook,
-    session_id: SessionId,
-    trace_id: TraceId,
-    model: &str,
-    message_count: usize,
-    round: u32,
-) -> Result<(), ModuleInvocationError> {
-    let action = Action::Completion {
-        model,
-        message_count,
-    };
-    let verdict = governance
-        .evaluate_verbose(&GovernanceRequest::new(action, session_id, trace_id, round))
-        .await;
-    match verdict.decision {
-        Decision::Allow => Ok(()),
-        Decision::Deny { reason } => Err(ModuleInvocationError::Denied { reason }),
-        Decision::RequireApproval { reason } => {
-            Err(ModuleInvocationError::ApprovalRequired { reason })
-        }
-    }
-}
-
 impl std::ops::Deref for BehaviorRegistry {
     type Target = [Arc<dyn BehaviorModule>];
 
@@ -630,52 +620,58 @@ impl ModuleTurnState {
 /// and it is not task-local or global ambient authority — it exists only where
 /// the runtime hands it out for the current invocation. It must not be
 /// retained as persistent module state across turns.
+#[derive(Clone)]
 pub struct RuntimeModuleInvoker {
-    router: Arc<ProviderRouter>,
-    governance: Arc<dyn GovernanceHook>,
-    session_id: SessionId,
-    trace_id: TraceId,
+    runtime: Arc<super::Runtime>,
+    origin: AgentTaskOrigin,
+    security: Option<TurnSecurityContext>,
     current_model: Arc<str>,
     module_id: Arc<str>,
     state: Arc<ModuleTurnState>,
     depth: u8,
 }
 
-impl Clone for RuntimeModuleInvoker {
-    fn clone(&self) -> Self {
-        Self {
-            router: Arc::clone(&self.router),
-            governance: Arc::clone(&self.governance),
-            session_id: self.session_id,
-            trace_id: self.trace_id,
-            current_model: Arc::clone(&self.current_model),
-            module_id: Arc::clone(&self.module_id),
-            state: Arc::clone(&self.state),
-            depth: self.depth,
-        }
-    }
-}
-
 impl RuntimeModuleInvoker {
+    /// Bind the invoker to the existing instance service and originating turn.
+    /// A Runtime without that service fails closed; there is no provider fallback.
     pub fn new(
-        router: Arc<ProviderRouter>,
-        governance: Arc<dyn GovernanceHook>,
-        session_id: SessionId,
-        trace_id: TraceId,
+        runtime: Arc<super::Runtime>,
+        origin: AgentTaskOrigin,
+        security: Option<TurnSecurityContext>,
         current_model: impl Into<Arc<str>>,
         module_id: impl Into<Arc<str>>,
         state: Arc<ModuleTurnState>,
         parent_depth: u8,
     ) -> Self {
         Self {
-            router,
-            governance,
-            session_id,
-            trace_id,
+            runtime,
+            origin,
+            security,
             current_model: current_model.into(),
             module_id: module_id.into(),
             state,
             depth: parent_depth.saturating_add(1),
+        }
+    }
+
+    fn task_error(&self, error: AgentError) -> ModuleInvocationError {
+        match error.code {
+            AgentErrorCode::BudgetExceeded if self.state.used() >= self.state.limit() => {
+                ModuleInvocationError::BudgetExceeded {
+                    limit: self.state.limit(),
+                }
+            }
+            AgentErrorCode::Denied => ModuleInvocationError::Denied {
+                reason: error.message,
+            },
+            AgentErrorCode::ApprovalRequired | AgentErrorCode::PendingApproval => {
+                ModuleInvocationError::ApprovalRequired {
+                    reason: error.message,
+                }
+            }
+            _ => ModuleInvocationError::Provider {
+                reason: format!("module {}: {error}", self.module_id),
+            },
         }
     }
 }
@@ -698,38 +694,50 @@ impl ModuleInvoker for RuntimeModuleInvoker {
         if model.is_empty() {
             return Err(ModuleInvocationError::NoModel);
         }
-        self.state.reserve()?;
-
-        let mut messages = Vec::with_capacity(2);
-        if let Some(system) = request.system {
-            messages.push(NormalizedMessage::system(system));
+        // Fast refusal avoids audit-only children after exhaustion. The atomic
+        // reservation happens solely at each actual Provider admission.
+        if self.state.used() >= self.state.limit() {
+            return Err(ModuleInvocationError::BudgetExceeded {
+                limit: self.state.limit(),
+            });
         }
-        messages.push(NormalizedMessage::user(request.input));
-
-        authorize_isolated_completion(
-            self.governance.as_ref(),
-            self.session_id,
-            self.trace_id,
-            &model,
-            messages.len(),
-            1,
-        )
-        .await?;
-
-        // `complete` intentionally sends no tool declarations. It also does
-        // not enter the session store or the module hook bus, so this is an
-        // isolated side-call rather than a nested agent loop.
-        let routed = self
-            .router
-            .complete(&NormalizedRequest::new(model, messages))
+        let child = self
+            .runtime
+            .spawn_side_agent(
+                &self.module_id,
+                self.origin.session,
+                AgentConfig {
+                    model: Some(model.clone()),
+                    ..Default::default()
+                },
+                self.security.clone(),
+            )
             .await
-            .map_err(|error| ModuleInvocationError::Provider {
-                reason: format!("module {}: {error}", self.module_id),
-            })?;
-
+            .map_err(|error| self.task_error(error))?;
+        let result = child
+            .agent
+            .execute(AgentTask {
+                messages: vec![NormalizedMessage::user(request.input)],
+                system: request.system,
+                model: Some(model),
+                max_rounds: 1,
+                timeout: None,
+                mode: AgentExecutionMode::SingleShot,
+                request_gate: Some(self.state.clone()),
+                origin: Some(self.origin.clone()),
+            })
+            .await;
+        // Reuse the instance cancellation/drain boundary on success and error.
+        // Dropping an interrupted adapter revokes via SideAgent's scope guard.
+        child
+            .agent
+            .stop()
+            .await
+            .map_err(|error| self.task_error(error))?;
+        let reply = result.map_err(|error| self.task_error(error))?;
         Ok(ModuleInvocationResponse {
-            response: routed.response,
-            served_by: routed.served_by,
+            response: reply.response,
+            served_by: reply.served_by,
         })
     }
 }
@@ -757,5 +765,21 @@ impl apeireth_plugin::ExtensionCatalog for BehaviorRegistry {
             "apeireth-runtime",
             0,
         ))
+    }
+}
+
+impl apeireth_plugin::agents::AgentRequestGate for ModuleTurnState {
+    fn reserve(&self) -> apeireth_plugin::agents::AgentResult<()> {
+        self.reserve().map_err(|e| {
+            apeireth_plugin::agents::AgentError::new(
+                apeireth_plugin::agents::AgentErrorCode::BudgetExceeded,
+                e.to_string(),
+            )
+        })
+    }
+}
+impl ModuleTurnState {
+    pub(crate) fn limit(&self) -> usize {
+        self.max
     }
 }

@@ -160,9 +160,12 @@ async fn fake_runtime(provider: Arc<FakeProvider>) -> Arc<Runtime> {
             .with_governance(Arc::new(AllowAll))
             .with_plugin(ProviderPlugin::new(provider))
             .with_default_model(MODEL)
-            .build()
+            .build_agent_runtime(apeireth_runtime::AgentHostPolicy::default())
             .await
-            .expect("runtime builds"),
+            .expect("managed host builds")
+            .into_main_runtime(apeireth_plugin::agents::AgentConfig::default())
+            .await
+            .expect("managed main builds"),
     )
 }
 
@@ -282,6 +285,16 @@ async fn the_resident_host_runs_the_heartbeat_when_both_gates_are_open() {
         .expect("load")
         .expect("session row");
     assert_eq!(stored.quota.consumed_tokens, 15, "关怀回合照常计费");
+    let main = runtime.managed_main().expect("producer uses managed main");
+    assert_eq!(runtime.tool_dispatcher().agent(session), main.id);
+    assert_eq!(main.usage.requests, 1);
+    assert!(runtime
+        .agent_runtime()
+        .unwrap()
+        .requests(main.id)
+        .unwrap()
+        .iter()
+        .all(|fact| fact.agent == main.id && fact.owner == main.owner));
     assert!(
         source.dispatch_errors().is_empty(),
         "关怀回合无错: {:?}",

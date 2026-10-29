@@ -443,24 +443,22 @@ fn overlaps_partially(s: usize, e: usize, start: usize, end: usize) -> bool {
 /// Used when a session is forked mid-tool-loop: an open call would leave the
 /// new session's view incomplete, so the fork closes it with a placeholder.
 pub fn open_tool_calls(messages: &[NormalizedMessage]) -> Vec<String> {
-    let mut issued: Vec<String> = Vec::new();
-    let mut answered: Vec<String> = Vec::new();
+    let mut pending = Vec::new();
     for message in messages {
         for call in &message.tool_calls {
-            if !issued.contains(&call.id) {
-                issued.push(call.id.clone());
+            if !pending.contains(&call.id) {
+                pending.push(call.id.clone());
             }
         }
         if let Some(id) = &message.tool_call_id {
-            if !answered.contains(id) {
-                answered.push(id.clone());
+            // A result answers an outstanding issuance, never a later reuse of
+            // the same provider wire id in another execution.
+            if let Some(index) = pending.iter().position(|call| call == id) {
+                pending.remove(index);
             }
         }
     }
-    issued
-        .into_iter()
-        .filter(|id| !answered.contains(id))
-        .collect()
+    pending
 }
 
 /// The placeholder tool result for a call a session fork left open: it closes
@@ -818,6 +816,19 @@ mod tests {
 
         let mut closed = messages;
         closed.push(fork_placeholder("c2"));
+        assert!(open_tool_calls(&closed).is_empty());
+        // A later execution may legitimately reuse a closed provider wire id.
+        // The earlier result must not hide that execution from interruption/fork audit.
+        closed.push(NormalizedMessage::assistant_with_tool_calls(
+            "",
+            vec![call("c1")],
+        ));
+        assert_eq!(open_tool_calls(&closed), vec!["c1".to_string()]);
+        closed.push(NormalizedMessage::tool_result(
+            "c1",
+            None,
+            "second execution",
+        ));
         assert!(open_tool_calls(&closed).is_empty());
     }
 }

@@ -42,6 +42,8 @@ use crate::scope::{
 use crate::topic_predictor::TopicCue;
 use crate::MemoryError;
 
+#[path = "coordinator/owned.rs"]
+mod owned;
 const WORKING_RING_BUFFER_CAP: usize = 30;
 
 /// Unified memory orchestrator coordinating all memory layers and pipelines.
@@ -181,6 +183,11 @@ impl MemoryCoordinator {
         self.backend.as_ref()
     }
 
+    /// Shared backend handle for Host assembly adapters; grants remain external.
+    pub fn backend_arc(&self) -> Arc<dyn MemoryBackend> {
+        self.backend.clone()
+    }
+
     /// Reference to the optional scoped memory backend.
     pub fn scoped_backend(&self) -> Option<&dyn ScopedMemoryBackend> {
         self.scoped_backend.as_deref()
@@ -211,6 +218,18 @@ impl MemoryCoordinator {
         let mut candidates = Vec::new();
         let mut candidate_meta = HashMap::new();
         let mut governance_filtered = 0;
+        let source_reference = |layer: &str, episode: &Episode, provenance: &MemoryProvenance| {
+            let source = provenance.source_session.as_deref();
+            if query.exact_scope_authorization
+                && (source.is_none() || source == Some(query.session_id.as_str()))
+            {
+                // The query key may be a storage partition. Unknown provenance
+                // must not be presented as the original execution session.
+                None
+            } else {
+                Some(format!("{layer}:{}", source.unwrap_or(&episode.session_id)))
+            }
+        };
 
         // Layer 1: Working Memory
         if query.layers.contains(&MemoryLayerKind::Working) {
@@ -224,6 +243,12 @@ impl MemoryCoordinator {
                     .rev()
                     .take((query.limit * 4).max(32))
                 {
+                    if query.exact_scope_authorization
+                        && !matches!(self.governance.get_governed(&ep.id), Ok(Some(gov)) if gov.status == MemoryGovernanceStatus::Active)
+                    {
+                        governance_filtered += 1;
+                        continue;
+                    }
                     if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
                         if gov.status == MemoryGovernanceStatus::Forgotten {
                             governance_filtered += 1;
@@ -246,7 +271,7 @@ impl MemoryCoordinator {
                         (
                             MemoryLayerKind::Working,
                             ep.timestamp * 1000,
-                            Some(format!("working:{}", ep.session_id)),
+                            source_reference("working", ep, &provenance),
                         ),
                     );
                     candidates.push(MemoryCandidate {
@@ -279,7 +304,17 @@ impl MemoryCoordinator {
                 };
                 if let Ok(scoped_episodes) = scoped.query_candidates(&candidate_query) {
                     for ep in scoped_episodes {
+                        if query.exact_scope_authorization
+                            && !matches!(self.governance.get_governed(&ep.id), Ok(Some(gov)) if gov.status == MemoryGovernanceStatus::Active)
+                        {
+                            governance_filtered += 1;
+                            continue;
+                        }
                         let (scope, provenance) = self.episode_scope_metadata(&ep);
+                        if !scope.is_visible_in(&query.visible_scopes) {
+                            governance_filtered += 1;
+                            continue;
+                        }
                         if let Ok(Some(gov)) = self.governance.get_governed(&ep.id) {
                             if gov.status == MemoryGovernanceStatus::Forgotten {
                                 governance_filtered += 1;
@@ -307,7 +342,7 @@ impl MemoryCoordinator {
                             (
                                 MemoryLayerKind::Episodic,
                                 ep.timestamp * 1000,
-                                Some(format!("episodic:{}", ep.session_id)),
+                                source_reference("episodic", &ep, &provenance),
                             ),
                         );
                         candidates.push(MemoryCandidate {
@@ -332,6 +367,12 @@ impl MemoryCoordinator {
                 .recent_episodes(&query.session_id, (query.limit * 8).max(64))
             {
                 for ep in raw_eps {
+                    if query.exact_scope_authorization
+                        && !matches!(self.governance.get_governed(&ep.id), Ok(Some(gov)) if gov.status == MemoryGovernanceStatus::Active)
+                    {
+                        governance_filtered += 1;
+                        continue;
+                    }
                     let (scope, provenance) = self.episode_scope_metadata(&ep);
                     if !scope.is_visible_in(&query.visible_scopes) {
                         governance_filtered += 1;
@@ -364,7 +405,7 @@ impl MemoryCoordinator {
                         (
                             MemoryLayerKind::Episodic,
                             ep.timestamp * 1000,
-                            Some(format!("episodic:{}", ep.session_id)),
+                            source_reference("episodic", &ep, &provenance),
                         ),
                     );
                     candidates.push(MemoryCandidate {
@@ -387,7 +428,7 @@ impl MemoryCoordinator {
         }
 
         // Layer 3: Semantic / Personal Memory (Preferences)
-        if query.layers.contains(&MemoryLayerKind::Semantic) {
+        if !query.exact_scope_authorization && query.layers.contains(&MemoryLayerKind::Semantic) {
             if let Some(pref_store) = &self.preferences {
                 let session_id_parsed =
                     SessionId::from_str(&query.session_id).unwrap_or_else(|_| SessionId::new());
@@ -432,7 +473,7 @@ impl MemoryCoordinator {
                             },
                             provenance: MemoryProvenance {
                                 source: "preference".to_string(),
-                                source_session: Some(query.session_id.clone()),
+                                source_session: Some(pref.session_id.to_string()),
                                 ..Default::default()
                             },
                         });
@@ -442,7 +483,8 @@ impl MemoryCoordinator {
         }
 
         // Layer 4: Relational / Temporal Memory (Graph & Associations)
-        if query.layers.contains(&MemoryLayerKind::Relational)
+        if !query.exact_scope_authorization
+            && query.layers.contains(&MemoryLayerKind::Relational)
             && !query.query_text.trim().is_empty()
         {
             if let Some(graph_store) = &self.graph {
@@ -496,7 +538,8 @@ impl MemoryCoordinator {
             if let Ok(typed_candidates) = source.candidates(query, identity, now_ms) {
                 for candidate in typed_candidates {
                     if !candidate.scope.is_visible_in(&query.visible_scopes)
-                        && !typed_scope_visible(&candidate.scope, identity)
+                        && (query.exact_scope_authorization
+                            || !typed_scope_visible(&candidate.scope, identity))
                     {
                         governance_filtered += 1;
                         continue;
@@ -1024,7 +1067,7 @@ impl MemoryCoordinator {
         Ok(result)
     }
 
-    fn episode_scope_metadata(&self, episode: &Episode) -> (MemoryScope, MemoryProvenance) {
+    pub fn episode_scope_metadata(&self, episode: &Episode) -> (MemoryScope, MemoryProvenance) {
         let fallback_scope = MemoryScope::Session {
             session_id: episode.session_id.clone(),
         };

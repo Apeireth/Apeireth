@@ -350,6 +350,8 @@ concept ContextBlock crates/foundation/orchestration/src/context_budget.rs
 ext BehaviorModule crates/engine/runtime/src/canonical/module.rs
 ext BehaviorRegistry crates/engine/runtime/src/canonical/module.rs
 ext CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
+ext ControlCommand crates/engine/runtime/src/canonical/control.rs
 ext Plugin crates/foundation/plugin/src/plugin.rs
 ext PluginManager crates/foundation/plugin/src/manager.rs
 ext SubLoopSpawner crates/engine/runtime/src/canonical/subloop.rs
+ext ToolCompletionObserver crates/foundation/plugin/src/observation.rs

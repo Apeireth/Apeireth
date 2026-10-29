@@ -7,6 +7,9 @@
 //! retrieval guide and spills the full original; without one the overflow path
 //! keeps the full content inline (prefer too long over lost information).
 
+#[path = "support/behavior_v1.rs"]
+mod behavior_v1;
+
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
@@ -17,8 +20,8 @@ use apeireth_plugin::{
     ProviderError,
 };
 use apeireth_protocol::canonical::{
-    ContentPart, ModelDescriptor, ModelFeature, NormalizedFinishReason, NormalizedRequest,
-    NormalizedResponse, NormalizedUsage,
+    ModelDescriptor, ModelFeature, NormalizedFinishReason, NormalizedRequest, NormalizedResponse,
+    NormalizedUsage,
 };
 use apeireth_runtime::canonical::{
     budget_context_blocks, BehaviorModule, HookPoint, ModuleContext, ModuleError, ModuleManifest,
@@ -252,10 +255,6 @@ impl BehaviorModule for InjectOverlays {
     }
 }
 
-fn message_text(message: &apeireth_protocol::canonical::NormalizedMessage) -> String {
-    ContentPart::join_text(&message.content)
-}
-
 /// The budget is wired into the provider request: with a small budget and a
 /// bound spill sink, the long-tail overlay arrives as a head/tail preview with
 /// an omission marker and a retrieval guide, while the core system / identity
@@ -292,7 +291,7 @@ async fn provider_request_receives_budgeted_injected_context() {
         .unwrap();
 
     let request = provider.first_request();
-    let texts: Vec<String> = request.messages.iter().map(message_text).collect();
+    let texts = behavior_v1::texts(&request.messages);
 
     // Core (system / identity / safety) block survives untouched.
     assert!(
@@ -388,7 +387,7 @@ async fn overflow_without_spill_sink_keeps_the_full_injected_content_inline() {
         .unwrap();
 
     let request = provider.first_request();
-    let texts: Vec<String> = request.messages.iter().map(message_text).collect();
+    let texts = behavior_v1::texts(&request.messages);
     assert!(
         texts.iter().any(|t| *t == long),
         "无落盘点时宁长勿丢: 长块完整内联"
@@ -427,7 +426,7 @@ async fn provider_request_is_unchanged_below_budget() {
         .unwrap();
 
     let request = provider.first_request();
-    let texts: Vec<String> = request.messages.iter().map(message_text).collect();
+    let texts = behavior_v1::texts(&request.messages);
     assert!(
         texts.iter().any(|t| *t == long),
         "long block must be byte-identical below budget"

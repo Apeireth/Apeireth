@@ -44,6 +44,14 @@ jobs:
           python scripts/arch_guard.py --report
           exit 0
 
+      # 守卫的守卫（KC-1 §9.4）：用三类故意违规的 fixture 证明内核边界检查
+      # 确实会失败。fixture 在临时目录中生成，不读写仓库源码；本步与上面的
+      # report 步同属灰度 job（continue-on-error），不改变 2026-11-03 前
+      # report-only 的既有裁决。
+      - name: Arch guard self-test (kernel boundary fixtures)
+        shell: pwsh
+        run: python scripts/arch_guard.py --self-test
+
       - name: Arch doc drift check (R0, generated deps)
         shell: pwsh
         run: |

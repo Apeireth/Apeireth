@@ -106,6 +106,55 @@ to = "apeireth-orchestration"
 why = "foundation 内反向依赖: LlmFactory/SubagentRole mirror (llm_orchestration_mirror.rs 自认反向依赖成环)"
 target = "R2 (单项 ADR 待出, Wave 3): 删除 mirror, 契约下沉 plugin 或 protocol"
 
+# ============================================================================
+# 机制型微内核边界 (KC-1, 2026-10-27)
+# ============================================================================
+# runtime 是机制内核: 只持有通用机制, 不依赖领域实现 crate, 不在执行循环里按
+# 业务工具名分支。新增生产依赖 / 执行循环字面量 / 领域类型必须先出 ADR 并改本表。
+# 静态扫描是预警手段, 不是完整架构证明。
+[kernel]
+crate = "apeireth-runtime"
+allowed_production_deps = [
+  "apeireth-core",
+  "apeireth-protocol",
+  "apeireth-plugin",
+  "apeireth-governance",
+  "apeireth-orchestration",
+]
+forbidden_production_deps = [
+  "apeireth-organ",
+  "apeireth-memory",
+  "apeireth-guard",
+  "apeireth-storage",
+  "apeireth-provider",
+  "apeireth-tools-canonical",
+]
+execution_loop_files = [
+  "crates/engine/runtime/src/canonical/execute.rs",
+  "crates/engine/runtime/src/canonical/dispatch_admission.rs",
+  "crates/engine/runtime/src/canonical/dispatcher.rs",
+  "crates/engine/runtime/src/canonical/registered_hooks.rs",
+  "crates/engine/runtime/src/canonical/subloop.rs",
+  "crates/engine/runtime/src/canonical/capability.rs",
+  "crates/engine/runtime/src/canonical/module_host.rs",
+]
+forbidden_dispatch_literals = [
+  "exit_plan_mode",
+  "shell",
+  "bash",
+  "filesystem",
+  "process",
+]
+forbidden_domain_types = [
+  "BioPainState",
+  "BioRecoveryLedger",
+  "BioPainSnapshot",
+  "NociceptionObserver",
+  "CarePotentialField",
+  "care_potential_field",
+  "nociception",
+]
+
 # 现役装配根 (允许多个但必须登记; 目标收敛到 runtime-assembly + 薄适配器)。
 [[composition_roots]]
 crate = "apeireth-runtime-assembly"
@@ -129,6 +178,10 @@ role = "Gateway 引导 (目标同上)"
 # ExtensionCatalog（现存 PluginManager 与 BehaviorRegistry 两个实现）。
 module_trait = "crates/engine/runtime/src/canonical/module.rs::BehaviorModule"
 plugin_trait = "crates/foundation/plugin/src/plugin.rs::Plugin"
+# KC-1 (ADR-0017): 通用工具完成观察口 + 注册式内部控制命令。
+tool_completion_observer = "crates/foundation/plugin/src/observation.rs::ToolCompletionObserver"
+control_command = "crates/engine/runtime/src/canonical/control.rs::ControlCommand"
+# Compatibility behavior registry; V1 module lifecycle reuses plugin_manager below (ADR-0019).
 module_registry = "crates/engine/runtime/src/canonical/module.rs::BehaviorRegistry"
 capability_registry = "crates/engine/runtime/src/canonical/capability.rs::CapabilityRegistry"
 plugin_manager = "crates/foundation/plugin/src/manager.rs::PluginManager"
@@ -137,6 +190,60 @@ sub_loop = "crates/engine/runtime/src/canonical/module.rs::SubLoopSpawner"
 # 已登记技术债: R2 收口（2026-10-20）后清零。新增结构变更须先出 ADR 再登记。
 
 # 去重黑名单: 同名概念只允许一个 canonical 定义; known_debt 为实测债务 (只减不增)。
+[[concepts]]
+name = "ToolEventV1"
+canonical = "crates/foundation/protocol/src/canonical/tool_event.rs"
+known_debt = []
+target = "ADR-0018/0019: 统一来源/执行身份/相关性与成对消息投影；V1 注册模块在 Runtime 接线，旧行为模块显式兼容"
+
+[[concepts]]
+name = "ToolDispatcher"
+canonical = "crates/engine/runtime/src/canonical/dispatcher.rs"
+known_debt = []
+target = "ADR-0019/0020: 单一 CapabilityRegistry 执行目录、统一调用上下文/策略与生命周期适配，不拥有竞争注册表"
+
+[[concepts]]
+name = "ToolExecutionContext"
+canonical = "crates/foundation/plugin/src/tool_execution.rs"
+known_debt = []
+target = "ADR-0020: 逐调用身份/Scope/授权/期限/取消上下文，兼容旧工具但无共享全局 Agent 状态"
+
+[[concepts]]
+name = "ToolModule"
+canonical = "crates/foundation/plugin/src/tool_module.rs"
+known_debt = []
+target = "ADR-0020: 现有 Plugin 生命周期的工具模块实现，不构成第二注册表"
+
+[[concepts]]
+name = "AgentRuntime"
+canonical = "crates/engine/runtime/src/canonical/instances.rs"
+known_debt = []
+target = "ADR-0021 / S5: 复用 Runtime/Session/Dispatcher 的拥有权与核算；桌面 main 的完整请求适配共享一个 AgentRuntime，短控制锁与独立会话写闸；PortableHost 保持桌面无依赖"
+
+[[concepts]]
+name = "UsageAccounting"
+canonical = "crates/engine/runtime/src/canonical/accounting.rs"
+known_debt = []
+target = "ADR-0021 / S5: Provider/Dispatcher 独占实际记账；main 跨 Session 聚合 AgentId，有限实例/owner 预算不重置；桌面显式沿用 SessionQuota，未知用量如实记录"
+
+[[concepts]]
+name = "ProfileConfig"
+canonical = "crates/engine/runtime/src/canonical/profiles.rs"
+known_debt = []
+target = "ADR-0021: 复用既有 Runtime/Session/Dispatcher 的拥有权、核算与隔离机制；不复制 Agent Loop"
+
+[[concepts]]
+name = "ModuleAgents"
+canonical = "crates/foundation/plugin/src/agents.rs"
+known_debt = []
+target = "ADR-0021: PluginContext 的 owner 绑定服务端口或 Host 存储端口；不构成第二模块扩展系统"
+
+[[concepts]]
+name = "ProfileStore"
+canonical = "crates/engine/runtime/src/canonical/profiles.rs"
+known_debt = []
+target = "ADR-0021: PluginContext 的 owner 绑定服务端口或 Host 存储端口；不构成第二模块扩展系统"
+
 [[concepts]]
 name = "ContextAssembler"
 canonical = "crates/foundation/orchestration/src/context_budget.rs"
@@ -199,3 +306,9 @@ approval_policy = { structural = "owner", debt = "engineering-lead", size_doc = 
 strict_requires_adr_above_weight = 10
 register_file = "docs/architecture/exceptions.toml"
 release_freeze = false              # release authority 在冻结窗口置 true
+
+[[concepts]]
+name = "PrincipalAuthorizations"
+canonical = "crates/engine/runtime/src/canonical/principal_authority.rs"
+known_debt = []
+target = "S4: Host-only revocable execution epoch; store/scope mapping stays in assembly, not a second module registry"

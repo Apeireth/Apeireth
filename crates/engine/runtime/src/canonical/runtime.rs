@@ -50,12 +50,12 @@ use apeireth_orchestration::repetition_advisory::{
 use apeireth_orchestration::runtime_invariants::InvariantAuditor;
 use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
+    ToolCompletionFact, ToolCompletionObserver,
 };
 use apeireth_protocol::canonical::{ModelDescriptor, ModelFeature};
 use serde::Serialize;
 
 use super::approval::PendingApprovalView;
-use super::bio_pain::{BioPainSnapshot, BioPainState, BioRecoverySnapshot};
 use super::capability::CapabilityRegistry;
 use super::context::{ContextProjector, NoContextProjector};
 use super::error::{RuntimeError, RuntimeResult};
@@ -163,13 +163,6 @@ pub struct RuntimeConfig {
     /// postures changes the prompt projection and nothing else. Default `false`:
     /// a runtime that never engages the mechanism is byte-for-byte unchanged.
     pub plan_mode_enabled: bool,
-    /// 痛觉评估 (SG-16) + 再生案例记账 (SG-17) 在失败处理链上的观测开关。
-    /// 默认 `false`: 关闭时 `record_call_completed` 不取锁、不写账本,
-    /// `ToolFailed` 事件与 `CapabilityCompleted` 轨迹逐字节不变。开启后仍在
-    /// 原有落账**之后**只追加只读评估与再生案例 (`Runtime::bio_pain_snapshot` /
-    /// `Runtime::bio_recovery_snapshot`), 不改变任何错误处理/重试决策。
-    /// 见 [`super::bio_pain`]。
-    pub bio_pain_enabled: bool,
     /// Session-scoped cognitive quota ceilings (opt-in spend gate). `None` on a
     /// dimension means no limit; the metering itself always runs so the
     /// self-report's consumption column stays real. See
@@ -254,7 +247,6 @@ impl Default for RuntimeConfig {
             context_spill_root: None,
             repetition_advisory: RepetitionPolicy::default(),
             plan_mode_enabled: false,
-            bio_pain_enabled: false,
             quota: super::quota::SessionQuotaLimits::default(),
             cost_rates: None,
             metrics_window_turns: super::metrics::DEFAULT_METRICS_WINDOW_TURNS,
@@ -277,7 +269,11 @@ fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_,
 
 /// The assembled runtime.
 pub struct Runtime {
+    pub(super) instances: std::sync::Weak<super::instances::Inner>,
+    pub(super) instance_host: Option<super::instances::AgentRuntime>,
+    pub(super) task: Option<Arc<super::instances::TaskExecution>>,
     pub(super) plugins: PluginManager,
+    pub(super) v1_protocol: bool,
     // Arc so per-turn invoker handles can carry the one canonical router
     // without borrowing the runtime. Still exactly one router instance.
     pub(super) providers: Arc<ProviderRouter>,
@@ -288,13 +284,18 @@ pub struct Runtime {
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
     pub(super) modules: BehaviorRegistry,
+    pub(super) principal_authorizations:
+        Option<Arc<super::principal_authority::PrincipalAuthorizations>>,
+    pub(super) registered_behaviors:
+        BTreeMap<String, Arc<super::behavior_adapter::RegisteredBehavior>>,
     pub(super) capabilities: CapabilityRegistry,
-    pub(super) session_locks: SessionLocks,
-    pub(super) event_sink: RwLock<Arc<dyn RuntimeEventSink>>,
+    pub(super) dispatcher: Arc<super::dispatcher::ToolDispatcher>,
+    pub(super) session_locks: Arc<SessionLocks>,
+    pub(super) event_sink: Arc<RwLock<Arc<dyn RuntimeEventSink>>>,
     pub(super) context_projector: Arc<dyn ContextProjector>,
     /// Session-scoped streak state for the repeated-identical-call advisory
     /// channel. Advisory only: it never blocks and never decides anything.
-    pub(super) repetition_detectors: Mutex<BTreeMap<SessionId, RepetitionDetector>>,
+    pub(super) repetition_detectors: Arc<Mutex<BTreeMap<SessionId, RepetitionDetector>>>,
     /// Optional runtime-invariant consumption point (observation layer). When
     /// absent, no invariant checking happens at the dispatch boundary.
     pub(super) invariant_auditor: Option<Arc<InvariantAuditor>>,
@@ -313,10 +314,13 @@ pub struct Runtime {
     /// G-P1 指标面: 回合收束指标的进程内滚动窗口 (会话 + 全局两层),回合
     /// 收束埋点写这里, `/v1/panel/metrics` 从这里读 (见 [`super::metrics`])。
     pub(super) metrics: Arc<super::metrics::MetricsRegistry>,
-    /// 运行时级痛觉账本 + 再生案例账 (SG-16/17, 默认关): 只在
-    /// [`RuntimeConfig::bio_pain_enabled`] 为真时由失败/成功路径写入; 跨会话,
-    /// 只观测不决策。见 [`super::bio_pain`]。
-    pub(super) bio_pain: Mutex<BioPainState>,
+    /// Optional domain-neutral observer of completed tool calls.
+    ///
+    /// The kernel emits one [`ToolCompletionFact`] at the single completion
+    /// bookkeeping point (serial dispatch, parallel commit, cancel drain).
+    /// With no observer installed, completion bookkeeping is exactly its
+    /// historical two records — no extra lock, no domain state.
+    pub(super) tool_completion_observer: Option<Arc<dyn ToolCompletionObserver>>,
 }
 
 impl Runtime {
@@ -359,32 +363,6 @@ impl Runtime {
     /// 指标注册表 (G-P1 指标数据源): 回合收束指标的进程内滚动窗口。
     pub fn metrics(&self) -> &super::metrics::MetricsRegistry {
         &self.metrics
-    }
-
-    /// 痛觉观测面的只读快照 (SG-16/17)。
-    ///
-    /// 默认关时返回 `enabled = false` 的空快照; 开启后返回运行时级账本当前
-    /// 全部组、最近 [`super::bio_pain::DEFAULT_BIO_PAIN_OBSERVATIONS`] 条评估,
-    /// 以及再生案例账快照 ([`BioRecoverySnapshot`])。读取本身不改变任何状态。
-    /// 本访问器**不是**事件通道: 评估与案例迁移从不伪造 session / trace 事件。
-    pub fn bio_pain_snapshot(&self) -> BioPainSnapshot {
-        self.bio_pain_guard().snapshot(self.config.bio_pain_enabled)
-    }
-
-    /// 再生案例账的只读快照 (SG-17, 与痛觉共用 `bio_pain_enabled` 开关)。
-    ///
-    /// 等价于 `self.bio_pain_snapshot().recovery` 但不克隆痛觉组与观测环。
-    /// 关闭时返回全零/空的 [`BioRecoverySnapshot`]。
-    pub fn bio_recovery_snapshot(&self) -> BioRecoverySnapshot {
-        self.bio_pain_guard().recovery_snapshot()
-    }
-
-    /// 痛觉账本写闸: 持锁线程 panic 后账本数据并未损坏, 按 L 组口径恢复而非
-    /// 把一次 panic 放大成之后所有失败路径的级联 panic。默认关路径不取此锁。
-    pub(super) fn bio_pain_guard(&self) -> std::sync::MutexGuard<'_, BioPainState> {
-        self.bio_pain
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Return a live, secret-free projection for diagnostics and capability
@@ -441,7 +419,7 @@ impl Runtime {
                 name: module.manifest().name.clone(),
             })
             .collect();
-        let mut capabilities = self
+        let capabilities = self
             .capabilities
             .entries()
             .into_iter()
@@ -452,14 +430,6 @@ impl Runtime {
                 available: true,
             })
             .collect::<Vec<_>>();
-        capabilities.extend(self.plugins.active_tools().into_iter().map(|capability| {
-            RuntimeCapabilitySnapshot {
-                id: capability.id().to_string(),
-                name: capability.declaration().name,
-                owner: "plugin".to_string(),
-                available: true,
-            }
-        }));
         RuntimeSnapshot {
             default_model: self.config.default_model.clone(),
             max_rounds: self.config.max_rounds,
@@ -471,14 +441,7 @@ impl Runtime {
         }
     }
 
-    /// Every tool that can currently be dispatched to.
-    pub fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-        let mut tools = self.capabilities.capabilities();
-        tools.extend(self.plugins.active_tools());
-        tools
-    }
-
-    /// The runtime-owned registry for non-plugin capabilities.
+    /// The single executable catalog for managed and compatibility capabilities.
     pub fn capability_registry(&self) -> &CapabilityRegistry {
         &self.capabilities
     }
@@ -555,6 +518,14 @@ impl Runtime {
         module_id: &str,
         tool: Arc<dyn ToolCapability>,
     ) -> Result<(), RuntimeError> {
+        if let Some(host) = self.agent_runtime() {
+            return host
+                .inner
+                .kernel
+                .try_read()
+                .map_err(|_| RuntimeError::misconfigured("control plane is busy"))?
+                .register_dynamic_tool(module_id, tool);
+        }
         let visible_plugins = self.plugins.active_tools();
         crate::canonical::module::reject_tool_identity_collisions(
             &visible_plugins,
@@ -578,10 +549,8 @@ impl Runtime {
             .declarations()
             .into_iter()
             .collect::<Vec<_>>();
-        declarations.extend(self.plugins.tool_declarations());
-        if self.config.plan_mode_enabled {
-            declarations.push(super::execute::plan_mode_exit_declaration());
-        }
+        // Control declarations are part of the one registry-driven catalog.
+        declarations.extend(self.capabilities.control_declarations());
         declarations
     }
 
@@ -597,13 +566,6 @@ impl Runtime {
     /// `provider.something`.
     pub fn providers(&self) -> &ProviderRouter {
         &self.providers
-    }
-
-    /// The shared router behind an [`Arc`](std::sync::Arc), for turn-scoped
-    /// invoker construction. This is the same single router instance the
-    /// runtime serves every completion from.
-    pub(super) fn providers_arc(&self) -> Arc<ProviderRouter> {
-        Arc::clone(&self.providers)
     }
 
     /// The modules registered with this runtime, in execution order.
@@ -640,7 +602,26 @@ impl Runtime {
     ///
     /// Returns the failures encountered; shutdown continues past each one.
     pub async fn shutdown(&mut self) -> Vec<apeireth_plugin::PluginError> {
-        self.plugins.shutdown_all().await
+        if let Some(host) = &self.instance_host {
+            if host.has_managed_main() {
+                return match Box::pin(host.shutdown()).await {
+                    Ok(()) => Vec::new(),
+                    Err(error) => vec![apeireth_plugin::PluginError::shutdown_failed(
+                        PluginId::new("host.main").expect("static owner"),
+                        error.to_string(),
+                    )],
+                };
+            }
+            if let Err(error) = host.drain_instances().await {
+                return vec![apeireth_plugin::PluginError::shutdown_failed(
+                    apeireth_core::kernel::PluginId::new("host.compat").expect("static owner"),
+                    error.to_string(),
+                )];
+            }
+        }
+        let failures = self.plugins.shutdown_all().await;
+        self.capabilities.shutdown_legacy().await;
+        failures
     }
 }
 
@@ -670,17 +651,23 @@ pub struct RuntimeBuilder {
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
     modules: Vec<Arc<dyn BehaviorModule>>,
+    principal_authorizations: Option<Arc<super::principal_authority::PrincipalAuthorizations>>,
     capabilities: Vec<Arc<dyn ToolCapability>>,
     event_sink: Arc<dyn RuntimeEventSink>,
     context_projector: Arc<dyn ContextProjector>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
+    dispatch_limits: super::dispatcher::DispatchLimits,
     invariant_auditor: Option<Arc<InvariantAuditor>>,
     summary_generator: Option<Arc<dyn SummaryGenerator>>,
     call_scheduler: Option<Arc<CallScheduler>>,
     session_manager: Option<Arc<SessionManager>>,
+    /// 通用工具完成观察口（不注入 = 零观测 = 零行为变化）。
+    tool_completion_observer: Option<Arc<dyn ToolCompletionObserver>>,
     /// 出网闸（不注入 = 默认放行 = 零行为变化）。
     egress_gate: Option<Arc<dyn super::egress_gate::EgressGate>>,
+    pub(super) agent_factory: Option<Arc<dyn apeireth_plugin::agents::ModuleAgentFactory>>,
+    pub(super) v1_protocol: bool,
 }
 
 impl Default for RuntimeBuilder {
@@ -699,17 +686,37 @@ impl RuntimeBuilder {
             governance: Arc::new(DenyUnconfigured),
             plugins: Vec::new(),
             modules: Vec::new(),
+            principal_authorizations: None,
             capabilities: Vec::new(),
             event_sink: Arc::new(NoopRuntimeEventSink),
             context_projector: Arc::new(NoContextProjector),
             fallback_order: None,
             config: RuntimeConfig::default(),
+            dispatch_limits: super::dispatcher::DispatchLimits::default(),
             invariant_auditor: None,
             summary_generator: None,
             call_scheduler: None,
             session_manager: None,
+            tool_completion_observer: None,
             egress_gate: None,
+            agent_factory: None,
+            v1_protocol: false,
         }
+    }
+
+    #[must_use]
+    pub fn with_principal_authorizations(
+        mut self,
+        authority: Arc<super::principal_authority::PrincipalAuthorizations>,
+    ) -> Self {
+        self.principal_authorizations = Some(authority);
+        self
+    }
+
+    #[must_use]
+    pub fn with_dispatch_limits(mut self, limits: super::dispatcher::DispatchLimits) -> Self {
+        self.dispatch_limits = limits;
+        self
     }
 
     /// Use a specific time source.
@@ -761,11 +768,19 @@ impl RuntimeBuilder {
         self
     }
 
-    /// Register a cognitive module. Modules run in registration order.
+    /// Register a cognitive module through authenticated fixed Hooks and V1 tools.
+    /// Modules run in registration order. The Host must grant their internal
+    /// capabilities explicitly; registration does not authorize execution.
     #[must_use]
-    pub fn with_module(mut self, module: Arc<dyn BehaviorModule>) -> Self {
+    pub fn with_registered_behavior(mut self, module: Arc<dyn BehaviorModule>) -> Self {
         self.modules.push(module);
         self
+    }
+
+    /// Compatibility name for [`Self::with_registered_behavior`].
+    #[must_use]
+    pub fn with_module(self, module: Arc<dyn BehaviorModule>) -> Self {
+        self.with_registered_behavior(module)
     }
 
     /// Compatibility alias that makes the behavior/capability distinction
@@ -899,27 +914,23 @@ impl RuntimeBuilder {
         self
     }
 
-    /// Enable the bio-pain observation + recovery bookkeeping of the failure path
-    /// (SG-16/17), default off.
+    /// Install a domain-neutral observer of completed tool calls.
     ///
-    /// When enabled, every completed tool call is folded into a runtime-level
-    /// pain ledger *after* its existing session/trace records have landed:
-    /// failures are assessed (class approximation + habituation + chronic
-    /// progression) and successes repair the capability's recorded causes.
-    /// Escalated recommendations (`Backoff`/`Diagnose`/`Abandon`) additionally
-    /// open or advance one `recovery_protocol::RecoveryCase` per
-    /// `(capability, cause_key)`, and a success closes that capability's cases
-    /// through the kernel state machine to `Resolved`. Everything is
-    /// bookkeeping only — it never changes the tool result, the error text, or
-    /// any retry/error-handling decision — and is readable through
-    /// [`Runtime::bio_pain_snapshot`] / [`Runtime::bio_recovery_snapshot`].
-    /// When disabled (the default), `record_call_completed` takes no extra lock
-    /// and writes no ledger, so the `ToolFailed` event and
-    /// `CapabilityCompleted` trace stay byte-for-byte identical.
-    /// See [`super::bio_pain`].
+    /// The observer receives exactly one [`ToolCompletionFact`] per executed
+    /// call, after the canonical `ToolFailed` session event and
+    /// `CapabilityCompleted` trace entry have landed. It is observational only:
+    /// the runtime ignores anything it sees, so results, events, retries, and
+    /// approvals are unchanged. Without an observer the completion bookkeeping
+    /// takes no extra lock and writes no extra state (byte-for-byte identical).
+    ///
+    /// Domain owners implement the trait in [`apeireth_plugin::observation`];
+    /// the kernel never names a domain crate or a concrete observer.
     #[must_use]
-    pub fn with_bio_pain(mut self, enabled: bool) -> Self {
-        self.config.bio_pain_enabled = enabled;
+    pub fn with_tool_completion_observer(
+        mut self,
+        observer: Arc<dyn ToolCompletionObserver>,
+    ) -> Self {
+        self.tool_completion_observer = Some(observer);
         self
     }
 
@@ -997,6 +1008,16 @@ impl RuntimeBuilder {
     /// misconfiguration surfaces at boot rather than inside somebody's first
     /// request.
     pub async fn build(self) -> RuntimeResult<Runtime> {
+        let host = self.build_agent_runtime_compat().await?;
+        let mut slot = host.inner.kernel.write().await;
+        let view = slot.execution_view();
+        let mut runtime = std::mem::replace(&mut *slot, view);
+        drop(slot);
+        runtime.instance_host = Some(host);
+        Ok(runtime)
+    }
+
+    pub(super) async fn build_kernel(mut self) -> RuntimeResult<Runtime> {
         if self.config.max_rounds == 0 {
             return Err(RuntimeError::misconfigured(
                 "max_rounds must be at least 1, otherwise no turn can ever run",
@@ -1007,42 +1028,86 @@ impl RuntimeBuilder {
                 "max_module_invocations must be at least 1",
             ));
         }
+        let mut registered_behaviors = BTreeMap::new();
         let mut module_registry = BehaviorRegistry::new();
         for module in self.modules {
+            let adapter = Arc::new(
+                super::behavior_adapter::RegisteredBehavior::new(module.clone())
+                    .map_err(RuntimeError::misconfigured)?,
+            );
+            self.plugins.push(adapter.clone());
+            registered_behaviors.insert(module.manifest().id.clone(), adapter);
             module_registry
                 .register(module)
                 .map_err(RuntimeError::misconfigured)?;
         }
 
         let capability_registry = CapabilityRegistry::new();
-        capability_registry
-            .register_all_for_builder(self.capabilities)
-            .map_err(RuntimeError::misconfigured)?;
+        // Internal control commands are registered, not branched on in the
+        // execution loop. Plan mode is the first (and currently only) one; a
+        // runtime with the mechanism off registers nothing at all.
+        if self.config.plan_mode_enabled {
+            capability_registry
+                .register_control(Arc::new(
+                    super::plan_mode_control::PlanModeExitControl::new(),
+                ))
+                .map_err(RuntimeError::misconfigured)?;
+        }
 
         let mut manager = PluginManager::new();
         for plugin in self.plugins {
             manager.register(plugin)?;
         }
 
-        let ctx = PluginContext::new(
+        let mut ctx = PluginContext::new(
             Arc::clone(&self.clock),
             Arc::clone(&self.credentials),
             TraceId::new(),
         );
-        manager.start_all(&ctx).await?;
-
+        if let Some(factory) = self.agent_factory {
+            ctx = ctx.with_agent_factory(factory);
+        }
+        let declared_tools = manager
+            .plugins()
+            .ids()
+            .flat_map(|id| manager.plugins().get(id).expect("registered").tools())
+            .collect::<Vec<_>>();
         crate::canonical::module::reject_tool_identity_collisions(
-            &capability_registry.capabilities(),
-            &manager.active_tools(),
+            &self.capabilities,
+            &declared_tools,
             "plugin tools",
         )
         .map_err(RuntimeError::misconfigured)?;
+        crate::canonical::control::reject_control_tool_collisions(
+            &capability_registry.controls(),
+            &declared_tools,
+        )
+        .map_err(RuntimeError::misconfigured)?;
+        crate::canonical::control::reject_control_tool_collisions(
+            &capability_registry.controls(),
+            &self.capabilities,
+        )
+        .map_err(RuntimeError::misconfigured)?;
+        if !self.capabilities.is_empty() {
+            manager.register(Arc::new(
+                apeireth_plugin::ToolModule::new(
+                    PluginId::new("host.legacy.tools").expect("static module id"),
+                    self.capabilities,
+                )?
+                .with_legacy_events(),
+            ))?;
+        }
+        manager.start_all_or_rollback(&ctx).await?;
+        super::module_host::populate_tool_catalog(&capability_registry, &mut manager).await?;
 
         // Providers are read out of the capability registry *after* start-up, so
         // the router contains exactly those whose plugins actually came up. A
         // provider whose plugin failed to initialize is never routed to.
         let mut providers =
             ProviderRouter::new(manager.active_providers(), Arc::clone(&self.clock));
+        providers
+            .accounting
+            .set_rates(self.config.cost_rates.clone());
         if let Some(gate) = self.egress_gate.clone() {
             providers = providers.with_egress_gate(gate);
         }
@@ -1069,19 +1134,30 @@ impl RuntimeBuilder {
             )),
         };
 
+        let dispatcher = Arc::new(
+            super::dispatcher::ToolDispatcher::new(self.dispatch_limits)
+                .with_usage(providers.accounting.clone()),
+        );
         Ok(Runtime {
+            instances: Default::default(),
+            instance_host: None,
+            task: None,
             plugins: manager,
+            v1_protocol: self.v1_protocol,
             providers: Arc::new(providers),
             sessions,
             governance: self.governance,
             clock: self.clock,
             config: self.config,
             modules: module_registry,
+            principal_authorizations: self.principal_authorizations,
+            registered_behaviors,
             capabilities: capability_registry,
-            session_locks: SessionLocks::default(),
-            event_sink: RwLock::new(self.event_sink),
+            dispatcher,
+            session_locks: Arc::new(SessionLocks::default()),
+            event_sink: Arc::new(RwLock::new(self.event_sink)),
             context_projector: self.context_projector,
-            repetition_detectors: Mutex::new(BTreeMap::new()),
+            repetition_detectors: Arc::new(Mutex::new(BTreeMap::new())),
             invariant_auditor: self.invariant_auditor,
             context_spill,
             compaction: self
@@ -1089,7 +1165,7 @@ impl RuntimeBuilder {
                 .map(|generator| Arc::new(CompactionEngine::new(generator))),
             call_scheduler: self.call_scheduler,
             metrics,
-            bio_pain: Mutex::new(BioPainState::new()),
+            tool_completion_observer: self.tool_completion_observer,
         })
     }
 }
@@ -1100,248 +1176,5 @@ pub fn plugin_ids(runtime: &Runtime) -> Vec<&PluginId> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use apeireth_core::kernel::{Lifecycle, Timestamp, VirtualClock};
-    use apeireth_governance::{DenyCapabilities, GovernancePipeline};
-    use apeireth_plugin::{
-        CapabilityKind, PluginManifest, PluginResult, StaticCredentials, ToolCapability,
-    };
-    use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
-    use async_trait::async_trait;
-    use std::sync::Mutex;
-
-    struct Echo(CapabilityId);
-
-    #[async_trait]
-    impl ToolCapability for Echo {
-        fn id(&self) -> &CapabilityId {
-            &self.0
-        }
-        fn declaration(&self) -> NormalizedTool {
-            NormalizedTool {
-                name: "echo".into(),
-                description: Some("echo".into()),
-                parameters: ToolParameters::new(),
-                strict: false,
-            }
-        }
-        async fn invoke(&self, call: &ToolCall) -> ToolResult {
-            ToolResult::ok(&call.id, call.arguments.clone())
-        }
-    }
-
-    /// Captures whatever credential it was offered at start-up.
-    struct KeyReader {
-        manifest: PluginManifest,
-        seen: Mutex<Option<String>>,
-    }
-
-    #[async_trait]
-    impl Plugin for KeyReader {
-        fn manifest(&self) -> &PluginManifest {
-            &self.manifest
-        }
-        async fn initialize(&self, ctx: &PluginContext) -> PluginResult<()> {
-            *self.seen.lock().unwrap() = ctx
-                .credentials
-                .resolve("provider.fake.api_key")
-                .map(|s| s.expose().to_string());
-            Ok(())
-        }
-        async fn shutdown(&self) -> PluginResult<()> {
-            Ok(())
-        }
-        fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
-            vec![Arc::new(Echo(CapabilityId::new("tool.echo").unwrap()))]
-        }
-    }
-
-    fn key_reader() -> Arc<KeyReader> {
-        Arc::new(KeyReader {
-            manifest: PluginManifest::new(
-                PluginId::new("builtin.key_reader").unwrap(),
-                "1.0.0",
-                "reads a key at boot",
-            )
-            .declare_capability(
-                CapabilityId::new("tool.echo").unwrap(),
-                CapabilityKind::Tool,
-                "echo",
-            )
-            .unwrap(),
-            seen: Mutex::new(None),
-        })
-    }
-
-    /// 出网闸从 Builder 一路带到 ProviderRouter（不注入 = 默认放行）。
-    #[tokio::test]
-    async fn egress_gate_reaches_the_provider_router() {
-        use crate::canonical::egress_gate::{EgressGate, EgressVerdict};
-        use apeireth_protocol::canonical::NormalizedRequest;
-
-        struct CountGate(Arc<std::sync::atomic::AtomicUsize>);
-        impl EgressGate for CountGate {
-            fn vet(&self, _request: &NormalizedRequest) -> EgressVerdict {
-                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                EgressVerdict::Pass
-            }
-        }
-
-        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let gate = Arc::new(CountGate(counter.clone()));
-        let runtime = Runtime::builder()
-            .with_egress_gate(gate)
-            .build()
-            .await
-            .expect("runtime builds");
-        // 闸挂在 router 上：构造本身不触发判定（判定发生在出网那一刻）。
-        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 0);
-        assert!(!runtime.providers().is_empty() || true);
-    }
-
-    #[tokio::test]
-    async fn the_smallest_runtime_builds_with_no_arguments() {
-        let runtime = Runtime::builder().build().await.unwrap();
-        assert_eq!(runtime.plugins().plugins().len(), 0);
-        assert!(runtime.tools().is_empty());
-        assert!(runtime.providers().is_empty());
-        assert_eq!(runtime.config().max_rounds, DEFAULT_MAX_ROUNDS);
-    }
-
-    #[tokio::test]
-    async fn a_runtime_builds_and_boots_without_any_credentials() {
-        let plugin = key_reader();
-        let runtime = Runtime::builder()
-            .with_plugin(plugin.clone())
-            .build()
-            .await
-            .unwrap();
-
-        assert_eq!(
-            runtime
-                .plugins()
-                .state(&PluginId::new("builtin.key_reader").unwrap())
-                .unwrap(),
-            Lifecycle::Active,
-            "no key must not prevent boot"
-        );
-        assert_eq!(*plugin.seen.lock().unwrap(), None);
-        assert_eq!(runtime.tools().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn credentials_reach_plugins_through_the_injected_resolver() {
-        let plugin = key_reader();
-        let _runtime = Runtime::builder()
-            .with_plugin(plugin.clone())
-            .with_credentials(Arc::new(
-                StaticCredentials::new().with("provider.fake.api_key", "sk-injected"),
-            ))
-            .build()
-            .await
-            .unwrap();
-
-        assert_eq!(
-            plugin.seen.lock().unwrap().as_deref(),
-            Some("sk-injected"),
-            "the plugin must receive the key without the runtime storing it"
-        );
-    }
-
-    #[tokio::test]
-    async fn the_runtime_never_prints_a_secret() {
-        let runtime = Runtime::builder()
-            .with_plugin(key_reader())
-            .with_credentials(Arc::new(
-                StaticCredentials::new().with("provider.fake.api_key", "sk-injected"),
-            ))
-            .build()
-            .await
-            .unwrap();
-
-        let printed = format!("{runtime:?}");
-        assert!(!printed.contains("sk-injected"), "{printed}");
-    }
-
-    #[tokio::test]
-    async fn the_injected_clock_is_the_one_sessions_are_stamped_with() {
-        let clock: Arc<dyn Clock> = Arc::new(VirtualClock::new(
-            Timestamp::from_epoch_millis(1_700_000_000_000)
-                .unwrap()
-                .as_datetime(),
-        ));
-        let runtime = Runtime::builder().with_clock(clock).build().await.unwrap();
-
-        let session = runtime
-            .sessions()
-            .load_or_create(apeireth_core::kernel::SessionId::new())
-            .await
-            .unwrap();
-        assert_eq!(session.created_at.epoch_millis(), 1_700_000_000_000);
-    }
-
-    #[tokio::test]
-    async fn a_zero_round_limit_is_rejected_at_build() {
-        let err = Runtime::builder()
-            .with_max_rounds(0)
-            .build()
-            .await
-            .unwrap_err();
-        assert!(matches!(err, RuntimeError::Misconfigured(_)), "{err}");
-    }
-
-    #[tokio::test]
-    async fn a_duplicate_plugin_is_rejected_at_build() {
-        let err = Runtime::builder()
-            .with_plugin(key_reader())
-            .with_plugin(key_reader())
-            .build()
-            .await
-            .unwrap_err();
-        assert!(matches!(err, RuntimeError::Plugin(_)), "{err}");
-    }
-
-    #[tokio::test]
-    async fn governance_is_held_as_configured() {
-        let runtime = Runtime::builder()
-            .with_governance(Arc::new(GovernancePipeline::new().with(Arc::new(
-                DenyCapabilities::new().deny(CapabilityId::new("tool.example").unwrap()),
-            ))))
-            .build()
-            .await
-            .unwrap();
-        assert_eq!(runtime.governance().name(), "pipeline");
-    }
-
-    #[tokio::test]
-    async fn default_governance_is_fail_closed_for_capabilities() {
-        let runtime = Runtime::builder().build().await.unwrap();
-        assert_eq!(runtime.governance().name(), "deny_unconfigured");
-    }
-
-    #[tokio::test]
-    async fn shutdown_stops_the_plugins_it_started() {
-        let mut runtime = Runtime::builder()
-            .with_plugin(key_reader())
-            .build()
-            .await
-            .unwrap();
-        let id = PluginId::new("builtin.key_reader").unwrap();
-
-        assert_eq!(runtime.plugins().state(&id).unwrap(), Lifecycle::Active);
-        assert!(runtime.shutdown().await.is_empty());
-        assert_eq!(runtime.plugins().state(&id).unwrap(), Lifecycle::Stopped);
-    }
-
-    #[tokio::test]
-    async fn plugin_ids_are_reported_in_id_order() {
-        let runtime = Runtime::builder()
-            .with_plugin(key_reader())
-            .build()
-            .await
-            .unwrap();
-        let ids: Vec<&str> = plugin_ids(&runtime).iter().map(|i| i.as_str()).collect();
-        assert_eq!(ids, ["builtin.key_reader"]);
-    }
-}
+#[path = "runtime/tests.rs"]
+mod tests;

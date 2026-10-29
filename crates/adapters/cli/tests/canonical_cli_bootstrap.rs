@@ -453,3 +453,256 @@ async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
         "the failure must name the credential problem: {err}"
     );
 }
+
+/// Real bootstrap, both transports, a frozen approval and the producer's turn
+/// seam all retain one managed identity and the caller's durable session.
+#[tokio::test]
+async fn desktop_entries_share_managed_main_sessions_approval_stream_and_heartbeat() {
+    use apeireth_gateway::canonical_router;
+    use apeireth_runtime::{ApprovalDecision, ApprovalResolution};
+    use axum::{body::Body, http::Request, response::IntoResponse, routing::post, Json, Router};
+    use http_body_util::BodyExt;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    let _lock = ENV_LOCK.lock().unwrap();
+    let directory = tempdir().unwrap();
+    let seen = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let capture = seen.clone();
+    let service = Router::new().route("/v1/chat/completions", post(move |Json(request): Json<Value>| {
+        let capture = capture.clone();
+        async move {
+            capture.lock().unwrap().push(request.clone());
+            if request["stream"] == true {
+                let frames = ["first ", "second"].into_iter().map(|part| {
+                    let body = serde_json::json!({"id":"managed-stream","model":"managed-fixture",
+                        "choices":[{"index":0,"delta":{"content":part},"finish_reason":null}]});
+                    format!("data: {body}\n\n")
+                }).collect::<String>();
+                let end = serde_json::json!({"id":"managed-stream","model":"managed-fixture",
+                    "choices":[{"index":0,"delta":{},"finish_reason":"stop"}],
+                    "usage":{"prompt_tokens":5,"completion_tokens":4,"total_tokens":9}});
+                return ([("content-type", "text/event-stream")], format!("{frames}data: {end}\n\ndata: [DONE]\n\n")).into_response();
+            }
+            let messages = request["messages"].as_array().unwrap();
+            let last_user = messages.iter().rfind(|m| m["role"] == "user").unwrap();
+            let needs_tool = last_user["content"] == "run pwd with approval" &&
+                !messages.iter().any(|m| m["role"] == "tool" && m["tool_call_id"] == "managed-approval-call");
+            let message = if needs_tool {
+                serde_json::json!({"role":"assistant","content":null,"tool_calls":[{
+                    "id":"managed-approval-call","type":"function","function":{"name":"shell",
+                    "arguments":"{\"command\":\"pwd\"}"}}]})
+            } else { serde_json::json!({"role":"assistant","content":"managed reply"}) };
+            Json(serde_json::json!({"id":"managed-response","model":"managed-fixture",
+                "choices":[{"index":0,"message":message,"finish_reason":if needs_tool {"tool_calls"} else {"stop"}}],
+                "usage":{"prompt_tokens":5,"completion_tokens":4,"total_tokens":9}})).into_response()
+        }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, service).await.unwrap() });
+    let cognitive = directory
+        .path()
+        .join("cognitive.sqlite3")
+        .to_string_lossy()
+        .into_owned();
+    let sessions = directory
+        .path()
+        .join("sessions.sqlite3")
+        .to_string_lossy()
+        .into_owned();
+    let data = directory.path().join("data").to_string_lossy().into_owned();
+    let _guards = [
+        EnvGuard::set("APEIRETH_API_KEY", None),
+        EnvGuard::set("APEIRETH_OPENAI_KEY", Some("managed-fixture-key")),
+        EnvGuard::set("OPENAI_API_KEY", Some("managed-fixture-key")),
+        EnvGuard::set("APEIRETH_OPENAI_URL", Some(&url)),
+        EnvGuard::set("APEIRETH_OPENAI_MODELS", Some("managed-fixture")),
+        EnvGuard::set("APEIRETH_MODEL", Some("managed-fixture")),
+        EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None),
+        EnvGuard::set("APEIRETH_COGNITIVE_DB", Some(&cognitive)),
+        EnvGuard::set("APEIRETH_SESSION_DB", Some(&sessions)),
+        EnvGuard::set("APEIRETH_DATA_DIR", Some(&data)),
+        EnvGuard::set("APEIRETH_ENABLE_SHELL", Some("1")),
+        EnvGuard::set("APEIRETH_ENABLE_ORGANS", None),
+    ];
+    let runtime = Arc::new(build_canonical_runtime_from_env().await.unwrap());
+    let identity = runtime
+        .managed_main()
+        .expect("desktop main must be managed");
+    assert_eq!(
+        identity.owner,
+        apeireth_plugin::agents::AgentOwner::Host("main".into())
+    );
+    assert_eq!(runtime.agent_runtime().unwrap().instances().len(), 1);
+    let session = SessionId::new();
+    execute_canonical_cli_turn(&runtime, "cli continuity sentinel", None, Some(session))
+        .await
+        .unwrap();
+    let app = canonical_router(runtime.clone());
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/v1/chat")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({"session":session,"input":"gateway continuation"})
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let stream_session = SessionId::new();
+    let response = app.clone().oneshot(Request::post("/v1/chat/completions").header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"session_id":stream_session,"stream":true,"messages":[{"role":"system","content":"static host sentinel"},{"role":"user","content":"stream input"}]}).to_string())).unwrap()).await.unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let body = String::from_utf8(
+        response
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(
+        body.contains("first ") && body.contains("second") && body.contains("[DONE]"),
+        "{body}"
+    );
+    let deltas = body
+        .lines()
+        .filter_map(|line| line.strip_prefix("data: "))
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter_map(|frame| {
+            frame["choices"][0]["delta"]["content"]
+                .as_str()
+                .map(str::to_owned)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(deltas, ["first ", "second"]);
+    let CanonicalCliTurn::PendingApproval(pending) =
+        execute_canonical_cli_turn(&runtime, "run pwd with approval", None, Some(session))
+            .await
+            .unwrap()
+    else {
+        panic!("approval must remain resumable")
+    };
+    assert_eq!(
+        runtime.managed_main().unwrap().status,
+        apeireth_plugin::agents::AgentStatus::WaitingApproval
+    );
+    let inbox = runtime.pending_approvals(session).await.unwrap();
+    assert_eq!(inbox[0].approval_id, pending.approval_id);
+    let response = app
+        .oneshot(
+            Request::post("/v1/approvals/resolve")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({"session":session, "approval":pending.approval_id,
+            "decision":"approve"})
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let resolved = apeireth_cli::resolve_canonical_cli_approval(
+        &runtime,
+        session,
+        pending.approval_id,
+        ApprovalDecision::Approve,
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        resolved,
+        ApprovalResolution::AlreadyResolved { .. }
+    ));
+    apeireth_cli::care_heartbeat::dispatch_heartbeat_turn(
+        &runtime,
+        session,
+        "heartbeat continuation",
+    )
+    .await
+    .unwrap();
+    for id in [session, stream_session] {
+        assert_eq!(runtime.tool_dispatcher().agent(id), identity.id);
+        let stored = runtime.sessions().load(&id).await.unwrap().unwrap();
+        assert!(
+            stored.events.iter().any(|entry| matches!(
+                entry.event,
+                apeireth_runtime::SessionEventKind::ToolEventRecorded { .. }
+            )) || id == stream_session
+        );
+    }
+    let history = runtime.sessions().load(&session).await.unwrap().unwrap();
+    let user_text = history
+        .messages
+        .iter()
+        .filter(|m| m.role == apeireth_protocol::canonical::MessageRole::User)
+        .map(|m| apeireth_protocol::canonical::ContentPart::join_text(&m.content))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        user_text,
+        [
+            "cli continuity sentinel",
+            "gateway continuation",
+            "run pwd with approval",
+            "heartbeat continuation"
+        ]
+    );
+    let streaming = runtime
+        .sessions()
+        .load(&stream_session)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        streaming
+            .messages
+            .iter()
+            .filter(|m| m.role == apeireth_protocol::canonical::MessageRole::System)
+            .count(),
+        1
+    );
+    assert!(seen
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|request| request["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["content"] == "cli continuity sentinel")
+            && request["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["content"] == "gateway continuation")));
+    let facts = runtime
+        .agent_runtime()
+        .unwrap()
+        .requests(identity.id)
+        .unwrap();
+    assert_eq!(
+        facts.len() as u64,
+        runtime.managed_main().unwrap().usage.requests
+    );
+    assert!(facts
+        .iter()
+        .all(|fact| fact.agent == identity.id && fact.owner == identity.owner));
+    assert_eq!(runtime.managed_main().unwrap().id, identity.id);
+    runtime.agent_runtime().unwrap().shutdown().await.unwrap();
+    assert!(apeireth_cli::care_heartbeat::dispatch_heartbeat_turn(
+        &runtime,
+        session,
+        "after shutdown"
+    )
+    .await
+    .is_err());
+    server.abort();
+}

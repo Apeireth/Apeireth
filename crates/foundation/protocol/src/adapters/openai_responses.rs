@@ -48,6 +48,8 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
     }
 
     fn adapt_request(&self, req: &NormalizedRequest) -> Result<Value, ProtocolError> {
+        crate::canonical::validate_closed_tool_context(&req.messages)
+            .map_err(|error| ProtocolError::invalid("messages", error.to_string()))?;
         if req.model.is_empty() {
             return Err(ProtocolError::missing("model"));
         }
@@ -80,11 +82,11 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
             body.insert("instructions".into(), Value::String(ins));
         }
 
-        // 映射设计参考 buildImmediateResponsesPayload:
-        // output 是结构化数组; input 归一化为 OpenAI Responses 的 input item 数组
+        // One assistant message may yield text plus several independent call
+        // items. Keep all of them before the matching result items.
         let input_items: Vec<Value> = non_system
             .iter()
-            .map(|m| {
+            .flat_map(|m| {
                 let mut item = Map::new();
                 match m.role {
                     MessageRole::User => {
@@ -109,27 +111,26 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                         item.insert("content".into(), Value::Array(parts));
                     }
                     MessageRole::Assistant => {
-                        // assistant → output_text + function_call items
+                        let mut items = Vec::new();
                         let text = ContentPart::join_text(&m.content);
                         if !text.is_empty() {
-                            // 注: 简单实现只输出 1 个 message item
-                            let mut inner = Map::new();
-                            inner.insert("type".into(), Value::String("output_text".into()));
-                            inner.insert("text".into(), Value::String(text));
-                            inner.insert("role".into(), Value::String("assistant".into()));
-                            // 直接作为 input item 即可 (Responses API 接受 history)
-                            return Value::Object({
-                                let mut outer = Map::new();
-                                outer.insert("role".into(), Value::String("assistant".into()));
-                                outer.insert(
-                                    "content".into(),
-                                    Value::Array(vec![Value::Object(inner)]),
-                                );
-                                outer
-                            });
+                            items.push(json!({
+                                "role": "assistant",
+                                "content": text,
+                            }));
                         }
-                        item.insert("role".into(), Value::String("assistant".into()));
-                        item.insert("content".into(), Value::Array(Vec::new()));
+                        for call in &m.tool_calls {
+                            items.push(json!({
+                                "type": "function_call",
+                                "call_id": call.id,
+                                "name": call.name,
+                                "arguments": call.arguments.to_string(),
+                            }));
+                        }
+                        if items.is_empty() {
+                            items.push(json!({"role": "assistant", "content": ""}));
+                        }
+                        return items;
                     }
                     MessageRole::Tool => {
                         // tool → function_call_output
@@ -144,7 +145,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                         // 已经在外层 instructions 处理过, 不应到这里
                     }
                 }
-                Value::Object(item)
+                vec![Value::Object(item)]
             })
             .collect();
 
@@ -184,7 +185,8 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                     if t.strict {
                         func.insert("strict".into(), Value::Bool(true));
                     }
-                    json!({"type": "function", "function": Value::Object(func)})
+                    func.insert("type".into(), Value::String("function".into()));
+                    Value::Object(func)
                 })
                 .collect();
             body.insert("tools".into(), Value::Array(tools));
@@ -196,7 +198,7 @@ impl ProtocolAdapter for OpenAiResponsesAdapter {
                 NormalizedToolChoice::None => Value::String("none".into()),
                 NormalizedToolChoice::Required => Value::String("required".into()),
                 NormalizedToolChoice::Specific { name } => {
-                    json!({"type": "function", "function": {"name": name}})
+                    json!({"type": "function", "name": name})
                 }
             };
             body.insert("tool_choice".into(), v);
@@ -407,14 +409,24 @@ mod tests {
             "gpt-4o",
             vec![
                 NormalizedMessage::user("weather?"),
+                NormalizedMessage::assistant_with_tool_calls(
+                    "",
+                    vec![ToolCall {
+                        id: "call_1".into(),
+                        name: "get_weather".into(),
+                        arguments: json!({}),
+                    }],
+                ),
                 NormalizedMessage::tool_result("call_1", Some("get_weather".into()), "sunny"),
             ],
         );
         let v = OpenAiResponsesAdapter::new().adapt_request(&req).unwrap();
         let input = v["input"].as_array().unwrap();
-        assert_eq!(input[1]["type"], "function_call_output");
+        assert_eq!(input[1]["type"], "function_call");
         assert_eq!(input[1]["call_id"], "call_1");
-        assert_eq!(input[1]["output"], "sunny");
+        assert_eq!(input[2]["type"], "function_call_output");
+        assert_eq!(input[2]["call_id"], "call_1");
+        assert_eq!(input[2]["output"], "sunny");
     }
 
     #[test]
@@ -438,7 +450,8 @@ mod tests {
         req.tool_choice = Some(NormalizedToolChoice::Required);
         let v = OpenAiResponsesAdapter::new().adapt_request(&req).unwrap();
         assert_eq!(v["tools"][0]["type"], "function");
-        assert_eq!(v["tools"][0]["function"]["name"], "fn");
+        assert_eq!(v["tools"][0]["name"], "fn");
+        assert!(v["tools"][0].get("function").is_none());
         assert_eq!(v["tool_choice"], "required");
     }
 
