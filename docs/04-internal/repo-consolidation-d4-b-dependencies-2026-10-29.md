@@ -23,3 +23,24 @@ Actual follow-on work is also in CI: #99 test-only environment lock, #103 provid
 Kernel status remains **Kernel Convergence Complete (under approved startup definition)**. The approved retained normal_start P50 is 7.5642 ms; legacy 11.4143 ms remains unmet historical, and true cold_start remains UNAVAILABLE. This checkpoint does not assert new performance samples or final-main verification.
 
 Evidence: `/tmp/apeireth-d4b/`, mirrored `d4b-*.log` and `.exit` under `/workspace/apeireth-codex/`; PR creation, source hashes, recovery receipts and actual merge records are machine-readable JSON. The final D4b addendum will record replacement merges/closures or exact blockers after CI settles.
+
+## Final D4b result
+
+The checkpoint above is historical. All actionable serial updates below have now landed; #22 remains a measured policy blocker.
+
+| PR | Exact merged head | Verified recovery tag | Protected merge |
+|---|---|---|---|
+| #97 | `bf9e80c3881e2dadbc89c3948c7b1f956e59bbc5` | `recovery/pre-merge-pr97-bf9e80c3` | `396fea41fa09d5ddd694501d831dd5e2b8d636e2` |
+| #33 | `c2592f4fe8b02d6b9783020ff91a3df05d64bd1d` | `recovery/pre-merge-pr33-c2592f4f` | `a9026b9df2f3e2f5f0d920fe42d24c7e9933f409` |
+| #96 | `777614510808e603e47b7f4aa8f7fa33e7f8fc5d` | `recovery/pre-merge-pr96-77761451` | `dd243e6bcd8ded989c4ca32bde3313de3badde59` |
+| #101 | `44cdffa79c46690e6a0b563a62a2230f093d4b0e` | `recovery/pre-merge-pr101-44cdffa7` | `00f923c502f119d55b14cb70c69394c544a3f8d3` |
+| #100 | `47b13fbd602d45f57dbe7f1a9191a11b7af21f6b` | `recovery/pre-merge-pr100-47b13fbd` | `3b18a6e2bbaeed953eda74c0df62e9ad9c001f94` |
+| #102 | `e7e8454baf3b66bcd1a6132e92687cebc81fe27c` | `recovery/pre-merge-pr102-e7e8454b` | `074ec29c0ac6af028f5d66a9f5f349c69e433f4c` |
+
+Original #17 → #101, #20 → #100 and #29 → #102 were closed with evidence comments only after replacement merges and separate exact-original-head recovery verification. Their historical commits remain recoverable; patch-intent supersession is not represented as full ancestry integration. #96 was refreshed by an ordinary main merge and FF push, never by force.
+
+#22 remains open WIP: precise hyper-util 0.1.21 resolution succeeds, but cargo-deny rejects duplicate base64 0.22.1/0.23.1. No exception was added. The candidate patch, full failure and explicit exit condition remain preserved. The failed historical-neutral broad-merge attempt for #29 was aborted; its narrow additive replacement kept current Tokio/serde resolutions.
+
+Kernel acceptance remains **Kernel Convergence Complete (under approved startup definition)**. Approved retained normal_start P50=7.5642 ms; legacy A4 OLD_COLD_P50=11.4143 ms remains unmet historical, and true cold_start is UNAVAILABLE because real cache dropping was denied. First-run/regression targets remain advisory. This milestone does not invent new performance samples or hardware validation.
+
+All actual merges use fresh six required contexts plus no known failing software/security checks, exact-head local/remote/reachability-verified recovery tags, and `gh pr merge --merge --match-head-commit`. There is no force push, direct main push, admin bypass, repository-setting mutation or manual source-branch deletion. Restore a preserved head with `git fetch origin tag <tag>` then `git push origin <tag>:refs/heads/<new-recovery-branch>`; do not overwrite an existing divergent published ref. Individual receipts include the exact command, SHA and object-reachability proof.

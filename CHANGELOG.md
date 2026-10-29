@@ -2,6 +2,11 @@
 
 ## [Unreleased] — D4b serial dependency execution and current blockers（2026-10-29）
 
+- Complete six protected serial dependency and action integrations after fresh required checks and exact-head recovery verification.
+- Close superseded #17 #20 #29 with merge evidence and preserve #22 as measured policy-blocked WIP.
+
+## [Unreleased] — D4b serial dependency execution and current blockers（2026-10-29）
+
 - Execute protected merges for Tokio serde_json and refreshed setup-python with verified recovery anchors.
 - Publish additive dependency and action replacements; retain the measured hyper-util duplicate-dependency blocker without policy relaxation.
 
