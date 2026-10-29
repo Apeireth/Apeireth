@@ -2,12 +2,44 @@
 
 [Document-Meta]
 Document: docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md
-Version: 3.1 (S6 Android cross-check addendum)
+Version: 3.2 (A4 full gates and formal startup judgment)
 Last-Modified: 2026-10-29
-Status: Convergence Partial；S1–S6 软件门禁通过，冷启动目标仍未达
+Status: Convergence Partial；A4 五段与指定软件检查通过，原 Dev 冷启动门槛仍未达
 Author: Codex
 
-## 2026-10-29 当前验收结论
+## A4 当前验收结论（2026-10-29）
+
+**正式状态仍为 Partial。** 从 clean `fffb712ed0d21fdab9768bed4aa0093d0ca13a75`
+重新运行原五段 `gate_full.ps1`，全部通过、exit **0**；指定集成、四包 clippy、fmt、
+strict arch、架构生成物、文档真源/链接/索引也通过。没有修源码、删/忽略测试、弱化断言或修改门禁。
+完整命令、软件/平台边界与回执见 [A4 验收账](kernel-convergence-a4-final-gates-2026-10-29.md)。
+
+原 Dev `cold-start` 本轮 **OLD_COLD_P50=11.4143 ms**，仍未达到正式 **<10 ms**；
+同 profile 的 idle P50 **30.1094 MiB**，满足原同数值 35 MiB 目标。
+原 benchmark 仍测同进程、新 DB 的完整生产组装，不含提前创建的 Tokio、目录创建与 Runtime 销毁；
+没有改负载、初始化、profile、阈值或历史数据，也没有把 exit 0 当作性能达标。
+[A1](kernel-convergence-a1-cold-start-2026-10-29.md) 的历史 P50 11.9248 ms、
+[A1b](kernel-convergence-a1b-startup-definitions-2026-10-29.md) 的历史 P50 11.5277 ms 原样保留。
+
+A1b 的已有库完整进程重启 `normal_start` Dev P50 **7.5642 ms** 是保留证据，本批未重跑该矩阵。
+新日常 P50≤10 ms 定义仍为 **PROPOSED_UNAPPROVED**，未替换正式 gate。
+本轮所列必需软件检查已通过；若仅改用这项启动定义，条件判语为
+**“Complete pending approval of the new startup definition”**。
+这不代表已获批准，**当前正式结论继续 Partial**，正式 Complete 阻塞仍是旧启动门槛。
+
+A1b 的真实冷缓存 `cold_start` 仍 **UNAVAILABLE**（真实 drop_caches 写权限被拒绝，n=0，
+P50/P95 未实测）；本批未以正常缓存或同进程重开补数。A3 的 CLI TCP 夹具 EPERM 是历史失败，
+本轮未改原测试，`canonical_cli_bootstrap` 定向及五段门禁内均通过，已补齐该范围的软件复验缺口；
+不追溯改写 A3 的 RESIDUAL 记录，不将 mock-server 通过当成真实外部服务验证。
+
+本批 Android `aarch64-linux-android` runtime 库 check/build、assembly 最小库 check 均通过；
+仅为编译证据，无设备/JNI/UI、可选 SQLite 组合目标构建或 **HARDWARE VALIDATED**。
+未重跑前端或外部 live/硬件验收；S6 的前端通过仍是当时的独立证据，不冒称为本批实测。
+源码冻结复核未见 Rust/Cargo 变动，交付为文档提交；下一步 **B**，本批不启动 B。
+
+## S6 验收结论（历史冻结口径，2026-10-29）
+
+本节至下方历史正文之前均为原 S6 冻结记录；其“当前”“本批”不覆盖上面的 A4 结论。
 
 **整体仍为 Partial。** S1–S6 的兼容执行收敛为 **PRODUCTION WIRED**，原五段软件门禁通过；
 现存 Complete 阻塞项是既有冷启动目标未达。不会把基准进程 exit 0 当作性能阈值通过。
@@ -52,7 +84,7 @@ AgentTaskInterrupted 的 pending calls 只说明最后 checkpoint 未闭合，�
 不伪造 ToolResult、不额外扣账；显式排水成功才提供可观察事实，失败仍报错并保留 owner。
 新枚举要求升级 reader；旧日志与旧事件保留，不能承诺旧二进制无损降级读取新记录。
 
-## 当前门禁、性能和限制
+## S6 门禁、性能和限制（历史冻结口径）
 
 原版五段 gate_full 最终 exit 0，完整日志与退出码为
 `/workspace/apeireth-codex/s6-gate-full.log` / `s6-gate-full.exit`。

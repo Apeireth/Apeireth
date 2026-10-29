@@ -1,5 +1,11 @@
 # Changelog — Apeireth
 
+## [Unreleased] — Kernel Convergence A4：全量门禁与正式验收复核（2026-10-29）
+
+- **软件复验**：原 gate_full 五段、指定 Runtime/CLI/Gateway 集成、clippy/fmt/strict arch 与文档门禁通过；CLI 原 TCP mock 夹具本轮通过，补齐 A3 当时的环境复验缺口，没有生产源码修复或测试减弱。
+- **正式验收仍 Partial**：原 Dev cold-start P50 11.4143 ms 仍未满足原 <10 ms。A1b normal_start 日常定义继续 PROPOSED_UNAPPROVED，真实冷缓存仍未实测；未改门槛、负载或历史数据。
+- **平台与证据**：Android runtime 库 check/build、assembly 最小库 check 通过，仅编译范围，无设备/JNI/UI/HARDWARE VALIDATED。见 [A4 验收账](docs/04-internal/kernel-convergence-a4-final-gates-2026-10-29.md) 与 [最终验收账](docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md)。
+
 ## [Unreleased] — Kernel Convergence S6：子实例中断事实与最终门禁（2026-10-29）
 
 - **PRODUCTION WIRED（兼容子执行证据）**：工具派发前保存原 Session checkpoint，显式排水后追加一次 AgentTaskInterrupted；复用 wire id 的新执行不会被旧结果遮蔽，保留兼容 API、原日志与唯一计量边界。

@@ -357,6 +357,7 @@ docs/04-internal/kernel-convergence-a1-cold-start-2026-10-29.md,L4,9,A1 冷启�
 docs/04-internal/kernel-convergence-a1b-startup-definitions-2026-10-29.md,L4,9,A1b 独立启动定义与进程测量,2026-10-29,在飞,0,保留,
 docs/04-internal/kernel-convergence-a2-ignored-tests-2026-10-29.md,L4,7,A2 忽略测试全量审计与恢复,2026-10-29,在飞,0,保留,
 docs/04-internal/kernel-convergence-a3-legacy-audit-2026-10-29.md,L4,7,A3 Legacy 执行入口审计,2026-10-29,在飞,0,保留,
+docs/04-internal/kernel-convergence-a4-final-gates-2026-10-29.md,L4,9,A4 全量门禁与最终验收复核,2026-10-29,在飞,0,保留,
 docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md,L4,9,Kernel Convergence Final Acceptance Report,2026-10-29,在飞,11,保留,
 docs/04-internal/kernel-convergence-remaining-debt-map-2026-10-29.md,L4,7,Production Kernel Convergence — Remaining Debt Map,2026-10-29,在飞,7,保留,
 docs/04-internal/kernel-convergence-s1-2026-10-29.md,L4,4,Kernel Convergence — S1 SubLoop instance adapter,2026-10-29,在飞,8,保留,
