@@ -1,5 +1,10 @@
 # Changelog — Apeireth
 
+## [Unreleased] — F2 exact merged main verification（2026-10-29）
+
+- Verify exact protected main in a detached worktree: eight docs/architecture/wiring/ledger commands pass.
+- Prove main tree equals the final five-segment D3a software-gate tree; defer redundant rerun with that explicit evidence, preserve platform/perf boundaries.
+
 ## [Unreleased] — D3b scoped consolidation extraction and readiness plans（2026-10-29）
 
 - After protected #98 integration, re-scan remaining open PRs; no independent narrow CLEAN candidate is merged.

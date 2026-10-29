@@ -1,5 +1,7 @@
 # F Main verification
 
+> Historical F snapshot retained. Post-D3 protected integration and fresh exact-main evidence are in [F2](repo-consolidation-f2-main-verify-2026-10-29.md); the earlier unintegrated-main/deferred-gate statements below describe their original snapshot.
+
 [Document-Meta]
 Document: docs/04-internal/repo-consolidation-f-main-verify-2026-10-29.md
 Version: 1.0
