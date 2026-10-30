@@ -1,0 +1,810 @@
+{
+  "schema": "apeireth.harness-run.v1",
+  "commit_sha": "4a42d9daba89669b002d47cd99119f8e14a3f0eb",
+  "tree_sha": "9c20cf2941f2ecc28d0ec7647e49c0b2ee4eef0b",
+  "base_sha": "caf499b769cd1d3aa0a6281c77acc5e1ca5c6ae7",
+  "started_at": "2026-10-30T02:43:49+00:00",
+  "finished_at": "2026-10-30T02:43:51+00:00",
+  "diff_tags": [
+    "ci",
+    "contract",
+    "docs"
+  ],
+  "gates": [
+    {
+      "id": "docs-truth",
+      "status": "PASS",
+      "command": [
+        "python3",
+        "scripts/docs_truth.py",
+        "--verify",
+        "--block-stale"
+      ],
+      "exit_code": 0,
+      "duration_s": 0.538,
+      "output_tail": "id                                status      level               default  switch\n---------------------------------------------------------------------------------------\nrt.provider_router                OK          PRODUCTION WIRED    ON       -\ncore.cost_router                  OK          PRODUCTION WIRED    OFF      APEIRETH_COST_ROUTING\ntool.task_board                   OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_TASK_BOARD\ntool.mcp_bridge                   OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_MCP\ntool.voice_speak                  OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_VOICE_SPEAK\nsec.egress_control                OK          PRODUCTION WIRED    ON       -\nsec.object_access                 OK          PRODUCTION WIRED    ON       -\nsec.exposure_audit                OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_EXPOSURE_AUDIT\nsec.egress_gate                   OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_EGRESS_GATE\nmem.lesson_object                 OK          PRODUCTION WIRED    ON       -\ngap.memory_update                 OK          PRODUCTION WIRED    ON       -\ngap.prompt_stabilizer_unwired     OK          NOT IMPLEMENTED     -        -\nsec.linux_containment             OK          IMPLEMENTED         -        -\nsec.gateway_tls                   OK          PRODUCTION WIRED    OFF      APEIRETH_TLS_CERT\nsec.storage_envelope_crypto       OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_SESSION_SEAL\ngov.chain_skeleton                OK          PRODUCTION WIRED    ON       -\ngov.chain_hook_adapter            OK          PRODUCTION WIRED    ON       -\ngov.reflection_queue              OK          IMPLEMENTED         -        -\ngov.chain_drill_ci                OK          IMPLEMENTED         -        -\nsec.governance_chain_drill        OK          IMPLEMENTED         -        -\nrel.release_asset_verify          OK          IMPLEMENTED         -        -\nsec.sql_readonly_gate             OK          PRODUCTION WIRED    ON       -\nsec.provider_proxy_ssrf           OK          PRODUCTION WIRED    ON       -\nsec.desktop_file_roots            OK          PRODUCTION WIRED    ON       -\nsec.terminal_permission_surfaces  OK          IMPLEMENTED         -        -\nbio.tone                          OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_BIO_TONE\nbio.circadian                     OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_BIO_CIRCADIAN\nbio.nociception_pain              OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_BIO_PAIN\nbio.recovery_protocol             OK          PRODUCTION WIRED    OFF      APEIRETH_ENABLE_BIO_PAIN\n\nclaims=29 fail=0 stale=0 review_due=0 suspected_missing=0",
+      "required": true,
+      "reason": null,
+      "blocking": true,
+      "scope": [
+        "docs",
+        "claims",
+        "rust",
+        "ci"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "a97770584eb94b3f08bd53d1418958d5c93f3d07168b3c1cc32443a59681a1af",
+      "tail_sha256": "cbeca4cd502427cc1200cbdd5b703f58520cc175a0143d2532db168530b8f543"
+    },
+    {
+      "id": "doc-class",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_doc_class.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "doc-caliber",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_doc_caliber.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "doc-numbers",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_doc_numbers.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "doc-paths",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_doc_paths.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "docs-links",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/docs_links.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "batch-status",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_batch_status.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "claims-verify",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_claims_verify.py",
+        "--wired-gate"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs",
+        "claims",
+        "rust"
+      ],
+      "timeout": 900,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "arch-strict",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/arch_guard.py",
+        "--strict"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "contract"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "arch-doc",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/arch_doc.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "contract",
+        "docs"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "crate-budget",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_crate_budget.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "dead-code",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_dead_code.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 900,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "unwired",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/audit_unwired.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 900,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "unwired-groups",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/group_unwired_baseline.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 900,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "stale-binaries",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_stale_binaries.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "mod-targets",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_mod_targets.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "guard-wiring",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_guard_wiring.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "quality-metrics",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_quality_metrics.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 900,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "golden-baseline",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_golden_baseline.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "timeout": 900,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "golden-no-leak",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_golden_no_leak.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "internal-golden",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/internal_golden.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "d4-ledger",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/d4_ledger.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "wiring-report",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/wiring_report.py",
+        "--verify"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "verify-ledger",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/verify_ledger.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs",
+        "claims"
+      ],
+      "timeout": 600,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "gate-manifest",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/gen_gate_manifest.py",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs",
+        "ci",
+        "contract"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "self-status-vocab",
+      "status": "SKIPPED",
+      "command": [
+        "python3",
+        "scripts/check_self_status_vocab.py"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": false,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "docs"
+      ],
+      "timeout": 300,
+      "env": "python",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "ci-rust",
+      "status": "SKIPPED",
+      "command": [
+        "cargo",
+        "build",
+        "--workspace",
+        "--tests",
+        "--locked"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 3600,
+      "env": "cargo",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "ci-nextest",
+      "status": "SKIPPED",
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--workspace",
+        "--profile",
+        "ci",
+        "--locked"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 3600,
+      "env": "cargo",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "ci-clippy",
+      "status": "SKIPPED",
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 3600,
+      "env": "cargo",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "ci-fmt",
+      "status": "SKIPPED",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust"
+      ],
+      "timeout": 900,
+      "env": "cargo",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "ci-doc-test",
+      "status": "SKIPPED",
+      "command": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--doc",
+        "--locked"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "docs"
+      ],
+      "timeout": 3600,
+      "env": "cargo",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "ci-cargo-deny",
+      "status": "SKIPPED",
+      "command": [
+        "bash",
+        "scripts/audit/run-cargo-audit-deny.sh"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": true,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "lock"
+      ],
+      "timeout": 1800,
+      "env": "ci",
+      "output_sha256": "",
+      "tail_sha256": ""
+    },
+    {
+      "id": "ci-promise-audit",
+      "status": "SKIPPED",
+      "command": [
+        "bash",
+        "scripts/audit/8-promise-audit.sh"
+      ],
+      "exit_code": null,
+      "duration_s": 0.0,
+      "output_tail": "",
+      "required": false,
+      "reason": "not selected by --only（本次未选中）",
+      "blocking": true,
+      "scope": [
+        "rust",
+        "contract"
+      ],
+      "timeout": 900,
+      "env": "ci",
+      "output_sha256": "",
+      "tail_sha256": ""
+    }
+  ],
+  "verdict": "BLOCKED",
+  "verdict_reasons": [
+    "required gate not applicable/skipped without justification: doc-class",
+    "required gate not applicable/skipped without justification: doc-caliber",
+    "required gate not applicable/skipped without justification: doc-numbers",
+    "required gate not applicable/skipped without justification: doc-paths",
+    "required gate not applicable/skipped without justification: docs-links",
+    "required gate not applicable/skipped without justification: batch-status",
+    "required gate not applicable/skipped without justification: claims-verify",
+    "required gate not applicable/skipped without justification: arch-strict",
+    "required gate not applicable/skipped without justification: arch-doc",
+    "required gate not applicable/skipped without justification: crate-budget",
+    "required gate not applicable/skipped without justification: dead-code",
+    "required gate not applicable/skipped without justification: unwired",
+    "required gate not applicable/skipped without justification: unwired-groups",
+    "required gate not applicable/skipped without justification: stale-binaries",
+    "required gate not applicable/skipped without justification: mod-targets",
+    "required gate not applicable/skipped without justification: guard-wiring",
+    "required gate not applicable/skipped without justification: quality-metrics",
+    "required gate not applicable/skipped without justification: golden-baseline",
+    "required gate not applicable/skipped without justification: golden-no-leak",
+    "required gate not applicable/skipped without justification: internal-golden",
+    "required gate not applicable/skipped without justification: d4-ledger",
+    "required gate not applicable/skipped without justification: wiring-report",
+    "required gate not applicable/skipped without justification: verify-ledger",
+    "required gate not applicable/skipped without justification: gate-manifest",
+    "required gate not applicable/skipped without justification: ci-rust",
+    "required gate not applicable/skipped without justification: ci-nextest",
+    "required gate not applicable/skipped without justification: ci-clippy",
+    "required gate not applicable/skipped without justification: ci-fmt",
+    "required gate not applicable/skipped without justification: ci-doc-test",
+    "required gate not applicable/skipped without justification: ci-cargo-deny"
+  ],
+  "changed_files": [
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/docs-governance.yml",
+    "docs/architecture/contract.toml",
+    "docs/status/harness-convergence-decision-2026-10-30.md",
+    "scripts/gate-manifest.json",
+    "scripts/gen_gate_manifest.py"
+  ],
+  "changed_file_count": 6,
+  "diff_source": "git diff --name-only HEAD~1..HEAD",
+  "registry_source": [
+    "门禁登记表来源：docs/architecture/contract.toml [ci_gates]（33 条门禁）。"
+  ],
+  "restricted_to": [
+    "docs-truth"
+  ]
+}

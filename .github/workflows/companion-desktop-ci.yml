@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       # WebKitGTK-4.1 + librsvg + libdbus 系统库 (Tauri 2 链接)
       - name: "Install system deps (Tauri: webkit/gtk/dbus)"

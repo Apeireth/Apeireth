@@ -441,6 +441,15 @@ timeout = 600
 note = "四层验收台账"
 
 [[ci_gates.gate]]
+id = "toolchain-pin"
+cmd = ["python3", "scripts/check_toolchain_pin.py"]
+scope = ["ci", "contract", "rust"]
+blocking = true
+required = true
+timeout = 300
+note = "CI 工具链必须与 `rust-toolchain.toml` 的 channel 一致（禁浮动 `@stable`）"
+
+[[ci_gates.gate]]
 id = "gate-manifest"
 cmd = ["python3", "scripts/gen_gate_manifest.py", "--check"]
 scope = ["docs", "ci", "contract"]

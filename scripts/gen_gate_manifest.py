@@ -71,11 +71,37 @@ def locked_sources(contract: dict) -> list[str]:
     )
 
 
+def repo_facts() -> dict:
+    """从**真实文件**读出「仓库计数」类事实（**不手写**）。
+
+    这些数字曾经散落在 PR 模板里手抄 ⇒ 实测已漂：
+    「6 哲学锚」（实为 **9**）、「18 workflow」（实为 **42**）、
+    「24 LOCKED crate」（R148 已撤销，实为 **3 个受锁源码**）。
+    """
+    philosophy = ROOT / "docs" / "01-architecture" / "philosophy.md"
+    anchors = 0
+    if philosophy.exists():
+        for line in philosophy.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("|") and re.search(r"\b[SO]-[0-9]\b", stripped):
+                anchors += 1
+    workflows = len(list((ROOT / ".github" / "workflows").glob("*.yml")))
+    crates = len(
+        [
+            path
+            for path in (ROOT / "crates").iterdir()
+            if path.is_dir() and (path / "Cargo.toml").exists()
+        ]
+    )
+    return {"philosophy_anchors": anchors, "workflows": workflows, "crates": crates}
+
+
 def render_block(contract: dict) -> str:
     """生成人读副本里的自动事实块（**不含** BEGIN/END 标记本身）。"""
     meta = contract.get("meta", {})
     workspace = contract.get("workspace", {})
     registry = gates(contract)
+    facts = repo_facts()
     required = [g for g in registry if g.get("required")]
     local = [g for g in registry if g.get("env") != "cargo" and g.get("env") != "ci"]
 
@@ -96,6 +122,9 @@ def render_block(contract: dict) -> str:
     for path in locked_sources(contract):
         lines.append(f"  - `{path}`")
     lines += [
+        f"- **哲学锚**：**{facts['philosophy_anchors']}** 条（`docs/01-architecture/philosophy.md`）",
+        f"- **workflow**：**{facts['workflows']}** 个（`.github/workflows/*.yml`）",
+        f"- **crate**：**{facts['crates']}** 个（`crates/*/Cargo.toml`）",
         f"- **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`"
         f"（共 **{len(registry)}** 条 · required **{len(required)}** 条）",
         f"  - 本地可跑（`{len(local)}` 条）："
@@ -141,6 +170,7 @@ def build_manifest(contract: dict) -> dict:
         "workspace_version": contract.get("workspace", {}).get("version"),
         "workspace_members": contract.get("workspace", {}).get("members"),
         "locked_sources": locked_sources(contract),
+        "repo_facts": repo_facts(),
         "gates": [
             {
                 "id": g.get("id"),

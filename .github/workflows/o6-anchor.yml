@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       # keyring/dbus/wayland/pipewire/egl 需要系统库
       - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
@@ -96,19 +96,41 @@ jobs:
           fi
           echo "✓ O-6 锚 #3: legacy path 在预算内 (compat shim 阶段)"
 
-      # O-6 锚 #4: LOCKED 数据 0 触碰 — 验证 13 键 LOCKED 数据没改
-      # 13 键 LOCKED 数据在 `crates/foundation/core/src/philosophy.rs`
+      # O-6 锚 #4: LOCKED 数据 0 触碰 — 验证 PHL 键集 LOCKED 数据没改
+      # PHL 键集在 `crates/foundation/core/src/philosophy.rs`
+      # ⚠️ 键数**不手写**（曾经写着「13 键」而源码早已是 14 个变体 ⇒ 误导）
+      #    ⇒ 下面由源码**推导**（2026-10-30）。真正的 0 触碰由 `rust.yml` hard-walls
+      #    按契约 `[locked]` 逐文件 word-diff 守（philosophy.rs 在其中）。
       # RUNTIME_ENFORCED = false 必须保持 (per 2026-08-27 5 维分析拍板降级)
       - name: "O-6 锚 #4: LOCKED 数据 0 触碰"
         shell: bash
         run: |
           set -e
-          # 13 键 LOCKED 数据守门
+          # PHL 键集 LOCKED 数据守门
           if ! grep -q 'pub const RUNTIME_ENFORCED: bool = false' crates/foundation/core/src/philosophy.rs; then
             echo "❌ O-6 锚 #4 违约: philosophy.rs::RUNTIME_ENFORCED != false"
-            echo "13 键降级决策 (2026-08-27 5 维分析) 必须保持"
+            echo "PHL 键集降级决策 (2026-08-27 5 维分析) 必须保持"
             exit 1
           fi
+          # 键数**从源码推导**（不手写 ⇒ 键集增减时本守门不会说错话）
+          PHL_COUNT=$(python3 - <<'PYKEYS'
+          import re
+          text = open("crates/foundation/core/src/philosophy.rs", encoding="utf-8").read()
+          match = re.search(r"pub enum PhilosophyKey \{(.*?)\n\}", text, re.S)
+          body = match.group(1) if match else ""
+          variants = [
+              line.strip()
+              for line in body.splitlines()
+              if line.strip()
+              and not line.strip().startswith("//")
+              and not line.strip().startswith("/*")
+              and not line.strip().startswith("///")
+              and line.strip().rstrip(",")
+          ]
+          print(len(variants))
+          PYKEYS
+          )
+          echo "PHL 键集变体数（源码推导）: $PHL_COUNT"
           # 9 哲学锚数守门 (8 + O-6 永远追求最优)
           # 用单行 grep 每个锚, 避免一行 regex 跨平台差异
           ANCHOR_COUNT=0
@@ -139,7 +161,7 @@ jobs:
             echo "❌ O-6 锚 #4 违约: R11 baseline 3 值 (0.8682/0.8532/0.9063) 缺失"
             exit 1
           fi
-          echo "✓ O-6 锚 #4: 13 键 LOCKED + 9 哲学锚 + workspace.version $CUR + R11 baseline 0 触碰"
+          echo "✓ O-6 锚 #4: PHL 键集 $PHL_COUNT 键 LOCKED + 9 哲学锚 + workspace.version $CUR + R11 baseline 0 触碰"
 
       # O-6 锚 #5 (额外): 8 哲学锚表头数 0 减 (不能删除任何锚, 只能扩展)
       - name: "O-6 锚 #5: 哲学锚表头 0 减 (只允许扩展)"
@@ -165,7 +187,7 @@ jobs:
           echo "  ✅ #1: clippy 0 警告"
           echo "  ✅ #2: 全 workspace 测试 0 失败"
           echo "  ✅ #3: legacy compat path 在预算内"
-          echo "  ✅ #4: 13 键 LOCKED + 9 哲学锚 + workspace.version (release authority, 现 2.0.0-rc.4) + R11 baseline 0 触碰"
+          echo "  ✅ #4: PHL 键集 $PHL_COUNT 键 LOCKED + 9 哲学锚 + workspace.version (release authority, 现 2.0.0-rc.4) + R11 baseline 0 触碰"
           echo "  ✅ #5: 9 个哲学锚全在 (S-1/S-2/S-3/O-1/O-2/O-3/O-4/O-5/O-6)"
           echo ""
           echo "  O-6 锚兑现 - 工程最优严守"

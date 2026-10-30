@@ -47,7 +47,7 @@ jobs:
         run: python scripts/check_no_legacy_deps.py
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
 
       # keyring/dbus/wayland/pipewire/egl 需要系统库 (仅 Linux)
       - name: "Install system deps (Linux: libdbus + libwayland + libpipewire + libegl)"
@@ -91,6 +91,16 @@ jobs:
 
   # === 8 硬墙守门 (per CONTRIBUTING.md §0 触碰实查) ===
   # 跟 companion-desktop-ci.yml 平行, 但只盯根 workspace
+  # 工具链钉版一致性（2026-10-30）：CI 装的 rustc 必须 == `rust-toolchain.toml` 声明的版本
+  # ⇒ 否则「可重现构建」在 CI 里不成立（本地钉、CI 浮动）。
+  toolchain-pin:
+    name: 工具链钉版一致 (CI == rust-toolchain.toml)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 钉版核对
+        run: python3 scripts/check_toolchain_pin.py
+
   hard-walls:
     name: 8 硬墙守门 (LOCKED / version / baseline / 14 键 / V1136)
     runs-on: ubuntu-latest

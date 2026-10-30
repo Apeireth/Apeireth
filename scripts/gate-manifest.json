@@ -8,6 +8,11 @@
     "crates/foundation/core/src/onion.rs",
     "crates/foundation/core/src/philosophy.rs"
   ],
+  "repo_facts": {
+    "philosophy_anchors": 9,
+    "workflows": 42,
+    "crates": 0
+  },
   "gates": [
     {
       "id": "docs-truth",
@@ -395,6 +400,23 @@
       "env": "python",
       "timeout": 600,
       "note": "四层验收台账"
+    },
+    {
+      "id": "toolchain-pin",
+      "cmd": [
+        "python3",
+        "scripts/check_toolchain_pin.py"
+      ],
+      "scope": [
+        "ci",
+        "contract",
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "CI 工具链必须与 `rust-toolchain.toml` 的 channel 一致（禁浮动 `@stable`）"
     },
     {
       "id": "gate-manifest",

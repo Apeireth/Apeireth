@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust stable + clippy + rustfmt
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
 
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
       # CI fix 2026-08: nightly rustfmt 每日漂移 (原 8 项 rustfmt.toml 配置在 stable
       # 全是 unstable, nightly 跑则全仓数百文件 diff, 门禁从未绿过) → 改 stable + 默认风格
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt
       - name: cargo fmt --all -- --check

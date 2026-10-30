@@ -25,8 +25,11 @@
   - `crates/foundation/core/src/eight_anchors.rs`
   - `crates/foundation/core/src/onion.rs`
   - `crates/foundation/core/src/philosophy.rs`
-- **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **33** 条 · required **31** 条）
-  - 本地可跑（`26` 条）：`docs-truth` · `doc-class` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `gate-manifest` · `self-status-vocab`
+- **哲学锚**：**9** 条（`docs/01-architecture/philosophy.md`）
+- **workflow**：**42** 个（`.github/workflows/*.yml`）
+- **crate**：**0** 个（`crates/*/Cargo.toml`）
+- **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **34** 条 · required **32** 条）
+  - 本地可跑（`27` 条）：`docs-truth` · `doc-class` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `toolchain-pin` · `gate-manifest` · `self-status-vocab`
   - 完整清单与命令：**不要在这里复制**，改看契约 `[ci_gates]`（`scripts/harness.py plan` 会按变更范围列出该跑哪几条）
 
 ### 硬约束（**数字全部来自上面那块，不要在此手写**）
@@ -85,7 +88,7 @@
 
 - [ ] 涉及代码改动 → `CHANGELOG.md` 顶部 `## [Unreleased]` 段加 1 行
 - [ ] 涉及路线图变更 → `ROADMAP.md` 按状态标记 (✅ / ⏳ / ❌)
-- [ ] 涉及 4 关 / 12 键 / 5 重守门 / 24 维 / 9 器官 / 6 哲学锚 → 同步 `docs/conventions/` + `docs/glossary/`
+- [ ] 涉及 4 关 / 12 键 / 5 重守门 / 24 维 / 9 器官 / **哲学锚（数量见上方自动块）** → 同步 `docs/conventions/` + `docs/glossary/`
 - [ ] 涉及新 public API → 加 `///` rustdoc (per `cargo doc` 通过)
 - [ ] 涉及新 submodule → 加 `mod.rs` 顶部 30+ 行守门 (per 主人偏好 O-4)
 
@@ -139,7 +142,7 @@
 - [ ] 上面文档段 5 项对应勾
 - [ ] 上面 6 哲学 anchor 段 6 项对应勾
 - [ ] 上面 8 项不修改承诺段 8 项对应勾
-- [ ] 跟现有 18 workflow yml + 18 LOCKED crate 0 冲突
+- [ ] 跟现有 workflow 与受锁源码 0 冲突（**清单见上方自动块**）
 - [ ] 跟 A / B / C / D-2 / D-3 并行任务 0 冲突 (per `reports/agent-a2-final-2026-08-10.md`)
 - [ ] commit message 规范: `<type>(<scope>): <subject>`, 例: `feat(workspace): R26 阶段 — dependabot + ISSUE_TEMPLATE 补全`
 - [ ] CODEOWNERS 自动 review (per CONTRIBUTING.md §PR 流程 第 6 步)

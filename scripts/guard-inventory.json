@@ -1,0 +1,815 @@
+{
+  "schema": "apeireth.guard-inventory.v1",
+  "generated_from": "scripts/gen_guard_inventory.py",
+  "guards": [
+    {
+      "id": "analyze-shadow",
+      "path": "scripts/guard_ml/analyze_shadow.py",
+      "kind": "generator",
+      "blocking": true,
+      "invocation": [
+        "python scripts/guard_ml/analyze_shadow.py --self-test"
+      ],
+      "ci_workflows": [
+        ".github/workflows/guard-v3.3.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Analyze privacy-safe Guard shadow events without fabricating production evidenc…",
+      "flags": []
+    },
+    {
+      "id": "arch-doc",
+      "path": "scripts/arch_doc.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python scripts/arch_doc.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/arch-guard.yml"
+      ],
+      "has_baseline": false,
+      "notes": "架构文档生成器（R0）：从契约 + cargo metadata 生成机器依赖图，并做防漂移检查",
+      "flags": [
+        "--check",
+        "--gen",
+        "--help",
+        "--print",
+        "-h"
+      ]
+    },
+    {
+      "id": "arch-guard",
+      "path": "scripts/arch_guard.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python scripts/arch_guard.py --report"
+      ],
+      "ci_workflows": [
+        ".github/workflows/arch-guard.yml"
+      ],
+      "has_baseline": true,
+      "notes": "架构守卫（Architecture Guard）— 读取架构契约并执行 fitness functions",
+      "flags": [
+        "--baseline",
+        "--contract",
+        "--exceptions",
+        "--help",
+        "--json",
+        "--log",
+        "--print-vendored",
+        "--report",
+        "--strict",
+        "--update-baseline",
+        "--wave",
+        "-h"
+      ]
+    },
+    {
+      "id": "audit-unwired",
+      "path": "scripts/audit_unwired.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/audit_unwired.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/unwired-ratchet.yml"
+      ],
+      "has_baseline": true,
+      "notes": "孤儿 API 审计：找「库级齐全、生产没接电」的公开符号",
+      "flags": [
+        "--check",
+        "--help",
+        "--update",
+        "-h"
+      ]
+    },
+    {
+      "id": "audit-unwired-modules",
+      "path": "scripts/audit_unwired_modules.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/audit_unwired_modules.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "模块级「未接线」审计 —— 找整块能力没接电的模块",
+      "flags": [
+        "--help",
+        "--json",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-batch-status",
+      "path": "scripts/check_batch_status.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_batch_status.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-governance.yml"
+      ],
+      "has_baseline": true,
+      "notes": "批次进度页守卫—— 让「做到哪了」不可能手写漂移",
+      "flags": [
+        "--check",
+        "--gen",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-claims-verify",
+      "path": "scripts/check_claims_verify.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_claims_verify.py --wired-gate",
+        "python3 scripts/check_claims_verify.py --check --timeout 600"
+      ],
+      "ci_workflows": [
+        ".github/workflows/claims-verify.yml"
+      ],
+      "has_baseline": false,
+      "notes": "状态声明验证守卫—— 让 claims.yaml 的 verify_cmd 真的被跑",
+      "flags": [
+        "--check",
+        "--help",
+        "--list",
+        "--only",
+        "--timeout",
+        "--wired-gate",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-commit-tree",
+      "path": "scripts/check_commit_tree.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_commit_tree.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "提交完整性自检：提交后的树里必须有的文件都在",
+      "flags": [
+        "--expect",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-coverage-ratchet",
+      "path": "scripts/check_coverage_ratchet.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_coverage_ratchet.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/coverage.yml"
+      ],
+      "has_baseline": true,
+      "notes": "覆盖率棘轮：只减不增（与 doc-caliber-baseline / known-missing 同一范式）",
+      "flags": []
+    },
+    {
+      "id": "check-crate-budget",
+      "path": "scripts/check_crate_budget.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_crate_budget.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "crate 体量预算守卫—— 堵住「搬家式漂移」",
+      "flags": [
+        "--check",
+        "--gen",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-dead-code",
+      "path": "scripts/check_dead_code.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_dead_code.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/dead-code-ratchet.yml"
+      ],
+      "has_baseline": true,
+      "notes": "D-1 死代码棘轮（只减不增）：dead_code = 'warn' 的豁免清单不得增长",
+      "flags": [
+        "--help",
+        "--update",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-doc-caliber",
+      "path": "scripts/check_doc_caliber.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_doc_caliber.py --changed \"$BASE\" \"$GITHUB_SHA\""
+      ],
+      "ci_workflows": [
+        ".github/workflows/doc-caliber.yml"
+      ],
+      "has_baseline": true,
+      "notes": "文档四级口径守门 (W8③, per docs/04-internal/engineering-review-handoff-2026-10-06.md §5…",
+      "flags": []
+    },
+    {
+      "id": "check-doc-class",
+      "path": "scripts/check_doc_class.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_doc_class.py --check",
+        "python3 scripts/check_doc_class.py --report"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-governance.yml"
+      ],
+      "has_baseline": true,
+      "notes": "文档分类守卫—— 让 AI 落下的每一份文档先分类、再被约束",
+      "flags": [
+        "--check",
+        "--gen",
+        "--help",
+        "--report",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-doc-numbers",
+      "path": "scripts/check_doc_numbers.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_doc_numbers.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "核对「速查表里的当前状态数字」与实测基线是否逐字一致",
+      "flags": []
+    },
+    {
+      "id": "check-doc-paths",
+      "path": "scripts/check_doc_paths.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_doc_paths.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/doc-paths.yml"
+      ],
+      "has_baseline": true,
+      "notes": "文档里的源文件路径悬空检查（只减不增的棘轮）",
+      "flags": [
+        "--check",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-golden-baseline",
+      "path": "scripts/check_golden_baseline.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_golden_baseline.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/golden-baseline.yml"
+      ],
+      "has_baseline": true,
+      "notes": "内部卷检索基线闸门 —— 把「准确度不许掉」落成机器门禁",
+      "flags": []
+    },
+    {
+      "id": "check-golden-no-leak",
+      "path": "scripts/check_golden_no_leak.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_golden_no_leak.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "检查考卷（golden set）不泄漏答案：题面里的把手不得出现在可检索文本里",
+      "flags": []
+    },
+    {
+      "id": "check-guard-inventory",
+      "path": "scripts/check_guard_inventory.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_guard_inventory.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "校验 scripts/guard-inventory.json 与仓库现状是否同步（只读，不改任何东西）",
+      "flags": []
+    },
+    {
+      "id": "check-guard-wiring",
+      "path": "scripts/check_guard_wiring.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_guard_wiring.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "护栏（apeireth-guard）接线台账（机器可检）",
+      "flags": [
+        "--help",
+        "--report",
+        "--update",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-mod-targets",
+      "path": "scripts/check_mod_targets.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_mod_targets.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/mod-targets.yml"
+      ],
+      "has_baseline": false,
+      "notes": "检查 mod xxx; 声明指向的源文件确实存在（且没有同名文件的孤儿）",
+      "flags": [
+        "--help",
+        "--root",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-no-legacy-deps",
+      "path": "scripts/check_no_legacy_deps.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python scripts/check_no_legacy_deps.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/rust.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Fail when the current Cargo workspace reaches code under legacy/",
+      "flags": []
+    },
+    {
+      "id": "check-quality-metrics",
+      "path": "scripts/check_quality_metrics.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_quality_metrics.py",
+        "python3 scripts/check_quality_metrics.py --report"
+      ],
+      "ci_workflows": [
+        ".github/workflows/quality-metrics.yml"
+      ],
+      "has_baseline": true,
+      "notes": "度量体系的覆盖率台账（机器可检）",
+      "flags": [
+        "--help",
+        "--report",
+        "--update",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-self-status-vocab",
+      "path": "scripts/check_self_status_vocab.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_self_status_vocab.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/self-status-vocab.yml"
+      ],
+      "has_baseline": false,
+      "notes": "自述词表纪律检查器（只报告，不阻塞）",
+      "flags": [
+        "--help",
+        "--strict",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-stale-binaries",
+      "path": "scripts/check_stale_binaries.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_stale_binaries.py --report"
+      ],
+      "ci_workflows": [
+        ".github/workflows/stale-artifacts.yml"
+      ],
+      "has_baseline": false,
+      "notes": "扫出陈旧测试二进制（编译于已不存在的路径）—— 防止「假红 / 假绿」",
+      "flags": [
+        "--clean",
+        "--help",
+        "--report",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-toolchain-pin",
+      "path": "scripts/check_toolchain_pin.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_toolchain_pin.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/rust.yml"
+      ],
+      "has_baseline": false,
+      "notes": "CI 工具链钉版守卫（2026-10-30）",
+      "flags": []
+    },
+    {
+      "id": "cosign-sign-all",
+      "path": "scripts/release/cosign-sign-all.sh",
+      "kind": "generator",
+      "blocking": true,
+      "invocation": [
+        "bash scripts/release/cosign-sign-all.sh"
+      ],
+      "ci_workflows": [
+        ".github/workflows/cosign.yml"
+      ],
+      "has_baseline": false,
+      "notes": "R20 阶段 6 — cosign 8 包签名 (1.0 release #3 signature, 内部规范)",
+      "flags": [
+        "--dry-run"
+      ]
+    },
+    {
+      "id": "d4-ledger",
+      "path": "scripts/d4_ledger.py",
+      "kind": "ratchet",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/d4_ledger.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": true,
+      "notes": "生成 D4 候选池台账—— B0-c 的结构部分",
+      "flags": [
+        "--check",
+        "--gen",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "docs-index",
+      "path": "scripts/docs_index.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/docs_index.py --check",
+        "python3 scripts/docs_index.py --report"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-governance.yml"
+      ],
+      "has_baseline": false,
+      "notes": "文档索引与分层一致性检查 —— 让\"文档归类\"变成可复核的机器判据",
+      "flags": [
+        "--check",
+        "--gen",
+        "--health",
+        "--help",
+        "--report",
+        "-h"
+      ]
+    },
+    {
+      "id": "docs-links",
+      "path": "scripts/docs_links.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/docs_links.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-governance.yml"
+      ],
+      "has_baseline": false,
+      "notes": "文档链接完整性检查 —— 断链=0 是每一批文档治理的验收判据",
+      "flags": [
+        "--anchors",
+        "--check",
+        "--help",
+        "--report",
+        "--scope",
+        "-h"
+      ]
+    },
+    {
+      "id": "docs-truth",
+      "path": "scripts/docs_truth.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/docs_truth.py --verify --block-stale",
+        "python3 scripts/docs_truth.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-truth.yml"
+      ],
+      "has_baseline": false,
+      "notes": "文档事实体系（Docs Truth System）P0 工具",
+      "flags": [
+        "--baseline-check",
+        "--block-stale",
+        "--check",
+        "--claims",
+        "--force",
+        "--gen",
+        "--gen-badges",
+        "--gen-matrix-01",
+        "--help",
+        "--log",
+        "--matrix-check",
+        "--strict",
+        "--verify",
+        "--write",
+        "-h"
+      ]
+    },
+    {
+      "id": "download-novels",
+      "path": "scripts/download_novels.sh",
+      "kind": "generator",
+      "blocking": true,
+      "invocation": [
+        "bash scripts/download_novels.sh"
+      ],
+      "ci_workflows": [
+        ".github/workflows/golden-baseline.yml"
+      ],
+      "has_baseline": false,
+      "notes": "下载内部卷用的公有领域小说语料（Project Gutenberg）",
+      "flags": [
+        "--dir"
+      ]
+    },
+    {
+      "id": "gen-gate-manifest",
+      "path": "scripts/gen_gate_manifest.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/gen_gate_manifest.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-governance.yml"
+      ],
+      "has_baseline": false,
+      "notes": "门禁清单生成器 / 漂移守卫（P0 · 2026-10-30）",
+      "flags": [
+        "--check",
+        "--gen",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "group-unwired-baseline",
+      "path": "scripts/group_unwired_baseline.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/group_unwired_baseline.py --check"
+      ],
+      "ci_workflows": [
+        ".github/workflows/unwired-ratchet.yml"
+      ],
+      "has_baseline": true,
+      "notes": "把孤儿 API 基线按「为什么零引用」分组",
+      "flags": [
+        "--check",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "internal-golden",
+      "path": "scripts/internal_golden.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/internal_golden.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "内部卷（B0-b）的记录抽取与考卷校验",
+      "flags": [
+        "--check",
+        "--help",
+        "--min-chars",
+        "--records",
+        "--stats",
+        "-h"
+      ]
+    },
+    {
+      "id": "release-1-0-checklist",
+      "path": "scripts/release-1.0-checklist.sh",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "bash scripts/release-1.0-checklist.sh --dry-run",
+        "bash scripts/release-1.0-checklist.sh --skip 4,5,6"
+      ],
+      "ci_workflows": [
+        ".github/workflows/release-1.0.0.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Apeireth 1.0 release 检查清单 (12 项, 按安装规范)",
+      "flags": []
+    },
+    {
+      "id": "sbom",
+      "path": "scripts/sbom.sh",
+      "kind": "generator",
+      "blocking": true,
+      "invocation": [
+        "bash scripts/sbom.sh"
+      ],
+      "ci_workflows": [
+        ".github/workflows/release.yml"
+      ],
+      "has_baseline": false,
+      "notes": "用 cargo-cyclonedx 生成 CycloneDX 1.5 SBOM, 落地 cyclonedx-sbom.json",
+      "flags": []
+    },
+    {
+      "id": "train-eval",
+      "path": "scripts/guard_ml/train_eval.py",
+      "kind": "generator",
+      "blocking": true,
+      "invocation": [
+        "python scripts/guard_ml/train_eval.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/guard-v3.3.yml"
+      ],
+      "has_baseline": false,
+      "notes": "True group-holdout evaluation for Guard joint features.",
+      "flags": []
+    },
+    {
+      "id": "uninstall",
+      "path": "scripts/uninstall/uninstall.sh",
+      "kind": "generator",
+      "blocking": true,
+      "invocation": [
+        "bash scripts/uninstall/uninstall.sh --dry-run"
+      ],
+      "ci_workflows": [
+        ".github/workflows/release-1.0.0.yml"
+      ],
+      "has_baseline": false,
+      "notes": "Apeireth 完整卸载 (按安装规范 5 步 0 残留守门)",
+      "flags": [
+        "--purge"
+      ]
+    },
+    {
+      "id": "v2-0-0-alpha-to-v1-0-0",
+      "path": "scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh",
+      "kind": "generator",
+      "blocking": true,
+      "invocation": [
+        "bash scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run"
+      ],
+      "ci_workflows": [
+        ".github/workflows/release-1.0.0.yml"
+      ],
+      "has_baseline": false,
+      "notes": "一次性 SQLite → PostgreSQL 数据迁移 (D-07 主人 2026-08-05 20:53 拍板 A)",
+      "flags": []
+    },
+    {
+      "id": "verify-changed",
+      "path": "scripts/verify_changed.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/verify_changed.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "变更影响面验证（fast feedback gate）",
+      "flags": [
+        "--arch-strict",
+        "--base",
+        "--dry-run",
+        "--files",
+        "--help",
+        "--log",
+        "--no-arch",
+        "--no-check",
+        "--no-clippy",
+        "--no-test",
+        "-h"
+      ]
+    },
+    {
+      "id": "verify-ledger",
+      "path": "scripts/verify_ledger.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python scripts/verify_ledger.py --quiet"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-truth.yml"
+      ],
+      "has_baseline": false,
+      "notes": "四层验收台账（verification-ledger.yaml）只读校验器",
+      "flags": [
+        "--help",
+        "--quiet",
+        "-h"
+      ]
+    },
+    {
+      "id": "vet",
+      "path": "scripts/vet.sh",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "bash scripts/vet.sh"
+      ],
+      "ci_workflows": [
+        ".github/workflows/release.yml"
+      ],
+      "has_baseline": false,
+      "notes": "三件套: cargo vet + cargo audit + cargo deny, 串成发布前供应链验证",
+      "flags": []
+    },
+    {
+      "id": "wiring-report",
+      "path": "scripts/wiring_report.py",
+      "kind": "guard",
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/wiring_report.py --check-env-registry",
+        "python3 scripts/wiring_report.py --verify",
+        "python3 scripts/wiring_report.py --crosscheck"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-truth.yml",
+        ".github/workflows/wiring-ledger.yml"
+      ],
+      "has_baseline": false,
+      "notes": "R3a：env 登记表播种 + wiring ledger 生成/漂移校验（ADR-0004）",
+      "flags": [
+        "--check-env-registry",
+        "--crosscheck",
+        "--fill-layer",
+        "--fill-owners-from-claims",
+        "--finalize-kinds",
+        "--force",
+        "--gen",
+        "--help",
+        "--mark-test-only",
+        "--seed-env-registry",
+        "--stats",
+        "--strict",
+        "--verify",
+        "-h"
+      ]
+    }
+  ]
+}
