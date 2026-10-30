@@ -372,7 +372,7 @@ claims:
       - .github/workflows/rust.yml
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: 6836ae5cc31b11c985907973126d190f9acdc61b
+    verified_at: 158cf5ac
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
