@@ -335,6 +335,9 @@ artifacts/*.txt
 # ⇒ 不入库（CI 里作 artifact 上传即可）；**清单** `scripts/guard-inventory.json` 是真源 ⇒ 入库。
 artifacts/harness/
 scripts/harness-last-run.json
+# 2026-10-30: 上下文包是**每次任务重新生成**的临时产物（绑当前 commit）
+# ⇒ 不入库（`.harness/tasks/*.yaml` 任务边界**入库** ⇒ owner 2026-10-30 裁定）
+.harness/context/
 frontend/companion-desktop/shot-*.png
 
 # 外部源码抽取暂存（研究线临时区）：绝不入库（借鉴源码产物不留痕迹），收口即删
