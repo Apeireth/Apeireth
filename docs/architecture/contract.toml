@@ -484,6 +484,7 @@ scope = ["rust"]
 blocking = true
 required = true
 env = "cargo"
+delegated_to = ".github/workflows/rust.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
 timeout = 3600
 note = "CI 专属：全工作区编译"
 
@@ -494,6 +495,7 @@ scope = ["rust"]
 blocking = true
 required = true
 env = "cargo"
+delegated_to = ".github/workflows/rust.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
 timeout = 3600
 note = "CI 专属：全工作区测试"
 
@@ -504,6 +506,7 @@ scope = ["rust"]
 blocking = true
 required = true
 env = "cargo"
+delegated_to = ".github/workflows/rust-lint.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
 timeout = 3600
 note = "CI 专属：clippy 零警告"
 
@@ -514,6 +517,7 @@ scope = ["rust"]
 blocking = true
 required = true
 env = "cargo"
+delegated_to = ".github/workflows/rustfmt.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
 timeout = 900
 note = "CI 专属：格式"
 
@@ -524,6 +528,7 @@ scope = ["rust", "docs"]
 blocking = true
 required = true
 env = "cargo"
+delegated_to = ".github/workflows/rustdoc-test.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
 timeout = 3600
 note = "CI 专属：文档测试"
 
@@ -534,6 +539,7 @@ scope = ["rust", "lock"]
 blocking = true
 required = true
 env = "ci"
+delegated_to = ".github/workflows/cargo-deny.yml"   # 由该 workflow 负责 ⇒ 裁决层不重复执行
 timeout = 1800
 note = "CI 专属：依赖策略（cargo deny）"
 
@@ -544,5 +550,6 @@ scope = ["rust", "contract"]
 blocking = true
 required = false
 env = "ci"
+delegated_to = "(无 workflow 调用 · 仓外手工执行)"
 timeout = 900
 note = "CI 专属：8 项不修改承诺审计"

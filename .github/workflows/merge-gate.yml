@@ -1,0 +1,106 @@
+# =============================================================================
+# `harness / merge-gate` —— **唯一合并裁决**（2026-10-30）
+# =============================================================================
+# 设计来源：docs/status/harness-convergence-decision-2026-10-30.md §五
+#
+# # 为什么要有这个 job
+#
+# 本仓有 **42+ 个 workflow**，但**没有任何一层**回答：
+#   「当前这个 head，**所有该跑的门禁都跑了吗**？跑过的那些**结论是什么**？
+#     被跳过的那些是**合法跳过**还是**该跑没跑**？」
+# ⇒ ⇒ 之前 CI 层事实上「**SKIPPED 当 PASS**」（审计 R11：15 个带 `paths:` 的 workflow
+#      跳过时**不产出任何机器可读结论**）。
+#
+# ⇒ 本 job **不重跑测试**，只做**裁决**：
+#   1. 跑 `scripts/harness.py check`（执行本地可跑的门禁，产出机器可读结果）；
+#   2. 跑 `scripts/harness.py attest`（写**绑 commit SHA + tree SHA** 的证据包）；
+#   3. 跑 `scripts/harness.py merge-decision`（**唯一裁决**，退出码 0 ⇔ 可合并）。
+#
+# # 状态语义（**不得放宽**）
+#
+# * `SKIPPED` **不等于** `PASS`：不适用（scope 不相交）⇒ 不阻断；**适用却没跑** ⇒ **阻断**；
+# * `UNVERIFIED` **不能**进入合并；
+# * `WAIVED` 必须带豁免编号 / 审批者 / 过期时间；
+# * 证据必须绑**当前** commit SHA ⇒ 旧证据一律拒绝。
+#
+# # 注意（**边界**）
+#
+# * 本 job 只裁决**本地可跑**的门禁（契约里 `env = python` 的那些）；
+#   `env = cargo` / `env = ci` 的门禁由各专业 workflow 负责
+#   ⇒ 它们**仍需**被列为 required 且由本 job 的**并集**覆盖（见下）。
+#   ⚠️ 本仓当前的 `env = cargo` 门禁在**本地不可认证** ⇒ 本 job 对含 Rust 变更的 PR
+#   会给 `BLOCKED`（诚实的「本地不能认证 cargo 门禁」）⇒ **以 CI 专业 job 的结论为准**。
+# =============================================================================
+
+name: harness / merge-gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: merge-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  merge-gate:
+    name: 合并裁决（唯一）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # ① 裁决输入：契约里的门禁登记表（唯一真源）
+      - name: 门禁登记表（契约 [ci_gates]）
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          with open("docs/architecture/contract.toml", "rb") as handle:
+              contract = tomllib.load(handle)
+          gates = contract.get("ci_gates", {}).get("gate", [])
+          print(f"登记门禁 {len(gates)} 条 · required {sum(1 for g in gates if g.get('required'))} 条")
+          PY
+
+      # ② 门禁清单同步（漏登记 ⇒ 裁决层会漏门禁 ⇒ 假绿）
+      - name: 守卫清单同步
+        run: python3 scripts/check_guard_inventory.py
+
+      # ③ 人读副本与契约一致（PR 模板的数字不许过期）
+      - name: 门禁清单一致性
+        run: python3 scripts/gen_gate_manifest.py --check
+
+      # ④ 执行本地可跑的门禁（产出机器可读结果）
+      - name: 执行门禁（本地可跑部分）
+        id: check
+        run: |
+          set +e
+          python3 scripts/harness.py check
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+
+      # ⑤ 写**绑 SHA** 的证据包
+      - name: 写证据包（commit + tree SHA）
+        run: python3 scripts/harness.py attest --task-id "${{ github.run_id }}" --agent "github-actions"
+
+      # ⑥ 唯一裁决
+      - name: 合并裁决
+        run: python3 scripts/harness.py merge-decision
+
+      # ⑦ 证据作为 artifact 上传（**不留在仓里**）
+      - name: 上传证据包
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-evidence-${{ github.sha }}
+          path: artifacts/harness/
+          if-no-files-found: warn

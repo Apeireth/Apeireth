@@ -26,7 +26,7 @@
   - `crates/foundation/core/src/onion.rs`
   - `crates/foundation/core/src/philosophy.rs`
 - **哲学锚**：**9** 条（`docs/01-architecture/philosophy.md`）
-- **workflow**：**42** 个（`.github/workflows/*.yml`）
+- **workflow**：**43** 个（`.github/workflows/*.yml`）
 - **crate**：**0** 个（`crates/*/Cargo.toml`）
 - **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **35** 条 · required **33** 条）
   - 本地可跑（`28` 条）：`docs-truth` · `doc-class` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `guard-inventory` · `toolchain-pin` · `gate-manifest` · `self-status-vocab`

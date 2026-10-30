@@ -111,6 +111,7 @@ TAIL_LINES = 40
 S_PASS = "PASS"
 S_FAIL = "FAIL"
 S_SKIPPED = "SKIPPED"
+S_DELEGATED = "DELEGATED"
 S_UNVERIFIED = "UNVERIFIED"
 S_WAIVED = "WAIVED"
 S_BLOCKED = "BLOCKED"
@@ -292,6 +293,10 @@ def normalize_gate(raw: Any) -> dict[str, Any] | None:
     if not isinstance(scope, list) or not scope:
         scope = ["*"]
     scope = [str(x) for x in scope]
+    # ⚠️ `delegated_to`：该门禁**由别处负责**（另一个 required check / workflow）
+    # ⇒ 本地/CI 的裁决层**不重复执行**，但也**不算通过** ⇒ 记 `DELEGATED`。
+    delegated_to = raw.get("delegated_to")
+    delegated_to = str(delegated_to) if delegated_to else None
     timeout = raw.get("timeout")
     if not isinstance(timeout, int) or timeout <= 0:
         timeout = DEFAULT_TIMEOUT
@@ -299,6 +304,7 @@ def normalize_gate(raw: Any) -> dict[str, Any] | None:
         "id": gid.strip(),
         "cmd": list(cmd),
         "scope": scope,
+        "delegated_to": delegated_to,
         "blocking": bool(raw.get("blocking", True)),
         "required": bool(raw.get("required", True)),
         "timeout": timeout,
@@ -538,6 +544,9 @@ def run_gate(gate: dict[str, Any], timeout: int) -> dict[str, Any]:
     return {
         "id": gate["id"],
         "status": status,
+        # ⚠️ `delegated_to` 必须**带进记录** ⇒ 否则裁决原因里只能显示 `None`
+        # （证据包 / 门禁结果 JSON 是给人看的 ⇒ 不能丢字段）。
+        "delegated_to": gate.get("delegated_to"),
         "command": list(gate["cmd"]),
         "exit_code": exit_code,
         "duration_s": duration,
@@ -568,6 +577,9 @@ def gate_record(
     return {
         "id": gate["id"],
         "status": status,
+        # ⚠️ `delegated_to` 必须**带进记录** ⇒ 否则裁决原因里只能显示 `None`
+        # （证据包 / 门禁结果 JSON 是给人看的 ⇒ 不能丢字段）。
+        "delegated_to": gate.get("delegated_to"),
         "command": list(gate["cmd"]),
         "exit_code": exit_code,
         "duration_s": duration,
@@ -612,9 +624,11 @@ def evaluate_verdict(
         g
         for g in gates
         if g.get("required")
-        and g.get("status") not in (S_PASS, S_WAIVED, S_FAIL, S_UNVERIFIED, S_BLOCKED)
+        and g.get("status")
+        not in (S_PASS, S_WAIVED, S_FAIL, S_UNVERIFIED, S_BLOCKED, S_DELEGATED)
         and g.get("scope_applies", True)
     ]
+    delegated = [g for g in gates if g.get("status") == S_DELEGATED]
 
     for gate in fails:
         reasons.append(f"门禁 {gate['id']} FAIL（退出码 {gate.get('exit_code')}）")
@@ -623,6 +637,10 @@ def evaluate_verdict(
     for gate in req_bad:
         reasons.append(
             "required gate applicable but skipped without justification: " + str(gate.get("id"))
+        )
+    for gate in delegated:
+        reasons.append(
+            f"门禁 {gate['id']} DELEGATED（由 `{gate.get('delegated_to')}` 负责 ⇒ 本层不判）"
         )
     reasons.extend(blocking)
 
@@ -827,6 +845,17 @@ def cmd_check(args: argparse.Namespace) -> int:
     for gate in gates:
         run, why = decide_run(gate, tags, only, skip)
         if not run:
+            # ⚠️ **DELEGATED**（2026-10-30）：门禁**由别处负责**（契约 `delegated_to`）
+            # ⇒ 本层不重复执行 ⇒ 但**也不算通过** ⇒ 单独一态，裁决时不阻断、清单里显式列出。
+            if gate.get("delegated_to") and "CI 专属门禁" in why:
+                record = gate_record(
+                    gate,
+                    S_DELEGATED,
+                    f"由 `{gate['delegated_to']}` 负责 ⇒ 本层不重复执行（**不是通过**）",
+                )
+                record["scope_applies"] = scope_applies(gate, tags)
+                results.append(record)
+                continue
             record = gate_record(gate, S_SKIPPED, why)
             # ⚠️ 「**不适用**」与「**适用却没跑**」必须分开（见 `scope_applies`）
             # ⇒ 不适用 ⇒ 不阻断；适用却没跑 ⇒ 阻断。
@@ -1051,6 +1080,10 @@ def render_summary(run_doc: dict[str, Any], task_doc: dict[str, Any]) -> str:
         note = str(gate.get("reason") or "").replace("\n", " ").replace("|", "\\|")
         if status == S_SKIPPED:
             note = (note + "　⚠ SKIPPED ≠ PASS（未跑过，不算通过）").strip()
+        if status == S_DELEGATED:
+            note = (
+                note + "　⚠ DELEGATED ≠ PASS（由别处负责，本层不判）"
+            ).strip()
         lines.append(
             "| `{id}` | **{status}** | {req} | {ec} | {sec} | {note} |".format(
                 id=gate.get("id"),
@@ -1084,7 +1117,10 @@ def render_summary(run_doc: dict[str, Any], task_doc: dict[str, Any]) -> str:
 
     lines.append("---")
     lines.append("")
-    lines.append("> 口径：**SKIPPED 不等于 PASS**；**UNVERIFIED 不能进入合并**；")
+    lines.append(
+        "> 口径：**SKIPPED 不等于 PASS**；**UNVERIFIED 不能进入合并**；"
+        "**DELEGATED 也不是 PASS**（由别处负责 ⇒ 本层不判）；"
+    )
     lines.append("> 只有 `PASS`（或已批准的 `WAIVED`）才允许合并。")
     lines.append("")
     return "\n".join(lines)

@@ -339,7 +339,10 @@
       "invocation": [
         "python3 scripts/check_guard_inventory.py"
       ],
-      "ci_workflows": [],
+      "ci_workflows": [
+        ".github/workflows/docs-governance.yml",
+        ".github/workflows/merge-gate.yml"
+      ],
       "has_baseline": false,
       "notes": "校验 scripts/guard-inventory.json 与仓库现状是否同步（只读，不改任何东西）",
       "flags": [
@@ -641,7 +644,8 @@
         "python3 scripts/gen_gate_manifest.py --check"
       ],
       "ci_workflows": [
-        ".github/workflows/docs-governance.yml"
+        ".github/workflows/docs-governance.yml",
+        ".github/workflows/merge-gate.yml"
       ],
       "has_baseline": false,
       "notes": "门禁清单生成器 / 漂移守卫（P0 · 2026-10-30）",
@@ -668,6 +672,27 @@
       "notes": "把孤儿 API 基线按「为什么零引用」分组",
       "flags": [
         "--check",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "harness",
+      "path": "scripts/harness.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/harness.py check",
+        "python3 scripts/harness.py attest --task-id \"${{ github.run_id }}\" --agent \"github-actions\"",
+        "python3 scripts/harness.py merge-decision"
+      ],
+      "ci_workflows": [
+        ".github/workflows/merge-gate.yml"
+      ],
+      "has_baseline": false,
+      "notes": "统一验证入口（harness）—— 本仓唯一的验收入口",
+      "flags": [
         "--help",
         "-h"
       ]
