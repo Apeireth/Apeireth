@@ -710,15 +710,24 @@ async fn unresolved_idempotency_record_is_not_evicted_to_repeat_an_uncertain_eff
         .await
         .unwrap();
     let mut r = request("module.b", "hold");
-    r.timeout = Duration::from_millis(30);
     r.idempotency_key = Some("uncertain".into());
-    assert!(
-        a.port()
-            .send(r.clone())
-            .await
-            .unwrap_err()
-            .may_have_executed
-    );
+    let mut pending = r.clone();
+    pending.cancellation = Default::default();
+    let cancellation = pending.cancellation.clone();
+    let port = a.port();
+    // Dispatch is conservatively marked started before the endpoint is entered.
+    // Interrupt only after the endpoint acknowledges entry, while its effect is held.
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(3), async {
+        tokio::join!(port.send(pending), async {
+            b.entered.notified().await;
+            cancellation.cancel();
+        })
+    })
+    .await
+    .unwrap();
+    let error = result.unwrap_err();
+    assert_eq!(error.code, ModuleMessageErrorCode::Cancelled);
+    assert!(error.may_have_executed);
     assert_eq!(
         a.port().send(r.clone()).await.unwrap_err().code,
         ModuleMessageErrorCode::Duplicate

@@ -72,6 +72,11 @@ fn policy(sink: bool) -> AgentHostPolicy {
     );
     policy
 }
+enum FirstReply {
+    Immediate,
+    Hold,
+    Drop,
+}
 struct Echo {
     address: std::net::SocketAddr,
     received: Arc<AtomicUsize>,
@@ -86,7 +91,7 @@ impl Drop for Echo {
     }
 }
 impl Echo {
-    async fn start(hold: bool, valid: bool) -> Self {
+    async fn start(first_reply: FirstReply, valid: bool) -> Self {
         let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let address = socket.local_addr().unwrap();
         let audit: Arc<Mutex<Option<Arc<review_support::Audit>>>> = Arc::new(Mutex::new(None));
@@ -112,8 +117,13 @@ impl Echo {
                     .windows(b"private_mesh_payload".len())
                     .any(|v| v == b"private_mesh_payload"));
                 signal.notify_one();
-                if hold && previous == 0 {
-                    waiting.notified().await;
+                if previous == 0 {
+                    match first_reply {
+                        FirstReply::Immediate => {}
+                        FirstReply::Hold => waiting.notified().await,
+                        // A lost reply must never be sent later to a closed request socket.
+                        FirstReply::Drop => continue,
+                    }
                 }
                 socket
                     .send_to(
@@ -183,7 +193,7 @@ fn public_result(provider: &Provider, key: &str) -> Value {
 #[tokio::test]
 async fn accepted_main_call_closes_while_private_udp_worker_and_authorized_status_event_continue_independently(
 ) {
-    let echo = Echo::start(true, true).await;
+    let echo = Echo::start(FirstReply::Hold, true).await;
     let received = Arc::new(Mutex::new(Vec::new()));
     let sink = ToolModule::new(
         pid("module.status_sink"),
@@ -344,7 +354,7 @@ async fn unavailable_deny_and_disabled_transport_never_send_a_datagram() {
         )),
         None,
     ] {
-        let echo = Echo::start(false, true).await;
+        let echo = Echo::start(FirstReply::Immediate, true).await;
         let mesh = Arc::new(MeshModule::new(config(echo.address)).unwrap());
         let (gate, audit, _) =
             review_support::gate(mode.clone().unwrap_or(review_support::Mode::Unavailable));
@@ -372,7 +382,7 @@ async fn unavailable_deny_and_disabled_transport_never_send_a_datagram() {
 async fn native_exchange_refuses_raw_calls_unconfigured_peers_and_unrelated_reply_nonce() {
     assert!(MeshModule::new(config("192.0.2.1:9".parse().unwrap())).is_err());
     assert!(MeshModule::new(config("127.0.0.1:0".parse().unwrap())).is_err());
-    let echo = Echo::start(false, false).await;
+    let echo = Echo::start(FirstReply::Immediate, false).await;
     let mesh = Arc::new(MeshModule::new(config(echo.address)).unwrap());
     let internal = mesh
         .tools()
@@ -406,7 +416,7 @@ async fn native_exchange_refuses_raw_calls_unconfigured_peers_and_unrelated_repl
 
 #[tokio::test]
 async fn stopping_mesh_cancels_waiting_socket_and_drains_owned_worker_before_returning() {
-    let echo = Echo::start(true, true).await;
+    let echo = Echo::start(FirstReply::Drop, true).await;
     let mesh = Arc::new(MeshModule::new(config(echo.address)).unwrap());
     let (gate, _) = review_support::allow_gate();
     let runtime = builder(Provider::new(vec![]))
@@ -427,7 +437,6 @@ async fn stopping_mesh_cancels_waiting_socket_and_drains_owned_worker_before_ret
     .unwrap();
     assert_eq!(mesh.status().state, MeshState::Stopped);
     let count = echo.received.load(Ordering::SeqCst);
-    echo.release.notify_one();
     tokio::time::sleep(Duration::from_millis(120)).await;
     assert_eq!(echo.received.load(Ordering::SeqCst), count);
     assert!(runtime
@@ -439,7 +448,7 @@ async fn stopping_mesh_cancels_waiting_socket_and_drains_owned_worker_before_ret
 #[tokio::test]
 async fn native_timeout_returns_a_closed_error_and_later_heartbeat_can_recover_without_new_authority(
 ) {
-    let echo = Echo::start(true, true).await;
+    let echo = Echo::start(FirstReply::Drop, true).await;
     let mesh = Arc::new(
         MeshModule::new(
             config(echo.address).with_timing(Duration::from_millis(40), Duration::from_millis(50)),
@@ -458,14 +467,43 @@ async fn native_timeout_returns_a_closed_error_and_later_heartbeat_can_recover_w
     tokio::time::timeout(Duration::from_secs(2), echo.entered.notified())
         .await
         .unwrap();
-    wait_for(|| mesh.status().state == MeshState::Degraded).await;
-    echo.release.notify_one();
+    let mailbox = runtime.instances().into_iter().next().unwrap();
+    let first = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if let Some(first) = facts(&*runtime.kernel().await, mailbox.session)
+                .await
+                .into_iter()
+                .next()
+            {
+                break first;
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    })
+    .await
+    .expect("native timeout must persist a closed tool result before heartbeat recovery");
+    assert_eq!(first.call().name, "mesh.exchange");
+    assert!(!first.result().is_ok(), "the dropped reply must time out");
+    let error = first.result().render();
+    assert!(
+        error.contains("\"code\":\"timeout\"")
+            || error.contains("private Mesh exchange unavailable or interrupted"),
+        "expected a closed native/dispatcher timeout, got {error}"
+    );
     wait_for(|| mesh.status().state == MeshState::Online).await;
+    let recovered = facts(&*runtime.kernel().await, mailbox.session).await;
+    assert!(recovered.iter().skip(1).any(|fact| fact.result().is_ok()));
     assert!(echo.received.load(Ordering::SeqCst) >= 2);
     assert_eq!(
         runtime.instances().len(),
         1,
         "ordinary native failure must not create a fresh authority/budget"
+    );
+    assert_eq!(runtime.instances()[0].id, mailbox.id);
+    assert_eq!(runtime.instances()[0].session, mailbox.session);
+    assert!(
+        !echo.task.is_finished(),
+        "reply loss must not stop the peer"
     );
     assert_eq!(provider.requests().len(), 0);
     assert!(audit.records().len() >= 2);

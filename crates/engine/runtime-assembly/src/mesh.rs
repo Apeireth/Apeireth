@@ -224,13 +224,13 @@ impl Plugin for MeshModule {
                     }
                     let mut published = None;
                     loop {
-                        let mut request = InternalToolRequest::new(
+                        let request = InternalToolRequest::new(
                             capability("exchange"),
                             json!({"device":config.peer}),
                         );
-                        // A native timeout returns a closed ToolResult before the mailbox deadline.
-                        // A stricter Host transport deadline still fails closed and needs Host recovery.
-                        request.timeout = config.timeout.saturating_mul(2);
+                        // Keep the ordinary message deadline independent of the native socket timeout:
+                        // admission, review and result persistence also consume the message budget.
+                        // Stricter Host limits still fail closed and require Host recovery.
                         let online = port
                             .invoke_internal(request)
                             .await

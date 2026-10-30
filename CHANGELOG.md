@@ -4,6 +4,7 @@
 
 - **IMPLEMENTED / 默认 OFF**：显式 Host 的 Module public/private 契约、Memory 任务句柄、强制 Internal 监督与审计、typed 模块消息及固定回环 UDP Mesh worker。模型 Allow 不覆盖确定性权限；拒绝、不可用、超时或审计失败不执行受保护操作。
 - **边界**：复用原 Registry、Lifecycle、Dispatcher、AgentInstance 与唯一计量；真实 Runtime/进程/存储/回环 socket 软件证据见 [P4 报告](docs/04-internal/ale-system-one-p4-2026-10-30.md)。兼容入口默认纳管、外部设备/网络/加密及 live model 验证仍待验收；无硬件声明，不改历史基准。
+- **CI 回归修复**：Mesh 原生超时与普通消息期限解耦，Host 上限保留；丢包回归检查同一实例/Session 的闭合错误与后续成功，回显端不向已关闭请求端口补发旧包。未决幂等回归在接收端确认进入后取消，仍断言重复拒绝、窗口背压与副作用不重放。
 
 ## [Unreleased] — G Repository consolidation report（2026-10-29）
 
