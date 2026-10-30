@@ -47,6 +47,235 @@
       "t1_pixel_different": 554,
       "t1_pixel_total": 885132,
       "t1_pixel_ratio": 0.0006258953466827547,
+      "t1_pixel_within_budget": true,
+      "t1_pixel_budget": 0.001,
+      "t1b_all_diffs_attributed": true,
+      "t1_attribution": [
+        {
+          "point": {
+            "x": 7,
+            "y": 77
+          },
+          "ref_page_point": {
+            "x": 243.0,
+            "y": 296.765625
+          },
+          "eng_page_point": {
+            "x": 243.0,
+            "y": 296.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "div",
+            "class": "cap-card svelte-1xvyir2",
+            "rect": {
+              "x": 236,
+              "y": 296.703125,
+              "w": 828,
+              "h": 660.828125
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 27,
+            "y": 108
+          },
+          "ref_page_point": {
+            "x": 263.0,
+            "y": 327.765625
+          },
+          "eng_page_point": {
+            "x": 263.0,
+            "y": 327.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "svg",
+            "class": "lucide lucide-icon lucide-radar",
+            "rect": {
+              "x": 251,
+              "y": 320.046875,
+              "w": 13,
+              "h": 13
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 768,
+            "y": 585
+          },
+          "ref_page_point": {
+            "x": 1004.0,
+            "y": 804.765625
+          },
+          "eng_page_point": {
+            "x": 1004.0,
+            "y": 804.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "svg",
+            "class": "lucide lucide-copy lucide-icon",
+            "rect": {
+              "x": 992.859375,
+              "y": 800.96875,
+              "w": 12,
+              "h": 12
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 823,
+            "y": 913
+          },
+          "ref_page_point": {
+            "x": 1059.0,
+            "y": 1132.765625
+          },
+          "eng_page_point": {
+            "x": 1059.0,
+            "y": 1132.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 5,
+          "attributed": true,
+          "match": {
+            "tag": "div",
+            "class": "danger-zone-box svelte-1xvyir2",
+            "rect": {
+              "x": 236,
+              "y": 1132.75,
+              "w": 828,
+              "h": 156.28125
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 24,
+            "y": 943
+          },
+          "ref_page_point": {
+            "x": 260.0,
+            "y": 1162.765625
+          },
+          "eng_page_point": {
+            "x": 260.0,
+            "y": 1162.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "path",
+            "class": "",
+            "rect": {
+              "x": 254.3213348388672,
+              "y": 1154.58447265625,
+              "w": 13.343978881835938,
+              "h": 12.00927734375
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 41,
+            "y": 1002
+          },
+          "ref_page_point": {
+            "x": 277.0,
+            "y": 1221.765625
+          },
+          "eng_page_point": {
+            "x": 277.0,
+            "y": 1221.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "svg",
+            "class": "lucide lucide-icon lucide-trash-2",
+            "rect": {
+              "x": 268,
+              "y": 1220.234375,
+              "w": 13,
+              "h": 13
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 258,
+            "y": 1010
+          },
+          "ref_page_point": {
+            "x": 494.0,
+            "y": 1229.765625
+          },
+          "eng_page_point": {
+            "x": 494.0,
+            "y": 1229.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "button",
+            "class": "danger-button svelte-1xvyir2",
+            "rect": {
+              "x": 253,
+              "y": 1209.4375,
+              "w": 241.015625,
+              "h": 34.59375
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 823,
+            "y": 1068
+          },
+          "ref_page_point": {
+            "x": 1059.0,
+            "y": 1287.765625
+          },
+          "eng_page_point": {
+            "x": 1059.0,
+            "y": 1287.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 5,
+          "attributed": true,
+          "match": {
+            "tag": "div",
+            "class": "danger-zone-box svelte-1xvyir2",
+            "rect": {
+              "x": 236,
+              "y": 1132.75,
+              "w": 828,
+              "h": 156.28125
+            }
+          },
+          "ref_style_diff": []
+        }
+      ],
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
@@ -63,7 +292,7 @@
         "w": 828,
         "h": 1069.265625
       },
-      "passed": false
+      "passed": true
     },
     {
       "case": "data-no-readings",
@@ -91,6 +320,235 @@
       "t1_pixel_different": 554,
       "t1_pixel_total": 885132,
       "t1_pixel_ratio": 0.0006258953466827547,
+      "t1_pixel_within_budget": true,
+      "t1_pixel_budget": 0.001,
+      "t1b_all_diffs_attributed": true,
+      "t1_attribution": [
+        {
+          "point": {
+            "x": 7,
+            "y": 77
+          },
+          "ref_page_point": {
+            "x": 243.0,
+            "y": 296.765625
+          },
+          "eng_page_point": {
+            "x": 243.0,
+            "y": 296.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "div",
+            "class": "cap-card svelte-1xvyir2",
+            "rect": {
+              "x": 236,
+              "y": 296.703125,
+              "w": 828,
+              "h": 660.828125
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 27,
+            "y": 108
+          },
+          "ref_page_point": {
+            "x": 263.0,
+            "y": 327.765625
+          },
+          "eng_page_point": {
+            "x": 263.0,
+            "y": 327.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "svg",
+            "class": "lucide lucide-icon lucide-radar",
+            "rect": {
+              "x": 251,
+              "y": 320.046875,
+              "w": 13,
+              "h": 13
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 768,
+            "y": 585
+          },
+          "ref_page_point": {
+            "x": 1004.0,
+            "y": 804.765625
+          },
+          "eng_page_point": {
+            "x": 1004.0,
+            "y": 804.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "svg",
+            "class": "lucide lucide-copy lucide-icon",
+            "rect": {
+              "x": 992.859375,
+              "y": 800.96875,
+              "w": 12,
+              "h": 12
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 823,
+            "y": 913
+          },
+          "ref_page_point": {
+            "x": 1059.0,
+            "y": 1132.765625
+          },
+          "eng_page_point": {
+            "x": 1059.0,
+            "y": 1132.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 5,
+          "attributed": true,
+          "match": {
+            "tag": "div",
+            "class": "danger-zone-box svelte-1xvyir2",
+            "rect": {
+              "x": 236,
+              "y": 1132.75,
+              "w": 828,
+              "h": 156.28125
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 24,
+            "y": 943
+          },
+          "ref_page_point": {
+            "x": 260.0,
+            "y": 1162.765625
+          },
+          "eng_page_point": {
+            "x": 260.0,
+            "y": 1162.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "path",
+            "class": "",
+            "rect": {
+              "x": 254.3213348388672,
+              "y": 1154.58447265625,
+              "w": 13.343978881835938,
+              "h": 12.00927734375
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 41,
+            "y": 1002
+          },
+          "ref_page_point": {
+            "x": 277.0,
+            "y": 1221.765625
+          },
+          "eng_page_point": {
+            "x": 277.0,
+            "y": 1221.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "svg",
+            "class": "lucide lucide-icon lucide-trash-2",
+            "rect": {
+              "x": 268,
+              "y": 1220.234375,
+              "w": 13,
+              "h": 13
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 258,
+            "y": 1010
+          },
+          "ref_page_point": {
+            "x": 494.0,
+            "y": 1229.765625
+          },
+          "eng_page_point": {
+            "x": 494.0,
+            "y": 1229.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 6,
+          "attributed": true,
+          "match": {
+            "tag": "button",
+            "class": "danger-button svelte-1xvyir2",
+            "rect": {
+              "x": 253,
+              "y": 1209.4375,
+              "w": 241.015625,
+              "h": 34.59375
+            }
+          },
+          "ref_style_diff": []
+        },
+        {
+          "point": {
+            "x": 823,
+            "y": 1068
+          },
+          "ref_page_point": {
+            "x": 1059.0,
+            "y": 1287.765625
+          },
+          "eng_page_point": {
+            "x": 1059.0,
+            "y": 1287.765625
+          },
+          "ref_candidates": 6,
+          "eng_candidates": 5,
+          "attributed": true,
+          "match": {
+            "tag": "div",
+            "class": "danger-zone-box svelte-1xvyir2",
+            "rect": {
+              "x": 236,
+              "y": 1132.75,
+              "w": 828,
+              "h": 156.28125
+            }
+          },
+          "ref_style_diff": []
+        }
+      ],
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
@@ -107,7 +565,7 @@
         "w": 828,
         "h": 1069.265625
       },
-      "passed": false
+      "passed": true
     },
     {
       "case": "user-readings",
@@ -135,6 +593,10 @@
       "t1_pixel_different": 0,
       "t1_pixel_total": 355212,
       "t1_pixel_ratio": 0.0,
+      "t1_pixel_within_budget": true,
+      "t1_pixel_budget": 0.001,
+      "t1b_all_diffs_attributed": true,
+      "t1_attribution": [],
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
@@ -179,6 +641,10 @@
       "t1_pixel_different": 0,
       "t1_pixel_total": 355212,
       "t1_pixel_ratio": 0.0,
+      "t1_pixel_within_budget": true,
+      "t1_pixel_budget": 0.001,
+      "t1b_all_diffs_attributed": true,
+      "t1_attribution": [],
       "t2_dom_equal": true,
       "t2_dom_diffs": [],
       "t3_same_width": true,
@@ -199,16 +665,19 @@
     }
   ],
   "checks": {
-    "t1_all_pixels_zero": false,
+    "t1_within_budget": true,
+    "t1b_all_diffs_attributed": true,
     "t2_dom_identical": true,
     "t3_same_width": true,
     "t3b_same_height": true
   },
   "notes": [
     "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T1 判据（2026-10-30 owner 裁定 **E-54 口径 A**）：**有界**（像素差占比 ≤ 0.1%）+ **元素级归因**（每个差异必须落到两侧同元素的同一样式：tag + 关键计算样式 + 边界盒逐值相同）+ DOM/宽高全等；**严格读数保留为报告项**（t1_pixel_different / t1_pixel_ratio）。",
+    "T1 判据**可失败性**：每次运行先跑反事实自检（0 差异须 PASS、超预算须 FAIL、恰好等于预算须 PASS、同图自比须 PASS、平移 1px 自比须 FAIL）⇒ 自检不过 ⇒ **exit 2**（判据坏了，不许报绿）。",
     "T2 的归一化：剔除 Svelte 作用域 class 与 `sp-*` 作用域锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
     "T3：两侧裁剪框宽度必须相等；**高度也要相等**（只比宽度 ⇒ 「少渲染一个后继兄弟元素」这类结构性缺失看不出来）。",
     "两态：参考侧在**装载之前**注入 `__DATA_READINGS__`；引擎侧调 `window.__DATA__.setReadings()` ⇒ **两侧读同一份固定数据**。"
   ],
-  "passed": false
+  "passed": true
 }

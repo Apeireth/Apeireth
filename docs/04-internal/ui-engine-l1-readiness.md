@@ -104,7 +104,7 @@ python3 ../../../scripts/run-ci-local.py --workflow ui-engine-ci.yml   # 8 job �
 |---|------|------|------|
 | C1 | GitHub CI 出现**一次全绿** | ✅ **达成**（run `40704477776`，8/8 success；⚠️ 像素步骤按设计 `not_applicable`，像素等价仍由本地/真实 GPU 负责 —— E-118） | 已闭合 |
 | C2 | **真实 Tauri WebView 至少一个平台**跑通（`Engine::create` + 一帧非黑 + 降级档） | ❌ 无装置 | 需要真机/runner |
-| C3 | **E-54 判据口径**裁定（有界 + 保留严格读数 / 保持严格 0） | ⬜ 等 owner | owner |
+| C3 | **E-54 判据口径**裁定 | ✅ **达成**（owner 2026-10-30 裁定 **A**：有界 ≤0.1% + 元素级归因 + 反事实自检；严格读数保留为报告项 —— E-119） | 已闭合 | owner |
 
 ### 7.3 允许并行开工的部分（不依赖 C1–C3）
 

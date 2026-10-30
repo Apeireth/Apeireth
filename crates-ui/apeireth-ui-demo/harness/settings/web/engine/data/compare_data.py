@@ -46,6 +46,7 @@ python3 web/engine/data/compare_data.py
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import pathlib
@@ -293,6 +294,8 @@ def collect_pair(panel: str, section: str, port: int) -> dict:
                 "box": box,
                 "shot": compare.screenshot(cdp, box),
             }
+            if side == "reference":
+                shots[side]["index"] = element_index(cdp, box or {})
         # ── 装置对齐：两侧内容必须落在**同一个设备像素格** ─────────────────────
         # 参考侧是**生产整页**（页头 + 侧栏 + 内容列）⇒ 它的内容块在文档里的位置
         # **带小数**（实测 `top = 219.765625`）；引擎侧是**独立挂载** ⇒ 位置是 `0`。
@@ -318,6 +321,7 @@ def collect_pair(panel: str, section: str, port: int) -> dict:
         unaligned = compare.pixel_diff(shots["reference"]["shot"], shots["engine"]["shot"])
         shots["engine"]["shot"] = engine_shot
         shots["engine"]["box"] = eng_box_after
+        shots["engine"]["index"] = element_index(cdp, eng_box_after or {})
         alignment = {
             "why": "两侧内容必须落在同一个设备像素格 ⇒ 抗锯齿 / 字形栅格化才可比",
             "reference_origin": {"x": ref_box.get("x"), "y": ref_box.get("y")},
@@ -338,19 +342,41 @@ def collect_pair(panel: str, section: str, port: int) -> dict:
         eng_box = shots["engine"]["box"] or {}
         same_width = abs(float(ref_box.get("w", 0)) - float(eng_box.get("w", 0))) <= 0.5
         same_height = abs(float(ref_box.get("h", 0)) - float(eng_box.get("h", 0))) <= 0.5
+        # ── 元素级归因（口径 A）：差异必须落到「两侧同元素的同一样式」 ──────
+        points = diff_pixel_points(
+            shots["reference"]["shot"], shots["engine"]["shot"], limit=8
+        )
+        attributions = [
+            attribute_pixel_difference(
+                point,
+                shots["reference"].get("index") or [],
+                shots["engine"].get("index") or [],
+                shots["reference"]["box"] or {},
+                shots["engine"]["box"] or {},
+            )
+            for point in points
+        ]
+        all_attributed = all(item["attributed"] for item in attributions)
         result = {
             "section": section,
             "alignment": alignment,
+            # ⚠️ **严格读数保留为报告项**（不删、不隐藏）：像素差个数与占比。
             "t1_pixel_different": pixel["different"],
             "t1_pixel_total": pixel["total"],
             "t1_pixel_ratio": pixel["ratio"],
+            # ── 判据（有界）：占比 ≤ 预算，且每个差异都能归因到同元素同样式 ──
+            "t1_pixel_within_budget": t1_within_budget(pixel["ratio"]),
+            "t1_pixel_budget": DATA_PIXEL_BUDGET,
+            "t1b_all_diffs_attributed": all_attributed,
+            "t1_attribution": attributions,
             "t2_dom_equal": not dom_diffs,
             "t2_dom_diffs": dom_diffs,
             "t3_same_width": same_width,
             "t3b_same_height": same_height,
         }
         result["passed"] = (
-            result["t1_pixel_different"] == 0
+            result["t1_pixel_within_budget"]
+            and result["t1b_all_diffs_attributed"]
             and result["t2_dom_equal"]
             and same_width
             and same_height
@@ -366,12 +392,289 @@ def collect_pair(panel: str, section: str, port: int) -> dict:
         httpd.shutdown()
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# T1 有界判据（2026-10-30 owner 裁定：**E-54 口径 A**）
+# ═══════════════════════════════════════════════════════════════════════════
+#: T1 像素差预算（占比）。实测 data 面 554/885132 = **0.0626%**
+#: ⇒ 0.1% 留约 **1.6× 余量**；与 intro 面 `check_particle_edge.py` v2、
+#:    pilot/工具卡面（`compare.PIXEL_BUDGET`）**同范式**（仓库内既有做法）。
+DATA_PIXEL_BUDGET = 0.001
+
+#: 归因配对时每侧取**最深**的若干个命中元素（面积最小优先）。
+ATTRIBUTION_CANDIDATES = 6
+
+
+def t1_within_budget(ratio: float, budget: float = DATA_PIXEL_BUDGET) -> bool:
+    """T1 纯判据：像素差占比 ≤ 预算 ⇒ 通过（**纯函数**，便于反事实自检）。"""
+    return ratio <= budget
+
+
+def _shift_png(data: bytes, dx: int, dy: int) -> bytes:
+    """把 PNG 平移 (dx, dy) 像素（**仅供反事实自检**用）。"""
+    from PIL import Image, ImageChops
+
+    image = Image.open(io.BytesIO(data)).convert("RGB")
+    buffer = io.BytesIO()
+    ImageChops.offset(image, dx, dy).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def selfcheck_t1_criterion(sample_png: bytes | None = None) -> list[str]:
+    """判据**可失败性**自检：合成反事实 ⇒ 若被判通过 ⇒ 判据坏了。
+
+    ⚠️ 两层：
+    ①**逻辑层** —— 0 差异必须 PASS、超预算必须 FAIL、恰好等于预算必须 PASS；
+    ②**图像层**（真验证「像素统计 → 阈值 → 预算」整条链能失败）——
+       同一张图 vs 自身 ⇒ 必须 PASS；同一张图 vs **自身平移 1px** ⇒ 必然远超预算 ⇒ 必须 FAIL。
+
+    ⇒ 任一反事实不符 ⇒ 门禁自身失效 ⇒ 调用方须 `exit 2`（**判据坏了，不许报绿**）。
+    """
+    problems: list[str] = []
+    if not t1_within_budget(0.0):
+        problems.append("反事实①：0 差异被判失败 ⇒ 判据过严")
+    if t1_within_budget(DATA_PIXEL_BUDGET * 10):
+        problems.append("反事实②：超预算差异被判通过 ⇒ 判据失效")
+    if not t1_within_budget(DATA_PIXEL_BUDGET):
+        problems.append("反事实③：恰好等于预算被判失败 ⇒ 边界定义不一致")
+    if sample_png is None:
+        from PIL import Image
+
+        # 自造**有结构**的图（纯色图平移 1px 后仍相同 ⇒ 反事实会失效）
+        canvas = Image.new("RGB", (64, 64))
+        pixels = canvas.load()
+        for y in range(64):
+            for x in range(64):
+                pixels[x, y] = ((x * 7) % 256, (y * 11) % 256, ((x + y) * 13) % 256)
+        buffer = io.BytesIO()
+        canvas.save(buffer, format="PNG")
+        sample_png = buffer.getvalue()
+    if sample_png:
+        same = compare.pixel_diff(sample_png, sample_png)
+        if not t1_within_budget(same["ratio"]):
+            problems.append("反事实④：同图自比被判失败 ⇒ 判据过严")
+        shifted = _shift_png(sample_png, 1, 1)
+        moved = compare.pixel_diff(sample_png, shifted)
+        if t1_within_budget(moved["ratio"]):
+            problems.append("反事实⑤：平移 1px 的自比被判通过 ⇒ 判据抓不到真差异")
+    return problems
+
+
+def selfcheck_attribution() -> list[str]:
+    """**归因判据**的可失败性自检（合成两侧元素索引）。
+
+    ⇒ 三条反事实：
+    ①两侧**完全相同** ⇒ 必须归因成功（否则判据太严，永远红）；
+    ②两侧**样式不同** ⇒ 必须归因失败（否则真缺陷会被预算吞掉）；
+    ③两侧**几何不同** ⇒ 必须归因失败（同上）。
+
+    ⇒ 任一不符 ⇒ 归因判据失效 ⇒ 调用方须 `exit 2`。
+    """
+    problems: list[str] = []
+    base = {
+        "tag": "div",
+        "cls": "sample",
+        "rect": {"x": 10.0, "y": 20.0, "w": 100.0, "h": 30.0},
+        "style": {"color": "rgb(1, 2, 3)", "borderTopColor": "rgba(224, 91, 80, 0.35)"},
+    }
+    clip = {"x": 0.0, "y": 0.0, "w": 800.0, "h": 600.0}
+    point = (12, 22)
+
+    same = attribute_pixel_difference(point, [base], [dict(base)], clip, clip)
+    if not same["attributed"]:
+        problems.append("归因反事实①：两侧完全相同却归因失败 ⇒ 判据过严")
+
+    other_style = dict(base)
+    other_style["style"] = dict(base["style"])
+    other_style["style"]["color"] = "rgb(9, 9, 9)"
+    styled = attribute_pixel_difference(point, [base], [other_style], clip, clip)
+    if styled["attributed"]:
+        problems.append("归因反事实②：两侧样式不同却归因成功 ⇒ 真缺陷会被预算吞掉")
+
+    other_rect = dict(base)
+    other_rect["rect"] = {"x": 11.0, "y": 20.0, "w": 100.0, "h": 30.0}
+    moved = attribute_pixel_difference(point, [base], [other_rect], clip, clip)
+    if moved["attributed"]:
+        problems.append("归因反事实③：两侧几何不同却归因成功 ⇒ 真缺陷会被预算吞掉")
+    return problems
+
+
+#: 页面内**元素索引**采集脚本：取裁剪框内所有可见元素的
+#: (tag / class / 边界盒 / 关键计算样式) ⇒ 供**元素级归因**在本地比对。
+ELEMENT_INDEX_SCRIPT = r"""(() => {
+  const clip = %s;
+  const keys = [
+    'position', 'top', 'left', 'width', 'height',
+    'borderTopWidth', 'borderTopColor', 'borderTopStyle',
+    'borderBottomWidth', 'borderBottomColor', 'borderBottomStyle',
+    'borderLeftWidth', 'borderLeftColor', 'borderLeftStyle',
+    'borderRightWidth', 'borderRightColor', 'borderRightStyle',
+    'backgroundColor', 'color', 'opacity', 'transform', 'filter',
+    'boxShadow', 'mixBlendMode', 'isolation',
+    'fontFamily', 'fontSize', 'fontWeight', 'lineHeight',
+  ];
+  const out = [];
+  for (const el of document.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    const x = r.x + window.scrollX;
+    const y = r.y + window.scrollY;
+    if (x + r.width < clip.x || x > clip.x + clip.w) continue;
+    if (y + r.height < clip.y || y > clip.y + clip.h) continue;
+    const cs = getComputedStyle(el);
+    const style = {};
+    for (const key of keys) style[key] = cs[key];
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      cls: (el.getAttribute('class') || '').split(/\s+/).filter(Boolean).sort().join(' '),
+      rect: { x: r.x, y: r.y, w: r.width, h: r.height },
+      style: style,
+    });
+  }
+  return JSON.stringify(out);
+})()"""
+
+
+def element_index(cdp, clip: dict) -> list[dict]:
+    """采集裁剪框内的元素索引（页面坐标口径）。"""
+    payload = json.dumps(
+        {"x": float(clip.get("x", 0.0)), "y": float(clip.get("y", 0.0)),
+         "w": float(clip.get("w", 0.0)), "h": float(clip.get("h", 0.0))}
+    )
+    raw = cdp.evaluate(ELEMENT_INDEX_SCRIPT % payload)
+    if isinstance(raw, str):
+        return json.loads(raw or "[]")
+    return raw or []
+
+
+def diff_pixel_points(left_png: bytes, right_png: bytes, limit: int = 8) -> list[tuple[int, int]]:
+    """差异像素坐标（**截图内**坐标）：**全量收集后均匀取样** `limit` 个。
+
+    ⚠️ 阈值口径与 `compare.pixel_diff` 一致（任一通道绝对差 > `CHANNEL_THRESHOLD`）。
+
+    ⭐ **为什么是「均匀取样」而不是「取前 N 个」**：差异可能集中在少数几行
+    （E-54 实测集中在 y≈913/989/1024/1069 的分数位置边框）
+    ⇒ ⇒ 只取前 N 个会**整批落在顶部**⇒ ⇒ 归因覆盖不到真正的差异行
+    ⇒ ⇒ 均匀取样才能代表**整个**差异分布。
+    """
+    from PIL import Image, ImageChops
+
+    left = Image.open(io.BytesIO(left_png)).convert("RGB")
+    right = Image.open(io.BytesIO(right_png)).convert("RGB")
+    if left.size != right.size:
+        return []
+    difference = ImageChops.difference(left, right)
+    mask = None
+    for band in difference.split():
+        part = band.point(lambda v: 255 if v > compare.CHANNEL_THRESHOLD else 0)
+        mask = part if mask is None else ImageChops.lighter(mask, part)
+    if mask is None:
+        return []
+    width, _height = mask.size
+    all_points: list[tuple[int, int]] = []
+    for index, value in enumerate(mask.tobytes()):
+        if value:
+            all_points.append((index % width, index // width))
+            if len(all_points) >= 5000:
+                break
+    if not all_points:
+        return []
+    if len(all_points) <= limit:
+        return all_points
+    # 均匀取样（含首尾）⇒ 覆盖整个差异分布。
+    step = (len(all_points) - 1) / (limit - 1)
+    return [all_points[round(index * step)] for index in range(limit)]
+
+
+def _covers(rect: dict, x: float, y: float) -> bool:
+    """元素矩形是否覆盖点（**含边**）。"""
+    return (
+        rect["x"] <= x <= rect["x"] + rect["w"]
+        and rect["y"] <= y <= rect["y"] + rect["h"]
+    )
+
+
+def attribute_pixel_difference(
+    point: tuple[int, int],
+    ref_index: list[dict],
+    eng_index: list[dict],
+    ref_clip: dict,
+    eng_clip: dict,
+) -> dict:
+    """**元素级归因**：把一个差异像素落到两侧的具体元素上。
+
+    ## 判定规则（口径 A 的关键）
+
+    差异必须能归因到**两侧同元素的同一样式**（tag 相同 + 关键计算样式逐值相同
+    + 边界盒逐值相同）⇒ ⇒ 该差异是**同一元素的合成舍入差**（浏览器侧）
+    ⇒ ⇒ 才允许被 T1 预算容忍。
+
+    ⇒ 若归因**不成立**（找不到同元素，或找到但样式/几何不同）⇒
+    ⇒ **判失败**（哪怕差异占比很小）⇒ ⇒ 真缺陷不会被预算吞掉。
+    """
+    sx, sy = point
+    ref_x = sx + float(ref_clip.get("x", 0.0))
+    ref_y = sy + float(ref_clip.get("y", 0.0))
+    eng_x = sx + float(eng_clip.get("x", 0.0))
+    eng_y = sy + float(eng_clip.get("y", 0.0))
+    ref_hits = [el for el in ref_index if _covers(el["rect"], ref_x, ref_y)]
+    eng_hits = [el for el in eng_index if _covers(el["rect"], eng_x, eng_y)]
+    # ⭐ **取最深命中元素**（面积最小）—— `html`/`body` 总能覆盖整页，
+    #   若允许它们参与配对 ⇒ ⇒ 任何差异都会「归因成功」⇒ ⇒ 等于没归因。
+    ref_hits.sort(key=lambda el: el["rect"]["w"] * el["rect"]["h"])
+    eng_hits.sort(key=lambda el: el["rect"]["w"] * el["rect"]["h"])
+    ref_hits = ref_hits[:ATTRIBUTION_CANDIDATES]
+    eng_hits = eng_hits[:ATTRIBUTION_CANDIDATES]
+    match = None
+    for ref_el in ref_hits:
+        for eng_el in eng_hits:
+            if ref_el["tag"] != eng_el["tag"]:
+                continue
+            if ref_el["rect"] != eng_el["rect"]:
+                continue
+            if ref_el["style"] != eng_el["style"]:
+                continue
+            match = {
+                "tag": ref_el["tag"],
+                "class": ref_el["cls"],
+                "rect": ref_el["rect"],
+            }
+            break
+        if match:
+            break
+    return {
+        "point": {"x": sx, "y": sy},
+        "ref_page_point": {"x": ref_x, "y": ref_y},
+        "eng_page_point": {"x": eng_x, "y": eng_y},
+        "ref_candidates": len(ref_hits),
+        "eng_candidates": len(eng_hits),
+        "attributed": match is not None,
+        "match": match,
+        "ref_style_diff": [
+            el for el in ref_hits
+            if any(
+                other["tag"] == el["tag"] and other["rect"] == el["rect"]
+                and other["style"] != el["style"]
+                for other in eng_hits
+            )
+        ][:2],
+    }
+
+
 def main() -> int:
     if not DIST.exists():
         log(f"未找到构建产物：{DIST}（先跑 `bash build.sh`）")
         return 2
     OUT.mkdir(parents=True, exist_ok=True)
     EVIDENCE.mkdir(parents=True, exist_ok=True)
+
+    # ── ⭐ 判据**可失败性**自检（先于任何判定）：判据坏了 ⇒ exit 2 ──
+    criterion_problems = selfcheck_t1_criterion() + selfcheck_attribution()
+    if criterion_problems:
+        log("❌ 判据自检未过（判据本身坏了 ⇒ 不许报绿）：")
+        for problem in criterion_problems:
+            log(f"   · {problem}")
+        return 2
+    log("✅ 判据自检通过（像素判据 5 条 + 归因判据 3 条反事实全部符合预期）")
 
     httpd, port = compare.serve(DIST)
     base = f"http://127.0.0.1:{port}"
@@ -418,6 +721,9 @@ def main() -> int:
                         "box": box,
                         "shot": compare.screenshot(cdp, box),
                     }
+                    # 参考侧的**元素索引**（元素级归因用）：此刻页面状态与截图一致。
+                    if side == "reference":
+                        shots[side]["index"] = element_index(cdp, box or {})
                     # 参考侧的注入**只对下一次装载生效** ⇒ 引擎侧不需要。
                     if side == "reference":
                         set_readings(cdp, side, True)
@@ -445,6 +751,8 @@ def main() -> int:
                 time.sleep(0.3)
                 eng_box_after = compare.wait_element_box_stable(cdp, ENGINE_SELECTOR, get_box=lambda: element_box(cdp, ENGINE_SELECTOR))
                 engine_shot = compare.wait_stable(cdp, eng_box_after)
+                # 引擎侧元素索引**在对齐后**采（对齐改了位置 ⇒ 索引必须与截图同刻）。
+                shots["engine"]["index"] = element_index(cdp, eng_box_after or {})
                 unaligned = compare.pixel_diff(shots["reference"]["shot"], shots["engine"]["shot"])
                 shots["engine"]["shot"] = engine_shot
                 shots["engine"]["box"] = eng_box_after
@@ -487,14 +795,35 @@ def main() -> int:
                 same_height = (
                     abs(float(ref_box.get("h", 0)) - float(eng_box.get("h", 0))) <= 0.5
                 )
+                # ── 元素级归因（口径 A）：差异必须落到「两侧同元素的同一样式」 ──
+                points = diff_pixel_points(
+                    shots["reference"]["shot"], shots["engine"]["shot"], limit=8
+                )
+                attributions = [
+                    attribute_pixel_difference(
+                        point,
+                        shots["reference"].get("index") or [],
+                        shots["engine"].get("index") or [],
+                        ref_box,
+                        eng_box,
+                    )
+                    for point in points
+                ]
+                all_attributed = all(item["attributed"] for item in attributions)
                 case = {
                     "case": f"{section}-{state}",
                     "section": section,
                     "reading_state": state,
                     "alignment": alignment,
+                    # ⚠️ **严格读数保留为报告项**（不删、不隐藏）：像素差个数与占比。
                     "t1_pixel_different": pixel["different"],
                     "t1_pixel_total": pixel["total"],
                     "t1_pixel_ratio": pixel["ratio"],
+                    # ── 判据（有界）：占比 ≤ 预算，且每个差异都能归因到同元素同样式 ──
+                    "t1_pixel_within_budget": t1_within_budget(pixel["ratio"]),
+                    "t1_pixel_budget": DATA_PIXEL_BUDGET,
+                    "t1b_all_diffs_attributed": all_attributed,
+                    "t1_attribution": attributions,
                     "t2_dom_equal": not dom_diffs,
                     "t2_dom_diffs": dom_diffs,
                     "t3_same_width": same_width,
@@ -503,7 +832,8 @@ def main() -> int:
                     "engine_box": eng_box,
                 }
                 case["passed"] = (
-                    case["t1_pixel_different"] == 0
+                    case["t1_pixel_within_budget"]
+                    and case["t1b_all_diffs_attributed"]
                     and case["t2_dom_equal"]
                     and same_width
                     and same_height
@@ -525,8 +855,14 @@ def main() -> int:
                 )
 
         report["checks"] = {
-            "t1_all_pixels_zero": all(
-                case["t1_pixel_different"] == 0 for case in report["cases"]
+            # ⚠️ **有界判据**（2026-10-30 owner 裁定 E-54 口径 A）：
+            #   像素差占比 ≤ 预算（0.1%）**且** 每个差异都能归因到「两侧同元素的同一样式」
+            #   ⇒ ⇒ 真缺陷（样式/几何不同）即使占比极小也会红 ⇒ ⇒ 预算不会吞掉真缺陷。
+            "t1_within_budget": all(
+                case["t1_pixel_within_budget"] for case in report["cases"]
+            ),
+            "t1b_all_diffs_attributed": all(
+                case["t1b_all_diffs_attributed"] for case in report["cases"]
             ),
             "t2_dom_identical": all(case["t2_dom_equal"] for case in report["cases"]),
             "t3_same_width": all(case["t3_same_width"] for case in report["cases"]),
@@ -534,6 +870,13 @@ def main() -> int:
         }
         report["notes"] = [
             "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+            "T1 判据（2026-10-30 owner 裁定 **E-54 口径 A**）："
+            "**有界**（像素差占比 ≤ 0.1%）+ **元素级归因**"
+            "（每个差异必须落到两侧同元素的同一样式：tag + 关键计算样式 + 边界盒逐值相同）"
+            "+ DOM/宽高全等；**严格读数保留为报告项**（t1_pixel_different / t1_pixel_ratio）。",
+            "T1 判据**可失败性**：每次运行先跑反事实自检（0 差异须 PASS、超预算须 FAIL、"
+            "恰好等于预算须 PASS、同图自比须 PASS、平移 1px 自比须 FAIL）"
+            "⇒ 自检不过 ⇒ **exit 2**（判据坏了，不许报绿）。",
             "T2 的归一化：剔除 Svelte 作用域 class 与 `sp-*` 作用域锚点、"
             "class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
             "T3：两侧裁剪框宽度必须相等；**高度也要相等**"
