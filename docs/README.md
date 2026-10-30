@@ -52,7 +52,7 @@
 docs/
 ├── 03-reference/    L1+L3  真源与参考（测试基线/能力矩阵/接手手册/术语）
 ├── status/          L1     文档事实体系的机器真源（claims/wiring/verification-ledger/未接线台账）
-├── adr/             L2     决策记录（只增不改，README 索引完整覆盖 16 篇）
+├── adr/             L2     决策记录（只增不改，README 索引完整覆盖 18 篇）
 ├── architecture/    L2     可执行契约（contract.toml / env-registry / 异常表 / 线路协调）
 ├── 01-architecture/ L3     架构说明（哲学/愿景/架构/安全/能力规范）
 ├── 02-guides/       L3     使用与操作指南（按场景分组）
