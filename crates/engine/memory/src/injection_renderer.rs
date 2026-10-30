@@ -227,6 +227,121 @@ impl InjectionRenderer for PlainRenderer {
     }
 }
 
+/// **生产形态**：编号证据清单 + 反幻觉规则（**逐字复刻今天的注入文本**）。
+///
+/// # 为什么要有这个渲染器（2026-10-30 · B2 接线）
+///
+/// 设计稿 §5 ③ 把注入上提为契约（[`InjectionRenderer`]），但**生产路径没走它**：
+/// `context_compiler` 直接调 `memory_injection::build_memory_injection_with_budget`
+/// ⇒ 契约是「库级」的，不是「生产级」的。
+///
+/// ⇒ 本渲染器 = **契约与生产之间的那层适配**，且必须**逐字等价**于今天的输出
+/// ⇒ ⇒ 接线当天**行为零变化**（有测试钉住，见 `tests/injection_renderer_production.rs`）。
+///
+/// # 与 [`PlainRenderer`] 的三处**实测差异**（别混用）
+///
+/// | | 生产 / 本渲染器 | [`PlainRenderer`] |
+/// |---|---|---|
+/// | 标题行 | **有**（`[记忆证据 — …]`）| 无 |
+/// | 条目行 | `1. 内容`（**编号**）| `[出处] 内容` |
+/// | 规则措辞 | 「以上**编号**条目」 | 「以上条目」 |
+///
+/// # ⚠️ **不重排**（与其它三个渲染器不同）
+///
+/// [`PlainRenderer`] 等按 `relevance` 重排（`rank_by_relevance`）；
+/// 而**生产顺序 = 检索顺序**（排序由检索层负责，渲染层再排一次会**改掉检索的语义**）。
+/// ⇒ ⇒ 本渲染器**保持输入顺序** ⇒ 这是它能逐字等价的前提之一。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NumberedEvidenceRenderer {
+    /// 是否在末尾追加反幻觉规则（生产默认**带**）。
+    include_note: bool,
+    /// **单条**证据的字符上限（生产默认 `120` = `EVIDENCE_MAX_CHARS`）。
+    per_entry_chars: usize,
+}
+
+impl Default for NumberedEvidenceRenderer {
+    /// 默认 = 与今天的生产注入**逐字一致**（带规则 · 单条 120 字）。
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl NumberedEvidenceRenderer {
+    /// 默认形态：带规则 · 单条 120 字（**与今天逐字一致**）。
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            include_note: true,
+            per_entry_chars: crate::memory_injection::EVIDENCE_MAX_CHARS,
+        }
+    }
+
+    /// 不带反幻觉规则。
+    #[must_use]
+    pub fn without_note() -> Self {
+        Self {
+            include_note: false,
+            per_entry_chars: crate::memory_injection::EVIDENCE_MAX_CHARS,
+        }
+    }
+
+    /// 指定**单条**证据的字符上限。
+    ///
+    /// ⚠️ `0` ⇒ **截成空串**（与生产 `chars().take(0)` **逐字一致**）
+    /// ⇒ 「不截断」请用 `usize::MAX`。
+    #[must_use]
+    pub fn with_per_entry_chars(mut self, per_entry_chars: usize) -> Self {
+        self.per_entry_chars = per_entry_chars;
+        self
+    }
+}
+
+impl InjectionRenderer for NumberedEvidenceRenderer {
+    fn render(&self, evidence: &[Evidence], budget: Budget) -> Injection {
+        if evidence.is_empty() {
+            return Injection::Empty {
+                reason: "没有证据".to_string(),
+            };
+        }
+        if budget.max_chars == 0 {
+            return Injection::Empty {
+                reason: "预算为 0".to_string(),
+            };
+        }
+        // ⚠️ **不自行裁剪到预算**：裁剪要连带回退「选中回执」
+        // （`selected_candidate_ids` / `selected_attribution`）
+        // ⇒ 那是**调用方**的事（它才知道哪几行是记忆正文行）
+        // ⇒ 本渲染器只负责**逐字复刻格式**。
+        let mut text = String::from(EVIDENCE_BLOCK_HEADER);
+        for (index, item) in evidence.iter().enumerate() {
+            // ⚠️ `per_entry_chars = 0` ⇒ **截成空串**（与生产 `chars().take(0)` 一致）
+            // ⇒ **不是**「不截断」⇒ 「不截断」用 `usize::MAX`。
+            let body = item
+                .text
+                .chars()
+                .take(self.per_entry_chars)
+                .collect::<String>();
+            text.push_str(&format!("{}. {}\n", index + 1, body));
+        }
+        if self.include_note {
+            text.push_str(NUMBERED_RULE_NOTE);
+        }
+        Injection::Plain { text }
+    }
+}
+
+/// 生产注入的**标题行**（逐字复刻 `memory_injection::build_memory_injection_with_budget`）。
+pub const EVIDENCE_BLOCK_HEADER: &str =
+    "[记忆证据 — 你只知道以下条目, 不要声称记得列表之外的任何对话]\n";
+
+/// 生产注入的**反幻觉规则**（逐字复刻）。
+///
+/// ⚠️ 与 [`ANTI_HALLUCINATION_NOTE`] **差一个「编号」二字**
+/// ⇒ 生产文本说的是「以上**编号**条目」（因为条目确实带编号）
+/// ⇒ ⇒ 两个常量**必须分开**，否则会把今天的文本改掉。
+pub const NUMBERED_RULE_NOTE: &str =
+    "规则: 说话只能基于以上编号条目; 不确定就说「我猜」; 禁止说「我记得我们以前聊过」— 那是编造。";
+
 /// 结构化条目形态：每条一行「内容 —— 出处」。
 ///
 /// # 为什么行里**不带**项目符号

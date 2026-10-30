@@ -307,13 +307,47 @@ impl ClosedWorldContextCompiler {
         max_chars: usize,
         per_entry_chars: usize,
     ) -> Option<SelectedMemoryAccess> {
-        use crate::memory_injection::build_memory_injection_with_budget;
+        self.compile_injection_with_renderer(
+            recalled,
+            _session_id,
+            max_chars,
+            per_entry_chars,
+            &crate::injection_renderer::NumberedEvidenceRenderer::new()
+                .with_per_entry_chars(per_entry_chars),
+        )
+    }
+
+    /// **同** [`Self::compile_injection_with_selected_access_budget`]，但**注入形态可换**。
+    ///
+    /// # 这是什么（2026-10-30 · 设计稿 §5 ③ 的**生产落点**）
+    ///
+    /// 生产注入此前**直接调** `memory_injection::build_memory_injection_with_budget`
+    /// ⇒ 契约 [`crate::injection_renderer::InjectionRenderer`] 是**库级**的，不是生产级的。
+    /// ⇒ ⇒ 本方法让**生产路径经由契约** ⇒ 「形态可换」从口号变成**可调用的事实**。
+    ///
+    /// # 口径（**默认行为零变化**）
+    ///
+    /// * 默认渲染器 = [`crate::injection_renderer::NumberedEvidenceRenderer`]
+    ///   （**逐字复刻**今天的格式，有测试钉住：
+    ///   `crates/engine/memory/tests/injection_renderer_production.rs`）；
+    /// * 换别的渲染器 ⇒ **只改形态**，检索语义与预算口径**不动**；
+    /// * **裁剪仍在调用方**（要连带回退「选中回执」⇒ 渲染层不知道哪几行是记忆正文行）。
+    pub fn compile_injection_with_renderer(
+        &self,
+        recalled: &MemoryRecallResult,
+        _session_id: &str,
+        max_chars: usize,
+        per_entry_chars: usize,
+        renderer: &dyn crate::injection_renderer::InjectionRenderer,
+    ) -> Option<SelectedMemoryAccess> {
         if recalled.items.is_empty() {
             return None;
         }
         // 标题 + 反幻觉规则文案的保守预留。
         const RULES_RESERVE: usize = 160;
         let mut entries: Vec<String> = Vec::new();
+        // 与 `entries` **同序**的归因（给非 Plain 形态用；Plain 形态不用它 ⇒ 输出不变）。
+        let mut entry_attributions: Vec<String> = Vec::new();
         let mut selected_candidate_ids = Vec::new();
         let mut selected_attribution = Vec::new();
         let mut current_chars = RULES_RESERVE;
@@ -325,6 +359,9 @@ impl ClosedWorldContextCompiler {
             }
             current_chars += cost;
             entries.push(sanitized_content);
+            // ⚠️ 归因**作为数据**随条目走（不再焊死在文本里）
+            // ⇒ ⇒ 「内容 —— 出处」这类形态在生产里才有意义（设计稿 §5 ③ 的主张）。
+            entry_attributions.push(String::new());
             selected_attribution.push(attribution_for(&item.id, item.score_components));
             selected_candidate_ids.push(item.id.clone());
         }
@@ -346,6 +383,7 @@ impl ClosedWorldContextCompiler {
                     snippet.diary_date,
                     single_line(&sanitize_text(&snippet.snippet))
                 ));
+                entry_attributions.push(format!("日记 {}", snippet.diary_date));
                 diary_lines += 1;
             }
         }
@@ -364,10 +402,12 @@ impl ClosedWorldContextCompiler {
             }
             current_chars += cost;
             entries.push(line);
+            entry_attributions.push(format!("wiki {}", section.source_path));
             wiki_lines += 1;
         }
         loop {
-            let rendered = build_memory_injection_with_budget(&entries, per_entry_chars);
+            let rendered =
+                render_through_contract(renderer, &entries, &entry_attributions, max_chars);
             if rendered.chars().count() <= max_chars {
                 if entries.is_empty() {
                     return None;
@@ -413,6 +453,43 @@ impl ClosedWorldContextCompiler {
             observer.observe_selected(&selected);
         }
         Some(selected.overlay)
+    }
+}
+
+/// 经由**注入契约**渲染一批证据（设计稿 §5 ③ 的生产落点）。
+///
+/// # 为什么 id 要**补零**
+///
+/// 契约里的三个通用渲染器（[`crate::injection_renderer::PlainRenderer`] 等）
+/// 会按 `relevance` 排序、同分时按 **id 升序** ⇒ 若 id 是 `e0, e1, …, e10`，
+/// 则 `e10 < e2`（字典序）⇒ **顺序被打乱** ⇒ 与生产的「检索顺序 = 顺序」不符。
+/// ⇒ ⇒ id 用**四位补零**（`e0000`）⇒ 字典序 == 输入序 ⇒ 任何渲染器都保序。
+///
+/// # 形态 → 文本
+///
+/// * `Plain` ⇒ 原样（**生产默认**，与今天逐字一致）；
+/// * `Bulleted` / `Conclusions` ⇒ 按行拼接（**形态可换**的落点）；
+/// * `Empty` ⇒ 空串（调用方据此回退：裁剪到底 ⇒ 返回 `None`）。
+fn render_through_contract(
+    renderer: &dyn crate::injection_renderer::InjectionRenderer,
+    entries: &[String],
+    attributions: &[String],
+    max_chars: usize,
+) -> String {
+    use crate::injection_renderer::{Budget, Evidence, Injection};
+    let evidence: Vec<Evidence> = entries
+        .iter()
+        .enumerate()
+        .map(|(index, text)| {
+            let attribution = attributions.get(index).cloned().unwrap_or_default();
+            Evidence::new(format!("e{index:04}"), text.clone(), attribution, 1.0)
+        })
+        .collect();
+    match renderer.render(&evidence, Budget::new(max_chars, 0)) {
+        Injection::Plain { text } => text,
+        Injection::Bulleted { lines } => lines.join("\n"),
+        Injection::Conclusions { items } => items.join("\n"),
+        Injection::Empty { .. } => String::new(),
     }
 }
 
