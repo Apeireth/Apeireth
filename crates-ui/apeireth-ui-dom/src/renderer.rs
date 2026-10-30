@@ -605,6 +605,71 @@ impl<D: Dom> Renderer<D> {
         Ok(cursor)
     }
 
+    /// ⭐⭐⭐ **嵌套位置的窗口化渲染**（L1-G5）：在 `path` 指定的父节点下渲染窗口。
+    ///
+    /// ## 为什么必须有它（2026-10-28 浏览器集成探针实测发现）
+    ///
+    /// [`Self::patch_windowed`] 只能替换**根视图**；嵌套列表要用
+    /// [`Self::patch_children_at_path`] ⇒ ⇒ **但它不会自动加前后留白**
+    /// ⇒ ⇒ 调用方得自己算 spacer ⇒ ⇒ **很容易漏**。
+    ///
+    /// 实测症状：用 `patch_children_at_path` 只写窗口行（不留白）⇒
+    /// 宿主内容高度不足 ⇒ ⇒ 浏览器把 `scrollTop` **夹回 0**
+    /// ⇒ ⇒ 窗口永远不动 ⇒ 表现为「虚拟列表不滚动」，且**很难定位**
+    /// （引擎的窗口计算没错，错的是"内容没撑高"）。
+    ///
+    /// ⇒ ⇒ 本方法：留白由引擎算，调用方只提供「每项高度 + 取项函数」。
+    ///
+    /// ⚠️ 约定：`path` 指向**滚动容器**（其自身度量决定视口高度）。
+    pub fn patch_windowed_at_path(
+        &mut self,
+        path: &[usize],
+        item_heights: &[f64],
+        overscan: usize,
+        item: impl Fn(usize) -> VNode,
+    ) -> Result<crate::virtual_list::VirtualPlan, DomError> {
+        let plan = self.virtual_window_for(path, item_heights, overscan)?;
+        let sanitized: Vec<f64> = item_heights
+            .iter()
+            .map(|height| {
+                if height.is_finite() && *height > 0.0 {
+                    *height
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let total: f64 = sanitized.iter().sum();
+        let window_height: f64 = sanitized[plan.first..=plan.last]
+            .iter()
+            .sum::<f64>()
+            .max(0.0);
+        let spacer_after = (total - plan.offset - window_height).max(0.0);
+
+        let mut rows: Vec<VNode> = Vec::new();
+        if plan.offset > 0.0 {
+            rows.push(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-before")
+                    .attr("style", format!("height: {}px", plan.offset))
+                    .build(),
+            );
+        }
+        for index in plan.first..=plan.last {
+            rows.push(item(index));
+        }
+        if spacer_after > 0.0 {
+            rows.push(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-after")
+                    .attr("style", format!("height: {spacer_after}px"))
+                    .build(),
+            );
+        }
+        self.patch_children_at_path(path, rows)?;
+        Ok(plan)
+    }
+
     /// ⭐⭐⭐ **窗口化渲染**（L1-G5 收尾）：只挂载可见窗口内的子项。
     ///
     /// ## 布局约定

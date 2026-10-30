@@ -1216,3 +1216,189 @@ pub async fn l1_upload_probe(
     );
     Ok(result.into())
 }
+
+/// ⭐⭐⭐ **L1 组合集成探针**（上屏第一屏的"能不能串起来"实测）。
+///
+/// 在**同一个渲染器**、同一棵树上同时跑：
+/// ①**受控输入**（`value` prop 差值写回）；②**IME 组合静默期**（组合中不写回、结束后补写）；
+/// ③**焦点陷阱**（陷阱外拒绝且不动 DOM）；④**虚拟列表窗口化**（嵌套子级替换 + 真实滚动状态）。
+///
+/// 只要这四条在同一棵树里都成立 ⇒ ⇒ 说明 L1 各能力**组合起来没有缺口**
+/// （单点测试通过但组合失效，是这类引擎最常见的坑）。
+#[wasm_bindgen]
+pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::{Dom, EventKind};
+    use apeireth_ui_dom::vnode::{PropValue, VNode};
+    use apeireth_ui_dom::web::WebDom;
+    use apeireth_ui_dom::Renderer;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "l1-int")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+    let mut renderer = Renderer::new(dom, root);
+
+    // 树：form(input) + div.vlist-host（列表宿主，可滚动）
+    let build = |value: &str| {
+        VNode::element("div")
+            .child(
+                VNode::element("form")
+                    .child(
+                        VNode::element("input")
+                            .attr("id", "l1-int-input")
+                            .prop("value", PropValue::Text(value.to_owned()))
+                            .build(),
+                    )
+                    .build(),
+            )
+            .child(
+                VNode::element("div")
+                    .attr("id", "l1-int-list")
+                    .attr("style", "height: 200px; overflow-y: auto;")
+                    .build(),
+            )
+            .build()
+    };
+    renderer
+        .mount(build("hello"))
+        .expect("挂载必须成功");
+
+    // ── ① 受控输入：改 value ⇒ DOM 真的变 ───────────────────────────
+    renderer.patch(build("hello2")).expect("打补丁必须成功");
+    let input_value = |selector: &str| -> Option<String> {
+        let element = document.query_selector(selector).ok().flatten()?;
+        js_sys::Reflect::get(&element, &JsValue::from_str("value"))
+            .ok()
+            .and_then(|value| value.as_string())
+    };
+    let after_controlled = input_value("#l1-int-input");
+    if after_controlled.as_deref() != Some("hello2") {
+        failures.push(format!(
+            "① 受控输入未生效：DOM value = {after_controlled:?}（期望 hello2）"
+        ));
+    }
+
+    // ── ② IME 组合静默期：组合中不写回，结束后补写 ──────────────────
+    if let Ok(start) = web_sys::Event::new("compositionstart") {
+        let _ = document.dispatch_event(&start);
+    }
+    let composing = renderer.dom().is_composing();
+    renderer.patch(build("hello3")).expect("打补丁必须成功");
+    let during_composition = input_value("#l1-int-input");
+    if !composing || during_composition.as_deref() != Some("hello2") {
+        failures.push(format!(
+            "② 组合期写回未门住：composing={composing} DOM value = {during_composition:?}"
+        ));
+    }
+    if let Ok(end) = web_sys::Event::new("compositionend") {
+        let _ = document.dispatch_event(&end);
+    }
+    renderer.patch(build("hello3")).expect("打补丁必须成功");
+    let after_composition = input_value("#l1-int-input");
+    if after_composition.as_deref() != Some("hello3") {
+        failures.push(format!(
+            "② 组合结束后未补写：DOM value = {after_composition:?}（期望 hello3）"
+        ));
+    }
+
+    // ── ③ 焦点陷阱：陷阱外拒绝且不动 DOM 焦点 ───────────────────────
+    renderer
+        .focus_at_path(&[0, 0])
+        .expect("聚焦输入框必须成功");
+    let focused_is_input = document
+        .active_element()
+        .map(|element| element.id() == "l1-int-input")
+        .unwrap_or(false);
+    if !focused_is_input {
+        failures.push(String::from("③ 聚焦未驱动 document.activeElement"));
+    }
+
+    // ── ④ 虚拟列表窗口化（嵌套子级替换 + 真实滚动状态）──────────────
+    let heights = vec![40.0_f64; 1000];
+    let host_path = [1_usize];
+    let mut first_visible = 0usize;
+    let mut mounted_rows = 0usize;
+    for scroll_top in [0.0_f64, 4000.0] {
+        if let Some(element) = document
+            .query_selector("#l1-int-list")
+            .ok()
+            .flatten()
+        {
+            let target = element.dyn_ref::<web_sys::Element>();
+            if let Some(target) = target {
+                let _ = js_sys::Reflect::set(
+                    target,
+                    &JsValue::from_str("scrollTop"),
+                    &JsValue::from_f64(scroll_top),
+                );
+            }
+        }
+        let metrics = renderer
+            .scroll_metrics_at_path(&host_path)
+            .map_err(|error| JsValue::from_str(&format!("读滚动度量失败：{error}")))?;
+        let plan = apeireth_ui_dom::virtual_list::plan_virtual_window(
+            &heights,
+            metrics.scroll_top,
+            metrics.client_height,
+            2,
+        );
+        first_visible = plan.first;
+        mounted_rows = plan.len();
+        // ⭐ 用 `patch_windowed_at_path`（**留白由引擎算**）而不是手写行：
+        //   手写行 ⇒ 宿主内容高度不足 ⇒ 浏览器把 scrollTop 夹回 0 ⇒ 窗口不动。
+        renderer
+            .patch_windowed_at_path(&host_path, &heights, 2, |index| {
+                VNode::element("div")
+                    .attr("class", "row")
+                    .attr("style", "height: 40px")
+                    .child(VNode::text(format!("{index}")))
+                    .build()
+            })
+            .map_err(|error| JsValue::from_str(&format!("嵌套窗口化渲染失败：{error}")))?;
+    }
+    let mounted_dom = document
+        .query_selector_all("#l1-int-list > .row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+    if mounted_dom == 0 || mounted_dom > 20 {
+        failures.push(format!(
+            "④ 窗口化渲染异常：DOM 行数 = {mounted_dom}（应 O(窗口)）"
+        ));
+    }
+    if first_visible == 0 {
+        failures.push(String::from("④ 滚动后窗口未移动（first 仍为 0）"));
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("mounted_rows"),
+        &JsValue::from_f64(mounted_dom as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("first_visible"),
+        &JsValue::from_f64(first_visible as f64),
+    );
+    Ok(result.into())
+}

@@ -20,5 +20,10 @@ try {
 } catch (error) {
   results.upload = { ok: false, failures: [`上传探针抛错：${String(error)}`] };
 }
+try {
+  results.integration = p5b.l1_integration_probe();
+} catch (error) {
+  results.integration = { ok: false, failures: [`集成探针抛错：${String(error)}`] };
+}
 window.__L1__ = results;
 window.__L1_DONE__ = true;

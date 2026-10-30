@@ -102,7 +102,7 @@ python3 ../../../scripts/run-ci-local.py --workflow ui-engine-ci.yml   # 8 job �
 
 | # | 条件 | 当前 | 归属 |
 |---|------|------|------|
-| C1 | GitHub CI 出现**一次全绿** | ❌ run `40701131910` 仍 queued | 外部（runner 积压） |
+| C1 | GitHub CI 出现**一次全绿** | ✅ **达成**（run `40704477776`，8/8 success；⚠️ 像素步骤按设计 `not_applicable`，像素等价仍由本地/真实 GPU 负责 —— E-118） | 已闭合 |
 | C2 | **真实 Tauri WebView 至少一个平台**跑通（`Engine::create` + 一帧非黑 + 降级档） | ❌ 无装置 | 需要真机/runner |
 | C3 | **E-54 判据口径**裁定（有界 + 保留严格读数 / 保持严格 0） | ⬜ 等 owner | owner |
 

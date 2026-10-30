@@ -30,5 +30,11 @@
     "failures": [],
     "backend_actual": "Gl",
     "uploaded_w": 3
+  },
+  "integration": {
+    "ok": true,
+    "failures": [],
+    "mounted_rows": 9,
+    "first_visible": 98
   }
 }
