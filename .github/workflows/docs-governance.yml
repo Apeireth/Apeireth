@@ -76,3 +76,8 @@ jobs:
       # ⇒ 漏登记的守卫 ⇒ 合并裁决层会**漏掉**它（假绿）。
       - name: 守卫清单同步（机读清单 vs 仓库实际）
         run: python3 scripts/check_guard_inventory.py
+
+      # **失败知识库不许陈旧**（2026-10-30）：条目里指向的守卫必须真实存在
+      # ⇒ 否则照着知识排查会去找一个不存在的检查器。
+      - name: 失败知识库一致性
+        run: python3 scripts/check_failure_knowledge.py

@@ -1,0 +1,173 @@
+schema: apeireth.repair-recipes.v1
+recipes:
+  - id: compile-error
+    category: compile-error
+    symptoms:
+      - error[E0xxx]
+      - "error: could not compile"
+      - "error: aborting due to N previous error"
+    diagnose:
+      - cargo build -p <crate> --locked
+      - git diff --stat
+      - cargo metadata --locked
+    fix:
+      - 按 rustc 报的**第一个** error[E0xxx] 定位（不是最后一个）
+      - 一次只改一个根因再重编，避免多错叠加
+      - 跨 crate 接口变更先 cargo check --workspace
+    verify: cargo build --workspace --locked
+    escalate_when: 同一处 error[E0xxx] 修了两轮仍复现，或错误来自依赖内部（不是本仓代码）
+  - id: test-regression
+    category: test-regression
+    symptoms:
+      - "test result: FAILED"
+      - panicked at
+      - assertion failed
+      - assertion `left == right` failed
+    diagnose:
+      - cargo nextest run -p <crate> --profile ci --locked <test_name>
+      - git diff --stat
+      - python3 scripts/harness.py plan
+    fix:
+      - 先复跑该用例，确认是**稳定**失败（不是偶发）
+      - 对比基线数字（scripts/golden-baseline.json），确认是回归而不是口径变更
+      - 改实现前先确认断言本身是否还成立
+    verify: cargo nextest run -p <crate> --profile ci --locked
+    escalate_when: 复跑 3 次结果不一致（疑似 flaky），或失败用例属已知慢性红
+  - id: flaky-test
+    category: flaky-test
+    symptoms:
+      - 同一测试名既 FAILED 又 ok/PASS
+      - flaky
+      - TRY n
+    diagnose:
+      - cargo nextest run -p <crate> --profile ci --locked <test_name> --retries 0
+      - 连跑 3 次并记录每次结果
+      - git diff --stat
+    fix:
+      - 先判定是否偶发（**不是**稳定回归）
+      - 偶发用例显式标注并隔离，**不要**改生产代码去迎合
+      - 找共享状态/时间/并发依赖（常见根因）
+    verify: cargo nextest run -p <crate> --profile ci --locked --retries 0
+    escalate_when: 同一用例 3 次以上偶发，或多个用例共享同一根因
+  - id: environment-failure
+    category: environment-failure
+    symptoms:
+      - Permission denied
+      - ENOSPC
+      - No space left on device
+      - Connection refused
+      - could not resolve
+      - No such file or directory（工具缺失）
+      - network
+      - timed out
+    diagnose:
+      - python3 scripts/check_toolchain_pin.py
+      - rustup toolchain list
+      - df -h .
+      - python3 scripts/harness.py plan
+    fix:
+      - 先补齐工具链/权限/网络/磁盘，**不要**改业务代码
+      - 依赖缓存缺失时先 cargo fetch
+      - 网络不可达时明确标注「环境不具备」，而不是判成代码失败
+    verify: python3 scripts/harness.py check
+    escalate_when: 沙箱/网络策略层面不允许修复（如 CI 固定 node 版本与本机不符）
+  - id: contract-drift
+    category: contract-drift
+    symptoms:
+      - STALE
+      - drift
+      - out of sync
+      - 不一致
+      - 超基线
+      - 越界
+    diagnose:
+      - python3 scripts/docs_truth.py --verify --block-stale
+      - python3 scripts/arch_guard.py --strict
+      - git diff --stat
+    fix:
+      - 先分清**真源**与人读副本，改真源
+      - 人读副本用生成器重生成，**不要**手改
+      - 基线类告警按棘轮 bump 并写清理由
+    verify: python3 scripts/docs_truth.py --verify --block-stale
+    escalate_when: 真源本身有争议（哪边是真源说不清），或需要放宽棘轮
+  - id: stale-base
+    category: stale-base
+    symptoms:
+      - bad revision
+      - unknown revision
+      - not a valid object
+      - ambiguous argument
+    diagnose:
+      - git cat-file -t <sha>
+      - git log --oneline -5
+      - git merge-base --is-ancestor <sha> HEAD
+    fix:
+      - 把 verified_at/基线换成仓库里**真实存在且已合入**的提交
+      - 用缩写 sha（与文件既有风格一致）
+      - 改完重跑 claims 校验
+    verify: python3 scripts/verify_ledger.py --quiet
+    escalate_when: 找不到对应提交（历史被 rebase/丢弃）
+  - id: dependency-drift
+    category: dependency-drift
+    symptoms:
+      - failed to select a version
+      - package X not found
+      - lock file needs to be updated
+      - out of date
+    diagnose:
+      - cargo metadata --locked
+      - cargo update --dry-run
+      - git diff --stat Cargo.lock
+    fix:
+      - 依赖改动与 Cargo.lock **同批提交**
+      - CI 一律用 --locked 跑
+      - 升级前先看 peer/feature 变化
+    verify: cargo metadata --locked
+    escalate_when: 需要跨大版本升级（语义破坏）或上游已停止维护
+  - id: harness-bug
+    category: harness-bug
+    symptoms:
+      - Traceback (most recent call last)（来自 scripts/）
+      - NameError
+      - KeyError
+      - AssertionError（守卫内）
+    diagnose:
+      - python3 scripts/<guard>.py --help
+      - python3 scripts/check_guard_inventory.py
+      - git diff --stat scripts/
+    fix:
+      - 先修守卫自身
+      - 守卫改完自测一遍再进 CI
+      - 给守卫加 --self-test 之类的自检入口
+    verify: python3 scripts/<guard>.py --check
+    escalate_when: 守卫逻辑本身有争议（该拦什么没共识）
+  - id: false-positive
+    category: false-positive
+    symptoms:
+      - STALE + 历史口径
+      - STALE + historical
+      - STALE + 已修
+      - VIOLATION + 已过时
+    diagnose:
+      - python3 scripts/docs_truth.py --verify --block-stale
+      - git log --oneline -- <被举报的文件>
+      - 回读被举报的证据段落，确认它的时间口径
+    fix:
+      - 先确认该违规确属历史事实
+      - 为已修项登记豁免/更新基线
+      - "**不要**改实现去迎合误报"
+    verify: python3 scripts/docs_truth.py --verify --block-stale
+    escalate_when: 无法判定该证据是否真的过时（需要业务口径裁决）
+  - id: unknown
+    category: unknown
+    symptoms:
+      - 无已知信号命中
+    diagnose:
+      - python3 scripts/harness.py plan
+      - git diff --stat
+      - python3 scripts/harness.py check --json
+    fix:
+      - 人工分诊：确认是哪个门禁、哪个 crate
+      - 把新形态登记成 failure-patterns 条目（--add-knowledge）
+    verify: python3 scripts/harness.py check
+    escalate_when: 两次分诊都定位不到 ⇒ 升级给 owner

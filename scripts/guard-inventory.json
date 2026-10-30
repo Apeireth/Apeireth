@@ -301,6 +301,22 @@
       ]
     },
     {
+      "id": "check-failure-knowledge",
+      "path": "scripts/check_failure_knowledge.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_failure_knowledge.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/docs-governance.yml"
+      ],
+      "has_baseline": false,
+      "notes": "失败知识库守卫（2026-10-30）",
+      "flags": []
+    },
+    {
       "id": "check-golden-baseline",
       "path": "scripts/check_golden_baseline.py",
       "kind": "guard",

@@ -465,6 +465,15 @@ timeout = 600
 note = "四层验收台账"
 
 [[ci_gates.gate]]
+id = "failure-knowledge"
+cmd = ["python3", "scripts/check_failure_knowledge.py"]
+scope = ["docs", "ci", "contract"]
+blocking = true
+required = true
+timeout = 300
+note = "**失败知识库不许陈旧**：条目里指向的守卫必须真实存在（改名/删除 ⇒ 知识失效）"
+
+[[ci_gates.gate]]
 id = "guard-inventory"
 cmd = ["python3", "scripts/check_guard_inventory.py"]
 stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活

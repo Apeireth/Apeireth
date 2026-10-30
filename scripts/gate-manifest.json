@@ -402,6 +402,23 @@
       "note": "四层验收台账"
     },
     {
+      "id": "failure-knowledge",
+      "cmd": [
+        "python3",
+        "scripts/check_failure_knowledge.py"
+      ],
+      "scope": [
+        "docs",
+        "ci",
+        "contract"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "**失败知识库不许陈旧**：条目里指向的守卫必须真实存在（改名/删除 ⇒ 知识失效）"
+    },
+    {
       "id": "guard-inventory",
       "cmd": [
         "python3",
