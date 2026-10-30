@@ -33,6 +33,7 @@ python3 scripts/check_guard_inventory.py --deep   # 额外重算一遍全量记�
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -167,7 +168,17 @@ def check_deep(problems: list[str]) -> None:
 
 
 def main(argv: list[str]) -> int:
-    deep = "--deep" in argv[1:]
+    ap = argparse.ArgumentParser(
+        prog="scripts/check_guard_inventory.py",
+        description="校验 scripts/guard-inventory.json 与仓库现状是否同步（只读）。",
+    )
+    ap.add_argument(
+        "--deep",
+        action="store_true",
+        help="额外重算一遍全量记录（会重跑每个守卫的 --help 探测）以抓 kind/blocking/flags 漂移",
+    )
+    args = ap.parse_args(argv[1:])
+    deep = args.deep
     problems: list[str] = []
 
     data = check_inventory(problems)

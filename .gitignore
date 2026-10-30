@@ -331,6 +331,10 @@ frontend/companion-desktop/src-tauri/binaries/
 # 不入库以免 100MB+ 二进制进 git；INDEX.md 等清单文件仍被跟踪。
 artifacts/*.png
 artifacts/*.txt
+# 2026-10-30: harness 的**证据包**是**运行时产物**（每次运行重写、绑 commit SHA）
+# ⇒ 不入库（CI 里作 artifact 上传即可）；**清单** `scripts/guard-inventory.json` 是真源 ⇒ 入库。
+artifacts/harness/
+scripts/harness-last-run.json
 frontend/companion-desktop/shot-*.png
 
 # 外部源码抽取暂存（研究线临时区）：绝不入库（借鉴源码产物不留痕迹），收口即删

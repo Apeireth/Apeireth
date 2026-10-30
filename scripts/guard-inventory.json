@@ -6,6 +6,7 @@
       "id": "analyze-shadow",
       "path": "scripts/guard_ml/analyze_shadow.py",
       "kind": "generator",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "python scripts/guard_ml/analyze_shadow.py --self-test"
@@ -21,6 +22,7 @@
       "id": "arch-doc",
       "path": "scripts/arch_doc.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python scripts/arch_doc.py --check"
@@ -42,6 +44,7 @@
       "id": "arch-guard",
       "path": "scripts/arch_guard.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python scripts/arch_guard.py --report"
@@ -70,6 +73,7 @@
       "id": "audit-unwired",
       "path": "scripts/audit_unwired.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/audit_unwired.py --check"
@@ -90,6 +94,7 @@
       "id": "audit-unwired-modules",
       "path": "scripts/audit_unwired_modules.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/audit_unwired_modules.py"
@@ -107,6 +112,7 @@
       "id": "check-batch-status",
       "path": "scripts/check_batch_status.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_batch_status.py --check"
@@ -127,6 +133,7 @@
       "id": "check-claims-verify",
       "path": "scripts/check_claims_verify.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_claims_verify.py --wired-gate",
@@ -151,6 +158,7 @@
       "id": "check-commit-tree",
       "path": "scripts/check_commit_tree.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_commit_tree.py"
@@ -168,6 +176,7 @@
       "id": "check-coverage-ratchet",
       "path": "scripts/check_coverage_ratchet.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_coverage_ratchet.py --check"
@@ -183,6 +192,7 @@
       "id": "check-crate-budget",
       "path": "scripts/check_crate_budget.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_crate_budget.py"
@@ -201,6 +211,7 @@
       "id": "check-dead-code",
       "path": "scripts/check_dead_code.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_dead_code.py"
@@ -220,6 +231,7 @@
       "id": "check-doc-caliber",
       "path": "scripts/check_doc_caliber.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_doc_caliber.py --changed \"$BASE\" \"$GITHUB_SHA\""
@@ -235,6 +247,7 @@
       "id": "check-doc-class",
       "path": "scripts/check_doc_class.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_doc_class.py --check",
@@ -257,6 +270,7 @@
       "id": "check-doc-numbers",
       "path": "scripts/check_doc_numbers.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_doc_numbers.py"
@@ -270,6 +284,7 @@
       "id": "check-doc-paths",
       "path": "scripts/check_doc_paths.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_doc_paths.py --check"
@@ -289,6 +304,7 @@
       "id": "check-golden-baseline",
       "path": "scripts/check_golden_baseline.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_golden_baseline.py"
@@ -304,6 +320,7 @@
       "id": "check-golden-no-leak",
       "path": "scripts/check_golden_no_leak.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_golden_no_leak.py"
@@ -317,6 +334,7 @@
       "id": "check-guard-inventory",
       "path": "scripts/check_guard_inventory.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_guard_inventory.py"
@@ -324,12 +342,17 @@
       "ci_workflows": [],
       "has_baseline": false,
       "notes": "校验 scripts/guard-inventory.json 与仓库现状是否同步（只读，不改任何东西）",
-      "flags": []
+      "flags": [
+        "--deep",
+        "--help",
+        "-h"
+      ]
     },
     {
       "id": "check-guard-wiring",
       "path": "scripts/check_guard_wiring.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_guard_wiring.py"
@@ -348,6 +371,7 @@
       "id": "check-mod-targets",
       "path": "scripts/check_mod_targets.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_mod_targets.py"
@@ -367,6 +391,7 @@
       "id": "check-no-legacy-deps",
       "path": "scripts/check_no_legacy_deps.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python scripts/check_no_legacy_deps.py"
@@ -382,6 +407,7 @@
       "id": "check-quality-metrics",
       "path": "scripts/check_quality_metrics.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_quality_metrics.py",
@@ -400,9 +426,24 @@
       ]
     },
     {
+      "id": "check-release-version",
+      "path": "scripts/check-release-version.sh",
+      "kind": "guard",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "bash scripts/check-release-version.sh"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "Validates release version consistency across all authoritative sources:",
+      "flags": []
+    },
+    {
       "id": "check-self-status-vocab",
       "path": "scripts/check_self_status_vocab.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_self_status_vocab.py"
@@ -422,6 +463,7 @@
       "id": "check-stale-binaries",
       "path": "scripts/check_stale_binaries.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_stale_binaries.py --report"
@@ -442,6 +484,7 @@
       "id": "check-toolchain-pin",
       "path": "scripts/check_toolchain_pin.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/check_toolchain_pin.py"
@@ -457,6 +500,7 @@
       "id": "cosign-sign-all",
       "path": "scripts/release/cosign-sign-all.sh",
       "kind": "generator",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "bash scripts/release/cosign-sign-all.sh"
@@ -474,6 +518,7 @@
       "id": "d4-ledger",
       "path": "scripts/d4_ledger.py",
       "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/d4_ledger.py"
@@ -492,6 +537,7 @@
       "id": "docs-index",
       "path": "scripts/docs_index.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/docs_index.py --check",
@@ -515,6 +561,7 @@
       "id": "docs-links",
       "path": "scripts/docs_links.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/docs_links.py --check"
@@ -537,6 +584,7 @@
       "id": "docs-truth",
       "path": "scripts/docs_truth.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/docs_truth.py --verify --block-stale",
@@ -569,6 +617,7 @@
       "id": "download-novels",
       "path": "scripts/download_novels.sh",
       "kind": "generator",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "bash scripts/download_novels.sh"
@@ -586,6 +635,7 @@
       "id": "gen-gate-manifest",
       "path": "scripts/gen_gate_manifest.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/gen_gate_manifest.py --check"
@@ -605,7 +655,8 @@
     {
       "id": "group-unwired-baseline",
       "path": "scripts/group_unwired_baseline.py",
-      "kind": "guard",
+      "kind": "ratchet",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/group_unwired_baseline.py --check"
@@ -625,6 +676,7 @@
       "id": "internal-golden",
       "path": "scripts/internal_golden.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/internal_golden.py"
@@ -642,9 +694,24 @@
       ]
     },
     {
+      "id": "promise-audit",
+      "path": "scripts/audit/8-promise-audit.sh",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "bash scripts/audit/8-promise-audit.sh"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "R20 阶段 6 — 1.0 release 8 项不修改承诺审计",
+      "flags": []
+    },
+    {
       "id": "release-1-0-checklist",
       "path": "scripts/release-1.0-checklist.sh",
       "kind": "guard",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "bash scripts/release-1.0-checklist.sh --dry-run",
@@ -658,9 +725,24 @@
       "flags": []
     },
     {
+      "id": "run-cargo-audit-deny",
+      "path": "scripts/audit/run-cargo-audit-deny.sh",
+      "kind": "generator",
+      "is_guard": false,
+      "blocking": true,
+      "invocation": [
+        "bash scripts/audit/run-cargo-audit-deny.sh"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "R20 阶段 6 — cargo audit + cargo deny 一键扫描 (1.0 release #3 security)",
+      "flags": []
+    },
+    {
       "id": "sbom",
       "path": "scripts/sbom.sh",
       "kind": "generator",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "bash scripts/sbom.sh"
@@ -676,6 +758,7 @@
       "id": "train-eval",
       "path": "scripts/guard_ml/train_eval.py",
       "kind": "generator",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "python scripts/guard_ml/train_eval.py"
@@ -691,6 +774,7 @@
       "id": "uninstall",
       "path": "scripts/uninstall/uninstall.sh",
       "kind": "generator",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "bash scripts/uninstall/uninstall.sh --dry-run"
@@ -708,6 +792,7 @@
       "id": "v2-0-0-alpha-to-v1-0-0",
       "path": "scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh",
       "kind": "generator",
+      "is_guard": false,
       "blocking": true,
       "invocation": [
         "bash scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run"
@@ -723,6 +808,7 @@
       "id": "verify-changed",
       "path": "scripts/verify_changed.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/verify_changed.py"
@@ -748,6 +834,7 @@
       "id": "verify-ledger",
       "path": "scripts/verify_ledger.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python scripts/verify_ledger.py --quiet"
@@ -767,6 +854,7 @@
       "id": "vet",
       "path": "scripts/vet.sh",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "bash scripts/vet.sh"
@@ -782,6 +870,7 @@
       "id": "wiring-report",
       "path": "scripts/wiring_report.py",
       "kind": "guard",
+      "is_guard": true,
       "blocking": true,
       "invocation": [
         "python3 scripts/wiring_report.py --check-env-registry",

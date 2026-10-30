@@ -28,8 +28,8 @@
 - **哲学锚**：**9** 条（`docs/01-architecture/philosophy.md`）
 - **workflow**：**42** 个（`.github/workflows/*.yml`）
 - **crate**：**0** 个（`crates/*/Cargo.toml`）
-- **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **34** 条 · required **32** 条）
-  - 本地可跑（`27` 条）：`docs-truth` · `doc-class` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `toolchain-pin` · `gate-manifest` · `self-status-vocab`
+- **门禁登记表**：`docs/architecture/contract.toml` 的 `[ci_gates]`（共 **35** 条 · required **33** 条）
+  - 本地可跑（`28` 条）：`docs-truth` · `doc-class` · `doc-caliber` · `doc-numbers` · `doc-paths` · `docs-links` · `batch-status` · `claims-verify` · `arch-strict` · `arch-doc` · `crate-budget` · `dead-code` · `unwired` · `unwired-groups` · `stale-binaries` · `mod-targets` · `guard-wiring` · `quality-metrics` · `golden-baseline` · `golden-no-leak` · `internal-golden` · `d4-ledger` · `wiring-report` · `verify-ledger` · `guard-inventory` · `toolchain-pin` · `gate-manifest` · `self-status-vocab`
   - 完整清单与命令：**不要在这里复制**，改看契约 `[ci_gates]`（`scripts/harness.py plan` 会按变更范围列出该跑哪几条）
 
 ### 硬约束（**数字全部来自上面那块，不要在此手写**）

@@ -71,3 +71,8 @@ jobs:
       #      而契约早已是 2.0.0-rc.4 / 30 members ⇒ CI 守的与模板写的**不一致**）。
       - name: 门禁清单一致性（PR 模板等人读副本 vs 契约 [ci_gates]）
         run: python3 scripts/gen_gate_manifest.py --check
+
+      # **守卫清单同步**（2026-10-30）：全仓守卫的机读清单须与实际一致
+      # ⇒ 漏登记的守卫 ⇒ 合并裁决层会**漏掉**它（假绿）。
+      - name: 守卫清单同步（机读清单 vs 仓库实际）
+        run: python3 scripts/check_guard_inventory.py

@@ -439,6 +439,24 @@ def exemption_state(exemption: dict[str, Any] | None) -> tuple[str, str]:
 
 # ------------------------------------------------------------------- 门禁执行
 
+def scope_applies(gate: dict[str, Any], tags: list[str]) -> bool:
+    """这条门禁的 **scope 是否命中本次 diff**？
+
+    ⚠️ 这是**裁决语义的关键**（2026-10-30 修正）：
+
+    * **不适用**（scope 与 diff 不相交）⇒ `SKIPPED` 是「**这次不查它**」
+      ⇒ **不该**因此阻断合并（否则一个纯文档 PR 会被 cargo 门禁挡住）；
+    * **适用但没跑**（`--only` 没选中 / 显式跳过 / CI 专属 / 超时 / 执行失败）
+      ⇒ 那才是「**该查的没查**」⇒ `UNVERIFIED` ⇒ **必须**阻断。
+
+    ⇒ 两者都记 `SKIPPED`（**都不是通过**），但**是否阻断**由本函数区分。
+    """
+    scope = gate.get("scope") or ["*"]
+    if "*" in scope:
+        return True
+    return bool(set(scope) & set(tags))
+
+
 def decide_run(
     gate: dict[str, Any],
     tags: list[str],
@@ -587,11 +605,15 @@ def evaluate_verdict(
     blocking: list[str] = list(blocking_reasons or [])
     fails = [g for g in gates if g.get("status") == S_FAIL]
     unver = [g for g in gates if g.get("status") in (S_UNVERIFIED, S_BLOCKED)]
+    # ⚠️ **适用却被跳过**的 required 门禁 ⇒ 阻断（该查的没查）。
+    #    **不适用**的（scope 与本次 diff 不相交）⇒ 不阻断
+    #    （它不是「通过」，只是「这次不查」⇒ 见 `scope_applies`）。
     req_bad = [
         g
         for g in gates
         if g.get("required")
         and g.get("status") not in (S_PASS, S_WAIVED, S_FAIL, S_UNVERIFIED, S_BLOCKED)
+        and g.get("scope_applies", True)
     ]
 
     for gate in fails:
@@ -600,7 +622,7 @@ def evaluate_verdict(
         reasons.append(f"门禁 {gate['id']} {gate.get('status')}（{gate.get('reason') or '原因未记录'}）")
     for gate in req_bad:
         reasons.append(
-            "required gate not applicable/skipped without justification: " + str(gate.get("id"))
+            "required gate applicable but skipped without justification: " + str(gate.get("id"))
         )
     reasons.extend(blocking)
 
@@ -658,9 +680,10 @@ def global_reasons(ctx: dict[str, Any]) -> list[str]:
 
 # ------------------------------------------------------------------- 打印
 
-def print_table(headers: list[str], rows: list[list[str]]) -> None:
+def print_table(headers: list[str], rows: list[list[str]], stream=None) -> None:
+    stream = stream or sys.stdout
     if not rows:
-        print("(无)")
+        print("(无)", file=stream)
         return
     widths = [len(h) for h in headers]
     for row in rows:
@@ -668,13 +691,14 @@ def print_table(headers: list[str], rows: list[list[str]]) -> None:
             widths[i] = max(widths[i], len(cell))
     def fmt(cells: list[str]) -> str:
         return " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells))
-    print(fmt(headers))
-    print("-+-".join("-" * w for w in widths))
+    print(fmt(headers), file=stream)
+    print("-+-".join("-" * w for w in widths), file=stream)
     for row in rows:
-        print(fmt(row))
+        print(fmt(row), file=stream)
 
 
-def render_gate_table(gates: list[dict[str, Any]]) -> None:
+def render_gate_table(gates: list[dict[str, Any]], stream=None) -> None:
+    stream = stream or sys.stdout
     rows = []
     for gate in gates:
         exit_code = gate.get("exit_code")
@@ -688,7 +712,7 @@ def render_gate_table(gates: list[dict[str, Any]]) -> None:
                 (gate.get("reason") or "").replace("\n", " ")[:70],
             ]
         )
-    print_table(["GATE", "STATUS", "REQ", "EXIT", "SECS", "REASON"], rows)
+    print_table(["GATE", "STATUS", "REQ", "EXIT", "SECS", "REASON"], rows, stream)
 
 
 def print_notes(notes: list[str], stream=sys.stdout) -> None:
@@ -735,21 +759,34 @@ def cmd_plan(args: argparse.Namespace) -> int:
         )
     print_table(["GATE", "REQUIRED", "SCOPE", "WILL-RUN"], rows)
 
-    skipped_required = [
-        g["id"]
-        for g in gates
-        if g.get("required") and not decide_run(g, tags, only, skip)[0]
-    ]
+    # ⚠️ 分两类（2026-10-30 语义修正）：
+    #   **不适用**（scope 与 diff 不相交）⇒ 不阻断（这次不查它，不是「通过」）；
+    #   **适用却没跑**（--only 没选中 / CI 专属 / 显式跳过）⇒ **阻断**。
+    not_applicable: list[str] = []
+    applicable_but_skipped: list[str] = []
+    for gate in gates:
+        if not gate.get("required"):
+            continue
+        if decide_run(gate, tags, only, skip)[0]:
+            continue
+        if scope_applies(gate, tags):
+            applicable_but_skipped.append(gate["id"])
+        else:
+            not_applicable.append(gate["id"])
     print()
-    print(
-        f"提示：{len(skipped_required)} 个 required 门禁本次不适用 ⇒ "
-        "按裁决规则「required gate not applicable/skipped without justification」"
-        "⇒ merge-decision 裁决将为 BLOCKED（SKIPPED ≠ PASS）。"
-        if skipped_required
-        else "提示：本次所有 required 门禁都会执行。"
-    )
-    if skipped_required:
-        print("      未适用的 required 门禁: " + ", ".join(skipped_required))
+    if applicable_but_skipped:
+        print(
+            f"⚠️ {len(applicable_but_skipped)} 个 required 门禁**适用本次变更但没跑** ⇒ "
+            "merge-decision 裁决将为 BLOCKED（该查的没查 ⇒ 不是通过）："
+            + ", ".join(applicable_but_skipped)
+        )
+    if not_applicable:
+        print(
+            f"· {len(not_applicable)} 个 required 门禁**本次不适用**（scope 与 diff 标签不相交）"
+            "⇒ 不阻断（**不是通过**，只是这次不查）"
+        )
+    if not applicable_but_skipped and not not_applicable:
+        print("· 本次所有 required 门禁都会执行。")
     return 0
 
 
@@ -790,7 +827,11 @@ def cmd_check(args: argparse.Namespace) -> int:
     for gate in gates:
         run, why = decide_run(gate, tags, only, skip)
         if not run:
-            results.append(gate_record(gate, S_SKIPPED, why))
+            record = gate_record(gate, S_SKIPPED, why)
+            # ⚠️ 「**不适用**」与「**适用却没跑**」必须分开（见 `scope_applies`）
+            # ⇒ 不适用 ⇒ 不阻断；适用却没跑 ⇒ 阻断。
+            record["scope_applies"] = scope_applies(gate, tags)
+            results.append(record)
             continue
 
         if gate.get("require_clean_tree") and dirty:
@@ -852,7 +893,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     print(f"diff 标签: {tags if tags else '(无)'}", file=table_stream)
     print_notes(notes, table_stream)
     print(file=table_stream)
-    render_gate_table(results)
+    render_gate_table(results, table_stream)
     print(file=table_stream)
     counts: dict[str, int] = {}
     for record in results:

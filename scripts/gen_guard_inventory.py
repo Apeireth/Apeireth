@@ -76,9 +76,13 @@ GENERATOR = "scripts/gen_guard_inventory.py"
 # ── 发现：名字像守卫的模式（对「相对 scripts/、去扩展名」的名字做 fnmatch）──
 NAME_PATTERNS = (
     "check_*",
+    # ⚠️ **连字符**命名也是真检查器（`check-release-version.sh`）⇒ 2026-10-30 补
+    "check-*",
     "audit_*",
+    "audit-*",
     "*_ratchet*",
     "verify_*",
+    "verify-*",
     "arch_guard",
     "docs_truth",
     "docs_index",
@@ -87,6 +91,10 @@ NAME_PATTERNS = (
     "d4_ledger",
     "internal_golden",
     "group_unwired_baseline",
+    # 发布/升级类的**审计**脚本（同样在 CI 里跑 ⇒ 必须登记）
+    "*promise-audit*",
+    "*cargo-audit-deny*",
+    "*release-1.0-checklist*",
 )
 
 # ── 分类：判定「这是个检查器」的额外词表（名字口径，不影响发现范围）──
@@ -155,6 +163,47 @@ PY_MODULE_RE = re.compile(r"^\s*python3?\s+-m\s+(py_compile|compileall|pydoc)\b"
 # --------------------------------------------------------------------------- #
 # 发现
 # --------------------------------------------------------------------------- #
+#: **不是守卫**的脚本类别（发布 / 打包 / 训练 / 取证）。
+#:
+#: ⚠️ 这些脚本**也在 CI 里被调用** ⇒ 必须**登记**（否则清单不完整）
+#: ⇒ 但**不是守卫**（它们不挡东西，只产产物 / 跑流程）
+#: ⇒ ⇒ 用 `is_guard` 字段区分，避免「守卫清单」被稀释。
+NON_GUARD_MARKERS = (
+    "release",
+    "sbom",
+    "cosign",
+    "uninstall",
+    "upgrade",
+    "migrate",
+    "train",
+    "eval",
+    "measure",
+    "export",
+    "download",
+    "build-all",
+    "download_novels",
+    "guard_ml",
+    "generate-release-manifest",
+    "verify-release-assets",
+)
+
+
+def is_true_guard(rel_path: str, kind: str) -> bool:
+    """这个脚本**挡得住**东西吗（= 合并裁决里的「门禁」）？
+
+    口径（2026-10-30）：
+    * `kind` ∈ {`guard`, `ratchet`} ⇒ **是**守卫；
+    * 其余（`generator` 等）⇒ **不是**守卫
+      —— 生成器**只产文件**，不判对错 ⇒ 不该进「合并门禁」；
+    * 路径里含发布 / 打包 / 训练 / 取证类标记 ⇒ **不是**守卫
+      （即便它退出码非 0）。
+    """
+    lowered = rel_path.lower()
+    if any(marker in lowered for marker in NON_GUARD_MARKERS):
+        return False
+    return kind in ("guard", "ratchet")
+
+
 def rel_stem(path: Path) -> str:
     """相对 scripts/ 的路径，去掉扩展名。"""
     rel = path.relative_to(SCRIPTS_DIR).as_posix()
@@ -619,6 +668,41 @@ def detect_baseline(src: str, suffix: str, path: Path | None = None) -> bool:
     return False
 
 
+def baseline_vars(src: str) -> set[str]:
+    """本文件里被赋值为「基线路径」的变量名（如 BASELINE = ROOT / "..." / "x-baseline.txt"）。"""
+    out: set[str] = set()
+    try:
+        tree = ast.parse(src)
+    except (SyntaxError, ValueError):
+        return out
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.BinOp):
+            continue
+        names = [
+            n.value
+            for n in ast.walk(node.value)
+            if isinstance(n, ast.Constant)
+            and isinstance(n.value, str)
+            and any(pat.fullmatch(n.value) for pat in BASELINE_PATTERNS)
+        ]
+        if not names:
+            continue
+        for tgt in node.targets:
+            if isinstance(tgt, ast.Name):
+                out.add(tgt.id)
+    return out
+
+
+def detect_baseline_write(src: str, names: set[str]) -> bool:
+    """脚本会不会**重写**基线文件。"""
+    for name in sorted(names):
+        if re.search(rf"\b{re.escape(name)}\s*\.\s*(?:write_text|write_bytes)\s*\(", src):
+            return True
+        if re.search(rf"open\(\s*{re.escape(name)}\s*,\s*[\"\']w", src):
+            return True
+    return False
+
+
 def detect_regen(src: str, flags: list[str]) -> bool:
     for f in flags:
         if f in REGEN_FLAGS:
@@ -796,6 +880,13 @@ def build_record(path: Path, ci_index: dict[str, dict[str, list[str]]]) -> dict:
     blocking = detect_blocking(src, path.suffix)
     has_baseline = detect_baseline(src, path.suffix, path)
     regen = detect_regen(src, flags)
+    if not regen and has_baseline and path.suffix == ".py":
+        bvars = set(baseline_vars(src))
+        for sib in sibling_module_paths(path, src):
+            sib_src = read_text(sib)
+            if sib_src:
+                bvars |= baseline_vars(sib_src)
+        regen = detect_baseline_write(src, bvars)
     check_mode = looks_like_checker(rel_stem(path)) or detect_check_mode(src, flags)
     manipulates = detect_manipulates(src, path.suffix)
 
@@ -822,6 +913,10 @@ def build_record(path: Path, ci_index: dict[str, dict[str, list[str]]]) -> dict:
         "id": make_id(rel_stem(path)),
         "path": rel,
         "kind": kind,
+        # ⚠️ `is_guard` = 「这个脚本**挡得住**东西」（断言/棘轮/验证）。
+        #    发布 / 打包 / ML 训练类脚本也会被 CI 调用 ⇒ **登记但不算守卫**
+        #    ⇒ 否则「守卫清单」会被稀释，合并裁决里也就分不清谁是门禁。
+        "is_guard": is_true_guard(rel, kind),
         "blocking": blocking,
         "invocation": invocation,
         "ci_workflows": ci_wfs,

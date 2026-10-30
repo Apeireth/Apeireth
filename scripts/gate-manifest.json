@@ -402,6 +402,23 @@
       "note": "四层验收台账"
     },
     {
+      "id": "guard-inventory",
+      "cmd": [
+        "python3",
+        "scripts/check_guard_inventory.py"
+      ],
+      "scope": [
+        "ci",
+        "contract",
+        "rust"
+      ],
+      "blocking": true,
+      "required": true,
+      "env": "python",
+      "timeout": 300,
+      "note": "**守卫清单同步**：全仓守卫的机读清单须与实际一致（漏登记 ⇒ 裁决层会漏门禁）"
+    },
+    {
       "id": "toolchain-pin",
       "cmd": [
         "python3",
