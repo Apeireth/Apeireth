@@ -135,7 +135,7 @@ def render_block(contract: dict) -> str:
         "### 硬约束（**数字全部来自上面那块，不要在此手写**）",
         "",
         "- [ ] **0 触碰受锁源码**（清单见上，CI `hard-walls` 逐文件 word-diff 守）",
-        "- [ ] **0 改 `workspace.version`**（除非带 release 拍板证据，见 `docs/versioning/`）",
+        "- [ ] **0 改 `workspace.version`**（除非带 release 拍板证据，见 `docs/archive/versioning/`）",
         "- [ ] `cargo test --workspace` 全绿 + `cargo test --doc` 全绿",
         "- [ ] **0 假装**（skeleton 标 ⏳，不假装已实现，编译期 hardcode 守门）",
         "",
