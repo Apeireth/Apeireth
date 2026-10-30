@@ -372,11 +372,11 @@ claims:
       - .github/workflows/rust.yml
     tests:
       - crates/foundation/governance/tests/governance_chain_drill.rs
-    verified_at: af0c3852
+    verified_at: 6836ae5cc31b11c985907973126d190f9acdc61b
     verify_cmd: "cargo test -p apeireth-governance --test governance_chain_drill --locked"
     owner: governance
     next_review: "2026-11-20"
-    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。"
+    notes: "R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。2026-10-30 复核：rust.yml 因「CI 工具链钉版」新增 toolchain-pin job 而变更 ⇒ 已重跑 verify_cmd（3 passed）并回填 verified_at。远端仍 0 次执行：该步骤排在 cargo nextest --workspace 之后，三平台 nextest 常红（基座既有）导致 job 早停、步骤被 skip（2026-10-22 复核 rust.yml 运行实况）；故仅登记 IMPLEMENTED 证据面，待 nextest 基线转绿后自动进入执行面。"
 
   - id: sec.governance_chain_drill
     title: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
