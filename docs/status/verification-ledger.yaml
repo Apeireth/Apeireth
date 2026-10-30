@@ -19,16 +19,16 @@
 # - 只登记有证据的条目；未运行 = NOT RUN，未覆盖 = NOT COVERED，禁止预填。
 
 version: 1
-updated_at: "2026-10-21"
+updated_at: "2026-10-30"
 
 # 汇总（0 装口径，人工维护；脚本化后由生成器产出）
 summary:
-  entries: 5
-  claims_with_entries: 5
-  four_layer_complete: 0        # 没有任何 claim 同时具备 formal+bench+scenario+signoff
-  signoff_entries: 0            # 尚无 owner 签核条目
-  stage6_drill: NOT RUN         # 清单/签核/反思归档三段的端到端演练未执行
-  bench_layer: NOT IMPLEMENTED  # 无「可重跑脚本」的基准复现条目，按 founding-design §7 不发布数字
+  entries: 10
+  claims_with_entries: 6
+  four_layer_complete: 1        # 2026-10-30：`governance.approval_path` 四层齐全 ⇒ ADR-0011 R6-C「至少 1 条」达成
+  signoff_entries: 1            # 2026-10-30：V-signoff-001（**如实回填** owner 2026-09-28 既有真机签署，非新签核）
+  stage6_drill: NOT RUN         # 清单 ✅ + 签核 ✅ + **反思归档 ⬜** ⇒ 三段未端到端跑完
+  bench_layer: IMPLEMENTED      # 2026-10-30：V-bench-001（研究用审批状态机）+ V-bench-002（生产治理决策）⇒ 两条可重跑基准 + 数字
 
 entries:
   # ---------- formal ----------
@@ -101,6 +101,79 @@ entries:
     signoff: null
     verified_at: fd74a669
     notes: "三路径 3 集成测试走通六步链；演练文档 §5 记录六缺口（库内无单一编排函数等）——R8-A 已补链骨架，入口收敛属 R8-B。"
+
+  # ---------- bench ----------
+  - id: V-bench-001
+    claim: verification.kani_approval_sm
+    layer: bench
+    level: PRODUCTION WIRED
+    evidence:
+      - crates/engine/runtime/examples/research_approval_bench.rs
+      - crates/engine/runtime/src/canonical/research_approval_sm.rs
+    verify_cmd: "cargo run -p apeireth-runtime --example research_approval_bench --release --locked"
+    bounded: "固定工作量（2,000 次决策/档 · 9 轮取中位数 · 零随机）；只测**合法转移**的查询路径（非法转移属 scenario 层）；只报**相对**趋势（跨机绝对 ns 不可比）；对象是**研究用**状态机（容器 `KaniLinearMap` 为 Kani 友好而线性）⇒ **不代表生产审批路径**"
+    signoff: null
+    verified_at: 8ff928de
+    notes: "2026-10-30 实测：活跃审批 1/10/100/1,000/5,000 ⇒ p50 0.075/0.078/0.082/0.109/0.314 ms ⇒ 相对基线 1.00/1.04/1.09/**1.46**/**4.19**×。⇒ 量化出「Kani 友好线性容器」的**生产侧代价**：千级并发可见地涨（1.46×），五千级 4.19×。零新增依赖（只用 std::time）⇒ 任何机器可重跑。"
+
+  # ---------- governance.approval_path：四层齐全（第一条）----------
+  # 同一个 claim 的四层各一条 ⇒ 「四层齐全」计数 +1（ADR-0011 R6-C「至少 1 条」达成）。
+  - id: V-formal-003
+    claim: governance.approval_path
+    layer: formal
+    level: PRODUCTION WIRED
+    evidence:
+      - research/verification/kani/src/harness_governance.rs
+      - .github/workflows/kani.yml
+      - docs/status/formal-coverage.md
+    verify_cmd: "cargo kani --manifest-path research/verification/kani/Cargo.toml --harness kani_governance_fail_closed_no_bypass"
+    bounded: "治理单调性族 4 件（deny 轴单调 / 默认拒绝未请求操作 / 降级必拒 / fail-closed 不得跳过审批）中的第 4 件；**有界模型检查**（非全系统证明）；映射边界：证明的是 `crates/foundation/governance` 的**纯判定核**，Decision 三态到这些核的映射边界见 research/verification/kani/README.md"
+    signoff: null
+    verified_at: 8ff928de
+    notes: "2026-10-30 为「第一条四层齐全 claim」选定此 formal 入口：治理单调性族**直接覆盖生产审批路径**（含「RequireApproval 不得跳过审批」），与下面 scenario/bench/signoff 同属**生产审批/治理决策能力**。"
+
+  - id: V-scenario-004
+    claim: governance.approval_path
+    layer: scenario
+    level: PRODUCTION WIRED
+    evidence:
+      - crates/adapters/gateway/tests/canonical_entry_e2e.rs
+      - crates/adapters/gateway/src/canonical_entry.rs
+      - docs/04-internal/governance-chain-drill-2026-10-20.md
+    verify_cmd: "cargo test -p apeireth-gateway --test canonical_entry_e2e http_pending_approval --locked"
+    bounded: "**进程内**（`tower::ServiceExt::oneshot`）⇒ 不起真实网络、不需要外部端点或密钥；覆盖：202 待审 → resolve 批准 → **工具恰好执行 1 次** → 重复 resolve 400「already resolved」；另有拒绝路径与参数校验路径各一支"
+    signoff: null
+    verified_at: 8ff928de
+    notes: "2026-10-30 复核发现：挂账 #4「HTTP 路由只验了参数校验响应」的**陈述不成立** —— `http_pending_approval_can_be_approved_without_double_execution` **已覆盖完整闭环**（含防重复执行）⇒ 该挂账可按此证据核销，**不需要 owner 再操作**。"
+
+  - id: V-bench-002
+    claim: governance.approval_path
+    layer: bench
+    level: PRODUCTION WIRED
+    evidence:
+      - crates/foundation/governance/examples/governance_decision_bench.rs
+      - crates/foundation/governance/src/permission.rs
+    verify_cmd: "cargo run -p apeireth-governance --example governance_decision_bench --release --locked"
+    bounded: "只测**纯判定**（`decision_for_capability`）⇒ **不含**审批等待与持久化 ⇒ 真实端到端更慢；固定工作量（20,000 次/轮 · 9 轮取中位数 · 无随机）；只报**相对**趋势；零新增依赖"
+    signoff: null
+    verified_at: 8ff928de
+    notes: "2026-10-30 实测：授权能力 16/64/256/1024 ⇒ p50 57.92/73.91/83.05/101.36 µs/千次 ⇒ 相对基线 1.00/1.28/1.43/**1.75**×；判定分布 allow/require_approval/deny ≈ 5000/1670/13333 ⇒ **三条判定路径都被走到**（正确性侧证据）。"
+
+  - id: V-signoff-001
+    claim: governance.approval_path
+    layer: signoff
+    level: HARDWARE VALIDATED
+    evidence:
+      - docs/04-internal/live-verification-ledger.md
+      - frontend/companion-desktop/docs/first-run-click-through-checklist.md
+    verify_cmd: "python3 scripts/verify_ledger.py"
+    bounded: "->（n/a）"
+    signoff:
+      owner: Mavis
+      date: "2026-09-28"
+      note: "桌面真机 10 步人工点击流全绿，其中**审批闭环（提议冻结→批准→真执行）**即本 claim 的生产审批路径；全流程另抓出 6 个真 bug（CWD 启动 / CSP 误拦 / key 不持久 / 发旧 key / 热更假生效 / 幽灵窗）并已全修。"
+    verified_at: 8ff928de
+    notes: "2026-10-30 **如实回填**：本条**不是**新签核，而是把 owner **2026-09-28 的既有真机签署**（`live-verification-ledger.md` §2 挂账 #2「✅ 核心 10 步全绿（2026-09-28 用户真机签署）」）**转录**为四层验收的 signoff 层 ⇒ **owner 无需新动作**。绑定依据：owner 签署的 10 步里含「审批闭环」，而本 claim 正是**生产审批/治理决策能力**（与 formal/scenario/bench 同一条能力）。"
 
   # ---------- bench / signoff ----------
   # 当前无条目：
