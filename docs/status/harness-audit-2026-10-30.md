@@ -190,6 +190,23 @@ GitHub 的 branch protection required checks 是**远端设置**，仓内没有�
 | **R17** | **R11 baseline 3 值手写 3 处，公开复现入口已归档** | `.github/PULL_REQUEST_TEMPLATE.md:10,71`、`Cargo.toml:127`、`.github/workflows/rust.yml:221,233`；真源已归档 `legacy/donor/apeireth-asi/tests/integration_r_measure.rs`；`ROADMAP.md:68` 自记「无公开复现入口」 | 🟡 **未修** |
 | **R18** | **1.0 release 12 项 checklist 在 PR 模板里逐条手抄** | `.github/PULL_REQUEST_TEMPLATE.md:116-131` vs `scripts/release-1.0-checklist.sh:2-3` 及 `check 1..12` | 🟡 **未修** |
 
+### 4.1b **处置裁定**（lead 2026-10-30 · 逐条落实）
+
+| # | 裁定 | 依据 / 动作 |
+|---|---|---|
+| **R1** | ✅ **已修** | PR 模板的「6 哲学锚」改为**指向生成块**；锚数由 `scripts/gen_gate_manifest.py` 的 `repo_facts()` 从 `docs/01-architecture/philosophy.md` **实测**（= 9）|
+| **R2** | ✅ **已修** | `o6-anchor.yml` 的键数改为**从源码推导**（`PHL_COUNT`，实测 **14**）⇒ 键集增减时不再说错话。⚠️ 复核确认：原「13 键」只是**文案漂移**，该守门本身只 grep 一个常量；真正的 0 触碰由 `rust.yml` hard-walls 按契约 `[locked]` 守 ⇒ **不是漏洞** |
+| **R3** | ✅ **已修** | 「24 LOCKED crate」全名清单已删；改为**指向生成块**（受锁源 3 个，由契约 `[locked]` 推导）|
+| **R4** | ✅ **已修** | 「18 workflow」改为**指向生成块**（由 `ls .github/workflows/*.yml` 实测 = 42）|
+| **R9** | ✅ **已修** | CI 的 35 处 `@stable` → **钉 `@1.97.1`**（已核实 action 有 `refs/heads/1.97.1`、本地正是该版本且全绿）；新增守卫 `scripts/check_toolchain_pin.py`（浮动引用 ⇒ 红）+ 接入 `rust.yml` |
+| **R6 / R7** | ❌ **按纪律不修** | `AGENTS.md §3`「**历史不追溯改写**：带日期的历史记录保留原值，需要时加「历史口径（日期）」标注」⇒ `anti-drift-audit-2026-10-28.md` 的「528,097 行」「41 CI」是**当时快照** ⇒ **不是漂移** ⇒ 已在该页**加「历史口径（2026-10-28 快照）」标注**（并注明差异来自时间推移）|
+| **R15** | ✅ **已修** | PR 模板指向的 `docs/versioning/`、`docs/conventions/`、`docs/glossary/` 均不存在 ⇒ 改为**实际存在的路径**（`docs/03-reference/glossary.md` 等）|
+| **R16** | ⚠️ **有意不改名 + 已注明** | job 名「8 硬墙守门」实为 6 条（`rust.yml`）/ 3 条（`companion-desktop-ci.yml`）⇒ **不改名**：job 名 = GitHub **check 名** ⇒ 改名会影响分支保护的 required check（远端真值本机**不可读**）⇒ 改为**在注释里写明实际条数**并留审计号。⚠️ 这条**只能这样修**：名不改 ⇒ 误会仍在 ⇒ 已在注释中显式声明 |
+| **R12** | ✅ **已修（补注释）** | `cosign.yml` 的 `skipped` 当 `success` 是**有意为之**（cosign 在某些路径下本就不产签名）⇒ **补注释说明**，避免后人误当漏洞 |
+| **R5** | ⏸️ **待 owner** | 分支保护 required 集合的**真值在远端**（仓内不可读）⇒ 4 处手写副本之间**互相矛盾**这一点已登记；**具体该 require 哪几个 check 是远端裁决** ⇒ 本轮只做**仓内自洽**，不臆造远端配置 |
+| **R11** | 🔄 **推进中** | `scripts/harness.py` 已实现「`SKIPPED` ≠ `PASS`、required 被 SKIPPED ⇒ 裁决 BLOCKED」⇒ **未接 CI**；接 CI 属 P2（`harness / merge-gate`）|
+| **R13 / R14 / R17 / R18 / R10** | ⏳ **待做** | 均有明确修法，量级小于已修项 ⇒ 排在 P2/P3；**未修的如实留在上表** |
+
 ### 4.2 **已修**（机器守卫，不是靠人记得同步）
 
 | # | 事实 | 证据 | 状态 |

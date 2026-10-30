@@ -35,7 +35,7 @@
 ### 硬约束（**数字全部来自上面那块，不要在此手写**）
 
 - [ ] **0 触碰受锁源码**（清单见上，CI `hard-walls` 逐文件 word-diff 守）
-- [ ] **0 改 `workspace.version`**（除非带 release 拍板证据，见 `docs/versioning/`）
+- [ ] **0 改 `workspace.version`**（除非带 release 拍板证据，见 `docs/archive/versioning/`）
 - [ ] `cargo test --workspace` 全绿 + `cargo test --doc` 全绿
 - [ ] **0 假装**（skeleton 标 ⏳，不假装已实现，编译期 hardcode 守门）
 <!-- END:auto-facts -->
@@ -70,7 +70,7 @@
 <!-- 任务要的 5 项 1:1, 提交前必跑实查 -->
 
 - [ ] **0 触碰受锁源码**（**逐个文件清单见上方「自动生成」块** ⇒ CI `hard-walls` 按该清单 word-diff 守；此处**不手写清单**，避免副本过期）
-- [ ] **0 改 `workspace.version`**（**当前值见上方「自动生成」块**；改动须带 release 拍板证据，per `docs/versioning/`）
+- [ ] **0 改 `workspace.version`**（**当前值见上方「自动生成」块**；改动须带 release 拍板证据，per `docs/archive/versioning/`）
 - [ ] **0 改 R11 baseline 3 值** (V1141=0.8682 / V1131=0.8532 / V1136=0.9063, in `legacy/donor/apeireth-asi/tests/integration_r_measure.rs`)
 - [ ] **cargo test pass** (`cargo test --workspace` 全绿 + `cargo test --doc` 全绿)
 - [ ] **0 假装** (skeleton 标 ⏳, 不假装已实现, 编译期 hardcode 守门)
@@ -88,11 +88,11 @@
 
 - [ ] 涉及代码改动 → `CHANGELOG.md` 顶部 `## [Unreleased]` 段加 1 行
 - [ ] 涉及路线图变更 → `ROADMAP.md` 按状态标记 (✅ / ⏳ / ❌)
-- [ ] 涉及 4 关 / 12 键 / 5 重守门 / 24 维 / 9 器官 / **哲学锚（数量见上方自动块）** → 同步 `docs/conventions/` + `docs/glossary/`
+- [ ] 涉及 4 关 / 12 键 / 5 重守门 / 24 维 / 9 器官 / **哲学锚（数量见上方自动块）** → 同步 `docs/archive/conventions/` + `docs/03-reference/glossary.md`
 - [ ] 涉及新 public API → 加 `///` rustdoc (per `cargo doc` 通过)
 - [ ] 涉及新 submodule → 加 `mod.rs` 顶部 30+ 行守门 (per 主人偏好 O-4)
 
-## 6 哲学 anchor 穿透 (per `docs/conventions/09-anchor.md`)
+## 6 哲学 anchor 穿透 (per `docs/archive/conventions/09-anchor.md`)
 
 <!-- 每个 PR 必含的 6 段, 删掉不适用的项 -->
 
@@ -103,7 +103,7 @@
 - [ ] **O-4** 任何人都能接手: doc 顶部 30+ 行 + 编译期 hardcode 守门?
 - [ ] **O-5** 不假装: skeleton 标 ⏳ + 不假装已实现?
 
-## 8 项不修改承诺 (per `docs/conventions/10-locked.md`)
+## 8 项不修改承诺 (per `docs/archive/conventions/10-locked.md`)
 
 <!-- 8 项 1:1, 0 触碰 严守 -->
 
