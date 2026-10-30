@@ -117,11 +117,59 @@ grep -n "24 LOCKED\|1\.2\.0" .github/PULL_REQUEST_TEMPLATE.md
 ### 我的建议（**拍板项**）
 
 1. ✅ **采纳选项 A**，按 §四 的 P0→P3 推进（**P0/P1 本批已做**）；
-2. ⏸️ **需 owner 明确一件事**：**task manifest / lease 是否入 git？**
-   * owner 先前裁定「协调看板**不入 git**」⇒ task manifest 若入 git，需确认二者不冲突；
-   * 我的默认做法：**先做非阻塞 schema + 校验器**，不动 blocking CI（**默认不改**，等拍板）；
-3. ⏸️ **需 owner 明确第二件事**：**`--no-verify` 是否允许留痕进提交元数据？**
-   （影响 hook 三层能否落地；**默认不改提交格式**。）
+2. ✅ **owner 2026-10-30 拍板**：**task manifest / lease** ⇒ **按建议执行**：
+   * **可入仓**（`.harness/tasks/<id>.yaml`），但**非强制**、**不接 required gate**；
+   * 用途**仅限**给 AI 提供「任务边界 + 最小上下文」（见 §九 效率型 harness）；
+   * **不动**协调看板（owner 先前裁定它不入 git ⇒ 继续不入）。
+3. ✅ **owner 2026-10-30 拍板**：**`--no-verify` 留痕** ⇒ **按建议执行**：
+   * **不改提交格式**（不写 commit metadata）；
+   * hook 三层因此只落在**语义层**：`fast`（本地快反馈，可绕过）·
+     `contract`（阻断层）· `remote`（唯一 required check）——
+     **`--no-verify` 绕过本地层**这件事**如实告知**，但**不落痕**。
+
+---
+
+## 八、效率型 harness（2026-10-30 追加裁定）
+
+> **来源**：Astra 的第二份意见（效率型：让 AI **更快找到正确路径**、**更早暴露错误**）。
+> **裁定**：**采纳 5 项**（其中 3 项已落地），**其余 8 项暂缓并给出理由**。
+
+### 8.1 已采纳（并已落地）
+
+| # | Astra 的建议 | 本仓落点 | 状态 |
+|---|---|---|---|
+| **E1** | **两阶段反馈**（fast → deep） | `harness.py verify` + 契约门禁新增 `stage` 字段（**fast 22 条 / deep 13 条**） | ✅ **已落地** |
+| **E2** | **失败分类器**（9 类 + 下一步动作） | `scripts/harness_failures.py` + `.harness/knowledge/` | 🔄 并行推进 |
+| **E3** | **影响分析（层级判定）** | `scripts/harness_impact.py`（L0–L4） | 🔄 并行推进 |
+| **E4** | **仓库状态快照 / 最小上下文包** | `harness.py context`（`.harness/context/`） | 🔄 并行推进 |
+| **E5** | **失败学习库** | `.harness/knowledge/failure-patterns.yaml`（**已用本仓 10 条真实失败**播种） | 🔄 并行推进 |
+
+**E1 的实测收益**（本机，2026-10-30）：
+
+| 阶段 | 门禁数 | **耗时** | 说明 |
+|---|---|---|---|
+| `fast` | 22（本次适用 13） | **2.9 秒** | 全部只读、不编译 ⇒ **每次改动都能跑** |
+| `deep` | 13（本次适用 3） | **约 54 秒** | 要编译 / 重活 ⇒ 只在 fast 过了才跑 |
+
+⇒ ⇒ **短反馈回路提速约 20 倍**（直接对应 owner「**别一直跑全量了**」）。
+
+### 8.2 暂缓（**理由逐条**，不是不做）
+
+| # | 建议 | 暂缓理由 |
+|---|---|---|
+| E6 | 不稳定测试自动评估（重复 100 次） | 成本高（100× 测试时长）⇒ 先用失败分类器的 `flaky-test` 类 + 已有 `check_golden_baseline` 观察项兜住 |
+| E7 | 属性 / 变形 / 故障注入测试 | 本仓**已有** fuzz / Kani / Miri / guard-v3.3 ⇒ 先补**注册表**，**不新造框架** |
+| E8 | 风险热图 reviewer | 与 `arch_guard` / `check_guard_wiring` **重叠** ⇒ 折进 E3 的层级判定，不另起一套 |
+| E9 | 验证缓存绑内容身份 | GitHub Actions 已按 `Cargo.lock` 等键缓存；**tree_sha 绑定**是正确性问题 ⇒ 排在 P2 |
+| E10 | 质量指标仪表盘 | 需要历史数据积累 ⇒ 排在 P2（先埋点，后出表） |
+| E11 | merge queue 批次 | 依赖**远端分支保护**配置（本机不可读）⇒ **需 owner 在远端确认** |
+| E12 | 任务拆分质量检查 | 本轮**已做**（本仓批次按 contract / implementation / tests / wiring / docs 分开提交）⇒ 补成机器检查排 P2 |
+
+### 8.3 本轮**没照抄**的地方（同 §二的纪律）
+
+Astra 的 `.harness/context/` 与 `.harness/knowledge/` 目录结构**采纳**；
+但**门禁登记表不放进 `.harness/`** —— 它已在契约 `[ci_gates]`（唯一真源）⇒
+**不再造第二处**（这是 Astra 自己第 2 条反对的问题）。
 
 ---
 

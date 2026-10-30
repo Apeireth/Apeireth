@@ -80,12 +80,13 @@ jobs:
       - name: 门禁清单一致性
         run: python3 scripts/gen_gate_manifest.py --check
 
-      # ④ 执行本地可跑的门禁（产出机器可读结果）
-      - name: 执行门禁（本地可跑部分）
+      # ④ **两阶段验证**（2026-10-30）：先 `fast`（秒级只读），过了才跑 `deep`（编译/重活）
+      #    ⇒ 本地实测：fast ≈ **3s** · deep ≈ **54s** ⇒ 短反馈先给出
+      - name: 两阶段验证（fast → deep）
         id: check
         run: |
           set +e
-          python3 scripts/harness.py check
+          python3 scripts/harness.py verify
           echo "exit=$?" >> "$GITHUB_OUTPUT"
 
       # ⑤ 写**绑 SHA** 的证据包

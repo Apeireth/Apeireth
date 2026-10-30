@@ -227,6 +227,7 @@ release_freeze = false              # release authority 在冻结窗口置 true
 [[ci_gates.gate]]
 id = "docs-truth"
 cmd = ["python3", "scripts/docs_truth.py", "--verify", "--block-stale"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs", "claims", "rust", "ci"]
 blocking = true
 required = true
@@ -236,6 +237,7 @@ note = "文档声明的证据真源 + 陈旧检测（claims 29 条 fail/stale/re
 [[ci_gates.gate]]
 id = "doc-class"
 cmd = ["python3", "scripts/check_doc_class.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs"]
 blocking = true
 required = true
@@ -245,6 +247,7 @@ note = "9 类文档强制结构 + 存量棘轮"
 [[ci_gates.gate]]
 id = "doc-caliber"
 cmd = ["python3", "scripts/check_doc_caliber.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs"]
 blocking = true
 required = true
@@ -254,6 +257,7 @@ note = "四级口径标记须与「已实现」同段"
 [[ci_gates.gate]]
 id = "doc-numbers"
 cmd = ["python3", "scripts/check_doc_numbers.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs"]
 blocking = true
 required = true
@@ -263,6 +267,7 @@ note = "文档里的数字须与真源一致"
 [[ci_gates.gate]]
 id = "doc-paths"
 cmd = ["python3", "scripts/check_doc_paths.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs"]
 blocking = true
 required = true
@@ -272,6 +277,7 @@ note = "文档引用路径须存在"
 [[ci_gates.gate]]
 id = "docs-links"
 cmd = ["python3", "scripts/docs_links.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs"]
 blocking = true
 required = true
@@ -281,6 +287,7 @@ note = "断链 = 0"
 [[ci_gates.gate]]
 id = "batch-status"
 cmd = ["python3", "scripts/check_batch_status.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs"]
 blocking = true
 required = true
@@ -290,6 +297,7 @@ note = "进度页事实块与代码一致"
 [[ci_gates.gate]]
 id = "claims-verify"
 cmd = ["python3", "scripts/check_claims_verify.py", "--wired-gate"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs", "claims", "rust"]
 blocking = true
 required = true
@@ -299,6 +307,7 @@ note = "每条 claim 的 verify_cmd 真跑；高口径不许 skip/defer"
 [[ci_gates.gate]]
 id = "arch-strict"
 cmd = ["python3", "scripts/arch_guard.py", "--strict"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "contract"]
 blocking = true
 required = true
@@ -308,6 +317,7 @@ note = "架构契约（层/边/尺寸/权重）"
 [[ci_gates.gate]]
 id = "arch-doc"
 cmd = ["python3", "scripts/arch_doc.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "contract", "docs"]
 blocking = true
 required = true
@@ -317,6 +327,7 @@ note = "架构文档与契约一致"
 [[ci_gates.gate]]
 id = "crate-budget"
 cmd = ["python3", "scripts/check_crate_budget.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -326,6 +337,7 @@ note = "crate 体量棘轮（防「搬家式漂移」）"
 [[ci_gates.gate]]
 id = "dead-code"
 cmd = ["python3", "scripts/check_dead_code.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -335,6 +347,7 @@ note = "死代码棘轮"
 [[ci_gates.gate]]
 id = "unwired"
 cmd = ["python3", "scripts/audit_unwired.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -344,6 +357,7 @@ note = "未接线模块基线（142）"
 [[ci_gates.gate]]
 id = "unwired-groups"
 cmd = ["python3", "scripts/group_unwired_baseline.py", "--check"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -353,6 +367,7 @@ note = "未接线分组基线"
 [[ci_gates.gate]]
 id = "stale-binaries"
 cmd = ["python3", "scripts/check_stale_binaries.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -362,6 +377,7 @@ note = "编译期 CARGO_MANIFEST_DIR 产物防陈旧"
 [[ci_gates.gate]]
 id = "mod-targets"
 cmd = ["python3", "scripts/check_mod_targets.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -371,6 +387,7 @@ note = "mod.rs 目标声明"
 [[ci_gates.gate]]
 id = "guard-wiring"
 cmd = ["python3", "scripts/check_guard_wiring.py"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -380,6 +397,7 @@ note = "护栏能力接线台账"
 [[ci_gates.gate]]
 id = "quality-metrics"
 cmd = ["python3", "scripts/check_quality_metrics.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -389,6 +407,7 @@ note = "质量指标台账"
 [[ci_gates.gate]]
 id = "golden-baseline"
 cmd = ["python3", "scripts/check_golden_baseline.py"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "docs"]
 blocking = true
 required = true
@@ -398,6 +417,7 @@ note = "检索基线不许劣化（内部卷 + 小说语料）"
 [[ci_gates.gate]]
 id = "golden-no-leak"
 cmd = ["python3", "scripts/check_golden_no_leak.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -407,6 +427,7 @@ note = "黄金集不得泄漏答案"
 [[ci_gates.gate]]
 id = "internal-golden"
 cmd = ["python3", "scripts/internal_golden.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "docs"]
 blocking = true
 required = true
@@ -416,6 +437,7 @@ note = "内部卷 301 题片段须是记录正文逐字子串"
 [[ci_gates.gate]]
 id = "d4-ledger"
 cmd = ["python3", "scripts/d4_ledger.py", "--check"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "docs"]
 blocking = true
 required = true
@@ -425,6 +447,7 @@ note = "B0-c 候选池台账与代码一致"
 [[ci_gates.gate]]
 id = "wiring-report"
 cmd = ["python3", "scripts/wiring_report.py", "--verify"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "docs"]
 blocking = true
 required = true
@@ -434,6 +457,7 @@ note = "接线报告与实际调用点一致"
 [[ci_gates.gate]]
 id = "verify-ledger"
 cmd = ["python3", "scripts/verify_ledger.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs", "claims"]
 blocking = true
 required = true
@@ -443,6 +467,7 @@ note = "四层验收台账"
 [[ci_gates.gate]]
 id = "guard-inventory"
 cmd = ["python3", "scripts/check_guard_inventory.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["ci", "contract", "rust"]
 blocking = true
 required = true
@@ -452,6 +477,7 @@ note = "**守卫清单同步**：全仓守卫的机读清单须与实际一致�
 [[ci_gates.gate]]
 id = "toolchain-pin"
 cmd = ["python3", "scripts/check_toolchain_pin.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["ci", "contract", "rust"]
 blocking = true
 required = true
@@ -461,6 +487,7 @@ note = "CI 工具链必须与 `rust-toolchain.toml` 的 channel 一致（禁浮�
 [[ci_gates.gate]]
 id = "gate-manifest"
 cmd = ["python3", "scripts/gen_gate_manifest.py", "--check"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs", "ci", "contract"]
 blocking = true
 required = true
@@ -470,6 +497,7 @@ note = "**门禁清单的漂移守卫**：PR 模板等人读副本必须与本�
 [[ci_gates.gate]]
 id = "self-status-vocab"
 cmd = ["python3", "scripts/check_self_status_vocab.py"]
+stage = "fast"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["docs"]
 blocking = true
 required = false
@@ -480,6 +508,7 @@ note = "自述口径词表一致"
 [[ci_gates.gate]]
 id = "ci-rust"
 cmd = ["cargo", "build", "--workspace", "--tests", "--locked"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -491,6 +520,7 @@ note = "CI 专属：全工作区编译"
 [[ci_gates.gate]]
 id = "ci-nextest"
 cmd = ["cargo", "nextest", "run", "--workspace", "--profile", "ci", "--locked"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -502,6 +532,7 @@ note = "CI 专属：全工作区测试"
 [[ci_gates.gate]]
 id = "ci-clippy"
 cmd = ["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -513,6 +544,7 @@ note = "CI 专属：clippy 零警告"
 [[ci_gates.gate]]
 id = "ci-fmt"
 cmd = ["cargo", "fmt", "--all", "--", "--check"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust"]
 blocking = true
 required = true
@@ -524,6 +556,7 @@ note = "CI 专属：格式"
 [[ci_gates.gate]]
 id = "ci-doc-test"
 cmd = ["cargo", "test", "--workspace", "--doc", "--locked"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "docs"]
 blocking = true
 required = true
@@ -535,6 +568,7 @@ note = "CI 专属：文档测试"
 [[ci_gates.gate]]
 id = "ci-cargo-deny"
 cmd = ["bash", "scripts/audit/run-cargo-audit-deny.sh"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "lock"]
 blocking = true
 required = true
@@ -546,6 +580,7 @@ note = "CI 专属：依赖策略（cargo deny）"
 [[ci_gates.gate]]
 id = "ci-promise-audit"
 cmd = ["bash", "scripts/audit/8-promise-audit.sh"]
+stage = "deep"        # 两阶段验证：fast = 只读秒级；deep = 需编译/重活
 scope = ["rust", "contract"]
 blocking = true
 required = false

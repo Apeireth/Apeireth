@@ -297,6 +297,10 @@ def normalize_gate(raw: Any) -> dict[str, Any] | None:
     # ⇒ 本地/CI 的裁决层**不重复执行**，但也**不算通过** ⇒ 记 `DELEGATED`。
     delegated_to = raw.get("delegated_to")
     delegated_to = str(delegated_to) if delegated_to else None
+    # ⚠️ `stage`：**两阶段验证**（2026-10-30）：
+    #   `fast` = 只读、秒级（本地/每次改动的短反馈回路）；
+    #   `deep` = 要编译或重活（全量测试 / 棘轮深查 / 专属 CI 门禁）。
+    stage = str(raw.get("stage") or ("deep" if str(raw.get("env", "python")) in CI_ONLY_ENVS else "fast"))
     timeout = raw.get("timeout")
     if not isinstance(timeout, int) or timeout <= 0:
         timeout = DEFAULT_TIMEOUT
@@ -305,6 +309,7 @@ def normalize_gate(raw: Any) -> dict[str, Any] | None:
         "cmd": list(cmd),
         "scope": scope,
         "delegated_to": delegated_to,
+        "stage": stage,
         "blocking": bool(raw.get("blocking", True)),
         "required": bool(raw.get("required", True)),
         "timeout": timeout,
@@ -547,6 +552,7 @@ def run_gate(gate: dict[str, Any], timeout: int) -> dict[str, Any]:
         # ⚠️ `delegated_to` 必须**带进记录** ⇒ 否则裁决原因里只能显示 `None`
         # （证据包 / 门禁结果 JSON 是给人看的 ⇒ 不能丢字段）。
         "delegated_to": gate.get("delegated_to"),
+        "stage": gate.get("stage", "fast"),
         "command": list(gate["cmd"]),
         "exit_code": exit_code,
         "duration_s": duration,
@@ -740,6 +746,88 @@ def print_notes(notes: list[str], stream=sys.stdout) -> None:
 
 # --------------------------------------------------------------------------- plan
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    """**两阶段验证**：先 `fast`；**fast 有 FAIL 就不跑 deep**。
+
+    # 为什么（2026-10-30 · owner「别一直跑全量了」）
+
+    * `fast` = 只读、秒级（实测 22 条合计 ~4s）⇒ **每次改动都能跑**；
+    * `deep` = 要编译 / 重活（13 条：含 cargo 门禁与慢棘轮）⇒ **只在 fast 过了才跑**；
+    * ⇒ ⇒ 「短反馈」与「深验证」**分层**，而不是每次都全量。
+
+    # 输出
+
+    * 打印两阶段的结果摘要；
+    * 写 `scripts/harness-last-run.json`（**含两阶段全部结果** ⇒ 证据完整）；
+    * 退出码：0 ⇔ 两阶段都没有 FAIL；1 ⇔ 有 FAIL。
+
+    # 注意
+
+    * **deep 被跳过**（因 fast 失败）时，deep 的门禁记 `SKIPPED` + 原因
+      「**fast 阶段失败 ⇒ 不跑 deep**」（**不是通过**）；
+    * 阶段本身**不改变**门禁的 required 语义 ⇒ 裁决仍按「适用却没跑 ⇒ 阻断」处理。
+    """
+    import argparse as _ap
+
+    for stage in ("fast", "deep"):
+        ns = _ap.Namespace(
+            base=args.base,
+            only=None,
+            skip_gate=None,
+            stage=stage,
+            json=False,
+            strict_exit=False,
+            timeout=None,      # ← cmd_check 会读它（别漏）
+        )
+        if stage == "fast":
+            print("════ 阶段 1/2：fast（秒级只读）════")
+            code = cmd_check(ns)
+            if code != 0:
+                print()
+                print("⚠️ **fast 阶段有 FAIL ⇒ 不跑 deep**（短反馈回路：先修快的）")
+                # 记录 deep 被跳过（**追加**进结果文件 ⇒ 证据里能看到 deep 未跑）
+                ctx = collect_context(args.base)
+                gates, notes, exemptions = load_registry()
+                tags = ctx["tags"]
+                deep_gates = [g for g in gates if g.get("stage", "fast") == "deep"]
+                if LAST_RUN_PATH.exists():
+                    try:
+                        doc = json.loads(LAST_RUN_PATH.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        doc = None
+                    if isinstance(doc, dict):
+                        existing = {
+                            g.get("id")
+                            for g in doc.get("gates", [])
+                            if isinstance(g, dict)
+                        }
+                        for gate in deep_gates:
+                            if gate["id"] in existing:
+                                continue
+                            record = gate_record(
+                                gate,
+                                S_SKIPPED,
+                                "fast 阶段失败 ⇒ 不跑 deep（**不是通过**）",
+                            )
+                            record["scope_applies"] = scope_applies(gate, tags)
+                            doc.setdefault("gates", []).append(record)
+                        doc["stage"] = "fast-failed-deep-skipped"
+                        LAST_RUN_PATH.write_text(
+                            json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                        print(
+                            f"（deep 的 {len(deep_gates)} 条门禁已记为 SKIPPED 进结果文件）"
+                        )
+                return code
+        else:
+            print()
+            print("════ 阶段 2/2：deep（编译 / 重活）════")
+            code = cmd_check(ns)
+            return code
+    return 0
+
+
 def cmd_plan(args: argparse.Namespace) -> int:
     ctx = collect_context(args.base)
     gates, notes, exemptions = load_registry()
@@ -822,6 +910,16 @@ def cmd_check(args: argparse.Namespace) -> int:
     only = parse_only(args.only)
     skip = parse_only(getattr(args, "skip_gate", None))
     tags = ctx["tags"]
+    # ⚠️ **两阶段验证**（2026-10-30）：`--stage fast` 只跑秒级只读门禁
+    # ⇒ ⇒ 短反馈回路；`--stage deep` 跑要编译/重活的那批。
+    stage = getattr(args, "stage", None)
+    if stage and stage not in ("fast", "deep", "all"):
+        print(f"error: --stage 只能是 fast / deep / all（收到 {stage!r}）", file=sys.stderr)
+        return 2
+    if stage and stage != "all":
+        gates = [g for g in gates if g.get("stage", "fast") == stage]
+        print(f"阶段过滤：{stage}（共 {len(gates)} 条门禁）")
+
 
     known = {g["id"] for g in gates}
     if only is not None:
@@ -1240,6 +1338,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_check.add_argument("--timeout", type=int, default=None, help="覆盖门禁超时秒数")
+    p_check.add_argument(
+        "--stage",
+        choices=("fast", "deep", "all"),
+        default="all",
+        help=(
+            "两阶段验证：fast = 只读秒级（短反馈回路）；deep = 编译/重活；all = 全部（默认）"
+        ),
+    )
     p_check.add_argument("--json", action="store_true", help="把结果 JSON 打到 stdout")
     p_check.add_argument(
         "--strict-exit",
@@ -1247,6 +1353,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="退出码直接镜像裁决（0 当且仅当 PASS）；默认只反映已执行门禁的结果",
     )
     p_check.set_defaults(func=cmd_check)
+
+    p_verify = sub.add_parser(
+        "verify",
+        help="**两阶段验证**：先 fast（秒级只读）；fast 有 FAIL 就不跑 deep",
+    )
+    p_verify.add_argument("--base", default=None, help="基线 SHA（默认 HEAD~1）")
+    p_verify.set_defaults(func=cmd_verify)
 
     p_attest = sub.add_parser("attest", help="写 SHA 绑定的证据包")
     p_attest.add_argument("--task-id", default=None, help="任务 id（默认 adhoc）")
