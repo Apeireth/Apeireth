@@ -746,6 +746,48 @@ def print_notes(notes: list[str], stream=sys.stdout) -> None:
 
 # --------------------------------------------------------------------------- plan
 
+IMPACT_SCRIPT = ROOT / "scripts" / "harness_impact.py"
+
+
+def impact_plan(base: str | None) -> dict:
+    """读影响分析（`scripts/harness_impact.py`）⇒ 决定**该跑哪几个阶段**。
+
+    # 为什么（2026-10-30 · owner「别一直跑全量了」）
+
+    * 影响级别 **L0/L1**（纯文档 / 内部实现）⇒ **只需 fast**（秒级）
+      ⇒ ⇒ deep（编译 / 重活，约 54s）**不必跑**；
+    * **L2/L3/L4** ⇒ fast + deep（L4 再加 security 阶段，当前未实现）。
+
+    ⇒ ⇒ 这就是「按影响面决定验证深度」的落点。
+
+    ⚠️ 影响分析**不可用**时 ⇒ **保守**：两个阶段都跑（不因为工具缺失就少验）。
+    """
+    if not IMPACT_SCRIPT.exists():
+        return {"available": False, "stages": ["fast", "deep"], "level": "?"}
+    cmd = [sys.executable, str(IMPACT_SCRIPT), "--json"]
+    if base:
+        cmd += ["--base", base]
+    try:
+        proc = subprocess.run(
+            cmd, cwd=ROOT, capture_output=True, text=True, timeout=300
+        )
+        if proc.returncode == 0:
+            data = json.loads(proc.stdout)
+            if isinstance(data, dict) and data.get("level"):
+                stages = data.get("suggested_stages") or ["fast", "deep"]
+                # `security` 阶段当前**未实现** ⇒ 过滤掉（否则会误报「没跑」）
+                stages = [s for s in stages if s in ("fast", "deep")]
+                return {
+                    "available": True,
+                    "stages": stages or ["fast"],
+                    "level": data.get("level"),
+                    "reasons": data.get("level_reasons") or [],
+                }
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        pass
+    return {"available": False, "stages": ["fast", "deep"], "level": "?"}
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """**两阶段验证**：先 `fast`；**fast 有 FAIL 就不跑 deep**。
 
@@ -769,7 +811,17 @@ def cmd_verify(args: argparse.Namespace) -> int:
     """
     import argparse as _ap
 
-    for stage in ("fast", "deep"):
+    plan = impact_plan(args.base)
+    stages = plan["stages"]
+    print(
+        f"影响级别 **{plan['level']}** ⇒ 该跑阶段：{', '.join(stages)}"
+        + ("" if plan["available"] else "（影响分析不可用 ⇒ 保守：两个阶段都跑）")
+    )
+    for reason in (plan.get("reasons") or [])[:3]:
+        print(f"  · {reason}")
+    print()
+
+    for stage in stages:
         ns = _ap.Namespace(
             base=args.base,
             only=None,

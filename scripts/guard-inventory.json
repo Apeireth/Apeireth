@@ -484,6 +484,20 @@
       ]
     },
     {
+      "id": "check-task-manifest",
+      "path": "scripts/check_task_manifest.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_task_manifest.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "任务清单校验器（非阻塞 · 2026-10-30）",
+      "flags": []
+    },
+    {
       "id": "check-toolchain-pin",
       "path": "scripts/check_toolchain_pin.py",
       "kind": "guard",
@@ -683,7 +697,7 @@
       "is_guard": true,
       "blocking": true,
       "invocation": [
-        "python3 scripts/harness.py check",
+        "python3 scripts/harness.py verify",
         "python3 scripts/harness.py attest --task-id \"${{ github.run_id }}\" --agent \"github-actions\"",
         "python3 scripts/harness.py merge-decision"
       ],
