@@ -759,11 +759,11 @@ claims:
       - crates/foundation/protocol/src/canonical/tool_event.rs
     tests:
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
-    verified_at: b80bc70b85b0e439bfbefa462c5f18f70db627df
+    verified_at: 5392e56c3218c147f055edca9288c0fc169a2f5c
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test module_message_pipeline --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Optional Host policy only. Real Runtime Command/Query/Event/Reply, actual file effect, owner generations/trace, private facts, explicit grant/caller intersection, Internal Allow/Deny, zero Main Provider forwarding, bounded loop/backpressure/cancel/deadline/dedupe and old-port refusal are software tested. Local retained-key refusal is not durable exactly-once. New message variants require the updated reader; old logs remain readable. No external model/network/device validation; compatibility C01/C02 default rollout remains open. See ale-system-one-p3-2026-10-30.md.；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。"
+    notes: "Optional Host policy only. Real Runtime Command/Query/Event/Reply, actual file effect, owner generations/trace, private facts, explicit grant/caller intersection, Internal Allow/Deny, zero Main Provider forwarding, bounded loop/backpressure/cancel/deadline/dedupe and old-port refusal are software tested. Local retained-key refusal is not durable exactly-once. New message variants require the updated reader; old logs remain readable. No external model/network/device validation; compatibility C01/C02 default rollout remains open. See ale-system-one-p3-2026-10-30.md.；2026-10-30 P4 复验：最终原五段与定向/文档测试通过。C03 在新消息口完成显式委托交集和长期授权分离，C01/C02 默认兼容纳管仍待验收；嵌套审查撤权及未决幂等窗口拒绝重试均有真实 Runtime 证据。固定回环 Mesh 复用同一门禁，无 live model/外部设备网络/硬件声明。；2026-10-30 CI 修复复核：未决幂等回归在 endpoint 确认进入后取消独立请求，再核验重复拒绝、窗口背压与副作用不重放；原超时回归保留。定向零重试重复运行、普通定向测试及 workspace 全量 test/clippy/fmt 本地通过，能力等级与默认不变，远端平台结果另验收。"
 
 
   - id: rt.mesh_local_worker
@@ -777,8 +777,8 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/mesh_execution.rs
       - crates/engine/runtime-assembly/tests/module_message_pipeline.rs
-    verified_at: b80bc70b85b0e439bfbefa462c5f18f70db627df
+    verified_at: 5392e56c3218c147f055edca9288c0fc169a2f5c
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test mesh_execution --test module_message_pipeline --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
-    notes: "Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the same deterministic Dispatcher/System One gate before each bind/send/receive. Public connect acknowledges the existing Host-scheduled task; it does not authorize arbitrary user-delegated destinations. Accepted/Handle/status, private packet isolation, authorized status Event, Main-stop independence, module drain/new generation, Deny/unavailable/no datagram and reply correlation use real Runtime/socket tests with scripted supervision. Plaintext software correlation is not cryptographic authentication/encryption. No live selected model, external device/LAN/NAT/discovery or durable job recovery validation; no default/universal protection claim. C01/C02 and D35 remain open. See ale-system-one-p4-2026-10-30.md."
+    notes: "Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the same deterministic Dispatcher/System One gate before each bind/send/receive. Public connect acknowledges the existing Host-scheduled task; it does not authorize arbitrary user-delegated destinations. Accepted/Handle/status, private packet isolation, authorized status Event, Main-stop independence, module drain/new generation, Deny/unavailable/no datagram and reply correlation use real Runtime/socket tests with scripted supervision. Plaintext software correlation is not cryptographic authentication/encryption. No live selected model, external device/LAN/NAT/discovery or durable job recovery validation; no default/universal protection claim. C01/C02 and D35 remain open. See ale-system-one-p4-2026-10-30.md.；2026-10-30 CI 修复复核：普通消息期限不再从短原生 socket 超时倍乘，原生策略与 Host 上限保留；丢包 fixture 不补发旧回复，回归核验闭合错误与同一实例/Session 的后续成功。原生回归超时保持，定向零重试重复运行、普通定向测试及 workspace 全量 test/clippy/fmt 本地通过；默认 OFF/Partial 保留，远端平台结果另验收。"
