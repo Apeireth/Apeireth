@@ -64,3 +64,10 @@ jobs:
       - name: 题材与层的分布（供人工看体系是否失衡；不阻塞）
         if: always()
         run: python3 scripts/docs_index.py --report
+
+      # **门禁清单的漂移守卫**（P0 · 2026-10-30）：
+      # 人读副本（PR 模板等）里的锁定清单 / 版本 / crate 数必须**等于契约**
+      # ⇒ ⇒ 手写副本从此不可能默默过期（实测：PR 模板曾写「24 LOCKED crate」「1.2.0」，
+      #      而契约早已是 2.0.0-rc.4 / 30 members ⇒ CI 守的与模板写的**不一致**）。
+      - name: 门禁清单一致性（PR 模板等人读副本 vs 契约 [ci_gates]）
+        run: python3 scripts/gen_gate_manifest.py --check
