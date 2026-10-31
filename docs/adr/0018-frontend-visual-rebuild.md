@@ -1,6 +1,6 @@
 # 0018. 前端视觉总攻 —— 以自研引擎为基底，推倒重建全部视觉方案
 
-- **Status**: Proposed（2026-10-28 起草；owner 已口述定调，待正式复核后转 Accepted）
+- **Status**: **Accepted**（2026-10-31 owner 批准；D3 已按方案 A 修正：设计原型载体 = K3.1 HTML 原型，Svelte 仅旧线基线）
 - **Date**: 2026-10-28
 - **Owners**: owner 拍板（2026-10-28 口述定调，原话见 §1.1）；实施线 = 前端视觉总攻线（总工程师制，下设设计 / 引擎 / 接线 / 验证四线）
 - **Supersedes**: [0015](0015-pure-rust-ui-engine.md)（**部分条款**：§2.1「视觉层零改写」硬约束，以及「逐面像素对照旧设计」作为验收目标；**保留** 0015 的核心决策：自研纯 Rust 引擎 + 独立 workspace `crates-ui/` + wasm32 → Tauri WebView 宿主）

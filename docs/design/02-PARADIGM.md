@@ -225,7 +225,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 | owner 2026-10-28 定调与决策（含范式研讨会回答） | §9 决策记录（逐条摘录） |
 | owner 2026-10-31 Astra 评审采纳与首屏改版 | [03-REVIEW-astra-2026-10-31.md](03-REVIEW-astra-2026-10-31.md) |
 | 参考语言分析（13 个外部参考页 + 开源科幻终端参考） | [reference-language-analysis-2026-10-28.md](reference-language-analysis-2026-10-28.md) |
-| 工程决策（推倒重建 / 引擎为基底 / 旧线冻结） | [ADR-0018](../adr/0018-frontend-visual-rebuild.md)（Proposed） |
+| 工程决策（推倒重建 / 引擎为基底 / 旧线冻结） | [ADR-0018](../adr/0018-frontend-visual-rebuild.md)（Accepted，2026-10-31） |
 | 作战计划（W0 定调 → W1 打样 → …） | [frontend-rebuild-plan.md](../04-internal/05-plans/frontend-rebuild-plan.md) |
 | 旧范式（只作素材库，不追溯改写） | [00-PHILOSOPHY.md](00-PHILOSOPHY.md) / [01-DESIGN-SYSTEM.md](01-DESIGN-SYSTEM.md) |
 | 旧范式可汲取清单（2026-10-31，**未采纳**：新范式不汲取旧范式，做出来再看） | [04-INHERIT-LIST-2026-10-31.md](04-INHERIT-LIST-2026-10-31.md) |
