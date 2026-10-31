@@ -158,7 +158,7 @@ docs/04-internal/05-plans/b-block-frontend-readiness-2026-08-28.md,L4,4,B 块 fr
 docs/04-internal/05-plans/design-intent.md,L4,4,Apeireth 设计意图记录（Design Intent）,2026-10-20,在飞,7,保留,
 docs/04-internal/05-plans/design-task-lease-2026-08-21.md,L4,4,Task DAG Lease Mechanism — 设计文档 (B 项) — 2026-08-21,2026-08-21,在飞,2,保留,
 docs/04-internal/05-plans/design-three-way-conflict-2026-08-21.md,L4,4,三路冲突检测机制 (Three-Way Conflict Detection) — 设计,2026-08-21,在飞,2,保留,
-docs/04-internal/05-plans/frontend-rebuild-plan.md,L4,4,Apeireth 前端视觉总攻 · 作战计划书 v2（推倒重建 · 自研引擎为基底）,2026-10-28,在飞,7,保留,
+docs/04-internal/05-plans/frontend-rebuild-plan.md,L4,4,Apeireth 前端视觉总攻 · 作战计划书 v2（推倒重建 · 自研引擎为基底）,2026-10-28,在飞,8,保留,
 docs/04-internal/05-plans/migration-v1-to-v2.md,L4,4,Apeireth v1.0 → v2.0 迁移指南（2026-08-27）,2026-08-27,在飞,6,保留,
 docs/04-internal/05-plans/r12-coordination-context-1-merge-spec-2026-08-28.md,L4,4,R12-CoordinationContext-1 真实施 brief — v1 context.rs + context_rot.rs rot_score 融合 (2026-08-28),2026-08-28,在飞,5,保留,
 docs/04-internal/05-plans/release-plan.md,L4,4,"Apeireth 发布路线（v2 工程重构线, 2026-08-27）",2026-08-27,在飞,7,保留,
