@@ -130,19 +130,19 @@ fn main() {
 }
 
 /// wasm32 侧的装配（把试点卡片挂进真实 DOM）。
+/// ## 诚实边界
+///
+/// - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
+///   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由试点 harness 承担：
+///   像素对照 + 逐帧对照，见 `crates-ui/apeireth-ui-demo/harness/`）。
+/// - **真后端未接线**：数据面是**固定 fixture**。
+///
+/// ## 调度
+///
+/// 写入 ⇒ 一次**微任务** flush（设计文档 §4.2 规则 1）⇒ 同一轮事件处理里的
+/// 多次写合并为一次 DOM 写入 ⇒ 界面在同一帧响应。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_app {
-    //! ## 诚实边界
-    //!
-    //! - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
-    //!   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由试点 harness 承担：
-    //!   像素对照 + 逐帧对照，见 `crates-ui/apeireth-ui-demo/harness/`）。
-    //! - **真后端未接线**：数据面是**固定 fixture**。
-    //!
-    //! ## 调度
-    //!
-    //! 写入 ⇒ 一次**微任务** flush（设计文档 §4.2 规则 1）⇒ 同一轮事件处理里的
-    //! 多次写合并为一次 DOM 写入 ⇒ 界面在同一帧响应。
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -399,7 +399,7 @@ pub mod wasm_app {
         if value.is_null() || value.is_undefined() {
             return None;
         }
-        Some(value.as_string()?)
+        value.as_string()
     }
 
     // ── 工具卡面应用 ──────────────────────────────────────────────────────

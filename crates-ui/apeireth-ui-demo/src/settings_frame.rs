@@ -354,22 +354,22 @@ impl FrameState {
 }
 
 /// wasm32 侧的装配（**native 编译不参与** ⇒ 行为由浏览器内对照钉住）。
+/// ## 诚实边界
+///
+/// - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
+///   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
+///   像素对照 + DOM 全等 + 宽度同源断言）。
+/// - **真后端未接线**：数据面是**固定 fixture**。
+///
+/// ## 调度
+///
+/// 写入 ⇒ 一次**微任务** flush ⇒ 同一轮事件处理里的多次写合并为一次
+/// DOM 写入 ⇒ 界面在同一帧响应。
+///
+/// ⚠️ 微任务调度器在本模块内**自带一份**（与 `main.rs` 里的同名实现同构）
+/// ⇒ 因为 `main.rs` 是**共享文件**（并行期不许改）。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
-    //! ## 诚实边界
-    //!
-    //! - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
-    //!   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
-    //!   像素对照 + DOM 全等 + 宽度同源断言）。
-    //! - **真后端未接线**：数据面是**固定 fixture**。
-    //!
-    //! ## 调度
-    //!
-    //! 写入 ⇒ 一次**微任务** flush ⇒ 同一轮事件处理里的多次写合并为一次
-    //! DOM 写入 ⇒ 界面在同一帧响应。
-    //!
-    //! ⚠️ 微任务调度器在本模块内**自带一份**（与 `main.rs` 里的同名实现同构）
-    //! ⇒ 因为 `main.rs` 是**共享文件**（并行期不许改）。
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -485,6 +485,9 @@ mod tests {
 
     use super::*;
     use apeireth_ui_core::Runtime;
+    // ⚠️ `UiComponent` 是 **native 侧**需要的（`SettingsFrame::render` 是 trait 方法）
+    //   ⇒ ⇒ wasm32 目标下它**未使用** ⇒ ⇒ 这里显式 allow（而不是删掉 —— 那会让 native 编译失败）。
+    #[allow(unused_imports)]
     use apeireth_ui_core::UiComponent;
 
     #[test]
@@ -599,6 +602,11 @@ mod tests {
         );
     }
 
+    // ⚠️ `crate::tree_to_text` 只在 **lib crate** 里（`lib.rs`）⇒ ⇒ 本模块被
+    //   `main.rs` **重复声明**进 bin ⇒ ⇒ bin 副本里 `crate::tree_to_text` **不存在**
+    //   ⇒ ⇒ 本测试**只在 lib 侧**（native 目标）可编译。
+    //   ⇒ wasm32 下跳过（该断言是 **native 冒烟**用途，浏览器内由像素/DOM 对照承担）。
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn the_rendered_tree_carries_the_sidebar_and_the_content_column() {
         let state = FrameState::new(Runtime::new().reactive_scope());

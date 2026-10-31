@@ -312,32 +312,32 @@ impl BudgetHost {
 }
 
 /// wasm32 侧的装配（**native 编译不参与** ⇒ 行为由浏览器内对照钉住）。
+/// ## 诚实边界
+///
+/// - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
+///   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
+///   像素对照 + DOM 全等 + 宽度同源断言）。
+/// - **真后端未接线**：数据面是**固定 fixture**。
+///
+/// ## 调度
+///
+/// 写入 ⇒ 一次**微任务** flush ⇒ 同一轮事件处理里的多次写合并为一次
+/// DOM 写入 ⇒ 界面在同一帧响应。
+///
+/// ## DOM property 回写（**为什么需要**）
+///
+/// 生产的数字步进器用 `bind:value` ⇒ 值是 **property**（DOM 上**没有**
+/// `value` 属性）⇒ 引擎侧若只写属性，DOM 对照会多出属性、像素对照会看到
+/// **空输入框** ⇒ 本模块在每次渲染后**显式回写** property
+/// （**只在当前值 ≠ 目标值时写** ⇒ 不打断输入法组合态与光标位置）。
+///
+/// ## 内联样式归一化（**为什么需要**）
+///
+/// 生产用样式指令 ⇒ 浏览器把取值**序列化**成自己的口径（**尾分号**）⇒
+/// 引擎侧把同一段取值**再交给 CSSOM 走一遍**（`style.cssText = 原文`）
+/// ⇒ **由浏览器自己序列化** ⇒ 两侧同口径、逐字相等。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
-    //! ## 诚实边界
-    //!
-    //! - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
-    //!   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
-    //!   像素对照 + DOM 全等 + 宽度同源断言）。
-    //! - **真后端未接线**：数据面是**固定 fixture**。
-    //!
-    //! ## 调度
-    //!
-    //! 写入 ⇒ 一次**微任务** flush ⇒ 同一轮事件处理里的多次写合并为一次
-    //! DOM 写入 ⇒ 界面在同一帧响应。
-    //!
-    //! ## DOM property 回写（**为什么需要**）
-    //!
-    //! 生产的数字步进器用 `bind:value` ⇒ 值是 **property**（DOM 上**没有**
-    //! `value` 属性）⇒ 引擎侧若只写属性，DOM 对照会多出属性、像素对照会看到
-    //! **空输入框** ⇒ 本模块在每次渲染后**显式回写** property
-    //! （**只在当前值 ≠ 目标值时写** ⇒ 不打断输入法组合态与光标位置）。
-    //!
-    //! ## 内联样式归一化（**为什么需要**）
-    //!
-    //! 生产用样式指令 ⇒ 浏览器把取值**序列化**成自己的口径（**尾分号**）⇒
-    //! 引擎侧把同一段取值**再交给 CSSOM 走一遍**（`style.cssText = 原文`）
-    //! ⇒ **由浏览器自己序列化** ⇒ 两侧同口径、逐字相等。
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -361,6 +361,7 @@ pub mod wasm {
     struct MicrotaskScheduler;
 
     impl HostScheduler for MicrotaskScheduler {
+        #[allow(clippy::type_complexity)] // thread_local! 里的闭包向量类型天然复杂
         fn schedule_flush(&self, flush: Box<dyn FnOnce()>) {
             let queue = Reflect::get(&js_sys::global(), &JsValue::from_str("queueMicrotask"))
                 .ok()
@@ -389,8 +390,9 @@ pub mod wasm {
 
     thread_local! {
         /// wasm 侧的单例应用。
-        static APP: RefCell<Option<BudgetApp>> = RefCell::new(None);
+        static APP: RefCell<Option<BudgetApp>> = const { RefCell::new(None) };
         /// 控制 API 的闭包（**必须活到页面结束** ⇒ 存在这里）。
+        #[allow(clippy::type_complexity)] // 闭包向量类型天然复杂（结构无法再简化）
         static CONTROL_CLOSURES: RefCell<Vec<Closure<dyn FnMut(JsValue) -> JsValue>>> =
             RefCell::new(Vec::new());
     }

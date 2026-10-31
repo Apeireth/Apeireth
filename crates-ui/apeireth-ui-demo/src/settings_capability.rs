@@ -846,19 +846,19 @@ impl CapabilityHost {
 // ── wasm 装配（**native 编译不参与** ⇒ 行为由浏览器内对照钉住） ─────────────
 
 /// wasm32 侧的装配。
+/// ## 诚实边界
+///
+/// - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
+///   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
+///   像素对照 + DOM 全等 + 宽高同源断言）。
+/// - **真后端未接线**：数据面是**固定数据**（编译期内嵌的那两份）。
+/// - **原生控件的取值是 property**：生产用 `bind:value` / `value={…}` ⇒ 引擎侧
+///   **不写** `value` 属性 ⇒ 宿主在每次渲染后**回写 property**（否则像素对照会
+///   看到空下拉 / 空输入框）。
+/// - **零 wasm 导出**：`set_settings_section` 已被向导面占用 ⇒ 本面不导出任何
+///   函数（见 [`patch_settings_api`] 与 `window.__CAPABILITY__`）。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
-    //! ## 诚实边界
-    //!
-    //! - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
-    //!   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
-    //!   像素对照 + DOM 全等 + 宽高同源断言）。
-    //! - **真后端未接线**：数据面是**固定数据**（编译期内嵌的那两份）。
-    //! - **原生控件的取值是 property**：生产用 `bind:value` / `value={…}` ⇒ 引擎侧
-    //!   **不写** `value` 属性 ⇒ 宿主在每次渲染后**回写 property**（否则像素对照会
-    //!   看到空下拉 / 空输入框）。
-    //! - **零 wasm 导出**：`set_settings_section` 已被向导面占用 ⇒ 本面不导出任何
-    //!   函数（见 [`patch_settings_api`] 与 `window.__CAPABILITY__`）。
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -866,9 +866,7 @@ pub mod wasm {
     use apeireth_ui_core::{HostScheduler, Runtime, UiComponent};
     use apeireth_ui_dom::{Renderer, VNode, WebDom};
     use apeireth_ui_kit::settings_capability::{
-        CapabilityPanels, ADVISORS_ARIA_LABEL, ADVISORS_VALUE_KEY, DEPTH_SELECT_ID,
-        PRESET_SELECT_ID, REASONING_FILTERS_ARIA_LABEL, REASONING_FILTERS_VALUE_KEY,
-        REASONING_TAG_ARIA_LABEL, REASONING_TAG_VALUE_KEY, SERVER_INPUT_ID, TIMEOUT_ARIA_LABEL,
+        CapabilityPanels, ADVISORS_VALUE_KEY, REASONING_FILTERS_VALUE_KEY, REASONING_TAG_VALUE_KEY,
         TIMEOUT_VALUE_KEY,
     };
     use apeireth_ui_macro::view;
@@ -882,6 +880,7 @@ pub mod wasm {
     struct MicrotaskScheduler;
 
     impl HostScheduler for MicrotaskScheduler {
+        #[allow(clippy::type_complexity)] // thread_local! 里的闭包向量类型天然复杂
         fn schedule_flush(&self, flush: Box<dyn FnOnce()>) {
             let queue = Reflect::get(&js_sys::global(), &JsValue::from_str("queueMicrotask"))
                 .ok()
@@ -906,6 +905,7 @@ pub mod wasm {
         /// wasm 侧的单例宿主。
         static CAPABILITY_APP: RefCell<Option<CapabilityHost>> = const { RefCell::new(None) };
         /// 控制 API 的闭包（**必须活到页面结束**）。
+        #[allow(clippy::type_complexity)] // 闭包向量类型天然复杂（结构无法再简化）
         static CONTROL_CLOSURES: RefCell<Vec<Closure<dyn FnMut(JsValue) -> JsValue>>> =
             const { RefCell::new(Vec::new()) };
     }
@@ -957,7 +957,6 @@ pub mod wasm {
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
         let effect_host = host.clone();
-        let effect_container = container.clone();
         runtime.effect(move || {
             let tree = render_tree(&effect_host);
             let mut guard = effect_renderer.borrow_mut();
@@ -1296,6 +1295,7 @@ pub mod wasm {
     /// （空框）。M6 已实测过这条（滑杆差 2,463 px）。
     ///
     /// 按选择器取一个元素。
+    #[allow(dead_code)] // wasm32 下暂未被调用（保留为工具函数）
     fn query(container: &Element, selector: &str) -> Option<Element> {
         let found = Reflect::get(container.as_ref(), &JsValue::from_str("querySelector"))
             .ok()?

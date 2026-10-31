@@ -202,6 +202,27 @@ def main() -> int:
                 continue
             if args.job and job_name not in args.job:
                 continue
+            # ⭐ **跳过带 `if:` 条件的 job**（2026-10-31 补）。
+            #
+            # ## 为什么
+            #
+            # 条件 job（如 `webview2`：只在 `workflow_dispatch` 时跑）依赖**特定事件上下文**
+            # ⇒ ⇒ 本地等价 CI **没有**那个上下文 ⇒ ⇒ 硬跑它 = 跑一个**注定失败**的 job
+            # ⇒ ⇒ 那会让「本地等价 CI 全绿」这个口径**被一个本地产物污染**。
+            #
+            # ## 为什么**不静默**跳过
+            #
+            # 静默跳过 ⇒ ⇒ 结论里少了一个 job 却看不出来 ⇒ ⇒ 读者会误以为「全跑了」
+            # ⇒ ⇒ 所以这里**显式打印**（见下），让跳过**可见**。
+            job_condition = job.get("if")
+            if job_condition:
+                print(
+                    f"\n⏭ 跳过条件 job：{workflow_file.name} / {job_name}"
+                    f"（if: {job_condition}）—— 本地等价 CI **不模拟**该事件上下文"
+                    f" ⇒ ⇒ 需要真实 GitHub 运行（它的结论**不在**本地结论覆盖范围内）"
+                )
+                results.append((workflow_file.name, job_name, "跳过（条件 job）", 0.0))
+                continue
             commands = _job_commands(job, env)
             if not commands:
                 results.append((workflow_file.name, job_name, "无可执行步骤", 0.0))

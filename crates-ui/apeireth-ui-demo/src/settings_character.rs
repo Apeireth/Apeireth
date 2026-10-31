@@ -710,17 +710,17 @@ impl CharacterHost {
 // ── wasm 装配（**native 编译不参与** ⇒ 行为由浏览器内对照钉住） ─────────────
 
 /// wasm32 侧的装配。
+/// ## 诚实边界
+///
+/// - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
+///   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
+///   像素对照 + DOM 全等 + 宽度同源断言）。
+/// - **真后端未接线**：数据面是**固定数据**（编译期内嵌的那两份）。
+/// - **原生控件的取值是 property**：生产用 `bind:value` ⇒ 引擎侧**不写**
+///   `value` 属性 ⇒ 宿主在每次渲染后**回写 property**（否则像素对照会看到
+///   空输入框）。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
-    //! ## 诚实边界
-    //!
-    //! - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
-    //!   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
-    //!   像素对照 + DOM 全等 + 宽度同源断言）。
-    //! - **真后端未接线**：数据面是**固定数据**（编译期内嵌的那两份）。
-    //! - **原生控件的取值是 property**：生产用 `bind:value` ⇒ 引擎侧**不写**
-    //!   `value` 属性 ⇒ 宿主在每次渲染后**回写 property**（否则像素对照会看到
-    //!   空输入框）。
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -739,6 +739,7 @@ pub mod wasm {
     struct MicrotaskScheduler;
 
     impl HostScheduler for MicrotaskScheduler {
+        #[allow(clippy::type_complexity)] // thread_local! 里的闭包向量类型天然复杂
         fn schedule_flush(&self, flush: Box<dyn FnOnce()>) {
             let queue = Reflect::get(&js_sys::global(), &JsValue::from_str("queueMicrotask"))
                 .ok()
@@ -763,6 +764,7 @@ pub mod wasm {
         /// wasm 侧的单例应用（人格与记忆面形态）。
         static CHARACTER_APP: RefCell<Option<CharacterHost>> = const { RefCell::new(None) };
         /// 控制 API 的闭包（**必须活到页面结束**）。
+        #[allow(clippy::type_complexity)] // 闭包向量类型天然复杂（结构无法再简化）
         static CONTROL_CLOSURES: RefCell<Vec<Closure<dyn FnMut(JsValue) -> JsValue>>> =
             const { RefCell::new(Vec::new()) };
     }
@@ -788,7 +790,7 @@ pub mod wasm {
         };
         let arguments = js_sys::Array::new();
         arguments.push(&JsValue::from_f64(epoch_ms as f64));
-        let Ok(instance) = js_sys::Reflect::construct(&constructor, &arguments) else {
+        let Ok(instance) = Reflect::construct(&constructor, &arguments) else {
             return String::new();
         };
         let Some(formatter) = Reflect::get(&instance, &JsValue::from_str("toLocaleString"))
@@ -801,7 +803,7 @@ pub mod wasm {
         if let Some(tag) = locale {
             call_arguments.push(&JsValue::from_str(tag));
         }
-        js_sys::Reflect::apply(&formatter, &instance, &call_arguments)
+        Reflect::apply(&formatter, &instance, &call_arguments)
             .ok()
             .and_then(|value| value.as_string())
             .unwrap_or_default()
@@ -905,7 +907,6 @@ pub mod wasm {
         let renderer = Rc::new(RefCell::new(renderer));
         let effect_renderer = renderer.clone();
         let effect_host = host.clone();
-        let effect_container = container.clone();
         runtime.effect(move || {
             let tree = render_tree(&effect_host);
             let mut guard = effect_renderer.borrow_mut();
@@ -1109,6 +1110,7 @@ pub mod wasm {
     }
 
     /// 按选择器取一个元素。
+    #[allow(dead_code)] // wasm32 下暂未被调用（保留为工具函数）
     fn query(container: &Element, selector: &str) -> Option<Element> {
         let found = Reflect::get(container.as_ref(), &JsValue::from_str("querySelector"))
             .ok()?

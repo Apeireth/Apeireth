@@ -570,22 +570,22 @@ impl WizardHost {
 }
 
 /// wasm 宿主挂载（**引擎侧**）。
+/// 向导面的 wasm 装配（**native 编译不参与**）。
+///
+/// ## 装配形态（照批一 / 批二）
+///
+/// `WebDom`（真实 DOM 后端）+ `Renderer`（挂载 / 打补丁）+ `MicrotaskScheduler`
+/// （写入 ⇒ 一次微任务 flush）+ `Runtime::effect`（状态变化 ⇒ 重算虚拟树 ⇒
+/// 就地打补丁）。
+///
+/// ## DOM property 回写（**为什么需要**）
+///
+/// 生产的输入框用 `bind:value` / `bind:checked` ⇒ 值是 **property**（DOM 上
+/// **没有** `value` / `checked` 属性）⇒ 引擎侧若只写属性，DOM 对照会多出属性、
+/// 像素对照会看到**空输入框** ⇒ 本模块在每次渲染后**显式回写** property
+/// （**只在当前值 ≠ 目标值时写** ⇒ 不打断输入法组合态与光标位置）。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
-    //! 向导面的 wasm 装配（**native 编译不参与**）。
-    //!
-    //! ## 装配形态（照批一 / 批二）
-    //!
-    //! `WebDom`（真实 DOM 后端）+ `Renderer`（挂载 / 打补丁）+ `MicrotaskScheduler`
-    //! （写入 ⇒ 一次微任务 flush）+ `Runtime::effect`（状态变化 ⇒ 重算虚拟树 ⇒
-    //! 就地打补丁）。
-    //!
-    //! ## DOM property 回写（**为什么需要**）
-    //!
-    //! 生产的输入框用 `bind:value` / `bind:checked` ⇒ 值是 **property**（DOM 上
-    //! **没有** `value` / `checked` 属性）⇒ 引擎侧若只写属性，DOM 对照会多出属性、
-    //! 像素对照会看到**空输入框** ⇒ 本模块在每次渲染后**显式回写** property
-    //! （**只在当前值 ≠ 目标值时写** ⇒ 不打断输入法组合态与光标位置）。
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -610,6 +610,7 @@ pub mod wasm {
     struct MicrotaskScheduler;
 
     impl HostScheduler for MicrotaskScheduler {
+        #[allow(clippy::type_complexity)] // thread_local! 里的闭包向量类型天然复杂
         fn schedule_flush(&self, flush: Box<dyn FnOnce()>) {
             let callback = Closure::once_into_js(move || {
                 flush();
@@ -639,6 +640,7 @@ pub mod wasm {
         /// wasm 侧的单例应用。
         static APP: RefCell<Option<WizardApp>> = const { RefCell::new(None) };
         /// 控制 API 的闭包（**必须活到页面结束** ⇒ 存在这里，不随函数返回丢弃）。
+        #[allow(clippy::type_complexity)] // 闭包向量类型天然复杂（结构无法再简化）
         static CONTROL_CLOSURES: RefCell<Vec<Closure<dyn FnMut(JsValue) -> JsValue>>> =
             const { RefCell::new(Vec::new()) };
     }

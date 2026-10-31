@@ -805,15 +805,15 @@ pub fn data_panel_props(fixture: &DataFixture, state: &DataHostState) -> DataPan
 }
 
 /// wasm32 侧的装配（**native 编译不参与** ⇒ 行为由浏览器内对照钉住）。
+/// ## 诚实边界
+///
+/// - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
+///   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
+///   像素对照 + DOM 全等 + 宽度同源断言 + 意图断言）。
+/// - **真后端未接线**：数据面是**固定数据**（编译期内嵌的那一份）。
+/// - **危险动作不执行**：引擎侧只发意图（`window.__DATA__.getIntents()` 可读）。
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
-    //! ## 诚实边界
-    //!
-    //! - 本模块整体被 `#[cfg(target_arch = "wasm32")]` 隔离 ⇒ **native 编译不参与**
-    //!   ⇒ 它的行为**未经 native 侧验证**（浏览器内的验证由设置页 harness 承担：
-    //!   像素对照 + DOM 全等 + 宽度同源断言 + 意图断言）。
-    //! - **真后端未接线**：数据面是**固定数据**（编译期内嵌的那一份）。
-    //! - **危险动作不执行**：引擎侧只发意图（`window.__DATA__.getIntents()` 可读）。
 
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -836,6 +836,7 @@ pub mod wasm {
     struct MicrotaskScheduler;
 
     impl HostScheduler for MicrotaskScheduler {
+        #[allow(clippy::type_complexity)] // thread_local! 里的闭包向量类型天然复杂
         fn schedule_flush(&self, flush: Box<dyn FnOnce()>) {
             let queue = Reflect::get(&js_sys::global(), &JsValue::from_str("queueMicrotask"))
                 .ok()
@@ -866,6 +867,7 @@ pub mod wasm {
         /// wasm 侧的单例应用（数据子面形态）。
         static DATA_APP: RefCell<Option<DataApp>> = const { RefCell::new(None) };
         /// 控制 API 的闭包（**必须持有** ⇒ 否则 JS 侧调用会被回收）。
+        #[allow(clippy::type_complexity)] // 闭包向量类型天然复杂（结构无法再简化）
         static CONTROL_CLOSURES: RefCell<Vec<Closure<dyn FnMut(JsValue) -> JsValue>>> =
             const { RefCell::new(Vec::new()) };
     }
@@ -925,7 +927,6 @@ pub mod wasm {
         let effect_renderer = renderer.clone();
         let effect_state = state.clone();
         let effect_fixture = fixture.clone();
-        let effect_container = container.clone();
         runtime.effect(move || {
             let tree = render_tree(&effect_state, &effect_fixture);
             let mut guard = effect_renderer.borrow_mut();

@@ -544,7 +544,7 @@
           "ratio": 0.3829750101173614
         },
         "transition_index": 2,
-        "transition_latency_ms": 101.69267654418945
+        "transition_latency_ms": 103.1491756439209
       },
       {
         "side": "engine/toolgrid",
@@ -562,7 +562,7 @@
           "ratio": 0.3829750101173614
         },
         "transition_index": 2,
-        "transition_latency_ms": 102.05292701721191
+        "transition_latency_ms": 101.96900367736816
       }
     ]
   },

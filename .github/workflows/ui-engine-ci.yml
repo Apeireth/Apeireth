@@ -265,6 +265,14 @@ jobs:
       - name: cargo build --target wasm32-unknown-unknown
         run: cargo build --workspace --target wasm32-unknown-unknown --release --locked
 
+      # ⭐⭐ **wasm32 目标的 clippy**（2026-10-31 补；此前**从未**跑过 ⇒ 掩盖了 29 条既有债）。
+      # 为什么单独一条：`web-sys` / `wasm-bindgen` 是 wasm-only ⇒ ⇒ **native 目标的 clippy
+      # **看不到** wasm 分支 ⇒ ⇒ wasm 侧的 lint 只能在这里被看见。
+      # ⚠️ 用 `--all-targets`：只有它才编 **test target**（此前 demo 的 test target
+      # 在 wasm32 下有一处真编译错误，就是这条门禁逼出来的）。
+      - name: cargo clippy（wasm32 目标）
+        run: cargo clippy --workspace --all-targets --target wasm32-unknown-unknown --locked -- -D warnings
+
       # 产物体积登记（不阻塞，只打印）：wasm 体积是发版口径的一部分，
       # 超出预算时须回头看依赖面（与 ui-core 依赖面守门同一思路）。
       - name: 产物体积（报告用）
