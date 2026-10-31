@@ -81,6 +81,7 @@ python3 ../../../scripts/run-ci-local.py --workflow ui-engine-ci.yml   # 8 job �
 | 6 | **focus / IME** | ✅ 焦点栈 + 陷阱 + 组合静默期（浏览器已验证） | E-093 / E-095 / E-098 |
 | 7 | **dispose** | ✅ 幂等 + 清全部内部状态 + 可复用 | E-122（native） |
 | — | **wasm 验证** | ✅ `wasm32` check 0 错误 + 浏览器探针全过 | E-116 / E-124 |
+| — | **产品宿主薄壳** | ✅ `boot`/`rerender`/`dispose` 三条**浏览器已验证**（`l1_app_probe`） | E-127 |
 | — | **WebView2 验证** | ❌ **未做** | 无 Windows 装置（= 放行条件 **C2**，owner 决定先泡着） |
 
 ⇒ ⇒ **除 WebView2 外，垂直切片已具备并有证据**；
