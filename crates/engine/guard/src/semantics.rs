@@ -168,6 +168,23 @@ pub fn descriptor_for_capability(
     CapabilitySafetyRegistry::canonical().descriptor_for(capability_id, arguments)
 }
 
+/// **运行时内部能力面**：`tool.behavior.*`（认知模块 / 探针 / 模块测试面）。
+///
+/// # 为什么需要这条边界（2026-10-31 合并批）
+///
+/// 这些能力**不是模型选的工具**，而是运行时自己发起的进程内认知调用
+/// （记忆召回、偏好学习写回、自述探针…）。而**回合意图**（`RuleIntentInterpreter`
+/// 的 fail-narrow 只读 intent）划的是**用户任务边界**
+/// ⇒ 若把内部认知也按意图对齐，一轮普通对话里运行时的记忆写回就会被判成
+/// 「越界」⇒ 高危拒绝 ⇒ 收容闸撤销会话 ⇒ 整轮被拒（实测：CLI 引导 5 条用例全红）。
+///
+/// ⇒ 这一层只把「意图对齐 / 只读范围」两项**判定豁免**掉；
+///   凭据、破坏性、对外网络、跨回合探测等**判定照旧**（它们看的是描述符，
+///   而描述符对内部写面仍如实标 `persistent_effect = true`）。
+pub fn is_runtime_internal_capability(capability_id: &str) -> bool {
+    capability_id.starts_with("tool.behavior.")
+}
+
 pub const BUILTIN_CANONICAL_CAPABILITY_IDS: &[&str] = &[
     "fs.read",
     "fs.write",
@@ -517,6 +534,69 @@ fn canonical_descriptors() -> Vec<CapabilitySafetyDescriptor> {
             false,
             false,
             false,
+            false,
+            "memory",
+        ),
+        // === 进程内模块能力（2026-10-31 合并批补登记）===
+        //
+        // `tool.behavior.cognitive.*` 是**模块内**调用（不落盘、不出网），但此前
+        // 不在注册表里 ⇒ `infer_descriptor` 走「未知 ⇒ 视为有对外效应」的保守兜底
+        // ⇒ 在**只读任务范围**下被 FastGuard 判成
+        // 「scope mismatch: … requested mutation capability」
+        // ⇒ 高危拒绝 ⇒ 收容闸撤销会话 ⇒ 该轮被拒。
+        //
+        // ⇒ 只登记**可证明只读**的两条（记忆召回 / 偏好召回）；
+        //   `memory_writeback` / `persona_injection` 等**有意不登记** ——
+        //   它们确实有变更语义，未知兜底（拒绝）才是正确结果。
+        describe(
+            "tool.behavior.cognitive.memory_recall",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "memory",
+        ),
+        describe(
+            "tool.behavior.cognitive.preference_recall",
+            vec![OperationClass::Read],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            false,
+            false,
+            "memory",
+        ),
+        // **内部写面也要如实登记**：它们是运行时的**进程内**记忆写（不落外部、
+        // 不出网）⇒ `external_effect = false`（否则 read-only 意图下正常的一轮
+        // 对话都会被判成越界）；但 `persistent_effect = true` 如实标记，
+        // 供需要区分「读」与「写」的层使用。
+        describe(
+            "tool.behavior.cognitive.preference_learning",
+            vec![OperationClass::Modify],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            true,
+            false,
+            "memory",
+        ),
+        describe(
+            "tool.behavior.cognitive.memory_writeback",
+            vec![OperationClass::Write],
+            vec![ResourceClass::MemorySemantic],
+            vec![SourceClass::ToolOutput],
+            vec![SinkClass::UserDisplay],
+            false,
+            false,
+            true,
             false,
             "memory",
         ),

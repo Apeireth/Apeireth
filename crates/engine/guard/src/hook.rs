@@ -878,7 +878,13 @@ impl BehaviorChainGuardHook {
         } else {
             self.chain_guard.evaluate(&chain, &obs, &fast_res)
         };
-        guard_decision = apply_alignment(guard_decision, &alignment);
+        // 运行时**内部**能力面（`tool.behavior.*`：认知模块/探针，由运行时派发，
+        // 不是模型选择的工具）**不受回合意图对齐**管辖 —— 意图描述的是用户任务
+        // 边界，而内部认知（记忆召回、偏好学习写回）是服务这一轮的必要组成。
+        // ⚠️ 只跳过**对齐**这一层：凭据/破坏性/网络/跨回合探测等判定全部照旧。
+        if !crate::semantics::is_runtime_internal_capability(&obs.capability_id) {
+            guard_decision = apply_alignment(guard_decision, &alignment);
+        }
         let cross_turn = self
             .session_history
             .lock()

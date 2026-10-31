@@ -682,11 +682,20 @@ mod tests {
         audit.rollback(2);
         assert_eq!(sink.len(), 2, "回滚后链回到存档点");
         sink.verify().expect("回滚后链仍完整");
+        // ⚠️ **2026-10-31 合并批**：本仓的单写者锁（`SingleWriterLock`）是**按账本**
+        // 而非按调用方计数的 ⇒ 同一账本**只能有一个 sink 句柄**（同进程也一样，见
+        // `second_sink_on_the_same_ledger_is_rejected`）。本用例来自 main 侧，按
+        // 「无锁实现」写在 `audit` / `sink` 仍存活时就重开 ⇒ 与本仓纪律冲突。
+        // ⇒ 重开前先放掉全部句柄（这才是生产里「关掉再开」的顺序）。
+        drop(audit);
+        drop(sink);
         let reopened = FileChainAuditSink::open(path.clone()).expect("reopen after rollback");
         assert_eq!(reopened.len(), 2, "回滚后账本必须仍开得出");
         reopened
             .append("governance.allowed", "tool.repo", Timestamp::now())
             .expect("append after rollback");
+        // 同上：单写者锁按**账本**计 ⇒ 重开前必须放掉上一个句柄。
+        drop(reopened);
         let after = FileChainAuditSink::open(path.clone()).expect("reopen after append");
         assert_eq!(after.len(), 3, "回滚后追加必须仍是三条记录");
         after.verify().expect("chain verifies");

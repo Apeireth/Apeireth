@@ -132,8 +132,14 @@ impl FastGuard {
         }
 
         // 4. Scope mismatch
+        //    ⚠️ 运行时**内部**能力面（`tool.behavior.*`）不受回合意图的只读管辖：
+        //    意图划的是**用户任务**边界，而记忆召回、偏好学习写回是运行时为服务
+        //    这一轮自己发起的认知动作（模型并未请求它们）。外部效应/凭据/破坏性
+        //    等判定**照旧生效**（`infer_descriptor` 仍会给未知能力保守上风险）。
         if let Some(scope) = declared_scope {
-            if is_read_only_scope(scope) {
+            if is_read_only_scope(scope)
+                && !crate::semantics::is_runtime_internal_capability(&obs.capability_id)
+            {
                 let cap_lc = obs.capability_id.to_lowercase();
                 if obs.external_effect
                     || cap_lc.contains("write")

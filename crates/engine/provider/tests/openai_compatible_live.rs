@@ -105,7 +105,10 @@ async fn deepseek_live_factory_smoke() {
 
     let factory = OpenAiCompatibleLlmFactory::from_env().expect("factory from env");
     let instance = factory
-        .spawn(apeireth_orchestration::SubagentRole::Reviewer, &live_model())
+        .spawn(
+            apeireth_orchestration::SubagentRole::Reviewer,
+            &live_model(),
+        )
         .await
         .expect("spawn");
     let req = CompletionRequest {

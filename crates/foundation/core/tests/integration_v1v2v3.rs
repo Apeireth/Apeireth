@@ -34,7 +34,8 @@
 
 use apeireth_core::{
     Action, ActionGuard, ActionTarget, ActionVerdict, DefaultPhilosophyGuard, HAMode,
-    HumanAuthority, PermissionLayer, PermissionOnion, PhilosophyKey, RealHuman, RiskLevel,
+    HumanAuthority, MultiSignPolicy, PermissionLayer, PermissionOnion, PhilosophyKey, RealHuman,
+    RiskLevel,
 };
 
 // ============================================
@@ -103,7 +104,14 @@ fn multi_human_authority() -> HumanAuthority {
         mode: HAMode::MultiHuman,
         real_humans: vec![real_human("alice"), real_human("bob")],
         ice_frozen_until: None,
-        multi_sign: None,
+        // 2026-10-31：`MultiHuman` **必须**配策略 —— core 侧已按校验器侧同口径
+        // 改成 fail-closed（未配置 ⇒ 拒绝），理由见 `gate.rs::check_ha` 的注释与
+        // `governance_chain_drill.rs` 的回归守卫。此夹具原本 `None`（等于「忘配」，
+        // 靠旧 fail-open 才放行）⇒ 这正是被修掉的那一类静默退化，故补上。
+        multi_sign: Some(MultiSignPolicy {
+            required: 2,
+            public_keys: None,
+        }),
     }
 }
 

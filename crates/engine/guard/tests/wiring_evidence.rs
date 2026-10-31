@@ -47,7 +47,16 @@ use apeireth_guard::{
 // 撞上 `--locked` 门禁）。`include_str!` 是**编译期**读文件，不引入任何依赖。
 const CLI_ROOT: &str = include_str!("../../../adapters/cli/src/lib.rs");
 const GATEWAY_ENTRY: &str = include_str!("../../../adapters/gateway/src/canonical_entry.rs");
-const RUNTIME_DISPATCH: &str = include_str!("../../../engine/runtime/src/canonical/execute.rs");
+// ⚠️ **2026-10-31 合并批**：main 把「工具派发闸」从 `execute.rs` 抽到了
+// `canonical/dispatch_admission.rs`（`execute.rs` 只剩**完成级**的 Deny 分支）
+// ⇒ 只钉 `execute.rs` 会让本测试的「拒绝即帧」断言**失去对象**（而对源码做字符串
+// 断言是这里的既定手法：runtime 改派发语义 ⇒ 测试必须红）。
+// ⇒ 两个文件**一起**钉：`execute.rs` 提供 Deny 分支，`dispatch_admission.rs`
+//   提供「refused by governance:」与 `ToolResult::permanent_error(` 的帧化。
+const RUNTIME_DISPATCH: &str = concat!(
+    include_str!("../../../engine/runtime/src/canonical/execute.rs"),
+    include_str!("../../../engine/runtime/src/canonical/dispatch_admission.rs"),
+);
 
 /// 生产形态的治理栈（护栏部分）。
 ///
