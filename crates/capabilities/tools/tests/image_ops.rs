@@ -4,6 +4,10 @@
 //!
 //! 断言全部走**像素级**真值 (fixture 像素逐个选定, 输出逐像素核对), 不钉字面。
 
+/// 本集成测试二进制内的 env 锁（进程级全局量 ⇒ 串行）。
+/// 放在**模块级**（不在测试函数内）：同文件多个测试函数共用同一把。
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 use std::path::Path;
 use std::sync::Arc;
 
@@ -934,6 +938,9 @@ async fn activity_counts_track_operations_without_paths() {
 /// 其余取值一律关 (默认关)。
 #[tokio::test]
 async fn image_ops_switch_fails_closed_on_anything_but_one() {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     std::env::remove_var(IMAGE_OPS_ENABLE_ENV);
     assert!(
         !apeireth_tools_canonical::image_ops_enabled_from_env(),

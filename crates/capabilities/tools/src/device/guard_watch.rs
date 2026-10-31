@@ -619,17 +619,10 @@ impl GuardAlertLedger {
             vec![GUARD_ALERTS_DOC_VERSION],
             alert,
         );
-        let line =
-            serde_json::to_vec(&doc).map_err(|error| format!("告警账序列化失败: {error}"))?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| format!("告警账打开失败 {}: {error}", self.path.display()))?;
-        file.write_all(&line)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|error| format!("告警账写入失败 {}: {error}", self.path.display()))
+        // ⚠️ **2026-10-27 修同族缺陷**：原写法**两次写**（行体 + 换行）
+        // ⇒ 并发写者会把两行挤成一行 ⇒ **告警记录丢失**。
+        // ⇒ 改用**共用原语**（行体与行尾换行同在一次写）。
+        crate::proposal::append_jsonl_row(&self.path, "告警账", &doc)
     }
 
     /// 读回整本 (逐记录语义: 坏行读作不存在并计入 `skipped`)。

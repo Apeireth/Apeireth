@@ -6,6 +6,9 @@
 //! 模块语义:
 //! - Update hunks require a **strict unique** match (0 → [`ApplyPatchError::ContextMismatch`],
 //!   >1 → [`ApplyPatchError::AmbiguousMatch`]). Silent first-match replacement is rejected.
+//! - 同一补丁内多个动作指向同一路径时按**声明顺序**叠加 (后一个 `*** Update File:`
+//!   段作用在前一段的暂存结果上): 报告说改了几处, 磁盘就得有几处的效果 ——
+//!   静默吞掉前一个动作会让成功报告变成谎帧.
 //! - 行式 hunks (`@@` 注释锚, `-old` / `+new`) 与 SEARCH/REPLACE 格式并存, 自动识别.
 //! - 提交写盘走统一存储基础件的持久档原子写 (同目录独占临时文件 + 落盘 + 替换,
 //!   见 `apeireth_core::storage_atomic`): 崩溃安全替换, 半途中断不留截断目标.
@@ -362,10 +365,24 @@ impl TransactionalPatchApplier {
                             path.to_string_lossy().to_string(),
                         ));
                     }
-                    let (original, observed) = read_observed(&full_path, gate)?;
-                    original_backups.insert(full_path.clone(), Some(original.clone()));
+                    // 同一路径被多个 `*** Update File:` 段声明时, 后一段**叠加**在
+                    // 前一段的暂存内容上 (动作按声明顺序生效) —— 报告说改了几处,
+                    // 磁盘就得有几处的效果; 静默吞掉前一个动作会让成功报告变成谎帧
+                    // (报告说改了两处, 磁盘只有后一处的效果)。
+                    // 原内容备份只在首次读盘时记 (回滚要的是「本次事务前的原内容」),
+                    // 版本 CAS 钥匙沿用首次观测 (磁盘自那次观测起未变)。
+                    let (base, intent, observed) = match staged_writes.get(&full_path) {
+                        Some(previous) => {
+                            (previous.content.clone(), previous.intent, previous.observed)
+                        }
+                        None => {
+                            let (original, observed) = read_observed(&full_path, gate)?;
+                            original_backups.insert(full_path.clone(), Some(original.clone()));
+                            (original, WriteKind::Replace, Some(observed))
+                        }
+                    };
 
-                    let mut updated = original;
+                    let mut updated = base;
                     for (h_idx, hunk) in hunks.iter().enumerate() {
                         updated = apply_unique_replace(
                             &updated,
@@ -379,8 +396,8 @@ impl TransactionalPatchApplier {
                         full_path,
                         StagedWrite {
                             content: updated,
-                            intent: WriteKind::Replace,
-                            observed: Some(observed),
+                            intent,
+                            observed,
                         },
                     );
                     files_updated.push(path.to_string_lossy().to_string());
@@ -876,6 +893,28 @@ replaced
     }
 
     // ---- H4 (2026-09-24 审计): 根目录包含校验 ----
+
+    #[test]
+    fn two_update_sections_on_one_file_both_land() {
+        // 同一补丁里两个 `*** Update File:` 指向同一文件: **两个动作都要落地** ——
+        // 报告说改了两处, 磁盘就得有两处的效果 (静默吞掉前一个 = 谎帧)。
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), "alpha\nbeta\ngamma\n").unwrap();
+
+        let patch = "*** Begin Patch\n\
+                     *** Update File: a.txt\n@@\n-beta\n+FIRST\n\
+                     *** Update File: a.txt\n@@\n-gamma\n+SECOND\n\
+                     *** End Patch";
+
+        let report = TransactionalPatchApplier::apply(dir.path(), patch).unwrap();
+        assert_eq!(report.files_updated, vec!["a.txt", "a.txt"]);
+        assert_eq!(report.total_actions, 2);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "alpha\nFIRST\nSECOND\n",
+            "两个 Update 动作都必须落地 (不许静默吞掉前一个)"
+        );
+    }
 
     #[test]
     fn apply_rejects_absolute_add_path() {

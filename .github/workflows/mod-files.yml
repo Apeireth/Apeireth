@@ -1,0 +1,29 @@
+# `mod` 声明 ↔ **文件入库性**关卡（2026-10-26 加）
+#
+# **防的是什么**：某个 commit 里带了 `pub mod X;`，但 `X.rs` **没进那个 commit**
+# ⇒ ⇒ 该 commit **单独 checkout 编译不过**（本地工作树里有文件 ⇒ 本地看不出来）
+# ⇒ ⇒ 已在实战里发生：PR #94 因 `crates/engine/memory/src/lib.rs` 带了
+#      `pub mod git_corpus;` 而 `git_corpus.rs` 当时还是未跟踪文件
+#      ⇒ **10 个 workflow 全红**（clippy / fmt / rustdoc / tarpaulin / …）。
+#
+# **为什么只查「入库性」**：**「文件存不存在」由编译器管**（`cargo check` 立刻报
+# `file not found for module`）⇒ 本关卡**不重复**它（手写 Rust 2018 模块路径解析
+# 不可靠：我第一版 88 处假阳性 ⇒ 已交给编译器）。
+name: mod-files-guard
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mod-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that every `mod` target file is tracked by git
+        run: python3 scripts/check_mod_files.py

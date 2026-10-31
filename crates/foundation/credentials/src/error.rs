@@ -39,7 +39,12 @@ pub enum CredentialsError {
     Format {
         /// 目标服务名。
         service: String,
-        /// 解析错误描述 (serde 消息, 不含明文)。
+        /// 解析错误描述（**只含错误类别 + 行列位置，绝不含凭据明文**）。
+        ///
+        /// ⚠️ 此前这里透传 serde 的原始消息 ⇒ 它的类型不匹配描述会**带上出错的值原文**
+        /// （`invalid type: integer `9876543210987654321`, expected a string`）
+        /// ⇒ 凭据表里的**值原文**原样进错误文本/日志/告警 ⇒ 违反本文件的红线。
+        /// 现在的写法只留 `classify()` + `line()` + `column()`：诊断力不丢，值不出门。
         message: String,
     },
 }

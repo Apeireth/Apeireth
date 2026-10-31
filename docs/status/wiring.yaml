@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 080cccb5ec0f9c2828c0160790cdfbd0fd41d21bef0485dc0c90c7154fe1306c
+claims_sha256: e210539ffa8041d6d580747a32e3adbdd452dc38ea2a0ee2ff47792ba33e91bf
 claims_total: 29
 items:
   - id: "rt.provider_router"
@@ -276,11 +276,9 @@ items:
       sources:
         - "crates/capabilities/tools/src/process/linux.rs"
         - "crates/capabilities/tools/src/process/platform.rs"
-        - "crates/capabilities/tools/src/process/mod.rs"
     wired:
       production_refs:
         - "crates/capabilities/tools/src/process/linux.rs"
-        - "crates/capabilities/tools/src/process/mod.rs"
         - "crates/capabilities/tools/src/process/platform.rs"
     default_enabled: "n/a"
     validated:
@@ -403,14 +401,13 @@ items:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "gov.chain_drill_ci"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。2026-10-30 复核：rust.yml 因「CI 工具…"
+      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest …"
   - id: "sec.governance_chain_drill"
     capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
     implemented:
       sources:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
         - "docs/04-internal/governance-chain-drill-2026-10-20.md"
-        - "crates/foundation/governance/tests/rubric_advice.rs"
     wired:
       production_refs:
         []

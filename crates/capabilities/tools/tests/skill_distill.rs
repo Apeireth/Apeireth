@@ -123,6 +123,36 @@ fn source_path_escapes_and_sensitive_surfaces_are_refused() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// 只读通道限域 (**现实层**): 工作区内的符号链接指向工作区外的文件 ⇒ 拒绝
+/// 即帧, 零落盘。
+///
+/// 词法限域只管**拼写** (绝对路径 / `..` 组件), 看不见 symlink 指向的真实
+/// 目标; 只读通道必须再证明「解析后的目标仍在工作区内」—— 否则一次 `path`
+/// 取参就能把工作区外的文件内容读进技能卡 (敏感面判定也只落在拼写上)。
+#[cfg(unix)]
+#[test]
+fn symlink_out_of_workspace_is_refused_by_the_read_only_channel() {
+    let root = temp_workspace("symlink");
+    let library = SkillLibrary::under_data_dir(&root);
+    let outside = std::env::temp_dir().join(format!(
+        "apeireth-skill-distill-outside-{}",
+        std::process::id()
+    ));
+    std::fs::write(&outside, "工作区外的秘密内容").unwrap();
+    std::os::unix::fs::symlink(&outside, root.join("link.md")).unwrap();
+
+    let call = params(draft("越界卡", &["越界"]), None, Some("link.md"));
+    let err = distill_into(&library, &root, &call, 1_000).unwrap_err();
+    assert!(err.contains("拒绝沉淀"), "符号链接越界必须拒绝即帧: {err}");
+    assert!(
+        library.scan().cards.is_empty(),
+        "越界请求零落盘: {:?}",
+        library.scan()
+    );
+    let _ = std::fs::remove_file(&outside);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// 内容输入二选一: 两个都给或两个都不给都拒绝即帧。
 #[test]
 fn exactly_one_content_input_is_required() {

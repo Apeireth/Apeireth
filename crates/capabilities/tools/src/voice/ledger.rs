@@ -131,17 +131,15 @@ impl SpokenLedger {
             vec![SPOKEN_DOC_VERSION],
             utterance,
         );
-        let line =
-            serde_json::to_vec(&doc).map_err(|error| format!("语句账本序列化失败: {error}"))?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| format!("语句账本打开失败 {}: {error}", self.path.display()))?;
-        file.write_all(&line)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|error| format!("语句账本写入失败 {}: {error}", self.path.display()))
+        // ⚠️ **2026-10-26 修同族缺陷**：原写法是**两次写**（行体一次、换行一次）
+        // ⇒ **并发写者**可以在两次写之间插进来 ⇒ ⇒ **两行被挤成一行** ⇒
+        // **记录丢失**（读回时那行解析失败 ⇒ 计入 `skipped` ⇒ 看着像「坏行」，
+        // 实则是「丢记录」）。
+        // ⇒ 改用**共用原语** `apeireth_core::stored_doc::append_record`
+        // （与读面 `scan_records` 同模块 ⇒ 读写同源、一个实现不分叉）：
+        // **行体与行尾换行同在一次写**（O_APPEND 原子），
+        // 且**末行缺换行**（撕裂写半行）时先补一个换行。
+        crate::proposal::append_jsonl_row(&self.path, "语句账本", &doc)
     }
 
     /// 读回整本 (逐记录语义: 坏行读作不存在并计入 `skipped`)。
@@ -197,6 +195,67 @@ mod tests {
             volume: 100,
             engine: "mock".to_string(),
         }
+    }
+
+    /// 回归（2026-10-26）：**撕裂写后追加不许把旧行吞掉**。
+    ///
+    /// 旧实现是**两次写**（行体一次、换行一次）⇒ 末行缺换行时，下一次追加会把
+    /// **旧行与新行粘成一行** ⇒ 旧行读不出来（看着像「坏行」，实则是**丢记录**）。
+    #[test]
+    fn appending_after_a_torn_line_keeps_every_row_readable() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ledger = SpokenLedger::under_data_dir(dir.path());
+        ledger.append(&utterance("第一句")).expect("append 1");
+
+        // 制造撕裂写：把末行的换行去掉。
+        let path = ledger.path().to_path_buf();
+        let mut bytes = std::fs::read(&path).expect("read ledger");
+        assert!(bytes.ends_with(b"\n"), "正常追加的末行应有换行");
+        bytes.pop();
+        std::fs::write(&path, &bytes).expect("write torn ledger");
+
+        ledger.append(&utterance("第二句")).expect("append 2");
+        let scan = ledger.scan().expect("scan");
+        let texts: Vec<&str> = scan
+            .records
+            .iter()
+            .map(|doc| doc.body.text.as_str())
+            .collect();
+        assert_eq!(
+            texts,
+            vec!["第一句", "第二句"],
+            "撕裂写后追加不许把旧行吞掉（丢记录）"
+        );
+        assert_eq!(scan.skipped, 0, "不应出现坏行");
+    }
+
+    /// 回归（2026-10-26）：**并发追加不许丢行**（行体与换行必须同在一次写）。
+    #[test]
+    fn concurrent_appends_keep_every_row() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ledger = std::sync::Arc::new(SpokenLedger::under_data_dir(dir.path()));
+        let mut handles = Vec::new();
+        for worker in 0..4u32 {
+            let ledger = ledger.clone();
+            handles.push(std::thread::spawn(move || {
+                for index in 0..8u32 {
+                    let mut record = utterance(&format!("w{worker}-{index}"));
+                    record.id = format!("spk-{worker}-{index}");
+                    ledger.append(&record).expect("append");
+                }
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("join");
+        }
+        let scan = ledger.scan().expect("scan");
+        assert_eq!(
+            scan.records.len(),
+            32,
+            "并发追加不许丢行（读到 {} 行）",
+            scan.records.len()
+        );
+        assert_eq!(scan.skipped, 0, "并发追加不许产生坏行");
     }
 
     #[test]

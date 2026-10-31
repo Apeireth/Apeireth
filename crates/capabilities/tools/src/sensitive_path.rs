@@ -257,8 +257,29 @@ fn secret_value_after(body: &str, from: usize) -> Option<(usize, usize, String)>
         return None;
     }
     if first == '"' || first == '\'' {
-        let close = value[1..].find(first).map(|at| at + 1 + first.len_utf8());
-        let end = close.unwrap_or(value.len());
+        // 闭合引号扫描**认反斜杠转义**（`\"` 不算闭合）。
+        //
+        // 2026-10-25 fuzz 发现的真缺陷：原实现用 `value[1..].find(first)`，
+        // 遇到转义引号就把它当闭合 ⇒ 含转义引号的值**只脱敏前半截**，
+        // 秘密尾部原样存活（实测 `token="a\"b"` → `token="[redacted]"b"`）。
+        // 修法方向是**只多脱敏不少脱敏**（fail-closed）：
+        // 跳过 `\X` 转义对后继续找真正的闭合引号。
+        let bytes = value.as_bytes();
+        let quote = first as u8;
+        let mut index = 1usize; // 跳过开引号
+        let mut close: Option<usize> = None;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' && index + 1 < bytes.len() {
+                index += 2; // 跳过转义对 `\X`
+                continue;
+            }
+            if bytes[index] == quote {
+                close = Some(index);
+                break;
+            }
+            index += 1;
+        }
+        let end = close.map(|at| at + 1).unwrap_or(value.len());
         return Some((
             value_start,
             value_start + end,
@@ -280,6 +301,23 @@ fn secret_value_after(body: &str, from: usize) -> Option<(usize, usize, String)>
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    /// **回归**：含转义引号的值必须**整段**脱敏（2026-10-25 fuzz 发现的真缺陷）。
+    ///
+    /// 原实现用 `find(first)` 找闭合引号 ⇒ 遇到 `\"` 就停 ⇒ 只脱敏前半截，
+    /// 秘密尾部（`b"`）原样存活（实测 `token="a\"b"` → `token="[redacted]"b"`）。
+    /// 修复后脱敏范围**只增不减**（fail-closed）。
+    #[test]
+    fn redacts_whole_value_when_it_contains_escaped_quote() {
+        for (input, leaked, note) in [
+            ("token=\"a\\\"b\"", "b\"", "转义引号的值"),
+            ("{\"token\":\"a\\\"b\"}", "b\"", "单行内联 JSON"),
+        ] {
+            let out = super::redact_secret_field_values(input);
+            assert!(!out.contains(leaked), "{note}：秘密值尾部泄漏 —— {out:?}");
+            assert!(out.contains(REDACTED), "{note}：值必须被脱敏 —— {out:?}");
+        }
+    }
 
     #[test]
     fn protects_known_sensitive_files_and_directories() {

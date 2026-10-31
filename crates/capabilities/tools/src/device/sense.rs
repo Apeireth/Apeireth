@@ -705,27 +705,11 @@ mod tests {
 
     #[test]
     fn the_switch_is_fail_closed_except_the_exact_opt_in() {
-        // 串行护住 env 读写 (进程级全局量)。
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        std::env::remove_var(DEVICE_SENSE_ENABLE_ENV);
-        assert!(!device_sense_enabled_from_env());
-        assert!(DeviceSenseConfig::from_env(".").is_none());
-        for value in ["0", "true", "on", " 1 0 ", ""] {
-            std::env::set_var(DEVICE_SENSE_ENABLE_ENV, value);
-            assert!(!device_sense_enabled_from_env(), "must refuse {value:?}");
-            assert!(
-                DeviceSenseConfig::from_env(".").is_none(),
-                "must refuse {value:?}"
-            );
-        }
-        std::env::set_var(DEVICE_SENSE_ENABLE_ENV, "1");
-        assert!(device_sense_enabled_from_env());
-        assert!(DeviceSenseConfig::from_env(".").is_some());
-        std::env::set_var(DEVICE_SENSE_ENABLE_ENV, " 1 ");
-        assert!(device_sense_enabled_from_env(), "前后空白容忍");
-        std::env::remove_var(DEVICE_SENSE_ENABLE_ENV);
+        crate::test_support::assert_switch_fails_closed_except_exact_one(
+            DEVICE_SENSE_ENABLE_ENV,
+            &["0", "true", "on", " 1 0 ", ""],
+            device_sense_enabled_from_env,
+            Some(|| DeviceSenseConfig::from_env(".").is_some()),
+        );
     }
 }

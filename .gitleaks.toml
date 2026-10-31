@@ -66,6 +66,13 @@ regexes = [
     '''sk-ant-voice-[a-z0-9]+''',
     # R215 REDACTED 形态占位 (留作 0 装 PASS 范例)
     '''REDACTED-[a-zA-Z0-9-]+-[0-9]+chars''',
+    # `input_security` fuzz target 的**假凭据夹具**：`sk-` 前缀 + **26 个数字**
+    # （测 PII/脱敏面必须写得出凭据的真形状, 否则测不到要测的那条路）。
+    # ⚠️ 用**正则**而不是**路径豁免** ⇒ 精确放过这一条形态,
+    # **不豁免整个文件** ⇒ 扫描器**仍然扫自己**（`scripts/secret-scan.ps1`）与所有其它文件。
+    # ⚠️ 2026-10-27 实测踩坑：把该字面量写进**任何注释** ⇒ **扫描器会把自己报出来**
+    # ⇒ ⇒ 本条正则刻意**不写出完整字面量**。
+    '''sk-1{26}''',
     # 旧 task 报告里的 test verification key (借 prefix 但含 test/dummy/verify 标记, 非真 key)
     '''(test|dummy|verify|not-real|fake)[-_]?key''',
     '''a-demo-api-key-.*''',

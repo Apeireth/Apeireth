@@ -42,13 +42,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [protocol_decode, gateway_guards, resident_parse, sentence_split, tool_schema, im_config, mcp_config, plugin_bounds, content_sanitize, guardrail_security, device_actions, untrusted_envelope, client_tokens, stored_doc, approval_risk, recon_scope]
+                                                                                                                                                                target: [apply_patch, approval_policy, approval_risk, backup, canonical_binding, canonical_entry, chain_audit, client_tokens, content_feed, content_sanitize, credentials, device_actions, device_control, device_sense, doc_ops, domain_context, education, egress, exec_pipeline, exposure_audit, external, fetch_image, filesystem, gateway_guards, git_write, guard_supervisor, guard_watch, guardrail_security, im_config, im_payload, input_security, mcp_config, mcp_governance, mcp_schema, path_guard, plugin_bounds, post_execute, proposal, protocol_decode, recon_scope, repo_map, resident_parse, search, self_status, sensitive_path, sentence_split, sheet_ops, skill_search, spill_access, stealth_crawler, stored_doc, tool_params, tool_schema, untrusted_envelope, weather, worktree_apply, write_intent]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: fuzz
+      # ⚠️ **系统依赖：`libdbus-1-dev`（2026-10-25 实测修）**
+      #
+      # `apeireth-credentials` → `keyring` → `secret-service` → `libdbus-sys`，
+      # 而 `libdbus-sys-0.2.7/build.rs` 用 **pkg-config 找 `dbus-1`**：
+      # 找不到就 `panic!()`（它自己的报错就写着
+      # 「sudo apt install libdbus-1-dev pkg-config」）。
+      #
+      # **为什么以前没炸**：CI 一直有 `rust-cache` 命中 ⇒ `libdbus-sys` 是**预编译产物**
+      # 直接用，根本不跑它的 build.rs。
+      # **2026-10-25 炸的原因**：fuzz 工作区新增了仓内 path 依赖（`apeireth-credentials`）
+      # ⇒ `fuzz/Cargo.lock` 变 ⇒ **rust-cache 的 key 变** ⇒ **冷编译**
+      # ⇒ `libdbus-sys` 必须从头编 ⇒ runner 上没有 libdbus 开发包 ⇒
+      # **构建期 panic ⇒ 39 个 target 全灭**（每个 job 都报
+      # 「failed to build fuzz script: ASAN_OPTIONS=… RUSTFLAGS=…」，但真因在上面的 panic）。
+      #
+      # ⇒ 装上系统依赖 ⇒ 冷构建也能过（**不依赖缓存是否命中**）。
+      - name: Install system deps (libdbus-1-dev for keyring/secret-service)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Choose run budget
@@ -69,7 +89,13 @@ jobs:
         #      error: the option `Z` is only accepted on the nightly compiler
         #      Error: failed to build fuzz script: ASAN_OPTIONS=... RUSTFLAGS=" -Cpasses=sancov-module ..."
         # 命令行 `+nightly` 优先级最高，能压过该 pin（2026-10-24 实测修正）。
-        run: cargo +nightly fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }}
+        # ⚠️ **2026-10-26 加 `-timeout=25`**（单次输入的执行上限，秒）：
+        # 实测：`mcp_schema` 的**固定对抗串电池**里有一个模板 `"{zq"` 让渲染器
+        # **死循环**（产品已修，见 `crates/foundation/plugin/src/mcp/prompt.rs`）。
+        # ⇒ 但**任何** target 若再出现「单次输入挂死」，没有 `-timeout` 的话
+        # libFuzzer 会**一直等** ⇒ 整个 job 跑到 45 分钟上限才红 ⇒ ⇒
+        # **反馈极慢**。⇒ 加了上限 ⇒ **单输入超 25 秒立刻报 timeout 并落 artifact**。
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- ${{ steps.budget.outputs.args }} -timeout=25
       - name: Upload crash artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -115,3 +141,50 @@ jobs:
           path: crates/engine/image/codecs/fuzz/artifacts/
           if-no-files-found: ignore
           retention-days: 14
+
+  # ── fuzz 目标登记一致性（三条静默空洞的机器守卫，2026-10-26 加）
+  #
+  # ① `[[bin]] name` ↔ `path` 必须一致 ⇒ 否则 **CI 跑的是另一个 target**
+  #    （实战踩到：`stealth_crawler` 指向 `spill_access.rs` ⇒ 那个 job 跑的是 spill_access）
+  # ② `fuzz/fuzz_targets/*.rs` 无孤儿 ⇒ 写了没登记 = 白写
+  # ③ 每个 `[[bin]]` 必须在矩阵里 ⇒ 登记了不跑 = 白登记
+  #    （实战又抓到：`git_write` 登记了但**从来没进过矩阵**）
+  #
+  # 这三类都是**静默**的：CI 全绿、报告好看，**实际覆盖面是假的**。
+  fuzz-registry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check fuzz target registry consistency
+        run: python3 scripts/check_fuzz_bins.py
+
+  # ── **全部 target 必须编译**（2026-10-26 加；**第四类静默空洞**）
+  #
+  # ④ 登记进矩阵 ≠ **编译得过** ⇒ 那个 job 必红。
+  #    实战踩到（2026-10-26）：`stealth_crawler` 的 target 里有一处
+  #    「`index` 不在作用域」的编译错 ⇒ **它从没编译过** ⇒ 而它**已登记进矩阵**
+  #    ⇒ ⇒ CI 那个 job 必红，而**本地一切正常**（我只逐个跑过别的 target）。
+  #    ⇒ `scripts/check_fuzz_bins.py` 查不出这类（它只查登记一致性，不查编译）。
+  #    ⇒ 这里用 `cargo +nightly check --all-targets`（**只做类型检查，不链接**
+  #    ⇒ 本机实测 **3.6 秒**）⇒ 一次性过完**所有** target ⇒ 比 46 个 job 各自
+  #    编译更快、更早暴露。
+  fuzz-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      # 同上：`libdbus-sys` 的 build.rs 用 pkg-config 找 `dbus-1`，找不到就 panic
+      # ⇒ 冷构建时必须装（不依赖缓存是否命中）。
+      - name: Install system deps (libdbus-1-dev for keyring/secret-service)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
+      - name: Type-check every fuzz target
+        working-directory: fuzz
+        # ⚠️ 必须 `+nightly`（仓根 rust-toolchain.toml 钉 1.97.1 stable，优先级更高）。
+        run: cargo +nightly check --all-targets --locked

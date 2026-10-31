@@ -2,6 +2,10 @@
 //! 阈值+时序判定 / **只看不动**断言 (告警零设备动作) / 告警账 round-trip /
 //! 开关 fail-closed (依赖在场感知族总闸) / 白名单外跳过不编造。
 
+/// 本集成测试二进制内的 env 锁（进程级全局量 ⇒ 串行）。
+/// 放在**模块级**（不在测试函数内）：同文件多个测试函数共用同一把。
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -244,11 +248,10 @@ async fn watching_is_read_only_and_never_touches_a_device() {
 /// ③ 开关 fail-closed: 双闸齐开且显式 `"1"` 才有守护面 (单开本闸不起)。
 #[test]
 fn the_switch_is_fail_closed_and_depends_on_device_sense() {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     // 串行护住 env 读写 (进程级全局量)。
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-
-    std::env::remove_var(DEVICE_SENSE_ENABLE_ENV);
     std::env::remove_var(GUARD_WATCH_ENABLE_ENV);
     assert!(!guard_watch_enabled_from_env());
     assert!(GuardWatchConfig::from_env(".").is_none());

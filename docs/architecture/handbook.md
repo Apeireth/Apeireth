@@ -96,11 +96,13 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | **W2 架构手术** | **2026-10-20 收口** | ADR-0002 Accepted；ADR-0003 **R1a 交付**（生物线 `151e9aea`/`77b1c1fb`：nervous_snapshot 647 行 + probes 578 行 + 测试 1,205 行，默认关；`self_status_source.rs` −173 行）；R4a-1 门禁隔离；R0 完成（依赖表生成物 + CI）；R3b 主体完成（env 登记 155 条，TODO-OWNER 0、fragments 0，验收见 ADR-0004 §7.7）；缩表 2 条、守卫 0 违规 |
 | **W3 架构手术** | **2026-10-20 收口** | R7 交付：ContextBlock 单一化（`0bdd9bb4`/`a93fdbb3`）+ SessionStore 三义收敛（`1cbaee95`/`3c0bcde1`）+ dormant scheduler 归档（`14c0e9a0`/`d5a4c537`，Heartbeat 复核保留 `b36ee05e`）+ PromptCacheStabilizer 删除（`51bb6cfa`）+ bench 同步（`2481200b`）；R2 交付：Extension ABI 家族（`56ae816b`）+ 双 catalog（`911e2f49`/`b5f75ba9`）+ plugin 内部索引更名（`d8aa87af`）+ 命名迁移（`efcce6c4`）；R4b 四岛收口（23,649 行归档 + lark 解耦）；R3b 主体完成（155 条 TODO-OWNER=0）；R3c 待 2026-11-03 后 review；缩表 3 删 1 缩、守卫 0 违规（生物线在途 1 条除外） |
 | **W4 架构波** | **2026-10-21 收口** | R1b 全交付（1a/1b/2a/2b/2c/3/4a 交付、4b 收口）/ R8 A-B1-C-D 部分 / R6 A-B + C-D 载体；全量 `gate_full` **341 套件 / 8570 passed / 0 failed / 51 ignored**（26.8 min，exit 0，日志 `artifacts/wave4-close-full-2026-10-21.log`）；基线缩表 2 条；guard VIOLATIONS 0 / exceptions=2；carries 如实（R8-B2/B3、R8-D wiring、R6-C/D 签核、夜间 full 未运行、R5 未开工） |
+| **W5 阶段 6 收口** | **2026-10-31 反思归档** | 阶段 6 三段闭环：**清单 ✅ + 签核 ✅ + 反思归档 ✅**（本节 §10）⇒ ADR-0011 R6-C「至少 1 条 claim 走通四层」达成（claim `governance.approval_path`；四层条目 `V-formal-003` / `V-scenario-004` / `V-bench-002` / `V-signoff-001`）；bench 另一条 `V-bench-001`（claim `verification.kani_approval_sm`）；挂账表 §2 六行核销/已决并**保留编号**（便于他文回引） |
 
 ## 9. 变更记录
 
 | 日期 | 变更 | 证据 |
 |---|---|---|
+| 2026-10-31 | **W5 阶段 6 第三段「反思归档」**（ADR-0011 D4 的最后一段）：手册新增 §10「波次复盘 · 阶段 6 反思归档」，**逐条引用台账 id**（`V-formal-003` / `V-scenario-004` / `V-bench-002` / `V-signoff-001` / `V-bench-001`）；同批把挂账表 §2 的 **#1 / #2 / #4 / #6 / #8 / #9** 六行按 2026-10-30 裁定核销/已决（**编号保留**以便 `engineering-review-handoff-2026-10-06.md` 等他文回引）、补 **§2 标题**（此前正文引用的「§2 挂账 #2」指向空处）、新增 **#10**（#2 残余 2 小项）、并把 **#11**（自动化 HTTP 闭环回归）**删掉** —— 裁定核实仓内已有`canonical_entry_e2e.rs::http_pending_approval_can_be_approved_without_double_execution` 覆盖完整闭环（202 执行 0 → resolve 200 执行**恰好 1** → 重复 resolve **400** 执行仍 1）⇒ 属重复登记 | 本节 §10 + `docs/04-internal/live-verification-ledger.md` §1.5/§1.6/§2 |
 | 2026-10-20 | 手册 v1（规则落地同日） | commit `8bfefb1b` / `8e9dd3ae` |
 | 2026-10-20 | 手册 v1.1：Wave 2 单项 ADR + R4a-1 门禁隔离（gate_full/image CI）+ arch_guard 例外抑制/登记表双通道/`--print-vendored` | commit `5e68f644` |
 | 2026-10-20 | Wave 2 收口（R1a 交付 + R3b 主体完成 + 缩基线 2 条）；R4b 执行：B 归档干净、A 内容全落地但遭**共享 index 抢占**拆成 `df78542f`(混) + `6dccb1d2`(净)，裁决 **R2 接受现状不重写历史**（并行线 5 秒级连提，重写会二次事故）；事故登记入 ADR-0005 §3.2 | `22771a50` / `e8e7db33` / `6dccb1d2` |
@@ -125,3 +127,77 @@ git log -1 --format='%h %s'                  # 确认 HEAD 与协作日历一致
 | 2026-10-21 | **R1b-2c 交付并复核**（生物线）：`NervousSignalKind::ApprovalSocial` 生产者+订阅者同批 additive（代码 `f2dad300` / 记录 `815d85e7`），默认关零行为变化；全量门禁随 Wave 4 收口批绿 | `f2dad300`/`815d85e7` |
 | 2026-10-21 | **Wave 4 收口**：R1b/R8/R6 交付矩阵见 §3；全量 `pwsh scripts/gate_full.ps1 -FailIfBusy` = main 264 套件 / 6263 passed + image 77 套件 / 2307 passed = **341 套件 / 8570 passed / 0 failed / 51 ignored**（HEAD `f2dad300`，26.8 min，exit 0）；基线缩表 2 条（`play_tools.rs` 1412、`cli/lib.rs` 3878）；`test-baseline.md` 现行基线刷新；`current_wave=5`；carries 如实（R8-B2/B3、R8-D wiring、R6-C/D 签核、夜间 full 未运行、R5 未开工）；R3c 2026-11-03 后 review | 收口批 commit |
 | 2026-10-21 | **效率线重启批验收**（`d2621788..3d6d3d44` 10 提交）：E1 test-baseline 维护/全量执行权接管（数字未变 341/8570/0/51）；E2 治理面 4 条 claim（claims 20→24，均 IMPLEMENTED）+ wiring 重生成；E4 `verify_ledger.py` 接入 docs-truth（负向测试留记录）；E3 夜间 CI 按 owner 裁决**不推送、全本地 → NOT MET 保留**；D29/DTS/口径修复随批；本行验收 = docs_truth / arch_doc / wiring / guard / ledger 全绿，crates 零改动（仅 nervous_snapshot 注释 +5 属生物线） |
+
+## 10. 波次复盘 · 阶段 6 反思归档（2026-10-31）
+
+> **本节是 ADR-0011 D4 要求的「阶段 6 第三段：反思归档」** —— 载体 = 本手册，
+> **逐条引用台账 id**（`docs/status/verification-ledger.yaml`，四层验收结构化真源）。
+> 前两段（**清单** = 台账有条目 · **签核** = `signoff` 层）已由 2026-10-30 裁定闭合，本段补齐 ⇒
+> **阶段 6 三段全绿** ⇒ ADR-0011 R6-C「**至少 1 条 claim 走通四层**」达成。
+
+### 10.1 本波引用的台账条目（**四层齐全的那一条**）
+
+| 层 | 台账 id | claim | 证据（摘要） |
+|---|---|---|---|
+| formal | `V-formal-003` | `governance.approval_path` | Kani 治理单调性族（4 件，含 `kani_governance_fail_closed_no_bypass`） |
+| scenario | `V-scenario-004` | `governance.approval_path` | HTTP 审批闭环（含**防重复执行**） |
+| bench | `V-bench-002` | `governance.approval_path` | `governance_decision_bench`（授权 16→1024 ⇒ 判定延迟 **1.75×**；三条判定路径都被走到） |
+| **signoff** | `V-signoff-001` | `governance.approval_path` | **如实回填** owner **2026-09-28 的既有真机签署**（`owner: Mavis`）—— **是「转录」不是「新签」** |
+| bench（另一条） | `V-bench-001` | `verification.kani_approval_sm` | `research_approval_bench`（研究用审批状态机） |
+
+> ⚠️ **signoff 的诚实口径**：owner 当天签的 10 步里就含「**审批闭环**」，而本 claim 正是**生产审批路径**
+> ⇒ ⇒ **绑定忠实** ⇒ ⇒ owner **无需任何新动作**（**不代签**：`signoff` 只记 owner 标识与日期，不入密钥）。
+
+### 10.2 问题（**本波最该记的一条：我问错了**）
+
+**我从「最后 5% 是 owner 才能给的东西」这个判断出发**，向 owner 提了四项问询
+（A 新 DeepSeek key · B MiniMax key · C embeddings 端点 · D 真机操作 + 签核）。
+**2026-10-30 裁定逐条用仓内证据核对后判定：四项里没有一项非要 owner 不可** ——
+而**真正的原因是我只读了台账 §2 的挂账表，没读 §1.4 里那几行核销批注**：
+
+| 我以为 | 实际（仓内早已有） |
+|---|---|
+| #9 要重跑（DeepSeek key 被撤销） | **2026-10-10 就已核销** —— §1.4 行 46 记着 provider 2/2 · organ 2/2 · council 1/1 全实跑 ⇒ §2 那行是**残留**，不是待办 |
+| #8 要 embeddings 端点 | **本仓侧已闭环**（真 HTTP E2E 5/5）⇒ 缺的是**厂商侧**（OpenAI 兼容格式），属**厂商风险** |
+| #4 要 owner 点桌面 | **自动化层已有完整闭环**（202 → 执行 0 → resolve → 200 且执行**恰好 1** → 重复 resolve 400 且执行仍 1）⇒ **缺口陈述不成立** |
+| #2 要 owner 确认 | **owner 2026-09-28 已真机签署** ⇒ 可**如实转录** |
+
+⇒ ⭐ **教训一（可复用）**：**挂账表里有行 ≠ 那行是待办** ⇒ **读台账必须先读 §1.4 的核销批注**。
+⇒ ⭐ **教训二**：**向 owner 派活之前，先把「仓内已有证据」翻一遍并列出**；
+⇒ **问不清楚的不是问题，是自己的检索缺口**。
+
+### 10.3 决策（已落地，可复核）
+
+1. ✅ **挂账表 §2 六行按裁定核销/已决，且**编号保留**（`#1` `#2` `#4` `#6` `#8` `#9`）
+   ⇒ 理由：其它文档（`engineering-review-handoff-2026-10-06.md` 等）按编号回引，
+   **编号只增不改** ⇒ 历史引用不能断；台账新增 **§2 标题**（此前正文引用的「§2 挂账 #2」**指向空处**）。
+2. ✅ **删掉我自拟的 #11**（自动化 HTTP 闭环回归）—— 裁定核实**仓内已有**该闭环 ⇒ **属重复登记** ⇒ 删。
+3. ✅ **新增 #10**（#2 的残余 2 小项：图形卸载真删验证 / 斜杠菜单点击流）—— 裁定只核销 #2 的**核心 10 步**，
+   这两项**未被裁定覆盖** ⇒ 留账（不虚报已消）。
+4. ✅ **厂商侧风险与本仓侧风险拆开记**（#1 / #8）：本仓侧（传输/解析/错误分类）由单测与真 HTTP stub 证完；
+   厂商侧（真实响应形状与配额）是**厂商风险**，不与本仓代码风险混算。
+5. 🟡 **留给下一波的两条（不阻塞）**：① #1/#9 若要留「厂商侧仍可用」的**当期**证据，
+   走 **owner 侧只读复核命令**（**密钥不出 owner 的机器**，只把输出贴回）——
+   2026-10-31 已用 MiniMax key 实测：**厂商真机 1 passed**（§1.5），但**换厂商复跑 #9 的两支不行**：
+   `openai_compatible_live` **硬编码** `DEEPSEEK_BASE_URL`（不走 `from_env`）、
+   `organ_live_llm` **硬编码请求模型** `deepseek-v4-flash` ⇒ **测试的厂商硬编码**才是真阻塞点
+   （改动在 `crates/engine/provider/` + `crates/engine/organ/` = 总指挥区 ⇒ 只报不改）；
+   ② `docs/status/verification-ledger.yaml` 的 **`stage6_drill` 字段**（`NOT RUN → 达成`）
+   在 **#94 的 10 条版本**里 ⇒ **不属我这条线的文件** ⇒ 请随 #94 一并更新。
+
+### 10.4 下一步
+
+| # | 事项 | 归属 |
+|---|---|---|
+| 1 | 把两支 live 测试的**端点与模型名改为可配**（默认仍 DeepSeek，行为不变）⇒ 换厂商即可复跑 | 总指挥区（provider / organ） |
+| 2 | `verification-ledger.yaml` 的 `stage6_drill` 随 #94 的 10 条版本更新 | 总指挥区（该文件是他的） |
+| 3 | 若要**OpenAI 兼容** `/embeddings` 的**当期**厂商证据：给一个该格式的端点（本地部署即可） | owner（可选，不阻塞） |
+| 4 | #10 两小项（图形卸载真删验证 / 斜杠菜单点击流）需 Windows 真机 | owner（可选，不阻塞） |
+
+### 10.5 这一段的边界（如实）
+
+- **没有**代签任何 `signoff`；`V-signoff-001` 是**转录** owner 2026-09-28 的**既有**签署；
+- **没有**把「厂商侧未实测」写成「已实测」⇒ #1 / #8 的厂商侧仍标为**厂商风险**；
+- **没有**动 `crates/engine/provider/` 与 `crates/engine/organ/`（总指挥区）⇒ 上述第 1 条**只报不改**；
+- 本节的**结论不替代** `docs/status/verification-signoff-ruling-2026-10-30.md`（裁定原文）
+  ⇒ **裁定是上位**；本节只做**归档与复盘**。

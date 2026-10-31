@@ -334,4 +334,61 @@ mod tests {
         assert!(guard.deny(&request).is_some());
         assert!(!guard.is_blocked("tool.mcp.other"));
     }
+
+    /// **治理串台的前提**：治理面（授权档 / deny 名单 / 只读声明）全都按
+    /// **能力身份**判定 ⇒ 目录里若同时躺着两个「模型名不同、能力身份相同」的
+    /// 工具，授权其中一个就会把另一个一起授权（deny 名单同理）。
+    /// 防线在登记层（[`McpToolCatalog`] 拒绝撞身份的登记）—— 这里钉住这条前提。
+    #[test]
+    fn one_capability_identity_never_carries_two_tools() {
+        let catalog = McpToolCatalog::new();
+        let dotted = McpToolEntry::new(
+            "demo",
+            &super::super::connection::DiscoveredTool {
+                name: "x.y".to_string(),
+                description: None,
+                input_schema: None,
+                declared_read_only: false,
+            },
+        )
+        .unwrap();
+        catalog.insert(dotted.clone()).unwrap();
+
+        // 另一个模型名、同一个能力身份（`demo` 的 `x.y` 与 `demo.x` 的 `y`
+        // 都合成 `tool.mcp.demo.x.y`）⇒ 两条登记路径都必须拒。
+        let colliding = McpToolEntry::new(
+            "demo.x",
+            &super::super::connection::DiscoveredTool {
+                name: "y".to_string(),
+                description: None,
+                input_schema: None,
+                declared_read_only: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(dotted.capability_id, colliding.capability_id);
+        assert_ne!(dotted.model_name, colliding.model_name);
+        assert!(
+            catalog.insert(colliding.clone()).is_err(),
+            "insert 必须拒撞能力身份的登记"
+        );
+        assert!(
+            catalog.replace_server("demo.x", vec![colliding]).is_err(),
+            "replace_server 必须拒撞能力身份的刷新"
+        );
+
+        // 目录里每个能力身份只有一个模型名 ⇒ 授权一个 = 授权一个。
+        let mut identities = std::collections::BTreeMap::new();
+        for entry in catalog.list() {
+            assert!(
+                identities
+                    .insert(
+                        entry.capability_id.as_str().to_string(),
+                        entry.model_name.clone()
+                    )
+                    .is_none(),
+                "一个能力身份不得承载两个工具"
+            );
+        }
+    }
 }

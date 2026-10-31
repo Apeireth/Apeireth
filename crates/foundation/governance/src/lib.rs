@@ -132,10 +132,10 @@ pub use approval_closure::{
 };
 pub use approval_family::{
     command_families, command_words, family_ids_for_arguments, interpret_recorded_command,
-    member_calls, member_family, touched_families, word_families, ApprovalTarget, CommandFamily,
-    MemberCall, MemberCallForm, CREATE_FAMILY_WORDS, DELETE_FAMILY_WORDS, MEMBER_PREFIX_FAMILIES,
-    MIN_ABBREVIATION_CHARS, MOVE_COPY_FAMILY_WORDS, NETWORK_FAMILY_WORDS, PROCESS_FAMILY_WORDS,
-    SEGMENT_SEPARATORS, WRITE_CONTENT_FAMILY_WORDS,
+    member_calls, member_family, strip_executable_suffix, touched_families, word_families,
+    ApprovalTarget, CommandFamily, MemberCall, MemberCallForm, CREATE_FAMILY_WORDS,
+    DELETE_FAMILY_WORDS, MEMBER_PREFIX_FAMILIES, MIN_ABBREVIATION_CHARS, MOVE_COPY_FAMILY_WORDS,
+    NETWORK_FAMILY_WORDS, PROCESS_FAMILY_WORDS, SEGMENT_SEPARATORS, WRITE_CONTENT_FAMILY_WORDS,
 };
 pub use approval_policy::{
     best_approval_match, extract_commands, frequency_count, is_high_risk, parse_approval_entry,

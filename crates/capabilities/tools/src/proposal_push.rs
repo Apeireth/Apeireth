@@ -98,6 +98,9 @@ pub struct ProposalPushStats {
 ///
 /// **append-only**: 逐行一个 [`StoredDoc`] 信封, 追加写 + 落盘, 不重写、不删行;
 /// 坏行读作不存在 (跳过并计入 `skipped`), 不砖化整本。
+///
+/// **行完整性**与提案账**同一套手续** ([`crate::proposal::append_jsonl_row`]):
+/// 行体与行尾换行同在一次写 ⇒ 并发追加不挤行; 末行缺换行 (撕裂写) 时先封口。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProposalPushLedger {
     path: PathBuf,
@@ -123,7 +126,6 @@ impl ProposalPushLedger {
 
     /// 追加一行 (JSONL 单行 + 落盘; append-only, 不重写不删行)。
     pub fn append(&self, record: &ProposalPushRecord) -> Result<(), String> {
-        use std::io::Write;
         if let Some(parent) = self.path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)
@@ -136,17 +138,9 @@ impl ProposalPushLedger {
             vec![PROPOSAL_PUSH_DOC_VERSION],
             record,
         );
-        let line =
-            serde_json::to_vec(&doc).map_err(|error| format!("推送账序列化失败: {error}"))?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| format!("推送账打开失败 {}: {error}", self.path.display()))?;
-        file.write_all(&line)
-            .and_then(|()| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-            .map_err(|error| format!("推送账写入失败 {}: {error}", self.path.display()))
+        // 与提案账**同一套追加手续** (行体与换行同在一次写 + 撕裂半行封口):
+        // 推送账与提案账同姿势, 口径不许分叉 (仓内已栽过「两条路径口径不一致」)。
+        crate::proposal::append_jsonl_row(&self.path, "推送账", &doc)
     }
 
     /// 读回整本 (逐记录语义: 坏行读作不存在并计入 `skipped`)。

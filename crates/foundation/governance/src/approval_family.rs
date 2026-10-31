@@ -273,7 +273,13 @@ enum MatchKind {
 }
 
 /// 剥掉一层可执行后缀（变体防护：`rm.exe` ≡ `rm`）。
-fn strip_executable_suffix(word: &str) -> &str {
+///
+/// **公开**（2026-10-25）：写意图面的「原地改写特判」（`sed -i` / `tar -x`）
+/// 原先手写 `w == "sed"`，**绕过了**本函数的剥离 ⇒ `sed.exe -i` 漏放，
+/// 而同面的族词路（`rm.exe`）能抓 ⇒ **面内不一致**。
+/// 本面文档承诺「变体匹配（…**可执行后缀**）全部引自治理层单一来源」，
+/// 故特判必须复用同一入口，而不是各写各的。
+pub fn strip_executable_suffix(word: &str) -> &str {
     let lower = word.to_ascii_lowercase();
     for suffix in EXECUTABLE_SUFFIXES {
         if let Some(stripped) = lower.strip_suffix(suffix) {
