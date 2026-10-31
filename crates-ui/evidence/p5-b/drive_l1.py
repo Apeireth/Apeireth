@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import os
 import sys
 import time
 
@@ -44,6 +45,13 @@ sys.path.insert(0, str(HERE))
 
 import compare  # noqa: E402
 
+#: 伺服根（默认 vite 构建产物 `web/dist`）。
+#:
+#: ⚠️ **WebView2 验证走另一条路**：Windows runner 上**不装 node**（CI 里 harness 的
+#: `node_modules` 是**符号链接**到生产前端 ⇒ Windows 上不可靠）⇒ ⇒ 改为直接伺服
+#: `web/` 根（`l1/index.html` + `main.js` + `engine/pkg/`）⇒ ⇒ **零 node 依赖**。
+#: ⇒ 用环境变量 `APEIRETH_L1_SERVE_ROOT` 切换（绝对路径）。
+SERVE_ROOT_ENV = "APEIRETH_L1_SERVE_ROOT"
 DIST = HERE / "web" / "dist"
 
 
@@ -53,11 +61,15 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=25.0)
     args = parser.parse_args()
 
-    if not (DIST / "l1" / "index.html").exists():
-        print(f"❌ 缺少构建产物 {DIST}/l1/index.html（先跑 build.sh 或 vite build）", file=sys.stderr)
+    serve_root = Path(os.environ[SERVE_ROOT_ENV]) if os.environ.get(SERVE_ROOT_ENV) else DIST
+    if not (serve_root / "l1" / "index.html").exists():
+        print(
+            f"❌ 缺少构建产物 {serve_root}/l1/index.html（先跑 build.sh 或 vite build）",
+            file=sys.stderr,
+        )
         return 2
 
-    httpd, port = compare.serve(DIST)
+    httpd, port = compare.serve(serve_root)
     chrome, devtools = compare.launch_chrome()
     try:
         cdp = compare.open_page(devtools)

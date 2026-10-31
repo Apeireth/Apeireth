@@ -548,3 +548,67 @@ jobs:
         with:
           name: p5b-production-compare-evidence
           path: crates-ui/evidence/p5-b/evidence/
+
+  # =========================================================================
+  # 8. WebView2 验证（**放行条件 C2**）—— Windows 真实 WebView2 引擎
+  # =========================================================================
+  # ## 为什么**只在手动触发**时跑
+  #
+  # ① owner 2026-10-31 决定 C2「先泡一泡」⇒ ⇒ 默认**不自动跑**（避免每次 push 都发
+  #    一封邮件 —— 这正是 owner 之前抱怨过的邮件洪水）；
+  # ② Windows runner 比 Linux 慢 ⇒ ⇒ 不进常规路径；
+  # ③ 常规 8 个 job 的**结论**不依赖它 ⇒ ⇒ 它是**补充**而非前置。
+  #
+  # ## 它验证什么
+  #
+  # 在 **Windows + WebView2 引擎**（= Edge 的渲染内核）里跑**同一套**浏览器能力探针
+  # （`drive_l1.py` 的五段：DOM 能力 / 纹理上传 / 产品宿主 / 双向绑定 / 组合集成）
+  # ⇒ ⇒ 证明「引擎能力不只在 Linux 桌面 Chromium 上成立」。
+  #
+  # ⚠️ **口径（0 装诚实真账）**：
+  # - 这是 **Edge/WebView2 引擎 headless**，**不是**「Tauri 应用内嵌 WebView2」的
+  #   端到端运行 ⇒ ⇒ 它覆盖**引擎兼容性**，不覆盖**宿主集成**；
+  # - Windows runner **无 GPU** ⇒ ⇒ 走软件渲染（`APEIRETH_CHROME_SWIFTSHADER=1`）
+  #   ⇒ ⇒ 它**不**覆盖 GPU 路径（GPU 路径由 Linux 真实 GPU 的对比证据覆盖）；
+  # - 本 job **尚未在真实 WebView2 上跑过**（配置就绪 ⇒ 待 owner 拍板触发）。
+  webview2:
+    name: WebView2 能力探针（Windows / C2）
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable + wasm32 target
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-bindgen-cli（与 crates-ui 硬钉版本一致）
+        run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+
+      - name: Build harness wasm（wasm32）
+        run: cargo build --release --target wasm32-unknown-unknown -p p5b-harness --locked
+        working-directory: crates-ui/evidence/p5-b/harness
+
+      - name: wasm-bindgen（产物直接落到 web/engine/pkg ⇒ 无需 node/vite）
+        run: wasm-bindgen --target web --out-dir web/engine/pkg --out-name p5b_harness ${{ github.workspace }}/crates-ui/target/wasm32-unknown-unknown/release/p5b_harness.wasm
+        working-directory: crates-ui/evidence/p5-b
+
+      - name: 跑五段能力探针（WebView2 引擎）
+        env:
+          # ⭐ Edge（= WebView2 同一渲染内核）；runner 上无 GPU ⇒ 软件渲染。
+          CHROME: C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+          APEIRETH_CHROME_SWIFTSHADER: '1'
+          # ⭐ 直接伺服 web/ 根（**零 node 依赖** ⇒ 绕开「node_modules 符号链接」问题）。
+          APEIRETH_L1_SERVE_ROOT: ${{ github.workspace }}\crates-ui\evidence\p5-b\web
+        run: python crates-ui/evidence/p5-b/drive_l1.py
+
+      - name: 上传证据（探针报告）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webview2-l1-report
+          path: crates-ui/evidence/p5-b/evidence/l1/report.json
+          if-no-files-found: warn
