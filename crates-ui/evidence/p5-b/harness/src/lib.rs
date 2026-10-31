@@ -1227,7 +1227,7 @@ pub async fn l1_upload_probe(
 /// （单点测试通过但组合失效，是这类引擎最常见的坑）。
 #[wasm_bindgen]
 pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
-    use apeireth_ui_dom::dom::{Dom, EventKind};
+    use apeireth_ui_dom::dom::Dom;
     use apeireth_ui_dom::vnode::{PropValue, VNode};
     use apeireth_ui_dom::web::WebDom;
     use apeireth_ui_dom::Renderer;
@@ -1399,6 +1399,199 @@ pub fn l1_integration_probe() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("first_visible"),
         &JsValue::from_f64(first_visible as f64),
+    );
+    Ok(result.into())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⭐ **上屏第一屏示例**（引擎侧接入范式；W0 onboarding 文档引用的**可运行**版本）
+// ═══════════════════════════════════════════════════════════════════════════
+//
+///! 演示第一屏真正会用到的那几件事：
+///! ①**受控输入**（值由状态给，不由 DOM 自己跑）；②**虚拟列表**（留白交给引擎）；
+///! ③**滚动联动**（信号 + 真实位置）；④**错误边界**（`render_guarded`）；
+///! ⑤**状态变了重渲染**（`patch` 差分）。
+///!
+///! ⚠️ 这里的调度器是**示例级**的（JS 侧 `setInterval` 调 [`w0_tick`]）——
+///! 生产应换成正式调度器；引擎侧契约不变（**状态 → 重建树 → patch**）。
+
+use std::rc::Rc;
+
+/// 示例屏的应用状态（**唯一真相**）。
+#[derive(Default)]
+pub struct DemoState {
+    /// 输入框的值（受控）。
+    pub name: String,
+    /// 状态是否变了（下一 tick 需要重渲染）。
+    pub dirty: bool,
+    /// 列表滚动位置（由引擎从真实 DOM 读，不缓存）。
+    pub scroll_top: f64,
+}
+
+thread_local! {
+    /// 渲染器（示例屏单例）。
+    static DEMO: RefCell<Option<DemoRenderer>> = const { RefCell::new(None) };
+}
+
+/// 示例屏的渲染器 + 状态（放一起，便于 tick 时一起用）。
+pub struct DemoRenderer {
+    /// 渲染器。
+    pub renderer: apeireth_ui_dom::Renderer<apeireth_ui_dom::web::WebDom>,
+    /// 应用状态（与事件处理器共享）。
+    pub state: Rc<RefCell<DemoState>>,
+    /// 滚动信号（`scroll` 不冒泡 ⇒ 直连容器）。
+    pub scroll: apeireth_ui_dom::renderer::ScrollSignal,
+    /// 列表容器路径（第一屏的第二个子节点）。
+    pub list_path: Vec<usize>,
+}
+
+/// 建示例屏的 VNode 树（**纯函数** ⇒ 可单独测试）。
+pub fn build_demo_tree(
+    state: &Rc<RefCell<DemoState>>,
+    rows: &[String],
+) -> apeireth_ui_dom::vnode::VNode {
+    use apeireth_ui_dom::dom::EventKind;
+    use apeireth_ui_dom::events::ElementHandler;
+    use apeireth_ui_dom::vnode::{PropValue, VNode};
+
+    // ⚠ 状态用 `Rc<RefCell<_>>` 共享给事件处理器（处理器要求 `'static`，
+    //   且**拿不到 `&mut renderer`** ⇒ 处理器只改状态，重渲染交给 tick）。
+    //   ⇒ **必须复用调用方那一个 Rc**（否则处理器写的状态与 tick 读的不是同一个）。
+    let input_state = state.clone();
+    VNode::element("section")
+        .attr("class", "w0-screen")
+        .child(
+            VNode::element("input")
+                .attr("id", "w0-name")
+                .prop("value", PropValue::Text(state.borrow().name.clone()))
+                .handler(
+                    EventKind::Input,
+                    ElementHandler::new(move |event| {
+                        // ⭐ 受控的关键：处理器只**改状态**，不碰 DOM。
+                        let mut guard = input_state.borrow_mut();
+                        guard.name = event.target_value().unwrap_or_default().to_owned();
+                        guard.dirty = true;
+                    }),
+                )
+                .build(),
+        )
+        .child(
+            VNode::element("div")
+                .attr("id", "w0-list")
+                .attr("style", "height: 200px; overflow-y: auto;")
+                .child(
+                    VNode::element("div")
+                        .attr("class", "row")
+                        .child(VNode::text(rows.first().cloned().unwrap_or_default()))
+                        .build(),
+                )
+                .build(),
+        )
+        .build()
+}
+
+/// ⭐ **挂载示例屏**（浏览器入口）。
+#[wasm_bindgen]
+pub fn w0_first_screen() -> Result<JsValue, JsValue> {
+    use apeireth_ui_dom::dom::Dom;
+    use apeireth_ui_dom::web::WebDom;
+    use apeireth_ui_dom::Renderer;
+
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "w0-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+    let mut renderer = Renderer::new(dom, root);
+
+    let rows: Vec<String> = (0..1000).map(|index| format!("行 {index}")).collect();
+    let state = Rc::new(RefCell::new(DemoState::default()));
+    let tree = build_demo_tree(&state, &rows);
+    renderer
+        .render_guarded(tree)
+        .map_err(|error| JsValue::from_str(&format!("渲染失败：{error}")))?;
+
+    // 滚动信号：直连列表容器（`scroll` 不冒泡）。
+    let scroll = renderer
+        .listen_scroll_at_path(&[1])
+        .map_err(|error| JsValue::from_str(&format!("监听滚动失败：{error}")))?;
+
+    // 虚拟列表：用 `patch_windowed_at_path`（**留白由引擎算** ⇒ 容器真的能滚）。
+    let heights = vec![40.0_f64; 1000];
+    renderer
+        .patch_windowed_at_path(&[1], &heights, 2, |index| {
+            use apeireth_ui_dom::vnode::VNode;
+            VNode::element("div")
+                .attr("class", "row")
+                .attr("style", "height: 40px")
+                .child(VNode::text(format!("行 {index}")))
+                .build()
+        })
+        .map_err(|error| JsValue::from_str(&format!("窗口化失败：{error}")))?;
+
+    DEMO.with(|slot| {
+        *slot.borrow_mut() = Some(DemoRenderer {
+            renderer,
+            state,
+            scroll,
+            list_path: vec![1],
+        });
+    });
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("mounted"),
+        &JsValue::from_bool(true),
+    );
+    Ok(result.into())
+}
+
+/// ⭐ **tick**：状态变了就重渲染（示例级调度器；生产换正式调度器）。
+#[wasm_bindgen]
+pub fn w0_tick() -> Result<JsValue, JsValue> {
+
+    let mut redrawn = false;
+    let mut scroll_seen = false;
+    DEMO.with(|slot| {
+        let mut guard = slot.borrow_mut();
+        let Some(demo) = guard.as_mut() else {
+            return;
+        };
+        // ① 滚动信号：位置**从真实 DOM 读**（信号只答「刚滚过没」）。
+        if demo.scroll.take() {
+            scroll_seen = true;
+            if let Ok(metrics) = demo.renderer.scroll_metrics_at_path(&demo.list_path) {
+                demo.state.borrow_mut().scroll_top = metrics.scroll_top;
+                demo.state.borrow_mut().dirty = true;
+            }
+        }
+        // ② 状态脏 ⇒ 重建树 → `patch`（差分）。
+        if demo.state.borrow().dirty {
+            let tree = build_demo_tree(&demo.state, &[]);
+            // ⚠️ 受控写回在 IME 组合期会被**门住**（引擎负责补写）。
+            let _ = demo.renderer.patch(tree);
+            demo.state.borrow_mut().dirty = false;
+            redrawn = true;
+        }
+    });
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("redrawn"),
+        &JsValue::from_bool(redrawn),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("scroll_seen"),
+        &JsValue::from_bool(scroll_seen),
     );
     Ok(result.into())
 }

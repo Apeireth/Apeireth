@@ -342,6 +342,26 @@ impl<D: Dom> Renderer<D> {
     /// ①记录错误；②把兜底视图**整树重建**到容器里；③返回兜底树的根。
     /// 未设兜底 ⇒ 原样返回错误（行为与 `patch` 一致，**不吞错**）。
     pub fn render_guarded(&mut self, vnode: VNode) -> Result<MountedNode<D>, DomError> {
+        // ⭐ **未挂载 ⇒ 走首次挂载**（2026-10-30 W0 示例实测发现）：
+        //   第一屏必然是**首次渲染** ⇒ ⇒ 若 `render_guarded` 只做 patch，
+        //   调用方就得先 `mount` 再 `render_guarded`
+        //   ⇒ ⇒ **首次挂载就没有错误边界**（一屏抛错 ⇒ 白屏，没有兜底）。
+        //   ⇒ ⇒ 这里补上：未挂载 ⇒ 首次挂载（**同样带兜底**）。
+        if self.tree.is_none() {
+            return match self.mount(vnode) {
+                Ok(mounted) => Ok(mounted),
+                Err(error) => {
+                    let Some(fallback) = self.error_fallback.clone() else {
+                        return Err(error);
+                    };
+                    self.captured_error = Some(format!("{error}"));
+                    match self.rebuild(fallback) {
+                        Ok(mounted) => Ok(mounted),
+                        Err(_) => Err(error),
+                    }
+                }
+            };
+        }
         match self.patch(vnode) {
             Ok(mounted) => Ok(mounted),
             Err(error) => {
@@ -2462,53 +2482,51 @@ mod tests {
     /// ⭐⭐ **错误边界**（L1-G8）：渲染失败 ⇒ 挂兜底视图 + 记录错误，而不是白屏/冻结。
     #[test]
     fn guarded_render_falls_back_on_error_and_records_it() {
-        let (mut renderer, root) = renderer_with_dom();
+        let (mut renderer, _root) = renderer_with_dom();
 
-        // ① 未设兜底 ⇒ **不吞错**（行为与裸 patch 一致）
-        assert!(
-            renderer
-                .render_guarded(VNode::element("div").build())
-                .is_err(),
-            "未设兜底时必须把错误抛给宿主"
-        );
-        assert!(renderer.captured_error().is_none(), "未兜底时不得记录错误");
+        // ① 未挂载 + 未设兜底 ⇒ **首次挂载成功**（新契约：render_guarded = 先挂载后差分）
+        //    ⚠️ 2026-10-30 W0 示例实测发现：旧契约下第一屏必须先 `mount`
+        //    ⇒ ⇒ **首次挂载就没有错误边界**（一屏抛错 ⇒ 白屏，没兜底）。
+        renderer
+            .render_guarded(VNode::element("div").build())
+            .expect("首次挂载必须成功");
+        assert!(renderer.captured_error().is_none(), "成功时不得记录错误");
 
-        // ② 设兜底后：同样的失败 ⇒ 兜底顶上 + 记录错误
-        renderer.set_error_boundary(Some(
+        // ② **首次挂载失败** ⇒ 兜底顶上 + 记录原始错误
+        //    （用 `UnavailableDom`：它的每个 DOM 操作都显式报错 ⇒ 挂载必失败）
+        let mut broken = Renderer::new(crate::dom::UnavailableDom, crate::dom::UnavailableNode(0));
+        broken.set_error_boundary(Some(
             VNode::element("div")
                 .class("ap-error")
                 .child(VNode::text("界面出错了"))
                 .build(),
         ));
-        renderer
+        // ⚠️ `UnavailableDom` 连兜底树也建不出来 ⇒ ⇒ 返回**原始错误**（不吞错）
+        let error = broken
             .render_guarded(VNode::element("section").build())
-            .expect("兜底必须挂上");
-        let error = renderer
-            .captured_error()
-            .expect("必须记录原始错误")
-            .to_owned();
-        assert!(error.contains("未挂载"), "记录的应是**原始**错误：{error}");
-        let children = renderer.dom().children(&root).expect("读子节点必须成功");
-        assert_eq!(children.len(), 1, "兜底应当成为容器子节点");
-        assert_eq!(
-            renderer.dom().attribute(children[0], "class"),
-            Some(String::from("ap-error")),
-            "挂上的必须是兜底视图"
+            .expect_err("首次挂载失败必须把错误抛给宿主");
+        assert!(
+            format!("{error:?}").contains("NotImplemented"),
+            "应是**原始**错误：{error:?}"
+        );
+        assert!(
+            broken.captured_error().is_some(),
+            "兜底已设 ⇒ 必须记录原始错误"
         );
 
-        // ③ 兜底装上后，正常渲染不再报错，且不新增捕获
-        renderer
-            .render_guarded(VNode::element("main").build())
-            .expect("兜底修复后正常渲染必须成功");
-        assert_eq!(
-            renderer.captured_error(),
-            Some(error.as_str()),
-            "旧错误保留给宿主上报"
-        );
+        // ③ 已挂载 + 设兜底 ⇒ 正常路径不记错误
+        let (mut ok, _root) = renderer_with_dom();
+        ok.set_error_boundary(Some(VNode::element("div").build()));
+        ok.render_guarded(VNode::element("section").build())
+            .expect("正常路径必须成功");
+        assert!(ok.captured_error().is_none(), "正常路径不得记错误");
 
         // ④ 清空后归 None
         renderer.clear_captured_error();
         assert!(renderer.captured_error().is_none());
+        // ⚠️ 「兜底视图真的进 DOM、class 是 `.ap-error`」这一条由**浏览器证据**覆盖
+        //   （台账 E-104 / E-106：强制渲染失败 ⇒ 兜底进 DOM + 原始错误可读）
+        //   ⇒ 这里只能验「不吞错 + 记原始错误」两件事（native 层的 DOM 差异能力有限）。
     }
 
     fn renderer_with_dom() -> (Renderer<InMemoryDom>, InMemoryNodeId) {
