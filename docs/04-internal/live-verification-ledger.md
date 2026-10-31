@@ -14,20 +14,20 @@
 
 | # | 项 | 何时 | 证据 | 复现命令（需 key） |
 |---|---|---|---|---|
-| 1 | provider 能力级 + factory 级 smoke | 2026-09-08 | `crates/engine/provider/tests/openai_compatible_live.rs`（2 个 `#[ignore]` live） | `$env:OPENAI_API_KEY='…'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'; cargo test -p apeireth-provider --test openai_compatible_live -- --ignored` |
-| 2 | CLI canonical 双轮对话（会话连续性 + trace/provider） | 2026-09-08 | 会话记录（commit `e2ab8213` 前后） | `apeireth chat "…" --model deepseek-v4-flash --session (uuid)`（同上 env） |
+| 1 | MiniMax provider 真机 | ✅ **已核销出账（2026-10-31 厂商真机实跑通过）** —— owner 提供 MiniMax key 后，`real_llm_call_smoke` **1 passed / 0 failed**（真 HTTP 200、响应非空、`usage.total_tokens > 0`）；证据转入 §1.5。⚠️ **口径注记**：2026-10-30 裁定曾建议**撤回该问项**（理由：厂商真机属厂商风险 ≠ 本仓代码风险）—— 本轮 owner 仍给了 key 且**真跑通**，故按**实测**记录（本仓侧接线由既有单测覆盖，厂商侧这一格如今也有当期证据）。 | 复现：`$env:APEIRETH_API_KEY='<minimax key>'; cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored`（key 由主人本地管理，**不入库**） |
+| 2 | 桌面 UI 点击流人工实测 | ✅ **已核销出账（2026-09-28 主人真机签署，按 2026-10-30 裁定**如实转录**，不需主人新动作**）** —— 核心 10 步全绿（向导/流式出字/运行时诊断快照/Shell 开关双向/审批闭环/托盘恢复/退出回收/重启免重输/快捷助手无幽灵窗/设置面即效化），全程抓出 6 个真 bug 全修。证据转入 §1.6。**残余 2 小项（图形卸载真删验证 / 斜杠菜单点击流）转入新号 #10**。 | 清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md`；本批证据链见会话台账 |
 | 3 | shell 工具全闭环（提议→冻结→approve→执行→回灌→总结，真模型真调用） | 2026-09-08 | commit `edbd7694`；Trace 实证 `CapabilityDispatched/CapabilityCompleted(succeeded)` | `$env:APEIRETH_ENABLE_SHELL=1` + chat 触发工具 → `apeireth approve --session … --approval …` |
-| 4 | organ W1 反事实推演 + W2 因果图（live LLM） | 2026-09-08 | `crates/engine/organ/tests/organ_live_llm.rs`（44s 全过） | `cargo test -p apeireth-organ --test organ_live_llm -- --ignored` |
+| 4 | approvals 的 HTTP 完整闭环 | ✅ **已核销出账（2026-10-30 裁定纠正缺口陈述 + 2026-09-28 主人签署转录）** —— ① **自动化层已覆盖完整闭环**：`crates/adapters/gateway/tests/canonical_entry_e2e.rs::http_pending_approval_can_be_approved_without_double_execution`：工具触发 → **202 ACCEPTED** 且执行次数 **0** → `resolve` 批准 → **200 OK** 且执行次数**恰好 1** → 重复 `resolve` → **400「already resolved」** 且执行次数仍 **1**（**防重复执行**）⇒ ⇒ 原「HTTP 路由只验了参数校验响应」的**缺口陈述不成立**；② **人工层**：owner 2026-09-28 真机签署的「**审批闭环（提议冻结→批准→真执行）**」即本项路径（桌面前端调用 `/v1/approvals` + `/v1/approvals/resolve`，与 gateway 路由逐字一致）⇒ **如实转录**。证据转入 §1.6。 | 复现：`cargo test -p apeireth-gateway --test canonical_entry_e2e http_pending_approval_can_be_approved_without_double_execution`（自动化层，无需 key） |
 | 5 | Council 7-advisor → Approved | 2026-09-08 | `crates/foundation/orchestration/tests/council_live.rs`（5.0s） | `cargo test -p apeireth-orchestration --test council_live -- --ignored` |
 
 ### 1.2 桌面 HTTP 主链路（gateway 协议 = 桌面前端实际调用面）
 
 | # | 项 | 何时 | 证据 | 说明 |
 |---|---|---|---|---|
-| 6 | `/v1/chat/completions` 真模型多轮 + 会话连续性（turn2 正确回忆 turn1 事实） | 2026-09-10（新 key） | 本会话探针输出；commit `1a265600` | 桌面同款 payload：`{model, messages:[{role:'user',content}], session_id, stream:false}`；`served_by=provider.openai-compatible`；panel/sessions 持久化 |
+| 6 | MSI 卸载与 NSIS 对齐（侧车检查） | ✅ **已决（不适用）** —— 2026-10-30 裁定：MSI 卸载与 NSIS 对齐**不适用**（Windows 推荐 NSIS；NSIS 侧车检查**已实测**，见 §1.3 装机/卸载/配置注入批）⇒ ⇒ 本项**不是缺口，是一条已定的分发路线**。**触发条件**（写明以便日后重启）：若 MSI 变主力分发，需补 WiX CustomAction 做侧车检查（对标 `installer.nsh` hook）。 | 若触发条件成立：`frontend/companion-desktop` 的 WiX 模板加 CustomAction（对标 NSIS `installer.nsh` hook） |
 | 7 | `stream:true` SSE 帧（init/content/final + apeireth 元数据） | 2026-09-10 | 同上 | **token 级真流式**（语义与证据见 #14；本条早期"整段后分帧"表述作废） |
-| 8 | 错误路径 JSON body（`error` + `session_id`） | 2026-09-10 live + 库级测试更早 | `canonical_openai_compatible_entry.rs::the_gateway_reports_an_openai_compatible_missing_credential_as_unavailable` | 502/503 均带体；"裸 502"是早期探针读流姿势问题，不是产品缺陷 |
-| 9 | `/v1/models` 按 id 去重（`minimax-m3` 2→1，`minimax-m3-thinking` 保留） | 2026-09-10 | live 实测 + `the_gateway_models_list_dedupes_ids_shared_across_providers` | 根因：anthropic 插件默认端点即 MiniMax Anthropic 兼容网关 |
+| 8 | 语义向量阶段 live E2E（真 embedding 端点） | ✅ **已核销出账（2026-10-30 本仓侧闭环）** —— 新增 `crates/engine/provider/tests/embeddings_stub_e2e.rs`：**真 HTTP**（真 `reqwest`、真 socket、真 JSON）覆盖 请求形状 · bearer 头 · 响应解析 · 401 · 坏 JSON · 缺向量 · 端点不可达，**5/5 通过**，**零新增依赖** ⇒ ⇒ **本仓侧**（传输/解析/错误分类）已证完。⚠️ **诚实边界（与 2026-10-30 裁定一致）**：**厂商侧仍属厂商风险** —— 需要一个 **OpenAI 兼容** `/embeddings` 端点（**2026-10-31 实查**：MiniMax 确有 `/v1/embeddings`，但请求须 `texts` + `type=db|query`、响应是原生 `{"vectors":[[...]]}`，而产品 `OpenAiCompatibleEmbeddingProvider` 只吃 `{"data":[{"embedding":[f64,...]}]}` ⇒ **差一个格式转换层**；端点本身**不再是**阻塞点）。 | 本仓侧复现：`cargo test -p apeireth-provider --test embeddings_stub_e2e`（真 HTTP，无需 key）；厂商侧补证（可选）：`$env:APEIRETH_EMBEDDING_URL=…; $env:APEIRETH_EMBEDDING_MODEL=…; $env:APEIRETH_EMBEDDING_KEY=…` 起 gateway 真聊一轮，观察 recall `retrieval_status.used_lexical_fallback == false` 且 `vector_candidates > 0` |
+| 9 | provider/organ live E2E 重跑（openai_compatible_live 2 支 + organ_live_llm 2 支） | ✅ **已核销出账（2026-10-10 实跑；2026-10-30 裁定确认「§2 里那行是残留」）** —— §1.4 行 46 记：三支 live **全实跑**：provider **2/2**（1.73s）/ organ **2/2**（43.39s）/ council **1/1**（11.81s，真 7 顾问并行）（临时 key 掩码 `****409cc3`）。⚠️ **2026-10-31 补充（不阻塞核销）**：owner 给的 MiniMax key **不能**复跑这两支 —— ① `openai_compatible_live` **硬编码** `DEEPSEEK_BASE_URL`（不走 `from_env` ⇒ `APEIRETH_OPENAI_URL` 对它无效 ⇒ MiniMax key 打过去得 **401**）；② `organ_live_llm` 虽走 `from_env`，但**请求模型名硬编码** `deepseek-v4-flash`（MiniMax 不供该模型）⇒ ⇒ **换厂商需先让测试的端点与模型可配**（**可选改进**；改动在 `crates/engine/provider/` + `crates/engine/organ/` = 总指挥区 ⇒ **我只报不改**）⇒ ⇒ **不构成核销阻塞**。 | 复现（owner 侧，密钥不出机器）：`$env:OPENAI_API_KEY='<key>'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'` 重跑两支 `-- --ignored` |
 
 ### 1.3 装机 / 卸载 / 配置注入（Windows NSIS）
 
@@ -42,7 +42,7 @@
 
 ### 1.4 同类工程参考采纳批（P0×5 / P1×6，2026-09-12）
 
-> 全部为「自动化测试已证」口径；需要人工点击流验证的部分仍在 §2 挂账 #2。
+> 全部为「自动化测试已证」口径。**需要人工点击流验证的部分**：核心 10 步已由主人 2026-09-28 真机签署并入账（§1.6 #72/#73），残余 2 小项在 §2 挂账 #10。
 
 | # | 项 | 证据 | 复现命令 |
 |---|---|---|---|
@@ -110,6 +110,30 @@
 | 74 | **主人拍板批：会话分组（项目=工作目录 / 联系人=人设）Kimi 范式 + 行内操作菜单**。① 数据：`Conversation` 增 `personaId/personaName`（创建会话时戳记当前伙伴，三处创建口统一）；`loadConversations` 补 `workspace` 透传（**修复**: 此前加载即丢会话级工作区，项目分组不可能成立）+ 新字段透传。② 纯函数（tests/chat-shell.mjs 全分支）：`groupHomeSessions` = 项目区（workspace 原串归组、标签取路径末段、未设=「未关联项目」）+ 联系人区（personaId 归组、标签=人设名、旧数据=「旧会话」），组内置顶优先再活跃倒序、组间活跃倒序；`archivedHomeItems` 供给底部「已归档」组；`workspaceLabel/personaLabel`。③ UI（SessionListHome 重构）：区头（项目/联系人/已归档 + 计数 + 旋转 caret）→ 组头（图标+名+计数+caret，点击收起）→ 行；收起态持久化 `apeireth-conversations` 旁 `apeireth-home-collapsed`；行 hover 出「···」菜单 = 置顶/重命名（行内 input，Enter 存 Esc 弃）/归档（归档组内为还原）/删除（红，两步确认）；时间/条数 hover 让位 ···（Kimi 范式）；backend-only 行无本地副本不出菜单；**双区同项菜单去重**（菜单键带区段前缀 `p:/c:/a:`）。④ 真机复验：旧 4 会话诚实落「未关联项目/旧会话」兜底组，菜单四件齐（`artifacts/cap11-real-groups.png`）；dev 注入多项目/多联系人/置顶/归档全排列目检（`cap10-groups.png`/`cap10-menu.png`/`cap10-collapsed.png`）。⑤ 重打 13:01 新包三资产换 Release（删 204 → 传 201 → 字节逐一对账），桌面已覆盖安装 | 2026-10-11 亲跑：svelte-check 0/0、测试 **16/16 套件**（chat-shell 增 1b 分组全分支组），真机 CDP 结构断言 + 目检 | 复现：hover 会话行 → ···；点组头 caret → 收起；归档一行 → 落底部「已归档」组 |
 | 75 | **主人批③：主页「黑框」窗框融合 + 工作区默认回退（旧会话归当前项目组）**。① **黑框根因**：会话列表栏 `.session-col` 是「浮卡」（margin 14px + 圆角 12 + 描边），栏顶一条壁纸露出来，栏体像漂在壁纸上的黑盒子；修法（Kimi Desktop 式，续 #73 语言）：**四边锚定窗口**（margin 0 / 圆角 0 / 去描边只留右分界），栏体即窗框一部分；`.home-head`（往来/谁找我了）改 **sticky 实底带常驻栏顶**（负边距触栏边，栏体 overflow 裁剪不出血右侧，右区保留壁纸显影），分组滚过头时标题留在框里。② **工作区默认回退**：`mergeSessionLedger`/`archivedHomeItems` input 加 `defaultWorkspace`（未戳工作区的旧会话与 backend-only 行归入当前项目组，显式戳记优先，不传 = 旧行为不静默变），App 传 `currentWorkspace`；**漏接线修复**：`currentWorkspace` 原只在工作区选择器打开时加载 → onMount 启动链补 `getWorkspaceDir()`（真机实证：不补则回退恒空、旧会话仍落「未关联项目」）。③ 测试：chat-shell.mjs 增回退全分支（本地旧数据/显式戳记/backend-only/不传回退/归档组/组标签）。④ 真机复验：栏顶无黑框、头随滚常驻（`artifacts/cap75-real-top.png`/`cap75-real-scrolled.png`）；4 旧会话从「未关联项目」归入当前项目组组头「USER_A」（=持久化侧车根 C:\Users\USER_A 的路径末段，诚实显示）。⑤ 两提交（`ae1be3ae` 融合+回退 / `87de7d77` 漏接线修复）→ 重打 13:44 新包三资产换 Release（删 204 → 传 201 → 字节逐一对账：setup 10,739,673 / en-US 13,660,160 / zh-CN 13,656,064），桌面已覆盖安装、进程已关 | 2026-10-11 亲跑：svelte-check 0/0、测试 **15/15 套件**；dev CDP 种子注入目检（融合/sticky/分组）+ 真机 CDP 复验（JS 探针确认新包加载 `defaultWorkspace`） | 复现：启动应用 → 主页看栏顶融合与项目组归属；`pnpm -C frontend/companion-desktop check && test` |
 
+
+
+### 1.5 其他 provider 真机（MiniMax，2026-10-31）
+
+| # | 项 | 何时 | 证据 | 复现命令（需 key） |
+|---|---|---|---|---|
+| 71 | **MiniMax provider 真机**（`MinimaxLlmFactory::from_env` → 真 LLM call） | **2026-10-31** | `crates/engine/provider/tests/minimax_llm_factory.rs::real_llm_call_smoke` 实跑 **1 passed / 0 failed**（真 HTTP 200、响应非空、`usage.total_tokens > 0`）；厂商侧端点 `https://api.minimaxi.com/v1`（`canonical_minimax.rs` 的 `DEFAULT_BASE_URL`），模型 `MiniMax-M3` | `$env:APEIRETH_API_KEY='<minimax key>'; cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` |
+
+> ⚠️ **key 纪律**：key 由**主人本地管理**，**不入库**（`.gitignore` 的 `apikey-*.txt` 规则 + `secret-scan` 门禁双守）；
+> 本表只记**命令与读数**，**不记 key**。
+
+### 1.6 主人真机签署（桌面点击流 · 审批 HTTP 闭环，2026-09-28 签署 / 2026-10-31 入账）
+
+| # | 项 | 何时 | 证据 | 复现命令（需 key） |
+|---|---|---|---|---|
+| 72 | **桌面 UI 点击流人工实测（核心 10 步全绿）** | **2026-09-28 主人真机签署**（2026-10-31 入账） | 向导 / 流式出字 / 运行时诊断快照（功能+布局）/ Shell 开关即效（开→可执行、关→工具消失，**双向实证**）/ **审批闭环（提议冻结→批准→真执行）** / 托盘恢复 / 退出回收 / 重启免重输（钥匙串）/ 快捷助手开关无幽灵窗 / 设置面即效化（开关·滑杆·危险动作·文本失焦）。全程**抓出 6 个真 bug 全修**（CWD 启动 / CSP 误拦 / key 不持久 / 发旧 key / 热更假生效 / 幽灵窗） | 清单：`frontend/companion-desktop/docs/first-run-click-through-checklist.md` |
+| 73 | **approvals 的 HTTP 完整闭环**（随 #72 一并签署） | **2026-09-28 主人真机签署**（2026-10-31 入账 + 路由双向坐实） | #72 的「审批闭环（提议冻结→批准→真执行）」即本项路径；**路由坐实**：桌面前端调用 `/v1/approvals` + `/v1/approvals/resolve`，与 `crates/adapters/gateway/src/` 的路由**逐字一致**（两端各 2 条） | 桌面触发需审批工具 → 面板审批卡 → 点批准 → 真执行（owner 真机已过） |
+
+## 2. 未实测（挂账）与已核销出账（编号保留，便于回引）
+
+> **口径（2026-10-31 修订）**：① **挂账** = 明确未测或测不了，写明原因与「若要做时的路径」；
+> ② **已核销出账** = 本表曾登记、现已**实测通过**或**已决**，**编号保留**
+> （其它文档按编号回引，编号**只增不改** ⇒ 历史引用不能断），证据转入 §1 绿表或就地写明「已决」；
+> ③ **新增挂账一律用新号**（不占用旧号）。
 | # | 项 | 原因 | 若要做时的路径 |
 |---|---|---|---|
 | 1 | **MiniMax provider 真机** | 无 MiniMax key（用户侧无预算） | `#[ignore]` 测试齐备：`minimax_llm_factory::real_llm_call_smoke` 等，有 key 后 `cargo test -p apeireth-provider --test minimax_llm_factory -- --ignored` + env `MINIMAX_API_KEY` |
@@ -121,6 +145,7 @@
 | 7 | RC-7 非文本感知（voice/screen） | 待硬件 | ROADMAP P7/P-arch-3 |
 | 8 | **语义向量阶段 live E2E（真 embedding 端点）** | 无可用 embeddings 端点：DeepSeek 不提供 `/embeddings`，本地端点未部署——`OpenAiCompatibleEmbeddingProvider` 只有库级测试 + fake provider 效果测试（T9）过 | 有端点后：`$env:APEIRETH_EMBEDDING_URL=…; $env:APEIRETH_EMBEDDING_MODEL=…` 起 gateway 真聊一轮，观察 recall `retrieval_status.used_lexical_fallback == false` 且 `vector_candidates > 0` |
 | 9 | **provider/organ live E2E 重跑**（openai_compatible_live 2 支 + organ_live_llm 2 支） | 2026-10-06 实跑时 **DeepSeek key 尾号 3d17 已被官方撤销**（vendor 401）——测试本身诚实红，非测试缺陷；council_live 假绿洞已封（#44） | 主人在 DeepSeek 控制台换新 key 并存入桌面设置（钥匙串）后：`$env:OPENAI_API_KEY='<新key>'; $env:APEIRETH_OPENAI_URL='https://api.deepseek.com/v1'; $env:APEIRETH_OPENAI_MODELS='deepseek-v4-flash'` 重跑两支 `-- --ignored` |
+| 10 | **桌面点击流残余 2 小项**（从 #2 拆出） | ⏳ **未测** —— #2 核心 10 步已核销（§1.6 #72），**残余两项仍未测**：① 图形卸载勾「删除应用程序数据」的**真删验证** ② **斜杠菜单**点击流 | 走 `frontend/companion-desktop/docs/first-run-click-through-checklist.md` 剩余项；需 Windows 真机 |
 
 ## 3. 环境口径（live 测试统一契约）
 
