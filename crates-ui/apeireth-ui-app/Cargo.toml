@@ -1,0 +1,39 @@
+# ============================================================================
+# apeireth-ui-app — 引擎**产品工程**（宿主运行时契约 + wasm 入口）
+# ----------------------------------------------------------------------------
+# 这是「新前端」的**实现目标工程**（交接包 §0：由引擎线指定路径与工程基线）。
+#
+# ## 定位（三句话说清）
+#
+# 1. **它是产品宿主**：屏幕装配 + 运行时契约（挂载 / 重渲染 / 销毁）都在这里；
+# 2. **它不是试点**：`apeireth-ui-demo` 是试点载体兼装配级冒烟（ADR-0015 §4），
+#    被证据装置与 CI 引用 ⇒ ⇒ 职责不同 ⇒ ⇒ 不合并（避免牵连证据链）；
+# 3. **它不是引擎**：`core/dom/gpu/kit` 仍是引擎层（ADR-0015 增补的三层边界），
+#    本 crate 只做**装配与宿主** ⇒ ⇒ 不把组件/能力塞进来。
+#
+# ## 依赖方向（拓扑秩 6，最高）
+#
+# app → ui（门面）→ core / dom / gpu / kit → …（下层）
+#
+# ⚠️ 本 crate **不得**被引擎层反向依赖（否则产品细节会污染引擎）。
+# ============================================================================
+[package]
+name = "apeireth-ui-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth UI 引擎产品工程：宿主运行时契约 + wasm 入口"
+
+[lib]
+name = "apeireth_ui_app"
+path = "src/lib.rs"
+
+[dependencies]
+#: 引擎门面（响应式核心 / DOM / GPU / 组件库的具名导出）。
+apeireth-ui = { path = "../apeireth-ui" }
+#: 响应式核心（Signal / Runtime）—— 屏幕状态用信号表达。
+apeireth-ui-core = { path = "../apeireth-ui-core" }
+#: DOM 层（VNode / Renderer）—— 屏幕视图树。
+apeireth-ui-dom = { path = "../apeireth-ui-dom" }

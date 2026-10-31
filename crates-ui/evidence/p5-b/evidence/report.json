@@ -1,6 +1,6 @@
 {
   "schema": "apeireth.ui-engine.p5-b.production-parity-report/1",
-  "generated_at": "2026-10-26T19:53:19+0800",
+  "generated_at": "2026-10-31T15:36:05+0800",
   "environment": {
     "chromium": "Chromium 154.0.8037.92 built on Debian GNU/Linux forky/sid",
     "host_target": "x86_64-unknown-linux-gnu",
@@ -29,7 +29,7 @@
       "fallback": false,
       "cameraIndex": 0
     },
-    "draw_calls": 295.09999999962747,
+    "draw_calls": 297.79999999701977,
     "uniforms": {
       "uRes": [
         960,
@@ -70,16 +70,16 @@
         0.31927116370834385
       ],
       "uAmbStr": [
-        0
+        0.6485998956886563
       ],
       "uEclipse": [
         0
       ],
       "uTlBright": [
-        1
+        1.1426919770515043
       ],
       "uTlGold": [
-        1
+        0.643270057371239
       ]
     }
   },
@@ -109,7 +109,7 @@
       "auto_resize_count": 0,
       "error": null,
       "canvas_png": "webgl.canvas.png",
-      "canvas_bytes": 152287
+      "canvas_bytes": 1
     },
     "webgpu": {
       "backend_requested": "webgpu",
@@ -136,10 +136,69 @@
       "auto_resize_count": 0,
       "error": null,
       "canvas_png": "webgpu.canvas.png",
-      "canvas_bytes": 152288
+      "canvas_bytes": 1
     }
   },
   "criteria": {
+    "capture_trace": {
+      "webgl": {
+        "attempts": 1,
+        "path": "/home/bai/Projects/apeireth-ui-wt/crates-ui/evidence/p5-b/evidence/webgl.canvas.png",
+        "size": [
+          960,
+          600
+        ],
+        "range": 255,
+        "distinct": 513,
+        "mean": 64.94,
+        "blank_exact": false,
+        "near_blank": false,
+        "blank": false
+      },
+      "webgpu": {
+        "attempts": 1,
+        "path": "/home/bai/Projects/apeireth-ui-wt/crates-ui/evidence/p5-b/evidence/webgpu.canvas.png",
+        "size": [
+          960,
+          600
+        ],
+        "range": 255,
+        "distinct": 513,
+        "mean": 64.94,
+        "blank_exact": false,
+        "near_blank": false,
+        "blank": false
+      }
+    },
+    "canvas_blank": {
+      "webgl": {
+        "path": "/home/bai/Projects/apeireth-ui-wt/crates-ui/evidence/p5-b/evidence/webgl.canvas.png",
+        "size": [
+          960,
+          600
+        ],
+        "range": 255,
+        "distinct": 513,
+        "mean": 64.94,
+        "blank_exact": false,
+        "near_blank": false,
+        "blank": false
+      },
+      "webgpu": {
+        "path": "/home/bai/Projects/apeireth-ui-wt/crates-ui/evidence/p5-b/evidence/webgpu.canvas.png",
+        "size": [
+          960,
+          600
+        ],
+        "range": 255,
+        "distinct": 513,
+        "mean": 64.94,
+        "blank_exact": false,
+        "near_blank": false,
+        "blank": false
+      }
+    },
+    "canvas_blank_any": false,
     "uniform_count": 16,
     "uniform_names": [
       "uAmbStr",
@@ -222,19 +281,35 @@
       "max_channel_delta": 1,
       "channel_threshold": 2
     },
+    "engine_webgl_vs_engine_webgpu": {
+      "comparable": true,
+      "left_size": [
+        960,
+        600
+      ],
+      "right_size": [
+        960,
+        600
+      ],
+      "pixels_compared": 576000,
+      "differing_pixels": 0,
+      "differing_ratio": 0.0,
+      "max_channel_delta": 1,
+      "channel_threshold": 2
+    },
     "webgl_diff_ratio_ok": true,
     "webgpu_diff_ratio_ok": true,
     "max_diff_ratio": 0.001,
     "channel_threshold": 2,
     "diagnostics": {
       "webgl_vs_vertically_flipped": {
-        "differing_pixels": 539726,
-        "differing_ratio": 0.9370243055555556,
+        "differing_pixels": 560940,
+        "differing_ratio": 0.9738541666666667,
         "max_channel_delta": 255
       },
       "webgpu_vs_vertically_flipped": {
-        "differing_pixels": 539726,
-        "differing_ratio": 0.9370243055555556,
+        "differing_pixels": 560940,
+        "differing_ratio": 0.9738541666666667,
         "max_channel_delta": 255
       }
     },
@@ -317,9 +392,9 @@
                 600
               ],
               "pixels_compared": 432000,
-              "differing_pixels": 208508,
-              "differing_ratio": 0.4826574074074074,
-              "max_channel_delta": 251,
+              "differing_pixels": 213480,
+              "differing_ratio": 0.49416666666666664,
+              "max_channel_delta": 253,
               "channel_threshold": 2
             }
           },
@@ -398,9 +473,9 @@
                 600
               ],
               "pixels_compared": 432000,
-              "differing_pixels": 208508,
-              "differing_ratio": 0.4826574074074074,
-              "max_channel_delta": 251,
+              "differing_pixels": 213480,
+              "differing_ratio": 0.49416666666666664,
+              "max_channel_delta": 253,
               "channel_threshold": 2
             }
           },
@@ -410,6 +485,9 @@
       "ok": true,
       "verified_any": true
     },
+    "engine_backend_parity_comparable": true,
+    "engine_backend_parity_ok": true,
+    "engine_backend_parity_note": "引擎 WebGL 与 WebGPU 的画布**逐像素相同**（0 差异）⇒ ⇒ 同一份逻辑在两个后端产出同一画面 ✔",
     "verdict": "pass"
   },
   "resize_leg": {
@@ -484,9 +562,9 @@
               600
             ],
             "pixels_compared": 432000,
-            "differing_pixels": 208508,
-            "differing_ratio": 0.4826574074074074,
-            "max_channel_delta": 251,
+            "differing_pixels": 213480,
+            "differing_ratio": 0.49416666666666664,
+            "max_channel_delta": 253,
             "channel_threshold": 2
           }
         }
@@ -560,9 +638,9 @@
               600
             ],
             "pixels_compared": 432000,
-            "differing_pixels": 208508,
-            "differing_ratio": 0.4826574074074074,
-            "max_channel_delta": 251,
+            "differing_pixels": 213480,
+            "differing_ratio": 0.49416666666666664,
+            "max_channel_delta": 253,
             "channel_threshold": 2
           }
         }
@@ -571,25 +649,25 @@
   },
   "browser_console": [
     "[reference:log.error] Failed to load resource: the server responded with a status of 404 (File not found)",
-    "[reference:log.warning] [.WebGL-0x3b4001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[reference:log.warning] [.WebGL-0x3b4001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[reference:log.warning] [.WebGL-0x3b4001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-    "[reference:log.warning] [.WebGL-0x3b4001b6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "[reference:log.warning] [.WebGL-0x1024001b6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[reference:log.warning] [.WebGL-0x1024001b6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[reference:log.warning] [.WebGL-0x1024001b6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[reference:log.warning] [.WebGL-0x1024001b6000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
     "[engine:console.log] [p5b] create engine: backend=webgl 960x600",
     "[engine:console.log] [p5b] engine created",
     "[engine:console.log] [p5b] pipeline created",
-    "[engine:console.log] [p5b] uniforms bound: \"uRes\":[960.0,600.0] \"uCenter\":[633.6,330.0] \"uScale\":[59.83744] \"uTime\":[1.5] \"uRot\":[0.0] \"uBright\":[0.32] \"uTurb\":[0.12] \"uPulse\":[0.0] \"uIncl\":[0.31927118] \"uAzim\":[0.0] \"uDiskAzim\":[0.0] \"uDiskIncl\":[0.31927118] \"uAmbStr\":[0.0] \"uEclipse\":[0.0] \"uTlBright\":[1.0] \"uTlGold\":[1.0]",
+    "[engine:console.log] [p5b] uniforms bound: \"uRes\":[960.0,600.0] \"uCenter\":[633.6,330.0] \"uScale\":[59.83744] \"uTime\":[1.5] \"uRot\":[0.0] \"uBright\":[0.32] \"uTurb\":[0.12] \"uPulse\":[0.0] \"uIncl\":[0.31927118] \"uAzim\":[0.0] \"uDiskAzim\":[0.0] \"uDiskIncl\":[0.31927118] \"uAmbStr\":[0.6485999] \"uEclipse\":[0.0] \"uTlBright\":[1.142692] \"uTlGold\":[0.6432701]",
     "[engine:console.log] [p5b] frame 0 drawn",
     "[engine:console.log] [p5b] frame 1 drawn",
     "[engine:console.log] [p5b] frame 2 drawn",
-    "[engine:console.log] [p5b] webgl | {\"backend_requested\":\"webgl\",\"backend_actual\":\"Gl\",\"webgpu_supported\":true,\"adapter_name\":\"ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)\",\"adapter_vendor\":0,\"device_type\":\"Cpu\",\"surface_format\":\"Rgba8Unorm\",\"encoding\":\"raw_bytes\",\"available_formats\":[\"Rgba8UnormSrgb\",\"Rgba8Unorm\",\"Rgba16Float\"],\"width\":960,\"height\":600,\"frames_drawn\":3,\"vertex_count\":3,\"uniform_members\":18,\"surface_width\":960,\"surface_height\":600,\"surface_generation\":0,\"auto_resize_count\":0,\"uniforms_used\":{\"uRes\":[960.0,600.0],\"uCenter\":[633.6,330.0],\"uScale\":[59.83744],\"uTime\":[1.5],\"uRot\":[0.0],\"uBright\":[0.32],\"uTurb\":[0.12],\"uPulse\":[0.0],\"uIncl\":[0.31927118],\"uAzim\":[0.0],\"uDiskAzim\":[0.0],\"uDiskIncl\":[0.31927118],\"uAmbStr\":[0.0],\"uEclipse\":[0.0],\"uTlBright\":[1.0],\"uTlGold\":[1.0]}}",
+    "[engine:console.log] [p5b] webgl | {\"backend_requested\":\"webgl\",\"backend_actual\":\"Gl\",\"webgpu_supported\":true,\"adapter_name\":\"ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)\",\"adapter_vendor\":0,\"device_type\":\"Cpu\",\"surface_format\":\"Rgba8Unorm\",\"encoding\":\"raw_bytes\",\"available_formats\":[\"Rgba8UnormSrgb\",\"Rgba8Unorm\",\"Rgba16Float\"],\"width\":960,\"height\":600,\"frames_drawn\":3,\"vertex_count\":3,\"uniform_members\":18,\"surface_width\":960,\"surface_height\":600,\"surface_generation\":0,\"auto_resize_count\":0,\"uniforms_used\":{\"uRes\":[960.0,600.0],\"uCenter\":[633.6,330.0],\"uScale\":[59.83744],\"uTime\":[1.5],\"uRot\":[0.0],\"uBright\":[0.32],\"uTurb\":[0.12],\"uPulse\":[0.0],\"uIncl\":[0.31927118],\"uAzim\":[0.0],\"uDiskAzim\":[0.0],\"uDiskIncl\":[0.31927118],\"uAmbStr\":[0.6485999],\"uEclipse\":[0.0],\"uTlBright\":[1.142692],\"uTlGold\":[0.6432701]}}",
     "[engine:console.log] [p5b] create engine: backend=webgpu 960x600",
     "[engine:console.log] [p5b] engine created",
     "[engine:console.log] [p5b] pipeline created",
-    "[engine:console.log] [p5b] uniforms bound: \"uRes\":[960.0,600.0] \"uCenter\":[633.6,330.0] \"uScale\":[59.83744] \"uTime\":[1.5] \"uRot\":[0.0] \"uBright\":[0.32] \"uTurb\":[0.12] \"uPulse\":[0.0] \"uIncl\":[0.31927118] \"uAzim\":[0.0] \"uDiskAzim\":[0.0] \"uDiskIncl\":[0.31927118] \"uAmbStr\":[0.0] \"uEclipse\":[0.0] \"uTlBright\":[1.0] \"uTlGold\":[1.0]",
+    "[engine:console.log] [p5b] uniforms bound: \"uRes\":[960.0,600.0] \"uCenter\":[633.6,330.0] \"uScale\":[59.83744] \"uTime\":[1.5] \"uRot\":[0.0] \"uBright\":[0.32] \"uTurb\":[0.12] \"uPulse\":[0.0] \"uIncl\":[0.31927118] \"uAzim\":[0.0] \"uDiskAzim\":[0.0] \"uDiskIncl\":[0.31927118] \"uAmbStr\":[0.6485999] \"uEclipse\":[0.0] \"uTlBright\":[1.142692] \"uTlGold\":[0.6432701]",
     "[engine:console.log] [p5b] frame 0 drawn",
     "[engine:console.log] [p5b] frame 1 drawn",
     "[engine:console.log] [p5b] frame 2 drawn",
-    "[engine:console.log] [p5b] webgpu | {\"backend_requested\":\"webgpu\",\"backend_actual\":\"BrowserWebGpu\",\"webgpu_supported\":true,\"adapter_name\":\"\",\"adapter_vendor\":0,\"device_type\":\"Cpu\",\"surface_format\":\"Rgba8Unorm\",\"encoding\":\"raw_bytes\",\"available_formats\":[\"Rgba8Unorm\",\"Bgra8Unorm\",\"Rgba16Float\"],\"width\":960,\"height\":600,\"frames_drawn\":3,\"vertex_count\":3,\"uniform_members\":18,\"surface_width\":960,\"surface_height\":600,\"surface_generation\":0,\"auto_resize_count\":0,\"uniforms_used\":{\"uRes\":[960.0,600.0],\"uCenter\":[633.6,330.0],\"uScale\":[59.83744],\"uTime\":[1.5],\"uRot\":[0.0],\"uBright\":[0.32],\"uTurb\":[0.12],\"uPulse\":[0.0],\"uIncl\":[0.31927118],\"uAzim\":[0.0],\"uDiskAzim\":[0.0],\"uDiskIncl\":[0.31927118],\"uAmbStr\":[0.0],\"uEclipse\":[0.0],\"uTlBright\":[1.0],\"uTlGold\":[1.0]}}"
+    "[engine:console.log] [p5b] webgpu | {\"backend_requested\":\"webgpu\",\"backend_actual\":\"BrowserWebGpu\",\"webgpu_supported\":true,\"adapter_name\":\"\",\"adapter_vendor\":0,\"device_type\":\"Cpu\",\"surface_format\":\"Rgba8Unorm\",\"encoding\":\"raw_bytes\",\"available_formats\":[\"Rgba8Unorm\",\"Bgra8Unorm\",\"Rgba16Float\"],\"width\":960,\"height\":600,\"frames_drawn\":3,\"vertex_count\":3,\"uniform_members\":18,\"surface_width\":960,\"surface_height\":600,\"surface_generation\":0,\"auto_resize_count\":0,\"uniforms_used\":{\"uRes\":[960.0,600.0],\"uCenter\":[633.6,330.0],\"uScale\":[59.83744],\"uTime\":[1.5],\"uRot\":[0.0],\"uBright\":[0.32],\"uTurb\":[0.12],\"uPulse\":[0.0],\"uIncl\":[0.31927118],\"uAzim\":[0.0],\"uDiskAzim\":[0.0],\"uDiskIncl\":[0.31927118],\"uAmbStr\":[0.6485999],\"uEclipse\":[0.0],\"uTlBright\":[1.142692],\"uTlGold\":[0.6432701]}}"
   ]
 }

@@ -55,6 +55,8 @@ members = [
     # ⭐ 宿主侧「时刻文本」能力（浏览器 `Intl` 口径 ⇒ 与生产逐字同源）。
     "apeireth-ui-time",
     "apeireth-ui-demo",
+    # ⭐ **引擎产品工程**（宿主运行时契约 + wasm 入口；交接包 §0 由引擎线指定路径）。
+    "apeireth-ui-app",
     # 场景层语义（uniform 取值链 + 生命周期）。
     # ⚠ 2026-10-25 补登：此前**漏登** ⇒ 该 crate 虽有源码与单测，却**不在
     #   本 workspace 的依赖图里** ⇒ ① CI 的 test 门禁
