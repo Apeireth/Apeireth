@@ -6,7 +6,7 @@
 # ② 本清单里的既有豁免**只减不增** —— 新增豁免必须写清理由并登记；
 # ③ 理由在 `scripts/dead-code-reasons.txt`（按文件登记）。
 #
-# 合计: 44 处 · 指纹: 640b9e0ef93dc869
+# 合计: 46 处 · 指纹: 48aa6d6cf882d111
 #
 # 格式: <站点标识>  <理由>
 
@@ -46,6 +46,8 @@ crates/engine/organ/src/hypothesis.rs:fn _placeholder(&self) {} // D-1（owner �
 crates/engine/organ/src/hypothesis.rs:fn empty_input() -> OrganInput {  hypothesis 测试夹具：当前无用例调用
 crates/engine/runtime-assembly/tests/canonical_builtin_tools.rs:fn _declaration_smoke() -> (NormalizedTool, Tool  测试声明烟测锚（显式保留，无行为）
 crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs#file  测试夹具结构（供用例构造完整工具）
+crates/engine/runtime-assembly/tests/support/convergence.rs#file  共享测试支撑模块（每个集成测试二进制各编译一次 ⇒ 未被本二进制调用的 helper 会报 dead_code；helper 在别的测试里都有调用，不可删）
+crates/engine/runtime-assembly/tests/support/system_one.rs#file  共享测试支撑模块（同上：按二进制重复编译导致的分二进制未使用）
 crates/engine/runtime-assembly/tests/upgrade_cycle.rs:fn _unused_episode_marker() {}  升级循环测试的占位锚（显式保留，无行为）
 crates/engine/runtime/src/canonical/module.rs:pub(crate) fn with_used(max: usize, used: usize)  0 引用 crate 内构造器（模块统计面预留）
 crates/engine/storage/src/cache/evictor.rs:fn policy(&self) -> EvictionPolicy; // D-1（owner  evictor trait 方法：实现方在本仓之外（宿主 crate 提供）

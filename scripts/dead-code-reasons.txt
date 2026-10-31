@@ -43,3 +43,5 @@ crates/engine/runtime-assembly/tests/cognitive_convergence_vertical.rs  测试�
 benches/src/assembly.rs  基准夹具 helper（供各基准构造完整装配，部分 helper 本文件内未被调用）
 benches/src/support.rs  基准支撑 helper（采样/计时共用，部分 helper 本文件内未被调用）
 crates/capabilities/tools/tests/object_access_judgment.rs  测试夹具 helper（供对象判定用例构造工具调用，当前无用例调用）
+crates/engine/runtime-assembly/tests/support/convergence.rs  共享测试支撑模块（每个集成测试二进制各编译一次 ⇒ 未被本二进制调用的 helper 会报 dead_code；helper 在别的测试里都有调用，不可删）
+crates/engine/runtime-assembly/tests/support/system_one.rs  共享测试支撑模块（同上：按二进制重复编译导致的分二进制未使用）

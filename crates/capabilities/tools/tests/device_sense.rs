@@ -4,12 +4,8 @@
 //! 提醒信号格式 (只交信号) / 真实协议与 live 插槽留位不接 / 开关 fail-closed /
 //! 自述在场节同表同源。
 
-/// 本集成测试二进制内的 env 锁（进程级全局量 ⇒ 串行）。
-/// 放在**模块级**（不在测试函数内）：同文件多个测试函数共用同一把。
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use apeireth_governance::{ToolGuard, ToolGuardRequest};
 use apeireth_plugin::ToolCapability;
