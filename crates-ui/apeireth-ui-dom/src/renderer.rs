@@ -276,6 +276,12 @@ impl<D: Dom> Renderer<D> {
             desynced: false,
             last_error: None,
             warnings: Vec::new(),
+            // ⚠️ **这里刻意是 `Ready`，不是 `MetricsStatus::default()`（= Unknown）**
+            //   ⇒ 二者**不一致是有意的**（2026-10-31 口径澄清，勿「统一」）：
+            //   · 类型默认 Unknown = **保守**（不知道度量 ⇒ 别算）；
+            //   · 渲染器默认 Ready = DOM 度量是**真实几何**（不是估算）⇒ 可以算；
+            //   · 真正的「度量未定」只有宿主知道（字体/资源未就绪）⇒ 由宿主**显式**设 Unknown。
+            //   ⇒ 既有测试 `unknown_metrics_block_virtual_window` 钉住了这条口径。
             metrics_status: crate::resource::MetricsStatus::Ready,
             error_fallback: None,
             captured_error: None,
@@ -991,6 +997,38 @@ impl<D: Dom> Renderer<D> {
             let _ = self.dom.remove_child(parent, &child);
         }
         Ok(())
+    }
+
+    /// ⭐⭐⭐ **销毁渲染器**（垂直切片的 **dispose** 环）。
+    ///
+    /// ## 与 [`Self::unmount`] 的区别（为什么需要它）
+    ///
+    /// `unmount` 只做 **DOM 侧**的事（摘节点 + 摘监听器）⇒ ⇒ 渲染器**内部状态**
+    /// 仍然留着：焦点栈、焦点陷阱、IME 待写队列、捕获到的错误、度量门控
+    /// ⇒ ⇒ 「卸载一屏」后接着「上另一屏」时，旧屏的残留会**渗进**新屏
+    /// （旧屏的焦点陷阱还在 ⇒ 新屏 Tab 不动；旧屏的 IME 待写队列还在
+    /// ⇒ 组合结束后补写到**已卸载**的节点）。
+    ///
+    /// ## 契约
+    ///
+    /// - **幂等**：未挂载时调用是空操作（不报错）；
+    /// - **可复用**：`dispose` 之后仍可再次 `mount`（渲染器不是「一次性」对象）；
+    /// - **状态复位到与新建时一致**（尤其度量门控：复位为 `Ready`，
+    ///   与 [`Renderer::new`] 同口径 —— 见该字段处的口径注释）。
+    pub fn dispose(&mut self) -> Result<(), DomError> {
+        let result = self.unmount();
+        // ① 焦点：路径映射 + 焦点栈 + 焦点陷阱（否则新屏继承旧屏的陷阱）
+        self.focus_paths.clear();
+        self.focus.blur();
+        self.focus.close_trap();
+        // ② IME 待写队列（否则组合结束后补写到已卸载的节点）
+        self.pending_value_writes.clear();
+        // ③ 捕获到的错误（否则新屏会误报旧屏的错误）
+        self.captured_error = None;
+        // ④ 度量门控复位（与 `new` 同口径：`Ready`）
+        self.metrics_status = crate::resource::MetricsStatus::Ready;
+        self.desynced = false;
+        result
     }
 
     /// 卸载整棵树（解绑 `bind:this` ⇒ 摘除 DOM 节点）。
@@ -2111,6 +2149,67 @@ mod tests {
             .expect("观测必须成功");
         assert!((score - 0.002).abs() < 1e-9, "实际得分 {score}");
         assert!((tracker.total() - 0.002).abs() < 1e-9);
+    }
+
+    /// ⭐⭐⭐ **dispose 清空全部内部状态**（垂直切片 dispose 环）：
+    /// 卸载一屏后旧屏残留**不得**渗进新屏。
+    #[test]
+    fn dispose_clears_internal_state_and_is_idempotent() {
+        let (mut renderer, root) = renderer_with_dom();
+        renderer
+            .mount(
+                VNode::element("div")
+                    .child(VNode::element("input").build())
+                    .build(),
+            )
+            .expect("挂载必须成功");
+        // 造出「旧屏残留」：焦点陷阱 + 捕获错误 + IME 待写队列
+        renderer.open_focus_trap(&[&[0]]);
+        renderer.set_error_boundary(Some(VNode::element("div").build()));
+        renderer.render_guarded(VNode::element("span").build()).ok();
+
+        renderer.dispose().expect("dispose 必须成功");
+        // ① 焦点陷阱已关（新屏 Tab 必须能动）
+        assert!(
+            !renderer.focus_tracker().trap_active(),
+            "dispose 后不得残留焦点陷阱"
+        );
+        // ② 捕获错误已清（新屏不得误报旧屏的错误）
+        assert!(
+            renderer.captured_error().is_none(),
+            "dispose 后不得残留捕获错误"
+        );
+        // ③ DOM 已卸（容器没有子节点了）
+        assert!(
+            renderer
+                .dom()
+                .children(&root)
+                .expect("读子节点必须成功")
+                .is_empty(),
+            "dispose 后 DOM 必须已卸载"
+        );
+        // ④ **幂等**：再 dispose 一次不报错
+        renderer.dispose().expect("重复 dispose 必须幂等（不报错）");
+        assert!(renderer.captured_error().is_none());
+    }
+
+    /// ⭐⭐⭐ **dispose 之后仍可复用**（渲染器不是一次性对象）。
+    #[test]
+    fn dispose_allows_reuse() {
+        let (mut renderer, root) = renderer_with_dom();
+        renderer
+            .mount(VNode::element("div").build())
+            .expect("挂载必须成功");
+        renderer.dispose().expect("dispose 必须成功");
+        renderer
+            .mount(
+                VNode::element("section")
+                    .child(VNode::element("span").build())
+                    .build(),
+            )
+            .expect("dispose 后必须能重新挂载");
+        let children = renderer.dom().children(&root).expect("读子节点必须成功");
+        assert_eq!(children.len(), 1, "重新挂载后 DOM 应有 1 个子节点");
     }
 
     /// ⭐⭐ **滚动信号**（L1-G5）：`scroll` 事件到达 ⇒ 信号置位；取走后复位；别的种类不触发。

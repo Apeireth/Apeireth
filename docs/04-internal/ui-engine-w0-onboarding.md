@@ -40,6 +40,7 @@
 | 虚拟列表 | 建议（长列表） | `patch_windowed_at_path` / `virtual_window_for` | WIRED + 1k 行规模不变量 |
 | 滚动联动 | 建议 | `listen_scroll_at_path` → `ScrollSignal::take()` | WIRED |
 | 布局跳动观测 | 建议（要「不跳」的质量线） | `observe_layout_shift_at_path` + `LayoutShiftTracker` | WIRED |
+| **销毁一屏** | **必须**（换屏/退出） | `dispose()`（= 卸载 DOM + 清焦点/陷阱/IME 队列/捕获错误，幂等且可复用） | IMPLEMENTED + native 测试 |
 | 缩放/密度 | 自动（跟随宿主） | `set_measurement_scale`（DPR × density） | WIRED + 浏览器验证 |
 | 纹理上传 | 按需（图片） | `ImageData` + `TextureUploader` + `upload_decoded` | 接口就绪，GPU 侧实现待接 |
 
@@ -132,7 +133,7 @@ renderer.close_focus_trap();
 ### 2.5 字体/图片未就绪 ⇒ 别急着算布局
 
 ```rust
-renderer.set_metrics_status(MetricsStatus::Unknown);   // 默认就是 Unknown
+renderer.set_metrics_status(MetricsStatus::Unknown);   // 字体未就绪 ⇒ 显式声明「度量未定」
 // 字体 ready 之后：
 renderer.set_metrics_status(MetricsStatus::Ready);
 ```
@@ -174,7 +175,7 @@ contextmenu / compositionstart / compositionend`
 |---|---|---|---|
 | 1 | 手写窗口行、**不留白** | 列表「不滚动」（`scrollTop` 被浏览器夹回 0） | 用 `patch_windowed_at_path`（留白由引擎算） |
 | 2 | 在 composition 期间改 `value` | 输入法被打断 / 字符丢失 | 组合期间只改状态不改值；引擎会补写 |
-| 3 | 字体没加载就窗口化 | 窗口位置错、加载完跳一下 | 先 `MetricsStatus::Unknown`，ready 后 `Ready` |
+| 3 | 字体没加载就窗口化 | 窗口位置错、加载完跳一下 | 字体未就绪时**显式** `set_metrics_status(Unknown)`，ready 后 `Ready`（⚠️ 渲染器**默认是 `Ready`** —— DOM 度量是真实几何；「度量未定」只有宿主知道 ⇒ 必须由宿主显式声明） |
 | 4 | 以为 `scroll` 会冒泡 | 委托根上收不到滚动 | 直连容器 |
 | 5 | `path` 下标语义搞错 | 读不到度量（`NotImplemented`） | `node_at_path(&[0])` = **树根的第 0 个子节点**；度量必须落在**同一个**节点上 |
 

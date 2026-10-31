@@ -100,7 +100,7 @@ docs/04-internal/00-governance/release-checklist.md,L4,5,发版清单（Release 
 docs/04-internal/01-handoffs/FINAL-HANDOFF-V2.0.0-RC.1.md,L4,8,"Apeireth v2.0.0-rc.1 最终接手报告 (2026-08-28 收盘, 主代理 Mavis 写, Final-2.1 更新: A 块 OrganOrchestrator 完整化 + O-6 三阶审查 amend)",2026-08-28,在飞,20,保留,
 docs/04-internal/01-handoffs/README.md,L4,5,01-handoffs —— 交接与接手,2026-10-31,在飞,1,索引,
 docs/04-internal/01-handoffs/frontend-visual-build-brief-2026-10-28.md,L4,4,新前端视觉施工 · 交付说明（给施工方）,2026-10-28,在飞,6,保留,
-docs/04-internal/01-handoffs/frontend-visual-build-kickoff-2026-10-31.md,L4,4,K3.1 前端重构 · 交接入口（施工前协议）,2026-10-31,在飞,5,保留,
+docs/04-internal/01-handoffs/frontend-visual-build-kickoff-2026-10-31.md,L4,4,K3.1 前端重构 · 交接入口（施工前协议）,2026-10-31,在飞,6,保留,
 docs/04-internal/01-handoffs/frontend-visual-build-prompt-2026-10-28.md,L4,4,新前端视觉施工 · 创作简报（交付 K3.1）,2026-10-28,在飞,7,保留,
 docs/04-internal/01-handoffs/frontend-visual-build-spec-2026-10-31.md,L4,4,施工规格附录（与创作简报配套）,2026-10-31,在飞,5,保留,
 docs/04-internal/01-handoffs/handoff-18crate-ci-fix-2026-09-23.md,L4,8,交接文档 — 18-crate 文档对账 + CI 安全守门修复 (2026-09-23),2026-09-23,在飞,6,保留,
