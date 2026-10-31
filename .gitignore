@@ -382,3 +382,10 @@ cobertura.xml
 # （crates/capabilities/tools/default_*.profraw）是**我自己**在执行 tarpaulin 后
 # 用 `git add -A` 卷进提交的。已从本分支删除, 本条规则防止再次发生。
 *.profraw
+
+# crates-ui **根**目录的 pnpm 副产物（本地等价 CI 在 crates-ui/ 下装依赖时由
+# `pnpm init` 生成 ⇒ 是**空壳**（name/version 皆默认）⇒ ⇒ 不进仓）。
+# ⚠️ 只针对 **crates-ui 根**：真前端工程（`crates-ui/evidence/p5-b/web/package.json`、
+#    `frontend/companion-desktop/package.json`）**照旧进仓**，不受影响。
+crates-ui/package.json
+crates-ui/pnpm-lock.yaml
