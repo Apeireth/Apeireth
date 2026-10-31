@@ -3,11 +3,12 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-spec-2026-10-31.md
-Version:         1.3
+Version:         1.4
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（与创作简报一起交给施工方）
 Author:          总工程师（lead）· 前端视觉总攻线
-口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.0）
+口径真源:        交接入口 = ./frontend-visual-build-kickoff-2026-10-31.md（v1.0，先读）
+                 创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.4）
 用法:            本文件是规格参考，不是硬门；硬门以创作简报 §三/§七 为准。
 ```
 
@@ -123,7 +124,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 - 骨 = 城式基地：中央光核塔；内区（记忆/经验）/ 中区（编排/任务/队列）/ 外区（能力/工具/适配器）街区；街道/高架（数据流）；边缘泊位/坞（agent 接入）。
 - 轴 = 三层轨道环：内环（记忆）/ 中环（编排）/ 外环（能力），不同倾角；最外治理闸门环（分段，需要签时亮金边并"开门"）。
 - 基地本身基本静止（只做极慢呼吸/微浮动）；**旋转交给环**：不均匀地停顿、短促冲刺、缓慢漂移，事件触发脉冲。
-- **形象层可替换**：语义槽 `core` / `districts[3]` / `rings[3]` / `gate_ring` / `docks[]` / `channels[]` / `units[]`；换壳只换造型，状态映射/交互/明暗/降级不变。
+- **形象层可替换**：语义槽 `core` / `districts[3]` / `rings[3]` / `gate_ring` / `docks[]` / `channels[]` / `units[]` 固定；城市是 owner 已选的初始载体，可在城市内部自由创造；换载体需在 T0 提出并由 owner 决定；换壳只换造型，状态映射/交互/明暗/降级不变。
 
 ### 5.2 解剖与状态映射
 
@@ -197,7 +198,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 ## §8 交付物明细
 
 - **D1 设计标准 v0.1**：语义令牌（surface/text/action/destructive/signal 等）明暗两套；网格；图标规则；可复制 token 清单。
-- **D2 主屏 8 张**：工作空间（含工作画布 3 种形态）、应用空间、控制塔、全息基地，各明暗两版；1440×900 基准。
+- **D2 冻结屏幕矩阵 8 张**：`workspace` / `application` / `control-tower` / `holographic-base`，各明暗两版；每张声明 screen_id/state_id/theme/viewport/source/证据路径；1440×900 基准。
 - **D2b（鼓励，随额度）**：应用空间子视图——文档/图像工作流各明暗 = 4 张。
 - **D3 组件与状态矩阵**：§7 清单，每个八状态。
 - **D4 可交互原型**：工作空间↔应用空间↔控制塔可走通；四工作流可切换（工具可 mock）；键盘可达。
@@ -279,3 +280,93 @@ T0 完成 / D1 完成 / 每组组件完成 / 每张屏（含明暗）完成 / �
 - 额度将尽：停在完整检查点；宁可少做一张屏，不留半张屏/半套组件；下一步写清路径与待定项。
 - 文件级：每个屏/每类组件独立文件；待做内容用显式 `TODO` 标注并写入 MANIFEST，不交空文件/占位符。
 - 失败/被打回：保留旧检查点，修完再覆盖工作副本；不在失败版本上继续堆。
+
+---
+
+## §13 数据与交互契约
+
+### 13.1 数据来源标签
+
+```text
+LIVE        当前由真实 API / 事件流提供，并显示来源与时间
+MOCK        为演示设计而生成，显示 scenario_id
+STALE       最近一次真实值，显示最后更新时间
+UNAVAILABLE 能力存在但当前不可取值
+NOT_WIRED   设计形状已存在，尚未接入后端
+```
+
+任何遥测、Agent 状态、工具结果、AI 建议、文件版本、审批都必须属于其中一种；禁止无标签填充。
+
+### 13.2 AI 建议生命周期与记录
+
+```text
+idle → proposing → preview → awaiting-approval → applying
+→ applied | rejected | failed | reverted
+```
+
+每条建议至少记录：`suggestion_id / work_id / artifact_id / anchor_type(selection|paragraph|layer|row|code-range) / anchor_id / before_version / after_version / trace_id / permission_scope / source`。
+接受必须产生新版本或明确失败态；回退指向版本节点；局部接受说明剩余差异如何处理。
+
+### 13.3 WorkspaceContext 与演示路径
+
+```text
+WorkspaceContext {
+  work_id, artifact_id, artifact_type, selection, version_id,
+  active_app, focused_agent_id, permission_scope, trace_id,
+  return_route, return_focus
+}
+```
+
+首轮演示路径：工作空间选择锚点 → 打开应用空间 → AI 协作栏识别同一锚点 → 查看差异 → 接受/拒绝 → 返回原工作并恢复焦点。
+
+### 13.4 控制塔进入/退出
+
+```text
+进入：保存 route + work_id + artifact_id + selection + focused_agent + 滚动位置。
+退出：恢复进入前的工作画布、协作栏展开状态、滚动位置、键盘焦点。
+首次引导：非阻塞 coachmark，不增加第二次确认，不改变一次交互进入的规则。
+```
+
+基地右键菜单只能打开检查器、待签卡或命令面；写操作不得在基地本体提交。
+
+---
+
+## §14 证据与交付协议
+
+每个检查点更新：`PROGRESS.md`、`MANIFEST.md`、`EVIDENCE.md`、`DECISIONS.md`、`checkpoints/vN/`（只增不改）。
+
+`EVIDENCE.md` 每项至少写：`artifact_id / viewport / DPI / theme / state_id / source / 复现步骤 / 截图或录屏路径 / 实际结果 / 未验证项`。
+
+开工前先交 `SOURCE-OF-TRUTH.md`（读取的文件与版本、冲突与采用规则、当前模式、待 owner 决定项）；没有它不开始 T0。
+
+未测写"未验证"，不得写"通过"；额度将尽时停在完整检查点并写明下一步与唯一阻塞原因。
+
+---
+
+## §15 性能测量协议
+
+```text
+目标环境：Windows WebView2，DPI 100/125/150
+基准窗口：1440×900（默认窗口）
+正常交互目标 60fps；低性能降级不改变状态语义
+窗口失焦：暂停环境层与基地渲染
+prefers-reduced-motion：停用旋转、视差、无源呼吸
+D5 记录测量方式与实际结果；未测写"未验证"
+```
+
+---
+
+## §16 响应式与命令条行为
+
+窄窗优先级：
+
+```text
+1280：左右栏可收纳，中央工作画布保持可用
+1440：三栏基准
+1920：增加留白，不把面板拉到失去层级
+更窄：右栏变抽屉、左栏变 rail、应用 chrome 允许折叠
+任何尺寸：不允许用横向滚动承载主工作流
+```
+
+命令条状态：空闲 / 聚焦 / 输入中 / 有附件 / 发送中 / 可中断 / 错误 / 权限不足；
+Enter 发送、Shift+Enter 换行、Esc 取消或收起、Tab 在附件与建议间移动；拖入文件显示文件名/类型/大小/来源/移除；发送后任务出现在工作画布与 AI 协作栏。

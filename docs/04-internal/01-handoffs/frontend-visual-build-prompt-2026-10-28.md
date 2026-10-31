@@ -3,14 +3,15 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-prompt-2026-10-28.md
-Version:         3.3
+Version:         3.4
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（待 owner 转交施工方）
 Author:          总工程师（lead）· 前端视觉总攻线
                                  
-口径真源:        施工规格 = ./frontend-visual-build-spec-2026-10-31.md
-                 交付说明 = ./frontend-visual-build-brief-2026-10-28.md（v3.2）
-用法:            从「你是一位…」开始，整份内容（正文 + 规格附录 + 参考截图）交给施工方；
+口径真源:        交接入口 = ./frontend-visual-build-kickoff-2026-10-31.md（v1.0，先读）
+                 施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.4）
+                 交付说明 = ./frontend-visual-build-brief-2026-10-28.md（v3.4）
+用法:            先读《交接入口》（协议/模式/证据）；从「你是一位…」开始，整份内容（正文 + 规格附录 + 参考截图）交给施工方；
                  本 meta 块不进入交付内容。
 ```
 
@@ -55,7 +56,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 
 1. **首屏是工作空间**；控制塔必须一次交互进入，不能是默认首屏的一部分。
 2. **明暗两套都精细**，独立成立（不是反相）。
-3. **唯一饱和信号色**（金 = 系统信号/能量），只用于系统活动/信号/告警语义。
+3. **金色是唯一高饱和系统信号色**（系统活动/信号/告警语义）；成功/警告/危险/信息可低饱和承担语义，不得装饰或品牌化；工作画布内容色、图片原色、应用内部色不受限，但不能冒充系统信号。
 4. **控制塔的全息基地只"看 + 选"**（点选/双击聚焦/拖视角/滚轮/右键菜单），不是编辑器；写操作只走固定面（命令条/检查器/待签卡/工作画布）。
 5. **AI 建议必须可追溯**：锚点（选区/段落/图层）、差异、[接受][拒绝][回退]。
 6. **交互件八状态**：default / hover / focus / active / disabled / loading / error / selected。
@@ -172,6 +173,7 @@ deliverables/
 - [ ] 状态覆盖：默认/选中/告警/空/加载/错误/权限不足；D3 八状态；
 - [ ] 工作画布 AI 建议有锚点/差异/接受拒绝回退；应用空间四个工作流形状完整（mock 已标注）；
 - [ ] 基地画面：唯一亮物、只看+选、降级可用、换壳不改变语义；
+- [ ] 数据来源标签（LIVE/MOCK/STALE/UNAVAILABLE/NOT_WIRED）、AI 建议生命周期、WorkspaceContext、EVIDENCE/DECISIONS 按《交接入口》§4/§5 执行；
 - [ ] 所有 mock 显式标注；无"声称测过但没测"的数字。
 
 **交付前评审 pass**（自我否定，不是自夸）：

@@ -3,12 +3,13 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-brief-2026-10-28.md
-Version:         3.3
+Version:         3.4
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（待 owner 转交施工方）
 Author:          总工程师（lead）· 前端视觉总攻线
-口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.3）
-                 施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.2）
+口径真源:        交接入口 = ./frontend-visual-build-kickoff-2026-10-31.md（v1.0，先读）
+                 创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.4）
+                 施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.4）
                  首发平台 = Windows 桌面（WebView2 验收基线；Linux 兼容目标）
 用法:            本文件说明"怎么用这份交付包"；施工细则以创作简报为准。
 ```
@@ -29,14 +30,16 @@ Apeireth 是一个 AI 工作系统（**首发平台：Windows 桌面，Tauri + W
 
 ## §2 读什么、按什么顺序
 
-1. **创作简报**（`frontend-visual-build-prompt-2026-10-28.md`）：目标 / 三空间 / 画面 / 硬底线 / 动效 / T0 / 交付物 / 验收门 / 自由条款。
-2. **施工规格**（`frontend-visual-build-spec-2026-10-31.md`）：布局参考、组件与八状态、基地解剖、轨迹字段、交互清单、验证明细。
-3. **参考截图**（owner 提供）：只研究语言，不复制素材/构图。
+1. **交接入口**（`frontend-visual-build-kickoff-2026-10-31.md`，先读）：施工模式、真源优先级、数据契约、证据协议。
+2. **创作简报**（`frontend-visual-build-prompt-2026-10-28.md`）：目标 / 三空间 / 画面 / 硬底线 / 动效 / T0 / 交付物 / 验收门 / 自由条款。
+3. **施工规格**（`frontend-visual-build-spec-2026-10-31.md`）：布局参考、组件与八状态、基地解剖、轨迹字段、交互清单、验证明细、契约明细。
+4. **参考截图**（owner 提供）：只研究语言，不复制素材/构图。
 
 > 硬门以创作简报 §三/§七 为准；规格附录是参考，不是逐条验收清单。
 
 ## §3 流程（T0 前置门）
 
+0. 开工前先交 **SOURCE-OF-TRUTH.md**（读取的文件/版本、冲突与采用规则、当前施工模式；没有它不开始 T0）；当前模式 = **DESIGN_ONLY**；
 1. 先交 **T0 处理稿**（不写 HTML/CSS）：一句话构想 + 3 概念方向 + 风格圣经 + 三空间 IA + 工作画布 + AI 协作栏 + 控制塔/基地 + 轨迹 + 交互清单 + 不确定项；
 2. **owner 审 T0**，说"行"之后才进入生产；
 3. 生产顺序：**D1 设计标准 → D3 零件与状态 → D2 成品**；交付时按同样顺序展示。
@@ -60,7 +63,7 @@ Apeireth 是一个 AI 工作系统（**首发平台：Windows 桌面，Tauri + W
 |---|---|---|
 | T0 | 处理稿 | 见 §3；owner 审 |
 | D1 | 设计标准 v0.1 | 语义令牌明暗两套 + 网格 + 图标规则 + token 清单；D2/D3 从它派生 |
-| D2 | 三空间 × 明暗 + 全息基地 = 8 张主屏（+ D2b 应用空间子视图 4 张，随额度） | 1440×900 基准；覆盖主要状态；每屏可截图当作品 |
+| D2 | **冻结屏幕矩阵 = 4 类 × 明暗 = 8 张**（+ D2b 细化屏，随额度） | `workspace` / `application` / `control-tower` / `holographic-base`；每张声明 screen_id/state_id/theme/viewport/source/证据路径；state_id 覆盖 empty/active/selected/loading/awaiting-approval/error/unavailable；1440×900 基准 |
 | D3 | 组件与状态矩阵 | 每个交互件八状态（见规格 §7） |
 | D4 | 可交互原型 | 三空间可走通；四工作流可切换；键盘可达 |
 | D5 | 设计说明 | 决策/取舍/0 装标注/动效清单/依赖与降级/mock 清单 |
@@ -87,5 +90,6 @@ Apeireth 是一个 AI 工作系统（**首发平台：Windows 桌面，Tauri + W
 |---|---|
 | `frontend-visual-build-prompt-2026-10-28.md` | 创作简报（主读） |
 | `frontend-visual-build-spec-2026-10-31.md` | 施工规格（备查） |
+| `frontend-visual-build-kickoff-2026-10-31.md` | 交接入口（先读：模式/真源/契约/证据） |
 | `frontend-visual-build-brief-2026-10-28.md`（本文） | 用法与交付说明 |
 | 参考截图（owner 提供） | 语言研究，不复制素材 |
