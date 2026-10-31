@@ -1762,25 +1762,54 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
         failures.push(format!("① boot 后输入框值不对：{booted:?}"));
     }
 
-    // ③ ⭐ **自动渲染**：改信号 ⇒ **不**调任何宿主函数 ⇒ DOM **自动**更新
-    //    （core 的 effect 是**同步重跑**的 ⇒ ⇒ 宿主不需要手动重建视图/手动 patch）
-    wasm_host::set_demo_text("已更新").map_err(|error| {
-        JsValue::from_str(&format!("set_demo_text 失败：{error:?}"))
+    // ③ ⭐⭐ **批次边界渲染**：N 次状态变更 ⇒ **只渲染一次**（不抖）
+    //    （core 的 effect 同步重跑 ⇒ ⇒ 若每次都 patch ⇒ N 次渲染 ⇒ 抖
+    //      ⇒ ⇒ effect 只**标脏**，真正的 patch 由批次边界合并成**一次**）
+    let renders_before = wasm_host::render_count().map_err(|error| {
+        JsValue::from_str(&format!("render_count 失败：{error:?}"))
     })?;
-    let after = input_value();
-    if after.as_deref() != Some("已更新") {
-        failures.push(format!("② 改信号后 DOM 未自动更新：{after:?}"));
+    for text in ["一", "二", "三"] {
+        wasm_host::set_demo_text(text).map_err(|error| {
+            JsValue::from_str(&format!("set_demo_text 失败：{error:?}"))
+        })?;
     }
-    // ③b `flush` 是**幂等**的（已同步重跑 ⇒ 此时无待办 ⇒ 不应重复渲染）
+    // 变更后、批次边界前 ⇒ DOM **不应**变（渲染被合并了）
+    let before_flush = input_value();
+    if before_flush.as_deref() == Some("三") {
+        failures.push(String::from(
+            "② 批次边界前不应渲染（渲染必须合并到边界 ⇒ 否则一帧多次变更 ⇒ 多次渲染 ⇒ 抖）",
+        ));
+    }
     let flushed = wasm_host::flush().map_err(|error| {
         JsValue::from_str(&format!("flush 失败：{error:?}"))
     })?;
-    if flushed {
-        failures.push(String::from("②b 已同步重跑 ⇒ 随后的 flush 不应再执行 effect"));
+    if !flushed {
+        failures.push(String::from("② 批次边界应当渲染一次"));
     }
-    let after_flush = input_value();
-    if after_flush.as_deref() != Some("已更新") {
-        failures.push(format!("②b flush 后 DOM 被改坏了：{after_flush:?}"));
+    let renders_after = wasm_host::render_count().map_err(|error| {
+        JsValue::from_str(&format!("render_count 失败：{error:?}"))
+    })?;
+    if renders_after != renders_before + 1 {
+        failures.push(format!(
+            "② 3 次变更 ⇒ 只应渲染 1 次；实际 {renders_before} → {renders_after}"
+        ));
+    }
+    let after = input_value();
+    if after.as_deref() != Some("三") {
+        failures.push(format!("② 批次边界后 DOM 应是**最新**值：三；实际 {after:?}"));
+    }
+    // ③b 再次 flush ⇒ 幂等（无变更 ⇒ 不该再渲染）
+    let flushed_again = wasm_host::flush().map_err(|error| {
+        JsValue::from_str(&format!("flush 失败：{error:?}"))
+    })?;
+    if flushed_again {
+        failures.push(String::from("②b 无变更时 flush 不应再渲染"));
+    }
+    let renders_final = wasm_host::render_count().map_err(|error| {
+        JsValue::from_str(&format!("render_count 失败：{error:?}"))
+    })?;
+    if renders_final != renders_after {
+        failures.push(format!("②b 幂等失败：{renders_after} → {renders_final}"));
     }
 
     // ③b 手动路径仍在：`rerender()` 可显式触发一次

@@ -90,6 +90,7 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
     renderer
         .render_guarded(view)
         .map_err(|error| JsValue::from_str(&format!("宿主薄壳：首屏渲染失败：{error}")))?;
+    state.borrow_mut().mark_rendered();
     let renderer = Rc::new(RefCell::new(renderer));
 
     // ⭐ **自动渲染**：effect 体里读屏幕的状态信号 ⇒ ⇒ 依赖被 core 追踪
@@ -97,14 +98,18 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
     // ⇒ ⇒ 宿主**不需要**手动「重建视图」—— 那正是自动调度的意义。
     let auto_render = {
         let screen = screen.clone();
-        let renderer = renderer.clone();
+        let state_for_effect = state.clone();
         runtime.effect(move || {
             let view = screen.view();
             // ⭐ **自动建立依赖**：遍历树里所有绑定并读一次 ⇒ ⇒ core 收集到依赖
-            // ⇒ ⇒ 屏幕作者**不需要**手动 `signal.get()`（这正是本批要消除的易漏点）。
+            // ⇒ ⇒ 屏幕作者**不需要**手动 `signal.get()`（这正是 E-129 消除的易漏点）。
             view.touch_bindings();
-            let mut guard = renderer.borrow_mut();
-            let _ = guard.patch(view);
+            // ⭐⭐ **只标脏，不 patch**（批次边界收口）：
+            //   core 的 effect 是**同步重跑**的 ⇒ ⇒ 一帧内 N 次变更 ⇒ N 次 effect
+            //   ⇒ ⇒ 若在这里直接 patch ⇒ ⇒ **N 次渲染**（会抖）。
+            //   ⇒ ⇒ 这里只**请求**渲染 ⇒ ⇒ 真正的 patch 由批次边界做**一次**。
+            let _ = &view; // 树已构造（依赖已建立）；本批不 patch
+            state_for_effect.borrow_mut().mark_dirty();
         })
     };
 
@@ -140,6 +145,7 @@ pub fn rerender() -> Result<bool, JsValue> {
             .borrow_mut()
             .patch(view)
             .map_err(|error| JsValue::from_str(&format!("宿主薄壳：重渲染失败：{error}")))?;
+        host.state.borrow_mut().mark_rendered();
         Ok(true)
     })
 }
@@ -193,7 +199,49 @@ pub fn set_demo_text(text: &str) -> Result<(), JsValue> {
     })
 }
 
-/// ⭐ **flush**：跑完当前所有待办（含**自动渲染**的 effect）。
+/// ⭐⭐ **批次边界渲染**：若被标脏 ⇒ **渲染一次**（并清脏 + 计数 +1）。
+///
+/// ## 为什么在批次边界而不是「变更时」
+///
+/// core 的 effect 是**同步重跑**的 ⇒ ⇒ 一帧内 N 次状态变更 ⇒ N 次 effect
+/// ⇒ ⇒ 若每次都直接 patch ⇒ ⇒ **N 次渲染**（重排抖动、浪费）
+/// ⇒ ⇒ 故：effect 只**标脏** ⇒ ⇒ 批次边界**合并成一次**渲染。
+///
+/// 返回 `true` = 本次真的渲染了。
+#[wasm_bindgen]
+pub fn render_if_dirty() -> Result<bool, JsValue> {
+    HOST.with(|slot| {
+        let mut guard = slot.borrow_mut();
+        let Some(host) = guard.as_mut() else {
+            return Err(JsValue::from_str("宿主薄壳：还没 boot"));
+        };
+        if !host.state.borrow_mut().take_dirty() {
+            return Ok(false);
+        }
+        let view = host.screen.view();
+        host.renderer
+            .borrow_mut()
+            .patch(view)
+            .map_err(|error| JsValue::from_str(&format!("宿主薄壳：重渲染失败：{error}")))?;
+        host.state.borrow_mut().mark_rendered();
+        Ok(true)
+    })
+}
+
+/// ⭐ **已渲染次数**（用来观测「一帧内多次变更 ⇒ 渲染了几次」）。
+#[wasm_bindgen]
+pub fn render_count() -> Result<usize, JsValue> {
+    HOST.with(|slot| {
+        let guard = slot.borrow();
+        let Some(host) = guard.as_ref() else {
+            return Err(JsValue::from_str("宿主薄壳：还没 boot"));
+        };
+        let renders = host.state.borrow().renders();
+        Ok(renders)
+    })
+}
+
+/// ⭐ **flush**：跑完当前所有待办 + 执行**批次边界渲染**。
 ///
 /// ## 宿主该在什么时候调
 ///
@@ -214,7 +262,20 @@ pub fn flush() -> Result<bool, JsValue> {
             return Err(JsValue::from_str("宿主薄壳：还没 boot"));
         };
         let report = host.runtime.flush();
-        Ok(report.effects_run > 0)
+        // 批次边界：把 effect 请求的渲染**合并成一次**。
+        let rendered = if host.state.borrow_mut().take_dirty() {
+            let view = host.screen.view();
+            host.renderer
+                .borrow_mut()
+                .patch(view)
+                .map_err(|error| JsValue::from_str(&format!("宿主薄壳：重渲染失败：{error}")))?;
+            host.state.borrow_mut().mark_rendered();
+            true
+        } else {
+            false
+        };
+        let _ = report;
+        Ok(rendered)
     })
 }
 

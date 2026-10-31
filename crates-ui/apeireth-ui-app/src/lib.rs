@@ -70,6 +70,8 @@ pub trait Screen: 'static {
 pub struct HostState {
     current: Option<String>,
     dirty: bool,
+    /// ⭐ 已渲染次数（**批次边界**的实际渲染次数 ⇒ ⇒ 用来观测「一帧多次变更 ⇒ 渲染几次」）。
+    renders: usize,
 }
 
 impl HostState {
@@ -107,6 +109,18 @@ impl HostState {
     /// 返回 `true` = 需要重渲染；`false` = 本帧无需重渲染。
     pub fn take_dirty(&mut self) -> bool {
         std::mem::replace(&mut self.dirty, false)
+    }
+
+    /// ⭐ 记一次**实际渲染**（批次边界真正 patch 了才调）。
+    ///
+    /// ⇒ 与「标脏次数」分开 ⇒ ⇒ 才能观测「多次变更 ⇒ 渲染**几次**」。
+    pub fn mark_rendered(&mut self) {
+        self.renders += 1;
+    }
+
+    /// 已渲染次数。
+    pub fn renders(&self) -> usize {
+        self.renders
     }
 
     /// 清空（屏幕被销毁时）。
@@ -169,6 +183,30 @@ mod tests {
         }
         assert!(state.take_dirty());
         assert!(!state.take_dirty(), "5 次标脏 ⇒ 帧边界只重渲染 1 次");
+    }
+
+    /// ⭐⭐ **批次语义**：多次变更 ⇒ 批次边界**只渲染一次**。
+    ///
+    /// 这是「上层显式批处理」的核心口径：
+    /// - N 次标脏 ⇒ 脏标记仍是**一个**（合并）；
+    /// - 批次边界渲染**一次** ⇒ 计数 +1；
+    /// - 渲染后不再脏 ⇒ 再判定时**不**该再渲染（幂等）。
+    #[test]
+    fn batch_renders_once_regardless_of_change_count() {
+        let mut state = HostState::new();
+        state.switch_to("settings");
+        for _ in 0..5 {
+            state.mark_dirty();
+        }
+        assert!(state.is_dirty(), "多次变更后必须脏");
+        // 批次边界：渲染一次
+        state.mark_rendered();
+        state.take_dirty();
+        assert_eq!(state.renders(), 1, "5 次变更 ⇒ 只该渲染 1 次");
+        assert!(!state.is_dirty(), "渲染后不再脏");
+        // 幂等：再判定时不该再渲染
+        assert!(!state.take_dirty(), "渲染后不得重复渲染");
+        assert_eq!(state.renders(), 1, "渲染次数不得增加");
     }
 
     /// 清空 ⇒ 无当前屏幕、也不脏（屏幕被销毁后）。
