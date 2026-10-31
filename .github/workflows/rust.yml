@@ -334,9 +334,20 @@ jobs:
         with:
           fetch-depth: 0  # scan-history 需要全历史
 
-      - name: Install PowerShell
-        shell: pwsh
+      - name: Ensure PowerShell (runner images preinstall pwsh; apt is a fallback)
+        # ⚠️ **2026-10-31 修正（副总指挥线）**：原写法是无条件
+        #     `sudo apt-get install -y powershell`，且准备步用 `shell: pwsh`
+        # ⇒ ⇒ Ubuntu 的**默认仓库没有这个包** ⇒ `Unable to locate package` ⇒ exit 100
+        # ⇒ ⇒ 而 `ubuntu-latest` **本来就预装 pwsh** ⇒ ⇒ 那一步既多余又必然失败
+        # ⇒ ⇒ **整个 secret-scan job 一直红在这个准备步上**（而不是红在真扫描上）
+        #   ⇒ ⇒ **两个真扫描步（scan-all / scan-history）从来没跑到过**。
+        # ⇒ 现在改成**幂等守卫**：有 pwsh 就直接用并打印版本；没有才尝试装。
+        #   （准备步用 `shell: bash` ⇒ 不依赖 pwsh 本身存在。）
+        shell: bash
         run: |
+          if command -v pwsh >/dev/null 2>&1; then
+            echo "pwsh already present:"; pwsh --version; exit 0
+          fi
           sudo apt-get update
           sudo apt-get install -y powershell
 

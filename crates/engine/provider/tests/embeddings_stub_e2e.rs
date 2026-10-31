@@ -197,7 +197,7 @@ async fn 真http_401_归类为不可用() {
 }
 
 #[tokio::test]
-async fn 真http_坏JSON_归类为非法向量() {
+async fn 真http_坏json_归类为非法向量() {
     let (base_url, _captured) = spawn_stub("HTTP/1.1 200 OK", "this is not json").await;
     let provider = OpenAiCompatibleEmbeddingProvider::new(&base_url, "m", None).expect("provider");
     let error = provider.embed("x").await.expect_err("应失败");

@@ -307,56 +307,6 @@ fn evaluate_subset(
     hits as f64 / total as f64
 }
 
-fn evaluate(
-    snaps: &[Vec<CandidateSnap>],
-    cases: &[&Case],
-    w_heading: f64,
-    w_path: f64,
-    w_len: f64,
-) -> f64 {
-    let mut total = 0usize;
-    let mut hits = 0usize;
-    for (index, case) in cases.iter().enumerate() {
-        let Some(snap) = snaps.get(index) else {
-            continue;
-        };
-        let terms = terms_of(&case.query);
-        let mut scored: Vec<(&str, f64)> = snap
-            .iter()
-            .map(|c| {
-                let mut score = c.production_score;
-                if w_heading > 0.0 {
-                    score += w_heading * coverage_terms(&terms, &c.heading);
-                }
-                if w_path > 0.0 {
-                    score += w_path * coverage_terms(&terms, &c.path);
-                }
-                if w_len > 0.0 {
-                    let len = c.text_len as f64;
-                    score += w_len * (1.0 - (len / 4000.0).min(1.0));
-                }
-                (c.id.as_str(), score)
-            })
-            .collect();
-        scored.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.0.cmp(b.0))
-        });
-        total += 1;
-        if scored
-            .iter()
-            .take(K)
-            .any(|(id, _)| case.expect.iter().any(|e| e == id))
-        {
-            hits += 1;
-        }
-    }
-    if total == 0 {
-        return f64::NAN;
-    }
-    hits as f64 / total as f64
-}
 
 fn terms_of(query: &str) -> Vec<String> {
     query
