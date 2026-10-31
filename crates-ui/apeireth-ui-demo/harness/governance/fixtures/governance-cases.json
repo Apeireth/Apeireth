@@ -4,7 +4,7 @@
   "manifests": {
     "full": {
       "schema_version": 1,
-      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.5" },
       "capabilities": [
         {
           "id": "permissions",
@@ -51,7 +51,7 @@
     },
     "no_approval_read": {
       "schema_version": 1,
-      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.5" },
       "capabilities": [
         {
           "id": "permissions",
@@ -69,7 +69,7 @@
     },
     "grants_read_only": {
       "schema_version": 1,
-      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.5" },
       "capabilities": [
         {
           "id": "permissions",
@@ -87,7 +87,7 @@
     },
     "audit_unavailable": {
       "schema_version": 1,
-      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.5" },
       "capabilities": [
         {
           "id": "trace",
@@ -100,7 +100,7 @@
     },
     "guard_unavailable": {
       "schema_version": 1,
-      "runtime": { "name": "apeireth", "version": "2.0.0-rc.4" },
+      "runtime": { "name": "apeireth", "version": "2.0.0-rc.5" },
       "capabilities": [
         {
           "id": "safety",

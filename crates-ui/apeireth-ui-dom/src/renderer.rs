@@ -223,6 +223,16 @@ pub struct Renderer<D: Dom> {
     tree: Option<MountedNode<D>>,
     /// 当前**已绑定**的 `bind:this` 槽位数（挂载 +1 / 卸载 −1）。
     bound_slots: usize,
+    /// ⭐⭐ **patch 统计**（可比对的节点数 / 实际写入次数）。
+    ///
+    /// ## 为什么要有它
+    ///
+    /// 实测（E-137/E-139）：4.7k 元素的树里，**改一个叶子**要 **94 ms**，
+    /// 其中**构造仅 3 ms** ⇒ ⇒ **写入只有 8 次**、**比对却有 42,138 次**
+    /// ⇒ ⇒ 差分**写得对**，但**比得太多** ⇒ ⇒ 该优化的是**比对范围**。
+    ///
+    /// ⚠️ 用 `Cell` ⇒ ⇒ 计数**不改变任何方法签名** ⇒ ⇒ 插桩零侵入。
+    patch_stats: std::cell::Cell<crate::patch_stats::PatchStats>,
     /// 渲染器与 DOM 是否**劈叉**（一次失败的 patch 之后为 `true`）。
     ///
     /// 劈叉 ⇒ 内存树**不可信** ⇒ 下一次 patch **整树重建**（不再拿旧树差分）。
@@ -266,6 +276,35 @@ pub struct Renderer<D: Dom> {
 }
 
 impl<D: Dom> Renderer<D> {
+    /// ⭐ 记一次**实际写入** DOM（统计用；不改变行为）。
+    fn count_write(&self) {
+        self.patch_stats.set({
+            let mut stats = self.patch_stats.get();
+            stats.written_nodes += 1;
+            stats
+        });
+    }
+
+    /// ⭐⭐ 取**最近一次 patch 的统计**（比对节点数 / 写入次数）。
+    ///
+    /// ## 怎么用
+    ///
+    /// ```ignore
+    /// renderer.reset_patch_stats();
+    /// renderer.patch(view)?;
+    /// let stats = renderer.patch_stats();
+    /// // ⇒ stats.compared_nodes 越**小** ⇒ 比对范围越窄 ⇒ ⇒ 越快
+    /// ```
+    pub fn patch_stats(&self) -> crate::patch_stats::PatchStats {
+        self.patch_stats.get()
+    }
+
+    /// ⭐⭐ 复位 patch 统计（便于「一次操作 = 一组数字」）。
+    pub fn reset_patch_stats(&self) {
+        self.patch_stats
+            .set(crate::patch_stats::PatchStats::default());
+    }
+
     /// 建一个渲染器（挂载容器 = `root`）。
     pub fn new(dom: D, root: D::Node) -> Self {
         Self {
@@ -273,6 +312,7 @@ impl<D: Dom> Renderer<D> {
             root,
             tree: None,
             bound_slots: 0,
+            patch_stats: std::cell::Cell::new(crate::patch_stats::PatchStats::default()),
             desynced: false,
             last_error: None,
             warnings: Vec::new(),
@@ -1167,6 +1207,12 @@ impl<D: Dom> Renderer<D> {
         parent: &D::Node,
         after: Option<&D::Node>,
     ) -> Result<MountedNode<D>, DomError> {
+        // ⭐⭐ 统计：**比对**了一个节点（优化可验证性基建）。
+        self.patch_stats.set({
+            let mut stats = self.patch_stats.get();
+            stats.compared_nodes += 1;
+            stats
+        });
         match (old, new) {
             (MountedNode::Element(old_element), VNode::Element(new_element)) => {
                 if old_element.vnode.tag != new_element.tag {
@@ -1207,6 +1253,7 @@ impl<D: Dom> Renderer<D> {
                 if old_text.vnode.data != new_text.data {
                     // 就地改文本（不重建文本节点 —— 设计文档 §5.2.4）。
                     self.dom.set_text(&old_text.dom, &new_text.data)?;
+                    self.count_write();
                 }
                 Ok(MountedNode::Text(MountedText {
                     vnode: new_text.clone(),
@@ -1626,9 +1673,13 @@ impl<D: Dom> Renderer<D> {
             let value = binding.value();
             match binding.slot() {
                 crate::binding::BindingSlot::Checked => {
-                    self.dom.set_property_bool(dom, name, value == "true")?
+                    self.dom.set_property_bool(dom, name, value == "true")?;
+                    self.count_write();
                 }
-                _ => self.dom.set_property(dom, name, &value)?,
+                _ => {
+                    self.dom.set_property(dom, name, &value)?;
+                    self.count_write();
+                }
             }
         }
         Ok(())
@@ -1693,6 +1744,7 @@ impl<D: Dom> Renderer<D> {
                         _ => {}
                     }
                     self.dom.set_property(dom, &name, text)?;
+                    self.count_write();
                 }
                 Some(PropValue::Bool(flag)) => {
                     self.dom.set_property_bool(dom, &name, *flag)?;
@@ -1784,8 +1836,14 @@ impl<D: Dom> Renderer<D> {
             let new_value = new.attr_value(&name).and_then(AttrValue::to_attr_string);
             if old_value != new_value {
                 match new_value {
-                    Some(value) => self.dom.set_attribute(dom, &name, &value)?,
-                    None => self.dom.remove_attribute(dom, &name)?,
+                    Some(value) => {
+                        self.dom.set_attribute(dom, &name, &value)?;
+                        self.count_write();
+                    }
+                    None => {
+                        self.dom.remove_attribute(dom, &name)?;
+                        self.count_write();
+                    }
                 }
             }
         }

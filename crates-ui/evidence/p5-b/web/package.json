@@ -1,7 +1,7 @@
 {
   "name": "@apeireth/ui-engine-p5b-harness",
   "private": true,
-  "version": "2.0.0-rc.4",
+  "version": "2.0.0-rc.5",
   "type": "module",
   "description": "P5-b 生产对照 harness：Rust 引擎 vs 生产场景（逐像素）",
   "scripts": {

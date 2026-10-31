@@ -1199,7 +1199,7 @@ mod tests {
         assert_eq!(rows[0].note, "pid 4821 · 重启 0 次");
         assert_eq!(rows[1].value, "桌面拉起的侧车（生命周期归桌面壳）");
         assert_eq!(rows[2].value, "http://127.0.0.1:8080");
-        assert_eq!(rows[3].value, "2.0.0-rc.4");
+        assert_eq!(rows[3].value, "2.0.0-rc.5");
         assert_eq!(rows[2].note, "", "有端点 ⇒ 无注记");
 
         let probes = probe_rows(fixture.resident_probe.as_ref());

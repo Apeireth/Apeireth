@@ -6,7 +6,7 @@
     "state": "Ready",
     "ownership": "OwnedByDesktop",
     "endpoint": "http://127.0.0.1:8080",
-    "backend_version": "2.0.0-rc.4",
+    "backend_version": "2.0.0-rc.5",
     "pid": 4821,
     "restart_count": 0
   },

@@ -19,7 +19,7 @@
 #     主仓也不依赖引擎：数据面走既有 HTTP/SSE 契约，见 frontend-data-contract）；
 #   - 主仓 `cargo metadata` 不含本 workspace ⇒ `scripts/arch_guard.py` 只扫根
 #     workspace 的 metadata ⇒ 主门禁对本 workspace **0 扫描**；
-#   - 版本轴**独立声明**但与主仓口径对齐（2.0.0-rc.4），发版时两处同改；
+#   - 版本轴**独立声明**但与主仓口径对齐（2.0.0-rc.5），发版时两处同改；
 #     本文件不动主仓 [workspace.package].version（LOCKED 项，仅 release
 #     authority 可改）。
 #
@@ -70,10 +70,10 @@ members = [
 ]
 
 # ---------------------------------------------------------------------------
-# Workspace 包元数据（版本轴与主仓口径对齐：2.0.0-rc.4）
+# Workspace 包元数据（版本轴与主仓口径对齐：2.0.0-rc.5）
 # ---------------------------------------------------------------------------
 [workspace.package]
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 edition = "2021"
 rust-version = "1.97"
 authors = ["Apeireth Team"]

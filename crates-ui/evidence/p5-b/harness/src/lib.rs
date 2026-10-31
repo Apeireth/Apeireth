@@ -2142,6 +2142,7 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
     //   ⇒ ⇒ 数字才**能指明该优化哪一半**（不猜）。
     let start_update = js_sys::Date::now();
     leaf.set(String::from("更新后"));
+    renderer.reset_patch_stats();
     let start_build = js_sys::Date::now();
     let new_view = view();
     let build_millis = js_sys::Date::now() - start_build;
@@ -2149,6 +2150,8 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
         .patch(new_view)
         .map_err(|error| JsValue::from_str(&format!("打补丁失败：{error}")))?;
     let update_millis = js_sys::Date::now() - start_update;
+    // ⭐⭐ patch 统计（**不抖**的观测量 ⇒ ⇒ 「收窄比对范围」可验证）
+    let stats = renderer.patch_stats();
 
     // 行为断言：目标叶子确实更新了
     let leaf_value = document
@@ -2211,6 +2214,16 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("build_millis"),
         &JsValue::from_f64(build_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("compared_nodes"),
+        &JsValue::from_f64(stats.compared_nodes as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("written_nodes"),
+        &JsValue::from_f64(stats.written_nodes as f64),
     );
     Ok(result.into())
 }
