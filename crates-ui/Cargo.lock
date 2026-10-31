@@ -20,6 +20,9 @@ dependencies = [
  "apeireth-ui",
  "apeireth-ui-core",
  "apeireth-ui-dom",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

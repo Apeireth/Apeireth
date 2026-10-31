@@ -21,13 +21,19 @@
 use apeireth_ui_core::Signal;
 use apeireth_ui_dom::vnode::VNode;
 
+/// ⭐ **wasm 薄壳**（接真实 DOM 的入口）—— **仅 wasm32 目标编译**。
+///
+/// ⇒ native 侧**不参与编译** ⇒ ⇒ 契约层永远可 native 单测（与 core 同纪律）。
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_host;
+
 /// ⭐ **屏幕契约**：一个屏幕 = 一个身份 + 一棵由引擎渲染的视图树。
 ///
 /// ## 为什么是 trait 而不是闭包
 ///
 /// 屏幕要能被**路由**（按 id 找屏幕）、要能被**测试**（不碰 DOM 就能拿到视图树）
 /// ⇒ ⇒ trait 能同时满足两者；闭包只能满足其一。
-pub trait Screen {
+pub trait Screen: 'static {
     /// 屏幕身份（路由 / 日志 / 恢复现场用；**稳定** ⇒ 不要塞会变的文案）。
     fn id(&self) -> &str;
 

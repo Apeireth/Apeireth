@@ -37,3 +37,16 @@ apeireth-ui = { path = "../apeireth-ui" }
 apeireth-ui-core = { path = "../apeireth-ui-core" }
 #: DOM 层（VNode / Renderer）—— 屏幕视图树。
 apeireth-ui-dom = { path = "../apeireth-ui-dom" }
+
+# ⚠️ **wasm-only 依赖**（native 目标不参与编译 ⇒ native 侧仍是 **0 外部依赖**；
+#    与 `apeireth-ui-dom` 同一口径：版本精确硬钉 1:1 —— web-sys 0.3.106 要求
+#    wasm-bindgen =0.2.129）。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+js-sys = "=0.3.106"
+web-sys = { version = "=0.3.106", features = [
+    "Document",       # query_selector / create_element
+    "Element",        # 取元素 / 事件派发
+    "HtmlElement",    # focus / blur
+    "Window",         # document
+] }

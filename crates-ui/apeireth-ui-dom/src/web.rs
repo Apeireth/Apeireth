@@ -65,6 +65,12 @@ pub struct WebDom {
     ///
     /// 为什么必须由后端自己装：若只在「应用监听了 composition 事件」时才更新组合态
     /// ⇒ ⇒ 不监听的应用会**静默失去 IME 保护**（中文输入被打散，且无任何报错）。
+    // ⚠️ **「持有」本身就是目的**（clippy 会误报「never read」）：
+    //   这两个 `Closure` 是 **JS 侧回调的 Rust 端所有者** ⇒ ⇒ 一旦被 drop
+    //   ⇒ ⇒ JS 侧监听器回调失效 ⇒ ⇒ **IME 组合态跟踪静默失效**
+    //   ⇒ ⇒ 字段**不读**是对的（读了反而多余），但必须**留着**。
+    #[allow(dead_code)]
+    #[allow(clippy::type_complexity)]
     composition_closures: (Closure<dyn FnMut(Event)>, Closure<dyn FnMut(Event)>),
     /// 下一个节点编号。
     next_node_id: Cell<u32>,
@@ -373,7 +379,7 @@ impl Dom for WebDom {
         let element = self.as_element(node)?;
         let target: JsValue = element.clone().into();
         // ① 自有属性（引擎自己挂上去的展开属性）⇒ 真的删掉。
-        if let Some(object) = element.clone().dyn_into::<Object>().ok() {
+        if let Ok(object) = element.clone().dyn_into::<Object>() {
             let _ = Reflect::delete_property(&object, &JsValue::from_str(name));
         }
         // ② 反射型 IDL 属性 ⇒ 写回**默认值**（浏览器语义：没有该属性时的取值）。
