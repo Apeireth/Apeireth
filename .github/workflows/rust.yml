@@ -376,12 +376,23 @@ jobs:
         #   ⇒ ⇒ **整个 secret-scan job 一直红在这个准备步上**（而不是红在真扫描上）。
         # ⇒ 现在改成**幂等守卫**：有 pwsh 就直接用并打印版本；没有才尝试装。
         shell: bash
+      - name: Ensure PowerShell is available
+        shell: bash
         run: |
           if command -v pwsh >/dev/null 2>&1; then
             echo "pwsh already present:"; pwsh --version; exit 0
           fi
           sudo apt-get update
           sudo apt-get install -y powershell
+          if ! command -v pwsh >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y powershell
+          fi
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      - name: Verify secret scanner contracts
+        shell: bash
+        run: python -m unittest discover -s scripts -p test_secret_scan.py
 
       - name: "Secret scan: working tree (scan-all)"
         shell: pwsh

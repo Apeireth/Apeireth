@@ -222,8 +222,24 @@ impl ActionGuard {
             _ if !requires_ha => true,
             HAMode::SingleHuman => !ha.real_humans.is_empty(),
             HAMode::MultiHuman => {
-                let required = ha.multi_sign.as_ref().map_or(1, |policy| policy.required);
-                !ha.real_humans.is_empty() && ha.real_humans.len() as u8 >= required
+                // ⚠️ **2026-10-31 修复（原 fail-open）**：
+                // 旧写法 `ha.multi_sign.as_ref().map_or(1, |policy| policy.required)`
+                // ⇒ **忘配策略 ⇒ required = 1** ⇒ `MultiHuman` 退化成 `SingleHuman`
+                //   ⇒ **不报错、不告警、审计看不出差别**。
+                // ⇒ 而**校验器侧**（`governance::chain` 的 `PlaceholderMultiSignVerifier`）
+                //   在**未配置**时返回 `NotConfigured` ⇒ **Denied**（fail-closed）
+                // ⇒ ⇒ 两处口径不一致 ⇒ **最弱的一条生效** ⇒ 多人审批可被「忘配」击穿。
+                //
+                // ⇒ 这里与校验器侧**同口径 fail-closed**：未配置策略 ⇒ **拒绝**。
+                let Some(policy) = ha.multi_sign.as_ref() else {
+                    return false;
+                };
+                // `MultiHuman` 语义上**至少 2 人**：`required = 1` 与 `SingleHuman`
+                // 等价 ⇒ ⇒ 那是**同一个退化的另一种写法** ⇒ 一并挡住。
+                let required = usize::from(policy.required.max(2));
+                // ⚠️ 旧写法 `ha.real_humans.len() as u8` **会截断**（≥256 人时回绕）
+                //   ⇒ 用 `usize` 比较，**不做窄化转换**。
+                ha.real_humans.len() >= required
             }
         }
     }

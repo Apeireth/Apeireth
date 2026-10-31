@@ -15,8 +15,20 @@ name: Cargo audit (RUSTSEC advisories)
 on:
   push:
     branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
+    # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件、空 CI 在跑」时修）：
+    #   实测：本 workflow 在 PR 分支同步时会生成**无 job 的失败 run**（jobs=0）
+    #   ⇒ ⇒ 每次 push 都发一封红邮件 ⇒ ⇒ 而依赖没变时 RUSTSEC 结论与上次完全相同
+    #   ⇒ ⇒ 跑它**没有信息量** ⇒ ⇒ 只在依赖变动时才跑。
+    #   ⇒ 覆盖不丢：依赖变了照跑 + 每周 cron 仍跑 + cargo-deny 每次 PR 查 advisories。
+    paths:
+      - '**/Cargo.lock'
+      - '.github/workflows/cargo-audit.yml'
   pull_request:
     branches: ['**']
+    # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 兜底）。
+    paths:
+      - '**/Cargo.lock'
+      - '.github/workflows/cargo-audit.yml'
   schedule:
     # 每周日凌晨 4 点 (跟 eval-live 错开 1h, 避免 GPU 竞争)
     - cron: '0 4 * * 0'
@@ -43,7 +55,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -143,6 +155,11 @@ jobs:
         # run 35835024572 步骤 "Convert JSON report to SARIF" 失败)。
         # 守门机制必须能在"发现漏洞"这一时刻工作, 故改为迭代 list; severity 缺省/为
         # null 时按 1 (warning) 处理, 不因缺字段崩。
+        # 2026-10-24 修「证据链断裂」: 审计失败时本步原本被 skip, 于是 upload-sarif 步
+        # 报 `Path does not exist: audit-report.sarif` 二次失败 (PR #64 run 40058519140 实测),
+        # 与 workflow 注释里「报告已先落盘, 上传步骤用 if: always() 保证失败时也留证据」相悖。
+        # audit-report.json 在审计失败时同样已落盘, 故本步必须 always 跑, 让 SARIF 照常产出并上传。
+        if: always()
         run: |
           python3 - <<'PYEOF'
           import json, sys, datetime, hashlib

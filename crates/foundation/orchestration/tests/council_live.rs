@@ -26,6 +26,42 @@ fn sample_proposal() -> Proposal {
     }
 }
 
+/// live 测试用的模型名（**默认仍是 DeepSeek**，行为不变）。
+///
+/// # 为什么可配化（2026-10-31 · 副总指挥交接请求③）
+///
+/// 此前本文件**硬编码** `deepseek-v4-flash` ⇒ ⇒ 换厂商（MiniMax / 其它
+/// openai-compatible）**复跑不了** ⇒ ⇒ 台账挂账 #9 会被「厂商 key 被撤销」
+/// 这种**与代码无关**的原因卡住。
+///
+/// env 约定（与 `OpenAiCompatibleLlmFactory::from_env` 一致）：
+/// * `APEIRETH_OPENAI_MODELS` ⇒ 逗号分隔的模型列表（默认 `deepseek-v4-flash`）
+/// * `APEIRETH_OPENAI_MODEL` ⇒ **单模型覆盖**（默认取列表第一个）
+///
+/// ⚠️ **0 装纪律不变**：不打印 key、不落 key、默认 `#[ignore]` 不跑。
+/// ⚠️ 同族实现见 `crates/engine/provider/tests/openai_compatible_live.rs` 与
+///   `crates/engine/organ/tests/organ_live_llm.rs`（同形三处都钉）。
+fn live_model() -> String {
+    if let Ok(model) = std::env::var("APEIRETH_OPENAI_MODEL") {
+        let model = model.trim().to_string();
+        if !model.is_empty() {
+            return model;
+        }
+    }
+    std::env::var("APEIRETH_OPENAI_MODELS")
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .find(|item| !item.is_empty())
+                .unwrap_or_default()
+                .to_string()
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "deepseek-v4-flash".to_string())
+}
+
 #[tokio::test]
 #[ignore = "requires OPENAI_API_KEY + APEIRETH_OPENAI_MODELS env (DeepSeek live E2E, manual)"]
 async fn council_7_advisor_live_decide() {
@@ -43,7 +79,7 @@ async fn council_7_advisor_live_decide() {
     let probe = inner
         .spawn(
             apeireth_orchestration::SubagentRole::Reviewer,
-            "deepseek-v4-flash",
+            &live_model(),
         )
         .await
         .expect("probe spawn");
@@ -70,7 +106,7 @@ async fn council_7_advisor_live_decide() {
 
     let factory: Arc<dyn apeireth_orchestration::llm::LlmFactory> =
         Arc::new(MirrorLlmFactory::new(inner));
-    let council = Council::with_factory(factory, "deepseek-v4-flash");
+    let council = Council::with_factory(factory, &live_model());
     assert_eq!(council.advisors().len(), 7);
 
     let verdict = council.decide(&sample_proposal()).await;

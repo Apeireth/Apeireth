@@ -73,6 +73,7 @@ pub mod care_heartbeat;
 /// 关怀候选 (同源打扰纪律; 守护例外档)。
 #[path = "canonical/care_reminder.rs"]
 pub mod care_reminder;
+#[path = "canonical/care_signals.rs"]
 mod care_signals;
 #[path = "canonical/causal_world_model.rs"]
 pub mod causal_world_model;
@@ -117,6 +118,7 @@ pub mod nervous_switchboard;
 #[path = "canonical/nightwatch.rs"]
 pub mod nightwatch;
 /// W3 三洋葱 L3-L5 物理执行面: 双洋葱判定的治理 hook (2026-10-10)。
+#[path = "canonical/onion_layer.rs"]
 pub mod onion_layer;
 #[path = "canonical/orchestrator.rs"]
 pub mod orchestrator;
@@ -124,6 +126,7 @@ pub mod orchestrator;
 pub mod organ_llm_bridge;
 #[path = "canonical/organ_module.rs"]
 pub mod organ_module;
+#[path = "canonical/parallel_dispatch.rs"]
 pub mod parallel_dispatch;
 #[path = "canonical/permission_preset.rs"]
 pub mod permission_preset;
@@ -151,6 +154,7 @@ pub mod ritual_tools;
 pub mod self_status_source;
 #[path = "canonical/self_tuning_wire.rs"]
 pub mod self_tuning_wire;
+#[path = "canonical/session_seal.rs"]
 pub mod session_seal;
 /// 任务簿工具面 (`tool.task_board`, V6-a): 增/列/改派/完成 + 治理档钩子
 /// (写面 = write_intent 同族, failed 只能人判无工具面)。
@@ -301,8 +305,8 @@ pub use tool_ecosystem_probe::{
 };
 pub use tool_modules::{
     BackupExportModule, DeviceControlModule, DocOpsModule, EducationModule, FetchModule,
-    FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, RepoModule,
-    SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
+    FilesystemModule, GitWriteModule, GuardWatchModule, ImageOpsModule, McpModule, ProcessModule,
+    RepoModule, SearchModule, SelfStatusModule, SheetOpsModule, ShellModule, TraitReportModule,
     VoiceSpeakModule, SELF_STATUS_TIMEOUT_MS, TRAIT_REPORT_TIMEOUT_MS,
 };
 pub use tool_taxonomy::{
@@ -325,3 +329,12 @@ pub use typed_recall::SqliteTypedMemoryRecallSource;
 pub use apeireth_tools_canonical::backup::backup_status_probe;
 // V3-b 发声面勿扰窗口的同源接缝导出 (care_rules 窗口优先, 最小 env 兜底)。
 pub use voice_quiet::voice_quiet_hours_from_care_rules;
+
+#[path = "canonical/memory_module.rs"]
+pub mod memory_module;
+
+#[path = "canonical/cognitive_registry.rs"]
+mod cognitive_registry;
+
+#[path = "canonical/desktop_host.rs"]
+pub mod desktop_host;

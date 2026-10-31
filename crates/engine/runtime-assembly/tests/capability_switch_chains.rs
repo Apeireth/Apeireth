@@ -320,7 +320,7 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     config.mcp_data_dir = Some(PathBuf::from(dir.path()));
     let modules = ProductionModules::build(config, ProductionBackends::default(), clock())
         .expect("assembly builds");
-    assert!(modules.mcp_bridge().is_some(), "桥必须装配");
+    assert!(modules.mcp_definition().is_some(), "桥必须装配");
     assert_eq!(roster_of(&modules).await["mcp"], true);
 
     // 开关开 + 无服务器配置: 桥照常装配 (面在), 但无外部工具 —— 照实 false。
@@ -330,7 +330,7 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     config.mcp_data_dir = Some(PathBuf::from(empty.path()));
     let modules = ProductionModules::build(config, ProductionBackends::default(), clock())
         .expect("assembly builds");
-    assert!(modules.mcp_bridge().is_some());
+    assert!(modules.mcp_definition().is_some());
     assert_eq!(
         roster_of(&modules).await["mcp"],
         false,
@@ -340,7 +340,7 @@ async fn mcp_row_reports_external_tools_only_when_the_bridge_serves() {
     // 开关关: 不装配、照实 false。
     let modules = ProductionModules::build(base_config(), ProductionBackends::default(), clock())
         .expect("assembly builds");
-    assert!(modules.mcp_bridge().is_none());
+    assert!(modules.mcp_definition().is_none());
     assert_eq!(roster_of(&modules).await["mcp"], false);
 }
 

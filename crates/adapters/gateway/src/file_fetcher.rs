@@ -101,7 +101,7 @@ impl TransparentFileFetcher {
         sha256_hex(file_url.as_bytes())
     }
 
-    /// 校验文件路径是否符合安全沙箱（防路径穿越）
+    /// 词面路径校验；实际获取还会核对当前文件系统的根目录解析。
     pub fn validate_path_safety(&self, path_str: &str) -> Result<(), FileFetchError> {
         if path_str.contains("..") || path_str.contains('\0') {
             return Err(FileFetchError::PathTraversal(path_str.into()));
@@ -137,6 +137,7 @@ impl TransparentFileFetcher {
             .strip_prefix(FILE_SCHEME)
             .ok_or_else(|| FileFetchError::InvalidUrl(file_url.into()))?;
         self.validate_path_safety(path_part)?;
+        self.validate_local_resolution(Path::new(path_part))?;
 
         let cache_key = Self::compute_cache_key(file_url);
 
@@ -177,6 +178,32 @@ impl TransparentFileFetcher {
         &self.cache_dir
     }
 
+    /// 落地解析校验：白名单根目录约束按**真实路径**再核对一次（防符号链接越狱）。
+    ///
+    /// `validate_path_safety` 只查词面（`..` / NUL）；符号链接能把词面合法的
+    /// 路径指向根目录之外 ⇒ 取用前按当前文件系统解析一次（origin/main 侧引入）。
+    fn validate_local_resolution(&self, path: &Path) -> Result<(), FileFetchError> {
+        if self.allowed_roots.is_empty() {
+            return Ok(());
+        }
+        let resolved = resolve_existing_prefix(path).map_err(|_| {
+            FileFetchError::PathTraversal(
+                "file path cannot be resolved within allowed roots".into(),
+            )
+        })?;
+        if self
+            .allowed_roots
+            .iter()
+            .any(|root| std::fs::canonicalize(root).is_ok_and(|root| resolved.starts_with(root)))
+        {
+            Ok(())
+        } else {
+            Err(FileFetchError::PathTraversal(
+                "resolved file path is outside allowed roots".into(),
+            ))
+        }
+    }
+
     /// 元数据文件名：`<url_cache_key>.meta.json`。
     fn meta_path(&self, cache_key: &str) -> PathBuf {
         self.cache_dir.join(format!("{cache_key}.meta.json"))
@@ -197,6 +224,11 @@ impl TransparentFileFetcher {
         cache_key: &str,
     ) -> Result<Option<FetchedFile>, FileFetchError> {
         let meta_path = self.meta_path(cache_key);
+        // 元数据必须是**普通文件**（`symlink_metadata`，不跟随符号链接）：
+        // 指向别处的链接不当作命中（origin/main 侧引入）。
+        if !is_regular_file(&meta_path) {
+            return Ok(None);
+        }
         let Ok(meta_text) = std::fs::read_to_string(&meta_path) else {
             return Ok(None);
         };
@@ -204,6 +236,19 @@ impl TransparentFileFetcher {
             let _ = std::fs::remove_file(&meta_path);
             return Ok(None);
         };
+        // 元数据必须**绑定本 URL**且哈希字段形状合法：别的 URL 的元数据
+        // 不能顶替本 URL 的缓存内容（origin/main 侧引入）。
+        if meta.original_url != file_url
+            || meta.sha256_hash.len() != 64
+            || !meta.sha256_hash.bytes().all(|c| c.is_ascii_hexdigit())
+        {
+            let _ = std::fs::remove_file(&meta_path);
+            return Ok(None);
+        }
+        if !is_regular_file(&self.blob_path(&meta.sha256_hash)) {
+            let _ = std::fs::remove_file(&meta_path);
+            return Ok(None);
+        }
         let Ok(data) = std::fs::read(self.blob_path(&meta.sha256_hash)) else {
             // 元数据在但内容丢了 = 坏条目，清掉元数据重取
             let _ = std::fs::remove_file(&meta_path);
@@ -231,7 +276,11 @@ impl TransparentFileFetcher {
     fn write_disk_cache(&self, file: &FetchedFile) -> Result<(), FileFetchError> {
         std::fs::create_dir_all(&self.cache_dir)?;
         let blob_path = self.blob_path(&file.sha256_hash);
-        if !blob_path.is_file() {
+        // 已有 blob 也可能是**坏的**（被截断/篡改）—— 逐字节重算哈希核对，
+        // 坏的就重写：不能因「文件已存在」就跳过写（origin/main 侧引入）。
+        let valid_blob = is_regular_file(&blob_path)
+            && std::fs::read(&blob_path).is_ok_and(|data| sha256_hex(&data) == file.sha256_hash);
+        if !valid_blob {
             atomic_write(&blob_path, &file.data)?;
         }
         let meta = CacheMeta {
@@ -322,22 +371,53 @@ struct CacheMeta {
 ///
 /// 缓存文件必须「要么是旧版本、要么是完整新版本」——
 /// 直接覆写会留下写一半的条目，下次命中即坏数据。
+///
+/// 实现改走仓内唯一原子写实现 `apeireth_core::storage_atomic`（origin/main 侧）：
+/// 独占创建临时文件（`create_new`，不写穿预置的同名链接/文件）+ 替换，
+/// 权限收敛到 `0o600`；父目录也由该实现兜底创建。
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), FileFetchError> {
-    let Some(parent) = path.parent() else {
-        return Err(FileFetchError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "缓存路径没有父目录",
-        )));
-    };
-    std::fs::create_dir_all(parent)?;
-    let file_name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| "cache".to_string());
-    let tmp = parent.join(format!(".{file_name}.tmp"));
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    // The shared primitive uses exclusive temporary creation and replacement.
+    // Cache data is owner-only on Unix; normal restart persistence is sufficient.
+    apeireth_core::storage_atomic::write_atomic(path, bytes, 0o600).map_err(FileFetchError::Io)
+}
+
+/// 是否为**普通文件**（`symlink_metadata`，不跟随符号链接）。
+///
+/// 缓存条目必须是普通文件：符号链接（哪怕指向普通文件）一律不认，
+/// 避免被链接指向缓存目录之外。
+fn is_regular_file(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file())
+}
+
+/// 解析路径：已存在的部分做 `canonicalize`，缺失部分按原样拼回。
+///
+/// 用于白名单根目录核对 —— 目标文件本身可能还不存在（远端回退场景），
+/// 故取「最长已存在前缀」的真实路径再比。
+fn resolve_existing_prefix(path: &Path) -> std::io::Result<PathBuf> {
+    let mut prefix = path.to_path_buf();
+    let mut tail = Vec::new();
+    loop {
+        match std::fs::symlink_metadata(&prefix) {
+            Ok(_) => {
+                let mut resolved = std::fs::canonicalize(prefix)?;
+                for part in tail.into_iter().rev() {
+                    resolved.push(part);
+                }
+                return Ok(resolved);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let Some(name) = prefix.file_name().map(|n| n.to_os_string()) else {
+                    return Err(error);
+                };
+                tail.push(name);
+                prefix.pop();
+                if prefix.as_os_str().is_empty() {
+                    prefix.push(".");
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 /// SHA-256 十六进制摘要（小写）。
@@ -441,6 +521,8 @@ mod tests {
     use super::*;
 
     // ===== 磁盘缓存（2026-10-25 接电：此前 `cache_dir` 是死字段）=====
+    // origin/main 侧另补安全面：符号链接不认、元数据与 URL 绑定、坏 blob 重写、
+    // 白名单根目录按真实路径核对（用例一并保留）。
 
     /// 进程内唯一的临时目录（本 crate 无 `tempfile` 依赖，不为此新增依赖）。
     ///
@@ -517,6 +599,123 @@ mod tests {
         let mut fetcher = TransparentFileFetcher::new(cache.as_path(), Vec::new());
         let fetched = fetcher.fetch_file(&url, no_remote).expect("refetch");
         assert_eq!(fetched.data, b"original bytes", "绝不能返回被篡改的缓存");
+    }
+
+    #[test]
+    fn rejected_corruption_is_repaired_for_the_next_restart() {
+        let dir = scratch_dir("repair-source");
+        let cache = scratch_dir("repair-cache");
+        let url = local_file_url(&dir, "item.txt", b"original");
+        let first = TransparentFileFetcher::new(&cache, vec![])
+            .fetch_file(&url, no_remote)
+            .unwrap();
+        std::fs::write(cache.join(format!("{}.bin", first.sha256_hash)), b"corrupt").unwrap();
+        assert_eq!(
+            TransparentFileFetcher::new(&cache, vec![])
+                .fetch_file(&url, no_remote)
+                .unwrap()
+                .data,
+            b"original"
+        );
+        std::fs::remove_file(dir.join("item.txt")).unwrap();
+        assert_eq!(
+            TransparentFileFetcher::new(&cache, vec![])
+                .fetch_file(&url, no_remote)
+                .unwrap()
+                .data,
+            b"original"
+        );
+    }
+
+    #[test]
+    fn metadata_for_a_different_url_cannot_substitute_cached_content() {
+        let dir = scratch_dir("binding-source");
+        let cache = scratch_dir("binding-cache");
+        let a = local_file_url(&dir, "a.txt", b"first");
+        let b = local_file_url(&dir, "b.txt", b"second");
+        let mut first = TransparentFileFetcher::new(&cache, vec![]);
+        first.fetch_file(&a, no_remote).unwrap();
+        first.fetch_file(&b, no_remote).unwrap();
+        let meta_a = first.meta_path(&TransparentFileFetcher::compute_cache_key(&a));
+        let meta_b = first.meta_path(&TransparentFileFetcher::compute_cache_key(&b));
+        std::fs::copy(meta_b, meta_a).unwrap();
+        std::fs::remove_file(dir.join("a.txt")).unwrap();
+        let error = TransparentFileFetcher::new(&cache, vec![])
+            .fetch_file(&a, |_| Err(FileFetchError::NodeNotFound("offline".into())))
+            .unwrap_err();
+        assert!(matches!(error, FileFetchError::NodeNotFound(_)));
+        assert_eq!(
+            TransparentFileFetcher::new(&cache, vec![])
+                .fetch_file(&b, no_remote)
+                .unwrap()
+                .data,
+            b"second"
+        );
+    }
+
+    #[test]
+    fn cache_write_failure_preserves_the_fetch_and_is_counted() {
+        let dir = scratch_dir("write-failure");
+        let url = local_file_url(&dir, "source.txt", b"available");
+        let blocked = dir.join("not-a-directory");
+        std::fs::write(&blocked, b"occupied").unwrap();
+        let mut fetcher = TransparentFileFetcher::new(&blocked, vec![]);
+        assert_eq!(
+            fetcher.fetch_file(&url, no_remote).unwrap().data,
+            b"available"
+        );
+        assert_eq!(fetcher.cache_write_failures(), 1);
+        assert_eq!(std::fs::read(blocked).unwrap(), b"occupied");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_cache_records_are_not_trusted() {
+        for metadata in [true, false] {
+            let dir = scratch_dir("symlink-source");
+            let cache = scratch_dir("symlink-cache");
+            let url = local_file_url(&dir, "source.txt", b"payload");
+            let mut first = TransparentFileFetcher::new(&cache, vec![]);
+            let file = first.fetch_file(&url, no_remote).unwrap();
+            let entry = if metadata {
+                first.meta_path(&file.cache_key)
+            } else {
+                first.blob_path(&file.sha256_hash)
+            };
+            let outside = dir.join("moved-cache-record");
+            std::fs::rename(&entry, &outside).unwrap();
+            std::os::unix::fs::symlink(&outside, &entry).unwrap();
+            std::fs::remove_file(dir.join("source.txt")).unwrap();
+            assert!(TransparentFileFetcher::new(&cache, vec![])
+                .fetch_file(&url, |_| Err(FileFetchError::NodeNotFound(
+                    "offline".into()
+                )))
+                .is_err());
+            assert!(outside.is_file());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn root_symlink_escape_is_rejected_even_after_a_memory_hit() {
+        let root = scratch_dir("allowed-root");
+        let outside = scratch_dir("outside-root");
+        let cache = scratch_dir("root-cache");
+        let inside = root.join("inside");
+        std::fs::create_dir(&inside).unwrap();
+        std::fs::write(inside.join("item.txt"), b"inside").unwrap();
+        std::fs::write(outside.join("item.txt"), b"outside").unwrap();
+        let link = root.join("link");
+        std::os::unix::fs::symlink(&inside, &link).unwrap();
+        let url = format!("file://{}", link.join("item.txt").display());
+        let mut fetcher = TransparentFileFetcher::new(&cache, vec![root]);
+        assert_eq!(fetcher.fetch_file(&url, no_remote).unwrap().data, b"inside");
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(matches!(
+            fetcher.fetch_file(&url, no_remote),
+            Err(FileFetchError::PathTraversal(_))
+        ));
     }
 
     /// 元数据在但内容 blob 缺失（坏条目）⇒ 视为未命中，不报错。

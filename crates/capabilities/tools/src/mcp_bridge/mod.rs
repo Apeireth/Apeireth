@@ -35,8 +35,13 @@ pub mod bridge;
 pub mod catalog;
 pub mod config;
 pub mod connection;
+pub mod definition;
+pub use definition::McpDefinition;
 pub mod governance;
 pub mod mock;
+pub mod module;
+mod process_owner;
+pub use module::McpPlugin;
 pub mod tool;
 pub mod transport;
 

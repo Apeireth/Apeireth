@@ -237,16 +237,22 @@ impl LlmInstance for InvokerLlmInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::kernel::{CapabilityId, Clock, ModelId, SessionId, TraceId};
+    use apeireth_core::kernel::{
+        AgentId, CapabilityId, ModelId, PluginId, RequestId, SessionId, TraceId,
+    };
     use apeireth_governance::{Decision, GovernanceHook, GovernanceRequest};
-    use apeireth_plugin::{ProviderCapability, ProviderError};
+    use apeireth_plugin::agents::AgentTaskOrigin;
+    use apeireth_plugin::{
+        CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
+        ProviderError,
+    };
     use apeireth_protocol::canonical::{
         ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse,
     };
     use std::sync::atomic::{AtomicU32, Ordering};
 
     use super::super::module::{ModuleInvocationResponse, ModuleTurnState};
-    use super::super::provider::ProviderRouter;
+    use super::super::Runtime;
 
     // ------------------------------------------------------------------
     // Test doubles
@@ -291,11 +297,14 @@ mod tests {
             _request: &NormalizedRequest,
         ) -> Result<NormalizedResponse, ProviderError> {
             self.completions.fetch_add(1, Ordering::SeqCst);
-            Ok(NormalizedResponse::text(
-                "scripted-1",
-                "test-model",
-                self.reply,
-            ))
+            let mut response = NormalizedResponse::text("scripted-1", "test-model", self.reply);
+            response.usage = apeireth_protocol::canonical::NormalizedUsage {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                total_tokens: 2,
+                prompt_cache_hit_tokens: None,
+            };
+            Ok(response)
         }
     }
 
@@ -340,28 +349,69 @@ mod tests {
         }
     }
 
-    fn virtual_clock() -> Arc<dyn Clock> {
-        Arc::new(apeireth_core::clock::VirtualClock::new(
-            chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
-                .unwrap()
-                .with_timezone(&chrono::Utc),
-        ))
+    struct TestProviderPlugin {
+        manifest: PluginManifest,
+        provider: Arc<ScriptedProvider>,
     }
-
-    /// Real canonical chain: the crate-internal per-turn invoker over a real
-    /// router. The invoker is an owned turn-scoped handle (Arc router + Arc
-    /// governance), so no lifetime scaffolding is needed.
-    fn real_invoker(
+    #[async_trait::async_trait]
+    impl Plugin for TestProviderPlugin {
+        fn manifest(&self) -> &PluginManifest {
+            &self.manifest
+        }
+        async fn initialize(&self, _: &PluginContext) -> PluginResult<()> {
+            Ok(())
+        }
+        async fn shutdown(&self) -> PluginResult<()> {
+            Ok(())
+        }
+        fn providers(&self) -> Vec<Arc<dyn ProviderCapability>> {
+            vec![self.provider.clone()]
+        }
+    }
+    async fn invoker_runtime(
+        provider: Arc<ScriptedProvider>,
+        governance: Arc<FixedDecisionHook>,
+    ) -> Arc<Runtime> {
+        let manifest = PluginManifest::new(
+            PluginId::new("test.bridge_provider").unwrap(),
+            "1.0.0",
+            "bridge provider",
+        )
+        .declare_capability(
+            provider.id.clone(),
+            CapabilityKind::Provider,
+            "scripted provider",
+        )
+        .unwrap();
+        Arc::new(
+            Runtime::builder()
+                .with_plugin(Arc::new(TestProviderPlugin { manifest, provider }))
+                .with_governance(governance)
+                .build()
+                .await
+                .unwrap(),
+        )
+    }
+    fn origin() -> AgentTaskOrigin {
+        AgentTaskOrigin {
+            agent: AgentId::new(),
+            session: SessionId::new(),
+            request: RequestId::new(),
+            trace: TraceId::new(),
+        }
+    }
+    /// Real canonical chain: an owned turn handle bound to the same Runtime
+    /// instance service used by production hooks, with a private child session.
+    async fn real_invoker(
         provider: &Arc<ScriptedProvider>,
         governance: FixedDecisionHook,
     ) -> (Arc<dyn ModuleInvoker>, Arc<FixedDecisionHook>) {
         let governance = Arc::new(governance);
-        let router = Arc::new(ProviderRouter::new(vec![provider.clone()], virtual_clock()));
+        let runtime = invoker_runtime(provider.clone(), governance.clone()).await;
         let invoker = super::super::module::RuntimeModuleInvoker::new(
-            router,
-            governance.clone(),
-            SessionId::new(),
-            TraceId::new(),
+            runtime,
+            origin(),
+            None,
             "test-model",
             "test.organ_llm_bridge",
             Arc::new(ModuleTurnState::new(8)),
@@ -390,7 +440,7 @@ mod tests {
     #[tokio::test]
     async fn organ_factory_call_reaches_scripted_provider_through_canonical_path() {
         let provider = ScriptedProvider::new("counterfactual: 42");
-        let (invoker, governance) = real_invoker(&provider, FixedDecisionHook::allow());
+        let (invoker, governance) = real_invoker(&provider, FixedDecisionHook::allow()).await;
         let factory = InvokerLlmFactory::new(invoker);
 
         let mut instance = factory
@@ -420,7 +470,7 @@ mod tests {
     #[tokio::test]
     async fn model_override_is_forwarded_to_the_invoker() {
         let provider = ScriptedProvider::new("ok");
-        let (invoker, _governance) = real_invoker(&provider, FixedDecisionHook::allow());
+        let (invoker, _governance) = real_invoker(&provider, FixedDecisionHook::allow()).await;
         let factory = InvokerLlmFactory::new(invoker);
 
         let mut instance = factory
@@ -450,7 +500,8 @@ mod tests {
         let (invoker, governance) = real_invoker(
             &provider,
             FixedDecisionHook::deny("organ completions are disabled by policy"),
-        );
+        )
+        .await;
         let factory = InvokerLlmFactory::new(invoker);
 
         let mut instance = factory
@@ -490,7 +541,8 @@ mod tests {
         let (invoker, _governance) = real_invoker(
             &provider,
             FixedDecisionHook::require_approval("escalation needed"),
-        );
+        )
+        .await;
         let factory = InvokerLlmFactory::new(invoker.clone());
 
         let mut instance = factory
@@ -657,12 +709,11 @@ mod tests {
     async fn owned_handle_clones_share_one_turn_budget() {
         let provider = ScriptedProvider::new("ok");
         let governance = Arc::new(FixedDecisionHook::allow());
-        let router = Arc::new(ProviderRouter::new(vec![provider.clone()], virtual_clock()));
+        let runtime = invoker_runtime(provider.clone(), governance.clone()).await;
         let invoker = super::super::module::RuntimeModuleInvoker::new(
-            router,
-            governance,
-            SessionId::new(),
-            TraceId::new(),
+            runtime,
+            origin(),
+            None,
             "test-model",
             "test.organ_llm_bridge",
             Arc::new(ModuleTurnState::new(1)),
@@ -709,12 +760,11 @@ mod tests {
     async fn owned_handle_depth_guard_unchanged() {
         let provider = ScriptedProvider::new("never");
         let governance = Arc::new(FixedDecisionHook::allow());
-        let router = Arc::new(ProviderRouter::new(vec![provider], virtual_clock()));
+        let runtime = invoker_runtime(provider, governance.clone()).await;
         let invoker = super::super::module::RuntimeModuleInvoker::new(
-            router,
-            governance,
-            SessionId::new(),
-            TraceId::new(),
+            runtime,
+            origin(),
+            None,
             "test-model",
             "test.organ_llm_bridge",
             Arc::new(ModuleTurnState::new(8)),

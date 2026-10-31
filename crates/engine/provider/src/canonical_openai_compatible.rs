@@ -107,6 +107,7 @@ pub struct OpenAiCompatibleProviderCapability {
     credential_key: String,
     resolver: ResolverSlot,
     /// 推理字段归一化配置（12 别名 → 前置 think 块；出向剥离别名字段）。
+    /// 推理字段归一化配置（12 别名 → 前置 think 块；归一输出不携带原始别名字段）。
     ///
     /// 默认由 `reasoning_adapter` 的 `from_env` 读取（`APEIRETH_REASONING_ENABLED`
     /// 等三个变量）且**默认关** ⇒ 关时响应解析与接线前逐字节一致（零行为变化）。
@@ -833,6 +834,7 @@ mod tests {
         assert!(reasoned_text.contains("先想一步"), "{reasoned_text}");
         assert!(reasoned_text.ends_with("结论"), "{reasoned_text}");
     }
+    mod reasoning_contract;
 
     /// The streaming path forwards incremental content deltas (not one final
     /// blob) and reassembles the same canonical response the non-streaming

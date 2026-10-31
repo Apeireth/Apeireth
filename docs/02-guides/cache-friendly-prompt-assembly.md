@@ -1,112 +1,70 @@
 # 缓存友好提示组装 (Cache-Friendly Prompt Assembly)
 
-> 面向 provider 前缀缓存的请求组装顺序说明。目标：把每轮请求的**前缀**做成字节级稳定，
-> 让服务商的前缀缓存 (KV 复用) 命中率随会话变长而上升，而不是每轮从第一个 token 之后全断。
-
-## 1. 病灶
-
-一个 provider 请求的消息数组由三类内容组成：
-
-- **静态前缀层**：system (persona / 身份 / 安全约定) 与工具声明。会话内顺序冻结、字节稳定。
-- **已提交历史**：`session_messages`，只追加 (append-only)，跨轮字节不变。
-- **动态尾段**：`overlays` (记忆召回块 / 器官产物 / 经验教训 / 跨源披露块) 与当前轮的活查询
-  (`retry_scaffolding`)。这些**每轮都变**。
-
-旧的组装把动态 `overlays` 放在消息数组**最前面**：
-
 ```text
-旧 (缓存不友好):
-  [ overlays(每轮变) | system | 工具 | ...历史... | 当前提问 ]
-     ^ 从这里开始每轮字节都不同 → 前缀缓存从第一个 token 后全部失效
+[Document-Meta]
+Document: docs/02-guides/cache-friendly-prompt-assembly.md
+Version: S3 V1 pairing
+Last-Modified: 2026-10-29
+Status: 活跃；组装行为有离线 Runtime 回归，实际服务商缓存命中率未实测
+Author: Codex
 ```
 
-只要任一 overlay 在两轮之间发生变化 (召回内容、预算换算、封套披露几乎必然变)，
-请求的**第一个字节**就不同，服务商可复用的前缀长度为 0。这是内测命中率偏低的直接原因。
+## 1. 请求顺序与信任边界
 
-## 2. 修法：静态前缀在前，动态块挪到尾
+静态 Host system / 身份 / 安全约定保留在会话前缀。工具声明使用既有目录确定的顺序。
+行为模块的动态文本经 RegisteredBehavior、固定 Hook、Dispatcher 和 ToolEventV1，
+以配对的 assistant call + tool result 追加；调用批未闭合时先等待，不插入开放批次。
+`compose_provider_messages` 只组合已提交视图与最后的 `retry_scaffolding`。
 
 ```text
-新 (缓存友好):
-  [ system | 工具 | ...已提交历史(只追加)... | overlays(动态) | 活查询(retry) ]
-    \___________________ 字节稳定前缀 _____________________/  \___ 每轮变 ___/
+[ 静态 Host system | 已提交历史（含合法模块工具对）| 重试反馈（若有）]
 ```
 
-`compose_provider_messages` 的拼装顺序改为
-`[ session_messages, overlays, retry_scaffolding ]`：
+模块按注册顺序执行。同一 Hook 的结果只提交一次；空观察仅审计，不制造空工具对。
+下一轮保留已提交事实，不重新复制同一结果。业务引擎使用剔除已认证模块工具对的历史，
+因此模块内容不会变成用户输入或被再次学习。静态 Host policy 与动态数据角色分开。
 
-1. `session_messages` (含 system / 已提交历史) 放最前 —— 只追加，构成字节稳定的前缀。
-2. `overlays` 作为**尾插上下文消息**移到历史之后、活查询之前 —— 前缀零变化，动态内容只影响尾段。
-3. `retry_scaffolding` (本轮的活查询 / 反馈) 保持最后，模型要回答的目标始终在末尾。
+## 2. Overlay 兼容表示与预算
 
-移动 overlay **不改其内容、来源标注或封套形态**：它按 `overlay.message().clone()` 逐字复制，
-只改位置。跨源块仍在 `budget_injected_overlays` 的披露闸里走 `UntrustedEnvelope`
-(固定告警头 + 显式边界 + 来源标注 + 边界防伪转义)，预算换算 / spill 语义不变。
+S3 之前，未注册的 `with_module` 可以直接执行回调，把暂态 Overlay 当 system 消息尾插。
+该执行与注入分支已移除。`with_module` / `with_behavior` 与 `with_registered_behavior`
+使用同一注册工具路径，Host 仍须显式授权。
 
-### 五原则对照
+`PromptOverlay` / `ModuleOutcome.prompt_overlays` 保留为业务产生者与兼容 reader 的数据表示。
+`system` 构造器的名称不赋予动态内容 system 权限；适配器丢弃消息角色，将文本与来源标签放入
+`untrusted_data` 工具载荷。V1 的字段、版本与配对规则不变。
 
-| 原则 | 落点 |
+`behavior_projection::budget_module_context` 只处理与持久 ToolEventV1 精确匹配的工具对，
+不会根据用户文本里的 JSON 或工具名推断身份。它对派生 Provider 视图统一预算，不改写审计原文、
+call id、来源或 Session 消息。静态 system 核心块计入预算且不截断。
+
+跨源内容继续经过 `UntrustedEnvelope`：固定告警、来源、边界与防伪转义保留在工具数据中。
+超预算沿用最长非核心块优先裁剪与 spill；文件含完整原文，载荷含预览和真实取回指引。
+无 spill sink 或写入失败时保留完整内容，不制造不可取回的截断。
+
+## 3. 前缀稳定性与明确断点
+
+在相同预算和视图下，追加历史可复用之前的消息前缀。不能据此承诺真实服务商的缓存命中率；
+协议序列化、模型缓存策略、历史压缩及预算改变均可能影响缓存。
+
+| 断点 | 触发与行为 |
 | --- | --- |
-| 1 静态前缀层冻结 | system + 工具声明顺序确定 (注册序 / `BTreeMap`)，组装路径无每轮时间戳 / 随机序 |
-| 2 历史只追加 | `Session::provider_view` 是纯折叠派生视图，转写与事件日志从不改写既往消息 |
-| 3 动态块挪尾 | `compose_provider_messages` 把 `overlays` 从"最前"移到"历史后、活查询前" |
-| 4 显式断点清单 | 见 §4，文档 + `compose_provider_messages` doc 注释钉死 |
-| 5 缓存诊断钩子 | `APEIRETH_CACHE_TRACE=1`，见 §5 |
+| 压缩检查点 | 派生表层以摘要替换可压缩历史，原文与事件仍保留 |
+| 重试反馈 | `Retry { feedback }` 的暂态反馈置于末尾，不写成用户历史 |
+| 溢出预算收缩 | 上下文超限后，从原始认证事实重新预算工具载荷；只有预算变小且组装变化才重试，保留原重试上限 |
+| 跨源披露或总预算变化 | 封套与预览可能改变所在位置之后的派生前缀；不重新运行回调或重复执行工具 |
+| 新会话 | 静态 system 与首条消息建立新前缀 |
 
-## 3. 为什么命中率随会话变长而上升
+## 4. 缓存诊断
 
-请求里可被前缀缓存复用的部分 = **静态前缀层 + 已提交历史**；每轮真正重算的只有尾段
-(overlays + 当前提问 + 偶发的重试反馈)。三段的 token 占比大致如下 (估算，非实测)：
+`APEIRETH_CACHE_TRACE=1` 打开既有脱敏 stderr 简报，含稳定前缀字节数与变化范围，
+不打印消息文本、工具名或模型输出。未设置时关闭。
+源码为 `crates/engine/runtime/src/canonical/cache_trace.rs`。
 
-| 段 | 会话早期 | 会话后期 | 是否可复用 |
-| --- | --- | --- | --- |
-| system + 工具声明 | 数百~数千 token | 不变 | 可复用 (静态) |
-| 已提交历史 | 少量 | 主导 (随轮次线性增长) | 可复用 (只追加) |
-| 动态 overlays + 当前提问 | 数十~数百 token | 数十~数百 token | 不可复用 (尾段) |
+## 5. 验证与表示迁移
 
-命中率 ≈ (静态前缀 + 已提交历史) / 全请求。会话越长，历史占比越大，命中率越接近 100%；
-早期请求命中率最低 (静态段占比最高但绝对量小)。因此目标表述为 **95%+，且会话越长越高**：
-一旦历史段主导，尾段的固定开销 (overlays + 提问) 占比降到 5% 以下。
-
-对比旧顺序：旧顺序每轮前缀全断，命中率与会话长度无关、恒为最低值。新顺序把这一项
-从"每轮全断"变成"随会话单调上升"。
-
-## 4. 显式缓存断点清单 (已知会开启新前缀的位置)
-
-以下位置是**有意为之**的前缀断点，出现时前缀缓存从该处重新开始，属预期行为：
-
-| 断点 | 触发 | 说明 |
-| --- | --- | --- |
-| 压缩检查点 | `compact_session_if_due` 落下一个摘要，表层替换一段可压缩前缀 | 历史被摘要改写 → 新前缀 |
-| 重试脚手架 | 模块返回 `Retry { feedback }` 时的 `retry_scaffolding` | 罕见、瞬时、可接受的断点 |
-| 溢出预算收缩 | provider 报上下文超限后 `budget_injected_overlays` 缩预算重组 | 重组后尾段变化，罕见 |
-| 跨源块首轮披露 | 一个跨源块第一次过 `UntrustedEnvelope` 披露闸 | 封套文本首次出现于该请求 |
-| 会话首轮 | 新会话的 system / 首条消息 | 前缀从零建立 |
-
-除上表外，正常轮次之间前缀应逐字节一致、仅尾部增长。
-
-## 5. 缓存诊断钩子
-
-调试环境变量 `APEIRETH_CACHE_TRACE=1` 打开后，**每个 provider 请求**在日志通道 (stderr)
-输出一行脱敏简报，报告"前缀稳定字节数 / 变更段"，从不打印提示内容：
-
-```text
-cache-trace: stable_prefix_bytes=128 prev_bytes=256 curr_bytes=320 changed_segment=128..320 [redacted]
-```
-
-- `stable_prefix_bytes`：与上一请求字节相同的最长前缀长度 (即前缀缓存可复用的字节数)。
-- `changed_segment`：两请求开始分歧的字节区间。
-- `[redacted]`：简报只含字节数与偏移，绝不含消息文本、工具名或模型输出。
-
-开关读取 `APEIRETH_CACHE_TRACE`，取 `1` / `true` / `yes` / `on` 为开；未设或其它值为关 (零开销)。
-实现见 `crates/engine/runtime/src/canonical/cache_trace.rs`。
-
-## 6. 测试覆盖
-
-- 两轮连续请求消息数组前缀逐字节相同、仅尾部增长 (单元 + e2e mock provider)。
-- overlay 内容 / 来源标注 / 封套形态在移动后不变 (跨源块过披露闸，payload 仍在边界内)。
-- 尾插位置正确：在历史之后、活查询之前。
-- system / 工具声明零改动 (静态前缀字节稳定、工具声明序确定)。
-- 压缩 / 重试断点语义不变 (压缩摘要留在历史前缀，重试反馈仍是末尾断点)。
-- `cache_trace` 简报含前缀稳定段且脱敏。
-- 组装序列化字节钉 (golden byte-pin) 防漂移。
-- 既有 L2 / 字节钉测试零回归 (全量套件)。
+`cache_prefix`、`context_budget`、`context_overflow` 和 execute 单元测试保留前缀、顺序、
+跨源封套、spill 可取回性、核心块、预算收缩与重试断点断言。
+旧“动态 system / 暂态不持久”断言在 S3 明确改为 V1 配对、数据角色及持久一次，
+同时保留用户历史不污染与业务历史过滤。实际命令和结果见
+[S3 交付账](../04-internal/kernel-convergence-s3-2026-10-29.md)。

@@ -415,6 +415,17 @@ impl ToolExecutionPipeline {
         frozen: Option<&FrozenInvocation>,
         session: Option<SessionId>,
     ) -> ExecutedCall {
+        self.run_scoped(tool, call, frozen, session, None).await
+    }
+
+    async fn run_scoped(
+        &self,
+        tool: &dyn ToolCapability,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        session: Option<SessionId>,
+        context: Option<&apeireth_plugin::ToolExecutionContext>,
+    ) -> ExecutedCall {
         let mut record = ExecutionRecord::default();
 
         // Stage 1: pre-execute waterfall.
@@ -448,7 +459,7 @@ impl ToolExecutionPipeline {
 
         // Stage 3: around — timeout and retry wrap the execution.
         let (mut result, attempts) =
-            match around::run_around(tool, call, frozen, session, &self.around).await {
+            match around::run_around(tool, call, frozen, session, context, &self.around).await {
                 Ok(executed) => executed,
                 Err(failure) => {
                     record.note_stage(ExecutionStage::Around, failure.code());
@@ -573,6 +584,27 @@ impl PipelinedCapability {
 
 #[async_trait::async_trait]
 impl ToolCapability for PipelinedCapability {
+    fn execution_policy(&self) -> apeireth_plugin::ToolExecutionPolicy {
+        self.inner.execution_policy()
+    }
+    async fn invoke_with_context(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+        context: &apeireth_plugin::ToolExecutionContext,
+    ) -> ToolResult {
+        self.pipeline
+            .run_scoped(
+                self.inner.as_ref(),
+                call,
+                frozen,
+                context.session,
+                Some(context),
+            )
+            .await
+            .result
+    }
+
     fn id(&self) -> &CapabilityId {
         self.inner.id()
     }

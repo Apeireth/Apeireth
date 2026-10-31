@@ -1,6 +1,6 @@
 //! F6 Value Cases 器官 集成测试 (per 任务 §3, 子代理 R3).
 //!
-//! 3 测试 + 1 #[ignore] smoke + 1 trait shape (per R2 同模式):
+//! 确定性行为、Noop 工厂合同与 trait shape 回归：
 //!
 //! 1. `value_cases_organ_record_and_promote_candidates` (record → feedback → promote_candidates
 //!    路径, 对齐 v1)
@@ -15,7 +15,7 @@
 //!   v1 value_cases 是确定性无 LLM, **当前 trait 接口不调 LLM**, trait 边界 + future
 //!   LLM 价值萃取路径已就位.
 //! - dev 测试路径: `NoopLlmFactory`, 验 trait 边界
-//! - `#[ignore]` 测试: 真生产前阻塞 #1 验真接 LLM 注入 shape (per E4/F4 同款)
+//! - Noop 工厂合同测试默认运行，不依赖密钥或外部服务。
 //!
 //! **承接**:
 //! - 子代理 Q 报告 #3 "Council 真接 LLM" 已就位 (`LlmFactory` 注入), F6 与 E4/F4 共享
@@ -264,13 +264,12 @@ async fn value_cases_organ_recall_by_keyword_and_disagree_blocks() {
 }
 
 // ============================================
-// Test 4 (#[ignore]): 真 LLM factory 注入 shape 验
+// Noop factory contract (default regression).
 // ============================================
 
-/// **0 装诚实**: 真接 LLM smoke (同 curiosity / hypothesis 模式). 当前 trait `process()`
-/// 不调 LLM (v1 确定性). #[ignore] 给 manual 验真 LLM 注入后 trait shape 不破.
+/// 离线 Noop 工厂合同：默认回归，不读取密钥或调用外部服务。
+/// 保留历史函数名与原断言；通过不代表真实模型服务已验证。
 #[tokio::test]
-#[ignore = "requires APEIRETH_API_KEY env; manual run: cargo test -p apeireth-organ -- --ignored"]
 async fn value_cases_organ_real_llm_smoke() {
     let factory: Arc<dyn LlmFactory> = Arc::new(NoopLlmFactory);
     let organ = ValueCasesOrgan::new(factory, "minimax-m3-thinking");

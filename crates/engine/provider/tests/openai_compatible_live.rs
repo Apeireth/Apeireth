@@ -13,19 +13,62 @@ use std::sync::Arc;
 use apeireth_plugin::{CredentialResolver, ProviderCapability};
 use apeireth_protocol::canonical::{NormalizedMessage, NormalizedRequest};
 
-/// DeepSeek 默认端点（OpenAI-compatible 协议族）。
-const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
+/// live 测试的**端点 / 模型**从 env 取（**默认仍是 DeepSeek**，行为不变）。
+///
+/// # 为什么可配化（2026-10-31 · 副总指挥交接请求③）
+///
+/// 此前本文件**硬编码** `DEEPSEEK_BASE_URL` 与 `deepseek-v4-flash`
+/// ⇒ ⇒ 换厂商（MiniMax / 其它 openai-compatible）**复跑不了**
+/// ⇒ ⇒ 台账挂账 #9 会被「厂商 key 被撤销」这种**与代码无关**的原因卡住。
+///
+/// ⇒ env 约定（与 `OpenAiCompatibleLlmFactory::from_env` 一致）：
+/// * `APEIRETH_OPENAI_URL` ⇒ 端点（默认 `https://api.deepseek.com/v1`）
+/// * `APEIRETH_OPENAI_MODELS` ⇒ 逗号分隔的模型列表（默认 `deepseek-v4-flash`）
+/// * `APEIRETH_OPENAI_MODEL` ⇒ **单模型覆盖**（默认取列表第一个）
+///
+/// ⚠️ **0 装纪律不变**：不打印 key、不落 key、默认 `#[ignore]` 不跑。
+/// ⚠️ 同族实现见 `crates/engine/organ/tests/organ_live_llm.rs` 与
+///   `crates/foundation/orchestration/tests/council_live.rs`（同形三处都钉）。
+fn live_base_url() -> String {
+    std::env::var("APEIRETH_OPENAI_URL")
+        .ok()
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "https://api.deepseek.com/v1".to_string())
+}
+
+/// live 测试用的模型名（见 [`live_base_url`] 的 env 约定）。
+fn live_model() -> String {
+    if let Ok(model) = std::env::var("APEIRETH_OPENAI_MODEL") {
+        let model = model.trim().to_string();
+        if !model.is_empty() {
+            return model;
+        }
+    }
+    std::env::var("APEIRETH_OPENAI_MODELS")
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .find(|item| !item.is_empty())
+                .unwrap_or_default()
+                .to_string()
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "deepseek-v4-flash".to_string())
+}
 
 #[tokio::test]
 #[ignore = "requires OPENAI_API_KEY env (DeepSeek live E2E, manual)"]
 async fn deepseek_live_e2e_smoke() {
     // 模型列表: 以 2026-09 DeepSeek /v1/models 实况为准 (deepseek-v4-flash /
     // deepseek-v4-pro / deepseek-v4-flash-vision-exp); 用 flash 便宜档。
-    let models = vec!["deepseek-v4-flash".to_string()];
+    let models = vec![live_model()];
     let http = reqwest::Client::builder().build().expect("reqwest client");
     let plugin =
         apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin::new(
-            DEEPSEEK_BASE_URL,
+            live_base_url(),
             models,
             http,
             60_000,
@@ -38,7 +81,7 @@ async fn deepseek_live_e2e_smoke() {
     let cap = plugin.provider_for_test();
 
     let req = NormalizedRequest::new(
-        "deepseek-v4-flash",
+        &live_model(),
         vec![NormalizedMessage::user(
             "Reply with the single word 'ok' and nothing else.",
         )],
@@ -62,10 +105,7 @@ async fn deepseek_live_factory_smoke() {
 
     let factory = OpenAiCompatibleLlmFactory::from_env().expect("factory from env");
     let instance = factory
-        .spawn(
-            apeireth_orchestration::SubagentRole::Reviewer,
-            "deepseek-v4-flash",
-        )
+        .spawn(apeireth_orchestration::SubagentRole::Reviewer, &live_model())
         .await
         .expect("spawn");
     let req = CompletionRequest {

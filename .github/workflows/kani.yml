@@ -78,6 +78,7 @@ jobs:
             'crates/foundation/governance/src/risk.rs' \
             'crates/foundation/governance/src/intent.rs' \
             'crates/adapters/gateway/src/file_fetcher.rs' \
+            'crates/foundation/core/src/storage_atomic.rs' \
             'crates/capabilities/tools/src/sensitive_path.rs' \
             'research/verification/kani/**' \
             '.github/workflows/kani.yml' || true)

@@ -47,7 +47,7 @@ pub mod ambient_context;
 pub mod async_context;
 // 派发调度 · 并行调用分类调度: 判定器 + 互斥屏障 + 有界滚动池 + 模型序提交 + 取消补果。
 pub mod call_scheduler;
-pub mod care_potential_field;
+// 关怀势能场 (业务话术 + 关怀动作分级) 属领域实现, 已迁至 `apeireth-organ::care_potential_field`.
 // 上下文工程 · 压缩检查点: 表层替换 + 留档 + 可回放 (纯确定性折叠 + 注入式摘要)。
 pub mod cognitive_quota_scheduler;
 pub mod compaction_checkpoint;
@@ -125,7 +125,6 @@ pub use call_scheduler::{
     SafetyRule, SafetyWhitelist, ScheduledCall, SchedulerConfig, SchedulerConfigError, SlotOutcome,
     DEFAULT_MAX_PARALLEL, DEFAULT_WIND_DOWN,
 };
-pub use care_potential_field::{CareAction, CarePotentialField};
 pub use cognitive_quota_scheduler::{
     CognitiveContextFrame, CognitiveInterrupt, CognitivePriority, CognitiveQuota,
     CognitiveTaskControlBlock,

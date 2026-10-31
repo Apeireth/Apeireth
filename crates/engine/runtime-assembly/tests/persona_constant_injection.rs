@@ -186,10 +186,29 @@ async fn with_persona_sediment_the_constant_injection_enters_the_turn_start_prom
     // 逐字面: 解回消息表, 注入文本与回取面纯渲染完全一致。
     let messages: Vec<apeireth_protocol::canonical::NormalizedMessage> =
         serde_json::from_str(&captured[0]).expect("messages parse");
-    let texts: Vec<String> = messages
+    // S3: preserve exact producer text inside an untrusted V1 tool result;
+    // the old transient system projection is intentionally retired.
+    apeireth_protocol::canonical::validate_closed_tool_context(&messages).unwrap();
+    assert!(!messages
         .iter()
-        .map(|message| apeireth_protocol::canonical::ContentPart::join_text(&message.content))
-        .collect();
+        .any(|m| m.role == apeireth_protocol::canonical::MessageRole::System));
+    let texts = messages
+        .iter()
+        .filter(|m| m.role == apeireth_protocol::canonical::MessageRole::Tool)
+        .flat_map(|m| {
+            let value: serde_json::Value = serde_json::from_str(
+                &apeireth_protocol::canonical::ContentPart::join_text(&m.content),
+            )
+            .unwrap();
+            assert_eq!(value["payload"]["value"]["untrusted_data"], true);
+            value["payload"]["value"]["context"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|block| block["text"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
     assert!(
         texts.contains(&expected),
         "恒定自述必须逐字进 TurnStart 提示词: {texts:?}"

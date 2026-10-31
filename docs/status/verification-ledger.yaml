@@ -19,7 +19,7 @@
 # - 只登记有证据的条目；未运行 = NOT RUN，未覆盖 = NOT COVERED，禁止预填。
 
 version: 1
-updated_at: "2026-10-30"
+updated_at: "2026-10-31"
 
 # 汇总（0 装口径，人工维护；脚本化后由生成器产出）
 summary:
@@ -27,7 +27,7 @@ summary:
   claims_with_entries: 6
   four_layer_complete: 1        # 2026-10-30：`governance.approval_path` 四层齐全 ⇒ ADR-0011 R6-C「至少 1 条」达成
   signoff_entries: 1            # 2026-10-30：V-signoff-001（**如实回填** owner 2026-09-28 既有真机签署，非新签核）
-  stage6_drill: NOT RUN         # 清单 ✅ + 签核 ✅ + **反思归档 ⬜** ⇒ 三段未端到端跑完
+  stage6_drill: DONE            # 2026-10-31：三段闭环 —— 清单 ✅（本文件 10 条 / 5 层覆盖）+ 签核 ✅（V-signoff-001）+ 反思归档 ✅（`docs/architecture/handbook.md` §10「波次复盘 · 阶段 6 反思归档」，逐条引用 V-formal-003 / V-scenario-004 / V-bench-002 / V-signoff-001 / V-bench-001）⇒ ADR-0011 R6-C 达成
   bench_layer: IMPLEMENTED      # 2026-10-30：V-bench-001（研究用审批状态机）+ V-bench-002（生产治理决策）⇒ 两条可重跑基准 + 数字
 
 entries:

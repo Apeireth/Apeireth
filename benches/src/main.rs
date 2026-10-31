@@ -12,6 +12,9 @@
 //! 诊断子命令 (不计入 `all`, 无 README 目标行, 仅供剖析归因):
 //! `profile-cold-start` (冷启动分段计时) / `profile-sandbox` (沙箱 spawn 分解),
 //! 见 [`profile_startup`] 模块文档。
+//! 独立启动定义: `first_run` / `normal_start` / `cold_start` / `warm_resume`。
+//! 下划线 `cold_start` 需要真实页缓存清理；连字符 `cold-start` 保留历史门槛和负载。
+//! 新定义不进入 `all`，目标均为待批准提案，详见 [`startup`]。
 
 mod assembly;
 mod atomic_write;
@@ -26,6 +29,7 @@ mod os_sandbox;
 mod profile_startup;
 mod saga_rollback;
 mod spill_truncate;
+mod startup;
 mod support;
 
 use support::{print_outcome, BenchConfig, Outcome};
@@ -55,6 +59,9 @@ fn main() {
             for name in BENCH_NAMES {
                 println!("{name}");
             }
+            for name in startup::NAMES {
+                println!("{name}");
+            }
         }
         "all" => {
             run_all(&cfg);
@@ -63,6 +70,15 @@ fn main() {
         // 不对外暴露 (不进 `list` 输出)。
         idle_footprint::PROBE_ARG => {
             idle_footprint::run_probe();
+        }
+        startup::PROBE_ARG => {
+            startup::probe::run(&args[1..]).expect("startup child probe");
+        }
+        name if startup::NAMES.contains(&name) => {
+            if let Err(error) = startup::run(name, &cfg) {
+                eprintln!("startup benchmark failed: {error}");
+                std::process::exit(1);
+            }
         }
         name => match run_one(name, &cfg) {
             Some(outcomes) => {

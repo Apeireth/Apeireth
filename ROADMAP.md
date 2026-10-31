@@ -63,6 +63,8 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ## 3. 当前状态（v2.0.0-rc.4 现行；下方各批注记为带日期历史真账）
 
+> **2026-10-30 Modular ALE / System One（Partial）**：IMPLEMENTED、显式 Host 组合、默认 OFF；模块契约/私有任务句柄、确定性权限之外的强制监督与审计、有界 typed 消息、固定回环 UDP worker/白名单状态已进入软件验收。兼容入口逐项纳管、默认 rollout、live model 与外部设备/LAN/加密/NAT/持久恢复仍为后续阶段。源码、真实执行路径及限制见 [P4 报告](docs/04-internal/ale-system-one-p4-2026-10-30.md)；不追溯改写下方历史值。
+
 > **2026-10-16 文本可信度批注记（现行口径，审计修 B-01/B-02/B-03）**：workspace.version = **2.0.0-rc.4**；workspace = **20 members（19 crates + 1 bench harness）**；测试基线单一真源见 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)（2026-10-16 口径：199 套件 / 5360 passed / 0 failed / 22 ignored）。下文带日期注记保留当时口径不追溯改写。
 >
 > **2026-10-16 口径尾账批注记（现行口径，审计修 B-04 / B-05 / D13 / F-02）**：守门级数现值 = **7 重守门 v7**（1-5 重嵌套 + 6 Colang DSL + 7 Superpowers Skill Guard），唯一现值出处 = §13「守门级数」行；13 键现值表述 = **14 键 LOCKED**（PHL-01..08；2026-10-20 经 ADR-0006 正式化，「13 键」为 PHL-07 时代历史口径）；R11 baseline 3 值**无公开复现入口，仅供内部对照**；吸收自动化轴统一改名 **P 轴（Practice 沉淀）**（原 I 轴，因 00-backlog 想法清单 #I 字母双占，见 00-backlog D13）。其余文档旧口径一律加「历史口径（日期）」标注、不追溯改写。四件对照表与 F-02 去留方案表见 [docs/04-internal/backend-enhancement/audit-gap-caliber-hygiene-2026-10-16.md](docs/04-internal/backend-enhancement/audit-gap-caliber-hygiene-2026-10-16.md)。

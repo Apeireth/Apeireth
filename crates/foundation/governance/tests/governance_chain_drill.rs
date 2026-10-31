@@ -533,27 +533,20 @@ fn chain_timeout_path_holds_and_fails_closed() {
 /// `HAMode::MultiHuman` 的构造**都配了** `multi_sign: Some(MultiSignPolicy { .. })`
 /// ⇒ ⇒ `map_or(1, ...)` 的**默认分支从未被任何测试执行**。
 ///
-/// ## 为什么用 `#[ignore]`
-/// 本项目纪律是「**先让违反显形、再逐节还债**」。
-/// 本测试断言的**期望行为**（fail-closed）当前**不成立** ⇒
-/// 若不加 `ignore`，`cargo test --workspace` 会红 ⇒ **挡住所有正常提交**。
-/// ⇒ 跑它看缺陷：
-/// ```bash
-/// cargo test -p apeireth-governance --test governance_chain_drill \
-///   -- --ignored multi_human_without_policy_must_not_degrade_to_single_human
-/// ```
-/// ⇒ core 侧修好后**去掉本 `ignore`**，它立刻变成回归守卫。
-///
-/// ## 建议修法（一行，给 `core` 的 owner）
+/// ## ✅ 已修（2026-10-31）
+/// core 侧已按**校验器侧同口径**改为 fail-closed：
 /// ```rust
-/// // 现在（fail-open）
+/// // 修前（fail-open）：忘配策略 ⇒ required = 1 ⇒ 1 人即可
 /// let required = ha.multi_sign.as_ref().map_or(1, |policy| policy.required);
-/// // 改为（与校验器侧同口径 fail-closed）
+///
+/// // 修后（fail-closed，与 `PlaceholderMultiSignVerifier` 的 `NotConfigured ⇒ Denied` 同口径）
 /// let Some(policy) = ha.multi_sign.as_ref() else { return false };
-/// let required = policy.required.max(2); // MultiHuman 至少 2 人
+/// let required = usize::from(policy.required.max(2)); // MultiHuman 至少 2 人
 /// ```
+/// ⇒ ⇒ 本测试的 `#[ignore]` **已去掉** ⇒ 它现在是**常驻回归守卫**。
+/// ⇒ 附带修掉同处的一个**窄化转换**隐患：`real_humans.len() as u8` 在 ≥256 人时**回绕**
+/// ⇒ ⇒ 改用 `usize` 比较。
 #[test]
-#[ignore = "债栏 D8 未裁决：期望 fail-closed，当前 core 侧是 fail-open（忘配策略 ⇒ 1 人放行）"]
 fn multi_human_without_policy_must_not_degrade_to_single_human() {
     let mut ha = ha_2of3();
     ha.multi_sign = None; // ← 「忘配策略」（配置缺位，不是有人故意降级）

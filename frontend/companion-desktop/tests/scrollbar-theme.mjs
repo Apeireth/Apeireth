@@ -5,7 +5,9 @@
 // 盯死三组：
 //   ① 令牌覆盖矩阵：:root 深底基准 + 三个浅色主题必须覆写为墨色低透
 //      （浅底用骨白 = 发白），星舰冷白覆写；任何滚动条令牌禁止取白；
-//   ② 全局规则：伪元素规则必须是全局选择器 + 令牌引用（所有滚动容器统一）；
+//   ② 全局规则：伪元素规则必须是全局选择器 + 令牌引用（所有滚动容器统一），
+//      且不得出现 scrollbar-width/scrollbar-color 标准属性（Chromium/WebView2
+//      里标准属性优先于 webkit 伪元素，会把细药丸滑块换回系统方角滑块）；
 //   ③ 无残留硬编码：shell.css 滚动条规则里不许再出现字面色值。
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -69,8 +71,14 @@ function blockOf(src, selector) {
     /::-webkit-scrollbar-track \{\s*background: var\(--ap-scrollbar-track\);/.test(shell),
     '轨道走令牌',
   );
-  assert.ok(/scrollbar-color: var\(--ap-scrollbar-thumb\)/.test(shell), '标准属性兜底在案');
-  console.log('  ok  ② 全局规则（伪元素 + 标准属性兜底，全部令牌引用）');
+  assert.ok(!/scrollbar-width\s*:/.test(shell), '标准属性 scrollbar-width 不得回归（会劫持 webkit 细药丸）');
+  assert.ok(!/scrollbar-color\s*:/.test(shell), '标准属性 scrollbar-color 不得回归（会劫持 webkit 细药丸）');
+  assert.ok(/::-webkit-scrollbar \{[^}]*width: 10px;/.test(shell), '10px 槽 = 3px×2 透明边 + 4px 可见药丸');
+  assert.ok(
+    /::-webkit-scrollbar-thumb \{[^}]*border: 3px solid transparent;/.test(shell),
+    '滑块用透明边收出 ~4px 可见宽度',
+  );
+  console.log('  ok  ② 全局规则（伪元素细药丸 + 标准属性不劫持，全部令牌引用）');
 }
 
 // ---- ③ 无残留硬编码色 ----

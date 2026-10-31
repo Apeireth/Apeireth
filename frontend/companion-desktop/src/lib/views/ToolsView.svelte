@@ -611,16 +611,19 @@
   }
   .search-input-wrap input {
     width: 100%;
-    padding: 7px 28px 7px 30px;
+    padding: 8px 28px 8px 30px;
     background: var(--surface-2);
-    border: 1px solid var(--line-strong);
-    border-radius: 7px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
     color: var(--text);
     font-size: 12px;
     outline: 0;
+    transition: border-color var(--ap-dur-fast) var(--ap-ease-out),
+      box-shadow var(--ap-dur-fast) var(--ap-ease-out);
   }
   .search-input-wrap input:focus {
     border-color: var(--amber-line);
+    box-shadow: var(--ap-focus-ring);
   }
   .clear-search-btn {
     position: absolute;
@@ -652,20 +655,30 @@
     gap: 14px;
   }
   .tool-card-box {
-    background: var(--surface-2);
+    /* 美术走查（2026-10-18）：卡片靠「顶沿内高光 + 淡投影」浮起，而不是靠
+       换底色（换底色在纯黑主题下会闪一下，读作故障）。 */
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 46%),
+      var(--surface-2);
     border: 1px solid var(--line);
-    border-radius: 9px;
-    padding: 14px;
+    border-radius: 12px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 9px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-card);
+    transition: border-color var(--ap-dur-fast) var(--ap-ease-out),
+      box-shadow var(--ap-dur-fast) var(--ap-ease-out),
+      transform var(--ap-dur-fast) var(--ap-ease-out);
   }
   .tool-card-box:hover {
     border-color: var(--line-strong);
-    background: var(--surface-3);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-shadow-pop);
+  }
+  .tool-card-box:focus-visible {
+    outline: 0;
+    box-shadow: inset 0 1px 0 var(--ap-hairline-top), var(--ap-focus-ring);
   }
   .card-head {
     display: flex;
@@ -685,6 +698,8 @@
   .tool-title {
     font-size: 13px;
     font-family: var(--mono);
+    font-weight: 600;
+    letter-spacing: 0.01em;
     color: var(--text);
   }
   .tool-desc {
@@ -704,8 +719,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
   }
   .source-pill {
     font-size: 10px;

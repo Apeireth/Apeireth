@@ -62,10 +62,19 @@ $exemptFiles = @(
 )
 $exempted = 0
 
+function Invoke-ScanGit {
+  param([string[]]$GitArgs)
+  $lines = @(& git @GitArgs 2>$null)
+  if ($LASTEXITCODE -ne 0) {
+    throw "git $($GitArgs -join ' ') failed with exit $LASTEXITCODE; scan incomplete"
+  }
+  return $lines
+}
+
 $changed = @()
-$changed += (cmd /c "git diff --name-only HEAD 2>nul")
-$changed += (cmd /c "git diff --cached --name-only 2>nul")
-$changed += (cmd /c "git ls-files --others --exclude-standard 2>nul")
+$changed += @(Invoke-ScanGit -GitArgs @('diff', '--name-only', 'HEAD'))
+$changed += @(Invoke-ScanGit -GitArgs @('diff', '--cached', '--name-only'))
+$changed += @(Invoke-ScanGit -GitArgs @('ls-files', '--others', '--exclude-standard'))
 $changed = $changed | Where-Object { $_ } | Sort-Object -Unique
 
 $targets = $changed | Where-Object {
@@ -80,7 +89,7 @@ if (-not $targets) {
 }
 
 $untracked = @{}
-foreach ($f in (cmd /c "git ls-files --others --exclude-standard 2>nul")) { if ($f) { $untracked[$f] = $true } }
+foreach ($f in (Invoke-ScanGit -GitArgs @('ls-files', '--others', '--exclude-standard'))) { if ($f) { $untracked[$f] = $true } }
 
 $hits = 0
 foreach ($file in $targets) {
@@ -101,7 +110,7 @@ foreach ($file in $targets) {
     }
     continue
   }
-  $diff = @(cmd /c "git diff -U0 HEAD -- `"$file`" 2>nul")
+  $diff = @(Invoke-ScanGit -GitArgs @('diff', '-U0', 'HEAD', '--', $file))
   $lineNo = 0
   foreach ($row in $diff) {
     if ($row -match '^@@ -\d+(?:,\d+)? \+(\d+)') { $lineNo = [int]$matches[1]; continue }

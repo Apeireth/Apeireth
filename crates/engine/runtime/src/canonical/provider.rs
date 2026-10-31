@@ -94,6 +94,7 @@ pub struct RoutedCompletion {
 /// Chooses among providers and falls back when one fails transiently.
 pub struct ProviderRouter {
     providers: Vec<Arc<dyn ProviderCapability>>,
+    pub(crate) accounting: Arc<super::accounting::UsageAccounting>,
     fallback_order: Vec<CapabilityId>,
     health: RwLock<BTreeMap<CapabilityId, ProviderHealth>>,
     clock: Arc<dyn Clock>,
@@ -109,6 +110,7 @@ impl ProviderRouter {
         let fallback_order = providers.iter().map(|p| p.id().clone()).collect();
         Self {
             providers,
+            accounting: Arc::new(super::accounting::UsageAccounting::default()),
             fallback_order,
             health: RwLock::new(BTreeMap::new()),
             clock,
@@ -219,7 +221,7 @@ impl ProviderRouter {
     /// [`ProviderRouter::complete_with_tools`] when tool declarations must be
     /// sent only to providers that support tool calls.
     pub async fn complete(&self, request: &NormalizedRequest) -> RuntimeResult<RoutedCompletion> {
-        self.complete_inner(request, None, None).await
+        self.complete_inner(request, None, None, None, None).await
     }
 
     /// Serve a completion with per-provider tool declarations.
@@ -234,7 +236,7 @@ impl ProviderRouter {
         request: &NormalizedRequest,
         tool_declarations: &[NormalizedTool],
     ) -> RuntimeResult<RoutedCompletion> {
-        self.complete_inner(request, Some(tool_declarations), None)
+        self.complete_inner(request, Some(tool_declarations), None, None, None)
             .await
     }
 
@@ -251,7 +253,32 @@ impl ProviderRouter {
         tool_declarations: &[NormalizedTool],
         on_delta: &Arc<dyn Fn(String) + Send + Sync>,
     ) -> RuntimeResult<RoutedCompletion> {
-        self.complete_inner(request, Some(tool_declarations), Some(on_delta))
+        self.complete_inner(request, Some(tool_declarations), Some(on_delta), None, None)
+            .await
+    }
+
+    pub async fn complete_for_session(
+        &self,
+        session: apeireth_core::kernel::SessionId,
+        request_id: apeireth_core::kernel::RequestId,
+        request: &NormalizedRequest,
+        tools: Option<&[NormalizedTool]>,
+        sink: Option<&Arc<dyn Fn(String) + Send + Sync>>,
+    ) -> RuntimeResult<RoutedCompletion> {
+        self.complete_inner(request, tools, sink, Some((session, request_id)), None)
+            .await
+    }
+
+    pub(crate) async fn complete_for_session_gated(
+        &self,
+        session: apeireth_core::kernel::SessionId,
+        request_id: apeireth_core::kernel::RequestId,
+        request: &NormalizedRequest,
+        tools: Option<&[NormalizedTool]>,
+        sink: Option<&Arc<dyn Fn(String) + Send + Sync>>,
+        gate: Option<&dyn apeireth_plugin::agents::AgentRequestGate>,
+    ) -> RuntimeResult<RoutedCompletion> {
+        self.complete_inner(request, tools, sink, Some((session, request_id)), gate)
             .await
     }
 
@@ -260,6 +287,11 @@ impl ProviderRouter {
         request: &NormalizedRequest,
         tool_declarations: Option<&[NormalizedTool]>,
         on_delta: Option<&Arc<dyn Fn(String) + Send + Sync>>,
+        identity: Option<(
+            apeireth_core::kernel::SessionId,
+            apeireth_core::kernel::RequestId,
+        )>,
+        gate: Option<&dyn apeireth_plugin::agents::AgentRequestGate>,
     ) -> RuntimeResult<RoutedCompletion> {
         // 出网闸：请求发出前判定一次（ADR-0014 §1.2 —— 上下文出境即行动）。
         // 默认 AllowAll 时这一支恒为 Pass，零行为变化。
@@ -281,6 +313,11 @@ impl ProviderRouter {
             .providers
             .iter()
             .filter(|p| p.supports_model(&request.model))
+            .filter(|p| {
+                identity
+                    .and_then(|(session, _)| self.accounting.requested_provider(session))
+                    .is_none_or(|id| &id == p.id())
+            })
             .collect();
 
         if supporting.is_empty() {
@@ -303,6 +340,7 @@ impl ProviderRouter {
                 if health
                     .get(provider.id())
                     .is_some_and(|status| !status.healthy)
+                    && !self.accounting.can_probe(provider.id())
                 {
                     unhealthy.push(provider.id().as_str());
                 } else {
@@ -318,7 +356,7 @@ impl ProviderRouter {
                 unhealthy: unhealthy.join(", "),
             });
         }
-        candidates.sort_by_key(|p| self.rank(p.id()));
+        candidates.sort_by_key(|p| (self.accounting.cooling(p.id()), self.rank(p.id())));
 
         let mut failed_attempts: Vec<(CapabilityId, ProviderError)> = Vec::new();
 
@@ -333,6 +371,28 @@ impl ProviderRouter {
                 }
             }
 
+            let _permit = self.accounting.permit(&id).await?;
+            let mut meter = identity
+                .map(|(session, request_id)| {
+                    self.accounting.begin_gated(
+                        session,
+                        request_id,
+                        id.clone(),
+                        &candidate_request.model,
+                        gate,
+                    )
+                })
+                .transpose()?;
+            if let Some(remaining) =
+                identity.and_then(|(session, _)| self.accounting.output_budget(session))
+            {
+                candidate_request.max_tokens = Some(
+                    candidate_request
+                        .max_tokens
+                        .unwrap_or(remaining)
+                        .min(remaining),
+                );
+            }
             let started = Timestamp::from_clock(self.clock.as_ref());
 
             let attempt = match on_delta {
@@ -344,6 +404,14 @@ impl ProviderRouter {
                 None => provider.complete(&candidate_request).await,
             };
 
+            self.accounting
+                .provider_outcome(&id, attempt.as_ref().err());
+            if let Some(meter) = &mut meter {
+                meter.finish(
+                    attempt.as_ref().ok().map(|response| &response.usage),
+                    attempt.is_err(),
+                );
+            }
             match attempt {
                 Ok(mut response) => {
                     let elapsed = Timestamp::from_clock(self.clock.as_ref())
@@ -426,6 +494,10 @@ impl std::fmt::Debug for ProviderRouter {
             .finish_non_exhaustive()
     }
 }
+
+#[cfg(test)]
+#[path = "provider/compat_tests.rs"]
+mod compat_tests;
 
 #[cfg(test)]
 mod tests {

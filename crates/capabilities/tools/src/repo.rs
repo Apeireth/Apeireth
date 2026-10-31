@@ -149,7 +149,7 @@ impl ToolCapability for RepoTool {
         };
         let max_runtime = request.limits().max_runtime;
 
-        let result = match tokio::task::spawn_blocking(move || {
+        let result = match crate::process::run_native(move || {
             let executor = ProcessExecutor::new();
             executor.execute(&request)
         })

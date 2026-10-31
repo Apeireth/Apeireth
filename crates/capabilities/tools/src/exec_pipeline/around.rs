@@ -125,6 +125,7 @@ pub(crate) async fn run_around(
     call: &ToolCall,
     frozen: Option<&FrozenInvocation>,
     session: Option<SessionId>,
+    context: Option<&apeireth_plugin::ToolExecutionContext>,
     policy: &AroundPolicy,
 ) -> Result<(ToolResult, u32), PipelineFailure> {
     let timeout_ms = policy
@@ -146,12 +147,18 @@ pub(crate) async fn run_around(
     let mut attempts = 0u32;
     loop {
         attempts += 1;
+        let invocation = async {
+            match context {
+                Some(context) => tool.invoke_with_context(call, frozen, context).await,
+                None => tool.invoke_in_session(call, frozen, session).await,
+            }
+        };
         let attempt = match armed.as_mut() {
             Some((_deadline, notice)) => tokio::select! {
                 _ = notice.notified() => None,
-                result = tool.invoke_in_session(call, frozen, session) => Some(result),
+                result = invocation => Some(result),
             },
-            None => Some(tool.invoke_in_session(call, frozen, session).await),
+            None => Some(invocation.await),
         };
         let Some(result) = attempt else {
             return Err(PipelineFailure::Timeout {

@@ -49,10 +49,15 @@
 
 pub mod model;
 pub mod stream;
+pub mod tool_event;
 pub mod tool_result;
 
 pub use model::{ModelDescriptor, ModelFeature};
 pub use stream::StreamEvent;
+pub use tool_event::{
+    validate_closed_tool_context, ModuleHookV1, ToolEventBatch, ToolEventError, ToolEventInsertion,
+    ToolEventLimits, ToolEventSourceV1, ToolEventV1,
+};
 pub use tool_result::{ToolOutcome, ToolResult};
 
 pub use crate::normalized::{

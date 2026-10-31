@@ -1,22 +1,26 @@
-//! `canonical::bio_pain` — 痛觉学习 (SG-16) + 再生案例记账 (SG-17) 在失败处理链上的
-//! 观测接线 (W3.3 痛觉 / W3.4 再生, 同一开关, 默认关).
+//! `organ::nociception` — 痛觉学习 (SG-16) + 再生案例记账 (SG-17) 的领域账本.
 //!
 //! # 它是什么
-//! 运行时级的**只读观测 + 记账**面: 每次工具调用完成时, 把失败压成一个稳定的
+//! 领域级的**只读观测 + 记账**面: runtime 内核在每个工具调用完成时, 通过通用
+//! [`ToolCompletionObserver`] 端口发出一次事实; 本模块把失败压成一个稳定的
 //! [`FailureSignal`] 交给 `apeireth_orchestration::nociception::PainLedger`,
-//! 成功则对同一能力的已记账原因执行 `record_repair`。账本挂在 [`Runtime`] 级
-//! (跨会话), 因此"跨会话反复"由账本按 `session_gap_ms` 的时间间隙近似, 与
-//! `nociception` 内核口径一致。
+//! 成功则对同一能力的已记账原因执行 `record_repair`。账本挂在
+//! [`NociceptionObserver`] 上 (跨会话), 因此"跨会话反复"由账本按
+//! `session_gap_ms` 的时间间隙近似, 与 `nociception` 内核口径一致。
+//!
+//! 内核不持有痛觉状态、不识别 `bio_pain` 开关、不按领域名分支; 装配层决定是否
+//! 把本 observer 装进 runtime。未安装 = 内核零接线、零取锁、零写入。
 //!
 //! 痛觉建议升级时, 同一失败链再把 `(capability, cause_key)` 记入一张**再生案例账**
 //! (`apeireth_orchestration::recovery_protocol::RecoveryCase`, 四期状态机), 成功
 //! 时把该能力的案例收尾到 `Resolved` 并移出活跃账。见下文"再生案例账"节。
 //!
-//! # 接线点 (唯一失败入口)
-//! `execute::record_call_completed` 是三个调用点的共同收口:
+//! # 接线点 (唯一失败事实出口)
+//! runtime 的 `record_call_completed` 是三个调用点的共同收口:
 //! 串行派发 (`execute.rs` 的 `dispatch_one_tool`)、并行窗口正常提交、并行窗口
-//! 取消排水。本模块的评估在该函数**原有事件/轨迹落账之后**执行 —— 事实先落,
-//! 观测后追加。
+//! 取消排水。内核在该函数**原有事件/轨迹落账之后**向已安装的
+//! [`ToolCompletionObserver`] 发出**一次**事实 —— 事实先落, 观测后追加。
+//! 取消槽位与人工拒绝的伪结果不经过该收口, 因此不会产生评估 (与原语义一致)。
 //!
 //! # 修复键的口径
 //! 成功结果不携带"修好了哪一个失败原因", 所以成功分支不能只指认一个 cause_key:
@@ -28,7 +32,7 @@
 //! - 不改写 [`ToolResult`]、不改写 `ToolFailed` 的错误文本;
 //! - 不改变重试、退避、熔断或错误处理决策; 不引入第 4 套 RetryPolicy;
 //! - 不伪造任何 session 事件或 trace 事件 —— 观测面是 [`BioPainSnapshot`]
-//!   (运行时只读访问器), 不是事件流。
+//!   ([`NociceptionObserver::snapshot`]), 不是事件流。
 //!
 //! # 失败类别的近似口径 (不冒充精确分类)
 //! protocol 层唯一的失败判别位是 `ToolOutcome::Error::retryable` (没有独立的
@@ -79,10 +83,9 @@
 //! 在 [`BioRecoverySnapshot`] (只读快照), 不产生 session/trace 事件。
 //!
 //! # 默认关
-//! [`RuntimeConfig::bio_pain_enabled`](super::runtime::RuntimeConfig) 默认
-//! `false`: 关闭时 `record_call_completed` 走原路径, 不取锁、不写账本, session
-//! 事件与 trace 逐字节不变。开启只通过 builder 的
-//! [`RuntimeBuilder::with_bio_pain`](super::runtime::RuntimeBuilder::with_bio_pain),
+//! 装配层开关默认 `false`: 关闭时不构造本 observer, runtime 的
+//! `record_call_completed` 走原路径, 不取锁、不写账本, session 事件与 trace
+//! 逐字节不变。开启只通过装配层把 [`NociceptionObserver`] 装进 runtime,
 //! 痛觉与再生案例共用这一个开关。
 //!
 //! # 诚实边界
@@ -95,6 +98,7 @@
 //! - 评估不参与任何控制流, 因此"建议 Retry 但运行时仍按原逻辑处理"是预期行为。
 
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::Mutex;
 
 use apeireth_orchestration::nociception::{
     FailureClass, FailureSignal, Habituation, PainAssessment, PainGroup, PainLedger, Recommendation,
@@ -102,6 +106,7 @@ use apeireth_orchestration::nociception::{
 use apeireth_orchestration::recovery_protocol::{
     transition, HealingPhase, RecoveryCase, RecoveryEvent,
 };
+use apeireth_plugin::observation::{ToolCompletionFact, ToolCompletionObserver};
 use apeireth_protocol::canonical::{ToolOutcome, ToolResult};
 use serde::Serialize;
 
@@ -240,8 +245,8 @@ pub struct BioRecoveryPhaseCounts {
 /// 再生案例账的只读快照 (SG-17, 与痛觉共用开关).
 ///
 /// 关闭时 [`BioRecoverySnapshot::default`] (全零/空)。只读访问器
-/// [`Runtime::bio_recovery_snapshot`](super::runtime::Runtime::bio_recovery_snapshot)
-/// 与 [`BioPainSnapshot::recovery`] 都返回它的副本, 不改变状态。
+/// [`NociceptionObserver::recovery_snapshot`] 与 [`BioPainSnapshot::recovery`]
+/// 都返回它的副本, 不改变状态。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct BioRecoverySnapshot {
     /// 活跃案例数 (= `cases.len()`)。
@@ -257,10 +262,10 @@ pub struct BioRecoverySnapshot {
     pub cases: Vec<BioRecoveryCaseSnapshot>,
 }
 
-/// 运行时痛觉观测面的只读快照.
+/// 痛觉观测面的只读快照.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BioPainSnapshot {
-    /// 机制是否开启 (`with_bio_pain(true)`)。关闭时其余字段为空/零。
+    /// 机制是否开启 (observer 是否已装入 runtime)。关闭时其余字段为空/零。
     pub enabled: bool,
     /// 累计评估次数。
     pub assessed: u64,
@@ -446,11 +451,11 @@ impl BioRecoveryLedger {
     }
 }
 
-/// 运行时级痛觉账本 + 观测环 + 再生案例账.
+/// 痛觉账本 + 观测环 + 再生案例账.
 ///
-/// [`Runtime`](super::runtime::Runtime) 以 `Mutex` 持有本结构; 只在开关开启时
-/// 由 `record_call_completed` 写入。所有方法都不 panic、不做 I/O。痛觉与再生
-/// 案例共用**同一把锁**, 因此不存在嵌套锁与锁顺序问题。
+/// [`NociceptionObserver`] 以 `Mutex` 持有本结构; 只由 observer 收到内核完成
+/// 事实时写入。所有方法都不 panic、不做 I/O。痛觉与再生案例共用**同一把锁**,
+/// 因此不存在嵌套锁与锁顺序问题。
 #[derive(Debug)]
 pub(crate) struct BioPainState {
     ledger: PainLedger,
@@ -571,12 +576,140 @@ impl BioPainState {
     }
 }
 
+impl Default for BioPainSnapshot {
+    /// 机制未开启时的空快照 (与观测面既有口径一致)。
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            assessed: 0,
+            repaired: 0,
+            observations: Vec::new(),
+            groups: Vec::new(),
+            recovery: BioRecoverySnapshot::default(),
+        }
+    }
+}
+
+/// 领域观察者: 把内核交出的通用工具完成事实记入痛觉账本.
+///
+/// 由装配层构造并装入 runtime; 内核只认识
+/// [`ToolCompletionObserver`] 端口, 不认识痛觉、再生案例或本类型。
+/// 账本由 `Mutex` 串行化, 因此串行/并行/取消排水的提交顺序不会造成重复记账:
+/// 每个 `record_call_completed` 只发出一次事实。
+#[derive(Debug)]
+pub struct NociceptionObserver {
+    state: Mutex<BioPainState>,
+    enabled: bool,
+}
+
+impl NociceptionObserver {
+    /// 开启状态的观察者 (装进 runtime 后生效)。
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            state: Mutex::new(BioPainState::new()),
+            enabled: true,
+        }
+    }
+
+    /// 关闭状态的观察者: 快照恒为空, 事实被忽略。
+    ///
+    /// 供装配层在开关关闭时仍能提供"同口径空快照"读取口 (不安装进 runtime)。
+    #[must_use]
+    pub fn disabled() -> Self {
+        Self {
+            state: Mutex::new(BioPainState::new()),
+            enabled: false,
+        }
+    }
+
+    /// 观察面是否开启。
+    #[must_use]
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// 痛觉观测面的只读快照 (克隆账本、观测环与再生案例账)。
+    #[must_use]
+    pub fn snapshot(&self) -> BioPainSnapshot {
+        self.lock_state().snapshot(self.enabled)
+    }
+
+    /// 再生案例账的只读快照 (与 [`Self::snapshot`] 的 `recovery` 字段同源)。
+    #[must_use]
+    pub fn recovery_snapshot(&self) -> BioRecoverySnapshot {
+        self.lock_state().recovery_snapshot()
+    }
+
+    /// poison 容错读锁: 持锁线程 panic 后账本数据并未损坏, 按 L 组口径恢复。
+    fn lock_state(&self) -> std::sync::MutexGuard<'_, BioPainState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+impl Default for NociceptionObserver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ToolCompletionObserver for NociceptionObserver {
+    fn observe(&self, fact: &ToolCompletionFact<'_>) {
+        if !self.enabled {
+            return;
+        }
+        let now_ms = u64::try_from(fact.at.epoch_millis()).unwrap_or(0);
+        let capability = fact.capability.as_str();
+        let rendered = fact.result.render();
+        let class = failure_class_for_result(fact.result);
+        let mut state = self.lock_state();
+        match class {
+            Some(class) => state.observe_failure(capability, class, &rendered, now_ms),
+            // `None` 只表示这次调用成功 (失败信号不成立) → 记修复。
+            None => {
+                state.observe_success(capability, now_ms);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apeireth_core::kernel::{CapabilityId, RequestId, SessionId, Timestamp, TraceId};
     use apeireth_orchestration::nociception::{
         DEFAULT_HABITUATION_THRESHOLD, DEFAULT_SESSION_GAP_MS,
     };
+    use apeireth_protocol::canonical::ToolCall;
+
+    const FACT_NOW_MS: i64 = 1_700_000_000_000;
+
+    fn completion_fact<'a>(
+        call: &'a ToolCall,
+        capability: &'a CapabilityId,
+        result: &'a ToolResult,
+    ) -> ToolCompletionFact<'a> {
+        ToolCompletionFact {
+            session: SessionId::new(),
+            request: RequestId::new(),
+            trace: TraceId::new(),
+            round: 1,
+            call,
+            capability,
+            result,
+            at: Timestamp::from_epoch_millis(FACT_NOW_MS).expect("timestamp"),
+        }
+    }
+
+    fn call() -> ToolCall {
+        ToolCall {
+            id: "call_1".to_string(),
+            name: "echo".to_string(),
+            arguments: serde_json::json!({}),
+        }
+    }
 
     fn retryable(message: &str) -> ToolResult {
         ToolResult::retryable_error("call_1", message)
@@ -1290,5 +1423,65 @@ mod tests {
             "并发交错仍只产生合法迁移"
         );
         assert!(snapshot.recovery.active_cases <= 1, "同键最多一个活跃案例");
+    }
+
+    #[test]
+    fn installed_observer_records_one_assessment_per_completion_fact() {
+        let observer = NociceptionObserver::new();
+        let call = call();
+        let capability = CapabilityId::new("tool.echo").expect("capability id");
+        let failure = retryable("upstream timeout");
+
+        observer.observe(&completion_fact(&call, &capability, &failure));
+        observer.observe(&completion_fact(&call, &capability, &failure));
+
+        let snapshot = observer.snapshot();
+        assert!(snapshot.enabled);
+        assert_eq!(snapshot.assessed, 2, "每次完成事实恰一次评估");
+        assert_eq!(snapshot.recovery.active_cases, 0, "Retry 不建案例");
+        assert_eq!(
+            observer.recovery_snapshot(),
+            snapshot.recovery,
+            "两个读取口同源"
+        );
+    }
+
+    #[test]
+    fn a_success_fact_repairs_without_being_an_assessment() {
+        let observer = NociceptionObserver::new();
+        let call = call();
+        let capability = CapabilityId::new("tool.echo").expect("capability id");
+        observer.observe(&completion_fact(
+            &call,
+            &capability,
+            &retryable("upstream timeout"),
+        ));
+
+        observer.observe(&completion_fact(
+            &call,
+            &capability,
+            &ToolResult::ok("call_1", serde_json::json!("ok")),
+        ));
+
+        let snapshot = observer.snapshot();
+        assert_eq!(snapshot.assessed, 1);
+        assert_eq!(snapshot.repaired, 1);
+        assert_eq!(snapshot.groups[0].last_repair_ms, FACT_NOW_MS as u64);
+    }
+
+    #[test]
+    fn a_disabled_observer_stays_empty_and_ignores_facts() {
+        let observer = NociceptionObserver::disabled();
+        let call = call();
+        let capability = CapabilityId::new("tool.echo").expect("capability id");
+        observer.observe(&completion_fact(
+            &call,
+            &capability,
+            &permanent("bad argument"),
+        ));
+
+        assert!(!observer.is_enabled());
+        assert_eq!(observer.snapshot(), BioPainSnapshot::default());
+        assert_eq!(observer.recovery_snapshot(), BioRecoverySnapshot::default());
     }
 }

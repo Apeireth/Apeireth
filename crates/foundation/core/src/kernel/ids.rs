@@ -76,6 +76,24 @@ macro_rules! generated_id {
 }
 
 generated_id! {
+    /// One activation of a module definition, never a tool call or agent.
+    ModuleInstanceId
+}
+generated_id! {
+    /// A host-defined profile configuration identity.
+    ProfileId
+}
+generated_id! {
+    /// An opaque storage namespace, assigned by the host.
+    NamespaceId
+}
+
+generated_id! {
+    /// One independently identifiable agent instance; distinct from its session.
+    AgentId
+}
+
+generated_id! {
     /// Identifies one conversation: an ordered message history plus its state.
     ///
     /// A session outlives the individual requests made against it.

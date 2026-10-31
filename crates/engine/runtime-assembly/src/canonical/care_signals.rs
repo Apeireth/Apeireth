@@ -3,7 +3,7 @@
 //!
 //! # 为什么需要这一层
 //!
-//! `CarePotentialField`（`apeireth_orchestration::care_potential_field`）有完整实现、
+//! `CarePotentialField`（`apeireth_organ::care_potential_field`）有完整实现、
 //! 有势能公式、有分级关怀动作，但**没有任何生产调用** —— 缺的不是算法，是**输入**：
 //! nocturnal / distress / fatigue / silence / flow_resistance 五个因子没人算。
 //!
@@ -28,7 +28,9 @@
 
 use std::sync::Arc;
 
-use apeireth_orchestration::{CareAction, CarePotentialField};
+// 2026-10-31 合并注记: `care_potential_field` 已由 main 从 `apeireth-orchestration`
+// **迁到** `apeireth-organ` (领域实现归领域 crate) ⇒ 引用路径随之改。
+use apeireth_organ::{CareAction, CarePotentialField};
 
 use super::care_heartbeat::bio_lifecycle::BioLifecycleState;
 

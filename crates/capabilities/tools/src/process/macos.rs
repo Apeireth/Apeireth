@@ -170,6 +170,14 @@ impl ManagedChild for MacOsChild {
         }
     }
 
+    fn terminate_remaining(&mut self) -> Result<(), ProcessError> {
+        match self.group_signal(libc::SIGKILL) {
+            Ok(()) => Ok(()),
+            Err(error) if error.raw_os_error() == Some(libc::ESRCH) => Ok(()),
+            Err(error) => Err(io_error(error)),
+        }
+    }
+
     fn take_stdout(&mut self) -> Option<Box<dyn Read + Send>> {
         self.child
             .stdout

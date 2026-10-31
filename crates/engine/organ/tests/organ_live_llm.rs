@@ -20,6 +20,52 @@ use apeireth_organ::world_model::{
     CounterfactualQuery, LlmTimelineLlm, TimelineContext, TimelineLlm, WorldModel, WorldState,
 };
 
+/// live 测试的**端点 / 模型**从 env 取（**默认仍是 DeepSeek**，行为不变）。
+///
+/// # 为什么可配化（2026-10-31 · 副总指挥交接请求③）
+///
+/// 此前本文件**硬编码** `DEEPSEEK_BASE_URL` 与 `deepseek-v4-flash`
+/// ⇒ ⇒ 换厂商（MiniMax / 其它 openai-compatible）**复跑不了**
+/// ⇒ ⇒ 台账挂账 #9 会被「厂商 key 被撤销」这种**与代码无关**的原因卡住。
+///
+/// ⇒ env 约定（与 `OpenAiCompatibleLlmFactory::from_env` 一致）：
+/// * `APEIRETH_OPENAI_URL` ⇒ 端点（默认 `https://api.deepseek.com/v1`）
+/// * `APEIRETH_OPENAI_MODELS` ⇒ 逗号分隔的模型列表（默认 `deepseek-v4-flash`）
+/// * `APEIRETH_OPENAI_MODEL` ⇒ **单模型覆盖**（默认取列表第一个）
+///
+/// ⚠️ **0 装纪律不变**：不打印 key、不落 key、默认 `#[ignore]` 不跑。
+/// ⚠️ 同族实现见 `crates/engine/organ/tests/organ_live_llm.rs` 与
+///   `crates/foundation/orchestration/tests/council_live.rs`（同形三处都钉）。
+fn live_base_url() -> String {
+    std::env::var("APEIRETH_OPENAI_URL")
+        .ok()
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "https://api.deepseek.com/v1".to_string())
+}
+
+/// live 测试用的模型名（见 [`live_base_url`] 的 env 约定）。
+fn live_model() -> String {
+    if let Ok(model) = std::env::var("APEIRETH_OPENAI_MODEL") {
+        let model = model.trim().to_string();
+        if !model.is_empty() {
+            return model;
+        }
+    }
+    std::env::var("APEIRETH_OPENAI_MODELS")
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .find(|item| !item.is_empty())
+                .unwrap_or_default()
+                .to_string()
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "deepseek-v4-flash".to_string())
+}
+
 fn live_factory() -> Arc<dyn LlmFactory> {
     Arc::new(OpenAiCompatibleLlmFactory::from_env().expect(
         "OpenAiCompatibleLlmFactory::from_env (需 OPENAI_API_KEY + APEIRETH_OPENAI_MODELS)",
@@ -32,7 +78,7 @@ fn live_factory() -> Arc<dyn LlmFactory> {
 async fn w1_world_model_simulate_live() {
     let factory = live_factory();
     // 1) 真 LLM 步级断言 (W1 的真接 LLM 路径).
-    let llm = LlmTimelineLlm::new(factory.clone(), "deepseek-v4-flash");
+    let llm = LlmTimelineLlm::new(factory.clone(), &live_model());
     let ctx = TimelineContext {
         start_state: WorldState::default(),
         hypothesis: "主人今晚熬夜写代码".into(),
@@ -48,7 +94,7 @@ async fn w1_world_model_simulate_live() {
 
     // 2) facade 路径: simulate 走同一条真 LLM 链, 返 Ok。0 装口径: 按 v1 语义
     //    state_snapshot 克隆 prior_state (不解析 LLM 的 state 行), 故不強断言字段.
-    let wm = WorldModel::new(factory, "deepseek-v4-flash");
+    let wm = WorldModel::new(factory, &live_model());
     let query = CounterfactualQuery {
         hypothesis: "主人今晚熬夜写代码".into(),
         current_state: "主人精力 80%, 截止日期明天".into(),
@@ -60,7 +106,7 @@ async fn w1_world_model_simulate_live() {
 #[tokio::test]
 #[ignore = "requires OPENAI_API_KEY + APEIRETH_OPENAI_MODELS env (DeepSeek live E2E, manual)"]
 async fn w2_causal_simulate_live() {
-    let wm = CausalWorldModel::new(live_factory(), "deepseek-v4-flash");
+    let wm = CausalWorldModel::new(live_factory(), &live_model());
     // 注入最小因果图: 熬夜 → 效率下降。
     wm.add_entity(CausalNode::from_chain("熬夜写代码"));
     wm.add_entity(CausalNode::from_chain("次日效率下降"));

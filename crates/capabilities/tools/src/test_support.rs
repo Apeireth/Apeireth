@@ -31,11 +31,10 @@ use std::time::Duration;
 /// `cargo test --lib` 会把一个 crate 的**全部单测跑在同一进程**，
 /// 于是不同模块**各自声明**的 `static ENV_LOCK` **互不排斥**：
 /// 某模块写 env 的瞬间，别的模块的测试可能读到瞬态值。
-/// 实测 `cargo test -p apeireth-tools-canonical --lib` **30 轮中有 1 次失败**。
 ///
 /// **本 crate 的约定**：crate 内**只允许这一把** crate 级锁；
 /// 模块内再声明私有 `static ENV_LOCK` = 破坏互斥。
-/// 守卫测试 `tests/env_lock_guard.rs` 会把这条约定**固化成红/绿**。
+/// 本模块的守卫测试检查这条约定，并实测锁的互斥。
 #[cfg(test)]
 pub(crate) static CRATE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -250,36 +249,46 @@ mod tests {
     }
 
     /// 守卫：crate 级锁**真的互斥**（第二个线程必须等第一个释放）。
-    ///
-    /// **主线程必须先拿到锁再 spawn 观察线程** —— 否则观察线程可能**先**拿到锁，
-    /// 断言就成了竞态（本测试初版就这样，2026-10-25 在机器负载下被 fuzz 子代理
-    /// 用 `cargo test --workspace` 抓到 flake，已改成确定性写法）。
     #[test]
     fn crate_env_lock_actually_excludes() {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
 
-        let acquired = Arc::new(AtomicBool::new(false));
-        let observer_flag = acquired.clone();
+        let holding = Arc::new(AtomicBool::new(false));
+        let saw_holding = Arc::new(AtomicBool::new(false));
+        let holder_flag = holding.clone();
+        let observer_flag = saw_holding.clone();
 
-        // 先持锁，再 spawn ⇒ 观察线程**一定**被挡住。
+        // Establish ownership before starting the contender. The channel confirms
+        // an actual rejected acquisition instead of depending on scheduling delays.
         let guard = lock_env();
+        holding.store(true, Ordering::SeqCst);
+        let (blocked_tx, blocked_rx) = std::sync::mpsc::channel();
         let observer = std::thread::spawn(move || {
+            assert!(matches!(
+                CRATE_ENV_LOCK.try_lock(),
+                Err(std::sync::TryLockError::WouldBlock)
+            ));
+            blocked_tx.send(()).expect("report blocked contender");
             let guard = lock_env();
-            observer_flag.store(true, Ordering::SeqCst);
+            // 拿到锁时，另一个线程应当**不在**持锁中。
+            observer_flag.store(!holder_flag.load(Ordering::SeqCst), Ordering::SeqCst);
             drop(guard);
         });
 
-        // 观察者此时必须拿不到锁。
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        blocked_rx
+            .recv()
+            .expect("contender must observe the held lock");
+        // 观察者此时必须被挡住。
         assert!(
-            !acquired.load(Ordering::SeqCst),
+            !saw_holding.load(Ordering::SeqCst),
             "第二个线程在第一个持锁期间拿到了锁 ⇒ 锁无效"
         );
+        holding.store(false, Ordering::SeqCst);
         drop(guard);
         observer.join().expect("观察线程 join");
         assert!(
-            acquired.load(Ordering::SeqCst),
+            saw_holding.load(Ordering::SeqCst),
             "第一个释放后第二个线程应能拿到锁"
         );
     }

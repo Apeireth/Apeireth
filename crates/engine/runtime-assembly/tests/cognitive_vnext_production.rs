@@ -192,6 +192,13 @@ async fn production_memory_module_recalls_after_restart_and_honors_forget() {
         ))
         .unwrap();
 
+    // Production memory now executes through the same capability gate as tools.
+    // Authorize only the selected recall adapter; retain every data/forget assertion.
+    let mut policy = apeireth_governance::PermissionPolicy::new();
+    policy.grant(apeireth_governance::Permission::ExecuteTool(
+        "tool.behavior.cognitive.memory_recall".into(),
+    ));
+    let memory_authorization = Arc::new(apeireth_governance::PermissionGovernanceHook::new(policy));
     let provider = ScriptedProvider::new();
     let modules = ProductionCognitiveModules::build(
         memory_config(),
@@ -207,6 +214,7 @@ async fn production_memory_module_recalls_after_restart_and_honors_forget() {
     let runtime = modules
         .register_into(
             Runtime::builder()
+                .with_governance(memory_authorization.clone())
                 .with_plugin(ProviderPlugin::new(provider.clone()))
                 .with_default_model(MODEL),
         )
@@ -257,6 +265,7 @@ async fn production_memory_module_recalls_after_restart_and_honors_forget() {
     let reopened_runtime = reopened_modules
         .register_into(
             Runtime::builder()
+                .with_governance(memory_authorization.clone())
                 .with_plugin(ProviderPlugin::new(reopened_provider.clone()))
                 .with_default_model(MODEL),
         )

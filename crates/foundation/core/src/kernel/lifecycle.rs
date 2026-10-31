@@ -24,6 +24,10 @@ pub enum Lifecycle {
     Registered,
     /// Start-up in progress.
     Initializing,
+    /// Initialization completed; resources exist but dispatch is not ready.
+    Initialized,
+    /// Start hook is running.
+    Starting,
     /// Running; capabilities may be dispatched to.
     Active,
     /// Shutdown in progress; no new dispatch is accepted.
@@ -40,6 +44,8 @@ impl Lifecycle {
         match self {
             Self::Registered => "registered",
             Self::Initializing => "initializing",
+            Self::Initialized => "initialized",
+            Self::Starting => "starting",
             Self::Active => "active",
             Self::Stopping => "stopping",
             Self::Stopped => "stopped",
@@ -64,7 +70,13 @@ impl Lifecycle {
     pub const fn can_transition_to(&self, next: Self) -> bool {
         match (self, next) {
             (Self::Registered, Self::Initializing)
-            | (Self::Initializing, Self::Active)
+            | (Self::Initializing, Self::Active) // compatibility for existing primitive clients
+            | (Self::Initializing, Self::Initialized)
+            | (Self::Initialized, Self::Starting)
+            | (Self::Starting, Self::Active)
+            | (Self::Initialized, Self::Stopping)
+            | (Self::Initializing, Self::Stopping)
+            | (Self::Starting, Self::Stopping)
             | (Self::Active, Self::Stopping)
             | (Self::Stopping, Self::Stopped) => true,
 
@@ -74,7 +86,7 @@ impl Lifecycle {
 
             // Failure can interrupt any non-terminal state.
             (
-                Self::Registered | Self::Initializing | Self::Active | Self::Stopping,
+                Self::Registered | Self::Initializing | Self::Initialized | Self::Starting | Self::Active | Self::Stopping,
                 Self::Failed,
             ) => true,
 

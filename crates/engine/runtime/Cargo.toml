@@ -22,12 +22,15 @@ serde_json = { workspace = true }
 sha2 = "0.10"
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+jsonschema = { version = "0.33", default-features = false }
 parking_lot = "0.12"
 
 [dev-dependencies]
 tempfile = "3"
 chrono = { workspace = true }
 apeireth-provider = { path = "../provider" }
+# 领域观察者接线测试 (痛觉/再生账本已迁至 organ; runtime 只认识通用观察口).
+apeireth-organ = { path = "../organ" }
 reqwest = { workspace = true }
 
 [lints]
