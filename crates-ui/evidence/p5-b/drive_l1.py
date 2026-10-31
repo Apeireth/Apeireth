@@ -17,7 +17,8 @@ python3 drive_l1.py --out DIR  # 指定输出目录
   经 **document 级**监听翻转 `Dom::is_composing()`；
 - **G6** `bounding_box_in_device` 按 `dpr × density` 换算（2.0 × 1.25 = 2.5）；
 - **G8** 错误边界：强制渲染失败 ⇒ **兜底视图真的进了 DOM** 且 `captured_error()` 是**原始错误**；
-- **产品宿主**：`boot` 挂载 ⇒ 信号变 + `rerender` ⇒ DOM 更新 ⇒ `dispose` ⇒ DOM 卸载；
+- **产品宿主**：`boot` 挂载 ⇒ 批次边界渲染（N 次变更 ⇒ 1 次渲染）⇒ **rAF 帧驱动**
+  （不调 flush ⇒ 下一帧自动更新）⇒ `dispose` ⇒ DOM 卸载；
 - **双向绑定**：信号 → DOM（下行）与 DOM → 信号（上行，真实 `input` 事件）都成立，
   且**用户自己的处理器不被内部写回覆盖**；
 - **组合**：在**同一棵渲染树**上同时跑 受控输入 / IME 静默期 / 焦点陷阱 / 虚拟列表窗口化
@@ -91,7 +92,12 @@ def main() -> int:
     integration = report.get("integration") or {}
     dom_ok = bool(dom.get("ok"))
     upload_ok = bool(upload.get("ok"))
-    app_ok = bool(app.get("ok"))
+    # ⭐ 宿主段有三个子判定：主段 + **帧后**（rAF 帧驱动）+ **销毁**（DOM 卸载）
+    #   ⇒ ⇒ 三者都要过 ⇒ ⇒ 任何一个红都会让整段红。
+    app_main_ok = bool(app.get("ok"))
+    app_frame_ok = bool((app.get("after_frame") or {}).get("ok"))
+    app_dispose_ok = bool((app.get("dispose") or {}).get("ok"))
+    app_ok = app_main_ok and app_frame_ok and app_dispose_ok
     binding_ok = bool(binding.get("ok"))
     integration_ok = bool(integration.get("ok"))
     if not dom_ok:
@@ -100,6 +106,12 @@ def main() -> int:
         print(f"❌ 上传探针失败项：{upload.get('failures')}", file=sys.stderr)
     if not app_ok:
         print(f"❌ 宿主探针失败项：{app.get('failures')}", file=sys.stderr)
+        print(
+            f"❌ 宿主子段：主段={app_main_ok} 帧后={app_frame_ok} 销毁={app_dispose_ok}"
+            f"（帧后 failures={(app.get('after_frame') or {}).get('failures')}"
+            f" / 销毁 failures={(app.get('dispose') or {}).get('failures')}）",
+            file=sys.stderr,
+        )
     if not binding_ok:
         print(f"❌ 绑定探针失败项：{binding.get('failures')}", file=sys.stderr)
     if not integration_ok:

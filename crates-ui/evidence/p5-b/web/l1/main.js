@@ -25,6 +25,23 @@ try {
 } catch (error) {
   results.app = { ok: false, failures: [`宿主探针抛错：${String(error)}`] };
 }
+// ⭐ 帧驱动验证：改信号（不调 flush）⇒ 等**下一帧** ⇒ DOM 应当自动更新。
+results.app.after_frame = { ok: false, failures: ["帧后探针未执行"] };
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    try {
+      results.app.after_frame = p5b.l1_app_probe_after_frame();
+    } catch (error) {
+      results.app.after_frame = { ok: false, failures: [`帧后探针抛错：${String(error)}`] };
+    }
+    try {
+      results.app.dispose = p5b.l1_app_dispose_probe();
+    } catch (error) {
+      results.app.dispose = { ok: false, failures: [`销毁探针抛错：${String(error)}`] };
+    }
+    window.__L1_DONE__ = true;
+  });
+});
 try {
   results.binding = p5b.l1_binding_probe();
 } catch (error) {
@@ -36,4 +53,4 @@ try {
   results.integration = { ok: false, failures: [`集成探针抛错：${String(error)}`] };
 }
 window.__L1__ = results;
-window.__L1_DONE__ = true;
+// ⭐ DONE 推迟：必须等帧后探针跑完（否则驱动会提前判定）

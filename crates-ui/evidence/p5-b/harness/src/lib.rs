@@ -1817,7 +1817,97 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
         JsValue::from_str(&format!("rerender 失败：{error:?}"))
     })?;
 
-    // ④ dispose ⇒ DOM 被卸载
+    // ③c ⭐ **帧驱动**：再改一次信号 ⇒ **不**调 flush ⇒ 交给 rAF 帧循环
+    //    （⇒ 「自动」= 宿主**不需要记得调**；帧后探针会断言它已更新）
+    wasm_host::set_demo_text("帧后更新").map_err(|error| {
+        JsValue::from_str(&format!("set_demo_text 失败：{error:?}"))
+    })?;
+
+    // ⚠️ dispose 段挪到独立探针（`l1_app_dispose_probe`）⇒ ⇒ 因为
+    //   dispose 会**卸载 DOM** ⇒ ⇒ 若在帧后探针之前执行 ⇒ ⇒ 帧后探针就看不到输入框了。
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐⭐ **宿主「帧后」探针**（在浏览器的一帧之后调用）。
+///
+/// ## 它验证什么
+///
+/// **rAF 帧驱动**：状态变更 ⇒ **宿主不需要手动调 `flush`** ⇒ **下一帧**自动更新 DOM。
+/// ⇒ ⇒ 「自动」不再是「宿主记得调」，而是**引擎自己在帧边界收口**。
+#[wasm_bindgen]
+pub fn l1_app_probe_after_frame() -> Result<JsValue, JsValue> {
+    use apeireth_ui_app::wasm_host;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
+    let value = document
+        .query_selector("#l1-app-root input")
+        .ok()
+        .flatten()
+        .and_then(|element| {
+            js_sys::Reflect::get(&element, &JsValue::from_str("value"))
+                .ok()
+                .and_then(|value| value.as_string())
+        });
+    if value.as_deref() != Some("帧后更新") {
+        failures.push(format!(
+            "⭐ 帧后 DOM 应被**自动**更新为「帧后更新」；实际 {value:?}（⇒ rAF 帧驱动未生效）"
+        ));
+    }
+    let renders = wasm_host::render_count().map_err(|error| {
+        JsValue::from_str(&format!("render_count 失败：{error:?}"))
+    })?;
+    if renders < 2 {
+        failures.push(format!("⭐ 帧驱动应当至少渲染过一次（首屏之外）；实际 renders={renders}"));
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("render_count"),
+        &JsValue::from_f64(renders as f64),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐ **宿主「销毁」探针**（在帧后探针之后调用）。
+///
+/// 验证 `dispose_screen` ⇒ **DOM 被卸载**（宿主换屏时必须走这一步，
+/// 否则旧屏的焦点陷阱 / IME 待写队列会渗进新屏）。
+#[wasm_bindgen]
+pub fn l1_app_dispose_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_app::wasm_host;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
     wasm_host::dispose_screen()
         .map_err(|error| JsValue::from_str(&format!("dispose 失败：{error:?}")))?;
     let leftover = document
@@ -1825,7 +1915,7 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
         .ok()
         .flatten();
     if leftover.is_some() {
-        failures.push(String::from("③ dispose 后输入框仍在 DOM 里"));
+        failures.push(String::from("dispose 后输入框仍在 DOM 里"));
     }
 
     let result = js_sys::Object::new();

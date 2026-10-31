@@ -24,10 +24,11 @@
 //! - **WebView2 未验证**（真实 Windows 宿主未跑）⇒ 当前证据只覆盖
 //!   **系统 Chromium**（浏览器探针）⇒ ⇒ 切到生产宿主前必须补 C2。
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 use apeireth_ui_core::Runtime;
 use apeireth_ui_dom::dom::Dom;
@@ -46,6 +47,8 @@ struct Host {
     runtime: Runtime,
     /// 当前屏幕（共享给 effect ⇒ effect 能读它的状态信号 ⇒ ⇒ 依赖被追踪）。
     screen: Rc<dyn Screen>,
+    /// ⭐ 帧循环是否在跑（`dispose` 时置 false ⇒ 循环自然停下）。
+    running: Rc<Cell<bool>>,
     /// 自动渲染的 effect 句柄（**必须保留** ⇒ 否则效果被立刻撤销）。
     ///
     /// ⚠️ core 的 effect 语义：「创建时不执行、依赖标脏后重跑、重跑前清空旧依赖」。
@@ -113,15 +116,21 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
         })
     };
 
+    let running = Rc::new(Cell::new(true));
     HOST.with(|slot| {
         *slot.borrow_mut() = Some(Host {
             renderer,
             state,
             runtime,
             screen,
+            running: running.clone(),
             auto_render,
         });
     });
+
+    // ⭐⭐ **帧驱动**：每帧跑一次**批次边界**（⇒ N 次状态变更 ⇒ 本帧只渲染 1 次）。
+    //   ⇒ ⇒ 宿主**不需要**手动调 `flush` ⇒ 状态变 ⇒ 下一帧自动更新。
+    start_frame_loop(running);
     Ok(())
 }
 
@@ -162,6 +171,7 @@ pub fn dispose_screen() -> Result<(), JsValue> {
         let Some(host) = guard.as_mut() else {
             return Err(JsValue::from_str("宿主薄壳：还没 boot"));
         };
+        host.running.set(false);
         host.auto_render.dispose();
         host.renderer
             .borrow_mut()
@@ -197,6 +207,37 @@ pub fn set_demo_text(text: &str) -> Result<(), JsValue> {
         }
         Err(JsValue::from_str("宿主薄壳：当前屏幕不是演示屏"))
     })
+}
+
+/// ⭐⭐ **帧驱动循环**：每帧执行一次**批次边界渲染**。
+///
+/// ## 为什么需要它
+///
+/// core 的 effect 是**同步重跑**的 ⇒ ⇒ 状态变一次就标脏一次
+/// ⇒ ⇒ 若**每次**都渲染 ⇒ ⇒ 一帧内 N 次变更 ⇒ N 次渲染（抖）
+/// ⇒ ⇒ 帧循环把「渲染」收敛到**每帧一次** ⇒ ⇒ 一帧内 N 次变更 ⇒ **渲染 1 次**。
+///
+/// ## 停止
+///
+/// `dispose_screen` 会把 `running` 置 false ⇒ ⇒ 下一帧起**不再排下一帧** ⇒ ⇒ 循环自然停。
+fn start_frame_loop(running: Rc<Cell<bool>>) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let closure = Closure::<dyn FnMut(f64)>::new(move |_timestamp| {
+        if !running.get() {
+            return;
+        }
+        // 本帧的批次边界：把这一帧内积累的变更**合并成一次**渲染。
+        let _ = render_if_dirty();
+        // 排下一帧。
+        start_frame_loop(running.clone());
+    });
+    let _ = window.request_animation_frame(closure.as_ref().unchecked_ref());
+    // `Closure` 必须被泄漏或转移，否则 JS 回调会在下一帧前被释放 ⇒ ⇒ 泄漏到页面生命周期结束。
+    // ⚠️ 单页应用的宿主通常**不卸载** ⇒ ⇒ 泄漏量与页面同寿 ⇒ 可接受；
+    //   真要卸载，需要宿主提供「页面卸载」钩子来 `forget` 这批闭包（下一批）。
+    closure.forget();
 }
 
 /// ⭐⭐ **批次边界渲染**：若被标脏 ⇒ **渲染一次**（并清脏 + 计数 +1）。
