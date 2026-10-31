@@ -97,7 +97,13 @@ def main() -> int:
     app_main_ok = bool(app.get("ok"))
     app_frame_ok = bool((app.get("after_frame") or {}).get("ok"))
     app_dispose_ok = bool((app.get("dispose") or {}).get("ok"))
-    app_ok = app_main_ok and app_frame_ok and app_dispose_ok
+    app_frame_stopped_ok = bool((app.get("frame_stopped") or {}).get("ok"))
+    app_ok = (
+        app_main_ok
+        and app_frame_ok
+        and app_dispose_ok
+        and app_frame_stopped_ok
+    )
     binding_ok = bool(binding.get("ok"))
     integration_ok = bool(integration.get("ok"))
     if not dom_ok:
@@ -108,6 +114,7 @@ def main() -> int:
         print(f"❌ 宿主探针失败项：{app.get('failures')}", file=sys.stderr)
         print(
             f"❌ 宿主子段：主段={app_main_ok} 帧后={app_frame_ok} 销毁={app_dispose_ok}"
+            f" 帧停止={app_frame_stopped_ok}"
             f"（帧后 failures={(app.get('after_frame') or {}).get('failures')}"
             f" / 销毁 failures={(app.get('dispose') or {}).get('failures')}）",
             file=sys.stderr,

@@ -49,6 +49,8 @@ struct Host {
     screen: Rc<dyn Screen>,
     /// ⭐ 帧循环是否在跑（`dispose` 时置 false ⇒ 循环自然停下）。
     running: Rc<Cell<bool>>,
+    /// ⭐ 当前排着的帧号（`dispose` 时用它 `cancel_animation_frame` ⇒ ⇒ 立刻停）。
+    frame_id: Rc<Cell<i32>>,
     /// 自动渲染的 effect 句柄（**必须保留** ⇒ 否则效果被立刻撤销）。
     ///
     /// ⚠️ core 的 effect 语义：「创建时不执行、依赖标脏后重跑、重跑前清空旧依赖」。
@@ -117,6 +119,7 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
     };
 
     let running = Rc::new(Cell::new(true));
+    let frame_id = Rc::new(Cell::new(0i32));
     HOST.with(|slot| {
         *slot.borrow_mut() = Some(Host {
             renderer,
@@ -124,13 +127,14 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
             runtime,
             screen,
             running: running.clone(),
+            frame_id: frame_id.clone(),
             auto_render,
         });
     });
 
     // ⭐⭐ **帧驱动**：每帧跑一次**批次边界**（⇒ N 次状态变更 ⇒ 本帧只渲染 1 次）。
     //   ⇒ ⇒ 宿主**不需要**手动调 `flush` ⇒ 状态变 ⇒ 下一帧自动更新。
-    start_frame_loop(running);
+    start_frame_loop(running, frame_id);
     Ok(())
 }
 
@@ -171,7 +175,12 @@ pub fn dispose_screen() -> Result<(), JsValue> {
         let Some(host) = guard.as_mut() else {
             return Err(JsValue::from_str("宿主薄壳：还没 boot"));
         };
+        // ⭐ 先停帧循环（`running` 标志 + **取消已排的那一帧**）⇒ ⇒ 循环立刻停止
+        //   （不只是「下一帧起不再排」⇒ ⇒ 那一帧也不会再执行）。
         host.running.set(false);
+        if let Some(window) = web_sys::window() {
+            let _ = window.cancel_animation_frame(host.frame_id.get());
+        }
         host.auto_render.dispose();
         host.renderer
             .borrow_mut()
@@ -209,6 +218,9 @@ pub fn set_demo_text(text: &str) -> Result<(), JsValue> {
     })
 }
 
+/// 帧回调闭包的槽（**持有**那个唯一的 `Closure`；循环引用是「它能一直活着」的前提）。
+type FrameSlot = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
+
 /// ⭐⭐ **帧驱动循环**：每帧执行一次**批次边界渲染**。
 ///
 /// ## 为什么需要它
@@ -220,24 +232,46 @@ pub fn set_demo_text(text: &str) -> Result<(), JsValue> {
 /// ## 停止
 ///
 /// `dispose_screen` 会把 `running` 置 false ⇒ ⇒ 下一帧起**不再排下一帧** ⇒ ⇒ 循环自然停。
-fn start_frame_loop(running: Rc<Cell<bool>>) {
+fn start_frame_loop(running: Rc<Cell<bool>>, frame_id: Rc<Cell<i32>>) {
     let Some(window) = web_sys::window() else {
         return;
     };
+    // ⭐⭐ **单一 Closure 自递归**（2026-10-31 修**真缺陷**）：
+    //   修前：**每帧** `Closure::new` + `forget()` ⇒ ⇒ **每帧泄漏一个闭包 + 一个 JS 回调**
+    //   （60 帧/秒 ⇒ 每分钟 3600 个 ⇒ 持续增长）⇒ ⇒ 那是**真缺陷**，不是一次性债。
+    //   修后：**只建一个** Closure，它自己排下一帧 ⇒ ⇒ 泄漏降为「每次 boot 一个」。
+    let slot: FrameSlot = Rc::new(RefCell::new(None));
+    let slot_for_closure = slot.clone();
+    let running_for_closure = running.clone();
+    let frame_id_for_closure = frame_id.clone();
+    let window_for_closure = window.clone();
     let closure = Closure::<dyn FnMut(f64)>::new(move |_timestamp| {
-        if !running.get() {
+        if !running_for_closure.get() {
             return;
         }
         // 本帧的批次边界：把这一帧内积累的变更**合并成一次**渲染。
         let _ = render_if_dirty();
-        // 排下一帧。
-        start_frame_loop(running.clone());
+        // 排下一帧：**复用同一个 Closure**（不再每帧新建 ⇒ 不再每帧泄漏）。
+        let borrowed = slot_for_closure.borrow();
+        if let Some(current) = borrowed.as_ref() {
+            if let Ok(id) =
+                window_for_closure.request_animation_frame(current.as_ref().unchecked_ref())
+            {
+                frame_id_for_closure.set(id);
+            }
+        }
     });
-    let _ = window.request_animation_frame(closure.as_ref().unchecked_ref());
-    // `Closure` 必须被泄漏或转移，否则 JS 回调会在下一帧前被释放 ⇒ ⇒ 泄漏到页面生命周期结束。
-    // ⚠️ 单页应用的宿主通常**不卸载** ⇒ ⇒ 泄漏量与页面同寿 ⇒ 可接受；
-    //   真要卸载，需要宿主提供「页面卸载」钩子来 `forget` 这批闭包（下一批）。
-    closure.forget();
+    *slot.borrow_mut() = Some(closure);
+    let borrowed = slot.borrow();
+    if let Some(current) = borrowed.as_ref() {
+        if let Ok(id) = window.request_animation_frame(current.as_ref().unchecked_ref()) {
+            frame_id.set(id);
+        }
+    }
+    // ⚠️ `slot` ↔ `closure` 构成**循环引用** ⇒ ⇒ closure 不会被自动 drop
+    //   ⇒ ⇒ 这正是「它能一直活着」的前提；代价是**每次 boot 泄漏一个**闭包
+    //   ⇒ ⇒ **彻底回收**需要「页面卸载钩子」显式释放（未做，已知债）。
+    //   ⚠️ 但**不再每帧泄漏**（修前才是每帧）。
 }
 
 /// ⭐⭐ **批次边界渲染**：若被标脏 ⇒ **渲染一次**（并清脏 + 计数 +1）。

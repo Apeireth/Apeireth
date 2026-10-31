@@ -1917,7 +1917,49 @@ pub fn l1_app_dispose_probe() -> Result<JsValue, JsValue> {
     if leftover.is_some() {
         failures.push(String::from("dispose 后输入框仍在 DOM 里"));
     }
+    // dispose 时的渲染次数（供「帧循环已停止」探针比较）。
+    let renders_at_dispose = wasm_host::render_count().map_err(|error| {
+        JsValue::from_str(&format!("render_count 失败：{error:?}"))
+    })?;
 
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("renders_at_dispose"),
+        &JsValue::from_f64(renders_at_dispose as f64),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐ **帧循环已停止**探针（dispose 之后再调用）。
+///
+/// ## 它验证什么
+///
+/// `dispose_screen` 之后，帧循环必须**真的停**（`running` 标志 + 取消已排的那一帧）
+/// ⇒ ⇒ 否则宿主换屏后，旧循环还在每帧跑（浪费 + 潜在的跨屏渲染）。
+#[wasm_bindgen]
+pub fn l1_app_frame_stopped_probe(before: usize) -> Result<JsValue, JsValue> {
+    use apeireth_ui_app::wasm_host;
+
+    let mut failures: Vec<String> = Vec::new();
+    let now = wasm_host::render_count().map_err(|error| {
+        JsValue::from_str(&format!("render_count 失败：{error:?}"))
+    })?;
+    if now != before {
+        failures.push(format!(
+            "⭐ dispose 后帧循环必须停止（渲染次数不得增长）；dispose 前={before} 现在={now}"
+        ));
+    }
     let result = js_sys::Object::new();
     let failures_array = js_sys::Array::new();
     for item in &failures {

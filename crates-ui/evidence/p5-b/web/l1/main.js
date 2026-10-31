@@ -34,12 +34,24 @@ requestAnimationFrame(() => {
     } catch (error) {
       results.app.after_frame = { ok: false, failures: [`帧后探针抛错：${String(error)}`] };
     }
+    let rendersAtDispose = 0;
     try {
       results.app.dispose = p5b.l1_app_dispose_probe();
+      rendersAtDispose = (results.app.dispose.renders_at_dispose) || 0;
     } catch (error) {
       results.app.dispose = { ok: false, failures: [`销毁探针抛错：${String(error)}`] };
     }
-    window.__L1_DONE__ = true;
+    // ⭐ 再等两帧 ⇒ 帧循环若没停，渲染次数会增长 ⇒ 「帧停止」探针会红。
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          results.app.frame_stopped = p5b.l1_app_frame_stopped_probe(rendersAtDispose);
+        } catch (error) {
+          results.app.frame_stopped = { ok: false, failures: [`帧停止探针抛错：${String(error)}`] };
+        }
+        window.__L1_DONE__ = true;
+      });
+    });
   });
 });
 try {
