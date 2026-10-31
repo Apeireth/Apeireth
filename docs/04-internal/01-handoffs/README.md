@@ -7,7 +7,7 @@
 | 篇 | 是什么 |
 |---|---|
 | [`frontend-visual-build-prompt-2026-10-28.md`](frontend-visual-build-prompt-2026-10-28.md) | **新前端视觉施工 · 创作简报（给施工方）**——目标/三空间/画面/硬底线/动效/T0/交付物/验收/自由条款（2026-10-31 v3.3） |
-| [`frontend-visual-build-spec-2026-10-31.md`](frontend-visual-build-spec-2026-10-31.md) | **施工规格附录**——布局参考区间/组件与八状态/基地解剖/轨迹字段/交互清单/验证明细（2026-10-31 v1.2） |
+| [`frontend-visual-build-spec-2026-10-31.md`](frontend-visual-build-spec-2026-10-31.md) | **施工规格附录**——布局参考区间/组件与八状态/基地解剖/轨迹字段/交互清单/验证明细（2026-10-31 v1.3） |
 | [`frontend-visual-build-brief-2026-10-28.md`](frontend-visual-build-brief-2026-10-28.md) | **交付说明（给施工方）**——交付包怎么用/读法/T0 流程/交付物/验收/边界（2026-10-31 v3.3） |
 | [`FINAL-HANDOFF-V2.0.0-RC.1.md`](FINAL-HANDOFF-V2.0.0-RC.1.md) | Apeireth v2.0.0-rc.1 最终接手报告 (2026-08-28 收盘, 主代理 Mavis 写, Final-2.1 更新: A 块 OrganOrchestrator 完整化 + O-6 三阶审查 amend) |
 | [`handoff-18crate-ci-fix-2026-09-23.md`](handoff-18crate-ci-fix-2026-09-23.md) | 交接文档 — 18-crate 文档对账 + CI 安全守门修复 (2026-09-23) |
