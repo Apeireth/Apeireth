@@ -3,12 +3,12 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-brief-2026-10-28.md
-Version:         3.2
+Version:         3.3
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（待 owner 转交施工方）
 Author:          总工程师（lead）· 前端视觉总攻线
-口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.2）
-                 施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.1）
+口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.3）
+                 施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.2）
                  首发平台 = Windows 桌面（WebView2 验收基线；Linux 兼容目标）
 用法:            本文件说明"怎么用这份交付包"；施工细则以创作简报为准。
 ```
@@ -76,6 +76,7 @@ Apeireth 是一个 AI 工作系统（**首发平台：Windows 桌面，Tauri + W
 ## §6 边界与自由
 
 - 不接后端、不写生产仓库代码；交付物（文件/链接）交 owner。
+- **实现基底**：自研 UI 引擎（Rust→wasm）+ Tauri WebView；D5 标注 DOM/CSS vs Canvas/WebGL vs 需引擎补齐，并给降级。
 - 以上是方向与底线，不是能力上限：**大胆给出更好的设计决定**并说明理由；冲突时优先保证"工作可完成、状态可追溯、明暗对等"。
 - 不要为了"稳"做成普通 SaaS；也不要为了"炫"牺牲可读性。
 - 3D 质感浓度打样后评估；首轮按你能拿到的最好效果做。
