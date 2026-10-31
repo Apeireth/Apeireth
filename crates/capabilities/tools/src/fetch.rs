@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use apeireth_core::kernel::CapabilityId;
+use apeireth_governance::untrusted_mark::UntrustedContentWrapper;
 use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use async_trait::async_trait;
@@ -428,12 +429,24 @@ impl FetchTool {
             };
 
         let final_url = sanitize_final_url(&response.final_url);
+
+        // ⚠️ **远程内容一律按「不可信」包裹**（2026-10-31 · 静态安全审计复核）。
+        //
+        // 审计指出：`tool.fetch` 把**远程页面原文**裸嵌进给模型的返回值
+        // ⇒ ⇒ 远程页面里的「指令」与用户的指令**在模型眼里同权重**
+        // ⇒ ⇒ 间接提示词注入（Indirect Prompt Injection）。
+        //
+        // ⇒ 复用仓里**既有的**专用机制 [`UntrustedContentWrapper`]
+        // （`apeireth-governance::untrusted_mark`，与 `content_feed` / `stealth_crawler`
+        // 同一套口径）⇒ 它还负责**边界伪造中和**（把正文里的 `<<<[` 换成 `<<< [`）
+        // ⇒ ⇒ 攻击者无法用伪造的闭合标记提前逃出信封。
+        let enveloped_body = UntrustedContentWrapper::wrap(&final_url, &decoded);
         let mut value = serde_json::json!({
             "url": final_url,
             "status": response.status,
             "content_type": effective_content_type,
             "content_length": response.content_length,
-            "body": decoded,
+            "body": enveloped_body,
             "bytes": body.len(),
             "redirects": response.redirects,
         });
@@ -450,7 +463,9 @@ impl FetchTool {
                 value["title"] = serde_json::Value::String(title.trim().to_string());
             }
             if let Ok(text) = extract_text(&decoded) {
-                value["text"] = serde_json::Value::String(text);
+                // 派生的纯文本视图**同样**是远程内容 ⇒ 同样包裹。
+                value["text"] =
+                    serde_json::Value::String(UntrustedContentWrapper::wrap(&final_url, &text));
             }
             let tree = extract_tree(&decoded);
             if !tree.is_empty() {
