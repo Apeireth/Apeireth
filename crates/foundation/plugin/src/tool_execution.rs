@@ -7,14 +7,35 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-#[derive(Debug, Clone, Default)]
-pub struct ToolCancellation(Arc<AtomicBool>);
+#[derive(Default)]
+struct CancellationState {
+    cancelled: AtomicBool,
+    parents: Vec<ToolCancellation>,
+}
+#[derive(Clone, Default)]
+pub struct ToolCancellation(Arc<CancellationState>);
+impl std::fmt::Debug for ToolCancellation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolCancellation")
+            .field("cancelled", &self.is_cancelled())
+            .finish()
+    }
+}
 impl ToolCancellation {
+    pub fn joined(parents: Vec<Self>) -> Self {
+        Self(Arc::new(CancellationState {
+            cancelled: AtomicBool::new(false),
+            parents,
+        }))
+    }
+    pub fn same_call(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
     pub fn cancel(&self) {
-        self.0.store(true, Ordering::Release);
+        self.0.cancelled.store(true, Ordering::Release);
     }
     pub fn is_cancelled(&self) -> bool {
-        self.0.load(Ordering::Acquire)
+        self.0.cancelled.load(Ordering::Acquire) || self.0.parents.iter().any(Self::is_cancelled)
     }
     pub fn cancel_on_drop(&self) -> CancelOnDrop {
         CancelOnDrop(self.clone())
@@ -32,15 +53,29 @@ pub enum ToolCaller {
     Model,
     BehaviorModule(String),
     Module(PluginId),
+    ModuleMessage {
+        source: PluginId,
+        instance: apeireth_core::kernel::ModuleInstanceId,
+    },
     Host,
 }
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ToolAuthorization {
     /// Host-bound authorization generation; Dispatcher overwrites caller input.
     pub principal_epoch: Option<String>,
     pub intent_id: Option<String>,
     pub authorization_context: Option<String>,
     pub approved: bool,
+    /// Immutable Host-only security data. Never decoded from model or message payloads.
+    pub host_context: Option<Arc<dyn std::any::Any + Send + Sync>>,
+}
+impl std::fmt::Debug for ToolAuthorization {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolAuthorization")
+            .field("approved", &self.approved)
+            .field("has_host_context", &self.host_context.is_some())
+            .finish_non_exhaustive()
+    }
 }
 /// Runtime-created immutable call identity. Legacy direct-host calls may lack a turn.
 #[derive(Clone)]
@@ -52,6 +87,12 @@ pub struct ToolExecutionContext {
     pub call_id: String,
     pub caller: ToolCaller,
     pub module: PluginId,
+    pub module_instance: Option<apeireth_core::kernel::ModuleInstanceId>,
+    pub internal_review: Option<crate::system_one::InternalReviewReceipt>,
+    pub message_support: bool,
+    pub message_route: Option<crate::module_messages::ModuleMessageRoute>,
+    pub delegated_tools: Option<Vec<CapabilityId>>,
+    pub delegation: Option<Arc<ToolExecutionContext>>,
     /// Snapshot only; dispatcher checks current scope again before execution.
     pub tool_scope: Option<Vec<CapabilityId>>,
     pub authorization: ToolAuthorization,
@@ -109,9 +150,17 @@ pub struct NativeExecutionContext {
     pub deadline: Instant,
     pub tasks: ModuleTaskScope,
     resource_lease: Option<Arc<dyn Send + Sync>>,
+    tool_context: Option<Arc<ToolExecutionContext>>,
 }
 std::thread_local! {
     static NATIVE_CONTEXT: std::cell::RefCell<Option<NativeExecutionContext>> = const { std::cell::RefCell::new(None) };
+}
+pub fn native_tool_context() -> Option<Arc<ToolExecutionContext>> {
+    NATIVE_CONTEXT.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .and_then(|context| context.tool_context.clone())
+    })
 }
 pub fn native_execution_context() -> Option<NativeExecutionContext> {
     NATIVE_CONTEXT.with(|slot| slot.borrow().clone())
@@ -136,10 +185,12 @@ pub async fn scope_native_execution<T>(
     context: &ToolExecutionContext,
     future: impl std::future::Future<Output = T>,
 ) -> T {
+    let tool_context = context.message_support.then(|| Arc::new(context.clone()));
     futures::pin_mut!(future);
     futures::future::poll_fn(|cx| {
         with_native_execution(
             Some(NativeExecutionContext {
+                tool_context: tool_context.clone(),
                 cancellation: context.cancellation.clone(),
                 deadline: context.deadline,
                 tasks: context.module_tasks.clone(),
@@ -174,12 +225,14 @@ mod tests {
             deadline: Instant::now(),
             tasks: ModuleTaskScope::new(),
             resource_lease: None,
+            tool_context: None,
         };
         let inner = NativeExecutionContext {
             cancellation: Default::default(),
             deadline: Instant::now(),
             tasks: ModuleTaskScope::new(),
             resource_lease: None,
+            tool_context: None,
         };
         inner.cancellation.cancel();
         assert!(native_execution_context().is_none());

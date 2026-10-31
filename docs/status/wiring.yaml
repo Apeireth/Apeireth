@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 1af507a84e431ca384980c559c07e89f529d26500ca15e34e0a5f3a0b28b7ea2
-claims_total: 33
+claims_sha256: a326d2ed94353d8201d26b7475027075a05b7e83e06744d5184f8098a72190a8
+claims_total: 37
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -822,3 +822,114 @@ items:
       claims_id: "rt.desktop_managed_main"
     gaps:
       []
+  - id: "rt.module_execution_contract"
+    capability: "Module public/private contract and task receipts"
+    implemented:
+      sources:
+        - "crates/foundation/plugin/src/module_contract.rs"
+        - "crates/foundation/plugin/src/capability.rs"
+        - "crates/foundation/plugin/src/manager.rs"
+        - "crates/foundation/plugin/src/tool_module.rs"
+        - "crates/engine/runtime/src/canonical/capability.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_module/organizer.rs"
+        - "crates/engine/runtime/src/canonical/capability.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/foundation/plugin/src/capability.rs"
+        - "crates/foundation/plugin/src/manager.rs"
+        - "crates/foundation/plugin/src/module_contract.rs"
+        - "crates/foundation/plugin/src/tool_module.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/foundation/plugin/tests/module_contract.rs"
+        - "crates/engine/runtime-assembly/tests/modular_ale.rs"
+      claims_id: "rt.module_execution_contract"
+    gaps:
+      - "未达 PRODUCTION WIRED：Explicit Host composition only. Existing shell wire name/frozen payload, private organizer Session, accepted task receipt, authorized status and inter…"
+  - id: "rt.system_one_internal"
+    capability: "Mandatory System One internal execution review"
+    implemented:
+      sources:
+        - "crates/foundation/plugin/src/system_one.rs"
+        - "crates/foundation/plugin/src/module_contract.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+        - "crates/engine/runtime/src/canonical/system_one.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher/system_one.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime-assembly/src/system_one.rs"
+        - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime-assembly/src/canonical/memory_module.rs"
+        - "crates/engine/runtime-assembly/src/system_one.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher.rs"
+        - "crates/engine/runtime/src/canonical/dispatcher/system_one.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/runtime.rs"
+        - "crates/engine/runtime/src/canonical/system_one.rs"
+        - "crates/foundation/plugin/src/module_contract.rs"
+        - "crates/foundation/plugin/src/system_one.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/system_one_execution.rs"
+        - "crates/engine/runtime-assembly/tests/modular_ale.rs"
+      claims_id: "rt.system_one_internal"
+    gaps:
+      - "未达 PRODUCTION WIRED：Explicit Host contract and exact supervisor provider/model only. Existing Dispatcher enforces scope/approval/epoch/cancel/lifecycle/native policy befo…"
+  - id: "rt.module_messages"
+    capability: "Bounded owner-authenticated module message pipeline"
+    implemented:
+      sources:
+        - "crates/foundation/plugin/src/module_messages.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+        - "crates/engine/runtime/src/canonical/module_messages.rs"
+        - "crates/engine/runtime/src/canonical/instances/messages.rs"
+        - "crates/engine/runtime/src/canonical/message_execution.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/instances/audit.rs"
+        - "crates/foundation/protocol/src/canonical/tool_event.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime/src/canonical/instances/audit.rs"
+        - "crates/engine/runtime/src/canonical/instances/messages.rs"
+        - "crates/engine/runtime/src/canonical/message_execution.rs"
+        - "crates/engine/runtime/src/canonical/module_host.rs"
+        - "crates/engine/runtime/src/canonical/module_messages.rs"
+        - "crates/foundation/plugin/src/module_messages.rs"
+        - "crates/foundation/plugin/src/tool_execution.rs"
+        - "crates/foundation/protocol/src/canonical/tool_event.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/module_message_pipeline.rs"
+      claims_id: "rt.module_messages"
+    gaps:
+      - "未达 PRODUCTION WIRED：Optional Host policy only. Real Runtime Command/Query/Event/Reply, actual file effect, owner generations/trace, private facts, explicit grant/caller i…"
+  - id: "rt.mesh_local_worker"
+    capability: "Governed module-owned local Mesh worker and public status"
+    implemented:
+      sources:
+        - "crates/engine/runtime-assembly/src/mesh.rs"
+        - "crates/engine/runtime-assembly/src/lib.rs"
+    wired:
+      production_refs:
+        - "crates/engine/runtime-assembly/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/mesh.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/mesh_execution.rs"
+        - "crates/engine/runtime-assembly/tests/module_message_pipeline.rs"
+      claims_id: "rt.mesh_local_worker"
+    gaps:
+      - "未达 PRODUCTION WIRED：Optional portable Host composition, fixed configured loopback UDP peer only. Lifecycle-owned worker calls its registered Internal exchange through the…"

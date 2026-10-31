@@ -5,9 +5,11 @@
 
 #![deny(unsafe_code)]
 
+pub mod mesh;
 pub mod portable;
 #[cfg(feature = "memory")]
 pub mod profile_memory;
+pub mod system_one;
 pub use portable::{AssemblyError, PortableHost};
 
 #[cfg(feature = "desktop")]

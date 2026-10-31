@@ -270,6 +270,7 @@ fn write_lock_or_recover<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_,
 /// The assembled runtime.
 pub struct Runtime {
     pub(super) instances: std::sync::Weak<super::instances::Inner>,
+    pub(super) message_invocation: Option<Arc<super::module_messages::MessageInvocation>>,
     pub(super) instance_host: Option<super::instances::AgentRuntime>,
     pub(super) task: Option<Arc<super::instances::TaskExecution>>,
     pub(super) plugins: PluginManager,
@@ -666,6 +667,7 @@ pub struct RuntimeBuilder {
     tool_completion_observer: Option<Arc<dyn ToolCompletionObserver>>,
     /// 出网闸（不注入 = 默认放行 = 零行为变化）。
     egress_gate: Option<Arc<dyn super::egress_gate::EgressGate>>,
+    system_one: Option<Arc<super::system_one::SystemOneGate>>,
     pub(super) agent_factory: Option<Arc<dyn apeireth_plugin::agents::ModuleAgentFactory>>,
     pub(super) v1_protocol: bool,
 }
@@ -699,9 +701,18 @@ impl RuntimeBuilder {
             session_manager: None,
             tool_completion_observer: None,
             egress_gate: None,
+            system_one: None,
             agent_factory: None,
             v1_protocol: false,
         }
+    }
+
+    /// Select a mandatory supervisor service for enrolled internal execution.
+    /// An absent/unbound service refuses enrolled effects; compatibility defaults stay unchanged.
+    #[must_use]
+    pub fn with_system_one(mut self, gate: Arc<super::system_one::SystemOneGate>) -> Self {
+        self.system_one = Some(gate);
+        self
     }
 
     #[must_use]
@@ -1136,10 +1147,12 @@ impl RuntimeBuilder {
 
         let dispatcher = Arc::new(
             super::dispatcher::ToolDispatcher::new(self.dispatch_limits)
-                .with_usage(providers.accounting.clone()),
+                .with_usage(providers.accounting.clone())
+                .with_system_one(self.system_one, self.principal_authorizations.clone()),
         );
         Ok(Runtime {
             instances: Default::default(),
+            message_invocation: None,
             instance_host: None,
             task: None,
             plugins: manager,

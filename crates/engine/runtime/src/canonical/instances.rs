@@ -16,6 +16,7 @@ mod audit;
 mod control;
 mod hot;
 mod main;
+mod messages;
 mod profiles;
 mod tasks;
 pub(super) use tasks::TaskExecution;
@@ -51,6 +52,7 @@ pub struct AgentHostPolicy {
     pub max_budget: AgentBudget,
     pub runtime_budget: Option<super::accounting::SharedUsageBudget>,
     pub modules: BTreeMap<PluginId, ModuleAgentGrant>,
+    pub message_policy: Option<super::module_messages::ModuleMessagePolicy>,
 }
 impl Default for AgentHostPolicy {
     fn default() -> Self {
@@ -69,6 +71,7 @@ impl Default for AgentHostPolicy {
             },
             runtime_budget: None,
             modules: BTreeMap::new(),
+            message_policy: None,
         }
     }
 }
@@ -87,12 +90,14 @@ pub(super) struct Inner {
     profile_switch: tokio::sync::Mutex<Option<Arc<dyn AgentInstance>>>,
     factory: Arc<Factory>,
     main: OnceLock<main::MainExecution>,
+    message_pipeline: Option<Arc<super::module_messages::ModuleMessagePipeline>>,
 }
 struct Factory {
     binding: Arc<OnceLock<Weak<Inner>>>,
     ready: Arc<tokio::sync::Notify>,
 }
 struct BoundModule {
+    message_port: OnceLock<Arc<dyn apeireth_plugin::module_messages::ModuleMessages>>,
     binding: Arc<OnceLock<Weak<Inner>>>,
     ready: Arc<tokio::sync::Notify>,
     owner: AgentOwner,
@@ -106,6 +111,7 @@ impl ModuleAgentFactory for Factory {
         scope: ModuleTaskScope,
     ) -> Arc<dyn ModuleAgents> {
         Arc::new(BoundModule {
+            message_port: OnceLock::new(),
             binding: self.binding.clone(),
             ready: self.ready.clone(),
             owner: AgentOwner::Module {
@@ -118,6 +124,13 @@ impl ModuleAgentFactory for Factory {
 }
 #[async_trait]
 impl ModuleAgents for BoundModule {
+    fn messages(&self) -> Option<Arc<dyn apeireth_plugin::module_messages::ModuleMessages>> {
+        Some(
+            self.message_port
+                .get_or_init(|| messages::bind(self))
+                .clone(),
+        )
+    }
     async fn wait_ready(&self) -> AgentResult<()> {
         self.scope
             .run(async {
@@ -243,6 +256,16 @@ impl RuntimeBuilder {
                 "invalid agent host policy",
             ));
         }
+        if let Some(policy) = &policy.message_policy {
+            policy
+                .validate()
+                .map_err(super::RuntimeError::misconfigured)?;
+        }
+        let message_pipeline = policy.message_policy.as_ref().map(|policy| {
+            Arc::new(super::module_messages::ModuleMessagePipeline::new(
+                policy.limits.clone(),
+            ))
+        });
         let binding = Arc::new(OnceLock::new());
         let ready = Arc::new(tokio::sync::Notify::new());
         if !compatibility {
@@ -288,6 +311,7 @@ impl RuntimeBuilder {
             profile_switch: tokio::sync::Mutex::new(None),
             factory,
             main: OnceLock::new(),
+            message_pipeline,
         });
         inner.kernel.write().await.instances = Arc::downgrade(&inner);
         let _ = binding.set(Arc::downgrade(&inner));

@@ -55,6 +55,10 @@ pub trait ToolCapability: Send + Sync {
 
     /// Declarative output, permission, platform, timeout and concurrency policy.
     /// Module-only tools are discoverable by the dispatcher, not advertised to models.
+    fn module_contract(&self) -> crate::module_contract::ModuleToolContract {
+        crate::module_contract::ModuleToolContract::default()
+    }
+
     fn model_visible(&self) -> bool {
         true
     }

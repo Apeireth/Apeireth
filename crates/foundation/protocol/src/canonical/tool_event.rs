@@ -39,6 +39,14 @@ pub enum ModuleHookV1 {
 pub enum ToolEventSourceV1 {
     /// A model requested the call; ownership may be resolved by the dispatcher.
     Model { module_id: Option<PluginId> },
+    /// A private direct module request. New readers retain old variants unchanged.
+    ModuleMessage {
+        module_id: PluginId,
+        module_instance_id: apeireth_core::kernel::ModuleInstanceId,
+        target_module_id: PluginId,
+        target_module_instance_id: apeireth_core::kernel::ModuleInstanceId,
+        message_id: TaskId,
+    },
     /// A module produced a result at a fixed hook boundary.
     Module {
         module_id: PluginId,
@@ -106,10 +114,22 @@ impl ToolEventV1 {
         }
         let owner = match &source {
             ToolEventSourceV1::Model { module_id } => module_id.as_ref(),
-            ToolEventSourceV1::Module { module_id, .. } => Some(module_id),
+            ToolEventSourceV1::Module { module_id, .. }
+            | ToolEventSourceV1::ModuleMessage { module_id, .. } => Some(module_id),
         };
         if let Some(owner) = owner {
             valid_label(owner.as_str(), "module id")?;
+        }
+        if let ToolEventSourceV1::ModuleMessage {
+            message_id,
+            target_module_id,
+            ..
+        } = &source
+        {
+            if *message_id != call_id {
+                return Err(ToolEventError::Correlation);
+            }
+            valid_label(target_module_id.as_str(), "target module id")?;
         }
         result.name = Some(call.name.clone());
         Ok(Self {
@@ -150,6 +170,7 @@ impl ToolEventV1 {
     pub fn provider_messages(&self) -> [NormalizedMessage; 2] {
         let content = match &self.source {
             ToolEventSourceV1::Model { .. } => self.result.render(),
+            ToolEventSourceV1::ModuleMessage { .. } => json!({"version":1,"origin":"module_message","source":self.source,"call_id":self.call_id,"payload":self.result.outcome}).to_string(),
             ToolEventSourceV1::Module { module_id, hook } => json!({
                 "version": 1,
                 "origin": "module",

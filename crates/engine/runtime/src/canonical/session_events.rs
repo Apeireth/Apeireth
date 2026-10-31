@@ -11,6 +11,18 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "event", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum SessionEventKind {
+    /// Private transport attempt checkpoint; it is not a completion or Provider turn.
+    ModuleMessageStarted {
+        agent: apeireth_core::kernel::AgentId,
+        envelope: apeireth_plugin::module_messages::ModuleMessageEnvelope,
+        call_id: String,
+    },
+    /// Observed only after the owning instance/native scope actually drained.
+    ModuleMessageInterrupted {
+        agent: apeireth_core::kernel::AgentId,
+        message_id: apeireth_core::kernel::TaskId,
+        pending_tool_calls: Vec<String>,
+    },
     /// Private instance task provenance. New readers retain the full correlation;
     /// older binaries may reject this new event variant on downgrade.
     AgentTaskStarted {

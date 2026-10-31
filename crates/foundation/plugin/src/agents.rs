@@ -200,6 +200,11 @@ pub trait AgentInstance: Send + Sync {
 }
 #[async_trait]
 pub trait ModuleAgents: Send + Sync {
+    /// Bound transport only; the Host must independently authorize targets and execution.
+    fn messages(&self) -> Option<Arc<dyn crate::module_messages::ModuleMessages>> {
+        None
+    }
+
     /// Wait from an owned background task, never synchronously inside initialize/start.
     async fn wait_ready(&self) -> AgentResult<()> {
         Ok(())
