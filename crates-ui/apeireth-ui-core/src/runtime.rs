@@ -1193,6 +1193,46 @@ mod tests {
         assert_eq!(&*seen.borrow(), &[1, 2, 3]);
     }
 
+    /// ⭐⭐ **effect 的执行时机**：依赖变更 ⇒ 是**立即重跑**还是**等 flush**？
+    ///
+    /// ## 为什么钉这条
+    ///
+    /// 「信号变 ⇒ 界面自动更新」这条链的**时机**决定宿主该怎么调度：
+    /// - 若**立即**重跑 ⇒ 宿主不需要 flush（但一帧内多次变更 ⇒ 多次重渲染 ⇒ 会抖）；
+    /// - 若**等 flush** ⇒ 宿主在帧边界 flush 一次 ⇒ 多次变更 ⇒ 一次重渲染（不抖）。
+    ///
+    /// ⇒ 这条测试把**真实语义**钉死 ⇒ ⇒ 宿主与文档都按它写（不许各写各的）。
+    #[test]
+    fn effect_rerun_timing_is_pinned() {
+        let runtime = Runtime::new();
+        let value = runtime.signal(1u32);
+        let ran = Rc::new(Cell::new(0usize));
+
+        let counter = ran.clone();
+        let signal = value.clone();
+        runtime.effect(move || {
+            let _ = signal.get(); // 依赖收集点
+            counter.set(counter.get() + 1);
+        });
+
+        // ① 创建后 flush ⇒ 首次执行（core 语义：创建时**不**同步执行）
+        assert_eq!(ran.get(), 0, "创建时不应同步执行");
+        runtime.flush();
+        assert_eq!(ran.get(), 1, "首次执行发生在 flush");
+
+        // ② 依赖变更 ⇒ **立即重跑**（⭐ 本仓库的**真实语义**，此前无测试钉住）
+        //   ⇒ ⇒ 「一帧内多次变更 ⇒ 多次重渲染」是**事实**（会抖）
+        //   ⇒ ⇒ 想「帧边界只渲染一次」必须由**上层显式批处理**（不是 core 免费给的）。
+        value.set(2);
+        assert_eq!(
+            ran.get(),
+            2,
+            "⭐ 依赖变更**立即**重跑 effect（core 的真实语义；flush 不是它的前提）"
+        );
+        runtime.flush();
+        assert_eq!(ran.get(), 2, "已同步重跑 ⇒ 随后的 flush 不应重复执行");
+    }
+
     #[test]
     fn conditional_dependency_is_rebuilt_on_each_run() {
         let runtime = Runtime::new();

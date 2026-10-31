@@ -1762,20 +1762,31 @@ pub fn l1_app_probe() -> Result<JsValue, JsValue> {
         failures.push(format!("① boot 后输入框值不对：{booted:?}"));
     }
 
-    // ③ 信号变 ⇒ rerender ⇒ DOM 更新
+    // ③ ⭐ **自动渲染**：改信号 ⇒ **不**调任何宿主函数 ⇒ DOM **自动**更新
+    //    （core 的 effect 是**同步重跑**的 ⇒ ⇒ 宿主不需要手动重建视图/手动 patch）
     wasm_host::set_demo_text("已更新").map_err(|error| {
         JsValue::from_str(&format!("set_demo_text 失败：{error:?}"))
     })?;
-    let redrawn = wasm_host::rerender().map_err(|error| {
-        JsValue::from_str(&format!("rerender 失败：{error:?}"))
-    })?;
-    if !redrawn {
-        failures.push(String::from("② 状态已标脏 ⇒ rerender 必须返回 true"));
-    }
     let after = input_value();
     if after.as_deref() != Some("已更新") {
-        failures.push(format!("② 重渲染后 DOM 未更新：{after:?}"));
+        failures.push(format!("② 改信号后 DOM 未自动更新：{after:?}"));
     }
+    // ③b `flush` 是**幂等**的（已同步重跑 ⇒ 此时无待办 ⇒ 不应重复渲染）
+    let flushed = wasm_host::flush().map_err(|error| {
+        JsValue::from_str(&format!("flush 失败：{error:?}"))
+    })?;
+    if flushed {
+        failures.push(String::from("②b 已同步重跑 ⇒ 随后的 flush 不应再执行 effect"));
+    }
+    let after_flush = input_value();
+    if after_flush.as_deref() != Some("已更新") {
+        failures.push(format!("②b flush 后 DOM 被改坏了：{after_flush:?}"));
+    }
+
+    // ③b 手动路径仍在：`rerender()` 可显式触发一次
+    wasm_host::rerender().map_err(|error| {
+        JsValue::from_str(&format!("rerender 失败：{error:?}"))
+    })?;
 
     // ④ dispose ⇒ DOM 被卸载
     wasm_host::dispose_screen()

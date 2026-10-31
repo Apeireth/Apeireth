@@ -38,12 +38,19 @@ use crate::{HostState, Screen};
 
 /// 宿主实例（wasm 单线程 ⇒ `thread_local`）。
 struct Host {
-    /// 引擎渲染器。
-    renderer: Renderer<WebDom>,
+    /// 引擎渲染器（**共享**给自动渲染的 effect ⇒ ⇒ 用 `Rc<RefCell<…>>`）。
+    renderer: Rc<RefCell<Renderer<WebDom>>>,
     /// 宿主状态（当前屏幕 + 脏标记）。
     state: Rc<RefCell<HostState>>,
-    /// 当前屏幕。
-    screen: Box<dyn Screen>,
+    /// 响应式运行时（**自动渲染**的驱动：effect + flush）。
+    runtime: Runtime,
+    /// 当前屏幕（共享给 effect ⇒ effect 能读它的状态信号 ⇒ ⇒ 依赖被追踪）。
+    screen: Rc<dyn Screen>,
+    /// 自动渲染的 effect 句柄（**必须保留** ⇒ 否则效果被立刻撤销）。
+    ///
+    /// ⚠️ core 的 effect 语义：「创建时不执行、依赖标脏后重跑、重跑前清空旧依赖」。
+    #[allow(dead_code)]
+    auto_render: apeireth_ui_core::EffectHandle,
 }
 
 thread_local! {
@@ -75,7 +82,7 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
 
     let runtime = Runtime::new();
     let state = Rc::new(RefCell::new(HostState::new()));
-    let screen = Box::new(DemoScreen::new(&runtime));
+    let screen: Rc<dyn Screen> = Rc::new(DemoScreen::new(&runtime));
     state.borrow_mut().switch_to(screen.id());
 
     let mut renderer = Renderer::new(dom, root);
@@ -83,12 +90,28 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
     renderer
         .render_guarded(view)
         .map_err(|error| JsValue::from_str(&format!("宿主薄壳：首屏渲染失败：{error}")))?;
+    let renderer = Rc::new(RefCell::new(renderer));
+
+    // ⭐ **自动渲染**：effect 体里读屏幕的状态信号 ⇒ ⇒ 依赖被 core 追踪
+    // ⇒ ⇒ 状态变 ⇒ effect 被标脏 ⇒ ⇒ **flush 时**重建视图 + patch DOM。
+    // ⇒ ⇒ 宿主**不需要**手动「重建视图」—— 那正是自动调度的意义。
+    let auto_render = {
+        let screen = screen.clone();
+        let renderer = renderer.clone();
+        runtime.effect(move || {
+            let view = screen.view(); // ← 读状态信号 ⇒ **依赖收集点**
+            let mut guard = renderer.borrow_mut();
+            let _ = guard.patch(view);
+        })
+    };
 
     HOST.with(|slot| {
         *slot.borrow_mut() = Some(Host {
             renderer,
             state,
+            runtime,
             screen,
+            auto_render,
         });
     });
     Ok(())
@@ -111,6 +134,7 @@ pub fn rerender() -> Result<bool, JsValue> {
         }
         let view = host.screen.view();
         host.renderer
+            .borrow_mut()
             .patch(view)
             .map_err(|error| JsValue::from_str(&format!("宿主薄壳：重渲染失败：{error}")))?;
         Ok(true)
@@ -129,7 +153,9 @@ pub fn dispose_screen() -> Result<(), JsValue> {
         let Some(host) = guard.as_mut() else {
             return Err(JsValue::from_str("宿主薄壳：还没 boot"));
         };
+        host.auto_render.dispose();
         host.renderer
+            .borrow_mut()
             .dispose()
             .map_err(|error| JsValue::from_str(&format!("宿主薄壳：销毁失败：{error}")))?;
         host.state.borrow_mut().clear();
@@ -155,10 +181,37 @@ pub fn set_demo_text(text: &str) -> Result<(), JsValue> {
         // 演示屏的信号访问（内部可见性靠同 crate 的 `pub(crate)` 通道）。
         if let Some(demo) = host.screen.as_any().downcast_ref::<DemoScreen>() {
             demo.text.set(text.to_owned());
+            // ⚠️ **不 patch** ⇒ ⇒ DOM 的更新由**自动渲染**（effect + flush）完成
+            // ⇒ ⇒ 这正是「信号 ⇒ 自动重渲染」的证据点。
             host.state.borrow_mut().mark_dirty();
             return Ok(());
         }
         Err(JsValue::from_str("宿主薄壳：当前屏幕不是演示屏"))
+    })
+}
+
+/// ⭐ **flush**：跑完当前所有待办（含**自动渲染**的 effect）。
+///
+/// ## 宿主该在什么时候调
+///
+/// ⚠️ **实测口径（2026-10-31 钉住）**：core 的 effect 是**同步重跑**的
+/// ⇒ ⇒ 状态变 ⇒ effect **立即**跑 ⇒ ⇒ DOM **立刻**更新
+/// ⇒ ⇒ **不需要**（也不能靠）flush 来「延后」更新。
+///
+/// ⇒ 所以 `flush` 的作用是**排空待办**（若有待办则跑完；无待办则**幂等无副作用**）
+/// ⇒ ⇒ 宿主可在事件批次结束时调一次做**兜底排空**。
+///
+/// ⚠️ 「一帧内多次状态变更 ⇒ 只重渲染一次」**尚未实现**
+/// ⇒ ⇒ 那需要**上层显式批处理**（core 不提供；下一批）。
+#[wasm_bindgen]
+pub fn flush() -> Result<bool, JsValue> {
+    HOST.with(|slot| {
+        let guard = slot.borrow();
+        let Some(host) = guard.as_ref() else {
+            return Err(JsValue::from_str("宿主薄壳：还没 boot"));
+        };
+        let report = host.runtime.flush();
+        Ok(report.effects_run > 0)
     })
 }
 
@@ -194,6 +247,15 @@ impl Screen for DemoScreen {
     fn view(&self) -> apeireth_ui_dom::vnode::VNode {
         use apeireth_ui_dom::binding::Binding;
         use apeireth_ui_dom::vnode::VNode;
+
+        // ⚠️⭐ **显式读一次信号**（依赖声明）：core 的 effect 是**依赖追踪式**的
+        //   —— 只有在 effect 体里**读到**的信号才会被订阅。
+        // ⇒ 而 `Binding::text(signal)` 只是**把信号放进 VNode**，**不读它的值**
+        // ⇒ ⇒ 若不读一次，effect **收不到依赖** ⇒ ⇒ 状态变了也不会重渲染。
+        // ⇒ ⇒ 这一行就是「声明这个视图依赖这个信号」。
+        // ⚠️ 已知缺口：依赖**应由引擎从 VNode 的绑定自动收集**（下一批），
+        //   现在需要屏幕作者自己声明 ⇒ ⇒ **容易漏** ⇒ 故在此显式标注。
+        let _ = self.text.get();
 
         VNode::element("section")
             .attr("class", "app-screen")
