@@ -672,6 +672,50 @@ pub fn canonical_router_with_services(runtime: Arc<Runtime>, services: GatewaySe
 /// (`/v1/approvals/resolve`)、读取全部会话与记忆 (panel 族路由)、热改
 /// provider base_url (`/v1/admin/config`)。本谓词把可跨源访问本 gateway
 /// 的页面收敛到 Tauri 桌面件与本机回环开发服务器。
+/// **跨源请求闸**：带 `Origin` 且不在本地白名单 ⇒ **拒绝**（403）。
+///
+/// # 为什么需要它（CORS 层不够）
+///
+/// `tower_http::cors::CorsLayer` 只**加响应头**，它**不拒绝**非预检请求 ⇒
+/// ⇒ 跨源的 **simple POST**（无预检）**照样抵达 handler** ⇒
+/// ⇒ 浏览器读不到响应，但**副作用照样发生**（例如 `POST /v1/admin/shutdown`）。
+///
+/// ⇒ 本层补上「**拒绝**」这一半：请求带 `Origin` 时按 [`is_allowed_local_origin`] 判定。
+///
+/// # 口径
+///
+/// * **只拦状态变更方法**（POST / PUT / PATCH / DELETE）
+///   ⇒ 读方法（GET / HEAD）与预检（OPTIONS）**维持既有 CORS 语义**
+///   （跨源读返回 200 但**不带** `access-control-allow-origin` ⇒ 浏览器自己挡）
+///   ⇒ ⇒ **改动面最小**（既有的 `the_gateway_refuses_cors_for_non_local_origins` 语义不变），
+///   而**危险面**（跨源触发的状态变更）被真正堵上；
+/// * **不带 `Origin`** ⇒ **放行**（CLI / 服务端 / 脚本等非浏览器客户端 ⇒ 本来就没有这个头）；
+/// * 带 `Origin` 且不在白名单 ⇒ **403**；
+/// * 层序：**在令牌门之内** ⇒ ⇒ 未通过令牌门时**仍是 401**
+///   ⇒ 不借 403/401 的差别泄露路由存在性（与既有纪律一致）。
+async fn reject_foreign_origin(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let method = req.method().clone();
+    let mutates_state = !matches!(
+        method,
+        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
+    );
+    if mutates_state {
+        if let Some(origin) = req.headers().get(axum::http::header::ORIGIN) {
+            if !is_allowed_local_origin(origin) {
+                return (
+                    axum::http::StatusCode::FORBIDDEN,
+                    "cross-origin request rejected: origin is not allowed",
+                )
+                    .into_response();
+            }
+        }
+    }
+    next.run(req).await
+}
+
 fn is_allowed_local_origin(origin: &axum::http::HeaderValue) -> bool {
     let Ok(text) = origin.to_str() else {
         return false;
@@ -1274,6 +1318,10 @@ pub fn canonical_router_with_state(state: GatewayState) -> Router {
             gate_state.clone(),
             require_user_capability,
         ))
+        // 跨源请求闸 (2026-10-31 · 静态安全审计复核): CORS 层只加头、**不拒绝**
+        // ⇒ 跨源 simple POST 的副作用照样发生 ⇒ 这里补「拒绝」那一半。
+        // 层序: **令牌门之内** ⇒ 未过令牌门仍回 401 (不借 403/401 差别泄露路由存在性)。
+        .layer(middleware::from_fn(reject_foreign_origin))
         // 令牌门包住整个 API 面 (含未匹配路径的 fallback: 强制态下未知路径也
         // 401, 不借 404/401 差别泄露路由存在性)。
         .layer(middleware::from_fn_with_state(
