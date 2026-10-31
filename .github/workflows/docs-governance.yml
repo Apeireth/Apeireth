@@ -32,6 +32,7 @@ on:
       - 'scripts/docs_index.py'
       - '.github/workflows/docs-governance.yml'
 
+  workflow_dispatch:
 permissions:
   contents: read
 
