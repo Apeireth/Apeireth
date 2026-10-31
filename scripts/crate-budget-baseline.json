@@ -1,12 +1,12 @@
 {
   "crates": {
     "crates/adapters/cli": {
-      "files": 36,
-      "loc": 16893
+      "files": 37,
+      "loc": 16942
     },
     "crates/adapters/gateway": {
       "files": 34,
-      "loc": 18653
+      "loc": 19151
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -17,12 +17,12 @@
       "loc": 7925
     },
     "crates/capabilities/tools": {
-      "files": 123,
-      "loc": 82915
+      "files": 130,
+      "loc": 85789
     },
     "crates/engine/guard": {
       "files": 28,
-      "loc": 14427
+      "loc": 14519
     },
     "crates/engine/image/algo": {
       "files": 128,
@@ -69,24 +69,24 @@
       "loc": 4159
     },
     "crates/engine/memory": {
-      "files": 174,
-      "loc": 78066
+      "files": 176,
+      "loc": 78495
     },
     "crates/engine/organ": {
-      "files": 31,
-      "loc": 26169
+      "files": 33,
+      "loc": 27843
     },
     "crates/engine/provider": {
-      "files": 12,
-      "loc": 5649
+      "files": 13,
+      "loc": 5727
     },
     "crates/engine/runtime": {
-      "files": 24,
-      "loc": 18367
+      "files": 51,
+      "loc": 24655
     },
     "crates/engine/runtime-assembly": {
-      "files": 70,
-      "loc": 41315
+      "files": 82,
+      "loc": 44021
     },
     "crates/engine/storage": {
       "files": 27,
@@ -94,27 +94,27 @@
     },
     "crates/foundation/core": {
       "files": 28,
-      "loc": 14401
+      "loc": 14450
     },
     "crates/foundation/credentials": {
       "files": 10,
-      "loc": 3862
+      "loc": 4011
     },
     "crates/foundation/governance": {
       "files": 24,
-      "loc": 15004
+      "loc": 15075
     },
     "crates/foundation/orchestration": {
-      "files": 55,
-      "loc": 30320
+      "files": 54,
+      "loc": 30140
     },
     "crates/foundation/plugin": {
-      "files": 36,
-      "loc": 12432
+      "files": 47,
+      "loc": 15317
     },
     "crates/foundation/protocol": {
-      "files": 23,
-      "loc": 7992
+      "files": 24,
+      "loc": 8657
     }
   },
   "note": "每个 crate 的 src/ 总量；只减不增（--gen 只应在真的减少后跑）",

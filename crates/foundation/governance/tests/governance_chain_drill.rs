@@ -175,8 +175,9 @@ fn chain_pass_path_ratifies_and_persists_audit() {
     );
 
     // 对抗（**同族第二形态**，2026-10-28 补）：`MultiHuman` 但**忘配 `multi_sign`** ⇒
-    // 策略侧 `map_or(1, ...)` 会把门槛降成 1 ⇒ ⇒ **静默退化为单签**（fail-open）。
-    // ⇒ 本断言当前**不成立** ⇒ ⇒ 见下面 `#[ignore]` 的显形测试与债栏 **D8**。
+    // 当年策略侧 `map_or(1, ...)` 把门槛降成 1 ⇒ ⇒ **静默退化为单签**（fail-open）。
+    // ✅ **2026-10-31 已修**：策略侧改成与校验器侧同口径 fail-closed（未配置 ⇒ 拒绝）
+    // ⇒ 该形态由下面那条**已去 `#[ignore]`** 的常驻回归守卫钉住（债栏 D8 结项）。
     //
     // ② 审议意见记名：7 席具名票（5 赞成 / 1 反对 / 1 弃权）。
     let ballots = vec![
@@ -518,7 +519,7 @@ fn chain_timeout_path_holds_and_fails_closed() {
     persist_verify_and_tamper_check(&chain, "timeout");
 }
 
-/// ⚠️ **显形测试（故意 `#[ignore]`）**：`MultiHuman` 忘配 `multi_sign` ⇒ **静默退化为单签**。
+/// **常驻回归守卫（2026-10-31 起 `#[ignore]` 已去掉）**：`MultiHuman` 忘配 `multi_sign` ⇒ 必须**拒绝**（不得静默退化为单签）。
 ///
 /// ## 背景（债栏 **D8** 2026-10-25 核查批判定的「一处口径不一致待裁决」）
 /// - **策略侧** `crates/foundation/core/src/gate.rs:225`：

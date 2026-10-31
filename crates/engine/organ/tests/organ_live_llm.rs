@@ -36,15 +36,7 @@ use apeireth_organ::world_model::{
 /// ⚠️ **0 装纪律不变**：不打印 key、不落 key、默认 `#[ignore]` 不跑。
 /// ⚠️ 同族实现见 `crates/engine/organ/tests/organ_live_llm.rs` 与
 ///   `crates/foundation/orchestration/tests/council_live.rs`（同形三处都钉）。
-fn live_base_url() -> String {
-    std::env::var("APEIRETH_OPENAI_URL")
-        .ok()
-        .map(|value| value.trim().trim_end_matches('/').to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "https://api.deepseek.com/v1".to_string())
-}
-
-/// live 测试用的模型名（见 [`live_base_url`] 的 env 约定）。
+/// live 测试用的模型名（env 约定见上方模块文档）。
 fn live_model() -> String {
     if let Ok(model) = std::env::var("APEIRETH_OPENAI_MODEL") {
         let model = model.trim().to_string();

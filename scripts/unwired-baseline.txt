@@ -57,7 +57,7 @@
 # --- G1（0 条）：集成测试辅助 API。保留合理，但**不应增长**。
 
 
-# --- G3（29 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
+# --- G3（28 条）：生物 / 认知 / 编排的**观测与查询 API**。生物族默认关 ⇒ 打开前不会走到。
 
 orphan bio_care_assembly_from_env  # G3
 orphan bio_circadian_wiring_from_env  # G3
@@ -79,7 +79,6 @@ orphan should_suppress  # G3
 orphan state_mut  # G3
 orphan stop_all  # G3
 orphan to_prompt  # G3
-orphan with_access_recorder  # G3
 orphan with_attrs  # G3
 orphan with_deadline  # G3
 orphan with_llm_proposer  # G3
@@ -89,16 +88,13 @@ orphan with_quorum_gate_probe  # G3
 orphan with_system_markers  # G3
 orphan with_task_type  # G3
 
-# --- G4（36 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
+# --- G4（31 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
 orphan with_age  # G4
-orphan with_allowed_capability  # G4
 orphan with_as_of  # G4
 orphan with_backend  # G4
-orphan with_behavior  # G4
 orphan with_bio_self_status_from_env  # G4
 orphan with_busy_timeout  # G4
-orphan with_capabilities  # G4
 orphan with_clear_env  # G4
 orphan with_data  # G4
 orphan with_date  # G4
@@ -110,7 +106,6 @@ orphan with_journal_mode  # G4
 orphan with_max_episodes  # G4
 orphan with_metrics_window  # G4
 orphan with_min_candidate_score  # G4
-orphan with_output_bounds  # G4
 orphan with_port  # G4
 orphan with_preview_chars  # G4
 orphan with_proactive_budget  # G4
@@ -123,7 +118,6 @@ orphan with_session_label  # G4
 orphan with_shell_executable  # G4
 orphan with_synchronous  # G4
 orphan with_system_clock  # G4
-orphan with_system_prompt  # G4
 orphan with_task_scope  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
@@ -133,7 +127,7 @@ orphan with_voices_error  # G4
 orphan forget_principal_with_permit  # G5
 orphan research_coordinated_forget_with_permit  # G5
 
-# --- G6（72 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（71 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
 orphan with_used  # G6
 orphan with_len  # G6
@@ -191,7 +185,6 @@ orphan query_with_time_range  # G6
 orphan rebind  # G6
 orphan recent_actions  # G6
 orphan reconnect_attempts  # G6
-orphan register_provider  # G6
 orphan remove_job  # G6
 orphan repetition_policy  # G6
 orphan retrieve_with_reranker  # G6

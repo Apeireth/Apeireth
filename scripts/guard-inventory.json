@@ -47,7 +47,8 @@
       "is_guard": true,
       "blocking": true,
       "invocation": [
-        "python scripts/arch_guard.py --report"
+        "python scripts/arch_guard.py --report",
+        "python scripts/arch_guard.py --self-test"
       ],
       "ci_workflows": [
         ".github/workflows/arch-guard.yml"
@@ -63,9 +64,34 @@
         "--log",
         "--print-vendored",
         "--report",
+        "--self-test",
         "--strict",
         "--update-baseline",
         "--wave",
+        "-h"
+      ]
+    },
+    {
+      "id": "audit-ignored-tests",
+      "path": "scripts/audit_ignored_tests.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/audit_ignored_tests.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "Audit workspace ignore declarations against an observed native test set.",
+      "flags": [
+        "--baseline-log",
+        "--baseline-ref",
+        "--before-list",
+        "--before-ref",
+        "--current-list",
+        "--help",
+        "--history",
+        "--output",
         "-h"
       ]
     },
@@ -126,6 +152,24 @@
         "--check",
         "--gen",
         "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-ci-gate-coverage",
+      "path": "scripts/check_ci_gate_coverage.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_ci_gate_coverage.py"
+      ],
+      "ci_workflows": [],
+      "has_baseline": false,
+      "notes": "CI 逐步门禁覆盖检查：CI 跑的每一步，本地门禁都跑了（或被显式豁免并写了理由）",
+      "flags": [
+        "--help",
+        "--quiet",
         "-h"
       ]
     },
@@ -301,6 +345,26 @@
       ]
     },
     {
+      "id": "check-env-race",
+      "path": "scripts/check_env_race.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_env_race.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/rust.yml"
+      ],
+      "has_baseline": false,
+      "notes": "跨测试 env 竞态清单：找出「改了进程级环境变量、却没与其它测试串行化」的测试",
+      "flags": [
+        "--help",
+        "--json",
+        "-h"
+      ]
+    },
+    {
       "id": "check-failure-knowledge",
       "path": "scripts/check_failure_knowledge.py",
       "kind": "guard",
@@ -315,6 +379,26 @@
       "has_baseline": false,
       "notes": "失败知识库守卫（2026-10-30）",
       "flags": []
+    },
+    {
+      "id": "check-fuzz-bins",
+      "path": "scripts/check_fuzz_bins.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_fuzz_bins.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/fuzz.yml"
+      ],
+      "has_baseline": false,
+      "notes": "fuzz 目标登记一致性检查器（把三件靠人眼的事变成机器事实）",
+      "flags": [
+        "--help",
+        "--quiet",
+        "-h"
+      ]
     },
     {
       "id": "check-golden-baseline",
@@ -383,6 +467,26 @@
         "--help",
         "--report",
         "--update",
+        "-h"
+      ]
+    },
+    {
+      "id": "check-mod-files",
+      "path": "scripts/check_mod_files.py",
+      "kind": "guard",
+      "is_guard": true,
+      "blocking": true,
+      "invocation": [
+        "python3 scripts/check_mod_files.py"
+      ],
+      "ci_workflows": [
+        ".github/workflows/mod-files.yml"
+      ],
+      "has_baseline": false,
+      "notes": "mod 行 ↔ 文件入库性守卫（防「引用提交了、文件没提交」）",
+      "flags": [
+        "--help",
+        "--quiet",
         "-h"
       ]
     },

@@ -56,6 +56,18 @@ MOD_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*
 # `#[path = "..."]` 覆盖（自定义文件路径）—— 出现时跳过该 mod（路径不按惯例推导）。
 PATH_ATTR_RE = re.compile(r"#\s*\[\s*path\s*=")
 
+# `#[path = "..."]` **成对**声明：`#[path = "x.rs"] pub mod x;`
+# ⇒ 被**指向的文件**才是被编译的那个 ⇒ 记它的 stem 为「已声明」。
+#
+# 2026-10-31 合并批：main 把 runtime-assembly 的重模块收进 `desktop.rs`
+# （`#[path = "startup.rs"] pub mod startup;` 等）⇒ 文件仍在 `src/` 下，
+# 但声明不在 `lib.rs` 里 ⇒ 旧实现把 4 个文件误报成 ORPHAN（假阳性）。
+PATH_MOD_RE = re.compile(
+    r"#\s*\[\s*path\s*=\s*\"([^\"]+)\"\s*\]\s*"
+    r"(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;",
+    re.MULTILINE,
+)
+
 
 def candidate_files(module_dir: Path, name: str) -> list[Path]:
     """一个 `mod <name>;` 可能对应的文件（按 Rust 惯例）。"""
@@ -129,6 +141,20 @@ def find_orphan_module_files(manifest: Path) -> list[str]:
     for sibling_root in sorted(root_dir.glob("lib.rs")) + sorted(root_dir.glob("main.rs")):
         text = sibling_root.read_text(encoding="utf-8", errors="replace")
         declared.update(match.group(1) for match in MOD_RE.finditer(text))
+    # **同目录任何 `.rs` 文件**里的声明都算（兄弟模块文件可以声明子模块，
+    # 例如 `desktop.rs` 用 `#[path]` 收进 `src/*.rs`）。
+    for sibling in sorted(root_dir.glob("*.rs")):
+        if sibling.name in ("lib.rs", "main.rs"):
+            continue
+        text = sibling.read_text(encoding="utf-8", errors="replace")
+        declared.update(match.group(1) for match in MOD_RE.finditer(text))
+        for match in PATH_MOD_RE.finditer(text):
+            relative, name = match.group(1), match.group(2)
+            declared.add(name)
+            target = (sibling.parent / relative).resolve()
+            # 只关心落在**本 crate 根目录**下的目标（更深层由对应目录自己管）。
+            if target.parent == root_dir.resolve():
+                declared.add(target.stem)
     # ⚠️ **同名声明两次**（2026-10-27 加）：今天发生过**三条线同时写同一批文件**
     # ⇒ 各自往 `lib.rs` 里插 `pub mod …;` ⇒ **同一个模块被声明两次**
     # ⇒ 编译器会报「duplicate module」⇒ 但**若两条线用了不同名字**

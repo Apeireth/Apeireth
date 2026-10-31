@@ -138,7 +138,7 @@ async fn spawn_stub(
 }
 
 #[tokio::test]
-async fn 真http往返_解析出向量且请求形状正确() {
+async fn real_http_roundtrip_returns_vectors_with_correct_shape() {
     let (base_url, captured) = spawn_stub(
         "HTTP/1.1 200 OK",
         r#"{"data":[{"embedding":[0.25,-0.5,1.0],"index":0}],"model":"stub-embed"}"#,
@@ -181,7 +181,7 @@ async fn 真http往返_解析出向量且请求形状正确() {
 }
 
 #[tokio::test]
-async fn 真http_401_归类为不可用() {
+async fn real_http_401_is_classified_unavailable() {
     let (base_url, _captured) = spawn_stub(
         "HTTP/1.1 401 Unauthorized",
         r#"{"error":"invalid api key"}"#,
@@ -197,7 +197,7 @@ async fn 真http_401_归类为不可用() {
 }
 
 #[tokio::test]
-async fn 真http_坏JSON_归类为非法向量() {
+async fn real_http_bad_json_is_classified_invalid_vector() {
     let (base_url, _captured) = spawn_stub("HTTP/1.1 200 OK", "this is not json").await;
     let provider = OpenAiCompatibleEmbeddingProvider::new(&base_url, "m", None).expect("provider");
     let error = provider.embed("x").await.expect_err("应失败");
@@ -208,7 +208,7 @@ async fn 真http_坏JSON_归类为非法向量() {
 }
 
 #[tokio::test]
-async fn 真http_响应缺向量_归类为非法向量() {
+async fn real_http_missing_embedding_is_classified_invalid() {
     let (base_url, _captured) = spawn_stub("HTTP/1.1 200 OK", r#"{"data":[]}"#).await;
     let provider = OpenAiCompatibleEmbeddingProvider::new(&base_url, "m", None).expect("provider");
     let error = provider.embed("x").await.expect_err("应失败");
@@ -219,7 +219,7 @@ async fn 真http_响应缺向量_归类为非法向量() {
 }
 
 #[tokio::test]
-async fn 真http_端点不可达_归类为不可用() {
+async fn real_http_unreachable_endpoint_is_classified_unavailable() {
     // 先占一个端口再立刻释放 ⇒ 几乎必然连不上（**真连接失败**，不是 mock）。
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr = listener.local_addr().expect("addr");

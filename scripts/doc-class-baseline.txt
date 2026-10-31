@@ -5,7 +5,7 @@
 #   · 补了 Class 的文档必须从这里删掉（`--gen` 自动缩表）；
 #   · 基线不许虚高（有已分类的残留在里面 ⇒ 门禁失败）。
 #
-# 已登记（待分类）：491 份
+# 已登记（待分类）：534 份
 docs/01-architecture/apeireth-true-understanding-2026-08-28.md
 docs/01-architecture/architecture.md
 docs/01-architecture/brand.md
@@ -71,9 +71,11 @@ docs/02-guides/frontend-data-contract.md
 docs/02-guides/fuzz-target-authoring.md
 docs/02-guides/im-quick-access.md
 docs/02-guides/mcp-external-tools.md
+docs/02-guides/mcp-tool-integration.md
 docs/02-guides/multi-ai-construction-guide.md
 docs/02-guides/perception-setup.md
 docs/02-guides/permission-surfaces.md
+docs/02-guides/portable-runtime-assembly.md
 docs/02-guides/quick-start.md
 docs/02-guides/self-insight-channel.md
 docs/02-guides/server-deployment.md
@@ -102,6 +104,7 @@ docs/04-internal/00-governance/r12-r13-r14-implementation-brief-template-2026-08
 docs/04-internal/00-governance/release-checklist.md
 docs/04-internal/01-handoffs/FINAL-HANDOFF-V2.0.0-RC.1.md
 docs/04-internal/01-handoffs/handoff-18crate-ci-fix-2026-09-23.md
+docs/04-internal/01-handoffs/handoff-deputy-env-lock-line-2026-10-31.md
 docs/04-internal/01-handoffs/handoff-k3-frontend-2026-09-23.md
 docs/04-internal/01-handoffs/handoff-log-2026-08-28-mavis.md
 docs/04-internal/01-handoffs/handoff-pet-avatar-line-2026-10-11.md
@@ -173,6 +176,11 @@ docs/04-internal/TO-NEW-TEAM.md
 docs/04-internal/absorption-candidates-2026-10.md
 docs/04-internal/absorption-ledger.md
 docs/04-internal/ai-os-landscape-2026-10-18.md
+docs/04-internal/ale-system-one-acceptance-2026-10-30.md
+docs/04-internal/ale-system-one-p0-2026-10-29.md
+docs/04-internal/ale-system-one-p2-2026-10-30.md
+docs/04-internal/ale-system-one-p3-2026-10-30.md
+docs/04-internal/ale-system-one-p4-2026-10-30.md
 docs/04-internal/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md
 docs/04-internal/async-trait-decision-matrix.md
 docs/04-internal/audits/01-architecture-and-capability-audit.md
@@ -303,6 +311,7 @@ docs/04-internal/backend-enhancement/zero-debt-opening-clearance-2026-10-12.md
 docs/04-internal/backlog.md
 docs/04-internal/borrow-from-jimmyxiao2009.md
 docs/04-internal/capability-knob-audit-2026-09-12.md
+docs/04-internal/capability-modules-phase3-2026-10-28.md
 docs/04-internal/ci-fix-log-2026-08.md
 docs/04-internal/claims-evidence-matrix.md
 docs/04-internal/cognitive-module-wiring.md
@@ -339,11 +348,27 @@ docs/04-internal/handover-ledger.md
 docs/04-internal/history/01-reconstruct-v2-stage-record.md
 docs/04-internal/history/02-v1-to-v2-research-and-audit-dossier.md
 docs/04-internal/kani-verification-playbook.md
+docs/04-internal/kc1-kernel-convergence-baseline-2026-10-27.md
+docs/04-internal/kernel-convergence-2026-10-28.md
+docs/04-internal/kernel-convergence-a1-cold-start-2026-10-29.md
+docs/04-internal/kernel-convergence-a1b-startup-definitions-2026-10-29.md
+docs/04-internal/kernel-convergence-a2-ignored-tests-2026-10-29.md
+docs/04-internal/kernel-convergence-a3-legacy-audit-2026-10-29.md
+docs/04-internal/kernel-convergence-a4-final-gates-2026-10-29.md
+docs/04-internal/kernel-convergence-final-acceptance-2026-10-28.md
+docs/04-internal/kernel-convergence-remaining-debt-map-2026-10-29.md
+docs/04-internal/kernel-convergence-s1-2026-10-29.md
+docs/04-internal/kernel-convergence-s2-2026-10-29.md
+docs/04-internal/kernel-convergence-s3-2026-10-29.md
+docs/04-internal/kernel-convergence-s4-2026-10-29.md
+docs/04-internal/kernel-convergence-s5-2026-10-29.md
+docs/04-internal/kernel-convergence-s6-2026-10-29.md
 docs/04-internal/license-port/gate1-license.md
 docs/04-internal/license-port/gate2-quality.md
 docs/04-internal/license-port/gate3-security.md
 docs/04-internal/license-port/gate4-integration.md
 docs/04-internal/live-verification-ledger.md
+docs/04-internal/live-verification-runbook-2026-10-26.md
 docs/04-internal/maintenance-guide.md
 docs/04-internal/memory-research.md
 docs/04-internal/migration-v1-to-v2.md
@@ -373,8 +398,17 @@ docs/04-internal/ref-crawler-research.md
 docs/04-internal/ref-gh-accel.md
 docs/04-internal/ref-hydra.md
 docs/04-internal/ref-yoyo-evolve.md
+docs/04-internal/registry-kernel-migration-2026-10-27.md
+docs/04-internal/registry-kernel-phase2-2026-10-27.md
 docs/04-internal/release-checklist.md
 docs/04-internal/release-plan.md
+docs/04-internal/repo-consolidation-b-inventory-2026-10-29.md
+docs/04-internal/repo-consolidation-c-classify-2026-10-29.md
+docs/04-internal/repo-consolidation-d-merge-2026-10-29.md
+docs/04-internal/repo-consolidation-d2-anchored-merges-2026-10-29.md
+docs/04-internal/repo-consolidation-e-cleanup-2026-10-29.md
+docs/04-internal/repo-consolidation-f-main-verify-2026-10-29.md
+docs/04-internal/repo-consolidation-g-report-2026-10-29.md
 docs/04-internal/round-10-research-plan-2026-08-28.md
 docs/04-internal/round-10-youyou-list-mainagent-verify-2026-08-28.md
 docs/04-internal/round-12-final-gap-audit-2026-08-28.md
@@ -413,6 +447,14 @@ docs/adr/0012-central-ai-and-household-companion.md
 docs/adr/0013-open-source-personal-utility-assistant.md
 docs/adr/0014-astra-derived-contract.md
 docs/adr/0016-personal-line-carries-all-care-mechanisms.md
+docs/adr/0017-kernel-convergence-observation-port.md
+docs/adr/0018-registry-kernel-tool-events.md
+docs/adr/0019-registry-runtime-dispatch.md
+docs/adr/0020-capability-module-ownership.md
+docs/adr/0021-consolidation-ui-core-slice.md
+docs/adr/0021-owned-agents-and-dynamic-modules.md
+docs/adr/0022-production-kernel-convergence.md
+docs/adr/0023-modular-ale-system-one.md
 docs/adr/_template.md
 docs/architecture/ARCHITECTURE.generated.md
 docs/architecture/handbook.md
@@ -449,6 +491,7 @@ docs/design/human-side-design-review.md
 docs/design/intro-animation.md
 docs/design/m-axis-3d-recon-2026-10-18.md
 docs/design/m-axis-3d-recon-wgpu3dgs-2026-10-18.md
+docs/design/m-axis-3d-trial-2026-10-26.md
 docs/design/material-language-supplement.md
 docs/design/pet-resident-projection.md
 docs/design/readme-research-notes.md
