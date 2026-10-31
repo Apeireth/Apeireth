@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: a6146f746be641b9a314b2cfea2581e121d406e8d75a43fcc86af42df21f6f57
+claims_sha256: a4a5d192c28051f50ce126480a94d6f9bf6c55ba6584f6192713b1ba10045377
 claims_total: 37
 items:
   - id: "rt.provider_router"
@@ -94,6 +94,8 @@ items:
       tests:
         - "crates/capabilities/tools/src/mcp_bridge/config.rs"
         - "crates/capabilities/tools/src/mcp_bridge/catalog.rs"
+        - "crates/engine/runtime-assembly/tests/production_mcp_factory.rs"
+        - "crates/engine/runtime-assembly/tests/convergence_mcp.rs"
       claims_id: "tool.mcp_bridge"
     gaps:
       - "能力矩阵未出现开关 APEIRETH_ENABLE_MCP（待补）"
@@ -128,7 +130,7 @@ items:
       production_refs:
         - "crates/capabilities/tools/src/egress.rs"
         - "crates/capabilities/tools/src/fetch.rs"
-    default_enabled: true
+    default_enabled: false
     validated:
       tests:
         - "crates/capabilities/tools/src/egress.rs"
@@ -158,7 +160,7 @@ items:
     gaps:
       []
   - id: "sec.exposure_audit"
-    capability: "暴露面体检（五个暴露面只读扫描 + 同一内核两出口）"
+    capability: "暴露面体检（六个暴露面只读扫描 + 同一内核两出口）"
     implemented:
       sources:
         - "crates/capabilities/tools/src/exposure_audit/mod.rs"
@@ -232,6 +234,7 @@ items:
     implemented:
       sources:
         - "crates/engine/memory/src/lesson.rs"
+        - "crates/engine/memory/src/migrations/list.rs"
         - "crates/engine/memory/src/migrations.rs"
         - "crates/engine/memory/src/migrations/fresh_tables.sql"
         - "crates/adapters/cli/src/lessons_command.rs"
@@ -241,6 +244,7 @@ items:
         - "crates/engine/memory/src/lesson.rs"
         - "crates/engine/memory/src/migrations.rs"
         - "crates/engine/memory/src/migrations/fresh_tables.sql"
+        - "crates/engine/memory/src/migrations/list.rs"
     default_enabled: true
     validated:
       tests:
@@ -292,13 +296,11 @@ items:
     implemented:
       sources:
         - "crates/capabilities/tools/src/process/linux.rs"
-        - "crates/capabilities/tools/src/process/platform.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
     wired:
       production_refs:
         - "crates/capabilities/tools/src/process/linux.rs"
         - "crates/capabilities/tools/src/process/mod.rs"
-        - "crates/capabilities/tools/src/process/platform.rs"
     default_enabled: "n/a"
     validated:
       tests:
@@ -420,7 +422,7 @@ items:
         - "crates/foundation/governance/tests/governance_chain_drill.rs"
       claims_id: "gov.chain_drill_ci"
     gaps:
-      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 3 passed。远端仍 0 次执行：该步骤排在 cargo nextest …"
+      - "未达 PRODUCTION WIRED：R8-D 60627d8e：rust-tests job 增治理链演练显式步骤；本地等价命令 cargo test -p apeireth-governance --test governance_chain_drill 4 passed（2026-10-31：多签守卫用例已去 #[ignore]）…"
   - id: "sec.governance_chain_drill"
     capability: "M-of-N 逻辑票链三路径端到端合练（B7 验证证据）"
     implemented:
