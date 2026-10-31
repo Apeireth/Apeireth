@@ -1070,6 +1070,9 @@ impl<D: Dom> Renderer<D> {
                 // property 在**子节点之后**写（`select.value` 依赖 `option` 已存在），
                 // 且**入树之前**（用户看不到默认值 → 目标值的中间态）。
                 self.write_props(&dom, element)?;
+                // ⭐ 绑定写回（信号 → DOM）在 **props 之后**：props 是「我们给的值」，
+                //   绑定是「信号的值」⇒ ⇒ 后者优先（它是双向通道的真相）。
+                self.apply_bindings(&dom, element)?;
                 self.insert_into(parent, &dom, anchor)?;
                 if let Some(this_ref) = &element.this_ref {
                     this_ref.bind_node(Box::new(dom.clone()))?;
@@ -1192,6 +1195,8 @@ impl<D: Dom> Renderer<D> {
                 )?;
                 // property 在**子节点之后**打（同挂载时的理由）。
                 self.patch_props(&old_element.dom, &old_element.vnode, new_element)?;
+                // ⭐ 绑定写回（信号 → DOM）：与 `patch_props` 同一「变了才写 + IME 门控」口径。
+                self.apply_bindings(&old_element.dom, new_element)?;
                 Ok(MountedNode::Element(MountedElement {
                     vnode: new_element.clone(),
                     dom: old_element.dom.clone(),
@@ -1583,6 +1588,47 @@ impl<D: Dom> Renderer<D> {
             match value {
                 PropValue::Text(text) => self.dom.set_property(dom, name, text)?,
                 PropValue::Bool(flag) => self.dom.set_property_bool(dom, name, *flag)?,
+            }
+        }
+        Ok(())
+    }
+
+    /// ⭐⭐ **应用 property 双向绑定**（信号 → DOM；`bind:value` / `bind:checked`）。
+    ///
+    /// ## 口径（与 `write_props` 同源，勿分叉）
+    ///
+    /// - **只在 DOM 当前值 ≠ 信号值时才写** ⇒ 无条件回写会**打断输入法组合态**
+    ///   并把光标推到末尾；
+    /// - **IME 组合期间不写**（组合中的拼音不能被引擎冲掉）；
+    /// - 写 `checked` 必须走 [`Dom::set_property_bool`]（写字符串 `"false"` 会让真值判断**反过来**）。
+    ///
+    /// ## 为什么放在渲染期（而不是「信号变更时」立即写）
+    ///
+    /// 信号变更**不必**立刻反映到 DOM：渲染是批量的 ⇒ ⇒ 同一个信号在一帧内改多次
+    /// ⇒ ⇒ 只在渲染期写一次 ⇒ ⇒ 少写、且与 VNode 树的状态一致（不会出现「DOM 已是新值、
+    /// 树还是旧值」的中间态）。
+    fn apply_bindings(&self, dom: &D::Node, element: &ElementVNode) -> Result<(), DomError> {
+        if element.bindings.is_empty() {
+            return Ok(());
+        }
+        // ⚠️ IME 组合期间**不写**（与 `write_props` 的门控同口径）。
+        if self.dom.is_composing() {
+            return Ok(());
+        }
+        for binding in &element.bindings {
+            let Some(name) = binding.slot().property_name() else {
+                continue;
+            };
+            let current = self.dom.get_property(dom, name).unwrap_or_default();
+            if !binding.needs_write(&current) {
+                continue;
+            }
+            let value = binding.value();
+            match binding.slot() {
+                crate::binding::BindingSlot::Checked => {
+                    self.dom.set_property_bool(dom, name, value == "true")?
+                }
+                _ => self.dom.set_property(dom, name, &value)?,
             }
         }
         Ok(())
@@ -2149,6 +2195,52 @@ mod tests {
             .expect("观测必须成功");
         assert!((score - 0.002).abs() < 1e-9, "实际得分 {score}");
         assert!((tracker.total() - 0.002).abs() < 1e-9);
+    }
+
+    /// ⭐⭐⭐ **信号 → DOM 写回**（垂直切片 Signal 环的发动机）：
+    /// 信号变 ⇒ 重新渲染 ⇒ DOM 值跟着变（**不需要**手工再写一次 DOM）。
+    #[test]
+    fn signal_binding_writes_into_dom_on_render() {
+        use crate::binding::Binding;
+        use apeireth_ui_core::Runtime;
+
+        let runtime = Runtime::new();
+        let signal = runtime.signal(String::from("hello"));
+        let (mut renderer, root) = renderer_with_dom();
+        let view = VNode::element("input")
+            .bind(Binding::text(signal.clone()))
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+        let node = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+        assert_eq!(
+            renderer.dom().property(node, "value").as_deref(),
+            Some("hello"),
+            "首次渲染必须把信号值写进 DOM"
+        );
+
+        // ① 信号变 ⇒ 重新渲染 ⇒ DOM 跟着变
+        signal.set(String::from("world"));
+        renderer
+            .patch(
+                VNode::element("input")
+                    .bind(Binding::text(signal.clone()))
+                    .build(),
+            )
+            .expect("打补丁必须成功");
+        assert_eq!(
+            renderer.dom().property(node, "value").as_deref(),
+            Some("world"),
+            "信号变更后重渲染必须把新值写进 DOM"
+        );
+
+        // ② **DOM → 信号**（写回路径）：DOM 值变了 ⇒ 信号跟着变
+        renderer
+            .dom()
+            .set_property(&node, "value", "typed")
+            .expect("写 DOM 必须成功");
+        let binding = Binding::text(signal.clone());
+        binding.write_back("typed");
+        assert_eq!(signal.get(), "typed", "写回路径必须更新信号");
     }
 
     /// ⭐⭐⭐ **dispose 清空全部内部状态**（垂直切片 dispose 环）：

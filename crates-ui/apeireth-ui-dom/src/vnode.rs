@@ -289,6 +289,14 @@ pub struct ElementVNode {
     ///
     /// `None` ⇒ 该元素没有元素引用绑定。
     pub this_ref: Option<ThisRef>,
+    /// **property 双向绑定**（信号 ⇄ DOM property；见 [`crate::binding::Binding`]）。
+    ///
+    /// 与 [`Self::props`] 的区别：`props` 是**单向**的（我们给值 ⇒ 写进 DOM）；
+    /// 这里的 `bindings` 是**双向**的：
+    /// - **信号 → DOM**：渲染阶段写回，且**只在 DOM 当前值 ≠ 信号值时**才写
+    ///   （无条件回写会打断输入法组合态与光标位置）；
+    /// - **DOM → 信号**：事件处理器里写回（见 `Binding::write_back`）。
+    pub bindings: Vec<crate::binding::Binding>,
     /// 事件处理器（按事件类型索引）。
     ///
     /// 处理器**按指针身份**比较（见 [`ElementHandler`]）⇒ 差分能判断
@@ -307,9 +315,16 @@ impl ElementVNode {
             attrs: Vec::new(),
             props: Vec::new(),
             this_ref: None,
+            bindings: Vec::new(),
             handlers: Vec::new(),
             children: Vec::new(),
         }
+    }
+
+    /// ⭐ 追加一个 **property 双向绑定**（信号 ⇄ DOM property）。
+    pub fn bind(mut self, binding: crate::binding::Binding) -> Self {
+        self.bindings.push(binding);
+        self
     }
 
     /// 设置列表项身份（keyed 差分用）。
@@ -456,6 +471,12 @@ impl ElementBuilder {
         Self {
             node: ElementVNode::new(tag),
         }
+    }
+
+    /// ⭐ 追加一个 **property 双向绑定**（信号 ⇄ DOM property）。
+    pub fn bind(mut self, binding: crate::binding::Binding) -> Self {
+        self.node = self.node.bind(binding);
+        self
     }
 
     /// 设置列表项身份（keyed 差分用）。
