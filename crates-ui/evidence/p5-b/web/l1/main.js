@@ -21,6 +21,11 @@ try {
   results.upload = { ok: false, failures: [`上传探针抛错：${String(error)}`] };
 }
 try {
+  results.binding = p5b.l1_binding_probe();
+} catch (error) {
+  results.binding = { ok: false, failures: [`绑定探针抛错：${String(error)}`] };
+}
+try {
   results.integration = p5b.l1_integration_probe();
 } catch (error) {
   results.integration = { ok: false, failures: [`集成探针抛错：${String(error)}`] };

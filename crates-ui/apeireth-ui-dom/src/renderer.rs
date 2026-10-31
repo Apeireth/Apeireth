@@ -1792,12 +1792,84 @@ impl<D: Dom> Renderer<D> {
         Ok(())
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ⭐ 绑定写回 ⇄ 用户处理器的**组合**（DOM → 信号 上行路径）
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// ⭐ 元素上的**绑定事件类型**（绑定写回要挂到哪些事件上）。
+    ///
+    /// - `bind:value` ⇒ [`crate::dom::EventKind::Input`]（文本输入）；
+    /// - `bind:checked` ⇒ [`crate::dom::EventKind::Change`]（勾选变化）。
+    fn binding_event_kinds(
+        element: &ElementVNode,
+    ) -> Vec<(crate::dom::EventKind, crate::binding::Binding)> {
+        let mut out: Vec<(crate::dom::EventKind, crate::binding::Binding)> = Vec::new();
+        for binding in &element.bindings {
+            let kind = match binding {
+                crate::binding::Binding::Text { .. } => crate::dom::EventKind::Input,
+                crate::binding::Binding::Checked { .. } => crate::dom::EventKind::Change,
+            };
+            out.push((kind, binding.clone()));
+        }
+        out
+    }
+
+    /// ⭐ **组合**「绑定写回 + 用户处理器」⇒ 一个监听器里先写回信号、再调用户处理器。
+    ///
+    /// ## ⭐ 为什么必须组合（而不是另挂一个内部监听器）
+    ///
+    /// [`crate::dom::Dom::add_listener`] 对「同节点同事件类型」是**覆盖**语义
+    /// ⇒ ⇒ 内部监听器会把**用户自己的处理器覆盖掉**（用户处理器静默消失）
+    /// ⇒ ⇒ 必须合成一个 ⇒ ⇒ 用户的处理器与绑定写回**都在**。
+    ///
+    /// ## 顺序
+    ///
+    /// 先写回信号、再调用户处理器 ⇒ ⇒ 用户处理器里读信号能读到**刚写回**的新值。
+    fn compose_handler(
+        user: Option<crate::events::ElementHandler>,
+        binding: Option<crate::binding::Binding>,
+    ) -> crate::events::ElementHandler {
+        crate::events::ElementHandler::new(move |event| {
+            if let Some(binding) = binding.as_ref() {
+                binding.write_back_from_event(event);
+            }
+            if let Some(user) = user.as_ref() {
+                user.call(event);
+            }
+        })
+    }
+
     // ── 事件处理器 ────────────────────────────────────────────────────────
 
-    /// 新建节点：挂上全部事件处理器。
+    /// 新建节点：挂上全部事件处理器（**含绑定写回**）。
     fn write_handlers(&self, dom: &D::Node, element: &ElementVNode) -> Result<(), DomError> {
+        let bindings = Self::binding_event_kinds(element);
+        // ① 用户自己的处理器（与绑定写回**组合**成同一个监听器）。
         for (kind, handler) in &element.handlers {
-            self.dom.add_listener(dom, *kind, handler.clone())?;
+            let binding = bindings
+                .iter()
+                .find(|(bind_kind, _)| bind_kind == kind)
+                .map(|(_, binding)| binding.clone());
+            self.dom.add_listener(
+                dom,
+                *kind,
+                Self::compose_handler(Some(handler.clone()), binding),
+            )?;
+        }
+        // ② 绑定事件类型里、用户**没**挂处理器的 ⇒ 单独挂一个（只做写回）。
+        for (kind, binding) in &bindings {
+            if element
+                .handlers
+                .iter()
+                .any(|(user_kind, _)| user_kind == kind)
+            {
+                continue;
+            }
+            self.dom.add_listener(
+                dom,
+                *kind,
+                Self::compose_handler(None, Some(binding.clone())),
+            )?;
         }
         Ok(())
     }
@@ -1825,28 +1897,66 @@ impl<D: Dom> Renderer<D> {
         old: &ElementVNode,
         new: &ElementVNode,
     ) -> Result<(), DomError> {
-        if old.handlers == new.handlers {
+        let old_bindings = Self::binding_event_kinds(old);
+        let new_bindings = Self::binding_event_kinds(new);
+        // 早退条件：用户处理器**与**绑定都没变 ⇒ 监听器不用动。
+        let bindings_same = old_bindings == new_bindings;
+        if old.handlers == new.handlers && bindings_same {
             return Ok(());
         }
-        // ① 逐 kind 比较：变了 ⇒ 先摘旧的那个（**只摘这个 kind**），再挂新的。
-        for (kind, handler) in &new.handlers {
-            let unchanged = old
+        // ① 应存在的事件类型 = 用户处理器 ∪ 绑定事件类型。
+        let mut kinds: Vec<crate::dom::EventKind> =
+            new.handlers.iter().map(|(kind, _)| *kind).collect();
+        for (kind, _) in &new_bindings {
+            if !kinds.contains(kind) {
+                kinds.push(*kind);
+            }
+        }
+        for kind in kinds.iter().copied() {
+            let user_old = old
                 .handlers
                 .iter()
-                .find(|(old_kind, _)| old_kind == kind)
-                .is_some_and(|(_, old_handler)| old_handler == handler);
-            if unchanged {
+                .find(|(old_kind, _)| old_kind == &kind)
+                .map(|(_, handler)| handler.clone());
+            let user_new = new
+                .handlers
+                .iter()
+                .find(|(new_kind, _)| new_kind == &kind)
+                .map(|(_, handler)| handler.clone());
+            let binding_old = old_bindings
+                .iter()
+                .find(|(bind_kind, _)| bind_kind == &kind)
+                .map(|(_, binding)| binding.clone());
+            let binding_new = new_bindings
+                .iter()
+                .find(|(bind_kind, _)| bind_kind == &kind)
+                .map(|(_, binding)| binding.clone());
+            let user_same = match (&user_old, &user_new) {
+                (Some(old), Some(new)) => old == new,
+                (None, None) => true,
+                _ => false,
+            };
+            let binding_same = binding_old == binding_new;
+            if user_same && binding_same {
                 continue;
             }
-            self.dom.remove_listener(dom, *kind)?;
-            self.dom.add_listener(dom, *kind, handler.clone())?;
+            // ⚠️ 摘的时候**容错**（该 kind 可能本来就没挂过）。
+            let _ = self.dom.remove_listener(dom, kind);
+            self.dom
+                .add_listener(dom, kind, Self::compose_handler(user_new, binding_new))?;
         }
-        // ② 新虚拟树里**没有**的事件类型 ⇒ 把旧的那个摘掉。
+        // ② 旧有新无的事件类型 ⇒ 把旧的那个摘掉。
         for (kind, _) in &old.handlers {
-            if new.handlers.iter().any(|(new_kind, _)| new_kind == kind) {
+            if kinds.contains(kind) {
                 continue;
             }
             self.dom.remove_listener(dom, *kind)?;
+        }
+        for (kind, _) in &old_bindings {
+            if kinds.contains(kind) {
+                continue;
+            }
+            let _ = self.dom.remove_listener(dom, *kind);
         }
         Ok(())
     }
@@ -2241,6 +2351,65 @@ mod tests {
         let binding = Binding::text(signal.clone());
         binding.write_back("typed");
         assert_eq!(signal.get(), "typed", "写回路径必须更新信号");
+    }
+
+    /// ⭐⭐⭐⭐ **DOM → 信号（事件侧）写回，且**不覆盖**用户自己的处理器**。
+    ///
+    /// 这是「双向绑定闭环」的上行半程：用户输入 ⇒ 事件 ⇒ 信号更新 ⇒ 重渲染 ⇒ DOM 一致。
+    #[test]
+    fn input_event_writes_back_to_signal_and_keeps_user_handler() {
+        use crate::binding::Binding;
+        use crate::dom::EventKind;
+        use crate::events::ElementHandler;
+        use apeireth_ui_core::Runtime;
+
+        let runtime = Runtime::new();
+        let signal = runtime.signal(String::from("init"));
+        let (mut renderer, root) = renderer_with_dom();
+
+        // 用户自己的处理器（**必须仍然被调用** ⇒ 证明没被内部监听器覆盖）
+        let user_called = Rc::new(Cell::new(false));
+        let flag = user_called.clone();
+        let flag_second = user_called.clone();
+        let view = VNode::element("input")
+            .bind(Binding::text(signal.clone()))
+            .handler(
+                EventKind::Input,
+                ElementHandler::new(move |_event| flag.set(true)),
+            )
+            .build();
+        renderer.mount(view).expect("挂载必须成功");
+        let node = renderer.dom().children(&root).expect("读子节点必须成功")[0];
+
+        // ① 派发 input 事件（载荷带 `target_value`）⇒ 信号被写回
+        let called = renderer
+            .dom()
+            .dispatch_with_value(node, EventKind::Input, "typed");
+        assert!(called >= 1, "派发必须至少调用一个处理器（实际 {called}）");
+        assert_eq!(signal.get(), "typed", "input 事件必须把 DOM 值写回信号");
+        assert!(
+            user_called.get(),
+            "⭐ 用户自己的处理器必须仍然被调用（不得被内部监听器覆盖）"
+        );
+
+        // ② 信号变了 ⇒ 重渲染 ⇒ DOM 一致（下行半程）
+        signal.set(String::from("next"));
+        renderer
+            .patch(
+                VNode::element("input")
+                    .bind(Binding::text(signal.clone()))
+                    .handler(
+                        EventKind::Input,
+                        ElementHandler::new(move |_event| flag_second.set(true)),
+                    )
+                    .build(),
+            )
+            .expect("打补丁必须成功");
+        assert_eq!(
+            renderer.dom().property(node, "value").as_deref(),
+            Some("next"),
+            "信号变更后重渲染必须把新值写进 DOM"
+        );
     }
 
     /// ⭐⭐⭐ **dispose 清空全部内部状态**（垂直切片 dispose 环）：

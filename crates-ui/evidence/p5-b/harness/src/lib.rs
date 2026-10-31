@@ -1017,8 +1017,11 @@ pub fn l1_probe() -> Result<JsValue, JsValue> {
                     .child(VNode::text("兜底可见"))
                     .build(),
             ));
-            // 未挂载就渲染 ⇒ 必失败 ⇒ 兜底顶上（这正是错误边界要覆盖的场景）
-            let _ = guarded.render_guarded(VNode::element("section").build());
+            // ⚠️ **制造真实失败**（2026-10-31 改）：原先靠「未挂载就渲染 ⇒ 必失败」，
+            //   但 `render_guarded` 已改成「未挂载 ⇒ 首次挂载」（第一屏也要有兜底）
+            //   ⇒ ⇒ 那个前提不再成立 ⇒ ⇒ 这里改用**非法标签名**
+            //   （浏览器 `createElement("")` 会抛 ⇒ 渲染真失败 ⇒ 兜底顶上）。
+            let _ = guarded.render_guarded(VNode::element("").build());
             g8_captured = guarded.captured_error().unwrap_or_default().to_owned();
             let fallback_visible = document
                 .query_selector("#l1-g8 .ap-error")
@@ -1592,6 +1595,123 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("scroll_seen"),
         &JsValue::from_bool(scroll_seen),
+    );
+    Ok(result.into())
+}
+
+/// ⭐⭐⭐⭐ **双向绑定探针**（垂直切片 Signal 环的浏览器端到端证据）。
+///
+/// 在**真实浏览器**里验证：
+/// ①**下行**（信号 → DOM）：`signal.set(...)` ⇒ 重新渲染 ⇒ DOM 的 `value` 跟着变；
+/// ②**上行**（DOM → 信号）：真实 `input` 事件 ⇒ 信号被写回；
+/// ③**用户自己的处理器仍被调用**（内部绑定写回**不得覆盖**用户处理器）。
+#[wasm_bindgen]
+pub fn l1_binding_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_core::Runtime;
+    use apeireth_ui_dom::binding::Binding;
+    use apeireth_ui_dom::dom::{Dom, EventKind};
+    use apeireth_ui_dom::events::ElementHandler;
+    use apeireth_ui_dom::vnode::VNode;
+    use apeireth_ui_dom::web::WebDom;
+    use apeireth_ui_dom::Renderer;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    dom.set_attribute(&root, "id", "l1-bind-root")
+        .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+    let mut renderer = Renderer::new(dom, root);
+
+    let runtime = Runtime::new();
+    let signal = runtime.signal(String::from("init"));
+    let user_called = std::rc::Rc::new(std::cell::Cell::new(false));
+    let flag = user_called.clone();
+    let view = VNode::element("input")
+        .attr("id", "l1-bind-input")
+        .bind(Binding::text(signal.clone()))
+        .handler(
+            EventKind::Input,
+            ElementHandler::new(move |_event| flag.set(true)),
+        )
+        .build();
+    renderer
+        .mount(view)
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+
+    let value_of = |selector: &str| -> Option<String> {
+        let element = document.query_selector(selector).ok().flatten()?;
+        js_sys::Reflect::get(&element, &JsValue::from_str("value"))
+            .ok()
+            .and_then(|value| value.as_string())
+    };
+
+    // ① 下行：首渲染写回信号值
+    let initial = value_of("#l1-bind-input");
+    if initial.as_deref() != Some("init") {
+        failures.push(format!("① 首渲染未把信号值写进 DOM：{initial:?}"));
+    }
+
+    // ② 下行：信号变 ⇒ 重渲染 ⇒ DOM 跟着变
+    signal.set(String::from("downlink"));
+    renderer
+        .patch(
+            VNode::element("input")
+                .attr("id", "l1-bind-input")
+                .bind(Binding::text(signal.clone()))
+                .build(),
+        )
+        .map_err(|error| JsValue::from_str(&format!("打补丁失败：{error}")))?;
+    let after_downlink = value_of("#l1-bind-input");
+    if after_downlink.as_deref() != Some("downlink") {
+        failures.push(format!("② 信号变更后 DOM 未更新：{after_downlink:?}"));
+    }
+
+    // ③ 上行：真实 input 事件 ⇒ 信号被写回
+    let dispatched = document
+        .query_selector("#l1-bind-input")
+        .ok()
+        .flatten()
+        .map(|element| {
+            let _ = js_sys::Reflect::set(
+                &element,
+                &JsValue::from_str("value"),
+                &JsValue::from_str("uplink"),
+            );
+            let event = web_sys::Event::new("input").expect("造事件必须成功");
+            let _ = element.dispatch_event(&event);
+            true
+        })
+        .unwrap_or(false);
+    if !dispatched {
+        failures.push(String::from("③ 找不到输入框，无法派发 input 事件"));
+    }
+    if signal.get() != "uplink" {
+        failures.push(format!("③ input 事件未把 DOM 值写回信号：{}", signal.get()));
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("signal_value"),
+        &JsValue::from_str(&signal.get()),
     );
     Ok(result.into())
 }

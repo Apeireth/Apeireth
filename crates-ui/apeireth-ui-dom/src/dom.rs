@@ -967,6 +967,37 @@ impl InMemoryDom {
         }
     }
 
+    /// ⭐ 派发**带载荷**的事件（`target_value`）—— 与真实浏览器侧的 `input` 事件同语义。
+    ///
+    /// ## 为什么需要它（而不是复用 [`Self::dispatch`]）
+    ///
+    /// `dispatch` 造的事件**没有 `target_value`** ⇒ ⇒ 绑定写回拿不到值
+    /// ⇒ ⇒ 「DOM → 信号」这条上行路径在 native 侧**无法测**
+    /// ⇒ ⇒ 而真实浏览器侧（`WebDom`）会把 `input.value` 填进载荷
+    /// ⇒ ⇒ native 与浏览器**语义必须一致**，否则 native 测试是假的。
+    ///
+    /// 返回实际调用次数（与 [`Self::dispatch`] 同口径）。
+    pub fn dispatch_with_value(&self, node: InMemoryNodeId, kind: EventKind, value: &str) -> usize {
+        let indices = self.target_path(&node).unwrap_or_default();
+        let mut chain: Vec<InMemoryNodeId> = vec![node];
+        while let Some(parent) = self.parent(*chain.last().expect("链非空")) {
+            chain.push(parent);
+        }
+        let mut event = crate::events::DomEvent::new(kind, indices).with_target_value(value);
+        let mut called = 0;
+        for current in chain {
+            let handler = self.listeners.borrow().get(&current, kind).cloned();
+            if let Some(handler) = handler {
+                handler.call(&mut event);
+                called += 1;
+                if event.is_propagation_stopped() {
+                    return called;
+                }
+            }
+        }
+        called
+    }
+
     /// 派发事件：自目标节点起，沿祖先链**自下而上**调用处理器。
     ///
     /// 冒泡语义与真实浏览器一致（设计文档 §5.3.3）：目标先执行，祖先后执行；

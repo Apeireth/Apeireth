@@ -4,7 +4,7 @@
     "failures": [],
     "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
     "g8_error_boundary_ok": true,
-    "g8_captured_error": "Undecidable: 渲染器未挂载：先 mount 再 patch",
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:35013/engine/pkg/p5b_harness.js:654:30\n    at handleError (http://127.0.0.1:35013/engine/pkg/p5b_harness.js:2919:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:35013/engine/pkg/p5b_harness.js:653:67)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:35013/engine/pkg/p5b_harness_bg.wasm:wasm-function[7091]:0x390539)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element (http://127.0.0.1:35013/engine/pkg/p5b_harness_bg.wasm:wasm-function[5937]:0x383844)\n    at p5b_harness.wasm.<apeireth_ui_dom[4b52a6df9575b20c]::web::WebDom as apeireth_ui_dom[4b52a6df9575b20c]::dom::Dom>::create_element (http://127.0.0.1:35013/engine/pkg/p5b_harness_bg.wasm:wasm-function[3651]:0x33edfa)\n    at p5b_harness.wasm.<apeireth_ui_dom[4b52a6df9575b20c]::renderer::Renderer<apeireth_ui_dom[4b52a6df9575b20c]::web::WebDom>>::mount_node (http://127.0.0.1:35013/engine/pkg/p5b_harness_bg.wasm:wasm-function[784]:0x12dbb7)\n    at p5b_harness.wasm.<apeireth_ui_dom[4b52a6df9575b20c]::renderer::Renderer<apeireth_ui_dom[4b52a6df9575b20c]::web::WebDom>>::mount (http://127.0.0.1:35013/engine/pkg/p5b_harness_bg.wasm:wasm-function[1990]:0x2a705d)\n    at p5b_harness.wasm.<apeireth_ui_dom[4b52a6df9575b20c]::renderer::Renderer<apeireth_ui_dom[4b52a6df9575b20c]::web::WebDom>>::render_guarded (http://127.0.0.1:35013/engine/pkg/p5b_harness_bg.wasm:wasm-function[1509]:0x24ec68)\n    at p5b_harness.wasm.p5b_harness[dc88520fbf04d6d2]::l1_probe (http://127.0.0.1:35013/engine/pkg/p5b_harness_bg.wasm:wasm-function[670]:0xa6178))",
     "g8_panic_hook": "installed",
     "engine_form": {
       "x": 8,
@@ -30,6 +30,11 @@
     "failures": [],
     "backend_actual": "Gl",
     "uploaded_w": 3
+  },
+  "binding": {
+    "ok": true,
+    "failures": [],
+    "signal_value": "uplink"
   },
   "integration": {
     "ok": true,

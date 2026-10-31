@@ -132,6 +132,39 @@ impl Binding {
         self.value() != current
     }
 
+    /// ⭐⭐ **从事件载荷写回信号**（DOM → 信号的上行路径）。
+    ///
+    /// ## 为什么用「事件载荷」而不是回读 DOM
+    ///
+    /// 事件处理器**拿不到 `&Dom`** ⇒ ⇒ 回读 DOM 做不到
+    /// ⇒ ⇒ 浏览器侧在派发时把 `input.value` / `change.checked` **填进事件载荷**
+    /// （见 `WebDom` 的载荷填充）⇒ ⇒ 处理器直接用载荷即可 ⇒ ⇒ **不产生第二份真相**。
+    ///
+    /// ## 返回值
+    ///
+    /// `true` = 信号确实被更新；`false` = 载荷里没有对应值（**不写**，
+    /// 避免用「空字符串」覆盖用户输入）。
+    pub fn write_back_from_event(&self, event: &crate::events::DomEvent) -> bool {
+        match self {
+            Self::Text { signal, .. } => match event.target_value() {
+                Some(value) => {
+                    let changed = signal.get() != value;
+                    signal.set(value.to_owned());
+                    changed
+                }
+                None => false,
+            },
+            Self::Checked { signal, .. } => match event.checked() {
+                Some(flag) => {
+                    let changed = signal.get() != flag;
+                    signal.set(flag);
+                    changed
+                }
+                None => false,
+            },
+        }
+    }
+
     /// 信号当前值（写回 DOM 时用）。
     pub fn value(&self) -> String {
         match self {

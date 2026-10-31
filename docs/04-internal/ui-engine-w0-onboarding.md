@@ -89,6 +89,31 @@ renderer.render_guarded(view)?;                 // 已验证：浏览器强制�
 ```
 > 已验证来源：`l1_probe()`（挂载 + 受控输入写回）与 `l1_integration_probe()`（受控输入 + IME + 焦点 + 列表）。
 
+### 2.1b ⭐ 双向绑定（信号 ⇄ DOM property）
+
+```rust
+use apeireth_ui_core::Runtime;
+use apeireth_ui_dom::binding::Binding;
+use apeireth_ui_dom::dom::EventKind;
+use apeireth_ui_dom::events::ElementHandler;
+
+let runtime = Runtime::new();
+let name = runtime.signal(String::from("初始值"));
+
+VNode::element("input")
+    .bind(Binding::text(name.clone()))          // ⭐ 双向：信号 ⇄ DOM 的 value
+    .handler(EventKind::Input, ElementHandler::new(move |event| {
+        // 你自己的处理器**照样会被调用**（引擎把绑定写回与它**组合**成一个监听器）
+        println!("用户输入：{:?}", event.target_value());
+    }))
+    .build()
+```
+> **行为**：信号变 ⇒ 重新渲染 ⇒ DOM 跟着变（**下行**）；
+> 用户输入 ⇒ `input` 事件 ⇒ 信号被写回（**上行**）。
+> ⭐ 引擎**不会**用内部监听器覆盖你的处理器 —— 两者**组合**成一个监听器
+> ⇒ 你的处理器与绑定写回**都在**，且写回**先**于你的处理器（你读信号能读到新值）。
+> ⚠️ IME 组合期间**不写回**（不打断输入法）。
+
 ### 2.2 状态变了怎么重渲染
 
 ```rust
