@@ -390,19 +390,67 @@ pub fn egress_gate_from_env_with_all(
             ConsequenceTracker::with_ledger(path),
         )));
     }
-    if trimmed != "1" {
-        match AuthorizationPolicy::from_carryable(trimmed) {
-            Ok(policy) => {
-                gate =
-                    gate.with_authorization(policy, Arc::new(apeireth_core::kernel::SystemClock));
-            }
-            Err(error) => {
-                eprintln!("[egress] 授权策略解析失败（{error}）—— 不装配出网闸");
-                return None;
-            }
+    match plan_authorization(trimmed) {
+        GateAuthorizationPlan::RedactionOnly => {}
+        GateAuthorizationPlan::WithPolicy(policy) => {
+            gate = gate.with_authorization(policy, Arc::new(apeireth_core::kernel::SystemClock));
+        }
+        GateAuthorizationPlan::DenyAll { error } => {
+            // ⚠️ **fail-closed**（2026-10-31 · 静态安全审计复核）。
+            //
+            // 旧行为是 `return None` ⇒ **闸根本不装配** ⇒ 脱敏与授权**双双失效**
+            // ⇒ 而启用判定（`egress_gate_enabled_from_value`）对「非 1 非空」的值
+            //   一律为**真** ⇒ ⇒ 操作者以为闸开着，实际**全裸出网**（fail-open）。
+            //
+            // ⇒ 新行为：闸**照常装配**（脱敏仍在），但挂一个**空授权策略**
+            //   （无 grant ⇒ `allows_at` 必假 ⇒ 出网一律 `Deny`）
+            //   ⇒ ⇒ 配置写错 ⇒ **显式拒绝**，而不是静默放行。
+            eprintln!(
+                "[egress] 授权策略解析失败（{error}）—— **按 fail-closed 处理**：闸照常装配，出网一律拒绝"
+            );
+            gate = gate.with_authorization(
+                AuthorizationPolicy::new(
+                    "egress-gate",
+                    "egress-gate-malformed-policy",
+                    0,
+                    Vec::new(),
+                ),
+                Arc::new(apeireth_core::kernel::SystemClock),
+            );
         }
     }
     Some(Arc::new(gate) as std::sync::Arc<dyn EgressGate>)
+}
+
+/// 授权策略的装配计划（**纯函数** ⇒ 可直接测，不碰 env）。
+///
+/// | env 值 | 计划 | 语义 |
+/// |---|---|---|
+/// | `"1"` | `RedactionOnly` | 闸照常装配，**只做脱敏**（无授权判定）|
+/// | 合法策略 JSON | `WithPolicy` | 闸 + 授权策略（未授权即拒绝，fail-closed）|
+/// | **其它非空值（畸形）** | `DenyAll` | **fail-closed**：闸照常装配，但出网一律拒绝 |
+///
+/// ⚠️ 畸形值**不能**当成「没配」（那会 fail-open ⇒ 脱敏与授权一起消失）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GateAuthorizationPlan {
+    /// `"1"` ⇒ 只脱敏。
+    RedactionOnly,
+    /// 合法策略 ⇒ 挂上它。
+    WithPolicy(AuthorizationPolicy),
+    /// 畸形 ⇒ 一律拒（fail-closed）。
+    DenyAll { error: String },
+}
+
+/// 判定 env 值对应的授权装配计划（**纯函数**）。
+pub fn plan_authorization(trimmed: &str) -> GateAuthorizationPlan {
+    let trimmed = trimmed.trim();
+    if trimmed == "1" {
+        return GateAuthorizationPlan::RedactionOnly;
+    }
+    match AuthorizationPolicy::from_carryable(trimmed) {
+        Ok(policy) => GateAuthorizationPlan::WithPolicy(policy),
+        Err(error) => GateAuthorizationPlan::DenyAll { error },
+    }
 }
 
 #[cfg(test)]
@@ -715,6 +763,102 @@ mod tests {
         let value = std::env::var(EGRESS_GATE_ENV).ok();
         if value.as_deref() != Some("1") {
             assert!(egress_gate_from_env().is_none());
+        }
+    }
+
+    // ===== 2026-10-31 · 静态安全审计复核：畸形策略必须 fail-closed =====
+
+    /// 畸形策略 ⇒ **必须**是 fail-closed 计划（**不能**是「不装配闸」）。
+    #[test]
+    fn malformed_policy_plans_deny_all_not_no_gate() {
+        for bad in [
+            "{not json",
+            r#"{"subject":"u1""#, // 截断的 JSON
+            "true",               // 不是 "1"，也不是策略
+            "[]",                 // 类型不对
+        ] {
+            match plan_authorization(bad) {
+                GateAuthorizationPlan::DenyAll { .. } => {}
+                other => panic!("畸形值 {bad:?} 必须走 fail-closed，实际：{other:?}"),
+            }
+        }
+    }
+
+    /// **合法但空 grants** 的策略 ⇒ 挂上它 ⇒ 但**无 grant ⇒ 一律拒**（同样 fail-closed）。
+    #[test]
+    fn valid_but_empty_grants_policy_still_denies() {
+        let json = r#"{"version":1,"subject":"u1","issuer":"o","issued_at_ms":1,"grants":[]}"#;
+        match plan_authorization(json) {
+            GateAuthorizationPlan::WithPolicy(policy) => {
+                assert!(policy.grants.is_empty());
+                let gate = RedactionEgressGate::new()
+                    .with_authorization(policy, Arc::new(apeireth_core::kernel::SystemClock));
+                assert!(
+                    matches!(
+                        gate.vet(&request_with("今天天气不错")),
+                        EgressVerdict::Deny { .. }
+                    ),
+                    "空授权 ⇒ 必须拒绝出网"
+                );
+            }
+            other => panic!("合法策略应走 WithPolicy，实际：{other:?}"),
+        }
+    }
+
+    /// `"1"` ⇒ 只脱敏（既有语义不变）。
+    #[test]
+    fn one_plans_redaction_only() {
+        assert_eq!(
+            plan_authorization("1"),
+            GateAuthorizationPlan::RedactionOnly
+        );
+        assert_eq!(
+            plan_authorization(" 1 "),
+            GateAuthorizationPlan::RedactionOnly
+        );
+    }
+
+    /// 合法策略 ⇒ 挂上它。
+    #[test]
+    fn valid_policy_plans_with_policy() {
+        let json = r#"{"version":1,"subject":"u1","issuer":"owner","issued_at_ms":1,
+            "grants":[{"resource":"egress","action":"egress"}]}"#;
+        match plan_authorization(json) {
+            GateAuthorizationPlan::WithPolicy(policy) => {
+                assert_eq!(policy.subject, "u1");
+            }
+            other => panic!("合法策略应走 WithPolicy，实际：{other:?}"),
+        }
+    }
+
+    /// **端到端**：畸形 env 值 ⇒ 闸**被装配**且**出网被拒**（fail-closed）。
+    ///
+    /// ⚠️ 不能直接改 env（全局状态 + 2024 版 `set_var` 不安全）
+    /// ⇒ ⇒ 用纯函数 + 显式装配走同一条语义路径。
+    #[test]
+    fn malformed_policy_yields_installed_gate_that_denies() {
+        let plan = plan_authorization("{broken");
+        let gate = match plan {
+            GateAuthorizationPlan::DenyAll { .. } => RedactionEgressGate::new().with_authorization(
+                AuthorizationPolicy::new(
+                    "egress-gate",
+                    "egress-gate-malformed-policy",
+                    0,
+                    Vec::new(),
+                ),
+                Arc::new(apeireth_core::kernel::SystemClock),
+            ),
+            _ => panic!("畸形值必须走 DenyAll"),
+        };
+        let request = request_with("今天天气不错");
+        match gate.vet(&request) {
+            EgressVerdict::Deny { reason } => {
+                assert!(
+                    reason.contains("未获授权") || reason.contains("拒绝"),
+                    "拒绝理由应可读: {reason}"
+                );
+            }
+            other => panic!("畸形策略下必须拒绝出网，实际：{other:?}"),
         }
     }
 
