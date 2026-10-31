@@ -138,6 +138,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 - **2026-10-28 更新**：新范式 v0.1 草案已落 [02-PARADIGM.md](../../design/02-PARADIGM.md)（待 owner 签署）；参考语言分析见 [reference-language-analysis-2026-10-28.md](../../design/reference-language-analysis-2026-10-28.md)。**签署前不进入 W1。**
 - **2026-10-31 更新（Astra 评审后）**：owner 拍板采纳 Astra 三空间模型——**首屏改为工作空间**；三空间 = 工作空间（默认）/ 应用空间 / 控制塔（含全息基地，单独一页、一次交互进入）；视觉身份退居环境层；范围三空间一起进。
   范式已升 [02-PARADIGM.md](../../design/02-PARADIGM.md) v0.5，施工提示词/简报升 v2.0；评审与决策见 [03-REVIEW-astra-2026-10-31.md](../../design/03-REVIEW-astra-2026-10-31.md)。
+- **2026-10-31 更新（平台定稿）**：**首发平台 = Windows 桌面**（Tauri + WebView2）；验收基线 = Windows Edge/Chrome（WebView2 内核）+ DPI 100/125/150；Linux 为兼容目标（引擎开发/CI 主平台），不要求像素一致。平台矩阵见 [02-PARADIGM.md](../../design/02-PARADIGM.md) §5.1。
 
 ---
 

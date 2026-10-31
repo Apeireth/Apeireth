@@ -3,12 +3,13 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-brief-2026-10-28.md
-Version:         3.0
+Version:         3.1
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（待 owner 转交施工方）
 Author:          总工程师（lead）· 前端视觉总攻线
-口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.0）
+口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.1）
                  施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.0）
+                 首发平台 = Windows 桌面（WebView2 验收基线；Linux 兼容目标）
 用法:            本文件说明"怎么用这份交付包"；施工细则以创作简报为准。
 ```
 
@@ -20,7 +21,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 
 ## §1 一页目标
 
-Apeireth 是一个 AI 工作系统。请设计一套全新的界面：**三个空间**——工作空间（默认首屏）/ 应用空间 / 控制塔（含全息基地）。目标是让 owner 第一眼说"行"，并让后续实现有据可依。
+Apeireth 是一个 AI 工作系统（**首发平台：Windows 桌面，Tauri + WebView2**）。请设计一套全新的界面：**三个空间**——工作空间（默认首屏）/ 应用空间 / 控制塔（含全息基地）。目标是让 owner 第一眼说"行"，并让后续实现有据可依。
 
 - 首屏是**工作空间**：让人开始工作、完成工作；
 - **应用空间**：文档/图像/浏览器/终端共享同一工作上下文；
@@ -57,7 +58,7 @@ Apeireth 是一个 AI 工作系统。请设计一套全新的界面：**三个�
 ## §5 验收（owner + 总工程师）
 
 - **owner 审美**：对三空间 × 明暗（+ 全息基地）显式说"行"——唯一主观门；
-- **客观门**：首屏是工作空间、控制塔一次交互进入、明暗双套、对比度、键盘、reduced-motion、响应式、状态覆盖、AI 建议可追溯、基地只看+选、0 装标注；
+- **客观门**：首屏是工作空间、控制塔一次交互进入、明暗双套、对比度、键盘、reduced-motion、响应式、状态覆盖、AI 建议可追溯、基地只看+选、0 装标注；**Windows Edge/Chrome（WebView2）+ DPI 100/125/150 验收基线**；Linux 仅兼容目标；
 - **交付前评审 pass**：自我否定模板（判定/三条打回理由/证据/最多两条真好/未能判断项），判定"可交"后再交。
 
 ## §6 边界与自由
