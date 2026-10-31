@@ -136,6 +136,8 @@ Author:          总工程师（lead）· 前端视觉总攻线
 - 新范式 = W0-A 的**唯一交付物**：可能取代 `docs/design/00-PHILOSOPHY.md`，也可能重写为独立文档。**新范式落地前，不进入 W1 打样**（否则打样没有靶子）。
 - 既有设计文档（`00-PHILOSOPHY.md` / `01-DESIGN-SYSTEM.md` / `design/**`）在新范式落地前只作**输入**，不作约束；**历史不追溯改写**。
 - **2026-10-28 更新**：新范式 v0.1 草案已落 [02-PARADIGM.md](../../design/02-PARADIGM.md)（待 owner 签署）；参考语言分析见 [reference-language-analysis-2026-10-28.md](../../design/reference-language-analysis-2026-10-28.md)。**签署前不进入 W1。**
+- **2026-10-31 更新（Astra 评审后）**：owner 拍板采纳 Astra 三空间模型——**首屏改为工作空间**；三空间 = 工作空间（默认）/ 应用空间 / 控制塔（含全息基地，单独一页、一次交互进入）；视觉身份退居环境层；范围三空间一起进。
+  范式已升 [02-PARADIGM.md](../../design/02-PARADIGM.md) v0.5，施工提示词/简报升 v2.0；评审与决策见 [03-REVIEW-astra-2026-10-31.md](../../design/03-REVIEW-astra-2026-10-31.md)。
 
 ---
 
