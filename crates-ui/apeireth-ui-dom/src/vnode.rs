@@ -152,6 +152,39 @@ impl VNode {
         VNode::Text(TextVNode { data: data.into() })
     }
 
+    /// ⭐⭐⭐ **收集「绑定信号 → 元素路径」的映射**（细粒度更新的地基）。
+    ///
+    /// ## 它解决什么
+    ///
+    /// 实测（E-137）：4.7k 元素的树里，**改一个叶子**的「差分 patch」要 **89 ms**
+    /// ⇒ ⇒ 瓶颈是 **patch 的逐节点比对范围**，不是视图构造（仅 2 ms）。
+    /// ⇒ ⇒ 要收窄比对范围，就必须知道「**哪个信号变 ⇒ 哪些 DOM 子树要重画**」
+    /// ⇒ ⇒ 本方法给出那个映射的**第一半**（信号 → 路径）。
+    ///
+    /// ## ⭐ 路径可直接喂给 `Renderer::node_for_path`（**同根定义**）
+    ///
+    /// 实测校准（2026-10-31）：`node_for_path` 的路径根 = **tree 根** = **挂载的那棵
+    /// VNode 的根** ⇒ ⇒ 与本方法返回的路径**同一个根定义** ⇒ ⇒ **无需任何前缀换算**。
+    ///
+    /// ## 路径语义（与 `Renderer::node_for_path` **严格一致**）
+    ///
+    /// 路径 = 从根到目标元素的**子节点索引**序列；索引 = 该节点 `children` 里的**序号**
+    /// ⇒ ⇒ **`VNode::Fragment` 自己占一个索引**（它没有 DOM 节点 ⇒ ⇒ 定位它会
+    /// `NodeNotFound`）⇒ ⇒ Fragment 的子节点路径**多一层**。
+    /// （⚠️ 第一版按「展平」实现 ⇒ ⇒ 与引擎不一致 ⇒ ⇒ 被 native 测试抓出后校准。）
+    ///
+    /// ## 用法
+    ///
+    /// ```ignore
+    /// let map = view.collect_binding_paths(); // (信号 id → 元素路径)
+    /// ```
+    pub fn collect_binding_paths(&self) -> Vec<BindingPath> {
+        let mut out = Vec::new();
+        let mut path = Vec::new();
+        collect_paths(self, &mut path, &mut out);
+        out
+    }
+
     /// ⭐⭐ **读一遍树里所有绑定用到的信号**（⇒ 自动建立响应式依赖）。
     ///
     /// ## 为什么需要它（这是我自己踩过的坑）
@@ -505,6 +538,52 @@ impl ElementVNode {
 pub struct TextVNode {
     /// 文本内容。
     pub data: String,
+}
+
+/// ⭐⭐⭐ **一个绑定在树中的位置**（信号 id + 元素路径）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindingPath {
+    /// 绑定用的信号 id（`apeireth_ui_core::graph::NodeId`）。
+    pub signal_id: apeireth_ui_core::graph::NodeId,
+    /// 元素路径（从根到该元素的**子节点索引**序列；与 `Renderer::node_for_path` 同语义）。
+    pub path: Vec<usize>,
+}
+
+/// 递归收集绑定路径。
+///
+/// ## ⭐ 路径语义（**必须与引擎一致**，2026-10-31 实测校准）
+///
+/// 引擎的路径是**挂载树路径**（`Renderer::node_for_path`）：每一层的索引 =
+/// 该节点 `children` 里的**序号** ⇒ ⇒ **`VNode::Fragment` 自己占一个索引**
+/// （虽然它**没有** DOM 节点 ⇒ ⇒ 定位到它会 `NodeNotFound`）
+/// ⇒ ⇒ Fragment 的子节点路径要**多一层**（先到 Fragment，再到它的子节点）。
+///
+/// ⚠️ 第一版实现**展平**了 Fragment ⇒ ⇒ 与引擎**不一致**
+/// ⇒ ⇒ 被 native 测试当场抓出（`node_for_path` 报 `NodeNotFound`）⇒ ⇒ 已按实测校准。
+fn collect_paths(node: &VNode, path: &mut Vec<usize>, out: &mut Vec<BindingPath>) {
+    match node {
+        VNode::Element(element) => {
+            for binding in &element.bindings {
+                out.push(BindingPath {
+                    signal_id: binding.signal_id(),
+                    path: path.clone(),
+                });
+            }
+            for (index, child) in element.children.iter().enumerate() {
+                path.push(index);
+                collect_paths(child, path, out);
+                path.pop();
+            }
+        }
+        VNode::Fragment(children) => {
+            for (index, child) in children.iter().enumerate() {
+                path.push(index);
+                collect_paths(child, path, out);
+                path.pop();
+            }
+        }
+        VNode::Text(_) => {}
+    }
 }
 
 /// 元素节点构造器。

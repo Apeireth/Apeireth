@@ -132,6 +132,19 @@ impl Binding {
         self.value() != current
     }
 
+    /// ⭐ 本绑定用的**信号 id**（⇒ 用于「信号 → DOM 路径」的映射）。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 「细粒度更新」要知道「**哪个信号**变 ⇒ ⇒ **哪些 DOM 子树**要重画」
+    /// ⇒ ⇒ 必须有「信号 ↔ DOM 位置」的对应关系 ⇒ ⇒ 本方法是它的入口。
+    pub fn signal_id(&self) -> apeireth_ui_core::graph::NodeId {
+        match self {
+            Self::Text { signal, .. } => signal.id(),
+            Self::Checked { signal, .. } => signal.id(),
+        }
+    }
+
     /// ⭐⭐ **从事件载荷写回信号**（DOM → 信号的上行路径）。
     ///
     /// ## 为什么用「事件载荷」而不是回读 DOM
