@@ -136,15 +136,75 @@ impl AccessGuardStatus {
     }
 }
 
+/// 各账**实际命中**的行数（**测出来的**，不是常量）。
+///
+/// # 为什么要有（2026-10-30 · 静态安全审计复核）
+///
+/// 审计指出：主体级遗忘的返回体 `episode/commitment/temporal/persona` 是**写死的常量**
+/// ⇒ 与真实效果脱钩 ⇒ 「报告已擦除」与「实际擦除」可以不一致。
+/// ⇒ 本结构把**真实行数**带出来 ⇒ 调用方（面板 / CLI）**看得见**实际动了多少行。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ForgetCounts {
+    /// 被标记 forgotten 的 episode 行数（本次新增）。
+    pub episodes: u64,
+    /// 被删除的 preference 行数（本次删除）。
+    pub preferences: u64,
+    /// 被撤回的 commitment 行数（本次更新）。
+    pub commitments: u64,
+    /// 被撤回的时序事实行数（本次更新）。
+    pub temporal: u64,
+    /// 被 tombstone 的人格行数（本次更新）。
+    pub personas: u64,
+}
+
+/// episode 归属**可判定性**（生产有没有把 episode 归到主体）。
+///
+/// # 为什么要有
+///
+/// `memory_principal_sessions`（主体 → 会话 映射）**生产侧没有写入方**
+/// ⇒ ⇒ 生产环境的 episode **归不到主体** ⇒ ⇒ 「被遗忘权」在 episode 维度
+/// **无法生效**。而这在旧返回体里是**看不见**的（`episode: true` 是常量）。
+///
+/// ⇒ 本结构把「**能不能判定归属**」显式带出来 ⇒ **缺口可见**，不再被常量掩盖。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AttributionStatus {
+    /// `memory_principal_sessions` 里该主体的会话数（归属映射的写入方）。
+    pub sessions_mapped: u64,
+    /// **能**归到该主体的 episode 数。
+    pub episodes_attributable: u64,
+    /// 归到该主体但**未**标 forgotten 的 episode 数（残留）。
+    pub episodes_outstanding: u64,
+}
+
+impl AttributionStatus {
+    /// 归属**不可判定**（没有任何会话映射 ⇒ 生产默认状态）。
+    pub fn unattributable(&self) -> bool {
+        self.sessions_mapped == 0
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UniversalForgetOutcome {
+    /// episode 账**已确认清空** = 「该主体有归属 episode」且「无残留」。
+    ///
+    /// ⚠️ 口径变更（2026-10-30）：旧实现是**写死 `true`** ⇒ 哪怕一个 episode 都没归到
+    /// 主体、什么都没擦除，也报「已擦除」。现改为**实测** ⇒ 归属不可判定时为 `false`
+    /// （配合 [`Self::attribution`] 说明原因，而不是谎称成功）。
     pub episode: bool,
+    /// preference 账已确认清空（**实测**；旧实现是写死 `false`，与实际执行的 DELETE 矛盾）。
     pub preference: bool,
+    /// commitment 账已确认清空（**实测**）。
     pub commitment: bool,
+    /// 时序事实账已确认清空（**实测**）。
     pub temporal: bool,
+    /// 人格账已确认清空（**实测**）。
     pub persona: bool,
     /// 访问史守卫的执行标注 (如实标注; 缺覆盖 ≠ 通过).
     pub access_guard: AccessGuardStatus,
+    /// 各账**实际命中**的行数（测出来的）。
+    pub counts: ForgetCounts,
+    /// episode 归属**可判定性**（`sessions_mapped == 0` ⇒ 生产默认 ⇒ 不可判定）。
+    pub attribution: AttributionStatus,
 }
 
 /// Durable principal-scoped governance boundary. Legacy rows without an
@@ -440,11 +500,27 @@ fn forget_principal_on_conn(
                     "principal has protected persona memory".into(),
                 ));
             }
+            // ---- 归属可判定性（实测; 生产若无映射 ⇒ 归不到主体 ⇒ 缺口必须可见）----
+            let sessions_mapped: u64 = tx.query_row(
+                "SELECT COUNT(*) FROM memory_principal_sessions WHERE principal_id=?1",
+                rusqlite::params![principal],
+                |row| row.get(0),
+            )?;
+            let episodes_attributable: u64 = tx.query_row(
+                "SELECT COUNT(*) FROM episodes e JOIN memory_principal_sessions ps ON ps.session_id=e.session_id WHERE ps.principal_id=?1",
+                rusqlite::params![principal],
+                |row| row.get(0),
+            )?;
+            // ---- 各账**实测**命中行数（旧实现是写死常量 ⇒ 与真实效果脱钩）----
+            let mut preferences_changed = 0_u64;
             if table_exists(&tx, "user_preferences")? {
                 tx.execute("DELETE FROM user_preferences WHERE session_id IN (SELECT session_id FROM memory_principal_sessions WHERE principal_id=?1)", rusqlite::params![principal])?;
+                preferences_changed = tx.changes();
             }
             tx.execute("INSERT OR IGNORE INTO episode_governance (episode_id,status,revision,reason,forgotten_at) SELECT e.id,'forgotten',0,?1,?2 FROM episodes e JOIN memory_principal_sessions ps ON ps.session_id=e.session_id WHERE ps.principal_id=?3", rusqlite::params![reason, at_ms, principal])?;
+            let episodes_changed = tx.changes();
             tx.execute("UPDATE commitments SET status='cancelled', retracted_at_ms=?1, updated_at_ms=?1, revision=revision+1 WHERE subject_id=?2 AND status='open' AND retracted_at_ms IS NULL", rusqlite::params![at_ms, principal])?;
+            let commitments_changed = tx.changes();
             tx.execute("INSERT INTO commitment_events (id,commitment_id,event_type,event_at_ms,payload_json,created_at_ms) SELECT printf('universal-forget:%s:%d',id,?1),id,'universal_forget',?1,json_object('reason',?2),?1 FROM commitments WHERE subject_id=?3 AND retracted_at_ms=?1", rusqlite::params![at_ms, reason, principal])?;
             let relation_rows: Vec<(String, String, String, String)> = {
                 let mut stmt = tx.prepare("SELECT relation_key, subject_id, predicate, object_id FROM temporal_graph_facts WHERE subject_id=?1 AND retracted_at_ms IS NULL GROUP BY relation_key")?;
@@ -455,20 +531,84 @@ fn forget_principal_on_conn(
                     .collect::<Result<Vec<_>, _>>()?;
                 rows
             };
+            let mut temporal_changed = 0_u64;
             for (relation_key, subject, predicate, object) in relation_rows {
                 let id = format!("universal-forget:{relation_key}:{at_ms}");
                 tx.execute("INSERT OR IGNORE INTO temporal_graph_facts (id,relation_key,subject_id,predicate,object_id,valid_from_ms,valid_until_ms,believed_at_ms,scope_json,provenance_json,confidence,revision,retracted_at_ms,created_at_ms) SELECT ?1,relation_key,subject_id,predicate,object_id,?2,?2,?2,scope_json,json_object('reason',?3),confidence,COALESCE(MAX(revision)+1,0),?2,?2 FROM temporal_graph_facts WHERE relation_key=?4", rusqlite::params![id,at_ms,reason,relation_key])?;
+                temporal_changed += tx.changes();
                 let _ = (subject, predicate, object);
             }
             tx.execute("UPDATE persona_profile_governance SET tombstoned_at_ms=?1,revision=revision+1,updated_at_ms=?1,reason=?2 WHERE subject_id=?3 AND protected=0 AND tombstoned_at_ms IS NULL", rusqlite::params![at_ms,reason,principal])?;
+            let personas_changed = tx.changes();
+
+            // ⚠️ **残留必须写在「写完之后」测**（后置状态）。
+            //    2026-10-30：初版把 outstanding 测在 tombstone INSERT **之前**
+            //    ⇒ 它必然还是「没被忘的那些」⇒ `episode` 永远 false
+            //    ⇒ 被既有测试 `principal_forget_works_through_the_production_store` 当场抓住。
+            let episodes_outstanding: u64 = tx.query_row(
+                "SELECT COUNT(*) FROM episodes e JOIN memory_principal_sessions ps ON ps.session_id=e.session_id WHERE ps.principal_id=?1 AND NOT EXISTS (SELECT 1 FROM episode_governance g WHERE g.episode_id=e.id AND g.status='forgotten')",
+                rusqlite::params![principal],
+                |row| row.get(0),
+            )?;
+            // 其余四账的**后置残留**（`commitment`/`temporal`/`persona` 按 `subject_id` 归属
+            // ⇒ **与归属映射无关** ⇒ 生产环境**真的**会撤回 ⇒ 残留可判定）。
+            let preferences_outstanding: u64 = if table_exists(&tx, "user_preferences")? {
+                tx.query_row(
+                    "SELECT COUNT(*) FROM user_preferences WHERE session_id IN (SELECT session_id FROM memory_principal_sessions WHERE principal_id=?1)",
+                    rusqlite::params![principal],
+                    |row| row.get(0),
+                )?
+            } else {
+                0
+            };
+            let commitments_outstanding: u64 = tx.query_row(
+                "SELECT COUNT(*) FROM commitments WHERE subject_id=?1 AND status='open' AND retracted_at_ms IS NULL",
+                rusqlite::params![principal],
+                |row| row.get(0),
+            )?;
+            let temporal_outstanding: u64 = tx.query_row(
+                "SELECT COUNT(*) FROM temporal_graph_facts WHERE subject_id=?1 AND retracted_at_ms IS NULL",
+                rusqlite::params![principal],
+                |row| row.get(0),
+            )?;
+            let personas_outstanding: u64 = tx.query_row(
+                "SELECT COUNT(*) FROM persona_profile_governance WHERE subject_id=?1 AND protected=0 AND tombstoned_at_ms IS NULL",
+                rusqlite::params![principal],
+                |row| row.get(0),
+            )?;
+
+            // ---- 返回体：**实测**而非常量（2026-10-30 · 静态安全审计复核）----
+            // 口径统一为「**已确认清空**」= 「该账**可判定归属**」∧「**无残留**」：
+            //   · `commitment`/`temporal`/`persona` 按 `subject_id` 归属 ⇒ **永远可判定**
+            //     ⇒ 无残留即 true（与旧常量语义一致，不制造回归）;
+            //   · `episode`/`preference` 依赖 `memory_principal_sessions` 映射
+            //     ⇒ **映射缺失 ⇒ 不可判定** ⇒ `false`（**不谎称已擦除**），
+            //       原因由 `attribution` 显式带出。
+            // 增量（本次动了多少行）在 `counts` 里 ⇒ 语义归语义，增量归增量。
+            let mappable = sessions_mapped > 0;
+            let episode_cleared = mappable && episodes_outstanding == 0;
+            let preference_cleared = mappable && preferences_outstanding == 0;
+            let attribution = AttributionStatus {
+                sessions_mapped,
+                episodes_attributable,
+                episodes_outstanding,
+            };
             tx.commit()?;
             Ok(UniversalForgetOutcome {
-                episode: true,
-                commitment: true,
-                temporal: true,
-                persona: true,
-                preference: false,
+                episode: episode_cleared,
+                commitment: commitments_outstanding == 0,
+                temporal: temporal_outstanding == 0,
+                persona: personas_outstanding == 0,
+                preference: preference_cleared,
                 access_guard: AccessGuardStatus::default(),
+                counts: ForgetCounts {
+                    episodes: episodes_changed,
+                    preferences: preferences_changed,
+                    commitments: commitments_changed,
+                    temporal: temporal_changed,
+                    personas: personas_changed,
+                },
+                attribution,
             })
         }
     }
