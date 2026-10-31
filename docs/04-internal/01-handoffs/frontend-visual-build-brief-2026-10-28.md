@@ -3,12 +3,12 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-brief-2026-10-28.md
-Version:         3.1
+Version:         3.2
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（待 owner 转交施工方）
 Author:          总工程师（lead）· 前端视觉总攻线
-口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.1）
-                 施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.0）
+口径真源:        创作简报 = ./frontend-visual-build-prompt-2026-10-28.md（v3.2）
+                 施工规格 = ./frontend-visual-build-spec-2026-10-31.md（v1.1）
                  首发平台 = Windows 桌面（WebView2 验收基线；Linux 兼容目标）
 用法:            本文件说明"怎么用这份交付包"；施工细则以创作简报为准。
 ```
@@ -41,6 +41,18 @@ Apeireth 是一个 AI 工作系统（**首发平台：Windows 桌面，Tauri + W
 2. **owner 审 T0**，说"行"之后才进入生产；
 3. 生产顺序：**D1 设计标准 → D3 零件与状态 → D2 成品**；交付时按同样顺序展示。
 4. owner 读 T0 若说不出画面 = T0 不够具体，重写，不许开始生产。
+
+### §3.1 进度保存（必须：每完成一个小阶段就存检查点）
+
+额度可能在任意时刻用完。**每完成一个小阶段就保存一次检查点**，保证任何时刻停下来都不丢工作、不留烂摊子：
+
+- **小阶段**：T0 写完 / D1 写完 / 每组组件 / 每张屏（含明暗）/ 每条可交互流程；
+- **每个检查点**：写完当前文件（可打开、无半成品）→ 更新 `PROGRESS.md`（已完成/进行中/未开始/下一步/待 owner）→ 更新 `MANIFEST.md`（文件对应关系）→ 打快照到 `checkpoints/vN/`（只增不改）；
+- **断点恢复**：新会话先读 `PROGRESS.md` + `MANIFEST.md`，从"下一步"继续，不重做已完成项；
+- **额度将尽**：停在完整检查点，宁可少做一张屏，不留半张屏/半套组件；
+- **文件级**：每个屏/每类组件独立文件；待做内容用显式 `TODO` 写进 MANIFEST，不交空文件/占位符。
+
+目录与模板见施工规格 §12。
 
 ## §4 交付物
 
