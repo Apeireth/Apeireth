@@ -65,6 +65,13 @@ pub enum EgressIpClass {
     Multicast,
     Unspecified,
     Broadcast,
+    /// **RFC 6598 共享地址空间**（`100.64.0.0/10`，CGNAT）。
+    ///
+    /// ⚠️ 2026-10-31：此前这一段被判成 `Public` ⇒ ⇒ **阿里云元数据
+    /// `100.100.100.200` 可达**（云厂商 SSRF 通道）。
+    Shared,
+    /// **特殊用途保留段**（RFC 6890 / 5737 / 2544 / 1112 / 1122 等）。
+    Reserved,
 }
 
 /// Classify an IP address. IPv4-mapped IPv6 addresses are classified by their
@@ -100,8 +107,41 @@ fn classify_ipv4(ip: Ipv4Addr) -> EgressIpClass {
         EgressIpClass::Unspecified
     } else if ip.is_broadcast() {
         EgressIpClass::Broadcast
+    } else if is_shared_address_space(ip) {
+        // RFC 6598 `100.64.0.0/10`（CGNAT）—— **含阿里云元数据 `100.100.100.200`**
+        // ⇒ 判成 Shared ⇒ 不是公网 ⇒ `PublicInternetOnly` 拒。
+        EgressIpClass::Shared
+    } else if is_reserved_ipv4(ip) {
+        EgressIpClass::Reserved
     } else {
         EgressIpClass::Public
+    }
+}
+
+/// **RFC 6598 共享地址空间** `100.64.0.0/10`（CGNAT / Tailscale 等）。
+///
+/// ⚠️ Rust 标准库的 `is_private` **不覆盖**这一段 ⇒ 此前会被判成公网。
+fn is_shared_address_space(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    octets[0] == 100 && (64..128).contains(&octets[1])
+}
+
+/// **特殊用途保留段**（Rust 标准库一律不覆盖 ⇒ 此前会被判成公网）。
+///
+/// * `0.0.0.0/8` —— "this network"（RFC 1122；`0.0.0.0/32` 已由 unspecified 单独判）
+/// * `192.0.0.0/24` —— IETF protocol assignments（RFC 6890）
+/// * `192.0.2.0/24` / `198.51.100.0/24` / `203.0.113.0/24` —— TEST-NET（RFC 5737）
+/// * `198.18.0.0/15` —— benchmarking（RFC 2544）
+/// * `240.0.0.0/4` —— reserved（RFC 1112）
+fn is_reserved_ipv4(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    match octets[0] {
+        0 => true,
+        192 => matches!(octets[1], 0 | 2),
+        198 => matches!(octets[1], 18 | 19 | 51),
+        203 => octets[1] == 0 && octets[2] == 113,
+        240..=255 => true,
+        _ => false,
     }
 }
 
@@ -116,9 +156,47 @@ fn classify_ipv6(ip: Ipv6Addr) -> EgressIpClass {
         EgressIpClass::Multicast
     } else if ip.is_unspecified() {
         EgressIpClass::Unspecified
+    } else if let Some(embedded) = nat64_embedded_ipv4(ip) {
+        // NAT64（RFC 6052）`64:ff9b::/96` —— 内嵌 IPv4 ⇒ 按内嵌地址判
+        // ⇒ 否则 `64:ff9b::10.0.0.1` 会绕过私有段判定。
+        classify_ipv4(embedded)
+    } else if let Some(embedded) = six_to_four_embedded_ipv4(ip) {
+        // 6to4（RFC 3056）`2002::/16` —— 内嵌 IPv4 ⇒ 同上。
+        classify_ipv4(embedded)
+    } else if is_ipv6_documentation(ip) {
+        // 文档用段 `2001:db8::/32`（RFC 3849）。
+        EgressIpClass::Reserved
     } else {
         EgressIpClass::Public
     }
+}
+
+/// NAT64 前缀 `64:ff9b::/96` 内嵌的 IPv4（RFC 6052）。
+fn nat64_embedded_ipv4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let octets = ip.octets();
+    if octets[0..4] == [0x00, 0x64, 0xff, 0x9b] && octets[4..12] == [0; 8] {
+        Some(Ipv4Addr::new(
+            octets[12], octets[13], octets[14], octets[15],
+        ))
+    } else {
+        None
+    }
+}
+
+/// 6to4 前缀 `2002::/16` 内嵌的 IPv4（RFC 3056）。
+fn six_to_four_embedded_ipv4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let octets = ip.octets();
+    if octets[0] == 0x20 && octets[1] == 0x02 {
+        Some(Ipv4Addr::new(octets[2], octets[3], octets[4], octets[5]))
+    } else {
+        None
+    }
+}
+
+/// 文档用段 `2001:db8::/32`（RFC 3849）。
+fn is_ipv6_documentation(ip: Ipv6Addr) -> bool {
+    let octets = ip.octets();
+    octets[0] == 0x20 && octets[1] == 0x01 && octets[2] == 0x0d && octets[3] == 0xb8
 }
 
 /// A single allow-list entry: exact host and optional port.
@@ -704,6 +782,93 @@ mod tests {
         let policy = EgressPolicy::PublicInternetOnly;
         let d = dest("https://example.com");
         let addrs = [SocketAddr::new("fc00::1".parse().unwrap(), 443)];
+        assert!(matches!(
+            policy.validate_resolved(&d, &addrs),
+            Err(EgressError::DestinationDenied { .. })
+        ));
+    }
+
+    // ===== 2026-10-31 · 静态安全审计复核：特殊用途段不得判成公网 =====
+
+    /// RFC 6598 共享地址空间 `100.64.0.0/10` —— **含阿里云元数据 `100.100.100.200`**。
+    ///
+    /// ⚠️ Rust 标准库的 `is_private` **不覆盖**这一段 ⇒ 修复前会被判成 `Public`
+    /// ⇒ ⇒ 云厂商 SSRF 通道。修复后必须**不是公网**。
+    #[test]
+    fn shared_address_space_is_not_public() {
+        for ip in [
+            "100.64.0.0",
+            "100.100.100.200", // **阿里云元数据**
+            "100.127.255.255",
+            "100.64.0.1", // Tailscale 常见段
+        ] {
+            let parsed: IpAddr = ip.parse().expect("ip");
+            assert!(
+                !is_public_ip(parsed),
+                "{ip} 是共享地址空间 ⇒ 不得判成公网（SSRF 通道）"
+            );
+            assert_eq!(classify_ip(parsed), EgressIpClass::Shared, "{ip}");
+        }
+    }
+
+    /// 特殊用途保留段（RFC 6890 / 5737 / 2544 / 1112 / 1122）。
+    #[test]
+    fn reserved_ipv4_ranges_are_not_public() {
+        for ip in [
+            "0.0.0.1",    // "this network"（RFC 1122）
+            "192.0.0.8",  // IETF protocol assignments（RFC 6890）
+            "192.0.2.1",  // TEST-NET-1
+            "198.18.0.1", // benchmarking（RFC 2544）
+            "198.19.255.255",
+            "198.51.100.1", // TEST-NET-2
+            "203.0.113.1",  // TEST-NET-3
+            "240.0.0.1",    // reserved（RFC 1112）
+            "255.1.2.3",
+        ] {
+            let parsed: IpAddr = ip.parse().expect("ip");
+            assert!(!is_public_ip(parsed), "{ip} 是保留段 ⇒ 不得判成公网");
+            assert_eq!(classify_ip(parsed), EgressIpClass::Reserved, "{ip}");
+        }
+    }
+
+    /// 边界：`100.63.x.x` 与 `100.128.x.x` **在**共享段之外 ⇒ 仍是公网。
+    #[test]
+    fn shared_address_space_boundaries_are_correct() {
+        assert!(is_public_ip("100.63.255.255".parse().unwrap()));
+        assert!(is_public_ip("100.128.0.0".parse().unwrap()));
+        assert!(!is_public_ip("100.64.0.0".parse().unwrap()));
+        assert!(!is_public_ip("100.127.255.255".parse().unwrap()));
+    }
+
+    /// NAT64（RFC 6052）内嵌 IPv4 ⇒ 按内嵌地址判 ⇒ 不得绕过私有段判定。
+    #[test]
+    fn nat64_embedded_private_is_classified_as_private() {
+        let ip: IpAddr = "64:ff9b::10.0.0.1".parse().unwrap();
+        assert_eq!(classify_ip(ip), EgressIpClass::Private);
+        assert!(!is_public_ip(ip));
+    }
+
+    /// 6to4（RFC 3056）内嵌 IPv4 ⇒ 同上。
+    #[test]
+    fn six_to_four_embedded_private_is_classified_as_private() {
+        let ip: IpAddr = "2002:0a00:0001::".parse().unwrap();
+        assert_eq!(classify_ip(ip), EgressIpClass::Private);
+        assert!(!is_public_ip(ip));
+    }
+
+    /// NAT64 / 6to4 内嵌**公网**地址 ⇒ 仍是公网（不许矫枉过正）。
+    #[test]
+    fn nat64_embedded_public_stays_public() {
+        let ip: IpAddr = "64:ff9b::5db8:d822".parse().unwrap();
+        assert!(is_public_ip(ip), "内嵌公网地址不应被误封");
+    }
+
+    /// `PublicInternetOnly` 策略必须**拒**云元数据地址（端到端断言，不只是分类）。
+    #[test]
+    fn public_internet_only_denies_cloud_metadata() {
+        let policy = EgressPolicy::PublicInternetOnly;
+        let d = dest("http://100.100.100.200/latest/meta-data/");
+        let addrs = [SocketAddr::new("100.100.100.200".parse().unwrap(), 80)];
         assert!(matches!(
             policy.validate_resolved(&d, &addrs),
             Err(EgressError::DestinationDenied { .. })
