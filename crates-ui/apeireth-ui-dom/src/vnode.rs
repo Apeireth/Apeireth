@@ -152,6 +152,54 @@ impl VNode {
         VNode::Text(TextVNode { data: data.into() })
     }
 
+    /// ⭐⭐ **读一遍树里所有绑定用到的信号**（⇒ 自动建立响应式依赖）。
+    ///
+    /// ## 为什么需要它（这是我自己踩过的坑）
+    ///
+    /// core 的 effect 是**依赖追踪式**的：只有在 effect 体里**读到**的信号才会被订阅。
+    /// 而 `Binding::text(signal)` 只是**把信号放进 VNode**，**不读它的值**
+    /// ⇒ ⇒ 只写 `Binding::text(sig)` 的视图**不会**订阅 `sig`
+    /// ⇒ ⇒ 状态变了界面不动 ⇒ ⇒ 必须由屏幕作者**手动** `sig.get()` 一下
+    /// ⇒ ⇒ **极易漏**（漏了就是「界面不更新」，且没有任何报错）。
+    ///
+    /// ⇒ 这个方法把「读一遍」**自动化**了：遍历树 ⇒ 对每个绑定读一次信号值
+    /// ⇒ ⇒ 依赖被 core 收集 ⇒ ⇒ 屏幕作者**不需要**手动声明。
+    ///
+    /// ## 使用位置
+    ///
+    /// 必须在 **effect 体里**调用（依赖收集只在 effect 执行期间生效）：
+    /// ```ignore
+    /// runtime.effect(move || {
+    ///     let view = screen.view();
+    ///     view.touch_bindings();   // ← 这一行建立依赖
+    ///     renderer.patch(view);
+    /// });
+    /// ```
+    ///
+    /// ## 为什么「读值」是安全的
+    ///
+    /// [`crate::binding::Binding::value`] 只是**读**信号（不写）⇒ ⇒
+    /// 不会造成信号写回风暴，也不会把 DOM 值同步回信号（那是事件路径的事）。
+    pub fn touch_bindings(&self) {
+        match self {
+            VNode::Element(element) => {
+                for binding in &element.bindings {
+                    // 只读值（建立依赖）⇒ ⇒ 丢弃结果。
+                    let _ = binding.value();
+                }
+                for child in &element.children {
+                    child.touch_bindings();
+                }
+            }
+            VNode::Fragment(children) => {
+                for child in children {
+                    child.touch_bindings();
+                }
+            }
+            VNode::Text(_) => {}
+        }
+    }
+
     /// 建一个分组节点。
     pub fn fragment(children: impl IntoIterator<Item = VNode>) -> Self {
         VNode::Fragment(children.into_iter().collect())

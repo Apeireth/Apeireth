@@ -99,7 +99,10 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
         let screen = screen.clone();
         let renderer = renderer.clone();
         runtime.effect(move || {
-            let view = screen.view(); // ← 读状态信号 ⇒ **依赖收集点**
+            let view = screen.view();
+            // ⭐ **自动建立依赖**：遍历树里所有绑定并读一次 ⇒ ⇒ core 收集到依赖
+            // ⇒ ⇒ 屏幕作者**不需要**手动 `signal.get()`（这正是本批要消除的易漏点）。
+            view.touch_bindings();
             let mut guard = renderer.borrow_mut();
             let _ = guard.patch(view);
         })
@@ -247,15 +250,6 @@ impl Screen for DemoScreen {
     fn view(&self) -> apeireth_ui_dom::vnode::VNode {
         use apeireth_ui_dom::binding::Binding;
         use apeireth_ui_dom::vnode::VNode;
-
-        // ⚠️⭐ **显式读一次信号**（依赖声明）：core 的 effect 是**依赖追踪式**的
-        //   —— 只有在 effect 体里**读到**的信号才会被订阅。
-        // ⇒ 而 `Binding::text(signal)` 只是**把信号放进 VNode**，**不读它的值**
-        // ⇒ ⇒ 若不读一次，effect **收不到依赖** ⇒ ⇒ 状态变了也不会重渲染。
-        // ⇒ ⇒ 这一行就是「声明这个视图依赖这个信号」。
-        // ⚠️ 已知缺口：依赖**应由引擎从 VNode 的绑定自动收集**（下一批），
-        //   现在需要屏幕作者自己声明 ⇒ ⇒ **容易漏** ⇒ 故在此显式标注。
-        let _ = self.text.get();
 
         VNode::element("section")
             .attr("class", "app-screen")
