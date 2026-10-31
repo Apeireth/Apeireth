@@ -21,7 +21,7 @@
 | 目录 | 是什么 | 篇数 |
 |---|---|---|
 | [`00-governance/`](00-governance/README.md) | 规矩是什么、谁定的：宪章、政策、手册、决策矩阵、台账 | 6 |
-| [`01-handoffs/`](01-handoffs/README.md) | 上一手留给下一手的现场：批次交接稿 | 11 |
+| [`01-handoffs/`](01-handoffs/README.md) | 上一手留给下一手的现场：批次交接稿 | 12 |
 | [`02-research/`](02-research/README.md) | 外部输入：调研稿、参考手册、考古与差距研究 | 22 |
 | [`03-audits/`](03-audits/README.md) | 对内核对：审计稿、差距矩阵、复核与体检 | 12 |
 | [`04-logs/`](04-logs/README.md) | 流水不是结论：工程日志与工作记录 | 2 |
