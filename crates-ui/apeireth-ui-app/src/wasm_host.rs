@@ -137,6 +137,31 @@ pub fn dispose_screen() -> Result<(), JsValue> {
     })
 }
 
+/// ⭐ **改演示屏的文本**（演示屏专用接口）。
+///
+/// ## 为什么暴露它
+///
+/// 演示屏的信号是**内部**的 ⇒ 外部改不到 ⇒ ⇒ 没有它就无法演示
+/// 「信号变 ⇒ 重渲染 ⇒ DOM 更新」这条链 ⇒ ⇒ 这条链是宿主运行时最核心的契约。
+///
+/// ⚠️ 只影响**演示屏**；真实屏幕由自己的状态源驱动。
+#[wasm_bindgen]
+pub fn set_demo_text(text: &str) -> Result<(), JsValue> {
+    HOST.with(|slot| {
+        let guard = slot.borrow();
+        let Some(host) = guard.as_ref() else {
+            return Err(JsValue::from_str("宿主薄壳：还没 boot"));
+        };
+        // 演示屏的信号访问（内部可见性靠同 crate 的 `pub(crate)` 通道）。
+        if let Some(demo) = host.screen.as_any().downcast_ref::<DemoScreen>() {
+            demo.text.set(text.to_owned());
+            host.state.borrow_mut().mark_dirty();
+            return Ok(());
+        }
+        Err(JsValue::from_str("宿主薄壳：当前屏幕不是演示屏"))
+    })
+}
+
 /// ⭐ **演示屏幕**：一个受控输入框（信号 ⇄ DOM 双向绑定）。
 ///
 /// ## 为什么内置演示屏
@@ -160,6 +185,10 @@ impl DemoScreen {
 impl Screen for DemoScreen {
     fn id(&self) -> &str {
         "demo"
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn view(&self) -> apeireth_ui_dom::vnode::VNode {

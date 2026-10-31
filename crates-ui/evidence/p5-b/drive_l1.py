@@ -17,6 +17,7 @@ python3 drive_l1.py --out DIR  # 指定输出目录
   经 **document 级**监听翻转 `Dom::is_composing()`；
 - **G6** `bounding_box_in_device` 按 `dpr × density` 换算（2.0 × 1.25 = 2.5）；
 - **G8** 错误边界：强制渲染失败 ⇒ **兜底视图真的进了 DOM** 且 `captured_error()` 是**原始错误**；
+- **产品宿主**：`boot` 挂载 ⇒ 信号变 + `rerender` ⇒ DOM 更新 ⇒ `dispose` ⇒ DOM 卸载；
 - **双向绑定**：信号 → DOM（下行）与 DOM → 信号（上行，真实 `input` 事件）都成立，
   且**用户自己的处理器不被内部写回覆盖**；
 - **组合**：在**同一棵渲染树**上同时跑 受控输入 / IME 静默期 / 焦点陷阱 / 虚拟列表窗口化
@@ -85,25 +86,29 @@ def main() -> int:
     # 探针结果分两段：`dom`（G1/G2/G3/G6/G8）与 `upload`（G7 纹理上传端到端）
     dom = report.get("dom") or report
     upload = report.get("upload") or {}
+    app = report.get("app") or {}
     binding = report.get("binding") or {}
     integration = report.get("integration") or {}
     dom_ok = bool(dom.get("ok"))
     upload_ok = bool(upload.get("ok"))
+    app_ok = bool(app.get("ok"))
     binding_ok = bool(binding.get("ok"))
     integration_ok = bool(integration.get("ok"))
     if not dom_ok:
         print(f"❌ DOM 探针失败项：{dom.get('failures')}", file=sys.stderr)
     if not upload_ok:
         print(f"❌ 上传探针失败项：{upload.get('failures')}", file=sys.stderr)
+    if not app_ok:
+        print(f"❌ 宿主探针失败项：{app.get('failures')}", file=sys.stderr)
     if not binding_ok:
         print(f"❌ 绑定探针失败项：{binding.get('failures')}", file=sys.stderr)
     if not integration_ok:
         print(f"❌ 集成探针失败项：{integration.get('failures')}", file=sys.stderr)
-    if not (dom_ok and upload_ok and binding_ok and integration_ok):
+    if not (dom_ok and upload_ok and app_ok and binding_ok and integration_ok):
         return 1
     print(
         "✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / "
-        "G8 错误边界与 panic hook / G7 纹理上传端到端 / 组合集成）"
+        "G8 错误边界与 panic hook / G7 纹理上传端到端 / 双向绑定 / 组合集成 / 产品宿主）"
     )
     return 0
 

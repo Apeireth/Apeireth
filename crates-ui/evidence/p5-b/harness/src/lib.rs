@@ -1715,3 +1715,89 @@ pub fn l1_binding_probe() -> Result<JsValue, JsValue> {
     );
     Ok(result.into())
 }
+
+/// ⭐⭐⭐⭐⭐ **产品宿主薄壳探针**（`ui-app` 的浏览器端到端证据）。
+///
+/// 验证**宿主运行时契约**在真实浏览器里成立：
+/// ①`boot` ⇒ 屏幕挂进真实 DOM（输入框出现，值 = 演示屏初始值）；
+/// ②**信号变 ⇒ 重渲染 ⇒ DOM 更新**（`set_demo_text` + `rerender`）；
+/// ③`dispose_screen` ⇒ DOM 被卸载（容器清空）。
+///
+/// ⚠️ 这是**产品宿主**的证据（不是引擎内部能力）⇒ 与 `l1_probe`（引擎能力）分开。
+#[wasm_bindgen]
+pub fn l1_app_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_app::wasm_host;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let body = document
+        .body()
+        .ok_or_else(|| JsValue::from_str("没有 body"))?;
+
+    // ① 宿主容器（真实 DOM）
+    let container = document
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建容器失败：{error:?}")))?;
+    container.set_attribute("id", "l1-app-root").map_err(|error| {
+        JsValue::from_str(&format!("设容器 id 失败：{error:?}"))
+    })?;
+    body.append_child(&container).map_err(|error| {
+        JsValue::from_str(&format!("挂容器失败：{error:?}"))
+    })?;
+
+    // ② boot
+    wasm_host::boot("#l1-app-root").map_err(|error| {
+        JsValue::from_str(&format!("boot 失败：{error:?}"))
+    })?;
+    let input_value = || -> Option<String> {
+        let element = document.query_selector("#l1-app-root input").ok().flatten()?;
+        js_sys::Reflect::get(&element, &JsValue::from_str("value"))
+            .ok()
+            .and_then(|value| value.as_string())
+    };
+    let booted = input_value();
+    if booted.as_deref() != Some("宿主已就绪") {
+        failures.push(format!("① boot 后输入框值不对：{booted:?}"));
+    }
+
+    // ③ 信号变 ⇒ rerender ⇒ DOM 更新
+    wasm_host::set_demo_text("已更新").map_err(|error| {
+        JsValue::from_str(&format!("set_demo_text 失败：{error:?}"))
+    })?;
+    let redrawn = wasm_host::rerender().map_err(|error| {
+        JsValue::from_str(&format!("rerender 失败：{error:?}"))
+    })?;
+    if !redrawn {
+        failures.push(String::from("② 状态已标脏 ⇒ rerender 必须返回 true"));
+    }
+    let after = input_value();
+    if after.as_deref() != Some("已更新") {
+        failures.push(format!("② 重渲染后 DOM 未更新：{after:?}"));
+    }
+
+    // ④ dispose ⇒ DOM 被卸载
+    wasm_host::dispose_screen()
+        .map_err(|error| JsValue::from_str(&format!("dispose 失败：{error:?}")))?;
+    let leftover = document
+        .query_selector("#l1-app-root input")
+        .ok()
+        .flatten();
+    if leftover.is_some() {
+        failures.push(String::from("③ dispose 后输入框仍在 DOM 里"));
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    Ok(result.into())
+}

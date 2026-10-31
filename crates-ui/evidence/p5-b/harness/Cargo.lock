@@ -3,6 +3,29 @@
 version = 4
 
 [[package]]
+name = "apeireth-ui"
+version = "2.0.0-rc.4"
+dependencies = [
+ "apeireth-ui-core",
+ "apeireth-ui-dom",
+ "apeireth-ui-gpu",
+ "apeireth-ui-kit",
+ "apeireth-ui-macro",
+]
+
+[[package]]
+name = "apeireth-ui-app"
+version = "2.0.0-rc.4"
+dependencies = [
+ "apeireth-ui",
+ "apeireth-ui-core",
+ "apeireth-ui-dom",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "apeireth-ui-core"
 version = "2.0.0-rc.4"
 
@@ -25,6 +48,19 @@ dependencies = [
  "web-sys",
  "wgpu",
 ]
+
+[[package]]
+name = "apeireth-ui-kit"
+version = "2.0.0-rc.4"
+dependencies = [
+ "apeireth-ui-core",
+ "apeireth-ui-dom",
+ "apeireth-ui-macro",
+]
+
+[[package]]
+name = "apeireth-ui-macro"
+version = "2.0.0-rc.4"
 
 [[package]]
 name = "apeireth-ui-scene"
@@ -419,6 +455,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 name = "p5b-harness"
 version = "0.0.0"
 dependencies = [
+ "apeireth-ui-app",
  "apeireth-ui-core",
  "apeireth-ui-dom",
  "apeireth-ui-gpu",

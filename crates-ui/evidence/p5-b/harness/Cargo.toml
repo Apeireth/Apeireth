@@ -25,6 +25,8 @@ apeireth-ui-gpu = { path = "../../../apeireth-ui-gpu" }
 apeireth-ui-dom = { path = "../../../apeireth-ui-dom" }
 #: 响应式核心（Signal/Runtime）—— 内部 crate，**非外部依赖**。
 apeireth-ui-core = { path = "../../../apeireth-ui-core" }
+#: **产品工程**（宿主薄壳）—— 内部 crate，**非外部依赖**。
+apeireth-ui-app = { path = "../../../apeireth-ui-app" }
 # 场景层（片头编舞取值链）—— 被验证对象之一。
 apeireth-ui-scene = { path = "../../../apeireth-ui-scene" }
 wasm-bindgen = "=0.2.129"
