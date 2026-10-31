@@ -15,8 +15,20 @@ name: Cargo audit (RUSTSEC advisories)
 on:
   push:
     branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
+    # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件、空 CI 在跑」时修）：
+    #   实测：本 workflow 在 PR 分支同步时会生成**无 job 的失败 run**（jobs=0）
+    #   ⇒ ⇒ 每次 push 都发一封红邮件 ⇒ ⇒ 而依赖没变时 RUSTSEC 结论与上次完全相同
+    #   ⇒ ⇒ 跑它**没有信息量** ⇒ ⇒ 只在依赖变动时才跑。
+    #   ⇒ 覆盖不丢：依赖变了照跑 + 每周 cron 仍跑 + cargo-deny 每次 PR 查 advisories。
+    paths:
+      - '**/Cargo.lock'
+      - '.github/workflows/cargo-audit.yml'
   pull_request:
     branches: ['**']
+    # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 兜底）。
+    paths:
+      - '**/Cargo.lock'
+      - '.github/workflows/cargo-audit.yml'
   schedule:
     # 每周日凌晨 4 点 (跟 eval-live 错开 1h, 避免 GPU 竞争)
     - cron: '0 4 * * 0'
