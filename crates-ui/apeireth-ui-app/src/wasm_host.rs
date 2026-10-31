@@ -51,6 +51,8 @@ struct Host {
     running: Rc<Cell<bool>>,
     /// ⭐ 当前排着的帧号（`dispose` 时用它 `cancel_animation_frame` ⇒ ⇒ 立刻停）。
     frame_id: Rc<Cell<i32>>,
+    /// ⭐ 帧槽（`dispose` 时释放 ⇒ ⇒ 帧闭包随之被 drop ⇒ ⇒ **零残留**）。
+    frame_slot: Rc<FrameSlot>,
     /// 自动渲染的 effect 句柄（**必须保留** ⇒ 否则效果被立刻撤销）。
     ///
     /// ⚠️ core 的 effect 语义：「创建时不执行、依赖标脏后重跑、重跑前清空旧依赖」。
@@ -120,6 +122,9 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
 
     let running = Rc::new(Cell::new(true));
     let frame_id = Rc::new(Cell::new(0i32));
+    let frame_slot = Rc::new(FrameSlot {
+        closure: RefCell::new(None),
+    });
     HOST.with(|slot| {
         *slot.borrow_mut() = Some(Host {
             renderer,
@@ -128,13 +133,14 @@ pub fn boot(container_selector: &str) -> Result<(), JsValue> {
             screen,
             running: running.clone(),
             frame_id: frame_id.clone(),
+            frame_slot: frame_slot.clone(),
             auto_render,
         });
     });
 
     // ⭐⭐ **帧驱动**：每帧跑一次**批次边界**（⇒ N 次状态变更 ⇒ 本帧只渲染 1 次）。
     //   ⇒ ⇒ 宿主**不需要**手动调 `flush` ⇒ 状态变 ⇒ 下一帧自动更新。
-    start_frame_loop(running, frame_id);
+    start_frame_loop(running, frame_id, frame_slot);
     Ok(())
 }
 
@@ -181,6 +187,8 @@ pub fn dispose_screen() -> Result<(), JsValue> {
         if let Some(window) = web_sys::window() {
             let _ = window.cancel_animation_frame(host.frame_id.get());
         }
+        // ⭐ 释放帧闭包（槽被释放 ⇒ ⇒ 闭包被 drop ⇒ ⇒ JS 侧回调失效 ⇒ ⇒ **零残留**）。
+        host.frame_slot.closure.borrow_mut().take();
         host.auto_render.dispose();
         host.renderer
             .borrow_mut()
@@ -218,8 +226,22 @@ pub fn set_demo_text(text: &str) -> Result<(), JsValue> {
     })
 }
 
-/// 帧回调闭包的槽（**持有**那个唯一的 `Closure`；循环引用是「它能一直活着」的前提）。
-type FrameSlot = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
+/// ⭐ **帧槽**：持有那个唯一的帧回调闭包。
+///
+/// ## 为什么用 `Weak` 打破自引用（2026-10-31）
+///
+/// 帧回调要**自己排下一帧** ⇒ ⇒ 它必须能引用「装着自己的槽」
+/// ⇒ ⇒ 若闭包**强引用**槽（`Rc`）⇒ ⇒ 槽 ⇒ 闭包 ⇒ 槽 ⇒ ⇒ **循环引用**
+/// ⇒ ⇒ 引用计数**永远不归零** ⇒ ⇒ 每次 boot 残留一个闭包（E-132 的已知债）。
+/// ⇒ ⇒ 改用 **`Weak`**：闭包只**弱**引用槽 ⇒ ⇒ 宿主释放槽 ⇒ ⇒ 弱引用失效
+/// ⇒ ⇒ 闭包随之释放 ⇒ ⇒ **彻底回收**（不再有残留）。
+pub struct FrameSlot {
+    /// 帧回调闭包（宿主释放槽时它被 drop ⇒ JS 侧回调失效）。
+    pub closure: RefCell<Option<FrameClosure>>,
+}
+
+/// 帧回调闭包的类型（每帧收到一个时间戳）。
+type FrameClosure = Closure<dyn FnMut(f64)>;
 
 /// ⭐⭐ **帧驱动循环**：每帧执行一次**批次边界渲染**。
 ///
@@ -232,7 +254,7 @@ type FrameSlot = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
 /// ## 停止
 ///
 /// `dispose_screen` 会把 `running` 置 false ⇒ ⇒ 下一帧起**不再排下一帧** ⇒ ⇒ 循环自然停。
-fn start_frame_loop(running: Rc<Cell<bool>>, frame_id: Rc<Cell<i32>>) {
+fn start_frame_loop(running: Rc<Cell<bool>>, frame_id: Rc<Cell<i32>>, slot: Rc<FrameSlot>) {
     let Some(window) = web_sys::window() else {
         return;
     };
@@ -240,8 +262,8 @@ fn start_frame_loop(running: Rc<Cell<bool>>, frame_id: Rc<Cell<i32>>) {
     //   修前：**每帧** `Closure::new` + `forget()` ⇒ ⇒ **每帧泄漏一个闭包 + 一个 JS 回调**
     //   （60 帧/秒 ⇒ 每分钟 3600 个 ⇒ 持续增长）⇒ ⇒ 那是**真缺陷**，不是一次性债。
     //   修后：**只建一个** Closure，它自己排下一帧 ⇒ ⇒ 泄漏降为「每次 boot 一个」。
-    let slot: FrameSlot = Rc::new(RefCell::new(None));
-    let slot_for_closure = slot.clone();
+    // ⭐ 闭包只**弱**引用槽 ⇒ ⇒ 宿主释放槽 ⇒ ⇒ 闭包随之释放 ⇒ ⇒ 无残留。
+    let slot_for_closure = Rc::downgrade(&slot);
     let running_for_closure = running.clone();
     let frame_id_for_closure = frame_id.clone();
     let window_for_closure = window.clone();
@@ -252,7 +274,11 @@ fn start_frame_loop(running: Rc<Cell<bool>>, frame_id: Rc<Cell<i32>>) {
         // 本帧的批次边界：把这一帧内积累的变更**合并成一次**渲染。
         let _ = render_if_dirty();
         // 排下一帧：**复用同一个 Closure**（不再每帧新建 ⇒ 不再每帧泄漏）。
-        let borrowed = slot_for_closure.borrow();
+        // 弱引用升级失败 ⇒ ⇒ 槽已被释放 ⇒ ⇒ 循环自然终止。
+        let Some(slot) = slot_for_closure.upgrade() else {
+            return;
+        };
+        let borrowed = slot.closure.borrow();
         if let Some(current) = borrowed.as_ref() {
             if let Ok(id) =
                 window_for_closure.request_animation_frame(current.as_ref().unchecked_ref())
@@ -261,17 +287,15 @@ fn start_frame_loop(running: Rc<Cell<bool>>, frame_id: Rc<Cell<i32>>) {
             }
         }
     });
-    *slot.borrow_mut() = Some(closure);
-    let borrowed = slot.borrow();
+    *slot.closure.borrow_mut() = Some(closure);
+    let borrowed = slot.closure.borrow();
     if let Some(current) = borrowed.as_ref() {
         if let Ok(id) = window.request_animation_frame(current.as_ref().unchecked_ref()) {
             frame_id.set(id);
         }
     }
-    // ⚠️ `slot` ↔ `closure` 构成**循环引用** ⇒ ⇒ closure 不会被自动 drop
-    //   ⇒ ⇒ 这正是「它能一直活着」的前提；代价是**每次 boot 泄漏一个**闭包
-    //   ⇒ ⇒ **彻底回收**需要「页面卸载钩子」显式释放（未做，已知债）。
-    //   ⚠️ 但**不再每帧泄漏**（修前才是每帧）。
+    // ⭐ 无循环引用（闭包只持 `Weak`）⇒ ⇒ 宿主释放槽 ⇒ ⇒ 闭包被 drop
+    //   ⇒ ⇒ **零残留**（E-132 的「每次 boot 泄漏一个」已消除）。
 }
 
 /// ⭐⭐ **批次边界渲染**：若被标脏 ⇒ **渲染一次**（并清脏 + 计数 +1）。
