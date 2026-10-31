@@ -99,6 +99,7 @@ def main() -> int:
     # 探针结果分两段：`dom`（G1/G2/G3/G6/G8）与 `upload`（G7 纹理上传端到端）
     dom = report.get("dom") or report
     upload = report.get("upload") or {}
+    perf = report.get("perf") or {}
     app = report.get("app") or {}
     binding = report.get("binding") or {}
     integration = report.get("integration") or {}
@@ -111,6 +112,7 @@ def main() -> int:
     app_dispose_ok = bool((app.get("dispose") or {}).get("ok"))
     app_frame_stopped_ok = bool((app.get("frame_stopped") or {}).get("ok"))
     app_reboot_ok = bool((app.get("reboot") or {}).get("ok"))
+    perf_ok = bool(perf.get("ok"))
     app_ok = (
         app_main_ok
         and app_frame_ok
@@ -137,7 +139,9 @@ def main() -> int:
         print(f"❌ 绑定探针失败项：{binding.get('failures')}", file=sys.stderr)
     if not integration_ok:
         print(f"❌ 集成探针失败项：{integration.get('failures')}", file=sys.stderr)
-    if not (dom_ok and upload_ok and app_ok and binding_ok and integration_ok):
+    if not perf_ok:
+        print(f"❌ 规模基线探针失败项：{perf.get('failures')}", file=sys.stderr)
+    if not (dom_ok and upload_ok and perf_ok and app_ok and binding_ok and integration_ok):
         return 1
     print(
         "✅ L1 浏览器探针全过（G1 测量 / G2 载荷 / G3 焦点与 IME / G6 缩放 / "

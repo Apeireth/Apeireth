@@ -60,6 +60,11 @@ requestAnimationFrame(() => {
   });
 });
 try {
+  results.perf = p5b.l1_perf_probe();
+} catch (error) {
+  results.perf = { ok: false, failures: [`规模基线探针抛错：${String(error)}`] };
+}
+try {
   results.binding = p5b.l1_binding_probe();
 } catch (error) {
   results.binding = { ok: false, failures: [`绑定探针抛错：${String(error)}`] };

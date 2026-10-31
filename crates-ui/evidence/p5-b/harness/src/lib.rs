@@ -2058,3 +2058,159 @@ pub fn l1_app_reboot_probe() -> Result<JsValue, JsValue> {
     let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
     Ok(result.into())
 }
+
+/// ⭐⭐⭐⭐ **规模基线探针**（「整树重建 + 差分 patch」的成本）。
+///
+/// ## 它回答什么
+///
+/// 当前引擎的更新路径是「**整树重建** → **差分 patch**」
+/// ⇒ ⇒ 每次状态变更都要**重新构造整棵视图树**，再由 patch **逐节点比对**。
+/// ⇒ ⇒ 成本随**树规模**线性增长 ⇒ ⇒ 大界面（长列表 / 大面板）会越来越贵。
+///
+/// ⇒ ⇒ 这里给出**可复跑的数字**：节点数、挂载耗时、单次更新耗时。
+/// ⚠️ 这些数字**机器相关** ⇒ ⇒ **不作门禁**，只作**决策依据**
+/// （「细粒度更新」值不值得做 ⇒ ⇒ 用数字说话，不靠猜）。
+///
+/// ## 顺带验证行为
+///
+/// 更新后**只有目标叶子的文本变了**，其余节点**逐字未变**
+/// ⇒ ⇒ 证明差分 patch 的**语义**是对的（不是「整棵重刷」）。
+#[wasm_bindgen]
+pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_core::Runtime;
+    use apeireth_ui_dom::binding::Binding;
+    use apeireth_ui_dom::dom::Dom;
+    use apeireth_ui_dom::vnode::VNode;
+    use apeireth_ui_dom::web::WebDom;
+    use apeireth_ui_dom::Renderer;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+    let root = dom
+        .create_element("div")
+        .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+    if let Some(body) = document.body() {
+        let _ = body.append_child(&root);
+    }
+
+    // ⭐ 树规模：宽 × 深 ⇒ 元素数 ≈ WIDTH^DEPTH × 2。
+    //   取 **8 × 4 ⇒ 约 8 千个元素**（够暴露「整树重建」的成本，又不至于把浏览器卡住）。
+    const WIDTH: usize = 8;
+    const DEPTH: usize = 4;
+
+    let runtime = Runtime::new();
+    let leaf = runtime.signal(String::from("初始"));
+    let mut renderer = Renderer::new(dom, root);
+
+    // 构树：递归生成（WIDTH 个兄弟 × DEPTH 层），**只有最深的一个叶子**带绑定。
+    fn build(width: usize, depth: usize, leaf: &apeireth_ui_core::Signal<String>, first: bool) -> VNode {
+        let mut children = Vec::with_capacity(width);
+        for index in 0..width {
+            if depth == 0 {
+                children.push(VNode::element("span").attr("data-i", index.to_string()).build());
+                if first {
+                    children.push(
+                        VNode::element("input")
+                            .attr("id", "perf-leaf")
+                            .bind(Binding::text(leaf.clone()))
+                            .build(),
+                    );
+                }
+            } else {
+                children.push(build(width, depth - 1, leaf, first && index == 0));
+            }
+        }
+        VNode::element("div").attr("class", "perf-row").child(VNode::Fragment(children)).build()
+    }
+
+    let view = || build(WIDTH, DEPTH, &leaf, true);
+
+    // ⚠️ 计时用 `js_sys::Date::now()`（**毫秒**精度）⇒ ⇒ 不依赖 wasm32 的
+    //   `Instant` 平台支持（那条路在部分 wasm 环境会 panic）。
+    let start_mount = js_sys::Date::now();
+    renderer
+        .mount(view())
+        .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+    let mount_millis = js_sys::Date::now() - start_mount;
+
+    // ⭐ 单次更新（改一个叶子信号 ⇒ 整树重建 + 差分 patch）—— **拆成两段计时**：
+    //   ①「构造」：Rust 侧重建整棵视图树（纯 CPU）；
+    //   ②「patch」：差分比对 + 写 DOM（含 JS 边界往返）。
+    //   ⇒ ⇒ 数字才**能指明该优化哪一半**（不猜）。
+    let start_update = js_sys::Date::now();
+    leaf.set(String::from("更新后"));
+    let start_build = js_sys::Date::now();
+    let new_view = view();
+    let build_millis = js_sys::Date::now() - start_build;
+    renderer
+        .patch(new_view)
+        .map_err(|error| JsValue::from_str(&format!("打补丁失败：{error}")))?;
+    let update_millis = js_sys::Date::now() - start_update;
+
+    // 行为断言：目标叶子确实更新了
+    let leaf_value = document
+        .query_selector("#perf-leaf")
+        .ok()
+        .flatten()
+        .and_then(|element| {
+            js_sys::Reflect::get(&element, &JsValue::from_str("value"))
+                .ok()
+                .and_then(|value| value.as_string())
+        });
+    if leaf_value.as_deref() != Some("更新后") {
+        failures.push(format!("目标叶子未更新：{leaf_value:?}"));
+    }
+
+    // 节点规模（DOM 实际元素数）
+    let total_elements = document
+        .query_selector_all(".perf-row")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("width"),
+        &JsValue::from_f64(WIDTH as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("depth"),
+        &JsValue::from_f64(DEPTH as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("elements"),
+        &JsValue::from_f64(total_elements as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("mount_millis"),
+        &JsValue::from_f64(mount_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("update_millis"),
+        &JsValue::from_f64(update_millis),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("build_millis"),
+        &JsValue::from_f64(build_millis),
+    );
+    Ok(result.into())
+}
