@@ -3,7 +3,7 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-kickoff-2026-10-31.md
-Version:         1.0
+Version:         1.1
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（交给施工方的第一份文件）
 Author:          总工程师（lead）· 前端视觉总攻线
@@ -27,6 +27,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 
 - **DESIGN_ONLY**：只在 `deliverables/` 产出可运行设计原型、令牌、屏幕、说明、证据与检查点；**不修改生产仓库**。
 - **PRODUCTION_IMPLEMENTATION**（后续阶段）：在**自研 UI 引擎前端工程**内实现已批准设计；保留现有运行时契约；每次修改运行相关检查与测试。
+  - **切换前提**：引擎产品工程的最小垂直切片已验证（Signal → VNode/RenderPlan → DOM mount/update/unmount → event → focus/IME → dispose，含 wasm/WebView2 验证）；**当前未满足**，所以现在只能是 DESIGN_ONLY。
   - 具体仓库路径与工程基线由引擎线在切换前指定；**本文件不预设路径**。
   - 现有 `frontend/companion-desktop`（旧前端）只是**工程背景**，不是新前端的实现目标。
 

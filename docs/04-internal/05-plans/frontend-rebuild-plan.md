@@ -139,6 +139,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 - **2026-10-31 更新（Astra 评审后）**：owner 拍板采纳 Astra 三空间模型——**首屏改为工作空间**；三空间 = 工作空间（默认）/ 应用空间 / 控制塔（含全息基地，单独一页、一次交互进入）；视觉身份退居环境层；范围三空间一起进。
   范式已升至 [02-PARADIGM.md](../../design/02-PARADIGM.md) **v1.0（owner 2026-10-31 签署冻结）**；施工提示词/简报升 v3.4；评审与决策见 [03-REVIEW-astra-2026-10-31.md](../../design/03-REVIEW-astra-2026-10-31.md)。
 - **2026-10-31 更新（方案 A）**：owner 裁定——**设计原型载体 = K3.1 HTML 原型；最终实现载体 = 自研引擎**；Svelte / `companion-desktop` 仅旧线工程基线。ADR-0018 D3 已同步修正，并已由 owner 批准转 **Accepted**；W1 对照 = K3.1 HTML 原型 vs 引擎实现；W0 的 direction board 与 3 屏样张由 K3.1 的 T0/D2 产出，owner 选定方向后 W0 关闭。
+- **2026-10-31 更新（引擎就绪度审计）**：外部评审指出**引擎产品仓当前只有 reactive core 切片**（signals/derived/effects/scheduler），没有 DOM/渲染/焦点/IME 生产消费者；与设计文档『引擎提供基础原语』存在口径差。裁定：**K3.1 设计工作不受阻**（DESIGN_ONLY），但 **W1/PRODUCTION_IMPLEMENTATION 前置门 = 引擎产品仓最小垂直切片验证通过**（Signal → VNode/RenderPlan → DOM mount/update/unmount → event → focus/IME → dispose，含 wasm/WebView2）；门未过则 W1 只做设计对照，不启引擎实现。引擎缺陷与能力矩阵由引擎线维护，本线只引用不代修。
 - **2026-10-31 更新（平台定稿）**：**首发平台 = Windows 桌面**（Tauri + WebView2）；验收基线 = Windows Edge/Chrome（WebView2 内核）+ DPI 100/125/150；Linux 为兼容目标（引擎开发/CI 主平台），不要求像素一致。平台矩阵见 [02-PARADIGM.md](../../design/02-PARADIGM.md) §5.1。
 
 ---
@@ -228,6 +229,8 @@ Author:          总工程师（lead）· 前端视觉总攻线
 | 可维护性 | 组件行数分布 / 依赖边增量 / 设计令牌覆盖率 | 机械统计 |
 
 **基底裁定门（owner 主持）**：拿 W1 数据回答「引擎能否达到设计/工程门」——通过 ⇒ 引擎继续作最终载体；不通过 ⇒ owner 用数据裁定调整（例如扩大 Svelte 原型的角色，或调整引擎边界），**本计划不预设结论**。
+
+**W1 前置门（硬）**：引擎产品仓最小垂直切片可用（Signal → VNode/RenderPlan → DOM mount/update/unmount → event → focus/IME → dispose，含 wasm32/WebView2 与真实窗口帧率验证）；能力矩阵由引擎线提供。**门未过 ⇒ W1 只做设计对照，不启引擎实现。**
 
 **W1 退出条件**：3 屏双载体可跑 + owner 审美门（通过或明确修改方向）+ 基底裁定记录落档。
 
@@ -394,6 +397,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 | **R3** | 真实 Tauri WebView 内未验证（旧线遗留最高风险） | 高（未验） | 高 | W2 硬门：真实 WebView 跑通一次才算过；不过不做 W3 |
 | **R4** | 双轨期设计漂移（K3.1 HTML 原型 vs 引擎实现） | 中 | 中 | 单一设计真源 + 生成物 `--check`；W1 后 HTML 原型**冻结**，不再演进 |
 | **R5** | owner 评审带宽不足 ⇒ 审美门堆积/代签冲动 | 中 | 高 | 批量评审节奏提案（§5.4）；**不接受代签**；积压时停线等 owner，不硬推 |
+| **R6** | 引擎就绪度与文档口径不一致（产品仓仅 reactive core；DOM/IME/WebView2 未验证） | 高（已见） | 高 | 能力矩阵由引擎线发布；W1 前置门 = 产品仓最小垂直切片 + wasm/WebView2 验证；门未过不启实现；K3.1 设计不受阻 |
 | **R6** | 华服线诱惑/夹带（3D/场景/桌宠提前开工） | 中 | 中 | 范围锁（§3.7）：W4 前不开工；例外须 owner 书面改范围 |
 | **R7** | 旧线冻结资产被误用进新线（旧外观组件/旧测试） | 中 | 中 | FROZEN 标注 + 只读纪律；新线评审检查「新组件是否真的按新设计」 |
 | **R8** | W4 生产切换回滚失败 | 低 | 高 | 切换前设计开关/双入口 + 回滚演练；旧包保留；数据面不变 |

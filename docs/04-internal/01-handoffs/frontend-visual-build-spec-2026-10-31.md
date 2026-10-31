@@ -3,7 +3,7 @@
 ```
 [Document-Meta]
 Document:        docs/04-internal/01-handoffs/frontend-visual-build-spec-2026-10-31.md
-Version:         1.4
+Version:         1.5
 Last-Modified:   2026-10-31
 Status:          🟡 施工输入（与创作简报一起交给施工方）
 Author:          总工程师（lead）· 前端视觉总攻线
@@ -20,7 +20,7 @@ Author:          总工程师（lead）· 前端视觉总攻线
 ## §0 实现基线与边界
 
 - 最终实现 = **自研 UI 引擎**（Rust → wasm）+ Tauri WebView（Windows 首发）。
-- 引擎提供基础原语（响应式、DOM 绑定、事件、布局测量、焦点/IME、滚动与虚拟化、主题通道），**没有现成组件库**。
+- 引擎的**能力边界以引擎线发布的能力矩阵为准**；当前阶段不要假设任何原语（DOM/布局/焦点/IME/虚拟化等）已经就绪，也不要依赖第三方 UI 组件库。
 - 交付的是设计原型（HTML/CSS/JS），不写生产代码；D5 需标注：哪些效果用 DOM/CSS、哪些依赖 Canvas/WebGL、哪些需要引擎补齐，并给出降级方案。
 - 效果优先：不确定引擎能否支持的效果，标"需引擎支持"，不要自我阉割。
 
