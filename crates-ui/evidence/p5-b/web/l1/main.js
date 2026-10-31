@@ -46,6 +46,11 @@ requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         try {
           results.app.frame_stopped = p5b.l1_app_frame_stopped_probe(rendersAtDispose);
+        try {
+          results.app.reboot = p5b.l1_app_reboot_probe();
+        } catch (error) {
+          results.app.reboot = { ok: false, failures: [`反复换屏探针抛错：${String(error)}`] };
+        }
         } catch (error) {
           results.app.frame_stopped = { ok: false, failures: [`帧停止探针抛错：${String(error)}`] };
         }

@@ -1973,3 +1973,88 @@ pub fn l1_app_frame_stopped_probe(before: usize) -> Result<JsValue, JsValue> {
     let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
     Ok(result.into())
 }
+
+/// ⭐⭐⭐ **反复换屏回归**（dispose ⇒ 再 boot ⇒ …）。
+///
+/// ## 它验证什么
+///
+/// 宿主换屏是**常态**（路由切换）⇒ ⇒ 每换一次都会 `dispose` 旧屏 + `boot` 新屏
+/// ⇒ ⇒ 若 `dispose` 没清干净（焦点陷阱 / IME 队列 / 帧循环 / 捕获错误）
+/// ⇒ ⇒ 旧屏的残留会**渗进**新屏 ⇒ ⇒ 且问题往往**延迟**出现（很难定位）。
+/// ⇒ ⇒ 这里连做 **3 轮**「boot ⇒ 改信号 ⇒ 渲染 ⇒ dispose ⇒ 卸载」
+/// ⇒ ⇒ 每轮都断言「渲染生效 + DOM 真的被卸载」⇒ ⇒ 证**反复换屏不累积问题**。
+#[wasm_bindgen]
+pub fn l1_app_reboot_probe() -> Result<JsValue, JsValue> {
+    use apeireth_ui_app::wasm_host;
+
+    let mut failures: Vec<String> = Vec::new();
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+    let body = document
+        .body()
+        .ok_or_else(|| JsValue::from_str("没有 body"))?;
+
+    for round in 1..=3u32 {
+        // ① 每轮用**独立**容器（避免上一轮的残留干扰断言）。
+        let container = document
+            .create_element("div")
+            .map_err(|error| JsValue::from_str(&format!("建容器失败：{error:?}")))?;
+        let container_id = format!("l1-app-reboot-{round}");
+        container
+            .set_attribute("id", &container_id)
+            .map_err(|error| JsValue::from_str(&format!("设容器 id 失败：{error:?}")))?;
+        body.append_child(&container)
+            .map_err(|error| JsValue::from_str(&format!("挂容器失败：{error:?}")))?;
+
+        // ② boot
+        wasm_host::boot(&format!("#{container_id}")).map_err(|error| {
+            JsValue::from_str(&format!("第 {round} 轮 boot 失败：{error:?}"))
+        })?;
+
+        // ③ 改信号 ⇒ 显式 flush ⇒ DOM 更新（批边界路径）
+        let text = format!("第{round}轮");
+        wasm_host::set_demo_text(&text).map_err(|error| {
+            JsValue::from_str(&format!("第 {round} 轮改信号失败：{error:?}"))
+        })?;
+        wasm_host::flush()
+            .map_err(|error| JsValue::from_str(&format!("第 {round} 轮 flush 失败：{error:?}")))?;
+        let value = document
+            .query_selector(&format!("#{container_id} input"))
+            .ok()
+            .flatten()
+            .and_then(|element| {
+                js_sys::Reflect::get(&element, &JsValue::from_str("value"))
+                    .ok()
+                    .and_then(|value| value.as_string())
+            });
+        if value.as_deref() != Some(text.as_str()) {
+            failures.push(format!("第 {round} 轮渲染未生效：{value:?}"));
+        }
+
+        // ④ dispose ⇒ DOM 真的被卸载（**残留会渗进下一轮** ⇒ 必须每轮都干净）
+        wasm_host::dispose_screen().map_err(|error| {
+            JsValue::from_str(&format!("第 {round} 轮 dispose 失败：{error:?}"))
+        })?;
+        let leftover = document
+            .query_selector(&format!("#{container_id} input"))
+            .ok()
+            .flatten();
+        if leftover.is_some() {
+            failures.push(format!("第 {round} 轮 dispose 后输入框仍在 DOM 里"));
+        }
+    }
+
+    let result = js_sys::Object::new();
+    let failures_array = js_sys::Array::new();
+    for item in &failures {
+        failures_array.push(&JsValue::from_str(item));
+    }
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("ok"),
+        &JsValue::from_bool(failures.is_empty()),
+    );
+    let _ = js_sys::Reflect::set(&result, &JsValue::from_str("failures"), &failures_array);
+    Ok(result.into())
+}
