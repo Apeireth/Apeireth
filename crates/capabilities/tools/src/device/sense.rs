@@ -7,12 +7,19 @@
 //! 插槽图见 [`crate::device::adapter`] (mock 已接固定 fixture, 真实协议族留
 //! 插槽不接)。
 //!
-//! # 敏感面: 摄像头类 = 显式授权 + 审计
+//! # 敏感面: 摄像头类 = 宿主拍板 + 审计
 //!
 //! 摄像头类 (谁在家类目) 是**敏感读面**: 每次感知尝试都落审计账
-//! ([`crate::device::audit`], append-only); 放行要**显式授权**
-//! (`sensitive_read_authorized: true` + 非空 `authorized_by`), 缺任一 =
-//! 拒绝即帧 + 审计行 `denied`。审计账写不进 = 不放行 (fail-closed)。
+//! ([`crate::device::audit`], append-only); 放行要**宿主拍板** —— 模型面
+//! **无权提供授权人** (授权旗 `sensitive_read_authorized` 只是模型的*请求*,
+//! 真正放行看**宿主决定账**的批准记录, 见 [`crate::device::approval`]),
+//! 缺拍板 = 拒绝即帧 + 审计行 `denied`。审计账写不进 = 不放行 (fail-closed)。
+//!
+//! **同族缺陷 (2026-11-01 安全审计)**: 原实现把 `authorized_by` 直接取自
+//! **模型参数** ⇒ 模型可以自称「已获授权」从而读摄像头, 且审计账里的授权人
+//! 不可信。现由 [`DeviceSenseApprovalHook`] (宿主审批门, 与执行面
+//! `DeviceControlApprovalHook` 同形态) 承载宿主人批, 工具面只认决定账里的
+//! 宿主署名。
 //!
 //! # 治理 (风险档 = 低-中, 读面)
 //!
@@ -32,7 +39,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use apeireth_core::kernel::CapabilityId;
-use apeireth_governance::{ToolGuard, ToolGuardRequest};
+use apeireth_governance::{
+    Action, Decision, GovernanceHook, GovernanceRequest, ToolGuard, ToolGuardRequest,
+};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use async_trait::async_trait;
@@ -40,6 +49,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::adapter::{AdapterRegistry, DeviceState};
+use super::approval::{host_approval, DeviceApprovalDecisionLedger};
 use super::audit::{DeviceSenseAuditLedger, SensitiveReadAudit, SensitiveReadOutcome};
 use super::registry::{Device, DeviceKind, DeviceRegistry, DevicesBody};
 use crate::exec_pipeline::{AroundPolicy, OutputSchema, SchemaKind, DEFAULT_MAX_TIMEOUT_MS};
@@ -77,7 +87,12 @@ pub const DEVICE_SENSE_ACTIONS: &[&str] = &[ACTION_LIST, ACTION_SENSE];
 struct DeviceSenseParams {
     action: Option<String>,
     device_ids: Option<Vec<String>>,
+    /// 模型的**请求**旗 (摄像头类敏感读要显式请求) —— **不是授权**: 真正的
+    /// 放行看宿主决定账的批准记录 (模型的授权旗/授权人一律不作数)。
     sensitive_read_authorized: Option<bool>,
+    /// 模型自称的授权人 —— **一律不作数** (2026-11-01 安全审计: 原实现直接
+    /// 取这个模型参数当授权人 ⇒ 模型可自称「已获授权」读摄像头, 且审计账里的
+    /// 授权人不可信)。保留解析只为旧提示词不硬失败; 真授权只认宿主决定账。
     authorized_by: Option<String>,
 }
 
@@ -189,21 +204,24 @@ pub fn device_presence_status(
 /// 设备感知工具 (`tool.device_sense`, 声明名 `device_sense`)。
 ///
 /// 读面零执行: `list` 只回白名单视图, `sense` 走适配器读状态 (白名单 +
-/// 敏感面显式授权 + 审计)。
+/// 敏感面宿主拍板 + 审计)。
 pub struct DeviceSenseTool {
     id: CapabilityId,
     registry: DeviceRegistry,
     adapters: AdapterRegistry,
     audit: DeviceSenseAuditLedger,
+    /// 宿主决定账 (敏感读的「谁批」唯一来源; 模型参数不作数)。
+    decisions: DeviceApprovalDecisionLedger,
     activity: Arc<DeviceSenseActivity>,
 }
 
 impl DeviceSenseTool {
-    /// 绑定设备表 / 适配器注册表 / 敏感读审计账 / 进程内计数。
+    /// 绑定设备表 / 适配器注册表 / 敏感读审计账 / 宿主决定账 / 进程内计数。
     pub fn new(
         registry: DeviceRegistry,
         adapters: AdapterRegistry,
         audit: DeviceSenseAuditLedger,
+        decisions: DeviceApprovalDecisionLedger,
         activity: Arc<DeviceSenseActivity>,
     ) -> Self {
         Self {
@@ -211,6 +229,7 @@ impl DeviceSenseTool {
             registry,
             adapters,
             audit,
+            decisions,
             activity,
         }
     }
@@ -277,31 +296,43 @@ impl DeviceSenseTool {
             Err(refusal) => return self.refuse(call, refusal),
         };
 
-        // 敏感面 (摄像头类): 显式授权 + 审计 —— 每次尝试都入账, 写不进 = 不放行。
+        // 敏感面 (摄像头类): 宿主拍板 + 审计 —— 每次尝试都入账, 写不进 = 不放行。
         let sensitive_targets: Vec<&Device> = targets
             .iter()
             .copied()
             .filter(|device| device.kind.is_sensitive())
             .collect();
         if !sensitive_targets.is_empty() {
-            let authorizer = params
-                .authorized_by
-                .as_deref()
-                .map(str::trim)
-                .filter(|text| !text.is_empty())
-                .map(str::to_string);
-            let granted = params.sensitive_read_authorized == Some(true) && authorizer.is_some();
-            let (outcome, reason) = if granted {
-                (
+            // **原先错在哪**: 授权人直接取模型参数 (`authorized_by`) ⇒ 模型自称
+            // 「已获授权」即可读摄像头, 审计账里的授权人也不可信。
+            // **现在为什么这样**: 放行只认**宿主写的决定账** (宿主拍板记录);
+            // 模型自称的授权人/授权旗一律不作数 (不采信、不落账) —— 审计账里
+            // 的 `authorized_by` 是宿主的署名 (决定账 `decided_by` 原样)。
+            let plan_id = sense_plan_id(&sensitive_targets);
+            let host = host_approval(&self.decisions, None, &plan_id, false);
+            let (outcome, reason, authorizer) = match &host {
+                Ok(approval) => (
                     SensitiveReadOutcome::Granted,
-                    "显式授权齐备 (sensitive_read_authorized=true + authorized_by)".to_string(),
-                )
+                    format!("宿主已拍板 (决定账批准记录: {})", approval.approved_by),
+                    Some(approval.approved_by.clone()),
+                ),
+                Err(error) => (
+                    SensitiveReadOutcome::Denied,
+                    format!("摄像头类是敏感读面: {error}"),
+                    None,
+                ),
+            };
+            // 模型的请求旗仍是必要条件 (模型得显式要读摄像头类): 但它**不是**
+            // 授权 —— 授权只认宿主决定账 (上面那一步)。
+            let granted = outcome == SensitiveReadOutcome::Granted
+                && params.sensitive_read_authorized == Some(true);
+            let (outcome, reason, authorizer) = if granted {
+                (outcome, reason, authorizer)
             } else {
                 (
                     SensitiveReadOutcome::Denied,
-                    "摄像头类是敏感读面: 显式授权缺位 (需 sensitive_read_authorized=true \
-                     且 authorized_by 非空)"
-                        .to_string(),
+                    format!("{reason}; 且模型未显式请求敏感读 (sensitive_read_authorized=true)"),
+                    None,
                 )
             };
             let at_ms = now_epoch_ms();
@@ -397,6 +428,20 @@ impl DeviceSenseTool {
     }
 }
 
+/// 敏感读计划身份 (宿主拍板的闭合身份): 同一批敏感设备的一次读 = 一个身份。
+///
+/// 与动作面的 `plan_id_for` 同口径 (fnv1a64 规范摘要) ⇒ 宿主批的是「这一批
+/// 设备的这一次读」; 换一批设备 = 换身份 (不得借批)。
+pub fn sense_plan_id(devices: &[&Device]) -> String {
+    let mut ids: Vec<&str> = devices.iter().map(|device| device.id.as_str()).collect();
+    ids.sort_unstable();
+    let canonical = format!("device_sense\nsense\n{}", ids.join("\n"));
+    format!(
+        "{:016x}",
+        crate::worktree_plan::fnv1a64(canonical.as_bytes())
+    )
+}
+
 /// 目标选择 (纯判定): 白名单制 —— 默认全白名单; 指定 id 时逐台核白名单。
 ///
 /// 表外 / 停用设备 = `Err(拒绝即帧文案)` (底线①: 显式登记 + 启用才可感知)。
@@ -458,11 +503,7 @@ impl ToolCapability for DeviceSenseTool {
                     },
                     "sensitive_read_authorized": {
                         "type": "boolean",
-                        "description": "sense of camera-class devices only: explicit authorization flag. Camera-class reads are a sensitive face - without this true plus a non-empty authorized_by the read is refused and the attempt lands in the audit ledger."
-                    },
-                    "authorized_by": {
-                        "type": "string",
-                        "description": "sense of camera-class devices only: who granted the explicit authorization (recorded truthfully in the audit ledger)."
+                        "description": "sense of camera-class devices only: the model's REQUEST to read a camera-class device. This flag is NOT an authorization: the host must have approved the read (host decision ledger), otherwise the read is refused and the attempt lands in the audit ledger. You cannot name the authorizer - the host owns that."
                     }
                 },
                 "required": ["action"],
@@ -481,9 +522,9 @@ impl ToolCapability for DeviceSenseTool {
                  so in source_note; real protocol adapters (local_bridge / cloud_bridge / \
                  direct) are reserved slots that are honestly not wired yet. Camera-class \
                  devices are a sensitive read face: each attempt is audited (append-only \
-                 device-sense-audit.jsonl) and a read needs explicit authorization \
-                 (sensitive_read_authorized=true + authorized_by). This face only senses - it \
-                 never controls a device.",
+                 device-sense-audit.jsonl) and a read needs the HOST's approval (a host decision \
+                 record) - you cannot grant it yourself and you cannot name the authorizer. \
+                 This face only senses - it never controls a device.",
             )
             .with_parameters(parameters)
     }
@@ -516,8 +557,13 @@ impl ToolCapability for DeviceSenseTool {
     }
 }
 
-/// 单调边界 Guard (只拒不放): 敏感读面授权参数的诚实性 —— 开了授权旗但没给
+/// 单调边界 Guard (只拒不放): 模型自称授权的**诚实性** —— 开了授权旗却给不出
 /// 授权人 = 拒 (任何后续阶段都不能翻回放行)。
+///
+/// **口径说明 (2026-11-01 安全审计)**: 模型的授权旗/授权人**一律不作数**
+/// (放行只认宿主决定账, 见 [`host_approval`]); 本 Guard 只拦最不诚实的一档
+/// (开了旗却给不出授权人), 免得审计账里出现无主的授权声明。真正的放行判定
+/// 在工具面 (宿主拍板 + 审计留痕)。
 pub struct DeviceSenseBoundaryGuard;
 
 impl DeviceSenseBoundaryGuard {
@@ -558,11 +604,104 @@ impl ToolGuard for DeviceSenseBoundaryGuard {
         {
             return Some(
                 "拒绝感知: sensitive_read_authorized=true 必须配非空 authorized_by \
-                 (谁授权要如实留痕, 审计账要落授权人)"
+                 (模型自称的授权人不作数, 放行只认宿主拍板)"
                     .to_string(),
             );
         }
         None
+    }
+}
+
+/// 敏感读面的**宿主审批门** (治理链, 与执行面 `DeviceControlApprovalHook`
+/// 同形态): 摄像头类敏感读 = [`Decision::require_approval`] (宿主人批, 无
+/// 自动放行档); 其余读面 (白名单视图 / 非敏感设备) 放行。
+///
+/// **原先错在哪**: 敏感读没有任何宿主审批门 —— 授权人直接取模型参数, 模型
+/// 自称「已获授权」即可读摄像头 (注册即 grant, 零审批)。
+/// **现在为什么这样**: 敏感读先停宿主人批 (无自动档), 且真正的放行判定在
+/// 工具面查**宿主决定账** (模型的授权旗/授权人一律不作数)。
+#[derive(Debug, Clone)]
+pub struct DeviceSenseApprovalHook {
+    registry: DeviceRegistry,
+}
+
+impl DeviceSenseApprovalHook {
+    /// 绑定设备表 (判定本次读是否命中摄像头类敏感面)。
+    pub fn new(registry: DeviceRegistry) -> Self {
+        Self { registry }
+    }
+
+    /// 数据目录落位 (设备表 = `<data_dir>/devices.json`, 与感知面同一本)。
+    pub fn under_data_dir(data_dir: impl AsRef<std::path::Path>) -> Self {
+        Self::new(DeviceRegistry::under_data_dir(data_dir))
+    }
+}
+
+#[async_trait]
+impl GovernanceHook for DeviceSenseApprovalHook {
+    fn name(&self) -> &str {
+        "device_sense_sensitive_read"
+    }
+
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        let Action::CapabilityDispatch {
+            capability,
+            arguments,
+        } = &request.action
+        else {
+            return Decision::Allow;
+        };
+        if capability.as_str() != DEVICE_SENSE_CAPABILITY_ID {
+            return Decision::Allow;
+        }
+        let verb = arguments
+            .get("action")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        match verb {
+            // 白名单视图读 = 零副作用读面: 零审批。
+            ACTION_LIST => Decision::Allow,
+            ACTION_SENSE => {
+                // 设备表拒开 = fail-closed (不放行未知面)。
+                let body = match self.registry.load() {
+                    Ok(body) => body,
+                    Err(error) => {
+                        return Decision::deny(format!(
+                            "设备表拒开, 拒绝感知 (fail-closed, 不回退默认表): {error}"
+                        ))
+                    }
+                };
+                let device_ids = arguments
+                    .get("device_ids")
+                    .and_then(Value::as_array)
+                    .map(|ids| {
+                        ids.iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect::<Vec<String>>()
+                    });
+                let targets = match select_targets(&body, device_ids.as_deref()) {
+                    Ok(targets) => targets,
+                    Err(refusal) => return Decision::deny(refusal),
+                };
+                let sensitive: Vec<&str> = targets
+                    .iter()
+                    .filter(|device| device.kind.is_sensitive())
+                    .map(|device| device.id.as_str())
+                    .collect();
+                if sensitive.is_empty() {
+                    return Decision::Allow;
+                }
+                Decision::require_approval(format!(
+                    "摄像头类是敏感读面 (设备: {}): 宿主必须拍板才放行 \
+                     (工具面查宿主决定账的批准记录; 模型的授权旗/授权人不作数)",
+                    sensitive.join(", ")
+                ))
+            }
+            other => Decision::deny(format!(
+                "设备感知拍 {other:?} 不在闭合拍词表 (list/sense): fail-closed 拒绝即帧"
+            )),
+        }
     }
 }
 
@@ -587,6 +726,7 @@ pub fn device_sense_capability(
         config.registry(),
         AdapterRegistry::builtin(),
         config.audit(),
+        config.decisions(),
         activity,
     ));
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
@@ -626,6 +766,14 @@ impl DeviceSenseConfig {
     /// 本配置的敏感读审计账。
     pub fn audit(&self) -> DeviceSenseAuditLedger {
         DeviceSenseAuditLedger::under_data_dir(&self.data_dir)
+    }
+
+    /// 本配置的**宿主决定账** (敏感读放行的「谁批」唯一来源)。
+    ///
+    /// 与执行面的审批决定账同一本 (`device-approval-decisions.jsonl`, 同数据
+    /// 目录) ⇒ 两个设备面 (读面/执行面) 的「谁批」同源同账。
+    pub fn decisions(&self) -> DeviceApprovalDecisionLedger {
+        DeviceApprovalDecisionLedger::under_data_dir(&self.data_dir)
     }
 
     /// 开关实况: `APEIRETH_ENABLE_DEVICE_SENSE` 只认显式 `"1"` (默认关 fail-closed)。

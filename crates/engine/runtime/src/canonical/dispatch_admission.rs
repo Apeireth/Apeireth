@@ -220,6 +220,85 @@ impl Runtime {
                 ));
             }
 
+            // P3-6 修复 (2026-11-01): 已批准 / 预批的调用**仍然要过治理链**。
+            //
+            // 原先错在哪: 本分支只复核冻结审批的身份 / 指纹 / 动作绑定, 就直接
+            // 返回 `ToolAdmission::Ready` —— 全程**不调** `self.governance`
+            // ⇒ 共享 live 策略 (`PermissionPolicy`) 上的热撤销
+            // (`revoke`, 面板 `POST /v1/panel/grants/revoke`) 对「已经批准过」
+            // 的调用**完全无效**: 撤销之后再恢复/再派发, 照样执行。
+            //
+            // 现在为什么这样: 「已批准」≠「免治理」。本分支与普通路径**同样评估
+            // 治理**, 但把「需要人工审批」这一档**降级为「已批准」** —— 人已经对
+            // 这一次调用 (冻结载荷, 经绑定复核) 拍过板, 不再二次索要审批;
+            // **拒绝档照旧拒绝** (fail closed) ⇒ 热撤销立即生效。
+            let action = Action::CapabilityDispatch {
+                capability: &capability,
+                arguments: &call.arguments,
+            };
+            let label = action.label();
+            let verdict = self
+                .governance
+                .evaluate_verbose(
+                    &GovernanceRequest::new(action, *session_id, trace_id, round)
+                        .with_action_id(&call.id)
+                        .with_optional_security_context(security_context),
+                )
+                .await;
+            let hook = verdict.hook;
+            let owner = verdict.owner;
+            // 「需要人工审批」→ 「已批准」 (降级, 不是跳过治理)。
+            let downgraded = matches!(verdict.decision, Decision::RequireApproval { .. });
+            let decision = if downgraded {
+                Decision::Allow
+            } else {
+                verdict.decision.clone()
+            };
+            let reason = if downgraded {
+                // 降级档: 如实留痕「审批已由人拍板, 治理仍被评估」。
+                Some(
+                    "pre-approved dispatch: the human already approved this frozen invocation; \
+                     the require-approval tier is downgraded to allow"
+                        .to_string(),
+                )
+            } else {
+                decision.reason().map(str::to_owned)
+            };
+
+            trace.record(
+                Timestamp::from_clock(clock),
+                TraceEvent::GovernanceEvaluated {
+                    hook: hook.clone(),
+                    owner,
+                    action: label.to_string(),
+                    decision: decision.label().to_string(),
+                    reason,
+                    round,
+                },
+            );
+
+            if let Decision::Deny { reason } = &decision {
+                // 治理拒绝 ⇒ 拒绝即帧: 不派发、不落盘, 落审计行。
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::GovernanceDenied {
+                        hook,
+                        action: label.to_string(),
+                        reason: reason.clone(),
+                        round,
+                    },
+                    clock,
+                );
+                return Ok(ToolAdmission::Resolved(
+                    ToolResult::permanent_error(
+                        &call.id,
+                        format!("refused by governance: {reason}"),
+                    )
+                    .with_name(&call.name),
+                ));
+            }
+
             // Observation layer at the dispatch boundary: the side-effect
             // audit event is checked before the dispatch is recorded and the
             // invocation runs.

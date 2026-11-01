@@ -80,6 +80,12 @@ pub fn is_write_or_execute_capability(capability: &CapabilityId) -> bool {
         // **执行面**(开/关/调参), 只读会话不得驱动; L3 白名单 + L4 动钱/不可逆
         // 永人批是它自己的门, 但读-only 预设应先于它整体拒绝。
         "tool.device_control",
+        // K 轴 L1 在场感知 (`tool.device_sense`): **含摄像头类敏感读面** ——
+        // ① 敏感读必须宿主拍板 (决定账) 才放行 ⇒ 只读会话不得触发这种需人批
+        // 的物理面读; ② 每次感知尝试都往审计账 append 一行 = 写面 (同
+        // `tool.filesystem` 口径: 含写权的面整个算写)。⇒ 只读档整体拒绝
+        // (fail-closed); 纯数据读走 `tool.weather` 等面。
+        "tool.device_sense",
         // 主动关怀规则面 (`tool.care_schedule`): 增删规则 = 改持久化关怀配置
         // (写面), 只读会话不应改; 「读」在 `tool.self_status` 关怀节。
         "tool.care_schedule",
@@ -780,6 +786,9 @@ mod tests {
             "tool.sheet_ops",
             "tool.device_control",
             "tool.care_schedule",
+            // K 轴 L1 感知面 (2026-11-01 安全审计): 摄像头类敏感读要宿主拍板 +
+            // 每次尝试都 append 审计账 (含写权) ⇒ 只读档整体拒绝。
+            "tool.device_sense",
             // 出口 / 远端副作用
             "tool.fetch",
             "tool.repo",
@@ -805,9 +814,10 @@ mod tests {
             "tool.worktree_plan",
             "fs.read",
             "unknown.reader",
-            // K 轴读面: 感知/天气/守护都**只看不动** —— 设备动作归
-            // `tool.device_control`(写/执行面, 已在上方名单), 守护只看不发动作。
-            "tool.device_sense",
+            // K 轴读面: 天气/守护都**只看不动** —— 设备动作归
+            // `tool.device_control`(写/执行面, 已在上方名单), 守护只看不发动作;
+            // 感知面 (`tool.device_sense`) 含摄像头类敏感读 + 审计 append ⇒
+            // 已归入上方拒绝名单 (2026-11-01 安全审计)。
             "tool.weather",
             "tool.guard_watch",
         ] {

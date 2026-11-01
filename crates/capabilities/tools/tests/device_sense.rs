@@ -11,12 +11,15 @@ use apeireth_governance::{ToolGuard, ToolGuardRequest};
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
 use apeireth_tools_canonical::device::adapter::{AdapterRegistry, RESERVED_PROTOCOL_SLOTS};
+use apeireth_tools_canonical::device::approval::{
+    DeviceActionDecision, DeviceApprovalDecisionLedger, DeviceApprovalDecisionRecord,
+};
 use apeireth_tools_canonical::device::audit::DeviceSenseAuditLedger;
 use apeireth_tools_canonical::device::registry::{
     Device, DeviceKind, DeviceRegistry, DevicesBody, DEVICES_FILE,
 };
 use apeireth_tools_canonical::device::sense::{
-    device_presence_status, device_sense_enabled_from_env, DeviceSenseActivity,
+    device_presence_status, device_sense_enabled_from_env, sense_plan_id, DeviceSenseActivity,
     DeviceSenseBoundaryGuard, DeviceSenseConfig, DeviceSenseTool, DEVICE_SENSE_CAPABILITY_ID,
     DEVICE_SENSE_ENABLE_ENV,
 };
@@ -57,9 +60,24 @@ fn tool_with(tag: &str) -> (PathBuf, DeviceSenseTool, Arc<DeviceSenseActivity>) 
         config.registry(),
         AdapterRegistry::builtin(),
         config.audit(),
+        config.decisions(),
         Arc::clone(&activity),
     );
     (data_dir, tool, activity)
+}
+
+/// 宿主拍板 (决定账落一条批准记录): 敏感读的放行唯一来源。
+fn host_approves(data_dir: &PathBuf, devices: &[&Device], who: &str) {
+    let plan_id = sense_plan_id(devices);
+    DeviceApprovalDecisionLedger::under_data_dir(data_dir)
+        .append(&DeviceApprovalDecisionRecord {
+            plan_id,
+            decision: DeviceActionDecision::Approved,
+            decided_by: who.to_string(),
+            im_card_id: None,
+            at_ms: 1_700_000_000_000,
+        })
+        .expect("宿主批准落决定账");
 }
 
 /// 一台 mock 设备行。
@@ -169,35 +187,44 @@ async fn off_list_and_disabled_devices_are_refused() {
     assert_eq!(ok["whitelisted"], 1);
 }
 
-/// ⑤ 摄像头敏感面: 显式授权 + 审计 —— 无授权拒绝即帧且审计留痕, 授权齐备放行
-/// 且审计留痕 (append-only)。
+/// ⑤ 摄像头敏感面: **宿主拍板** + 审计 —— 宿主没拍板拒绝即帧且审计留痕, 宿主
+/// 拍板后放行且审计留痕 (append-only, 授权人是**宿主**的署名)。
+///
+/// **2026-11-01 安全审计回归**: 原实现拿**模型参数** (`authorized_by`) 当授权人
+/// ⇒ 模型自称「已获授权」即可读摄像头; 现在放行只认宿主决定账的批准记录。
 #[tokio::test]
-async fn camera_reads_need_explicit_authorization_and_land_in_the_audit() {
+async fn camera_reads_need_the_host_approval_and_land_in_the_audit() {
     let (data_dir, tool, _activity) = tool_with("camera-audit");
-    write_table(
-        &data_dir,
-        vec![mock_device("cam-1", DeviceKind::Camera, true)],
-    );
+    let camera = mock_device("cam-1", DeviceKind::Camera, true);
+    write_table(&data_dir, vec![camera.clone()]);
     let audit = DeviceSenseAuditLedger::under_data_dir(&data_dir);
 
-    // 无显式授权: 拒绝即帧 + 审计行 denied。
-    let frame = refused(&tool, json!({"action": "sense"})).await;
+    // 宿主没拍板: 拒绝即帧 + 审计行 denied (授权人留空, 不采信模型自称)。
+    let frame = refused(
+        &tool,
+        json!({"action": "sense", "sensitive_read_authorized": true, "authorized_by": "模型自称的主人"}),
+    )
+    .await;
     assert!(frame.contains("敏感读面"), "{frame}");
     let scan = audit.scan().expect("审计账可读");
     assert_eq!(scan.records.len(), 1);
     let row = &scan.records[0].body;
     assert_eq!(row.device_id, "cam-1");
     assert_eq!(row.outcome.as_str(), "denied");
-    assert_eq!(row.authorized_by, None, "无授权人如实留痕");
+    assert_eq!(
+        row.authorized_by, None,
+        "无授权人如实留痕 (模型自称的不作数)"
+    );
     assert_eq!(row.action, "sense");
 
-    // 显式授权齐备: 放行 + 审计行 granted (授权人如实留痕)。
+    // 宿主拍板 (决定账): 放行 + 审计行 granted (授权人 = 宿主署名)。
+    host_approves(&data_dir, &[&camera], "宿主:面板@local");
     let ok = ok_value(
         &tool,
         json!({
             "action": "sense",
             "sensitive_read_authorized": true,
-            "authorized_by": "owner",
+            "authorized_by": "模型自称的主人",
         }),
     )
     .await;
@@ -206,7 +233,11 @@ async fn camera_reads_need_explicit_authorization_and_land_in_the_audit() {
     assert_eq!(scan.records.len(), 2);
     let row = &scan.records[1].body;
     assert_eq!(row.outcome.as_str(), "granted");
-    assert_eq!(row.authorized_by.as_deref(), Some("owner"));
+    assert_eq!(
+        row.authorized_by.as_deref(),
+        Some("宿主:面板@local"),
+        "审计账里的授权人 = 宿主的值, 不是模型给的字符串"
+    );
     // 摄像头 fixture 只回事件位, 不回图像内容。
     let state = &ok["states"][0];
     for key in state["readings"].as_object().unwrap().keys() {
@@ -334,19 +365,19 @@ async fn real_protocol_and_live_slots_refuse_until_wired() {
 
     // 设备表把设备挂在未接线插槽上 = 感知拒绝即帧 (真因如实)。
     let (data_dir, tool, _activity) = tool_with("slot");
-    write_table(
-        &data_dir,
-        vec![Device {
-            id: "cam-bridge".into(),
-            kind: DeviceKind::Camera,
-            name: "桥接摄像头".into(),
-            adapter: "cloud_bridge".into(),
-            enabled: true,
-        }],
-    );
+    let bridge = Device {
+        id: "cam-bridge".into(),
+        kind: DeviceKind::Camera,
+        name: "桥接摄像头".into(),
+        adapter: "cloud_bridge".into(),
+        enabled: true,
+    };
+    write_table(&data_dir, vec![bridge.clone()]);
+    // 宿主拍板 (敏感读的放行唯一来源) —— 过了这道门才轮到适配器插槽判定。
+    host_approves(&data_dir, &[&bridge], "宿主:面板@local");
     let frame = refused(
         &tool,
-        json!({"action": "sense", "sensitive_read_authorized": true, "authorized_by": "owner"}),
+        json!({"action": "sense", "sensitive_read_authorized": true}),
     )
     .await;
     assert!(frame.contains("留插槽不接"), "{frame}");

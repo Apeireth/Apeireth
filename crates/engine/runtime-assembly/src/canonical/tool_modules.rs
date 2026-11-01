@@ -7,15 +7,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apeireth_plugin::ToolCapability;
+use apeireth_tools_canonical::apply_patch_tool::{
+    apply_patch_capability_with_live_policy, shared_live_permission_policy_slot,
+};
 use apeireth_tools_canonical::education::EducationTool;
 use apeireth_tools_canonical::exposure_audit::ExposureAuditTool;
 use apeireth_tools_canonical::repo_map_tool::{RepoMapConfig, RepoMapTool};
 use apeireth_tools_canonical::{
-    apply_patch_capability, authorized_file_write_policy, authorized_git_write_policy,
-    authorized_worktree_apply_policy, content_feed_capability, git_write_capability,
-    worktree_apply_capability, worktree_plan_capability, AroundPolicy, ContentFeedConfig,
-    FetchConfig, FetchTool, FilesystemTool, ObservedGate, PipelinedCapability, RepoTool,
-    SearchTool, SelfStatusSource, SelfStatusTool, ShellTool, ToolExecutionPipeline,
+    authorized_git_write_policy, authorized_worktree_apply_policy, content_feed_capability,
+    git_write_capability, worktree_apply_capability, worktree_plan_capability, AroundPolicy,
+    ContentFeedConfig, FetchConfig, FetchTool, FilesystemTool, ObservedGate, PipelinedCapability,
+    RepoTool, SearchTool, SelfStatusSource, SelfStatusTool, ShellTool, ToolExecutionPipeline,
     TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
 };
 
@@ -584,8 +586,25 @@ pub struct ApplyPatchModule {
 
 impl ApplyPatchModule {
     /// Create the file-write module over the shared read-observation gate.
+    ///
+    /// P3-6 (2026-11-01): 写入工具面的 stage-1 风险映射读**共享 live 策略**
+    /// (治理链正在评估的那一份), 不再注入**工具自建**的那份策略。
+    ///
+    /// 原先错在哪: 本模块注入 `authorized_file_write_policy()` —— 工具侧
+    /// *新建* 的一份 `PermissionPolicy` (只 grant `tool.apply_patch`)。它与
+    /// 治理链的共享 live 策略是两个对象 ⇒ 面板上的热撤销
+    /// (`PermissionPolicy::revoke`) 对写工具面**无效** (stage-1 恒放行)。
+    ///
+    /// 现在为什么这样: 挂**共享 live 策略槽**
+    /// ([`shared_live_permission_policy_slot`]): 槽里当前指向的策略就是
+    /// 治理链那一份 ⇒ 撤销立即在写工具面生效。审批档仍归治理链 (runtime
+    /// 每次派发都评估治理, 含已批准 / 预批路径), 工具面只查「有没有授权」。
     pub fn new(workspace_root: impl Into<PathBuf>, gate: Arc<ObservedGate>) -> Self {
-        let tool = apply_patch_capability(workspace_root, gate, authorized_file_write_policy());
+        let tool = apply_patch_capability_with_live_policy(
+            workspace_root,
+            gate,
+            shared_live_permission_policy_slot(),
+        );
         Self { tool }
     }
 

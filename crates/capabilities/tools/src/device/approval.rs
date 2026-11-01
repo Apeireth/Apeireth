@@ -24,7 +24,9 @@ use std::path::{Path, PathBuf};
 use apeireth_core::stored_doc::{scan_records, DocCompat, RecordScan, StoredDoc};
 use serde::{Deserialize, Serialize};
 
-use super::device_control::DeviceApprovalCard;
+use super::device_control::{
+    ApprovalEvidence, ApprovalRequirement, DeviceApprovalCard, AUTO_PASS_APPROVER,
+};
 
 // ---------------------------------------------------------------------------
 // 推送账 (device-approval-pushes.jsonl)
@@ -331,12 +333,131 @@ impl DeviceApprovalDecisionLedger {
     ///
     /// `None` = 还没人拍板 (卡还开着); 已拍板 = 再点拒绝即帧, 不翻案。
     pub fn decision_for(&self, plan_id: &str) -> Result<Option<DeviceActionDecision>, String> {
+        Ok(self
+            .decision_record_for(plan_id)?
+            .map(|record| record.decision))
+    }
+
+    /// 一计划一决定的**主体**真值: 该计划已拍板的那条记录 (首次落账为真值)。
+    ///
+    /// [`Self::decision_for`] 只回决定 (批准/拒绝); 本方法回整条记录 ⇒ 授权人
+    /// (`decided_by`) 也只认**宿主写的账**, 不采信调用方 (模型) 传来的字符串。
+    pub fn decision_record_for(
+        &self,
+        plan_id: &str,
+    ) -> Result<Option<DeviceApprovalDecisionRecord>, String> {
         let scan = self.scan()?;
         Ok(scan
             .records
             .iter()
             .find(|record| record.body.plan_id == plan_id)
-            .map(|record| record.body.decision))
+            .map(|record| record.body.clone()))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 宿主拍板真值 (决定账 + 推送账): 模型参数不得冒充授权人
+// ---------------------------------------------------------------------------
+
+/// 宿主拍板结果 (谁批 + IM 卡送达回执): **只来自宿主写的账**, 不来自模型参数。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostApproval {
+    /// 谁批 (决定账 `decided_by` 原样署名, 宿主侧真值)。
+    pub approved_by: String,
+    /// IM 审批卡送达回执 (推送账 `message_ref`; 动钱档必填, 其余档 `None`)。
+    pub im_card_id: Option<String>,
+}
+
+/// 宿主拍板真值判定 (敏感读面 + 不可逆/动钱档的「谁批」唯一来源)。
+///
+/// **原先错在哪**: 审批证据 (`approved_by` / `im_card_id`) 直接取**模型参数**
+/// ⇒ 模型可以自己声称「已获授权」; 不可逆/动钱档 (底线②③) 的「谁批」还只做
+/// 「非空」校验 (不查主体), 审计账里的授权人不可信。
+///
+/// **现在为什么这样**: 「谁批」只认**宿主写的账** (判据照抄 IM 面
+/// `im_device.rs`: 先查决定账 —— 一计划一决定, 再查推送账 —— 卡没到手机就没有
+/// 送达回执): 决定账里没有该计划的批准记录 = 宿主没拍板 ⇒ 拒绝即帧; 有批准
+/// 记录 = 授权人取**决定账里的 `decided_by`** (宿主署名), 调用方传来的任何
+/// 字符串一律不作数。动钱档另需推送账的送达回执 (缺回执 = 无 IM 审批卡)。
+pub fn host_approval(
+    decisions: &DeviceApprovalDecisionLedger,
+    pushes: Option<&DeviceApprovalPushLedger>,
+    plan_id: &str,
+    require_im_card: bool,
+) -> Result<HostApproval, String> {
+    let record = decisions
+        .decision_record_for(plan_id)
+        .map_err(|error| format!("决定账读取失败 (真因如实): {error}"))?
+        .ok_or_else(|| {
+            format!("宿主未拍板: 决定账里没有计划 {plan_id} 的批准记录 (模型参数不作数)")
+        })?;
+    if record.decision != DeviceActionDecision::Approved {
+        return Err(format!(
+            "宿主已拒绝计划 {plan_id} (决定账: {}) —— 一计划一决定, 不翻案",
+            record.decision.as_str()
+        ));
+    }
+    let approved_by = record.decided_by.trim();
+    if approved_by.is_empty() {
+        return Err(format!(
+            "宿主拍板缺署名: 计划 {plan_id} 的批准记录没有 decided_by (缺人不作数)"
+        ));
+    }
+    let im_card_id =
+        if require_im_card {
+            let delivered = pushes
+                .ok_or_else(|| "动钱档必须 IM 审批卡: 未接推送账".to_string())?
+                .delivered_record_for(plan_id)
+                .map_err(|error| format!("推送账读取失败 (真因如实): {error}"))?
+                .ok_or_else(|| {
+                    format!(
+                        "查无计划 {plan_id} 的送达记录 —— 审批卡没到手机就没有回执, \
+                     动钱动作无从批准 (缺 IM 审批卡)"
+                    )
+                })?;
+            Some(delivered.message_ref.clone().ok_or_else(|| {
+                format!("计划 {plan_id} 的送达行缺回执引用 —— 无回执 = 无 IM 审批卡")
+            })?)
+        } else {
+            None
+        };
+    Ok(HostApproval {
+        approved_by: approved_by.to_string(),
+        im_card_id,
+    })
+}
+
+/// 宿主拍板 → 执行面审批证据 (模型面 `execute` 拍用)。
+///
+/// **原先错在哪**: 执行面的审批证据直接取**模型参数** ⇒ 模型自称「已获批准」
+/// 就能执行不可逆/动钱动作, 状态账里的「谁批」不可信。
+/// **现在为什么这样**: 证据只从**宿主写的账**取: reversible **自动档** = 宿主
+/// 配置的如实标签 ([`AUTO_PASS_APPROVER`]); 其余档 = 决定账里的宿主署名
+/// (动钱档另需推送账的送达回执)。模型自称的 `approved_by` / `im_card_id`
+/// 一律不作数 (不采信、不落账)。
+pub fn host_approval_evidence(
+    decisions: &DeviceApprovalDecisionLedger,
+    pushes: &DeviceApprovalPushLedger,
+    plan_id: &str,
+    requirement: ApprovalRequirement,
+) -> Result<ApprovalEvidence, String> {
+    match requirement {
+        ApprovalRequirement::Approval { auto_allowed: true } => Ok(ApprovalEvidence {
+            approved_by: Some(AUTO_PASS_APPROVER.to_string()),
+            im_card_id: None,
+        }),
+        requirement => {
+            let approval = host_approval(
+                decisions,
+                Some(pushes),
+                plan_id,
+                requirement.requires_im_card(),
+            )?;
+            Ok(ApprovalEvidence {
+                approved_by: Some(approval.approved_by),
+                im_card_id: approval.im_card_id,
+            })
+        }
     }
 }
 

@@ -87,6 +87,10 @@ use crate::exec_pipeline::{
     DEFAULT_MAX_TIMEOUT_MS,
 };
 
+use super::approval::{
+    host_approval_evidence, DeviceApprovalDecisionLedger, DeviceApprovalPushLedger,
+};
+
 // ---------------------------------------------------------------------------
 // 身份与开关 (注册即闸, 双闸 fail-closed)
 // ---------------------------------------------------------------------------
@@ -1345,6 +1349,10 @@ pub struct DeviceControlRunner {
     whitelist: Arc<dyn DeviceWhitelist>,
     adapter: Arc<dyn DeviceAdapter>,
     ledger: DeviceActionLedger,
+    /// 宿主决定账 (「谁批」真值: 一计划一决定, 同一数据目录落位)。
+    decisions: DeviceApprovalDecisionLedger,
+    /// 宿主推送账 (IM 审批卡送达回执: 动钱档的 `im_card_id` 来源)。
+    pushes: DeviceApprovalPushLedger,
     /// 预览票 (进程内): plan_id → 已预览 (先模拟后执行的凭证, 不落盘)。
     previewed: Mutex<BTreeSet<String>>,
     /// 进程内记录序号 (身份唯一性用, 非安全边界)。
@@ -1353,17 +1361,24 @@ pub struct DeviceControlRunner {
 
 impl DeviceControlRunner {
     /// 组装执行核心 (白名单 + 适配器 + 状态账落位)。
+    ///
+    /// 宿主两本审批账 (决定账 + 推送账) 与状态账**同一数据目录**落位 ⇒ 执行
+    /// 核心自己就能查「谁批」, 组装签名不变 (调用方零改动)。
     pub fn new(
         config: DeviceControlConfig,
         whitelist: Arc<dyn DeviceWhitelist>,
         adapter: Arc<dyn DeviceAdapter>,
     ) -> Self {
         let ledger = DeviceActionLedger::under_data_dir(&config.data_dir);
+        let decisions = DeviceApprovalDecisionLedger::under_data_dir(&config.data_dir);
+        let pushes = DeviceApprovalPushLedger::under_data_dir(&config.data_dir);
         Self {
             config,
             whitelist,
             adapter,
             ledger,
+            decisions,
+            pushes,
             previewed: Mutex::new(BTreeSet::new()),
             ordinal: AtomicU64::new(1),
         }
@@ -1400,6 +1415,11 @@ impl DeviceControlRunner {
     /// 状态账落点 (只读消费口)。
     pub fn ledger(&self) -> &DeviceActionLedger {
         &self.ledger
+    }
+
+    /// 宿主两本审批账 (决定账 + 推送账, 只读消费口): 工具面查「谁批」用。
+    pub fn host_ledgers(&self) -> (&DeviceApprovalDecisionLedger, &DeviceApprovalPushLedger) {
+        (&self.decisions, &self.pushes)
     }
 
     /// **plan 拍** (零副作用): 白名单 + 分级词表 + 参数闭合校验 → 计划帧。
@@ -1534,6 +1554,10 @@ impl DeviceControlRunner {
     }
 
     /// 分级审批证据校验 (返回「谁批」; 自动档放行如实记 [`AUTO_PASS_APPROVER`])。
+    ///
+    /// **口径**: 本方法只认**调用方 (宿主)** 递来的证据; 模型面 (工具面) 的
+    /// 证据由 [`DeviceControlTool::host_evidence`] 从**宿主决定账/推送账**取
+    /// (模型参数不作数) —— 自动档的「谁批」是**宿主的配置**, 不是任何字符串。
     fn approval_evidence(
         &self,
         plan: &ExecutionPlan,
@@ -1543,7 +1567,7 @@ impl DeviceControlRunner {
         let note = approval_note_for(plan.grade);
         match plan.approval {
             ApprovalRequirement::Approval { auto_allowed: true } => {
-                Ok(approved_by.unwrap_or(AUTO_PASS_APPROVER).to_string())
+                Ok(AUTO_PASS_APPROVER.to_string())
             }
             ApprovalRequirement::Approval {
                 auto_allowed: false,
@@ -1906,9 +1930,11 @@ pub struct DeviceControlParams {
     pub params: Value,
     /// 计划 id (preview / execute 必带, 三拍同计划绑定)。
     pub plan_id: Option<String>,
-    /// 谁批 (execute 的审批证据)。
+    /// 模型自称的「谁批」 —— **一律不作数** (2026-11-01 安全审计: 原实现直接
+    /// 取这个模型参数当审批证据 ⇒ 模型可自称「已获批准」执行不可逆/动钱动作,
+    /// 状态账里的授权人也不可信)。真证据只认宿主决定账/推送账。
     pub approved_by: Option<String>,
-    /// IM 审批卡标识 (money 档 execute 必带)。
+    /// 模型自称的 IM 审批卡标识 —— **一律不作数** (真卡号取宿主推送账的送达回执)。
     pub im_card_id: Option<String>,
 }
 
@@ -1944,6 +1970,24 @@ impl DeviceControlTool {
     /// 执行核心 (测试直调口, 与工具面同一真源)。
     pub fn runner(&self) -> &Arc<DeviceControlRunner> {
         &self.runner
+    }
+
+    /// 宿主拍板证据 (模型面 execute 拍): 只认**宿主写的账**, 不认模型参数。
+    ///
+    /// reversible **自动档** = 宿主配置的如实标签; 其余档 (reversible 审批档 /
+    /// irreversible / money) = 决定账里的宿主署名 (动钱档另需推送账的送达回执)。
+    fn host_evidence(
+        &self,
+        params: &DeviceControlParams,
+        action_params: &Value,
+        plan_id: &str,
+    ) -> Result<ApprovalEvidence, DeviceControlError> {
+        let plan = self
+            .runner
+            .plan(&params.device, &params.device_action, action_params)?;
+        let (decisions, pushes) = self.runner.host_ledgers();
+        host_approval_evidence(decisions, pushes, plan_id, plan.approval)
+            .map_err(DeviceControlError::ApprovalRequired)
     }
 
     /// 输出归一合同: 结构化输出必须是对象且 `action` / `status` 恒在场。
@@ -1991,14 +2035,6 @@ impl ToolCapability for DeviceControlTool {
                     "plan_id": {
                         "type": "string",
                         "description": "preview / execute only: the plan id returned by the plan beat (payload drift is refused)."
-                    },
-                    "approved_by": {
-                        "type": "string",
-                        "description": "execute only: who approved this call (human name or IM card callback id)."
-                    },
-                    "im_card_id": {
-                        "type": "string",
-                        "description": "execute on money-grade actions only: the IM approval card id (required for purchase / order words)."
                     }
                 },
                 "required": ["action", "device", "device_action"],
@@ -2108,9 +2144,15 @@ impl ToolCapability for DeviceControlTool {
                         ),
                     );
                 };
-                let evidence = ApprovalEvidence {
-                    approved_by: params.approved_by.clone(),
-                    im_card_id: params.im_card_id.clone(),
+                // **原先错在哪**: 审批证据直接取模型参数 (`approved_by` /
+                // `im_card_id`) ⇒ 模型自称「已获批准」就能执行不可逆/动钱动作,
+                // 且状态账里的「谁批」不可信 (不可逆/动钱档还不查主体)。
+                // **现在为什么这样**: 证据只从**宿主写的账**取 (决定账 = 谁批,
+                // 推送账 = IM 卡送达回执; 判据照抄 IM 面): 宿主没拍板 ⇒ 拒绝
+                // 即帧; 模型自称的授权人/卡号一律不作数 (不采信、不落账)。
+                let evidence = match self.host_evidence(&params, &action_params, plan_id) {
+                    Ok(evidence) => evidence,
+                    Err(error) => return self.refuse(call, error),
                 };
                 match self.runner.execute(
                     &params.device,
@@ -2929,87 +2971,6 @@ mod tests {
         let section = status.to_json();
         assert_eq!(section["executed_money"], json!(0));
         assert_eq!(section["devices_enabled"], json!(3));
-    }
-
-    /// ⑲ 工具面: 三拍走通 + 缺 plan_id 即拒 + 输出归一字段恒在。
-    #[tokio::test]
-    async fn tool_face_walks_the_three_beats() {
-        use apeireth_protocol::canonical::ToolOutcome;
-
-        fn value_of(result: &ToolResult) -> Value {
-            match &result.outcome {
-                ToolOutcome::Ok { value } => value.clone(),
-                other => panic!("必须成功帧: {other:?}"),
-            }
-        }
-
-        let (_dir, runner) = temp_runner();
-        let tool = DeviceControlTool::new(runner.clone());
-        let call = |id: &str, arguments: Value| ToolCall {
-            id: id.to_string(),
-            name: DEVICE_CONTROL_TOOL_NAME.to_string(),
-            arguments,
-        };
-        let planned = tool
-            .invoke(&call(
-                "c1",
-                json!({"action": "plan", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}}),
-            ))
-            .await;
-        assert!(planned.is_ok(), "{planned:?}");
-        let planned = value_of(&planned);
-        assert_eq!(planned["action"], json!(ACTION_PLAN));
-        assert_eq!(planned["status"], json!("planned"));
-        assert_eq!(planned["grade"], json!("reversible"));
-        assert_eq!(
-            planned["zero_side_effect"],
-            json!(true),
-            "plan 帧自报零副作用"
-        );
-        let plan_id = planned["plan_id"]
-            .as_str()
-            .expect("plan_id 进帧")
-            .to_string();
-
-        let previewed = tool
-            .invoke(&call(
-                "c2",
-                json!({"action": "preview", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}, "plan_id": plan_id}),
-            ))
-            .await;
-        assert!(previewed.is_ok(), "{previewed:?}");
-        let previewed = value_of(&previewed);
-        assert_eq!(previewed["status"], json!("previewed"));
-        assert!(previewed["approval_card"].is_object(), "审批卡载荷随预览帧");
-
-        let executed = tool
-            .invoke(&call(
-                "c3",
-                json!({"action": "execute", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}, "plan_id": plan_id, "approved_by": "主人"}),
-            ))
-            .await;
-        assert!(executed.is_ok(), "{executed:?}");
-        let executed = value_of(&executed);
-        assert_eq!(executed["status"], json!("executed"));
-        assert_eq!(executed["approved_by"], json!("主人"));
-        assert!(executed["record_id"].is_string(), "状态账记录 id 进帧");
-
-        // 缺 plan_id 的 preview/execute 即拒。
-        let refused = tool
-            .invoke(&call(
-                "c4",
-                json!({"action": "execute", "device": "lamp", "device_action": "set_brightness", "params": {"level": 30}, "approved_by": "主人"}),
-            ))
-            .await;
-        assert!(!refused.is_ok(), "{refused:?}");
-        // 词表外拍即拒。
-        let refused = tool
-            .invoke(&call(
-                "c5",
-                json!({"action": "wish", "device": "lamp", "device_action": "power_on"}),
-            ))
-            .await;
-        assert!(!refused.is_ok(), "{refused:?}");
     }
 
     /// ⑳ 白名单复用: L1 设备表 (`devices.json`) 只读消费桥 —— 同一本设备表,

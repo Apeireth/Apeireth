@@ -471,6 +471,10 @@ async fn timeout_wraps_execution_through_the_deadline_timer() {
         executed.failure,
         Some(PipelineFailure::Timeout {
             code: "timeout.deadline_expired",
+            // The slow tool was entered before the deadline hit, so its side
+            // effect may already have landed: the frame is permanent, not
+            // retryable (the call started ⇒ a retry would repeat it).
+            started: true,
         }),
         "expiry must surface through the deadline library's own code family"
     );
@@ -478,6 +482,10 @@ async fn timeout_wraps_execution_through_the_deadline_timer() {
         .result
         .render()
         .contains("timeout.deadline_expired"));
+    assert!(
+        !executed.result.outcome.is_retryable(),
+        "a started call must not be reported as retryable"
+    );
     assert_eq!(slow.runs(), 1, "the attempt started and was cut off");
 
     // A refused timeout value never arms a timer and never executes.
@@ -488,7 +496,13 @@ async fn timeout_wraps_execution_through_the_deadline_timer() {
         executed.failure,
         Some(PipelineFailure::Timeout {
             code: "timeout.invalid_timeout",
+            // The tool was never entered: nothing happened ⇒ retry is safe.
+            started: false,
         })
+    );
+    assert!(
+        executed.result.outcome.is_retryable(),
+        "a call that never started stays retryable"
     );
     assert_eq!(slow.runs(), 1, "a refused timeout value must not execute");
 
@@ -596,6 +610,7 @@ fn every_failure_lands_in_the_closed_error_vocabulary() {
         },
         PipelineFailure::Timeout {
             code: "timeout.deadline_expired",
+            started: true,
         },
         PipelineFailure::RetriesExhausted {
             attempts: 2,

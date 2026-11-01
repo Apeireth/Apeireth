@@ -354,22 +354,82 @@ impl ToolCapability for ApplyPatchTool {
 ///
 /// 判定顺序 (与外部工具风险映射同一语义):
 ///
-/// 1. 共享 [`PermissionPolicy`] 里有显式授权 (grant 且未标审批) → 放行;
-/// 2. 授权被标了人工审批 → require-approval 档 (`ask`);
-/// 3. 无授权 → 同样停在 require-approval 档 (`ask`), 拒绝即帧
-///    (`pipeline.pre_ask`)、不落盘。
+/// 1. 策略里有显式授权 (grant) → 放行 (授权在, 「要不要人批」归治理链);
+/// 2. 无授权 (含热撤销后的 deny) → 停在 require-approval 档 (`ask`),
+///    拒绝即帧 (`pipeline.pre_ask`)、不落盘。
 ///
-/// 这里只回答「这次调用是否有人的授权」; 风险档位 (每次写入都要人批 /
+/// 这里只回答「这次调用**有没有授权**」; 风险档位 (每次写入都要人批 /
 /// 自动放行已读文件的修改) 由治理层承载, 与本地审批面板 / IM 审批卡同链。
+///
+/// # 策略来源: 共享 live 策略槽 (P3-6)
+///
+/// 原先错在哪: 本钩子查的是**工具自建**的一份策略
+/// ([`authorized_file_write_policy`] 新建 `PermissionPolicy`, 只 grant 一条)
+/// —— 它与治理链用的**共享 live 策略**是两个对象 ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`) 对写工具面**完全无效**。
+///
+/// 现在为什么这样: 策略改成**可换指针的槽**
+/// ([`LivePermissionPolicySlot`]): 组装根把共享 live 策略 (治理链那一份
+/// `Arc<Mutex<PermissionPolicy>>`) 装进槽里, 写工具面与治理链读**同一份**
+/// ⇒ 撤销立即生效。钩子每次检查都**现读**槽里的当前策略 (不是快照)。
 pub struct ApplyPatchRiskMappingHook {
-    policy: Arc<Mutex<PermissionPolicy>>,
+    /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
 }
 
 impl ApplyPatchRiskMappingHook {
-    /// 挂在共享授权策略上的风险映射钩子。
+    /// 挂在共享授权策略上的风险映射钩子 (本钩子自带一个只属于它的槽)。
     pub fn new(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
-        Self { policy }
+        Self {
+            slot: Arc::new(Mutex::new(policy)),
+        }
     }
+
+    /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对写工具面立即生效。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self { slot }
+    }
+}
+
+/// 共享 live 策略槽: 指向「当前生效的那份」授权策略的可换指针。
+///
+/// 槽 = `Arc<Mutex<Arc<Mutex<PermissionPolicy>>>>`: 外层锁只护**换指针**,
+/// 内层锁是策略自身的锁 (与治理链同一把 ⇒ 同一份数据)。
+pub type LivePermissionPolicySlot = Arc<Mutex<Arc<Mutex<PermissionPolicy>>>>;
+
+/// 读槽里当前指向的策略句柄 (克隆 `Arc`, 不持锁跨调用)。
+fn current_live_policy(slot: &LivePermissionPolicySlot) -> Arc<Mutex<PermissionPolicy>> {
+    Arc::clone(&slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner()))
+}
+
+/// 进程内共享的 live 策略槽 (写工具面 stage-1 读它)。
+///
+/// 原先错在哪: 写工具面各自持一份**自建**策略, 与治理链的共享 live 策略
+/// 不是一个对象 ⇒ 热撤销对工具面无效。
+/// 现在为什么这样: 工具面统一读这一个槽; 组装根把共享 live 策略
+/// ([`install_shared_live_permission_policy`]) 装进来, 工具面与治理链同源。
+///
+/// 未被装配根装入共享 live 策略之前, 槽里放的是**种子策略**
+/// ([`authorized_file_write_policy`]: 只 grant 写工具面) ⇒ 行为与旧口径
+/// 一致 (放行), 不制造「零授权 ⇒ 全拒」的功能回归。
+pub fn shared_live_permission_policy_slot() -> LivePermissionPolicySlot {
+    static SLOT: std::sync::OnceLock<LivePermissionPolicySlot> = std::sync::OnceLock::new();
+    SLOT.get_or_init(|| Arc::new(Mutex::new(authorized_file_write_policy())))
+        .clone()
+}
+
+/// 把**共享 live 策略** (治理链正在评估的那一份) 装进共享槽。
+///
+/// 装入后, 写工具面的 stage-1 与治理链读同一份策略 ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`) 对已批准 / 预批的写调用同样生效。
+///
+/// 装配根 (CLI 组装根持有共享 live 策略句柄) 调用一次即可; 重复装入以最后
+/// 一次为准 (后装的接管)。
+pub fn install_shared_live_permission_policy(policy: &Arc<Mutex<PermissionPolicy>>) {
+    let slot = shared_live_permission_policy_slot();
+    let mut current = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    *current = Arc::clone(policy);
 }
 
 impl PreExecuteHook for ApplyPatchRiskMappingHook {
@@ -378,14 +438,19 @@ impl PreExecuteHook for ApplyPatchRiskMappingHook {
     }
 
     fn pre_verdict(&self, request: &PreExecuteRequest<'_>) -> PreVerdict {
-        let decision = self
-            .policy
+        // 现读槽里当前指向的策略 (共享 live 策略口径: 不是构造时的快照)。
+        let policy = current_live_policy(&self.slot);
+        let decision = policy
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .decision_for_capability(request.capability.as_str());
         match decision {
-            Decision::Allow => PreVerdict::Allow,
-            Decision::RequireApproval { reason } => PreVerdict::Ask { reason },
+            // 授权在 (grant) ⇒ 放行。「要不要人批」由治理链决定 (runtime 每次
+            // 派发都评估治理, 含已批准 / 预批路径), 工具面不重复索要审批 ——
+            // 否则「人已批准」的那一次调用会在工具面再次冻结, 永远落不了盘。
+            Decision::Allow | Decision::RequireApproval { .. } => PreVerdict::Allow,
+            // 无授权 (含**热撤销**后的 deny) ⇒ 停在 require-approval 档,
+            // 拒绝即帧 (`pipeline.pre_ask`)、不落盘。
             Decision::Deny { .. } => PreVerdict::Ask {
                 reason: format!(
                     "file-write tool {} sits at the require-approval level: \
@@ -489,6 +554,11 @@ impl GovernanceHook for ApplyPatchWriteApprovalHook {
 ///
 /// 风险档位 (每次写入都要人批 / 自动放行已读文件的修改) 不在工具策略里 ——
 /// 由治理层的授权标记与写入风险钩子承载, 与本地审批面板 / IM 审批卡同链。
+///
+/// P3-6 注记: 本函数是**种子**策略 (只 grant 写工具面), 不是「治理链用的
+/// 共享 live 策略」。生产写工具面的 stage-1 读的是
+/// [`shared_live_permission_policy_slot`] (共享槽), 由装配根把治理链那一份
+/// 共享 live 策略装进去 ⇒ 热撤销对写工具面同样生效。
 pub fn authorized_file_write_policy() -> Arc<Mutex<PermissionPolicy>> {
     let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
     policy
@@ -501,17 +571,46 @@ pub fn authorized_file_write_policy() -> Arc<Mutex<PermissionPolicy>> {
 }
 
 /// 组装生产五段流水线: 风险映射 → 单调边界 Guard → 超时 → 输出归一合同。
+///
+/// 策略口径: 传入的这份策略由调用方持有 (本钩子每次检查现读它)。
 pub fn apply_patch_pipeline(
     root: impl Into<PathBuf>,
     gate: Arc<ObservedGate>,
     policy: Arc<Mutex<PermissionPolicy>>,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    apply_patch_pipeline_with_hook(root, gate, Arc::new(ApplyPatchRiskMappingHook::new(policy)))
+}
+
+/// 组装生产五段流水线: stage-1 的风险映射读**共享 live 策略槽** (P3-6)。
+///
+/// 原先错在哪: 生产写工具面的 stage-1 读的是**工具自建**的一份策略, 与
+/// 治理链的共享 live 策略不是同一个对象 ⇒ 热撤销对写工具面无效。
+/// 现在为什么这样: 流水线挂在**共享槽**上, 槽里当前指向的策略就是治理链
+/// 正在评估的那一份 ⇒ 撤销立即生效 (审批档仍归治理链, 工具面只查授权)。
+pub fn apply_patch_pipeline_with_live_policy(
+    root: impl Into<PathBuf>,
+    gate: Arc<ObservedGate>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    apply_patch_pipeline_with_hook(
+        root,
+        gate,
+        Arc::new(ApplyPatchRiskMappingHook::with_slot(slot)),
+    )
+}
+
+/// 五段流水线的共同装配 (风险映射钩子由调用方给: 自带策略 or 共享槽)。
+fn apply_patch_pipeline_with_hook(
+    root: impl Into<PathBuf>,
+    gate: Arc<ObservedGate>,
+    risk_hook: Arc<dyn PreExecuteHook>,
 ) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
     let root = root.into();
     let guard: Arc<dyn ToolGuard> =
         Arc::new(ApplyPatchWriteBoundaryGuard::new(root, Arc::clone(&gate)));
     Arc::new(
         crate::exec_pipeline::ToolExecutionPipeline::new()
-            .with_pre_hook(Arc::new(ApplyPatchRiskMappingHook::new(policy)))
+            .with_pre_hook(risk_hook)
             .with_guard(guard)
             .with_around(
                 AroundPolicy::new().with_timeout(APPLY_PATCH_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
@@ -531,5 +630,22 @@ pub fn apply_patch_capability(
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
         tool,
         apply_patch_pipeline(root, gate, policy),
+    ))
+}
+
+/// 组装生产工具面: stage-1 读**共享 live 策略** (P3-6)。
+///
+/// 与 [`apply_patch_capability`] 的差别只在策略来源: 这里挂**共享槽**, 槽里
+/// 当前指向的策略 = 治理链正在评估的那一份 ⇒ 面板上的热撤销对写工具面生效。
+pub fn apply_patch_capability_with_live_policy(
+    root: impl Into<PathBuf>,
+    gate: Arc<ObservedGate>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    let root = root.into();
+    let tool = Arc::new(ApplyPatchTool::new(root.clone(), Arc::clone(&gate)));
+    Arc::new(crate::exec_pipeline::PipelinedCapability::new(
+        tool,
+        apply_patch_pipeline_with_live_policy(root, gate, slot),
     ))
 }

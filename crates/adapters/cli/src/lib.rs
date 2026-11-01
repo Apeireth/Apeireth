@@ -1027,6 +1027,18 @@ fn build_production_governance_parts_with_dataset(
         policy.require_approval_for(apeireth_tools_canonical::IMAGE_OPS_CAPABILITY_ID);
     }
     let policy = Arc::new(std::sync::Mutex::new(policy));
+    // **共享 live 策略装进工具面的槽**（2026-11-01 安全审计 P3-6）。
+    //
+    // 原先错在哪：写工具面（`apply_patch` 的 stage-1 闸）各持一份**自建**策略，
+    // 与治理链正在评估的**这一份**不是一个对象 ⇒ 面板上的**热撤销**
+    // （`PermissionPolicy::revoke`）对已批准 / 预批的写调用**不生效**。
+    //
+    // 现在为什么这样：装的是**同一个 `Arc`**（不是拷贝一份值）⇒ 工具面与治理链
+    // 同源 ⇒ 撤销立刻可见。
+    //
+    // 放在**策略诞生处**（而不是「把策略交给别处」的通道）⇒ 槽从策略一存在起就是对的
+    // ⇒ **与注册顺序无关**。
+    apeireth_tools_canonical::apply_patch_tool::install_shared_live_permission_policy(&policy);
     // 判定落盘面（append-only）：守卫判定此前只在内存、重启即散。
     // 纪律与原因见 `guard_decision_wiring` 模块（尺寸棘轮：装配根只留一行）。
     let mut guard = guard_decision_wiring::attach_decision_log(BehaviorChainGuardHook::new());
@@ -1333,10 +1345,10 @@ fn build_production_governance_parts_from_env() -> (
         pipeline
     };
     // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): **开关开 = 注册 +
-    // 授权同源** (同一开关值同时决定装配侧注册与本授权面)。只读档 = **grant
-    // 即用** (零审批, 与 `tool.self_status` 同档): 白名单设备读 + 天气公开读;
-    // 摄像头类敏感读面的显式授权 + 审计在工具边界强制 (审计缺位不放行)。
-    if apeireth_tools_canonical::device::sense::device_sense_enabled_from_env() {
+    // 授权同源** (只读档 grant 即用); 摄像头类**敏感读**另走宿主审批门
+    // (`DeviceSenseApprovalHook`, 无自动放行档) + 决定账批准记录 —— 模型参数
+    // 不再充当授权人 (2026-11-01 安全审计)。
+    let pipeline = if apeireth_tools_canonical::device::sense::device_sense_enabled_from_env() {
         policy
             .lock()
             .expect("permission policy lock poisoned (0 装诚实)")
@@ -1349,13 +1361,19 @@ fn build_production_governance_parts_from_env() -> (
             .grant(Permission::ExecuteTool(
                 apeireth_tools_canonical::device::weather::WEATHER_CAPABILITY_ID.to_string(),
             ));
-    }
+        pipeline.with(Arc::new(
+            apeireth_tools_canonical::device::sense::DeviceSenseApprovalHook::under_data_dir(
+                default_panel_data_dir(),
+            ),
+        ))
+    } else {
+        pipeline
+    };
     // K 轴 L3/L4 受控执行 (`tool.device_control`): **双闸开 = 注册 + 授权同源**
-    // (`APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL` 齐开,
-    // 默认关 fail-closed)。只 grant「工具面有人拍板」, **分级审批档由
-    // [`DeviceControlApprovalHook`] 唯一承载** —— reversible 审批档 (自动档
-    // 子开关只此档可配) / irreversible **永远逐次人批** / money **永远逐次
-    // 人批 + IM 审批卡** (与本地审批面板 / IM 审批卡同一链)。
+    // (默认关 fail-closed)。只 grant「工具面有人拍板」, **分级审批档由
+    // [`DeviceControlApprovalHook`] 唯一承载** —— reversible 审批档 / irreversible
+    // **永远逐次人批** / money **永远逐次人批 + IM 审批卡**; 「谁批」只认宿主
+    // 决定账 (模型自称的 `approved_by` 不作数, 2026-11-01 安全审计)。
     let pipeline =
         if apeireth_tools_canonical::device::device_control::device_control_enabled_from_env() {
             policy
@@ -1374,11 +1392,9 @@ fn build_production_governance_parts_from_env() -> (
         } else {
             pipeline
         };
-    // K 轴 L5 看家骨架 (`tool.guard_watch`): **双闸开 = 注册 + 授权同源**
-    // (`APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH` 齐开,
-    // 默认关 fail-closed)。只读档 = grant 即用 (零审批, 与 `tool.self_status`
-    // 同档): 守护规则读 + 白名单设备感知 + 告警账 append。**只看不动**: 告警
-    // 零设备动作 (动手仍走 `tool.device_control` 三拍人批)。
+    // K 轴 L5 看家骨架 (`tool.guard_watch`): **双闸开 = 注册 + 授权同源** (默认
+    // 关 fail-closed)。只读档 = grant 即用: 守护规则读 + 白名单设备感知 + 告警
+    // 账 append。**只看不动** (动手仍走 `tool.device_control` 三拍人批)。
     if apeireth_tools_canonical::device::guard_watch::guard_watch_enabled_from_env() {
         policy
             .lock()
@@ -2222,9 +2238,8 @@ async fn build_cognitive_modules_at(
         // 写总闸由组装根注入 (`file_write` 同一开关值, 关 = 拒写不拒读);
         // 自述创作节与工具面同一计数器 (探针随配置注入)。
         sheet_ops: apeireth_tools_canonical::SheetOpsConfig::from_env(workspace_root.clone()),
-        // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): 注册即闸
-        // (`APEIRETH_ENABLE_DEVICE_SENSE` 旋钮开才注入落位, 默认关 fail-closed)。
-        // 设备表 = 数据目录 `devices.json` (StoredDoc 拒开, 白名单制默认零设备);
+        // K 轴 L1 在场感知 (`tool.device_sense` + `tool.weather`): 注册即闸 (默认
+        // 关 fail-closed)。设备表 = 数据目录 `devices.json` (白名单制默认零设备);
         // 天气 = mock 档 (如实标注数据源); 自述在场节与工具面同表同源。
         device_sense: apeireth_tools_canonical::device::sense::DeviceSenseConfig::from_env(
             default_panel_data_dir(),
@@ -2232,20 +2247,16 @@ async fn build_cognitive_modules_at(
         weather: apeireth_tools_canonical::device::weather::WeatherConfig::from_env(
             default_panel_data_dir(),
         ),
-        // K 轴 L3/L4 受控执行 (`tool.device_control`): 注册即闸 (双闸
-        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_DEVICE_CONTROL`
-        // 齐开才注入配置, 默认关 fail-closed)。白名单 = `devices.json` 同一本
-        // 设备表 (只读消费); 执行面 = mock 适配器 (真实协议族后插) + 状态账
-        // `device-actions.jsonl` (append-only); 自述设备节与工具面同账。
+        // K 轴 L3/L4 受控执行 (`tool.device_control`): 注册即闸 (双闸齐开才注入,
+        // 默认关 fail-closed)。白名单 = `devices.json` 同一本设备表 (只读消费);
+        // 执行面 = mock 适配器 + 状态账 `device-actions.jsonl` (append-only)。
         device_control:
             apeireth_tools_canonical::device::device_control::DeviceControlConfig::from_env(
                 default_panel_data_dir(),
             ),
-        // K 轴 L5 看家骨架 (`tool.guard_watch`): 注册即闸 (双闸
-        // `APEIRETH_ENABLE_DEVICE_SENSE` + `APEIRETH_ENABLE_GUARD_WATCH` 齐开才
-        // 注入配置, 默认关 fail-closed)。守护规则 = `guard-rules.json` (StoredDoc
-        // 拒开, 规则 = 阈值/时序条件); 告警 = `guard-alerts.jsonl` (关怀候选高
-        // 优先, 打扰纪律守护例外档); **只看不动** (零设备动作)。
+        // K 轴 L5 看家骨架 (`tool.guard_watch`): 注册即闸 (双闸齐开才注入, 默认
+        // 关 fail-closed)。守护规则 = `guard-rules.json` (阈值/时序条件); 告警 =
+        // `guard-alerts.jsonl` (关怀候选高优先); **只看不动** (零设备动作)。
         guard_watch: apeireth_tools_canonical::device::guard_watch::GuardWatchConfig::from_env(
             default_panel_data_dir(),
         ),

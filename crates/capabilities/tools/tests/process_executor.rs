@@ -600,6 +600,37 @@ mod windows_tests {
             );
         }
     }
+
+    /// P3-11 审计 (2026-10-31): AppContainer profile 名原先是**固定常量** ⇒ SID 由
+    /// 名字**确定性**派生 ⇒ 全机全账号同一 SID, 且任何进程都能同名抢占。
+    /// 现在名字掺了用户标签 + 随机后缀 ⇒ SID 不再确定。
+    #[test]
+    fn appcontainer_profile_name_is_not_the_fixed_constant() {
+        use apeireth_tools_canonical::process::appcontainer::AppContainerSandbox;
+
+        let Ok(sandbox) = AppContainerSandbox::acquire() else {
+            eprintln!("SKIP: 本机不支持 AppContainer profile (环境不支持)");
+            return;
+        };
+        let name = sandbox.profile_name();
+        assert!(
+            name.starts_with("Apeireth.Shell.Sandbox."),
+            "profile name must keep the prefix and add scope: {name}"
+        );
+        assert!(
+            name.len() > "Apeireth.Shell.Sandbox".len(),
+            "profile name must not be the bare fixed constant: {name}"
+        );
+        // 同一进程内两次 acquire 必须拿到同一个 profile (幂等) ⇒ 名字稳定。
+        let Ok(second) = AppContainerSandbox::acquire() else {
+            return;
+        };
+        assert_eq!(
+            second.profile_name(),
+            name,
+            "the profile name must be stable within one process"
+        );
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -674,9 +705,53 @@ mod linux_tests {
     }
 }
 
+/// P3-11 审计 (2026-10-31): AppContainer profile 名原先是**固定常量** ⇒ SID 由名字
+/// **确定性**派生 ⇒ ① 全机全账号同一 SID (共享盘上的跨账号授权互相命中);
+/// ② 任何进程都能**同名抢占** (抢先注册同名 profile ⇒ 我们 acquire 时拿到
+/// `ALREADY_EXISTS` ⇒ 沙箱用的是对方注册的 profile)。
+///
+/// 拼装规则抽成**平台无关**函数 ⇒ 这条规则在 Linux 上就能测 (不必等 CI 矩阵)。
+#[test]
+fn appcontainer_profile_name_is_scoped_and_sanitized() {
+    use apeireth_tools_canonical::process::appcontainer_profile_name;
+
+    let name = appcontainer_profile_name("Apeireth.Shell.Sandbox", "abc123", "0123456789abcdef");
+    assert!(
+        name.starts_with("Apeireth.Shell.Sandbox."),
+        "prefix lost: {name}"
+    );
+    assert!(name.contains(".abc123."), "user tag lost: {name}");
+    assert!(
+        name.ends_with(".0123456789abcdef"),
+        "random tag lost: {name}"
+    );
+
+    // 随机后缀不同 ⇒ 名字不同 ⇒ 派生出的 SID 不同 (SID 不再确定)。
+    let other = appcontainer_profile_name("Apeireth.Shell.Sandbox", "abc123", "fedcba9876543210");
+    assert_ne!(
+        name, other,
+        "a different random tag must yield a different profile name"
+    );
+
+    // 非法字符被剔除 (profile 名只允许安全字符), 每段封顶 24 字符。
+    let hostile =
+        appcontainer_profile_name("Apeireth.Shell.Sandbox", "us er/../\\", &"x".repeat(64));
+    assert!(!hostile.contains('/'), "slash must be stripped: {hostile}");
+    assert!(!hostile.contains(' '), "space must be stripped: {hostile}");
+    for segment in hostile.split('.') {
+        assert!(segment.len() <= 24, "segment too long: {segment}");
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos_tests {
     use super::*;
+    use std::process::{Command, Stdio};
+
+    /// 角色进程的环境标记: 重跑本测试二进制时带上它 ⇒ 走「executor 角色」分支。
+    const ROLE_ENV: &str = "APEIRETH_TEST_MACOS_EXECUTOR_ROLE";
+    /// 长睡时长的唯一标记 (避免与并发跑的其它测试撞同一个命令行)。
+    const SLEEP_MARKER: &str = "987654";
 
     #[test]
     fn timeout_terminates_the_whole_process_group_tree() {
@@ -711,6 +786,131 @@ mod macos_tests {
             EnforcementLevel::Unsupported,
             "macOS backend must not invent a Windows RestrictedToken equivalent"
         );
+    }
+
+    /// P3-8 (2026-10-31): macOS 侧必须验证「子进程自任进程组长」—— 父死亡守护
+    /// 靠 `kill(-pgid, SIGKILL)` 杀整个组, 组边界不成立则守护形同虚设。
+    #[test]
+    fn macos_child_leads_its_own_process_group() {
+        let result = execute(&request_for("platform-security-info", "")).unwrap();
+        assert!(result.success(), "{}", text(&result.stderr));
+        let stdout = text(&result.stdout);
+        let pgid = stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("PGRP:"))
+            .map(str::trim)
+            .expect("PGRP line missing");
+        let pid = stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("PID:"))
+            .map(str::trim)
+            .expect("PID line missing");
+        assert_eq!(
+            pgid, pid,
+            "the child must lead its own process group (the macOS guard kills -pgid)"
+        );
+    }
+
+    /// P3-8 (2026-10-31): **executor 被 SIGKILL ⇒ 子进程必须跟着死**。
+    ///
+    /// 这是 macOS 父死亡守护 (`kqueue(EVFILT_PROC/NOTE_EXIT)`) 的端到端证明:
+    /// 角色进程用 ProcessExecutor 起一个长睡子进程, 然后被 SIGKILL (模拟 executor
+    /// 崩溃) ⇒ 守护进程必须把子进程所在的进程组一起带走 (否则子进程逃出
+    /// `max_runtime` 约束 —— 正是 P3-8 的原始后果)。
+    #[test]
+    fn macos_child_dies_when_its_executor_is_killed() {
+        let exe = std::env::current_exe().expect("current_exe");
+        let mut role = Command::new(&exe)
+            .arg("--exact")
+            .arg("macos_executor_role_process")
+            .arg("--nocapture")
+            .env(ROLE_ENV, "1")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn the executor-role process");
+
+        // 等 executor 起好的子进程出现在进程表里 (命令行含唯一 sleep 标记)。
+        let child_pid =
+            wait_for_pid_containing(&format!("sleep {SLEEP_MARKER}"), Duration::from_secs(30))
+                .expect("the executor's child must show up in the process table");
+
+        // 模拟 executor 崩溃: SIGKILL (不给它任何清理机会)。
+        unsafe { libc::kill(role.id() as i32, libc::SIGKILL) };
+        let _ = role.wait();
+
+        // 守护进程必须把子进程带走。
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if !process_alive(child_pid) {
+                break;
+            }
+            if Instant::now() >= deadline {
+                unsafe { libc::kill(child_pid, libc::SIGKILL) };
+                panic!("the child survived its executor's death (macOS parent-death guard failed)");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// 角色进程: 用 ProcessExecutor 起一个长睡子进程并一直阻塞 (由父测试 SIGKILL)。
+    #[test]
+    fn macos_executor_role_process() {
+        if std::env::var_os(ROLE_ENV).is_none() {
+            return; // 正常跑测试时本测是空转
+        }
+        let mut limits = ProcessLimits::default();
+        // 阻塞到被 SIGKILL 为止 (默认 30s 会先超时 ⇒ 子进程被 executor 自己杀掉,
+        // 那样就测不到「父死亡」这条路径了)。
+        limits.max_runtime = Duration::from_secs(600);
+        let request = ProcessRequest::new(helper())
+            .with_args(["sleep", SLEEP_MARKER])
+            .with_limits(limits);
+        let _ = execute(&request);
+    }
+
+    /// 在进程表里找命令行含 `needle` 的 pid (macOS `ps` 扫描)。
+    fn wait_for_pid_containing(needle: &str, timeout: Duration) -> Option<i32> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(pid) = pid_containing(needle) {
+                return Some(pid);
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn pid_containing(needle: &str) -> Option<i32> {
+        let output = Command::new("ps")
+            .arg("-Ao")
+            .arg("pid=,command=")
+            .output()
+            .ok()?;
+        let listing = String::from_utf8_lossy(&output.stdout);
+        for line in listing.lines() {
+            let line = line.trim();
+            let Some((pid, command)) = line.split_once(' ') else {
+                continue;
+            };
+            if command.contains(needle) {
+                if let Ok(pid) = pid.trim().parse::<i32>() {
+                    return Some(pid);
+                }
+            }
+        }
+        None
+    }
+
+    /// 进程是否还活着 (signal 0 探测; EPERM 也算活着 —— 只是没权限发信号)。
+    fn process_alive(pid: i32) -> bool {
+        let ret = unsafe { libc::kill(pid, 0) };
+        if ret == 0 {
+            return true;
+        }
+        std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
     }
 
     fn assert_process_gone(pid: i32) {

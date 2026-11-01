@@ -726,7 +726,7 @@ impl ProcessExecutor {
             return Err(ProcessError::Cancelled);
         }
 
-        let capabilities = current_platform_capabilities();
+        let (platform, capabilities) = platform_backend();
         validate_limits_against_capabilities(request, &capabilities)?;
 
         let missing = request.isolation().missing_requirements(&capabilities);
@@ -740,7 +740,7 @@ impl ProcessExecutor {
 
         let enforcement_capabilities = capabilities_for_execution(request, &capabilities);
         let enforcement = PlatformEnforcement {
-            platform: capabilities_platform_kind(),
+            platform,
             capabilities: enforcement_capabilities,
         };
 
@@ -748,17 +748,14 @@ impl ProcessExecutor {
         {
             return windows::spawn_and_supervise(request, enforcement);
         }
-
         #[cfg(target_os = "linux")]
         {
             return linux::spawn_and_supervise(request, enforcement);
         }
-
         #[cfg(target_os = "macos")]
         {
             return macos::spawn_and_supervise(request, enforcement);
         }
-
         #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             return platform::spawn_and_supervise(request, enforcement);
@@ -768,50 +765,53 @@ impl ProcessExecutor {
 
 /// Report the current platform's isolation capabilities.
 ///
-/// The returned values come from actual OS/runtime detection in the platform
-/// backend, never from `cfg!(...)` alone.
+/// Values come from actual OS/runtime detection in the backend, never `cfg!`.
 pub fn current_platform_capabilities() -> IsolationCapabilities {
+    platform_backend().1
+}
+
+/// 平台后端分派点: 一次给出「平台种类 + 该平台能力」(合并成一处 cfg 块)。
+fn platform_backend() -> (PlatformKind, IsolationCapabilities) {
     #[cfg(windows)]
     {
-        return windows::capabilities();
+        return (PlatformKind::Windows, windows::capabilities());
     }
-
     #[cfg(target_os = "linux")]
     {
-        return linux::capabilities();
+        return (PlatformKind::Linux, linux::capabilities());
     }
-
     #[cfg(target_os = "macos")]
     {
-        return macos::capabilities();
+        return (PlatformKind::MacOs, macos::capabilities());
     }
-
     #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
-        return platform::capabilities();
+        return (PlatformKind::Other, platform::capabilities());
     }
 }
 
-fn capabilities_platform_kind() -> PlatformKind {
-    #[cfg(windows)]
-    {
-        return PlatformKind::Windows;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        return PlatformKind::Linux;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        return PlatformKind::MacOs;
-    }
-
-    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
-    {
-        return PlatformKind::Other;
-    }
+/// AppContainer profile 名的**平台无关**拼装规则 (Windows 后端调用; Linux 侧可测)。
+///
+/// 原先错在: profile 名是固定常量 ⇒ SID 由名字**确定性**派生 ⇒ ① 全机全账号同一
+/// SID (共享盘上的跨账号授权会互相命中); ② 任何进程都能**同名抢占** (抢先注册同名
+/// profile ⇒ 我们 acquire 时拿到 `ALREADY_EXISTS` ⇒ 沙箱用的是对方注册的 profile)。
+/// 现在完整名字 = 前缀 + **用户标签** (跨账号区分) + **随机后缀** (跨进程区分, 防
+/// 抢占) ⇒ SID 不再确定; 字符集收敛到 `[A-Za-z0-9._-]`, 每段封顶 24 字符。
+pub fn appcontainer_profile_name(prefix: &str, user_tag: &str, random_tag: &str) -> String {
+    const SEGMENT_MAX: usize = 24;
+    let clean = |segment: &str| -> String {
+        segment
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+            .take(SEGMENT_MAX)
+            .collect()
+    };
+    format!(
+        "{}.{}.{}",
+        clean(prefix),
+        clean(user_tag),
+        clean(random_tag)
+    )
 }
 
 fn validate_request(request: &ProcessRequest) -> Result<(), ProcessError> {

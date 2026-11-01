@@ -1,25 +1,28 @@
 //! The around stage: timeout and retry wrap the execution itself.
 //!
-//! The wrap order is fixed and cannot be rearranged: the deadline is armed
-//! **around** the whole retry sequence, which wraps the execution. One run
-//! therefore has one absolute deadline, however many attempts it makes.
+//! The wrap order is fixed: the deadline is armed **around** the whole retry
+//! sequence, which wraps the execution — one run, one absolute deadline.
 //!
 //! The timeout runs through the deadline timer library
-//! (`apeireth_core::deadline`): expiry only *notifies*, and wrapping up the
-//! in-flight work is this stage's own job — the in-flight future is dropped
-//! here, and the armed timer is dropped (and cleaned up) with the stage.
+//! (`apeireth_core::deadline`): expiry only *notifies*; wrapping up the
+//! in-flight work is this stage's own job — the deadline branch cancels the
+//! attempt's signal and drops the in-flight future (no late side effect).
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use apeireth_core::deadline::{clamp_timeout, Deadline, TimeoutError};
+use apeireth_core::deadline::{clamp_timeout, Deadline, TimeoutError, TimeoutErrorCode};
 use apeireth_core::kernel::SessionId;
-use apeireth_plugin::{FrozenInvocation, ToolCapability};
+use apeireth_plugin::{FrozenInvocation, ToolCancellation, ToolCapability};
 use apeireth_protocol::canonical::{ToolCall, ToolResult};
 
 use super::PipelineFailure;
 
 /// Default upper bound accepted by the timeout gate (two minutes).
 pub const DEFAULT_MAX_TIMEOUT_MS: u64 = 120_000;
+
+/// The deadline library's stable "the deadline expired" code.
+const DEADLINE_EXPIRED: &str = TimeoutErrorCode::DeadlineExpired.as_str();
 
 /// How often a failed attempt is retried.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,30 +99,30 @@ impl AroundPolicy {
     /// Gate the configured timeout value before it is armed.
     ///
     /// Returns the timeout to arm, or `None` when the policy runs without one.
-    /// Zero, the unbounded sentinel, and values above the cap are refused with
-    /// the deadline library's own error code.
+    /// Zero, the unbounded sentinel, and values above the cap are refused.
     pub fn validated_timeout_ms(&self) -> Result<Option<u64>, TimeoutError> {
-        match self.timeout_ms {
-            None => Ok(None),
-            // The default is only read for an absent request; here the request
-            // is always present, so it is passed through unchanged.
-            Some(requested) => Ok(Some(clamp_timeout(
-                Some(requested),
-                requested,
-                self.max_timeout_ms,
-            )?)),
-        }
+        let Some(requested) = self.timeout_ms else {
+            return Ok(None);
+        };
+        // The default is only read for an absent request; here the request is
+        // always present, so it is passed through unchanged.
+        let timeout = clamp_timeout(Some(requested), requested, self.max_timeout_ms)?;
+        Ok(Some(timeout))
     }
+}
+
+/// One timeout-family failure: `code` is the deadline library's stable code,
+/// `started` says whether the run had already entered the tool call.
+fn timeout_failure(code: &'static str, started: bool) -> PipelineFailure {
+    PipelineFailure::Timeout { code, started }
 }
 
 /// Execute one call through the around stage.
 ///
 /// Returns the final result together with the number of attempts made. The
 /// only error the stage itself produces is the closed timeout family: a failed
-/// result is a result, not a stage failure, and travels on to the next stage.
-/// `session` is the dispatching turn's session scope (see
-/// [`ToolCapability::invoke_in_session`]); it is `None` for host-side
-/// invocations that have no session.
+/// result is a result, not a stage failure. `session` is the dispatching turn's
+/// session scope; `None` for host-side invocations without one.
 pub(crate) async fn run_around(
     tool: &dyn ToolCapability,
     call: &ToolCall,
@@ -128,27 +131,35 @@ pub(crate) async fn run_around(
     context: Option<&apeireth_plugin::ToolExecutionContext>,
     policy: &AroundPolicy,
 ) -> Result<(ToolResult, u32), PipelineFailure> {
+    // 取值被拒 ⇒ 定时器从未武装 ⇒ 工具一次都没被进入 ⇒ 未开始 ⇒ 可重试。
     let timeout_ms = policy
         .validated_timeout_ms()
-        .map_err(|error| PipelineFailure::Timeout {
-            code: error.code().as_str(),
-        })?;
+        .map_err(|error| timeout_failure(error.code().as_str(), false))?;
     let mut armed: Option<(Deadline, _)> = match timeout_ms {
         Some(milliseconds) => Some(
-            Deadline::after(Duration::from_millis(milliseconds)).map_err(|error| {
-                PipelineFailure::Timeout {
-                    code: error.code().as_str(),
-                }
-            })?,
+            Deadline::after(Duration::from_millis(milliseconds))
+                .map_err(|error| timeout_failure(error.code().as_str(), false))?,
         ),
         None => None,
     };
 
     let mut attempts = 0u32;
+    // 运行级粘滞位: 任一次尝试进入了工具 ⇒ 本次运行「已开始」(副作用可能已落地)。
+    let started = AtomicBool::new(false);
     loop {
         attempts += 1;
+        // 每次尝试一份子取消令牌: 承接上层取消; 超时时由本层主动取消在途调用。
+        let parents = context.iter().map(|ctx| ctx.cancellation.clone()).collect();
+        let cancellation = ToolCancellation::joined(parents);
+        // 把子令牌交给工具 (同 shell/execution.rs 的用法): 已投递的子进程据此中止。
+        let attempt_context = context.cloned().map(|mut attempt| {
+            attempt.cancellation = cancellation.clone();
+            attempt
+        });
         let invocation = async {
-            match context {
+            // 进入工具 ⇒ 副作用可能已经投递 ⇒ 本次运行「已开始」。
+            started.store(true, Ordering::SeqCst);
+            match &attempt_context {
                 Some(context) => tool.invoke_with_context(call, frozen, context).await,
                 None => tool.invoke_in_session(call, frozen, session).await,
             }
@@ -161,9 +172,11 @@ pub(crate) async fn run_around(
             None => Some(invocation.await),
         };
         let Some(result) = attempt else {
-            return Err(PipelineFailure::Timeout {
-                code: apeireth_core::deadline::TimeoutErrorCode::DeadlineExpired.as_str(),
-            });
+            // 超时 ⇒ 主动取消在途调用 (已投递的子进程/调用在此中止); 真正无法取消的
+            // 路径 (git_write / MCP 的 in-flight call) 仍会落地 ⇒ 按「已开始」处理。
+            cancellation.cancel();
+            let was_started = started.load(Ordering::SeqCst);
+            return Err(timeout_failure(DEADLINE_EXPIRED, was_started));
         };
         if result.is_ok() || attempts >= policy.retry.attempts() {
             return Ok((result, attempts));
