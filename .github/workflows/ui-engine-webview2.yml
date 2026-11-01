@@ -55,8 +55,22 @@ jobs:
         run: cargo build --release --target wasm32-unknown-unknown -p p5b-harness --locked
         working-directory: crates-ui/evidence/p5-b/harness
 
+      # ⭐⚠️ 产物路径：`harness` 是**独立 workspace**（自带 `[workspace]` 表）
+      #   ⇒ ⇒ 它的 target 目录是 **`harness/target/`**，**不是** `crates-ui/target/`
+      #   ⇒ ⇒ 2026-11-01 首次运行就栽在这里（`The system cannot find the path specified`）。
+      #   ⇒ ⇒ 这里先**断言存在**并在失败时**列出**所有 .wasm ⇒ ⇒ 下次一眼看出。
       - name: wasm-bindgen（产物直接落到 web/engine/pkg ⇒ 无需 node/vite）
-        run: wasm-bindgen --target web --out-dir web/engine/pkg --out-name p5b_harness ${{ github.workspace }}/crates-ui/target/wasm32-unknown-unknown/release/p5b_harness.wasm
+        shell: pwsh
+        run: |
+          $wasm = "${{ github.workspace }}/crates-ui/evidence/p5-b/harness/target/wasm32-unknown-unknown/release/p5b_harness.wasm"
+          if (-not (Test-Path $wasm)) {
+            Write-Error "找不到 wasm 产物：$wasm"
+            Write-Output "—— 实际找到的 .wasm ——"
+            Get-ChildItem -Path "${{ github.workspace }}/crates-ui" -Recurse -Filter "*.wasm" -ErrorAction SilentlyContinue |
+              Select-Object -First 10 -ExpandProperty FullName
+            exit 1
+          }
+          wasm-bindgen --target web --out-dir web/engine/pkg --out-name p5b_harness $wasm
         working-directory: crates-ui/evidence/p5-b
 
       - name: 跑五段能力探针（WebView2 引擎）
