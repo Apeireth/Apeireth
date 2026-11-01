@@ -36,6 +36,30 @@ import os
 import sys
 import time
 
+# ⭐⭐ **输出按 UTF-8**（2026-11-01 补；Windows runner 的控制台默认是 **cp1252**）。
+#
+# ## 为什么需要
+#
+# 本脚本会打印**中文**（含 ✅/❌ 提示与失败原因）⇒ ⇒ cp1252 **无法编码**它们
+# ⇒ ⇒ `print()` 抛 `UnicodeEncodeError` ⇒ ⇒ **整个判据在最后一步崩掉**
+# ⇒ ⇒ 而那一步之后的内容（真正的判定结果）**根本没被读到**。
+#
+# ⇒ ⇒ 这里把 stdout/stderr 重新绑到 UTF-8 ⇒ ⇒ 输出不再依赖控制台代码页。
+def _force_utf8_output() -> None:
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is None:
+            continue
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+_force_utf8_output()
+
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(
     0,
