@@ -127,7 +127,7 @@ orphan with_voices_error  # G4
 orphan forget_principal_with_permit  # G5
 orphan research_coordinated_forget_with_permit  # G5
 
-# --- G6（71 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
+# --- G6（73 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
 orphan with_used  # G6
 orphan with_len  # G6
@@ -200,6 +200,8 @@ orphan tool_paths  # G6
 orphan total_subscriptions  # G6
 orphan upsert_hallway  # G6
 orphan without_as_of  # G6
+orphan device_control_capability  # G6
+orphan skill_distill_capability  # G6
 
 # --- G7（3 条）：**owner 裁定不接**（有意保留，不是遗漏）：W1 IM 通道（2026-10-23 裁定暂缓）、W5 哲学拦截层（2026-10-24 裁定不接）。保留代码是有意的 —— 解冻条件写在 `docs/status/unwired-ledger.md`。
 

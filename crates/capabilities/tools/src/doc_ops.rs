@@ -4579,14 +4579,6 @@ pub fn doc_ops_capability(config: DocOpsConfig) -> Arc<dyn ToolCapability> {
     doc_ops_capability_shared(config, DocOpsCounters::new())
 }
 
-/// 组装生产工具面 + **共享 live 策略槽** (P3-6): stage-1 闸与治理链同源。
-pub fn doc_ops_capability_with_slot(
-    config: DocOpsConfig,
-    slot: LivePermissionPolicySlot,
-) -> Arc<dyn ToolCapability> {
-    doc_ops_capability_shared_with_slot(config, DocOpsCounters::new(), slot)
-}
-
 /// 组装生产工具面 + 共享计数器 (自述创作节与工具面同一真值源)。
 pub fn doc_ops_capability_shared(
     config: DocOpsConfig,

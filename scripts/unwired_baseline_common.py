@@ -135,6 +135,12 @@ HEADER = """# 孤儿 API 基线（scripts/audit_unwired.py --update 生成；**�
 #     或设计上是供宿主/外部调用的公开 API。
 VERIFIED_REDUNDANT_OR_HOST = {
     # --- engine/memory：主路径见 unwired-memory-audit-2026-10-24.md ---
+    # --- capabilities/tools：2026-11-01 P3-6 推广（宿主 live 策略槽）---
+    # 主路径 = `*_with_slot` / `*_with_live_policy` 变体（装配根在用）；
+    # 这两个是**既有 public API**（对外的便捷包装，仓内无调用点）⇒
+    # 删了会破坏外部调用者的向后兼容 ⇒ 归 G6（并行入口/宿主面）。
+    "device_control_capability",  # 主路径 device_control_capability_with_slot
+    "skill_distill_capability",  # 主路径 skill_distill_capability_with_slot
     "consolidate_governed",  # 主路径 consolidate
     "default_min_count",  # 公开 API 的默认值常量，宿主面
     "ensure_governance",  # 主路径 ensure_governance_on_conn

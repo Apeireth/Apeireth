@@ -184,15 +184,15 @@ pub use content_feed::{
 };
 pub use doc_ops::{
     authorized_doc_ops_policy, doc_ops_approval_reason, doc_ops_capability,
-    doc_ops_capability_shared, doc_ops_capability_shared_with_slot, doc_ops_capability_with_slot,
-    doc_ops_enabled_from_env, doc_ops_params_refusal, doc_ops_pipeline, doc_ops_pipeline_with_slot,
-    is_doc_ops_write_action, DocOpsApprovalHook, DocOpsBoundaryGuard, DocOpsConfig, DocOpsCounters,
-    DocOpsError, DocOpsParams, DocOpsRiskMappingHook, DocOpsRunner, DocOpsTool,
-    ACTION_DOCX_EXTRACT_TEXT, ACTION_DOCX_OUTLINE, ACTION_PDF_EXTRACT_PAGES,
-    ACTION_PDF_EXTRACT_TEXT, ACTION_PDF_INFO, ACTION_PDF_MERGE, ACTION_PDF_SPLIT,
-    ACTION_PDF_WATERMARK_TEXT, DOC_OPS_ACTIONS, DOC_OPS_CAPABILITY_ID, DOC_OPS_ENABLE_ENV,
-    DOC_OPS_MAX_INPUT_BYTES, DOC_OPS_MAX_PAGES, DOC_OPS_MAX_TEXT_CHARS, DOC_OPS_READ_ACTIONS,
-    DOC_OPS_TIMEOUT_MS, DOC_OPS_TOOL_DESCRIPTION, DOC_OPS_TOOL_NAME, DOC_OPS_WRITE_ACTIONS,
+    doc_ops_capability_shared, doc_ops_capability_shared_with_slot, doc_ops_enabled_from_env,
+    doc_ops_params_refusal, doc_ops_pipeline, doc_ops_pipeline_with_slot, is_doc_ops_write_action,
+    DocOpsApprovalHook, DocOpsBoundaryGuard, DocOpsConfig, DocOpsCounters, DocOpsError,
+    DocOpsParams, DocOpsRiskMappingHook, DocOpsRunner, DocOpsTool, ACTION_DOCX_EXTRACT_TEXT,
+    ACTION_DOCX_OUTLINE, ACTION_PDF_EXTRACT_PAGES, ACTION_PDF_EXTRACT_TEXT, ACTION_PDF_INFO,
+    ACTION_PDF_MERGE, ACTION_PDF_SPLIT, ACTION_PDF_WATERMARK_TEXT, DOC_OPS_ACTIONS,
+    DOC_OPS_CAPABILITY_ID, DOC_OPS_ENABLE_ENV, DOC_OPS_MAX_INPUT_BYTES, DOC_OPS_MAX_PAGES,
+    DOC_OPS_MAX_TEXT_CHARS, DOC_OPS_READ_ACTIONS, DOC_OPS_TIMEOUT_MS, DOC_OPS_TOOL_DESCRIPTION,
+    DOC_OPS_TOOL_NAME, DOC_OPS_WRITE_ACTIONS,
 };
 pub use education::{DxCheckTool, DxReport, REPLACED_DIFFS};
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
@@ -303,15 +303,14 @@ pub use self_status::{
 pub use sheet_ops::{
     authorized_sheet_ops_policy, is_sheet_ops_write_action, sheet_ops_approval_reason,
     sheet_ops_capability, sheet_ops_capability_shared, sheet_ops_capability_shared_with_slot,
-    sheet_ops_capability_with_slot, sheet_ops_enabled_from_env, sheet_ops_params_refusal,
-    sheet_ops_pipeline, sheet_ops_pipeline_with_slot, SheetOpsApprovalHook, SheetOpsBoundaryGuard,
-    SheetOpsConfig, SheetOpsCounters, SheetOpsError, SheetOpsParams, SheetOpsRiskMappingHook,
-    SheetOpsRunner, SheetOpsTool, ACTION_AGGREGATE, ACTION_EXPORT_CSV, ACTION_FILTER,
-    ACTION_FORMULA, ACTION_READ, ACTION_SORT, ACTION_SUMMARY, AGGREGATE_FUNCTIONS,
-    DEFAULT_MAX_COLS, DEFAULT_MAX_PREVIEW_ROWS, DEFAULT_MAX_ROWS, FILTER_PREDICATES,
-    SHEET_OPS_ACTIONS, SHEET_OPS_CAPABILITY_ID, SHEET_OPS_ENABLE_ENV, SHEET_OPS_READ_ACTIONS,
-    SHEET_OPS_TIMEOUT_MS, SHEET_OPS_TOOL_DESCRIPTION, SHEET_OPS_TOOL_NAME,
-    SHEET_OPS_TRANSFORM_ACTIONS, SHEET_OPS_WRITE_ACTIONS, SORT_ORDERS,
+    sheet_ops_enabled_from_env, sheet_ops_params_refusal, sheet_ops_pipeline,
+    sheet_ops_pipeline_with_slot, SheetOpsApprovalHook, SheetOpsBoundaryGuard, SheetOpsConfig,
+    SheetOpsCounters, SheetOpsError, SheetOpsParams, SheetOpsRiskMappingHook, SheetOpsRunner,
+    SheetOpsTool, ACTION_AGGREGATE, ACTION_EXPORT_CSV, ACTION_FILTER, ACTION_FORMULA, ACTION_READ,
+    ACTION_SORT, ACTION_SUMMARY, AGGREGATE_FUNCTIONS, DEFAULT_MAX_COLS, DEFAULT_MAX_PREVIEW_ROWS,
+    DEFAULT_MAX_ROWS, FILTER_PREDICATES, SHEET_OPS_ACTIONS, SHEET_OPS_CAPABILITY_ID,
+    SHEET_OPS_ENABLE_ENV, SHEET_OPS_READ_ACTIONS, SHEET_OPS_TIMEOUT_MS, SHEET_OPS_TOOL_DESCRIPTION,
+    SHEET_OPS_TOOL_NAME, SHEET_OPS_TRANSFORM_ACTIONS, SHEET_OPS_WRITE_ACTIONS, SORT_ORDERS,
 };
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use skill::{

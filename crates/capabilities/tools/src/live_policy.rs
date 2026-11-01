@@ -90,18 +90,3 @@ pub fn live_policy_allows(slot: &LivePermissionPolicySlot, capability: &str) -> 
         None => None,
     }
 }
-
-/// 宿主对该能力的**执行授权**判决（只关心「能不能执行」）。
-///
-/// 与 [`live_policy_allows`] 同义，但用 [`Permission`] 显式表达
-/// 「我们问的是**执行授权**，不是审批档」。
-pub fn live_policy_grants_execution(
-    slot: &LivePermissionPolicySlot,
-    capability: &str,
-) -> Option<bool> {
-    let policy = current_live_policy(slot)?;
-    let policy = policy
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    Some(policy.has(&Permission::ExecuteTool(capability.to_string())))
-}
