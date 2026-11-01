@@ -34,6 +34,23 @@ on:
 permissions:
   contents: read
 
+
+# ⚠️ **CI 磁盘瘦身**（2026-11-01 实测，见 commit body 的 0 装真账）
+# 同一命令 `cargo build --workspace --tests --locked` 的 target 体积：
+#   默认          ⇒ 101 GB / 10m14s
+#   debug=0+inc=0 ⇒  14 GB /  3m21s
+#   **+ strip=symbols ⇒  7.5 GB / 3m20s**（runner 磁盘 14 GB ⇒ 只有这个装得下）
+# 原因：每个测试二进制的 `STRTAB`（panic 消息/类型名）**73.6 MiB** + `SYMTAB` 9.5 MiB
+#   ⇒ `strip=debuginfo` **不去符号表** ⇒ 必须 `strip=symbols`。
+# ⇒ **不删任何测试、不改任何口径**，只改构建环境。
+# ⚠️ **coverage.yml 故意不改**（tarpaulin 需要调试信息）。
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_PROFILE_DEV_STRIP: symbols
+  CARGO_PROFILE_TEST_STRIP: symbols
+
 jobs:
   golden-baseline:
     name: internal golden set retrieval baseline gate
@@ -54,6 +71,30 @@ jobs:
 
       - name: Download internal-set corpus (public domain novels, SHA-256 pinned)
         run: bash scripts/download_novels.sh
+
+      - name: Runner capacity report (磁盘/CPU/内存 ⇒ 写进 artifact 供下载)
+        # ⚠️ **为什么加这一步**（2026-11-01 实测推导）：CI 上 `Build workspace tests` 反复 exit 101，
+        # 而**本地同命令退出码 0** ⇒ ⇒ 差异必在**环境**（磁盘/内存/核数），不在代码。
+        # ⇒ 本步骤把 runner 的**真实容量**写成 artifact ⇒ ⇒ **以后不用猜**，
+        #   任何「构建挂了」都能先看容量，不必等日志（Actions 日志 API 对本仓返回 403）。
+        run: |
+          mkdir -p "$RUNNER_TEMP/capacity"
+          {
+            echo "=== date ==="; date -u
+            echo "=== disk ==="; df -h / /tmp "$GITHUB_WORKSPACE" 2>/dev/null || true
+            echo "=== cpu ==="; nproc; grep -m1 'model name' /proc/cpuinfo || true
+            echo "=== memory ==="; free -h || true
+            echo "=== runner image ==="; cat "$RUNNER_OS" 2>/dev/null || true
+          } > "$RUNNER_TEMP/capacity/report.txt" 2>&1
+          cat "$RUNNER_TEMP/capacity/report.txt"
+          echo "$GITHUB_WORKSPACE" >> "$RUNNER_TEMP/capacity/report.txt"
+
+      - name: Upload runner capacity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-capacity-golden-baseline
+          path: ${{ runner.temp }}/capacity/report.txt
+          if-no-files-found: warn
 
       - name: Build workspace tests
         run: cargo build --workspace --tests --locked
