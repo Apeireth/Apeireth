@@ -146,7 +146,7 @@ claims:
       - crates/capabilities/tools/src/shell/execution.rs
     tests:
       - crates/capabilities/tools/src/object_access.rs
-    verified_at: d45a96e877a501a0b580b836797c10d2a36be87f
+    verified_at: cc244de376e8f3b61e2463ebbdbcaf06680440ef
     verify_cmd: "cargo test -p apeireth-tools-canonical --lib object_access"
     owner: capabilities
     next_review: "2026-12-01"
@@ -271,7 +271,7 @@ claims:
       - crates/capabilities/tools/src/process/mod.rs
     tests:
       - crates/capabilities/tools/tests/process_executor.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: cc244de376e8f3b61e2463ebbdbcaf06680440ef
     verify_cmd: "cargo test -p apeireth-tools-canonical --test process_executor"
     owner: tools
     next_review: "2026-11-20"
@@ -447,7 +447,7 @@ claims:
       - crates/foundation/credentials/src/hot_store.rs
     tests:
       - crates/engine/provider/tests/endpoint_binding.rs
-    verified_at: PLACEHOLDER_SHA
+    verified_at: cc244de376e8f3b61e2463ebbdbcaf06680440ef
     verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked"
     owner: provider
     next_review: "2026-12-01"
@@ -611,7 +611,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 5c74f955e62cebcb1979fb3606e804d9fb10d73c
+    verified_at: cc244de376e8f3b61e2463ebbdbcaf06680440ef
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"

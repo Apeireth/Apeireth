@@ -11,13 +11,13 @@
 | `tool.mcp_bridge` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_MCP` | `5c74f955e62c` | 2026-11-20 |
 | `tool.voice_speak` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_VOICE_SPEAK` | `5c74f955e62c` | 2026-11-20 |
 | `sec.egress_control` | PRODUCTION WIRED | OFF | - | `5c74f955e62c` | 2026-12-01 |
-| `sec.object_access` | PRODUCTION WIRED | ON | - | `d45a96e877a5` | 2026-12-01 |
+| `sec.object_access` | PRODUCTION WIRED | ON | - | `cc244de376e8` | 2026-12-01 |
 | `sec.exposure_audit` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EXPOSURE_AUDIT` | `5c74f955e62c` | 2026-12-01 |
 | `sec.egress_gate` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_EGRESS_GATE` | `5c74f955e62c` | 2026-12-01 |
 | `mem.lesson_object` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-12-01 |
 | `gap.memory_update` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
 | `gap.prompt_stabilizer_unwired` | NOT IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
-| `sec.linux_containment` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
+| `sec.linux_containment` | IMPLEMENTED | - | - | `cc244de376e8` | 2026-11-20 |
 | `sec.gateway_tls` | PRODUCTION WIRED | OFF | `APEIRETH_TLS_CERT` | `5c74f955e62c` | 2026-11-20 |
 | `sec.storage_envelope_crypto` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_SESSION_SEAL` | `5c74f955e62c` | 2026-11-20 |
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
@@ -27,7 +27,7 @@
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
-| `sec.credential_endpoint_binding` | PRODUCTION WIRED | ON | `APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` | `PLACEHOLDER_` | 2026-12-01 |
+| `sec.credential_endpoint_binding` | PRODUCTION WIRED | ON | - | `cc244de376e8` | 2026-12-01 |
 | `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
@@ -35,7 +35,7 @@
 | `bio.circadian` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_CIRCADIAN` | `5c74f955e62c` | 2026-11-20 |
 | `bio.nociception_pain` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `5c74f955e62c` | 2026-11-20 |
 | `bio.recovery_protocol` | PRODUCTION WIRED | OFF | `APEIRETH_ENABLE_BIO_PAIN` | `5c74f955e62c` | 2026-11-20 |
-| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-28 |
+| `rt.registered_module_v1` | PRODUCTION WIRED | ON | - | `cc244de376e8` | 2026-11-28 |
 | `rt.owned_agents` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
 | `mem.registered_namespace` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
 | `rt.desktop_managed_main` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
