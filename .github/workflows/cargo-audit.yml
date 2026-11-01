@@ -14,7 +14,30 @@ name: Cargo audit (RUSTSEC advisories)
 
 on:
   push:
-    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
+    # ⭐⭐⭐ 把**活跃的特性分支**列进来（2026-11-01 实测修正）。
+    #
+    # ## 为什么必须列（**实测**，不是推测）
+    #
+    # 现象：在 `ui-engine-p0-2026-10-24` 上 push ⇒ ⇒ **每次**都产生一个
+    # `cargo-audit` 的 run ⇒ ⇒ `conclusion = failure` ⇒ ⇒ **但 `jobs = 0`**。
+    #
+    # 机制（实测确认）：
+    # ① 该 workflow **在默认分支 `main` 上存在** ⇒ ⇒ GitHub 对**任何分支**的 push
+    #    都会为它**创建 run**；
+    # ② `push.branches` 过滤**只阻止 job 调度** ⇒ ⇒ 分支不在列表里 ⇒ ⇒ **run 里没有 job**
+    #    ⇒ ⇒ **GitHub 把「无 job 的 run」判为 `failure`** ⇒ ⇒ ⇒ **每次一封红邮件**
+    #    （owner 2026-10-31 报「一直发红邮件 / 空 CI 在跑」的现象）；
+    # ③ ⚠️ **实测否定结果**：加否定路径 `'!crates-ui/**'` **不能**阻止它
+    #    ⇒ ⇒ 只改台账（**不碰** lock / workflow）的 push **仍然**产生无 job run
+    #    ⇒ ⇒ ⇒ ⇒ 路径过滤这条路**已被实测排除**。
+    #
+    # ⇒ ⇒ **正解**：把活跃分支**列进来** ⇒ ⇒ audit **真跑**（有 job）⇒ ⇒
+    # ⇒ ⇒ run 的结论变成**真实的审计结论**（绿 ⇒ 无红邮件；红 ⇒ 是真问题）⇒ ⇒
+    # ⇒ ⇒ **信息量更高**，而不是制造一个**假的失败**。
+    #
+    # ⚠️ 另注（**关键的机制事实**）：`push` 事件用的是**默认分支上**的 workflow 版本
+    #   ⇒ ⇒ 在特性分支上改这个文件**不生效** ⇒ ⇒ ⇒ 本修复**必须进 main**。
+    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion, ui-engine-p0-2026-10-24]
     # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件、空 CI 在跑」时修）：
     #   实测：本 workflow 在 PR 分支同步时会生成**无 job 的失败 run**（jobs=0）
     #   ⇒ ⇒ 每次 push 都发一封红邮件 ⇒ ⇒ 而依赖没变时 RUSTSEC 结论与上次完全相同
@@ -23,12 +46,18 @@ on:
     paths:
       - '**/Cargo.lock'
       - '.github/workflows/cargo-audit.yml'
+      # ⭐ 排除**独立 workspace**（`crates-ui/`，ADR-0015）⇒ ⇒ 主仓的 audit
+      #   **根本不覆盖**它的依赖 ⇒ ⇒ 让主仓 workflow 为它触发**既无信息量、又发邮件**
+      #   ⇒ ⇒ ⇒ **排除掉**（crates-ui 的依赖审计由它自己的门禁负责）。
+      - '!crates-ui/**'
   pull_request:
     branches: ['**']
     # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 兜底）。
     paths:
       - '**/Cargo.lock'
       - '.github/workflows/cargo-audit.yml'
+      # ⭐ 同上：排除独立 workspace（crates-ui）⇒ ⇒ PR 侧也不产生「无 job 的失败 run」。
+      - '!crates-ui/**'
   schedule:
     # 每周日凌晨 4 点 (跟 eval-live 错开 1h, 避免 GPU 竞争)
     - cron: '0 4 * * 0'
