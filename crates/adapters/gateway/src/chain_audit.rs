@@ -53,70 +53,74 @@ pub struct FileChainAuditSink {
     _lock: SingleWriterLock,
 }
 
-/// 单写者锁：`<audit>.lock` 文件（`create_new` 原子创建 + 写入 pid）。
+/// 单写者锁：`<audit>.lock` 文件 + **OS 文件锁**（内核保证互斥）。
 ///
-/// 不加新依赖（不用 flock 库）：`create_new` 本身是原子的，pid 用于识别
-/// **陈旧锁**（上次进程崩溃没来得及删）—— pid 不存活则接管。
+/// # 原先错在哪（2026-11-01 安全审计收口）
+///
+/// 旧实现是 `create_new` 原子创建 + 靠 **pid 猜陈旧锁**：
+/// * **TOCTOU 竞态**：两个进程同时看到陈旧锁 ⇒ 都 `remove` ⇒ 都 `create_new`
+///   ⇒ **两个写者并存** ⇒ 链分叉（后写者的 `previous_hash` 基于过期链尾）
+///   ⇒ 下次打开必然校验失败 ⇒ 审计**永久降级内存账**（不持久）。
+/// * 进程崩溃留下陈旧锁 ⇒ 要靠 pid 存活去猜 ⇒ 猜错就永久锁死或误抢。
+/// * 同进程内多实例的互斥语义**按账本**（不是按进程）⇒ 落盘顺序敏感。
+///
+/// # 现在为什么这样
+///
+/// 改用**平台原生文件锁**（unix: `libc::flock`；windows: `LockFileEx`）：
+/// * **内核保证**互斥 ⇒ 没有 TOCTOU、没有陈旧锁（进程退出内核自动释放）；
+/// * 文件锁挂在**打开文件描述**上 ⇒ 同进程内**不同 fd 也会互斥**
+///   ⇒ 「同进程多实例」不再需要靠 drop 顺序 ⇒ 测试不再顺序敏感。
+/// * 不加新依赖（仓库纪律）⇒ 直接用平台原生调用，不引 flock 库。
+///
+/// # 失败口径
+///
+/// 抢不到锁 ⇒ 如实报「已被另一个进程持有」⇒ 调用方**降级内存账**（审计不持久）
+/// ⇒ **不静默并发写**（宁可不持久，也不能写出一个分叉的链）。
 struct SingleWriterLock {
     path: PathBuf,
+    /// 锁文件句柄（**必须持有** ⇒ 句柄关闭/进程退出 ⇒ 锁自动释放）。
+    _file: std::fs::File,
 }
 
 impl SingleWriterLock {
     fn acquire(ledger: &std::path::Path) -> Result<Self, String> {
         let path = ledger.with_extension("lock");
-        for attempt in 0..2 {
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-            {
-                Ok(mut file) => {
-                    use std::io::Write as _;
-                    let _ = file.write_all(std::process::id().to_string().as_bytes());
-                    return Ok(Self { path });
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    let holder = std::fs::read_to_string(&path).unwrap_or_default();
-                    let holder_pid = holder.trim().parse::<u32>().ok();
-                    // 陈旧锁（持有进程已不存在）= 接管；存活 = 拒绝（如实报原因）。
-                    let stale = holder_pid.is_none_or(|pid| !process_alive(pid));
-                    if stale && attempt == 0 {
-                        let _ = std::fs::remove_file(&path);
-                        continue;
-                    }
-                    return Err(format!(
-                        "审计账本已被另一个进程持有（pid={}，单写者：链 sequence 不允许并发追加）；\
-                         本进程改用内存账（审计不持久），如需接管请确认该进程已退出",
-                        holder.trim()
-                    ));
-                }
-                Err(error) => return Err(format!("审计账本锁创建失败: {error}")),
-            }
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .map_err(|error| format!("审计账本锁文件打开失败: {error}"))?;
+        // 写 pid（**仅供人排查**；互斥由内核的文件锁保证，不依赖这个值）。
+        {
+            use std::io::{Seek, SeekFrom, Write as _};
+            let mut handle = file
+                .try_clone()
+                .map_err(|error| format!("审计账本锁文件复制失败: {error}"))?;
+            let _ = handle.set_len(0);
+            let _ = handle.seek(SeekFrom::Start(0));
+            let _ = handle.write_all(std::process::id().to_string().as_bytes());
+            let _ = handle.flush();
         }
-        Err("审计账本锁获取失败（陈旧锁接管后仍冲突）".to_string())
+        if let Err(reason) = apeireth_core::storage_atomic::try_lock_exclusive(&file) {
+            let holder = std::fs::read_to_string(&path).unwrap_or_default();
+            let _ = std::fs::remove_file(&path);
+            return Err(format!(
+                "审计账本已被另一个进程持有（pid={}，单写者：链 sequence 不允许并发追加）；\
+                 本进程改用内存账（审计不持久），如需接管请确认该进程已退出（{reason}）",
+                holder.trim()
+            ));
+        }
+        Ok(Self { path, _file: file })
     }
 }
 
 impl Drop for SingleWriterLock {
     fn drop(&mut self) {
+        // 顺序重要：**先让内核释放锁，再删锁文件**。
+        // （先删文件会让另一个进程立刻建新文件并锁它，而本进程还锁着旧 inode。）
         let _ = std::fs::remove_file(&self.path);
     }
-}
-
-/// 进程是否存活。
-///
-/// **复用 [`apeireth_core::storage_atomic::pid_alive`]**（跨平台：unix 走
-/// `kill(pid, 0)`、Windows 走 `OpenProcess`、其它平台保守视为存活）。
-///
-/// **为什么换掉原来那个 Linux-only 的 `/proc` 判定**（2026-10-25）：
-/// 原来的实现只在 Linux 上判活，**其它平台一律返回「存活」** ⇒
-/// 「持有进程已死 ⇒ 陈旧锁可被接管」在 **macOS / Windows 上永远不成立**
-/// ⇒ 一次崩溃会把审计链**永久锁死**（在该平台上的真实故障面），
-/// 而且与之配套的测试 `stale_lock_from_dead_process_is_taken_over`
-/// 在 **win + mac 两个平台都红**（本地 Linux 绿 ⇒ 平台差异被掩盖）。
-/// ⇒ 改用仓内已有的跨平台实现，一处口径、全平台一致。
-fn process_alive(pid: u32) -> bool {
-    apeireth_core::storage_atomic::pid_alive(pid)
 }
 
 struct ChainState {
@@ -541,6 +545,44 @@ mod tests {
     ///
     /// 缺陷原文 (修复前): 编码面照写, 解码面按第一个 `#` 切 ⇒ pair_id 被截断、
     /// round 串位、subject 吞掉后半段 ⇒ 读面**冒充**另一条记录且不报错。
+    /// **同进程**第二个 sink 拿不到锁 ⇒ 互斥是真的（不是靠「同进程不算」）。
+    ///
+    /// 这条正是旧实现要靠 `drop(audit); drop(sink); drop(reopened);` 绕开的地方
+    /// （顺序敏感 ⇒ 测试之间互相影响）。新实现靠**内核**保证 ⇒ 不依赖顺序。
+    #[test]
+    fn a_second_sink_on_the_same_ledger_is_refused() {
+        let path = unique_path("single-writer");
+        let first = FileChainAuditSink::open(path.clone()).expect("第一次开应成功");
+        let second = FileChainAuditSink::open(path.clone());
+        assert!(
+            second.is_err(),
+            "同一账本的第二个 sink 必须被拒（单写者：链 sequence 不允许并发追加）"
+        );
+        let Err(reason) = second else {
+            panic!("第二个 sink 不该开成功");
+        };
+        assert!(
+            reason.contains("单写者"),
+            "拒绝原因必须说清是单写者约束（真因如实），实际: {reason}"
+        );
+        drop(first);
+    }
+
+    /// 第一个 sink **放掉**之后，第二个能拿到锁 ⇒ 锁随**句柄**释放
+    /// （不是靠删文件 ⇒ 不会与「另一个进程已建新文件并锁它」竞态）。
+    #[test]
+    fn the_lock_is_reusable_after_the_holder_is_dropped() {
+        let path = unique_path("single-writer-reuse");
+        {
+            let _first = FileChainAuditSink::open(path.clone()).expect("第一次开应成功");
+            assert!(
+                FileChainAuditSink::open(path.clone()).is_err(),
+                "持锁期间第二个必须拿不到"
+            );
+        }
+        let _second = FileChainAuditSink::open(path.clone()).expect("放掉之后应能再拿到");
+    }
+
     #[test]
     fn ambiguous_pair_id_is_refused_on_write_and_on_read() {
         let path = unique_path("ambiguous");

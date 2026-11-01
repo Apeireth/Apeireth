@@ -26,3 +26,10 @@ path = "src/lib.rs"
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
+
+# 审计账本单写者锁：Windows 侧用原生 `LockFileEx`（unix 侧走手写 FFI，不加依赖）。
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }

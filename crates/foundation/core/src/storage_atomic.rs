@@ -839,3 +839,99 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 }
+
+/// 拿**排他**文件锁（**不阻塞**）。
+///
+/// # 历史（为什么不再需要「pid 判活」）
+///
+/// 旧锁（`create_new` + pid 猜陈旧锁）需要判断「持锁进程是否还活着」。
+/// 那条配套实现最初是 **Linux-only 的 `/proc` 判定** ⇒ **其它平台一律返回
+/// 「存活」** ⇒ 「持有进程已死 ⇒ 陈旧锁可被接管」在 **macOS / Windows 上
+/// 永远不成立** ⇒ 一次崩溃会把审计链**永久锁死**（真实故障面）；且配套测试
+/// `stale_lock_from_dead_process_is_taken_over` 在 **win + mac 两个平台都红**
+/// （本地 Linux 绿 ⇒ 平台差异被掩盖）。
+///
+/// ⇒ 2026-11-01 改用 OS 文件锁后：**进程退出由内核释放锁**
+/// ⇒ **不再需要猜陈旧** ⇒ pid 判活整套退役（连同它的 TOCTOU 竞态）。
+///
+/// # 为什么需要它（2026-11-01 安全审计收口）
+///
+/// 审计账本原先用 `create_new` 文件锁 + **pid 猜陈旧锁**：
+/// * **TOCTOU 竞态**：两个进程同时看到陈旧锁 ⇒ 都删 ⇒ 都建 ⇒ **两个写者并存**
+///   ⇒ 链的 `previous_hash` 基于过期链尾 ⇒ **分叉** ⇒ 下次打开校验失败
+///   ⇒ 审计**永久降级内存账**（不持久）。
+/// * 进程崩溃留下陈旧锁 ⇒ 靠 pid 猜 ⇒ 猜错就永久锁死或误抢。
+///
+/// # 平台行为
+///
+/// * unix：`flock(fd, LOCK_EX | LOCK_NB)` —— 内核保证互斥；**进程退出自动释放**
+///   ⇒ 没有陈旧锁；文件锁挂在**打开文件描述**上 ⇒ **同进程不同 fd 也互斥**
+///   （这正是「同进程多实例」需要的语义）。
+/// * Windows：`LockFileEx(EXCLUSIVE | FAIL_IMMEDIATELY)` —— 同上语义。
+/// * 其它平台 / miri：**不支持** ⇒ [`Err`] ⇒ 调用方**降级内存账**，
+///   **绝不静默并发写**（宁可不持久，也不能写出分叉的链）。
+///
+/// # 失败口径
+///
+/// 抢不到 ⇒ [`Err`]（真因如实，含 OS 错误）⇒ **不阻塞等待**。
+pub fn try_lock_exclusive(file: &std::fs::File) -> Result<(), String> {
+    // miri 不支持 flock FFI ⇒ 保守失败（调用方降级内存账；绝不假装拿到了锁）。
+    #[cfg(miri)]
+    {
+        let _ = file;
+        return Err("miri 不支持 OS 文件锁".to_string());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd as _;
+        let fd = file.as_raw_fd();
+        // 最小化平台绑定：只声明本模块用到的 POSIX 入口, 不引入额外依赖
+        // （与同文件的 `pid_alive` 同一手法）。
+        unsafe extern "C" {
+            fn flock(fd: i32, operation: i32) -> i32;
+        }
+        // POSIX 常量: LOCK_EX = 2, LOCK_NB = 4（不改这两个数）。
+        const LOCK_EX: i32 = 2;
+        const LOCK_NB: i32 = 4;
+        // SAFETY: `fd` 来自一个活着的 `File`（句柄在本函数期间有效）；
+        // `flock` 只对该 fd 加锁, 不触碰其它内存。
+        let rc = unsafe { flock(fd, LOCK_EX | LOCK_NB) };
+        if rc == 0 {
+            Ok(())
+        } else {
+            Err(format!("flock 失败: {}", std::io::Error::last_os_error()))
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle as _;
+        let handle = file.as_raw_handle();
+        let mut overlapped = std::mem::zeroed::<windows_sys::Win32::Foundation::OVERLAPPED>();
+        // SAFETY: `handle` 来自活着的 `File`；`OVERLAPPED` 是零初始化的栈对象，
+        // `LockFileEx` 只读它并可能写回（独占字节范围锁定不需要有效 hEvent）。
+        let ok = unsafe {
+            windows_sys::Win32::Storage::FileSystem::LockFileEx(
+                handle,
+                windows_sys::Win32::Storage::FileSystem::LOCKFILE_EXCLUSIVE_LOCK
+                    | windows_sys::Win32::Storage::FileSystem::LOCKFILE_FAIL_IMMEDIATELY,
+                0,
+                u32::MAX,
+                u32::MAX,
+                &mut overlapped,
+            )
+        };
+        if ok != 0 {
+            Ok(())
+        } else {
+            Err(format!(
+                "LockFileEx 失败: {}",
+                std::io::Error::last_os_error()
+            ))
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = file;
+        Err("本平台无 OS 文件锁支持".to_string())
+    }
+}
