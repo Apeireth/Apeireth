@@ -90,6 +90,7 @@ orphan with_task_type  # G3
 
 # --- G4（30 条）：**注入点 / 探测口**（`with_*`）。生产装配走 `install_*`。
 
+orphan with_max_episodes  # G4
 orphan with_age  # G4
 orphan with_as_of  # G4
 orphan with_backend  # G4
