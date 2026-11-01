@@ -61,7 +61,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=25.0)
     args = parser.parse_args()
 
-    serve_root = Path(os.environ[SERVE_ROOT_ENV]) if os.environ.get(SERVE_ROOT_ENV) else DIST
+    serve_root = pathlib.Path(os.environ[SERVE_ROOT_ENV]) if os.environ.get(SERVE_ROOT_ENV) else DIST
     if not (serve_root / "l1" / "index.html").exists():
         print(
             f"❌ 缺少构建产物 {serve_root}/l1/index.html（先跑 build.sh 或 vite build）",
