@@ -216,11 +216,22 @@
 
 > **2026-11-01 限定名级复核**（副总指挥线，逐条 grep **限定名** ⇒ 排除 `ProactiveRecallPolicy` 这类前缀遮蔽）：
 > - `scope::RecallPolicy` ⇒ 库外 **0** ⇒ 但**不是缺口** ⇒ 已归组到 §5.1（`RecallPolicy` 三处承担）⇒ **本条销账**；
-> - `dailynote::DailyNote` ⇒ 库外 **0** ⇒ 仍待判；
-> - `online_calibration::AdaptiveBaseline` ⇒ 库外 **0** ⇒ 仍待判；
-> - ⭐ `online_calibration::DriftDetector` ⇒ 库外 **1**
->   （`crates/foundation/governance/src/research_autonomy.rs`）⇒ ⇒ **已接线** ⇒ **本条原记录已过期**；
-> - `cluster_store::ClusterStore` ⇒ 库外 **0** ⇒ 仍待判。
+> - `dailynote::DailyNote` ⇒ 库外 **0**（家族内 `note.rs`/`store.rs`/`export.rs` 自洽）
+>   ⇒ ⇒ **A 类真缺口**（库级 IMPLEMENTED，生产零消费；模块自述指向 v2 plan §9.5 的「拆独立 crate」计划）；
+> - `online_calibration::AdaptiveBaseline` ⇒ 库外 **0** 且**只有 `lib.rs` 重导出**（无真实消费者）
+>   ⇒ ⇒ **A 类真缺口**（库级 IMPLEMENTED，零真实消费）；
+> - `online_calibration::DriftDetector` ⇒ 库外 **0**，且**只有 `lib.rs` 重导出**
+>   ⇒ ⇒ **A 类真缺口**（与 `AdaptiveBaseline` 同族：库级已实现、生产零消费）
+>   ⇒ ⇒ ⚠️ **2026-11-01 更正**：此前记为「已接生产（`runtime-assembly/src/canonical/research_autonomy.rs`）」
+>   是**错的** —— 复核发现该文件里的 `DriftDetector` **只出现在两处注释**（模块文档 + 字段注释）
+>   ⇒ ⇒ **它根本没 import memory 的 `DriftDetector`** ⇒ ⇒ 全仓 `DriftDetector::` / `drift_detector` **零命中**
+>   ⇒ ⇒ **零真实调用** ⇒ ⇒ 原「已接线」判定撤回 ⇒ **本族两半都是 A 类真缺口**；
+>   ⇒ ⇒ ⚠️ **教训**：**名字出现 ≠ 真调用** ⇒ 判「已接线」必须看 **import + 构造/调用**，不是看名字出现过。
+> - `cluster_store::ClusterStore` ⇒ 库外 **0**，但 **库内被 `meta_thinking.rs` 消费**
+>   ⇒ ⇒ 而 `meta_thinking` **在生产装配里** ⇒ ⇒ **不是缺口**
+>   ⇒ ⇒ ⚠️ **这是「零引用」的第三种假阳性形态：间接消费链**
+>   （模块自身零引用，却经另一个模块进入生产 ⇒ 引用计数看不见）。
+
 > ⇒ ⇒ **判据提醒**：本节的「零引用」必须用**限定名**复核 —— 裸 token 计数会被
 > `ProactiveRecallPolicy` 之类的前缀遮蔽（**同名遮蔽**，见本节「判据盲区」）。
 > ⇒ ⇒ **口径注记**：本段提到的「已接线」指**该 API 在生产装配面被消费**（四级口径 = **PRODUCTION WIRED** 那一档）；

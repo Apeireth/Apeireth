@@ -43,6 +43,10 @@ CI_ONLY: dict[str, str] = {
     "cargo +nightly fuzz run": "fuzz 矩阵（CI 按 target 逐个跑；本地只跑 + 全 target 编译关卡）",
     "cargo run -p apeireth-guard": "导出场景样例（CI 专属产物）",
     "docker": "容器相关",
+    # ⚠️ 匹配规则是**前缀匹配**（`classify()` 用 `startswith`）⇒ ⇒ 键必须是命令前缀。
+    # ⚠️ 且 `python3 scripts/` 在 `GATE_PREFIXES` 里 ⇒ 会被判成「本地可跑」⇒
+    #    ⇒ 必须用**更长的前缀**把 harness 单独摘出来豁免。
+    "python3 scripts/harness.py": "CI 专属：attest 用 `github.run_id` 作证据 id；merge-decision 读 CI 产出的证据文件（本地无 run 上下文与该文件）",
 }
 
 # ── 本地门禁脚本（仓外，不在 git 里）：比对它**实际跑了什么**。
