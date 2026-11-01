@@ -82,3 +82,21 @@ profile for production print.
   ill-behaved LUT profiles is not implemented); v2/v4 perceptual reference black mixing is not
   modelled beyond the PRMG black for v4 LUT profiles.
 * Profile ID (MD5) is not computed when writing (left zero, which the spec allows).
+
+## Install
+
+```toml
+[dependencies]
+apeireth-image-cms = "2.0.0-rc.5"
+```
+
+## License
+
+Dual licensed `MIT OR Apache-2.0`, at your option. The crate header keeps the
+`Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors` notice with the original
+license terms unchanged. See `crates/engine/image/NOTICE.md`.
+
+## Links
+
+- Source: `crates/engine/image/cms`
+- Family notices: `crates/engine/image/NOTICE.md`, `OSS_NOTICE.md`

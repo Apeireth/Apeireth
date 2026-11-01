@@ -1,0 +1,55 @@
+# Copyright (c) 2026 The Apeireth Authors.
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+# ============================================================================
+# apeireth —— 引擎门面 crate（ADR-0019）
+# ----------------------------------------------------------------------------
+# 本 crate **只做 re-export**：零业务逻辑、零新 trait、零新注册表、零新能力。
+# 作用有二：
+#   ① 占住 crates.io 裸名 `apeireth`（旗舰入口）；
+#   ② 给下游一个单依赖入口：`apeireth = "2.0.0-rc.4"` 即可拿到引擎核心模块。
+#
+# 归属层（契约 §[layers]）：engine —— 三条出边（-> foundation / engine /
+# capabilities）**均已在允许表内**，故本 crate 引入 **0 新增允许边**。
+# ============================================================================
+[package]
+name = "apeireth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "Apeireth engine facade — single-dependency entry point that re-exports the core engine modules (no new capabilities)"
+
+[dependencies]
+# --- 默认导出的三个核心模块（ADR-0020 瘦身：实测 91 个包）---
+apeireth-core = { workspace = true }
+apeireth-protocol = { workspace = true }
+apeireth-runtime = { workspace = true }
+# --- 可选模块（feature 门控；默认关闭，避免默认依赖树过大） ---
+# 合计 3 默认 + 4 可选 = 7 条生产边 ⇒ 111 + 7 = 118，
+# 恰好等于契约 §[budgets].max_production_edges（棘轮：不抬预算）。
+# `apeireth-organ` / `apeireth-image-core` **不进门面** —— 需要时直接依赖对应 crate
+# （image 家族含 10 个 vendored crate，依赖树较重，不适合做门面默认面）。
+apeireth-memory = { workspace = true, optional = true }
+apeireth-guard = { workspace = true, optional = true }
+apeireth-orchestration = { workspace = true, optional = true }
+# 工具层（ADR-0020 瘦身：实测传递依赖带进 160 个包 —— image 家族 11 crate +
+# 编解码/色彩/几何依赖链 ⇒ 由默认改可选）
+apeireth-tools-canonical = { workspace = true, optional = true }
+
+[features]
+default = []
+# 各 feature 一一对应一个可选模块，开哪个装哪个（不级联）。
+memory = ["dep:apeireth-memory"]
+guard = ["dep:apeireth-guard"]
+orchestration = ["dep:apeireth-orchestration"]
+# 工具层：传递依赖很重（实测 +160 个包）⇒ 默认关，需要时显式开。
+tools = ["dep:apeireth-tools-canonical"]
+
+[lints]
+workspace = true

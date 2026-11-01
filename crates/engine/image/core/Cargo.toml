@@ -7,20 +7,25 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-publish = false
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+publish = true
 
 [lints]
 workspace = true
 
 [dependencies]
-apeireth-image-geom = { path = "../geom" }
-apeireth-image-cms = { path = "../cms" }
-apeireth-image-color = { path = "../color" }
-apeireth-image-raster = { path = "../raster" }
-apeireth-image-doc = { path = "../doc" }
-apeireth-image-vector = { path = "../vector" }
-apeireth-image-compose = { path = "../compose" }
-apeireth-image-algo = { path = "../algo" }
-apeireth-image-codecs = { path = "../codecs" }
-apeireth-image-psd = { path = "../psd" }
+apeireth-image-geom = { workspace = true }
+apeireth-image-cms = { workspace = true }
+apeireth-image-color = { workspace = true }
+apeireth-image-raster = { workspace = true }
+apeireth-image-doc = { workspace = true }
+apeireth-image-vector = { workspace = true }
+apeireth-image-compose = { workspace = true }
+apeireth-image-algo = { workspace = true }
+apeireth-image-codecs = { workspace = true }
+apeireth-image-psd = { workspace = true }
 thiserror = "2"

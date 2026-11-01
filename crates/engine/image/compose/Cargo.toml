@@ -7,10 +7,17 @@
 # docs/04-internal/license-port/gate1-license.md. Original license terms unchanged.
 [package]
 name = "apeireth-image-compose"
+description = "CPU reference compositor: flattens a document layer tree into straight-alpha RGBA"
 version.workspace = true
 edition = "2024"
 license.workspace = true
-publish = false
+publish = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -21,11 +28,11 @@ dbg_macro = "warn"
 todo = "warn"
 
 [dependencies]
-apeireth-image-geom = { path = "../geom" }
-apeireth-image-color = { path = "../color" }
-apeireth-image-raster = { path = "../raster" }
-apeireth-image-doc = { path = "../doc" }
-apeireth-image-vector = { path = "../vector" }
+apeireth-image-geom = { workspace = true }
+apeireth-image-color = { workspace = true }
+apeireth-image-raster = { workspace = true }
+apeireth-image-doc = { workspace = true }
+apeireth-image-vector = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rayon = "1"

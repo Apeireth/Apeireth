@@ -11,8 +11,13 @@ description = "Depth-agnostic, tile-aware CPU image filters (blur, sharpen, nois
 version.workspace = true
 edition = "2024"
 license.workspace = true
-publish = false
+publish = true
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -23,9 +28,9 @@ dbg_macro = "warn"
 todo = "warn"
 
 [dependencies]
-apeireth-image-geom = { path = "../geom" }
-apeireth-image-color = { path = "../color" }
-apeireth-image-raster = { path = "../raster" }
+apeireth-image-geom = { workspace = true }
+apeireth-image-color = { workspace = true }
+apeireth-image-raster = { workspace = true }
 serde = { version = "1", features = ["derive", "rc"] }
 rustfft = "6.4.1"
 

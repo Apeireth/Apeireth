@@ -7,10 +7,17 @@
 # docs/04-internal/license-port/gate1-license.md. Original license terms unchanged.
 [package]
 name = "apeireth-image-geom"
+description = "Geometry primitives shared by the image core family: sizes, rects, affines, tiles and warps"
 version.workspace = true
 edition = "2024"
 license.workspace = true
-publish = false
+publish = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [lints.rust]
 unsafe_code = "forbid"

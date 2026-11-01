@@ -11,8 +11,13 @@ description = "Vector paths, shape layers, strokes and vector masks → anti-ali
 version.workspace = true
 edition = "2024"
 license.workspace = true
-publish = false
+publish = true
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -23,10 +28,10 @@ dbg_macro = "warn"
 todo = "warn"
 
 [dependencies]
-apeireth-image-geom = { path = "../geom" }
-apeireth-image-color = { path = "../color" }
-apeireth-image-raster = { path = "../raster" }
-apeireth-image-doc = { path = "../doc" }
+apeireth-image-geom = { workspace = true }
+apeireth-image-color = { workspace = true }
+apeireth-image-raster = { workspace = true }
+apeireth-image-doc = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rayon = "1"

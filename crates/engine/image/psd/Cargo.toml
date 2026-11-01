@@ -11,8 +11,13 @@ description = "Faithful, lossless reader and writer for Adobe Photoshop PSD (v1)
 version.workspace = true
 edition = "2024"
 license.workspace = true
-publish = false
+publish = true
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [lib]
 name = "apeireth_image_psd"
@@ -21,7 +26,13 @@ path = "src/lib.rs"
 [features]
 # Real-file corpus tests (opt-in; `cargo xtask test-corpus`). Fail when the corpus is missing.
 corpus = []
-default = []
+# `testgen` is on by default: the integration tests under `tests/` build their fixtures with
+# `apeireth_image_psd::testgen`, and the usual way to switch a crate's own feature on for its
+# integration tests — a self dev-dependency — cannot survive `cargo package` (cargo strips the
+# path and then looks the crate up in the registry, so packaging fails with
+# "no matching package named `apeireth-image-psd` found"). A default feature keeps the test
+# suite complete and the crate publishable; `default-features = false` turns the module off.
+default = ["testgen"]
 serde = ["dep:serde"]
 testgen = []
 
@@ -32,7 +43,6 @@ serde = { version = "1", features = ["derive", "rc"], optional = true }
 
 [dev-dependencies]
 proptest = "1"
-apeireth-image-psd = { path = ".", features = ["testgen"] }
 
 [lints.rust]
 unsafe_code = "forbid"

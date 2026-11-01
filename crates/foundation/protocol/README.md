@@ -1,5 +1,5 @@
 # apeireth-protocol
 
-> Apeireth R17 战役 1-1: LLM 协议归一化层 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini), 字段级借鉴开源 protocol-bridge 真代码. R37-1 bridge facade (4 Bridge struct 砍 router 中间层) + R20 阶段 2 WS 8 帧协议 (AuthFrame/CloseFrame/ErrorFrame/Ping/StreamChunk/StreamEnd/ToolInvoke/ToolResult). src 模块 9 个 (lib + adapter + adapters/ + bridge + bridge_ext + error + gateway + normalized + organ_kani_proofs + ws_v1). 测试数 (#[test]): 51 in-src + 27 集成 (tests/wire_format.rs + tests/wire_format_ext.rs, 4 协议 golden + 边界).
+> Apeireth R17 战役 1-1: LLM 协议归一化层 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini), 字段级**自研实现**, 对齐业界通行 wire format 语义. R37-1 bridge facade (4 Bridge struct 砍 router 中间层) + R20 阶段 2 WS 8 帧协议 (AuthFrame/CloseFrame/ErrorFrame/Ping/StreamChunk/StreamEnd/ToolInvoke/ToolResult). src 目录当前 16 个条目 (acp / adapter / adapters/ / bridge / bridge_ext / canonical/ / error / gateway / lib / normalized / organ_kani_proofs / p2p_mesh / retry / usage / ws_session / ws_v1). 测试数字单一真源见 [docs/03-reference/test-baseline.md](../../../docs/03-reference/test-baseline.md)（本文不抄写）。
 
-apeireth-protocol 是 Apeireth 1.0 (AGI 操作系统) 工作区 crate 之一。完整架构见 [docs/](../../../docs/README.md)。
+apeireth-protocol 是 Apeireth v2 (AGI 操作系统) 工作区 crate 之一。完整架构见 [docs/](../../../docs/README.md)。

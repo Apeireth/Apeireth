@@ -11,8 +11,13 @@ description = "Pure-Rust ICC v2/v4 colour management: profile parsing and writin
 version.workspace = true
 edition = "2024"
 license.workspace = true
-publish = false
+publish = true
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -241,3 +241,21 @@ including chunks after IDAT. This budget is separate from pixels, not a total pr
 
 If `corpus/pngsuite/*.png` exists at the repo root, every file in it is compared against the
 `image` crate's decoder. Without it, that test is skipped.
+
+## Install
+
+```toml
+[dependencies]
+apeireth-image-codecs = "2.0.0-rc.5"
+```
+
+## License
+
+Dual licensed `MIT OR Apache-2.0`, at your option. The crate header keeps the
+`Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors` notice with the original
+license terms unchanged. See `crates/engine/image/NOTICE.md`.
+
+## Links
+
+- Source: `crates/engine/image/codecs`
+- Family notices: `crates/engine/image/NOTICE.md`, `OSS_NOTICE.md`

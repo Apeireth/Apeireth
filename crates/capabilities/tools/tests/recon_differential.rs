@@ -8,6 +8,9 @@ use apeireth_tools_canonical::recon::parse_binary;
 
 fn readelf_available() -> bool {
     Command::new("readelf")
+        // 固定 C locale：readelf 的输出标签（Class: / Entry point address:）随 locale 变化，
+        // 本测试按英文标签解析 ⇒ 非 C locale 下会误判为不匹配（2026-10-31 本机实测）。
+        .env("LC_ALL", "C")
         .arg("--version")
         .output()
         .map(|output| output.status.success())
@@ -28,6 +31,7 @@ fn elf_header_matches_readelf() {
     }
     let exe = std::env::current_exe().expect("current exe");
     let output = Command::new("readelf")
+        .env("LC_ALL", "C")
         .arg("-h")
         .arg(&exe)
         .output()

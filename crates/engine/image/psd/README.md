@@ -161,3 +161,25 @@ A `cargo-fuzz` skeleton lives in `fuzz/`. It is its own workspace and is exclude
 * **Descriptor `bool`** bytes other than 0/1 are normalized to 1 on write.
 * **Pascal names** have their pad bytes written as zeros. A layer & mask section that contains only a zero layer-info length is normalized to an empty section. These are the only known non-byte-exact cases, and both are pathological.
 * **Header limits.** The parser accepts up to 300 000 × 300 000 for both versions. `PsdFile::validate()` enforces the spec's 30 000 limit for PSD.
+
+## Install
+
+```toml
+[dependencies]
+apeireth-image-psd = "2.0.0-rc.5"
+```
+
+The `testgen` feature is on by default: the integration tests under `tests/` build their
+fixtures with `apeireth_image_psd::testgen`, and a crate cannot depend on itself for that
+purpose without breaking `cargo package`. Turn it off with `default-features = false`.
+
+## License
+
+Dual licensed `MIT OR Apache-2.0`, at your option. The crate header keeps the
+`Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors` notice with the original
+license terms unchanged. See `crates/engine/image/NOTICE.md`.
+
+## Links
+
+- Source: `crates/engine/image/psd`
+- Family notices: `crates/engine/image/NOTICE.md`, `OSS_NOTICE.md`

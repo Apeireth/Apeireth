@@ -7,6 +7,13 @@
 //! 桥接: plugin 工厂经 `apeireth_plugin::MirrorLlmFactory` 桥到 orchestration
 //! 镜像 trait（O-6 归位: 桥在 plugin, 单一事实源; 生产 CLI/gateway 与测试
 //! 共用同一实现）。
+//!
+//! 位置: 本文件 2026-10-31 由 `crates/foundation/orchestration/tests/council_live.rs`
+//! 迁来 (ADR-0017 S2a / B3)。它是需真实凭据的 live E2E = 产品侧集成面, 归
+//! adapters (私有产品仓, 不发布); foundation crate 的 dev-dependency 在
+//! crates.io publish 时同样构成发布顺序约束, 留在 orchestration 会与
+//! `plugin -> orchestration` 生产依赖构成死锁环, 令发布顺序无法排出。
+//! `apeireth_plugin` / `apeireth_provider` 在本 crate 是生产依赖, 无需新增。
 
 use std::sync::Arc;
 

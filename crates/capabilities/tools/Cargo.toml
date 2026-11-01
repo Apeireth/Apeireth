@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Canonical builtin tool capabilities: filesystem / search / repo (默认启用); shell / fetch (opt-in, 默认关); egress 策略 + 唯一 ProcessExecutor 边界（Windows Job Object + CREATE_SUSPENDED 三 OS 隔离）"
 
 [dependencies]
@@ -13,15 +17,15 @@ description = "Canonical builtin tool capabilities: filesystem / search / repo (
 # canonical plugin/protocol/core contracts, never on the runtime or gateway.
 # The governance edge is one-way and interface-only: the execution chain's guard
 # stage consults the deny-only guard interface; no policy is owned here.
-apeireth-core = { path = "../../foundation/core" }
-apeireth-protocol = { path = "../../foundation/protocol" }
-apeireth-plugin = { path = "../../foundation/plugin" }
-apeireth-governance = { path = "../../foundation/governance" }
+apeireth-core = { workspace = true }
+apeireth-protocol = { workspace = true }
+apeireth-plugin = { workspace = true }
+apeireth-governance = { workspace = true }
 # 技能卡调用面 (I1) 复用共享引用封套 (UntrustedEnvelope: 固定警告头 + 显式
 # 边界 + 边界伪造转义 + 每源预算 + 分级省略) —— 与记忆检索披露同一套 L2
 # 封套披露语义, 一个预算系统管到底。orchestration 生产依赖仅 core,
 # 方向不变 (foundation 契约面)。
-apeireth-orchestration = { path = "../../foundation/orchestration" }
+apeireth-orchestration = { workspace = true }
 async-trait = { workspace = true }
 encoding_rs = "0.8"
 futures = { workspace = true }
@@ -32,7 +36,7 @@ futures = { workspace = true }
 # 有损质量 90 / webp 无损档, 与换核前口径一致)。如实登记: 核面内部对
 # bmp/gif/tga 等格式的编解码仍委派外部纯 Rust 图像库 (属核面依赖闭包既有
 # 登记, 见 artifacts/licport-dep-closure.txt), 本层不再直接引用。
-apeireth-image-core = { path = "../../engine/image/core" }
+apeireth-image-core = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -212,6 +212,21 @@ impl ToolCapability for RepoTool {
 
 #[cfg(test)]
 mod tests {
+    /// 固定进程 locale 为 C：**仅测试进程内生效**。
+    ///
+    /// git 的报错文案随 locale 变化（本机 zh_CN.UTF-8 下为「致命错误：不是 Git 仓库…」，
+    /// 英文环境为 "not a git repository"）。本模块断言按英文文案匹配 ⇒ 非 C locale 下
+    /// 会误判失败（2026-10-31 本机实测：`cargo test -p apeireth-tools-canonical --lib`
+    /// 721 passed / 1 failed，失败项即 `non_git_directory_is_an_error`；加 C locale 后全绿）。
+    ///
+    /// ⚠️ 生产路径的 git spawn **未改** ⇒ 工具对用户呈现的报错文案仍随运行机器 locale 变化
+    /// （既有行为，非本批引入；是否固定为英文属产品决策，未擅自改）。
+    fn pin_c_locale() {
+        // edition 2021 下 `set_var` 是 safe 函数（Rust 2024 edition 才标 unsafe）。
+        // 影响方向唯一（git 输出转英文），测试进程内生效。
+        std::env::set_var("LC_ALL", "C");
+    }
+
     use super::*;
     use serde_json::json;
     use std::fs;
@@ -334,6 +349,7 @@ mod tests {
 
     #[tokio::test]
     async fn non_git_directory_is_an_error() {
+        pin_c_locale();
         if !git_available() {
             eprintln!("git is not installed; skipping non-git repo test");
             return;

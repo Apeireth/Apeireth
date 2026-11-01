@@ -5,10 +5,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Apeireth orchestration 编排层 (P-arch 2026-08-27, scene-d 例 3 基础): 7 Advisor + Council 多意见评审 + Orchestrator 调度 subagent + SelfAssessmentCache. v2.0 alpha 是 trait + 0 装占位, 真 LLM 实现留 v2.0.0-rc 路线. 详见 v2-unabsorbed-features.md §A1 + §A2 + scene-d-v2-plan.md."
 
 [dependencies]
-apeireth-core = { path = "../core" }
+apeireth-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
@@ -20,11 +25,13 @@ uuid = { workspace = true, features = ["v4"] }
 [dev-dependencies]
 tempfile = "3"
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+
 # RA-15/RC-6 补全 (2026-09-08): council live E2E 用 OpenAI-compatible factory
-# (DeepSeek) 经测试本地适配器桥到镜像 LlmFactory trait — 仅 dev-dep,
-# 生产依赖图 0 变化 (orchestration 生产仍只依赖 core)。
-apeireth-plugin = { path = "../plugin" }
-apeireth-provider = { path = "../../engine/provider" }
+# (DeepSeek) 经测试本地适配器桥到镜像 LlmFactory trait — 该 live E2E 已迁到
+# `crates/adapters/cli/tests/council_live.rs` (需凭据的 live E2E = 产品侧集成面;
+# adapters 按 ADR-0017 归私有产品仓且不发布)。crates.io publish 时 dev-dependency
+# 同样构成发布顺序约束, 移除本 crate 的 apeireth-plugin / apeireth-provider
+# dev-dep 以解开 plugin -> orchestration 的发布死锁环。
 
 [lib]
 name = "apeireth_orchestration"

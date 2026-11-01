@@ -11,8 +11,13 @@ description = "Symmetric, depth- and metadata-preserving codecs for flat raster 
 version.workspace = true
 edition = "2024"
 license.workspace = true
-publish = false
+publish = true
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [features]
 # Real-file corpus tests (opt-in; `cargo xtask test-corpus`). Fail when the corpus is missing.

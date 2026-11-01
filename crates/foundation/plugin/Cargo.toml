@@ -5,13 +5,18 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Canonical plugin and capability model: a plugin is a capability provider, and the registries here are the single source of truth for what the runtime can do."
 
 [dependencies]
 # Permitted direction: core <- protocol <- plugin.
-apeireth-core = { path = "../core" }
-apeireth-orchestration = { path = "../orchestration" }
-apeireth-protocol = { path = "../protocol" }
+apeireth-core = { workspace = true }
+apeireth-orchestration = { workspace = true }
+apeireth-protocol = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
