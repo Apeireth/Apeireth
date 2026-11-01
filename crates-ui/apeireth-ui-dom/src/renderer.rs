@@ -1867,8 +1867,16 @@ impl<D: Dom> Renderer<D> {
             }
         }
         for name in names {
-            let old_value = old.attr_value(&name).and_then(AttrValue::to_attr_string);
-            let new_value = new.attr_value(&name).and_then(AttrValue::to_attr_string);
+            // ⭐ **零分配**比较（2026-11-01）：旧写法每次比对都 `clone()` 出两个
+            //   String ⇒ ⇒ 4.7k 元素的树一次 patch 要几万次分配 ⇒ ⇒ 头号嫌疑。
+            //   ⇒ 这里用借用版（`Cow`）比较 ⇒ ⇒ **零分配**，语义与旧写法**完全一致**
+            //   ⇒ ⇒ **只在真要写时**才分配（见下面的 `to_attr_string()`）。
+            let old_value = old
+                .attr_value(&name)
+                .and_then(AttrValue::to_attr_string_ref);
+            let new_value = new
+                .attr_value(&name)
+                .and_then(AttrValue::to_attr_string_ref);
             if old_value != new_value {
                 match new_value {
                     Some(value) => {

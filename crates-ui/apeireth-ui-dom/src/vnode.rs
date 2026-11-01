@@ -97,6 +97,32 @@ pub enum AttrValue {
 }
 
 impl AttrValue {
+    /// ⭐ **零分配**转成「要写入 DOM 的属性值」；布尔 `false` 返回 `None`（表示不写）。
+    ///
+    /// ## 为什么需要（2026-11-01）
+    ///
+    /// [`Self::to_attr_string`] 会 **`text.clone()`** ⇒ ⇒ **每次属性比对都分配**
+    /// ⇒ ⇒ 差分 patch 里每个属性要比两次（old + new）⇒ ⇒ 4.7k 元素的树
+    /// ⇒ ⇒ 一次 patch 就是**几万次 String 分配** ⇒ ⇒ 实测这是「每节点 2.5 µs」
+    /// ⇒ ⇒ 里的**头号嫌疑**。
+    ///
+    /// ## 为什么**借用**而不是分配
+    ///
+    /// `Text` 变体**直接借用**内部字符串（`Cow::Borrowed`）⇒ ⇒ **零分配**
+    /// ⇒ ⇒ 语义与 [`Self::to_attr_string`] **完全一致**（含 `Bool(true)` ⇒ `"true"`）。
+    pub fn to_attr_string_ref(&self) -> Option<std::borrow::Cow<'_, str>> {
+        match self {
+            AttrValue::Text(text) => Some(std::borrow::Cow::Borrowed(text.as_str())),
+            AttrValue::Bool(flag) => {
+                if *flag {
+                    Some(std::borrow::Cow::Borrowed("true"))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// 转成「要写入 DOM 的属性值」；布尔 `false` 返回 `None`（表示不写）。
     pub fn to_attr_string(&self) -> Option<String> {
         match self {
