@@ -4,7 +4,7 @@
     "height": 900
   },
   "device_pixel_ratio": 1,
-  "timezone": "UTC",
+  "timezone": "Asia/Shanghai",
   "channel_threshold": 2,
   "pixel_budget": 0.01,
   "phases_ms": [
@@ -46,9 +46,9 @@
     {
       "phase_ms": 450,
       "size_mismatch": false,
-      "different": 2,
+      "different": 0,
       "total": 176160,
-      "ratio": 1.1353315168029064e-05
+      "ratio": 0.0
     },
     {
       "phase_ms": 600,
@@ -64,7 +64,7 @@
     "window_ms": 1200,
     "target_frame_count": 20,
     "align_tolerance_ms": 25.0,
-    "reference_mean_interval_ms": 58.333,
+    "reference_mean_interval_ms": 58.368,
     "frames": [
       {
         "index": 0,
@@ -73,26 +73,21 @@
         "phase_delta_ms": 0.0,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3749,
+        "different": 0,
         "total": 1296000,
-        "ratio": 0.002892746913580247,
-        "bbox": [
-          307,
-          24,
-          463,
-          350
-        ]
+        "ratio": 0.0,
+        "bbox": null
       },
       {
         "index": 1,
-        "reference_relative_ms": 60.416,
-        "engine_relative_ms": 40.518,
-        "phase_delta_ms": -19.898,
+        "reference_relative_ms": 80.476,
+        "engine_relative_ms": 61.737,
+        "phase_delta_ms": -18.739,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3749,
+        "different": 2787,
         "total": 1296000,
-        "ratio": 0.002892746913580247,
+        "ratio": 0.002150462962962963,
         "bbox": [
           307,
           24,
@@ -102,14 +97,14 @@
       },
       {
         "index": 2,
-        "reference_relative_ms": 120.848,
-        "engine_relative_ms": 81.009,
-        "phase_delta_ms": -39.839,
+        "reference_relative_ms": 160.915,
+        "engine_relative_ms": 142.09,
+        "phase_delta_ms": -18.825,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3749,
+        "different": 2714,
         "total": 1296000,
-        "ratio": 0.002892746913580247,
+        "ratio": 0.002094135802469136,
         "bbox": [
           307,
           24,
@@ -119,14 +114,14 @@
       },
       {
         "index": 3,
-        "reference_relative_ms": 181.332,
-        "engine_relative_ms": 141.553,
-        "phase_delta_ms": -39.778,
+        "reference_relative_ms": 221.239,
+        "engine_relative_ms": 202.483,
+        "phase_delta_ms": -18.756,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3747,
+        "different": 2725,
         "total": 1296000,
-        "ratio": 0.0028912037037037036,
+        "ratio": 0.0021026234567901236,
         "bbox": [
           307,
           24,
@@ -136,14 +131,14 @@
       },
       {
         "index": 4,
-        "reference_relative_ms": 261.941,
-        "engine_relative_ms": 181.938,
-        "phase_delta_ms": -80.003,
+        "reference_relative_ms": 281.628,
+        "engine_relative_ms": 262.844,
+        "phase_delta_ms": -18.784,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3726,
+        "different": 2699,
         "total": 1296000,
-        "ratio": 0.002875,
+        "ratio": 0.002082561728395062,
         "bbox": [
           307,
           24,
@@ -153,14 +148,14 @@
       },
       {
         "index": 5,
-        "reference_relative_ms": 342.434,
-        "engine_relative_ms": 242.345,
-        "phase_delta_ms": -100.09,
+        "reference_relative_ms": 362.124,
+        "engine_relative_ms": 343.215,
+        "phase_delta_ms": -18.909,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3594,
+        "different": 2781,
         "total": 1296000,
-        "ratio": 0.0027731481481481483,
+        "ratio": 0.0021458333333333334,
         "bbox": [
           307,
           24,
@@ -170,14 +165,14 @@
       },
       {
         "index": 6,
-        "reference_relative_ms": 402.822,
-        "engine_relative_ms": 282.691,
-        "phase_delta_ms": -120.131,
+        "reference_relative_ms": 422.554,
+        "engine_relative_ms": 403.588,
+        "phase_delta_ms": -18.965,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3551,
+        "different": 2710,
         "total": 1296000,
-        "ratio": 0.002739969135802469,
+        "ratio": 0.0020910493827160496,
         "bbox": [
           307,
           24,
@@ -187,14 +182,14 @@
       },
       {
         "index": 7,
-        "reference_relative_ms": 463.184,
-        "engine_relative_ms": 343.291,
-        "phase_delta_ms": -119.892,
+        "reference_relative_ms": 482.962,
+        "engine_relative_ms": 463.943,
+        "phase_delta_ms": -19.019,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 3426,
+        "different": 45,
         "total": 1296000,
-        "ratio": 0.0026435185185185186,
+        "ratio": 3.472222222222222e-05,
         "bbox": [
           307,
           24,
@@ -204,26 +199,21 @@
       },
       {
         "index": 8,
-        "reference_relative_ms": 543.764,
-        "engine_relative_ms": 383.797,
-        "phase_delta_ms": -159.966,
+        "reference_relative_ms": 563.441,
+        "engine_relative_ms": 544.33,
+        "phase_delta_ms": -19.11,
         "unpaired": false,
         "size_mismatch": false,
-        "different": 1,
+        "different": 0,
         "total": 1296000,
-        "ratio": 7.716049382716049e-07,
-        "bbox": [
-          307,
-          24,
-          463,
-          350
-        ]
+        "ratio": 0.0,
+        "bbox": null
       },
       {
         "index": 9,
-        "reference_relative_ms": 604.313,
-        "engine_relative_ms": 444.413,
-        "phase_delta_ms": -159.9,
+        "reference_relative_ms": 623.878,
+        "engine_relative_ms": 624.699,
+        "phase_delta_ms": 0.821,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -233,9 +223,9 @@
       },
       {
         "index": 10,
-        "reference_relative_ms": 644.718,
-        "engine_relative_ms": 484.931,
-        "phase_delta_ms": -159.787,
+        "reference_relative_ms": 664.221,
+        "engine_relative_ms": 664.941,
+        "phase_delta_ms": 0.72,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -245,9 +235,9 @@
       },
       {
         "index": 11,
-        "reference_relative_ms": 705.134,
-        "engine_relative_ms": 525.497,
-        "phase_delta_ms": -179.636,
+        "reference_relative_ms": 704.511,
+        "engine_relative_ms": 725.258,
+        "phase_delta_ms": 20.748,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -257,9 +247,9 @@
       },
       {
         "index": 12,
-        "reference_relative_ms": 745.45,
-        "engine_relative_ms": 566.006,
-        "phase_delta_ms": -179.445,
+        "reference_relative_ms": 746.504,
+        "engine_relative_ms": 765.546,
+        "phase_delta_ms": 19.042,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -269,9 +259,9 @@
       },
       {
         "index": 13,
-        "reference_relative_ms": 805.867,
-        "engine_relative_ms": 626.601,
-        "phase_delta_ms": -179.266,
+        "reference_relative_ms": 806.82,
+        "engine_relative_ms": 825.886,
+        "phase_delta_ms": 19.066,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -281,9 +271,9 @@
       },
       {
         "index": 14,
-        "reference_relative_ms": 846.198,
-        "engine_relative_ms": 647.001,
-        "phase_delta_ms": -199.198,
+        "reference_relative_ms": 847.405,
+        "engine_relative_ms": 866.161,
+        "phase_delta_ms": 18.756,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -293,9 +283,9 @@
       },
       {
         "index": 15,
-        "reference_relative_ms": 906.605,
-        "engine_relative_ms": 707.585,
-        "phase_delta_ms": -199.02,
+        "reference_relative_ms": 907.733,
+        "engine_relative_ms": 926.522,
+        "phase_delta_ms": 18.788,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -305,9 +295,9 @@
       },
       {
         "index": 16,
-        "reference_relative_ms": 947.011,
-        "engine_relative_ms": 748.098,
-        "phase_delta_ms": -198.913,
+        "reference_relative_ms": 948.008,
+        "engine_relative_ms": 966.819,
+        "phase_delta_ms": 18.811,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -317,9 +307,9 @@
       },
       {
         "index": 17,
-        "reference_relative_ms": 1007.568,
-        "engine_relative_ms": 808.588,
-        "phase_delta_ms": -198.98,
+        "reference_relative_ms": 1008.347,
+        "engine_relative_ms": 1027.191,
+        "phase_delta_ms": 18.844,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -329,9 +319,9 @@
       },
       {
         "index": 18,
-        "reference_relative_ms": 1047.935,
-        "engine_relative_ms": 848.982,
-        "phase_delta_ms": -198.954,
+        "reference_relative_ms": 1048.647,
+        "engine_relative_ms": 1067.519,
+        "phase_delta_ms": 18.872,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -341,9 +331,9 @@
       },
       {
         "index": 19,
-        "reference_relative_ms": 1108.335,
-        "engine_relative_ms": 909.4,
-        "phase_delta_ms": -198.935,
+        "reference_relative_ms": 1108.989,
+        "engine_relative_ms": 1110.849,
+        "phase_delta_ms": 1.86,
         "unpaired": false,
         "size_mismatch": false,
         "different": 0,
@@ -367,14 +357,14 @@
       "timeline": [
         {
           "name": "animationstart",
-          "at": 653.8,
-          "target": "approval-card svelte-a7zma4",
+          "at": 676.2,
+          "target": "approval-card svelte-6td96o",
           "property": null
         },
         {
           "name": "animationend",
-          "at": 1253.7,
-          "target": "approval-card svelte-a7zma4",
+          "at": 1276,
+          "target": "approval-card svelte-6td96o",
           "property": null
         }
       ],
@@ -392,13 +382,13 @@
       "timeline": [
         {
           "name": "animationstart",
-          "at": 614.7,
+          "at": 616.3,
           "target": "approval-card",
           "property": null
         },
         {
           "name": "animationend",
-          "at": 1197.8,
+          "at": 1216.2,
           "target": "approval-card",
           "property": null
         }
@@ -411,8 +401,8 @@
     "started_delta": 0
   },
   "t6_unmount": {
-    "reference_dismiss_delay_ms": 1.2999999970197678,
-    "engine_dismiss_delay_ms": 0.8000000007450581,
+    "reference_dismiss_delay_ms": 0.9000000022351742,
+    "engine_dismiss_delay_ms": 1.1000000014901161,
     "reference_decision_after_dismiss": null,
     "engine_decision_after_dismiss": null
   },

@@ -22,21 +22,212 @@
 //! | `WebDom`（web-sys） | wasm32 only | ✅ 已实现；**未经任何运行时验证**（见 crate 文档头） |
 //! | [`UnavailableDom`] | —— | 🔵 未接线桩：每个操作都报 [`DomError::NotImplemented`] |
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, VecDeque};
+
+use crate::listeners::ListenerTable;
+
+/// 元素盒（CSS 像素，语义与浏览器 `getBoundingClientRect()` 一致）。
+///
+/// ⚠️ **引擎不做布局**（ADR-0015）：`bounding_box` 是向 DOM/宿主**查询**，
+/// 不是引擎自己算出来的。内存后端只提供**脚本化**测量（测试用）。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ElementBox {
+    /// 左边（相对视口，CSS 像素）。
+    pub x: f64,
+    /// 上边（相对视口，CSS 像素）。
+    pub y: f64,
+    /// 宽（CSS 像素）。
+    pub width: f64,
+    /// 高（CSS 像素）。
+    pub height: f64,
+}
+
+impl ElementBox {
+    /// 构造元素盒（CSS 像素）。
+    pub fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+    /// 右边界（`x + width`）。
+    pub fn right(&self) -> f64 {
+        self.x + self.width
+    }
+    /// 下边界（`y + height`）。
+    pub fn bottom(&self) -> f64 {
+        self.y + self.height
+    }
+    /// 点是否落在盒内（命中测试的最基本形式）。
+    pub fn contains(&self, x: f64, y: f64) -> bool {
+        x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
+    }
+}
+
+/// ⭐ **测量与命中测试的乘数**：设备像素比（DPR）× 界面密度（L1-G6）。
+///
+/// ## 为什么必须由引擎拥有
+///
+/// 系统缩放 125%、紧凑密度、Retina 屏下，**同一份 CSS 像素**对应不同设备像素
+/// ⇒ ⇒ 命中测试、纹理采样、拖拽阈值都必须按这个乘数换算
+/// ⇒ ⇒ 若让每个上层自己拿 `devicePixelRatio` 相乘，必然出现「差 1px」「拖不动」
+/// 这类只在特定缩放下复现的缺陷。
+///
+/// ## 单位约定
+///
+/// - **CSS 像素**：布局与事件坐标（`ElementBox`、`client_position`）；
+/// - **设备像素**：渲染目标与采样。
+/// - `device = css × dpr × density`。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MeasurementScale {
+    device_pixel_ratio: f64,
+    density: f64,
+}
+
+impl Default for MeasurementScale {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
+impl MeasurementScale {
+    /// 恒等乘数（dpr = 1、密度 = 1）。
+    pub const IDENTITY: Self = Self {
+        device_pixel_ratio: 1.0,
+        density: 1.0,
+    };
+
+    /// 构造乘数。非法值（`<= 0` / 非有限）按 **1.0** 处理并**不**静默产生 0 尺寸。
+    pub fn new(device_pixel_ratio: f64, density: f64) -> Self {
+        let sanitize = |value: f64| {
+            if value.is_finite() && value > 0.0 {
+                value
+            } else {
+                1.0
+            }
+        };
+        Self {
+            device_pixel_ratio: sanitize(device_pixel_ratio),
+            density: sanitize(density),
+        }
+    }
+
+    /// 设备像素比。
+    pub fn device_pixel_ratio(&self) -> f64 {
+        self.device_pixel_ratio
+    }
+
+    /// 界面密度标量。
+    pub fn density(&self) -> f64 {
+        self.density
+    }
+
+    /// CSS 像素 ⇒ 设备像素。
+    pub fn css_to_device(&self, css: f64) -> f64 {
+        css * self.device_pixel_ratio * self.density
+    }
+
+    /// 设备像素 ⇒ CSS 像素。
+    pub fn device_to_css(&self, device: f64) -> f64 {
+        device / (self.device_pixel_ratio * self.density)
+    }
+
+    /// 把元素盒整体换算到设备像素。
+    pub fn box_to_device(&self, rect: ElementBox) -> ElementBox {
+        ElementBox::new(
+            self.css_to_device(rect.x),
+            self.css_to_device(rect.y),
+            self.css_to_device(rect.width),
+            self.css_to_device(rect.height),
+        )
+    }
+}
+
+/// 滚动度量（CSS 像素）。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ScrollMetrics {
+    /// 当前滚动位置（CSS 像素，0 = 顶部）。
+    pub scroll_top: f64,
+    /// 内容总高度（CSS 像素）。
+    pub scroll_height: f64,
+    /// 可视区高度（CSS 像素）。
+    pub client_height: f64,
+}
+
+impl ScrollMetrics {
+    /// 可滚动的最大 `scroll_top`（内容不足一屏时为 0）。
+    pub fn max_scroll_top(&self) -> f64 {
+        (self.scroll_height - self.client_height).max(0.0)
+    }
+    /// 把任意 `scroll_top` **夹到**合法区间。
+    pub fn clamp_scroll_top(&self, top: f64) -> f64 {
+        top.clamp(0.0, self.max_scroll_top())
+    }
+}
+
+/// 脚本化测量（**测试专用**）：一个节点的元素盒与滚动度量。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ScriptedMeasurement {
+    /// 该节点的元素盒。
+    pub bounding_box: ElementBox,
+    /// 该节点的滚动度量。
+    pub scroll_metrics: ScrollMetrics,
+}
+
+impl ScriptedMeasurement {
+    /// 构造脚本化测量。
+    pub fn new(bounding_box: ElementBox, scroll_metrics: ScrollMetrics) -> Self {
+        Self {
+            bounding_box,
+            scroll_metrics,
+        }
+    }
+}
 
 /// DOM 事件类型（按仓库实测使用面裁剪，不照抄浏览器 API 全集）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EventKind {
     /// 点击（冒泡，委托根监听）。
     Click,
+    /// 双击（冒泡）。
+    DoubleClick,
     /// 键盘按下（冒泡）。
     KeyDown,
-    /// 输入（冒泡；双向绑定的取值事件）。
+    /// 键盘抬起（冒泡）—— 组合键判定要用它（只按 `KeyDown` 会漏「松开」）。
+    KeyUp,
+    /// 输入（冒泡；双向绑定的取值事件；IME 组合期间**不**触发，见 G3）。
     Input,
-    /// 变更（冒泡）。
+    /// 变更（冒泡）—— 复选框/单选的 `checked` 走这条。
     Change,
+    /// 获得焦点（`focusin` **冒泡**版本；`focus` 本身不冒泡，不用）。
+    FocusIn,
     /// 失焦（冒泡）。
     FocusOut,
+    /// 表单提交（冒泡）。
+    Submit,
+    /// 指针按下（冒泡）。
+    PointerDown,
+    /// 指针抬起（冒泡）。
+    PointerUp,
+    /// 指针移动（冒泡；**默认会高频** ⇒ 上层需自行节流/合并）。
+    PointerMove,
+    /// 指针进入（冒泡）。
+    PointerEnter,
+    /// 指针离开（冒泡）。
+    PointerLeave,
+    /// 滚动（**不冒泡** ⇒ 必须直接监听滚动容器本身，不能靠委托根）。
+    Scroll,
+    /// 滚轮（冒泡）。
+    Wheel,
+    /// 右键菜单（冒泡）。
+    ContextMenu,
+    /// ⭐ **IME 组合开始**（冒泡）⇒ 必须**关掉**受控写回（见 `focus::CompositionGate`）。
+    CompositionStart,
+    /// ⭐ **IME 组合结束**（冒泡）⇒ 打开写回并采纳组合结果（`data` 载荷）。
+    CompositionEnd,
 }
 
 impl EventKind {
@@ -44,11 +235,98 @@ impl EventKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             EventKind::Click => "click",
+            EventKind::DoubleClick => "dblclick",
             EventKind::KeyDown => "keydown",
+            EventKind::KeyUp => "keyup",
             EventKind::Input => "input",
             EventKind::Change => "change",
+            EventKind::FocusIn => "focusin",
             EventKind::FocusOut => "focusout",
+            EventKind::Submit => "submit",
+            EventKind::PointerDown => "pointerdown",
+            EventKind::PointerUp => "pointerup",
+            EventKind::PointerMove => "pointermove",
+            EventKind::PointerEnter => "pointerenter",
+            EventKind::PointerLeave => "pointerleave",
+            EventKind::Scroll => "scroll",
+            EventKind::Wheel => "wheel",
+            EventKind::ContextMenu => "contextmenu",
+            EventKind::CompositionStart => "compositionstart",
+            EventKind::CompositionEnd => "compositionend",
         }
+    }
+
+    /// 该事件**能否**挂在委托根上统一监听。
+    ///
+    /// ⚠️ `scroll` **不冒泡**（浏览器规范）⇒ ⇒ 它**必须**直接监听到滚动容器本身
+    /// ⇒ ⇒ 若把它挂到委托根，会**永远收不到事件**（静默失效，最难查的一类缺陷）。
+    pub fn bubbles_to_delegation_root(&self) -> bool {
+        !matches!(self, EventKind::Scroll)
+    }
+
+    /// 该事件在本枚举中的**稳定序号**。
+    ///
+    /// ⚠️ **穷尽 `match`**：新增变体却忘了在这里登记 ⇒ ⇒ **编译失败**
+    /// ⇒ ⇒ 这是「新增事件类型」的**编译期护栏**（比测试更早、更硬）。
+    pub fn index(self) -> usize {
+        match self {
+            EventKind::Click => 0,
+            EventKind::DoubleClick => 1,
+            EventKind::KeyDown => 2,
+            EventKind::KeyUp => 3,
+            EventKind::Input => 4,
+            EventKind::Change => 5,
+            EventKind::FocusIn => 6,
+            EventKind::FocusOut => 7,
+            EventKind::Submit => 8,
+            EventKind::PointerDown => 9,
+            EventKind::PointerUp => 10,
+            EventKind::PointerMove => 11,
+            EventKind::PointerEnter => 12,
+            EventKind::PointerLeave => 13,
+            EventKind::Scroll => 14,
+            EventKind::Wheel => 15,
+            EventKind::ContextMenu => 16,
+            EventKind::CompositionStart => 17,
+            EventKind::CompositionEnd => 18,
+        }
+    }
+
+    /// 由序号还原事件类型（与 [`Self::index`] 互逆；越界 ⇒ `None`）。
+    pub fn from_index(index: usize) -> Option<Self> {
+        Some(match index {
+            0 => EventKind::Click,
+            1 => EventKind::DoubleClick,
+            2 => EventKind::KeyDown,
+            3 => EventKind::KeyUp,
+            4 => EventKind::Input,
+            5 => EventKind::Change,
+            6 => EventKind::FocusIn,
+            7 => EventKind::FocusOut,
+            8 => EventKind::Submit,
+            9 => EventKind::PointerDown,
+            10 => EventKind::PointerUp,
+            11 => EventKind::PointerMove,
+            12 => EventKind::PointerEnter,
+            13 => EventKind::PointerLeave,
+            14 => EventKind::Scroll,
+            15 => EventKind::Wheel,
+            16 => EventKind::ContextMenu,
+            17 => EventKind::CompositionStart,
+            18 => EventKind::CompositionEnd,
+            _ => return None,
+        })
+    }
+
+    /// 全部事件类型（**由 `from_index` 枚举得出** ⇒ 不会与变体集合漂移）。
+    pub fn all() -> Vec<EventKind> {
+        let mut kinds = Vec::new();
+        let mut index = 0;
+        while let Some(kind) = EventKind::from_index(index) {
+            kinds.push(kind);
+            index += 1;
+        }
+        kinds
     }
 }
 
@@ -120,6 +398,66 @@ pub trait Dom: 'static {
     /// 建一个文本节点。
     fn create_text(&self, data: &str) -> Result<Self::Node, DomError>;
 
+    /// ⭐ **元素盒（CSS 像素）** —— 与浏览器 `getBoundingClientRect()` **同语义**
+    /// （相对**视口**左上角、含边框、不含外边距）。
+    ///
+    /// ## 为什么是 CSS 像素而不是设备像素
+    ///
+    /// 上层（弹层定位、滚动、拖拽命中）用的是 CSS 像素；设备像素只在**上传/采样**时才需要
+    /// ⇒ ⇒ 换算放在一处，不要散落在各处
+    /// ⇒ ⇒ 否则 125% 缩放/紧凑密度下必然出现「差 1px」类缺陷。
+    ///
+    /// 默认实现返回 [`DomError::NotImplemented`]（**显式**不支持，不是静默零值）。
+    fn bounding_box(&self, node: &Self::Node) -> Result<ElementBox, DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// ⭐ **滚动度量**（CSS 像素）：当前滚动位置、内容高度、可视高度。
+    fn scroll_metrics(&self, node: &Self::Node) -> Result<ScrollMetrics, DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// ⭐ **把焦点移到该节点**（L1-G3 接线点）。
+    ///
+    /// ⚠️ 焦点**策略**（栈 / 陷阱 / 恢复）在 [`crate::focus::FocusTracker`] 与渲染器里；
+    /// 后端只负责「把浏览器的焦点真的挪过去」这一件事。
+    fn focus(&self, node: &Self::Node) -> Result<(), DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// ⭐ **把焦点从该节点移走**。
+    fn blur(&self, node: &Self::Node) -> Result<(), DomError> {
+        let _ = node;
+        Err(DomError::NotImplemented)
+    }
+
+    /// 当前聚焦的节点（后端不知道 ⇒ `None`；测试后端会记录）。
+    fn focused(&self) -> Option<Self::Node> {
+        None
+    }
+
+    /// ⭐ **是否处于 IME 组合中**（L1-G3 接线点）。
+    ///
+    /// ## 为什么放在后端 trait 上
+    ///
+    /// 组合事件的**到达**发生在后端（它把浏览器事件折成 [`crate::events::DomEvent`]）
+    /// ⇒ ⇒ 把「组合中」这个状态记在后端，渲染器就不必依赖宿主转告
+    /// ⇒ ⇒ 否则每个宿主都要自己记得调 `note_event()`，忘一处就回到「中文输入被打散」。
+    ///
+    /// 默认 `false`（不认识组合事件的后端 = 永远不在组合中）。
+    fn is_composing(&self) -> bool {
+        false
+    }
+
+    /// ⭐ **设置滚动位置**（CSS 像素）⇒ 实现应把值**夹到** `[0, max_scroll_top]`。
+    fn set_scroll_top(&self, node: &Self::Node, top: f64) -> Result<(), DomError> {
+        let _ = (node, top);
+        Err(DomError::NotImplemented)
+    }
+
     /// 写属性。
     fn set_attribute(&self, node: &Self::Node, name: &str, value: &str) -> Result<(), DomError>;
 
@@ -145,8 +483,55 @@ pub trait Dom: 'static {
     /// 对 `input.value` 无效，且会破坏浏览器的受控输入语义。
     fn set_property(&self, node: &Self::Node, name: &str, value: &str) -> Result<(), DomError>;
 
+    /// 写**布尔** property（`checked` / `selected` / …）。
+    ///
+    /// ⚠️ **不能**用 [`Self::set_property`] 传 `"false"` 写布尔 property ——
+    /// `Reflect::set(el, "checked", "false")` 写进去是**非空字符串** ⇒ 真值判断为**真**
+    /// ⇒ 语义**反了**。
+    ///
+    /// 默认实现 ⇒ **显式失败**（`Unsupported`）而不是静默写错：
+    /// 没实现该通道的后端**不该假装支持**（0 装）。
+    fn set_property_bool(
+        &self,
+        node: &Self::Node,
+        name: &str,
+        value: bool,
+    ) -> Result<(), DomError> {
+        let _ = (node, name, value);
+        Err(DomError::Unsupported(format!(
+            "set_property_bool({name}) 该后端未实现"
+        )))
+    }
+
     /// 读 property。
     fn get_property(&self, node: &Self::Node, name: &str) -> Result<String, DomError>;
+
+    /// **移除** property（`value` / `checked` 等）。
+    ///
+    /// ## 为什么必须有这一条（2026-10-25 修）
+    ///
+    /// 修前渲染器遇到「property 从虚拟树上消失」只能报 [`DomError::Unsupported`]
+    /// ⇒ ⇒ **整帧中止** ⇒ ⇒ DOM 已经改了一半 ⇒ 界面冻结。
+    ///
+    /// ⇒ 「property 消失」是**正常**的差分结果（条件渲染会让 property 时有时无）
+    /// ⇒ ⇒ 必须有一条**能真正移除**的通道。
+    ///
+    /// ## 语义（后端必须遵守）
+    ///
+    /// 移除之后 [`Dom::get_property`] 读到的必须是该 property 的**默认值**
+    /// （字符串 property ⇒ 空串；布尔 property ⇒ `false`）⇒
+    /// ⇒ 与浏览器的「回落到默认值」一致。
+    ///
+    /// ## 默认实现 = **显式失败**（0 装）
+    ///
+    /// 没实现该通道的后端**不该假装支持** ⇒ 报 [`DomError::Unsupported`] ⇒
+    /// 渲染器据此**降级**（写回默认值 + 记警告），**不中止整帧**。
+    fn remove_property(&self, node: &Self::Node, name: &str) -> Result<(), DomError> {
+        let _ = (node, name);
+        Err(DomError::Unsupported(String::from(
+            "remove_property 该后端未实现（property 无通用删除操作）",
+        )))
+    }
 
     /// 写文本内容（就地改，不重建文本节点，见设计 §5.2.4）。
     fn set_text(&self, node: &Self::Node, data: &str) -> Result<(), DomError>;
@@ -186,6 +571,46 @@ pub trait Dom: 'static {
 
     /// 摘掉某节点上的**全部**事件处理器（卸载时必做；差分时重挂前也做）。
     fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError>;
+
+    /// 摘掉某节点上**指定事件类型**的处理器（其余类型的**保留**）。
+    ///
+    /// ## 为什么必须有这一条（2026-10-25 修）
+    ///
+    /// 差分时「换了处理器 ⇒ 重挂」如果走 [`Dom::remove_listeners`]（摘**全部**）
+    /// ⇒ ⇒ 一个元素上挂多个事件类型时（例：标题同时挂 `click` 与 `keydown`）
+    /// ⇒ ⇒ 摘 `click` 会把 `keydown` 一起带走 ⇒ ⇒ **先挂的处理器静默失效**。
+    ///
+    /// ⇒ ⇒ 必须有**按 kind** 的增量摘挂。
+    ///
+    /// ## 默认实现 = 摘**全部**（⚠️ 会误伤其它 kind）
+    ///
+    /// 没实现按 kind 摘挂的后端**会**误伤同元素的其它事件类型 ⇒
+    /// ⇒ **后端应当覆写**本方法（内存后端与真实后端都已覆写）。
+    fn remove_listener(&self, node: &Self::Node, kind: EventKind) -> Result<(), DomError> {
+        let _ = kind;
+        self.remove_listeners(node)
+    }
+
+    /// 目标节点在树里的**子节点下标路径**（从根到目标；空 = 目标就是根）。
+    ///
+    /// ## 口径（两个后端必须一致 ⇒ 事件负载才可比）
+    ///
+    /// - 只数**元素与文本**子节点（注释节点**跳过**）⇒ 与 [`Dom::children`]
+    ///   的口径一致 ⇒ 下标空间两侧相同；
+    /// - 从**最顶层的祖先**算起（浏览器侧 = 文档根；内存侧 = 树的根）。
+    ///
+    /// ## 为什么要有这一条
+    ///
+    /// 事件负载里的 `target_path` 是**委托路由**的依据 ⇒ 两个后端算出来的
+    /// 路径必须**逐项可比** ⇒ ⇒ 口径必须写在 trait 上（而不是各后端各写一套）。
+    ///
+    /// 默认实现 = **显式失败**（0 装）：后端算不出来就报不支持，不许瞎编。
+    fn target_path(&self, node: &Self::Node) -> Result<Vec<usize>, DomError> {
+        let _ = node;
+        Err(DomError::Unsupported(String::from(
+            "target_path 该后端未实现（事件路径不可判定）",
+        )))
+    }
 }
 
 /// 内存 DOM 的节点句柄（编号）。
@@ -204,14 +629,37 @@ enum InMemoryNodeKind {
 struct InMemoryNode {
     kind: InMemoryNodeKind,
     attrs: Vec<(String, String)>,
-    props: Vec<(String, String)>,
+    props: Vec<(String, MemoryProp)>,
     children: Vec<InMemoryNodeId>,
     /// 当前父节点（`None` = 尚未挂到任何树上）。
     parent: Option<InMemoryNodeId>,
-    /// 事件处理器（挂在**本元素**上；冒泡由 [`InMemoryDom::dispatch`] 模拟）。
-    listeners: Vec<(EventKind, crate::events::ElementHandler)>,
     /// 是否已被从树上摘除（摘除后禁止再写入 —— 设计文档 §5.5.2 规则 T6）。
     detached: bool,
+}
+
+/// 内存后端里的一个 property 值。
+///
+/// ## 为什么带**类型**
+///
+/// 布尔 property 的**默认值**是 `false`（不是空串）⇒ ⇒ 移除 property 时
+/// 要写回**对应类型**的默认值 ⇒ ⇒ 必须记得它当初是**布尔**还是**字符串**。
+#[derive(Debug, Clone)]
+struct MemoryProp {
+    /// 当前值（字符串形式）。
+    value: String,
+    /// 是否是**布尔** property（`set_property_bool` 写的那些）。
+    is_bool: bool,
+}
+
+impl MemoryProp {
+    /// 该 property 的**默认值**（浏览器语义：没有该属性时的取值）。
+    fn default_value(is_bool: bool) -> String {
+        if is_bool {
+            String::from("false")
+        } else {
+            String::new()
+        }
+    }
 }
 
 /// 内存 DOM 记录的一次操作。
@@ -249,6 +697,16 @@ pub enum DomOp {
         /// property 值。
         value: String,
     },
+    /// 写**布尔** property（`checked` / `selected` / …）。
+    ///
+    /// 与 [`Self::SetProperty`] **分开记** ⇒ 「布尔走布尔通道」这件事
+    /// 是**可观测的**（否则写错成字符串在记录里看不出来）。
+    SetPropertyBool {
+        /// property 名。
+        name: String,
+        /// property 值。
+        value: bool,
+    },
     /// 读 property（不改树；记录它是为了让「读」在序列里可见）。
     GetProperty {
         /// property 名。
@@ -258,6 +716,11 @@ pub enum DomOp {
     SetText {
         /// 新文本。
         data: String,
+    },
+    /// **移除** property。
+    RemoveProperty {
+        /// property 名。
+        name: String,
     },
     /// 增删 class token（token 级差分）。
     SetClassTokens {
@@ -288,6 +751,11 @@ pub enum DomOp {
         /// 事件类型。
         kind: EventKind,
     },
+    /// 摘掉某节点上**指定事件类型**的处理器（其余类型保留 ⇒ 增量替换）。
+    RemoveListener {
+        /// 事件类型。
+        kind: EventKind,
+    },
     /// 摘掉某节点上的全部事件处理器。
     RemoveListeners,
 }
@@ -310,16 +778,86 @@ pub struct RecordedOp {
 ///
 /// 后端**始终**记录自己执行过的操作（[`InMemoryDom::ops`]）⇒ T1–T6 可以被
 /// 机械判定（而不必读源码文本 —— 设计文档 §10.2 明令禁止源码镜像断言）。
-#[derive(Debug, Default)]
+///
+/// ## 两道「不许无界增长」的闸（2026-10-25 修）
+///
+/// 1. **节点**：摘除时**立即释放载荷**（属性 / property / 子节点 / **监听器**）
+///    ⇒ 监听器闭包（它捕获着应用状态）**不再随摘除的节点一起泄漏**。
+///    ⇒ 节点**槽位**只增不复用（句柄一旦发出就必须仍能判定为「已摘除」）。
+/// 2. **操作日志**：有**上界**（[`InMemoryDom::set_op_capacity`]）⇒ 超出后
+///    **丢弃最旧**的记录 ⇒ 长时间运行不会把内存吃光。
+#[derive(Debug)]
 pub struct InMemoryDom {
     nodes: RefCell<Vec<InMemoryNode>>,
-    ops: RefCell<Vec<RecordedOp>>,
+    /// 事件监听器登记表（按 **(节点, 事件类型)** 索引 ⇒ 增量替换）。
+    listeners: RefCell<ListenerTable<InMemoryNodeId, crate::events::ElementHandler>>,
+    /// ⭐ **脚本化测量表**（**测试用**，不是布局引擎）：节点 → (元素盒, 滚动度量)。
+    ///
+    /// 引擎不做布局（ADR-0015）⇒ ⇒ 内存后端**不计算**几何，只接受测试脚本注入的几何
+    /// ⇒ ⇒ 这样上层（弹层定位 / 滚动物理 / 命中测试）可以在 native 侧被确定性地测试。
+    /// 未注入 ⇒ 三个测量方法返回 [`DomError::NotImplemented`]（**显式**不支持）。
+    measurements: RefCell<HashMap<InMemoryNodeId, ScriptedMeasurement>>,
+    /// ⭐ 测试用 IME 组合态（见 `script_composition`）。
+    composing: Cell<bool>,
+    /// ⭐ 当前聚焦节点（**测试用**：记录 `focus()` 的效果 ⇒ 焦点策略可被断言）。
+    focused: Cell<Option<InMemoryNodeId>>,
+    ops: RefCell<VecDeque<RecordedOp>>,
+    /// 操作日志的上界（超出后丢弃最旧的记录）。
+    op_capacity: Cell<usize>,
+}
+
+/// 操作日志的**默认**上界。
+///
+/// 为什么要有上界：日志是**判据**用的（长跑场景下没人看得完几十万条）⇒
+/// ⇒ 留一个足够宽的窗口（够看完一批渲染）⇒ 超出后丢最旧的。
+pub const DEFAULT_OP_CAPACITY: usize = 8192;
+
+impl Default for InMemoryDom {
+    fn default() -> Self {
+        Self {
+            nodes: RefCell::new(Vec::new()),
+            listeners: RefCell::new(ListenerTable::new()),
+            measurements: RefCell::new(HashMap::new()),
+            composing: Cell::new(false),
+            focused: Cell::new(None),
+            ops: RefCell::new(VecDeque::new()),
+            op_capacity: Cell::new(DEFAULT_OP_CAPACITY),
+        }
+    }
 }
 
 impl InMemoryDom {
+    /// 节点必须存在（测量 API 的公共前置检查）。
+    /// ⭐ **脚本化 IME 组合态**（**测试用**）：模拟「输入法正在组合」。
+    pub fn script_composition(&self, composing: bool) {
+        self.composing.set(composing);
+    }
+
+    fn ensure_node_exists(&self, node: &InMemoryNodeId) -> Result<(), DomError> {
+        if self.nodes.borrow().get(node.0).is_none() {
+            return Err(DomError::NodeNotFound);
+        }
+        Ok(())
+    }
+
     /// 建一棵空的内存 DOM。
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// ⭐ **注入脚本化测量**（**测试用**）：给某个节点设定元素盒与滚动度量。
+    ///
+    /// ⚠️ 这不是布局引擎：引擎不做布局（ADR-0015）。这里只是让上层能在 native 侧
+    /// 对「测量 → 定位 / 滚动 / 命中」这条链做**确定性**测试。
+    pub fn script_measurement(
+        &self,
+        node: InMemoryNodeId,
+        bounding_box: ElementBox,
+        scroll_metrics: ScrollMetrics,
+    ) {
+        self.measurements
+            .borrow_mut()
+            .insert(node, ScriptedMeasurement::new(bounding_box, scroll_metrics));
     }
 
     /// 读节点标签（元素节点才有）。
@@ -341,7 +879,7 @@ impl InMemoryDom {
             .map(|(_, value)| value.clone())
     }
 
-    /// 读 property 值。
+    /// 读 property 值（**实时**语义：读的是当前值）。
     pub fn property(&self, node: InMemoryNodeId, name: &str) -> Option<String> {
         let nodes = self.nodes.borrow();
         let entry = nodes.get(node.0)?;
@@ -349,7 +887,7 @@ impl InMemoryDom {
             .props
             .iter()
             .find(|(key, _)| key == name)
-            .map(|(_, value)| value.clone())
+            .map(|(_, value)| value.value.clone())
     }
 
     /// 读文本内容（文本节点自身或子树拼接）。
@@ -369,9 +907,95 @@ impl InMemoryDom {
         }
     }
 
-    /// 节点总数（用于断言「没有多余节点产生」）。
+    /// 节点总数（**活着的**节点数 —— 已摘除的不算）。
+    ///
+    /// 用途：断言「没有多余节点产生」⇒ 摘除的节点**不算**在里面
+    /// （它们已经是垃圾，见 [`InMemoryDom::slot_count`]）。
     pub fn node_count(&self) -> usize {
+        self.nodes
+            .borrow()
+            .iter()
+            .filter(|entry| !entry.detached)
+            .count()
+    }
+
+    /// **槽位**总数（含已摘除的墓碑）。
+    ///
+    /// ## 为什么槽位只增不复用
+    ///
+    /// 节点句柄（[`InMemoryNodeId`]）一旦发出就可能被外部长期持有 ⇒
+    /// ⇒ 复用槽位会让**过期句柄打到新节点上**（比泄漏更危险）⇒
+    /// ⇒ 槽位不复用；但摘除时**载荷**（含监听器闭包）**立即释放** ⇒
+    /// ⇒ 真正会泄漏的闭包**不会**泄漏。
+    pub fn slot_count(&self) -> usize {
         self.nodes.borrow().len()
+    }
+
+    /// 回收**尾部**的墓碑槽位（已摘除且载荷已空的槽位）⇒ 返回回收的个数。
+    ///
+    /// ## 为什么只回收「尾部」
+    ///
+    /// 槽位编号 = 下标 ⇒ 回收中间的槽位会让后面所有编号**平移** ⇒
+    /// ⇒ 外面持有的句柄全部失效 ⇒ ⇒ 只回收**尾部**那段（编号连续、无外部
+    /// 活句柄依赖）⇒ 中间的墓碑保留（它们只是一条 `detached` 标记）。
+    ///
+    /// ⚠️ 回收之后，**被回收的那些编号**不再可判定（`is_detached` 返回 `false`）。
+    pub fn compact(&self) -> usize {
+        let mut nodes = self.nodes.borrow_mut();
+        let mut reclaimed = 0usize;
+        while let Some(last) = nodes.last() {
+            if !last.detached {
+                break;
+            }
+            nodes.pop();
+            reclaimed += 1;
+        }
+        reclaimed
+    }
+
+    /// 操作日志的上界。
+    pub fn op_capacity(&self) -> usize {
+        self.op_capacity.get()
+    }
+
+    /// 设操作日志的上界（`0` = 不记录）。
+    pub fn set_op_capacity(&self, capacity: usize) {
+        self.op_capacity.set(capacity);
+        let mut ops = self.ops.borrow_mut();
+        while ops.len() > capacity {
+            ops.pop_front();
+        }
+    }
+
+    /// ⭐ 派发**带载荷**的事件（`target_value`）—— 与真实浏览器侧的 `input` 事件同语义。
+    ///
+    /// ## 为什么需要它（而不是复用 [`Self::dispatch`]）
+    ///
+    /// `dispatch` 造的事件**没有 `target_value`** ⇒ ⇒ 绑定写回拿不到值
+    /// ⇒ ⇒ 「DOM → 信号」这条上行路径在 native 侧**无法测**
+    /// ⇒ ⇒ 而真实浏览器侧（`WebDom`）会把 `input.value` 填进载荷
+    /// ⇒ ⇒ native 与浏览器**语义必须一致**，否则 native 测试是假的。
+    ///
+    /// 返回实际调用次数（与 [`Self::dispatch`] 同口径）。
+    pub fn dispatch_with_value(&self, node: InMemoryNodeId, kind: EventKind, value: &str) -> usize {
+        let indices = self.target_path(&node).unwrap_or_default();
+        let mut chain: Vec<InMemoryNodeId> = vec![node];
+        while let Some(parent) = self.parent(*chain.last().expect("链非空")) {
+            chain.push(parent);
+        }
+        let mut event = crate::events::DomEvent::new(kind, indices).with_target_value(value);
+        let mut called = 0;
+        for current in chain {
+            let handler = self.listeners.borrow().get(&current, kind).cloned();
+            if let Some(handler) = handler {
+                handler.call(&mut event);
+                called += 1;
+                if event.is_propagation_stopped() {
+                    return called;
+                }
+            }
+        }
+        called
     }
 
     /// 派发事件：自目标节点起，沿祖先链**自下而上**调用处理器。
@@ -382,23 +1006,7 @@ impl InMemoryDom {
     /// 返回实际调用次数。
     pub fn dispatch(&self, node: InMemoryNodeId, kind: EventKind) -> usize {
         // 目标路径（从根到目标的子节点下标序列）。
-        let mut indices: Vec<usize> = Vec::new();
-        let mut current = node;
-        while let Some(parent) = self.parent(current) {
-            let siblings = self
-                .nodes
-                .borrow()
-                .get(parent.0)
-                .map(|entry| entry.children.clone())
-                .unwrap_or_default();
-            let index = siblings
-                .iter()
-                .position(|child| *child == current)
-                .unwrap_or_default();
-            indices.push(index);
-            current = parent;
-        }
-        indices.reverse();
+        let indices = self.target_path(&node).unwrap_or_default();
 
         // 祖先链（目标在前）。
         let mut chain: Vec<InMemoryNodeId> = vec![node];
@@ -409,20 +1017,8 @@ impl InMemoryDom {
         let mut event = crate::events::DomEvent::new(kind, indices);
         let mut called = 0;
         for current in chain {
-            let handlers: Vec<crate::events::ElementHandler> = self
-                .nodes
-                .borrow()
-                .get(current.0)
-                .map(|entry| {
-                    entry
-                        .listeners
-                        .iter()
-                        .filter(|(key, _)| *key == kind)
-                        .map(|(_, handler)| handler.clone())
-                        .collect()
-                })
-                .unwrap_or_default();
-            for handler in handlers {
+            let handler = self.listeners.borrow().get(&current, kind).cloned();
+            if let Some(handler) = handler {
                 handler.call(&mut event);
                 called += 1;
                 if event.is_propagation_stopped() {
@@ -451,8 +1047,12 @@ impl InMemoryDom {
     }
 
     /// 已执行的操作序列（按发生顺序）。
+    ///
+    /// ⚠️ 日志有**上界**（[`InMemoryDom::set_op_capacity`]）⇒ 超出后**丢弃最旧**
+    /// 的记录 ⇒ 机械判据只对**最近一批**有效 ⇒ 断言前先
+    /// [`InMemoryDom::clear_ops`]。
     pub fn ops(&self) -> Vec<RecordedOp> {
-        self.ops.borrow().clone()
+        self.ops.borrow().iter().cloned().collect()
     }
 
     /// 清空操作序列（让下一次断言只看「这一批」的操作）。
@@ -469,33 +1069,109 @@ impl InMemoryDom {
             props: Vec::new(),
             children: Vec::new(),
             parent: None,
-            listeners: Vec::new(),
             detached: false,
         });
         InMemoryNodeId(nodes.len() - 1)
     }
 
-    /// 记一次操作。
+    /// 记一次操作（**受上界约束**：超出后丢弃最旧的）。
     fn record(&self, op: DomOp, node: InMemoryNodeId) {
-        self.ops.borrow_mut().push(RecordedOp { op, node });
+        let capacity = self.op_capacity.get();
+        if capacity == 0 {
+            return;
+        }
+        let mut ops = self.ops.borrow_mut();
+        ops.push_back(RecordedOp { op, node });
+        while ops.len() > capacity {
+            ops.pop_front();
+        }
     }
 
-    /// 把子树整体标记为已摘除（T6：被移除的节点不参与本批次的写入）。
+    /// 把子树整体标记为已摘除（T6：被移除的节点不参与本批次的写入），
+    /// 并**立即释放载荷**（含监听器闭包 ⇒ 闭包捕获的应用状态一起释放）。
+    ///
+    /// ## 为什么载荷必须**立即**释放（2026-10-25 修）
+    ///
+    /// 修前摘除只打标记 ⇒ 节点连同 `listeners` 一直留在后端里 ⇒
+    /// ⇒ 监听器闭包（捕获着应用状态）**跟着一起泄漏** ⇒
+    /// ⇒ 5 轮挂载 / 卸载就把整棵树的闭包留在内存里。
     fn mark_subtree_detached(&self, node: InMemoryNodeId) {
-        let mut nodes = self.nodes.borrow_mut();
-        let mut pending = vec![node];
-        while let Some(current) = pending.pop() {
-            let Some(entry) = nodes.get_mut(current.0) else {
-                continue;
-            };
-            entry.detached = true;
-            entry.parent = None;
-            pending.extend(entry.children.iter().copied());
+        let mut detached: Vec<InMemoryNodeId> = Vec::new();
+        {
+            let mut nodes = self.nodes.borrow_mut();
+            let mut pending = vec![node];
+            while let Some(current) = pending.pop() {
+                let Some(entry) = nodes.get_mut(current.0) else {
+                    continue;
+                };
+                entry.detached = true;
+                entry.parent = None;
+                // 先收孩子，再清孩子（否则递归就断了）。
+                pending.extend(entry.children.iter().copied());
+                entry.children.clear();
+                // 载荷释放：属性 / property 都不再需要。
+                entry.attrs.clear();
+                entry.props.clear();
+                detached.push(current);
+            }
+        }
+        // 监听器在**表**里 ⇒ 逐个摘掉（闭包 ⇒ 释放）。
+        let mut listeners = self.listeners.borrow_mut();
+        for id in detached {
+            listeners.remove_node(&id);
         }
     }
 }
 
 impl Dom for InMemoryDom {
+    fn focus(&self, node: &InMemoryNodeId) -> Result<(), DomError> {
+        self.ensure_node_exists(node)?;
+        self.focused.set(Some(*node));
+        Ok(())
+    }
+
+    fn blur(&self, node: &InMemoryNodeId) -> Result<(), DomError> {
+        self.ensure_node_exists(node)?;
+        if self.focused.get() == Some(*node) {
+            self.focused.set(None);
+        }
+        Ok(())
+    }
+
+    fn focused(&self) -> Option<InMemoryNodeId> {
+        self.focused.get()
+    }
+
+    fn is_composing(&self) -> bool {
+        self.composing.get()
+    }
+
+    fn bounding_box(&self, node: &InMemoryNodeId) -> Result<ElementBox, DomError> {
+        self.ensure_node_exists(node)?;
+        self.measurements
+            .borrow()
+            .get(node)
+            .map(|item| item.bounding_box)
+            .ok_or(DomError::NotImplemented)
+    }
+
+    fn scroll_metrics(&self, node: &InMemoryNodeId) -> Result<ScrollMetrics, DomError> {
+        self.ensure_node_exists(node)?;
+        self.measurements
+            .borrow()
+            .get(node)
+            .map(|item| item.scroll_metrics)
+            .ok_or(DomError::NotImplemented)
+    }
+
+    fn set_scroll_top(&self, node: &InMemoryNodeId, top: f64) -> Result<(), DomError> {
+        self.ensure_node_exists(node)?;
+        let mut measurements = self.measurements.borrow_mut();
+        let item = measurements.get_mut(node).ok_or(DomError::NotImplemented)?;
+        item.scroll_metrics.scroll_top = item.scroll_metrics.clamp_scroll_top(top);
+        Ok(())
+    }
+
     type Node = InMemoryNodeId;
 
     fn create_element(&self, tag: &str) -> Result<Self::Node, DomError> {
@@ -600,15 +1276,14 @@ impl Dom for InMemoryDom {
                 next.push(token.clone());
             }
         }
-        // token 集合为空 ⇒ 整个 class 属性不保留（不留 `class=""` 残渣）。
-        if next.is_empty() {
-            entry.attrs.retain(|(key, _)| key != "class");
-        } else {
-            let value = next.join(" ");
-            match entry.attrs.iter_mut().find(|(key, _)| key == "class") {
-                Some(slot) => slot.1 = value,
-                None => entry.attrs.push((String::from("class"), value)),
-            }
+        // ⭐ **语义对齐浏览器**（2026-10-25 修）：token 全删之后**保留**
+        // `class=""`（浏览器的 `classList` 删完就是空串）⇒
+        // ⇒ 修前内存后端把 class 属性**整个删掉** ⇒ 与浏览器不一致
+        // ⇒ ⇒ 两侧的属性对照会差一项。
+        let value = next.join(" ");
+        match entry.attrs.iter_mut().find(|(key, _)| key == "class") {
+            Some(slot) => slot.1 = value,
+            None => entry.attrs.push((String::from("class"), value)),
         }
         drop(nodes);
         self.record(
@@ -634,15 +1309,60 @@ impl Dom for InMemoryDom {
                 "property 只能设在元素节点上",
             )));
         }
+        let prop = MemoryProp {
+            value: value.to_owned(),
+            is_bool: false,
+        };
         match entry.props.iter_mut().find(|(key, _)| key == name) {
-            Some(slot) => slot.1 = value.to_owned(),
-            None => entry.props.push((name.to_owned(), value.to_owned())),
+            Some(slot) => slot.1 = prop,
+            None => entry.props.push((name.to_owned(), prop)),
         }
         drop(nodes);
         self.record(
             DomOp::SetProperty {
                 name: name.to_owned(),
                 value: value.to_owned(),
+            },
+            *node,
+        );
+        Ok(())
+    }
+
+    fn set_property_bool(
+        &self,
+        node: &Self::Node,
+        name: &str,
+        value: bool,
+    ) -> Result<(), DomError> {
+        // 存成 "true"/"false" 只是为了 `get_property`（它返回 `String`）能读回；
+        // **记录**用独立的 `SetPropertyBool` ⇒ 通道选择本身可观测。
+        let text = if value { "true" } else { "false" };
+        {
+            let mut nodes = self.nodes.borrow_mut();
+            let Some(entry) = nodes.get_mut(node.0) else {
+                return Err(DomError::NodeNotFound);
+            };
+            if entry.detached {
+                return Err(DomError::NodeDetached);
+            }
+            if matches!(entry.kind, InMemoryNodeKind::Text(_)) {
+                return Err(DomError::Unsupported(String::from(
+                    "property 只能设在元素节点上",
+                )));
+            }
+            let prop = MemoryProp {
+                value: text.to_owned(),
+                is_bool: true,
+            };
+            match entry.props.iter_mut().find(|(key, _)| key == name) {
+                Some(slot) => slot.1 = prop,
+                None => entry.props.push((name.to_owned(), prop)),
+            }
+        }
+        self.record(
+            DomOp::SetPropertyBool {
+                name: name.to_owned(),
+                value,
             },
             *node,
         );
@@ -657,11 +1377,17 @@ impl Dom for InMemoryDom {
         if entry.detached {
             return Err(DomError::NodeDetached);
         }
+        // ⭐ **实时语义**（2026-10-25 修）：读的是「**当前**的 property 值」
+        // （不是「上一帧虚拟树写的值」）⇒ 与浏览器一致
+        // ⇒ ⇒ 用户改过的值会被读到（浏览器的 `input.value` 就是实时的）。
+        //
+        // ⚠️ 渲染器的跳过条件因此必须以「**目标值是否变化**」为准
+        // （见 `renderer::patch_props`），否则会把用户的输入覆盖掉。
         let value = entry
             .props
             .iter()
             .find(|(key, _)| key == name)
-            .map(|(_, value)| value.clone())
+            .map(|(_, value)| value.value.clone())
             .unwrap_or_default();
         drop(nodes);
         self.record(
@@ -671,6 +1397,49 @@ impl Dom for InMemoryDom {
             *node,
         );
         Ok(value)
+    }
+
+    fn remove_property(&self, node: &Self::Node, name: &str) -> Result<(), DomError> {
+        let mut nodes = self.nodes.borrow_mut();
+        let Some(entry) = nodes.get_mut(node.0) else {
+            return Err(DomError::NodeNotFound);
+        };
+        if entry.detached {
+            return Err(DomError::NodeDetached);
+        }
+        if matches!(entry.kind, InMemoryNodeKind::Text(_)) {
+            return Err(DomError::Unsupported(String::from(
+                "property 只能设在元素节点上",
+            )));
+        }
+        // ⭐ **回落到默认值**（浏览器语义）：字符串 ⇒ 空串；布尔 ⇒ `false`。
+        //
+        // 为什么不是「删掉这条记录」：删掉之后读回来是空串 ⇒ ⇒ 布尔 property
+        // 就与浏览器（`false`）**不一致** ⇒ ⇒ 两侧语义必须一致（0 装）。
+        match entry.props.iter_mut().find(|(key, _)| key == name) {
+            Some(slot) => {
+                let is_bool = slot.1.is_bool;
+                slot.1.value = MemoryProp::default_value(is_bool);
+            }
+            None => {
+                // 从没写过 ⇒ 回落成默认值（字符串语义）。
+                entry.props.push((
+                    name.to_owned(),
+                    MemoryProp {
+                        value: MemoryProp::default_value(false),
+                        is_bool: false,
+                    },
+                ));
+            }
+        }
+        drop(nodes);
+        self.record(
+            DomOp::RemoveProperty {
+                name: name.to_owned(),
+            },
+            *node,
+        );
+        Ok(())
     }
 
     fn set_text(&self, node: &Self::Node, data: &str) -> Result<(), DomError> {
@@ -810,31 +1579,72 @@ impl Dom for InMemoryDom {
         kind: EventKind,
         handler: crate::events::ElementHandler,
     ) -> Result<(), DomError> {
-        let mut nodes = self.nodes.borrow_mut();
-        let Some(entry) = nodes.get_mut(node.0) else {
-            return Err(DomError::NodeNotFound);
-        };
-        if entry.detached {
-            return Err(DomError::NodeDetached);
+        {
+            let nodes = self.nodes.borrow();
+            let Some(entry) = nodes.get(node.0) else {
+                return Err(DomError::NodeNotFound);
+            };
+            if entry.detached {
+                return Err(DomError::NodeDetached);
+            }
         }
-        match entry.listeners.iter_mut().find(|(key, _)| *key == kind) {
-            Some(slot) => slot.1 = handler,
-            None => entry.listeners.push((kind, handler)),
-        }
-        drop(nodes);
+        // 覆盖语义：同 (节点, kind) 至多一条。
+        self.listeners.borrow_mut().insert(*node, kind, handler);
         self.record(DomOp::AddListener { kind }, *node);
         Ok(())
     }
 
     fn remove_listeners(&self, node: &Self::Node) -> Result<(), DomError> {
-        let mut nodes = self.nodes.borrow_mut();
-        let Some(entry) = nodes.get_mut(node.0) else {
-            return Err(DomError::NodeNotFound);
-        };
-        entry.listeners.clear();
-        drop(nodes);
+        {
+            let nodes = self.nodes.borrow();
+            if nodes.get(node.0).is_none() {
+                return Err(DomError::NodeNotFound);
+            }
+        }
+        // 摘掉该节点的**全部** kind（闭包 ⇒ 释放）。
+        self.listeners.borrow_mut().remove_node(node);
         self.record(DomOp::RemoveListeners, *node);
         Ok(())
+    }
+
+    fn remove_listener(&self, node: &Self::Node, kind: EventKind) -> Result<(), DomError> {
+        {
+            let nodes = self.nodes.borrow();
+            if nodes.get(node.0).is_none() {
+                return Err(DomError::NodeNotFound);
+            }
+        }
+        // ⭐ **只摘这一个 kind** ⇒ 同元素的其它 kind **不受影响**（既有契约）。
+        self.listeners.borrow_mut().remove_kind(node, kind);
+        self.record(DomOp::RemoveListener { kind }, *node);
+        Ok(())
+    }
+
+    fn target_path(&self, node: &Self::Node) -> Result<Vec<usize>, DomError> {
+        let nodes = self.nodes.borrow();
+        if nodes.get(node.0).is_none() {
+            return Err(DomError::NodeNotFound);
+        }
+        drop(nodes);
+        // 从根到目标的子节点下标序列（只数元素 / 文本 ⇒ 与浏览器口径一致）。
+        let mut indices: Vec<usize> = Vec::new();
+        let mut current = *node;
+        while let Some(parent) = self.parent(current) {
+            let siblings = self
+                .nodes
+                .borrow()
+                .get(parent.0)
+                .map(|entry| entry.children.clone())
+                .unwrap_or_default();
+            let index = siblings
+                .iter()
+                .position(|child| *child == current)
+                .unwrap_or_default();
+            indices.push(index);
+            current = parent;
+        }
+        indices.reverse();
+        Ok(indices)
     }
 }
 
@@ -924,10 +1734,153 @@ impl Dom for UnavailableDom {
     fn remove_listeners(&self, _node: &Self::Node) -> Result<(), DomError> {
         Err(DomError::NotImplemented)
     }
+
+    fn remove_property(&self, _node: &Self::Node, _name: &str) -> Result<(), DomError> {
+        Err(DomError::NotImplemented)
+    }
+
+    fn remove_listener(&self, _node: &Self::Node, _kind: EventKind) -> Result<(), DomError> {
+        Err(DomError::NotImplemented)
+    }
+
+    fn target_path(&self, _node: &Self::Node) -> Result<Vec<usize>, DomError> {
+        Err(DomError::NotImplemented)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+
+    // ── G6 缩放/密度标量（台账 L1-G6）────────────────────────────────────
+
+    /// 恒等乘数不改变数值。
+    #[test]
+    fn identity_scale_does_not_change_values() {
+        let scale = MeasurementScale::IDENTITY;
+        assert_eq!(scale.css_to_device(100.0), 100.0);
+        assert_eq!(scale.device_to_css(100.0), 100.0);
+    }
+
+    /// DPR 与密度**相乘**（2.0 × 1.25 = 2.5），且双向互逆。
+    #[test]
+    fn scale_multiplies_dpr_and_density_and_is_invertible() {
+        let scale = MeasurementScale::new(2.0, 1.25);
+        assert_eq!(scale.device_pixel_ratio(), 2.0);
+        assert_eq!(scale.density(), 1.25);
+        assert_eq!(scale.css_to_device(40.0), 100.0, "40 CSS × 2.5 = 100 设备");
+        assert_eq!(scale.device_to_css(100.0), 40.0, "必须可逆");
+    }
+
+    /// ⭐ **非法乘数不得静默变成 0 尺寸**（0/负数/NaN/∞ ⇒ 按 1.0 处理）。
+    #[test]
+    fn illegal_scale_falls_back_to_one_instead_of_zero() {
+        for bad in [0.0, -2.0, f64::NAN, f64::INFINITY] {
+            let scale = MeasurementScale::new(bad, bad);
+            assert_eq!(scale.device_pixel_ratio(), 1.0, "非法 dpr {bad} 应回落 1.0");
+            assert_eq!(scale.density(), 1.0, "非法 density {bad} 应回落 1.0");
+            assert!(scale.css_to_device(10.0) > 0.0, "不得把尺寸压成 0");
+        }
+    }
+
+    /// 元素盒整体换算。
+    #[test]
+    fn element_box_scales_to_device_pixels() {
+        let scale = MeasurementScale::new(2.0, 1.0);
+        let device = scale.box_to_device(ElementBox::new(10.0, 20.0, 30.0, 40.0));
+        assert_eq!(device, ElementBox::new(20.0, 40.0, 60.0, 80.0));
+    }
+
+    // ── G1 布局测量（台账 L1-G1）──────────────────────────────────────────
+
+    /// **未注入脚本化测量 ⇒ 显式不支持**（不是静默返回 0）。
+    ///
+    /// 0 装纪律：引擎不做布局（ADR-0015）⇒ ⇒ 内存后端不能假装知道几何
+    /// ⇒ ⇒ 三个方法必须返回 [`DomError::NotImplemented`]，让上层立刻发现「没接线」。
+    #[test]
+    fn measurement_without_scripting_is_explicitly_unimplemented() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("div").expect("建元素必须成功");
+        assert!(matches!(
+            dom.bounding_box(&node),
+            Err(DomError::NotImplemented)
+        ));
+        assert!(matches!(
+            dom.scroll_metrics(&node),
+            Err(DomError::NotImplemented)
+        ));
+        assert!(matches!(
+            dom.set_scroll_top(&node, 10.0),
+            Err(DomError::NotImplemented)
+        ));
+    }
+
+    /// **脚本化测量可注入可读回**，且 `set_scroll_top` 会**夹到**合法区间。
+    #[test]
+    fn scripted_measurement_round_trips_and_clamps_scroll() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("div").expect("建元素必须成功");
+        dom.script_measurement(
+            node,
+            ElementBox::new(12.0, 34.0, 200.0, 100.0),
+            ScrollMetrics {
+                scroll_top: 0.0,
+                scroll_height: 1000.0,
+                client_height: 300.0,
+            },
+        );
+        assert_eq!(
+            dom.bounding_box(&node),
+            Ok(ElementBox::new(12.0, 34.0, 200.0, 100.0))
+        );
+        let metrics = dom.scroll_metrics(&node).expect("度量必须可读");
+        assert_eq!(metrics.max_scroll_top(), 700.0);
+        // 超过上界 ⇒ 夹到 700；负值 ⇒ 夹到 0。
+        dom.set_scroll_top(&node, 9999.0).expect("设置滚动必须成功");
+        assert_eq!(dom.scroll_metrics(&node).expect("可读").scroll_top, 700.0);
+        dom.set_scroll_top(&node, -5.0).expect("设置滚动必须成功");
+        assert_eq!(dom.scroll_metrics(&node).expect("可读").scroll_top, 0.0);
+    }
+
+    /// 元素盒的几何辅助（命中测试的最基本形式）。
+    #[test]
+    fn element_box_geometry_helpers() {
+        let rect = ElementBox::new(10.0, 20.0, 100.0, 50.0);
+        assert_eq!(rect.right(), 110.0);
+        assert_eq!(rect.bottom(), 70.0);
+        assert!(rect.contains(10.0, 20.0), "左上角算在内");
+        assert!(rect.contains(109.9, 69.9));
+        assert!(
+            !rect.contains(110.0, 20.0),
+            "右边界**不**算在内（半开区间）"
+        );
+        assert!(!rect.contains(10.0, 70.0), "下边界**不**算在内");
+        assert!(!rect.contains(9.9, 20.0));
+    }
+
+    /// 内容不足一屏 ⇒ 最大滚动量为 0（不会出现负的可滚动距离）。
+    #[test]
+    fn scroll_metrics_never_report_negative_range() {
+        let metrics = ScrollMetrics {
+            scroll_top: 0.0,
+            scroll_height: 120.0,
+            client_height: 300.0,
+        };
+        assert_eq!(metrics.max_scroll_top(), 0.0);
+        assert_eq!(metrics.clamp_scroll_top(50.0), 0.0);
+    }
+
+    /// 对不存在的节点做测量 ⇒ `NodeNotFound`（与「未接线」区分开）。
+    #[test]
+    fn measuring_a_missing_node_is_not_found() {
+        let dom = InMemoryDom::new();
+        let _existing = dom.create_element("div").expect("建元素必须成功");
+        let mut other = dom.create_element("span").expect("建元素必须成功");
+        other = InMemoryNodeId(other.0 + 1000);
+        assert!(matches!(
+            dom.bounding_box(&other),
+            Err(DomError::NodeNotFound)
+        ));
+    }
     use super::*;
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -1405,6 +2358,299 @@ mod tests {
         assert_eq!(
             DomError::Unsupported(String::from("x")).to_string(),
             "Unsupported: x"
+        );
+    }
+
+    // ── 摘除 ⇒ **立即释放载荷**（2026-10-25 修） ───────────────────────────
+
+    /// ⭐ **摘除子树 ⇒ 监听器闭包一起释放**（闭包捕获的应用状态不再泄漏）。
+    ///
+    /// ## 缺陷现象（实测）
+    ///
+    /// 修前：节点只打「已摘除」标记 ⇒ 记录（含 `listeners`）一直留着 ⇒
+    /// ⇒ 5 轮挂载 / 卸载后节点全留着 ⇒ ⇒ 闭包捕获的应用状态**一起泄漏**。
+    ///
+    /// ## 判据
+    ///
+    /// 处理器捕获的 `Rc` 的**强引用计数**在摘除后**回落** ⇒ 闭包被释放 ✓。
+    #[test]
+    fn detaching_a_subtree_releases_its_listeners() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let captured = Rc::new(Cell::new(0u32));
+        let node = dom.create_element("button").expect("建节点必须成功");
+        let handler = crate::events::ElementHandler::new({
+            let captured = captured.clone();
+            move |_event| {
+                captured.set(captured.get() + 1);
+            }
+        });
+        dom.add_listener(&node, EventKind::Click, handler)
+            .expect("挂处理器必须成功");
+        dom.append_child(&root, &node).expect("挂载必须成功");
+        assert_eq!(
+            Rc::strong_count(&captured),
+            2,
+            "处理器捕获着它（测试自己一份 + 闭包一份）"
+        );
+
+        dom.remove_child(&root, &node).expect("摘除必须成功");
+        assert_eq!(
+            Rc::strong_count(&captured),
+            1,
+            "摘除 ⇒ 监听器闭包**必须**被释放（不许泄漏应用状态）"
+        );
+    }
+
+    /// **摘除子树 ⇒ 子孙的监听器也一起释放**（不只是顶层）。
+    #[test]
+    fn detaching_a_subtree_releases_the_listeners_of_its_descendants() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let branch = dom.create_element("div").expect("建节点必须成功");
+        let leaf = dom.create_element("button").expect("建节点必须成功");
+        let captured = Rc::new(Cell::new(0u32));
+        let handler = crate::events::ElementHandler::new({
+            let captured = captured.clone();
+            move |_event| {
+                captured.set(captured.get() + 1);
+            }
+        });
+        dom.add_listener(&leaf, EventKind::Click, handler)
+            .expect("挂处理器必须成功");
+        dom.append_child(&root, &branch).expect("挂载必须成功");
+        dom.append_child(&branch, &leaf).expect("挂载必须成功");
+        assert_eq!(Rc::strong_count(&captured), 2);
+
+        dom.remove_child(&root, &branch).expect("摘除必须成功");
+        assert_eq!(Rc::strong_count(&captured), 1, "子孙的监听器也必须被释放");
+    }
+
+    /// **摘除 ⇒ 整棵子树都被标记为已摘除**（T6 的可判定性 ⇒ 与浏览器同口径）。
+    ///
+    /// ## 为什么
+    ///
+    /// 真实 DOM 后端修前**只标记顶层节点** ⇒ 子节点仍可被写入 ⇒
+    /// ⇒ 规则 T6 在浏览器里是**假的** ⇒ ⇒ 两侧口径必须一致。
+    #[test]
+    fn detaching_a_node_marks_its_whole_subtree_as_detached() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let branch = dom.create_element("div").expect("建节点必须成功");
+        let leaf = dom.create_element("span").expect("建节点必须成功");
+        dom.append_child(&root, &branch).expect("挂载必须成功");
+        dom.append_child(&branch, &leaf).expect("挂载必须成功");
+
+        dom.remove_child(&root, &branch).expect("摘除必须成功");
+        assert!(dom.is_detached(branch));
+        assert!(
+            dom.is_detached(leaf),
+            "子孙也必须被标记（**不许**只标记顶层 ⇒ T6 在浏览器里会形同虚设）"
+        );
+        assert_eq!(
+            dom.set_attribute(&leaf, "class", "x")
+                .expect_err("写入已摘除节点必须报错"),
+            DomError::NodeDetached
+        );
+    }
+
+    /// **摘除 ⇒ 载荷立即释放**（属性 / property 都不再留着）。
+    ///
+    /// ## 为什么
+    ///
+    /// 摘除的节点**再也不会被读**（引擎的树里已经没有它）⇒ ⇒ 留着属性 /
+    /// property 只是**白占内存**⇒ ⇒ 与监听器一样**立即释放**。
+    #[test]
+    fn detaching_a_subtree_releases_its_payload() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let item = dom.create_element("li").expect("建节点必须成功");
+        dom.set_attribute(&item, "class", "ap-row")
+            .expect("写属性必须成功");
+        dom.set_property(&item, "value", "x")
+            .expect("写 property 必须成功");
+        dom.append_child(&root, &item).expect("挂载必须成功");
+
+        dom.remove_child(&root, &item).expect("摘除必须成功");
+        assert_eq!(
+            dom.attribute(item, "class"),
+            None,
+            "摘除 ⇒ 载荷释放（属性不留）"
+        );
+        assert_eq!(
+            dom.property(item, "value"),
+            None,
+            "摘除 ⇒ 载荷释放（property 不留）"
+        );
+        assert!(dom.is_detached(item), "摘除的**判定**必须仍在");
+    }
+
+    /// **摘除 ⇒ 节点不再算「活着的」**（`node_count` 反映真实树的大小）。
+    #[test]
+    fn detached_nodes_do_not_count_as_live_nodes() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let item = dom.create_element("li").expect("建节点必须成功");
+        dom.append_child(&root, &item).expect("挂载必须成功");
+        assert_eq!(dom.node_count(), 2);
+
+        dom.remove_child(&root, &item).expect("摘除必须成功");
+        assert_eq!(dom.node_count(), 1, "摘除 ⇒ 不再算活着的节点");
+        assert_eq!(dom.slot_count(), 2, "槽位保留（句柄必须仍能判定为已摘除）");
+        assert!(dom.is_detached(item), "摘除的节点仍可判定");
+    }
+
+    /// **槽位只增不复用** ⇒ 但可以显式**压缩**尾部的墓碑。
+    #[test]
+    fn the_tail_slots_can_be_compacted_away() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let item = dom.create_element("li").expect("建节点必须成功");
+        dom.append_child(&root, &item).expect("挂载必须成功");
+        dom.remove_child(&root, &item).expect("摘除必须成功");
+        assert_eq!(dom.slot_count(), 2);
+
+        assert_eq!(dom.compact(), 1, "尾部墓碑可回收");
+        assert_eq!(dom.slot_count(), 1, "只回收了尾部");
+        assert_eq!(dom.node_count(), 1, "活着的节点不受影响");
+    }
+
+    /// **操作日志有上界** ⇒ 长时间运行不会把内存吃光。
+    #[test]
+    fn the_operation_log_has_an_upper_bound() {
+        let dom = InMemoryDom::new();
+        dom.set_op_capacity(8);
+        for _ in 0..50 {
+            dom.create_element("div").expect("建节点必须成功");
+        }
+        assert!(
+            dom.ops().len() <= 8,
+            "日志不许无界增长：实测 {} 条",
+            dom.ops().len()
+        );
+        // 最新的记录**必须**还在（丢的是最旧的）。
+        assert!(matches!(
+            dom.ops().last().map(|recorded| &recorded.op),
+            Some(DomOp::CreateElement { .. })
+        ));
+    }
+
+    // ── 与浏览器**同语义**（2026-10-25 修） ────────────────────────────────
+
+    /// ⭐ **class token 全删之后留 `class=""`**（浏览器的 `classList` 语义）。
+    #[test]
+    fn removing_every_class_token_keeps_an_empty_class_attribute() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("div").expect("建节点必须成功");
+        dom.set_class_tokens(&node, &[String::from("ap-a")], &[])
+            .expect("加 token 必须成功");
+        assert_eq!(dom.attribute(node, "class"), Some(String::from("ap-a")));
+
+        dom.set_class_tokens(&node, &[], &[String::from("ap-a")])
+            .expect("删 token 必须成功");
+        assert_eq!(
+            dom.attribute(node, "class"),
+            Some(String::new()),
+            "与浏览器一致：留 `class=\"\"`（属性**仍在**）"
+        );
+    }
+
+    /// ⭐ **移除 property ⇒ 回到默认值**（浏览器语义）。
+    #[test]
+    fn removing_a_property_falls_back_to_its_default_value() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("input").expect("建节点必须成功");
+        dom.set_property(&node, "value", "abc")
+            .expect("写 property 必须成功");
+        dom.remove_property(&node, "value")
+            .expect("移除 property 必须成功");
+        assert_eq!(
+            dom.get_property(&node, "value")
+                .expect("读 property 必须成功"),
+            String::new(),
+            "字符串 property 的默认值是空串"
+        );
+    }
+
+    /// **布尔 property 的默认值是 `false`**（不是空串）⇒ 与浏览器一致。
+    #[test]
+    fn removing_a_boolean_property_falls_back_to_false() {
+        let dom = InMemoryDom::new();
+        let node = dom.create_element("input").expect("建节点必须成功");
+        dom.set_property_bool(&node, "checked", true)
+            .expect("写 property 必须成功");
+        assert_eq!(
+            dom.get_property(&node, "checked")
+                .expect("读 property 必须成功"),
+            String::from("true")
+        );
+
+        dom.remove_property(&node, "checked")
+            .expect("移除 property 必须成功");
+        assert_eq!(
+            dom.get_property(&node, "checked")
+                .expect("读 property 必须成功"),
+            String::from("false"),
+            "布尔 property 的默认值是 `false`（与浏览器一致）"
+        );
+    }
+
+    /// **按 kind 摘监听器** ⇒ 同元素的其它 kind **不受影响**。
+    #[test]
+    fn removing_one_listener_kind_keeps_the_other_kinds() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let node = dom.create_element("div").expect("建节点必须成功");
+        let clicks = Rc::new(Cell::new(0u32));
+        let keys = Rc::new(Cell::new(0u32));
+        let click_counter = clicks.clone();
+        let key_counter = keys.clone();
+        dom.add_listener(
+            &node,
+            EventKind::Click,
+            crate::events::ElementHandler::new(move |_event| {
+                click_counter.set(click_counter.get() + 1);
+            }),
+        )
+        .expect("挂处理器必须成功");
+        dom.add_listener(
+            &node,
+            EventKind::KeyDown,
+            crate::events::ElementHandler::new(move |_event| {
+                key_counter.set(key_counter.get() + 1);
+            }),
+        )
+        .expect("挂处理器必须成功");
+        dom.append_child(&root, &node).expect("挂载必须成功");
+
+        dom.remove_listener(&node, EventKind::Click)
+            .expect("摘监听器必须成功");
+        assert_eq!(dom.dispatch(node, EventKind::Click), 0, "click 被摘掉了");
+        assert_eq!(
+            dom.dispatch(node, EventKind::KeyDown),
+            1,
+            "keydown **不许**被牵连（既有契约）"
+        );
+    }
+
+    /// **目标路径**只数元素 / 文本（与浏览器同口径 ⇒ 两侧可比）。
+    #[test]
+    fn the_target_path_counts_only_elements_and_texts() {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建节点必须成功");
+        let first = dom.create_element("div").expect("建节点必须成功");
+        let second = dom.create_element("span").expect("建节点必须成功");
+        let text = dom.create_text("x").expect("建节点必须成功");
+        dom.append_child(&root, &first).expect("挂载必须成功");
+        dom.append_child(&root, &second).expect("挂载必须成功");
+        dom.append_child(&root, &text).expect("挂载必须成功");
+
+        assert_eq!(dom.target_path(&first).expect("读路径必须成功"), vec![0]);
+        assert_eq!(dom.target_path(&second).expect("读路径必须成功"), vec![1]);
+        assert_eq!(
+            dom.target_path(&text).expect("读路径必须成功"),
+            vec![2],
+            "文本节点也占下标（与浏览器的可见子节点一致）"
         );
     }
 }

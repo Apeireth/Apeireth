@@ -123,10 +123,9 @@ pub use file_fetcher::{
     FetchedFile, FileFetchError, InternalFileRequest, InternalFileResponse, TransparentFileFetcher,
 };
 pub use presence::{
-    presence_snapshot_handler, spawn_presence_heartbeat, InitiativeBudget, PresenceBreath,
-    PresencePad, PresenceService, PresenceSignificance, PresenceSnapshotBody, PresenceSource,
-    PresenceState, PresenceSubscription, PresenceSynthesizer, HEARTBEAT_INTERVAL_SECS,
-    INITIATIVE_DAILY_CAP,
+    presence_snapshot_handler, InitiativeBudget, PresenceBreath, PresencePad, PresenceService,
+    PresenceSignificance, PresenceSnapshotBody, PresenceSource, PresenceState,
+    PresenceSubscription, PresenceSynthesizer, HEARTBEAT_INTERVAL_SECS, INITIATIVE_DAILY_CAP,
 };
 
 pub use canonical_entry::{
@@ -218,12 +217,16 @@ pub use resident::{
 };
 pub use shutdown::ShutdownTrigger;
 
+pub mod principal_forget;
+
+pub use principal_forget::{MemoryGovernanceCommand, PrincipalForgetDto};
+
 pub use panels::{
     AuditCommand, AuditDto, AuditQuery, EpisodeDto, EpisodeMutationDto, GatewayServices,
     GatewayState, GrantCommand, GrantDto, GrantMutationDto, GrantQuery, GraphEdgeDto, GraphNodeDto,
     GuardDryRunRequest, GuardDryRunResponse, GuardEventDto, GuardStatusDto, MemoryCommand,
-    MemoryGovernanceCommand, MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto, PanelData,
-    SafetyGuardQuery, SessionQuery, SessionSummaryDto, ToolCatalogQuery, ToolDto, TraceCommand,
-    TraceDetailDto, TraceQuery, TraceSpanDto, TraceSummaryDto, WorkbenchMemoryProvenanceDto,
-    WorkbenchQuery, WorkbenchToolExecutionDto, WorkbenchTurnDto,
+    MemoryGraphDto, MemoryQuery, ModuleQuery, OrganDto, PanelData, SafetyGuardQuery, SessionQuery,
+    SessionSummaryDto, ToolCatalogQuery, ToolDto, TraceCommand, TraceDetailDto, TraceQuery,
+    TraceSpanDto, TraceSummaryDto, WorkbenchMemoryProvenanceDto, WorkbenchQuery,
+    WorkbenchToolExecutionDto, WorkbenchTurnDto,
 };

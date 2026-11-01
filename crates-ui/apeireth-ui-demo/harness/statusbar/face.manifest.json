@@ -1,0 +1,31 @@
+{
+  "note": "状态条面的抽取清单（单一真源 ⇒ 产物全部由抽取器生成，不手抄）",
+  "out": "public",
+  "icons_out": "../../../apeireth-ui-kit/src/icons_status_bar.rs",
+  "design_out": "public/design",
+  "fixture": "fixtures/statusbar-cases.json",
+  "fixture_out": "engine-host/src/fixture_generated.rs",
+  "components": [
+    {
+      "slug": "status-bar",
+      "path": "frontend/companion-desktop/src/lib/components/StatusBar.svelte",
+      "css": "status-bar.css",
+      "scope": ".status-bar"
+    },
+    {
+      "slug": "status-badge",
+      "path": "frontend/companion-desktop/src/lib/components/StatusBadge.svelte",
+      "css": "status-badge.css",
+      "scope": null
+    }
+  ],
+  "icons": [],
+  "notes": [
+    "components[].path = 仓内相对路径（生产组件在不同子目录 ⇒ 不能只给文件名）。",
+    "components[].scope = 作用域根 class；null = **不做作用域化**（原文照抄）。",
+    "status-badge 的 scope 刻意为 null：它的变体规则（.amber/.green/.blue/.danger/.neutral/.dim）作用在**根元素自身**（class=\"status-badge amber normal\"）⇒ 前缀法会改写成后代选择器（.status-badge .amber）⇒ 样式全丢。",
+    "icons = []：本面**零图标**（StatusBar.svelte 只有 import type，StatusBadge.svelte 无 import）⇒ 该数组同时是**漂移哨兵**（日后生产组件一旦引入图标，抽取器会列出并让 --check 报漂移）。",
+    "icons_out / design_out / fixture_out = **相对本 manifest 所在目录**的路径。",
+    "⚠️ 层数核对：manifest 在 crates-ui/apeireth-ui-demo/harness/statusbar/ ⇒ 到 crates-ui/ 是 ../../.. ⇒ icons_out 正确值是 ../../../apeireth-ui-kit/src/icons_status_bar.rs。"
+  ]
+}

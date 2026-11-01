@@ -1,0 +1,31 @@
+# 场景对照 harness —— 真浏览器验证宿主（证据用；**不是** workspace 成员）
+#
+# 作用：把**场景层语义 crate**（`apeireth-ui-scene`）算出的 16 个取值
+# 喂给引擎（`apeireth-ui-gpu`）画到真实浏览器里，供与生产侧逐值 + 逐像素对照。
+#
+# 构建（**在 crates-ui/ 之外**执行，避免被主 workspace 扫到）：
+#   cargo build --release --target wasm32-unknown-unknown --locked
+#   wasm-bindgen --target web --no-typescript --out-dir ../web/public/engine/pkg \
+#       target/wasm32-unknown-unknown/release/scene_harness.wasm
+#
+# ⚠️ 本 crate 自带 `[workspace]` 段 ⇒ 独立 workspace ⇒ 不进 crates-ui 的
+#    依赖图、不进 cargo deny 的图、不进 CI 门禁。
+[package]
+name = "scene-harness"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# 被验证对象：场景层语义（取值链）+ 引擎本体（uniform → 着色器）。
+apeireth-ui-scene = { path = "../../../../apeireth-ui-scene" }
+apeireth-ui-gpu = { path = "../../../../apeireth-ui-gpu" }
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "=0.4.79"
+js-sys = "=0.3.106"
+web-sys = { version = "=0.3.106", features = ["HtmlCanvasElement", "Window", "console"] }
+
+[workspace]

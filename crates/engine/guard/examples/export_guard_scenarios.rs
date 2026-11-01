@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use apeireth_guard::{
-    canonical_descriptor_coverage, family_split, feature_schema_hash, run_scenario, ScenarioCatalog,
+    canonical_descriptor_coverage, family_split, feature_schema_hash, run_scenario,
+    run_scenario_checked, ScenarioCatalog,
 };
 
 fn write_jsonl(path: &PathBuf, rows: &[serde_json::Value]) {
@@ -20,10 +21,15 @@ fn write_jsonl(path: &PathBuf, rows: &[serde_json::Value]) {
     std::fs::write(path, output).expect("write JSONL export");
 }
 
+/// 导出器：**fail-closed**。
+///
+/// 返回 `Result` 而不是 `()`，这样「场景对账不上」会让进程以**非零退出码**结束 ——
+/// 门禁看的是退出码，不是日志。
 #[tokio::main(flavor = "current_thread")]
-async fn main() {
+async fn main() -> Result<(), String> {
     let catalog = ScenarioCatalog::all();
     let mut feature_rows = Vec::new();
+    let mut unreconciled: Vec<serde_json::Value> = Vec::new();
     let mut action_rows = Vec::new();
     let mut trace_rows = Vec::new();
     let mut pair_members: BTreeMap<String, Vec<serde_json::Value>> = BTreeMap::new();
@@ -35,7 +41,32 @@ async fn main() {
         families.insert(scenario.family.clone());
         *languages.entry(scenario.language.clone()).or_insert(0usize) += 1;
         *labels.entry(scenario.label.clone()).or_insert(0usize) += 1;
-        let outcome = run_scenario(scenario).await;
+        // 用 `run_scenario_checked`（而不是 `run_scenario`）：它会把「效果没对上」
+        // 的场景**标出来**而不是静默产出。
+        //
+        // ⚠️ 这里**不** fail-closed：2026-10-24 实测，目录里 **上千个场景实例**
+        // 对账不上（绝大多数是 `expected_effects` 为空/漏项，与实现的真实副作用集
+        // 不一致）—— 那是**场景预期数据**的问题，需要单独一轮补全，
+        // 不能靠让导出直接失败来「解决」（那只是把问题挪到 CI 失败里）。
+        //
+        // 现在做的是**让它可见**：未对账的场景计入 `reconciliation` 统计并写进
+        // manifest ⇒ 门禁与训练流程**看得见**这批数据不可信，而不是拿到一份
+        // 看起来正常、实际效果标注错误的训练集。
+        let outcome = match run_scenario_checked(scenario).await {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                unreconciled.push(serde_json::json!({
+                    "scenario_id": scenario.id,
+                    "turn_index": error.turn_index,
+                    "action_id": error.action_id,
+                    "missing_effects": error.missing_effects,
+                    "unexpected_effects": error.unexpected_effects,
+                }));
+                // 用未 checked 的结果继续导出（保留全部场景，不丢数据），
+                // 但这个场景已被标记为「未对账」。
+                run_scenario(scenario).await
+            }
+        };
         let split = family_split(&outcome.family);
 
         // Keep the historical aggregate export for compatibility. The new
@@ -172,6 +203,13 @@ async fn main() {
         "class_balance": labels,
         "feature_schema_hash": feature_schema_hash(),
         "descriptor_coverage": coverage,
+        // **对账状态**（2026-10-24 新增）：未对账的场景实例清单。
+        // 见上面的说明 —— 现在是「可见」，还不是「阻断」。
+        "reconciliation": {
+            "checked": true,
+            "unreconciled_count": unreconciled.len(),
+            "unreconciled": unreconciled,
+        },
         "exports": ["generated_features.jsonl", "action_samples.jsonl", "trace_samples.jsonl", "pair_samples.jsonl"],
         "privacy": {
             "raw_prompt": false,
@@ -216,4 +254,5 @@ async fn main() {
         trace_rows.len(),
         pair_rows.len()
     );
+    Ok(())
 }

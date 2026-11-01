@@ -1,0 +1,42 @@
+[
+  {
+    "tab": "approvals",
+    "side": "reference",
+    "messages": []
+  },
+  {
+    "tab": "approvals",
+    "side": "engine",
+    "messages": []
+  },
+  {
+    "tab": "grants",
+    "side": "reference",
+    "messages": []
+  },
+  {
+    "tab": "grants",
+    "side": "engine",
+    "messages": []
+  },
+  {
+    "tab": "audit",
+    "side": "reference",
+    "messages": []
+  },
+  {
+    "tab": "audit",
+    "side": "engine",
+    "messages": []
+  },
+  {
+    "tab": "guard",
+    "side": "reference",
+    "messages": []
+  },
+  {
+    "tab": "guard",
+    "side": "engine",
+    "messages": []
+  }
+]

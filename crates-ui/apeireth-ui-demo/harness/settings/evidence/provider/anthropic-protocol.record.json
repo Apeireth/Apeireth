@@ -1,0 +1,38 @@
+{
+  "passed": false,
+  "t1_pixel_ratio": 0.0033428479195337854,
+  "t1_pixel_different": 2361,
+  "t1_pixel_total": 706284,
+  "t1_pixel_exact_zero": false,
+  "t1_size_mismatch": false,
+  "t2_dom_equal": false,
+  "t2_dom_diffs": [
+    "根/3/1/1/1/1/0/0: 文本不同 ⇒ 参考 \"MiniMax (Anthropic 网关)\" / 引擎 \"minimax (Anthropic 网关)\""
+  ],
+  "t3_same_width": true,
+  "t3b_same_height": true,
+  "t3_reference_box": {
+    "x": 236,
+    "y": 219.765625,
+    "w": 828,
+    "h": 853.5625
+  },
+  "t3_engine_box": {
+    "x": 236,
+    "y": 219.765625,
+    "w": 828,
+    "h": 853.5625
+  },
+  "t3_reference_width": 828,
+  "t3_engine_width": 828,
+  "t3_reference_height": 853.5625,
+  "t3_engine_height": 853.5625,
+  "case": "anthropic-protocol",
+  "reference_version_present": true,
+  "engine_version_present": true,
+  "reference_key_label": "API Key (x-api-key) 未保存",
+  "engine_key_label": "API Key (x-api-key) 未保存",
+  "gate": "out_of_gate",
+  "out_of_gate_reason": "共享 fixture 的 Anthropic 预设表第 2 条大小写与生产不符（fixture `minimax (Anthropic 网关)`/`minimax-M3` vs 生产 `MiniMax (Anthropic 网关)`/`MiniMax-M3`，见 SettingsView.svelte:836-841）⇒ 差异归**参照物**，移交主线修 fixture；引擎按表渲染（表驱动）是对的。修好 fixture 后本用例应自动转绿（判据不变）。",
+  "known_reference_defect": true
+}

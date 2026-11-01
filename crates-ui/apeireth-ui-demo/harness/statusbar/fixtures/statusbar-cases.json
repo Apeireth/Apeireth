@@ -1,0 +1,257 @@
+{
+  "note": "状态条面对照的固定数据（两侧喂**同一份**）：参考侧 import 本文件，引擎侧由抽取器生成 Rust。",
+  "cases": [
+    {
+      "id": "case-0",
+      "items": [
+        {
+          "key": "cell-1",
+          "text": "通道一 · 已就绪",
+          "tone": "quiet",
+          "title": "第一通道：状态正常。点击立即重连（重建订阅）。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-2",
+          "text": "通道二 · 空闲",
+          "tone": "quiet",
+          "title": "当前没有进行中的回合。",
+          "clickable": false,
+          "sim": false
+        },
+        {
+          "key": "cell-3",
+          "text": "通道三 · 计数 12",
+          "tone": "quiet",
+          "title": "口径：最近 50 条窗口内的计数（端点不供总数）。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-4",
+          "text": "通道四 · 不可用",
+          "tone": "quiet",
+          "title": "当前运行时未声明该能力（0 装：不假装在线）。",
+          "clickable": false,
+          "sim": false
+        }
+      ],
+      "badge": {
+        "variant": "neutral",
+        "label": "就绪",
+        "size": "normal"
+      }
+    },
+    {
+      "id": "case-1",
+      "items": [
+        {
+          "key": "cell-1",
+          "text": "通道一 · 连接中",
+          "tone": "warn",
+          "title": "尚未连上事件总线，指数退避重连中（2s 起，封顶 30s）。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-2",
+          "text": "通道二 · 回合进行中",
+          "tone": "quiet",
+          "title": "点击打断——不再听他说完（打断的是收听，不是他）。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-3",
+          "text": "通道三 · 读取失败",
+          "tone": "warn",
+          "title": "事件列表拉取失败——计数缺失而非为零。点击打开设置自查。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-4",
+          "text": "通道四 · 不可用",
+          "tone": "quiet",
+          "title": "当前运行时未声明该能力（0 装：不编造计数）。",
+          "clickable": false,
+          "sim": false
+        }
+      ],
+      "badge": {
+        "variant": "amber",
+        "label": "待完善",
+        "size": "small"
+      }
+    },
+    {
+      "id": "case-2",
+      "items": [
+        {
+          "key": "cell-1",
+          "text": "通道一 · 已连接",
+          "tone": "quiet",
+          "title": "事件总线已连接。点击立即重连（重建事件订阅）。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-2",
+          "text": "通道二 · 未连接",
+          "tone": "danger",
+          "title": "未连接已超过 30s——显示为本机中性默认（SIM 纪律）。",
+          "clickable": true,
+          "sim": true
+        },
+        {
+          "key": "cell-3",
+          "text": "通道三 · 计数 50+",
+          "tone": "quiet",
+          "title": "口径：最近 50 条事件窗口内的计数（端点不供总数）。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-4",
+          "text": "通道四 · 回合空闲",
+          "tone": "quiet",
+          "title": "当前没有进行中的回合。",
+          "clickable": false,
+          "sim": false
+        }
+      ],
+      "badge": {
+        "variant": "danger",
+        "label": "危险",
+        "size": "normal"
+      }
+    },
+    {
+      "id": "case-3",
+      "items": [
+        {
+          "key": "cell-1",
+          "text": "通道一 · 已就绪",
+          "tone": "quiet",
+          "title": "第一通道：状态正常。",
+          "clickable": false,
+          "sim": false
+        },
+        {
+          "key": "cell-2",
+          "text": "通道二 · 未连接",
+          "tone": "danger",
+          "title": "未连接已超过 30s——显示为本机中性默认（SIM 纪律）。",
+          "clickable": true,
+          "sim": true
+        },
+        {
+          "key": "cell-3",
+          "text": "通道三 · 计数 0",
+          "tone": "quiet",
+          "title": "口径：最近 50 条窗口内的计数（端点不供总数）。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-4",
+          "text": "通道四 · 不可用",
+          "tone": "quiet",
+          "title": "当前运行时未声明该能力（0 装：不假装在线）。",
+          "clickable": false,
+          "sim": false
+        }
+      ],
+      "badge": {
+        "variant": "green",
+        "label": "正常",
+        "size": "normal"
+      }
+    },
+    {
+      "id": "case-4",
+      "items": [
+        {
+          "key": "cell-1",
+          "text": "通道一 · 读取失败",
+          "tone": "warn",
+          "title": "拉取失败——计数缺失而非为零。点击打开设置自查。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-2",
+          "text": "通道二 · 未连接",
+          "tone": "danger",
+          "title": "未连接已超过 30s——显示为本机中性默认（SIM 纪律）。",
+          "clickable": true,
+          "sim": true
+        },
+        {
+          "key": "cell-3",
+          "text": "通道三 · 回合进行中",
+          "tone": "quiet",
+          "title": "点击打断——不再听他说完。",
+          "clickable": true,
+          "sim": false
+        },
+        {
+          "key": "cell-4",
+          "text": "通道四 · 不可用",
+          "tone": "quiet",
+          "title": "当前运行时未声明该能力（0 装：不假装在线）。",
+          "clickable": false,
+          "sim": false
+        }
+      ],
+      "badge": {
+        "variant": "dim",
+        "label": "弱化",
+        "size": "small"
+      }
+    },
+    {
+      "id": "case-5",
+      "items": [
+        {
+          "key": "cell-1",
+          "text": "通道一 · 已就绪",
+          "tone": "quiet",
+          "title": "第一通道：状态正常。",
+          "clickable": false,
+          "sim": false
+        },
+        {
+          "key": "cell-2",
+          "text": "通道二 · 空闲",
+          "tone": "quiet",
+          "title": "当前没有进行中的回合。",
+          "clickable": false,
+          "sim": false
+        },
+        {
+          "key": "cell-3",
+          "text": "通道三 · 计数 7",
+          "tone": "quiet",
+          "title": "口径：最近 50 条窗口内的计数。",
+          "clickable": false,
+          "sim": false
+        },
+        {
+          "key": "cell-4",
+          "text": "通道四 · 不可用",
+          "tone": "quiet",
+          "title": "当前运行时未声明该能力。",
+          "clickable": false,
+          "sim": false
+        }
+      ],
+      "badge": {
+        "variant": "blue",
+        "label": "提示",
+        "size": "normal"
+      }
+    }
+  ]
+}

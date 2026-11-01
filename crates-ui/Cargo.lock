@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "apeireth-ui"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-ui-core",
  "apeireth-ui-dom",
@@ -14,18 +14,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-ui-app"
+version = "2.0.0-rc.5"
+dependencies = [
+ "apeireth-ui",
+ "apeireth-ui-core",
+ "apeireth-ui-dom",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "apeireth-ui-core"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 
 [[package]]
 name = "apeireth-ui-demo"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-ui",
  "apeireth-ui-core",
  "apeireth-ui-dom",
  "apeireth-ui-kit",
  "apeireth-ui-macro",
+ "apeireth-ui-time",
  "js-sys",
  "wasm-bindgen",
  "web-sys",
@@ -33,7 +46,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-ui-dom"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-ui-core",
  "js-sys",
@@ -43,7 +56,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-ui-gpu"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-ui-core",
  "naga",
@@ -53,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "apeireth-ui-kit"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-ui-core",
  "apeireth-ui-dom",
@@ -62,10 +75,26 @@ dependencies = [
 
 [[package]]
 name = "apeireth-ui-macro"
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 dependencies = [
  "apeireth-ui-core",
  "apeireth-ui-dom",
+]
+
+[[package]]
+name = "apeireth-ui-scene"
+version = "2.0.0-rc.5"
+dependencies = [
+ "apeireth-ui-gpu",
+]
+
+[[package]]
+name = "apeireth-ui-time"
+version = "2.0.0-rc.5"
+dependencies = [
+ "apeireth-ui-kit",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -96,7 +96,22 @@ impl Scope {
     /// 域名必须精确匹配，或是某个授权域名的子域。
     pub fn check_domain(&self, domain: &str) -> Result<(), ScopeError> {
         self.validate()?;
-        let target = domain.trim().trim_end_matches('.').to_ascii_lowercase();
+        let target = domain.trim().trim_start_matches('.').trim_end_matches('.');
+        let target = target.to_ascii_lowercase();
+        // 目标必须**本身是一个裸域名**，不能只靠「后缀像」通过。
+        //
+        // 2026-10-25 修复：改动前只做 `ends_with(".{allowed}")` 后缀匹配，
+        // 于是任何**以后缀结尾的任意字符串**都通过 —— 实测下列全部被放行：
+        //   `evil.com/.example.com` / `evil.com#.example.com` / `evil.com?.example.com`
+        //   `evil.com\\.example.com` / `-\n\n...example.com`
+        // 这些串若来自**原始工具参数**（`recon_tool` / `external` 两处传的就是
+        // 未经 URL 解析的 `host`），URL/连接层解析出的真实 host 可能是 `evil.com`，
+        // 即「限制校验看的是 A 域名、实际连的是 B 主机」的限域绕过（SSRF 面）。
+        // 注：`recon/web.rs` 那处传的是 `Url::host_str()`（已归一化），本来安全；
+        // 本修复是为**未归一化的调用点**补上纵深。
+        if !Self::is_bare_domain(&target) {
+            return Err(ScopeError::Outside(domain.to_string()));
+        }
         for allowed in &self.domains {
             let allowed = allowed
                 .trim()
@@ -108,6 +123,23 @@ impl Scope {
             }
         }
         Err(ScopeError::Outside(domain.to_string()))
+    }
+
+    /// 是否为**裸域名**（可带 FQDN 前导点，已在调用处裁掉）：
+    /// 至少两个 label，每 label 非空、仅 `[a-z0-9-]`、不以 `-` 开头或结尾。
+    ///
+    /// 只接受裸域名是为了堵住「后缀像域名、实际 host 不是它」的限域绕过。
+    fn is_bare_domain(target: &str) -> bool {
+        let labels: Vec<&str> = target.split('.').collect();
+        labels.len() >= 2
+            && labels.iter().all(|label| {
+                !label.is_empty()
+                    && !label.starts_with('-')
+                    && !label.ends_with('-')
+                    && label
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            })
     }
 
     /// IP 必须落在某个授权网段内。
@@ -250,5 +282,45 @@ mod tests {
         scope.authorized = true;
         scope.cidrs = vec!["10.0.0.0/33".into()];
         assert!(matches!(scope.validate(), Err(ScopeError::Malformed(_))));
+    }
+
+    /// **限域不得被「后缀像域名」绕过**（2026-10-25 fuzz 发现）。
+    ///
+    /// 修复前 `check_domain` 只做 `ends_with(".{allowed}")`，于是下列串全部放行 ——
+    /// 而它们在 URL/连接层解析出的真实 host 可能是 `evil.com`，
+    /// 即「校验看 A 域名、实际连 B 主机」的 SSRF 面绕过。
+    #[test]
+    fn check_domain_rejects_strings_that_merely_end_with_an_allowed_suffix() {
+        let mut scope = Scope::empty("t");
+        scope.authorized = true;
+        scope.domains = vec!["example.com".into()];
+        scope.paths = vec![std::path::PathBuf::from("/allowed")];
+
+        // 合法形态仍须放行。
+        for ok in [
+            "example.com",
+            "api.example.com",
+            "a.b.example.com",
+            ".example.com",
+            "example.com.",
+        ] {
+            assert!(scope.check_domain(ok).is_ok(), "合法域名应放行: {ok:?}");
+        }
+        // 这些串「后缀」看起来像授权域，但本身不是裸域名 —— 必须拒。
+        for bad in [
+            "evil.com/.example.com",
+            "evil.com#.example.com",
+            "evil.com?.example.com",
+            "evil.com\\.example.com",
+            "evil.com@.example.com",
+            "-\n\n...example.com",
+            "example.com:443",
+            "example.com/path",
+        ] {
+            assert!(
+                scope.check_domain(bad).is_err(),
+                "非裸域名的后缀伪装必须拒: {bad:?}"
+            );
+        }
     }
 }

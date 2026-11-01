@@ -1,7 +1,7 @@
 {
   "name": "@apeireth/ui-engine-pilot-harness",
   "private": true,
-  "version": "2.0.0-rc.4",
+  "version": "2.0.0-rc.5",
   "type": "module",
   "description": "P3 试点对照 harness：Rust 引擎版审批卡 vs 生产 Svelte 版（像素 / 逐帧）",
   "scripts": {

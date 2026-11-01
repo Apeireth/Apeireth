@@ -41,7 +41,7 @@ impl BindingSlot {
 }
 
 /// 绑定描述：信号与 DOM property 的双向通道。
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Binding {
     /// 文本绑定。
     Text {
@@ -58,6 +58,40 @@ pub enum Binding {
         signal: Signal<bool>,
     },
 }
+
+/// ⭐ `Binding` 的相等语义：**同槽位 + 同信号**才算同一个绑定。
+///
+/// ⇒ 理由：`Binding` 持有 `Signal`（响应式状态），它的**身份**是「哪个槽位接哪个信号」
+/// ⇒ ⇒ 差分时才能判断「绑定换了没有」（换了 ⇒ 需要重新写回/重新接线）。
+impl PartialEq for Binding {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::Text {
+                    slot: a,
+                    signal: a_signal,
+                },
+                Self::Text {
+                    slot: b,
+                    signal: b_signal,
+                },
+            ) => a == b && a_signal.id() == b_signal.id(),
+            (
+                Self::Checked {
+                    slot: a,
+                    signal: a_signal,
+                },
+                Self::Checked {
+                    slot: b,
+                    signal: b_signal,
+                },
+            ) => a == b && a_signal.id() == b_signal.id(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Binding {}
 
 impl Binding {
     /// 建一个文本绑定（`bind:value`）。
@@ -96,6 +130,52 @@ impl Binding {
     /// 读取信号会**登记依赖** ⇒ 渲染 effect 会因绑定信号变化而重跑（设计 §5.4.3）。
     pub fn needs_write(&self, current: &str) -> bool {
         self.value() != current
+    }
+
+    /// ⭐ 本绑定用的**信号 id**（⇒ 用于「信号 → DOM 路径」的映射）。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 「细粒度更新」要知道「**哪个信号**变 ⇒ ⇒ **哪些 DOM 子树**要重画」
+    /// ⇒ ⇒ 必须有「信号 ↔ DOM 位置」的对应关系 ⇒ ⇒ 本方法是它的入口。
+    pub fn signal_id(&self) -> apeireth_ui_core::graph::NodeId {
+        match self {
+            Self::Text { signal, .. } => signal.id(),
+            Self::Checked { signal, .. } => signal.id(),
+        }
+    }
+
+    /// ⭐⭐ **从事件载荷写回信号**（DOM → 信号的上行路径）。
+    ///
+    /// ## 为什么用「事件载荷」而不是回读 DOM
+    ///
+    /// 事件处理器**拿不到 `&Dom`** ⇒ ⇒ 回读 DOM 做不到
+    /// ⇒ ⇒ 浏览器侧在派发时把 `input.value` / `change.checked` **填进事件载荷**
+    /// （见 `WebDom` 的载荷填充）⇒ ⇒ 处理器直接用载荷即可 ⇒ ⇒ **不产生第二份真相**。
+    ///
+    /// ## 返回值
+    ///
+    /// `true` = 信号确实被更新；`false` = 载荷里没有对应值（**不写**，
+    /// 避免用「空字符串」覆盖用户输入）。
+    pub fn write_back_from_event(&self, event: &crate::events::DomEvent) -> bool {
+        match self {
+            Self::Text { signal, .. } => match event.target_value() {
+                Some(value) => {
+                    let changed = signal.get() != value;
+                    signal.set(value.to_owned());
+                    changed
+                }
+                None => false,
+            },
+            Self::Checked { signal, .. } => match event.checked() {
+                Some(flag) => {
+                    let changed = signal.get() != flag;
+                    signal.set(flag);
+                    changed
+                }
+                None => false,
+            },
+        }
     }
 
     /// 信号当前值（写回 DOM 时用）。

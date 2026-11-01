@@ -74,12 +74,6 @@ impl CarePotentialField {
         f64::from_bits(self.current_potential.load(Ordering::SeqCst))
     }
 
-    /// Sets the potential manually (e.g. for restoring from persistence).
-    pub fn set_potential(&self, val: f64) {
-        self.current_potential
-            .store((val.max(0.0)).to_bits(), Ordering::SeqCst);
-    }
-
     /// Advances the potential field by dt_seconds based on current environmental and psychological cues.
     pub fn step(
         &self,

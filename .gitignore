@@ -207,6 +207,35 @@ crates/apeireth-integration-e2e/.*.log
 # 习惯: .r<round>-<task>-*.<ext> = sub-agent scratch, 0 必进 git (整合 #4 commit 已含 3 实际文件)
 .r[0-9][0-9][0-9]-*-*
 *.py
+# 仓库常驻工具脚本：scripts/ **一级**的全部 .py 入库（2026-10-24 修正）。
+#
+# 为什么要整目录放行，而不是逐个 `!scripts/xxx.py`：
+# 逐个放行的模式有个**静默失败**——新建一个工具脚本忘了加例外行，
+# `git add` 会跳过它、`git status` 也不显示（被 ignore 规则吃掉），
+# 于是**本地全绿、提交里没有、CI 红了**。
+# 2026-10-24 实测踩过：`unwired_baseline_common.py` 等三个文件因此没进提交，
+# 而 `audit_unwired.py` import 它 ⇒ CI 的「孤儿 API 棘轮」直接失败。
+# 静默忽略比报错更危险 —— 所以这里改成整目录放行，
+# 让「忘了加例外」这类事故**不可能发生**（新增脚本会正常出现在 git status 里）。
+!scripts/*.py
+
+# crates-ui 的**门禁脚本**入库（2026-10-25 补）：架构断言
+# （「状态对象不得自建 `Runtime`」）与规则差分装置的真源校验都靠它。
+# ⚠️ `*.py` 是全局忽略 ⇒ 上面这些 `!` 例外只放行了**仓库根** `scripts/` 一级
+# ⇒ crates-ui 内的脚本**必须**在这里逐层放行，否则「写了门禁但没进仓 ⇒ CI 不会跑」。
+!crates-ui/apeireth-ui-demo/harness/scripts/*.py
+
+# crates-ui/evidence/ 下的**对照驱动**（2026-10-26 补）。
+# ⚠️ `*.py` 是全局忽略 ⇒ ⇒ 新的驱动脚本**进不了仓** ⇒ ⇒ 「本地能跑、提交里没有、
+# CI 不会跑」⇒ ⇒ 与 `harness/scripts/` 同一类静默失败 ⇒ ⇒ 同样要逐层放行。
+!crates-ui/evidence/p5-b/drive_intro.py
+# L1 能力浏览器探针驱动（台账 E-98）：**判据脚本必须进仓**，否则门禁只在本地存在。
+!crates-ui/evidence/p5-b/drive_l1.py
+!crates-ui/evidence/p5-b/drive_device.py
+# ⚠️ 2026-10-27 实测踩到**同一个坑**：`check_particle_edge.py`（intro 的「有界差异」门禁）
+# 写了、台账（E-60）也引用了，但**一直在忽略名单里** ⇒ ⇒ 仓库里根本没有这个文件
+# ⇒ ⇒ 「判据存在」只是本地幻觉。静默忽略比报错更危险 ⇒ ⇒ 这里补放行。
+!crates-ui/evidence/p5-b/check_particle_edge.py
 !scripts/guard_ml/*.py
 # DTS（文档事实体系）常驻脚本：跨批使用，必须入库（2026-10-20 第三线）
 !scripts/docs_truth.py
@@ -222,6 +251,8 @@ crates/apeireth-integration-e2e/.*.log
 !scripts/verify_ledger.py
 # 未接线审计（2026-10-22 接线治理批）：仓库常驻工具，必须入库
 !scripts/audit_unwired.py
+# 覆盖率棘轮（2026-10-24 输入面/覆盖率治理批）：仓库常驻工具，必须入库
+!scripts/check_coverage_ratchet.py
 # 自述词表纪律检查器（2026-10-23 ADR-0014 §6 落地）：仓库常驻工具（CI 报告项）
 !scripts/check_self_status_vocab.py
 # 文档治理门禁（2026-10-23 文档治理批）：链接完整性 + 索引分层校验器，必须入库
@@ -285,7 +316,7 @@ coverage/
 **/coverage/
 
 # Frontend (companion-desktop)
-**/node_modules/
+**/node_modules
 frontend/companion-desktop/dist/
 # Tauri build artifacts (Round 8 hygiene: target/ + node_modules/ 应 ignore, 不污染 git)
 frontend/companion-desktop/target/
@@ -339,3 +370,22 @@ research/praisonai-git/
 # Python 缓存（scripts/ 运行副产物，不入库；2026-10-20 效率线）
 __pycache__/
 *.pyc
+
+# 覆盖率测量产物（tarpaulin 输出，非源码）
+cobertura.xml
+
+# 覆盖率插桩产物（tarpaulin 的 .profraw）—— 构建产物, 0 必进 git。
+# 它们会被 tarpaulin 当作覆盖率数据 merge 进去, 污染测量。
+#
+# 订正（2026-10-24）: 本批早段我曾在提交正文里写「仓里曾有 2 个被误提交」——
+# **那是错的**。`origin/main` 上 .profraw 数量为 0; 那 2 个
+# （crates/capabilities/tools/default_*.profraw）是**我自己**在执行 tarpaulin 后
+# 用 `git add -A` 卷进提交的。已从本分支删除, 本条规则防止再次发生。
+*.profraw
+
+# crates-ui **根**目录的 pnpm 副产物（本地等价 CI 在 crates-ui/ 下装依赖时由
+# `pnpm init` 生成 ⇒ 是**空壳**（name/version 皆默认）⇒ ⇒ 不进仓）。
+# ⚠️ 只针对 **crates-ui 根**：真前端工程（`crates-ui/evidence/p5-b/web/package.json`、
+#    `frontend/companion-desktop/package.json`）**照旧进仓**，不受影响。
+crates-ui/package.json
+crates-ui/pnpm-lock.yaml

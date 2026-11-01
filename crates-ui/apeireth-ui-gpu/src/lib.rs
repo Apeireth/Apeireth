@@ -37,8 +37,50 @@
 //! - **片元坐标语义修正**（[`glsl::fix_frag_coord_semantics`]）：GLSL ES 规定
 //!   `gl_FragCoord` 的 y 轴**向上**，而本引擎的两个后端都把它变成**向下**
 //!   ⇒ 不修正的话同一份 GLSL 源画出来的画面是**上下颠倒**的。变换器在**源级**
-//!   把 `gl_FragCoord` 换成 `vec4(x, height - y, z, w)` ⇒ 引擎里的片元坐标与
-//!   GLSL ES 规范逐点一致（**不改任何表达式与数值**，只改坐标的取法）。
+//!   把 `gl_FragCoord` 换成 `vec4(x, 帧缓冲高 - y, z, w)`。
+//!   - ⭐ 翻转高度来自 **uniform**（[`glsl::FRAMEBUFFER_HEIGHT_MEMBER`]），不是
+//!     **烘焙字面量** ⇒ **改尺寸不必重编译着色器**（生产 uniform 的偏移与取值
+//!     逐字节不变 ⇒ 逐像素证据不受影响；等价性论证见该函数的文档）。
+//!
+//! ### ✅ 生命周期与可观测性（P5-c 重构批，2026-10-25）
+//!
+//! - ⭐ **resize 通路**（[`engine::Engine::resize`]）：改尺寸 ⇒ **重新配置
+//!   表面** + 更新配置。早期实现**只在 `create` 里**配置一次表面 ⇒ 尺寸变了
+//!   以后场景层按新尺寸算几何、GPU 按旧 config 出图（拉伸/裁切），翻转高度
+//!   陈旧（竖直错位），WebGPU 后端改 `canvas.width/height` 还会**作废交换链**
+//!   ⇒ `get_current_texture()` 永久 `Lost` ⇒ **没有重建入口就永远画不出来**。
+//! - ⭐⭐ **尺寸自侦测**（[`engine::CanvasSizeSource`] +
+//!   [`engine::EngineOptions::canvas_size`]）：引擎**不持有画布句柄** ⇒ 它
+//!   自己**看不到** `canvas.width/height` 变没变 ⇒ ⇒ 若只有「宿主显式调
+//!   [`engine::Engine::resize`]」一条路 ⇒ **与生产行为不一致**（生产是
+//!   Svelte + `<canvas>`：改 `canvas.width/height` 就完事，**什么都不调**）。
+//!   ⇒ 宿主把「读画布尺寸」的闭包交给引擎 ⇒ 引擎**每帧**比对 ⇒ 不一致就
+//!   **自动** resize ⇒ ⇒ **行为与生产一致**。
+//!   - ⚠ 上游事实：wgpu 的两个后端在 `configure()` 里都会**改写
+//!     `canvas.width/height`**（`wgpu-30.0.1/src/backend/webgpu.rs:4213-4215`、
+//!     `wgpu-hal-30.0.1/src/gles/web.rs:357-358`）⇒ ⇒ 引擎的 config 尺寸
+//!     **必须**与画布一致 ⇒ ⇒ 自侦测也是「**不让引擎与宿主抢画布尺寸**」。
+//! - ⭐ **表面重建路径**（[`engine::Engine::reconfigure_surface`]）：交换链
+//!   失效时重新配置表面 ⇒ 恢复；[`engine::Engine::draw_frame`] 检出 `Lost` 时
+//!   **自动**重建并重试一次。
+//! - ⭐ **设备丢失可检测**（[`engine::DeviceEvent::Lost`]）：注册 wgpu 30 的
+//!   `Device::set_device_lost_callback` ⇒ 丢失原因带**帧号**进队列 ⇒
+//!   `draw_frame` 返回 [`GpuError::DeviceLost`]（宿主据此决定重建）。
+//! - ⭐ **每帧 poll 设备**：wgpu 30 的 `Device::poll` 在 **GLES 后端不是 no-op**
+//!   ⇒ 不 poll ⇒ 后端错误**永远不派发** ⇒ 失败完全静默。事件带**帧号**，
+//!   且宿主可用 [`engine::Engine::poll_device`] 在**不画帧**时取走积压事件。
+//! - ⭐ **表面纹理错误逐个区分**：`Lost`（重建表面）/ `Outdated`（resize）/
+//!   `Timeout`、`Occluded`（瞬时，跳过本帧）各有**专属**错误变体。
+//! - ⭐ **后端选择不 panic**：`Auto` 分支也守卫「本产物没编入任何后端
+//!   feature」⇒ 返回 [`GpuError::Unsupported`]（wgpu 的 `Instance::new` 在
+//!   那种情况下会 **panic** ⇒ 浏览器里就是**页面崩溃**）。
+//! - ⭐ **启动只探一次 WebGPU**（早期实现走
+//!   `new_instance_with_webgpu_detection` ⇒ 内部**再探一次** ⇒ 两趟
+//!   `requestAdapter()` 往返）。
+//! - ⭐ **管线只建一次**（[`engine::Engine::create_scene_pipeline`] 的文档 +
+//!   [`engine::Engine::pipeline_creation_count`] 计数 + 显式
+//!   [`engine::Engine::recreate_pipeline`]）：管线创建是**重资源**操作（实测
+//!   `Page.captureScreenshot` **超时**）。
 //!
 //! ### ✅ 与生产画面一致（P5-b 实测）
 //!
@@ -47,6 +89,34 @@
 //!   **0 / 576,000** 像素不同（差分阈值：任一通道绝对差 > 2/255）。
 //!   证据见 `crates-ui/evidence/p5-b/`（含抓到的 16 个 uniform 原值、
 //!   三张画布、逐像素判据与控制台日志）。
+//! - ⚠ **本批（2026-10-25 重构）改了「翻转高度」的来源**（字面量 → uniform）
+//!   ⇒ 该证据**是在改动前**抓的 ⇒ **本批未重新抓取**（浏览器 harness 不在本批
+//!   范围内）。
+//!   - **等价性论证**：`600.0`（GLSL float 字面量）与 uniform 里的 f32
+//!     `600.0` 是**同一个 f32 值** ⇒ `highp - highp` 的 IEEE 减法**逐位相同**
+//!     ⇒ 像素不变；且引擎成员**追加在 uniform 块末尾** ⇒ 生产 uniform 的
+//!     **偏移与取值逐字节不变**（块大小仍是 96 字节）。
+//!   - ⇒ 结论：**该证据按构造仍然成立**，但**未在本批重新实测**（诚实标注：
+//!     未经重新抓取的证据不能算「本批实测」）。
+//!
+//! ### ✅ resize 自侦测**已在浏览器实测**（2026-10-25）
+//!
+//! - 探针把引擎页的画布从 **960×600 改成 720×600**（**比例不同** ⇒ 构图
+//!   变化可测）⇒ 宿主**没有**调任何 resize 接口（引擎页里根本没有这种接口）
+//!   ⇒ 引擎**自己**侦测到并 resize：
+//!   - 两个后端的表面尺寸都从 `960×600` 变成 `720×600`；
+//!   - 表面**代号** `0 → 1`（⇒ 表面确实被重新配置过 ⇒ 交换链重建 ⇒
+//!     WebGPU 后端「改画布尺寸 ⇒ 交换链作废」的恢复路径**实测**走通）；
+//!   - **自动 resize 计数** `0 → 1`（⇒ 走的是**自动**路径，不是宿主显式调用）。
+//! - 逐像素判据：生产画面**裁剪**左侧 720 列 vs 引擎 resize 后的实拍 ⇒
+//!   **0 / 432,000** 像素不同（WebGL 与 WebGPU **都是 0**）⇒ ⇒ 新尺寸**真的
+//!   生效**，且画面是**裁剪**（不是**拉伸**）。
+//!   - **反事实**（判据灵敏性）：把生产画面**缩放**到 720×600 再比 ⇒
+//!     **208,508 / 432,000 = 48.27%** 像素不同 ⇒ ⇒ 0 差异不是因为「怎么比
+//!     都一样」。
+//! - ⚠ **本批未把重新生成的证据入库**（批次纪律：证据目录只改 harness 源码）
+//!   ⇒ ⇒ 上面的数字来自**本批实测**（Chromium 154 + SwiftShader），但
+//!   **对应的 PNG / report.json 不在版本库里**。
 //!
 //! ### 🔵 未接线 / 未做
 //!
@@ -82,6 +152,12 @@ pub mod engine;
 pub mod glsl;
 pub mod scene;
 pub mod shaders;
+/// ⭐ 纹理上传（L1-G7 最后一段：行对齐 + 上传）。
+pub mod upload;
+
+/// ⭐ 重导出 `wgpu`：消费方（适配器、探针）应经此引用，
+/// 避免各自钉同一个精确版本导致不一致。
+pub use wgpu;
 
 pub use bindings::{
     binding_of, binding_table, name_of, BindingError, UniformBufferLayout, UniformSlot,
@@ -89,14 +165,20 @@ pub use bindings::{
 };
 pub use context::{GpuContext, GpuError, Tier, UnavailableGpuContext};
 pub use engine::{
-    select_surface_format, BackendPreference, ColorProfile, Engine, EngineOptions, EngineReport,
-    FrameReport, OutputEncoding, SceneDescriptor, ScenePipeline, SurfaceTargetInput,
+    select_surface_format, BackendPreference, BlendMode, CanvasSizeSource, ColorProfile,
+    DeviceEvent, Engine, EngineOptions, EngineReport, FrameReport, OutputEncoding, SceneDescriptor,
+    ScenePass, ScenePipeline, SurfaceTargetInput, Topology, VertexFormat,
 };
 pub use glsl::{GlslError, UniformDecl};
 pub use scene::{
     BlackHoleParams, SceneError, SceneUniforms, GRAVITATIONAL_CONSTANT, SOLAR_MASS, SPEED_OF_LIGHT,
 };
-pub use shaders::{SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL};
+pub use shaders::{
+    INTRO_BACKDROP_FRAGMENT_GLSL, INTRO_BACKDROP_UNIFORM_NAMES, INTRO_BACKDROP_VERTEX_GLSL,
+    INTRO_SPRITE_COORD_FRAGMENT_GLSL, INTRO_SPRITE_FLAT_FRAGMENT_GLSL, INTRO_SPRITE_FRAGMENT_GLSL,
+    INTRO_SPRITE_PROBE_FRAGMENT_GLSL, INTRO_SPRITE_UNIFORM_NAMES, INTRO_SPRITE_VERTEX_GLSL,
+    SCENE_FRAGMENT_GLSL, SCENE_VERTEX_GLSL,
+};
 
 #[cfg(test)]
 mod tests {

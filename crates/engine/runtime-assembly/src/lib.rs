@@ -102,9 +102,9 @@ pub use canonical::self_status_source::device_presence_probe;
 // (控制计数/最近动作, 与 `tool.device_control` 工具面同账同源)。
 pub use canonical::self_status_source::device_control_status_probe;
 pub use canonical::task_board_tool::{
-    task_board_approval_reason, task_board_write_face_for_action, TaskBoardApprovalHook,
-    TaskBoardTool, TaskBoardWriteFace, ACTION_TASK_ADD, ACTION_TASK_COMPLETE, ACTION_TASK_LIST,
-    ACTION_TASK_REASSIGN, TASK_BOARD_ACTIONS, TASK_BOARD_CAPABILITY_ID, TASK_BOARD_TOOL_NAME,
+    task_board_approval_reason, TaskBoardApprovalHook, TaskBoardTool, TaskBoardWriteFace,
+    ACTION_TASK_ADD, ACTION_TASK_COMPLETE, ACTION_TASK_LIST, ACTION_TASK_REASSIGN,
+    TASK_BOARD_ACTIONS, TASK_BOARD_CAPABILITY_ID, TASK_BOARD_TOOL_NAME,
 };
 pub use canonical::tool_modules::{
     DeviceControlModule, DeviceSenseModule, GuardWatchModule, WeatherModule,

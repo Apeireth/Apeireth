@@ -89,12 +89,6 @@ impl RitualStateBody {
     pub fn resolved_config(&self) -> RitualConfig {
         self.config.clone().unwrap_or_default()
     }
-
-    /// 某 kind 的状态 (无 = 从未记录, 不编 `fresh` 状态)。
-    #[must_use]
-    pub fn state_for(&self, kind: RitualKind) -> Option<&RitualState> {
-        self.states.iter().find(|state| state.kind == kind)
-    }
 }
 
 /// 仪式状态存储错误 (闭合词表: 拒开 / 拒收)。

@@ -78,3 +78,89 @@ pub const ICON_CHECK: IconData = IconData {
         IconNode { tag: "path", attrs: &[("d", "M20 6 9 17l-5-5")] },
     ],
 };
+
+/// 图标 `chevron-down`。
+#[rustfmt::skip]
+pub const ICON_CHEVRON_DOWN: IconData = IconData {
+    name: "chevron-down",
+    class: "lucide-icon lucide lucide-chevron-down",
+    nodes: &[
+        IconNode { tag: "path", attrs: &[("d", "m6 9 6 6 6-6")] },
+    ],
+};
+
+/// 图标 `chevron-right`。
+#[rustfmt::skip]
+pub const ICON_CHEVRON_RIGHT: IconData = IconData {
+    name: "chevron-right",
+    class: "lucide-icon lucide lucide-chevron-right",
+    nodes: &[
+        IconNode { tag: "path", attrs: &[("d", "m9 18 6-6-6-6")] },
+    ],
+};
+
+/// 图标 `wrench`。
+#[rustfmt::skip]
+pub const ICON_WRENCH: IconData = IconData {
+    name: "wrench",
+    class: "lucide-icon lucide lucide-wrench",
+    nodes: &[
+        IconNode { tag: "path", attrs: &[("d", "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z")] },
+    ],
+};
+
+/// 图标 `circle-check`。
+#[rustfmt::skip]
+pub const ICON_CIRCLE_CHECK: IconData = IconData {
+    name: "circle-check",
+    class: "lucide-icon lucide lucide-circle-check",
+    nodes: &[
+        IconNode { tag: "circle", attrs: &[("cx", "12"), ("cy", "12"), ("r", "10")] },
+        IconNode { tag: "path", attrs: &[("d", "m9 12 2 2 4-4")] },
+    ],
+};
+
+/// 图标 `circle-x`。
+#[rustfmt::skip]
+pub const ICON_CIRCLE_X: IconData = IconData {
+    name: "circle-x",
+    class: "lucide-icon lucide lucide-circle-x",
+    nodes: &[
+        IconNode { tag: "circle", attrs: &[("cx", "12"), ("cy", "12"), ("r", "10")] },
+        IconNode { tag: "path", attrs: &[("d", "m15 9-6 6")] },
+        IconNode { tag: "path", attrs: &[("d", "m9 9 6 6")] },
+    ],
+};
+
+/// 图标 `loader-circle`。
+#[rustfmt::skip]
+pub const ICON_LOADER_CIRCLE: IconData = IconData {
+    name: "loader-circle",
+    class: "lucide-icon lucide lucide-loader-circle",
+    nodes: &[
+        IconNode { tag: "path", attrs: &[("d", "M21 12a9 9 0 1 1-6.219-8.56")] },
+    ],
+};
+
+/// 图标 `clock`。
+#[rustfmt::skip]
+pub const ICON_CLOCK: IconData = IconData {
+    name: "clock",
+    class: "lucide-icon lucide lucide-clock",
+    nodes: &[
+        IconNode { tag: "circle", attrs: &[("cx", "12"), ("cy", "12"), ("r", "10")] },
+        IconNode { tag: "polyline", attrs: &[("points", "12 6 12 12 16 14")] },
+    ],
+};
+
+/// 图标 `triangle-alert`。
+#[rustfmt::skip]
+pub const ICON_TRIANGLE_ALERT: IconData = IconData {
+    name: "triangle-alert",
+    class: "lucide-icon lucide lucide-triangle-alert",
+    nodes: &[
+        IconNode { tag: "path", attrs: &[("d", "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3")] },
+        IconNode { tag: "path", attrs: &[("d", "M12 9v4")] },
+        IconNode { tag: "path", attrs: &[("d", "M12 17h.01")] },
+    ],
+};

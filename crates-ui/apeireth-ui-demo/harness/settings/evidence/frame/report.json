@@ -1,0 +1,211 @@
+{
+  "panel": "frame",
+  "title": "页面框架与导航",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "Asia/Shanghai",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "reference_page": "/web/reference/frame/index.html",
+  "engine_page": "/web/engine/frame/index.html",
+  "crop": {
+    "selector": ".settings-subnav",
+    "mode": "元素框（宽度） + 导航内容（高度）",
+    "why": "参考侧的内容列装着别的面的面板 ⇒ 网格行把侧栏拉伸 ⇒ 整框高度两侧不等；逐像素对照只针对导航内容，宽度仍按元素框断言。"
+  },
+  "t1_pixels": {
+    "size_mismatch": false,
+    "different": 0,
+    "total": 38000,
+    "ratio": 0.0
+  },
+  "t2_dom": {
+    "equal": true,
+    "diffs": []
+  },
+  "t3_width_same_source": {
+    "equal": true,
+    "mismatch": null,
+    "reference_box": {
+      "x": 0,
+      "y": 133.53125,
+      "w": 200,
+      "h": 190,
+      "element_h": 1271.921875
+    },
+    "engine_box": {
+      "x": 0,
+      "y": 133.53125,
+      "w": 200,
+      "h": 190,
+      "element_h": 222
+    }
+  },
+  "geometry": {
+    "note": "本面是**几何基准**：其它内容面据此对齐（内容盒 828px）。",
+    "reference": {
+      "subnav": {
+        "selector": ".settings-subnav",
+        "x": 0,
+        "y": 117.53125,
+        "w": 200,
+        "h": 1271.921875,
+        "padding_left": 12,
+        "padding_right": 12,
+        "content_box_width": 176,
+        "max_width": "none",
+        "box_sizing": "border-box",
+        "grid_template_columns": "none"
+      },
+      "content": {
+        "selector": ".settings-content",
+        "x": 200,
+        "y": 117.53125,
+        "w": 900,
+        "h": 1271.921875,
+        "padding_left": 36,
+        "padding_right": 36,
+        "content_box_width": 828,
+        "max_width": "900px",
+        "box_sizing": "border-box",
+        "grid_template_columns": "none"
+      },
+      "layout": {
+        "selector": ".settings-layout",
+        "x": 0,
+        "y": 117.53125,
+        "w": 1440,
+        "h": 1271.921875,
+        "padding_left": 0,
+        "padding_right": 0,
+        "content_box_width": 1440,
+        "max_width": "none",
+        "box_sizing": "border-box",
+        "grid_template_columns": "200px 1240px"
+      },
+      "view": {
+        "selector": ".settings-view",
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 1389.453125,
+        "padding_left": 0,
+        "padding_right": 0,
+        "content_box_width": 1440,
+        "max_width": "none",
+        "box_sizing": "border-box",
+        "grid_template_columns": "none"
+      },
+      "block": {
+        "selector": ".setting-block",
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 1121.6875,
+        "padding_left": 0,
+        "padding_right": 0,
+        "content_box_width": 828,
+        "max_width": "none",
+        "box_sizing": "border-box",
+        "grid_template_columns": "none"
+      },
+      "nav_content": {
+        "top": 133.53125,
+        "bottom": 323.53125
+      },
+      "ready": false,
+      "error": null
+    },
+    "engine": {
+      "subnav": {
+        "selector": ".settings-subnav",
+        "x": 0,
+        "y": 117.53125,
+        "w": 200,
+        "h": 222,
+        "padding_left": 12,
+        "padding_right": 12,
+        "content_box_width": 176,
+        "max_width": "none",
+        "box_sizing": "border-box",
+        "grid_template_columns": "none"
+      },
+      "content": {
+        "selector": ".settings-content",
+        "x": 200,
+        "y": 117.53125,
+        "w": 900,
+        "h": 222,
+        "padding_left": 36,
+        "padding_right": 36,
+        "content_box_width": 828,
+        "max_width": "900px",
+        "box_sizing": "border-box",
+        "grid_template_columns": "none"
+      },
+      "layout": {
+        "selector": ".settings-layout",
+        "x": 0,
+        "y": 117.53125,
+        "w": 1440,
+        "h": 222,
+        "padding_left": 0,
+        "padding_right": 0,
+        "content_box_width": 1440,
+        "max_width": "none",
+        "box_sizing": "border-box",
+        "grid_template_columns": "200px 1240px"
+      },
+      "view": {
+        "selector": ".settings-view",
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 339.53125,
+        "padding_left": 0,
+        "padding_right": 0,
+        "content_box_width": 1440,
+        "max_width": "none",
+        "box_sizing": "border-box",
+        "grid_template_columns": "none"
+      },
+      "block": null,
+      "nav_content": {
+        "top": 133.53125,
+        "bottom": 323.53125
+      },
+      "ready": true,
+      "error": null
+    },
+    "width_same_source": {
+      "sidebar_width_reference": 200,
+      "sidebar_width_engine": 200,
+      "content_border_box_width_reference": 900,
+      "content_border_box_width_engine": 900,
+      "content_box_width_reference": 828,
+      "content_box_width_engine": 828,
+      "setting_block_width_reference": 828,
+      "setting_block_width_engine": null
+    }
+  },
+  "console": [
+    {
+      "side": "reference",
+      "messages": []
+    },
+    {
+      "side": "engine",
+      "messages": []
+    }
+  ],
+  "checks": {
+    "t1_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_width_same_source": true,
+    "t4_engine_mounted": true
+  },
+  "passed": true
+}

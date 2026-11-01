@@ -949,6 +949,17 @@ fn main() -> ExitCode {
         },
         // V5-b 暴露面体检 (安全守望 · 本地只读自查): report 单动词, 体检只读零写,
         // 报告出 stdout (--out 为用户显式落档), 外网暴露面显式「未测」。
+        // 生物机制族用户开关面 (ADR-0015: 个人线全带、默认关、用户自开)。
+        "bio" => match apeireth_cli::bio_command::run_bio(&args[1..]) {
+            Ok(report) => {
+                println!("{report}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("bio operation refused: {error}");
+                ExitCode::FAILURE
+            }
+        },
         // 出域账本 (承诺措辞「记录已知流向」的查询出口): 只读零写。
         "egress" => match apeireth_cli::egress_command::run_egress(&args[1..]) {
             Ok(report) => {

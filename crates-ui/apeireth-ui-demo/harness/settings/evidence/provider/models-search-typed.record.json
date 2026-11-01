@@ -1,0 +1,31 @@
+{
+  "case": "models-search-typed",
+  "driver": "点测试连接（拉模型）⇒ 在 .disc-search input 真实键入 'gpt'（两侧同路径）",
+  "t1_pixel_different": -1,
+  "t1_pixel_total": 0,
+  "t1_pixel_ratio": 1.0,
+  "t2_dom_equal": false,
+  "t2_dom_diffs": [
+    "根: 子节点数不同（5 / 6）",
+    "根/3: 属性 `aria-label` 不同 ⇒ 参考 \"服务商端点、密钥与模型\" / 引擎 null",
+    "根/3: 属性 `class` 不同 ⇒ 参考 \"text-group\" / 引擎 \"effective-config info-card\"",
+    "根/3: 属性 `role` 不同 ⇒ 参考 \"group\" / 引擎 null",
+    "根/3: 子节点数不同（4 / 2）",
+    "根/3/0: 标签不同（div / strong）",
+    "根/3/1: 属性 `class` 不同 ⇒ 参考 \"config-step\" / 引擎 \"effective-grid\"",
+    "根/3/1: 子节点数不同（2 / 4）",
+    "根/3/1/0: 属性 `class` 不同 ⇒ 参考 \"step-num\" / 引擎 null",
+    "根/3/1/0: 子节点数不同（1 / 2）",
+    "根/3/1/0/0: 文本不同 ⇒ 参考 \"2\" / 引擎 \"Provider: \"",
+    "根/3/1/1: 标签不同（div / span）",
+    "根/4: 属性 `aria-label` 不同 ⇒ 参考 null / 引擎 \"服务商端点、密钥与模型\"",
+    "根/4: 属性 `class` 不同 ⇒ 参考 \"advanced-box\" / 引擎 \"text-group\"",
+    "根/4: 属性 `role` 不同 ⇒ 参考 null / 引擎 \"group\"",
+    "根/4: 子节点数不同（1 / 4）",
+    "根/4/0: 标签不同（button / div）"
+  ],
+  "reference_typed_value": "gpt",
+  "engine_typed_value": "",
+  "reference_items": 2,
+  "engine_items": 3
+}

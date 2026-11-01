@@ -141,15 +141,52 @@ impl crate::SqliteMemoryStore {
     }
 }
 
+/// 按 `role` **保守推导**记忆来源。
+///
+/// # 为什么这样够
+///
+/// 生产写入路径以前只写 6 列，V4 的 `provenance` 列留 NULL ⇒ 读侧一律兜底成
+/// `Manual`（"手动注入"）—— 也就是说**一条工具产物和一条用户手写在库里长得
+/// 一模一样**。可追溯性没有数据支撑，「记录 ≠ 负责」那一条就断了。
+///
+/// # 为什么这是「近似」而不是「精确追踪」
+///
+/// 真正的来源要由**调用点**告诉存储层（谁写的这条记忆）。当前调用点没有这个
+/// 通道（trait 签名锁定），所以只能从 `role` 推导 —— 它能区分
+/// 「对话来的」/「工具来的」/「系统注入的」，但分不清同 `role` 内部的不同来源。
+/// 所以这里**只做不撒谎的最小区分**：认不出来的一律 `Manual`（不假装）。
+///
+/// `role` 的取值口径见 [`EpisodeQuery::role`]：`user` / `assistant` / `system` / `tool`。
+fn provenance_for_role(role: &str) -> crate::Provenance {
+    use crate::Provenance;
+    match role.trim().to_ascii_lowercase().as_str() {
+        "tool" | "tool_result" | "tool_use" => Provenance::Tool,
+        "user" | "assistant" => Provenance::Dialog,
+        "system" => Provenance::Observation,
+        _ => Provenance::Manual,
+    }
+}
+
 impl EpisodeStore for crate::SqliteMemoryStore {
     fn put_episode(&self, ep: &Episode) -> MemoryResult<()> {
         Self::validate_episode(ep)?;
         let conn = self.conn()?;
         // Note: 现有 schema 没有 continuity_id 列在 episodes 表上, 续作兼容.
         // 主体引用通过 session_id 间接表达; 真正跨 session 的主体关联走 6 历史流.
+        //
+        // **V4 的 4 列一并写入**（`valid_from_ms` / `valid_until_ms` / `created_ms` /
+        // `provenance`）。此前本路径只写 6 列，那 4 列留 NULL ⇒ 读侧
+        // `normalize_meta` 一律兜底成 `Provenance::Manual` ⇒
+        // **「这条记忆从哪来」在生产上永远是假的**（工具产物与用户手写无法区分）。
+        // 那正是「记录 ≠ 负责」里最关键的一环断了 —— 可追溯性没有数据支撑。
+        //
+        // 来源按 `role` **保守推导**（不是精确追踪，如实标注）：
+        //   tool → Tool · user/assistant → Dialog · system → Observation
+        //   其它 → Manual（不假装）。
         conn.execute(
-            "INSERT OR IGNORE INTO episodes (id, continuity_id, session_id, timestamp, role, content)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT OR IGNORE INTO episodes (id, continuity_id, session_id, timestamp, role, content,
+             valid_from_ms, valid_until_ms, created_ms, provenance)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 ep.id,
                 "default", // continuity_id 占位, 真正场景由调用方先建 IdentityCard
@@ -157,6 +194,10 @@ impl EpisodeStore for crate::SqliteMemoryStore {
                 ep.timestamp,
                 ep.role,
                 ep.content,
+                ep.timestamp.saturating_mul(1000), // valid_from_ms = created_ms
+                Option::<i64>::None,                 // valid_until_ms = 永久有效
+                ep.timestamp.saturating_mul(1000), // created_ms（秒 → 毫秒）
+                provenance_for_role(&ep.role).as_str(),
             ],
         )?;
         Ok(())
@@ -302,6 +343,41 @@ mod tests {
             content: format!("content of {id}"),
             session_id: session.into(),
         }
+    }
+
+    /// 生产写入路径**必须**带上 V4 的 4 列 —— 否则来源永远是 `Manual`，
+    /// 「这条记忆从哪来」在生产上是假的（工具产物与用户手写无法区分）。
+    #[test]
+    fn put_episode_records_v4_metadata() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        let ep = make_episode("ep-meta", "s-1", 1000, "tool");
+        <SqliteMemoryStore as EpisodeStore>::put_episode(&store, &ep).unwrap();
+
+        let meta = store
+            .read_episode_meta("ep-meta")
+            .unwrap()
+            .expect("应有元数据");
+        assert_eq!(
+            meta.provenance,
+            crate::Provenance::Tool,
+            "role=tool ⇒ 来源必须是 Tool（不能是 Manual）"
+        );
+        assert_eq!(meta.created_ms, 1_000_000, "created_ms = 秒×1000");
+        assert_eq!(meta.valid_from_ms, Some(1_000_000));
+        assert_eq!(meta.valid_until_ms, None, "默认永久有效");
+    }
+
+    /// 来源按 role 保守推导；**认不出来的一律 Manual**（不假装）。
+    #[test]
+    fn provenance_is_derived_from_role_conservatively() {
+        use crate::Provenance;
+        assert_eq!(provenance_for_role("tool"), Provenance::Tool);
+        assert_eq!(provenance_for_role("TOOL"), Provenance::Tool);
+        assert_eq!(provenance_for_role("user"), Provenance::Dialog);
+        assert_eq!(provenance_for_role("assistant"), Provenance::Dialog);
+        assert_eq!(provenance_for_role("system"), Provenance::Observation);
+        assert_eq!(provenance_for_role("mystery"), Provenance::Manual);
+        assert_eq!(provenance_for_role(""), Provenance::Manual);
     }
 
     #[test]

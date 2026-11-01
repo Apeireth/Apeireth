@@ -168,6 +168,35 @@ pub trait MemoryGovernanceStore: Send + Sync {
         expected_rev: i64,
     ) -> Result<GovernedEpisode, MemoryGovernanceError>;
 
+    /// **按主体全量遗忘**（被遗忘权）：跨 5 账（episode / preference /
+    /// commitment / temporal / persona）一个事务清完。
+    ///
+    /// # 为什么加在 trait 上
+    ///
+    /// 删用户（`DELETE /v1/admin/users/:id`）原来**只改用户表** ——
+    /// 用户的记忆还留着。而「删除主体」在隐私语义上是**连记忆一起删**。
+    /// 单条 `forget_episode` 不够：那是用户手动点某一条。
+    ///
+    /// # 语义（与 `forget_principal_on_conn` 一致）
+    ///
+    /// - **一个事务**：要么全清、要么不清 —— 分多次删会出现「删了一半」的
+    ///   中间态，那种状态比没删更糟（用户以为已删，实际还留着）；
+    /// - **protected persona 整体拒绝**：那是用户明确要求保留的记录。
+    ///   撞上它 ⇒ 整体拒绝并说明，**不静默跳过**（静默跳过会让用户以为
+    ///   「全删了」而实际留了一部分）。
+    ///
+    /// 默认实现 = 未接线（返回明确错误），不静默成功。
+    fn forget_principal(
+        &self,
+        _principal_id: &str,
+        _at_ms: i64,
+        _reason: Option<&str>,
+    ) -> Result<crate::universal_forget::UniversalForgetOutcome, MemoryGovernanceError> {
+        Err(MemoryGovernanceError::Invalid(
+            "forget_principal 未接线（本 store 不提供主体遗忘面）".into(),
+        ))
+    }
+
     /// 保护 (防自动遗忘/压缩).
     fn protect_episode(
         &self,
@@ -544,6 +573,21 @@ impl SqliteMemoryStore {
 }
 
 impl MemoryGovernanceStore for SqliteMemoryStore {
+    fn forget_principal(
+        &self,
+        principal_id: &str,
+        at_ms: i64,
+        reason: Option<&str>,
+    ) -> Result<crate::universal_forget::UniversalForgetOutcome, MemoryGovernanceError> {
+        crate::universal_forget::UniversalForgetFacade::forget_principal(
+            self,
+            principal_id,
+            at_ms,
+            reason,
+        )
+        .map_err(MemoryGovernanceError::Invalid)
+    }
+
     fn get_governed(
         &self,
         episode_id: &str,

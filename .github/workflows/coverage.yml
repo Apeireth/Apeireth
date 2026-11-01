@@ -40,6 +40,11 @@ jobs:
           -p apeireth-cli
           --out Xml --engine llvm --timeout 600
 
+      - name: 覆盖率棘轮（只减不增）
+        # 此前覆盖率只上报、不判定 —— 下滑无人拦。基线未记录时脚本会明确
+        # 打印「ratchet INACTIVE」，不假装绿灯（见 scripts/check_coverage_ratchet.py 头注释）。
+        run: python3 scripts/check_coverage_ratchet.py --check
+
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v7
         with:

@@ -1,0 +1,930 @@
+{
+  "face": "capability（能力与治理 · 设置页 S4 面）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.0,
+  "crop": "元素框（`.setting-block` / `.sp-capability .setting-block`）",
+  "reference_page": "/web/reference/capability/index.html",
+  "engine_page": "/web/engine/capability/index.html",
+  "sections": [
+    "governance",
+    "tools",
+    "developer"
+  ],
+  "cases": [
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 563868,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 681.9375,
+      "t3_engine_height": 681.9375,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "select",
+          "id": "cognitive-depth",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=cognitive-depth"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "select",
+          "id": "cognitive-depth",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=cognitive-depth"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": null,
+      "t5_engine_preview": null,
+      "case": "governance",
+      "section": "governance",
+      "reference_scripts": [],
+      "engine_scripts": [],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 862776,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 1042.921875,
+      "t3_engine_height": 1042.921875,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": null,
+      "t5_engine_preview": null,
+      "case": "tools",
+      "section": "tools",
+      "reference_scripts": [],
+      "engine_scripts": [],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6(父行关)",
+        "T7"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 482724,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 583.203125,
+      "t3_engine_height": 583.203125,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [],
+      "t4_engine_controls": [],
+      "t5_preview_equal": true,
+      "t5_reference_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}",
+      "t5_engine_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}",
+      "case": "developer",
+      "section": "developer",
+      "reference_scripts": [],
+      "engine_scripts": [],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 668196,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 807.21875,
+      "t3_engine_height": 807.21875,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "select",
+          "id": "cognitive-depth",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=cognitive-depth"
+          ]
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "顾问数量",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=顾问数量",
+            "max=7",
+            "min=1",
+            "step=1",
+            "type=range"
+          ]
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "单顾问超时毫秒",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=单顾问超时毫秒",
+            "min=1000",
+            "step=5000",
+            "type=number"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "select",
+          "id": "cognitive-depth",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=cognitive-depth"
+          ]
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "顾问数量",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=顾问数量",
+            "max=7",
+            "min=1",
+            "step=1",
+            "type=range"
+          ]
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "单顾问超时毫秒",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=单顾问超时毫秒",
+            "min=1000",
+            "step=5000",
+            "type=number"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": null,
+      "t5_engine_preview": null,
+      "case": "governance-council-on",
+      "section": "governance",
+      "reference_scripts": [
+        "(() => { const label = \"\\u8bae\\u4f1a (Council)\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+      ],
+      "engine_scripts": [
+        "window.__CAPABILITY__.toggleCapability(\"council\")"
+      ],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 914940,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 1105.5625,
+      "t3_engine_height": 1105.5625,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": null,
+      "t5_engine_preview": null,
+      "case": "tools-shell-on",
+      "section": "tools",
+      "reference_scripts": [
+        "(() => { const label = \"Shell \\u547d\\u4ee4\\u5de5\\u5177\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+      ],
+      "engine_scripts": [
+        "window.__CAPABILITY__.toggleCapability(\"shell\")"
+      ],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T7"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 960480,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 1160.8125,
+      "t3_engine_height": 1160.8125,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": null,
+      "t5_engine_preview": null,
+      "case": "tools-shell-bare",
+      "section": "tools",
+      "reference_scripts": [
+        "(() => { const label = \"Shell \\u547d\\u4ee4\\u5de5\\u5177\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()",
+        "(() => { const label = \"AppContainer \\u6c99\\u7bb1\\u6267\\u884c\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+      ],
+      "engine_scripts": [
+        "window.__CAPABILITY__.toggleCapability(\"shell\")",
+        "window.__CAPABILITY__.toggleCapability(\"shellSandbox\")"
+      ],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 862776,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 1042.921875,
+      "t3_engine_height": 1042.921875,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": null,
+      "t5_engine_preview": null,
+      "case": "tools-filewrite-on",
+      "section": "tools",
+      "reference_scripts": [
+        "(() => { const label = \"\\u6587\\u4ef6\\u5199\\u5165\\uff08apply_patch \\u00b7 shell \\u5199\\u547d\\u4ee4\\uff09\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+      ],
+      "engine_scripts": [
+        "window.__CAPABILITY__.toggleCapability(\"fileWrite\")"
+      ],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T6(父行开)",
+        "T7"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 586224,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 708.484375,
+      "t3_engine_height": 708.484375,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "思考模式模型过滤器",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=思考模式模型过滤器",
+            "placeholder=全部模型",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "reasoning 标签",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=reasoning 标签",
+            "type=text"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "思考模式模型过滤器",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=思考模式模型过滤器",
+            "placeholder=全部模型",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "input",
+          "id": "",
+          "aria": "reasoning 标签",
+          "value_attr": false,
+          "attrs": [
+            "aria-label=reasoning 标签",
+            "type=text"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}",
+      "t5_engine_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}",
+      "case": "developer-reasoning-on",
+      "section": "developer",
+      "reference_scripts": [
+        "(() => { const label = \"\\u601d\\u8003\\u6a21\\u5f0f (Reasoning)\"; const button = Array.from(document.querySelectorAll('button.cap-row')).find((row) => row.getAttribute('aria-label') === label); if (!button) return false; button.click(); return true; })()"
+      ],
+      "engine_scripts": [
+        "window.__CAPABILITY__.toggleCapability(\"reasoningEnabled\")"
+      ],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ]
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 862776,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 1042.921875,
+      "t3_engine_height": 1042.921875,
+      "t4_controls_equal": true,
+      "t4_reference_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t4_engine_controls": [
+        {
+          "tag": "input",
+          "id": "allowed-server-input",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=allowed-server-input",
+            "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+            "type=text"
+          ]
+        },
+        {
+          "tag": "select",
+          "id": "permission-preset",
+          "aria": "",
+          "value_attr": false,
+          "attrs": [
+            "id=permission-preset"
+          ]
+        }
+      ],
+      "t5_preview_equal": true,
+      "t5_reference_preview": null,
+      "t5_engine_preview": null,
+      "case": "tools-server-typed",
+      "section": "tools",
+      "reference_scripts": [
+        "(() => { const input = document.querySelector('#allowed-server-input'); if (!input) return false; input.value = 'relay.example.com:8443'; input.dispatchEvent(new Event('input', {bubbles: true})); return input.value; })()"
+      ],
+      "engine_scripts": [
+        "window.__CAPABILITY__.setText([\"allowedServerInput\", \"relay.example.com:8443\"])"
+      ],
+      "criteria": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ]
+    }
+  ],
+  "requires_two_states": {
+    "name": "requires 两态（fileWriteAutoPass ← fileWrite）",
+    "rows": [
+      {
+        "passed": true,
+        "t1_pixel_ratio": 0.0,
+        "t1_pixel_different": 0,
+        "t1_pixel_total": 862776,
+        "t2_dom_equal": true,
+        "t2_dom_diffs": [],
+        "t3_same_width": true,
+        "t3b_same_height": true,
+        "t3_reference_width": 828,
+        "t3_engine_width": 828,
+        "t3_reference_height": 1042.921875,
+        "t3_engine_height": 1042.921875,
+        "t4_controls_equal": true,
+        "t4_reference_controls": [
+          {
+            "tag": "input",
+            "id": "allowed-server-input",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=allowed-server-input",
+              "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+              "type=text"
+            ]
+          },
+          {
+            "tag": "select",
+            "id": "permission-preset",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=permission-preset"
+            ]
+          }
+        ],
+        "t4_engine_controls": [
+          {
+            "tag": "input",
+            "id": "allowed-server-input",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=allowed-server-input",
+              "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+              "type=text"
+            ]
+          },
+          {
+            "tag": "select",
+            "id": "permission-preset",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=permission-preset"
+            ]
+          }
+        ],
+        "t5_preview_equal": true,
+        "t5_reference_preview": null,
+        "t5_engine_preview": null,
+        "case": "requires-parent-off",
+        "reference_structure": {
+          "sub_is_next_sibling": true,
+          "sub_is_not_child": true,
+          "sub_class": "cap-row cap-row-nested dim",
+          "sub_disabled": true,
+          "parent_class": "cap-row",
+          "mcp_present": true,
+          "mcp_is_last_element": true,
+          "mcp_is_static": true,
+          "card_last_class": "cap-row cap-row-static"
+        },
+        "engine_structure": {
+          "sub_is_next_sibling": true,
+          "sub_is_not_child": true,
+          "sub_class": "cap-row cap-row-nested dim",
+          "sub_disabled": true,
+          "parent_class": "cap-row",
+          "mcp_present": true,
+          "mcp_is_last_element": true,
+          "mcp_is_static": true,
+          "card_last_class": "cap-row cap-row-static"
+        }
+      },
+      {
+        "passed": true,
+        "t1_pixel_ratio": 0.0,
+        "t1_pixel_different": 0,
+        "t1_pixel_total": 862776,
+        "t2_dom_equal": true,
+        "t2_dom_diffs": [],
+        "t3_same_width": true,
+        "t3b_same_height": true,
+        "t3_reference_width": 828,
+        "t3_engine_width": 828,
+        "t3_reference_height": 1042.921875,
+        "t3_engine_height": 1042.921875,
+        "t4_controls_equal": true,
+        "t4_reference_controls": [
+          {
+            "tag": "input",
+            "id": "allowed-server-input",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=allowed-server-input",
+              "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+              "type=text"
+            ]
+          },
+          {
+            "tag": "select",
+            "id": "permission-preset",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=permission-preset"
+            ]
+          }
+        ],
+        "t4_engine_controls": [
+          {
+            "tag": "input",
+            "id": "allowed-server-input",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=allowed-server-input",
+              "placeholder=https://relay.example.com:8443 或 relay.example.com:8443",
+              "type=text"
+            ]
+          },
+          {
+            "tag": "select",
+            "id": "permission-preset",
+            "aria": "",
+            "value_attr": false,
+            "attrs": [
+              "id=permission-preset"
+            ]
+          }
+        ],
+        "t5_preview_equal": true,
+        "t5_reference_preview": null,
+        "t5_engine_preview": null,
+        "case": "requires-parent-on",
+        "reference_structure": {
+          "sub_is_next_sibling": true,
+          "sub_is_not_child": true,
+          "sub_class": "cap-row cap-row-nested",
+          "sub_disabled": false,
+          "parent_class": "cap-row",
+          "mcp_present": true,
+          "mcp_is_last_element": true,
+          "mcp_is_static": true,
+          "card_last_class": "cap-row cap-row-static"
+        },
+        "engine_structure": {
+          "sub_is_next_sibling": true,
+          "sub_is_not_child": true,
+          "sub_class": "cap-row cap-row-nested",
+          "sub_disabled": false,
+          "parent_class": "cap-row",
+          "mcp_present": true,
+          "mcp_is_last_element": true,
+          "mcp_is_static": true,
+          "card_last_class": "cap-row cap-row-static"
+        }
+      }
+    ],
+    "passed": true
+  },
+  "nested_row_assertion": {
+    "name": "嵌套行插入点（同层兄弟） + MCP 行（卡内最后一个元素）",
+    "passed": true,
+    "reference": {
+      "sub_is_next_sibling": true,
+      "sub_is_not_child": true,
+      "sub_class": "cap-row cap-row-nested dim",
+      "sub_disabled": true,
+      "parent_class": "cap-row",
+      "mcp_present": true,
+      "mcp_is_last_element": true,
+      "mcp_is_static": true,
+      "card_last_class": "cap-row cap-row-static"
+    },
+    "engine": {
+      "sub_is_next_sibling": true,
+      "sub_is_not_child": true,
+      "sub_class": "cap-row cap-row-nested dim",
+      "sub_disabled": true,
+      "parent_class": "cap-row",
+      "mcp_present": true,
+      "mcp_is_last_element": true,
+      "mcp_is_static": true,
+      "card_last_class": "cap-row cap-row-static"
+    }
+  },
+  "config_json_byte_check": {
+    "name": "配置 JSON 预览（键序 baseUrl→model→provider→hasApiKey，缩进 2）",
+    "passed": true,
+    "reference_bytes": 276,
+    "engine_bytes": 276,
+    "python_bytes": 276,
+    "reference_equals_python": true,
+    "engine_equals_python": true,
+    "reference_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}",
+    "engine_preview": "{\n  \"baseUrl\": \"http://127.0.0.1:8080\",\n  \"model\": \"gpt-4o\",\n  \"provider\": {\n    \"protocol\": \"openai\",\n    \"preset\": \"openai\",\n    \"baseUrl\": \"https://api.openai.com/v1\",\n    \"apiKey\": \"\",\n    \"model\": \"gpt-4o\",\n    \"anthropicVersion\": \"2023-06-01\"\n  },\n  \"hasApiKey\": false\n}"
+  },
+  "shared_api_selection": {
+    "name": "共享入口的 selectSection 能驱动本面（包裹共享 API ⇒ 幂等）",
+    "passed": true,
+    "sections": [
+      {
+        "requested": "governance",
+        "rendered_title": "决策与治理"
+      },
+      {
+        "requested": "tools",
+        "rendered_title": "工具与安全"
+      },
+      {
+        "requested": "developer",
+        "rendered_title": "开发者选项"
+      }
+    ]
+  },
+  "checks": {
+    "t1_pixels_zero": true,
+    "t2_dom_identical": true,
+    "t3_same_width_and_height": true,
+    "t4_native_controls_equal": true,
+    "t5_config_json_bytes": true,
+    "t6_requires_two_states": true,
+    "t7_nested_row_and_mcp": true,
+    "t8_shared_api_selection": true
+  },
+  "notes": [
+    "T1 的判据是**差异 0**（任一通道绝对差 > 2/255 即记「不同」）。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与 `sp-*` 作用域锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3：两侧裁剪框**宽度与高度都**必须相等（不等 ⇒ 直接判失败）。",
+    "T4：`select` / `input` 的属性集逐字相等；两侧都**不带** `value` 属性（生产用 property ⇒ 宿主挂载后回写）。",
+    "T5：预览由**宿主**用 `ui_kit::json`（保插入序）+ 缩进 2 生成 ⇒ 与浏览器侧 `JSON.stringify` 逐字节相同。",
+    "T6/T7 的两态靠**生产自己的交互路径**驱动参考侧（点行 / 输入 / 添加）⇒ **生产代码与生产固定数据一字未改**。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。",
+    "⚠️ **范围声明**：`security` 分区（markup 3006–3021）**不迁** —— 那一段整块委派给独立面（`GovernanceView`）⇒ 不属本面。",
+    "⚠️ **未覆盖**：`configJsonCopied` 的「已复制」态在无头浏览器里到不了（剪贴板写入被拒 ⇒ 生产的 `configJsonCopied` 恒为 false）⇒ 该分支只有原生单测覆盖（见 `settings_capability.rs` 的 `the_copy_button_switches_between_two_labels`）。",
+    "⚠️ **未覆盖**：`pending` 态（`liveApplyPendingKey != null` ⇒ 全行禁用 + 行内 `pending` class）**不可对照**（参考侧没有把它拨起来的入口）⇒ 只有原生单测覆盖。"
+  ],
+  "passed": true,
+  "console": [
+    {
+      "side": "reference",
+      "messages": []
+    },
+    {
+      "side": "engine",
+      "messages": []
+    }
+  ]
+}

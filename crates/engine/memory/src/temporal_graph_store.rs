@@ -283,13 +283,6 @@ impl SqliteTemporalGraphStore {
         self.append(fact).await
     }
 
-    pub async fn append_fact(
-        &self,
-        fact: TemporalGraphFact,
-    ) -> Result<TemporalGraphFact, TemporalGraphError> {
-        self.append(fact).await
-    }
-
     /// Appends a correction linked to an existing revision by `supersedes_id`.
     /// The logical relation key is immutable across the chain.
     pub async fn supersede(

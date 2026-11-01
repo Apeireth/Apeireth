@@ -3,7 +3,7 @@
 > `Status: ✅ 批 L3 交付（2026-10-17，纯文档批 · 未 commit）`
 > 一事：沉淀产品面的**洞察**——内测/owner 的判词如何变成制度，每条 =【洞察 → 制度化落点 → 可复用判据】三段；
 > 判词的价值不在"说得好听"，在于它指向的病灶能被制度化封死、判据能被下一个施工者直接执行。
-> 矿脉图：[L-experience-distillation.md](../backend-enhancement/L-experience-distillation.md) §二.5（本批挖第五矿，末矿）；
+> 矿脉图：[L-experience-distillation.md](../../archive/backend-enhancement/L-experience-distillation-2026-10-15.md) §二.5（本批挖第五矿，末矿）；
 > 施工宪章：[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md)；工程总纲：[ENGINEER-MANIFESTO.md](../ENGINEER-MANIFESTO.md)。
 > 姊妹矿：[01-collaboration-patterns.md](01-collaboration-patterns.md)（协同面）/ [02-failure-anatomy.md](02-failure-anatomy.md)（死法面）/ [03-design-verdicts.md](03-design-verdicts.md)（裁定面）/ [04-methodology.md](04-methodology.md)（活法面）。
 > 出处标注：**★** = 仓内锚点（可链接复核）；**☆** = 会话记录侧（判词原话与现场未落仓，不编造）。
@@ -24,7 +24,7 @@
 3. **名册**：名册/描述按**实际注册条件**取值，不照抄配置值（缺依赖时报 false 是诚实，报 true 是假旋钮）。
 守住三问的落法 = 审计表逐行 + 行级锁定测试（表结构与全责文案各有复查脚本锁死），不是一次性检查。
 
-> 出处：★[capability-switch-power-audit.md](../../02-guides/capability-switch-power-audit.md) 抬头（开关名=开关权、摆设开关/幽灵权力）+ §一（file_write 唯一写总闸整改行、名册按注册条件取值行）+ §三/§四（全责文案三落点、行级锁定测试指针）；★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §一.3（命名即承诺）；★[live-verification-ledger.md](../live-verification-ledger.md) #2（"Shell 开关即效（开→可执行、关→工具消失，双向实证）"与 6 个真 bug 含"热更假生效"）+ #24 ③（热应用/重启契约：按 spawn 快照分类）；★[capability-knob-audit-2026-09-12.md](../capability-knob-audit-2026-09-12.md) §1（"UI 有旋钮但后端不生效"对账判定）；☆内测判词原话（"开关不均匀生效"，会话记录，未落仓）。
+> 出处：★[capability-switch-power-audit.md](../../02-guides/capability-switch-power-audit.md) 抬头（开关名=开关权、摆设开关/幽灵权力）+ §一（file_write 唯一写总闸整改行、名册按注册条件取值行）+ §三/§四（全责文案三落点、行级锁定测试指针）；★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §一.3（命名即承诺）；★[live-verification-ledger.md](../live-verification-ledger.md) #2（"Shell 开关即效（开→可执行、关→工具消失，双向实证）"与 6 个真 bug 含"热更假生效"）+ #24 ③（热应用/重启契约：按 spawn 快照分类）；★[capability-knob-audit-2026-09-12.md](../03-audits/capability-knob-audit-2026-09-12.md) §1（"UI 有旋钮但后端不生效"对账判定）；☆内测判词原话（"开关不均匀生效"，会话记录，未落仓）。
 
 ## 洞察 2 · "工具在清单≠能产出结果" → 能力四级口径与证据链制度化案
 
@@ -32,7 +32,7 @@
 
 【制度化落点】四级口径阶梯 + 证据链三件：
 1. **四级口径**（[system-capabilities.md](../../01-architecture/system-capabilities.md) 头注）：`IMPLEMENTED（代码存在）≠ PRODUCTION WIRED（接入生产主路径）≠ DEFAULT ENABLED（无需 opt-in）≠ HARDWARE VALIDATED（真机验证）`——一切能力自述先报自己在哪一级；
-2. **证据链**：[claims-evidence-matrix.md](../claims-evidence-matrix.md)（每条对外声明 → 证据 → 等级）、[live-verification-ledger.md](../live-verification-ledger.md)（"什么测过、什么没测"唯一权威，写"已验证"前先查）、差距审计两级化（"库级已实现但未接生产装配"〔四级口径术语引用〕与"真缺口"分开记账）；
+2. **证据链**：[claims-evidence-matrix.md](../00-governance/claims-evidence-matrix.md)（每条对外声明 → 证据 → 等级）、[live-verification-ledger.md](../live-verification-ledger.md)（"什么测过、什么没测"唯一权威，写"已验证"前先查）、差距审计两级化（"库级已实现但未接生产装配"〔四级口径术语引用〕与"真缺口"分开记账）；
 3. **抓假账先例**：接线假账靠**生产调用点实证**抓出（某输出脱敏函数全仓只有定义+导出、零生产调用——IMPLEMENTED ≠ PRODUCTION WIRED 当场现形，随后真接线）。
 
 【可复用判据】
@@ -40,7 +40,7 @@
 2. "在清单"的真值看**名册按实际注册条件取值**（洞察 1 判据 3），"能产出结果"的真值看**调用链实证**——注意双向陷阱：名字扫描"0 引用"也会误判（crate 内部互调也是生产路径，已有三审推翻旧结论的先例），判据是调用链走到生产主路径，不是名字计数；
 3. 每个"✅"能指回证据（测试名/台账行/真机记录），指不回的降级为"未实测"。
 
-> 出处：★[system-capabilities.md](../../01-architecture/system-capabilities.md) 头注（四级口径阶梯原文）；★[claims-evidence-matrix.md](../claims-evidence-matrix.md)（声明→证据→等级矩阵）；★[live-verification-ledger.md](../live-verification-ledger.md) #48（`scan_and_sanitize_output` 零生产调用——接线假账现形案）/ #41（"0 引用=未接"是名字扫描陷阱，三审推翻两条旧结论）；★[v1-vs-v2-capability-gap-audit-2026-10-06.md](../v1-vs-v2-capability-gap-audit-2026-10-06.md) §7.1/§7.2（"库级已实现但未接生产装配" vs "真缺口"两级化）；☆内测判词原话（"工具在清单≠能产出结果"，会话记录，未落仓）。
+> 出处：★[system-capabilities.md](../../01-architecture/system-capabilities.md) 头注（四级口径阶梯原文）；★[claims-evidence-matrix.md](../00-governance/claims-evidence-matrix.md)（声明→证据→等级矩阵）；★[live-verification-ledger.md](../live-verification-ledger.md) #48（`scan_and_sanitize_output` 零生产调用——接线假账现形案）/ #41（"0 引用=未接"是名字扫描陷阱，三审推翻两条旧结论）；★[v1-vs-v2-capability-gap-audit-2026-10-06.md](../v1-vs-v2-capability-gap-audit-2026-10-06.md) §7.1/§7.2（"库级已实现但未接生产装配" vs "真缺口"两级化）；☆内测判词原话（"工具在清单≠能产出结果"，会话记录，未落仓）。
 
 ## 洞察 3 · 模型的实测精神：实测而非推断的文化
 
@@ -57,7 +57,7 @@
 2. 发现推断错误**立即纠正并留档**（含"我当时怎么错的"），不悄悄改口——"叙事先于实测"是要被点名的病；
 3. 悬案裁决用实取/实跑（示踪、探针、API 实取），不用第二层推断去补第一层推断。
 
-> 出处：★[round-13-1-0-maturity-audit-2026-08-28.md](../round-13-1-0-maturity-audit-2026-08-28.md)（"R11 6 sub-agent 写真账时…0 实测 1.0 真代码…这是 O-5 失守，用户 catch 对"）；★[handoff-18crate-ci-fix-2026-09-23.md](../handoff-18crate-ci-fix-2026-09-23.md) 头注（"只写实测过的事实；推断一律标'推断'，没验的一律标'未验'"）+ 推断错误勘误段（"仍应视为一次'叙事先于实测'"）；★[AGENTS.md](../../../AGENTS.md) §1（0 装 PASS 与"每个数字必须可复核"）；★[live-verification-ledger.md](../live-verification-ledger.md)（验收权威定位）；★[ENGINEER-MANIFESTO.md](../ENGINEER-MANIFESTO.md) §13（"`git fetch` 失败 ≠ `git push` 失败…不要凭 fetch 失败推断 push"同构教训）。
+> 出处：★[round-13-1-0-maturity-audit-2026-08-28.md](../03-audits/round-13-1-0-maturity-audit-2026-08-28.md)（"R11 6 sub-agent 写真账时…0 实测 1.0 真代码…这是 O-5 失守，用户 catch 对"）；★[handoff-18crate-ci-fix-2026-09-23.md](../01-handoffs/handoff-18crate-ci-fix-2026-09-23.md) 头注（"只写实测过的事实；推断一律标'推断'，没验的一律标'未验'"）+ 推断错误勘误段（"仍应视为一次'叙事先于实测'"）；★[AGENTS.md](../../../AGENTS.md) §1（0 装 PASS 与"每个数字必须可复核"）；★[live-verification-ledger.md](../live-verification-ledger.md)（验收权威定位）；★[ENGINEER-MANIFESTO.md](../ENGINEER-MANIFESTO.md) §13（"`git fetch` 失败 ≠ `git push` 失败…不要凭 fetch 失败推断 push"同构教训）。
 
 ## 洞察 4 · "AI 先用、人后用"第一律的诞生现场
 
@@ -65,7 +65,7 @@
 
 【制度化落点】
 1. **宪章 §〇**（[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §〇，2026-10-13 立）：能力先做成**工具**（模型可调用、过治理、入名册）；人类界面是同内核的**包装出口**（不另起炉灶、不两套逻辑）；判据：删掉人类界面后，该能力对 agent 仍然完整可用；
-2. **吸收裁定顺序**（[absorption-candidates-2026-10.md](../absorption-candidates-2026-10.md) §〇）：吸收任何项目先问『AI 拿到它能干什么』，再问『人怎么玩』；
+2. **吸收裁定顺序**（[absorption-candidates-2026-10.md](../03-audits/absorption-candidates-2026-10.md) §〇）：吸收任何项目先问『AI 拿到它能干什么』，再问『人怎么玩』；
 3. **落地实形**：一个引擎两个出口（备份面：模型面工具先有、CLI 面同内核包装），后续能力照此成形。
 
 【可复用判据】设计新能力先过三问，第三问是硬判据：
@@ -73,7 +73,7 @@
 2. 人类界面是同内核的**包装出口**吗（有没有第二套逻辑）？
 3. **删掉人类界面后，该能力对 agent 仍然完整可用**吗？——删不删都一样的能力，才叫过了第一律。
 
-> 出处：★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §〇（设计第一律全文与三步裁定顺序）；★[absorption-candidates-2026-10.md](../absorption-candidates-2026-10.md) §〇（2026-10-13 owner 裁定原文与吸收提问法）；★[G5-backup-restore-delivery.md](../backend-enhancement/G5-backup-restore-delivery.md) 头注（"一个引擎, 两个出口: 模型面 `tool.backup_export` (AI 先用) + CLI 面"落地实形）；★[philosophy-study/00-master-synthesis.md](../philosophy-study/00-master-synthesis.md)（"吸收纪律照旧：设计第一律（AI 先用、人后用）"）。
+> 出处：★[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md) §〇（设计第一律全文与三步裁定顺序）；★[absorption-candidates-2026-10.md](../03-audits/absorption-candidates-2026-10.md) §〇（2026-10-13 owner 裁定原文与吸收提问法）；★[G5-backup-restore-delivery.md](../backend-enhancement/G5-backup-restore-delivery.md) 头注（"一个引擎, 两个出口: 模型面 `tool.backup_export` (AI 先用) + CLI 面"落地实形）；★[philosophy-study/00-master-synthesis.md](../philosophy-study/00-master-synthesis.md)（"吸收纪律照旧：设计第一律（AI 先用、人后用）"）。
 
 ## 洞察 5 · "用户觉得重复 = 分层没说清"案（本会话）
 
@@ -98,9 +98,9 @@
 【洞察】owner 随手记录的 60 项（视频随手记录习惯触发）经分诊变成真金：随手记的杂音量不是负担，是**未分诊的资产**；价值不在记了多少，而在"分诊 → 调研 → 裁定 → 落地 → 回写台账"这条流水线有没有建成。流水线建成后产出惊人：五类分诊总表、5 条机制级 TOP 候选全部进入施工序、并且被产品化为它自己的能力（随手记入口 + 书→技能沉淀）——**吸收优秀实践从一次战役动作变成产品本能**。
 
 【制度化落点】
-1. **吸收候选池**（[absorption-candidates-2026-10.md](../absorption-candidates-2026-10.md)）：分诊总表（五类、每项"一句话假说（它教我们什么）"+ 核实状态，未核实标"待研"不望文生义）+ TOP 候选 + 调研队列（"一项目一小节、机制假说+实证+吸收裁定三段式"，见 [04-methodology.md](04-methodology.md) 配方 3）+ 落地追踪；
-2. **吸收台账**（[absorption-ledger.md](../absorption-ledger.md)）：吸收后回写台账可追账（哪批验收、证据在哪）；
-3. **产品化回环**：随记习惯 → 随手记工具（[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md)：一键记一条→未整理原料入记忆流）；吸收战役 → 书→技能沉淀（[I-absorption-automation.md](../backend-enhancement/I-absorption-automation.md) P 轴分期，文件名保留旧名防断链）——判词与方法论最终都变成产品能力。
+1. **吸收候选池**（[absorption-candidates-2026-10.md](../03-audits/absorption-candidates-2026-10.md)）：分诊总表（五类、每项"一句话假说（它教我们什么）"+ 核实状态，未核实标"待研"不望文生义）+ TOP 候选 + 调研队列（"一项目一小节、机制假说+实证+吸收裁定三段式"，见 [04-methodology.md](04-methodology.md) 配方 3）+ 落地追踪；
+2. **吸收台账**（[absorption-ledger.md](../03-audits/absorption-ledger.md)）：吸收后回写台账可追账（哪批验收、证据在哪）；
+3. **产品化回环**：随记习惯 → 随手记工具（[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md)：一键记一条→未整理原料入记忆流）；吸收战役 → 书→技能沉淀（[I-absorption-automation.md](../backend-enhancement/02-axes/I-absorption-automation.md) P 轴分期，文件名保留旧名防断链）——判词与方法论最终都变成产品能力。
 
 【可复用判据】面对一批杂乱输入，五步判据逐步可执行：
 1. **只分诊不改写**：原料原样保留，按类归堆（分诊总表式）；
@@ -109,7 +109,7 @@
 4. **落地必回写台账**：吸收后能追账（验收批 + 证据指针）才算吸收完成；
 5. **中性收口**：借鉴思路、产物不留痕迹（宪章纪律，表述扫描零命中）。
 
-> 出处：★[absorption-candidates-2026-10.md](../absorption-candidates-2026-10.md) 头注（"owner 随记 60 项（视频随手记录习惯触发）"）+ §一五类分诊总表 + §二 TOP 候选 + §三调研纪律 + §三之半落地追踪 + §四登记/回写；★[absorption-ledger.md](../absorption-ledger.md)（吸收台账回写先例）；★[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) 头注（"owner 随记习惯的产品化"）；★[I-absorption-automation.md](../backend-enhancement/I-absorption-automation.md)（P 轴分期：吸收自动化）；★[04-methodology.md](04-methodology.md) 配方 3（一项目一小节、三段式）。
+> 出处：★[absorption-candidates-2026-10.md](../03-audits/absorption-candidates-2026-10.md) 头注（"owner 随记 60 项（视频随手记录习惯触发）"）+ §一五类分诊总表 + §二 TOP 候选 + §三调研纪律 + §三之半落地追踪 + §四登记/回写；★[absorption-ledger.md](../03-audits/absorption-ledger.md)（吸收台账回写先例）；★[quick-capture-delivery.md](../backend-enhancement/quick-capture-delivery.md) 头注（"owner 随记习惯的产品化"）；★[I-absorption-automation.md](../backend-enhancement/02-axes/I-absorption-automation.md)（P 轴分期：吸收自动化）；★[04-methodology.md](04-methodology.md) 配方 3（一项目一小节、三段式）。
 
 ## 附：洞察 ↔ 制度化落点 ↔ 对外指南对照速查
 

@@ -4863,9 +4863,9 @@ mod tests {
 
     /// 每测试独立临时工作区。
     fn workspace(tag: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("apeireth-doc-ops-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let p = std::env::temp_dir().join(format!("apeireth-doc-ops-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        let dir = p.join("ws");
         std::fs::create_dir_all(&dir).expect("创建测试工作区");
         dir
     }

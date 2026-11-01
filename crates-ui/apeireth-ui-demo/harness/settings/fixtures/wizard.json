@@ -1,0 +1,55 @@
+{
+  "_note": "W1 首次运行向导的固定数据。文案逐字取自生产（lib/onboarding.ts 与 FirstRunWizard.svelte）。",
+  "_source": "frontend/companion-desktop/src/lib/onboarding.ts:30-76、frontend/companion-desktop/src/lib/components/FirstRunWizard.svelte:32-97",
+  "steps": {
+    "casual": ["welcome", "tier", "api", "identity", "preset"],
+    "pro": ["welcome", "tier", "pro-guide"]
+  },
+  "stepTitles": {
+    "welcome": {"title": "欢迎使用 Apeireth 伙伴", "sub": "先把「这是什么」讲清楚，约 2 分钟"},
+    "tier": {"title": "你是哪类用户？", "sub": "不同轨道，不同待遇——之后随时可改"},
+    "api": {"title": "连接模型服务", "sub": "密钥只进系统钥匙串，不落盘明文"},
+    "identity": {"title": "自我描述词", "sub": "他如何理解你——随每次对话带在身上"},
+    "preset": {"title": "普通用户预设值", "sub": "一次配好，使用中自动调整参数"},
+    "pro-guide": {"title": "专业用户参考", "sub": "只做介绍——一切由你自己掌控"}
+  },
+  "presets": [
+    {"id": "deepseek", "name": "DeepSeek", "baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-v4-flash", "hint": "推荐 · 本项目实测路径"},
+    {"id": "openai", "name": "OpenAI", "baseUrl": "https://api.openai.com/v1", "model": "gpt-4o", "hint": ""},
+    {"id": "minimax", "name": "MiniMax", "baseUrl": "https://api.minimax.chat/v1", "model": "MiniMax-M3", "hint": ""},
+    {"id": "ollama", "name": "Ollama 本地", "baseUrl": "http://localhost:11434/v1", "model": "llama3.3", "hint": "无需 key"},
+    {"id": "custom", "name": "自定义端点", "baseUrl": "", "model": "", "hint": "任意 OpenAI 兼容服务"}
+  ],
+  "introBullets": [
+    "对话：多会话、流式出字，审批与审计都在本地留痕",
+    "治理：危险能力（shell / fetch / 文件写）默认关闭，逐次人工审批",
+    "记忆：本地记忆库，核心记忆族可一键开启",
+    "伙伴：阿佩瑞斯带着人设与用户印象与你相处，换人设即换档案"
+  ],
+  "introPlan": [
+    "① 选择使用方式（普通用户 / 专业用户）",
+    "② 连接模型服务（端点、模型、密钥）",
+    "③ 自我描述词（他如何理解你）",
+    "④ 普通用户预设值（使用中自动调整参数）；专业用户只做介绍"
+  ],
+  "proGuideLines": [
+    "设置 ›「连接」：服务商、端点、模型、密钥（密钥只进系统钥匙串）",
+    "设置 ›「伙伴档案」：人设、用户印象、记忆倾向、性情旋钮与成长日志",
+    "设置 ›「能力与安全」：工具与高级能力开关（危险项默认关，逐次人工审批）",
+    "设置 ›「外观」：主题、强调色、背景",
+    "预算旋钮（回合轮数 / 工具调用 / 上下文预算）留空 = 后端默认，填写即显式生效"
+  ],
+  "state": {
+    "_note": "初始态：分流未选（tier = null）、步序 0、预设 deepseek。",
+    "tier": null,
+    "stepIndex": 0,
+    "presetId": "deepseek",
+    "apiKey": "",
+    "baseUrl": "https://api.deepseek.com/v1",
+    "model": "deepseek-v4-flash",
+    "selfDescription": "",
+    "autoTune": true,
+    "applying": false,
+    "error": ""
+  }
+}

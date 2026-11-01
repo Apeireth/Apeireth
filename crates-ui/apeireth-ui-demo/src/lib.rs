@@ -31,13 +31,25 @@
 pub mod approval_card;
 pub mod fixture;
 mod fixture_generated;
+pub mod toolcard_fixture;
+mod toolcard_fixture_generated;
+pub mod toolgrid_fixture;
+mod toolgrid_fixture_generated;
 
-pub use approval_card::{format_clock_utc, ApprovalCard, ApprovalCardProps, ApprovalItem};
+// ⚠⚠️ **`format_clock_utc` 不再从 crate 根公开导出**（2026-10-27 边界守卫的第一次命中）。
+//
+// 它是审批卡早期那份「固定 UTC」实现 ⇒ ⇒ **绕过**进程级时间器
+// ⇒ ⇒ 宿主装了浏览器 `Intl` 也不被消费 ⇒ ⇒ 非 UTC 时区下差 8 小时（实测）。
+// ⇒ ⇒ 组件已改用 `governance_tab::format_clock_hm`（进程级时间器）。
+// ⇒ ⇒ 保留它**只为** native 的可复现基准与单测 ⇒ ⇒ 故**不公开** ⇒ ⇒ 防复发。
+pub use approval_card::{ApprovalCard, ApprovalCardProps, ApprovalItem};
 pub use fixture::pilot_item;
+pub use toolcard_fixture::{tool_card_cases, ToolCardCase};
+pub use toolgrid_fixture::{toolgrid_cases, toolgrid_tools, ToolGridCase};
 
 use std::rc::Rc;
 
-use apeireth_ui_core::{Callback, Runtime, Signal};
+use apeireth_ui_core::{Callback, ReactiveScope, Signal};
 use apeireth_ui_dom::VNode;
 
 /// 试点应用状态（响应式部分）。
@@ -56,8 +68,8 @@ pub struct PilotState {
 
 /// 试点状态的内层（可共享 ⇒ 回调能捕获它）。
 struct PilotInner {
-    /// 运行时（信号宿主）。
-    runtime: Runtime,
+    /// 响应式作用域（**使用者形态** ⇒ 本状态**挂不了 effect**）。
+    scope: ReactiveScope,
     /// 处理中。
     busy: Signal<bool>,
     /// 已复制。
@@ -68,11 +80,9 @@ struct PilotInner {
     visible: Signal<bool>,
 }
 
-impl Default for PilotState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// ⚠️ **本类型刻意没有 `Default` 实现**（2026-10-26）：
+// `Default` 只能写成「自建一个运行时」⇒ ⇒ 那正是「幽灵输入」的根
+// ⇒ ⇒ 有 `Default` ⇒ 就有一条**隐式**的自建路径 ⇒ ⇒ 类型层面的收口被绕过。
 
 impl Clone for PilotState {
     fn clone(&self) -> Self {
@@ -84,22 +94,26 @@ impl Clone for PilotState {
 
 impl PilotState {
     /// 建一份初始状态。
-    pub fn new() -> Self {
-        let runtime = Runtime::new();
+    /// ⭐ **接受宿主给的响应式作用域**（**使用者形态**；2026-10-26）。
+    ///
+    /// ⇒ ⇒ 本状态**拿不到**挂 effect / flush 的能力 ⇒ ⇒ 它**不可能**成为
+    /// 渲染链的另一端 ⇒ ⇒ 它的信号**必然**落在宿主授予的运行时上
+    /// ⇒ ⇒ 「幽灵输入」的结构条件被切断。
+    pub fn new(scope: ReactiveScope) -> Self {
         Self {
             inner: Rc::new(PilotInner {
-                busy: runtime.signal(false),
-                copied: runtime.signal(false),
-                decision: runtime.signal(None),
-                visible: runtime.signal(true),
-                runtime,
+                busy: scope.signal(false),
+                copied: scope.signal(false),
+                decision: scope.signal(None),
+                visible: scope.signal(true),
+                scope,
             }),
         }
     }
 
-    /// 运行时（信号宿主）。
-    pub fn runtime(&self) -> &Runtime {
-        &self.inner.runtime
+    /// 响应式作用域（**使用者形态**；供宿主复核「同一个运行时」）。
+    pub fn scope(&self) -> &ReactiveScope {
+        &self.inner.scope
     }
 
     /// 处理中信号。
@@ -142,11 +156,6 @@ impl PilotState {
     /// 标记为已复制。
     pub fn mark_copied(&self) {
         self.inner.copied.set(true);
-    }
-
-    /// 跑一次调度（native 同步 flush）。
-    pub fn flush(&self) {
-        self.inner.runtime.flush();
     }
 }
 
@@ -208,6 +217,7 @@ mod tests {
     //! crate 级断言：跨层组合行为（宏组件 + 组件库 + 响应式信号）。
 
     use super::*;
+    use apeireth_ui_core::Runtime;
     use apeireth_ui_core::UiComponent;
     use apeireth_ui_dom::Children;
 
@@ -252,7 +262,7 @@ mod tests {
 
     #[test]
     fn approval_card_renders_the_twenty_one_class_names() {
-        let state = PilotState::new();
+        let state = PilotState::new(Runtime::new().reactive_scope());
         let node = ApprovalCard::render(&pilot_props(&state));
         let text = tree_to_text(&node);
 
@@ -266,7 +276,7 @@ mod tests {
 
     #[test]
     fn approval_card_renders_the_expected_structure() {
-        let state = PilotState::new();
+        let state = PilotState::new(Runtime::new().reactive_scope());
         let node = ApprovalCard::render(&pilot_props(&state));
         let text = tree_to_text(&node);
 
@@ -280,9 +290,10 @@ mod tests {
 
     #[test]
     fn dismiss_hides_the_card_without_making_a_business_decision() {
-        let state = PilotState::new();
+        let runtime = Runtime::new();
+        let state = PilotState::new(runtime.reactive_scope());
         state.dismiss();
-        state.flush();
+        runtime.flush();
 
         assert!(!state.visible().get(), "关闭 ⇒ 卡片隐藏");
         assert!(
@@ -293,14 +304,40 @@ mod tests {
 
     #[test]
     fn allow_and_reject_record_different_decisions() {
-        let allow_state = PilotState::new();
+        let allow_runtime = Runtime::new();
+        let allow_state = PilotState::new(allow_runtime.reactive_scope());
         allow_state.allow();
-        allow_state.flush();
+        allow_runtime.flush();
         assert_eq!(allow_state.decision().get(), Some(true));
 
-        let reject_state = PilotState::new();
+        let reject_runtime = Runtime::new();
+        let reject_state = PilotState::new(reject_runtime.reactive_scope());
         reject_state.reject();
-        reject_state.flush();
+        reject_runtime.flush();
         assert_eq!(reject_state.decision().get(), Some(false));
     }
 }
+// ── 设置页三页的**子面**宿主挂载模块（并行迁移面 · 预置声明）──
+// ⚠️ 预置声明 ⇒ 各子面施工线**只填自己的模块文件** ⇒ 共享点归零。
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_budget;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_capability;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_character;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_data;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_frame;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_provider;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_theme;
+#[cfg(not(target_arch = "wasm32"))]
+// ⚠️ **必须是 `not(wasm32)`**：本 crate 的 `lib` 与 `bin` 是**两个编译单元**，
+// 但会打进**同一个 wasm 产物** ⇒ 同一份模块文件若被两边都编译，
+// 任何 `#[wasm_bindgen]` 记号都会产生**同名外部符号** ⇒ wasm 链接阶段失败
+// （实测报错：duplicate symbol）。⇒ native 侧归本 lib（跑 native 单测），
+// wasm 侧归 `main.rs` 那份声明。
+#[cfg(not(target_arch = "wasm32"))]
+pub mod settings_wizard;

@@ -1,0 +1,1594 @@
+
+  .sp-capability .settings-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .sp-capability .settings-layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    /* 响应式（滚轮修复批）：单行 minmax(0,1fr) 把行高钉死在容器内——
+       小窗下内容列成为确定的滚动面板（滚轮/滚动条都直达），不随内容无限长高。 */
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .sp-capability .settings-subnav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px 12px;
+    border-right: 1px solid var(--line);
+    background: var(--surface);
+    /* 滚轮语义（CDP 实测定案）：子导航**不**自滚——它是页面 chrome，滚轮落给
+       内容列（wheel-router R4 唯一面板规则）。做成滚动面板会两头坏：R1 原生
+       吞掉滚轮只滚导航、且让抽屉子树多面板使 R4 失效。窗口最小高 640px 下
+       导航内容不溢出（5 组 ≤ ~500px），极端矮窗由整窗最小尺寸兜住。 */
+    overflow: hidden;
+    min-height: 0;
+  }
+  .sp-capability .subnav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    /* 多开预算（980×640 实测可用 500px）：5 大行 + 13 分区页全开也要原生放得下
+       （子导航不自滚是滚轮契约），故分区页行高 22px（padding 3 + line 16）；
+       全开预算 502px ≤ 实测 532px，留 30px 余量。 */
+    padding: 3px 12px;
+    line-height: 16px;
+    border-radius: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .sp-capability .subnav-btn:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .sp-capability .subnav-btn.active {
+    background: var(--amber-wash);
+    color: var(--amber);
+    font-weight: 500;
+  }
+
+  .sp-capability .settings-content {
+    overflow-y: auto;
+    padding: 24px 36px 48px;
+    max-width: 900px;
+    /* 响应式（滚轮修复批）：配合 .settings-layout 的 minmax(0,1fr) 行，
+       内容列在任意窗口尺寸下都是有界滚动面板。 */
+    min-height: 0;
+  }
+  .sp-capability .setting-block {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .sp-capability .block-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sp-capability .block-desc {
+    margin: -10px 0 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+/* Provider summary */
+
+
+   
+  .sp-capability .provider-summary {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    flex-wrap: wrap;
+  }
+  .sp-capability .summary-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .sp-capability .summary-badge {
+    align-self: flex-start;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--amber-wash);
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .sp-capability .summary-main strong {
+    font-size: 15px;
+    color: var(--text);
+  }
+  .sp-capability .summary-model {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sp-capability .summary-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 0;
+  }
+  .sp-capability .summary-url {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--faint);
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sp-capability .status-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    background: var(--surface);
+  }
+  .sp-capability .status-pill.ok {
+    border-color: rgba(61, 122, 92, 0.35);
+    color: var(--green);
+    background: var(--green-wash);
+  }
+  .sp-capability .status-pill.warn {
+    border-color: rgba(168, 72, 64, 0.35);
+    color: var(--danger);
+    background: rgba(168, 72, 64, 0.08);
+  }
+  .sp-capability .status-pill.idle {
+    color: var(--faint);
+  }
+/* Config steps */
+
+
+   
+  .sp-capability .config-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .sp-capability .step-num {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--amber-wash);
+    color: var(--amber);
+    border: 1px solid var(--amber-line);
+    margin-top: 2px;
+  }
+  .sp-capability .step-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sp-capability .step-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sp-capability .form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 720px) {
+    .form-row-2 {
+      grid-template-columns: 1fr;
+    }
+  }
+  .sp-capability .model-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .sp-capability .disc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .sp-capability .disc-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    min-width: 180px;
+  }
+  .sp-capability .disc-search input {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 12px;
+    color: var(--text);
+    width: 140px;
+  }
+  .sp-capability .model-catalog {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .sp-capability .catalog-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .sp-capability .catalog-item:last-child {
+    border-bottom: 0;
+  }
+  .sp-capability .catalog-item:hover {
+    background: var(--surface-2);
+  }
+  .sp-capability .catalog-item.selected {
+    background: var(--amber-wash);
+    color: var(--amber);
+  }
+  .sp-capability .catalog-empty {
+    margin: 0;
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--faint);
+  }
+/* Protocol Tabs */
+
+
+   
+  .sp-capability .protocol-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .sp-capability .protocol-tab {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+    color: var(--muted);
+  }
+  .sp-capability .protocol-tab:hover {
+    border-color: var(--amber-line);
+    color: var(--text);
+  }
+  .sp-capability .protocol-tab.selected {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+  }
+  .sp-capability .proto-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .sp-capability .proto-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sp-capability .protocol-tab.selected .proto-title {
+    color: var(--amber);
+  }
+  .sp-capability .proto-sub {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+/* Presets Row */
+
+
+   
+  .sp-capability .presets-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sp-capability .preset-chip {
+    padding: 6px 12px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .sp-capability .preset-chip:hover {
+    border-color: var(--amber-line);
+    color: var(--text);
+  }
+  .sp-capability .preset-chip.selected {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+    font-weight: 600;
+  }
+/* Form controls */
+
+
+   
+  .sp-capability .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sp-capability .form-group label,
+  .sp-capability .form-group .group-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .sp-capability .form-group input {
+    padding: 8px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 13px;
+    outline: 0;
+  }
+  .sp-capability .form-group input:focus {
+    border-color: var(--amber-line);
+  }
+  .sp-capability .field-hint {
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.4;
+  }
+/* Key input with show/hide toggle */
+
+
+   
+  .sp-capability .key-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .sp-capability .key-input-wrapper input {
+    width: 100%;
+    padding-right: 36px;
+  }
+  .sp-capability .key-toggle-btn {
+    position: absolute;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
+  }
+  .sp-capability .key-toggle-btn:hover {
+    color: var(--text);
+  }
+
+  .sp-capability .credential-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+  }
+  .sp-capability .cred-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .sp-capability .chip-label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .sp-capability .model-chip {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11px;
+    font-family: var(--mono);
+    cursor: pointer;
+  }
+  .sp-capability .model-chip:hover {
+    border-color: var(--amber-line);
+    color: var(--amber);
+  }
+  .sp-capability .model-chip.selected {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+  }
+/* Test Connection Banner */
+
+
+   
+  .sp-capability .test-result-box {
+    padding: 12px 14px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .sp-capability .test-result-box.success {
+    background: rgba(46, 204, 113, 0.08);
+    border: 1px solid rgba(46, 204, 113, 0.3);
+  }
+  .sp-capability .test-result-box.failed {
+    background: rgba(231, 76, 60, 0.08);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+  .sp-capability .test-result-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .success-icon {
+    color: #2ecc71;
+  }
+  .failed-icon {
+    color: #e74c3c;
+  }
+  .sp-capability .latency-badge {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .sp-capability .test-result-msg {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .sp-capability .discovered-models {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+    border-top: 1px solid var(--line);
+    padding-top: 6px;
+  }
+  .sp-capability .disc-label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .sp-capability .more-models {
+    font-size: 11px;
+    color: var(--faint);
+    align-self: center;
+  }
+/* Advanced Gateway Box */
+
+
+   
+  .sp-capability .advanced-box {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .sp-capability .advanced-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .sp-capability .advanced-toggle:hover {
+    color: var(--text);
+  }
+  .sp-capability .adv-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+  }
+  .sp-capability .advanced-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+
+  .sp-capability .info-card {
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+/* ===== 能力中心 · 同类 IM 式分组卡片（2026-10-10 W2/W3 收官批）===== */
+
+
+   
+  .sp-capability .cap-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sp-capability .cap-summary b {
+    color: var(--amber);
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+/* 「推荐配置」一键预设：按钮 + 说明（能力中心）。 */
+
+
+   
+  .sp-capability .preset-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sp-capability .preset-hint {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sp-capability .preset-actions {
+    display: flex;
+    gap: 8px;
+  }
+/* 文本提交组（第 2 级）：整组失焦/回车提交的容器。display:contents
+     不改既有排版，只负责承载组事件与组语义。 */
+
+
+   
+  .sp-capability .text-group {
+    display: contents;
+  }
+/* 字段旁即效确认：未提交显「未保存」，提交成功闪 ✓。 */
+
+
+   
+  .sp-capability .field-flag {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .sp-capability .field-dirty {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--amber-wash);
+    color: var(--amber);
+  }
+  .sp-capability .field-ack {
+    color: #2ecc71;
+  }
+
+  .sp-capability .workspace-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: 0;
+  }
+  .sp-capability .workspace-input:focus {
+    border-color: var(--amber-line);
+  }
+
+  .sp-capability .cap-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .sp-capability .cap-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .sp-capability .cap-card-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .sp-capability .cap-card-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--faint);
+  }
+/* 行：图标 + 标题/副文案 + 右侧控制。整行可点（同类设置项语义）。 */
+
+
+   
+  .sp-capability .cap-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 14px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    color: var(--text);
+  }
+  .sp-capability .cap-row:last-child {
+    border-bottom: 0;
+  }
+  .sp-capability .cap-row:hover {
+    background: var(--surface);
+  }
+  .sp-capability .cap-row.dim {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+/* 即点即生效 pending：目标行开关脉动、行禁用防连点；失败回滚后由横幅收场。 */
+
+   
+  .sp-capability .cap-row:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  .sp-capability .cap-row.pending .cap-switch {
+    animation: cap-pending 0.9s ease-in-out infinite;
+  }
+  @keyframes cap-pending {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .sp-capability .cap-row-nested {
+    padding-left: 40px;
+    background: color-mix(in srgb, var(--surface) 40%, transparent);
+  }
+  .sp-capability .cap-row.sandbox-off {
+    background: rgba(168, 72, 64, 0.07);
+  }
+  .sp-capability .cap-row-static {
+    cursor: default;
+  }
+  .sp-capability .cap-row-static:hover {
+    background: transparent;
+  }
+
+  .sp-capability .cap-icon {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .sp-capability .cap-row-nested .cap-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .sp-capability .cap-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .sp-capability .cap-text strong {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sp-capability .cap-text small {
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.5;
+  }
+/* 工程诚实：每个旋钮如实标注后端 env 名，等宽弱色芯片，不抢视觉。 */
+
+   
+  .sp-capability .cap-env {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 400;
+    color: var(--faint);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    letter-spacing: 0.02em;
+  }
+/* 开关（圆钮样式） */
+
+
+   
+  .sp-capability .cap-switch {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    transition: background 0.18s ease, border-color 0.18s ease;
+  }
+  .sp-capability .cap-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: left 0.18s ease, background 0.18s ease;
+  }
+  .sp-capability .cap-switch.on {
+    background: var(--accent, #6ea8fe);
+    border-color: transparent;
+  }
+  .sp-capability .cap-switch.on .cap-knob {
+    left: 18px;
+    background: #fff;
+  }
+/* 数值行（滑杆 / 数字输入） */
+
+
+   
+  .sp-capability .cap-slider-wrap {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sp-capability .cap-slider-wrap input[type='range'] {
+    width: 110px;
+    accent-color: var(--accent, #6ea8fe);
+  }
+  .sp-capability .cap-slider-wrap input[type='number'] {
+    width: 90px;
+    padding: 6px 8px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: var(--mono);
+    outline: 0;
+  }
+  .sp-capability .cap-slider-wrap input[type='number']:focus {
+    border-color: var(--amber-line);
+  }
+  .sp-capability .cap-slider-wrap b {
+    font-family: var(--mono);
+    font-size: 12px;
+    min-width: 30px;
+    text-align: right;
+    color: var(--text);
+  }
+  .sp-capability .cap-select-wrap select {
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    outline: 0;
+  }
+
+  .sp-capability .cap-warning {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 14px 12px 40px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(168, 72, 64, 0.35);
+    background: rgba(168, 72, 64, 0.08);
+    color: var(--danger);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+/* 默认能力卡：常驻/显式触发机制的说明卡——明确「这不是开关」。
+     主人 2026-10-10 反馈：静态 info-card 与可操控开关行同形，易误以为坏了；
+     改为带徽章的说明卡 + 页脚注，与开关卡在视觉上明确分层。 */
+
+
+   
+  .sp-capability .cap-default-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 10px;
+    background: transparent;
+  }
+  .sp-capability .cap-default-badge {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--faint);
+  }
+  .sp-capability .cap-default-badge.on {
+    border-color: rgba(61, 122, 92, 0.35);
+    color: var(--green);
+    background: var(--green-wash);
+  }
+  .sp-capability .cap-default-badge.note {
+    border-color: var(--line-strong);
+    color: var(--muted);
+  }
+  .sp-capability .cap-default-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sp-capability .cap-default-text {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .sp-capability .cap-default-text code {
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .sp-capability .cap-footnote {
+    margin: -6px 2px 0;
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.6;
+  }
+
+  .sp-capability .cap-input-wrap input {
+    width: 170px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: var(--mono);
+    outline: 0;
+  }
+  .sp-capability .cap-input-wrap input:focus {
+    border-color: var(--amber-line);
+  }
+
+  .sp-capability .code-box-wrap {
+    position: relative;
+  }
+  .sp-capability .code-box-wrap .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+  }
+/* 用户印象动作行（立即总结 / 自动总结开关 / 清空） */
+
+   
+  .sp-capability .impression-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 12px;
+  }
+/* 多 Agent 人设卡片 */
+
+
+   
+  .sp-capability .persona-card {
+    padding: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sp-capability .persona-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .sp-capability .persona-index {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--faint);
+  }
+  .sp-capability .persona-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sp-capability .quiet-button.selected {
+    background: var(--amber-wash);
+    border-color: var(--amber-line);
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .sp-capability .danger-text { color: var(--danger); }
+  .sp-capability .form-group textarea {
+    padding: 8px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.6;
+    font-family: inherit;
+    resize: vertical;
+    outline: 0;
+  }
+  .sp-capability .form-group textarea:focus { border-color: var(--amber-line); }
+  .sp-capability .info-title {
+    font-size: 13px;
+    color: var(--text);
+  }
+  .sp-capability .notice-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(231, 162, 59, 0.08);
+    border: 1px solid var(--amber-line);
+    border-radius: 7px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .sp-capability .diag-results {
+    padding: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sp-capability .diag-summary {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+  .sp-capability .diag-summary b {
+    color: var(--amber);
+    font-family: var(--mono);
+  }
+  .sp-capability .diag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sp-capability .diag-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .sp-capability .diag-item code {
+    font-family: var(--mono);
+    color: var(--faint);
+  }
+
+  .sp-capability .danger-zone-box {
+    padding: 16px;
+    background: rgba(224, 91, 80, 0.08);
+    border: 1px solid rgba(224, 91, 80, 0.35);
+    border-radius: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sp-capability .danger-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--danger);
+  }
+  .sp-capability .danger-desc {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .sp-capability .danger-button {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    background: var(--danger);
+    border: 1px solid var(--danger);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+/* 会话清理双档（spec §1）：两档并排 + 未接线的③灰显提示。 */
+
+   
+  .sp-capability .danger-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sp-capability .danger-actions .danger-button {
+    align-self: auto;
+  }
+  .sp-capability .danger-future {
+    opacity: 0.55;
+  }
+
+  .sp-capability .code-box {
+    margin: 0;
+    padding: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .sp-capability .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: grid;
+    place-items: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .sp-capability .modal-dialog {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .sp-capability .modal-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .sp-capability .modal-header h3 {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .sp-capability .modal-body {
+    padding: 16px 18px;
+  }
+  .sp-capability .modal-desc {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sp-capability .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+/* ---- wave-2 设置页新增样式 ---- */
+
+
+   
+  .sp-capability .keychain-status {
+    padding: 8px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .sp-capability .keychain-stored {
+    color: var(--green);
+    font-family: var(--mono);
+  }
+  .sp-capability .keychain-muted {
+    color: var(--faint);
+  }
+  .sp-capability .modal-error {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: var(--danger);
+    line-height: 1.5;
+  }
+  .sp-capability .delete-key-btn {
+    margin-right: auto;
+  }
+  .sp-capability .apply-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sp-capability .warnings-box {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--amber-line);
+    background: var(--amber-wash);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sp-capability .warnings-box strong {
+    color: var(--amber);
+    display: block;
+    margin-bottom: 6px;
+  }
+  .sp-capability .warnings-box ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sp-capability .warnings-box li {
+    line-height: 1.5;
+  }
+  .sp-capability .effective-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+    margin-top: 8px;
+  }
+  .sp-capability .effective-grid span {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .sp-capability .effective-grid code {
+    font-family: var(--mono);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sp-capability .model-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .sp-capability .workspace-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 6px;
+  }
+  .sp-capability .workspace-path {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sp-capability .error-hint {
+    color: var(--danger);
+  }
+  .sp-capability .form-group select {
+    padding: 8px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 13px;
+    outline: 0;
+  }
+  .sp-capability .form-group select:focus {
+    border-color: var(--amber-line);
+  }
+/* ---- 「预算与配额」：会话消耗卡 / 预算余量条 / 旋钮反馈 / 「暂无接口」徽标 ---- */
+
+
+   
+  .sp-capability .meter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .sp-capability .meter-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sp-capability .meter-cell small {
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .sp-capability .meter-cell b {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sp-capability .budget-remaining {
+    padding: 12px 14px;
+  }
+  .sp-capability .remaining-title {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .sp-capability .remaining-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 5px 0;
+  }
+  .sp-capability .remaining-label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .sp-capability .remaining-label small {
+    font-size: 10px;
+    color: var(--faint);
+  }
+  .sp-capability .remaining-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .sp-capability .remaining-strong {
+    color: var(--text);
+  }
+  .sp-capability .remaining-bar {
+    flex: none;
+    width: 96px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .sp-capability .remaining-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--amber);
+  }
+  .sp-capability .budget-badge {
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .sp-capability .budget-feedback {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px 10px 40px;
+    font-size: 11px;
+    color: var(--amber);
+  }
+  .sp-capability .quota-none {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px dashed var(--line-strong);
+    color: var(--faint);
+  }
+  .sp-capability .budget-behaviors {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .sp-capability .budget-behaviors li {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+/* ---- daemon 运维面（D12）：状态行 / 启停指引命令行（只读 + 可复制） ---- */
+
+
+   
+  .sp-capability .ops-rows {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .sp-capability .ops-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 14px;
+  }
+  .sp-capability .ops-label {
+    flex: none;
+    width: 110px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sp-capability .ops-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .sp-capability .ops-note {
+    font-size: 11px;
+    color: var(--faint);
+    overflow-wrap: anywhere;
+  }
+  .sp-capability .ops-guidance {
+    padding: 12px 14px;
+  }
+  .sp-capability .ops-guidance-title {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .sp-capability .ops-command {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .sp-capability .ops-command-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .sp-capability .ops-command-head strong {
+    font-size: 12px;
+    color: var(--text);
+  }
+  .sp-capability .ops-command-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 10px;
+    overflow-wrap: anywhere;
+  }
+  .sp-capability .ops-command small {
+    font-size: 11px;
+    color: var(--faint);
+  }
+/* 大类行（简化批）：图标 + 标题 + 展开指示；描述词不在导航列（挪去页面顶）。 */
+
+   
+  .sp-capability .subnav-group { display: flex; flex-direction: column; gap: 2px; }
+  .sp-capability .subnav-group-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    /* 大类行 26px（padding 5 + line 16）——多开总高预算见 .subnav-btn 注释。 */
+    padding: 5px 12px; line-height: 16px; border-radius: 6px; border: 0; background: transparent;
+    color: var(--muted); font-size: 12px; font-weight: 600; text-align: left;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .sp-capability .subnav-group-btn:hover { background: var(--surface-2); color: var(--text); }
+  .sp-capability .subnav-group-btn.active { color: var(--text); }
+  .sp-capability .subnav-group-name { flex: 1; }
+  .sp-capability .subnav-chevron { display: flex; color: var(--faint, var(--muted)); transition: transform .15s ease; }
+  .sp-capability .subnav-chevron.open { transform: rotate(180deg); }
+  .sp-capability .subnav-group-pages { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 2px; padding-left: 8px; }
+/* ---- 允许的自建服务器（用户白名单管理列表）---- */
+
+
+   
+  .sp-capability .allowed-server-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .sp-capability .allowed-server-base {
+    flex: 1;
+    font-size: 12px;
+    word-break: break-all;
+  }
+  .sp-capability .allowed-server-remove,
+  .sp-capability .allowed-server-add-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--amber-line, rgba(0, 0, 0, 0.15));
+    border-radius: 6px;
+    background: var(--surface-2, rgba(0, 0, 0, 0.04));
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .sp-capability .allowed-server-remove:disabled,
+  .sp-capability .allowed-server-add-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .sp-capability .allowed-server-add {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .sp-capability .allowed-server-add input {
+    flex: 1;
+  }
+  .sp-capability .allowed-server-error {
+    color: var(--danger, #b42318);
+  }
+/* 描述词落位：大类说明常驻内容列页顶（类别分级下的页面）。 */
+
+   
+  .sp-capability .category-context {
+    margin: 0 0 18px;
+    padding: 10px 14px;
+    border-left: 2px solid var(--amber-wash, var(--line));
+    background: var(--surface-2);
+    border-radius: 0 8px 8px 0;
+  }
+  .sp-capability .category-context-title { margin: 0; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ap-muted, #96919c); }
+  .sp-capability .category-context-blurb { margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+/* ---- 用户中心（第一页）：头像位 + 用户信息表单（失焦/回车即存本地） ---- */
+
+   
+  .sp-capability .user-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+    margin-bottom: 18px;
+  }
+  .sp-capability .user-avatar-slot { flex: none; }
+  .sp-capability .user-avatar-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .sp-capability .user-avatar-fallback {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .sp-capability .user-avatar-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .sp-capability .user-avatar-actions { display: flex; flex-wrap: wrap; gap: 8px; }

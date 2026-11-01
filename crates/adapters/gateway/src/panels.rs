@@ -14,6 +14,7 @@
 //! 不会混两个时刻的状态); 响应内各字段同出一刻, 多客户端并发读各自拿到完整
 //! 一致的快照。该语义由 `tests/multi_client_session.rs` 面板两例钉住。
 
+use crate::principal_forget::{MemoryGovernanceCommand, PrincipalForgetDto};
 use std::sync::{Arc, RwLock};
 
 use apeireth_core::kernel::SessionId;
@@ -360,6 +361,16 @@ pub trait PanelData: Send + Sync {
         reason: Option<&str>,
     ) -> Result<EpisodeMutationDto, String>;
 
+    /// **按主体全量遗忘**（被遗忘权）：跨 5 账一个事务清完。
+    /// 删用户原来**只改用户表** —— 用户的记忆还留着。默认诚实报未接线。
+    async fn forget_principal(
+        &self,
+        principal_id: &str,
+        reason: Option<&str>,
+    ) -> Result<PrincipalForgetDto, String> {
+        crate::principal_forget::forget_principal_unwired(principal_id, reason)
+    }
+
     /// 纠正内容（用户说「你理解错了」）。
     ///
     /// 语义 = 重写**治理视图**内容（原始 append-only episode 行不动），
@@ -436,35 +447,6 @@ pub trait MemoryCommand: Send + Sync {
 
 /// Durable memory governance command port.
 #[async_trait]
-pub trait MemoryGovernanceCommand: Send + Sync {
-    async fn protect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String>;
-    async fn unprotect_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String>;
-    async fn forget_episode(
-        &self,
-        id: &str,
-        expected_rev: u64,
-        reason: Option<&str>,
-    ) -> Result<EpisodeMutationDto, String>;
-
-    /// 纠正内容（见 [`PanelData::update_episode`] 的语义）。
-    async fn update_episode(
-        &self,
-        _id: &str,
-        _content: &str,
-        _updated_by: Option<&str>,
-        _expected_rev: u64,
-    ) -> Result<EpisodeMutationDto, String> {
-        Err("memory.update 未接线（本 embedder 未提供纠正面）".to_string())
-    }
-}
 
 /// Tool catalog read port.
 #[async_trait]

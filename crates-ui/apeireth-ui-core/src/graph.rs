@@ -105,6 +105,46 @@ impl DependencyGraph {
         self.labels.get(&node).map(String::as_str)
     }
 
+    /// 摘掉节点的标签（节点销毁时调用 ⇒ 标签不得单调增长）。
+    pub fn remove_label(&mut self, node: NodeId) {
+        self.labels.remove(&node);
+    }
+
+    /// 当前标签条数（可观测：长跑进程里标签不得只增不减）。
+    pub fn label_count(&self) -> usize {
+        self.labels.len()
+    }
+
+    /// 把节点从图里**彻底摘掉**：双向边 + 标签一并清掉。
+    ///
+    /// 为什么需要：节点被销毁（effect `dispose` / 派生 `dispose`）后，若只清出边
+    /// 不清标签，标签表就只增不减 ⇒ 长跑 SPA 的图结构随节点数线性增长。
+    /// 边是**双向**的 ⇒ 一个节点可能既在别人的依赖集里、也在别人的被依赖集里，
+    /// 两边都要摘（否则反向表会残留指向已销毁节点的空壳条目）。
+    pub fn remove_node(&mut self, node: NodeId) {
+        // 出边：本节点读了谁 ⇒ 谁的「被依赖集」里要去掉本节点。
+        let deps = self.dependencies.remove(&node).unwrap_or_default();
+        for dep in deps {
+            if let Some(set) = self.dependents.get_mut(&dep) {
+                set.remove(&node);
+                if set.is_empty() {
+                    self.dependents.remove(&dep);
+                }
+            }
+        }
+        // 入边：谁读了本节点 ⇒ 那些节点的「依赖集」里要去掉本节点。
+        let dependents = self.dependents.remove(&node).unwrap_or_default();
+        for dependent in dependents {
+            if let Some(set) = self.dependencies.get_mut(&dependent) {
+                set.remove(&node);
+                if set.is_empty() {
+                    self.dependencies.remove(&dependent);
+                }
+            }
+        }
+        self.labels.remove(&node);
+    }
+
     /// 当前依赖边条数（两个方向的表各算一条存储 ⇒ 返回逻辑边数）。
     pub fn edge_count(&self) -> usize {
         self.dependencies.values().map(BTreeSet::len).sum()
@@ -232,5 +272,34 @@ mod tests {
 
         graph.clear_dependencies(reader);
         assert_eq!(graph.node_count(), 0, "空集合条目必须被剪掉");
+    }
+
+    /// 摘掉节点 ⇒ **两个方向**的边与标签都必须消失（否则图与标签表只增不减）。
+    #[test]
+    fn removing_a_node_clears_both_directions_and_the_label() {
+        let mut graph = DependencyGraph::new();
+        let effect = NodeId(1);
+        let signal = NodeId(2);
+        let other = NodeId(3);
+
+        graph.subscribe(effect, signal); // effect 读 signal
+        graph.subscribe(other, effect); // other 读 effect
+        graph.set_label(effect, "视图::待销毁");
+        assert_eq!(graph.label_count(), 1);
+
+        graph.remove_node(effect);
+
+        assert!(graph.dependencies_of(effect).is_empty(), "出边必须清掉");
+        assert!(graph.dependents_of(effect).is_empty(), "入边必须清掉");
+        assert!(
+            graph.dependents_of(signal).is_empty(),
+            "反向表里不得残留已摘节点"
+        );
+        assert!(
+            graph.dependencies_of(other).is_empty(),
+            "别人依赖已摘节点的那条边也必须清掉"
+        );
+        assert_eq!(graph.label_count(), 0, "标签必须一并摘掉");
+        assert_eq!(graph.edge_count(), 0);
     }
 }

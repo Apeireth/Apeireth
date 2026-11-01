@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "t1_pixel_ratio": 0.0,
+  "t1_pixel_different": 0,
+  "t1_pixel_total": 1163340,
+  "t2_dom_equal": true,
+  "t2_dom_diffs": [],
+  "t3_same_width": true,
+  "t3b_same_height": true,
+  "t3_reference_width": 828,
+  "t3_engine_width": 828,
+  "section": "cognition"
+}

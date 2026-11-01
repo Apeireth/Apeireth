@@ -1,0 +1,203 @@
+{
+  "face": "budget（预算与配额 · 设置页 S5 面）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": 0.01,
+  "crop": "element（按**本面自己拥有的区块**裁剪；参考侧夹着的 `MetricsPanel` 是外部组件 ⇒ 未迁 ⇒ 不对照）",
+  "reference_page": "/web/reference/budget/index.html",
+  "engine_page": "/web/engine/budget/index.html",
+  "reference_selector": ".setting-block",
+  "engine_selector": ".sp-budget .setting-block",
+  "excluded_external_component": ".metrics-card（MetricsPanel：外部组件 + HTTP ⇒ 未迁）",
+  "sections": [
+    "budget",
+    "runtime"
+  ],
+  "pairs": [
+    {
+      "passed": true,
+      "section": "budget",
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t4_fill_styles_equal": true,
+      "t4_reference_fills": [
+        "width: 19%;"
+      ],
+      "t4_engine_fills": [
+        "width: 19%;"
+      ],
+      "regions": {
+        "session": {
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 375912,
+          "t1_size_mismatch": false,
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "alignment_delta": {
+            "x": 236.0,
+            "y": 219.765625
+          },
+          "reference_box": {
+            "x": 236,
+            "y": 219.765625,
+            "w": 828,
+            "h": 454.0625
+          },
+          "engine_box": {
+            "x": 236,
+            "y": 219.765625,
+            "w": 828,
+            "h": 454.0625
+          }
+        },
+        "knobs": {
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 219420,
+          "t1_size_mismatch": false,
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "alignment_delta": {
+            "x": 236.0,
+            "y": 428.09375
+          },
+          "reference_box": {
+            "x": 236,
+            "y": 900.15625,
+            "w": 828,
+            "h": 265.59375
+          },
+          "engine_box": {
+            "x": 236,
+            "y": 900.15625,
+            "w": 828,
+            "h": 265.59375
+          }
+        },
+        "quota": {
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 240948,
+          "t1_size_mismatch": false,
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "alignment_delta": {
+            "x": 236.0,
+            "y": 428.09375
+          },
+          "reference_box": {
+            "x": 236,
+            "y": 1183.75,
+            "w": 828,
+            "h": 291.15625
+          },
+          "engine_box": {
+            "x": 236,
+            "y": 1183.75,
+            "w": 828,
+            "h": 291.15625
+          }
+        },
+        "exhaust": {
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 168912,
+          "t1_size_mismatch": false,
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "alignment_delta": {
+            "x": 236.0,
+            "y": 428.09375
+          },
+          "reference_box": {
+            "x": 236,
+            "y": 1492.90625,
+            "w": 828,
+            "h": 204.578125
+          },
+          "engine_box": {
+            "x": 236,
+            "y": 1492.90625,
+            "w": 828,
+            "h": 204.578125
+          }
+        }
+      }
+    },
+    {
+      "passed": true,
+      "section": "runtime",
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t4_fill_styles_equal": true,
+      "t4_reference_fills": [],
+      "t4_engine_fills": [],
+      "regions": {
+        "runtime": {
+          "t1_pixel_ratio": 0.0,
+          "t1_pixel_different": 0,
+          "t1_pixel_total": 94392,
+          "t1_size_mismatch": false,
+          "t3_same_width": true,
+          "t3_reference_width": 828,
+          "t3_engine_width": 828,
+          "alignment_delta": {
+            "x": 236.0,
+            "y": 219.765625
+          },
+          "reference_box": {
+            "x": 236,
+            "y": 219.765625,
+            "w": 828,
+            "h": 114.625
+          },
+          "engine_box": {
+            "x": 236,
+            "y": 219.765625,
+            "w": 828,
+            "h": 114.625
+          }
+        }
+      }
+    }
+  ],
+  "checks": {
+    "t1_all_pixels_within_budget": true,
+    "t2_dom_identical": true,
+    "t3_same_width": true,
+    "t4_fill_styles_identical": true
+  },
+  "notes": [
+    "T1 的差异像素阈值：任一通道绝对差 > 2/255 即记「不同」。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与引擎侧的 `sp-*` 作用域锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3 是**宽度同源**：参考侧靠生产自己的布局得到 828px，引擎侧靠对照专用样式表的 `.settings-stage` 钉成 828px ⇒ 不等即判失败。",
+    "T4 是余量条内联宽度的**逐字**比对（`width: N%;`）⇒ 验证「`Math.round(ratio * 100)` 的**半数向 +∞**口径」两侧同源。",
+    "**装置对齐**：参考侧是生产整页（内容块在文档里的位置带小数），引擎侧是独立挂载（位置 0）⇒ 逐区域把引擎侧舞台对齐到参考侧的文档位置（同一像素格）⇒ 差异只反映**渲染本身**。",
+    "参考侧的 `MetricsPanel`（`.metrics-card`）是**外部组件 + HTTP**⇒ 本面**未迁** ⇒ 两侧都**排除**它（对照只覆盖本面自己的区块）。",
+    "运行时分区的**诊断结果区**（`.diag-results`）用外部组件 `StatusBadge`（带自己的 scoped CSS）⇒ **未迁** ⇒ 参考侧的默认态亦无报告 ⇒ 该分支**未覆盖**（诚实边界）。",
+    "环境：视口 1440×900、DPR 1、时区 UTC。"
+  ],
+  "passed": true,
+  "console": [
+    {
+      "side": "reference",
+      "selector": ".setting-block",
+      "messages": []
+    },
+    {
+      "side": "engine",
+      "selector": ".sp-budget .setting-block",
+      "messages": []
+    }
+  ]
+}

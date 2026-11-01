@@ -1,0 +1,80 @@
+{
+  "dom": {
+    "ok": true,
+    "failures": [],
+    "payload": "value=Some(\"a\");pos=None;checked=Some(false)",
+    "g8_error_boundary_ok": true,
+    "g8_captured_error": "Unsupported: create_element() 失败：JsValue(InvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\nInvalidCharacterError: Failed to execute 'createElement' on 'Document': The tag name provided ('') is not a valid name.\n    at http://127.0.0.1:40505/engine/pkg/p5b_harness.js:896:30\n    at handleError (http://127.0.0.1:40505/engine/pkg/p5b_harness.js:3178:18)\n    at __wbg_createElement_74049073a11f9c31 (http://127.0.0.1:40505/engine/pkg/p5b_harness.js:895:67)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element::__wbg_createElement_74049073a11f9c31 externref shim (http://127.0.0.1:40505/engine/pkg/p5b_harness_bg.wasm:wasm-function[7258]:0x3a5d1b)\n    at p5b_harness.wasm.<web_sys[3f0844a8ae53d195]::features::gen_Document::Document>::create_element (http://127.0.0.1:40505/engine/pkg/p5b_harness_bg.wasm:wasm-function[6079]:0x398bd4)\n    at p5b_harness.wasm.<apeireth_ui_dom[3a708cc9b40cc98c]::web::WebDom as apeireth_ui_dom[3a708cc9b40cc98c]::dom::Dom>::create_element (http://127.0.0.1:40505/engine/pkg/p5b_harness_bg.wasm:wasm-function[3736]:0x3525cd)\n    at p5b_harness.wasm.<apeireth_ui_dom[3a708cc9b40cc98c]::renderer::Renderer<apeireth_ui_dom[3a708cc9b40cc98c]::web::WebDom>>::mount_node (http://127.0.0.1:40505/engine/pkg/p5b_harness_bg.wasm:wasm-function[790]:0x130c36)\n    at p5b_harness.wasm.<apeireth_ui_dom[3a708cc9b40cc98c]::renderer::Renderer<apeireth_ui_dom[3a708cc9b40cc98c]::web::WebDom>>::mount (http://127.0.0.1:40505/engine/pkg/p5b_harness_bg.wasm:wasm-function[2034]:0x2b6913)\n    at p5b_harness.wasm.<apeireth_ui_dom[3a708cc9b40cc98c]::renderer::Renderer<apeireth_ui_dom[3a708cc9b40cc98c]::web::WebDom>>::render_guarded (http://127.0.0.1:40505/engine/pkg/p5b_harness_bg.wasm:wasm-function[1537]:0x25ba29)\n    at p5b_harness.wasm.p5b_harness[125d3db13a2a6fa1]::l1_probe (http://127.0.0.1:40505/engine/pkg/p5b_harness_bg.wasm:wasm-function[674]:0xa64ac))",
+    "g8_panic_hook": "installed",
+    "engine_form": {
+      "x": 8,
+      "y": 8,
+      "w": 1424,
+      "h": 21
+    },
+    "js_form": {
+      "x": 8,
+      "y": 8,
+      "w": 1424,
+      "h": 21
+    },
+    "device_input": {
+      "x": 20,
+      "y": 20,
+      "w": 462.5,
+      "h": 52.5
+    }
+  },
+  "upload": {
+    "ok": true,
+    "failures": [],
+    "backend_actual": "Gl",
+    "uploaded_w": 3
+  },
+  "app": {
+    "ok": true,
+    "failures": [],
+    "after_frame": {
+      "ok": true,
+      "failures": [],
+      "render_count": 3
+    },
+    "dispose": {
+      "ok": true,
+      "failures": [],
+      "renders_at_dispose": 3
+    },
+    "frame_stopped": {
+      "ok": true,
+      "failures": []
+    },
+    "reboot": {
+      "ok": true,
+      "failures": []
+    }
+  },
+  "perf": {
+    "ok": true,
+    "failures": [],
+    "width": 8,
+    "depth": 4,
+    "elements": 37477,
+    "row_elements": 4681,
+    "mount_millis": 123,
+    "update_millis": 82,
+    "build_millis": 2,
+    "compared_nodes": 42138,
+    "written_nodes": 8
+  },
+  "binding": {
+    "ok": true,
+    "failures": [],
+    "signal_value": "uplink"
+  },
+  "integration": {
+    "ok": true,
+    "failures": [],
+    "mounted_rows": 9,
+    "first_visible": 98
+  }
+}

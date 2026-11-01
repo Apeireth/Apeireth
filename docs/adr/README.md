@@ -43,13 +43,16 @@
 | [0011](0011-r6-verification-architecture.md) | R6 验证架构——三层门禁语义 / 单一执行器 / 四层验收载体 | **Accepted**（2026-10-20，owner 授权 Wave 4） | Wave 4 / 门禁语义·数字真源·四层验收 |
 | [0012](0012-central-ai-and-household-companion.md) | 中央 AI 与每户伙伴并存——两类主体、两套数据归属 | **Accepted**（2026-10-22，owner 口述拍板） | 多人阶段前置裁定：数据/成长归属、跨主体流动边界 |
 | [0013](0013-open-source-personal-utility-assistant.md) | 定位重裁定：开源免费的个人工具型助手，动态红线取代完全本地 | **Accepted**（2026-10-23，owner 口述拍板）；**取代 0012** | 主战场/红线/开源免费定位；承重墙=出境脱敏闸接电 |
-| [0014](0014-astra-derived-contract.md) | 外部顾问判据落地：四条共识改写、平台第四职责、最小诚实自述集 | **Proposed**（2026-10-23 起草，待 owner 裁定） | 存在理由、义务分级、授权策略对象、问责四构件 |
+| [0014](0014-astra-derived-contract.md) | 外部顾问判据落地：四条共识改写、平台第四职责、最小诚实自述集 | **Accepted**（2026-10-24，owner 裁定）；内容已全部落地合入 main | 存在理由、义务分级、授权策略对象、问责五步、开源语境差异判据 |
 | [0015](0015-pure-rust-ui-engine.md) | 全栈纯 Rust 前端引擎——自研响应式 + DOM 绑定层，独立 workspace 立项 | **Accepted**（2026-10-24，owner 口述拍板） | 引擎边界硬约束 / 视觉层零改写 / crates-ui 独立 workspace / 契约登记 |
 | [0016](0016-frontend-visual-rebuild.md) | 前端视觉总攻——以自研引擎为基底，推倒重建全部视觉方案 | ⚠️ **已被 0018 取代**（同题重编号；本文保留原样不追溯改写） | **部分取代 0015**（视觉层零改写 / 逐像素迁移目标废止；引擎核心决策保留） |
 | [0017](0017-engine-product-repo-split.md) | 引擎仓 / 产品仓分离——双仓边界、护城河落在私有插件包、前端私有 | **Accepted**（2026-10-31 owner 逐条裁决）；S1/S2a 已交付 | 双仓边界 / 私有插件包形态（复用 4 个既有扩展点）/ 两轴版本 / 7 步迁移与回滚 / §10 实施记录 |
 | [0018](0018-frontend-visual-rebuild.md) | 前端视觉总攻——以自研引擎为基底，推倒重建全部视觉方案（**取代 0016 同题草稿**） | **Accepted**（2026-10-31 owner 批准；D3 方案 A：设计原型载体 = K3.1 HTML 原型，Svelte 仅旧线基线） | 部分取代 0015；引擎 `crates-ui` 仍为最终实现载体 |
 | [0019](0019-apeireth-facade-crate.md) | `apeireth` 门面 crate——品牌旗舰名占位 + 单依赖入口 | **Accepted**（2026-10-31 owner 裁决「发就行」）；实现同批落地 | 0 新增允许边 / crate 30→31 / 裸名 `apeireth` 占名 / 拒占位包；**§2.1 默认导出集合已被 0020 取代** |
 | [0020](0020-facade-slim-default.md) | 门面默认面瘦身——`tools` 由默认改可选，默认依赖树 252 → 91 包 | **Accepted**（2026-10-31 owner 裁决「B」）；S1-S2 已落地，**S3 待 owner 授权 bump LOCKED `workspace.version`** | 部分取代 0019 §2.1（默认导出集合）/ 契约 0 改动 / 生产边仍 118 |
+| [0016](0016-personal-line-carries-all-care-mechanisms.md) | 个人线带全部 14 条关怀机制，默认关，用户自行开启 | **Accepted**（2026-10-24，owner 拍板） | 机制归属裁定；数据面=配置文件+CLI（前端待接，不涉及本 ADR） |
+| [0017](0017-ui-engine-gpu-layer-authorization.md) | 引擎 GPU 层的授权范围——片头场景留在引擎，边界落成可执行守卫 | **Accepted**（2026-10-27，owner 口述拍板） | 澄清并扩展 ADR-0015 §2.1；可执行守卫 |
+| [0018](0018-frontend-visual-rebuild.md) | 前端视觉总攻——以自研引擎为基底，推倒重建全部视觉方案 | **Proposed**（2026-10-28 起草，待 owner 复核） | **部分取代 0015**（视觉层零改写 / 逐像素迁移目标废止；引擎核心决策保留）；作战计划见 05-plans/frontend-rebuild-plan.md |
 
 ## 命名
 

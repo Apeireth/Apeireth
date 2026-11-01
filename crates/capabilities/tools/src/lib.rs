@@ -169,16 +169,15 @@ pub use backup::{
 };
 pub use content_feed::{
     content_feed_approval_reason, content_feed_capability, content_feed_pipeline, episode_for_item,
-    ingest_port, item_content_hash, item_identity, item_source, stable_ingest_content,
-    write_face_for_action, AttentionLimits, ContentFeedApprovalHook, ContentFeedConfig,
-    ContentFeedTool, EpisodeWriter, FeedDocumentForm, FeedHealth, FeedItemSummary, FeedKind,
-    FeedLifecycleBody, FeedLifecycleStore, FeedSource, FeedStore, FeedStoreError, FeedWriteFace,
-    IngestOutcome, IngestPort, IngestRequest, LifecyclePolicy, LifecycleStats, PullFeedReport,
-    PullRecord, ACTION_FEED_ADD, ACTION_FEED_LIST, ACTION_FEED_REMOVE, ACTION_PULL,
-    CONTENT_FEED_ACTIONS, CONTENT_FEED_CAPABILITY_ID, CONTENT_FEED_DISCLOSURE_NOTE,
-    CONTENT_FEED_EPISODE_ROLE, CONTENT_FEED_SESSION_LABEL, CONTENT_FEED_TOOL_NAME,
-    DEFAULT_DAILY_INGESTS, DEFAULT_PER_PULL_ITEMS, FEEDS_DOC_NAME, FEED_LIFECYCLE_FILE_NAME,
-    ITEM_LEDGER_MAX,
+    ingest_port, item_identity, item_source, stable_ingest_content, write_face_for_action,
+    AttentionLimits, ContentFeedApprovalHook, ContentFeedConfig, ContentFeedTool, EpisodeWriter,
+    FeedDocumentForm, FeedHealth, FeedItemSummary, FeedKind, FeedLifecycleBody, FeedLifecycleStore,
+    FeedSource, FeedStore, FeedStoreError, FeedWriteFace, IngestOutcome, IngestPort, IngestRequest,
+    LifecyclePolicy, LifecycleStats, PullFeedReport, PullRecord, ACTION_FEED_ADD, ACTION_FEED_LIST,
+    ACTION_FEED_REMOVE, ACTION_PULL, CONTENT_FEED_ACTIONS, CONTENT_FEED_CAPABILITY_ID,
+    CONTENT_FEED_DISCLOSURE_NOTE, CONTENT_FEED_EPISODE_ROLE, CONTENT_FEED_SESSION_LABEL,
+    CONTENT_FEED_TOOL_NAME, DEFAULT_DAILY_INGESTS, DEFAULT_PER_PULL_ITEMS, FEEDS_DOC_NAME,
+    FEED_LIFECYCLE_FILE_NAME, ITEM_LEDGER_MAX,
 };
 pub use doc_ops::{
     authorized_doc_ops_policy, doc_ops_approval_reason, doc_ops_capability,

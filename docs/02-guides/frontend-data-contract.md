@@ -863,7 +863,7 @@ data: [他说] 主人，夜深了，本座留意到你还在忙。
 
 ### 10.4 技能卡 `SkillCard`（P1 书→技能沉淀，**在建**；原 I1，审计修 D13 改名）
 
-出处：`crates/capabilities/tools/src/skill/card.rs`（`SkillCard`/`SkillCardDraft`/`SkillSource`/`SkillSourceKind`）。**状态：P1 线在途**（交付记录随线落盘，[P 轴分期](../04-internal/backend-enhancement/I-absorption-automation.md) 分期表——文件名保留旧名防断链）——前端**严禁提前消费**，形状演进以 `card.rs` 为准。
+出处：`crates/capabilities/tools/src/skill/card.rs`（`SkillCard`/`SkillCardDraft`/`SkillSource`/`SkillSourceKind`）。**状态：P1 线在途**（交付记录随线落盘，[P 轴分期](../04-internal/backend-enhancement/02-axes/I-absorption-automation.md) 分期表——文件名保留旧名防断链）——前端**严禁提前消费**，形状演进以 `card.rs` 为准。
 
 ```json
 {

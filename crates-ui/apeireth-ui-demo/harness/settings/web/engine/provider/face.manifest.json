@@ -1,0 +1,35 @@
+{
+  "note": "服务商与连接面（`provider`）的抽取清单（单一真源 ⇒ 产物全部由抽取器生成，不手抄）。",
+  "out": ".",
+  "icons_out": "../../../../../../../target/provider-scratch/icons_provider.rs",
+  "components": [
+    {
+      "slug": "model-picker",
+      "path": "frontend/companion-desktop/src/lib/components/SessionModelPicker.svelte",
+      "css": "model-picker.css",
+      "scope": ".model-picker"
+    }
+  ],
+  "icons": [
+    "server",
+    "globe",
+    "sparkles",
+    "eye",
+    "eye-off",
+    "lock",
+    "check",
+    "check-circle-2",
+    "x-circle",
+    "chevron-down",
+    "chevron-up",
+    "search",
+    "rotate-ccw",
+    "trash-2"
+  ],
+  "notes": [
+    "components[0] = `SessionModelPicker`（241 行外部组件）⇒ **行为不迁**（只放闭合态占位）⇒ 但它的 `<style>` **不在** `SettingsView.svelte` 里 ⇒ 占位节点必须另带一份作用域化样式，否则闭合态的触发器与箭头没有布局（像素必不一致）。",
+    "icons = 生产 import 名对应的**抽取器别名**；抽取器跟随上游包的再导出找到真实 `.svelte` ⇒ 常量名与 class 后缀取**真实文件名**（`CheckCircle2` ⇒ `circle-check.svelte` ⇒ `ICON_CIRCLE_CHECK` / `lucide-circle-check`；`XCircle` ⇒ `circle-x.svelte` ⇒ `lucide-circle-x`）。",
+    "icons_out = **相对本 manifest 所在目录**的路径（7 层到仓库根）；产物是生成物，粘贴进 `ui-kit/src/settings_provider.rs` 的 `icons` 模块（勿手改）。",
+    "本面的 scoped CSS 主体（`.sp-provider` 前缀）由**共享**的 `settings/scripts/extract-settings-assets.mjs` 按子面分片产出（`public/settings-provider.css`）⇒ 本 manifest 只补外部组件的样式与本面图标。"
+  ]
+}

@@ -125,14 +125,6 @@ impl RedactionEgressGate {
     pub fn ledger(&self) -> &Arc<EgressLedger> {
         &self.ledger
     }
-
-    /// 本次判定是否改写了内容。
-    pub fn replaced_any(&self) -> bool {
-        self.bridge
-            .lock()
-            .map(|bridge| bridge.registered_values() > 0)
-            .unwrap_or(false)
-    }
 }
 
 impl RedactionEgressGate {

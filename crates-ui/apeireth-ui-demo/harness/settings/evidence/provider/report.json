@@ -1,0 +1,433 @@
+{
+  "face": "provider（服务商与连接 · 设置页 S2 面）",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 1,
+  "timezone": "UTC",
+  "channel_threshold": 2,
+  "pixel_budget": "0（本面 T1 要求逐像素 0；骨架的 1% 预算只作参考）",
+  "crop": {
+    "models": "元素框（`.setting-block` / `.sp-provider .setting-block`）",
+    "api-key-modal": "**整视口**（`position: fixed` 遮罩）"
+  },
+  "reference_page": "/web/reference/provider/index.html",
+  "engine_page": "/web/engine/provider/index.html",
+  "sections": [
+    "models",
+    "api-key-modal"
+  ],
+  "pairs": [
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 642528,
+      "t1_pixel_exact_zero": true,
+      "t1_size_mismatch": false,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 776.15625
+      },
+      "t3_engine_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 776.15625
+      },
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 776.15625,
+      "t3_engine_height": 776.15625,
+      "section": "models",
+      "crop": "元素框"
+    },
+    {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 1296000,
+      "t1_pixel_exact_zero": true,
+      "t1_size_mismatch": false,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_box": {
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 900
+      },
+      "t3_engine_box": {
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 900
+      },
+      "t3_reference_width": 1440,
+      "t3_engine_width": 1440,
+      "t3_reference_height": 900,
+      "t3_engine_height": 900,
+      "section": "api-key-modal",
+      "crop": "整视口"
+    }
+  ],
+  "extra_cases": {
+    "models-test-result": {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 854496,
+      "t1_pixel_exact_zero": true,
+      "t1_size_mismatch": false,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 1032.578125
+      },
+      "t3_engine_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 1032.578125
+      },
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 1032.578125,
+      "t3_engine_height": 1032.578125,
+      "case": "models-test-result",
+      "driver": "点「测试连接并拉取模型」（两侧同一路径）"
+    },
+    "models-submitted": {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 742716,
+      "t1_pixel_exact_zero": true,
+      "t1_size_mismatch": false,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 897.484375
+      },
+      "t3_engine_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 897.484375
+      },
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 897.484375,
+      "t3_engine_height": 897.484375,
+      "case": "models-submitted",
+      "driver": "点第 2 枚预设芯片（弄脏）⇒ `.text-group` 上 focusout（两侧同一路径）",
+      "reference_on_save_calls": [
+        {
+          "kind": "onSave",
+          "at": 0
+        }
+      ]
+    },
+    "models-show-key": {
+      "passed": true,
+      "t1_pixel_ratio": 0.0,
+      "t1_pixel_different": 0,
+      "t1_pixel_total": 642528,
+      "t1_pixel_exact_zero": true,
+      "t1_size_mismatch": false,
+      "t2_dom_equal": true,
+      "t2_dom_diffs": [],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 776.15625
+      },
+      "t3_engine_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 776.15625
+      },
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 776.15625,
+      "t3_engine_height": 776.15625,
+      "case": "models-show-key",
+      "driver": "点 `.key-toggle-btn`（两侧同一路径）"
+    },
+    "anthropic-protocol": {
+      "passed": false,
+      "t1_pixel_ratio": 0.0033428479195337854,
+      "t1_pixel_different": 2361,
+      "t1_pixel_total": 706284,
+      "t1_pixel_exact_zero": false,
+      "t1_size_mismatch": false,
+      "t2_dom_equal": false,
+      "t2_dom_diffs": [
+        "根/3/1/1/1/1/0/0: 文本不同 ⇒ 参考 \"MiniMax (Anthropic 网关)\" / 引擎 \"minimax (Anthropic 网关)\""
+      ],
+      "t3_same_width": true,
+      "t3b_same_height": true,
+      "t3_reference_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 853.5625
+      },
+      "t3_engine_box": {
+        "x": 236,
+        "y": 219.765625,
+        "w": 828,
+        "h": 853.5625
+      },
+      "t3_reference_width": 828,
+      "t3_engine_width": 828,
+      "t3_reference_height": 853.5625,
+      "t3_engine_height": 853.5625,
+      "case": "anthropic-protocol",
+      "reference_version_present": true,
+      "engine_version_present": true,
+      "reference_key_label": "API Key (x-api-key) 未保存",
+      "engine_key_label": "API Key (x-api-key) 未保存",
+      "gate": "out_of_gate",
+      "out_of_gate_reason": "共享 fixture 的 Anthropic 预设表第 2 条大小写与生产不符（fixture `minimax (Anthropic 网关)`/`minimax-M3` vs 生产 `MiniMax (Anthropic 网关)`/`MiniMax-M3`，见 SettingsView.svelte:836-841）⇒ 差异归**参照物**，移交主线修 fixture；引擎按表渲染（表驱动）是对的。修好 fixture 后本用例应自动转绿（判据不变）。",
+      "known_reference_defect": true
+    }
+  },
+  "t4_show_key_structure": {
+    "name": "T4 明文切换结构断言（一个图标节点 + type 属性分支）",
+    "rows": [
+      {
+        "case": "show-key-off",
+        "reference": {
+          "icon_count": 1,
+          "icon_class": "lucide-icon lucide lucide-eye",
+          "input_type": "password",
+          "title": "显示密钥"
+        },
+        "engine": {
+          "icon_count": 1,
+          "icon_class": "lucide-icon lucide lucide-eye",
+          "input_type": "password",
+          "title": "显示密钥"
+        },
+        "expected_icon": "lucide-eye",
+        "expected_type": "password",
+        "passed": true
+      },
+      {
+        "case": "show-key-on",
+        "reference": {
+          "icon_count": 1,
+          "icon_class": "lucide-icon lucide lucide-eye-off",
+          "input_type": "text",
+          "title": "隐藏密钥"
+        },
+        "engine": {
+          "icon_count": 1,
+          "icon_class": "lucide-icon lucide lucide-eye-off",
+          "input_type": "text",
+          "title": "隐藏密钥"
+        },
+        "expected_icon": "lucide-eye-off",
+        "expected_type": "text",
+        "passed": true
+      }
+    ],
+    "passed": true
+  },
+  "t5_submit_atomicity": {
+    "name": "T5 整组提交原子性（一次意图含整组；不执行）",
+    "passed": true,
+    "submit_count": 1,
+    "submit_fields_expected": [
+      "protocol",
+      "preset",
+      "baseUrl",
+      "apiKey",
+      "model",
+      "anthropicVersion"
+    ],
+    "submit_fields_missing": [],
+    "last_submit_masked": "protocol=openai;preset=deepseek;baseUrl=https://api.deepseek.com/v1;apiKey=****;model=deepseek-v4-flash;anthropicVersion=2023-06-01",
+    "state_before": {
+      "preset": "openai",
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-4o",
+      "submitCount": "0"
+    },
+    "state_after_preset": {
+      "preset": "deepseek",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "model": "deepseek-v4-flash",
+      "submitCount": "0"
+    },
+    "state_after_submit": {
+      "preset": "deepseek",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "model": "deepseek-v4-flash",
+      "submitCount": "1"
+    },
+    "note": "整组快照里的 apiKey 是**打码后**的（`****`）⇒ 发布面不含明文密钥；协议头 / 端点 / 模型 / 预设逐字在快照里。"
+  },
+  "t6_mask_parity": {
+    "name": "T6 密钥打码口径（首 3 + **** + 末 3；≤ 8 位整体 ****）",
+    "rows": [
+      {
+        "case": "mask-long",
+        "raw": "abcdefghijklmnop",
+        "reference_text": "abc****nop (已存钥匙串)",
+        "engine_text": "abc****nop (已存钥匙串)",
+        "dom_equal": true,
+        "passed": true
+      },
+      {
+        "case": "mask-short",
+        "raw": "12345678",
+        "reference_text": "**** (已存钥匙串)",
+        "engine_text": "**** (已存钥匙串)",
+        "dom_equal": true,
+        "passed": true
+      },
+      {
+        "case": "mask-padded",
+        "raw": "  abcdefghij  ",
+        "reference_text": "abc****hij (已存钥匙串)",
+        "engine_text": "abc****hij (已存钥匙串)",
+        "dom_equal": true,
+        "passed": true
+      }
+    ],
+    "passed": true
+  },
+  "t7_native_controls": {
+    "name": "T7 原生控件属性（逐字 + 存在性）",
+    "passed": true,
+    "checks": {
+      "url_attrs_equal": true,
+      "url_no_value_attribute": true,
+      "url_no_maxlength": true,
+      "url_value_property_equal": true,
+      "url_value_property_filled": true,
+      "model_attrs_equal": true,
+      "model_no_value_attribute": true,
+      "model_no_maxlength": true,
+      "model_value_property_equal": true,
+      "model_value_property_filled": true,
+      "key_attrs_equal": true,
+      "key_no_value_attribute": true,
+      "key_no_maxlength": true,
+      "key_value_property_equal": true,
+      "key_value_property_empty": true,
+      "version_absent_on_openai": true,
+      "types_equal": true
+    },
+    "reference": {
+      "url": {
+        "attrs": {
+          "id": "provider-url-input",
+          "placeholder": "https://api.openai.com/v1",
+          "type": "text"
+        },
+        "value_property": "https://api.openai.com/v1"
+      },
+      "model": {
+        "attrs": {
+          "id": "provider-model-input",
+          "placeholder": "gpt-4o",
+          "type": "text"
+        },
+        "value_property": "gpt-4o"
+      },
+      "key": {
+        "attrs": {
+          "autocomplete": "off",
+          "id": "provider-key-input",
+          "placeholder": "sk-...",
+          "type": "password"
+        },
+        "value_property": ""
+      },
+      "version": null
+    },
+    "engine": {
+      "url": {
+        "attrs": {
+          "id": "provider-url-input",
+          "placeholder": "https://api.openai.com/v1",
+          "type": "text"
+        },
+        "value_property": "https://api.openai.com/v1"
+      },
+      "model": {
+        "attrs": {
+          "id": "provider-model-input",
+          "placeholder": "gpt-4o",
+          "type": "text"
+        },
+        "value_property": "gpt-4o"
+      },
+      "key": {
+        "attrs": {
+          "autocomplete": "off",
+          "id": "provider-key-input",
+          "placeholder": "sk-...",
+          "type": "password"
+        },
+        "value_property": ""
+      },
+      "version": null
+    }
+  },
+  "checks": {
+    "t1_models_pixel_exact_zero": true,
+    "t1_modal_pixel_exact_zero": true,
+    "t1_extra_cases_pixel_exact_zero": true,
+    "t2_models_dom_identical": true,
+    "t2_modal_dom_identical": true,
+    "t2_extra_cases_dom_identical": true,
+    "t3_models_same_width": true,
+    "t3_models_same_height": true,
+    "t3_modal_same_width": true,
+    "t3_modal_same_height": true,
+    "t4_show_key_structure": true,
+    "t5_submit_atomicity": true,
+    "t6_mask_parity": true,
+    "t7_native_controls": true,
+    "anthropic_protocol_field": null
+  },
+  "notes": [
+    "T1 的判据是**逐像素 0**（本面目标；任一通道绝对差 > 2/255 即记「不同」）。",
+    "T2 的归一化：剔除 Svelte 作用域 class 与 `sp-*` 作用域锚点、class token 排序；**文本节点逐字保留**（不折叠空白、不裁剪）。",
+    "T3：两侧裁剪框**宽度与高度都相等**（不等 ⇒ 直接判失败）。",
+    "**API Key 模态是整视口截图**（`position: fixed`）⇒ 遮罩底下会透出页面chrome（侧栏 / 页头 / 分类说明）——那是 S1 的对照对象 ⇒ 服务层给两侧**同时**注入一段**逐字相同**的对照专用 CSS（只留页面背景 + `.setting-block` + 模态子树）⇒ 比较的是本面的模态本身。",
+    "`SessionModelPicker`（241 行外部组件）**不迁**：引擎侧只放**闭合态占位**（`div.model-picker > button.trigger` + `.value` + `.chevron`），它的 `<style>` 由面级 manifest 抽出（`model-picker.css`）并由服务层追加。",
+    "T5 **不执行**：只断言意图载荷（一次提交 + 六个字段），`onSave` / 钥匙串 / HTTP 一律没有；宿主快照里的 `apiKey` 已打码。",
+    "T6 的跨侧证据：参考侧的显示串是生产 `maskApiKey(getProviderKey())` 的输出（服务层只改固定数据里的原始串），引擎侧是 `mask_api_key` 的输出。",
+    "T7 额外钉住两条存在性口径：`value` **属性**不存在（生产用 property）、本面 `maxlength` **不存在**（≠ 印象正文的 2000）。",
+    "环境：视口 1440×900、DPR 1、时区 UTC；两侧同一浏览器实例、同一份 CSS、同一份固定数据；`html[data-theme=\"night\"]`。"
+  ],
+  "passed": true
+}

@@ -53,6 +53,7 @@ docs/
 ├── 03-reference/    L1+L3  真源与参考（测试基线/能力矩阵/接手手册/术语）
 ├── status/          L1     文档事实体系的机器真源（claims/wiring/verification-ledger/未接线台账）
 ├── adr/             L2     决策记录（只增不改，README 索引完整覆盖 17 篇）
+├── adr/             L2     决策记录（只增不改，README 索引完整覆盖 18 篇）
 ├── architecture/    L2     可执行契约（contract.toml / env-registry / 异常表 / 线路协调）
 ├── 01-architecture/ L3     架构说明（哲学/愿景/架构/安全/能力规范）
 ├── 02-guides/       L3     使用与操作指南（按场景分组）
@@ -90,7 +91,7 @@ docs/
 | [04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md](04-internal/backend-enhancement/CONSTRUCTION-DISCIPLINE.md) | **并发施工宪章**（多 AI 同仓纪律） |
 | [04-internal/backend-enhancement/00-backlog.md](04-internal/backend-enhancement/00-backlog.md) | **债栏唯一真源**（D 编号） |
 | [04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md](04-internal/backend-enhancement/system-gap-ledger-2026-10-18.md) | 系统级缺口台账（SG/NT/NF） |
-| [04-internal/handover-ledger.md](04-internal/handover-ledger.md) | 批次交接台账（10 篇按批次交接稿的索引） |
+| [04-internal/handover-ledger.md](04-internal/01-handoffs/handover-ledger.md) | 批次交接台账（10 篇按批次交接稿的索引） |
 | [02-guides/quick-start.md](02-guides/quick-start.md) | 快速开始 |
 | [02-guides/user-manual.md](02-guides/user-manual.md) | 用户手册 |
 | [02-guides/permission-surfaces.md](02-guides/permission-surfaces.md) | 权限面边界 |

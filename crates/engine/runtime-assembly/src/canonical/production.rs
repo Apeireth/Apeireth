@@ -567,6 +567,12 @@ pub struct ProductionBackends {
     pub retrieval_tuning: Option<Arc<crate::canonical::retrieval_tuning_wire::RetrievalTuningWire>>,
     /// 自省通道: 记忆账本计数探测口 (会话/记忆/保护/教训计数, 只回计数)。
     pub self_status_ledger: Option<StatusProbe<MemoryLedgerStats>>,
+    /// 自省通道: **问责计数**探测口 (影响声明 / 后果三态 / 待补救, 只回计数)。
+    ///
+    /// ADR-0014 §4 指定的「自述面新增只读子对象」。`None` = 不挂载 ⇒
+    /// `capabilities.accountability` 子对象省略（旧帧形状不变）。
+    pub self_status_accountability:
+        Option<StatusProbe<apeireth_tools_canonical::AccountabilityStats>>,
     /// 自省通道: 凭据存在性探测口 (只回布尔, 不回显凭据本体)。
     pub self_status_credentials: Option<StatusProbe<bool>>,
     /// 自省通道: 组装根补充的能力名册行 (例如授权层的 `local_read_tools` 旋钮)。
@@ -1257,6 +1263,12 @@ impl ProductionModules {
             );
             if let Some(probe) = &backends.self_status_ledger {
                 source = source.with_ledger_probe(Arc::clone(probe));
+            }
+            if let Some(probe) = &backends.self_status_accountability {
+                source = crate::accountability_probe::with_accountability_probe(
+                    source,
+                    Arc::clone(probe),
+                );
             }
             if let Some(probe) = &backends.self_status_credentials {
                 source = source.with_credentials_probe(Arc::clone(probe));

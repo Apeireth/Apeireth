@@ -301,10 +301,62 @@ pub fn effect_fingerprint(
 /// (保守优先)。
 const SHELL_FREE_COMMAND_SURFACES: &[&str] = &["tool.git_write"];
 
+/// 明确**只读**的结构化操作名。
+///
+/// 用于收窄「读写合一」capability 的静态描述符：canonical registry 里
+/// `tool.filesystem` 声明了 `[Read, Write]` 且 `persistent_effect = true`
+/// —— 因为**这个 capability 本身既能读也能写**，静态描述符只能取并集。
+/// 但实际调用**带参数**（`{"op": "read"}`），可以判定这一次是只读。
+const READ_ONLY_OPS: &[&str] = &[
+    "read", "list", "ls", "stat", "cat", "get", "head", "tail", "grep", "search", "view",
+    "preview", "info", "exists", "glob", "find",
+];
+
+/// 按**结构化参数**收窄「读写合一」capability 的副作用集。
+///
+/// # 为什么需要
+///
+/// canonical registry 里 `tool.filesystem` 的静态描述符是
+/// `operations = [Read, Write]`、`persistent_effect = true` ——
+/// 因为这个 capability **既能读也能写**，静态描述符只能取并集。
+/// 但一次具体调用带参数（`{"op": "read"}`），**这一次**是只读的。
+///
+/// 不收窄的后果（2026-10-24 实测）：
+/// - 场景对账失败：`run_scenario_checked` 报 `unexpected_effects:
+///   ["persistence_change"]` ⇒ 写进 shadow 训练集的效果是**错的**；
+/// - 更要紧：护栏拿一个**过宽**的副作用集判风险 ⇒ 「只读一个文件」
+///   被当成有持久化副作用。
+fn narrow_by_structured_readonly(
+    descriptor: &mut CapabilitySafetyDescriptor,
+    arguments: &serde_json::Value,
+) {
+    let Some(op) = arguments.get("op").and_then(serde_json::Value::as_str) else {
+        return;
+    };
+    let op = op.trim().to_ascii_lowercase();
+    if !READ_ONLY_OPS.contains(&op.as_str()) {
+        return;
+    }
+    // 只读 ⇒ 没有持久化副作用，也不可能是破坏性的。
+    descriptor.persistent_effect = false;
+    descriptor.destructive = false;
+    descriptor.operation_classes.retain(|class| {
+        !matches!(
+            class,
+            OperationClass::Write | OperationClass::Modify | OperationClass::Delete
+        )
+    });
+    if !descriptor.operation_classes.contains(&OperationClass::Read) {
+        descriptor.operation_classes.insert(0, OperationClass::Read);
+    }
+}
+
 fn merge_command_effects(
     descriptor: &mut CapabilitySafetyDescriptor,
     arguments: &serde_json::Value,
 ) {
+    // 结构化只读收窄**先做**：后面的 shell 命令合并不该把它加回去。
+    narrow_by_structured_readonly(descriptor, arguments);
     let Some(command) = arguments.get("command").and_then(serde_json::Value::as_str) else {
         return;
     };
@@ -792,6 +844,41 @@ mod tests {
     /// git 写分级工具的结构化调用面: shell 基线效应不进观察 (受控 git 调用
     /// 不是 shell 执行面), 但真实效应照常合并 (守卫仍是漏判时的第二双眼睛);
     /// shell 面照旧全量合并 (保守优先)。
+    /// **结构化只读调用不得带持久化副作用**。
+    ///
+    /// canonical registry 里 `tool.filesystem` 是「读写合一」的
+    /// （`operations = [Read, Write]`、`persistent_effect = true`），
+    /// 但一次具体调用带参数 —— `{"op": "read"}` 就是只读的。
+    ///
+    /// 不收窄的后果（2026-10-24 实测）：护栏拿**过宽**的副作用集判风险，
+    /// 且场景对账失败 ⇒ 写进 shadow 训练集的效果标注是错的。
+    #[test]
+    fn structured_readonly_call_has_no_persistent_effect() {
+        let read = serde_json::json!({"op": "read", "path_class": "workspace"});
+        let descriptor = descriptor_for_capability("tool.filesystem", &read);
+        assert!(!descriptor.persistent_effect, "只读调用不该有持久化副作用");
+        assert!(
+            !descriptor
+                .operation_classes
+                .contains(&OperationClass::Write),
+            "只读调用不该带 Write 操作类: {:?}",
+            descriptor.operation_classes
+        );
+        assert!(
+            descriptor.operation_classes.contains(&OperationClass::Read),
+            "只读调用应带 Read 操作类: {:?}",
+            descriptor.operation_classes
+        );
+    }
+
+    /// 写操作**不受**收窄影响（不能把真写的副作用抹掉）。
+    #[test]
+    fn structured_write_call_keeps_persistent_effect() {
+        let write = serde_json::json!({"op": "write", "path_class": "workspace"});
+        let descriptor = descriptor_for_capability("tool.filesystem", &write);
+        assert!(descriptor.persistent_effect, "写调用必须保留持久化副作用");
+    }
+
     #[test]
     fn structured_command_surface_merges_real_effects_without_the_shell_baseline() {
         let add = descriptor_for_capability(

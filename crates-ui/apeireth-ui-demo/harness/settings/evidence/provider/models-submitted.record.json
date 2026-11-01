@@ -1,0 +1,36 @@
+{
+  "passed": true,
+  "t1_pixel_ratio": 0.0,
+  "t1_pixel_different": 0,
+  "t1_pixel_total": 742716,
+  "t1_pixel_exact_zero": true,
+  "t1_size_mismatch": false,
+  "t2_dom_equal": true,
+  "t2_dom_diffs": [],
+  "t3_same_width": true,
+  "t3b_same_height": true,
+  "t3_reference_box": {
+    "x": 236,
+    "y": 219.765625,
+    "w": 828,
+    "h": 897.484375
+  },
+  "t3_engine_box": {
+    "x": 236,
+    "y": 219.765625,
+    "w": 828,
+    "h": 897.484375
+  },
+  "t3_reference_width": 828,
+  "t3_engine_width": 828,
+  "t3_reference_height": 897.484375,
+  "t3_engine_height": 897.484375,
+  "case": "models-submitted",
+  "driver": "点第 2 枚预设芯片（弄脏）⇒ `.text-group` 上 focusout（两侧同一路径）",
+  "reference_on_save_calls": [
+    {
+      "kind": "onSave",
+      "at": 0
+    }
+  ]
+}

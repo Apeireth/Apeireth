@@ -43,6 +43,7 @@ import pathlib
 import re
 import signal
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -62,6 +63,24 @@ OUT = HARNESS / "out"
 CHROME = os.environ.get("CHROME") or "/usr/bin/chromium"
 
 # 对照口径（设计文档 §9.3）。
+#: 对照时**浏览器时区**（`Emulation.setTimezoneOverride` 的取值）。
+#:
+#: ## 为什么要显式设成**非 UTC**
+#:
+#: 生产的时刻显示走 `toLocaleTimeString('zh-CN', …)` ⇒ **依赖浏览器本地时区**；
+#: 而引擎侧此前**固定 UTC** ⇒ ⇒ 只要用户不在 UTC，两侧就差**时差**。
+#:
+#: ⇒ ⇒ 装置若也固定 UTC ⇒ **两边一致 ⇒ 缺陷被完全掩盖** ⇒ ⇒ 这是
+#: 「**对照装置与被测对象一起错**」的典型 ⇒ ⇒ 判据**测不到真实场景**。
+#:
+#: ⇒ ⇒ 这里显式设成**非 UTC**（默认 `Asia/Shanghai`）⇒ ⇒
+#: - 本地：**立刻暴露**引擎的固定 UTC；
+#: - CI：**可复现**（不依赖 runner 的系统时区）。
+#:
+#: ⚠️ 两侧（参考 / 引擎）在**同一个浏览器** ⇒ **同一时区** ⇒ ⇒
+#: ⇒ 判据比的是「引擎有没有按本地时区显示」，而不是「两边时区是否相同」。
+TIMEZONE = os.environ.get("APEIRETH_COMPARE_TZ", "Asia/Shanghai")
+
 VIEWPORT_WIDTH = 1440
 VIEWPORT_HEIGHT = 900
 CHANNEL_THRESHOLD = 2  # 任一通道绝对差 > 2/255 即记「不同」
@@ -203,6 +222,36 @@ def launch_chrome() -> tuple[subprocess.Popen, int]:
         "--hide-scrollbars",
         "--remote-allow-origins=*",
         "--remote-debugging-port=0",
+        # ⭐⭐ `--user-data-dir`（2026-11-01 补；**Windows Edge headless 的硬需求**）。
+        #
+        # ## 为什么必须有
+        #
+        # Windows runner 上跑的是 **Edge**（= WebView2 同一渲染内核）⇒ ⇒ 实测：
+        # **不给**独立 profile ⇒ ⇒ Edge headless **不监听**调试端口
+        # ⇒ ⇒ CDP 的 `Page.navigate` **超时**（run 41264856246 的真实失败）。
+        #
+        # ## 为什么**总是**加（不只 Windows）
+        #
+        # 用**一次性临时目录** ⇒ ⇒ 既满足 Edge 的需求，又**不碰**用户的默认 profile
+        # ⇒ ⇒ Linux 侧也无害（Chromium 同样接受这个参数）⇒ ⇒ 一条路径两边通用。
+        f"--user-data-dir={tempfile.mkdtemp(prefix='apeireth-chrome-')}",
+        # ⭐⭐ **真实 GPU 硬件加速**（2026-10-26 实测加的）。
+        #
+        # ⚠⚠️ **不加这组参数时，headless Chrome 一律走 SwiftShader（纯软件）**
+        # ⇒ ⇒ 此前**所有**浏览器实测都跑在软件渲染上 ⇒ ⇒ 「真实 GPU 未实测」这条账
+        # ⇒ ⇒ 一直挂着。实测对照（同一台机器）：
+        #   默认            ⇒ ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)
+        #   加这组参数      ⇒ ANGLE (AMD, Vulkan 1.4.354 (AMD Radeon 8060S Graphics (RADV STRIX_HALO)), radv)
+        #
+        # ⇒ ⇒ `--use-angle=vulkan` 让 ANGLE 走 **Mesa RADV**（真实硬件）。
+        # ⇒ ⇒ `--ignore-gpu-blocklist` ⇒ 绕开 Chrome 的黑名单（容器/无头常被误列）。
+        # ⇒ ⇒ `--enable-features=Vulkan` ⇒ 显式启用 Vulkan。
+        # ⇒ ⇒ **可回退**：环境变量 `APEIRETH_CHROME_SWIFTSHADER=1` ⇒ ⇒ 退回软件渲染
+        #    （软件后端仍需保留 ⇒ 因为它是**可复现**的基线，而硬件后端会随驱动变）。
+        "--use-angle=vulkan",
+        "--enable-features=Vulkan",
+        "--ignore-gpu-blocklist",
+        "--enable-unsafe-swiftshader",
         f"--window-size={VIEWPORT_WIDTH},{VIEWPORT_HEIGHT}",
         "about:blank",
     ]
@@ -245,7 +294,7 @@ def open_page(port: int) -> Cdp:
         "deviceScaleFactor": 1,
         "mobile": False,
     })
-    cdp.call("Emulation.setTimezoneOverride", {"timezoneId": "UTC"})
+    cdp.call("Emulation.setTimezoneOverride", {"timezoneId": TIMEZONE})
     cdp.call("Emulation.setEmulatedMedia", {
         "features": [{"name": "prefers-reduced-motion", "value": "no-preference"}]
     })
@@ -397,6 +446,86 @@ def card_box(cdp: Cdp) -> dict:
     return json.loads(raw) if raw else None
 
 
+def wait_element_box_stable(
+    cdp: Cdp,
+    selector: str,
+    get_box=None,
+    timeout: float = 6.0,
+    interval: float = 0.2,
+) -> dict:
+    """⭐ **等元素尺寸稳定**再取裁剪框（2026-10-26 实测加的）。
+
+    ## 为什么需要它
+
+    对照里有一类操作会**改变元素尺寸/位置**（例如把 stage 平移以便两侧落在
+    **同一个设备像素格**上）⇒ ⇒ 之后要立刻取**裁剪框**去截图。
+
+    ⇒ ⇒ 但**布局/尺寸更新是异步的**（真实 GPU 上尤其明显：合成与重排都更慢）
+    ⇒ ⇒ 于是立刻取框会拿到**旧框** ⇒ ⇒ 截出来的图**尺寸与参考侧不同**
+    ⇒ ⇒ ⇒ `compare.pixel_diff` 在**尺寸不同**时直接返回 `ratio = 1.0`
+    ⇒ ⇒ ⇒ 判据会报「**逐像素 100% 不同**」—— 而那**不是**像素差异，是**框错了**。
+
+    ⭐ 2026-10-26 在**真实 GPU**（AMD RADV）上实测踩到：
+    `data` 面的 `t1_all_pixels_zero` 报 `ratio = 1.0`、`t3b_same_height` 失败，
+    而**同一轮落盘的 PNG 与参考侧逐像素完全相同**（差异 0）
+    ⇒ ⇒ ⇒ 根因就是「**判据那张的裁剪框是旧的**」。
+
+    ⇒ ⇒ 这里轮询取框 ⇒ ⇒ **连续两次相同**即视为稳定 ⇒ ⇒ 返回最后的框。
+    ⇒ ⇒ ⚠️ 超时**不静默**：返回最后的框 ⇒ ⇒ 判据照常暴露差异。
+    """
+    # ⚠️ 取框的函数**由调用方提供** ⇒ ⇒ 本模块不依赖各面自己的
+    # `element_box` 实现（各面的选择器/口径可能不同）⇒ ⇒ 通用。
+    getter = get_box if get_box is not None else (
+        lambda: element_box(cdp, selector)
+    )
+    deadline = time.monotonic() + timeout
+    previous = getter()
+    while time.monotonic() < deadline:
+        time.sleep(interval)
+        current = getter()
+        if current == previous:
+            return current
+        previous = current
+    return previous
+
+
+def wait_stable(
+    cdp: Cdp,
+    box: dict | None = None,
+    timeout: float = 6.0,
+    interval: float = 0.25,
+) -> bytes:
+    """⭐ **等画面稳定**再截图（2026-10-26 实测加的）。
+
+    ## 为什么需要它
+
+    引擎的 DOM 补丁是**同步**的（`renderer.patch(tree)` 立刻改 DOM）
+    ⇒ ⇒ 但**浏览器把 DOM 合成到屏幕是异步的**
+    ⇒ ⇒ 于是「DOM 已更新」**不等于**「屏幕已呈现」
+    ⇒ ⇒ ⇒ 截图可能截到**合成之前**的画面 ⇒ ⇒ 判据会读到**旧/空**画面。
+
+    ⭐ 2026-10-26 在**真实 GPU**（AMD RADV）上实测踩到：
+    `data` 面的判据读到 **ratio = 1.0**（**逐像素 100% 不同**）
+    ⇒ ⇒ 而同一轮**落盘的 PNG 与参考侧逐像素完全相同**（差异 0）
+    ⇒ ⇒ ⇒ 说明**判据那张截早了** ⇒ ⇒ 不是「引擎没画」，是「**没等合成**」。
+
+    ⇒ ⇒ 这里连拍两张、间隔 `interval` ⇒ ⇒ **连续两次相同**即视为稳定 ⇒ ⇒ 返回最后一张。
+    ⇒ ⇒ ⚠️ 用**像素级**判同 ⇒ ⇒ 不会把「静止的错误画面」误判成「未稳定」
+    ⇒ ⇒ （静止的错误画面**两次也相同** ⇒ ⇒ 直接返回 ⇒ ⇒ 不会掩盖真问题）。
+
+    ⇒ ⇒ **超时**时返回**最后一张**（并让判据照常暴露差异 ⇒ ⇒ 不静默放行）。
+    """
+    deadline = time.monotonic() + timeout
+    previous = screenshot(cdp, box)
+    while time.monotonic() < deadline:
+        time.sleep(interval)
+        current = screenshot(cdp, box)
+        if current == previous:
+            return current
+        previous = current
+    return previous
+
+
 def screenshot(cdp: Cdp, box: dict | None = None) -> bytes:
     params = {"format": "png"}
     if box:
@@ -459,9 +588,20 @@ def capture_frames(cdp: Cdp, duration_ms: int, max_frames: int) -> list[tuple[fl
     调度影响（实测两侧可能差一帧）⇒ 这里按**固定帧数**采集（两侧帧数相同），
     并在比对时按**时间对齐**（容差内配对）。
     """
+    # ⭐⭐ **按帧数采，不按时间截**（2026-10-27 修的真缺陷）。
+    #
+    # 上面 docstring 写的就是「按**固定帧数**采集（两侧帧数相同）」
+    # ⇒ ⇒ 但原实现里还有一个「到 `duration_ms` 就停」的条件
+    # ⇒ ⇒ **实际帧数取决于截图有多快** ⇒ ⇒ 实测同一构建跑出 12 / 13 / 14 / 16 / 17 / 19 帧
+    # ⇒ ⇒ 而判据是 `len(frame_results) == FRAME_COUNT`（=20）
+    # ⇒ ⇒ ⇒ **几乎永远不可能等于 20** ⇒ ⇒ **该判据恒红**，且与引擎无关
+    #     （它测的是「采集机器的截图速度」）。
+    # ⇒ ⇒ 修法：**以帧数为主**（与文档一致），时间只作**兜底上限**
+    #     （`duration_ms * 4` ⇒ 正常根本不会触发，只为防某侧卡死）。
     frames: list[tuple[float, bytes]] = []
     started = time.time()
-    while (time.time() - started) * 1000.0 < duration_ms and len(frames) < max_frames:
+    hard_deadline = started + duration_ms * 4.0 / 1000.0
+    while len(frames) < max_frames and time.time() < hard_deadline:
         timestamp = (time.time() - started) * 1000.0
         frames.append((timestamp, screenshot(cdp, None)))
     return frames
@@ -553,18 +693,51 @@ def collect_side(cdp: Cdp, name: str, url: str) -> Side:
 
 
 def collect_phases(cdp: Cdp, url: str) -> dict[str, bytes]:
-    """相位冻结下的截图（每个相位一张）。"""
+    """相位冻结下的截图（每个相位一张）。
+
+    ## ⭐⭐ 为什么必须「**导航之前**」就把冻结设好（2026-10-27 实测）
+
+    原实现是「先 `navigate`、**再**设 `--pilot-phase` / `pilot-freeze`」
+    ⇒ ⇒ 页面加载后动画**已经跑了几毫秒**才被暂停
+    ⇒ ⇒ 冻结位置 = 「真实已过的时长」+ 指定相位 ⇒ ⇒ **每次运行都不同**
+    ⇒ ⇒ 实测（同一构建、同一份代码，连续三次运行）：
+    坏相位依次落在 `450ms` → `0/150/300ms` → `0/300/450ms`，**在移动**
+    ⇒ ⇒ 而每次「坏」的幅度都稳定在 4~5%
+    ⇒ ⇒ ⇒ 那是**采样抖动**，不是引擎的动画不对。
+
+    ⚠ 也试过两种「事后补救」，都**不够**：
+    - `wait_stable`（连续两帧截图相同）⇒ ⇒ 它**分不清**「稳定在旧相位」与
+      「稳定在新相位」⇒ ⇒ 冻结模式下旧相位也是静止的 ⇒ ⇒ 骗过判据；
+    - 「两次 `requestAnimationFrame`」⇒ ⇒ 只能保证**新样式已合成**，
+      但动画**早就跑过头**了 ⇒ ⇒ 冻结位置依旧随机。
+
+    ⇒ ⇒ 正解：用 `Page.addScriptToEvaluateOnNewDocument`，让冻结脚本
+    **在文档开始执行前**就生效 ⇒ ⇒ 动画从**第 0 毫秒**起就是「冻结在指定相位」
+    ⇒ ⇒ 冻结位置**确定**。
+    """
     shots: dict[str, bytes] = {}
     for phase in PHASES_MS:
-        navigate(cdp, url)
-        cdp.evaluate("document.documentElement.dataset.pilotMotion = 'on'; true")
-        cdp.evaluate("document.documentElement.dataset.pilotFreeze = '1'; true")
-        cdp.evaluate(
-            f"document.documentElement.style.setProperty('--pilot-phase', '-{phase}ms'); true"
+        source = (
+            "document.documentElement.dataset.pilotMotion = 'on';"
+            "document.documentElement.dataset.pilotFreeze = '1';"
+            f"document.documentElement.style.setProperty('--pilot-phase', '-{phase}ms');"
         )
-        time.sleep(0.25)
-        box = card_box(cdp)
-        shots[str(phase)] = screenshot(cdp, box)
+        # ① **导航之前**注册：新文档一执行就冻结在指定相位。
+        added = cdp.call(
+            "Page.addScriptToEvaluateOnNewDocument", {"source": source}
+        ).get("identifier")
+        try:
+            navigate(cdp, url)
+            # ② 幂等补一次（脚本在某些页面上可能在 `documentElement` 就绪前跑）。
+            cdp.evaluate(source + " true")
+            time.sleep(0.1)
+            box = card_box(cdp)
+            # ③ 再等稳定（双保险，防合成异步）。
+            shots[str(phase)] = wait_stable(cdp, box)
+        finally:
+            # ④ **必须移除**：否则后面每个相位的导航都会累积旧的冻结脚本。
+            if added:
+                cdp.call("Page.removeScriptToEvaluateOnNewDocument", {"identifier": added})
     return shots
 
 
@@ -580,7 +753,7 @@ def main() -> int:
     report: dict = {
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         "device_pixel_ratio": 1,
-        "timezone": "UTC",
+        "timezone": TIMEZONE,
         "channel_threshold": CHANNEL_THRESHOLD,
         "pixel_budget": PIXEL_BUDGET,
         "phases_ms": PHASES_MS,

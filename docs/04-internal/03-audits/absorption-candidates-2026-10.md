@@ -59,7 +59,7 @@ Supermemory（ASMR 记忆系统）→ 记忆分层假说；agent-governance-tool
 
 ## 三之半、落地追踪（2026-10-15）
 
-TOP5 机制已全部入 V1-V6 施工序（V3=双引擎关怀/TTS、V4=人格层/保鲜/保真、V5=安全守望、V6=任务编排/动作绑定、V1=上屏面）——见 [V-forward-direction.md](../backend-enhancement/V-forward-direction.md)。
+TOP5 机制已全部入 V1-V6 施工序（V3=双引擎关怀/TTS、V4=人格层/保鲜/保真、V5=安全守望、V6=任务编排/动作绑定、V1=上屏面）——见 [V-forward-direction.md](../backend-enhancement/00-governance/V-forward-direction.md)。
 
 ## 四、登记
 
@@ -68,7 +68,7 @@ TOP5 机制已全部入 V1-V6 施工序（V3=双引擎关怀/TTS、V4=人格层/
 
 **落地回写（2026-10-13）**：TOP 候选 2「书→技能流水线」= **I1 已交付**（技能卡模型 +
 `tool.skill_distill` 沉淀管线 + `tool.skill_search` L2 封套调用面 + 治理档），
-分期与后续各期见 [I 轴分期](../backend-enhancement/I-absorption-automation.md)（历史口径（2026-10-13）：I 轴分期；现为 P 轴分期（Practice 沉淀），审计修 D13），交付实录见
+分期与后续各期见 [I 轴分期](../backend-enhancement/02-axes/I-absorption-automation.md)（历史口径（2026-10-13）：I 轴分期；现为 P 轴分期（Practice 沉淀），审计修 D13），交付实录见
 [I1-skill-distill-delivery](../backend-enhancement/I1-skill-distill-delivery.md)；
 TOP 候选 1 随手记已由 C 轴入口面交付（[quick-capture-delivery](../backend-enhancement/quick-capture-delivery.md)）。
 

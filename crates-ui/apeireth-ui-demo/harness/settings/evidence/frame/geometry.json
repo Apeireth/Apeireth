@@ -1,0 +1,147 @@
+{
+  "note": "本面是**几何基准**：其它内容面据此对齐（内容盒 828px）。",
+  "reference": {
+    "subnav": {
+      "selector": ".settings-subnav",
+      "x": 0,
+      "y": 117.53125,
+      "w": 200,
+      "h": 1271.921875,
+      "padding_left": 12,
+      "padding_right": 12,
+      "content_box_width": 176,
+      "max_width": "none",
+      "box_sizing": "border-box",
+      "grid_template_columns": "none"
+    },
+    "content": {
+      "selector": ".settings-content",
+      "x": 200,
+      "y": 117.53125,
+      "w": 900,
+      "h": 1271.921875,
+      "padding_left": 36,
+      "padding_right": 36,
+      "content_box_width": 828,
+      "max_width": "900px",
+      "box_sizing": "border-box",
+      "grid_template_columns": "none"
+    },
+    "layout": {
+      "selector": ".settings-layout",
+      "x": 0,
+      "y": 117.53125,
+      "w": 1440,
+      "h": 1271.921875,
+      "padding_left": 0,
+      "padding_right": 0,
+      "content_box_width": 1440,
+      "max_width": "none",
+      "box_sizing": "border-box",
+      "grid_template_columns": "200px 1240px"
+    },
+    "view": {
+      "selector": ".settings-view",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1389.453125,
+      "padding_left": 0,
+      "padding_right": 0,
+      "content_box_width": 1440,
+      "max_width": "none",
+      "box_sizing": "border-box",
+      "grid_template_columns": "none"
+    },
+    "block": {
+      "selector": ".setting-block",
+      "x": 236,
+      "y": 219.765625,
+      "w": 828,
+      "h": 1121.6875,
+      "padding_left": 0,
+      "padding_right": 0,
+      "content_box_width": 828,
+      "max_width": "none",
+      "box_sizing": "border-box",
+      "grid_template_columns": "none"
+    },
+    "nav_content": {
+      "top": 133.53125,
+      "bottom": 323.53125
+    },
+    "ready": false,
+    "error": null
+  },
+  "engine": {
+    "subnav": {
+      "selector": ".settings-subnav",
+      "x": 0,
+      "y": 117.53125,
+      "w": 200,
+      "h": 222,
+      "padding_left": 12,
+      "padding_right": 12,
+      "content_box_width": 176,
+      "max_width": "none",
+      "box_sizing": "border-box",
+      "grid_template_columns": "none"
+    },
+    "content": {
+      "selector": ".settings-content",
+      "x": 200,
+      "y": 117.53125,
+      "w": 900,
+      "h": 222,
+      "padding_left": 36,
+      "padding_right": 36,
+      "content_box_width": 828,
+      "max_width": "900px",
+      "box_sizing": "border-box",
+      "grid_template_columns": "none"
+    },
+    "layout": {
+      "selector": ".settings-layout",
+      "x": 0,
+      "y": 117.53125,
+      "w": 1440,
+      "h": 222,
+      "padding_left": 0,
+      "padding_right": 0,
+      "content_box_width": 1440,
+      "max_width": "none",
+      "box_sizing": "border-box",
+      "grid_template_columns": "200px 1240px"
+    },
+    "view": {
+      "selector": ".settings-view",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 339.53125,
+      "padding_left": 0,
+      "padding_right": 0,
+      "content_box_width": 1440,
+      "max_width": "none",
+      "box_sizing": "border-box",
+      "grid_template_columns": "none"
+    },
+    "block": null,
+    "nav_content": {
+      "top": 133.53125,
+      "bottom": 323.53125
+    },
+    "ready": true,
+    "error": null
+  },
+  "width_same_source": {
+    "sidebar_width_reference": 200,
+    "sidebar_width_engine": 200,
+    "content_border_box_width_reference": 900,
+    "content_border_box_width_engine": 900,
+    "content_box_width_reference": 828,
+    "content_box_width_engine": 828,
+    "setting_block_width_reference": 828,
+    "setting_block_width_engine": null
+  }
+}

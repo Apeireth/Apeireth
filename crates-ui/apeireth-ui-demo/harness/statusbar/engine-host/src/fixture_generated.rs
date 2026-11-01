@@ -1,0 +1,253 @@
+//! 固定数据（**自动生成** —— 勿手改）。
+//!
+//! 来源：`crates-ui/apeireth-ui-demo/harness/statusbar/fixtures/statusbar-cases.json`
+//! 生成器：`crates-ui/apeireth-ui-demo/harness/statusbar/scripts/extract-statusbar-assets.mjs`
+//!
+use crate::fixture::{StatusBarCase, StatusBarCaseItem};
+use apeireth_ui_kit::status_bar::{StatusBadgeSize, StatusBadgeVariant, StatusTone};
+
+/// 对照用的固定用例（两侧喂同一份数据）。
+pub fn status_bar_cases() -> Vec<StatusBarCase> {
+    vec![
+        StatusBarCase {
+            id: String::from("case-0"),
+            items: vec![
+                StatusBarCaseItem {
+                    key: String::from("cell-1"),
+                    text: String::from("通道一 · 已就绪"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("第一通道：状态正常。点击立即重连（重建订阅）。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-2"),
+                    text: String::from("通道二 · 空闲"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前没有进行中的回合。"),
+                    clickable: false,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-3"),
+                    text: String::from("通道三 · 计数 12"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("口径：最近 50 条窗口内的计数（端点不供总数）。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-4"),
+                    text: String::from("通道四 · 不可用"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前运行时未声明该能力（0 装：不假装在线）。"),
+                    clickable: false,
+                    sim: false,
+                },
+            ],
+            badge_variant: StatusBadgeVariant::Neutral,
+            badge_label: String::from("就绪"),
+            badge_size: StatusBadgeSize::Normal,
+        },
+        StatusBarCase {
+            id: String::from("case-1"),
+            items: vec![
+                StatusBarCaseItem {
+                    key: String::from("cell-1"),
+                    text: String::from("通道一 · 连接中"),
+                    tone: StatusTone::Warn,
+                    title: String::from("尚未连上事件总线，指数退避重连中（2s 起，封顶 30s）。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-2"),
+                    text: String::from("通道二 · 回合进行中"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("点击打断——不再听他说完（打断的是收听，不是他）。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-3"),
+                    text: String::from("通道三 · 读取失败"),
+                    tone: StatusTone::Warn,
+                    title: String::from("事件列表拉取失败——计数缺失而非为零。点击打开设置自查。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-4"),
+                    text: String::from("通道四 · 不可用"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前运行时未声明该能力（0 装：不编造计数）。"),
+                    clickable: false,
+                    sim: false,
+                },
+            ],
+            badge_variant: StatusBadgeVariant::Amber,
+            badge_label: String::from("待完善"),
+            badge_size: StatusBadgeSize::Small,
+        },
+        StatusBarCase {
+            id: String::from("case-2"),
+            items: vec![
+                StatusBarCaseItem {
+                    key: String::from("cell-1"),
+                    text: String::from("通道一 · 已连接"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("事件总线已连接。点击立即重连（重建事件订阅）。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-2"),
+                    text: String::from("通道二 · 未连接"),
+                    tone: StatusTone::Danger,
+                    title: String::from("未连接已超过 30s——显示为本机中性默认（SIM 纪律）。"),
+                    clickable: true,
+                    sim: true,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-3"),
+                    text: String::from("通道三 · 计数 50+"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("口径：最近 50 条事件窗口内的计数（端点不供总数）。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-4"),
+                    text: String::from("通道四 · 回合空闲"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前没有进行中的回合。"),
+                    clickable: false,
+                    sim: false,
+                },
+            ],
+            badge_variant: StatusBadgeVariant::Danger,
+            badge_label: String::from("危险"),
+            badge_size: StatusBadgeSize::Normal,
+        },
+        StatusBarCase {
+            id: String::from("case-3"),
+            items: vec![
+                StatusBarCaseItem {
+                    key: String::from("cell-1"),
+                    text: String::from("通道一 · 已就绪"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("第一通道：状态正常。"),
+                    clickable: false,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-2"),
+                    text: String::from("通道二 · 未连接"),
+                    tone: StatusTone::Danger,
+                    title: String::from("未连接已超过 30s——显示为本机中性默认（SIM 纪律）。"),
+                    clickable: true,
+                    sim: true,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-3"),
+                    text: String::from("通道三 · 计数 0"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("口径：最近 50 条窗口内的计数（端点不供总数）。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-4"),
+                    text: String::from("通道四 · 不可用"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前运行时未声明该能力（0 装：不假装在线）。"),
+                    clickable: false,
+                    sim: false,
+                },
+            ],
+            badge_variant: StatusBadgeVariant::Green,
+            badge_label: String::from("正常"),
+            badge_size: StatusBadgeSize::Normal,
+        },
+        StatusBarCase {
+            id: String::from("case-4"),
+            items: vec![
+                StatusBarCaseItem {
+                    key: String::from("cell-1"),
+                    text: String::from("通道一 · 读取失败"),
+                    tone: StatusTone::Warn,
+                    title: String::from("拉取失败——计数缺失而非为零。点击打开设置自查。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-2"),
+                    text: String::from("通道二 · 未连接"),
+                    tone: StatusTone::Danger,
+                    title: String::from("未连接已超过 30s——显示为本机中性默认（SIM 纪律）。"),
+                    clickable: true,
+                    sim: true,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-3"),
+                    text: String::from("通道三 · 回合进行中"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("点击打断——不再听他说完。"),
+                    clickable: true,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-4"),
+                    text: String::from("通道四 · 不可用"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前运行时未声明该能力（0 装：不假装在线）。"),
+                    clickable: false,
+                    sim: false,
+                },
+            ],
+            badge_variant: StatusBadgeVariant::Dim,
+            badge_label: String::from("弱化"),
+            badge_size: StatusBadgeSize::Small,
+        },
+        StatusBarCase {
+            id: String::from("case-5"),
+            items: vec![
+                StatusBarCaseItem {
+                    key: String::from("cell-1"),
+                    text: String::from("通道一 · 已就绪"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("第一通道：状态正常。"),
+                    clickable: false,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-2"),
+                    text: String::from("通道二 · 空闲"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前没有进行中的回合。"),
+                    clickable: false,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-3"),
+                    text: String::from("通道三 · 计数 7"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("口径：最近 50 条窗口内的计数。"),
+                    clickable: false,
+                    sim: false,
+                },
+                StatusBarCaseItem {
+                    key: String::from("cell-4"),
+                    text: String::from("通道四 · 不可用"),
+                    tone: StatusTone::Quiet,
+                    title: String::from("当前运行时未声明该能力。"),
+                    clickable: false,
+                    sim: false,
+                },
+            ],
+            badge_variant: StatusBadgeVariant::Blue,
+            badge_label: String::from("提示"),
+            badge_size: StatusBadgeSize::Normal,
+        },
+    ]
+}

@@ -760,10 +760,33 @@ mod tests {
                 .unwrap(),
             results[0].3
         );
-        assert!(results[0]
+        // ── 跨会话读取: 断言**真正的隔离性质**, 而不是「必然报错」 ──────────────
+        //
+        // 为什么原断言（`.is_err()`）会 flake（2026-10-24 macOS CI 实测 3 连红）:
+        // `next_reference()` 的组成是 `{前缀}{timestamp_nanos}-{pid}-{sequence}-{名字}`。
+        // 本测试的两个线程**同进程**（pid 相同）、各持**独立 store**（sequence 都从 0 起），
+        // 又被 `Barrier` 同步到同一瞬间 spill —— 只要落在同一时钟粒度内，
+        // **两个会话就会生成完全相同的 reference 名**。
+        // 此时「拿 session_b 的身份读 ref_a」读到的其实是 **session_b 自己的文件**，
+        // 返回 `Ok` 属正常行为（隔离按**目录**实现，不同目录下同名文件互不干扰）。
+        // macOS 的 `SystemTime::now()` 粒度较粗 → 撞名概率显著高于 Linux，故 CI 才红。
+        //
+        // 真正要守的性质只有一条: **用别的会话身份读取, 绝不能拿到本会话的内容**。
+        // 撞名时读到的是对方自己的内容（这是对的），所以这里按内容判定。
+        let session_a_reference = &results[0].2;
+        let session_a_content = &results[0].3;
+        match results[0]
             .0
-            .read_for_session(&results[1].1, &results[0].2)
-            .is_err());
+            .read_for_session(&results[1].1, session_a_reference)
+        {
+            // 常见情形: reference 不同名 → 该会话目录下不存在此文件 → 拒读。
+            Err(_) => {}
+            // 撞名情形: 读到的是 session_b 自己的内容 —— 必须**不等于** session_a 的内容。
+            Ok(leaked) => assert_ne!(
+                &leaked, session_a_content,
+                "跨会话读取拿到了 session_a 的内容 —— 隔离被突破"
+            ),
+        }
     }
 
     #[test]

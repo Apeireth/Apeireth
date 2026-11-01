@@ -52,21 +52,21 @@ Author:          经验总装批施工者
 | **派子代理** | MANIFESTO §6（workflow + 3 问 + 亲验义务） | `subagent-brief.md` | 派前自己先跑一遍基线 |
 | **判某能力到底做没做** | [engineering-review-handoff-2026-10-06.md](../engineering-review-handoff-2026-10-06.md) §2.3（三关）+ [system-capabilities.md](../../01-architecture/system-capabilities.md) 四级口径 | — | 三关命令见本册 §4 |
 | **写交付文档** | 任一份 *-delivery.md 卷宗抬头（接缝注先例） | `delivery-doc-skeleton.md` | `python scripts/check_doc_caliber.py <doc>` |
-| **跨会话接续** | [handoff-w1-w5-closure](../handoff-w1-w5-closure-2026-10-10.md) §7（接手第一步） | `handoff-report-skeleton.md` | 交付方 §3 验证清单 |
+| **跨会话接续** | [handoff-w1-w5-closure](../01-handoffs/handoff-w1-w5-closure-2026-10-10.md) §7（接手第一步） | `handoff-report-skeleton.md` | 交付方 §3 验证清单 |
 | **写"已验证/已实测"** | [live-verification-ledger.md](../live-verification-ledger.md)（唯一权威，先查再写） | — | 台账行的复现命令 |
 | **报测试数字** | [test-baseline.md](../../03-reference/test-baseline.md)（单一真源） | `retest-note.md`（复测注记） | 数字随行三件：命令+日期+工具链 |
-| **网络/下载/git 排障** | [ops-network-playbook.md](../ops-network-playbook.md) §1/§2/§4 | — | 手册内探测命令 |
+| **网络/下载/git 排障** | [ops-network-playbook.md](../00-governance/ops-network-playbook.md) §1/§2/§4 | — | 手册内探测命令 |
 | **形式化验证（kani 面）** | [kani-verification-playbook.md](../kani-verification-playbook.md) §2（K1-K18） | §3 新增 harness 检查单 | WSL 本地回路（手册 §5） |
-| **吸收外部项目** | [absorption-candidates-2026-10.md](../absorption-candidates-2026-10.md) §〇（第一律提问法） | 04-methodology 配方 3（一项目一小节） | 取材先净化（配方 4） |
-| **发布/release** | [release-checklist.md](../release-checklist.md) + MANIFESTO §10（版本轴 LOCKED） | — | 发布资产校验脚本（B8 批） |
+| **吸收外部项目** | [absorption-candidates-2026-10.md](../03-audits/absorption-candidates-2026-10.md) §〇（第一律提问法） | 04-methodology 配方 3（一项目一小节） | 取材先净化（配方 4） |
+| **发布/release** | [release-checklist.md](../00-governance/release-checklist.md) + MANIFESTO §10（版本轴 LOCKED） | — | 发布资产校验脚本（B8 批） |
 | **查在飞/待办** | [00-backlog.md](../backend-enhancement/00-backlog.md) + 债栏 D1-D27 | — | — |
 
 ---
 
 ## 3. 本机环境事实卡（会咬人的点，全部实测过）
 
-> 来源：[handoff-w1-w5-closure](../handoff-w1-w5-closure-2026-10-10.md) §4/§6、
-> [ops-network-playbook.md](../ops-network-playbook.md)、[00-backlog](../backend-enhancement/00-backlog.md) 债栏。
+> 来源：[handoff-w1-w5-closure](../01-handoffs/handoff-w1-w5-closure-2026-10-10.md) §4/§6、
+> [ops-network-playbook.md](../00-governance/ops-network-playbook.md)、[00-backlog](../backend-enhancement/00-backlog.md) 债栏。
 > 换机器即失效，以实测为准。
 
 ### 3.1 命令卡（交付前必跑，`-j 2` 口径）

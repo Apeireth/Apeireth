@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>scene engine — Rust scene semantics on the engine</title>
+<style>
+  /* 画布的 CSS 尺寸 = 设备像素尺寸（dpr 由 CDP 固定为 1）⇒ 截图 1:1 无缩放。 */
+  html, body { margin: 0; padding: 0; background: #000; }
+  canvas { display: block; width: 1440px; height: 900px; }
+</style>
+</head>
+<body>
+<canvas id="webgl" width="1440" height="900"></canvas>
+<canvas id="webgpu" width="1440" height="900"></canvas>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

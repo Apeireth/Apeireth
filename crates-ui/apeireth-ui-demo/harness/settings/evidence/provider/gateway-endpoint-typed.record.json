@@ -1,0 +1,13 @@
+{
+  "case": "gateway-endpoint-typed",
+  "driver": "点 .advanced-toggle（展开高级网关）⇒ 在 #endpoint-input 真实键入（两侧同路径）",
+  "t1_pixel_different": -1,
+  "t1_pixel_total": 0,
+  "t1_pixel_ratio": 1.0,
+  "t2_dom_equal": false,
+  "t2_dom_diffs": [
+    "根/4/1/0/0: 子节点数不同（2 / 1）"
+  ],
+  "reference_typed_value": "http://127.0.0.1:8080http://127.0.0.1:9911",
+  "engine_typed_value": "http://127.0.0.1:8080"
+}

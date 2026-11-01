@@ -75,20 +75,6 @@ impl ApprovalItem {
     }
 }
 
-/// 格式化时刻（UTC，24 小时制，两位补零）。
-///
-/// 与既有实现 `toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})`
-/// 在 **UTC 时区**下产出同样的字符串（例如 `01:10`）。
-///
-/// 纯算术（不读系统时区）⇒ 对照环境把浏览器时区钉成 UTC 时两侧必然一致。
-pub fn format_clock_utc(epoch_millis: i64) -> String {
-    let total_seconds = epoch_millis.div_euclid(1000);
-    let seconds_of_day = total_seconds.rem_euclid(86_400);
-    let minutes = seconds_of_day / 60;
-    let hours = minutes / 60;
-    format!("{:02}:{:02}", hours, minutes % 60)
-}
-
 /// 审批卡组件（用 `#[component]` 宏声明：**函数即组件**）。
 ///
 /// 宏展开后等价于：props 结构体 `ApprovalCardProps` + 组件类型
@@ -120,7 +106,10 @@ pub fn ApprovalCard(
     let show_time = item.created_at.is_some();
     let clock = item
         .created_at
-        .map(format_clock_utc)
+        // ⚠️ **必须走进程级时间器**（不自己算 UTC）：
+        // 宿主在 wasm 上装了浏览器 `Intl` ⇒ 与生产**同一时区**；
+        // 自己算固定 UTC ⇒ ⇒ 非 UTC 时区下**差 8 小时**（实测踩到）。
+        .map(apeireth_ui_kit::governance_tab::format_clock_hm)
         .unwrap_or_else(String::new);
 
     let close_button = on_dismiss.as_ref().map(|dismiss| {
@@ -290,6 +279,24 @@ mod tests {
     //! 试点组件的**行为**断言（渲染结果 ⇒ 结构 / class / 文本），不读源码。
 
     use super::*;
+
+    /// 格式化时刻（UTC，24 小时制，两位补零）—— **仅测试用**。
+    ///
+    /// 与既有实现 `toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})`
+    /// 在 **UTC 时区**下产出同样的字符串（例如 `01:10`）。
+    ///
+    /// ⚠️ **本函数是「自算时区」的实现** ⇒ ⇒ 只作为 native 可复现基准留在测试里，
+    /// **不得**被任何组件调用（否则绕过进程级时间器 ⇒ 生产/引擎差 8 小时，见台账 E-66）。
+    /// 2026-10-27 起它已从模块级搬进 `mod tests` ⇒ ⇒ **外部不可达**；
+    /// 边界守卫（`check_ui_boundaries.py` 的 Guard B）按**符号级 + 块级**复核。
+    fn format_clock_utc(epoch_millis: i64) -> String {
+        let total_seconds = epoch_millis.div_euclid(1000);
+        let seconds_of_day = total_seconds.rem_euclid(86_400);
+        let minutes = seconds_of_day / 60;
+        let hours = minutes / 60;
+        format!("{:02}:{:02}", hours, minutes % 60)
+    }
+
     use apeireth_ui_core::{Runtime, UiComponent};
 
     /// 建一份试点 props（`item` 可替换）。

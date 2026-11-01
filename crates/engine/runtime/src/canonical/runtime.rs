@@ -483,16 +483,6 @@ impl Runtime {
         &self.capabilities
     }
 
-    /// Replace the host event sink without changing the runtime graph.
-    ///
-    /// This is used by adapters that are assembled after the runtime. Event
-    /// delivery is observational and never changes the turn result.
-    pub fn set_event_sink(&self, sink: Arc<dyn RuntimeEventSink>) {
-        // poison 容错 (L 组): 持锁线程 panic 后, 事件 sink 本身并未损坏;
-        // 直接 expect 会把一次 sink panic 升级为之后所有 set/emit 的全线崩溃。
-        *write_lock_or_recover(&self.event_sink) = sink;
-    }
-
     /// Add an observer while preserving sinks installed by another
     /// composition root. Gateway setup uses this so dataset/audit observers
     /// attached during runtime bootstrap are not silently discarded.

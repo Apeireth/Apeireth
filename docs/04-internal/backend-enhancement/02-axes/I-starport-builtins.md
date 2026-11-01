@@ -1,7 +1,7 @@
 # I 星港——基地内置应用面
 
 > `Status: ✅ 17 面全部点亮（2026-10-11）：6 个未组装面全部干成真实工作切片（真硬件 I/O / 真端点 / 真文件与协议面），未组装名单清零；pnpm test 70/70、svelte-check 0 错 0 警、中性词零命中、Rust 80+9 测试与 clippy 零警；后续批次=清接线缝与增强既有面`
-> 命名体系与研判全量见 [builtin-feature-synthesis](../../../../reports/builtin-feature-synthesis-2026-10-11.md)；架构拆解见 [embedded-app-suite-research](../../../../reports/embedded-app-suite-research-2026-10-11.md)。
+> 命名体系与研判全量见 [builtin-feature-synthesis](../../../../reports/10-desktop-and-ui.md)；架构拆解见 [embedded-app-suite-research](../../../../reports/07-research-assessments.md)。
 
 ## 一句话
 

@@ -3,7 +3,7 @@
 > `Status: ✅ 批 L2 交付（2026-10-16，纯文档批 · 未 commit）`
 > 一事：沉淀本战役各批交付文档里的**口径裁决**，每条 =【裁定 → 被拒案 → 理由链】三段——
 > 不只留"结论是什么"，还留"当时拒了什么、为什么拒"，防未来把被拒案当新提案重提。
-> 矿脉图：[L-experience-distillation.md](../backend-enhancement/L-experience-distillation.md) §二.3（本批挖第三矿）；
+> 矿脉图：[L-experience-distillation.md](../../archive/backend-enhancement/L-experience-distillation-2026-10-15.md) §二.3（本批挖第三矿）；
 > 施工宪章：[CONSTRUCTION-DISCIPLINE.md](../backend-enhancement/CONSTRUCTION-DISCIPLINE.md)；姊妹矿：[01-collaboration-patterns.md](01-collaboration-patterns.md)（协同面）/ [02-failure-anatomy.md](02-failure-anatomy.md)（死法面）。
 > 出处标注：**★** = 仓内锚点（可链接复核）；**☆** = 会话记录侧（案例现场未落仓，不编造）。
 > 素材口径：裁定与被拒案均取自仓内交付文档/契约/提交正文的明文记录；理由链是对明文依据的归纳，无明文依据处如实标注。
@@ -16,7 +16,7 @@
 
 【理由链】①字段名的读者是三面接线者，同族同形 = 少一次翻译错误；②维度名（报帧用）与配置字段名（接线用）各司其职，不互相污染；③家族钳制锚点（`MAX_QUOTA_COST_MICROS`）与解析函数（`parse_quota_max_cost_micros`）随名走，"与 tokens/tool_steps 同口径"成为可逐项核对的承诺。
 
-> 出处：★[A-quota-real-interface.md](../backend-enhancement/A-quota-real-interface.md) §P2 实施记录「新符号」行（"规格速记作 `cost_micros`，实现取家族口径 `max_*`，与 `CognitiveQuota.max_cost_micros`／env `APEIRETH_QUOTA_MAX_COST_MICROS` 同名轴"；`MAX_QUOTA_COST_MICROS` 家族钳制锚点、`parse_quota_max_cost_micros` 同族解析纪律四态）。
+> 出处：★[A-quota-real-interface.md](../backend-enhancement/02-axes/A-quota-real-interface.md) §P2 实施记录「新符号」行（"规格速记作 `cost_micros`，实现取家族口径 `max_*`，与 `CognitiveQuota.max_cost_micros`／env `APEIRETH_QUOTA_MAX_COST_MICROS` 同名轴"；`MAX_QUOTA_COST_MICROS` 家族钳制锚点、`parse_quota_max_cost_micros` 同族解析纪律四态）。
 
 ## 裁定 2 · 族集授权不绑目标 + 补偿控制
 
@@ -46,7 +46,7 @@
 
 【理由链】①护栏以"字面量出现 = 执行核特判嫌疑"为判据（架构冻结全文扫描，去注释后扫执行核九个源文件，含测试面），夹具写禁词与真特判在扫描面不可区分；②被测语义不依赖那个字样——工具名字段（`name: "shell"`）+ 代位能力 id 完整承载断言，语义不损；③护栏严、测试全两头都真：扫描零命中是真零命中，断言覆盖是真覆盖。
 
-> 出处：★[J-life-integration.md](../backend-enhancement/J-life-integration.md) 门禁证据注 1（在途夹具含字面量 `tool.shell` 撞既有架构冻结护栏全文扫描 → 其线已修夹具、隔离复跑转绿、非本批引入亦非本批遗留）；★护栏本体 [canonical_architecture_invariants.rs](../../../crates/engine/runtime/tests/canonical_architecture_invariants.rs)（`execution_core_does_not_special_case_standard_modules` 禁词表含 `tool.shell`）；★现行夹具形状 [approval.rs](../../../crates/engine/runtime/src/canonical/approval.rs)（`name: "shell"` + 代位 id，收卷提交 `bddc8aa4`）；☆会话记录（修夹具现场，未落仓）。
+> 出处：★[J-life-integration.md](../backend-enhancement/02-axes/J-life-integration.md) 门禁证据注 1（在途夹具含字面量 `tool.shell` 撞既有架构冻结护栏全文扫描 → 其线已修夹具、隔离复跑转绿、非本批引入亦非本批遗留）；★护栏本体 [canonical_architecture_invariants.rs](../../../crates/engine/runtime/tests/canonical_architecture_invariants.rs)（`execution_core_does_not_special_case_standard_modules` 禁词表含 `tool.shell`）；★现行夹具形状 [approval.rs](../../../crates/engine/runtime/src/canonical/approval.rs)（`name: "shell"` + 代位 id，收卷提交 `bddc8aa4`）；☆会话记录（修夹具现场，未落仓）。
 
 ## 裁定 5 · 保守下界不冒充规格书（模型画像窗口）
 
@@ -56,7 +56,7 @@
 
 【理由链】①下界的语义是"只低估不高估"（路由不超卖）；②精确规格无来源时 `None`（未提供）是诚实态，显式 null + 原因可上屏；③能力布尔取族声明照实口径（不拔高）与下界同构——**一切保守取值都要标明性质**（"floor"不是"spec"）；④基线口径由测试钉死（"基线 == 提供商默认模型表"逐 id 一致），保守值不漂移成事实。
 
-> 出处：★[H-model-plane.md](../backend-enhancement/H-model-plane.md) §P1 配置面第 1 条（"上下文窗/输出取**保守下界**（…，routing floor，**不是**规格书）"）+ 消费面接线图注 + 测试证据「内置基线命中：保守下界+族能力布尔+单价未提供」。
+> 出处：★[H-model-plane.md](../backend-enhancement/02-axes/H-model-plane.md) §P1 配置面第 1 条（"上下文窗/输出取**保守下界**（…，routing floor，**不是**规格书）"）+ 消费面接线图注 + 测试证据「内置基线命中：保守下界+族能力布尔+单价未提供」。
 
 ## 裁定 6 · 绝不编价
 
@@ -66,7 +66,7 @@
 
 【理由链】①钱的数字错一处即决策误导（配额烧钱闸、成本分级都吃这本账）；②`None` + 原因 = 可解释的诚实态，消费端渲染 "—"/「未提供」；③冻结文案「部分计量: N 个计量轮无单价未计入 (绝不编价)」把缺口写在数字旁边；④记账二分恒等式（每轮要么计入价、要么 `unpriced_rounds += 1`，不重不漏）让部分计量可审计。
 
-> 出处：★[H-model-plane.md](../backend-enhancement/H-model-plane.md) §P1 画像结构（"**单价绝不编价**（缺一半也不补另一半）"）；★[A-quota-real-interface.md](../backend-enhancement/A-quota-real-interface.md) §H-P1 接头（"缺一半/无价/未知回 `None`——绝不编价"）+ §P2 口径备注（部分计量口径、记账二分恒等式）；★[frontend-data-contract.md](../../02-guides/frontend-data-contract.md)（`*.reason` 冻结文案「部分计量: N 个计量轮无单价未计入 (绝不编价)」）。
+> 出处：★[H-model-plane.md](../backend-enhancement/02-axes/H-model-plane.md) §P1 画像结构（"**单价绝不编价**（缺一半也不补另一半）"）；★[A-quota-real-interface.md](../backend-enhancement/02-axes/A-quota-real-interface.md) §H-P1 接头（"缺一半/无价/未知回 `None`——绝不编价"）+ §P2 口径备注（部分计量口径、记账二分恒等式）；★[frontend-data-contract.md](../../02-guides/frontend-data-contract.md)（`*.reason` 冻结文案「部分计量: N 个计量轮无单价未计入 (绝不编价)」）。
 
 ## 裁定 7 · 空态"—"语义
 
@@ -76,7 +76,7 @@
 
 【理由链】①"—"是无值的专用记号，与 0 语义分离，仪表盘不会把"没接线"读成"没有消耗"；②空态即契约（设计原则：空态写"当 X 发生时这里会出现 Y"）；③显式空 + 计数对账 + 拒收侧车让"真空"可判；④读面缺席（501/404）→「暂无接口」诚实空态，其余错误抛错上屏，不静默降级成空列表。
 
-> 出处：★[gateway-api-contract.md](../../gateway-api-contract.md) §8b（"空态 = 显式空 + "—"：…未知不用 0 冒充"）；★[frontend-data-contract.md](../../02-guides/frontend-data-contract.md)（空态 = "—" 语义、`*.display` 取不到/不设限侧显 "—"、暂无接口整行 "—"、`SKILL_SHELF_NO_FACE` 诚实空态）；★[G-observability.md](../backend-enhancement/G-observability.md) §指标空态（空态显式 "—"、null 不冒充 0）；★[A-quota-real-interface.md](../backend-enhancement/A-quota-real-interface.md)（不设限显示 "—"、深度维继续整行 "—"）。
+> 出处：★[gateway-api-contract.md](../../gateway-api-contract.md) §8b（"空态 = 显式空 + "—"：…未知不用 0 冒充"）；★[frontend-data-contract.md](../../02-guides/frontend-data-contract.md)（空态 = "—" 语义、`*.display` 取不到/不设限侧显 "—"、暂无接口整行 "—"、`SKILL_SHELF_NO_FACE` 诚实空态）；★[G-observability.md](../backend-enhancement/G-observability.md) §指标空态（空态显式 "—"、null 不冒充 0）；★[A-quota-real-interface.md](../backend-enhancement/02-axes/A-quota-real-interface.md)（不设限显示 "—"、深度维继续整行 "—"）。
 
 ## 裁定 8 · 错误帧报语义不回显值
 
@@ -86,7 +86,7 @@
 
 【理由链】①错误帧的读者包括日志、审计、审批卡、前端，是全链最宽的广播面；②语义足够排障：原因码 + 存在性 + 脱敏命令串已可定位问题；③脱敏走统一函数全链过（命令面、输出、审批理由、审批卡命令文本）；④安全向不对称：宁可信息少一点也不回显值；⑤报语义还有"不冒充裁定"子条——提示帧刻意避开 401（不冒充服务端鉴权裁定）、拒绝帧不回显凭据本体。
 
-> 出处：★[W2-2-remote-access-auth-delivery.md](../backend-enhancement/W2-2-remote-access-auth-delivery.md)（"401 帧不回显任何令牌值"）；★[server-deployment.md](../../02-guides/server-deployment.md)（令牌在否只报 present/absent，永不回显值）；★[self-insight-channel.md](../../02-guides/self-insight-channel.md)（凭据只回存在性布尔，本体绝不回显）；★[git-write-tiering-delivery.md](../backend-enhancement/git-write-tiering-delivery.md)（`redact_secret_surfaces` 全链脱敏）；★[H-model-plane.md](../backend-enhancement/H-model-plane.md)（误粘贴凭据字段拒开且错误帧不回显值（值自由报错））；★[audit-gap-behavior-fixes-2026-10-16.md](../backend-enhancement/audit-gap-behavior-fixes-2026-10-16.md) §1（503 刻意避开 401，绝不冒充服务端鉴权裁定）；★[J-life-integration.md](../backend-enhancement/J-life-integration.md)（拒绝帧不回显凭据本体）。
+> 出处：★[W2-2-remote-access-auth-delivery.md](../backend-enhancement/W2-2-remote-access-auth-delivery.md)（"401 帧不回显任何令牌值"）；★[server-deployment.md](../../02-guides/server-deployment.md)（令牌在否只报 present/absent，永不回显值）；★[self-insight-channel.md](../../02-guides/self-insight-channel.md)（凭据只回存在性布尔，本体绝不回显）；★[git-write-tiering-delivery.md](../backend-enhancement/git-write-tiering-delivery.md)（`redact_secret_surfaces` 全链脱敏）；★[H-model-plane.md](../backend-enhancement/02-axes/H-model-plane.md)（误粘贴凭据字段拒开且错误帧不回显值（值自由报错））；★[audit-gap-behavior-fixes-2026-10-16.md](../backend-enhancement/audit-gap-behavior-fixes-2026-10-16.md) §1（503 刻意避开 401，绝不冒充服务端鉴权裁定）；★[J-life-integration.md](../backend-enhancement/02-axes/J-life-integration.md)（拒绝帧不回显凭据本体）。
 
 ## 裁定 9 · 审计误报的勘误姿势（C-05 案）
 

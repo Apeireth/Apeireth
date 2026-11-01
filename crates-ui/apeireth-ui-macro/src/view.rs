@@ -319,6 +319,15 @@ pub(crate) enum Attr {
         /// 值表达式原文。
         value: String,
     },
+    /// **property** 赋值（`prop:<名>` / `bind:value` / `bind:checked`）。
+    ///
+    /// ⚠️ property 与属性是**两条独立通道**：写 attribute 对 `input.value` 无效。
+    Prop {
+        /// property 名。
+        name: String,
+        /// 值表达式原文。
+        value: String,
+    },
 }
 
 /// HTML 标签白名单（判定「裸标识符是元素还是表达式」用）。
@@ -682,6 +691,7 @@ impl<'a> Cursor<'a> {
     ///
     /// 支持的形态（够用且可判定）：
     /// - 标识符：`text`
+    /// - 括号组：`(key, value)`（**元组模式** / 括号表达式）⇒ 原文透传
     /// - 方法链 / 字段链：`a.b.c`、`a.b()`、`a.b()?.c()`
     /// - 直接调用：`format!("…")`
     /// - 前置 `!` / `-`：`!flag`
@@ -697,10 +707,17 @@ impl<'a> Cursor<'a> {
                 _ => break,
             }
         }
-        // 主体：标识符。
+        // 主体：**括号组**（元组模式 / 括号表达式）或标识符。
+        if let Some(TokKind::Group { open, .. }) = self.tokens.get(self.pos).map(|t| &t.kind) {
+            if *open == '(' {
+                // 整组透传（`(key, value)` ⇒ 模式原文；`(expr)` ⇒ 表达式原文）。
+                self.pos += 1;
+                return Ok(self.slice(start, self.pos));
+            }
+        }
         match self.peek().map(|token| token.ident()) {
             Some(Some(_)) => self.pos += 1,
-            _ => return Err("表达式缺失（期望一个标识符）".to_owned()),
+            _ => return Err("表达式缺失（期望一个标识符或括号组）".to_owned()),
         }
         // 直接调用：`name(...)`。
         if let Some(TokKind::Group { open, .. }) = self.tokens.get(self.pos).map(|t| &t.kind) {
@@ -782,12 +799,28 @@ fn parse_attr(tokens: &[Tok], source: &str) -> Result<Attr, String> {
     let Some(first) = tokens.first() else {
         return Err("属性为空".to_owned());
     };
-    let name = match &first.kind {
+    let mut name = match &first.kind {
         TokKind::Ident(text) => text.clone(),
         TokKind::Literal(text) => text.trim_matches('"').to_owned(),
         other => return Err(format!("属性名非法：{other:?}")),
     };
     let mut index = 1usize;
+    // 连字符属性名（`aria-label` / `aria-expanded` / `data-*`）⇒ 逐段拼回。
+    while let (
+        Some(Tok {
+            kind: TokKind::Punct('-'),
+            ..
+        }),
+        Some(Tok {
+            kind: TokKind::Ident(text),
+            ..
+        }),
+    ) = (tokens.get(index), tokens.get(index + 1))
+    {
+        name.push('-');
+        name.push_str(text);
+        index += 2;
+    }
     let mut sub: Option<String> = None;
     if let Some(Tok {
         kind: TokKind::Punct(':'),
@@ -839,9 +872,27 @@ fn parse_attr(tokens: &[Tok], source: &str) -> Result<Attr, String> {
             let value = value.ok_or_else(|| "属性 `bind:this` 缺值".to_owned())?;
             Ok(Attr::This { value })
         }
+        // `bind:value` / `bind:checked` ⇒ **property 赋值**（Svelte 的同口径：
+        // 对原生控件写 property，不写 attribute）。
+        ("bind", Some(name @ ("value" | "checked"))) => {
+            let value = value.ok_or_else(|| format!("属性 `bind:{name}` 缺值"))?;
+            Ok(Attr::Prop {
+                name: name.to_owned(),
+                value,
+            })
+        }
+        // 任意 property：`prop:value = expr` / `prop:checked = expr`。
+        ("prop", Some(name)) => {
+            let value = value.ok_or_else(|| format!("属性 `prop:{name}` 缺值"))?;
+            Ok(Attr::Prop {
+                name: name.to_owned(),
+                value,
+            })
+        }
         ("bind", Some(other)) => Err(format!(
-            "双向绑定 `bind:{other}` **尚未接线**（渲染阶段的 property 回写未实现）——\
-             本批只支持 `bind:this`"
+            "双向绑定 `bind:{other}` **尚未接线** —— 本批支持 `bind:this` / \
+             `bind:value` / `bind:checked`（后两者写 property）；\
+             其它 property 用 `prop:{other} = <表达式>`"
         )),
         (name, None) if name.starts_with("on") => {
             let value = value.ok_or_else(|| format!("事件属性 `{name}` 缺值"))?;
@@ -973,6 +1024,9 @@ fn generate_element(tag: &str, attrs: &[Attr], children: &[Node]) -> Result<Stri
             Attr::Plain { name, value } => {
                 let _ = write!(code, " __n = __n.attr({name:?}, {value});");
             }
+            Attr::Prop { name, value } => {
+                let _ = write!(code, " __n = __n.prop({name:?}, {value});");
+            }
             Attr::Key { value } => {
                 let _ = write!(code, " __n = __n.key({value});");
             }
@@ -1009,6 +1063,10 @@ fn generate_component(
         match arg {
             Attr::Plain { name: field, value } => {
                 let _ = write!(setters, ".{field}({value})");
+            }
+            Attr::Prop { name: field, value } => {
+                // property 不是属性 ⇒ props 结构体里用 `prop_<名>` 方法（不占属性名）。
+                let _ = write!(setters, ".prop_{field}({value})");
             }
             Attr::Key { value } => {
                 let _ = write!(setters, ".key({value})");
@@ -1092,8 +1150,33 @@ mod tests {
     }
 
     #[test]
-    fn bind_value_is_reported_as_not_wired() {
-        let err = parse("input(bind:value = name)").expect_err("必须报错");
+    fn bind_value_now_parses_as_a_property() {
+        // ⚠️ 本测试原先断言「`bind:value` **必须报错**（property 回写未实现）」。
+        // 渲染器的 property 通道接通后该约束**不再成立** ⇒ 反转成正向断言：
+        // `bind:value` ⇒ **property**（不是属性）。
+        let code = gen("input(bind:value = name)");
+        assert!(
+            code.contains(".prop(\"value\", name)"),
+            "bind:value 必须生成 property 写入，实测：{code}"
+        );
+        assert!(
+            !code.contains(".attr(\"value\""),
+            "bind:value **不得**生成属性写入（写 attribute 对 input.value 无效）：{code}"
+        );
+        // `bind:checked` ⇒ 同样走 property（布尔由 `From<bool>` 转 PropValue）。
+        let checked = gen("input(bind:checked = flag)");
+        assert!(
+            checked.contains(".prop(\"checked\", flag)"),
+            "bind:checked 必须生成 property 写入，实测：{checked}"
+        );
+        // 任意 property：`prop:<名>`。
+        let other = gen("input(prop:indeterminate = half)");
+        assert!(
+            other.contains(".prop(\"indeterminate\", half)"),
+            "prop:<名> 必须生成 property 写入，实测：{other}"
+        );
+        // 不认识的 `bind:` 仍然报错（不静默放过）。
+        let err = parse("input(bind:group = g)").expect_err("未知 bind 必须报错");
         assert!(err.contains("尚未接线"), "实测错误文案：{err}");
     }
 
@@ -1151,6 +1234,28 @@ mod tests {
         );
         assert!(
             code.contains("collect::<::std::vec::Vec<_>>()"),
+            "实测：{code}"
+        );
+    }
+
+    #[test]
+    fn tuple_patterns_are_passed_through_verbatim() {
+        let code = gen("ul { for (key, value) in entries { li { key } } }");
+        assert!(
+            code.contains("entries).into_iter().map(|(key, value)|"),
+            "实测：{code}"
+        );
+    }
+
+    #[test]
+    fn hyphenated_attribute_names_are_joined_back() {
+        let code = gen("div(aria-expanded = flag, aria-label = \"收起详情\") { \"x\" }");
+        assert!(
+            code.contains("__n.attr(\"aria-expanded\", flag)"),
+            "实测：{code}"
+        );
+        assert!(
+            code.contains("__n.attr(\"aria-label\", \"收起详情\")"),
             "实测：{code}"
         );
     }

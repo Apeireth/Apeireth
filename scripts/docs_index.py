@@ -36,6 +36,30 @@ REDIRECTS = Path("docs/_redirects.tsv")
 
 SKIP_DIRS = {".git", "target", "legacy", "node_modules", "dist", ".venv"}
 
+
+
+def nested_worktree_dirs(root: Path) -> set[str]:
+    """仓内**嵌套**的其他 git 工作树根（相对 root 的第一层目录名）。
+
+    判据：该目录下有 `.git` **文件**（主仓的 `.git` 是目录；`git worktree add`
+    出来的副本是 `.git` 文件，内容 `gitdir: ...`）。
+
+    为什么必须剪：嵌套工作树里带着**本仓的完整副本**。不剪的话，副本中的文档会被
+    当成本仓文档**重复扫描** —— 路径前缀判断随之失准（副本里的
+    `xxx/docs/archive/foo.md` 相对主仓不以 `docs/archive/` 开头，历史卷宗被当成活跃文档）。
+    口径门禁实测：仓内建一个 worktree 后，活跃文档数从 415 涨到 1190、
+    凭空多出 24 处「新增违规」，全是副本造成的假阳性。
+    """
+    out: set[str] = set()
+    try:
+        for child in root.iterdir():
+            if child.is_dir() and (child / ".git").is_file():
+                out.add(child.name)
+    except OSError:
+        pass
+    return out
+
+_NESTED_WT = nested_worktree_dirs(ROOT)
 LAYERS = {"L1", "L2", "L3", "L4", "L5"}
 TOPICS = {str(i) for i in range(1, 13)}
 
@@ -75,6 +99,8 @@ def iter_md(base: Path) -> list[Path]:
     for p in root.rglob("*.md"):
         rel = p.relative_to(ROOT)
         if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        if rel.parts and rel.parts[0] in _NESTED_WT:
             continue
         out.append(p)
     return sorted(out)
@@ -126,6 +152,8 @@ def build_ref_counts(docs: list[Path], reports: list[Path]) -> dict[str, int]:
             continue
         rel = src.relative_to(ROOT)
         if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        if rel.parts and rel.parts[0] in _NESTED_WT:
             continue
         try:
             text = src.read_text(encoding="utf-8", errors="replace")
@@ -275,6 +303,8 @@ def check() -> list[str]:
     for d in sorted(p for p in (ROOT / DOCS).rglob("*") if p.is_dir()):
         rel = d.relative_to(ROOT)
         if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        if rel.parts and rel.parts[0] in _NESTED_WT:
             continue
         if "archive" in rel.parts:  # 历史卷宗不要求索引（L5 只读）
             continue
