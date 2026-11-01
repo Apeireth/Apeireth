@@ -228,3 +228,56 @@ Class:           STATUS
 | `crates/engine/memory/src/scope.rs` | `RecallPolicy`（§6.1 的重复实现） |
 | `crates/engine/runtime-assembly/src/canonical/memory_module.rs` | 生产记忆模块（7 个操作：`retrieve`/`write`/`update`/`delete`/`search`/`compact`/`organize`） |
 | `.github/workflows/golden-baseline.yml` | 记忆线闸门（含**runner 容量体检 artifact**） |
+
+---
+
+## 10. 🟢 **收尾基线（2026-11-01 末，本线暂停点）**
+
+> 本节是**恢复点**：下次接手**从这里读起**，不用回看对话。
+> 上文 §0–§9 是**当时的推理链**（保留不动）；本节是**最新状态**，与其冲突时**以本节为准**。
+
+### 10.1 已落地（都在 `debt-round8` 远端，可核对）
+| 交付 | 位置 | 状态 |
+|---|---|---|
+| **夜间整编驱动层** | `crates/engine/memory/src/consolidation_trigger.rs` | ✅ 已推（记忆 crate lib 测试 +10） |
+| **在线质量漂移监控** | `crates/engine/memory/src/quality_drift.rs` | ✅ 已推（+10 测试，**接线 2 个 A 类缺口**） |
+| **CI 磁盘瘦身** | 5 个 workflow 顶层 env | ✅ 已推 ⇒ **`Golden baseline` 闸门首次真跑通并绿** |
+| **CI 门禁逐步覆盖** | 仓外 `gates.sh` 25 → 39 步 + `CI_ONLY` +1 | ✅ 已推 ⇒ 「CI 的 63 个本地步全部在本地」 |
+| **孤儿 API 基线销账** | `scripts/unwired-baseline.txt` | ✅ **137 → 135**（真接线 2 条；成分见 10.3） |
+| **fuzz lock 修复** | `fuzz/Cargo.lock` +1 行 | ✅ 已推（`--locked` nightly/stable 双过） |
+
+### 10.2 深化四期**最新**状态（覆盖 §3 的表）
+| 期 | 状态 |
+|---|---|
+| **P1 效果评估集** | ✅ **完成**（含 `case_fingerprint` 防偷换语料） |
+| **P2 夜间整编** | 🟢 **记忆侧已补齐**：`ConsolidationTrigger`（窗口水位/幂等/只整新料/料不够不跑/失败不丢料）<br>⚠️ **仍缺：生产调用点**（在 `runtime-assembly` / `orchestration` = **跨区**） |
+| **P3 教训回路** | ✅ 已接线 |
+| **P4 图谱/向量** | ✅ 完成（`persistent_vector` 自述 default-off ⇒ 不是缺口） |
+
+### 10.3 孤儿 API 基线的**成分修正**（重要，别退回）
+`online_calibration` 整族的两半（`AdaptiveBaseline` / `DriftDetector`）在 `quality_drift.rs` 里**有了真实消费者**：
+- `consolidate_governed` ⇒ 被 `ConsolidationTrigger::run` 调用 ⇒ **销账（正确）**；
+- `streaks` ⇒ 被 `QualityDriftMonitor` 的「连续偏离计数」调用 ⇒ **销账（正确）**；
+- ⚠️ **`with_max_episodes` 必须留在基线里**：`memory_materializer.rs:278` 的那个**仍是真孤儿**。
+  我最初把方法起名成同名 ⇒ **基线一度把它当成「已接线」而删掉（假的债减少）** ⇒ 已改名为
+  `with_batch_limit` 并**把该行加回** ⇒ ⇒ **以后给记忆 crate 加公开方法时，务必先查这个名字是否已是孤儿。**
+
+### 10.4 ⭐ 本轮踩到并**已写入纪律**的坑（下一位直接受益）
+1. **`/git/commits/{sha}` 要全 40 位 sha**（短 sha ⇒ 404）⇒ 本轮踩了 **10 次**；
+2. **`pushon.py` 的 reset 流程会丢掉已提交内容** ⇒ ⇒ **已提交的批次不要再用它推**，
+   用 `apipush2.py` + 显式 `--remote-base/--local-base`（本轮因此**漏推过一次**，靠「推后核实远端文件」发现）；
+3. ⭐ **推完必须核实远端真的收到文件**（`GET /contents/{path}?ref=tip`）—— 推送成功 ≠ 内容上去了；
+4. **`fuzz/Cargo.lock` 是独立 workspace**：任何 `crates/**/Cargo.toml` 的依赖变化都会让它过期
+   ⇒ ⇒ 改完顺手 `cd fuzz && cargo +nightly update --offline`；
+5. **同名遮蔽会伪造「债减少」** ⇒ 新公开 API 起名前先 `grep` 是否已是孤儿符号；
+6. **CI 的 `pull_request` 事件检出的是「合并提交」** ⇒ ⇒ 本地分支树绿**不能**证伪 CI 红
+   ⇒ 复现要用 `git merge-tree` 取合并树再跑门禁。
+
+### 10.5 下一步（**按可做性排序**）
+| # | 事项 | 归属 | 阻塞 |
+|---|---|---|---|
+| 1 | 给 `ConsolidationTrigger` / `QualityDriftMonitor` **找生产调用点** | `runtime-assembly` = **跨区** | 需总指挥划落点 |
+| 2 | `DailyNote` 族的接线（仍是 A 类真缺口） | 记忆 crate ✔ + 消费侧跨区 | 需先定消费点 |
+| 3 | 检索排序 / 注入契约的 **claim 登记** | `claims.yaml` = 真源 | 需总指挥拍板 |
+| 4 | 等 `debt-round8` 的 CI 跑完后看是否全绿 | — | runner 队列 |
+| 5 | `PR #94` 的合并（`mergeable=True`，`blocked` 只差检查） | 总指挥 | — |
