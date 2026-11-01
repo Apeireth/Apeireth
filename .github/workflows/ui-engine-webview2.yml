@@ -73,6 +73,12 @@ jobs:
           wasm-bindgen --target web --out-dir web/engine/pkg --out-name p5b_harness $wasm
         working-directory: crates-ui/evidence/p5-b
 
+      # ⭐ 判据依赖**必须在 CI 声明**（纪律：判据代码不得依赖 CI 未声明的依赖）。
+      #   ⇒ `compare.py` 的 CDP 客户端用 `websocket-client`（另有 Pillow，供像素对照；
+      #   本 job 只跑能力探针 ⇒ 两者都装上保持与既有 pilot/production job **同口径**）。
+      - name: 安装判据依赖（websocket-client / pillow）
+        run: python -m pip install --quiet websocket-client pillow
+
       - name: 跑五段能力探针（WebView2 引擎）
         env:
           # ⭐ Edge（= WebView2 同一渲染内核）；runner 上无 GPU ⇒ 软件渲染。
