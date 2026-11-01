@@ -396,11 +396,11 @@ claims:
       - docs/packaging/release-asset-verification.md
       - docs/04-internal/backend-enhancement/B8-release-signing-2026-10-19.md
     tests: []
-    verified_at: 357e9780
+    verified_at: fe4ee516
     verify_cmd: "pwsh -NoProfile -File scripts/verify-release-assets.ps1 -ExpectedSha256 <hex> -Path <asset>"
     owner: release
     next_review: "2026-11-20"
-    notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 smoke）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）"
+    notes: "7/7 手工用例见 B8 登记（无自动测试，如实登记 tests 为空）；签名/可复现构建属排期待办。；2026-10-22 批次复核：generate-release-manifest exit 0 / verify-release-assets PASS exit 0（rc.4 exe 本地 smoke）；远程 CI 首跑见 PR #36（本批新 commit 复跑后为准）；2026-10-31 版本轴 rc.5 批次复核：仅 .EXAMPLE 注释内版本号随轴更新（rc.4 -> rc.5），脚本逻辑与判定规则 0 改动 => IMPLEMENTED 能力声明不变，verified_at bump 至 fe4ee516"
 
   - id: sec.sql_readonly_gate
     title: "桌面三数据库客户端只读闸加固（B1：词法级写类拒绝 + 远程只读事务纵深）"
