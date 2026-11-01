@@ -86,27 +86,27 @@ use std::task::{Context, Poll, Wake, Waker};
 
 use apeireth_core::kernel::CapabilityId;
 use apeireth_governance::{
-    ApprovalPolicyEngine, CallRecord, Decision, GuardRefusal, MonotonicGuards, Permission,
-    PermissionPolicy, ToolGuard, ToolGuardRequest, extract_commands,
+    extract_commands, ApprovalPolicyEngine, CallRecord, Decision, GuardRefusal, MonotonicGuards,
+    Permission, PermissionPolicy, ToolGuard, ToolGuardRequest,
 };
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use apeireth_tools_canonical::device::device_control::{
-    DEVICE_CONTROL_CAPABILITY_ID, DeviceControlRiskMappingHook,
+    DeviceControlRiskMappingHook, DEVICE_CONTROL_CAPABILITY_ID,
 };
 use apeireth_tools_canonical::exec_pipeline::{
     CommandFamilyGateHook, ExecutionStage, PipelineFailure, PreExecuteHook, PreExecuteRequest,
     PreExecuteWaterfall, PreVerdict, RiskLevelGateHook, ToolExecutionPipeline,
 };
 use apeireth_tools_canonical::{
-    APPLY_PATCH_CAPABILITY_ID, ApplyPatchRiskMappingHook, DOC_OPS_CAPABILITY_ID,
-    DocOpsRiskMappingHook, GIT_WRITE_CAPABILITY_ID, GitWriteRiskMappingHook, QuietClock,
-    QuietHours, SHEET_OPS_CAPABILITY_ID, SKILL_DISTILL_CAPABILITY_ID, SheetOpsRiskMappingHook,
-    SkillDistillRiskMappingHook, ToolGuardrail, VOICE_SPEAK_CAPABILITY_ID,
-    VoiceSpeakRiskMappingHook, WORKTREE_APPLY_CAPABILITY_ID, WorktreeApplyRiskMappingHook,
+    ApplyPatchRiskMappingHook, DocOpsRiskMappingHook, GitWriteRiskMappingHook, QuietClock,
+    QuietHours, SheetOpsRiskMappingHook, SkillDistillRiskMappingHook, ToolGuardrail,
+    VoiceSpeakRiskMappingHook, WorktreeApplyRiskMappingHook, APPLY_PATCH_CAPABILITY_ID,
+    DOC_OPS_CAPABILITY_ID, GIT_WRITE_CAPABILITY_ID, SHEET_OPS_CAPABILITY_ID,
+    SKILL_DISTILL_CAPABILITY_ID, VOICE_SPEAK_CAPABILITY_ID, WORKTREE_APPLY_CAPABILITY_ID,
 };
 use libfuzzer_sys::fuzz_target;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 // ── 固定夹具 ────────────────────────────────────────────────────────────────
 
@@ -1147,6 +1147,66 @@ fn check_risk_mapping_family(
 /// * `Decision::Deny { reason } => return PreVerdict::Deny { reason: format!("拒绝发声:
 ///   未授权 (注册即闸, fail-closed): {reason}") }`
 /// * `Decision::RequireApproval { reason } => return PreVerdict::Ask { reason }`
+/// **写工具面（`apply_patch`）自己的口径检查**（2026-11-01 P3-6）。
+///
+/// # 为什么它**不在** `check_risk_mapping_family` 里
+///
+/// 家族契约（R1 未授权 ⇒ ask / R2 授权 ⇒ allow / R3 授权+标审批 ⇒ **ask**）
+/// 对其余 6 个面成立；但写工具面在 P3-6 里**刻意**改成
+/// 「`Allow | RequireApproval ⇒ Allow`」—— 理由：人已批准的那一次调用若在工具面
+/// **二次冻结**，就**永远落不了盘**（人批了也没用）⇒ 「要不要人批」由**治理链**决定
+/// （runtime 每次派发都评估治理，含已批准/预批路径）⇒ 工具面**不重复索要审批**。
+///
+/// ⇒ 本检查**逐条钉住它的新口径**（不是弱化覆盖）：
+/// * R1 未授权 ⇒ **ask**（停审批档、零落盘；fail-closed 仍成立）
+/// * R2 授权（未标审批）⇒ **allow**
+/// * R3 授权 + 标审批 ⇒ **allow**（P3-6 的核心：审批档归治理链）
+fn check_apply_patch_risk_mapping() {
+    let cap = CapabilityId::new(APPLY_PATCH_CAPABILITY_ID).expect("固定能力 id 必须合法");
+    let call = ToolCall {
+        id: "fuzz".to_string(),
+        name: APPLY_PATCH_CAPABILITY_ID.to_string(),
+        arguments: json!({}),
+    };
+    let request = PreExecuteRequest::new(&call, &cap);
+
+    // R1：无授权 ⇒ 停在问人档，**不得放行**（fail-closed 仍成立）。
+    let hook = ApplyPatchRiskMappingHook::new(Arc::new(Mutex::new(PermissionPolicy::new())));
+    assert_eq!(
+        hook.pre_verdict(&request).label(),
+        "ask",
+        "R1：未授权的写调用没有停在问人档（fail-closed 被破坏）"
+    );
+
+    // R2：显式授权（未标审批）⇒ 放行。
+    let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
+    policy.lock().unwrap().grant(Permission::ExecuteTool(
+        APPLY_PATCH_CAPABILITY_ID.to_string(),
+    ));
+    let hook = ApplyPatchRiskMappingHook::new(Arc::clone(&policy));
+    assert_eq!(
+        hook.pre_verdict(&request).label(),
+        "allow",
+        "R2：已显式授权的写调用没有放行"
+    );
+
+    // R3：显式授权 + 标审批 ⇒ **allow**（P3-6：审批档归治理链，工具面不二次索要）。
+    let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
+    {
+        let mut guard = policy.lock().unwrap();
+        guard.grant(Permission::ExecuteTool(
+            APPLY_PATCH_CAPABILITY_ID.to_string(),
+        ));
+        guard.require_approval_for(APPLY_PATCH_CAPABILITY_ID.to_string());
+    }
+    let hook = ApplyPatchRiskMappingHook::new(Arc::clone(&policy));
+    assert_eq!(
+        hook.pre_verdict(&request).label(),
+        "allow",
+        "R3：已标人工审批的写调用被工具面二次索要审批（会永不落盘）⇒ 口径被改坏"
+    );
+}
+
 fn check_voice_risk_mapping() {
     let cap = CapabilityId::new(VOICE_SPEAK_CAPABILITY_ID).expect("固定能力 id 必须合法");
     let call = ToolCall {
@@ -1202,10 +1262,12 @@ fn check_voice_risk_mapping() {
 
 /// 风险映射 hook 家族总入口。
 fn check_risk_mapping_family_all() {
-    check_risk_mapping_family(
-        &|policy| Arc::new(ApplyPatchRiskMappingHook::new(policy)) as Arc<dyn PreExecuteHook>,
-        APPLY_PATCH_CAPABILITY_ID,
-    );
+    // ⚠️ **`apply_patch` 不在家族检查里**（2026-11-01 P3-6 刻意改口径）：
+    // 家族契约是「授权 + 标审批 ⇒ ask」，而写工具面改成
+    // 「`Allow | RequireApproval ⇒ Allow`」—— 理由：人已批准的那一次调用若在
+    // 工具面**二次冻结**，就**永远落不了盘**（人批了也没用）。
+    // ⇒ 它由 `check_apply_patch_risk_mapping` 单独钉（口径不同 ⇒ 不混进家族）。
+    check_apply_patch_risk_mapping();
     check_risk_mapping_family(
         &|policy| Arc::new(GitWriteRiskMappingHook::new(policy)) as Arc<dyn PreExecuteHook>,
         GIT_WRITE_CAPABILITY_ID,

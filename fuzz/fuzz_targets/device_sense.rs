@@ -73,6 +73,7 @@ use apeireth_tools_canonical::device::adapter::{
     AdapterError, AdapterRegistry, DeviceAdapter, DeviceState, MockAdapter, MOCK_ADAPTER,
     RESERVED_PROTOCOL_SLOTS,
 };
+use apeireth_tools_canonical::device::approval::DeviceApprovalDecisionLedger;
 use apeireth_tools_canonical::device::audit::{
     DeviceSenseAuditLedger, SensitiveReadAudit, SensitiveReadOutcome, DEVICE_SENSE_AUDIT_FILE,
 };
@@ -319,12 +320,10 @@ fn mutate_envelope(devices: &[Device], payload: &[u8]) -> Value {
         1 => doc["version"] = json!(DEVICES_DOC_VERSION + 1),
         2 => doc["compatible_versions"] = json!([DEVICES_DOC_VERSION + 1]),
         3 => {
-            doc["body"]["devices"] =
-                json!([{ "id": "", "kind": "sensor", "name": "x", "adapter": "mock", "enabled": true }])
+            doc["body"]["devices"] = json!([{ "id": "", "kind": "sensor", "name": "x", "adapter": "mock", "enabled": true }])
         }
         4 => {
-            doc["body"]["devices"] =
-                json!([{ "id": "a", "kind": "toaster", "name": "x", "adapter": "mock", "enabled": true }])
+            doc["body"]["devices"] = json!([{ "id": "a", "kind": "toaster", "name": "x", "adapter": "mock", "enabled": true }])
         }
         5 => {
             doc["body"]["devices"] = json!([{
@@ -369,7 +368,10 @@ const KNOWN_FIELDS: &[&str] = &[
 /// `sense.rs:545-549`「解析失败不归边界 Guard」）。
 fn parse_args(args: &Value) -> Result<ParsedArgs, ()> {
     let object = args.as_object().ok_or(())?;
-    if object.keys().any(|key| !KNOWN_FIELDS.contains(&key.as_str())) {
+    if object
+        .keys()
+        .any(|key| !KNOWN_FIELDS.contains(&key.as_str()))
+    {
         return Err(());
     }
     let action = match object.get("action") {
@@ -610,6 +612,9 @@ fn run_case(case: &Case) -> (Observed, Option<DevicesBody>) {
         registry.clone(),
         adapters,
         audit.clone(),
+        // 宿主决定账（2026-11-01 P3-1/P3-2：敏感读的放行**只认宿主决定账**）
+        // ⇒ 与审计账**同数据目录** ⇒ 同源口径（无记录 ⇒ 不放行 = fail-closed）。
+        DeviceApprovalDecisionLedger::under_data_dir(&root),
         Arc::clone(&activity),
     );
     let call = ToolCall {
@@ -767,8 +772,7 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
                     "`list` 必须如实报设备表在不在 (sense.rs:263): {value}"
                 );
                 assert_eq!(
-                    observed.sense_calls,
-                    0,
+                    observed.sense_calls, 0,
                     "`list` 不是感知, 不得计感知次数 (sense.rs:370-371 只在 sense 路径记账)"
                 );
             } else {
@@ -825,8 +829,7 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
                     "感知台数累计必须等于读到的台数 (sense.rs:372-374)"
                 );
                 assert_eq!(
-                    observed.sense_calls,
-                    1,
+                    observed.sense_calls, 1,
                     "放行的感知必须记一次感知次数 (sense.rs:370-371)"
                 );
 
@@ -890,9 +893,7 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
                 };
                 for key in readings.keys() {
                     assert!(
-                        !key.contains("frame")
-                            && !key.contains("image")
-                            && !key.contains("jpeg"),
+                        !key.contains("frame") && !key.contains("image") && !key.contains("jpeg"),
                         "摄像头读数不得含图像内容 (adapter.rs:128): key={key}"
                     );
                 }
@@ -955,7 +956,10 @@ fn assert_case(case: &Case, observed: &Observed, table: Option<&DevicesBody>, pl
                 }
                 Refusal::SensitiveDenied => {
                     // ── ④ ⑤ 授权缺位 ⇒ 拒绝即帧 + 逐台审计行 `denied` ───────
-                    let rows = observed.rows.as_ref().expect("正常目录的审计账必须读得回来");
+                    let rows = observed
+                        .rows
+                        .as_ref()
+                        .expect("正常目录的审计账必须读得回来");
                     assert_eq!(
                         rows.len(),
                         plan.sensitive.len(),
@@ -1114,10 +1118,7 @@ fn assert_guard(case: &Case, observed: &Observed, plan: &Plan) {
 
     // 拒了不得被后续阶段翻回放行 (`sense.rs:520`「任何后续阶段都不能翻回放行」)。
     if denial.is_some() {
-        let sensitive_read = observed
-            .reads
-            .iter()
-            .any(|id| plan.sensitive.contains(id));
+        let sensitive_read = observed.reads.iter().any(|id| plan.sensitive.contains(id));
         assert!(
             !sensitive_read,
             "Guard 拒了之后不得仍读到摄像头类设备 (sense.rs:520): {:?}",
@@ -1127,10 +1128,7 @@ fn assert_guard(case: &Case, observed: &Observed, plan: &Plan) {
             let granted = rows
                 .iter()
                 .any(|row| row.outcome == SensitiveReadOutcome::Granted);
-            assert!(
-                !granted,
-                "Guard 拒了之后不得留下放行审计行 (sense.rs:520)"
-            );
+            assert!(!granted, "Guard 拒了之后不得留下放行审计行 (sense.rs:520)");
         }
     }
 }
@@ -1161,7 +1159,10 @@ fn args_fuzzed(payload: &[u8]) -> Value {
             object.insert("action".into(), json!(""));
         }
         4 => {
-            object.insert("action".into(), json!(String::from_utf8_lossy(payload).into_owned()));
+            object.insert(
+                "action".into(),
+                json!(String::from_utf8_lossy(payload).into_owned()),
+            );
         }
         _ => {
             object.insert("action".into(), json!(7));
@@ -1286,6 +1287,8 @@ fn fixture_suite() {
         registry.clone(),
         AdapterRegistry::builtin(),
         audit.clone(),
+        // 宿主决定账（同上：与审计账同数据目录）。
+        DeviceApprovalDecisionLedger::under_data_dir(&root),
         Arc::clone(&activity),
     );
 
