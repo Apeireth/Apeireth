@@ -43,6 +43,7 @@ import pathlib
 import re
 import signal
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -221,6 +222,19 @@ def launch_chrome() -> tuple[subprocess.Popen, int]:
         "--hide-scrollbars",
         "--remote-allow-origins=*",
         "--remote-debugging-port=0",
+        # ⭐⭐ `--user-data-dir`（2026-11-01 补；**Windows Edge headless 的硬需求**）。
+        #
+        # ## 为什么必须有
+        #
+        # Windows runner 上跑的是 **Edge**（= WebView2 同一渲染内核）⇒ ⇒ 实测：
+        # **不给**独立 profile ⇒ ⇒ Edge headless **不监听**调试端口
+        # ⇒ ⇒ CDP 的 `Page.navigate` **超时**（run 41264856246 的真实失败）。
+        #
+        # ## 为什么**总是**加（不只 Windows）
+        #
+        # 用**一次性临时目录** ⇒ ⇒ 既满足 Edge 的需求，又**不碰**用户的默认 profile
+        # ⇒ ⇒ Linux 侧也无害（Chromium 同样接受这个参数）⇒ ⇒ 一条路径两边通用。
+        f"--user-data-dir={tempfile.mkdtemp(prefix='apeireth-chrome-')}",
         # ⭐⭐ **真实 GPU 硬件加速**（2026-10-26 实测加的）。
         #
         # ⚠⚠️ **不加这组参数时，headless Chrome 一律走 SwiftShader（纯软件）**
