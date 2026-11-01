@@ -34,6 +34,12 @@
    ⇒ ⇒ **零生产消费是「设计如此」，不是缺口**（差点被我当成缺口）。
 3. ⭐ **同一能力被写两遍**是本仓最常见的形态：`RecallPolicy`（未接）与
    `MemoryRecallQuery` + `MemoryModule`（在用）**默认值逐字相同**（见 §6.1）。
+4. ⭐ **改了 claim 的 `sources` 就要重打 `verified_at`**（否则 CI 的 `docs truth gate` 立刻红）：
+   本轮实测 —— `gov.chain_drill_ci` 的 `sources` 就是 `.github/workflows/rust.yml`，
+   我为修 CI 磁盘改了那个文件 ⇒ ⇒ 那条 claim **立刻 STALE** ⇒ ⇒ 修法：把戳指向
+   **包含该改动的远端 commit**（CI 跑的是真实历史 ⇒ `git diff <戳> -- <sources>` 必为空），
+   然后**重生成** `STATUS.md` / `wiring.yaml`。
+   ⇒ ⇒ **推论**：`claims.yaml` 是真源，**改 CI 配置也会动它** ⇒ ⇒ 别以为「我只改了 workflow」。
 
 ---
 
@@ -130,7 +136,8 @@
 
 ### 6.2 ★ 生产路径上的核心能力**没有 claim**
 
-- `docs/status/claims.yaml` 共 **37 条**，其中 `level` 分布 **PRODUCTION WIRED 24 / IMPLEMENTED 12 / NOT IMPLEMENTED 1**；
+- `docs/status/claims.yaml` 共 **38 条**（2026-11-01 复核时；⚠️ **这个数会变** —— 它每天都在被人加），
+  `level` 分布 **PRODUCTION WIRED 24 / IMPLEMENTED 13 / NOT IMPLEMENTED 1**；
 - 与记忆相关的只有 **3 条**：`mem.lesson_object`（PRODUCTION WIRED）· `gap.memory_update`（PRODUCTION WIRED）·
   `mem.registered_namespace`（IMPLEMENTED）；
 - ⚠️ **检索排序 / 注入契约没有任何 claim**，**而它们在产品生产路径上**：
@@ -192,7 +199,7 @@
 | 文件 | 作用 |
 |---|---|
 | `docs/status/unwired-ledger.md` | **未接线台账**（§五 含人工过筛的四类判定 + **判据盲区报备**）⇒ **本文的事实基线** |
-| `docs/status/claims.yaml` | 四级口径**真源**（37 条） |
+| `docs/status/claims.yaml` | 四级口径**真源**（38 条 · 会变） |
 | `docs/04-internal/backend-enhancement/02-axes/C-memory-deepening.md` | 记忆轴**设计**（分期与验收线「不许感觉更聪明」）⇒ **输入，不是现状** |
 | `scripts/audit_unwired_modules.py` · `scripts/audit_unwired.py` | 未接线审计（符号级 / 模块级）⇒ ⚠️ 判据盲区见 §4 |
 | `scripts/golden-baseline.json` · `scripts/check_golden_baseline.py` | **P1 评估集**真源与闸门 |
