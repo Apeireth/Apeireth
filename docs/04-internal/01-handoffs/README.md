@@ -2,14 +2,12 @@
 
 > 批次交接稿 —— **上一手留给下一手的现场记录**。读这里回答「上一批做到哪、坑在哪」。
 
-**10 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
+**14 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
 
 | 篇 | 是什么 |
 |---|---|
-| [`frontend-visual-build-brief-2026-10-28.md`](frontend-visual-build-brief-2026-10-28.md) | **新前端视觉总攻 · 交付简报（给施工方）**——范式/三副面孔/三屏/交付物/硬约束/验收/自由条款（2026-10-28） |
-| [`frontend-visual-build-prompt-2026-10-28.md`](frontend-visual-build-prompt-2026-10-28.md) | 配套提示词（整份文件即提示词，可直接复制给施工方）（2026-10-28） |
-**12 篇**。按篇名查；需要横跨多篇时，回 [`../README.md`](../README.md) 的台账地图。
 | [`frontend-visual-build-kickoff-2026-10-31.md`](frontend-visual-build-kickoff-2026-10-31.md) | **K3.1 交接入口（先读）**——施工模式/真源优先级/数据契约/证据协议/检查点（2026-10-31 v1.1） |
+| [`engine-line-capability-request-2026-11-01.md`](engine-line-capability-request-2026-11-01.md) | **引擎线能力矩阵与垂直切片请求（转办件）**——要引擎线回答现在到底有什么、什么时候能跑通切片；含原语清单、验收门、待复核缺陷、CI 缺口（2026-11-01 v1.0） |
 | [`frontend-visual-build-prompt-2026-10-28.md`](frontend-visual-build-prompt-2026-10-28.md) | **新前端视觉施工 · 创作简报（给施工方）**——目标/三空间/画面/硬底线/动效/T0/交付物/验收/自由条款（2026-10-31 v3.5） |
 | [`frontend-visual-build-spec-2026-10-31.md`](frontend-visual-build-spec-2026-10-31.md) | **施工规格附录**——布局参考区间/组件与八状态/基地解剖/轨迹字段/交互清单/验证明细（2026-10-31 v1.5） |
 | [`frontend-visual-build-brief-2026-10-28.md`](frontend-visual-build-brief-2026-10-28.md) | **交付说明（给施工方）**——交付包怎么用/读法/T0 流程/交付物/验收/边界（2026-10-31 v3.5） |
