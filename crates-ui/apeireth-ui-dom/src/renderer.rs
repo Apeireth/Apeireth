@@ -134,6 +134,28 @@ impl<D: Dom> MountedNode<D> {
     }
 
     /// 重建虚拟节点（供 keyed 差分复用 P1 的差分计划）。
+    /// ⭐ **零克隆**取 key（不必克隆整棵子树）。
+    ///
+    /// ## 为什么需要（2026-11-01）
+    ///
+    /// [`Self::to_vnode`] 是 **`vnode.clone()`** ⇒ ⇒ **克隆整棵子树**
+    /// ⇒ ⇒ 而调用方往往**只要 key** ⇒ ⇒ 白克隆 ⇒ ⇒ **每个元素都克隆一次全部后代**
+    /// ⇒ ⇒ 二次方 ⇒ ⇒ 实测把「改一个叶子」的 94 ms 撑起来。
+    fn key_ref(&self) -> Option<&crate::vnode::Key> {
+        match self {
+            MountedNode::Element(element) => element.vnode.key.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// ⭐ **零克隆**判「能否取到 vnode」（等价于 `to_vnode().is_some()`）。
+    ///
+    /// `Fragment` 取不到（它不是节点）⇒ ⇒ 与旧的 `old_vnodes.len() != old.len()`
+    /// 判据**完全等价**（那个判据就是「有子节点取不到 vnode」）。
+    fn has_vnode(&self) -> bool {
+        matches!(self, MountedNode::Element(_) | MountedNode::Text(_))
+    }
+
     fn to_vnode(&self) -> Option<VNode> {
         match self {
             MountedNode::Element(element) => Some(VNode::Element(element.vnode.clone())),
@@ -1187,14 +1209,20 @@ impl<D: Dom> Renderer<D> {
         old: &[MountedNode<D>],
         new: &[VNode],
     ) -> Result<(), DomError> {
-        let old_vnodes: Vec<VNode> = old.iter().filter_map(|child| child.to_vnode()).collect();
-        if old_vnodes.len() != old.len() {
+        // ⭐ **零克隆**判定（2026-11-01）：先看「能不能取到 vnode」与「有没有 key」，
+        //   ⇒ ⇒ **不 keyed** 就**提前返回** ⇒ ⇒ **不必克隆任何子树**。
+        //   （旧写法先克隆整批子树再判断 ⇒ ⇒ 每个元素都克隆一次全部后代 ⇒ ⇒ 二次方。）
+        if old.iter().any(|child| !child.has_vnode()) {
             // 有子节点取不到 vnode（文本 / 空块）⇒ ⇒ 一定不走 keyed 路径。
             return Ok(());
         }
-        if crate::keyed::list_diff_mode(&old_vnodes, new) != crate::keyed::ListDiffMode::Keyed {
+        let all_keyed = old.iter().all(|child| child.key_ref().is_some())
+            && new.iter().all(|vnode| vnode.key().is_some());
+        if !all_keyed {
             return Ok(());
         }
+        // 只有 keyed 才需要完整 vnode（`diff_keyed` 要按 key 配对）。
+        let old_vnodes: Vec<VNode> = old.iter().filter_map(|child| child.to_vnode()).collect();
         diff_keyed(&old_vnodes, new)
             .map(|_| ())
             .map_err(|error| DomError::Undecidable(format!("keyed 差分不可判定：{error}")))
@@ -1327,14 +1355,20 @@ impl<D: Dom> Renderer<D> {
         //    ⇒ `{ expr }` 这种插值**恒占一个位置** ⇒ 某个块「出现 / 消失」
         //    ⇒ **不会**让后面的兄弟错位
         //    （这与生产侧 Svelte 的 `{#if}` 块锚点语义一致）。
-        let old_vnodes: Vec<VNode> = old.iter().filter_map(|child| child.to_vnode()).collect();
-        let keyed = old_vnodes.len() == old.len()
-            && crate::keyed::list_diff_mode(&old_vnodes, new) == crate::keyed::ListDiffMode::Keyed;
+        // ⭐ **零克隆**判定（2026-11-01）：`keyed` / `has_key` 只需要 key
+        //   ⇒ ⇒ 先零克隆扫一遍 ⇒ ⇒ **unkeyed 路径完全不克隆子树**
+        //   （旧写法**无条件**克隆全部子节点 ⇒ ⇒ 每个元素克隆一次全部后代 ⇒ ⇒ 二次方）。
+        let old_all_keyed = old.iter().all(|child| child.key_ref().is_some());
+        let keyed = old.len() == old.iter().filter(|child| child.has_vnode()).count()
+            && old_all_keyed
+            && new.iter().all(|vnode| vnode.key().is_some());
         // ⭐ 混合配对（见 `patch_mixed_children` 的说明）⇒ 条件渲染的块
         // 「出现 / 消失」时，**兄弟不再错位**。
-        let has_key = old_vnodes.iter().any(|vnode| vnode.key().is_some())
+        let has_key = old.iter().any(|child| child.key_ref().is_some())
             || new.iter().any(|vnode| vnode.key().is_some());
         if keyed {
+            // 只有 keyed 路径需要完整 vnode（按 key 配对）。
+            let old_vnodes: Vec<VNode> = old.iter().filter_map(|child| child.to_vnode()).collect();
             self.patch_keyed_children(parent, old, new, &old_vnodes, after)
         } else if has_key {
             self.patch_mixed_children(parent, old, new, after)
@@ -1483,7 +1517,8 @@ impl<D: Dom> Renderer<D> {
         let mut by_key: std::collections::HashMap<crate::vnode::Key, usize> =
             std::collections::HashMap::new();
         for (index, child) in old.iter().enumerate() {
-            if let Some(key) = child.to_vnode().and_then(|vnode| vnode.key().cloned()) {
+            // ⭐ 零克隆取 key（旧写法克隆整棵子树只为拿一个 key）。
+            if let Some(key) = child.key_ref().cloned() {
                 by_key.entry(key).or_insert(index);
             }
         }
