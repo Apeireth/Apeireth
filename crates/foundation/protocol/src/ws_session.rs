@@ -93,7 +93,7 @@ impl WsSessionGuard {
     /// A fresh connection: [`WsSessionState::AwaitingAuth`].
     ///
     /// `expected_token` is the token a client has to present in its
-    /// [`AuthFrame`](crate::ws_v1::AuthFrame); the transport owns it (e.g. a
+    /// [`AuthFrame`]; the transport owns it (e.g. a
     /// short-lived token minted for this connection). An **empty** expected
     /// token means "nothing configured" and refuses every handshake
     /// (fail-closed) — there is no "no auth required" mode.

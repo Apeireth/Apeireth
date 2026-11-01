@@ -59,7 +59,7 @@ use windows_sys::Win32::Security::{
     TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+    DELETE, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
 };
 use windows_sys::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess,
@@ -76,11 +76,27 @@ use super::{EnforcementLevel, ProcessError};
 /// 原先错在: 它就是**完整**的 profile 名 ⇒ SID 确定性派生 (见模块头 §1)。
 pub const SANDBOX_APPCONTAINER_NAME: &str = "Apeireth.Shell.Sandbox";
 
-/// 沙箱**数据面**权限掩码: 读 + 写 + 执行。
+/// 沙箱**数据面**权限掩码: 读 + 写 + 执行 + **删除**。
 ///
 /// 原先错在: 授权用的是 `FILE_ALL_ACCESS` (含 `DELETE` / `WRITE_DAC` /
 /// `WRITE_OWNER`) ⇒ 沙箱内进程能删文件、能改 DACL ⇒ 授权面远超"读写工作区"。
-const SANDBOX_DATA_ACCESS: u32 = FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE;
+///
+/// ⚠️ **2026-11-01 CI 实测修正：不能收窄 `DELETE`**。
+///
+/// 第一版收窄成 `READ|WRITE|EXECUTE`（把 `DELETE` 去掉）⇒ **Windows CI 实测红**
+/// （`object_access_judgment.rs` 的
+/// `lexical_pass_but_object_violation_is_fenced_with_frame_and_audit`）：
+/// 沙箱内 PowerShell 的 `File.Delete('.env')` 被 **OS 权限层**先拒
+/// （`UnauthorizedAccessException`）⇒ **删除根本没发生**
+/// ⇒ **对象判定（敏感对象删除的唯一兜底）根本没机会触发**
+/// ⇒ `object_audit.violations = 0` ⇒ 「换 API 换权力」的防线在 Windows 上**形同虚设**。
+///
+/// ⇒ 结论：**`DELETE` 必须留着**（对象判定要能在删除**真的发生**时把它拦下来；
+/// 敏感对象由对象判定把关，不是由沙箱权限代替）。
+/// ⇒ **真正要收窄的是 `WRITE_DAC` / `WRITE_OWNER`**（改 DACL / 改所有者）
+/// —— 那两个才是「沙箱内进程不该有的权力」⇒ 这里**不含**它们。
+const SANDBOX_DATA_ACCESS: u32 =
+    FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE;
 
 /// ACE 回收的**宽限期**: 授权后至少存活这么久才允许回收。
 ///

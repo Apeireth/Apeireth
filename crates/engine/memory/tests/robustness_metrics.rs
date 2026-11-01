@@ -170,12 +170,18 @@ fn scale_slope_from_known_durations_flags_superlinear_growth() {
 #[test]
 fn measure_scale_slope_records_the_two_runs_and_a_trend() {
     // ⚠️ **墙钟** ⇒ 只断言「量级与趋势」，不拿它当精确断言依据。
+    //
+    // ⚠️ **间隔为什么放大到 120/480ms**（2026-11-01 CI 实测修正）：
+    // macOS runner 实测 `small_ms=111`（本该 ~30）⇒ **调度噪声**把 30ms 的
+    // sleep 拖成 111ms ⇒ slope 算成 0.27 ⇒ 原断言 `[0.7, 1.4]` **真的红了**
+    // （Linux 绿、macOS 红 ⇒ **平台差异被本地验证掩盖**）。
+    // ⇒ 间隔放大 ⇒ 同样的**绝对**噪声在**相对**占比上变小 ⇒ 斜率回到 1 附近。
     let small = || {
-        std::thread::sleep(Duration::from_millis(30));
+        std::thread::sleep(Duration::from_millis(120));
         report(10, 0.8)
     };
     let large = || {
-        std::thread::sleep(Duration::from_millis(120));
+        std::thread::sleep(Duration::from_millis(480));
         report(40, 0.8)
     };
     let verdict = measure_scale_slope(&small, &large, 10, 40);
@@ -186,10 +192,17 @@ fn measure_scale_slope_records_the_two_runs_and_a_trend() {
         verdict.large_ms >= verdict.small_ms,
         "大语料不该更快：{verdict:?}"
     );
-    // 耗时 ×4、规模 ×4 ⇒ 斜率 ≈ 1.0（给抖动留余量）。
+    // 耗时 ×4、规模 ×4 ⇒ 斜率 ≈ 1.0。
+    //
+    // ⚠️ **区间为什么是 [0.4, 2.0] 而不是 [0.7, 1.4]**：
+    // 墙钟测量在**共享 CI runner** 上会被调度噪声污染（实测绝对噪声可达 ~80ms）
+    // ⇒ 窄区间 ⇒ 只在**特定 runner 负载**下成立 ⇒ 变成「测 runner 不测代码」。
+    // ⇒ 这里只挡「**算反了 / 差一个数量级**」这类**真**算法 bug；
+    // **精确性由 `scale_slope_from_ms` 的确定性单测负责**
+    // （精确断言 1.0 / 2.0 / 0.5）⇒ **纯函数测算法、墙钟测趋势**，分工不重叠。
     assert!(
-        (0.7..=1.4).contains(&verdict.slope),
-        "斜率应接近线性（1.0）：{verdict:?}"
+        (0.4..=2.0).contains(&verdict.slope),
+        "斜率应与线性同量级（1.0 附近）：{verdict:?}"
     );
 }
 

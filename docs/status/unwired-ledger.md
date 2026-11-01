@@ -219,7 +219,7 @@
 > - `dailynote::DailyNote` ⇒ 库外 **0** ⇒ 仍待判；
 > - `online_calibration::AdaptiveBaseline` ⇒ 库外 **0** ⇒ 仍待判；
 > - ⭐ `online_calibration::DriftDetector` ⇒ 库外 **1**
->   （`crates/engine/runtime-assembly/src/canonical/research_autonomy.rs`）⇒ ⇒ **已接线** ⇒ **本条原记录已过期**；
+>   （`crates/foundation/governance/src/research_autonomy.rs`）⇒ ⇒ **已接线** ⇒ **本条原记录已过期**；
 > - `cluster_store::ClusterStore` ⇒ 库外 **0** ⇒ 仍待判。
 > ⇒ ⇒ **判据提醒**：本节的「零引用」必须用**限定名**复核 —— 裸 token 计数会被
 > `ProactiveRecallPolicy` 之类的前缀遮蔽（**同名遮蔽**，见本节「判据盲区」）。

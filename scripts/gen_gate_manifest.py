@@ -86,11 +86,18 @@ def repo_facts() -> dict:
             if stripped.startswith("|") and re.search(r"\b[SO]-[0-9]\b", stripped):
                 anchors += 1
     workflows = len(list((ROOT / ".github" / "workflows").glob("*.yml")))
+    # ⚠️ **原先错在哪**（2026-11-01 实测）：这里数的是 `crates/*/Cargo.toml`
+    # ⇒ 仓是**分层目录**（`crates/foundation/<crate>` / `crates/engine/<crate>` /
+    # `crates/adapters/<crate>` / `crates/capabilities/<crate>`）
+    # ⇒ **`crates/*/Cargo.toml` 一个都不存在** ⇒ 计数恒为 **0**
+    # ⇒ PR 模板里长期写着「crate：**0** 个」⇒ **人读副本在说假话**。
+    # ⇒ 现在改成数**真实 crate**：递归找 `crates/**/Cargo.toml`，
+    # 且该目录含 `src/`（排除 workspace 根等非 crate 目录）。
     crates = len(
         [
-            path
-            for path in (ROOT / "crates").iterdir()
-            if path.is_dir() and (path / "Cargo.toml").exists()
+            manifest
+            for manifest in (ROOT / "crates").rglob("Cargo.toml")
+            if (manifest.parent / "src").is_dir()
         ]
     )
     return {"philosophy_anchors": anchors, "workflows": workflows, "crates": crates}
@@ -187,6 +194,34 @@ def build_manifest(contract: dict) -> dict:
     }
 
 
+
+def _diff_lines(left_label: str, left: str, right_label: str, right: str) -> str:
+    """两段文本的**逐行差异**（守卫失败时直接摆出来 ⇒ 不用再猜）。
+
+    只打印**有差异的行**（前 40 行）⇒ 日志可读；超出部分给出提示。
+    """
+    import difflib
+
+    left_lines = left.splitlines()
+    right_lines = right.splitlines()
+    diff = [
+        line
+        for line in difflib.unified_diff(
+            left_lines, right_lines, left_label, right_label, lineterm="", n=1
+        )
+        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+    ]
+    if not diff:
+        return "（差异为空 ⇒ 不是文本差异 ⇒ 继续查解析/环境差异）"
+    shown = diff[:40]
+    tail = (
+        f"\n…（共 {len(diff)} 行差异，此处只列前 {len(shown)} 行）"
+        if len(diff) > len(shown)
+        else ""
+    )
+    return "差异（实际 ⇒ 期望）:\n" + "\n".join(shown) + tail
+
+
 def cmd_gen(contract: dict) -> int:
     block = render_block(contract)
     manifest = build_manifest(contract)
@@ -231,6 +266,10 @@ def cmd_check(contract: dict) -> int:
                     f"{PR_TEMPLATE.relative_to(ROOT)} 的自动事实块**与契约不一致**"
                     f" ⇒ 有人手改了副本（或契约改了没重新生成）⇒ 跑 `--gen`"
                 )
+                # ⚠️ **为什么要打印逐行 diff**（2026-11-01 实测）：
+                # CI 上红、本地同 commit 绿 ⇒ 守卫只说「不一致」**不说差在哪**
+                # ⇒ 只能靠猜（这次卡了很久）⇒ 失败时直接把差异摆出来。
+                problems.append(_diff_lines("PR 模板实际", existing, "PR 模板期望", expected))
 
     # ② manifest 是否与契约一致
     if not MANIFEST.exists():
@@ -241,9 +280,18 @@ def cmd_check(contract: dict) -> int:
         except json.JSONDecodeError as error:
             current = None
             problems.append(f"{MANIFEST.relative_to(ROOT)} 不是合法 JSON：{error}")
-        if current is not None and current != build_manifest(contract):
+        expected_manifest = build_manifest(contract)
+        if current is not None and current != expected_manifest:
             problems.append(
                 f"{MANIFEST.relative_to(ROOT)} **与契约不一致** ⇒ 跑 `--gen`"
+            )
+            problems.append(
+                _diff_lines(
+                    "manifest 实际",
+                    json.dumps(current, ensure_ascii=False, indent=2),
+                    "manifest 期望",
+                    json.dumps(expected_manifest, ensure_ascii=False, indent=2),
+                )
             )
 
     # ③ 每条门禁引用的脚本必须存在（登记了不存在的门禁 = 假门禁）

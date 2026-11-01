@@ -47,6 +47,8 @@ const executeRust = readFileSync(
   'utf8',
 );
 const cliRust = readFileSync(join(repoRoot, 'crates', 'adapters', 'cli', 'src', 'lib.rs'), 'utf8');
+// 上下文预算旋钮的**单一真源**（2026-11-01：SG-14 把解析收成单一真源，
+// cli 与装配根**转调同一函数** ⇒ env 名字面量**只在**这里）。
 const contextBudgetRust = readFileSync(
   join(repoRoot, 'crates', 'engine', 'runtime-assembly', 'src', 'canonical', 'context_budget.rs'),
   'utf8',
@@ -205,13 +207,34 @@ console.log('--- budget knob face ---');
   };
   const envPairsIdx = supervisorRust.lastIndexOf('fn env_pairs');
   assert.ok(envPairsIdx > 0, 'backend_supervisor 必须有 env_pairs 实现');
+  // ⚠️ **每个 env 名要在「它当前的权威来源」里断言**（2026-11-01 CI 实测修正）：
+  // 本 suite 曾在 CI 上**唯一**红（`CLI 旋钮名必须同名：APEIRETH_CONTEXT_BUDGET_CHARS`）
+  // ⇒ 真因不是「CLI 少了旋钮」，而是**断言过期**：SG-14 把上下文预算的解析
+  // **收成单一真源**（`runtime-assembly::canonical::context_budget`，
+  // cli 与装配根**转调同一函数`）⇒ env 名的**字面量**只在单一真源里，
+  // CLI **刻意不再有**（否则就是第二份真源 ⇒ 会被手改漂移）。
+  // ⇒ 这里按权威来源分别断言，**「同名 + 同源」两件事都仍然被钉住**。
+  const ENV_AUTHORITY = {
+    maxTurnRounds: { source: cliRust, where: 'CLI env 面' },
+    maxToolCalls: { source: cliRust, where: 'CLI env 面' },
+    contextBudgetChars: { source: contextBudgetRust, where: '上下文预算单一真源' },
+  };
   for (const [key, env] of Object.entries(ENV_NAMES)) {
     assert.equal(BUDGET_KNOB_SPECS[key].env, env, `${key} 注册表 env 名 = ${env}`);
     assert.ok(supervisorRust.includes(`("${env}",`), `backend_supervisor env_pairs 必须注入 ${env}`);
-    assert.ok(cliRust.includes(`"${env}"`), `CLI 旋钮名必须同名：${env}`);
+    const authority = ENV_AUTHORITY[key];
+    assert.ok(
+      authority.source.includes(`"${env}"`),
+      `${key} 旋钮名必须在${authority.where}同名：${env}`,
+    );
     assert.ok(settingsSrc.includes('<code class="cap-env">{spec.env}</code>'), '设置页 env 芯片走注册表（单一来源）');
   }
-  console.log('  -> PASS: config → 注入字段 → env_pairs → CLI 旋钮名四处同名同源');
+  // 上下文预算这一项还要钉住「CLI **转调**单一真源」⇒ 不会退回「CLI 自己解析一份」。
+  assert.ok(
+    cliRust.includes('context_budget_chars_from_env'),
+    'CLI 必须转调上下文预算的单一真源（不得自己再解析一份）',
+  );
+  console.log('  -> PASS: config → 注入字段 → env_pairs → 权威来源旋钮名 + 转调同源');
 }
 
 // ---------------------------------------------------------------------------

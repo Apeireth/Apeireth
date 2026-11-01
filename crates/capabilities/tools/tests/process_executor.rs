@@ -831,9 +831,25 @@ mod macos_tests {
             .expect("spawn the executor-role process");
 
         // 等 executor 起好的子进程出现在进程表里 (命令行含唯一 sleep 标记)。
-        let child_pid =
-            wait_for_pid_containing(&format!("sleep {SLEEP_MARKER}"), Duration::from_secs(30))
-                .expect("the executor's child must show up in the process table");
+        let child_pid = match wait_for_pid_containing(
+            &format!("sleep {SLEEP_MARKER}"),
+            Duration::from_secs(30),
+        ) {
+            Some(pid) => pid,
+            None => {
+                // **失败时把证据打出来**（进程表快照 + 角色进程是否还活着）
+                // ⇒ 下次 CI 红了不用再猜「是没起来、还是没匹配上」。
+                let role_state = match role.try_wait() {
+                    Ok(Some(status)) => format!("角色进程已退出: {status}"),
+                    Ok(None) => "角色进程仍在跑（⇒ 问题在子进程侧）".to_string(),
+                    Err(error) => format!("角色进程状态取不到: {error}"),
+                };
+                panic!(
+                        "the executor's child must show up in the process table\n                         角色进程: {role_state}\n进程表快照:\n{}",
+                        process_table_snapshot()
+                    );
+            }
+        };
 
         // 模拟 executor 崩溃: SIGKILL (不给它任何清理机会)。
         unsafe { libc::kill(role.id() as i32, libc::SIGKILL) };
@@ -885,7 +901,14 @@ mod macos_tests {
 
     fn pid_containing(needle: &str) -> Option<i32> {
         let output = Command::new("ps")
-            .arg("-Ao")
+            // ⚠️ **`-ww` 是必需的**（2026-11-01 CI 实测修正）：BSD/macOS 的 `ps`
+            // **默认把命令行截断到终端宽度** ⇒ 长的命令行尾部被切掉 ⇒ 匹配不到
+            // ⇒ 2026-11-01 macOS CI 上本测试真的红了
+            // （"the executor's child must show up in the process table"）。
+            // Linux 的 `ps` 默认不截断 ⇒ 本地绿 / macOS 红 ⇒ **平台差异被掩盖**。
+            // ⇒ 加 `-ww`（BSD ps 的「不截断」选项，Linux 也支持）。
+            .arg("-Aww")
+            .arg("-o")
             .arg("pid=,command=")
             .output()
             .ok()?;
@@ -902,6 +925,17 @@ mod macos_tests {
             }
         }
         None
+    }
+
+    /// 进程表快照（**失败时打印** ⇒ 下次 CI 不用再猜）。
+    fn process_table_snapshot() -> String {
+        Command::new("ps")
+            .arg("-Aww")
+            .arg("-o")
+            .arg("pid=,command=")
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+            .unwrap_or_else(|error| format!("<ps 取不到: {error}>"))
     }
 
     /// 进程是否还活着 (signal 0 探测; EPERM 也算活着 —— 只是没权限发信号)。
