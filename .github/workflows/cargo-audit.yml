@@ -37,7 +37,33 @@ on:
     #
     # ⚠️ 另注（**关键的机制事实**）：`push` 事件用的是**默认分支上**的 workflow 版本
     #   ⇒ ⇒ 在特性分支上改这个文件**不生效** ⇒ ⇒ ⇒ 本修复**必须进 main**。
-    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion, ui-engine-p0-2026-10-24]
+    # ⭐⭐⭐ **刻意不写 `branches`**（2026-11-01 实测修正；PR #110 的第一版修法在这里**实测无效**）。
+    #
+    # ## 实测到的机制（两次修正的记录）
+    #
+    # ① 现象：push 到 `ui-engine-p0-2026-10-24` ⇒ ⇒ **每次**都产生一个
+    #    `cargo-audit` 的 run ⇒ ⇒ `conclusion = failure` ⇒ ⇒ **但 `jobs = 0`**。
+    # ② 机制（实测确认）：
+    #    a) `paths` **不阻止 run 被创建** —— 实测：只改台账（**不碰** lock / workflow）
+    #       的 push **仍然**产生了 run ⇒ ⇒ ⇒ 所以「靠 paths 少触发」这条路**无效**；
+    #    b) `branches` 过滤决定的是**有没有 job** —— 分支不在列表 ⇒ ⇒ **run 里没有 job**
+    #       ⇒ ⇒ ⭐ **GitHub 把「无 job 的 run」判为 `failure`** ⇒ ⇒ ⇒ **每次一封红邮件**
+    #       （owner 2026-10-31 报「一直发红邮件 / 空 CI 在跑」）；
+    #    c) ⚠️ PR #110 的修法（把分支**加进** `push.branches`）⇒ ⇒ **实测仍无 job**
+    #       ⇒ ⇒ ⇒ **加分支名解决不了问题**（机制与「分支名是否写对」无关）。
+    #
+    # ## 正解（本次）
+    #
+    # ⇒ ⇒ **去掉 `branches` 限制、保留 `paths`** ⇒ ⇒
+    #    · 依赖**没变** ⇒ ⇒ `paths` 不匹配 ⇒ ⇒ **workflow 不触发** ⇒ ⇒ 无 run ⇒ ⇒ **无邮件**；
+    #    · 依赖**变了** ⇒ ⇒ `paths` 匹配 ⇒ ⇒ **run 里有 job** ⇒ ⇒ **真跑** ⇒ ⇒
+    #      ⇒ ⇒ 结论是**真实的审计结论**（绿 ⇒ 无红邮件；红 ⇒ 是真问题）。
+    #
+    # ## 为什么这是「结构对」而不是「绕过」
+    #
+    # ⭐ 「无 job 的 run」是 GitHub 的**占位产物** ⇒ ⇒ 它**不含任何审计信息**
+    # ⇒ ⇒ ⇒ 唯一能消除它的办法是让它**真的有 job** ⇒ ⇒ ⇒⇒ ⇒
+    # ⇒ ⇒ **「让它真跑」比「让它别触发」更正确** ⇒ ⇒ ⇒ 且 `paths` 保留 ⇒ ⇒ **不浪费 CI**。
     # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件、空 CI 在跑」时修）：
     #   实测：本 workflow 在 PR 分支同步时会生成**无 job 的失败 run**（jobs=0）
     #   ⇒ ⇒ 每次 push 都发一封红邮件 ⇒ ⇒ 而依赖没变时 RUSTSEC 结论与上次完全相同
@@ -51,7 +77,8 @@ on:
       #   ⇒ ⇒ ⇒ **排除掉**（crates-ui 的依赖审计由它自己的门禁负责）。
       - '!crates-ui/**'
   pull_request:
-    branches: ['**']
+    # ⭐ 同上（2026-11-01 实测）：不写 `branches` ⇒ ⇒ **不产生「无 job 的占位失败」**；
+    #   `paths` 保留 ⇒ ⇒ 只在依赖真变了时才跑。
     # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 兜底）。
     paths:
       - '**/Cargo.lock'
