@@ -23,12 +23,36 @@ on:
     paths:
       - '**/Cargo.lock'
       - '.github/workflows/cargo-audit.yml'
+      # ⭐⭐⭐ **排除 `crates-ui/`**（2026-11-01；owner 报「一直发红邮件」的**真根因**）。
+      #
+      # ## 为什么这是**真根因**
+      #
+      # ① 本 workflow 的 `push.branches` 只列了 `master`/`main` 等**主仓分支**
+      #    ⇒ ⇒ 在**其它分支**（如 `ui-engine-p0-2026-10-24`）push 时，
+      #    GitHub 仍会因 `paths` 命中而**创建 run**；
+      # ② 但该分支不在 `push.branches` 里 ⇒ ⇒ **不产生任何 job**
+      #    ⇒ ⇒ 得到一个**无 job 的 run** ⇒ ⇒ **GitHub 把它判为 `failure`**
+      #    ⇒ ⇒ ⇒ **每次 push 一封红邮件**（owner 2026-10-31 报的现象）。
+      # ③ 而 `paths: '**/Cargo.lock'` **会命中 `crates-ui/Cargo.lock`**
+      #    ⇒ ⇒ 本线每次 push（锁文件重算）都**必然命中** ⇒ ⇒ ⇒ **每次都发**。
+      #
+      # ## 为什么**排除**而不是删掉整个 paths
+      #
+      # `crates-ui/` 是**独立 workspace**（ADR-0015）⇒ ⇒ **主仓的 `cargo audit`
+      # 根本不覆盖它的依赖** ⇒ ⇒ ⇒ 让主仓 workflow 为它触发**既没信息量、又发邮件**
+      # ⇒ ⇒ ⇒ **排除掉**（⇒ ⇒ crates-ui 的依赖审计由它自己的门禁负责）。
+      #
+      # ⚠️ 诚实的覆盖口径：`crates-ui/` 的 RUSTSEC 覆盖**目前不在本 workflow 里**
+      # ⇒ ⇒ **不得**把它算作「已覆盖」（⇒ ⇒ 补齐动作见台账 E-148 的后续项）。
+      - '!crates-ui/**'
   pull_request:
     branches: ['**']
     # ⚠️ 同上：PR 侧也只在依赖变动时跑（RUSTSEC 覆盖由 cargo-deny 的 advisories 检查兜底）。
     paths:
       - '**/Cargo.lock'
       - '.github/workflows/cargo-audit.yml'
+      # ⭐ 同上：排除独立 workspace（crates-ui）⇒ ⇒ PR 侧也不产生「无 job 的失败 run」。
+      - '!crates-ui/**'
   schedule:
     # 每周日凌晨 4 点 (跟 eval-live 错开 1h, 避免 GPU 竞争)
     - cron: '0 4 * * 0'
