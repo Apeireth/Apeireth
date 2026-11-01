@@ -120,6 +120,27 @@ where
     Arc::new(FnRuntimeEventSink(f))
 }
 
+/// Convert a pending view into the event's stable fields.
+pub(crate) fn approval_event_fields(
+    view: &PendingApprovalView,
+) -> (
+    SessionId,
+    RequestId,
+    TraceId,
+    ApprovalId,
+    CapabilityId,
+    String,
+) {
+    (
+        view.session_id,
+        view.request_id,
+        view.trace_id,
+        view.approval_id,
+        view.capability_id.clone(),
+        view.tool_name.clone(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

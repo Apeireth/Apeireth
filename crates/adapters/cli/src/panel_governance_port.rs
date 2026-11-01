@@ -4,9 +4,7 @@
 //! `apeireth_memory::MemoryGovernanceStore`（rev CAS + 状态机），本模块只做
 //! 「窄口 → 全口」的转发，不复制任何逻辑。
 
-use apeireth_gateway::{
-    EpisodeMutationDto, MemoryGovernanceCommand, PanelData, PrincipalForgetDto,
-};
+use apeireth_gateway::{EpisodeMutationDto, MemoryGovernanceCommand, PanelData};
 use async_trait::async_trait;
 
 use crate::gateway_panels::CliPanelData;
@@ -46,13 +44,5 @@ impl MemoryGovernanceCommand for CliPanelData {
         expected_rev: u64,
     ) -> Result<EpisodeMutationDto, String> {
         PanelData::update_episode(self, id, content, updated_by, expected_rev).await
-    }
-
-    async fn forget_principal(
-        &self,
-        principal_id: &str,
-        reason: Option<&str>,
-    ) -> Result<PrincipalForgetDto, String> {
-        PanelData::forget_principal(self, principal_id, reason).await
     }
 }

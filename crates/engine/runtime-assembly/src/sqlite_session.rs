@@ -229,6 +229,11 @@ impl SessionStore for SqliteSessionStore {
     }
 }
 
+/// Convenience conversion for assembly callers.
+pub fn as_session_store(store: SqliteSessionStore) -> Arc<dyn SessionStore> {
+    Arc::new(store)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

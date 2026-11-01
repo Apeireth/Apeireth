@@ -132,12 +132,39 @@ orphan with_used  # G4
 orphan with_user_agent  # G4
 orphan with_voices_error  # G4
 
-# --- G5（4 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
+# --- G5（31 条）：**待判**：其余。逐条要人回答「真没人调，还是判据看不见」。**还债从这里开始。**
 
 orphan begin_wait  # G5
 orphan end_wait  # G5
 orphan idle_elapsed  # G5
 orphan is_tripped  # G5
+orphan __register_all_asserts  # G5
+orphan accountability_status_probe  # G5
+orphan append_fact  # G5
+orphan approval_event_fields  # G5
+orphan as_session_store  # G5
+orphan audit_diff  # G5
+orphan bottom  # G5
+orphan clear_working  # G5
+orphan cli_forget_principal  # G5
+orphan evict_one  # G5
+orphan from_decision  # G5
+orphan is_verbatim_zone  # G5
+orphan item_content_hash  # G5
+orphan loop_config_mut_for_test  # G5
+orphan next_occurrence_after  # G5
+orphan record_turn_usage_at  # G5
+orphan remove_session  # G5
+orphan replaced_any  # G5
+orphan run_bio  # G5
+orphan run_scenario_checked  # G5
+orphan set_event_sink  # G5
+orphan set_potential  # G5
+orphan spawn_presence_heartbeat  # G5
+orphan state_for  # G5
+orphan stats_ref  # G5
+orphan task_board_write_face_for_action  # G5
+orphan with_accountability_probe  # G5
 
 # --- G6（81 条）：**冗余 API 表面 / 宿主入口**：同一能力有**主路径在用**，这些是并行入口或便利包装；或设计上是给宿主/外部调用的公开 API。已逐条核查（见 `unwired-debt-taxonomy-2026-10-24.md` 与 `unwired-debt-audit-2026-10-24.md`）。
 
