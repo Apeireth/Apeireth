@@ -3,7 +3,7 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: e34c72ff5e8880c3f4221c4381e647655c32abc5302614e4071a6947627084a9
+claims_sha256: d69b5727af2f176507e8df38db15f0addffa76eb1ecab2897baf1ab6b4279eac
 claims_total: 38
 items:
   - id: "rt.provider_router"
@@ -478,7 +478,7 @@ items:
     gaps:
       []
   - id: "sec.credential_endpoint_binding"
-    capability: "凭据 ↔ 端点绑定（厂商 provider 的凭据只发往厂商端点；自定义端点须显式声明）"
+    capability: "凭据 ↔ 端点绑定（凭据只发往 audience ∪ 显式绑定内的端点；运行时换端点默认拒绝）"
     implemented:
       sources:
         - "crates/engine/provider/src/endpoint_binding.rs"
