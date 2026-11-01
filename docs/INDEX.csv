@@ -139,6 +139,7 @@ docs/04-internal/03-audits/absorption-ledger.md,L4,3,质感吸收台账 —— �
 docs/04-internal/03-audits/apeireth-1-0-vs-2-0-functional-gap-2026-08-28.md,L4,7,Apeireth 1.0 vs 2.0 功能差距真账 (2026-08-28),2026-08-28,在飞,15,保留,
 docs/04-internal/03-audits/capability-knob-audit-2026-09-12.md,L4,7,功能旋钮四方对账审计 (Capability-Knob Audit),2026-09-12,在飞,5,保留,
 docs/04-internal/03-audits/debt-ledger-status-2026-10-25.md,L3,7,债栏 D1–D32 逐条状态审计（2026-10-25）,2026-10-25,在飞,1,保留,
+docs/04-internal/03-audits/dependabot-alerts-triage-2026-11-01.md,L4,4,Dependabot 告警分诊（2026-11-01 实测基线）,2026-11-01,在飞,1,保留,
 docs/04-internal/03-audits/doc-governance-batch-review-2026-10-23.md,L4,4,对抗性复核报告 —— 文档治理批（`docs/consolidation-2026-10-23`）,2026-10-23,在飞,1,保留,
 docs/04-internal/03-audits/doc-governance-fix-verification-2026-10-24.md,L4,4,修复验证报告 —— eadcc841（10 条断言）,2026-10-24,在飞,1,保留,
 docs/04-internal/03-audits/doc-governance-followup-review-2026-10-24.md,L4,4,对抗性复核报告 —— docs/governance-followup-2026-10-24,2026-10-24,在飞,1,保留,
