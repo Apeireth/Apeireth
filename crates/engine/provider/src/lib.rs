@@ -16,6 +16,8 @@ pub mod canonical_openai_compatible;
 pub mod credentials;
 /// OpenAI-compatible embeddings transport (semantic recall vector stage).
 pub mod embeddings;
+/// **凭据 ↔ 端点绑定**（安全审计 P1：防止「只改端点」就把旧凭据发给新主机）。
+pub mod endpoint_binding;
 /// CompletionRequest ↔ NormalizedRequest 转换 + 错误映射 (两个 LlmFactory 共享).
 pub(crate) mod llm_factory_adapters;
 /// RC-5 LlmFactory 真实现 — MiniMax backend adapter (复用 `MinimaxProviderCapability`).

@@ -433,6 +433,26 @@ claims:
     next_review: "2026-11-20"
     notes: "词法级写类拒绝（DML / CTE 内嵌 DML / EXPLAIN ANALYZE / SELECT INTO / FOR UPDATE 全拒，fail-closed）+ PG `BEGIN READ ONLY` / MySQL `START TRANSACTION READ ONLY` 纵深。桌面 CI 执行面（2026-10-22 复核）：companion-desktop-ci.yml 的 `cargo test --workspace --all-targets`（src-tauri 独立 workspace）执行本断言；PR #36 起该 gate 3/3 success。 残余：无跨平台 live E2E（如实）。"
 
+  - id: sec.credential_endpoint_binding
+    title: "凭据 ↔ 端点绑定（厂商 provider 的凭据只发往厂商端点；自定义端点须显式声明）"
+    level: PRODUCTION WIRED
+    default: "ON"
+    switch_env: APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS
+    sources:
+      - crates/engine/provider/src/endpoint_binding.rs
+      - crates/engine/provider/src/canonical_anthropic.rs
+      - crates/engine/provider/src/canonical_minimax.rs
+      - crates/engine/provider/src/canonical_openai_compatible.rs
+      - crates/foundation/plugin/src/credentials.rs
+      - crates/foundation/credentials/src/hot_store.rs
+    tests:
+      - crates/engine/provider/tests/endpoint_binding.rs
+    verified_at: PLACEHOLDER_SHA
+    verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked"
+    owner: provider
+    next_review: "2026-12-01"
+    notes: "2026-11-01 安全审计 P1 的设计落点：凭据与端点是两份独立配置，只改端点那一份会把旧凭据发给新主机。判定：允许集合 = audience（构造时确定）∪ 显式绑定（APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS 或运行时热写带绑定）；两者皆空则不拦截。厂商 provider（anthropic/minimax）的 from_env() 把 audience 设为厂商默认端点 ⇒ 换端点默认拒绝（fail-closed），要用自定义端点必须显式声明绑定；协议族 provider（openai-compatible）端点本就由部署方选 ⇒ 未声明绑定时不拦截，声明后强制。校验点在 resolve_key 取密钥之前 ⇒ 未绑定的端点根本拿不到凭据。残余边界（如实）：绑定是部署方的显式声明，不是密码学证明，防的是「只改端点就泄漏」，不防能同时改端点与声明的对手。"
+
   - id: sec.provider_proxy_ssrf
     title: "Provider 中继 SSRF 面收紧（B2：目标类闸 + DNS 钉址 + 重定向逐跳闸 + 头白名单）"
     level: PRODUCTION WIRED

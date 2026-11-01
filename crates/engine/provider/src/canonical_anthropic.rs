@@ -36,7 +36,7 @@
 //! `complete` reads it per turn. The slot holds a resolver handle, never a
 //! secret.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use apeireth_core::kernel::{CapabilityId, PluginId};
 use apeireth_plugin::{
@@ -100,6 +100,15 @@ pub struct AnthropicProviderCapability {
     http: reqwest::Client,
     timeout_ms: u64,
     credential_key: String,
+    /// **该凭据的端点 audience**（构造时确定）。
+    ///
+    /// * `new(...)` ⇒ **空**（不拦截；单元测试与程序化接线保持既有行为）。
+    /// * `from_env()` ⇒ **厂商默认端点** ⇒ 换到别的端点**默认拒绝**
+    ///   （安全审计 P1：只改 `APEIRETH_ANTHROPIC_URL` 不能把厂商 key 发走）。
+    ///
+    /// 部署方要用自定义端点 ⇒ 显式声明绑定
+    /// （`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS`）⇒ 绑定**加宽** audience。
+    credential_audience: RwLock<Option<Vec<String>>>,
     resolver: ResolverSlot,
 }
 
@@ -122,12 +131,32 @@ impl AnthropicProviderCapability {
             http,
             timeout_ms,
             credential_key: ANTHROPIC_API_KEY.to_string(),
+            credential_audience: RwLock::new(None),
             resolver,
         })
     }
 
+    /// **设定该凭据的端点 audience**（构造后设置；`Arc` 共享 ⇒ 内部可变性）。
+    ///
+    /// audience = 「这个凭据**该去**哪些端点」。设定后，**不在 audience 内**的端点
+    /// **拿不到**该凭据（fail-closed）—— 安全审计 P1 的落点。
+    ///
+    /// ⚠️ 部署方要用自定义端点 ⇒ 显式声明**绑定**（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS`
+    /// 或运行时热写带绑定）⇒ 绑定会**加宽** audience（不是替换）。
+    pub fn set_credential_audience(&self, origins: Vec<String>) {
+        let mut guard = self
+            .credential_audience
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = Some(origins);
+    }
+
     /// Resolve the API key for this turn, or fail permanently. A missing key
     /// is permanent (§40): falling back would mask a misconfiguration.
+    ///
+    /// ⚠️ **端点绑定闸（2026-11-01 安全审计 P1）**：在**解析出密钥的那一刻**就核对
+    /// 「这个凭据允许发往这个端点吗」⇒ 凭据**根本不会被取出**，更不会被挂到请求上。
+    /// 判定口径见 [`crate::endpoint_binding`]。
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
         let resolver = {
             let guard = self
@@ -142,6 +171,27 @@ impl AnthropicProviderCapability {
                 ),
             })?
         };
+        // 端点绑定校验**先于**取密钥 ⇒ 未绑定的端点拿不到凭据。
+        let audience = {
+            let guard = self
+                .credential_audience
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            guard.clone()
+        };
+        crate::endpoint_binding::ensure_credential_bound_to_endpoint(
+            resolver.as_ref(),
+            &self.credential_key,
+            &self.base_url,
+            audience.as_deref(),
+        )
+        .map_err(|err| match err {
+            ProviderError::AuthFailed { provider, detail } => ProviderError::AuthFailed {
+                provider,
+                detail: format!("{detail} (credential {})", self.credential_key),
+            },
+            other => other,
+        })?;
         resolver
             .resolve(&self.credential_key)
             .ok_or_else(|| ProviderError::AuthFailed {
@@ -515,7 +565,17 @@ impl AnthropicProviderPlugin {
                     "reqwest client build failed: {e}"
                 )))
             })?;
-        Ok(Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?)
+
+        // 端点 audience = **厂商默认端点**（2026-11-01 安全审计 P1）：
+        // ⇒ 只改端点配置（`APEIRETH_ANTHROPIC_URL` / `APEIRETH_API_URL`）
+        //   **不能**把厂商凭据发给别的主机；要用自定义端点必须**显式声明绑定**。
+        // ⚠️ 注意：此处用的是**厂商常量**，不是 `base_url` 变量
+        //   （`base_url` 可能已被配置改过 ⇒ 拿它当 audience 等于没设防）。
+        let capability = Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?;
+        capability
+            .capability
+            .set_credential_audience(vec![DEFAULT_BASE_URL.to_string()]);
+        Ok(capability)
     }
 
     /// The configured canonical model ids, in declaration order.

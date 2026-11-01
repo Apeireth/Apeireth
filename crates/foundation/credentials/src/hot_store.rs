@@ -34,6 +34,12 @@ use apeireth_plugin::{CredentialResolver, Secret};
 #[derive(Default)]
 pub struct HotCredentialStore {
     entries: RwLock<BTreeMap<String, Secret>>,
+    /// **端点绑定声明**（2026-11-01 安全审计 P1 的「凭据库维度」）：
+    /// 逻辑凭据名 → 该凭据被授权发送到的端点列表。
+    ///
+    /// 与凭据**存在同一个库** ⇒ 换端点（`APEIRETH_*_URL` / 热更 `base_url`）
+    /// **改不到**这份绑定 ⇒ 未绑定的端点拿不到凭据。
+    bindings: RwLock<BTreeMap<String, Vec<String>>>,
 }
 
 impl HotCredentialStore {
@@ -68,13 +74,50 @@ impl HotCredentialStore {
             .cloned()
     }
 
+    /// **写入**一个逻辑凭据名，并**同时声明**它被授权发送到的端点。
+    ///
+    /// 这是「凭据 ↔ 端点绑定」的**凭据库维度**落点：绑定与凭据**同库同写**，
+    /// ⇒ 改端点配置**不会**顺带改掉绑定。
+    ///
+    /// `endpoints` 为**空** ⇒ 该凭据**不绑定任何端点**
+    /// （调用方据此 fail-closed：它只能发往该 provider 的默认端点）。
+    pub fn set_with_endpoints(
+        &self,
+        name: &str,
+        value: impl Into<String>,
+        endpoints: impl IntoIterator<Item = String>,
+    ) {
+        self.set(name, value);
+        let mut bindings = self
+            .bindings
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        bindings.insert(name.to_string(), endpoints.into_iter().collect());
+    }
+
+    /// 该凭据已声明的端点（未声明 ⇒ `None`，即「不参与绑定」）。
+    pub fn declared_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        self.bindings
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(name)
+            .cloned()
+    }
+
     /// 移除一个运行时值 (回落到启动值解析)。返回是否确有条目被移除。
     pub fn remove(&self, name: &str) -> bool {
-        self.entries
+        let removed = self
+            .entries
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(name)
-            .is_some()
+            .is_some();
+        // 凭据被移除 ⇒ 绑定**一并**移除（不留悬空绑定）。
+        self.bindings
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(name);
+        removed
     }
 
     /// 当前条目数 (仅计数, 无凭据名/值)。
@@ -94,6 +137,11 @@ impl HotCredentialStore {
 impl CredentialResolver for HotCredentialStore {
     fn resolve(&self, name: &str) -> Option<Secret> {
         self.get(name)
+    }
+
+    /// 已声明绑定 ⇒ `Some(表)`；未声明 ⇒ `None`（不参与绑定）。
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        self.declared_endpoints(name)
     }
 }
 
@@ -137,6 +185,31 @@ impl CredentialResolver for LayeredCredentialResolver {
         self.primary
             .resolve(name)
             .or_else(|| self.fallback.resolve(name))
+    }
+
+    /// **任一层**声明了绑定就算数（取并集）。
+    ///
+    /// 为什么取并集而不是「跟随取到值的那一层」：绑定是**凭据名**的属性，
+    /// 而值可能来自任一层（运行时热写 > keyring > env）⇒ 绑定声明也允许来自任一层。
+    /// ⚠️ 这是**部署方的显式声明**（不是密码学证明）：它防的是「只改端点就泄漏」。
+    fn bound_endpoints(&self, name: &str) -> Option<Vec<String>> {
+        let mut merged: Vec<String> = Vec::new();
+        let mut declared = false;
+        for layer in [&self.primary, &self.fallback] {
+            if let Some(list) = layer.bound_endpoints(name) {
+                declared = true;
+                for endpoint in list {
+                    if !merged.contains(&endpoint) {
+                        merged.push(endpoint);
+                    }
+                }
+            }
+        }
+        if declared {
+            Some(merged)
+        } else {
+            None
+        }
     }
 }
 

@@ -105,6 +105,14 @@ pub struct OpenAiCompatibleProviderCapability {
     http: reqwest::Client,
     timeout_ms: u64,
     credential_key: String,
+    /// **该凭据的端点 audience**（构造时确定）。
+    ///
+    /// ⚠️ 本 provider 是**协议族**（DeepSeek / vLLM / Ollama / 自建网关…）
+    /// ⇒ 端点本来就由**部署方**选 ⇒ 没有可推导的「厂商默认端点」
+    /// ⇒ `from_env()` 也留**空**（不误伤正常部署）。
+    /// ⇒ 想要端点保护就**显式声明绑定**
+    /// （`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 或运行时热写带绑定）⇒ 声明后**强制**。
+    credential_audience: RwLock<Option<Vec<String>>>,
     resolver: ResolverSlot,
     /// 推理字段归一化配置（12 别名 → 前置 think 块；出向剥离别名字段）。
     /// 推理字段归一化配置（12 别名 → 前置 think 块；归一输出不携带原始别名字段）。
@@ -133,6 +141,7 @@ impl OpenAiCompatibleProviderCapability {
             http,
             timeout_ms,
             credential_key: OPENAI_COMPATIBLE_API_KEY.to_string(),
+            credential_audience: RwLock::new(None),
             resolver,
             reasoning: crate::reasoning_adapter::ReasoningAdapterConfig::from_env(),
         })
@@ -155,6 +164,21 @@ impl OpenAiCompatibleProviderCapability {
     }
 
     /// Resolve the API key for this turn, or fail permanently. A missing key
+    /// **设定该凭据的端点 audience**（构造后设置；`Arc` 共享 ⇒ 内部可变性）。
+    ///
+    /// audience = 「这个凭据**该去**哪些端点」。设定后，**不在 audience 内**的端点
+    /// **拿不到**该凭据（fail-closed）—— 安全审计 P1 的落点。
+    ///
+    /// ⚠️ 部署方要用自定义端点 ⇒ 显式声明**绑定**（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS`
+    /// 或运行时热写带绑定）⇒ 绑定会**加宽** audience（不是替换）。
+    pub fn set_credential_audience(&self, origins: Vec<String>) {
+        let mut guard = self
+            .credential_audience
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = Some(origins);
+    }
+
     /// is permanent (§40): the legacy config made `api_key_env` mandatory, so a
     /// missing key is a misconfiguration, not an anonymous request (§19/§20).
     fn resolve_key(&self) -> Result<Secret, ProviderError> {
@@ -171,6 +195,28 @@ impl OpenAiCompatibleProviderCapability {
                 ),
             })?
         };
+        // 端点绑定闸（2026-11-01 安全审计 P1）。
+        //
+        // ⚠️ 本 provider 是**协议族**（DeepSeek / vLLM / Ollama / 自建网关…）
+        // ⇒ 端点本来就由**部署方**选 ⇒ 没有可推导的「厂商默认端点」
+        // ⇒ 信任级别是 [`OperatorChosen`]：**未声明绑定时不拦截**（保持既有行为，
+        // 否则正常的自建端点会被全部打死）；**一旦声明了绑定就强制**。
+        //
+        // ⇒ 保护要生效：给该凭据**显式声明**绑定
+        //（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 或运行时热写带绑定）。
+        let audience = {
+            let guard = self
+                .credential_audience
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            guard.clone()
+        };
+        crate::endpoint_binding::ensure_credential_bound_to_endpoint(
+            resolver.as_ref(),
+            &self.credential_key,
+            &self.base_url(),
+            audience.as_deref(),
+        )?;
         resolver
             .resolve(&self.credential_key)
             .ok_or_else(|| ProviderError::AuthFailed {

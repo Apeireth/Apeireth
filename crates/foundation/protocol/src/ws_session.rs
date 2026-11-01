@@ -10,14 +10,20 @@
 //! 1. **Auth-first gate** — the first frame on a connection MUST be
 //!    [`WsFrame::Auth`]; anything else is closed with `1008 ws_unauthorized`
 //!    (legacy parity).
-//! 2. **Version negotiation** — an [`AuthFrame`] whose `ws_version` differs
+//! 2. **Token verification** — an [`AuthFrame`] MUST carry the exact token the
+//!    transport configured (compared in constant time). A missing, empty or
+//!    mismatched token is closed with `1008 ws_unauthorized`; the close reason
+//!    never echoes the token (not even a hash of it). The expected token is
+//!    handed in by the transport through [`WsSessionGuard::new`]; a guard
+//!    without an expected token refuses every handshake (fail-closed).
+//! 3. **Version negotiation** — an [`AuthFrame`] whose `ws_version` differs
 //!    from [`WS_PROTOCOL_VERSION`] is closed with `1008 ws_version_mismatch`.
 //!    This is the negotiation hook the blueprint promised ("一旦 bump 必跟
 //!    upgrade 校验同步").
-//! 3. **Direction enforcement** — server-only frames (`ToolResult`,
+//! 4. **Direction enforcement** — server-only frames (`ToolResult`,
 //!    `StreamChunk`, `StreamEnd`, `Error`) sent by a client are answered with a
 //!    non-fatal `invalid_direction` [`ErrorFrame`] (legacy parity).
-//! 4. **Close-code taxonomy** — `1000` normal, `1008` auth/version failure,
+//! 5. **Close-code taxonomy** — `1000` normal, `1008` auth/version failure,
 //!    `1013` concurrency limit, `4xxx` business errors (blueprint §2.5).
 //!
 //! Re-authentication in the `Open` state is allowed (the legacy handler
@@ -58,16 +64,43 @@ pub enum WsFrameDecision {
 
 /// One connection's session guard: carries the handshake state and renders
 /// every inbound frame into a [`WsFrameDecision`].
-#[derive(Debug, Clone)]
+///
+/// The guard also carries the **expected** WS token the transport configured
+/// for this endpoint; [`WsSessionGuard::admit`] refuses any [`AuthFrame`] whose
+/// token does not match it (constant-time comparison).
+#[derive(Clone)]
 pub struct WsSessionGuard {
     state: WsSessionState,
+    /// The token a client must present to be admitted.
+    ///
+    /// Never rendered by [`std::fmt::Debug`] (redacted) and never echoed in a
+    /// close reason.
+    expected_token: String,
+}
+
+impl std::fmt::Debug for WsSessionGuard {
+    /// Hand-written so the expected token never reaches a log line: the
+    /// derived `Debug` would print it verbatim.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WsSessionGuard")
+            .field("state", &self.state)
+            .field("expected_token", &"<redacted>")
+            .finish()
+    }
 }
 
 impl WsSessionGuard {
     /// A fresh connection: [`WsSessionState::AwaitingAuth`].
-    pub fn new() -> Self {
+    ///
+    /// `expected_token` is the token a client has to present in its
+    /// [`AuthFrame`](crate::ws_v1::AuthFrame); the transport owns it (e.g. a
+    /// short-lived token minted for this connection). An **empty** expected
+    /// token means "nothing configured" and refuses every handshake
+    /// (fail-closed) — there is no "no auth required" mode.
+    pub fn new(expected_token: String) -> Self {
         Self {
             state: WsSessionState::AwaitingAuth,
+            expected_token,
         }
     }
 
@@ -122,7 +155,8 @@ impl WsSessionGuard {
         }
     }
 
-    /// Version-negotiating auth admission (shared by both states).
+    /// Version-negotiating **and** token-authenticating admission (shared by
+    /// both states).
     fn admit_auth(&mut self, auth: &AuthFrame) -> WsFrameDecision {
         if auth.ws_version != WS_PROTOCOL_VERSION {
             // Version negotiation failure: close 1008 (legacy parity with the
@@ -132,14 +166,67 @@ impl WsSessionGuard {
                 code: WS_CLOSE_UNAUTHORIZED,
             });
         }
+        // Token verification (fail-closed):
+        // - no expected token configured → refuse (nothing to match against);
+        // - client sent no token → refuse;
+        // - token mismatch → refuse, compared in constant time so the reply
+        //   timing cannot be used to recover the expected token byte by byte.
+        // The close reason is the fixed legacy string `ws_unauthorized`: it
+        // carries no token material (not the token, not its length, not a
+        // prefix and not a hash of it).
+        if self.expected_token.is_empty()
+            || auth.token.is_empty()
+            || !constant_time_eq(self.expected_token.as_bytes(), auth.token.as_bytes())
+        {
+            return WsFrameDecision::Close(CloseFrame {
+                reason: "ws_unauthorized".into(),
+                code: WS_CLOSE_UNAUTHORIZED,
+            });
+        }
         self.state = WsSessionState::Open;
         WsFrameDecision::Deliver
     }
 }
 
+/// Constant-time byte comparison (timing-side-channel hardening).
+///
+/// **Why it lives here instead of being reused**: `crates/foundation/core/src/`
+/// has no generic constant-time comparison helper — the only credential check
+/// there is `verify_sovereign_token`, which is hardcoded to `"master"` and
+/// returns early on a length mismatch. The repo's one generic *public*
+/// implementation (`constant_time_eq`) lives in `crates/engine/memory/src/principles.rs`
+/// (crate `apeireth-memory`, engine layer); making this foundation-layer
+/// crate depend on an engine-layer crate inverts the dependency direction and
+/// would require touching this crate's `Cargo.toml`, which is outside the
+/// scope of this change. Hence a local, dependency-free copy in the same
+/// style as the existing ones (XOR accumulator, no early return).
+///
+/// **Honest limitation**: the loop runs `max(len(a), len(b))` times, so the
+/// duration still leaks `max(len(a), len(b))`. What it guarantees is that the
+/// comparison time is independent of the *content* — it never returns early on
+/// the first differing byte, so it leaks neither the position of the first
+/// difference nor the depth of a matching prefix.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    let max_len = a.len().max(b.len());
+    let mut diff = 0u8;
+    for i in 0..max_len {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
+        diff |= x ^ y;
+    }
+    // The length difference is folded into the final verdict: byte folding
+    // alone can be 0 for zero-byte prefixes (e.g. `"\0\0"` vs `"\0"`), so the
+    // length equality has to back it up. This is the only branch left and it
+    // depends on the lengths only.
+    diff == 0 && a.len() == b.len()
+}
+
 impl Default for WsSessionGuard {
+    /// Default-constructed guard: **no expected token** ⇒ it refuses every
+    /// handshake (fail-closed). Real transports must use
+    /// [`WsSessionGuard::new`] with the token they minted.
     fn default() -> Self {
-        Self::new()
+        Self::new(String::new())
     }
 }
 
@@ -148,9 +235,17 @@ mod tests {
     use super::*;
     use crate::ws_v1::{PingFrame, StreamChunkFrame, ToolInvokeFrame, ToolResultFrame};
 
+    /// The token the tests present to the guard.
+    const TEST_TOKEN: &str = "ws-tok-abc";
+
+    /// A guard that expects [`TEST_TOKEN`].
+    fn guard() -> WsSessionGuard {
+        WsSessionGuard::new(TEST_TOKEN.to_string())
+    }
+
     fn auth(version: &str) -> WsFrame {
         WsFrame::Auth(AuthFrame {
-            token: "ws-tok-abc".into(),
+            token: TEST_TOKEN.into(),
             ws_version: version.into(),
         })
     }
@@ -167,7 +262,7 @@ mod tests {
     #[test]
     fn auth_first_gate_closes_1008() {
         // Legacy parity: non-auth frame before auth → close 1008 ws_unauthorized.
-        let mut guard = WsSessionGuard::new();
+        let mut guard = guard();
         let d = guard.admit(&invoke());
         match d {
             WsFrameDecision::Close(cf) => {
@@ -181,7 +276,7 @@ mod tests {
 
     #[test]
     fn valid_auth_opens_the_session() {
-        let mut guard = WsSessionGuard::new();
+        let mut guard = guard();
         assert_eq!(
             guard.admit(&auth(WS_PROTOCOL_VERSION)),
             WsFrameDecision::Deliver
@@ -194,7 +289,7 @@ mod tests {
     #[test]
     fn version_mismatch_closes_1008() {
         // Version negotiation: ws_version != WS_PROTOCOL_VERSION → close 1008.
-        let mut guard = WsSessionGuard::new();
+        let mut guard = guard();
         let d = guard.admit(&auth("2"));
         match d {
             WsFrameDecision::Close(cf) => {
@@ -213,7 +308,7 @@ mod tests {
     fn server_only_frames_from_client_are_non_fatal_errors() {
         // Legacy parity: ToolResult/StreamChunk/StreamEnd/Error from a client →
         // invalid_direction error frame, connection continues.
-        let mut guard = WsSessionGuard::new();
+        let mut guard = guard();
         guard.admit(&auth(WS_PROTOCOL_VERSION));
 
         let server_only = vec![
@@ -254,7 +349,7 @@ mod tests {
 
     #[test]
     fn ping_and_close_deliver_when_open() {
-        let mut guard = WsSessionGuard::new();
+        let mut guard = guard();
         guard.admit(&auth(WS_PROTOCOL_VERSION));
         assert_eq!(
             guard.admit(&WsFrame::Ping(PingFrame { ts: 1 })),
@@ -271,7 +366,7 @@ mod tests {
 
     #[test]
     fn reauth_is_permitted_and_renegotiates_version() {
-        let mut guard = WsSessionGuard::new();
+        let mut guard = guard();
         guard.admit(&auth(WS_PROTOCOL_VERSION));
         // Legacy behavior: a second Auth frame re-validates rather than rejects.
         assert_eq!(
@@ -299,7 +394,7 @@ mod tests {
 
     #[test]
     fn early_client_close_is_honored() {
-        let mut guard = WsSessionGuard::new();
+        let mut guard = guard();
         assert!(matches!(
             guard.admit(&WsFrame::Close(CloseFrame {
                 reason: "bye".into(),
@@ -307,5 +402,94 @@ mod tests {
             })),
             WsFrameDecision::Close(_)
         ));
+    }
+
+    // ---- token verification (the handshake now actually authenticates) ----
+
+    #[test]
+    fn matching_token_opens_the_session() {
+        let mut guard = guard();
+        assert_eq!(
+            guard.admit(&auth(WS_PROTOCOL_VERSION)),
+            WsFrameDecision::Deliver
+        );
+        assert!(guard.is_open());
+    }
+
+    #[test]
+    fn mismatched_token_is_rejected() {
+        let mut guard = guard();
+        let bad = WsFrame::Auth(AuthFrame {
+            token: "ws-tok-xyz".into(),
+            ws_version: WS_PROTOCOL_VERSION.into(),
+        });
+        match guard.admit(&bad) {
+            WsFrameDecision::Close(cf) => {
+                assert_eq!(cf.code, WS_CLOSE_UNAUTHORIZED);
+                assert_eq!(cf.reason, "ws_unauthorized");
+                // The refusal must not echo the token (nor a prefix / a hash of
+                // it) in the reason.
+                assert!(!cf.reason.contains("ws-tok"));
+                assert!(!cf.reason.contains("xyz"));
+            }
+            other => panic!("expected Close, got {other:?}"),
+        }
+        assert!(
+            !guard.is_open(),
+            "a mismatched token must not open the session"
+        );
+    }
+
+    #[test]
+    fn empty_expected_token_refuses_the_handshake() {
+        // Fail-closed: no expected token configured ⇒ no handshake may succeed.
+        let mut guard = WsSessionGuard::new(String::new());
+        match guard.admit(&auth(WS_PROTOCOL_VERSION)) {
+            WsFrameDecision::Close(cf) => {
+                assert_eq!(cf.code, WS_CLOSE_UNAUTHORIZED);
+                assert_eq!(cf.reason, "ws_unauthorized");
+            }
+            other => panic!("expected Close, got {other:?}"),
+        }
+        assert!(!guard.is_open());
+    }
+
+    #[test]
+    fn empty_client_token_is_rejected() {
+        let mut guard = guard();
+        let empty = WsFrame::Auth(AuthFrame {
+            token: String::new(),
+            ws_version: WS_PROTOCOL_VERSION.into(),
+        });
+        match guard.admit(&empty) {
+            WsFrameDecision::Close(cf) => {
+                assert_eq!(cf.code, WS_CLOSE_UNAUTHORIZED);
+                assert_eq!(cf.reason, "ws_unauthorized");
+            }
+            other => panic!("expected Close, got {other:?}"),
+        }
+        assert!(!guard.is_open());
+    }
+
+    #[test]
+    fn default_guard_refuses_every_handshake() {
+        // `Default` builds a guard without an expected token ⇒ deny-all.
+        let mut guard = WsSessionGuard::default();
+        assert!(matches!(
+            guard.admit(&auth(WS_PROTOCOL_VERSION)),
+            WsFrameDecision::Close(CloseFrame {
+                code: WS_CLOSE_UNAUTHORIZED,
+                ..
+            })
+        ));
+        assert!(!guard.is_open());
+    }
+
+    #[test]
+    fn debug_output_does_not_reveal_the_expected_token() {
+        let guard = guard();
+        let rendered = format!("{guard:?}");
+        assert!(!rendered.contains(TEST_TOKEN));
+        assert!(rendered.contains("<redacted>"));
     }
 }
