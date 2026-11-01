@@ -2,11 +2,11 @@
   "crates": {
     "crates/adapters/cli": {
       "files": 37,
-      "loc": 16967
+      "loc": 17015
     },
     "crates/adapters/gateway": {
-      "files": 34,
-      "loc": 19186
+      "files": 35,
+      "loc": 19267
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -18,7 +18,7 @@
     },
     "crates/capabilities/tools": {
       "files": 130,
-      "loc": 86014
+      "loc": 87171
     },
     "crates/engine/guard": {
       "files": 28,
@@ -82,11 +82,11 @@
     },
     "crates/engine/runtime": {
       "files": 51,
-      "loc": 24665
+      "loc": 24744
     },
     "crates/engine/runtime-assembly": {
       "files": 82,
-      "loc": 44021
+      "loc": 44057
     },
     "crates/engine/storage": {
       "files": 27,

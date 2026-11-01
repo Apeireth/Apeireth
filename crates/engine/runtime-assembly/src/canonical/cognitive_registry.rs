@@ -23,6 +23,13 @@ impl super::ProductionModules {
                 policy.grant(Permission::ExecuteTool(capability.to_string()));
             }
         }
+        // **共享 live 策略装进工具面的槽**（2026-11-01 安全审计 P3-6）。
+        // 原先错在哪：写工具面各持一份**自建**策略，与治理链那一份不是同一个对象
+        // ⇒ 面板上的热撤销对已批准 / 预批的写调用**不生效**。
+        // 现在为什么这样：装**同一个 `Arc`** ⇒ 工具面与治理链同源 ⇒ 撤销立刻可见。
+        // 放在这里：本函数**本来就持有**那份策略的句柄 ⇒ 装的是同一个实例，
+        // 且在**装配期**完成 ⇒ 与注册顺序无关。
+        apeireth_tools_canonical::apply_patch_tool::install_shared_live_permission_policy(policy);
         let builder = self.register_context_projection(builder);
         Ok(self.register_into(builder))
     }

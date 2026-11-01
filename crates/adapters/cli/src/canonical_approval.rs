@@ -9,7 +9,11 @@
 use apeireth_core::kernel::{ApprovalId, SessionId};
 use apeireth_runtime::canonical::{ApprovalDecision, ApprovalResolution};
 
-use crate::{build_canonical_runtime_from_env_with_observability, resolve_canonical_cli_approval};
+use crate::{
+    build_canonical_runtime_from_env_with_observability, default_panel_data_dir,
+    resolve_canonical_cli_approval,
+};
+use apeireth_runtime::Runtime;
 
 /// 审批面决定分派: 人批/人拒 = 真实社会结果 (发布 `ApprovalSocial` 信号);
 /// 取消 = 收回请求, 未形成社会结论 (不发布、不编事件)。
@@ -40,4 +44,39 @@ pub async fn dispatch_canonical_approval(
     }
     observer.flush().await;
     result
+}
+
+/// 宿主拍板 ⇒ 设备决定账落账（**不是设备面调用则什么都不做**）。
+///
+/// 设备面的审批发生在 `execute` 这一拍 ⇒ pending approval 的工具调用参数
+/// **自带 `plan_id`** ⇒ 直接取用、不重算（重算要设备表 + 分级词表，易与执行面漂移）。
+pub async fn record_device_host_decision(
+    runtime: &Runtime,
+    session: SessionId,
+    approval: ApprovalId,
+    decision: &ApprovalDecision,
+) -> Result<(), String> {
+    let pending = runtime
+        .pending_approvals(session)
+        .await
+        .map_err(|error| error.to_string())?;
+    let Some(view) = pending.iter().find(|view| view.approval_id == approval) else {
+        // 查无 pending（可能已过期/已决）⇒ 由 resolve_approval 自己报错 ⇒ 这里不拦。
+        return Ok(());
+    };
+    let decisions =
+        apeireth_tools_canonical::device::approval::DeviceApprovalDecisionLedger::under_data_dir(
+            default_panel_data_dir(),
+        );
+    let approved = matches!(decision, ApprovalDecision::Approve);
+    apeireth_tools_canonical::device::approval::record_host_decision_for_call(
+        &decisions,
+        &view.tool_call.name,
+        &view.tool_call.arguments,
+        approved,
+        "本地审批面板",
+        None,
+    )
+    .map_err(|error| format!("宿主决定落账失败（真因如实，不静默）⇒ 不执行该次调用: {error}"))?;
+    Ok(())
 }

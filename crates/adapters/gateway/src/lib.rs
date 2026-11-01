@@ -17,6 +17,8 @@ pub mod admin;
 
 /// Native and OpenAI-compatible HTTP chat entry points.
 pub mod canonical_entry;
+/// **设备面：宿主拍板 ⇒ 决定账落账**（审计 P3-1/P3-2 闭环）。
+pub mod device_decision;
 
 pub(crate) mod panel_errors;
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).

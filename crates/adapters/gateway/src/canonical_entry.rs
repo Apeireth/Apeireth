@@ -382,6 +382,22 @@ pub async fn resolve_approval_attributed(
         "approval.resolve",
         Some(permit.admission()),
     );
+    // **设备面：先把宿主决定落进决定账，再续跑**（2026-11-01 安全审计 P3-1/P3-2 闭环）。
+    //
+    // 原先错在哪：设备面的放行**只认宿主决定账**（模型自称的授权人不作数），
+    // 但决定账原先**只有 IM 审批卡链会写** ⇒ 面板批了却不落账
+    // ⇒ 执行面查无批准 ⇒ **永远拒绝**（人批了也执行不了 = 流程断链）。
+    //
+    // 现在为什么这样：宿主拍板这一步**接上**决定账 ⇒ 闭环。
+    // ⚠️ 顺序：**先落账、后续跑**（续跑会执行工具 ⇒ 决定账必须已就位）。
+    // ⚠️ 落账失败 ⇒ **不续跑**（与 IM 面同口径：「拒绝落账 ⇒ 拒绝即帧」）。
+    crate::device_decision::record_device_host_decision(
+        runtime,
+        request.session,
+        request.approval,
+        &decision,
+    )
+    .await?;
     let resolved = runtime
         .resolve_approval(request.session, request.approval, decision)
         .await;

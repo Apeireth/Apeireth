@@ -283,17 +283,17 @@ env APEIRETH_VOICE_SPEAK_SCOPE
 # --- size (79) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
-size crates/adapters/cli/src/lib.rs 3768
+size crates/adapters/cli/src/lib.rs 3777
 size crates/adapters/cli/src/main.rs 1467
 size crates/adapters/cli/src/onboarding.rs 1338
-size crates/adapters/gateway/src/canonical_entry.rs 2281
+size crates/adapters/gateway/src/canonical_entry.rs 2297
 size crates/adapters/gateway/src/events.rs 1623
 size crates/adapters/gateway/src/panels.rs 1623
 size crates/adapters/gateway/src/presence.rs 1279
 size crates/adapters/sdk/src/client.rs 1552
 size crates/adapters/tui/src/state.rs 1585
 size crates/capabilities/tools/src/backup.rs 1236
-size crates/capabilities/tools/src/device/device_control.rs 3119
+size crates/capabilities/tools/src/device/device_control.rs 3080
 size crates/capabilities/tools/src/device/guard_watch.rs 1341
 size crates/capabilities/tools/src/doc_ops.rs 6124
 size crates/capabilities/tools/src/external.rs 2672
@@ -344,7 +344,7 @@ size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
 size crates/engine/runtime-assembly/src/canonical/production.rs 1950
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
-size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1356
+size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1375
 size crates/engine/runtime/src/canonical/execute.rs 4750
 size crates/engine/runtime/src/canonical/runtime.rs 1204
 size crates/foundation/core/src/cost_router.rs 1399

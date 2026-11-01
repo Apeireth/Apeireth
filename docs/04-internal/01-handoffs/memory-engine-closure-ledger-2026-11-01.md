@@ -1,5 +1,12 @@
 # 记忆引擎收口清单（2026-11-01 实测基线）
 
+[Document-Meta]
+Document:        memory-engine-closure-ledger-2026-11-01.md
+Version:         v1 (2026-11-01 实测基线)
+Last-Modified:   2026-11-01
+Status:          🟢 活跃 (记忆引擎这条线的接手人入口)
+Class:           STATUS
+
 > **给谁看**：接续记忆引擎这条线的人或 AI。**本文自足** —— 不需要读对话记录。
 > **本文是什么**：记忆引擎（`crates/engine/memory`，129 个顶层模块）当前**做到了哪、还差什么**的**实测**清单。
 > **口径纪律**：本文的每一条都来自**当场实测**（代码 grep / 工具跑 / 文件级 diff），

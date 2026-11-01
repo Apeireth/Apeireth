@@ -1027,18 +1027,6 @@ fn build_production_governance_parts_with_dataset(
         policy.require_approval_for(apeireth_tools_canonical::IMAGE_OPS_CAPABILITY_ID);
     }
     let policy = Arc::new(std::sync::Mutex::new(policy));
-    // **共享 live 策略装进工具面的槽**（2026-11-01 安全审计 P3-6）。
-    //
-    // 原先错在哪：写工具面（`apply_patch` 的 stage-1 闸）各持一份**自建**策略，
-    // 与治理链正在评估的**这一份**不是一个对象 ⇒ 面板上的**热撤销**
-    // （`PermissionPolicy::revoke`）对已批准 / 预批的写调用**不生效**。
-    //
-    // 现在为什么这样：装的是**同一个 `Arc`**（不是拷贝一份值）⇒ 工具面与治理链
-    // 同源 ⇒ 撤销立刻可见。
-    //
-    // 放在**策略诞生处**（而不是「把策略交给别处」的通道）⇒ 槽从策略一存在起就是对的
-    // ⇒ **与注册顺序无关**。
-    apeireth_tools_canonical::apply_patch_tool::install_shared_live_permission_policy(&policy);
     // 判定落盘面（append-only）：守卫判定此前只在内存、重启即散。
     // 纪律与原因见 `guard_decision_wiring` 模块（尺寸棘轮：装配根只留一行）。
     let mut guard = guard_decision_wiring::attach_decision_log(BehaviorChainGuardHook::new());
@@ -2786,6 +2774,16 @@ pub async fn resolve_canonical_cli_approval(
     approval: ApprovalId,
     decision: ApprovalDecision,
 ) -> Result<ApprovalResolution, String> {
+    // **设备面：先把宿主决定落进决定账，再续跑**（2026-11-01 安全审计 P3-1/P3-2 闭环）。
+    //
+    // 原先错在哪：设备面的放行**只认宿主决定账**（模型自称的授权人不作数），
+    // 但决定账原先**只有 IM 审批卡链会写** ⇒ 面板/CLI 批了却不落账
+    // ⇒ 执行面查无批准 ⇒ **永远拒绝**（人批了也执行不了 = 流程断链）。
+    //
+    // 现在为什么这样：宿主拍板这一步**接上**决定账 ⇒ 闭环。
+    // ⚠️ 顺序：**先落账、后续跑**（续跑会执行工具 ⇒ 决定账必须已就位）。
+    // ⚠️ 落账失败 ⇒ **不续跑**（与 IM 面同口径：「拒绝落账 ⇒ 拒绝即帧」）。
+    canonical_approval::record_device_host_decision(runtime, session, approval, &decision).await?;
     runtime
         .resolve_approval(session, approval, decision)
         .await

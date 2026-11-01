@@ -474,6 +474,89 @@ mod tests {
     use super::*;
     use crate::device::device_control::ActionGrade;
 
+    /// 宿主拍板 ⇒ 决定账落账 ⇒ **执行面查得到批准**（P3-1/P3-2 闭环的**回归钉**）。
+    ///
+    /// 少了这一步 ⇒ 面板批了也不落账 ⇒ 执行面查无批准 ⇒ 永远拒绝（流程断链）。
+    #[test]
+    fn host_decision_for_a_device_call_lands_in_the_decision_ledger() {
+        let dir = temp_dir("host-decision");
+        let ledger = DeviceApprovalDecisionLedger::at(dir.join("device-approval-decisions.jsonl"));
+        let arguments = serde_json::json!({
+            "action": "execute",
+            "device": "lamp",
+            "device_action": "toggle",
+            "plan_id": "plan-abc",
+        });
+
+        let plan_id = record_host_decision_for_call(
+            &ledger,
+            "tool.device_control",
+            &arguments,
+            true,
+            "本地审批面板",
+            None,
+        )
+        .expect("落账")
+        .expect("设备面调用 ⇒ 应落账");
+        assert_eq!(plan_id, "plan-abc");
+
+        // 执行面读的就是这本账 ⇒ 必须查到「批准」+ 宿主署名。
+        let record = ledger
+            .decision_record_for("plan-abc")
+            .expect("查决定")
+            .expect("有决定");
+        assert_eq!(record.decision, DeviceActionDecision::Approved);
+        assert_eq!(record.decided_by, "本地审批面板");
+    }
+
+    /// 非设备面调用 ⇒ **不落账**（不是本账的事，别污染账本）。
+    #[test]
+    fn host_decision_for_a_non_device_call_does_not_touch_the_ledger() {
+        let dir = temp_dir("host-decision-other");
+        let ledger = DeviceApprovalDecisionLedger::at(dir.join("device-approval-decisions.jsonl"));
+        let arguments = serde_json::json!({"command": "ls"});
+
+        let landed = record_host_decision_for_call(
+            &ledger,
+            "tool.shell",
+            &arguments,
+            true,
+            "本地审批面板",
+            None,
+        )
+        .expect("不落账也不报错");
+        assert!(landed.is_none(), "非设备面调用不该落账");
+        assert!(
+            ledger.scan().expect("scan").records.is_empty(),
+            "账本应为空"
+        );
+    }
+
+    /// 拒绝也要落账（**一计划一决定**：拒绝即关账，不给翻案空间）。
+    #[test]
+    fn host_rejection_is_also_recorded() {
+        let dir = temp_dir("host-reject");
+        let ledger = DeviceApprovalDecisionLedger::at(dir.join("device-approval-decisions.jsonl"));
+        let arguments = serde_json::json!({"action": "execute", "plan_id": "plan-x"});
+
+        record_host_decision_for_call(
+            &ledger,
+            "tool.device_control",
+            &arguments,
+            false,
+            "本地审批面板",
+            None,
+        )
+        .expect("落账")
+        .expect("应落账");
+
+        let record = ledger
+            .decision_record_for("plan-x")
+            .expect("查决定")
+            .expect("有决定");
+        assert_eq!(record.decision, DeviceActionDecision::Rejected);
+    }
+
     fn temp_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "apeireth-device-approval-{tag}-{}",
@@ -638,4 +721,74 @@ mod tests {
             "决定词表闭合"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// 宿主决定落账 (面板 / CLI 批准 ⇒ 决定账)
+// ---------------------------------------------------------------------------
+
+/// 宿主（本地审批面板 / CLI）对一次**设备面**工具调用拍板时，把决定**落进决定账**。
+///
+/// # 为什么需要这个口（2026-11-01 安全审计 P3-1/P3-2 的**闭环**）
+///
+/// 修复后，设备面的放行**只认宿主决定账**（模型自称的授权人不作数）
+/// ⇒ 但决定账原先**只有 IM 设备审批卡链会写**
+/// ⇒ 面板/CLI 批了却**不落账** ⇒ 执行面查无批准 ⇒ **永远拒绝**（流程断链）。
+/// ⇒ 本函数把「宿主拍板」这一步**接上**决定账 ⇒ 闭环。
+///
+/// # 落哪个计划
+///
+/// 设备面的审批发生在 **`execute`** 这一拍（`plan` / `preview` 直接放行）
+/// ⇒ pending approval 里的工具调用参数**自带 `plan_id`**
+/// ⇒ 直接取用，**不重算**（重算要设备表 + 分级词表，容易与执行面漂移）。
+///
+/// # 返回
+///
+/// * [`Some`]（`plan_id`）= 已落账；
+/// * [`None`] = **不是设备面调用**（或参数里没有 `plan_id`）⇒ **不落账**（不是本账的事）。
+///
+/// # 失败口径
+///
+/// 写账失败 ⇒ [`Err`]（真因如实）⇒ 调用方**不执行**该次调用
+/// （与 IM 面同口径：「拒绝落账 ⇒ 拒绝即帧」）。
+pub fn record_host_decision_for_call(
+    decisions: &DeviceApprovalDecisionLedger,
+    tool_name: &str,
+    arguments: &serde_json::Value,
+    approved: bool,
+    decided_by: &str,
+    im_card_id: Option<String>,
+) -> Result<Option<String>, String> {
+    if tool_name != super::device_control::DEVICE_CONTROL_CAPABILITY_ID {
+        return Ok(None);
+    }
+    let Some(plan_id) = arguments
+        .get("plan_id")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let record = DeviceApprovalDecisionRecord {
+        plan_id: plan_id.to_string(),
+        decision: if approved {
+            DeviceActionDecision::Approved
+        } else {
+            DeviceActionDecision::Rejected
+        },
+        decided_by: decided_by.to_string(),
+        im_card_id,
+        at_ms: current_epoch_ms(),
+    };
+    decisions.append(&record)?;
+    Ok(Some(plan_id.to_string()))
+}
+
+/// 当前 epoch 毫秒（决定账的时间戳）。
+fn current_epoch_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_millis() as i64)
+        .unwrap_or_default()
 }
