@@ -15,7 +15,8 @@ use apeireth_tools_canonical::exposure_audit::ExposureAuditTool;
 use apeireth_tools_canonical::repo_map_tool::{RepoMapConfig, RepoMapTool};
 use apeireth_tools_canonical::{
     authorized_git_write_policy, authorized_worktree_apply_policy, content_feed_capability,
-    git_write_capability, worktree_apply_capability, worktree_plan_capability, AroundPolicy,
+    git_write_capability, git_write_capability_with_live_policy, worktree_apply_capability,
+    worktree_apply_capability_with_live_policy, worktree_plan_capability, AroundPolicy,
     ContentFeedConfig, FetchConfig, FetchTool, FilesystemTool, ObservedGate, PipelinedCapability,
     RepoTool, SearchTool, SelfStatusSource, SelfStatusTool, ShellTool, ToolExecutionPipeline,
     TrustedShellConfig, DEFAULT_MAX_TIMEOUT_MS,
@@ -639,7 +640,12 @@ pub struct GitWriteModule {
 impl GitWriteModule {
     /// Create the graded git-write module over the workspace root.
     pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
-        let tool = git_write_capability(workspace_root, authorized_git_write_policy());
+        // ⭐ **共享 live 策略槽**（2026-11-01 P3-6 推广）：stage-1 与治理链同源
+        // ⇒ 面板的热撤销对写工具面**立即生效**（原先读自建策略 ⇒ 撤销看不见）。
+        let tool = git_write_capability_with_live_policy(
+            workspace_root,
+            shared_live_permission_policy_slot(),
+        );
         Self { tool }
     }
 
@@ -711,8 +717,12 @@ pub struct WorktreeApplyModule {
 impl WorktreeApplyModule {
     /// Create the worktree-write module over the shared read-observation gate.
     pub fn new(workspace_root: impl Into<PathBuf>, gate: Arc<ObservedGate>) -> Self {
-        let tool =
-            worktree_apply_capability(workspace_root, gate, authorized_worktree_apply_policy());
+        // ⭐ **共享 live 策略槽**（2026-11-01 P3-6 推广）：stage-1 与治理链同源。
+        let tool = worktree_apply_capability_with_live_policy(
+            workspace_root,
+            gate,
+            shared_live_permission_policy_slot(),
+        );
         Self { tool }
     }
 
@@ -753,10 +763,11 @@ impl SkillDistillModule {
         let workspace_root = workspace_root.into();
         let library = apeireth_tools_canonical::SkillLibrary::new(skills_dir.into());
         Self {
-            tool: apeireth_tools_canonical::skill_distill_capability(
+            // ⭐ **共享 live 策略槽**（2026-11-01 P3-6 推广）：stage-1 与治理链同源。
+            tool: apeireth_tools_canonical::skill_distill_capability_with_slot(
                 workspace_root,
                 library,
-                apeireth_tools_canonical::authorized_skill_distill_policy(),
+                shared_live_permission_policy_slot(),
             ),
         }
     }
@@ -837,10 +848,11 @@ impl VoiceSpeakModule {
         config: apeireth_tools_canonical::VoiceSpeakConfig,
         engine: Arc<dyn apeireth_tools_canonical::SynthEngine>,
     ) -> Self {
-        let tool = apeireth_tools_canonical::voice_speak_capability(
+        // ⭐ **共享 live 策略槽**（2026-11-01 P3-6 推广）：stage-1 与治理链同源。
+        let tool = apeireth_tools_canonical::voice_speak_capability_with_slot(
             config,
             engine,
-            apeireth_tools_canonical::authorized_voice_speak_policy(),
+            shared_live_permission_policy_slot(),
         );
         Self { tool }
     }
@@ -1008,9 +1020,11 @@ impl DocOpsModule {
     pub fn new(config: apeireth_tools_canonical::DocOpsConfig) -> Self {
         let counters = apeireth_tools_canonical::DocOpsCounters::new();
         Self {
-            tool: apeireth_tools_canonical::doc_ops_capability_shared(
+            // ⭐ **共享 live 策略槽**（2026-11-01 P3-6 推广）：stage-1 与治理链同源。
+            tool: apeireth_tools_canonical::doc_ops_capability_shared_with_slot(
                 config,
                 Arc::clone(&counters),
+                shared_live_permission_policy_slot(),
             ),
             counters,
         }
@@ -1058,9 +1072,11 @@ impl SheetOpsModule {
     pub fn new(config: apeireth_tools_canonical::SheetOpsConfig) -> Self {
         let counters = apeireth_tools_canonical::SheetOpsCounters::new();
         Self {
-            tool: apeireth_tools_canonical::sheet_ops_capability_shared(
+            // ⭐ **共享 live 策略槽**（2026-11-01 P3-6 推广）：stage-1 与治理链同源。
+            tool: apeireth_tools_canonical::sheet_ops_capability_shared_with_slot(
                 config,
                 Arc::clone(&counters),
+                shared_live_permission_policy_slot(),
             ),
             counters,
         }
@@ -1203,8 +1219,12 @@ impl DeviceControlModule {
                 devices_file,
             );
         Self {
-            tool: apeireth_tools_canonical::device::device_control::device_control_capability(
+            // ⭐ **共享 live 策略槽**（2026-11-01 P3-6 推广）：stage-1 与治理链同源。
+            // ⚠️ 设备面的**宿主拍板链**（决定账/推送账）**零改动** ⇒ 这里只多问一句
+            // 「宿主还授权吗」⇒ 撤销即刻生效。
+            tool: apeireth_tools_canonical::device::device_control::device_control_capability_with_slot(
                 Arc::clone(&runner),
+                shared_live_permission_policy_slot(),
             ),
             runner,
         }

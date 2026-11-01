@@ -16,6 +16,8 @@ pub mod apply_patch;
 // 受控文件写入生产工具面 (`tool.apply_patch`): 事务补丁原语 + 读前观测门禁
 // 接线 + 写入风险映射 (require-approval 档) + 单调边界 Guard + 五段流水线。
 pub mod apply_patch_tool;
+/// **进程内共享的 live 权限策略**（宿主授权的唯一真源；各工具面现读）。
+pub mod live_policy;
 // G5 备份恢复 (伙伴的「记忆保险箱」): 备份格式 (目录快照 + manifest.json 逐文件
 // SHA-256 摘要) + 导出/恢复/校验引擎 (宁拒不损 + 原子落位 + 版本显式拒) +
 // `tool.backup_export` (凭据不随行, 密钥/令牌面显式排除)。
@@ -182,7 +184,8 @@ pub use content_feed::{
 };
 pub use doc_ops::{
     authorized_doc_ops_policy, doc_ops_approval_reason, doc_ops_capability,
-    doc_ops_capability_shared, doc_ops_enabled_from_env, doc_ops_params_refusal, doc_ops_pipeline,
+    doc_ops_capability_shared, doc_ops_capability_shared_with_slot, doc_ops_capability_with_slot,
+    doc_ops_enabled_from_env, doc_ops_params_refusal, doc_ops_pipeline, doc_ops_pipeline_with_slot,
     is_doc_ops_write_action, DocOpsApprovalHook, DocOpsBoundaryGuard, DocOpsConfig, DocOpsCounters,
     DocOpsError, DocOpsParams, DocOpsRiskMappingHook, DocOpsRunner, DocOpsTool,
     ACTION_DOCX_EXTRACT_TEXT, ACTION_DOCX_OUTLINE, ACTION_PDF_EXTRACT_PAGES,
@@ -216,11 +219,12 @@ pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
 pub use git_write::{
     authorized_git_write_policy, classify_git_write, git_write_capability,
-    git_write_human_approval_floor, git_write_pipeline, git_write_plan_for_arguments,
-    GitWriteBoundaryGuard, GitWriteParams, GitWritePlan, GitWriteReleaseTier,
-    GitWriteRiskMappingHook, GitWriteTier, GitWriteTierApprovalHook, GitWriteTool, GradedSegment,
-    GIT_WRITE_CAPABILITY_ID, GIT_WRITE_TIMEOUT_MS, GIT_WRITE_TOOL_DESCRIPTION, GIT_WRITE_TOOL_NAME,
-    REFUSAL_L3_PREFIX, REFUSAL_MORPH_PREFIX, REFUSAL_OFFLIST_PREFIX,
+    git_write_capability_with_live_policy, git_write_human_approval_floor, git_write_pipeline,
+    git_write_pipeline_with_live_policy, git_write_plan_for_arguments, GitWriteBoundaryGuard,
+    GitWriteParams, GitWritePlan, GitWriteReleaseTier, GitWriteRiskMappingHook, GitWriteTier,
+    GitWriteTierApprovalHook, GitWriteTool, GradedSegment, GIT_WRITE_CAPABILITY_ID,
+    GIT_WRITE_TIMEOUT_MS, GIT_WRITE_TOOL_DESCRIPTION, GIT_WRITE_TOOL_NAME, REFUSAL_L3_PREFIX,
+    REFUSAL_MORPH_PREFIX, REFUSAL_OFFLIST_PREFIX,
 };
 pub use guardrail::{
     EgressSweepResult, LeakedCredentialKind, PreCallGuardError, ToolGuardrail, TripwireScanResult,
@@ -298,8 +302,9 @@ pub use self_status::{
 };
 pub use sheet_ops::{
     authorized_sheet_ops_policy, is_sheet_ops_write_action, sheet_ops_approval_reason,
-    sheet_ops_capability, sheet_ops_capability_shared, sheet_ops_enabled_from_env,
-    sheet_ops_params_refusal, sheet_ops_pipeline, SheetOpsApprovalHook, SheetOpsBoundaryGuard,
+    sheet_ops_capability, sheet_ops_capability_shared, sheet_ops_capability_shared_with_slot,
+    sheet_ops_capability_with_slot, sheet_ops_enabled_from_env, sheet_ops_params_refusal,
+    sheet_ops_pipeline, sheet_ops_pipeline_with_slot, SheetOpsApprovalHook, SheetOpsBoundaryGuard,
     SheetOpsConfig, SheetOpsCounters, SheetOpsError, SheetOpsParams, SheetOpsRiskMappingHook,
     SheetOpsRunner, SheetOpsTool, ACTION_AGGREGATE, ACTION_EXPORT_CSV, ACTION_FILTER,
     ACTION_FORMULA, ACTION_READ, ACTION_SORT, ACTION_SUMMARY, AGGREGATE_FUNCTIONS,
@@ -311,34 +316,37 @@ pub use sheet_ops::{
 pub use shell::{ShellTool, TrustedShellConfig};
 pub use skill::{
     authorized_skill_distill_policy, build_skill_disclosure, distill_into,
-    skill_distill_capability, skill_distill_pipeline, skill_search_capability,
-    skill_search_pipeline, SkillCard, SkillCardDraft, SkillDistillApprovalHook,
-    SkillDistillBoundaryGuard, SkillDistillParams, SkillDistillReport, SkillDistillRiskMappingHook,
-    SkillDistillTool, SkillLibrary, SkillLibraryError, SkillRevisionAudit,
-    SkillSearchBoundaryGuard, SkillSearchParams, SkillSearchTool, SkillSource, SkillSourceKind,
-    SKILL_DISTILL_CAPABILITY_ID, SKILL_DISTILL_TIMEOUT_MS, SKILL_DISTILL_TOOL_DESCRIPTION,
-    SKILL_DISTILL_TOOL_NAME, SKILL_SEARCH_CAPABILITY_ID, SKILL_SEARCH_TOOL_DESCRIPTION,
-    SKILL_SEARCH_TOOL_NAME,
+    skill_distill_capability, skill_distill_capability_with_slot, skill_distill_pipeline,
+    skill_distill_pipeline_with_slot, skill_search_capability, skill_search_pipeline, SkillCard,
+    SkillCardDraft, SkillDistillApprovalHook, SkillDistillBoundaryGuard, SkillDistillParams,
+    SkillDistillReport, SkillDistillRiskMappingHook, SkillDistillTool, SkillLibrary,
+    SkillLibraryError, SkillRevisionAudit, SkillSearchBoundaryGuard, SkillSearchParams,
+    SkillSearchTool, SkillSource, SkillSourceKind, SKILL_DISTILL_CAPABILITY_ID,
+    SKILL_DISTILL_TIMEOUT_MS, SKILL_DISTILL_TOOL_DESCRIPTION, SKILL_DISTILL_TOOL_NAME,
+    SKILL_SEARCH_CAPABILITY_ID, SKILL_SEARCH_TOOL_DESCRIPTION, SKILL_SEARCH_TOOL_NAME,
 };
 pub use spill::{safe_segment, SpillStore, SPILL_THRESHOLD_CHARS};
 pub use stealth_crawler::{ExtractedMediaItem, StealthBrowserConfig, StealthCrawlerEngine};
 pub use voice::{
     authorized_voice_speak_policy, system_synth_engine, tune_voice_params, voice_speak_capability,
-    voice_speak_pipeline, EmotionBand, EmotionReader, PadReading, PlaybackPolicy, QuietClock,
-    QuietHours, SpeakGate, SpeakOutcome, SpeakScope, SpokenLedger, SpokenStatus, SpokenUtterance,
-    SynthEngine, TuneDelta, TunedVoiceParams, VoiceSpeakBoundaryGuard, VoiceSpeakConfig,
-    VoiceSpeakParams, VoiceSpeakRiskMappingHook, VoiceSpeakTool, DEFAULT_VOICE_LABEL,
-    EMOTION_TUNE_TABLE, SPOKEN_LEDGER_FILE, VOICE_SPEAK_CAPABILITY_ID, VOICE_SPEAK_MAX_TEXT_CHARS,
+    voice_speak_capability_with_slot, voice_speak_pipeline, voice_speak_pipeline_with_slot,
+    EmotionBand, EmotionReader, PadReading, PlaybackPolicy, QuietClock, QuietHours, SpeakGate,
+    SpeakOutcome, SpeakScope, SpokenLedger, SpokenStatus, SpokenUtterance, SynthEngine, TuneDelta,
+    TunedVoiceParams, VoiceSpeakBoundaryGuard, VoiceSpeakConfig, VoiceSpeakParams,
+    VoiceSpeakRiskMappingHook, VoiceSpeakTool, DEFAULT_VOICE_LABEL, EMOTION_TUNE_TABLE,
+    SPOKEN_LEDGER_FILE, VOICE_SPEAK_CAPABILITY_ID, VOICE_SPEAK_MAX_TEXT_CHARS,
     VOICE_SPEAK_SCOPE_ENV, VOICE_SPEAK_TIMEOUT_MS, VOICE_SPEAK_TOOL_DESCRIPTION,
     VOICE_SPEAK_TOOL_NAME,
 };
 pub use worktree_apply::{
     apply_boundary_refusal, apply_summary, authorized_worktree_apply_policy,
-    cross_check_change_order, prepare_apply, worktree_apply_capability, worktree_apply_pipeline,
-    PreparedApply, VerifyCommand, WorktreeApplyApprovalHook, WorktreeApplyBoundaryGuard,
-    WorktreeApplyParams, WorktreeApplyReport, WorktreeApplyRiskMappingHook, WorktreeApplyTool,
-    REFUSAL_DRIFT_PREFIX, REFUSAL_VERIFY_PREFIX, WORKTREE_APPLY_CAPABILITY_ID,
-    WORKTREE_APPLY_TIMEOUT_MS, WORKTREE_APPLY_TOOL_DESCRIPTION, WORKTREE_APPLY_TOOL_NAME,
+    cross_check_change_order, prepare_apply, worktree_apply_capability,
+    worktree_apply_capability_with_live_policy, worktree_apply_pipeline,
+    worktree_apply_pipeline_with_live_policy, PreparedApply, VerifyCommand,
+    WorktreeApplyApprovalHook, WorktreeApplyBoundaryGuard, WorktreeApplyParams,
+    WorktreeApplyReport, WorktreeApplyRiskMappingHook, WorktreeApplyTool, REFUSAL_DRIFT_PREFIX,
+    REFUSAL_VERIFY_PREFIX, WORKTREE_APPLY_CAPABILITY_ID, WORKTREE_APPLY_TIMEOUT_MS,
+    WORKTREE_APPLY_TOOL_DESCRIPTION, WORKTREE_APPLY_TOOL_NAME,
 };
 pub use worktree_plan::{
     change_order_refusal, validated_change_order, worktree_plan_capability, worktree_plan_pipeline,

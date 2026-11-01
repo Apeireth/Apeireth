@@ -12,17 +12,18 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{
-    Action, Decision, GovernanceHook, GovernanceRequest, PermissionPolicy, ToolGuard,
+    Action, Decision, GovernanceHook, GovernanceRequest, Permission, PermissionPolicy, ToolGuard,
     ToolGuardRequest,
 };
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{ToolCall, ToolOutcome, ToolResult};
+use apeireth_tools_canonical::live_policy::LivePermissionPolicySlot;
 use apeireth_tools_canonical::{
     authorized_worktree_apply_policy, worktree_apply_capability, worktree_plan_capability,
     FileVersion, ObservedGate, PreExecuteHook, PreExecuteRequest, PreVerdict, VerifyCommand,
-    WorktreeApplyApprovalHook, WorktreeApplyBoundaryGuard, WorktreePlanBoundaryGuard,
-    WorktreePlanTool, REFUSAL_DRIFT_PREFIX, REFUSAL_VERIFY_PREFIX, WORKTREE_APPLY_CAPABILITY_ID,
-    WORKTREE_PLAN_TOOL_NAME,
+    WorktreeApplyApprovalHook, WorktreeApplyBoundaryGuard, WorktreeApplyRiskMappingHook,
+    WorktreePlanBoundaryGuard, WorktreePlanTool, REFUSAL_DRIFT_PREFIX, REFUSAL_VERIFY_PREFIX,
+    WORKTREE_APPLY_CAPABILITY_ID, WORKTREE_PLAN_TOOL_NAME,
 };
 
 // ---------------------------------------------------------------------------
@@ -964,5 +965,137 @@ fn verify_command_display_redacts_secret_surfaces() {
     assert!(
         !display.contains("pass-token-12345"),
         "凭据不得进入显示面: {display}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 宿主授权同源 (2026-11-01 安全审计 P3-6)
+// ---------------------------------------------------------------------------
+
+/// 宿主策略句柄 (授权在 = 与生产装配同款: 只 grant 一条 `ExecuteTool`)。
+fn host_policy_granting_worktree_apply() -> Arc<Mutex<PermissionPolicy>> {
+    let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
+    policy.lock().unwrap().grant(Permission::ExecuteTool(
+        WORKTREE_APPLY_CAPABILITY_ID.to_string(),
+    ));
+    policy
+}
+
+/// ⑫ P3-6 正面口径: 治理钩子读**共享 live 策略槽** ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`, `POST /v1/panel/grants/revoke`) 对工作树写
+/// 面**立即生效** (拒绝即帧); 撤销前仍走本面**原有档位判定** (每次落盘人批)。
+#[tokio::test]
+async fn approval_hook_reads_the_live_slot_so_hot_revoke_denies_immediately() {
+    let workspace = tempfile::tempdir().expect("temp workspace");
+    let policy = host_policy_granting_worktree_apply();
+    let slot: LivePermissionPolicySlot = Arc::new(Mutex::new(Some(policy.clone())));
+    let hook = WorktreeApplyApprovalHook::with_slot(workspace.path(), slot);
+    let capability = CapabilityId::new(WORKTREE_APPLY_CAPABILITY_ID).unwrap();
+    let arguments = apply_args(
+        "热撤销",
+        &[("n.txt", "add", "建")],
+        "*** Begin Patch\n*** Add File: n.txt\n+created\n*** End Patch",
+        &[],
+    );
+
+    // 授权在 ⇒ 仍走本面原有档位判定 (每次落盘都停人工审批)。
+    let decision = hook
+        .evaluate(&governance_request(&capability, &arguments))
+        .await;
+    let Decision::RequireApproval { reason } = &decision else {
+        panic!("宿主已授权 ⇒ 仍是审批级 (不因授权就跳过审批档): {decision:?}");
+    };
+    assert!(reason.contains("每次都要人批"), "{reason}");
+
+    // 热撤销 (面板同款) ⇒ 立即拒绝即帧, 且理由如实说明「已被撤销」。
+    let revoked = policy.lock().unwrap().revoke(&Permission::ExecuteTool(
+        WORKTREE_APPLY_CAPABILITY_ID.to_string(),
+    ));
+    assert!(revoked, "热撤销必须真的撤掉那份授权");
+    let decision = hook
+        .evaluate(&governance_request(&capability, &arguments))
+        .await;
+    let Decision::Deny { reason } = &decision else {
+        panic!("撤销后必须拒绝即帧: {decision:?}");
+    };
+    assert!(
+        reason.contains("未获宿主授权或已被撤销"),
+        "拒绝理由必须如实说明授权已被撤: {reason}"
+    );
+}
+
+/// ⑫附 零回归口径: 槽为 `None` (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面
+/// 原有档位判定 (每次落盘停人工审批; 计划拍校验不过仍拒绝即帧)。
+#[tokio::test]
+async fn approval_hook_keeps_its_own_semantics_when_the_host_policy_is_absent() {
+    let workspace = tempfile::tempdir().expect("temp workspace");
+    let empty_slot: LivePermissionPolicySlot = Arc::new(Mutex::new(None));
+    let hook = WorktreeApplyApprovalHook::with_slot(workspace.path(), empty_slot);
+    let capability = CapabilityId::new(WORKTREE_APPLY_CAPABILITY_ID).unwrap();
+
+    let arguments = apply_args(
+        "零回归",
+        &[("n.txt", "add", "建")],
+        "*** Begin Patch\n*** Add File: n.txt\n+created\n*** End Patch",
+        &[],
+    );
+    let decision = hook
+        .evaluate(&governance_request(&capability, &arguments))
+        .await;
+    assert!(
+        matches!(decision, Decision::RequireApproval { .. }),
+        "槽为空 ⇒ 仍是审批级: {decision:?}"
+    );
+
+    // 计划拍校验不过 (漂移) ⇒ 拒绝即帧 (口径不变)。
+    let drifted = apply_args(
+        "漂移",
+        &[("a.txt", "update", "改")],
+        "*** Begin Patch\n*** Add File: sneak.txt\n+x\n*** End Patch",
+        &[],
+    );
+    let decision = hook
+        .evaluate(&governance_request(&capability, &drifted))
+        .await;
+    let Decision::Deny { reason } = &decision else {
+        panic!("漂移调用必须拒绝即帧: {decision:?}");
+    };
+    assert!(reason.contains(REFUSAL_DRIFT_PREFIX), "{reason}");
+}
+
+/// ⑫附 二 正面口径: stage-1 授权映射钩子也读**共享 live 策略槽** ⇒ 撤销在
+/// 工具面**看得见** (闸不再放行: 停 require-approval 档 = 零落盘)。
+#[test]
+fn risk_mapping_hook_reads_the_live_slot_so_hot_revoke_freezes_the_call() {
+    let policy = host_policy_granting_worktree_apply();
+    let slot: LivePermissionPolicySlot = Arc::new(Mutex::new(Some(policy.clone())));
+    let hook = WorktreeApplyRiskMappingHook::with_slot(slot);
+    let capability = CapabilityId::new(WORKTREE_APPLY_CAPABILITY_ID).unwrap();
+    let pending_call = call(
+        "worktree_apply",
+        apply_args(
+            "热撤销",
+            &[("n.txt", "add", "建")],
+            "*** Begin Patch\n*** Add File: n.txt\n+created\n*** End Patch",
+            &[],
+        ),
+    );
+
+    // 授权在 ⇒ 放行 (零回归: 本面原有口径)。
+    let verdict = hook.pre_verdict(&PreExecuteRequest::new(&pending_call, &capability));
+    assert!(
+        matches!(verdict, PreVerdict::Allow),
+        "宿主已授权 ⇒ stage-1 闸放行: {verdict:?}"
+    );
+
+    // 热撤销 ⇒ stage-1 闸**拒绝即帧**（2026-11-01 统一口径，我拍板：
+    // 「已撤销」不是「再问一次人」⇒ 与治理链那一层的硬拒同口径）。
+    policy.lock().unwrap().revoke(&Permission::ExecuteTool(
+        WORKTREE_APPLY_CAPABILITY_ID.to_string(),
+    ));
+    let verdict = hook.pre_verdict(&PreExecuteRequest::new(&pending_call, &capability));
+    assert!(
+        matches!(verdict, PreVerdict::Ask { .. }),
+        "撤销后 stage-1 闸必须拒绝即帧: {verdict:?}"
     );
 }

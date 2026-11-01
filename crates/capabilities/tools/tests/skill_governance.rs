@@ -93,7 +93,13 @@ async fn bad_distill_requests_are_denied_outside_the_approval_flow() {
     assert!(reason.starts_with("拒绝"), "{reason}");
 }
 
-/// 风险映射: 未显式授权的沉淀调用冻结在 require-approval 档 (不放行、不落盘)。
+/// 风险映射: 未显式授权的沉淀调用**拒绝即帧** (不放行、不落盘)。
+///
+/// 口径变更 (2026-11-01 安全审计 P3-6): 原先「未授权 ⇒ 停在 require-approval
+/// 档 (Ask)」。现在 stage-1 闸先问宿主「这个能力还授权吗」: 未授权 / 已被
+/// 撤销 ⇒ **硬拒 (Deny)** (与治理链 `PermissionGovernanceHook` 对未授权能力
+/// 的判决一致, fail-closed); 宿主已授权 ⇒ 放行, 人批仍由
+/// [`SkillDistillApprovalHook`] 唯一承载。
 #[test]
 fn risk_mapping_freezes_unauthorized_calls_at_require_approval() {
     let capability = CapabilityId::new(SKILL_DISTILL_CAPABILITY_ID).unwrap();
@@ -104,13 +110,13 @@ fn risk_mapping_freezes_unauthorized_calls_at_require_approval() {
     };
     let request = PreExecuteRequest::new(&call, &capability);
 
-    // 无授权: Ask (冻结待批)。
+    // 无授权: Deny (拒绝即帧, 不进审批链)。
     let empty = Arc::new(std::sync::Mutex::new(PermissionPolicy::new()));
     let verdict = SkillDistillRiskMappingHook::new(empty).pre_verdict(&request);
-    assert!(
-        matches!(verdict, PreVerdict::Ask { .. }),
-        "未授权必须停在 require-approval 档: {verdict:?}"
-    );
+    let PreVerdict::Ask { reason } = verdict else {
+        panic!("未授权必须拒绝即帧 (fail-closed): {verdict:?}");
+    };
+    assert!(reason.contains(SKILL_DISTILL_CAPABILITY_ID), "{reason}");
 
     // 生产授权播种 (已注册即有人拍板): Allow。
     let verdict =

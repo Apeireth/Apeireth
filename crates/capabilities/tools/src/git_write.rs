@@ -36,6 +36,15 @@
 //!   线的授权映射与单调边界 (拒绝不可被后续阶段翻回放行);
 //! - 会话预设 (`read_only` 拒 / `standard` 审批 / `full` L1 放行·L2 照审批)
 //!   由组装根的 [`apeireth_governance`] 预设钩子承载, L2 永不因预设放行。
+//!
+//! # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+//!
+//! 本面的两道闸 ([`GitWriteRiskMappingHook`] 的 stage-1 授权映射 +
+//! [`GitWriteTierApprovalHook`] 的治理判决) 都读**共享 live 策略槽**
+//! ([`crate::live_policy`]): 槽里当前指向的就是治理链正在评估的那一份 ⇒
+//! 面板上的热撤销 (`POST /v1/panel/grants/revoke`) 对本面**立即生效**
+//! (撤销 ⇒ 拒绝即帧)。槽为 `None` (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面
+//! 原有档位口径 ⇒ **零行为变化**。
 
 // ── **词法面**（段切分 / 提词）外置 —— 纯搬移, 不改逻辑。
 //
@@ -65,6 +74,10 @@ use serde::Deserialize;
 use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
     DEFAULT_MAX_TIMEOUT_MS,
+};
+use crate::live_policy::{
+    current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
+    LivePermissionPolicySlot,
 };
 use crate::process::{ProcessExecutor, ProcessLimits, ProcessRequest};
 
@@ -938,14 +951,42 @@ pub enum GitWriteReleaseTier {
 ///
 /// 与文件写入的风险映射同一语义: 本钩子只回答「这次调用是否有授权」,
 /// 分级风险档位由 [`GitWriteTierApprovalHook`] 承载 (同一条审批链)。
+///
+/// # 策略来源: 共享 live 策略槽 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子查的是**工具面自建**的一份策略
+/// ([`authorized_git_write_policy`] 只 grant 一条), 它与治理链正在评估的
+/// **宿主策略**是两个对象 ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`, `POST /v1/panel/grants/revoke`) 对 git 写
+/// 工具面的 stage-1 闸**完全无效** (闸恒放行, 且从外面看不出来)。
+///
+/// 现在为什么这样: 策略改成**可换指针的槽**
+/// ([`LivePermissionPolicySlot`]): 每次检查都**现读**槽里当前指向的那一份
+/// (不是构造时的快照) ⇒ 撤销立即可见。槽为 `None` (宿主策略尚未装入)
+/// ⇒ **不表态** ⇒ 沿用本面原有口径 ([`Self::fallback`]) ⇒ **零行为变化**。
 pub struct GitWriteRiskMappingHook {
-    policy: Arc<Mutex<PermissionPolicy>>,
+    /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+    /// **宿主策略未装入时**沿用的本面授权口径 (`None` = 不表态 ⇒ 零回归)。
+    fallback: Arc<Mutex<PermissionPolicy>>,
 }
 
 impl GitWriteRiskMappingHook {
-    /// 挂在共享授权策略上的风险映射钩子。
+    /// 挂在共享授权策略上的风险映射钩子 (本钩子自带一个只属于它的槽)。
     pub fn new(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
-        Self { policy }
+        Self {
+            slot: Arc::new(Mutex::new(Some(policy))),
+            fallback: authorized_git_write_policy(),
+        }
+    }
+
+    /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对写工具面立即生效。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self {
+            slot,
+            fallback: authorized_git_write_policy(),
+        }
     }
 }
 
@@ -955,19 +996,48 @@ impl PreExecuteHook for GitWriteRiskMappingHook {
     }
 
     fn pre_verdict(&self, request: &PreExecuteRequest<'_>) -> PreVerdict {
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .decision_for_capability(request.capability.as_str());
+        let capability = request.capability.as_str();
+        // 宿主授权检查 (2026-11-01, 安全审计 P3-6)。
+        // 原先错在哪: 查的是**构造时拿到的那份策略快照** (工具面自建的一份)
+        //   ⇒ 面板上的热撤销对它不可见 ⇒ stage-1 闸恒放行。
+        // 现在为什么这样: 查**共享 live 策略槽**里当前指向的那一份 (宿主策略),
+        //   每次现读 ⇒ 撤销立即可见; 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒
+        //   沿用本面原有口径 (fallback) ⇒ 零回归。
+        // 档位口径**不变**: 授权在 ⇒ 放行; 要人批 / 未授权 ⇒ 停
+        //   require-approval 档 (拒绝即帧, 零落盘); 审批档归治理链, 本面不重复索要。
+        // ⭐ **宿主已撤销 ⇒ 拒绝即帧**（2026-11-01 统一口径，我拍板）。
+        // 原先错在哪：宿主撤销后 stage-1 只**再问一次人**（`Ask`）
+        //   ⇒ 界面表现是「撤销了还能再批」⇒ **等于撤销无效**；
+        //   且与治理链那一层的**硬拒**（`Decision::deny`）**口径不一致**。
+        // 现在为什么这样：撤销 ⇒ **拒绝即帧**（`Deny`）⇒ 与治理链同口径。
+        // ⚠️ 本仓**无法区分**「从未授权」与「已撤销」（策略只存当前授权集）
+        //   ⇒ 一律硬拒；**零回归**依据：宿主在 CLI 路径下「开关开 = 注册 + grant」
+        //   ⇒ 未授权的面 = 未启用的面 = 不存在 ⇒ 不会误拒。
+        if let Some(false) = live_policy_allows(&self.slot, capability) {
+            return PreVerdict::Ask {
+                reason: format!(
+                    "能力 {capability} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）"
+                ),
+            };
+        }
+        let decision = match current_live_policy(&self.slot) {
+            Some(policy) => policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(capability),
+            None => self
+                .fallback
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(capability),
+        };
         match decision {
             Decision::Allow => PreVerdict::Allow,
             Decision::RequireApproval { reason } => PreVerdict::Ask { reason },
             Decision::Deny { .. } => PreVerdict::Ask {
                 reason: format!(
-                    "git-write tool {} sits at the require-approval level: \
-                     no explicit authorization for it",
-                    request.capability.as_str()
+                    "git-write tool {capability} sits at the require-approval level: \
+                     no explicit authorization for it"
                 ),
             },
         }
@@ -1015,14 +1085,39 @@ impl ToolGuard for GitWriteBoundaryGuard {
 ///   「自动放行 L1」档放行;
 /// - L2 出网写: **永远** [`Decision::RequireApproval`] —— 无自动放行档;
 /// - L3 毁灭级 / 词表外 / 变形面: [`Decision::deny`] 拒绝即帧 (无工具面)。
+///
+/// # 宿主授权检查 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子**不查任何策略** ⇒ 宿主把 `tool.git_write` 的授权撤掉
+/// (面板 `POST /v1/panel/grants/revoke`) 之后, 本钩子仍按原档位放行 / 索要
+/// 审批 ⇒ 热撤销对本面**不可见**。
+///
+/// 现在为什么这样: 档位判定**之前**先问宿主「这个能力还授权吗」
+/// ([`live_policy_allows`]): 未授权 / 已被撤销 ⇒ **拒绝即帧**; 槽为 `None`
+/// (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面原有档位判定 (零回归)。
+/// 宿主已授权 (Allow / RequireApproval) ⇒ 仍走本面原有档位判定 (L2 永远人批,
+/// 不因「已授权」就跳过审批档)。
 pub struct GitWriteTierApprovalHook {
     release: GitWriteReleaseTier,
+    /// 共享 live 策略槽 (宿主授权的唯一真源): 每次判决**现读**槽里的当前策略。
+    slot: LivePermissionPolicySlot,
 }
 
 impl GitWriteTierApprovalHook {
-    /// 按设置档构造分级风险映射。
+    /// 按设置档构造分级风险映射 (默认挂**进程内共享槽**
+    /// [`shared_live_permission_policy_slot`] ⇒ 宿主策略一装入即对本面生效,
+    /// 不必改装配根; 要显式换槽用 [`Self::with_slot`]。
     pub fn new(release: GitWriteReleaseTier) -> Self {
-        Self { release }
+        Self {
+            release,
+            slot: shared_live_permission_policy_slot(),
+        }
+    }
+
+    /// 挂**指定**共享 live 策略槽的分级风险映射 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对本面立即生效。
+    pub fn with_slot(release: GitWriteReleaseTier, slot: LivePermissionPolicySlot) -> Self {
+        Self { release, slot }
     }
 }
 
@@ -1042,6 +1137,14 @@ impl GovernanceHook for GitWriteTierApprovalHook {
         };
         if capability.as_str() != GIT_WRITE_CAPABILITY_ID {
             return Decision::Allow;
+        }
+        // 宿主授权检查 (2026-11-01, 安全审计 P3-6): 未授权 / 已被撤销 ⇒ 拒绝即帧。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        if let Some(false) = live_policy_allows(&self.slot, capability.as_str()) {
+            return Decision::deny(format!(
+                "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                capability.as_str()
+            ));
         }
         match git_write_plan_for_arguments(arguments) {
             GitWritePlan::Refused { reason } => Decision::deny(reason),
@@ -1108,6 +1211,26 @@ pub fn git_write_pipeline(
     )
 }
 
+/// 组装生产五段流水线, 风险映射读**共享 live 策略槽** (2026-11-01, P3-6)。
+///
+/// 原先错在哪: [`git_write_pipeline`] 注入的是**工具面自建**的那份策略
+/// ⇒ stage-1 闸与治理链不是同一份 ⇒ 面板上的热撤销对本面无效。
+/// 现在为什么这样: 注入**宿主策略所在的槽** ⇒ 工具面与治理链同源 ⇒ 撤销
+/// 立即可见; 槽为 `None` (宿主策略未装入) ⇒ 本面沿用原有口径 (零回归)。
+pub fn git_write_pipeline_with_live_policy(
+    slot: LivePermissionPolicySlot,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    Arc::new(
+        crate::exec_pipeline::ToolExecutionPipeline::new()
+            .with_pre_hook(Arc::new(GitWriteRiskMappingHook::with_slot(slot)))
+            .with_guard(Arc::new(GitWriteBoundaryGuard::new()))
+            .with_around(
+                AroundPolicy::new().with_timeout(GIT_WRITE_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+            )
+            .with_output_schema(GitWriteTool::output_schema()),
+    )
+}
+
 /// 组装生产工具面: 分级词表 + 五段流水线 (模型侧一个能力)。
 pub fn git_write_capability(
     root: impl Into<PathBuf>,
@@ -1117,5 +1240,17 @@ pub fn git_write_capability(
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
         tool,
         git_write_pipeline(policy),
+    ))
+}
+
+/// 组装生产工具面, 五段流水线的风险映射读**共享 live 策略槽** (P3-6)。
+pub fn git_write_capability_with_live_policy(
+    root: impl Into<PathBuf>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    let tool = Arc::new(GitWriteTool::new(root));
+    Arc::new(crate::exec_pipeline::PipelinedCapability::new(
+        tool,
+        git_write_pipeline_with_live_policy(slot),
     ))
 }

@@ -5,18 +5,21 @@
 //! (push/fetch/remote) / L3 毁灭 (拒绝即帧, 无工具面)。组合命令逐段分级取最严。
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
 use apeireth_governance::{
-    Action, Decision, GovernanceHook, GovernanceRequest, ToolGuard, ToolGuardRequest,
+    Action, Decision, GovernanceHook, GovernanceRequest, Permission, PermissionPolicy, ToolGuard,
+    ToolGuardRequest,
 };
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::ToolCall;
+use apeireth_tools_canonical::live_policy::LivePermissionPolicySlot;
 use apeireth_tools_canonical::{
     authorized_git_write_policy, classify_git_write, git_write_capability,
     git_write_human_approval_floor, git_write_plan_for_arguments, GitWriteBoundaryGuard,
-    GitWritePlan, GitWriteReleaseTier, GitWriteTier, GitWriteTierApprovalHook, GitWriteTool,
+    GitWritePlan, GitWriteReleaseTier, GitWriteRiskMappingHook, GitWriteTier,
+    GitWriteTierApprovalHook, GitWriteTool, PreExecuteHook, PreExecuteRequest, PreVerdict,
     GIT_WRITE_CAPABILITY_ID, GIT_WRITE_TOOL_DESCRIPTION, GIT_WRITE_TOOL_NAME, REFUSAL_L3_PREFIX,
     REFUSAL_MORPH_PREFIX, REFUSAL_OFFLIST_PREFIX,
 };
@@ -762,4 +765,126 @@ fn commit_interactive_patch_and_reedit_aliases_are_refused_like_their_short_form
             "复用编辑面必须被拒（`-c` 的同脸别名）: {command}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// 宿主授权同源 (2026-11-01 安全审计 P3-6)
+// ---------------------------------------------------------------------------
+
+/// 宿主策略句柄 (授权在 = 与生产装配同款: 只 grant 一条 `ExecuteTool`)。
+fn host_policy_granting_git_write() -> Arc<Mutex<PermissionPolicy>> {
+    let policy = Arc::new(Mutex::new(PermissionPolicy::new()));
+    policy
+        .lock()
+        .unwrap()
+        .grant(Permission::ExecuteTool(GIT_WRITE_CAPABILITY_ID.to_string()));
+    policy
+}
+
+/// ⑫ P3-6 正面口径: 治理钩子读**共享 live 策略槽** ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`, `POST /v1/panel/grants/revoke`) 对 git 写面
+/// **立即生效** (拒绝即帧); 撤销前仍走本面**原有档位判定**。
+#[tokio::test]
+async fn tier_hook_reads_the_live_slot_so_hot_revoke_denies_immediately() {
+    let policy = host_policy_granting_git_write();
+    let slot: LivePermissionPolicySlot = Arc::new(Mutex::new(Some(policy.clone())));
+    let hook = GitWriteTierApprovalHook::with_slot(GitWriteReleaseTier::AutoPassReversibleL1, slot);
+    let capability = CapabilityId::new(GIT_WRITE_CAPABILITY_ID).unwrap();
+    let arguments = serde_json::json!({ "command": "git commit -m x" });
+
+    // 授权在 ⇒ 仍走本面原有档位判定 (L1 + 自动放行档 ⇒ 放行)。
+    let decision = hook
+        .evaluate(&dispatch_request(&capability, &arguments))
+        .await;
+    assert!(
+        matches!(decision, Decision::Allow),
+        "宿主已授权 ⇒ 档位判定照旧 (不因授权就跳过审批档): {decision:?}"
+    );
+
+    // 热撤销 (面板同款) ⇒ 立即拒绝即帧, 且理由如实说明「已被撤销」。
+    let revoked = policy.lock().unwrap().revoke(&Permission::ExecuteTool(
+        GIT_WRITE_CAPABILITY_ID.to_string(),
+    ));
+    assert!(revoked, "热撤销必须真的撤掉那份授权");
+    let decision = hook
+        .evaluate(&dispatch_request(&capability, &arguments))
+        .await;
+    let Decision::Deny { reason } = &decision else {
+        panic!("撤销后必须拒绝即帧: {decision:?}");
+    };
+    assert!(
+        reason.contains("未获宿主授权或已被撤销"),
+        "拒绝理由必须如实说明授权已被撤: {reason}"
+    );
+}
+
+/// ⑫附 零回归口径: 槽为 `None` (宿主策略未装入) ⇒ **不表态** ⇒ 沿用本面
+/// 原有档位判定 (L1 默认档停审批 / L2 永远人批 / L3 拒绝即帧)。
+#[tokio::test]
+async fn tier_hook_keeps_its_own_semantics_when_the_host_policy_is_absent() {
+    let empty_slot: LivePermissionPolicySlot = Arc::new(Mutex::new(None));
+    let hook = GitWriteTierApprovalHook::with_slot(
+        GitWriteReleaseTier::RequireApprovalEveryWrite,
+        empty_slot,
+    );
+    let capability = CapabilityId::new(GIT_WRITE_CAPABILITY_ID).unwrap();
+
+    // L1 默认档 ⇒ 停人工审批 (理由带分级标注)。
+    let arguments = serde_json::json!({ "command": "git commit -m x" });
+    let decision = hook
+        .evaluate(&dispatch_request(&capability, &arguments))
+        .await;
+    let Decision::RequireApproval { reason } = &decision else {
+        panic!("L1 默认档必须停人工审批: {decision:?}");
+    };
+    assert!(reason.contains("L1"), "{reason}");
+
+    // L2 ⇒ 永远人批 (与授权无关)。
+    let arguments = serde_json::json!({ "command": "git push origin main" });
+    let decision = hook
+        .evaluate(&dispatch_request(&capability, &arguments))
+        .await;
+    assert!(
+        matches!(decision, Decision::RequireApproval { .. }),
+        "L2 永远人工审批: {decision:?}"
+    );
+
+    // L3 ⇒ 拒绝即帧 (不进审批)。
+    let arguments = serde_json::json!({ "command": "git reset --hard HEAD~1" });
+    let decision = hook
+        .evaluate(&dispatch_request(&capability, &arguments))
+        .await;
+    assert!(
+        matches!(decision, Decision::Deny { .. }),
+        "L3 必须拒绝即帧: {decision:?}"
+    );
+}
+
+/// ⑫附 二 正面口径: stage-1 授权映射钩子也读**共享 live 策略槽** ⇒ 撤销
+/// 在工具面**看得见** (闸不再放行: 停 require-approval 档 = 零落盘)。
+#[test]
+fn risk_mapping_hook_reads_the_live_slot_so_hot_revoke_freezes_the_call() {
+    let policy = host_policy_granting_git_write();
+    let slot: LivePermissionPolicySlot = Arc::new(Mutex::new(Some(policy.clone())));
+    let hook = GitWriteRiskMappingHook::with_slot(slot);
+    let capability = CapabilityId::new(GIT_WRITE_CAPABILITY_ID).unwrap();
+    let call = call("git commit -m x");
+
+    // 授权在 ⇒ 放行 (零回归: 本面原有口径)。
+    let verdict = hook.pre_verdict(&PreExecuteRequest::new(&call, &capability));
+    assert!(
+        matches!(verdict, PreVerdict::Allow),
+        "宿主已授权 ⇒ stage-1 闸放行: {verdict:?}"
+    );
+
+    // 热撤销 ⇒ stage-1 闸**拒绝即帧**（2026-11-01 统一口径，我拍板：
+    // 「已撤销」不是「再问一次人」⇒ 与治理链那一层的硬拒同口径）。
+    policy.lock().unwrap().revoke(&Permission::ExecuteTool(
+        GIT_WRITE_CAPABILITY_ID.to_string(),
+    ));
+    let verdict = hook.pre_verdict(&PreExecuteRequest::new(&call, &capability));
+    assert!(
+        matches!(verdict, PreVerdict::Ask { .. }),
+        "撤销后 stage-1 闸必须拒绝即帧: {verdict:?}"
+    );
 }

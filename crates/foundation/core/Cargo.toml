@@ -32,4 +32,6 @@ workspace = true
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
+    # `OVERLAPPED` 在 `Win32::System::IO`（不是 Foundation）⇒ 必须开这个 feature。
+    "Win32_System_IO",
 ] }

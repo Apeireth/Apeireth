@@ -17,8 +17,8 @@
       "loc": 7925
     },
     "crates/capabilities/tools": {
-      "files": 130,
-      "loc": 87187
+      "files": 131,
+      "loc": 88314
     },
     "crates/engine/guard": {
       "files": 28,
@@ -86,7 +86,7 @@
     },
     "crates/engine/runtime-assembly": {
       "files": 82,
-      "loc": 44057
+      "loc": 44077
     },
     "crates/engine/storage": {
       "files": 27,
@@ -94,7 +94,7 @@
     },
     "crates/foundation/core": {
       "files": 28,
-      "loc": 14546
+      "loc": 14556
     },
     "crates/foundation/credentials": {
       "files": 10,

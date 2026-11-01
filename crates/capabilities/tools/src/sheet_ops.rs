@@ -113,6 +113,10 @@ use crate::exec_pipeline::{
     AroundPolicy, OutputSchema, PreExecuteHook, PreExecuteRequest, PreVerdict, SchemaKind,
     DEFAULT_MAX_TIMEOUT_MS,
 };
+use crate::live_policy::{
+    current_live_policy, live_policy_allows, shared_live_permission_policy_slot,
+    LivePermissionPolicySlot,
+};
 use crate::observed_gate::{
     gated_write_atomic, FsVersionProbe, ObservedGate, WriteKind, WriteRequest,
 };
@@ -3125,13 +3129,40 @@ pub fn sheet_ops_approval_reason(action: &str) -> String {
 ///
 /// **写面每次人批** (带 `output` 的变换动作与 `export_csv` / `export_xlsx`, 无自动
 /// 放行档); 纯读放行; 词表外动作 fail-closed 停审批 (不静默放行)。
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SheetOpsApprovalHook;
+///
+/// # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子**只**判档位 (写面人批 / 纯读放行), **从不问宿主是否还
+/// 授权** ⇒ 面板上把 `tool.sheet_ops` 撤销掉之后, 本钩子照样「纯读放行」
+/// ⇒ 热撤销对这个面**无效**, 且从外面**看不出来**。
+///
+/// 现在为什么这样: 钩子持有**共享 live 策略槽** ([`LivePermissionPolicySlot`]),
+/// 每次评估**现读**槽里当前指向的宿主策略 (不是构造时的快照) ⇒ 撤销立刻可见。
+/// 槽为 `None` (宿主策略尚未装入) ⇒ **不表态** ⇒ 沿用本面原有档位判定 ⇒
+/// **零行为变化** (不制造回归)。
+#[derive(Debug, Clone)]
+pub struct SheetOpsApprovalHook {
+    /// 共享 live 策略槽 (P3-6): 每次评估现读槽里当前指向的宿主策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+}
 
 impl SheetOpsApprovalHook {
-    /// 空构造 (无状态钩子)。
+    /// 构造: 挂**进程内共享槽** (宿主策略装入后自动跟随, 不需要改调用点)。
     pub fn new() -> Self {
-        Self
+        Self {
+            slot: shared_live_permission_policy_slot(),
+        }
+    }
+
+    /// 挂在**指定共享 live 策略槽**上的审批档钩子 (P3-6): 装配根注入用。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self { slot }
+    }
+}
+
+impl Default for SheetOpsApprovalHook {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -3151,6 +3182,17 @@ impl GovernanceHook for SheetOpsApprovalHook {
         };
         if capability.as_str() != SHEET_OPS_CAPABILITY_ID {
             return Decision::Allow;
+        }
+        // 宿主授权检查 (2026-11-01 安全审计 P3-6): 未授权 / 已被撤销 ⇒ **停审批档（零落盘）**。
+        // 分工: 治理链那一层是**拒绝即帧**（撤销 ⇒ 派发前就被拒）;
+        // stage-1 这一层是**落盘前的最后一道**（未授权 ⇒ 不落盘）。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        // 读面 / 写面**同等适用** (能力 id 相同) ⇒ 撤销后读写一起停。
+        if let Some(false) = live_policy_allows(&self.slot, capability.as_str()) {
+            return Decision::deny(format!(
+                "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                capability.as_str()
+            ));
         }
         let action = arguments
             .get("action")
@@ -3172,18 +3214,47 @@ impl GovernanceHook for SheetOpsApprovalHook {
     }
 }
 
-/// 写入风险映射 (pre-execute 瀑布): 未显式授权 = require-approval 档。
+/// 写入风险映射 (pre-execute 瀑布): 显式授权 → 放行; 被标人工审批 → `ask`。
 ///
 /// 与文档面风险映射同一语义: 显式授权 (grant 且未标审批) → 放行;
-/// 授权被标人工审批 / 无授权 → `ask` (拒绝即帧 `pipeline.pre_ask`)。
+/// 授权被标人工审批 → `ask` (拒绝即帧 `pipeline.pre_ask`);
+/// **未授权 / 已被撤销** → `deny` (硬拒, fail-closed; 2026-11-01 安全审计 P3-6)。
+///
+/// # 宿主授权同源 (2026-11-01 安全审计 P3-6)
+///
+/// 原先错在哪: 本钩子查的是**工具自建**的一份策略
+/// ([`authorized_sheet_ops_policy`] 新建 `PermissionPolicy`, 只 grant 一条) ——
+/// 它与治理链正在评估的那一份**不是同一个对象** ⇒ 面板上的热撤销
+/// (`PermissionPolicy::revoke`) 对这个 stage-1 闸**完全无效**。
+///
+/// 现在为什么这样: 策略改成**可换指针的槽**
+/// ([`LivePermissionPolicySlot`]): 组装根把宿主策略装进槽里 ⇒ 本钩子与
+/// 治理链读**同一份** ⇒ 撤销立即生效。钩子每次检查都**现读**槽里的当前策略。
+/// 槽为 `None` (宿主策略尚未装入) ⇒ **不表态** ⇒ 沿用本面原有的自建口径
+/// ([`authorized_sheet_ops_policy`]) ⇒ **零行为变化**。
 pub struct SheetOpsRiskMappingHook {
-    policy: Arc<Mutex<PermissionPolicy>>,
+    /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
+    slot: LivePermissionPolicySlot,
+    /// **宿主策略未装入时**沿用的本面授权口径 (`None` = 不表态 ⇒ 零回归)。
+    fallback: Arc<Mutex<PermissionPolicy>>,
 }
 
 impl SheetOpsRiskMappingHook {
-    /// 挂在共享授权策略上的风险映射钩子。
+    /// 挂在共享授权策略上的风险映射钩子 (签名不变: 策略照旧装进本钩子自带的槽)。
     pub fn new(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
-        Self { policy }
+        Self {
+            slot: Arc::new(Mutex::new(Some(policy))),
+            fallback: authorized_sheet_ops_policy(),
+        }
+    }
+
+    /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
+    /// 就是治理链正在评估的那一份 ⇒ 热撤销对本工具面立即生效。
+    pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
+        Self {
+            slot,
+            fallback: authorized_sheet_ops_policy(),
+        }
     }
 }
 
@@ -3193,11 +3264,32 @@ impl PreExecuteHook for SheetOpsRiskMappingHook {
     }
 
     fn pre_verdict(&self, request: &PreExecuteRequest<'_>) -> PreVerdict {
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .decision_for_capability(request.capability.as_str());
+        // 宿主授权检查 (2026-11-01 安全审计 P3-6): 未授权 / 已被撤销 ⇒ **停审批档（零落盘）**。
+        // 分工: 治理链那一层是**拒绝即帧**（撤销 ⇒ 派发前就被拒）;
+        // stage-1 这一层是**落盘前的最后一道**（未授权 ⇒ 不落盘）。
+        // 槽为 None (宿主策略未装入) ⇒ 不表态 ⇒ 沿用本面原有口径 (零回归)。
+        // 只在能力 id 命中本面能力时才有话说 (别的面不归本钩子管)。
+        if let Some(false) = live_policy_allows(&self.slot, request.capability.as_str()) {
+            return PreVerdict::Ask {
+                reason: format!(
+                    "能力 {} 未获宿主授权或已被撤销 ⇒ 停 require-approval 档（零落盘）",
+                    request.capability.as_str()
+                ),
+            };
+        }
+        // 档位判定: 现读槽里当前指向的策略; 槽为 None ⇒ 用本面自建口径
+        // (`authorized_sheet_ops_policy`) ⇒ 与改动前逐字一致。
+        let decision = match current_live_policy(&self.slot) {
+            Some(policy) => policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+            None => self
+                .fallback
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+        };
         match decision {
             Decision::Allow => PreVerdict::Allow,
             Decision::RequireApproval { reason } => PreVerdict::Ask { reason },
@@ -3258,6 +3350,10 @@ pub fn authorized_sheet_ops_policy() -> Arc<Mutex<PermissionPolicy>> {
 }
 
 /// 组装表格操作五段流水线: 风险映射 → 单调边界 Guard → 超时 → 输出归一合同。
+///
+/// 风险映射挂的是**本面自建**策略 (与改动前一致) ⇒ 本函数**零行为变化**;
+/// 要让 stage-1 闸跟宿主策略同源 (面板热撤销立即生效), 用
+/// [`sheet_ops_pipeline_with_slot`]。
 pub fn sheet_ops_pipeline(
     config: SheetOpsConfig,
 ) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
@@ -3275,9 +3371,41 @@ pub fn sheet_ops_pipeline(
     )
 }
 
+/// 组装表格操作五段流水线 + **共享 live 策略槽** (2026-11-01 安全审计 P3-6)。
+///
+/// 原先错在哪: [`sheet_ops_pipeline`] 的 stage-1 风险映射查的是**工具自建**的
+/// 策略 ⇒ 面板上的热撤销对它无效。
+/// 现在为什么这样: 风险映射改挂**共享槽** ⇒ 与治理链同源 ⇒ 撤销立即生效;
+/// 槽为 `None` (宿主策略未装入) ⇒ 沿用本面自建口径 ⇒ 零行为变化。
+///
+/// ⚠️ 宿主策略必须 **grant `tool.sheet_ops`** ⇒ 否则 stage-1 直接硬拒 (fail-closed)。
+pub fn sheet_ops_pipeline_with_slot(
+    config: SheetOpsConfig,
+    slot: LivePermissionPolicySlot,
+) -> Arc<crate::exec_pipeline::ToolExecutionPipeline> {
+    let guard: Arc<dyn ToolGuard> = Arc::new(SheetOpsBoundaryGuard::new(config));
+    Arc::new(
+        crate::exec_pipeline::ToolExecutionPipeline::new()
+            .with_pre_hook(Arc::new(SheetOpsRiskMappingHook::with_slot(slot)))
+            .with_guard(guard)
+            .with_around(
+                AroundPolicy::new().with_timeout(SHEET_OPS_TIMEOUT_MS, DEFAULT_MAX_TIMEOUT_MS),
+            )
+            .with_output_schema(SheetOpsTool::output_schema()),
+    )
+}
+
 /// 组装生产工具面: 受控读写族 + 五段流水线 (模型侧一个能力)。
 pub fn sheet_ops_capability(config: SheetOpsConfig) -> Arc<dyn ToolCapability> {
     sheet_ops_capability_shared(config, SheetOpsCounters::new())
+}
+
+/// 组装生产工具面 + **共享 live 策略槽** (P3-6): stage-1 闸与治理链同源。
+pub fn sheet_ops_capability_with_slot(
+    config: SheetOpsConfig,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    sheet_ops_capability_shared_with_slot(config, SheetOpsCounters::new(), slot)
 }
 
 /// 组装生产工具面 + 共享计数器 (自述创作节与工具面同一真值源)。
@@ -3290,6 +3418,22 @@ pub fn sheet_ops_capability_shared(
     Arc::new(crate::exec_pipeline::PipelinedCapability::new(
         tool,
         sheet_ops_pipeline(config),
+    ))
+}
+
+/// 组装生产工具面 + 共享计数器 + **共享 live 策略槽** (P3-6)。
+///
+/// 装配根用这个入口把宿主策略装进工具面 ⇒ 面板热撤销对 `tool.sheet_ops` 生效。
+pub fn sheet_ops_capability_shared_with_slot(
+    config: SheetOpsConfig,
+    counters: Arc<SheetOpsCounters>,
+    slot: LivePermissionPolicySlot,
+) -> Arc<dyn ToolCapability> {
+    let tool: Arc<dyn ToolCapability> =
+        Arc::new(SheetOpsTool::with_counters(config.clone(), counters));
+    Arc::new(crate::exec_pipeline::PipelinedCapability::new(
+        tool,
+        sheet_ops_pipeline_with_slot(config, slot),
     ))
 }
 

@@ -906,9 +906,19 @@ pub fn try_lock_exclusive(file: &std::fs::File) -> Result<(), String> {
     {
         use std::os::windows::io::AsRawHandle as _;
         let handle = file.as_raw_handle();
-        let mut overlapped = std::mem::zeroed::<windows_sys::Win32::Foundation::OVERLAPPED>();
+        // ⚠️ `OVERLAPPED` 在 `Win32::System::IO`（**不在** Foundation）
+        // ⇒ 2026-11-01 CI 实测：写错路径 ⇒ Windows 上 `cargo test --doc` 直接编译失败
+        // （`cannot find type OVERLAPPED in module windows_sys::Win32::Foundation`）。
+        let mut overlapped = std::mem::zeroed::<windows_sys::Win32::System::IO::OVERLAPPED>();
         // SAFETY: `handle` 来自活着的 `File`；`OVERLAPPED` 是零初始化的栈对象，
         // `LockFileEx` 只读它并可能写回（独占字节范围锁定不需要有效 hEvent）。
+        //
+        // ⚠️ **`&mut` 不会自动转成 `*mut`**（windows-sys 的签名是
+        // `lpoverlapped: *mut OVERLAPPED`）⇒ 必须**显式转换**
+        // （与仓内 `appcontainer.rs:877` / `windows.rs:135` 同一手法）。
+        // ⚠️ 本段**本机（Linux）编不到** ⇒ 只能靠 CI 矩阵验 ⇒ 故把签名依据写在这里：
+        // windows-sys 0.59 `Storage/FileSystem/mod.rs:259`
+        // `LockFileEx(HANDLE, LOCK_FILE_FLAGS, u32, u32, u32, *mut System::IO::OVERLAPPED) -> BOOL`
         let ok = unsafe {
             windows_sys::Win32::Storage::FileSystem::LockFileEx(
                 handle,
@@ -917,7 +927,7 @@ pub fn try_lock_exclusive(file: &std::fs::File) -> Result<(), String> {
                 0,
                 u32::MAX,
                 u32::MAX,
-                &mut overlapped,
+                &mut overlapped as *mut windows_sys::Win32::System::IO::OVERLAPPED,
             )
         };
         if ok != 0 {

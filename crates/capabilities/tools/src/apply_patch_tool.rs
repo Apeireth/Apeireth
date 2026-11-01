@@ -375,62 +375,42 @@ impl ToolCapability for ApplyPatchTool {
 pub struct ApplyPatchRiskMappingHook {
     /// 共享 live 策略槽: 每次检查都**现读**槽里当前指向的策略 (不是快照)。
     slot: LivePermissionPolicySlot,
+    /// **宿主策略未装入时**沿用的本面授权口径（`None` = 不表态 ⇒ 零回归）。
+    fallback: Arc<Mutex<PermissionPolicy>>,
 }
 
 impl ApplyPatchRiskMappingHook {
     /// 挂在共享授权策略上的风险映射钩子 (本钩子自带一个只属于它的槽)。
     pub fn new(policy: Arc<Mutex<PermissionPolicy>>) -> Self {
         Self {
-            slot: Arc::new(Mutex::new(policy)),
+            slot: Arc::new(Mutex::new(Some(policy))),
+            fallback: authorized_file_write_policy(),
         }
     }
 
     /// 挂在**共享 live 策略槽**上的风险映射钩子 (P3-6): 槽里当前指向的策略
     /// 就是治理链正在评估的那一份 ⇒ 热撤销对写工具面立即生效。
     pub fn with_slot(slot: LivePermissionPolicySlot) -> Self {
-        Self { slot }
+        Self {
+            slot,
+            fallback: authorized_file_write_policy(),
+        }
     }
 }
 
-/// 共享 live 策略槽: 指向「当前生效的那份」授权策略的可换指针。
+/// 进程内共享的 live 策略槽: 指向「当前生效的那一份」授权策略的可换指针。
 ///
-/// 槽 = `Arc<Mutex<Arc<Mutex<PermissionPolicy>>>>`: 外层锁只护**换指针**,
-/// 内层锁是策略自身的锁 (与治理链同一把 ⇒ 同一份数据)。
-pub type LivePermissionPolicySlot = Arc<Mutex<Arc<Mutex<PermissionPolicy>>>>;
-
-/// 读槽里当前指向的策略句柄 (克隆 `Arc`, 不持锁跨调用)。
-fn current_live_policy(slot: &LivePermissionPolicySlot) -> Arc<Mutex<PermissionPolicy>> {
-    Arc::clone(&slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner()))
-}
-
-/// 进程内共享的 live 策略槽 (写工具面 stage-1 读它)。
+/// **实现已迁到中立模块 [`crate::live_policy`]**（2026-11-01）：
+/// 共享槽是**全仓唯一**的 ⇒ 别的工具面也能接同一份宿主策略
+/// ⇒ 面板的热撤销对**所有**接了策略层的面都生效。
 ///
-/// 原先错在哪: 写工具面各自持一份**自建**策略, 与治理链的共享 live 策略
-/// 不是一个对象 ⇒ 热撤销对工具面无效。
-/// 现在为什么这样: 工具面统一读这一个槽; 组装根把共享 live 策略
-/// ([`install_shared_live_permission_policy`]) 装进来, 工具面与治理链同源。
-///
-/// 未被装配根装入共享 live 策略之前, 槽里放的是**种子策略**
-/// ([`authorized_file_write_policy`]: 只 grant 写工具面) ⇒ 行为与旧口径
-/// 一致 (放行), 不制造「零授权 ⇒ 全拒」的功能回归。
-pub fn shared_live_permission_policy_slot() -> LivePermissionPolicySlot {
-    static SLOT: std::sync::OnceLock<LivePermissionPolicySlot> = std::sync::OnceLock::new();
-    SLOT.get_or_init(|| Arc::new(Mutex::new(authorized_file_write_policy())))
-        .clone()
-}
-
-/// 把**共享 live 策略** (治理链正在评估的那一份) 装进共享槽。
-///
-/// 装入后, 写工具面的 stage-1 与治理链读同一份策略 ⇒ 面板上的热撤销
-/// (`PermissionPolicy::revoke`) 对已批准 / 预批的写调用同样生效。
-///
-/// 装配根 (CLI 组装根持有共享 live 策略句柄) 调用一次即可; 重复装入以最后
-/// 一次为准 (后装的接管)。
-pub fn install_shared_live_permission_policy(policy: &Arc<Mutex<PermissionPolicy>>) {
-    let slot = shared_live_permission_policy_slot();
-    let mut current = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    *current = Arc::clone(policy);
-}
+/// 槽 = `Arc<Mutex<Option<Arc<Mutex<PermissionPolicy>>>>>`:
+/// 外层锁只护**换指针**; `None` = 宿主策略**尚未装入** ⇒ 各面**不表态**
+/// ⇒ 沿用各自原有的档位判定 ⇒ **零行为变化**。
+pub use crate::live_policy::{
+    current_live_policy, install_shared_live_permission_policy, shared_live_permission_policy_slot,
+    LivePermissionPolicySlot,
+};
 
 impl PreExecuteHook for ApplyPatchRiskMappingHook {
     fn name(&self) -> &str {
@@ -439,11 +419,22 @@ impl PreExecuteHook for ApplyPatchRiskMappingHook {
 
     fn pre_verdict(&self, request: &PreExecuteRequest<'_>) -> PreVerdict {
         // 现读槽里当前指向的策略 (共享 live 策略口径: 不是构造时的快照)。
-        let policy = current_live_policy(&self.slot);
-        let decision = policy
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .decision_for_capability(request.capability.as_str());
+        //
+        // ⚠️ **槽里是 `None` = 宿主策略尚未装入**（2026-11-01 语义收紧）
+        // ⇒ **不表态** ⇒ 沿用本工具面**自己的**授权口径
+        // (`authorized_file_write_policy`) ⇒ **零行为变化**（不制造回归）。
+        // ⇒ 装入之后 ⇒ 与治理链**同源** ⇒ 热撤销立刻可见。
+        let decision = match current_live_policy(&self.slot) {
+            Some(policy) => policy
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+            None => self
+                .fallback
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .decision_for_capability(request.capability.as_str()),
+        };
         match decision {
             // 授权在 (grant) ⇒ 放行。「要不要人批」由治理链决定 (runtime 每次
             // 派发都评估治理, 含已批准 / 预批路径), 工具面不重复索要审批 ——

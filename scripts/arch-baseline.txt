@@ -280,7 +280,7 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (79) ---
+# --- size (80) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
 size crates/adapters/cli/src/lib.rs 3777
@@ -293,10 +293,11 @@ size crates/adapters/gateway/src/presence.rs 1279
 size crates/adapters/sdk/src/client.rs 1552
 size crates/adapters/tui/src/state.rs 1585
 size crates/capabilities/tools/src/backup.rs 1236
-size crates/capabilities/tools/src/device/device_control.rs 3080
+size crates/capabilities/tools/src/device/device_control.rs 3250
 size crates/capabilities/tools/src/device/guard_watch.rs 1341
-size crates/capabilities/tools/src/doc_ops.rs 6124
+size crates/capabilities/tools/src/doc_ops.rs 6268
 size crates/capabilities/tools/src/external.rs 2672
+size crates/capabilities/tools/src/git_write.rs 1256
 size crates/capabilities/tools/src/image_ops.rs 2233
 size crates/capabilities/tools/src/process/mod.rs 1216
 size crates/capabilities/tools/src/process/windows.rs 1448
@@ -305,7 +306,7 @@ size crates/capabilities/tools/src/recon/dotnet.rs 1233
 size crates/capabilities/tools/src/recon/yara.rs 1954
 size crates/capabilities/tools/src/recon_tool.rs 1664
 size crates/capabilities/tools/src/self_status.rs 4184
-size crates/capabilities/tools/src/sheet_ops.rs 4256
+size crates/capabilities/tools/src/sheet_ops.rs 4400
 size crates/capabilities/tools/src/shell.rs 1280
 size crates/engine/guard/src/scenario.rs 3853
 size crates/engine/guard/src/semantics.rs 1216
@@ -344,7 +345,7 @@ size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
 size crates/engine/runtime-assembly/src/canonical/production.rs 1950
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
-size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1375
+size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1395
 size crates/engine/runtime/src/canonical/execute.rs 4750
 size crates/engine/runtime/src/canonical/runtime.rs 1204
 size crates/foundation/core/src/cost_router.rs 1399
