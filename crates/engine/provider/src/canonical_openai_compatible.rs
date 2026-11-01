@@ -638,14 +638,13 @@ impl OpenAiCompatibleProviderPlugin {
                     "reqwest client build failed: {e}"
                 )))
             })?;
-        let capability = Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?;
-        // audience = **{实际配置的端点}**（协议族：端点由部署方选，没有可推导的
-        // 「厂商默认端点」）⇒ 挡住的是**运行时**换端点（admin 热改 `base_url`
-        // 或 `apply_hot_config`）⇒ 新主机拿不到凭据（fail-closed）。
-        capability
-            .capability
-            .set_credential_audience(vec![capability.capability.base_url()]);
-        Ok(capability)
+        // ⚠️ **协议族不设 audience**（不拦截）：它的端点**本来就**由部署方选
+        // （DeepSeek / vLLM / Ollama / 自建网关），没有可推导的「厂商默认端点」；
+        // 且 `admin` 的**合法热更新**（换 base_url + 换 api_key）必须能继续工作
+        // ⇒ 用 audience 拦它会打死正常部署。
+        // ⇒ 保护改由**显式绑定**承担：一旦声明了绑定就**强制**
+        //   （运行时换到未绑定的主机 ⇒ 拒绝发凭据，fail-closed）。
+        Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)
     }
 
     /// The configured canonical model ids, in declaration order.

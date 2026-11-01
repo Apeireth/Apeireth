@@ -46,10 +46,13 @@ pub trait CredentialWriter: Send + Sync {
     /// ⇒ 不支持绑定的写入端**必须如实报失败**。
     fn write_with_endpoints(
         &self,
-        _name: &str,
-        _value: &str,
+        name: &str,
+        value: &str,
         _endpoints: &[String],
     ) -> Result<(), String> {
+        // ⚠️ **先把凭据写了**（不能因为「不支持绑定」就把凭据也丢掉 ⇒ 功能回归）；
+        //    再如实报「绑定未登记」⇒ 调用方看到 warning，不会误以为绑定生效。
+        self.write(name, value)?;
         Err("该凭据写入端不支持端点绑定声明（凭据已写入，但绑定未登记）".to_string())
     }
 }
