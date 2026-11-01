@@ -111,7 +111,7 @@
 
 ## 6. ⚠️ 两处「欠的口径 / 欠的收口」（**真正的剩余工作**）
 
-### 6.1 ★ `RecallPolicy` 与生产检索：**同一套策略写了两遍**
+### 6.1 ✅ `RecallPolicy` 与生产检索：**同一套策略写了两遍 ⇒ 已归组销账**（2026-11-01 复核后修正）
 
 | | `scope::RecallPolicy`（**未接**） | 生产侧（在用） |
 |---|---|---|
@@ -126,13 +126,19 @@
 ⇒ ⇒ **两个「预算」字段只在 `scope.rs` 内出现**（定义 + 默认值 + builder + 单测）⇒ ⇒ **零生产消费**；
 ⇒ ⇒ 而生产侧的默认值与它**逐字相同** ⇒ ⇒ **同一套策略被写了两遍**。
 
-**收口选项（建议 B）**：
-- **A**：把 `proactive_budget` / `token_budget` **并进生产查询类型**并接线
-  ⇒ ⇒ 「主动召回预算」**真正生效**（现在完全没有）；
-- **B**（建议）：把 `RecallPolicy` **归组**为「`MemoryRecallQuery` + `MemoryModule` 承担」，
-  **记明理由**（照 `unwired-ledger.md` §5.1 的体例：模块 | 已被谁承担）；
-  ⇒ ⇒ **一份真相**，且**不动生产路径**（风险最低）。
-- ⚠️ 注意：`proactive_budget` 的语义与**已接生产的** `ProactiveRecallPolicy` **可能同名不同义** ⇒ ⇒ **动手前必须先分清**（§1 纪律 1）。
+**⚠️ 动手前必须先分清的同名问题（已查清）**：
+`ProactiveRecallPolicy`（**已接生产**）= 「**要不要主动召回** + 每次召回多少」
+（`enabled` + `budget` + `confidence_threshold` + `min_candidate_score` + `visible_scopes`）；
+⇒ ⇒ **「主动召回预算」这个能力并没有缺失**（已由 `ProactiveRecallPolicy.budget` 承担）
+⇒ ⇒ **不需要**把 `proactive_budget` 再并进生产查询类型（那会引入**第四份预算真相**）。
+
+**⇒ 处置（已落地）**：按 **B** 归组销账 ——
+`docs/status/unwired-ledger.md` §5.1「重复实现」表**新增一行**：
+`scope.rs` 的 `RecallPolicy` | 召回策略已分三处承担（`MemoryRecallQuery` 查询面 ·
+`ProactiveRecallPolicy` 主动召回决策+预算 · `MemoryModule` 两个预算字段）
+⇒ ⇒ **一份真相**，**不动生产路径**，**不删 API**（删除走「真死 API」独立流程）。
+⇒ ⇒ 连带更正 §5.5q 的「整族未接线」段：**`RecallPolicy` 销账** · **`DriftDetector` 已接线（原记录过期）**
+· 另三族仍待判。
 
 ### 6.2 ★ 生产路径上的核心能力**没有 claim**
 
@@ -185,7 +191,8 @@
 
 | # | 事项 | 归属 | 阻塞 |
 |---|---|---|---|
-| 1 | **限定名级**复核 `RecallPolicy` / `DailyNote` / `AdaptiveBaseline` / `ClusterStore` 四族，归组并落账 | **记忆 crate = 本线** | 先分清 `proactive_budget` 与 `ProactiveRecallPolicy` 是否同名同义 |
+| 1 | ✅ **已完成**：`RecallPolicy` **归组销账** + `DriftDetector` **已接线更正**（限定名级复核，已落 `unwired-ledger.md` §5.1 / §5.5q） | **记忆 crate = 本线** | — |
+| 1b | `DailyNote` / `AdaptiveBaseline` / `ClusterStore` 三族：**逐条判「归组 / 有意不接 / 真缺口」**并落账 | **记忆 crate = 本线** | 需先读各模块自述（`//!` 头注释）再判 |
 | 2 | 更正 `unwired-ledger.md` 里 `DriftDetector` 那条（**已接线**） | 他在改该文件 ⇒ 报备 | 无 |
 | 3 | **P2 运行时触发器**：谁在夜里推进 `CognitiveDreamState::Consolidating` | `core` / `orchestration` = **他的区** ⇒ 需对表 | 跨区 |
 | 4 | **检索排序 / 注入契约**的 claim 登记 | `claims.yaml` = **真源，他的决策面** | 需他拍板 |
