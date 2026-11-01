@@ -2167,8 +2167,15 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
         failures.push(format!("目标叶子未更新：{leaf_value:?}"));
     }
 
-    // 节点规模（DOM 实际元素数）
+    // ⭐ 节点规模：**真实 DOM 节点数**（`document.querySelectorAll('*')`）
+    //   ⇒ ⚠️ **不能**用 `.perf-row` 选择器计数当「元素数」⇒ ⇒ 那是**某类**元素的数量
+    //   ⇒ ⇒ 与引擎的「比对节点数」**口径不同** ⇒ ⇒ 会得出错误的倍率（2026-11-01 踩过）。
     let total_elements = document
+        .query_selector_all("*")
+        .ok()
+        .map(|list| list.length())
+        .unwrap_or(0);
+    let row_elements = document
         .query_selector_all(".perf-row")
         .ok()
         .map(|list| list.length())
@@ -2199,6 +2206,11 @@ pub fn l1_perf_probe() -> Result<JsValue, JsValue> {
         &result,
         &JsValue::from_str("elements"),
         &JsValue::from_f64(total_elements as f64),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("row_elements"),
+        &JsValue::from_f64(row_elements as f64),
     );
     let _ = js_sys::Reflect::set(
         &result,
