@@ -14,7 +14,25 @@ name: Cargo audit (RUSTSEC advisories)
 
 on:
   push:
-    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion]
+    # ⭐⭐⭐ **把活跃的特性分支列进来**（2026-11-01 实测修正）。
+    #
+    # ## 为什么必须列（**实测**，不是推测）
+    #
+    # 现象：在 `ui-engine-p0-2026-10-24` 上 push ⇒ ⇒ **每次**都产生一个
+    # `cargo-audit` 的 run ⇒ ⇒ `conclusion = failure` ⇒ ⇒ **但 `jobs = 0`**。
+    #
+    # 机制（实测确认）：
+    # ① 该 workflow **在默认分支 `main` 上存在** ⇒ ⇒ GitHub 对**任何分支**的 push
+    #    都会为它**创建 run**；
+    # ② `push.branches` 过滤**只阻止 job 调度** ⇒ ⇒ 分支不在列表里 ⇒ ⇒ **run 里没有 job**
+    #    ⇒ ⇒ **GitHub 把「无 job 的 run」判为 `failure`** ⇒ ⇒ ⇒ **每次一封红邮件**；
+    # ③ ⚠️ **实测**：加否定路径 `'!crates-ui/**'`（2026-11-01 曾试）**不能**阻止它
+    #    ⇒ ⇒ 第 2 次 push（只改台账，**不碰** lock / workflow）**仍然**产生无 job run。
+    #
+    # ⇒ ⇒ **正解**：把活跃分支**列进来** ⇒ ⇒ audit **真跑**（有 job）⇒ ⇒
+    # ⇒ ⇒ run 的结论变成**真实的审计结论**（绿 ⇒ 无红邮件；红 ⇒ 是真问题）⇒ ⇒
+    # ⇒ ⇒ **信息量更高**，而不是「制造一个假的失败」。
+    branches: [master, main, feature/cognitive-infrastructure-vnext, feature/memory-v2.2-production-completion, ui-engine-p0-2026-10-24]
     # ⭐⭐ **只在依赖真的变了才跑**（2026-10-31 owner 报「一直发邮件」时修）：
     #   本 workflow 在 PR 分支同步时会生成**无 job 的失败 run** ⇒ ⇒ 每次 push 都发一封红邮件
     #   ⇒ ⇒ 而依赖没变时，RUSTSEC 结论与上次完全相同 ⇒ ⇒ 跑它**没有信息量**。
