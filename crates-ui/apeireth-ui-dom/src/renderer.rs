@@ -2208,24 +2208,17 @@ fn dom_nodes_of<D: Dom>(node: &MountedNode<D>) -> Vec<D::Node> {
 }
 
 /// 读元素的 class token 集合（保序）。
-fn class_tokens(element: &ElementVNode) -> Vec<String> {
-    match element.attr_value("class") {
-        Some(AttrValue::Text(text)) => text.split_whitespace().map(str::to_owned).collect(),
-        _ => Vec::new(),
-    }
-}
-
 /// ⭐ **借用版** class token 收集（**零分配**，2026-11-01）。
 ///
 /// ## 为什么需要
 ///
-/// [`class_tokens`] 返回 `Vec<String>` ⇒ ⇒ **每个 token 一次 `String` 分配**
+/// [`ElementVNode::class_tokens`] 返回 `Vec<String>` ⇒ ⇒ **每个 token 一次 `String` 分配**
 /// ⇒ ⇒ 差分 patch 里**每个元素**都要算 old + new 两遍 ⇒ ⇒ 4.7k 元素的树
 /// ⇒ ⇒ 一次 patch 就是**十几万次分配** ⇒ ⇒ 实测这是「每节点 ~2.2 µs」的头号嫌疑。
 ///
 /// ## 语义
 ///
-/// 与 [`class_tokens`] **完全一致**（同样的 `split_whitespace` 切分），
+/// 与 [`ElementVNode::class_tokens`] **完全一致**（同样的 `split_whitespace` 切分），
 /// 只是**借用**内部字符串而不复制 ⇒ ⇒ 比较路径**零分配**。
 fn class_tokens_ref(element: &ElementVNode) -> Vec<&str> {
     match element.attr_value("class") {
