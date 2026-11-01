@@ -19,7 +19,7 @@
 $ErrorActionPreference = 'Stop'
 
 $VERSION = $env:APEIRETH_VERSION
-if (-not $VERSION) { $VERSION = "2.0.0-rc.4" }
+if (-not $VERSION) { $VERSION = "2.0.0-rc.5" }
 $BUCKET = $env:APEIRETH_BUCKET
 if (-not $BUCKET) { $BUCKET = "apeireth/scoop-bucket" }
 

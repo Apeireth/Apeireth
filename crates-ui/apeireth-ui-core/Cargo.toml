@@ -17,6 +17,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Apeireth UI 引擎响应式核心：信号 / 派生 / 依赖图 / 调度器 / effect / 作用域"
 
 [lib]

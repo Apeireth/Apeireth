@@ -19,7 +19,7 @@
 #     主仓也不依赖引擎：数据面走既有 HTTP/SSE 契约，见 frontend-data-contract）；
 #   - 主仓 `cargo metadata` 不含本 workspace ⇒ `scripts/arch_guard.py` 只扫根
 #     workspace 的 metadata ⇒ 主门禁对本 workspace **0 扫描**；
-#   - 版本轴**独立声明**但与主仓口径对齐（2.0.0-rc.4），发版时两处同改；
+#   - 版本轴**独立声明**但与主仓口径对齐（2.0.0-rc.5），发版时两处同改；
 #     本文件不动主仓 [workspace.package].version（LOCKED 项，仅 release
 #     authority 可改）。
 #
@@ -56,10 +56,10 @@ members = [
 ]
 
 # ---------------------------------------------------------------------------
-# Workspace 包元数据（版本轴与主仓口径对齐：2.0.0-rc.4）
+# Workspace 包元数据（版本轴与主仓口径对齐：2.0.0-rc.5）
 # ---------------------------------------------------------------------------
 [workspace.package]
-version = "2.0.0-rc.4"
+version = "2.0.0-rc.5"
 edition = "2021"
 rust-version = "1.97"
 authors = ["Apeireth Team"]
@@ -69,6 +69,32 @@ homepage = "https://github.com/Apeireth/Apeireth"
 description = "Apeireth 全栈纯 Rust 前端引擎（响应式 + DOM 绑定，独立 workspace）"
 keywords = ["gui", "reactive", "wasm", "renderer"]
 categories = ["gui"]
+
+# ---------------------------------------------------------------------------
+# Workspace 内部依赖（发布化：crates.io publish 硬要求）
+# ---------------------------------------------------------------------------
+# 【为什么需要这一段】
+#   crates.io publish 硬要求：**每个 path 依赖必须同时带 version**，否则
+#   `cargo package` 直接失败（实测 exit 101）。原状各 crate manifest 里写的
+#   是纯 `path = "..."`（无 version）⇒ 本段是发布化的前置条件。
+#
+# 【约定】
+#   - path **相对本文件所在目录**（crates-ui/），不是相对各 crate；
+#   - version 与 [workspace.package].version 同轴（2.0.0-rc.5），发版时同改；
+#   - **只列 6 个库 crate**：`apeireth-ui-demo` 是试点应用（owner 裁决
+#     publish = false）⇒ **不给它做版本依赖**（给它做版本依赖等于宣布它要
+#     上 crates.io，与裁决相反）。
+#
+# 【依赖方向不变】（ADR-0015 §3.3，单向下行无环）
+#   ui-macro(0) ← ui-core(1) ← {ui-dom(2), ui-gpu(2)} ← ui-kit(3)
+#   ← ui(4, 门面) ← ui-demo(5)
+[workspace.dependencies]
+apeireth-ui-core = { path = "apeireth-ui-core", version = "2.0.0-rc.5" }
+apeireth-ui-dom = { path = "apeireth-ui-dom", version = "2.0.0-rc.5" }
+apeireth-ui-macro = { path = "apeireth-ui-macro", version = "2.0.0-rc.5" }
+apeireth-ui-gpu = { path = "apeireth-ui-gpu", version = "2.0.0-rc.5" }
+apeireth-ui-kit = { path = "apeireth-ui-kit", version = "2.0.0-rc.5" }
+apeireth-ui = { path = "apeireth-ui", version = "2.0.0-rc.5" }
 
 # ---------------------------------------------------------------------------
 # Workspace lints

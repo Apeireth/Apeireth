@@ -23,6 +23,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Apeireth UI 引擎 DOM 绑定层：虚拟节点 / 后端抽象 / 差分 / 事件委托 / 双向绑定"
 
 [lib]
@@ -30,8 +35,11 @@ name = "apeireth_ui_dom"
 path = "src/lib.rs"
 
 [dependencies]
+# 内部依赖走 workspace 继承（path + version 见 crates-ui/Cargo.toml
+# [workspace.dependencies]）：crates.io publish 硬要求每个 path 依赖**带 version**
+# ⇒ 纯 path 依赖会让 `cargo package` 直接失败。
 # 内部依赖：响应式核心（状态 → DOM 的唯一数据来源）。
-apeireth-ui-core = { path = "../apeireth-ui-core" }
+apeireth-ui-core = { workspace = true }
 
 # 真实 DOM 后端（web-sys）—— 仅 wasm32 目标参与编译。
 # 许可：三者均为 MIT OR Apache-2.0（实测，见 crates-ui/deny.toml 白名单）。

@@ -72,4 +72,4 @@ v1 时代的安全组件（`apeireth-sovereignty`、`apeireth-tool-approval`、`
 
 ---
 
-_Last updated_: 2026-10-18 (文档审计批：crate 口径更新为 workspace 31 members（30 crates + bench harness；image 家族 +11）；测试基线只引单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md) 不抄写数字；`apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.4、仓库 URL `Apeireth/Apeireth` 不变)
+_Last updated_: 2026-10-18 (文档审计批：crate 口径更新为 workspace 31 members（30 crates + bench harness；image 家族 +11）；测试基线只引单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md) 不抄写数字；`apeireth-guard` 安全边界 2026-10-06 已核验；workspace.version 2.0.0-rc.5、仓库 URL `Apeireth/Apeireth` 不变)

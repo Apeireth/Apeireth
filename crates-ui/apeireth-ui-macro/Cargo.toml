@@ -16,6 +16,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Apeireth UI 引擎过程宏：#[component] 组件声明宏"
 
 [lib]
@@ -28,12 +33,15 @@ proc-macro = true
 # 零内部依赖、零外部依赖（架构拓扑秩 0，ADR-0015 §3.3）。
 
 [dev-dependencies]
+# 内部依赖走 workspace 继承（path + version 见 crates-ui/Cargo.toml
+# [workspace.dependencies]）：crates.io publish 硬要求每个 path 依赖**带 version**
+# ⇒ 纯 path 依赖会让 `cargo package` 直接失败。
 # 宏展开的端到端测试：展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`
 # （**绝对路径**，见 crate 文档头的「运行时路径约定」）⇒ 这两个 crate 必须是
 # 使用方的**直接依赖**。cargo 允许 dev-dependency 成环（这两个 crate 都不依赖
 # 本 crate ⇒ 不构成构建环）。
-apeireth-ui-core = { path = "../apeireth-ui-core" }
-apeireth-ui-dom = { path = "../apeireth-ui-dom" }
+apeireth-ui-core = { workspace = true }
+apeireth-ui-dom = { workspace = true }
 
 [lints]
 workspace = true

@@ -13,7 +13,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Apeireth UI 引擎试点应用：审批卡（装配级冒烟）"
+# 发布裁决（owner）：试点应用**不上 crates.io** ⇒ publish = false。
+publish = false
+# harness/ 是 vite 浏览器对照台（实测打包 332 个文件）⇒ 不进源码包。
+exclude = ["harness/"]
 
 [lib]
 name = "apeireth_ui_demo"
@@ -24,16 +33,19 @@ name = "apeireth-ui-demo"
 path = "src/main.rs"
 
 [dependencies]
+# 内部依赖走 workspace 继承（path + version 见 crates-ui/Cargo.toml
+# [workspace.dependencies]）：crates.io publish 硬要求每个 path 依赖**带 version**
+# ⇒ 纯 path 依赖会让 `cargo package` 直接失败。
 # 内部依赖：门面（各层 re-export）+ 组件库（共享组件）。
-apeireth-ui = { path = "../apeireth-ui" }
-apeireth-ui-kit = { path = "../apeireth-ui-kit" }
+apeireth-ui = { workspace = true }
+apeireth-ui-kit = { workspace = true }
 # 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**，
 # 见 apeireth-ui-macro 的 crate 文档头「运行时路径约定」）⇒ 这两个 crate 必须是
 # 使用方的**直接依赖**。
-apeireth-ui-core = { path = "../apeireth-ui-core" }
-apeireth-ui-dom = { path = "../apeireth-ui-dom" }
+apeireth-ui-core = { workspace = true }
+apeireth-ui-dom = { workspace = true }
 # 过程宏（`#[component]` + `view!`）—— 试点组件由它声明。
-apeireth-ui-macro = { path = "../apeireth-ui-macro" }
+apeireth-ui-macro = { workspace = true }
 # P0 阶段纪律：0 外部依赖。
 
 # wasm32 宿主侧依赖（仅 wasm32 目标参与编译；native 侧永远 0 外部依赖）。

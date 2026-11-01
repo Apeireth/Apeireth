@@ -528,7 +528,7 @@ cargo test -p apeireth-provider --test minimax_llm_factory real_llm_call_smoke -
 | **9 哲学锚本体** | `crates/foundation/core/src/eight_anchors.rs:58-79` (enum `PhilosophicalAnchor8`) | `NINE_ANCHORS_HARDCODE` 编译期锁 (line 222-366) | 主人明确授权 (例: 2026-08-27 加 O-6). 哲学锚本体升级 = 子代理可调研, 主代理必拍板. |
 | **13 键** | `crates/foundation/core/src/philosophy.rs:142` | `RUNTIME_ENFORCED = false` 显式标 | 已拍板降级为哲学标准, 不接回 runtime 强制. |
 | **3 项不可变脊柱** | `crates/foundation/core/src/onion.rs:249` | Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义 | 同上, 主人明确授权例外. |
-| **workspace.version** | `Cargo.toml` (workspace.package) | `"2.0.0-rc.4"`（2026-10-18 文档审计批核对；历史：2026-08-30 RC1 起 `2.0.0-rc.1`，旧 "1.2.0 双轴制" 已终结，workspace 轴与产品轴一致） | 随 release 推进 (rc.4 → 2.0.0 等), 主代理/release authority 拍板. |
+| **workspace.version** | `Cargo.toml` (workspace.package) | `"2.0.0-rc.5"`（2026-10-18 文档审计批核对；历史：2026-08-30 RC1 起 `2.0.0-rc.1`，旧 "1.2.0 双轴制" 已终结，workspace 轴与产品轴一致） | 随 release 推进 (rc.4 → 2.0.0 等), 主代理/release authority 拍板. |
 | **R11 baseline 3 值** | `legacy/donor/apeireth-asi/tests/integration_r_measure.rs:42-44` (R11_V1141/1131/1136_BASELINE const) + `legacy/donor/apeireth-blueprint-impl/src/r_measure.rs:228-231` (RMeasureAll::drift hardcode) — active workspace 无 const source | 0.8682 / 0.8532 / 0.9063 (R11 ASI R-Measure 数字严守) | R11 数字更新需 R12 spec 重新审定 + active workspace 迁回, 主代理拍板. |
 
 **改前必查**:
@@ -546,7 +546,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 1. **9 哲学锚本体**: 主人明确授权 (例: 2026-08-27 加 O-6). 哲学锚本体升级 = 子代理可调研, **主代理必拍板** (per O-6 description).
 2. **13 键**: 已拍板降级, 不接回 runtime 强制. 想接回 = 推翻 P0 拍板, 主代理必写 0 装诚实复盘.
 3. **3 项不可变脊柱**: 同 #1 主人明确授权.
-4. **workspace.version**: 随 release 推进 (现 2.0.0-rc.4; 下一次随 v2.0.0 GA 拍板). 主代理/release authority 拍板.
+4. **workspace.version**: 随 release 推进 (现 2.0.0-rc.5; 下一次随 v2.0.0 GA 拍板). 主代理/release authority 拍板.
 5. **R11 baseline 3 值**: R11 数字更新需 R12 spec 重新审定, 主代理拍板.
 
 **0 装诚实标**: 例外**必须有主代理拍板记录** (in commit message 或 plan doc). 0 例外 = 0 改 LOCKED.
@@ -621,7 +621,7 @@ git diff HEAD -- Cargo.lock                                    # 0 行 diff (或
 | 5 | **文档数字不复测, 复用旧值** | 文档写 3119 但实测 3120（2026-09-05 对账批真账） | 必实测 `cargo test --workspace --locked`, 不用历史值 |
 | 6 | **`--force-with-lease` 凭据 stale** | push rejected "stale info" | 改 `--force-with-lease=main:<expected-old-tip>` (验证 remote ref 状态), 不裸 `--force` |
 | 7 | **pub struct 在 impl block 内** | 编译错 "struct is not supported in 'trait's or 'impl's" | 移到 module level (impl block 外) |
-| 8 | **Cargo.toml workspace.version 改** | workspace.version 是 release authority（现 2.0.0-rc.4） | release 拍板才改 (per §10 真例外 #4) |
+| 8 | **Cargo.toml workspace.version 改** | workspace.version 是 release authority（现 2.0.0-rc.5） | release 拍板才改 (per §10 真例外 #4) |
 | 9 | **amend 没 `git add`, `write-tree` 输出 HEAD^{tree}** | amend 后 `git diff --stat` 显示修了, 但 `git show HASH:path` 实际是旧 blob (Round 1 真账: 5e18e65b msg 修了但 tree 没修) | amend 后必自验 tree: `git show HASH:path | grep <fix>`. 不依赖 `git diff --stat`. 见 .harness-step-log §3.6 + 0 装诚实标续 |
 | 10 | **`git fetch` 失败 ≠ `git push` 失败** | TCP 阻 fetch 但 push 实际成功 (Round 1 真账: 2 commits 实际 push 上了 origin, 但主代理凭 fetch 失败误判 + amend + followup, Round 3 fetch 通才发现 origin 已 advance, 改 force push) | 失败诊断: `git fetch` 跟 `git push` 是独立 channel, 各自状态. 怀疑 push 状态时, retry push 看 error code, 不要凭 fetch 失败推断 push. 见 .harness-step-log §3 |
 | 11 | **PowerShell `^{tree}` syntax gotcha** | `git rev-parse HEAD^{tree}` 中 `^{}` 被 pwsh 当特殊字符 (Round 1 真账: 第 1 次 amend 工序错, 第二次 update-ref 覆盖了第一次 chain) | quote 整段: `git rev-parse 'HEAD^{tree}'` 或 `-F file` 替代 inline msg. amend 工序需 quote, 否则 amend 错位. 见 .harness-step-log §3.4 |

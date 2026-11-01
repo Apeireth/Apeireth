@@ -61,7 +61,7 @@ const rowOf = (rows, key) => rows.find((row) => row.key === key);
       endpoint: 'http://127.0.0.1:8080',
       port: 8080,
       restart_count: 0,
-      backend_version: '2.0.0-rc.4',
+      backend_version: '2.0.0-rc.5',
     },
     null,
   );
@@ -75,7 +75,7 @@ const rowOf = (rows, key) => rows.find((row) => row.key === key);
     '归属如实（外部常驻不归桌面停机）',
   );
   assert.equal(rowOf(rows, 'endpoint').value, 'http://127.0.0.1:8080', '端点真值');
-  assert.equal(rowOf(rows, 'version').value, '2.0.0-rc.4', '版本真值');
+  assert.equal(rowOf(rows, 'version').value, '2.0.0-rc.5', '版本真值');
 
   // 缺位逐位「—」+ 诚实注记（不编数）。
   const sparse = daemonOpsView(

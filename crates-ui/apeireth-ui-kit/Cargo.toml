@@ -16,6 +16,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Apeireth UI 引擎组件库：共享组件的 Rust 重写 + 组件注册表"
 
 [lib]
@@ -23,9 +28,17 @@ name = "apeireth_ui_kit"
 path = "src/lib.rs"
 
 [dependencies]
+# 内部依赖走 workspace 继承（path + version 见 crates-ui/Cargo.toml
+# [workspace.dependencies]）：crates.io publish 硬要求每个 path 依赖**带 version**
+# ⇒ 纯 path 依赖会让 `cargo package` 直接失败。
 # 内部依赖：DOM 绑定层（组件产出虚拟节点）+ 响应式核心（组件 trait 边界）。
-apeireth-ui-dom = { path = "../apeireth-ui-dom" }
-apeireth-ui-core = { path = "../apeireth-ui-core" }
+apeireth-ui-dom = { workspace = true }
+apeireth-ui-core = { workspace = true }
+# 过程宏（`view!`）—— 卡面组件的内部结构由宏构造。
+# ⚠️ 宏展开物引用 `::apeireth_ui_core::…` / `::apeireth_ui_dom::…`（**绝对路径**，
+# 见 apeireth-ui-macro 的 crate 文档头「运行时路径约定」）⇒ 这两个 crate 必须是
+# 使用方的**直接依赖**（上面已列）。
+apeireth-ui-macro = { workspace = true }
 # P0 阶段纪律：0 外部依赖。
 
 [lints]

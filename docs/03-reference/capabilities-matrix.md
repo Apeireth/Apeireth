@@ -1,6 +1,6 @@
 # Apeireth 2.0 能力矩阵与契约参考 (Capabilities Matrix & Contract Reference)
 
-> **版本**: 2.0.0-rc.4 / runtime-assembly refactor (2026-09-04 起，2026-10-16 文本可信度批对账)
+> **版本**: 2.0.0-rc.5 / runtime-assembly refactor (2026-09-04 起，2026-10-16 文本可信度批对账)
 > **适用范围**: 开发者集成、API 调用方、前端控制台与多 Agent 协同网络
 > **测试基线**: 见本文件 §0.1（审计修 A-03 / C-01）；**默认能力**: 见本文件 §0.2（审计修 A-10）
 

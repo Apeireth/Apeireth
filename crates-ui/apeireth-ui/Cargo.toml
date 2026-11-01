@@ -14,6 +14,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 description = "Apeireth UI 引擎门面：re-export 响应式核心 / DOM 绑定 / GPU 桥 / 组件库"
 
 [lib]
@@ -21,12 +26,15 @@ name = "apeireth_ui"
 path = "src/lib.rs"
 
 [dependencies]
+# 内部依赖走 workspace 继承（path + version 见 crates-ui/Cargo.toml
+# [workspace.dependencies]）：crates.io publish 硬要求每个 path 依赖**带 version**
+# ⇒ 纯 path 依赖会让 `cargo package` 直接失败。
 # 内部依赖：各层（拓扑秩 4 ⇒ 全部下层皆可依赖）。
-apeireth-ui-core = { path = "../apeireth-ui-core" }
-apeireth-ui-dom = { path = "../apeireth-ui-dom" }
-apeireth-ui-gpu = { path = "../apeireth-ui-gpu" }
-apeireth-ui-kit = { path = "../apeireth-ui-kit" }
-apeireth-ui-macro = { path = "../apeireth-ui-macro" }
+apeireth-ui-core = { workspace = true }
+apeireth-ui-dom = { workspace = true }
+apeireth-ui-gpu = { workspace = true }
+apeireth-ui-kit = { workspace = true }
+apeireth-ui-macro = { workspace = true }
 # P0 阶段纪律：0 外部依赖。
 
 [lints]

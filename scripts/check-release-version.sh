@@ -13,7 +13,7 @@
 # Usage:
 #   bash scripts/check-release-version.sh
 #   bash scripts/check-release-version.sh --expected 1.2.0
-#   bash scripts/check-release-version.sh --expected 2.0.0-rc.4 --strict
+#   bash scripts/check-release-version.sh --expected 2.0.0-rc.5 --strict
 # ==============================================================================
 
 set -uo pipefail

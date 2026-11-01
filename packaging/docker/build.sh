@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Apeireth Docker 包 (Apeireth 2.0 RC1, Linux packaging)
-# 产出目标: apeireth/apeireth:2.0.0-rc.4 (多架构 linux/amd64 + linux/arm64)
+# 产出目标: apeireth/apeireth:2.0.0-rc.5 (多架构 linux/amd64 + linux/arm64)
 
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
-VERSION="${APEIRETH_VERSION:-2.0.0-rc.4}"
+VERSION="${APEIRETH_VERSION:-2.0.0-rc.5}"
 
 echo "=== apeireth docker build v${VERSION} ==="
 
@@ -43,4 +43,4 @@ echo "                                  -t apeireth/apeireth:latest \\"
 echo "                                  -t ghcr.io/apeireth/apeireth:${VERSION} \\"
 echo "                                  -t ghcr.io/apeireth/apeireth:latest ."
 
-exit 0
+exit 0

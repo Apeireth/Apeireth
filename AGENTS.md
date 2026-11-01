@@ -20,12 +20,13 @@
 ## 3. 口径纪律
 
 - **测试数字**：单一真源 [docs/03-reference/test-baseline.md](docs/03-reference/test-baseline.md)——其余文档只引用不抄写。
-- **crate 口径**：`workspace = 30 members（29 crates + bench harness）`（2026-10-20 R4b 归档
-  `apeireth-perception` 与 SDK 四孤岛后由 31→30；2026-10-18 许可搬运线第一批 +11：图像核心
-  vendored 家族 10 crate + 接口层 1 crate，见 docs/04-internal/license-port/；历史口径：
-  31 members（30 crates + bench harness，2026-10-18 至 2026-10-20）/ 20 members（19 crates +
-  bench harness，2026-10-18 前））。
-- **版本**：以根 `Cargo.toml` `[workspace.package] version` 为准（现 `2.0.0-rc.4`）；发版前按
+- **crate 口径**：`workspace = 31 members（30 crates + bench harness）`（2026-10-31 ADR-0019 新增
+  门面 crate `apeireth` 后由 30→31；2026-10-20 R4b 归档 `apeireth-perception` 与 SDK 四孤岛后
+  由 31→30；2026-10-18 许可搬运线第一批 +11：图像核心 vendored 家族 10 crate + 接口层 1 crate，
+  见 docs/04-internal/license-port/；历史口径：30 members（29 crates + bench harness，
+  2026-10-20 至 2026-10-31）/ 31 members（30 crates + bench harness，2026-10-18 至 2026-10-20）/
+  20 members（19 crates + bench harness，2026-10-18 前））。
+- **版本**：以根 `Cargo.toml` `[workspace.package] version` 为准（现 `2.0.0-rc.5`）；发版前按
   [docs/04-internal/release-checklist.md](docs/04-internal/release-checklist.md) 清版本残留。
 - **历史不追溯改写**：带日期的历史记录保留原值，需要时加「历史口径（日期）」标注。
 - **README.md / README.zh-CN.md = owner 面版（2026-10-18 已换回，草稿机制退役）**：owner 口令

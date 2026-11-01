@@ -45,7 +45,7 @@ cargo run -p apeireth-cli -- gateway serve --port 8080
 Test the health endpoint:
 ```bash
 curl http://127.0.0.1:8080/health
-# {"status":"ok","version":"2.0.0-rc.4","engine":"apeireth"}
+# {"status":"ok","version":"2.0.0-rc.5","engine":"apeireth"}
 ```
 
 ---
