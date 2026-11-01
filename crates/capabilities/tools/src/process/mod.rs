@@ -928,6 +928,18 @@ fn capabilities_for_execution(
         actual.privilege_reduction = EnforcementLevel::Unsupported;
     }
 
+    // P3-9/P3-10 审计 (2026-10-31): 记录须报「本次运行**实际生效**」的隔离属性 ——
+    // ① 环境隔离只在「从空环境起步」时成立: `Inherit` (默认) 不做 env_clear ⇒ 子进程
+    //    继承父环境 (含 provider 密钥), 不得宣称 Enforced; ② 结构化生成只在没有逐字
+    //    命令列尾时成立: Windows 的 raw_arg (cmd /D /S /C) 是命令串 ⇒ 只有 Partial。
+    if matches!(request.environment(), EnvironmentSpec::Inherit) {
+        actual.environment_isolation = EnforcementLevel::Unsupported;
+    }
+    #[cfg(windows)]
+    if request.raw_arg().is_some() {
+        actual.structured_spawn = EnforcementLevel::Partial;
+    }
+
     actual
 }
 

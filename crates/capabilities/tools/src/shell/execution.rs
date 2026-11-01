@@ -59,7 +59,8 @@ impl ShellTool {
             .with_name("shell");
         }
 
-        let request = match Self::process_request_from_frozen(frozen) {
+        // P3-#17 加固 (2026-10-31): 复核通过 ⇒ 工作目录用**已验证的 canonical 路径**。
+        let request = match Self::process_request_from_frozen(frozen, &cwd_canonical) {
             Ok(request) => request,
             Err(e) => {
                 return ToolResult::permanent_error(

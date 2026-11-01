@@ -77,6 +77,36 @@ pub const ACTION_LIST_SIGNALS: &str = "list_signals";
 /// 闭合动作词表 (now / list_signals)。
 pub const WEATHER_ACTIONS: &[&str] = &[ACTION_NOW, ACTION_LIST_SIGNALS];
 
+/// `place` 槽的长度上限 (字符数)。
+///
+/// `place` 是自由文本地点标签, 但它会被 mock 源**原样**抄进 `report.place` ⇒ 再进
+/// `ReminderSignal.evidence` ⇒ 最终被**回放成关怀回合的 user 消息**
+/// (`care_reminder.rs` → `care/engine.rs` → `canonical/execute.rs` 以 user 角色
+/// 追加) ⇒ 控制符可伪造回合结构 (提示词注入面) ⇒ 本槽必须有界。
+pub const WEATHER_PLACE_MAX_CHARS: usize = 64;
+
+/// `place` 槽校验: 非空 + 有界 + 无控制符。
+///
+/// 口径照抄同族的 `device/guard_watch.rs` 的 `validate_guard_message` 与
+/// `care/rules.rs` 的 `validate_care_material` —— **原先这两个校验不作用于本槽**
+/// (`place` 无长度上限 / 无字符集校验 / 无控制符校验) ⇒ 现在本槽与其它进关怀回合
+/// 的材料同等对待。
+pub fn validate_weather_place(place: &str) -> Result<(), String> {
+    if place.trim().is_empty() {
+        return Err("weather place must not be empty".to_string());
+    }
+    let length = place.chars().count();
+    if length > WEATHER_PLACE_MAX_CHARS {
+        return Err(format!(
+            "weather place is {length} characters; the maximum is {WEATHER_PLACE_MAX_CHARS}"
+        ));
+    }
+    if place.chars().any(char::is_control) {
+        return Err("weather place must not contain control characters".to_string());
+    }
+    Ok(())
+}
+
 /// 一次天气读数 (数据源逐帧如实标注)。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -531,6 +561,13 @@ impl WeatherTool {
 
     fn now(&self, call: &ToolCall, params: &WeatherParams) -> ToolResult {
         let place = params.place.as_deref().unwrap_or("local");
+        // `place` 槽校验 (原先**完全无校验** ⇒ 控制符/超长文本可经「报告 → 提醒
+        // 信号 `evidence` → 关怀回合的 user 消息」被回放 ⇒ 提示词注入面) ⇒
+        // 非法即拒绝即帧 (走本文件既有的 `refuse` 拒绝形态), 不进读面。
+        // 默认值 `"local"` 走同一条校验 (合法 ⇒ 默认路径不受影响)。
+        if let Err(reason) = validate_weather_place(place) {
+            return self.refuse(call, format!("拒绝天气读 (place 非法): {reason}"));
+        }
         let report = match self.source.observe(place, now_epoch_ms()) {
             Ok(report) => report,
             Err(error) => return self.refuse(call, format!("天气读失败 (不编天气): {error}")),
@@ -609,7 +646,8 @@ impl ToolCapability for WeatherTool {
                     },
                     "place": {
                         "type": "string",
-                        "description": "now only: free-text place label (echoed as-is by the mock source)."
+                        "maxLength": WEATHER_PLACE_MAX_CHARS,
+                        "description": "now only: free-text place label (echoed as-is by the mock source); non-empty, at most 64 characters, no control characters."
                     }
                 },
                 "required": ["action"],

@@ -323,6 +323,38 @@ fn result_enforcement_reports_platform_capabilities() {
     );
 }
 
+/// P3-9 审计 (2026-10-31): 默认请求是 `EnvironmentSpec::Inherit` ——
+/// `apply_request_to_command` 在 Inherit 分支**不做** `env_clear` ⇒ 子进程继承父
+/// 环境 (含 provider 的 API key)。三平台后端却都无条件宣称
+/// `EnvironmentIsolation=Enforced` ⇒ 执行记录谎报「本次实际生效」的隔离属性。
+#[test]
+fn default_request_does_not_claim_environment_isolation() {
+    let result = execute(&request_for("print-pid", "")).unwrap();
+    assert!(result.success(), "{}", text(&result.stderr));
+    assert!(
+        result.enforcement.capabilities.environment_isolation != EnforcementLevel::Enforced,
+        "an inherited environment must not be reported as isolated; got {:?}",
+        result.enforcement.capabilities.environment_isolation
+    );
+
+    // 对照组: 显式环境 (从空环境起步 = env_clear) 时, 平台能隔离环境 ⇒ 记录才允许
+    // 报 Enforced。
+    if current_platform_capabilities().environment_isolation == EnforcementLevel::Enforced {
+        let explicit = execute(
+            &ProcessRequest::new(helper())
+                .with_args(["print-pid"])
+                .with_explicit_env(Vec::new())
+                .with_limits(ProcessLimits::default()),
+        )
+        .unwrap();
+        assert_eq!(
+            explicit.enforcement.capabilities.environment_isolation,
+            EnforcementLevel::Enforced,
+            "an explicit (env-cleared) environment must report EnvironmentIsolation=Enforced"
+        );
+    }
+}
+
 #[cfg(windows)]
 mod windows_tests {
     use super::*;
@@ -532,6 +564,25 @@ mod windows_tests {
                 );
             }
         }
+    }
+
+    /// P3-10 审计 (2026-10-31): `StructuredSpawn` 的口径是「可执行文件 + argv 以
+    /// 结构化数组传递, 永不是命令串」。Windows 的 raw_arg 逐字尾 (shell 的
+    /// `cmd /D /S /C "<script>"`) 恰恰是命令串拼接 ⇒ 该次执行的结构化生成只有
+    /// Partial, 不得沿用平台的无条件 Enforced。
+    #[test]
+    fn raw_arg_request_reports_partial_structured_spawn() {
+        let request = ProcessRequest::new("cmd.exe")
+            .with_raw_arg(r#"/D /S /C "echo hi""#)
+            .with_limits(ProcessLimits::default());
+
+        let result = execute(&request).unwrap();
+        assert!(result.success(), "{}", text(&result.stderr));
+        assert_eq!(
+            result.enforcement.capabilities.structured_spawn,
+            EnforcementLevel::Partial,
+            "a verbatim command-line tail must not be reported as a structured spawn"
+        );
     }
 
     fn assert_process_terminated(pid: u32) {

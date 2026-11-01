@@ -44,7 +44,10 @@
 // `src/git_write.rs` + `src/git_write/parse.rs` 是 Rust 2018 标准模块布局
 // ⇒ `mod parse;` **自动解析**, **不需要**改 `lib.rs`（别人的文件）。
 mod parse;
-use parse::{split_command_segments, tokenize_segment};
+use parse::{
+    check_message_file_operands, grade_commit, grade_tag, long_option_overlaps, option_base,
+    short_bundle, split_command_segments, tokenize_segment,
+};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -185,7 +188,25 @@ fn refuse_morph(detail: impl AsRef<str>) -> String {
 }
 
 /// 分级一次 git 写调用 (词表 + 变形防护 + 逐段取最严)。
+///
+/// 无工作区根 ⇒ **不做**操作数路径校验 (纯词法分级面); 需要根的调用方走
+/// [`classify_git_write_under`] (工具面持有根 ⇒ 走那条)。
 pub fn classify_git_write(command: &str) -> GitWritePlan {
+    classify_git_write_inner(None, command)
+}
+
+/// 根感知分级: 词法分级 + **操作数路径包含性校验**。
+///
+/// `git commit -F <路径>` / `git tag -F <路径>` 的**操作数是文件路径** ⇒ 原先
+/// 完全不受约束 ⇒ **工作区外**的文件 (`/etc/passwd` / `~/.aws/credentials`) 能被
+/// 读进提交/附注对象 ⇒ 这里按工作区根做包含性校验, 越界即拒绝即帧 (口径照抄
+/// `filesystem.rs` 的 `resolve_contained`)。
+pub fn classify_git_write_under(root: &Path, command: &str) -> GitWritePlan {
+    classify_git_write_inner(Some(root), command)
+}
+
+/// 分级实现 (根可选): 有根时在词法分级之上补**操作数路径包含性校验**。
+fn classify_git_write_inner(root: Option<&Path>, command: &str) -> GitWritePlan {
     let segments_text = match split_command_segments(command) {
         Ok(segments) => segments,
         Err(reason) => return GitWritePlan::Refused { reason },
@@ -205,8 +226,18 @@ pub fn classify_git_write(command: &str) -> GitWritePlan {
         if tokens.is_empty() {
             continue;
         }
-        match grade_segment(text, &tokens) {
+        // 消息/附注**文件操作数** (`-F` / `--file`) 的捕获 —— 分级面出参带回。
+        let mut message_files = Vec::new();
+        match grade_segment(text, &tokens, &mut message_files) {
             Ok(segment) => {
+                // 根感知的**操作数路径包含性校验** (越界即拒绝即帧, 不进执行面)。
+                if let Some(root) = root {
+                    if let Err(reason) = check_message_file_operands(root, &message_files) {
+                        return GitWritePlan::Refused {
+                            reason: refuse_morph(format!("操作数路径越界: {reason}")),
+                        };
+                    }
+                }
                 tier = tier.strictest(segment.tier);
                 segments.push(segment);
             }
@@ -253,32 +284,12 @@ pub fn git_write_human_approval_floor(arguments: &serde_json::Value) -> bool {
 // 词法面: 逐段分级 (词表 + 变形防护)
 // ---------------------------------------------------------------------------
 
-/// 长选项基名 (`--message=x` → `--message`)。
-fn option_base(token: &str) -> &str {
-    match token.find('=') {
-        Some(index) => &token[..index],
-        None => token,
-    }
-}
-
-/// 长选项前缀重叠命中 (变形防护): git 允许无歧义缩写, 故 `--ha` 是 `--hard`
-/// 的同面变体, `--force-with-lease=x` 与 `--force` 同族 —— 两侧前缀重叠都算。
-fn long_option_overlaps(base: &str, pattern: &str) -> bool {
-    base.starts_with(pattern) || pattern.starts_with(base)
-}
-
-/// 短选项束的字符面 (`-qf` → `q`,`f`); 长选项与裸 `-` 不算束。
-fn short_bundle(token: &str) -> Option<Vec<char>> {
-    if token.starts_with("--") || token == "-" {
-        return None;
-    }
-    token
-        .strip_prefix('-')
-        .map(|rest| rest.chars().collect::<Vec<char>>())
-}
-
 /// 逐段分级: 词表白名单 + 危险全局选项拒 + 变形防护。
-fn grade_segment(text: &str, tokens: &[String]) -> Result<GradedSegment, String> {
+fn grade_segment(
+    text: &str,
+    tokens: &[String],
+    message_files: &mut Vec<String>,
+) -> Result<GradedSegment, String> {
     let Some(first) = tokens.first() else {
         return Err(refuse_offlist(
             "空命令: 本工具只执行分级词表内的 git 写命令",
@@ -312,7 +323,7 @@ fn grade_segment(text: &str, tokens: &[String]) -> Result<GradedSegment, String>
         .ok_or_else(|| refuse_offlist("缺 git 子命令: 只有分级词表内的写子命令可执行"))?;
     let rest = &tokens[index + 1..];
 
-    let tier = grade_subcommand(&subcommand.to_ascii_lowercase(), rest)?;
+    let tier = grade_subcommand(&subcommand.to_ascii_lowercase(), rest, message_files)?;
 
     let mut argv: Vec<String> = tokens[1..].to_vec();
     argv[index - 1] = subcommand.to_ascii_lowercase();
@@ -324,13 +335,20 @@ fn grade_segment(text: &str, tokens: &[String]) -> Result<GradedSegment, String>
 }
 
 /// 子命令词表分级。
-fn grade_subcommand(subcommand: &str, args: &[String]) -> Result<GitWriteTier, String> {
+fn grade_subcommand(
+    subcommand: &str,
+    args: &[String],
+    message_files: &mut Vec<String>,
+) -> Result<GitWriteTier, String> {
     match subcommand {
         "add" => Ok(GitWriteTier::ReversibleLocal),
-        "commit" => grade_commit(args),
+        // `commit` / `tag` 的 `-F` / `--file` 操作数是**文件路径** ⇒ 由分级面捕获
+        // 后交根感知分级面做包含性校验 (原先路径完全不受约束 ⇒ 工作区外的文件
+        // 能被读进提交/附注对象)。
+        "commit" => grade_commit(args, message_files),
         "branch" => grade_branch(args),
         "switch" => grade_switch(args),
-        "tag" => grade_tag(args),
+        "tag" => grade_tag(args, message_files),
         "push" => grade_push(args),
         "fetch" => grade_fetch(args),
         "remote" => grade_remote(args),
@@ -349,108 +367,6 @@ fn grade_subcommand(subcommand: &str, args: &[String]) -> Result<GitWriteTier, S
              L2 (push/fetch/remote); 其余写面拒绝即帧"
         ))),
     }
-}
-
-/// 值参数短选项: 遇上即"余下字符是值, 下一词是值"。
-const COMMIT_VALUE_SHORTS: &[char] = &['m', 'F', 'C', 't'];
-
-/// commit 短选项束的拒绝字符: `n`(--no-verify 绕钩子) / `s`·`S`(签名密钥面) /
-/// `c`·**`e`**(**编辑器面**) / `p`(交互补丁面)。
-///
-/// ⚠️ `e`（`--edit` 的短形）此前**漏在表外** ⇒ `git commit -m x -e` / `-em x`
-/// 被**静默放过**（`e` 既不在拒绝表、也不在值参数表 ⇒ 短选项束扫描时**被忽略**）
-/// ⇒ 违反本文件写死的承诺「**本工具不开编辑器面**」。
-const COMMIT_DENIED_SHORTS: &[char] = &['n', 's', 'S', 'c', 'e', 'p'];
-
-fn grade_commit(args: &[String]) -> Result<GitWriteTier, String> {
-    let mut message_source = false;
-    let mut index = 0;
-    while index < args.len() {
-        let token = &args[index];
-        if token == "--" {
-            break;
-        }
-        if token.starts_with('-') && token.len() > 1 {
-            let base = option_base(token);
-            if base.starts_with("--") {
-                if long_option_overlaps(base, "--amend") {
-                    return Err(refuse_l3(
-                        "commit --amend 改写既有提交 = 改史族 (与 rebase 改史同权)",
-                    ));
-                }
-                if long_option_overlaps(base, "--no-verify") {
-                    return Err(refuse_morph("commit --no-verify 绕过仓库钩子 = 变形绕过面"));
-                }
-                if long_option_overlaps(base, "--edit") {
-                    // `--edit` = 在编辑器里改提交消息 ⇒ **编辑器面**（长选项形）。
-                    // 与短选项 `-e` 同一族（此前长选项分支**根本没检查**它 ⇒ 放行）。
-                    return Err(refuse_offlist("commit --edit 开编辑器: 本工具不开编辑器面"));
-                }
-                if long_option_overlaps(base, "--patch")
-                    || long_option_overlaps(base, "--interactive")
-                {
-                    // ⚠️ **交互补丁面（长选项形）**（2026-10-26 修，缺陷 ㉑）：
-                    // 拒绝表只挡了短选项 `-p`，而 git 自己的 usage 行写着
-                    // `用法：git commit [-a | --interactive | --patch] …`
-                    // ⇒ **`--patch` / `--interactive` 与 `-p` 是同一张脸**
-                    // ⇒ 放行它们 = **别名绕过**（fuzz 实测：
-                    // `git commit -m msg --interactive` 被放行成 ReversibleLocal）。
-                    return Err(refuse_offlist(
-                        "commit --patch/--interactive 交互补丁面: 本工具不开交互面",
-                    ));
-                }
-                if long_option_overlaps(base, "--reedit-message") {
-                    // ⚠️ **复用并编辑面（长选项形）**（2026-10-26 修，缺陷 ㉑）：
-                    // `-c` 早已在拒绝表里，而它的长形 `--reedit-message`
-                    // （复用既有提交的 message **并进编辑器改**）此前**没被检查**
-                    // ⇒ 同脸不同形 ⇒ 别名绕过。
-                    return Err(refuse_offlist(
-                        "commit --reedit-message 复用并编辑面: 本工具不开编辑器面",
-                    ));
-                }
-                if long_option_overlaps(base, "--sign") || long_option_overlaps(base, "--gpg-sign")
-                {
-                    return Err(refuse_offlist("签名/密钥面不入本工具"));
-                }
-                if matches!(
-                    base,
-                    "--message" | "--file" | "--reuse-message" | "--fixup" | "--squash"
-                ) {
-                    message_source = true;
-                    if !token.contains('=') {
-                        index += 1;
-                    }
-                }
-                index += 1;
-                continue;
-            }
-            // 短选项束: 逐字符查拒绝面; 遇值参数字符即止 (余下是值)。
-            for ch in token[1..].chars() {
-                if COMMIT_DENIED_SHORTS.contains(&ch) {
-                    return Err(match ch {
-                        'n' => refuse_morph("commit -n/--no-verify 绕过仓库钩子 = 变形绕过面"),
-                        'c' | 'e' => refuse_offlist("commit -c/-e 开编辑器: 本工具不开编辑器面"),
-                        _ => refuse_offlist("签名/密钥面不入本工具"),
-                    });
-                }
-                if COMMIT_VALUE_SHORTS.contains(&ch) {
-                    if ch != 't' {
-                        message_source = true;
-                    }
-                    break;
-                }
-            }
-            index += 1;
-            continue;
-        }
-        index += 1;
-    }
-    if !message_source {
-        return Err(refuse_offlist(
-            "commit 必须显式带消息 (-m/-F/--message/--file/--reuse-message): 本工具不开编辑器面",
-        ));
-    }
-    Ok(GitWriteTier::ReversibleLocal)
 }
 
 /// branch 只开**建**形态 (切走 switch): 位置参 = 名字 [起点]。
@@ -581,78 +497,6 @@ fn grade_switch(args: &[String]) -> Result<GitWriteTier, String> {
     if !created && positionals != 1 {
         return Err(refuse_offlist(
             "switch 切形态要求 1 个分支名 (或 -c <new> 建并切)",
-        ));
-    }
-    Ok(GitWriteTier::ReversibleLocal)
-}
-
-/// tag 只开**本地创建**形态 (名字 [commit])。
-fn grade_tag(args: &[String]) -> Result<GitWriteTier, String> {
-    let mut positionals = 0usize;
-    let mut index = 0;
-    while index < args.len() {
-        let token = &args[index];
-        if token == "--" {
-            positionals += args.len() - index - 1;
-            break;
-        }
-        if token.starts_with('-') && token.len() > 1 {
-            let base = option_base(token);
-            if base.starts_with("--") {
-                if long_option_overlaps(base, "--delete") {
-                    return Err(refuse_l3(
-                        "tag --delete = 引用删除族 (与 update-ref -d 同权)",
-                    ));
-                }
-                if long_option_overlaps(base, "--force") {
-                    return Err(refuse_l3("tag --force = 强制覆盖既有 tag 引用"));
-                }
-                if long_option_overlaps(base, "--sign")
-                    || long_option_overlaps(base, "--local-user")
-                {
-                    return Err(refuse_offlist("签名/密钥面不入本工具"));
-                }
-                match base {
-                    "--annotate" | "--quiet" => {}
-                    "--message" | "--file" => {
-                        if !token.contains('=') {
-                            index += 1;
-                        }
-                    }
-                    _ => {
-                        return Err(refuse_offlist(
-                            "tag 只开本地创建形态: git tag <name> [commit] (-a/-m/-F 附注可选)",
-                        ))
-                    }
-                }
-                index += 1;
-                continue;
-            }
-            for ch in short_bundle(token).unwrap_or_default() {
-                match ch {
-                    'd' | 'D' => {
-                        return Err(refuse_l3("tag -d = 引用删除族 (与 update-ref -d 同权)"))
-                    }
-                    'f' => return Err(refuse_l3("tag -f = 强制覆盖既有 tag 引用")),
-                    's' | 'u' => return Err(refuse_offlist("签名/密钥面不入本工具")),
-                    'a' | 'q' => {}
-                    'm' | 'F' => break,
-                    _ => {
-                        return Err(refuse_offlist(
-                            "tag 只开本地创建形态: git tag <name> [commit] (-a/-m/-F 附注可选)",
-                        ))
-                    }
-                }
-            }
-            index += 1;
-            continue;
-        }
-        positionals += 1;
-        index += 1;
-    }
-    if !(1..=2).contains(&positionals) {
-        return Err(refuse_offlist(
-            "tag 建形态要求 1-2 个位置参 (名字 [commit])",
         ));
     }
     Ok(GitWriteTier::ReversibleLocal)
@@ -1041,7 +885,9 @@ impl ToolCapability for GitWriteTool {
                 .with_name(name)
             }
         };
-        let plan = classify_git_write(&params.command);
+        // 根感知分级: 本工具持有工作区根 ⇒ 在**执行前**就把越界的操作数路径
+        // (`-F` / `--file`) 拒掉 (拒绝即帧, git 进程根本不启动)。
+        let plan = classify_git_write_under(&self.root, &params.command);
         let GitWritePlan::Graded { tier, segments } = plan else {
             let reason = match plan {
                 GitWritePlan::Refused { reason } => reason,

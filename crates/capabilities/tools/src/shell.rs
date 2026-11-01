@@ -371,52 +371,35 @@ impl ShellTool {
     fn isolation_requirements_for(sandbox: bool) -> IsolationRequirement {
         let base = Self::base_isolation_requirements();
         if sandbox {
-            base.require(
-                IsolationCapability::FilesystemIsolation,
-                crate::process::EnforcementLevel::Enforced,
-            )
-            .require(
-                IsolationCapability::NetworkIsolation,
-                crate::process::EnforcementLevel::Enforced,
-            )
+            let enforced = EnforcementLevel::Enforced;
+            base.require(IsolationCapability::FilesystemIsolation, enforced)
+                .require(IsolationCapability::NetworkIsolation, enforced)
         } else {
             base
         }
     }
 
     fn base_isolation_requirements() -> IsolationRequirement {
+        // P3-10 审计 (2026-10-31): Windows 的 shell 走 raw_arg 逐字尾 (cmd /D /S /C
+        // "<script>"), 结构化生成实际只有 Partial ⇒ Windows 侧只能要求 Partial ——
+        // 否则要求闸就是为「自身违反的属性」背书 (平台自证 ⇒ 恒通过)。
+        #[cfg(windows)]
+        let structured_spawn = EnforcementLevel::Partial;
+        #[cfg(not(windows))]
+        let structured_spawn = EnforcementLevel::Enforced;
+        let enforced = EnforcementLevel::Enforced;
+        let partial = EnforcementLevel::Partial;
         IsolationRequirement::new()
-            .require(
-                IsolationCapability::StructuredSpawn,
-                crate::process::EnforcementLevel::Enforced,
-            )
-            .require(
-                IsolationCapability::ExplicitCwd,
-                crate::process::EnforcementLevel::Enforced,
-            )
-            .require(
-                IsolationCapability::Timeout,
-                crate::process::EnforcementLevel::Enforced,
-            )
-            .require(
-                IsolationCapability::StdoutLimit,
-                crate::process::EnforcementLevel::Enforced,
-            )
-            .require(
-                IsolationCapability::StderrLimit,
-                crate::process::EnforcementLevel::Enforced,
-            )
-            .require(
-                IsolationCapability::EnvironmentIsolation,
-                crate::process::EnforcementLevel::Enforced,
-            )
-            .require(
-                IsolationCapability::ProcessTreeContainment,
-                crate::process::EnforcementLevel::Partial,
-            )
+            .require(IsolationCapability::StructuredSpawn, structured_spawn)
+            .require(IsolationCapability::ExplicitCwd, enforced)
+            .require(IsolationCapability::Timeout, enforced)
+            .require(IsolationCapability::StdoutLimit, enforced)
+            .require(IsolationCapability::StderrLimit, enforced)
+            .require(IsolationCapability::EnvironmentIsolation, enforced)
+            .require(IsolationCapability::ProcessTreeContainment, partial)
             .require(
                 IsolationCapability::FailClosedPreExecutionContainment,
-                crate::process::EnforcementLevel::Enforced,
+                enforced,
             )
     }
 
@@ -441,7 +424,7 @@ impl ShellTool {
         failure.emit(&call.id, Some("shell"))
     }
 
-    /// Builds a [`ProcessRequest`] from frozen fields only.
+    /// Builds a [`ProcessRequest`] from the frozen fields (plus the verified cwd).
     ///
     /// This deliberately does not call `resolve_cwd_for`, `selected_shell`,
     /// `minimal_environment`, or `resolve_timeout_ms`. If a frozen value is
@@ -449,6 +432,7 @@ impl ShellTool {
     /// current configuration.
     fn process_request_from_frozen(
         frozen: &ShellFrozenInvocation,
+        verified_cwd: &Path,
     ) -> Result<ProcessRequest, String> {
         if frozen.version != SHELL_FROZEN_VERSION {
             return Err(format!(
@@ -490,8 +474,10 @@ impl ShellTool {
         let request = ProcessRequest::new(Self::os_string(&frozen.shell_executable))
             .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)));
 
+        // P3-#17 加固 (2026-10-31): 工作目录用**执行前已验证的 canonical 路径** ——
+        // 原先用原始 frozen.cwd ⇒ 授权路径 (Windows AppContainer ACL) ≠ 校验路径。
         Ok(request
-            .with_working_directory(PathBuf::from(&frozen.cwd))
+            .with_working_directory(verified_cwd.to_path_buf())
             .with_environment(environment)
             .with_limits(limits)
             .with_isolation(frozen.isolation.clone()))
