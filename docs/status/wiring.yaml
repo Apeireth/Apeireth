@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: 1c7a9189dfd1b0792d03f5caaf78a759867ad93ea63b5d4ed4f9dda47b4043d3
-claims_total: 38
+claims_sha256: 2d22e466be3fb5b4d006156dbe44de1dc301cfcc79612546548c8beec15c94a5
+claims_total: 48
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -634,6 +634,297 @@ items:
         - "crates/engine/runtime/tests/bio_pain_wiring.rs"
         - "crates/engine/organ/src/nociception.rs"
       claims_id: "bio.recovery_protocol"
+    gaps:
+      []
+  - id: "bio.homeostasis"
+    capability: "异稳态体征→上下文策略（SG-14，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/homeostasis.rs"
+        - "crates/engine/organ/src/context_assembly.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/context_assembly.rs"
+        - "crates/engine/organ/src/homeostasis.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
+        - "crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs"
+      claims_id: "bio.homeostasis"
+    gaps:
+      []
+  - id: "bio.immune_memory"
+    capability: "免疫记忆→守卫证据（SG-15，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/guard/src/immune_memory.rs"
+        - "crates/engine/guard/src/hook.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/adapters/cli/src/lib.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/guard/src/hook.rs"
+        - "crates/engine/guard/src/immune_memory.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs"
+        - "crates/engine/guard/src/immune_memory.rs"
+      claims_id: "bio.immune_memory"
+    gaps:
+      []
+  - id: "bio.attachment"
+    capability: "依恋/分离-重聚→关怀候选（SG-19，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/attachment.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/attachment.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_reminder.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_tools.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_care_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs"
+      claims_id: "bio.attachment"
+    gaps:
+      []
+  - id: "bio.social_repair"
+    capability: "社会修复→提示词修复指令（SG-20，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs"
+        - "crates/engine/runtime-assembly/src/canonical/cognitive.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
+      claims_id: "bio.social_repair"
+    gaps:
+      []
+  - id: "bio.quorum"
+    capability: "群体感应→审议门（SG-24，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/foundation/orchestration/src/quorum.rs"
+        - "crates/foundation/orchestration/src/council/mod.rs"
+        - "crates/engine/runtime-assembly/src/canonical/orchestrator.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/orchestrator.rs"
+        - "crates/foundation/orchestration/src/council/mod.rs"
+        - "crates/foundation/orchestration/src/quorum.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_quorum_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs"
+      claims_id: "bio.quorum"
+    gaps:
+      []
+  - id: "bio.lifecycle"
+    capability: "资产生命周期→五态账本（SG-18，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/foundation/orchestration/src/lifecycle.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs"
+        - "crates/engine/runtime-assembly/src/canonical/lifecycle_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/lifecycle_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/foundation/orchestration/src/lifecycle.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_lifecycle_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_lifecycle_production.rs"
+      claims_id: "bio.lifecycle"
+    gaps:
+      []
+  - id: "bio.play"
+    capability: "游戏练习场四工具面（SG-21，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/play.rs"
+        - "crates/engine/runtime-assembly/src/canonical/play_tools.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/play.rs"
+        - "crates/engine/runtime-assembly/src/canonical.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/play_tools.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_play_wiring.rs"
+        - "crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs"
+      claims_id: "bio.play"
+    gaps:
+      []
+  - id: "bio.ritual"
+    capability: "仪式→关怀完成面（SG-22，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/engine/organ/src/ritual.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_tools.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/adapters/cli/src/bio_switches.rs"
+        - "crates/adapters/cli/src/care_heartbeat.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/organ/src/ritual.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs"
+        - "crates/engine/runtime-assembly/src/canonical/care_reminder.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_state_store.rs"
+        - "crates/engine/runtime-assembly/src/canonical/ritual_tools.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_ritual_tools.rs"
+        - "crates/engine/runtime-assembly/tests/bio_observation_cells.rs"
+      claims_id: "bio.ritual"
+    gaps:
+      []
+  - id: "bio.ecosystem_health"
+    capability: "工具生态健康度观测（SG-25，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/capabilities/tools/src/ecosystem_health.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_ecosystem_probe.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/ecosystem_health.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_ecosystem_probe.rs"
+        - "crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_tool_ecosystem.rs"
+      claims_id: "bio.ecosystem_health"
+    gaps:
+      []
+  - id: "bio.capacity"
+    capability: "承载力/演替/关键种→自述格（SG-26，生产装配，默认关）"
+    implemented:
+      sources:
+        - "crates/foundation/orchestration/src/capacity.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/capabilities/tools/src/self_status.rs"
+    wired:
+      production_refs:
+        - "crates/capabilities/tools/src/self_status.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs"
+        - "crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs"
+        - "crates/engine/runtime-assembly/src/canonical/nervous_switchboard.rs"
+        - "crates/engine/runtime-assembly/src/canonical/self_status_source.rs"
+        - "crates/foundation/orchestration/src/capacity.rs"
+    default_enabled: false
+    validated:
+      tests:
+        - "crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs"
+      claims_id: "bio.capacity"
     gaps:
       []
   - id: "rt.registered_module_v1"

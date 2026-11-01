@@ -15,7 +15,7 @@
 #
 # 0 装口径：没有证据的声明不写在这里；grep 不到的写进 notes 而不是假装验证。
 version: 1
-updated_at: "2026-10-30"
+updated_at: "2026-11-01"
 
 claims:
   - id: rt.provider_router
@@ -569,6 +569,218 @@ claims:
     owner: orchestration
     next_review: "2026-11-20"
     notes: "RecoveryCase 状态机已接失败链；ScarLedger::learn 未接（如实）。；2026-10-27 KC-1 复核：runtime.rs/CLI 改动为通用 ToolCompletionObserver 端口与装配拆出，本 claim 语义与权限边界未变（实测见 b419826c 正文）"
+
+  - id: bio.homeostasis
+    title: "异稳态体征→上下文策略（SG-14，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CONTEXT_POLICY
+    sources:
+      - crates/engine/organ/src/homeostasis.rs
+      - crates/engine/organ/src/context_assembly.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
+      - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_observation_cells"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs）+ ObservedBioAssemblyModule 观测装饰器（canonical/bio_production_wiring.rs）；开关值经 NervousSwitchboard::BioSwitch::ContextPolicy 单入口解析，env 只认 \"1\"，默认关。② 自述在：capabilities.bio_mechanisms 的 homeostasis 格（BioMechanismKind::Homeostasis，经 BioProbeSlots::fill_homeostasis 迟绑定同源句柄）+ 聚合面 capabilities.nervous_system 的 SG-14.homeostasis 行。③ 边界：仅 ContextPressure 为实测值，其余 4 维沿用 VitalSignSet::healthy() 中性基线（nervous_snapshot.rs 记 vital_sign_inputs = partial）；观测格只读，不剪枝、不改行为。"
+
+  - id: bio.immune_memory
+    title: "免疫记忆→守卫证据（SG-15，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_IMMUNE_MEMORY
+    sources:
+      - crates/engine/guard/src/immune_memory.rs
+      - crates/engine/guard/src/hook.rs
+      - crates/adapters/cli/src/lib.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
+      - crates/engine/guard/src/immune_memory.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_immune_wiring"
+    owner: guard
+    next_review: "2026-11-20"
+    notes: "① 接在：CLI 生产入口把同一份共享免疫账挂到 BehaviorChainGuardHook（crates/adapters/cli/src/lib.rs 的 ENABLE_IMMUNE_MEMORY_ENV，只认 \"1\"）；机制内核 apeireth-guard::immune_memory 的 ImmuneMemory::observe 只向 guard evidence/verdict 追加 immune 字段，不改主结论。② 自述在：capabilities.bio_mechanisms 的 immune_memory 格（BioMechanismKind::ImmuneMemory，经 BioProbeSlots::fill_immune_memory 迟绑定 guard 同一份 SharedImmuneMemory）+ 聚合面 capabilities.nervous_system 的 SG-15.immune_memory 行。③ 边界：只观察 Deny/RequireApproval 两类事件；升级信号另作审议门 Conflict 外部源（同 record_key 出现次数节流）；自述格脱敏，不回 record key / 路径 / 原文。"
+
+  - id: bio.attachment
+    title: "依恋/分离-重聚→关怀候选（SG-19，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CARE_CANDIDATES
+    sources:
+      - crates/engine/organ/src/attachment.rs
+      - crates/engine/runtime-assembly/src/canonical/care_heartbeat.rs
+      - crates/adapters/cli/src/care_heartbeat.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_care_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_care_wiring"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：CLI care_heartbeat 心跳宿主供给 presence Turn 帧 + SessionStore 可续线索 → apeireth-organ::attachment / care::reunion 产出 reunion_candidate（非 Brief）→ care 纪律管道；开关 APEIRETH_ENABLE_BIO_CARE_CANDIDATES 只认 \"1\"。② 自述在：capabilities.bio_mechanisms 的 attachment 格（BioMechanismKind::Attachment，槽由 CLI 的 fill_care_status 填 CareHeartbeatStatus 读取口，与关怀生产者同一状态闭包）+ 聚合面 capabilities.nervous_system 的 SG-19.attachment 行。③ 边界：quiet 窗口抑制候选；未挂心跳宿主的运行面槽空 ⇒ 该格 null + 真因「未接线」，不编值；候选只进关怀纪律管道，不改回合决策。"
+
+  - id: bio.social_repair
+    title: "社会修复→提示词修复指令（SG-20，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE
+    sources:
+      - crates/engine/organ/src/social_repair.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_social_repair.rs
+      - crates/engine/runtime-assembly/src/canonical/cognitive.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_cognitive_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_cognitive_wiring"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioAssemblyModule（canonical/cognitive.rs），APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE 只认 \"1\"；生产装配**不注入** RepairPlan（install_bio_modules 只注入 context budget）⇒ 修复指令块在生产实际未产出；自述侧 SocialRepairObservationSource 订阅 NervousBus 的 ApprovalSocial::Rejected 并只读折算修复计划。② 自述在：capabilities.bio_mechanisms 的 social_repair 格（BioMechanismKind::SocialRepair，经 fill_social_repair 迟绑定同源观测源）+ 聚合面 capabilities.nervous_system 的 SG-20.social_repair 行。③ 边界：会话事件源未接（UncertaintySignal 采集未接，plan_repair 只能由调用方显式注入；nervous_snapshot.rs 记 session_event_source = not_wired）；观测格只读，不改行为。"
+
+  - id: bio.quorum
+    title: "群体感应→审议门（SG-24，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_QUORUM_GATE
+    sources:
+      - crates/foundation/orchestration/src/quorum.rs
+      - crates/foundation/orchestration/src/council/mod.rs
+      - crates/engine/runtime-assembly/src/canonical/orchestrator.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_quorum_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_quorum_immune_wiring.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_quorum_wiring"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "① 接在：OrganModule → OrganOrchestrator（canonical/orchestrator.rs）的 QuorumGate → decide_with_invoker_gated，开关 APEIRETH_ENABLE_QUORUM_GATE 只认 \"1\"；含 guard 免疫升级转 Conflict 的外部源（按 (record_key,occurrences) 节流）。② 自述在：capabilities.bio_mechanisms 的 quorum 格（BioMechanismKind::Quorum，经 fill_from_organ_module 读 organ 模块 last_quorum_trace 门账）+ 聚合面 capabilities.nervous_system 的 SG-24.quorum 行。③ 边界：Hold/Cooldown 不召开顾问、不伪造否决；自述格只回计数与裁决档位，不回理由原文；门账仅进程内、不持久化。"
+
+  - id: bio.lifecycle
+    title: "资产生命周期→五态账本（SG-18，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_LIFECYCLE
+    sources:
+      - crates/foundation/orchestration/src/lifecycle.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_lifecycle.rs
+      - crates/engine/runtime-assembly/src/canonical/lifecycle_state_store.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_lifecycle_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_lifecycle_production.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_lifecycle_wiring"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_modules 注册 BioLifecycleModule（canonical/bio_lifecycle.rs），APEIRETH_ENABLE_BIO_LIFECYCLE 只认 \"1\"，关 = 不构造状态 / 不注册模块 / 一次时钟都不读；真实工具结果经 nervous.bridge → NervousBus 订阅驱动记账（R1b-2b），AfterTurn 只做 evaluate。② 自述在：capabilities.bio_mechanisms 的 lifecycle 格（BioMechanismKind::Lifecycle，经 fill_lifecycle_state 迟绑定与注册模块同一 Arc）+ 聚合面 capabilities.nervous_system 的 SG-18.lifecycle 行。③ 边界：持久化 <care_dir>/lifecycle_state.json（StoredDoc v1，坏档拒开；目录缺省 = 纯内存）；AfterTurn 评估仍走钩子、未迁总线。"
+
+  - id: bio.play
+    title: "游戏练习场四工具面（SG-21，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_PLAY
+    sources:
+      - crates/engine/organ/src/play.rs
+      - crates/engine/runtime-assembly/src/canonical/play_tools.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_play_wiring.rs
+      - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_play_wiring"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_play 注册四工具 tool.play_propose/start/finish/abort（canonical/play_tools.rs），APEIRETH_ENABLE_BIO_PLAY 只认 \"1\" 且必须注入工作区根（缺根 = 无法证明 sandbox_dir 包含性 = 不注册）；四工具共享同一本内存练习账。② 自述在：capabilities.bio_mechanisms 的 play 格（BioMechanismKind::Play，play_probe 读同一本练习账；练习开关未开 ⇒ 该格 wired:false + 真因）+ 聚合面 capabilities.nervous_system 的 SG-21.play 行。③ 边界：无 IM 卡 / 无持久化（账本只在内存，重启丢 session）/ 沙箱非 OS 隔离（不创建目录）；产物只走 PlayOutcome.artifacts 元数据、不写主体记忆；审批钩子由适配器接线，本装配根不注册。"
+
+  - id: bio.ritual
+    title: "仪式→关怀完成面（SG-22，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_CARE_CANDIDATES
+    sources:
+      - crates/engine/organ/src/ritual.rs
+      - crates/engine/runtime-assembly/src/canonical/ritual_state_store.rs
+      - crates/engine/runtime-assembly/src/canonical/ritual_tools.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_extra_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_ritual_tools.rs
+      - crates/engine/runtime-assembly/tests/bio_observation_cells.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_ritual_tools"
+    owner: organ
+    next_review: "2026-11-20"
+    notes: "① 接在：装配根 install_bio_ritual_tools 注册两工具 tool.ritual_done / tool.ritual_skip（canonical/ritual_tools.rs），复用 APEIRETH_ENABLE_BIO_CARE_CANDIDATES（只认 \"1\"）且必须注入关怀数据目录（缺目录 = 无处落盘 = 不注册）；状态存 <care_dir>/ritual_state.json（StoredDoc v1 + 原子写）。② 自述在：capabilities.bio_mechanisms 的 ritual 格（BioMechanismKind::Ritual，经 fill_ritual_store 读同一本仪式账，只读统计、不投递不打卡）+ 聚合面 capabilities.nervous_system 的 SG-22.ritual 行。③ 边界：半程 —— 纯 CLI chat 无心跳宿主时仪式写入暂无候选消费（nervous_snapshot.rs 该行 level = HALF；claims 四级无 HALF 档，故本条记 PRODUCTION WIRED 并在此如实标注半程缺口）；工具面是唯一生产写者，显式 record_ritual_done/skip 注入口保留且无跨实例锁。"
+
+  - id: bio.ecosystem_health
+    title: "工具生态健康度观测（SG-25，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_SELF_STATUS
+    sources:
+      - crates/capabilities/tools/src/ecosystem_health.rs
+      - crates/engine/runtime-assembly/src/canonical/tool_ecosystem_probe.rs
+      - crates/engine/runtime-assembly/src/canonical/tool_taxonomy.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_tool_ecosystem.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_tool_ecosystem"
+    owner: tools
+    next_review: "2026-11-20"
+    notes: "① 接在：装配末端 production.rs 调 bio_probe_slots.fill_ecosystem_profiles(&capabilities) 把静态工具能力表剖面填入迟绑定槽；探针在 canonical/tool_ecosystem_probe.rs，纯函数在 apeireth-tools-canonical::ecosystem_health::analyze，策展表在 canonical/tool_taxonomy.rs（代码内常量快照）。② 自述在：capabilities.bio_mechanisms 的 ecosystem_health 格（BioMechanismKind::EcosystemHealth）+ 聚合面 capabilities.nervous_system 的 SG-25.ecosystem_health 行。③ 边界：本机制无专属开关，随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS 开合（nervous_snapshot.rs 该行 enabled_env = null）；快照 = 装配期静态注册面，运行期动态发现的 MCP 工具不在其中（未覆盖工具如实计 untagged）；完整 taxonomy 合同（工具声明自带标签）仍属 B 类 ADR 前置、未做；只读不剪枝。"
+
+  - id: bio.capacity
+    title: "承载力/演替/关键种→自述格（SG-26，生产装配，默认关）"
+    level: PRODUCTION WIRED
+    default: "OFF"
+    switch_env: APEIRETH_ENABLE_BIO_SELF_STATUS
+    sources:
+      - crates/foundation/orchestration/src/capacity.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_mechanism_probes.rs
+      - crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs
+      - crates/engine/runtime-assembly/src/canonical/nervous_snapshot.rs
+      - crates/capabilities/tools/src/self_status.rs
+    tests:
+      - crates/engine/runtime-assembly/tests/bio_mechanisms_self_status.rs
+    verified_at: 4041ea70
+    verify_cmd: "cargo test -p apeireth-runtime-assembly --test bio_mechanisms_self_status"
+    owner: orchestration
+    next_review: "2026-11-20"
+    notes: "① 接在：capacity_bio_probe(queue, limit) 读与 tool.task_board 同一本任务队列（apeireth-orchestration::capacity）；注册点 install_bio_self_status（canonical/bio_production_wiring.rs），随观测面总闸 APEIRETH_ENABLE_BIO_SELF_STATUS（只认 \"1\"）。② 自述在：capabilities.bio_mechanisms 的 capacity 格（BioMechanismKind::Capacity；挂在既有 capabilities 节内，不是新的顶层节）+ 聚合面 capabilities.nervous_system 的 SG-26.capacity 行（observed 由 bio_mechanisms 同源推导）。③ 边界：只读（不认领 / 不改派 / 不结算任务）；未配任务板 ⇒ probe 不注册 ⇒ 该格 wired:false + 真因；并发上限 active_task_limit 未配置时阈值显式 null，不编阈值。"
 
   - id: rt.registered_module_v1
     title: "注册模块生命周期、固定 V1 Hook 与唯一治理工具目录"

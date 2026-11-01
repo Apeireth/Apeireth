@@ -161,10 +161,11 @@
 | **编排 (Orchestration)** | daemon 化 / 多客户端会话复用 | `deploy/` 服务·计划任务脚本 + `apeireth-gateway` 会话路由（W2-①/W2-③） | 常驻占位+优雅停机收尾；并发会话路由（`/v1/apeireth/events?session=` 每客户端独立订阅、同会话扇出）+ 同会话写排队+审计（账本零交叠）+ 会话归属审计 + 面板读快照 | 已实证（[W2-3-multi-client-session-reuse.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)；daemon 见 [F-server-form.md](../04-internal/backend-enhancement/02-axes/F-server-form.md) 现状） | 待上屏（运维面无 UI） |
 | **治理 (Governance)** | 用户域数据门 / 角色门（多用户） | `apeireth-core::user_domain` + `runtime-assembly::domain_plane` + `governance::user_access` + `gateway::{domain_context,client_tokens}` | `users/<id>/` 每户一域+三面分库（会话/记忆/配额账本）+跨域拒绝即帧；`owner/member/guest` 冻结角色词表+24 格权限矩阵+令牌→用户→角色链+管理面 `apeireth user`（owner 门） | 已实证（[W3-1-multi-user-data-isolation.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md) / [W3-2-user-identity-roles.md](../04-internal/backend-enhancement/04-delivery/home-W-axis-delivery.md)） | 自审（域节）+ 待上屏（域/用户管理仅 CLI） |
 | **观测 (Observability)** | `metrics.read`（`GET /v1/panel/metrics`） | `apeireth-runtime::canonical::metrics` + `apeireth-gateway::panel_metrics` | 回合一收束一拍 `TurnMetrics` → 会话/全局两层窗口聚合（`{count,mean,p50,p95,sum}` 最近秩分位）；`schema_version:1`、`retention:"in_process_rolling"`（进程内环形不落盘）；空态显式 `"—"`（null 不冒充 0）；过 W2-② 令牌门 | 已实证（[G-observability.md](../04-internal/backend-enhancement/G-observability.md) P1 交付记录，21 项测试） | 待上屏（仪表/驾驶舱 CACHE·BUDGET 面板与遥测条待前端消费批） |
-> **真源对账注记（2026-10-28 复核批）**：本表「生物机制」段用**机制名**（`bio.<机制>`，
-> 与 `BioMechanismKind::ALL` 的 **14** 格 1:1 对齐，即自述面 `BioMechanismsStatus.mechanisms`
-> 的键）；而四级口径真源 [`claims.yaml`](../status/claims.yaml) 里**已生产装配的 4 条**
-> 用的是**能力名**。两套命名的对应关系（**人工对账依据，机器不校**）：
+> **真源对账注记（2026-10-28 复核批 · 2026-11-01 D24 补全）**：本表「生物机制」段用**机制名**
+> （`bio.<机制>`，与 `BioMechanismKind::ALL` 的 **14** 格 1:1 对齐，即自述面
+> `BioMechanismsStatus.mechanisms` 的键）；而四级口径真源
+> [`claims.yaml`](../status/claims.yaml) 用的是**能力名**。两套命名的对应关系
+> （**人工对账依据，机器不校**）：
 >
 > | 本表（机制名） | `claims.yaml`（能力名） | 交叉核对锚（`switch_env`） |
 > |---|---|---|
@@ -172,10 +173,23 @@
 > | `bio.circadian` | `bio.circadian` | `APEIRETH_ENABLE_BIO_CIRCADIAN` |
 > | `bio.nociception` | `bio.nociception_pain` | `APEIRETH_ENABLE_BIO_PAIN` |
 > | `bio.recovery` | `bio.recovery_protocol` | `APEIRETH_ENABLE_BIO_PAIN` |
+> | `bio.homeostasis` | `bio.homeostasis` | `APEIRETH_ENABLE_BIO_CONTEXT_POLICY` |
+> | `bio.immune_memory` | `bio.immune_memory` | `APEIRETH_ENABLE_IMMUNE_MEMORY` |
+> | `bio.attachment` | `bio.attachment` | `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` |
+> | `bio.social_repair` | `bio.social_repair` | `APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE` |
+> | `bio.quorum` | `bio.quorum` | `APEIRETH_ENABLE_QUORUM_GATE` |
+> | `bio.lifecycle` | `bio.lifecycle` | `APEIRETH_ENABLE_BIO_LIFECYCLE` |
+> | `bio.play` | `bio.play` | `APEIRETH_ENABLE_BIO_PLAY` |
+> | `bio.ritual` | `bio.ritual` | `APEIRETH_ENABLE_BIO_CARE_CANDIDATES` |
+> | `bio.ecosystem_health` | `bio.ecosystem_health` | `APEIRETH_ENABLE_BIO_SELF_STATUS`（**无专属开关**，随观测面总闸开合） |
+> | `bio.capacity` | `bio.capacity` | `APEIRETH_ENABLE_BIO_SELF_STATUS`（**无专属开关**，随观测面总闸开合） |
 >
-> ⇒ **其余 10 条**只有机制读数格（自述面）+ 生产接线（`bio_production_wiring.rs` 逐个
-> `register_bio_probe`），**尚未进 `claims.yaml`** ⇒ 即「**已接线、未作为对外能力承诺**」
-> （这个区别必须留着，否则会把「有读数」说成「已承诺」）。
+> ⇒ **2026-11-01 D24 落地**：**14 条全部已进 `claims.yaml`**
+> （每条 `PRODUCTION WIRED` + **默认关** ⇒ 「有机制读数」与「已作为对外能力承诺」**已对齐**；
+> 每条 notes 里**逐条写清边界/半程**（如 `bio.ritual` 半程、`bio.social_repair` 生产不注入
+> `RepairPlan`、`bio.capacity` 未配任务板则该格 `wired:false`））。
+> ⇒ ⚠️ **`level` 与 `default` 是两件事**：`PRODUCTION WIRED` + `default: OFF`
+> = 「**已进生产装配，但默认不开**」（与本表各行「默认关 X」一致）⇒ **不是**「已承诺默认开」。
 > ⚠️ `scripts/docs_truth.py --verify` **不校这层映射**（它只校 claims 自身的
 > `sources`/`tests`/`verified_at`）⇒ ⇒ 本节是**人工对账**，不是门禁。
 
