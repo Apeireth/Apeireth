@@ -61,12 +61,12 @@
 
 | 类别 | 数量 | 含义 |
 |---|---|---|
-| 重复实现 | 4 | 同能力另有主实现 ⇒ **不是债** |
+| 重复实现 | 5 | 同能力另有主实现 ⇒ **不是债** |
 | 有意不接 | 9 | 模块自述 default-off / 研究原型 / W5 哲学层 ⇒ **不是债** |
 | 整族未接线 | 6 | `layered_memo` 整族（6 个模块同因） |
 | 待判 | 31 | 逐条人工过筛中 |
 
-### 5.1 重复实现（4 条，不是债）
+### 5.1 重复实现（5 条，不是债）
 
 | 模块 | 已被谁承担 |
 |---|---|
@@ -74,6 +74,7 @@
 | `preference_store.rs` | 偏好已走 `SQLitePreferenceStore`（`cli/src/lib.rs:1858`） |
 | `three_layer.rs` | 分层由 `layers.rs` + coordinator 承担（`production.rs:1435`） |
 | `vector_distance.rs` | 向量数学归 `canonical::vector`（`coordinator.rs:613`） |
+| `scope.rs` 的 `RecallPolicy` | 召回策略已分三处承担：`MemoryRecallQuery`（查询面）· `ProactiveRecallPolicy`（**主动召回决策 + 每次预算**，已接生产）· `MemoryModule`（`max_recall_tokens`/`max_context_chars` 两个预算字段）⇒ ⇒ `RecallPolicy.proactive_budget`（默认 2）与 `token_budget`（默认 1024）**零生产消费**，且其默认值与 `MemoryModule` 的 1024/4000 **逐字相同** ⇒ ⇒ **同一套策略写了两遍** ⇒ **归组，不是债**（再接一次会引入第四份预算真相）|
 
 ### 5.2 有意不接（9 条，不是债）
 
@@ -212,6 +213,16 @@
 **整族未接线（模块级，建议单独立条目）**：`memory/src/scope.rs` 的 `RecallPolicy`、
 `dailynote/` 的 `DailyNote`、`online_calibration.rs` 的 `AdaptiveBaseline`/`DriftDetector`、
 `cluster_store.rs` 的 `ClusterStore` —— 各自那几条基线条目是**症状**，不是独立债。
+
+> **2026-11-01 限定名级复核**（副总指挥线，逐条 grep **限定名** ⇒ 排除 `ProactiveRecallPolicy` 这类前缀遮蔽）：
+> - `scope::RecallPolicy` ⇒ 库外 **0** ⇒ 但**不是缺口** ⇒ 已归组到 §5.1（`RecallPolicy` 三处承担）⇒ **本条销账**；
+> - `dailynote::DailyNote` ⇒ 库外 **0** ⇒ 仍待判；
+> - `online_calibration::AdaptiveBaseline` ⇒ 库外 **0** ⇒ 仍待判；
+> - ⭐ `online_calibration::DriftDetector` ⇒ 库外 **1**
+>   （`crates/engine/runtime-assembly/src/canonical/research_autonomy.rs`）⇒ ⇒ **已接线** ⇒ **本条原记录已过期**；
+> - `cluster_store::ClusterStore` ⇒ 库外 **0** ⇒ 仍待判。
+> ⇒ ⇒ **判据提醒**：本节的「零引用」必须用**限定名**复核 —— 裸 token 计数会被
+> `ProactiveRecallPolicy` 之类的前缀遮蔽（**同名遮蔽**，见本节「判据盲区」）。
 
 **「零引用 ≠ 没接电」的反例**：`apeireth_sdk_py`（PyO3 `#[pymodule]`）由 **Python import
 机制**调用，Rust 侧零引用是正常态 —— 判据看不见。
