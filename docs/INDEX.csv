@@ -110,7 +110,7 @@ docs/04-internal/01-handoffs/handoff-pet-avatar-line-2026-10-11.md,L4,8,交接�
 docs/04-internal/01-handoffs/handoff-w1-w5-closure-2026-10-10.md,L4,8,交接报告 — W1 沙箱 / W2 接线 / W3 真缺口 / W5 SDK 全线收官 (handoff-w1-w5-closure-2026-10-10.md),2026-10-10,在飞,8,保留,
 docs/04-internal/01-handoffs/handoff-w2-wiring-2026-10-06.md,L4,8,W2 接线工作线交接文档 (handoff-w2-wiring-2026-10-06.md),2026-10-06,在飞,8,保留,
 docs/04-internal/01-handoffs/handover-ledger.md,L4,3,批次交接台账（时间线索引）,2026-08-28,在飞,5,保留,
-docs/04-internal/01-handoffs/memory-engine-closure-ledger-2026-11-01.md,L4,3,记忆引擎收口清单（2026-11-01 实测基线）,2026-11-01,在飞,0,保留,
+docs/04-internal/01-handoffs/memory-engine-closure-ledger-2026-11-01.md,L4,3,记忆引擎收口清单（2026-11-01 实测基线）,2026-11-01,在飞,1,保留,
 docs/04-internal/02-research/README.md,L4,5,02-research —— 研究与调研,2026-08-28,在飞,1,索引,
 docs/04-internal/02-research/b-block-decision-points-research-2026-08-28.md,L4,6,B 块 frontend 对接 6 项主代理亲做决策 真账 (2026-08-28),2026-08-28,在飞,3,保留,
 docs/04-internal/02-research/b-block-gateway-sse-research-2026-08-28.md,L4,6,B 块 gateway SSE 真账 — sub-agent B-A 真实施 + 主代理亲撤真账 (2026-08-28),2026-08-28,在飞,6,保留,

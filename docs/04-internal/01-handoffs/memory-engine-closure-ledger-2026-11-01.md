@@ -1,3 +1,10 @@
+[Document-Meta]
+Document: docs/04-internal/01-handoffs/memory-engine-closure-ledger-2026-11-01.md
+Class: LEDGER
+Status: 🟢 活跃
+Last-Modified: 2026-11-01
+Author: deputy
+
 # 记忆引擎收口清单（2026-11-01 实测基线）
 
 [Document-Meta]
@@ -109,7 +116,7 @@ Class:           STATUS
 | `scope::RecallPolicy` | **0** | ⬜ **仅库内** ⇒ 与 `MemoryRecallQuery` + `MemoryModule` **重复实现** ⇒ 见 §6.1 |
 | `dailynote::DailyNote` | **0** | ⬜ 仅库内 ⇒ 待判 |
 | `online_calibration::AdaptiveBaseline` | **0** | ⬜ 仅库内 ⇒ 待判 |
-| `online_calibration::DriftDetector` | **1**（`crates/engine/runtime-assembly/src/canonical/research_autonomy.rs`） | ✅ **已接线 ⇒ 台账这条已过期，需更正** |
+| **`online_calibration::DriftDetector`** | **0**（只有 `lib.rs` 重导出） | ⬜ **A 类真缺口**（库级 IMPLEMENTED，零真实消费）⇒ ⚠️ **2026-11-01 撤回**「已接线」判定（复核发现那处只是**注释里提到**，且**没有 import** ⇒ 全仓零真实调用） |
 | `cluster_store::ClusterStore` | **0** | ⬜ 仅库内 ⇒ 待判 |
 
 ⇒ ⇒ **⇒ 台账里这一条需要更正**（`DriftDetector` 已接）。
