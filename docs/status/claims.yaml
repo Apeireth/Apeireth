@@ -447,7 +447,7 @@ claims:
       - crates/foundation/credentials/src/hot_store.rs
     tests:
       - crates/engine/provider/tests/endpoint_binding.rs
-    verified_at: cc244de376e8f3b61e2463ebbdbcaf06680440ef
+    verified_at: a9d689ed8f095975e9210ad54b7b67dfcf44f3fa
     verify_cmd: "cargo test -p apeireth-provider --test endpoint_binding --locked"
     owner: provider
     next_review: "2026-12-01"
