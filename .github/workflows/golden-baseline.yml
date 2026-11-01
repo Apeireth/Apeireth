@@ -96,8 +96,24 @@ jobs:
           path: ${{ runner.temp }}/capacity/report.txt
           if-no-files-found: warn
 
-      - name: Build workspace tests
-        run: cargo build --workspace --tests --locked
+      # ⚠️ **只构建闸门真正需要的那一个 example**（2026-11-01 修「长期红」）
+      #
+      # 原先错在哪：这一步跑的是 `cargo build --workspace --tests --locked`
+      #   ⇒ 编译**整个 workspace 的全部测试目标** ⇒ target 体积
+      #   **101 GB**（默认）/ **7.5 GB**（瘦身后）⇒ runner 磁盘 **装不下** ⇒
+      #   这一步 **exit 101** ⇒ 真正的检索基线闸门**从来没跑到过**
+      #   （自 2026-10-31 起就是这个 job 长期红的真因；本地同命令退出码 0
+      #     ⇒ 差异在**环境容量**，不在代码）。
+      #
+      # 现在为什么这样：闸门脚本 `scripts/check_golden_baseline.py` 实际只跑
+      #   `cargo run --quiet --locked -p apeireth-memory --example golden_baseline_report`
+      #   ⇒ **只需要 `apeireth-memory` 这一个 crate 的一个 example**
+      #   ⇒ 只构建它 ⇒ target 体积 **~几百 MB** ⇒ runner 装得下
+      #   ⇒ 这一步不再 exit 101 ⇒ 检索基线闸门**第一次真正执行**。
+      #
+      # ⚠️ **不删任何断言、不改任何口径**：跑的仍是同一个 example、同一份基线文件。
+      - name: Build the golden-report example (闸门唯一需要的产物)
+        run: cargo build --locked -p apeireth-memory --example golden_baseline_report
 
       - name: Retrieval baseline gate (accuracy must not drop)
         run: python3 scripts/check_golden_baseline.py
