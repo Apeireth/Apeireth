@@ -19,7 +19,7 @@
 //! * **audience** = 构造时确定的「这个凭据该去哪些端点」：
 //!   厂商 provider（anthropic / minimax）= **厂商默认端点** ⇒ 换端点**默认拒绝**；
 //!   协议族 provider（openai-compatible）= 空（端点本就由部署方选）⇒ 保持既有行为。
-//! * **显式绑定** = 部署方声明（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` / 运行时热写）
+//! * **显式绑定** = 部署方声明（凭据库热写：`HotCredentialStore::set_with_endpoints`）
 //!   ⇒ **加宽** audience。
 //! * 两者皆空 ⇒ **不拦截**；否则端点不在集合内 ⇒ **拒绝**（fail-closed）。
 //!
@@ -33,7 +33,7 @@
 //!
 //! * 对**协议族** provider，**不声明绑定时仍不拦截** —— 因为「部署方选的端点」
 //!   没有可推导的默认值，硬判会把正常部署全部打死。
-//!   ⇒ 想要拦截就**显式声明**绑定（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 或运行时热写）。
+//!   ⇒ 想要拦截就**显式声明**绑定（凭据库热写）。
 //! * 绑定是**部署方的显式声明**，不是密码学证明：它防的是「**只改端点**就泄漏」，
 //!   不防「能同时改端点与绑定声明」的对手（那种对手本来就能改凭据）。
 
@@ -61,7 +61,7 @@ pub enum EndpointBindingVerdict {
 ///   · **协议族 provider**（openai-compatible）⇒ audience = 空（端点本就由部署方选）
 ///     ⇒ 保持既有行为，不误伤自建端点。
 /// * `resolver.bound_endpoints(cred)` = 部署方**显式声明**的绑定
-///   （`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 或运行时热写）⇒ **加宽** audience。
+///   （凭据库热写）⇒ **加宽** audience。
 ///
 /// 最终允许集合 = `audience ∪ 显式绑定`：
 /// * 两者皆空 ⇒ **不拦截**（`Unmanaged`，保持既有行为）。
@@ -117,7 +117,7 @@ pub fn ensure_credential_bound_to_endpoint(
             detail: format!(
                 "credential is not bound to endpoint {origin}; allowed endpoints: {}. \
                  Refusing to send the credential to an unbound host. Declare the binding \
-                 explicitly (e.g. APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS) to use a custom endpoint.",
+                 explicitly (credential-store level) to use a custom endpoint.",
                 if allowed.is_empty() {
                     "<none declared>".to_string()
                 } else {
@@ -186,40 +186,6 @@ pub fn endpoint_origin(url: &str) -> Option<String> {
         None => String::new(),
     };
     Some(format!("{scheme}://{host}{port}"))
-}
-
-/// 解析 `APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 的绑定声明。
-///
-/// 格式：**`凭据名@origin`**，多条用 **`;`** 分隔（`@` 与 `;` 在 origin 里不会出现，
-/// 故不会歧义）。例：
-/// `provider.anthropic.api_key@https://gw.internal;provider.openai-compatible.api_key@https://api.deepseek.com`
-///
-/// # 失败口径
-///
-/// 格式非法的条目**被跳过**（不 panic、不静默改成别的意思）⇒ 未通过校验的绑定
-/// **不生效** ⇒ 该端点不会被放行（fail-closed 方向）。
-pub fn parse_endpoint_bindings(raw: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    for entry in raw.split(';') {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-        let Some((name, origin)) = entry.split_once('@') else {
-            continue;
-        };
-        let name = name.trim();
-        let origin = origin.trim();
-        if name.is_empty() || origin.is_empty() {
-            continue;
-        }
-        // 归一后仍能解析出 origin 才算有效声明。
-        if endpoint_origin(origin).is_none() {
-            continue;
-        }
-        out.push((name.to_string(), origin.to_string()));
-    }
-    out
 }
 
 #[cfg(test)]
@@ -386,17 +352,5 @@ mod tests {
             None,
         )
         .is_err());
-    }
-
-    #[test]
-    fn binding_declarations_parse_and_reject_garbage() {
-        let parsed = parse_endpoint_bindings(
-            "provider.anthropic.api_key@https://gw.internal ; bad-entry ; \
-             provider.openai-compatible.api_key@https://api.deepseek.com",
-        );
-        assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed[0].0, "provider.anthropic.api_key");
-        assert_eq!(parsed[0].1, "https://gw.internal");
-        assert_eq!(parsed[1].0, "provider.openai-compatible.api_key");
     }
 }

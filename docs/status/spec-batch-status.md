@@ -37,7 +37,7 @@ Author: lead
 | `b3_shadow_run` · B3 影子双跑模块 | **存在** |
 | `b0a_adapter` · B0-a PerLTQA 适配器 | **存在** |
 | `b0a_reproduce` · B0-a `reproduce.sh` | ****无**** |
-| `claims` · 状态声明 | **37 条（延后 0 · 豁免 0）** |
+| `claims` · 状态声明 | **38 条（延后 0 · 豁免 0）** |
 
 <!-- END:auto-facts -->
 

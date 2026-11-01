@@ -36,6 +36,22 @@ pub const MODEL_ENV: &str = "APEIRETH_MODEL";
 pub trait CredentialWriter: Send + Sync {
     /// Write `value` under the backend credential name `name`.
     fn write(&self, name: &str, value: &str) -> Result<(), String>;
+
+    /// Write `value` **and** declare the endpoints this credential is allowed
+    /// to reach (2026-11-01 安全审计 P1：凭据 ↔ 端点绑定).
+    ///
+    /// # 为什么默认实现是 **Err**（而不是静默忽略）
+    ///
+    /// 「静默丢弃绑定」会让部署方以为绑定生效了（实际没生效 ⇒ 保护是假的）。
+    /// ⇒ 不支持绑定的写入端**必须如实报失败**。
+    fn write_with_endpoints(
+        &self,
+        _name: &str,
+        _value: &str,
+        _endpoints: &[String],
+    ) -> Result<(), String> {
+        Err("该凭据写入端不支持端点绑定声明（凭据已写入，但绑定未登记）".to_string())
+    }
 }
 
 /// Capability flags carried by the hot config.
@@ -240,9 +256,25 @@ pub async fn admin_config_update(
 
     if let Some(api_key) = patch.api_key.as_deref() {
         let name = credential_name(&provider);
+        // ⚠️ **同笔**带 `base_url` + `api_key` ⇒ 视为一次**显式的端点绑定声明**
+        // （安全审计 P1：凭据与端点是两份独立配置 ⇒ 只改端点会把旧凭据发给新主机；
+        //   ⇒ 「换端点 + 换凭据」同笔提交 = 部署方明确说「这个凭据属于这个端点」）。
+        // ⇒ 绑定**与凭据同库写入**（`HotCredentialStore::set_with_endpoints`）
+        // ⇒ 之后**只改端点**不再能把这把凭据带走。
+        let bound_endpoint = patch
+            .base_url
+            .as_deref()
+            .map(|url| url.trim().to_string())
+            .filter(|url| !url.is_empty());
         match &state.services.credentials {
             Some(writer) => {
-                if let Err(error) = writer.write(&name, api_key) {
+                let result = match &bound_endpoint {
+                    Some(endpoint) => {
+                        writer.write_with_endpoints(&name, api_key, &[endpoint.clone()])
+                    }
+                    None => writer.write(&name, api_key),
+                };
+                if let Err(error) = result {
                     warnings.push(format!("api_key 未写入 keyring ({name}): {error}"));
                 }
             }

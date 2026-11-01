@@ -170,6 +170,31 @@ impl CredentialWriter for HotCredentialWriter {
         }
         Ok(())
     }
+
+    /// 写入凭据**并**登记它的端点绑定（安全审计 P1 的「凭据库维度」）。
+    ///
+    /// 绑定与凭据**存在同一个 store** ⇒ 换端点配置**改不到**这份绑定
+    /// ⇒ 未绑定的端点拿不到这把凭据。
+    ///
+    /// ⚠️ 持久层（OS keyring）只存**值**（keyring 的值模型没有附加元数据的位置）
+    /// ⇒ **绑定只活在进程内**（重启后需要重新声明）⇒ 如实在此说明，不假装持久。
+    fn write_with_endpoints(
+        &self,
+        name: &str,
+        value: &str,
+        endpoints: &[String],
+    ) -> Result<(), String> {
+        self.store
+            .set_with_endpoints(name, value, endpoints.iter().cloned());
+        if let Some(backend) = &self.durable {
+            backend
+                .set(name, &SecretBuf::from_str(value))
+                .map_err(|error| {
+                    format!("已热更生效（下次请求使用），但 keyring 持久化失败: {error}")
+                })?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

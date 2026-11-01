@@ -3,8 +3,8 @@
 # regenerate: python scripts/wiring_report.py --gen；drift check: --verify
 schema: adr-0004-r3a
 generator: scripts/wiring_report.py
-claims_sha256: a4a5d192c28051f50ce126480a94d6f9bf6c55ba6584f6192713b1ba10045377
-claims_total: 37
+claims_sha256: 7195570afba2dc49fef0ecd16759d4c5b9f46c480e81b9b99d4660b4cf946bce
+claims_total: 38
 items:
   - id: "rt.provider_router"
     capability: "跨 provider fallback + 健康态（运行时路由）"
@@ -475,6 +475,31 @@ items:
         - "frontend/companion-desktop/src-tauri/src/pg_client.rs"
         - "frontend/companion-desktop/src-tauri/src/mysql_client.rs"
       claims_id: "sec.sql_readonly_gate"
+    gaps:
+      []
+  - id: "sec.credential_endpoint_binding"
+    capability: "凭据 ↔ 端点绑定（厂商 provider 的凭据只发往厂商端点；自定义端点须显式声明）"
+    implemented:
+      sources:
+        - "crates/engine/provider/src/endpoint_binding.rs"
+        - "crates/engine/provider/src/canonical_anthropic.rs"
+        - "crates/engine/provider/src/canonical_minimax.rs"
+        - "crates/engine/provider/src/canonical_openai_compatible.rs"
+        - "crates/foundation/plugin/src/credentials.rs"
+        - "crates/foundation/credentials/src/hot_store.rs"
+    wired:
+      production_refs:
+        - "crates/engine/provider/src/canonical_anthropic.rs"
+        - "crates/engine/provider/src/canonical_minimax.rs"
+        - "crates/engine/provider/src/canonical_openai_compatible.rs"
+        - "crates/engine/provider/src/endpoint_binding.rs"
+        - "crates/foundation/credentials/src/hot_store.rs"
+        - "crates/foundation/plugin/src/credentials.rs"
+    default_enabled: true
+    validated:
+      tests:
+        - "crates/engine/provider/tests/endpoint_binding.rs"
+      claims_id: "sec.credential_endpoint_binding"
     gaps:
       []
   - id: "sec.provider_proxy_ssrf"

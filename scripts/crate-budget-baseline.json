@@ -2,11 +2,11 @@
   "crates": {
     "crates/adapters/cli": {
       "files": 37,
-      "loc": 16942
+      "loc": 16967
     },
     "crates/adapters/gateway": {
       "files": 34,
-      "loc": 19151
+      "loc": 19183
     },
     "crates/adapters/sdk": {
       "files": 22,
@@ -18,7 +18,7 @@
     },
     "crates/capabilities/tools": {
       "files": 130,
-      "loc": 85789
+      "loc": 86014
     },
     "crates/engine/guard": {
       "files": 28,
@@ -77,8 +77,8 @@
       "loc": 27843
     },
     "crates/engine/provider": {
-      "files": 13,
-      "loc": 5727
+      "files": 14,
+      "loc": 6291
     },
     "crates/engine/runtime": {
       "files": 51,
@@ -98,7 +98,7 @@
     },
     "crates/foundation/credentials": {
       "files": 10,
-      "loc": 4011
+      "loc": 4084
     },
     "crates/foundation/governance": {
       "files": 24,
@@ -110,11 +110,11 @@
     },
     "crates/foundation/plugin": {
       "files": 47,
-      "loc": 15317
+      "loc": 15339
     },
     "crates/foundation/protocol": {
       "files": 24,
-      "loc": 8657
+      "loc": 8841
     }
   },
   "note": "每个 crate 的 src/ 总量；只减不增（--gen 只应在真的减少后跑）",

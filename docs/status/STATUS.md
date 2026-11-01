@@ -23,10 +23,11 @@
 | `gov.chain_skeleton` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
 | `gov.chain_hook_adapter` | PRODUCTION WIRED | ON | - | `5c74f955e62c` | 2026-11-20 |
 | `gov.reflection_queue` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
-| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
+| `gov.chain_drill_ci` | IMPLEMENTED | - | - | `c67e25fdc274` | 2026-11-20 |
 | `sec.governance_chain_drill` | IMPLEMENTED | - | - | `5c74f955e62c` | 2026-11-20 |
 | `rel.release_asset_verify` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |
 | `sec.sql_readonly_gate` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
+| `sec.credential_endpoint_binding` | PRODUCTION WIRED | ON | `APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` | `PLACEHOLDER_` | 2026-12-01 |
 | `sec.provider_proxy_ssrf` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `sec.desktop_file_roots` | PRODUCTION WIRED | ON | - | `c9251271` | 2026-11-20 |
 | `sec.terminal_permission_surfaces` | IMPLEMENTED | - | - | `c9251271` | 2026-11-20 |

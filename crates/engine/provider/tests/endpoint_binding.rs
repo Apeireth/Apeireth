@@ -191,9 +191,16 @@ async fn protocol_family_provider_is_enforced_once_a_binding_is_declared() {
     );
 }
 
-/// 绑定声明的解析口径：没声明 ⇒ 不参与绑定（`None`）。
+/// 绑定声明的解析口径：没声明 ⇒ 不参与绑定（`None`）；声明了 ⇒ 表里有它。
 #[test]
 fn binding_declarations_are_absent_unless_declared() {
-    let resolver = EnvCredentialResolver::new().with_endpoint_bindings_from_env();
+    let resolver = EnvCredentialResolver::new();
     assert!(resolver.declared_endpoints(ANTHROPIC_API_KEY).is_none());
+
+    let bound = EnvCredentialResolver::new()
+        .with_endpoint_binding(ANTHROPIC_API_KEY, "https://gw.internal");
+    assert_eq!(
+        bound.declared_endpoints(ANTHROPIC_API_KEY),
+        Some(["https://gw.internal".to_string()].as_slice())
+    );
 }

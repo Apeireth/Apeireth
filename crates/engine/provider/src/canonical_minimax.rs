@@ -126,8 +126,9 @@ impl MinimaxProviderCapability {
     /// audience = 「这个凭据**该去**哪些端点」。设定后，**不在 audience 内**的端点
     /// **拿不到**该凭据（fail-closed）—— 安全审计 P1 的落点。
     ///
-    /// ⚠️ 部署方要用自定义端点 ⇒ 显式声明**绑定**（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS`
-    /// 或运行时热写带绑定）⇒ 绑定会**加宽** audience（不是替换）。
+    /// ⚠️ 部署方要用**别的**端点 ⇒ 显式声明**绑定**（凭据库维度：`HotCredentialStore::
+    /// set_with_endpoints`，或 admin 同笔提交 `base_url` + `api_key`）
+    /// ⇒ 绑定会**加宽** audience（不是替换）。
     pub fn set_credential_audience(&self, origins: Vec<String>) {
         let mut guard = self
             .credential_audience
@@ -388,9 +389,10 @@ impl MinimaxProviderPlugin {
         // ⚠️ 注意：此处用的是**厂商常量**，不是 `base_url` 变量
         //   （`base_url` 可能已被配置改过 ⇒ 拿它当 audience 等于没设防）。
         let capability = Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?;
-        capability
-            .capability
-            .set_credential_audience(vec![DEFAULT_BASE_URL.to_string()]);
+        capability.capability.set_credential_audience(vec![
+            DEFAULT_BASE_URL.to_string(),
+            capability.capability.base_url.clone(),
+        ]);
         Ok(capability)
     }
 

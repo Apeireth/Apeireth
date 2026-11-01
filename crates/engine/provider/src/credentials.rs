@@ -100,14 +100,10 @@ impl EnvCredentialResolver {
             OPENAI_COMPATIBLE_API_KEY.to_string(),
             OPENAI_COMPATIBLE_API_KEY_ENV.to_string(),
         );
-        let mut resolver = Self {
+        Self {
             mappings,
             bindings: BTreeMap::new(),
-        };
-        // 生产路径**自动**读端点绑定声明（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS`）
-        // ⇒ 部署方声明了才生效，不声明就没有（协议族 provider 不被误伤）。
-        resolver = resolver.with_endpoint_bindings_from_env();
-        resolver
+        }
     }
 
     /// Override or add a semantic-name → env-var mapping.
@@ -149,28 +145,11 @@ impl EnvCredentialResolver {
         self
     }
 
-    /// 从环境变量 `APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 读取绑定声明。
-    ///
-    /// 格式：**`凭据名@origin`**，多条用 **`;`** 分隔。
-    /// 例：`provider.anthropic.api_key@https://gw.internal;provider.openai-compatible.api_key@https://api.deepseek.com`
-    ///
-    /// 格式非法的条目**被跳过**（不生效 ⇒ 该端点不会被放行，fail-closed 方向）。
-    pub fn with_endpoint_bindings_from_env(mut self) -> Self {
-        let raw = std::env::var(ENDPOINT_BINDINGS_ENV).unwrap_or_default();
-        for (name, origin) in crate::endpoint_binding::parse_endpoint_bindings(&raw) {
-            self = self.with_endpoint_binding(name, origin);
-        }
-        self
-    }
-
     /// 该凭据已声明的端点（未声明 ⇒ `None`，即「不参与绑定」）。
     pub fn declared_endpoints(&self, semantic: &str) -> Option<&[String]> {
         self.bindings.get(semantic).map(Vec::as_slice)
     }
 }
-
-/// 环境变量名：端点绑定声明（`凭据名@origin`，多条 `;` 分隔）。
-pub const ENDPOINT_BINDINGS_ENV: &str = "APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS";
 
 impl CredentialResolver for EnvCredentialResolver {
     fn resolve(&self, name: &str) -> Option<Secret> {

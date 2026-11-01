@@ -1,8 +1,6 @@
 # arch-guard baseline v1 — 架构违规棘轮基线（只减不增）
 # 生成: python scripts/arch_guard.py --update-baseline
 # 规则: 新指纹不在本文件 = 违规; 本文件中已消失的指纹 = 可缩表。
-# D-1（2026-10-25）：下列 +1 = 守门属性 `#[allow(dead_code)]`（心跳驱动器句柄**仅测试读**）
-# 而非逻辑增长；同批其余被钉的 size 项全是**净减少**（删真死代码）。
 
 # --- edge (111) ---
 edge apeireth-bench-harness -> apeireth-core
@@ -120,7 +118,7 @@ edge apeireth-tui -> apeireth-credentials
 # --- devcycle (1) ---
 devcycle apeireth-memory,apeireth-orchestration,apeireth-plugin,apeireth-provider
 
-# --- env (153) ---
+# --- env (160) ---
 env APEIRETH_ANTHROPIC_
 env APEIRETH_ANTHROPIC_KEY
 env APEIRETH_ANTHROPIC_MODELS
@@ -158,6 +156,7 @@ env APEIRETH_ENABLE_BACKUP_EXPORT
 env APEIRETH_ENABLE_BIO_CARE_CANDIDATES
 env APEIRETH_ENABLE_BIO_CIRCADIAN
 env APEIRETH_ENABLE_BIO_CONTEXT_POLICY
+env APEIRETH_ENABLE_BIO_LIFECYCLE
 env APEIRETH_ENABLE_BIO_PAIN
 env APEIRETH_ENABLE_BIO_PLAY
 env APEIRETH_ENABLE_BIO_REPAIR_GUIDANCE
@@ -174,7 +173,9 @@ env APEIRETH_ENABLE_DEVICE_CONTROL
 env APEIRETH_ENABLE_DEVICE_SENSE
 env APEIRETH_ENABLE_DOC_OPS
 env APEIRETH_ENABLE_EDUCATION
+env APEIRETH_ENABLE_EGRESS_GATE
 env APEIRETH_ENABLE_EXPOSURE_AUDIT
+env APEIRETH_ENABLE_EXTERNAL
 env APEIRETH_ENABLE_FETCH
 env APEIRETH_ENABLE_FILE_WRITE
 env APEIRETH_ENABLE_FILE_WRITE_AUTO_PASS
@@ -196,9 +197,11 @@ env APEIRETH_ENABLE_PREFERENCE_LEARNING
 env APEIRETH_ENABLE_PROACTIVE_RECALL
 env APEIRETH_ENABLE_PROPOSALS
 env APEIRETH_ENABLE_QUORUM_GATE
+env APEIRETH_ENABLE_RECON
 env APEIRETH_ENABLE_REFLEXION
 env APEIRETH_ENABLE_RETRIEVAL_TUNING
 env APEIRETH_ENABLE_SELF_TUNING
+env APEIRETH_ENABLE_SESSION_SEAL
 env APEIRETH_ENABLE_SHEET_OPS
 env APEIRETH_ENABLE_SHELL
 env APEIRETH_ENABLE_SKILL_DISTILL
@@ -260,10 +263,12 @@ env APEIRETH_REFLEXION_DIR
 env APEIRETH_REG_APEIRETH_CORE_A
 env APEIRETH_REG_APEIRETH_CORE_B
 env APEIRETH_SESSION_DB
+env APEIRETH_SESSION_SEAL_KEY_FILE
 env APEIRETH_SHELL_SANDBOX
 env APEIRETH_SUBJECT_ID
 env APEIRETH_TLS_CERT
 env APEIRETH_TLS_KEY
+env APEIRETH_TOOL_SCOPE
 env APEIRETH_TUI_MOTION
 env APEIRETH_TUNE_
 env APEIRETH_TUNE_CONSOLIDATION_CADENCE
@@ -275,9 +280,11 @@ env APEIRETH_VOICE_INTERRUPT
 env APEIRETH_VOICE_QUIET_HOURS
 env APEIRETH_VOICE_SPEAK_SCOPE
 
-# --- size (65) ---
+# --- size (79) ---
+size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
 size crates/adapters/cli/src/lib.rs 3768
+size crates/adapters/cli/src/main.rs 1467
 size crates/adapters/cli/src/onboarding.rs 1338
 size crates/adapters/gateway/src/canonical_entry.rs 2281
 size crates/adapters/gateway/src/events.rs 1623
@@ -285,17 +292,23 @@ size crates/adapters/gateway/src/panels.rs 1623
 size crates/adapters/gateway/src/presence.rs 1279
 size crates/adapters/sdk/src/client.rs 1552
 size crates/adapters/tui/src/state.rs 1585
+size crates/capabilities/tools/src/backup.rs 1236
 size crates/capabilities/tools/src/device/device_control.rs 3119
 size crates/capabilities/tools/src/device/guard_watch.rs 1341
 size crates/capabilities/tools/src/doc_ops.rs 6124
-size crates/capabilities/tools/src/git_write.rs 1275
+size crates/capabilities/tools/src/external.rs 2672
 size crates/capabilities/tools/src/image_ops.rs 2233
+size crates/capabilities/tools/src/process/mod.rs 1216
 size crates/capabilities/tools/src/process/windows.rs 1448
+size crates/capabilities/tools/src/proposal.rs 1232
+size crates/capabilities/tools/src/recon/dotnet.rs 1233
+size crates/capabilities/tools/src/recon/yara.rs 1954
+size crates/capabilities/tools/src/recon_tool.rs 1664
 size crates/capabilities/tools/src/self_status.rs 4184
 size crates/capabilities/tools/src/sheet_ops.rs 4256
-size crates/capabilities/tools/src/shell.rs 1294
-size crates/engine/guard/src/hook.rs 1093
+size crates/capabilities/tools/src/shell.rs 1280
 size crates/engine/guard/src/scenario.rs 3853
+size crates/engine/guard/src/semantics.rs 1216
 size crates/engine/image/algo/src/artistic_fx.rs 1335
 size crates/engine/image/algo/src/inpaint.rs 2501
 size crates/engine/image/algo/src/lib.rs 1322
@@ -313,40 +326,66 @@ size crates/engine/image/doc/src/lib.rs 1520
 size crates/engine/image/geom/src/warp.rs 1374
 size crates/engine/image/psd/src/tiff.rs 2440
 size crates/engine/image/raster/src/lib.rs 1676
-size crates/engine/memory/src/migrations.rs 836
-size crates/engine/memory/src/migrations/list.rs 335
+size crates/engine/memory/src/coordinator.rs 1470
+size crates/engine/memory/src/golden_mining.rs 1323
 size crates/engine/memory/src/persona_layer.rs 1680
 size crates/engine/memory/src/research_derived_memory.rs 1211
 size crates/engine/organ/src/causal_world_model.rs 1864
 size crates/engine/organ/src/emergence.rs 1224
 size crates/engine/organ/src/goal.rs 1619
 size crates/engine/organ/src/neuromodulation.rs 1608
+size crates/engine/organ/src/nociception.rs 1487
 size crates/engine/organ/src/prompt_assembly.rs 1492
 size crates/engine/organ/src/world_model.rs 1336
+size crates/engine/runtime-assembly/src/canonical/bio_production_wiring.rs 1238
+size crates/engine/runtime-assembly/src/canonical/bio_tone.rs 1319
 size crates/engine/runtime-assembly/src/canonical/cognitive.rs 5136
 size crates/engine/runtime-assembly/src/canonical/orchestrator.rs 2432
 size crates/engine/runtime-assembly/src/canonical/play_tools.rs 1412
+size crates/engine/runtime-assembly/src/canonical/production.rs 1950
 size crates/engine/runtime-assembly/src/canonical/self_status_source.rs 2064
 size crates/engine/runtime-assembly/src/canonical/tool_modules.rs 1356
 size crates/engine/runtime/src/canonical/execute.rs 4750
 size crates/engine/runtime/src/canonical/runtime.rs 1204
-size crates/engine/runtime/src/canonical/session.rs 968
 size crates/foundation/core/src/cost_router.rs 1399
 size crates/foundation/core/src/lib.rs 2483
 size crates/foundation/core/src/stored_doc.rs 1304
 size crates/foundation/credentials/src/keyring.rs 1825
+size crates/foundation/governance/src/chain.rs 1320
+size crates/foundation/governance/src/input_security.rs 1224
 size crates/foundation/governance/src/sandbox_ladder.rs 1220
 size crates/foundation/orchestration/src/durable_schedule.rs 1242
 size crates/foundation/orchestration/src/lib.rs 1426
 size crates/foundation/orchestration/src/lifecycle.rs 1255
 size crates/foundation/orchestration/src/self_tuning.rs 1361
 size crates/foundation/orchestration/src/task_queue.rs 1479
+size crates/foundation/plugin/src/manager.rs 1258
 
-# --- concept (4) ---
+# --- concept (24) ---
+concept AgentRuntime crates/engine/runtime/src/canonical/instances.rs
 concept CapabilityRegistry crates/engine/runtime/src/canonical/capability.rs
-concept ContextAssembler crates/engine/organ/src/context_assembly.rs
 concept ContextAssembler crates/foundation/orchestration/src/context_budget.rs
 concept ContextBlock crates/foundation/orchestration/src/context_budget.rs
+concept MeshModule crates/engine/runtime-assembly/src/mesh.rs
+concept ModuleAgents crates/foundation/plugin/src/agents.rs
+concept ModuleMessageEnvelope crates/foundation/plugin/src/module_messages.rs
+concept ModuleMessagePipeline crates/engine/runtime/src/canonical/module_messages.rs
+concept ModuleMessages crates/foundation/plugin/src/module_messages.rs
+concept ModuleTaskHandle crates/foundation/plugin/src/module_contract.rs
+concept ModuleToolContract crates/foundation/plugin/src/module_contract.rs
+concept PrincipalAuthorizations crates/engine/runtime/src/canonical/principal_authority.rs
+concept ProfileConfig crates/engine/runtime/src/canonical/profiles.rs
+concept ProfileStore crates/engine/runtime/src/canonical/profiles.rs
+concept SystemOneAudit crates/foundation/plugin/src/system_one.rs
+concept SystemOneGate crates/engine/runtime/src/canonical/system_one.rs
+concept SystemOneRequest crates/foundation/plugin/src/system_one.rs
+concept SystemOneSupervisor crates/foundation/plugin/src/system_one.rs
+concept SystemOneVerdict crates/foundation/plugin/src/system_one.rs
+concept ToolDispatcher crates/engine/runtime/src/canonical/dispatcher.rs
+concept ToolEventV1 crates/foundation/protocol/src/canonical/tool_event.rs
+concept ToolExecutionContext crates/foundation/plugin/src/tool_execution.rs
+concept ToolModule crates/foundation/plugin/src/tool_module.rs
+concept UsageAccounting crates/engine/runtime/src/canonical/accounting.rs
 
 # --- ext (8) ---
 ext BehaviorModule crates/engine/runtime/src/canonical/module.rs

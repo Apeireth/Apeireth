@@ -111,7 +111,7 @@ pub struct OpenAiCompatibleProviderCapability {
     /// ⇒ 端点本来就由**部署方**选 ⇒ 没有可推导的「厂商默认端点」
     /// ⇒ `from_env()` 也留**空**（不误伤正常部署）。
     /// ⇒ 想要端点保护就**显式声明绑定**
-    /// （`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 或运行时热写带绑定）⇒ 声明后**强制**。
+    /// （凭据库热写带绑定）⇒ 声明后**强制**。
     credential_audience: RwLock<Option<Vec<String>>>,
     resolver: ResolverSlot,
     /// 推理字段归一化配置（12 别名 → 前置 think 块；出向剥离别名字段）。
@@ -169,8 +169,9 @@ impl OpenAiCompatibleProviderCapability {
     /// audience = 「这个凭据**该去**哪些端点」。设定后，**不在 audience 内**的端点
     /// **拿不到**该凭据（fail-closed）—— 安全审计 P1 的落点。
     ///
-    /// ⚠️ 部署方要用自定义端点 ⇒ 显式声明**绑定**（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS`
-    /// 或运行时热写带绑定）⇒ 绑定会**加宽** audience（不是替换）。
+    /// ⚠️ 部署方要用**别的**端点 ⇒ 显式声明**绑定**（凭据库维度：`HotCredentialStore::
+    /// set_with_endpoints`，或 admin 同笔提交 `base_url` + `api_key`）
+    /// ⇒ 绑定会**加宽** audience（不是替换）。
     pub fn set_credential_audience(&self, origins: Vec<String>) {
         let mut guard = self
             .credential_audience
@@ -203,7 +204,7 @@ impl OpenAiCompatibleProviderCapability {
         // 否则正常的自建端点会被全部打死）；**一旦声明了绑定就强制**。
         //
         // ⇒ 保护要生效：给该凭据**显式声明**绑定
-        //（`APEIRETH_CREDENTIAL_ENDPOINT_BINDINGS` 或运行时热写带绑定）。
+        //（凭据库热写带绑定）。
         let audience = {
             let guard = self
                 .credential_audience
@@ -637,7 +638,14 @@ impl OpenAiCompatibleProviderPlugin {
                     "reqwest client build failed: {e}"
                 )))
             })?;
-        Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)
+        let capability = Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?;
+        // audience = **{实际配置的端点}**（协议族：端点由部署方选，没有可推导的
+        // 「厂商默认端点」）⇒ 挡住的是**运行时**换端点（admin 热改 `base_url`
+        // 或 `apply_hot_config`）⇒ 新主机拿不到凭据（fail-closed）。
+        capability
+            .capability
+            .set_credential_audience(vec![capability.capability.base_url()]);
+        Ok(capability)
     }
 
     /// The configured canonical model ids, in declaration order.
