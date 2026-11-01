@@ -45,7 +45,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/foundation/core/src/cost_router.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-core cost_router"
     owner: core
     next_review: "2026-11-20"
@@ -63,7 +63,7 @@ claims:
     tests:
       - crates/engine/runtime-assembly/tests/task_board_tool.rs
       - crates/adapters/cli/tests/task_board_knob.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-runtime-assembly --test task_board_tool"
     owner: runtime-assembly
     next_review: "2026-11-20"
@@ -108,7 +108,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/capabilities/tools/tests/voice_speak.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-tools-canonical --test voice_speak"
     owner: tools
     next_review: "2026-11-20"
@@ -200,7 +200,7 @@ claims:
       - crates/capabilities/tools/src/accountability_view.rs
       - crates/foundation/governance/src/authorization.rs
       - crates/adapters/cli/src/egress_command.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-runtime --lib egress && cargo test -p apeireth-runtime-assembly --lib egress_gate"
     owner: runtime
     next_review: "2026-12-01"
@@ -289,7 +289,7 @@ claims:
       - crates/adapters/cli/src/lib.rs
     tests:
       - crates/adapters/gateway/tests/tls_serve.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-gateway --test tls_serve"
     owner: gateway
     next_review: "2026-11-20"
@@ -346,7 +346,7 @@ claims:
     tests:
       - crates/foundation/governance/src/chain.rs
       - crates/adapters/cli/tests/governance_chain_equivalence.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-governance --lib"
     owner: governance
     next_review: "2026-11-20"
@@ -547,7 +547,7 @@ claims:
     tests:
       - crates/engine/runtime/tests/bio_pain_wiring.rs
       - crates/engine/organ/src/nociception.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-organ --lib nociception"
     owner: runtime
     next_review: "2026-11-20"
@@ -613,7 +613,7 @@ claims:
       - crates/adapters/cli/tests/gateway_panels.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/profile_memory_authorization.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-runtime --test registry_runtime_v1 --locked && cargo test -p apeireth-runtime-assembly --test capability_modules_v1 --locked"
     owner: runtime
     next_review: "2026-11-28"
@@ -656,7 +656,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/adapters/cli/tests/canonical_cli_bootstrap.rs
       - crates/adapters/cli/tests/care_heartbeat_host.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-runtime --test cognitive_module_abi --locked -j 2 && cargo test -p apeireth-runtime --test canonical_subloop --locked -j 2 && cargo test -p apeireth-runtime-assembly --test convergence_agents --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
@@ -711,7 +711,7 @@ claims:
       - crates/engine/runtime-assembly/tests/managed_main.rs
       - crates/engine/runtime-assembly/tests/production_cognitive_v1.rs
       - crates/engine/runtime-assembly/tests/portable_host.rs
-    verified_at: 3a286761015cba58cfbaa6d7a5b5464a0dbb32f0
+    verified_at: 07f49ce8dc927ea349dab98fb39d125a422554e7
     verify_cmd: "cargo test -p apeireth-cli --test canonical_cli_bootstrap --test care_heartbeat_host --locked -j 2 && cargo test -p apeireth-runtime-assembly --test managed_main --test production_cognitive_v1 --locked -j 2"
     owner: runtime
     next_review: "2026-11-20"
