@@ -387,6 +387,7 @@ pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY
 pub mod access_history;
 pub mod commitments;
 pub mod consolidation;
+pub mod consolidation_trigger;
 pub mod context_compiler;
 pub mod context_window;
 pub mod continuity_state;
