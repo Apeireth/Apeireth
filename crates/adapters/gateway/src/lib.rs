@@ -19,6 +19,8 @@ pub mod admin;
 pub mod canonical_entry;
 /// **设备面：宿主拍板 ⇒ 决定账落账**（审计 P3-1/P3-2 闭环）。
 pub mod device_decision;
+/// **主体 → 会话**归属登记（审计 P1 收口；episode 维度的被遗忘权前提）。
+pub mod principal_attribution;
 
 pub(crate) mod panel_errors;
 /// Panel introspection surface (`/v1/panel/*`, tools, capabilities, audit, traces).

@@ -403,6 +403,8 @@ pub mod persona_store_sqlite;
 pub mod reconciler;
 pub mod retrieval_pipeline;
 // V4-c 检索维度自进化 (证据账 + 有界调权内核 + 生效值落地槽)。
+/// **主体 → 会话**归属映射的**写侧**（2026-11-01 安全审计 P1 收口）。
+pub mod principal_sessions;
 pub mod retrieval_tuning;
 pub mod robustness_metrics;
 pub mod scope;

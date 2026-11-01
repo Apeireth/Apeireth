@@ -9,6 +9,8 @@ pub mod backup;
 pub mod env_switches;
 // 审批面分派 (W3.7 拆分: 装配根文件尺寸棘轮已到顶; 公开路径经下方 re-export 不变).
 pub mod canonical_approval;
+/// **主体 → 会话**归属写面实现（持有记忆库；审计 P1 收口）。
+pub mod principal_recorder;
 // 心跳关怀常驻宿主接线面: FnInitiativeGate 注入 CareEngine + dispatch 接 Runtime::execute + 自述心跳两列.
 pub mod bio_command;
 mod bio_pain_wiring;
@@ -1827,6 +1829,15 @@ pub async fn build_canonical_runtime_from_env_with_observability() -> Result<
         apeireth_memory::SqliteMemoryStore::open(cognitive_db_path())
             .map_err(|error| format!("memory governance store open failed: {error}"))?,
     );
+    // **主体 → 会话**归属写面（2026-11-01 安全审计 P1 收口）：
+    // episode 维度的「被遗忘权」要成立 ⇒ 必须能把 episode 归到主体
+    // ⇒ 靠 memory 侧的 `memory_principal_sessions` 映射连接
+    // ⇒ 生产侧原先**无写入方** ⇒ 那一维的被遗忘权无法生效。
+    // ⇒ 装进 runtime 的进程级端口（gateway 只认端口、不依赖 memory）。
+    // ⚠️ 用**同一本**认知库 ⇒ 与治理面同源。
+    apeireth_runtime::canonical::principal_sessions::install_principal_session_recorder(Arc::new(
+        crate::principal_recorder::MemoryPrincipalSessionRecorder::new(Arc::clone(&governance)),
+    ));
     let enable_local_read_tools = local_read_tools_enabled_from_env();
     let panel = Arc::new(
         crate::gateway_panels::CliPanelData::new_with_runtime(

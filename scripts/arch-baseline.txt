@@ -283,10 +283,10 @@ env APEIRETH_VOICE_SPEAK_SCOPE
 # --- size (80) ---
 size crates/adapters/cli/src/care_heartbeat.rs 1621
 size crates/adapters/cli/src/gateway_panels.rs 1526
-size crates/adapters/cli/src/lib.rs 3777
+size crates/adapters/cli/src/lib.rs 3788
 size crates/adapters/cli/src/main.rs 1467
 size crates/adapters/cli/src/onboarding.rs 1338
-size crates/adapters/gateway/src/canonical_entry.rs 2297
+size crates/adapters/gateway/src/canonical_entry.rs 2311
 size crates/adapters/gateway/src/events.rs 1623
 size crates/adapters/gateway/src/panels.rs 1623
 size crates/adapters/gateway/src/presence.rs 1279
@@ -295,7 +295,7 @@ size crates/adapters/tui/src/state.rs 1585
 size crates/capabilities/tools/src/backup.rs 1236
 size crates/capabilities/tools/src/device/device_control.rs 3250
 size crates/capabilities/tools/src/device/guard_watch.rs 1341
-size crates/capabilities/tools/src/doc_ops.rs 6268
+size crates/capabilities/tools/src/doc_ops.rs 6260
 size crates/capabilities/tools/src/external.rs 2672
 size crates/capabilities/tools/src/git_write.rs 1256
 size crates/capabilities/tools/src/image_ops.rs 2233
@@ -306,7 +306,7 @@ size crates/capabilities/tools/src/recon/dotnet.rs 1233
 size crates/capabilities/tools/src/recon/yara.rs 1954
 size crates/capabilities/tools/src/recon_tool.rs 1664
 size crates/capabilities/tools/src/self_status.rs 4184
-size crates/capabilities/tools/src/sheet_ops.rs 4400
+size crates/capabilities/tools/src/sheet_ops.rs 4392
 size crates/capabilities/tools/src/shell.rs 1280
 size crates/engine/guard/src/scenario.rs 3853
 size crates/engine/guard/src/semantics.rs 1216

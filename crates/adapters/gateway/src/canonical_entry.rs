@@ -1791,6 +1791,20 @@ async fn native_chat(
     bind_session_owner(&state, session, user.as_ref());
     // W3-③: 会话入域立案 (域事件过滤面)。
     admit_domain_session(&state, &execution, session).await?;
+
+    // **主体 → 会话**归属登记（2026-11-01 安全审计 P1 收口）:
+    // episode 维度的「被遗忘权」要成立, 必须能把 episode 归到主体
+    // ⇒ 靠 memory 侧的 `memory_principal_sessions` 映射连接
+    // ⇒ 生产侧原先**无写入方** ⇒ 那一维的被遗忘权无法生效。
+    // 主体 = 域面 `user_id`（人/账户级）；**无 user_id ⇒ 不登记**
+    //（宁可归属不可判定, 也不要错归属 ⇒ 误删风险）。
+    // ⚠️ **旁路**: 写失败 ⇒ 记审计、**不阻断主流程**。
+    if let Err(error) = crate::principal_attribution::record_principal_attribution(
+        domain.as_ref().map(|Extension(context)| context),
+        session,
+    ) {
+        eprintln!("[principal-attribution] 归属登记失败 (旁路, 不阻断请求): {error}");
+    }
     let attribution = attribution_for(&state, identity.as_ref());
     let outcome = execute_chat_attributed(execution.runtime.as_ref(), request, attribution).await;
     state.observations.flush().await;
