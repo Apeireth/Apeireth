@@ -410,7 +410,7 @@ docs/04-internal/sub-agent-audit-round-4-2026-08-28.md,L4,7,sub-agent-audit-roun
 docs/04-internal/team-work-doc.md,L4,4,team-work-doc,2026-10-23,在飞,1,保留,
 docs/04-internal/ui-engine-defect-ledger.md,L4,3,引擎缺陷台账（2026-10-25 全量审计）,2026-10-25,在飞,7,保留,
 docs/04-internal/ui-engine-l1-capability-handoff.md,L4,8,引擎能力边界与 L1 缺口交接（ADR-0015 增补依据）,2026-10-28,在飞,2,保留,
-docs/04-internal/ui-engine-l1-readiness.md,L4,4,引擎 L1 完成度体检表（2026-10-28）,2026-10-28,在飞,4,保留,
+docs/04-internal/ui-engine-l1-readiness.md,L4,4,引擎 L1 完成度体检表（2026-11-02 更新；初版 2026-10-28）,2026-11-02,在飞,4,保留,
 docs/04-internal/ui-engine-plan.md,L4,4,全栈纯 Rust 前端引擎 —— 施工计划书（分阶段 / 验收门 / write_scope）,2026-10-28,在飞,8,保留,
 docs/04-internal/ui-engine-product-baseline.md,L4,3,引擎产品工程：路径与工程基线,2026-10-31,在飞,3,保留,
 docs/04-internal/ui-engine-w0-onboarding.md,L4,4,引擎侧上屏接入说明（W0）,,在飞,2,保留,
