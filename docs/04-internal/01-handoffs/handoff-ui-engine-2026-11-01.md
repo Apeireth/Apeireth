@@ -1,4 +1,4 @@
-# 引擎线交接（2026-11-01 收尾）
+# 引擎线交接（2026-11-02 更新；初版 2026-11-01 收尾）
 
 > **状态**：本批**已收尾**、工作树干净、成果全部推到远端。
 > **下次从这里继续**：§3「下一次开工的四件事」按顺序做，每件都已是**可执行**的（不是愿望）。
@@ -11,7 +11,7 @@
 | 项 | 值 |
 |---|---|
 | 分支 | `ui-engine-p0-2026-10-24` |
-| 本地 HEAD | `0b555d5a`（= 远端 HEAD） |
+| 本地 HEAD | `d83d6179`（= 远端 HEAD） |
 | 工作树 | **干净**（`git status` 无改动） |
 | 主 worktree | `/home/bai/Projects/Apeireth-rust`（**另一条线在用**，有 68 个未提交改动 ⇒ **不要动**） |
 | 本线 worktree | `/home/bai/Projects/apeireth-ui-wt2`（分支 `ui-engine-w0`，与远端分支**同内容**） |
@@ -46,13 +46,25 @@
 
 ## §3 下一次开工的四件事（按顺序，都已是可执行状态）
 
-### ① 段级计时插桩（把 143 ms 拆开）—— ⭐ 最该先做
+### ✅ 已完成（2026-11-02）：段级计时插桩 —— E-154
 
-**为什么**：E-153 只证明「Rust 侧不便宜」，**无法归因到哪一段**。
-**怎么做**：给 `patch_node` 的 4 个子段加 `PatchStats` 风格计数/计时
-（`patch_attributes` / `patch_props` / `patch_children` / 重建 `MountedNode`），
-用 `examples/patch_cost_probe.rs` 跑出各段占比。
-**验收**：4 段占比之和 ≈ 总时间；最大那段即优化对象。
+已交付：`SegmentTimings`（7 段）+ `Renderer::set_segment_clock()` + `seg!` 宏
+（可插拔时钟，**默认关闭 ⇒ 零开销**）。
+
+**结论**：`patch_children` **自身逻辑占 75.4%**，直接段合计仅 24.6%
+（⚠️ `children` 段含递归 ⇒ 84.1% **不可直接读**，正确读法见探针输出与 E-154）。
+
+### ① ⭐ 定位 `patch_children` 自身体内的**具体语句**（下一批最该做）
+
+**为什么**：E-154 已把大头缩到 `patch_children` 自身（75.4%），但**还没定位到语句**。
+**已缩小到 4 个嫌疑**（按可能性排序）：
+1. ⭐⭐ **`first_dom_node(&mounted)` 每 child 调一次** —— 若它**向下走子树**
+   找第一个 DOM 节点 ⇒ **O(子树) × 每 child ⇒ 二次方**（**最强嫌疑**）；
+2. 每元素 **3~4 次全扫 children**（`key_ref` / `has_vnode` 计数 / `key` / `has_key`）；
+3. `patch_positional_children` 的 `Vec` 构建；
+4. ⚠️ `new_element.clone()` —— **已排除**（`rebuild` 单独计时 = 10.5%）。
+**怎么做**：先给 `first_dom_node` 加调用计数（或临时段计时）⇒ 确认是否二次方。
+**验收**：`compared_nodes` / `written_nodes` **不得变差**；patch 时间按同口径 A/B 下降。
 
 ### ② native 侧 `Fragment` 节点计数口径
 
