@@ -255,6 +255,15 @@ pub struct Renderer<D: Dom> {
     ///
     /// ⚠️ 用 `Cell` ⇒ ⇒ 计数**不改变任何方法签名** ⇒ ⇒ 插桩零侵入。
     patch_stats: std::cell::Cell<crate::patch_stats::PatchStats>,
+    /// ⭐ **段级耗时时钟**（`None` = 不测 ⇒ **零开销**）。由宿主注入单调微秒时钟。
+    ///
+    /// ⚠️ 为什么不在引擎里直接取时间：本 workspace 的 wasm 环境里
+    /// `std::time::Instant::now()` **会 panic**（E-137 实测）
+    /// ⇒ ⇒ 时钟必须由**宿主/探针**提供（wasm 用 `js_sys::Date::now()`，
+    /// native 用 `Instant`）⇒ ⇒ 引擎只管调用，不假设平台。
+    segment_clock: std::cell::Cell<Option<fn() -> u128>>,
+    /// ⭐ 段级耗时累加（仅当 `segment_clock` 为 `Some` 时有意义）。
+    segment_timings: std::cell::Cell<crate::patch_stats::SegmentTimings>,
     /// 渲染器与 DOM 是否**劈叉**（一次失败的 patch 之后为 `true`）。
     ///
     /// 劈叉 ⇒ 内存树**不可信** ⇒ 下一次 patch **整树重建**（不再拿旧树差分）。
@@ -297,7 +306,66 @@ pub struct Renderer<D: Dom> {
     deferred_value_writes: usize,
 }
 
+/// ⭐⭐ **段级计时宏**（E-154）：包住一段代码 ⇒ ⇒ 其耗时累加进 `SegmentTimings`。
+///
+/// ## 为什么用宏而不是方法
+///
+/// 被包的段本身要 `&mut self`（如 `patch_children`）⇒ ⇒ 若写成
+/// `self.timed(..., || self.xxx())` ⇒ ⇒ **同一 `self` 同时被借两次**（实测编译不过）。
+/// ⇒ ⇒ 宏把「取时间 / 执行 / 结算」摊平在**同一作用域** ⇒ ⇒ 借用自然错开
+/// ⇒ ⇒ **零额外开销**（未注入时钟时只多一次 `Option` 判断）。
+macro_rules! seg {
+    ($self:ident, $field:ident, $body:block) => {{
+        let __clock = $self.segment_clock.get();
+        let __start = __clock.map(|now| now());
+        let __out = $body;
+        if let (Some(now), Some(start)) = (__clock, __start) {
+            let mut __timings = $self.segment_timings.get();
+            __timings.$field += now().saturating_sub(start);
+            $self.segment_timings.set(__timings);
+        }
+        __out
+    }};
+}
+
 impl<D: Dom> Renderer<D> {
+    /// ⭐⭐ 注入**段级耗时时钟**（单调微秒；`None` = 关闭 ⇒ **零开销**）。
+    ///
+    /// ## 谁该用它
+    ///
+    /// **测量装置 / 探针**（`examples/patch_cost_probe.rs`）⇒ ⇒ 不是生产路径。
+    ///
+    /// ## 为什么由外部注入
+    ///
+    /// 本 workspace 的 wasm 环境里 `std::time::Instant::now()` **会 panic**
+    /// （E-137 实测）⇒ ⇒ wasm 侧只能用 `js_sys::Date::now()`，
+    /// native 侧用 `Instant` ⇒ ⇒ **引擎不该假设平台**。
+    ///
+    /// ## 例子
+    ///
+    /// ```ignore
+    /// // native
+    /// fn clock() -> u128 {
+    ///     static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    ///     START.get_or_init(std::time::Instant::now).elapsed().as_micros()
+    /// }
+    /// renderer.set_segment_clock(Some(clock));
+    /// ```
+    pub fn set_segment_clock(&mut self, clock: Option<fn() -> u128>) {
+        self.segment_clock.set(clock);
+    }
+
+    /// ⭐⭐ 取**段级耗时累加**（仅在注入过时钟后有值；单位 ≈ 微秒）。
+    pub fn segment_timings(&self) -> crate::patch_stats::SegmentTimings {
+        self.segment_timings.get()
+    }
+
+    /// ⭐ 复位段级耗时（便于「一次操作 = 一组数字」）。
+    pub fn reset_segment_timings(&self) {
+        self.segment_timings
+            .set(crate::patch_stats::SegmentTimings::default());
+    }
+
     /// ⭐ 记一次**实际写入** DOM（统计用；不改变行为）。
     fn count_write(&self) {
         self.patch_stats.set({
@@ -335,6 +403,8 @@ impl<D: Dom> Renderer<D> {
             tree: None,
             bound_slots: 0,
             patch_stats: std::cell::Cell::new(crate::patch_stats::PatchStats::default()),
+            segment_clock: std::cell::Cell::new(None),
+            segment_timings: std::cell::Cell::new(crate::patch_stats::SegmentTimings::default()),
             desynced: false,
             last_error: None,
             warnings: Vec::new(),
@@ -1255,27 +1325,44 @@ impl<D: Dom> Renderer<D> {
                 //   更糟的是 `Undecidable` 被显式排除在「标劈叉」之外
                 //   ⇒ ⇒ 渲染器**自称同步**且**不走**整树重建自愈 ⇒ ⇒ **静默分叉**。
                 self.ensure_children_keyed_decidable(&old_element.children, &new_element.children)?;
+                // ⭐ 段级计时（E-154）：未注入时钟 ⇒ **零额外开销**；
+                //   各段耗时进 `SegmentTimings` ⇒ ⇒ 由探针读出来做**归因**。
                 // T1：同标签 ⇒ 复用同一个真实 DOM 节点，只改属性与子节点。
-                self.patch_attributes(&old_element.dom, &old_element.vnode, new_element)?;
-                self.patch_handlers(&old_element.dom, &old_element.vnode, new_element)?;
-                self.rebind_this(&old_element.vnode, new_element, &old_element.dom)?;
+                seg!(self, attrs, {
+                    self.patch_attributes(&old_element.dom, &old_element.vnode, new_element)?
+                });
+                seg!(self, handlers, {
+                    self.patch_handlers(&old_element.dom, &old_element.vnode, new_element)?
+                });
+                seg!(self, rebind, {
+                    self.rebind_this(&old_element.vnode, new_element, &old_element.dom)?
+                });
                 // 元素的子节点 = **该元素的全部**子节点 ⇒ 尾部锚点 = `None`
                 // （子节点都挂在元素内部）。
-                let children = self.patch_children(
-                    &old_element.dom,
-                    &old_element.children,
-                    &new_element.children,
-                    None,
-                )?;
+                // ⚠️ `children` 这一段**含递归** ⇒ 天然是大头候选。
+                let children = seg!(self, children, {
+                    self.patch_children(
+                        &old_element.dom,
+                        &old_element.children,
+                        &new_element.children,
+                        None,
+                    )?
+                });
                 // property 在**子节点之后**打（同挂载时的理由）。
-                self.patch_props(&old_element.dom, &old_element.vnode, new_element)?;
+                seg!(self, props, {
+                    self.patch_props(&old_element.dom, &old_element.vnode, new_element)?
+                });
                 // ⭐ 绑定写回（信号 → DOM）：与 `patch_props` 同一「变了才写 + IME 门控」口径。
-                self.apply_bindings(&old_element.dom, new_element)?;
-                Ok(MountedNode::Element(MountedElement {
-                    vnode: new_element.clone(),
-                    dom: old_element.dom.clone(),
-                    children,
-                }))
+                seg!(self, bindings, {
+                    self.apply_bindings(&old_element.dom, new_element)?
+                });
+                seg!(self, rebuild, {
+                    Ok(MountedNode::Element(MountedElement {
+                        vnode: new_element.clone(),
+                        dom: old_element.dom.clone(),
+                        children,
+                    }))
+                })
             }
             (MountedNode::Text(old_text), VNode::Text(new_text)) => {
                 if old_text.vnode.data != new_text.data {

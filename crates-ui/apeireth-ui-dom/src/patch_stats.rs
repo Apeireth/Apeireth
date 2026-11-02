@@ -19,3 +19,35 @@ pub struct PatchStats {
     /// 实际**写入** DOM 的次数（属性 / property / 文本 / 绑定写回）。
     pub written_nodes: usize,
 }
+
+/// ⭐ **段级耗时**（可选；默认**关闭** ⇒ 零开销）。
+///
+/// ## 为什么需要
+///
+/// 实测（E-153）：同一棵树 native patch ≈ **143~150 ms**、浏览器 ≈ **84 ms**
+/// ⇒ ⇒ 已排除 6 个候选（读 DOM / 重复遍历 / 子树克隆 / 属性分配 / class 分配 /
+/// wasm⇄JS 边界）⇒ ⇒ **但还不知道时间花在哪一段**
+/// ⇒ ⇒ 本结构把 `patch_node` 的 6 段**分开累加**。
+///
+/// ## 为什么默认关闭
+///
+/// 取时间本身有成本（`clock()` 两次调用 / 每次节点）
+/// ⇒ ⇒ 生产路径**不能**一直开着 ⇒ ⇒ 只在测量时由宿主注入时钟
+/// （[`crate::renderer::Renderer::set_segment_clock`]）。
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SegmentTimings {
+    /// `patch_attributes`：class token + 属性比对/写入。
+    pub attrs: u128,
+    /// `patch_handlers`：事件处理器比对。
+    pub handlers: u128,
+    /// `rebind_this`：`bind:this` 槽位重绑。
+    pub rebind: u128,
+    /// `patch_children`：子节点差分（**含递归** ⇒ 天然是大头候选）。
+    pub children: u128,
+    /// `patch_props`：property 比对/写入。
+    pub props: u128,
+    /// `apply_bindings`：绑定写回（信号 → DOM）。
+    pub bindings: u128,
+    /// 重建 `MountedNode`（结构体 + `Vec` 分配）。
+    pub rebuild: u128,
+}
