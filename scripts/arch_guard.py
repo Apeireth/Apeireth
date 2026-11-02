@@ -85,6 +85,9 @@ class Contract:
         self.ext_points = data.get("extension_points", {})
         self.flagged_edges = [(e["from"], e["to"]) for e in self.deps.get("flagged_edges", [])]
         self.composition_roots = data.get("composition_roots", [])
+        # 双仓归属（ADR-0017）：[[workspace.repos]] 段。publish != "none" 的段 = 该仓的
+        # **可发布清单**（发布可见性守卫用；见 check() 第 10 项）。
+        self.repos = data.get("workspace", {}).get("repos", [])
 
     @property
     def current_wave(self) -> int:
@@ -202,6 +205,53 @@ CI_CALIBER_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("13 键 verdict literal", re.compile(r"13\s*键\s*verdict")),
     ("handwritten LOCKED crate list", re.compile(r'LOCKED="apeireth-')),
 )
+
+
+def scan_publish_flags() -> dict[str, tuple[bool, str]]:
+    """扫描**全部** workspace 的 crate 发布可见性。
+
+    返回 {crate_name: (是否可发布, manifest 路径)}。范围 = 根 workspace + 契约登记的
+    独立 workspace（[[workspace.independent_workspaces]]，如 crates-ui）——**独立 workspace
+    同样要有发布可见性守卫**，否则「登记在可发布清单里却没被检查」= 半吊子。
+
+    publish 语义（cargo metadata）：`[]` = publish = false（不发）；
+    `None` / 缺省 = 默认 true（**会发**）。发布即永久公开、不可撤回 ⇒ 需登记。
+    """
+    out: dict[str, tuple[bool, str]] = {}
+
+    def one(manifest: str) -> None:
+        code, payload = _run(["cargo", "metadata", "--no-deps", "--format-version", "1",
+                              "--offline", "--manifest-path", manifest])
+        if code != 0:
+            return
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            return
+        for pkg in data.get("packages", []):
+            name = pkg.get("name", "")
+            if not name:
+                continue
+            regs = pkg.get("publish")
+            blocked = regs is not None and len(regs) == 0
+            out[name] = (not blocked, pkg.get("manifest_path", manifest))
+
+    one("Cargo.toml")
+    # 独立 workspace（契约登记者）：manifest 路径相对仓库根
+    for entry in (data_repos_independent() or []):
+        mf = entry.get("path")
+        if mf:
+            one(str(ROOT / mf / "Cargo.toml"))
+    return out
+
+
+def data_repos_independent() -> list:
+    """契约里 [[workspace.independent_workspaces]] 的原始条目（供 publish 扫描用）。"""
+    try:
+        raw = _read_toml(DEFAULT_CONTRACT)
+    except Exception:
+        return []
+    return raw.get("workspace", {}).get("independent_workspaces", []) or []
 
 
 def scan_ci_caliber() -> list[tuple[str, int, str]]:
@@ -562,6 +612,31 @@ def check(contract: Contract, baseline: set[str], wave: int, dry_metrics: bool =
     for rel, line_no, label in scan_ci_caliber():
         rep.violation(3, "caliber", f"ci-caliber {rel}:{line_no}",
                       f"workflow 出现现行旧口径「{label}」（须引用契约/真源，ADR-0011 D5）")
+
+    # 10. 发布可见性守卫（ADR-0017 §2.5 + owner 2026-11-02 裁定）
+    #     规则: 任何 publish != false 的 crate, 必须登记在契约的可发布清单
+    #     ([[workspace.repos]] 中 publish != "none" 的段的 crates 列表) 里。
+    #     目的: 「契约说不发」必须被代码强制, 而不靠操作者记得 —— crates.io 上已发布版本
+    #     **不可删除**（只能 yank）, 私有产品面一旦误上架即永久公开。
+    if contract.repos:
+        allowed_pub: set[str] = set()
+        for repo in contract.repos:
+            if repo.get("publish", "none") != "none":
+                allowed_pub.update(repo.get("crates", []))
+        flags = scan_publish_flags()
+        for crate in sorted(flags):
+            publishable, manifest = flags[crate]
+            if not publishable:
+                continue  # publish = false ⇒ 明确不发, 无需登记
+            if crate not in allowed_pub:
+                rep.violation(10, "publish", f"publish {crate}",
+                              f"crate 可发布（publish != false）但未登记在契约可发布清单 "
+                              f"[[workspace.repos]]（manifest: {manifest}）；"
+                              f"要么登记进可发布仓, 要么显式设 publish = false")
+        for crate in sorted(allowed_pub):
+            if crate not in flags:
+                rep.violation(10, "publish", f"publish {crate}",
+                              f"契约可发布清单登记了 {crate}, 但 workspace 里找不到该 crate")
 
     # 9. 装配根 / flagged / locked 文件存在性
     for root in contract.composition_roots:

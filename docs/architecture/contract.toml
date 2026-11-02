@@ -45,6 +45,11 @@ ci = ".github/workflows/ui-engine-ci.yml"
 note = "自研响应式 + DOM 绑定引擎（Rust → wasm32 → Tauri WebView）；不进主 members / 不进主依赖图 / 主 arch_guard 不扫（故配独立 CI 门禁）"
 
 # === 双仓归属登记（ADR-0017，owner 2026-10-31 裁决 Accepted）===
+# ⚠️ 本段同时是**发布可见性守卫**的清单来源（arch_guard.py check() 第 10 项）：
+#    任何 publish != false 的 crate（含独立 workspace crates-ui）必须登记在
+#    publish != "none" 的段的 crates 列表里，否则门禁报 W10 publish 违规。
+#    理由：crates.io 上已发布版本**不可删除**（只能 yank）⇒ 「说不发」必须被代码强制，
+#    不能靠操作者记得（owner 2026-11-02 裁定）。
 # 引擎仓 = 公开仓（crates.io 可消费）；产品仓 = 私有仓（消费引擎的已发布版本）。
 # 本段只做**归属登记**：不新增层、不新增依赖边、不新增扩展点、不改主 workspace 拓扑
 # （members / product_crates / bench_crates / version 全部不变）。

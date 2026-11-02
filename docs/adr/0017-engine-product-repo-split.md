@@ -550,6 +550,18 @@ note = "私有护城河 = 本仓内的私有插件包（实现引擎既有 4 个
 
 **⭐ 限速实测补充（2026-11-01）**：crates-ui 6 个是**新 crate 首发**，但**限速命中 0 次**（2026-10-31 首发那批触发的是「短时间内新建 crate 数」窗口，跨日已释放）。⇒ 限速是**滚动窗口**而非每日配额。
 
+### 10.4.1 发布可见性守卫（2026-11-02 落地）
+
+**起因**：owner 追问「哪些发哪些不发」时实测发现——4 个产品 adapter（`gateway` / `cli` / `sdk` / `tui`）的 `publish` **未设** ⇒ cargo 默认 true ⇒ 它们一直是「可发布」状态。契约 §[[workspace.repos]] 早已写 `product` 段 `publish = "none"`，**但代码没落实** ⇒ 任意一次 `cargo publish --workspace` 都会把私有产品交付面**永久公开上架**（crates.io 版本不可删，只能 yank）。
+
+**两层处置**：
+1. **补齐代码**：4 个 adapter 补 `publish = false`（commit `02200c93`）；实测 `cargo publish -p apeireth-gateway --dry-run` 被 cargo 拒绝（exit 101）。
+2. **补齐守卫**（本条）：`scripts/arch_guard.py` 新增第 10 项检查——**任何 `publish != false` 的 crate，必须登记在契约的可发布清单里**（范围含独立 workspace `crates-ui`；反向亦查：清单里登记了却不存在的 crate 也报）。⇒ 以后新增 crate 漏设 `publish = false`，门禁直接红，**不靠人记得**。
+
+**守卫有效性已实测**（注入反例法）：把 `apeireth-tui` 的 `publish = false` 注释掉 ⇒ `arch_guard --strict` 报 `VIOLATIONS: 1`（`[W10] publish: publish apeireth-tui — crate 可发布（publish != false）但未登记在契约可发布清单`）+ exit 1；还原 ⇒ `VIOLATIONS: 0` + exit 0。
+
+**当前口径**：crates.io 实际可发 **32 个**（全部 `2.0.0-rc.5`）；明确不发 **6 个**（4 adapter 私有产品面 + `ui-demo` 试点应用 + `bench-harness` bench-only；另有 2 个 fuzz crate 在独立 workspace，`publish = false`）。
+
 ### 10.5 下一步
 
 1. **owner**：注册 crates.io 账号（组织 `Apeireth`）→ 创建 API token → 交给施工线（手册 [docs/04-internal/engine-publish-runbook.md](../04-internal/engine-publish-runbook.md) §2）。
