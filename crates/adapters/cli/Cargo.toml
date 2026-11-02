@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+# 私有产品面（ADR-0017 §2.5：product 仓 publish = "none"）——
+# 本 crate 归私有产品仓，**不发布到 crates.io**（发布 = 永久公开，不可撤回）。
+publish = false
 authors.workspace = true
 description = "Canonical Apeireth CLI for session, chat, and gateway commands"
 
