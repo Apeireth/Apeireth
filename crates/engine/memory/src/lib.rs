@@ -404,6 +404,14 @@ pub mod persona_store_sqlite;
 pub mod reconciler;
 pub mod retrieval_pipeline;
 // V4-c 检索维度自进化 (证据账 + 有界调权内核 + 生效值落地槽)。
+/// **主体 → 会话**归属映射的**写侧**（2026-11-01 安全审计 P1 收口）。
+///
+/// ⚠️ 2026-11-02 补回：记忆线的 `553af676`（`QualityDriftMonitor`）在改 `lib.rs` 时
+/// 把这一行**连注释一起删掉**了（它基于「API 重建」的树 ⇒ 那边没有这行）
+/// ⇒ ⇒ 本地与 CI 立刻 `E0432: unresolved import apeireth_memory::principal_sessions`
+/// ⇒ ⇒ **连带所有门禁全红**（编译失败 ⇒ 每个 workflow 都挂）
+/// ⇒ ⇒ 所以这里**补回**，并在下面留一行注释提醒：**改 `lib.rs` 时要用合并，不要整树覆盖**。
+pub mod principal_sessions;
 pub mod retrieval_tuning;
 pub mod robustness_metrics;
 pub mod scope;

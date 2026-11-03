@@ -909,7 +909,15 @@ pub fn try_lock_exclusive(file: &std::fs::File) -> Result<(), String> {
         // ⚠️ `OVERLAPPED` 在 `Win32::System::IO`（**不在** Foundation）
         // ⇒ 2026-11-01 CI 实测：写错路径 ⇒ Windows 上 `cargo test --doc` 直接编译失败
         // （`cannot find type OVERLAPPED in module windows_sys::Win32::Foundation`）。
-        let mut overlapped = std::mem::zeroed::<windows_sys::Win32::System::IO::OVERLAPPED>();
+        //
+        // ⚠️ **`mem::zeroed` 是 `unsafe fn`** ⇒ 在安全函数里调用会 `E0133`
+        // （2026-11-02 CI 实测：Windows 上 `cargo test --doc` 因此红）⇒ 必须显式 `unsafe` 块。
+        // ⚠️ **同一个错我犯过两次**（`macos.rs` 那次已修，这里又漏）⇒
+        // **跨平台分支本机编不到 ⇒ 只有 CI 能抓** ⇒ 记在这里，别再犯第三次。
+        // SAFETY: `OVERLAPPED` 是 POD 结构（全零 = 内部指针为空 / 事件句柄为空，
+        // 是它的合法初值）；`LockFileEx` 只读它并可能写回（独占锁不需要有效 hEvent）。
+        let mut overlapped =
+            unsafe { std::mem::zeroed::<windows_sys::Win32::System::IO::OVERLAPPED>() };
         // SAFETY: `handle` 来自活着的 `File`；`OVERLAPPED` 是零初始化的栈对象，
         // `LockFileEx` 只读它并可能写回（独占字节范围锁定不需要有效 hEvent）。
         //
