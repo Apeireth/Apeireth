@@ -62,6 +62,11 @@ pub struct MemoryCoordinator {
     compressor: ContinuityCompressor,
     compiler: ClosedWorldContextCompiler,
     consolidation: MemoryConsolidationJob,
+    /// **可选**的夜间整编驱动（窗口水位 + 只整新料）。
+    ///
+    /// ⚠️ **缺省 = 无** ⇒ ⇒ 装配方**不接**它 ⇒ ⇒ `run_consolidation` 的行为
+    /// **一字不变**（零回退风险）⇒ ⇒ 只有**显式接上**才走增量语义。
+    consolidation_trigger: Option<ConsolidationTrigger>,
     ranking: MemoryRankingConfig,
     activation_source: Option<Arc<dyn ActivationSource>>,
     typed_recall_source: Option<Arc<dyn TypedMemoryRecallSource>>,
@@ -136,6 +141,7 @@ impl MemoryCoordinator {
             compressor: ContinuityCompressor::new(),
             compiler: ClosedWorldContextCompiler::new(),
             consolidation: MemoryConsolidationJob::new(),
+            consolidation_trigger: None,
             ranking: MemoryRankingConfig::default(),
             activation_source: None,
             typed_recall_source: None,
@@ -167,6 +173,25 @@ impl MemoryCoordinator {
     pub fn with_scoped_backend(mut self, scoped_backend: Arc<dyn ScopedMemoryBackend>) -> Self {
         self.scoped_backend = Some(scoped_backend);
         self
+    }
+
+    /// 接上**夜间整编驱动**（窗口水位 + 只整新料）。
+    ///
+    /// ⚠️ **不接 = 行为不变**：没有驱动时，`run_consolidation` 仍是「取最近 N 条重整编」
+    /// ⇒ ⇒ 装配方**零改动**就不受影响 ⇒ ⇒ 只有**显式接上**才走增量语义。
+    ///
+    /// 驱动由**装配方持有**（而不是这里新建）⇒ ⇒ 水位可以跨进程持久化
+    /// （用 `FileConsolidationWatermark`）⇒ ⇒ 「夜里跑一次」的语义跨重启成立。
+    #[must_use]
+    pub fn with_consolidation_trigger(mut self, trigger: ConsolidationTrigger) -> Self {
+        self.consolidation_trigger = Some(trigger);
+        self
+    }
+
+    /// 当前挂着的夜间整编驱动（没挂 ⇒ `None`）。
+    #[must_use]
+    pub fn consolidation_trigger(&self) -> Option<&ConsolidationTrigger> {
+        self.consolidation_trigger.as_ref()
     }
 
     /// Attach optional embedding provider for semantic candidate retrieval.
@@ -1118,6 +1143,49 @@ impl MemoryCoordinator {
             .consolidate_governed_episodes(session_id, &episodes))
     }
 
+    /// **统一入口**：按「有没有挂驱动」自动走增量语义或旧语义。
+    ///
+    /// - **挂了驱动** ⇒ 走 [`Self::run_consolidation_incremental`]（只整新料、同窗口只整一次）；
+    /// - **没挂驱动** ⇒ 走 [`Self::run_consolidation`]（**一字未改的旧路径**）。
+    ///
+    /// ⇒ ⇒ **装配方不挂驱动 = 行为完全不变** ⇒ ⇒ 挂驱动是**显式**的升级动作。
+    ///
+    /// ⚠️ **跳过（Skipped）时返回空报告**（不是错误）⇒ 调用方拿到的
+    /// `extracted_insights` 为空 ⇒ ⇒ 「这轮没整编」与「整编了但没提炼出洞察」
+    /// 在报告层面**同形** ⇒ ⇒ 需要区分的调用方请用
+    /// [`Self::run_consolidation_incremental`]（它返回 [`ConsolidationOutcome`]）。
+    pub fn run_consolidation_at(
+        &self,
+        session_id: &str,
+        now_sec: i64,
+    ) -> Result<ConsolidationReport, MemoryError> {
+        let Some(trigger) = self.consolidation_trigger.as_ref() else {
+            return self.run_consolidation(session_id);
+        };
+        match trigger.run(
+            session_id,
+            &self.recent_episodes_for(session_id, trigger.policy().max_episodes.max(100))?,
+            now_sec,
+            Some(self.governance.as_ref()),
+        )? {
+            ConsolidationOutcome::Consolidated { report, .. } => Ok(report),
+            ConsolidationOutcome::Skipped { .. } => Ok(ConsolidationReport::default()),
+        }
+    }
+
+    /// 取治理可见的近期情节（上限随策略走；至少 100 条，与旧路径同量级）。
+    fn recent_episodes_for(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> Result<Vec<Episode>, MemoryError> {
+        let governed = self
+            .governance
+            .governed_recent_episodes(session_id, limit)
+            .map_err(|error| MemoryError::Invalid(error.to_string()))?;
+        Ok(governed.into_iter().map(|item| item.episode).collect())
+    }
+
     /// **带水位的增量整编**：只整「上次整编之后」的新情节，同一窗口只整一次。
     ///
     /// 与 [`Self::run_consolidation`] 的差别（**这是本方法存在的理由**）：
@@ -1139,11 +1207,7 @@ impl MemoryCoordinator {
     ) -> Result<ConsolidationOutcome, MemoryError> {
         // 取料上限跟策略走（至少 100 条，与老方法同量级）⇒ ⇒ 窗口内的新料不会被截断。
         let limit = trigger.policy().max_episodes.max(100);
-        let governed = self
-            .governance
-            .governed_recent_episodes(session_id, limit)
-            .map_err(|error| MemoryError::Invalid(error.to_string()))?;
-        let episodes: Vec<Episode> = governed.into_iter().map(|item| item.episode).collect();
+        let episodes = self.recent_episodes_for(session_id, limit)?;
         trigger.run(
             session_id,
             &episodes,
@@ -1348,6 +1412,64 @@ where
 mod tests {
     use super::*;
     use crate::layers::MemoryLayerKind;
+
+    /// **统一入口**的行为：挂了驱动 ⇒ 走增量语义；**没挂驱动 ⇒ 走旧路径**。
+    #[test]
+    fn unified_entry_falls_back_to_the_old_path_without_a_trigger() {
+        use crate::consolidation_trigger::{ConsolidationPolicy, ConsolidationTrigger};
+        use std::sync::Arc;
+
+        const SESSION: &str = "unified-entry-session";
+        let coordinator = coordinator();
+        for index in 0..2 {
+            coordinator
+                .writeback_episode(&Episode {
+                    id: format!("ep-uni-{index}"),
+                    timestamp: 1_000 + index,
+                    role: "user".to_string(),
+                    content: format!("fixed: 统一入口 {index}"),
+                    session_id: SESSION.to_string(),
+                })
+                .expect("writeback");
+        }
+
+        // 没挂驱动 ⇒ 旧路径：每次都整编（哪怕没有新料）⇒ 洞察照样出得来
+        let plain = coordinator
+            .run_consolidation_at(SESSION, 2_000)
+            .expect("plain run");
+        assert!(
+            plain
+                .extracted_insights
+                .iter()
+                .any(|item| item.contains("统一入口")),
+            "没挂驱动 ⇒ 旧路径照样整编"
+        );
+
+        // 挂上驱动 ⇒ 增量语义：第一次整编后，**没有新料就整不出东西**
+        let trigger = ConsolidationTrigger::new(
+            ConsolidationPolicy::new(0).with_min_episodes(1),
+            Arc::new(crate::consolidation_trigger::InMemoryConsolidationWatermark::new()),
+        );
+        let coordinator = coordinator.with_consolidation_trigger(trigger);
+        let first = coordinator
+            .run_consolidation_at(SESSION, 3_000)
+            .expect("incremental run");
+        assert!(
+            first
+                .extracted_insights
+                .iter()
+                .any(|item| item.contains("统一入口")),
+            "挂了驱动 ⇒ 第一轮该整编出新料"
+        );
+        let second = coordinator
+            .run_consolidation_at(SESSION, 3_100)
+            .expect("second incremental run");
+        assert!(
+            second.extracted_insights.is_empty(),
+            "挂了驱动 ⇒ 没有新料就不该再整编出洞察：{:?}",
+            second.extracted_insights
+        );
+    }
 
     /// 增量整编入口的三个关键行为：**整编一次** / **窗口内跳过** / **只整新料**。
     #[test]

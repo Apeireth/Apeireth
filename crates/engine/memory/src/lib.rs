@@ -59,6 +59,10 @@ pub mod cold_archive;
 /// 图社区分层聚合 + 双级检索分诊 (W3 实现批, v1 community, 2026-10-10)。
 pub mod community;
 pub mod continuity_link;
+pub use consolidation_trigger::{
+    ConsolidationOutcome, ConsolidationPolicy, ConsolidationTrigger, ConsolidationWatermark,
+    FileConsolidationWatermark, InMemoryConsolidationWatermark, SkipReason,
+};
 pub use continuity_link::{
     continuity_id_from_env, current_continuity_id, ensure_identity, migrate_subject,
     normalize_continuity, recall_recent, record_carrier_migration, record_session,
