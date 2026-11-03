@@ -5,3 +5,7 @@ node_modules
 # wasm 产物是**构建期生成物**（wasm-bindgen 的输出，5 MB 二进制）⇒ 不入库。
 # 复现方式见 ../build.sh。
 public/engine/pkg/
+# 同上，但走的是**免 node/vite 的同构路径**（wasm-bindgen 直接输出到 `web/engine/pkg`，
+# 由 `APEIRETH_L1_SERVE_ROOT=web` 伺服）⇒ ⇒ 也是构建期产物 ⇒ 不入库。
+# ⚠️ 2026-11-03 补：此前漏了这条 ⇒ ⇒ 差点把 5 MB 二进制提交进去。
+engine/pkg/
