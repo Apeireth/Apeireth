@@ -112,6 +112,12 @@ try {
   results.patchChildren = { error: `patch_children 最小复现抛错：${String(error)}` };
 }
 try {
+  // ⭐⭐⭐ 滚动信号探针：引擎到底有没有收到 `scroll` 事件（E-164）。
+  results.scrollSignal = p5b.l1_scroll_signal_probe();
+} catch (error) {
+  results.scrollSignal = { error: `滚动信号探针抛错：${String(error)}` };
+}
+try {
   results.binding = p5b.l1_binding_probe();
 } catch (error) {
   results.binding = { ok: false, failures: [`绑定探针抛错：${String(error)}`] };

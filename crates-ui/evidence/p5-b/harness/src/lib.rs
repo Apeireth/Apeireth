@@ -1453,11 +1453,40 @@ pub struct DemoState {
     pub dirty: bool,
     /// 列表滚动位置（由引擎从真实 DOM 读，不缓存）。
     pub scroll_top: f64,
+    /// ⭐⭐⭐ **当前虚拟窗口**（首行 / 末行 / 前留白 / 总高）。
+    ///
+    /// ## 为什么需要
+    ///
+    /// 整树 `patch` 会把列表区域**按新树的内容**替换 ⇒ ⇒ 若新树里列表**没有行**
+    /// ⇒ ⇒ 列表被**清空** ⇒ ⇒ 内容高度塌陷 ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0**
+    /// ⇒ ⇒ ⇒ 用户的滚动位置**丢失**（E-164 实测：滚到 4000 ⇒ ⇒ 立刻变 0）。
+    ///
+    /// ⇒ ⇒ **窗口存进状态** ⇒ ⇒ `build_demo_tree` 输出**当前窗口的行**
+    /// ⇒ ⇒ ⇒ 整树 patch 的列表差分 = 「旧窗口 vs 同一窗口」⇒ ⇒ **不变**
+    /// ⇒ ⇒ ⇒ ⇒ **`scrollTop` 不再被夹回 0** ✓
+    pub window: WindowState,
+}
+
+/// ⭐⭐⭐ **虚拟窗口的状态**（列表内容的唯一真源）。
+#[derive(Default, Clone, Copy)]
+pub struct WindowState {
+    /// 窗口首行下标。
+    pub first: usize,
+    /// 窗口末行下标（**含**）。
+    pub last: usize,
+    /// 前留白高度（px）。
+    pub offset: f64,
+    /// 全表总高度（px）。
+    pub total: f64,
+    /// 窗口**有效**（还没算过 ⇒ ⇒ 首屏要先算一次）。
+    pub valid: bool,
 }
 
 thread_local! {
     /// 渲染器（示例屏单例）。
     static DEMO: RefCell<Option<DemoRenderer>> = const { RefCell::new(None) };
+    /// ⭐ 诊断用：`w0_first_screen` 里「挂监听后立刻派发 scroll」的 `peek()` 结果。
+    static SCROLL_PROBE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// 示例屏的渲染器 + 状态（放一起，便于 tick 时一起用）。
@@ -1510,29 +1539,70 @@ pub fn build_demo_tree(
                 )
                 .build(),
         )
-        .child(
-            VNode::element("div")
-                .attr("id", "w0-list")
-                .attr("style", "height: 200px; overflow-y: auto;")
-                // ⭐⭐⭐ **列表里没有任何行**（E-162 的根本修法）。
-                //
-                // ## 为什么
-                //
-                // 旧写法塞了 **1 个占位行** ⇒ ⇒ 每次整树重建（`w0_tick`）都会
-                // ⇒ ⇒ **把窗口化结果整个覆盖掉**（E-161 修的就是这个）。
-                //
-                // 而「每次 patch 完都重新窗口化」的修法有**副作用**：
-                // `patch_windowed_at_path` 要读布局度量 ⇒ ⇒ **每次 tick 一次强制回流**
-                // ⇒ ⇒ 在大页面上单次可达 **140 ms**（E-162 实测）
-                // ⇒ ⇒ ⇒ 每 50 ms 一次的 tick 会**占满主线程**
-                // ⇒ ⇒ ⇒ 连宿主自己的 `requestAnimationFrame` 都会**饿死**
-                // ⇒ ⇒ ⇒ ⇒ **帧驱动停摆**（实测：污染页里 rAF 一次都没跑）。
-                //
-                // ⇒ ⇒ **根本修法**：**列表内容只由窗口化负责** ⇒ ⇒ 整树重建**碰不到**它
-                // ⇒ ⇒ ⇒ 只有**滚动**（窗口位置变了）才需要重新窗口化
-                // ⇒ ⇒ ⇒ 输入变化 ⇒ 只 patch，**零额外回流** ✓
-                .build(),
-        )
+        .child(build_list_node(state))
+        .build()
+}
+
+/// ⭐⭐⭐⭐ **列表容器 + 当前窗口的内容**（E-164 的根本修法）。
+///
+/// ## 它解决什么
+///
+/// 整树 `patch` 会把列表区域**按新树的内容**替换。
+///
+/// - **旧写法（占位行）**：列表里只有 **1 个占位行**
+///   ⇒ ⇒ 整树 patch 把窗口化结果**整个覆盖掉**（E-161）⇒ ⇒ 虚拟列表塌成 1 行；
+/// - **E-163 的写法（列表无行）**：列表**空着**
+///   ⇒ ⇒ 整树 patch 把列表**清空** ⇒ ⇒ 内容高度塌陷
+///   ⇒ ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0** ⇒ ⇒ 用户的滚动位置**丢失**
+///   ⇒ ⇒ ⇒ （E-164 实测：滚到 4000 ⇒ ⇒ 下一个 tick 后立刻变 0）。
+///
+/// ⇒ ⇒ **正解**：列表内容 = **当前窗口**（存在 `state.window` 里）
+/// ⇒ ⇒ ⇒ 整树 patch 的列表差分 = 「旧窗口 vs 同一窗口」⇒ ⇒ **不变**
+/// ⇒ ⇒ ⇒ ⇒ **`scrollTop` 不再被夹回 0** ✓
+///
+/// ## 窗口没算过时
+///
+/// `state.window.valid == false` ⇒ ⇒ **输出空列表**（首屏还没窗口化）
+/// ⇒ ⇒ 首屏挂载后再调一次窗口化 ⇒ ⇒ 窗口被写回 state ⇒ ⇒ 之后整树 patch 就稳定了。
+fn build_list_node(state: &Rc<RefCell<DemoState>>) -> apeireth_ui_dom::vnode::VNode {
+    use apeireth_ui_dom::vnode::VNode;
+
+    let window = state.borrow().window;
+    let mut children: Vec<VNode> = Vec::new();
+    if window.valid {
+        if window.offset > 0.0 {
+            children.push(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-before")
+                    .attr("style", format!("height: {}px", window.offset))
+                    .build(),
+            );
+        }
+        for index in window.first..=window.last {
+            children.push(
+                VNode::element("div")
+                    .attr("class", "row")
+                    .attr("style", "height: 40px")
+                    .child(VNode::text(format!("行 {index}")))
+                    .build(),
+            );
+        }
+        let window_height = (window.last - window.first + 1) as f64 * 40.0;
+        let spacer_after = (window.total - window.offset - window_height).max(0.0);
+        if spacer_after > 0.0 {
+            children.push(
+                VNode::element("div")
+                    .attr("class", "vlist-spacer-after")
+                    .attr("style", format!("height: {spacer_after}px"))
+                    .build(),
+            );
+        }
+    }
+
+    VNode::element("div")
+        .attr("id", "w0-list")
+        .attr("style", "height: 200px; overflow-y: auto;")
+        .child(VNode::Fragment(children))
         .build()
 }
 
@@ -1553,12 +1623,13 @@ pub fn build_demo_tree(
 /// ⇒ ⇒ ⇒ 口径一致，不会再出现「一条路径窗口化、另一条不」的偏差。
 fn render_windowed_list(
     renderer: &mut apeireth_ui_dom::Renderer<apeireth_ui_dom::web::WebDom>,
+    state: &Rc<RefCell<DemoState>>,
     list_path: &[usize],
     item_count: usize,
 ) -> Result<(), JsValue> {
     use apeireth_ui_dom::vnode::VNode;
     let heights = vec![40.0_f64; item_count];
-    renderer
+    let plan = renderer
         .patch_windowed_at_path(list_path, &heights, 2, |index| {
             VNode::element("div")
                 .attr("class", "row")
@@ -1567,6 +1638,16 @@ fn render_windowed_list(
                 .build()
         })
         .map_err(|error| JsValue::from_str(&format!("窗口化失败：{error}")))?;
+    // ⭐⭐⭐ **窗口写回状态**（E-164）：树里要带**同一个窗口**
+    //   ⇒ ⇒ 整树 patch 的列表差分 = 「旧窗口 vs 同一窗口」⇒ ⇒ 不变
+    //   ⇒ ⇒ ⇒ **`scrollTop` 不再被夹回 0** ✓
+    state.borrow_mut().window = WindowState {
+        first: plan.first,
+        last: plan.last,
+        offset: plan.offset,
+        total: heights.iter().sum(),
+        valid: true,
+    };
     Ok(())
 }
 
@@ -1649,7 +1730,23 @@ pub fn w0_first_screen() -> Result<JsValue, JsValue> {
     //
     // ⇒ ⇒ 保留 [`w0_windowize`] 供宿主在**别**的场景显式调用
     // ⇒ ⇒（例如「先渲染骨架、后补数据」这类**已知**要延后的场景）。
-    render_windowed_list(&mut renderer, &[1], 1000)?;
+    render_windowed_list(&mut renderer, &state, &[1], 1000)?;
+    // ⭐⭐ **诊断（E-164）**：监听挂上之后**立刻**派发一次 `scroll` ⇒ ⇒ 看 `peek()`。
+    //   ⇒ ⇒ 与「窗口化之前」那次对比 ⇒ ⇒ 定位是「挂上就没生效」
+    //   ⇒ ⇒ 还是「窗口化把监听弄丢了」。
+    if let Some(container) = document
+        .query_selector("#w0-root #w0-list")
+        .ok()
+        .flatten()
+    {
+        if let Ok(event) = web_sys::Event::new("scroll") {
+            let _ = container.dispatch_event(&event);
+        }
+    }
+    let scroll_peek_after_windowize = DEMO.with(|slot| {
+        slot.borrow().as_ref().map(|demo| demo.scroll.peek())
+    });
+    SCROLL_PROBE.set(scroll_peek_after_windowize.unwrap_or(false));
 
     DEMO.with(|slot| {
         *slot.borrow_mut() = Some(DemoRenderer {
@@ -1813,6 +1910,220 @@ pub fn l1_patch_children_probe() -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+/// ⭐⭐⭐⭐⭐ **滚动信号探针**（E-164）：引擎**到底有没有收到 `scroll` 事件**？
+///
+/// ## 它回答什么
+///
+/// w0 页面上滚动后窗口**不动**（首行仍是「行 0」）⇒ ⇒ 两种可能：
+/// ①引擎**没收到** `scroll` 事件（`ScrollSignal` 的 `dirty` 从没被置位）；
+/// ②收到了，但 `w0_tick` 没据此重新窗口化。
+///
+/// ⇒ ⇒ 本探针直接读 `ScrollSignal::peek()` ⇒ ⇒ **区分这两种可能**。
+#[wasm_bindgen]
+pub fn l1_scroll_signal_probe() -> Result<JsValue, JsValue> {
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| JsValue::from_str("没有 document"))?;
+
+    // ⓪ ⭐⭐ **最小实验**：自己建一个滚动容器 + 挂监听 ⇒ ⇒ 不依赖 w0 的任何状态。
+    //
+    //   ⇒ ⇒ 这样能区分「引擎的 scroll 监听本身坏了」与「w0 的某个状态不对」。
+    let min_scroll_ok = {
+        use apeireth_ui_dom::dom::Dom;
+        use apeireth_ui_dom::vnode::VNode;
+        use apeireth_ui_dom::web::WebDom;
+        let dom = WebDom::new().map_err(|error| JsValue::from_str(&format!("WebDom: {error}")))?;
+        let root = dom
+            .create_element("div")
+            .map_err(|error| JsValue::from_str(&format!("建根失败：{error}")))?;
+        dom.set_attribute(&root, "id", "min-scroll-root")
+            .map_err(|error| JsValue::from_str(&format!("设 id 失败：{error}")))?;
+        if let Some(body) = document.body() {
+            let _ = body.append_child(&root);
+        }
+        let mut renderer = apeireth_ui_dom::Renderer::new(dom, root);
+        renderer
+            .render_guarded(
+                VNode::element("section")
+                    .child(
+                        VNode::element("div")
+                            .attr("id", "min-scroll-list")
+                            .attr("style", "height: 100px; overflow-y: auto;")
+                            .child(VNode::element("div").attr("style", "height: 5000px").build())
+                            .build(),
+                    )
+                    .build(),
+            )
+            .map_err(|error| JsValue::from_str(&format!("挂载失败：{error}")))?;
+        let signal = renderer
+            .listen_scroll_at_path(&[0])
+            .map_err(|error| JsValue::from_str(&format!("监听滚动失败：{error}")))?;
+        let container = document
+            .query_selector("#min-scroll-root #min-scroll-list")
+            .ok()
+            .flatten();
+        let Some(container) = container else {
+            return Err(JsValue::from_str("找不到最小滚动容器"));
+        };
+        // ① 手动派发
+        let event = web_sys::Event::new("scroll")
+            .map_err(|error| JsValue::from_str(&format!("建事件失败：{error:?}")))?;
+        container.dispatch_event(&event)?;
+        let after_manual = signal.peek();
+        // ② 真实滚动
+        container.set_scroll_top(2000);
+        let after_real_scroll = signal.peek();
+        // ③ 读回 scrollTop（看真实滚动是否真的发生）
+        let read_back = f64::from(container.scroll_top());
+        (after_manual, after_real_scroll, read_back)
+    };
+
+    // ⓪⓪ ⭐⭐ **不重新挂载**！直接用**页面现成**的示例屏（l1 页面里
+    //   `l1_w0_window_probe` 已经挂过一次）⇒ ⇒ 派发 scroll ⇒ ⇒ 读**那一个** signal。
+    //
+    // ⚠️⚠️ **上一版探针的错误**：这里又调了一次 `w0_first_screen()`
+    //   ⇒ ⇒ 它**重新挂载**并**替换了 DEMO 槽**（新的 `ScrollSignal`）
+    //   ⇒ ⇒ 而派发是发给**页面里的 DOM 节点**的
+    //   ⇒ ⇒ ⇒ 读到的 signal 与被派发的节点**对不上号** ⇒ ⇒ 「收不到」是**假象**。
+    // ⇒ ⇒ ⇒ **教训**：探针**自己制造的状态**会污染后续观测 ⇒ ⇒ 别重复挂载。
+    // ①b ⭐ 立刻读一次 `peek()` ⇒ ⇒ 看「挂载后」引擎是否已收到过 scroll。
+    let peek_right_after_mount = DEMO.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|demo| demo.scroll.peek())
+            .unwrap_or(false)
+    });
+    // ② 挂一个**独立的**滚动监听器（在同一个列表容器上）。
+    let container = document
+        .query_selector("#w0-root #w0-list")
+        .ok()
+        .flatten();
+    let Some(container) = container else {
+        return Err(JsValue::from_str("找不到 #w0-list"));
+    };
+    // 用引擎自己的 API 挂监听 ⇒ ⇒ 拿到 `ScrollSignal`。
+    // ⚠️ 引擎的监听是**按已挂载树**挂的 ⇒ ⇒ 这里读 DEMO 里那个渲染器的 signal。
+    let scroll_signal = DEMO.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|demo| demo.scroll.peek())
+            .unwrap_or(false)
+    });
+    let _ = container;
+
+    // ③ 派发一个真实 `scroll` 事件 ⇒ ⇒ 再读一次 `peek()`。
+    let before = scroll_signal;
+    // ⭐ 记录派发**前后**的 DOM 状态（供对照）。
+    let scroll_event = web_sys::Event::new("scroll")
+        .map_err(|error| JsValue::from_str(&format!("建 scroll 事件失败：{error:?}")))?;
+    container.dispatch_event(&scroll_event)?;
+    let after = DEMO.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|demo| demo.scroll.peek())
+            .unwrap_or(false)
+    });
+
+    // ⭐⭐ **诊断：引擎挂监听的到底是哪个节点？**
+    //
+    // 用**引擎自己的 `bounding_box_at_path`** 拿它「以为」的节点的盒子
+    // ⇒ ⇒ 再和 DOM 查询到的 `#w0-list` 的盒子比对
+    // ⇒ ⇒ 两者**相同** ⇒ ⇒ 引擎找对了节点 ⇒ ⇒ 问题在别处；
+    // ⇒ ⇒ 两者**不同** ⇒ ⇒ 路径 [1] 指向的不是列表容器 ⇒ ⇒ **根因**。
+    let engine_box = DEMO.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .and_then(|demo| demo.renderer.bounding_box_at_path(&[1]).ok())
+    });
+    let dom_box = container
+        .dyn_ref::<web_sys::Element>()
+        .map(|element| element.get_bounding_client_rect());
+    let dom_box_height = dom_box.as_ref().map(|rect| rect.height()).unwrap_or(-1.0);
+    // ⭐ 逐项打印（引擎 vs DOM）⇒ ⇒ 看出差在哪一项。
+    let box_detail = format!(
+        "engine=({:.1},{:.1},{:.1}x{:.1}) dom=({:.1},{:.1},{:.1}x{:.1})",
+        engine_box.map(|b| b.x).unwrap_or(-1.0),
+        engine_box.map(|b| b.y).unwrap_or(-1.0),
+        engine_box.map(|b| b.width).unwrap_or(-1.0),
+        engine_box.map(|b| b.height).unwrap_or(-1.0),
+        dom_box.as_ref().map(|r| r.x()).unwrap_or(-1.0),
+        dom_box.as_ref().map(|r| r.y()).unwrap_or(-1.0),
+        dom_box.as_ref().map(|r| r.width()).unwrap_or(-1.0),
+        dom_box.as_ref().map(|r| r.height()).unwrap_or(-1.0),
+    );
+    let boxes_match = match (engine_box, dom_box.as_ref()) {
+        (Some(a), Some(b)) => {
+            (a.x - b.x()).abs() < 0.5
+                && (a.y - b.y()).abs() < 0.5
+                && (a.width - b.width()).abs() < 0.5
+                && (a.height - b.height()).abs() < 0.5
+        }
+        _ => false,
+    };
+
+    let result = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("boxes_match"),
+        &JsValue::from_bool(boxes_match),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("box_detail"),
+        &JsValue::from_str(&box_detail),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("engine_box"),
+        &match engine_box {
+            Some(box_) => JsValue::from_f64(box_.height),
+            None => JsValue::from_f64(-1.0),
+        },
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("dom_box_height"),
+        &JsValue::from_f64(dom_box_height),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("peek_right_after_mount"),
+        &JsValue::from_bool(peek_right_after_mount),
+    );
+    // ⭐ 最小实验的三项结果。
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("w0_peek_after_windowize"),
+        &JsValue::from_bool(SCROLL_PROBE.with(|slot| slot.get())),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("min_after_manual"),
+        &JsValue::from_bool(min_scroll_ok.0),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("min_after_real_scroll"),
+        &JsValue::from_bool(min_scroll_ok.1),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("min_read_back"),
+        &JsValue::from_f64(min_scroll_ok.2),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("peek_before"),
+        &JsValue::from_bool(before),
+    );
+    let _ = js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("peek_after"),
+        &JsValue::from_bool(after),
+    );
+    Ok(result.into())
+}
+
 /// ⭐⭐⭐⭐ **对照：挂载与窗口化在**同一个 wasm 调用**里**（E-162 的关键证据）。
 ///
 /// ## 它回答什么
@@ -1851,7 +2162,7 @@ pub fn w0_first_screen_sync_probe() -> Result<JsValue, JsValue> {
         .render_guarded(build_demo_tree(&state, &rows))
         .map_err(|error| JsValue::from_str(&format!("渲染失败：{error}")))?;
     // ② ⭐ **同一个 wasm 调用内**窗口化（这是要复现的情形）。
-    render_windowed_list(&mut renderer, &[1], 1000)?;
+    render_windowed_list(&mut renderer, &state, &[1], 1000)?;
 
     let rows_in_dom = document
         .query_selector_all("#sync-probe-root #w0-list .row")
@@ -1913,7 +2224,7 @@ pub fn w0_windowize() -> Result<JsValue, JsValue> {
             already = true;
             return;
         }
-        match render_windowed_list(&mut demo.renderer, &demo.list_path, demo.row_count) {
+        match render_windowed_list(&mut demo.renderer, &demo.state, &demo.list_path, demo.row_count) {
             Ok(()) => {
                 demo.pending_windowize = false;
                 windowized = true;
@@ -1963,6 +2274,32 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
         }
         // ② 状态脏 ⇒ 重建树 → `patch`（差分）。
         if demo.state.borrow().dirty {
+            // ⭐⭐⭐ **滚动 ⇒ 先更新窗口，再重建树**（E-164 的关键顺序）。
+            //
+            // ## 为什么顺序不能反
+            //
+            // 树里带的是 **`state.window`**（当前窗口）⇒ ⇒ 若**先** patch（用旧窗口）
+            // ⇒ ⇒ **再**窗口化（算出新窗口）⇒ ⇒ ⇒ 两者**不一致**
+            // ⇒ ⇒ ⇒ 下一个 tick 的 patch 又会把列表改回旧窗口 ⇒ ⇒ ⇒ **窗口来回跳**。
+            //
+            // ⇒ ⇒ **先窗口化（更新 `state.window`）⇒ ⇒ 再重建树 ⇒ ⇒ 再 patch**
+            // ⇒ ⇒ ⇒ 树里的窗口 = DOM 里的窗口 ⇒ ⇒ **一致且稳定** ✓
+            //
+            // ⚠️ 窗口化要读布局度量 ⇒ ⇒ **一次强制回流**
+            // ⇒ ⇒ ⇒ **只在滚动时**才做（输入变化**不**触发 ⇒ ⇒ 零额外回流）。
+            let need_windowize = scroll_seen || demo.pending_windowize;
+            if need_windowize {
+                if let Err(error) = render_windowed_list(
+                    &mut demo.renderer,
+                    &demo.state,
+                    &demo.list_path,
+                    demo.row_count,
+                ) {
+                    // ⭐ 不静默吞掉：把错误**带出去**（`w0_tick` 的结果里有 `window_error`）。
+                    window_error = Some(format!("{error:?}"));
+                }
+                demo.pending_windowize = false;
+            }
             let tree = build_demo_tree(&demo.state, &[]);
             // ⚠️ 受控写回在 IME 组合期会被**门住**（引擎负责补写）。
             // ⭐⭐ **错误不再静默吞掉**（E-163）：此前 `let _ = ...` 把 patch 的失败
@@ -1989,16 +2326,6 @@ pub fn w0_tick() -> Result<JsValue, JsValue> {
             //
             // ⇒ ⇒ 配合「`build_demo_tree` 的列表**不含行**」⇒ ⇒
             // ⇒ ⇒ **整树重建碰不到窗口化结果** ⇒ ⇒ 输入变化**零额外回流** ✓
-            let need_windowize = scroll_seen || demo.pending_windowize;
-            if need_windowize {
-                if let Err(error) =
-                    render_windowed_list(&mut demo.renderer, &demo.list_path, demo.row_count)
-                {
-                    // ⭐ 不静默吞掉：把错误**带出去**（`w0_tick` 的结果里有 `window_error`）。
-                    window_error = Some(format!("{error:?}"));
-                }
-                demo.pending_windowize = false;
-            }
             demo.state.borrow_mut().dirty = false;
             redrawn = true;
         }

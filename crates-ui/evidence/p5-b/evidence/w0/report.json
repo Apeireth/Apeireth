@@ -4,20 +4,28 @@
   "deferred": {
     "mode": "deferred",
     "pollute": 0,
-    "rows": 7,
-    "t_dom": 35.700000000186265,
-    "t_painted": 36.90000000037253,
+    "rows": 9,
+    "t_dom": 33,
+    "t_painted": 35.10000000055879,
     "step": "already-windowized",
     "errors": []
   },
   "sync": {
     "mode": "sync",
     "pollute": 0,
-    "rows": 7,
-    "t_dom": 18,
-    "t_painted": 28.40000000037253,
+    "rows": 9,
+    "t_dom": 18.100000000558794,
+    "t_painted": 23.799999999813735,
     "step": "already-windowized",
     "errors": []
   },
-  "polluted": null
+  "polluted": null,
+  "scroll": {
+    "first_row_before": "行 0",
+    "first_row_after": "行 98",
+    "scroll_top_set": 4000,
+    "scroll_top_after": 4000,
+    "scroll_top_kept": true,
+    "window_moved": true
+  }
 }

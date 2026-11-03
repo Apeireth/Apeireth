@@ -170,6 +170,40 @@ renderer.set_metrics_status(MetricsStatus::Ready);
 > ⚠ 度量未定时 `virtual_window_for` 会**显式拒绝**（返回 `Undecidable`）
 > ⇒ ⇒ 这是**故意的**：宁可不窗口化，也别用错误度量算出的窗口（会造成布局跳动）。
 
+### 2.5++ ⭐⭐⭐ 虚拟列表：**列表内容必须由「当前窗口」产出**（E-164 修的真缺陷）
+
+⚠️⚠️ **两个坑连在一起，只有第三个写法能同时躲开**：
+
+| 写法 | 整树 `patch` 后 | 后果 |
+|---|---|---|
+| 列表塞 **1 个占位行** | 窗口化结果被**覆盖** ⇒ 塌成 1 行 | E-161 |
+| 列表**空着** | 列表被**清空** ⇒ 内容高度塌陷 ⇒ ⇒ **浏览器把 `scrollTop` 夹回 0** ⇒ ⇒ **滚动位置丢失** | E-164 |
+| ⭐ **列表 = 当前窗口**（窗口存在 state 里） | 差分 = 「旧窗口 vs 同一窗口」⇒ **不变** | ✅ 两个坑都躲开 |
+
+⇒ ⇒ **正解**：
+```rust
+// ① 窗口化时把窗口**写回状态**
+let plan = renderer.patch_windowed_at_path(&[1], &heights, 2, |i| /* 行 */)?;   // ← 拿到 plan
+state.borrow_mut().window = WindowState { first: plan.first, last: plan.last, /* … */ };
+
+// ② 重建树时输出**当前窗口**（不是占位行、也不是空）
+fn build_list_node(state) -> VNode {
+    let w = state.borrow().window;          // ← 当前窗口
+    let mut kids = vec![];
+    if w.valid {
+        if w.offset > 0.0 { kids.push(spacer_before(w.offset)); }
+        for i in w.first..=w.last { kids.push(row(i)); }
+        if w.after > 0.0 { kids.push(spacer_after(w.after)); }
+    }
+    VNode::element("div").attr("id", "w0-list").child(VNode::Fragment(kids)).build()
+}
+```
+⇒ ⇒ **顺序也关键**：**先窗口化（更新 state）⇒ ⇒ 再重建树 ⇒ ⇒ 再 `patch`**
+⇒ ⇒ 否则「树里的窗口」与「DOM 里的窗口」不一致 ⇒ ⇒ ⇒ **窗口来回跳**。
+
+⇒ ⇒ **为什么这条必须知道**：浏览器的 `scrollTop` 在**内容高度塌陷**时会被**夹回 0**
+⇒ ⇒ ⇒ 这是**浏览器机制**，不是引擎 bug ⇒ ⇒ ⇒ 整树重建时若动了列表区域，**必然**踩到。
+
 ### 2.5+ ⭐⭐ 虚拟列表：**每次改完树都要重新窗口化**（E-161 修的真缺陷）
 
 ⚠️⚠️ **「整树重建」模式与「虚拟列表」不兼容**，除非你知道「列表区域由窗口化管」。

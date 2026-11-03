@@ -97,10 +97,78 @@ if (DEFER) {
 
 // 示例级调度器（生产请换成正式调度器）。
 // ⚠️ `?notick=1` ⇒ 不启动 tick（**诊断用**：用来判别「DOM 翻倍是首屏造成的还是 tick 造成的」）。
+//
+// ⭐⭐ **调度器也影响「输入延迟」**（E-164）：
+// `setInterval(50ms)` ⇒ ⇒ 一次按键最多要等 **50 ms** 才反映到 DOM
+// ⇒ ⇒ ⇒ 而 `w0_tick` 本身只要 **0.11 ms**（E-158）⇒ ⇒ ⇒ **延迟全在调度器上**。
+// ⇒ ⇒ `?tick=raf` ⇒ 改用 `requestAnimationFrame` 驱动 ⇒ ⇒ 延迟 ≤ **一帧**（≈16 ms）。
+// ⭐ 默认改用 **`requestAnimationFrame`** 驱动（E-164）。
+//
+// ## 为什么
+//
+// 端到端更新延迟 = **引擎耗时**（0.11 ms，E-158）+ **调度间隔**
+// ⇒ ⇒ `setInterval(50ms)` ⇒ ⇒ 端到端最坏 **50 ms**
+// ⇒ ⇒ `rAF` ⇒ ⇒ 端到端最坏 **一帧**（≈16 ms）
+// ⇒ ⇒ ⇒ 且这与**生产做法一致**（`apeireth-ui-app` 的宿主就是 rAF 帧驱动）
+// ⇒ ⇒ ⇒ ⇒ 参考实现不该用一个**生产不会用**的调度器。
+//
+// ⚠️ `?tick=interval` 保留为**对照**（可复现「调度间隔决定延迟上限」这件事）。
+const TICK_MODE = new URLSearchParams(location.search).get("tick") || "raf";
 if (!new URLSearchParams(location.search).has("notick")) {
-  setInterval(() => {
-    p5b.w0_tick();
-  }, 50);
+  if (TICK_MODE === "raf") {
+    const step = () => {
+      const r = p5b.w0_tick();
+      // ⭐ 记录最近一次 tick 的结果（scroll_seen / redrawn）⇒ ⇒ 诊断用。
+      window.__W0_TICK__ = r;
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  } else {
+    setInterval(() => {
+      p5b.w0_tick();
+    }, 50);
+  }
 }
+
+// ⚠️⚠️ **这里曾放过一个「输入延迟自测」，已撤掉**（E-164 的教训）：
+//
+// 它给自己设了 `input.value = 目标值` ⇒ ⇒ 于是「DOM 值 == 目标值」这件事
+// **一开始就是真的** ⇒ ⇒ 测到的「延迟」只是 rAF 的一帧（0.5 ms）
+// ⇒ ⇒ ⇒ **完全测不到引擎的写回** ⇒ ⇒ **假测量**。
+//
+// ⭐ 为什么**这个屏测不出输入延迟**：「受控输入」的 DOM 值**本来就等于**
+//   用户输入的值 ⇒ ⇒ 引擎写回的是**同一个值** ⇒ ⇒ DOM 上**看不出**何时更新。
+// ⇒ ⇒ 要测端到端延迟，需要一个**派生 UI**（如「字符计数」标签）⇒ ⇒ **尚未做**。
+//
+// ⇒ ⇒ **可测的是结构性事实**：端到端延迟上限 = **调度间隔**
+//   （`setInterval(50ms)` ⇒ ≤50 ms / `rAF` ⇒ ≤ 一帧 ≈16 ms）
+//   ⇒ ⇒ 而**引擎侧**那部分只要 **0.11 ms**（E-158）⇒ ⇒ ⇒ 延迟几乎全在调度器。
+
+// ⭐⭐ **滚动 → 窗口化**的自测（E-164）：滚动容器 ⇒ ⇒ 等 tick ⇒ ⇒
+//   检查**窗口首行是否移动了**（这正是「按需窗口化」的唯一触发路径）。
+//
+// ⚠️ 判据要看**首行文本**而不是行数（行数不变是对的 ⇒ ⇒ 窗口只是**平移**了）。
+window.__W0_SCROLL__ = null;
+async function measureScrollWindow() {
+  const list = document.querySelector("#w0-root #w0-list");
+  if (!list) return null;
+  const firstRow = () => {
+    const row = list.querySelector(".row");
+    return row ? row.textContent : null;
+  };
+  const before = firstRow();
+  list.scrollTop = 4000;
+  // 等若干帧，让 tick（rAF 驱动）跑到并完成窗口化。
+  for (let i = 0; i < 30; i++) {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (firstRow() !== before) {
+      return { before, after: firstRow(), moved: true };
+    }
+  }
+  return { before, after: firstRow(), moved: false };
+}
+measureScrollWindow().then((value) => {
+  window.__W0_SCROLL__ = value;
+});
 
 window.__W0__ = { ok: true };
