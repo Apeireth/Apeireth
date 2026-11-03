@@ -7,7 +7,7 @@
   "candidate_count": 22,
   "measured_count": 3,
   "not_measurable_count": 1,
-  "left_pool_count": 2,
+  "left_pool_count": 3,
   "by_layer": {
     "D4": 8,
     "D3": 3,
@@ -395,7 +395,7 @@
       "delta_recall": null,
       "delta_grounded": null,
       "measure_note": null,
-      "status": "out-of-scope"
+      "status": "left-pool"
     },
     {
       "module": "research_roaming_memory",

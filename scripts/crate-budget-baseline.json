@@ -70,7 +70,7 @@
     },
     "crates/engine/memory": {
       "files": 179,
-      "loc": 79743
+      "loc": 80072
     },
     "crates/engine/organ": {
       "files": 33,
@@ -86,7 +86,7 @@
     },
     "crates/engine/runtime-assembly": {
       "files": 82,
-      "loc": 44077
+      "loc": 44200
     },
     "crates/engine/storage": {
       "files": 27,
