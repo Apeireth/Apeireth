@@ -1324,7 +1324,14 @@ impl<D: Dom> Renderer<D> {
                 //   ⇒ ⇒ 不可判定时属性**已经落进 DOM**，而内存树仍留旧值；
                 //   更糟的是 `Undecidable` 被显式排除在「标劈叉」之外
                 //   ⇒ ⇒ 渲染器**自称同步**且**不走**整树重建自愈 ⇒ ⇒ **静默分叉**。
-                self.ensure_children_keyed_decidable(&old_element.children, &new_element.children)?;
+                // ⭐ 段级计时（E-154 补）：这一段原本**在计时之外** ⇒ ⇒ 被误算进
+                //   「children 自身」⇒ ⇒ 现在**单列**（E-155）。
+                seg!(self, ensure, {
+                    self.ensure_children_keyed_decidable(
+                        &old_element.children,
+                        &new_element.children,
+                    )?
+                });
                 // ⭐ 段级计时（E-154）：未注入时钟 ⇒ **零额外开销**；
                 //   各段耗时进 `SegmentTimings` ⇒ ⇒ 由探针读出来做**归因**。
                 // T1：同标签 ⇒ 复用同一个真实 DOM 节点，只改属性与子节点。

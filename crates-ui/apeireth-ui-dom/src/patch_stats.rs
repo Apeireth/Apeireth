@@ -50,4 +50,9 @@ pub struct SegmentTimings {
     pub bindings: u128,
     /// 重建 `MountedNode`（结构体 + `Vec` 分配）。
     pub rebuild: u128,
+    /// `ensure_children_keyed_decidable`（keyed 差分**可判定性**校验）。
+    ///
+    /// ⚠️ 这一段**在 `patch_node` 的计时段之外**被调用（2026-11-02 补计时）
+    /// ⇒ ⇒ 此前它被**误算进**「children 自身」⇒ ⇒ 本字段把它**单列**出来。
+    pub ensure: u128,
 }

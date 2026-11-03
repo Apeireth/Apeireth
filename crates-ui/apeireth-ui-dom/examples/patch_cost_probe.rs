@@ -97,6 +97,8 @@ fn main() {
     const DEPTH: usize = 4;
     const REPEATS: usize = 5;
 
+    realistic_first_screen_probe();
+
     let runtime = Runtime::new();
     let leaf = runtime.signal(String::from("初始"));
     let dom = InMemoryDom::new();
@@ -193,6 +195,11 @@ fn main() {
         pct(seg.bindings)
     );
     println!(
+        "   ensure    {:>10} µs  {:>5.1}%  （keyed 可判定性校验）",
+        seg.ensure,
+        pct(seg.ensure)
+    );
+    println!(
         "   rebuild   {:>10} µs  {:>5.1}%",
         seg.rebuild,
         pct(seg.rebuild)
@@ -212,12 +219,13 @@ fn main() {
     //   ① 把**直接段**求和（不含 `children`）⇒ 这是「真正逐节点做的细活」；
     //   ② 用 `patch 中位数 − Σ直接段` ⇒ 得到 **`patch_children` 自身逻辑**的耗时
     //      （key 扫描 / 位置配对 / 块锚点计算 / `Vec` 构建）。
-    let direct = seg.attrs + seg.handlers + seg.rebind + seg.props + seg.bindings + seg.rebuild;
+    let direct =
+        seg.attrs + seg.handlers + seg.rebind + seg.props + seg.bindings + seg.rebuild + seg.ensure;
     let patch_total = samples[samples.len() / 2];
     let children_self = patch_total.saturating_sub(direct);
     println!("── ⭐ 正确读法（去嵌套）──");
     println!(
-        "   直接段合计 {:>10} µs  {:>5.1}%  （attrs/handlers/rebind/props/bindings/rebuild）",
+        "   直接段合计 {:>10} µs  {:>5.1}%  （attrs/handlers/rebind/props/bindings/rebuild/ensure）",
         direct,
         direct as f64 * 100.0 / patch_total as f64
     );
@@ -241,4 +249,76 @@ fn main() {
         "（参考：同树在真实 Chromium 上 ≈ 84 ms ⇒ ⇒ ⭐ native **不更快** \
          ⇒ ⇒ 瓶颈不在 wasm⇄JS 边界，在 Rust 侧 / 后端实现）"
     );
+}
+
+/// ⭐⭐ **真实首屏规模**的 patch 成本（2026-11-03）。
+///
+/// ## 为什么加这个
+///
+/// 上面的压测树（`WIDTH=8 / DEPTH=4` ⇒ 37,458 节点）是**合成压力树**，
+/// **不是**真实首屏 ⇒ ⇒ 用它当性能标尺会**做错优化**。
+///
+/// 真实首屏（`w0_first_screen()`）是 **1000 行的虚拟列表**
+/// ⇒ ⇒ 走 `patch_windowed_at_path` ⇒ ⇒ **DOM 里只有窗口内的行**
+/// ⇒ ⇒ 真实 patch 规模 ≈ **窗口行数 × 每行节点数**（几十行），**不是 1000 行**。
+///
+/// ## 这个函数测什么
+///
+/// 用**首屏真实形状**（容器 + 窗口内 N 行）建树 ⇒ ⇒ 量「改一个叶子」的 patch 成本
+/// ⇒ ⇒ 与压测树的数字**并列** ⇒ ⇒ 即可回答：
+/// 「真实首屏到底卡不卡？」
+fn realistic_first_screen(window_rows: usize) -> (VNode, usize) {
+    let mut rows = Vec::with_capacity(window_rows);
+    for index in 0..window_rows {
+        rows.push(
+            VNode::element("div")
+                .attr("class", "row")
+                .attr("style", "height: 40px")
+                .child(VNode::text(format!("行 {index}")))
+                .build(),
+        );
+    }
+    let list = VNode::element("div")
+        .attr("class", "list")
+        .child(VNode::Fragment(rows))
+        .build();
+    let root = VNode::element("div")
+        .attr("id", "w0-root")
+        .child(list)
+        .build();
+    let nodes = window_rows * 2 + 2; // 每行 = 1 元素 + 1 文本
+    (root, nodes)
+}
+
+/// ⭐ **真实首屏规模**的 patch 成本（窗口行数 × 每行节点）。
+fn realistic_first_screen_probe() {
+    println!();
+    println!("== ⭐ 真实首屏规模（虚拟列表窗口化）==");
+    // 视口 800px / 行高 40px ⇒ 窗口 ≈ 20 行；+overscan 2 ⇒ ≈ 22 行。
+    for window_rows in [20usize, 22, 40] {
+        let dom = InMemoryDom::new();
+        let root = dom.create_element("main").expect("建根必须成功");
+        let mut renderer = Renderer::new(dom, root);
+        renderer.set_segment_clock(Some(micros_clock));
+
+        let (view, nodes) = realistic_first_screen(window_rows);
+        renderer.mount(view.clone()).expect("挂载必须成功");
+
+        // 改一个叶子（第一行的文本）⇒ ⇒ 触发一次「改一个叶子」的 patch。
+        let start = Instant::now();
+        let mut changed = view.clone();
+        if let VNode::Element(element) = &mut changed {
+            if let Some(VNode::Fragment(children)) = element.children.first_mut() {
+                if let Some(VNode::Element(row)) = children.first_mut() {
+                    if let Some(VNode::Text(text)) = row.children.first_mut() {
+                        text.data = "行 0（改了）".to_string();
+                    }
+                }
+            }
+        }
+        renderer.patch(changed).expect("打补丁必须成功");
+        let micros = start.elapsed().as_micros();
+        println!("  窗口 {window_rows:>3} 行（≈{nodes} 节点）⇒ 改一个叶子 = {micros} µs");
+    }
+    println!("  ⇒ ⇒ 对照：合成压测树（37,458 节点）= 84~94 ms");
 }
