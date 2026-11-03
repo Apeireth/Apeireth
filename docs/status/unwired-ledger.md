@@ -217,7 +217,18 @@
 > **2026-11-01 限定名级复核**（副总指挥线，逐条 grep **限定名** ⇒ 排除 `ProactiveRecallPolicy` 这类前缀遮蔽）：
 > - `scope::RecallPolicy` ⇒ 库外 **0** ⇒ 但**不是缺口** ⇒ 已归组到 §5.1（`RecallPolicy` 三处承担）⇒ **本条销账**；
 > - `dailynote::DailyNote` ⇒ 库外 **0**（家族内 `note.rs`/`store.rs`/`export.rs` 自洽）
->   ⇒ ⇒ **A 类真缺口**（库级 IMPLEMENTED，生产零消费；模块自述指向 v2 plan §9.5 的「拆独立 crate」计划）；
+>   ⇒ ⇒ ⚠️ **2026-11-03 复核更正**：**「零消费」的原因是它本来就是桩**，不是「忘了接线」
+>   ⇒ ⇒ 实测三处**假实现**：`mcp.rs` 的 `tools/call` **只回显参数**（从不落库/读回/导出）·
+>   `enhanced.rs` 的 `search` 在**不传 tag 时直接返回空**（源码注释自承 "just return empty"）·
+>   `mcp` 与本体**各开一个 store**（⇒ 经 MCP 建的笔记在本体 `search` 里查不到 ⇒ 数据不通）
+>   ⇒ ⇒ **11-03 已修**（`7756bbe6b0c7`）：`tools/call` **真执行**（4 个工具）·
+>   `search` **无 tag 也能搜**（新增 `store.list_all()`）· 两处**共用一份库**（`Arc`）
+>   ⇒ ⇒ 既有测试 `note_create_tool` 原本**断言的是桩行为** ⇒ 修正后它**正确地失败** ⇒ 已改断言为「真落库」
+>   ⇒ ⇒ **仍非生产消费** ⇒ ⇒ **剩余缺口 = 「把 4 个 MCP 工具注册进工具面」**
+>   ⇒ ⇒ ⚠️ **那是 `crates/capabilities/tools` 的区**（工具清单 = 产品契约）⇒ ⇒ **需总指挥拍板**
+>   ⇒ ⇒ 原判「A 类真缺口（库级 IMPLEMENTED，生产零消费）」的**理由已变**
+>   （**不是「没实现」，是「实现好了但没注册进工具面」**）⇒ ⇒ 分类待他裁决后更新
+>   （模块自述指向 v2 plan §9.5 的「拆独立 crate」计划）；
 > - `online_calibration::AdaptiveBaseline` ⇒ 库外 **0** 且**只有 `lib.rs` 重导出**（无真实消费者）
 >   ⇒ ⇒ **A 类真缺口**（库级 IMPLEMENTED，零真实消费）；
 > - `online_calibration::DriftDetector` ⇒ 库外 **0**，且**只有 `lib.rs` 重导出**
