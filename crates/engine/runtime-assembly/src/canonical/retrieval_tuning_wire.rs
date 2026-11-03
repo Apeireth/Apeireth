@@ -27,6 +27,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::stored_doc::{self, DocCompat};
+use apeireth_memory::quality_drift::QualityDriftMonitor;
 use apeireth_memory::retrieval_tuning::{
     RetrievalTuningEngine, RetrievalTuningRecord, SelectedAttribution, TuningEvidence,
 };
@@ -94,18 +95,36 @@ pub struct RetrievalTuningWire {
     rounds: AtomicU64,
     /// 机会轮计数 (有选中回执的检索轮; > 0 = 信号面在场)。
     selective_rounds: AtomicU64,
+    /// **检索质量漂移告警累计数**（生产消费点：`QualityDriftMonitor` 在生产里
+    /// 监视「注入的记忆下一轮是否再次命中」的命中率 ⇒ ⇒ 命中率持续下滑 ⇒ ⇒ 计数涨）。
+    ///
+    /// ⚠️ **私有** ⇒ 出口走 [`Self::quality_drift_alarms`]（那个方法已被生产消费）。
+    quality_alarms: AtomicU64,
 }
 
 impl RetrievalTuningWire {
     /// 构造接线层 (引擎以默认评分权重为基线; 生效值在首次调权时落地)。
     pub fn new(log_path: PathBuf) -> Self {
         Self {
-            engine: Mutex::new(RetrievalTuningEngine::new()),
+            // 记忆线（2026-11-03）：给自进化引擎挂上**检索质量漂移监控**
+            // ⇒ ⇒ 每批证据的命中率进监控器 ⇒ ⇒ 连续多批偏离才告警
+            // ⇒ ⇒ **这就是 `QualityDriftMonitor` 的生产消费点**（此前全仓零消费者）。
+            // ⚠️ 参数口径：EMA α=0.05（基线稳、迟钝）· |z|≥2.0 算偏离 · **连续 3 批**才告警
+            // ⇒ ⇒ 单批波动**不告警**（防假告警）。
+            engine: Mutex::new(RetrievalTuningEngine::new().with_quality_drift(
+                QualityDriftMonitor::new(
+                    &[apeireth_memory::retrieval_tuning::RETRIEVAL_HIT_RATE_METRIC],
+                    0.05,
+                    2.0,
+                    3,
+                ),
+            )),
             log_path,
             log_failures: AtomicU64::new(0),
             pending: Mutex::new(None),
             rounds: AtomicU64::new(0),
             selective_rounds: AtomicU64::new(0),
+            quality_alarms: AtomicU64::new(0),
         }
     }
 
@@ -154,7 +173,16 @@ impl RetrievalTuningWire {
         if !records.is_empty() {
             apeireth_memory::retrieval_tuning::install_effective(engine.effective());
         }
+        // 记忆线（2026-11-03）：取本批的漂移告警（有 ⇒ 计数涨 ⇒ 面板/运维可读）。
+        let batch_alarms = engine
+            .quality_drift()
+            .map(|monitor| monitor.alarms().len())
+            .unwrap_or(0);
         drop(engine);
+        if batch_alarms > 0 {
+            self.quality_alarms
+                .fetch_add(batch_alarms as u64, Ordering::Relaxed);
+        }
         for record in &records {
             self.persist(record);
         }
@@ -204,6 +232,31 @@ impl RetrievalTuningWire {
     /// 账追加失败计数 (0 装诚实: 持久化失败不静默)。
     pub fn log_failures(&self) -> u64 {
         self.log_failures.load(Ordering::Relaxed)
+    }
+
+    /// **检索质量漂移告警累计数**（记忆线：生产里 `QualityDriftMonitor` 的出口）。
+    ///
+    /// ⇒ ⇒ **> 0** ⇒ 「注入的记忆下一轮不再命中」的命中率**连续多批偏离基线**
+    /// ⇒ ⇒ 检索质量在漂移 ⇒ ⇒ 值得查（嵌入源？排序权重？索引？）。
+    ///
+    /// ⚠️ **两个返回值的口径不同**（别混）：
+    /// - **计数 = 累计**（历史上**一共**报过多少次告警）⇒ 不回退；
+    /// - **明细 = 当前批次**（`QualityDriftMonitor::alarms()` 只保留最后一次 `record` 的告警）
+    ///   ⇒ ⇒ 偏离结束后**明细会变空**，但**计数仍在**。
+    ///
+    /// ⚠️ **为什么不是 `quality_alarm_count`**：那个名字曾作为**独立公开方法**存在
+    /// ⇒ ⇒ 但**零消费者** ⇒ ⇒ 孤儿 API 棘轮会把它记成「新增孤儿」
+    /// ⇒ ⇒ 改成**与告警明细一起返回**（一个出口 ⇒ 有消费者 ⇒ 不孤儿）。
+    pub fn quality_drift_alarms(&self) -> (u64, Vec<apeireth_memory::DriftAlarm>) {
+        let count = self.quality_alarms.load(Ordering::Relaxed);
+        let alarms = self
+            .engine
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .quality_drift()
+            .map(|monitor| monitor.alarms().to_vec())
+            .unwrap_or_default();
+        (count, alarms)
     }
 
     /// 待决注入集 (诊断/测试用)。
@@ -366,6 +419,51 @@ mod tests {
 
     fn receipt(id: &str, dimension: Option<RetrievalDimension>) -> SelectedAttribution {
         SelectedAttribution::new(id, dimension)
+    }
+
+    /// **记忆线**：漂移监控的告警出口真的有值（且**没漂移时是 0**）。
+    ///
+    /// ⇒ ⇒ 钉住两件事：
+    /// ① **没漂移 ⇒ 告警数 0**（不误报）；
+    /// ② **命中率持续下滑 ⇒ 告警数涨**（真能报出来，不是摆设）。
+    #[test]
+    fn quality_drift_alarms_report_zero_until_the_hit_rate_keeps_dropping() {
+        let _guard = lock_wire();
+        let wire = RetrievalTuningWire::new(temp_log("quality-drift"));
+        assert_eq!(wire.quality_drift_alarms().0, 0, "刚起来不该有告警");
+
+        // ⚠️ **漂移 = 命中率从高跌到低**（不是「一直低」）
+        // ⇒ ⇒ 「一直低」是**稳定差** ⇒ EMA 基线也跟着低 ⇒ z≈0 ⇒ **不告警**（这是对的）。
+        // ⇒ ⇒ 先几轮**全命中**（命中率 1.0，基线抬到 1.0），
+        // ⇒ ⇒ 再几轮**全未命中**（命中率 0.0 ⇒ 相对基线偏离巨大 ⇒ ⇒ 连续 3 批 ⇒ 告警）。
+        //
+        // ⚠️ **每轮注入 4 条** ⇒ ⇒ 每批 4 条证据 ⇒ ⇒ 满足「样本至少 3 条」的下限。
+        let ids: Vec<String> = (0..4).map(|index| format!("m{index}")).collect();
+        // 前 5 轮：注入的 4 条下一轮**全部再命中** ⇒ ⇒ 命中率 1.0
+        for round in 0..5 {
+            let receipts: Vec<SelectedAttribution> =
+                ids.iter().map(|id| receipt(id, None)).collect();
+            wire.record_injection_round(&receipts, 1_000 + i64::from(round) * 1_000);
+            wire.record_injection_round(&receipts, 1_500 + i64::from(round) * 1_000);
+        }
+        // 后 6 轮：注入的 4 条下一轮**一条都不再命中** ⇒ ⇒ 命中率 0.0 ⇒ ⇒ 持续偏离
+        //
+        // ⚠️ **下一轮必须「非空」** ⇒ ⇒ 空轮走 `record_empty_round`
+        // ⇒ ⇒ **不是机会轮 ⇒ 不裁决证据**（绝不拿「没有回执」当负信号）
+        // ⇒ ⇒ 所以要注入**另一批**条目 ⇒ ⇒ 上一批「机会在场而未再命中」⇒ ⇒ 负证据成立。
+        let other: Vec<String> = (0..4).map(|index| format!("other{index}")).collect();
+        for round in 0..6 {
+            let receipts: Vec<SelectedAttribution> =
+                ids.iter().map(|id| receipt(id, None)).collect();
+            let next: Vec<SelectedAttribution> = other.iter().map(|id| receipt(id, None)).collect();
+            wire.record_injection_round(&receipts, 100_000 + i64::from(round) * 1_000);
+            wire.record_injection_round(&next, 100_500 + i64::from(round) * 1_000);
+        }
+        let (count, _alarms) = wire.quality_drift_alarms();
+        assert!(
+            count > 0,
+            "命中率从 1.0 跌到 0.0 ⇒ 连续 3 批偏离 ⇒ 该报出漂移告警（实测 {count} 条）"
+        );
     }
 
     #[test]
